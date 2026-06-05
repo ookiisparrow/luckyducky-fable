@@ -1,0 +1,47 @@
+<script>
+// 应用根组件。生命周期钩子用 uni-app 的 onLaunch/onShow/onHide。
+export default {
+  onLaunch() {
+    // 应用启动。以后可在此做：读取本地登录态、初始化全局配置等。
+    console.log('Lucky Ducky launched')
+  },
+  onShow() {},
+  onHide() {},
+}
+</script>
+
+<style lang="scss">
+/* 全局公共样式。设计 token（颜色/圆角/间距/字号）集中在 uni.scss，
+   会被自动注入到每个组件的 <style lang="scss"> 中，这里只放真正全局的基础样式。 */
+
+page {
+  background: $bg;
+  color: $content;
+  font-family: $font-cn;
+  font-size: $fs-body;
+  line-height: 1.5;
+  /* 隐藏滚动条（与设计稿一致，内容区不显示滚动条） */
+  -webkit-overflow-scrolling: touch;
+}
+
+/* 跨端通用：去掉部分元素默认外边距 */
+view,
+text,
+image,
+scroll-view {
+  box-sizing: border-box;
+}
+
+/* 文本截断工具类（多端通用） */
+.ellipsis {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.clamp-2 {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+</style>

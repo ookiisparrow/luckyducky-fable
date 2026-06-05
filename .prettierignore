@@ -1,0 +1,4 @@
+dist
+node_modules
+unpackage
+src/static
