@@ -8,13 +8,15 @@
 import { defineStore } from 'pinia'
 import { SAMPLE_ADDRESS } from '@/data/checkout.js'
 
-let _seq = 1
-const nextId = () => _seq++
+// 下一个 id：取现有最大 + 1。不用模块计数器 —— 否则持久化回灌后计数器从头开始，
+// 新地址会和已存地址的 id 撞。基于现有列表算就天然防撞、且冷启动安全。
+const nextId = (list) => list.reduce((m, a) => Math.max(m, a.id || 0), 0) + 1
 
 export const useAddressStore = defineStore('address', {
   state: () => ({
-    list: [{ id: nextId(), ...SAMPLE_ADDRESS }],
+    list: [{ ...SAMPLE_ADDRESS, id: 1 }],
   }),
+  persist: { paths: ['list'] },
   getters: {
     // 当前默认地址（没有默认就取第一条，空簿则 null）
     defaultAddress: (s) => s.list.find((a) => a.isDefault) || s.list[0] || null,
@@ -27,7 +29,7 @@ export const useAddressStore = defineStore('address', {
         const i = this.list.findIndex((a) => a.id === targetId)
         if (i >= 0) this.list[i] = { ...this.list[i], ...addr }
       } else {
-        targetId = nextId()
+        targetId = nextId(this.list)
         this.list.push({ ...addr, id: targetId })
       }
       if (addr.isDefault) {

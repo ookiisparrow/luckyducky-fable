@@ -15,6 +15,8 @@ export const useUserStore = defineStore('user', {
     token: '', // 登录令牌（以后微信登录后写入）
     profile: defaultProfile(), // 用户资料（现为样例，可在资料编辑页修改）
   }),
+  // 登录态与资料都要跨会话保留
+  persist: { paths: ['token', 'profile'] },
   getters: {
     isLogin: (state) => !!state.token,
   },

@@ -22,6 +22,8 @@ export const useCartStore = defineStore('cart', {
     checkoutItems: [],
     checkoutFromCart: false,
   }),
+  // 只持久化购物车条目；结算草稿(checkoutItems/From)是临时态，不存 —— 避免冷启动残留旧草稿
+  persist: { paths: ['items'] },
   getters: {
     isEmpty: (s) => s.items.length === 0,
     // 全部条目的件数（用于 Tab 角标等）
