@@ -81,11 +81,8 @@ function onExplore() {
   scrollToAnchor('anchor-intro', 12)
 }
 function onProductOpen(p) {
-  // 把该商品的价格也带进详情（不同商品价不同；'￥399.00' → 399）
-  const num = (s) => Number(String(s).replace(/[^0-9.]/g, ''))
-  uni.navigateTo({
-    url: `/pages/detail/index?id=${p.id}&name=${encodeURIComponent(p.name)}&price=${num(p.now)}&was=${num(p.was)}`,
-  })
+  // 详情按 id 从商品总表(catalog)取数据，这里只需带 id（name 作兜底）
+  uni.navigateTo({ url: `/pages/detail/index?id=${p.id}&name=${encodeURIComponent(p.name)}` })
 }
 function onProductAdd(p) {
   ping(`已收藏 ${p.name}`)

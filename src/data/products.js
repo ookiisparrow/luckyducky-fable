@@ -1,9 +1,11 @@
 /**
- * 首页产品横滑数据。来源：原型 Sections.jsx 的 PRODUCTS。
- * 以后接后端：改为 api/shop.js 的 getProducts()，保持字段一致即可。
+ * 首页产品横滑数据 —— 从商品总表 data/catalog.js 按 featured 派生（单一来源）。
+ * 保持「字符串价(￥X.00)」形状，首页 ProductCard 模板不动。
+ * 以后接后端：用 api/shop.js 的 getProducts() 返回同形状即可。
  */
-export const PRODUCTS = [
-  { id: 'prod-1', name: '幸运小鸭礼盒', tag: '送礼首选', was: '￥258.00', now: '￥198.00' },
-  { id: 'prod-2', name: '进阶套装 · 小伙伴们', tag: '4 只装', was: '￥499.00', now: '￥399.00' },
-  { id: 'prod-3', name: '微笑小鸡 · 入门', tag: '零基础首选', was: '￥168.00', now: '￥128.00' },
-]
+import { CATALOG, FEATURED_IDS, yuan } from './catalog.js'
+
+export const PRODUCTS = FEATURED_IDS.map((id) => {
+  const p = CATALOG[id]
+  return { id: p.id, name: p.name, tag: p.tag, was: yuan(p.was), now: yuan(p.price) }
+})

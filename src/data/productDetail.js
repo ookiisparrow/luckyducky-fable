@@ -5,9 +5,15 @@
  *
  * 说明：图位（画廊/买家秀/推荐/详情图）一律走 MediaSlot 灰占位，
  * 所以这里不存真实图片地址，买家秀的配图用「数量」表示要画几个图槽。
+ *
+ * ⚠️ 这是「共用的描述性样例」：详情的头部身份（名/价/标签/划线价）由详情页按
+ * 商品 id 从 data/catalog.js 取（单一来源）；下面这些 title/price/was/tag 仅作
+ * 取不到 id 时的兜底。规格/评价/图文/套装等描述性内容暂为所有商品共用。
  */
+import { CATALOG } from './catalog.js'
+
 export const PRODUCT_DETAIL = {
-  // —— 头部 / 价格 ——
+  // —— 头部 / 价格（兜底；实际由 catalog 按 id 覆盖）——
   title: '幸运小鸭礼盒 · 零基础钩织套装',
   sub: '送礼首选 · 内含分步视频教程，第一次钩织也能轻松完成。',
   price: 198, // 现价（数字，￥ 由模板拼）
@@ -152,11 +158,6 @@ export const PRODUCT_DETAIL = {
     { icon: 'sparkles-purple', name: '专属幸运卡', qty: '1 张' },
   ],
 
-  // —— 为你推荐 ——
-  recs: [
-    { name: '微笑小鸡 · 入门', now: '￥128', was: '￥168' },
-    { name: '进阶套装 · 小伙伴们', now: '￥399', was: '￥499' },
-    { name: '幸运小鸭 · 单只', now: '￥98', was: '￥138' },
-    { name: '云朵小羊 · 入门', now: '￥148', was: '￥198' },
-  ],
+  // —— 为你推荐（从商品总表按 id 派生，价格与全店一致）——
+  recs: ['prod-3', 'prod-2', 'prod-4', 'prod-5'].map((id) => CATALOG[id]),
 }

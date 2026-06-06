@@ -15,32 +15,41 @@ import { onLoad } from '@dcloudio/uni-app'
 import Icon from '@/components/Icon.vue'
 import MediaSlot from '@/components/MediaSlot.vue'
 import { PRODUCT_DETAIL as PD } from '@/data/productDetail.js'
+import { getProduct } from '@/data/catalog.js'
 import { useCartStore } from '@/store/cart.js'
 
 const cart = useCartStore()
 const sel = ref(0) // 当前选中的画廊图
-const pid = ref('prod-1') // 商品 id（首页带过来；样例默认 prod-1）
-const title = ref(PD.title) // 默认样例标题；若首页带了商品名则用它
-// 价格优先用首页带过来的（不同商品价不同），无则退回样例价。
-// 描述性内容（规格/评价/图文）仍是共用样例，但价格这个关键数字与首页/购物车一致。
+// 商品身份按 id 从总表(catalog)取，单一来源；取不到时退回 PD 样例兜底。
+// 描述性内容（规格/评价/图文/套装）仍是共用样例。
+const pid = ref('prod-1')
+const title = ref(PD.title)
 const price = ref(PD.price)
 const was = ref(PD.was)
+const tag = ref(PD.tag)
 
 onLoad((q) => {
-  if (q && q.id) pid.value = q.id
-  if (q && q.name) title.value = decodeURIComponent(q.name)
-  if (q && q.price) price.value = Number(q.price)
-  if (q && q.was) was.value = Number(q.was)
+  const id = (q && q.id) || pid.value
+  pid.value = id
+  const p = getProduct(id)
+  if (p) {
+    title.value = p.name
+    price.value = p.price
+    was.value = p.was
+    tag.value = p.tag
+  } else if (q && q.name) {
+    title.value = decodeURIComponent(q.name)
+  }
 })
 
-// 加入购物车：真正写进 cart store（不再只弹 Toast）
+// 加入购物车：真正写进 cart store（用按 id 取到的身份）
 function addToCart() {
-  cart.add({ id: pid.value, name: title.value, tag: PD.tag, price: price.value, was: was.value })
+  cart.add({ id: pid.value, name: title.value, tag: tag.value, price: price.value, was: was.value })
   uni.showToast({ title: '已加入购物车', icon: 'none' })
 }
 // 立即购买：单件进结算草稿，直接去结算页（不影响购物车）
 function buyNow() {
-  cart.prepareBuyNow({ id: pid.value, name: title.value, tag: PD.tag, price: price.value, was: was.value })
+  cart.prepareBuyNow({ id: pid.value, name: title.value, tag: tag.value, price: price.value, was: was.value })
   uni.navigateTo({ url: '/pages/checkout/index' })
 }
 
@@ -241,8 +250,8 @@ function goReviews() {
           <view class="pdp-rec-body">
             <text class="pdp-rec-name">{{ p.name }}</text>
             <view class="pdp-rec-foot">
-              <text class="pdp-rec-now">{{ p.now }}</text>
-              <text class="pdp-rec-was">{{ p.was }}</text>
+              <text class="pdp-rec-now">￥{{ p.price }}</text>
+              <text class="pdp-rec-was">￥{{ p.was }}</text>
             </view>
           </view>
         </view>

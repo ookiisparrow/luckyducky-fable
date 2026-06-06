@@ -9,7 +9,8 @@ export const AS_TYPES = [
   { icon: 'message-square-warning', label: '投诉商家', sub: '问题反馈' },
 ]
 
+// 历史快照（denormalized，order-specific）；样例价对齐总表 catalog，避免看着不一致。
 export const AS_ORDERS = [
-  { name: '幸运小鸭礼盒 · 经典暖黄', meta: '已完成 · 2026-05-30', price: 178 },
-  { name: '进阶套装 · 小伙伴们', meta: '待收货 · 2026-06-02', price: 379 },
+  { name: '幸运小鸭礼盒 · 经典暖黄', meta: '已完成 · 2026-05-30', price: 198 },
+  { name: '进阶套装 · 小伙伴们', meta: '待收货 · 2026-06-02', price: 399 },
 ]

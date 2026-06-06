@@ -17,7 +17,8 @@
 - ✅ **商品详情页**（`pages/detail`，方案 A 经典电商）：浮层返回/分享 + 画廊缩略 + 价格卡 + 规格/服务 + 难度耗时 + 评价(评分分布/标签/前2条) + 图文详情(参数表) + 套装包含 + 为你推荐 + 固定底部购买坞。由首页产品卡 `uni.navigateTo` 带 `id/name` 进入。数据在 `data/productDetail.js`。
   - 图位全走 MediaSlot 灰占位；图标用 `static/icons/` 新增 11 个 svg（kit/stat 紫色、客服/收藏 content 色、分享白色；幸运卡用 `sparkles-purple` 与首页 ink 版区分）。
   - **全部评价子页**（`pages/reviews`）已做：评分汇总 + 标签 + 筛选(高亮态) + 全部评价列表；详情「全部 998 条」进入。
-  - ⚠️ **描述性内容为单一样例**：不同商品点进来规格/评价/图文相同；但**标题与价格用所点商品的实际值**（首页产品卡把 `price/was` 带进详情，详情用于展示 + 加购，故首页→详情→购物车价格一致）。规格选择/分享 暂为 Toast 占位（原型本身也是占位）。
+  - ✅ **商品身份按 id 单一来源**：详情头部的名/价/划线价/标签按 `q.id` 从 `data/catalog.js` 取（首页/购物车推荐/详情推荐也都从 catalog 派生），改一处全店一致。
+  - ⚠️ **描述性内容仍为共用样例**：不同商品点进来规格/评价/图文/套装相同（catalog 暂只存身份，描述性内容待按 id 扩充）。规格选择/分享 暂为 Toast 占位（原型本身也是占位）。
   - 决策：全站强调色统一为紫（`$brand` 已由蓝改为紫 `#a371ea`，见关键决策记录）。
 - ✅ **购物车页**（`pages/cart`）：由 `store/cart.js`（Pinia）真实驱动 —— 空车态/有货态、条目选择、数量增减（减到 1 再减→确认移除）、全选、选中合计、浮动「去结算」栏。详情页/购物车推荐位「加入购物车」真正入车（按 id 合并 +1）。数据 `data/cart.js`（为你推荐）。「去结算」暂 Toast 占位（结算页是下一步）。强调色用 `$purple`。
   - 说明：Tab 用 `uni.reLaunch` 切页但不重启 JS，故 cart store 内存态在三 Tab 间保留；加购后切购物车即见。
@@ -163,6 +164,14 @@ const emit = defineEmits(['tap'])
 ## 9. 内容数据：放 `data/`，将来换接口
 首页的产品/评价/FAQ 等都在 `src/data/*.js`。接后端时：
 在 `api/shop.js` 实现请求 → 页面里把 `import 数据` 改成「请求后写入 ref」。数据结构尽量与现有一致。
+
+### 9.0 商品单一来源：`data/catalog.js`（按 id）
+商品「身份」（id/name/tag/price/was，数字价）集中在 **`data/catalog.js`** 的 `CATALOG`，
+**所有「活的」商品入口都从它按 id 派生**：首页横滑(`products.js`)、购物车推荐(`cart.js`)、
+详情推荐(`productDetail.js` 的 recs)、详情头部(`pages/detail` 用 `getProduct(q.id)`)。
+改一个价全店一致。`getProduct(id)` / `FEATURED_IDS` / `yuan(n)` 也在此。
+> 订单/售后里的商品是**历史快照**（`data/orders.js`/`aftersales.js` 各存一份，order-specific 字段如 spec/qty/meta/status）；
+> 不从 catalog 取，但样例价**对齐** catalog 以免看着不一致。接后端时 catalog → `api/shop.js`。
 
 ### 9.1 接口调用模板（接后端时照此写）
 请求层签名见 `src/api/request.js`：`request({ url, method, data })`（**不是** `request.get`）。
