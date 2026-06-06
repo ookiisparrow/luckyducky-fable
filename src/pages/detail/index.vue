@@ -32,6 +32,11 @@ function addToCart() {
   cart.add({ id: pid.value, name: title.value, tag: PD.tag, price: PD.price, was: PD.was })
   uni.showToast({ title: '已加入购物车', icon: 'none' })
 }
+// 立即购买：单件进结算草稿，直接去结算页（不影响购物车）
+function buyNow() {
+  cart.prepareBuyNow({ id: pid.value, name: title.value, tag: PD.tag, price: PD.price, was: PD.was })
+  uni.navigateTo({ url: '/pages/checkout/index' })
+}
 
 // 评分星：实心 + 空心拼满 5 颗
 const stars = (n) => '★★★★★'.slice(0, n) + '☆☆☆☆☆'.slice(0, 5 - n)
@@ -248,7 +253,7 @@ function toast(t) {
       </view>
       <view class="pdp-buy-actions">
         <view class="pdp-btn pdp-btn-cart" @tap="addToCart">加入购物车</view>
-        <view class="pdp-btn pdp-btn-buy" @tap="toast('立即购买（结算开发中）')">立即购买</view>
+        <view class="pdp-btn pdp-btn-buy" @tap="buyNow">立即购买</view>
       </view>
     </view>
   </view>

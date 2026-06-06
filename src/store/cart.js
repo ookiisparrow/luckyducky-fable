@@ -16,6 +16,11 @@ import { defineStore } from 'pinia'
 export const useCartStore = defineStore('cart', {
   state: () => ({
     items: [],
+    // 结算草稿：进入结算页时的下单清单快照。
+    // fromCart=true 表示来自购物车（提交成功后从车里移除这些条目）；
+    // false 表示详情页「立即购买」（不影响购物车）。
+    checkoutItems: [],
+    checkoutFromCart: false,
   }),
   getters: {
     isEmpty: (s) => s.items.length === 0,
@@ -58,6 +63,29 @@ export const useCartStore = defineStore('cart', {
     toggleAll() {
       const next = !this.allSelected
       this.items.forEach((it) => (it.selected = next))
+    },
+
+    // —— 结算草稿 ——
+    // 购物车「去结算」：把选中条目快照进草稿
+    prepareCheckoutFromCart() {
+      this.checkoutItems = this.items.filter((it) => it.selected).map((it) => ({ ...it }))
+      this.checkoutFromCart = true
+    },
+    // 详情页「立即购买」：单件直接进草稿（不动购物车）
+    prepareBuyNow(p) {
+      this.checkoutItems = [
+        { id: p.id, name: p.name, tag: p.tag || '', price: p.price, was: p.was, qty: 1 },
+      ]
+      this.checkoutFromCart = false
+    },
+    // 提交成功后：来自购物车的清单从车里移除，清空草稿
+    finishCheckout() {
+      if (this.checkoutFromCart) {
+        const ids = this.checkoutItems.map((it) => it.id)
+        this.items = this.items.filter((it) => !ids.includes(it.id))
+      }
+      this.checkoutItems = []
+      this.checkoutFromCart = false
     },
   },
 })

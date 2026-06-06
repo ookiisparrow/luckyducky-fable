@@ -20,6 +20,20 @@
       }
     },
     {
+      "path": "pages/checkout/index",
+      "style": {
+        "navigationBarTitleText": "提交订单",
+        "navigationStyle": "custom"
+      }
+    },
+    {
+      "path": "pages/paysuccess/index",
+      "style": {
+        "navigationBarTitleText": "支付结果",
+        "navigationStyle": "custom"
+      }
+    },
+    {
       "path": "pages/me/index",
       "style": {
         "navigationBarTitleText": "我"

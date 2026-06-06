@@ -29,7 +29,8 @@ function onCheckout() {
     uni.showToast({ title: '请先选择商品', icon: 'none' })
     return
   }
-  uni.showToast({ title: '去结算（结算页开发中）', icon: 'none' })
+  cart.prepareCheckoutFromCart()
+  uni.navigateTo({ url: '/pages/checkout/index' })
 }
 </script>
 
