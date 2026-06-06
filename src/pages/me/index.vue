@@ -20,10 +20,8 @@ function toast(t) {
   uni.showToast({ title: t, icon: 'none' })
 }
 function continueWatch() {
-  // 接已实现的播放页
-  uni.navigateTo({
-    url: `/pages/player/index?name=${encodeURIComponent(V.name)}&ep=${encodeURIComponent(V.ep)}`,
-  })
+  // 续播课程表里进行中的那节（l3 · 看懂图解里的符号）
+  uni.navigateTo({ url: '/pages/player/index?id=l3' })
 }
 function allCourses() {
   // 首次进视频课先看欢迎引导，之后直达目录

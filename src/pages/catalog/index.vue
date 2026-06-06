@@ -36,12 +36,8 @@ function lessonSub(l, li) {
 
 // 点课时 → 进播放页，带上 章节/节次/课名（播放页显示用）
 function openLesson(lesson) {
-  const gi = ALL_LESSONS.findIndex((x) => x.id === lesson.id)
-  const ci = COURSE.chapters.findIndex((c) => c.lessons.some((x) => x.id === lesson.id))
-  const ep = `第 ${ci + 1} 章 · 第 ${gi + 1} 节`
-  uni.navigateTo({
-    url: `/pages/player/index?name=${encodeURIComponent(lesson.name)}&ep=${encodeURIComponent(ep)}`,
-  })
+  // 只传 id，播放页按 id 从课程表取名/章节、并支持上一集/下一集
+  uni.navigateTo({ url: `/pages/player/index?id=${lesson.id}` })
 }
 function startFirst() {
   // 从第一个未学完的课开始（没有就第一节）
