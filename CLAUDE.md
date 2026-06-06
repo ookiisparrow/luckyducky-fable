@@ -35,6 +35,7 @@
   - ⚠️ 全部为**样例订单**(无真实订单系统)；确认收货/提醒发货/物流/再次购买(进详情) 为 Toast/弹窗/跳转；退款→售后页、评价晒单→评价页 已接通。
 - ✅ **售后页 + 评价晒单页**（`pages/aftersales`、`pages/review`，数据 `data/aftersales.js`）：售后=服务类型四宫格+可申请订单+帮助行(均 Toast/无真实售后系统)；评价=星级评分+标签多选+文字(计数)+晒图(灰占位增删)+匿名开关，「发布」Toast。入口：我的订单「退款/售后」、订单详情「申请退款/评价晒单」。
 - ✅ **工程化**：设计 token（`uni.scss`）、Pinia/`store`、`api` 空壳、`MediaSlot` 媒体槽、ESLint + Prettier。
+- ✅ **组件化收口**（2026-06-06）：把多页 1:1 复制的块抽成组件 —— `PriceSummary`/`RatingSummary`/`ReviewItem`/`AddressBlock`/`OrderItem`（展示）、`CoSwitch`/`QuantityStepper`（交互叶子）；播放页 `HelpSheet` 拆出后 `player` 由 1318→496 行。详见组件分类（§4.1）与其中的 scoped 隔离铁律/故意没抽清单。⚠️ 纯搬家不改行为、lint+双端 build 通过，但**全程未做像素级验证**，需本机眼校（HelpSheet 交互最该重点点一遍）。
 - ✅ **构建**：H5 与 mp-weixin 均 `build` 通过。
 - ✅ **视频教程流程**：欢迎页(变体A) → 课程目录 → 播放页。播放页**对照设计稿 VideoPlayer 重做**：真 `<video>` 非全屏铺满(保同层渲染) + 知识点分段进度 + 段末自动暂停→重复播放 + 顶部「收起/标题/更多」+ 底部「上一集/求助(琥珀)/下一集」+ **完整求助面板**(在线客服聊天 / 遇到问题→辅助视频(海报占位+计时模拟) / 学习交流群二维码 / 常见问题FAQ / 反馈表单)。研究开关(0.5×慢放/单段循环/段末暂停开关/后退10s)按设计稿移除。上一集/下一集按 id 从 `data/course.js` 定位(catalog/me 传 id)。页面 `pages/welcome`、`pages/catalog`、`pages/player`。
   - **欢迎页入口**：我的页「全部教程」首次进视频课自动放欢迎引导(`uni.setStorageSync('ld_video_intro_seen')` 记看过、之后直达目录)；课程目录页有「重看视频教程引导」可再看。「继续观看」→ 播放页续播（不经欢迎页）。
@@ -113,10 +114,16 @@ src/
 
 ### 4.1 组件分类（新增组件时照此归类，放进 `src/components/`）
 - **页面区块**（整屏一段）：`Hero` / `BrandIntro` / `FeatureProducts` / `TrustStrip` / `Reassurance` / `Reviews` / `FAQ` / `ClosingCTA` / `SiteFooter`
-- **卡片**（列表里的一项）：`ProductCard` / `ReviewCard`
-- **基础控件**（跨页面复用的小件）：`Icon` / `MediaSlot` / `Accordion` / `TabBar` / `Toast` / `BackTop` / `CoNavBar`（结算/订单/地址等页的通用顶部导航条，`mode=back|close`）
-- **媒体**：`components/media/`（将来的定制视频播放器）
+- **卡片 / 列表项**：`ProductCard` / `ReviewCard`（首页买家秀）/ `ReviewItem`（详情&全部评价的单条评价，`:review` + `divided`）/ `OrderItem`（结算/订单/待付的商品行，默认「×数量」、`#foot` 插槽可换步进器）
+- **展示块**（跨页只读区块）：`RatingSummary`（评分汇总 `:rating`）/ `PriceSummary`（金额明细 `:goods/:coupon/:ship/:total`）/ `AddressBlock`（收货地址块 `:address` + `tappable`，空+可点显示「添加地址」、空+只读不渲染）
+- **基础控件**（跨页面复用的小件）：`Icon` / `MediaSlot` / `Accordion` / `TabBar` / `Toast` / `BackTop` / `CoNavBar`（顶部导航 `mode=back|close`）/ `CoSwitch`（开关 `:on`，点击交互由外层整行控制以保大热区）/ `QuantityStepper`（数量步进，发 `inc`/`dec` 事件让各页保留自己的下限逻辑，`size=md`购物车/`sm`结算）
+- **媒体 / 大块**：`components/media/`（将来的定制视频播放器）；`HelpSheet`（播放页求助面板，自带开合态、对外 `defineExpose({ open })`，父级用 ref 调；打开前父级先 `ctx.pause()`）
 > 现阶段组件平铺在 `components/` 下即可；数量变多再按上面分类建子目录。
+>
+> 🧩 **组件 scoped 隔离的两条铁律（抽组件前必读，踩过坑）**：
+> 1. **组件 `<style scoped>` 够不到 co.scss 的类，反之亦然。** 所以当某个原子类被「组件内」与「组件外」**同时**使用时，必须两边各留一份（已注释标注）：`co-addr-tag`（也被地址管理页 coam- 用）、`co-item-spec`/`co-price`/`.cny`（也被评价页、搭配购买用）。这不是冗余 bug，是 scoped 的必然代价。
+> 2. **插槽内容属父级作用域**（在父页编译、用父页的导入与 scoped）。故 `OrderItem` 的 `#foot` 里能直接塞父页导入的 `QuantityStepper`。
+> ⛔ **故意没抽的**（经济考量，非遗漏）：`FormField`（表单字段拆组件后 `:last-child` 对每行都成立→丢分隔线，得多传 `last` prop，markup 还没怎么省，不划算）；`StarInput`（仅评价页 1 处用）；`TagChip`/`EmptyState`/`BottomDock`（各处样式/内容差异大，已由 co.scss 共享样式或本就该各写）。要补抽再说，但先掂量「省的 markup」vs「被迫复制的原子类 + 变体 prop」。
 
 ## 5. 命名规范
 - 组件文件：**大驼峰** `PascalCase.vue`（如 `ProductCard.vue`）。
