@@ -53,7 +53,7 @@ const emit = defineEmits(['open', 'add'])
 @keyframes ld-prod-flash {
   0%,
   100% {
-    box-shadow: 0 0 0 0 rgba(0, 82, 217, 0);
+    box-shadow: 0 0 0 0 rgba(163, 113, 234, 0);
   }
   18%,
   62% {
