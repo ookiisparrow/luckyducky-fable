@@ -11,7 +11,10 @@
 import Icon from '@/components/Icon.vue'
 import MediaSlot from '@/components/MediaSlot.vue'
 import TabBar from '@/components/TabBar.vue'
-import { USER, CONTINUE_VIDEO as V, ORDER_TABS } from '@/data/profile.js'
+import { CONTINUE_VIDEO as V, ORDER_TABS } from '@/data/profile.js'
+import { useUserStore } from '@/store/user.js'
+
+const user = useUserStore()
 
 function toast(t) {
   uni.showToast({ title: t, icon: 'none' })
@@ -31,6 +34,9 @@ function onOrder() {
 function goAddress() {
   uni.navigateTo({ url: '/pages/address/index' })
 }
+function goEditProfile() {
+  uni.navigateTo({ url: '/pages/profile-edit/index' })
+}
 </script>
 
 <template>
@@ -39,13 +45,13 @@ function goAddress() {
     <view class="my-header my-header-purple">
       <view class="my-navrow"><text class="my-navtitle">我的</text></view>
       <view class="my-id">
-        <view class="my-avatar"><MediaSlot ratio="1/1" :radius="31" /></view>
+        <view class="my-avatar"><MediaSlot ratio="1/1" :radius="31" :src="user.profile.avatar" /></view>
         <view class="my-id-text">
-          <text class="my-id-name">{{ USER.name }}</text>
-          <text class="my-id-sub">{{ USER.phone }}</text>
-          <text v-if="USER.bio" class="my-id-bio">{{ USER.bio }}</text>
+          <text class="my-id-name">{{ user.profile.name }}</text>
+          <text class="my-id-sub">{{ user.profile.phone }}</text>
+          <text v-if="user.profile.bio" class="my-id-bio">{{ user.profile.bio }}</text>
         </view>
-        <view class="my-edit" @tap="toast('资料编辑（开发中）')">
+        <view class="my-edit" @tap="goEditProfile">
           <Icon name="pencil" :size="13" /><text>编辑</text>
         </view>
       </view>
