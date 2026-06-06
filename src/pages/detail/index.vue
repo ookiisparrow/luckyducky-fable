@@ -15,13 +15,23 @@ import { onLoad } from '@dcloudio/uni-app'
 import Icon from '@/components/Icon.vue'
 import MediaSlot from '@/components/MediaSlot.vue'
 import { PRODUCT_DETAIL as PD } from '@/data/productDetail.js'
+import { useCartStore } from '@/store/cart.js'
 
+const cart = useCartStore()
 const sel = ref(0) // 当前选中的画廊图
+const pid = ref('prod-1') // 商品 id（首页带过来；样例默认 prod-1）
 const title = ref(PD.title) // 默认样例标题；若首页带了商品名则用它
 
 onLoad((q) => {
+  if (q && q.id) pid.value = q.id
   if (q && q.name) title.value = decodeURIComponent(q.name)
 })
+
+// 加入购物车：真正写进 cart store（不再只弹 Toast）
+function addToCart() {
+  cart.add({ id: pid.value, name: title.value, tag: PD.tag, price: PD.price, was: PD.was })
+  uni.showToast({ title: '已加入购物车', icon: 'none' })
+}
 
 // 评分星：实心 + 空心拼满 5 颗
 const stars = (n) => '★★★★★'.slice(0, n) + '☆☆☆☆☆'.slice(0, 5 - n)
@@ -237,7 +247,7 @@ function toast(t) {
         <Icon name="star" :size="21" /><text>收藏</text>
       </view>
       <view class="pdp-buy-actions">
-        <view class="pdp-btn pdp-btn-cart" @tap="toast('已加入购物车')">加入购物车</view>
+        <view class="pdp-btn pdp-btn-cart" @tap="addToCart">加入购物车</view>
         <view class="pdp-btn pdp-btn-buy" @tap="toast('立即购买（结算开发中）')">立即购买</view>
       </view>
     </view>
