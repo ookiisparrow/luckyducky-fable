@@ -17,6 +17,27 @@
       "style": {
         "navigationBarTitleText": "我"
       }
+    },
+    {
+      "path": "pages/player/index",
+      "style": {
+        "navigationBarTitleText": "视频教程",
+        "navigationStyle": "custom"
+      }
+    },
+    {
+      "path": "pages/welcome/index",
+      "style": {
+        "navigationBarTitleText": "视频教程",
+        "navigationStyle": "custom"
+      }
+    },
+    {
+      "path": "pages/catalog/index",
+      "style": {
+        "navigationBarTitleText": "课程目录",
+        "navigationStyle": "custom"
+      }
     }
   ],
   "globalStyle": {
