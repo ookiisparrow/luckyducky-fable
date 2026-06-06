@@ -8,6 +8,7 @@ import { ref, computed, onUnmounted } from 'vue'
 import Icon from '@/components/Icon.vue'
 import MediaSlot from '@/components/MediaSlot.vue'
 import CoNavBar from '@/components/CoNavBar.vue'
+import PriceSummary from '@/components/PriceSummary.vue'
 import { useAddressStore } from '@/store/address.js'
 import { PENDING_ORDER as O, COUPON, SHIP } from '@/data/orders.js'
 import { goBack } from '@/utils/nav.js'
@@ -115,24 +116,7 @@ function gopay() {
       </view>
 
       <!-- 金额明细 -->
-      <view class="co-card">
-        <view class="co-summary">
-          <view class="co-sum-row">
-            <text class="co-sum-k">商品金额</text><text class="co-sum-b">￥{{ money(goods) }}</text>
-          </view>
-          <view class="co-sum-row">
-            <text class="co-sum-k">运费</text><text class="co-sum-b">￥0.00（包邮）</text>
-          </view>
-          <view class="co-sum-row discount">
-            <text class="co-sum-k">优惠券</text><text class="co-sum-b">-￥{{ money(COUPON) }}</text>
-          </view>
-          <view class="co-sum-div"></view>
-          <view class="co-sum-row total">
-            <text class="co-sum-k">需付款</text>
-            <text class="co-sum-b"><text class="cny">￥</text>{{ money(pay) }}</text>
-          </view>
-        </view>
-      </view>
+      <PriceSummary :goods="goods" :coupon="COUPON" :total="pay" total-label="需付款" />
     </view>
 
     <view class="co-foot"></view>

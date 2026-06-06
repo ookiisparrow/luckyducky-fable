@@ -14,11 +14,12 @@ import { ref } from 'vue'
 import { onLoad } from '@dcloudio/uni-app'
 import Icon from '@/components/Icon.vue'
 import MediaSlot from '@/components/MediaSlot.vue'
+import RatingSummary from '@/components/RatingSummary.vue'
+import ReviewItem from '@/components/ReviewItem.vue'
 import { PRODUCT_DETAIL as PD } from '@/data/productDetail.js'
 import { getProduct } from '@/data/catalog.js'
 import { useCartStore } from '@/store/cart.js'
 import { goBack } from '@/utils/nav.js'
-import { stars } from '@/utils/format.js'
 
 const cart = useCartStore()
 const sel = ref(0) // 当前选中的画廊图
@@ -156,41 +157,8 @@ function goReviews() {
           <text>全部 {{ PD.rating.count }} 条</text><Icon name="chevron-right" :size="14" />
         </view>
       </view>
-      <view class="pdp-rate-head">
-        <view class="pdp-rate-score">
-          <text class="pdp-rate-big">{{ PD.rating.score }}</text>
-          <text class="pdp-stars">{{ stars(5) }}</text>
-          <text class="pdp-rate-count">{{ PD.rating.count }} 条评价</text>
-        </view>
-        <view class="pdp-rate-bars">
-          <view v-for="([k, v], i) in PD.rating.dist" :key="i" class="pdp-rate-bar">
-            <text class="pdp-rate-k">{{ k }}</text>
-            <view class="pdp-rate-track">
-              <view class="pdp-rate-fill" :style="{ width: v + '%' }"></view>
-            </view>
-          </view>
-        </view>
-      </view>
-      <view class="pdp-chips">
-        <view v-for="([t, n], i) in PD.rating.tags" :key="i" class="pdp-chip">
-          <text>{{ t }}</text
-          ><text class="pdp-chip-n">{{ n }}</text>
-        </view>
-      </view>
-      <view v-for="(r, i) in PD.reviews" :key="i" class="pdp-review">
-        <view class="pdp-review-top">
-          <view class="pdp-review-av"><MediaSlot ratio="1/1" :radius="14" /></view>
-          <text class="pdp-review-name">{{ r.name }}</text>
-          <text class="pdp-review-date">{{ r.date }}</text>
-        </view>
-        <text class="pdp-stars">{{ stars(r.n) }}</text>
-        <text class="pdp-review-text">{{ r.text }}</text>
-        <view v-if="r.photos" class="pdp-review-photos">
-          <view v-for="p in r.photos" :key="p" class="pdp-review-photo">
-            <MediaSlot ratio="1/1" :radius="4" />
-          </view>
-        </view>
-      </view>
+      <RatingSummary :rating="PD.rating" />
+      <ReviewItem v-for="(r, i) in PD.reviews" :key="i" :review="r" divided />
     </view>
 
     <!-- 图文详情 -->
@@ -546,129 +514,7 @@ function goReviews() {
   margin-right: 2px;
 }
 
-/* 评价 */
-.pdp-stars {
-  color: $duck-deep;
-  font-size: 13px;
-  letter-spacing: 1.5px;
-}
-.pdp-rate-head {
-  display: flex;
-  align-items: center;
-  padding: 14px 20px 8px;
-}
-.pdp-rate-score {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  flex: 0 0 auto;
-  margin-right: 20px;
-}
-.pdp-rate-big {
-  font-family: $font-sans;
-  font-size: 34px;
-  font-weight: 700;
-  color: $ink;
-  line-height: 1;
-}
-.pdp-rate-score .pdp-stars {
-  margin-top: 4px;
-}
-.pdp-rate-count {
-  font-size: 11px;
-  color: $content-2;
-  margin-top: 4px;
-}
-.pdp-rate-bars {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-}
-.pdp-rate-bar {
-  display: flex;
-  align-items: center;
-  margin-bottom: 5px;
-}
-.pdp-rate-k {
-  font-size: 11px;
-  color: $content-2;
-  width: 26px;
-  flex: 0 0 26px;
-}
-.pdp-rate-track {
-  flex: 1;
-  height: 5px;
-  border-radius: 3px;
-  background: $line;
-  overflow: hidden;
-  margin-left: 8px;
-}
-.pdp-rate-fill {
-  height: 100%;
-  background: $duck-deep;
-  border-radius: 3px;
-}
-.pdp-chips {
-  display: flex;
-  flex-wrap: wrap;
-  padding: 8px 20px 14px;
-}
-.pdp-chip {
-  font-size: 12.5px;
-  color: $content;
-  background: $bg-grey;
-  border-radius: $r-pill;
-  padding: 6px 12px;
-  margin: 0 8px 8px 0;
-}
-.pdp-chip-n {
-  color: $content-2;
-  font-family: $font-sans;
-  margin-left: 3px;
-}
-.pdp-review {
-  padding: 14px 20px;
-  border-top: 0.5px solid $line-soft;
-}
-.pdp-review-top {
-  display: flex;
-  align-items: center;
-  margin-bottom: 9px;
-}
-.pdp-review-av {
-  width: 28px;
-  height: 28px;
-  border-radius: 50%;
-  overflow: hidden;
-  flex: 0 0 auto;
-  margin-right: 9px;
-}
-.pdp-review-name {
-  flex: 1;
-  font-size: 13px;
-  color: $ink;
-}
-.pdp-review-date {
-  font-size: 11px;
-  color: $content-2;
-}
-.pdp-review-text {
-  display: block;
-  font-size: 14px;
-  line-height: 1.6;
-  color: $content;
-  margin: 9px 0;
-}
-.pdp-review-photos {
-  display: flex;
-}
-.pdp-review-photo {
-  width: 72px;
-  height: 72px;
-  border-radius: $r-xs;
-  overflow: hidden;
-  margin-right: 6px;
-}
+/* 评价相关样式已移到 components/RatingSummary.vue + ReviewItem.vue */
 
 /* 图文详情 */
 .pdp-detail {

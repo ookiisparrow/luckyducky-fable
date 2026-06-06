@@ -15,6 +15,7 @@ import { ref, computed } from 'vue'
 import Icon from '@/components/Icon.vue'
 import CoNavBar from '@/components/CoNavBar.vue'
 import MediaSlot from '@/components/MediaSlot.vue'
+import PriceSummary from '@/components/PriceSummary.vue'
 import { useCartStore } from '@/store/cart.js'
 import { useAddressStore } from '@/store/address.js'
 import { CHECKOUT_ADDONS, COUPON, SHIP } from '@/data/checkout.js'
@@ -176,25 +177,7 @@ function onSubmit() {
       </view>
 
       <!-- 金额明细 -->
-      <view class="co-card">
-        <view class="co-summary">
-          <view class="co-sum-row">
-            <text class="co-sum-k">商品金额</text><text class="co-sum-b">￥{{ money(goods) }}</text>
-          </view>
-          <view class="co-sum-row">
-            <text class="co-sum-k">运费</text>
-            <text class="co-sum-b">{{ SHIP === 0 ? '￥0.00（包邮）' : '￥' + money(SHIP) }}</text>
-          </view>
-          <view class="co-sum-row discount">
-            <text class="co-sum-k">优惠券</text><text class="co-sum-b">-￥{{ money(COUPON) }}</text>
-          </view>
-          <view class="co-sum-div"></view>
-          <view class="co-sum-row total">
-            <text class="co-sum-k">实付款</text>
-            <text class="co-sum-b"><text class="cny">￥</text>{{ money(pay) }}</text>
-          </view>
-        </view>
-      </view>
+      <PriceSummary :goods="goods" :coupon="COUPON" :ship="SHIP" :total="pay" />
     </view>
 
     <!-- 给提交坞让位 -->

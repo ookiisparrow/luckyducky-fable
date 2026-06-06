@@ -221,49 +221,7 @@
   font-size: 19px;
 }
 
-/* 金额明细 */
-.co-summary {
-  margin: 4px 12px 14px;
-  background: $bg-faint;
-  border-radius: $r-md;
-  padding: 14px 16px;
-}
-.co-sum-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 5px 0;
-}
-.co-sum-k {
-  font-size: 13.5px;
-  color: $content-2;
-}
-.co-sum-b {
-  font-family: $font-sans;
-  font-weight: 500;
-  font-size: 14px;
-  color: $content;
-}
-.co-sum-row.discount .co-sum-b {
-  color: $red;
-}
-.co-sum-div {
-  height: 0.5px;
-  background: $line;
-  margin: 7px 0;
-}
-.co-sum-row.total .co-sum-k {
-  font-size: 14px;
-  color: $ink;
-}
-.co-sum-row.total .co-sum-b {
-  font-weight: 700;
-  font-size: 18px;
-  color: $ink;
-}
-.co-sum-row.total .cny {
-  font-size: 13px;
-}
+/* 金额明细：见 components/PriceSummary.vue（不再放这里） */
 
 /* 底部坞（容器；横排坞由各页另加 display:flex） */
 .co-foot {
