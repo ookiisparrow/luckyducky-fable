@@ -9,6 +9,7 @@ import { ref, computed } from 'vue'
 import Icon from '@/components/Icon.vue'
 import MediaSlot from '@/components/MediaSlot.vue'
 import { useUserStore } from '@/store/user.js'
+import { goBack } from '@/utils/nav.js'
 
 const user = useUserStore()
 const name = ref(user.profile.name || '')
@@ -26,11 +27,7 @@ function pickAvatar() {
     },
   })
 }
-function back() {
-  const p = getCurrentPages()
-  if (p.length > 1) uni.navigateBack()
-  else uni.reLaunch({ url: '/pages/me/index' })
-}
+const back = () => goBack('/pages/me/index')
 function save() {
   if (!valid.value) return
   user.updateProfile({

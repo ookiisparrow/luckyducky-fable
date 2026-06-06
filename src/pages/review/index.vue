@@ -7,6 +7,7 @@
 import { ref } from 'vue'
 import Icon from '@/components/Icon.vue'
 import MediaSlot from '@/components/MediaSlot.vue'
+import { goBack } from '@/utils/nav.js'
 
 const REV_TAGS = ['教程清晰', '很可爱', '适合新手', '包装用心', '物流快', '线材好']
 const REV_LABEL = ['', '非常不满', '不满意', '一般', '满意', '非常满意']
@@ -29,11 +30,7 @@ function addPhoto() {
 function rmPhoto() {
   if (photoCount.value > 0) photoCount.value--
 }
-function back() {
-  const p = getCurrentPages()
-  if (p.length > 1) uni.navigateBack()
-  else uni.reLaunch({ url: '/pages/me/index' })
-}
+const back = () => goBack('/pages/me/index')
 function publish() {
   uni.showToast({ title: '评价已发布 · 感谢分享~', icon: 'none' })
   setTimeout(back, 400)

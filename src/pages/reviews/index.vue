@@ -8,15 +8,12 @@ import { ref } from 'vue'
 import Icon from '@/components/Icon.vue'
 import MediaSlot from '@/components/MediaSlot.vue'
 import { PRODUCT_DETAIL as PD } from '@/data/productDetail.js'
+import { goBack } from '@/utils/nav.js'
+import { stars } from '@/utils/format.js'
 
 const f = ref(0)
-const stars = (n) => '★★★★★'.slice(0, n) + '☆☆☆☆☆'.slice(0, 5 - n)
 
-function back() {
-  const p = getCurrentPages()
-  if (p.length > 1) uni.navigateBack()
-  else uni.reLaunch({ url: '/pages/index/index' })
-}
+const back = () => goBack('/pages/index/index')
 </script>
 
 <template>

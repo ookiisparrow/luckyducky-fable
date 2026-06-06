@@ -12,6 +12,8 @@ import Icon from '@/components/Icon.vue'
 import MediaSlot from '@/components/MediaSlot.vue'
 import { useAddressStore } from '@/store/address.js'
 import { ORDER_CFG, COUPON, SHIP } from '@/data/orders.js'
+import { goBack } from '@/utils/nav.js'
+import { money } from '@/utils/format.js'
 
 const address = useAddressStore()
 const status = ref('toship')
@@ -24,13 +26,7 @@ onLoad((q) => {
 
 const goods = computed(() => cfg.value.items.reduce((s, it) => s + it.price * (it.qty || 1), 0))
 const pay = computed(() => Math.max(0, goods.value + SHIP - COUPON))
-const money = (n) => Number(n).toFixed(2)
-
-function back() {
-  const p = getCurrentPages()
-  if (p.length > 1) uni.navigateBack()
-  else uni.reLaunch({ url: '/pages/me/index' })
-}
+const back = () => goBack('/pages/me/index')
 function onAction(a) {
   const k = a.key
   if (k === 'confirm') {

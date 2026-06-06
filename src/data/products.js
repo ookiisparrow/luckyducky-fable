@@ -3,7 +3,8 @@
  * 保持「字符串价(￥X.00)」形状，首页 ProductCard 模板不动。
  * 以后接后端：用 api/shop.js 的 getProducts() 返回同形状即可。
  */
-import { CATALOG, FEATURED_IDS, yuan } from './catalog.js'
+import { CATALOG, FEATURED_IDS } from './catalog.js'
+import { yuan } from '../utils/format.js'
 
 export const PRODUCTS = FEATURED_IDS.map((id) => {
   const p = CATALOG[id]

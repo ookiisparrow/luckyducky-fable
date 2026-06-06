@@ -7,6 +7,7 @@
 import { ref, computed } from 'vue'
 import Icon from '@/components/Icon.vue'
 import { COURSE, ALL_LESSONS } from '@/data/course.js'
+import { goBack } from '@/utils/nav.js'
 
 // 默认展开第 1 章
 const open = ref({ c1: true })
@@ -47,11 +48,7 @@ function startFirst() {
   const next = ALL_LESSONS.find((l) => !l.done) || ALL_LESSONS[0]
   openLesson(next)
 }
-function back() {
-  const pages = getCurrentPages()
-  if (pages.length > 1) uni.navigateBack()
-  else uni.reLaunch({ url: '/pages/index/index' })
-}
+const back = () => goBack('/pages/index/index')
 function fav() {
   uni.showToast({ title: '已收藏本课程~', icon: 'none' })
 }

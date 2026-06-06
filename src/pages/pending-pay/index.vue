@@ -9,13 +9,13 @@ import Icon from '@/components/Icon.vue'
 import MediaSlot from '@/components/MediaSlot.vue'
 import { useAddressStore } from '@/store/address.js'
 import { PENDING_ORDER as O, COUPON, SHIP } from '@/data/orders.js'
+import { goBack } from '@/utils/nav.js'
+import { money } from '@/utils/format.js'
 
 const address = useAddressStore()
 const addr = computed(() => address.defaultAddress)
 const goods = O.price * (O.qty || 1)
 const pay = Math.max(0, goods + SHIP - COUPON)
-const money = (n) => Number(n).toFixed(2)
-
 const secs = ref(15 * 60 - 1)
 const timer = setInterval(() => {
   secs.value = secs.value > 0 ? secs.value - 1 : 0
@@ -27,11 +27,7 @@ const mmss = computed(() => {
   return `${m}:${s}`
 })
 
-function back() {
-  const p = getCurrentPages()
-  if (p.length > 1) uni.navigateBack()
-  else uni.reLaunch({ url: '/pages/me/index' })
-}
+const back = () => goBack('/pages/me/index')
 function cancel() {
   uni.showModal({
     title: '取消订单',

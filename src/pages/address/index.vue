@@ -6,14 +6,11 @@
  */
 import Icon from '@/components/Icon.vue'
 import { useAddressStore } from '@/store/address.js'
+import { goBack } from '@/utils/nav.js'
 
 const address = useAddressStore()
 
-function back() {
-  const p = getCurrentPages()
-  if (p.length > 1) uni.navigateBack()
-  else uni.reLaunch({ url: '/pages/me/index' })
-}
+const back = () => goBack('/pages/me/index')
 function pick(a) {
   address.setDefault(a.id)
   uni.showToast({ title: '已设为默认地址', icon: 'none' })

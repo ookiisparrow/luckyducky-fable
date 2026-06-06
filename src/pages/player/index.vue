@@ -15,6 +15,7 @@
  */
 import { ref, computed, onMounted, getCurrentInstance } from 'vue'
 import { onLoad } from '@dcloudio/uni-app'
+import { goBack } from '@/utils/nav.js'
 
 // —— 占位视频（替换为真实钩织拍摄）——
 const SRC = 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4'
@@ -205,11 +206,7 @@ function helpAction(msg) {
   uni.showToast({ title: msg, icon: 'none' })
 }
 
-function back() {
-  const pages = getCurrentPages()
-  if (pages.length > 1) uni.navigateBack()
-  else uni.reLaunch({ url: '/pages/index/index' })
-}
+const back = () => goBack('/pages/index/index')
 </script>
 
 <template>

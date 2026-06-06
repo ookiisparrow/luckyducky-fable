@@ -17,6 +17,8 @@ import MediaSlot from '@/components/MediaSlot.vue'
 import { PRODUCT_DETAIL as PD } from '@/data/productDetail.js'
 import { getProduct } from '@/data/catalog.js'
 import { useCartStore } from '@/store/cart.js'
+import { goBack } from '@/utils/nav.js'
+import { stars } from '@/utils/format.js'
 
 const cart = useCartStore()
 const sel = ref(0) // 当前选中的画廊图
@@ -53,14 +55,7 @@ function buyNow() {
   uni.navigateTo({ url: '/pages/checkout/index' })
 }
 
-// 评分星：实心 + 空心拼满 5 颗
-const stars = (n) => '★★★★★'.slice(0, n) + '☆☆☆☆☆'.slice(0, 5 - n)
-
-function back() {
-  const pages = getCurrentPages()
-  if (pages.length > 1) uni.navigateBack()
-  else uni.reLaunch({ url: '/pages/index/index' })
-}
+const back = () => goBack('/pages/index/index')
 function toast(t) {
   uni.showToast({ title: t, icon: 'none' })
 }

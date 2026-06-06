@@ -8,6 +8,7 @@ import { ref, computed } from 'vue'
 import { onLoad } from '@dcloudio/uni-app'
 import Icon from '@/components/Icon.vue'
 import { useAddressStore } from '@/store/address.js'
+import { goBack } from '@/utils/nav.js'
 
 const address = useAddressStore()
 const editId = ref(null)
@@ -35,11 +36,7 @@ const valid = computed(
   () => name.value.trim() && phone.value.trim() && region.value.trim() && detail.value.trim(),
 )
 
-function back() {
-  const p = getCurrentPages()
-  if (p.length > 1) uni.navigateBack()
-  else uni.reLaunch({ url: '/pages/address/index' })
-}
+const back = () => goBack('/pages/address/index')
 function save() {
   if (!valid.value) return
   address.save({

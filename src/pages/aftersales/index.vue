@@ -7,14 +7,10 @@
 import Icon from '@/components/Icon.vue'
 import MediaSlot from '@/components/MediaSlot.vue'
 import { AS_TYPES, AS_ORDERS } from '@/data/aftersales.js'
+import { goBack } from '@/utils/nav.js'
+import { money } from '@/utils/format.js'
 
-const money = (n) => Number(n).toFixed(2)
-
-function back() {
-  const p = getCurrentPages()
-  if (p.length > 1) uni.navigateBack()
-  else uni.reLaunch({ url: '/pages/me/index' })
-}
+const back = () => goBack('/pages/me/index')
 function toast(t) {
   uni.showToast({ title: t, icon: 'none' })
 }

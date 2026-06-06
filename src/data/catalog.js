@@ -21,6 +21,3 @@ export const getProduct = (id) => CATALOG[id] || null
 
 // 首页横滑展示的商品（featured）
 export const FEATURED_IDS = ['prod-1', 'prod-2', 'prod-3']
-
-// ￥ 展示辅助（部分页面历史上用字符串价）
-export const yuan = (n) => '￥' + Number(n).toFixed(2)

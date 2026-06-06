@@ -17,6 +17,8 @@ import MediaSlot from '@/components/MediaSlot.vue'
 import { useCartStore } from '@/store/cart.js'
 import { useAddressStore } from '@/store/address.js'
 import { CHECKOUT_ADDONS, COUPON, SHIP } from '@/data/checkout.js'
+import { goBack } from '@/utils/nav.js'
+import { money } from '@/utils/format.js'
 
 const cart = useCartStore()
 const address = useAddressStore()
@@ -47,8 +49,6 @@ const count = computed(
     list.value.reduce((s, it) => s + it.qty, 0) +
     addons.value.reduce((s, a) => s + (a.on ? a.qty : 0), 0),
 )
-const money = (n) => Number(n).toFixed(2)
-
 function setItemQty(i, v) {
   list.value[i].qty = Math.max(1, v)
 }
@@ -58,11 +58,7 @@ function toggleAddon(i) {
 function setAddonQty(i, v) {
   addons.value[i].qty = Math.max(1, v)
 }
-function back() {
-  const pages = getCurrentPages()
-  if (pages.length > 1) uni.navigateBack()
-  else uni.reLaunch({ url: '/pages/index/index' })
-}
+const back = () => goBack('/pages/index/index')
 function toast(t) {
   uni.showToast({ title: t, icon: 'none' })
 }
