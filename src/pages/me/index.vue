@@ -3,7 +3,7 @@
  * 「我」个人中心主页。对应原型 MyProfile.jsx（学习中枢版 A）。
  * 紫色资料头 + 继续学习卡 + 我的订单 + 客服/地址 列表。
  *
- * 真实接通：「继续观看 / 全部教程」跳已做好的 player / catalog 页。
+ * 真实接通：「继续观看」→ 播放页续播；「全部教程」→ 首次进视频课先放欢迎引导页、之后直达目录。
  * 占位（Toast，子流程后续做）：编辑资料、订单各状态、全部订单、客服、地址管理。
  *
  * 图位走 MediaSlot 灰占位；my-* 类名沿用原型。
@@ -26,7 +26,9 @@ function continueWatch() {
   })
 }
 function allCourses() {
-  uni.navigateTo({ url: '/pages/catalog/index' })
+  // 首次进视频课先看欢迎引导，之后直达目录
+  const seen = uni.getStorageSync('ld_video_intro_seen')
+  uni.navigateTo({ url: seen ? '/pages/catalog/index' : '/pages/welcome/index' })
 }
 function onOrder(key) {
   if (key === 'pending') uni.navigateTo({ url: '/pages/pending-pay/index' })

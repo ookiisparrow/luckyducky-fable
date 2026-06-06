@@ -55,6 +55,9 @@ function back() {
 function fav() {
   uni.showToast({ title: '已收藏本课程~', icon: 'none' })
 }
+function replayIntro() {
+  uni.navigateTo({ url: '/pages/welcome/index' })
+}
 </script>
 
 <template>
@@ -68,6 +71,7 @@ function fav() {
         <text class="vc-cover-eyebrow">视频教程</text>
         <text class="vc-cover-title">{{ COURSE.title }}</text>
         <text class="vc-cover-meta">共 {{ total }} 节 · 已学 {{ doneCount }} · {{ progPct }}%</text>
+        <text class="vc-replay" @tap="replayIntro">重看视频教程引导</text>
       </view>
     </view>
 
@@ -193,6 +197,18 @@ function fav() {
   font-size: 12px;
   color: rgba(255, 255, 255, 0.85);
   margin-top: 8px;
+}
+.vc-replay {
+  display: inline-block;
+  margin-top: 12px;
+  font-size: 12.5px;
+  color: #fff;
+  background: rgba(255, 255, 255, 0.18);
+  padding: 6px 12px;
+  border-radius: $r-pill;
+}
+.vc-replay:active {
+  background: rgba(255, 255, 255, 0.3);
 }
 
 /* 开始学习 */

@@ -5,9 +5,15 @@
  * 品牌第一印象：用真实大图铺满 + 简洁文案建立信心。
  */
 import { ref } from 'vue'
+import { onLoad } from '@dcloudio/uni-app'
 import Icon from '@/components/Icon.vue'
 
 const page = ref(0) // 0=欢迎屏 1=开始屏
+
+// 被展示过即标记「看过」，之后「全部教程」不再自动弹欢迎页（可在目录页「重看引导」再看）。
+onLoad(() => {
+  uni.setStorageSync('ld_video_intro_seen', true)
+})
 
 function next() {
   page.value = 1
@@ -21,7 +27,8 @@ function close() {
   else uni.reLaunch({ url: '/pages/index/index' })
 }
 function start() {
-  uni.navigateTo({ url: '/pages/catalog/index' })
+  // 用 redirectTo 替换掉欢迎页：返回时直接回上一层，不再夹一屏引导
+  uni.redirectTo({ url: '/pages/catalog/index' })
 }
 </script>
 
