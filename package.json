@@ -2,6 +2,10 @@
   "name": "luckyducky",
   "version": "0.1.0",
   "description": "Lucky Ducky 幸运小鸭 · 钩织材料包电商（uni-app 跨端）",
+  "engines": {
+    "node": ">=18",
+    "npm": ">=8"
+  },
   "scripts": {
     "dev:h5": "uni",
     "dev:mp-weixin": "uni -p mp-weixin",

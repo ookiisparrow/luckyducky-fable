@@ -19,6 +19,9 @@
 - ✅ **构建**：H5 与 mp-weixin 均 `build` 通过。
 - ⛔ 尚未做：真实数据/接口、登录/支付、其余页面、视频化图位（见路线图）。
 
+> 🔄 **保持同步**：每完成一个里程碑，先更新本节再 `git commit`。新会话可用 `git log -1 --oneline`
+> 看最近提交、确认"文档是否随代码一起更新过"——这是判断本节是否最新的最简单方法。
+
 ## ⭐ 路线图（建议顺序，按性价比）
 1. 产品/买家秀图位换真图（给 `MediaSlot` 传 `:src`）
 2. 购物车页（`store/cart.js` + 结算入口）
@@ -28,6 +31,8 @@
 6. 个人中心
 7. 客服 / 企业微信 / ERP 对接（`api/im.js`、`api/erp.js`）
 8. 视频教程页 + 定制播放器（`components/media/`）
+
+> 顺序可调：若**暂无真实产品图**，可先做 ②购物车页，第①步随时回补——互不阻塞。
 
 ## ⭐ 关键决策记录（为什么这么做，勿轻易推翻）
 - **uni-app 而非原生/React/Vue**：用户要多端发布（小程序+H5+App），一份代码多端。
@@ -52,6 +57,8 @@
 - **CSS 不要 `background-image: url(本地文件)`**（小程序端不支持引本地文件）；
   本地图片一律用 `<image>` 组件，或纯色 `<view>` 占位。
 - 避开各端不兼容属性：`backdrop-filter`、`color-mix()` 等用近似色/半透明替代。
+- **图标命名约定**：`src/static/icons/` 下用 `kebab-case`（如 `shopping-cart.svg`）；颜色直接烤进 svg；
+  激活态另存 `-on` 后缀文件（如 `house.svg` / `house-on.svg`）。组件里用 `<Icon name="house" :size="20" />`（`name` 不带 `.svg`）。
 
 ## 4. 目录结构与职责
 ```
@@ -69,6 +76,13 @@ src/
   pages.json        页面路由与窗口样式（navigationStyle: custom，导航自绘）
   manifest.json     应用标识与各端配置
 ```
+
+### 4.1 组件分类（新增组件时照此归类，放进 `src/components/`）
+- **页面区块**（整屏一段）：`Hero` / `BrandIntro` / `FeatureProducts` / `TrustStrip` / `Reassurance` / `Reviews` / `FAQ` / `ClosingCTA` / `SiteFooter`
+- **卡片**（列表里的一项）：`ProductCard` / `ReviewCard`
+- **基础控件**（跨页面复用的小件）：`Icon` / `MediaSlot` / `Accordion` / `TabBar` / `Toast` / `BackTop`
+- **媒体**：`components/media/`（将来的定制视频播放器）
+> 现阶段组件平铺在 `components/` 下即可；数量变多再按上面分类建子目录。
 
 ## 5. 命名规范
 - 组件文件：**大驼峰** `PascalCase.vue`（如 `ProductCard.vue`）。
@@ -116,6 +130,25 @@ const emit = defineEmits(['tap'])
 ## 9. 内容数据：放 `data/`，将来换接口
 首页的产品/评价/FAQ 等都在 `src/data/*.js`。接后端时：
 在 `api/shop.js` 实现请求 → 页面里把 `import 数据` 改成「请求后写入 ref」。数据结构尽量与现有一致。
+
+### 9.1 接口调用模板（接后端时照此写）
+请求层签名见 `src/api/request.js`：`request({ url, method, data })`（**不是** `request.get`）。
+```js
+// 1) src/api/shop.js —— 用 request 实现一个接口
+import { request } from './request'
+export function getProducts() {
+  return request({ url: '/products' }) // GET 默认；POST 时传 { url, method: 'POST', data }
+}
+
+// 2) 页面里：把「直接 import 静态数据」换成「请求后写入 ref」
+import { ref, onMounted } from 'vue'
+import { getProducts } from '@/api/shop' // 原来是 '@/data/products'
+const products = ref([])
+onMounted(async () => {
+  products.value = await getProducts()
+})
+```
+> 关键：数据结构保持和 `src/data/*.js` 一致，这样模板 `v-for` 一行都不用改。
 
 ## 10. 运行命令
 ```bash
