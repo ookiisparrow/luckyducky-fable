@@ -24,6 +24,21 @@ function addRec(r) {
   cart.add(r)
   uni.showToast({ title: '已加入购物车', icon: 'none' })
 }
+// 数量减：到 1 再减 → 确认后移除（标准电商做法）
+function dec(it) {
+  if (it.qty <= 1) {
+    uni.showModal({
+      title: '移除商品',
+      content: `确定从购物车移除「${it.name}」吗？`,
+      confirmText: '移除',
+      success: (r) => {
+        if (r.confirm) cart.remove(it.id)
+      },
+    })
+  } else {
+    cart.setQty(it.id, it.qty - 1)
+  }
+}
 function onCheckout() {
   if (cart.selectedCount === 0) {
     uni.showToast({ title: '请先选择商品', icon: 'none' })
@@ -65,7 +80,7 @@ function onCheckout() {
               <text class="ld-cart-item-price">￥{{ it.price }}</text>
             </view>
             <view class="ld-stepper">
-              <view class="ld-stepper-btn" @tap="cart.setQty(it.id, it.qty - 1)">−</view>
+              <view class="ld-stepper-btn" @tap="dec(it)">−</view>
               <text class="ld-stepper-n">{{ it.qty }}</text>
               <view class="ld-stepper-btn" @tap="cart.setQty(it.id, it.qty + 1)">＋</view>
             </view>
