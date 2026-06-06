@@ -48,9 +48,9 @@ function onAction(a) {
   } else if (k === 'logi') {
     uni.showToast({ title: '物流详情（开发中）', icon: 'none' })
   } else if (k === 'refund') {
-    uni.showToast({ title: '售后（开发中）', icon: 'none' })
+    uni.navigateTo({ url: '/pages/aftersales/index' })
   } else if (k === 'review') {
-    uni.showToast({ title: '评价晒单（开发中）', icon: 'none' })
+    uni.navigateTo({ url: '/pages/review/index' })
   }
 }
 </script>

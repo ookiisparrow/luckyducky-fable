@@ -30,7 +30,7 @@ function allCourses() {
 }
 function onOrder(key) {
   if (key === 'pending') uni.navigateTo({ url: '/pages/pending-pay/index' })
-  else if (key === 'refund') toast('售后（开发中）')
+  else if (key === 'refund') uni.navigateTo({ url: '/pages/aftersales/index' })
   else uni.navigateTo({ url: `/pages/order/index?status=${key}` })
 }
 function allOrders() {
