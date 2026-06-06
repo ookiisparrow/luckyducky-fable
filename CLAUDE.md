@@ -77,6 +77,7 @@
 - **系统圆体替代「文源圆体」**：真字体单字重 ~14MB 不适合打包；以后 `uni.loadFontFace` 可换。
 - **暂不做滚动渐显动画**：跨端+跨子组件实现复杂、收益小，优先稳定。
 - **主色统一为紫（已定）**。`$brand` 由 TDesign 蓝 `#0052D9` 改为「幸运紫」`#a371ea`（`$brand-active` 同步为 `#865dc0`），与详情/购物车/结算/个人中心全站一致，也贴合原型 live 主色。首页加购按钮/搜索框因此变紫。改主题只动 `uni.scss` 这两处（+ `ProductCard` flash 动画里一处透明紫已同步）。
+- **Sass `@import`→`@use` 暂缓（已定，外部审核别再提）**。全项目唯一显式 `@import` 是 8 个结算系列页引 `styles/co.scss`；`uni.scss`（纯 `$`变量+mixin、无 CSS 输出）由 uni-app **自动注入**每个组件，不靠 import。迁 `@use` 因模块隔离会让 co.scss 拿不到注入的变量（须自加 `@use '../uni.scss' as *;` 补），且有「8 页 scoped 样式静默失效、构建不报错、只能人工眼校」的回归风险；而构建里真正刷屏的 `legacy-js-api` 告警来自 `@dcloudio/vite-plugin-uni` 自身、迁移也消不掉。`@import` 到 Dart Sass 3.0 才真移除（现仅告警不阻断）。**结论：等 uni-app 升级其 Sass 集成时一起做**；执行清单见计划文件 floofy-splashing-mango.md。
 
 ## 2. 技术栈（已定，勿擅自更换）
 - 框架：**uni-app + Vue 3**（`<script setup>` 写法）
