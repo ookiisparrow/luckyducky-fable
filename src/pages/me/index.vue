@@ -28,8 +28,13 @@ function continueWatch() {
 function allCourses() {
   uni.navigateTo({ url: '/pages/catalog/index' })
 }
-function onOrder() {
-  toast('订单中心（开发中）')
+function onOrder(key) {
+  if (key === 'pending') uni.navigateTo({ url: '/pages/pending-pay/index' })
+  else if (key === 'refund') toast('售后（开发中）')
+  else uni.navigateTo({ url: `/pages/order/index?status=${key}` })
+}
+function allOrders() {
+  toast('全部订单（开发中）')
 }
 function goAddress() {
   uni.navigateTo({ url: '/pages/address/index' })
@@ -93,12 +98,12 @@ function goEditProfile() {
       <view class="my-card my-card-pad">
         <view class="my-sec-head">
           <view class="my-sec-title"><text>我的订单</text></view>
-          <view class="my-sec-more" @tap="onOrder">
+          <view class="my-sec-more" @tap="allOrders">
             <text>全部订单</text><Icon name="chevron-right" :size="14" />
           </view>
         </view>
         <view class="my-orders">
-          <view v-for="o in ORDER_TABS" :key="o.key" class="my-order" @tap="onOrder">
+          <view v-for="o in ORDER_TABS" :key="o.key" class="my-order" @tap="onOrder(o.key)">
             <view class="my-order-ico">
               <Icon :name="o.icon" :size="25" />
               <text v-if="o.badge" class="my-order-badge">{{ o.badge }}</text>

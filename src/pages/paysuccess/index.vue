@@ -21,7 +21,7 @@ function home() {
   uni.reLaunch({ url: '/pages/index/index' })
 }
 function orders() {
-  uni.showToast({ title: '订单中心（开发中）', icon: 'none' })
+  uni.reLaunch({ url: '/pages/order/index?status=toship' })
 }
 </script>
 
