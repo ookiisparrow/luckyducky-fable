@@ -31,6 +31,9 @@ $purple-ink-active: #37265a; // 主 CTA 按下态
 
 /* ---- 鸭子暖色（图像点缀） ---- */
 $duck-deep: #f2ac3c; // 星级
+$duck-orange: #e37318; // 橙：包邮提示文字
+$bg-cream: #fff7ec; // 暖奶油：包邮徽标底
+$line-cream: #f6e2be; // 暖奶油：包邮徽标描边
 
 /* ---- 售卖红 ---- */
 $red: #d54941;
@@ -45,6 +48,8 @@ $surface-cream: #e8e2d6; // 卡片暖色描边
 /* ---- 线条 ---- */
 $line: #e7e7e7;
 $line-strong: #dcdcdc;
+$line-soft: #eeeeee; // 更浅的分隔线（详情页区块内）
+$bg-faint: #fafafa; // 极浅灰：参数表名列底
 
 /* ---- 字体族 ----
    设计原用「文源圆体」，体积过大不打包，先用系统圆润字体栈替代。 */

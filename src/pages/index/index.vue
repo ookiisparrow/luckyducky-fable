@@ -81,7 +81,9 @@ function onExplore() {
   scrollToAnchor('anchor-intro', 12)
 }
 function onProductOpen(p) {
-  ping(`商品详情 · ${p.name}（敬请期待）`)
+  uni.navigateTo({
+    url: `/pages/detail/index?id=${p.id}&name=${encodeURIComponent(p.name)}`,
+  })
 }
 function onProductAdd(p) {
   ping(`已收藏 ${p.name}`)
