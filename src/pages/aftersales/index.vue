@@ -80,58 +80,11 @@ function toast(t) {
 </template>
 
 <style lang="scss" scoped>
-.co {
-  min-height: 100vh;
-  background: $bg-grey;
-  font-family: $font-cn;
-  color: $content;
-}
+@import '../../styles/co.scss';
 
-/* 顶部导航 */
-.co-header {
-  background: $white;
-  padding: calc(6px + env(safe-area-inset-top)) 0 0;
-  border-bottom: 0.5px solid $line;
-}
-.co-nav {
-  display: flex;
-  align-items: center;
-  padding: 2px 16px 12px;
-}
-.co-nav-btn {
-  width: 34px;
-  height: 34px;
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex: 0 0 auto;
-}
-.co-nav-btn:active {
-  background: rgba(0, 0, 0, 0.06);
-}
-.co-nav-title {
-  flex: 1;
-  text-align: center;
-  font-family: $font-display;
-  font-weight: 500;
-  font-size: 17px;
-  color: $ink;
-}
-.co-nav-spacer {
-  width: 34px;
-  flex: 0 0 auto;
-}
-
+/* 本页无底部坞，留出底部呼吸 */
 .co-body {
-  padding: 12px 14px 24px;
-}
-.co-card {
-  background: $white;
-  border-radius: $r-md;
-  box-shadow: $shadow-soft;
-  overflow: hidden;
-  margin-bottom: 12px;
+  padding-bottom: 24px;
 }
 
 /* 服务类型 */
@@ -243,31 +196,6 @@ function toast(t) {
 }
 .coas-apply:active {
   background: $bg-lilac;
-}
-
-/* 帮助行 */
-.co-row {
-  display: flex;
-  align-items: center;
-  padding: 15px 16px;
-}
-.co-row.divided {
-  border-top: 0.5px solid $line-soft;
-}
-.co-row-key {
-  font-size: 14.5px;
-  color: $content;
-  flex: 0 0 auto;
-}
-.co-row-val {
-  flex: 1 1 auto;
-  text-align: right;
-  font-size: 14px;
-  color: $content-2;
-  margin-left: 10px;
-}
-.co-row-chev {
-  display: flex;
 }
 
 .coas-note {

@@ -1,0 +1,422 @@
+/**
+ * 「co-」系列页面公共样式（结算 / 订单 / 待付 / 地址 / 资料 / 售后 / 评价）。
+ * 被各页 scoped <style> 以 @import 引入 —— 因 scoped 注入，会各自带上该组件的作用域，
+ * 互不污染。这里只放「多页共用且取值一致」的规则；页面专有样式
+ * (coam-/coas-/corev-/coord-/copend-/cosuc- 等) 与个别差异(底部坞按钮排布)仍写在各页内。
+ *
+ * uni.scss 的 $ 变量全局注入，这里可直接用。
+ */
+
+.co {
+  min-height: 100vh;
+  background: $bg-grey;
+  font-family: $font-cn;
+  color: $content;
+}
+
+/* 顶部导航 */
+.co-header {
+  background: $white;
+  padding: calc(6px + env(safe-area-inset-top)) 0 0;
+  border-bottom: 0.5px solid $line;
+}
+.co-nav {
+  display: flex;
+  align-items: center;
+  padding: 2px 16px 12px;
+}
+.co-nav-btn {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+}
+.co-nav-btn:active {
+  background: rgba(0, 0, 0, 0.06);
+}
+.co-nav-title {
+  flex: 1;
+  text-align: center;
+  font-family: $font-display;
+  font-weight: 500;
+  font-size: 17px;
+  color: $ink;
+}
+.co-nav-spacer {
+  width: 34px;
+  flex: 0 0 auto;
+}
+
+/* 容器 / 卡片 */
+.co-body {
+  padding: 12px 14px 4px;
+}
+.co-card {
+  background: $white;
+  border-radius: $r-md;
+  box-shadow: $shadow-soft;
+  overflow: hidden;
+  margin-bottom: 12px;
+}
+
+/* 信息行 */
+.co-row {
+  display: flex;
+  align-items: center;
+  padding: 15px 16px;
+}
+.co-row.divided {
+  border-top: 0.5px solid $line-soft;
+}
+.co-row-key {
+  font-size: 14.5px;
+  color: $content;
+  flex: 0 0 auto;
+}
+.co-row-val {
+  flex: 1 1 auto;
+  text-align: right;
+  font-size: 14px;
+  color: $ink;
+  margin-left: 10px;
+}
+.co-row-val.muted {
+  color: $content-2;
+}
+.co-row-chev {
+  display: flex;
+  flex: 0 0 auto;
+}
+
+/* 收货地址 */
+.co-addr {
+  background: $white;
+  border-radius: $r-md;
+  box-shadow: $shadow-soft;
+  margin-bottom: 12px;
+}
+.co-addr-main {
+  display: flex;
+  align-items: center;
+  padding: 18px 14px 20px;
+}
+.co-addr-pin {
+  width: 26px;
+  flex: 0 0 auto;
+  display: flex;
+  justify-content: center;
+  margin-right: 13px;
+}
+.co-addr-text {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.co-addr-line1 {
+  display: flex;
+  align-items: baseline;
+}
+.co-addr-name {
+  font-family: $font-display;
+  font-weight: 500;
+  font-size: 17px;
+  color: $ink;
+}
+.co-addr-phone {
+  font-family: $font-sans;
+  font-size: 14px;
+  color: $content;
+  margin-left: 12px;
+}
+.co-addr-line2 {
+  font-size: 13.5px;
+  color: $content-2;
+  line-height: 1.5;
+  margin-top: 6px;
+}
+.co-addr-tag {
+  /* 「默认」小徽标。外边距随上下文不同（行内位置不同），由各页另加。 */
+  font-size: 10.5px;
+  color: $purple;
+  background: $bg-lilac;
+  border: 0.5px solid $purple-line;
+  border-radius: 4px;
+  padding: 1px 6px;
+}
+/* 收货地址第二行里：徽标在详情前 → 右间距 */
+.co-addr-line2 .co-addr-tag {
+  margin-right: 6px;
+}
+.co-addr-chev {
+  flex: 0 0 auto;
+  display: flex;
+  margin-left: 8px;
+}
+.co-addr-empty-title {
+  display: block;
+  font-family: $font-display;
+  font-weight: 500;
+  font-size: 16px;
+  color: $ink;
+}
+.co-addr-empty-sub {
+  display: block;
+  font-size: 12.5px;
+  color: $content-2;
+  line-height: 1.5;
+  margin-top: 5px;
+}
+.co-stitch {
+  height: 4px;
+  border-radius: 0 0 $r-md $r-md;
+  overflow: hidden;
+  background-image: repeating-linear-gradient(
+    72deg,
+    $duck-orange 0 6px,
+    transparent 6px 7px,
+    $purple 7px 13px,
+    transparent 13px 14px
+  );
+}
+
+/* 店铺 + 商品行 */
+.co-shop {
+  display: flex;
+  align-items: center;
+  padding: 14px 16px 4px;
+}
+.co-shop-name {
+  font-family: $font-display;
+  font-weight: 500;
+  font-size: 15px;
+  color: $ink;
+  margin-left: 7px;
+}
+.co-shop-chev {
+  margin-left: auto;
+  display: flex;
+}
+.co-item {
+  display: flex;
+  padding: 14px 16px;
+}
+.co-item-img {
+  width: 80px;
+  height: 80px;
+  border-radius: $r-sm;
+  overflow: hidden;
+  flex: 0 0 auto;
+  margin-right: 12px;
+}
+.co-item-mid {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+.co-item-name {
+  font-size: 15px;
+  color: $ink;
+  line-height: 1.35;
+}
+.co-item-spec {
+  align-self: flex-start;
+  font-size: 11.5px;
+  color: $content-2;
+  background: $bg-grey;
+  border-radius: 4px;
+  padding: 3px 8px;
+  margin-top: 7px;
+}
+.co-item-foot {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  margin-top: auto;
+  padding-top: 10px;
+}
+.co-item-qty {
+  font-family: $font-sans;
+  font-size: 13px;
+  color: $content-2;
+}
+.co-price {
+  font-family: $font-sans;
+  font-weight: 600;
+  color: $ink;
+}
+.co-price .cny {
+  font-size: 13px;
+  margin-right: 1px;
+}
+.co-item-price {
+  font-size: 19px;
+}
+
+/* 金额明细 */
+.co-summary {
+  margin: 4px 12px 14px;
+  background: $bg-faint;
+  border-radius: $r-md;
+  padding: 14px 16px;
+}
+.co-sum-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 5px 0;
+}
+.co-sum-k {
+  font-size: 13.5px;
+  color: $content-2;
+}
+.co-sum-b {
+  font-family: $font-sans;
+  font-weight: 500;
+  font-size: 14px;
+  color: $content;
+}
+.co-sum-row.discount .co-sum-b {
+  color: $red;
+}
+.co-sum-div {
+  height: 0.5px;
+  background: $line;
+  margin: 7px 0;
+}
+.co-sum-row.total .co-sum-k {
+  font-size: 14px;
+  color: $ink;
+}
+.co-sum-row.total .co-sum-b {
+  font-weight: 700;
+  font-size: 18px;
+  color: $ink;
+}
+.co-sum-row.total .cny {
+  font-size: 13px;
+}
+
+/* 底部坞（容器；横排坞由各页另加 display:flex） */
+.co-foot {
+  height: calc(78px + env(safe-area-inset-bottom));
+}
+.co-dock {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 30;
+  background: $white;
+  box-shadow: 0 -1px 0 $line;
+  padding: 10px 16px calc(10px + env(safe-area-inset-bottom));
+}
+.co-dock-total {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.1;
+  margin-right: auto;
+}
+.co-dock-small {
+  font-size: 11px;
+  color: $content-2;
+}
+.co-dock-amt {
+  font-family: $font-sans;
+  font-weight: 700;
+  font-size: 24px;
+  color: $ink;
+  line-height: 1;
+}
+.co-dock-amt .cny {
+  font-size: 15px;
+  font-weight: 600;
+}
+
+/* 全宽主按钮（保存 / 发布 / 新增地址等） */
+.co-save {
+  height: 48px;
+  border-radius: $r-pill;
+  background: $purple;
+  color: $white;
+  font-weight: 600;
+  font-size: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.co-save.disabled {
+  background: #cdb8ee;
+}
+.co-save:active {
+  opacity: 0.94;
+}
+
+/* 开关 */
+.co-switch {
+  width: 44px;
+  height: 26px;
+  border-radius: $r-pill;
+  background: $line-strong;
+  flex: 0 0 auto;
+  position: relative;
+  transition: background 0.2s;
+}
+.co-switch.on {
+  background: $purple;
+}
+.co-switch-dot {
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: $white;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+  transition: transform 0.2s;
+}
+.co-switch.on .co-switch-dot {
+  transform: translateX(18px);
+}
+
+/* 表单字段（地址编辑 / 资料编辑） */
+.coaddr-form {
+  padding: 2px 16px;
+}
+.coaddr-field {
+  display: flex;
+  align-items: center;
+  padding: 15px 0;
+  border-bottom: 0.5px solid $line-soft;
+}
+.coaddr-field:last-child {
+  border-bottom: none;
+}
+.coaddr-field.area {
+  align-items: flex-start;
+}
+.coaddr-label {
+  flex: 0 0 64px;
+  font-size: 14.5px;
+  color: $content;
+}
+.coaddr-field.area .coaddr-label {
+  padding-top: 2px;
+}
+.coaddr-input {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: 15px;
+  color: $ink;
+  line-height: 1.5;
+}
+.coaddr-input.num {
+  font-family: $font-sans;
+  letter-spacing: 0.02em;
+}
+.coaddr-area {
+  height: 66px;
+}

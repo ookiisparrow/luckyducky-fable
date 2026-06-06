@@ -69,59 +69,7 @@ function add() {
 </template>
 
 <style lang="scss" scoped>
-.co {
-  min-height: 100vh;
-  background: $bg-grey;
-  font-family: $font-cn;
-  color: $content;
-}
-
-/* 顶部导航（结算系列同款） */
-.co-header {
-  background: $white;
-  padding: calc(6px + env(safe-area-inset-top)) 0 0;
-  border-bottom: 0.5px solid $line;
-}
-.co-nav {
-  display: flex;
-  align-items: center;
-  padding: 2px 16px 12px;
-}
-.co-nav-btn {
-  width: 34px;
-  height: 34px;
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex: 0 0 auto;
-}
-.co-nav-btn:active {
-  background: rgba(0, 0, 0, 0.06);
-}
-.co-nav-title {
-  flex: 1;
-  text-align: center;
-  font-family: $font-display;
-  font-weight: 500;
-  font-size: 17px;
-  color: $ink;
-}
-.co-nav-spacer {
-  width: 34px;
-  flex: 0 0 auto;
-}
-
-.co-body {
-  padding: 12px 14px 4px;
-}
-.co-card {
-  background: $white;
-  border-radius: $r-md;
-  box-shadow: $shadow-soft;
-  overflow: hidden;
-  margin-bottom: 12px;
-}
+@import '../../styles/co.scss';
 
 /* 地址卡 */
 .coam-card {
@@ -173,13 +121,8 @@ function add() {
   color: $content;
   margin-left: 10px;
 }
-.co-addr-tag {
-  font-size: 10.5px;
-  color: $purple;
-  background: $bg-lilac;
-  border: 0.5px solid $purple-line;
-  border-radius: 4px;
-  padding: 1px 6px;
+/* 此页徽标在姓名/手机之后 → 左间距 */
+.coam-line1 .co-addr-tag {
   margin-left: 8px;
 }
 .coam-addr {
@@ -231,19 +174,6 @@ function add() {
 }
 
 /* 底部新增 */
-.co-foot {
-  height: calc(78px + env(safe-area-inset-bottom));
-}
-.co-dock {
-  position: fixed;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  z-index: 30;
-  background: $white;
-  box-shadow: 0 -1px 0 $line;
-  padding: 10px 16px calc(10px + env(safe-area-inset-bottom));
-}
 .co-add {
   height: 48px;
   border-radius: $r-pill;

@@ -1,9 +1,9 @@
 <script setup>
 /**
  * 支付成功页。对应原型 Checkout.jsx 的 PaySuccess。
- * 由结算页 redirectTo 进入（带 amount）。成功标 + 实付 + 订单信息 + 两个出口。
- * 「返回首页」reLaunch 回首页；「查看订单」暂 Toast（订单中心在「个人中心」步骤再做）。
- * 入场动画按项目「暂不做渐显动画」的决定省略。
+ * 由结算页 / 待支付页 redirectTo 进入（带 amount）。成功标 + 实付 + 订单信息 + 两个出口。
+ * 「返回首页」reLaunch 回首页；「查看订单」reLaunch 到待发货订单页。
+ * 入场动画按项目「暂不做渐显动画」的决定省略。公共导航样式见 styles/co.scss。
  */
 import { ref } from 'vue'
 import { onLoad } from '@dcloudio/uni-app'
@@ -72,49 +72,15 @@ function orders() {
 </template>
 
 <style lang="scss" scoped>
+@import '../../styles/co.scss';
+
+/* 本页根用 cosuc（白底），其余复用 co- 导航 */
 .cosuc {
   min-height: 100vh;
   background: $white;
   font-family: $font-cn;
   color: $content;
 }
-
-/* 顶部导航（与结算页同款） */
-.co-header {
-  background: $white;
-  padding: calc(6px + env(safe-area-inset-top)) 0 0;
-  border-bottom: 0.5px solid $line;
-}
-.co-nav {
-  display: flex;
-  align-items: center;
-  padding: 2px 16px 12px;
-}
-.co-nav-btn {
-  width: 34px;
-  height: 34px;
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex: 0 0 auto;
-}
-.co-nav-btn:active {
-  background: rgba(0, 0, 0, 0.06);
-}
-.co-nav-title {
-  flex: 1;
-  text-align: center;
-  font-family: $font-display;
-  font-weight: 500;
-  font-size: 17px;
-  color: $ink;
-}
-.co-nav-spacer {
-  width: 34px;
-  flex: 0 0 auto;
-}
-
 .cosuc-body {
   padding: 18px 20px 8px;
 }

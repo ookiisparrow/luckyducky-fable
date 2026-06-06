@@ -117,98 +117,7 @@ function del() {
 </template>
 
 <style lang="scss" scoped>
-.co {
-  min-height: 100vh;
-  background: $bg-grey;
-  font-family: $font-cn;
-  color: $content;
-}
-
-/* 顶部导航（结算系列同款） */
-.co-header {
-  background: $white;
-  padding: calc(6px + env(safe-area-inset-top)) 0 0;
-  border-bottom: 0.5px solid $line;
-}
-.co-nav {
-  display: flex;
-  align-items: center;
-  padding: 2px 16px 12px;
-}
-.co-nav-btn {
-  width: 34px;
-  height: 34px;
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex: 0 0 auto;
-}
-.co-nav-btn:active {
-  background: rgba(0, 0, 0, 0.06);
-}
-.co-nav-title {
-  flex: 1;
-  text-align: center;
-  font-family: $font-display;
-  font-weight: 500;
-  font-size: 17px;
-  color: $ink;
-}
-.co-nav-spacer {
-  width: 34px;
-  flex: 0 0 auto;
-}
-
-.co-body {
-  padding: 12px 14px 4px;
-}
-.co-card {
-  background: $white;
-  border-radius: $r-md;
-  box-shadow: $shadow-soft;
-  overflow: hidden;
-  margin-bottom: 12px;
-}
-
-/* 表单 */
-.coaddr-form {
-  padding: 2px 16px;
-}
-.coaddr-field {
-  display: flex;
-  align-items: center;
-  padding: 15px 0;
-  border-bottom: 0.5px solid $line-soft;
-}
-.coaddr-field:last-child {
-  border-bottom: none;
-}
-.coaddr-field.area {
-  align-items: flex-start;
-}
-.coaddr-label {
-  flex: 0 0 64px;
-  font-size: 14.5px;
-  color: $content;
-}
-.coaddr-field.area .coaddr-label {
-  padding-top: 2px;
-}
-.coaddr-input {
-  flex: 1 1 auto;
-  min-width: 0;
-  font-size: 15px;
-  color: $ink;
-  line-height: 1.5;
-}
-.coaddr-input.num {
-  font-family: $font-sans;
-  letter-spacing: 0.02em;
-}
-.coaddr-area {
-  height: 66px;
-}
+@import '../../styles/co.scss';
 
 /* 设为默认 */
 .coaddr-default {
@@ -220,32 +129,6 @@ function del() {
   flex: 1;
   font-size: 15px;
   color: $ink;
-}
-.co-switch {
-  width: 44px;
-  height: 26px;
-  border-radius: $r-pill;
-  background: $line-strong;
-  flex: 0 0 auto;
-  position: relative;
-  transition: background 0.2s;
-}
-.co-switch.on {
-  background: $purple;
-}
-.co-switch-dot {
-  position: absolute;
-  top: 3px;
-  left: 3px;
-  width: 20px;
-  height: 20px;
-  border-radius: 50%;
-  background: $white;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
-  transition: transform 0.2s;
-}
-.co-switch.on .co-switch-dot {
-  transform: translateX(18px);
 }
 
 /* 删除 */
@@ -262,37 +145,5 @@ function del() {
 }
 .coaddr-delete:active {
   background: #fef2f2;
-}
-
-/* 底部保存 */
-.co-foot {
-  height: calc(78px + env(safe-area-inset-bottom));
-}
-.co-dock {
-  position: fixed;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  z-index: 30;
-  background: $white;
-  box-shadow: 0 -1px 0 $line;
-  padding: 10px 16px calc(10px + env(safe-area-inset-bottom));
-}
-.co-save {
-  height: 48px;
-  border-radius: $r-pill;
-  background: $purple;
-  color: $white;
-  font-weight: 600;
-  font-size: 16px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-.co-save.disabled {
-  background: #cdb8ee;
-}
-.co-save:active {
-  opacity: 0.94;
 }
 </style>
