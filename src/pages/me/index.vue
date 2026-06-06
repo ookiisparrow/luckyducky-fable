@@ -28,6 +28,9 @@ function allCourses() {
 function onOrder() {
   toast('订单中心（开发中）')
 }
+function goAddress() {
+  uni.navigateTo({ url: '/pages/address/index' })
+}
 </script>
 
 <template>
@@ -106,7 +109,7 @@ function onOrder() {
           <text class="my-row-label">联系客服</text>
           <view class="my-row-chev"><Icon name="chevron-right" :size="18" /></view>
         </view>
-        <view class="my-row divided" @tap="toast('地址簿（开发中）')">
+        <view class="my-row divided" @tap="goAddress">
           <view class="my-row-ico"><Icon name="map-pin-meta" :size="22" /></view>
           <text class="my-row-label">地址管理</text>
           <view class="my-row-chev"><Icon name="chevron-right" :size="18" /></view>

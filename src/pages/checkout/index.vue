@@ -15,10 +15,12 @@ import { ref, computed } from 'vue'
 import Icon from '@/components/Icon.vue'
 import MediaSlot from '@/components/MediaSlot.vue'
 import { useCartStore } from '@/store/cart.js'
-import { CHECKOUT_ADDONS, SAMPLE_ADDRESS, COUPON, SHIP } from '@/data/checkout.js'
+import { useAddressStore } from '@/store/address.js'
+import { CHECKOUT_ADDONS, COUPON, SHIP } from '@/data/checkout.js'
 
 const cart = useCartStore()
-const addr = SAMPLE_ADDRESS
+const address = useAddressStore()
+const addr = computed(() => address.defaultAddress) // 来自地址簿（可能为 null）
 
 // 下单清单：从草稿快照（本地改数量不回写购物车）；草稿为空时给个兜底样例
 const fallback = [{ id: 'prod-1', name: '幸运小鸭礼盒 · 零基础钩织套装', tag: '经典暖黄', price: 198, qty: 1 }]
@@ -64,7 +66,16 @@ function back() {
 function toast(t) {
   uni.showToast({ title: t, icon: 'none' })
 }
+// 地址：有默认地址→去地址管理(选/改)；无→去新增
+function goAddress() {
+  uni.navigateTo({ url: addr.value ? '/pages/address/index' : '/pages/address-edit/index' })
+}
 function onSubmit() {
+  if (!addr.value) {
+    uni.showToast({ title: '请先添加收货地址', icon: 'none' })
+    uni.navigateTo({ url: '/pages/address-edit/index' })
+    return
+  }
   const amount = pay.value
   cart.finishCheckout() // 来自购物车的条目从车里移除
   uni.redirectTo({ url: `/pages/paysuccess/index?amount=${amount.toFixed(2)}` })
@@ -83,9 +94,9 @@ function onSubmit() {
     </view>
 
     <view class="co-body">
-      <!-- 收货地址 -->
+      <!-- 收货地址（来自地址簿；无则空态引导添加） -->
       <view class="co-addr">
-        <view class="co-addr-main" @tap="toast('地址簿（开发中）')">
+        <view v-if="addr" class="co-addr-main" @tap="goAddress">
           <view class="co-addr-pin"><Icon name="map-pin" :size="24" /></view>
           <view class="co-addr-text">
             <view class="co-addr-line1">
@@ -96,6 +107,14 @@ function onSubmit() {
               <text v-if="addr.isDefault" class="co-addr-tag">默认</text>
               <text class="co-addr-detail">{{ (addr.region ? addr.region + ' ' : '') + addr.detail }}</text>
             </view>
+          </view>
+          <view class="co-addr-chev"><Icon name="chevron-right" :size="19" /></view>
+        </view>
+        <view v-else class="co-addr-main" @tap="goAddress">
+          <view class="co-addr-pin"><Icon name="map-pin" :size="24" /></view>
+          <view class="co-addr-text">
+            <text class="co-addr-empty-title">添加收货地址</text>
+            <text class="co-addr-empty-sub">请先填写收货人、手机号与详细地址</text>
           </view>
           <view class="co-addr-chev"><Icon name="chevron-right" :size="19" /></view>
         </view>
@@ -316,6 +335,20 @@ function onSubmit() {
   flex: 0 0 auto;
   display: flex;
   margin-left: 8px;
+}
+.co-addr-empty-title {
+  display: block;
+  font-family: $font-display;
+  font-weight: 500;
+  font-size: 16px;
+  color: $ink;
+}
+.co-addr-empty-sub {
+  display: block;
+  font-size: 12.5px;
+  color: $content-2;
+  line-height: 1.5;
+  margin-top: 5px;
 }
 .co-stitch {
   height: 4px;

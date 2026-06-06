@@ -34,6 +34,20 @@
       }
     },
     {
+      "path": "pages/address/index",
+      "style": {
+        "navigationBarTitleText": "地址管理",
+        "navigationStyle": "custom"
+      }
+    },
+    {
+      "path": "pages/address-edit/index",
+      "style": {
+        "navigationBarTitleText": "编辑收货地址",
+        "navigationStyle": "custom"
+      }
+    },
+    {
       "path": "pages/me/index",
       "style": {
         "navigationBarTitleText": "我"
