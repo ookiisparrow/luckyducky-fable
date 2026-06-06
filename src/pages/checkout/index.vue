@@ -12,6 +12,7 @@
  * 配送/优惠券/积分/备注 暂为展示 + Toast 占位。
  */
 import { ref, computed } from 'vue'
+import { onLoad } from '@dcloudio/uni-app'
 import Icon from '@/components/Icon.vue'
 import CoNavBar from '@/components/CoNavBar.vue'
 import AddressBlock from '@/components/AddressBlock.vue'
@@ -29,11 +30,15 @@ const cart = useCartStore()
 const address = useAddressStore()
 const addr = computed(() => address.defaultAddress) // 来自地址簿（可能为 null）
 
-// 下单清单：从草稿快照（本地改数量不回写购物车）；草稿为空时给个兜底样例
-const fallback = [{ id: 'prod-1', name: '幸运小鸭礼盒 · 零基础钩织套装', tag: '经典暖黄', price: 198, qty: 1 }]
-const list = ref(
-  (cart.checkoutItems.length ? cart.checkoutItems : fallback).map((it) => ({ ...it, qty: it.qty || 1 })),
-)
+// 下单清单：从结算草稿快照（本地可改数量，提交时按最终数量精确扣减购物车）。
+// 没有草稿（直接访问本页 / 内存态丢失）→ 不再兜底塞样例商品，引导回购物车，避免提交假订单。
+const list = ref(cart.checkoutItems.map((it) => ({ ...it, qty: it.qty || 1 })))
+onLoad(() => {
+  if (!cart.checkoutItems.length) {
+    uni.showToast({ title: '购物车是空的，先去选购吧～', icon: 'none' })
+    setTimeout(() => goBack('/pages/cart/index'), 800)
+  }
+})
 const addons = ref(CHECKOUT_ADDONS.map((a) => ({ ...a, qty: 1 })))
 
 const infoRows = [
@@ -78,7 +83,7 @@ function onSubmit() {
     return
   }
   const amount = pay.value
-  cart.finishCheckout() // 来自购物车的条目从车里移除
+  cart.finishCheckout(list.value) // 按本次最终数量精确扣减购物车
   uni.redirectTo({ url: `/pages/paysuccess/index?amount=${amount.toFixed(2)}` })
 }
 </script>

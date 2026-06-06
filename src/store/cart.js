@@ -78,11 +78,18 @@ export const useCartStore = defineStore('cart', {
       ]
       this.checkoutFromCart = false
     },
-    // 提交成功后：来自购物车的清单从车里移除，清空草稿
-    finishCheckout() {
+    // 提交成功后：来自购物车的条目「按本次实际提交的数量」精确扣减（减到 0 才移除该条），
+    // 而不是按 id 整条删掉 —— 否则结算页把 3 件改成 1 件提交后，购物车会错误地清掉全部 3 件。
+    // lines 传结算页最终清单（含改后数量）；不传则退回按草稿原数量扣减。
+    finishCheckout(lines) {
       if (this.checkoutFromCart) {
-        const ids = this.checkoutItems.map((it) => it.id)
-        this.items = this.items.filter((it) => !ids.includes(it.id))
+        const submitted = Array.isArray(lines) && lines.length ? lines : this.checkoutItems
+        submitted.forEach((line) => {
+          const it = this.items.find((x) => x.id === line.id)
+          if (!it) return
+          it.qty -= line.qty || 0
+          if (it.qty <= 0) this.remove(it.id)
+        })
       }
       this.checkoutItems = []
       this.checkoutFromCart = false

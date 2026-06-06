@@ -5,15 +5,16 @@
  * 品牌第一印象：用真实大图铺满 + 简洁文案建立信心。
  */
 import { ref } from 'vue'
-import { onLoad } from '@dcloudio/uni-app'
 import Icon from '@/components/Icon.vue'
 
 const page = ref(0) // 0=欢迎屏 1=开始屏
 
-// 被展示过即标记「看过」，之后「全部教程」不再自动弹欢迎页（可在目录页「重看引导」再看）。
-onLoad(() => {
+// 标记「看过」（之后「全部教程」不再自动弹欢迎页，可在目录页「重看引导」再看）。
+// 只在用户「开始学习」或「关闭」这类明确动作时才记 —— 之前是在 onLoad 一进页面就记，
+// 导致「打开后没看就被动关掉」也算看过、下次不再自动引导。改成动作触发更贴合真实意图。
+function markSeen() {
   uni.setStorageSync('ld_video_intro_seen', true)
-})
+}
 
 function next() {
   page.value = 1
@@ -22,11 +23,13 @@ function back() {
   page.value = 0
 }
 function close() {
+  markSeen()
   const pages = getCurrentPages()
   if (pages.length > 1) uni.navigateBack()
   else uni.reLaunch({ url: '/pages/index/index' })
 }
 function start() {
+  markSeen()
   // 用 redirectTo 替换掉欢迎页：返回时直接回上一层，不再夹一屏引导
   uni.redirectTo({ url: '/pages/catalog/index' })
 }

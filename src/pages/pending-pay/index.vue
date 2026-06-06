@@ -20,8 +20,17 @@ const addr = computed(() => address.defaultAddress)
 const goods = O.price * (O.qty || 1)
 const pay = Math.max(0, goods + SHIP - COUPON)
 const secs = ref(15 * 60 - 1)
+const expired = ref(false)
 const timer = setInterval(() => {
-  secs.value = secs.value > 0 ? secs.value - 1 : 0
+  if (secs.value > 0) {
+    secs.value -= 1
+  } else {
+    // 倒计时归零：兑现「超时订单将自动取消」的文案 —— 停表、置过期态、禁支付、提示并返回
+    clearInterval(timer)
+    expired.value = true
+    uni.showToast({ title: '订单已超时取消', icon: 'none' })
+    setTimeout(back, 1500)
+  }
 }, 1000)
 onUnmounted(() => clearInterval(timer))
 const mmss = computed(() => {
@@ -46,6 +55,7 @@ function cancel() {
   })
 }
 function gopay() {
+  if (expired.value) return
   uni.redirectTo({ url: `/pages/paysuccess/index?amount=${pay.toFixed(2)}` })
 }
 </script>
@@ -102,7 +112,7 @@ function gopay() {
         <text class="co-dock-amt"><text class="cny">￥</text>{{ money(pay) }}</text>
       </view>
       <view class="co-cancel" @tap="cancel">取消订单</view>
-      <view class="co-submit" @tap="gopay">去支付</view>
+      <view class="co-submit" :class="{ disabled: expired }" @tap="gopay">{{ expired ? '已超时' : '去支付' }}</view>
     </view>
   </view>
 </template>
@@ -172,5 +182,9 @@ function gopay() {
 }
 .co-submit:active {
   opacity: 0.94;
+}
+.co-submit.disabled {
+  background: $line-strong;
+  color: $content-2;
 }
 </style>
