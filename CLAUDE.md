@@ -36,6 +36,7 @@
 - ✅ **售后页 + 评价晒单页**（`pages/aftersales`、`pages/review`，数据 `data/aftersales.js`）：售后=服务类型四宫格+可申请订单+帮助行(均 Toast/无真实售后系统)；评价=星级评分+标签多选+文字(计数)+晒图(灰占位增删)+匿名开关，「发布」Toast。入口：我的订单「退款/售后」、订单详情「申请退款/评价晒单」。
 - ✅ **工程化**：设计 token（`uni.scss`）、Pinia/`store`、`api` 空壳、`MediaSlot` 媒体槽、ESLint + Prettier。
 - ✅ **组件化收口**（2026-06-06）：把多页 1:1 复制的块抽成组件 —— `PriceSummary`/`RatingSummary`/`ReviewItem`/`AddressBlock`/`OrderItem`（展示）、`CoSwitch`/`QuantityStepper`（交互叶子）；播放页 `HelpSheet` 拆出后 `player` 由 1318→496 行。详见组件分类（§4.1）与其中的 scoped 隔离铁律/故意没抽清单。⚠️ 纯搬家不改行为、lint+双端 build 通过，但**全程未做像素级验证**，需本机眼校（HelpSheet 交互最该重点点一遍）。
+- ✅ **状态持久化**（2026-06-06）：自写跨端 Pinia 插件 `store/persist.js`（用 uni storage，不引 persistedstate 以免小程序端 localStorage 崩）。购物车 `items`、地址 `list`、用户 `token+profile` 已持久化，刷新/冷启动不丢；结算草稿等临时态按 `paths` 排除。地址 id 改为 `max(现有)+1` 防回灌撞号。插件逻辑已用 node 隔离测（9 断言全过）。
 - ✅ **构建**：H5 与 mp-weixin 均 `build` 通过。
 - ✅ **视频教程流程**：欢迎页(变体A) → 课程目录 → 播放页。播放页**对照设计稿 VideoPlayer 重做**：真 `<video>` 非全屏铺满(保同层渲染) + 知识点分段进度 + 段末自动暂停→重复播放 + 顶部「收起/标题/更多」+ 底部「上一集/求助(琥珀)/下一集」+ **完整求助面板**(在线客服聊天 / 遇到问题→辅助视频(海报占位+计时模拟) / 学习交流群二维码 / 常见问题FAQ / 反馈表单)。研究开关(0.5×慢放/单段循环/段末暂停开关/后退10s)按设计稿移除。上一集/下一集按 id 从 `data/course.js` 定位(catalog/me 传 id)。页面 `pages/welcome`、`pages/catalog`、`pages/player`。
   - **欢迎页入口**：我的页「全部教程」首次进视频课自动放欢迎引导(`uni.setStorageSync('ld_video_intro_seen')` 记看过、之后直达目录)；课程目录页有「重看视频教程引导」可再看。「继续观看」→ 播放页续播（不经欢迎页）。
@@ -103,7 +104,9 @@ src/
   data/             静态内容数据（products/reviews/faq…）。
                     ⚠️ 以后接后端时，把这里替换成调用 src/api/，页面无需改动。
   api/              网络请求层：request.js 基础封装 + user/shop/erp/im 各模块（现为空壳）
-  store/            Pinia 状态：user(账号) / cart(购物车) …（现为预留）
+  store/            Pinia 状态：user(账号) / cart(购物车) / address(地址簿)；
+                    persist.js 是跨端持久化插件，store 里加 persist:true 或 {paths:[...]} 即自动存到
+                    uni storage（购物车/地址/资料 已开，刷新与冷启动不丢；结算草稿这类临时态不存）。
   utils/            跨页小工具：nav.js(goBack 兜底返回) / format.js(money/stars/yuan)
   static/           图片素材；static/icons/ 放 svg 图标
   uni.scss          ★ 设计 Token 单一来源（颜色/字号/圆角/间距/阴影）
