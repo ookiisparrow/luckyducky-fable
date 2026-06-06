@@ -13,16 +13,19 @@
 import { ref } from 'vue'
 import { onLoad } from '@dcloudio/uni-app'
 import Icon from '@/components/Icon.vue'
-import MediaSlot from '@/components/MediaSlot.vue'
 import RatingSummary from '@/components/RatingSummary.vue'
 import ReviewItem from '@/components/ReviewItem.vue'
+import DetailGallery from './components/DetailGallery.vue'
+import DetailParams from './components/DetailParams.vue'
+import DetailKit from './components/DetailKit.vue'
+import DetailRecs from './components/DetailRecs.vue'
+import DetailDock from './components/DetailDock.vue'
 import { PRODUCT_DETAIL as PD } from '@/data/productDetail.js'
 import { getProduct } from '@/data/catalog.js'
 import { useCartStore } from '@/store/cart.js'
 import { goBack } from '@/utils/nav.js'
 
 const cart = useCartStore()
-const sel = ref(0) // 当前选中的画廊图
 // 商品身份按 id 从总表(catalog)取，单一来源；取不到时退回 PD 样例兜底。
 // 描述性内容（规格/评价/图文/套装）仍是共用样例。
 const pid = ref('prod-1')
@@ -76,22 +79,7 @@ function goReviews() {
     </view>
 
     <!-- 画廊 -->
-    <view class="pdp-gallery">
-      <view class="pdp-gallery-scrim"></view>
-      <MediaSlot ratio="1/1" label="放入图片" />
-      <text class="pdp-count">{{ sel + 1 }}/{{ PD.galleryCount }}</text>
-      <view class="pdp-thumbs">
-        <view
-          v-for="i in PD.galleryCount"
-          :key="i"
-          class="pdp-thumb"
-          :class="{ on: sel === i - 1 }"
-          @tap="sel = i - 1"
-        >
-          <MediaSlot ratio="1/1" :radius="5" />
-        </view>
-      </view>
-    </view>
+    <DetailGallery :count="PD.galleryCount" />
 
     <!-- 价格卡 -->
     <view class="pdp-card pdp-price">
@@ -164,79 +152,28 @@ function goReviews() {
     <!-- 图文详情 -->
     <view class="pdp-sec">
       <view class="pdp-sec-head"><text class="pdp-sec-title">商品详情</text></view>
-      <view class="pdp-detail">
-        <view class="pdp-param">
-          <view
-            v-for="([k, v], i) in PD.params"
-            :key="i"
-            class="pdp-param-row"
-            :class="{ last: i === PD.params.length - 1 }"
-          >
-            <text class="pdp-param-dt">{{ k }}</text>
-            <text class="pdp-param-dd">{{ v }}</text>
-          </view>
-        </view>
-
-        <view v-for="(d, i) in PD.detailSections" :key="i">
-          <text class="pdp-detail-lead">{{ d.lead }}</text>
-          <text class="pdp-detail-p">{{ d.body }}</text>
-          <view class="pdp-detail-img"><MediaSlot ratio="4/3" :radius="5" label="放入图片" /></view>
-        </view>
-      </view>
+      <DetailParams :params="PD.params" :sections="PD.detailSections" />
     </view>
 
     <!-- 套装包含 -->
     <view class="pdp-sec">
       <view class="pdp-sec-head"><text class="pdp-sec-title">套装包含</text></view>
-      <view class="pdp-kit">
-        <view v-for="(k, i) in PD.kit" :key="i" class="pdp-kit-cell">
-          <view class="pdp-kit-ico"><Icon :name="k.icon" :size="19" /></view>
-          <view class="pdp-kit-text">
-            <text class="pdp-kit-name">{{ k.name }}</text>
-            <text class="pdp-kit-qty">{{ k.qty }}</text>
-          </view>
-        </view>
-      </view>
+      <DetailKit :kit="PD.kit" />
     </view>
 
     <!-- 为你推荐 -->
     <view class="pdp-sec pdp-sec-last">
       <view class="pdp-sec-head"><text class="pdp-sec-title">为你推荐</text></view>
-      <view class="pdp-recs">
-        <view
-          v-for="(p, i) in PD.recs"
-          :key="i"
-          class="pdp-rec"
-          @tap="toast(`${p.name}（敬请期待）`)"
-        >
-          <MediaSlot ratio="1/1" />
-          <view class="pdp-rec-body">
-            <text class="pdp-rec-name">{{ p.name }}</text>
-            <view class="pdp-rec-foot">
-              <text class="pdp-rec-now">￥{{ p.price }}</text>
-              <text class="pdp-rec-was">￥{{ p.was }}</text>
-            </view>
-          </view>
-        </view>
-      </view>
+      <DetailRecs :recs="PD.recs" @pick="(p) => toast(p.name + '（敬请期待）')" />
     </view>
 
-    <!-- 给固定购买坞让位 -->
-    <view class="pdp-foot"></view>
-
-    <!-- 固定底部购买坞 -->
-    <view class="pdp-dock">
-      <view class="pdp-buy-ico" @tap="toast('正在接入人工客服…')">
-        <Icon name="headphones" :size="21" /><text>客服</text>
-      </view>
-      <view class="pdp-buy-ico" @tap="toast('已收藏')">
-        <Icon name="star" :size="21" /><text>收藏</text>
-      </view>
-      <view class="pdp-buy-actions">
-        <view class="pdp-btn pdp-btn-cart" @tap="addToCart">加入购物车</view>
-        <view class="pdp-btn pdp-btn-buy" @tap="buyNow">立即购买</view>
-      </view>
-    </view>
+    <!-- 固定底部购买坞（含给 fixed 坞让位的占位） -->
+    <DetailDock
+      @service="toast('正在接入人工客服…')"
+      @favorite="toast('已收藏')"
+      @cart="addToCart"
+      @buy="buyNow"
+    />
   </view>
 </template>
 
@@ -271,53 +208,6 @@ function goReviews() {
 }
 .pdp-float-btn:active {
   background: rgba(0, 0, 0, 0.5);
-}
-
-/* ---------- 画廊 ---------- */
-.pdp-gallery {
-  position: relative;
-  background: $white;
-}
-.pdp-gallery-scrim {
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  height: 150px;
-  z-index: 1;
-  pointer-events: none;
-  background: linear-gradient(to bottom, rgba(0, 0, 0, 0.42), rgba(0, 0, 0, 0));
-}
-.pdp-count {
-  position: absolute;
-  right: 14px;
-  bottom: 88px;
-  background: rgba(0, 0, 0, 0.5);
-  color: $white;
-  font-family: $font-sans;
-  font-size: 12px;
-  padding: 4px 11px;
-  border-radius: $r-pill;
-  letter-spacing: 0.03em;
-}
-.pdp-thumbs {
-  display: flex;
-  padding: 12px 16px 16px;
-  overflow-x: auto;
-  white-space: nowrap;
-}
-.pdp-thumb {
-  box-sizing: border-box;
-  width: 60px;
-  height: 60px;
-  flex: 0 0 auto;
-  margin-right: 8px;
-  border-radius: $r-sm;
-  border: 2px solid transparent;
-  overflow: hidden;
-}
-.pdp-thumb.on {
-  border-color: $purple;
 }
 
 /* ---------- 区块卡通用 ---------- */
@@ -516,196 +406,4 @@ function goReviews() {
 
 /* 评价相关样式已移到 components/RatingSummary.vue + ReviewItem.vue */
 
-/* 图文详情 */
-.pdp-detail {
-  padding: 4px 20px 22px;
-}
-.pdp-param {
-  border: 1px solid $line;
-  border-radius: $r-md;
-  overflow: hidden;
-  margin: 12px 0 18px;
-}
-.pdp-param-row {
-  display: flex;
-  font-size: 13.5px;
-  border-bottom: 1px solid $line-soft;
-}
-.pdp-param-row.last {
-  border-bottom: none;
-}
-.pdp-param-dt {
-  width: 92px;
-  flex: 0 0 92px;
-  background: $bg-faint;
-  color: $content-2;
-  padding: 11px 14px;
-}
-.pdp-param-dd {
-  flex: 1;
-  color: $ink;
-  padding: 11px 14px;
-}
-.pdp-detail-lead {
-  display: block;
-  font-family: $font-display;
-  font-weight: 500;
-  font-size: 17px;
-  color: $ink;
-  margin: 18px 0 8px;
-}
-.pdp-detail-p {
-  display: block;
-  font-size: 14.5px;
-  line-height: 1.75;
-  color: $content;
-}
-.pdp-detail-img {
-  margin: 14px 0;
-}
-
-/* 套装包含（2 列卡片，跨端用 flex 不用 grid） */
-.pdp-kit {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: space-between;
-  padding: 6px 20px 18px;
-}
-.pdp-kit-cell {
-  width: calc(50% - 6px);
-  box-sizing: border-box;
-  display: flex;
-  align-items: center;
-  background: $white;
-  border: 1px solid $line-soft;
-  border-radius: $r-md;
-  padding: 14px;
-  margin-bottom: 12px;
-}
-.pdp-kit-ico {
-  width: 34px;
-  height: 34px;
-  border-radius: $r-xs;
-  background: $bg-lilac;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex: 0 0 auto;
-  margin-right: 11px;
-}
-.pdp-kit-name {
-  display: block;
-  font-size: 14px;
-  color: $ink;
-  line-height: 1.3;
-}
-.pdp-kit-qty {
-  display: block;
-  font-size: 11px;
-  color: $content-2;
-  font-family: $font-sans;
-  margin-top: 2px;
-}
-
-/* 为你推荐（2 列） */
-.pdp-recs {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: space-between;
-  padding: 10px 20px 20px;
-}
-.pdp-rec {
-  width: calc(50% - 6px);
-  box-sizing: border-box;
-  background: $white;
-  border: 1px solid $surface-cream;
-  border-radius: $r-sm;
-  overflow: hidden;
-  margin-bottom: 12px;
-}
-.pdp-rec:active {
-  transform: scale(0.985);
-}
-.pdp-rec-body {
-  padding: 10px 12px 12px;
-}
-.pdp-rec-name {
-  display: block;
-  font-size: 13.5px;
-  color: $ink;
-  line-height: 1.3;
-}
-.pdp-rec-foot {
-  display: flex;
-  align-items: baseline;
-  margin-top: 7px;
-}
-.pdp-rec-now {
-  font-family: $font-sans;
-  font-weight: 600;
-  font-size: 16px;
-  color: $ink;
-}
-.pdp-rec-was {
-  font-family: $font-sans;
-  font-size: 11px;
-  color: $content-2;
-  text-decoration: line-through;
-  margin-left: 6px;
-}
-
-/* ---------- 底部购买坞 ---------- */
-.pdp-foot {
-  height: calc(78px + env(safe-area-inset-bottom));
-}
-.pdp-dock {
-  position: fixed;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  z-index: 30;
-  display: flex;
-  align-items: center;
-  padding: 10px 14px calc(10px + env(safe-area-inset-bottom));
-  background: $white;
-  border-top: 0.5px solid $line;
-}
-.pdp-buy-ico {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  color: $content;
-  padding: 4px 6px;
-  flex: 0 0 auto;
-}
-.pdp-buy-ico text {
-  font-size: 10px;
-  margin-top: 2px;
-}
-.pdp-buy-actions {
-  flex: 1;
-  display: flex;
-  margin-left: 4px;
-}
-.pdp-btn {
-  flex: 1;
-  height: 46px;
-  border-radius: $r-pill;
-  font-weight: 600;
-  font-size: 15px;
-  color: $white;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-.pdp-btn:active {
-  transform: translateY(1px);
-}
-.pdp-btn-cart {
-  background: $purple-ink;
-  margin-right: 9px;
-}
-.pdp-btn-buy {
-  background: $purple;
-}
 </style>
