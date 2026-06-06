@@ -5,6 +5,7 @@
  * 服务类型 + 可申请售后的订单 + 帮助入口；当前均为 Toast 占位（无真实售后系统）。
  */
 import Icon from '@/components/Icon.vue'
+import CoNavBar from '@/components/CoNavBar.vue'
 import MediaSlot from '@/components/MediaSlot.vue'
 import { AS_TYPES, AS_ORDERS } from '@/data/aftersales.js'
 import { goBack } from '@/utils/nav.js'
@@ -18,13 +19,7 @@ function toast(t) {
 
 <template>
   <view class="co">
-    <view class="co-header">
-      <view class="co-nav">
-        <view class="co-nav-btn" @tap="back"><Icon name="chevron-left-ink" :size="22" /></view>
-        <text class="co-nav-title">退款 / 售后</text>
-        <view class="co-nav-spacer"></view>
-      </view>
-    </view>
+    <CoNavBar title="退款 / 售后" @back="back" />
 
     <view class="co-body">
       <!-- 服务类型 -->

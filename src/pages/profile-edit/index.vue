@@ -7,6 +7,7 @@
  */
 import { ref, computed } from 'vue'
 import Icon from '@/components/Icon.vue'
+import CoNavBar from '@/components/CoNavBar.vue'
 import MediaSlot from '@/components/MediaSlot.vue'
 import { useUserStore } from '@/store/user.js'
 import { goBack } from '@/utils/nav.js'
@@ -43,13 +44,7 @@ function save() {
 
 <template>
   <view class="co">
-    <view class="co-header">
-      <view class="co-nav">
-        <view class="co-nav-btn" @tap="back"><Icon name="chevron-left-ink" :size="22" /></view>
-        <text class="co-nav-title">编辑资料</text>
-        <view class="co-nav-spacer"></view>
-      </view>
-    </view>
+    <CoNavBar title="编辑资料" @back="back" />
 
     <view class="co-body">
       <view class="co-card coaddr-form">

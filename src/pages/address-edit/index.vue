@@ -7,6 +7,7 @@
 import { ref, computed } from 'vue'
 import { onLoad } from '@dcloudio/uni-app'
 import Icon from '@/components/Icon.vue'
+import CoNavBar from '@/components/CoNavBar.vue'
 import { useAddressStore } from '@/store/address.js'
 import { goBack } from '@/utils/nav.js'
 
@@ -68,13 +69,7 @@ function del() {
 
 <template>
   <view class="co">
-    <view class="co-header">
-      <view class="co-nav">
-        <view class="co-nav-btn" @tap="back"><Icon name="chevron-left-ink" :size="22" /></view>
-        <text class="co-nav-title">{{ editId != null ? '编辑收货地址' : '新增收货地址' }}</text>
-        <view class="co-nav-spacer"></view>
-      </view>
-    </view>
+    <CoNavBar :title="editId != null ? '编辑收货地址' : '新增收货地址'" @back="back" />
 
     <view class="co-body">
       <view class="co-card coaddr-form">

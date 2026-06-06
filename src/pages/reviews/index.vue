@@ -5,7 +5,7 @@
  * 筛选为高亮态（与原型一致，不做真实过滤）；买家秀图位走 MediaSlot 灰占位。
  */
 import { ref } from 'vue'
-import Icon from '@/components/Icon.vue'
+import CoNavBar from '@/components/CoNavBar.vue'
 import MediaSlot from '@/components/MediaSlot.vue'
 import { PRODUCT_DETAIL as PD } from '@/data/productDetail.js'
 import { goBack } from '@/utils/nav.js'
@@ -18,13 +18,7 @@ const back = () => goBack('/pages/index/index')
 
 <template>
   <view class="pdr">
-    <view class="pdr-header">
-      <view class="pdr-nav">
-        <view class="pdr-nav-btn" @tap="back"><Icon name="chevron-left-ink" :size="22" /></view>
-        <text class="pdr-nav-title">全部评价</text>
-        <view class="pdr-nav-spacer"></view>
-      </view>
-    </view>
+    <CoNavBar title="全部评价" @back="back" />
 
     <!-- 评分汇总 -->
     <view class="pdr-summary">
@@ -95,42 +89,6 @@ const back = () => goBack('/pages/index/index')
   background: $bg-grey;
   font-family: $font-cn;
   color: $content;
-}
-
-/* 顶部导航 */
-.pdr-header {
-  background: $white;
-  padding: calc(6px + env(safe-area-inset-top)) 0 0;
-  border-bottom: 0.5px solid $line;
-}
-.pdr-nav {
-  display: flex;
-  align-items: center;
-  padding: 2px 16px 12px;
-}
-.pdr-nav-btn {
-  width: 34px;
-  height: 34px;
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex: 0 0 auto;
-}
-.pdr-nav-btn:active {
-  background: rgba(0, 0, 0, 0.06);
-}
-.pdr-nav-title {
-  flex: 1;
-  text-align: center;
-  font-family: $font-display;
-  font-weight: 500;
-  font-size: 17px;
-  color: $ink;
-}
-.pdr-nav-spacer {
-  width: 34px;
-  flex: 0 0 auto;
 }
 
 /* 评分汇总 */

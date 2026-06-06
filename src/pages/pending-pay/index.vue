@@ -7,6 +7,7 @@
 import { ref, computed, onUnmounted } from 'vue'
 import Icon from '@/components/Icon.vue'
 import MediaSlot from '@/components/MediaSlot.vue'
+import CoNavBar from '@/components/CoNavBar.vue'
 import { useAddressStore } from '@/store/address.js'
 import { PENDING_ORDER as O, COUPON, SHIP } from '@/data/orders.js'
 import { goBack } from '@/utils/nav.js'
@@ -49,13 +50,7 @@ function gopay() {
 
 <template>
   <view class="co">
-    <view class="co-header">
-      <view class="co-nav">
-        <view class="co-nav-btn" @tap="back"><Icon name="chevron-left-ink" :size="22" /></view>
-        <text class="co-nav-title">待支付</text>
-        <view class="co-nav-spacer"></view>
-      </view>
-    </view>
+    <CoNavBar title="待支付" @back="back" />
 
     <view class="co-body">
       <!-- 倒计时 -->

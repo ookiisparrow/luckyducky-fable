@@ -8,6 +8,7 @@
 import { ref } from 'vue'
 import { onLoad } from '@dcloudio/uni-app'
 import Icon from '@/components/Icon.vue'
+import CoNavBar from '@/components/CoNavBar.vue'
 
 const amount = ref('0.00')
 const orderNo = ref('')
@@ -27,13 +28,7 @@ function orders() {
 
 <template>
   <view class="cosuc">
-    <view class="co-header">
-      <view class="co-nav">
-        <view class="co-nav-spacer"></view>
-        <text class="co-nav-title">支付结果</text>
-        <view class="co-nav-btn" @tap="home"><Icon name="x-ink" :size="22" /></view>
-      </view>
-    </view>
+    <CoNavBar title="支付结果" mode="close" @close="home" />
 
     <view class="cosuc-body">
       <view class="cosuc-hero">
@@ -72,9 +67,7 @@ function orders() {
 </template>
 
 <style lang="scss" scoped>
-@import '../../styles/co.scss';
-
-/* 本页根用 cosuc（白底），其余复用 co- 导航 */
+/* 本页根用 cosuc（白底）；顶部导航用 CoNavBar 组件 */
 .cosuc {
   min-height: 100vh;
   background: $white;

@@ -103,6 +103,7 @@ src/
                     ⚠️ 以后接后端时，把这里替换成调用 src/api/，页面无需改动。
   api/              网络请求层：request.js 基础封装 + user/shop/erp/im 各模块（现为空壳）
   store/            Pinia 状态：user(账号) / cart(购物车) …（现为预留）
+  utils/            跨页小工具：nav.js(goBack 兜底返回) / format.js(money/stars/yuan)
   static/           图片素材；static/icons/ 放 svg 图标
   uni.scss          ★ 设计 Token 单一来源（颜色/字号/圆角/间距/阴影）
   App.vue           根组件 + 全局基础样式
@@ -113,7 +114,7 @@ src/
 ### 4.1 组件分类（新增组件时照此归类，放进 `src/components/`）
 - **页面区块**（整屏一段）：`Hero` / `BrandIntro` / `FeatureProducts` / `TrustStrip` / `Reassurance` / `Reviews` / `FAQ` / `ClosingCTA` / `SiteFooter`
 - **卡片**（列表里的一项）：`ProductCard` / `ReviewCard`
-- **基础控件**（跨页面复用的小件）：`Icon` / `MediaSlot` / `Accordion` / `TabBar` / `Toast` / `BackTop`
+- **基础控件**（跨页面复用的小件）：`Icon` / `MediaSlot` / `Accordion` / `TabBar` / `Toast` / `BackTop` / `CoNavBar`（结算/订单/地址等页的通用顶部导航条，`mode=back|close`）
 - **媒体**：`components/media/`（将来的定制视频播放器）
 > 现阶段组件平铺在 `components/` 下即可；数量变多再按上面分类建子目录。
 

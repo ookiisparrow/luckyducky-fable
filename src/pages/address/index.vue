@@ -5,6 +5,7 @@
  * 列表由 store/address.js 驱动：点卡片设为默认、点笔编辑、底部新增。
  */
 import Icon from '@/components/Icon.vue'
+import CoNavBar from '@/components/CoNavBar.vue'
 import { useAddressStore } from '@/store/address.js'
 import { goBack } from '@/utils/nav.js'
 
@@ -25,13 +26,7 @@ function add() {
 
 <template>
   <view class="co">
-    <view class="co-header">
-      <view class="co-nav">
-        <view class="co-nav-btn" @tap="back"><Icon name="chevron-left-ink" :size="22" /></view>
-        <text class="co-nav-title">地址管理</text>
-        <view class="co-nav-spacer"></view>
-      </view>
-    </view>
+    <CoNavBar title="地址管理" @back="back" />
 
     <view class="co-body">
       <view v-if="address.list.length === 0" class="coam-empty">

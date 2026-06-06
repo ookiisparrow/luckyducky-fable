@@ -10,6 +10,7 @@ import { ref, computed } from 'vue'
 import { onLoad } from '@dcloudio/uni-app'
 import Icon from '@/components/Icon.vue'
 import MediaSlot from '@/components/MediaSlot.vue'
+import CoNavBar from '@/components/CoNavBar.vue'
 import { useAddressStore } from '@/store/address.js'
 import { ORDER_CFG, COUPON, SHIP } from '@/data/orders.js'
 import { goBack } from '@/utils/nav.js'
@@ -53,13 +54,7 @@ function onAction(a) {
 
 <template>
   <view class="co">
-    <view class="co-header">
-      <view class="co-nav">
-        <view class="co-nav-btn" @tap="back"><Icon name="chevron-left-ink" :size="22" /></view>
-        <text class="co-nav-title">{{ cfg.title }}</text>
-        <view class="co-nav-spacer"></view>
-      </view>
-    </view>
+    <CoNavBar :title="cfg.title" @back="back" />
 
     <view class="co-body">
       <!-- 状态横幅 -->
