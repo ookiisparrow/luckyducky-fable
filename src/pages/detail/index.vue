@@ -49,6 +49,9 @@ function back() {
 function toast(t) {
   uni.showToast({ title: t, icon: 'none' })
 }
+function goReviews() {
+  uni.navigateTo({ url: '/pages/reviews/index' })
+}
 </script>
 
 <template>
@@ -139,7 +142,7 @@ function toast(t) {
     <view class="pdp-sec">
       <view class="pdp-sec-head">
         <text class="pdp-sec-title">用户评价</text>
-        <view class="pdp-sec-more" @tap="toast('全部评价（敬请期待）')">
+        <view class="pdp-sec-more" @tap="goReviews">
           <text>全部 {{ PD.rating.count }} 条</text><Icon name="chevron-right" :size="14" />
         </view>
       </view>

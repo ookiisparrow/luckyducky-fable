@@ -20,6 +20,13 @@
       }
     },
     {
+      "path": "pages/reviews/index",
+      "style": {
+        "navigationBarTitleText": "全部评价",
+        "navigationStyle": "custom"
+      }
+    },
+    {
       "path": "pages/checkout/index",
       "style": {
         "navigationBarTitleText": "提交订单",
