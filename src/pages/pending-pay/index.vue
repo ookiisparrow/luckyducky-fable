@@ -6,8 +6,9 @@
  */
 import { ref, computed, onUnmounted } from 'vue'
 import Icon from '@/components/Icon.vue'
-import MediaSlot from '@/components/MediaSlot.vue'
 import CoNavBar from '@/components/CoNavBar.vue'
+import AddressBlock from '@/components/AddressBlock.vue'
+import OrderItem from '@/components/OrderItem.vue'
 import PriceSummary from '@/components/PriceSummary.vue'
 import { useAddressStore } from '@/store/address.js'
 import { PENDING_ORDER as O, COUPON, SHIP } from '@/data/orders.js'
@@ -62,22 +63,7 @@ function gopay() {
       </view>
 
       <!-- 收货地址（只读） -->
-      <view v-if="addr" class="co-addr">
-        <view class="co-addr-main">
-          <view class="co-addr-pin"><Icon name="map-pin" :size="24" /></view>
-          <view class="co-addr-text">
-            <view class="co-addr-line1">
-              <text class="co-addr-name">{{ addr.name }}</text>
-              <text class="co-addr-phone">{{ addr.phone }}</text>
-            </view>
-            <view class="co-addr-line2">
-              <text v-if="addr.isDefault" class="co-addr-tag">默认</text>
-              <text class="co-addr-detail">{{ (addr.region ? addr.region + ' ' : '') + addr.detail }}</text>
-            </view>
-          </view>
-        </view>
-        <view class="co-stitch"></view>
-      </view>
+      <AddressBlock :address="addr" />
 
       <!-- 订单商品（只读） -->
       <view class="co-card">
@@ -86,17 +72,7 @@ function gopay() {
           <text class="co-shop-name">易织™小棉鸭® 官方旗舰店</text>
           <view class="co-shop-chev"><Icon name="chevron-right" :size="16" /></view>
         </view>
-        <view class="co-item">
-          <view class="co-item-img"><MediaSlot ratio="1/1" :radius="5" /></view>
-          <view class="co-item-mid">
-            <text class="co-item-name">{{ O.name }}</text>
-            <text v-if="O.spec" class="co-item-spec">{{ O.spec }}</text>
-            <view class="co-item-foot">
-              <text class="co-price co-item-price"><text class="cny">￥</text>{{ money(O.price) }}</text>
-              <text class="co-item-qty">×{{ O.qty || 1 }}</text>
-            </view>
-          </view>
-        </view>
+        <OrderItem :name="O.name" :spec="O.spec" :price="O.price" :qty="O.qty || 1" />
       </view>
 
       <!-- 订单信息 -->

@@ -14,7 +14,9 @@
 import { ref, computed } from 'vue'
 import Icon from '@/components/Icon.vue'
 import CoNavBar from '@/components/CoNavBar.vue'
+import AddressBlock from '@/components/AddressBlock.vue'
 import MediaSlot from '@/components/MediaSlot.vue'
+import OrderItem from '@/components/OrderItem.vue'
 import PriceSummary from '@/components/PriceSummary.vue'
 import QuantityStepper from '@/components/QuantityStepper.vue'
 import { useCartStore } from '@/store/cart.js'
@@ -87,31 +89,7 @@ function onSubmit() {
 
     <view class="co-body">
       <!-- 收货地址（来自地址簿；无则空态引导添加） -->
-      <view class="co-addr">
-        <view v-if="addr" class="co-addr-main" @tap="goAddress">
-          <view class="co-addr-pin"><Icon name="map-pin" :size="24" /></view>
-          <view class="co-addr-text">
-            <view class="co-addr-line1">
-              <text class="co-addr-name">{{ addr.name }}</text>
-              <text class="co-addr-phone">{{ addr.phone }}</text>
-            </view>
-            <view class="co-addr-line2">
-              <text v-if="addr.isDefault" class="co-addr-tag">默认</text>
-              <text class="co-addr-detail">{{ (addr.region ? addr.region + ' ' : '') + addr.detail }}</text>
-            </view>
-          </view>
-          <view class="co-addr-chev"><Icon name="chevron-right" :size="19" /></view>
-        </view>
-        <view v-else class="co-addr-main" @tap="goAddress">
-          <view class="co-addr-pin"><Icon name="map-pin" :size="24" /></view>
-          <view class="co-addr-text">
-            <text class="co-addr-empty-title">添加收货地址</text>
-            <text class="co-addr-empty-sub">请先填写收货人、手机号与详细地址</text>
-          </view>
-          <view class="co-addr-chev"><Icon name="chevron-right" :size="19" /></view>
-        </view>
-        <view class="co-stitch"></view>
-      </view>
+      <AddressBlock :address="addr" tappable @tap="goAddress" />
 
       <!-- 店铺 + 订单商品 -->
       <view class="co-card">
@@ -120,22 +98,16 @@ function onSubmit() {
           <text class="co-shop-name">易织™小棉鸭® 官方旗舰店</text>
           <view class="co-shop-chev"><Icon name="chevron-right" :size="16" /></view>
         </view>
-        <view v-for="(it, i) in list" :key="it.id" class="co-item">
-          <view class="co-item-img"><MediaSlot ratio="1/1" :radius="5" /></view>
-          <view class="co-item-mid">
-            <text class="co-item-name">{{ it.name }}</text>
-            <text v-if="it.tag" class="co-item-spec">{{ it.tag }}</text>
-            <view class="co-item-foot">
-              <text class="co-price co-item-price"><text class="cny">￥</text>{{ money(it.price) }}</text>
-              <QuantityStepper
-                :n="it.qty"
-                size="sm"
-                @dec="setItemQty(i, it.qty - 1)"
-                @inc="setItemQty(i, it.qty + 1)"
-              />
-            </view>
-          </view>
-        </view>
+        <OrderItem v-for="(it, i) in list" :key="it.id" :name="it.name" :spec="it.tag" :price="it.price">
+          <template #foot>
+            <QuantityStepper
+              :n="it.qty"
+              size="sm"
+              @dec="setItemQty(i, it.qty - 1)"
+              @inc="setItemQty(i, it.qty + 1)"
+            />
+          </template>
+        </OrderItem>
       </view>
 
       <!-- 搭配购买 -->

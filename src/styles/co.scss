@@ -57,94 +57,16 @@
   flex: 0 0 auto;
 }
 
-/* 收货地址 */
-.co-addr {
-  background: $white;
-  border-radius: $r-md;
-  box-shadow: $shadow-soft;
-  margin-bottom: 12px;
-}
-.co-addr-main {
-  display: flex;
-  align-items: center;
-  padding: 18px 14px 20px;
-}
-.co-addr-pin {
-  width: 26px;
-  flex: 0 0 auto;
-  display: flex;
-  justify-content: center;
-  margin-right: 13px;
-}
-.co-addr-text {
-  flex: 1 1 auto;
-  min-width: 0;
-}
-.co-addr-line1 {
-  display: flex;
-  align-items: baseline;
-}
-.co-addr-name {
-  font-family: $font-display;
-  font-weight: 500;
-  font-size: 17px;
-  color: $ink;
-}
-.co-addr-phone {
-  font-family: $font-sans;
-  font-size: 14px;
-  color: $content;
-  margin-left: 12px;
-}
-.co-addr-line2 {
-  font-size: 13.5px;
-  color: $content-2;
-  line-height: 1.5;
-  margin-top: 6px;
-}
+/* 收货地址块：见 components/AddressBlock.vue（不再放这里）。
+   仅保留「默认」徽标基础样式 —— 地址管理页（coam-）也用同一个 .co-addr-tag，
+   两处布局独立、不互相 import，故 AddressBlock 内另带一份同款。外边距各页/各组件另加。 */
 .co-addr-tag {
-  /* 「默认」小徽标。外边距随上下文不同（行内位置不同），由各页另加。 */
   font-size: 10.5px;
   color: $purple;
   background: $bg-lilac;
   border: 0.5px solid $purple-line;
   border-radius: 4px;
   padding: 1px 6px;
-}
-/* 收货地址第二行里：徽标在详情前 → 右间距 */
-.co-addr-line2 .co-addr-tag {
-  margin-right: 6px;
-}
-.co-addr-chev {
-  flex: 0 0 auto;
-  display: flex;
-  margin-left: 8px;
-}
-.co-addr-empty-title {
-  display: block;
-  font-family: $font-display;
-  font-weight: 500;
-  font-size: 16px;
-  color: $ink;
-}
-.co-addr-empty-sub {
-  display: block;
-  font-size: 12.5px;
-  color: $content-2;
-  line-height: 1.5;
-  margin-top: 5px;
-}
-.co-stitch {
-  height: 4px;
-  border-radius: 0 0 $r-md $r-md;
-  overflow: hidden;
-  background-image: repeating-linear-gradient(
-    72deg,
-    $duck-orange 0 6px,
-    transparent 6px 7px,
-    $purple 7px 13px,
-    transparent 13px 14px
-  );
 }
 
 /* 店铺 + 商品行 */
@@ -164,29 +86,9 @@
   margin-left: auto;
   display: flex;
 }
-.co-item {
-  display: flex;
-  padding: 14px 16px;
-}
-.co-item-img {
-  width: 80px;
-  height: 80px;
-  border-radius: $r-sm;
-  overflow: hidden;
-  flex: 0 0 auto;
-  margin-right: 12px;
-}
-.co-item-mid {
-  flex: 1 1 auto;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-}
-.co-item-name {
-  font-size: 15px;
-  color: $ink;
-  line-height: 1.35;
-}
+/* 订单商品行整块：见 components/OrderItem.vue（不再放这里）。
+   下面 co-item-spec / co-price / .cny 是跨处共用的原子类（评价页、搭配购买、底坞），
+   组件 scoped 够不到，故 OrderItem 内另带一份，这里保留给组件外的用处。 */
 .co-item-spec {
   align-self: flex-start;
   font-size: 11.5px;
@@ -196,18 +98,6 @@
   padding: 3px 8px;
   margin-top: 7px;
 }
-.co-item-foot {
-  display: flex;
-  align-items: flex-end;
-  justify-content: space-between;
-  margin-top: auto;
-  padding-top: 10px;
-}
-.co-item-qty {
-  font-family: $font-sans;
-  font-size: 13px;
-  color: $content-2;
-}
 .co-price {
   font-family: $font-sans;
   font-weight: 600;
@@ -216,9 +106,6 @@
 .co-price .cny {
   font-size: 13px;
   margin-right: 1px;
-}
-.co-item-price {
-  font-size: 19px;
 }
 
 /* 金额明细：见 components/PriceSummary.vue（不再放这里） */
