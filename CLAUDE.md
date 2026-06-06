@@ -35,7 +35,7 @@
   - ⚠️ 全部为**样例订单**(无真实订单系统)；确认收货/提醒发货/物流/再次购买(进详情) 为 Toast/弹窗/跳转；退款→售后页、评价晒单→评价页 已接通。
 - ✅ **售后页 + 评价晒单页**（`pages/aftersales`、`pages/review`，数据 `data/aftersales.js`）：售后=服务类型四宫格+可申请订单+帮助行(均 Toast/无真实售后系统)；评价=星级评分+标签多选+文字(计数)+晒图(灰占位增删)+匿名开关，「发布」Toast。入口：我的订单「退款/售后」、订单详情「申请退款/评价晒单」。
 - ✅ **工程化**：设计 token（`uni.scss`）、Pinia/`store`、`api` 空壳、`MediaSlot` 媒体槽、ESLint + Prettier。
-- ✅ **组件化收口**（2026-06-06）：把多页 1:1 复制的块抽成组件 —— `PriceSummary`/`RatingSummary`/`ReviewItem`/`AddressBlock`/`OrderItem`（展示）、`CoSwitch`/`QuantityStepper`（交互叶子）；播放页 `HelpSheet` 拆出后 `player` 由 1318→496 行。详见组件分类（§4.1）与其中的 scoped 隔离铁律/故意没抽清单。⚠️ 纯搬家不改行为、lint+双端 build 通过，但**全程未做像素级验证**，需本机眼校（HelpSheet 交互最该重点点一遍）。
+- ✅ **组件化收口**（2026-06-06）：把多页 1:1 复制的块抽成组件 —— `PriceSummary`/`RatingSummary`/`ReviewItem`/`AddressBlock`/`OrderItem`（展示）、`CoSwitch`/`QuantityStepper`（交互叶子）；播放页 `HelpSheet` 拆出后 `player` 由 1318→496 行。又把两个大页面按段拆成页内子组件：`detail` 711→409（Gallery/Params/Kit/Recs/Dock）、`me` 477→185（ProfileHeader/ContinueVideo/OrderGrid），放各自 `pages/<页>/components/`。详见组件分类（§4.1）与其中的 scoped 隔离铁律/故意没抽清单。⚠️ 纯搬家不改行为、lint+双端 build 通过，但**全程未做像素级验证**，需本机眼校（HelpSheet 交互最该重点点一遍）。
 - ✅ **状态持久化**（2026-06-06）：自写跨端 Pinia 插件 `store/persist.js`（用 uni storage，不引 persistedstate 以免小程序端 localStorage 崩）。购物车 `items`、地址 `list`、用户 `token+profile` 已持久化，刷新/冷启动不丢；结算草稿等临时态按 `paths` 排除。地址 id 改为 `max(现有)+1` 防回灌撞号。插件逻辑已用 node 隔离测（9 断言全过）。
 - ✅ **构建**：H5 与 mp-weixin 均 `build` 通过。
 - ✅ **视频教程流程**：欢迎页(变体A) → 课程目录 → 播放页。播放页**对照设计稿 VideoPlayer 重做**：真 `<video>` 非全屏铺满(保同层渲染) + 知识点分段进度 + 段末自动暂停→重复播放 + 顶部「收起/标题/更多」+ 底部「上一集/求助(琥珀)/下一集」+ **完整求助面板**(在线客服聊天 / 遇到问题→辅助视频(海报占位+计时模拟) / 学习交流群二维码 / 常见问题FAQ / 反馈表单)。研究开关(0.5×慢放/单段循环/段末暂停开关/后退10s)按设计稿移除。上一集/下一集按 id 从 `data/course.js` 定位(catalog/me 传 id)。页面 `pages/welcome`、`pages/catalog`、`pages/player`。
@@ -121,7 +121,12 @@ src/
 - **展示块**（跨页只读区块）：`RatingSummary`（评分汇总 `:rating`）/ `PriceSummary`（金额明细 `:goods/:coupon/:ship/:total`）/ `AddressBlock`（收货地址块 `:address` + `tappable`，空+可点显示「添加地址」、空+只读不渲染）
 - **基础控件**（跨页面复用的小件）：`Icon` / `MediaSlot` / `Accordion` / `TabBar` / `Toast` / `BackTop` / `CoNavBar`（顶部导航 `mode=back|close`）/ `CoSwitch`（开关 `:on`，点击交互由外层整行控制以保大热区）/ `QuantityStepper`（数量步进，发 `inc`/`dec` 事件让各页保留自己的下限逻辑，`size=md`购物车/`sm`结算）
 - **媒体 / 大块**：`components/media/`（将来的定制视频播放器）；`HelpSheet`（播放页求助面板，自带开合态、对外 `defineExpose({ open })`，父级用 ref 调；打开前父级先 `ctx.pause()`）
-> 现阶段组件平铺在 `components/` 下即可；数量变多再按上面分类建子目录。
+> 现阶段跨页复用组件平铺在 `components/` 下即可；数量变多再按上面分类建子目录。
+> **页内自用的子组件**（只拆大页面、不跨页复用的）就近放 `pages/<页>/components/`，
+> 例：`pages/detail/components/`（DetailGallery/Params/Kit/Recs/Dock）、
+> `pages/me/components/`（ProfileHeader/ContinueVideo/OrderGrid）。拆页时**共享外壳类**
+> （如 detail 的 pdp-card/pdp-sec、me 的 my-card/my-sec-head）留在父页、只把各段独有内容
+> 与样式搬进子组件（同 scoped 隔离铁律），别让每个子组件各复制一份外壳。
 >
 > 🧩 **组件 scoped 隔离的两条铁律（抽组件前必读，踩过坑）**：
 > 1. **组件 `<style scoped>` 够不到 co.scss 的类，反之亦然。** 所以当某个原子类被「组件内」与「组件外」**同时**使用时，必须两边各留一份（已注释标注）：`co-addr-tag`（也被地址管理页 coam- 用）、`co-item-spec`/`co-price`/`.cny`（也被评价页、搭配购买用）。这不是冗余 bug，是 scoped 的必然代价。
