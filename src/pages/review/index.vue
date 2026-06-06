@@ -7,6 +7,7 @@
 import { ref } from 'vue'
 import Icon from '@/components/Icon.vue'
 import CoNavBar from '@/components/CoNavBar.vue'
+import CoSwitch from '@/components/CoSwitch.vue'
 import MediaSlot from '@/components/MediaSlot.vue'
 import { goBack } from '@/utils/nav.js'
 
@@ -107,7 +108,7 @@ function publish() {
       <view class="co-card corev-anon" @tap="anon = !anon">
         <text class="corev-anon-text">匿名评价</text>
         <text class="corev-anon-sub">隐藏你的昵称与头像</text>
-        <view class="co-switch" :class="{ on: anon }"><view class="co-switch-dot"></view></view>
+        <CoSwitch :on="anon" />
       </view>
     </view>
 

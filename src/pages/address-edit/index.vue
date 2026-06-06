@@ -8,6 +8,7 @@ import { ref, computed } from 'vue'
 import { onLoad } from '@dcloudio/uni-app'
 import Icon from '@/components/Icon.vue'
 import CoNavBar from '@/components/CoNavBar.vue'
+import CoSwitch from '@/components/CoSwitch.vue'
 import { useAddressStore } from '@/store/address.js'
 import { goBack } from '@/utils/nav.js'
 
@@ -93,7 +94,7 @@ function del() {
 
       <view class="co-card coaddr-default" @tap="isDefault = !isDefault">
         <text class="coaddr-default-text">设为默认地址</text>
-        <view class="co-switch" :class="{ on: isDefault }"><view class="co-switch-dot"></view></view>
+        <CoSwitch :on="isDefault" />
       </view>
 
       <view v-if="editId != null" class="co-card coaddr-delete" @tap="del">

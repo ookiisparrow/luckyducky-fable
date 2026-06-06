@@ -11,6 +11,7 @@
  */
 import Icon from '@/components/Icon.vue'
 import MediaSlot from '@/components/MediaSlot.vue'
+import QuantityStepper from '@/components/QuantityStepper.vue'
 import TabBar from '@/components/TabBar.vue'
 import { useCartStore } from '@/store/cart.js'
 import { CART_RECS } from '@/data/cart.js'
@@ -79,11 +80,12 @@ function onCheckout() {
               <text v-if="it.was" class="ld-cart-was">￥{{ it.was }}</text>
               <text class="ld-cart-item-price">￥{{ it.price }}</text>
             </view>
-            <view class="ld-stepper">
-              <view class="ld-stepper-btn" @tap="dec(it)">−</view>
-              <text class="ld-stepper-n">{{ it.qty }}</text>
-              <view class="ld-stepper-btn" @tap="cart.setQty(it.id, it.qty + 1)">＋</view>
-            </view>
+            <QuantityStepper
+              :n="it.qty"
+              size="md"
+              @dec="dec(it)"
+              @inc="cart.setQty(it.id, it.qty + 1)"
+            />
           </view>
         </view>
       </view>
@@ -262,32 +264,7 @@ function onCheckout() {
   font-size: 17px;
   color: $ink;
 }
-.ld-stepper {
-  display: flex;
-  align-items: center;
-  border: 1px solid $line-strong;
-  border-radius: $r-pill;
-  overflow: hidden;
-}
-.ld-stepper-btn {
-  width: 28px;
-  height: 28px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 16px;
-  color: $ink;
-}
-.ld-stepper-btn:active {
-  background: $bg-grey;
-}
-.ld-stepper-n {
-  min-width: 28px;
-  text-align: center;
-  font-family: $font-sans;
-  font-size: 13px;
-  color: $ink;
-}
+/* 数量步进器：见 components/QuantityStepper.vue（size="md"） */
 .ld-cart-hr {
   height: 1px;
   background: $line;

@@ -16,6 +16,7 @@ import Icon from '@/components/Icon.vue'
 import CoNavBar from '@/components/CoNavBar.vue'
 import MediaSlot from '@/components/MediaSlot.vue'
 import PriceSummary from '@/components/PriceSummary.vue'
+import QuantityStepper from '@/components/QuantityStepper.vue'
 import { useCartStore } from '@/store/cart.js'
 import { useAddressStore } from '@/store/address.js'
 import { CHECKOUT_ADDONS, COUPON, SHIP } from '@/data/checkout.js'
@@ -126,11 +127,12 @@ function onSubmit() {
             <text v-if="it.tag" class="co-item-spec">{{ it.tag }}</text>
             <view class="co-item-foot">
               <text class="co-price co-item-price"><text class="cny">￥</text>{{ money(it.price) }}</text>
-              <view class="co-stepper">
-                <view class="co-step-btn" @tap="setItemQty(i, it.qty - 1)">−</view>
-                <text class="co-step-n">{{ it.qty }}</text>
-                <view class="co-step-btn" @tap="setItemQty(i, it.qty + 1)">＋</view>
-              </view>
+              <QuantityStepper
+                :n="it.qty"
+                size="sm"
+                @dec="setItemQty(i, it.qty - 1)"
+                @inc="setItemQty(i, it.qty + 1)"
+              />
             </view>
           </view>
         </view>
@@ -151,11 +153,12 @@ function onSubmit() {
             <text class="co-addon-name">{{ a.name }}</text>
             <view class="co-addon-foot">
               <text class="co-price co-addon-price"><text class="cny">￥</text>{{ money(a.price) }}</text>
-              <view class="co-stepper">
-                <view class="co-step-btn" @tap="setAddonQty(i, a.qty - 1)">−</view>
-                <text class="co-step-n">{{ a.qty }}</text>
-                <view class="co-step-btn" @tap="setAddonQty(i, a.qty + 1)">＋</view>
-              </view>
+              <QuantityStepper
+                :n="a.qty"
+                size="sm"
+                @dec="setAddonQty(i, a.qty - 1)"
+                @inc="setAddonQty(i, a.qty + 1)"
+              />
             </view>
           </view>
         </view>
@@ -236,37 +239,7 @@ function onSubmit() {
   font-weight: 600;
 }
 
-/* 数量步进器（文字 −/＋，跨端稳） */
-.co-stepper {
-  display: flex;
-  align-items: center;
-  border: 0.5px solid $line-strong;
-  border-radius: $r-pill;
-  overflow: hidden;
-  height: 26px;
-}
-.co-step-btn {
-  width: 30px;
-  height: 26px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 15px;
-  color: $ink;
-}
-.co-step-btn:active {
-  background: $bg-grey;
-}
-.co-step-n {
-  min-width: 34px;
-  text-align: center;
-  font-family: $font-sans;
-  font-size: 14px;
-  color: $ink;
-  line-height: 26px;
-  border-left: 0.5px solid $line-strong;
-  border-right: 0.5px solid $line-strong;
-}
+/* 数量步进器：见 components/QuantityStepper.vue（size="sm"） */
 
 /* 搭配购买 */
 .co-addon-head {
