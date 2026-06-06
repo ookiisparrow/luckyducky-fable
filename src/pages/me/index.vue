@@ -54,7 +54,10 @@ function goEditProfile() {
       <view class="my-id">
         <view class="my-avatar"><MediaSlot ratio="1/1" :radius="31" :src="user.profile.avatar" /></view>
         <view class="my-id-text">
-          <text class="my-id-name">{{ user.profile.name }}</text>
+          <view class="my-id-nameline">
+            <text class="my-id-name">{{ user.profile.name }}</text>
+            <text v-if="user.profile.lv" class="my-lv">{{ user.profile.lv }}</text>
+          </view>
           <text class="my-id-sub">{{ user.profile.phone }}</text>
           <text v-if="user.profile.bio" class="my-id-bio">{{ user.profile.bio }}</text>
         </view>
@@ -186,13 +189,28 @@ function goEditProfile() {
   flex: 1 1 auto;
   margin: 0 14px;
 }
+.my-id-nameline {
+  display: flex;
+  align-items: center;
+}
 .my-id-name {
-  display: block;
   font-family: $font-display;
   font-weight: 700;
   font-size: 22px;
   line-height: 1.15;
   color: $white;
+}
+.my-lv {
+  flex: 0 0 auto;
+  font-weight: 500;
+  font-size: 11px;
+  letter-spacing: 0.02em;
+  padding: 3px 9px;
+  border-radius: $r-pill;
+  white-space: nowrap;
+  background: rgba(255, 255, 255, 0.22);
+  color: $white;
+  margin-left: 8px;
 }
 .my-id-sub {
   display: block;

@@ -81,8 +81,10 @@ function onExplore() {
   scrollToAnchor('anchor-intro', 12)
 }
 function onProductOpen(p) {
+  // 把该商品的价格也带进详情（不同商品价不同；'￥399.00' → 399）
+  const num = (s) => Number(String(s).replace(/[^0-9.]/g, ''))
   uni.navigateTo({
-    url: `/pages/detail/index?id=${p.id}&name=${encodeURIComponent(p.name)}`,
+    url: `/pages/detail/index?id=${p.id}&name=${encodeURIComponent(p.name)}&price=${num(p.now)}&was=${num(p.was)}`,
   })
 }
 function onProductAdd(p) {
