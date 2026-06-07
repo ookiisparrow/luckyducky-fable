@@ -5,15 +5,19 @@
  */
 import Icon from '@/components/Icon.vue'
 import MediaSlot from '@/components/MediaSlot.vue'
+import { getSystemBar } from '@/utils/systemBar.js'
 
 defineProps({
   profile: { type: Object, default: () => ({}) }, // { name, lv, phone, bio, avatar }
 })
 defineEmits(['edit'])
+
+// 顶部留白避开状态栏（注入 CSS 变量；标题居中、胶囊在右上不重叠，无需右避让）
+const topStyle = { '--sbh': getSystemBar().statusBarHeight + 'px' }
 </script>
 
 <template>
-  <view class="my-header my-header-purple">
+  <view class="my-header my-header-purple" :style="topStyle">
     <view class="my-navrow"><text class="my-navtitle">我的</text></view>
     <view class="my-id">
       <view class="my-avatar"><MediaSlot ratio="1/1" :radius="31" :src="profile.avatar" /></view>
@@ -35,7 +39,12 @@ defineEmits(['edit'])
 <style lang="scss" scoped>
 .my-header {
   position: relative;
+  /* #ifdef MP-WEIXIN */
+  padding: calc(8px + var(--sbh, 0px)) 20px 22px;
+  /* #endif */
+  /* #ifndef MP-WEIXIN */
   padding: calc(8px + env(safe-area-inset-top)) 20px 22px;
+  /* #endif */
 }
 .my-header-purple {
   /* 品牌紫渐变头（原型同款，渐变不入 token） */

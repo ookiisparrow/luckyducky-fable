@@ -118,6 +118,11 @@ $shadow-tab:
   color: $ink-pure;
 }
 
+/* ---- 运行时尺寸（不入 token）----
+   状态栏高度 / 微信胶囊位置 / 导航栏高度 需运行时才能确定，不放这里；
+   统一由 src/utils/systemBar.js 的 getSystemBar() 动态提供，组件用 :style
+   注入 CSS 变量后在 scoped 样式里 var() 取用。 */
+
 /* ---- 兼容 uni-app / 插件可能引用的内置变量（保留默认） ---- */
 $uni-color-primary: $brand;
 $uni-text-color: $content;

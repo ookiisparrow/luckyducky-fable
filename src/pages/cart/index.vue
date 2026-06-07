@@ -15,8 +15,12 @@ import QuantityStepper from '@/components/QuantityStepper.vue'
 import TabBar from '@/components/TabBar.vue'
 import { useCartStore } from '@/store/cart.js'
 import { CART_RECS } from '@/data/cart.js'
+import { getSystemBar } from '@/utils/systemBar.js'
 
 const cart = useCartStore()
+
+// 顶部留白避开状态栏（注入 CSS 变量；标题左对齐不碰胶囊，无需右避让）
+const topStyle = { '--sbh': getSystemBar().statusBarHeight + 'px' }
 
 function goShop() {
   uni.reLaunch({ url: '/pages/index/index' })
@@ -52,7 +56,7 @@ function onCheckout() {
 
 <template>
   <view class="ld-cart">
-    <view class="ld-cart-top">
+    <view class="ld-cart-top" :style="topStyle">
       <text class="ld-cart-top-title">购物车</text>
     </view>
 
@@ -142,7 +146,12 @@ function onCheckout() {
 
 /* 顶部标题（含状态栏安全区） */
 .ld-cart-top {
+  /* #ifdef MP-WEIXIN */
+  padding: calc(14px + var(--sbh, 0px)) 20px 8px;
+  /* #endif */
+  /* #ifndef MP-WEIXIN */
   padding: calc(14px + env(safe-area-inset-top)) 20px 8px;
+  /* #endif */
 }
 .ld-cart-top-title {
   font-family: $font-display;

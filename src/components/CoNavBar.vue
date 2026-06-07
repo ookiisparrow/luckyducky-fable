@@ -7,16 +7,25 @@
  * mode='close'：左占位 + 居中标题 + 右关闭，点关闭 emit('close')
  */
 import Icon from './Icon.vue'
+import { getSystemBar } from '@/utils/systemBar.js'
 
 defineProps({
   title: { type: String, default: '' },
   mode: { type: String, default: 'back' }, // back | close
 })
 const emit = defineEmits(['back', 'close'])
+
+// 状态栏高度 + 胶囊避让，注入为 CSS 变量（scoped 样式里用 var() 取）
+const bar = getSystemBar()
+const navStyle = {
+  '--sbh': bar.statusBarHeight + 'px',
+  '--navh': bar.navBarHeight + 'px',
+  '--gap': bar.capsuleGap + 'px',
+}
 </script>
 
 <template>
-  <view class="co-header">
+  <view class="co-header" :style="navStyle">
     <view class="co-nav">
       <template v-if="mode === 'close'">
         <view class="co-nav-spacer"></view>
@@ -35,13 +44,23 @@ const emit = defineEmits(['back', 'close'])
 <style lang="scss" scoped>
 .co-header {
   background: $white;
-  padding: calc(6px + env(safe-area-inset-top)) 0 0;
   border-bottom: 0.5px solid $line;
+  /* 顶部留白 = 状态栏高度：小程序用动态值（含安卓），H5/App 用安全区兜底 */
+  /* #ifdef MP-WEIXIN */
+  padding-top: var(--sbh, 0px);
+  /* #endif */
+  /* #ifndef MP-WEIXIN */
+  padding-top: calc(6px + env(safe-area-inset-top));
+  /* #endif */
 }
 .co-nav {
   display: flex;
   align-items: center;
-  padding: 2px 16px 12px;
+  min-height: var(--navh, 44px); /* 导航内容高度，与胶囊垂直居中对齐（H5 兜底 44px） */
+  padding: 0 16px;
+  /* #ifdef MP-WEIXIN */
+  padding-right: calc(16px + var(--gap, 0px)); /* 右侧为胶囊让位：close 键/标题不被遮挡 */
+  /* #endif */
 }
 .co-nav-btn {
   width: 34px;
