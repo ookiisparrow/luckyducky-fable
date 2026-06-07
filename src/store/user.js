@@ -7,6 +7,7 @@
  */
 import { defineStore } from 'pinia'
 import { USER } from '@/data/profile.js'
+import logger from '@/utils/logger.js'
 
 const defaultProfile = () => ({ ...USER, avatar: '' })
 
@@ -14,6 +15,8 @@ export const useUserStore = defineStore('user', {
   state: () => ({
     token: '', // 登录令牌（以后微信登录后写入）
     profile: defaultProfile(), // 用户资料（现为样例，可在资料编辑页修改）
+    openid: '', // 微信登录后的 openid（不持久化，每次启动静默 login 重新拿）
+    cloudUser: null, // 云端 users 记录（P0 起步；资料展示迁移留待"完善资料"步）
   }),
   // 登录态与资料都要跨会话保留。回灌守卫：token 须为字符串、profile 须为普通对象，
   // 否则该字段不回灌（保留初始默认）；profile 缺字段由 defaultProfile 深合并兜底。
@@ -35,10 +38,21 @@ export const useUserStore = defineStore('user', {
     updateProfile(patch) {
       this.profile = { ...this.profile, ...patch }
     },
-    // TODO: 接入微信登录后实现
+    // 静默登录:调云函数 login（后端用可信 openid upsert users），拿回用户。
+    // 仅小程序端有 wx.cloud；H5 / App 端为空操作（保留本地样例 profile）。
     async login() {
-      // const { code } = await uni.login(...)
-      // this.token = await loginApi(code)
+      // #ifdef MP-WEIXIN
+      try {
+        const res = await wx.cloud.callFunction({ name: 'login' })
+        const u = res && res.result && res.result.ok && res.result.user
+        if (u) {
+          this.openid = u._openid || ''
+          this.cloudUser = u
+        }
+      } catch (e) {
+        logger.error('login', e)
+      }
+      // #endif
     },
     logout() {
       this.token = ''
