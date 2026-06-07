@@ -3,11 +3,13 @@
 import logger from '@/utils/logger.js'
 import { initCloud } from '@/utils/cloud.js'
 import { useUserStore } from '@/store/user.js'
+import { useProductsStore } from '@/store/products.js'
 
 export default {
   onLaunch() {
     initCloud() // 微信云开发初始化（仅小程序端生效；环境 ID 在 utils/cloud.js）
     useUserStore().login() // 静默登录:用 openid upsert users 建档（仅小程序端）
+    useProductsStore().load() // 拉商品列表（小程序端走云函数；其它端回退本地 catalog）
     // 全局错误兜底：应用级运行时错误 / 未捕获的 Promise 拒绝，不再静默
     uni.onError((err) => logger.error('app', err))
     uni.onUnhandledRejection((e) => logger.error('promise', (e && e.reason) || e))

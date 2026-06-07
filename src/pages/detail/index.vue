@@ -23,10 +23,12 @@ import DetailDock from './components/DetailDock.vue'
 import { PRODUCT_DETAIL as PD } from '@/data/productDetail.js'
 import { getProduct } from '@/data/catalog.js'
 import { useCartStore } from '@/store/cart.js'
+import { useProductsStore } from '@/store/products.js'
 import { goBack } from '@/utils/nav.js'
 
 const cart = useCartStore()
-// 商品身份按 id 从总表(catalog)取，单一来源；取不到时退回 PD 样例兜底。
+const products = useProductsStore()
+// 商品身份优先从商品 store 取（小程序端云端 / 其它端本地回退）；取不到退回 catalog 再退回 PD 样例。
 // 描述性内容（规格/评价/图文/套装）仍是共用样例。
 const pid = ref('prod-1')
 const title = ref(PD.title)
@@ -34,10 +36,12 @@ const price = ref(PD.price)
 const was = ref(PD.was)
 const tag = ref(PD.tag)
 
-onLoad((q) => {
+onLoad(async (q) => {
   const id = (q && q.id) || pid.value
   pid.value = id
-  const p = getProduct(id)
+  // store 未就绪时 load 一次（幂等）；再按 id 取，最后退回本地 catalog 兜底。
+  await products.load()
+  const p = products.getById(id) || getProduct(id)
   if (p) {
     title.value = p.name
     price.value = p.price

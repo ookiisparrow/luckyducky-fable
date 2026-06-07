@@ -1,0 +1,17 @@
+{
+  "$schema": "https://static.cloudbase.net/cli/cloudbaserc.schema.json",
+  "envId": "cloudbase-d4gcssqbv06865479",
+  "functionRoot": "cloudfunctions",
+  "functions": [
+    {
+      "name": "seedProducts",
+      "timeout": 20,
+      "handler": "index.main"
+    },
+    {
+      "name": "getProducts",
+      "timeout": 10,
+      "handler": "index.main"
+    }
+  ]
+}

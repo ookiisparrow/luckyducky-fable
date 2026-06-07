@@ -2,14 +2,29 @@
 /**
  * 「入门钩织的妙趣方案」+ 横滑产品。对应原型 Sections.jsx 的 Friends。
  */
+import { computed } from 'vue'
 import MediaSlot from './MediaSlot.vue'
 import ProductCard from './ProductCard.vue'
-import { PRODUCTS } from '@/data/products.js'
+import { useProductsStore } from '@/store/products.js'
+import { yuan } from '@/utils/format.js'
 
 defineProps({
   flashId: { type: String, default: '' }, // 命中要高亮的产品 id
 })
 const emit = defineEmits(['open', 'add'])
+
+// 首页横滑商品来自商品 store（小程序端云端 / 其它端回退本地）。
+// store 是 canonical 形状（price/was 数字）；这里映射成 ProductCard 需要的字符串价形状。
+const products = useProductsStore()
+const list = computed(() =>
+  products.featured.map((p) => ({
+    id: p.id,
+    name: p.name,
+    tag: p.tag,
+    was: yuan(p.was),
+    now: yuan(p.price),
+  })),
+)
 </script>
 
 <template>
@@ -23,7 +38,7 @@ const emit = defineEmits(['open', 'add'])
 
     <scroll-view scroll-x class="ld-prod-rail" :show-scrollbar="false">
       <ProductCard
-        v-for="p in PRODUCTS"
+        v-for="p in list"
         :key="p.id"
         :product="p"
         :flash="flashId === p.id"

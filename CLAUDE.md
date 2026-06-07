@@ -6,11 +6,11 @@
 
 Lucky Ducky 是钩织材料包电商 App，目标是支持微信小程序 / H5 / App 多端发布。
 
-当前状态：前端主干已基本完成。**微信云开发 P0 已接入、静默微信登录已跑通**（`utils/cloud.js` + `cloudfunctions/login`，环境 `cloudbase-d4gcssqbv06865479`、AppID `wxcbd2fb68b81bcfb1`）。仍缺真实支付、真实素材，以及其余业务数据上云。详见 `docs/项目现状.md`。
+当前状态：前端主干已基本完成。**微信云开发 P0 已接入、静默微信登录已跑通**、**商品数据已上云**（`utils/cloud.js` 的 `callCloud` + `cloudfunctions/getProducts` + `store/products.js`，环境 `cloudbase-d4gcssqbv06865479`、AppID `wxcbd2fb68b81bcfb1`）。仍缺课程 / 订单上云、真实支付、真实素材。详见 `docs/项目现状.md`。
 
 下一阶段重点：
 
-- 课程 / 商品 / 订单等数据从 `data/*` 迁到云开发（`api` 层接 `wx.cloud` + 业务云函数）。
+- 课程 / 订单数据从 `data/*` 迁到云开发（商品已完成，照搬 `store/products.js` + `api/shop.js` + 云函数 模式）。
 - 二维码激活 +「确认进入即失退货权」流程（见 `docs/设计规格-课程电商系统.md` P3）。
 - 完善资料 UI（头像 / 昵称 / 手机号授权）、真实微信支付、真实素材。
 - 小程序真机校验：顶部安全区、沉浸页胶囊避让、视频同层渲染、关键跳转。
@@ -182,6 +182,8 @@ const emit = defineEmits(['tap'])
 - 页面里把静态 import 换成接口请求。
 - 尽量保持数据结构不变，避免大改模板。
 
+**云开发数据**（小程序端）走 `utils/cloud.js` 的 `callCloud` + 业务云函数，不走 HTTP `request`。已有样板：`api/shop.js`（`getProducts` 接 `callCloud`，H5/App 回退本地）+ `store/products.js`（收口、页面从 store 取）。课程 / 订单照此模式。
+
 商品身份单一来源：
 
 - `src/data/catalog.js` 保存商品 `id/name/tag/price/was` 等身份信息。
@@ -265,7 +267,7 @@ Pinia store 放在 `src/store/`。
 
 功能缺口：
 
-- ✅ 微信云开发 P0 已接入、静默登录已跑通；**其余业务数据(课程/商品/订单)未上云**，仍读 `data/*`。
+- ✅ 微信云开发 P0 + 商品数据已上云（`getProducts` / `store/products.js`）；课程 / 订单未上云，仍读 `data/*`。
 - 未接真实微信支付。
 - 未接真实订单、售后、客服、ERP。
 - 商品详情描述、规格、评价、套装内容仍有共用样例。
