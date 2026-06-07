@@ -27,6 +27,7 @@ describe('persistPlugin 回灌', () => {
           { id: 'a', name: 'x', price: 1, qty: 2, selected: 1 }, // 有效（selected 待归一化）
           { id: 'b', name: 'y', price: 1 }, // 无 qty → 丢
           { id: 'c', name: 'z', price: 1, qty: 0 }, // qty 非正 → 丢
+          { id: 'd', name: 'q', price: 1, qty: 0.5 }, // 小数 qty → 丢（审核 v0.1 #1）
           { id: null, name: 'w', price: 1, qty: 1 }, // 无 id → 丢
           {}, // 空 → 丢
         ],

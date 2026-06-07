@@ -15,7 +15,8 @@ import { defineStore } from 'pinia'
 import { keepValid } from '@/utils/validate.js'
 
 // 购物车条目契约：回灌时校验 + 归一化。导出供测试直接验证（单一来源，不在测试里复制逻辑）。
-// 有效条件：有 id、price 是数字、有 name、qty 是正数；并把 qty 取整、selected 归一为布尔。
+// 有效条件：有 id、price 是数字、有 name、qty 是【正整数】；selected 归一为布尔。
+// qty 必须 Number.isInteger 且 ≥1 —— 小数(如 0.5)直接丢弃，不再 floor 成 0（审核 v0.1 #1）。
 export const sanitizeCart = (s) => ({
   items: keepValid(
     s.items,
@@ -24,10 +25,10 @@ export const sanitizeCart = (s) => ({
       it.id != null &&
       typeof it.price === 'number' &&
       !!it.name &&
-      Number.isFinite(it.qty) &&
-      it.qty > 0,
+      Number.isInteger(it.qty) &&
+      it.qty >= 1,
     'cart',
-  ).map((it) => ({ ...it, qty: Math.floor(it.qty), selected: !!it.selected })),
+  ).map((it) => ({ ...it, selected: !!it.selected })),
 })
 
 export const useCartStore = defineStore('cart', {
