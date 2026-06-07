@@ -14,6 +14,22 @@
 import { defineStore } from 'pinia'
 import { keepValid } from '@/utils/validate.js'
 
+// 购物车条目契约：回灌时校验 + 归一化。导出供测试直接验证（单一来源，不在测试里复制逻辑）。
+// 有效条件：有 id、price 是数字、有 name、qty 是正数；并把 qty 取整、selected 归一为布尔。
+export const sanitizeCart = (s) => ({
+  items: keepValid(
+    s.items,
+    (it) =>
+      it &&
+      it.id != null &&
+      typeof it.price === 'number' &&
+      !!it.name &&
+      Number.isFinite(it.qty) &&
+      it.qty > 0,
+    'cart',
+  ).map((it) => ({ ...it, qty: Math.floor(it.qty), selected: !!it.selected })),
+})
+
 export const useCartStore = defineStore('cart', {
   state: () => ({
     items: [],
@@ -24,17 +40,8 @@ export const useCartStore = defineStore('cart', {
     checkoutFromCart: false,
   }),
   // 只持久化购物车条目；结算草稿(checkoutItems/From)是临时态，不存 —— 避免冷启动残留旧草稿。
-  // 回灌按契约清洗：丢弃残缺条目（无 id / 价格非数字 / 无名字），防旧脏数据撑乱购物车列表。
-  persist: {
-    paths: ['items'],
-    sanitize: (s) => ({
-      items: keepValid(
-        s.items,
-        (it) => it && it.id != null && typeof it.price === 'number' && !!it.name,
-        'cart',
-      ),
-    }),
-  },
+  // 回灌按 sanitizeCart 契约清洗（丢弃残缺条目、归一化 qty/selected），防旧脏数据撑乱列表。
+  persist: { paths: ['items'], sanitize: sanitizeCart },
   getters: {
     isEmpty: (s) => s.items.length === 0,
     // 全部条目的件数（用于 Tab 角标等）
