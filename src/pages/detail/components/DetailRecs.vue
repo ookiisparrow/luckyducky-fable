@@ -1,12 +1,12 @@
 <script setup>
 /**
  * 商品详情 · 为你推荐（两列商品小卡）。从 detail 页拆出。
- * 点击发 pick 事件、把商品交回父页处理（现为 Toast 占位）。外层 pdp-sec 仍在父页。
+ * 点击发 pick 事件、把商品交回父页处理（父页跳该商品详情）。外层 pdp-sec 仍在父页。
  */
 import MediaSlot from '@/components/MediaSlot.vue'
 
 defineProps({
-  recs: { type: Array, default: () => [] }, // [{ name, price, was }, ...]
+  recs: { type: Array, default: () => [] }, // [{ id, name, price, was }, ...]（id 用于点击跳详情）
 })
 defineEmits(['pick'])
 </script>

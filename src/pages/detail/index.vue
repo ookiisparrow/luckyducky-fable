@@ -66,6 +66,11 @@ function toast(t) {
 function goReviews() {
   uni.navigateTo({ url: '/pages/reviews/index' })
 }
+// 点「为你推荐」里的商品 → 跳该商品详情（带 id，详情按 id 取数据）。
+// 用 navigateTo 叠加新详情页、返回键逐级退回；与首页产品卡进详情写法一致。
+function onRecPick(p) {
+  uni.navigateTo({ url: `/pages/detail/index?id=${p.id}&name=${encodeURIComponent(p.name)}` })
+}
 </script>
 
 <template>
@@ -164,7 +169,7 @@ function goReviews() {
     <!-- 为你推荐 -->
     <view class="pdp-sec pdp-sec-last">
       <view class="pdp-sec-head"><text class="pdp-sec-title">为你推荐</text></view>
-      <DetailRecs :recs="PD.recs" @pick="(p) => toast(p.name + '（敬请期待）')" />
+      <DetailRecs :recs="PD.recs" @pick="onRecPick" />
     </view>
 
     <!-- 固定底部购买坞（含给 fixed 坞让位的占位） -->

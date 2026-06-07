@@ -91,7 +91,8 @@ function onClosingBuy() {
   ping('Get Ducky Get Lucky')
 }
 function onReviewsMore() {
-  ping('全部买家秀（敬请期待）')
+  // 「全部买家秀」复用「全部评价」页（reviews 是不带参数的静态评价列表）
+  uni.navigateTo({ url: '/pages/reviews/index' })
 }
 </script>
 
