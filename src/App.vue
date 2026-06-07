@@ -1,8 +1,13 @@
 <script>
 // 应用根组件。生命周期钩子用 uni-app 的 onLaunch/onShow/onHide。
+import logger from '@/utils/logger.js'
+
 export default {
   onLaunch() {
-    // 应用启动。以后可在此做：读取本地登录态、初始化全局配置等。
+    // 全局错误兜底：应用级运行时错误 / 未捕获的 Promise 拒绝，不再静默
+    uni.onError((err) => logger.error('app', err))
+    uni.onUnhandledRejection((e) => logger.error('promise', (e && e.reason) || e))
+    // 以后可在此做：读取本地登录态、初始化全局配置等。
   },
   onShow() {},
   onHide() {},

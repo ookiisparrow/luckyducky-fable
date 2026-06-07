@@ -9,7 +9,12 @@
  *
  * 时机：Pinia 插件在 store 首次被 useXxxStore() 实例化时同步执行，
  * 这里同步把上次存的状态回灌，所以页面读 store 时已是水合后的数据，无闪烁。
+ *
+ * 数据契约：各 store 可在 persist 里提供 sanitize(parsed) —— 回灌前清洗，过滤
+ * 残缺/旧格式数据，避免「脏数据撑乱页面」（见 store/cart.js、address.js 的契约）。
  */
+import logger from '@/utils/logger.js'
+
 export function persistPlugin({ store, options }) {
   const cfg = options.persist
   if (!cfg) return
@@ -17,12 +22,19 @@ export function persistPlugin({ store, options }) {
   const key = `ld_store_${store.$id}`
   const paths = cfg === true ? null : cfg.paths || null
 
-  // 1) 启动回灌：把上次存的状态合并回来（解析失败就忽略，避免脏数据卡死页面）
+  // 1) 启动回灌：把上次存的状态合并回来。
+  //    解析失败 → 忽略；解析成功但结构残缺 → 过 cfg.sanitize 清洗（见各 store 的
+  //    persist.sanitize），避免脏数据/旧格式撑乱页面。
   try {
     const saved = uni.getStorageSync(key)
-    if (saved) store.$patch(JSON.parse(saved))
-  } catch {
+    if (saved) {
+      let data = JSON.parse(saved)
+      if (typeof cfg.sanitize === 'function') data = cfg.sanitize(data) || {}
+      store.$patch(data)
+    }
+  } catch (e) {
     // 存储损坏：丢弃，退回初始 state
+    logger.warn('persist', `回灌 ${key} 失败，已退回初始态`, e)
   }
 
   // 2) 变更即存（只存 paths 指定的字段，未指定则整份）。

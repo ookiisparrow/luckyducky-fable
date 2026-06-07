@@ -12,6 +12,7 @@
  *   price / was 为数字（便于算合计），展示时模板再拼 ￥。
  */
 import { defineStore } from 'pinia'
+import { keepValid } from '@/utils/validate.js'
 
 export const useCartStore = defineStore('cart', {
   state: () => ({
@@ -22,8 +23,18 @@ export const useCartStore = defineStore('cart', {
     checkoutItems: [],
     checkoutFromCart: false,
   }),
-  // 只持久化购物车条目；结算草稿(checkoutItems/From)是临时态，不存 —— 避免冷启动残留旧草稿
-  persist: { paths: ['items'] },
+  // 只持久化购物车条目；结算草稿(checkoutItems/From)是临时态，不存 —— 避免冷启动残留旧草稿。
+  // 回灌按契约清洗：丢弃残缺条目（无 id / 价格非数字 / 无名字），防旧脏数据撑乱购物车列表。
+  persist: {
+    paths: ['items'],
+    sanitize: (s) => ({
+      items: keepValid(
+        s.items,
+        (it) => it && it.id != null && typeof it.price === 'number' && !!it.name,
+        'cart',
+      ),
+    }),
+  },
   getters: {
     isEmpty: (s) => s.items.length === 0,
     // 全部条目的件数（用于 Tab 角标等）

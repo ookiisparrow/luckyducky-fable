@@ -11,7 +11,7 @@
 钩织材料包电商 App「Lucky Ducky · 创造幸运」。当前阶段：**首页打底**（其余页面后续扩展）。
 设计来源是一套 HTML/React 手机原型，现已重做为 **uni-app 跨端工程**。
 
-## ⭐ 项目现状（更新于 2026-06-06）
+## ⭐ 项目现状（更新于 2026-06-07）
 - ✅ **首页**：9 区块（Hero / 品牌 / 产品横滑 / 信任条 / 折叠卖点 / 买家秀 / FAQ / 结尾 / 页脚）+ 交互
   （点购买滚动定位并高亮、点搜索滚到品牌、加入弹 Toast、回到顶部、手风琴折叠）。
 - ✅ **商品详情页**（`pages/detail`，方案 A 经典电商）：浮层返回/分享 + 画廊缩略 + 价格卡 + 规格/服务 + 难度耗时 + 评价(评分分布/标签/前2条) + 图文详情(参数表) + 套装包含 + 为你推荐 + 固定底部购买坞。由首页产品卡 `uni.navigateTo` 带 `id/name` 进入。数据在 `data/productDetail.js`。
@@ -43,6 +43,8 @@
   - ⚠️ **占位**：求助面板里 在线客服/学习群/反馈 的动作为 Toast；辅助视频是海报占位 + 计时模拟播放(非真视频)。
   - ⚠️ **待真机验**：小程序端「同层渲染叠加控件」是否生效（H5 可编译运行；我无法驱动微信开发者工具）。
   - 占位示例视频用外链 mp4；小程序需配合法域名或勾「不校验合法域名」。
+- ✅ **占位跳转接通**（2026-06-07）：① 首页「真实买家秀 · 全部 ›」→ 全部评价页（`pages/reviews`，静态页不带参）。② 商品详情「为你推荐」卡片 → 跳对应商品详情（带 `id`，`navigateTo` 叠栈、返回逐级退，与首页产品卡进详情同写法；`onRecPick`）。两处原为 Toast 占位，现接真实跳转；`recs` 每条带真实 id（从 `catalog` 派生）。lint + H5/mp-weixin 双端 build 通过；真机/浏览器点击眼校待用户确认。⚠️ 推荐位仍所有商品共用一份，可能「推荐到自己」，待「描述性内容按 id 扩充」时一并解决。
+- ✅ **非沉浸页顶部避让胶囊**（2026-06-07）：新建 `utils/systemBar.js`（动态读状态栏高度 + 微信胶囊位置、模块级缓存、跨端兜底，单一来源取代散落的 `env(safe-area-inset-top)` 硬编码）。`CoNavBar`（一改修好 10 个导航页）+ 购物车 + 「我」紫头 顶部内容下移、避开状态栏与胶囊；导航条与胶囊垂直居中、右侧 `capsuleGap` 让位（含 paysuccess 的 close 键）。**H5/App 保留 `env()` 兜底**（条件编译，防刘海回归）。lint + 双端 build 通过；真机眼校待用户确认。⚠️ **沉浸页本次未动**（详情/目录/播放/欢迎/首页）：其顶部悬浮按钮过高撞胶囊、播放页下移露黑块 两问题已记录待后续单独修（见关键决策记录末）。
 - ⛔ 尚未做：真实数据/接口、登录、**真实微信支付**、视频化图位、真实图片素材（见路线图与「产品探索书签」）。前端"能点能看"的主干已基本齐全，余下多为需后端/资质的真功能。
 
 > 🔄 **保持同步**：每完成一个里程碑，先更新本节再 `git commit`。新会话可用 `git log -1 --oneline`
@@ -78,6 +80,24 @@
 - **暂不做滚动渐显动画**：跨端+跨子组件实现复杂、收益小，优先稳定。
 - **主色统一为紫（已定）**。`$brand` 由 TDesign 蓝 `#0052D9` 改为「幸运紫」`#a371ea`（`$brand-active` 同步为 `#865dc0`），与详情/购物车/结算/个人中心全站一致，也贴合原型 live 主色。首页加购按钮/搜索框因此变紫。改主题只动 `uni.scss` 这两处（+ `ProductCard` flash 动画里一处透明紫已同步）。
 - **Sass `@import`→`@use` 暂缓（已定，外部审核别再提）**。全项目唯一显式 `@import` 是 8 个结算系列页引 `styles/co.scss`；`uni.scss`（纯 `$`变量+mixin、无 CSS 输出）由 uni-app **自动注入**每个组件，不靠 import。迁 `@use` 因模块隔离会让 co.scss 拿不到注入的变量（须自加 `@use '../uni.scss' as *;` 补），且有「8 页 scoped 样式静默失效、构建不报错、只能人工眼校」的回归风险；而构建里真正刷屏的 `legacy-js-api` 告警来自 `@dcloudio/vite-plugin-uni` 自身、迁移也消不掉。`@import` 到 Dart Sass 3.0 才真移除（现仅告警不阻断）。**结论：等 uni-app 升级其 Sass 集成时一起做**；执行清单见计划文件 floofy-splashing-mango.md。
+- **顶部安全区改用动态 `systemBar.js`，不再靠 `env()`（2026-06-07）**。原因：`env(safe-area-inset-top)` 在小程序（尤其安卓）不可靠，且只含状态栏、不含右上角胶囊 → 自绘导航会被胶囊遮挡。改用 `uni.getWindowInfo()` + `uni.getMenuButtonBoundingClientRect()` 动态算 状态栏高度/导航高度/胶囊右避让，注入 CSS 变量供 scoped 样式 `var()` 取用；`#ifdef MP-WEIXIN` 只在小程序算胶囊，H5/App 条件编译保留 `env()` 兜底。本次只改非沉浸页（CoNavBar 那 10 页 + 购物车 + 我）。**待后续单独修**：① 沉浸页（详情/目录/播放/欢迎）顶部悬浮按钮过高、撞状态栏 + 胶囊；② 视频播放页顶部下移避胶囊后露大面积黑块。
+
+## ⭐ 调试 / 质量体系（遇到问题先走这套，别碎片化救火）
+项目已建四根支柱，目标是「问题 发现 → 记录 → 追根因 → 预防」形成闭环：
+- **发现**：全局错误捕获（`main.js` 的 `app.config.errorHandler` + `App.vue` 的
+  `uni.onError`/`onUnhandledRejection`）统一进 `utils/logger.js`（分级日志、预留上报钩子）。
+  **日志一律走 logger，别裸 `console`。**
+- **预防**：数据边界校验。持久化回灌经 `store/persist.js` 的 `sanitize` 钩子 +
+  `utils/validate.js` 的 `keepValid` 清洗，各 store 声明契约（cart/address 过滤残缺数组项、
+  user 对象守卫）。**新增持久化字段或接 api 数据时，顺手加/更新契约。**
+- **记录 + 根因**：`docs/调试日志.md` 是问题账本。**每发现一个问题就记一条**
+  （现象/根因/同类隐患/是否结构性/状态），并**顺藤追同类隐患**（如这次从购物车找到地址簿同病），
+  而非只修眼前。
+- **测试**：`npm run test`（Vitest，用例在 `tests/`）。纯逻辑（store/persist/utils）有回归用例；
+  **修了 bug 就补一条锁定它的用例**。测试环境无 `uni` → `tests/setup.js` 已 mock。
+
+**约定**：遇到问题 → 先看 logger 输出定位 → 记进 `docs/调试日志.md` 追根因找同类 →
+能加契约/测试就加（消除整类）→ 再动手修。
 
 ## 2. 技术栈（已定，勿擅自更换）
 - 框架：**uni-app + Vue 3**（`<script setup>` 写法）
@@ -108,7 +128,7 @@ src/
   store/            Pinia 状态：user(账号) / cart(购物车) / address(地址簿)；
                     persist.js 是跨端持久化插件，store 里加 persist:true 或 {paths:[...]} 即自动存到
                     uni storage（购物车/地址/资料 已开，刷新与冷启动不丢；结算草稿这类临时态不存）。
-  utils/            跨页小工具：nav.js(goBack 兜底返回) / format.js(money/stars/yuan)
+  utils/            跨页小工具：nav.js(goBack 兜底返回) / format.js(money/stars/yuan) / systemBar.js(状态栏高度+胶囊位置，自绘导航避让用)
   static/           图片素材；static/icons/ 放 svg 图标
   uni.scss          ★ 设计 Token 单一来源（颜色/字号/圆角/间距/阴影）
   App.vue           根组件 + 全局基础样式

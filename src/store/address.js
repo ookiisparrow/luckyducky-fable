@@ -7,6 +7,7 @@
  */
 import { defineStore } from 'pinia'
 import { SAMPLE_ADDRESS } from '@/data/checkout.js'
+import { keepValid } from '@/utils/validate.js'
 
 // 下一个 id：取现有最大 + 1。不用模块计数器 —— 否则持久化回灌后计数器从头开始，
 // 新地址会和已存地址的 id 撞。基于现有列表算就天然防撞、且冷启动安全。
@@ -16,7 +17,18 @@ export const useAddressStore = defineStore('address', {
   state: () => ({
     list: [{ ...SAMPLE_ADDRESS, id: 1 }],
   }),
-  persist: { paths: ['list'] },
+  // 回灌按契约清洗：丢弃残缺地址（缺 id/姓名/电话/地区/详址），
+  // 防脏地址撑乱地址簿、或污染结算页默认地址。
+  persist: {
+    paths: ['list'],
+    sanitize: (s) => ({
+      list: keepValid(
+        s.list,
+        (a) => a && a.id != null && !!a.name && !!a.phone && !!a.region && !!a.detail,
+        'address',
+      ),
+    }),
+  },
   getters: {
     // 当前默认地址（没有默认就取第一条，空簿则 null）
     defaultAddress: (s) => s.list.find((a) => a.isDefault) || s.list[0] || null,
