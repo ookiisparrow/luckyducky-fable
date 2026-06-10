@@ -1,8 +1,9 @@
 <script setup>
 /**
  * 订单状态页（待发货 / 待收货 / 已完成）。对应原型 Checkout.jsx 的 OrderStatus。
- * 由 query.status 驱动（toship/toreceive/done），数据在 data/orders.js。
- * 收货地址读地址簿默认地址（只读展示）。底部动作按钮：
+ * 两种驱动：query.id → 真实订单（store/orders，云端/回退同一笔，关调试日志 C）；
+ *           query.status → 样例配置（toship/toreceive/done，data/orders.js，「我」页入口的演示路径）。
+ * 收货地址：真单读订单地址快照；样例读地址簿默认地址。底部动作按钮：
  *   提醒发货/查看物流 → Toast；确认收货 → 弹确认；再次购买 → 进详情；
  *   申请退款 → 售后页；评价晒单 → 评价页。
  */
@@ -14,21 +15,67 @@ import AddressBlock from '@/components/AddressBlock.vue'
 import OrderItem from '@/components/OrderItem.vue'
 import PriceSummary from '@/components/PriceSummary.vue'
 import { useAddressStore } from '@/store/address.js'
+import { useOrdersStore } from '@/store/orders.js'
 import { ORDER_CFG, COUPON, SHIP } from '@/data/orders.js'
 import { goBack } from '@/utils/nav.js'
-import { money } from '@/utils/format.js'
+import { money, dateTime } from '@/utils/format.js'
 
 const address = useAddressStore()
+const ordersStore = useOrdersStore()
 const status = ref('toship')
-const cfg = computed(() => ORDER_CFG[status.value] || ORDER_CFG.toship)
-const addr = computed(() => address.defaultAddress)
+const orderId = ref('')
+const order = computed(() => (orderId.value ? ordersStore.getById(orderId.value) : null))
 
-onLoad((q) => {
-  if (q && q.status && ORDER_CFG[q.status]) status.value = q.status
+// 真实订单（现阶段均为模拟支付的 paid = 待发货）映射成与样例同构的展示配置
+function cfgFromOrder(o) {
+  return {
+    title: '待发货',
+    icon: 'package-purple',
+    tint: 'lilac',
+    head: '已付款，等待商家发货',
+    sub: '商家将于 48 小时内为你打包发出',
+    items: o.items.map((it) => ({ name: it.name, spec: it.spec, price: it.price, qty: it.qty })),
+    info: [
+      ['订单编号', o.id],
+      ['付款时间', dateTime(o.paidAt)],
+      ['支付方式', '微信支付（模拟）'],
+    ],
+    actions: [
+      { label: '申请退款', kind: 'ghost', key: 'refund' },
+      { label: '提醒发货', kind: 'solid', key: 'remind' },
+    ],
+  }
+}
+
+const cfg = computed(() =>
+  order.value ? cfgFromOrder(order.value) : ORDER_CFG[status.value] || ORDER_CFG.toship,
+)
+// 真单地址用下单时的快照；样例用地址簿默认地址
+const addr = computed(() => (order.value ? order.value.address : address.defaultAddress))
+
+onLoad(async (q) => {
+  if (q && q.id) {
+    orderId.value = q.id
+    if (!ordersStore.getById(q.id)) await ordersStore.load()
+    if (!ordersStore.getById(q.id)) {
+      uni.showToast({ title: '没有找到这笔订单', icon: 'none' })
+      orderId.value = ''
+    }
+  } else if (q && q.status && ORDER_CFG[q.status]) {
+    status.value = q.status
+  }
 })
 
-const goods = computed(() => cfg.value.items.reduce((s, it) => s + it.price * (it.qty || 1), 0))
-const pay = computed(() => Math.max(0, goods.value + SHIP - COUPON))
+const goods = computed(() =>
+  order.value
+    ? order.value.goods
+    : cfg.value.items.reduce((s, it) => s + it.price * (it.qty || 1), 0),
+)
+const coupon = computed(() => (order.value ? order.value.coupon : COUPON))
+const ship = computed(() => (order.value ? order.value.ship : SHIP))
+const pay = computed(() =>
+  order.value ? order.value.amount : Math.max(0, goods.value + ship.value - coupon.value),
+)
 const back = () => goBack('/pages/me/index')
 function onAction(a) {
   const k = a.key
@@ -107,7 +154,7 @@ function onAction(a) {
       </view>
 
       <!-- 金额明细 -->
-      <PriceSummary :goods="goods" :coupon="COUPON" :total="pay" />
+      <PriceSummary :goods="goods" :coupon="coupon" :ship="ship" :total="pay" />
     </view>
 
     <view class="co-foot"></view>

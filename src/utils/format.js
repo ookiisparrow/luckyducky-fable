@@ -21,3 +21,12 @@ export const parseDur = (d) => {
   const [m, s] = String(d).split(':').map(Number)
   return (m || 0) * 60 + (s || 0)
 }
+
+// epoch 毫秒 → 'YYYY-MM-DD HH:mm'（订单付款时间等）。非法值返回 ''
+export const dateTime = (ms) => {
+  const n = Number(ms)
+  if (!Number.isFinite(n) || n <= 0) return ''
+  const d = new Date(n)
+  const p = (x) => String(x).padStart(2, '0')
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`
+}

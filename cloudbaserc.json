@@ -22,6 +22,16 @@
       "name": "getCourses",
       "timeout": 10,
       "handler": "index.main"
+    },
+    {
+      "name": "createOrder",
+      "timeout": 10,
+      "handler": "index.main"
+    },
+    {
+      "name": "getMyOrders",
+      "timeout": 10,
+      "handler": "index.main"
     }
   ]
 }

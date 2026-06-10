@@ -23,6 +23,7 @@ import CheckoutAddonList from './components/CheckoutAddonList.vue'
 import CheckoutSubmitDock from './components/CheckoutSubmitDock.vue'
 import { useCartStore } from '@/store/cart.js'
 import { useAddressStore } from '@/store/address.js'
+import { useOrdersStore } from '@/store/orders.js'
 import { CHECKOUT_ADDONS, COUPON, SHIP } from '@/data/checkout.js'
 import { goBack } from '@/utils/nav.js'
 import { useTimers } from '@/composables/useTimers.js'
@@ -30,6 +31,7 @@ import { useTimers } from '@/composables/useTimers.js'
 const { later } = useTimers()
 const cart = useCartStore()
 const address = useAddressStore()
+const ordersStore = useOrdersStore()
 const addr = computed(() => address.defaultAddress) // 来自地址簿（可能为 null）
 
 // 下单清单：从结算草稿快照（本地可改数量，提交时按最终数量精确扣减购物车）。
@@ -81,10 +83,12 @@ function toast(t) {
 function goAddress() {
   uni.navigateTo({ url: addr.value ? '/pages/address/index' : '/pages/address-edit/index' })
 }
-function onSubmit() {
+// 防双击：下单是异步动作，提交中再点无效
+const submitting = ref(false)
+async function onSubmit() {
   // 守卫：没有主商品（空草稿）不允许提交 —— 即使搭配购默认选中，也不能凑成无主订单
-  if (invalidCheckout.value || !list.value.length) {
-    uni.showToast({ title: '没有可提交的商品，请先去购物车选购', icon: 'none' })
+  if (invalidCheckout.value || !list.value.length || submitting.value) {
+    if (!submitting.value) uni.showToast({ title: '没有可提交的商品，请先去购物车选购', icon: 'none' })
     return
   }
   if (!addr.value) {
@@ -92,9 +96,23 @@ function onSubmit() {
     uni.navigateTo({ url: '/pages/address-edit/index' })
     return
   }
-  const amount = pay.value
-  cart.finishCheckout(list.value) // 按本次最终数量精确扣减购物车
-  uni.redirectTo({ url: `/pages/paysuccess/index?amount=${amount.toFixed(2)}` })
+  submitting.value = true
+  try {
+    // 真实下单：只传 id/qty + 地址快照，价格由云端按 products 现算（H5/App 回退本地生成）
+    const order = await ordersStore.create({
+      items: [
+        ...list.value.map((it) => ({ id: it.id, qty: it.qty })),
+        ...addons.value.filter((a) => a.on).map((a) => ({ id: a.id, qty: a.qty })),
+      ],
+      address: addr.value,
+    })
+    cart.finishCheckout(list.value) // 按本次最终数量精确扣减购物车
+    uni.redirectTo({ url: `/pages/paysuccess/index?id=${order.id}&amount=${order.amount.toFixed(2)}` })
+  } catch {
+    uni.showToast({ title: '下单失败，请稍后再试', icon: 'none' })
+  } finally {
+    submitting.value = false
+  }
 }
 </script>
 
@@ -151,7 +169,12 @@ function onSubmit() {
     <view class="co-foot"></view>
 
     <!-- 固定提交坞（页内组件：守卫在本页 onSubmit） -->
-    <CheckoutSubmitDock :pay="pay" :count="count" :disabled="invalidCheckout" @submit="onSubmit" />
+    <CheckoutSubmitDock
+      :pay="pay"
+      :count="count"
+      :disabled="invalidCheckout || submitting"
+      @submit="onSubmit"
+    />
   </view>
 </template>
 

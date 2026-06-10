@@ -1,28 +1,44 @@
 <script setup>
 /**
  * 支付成功页。对应原型 Checkout.jsx 的 PaySuccess。
- * 由结算页 / 待支付页 redirectTo 进入（带 amount）。成功标 + 实付 + 订单信息 + 两个出口。
- * 「返回首页」reLaunch 回首页；「查看订单」reLaunch 到待发货订单页。
+ * 由结算页 redirectTo 进入（带真实订单 id）。订单号/金额读订单 store 里的同一笔
+ * （关调试日志 C：提交 → 支付成功 → 订单详情贯通），查不到时回退 query 的 amount。
+ * 「返回首页」reLaunch 回首页；「查看订单」reLaunch 到该订单详情。
  * 入场动画按项目「暂不做渐显动画」的决定省略。公共导航样式见 styles/co.scss。
  */
 import { ref } from 'vue'
 import { onLoad } from '@dcloudio/uni-app'
 import Icon from '@/components/Icon.vue'
 import CoNavBar from '@/components/CoNavBar.vue'
+import { useOrdersStore } from '@/store/orders.js'
+import { money } from '@/utils/format.js'
 
+const ordersStore = useOrdersStore()
 const amount = ref('0.00')
 const orderNo = ref('')
 
-onLoad((q) => {
+onLoad(async (q) => {
   if (q && q.amount) amount.value = q.amount
-  orderNo.value = '202606061430' + String(Math.floor(Math.random() * 9000) + 1000)
+  if (q && q.id) {
+    orderNo.value = q.id
+    // 刚下的单已在 store；直接落地本页（如小程序重启）则拉一次再找
+    let o = ordersStore.getById(q.id)
+    if (!o) {
+      await ordersStore.load()
+      o = ordersStore.getById(q.id)
+    }
+    if (o) amount.value = money(o.amount)
+  }
 })
 
 function home() {
   uni.reLaunch({ url: '/pages/index/index' })
 }
 function orders() {
-  uni.reLaunch({ url: '/pages/order/index?status=toship' })
+  const url = orderNo.value
+    ? `/pages/order/index?id=${orderNo.value}`
+    : '/pages/order/index?status=toship'
+  uni.reLaunch({ url })
 }
 </script>
 
