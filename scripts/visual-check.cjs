@@ -21,11 +21,21 @@ const overlap = (a, b) =>
 
 // launch 的握手 promise 在本机偶发不回包（连接 ESTABLISHED 但初始化无响应），
 // 所以优先 connect 已起的实例，连不上才走 launch 冷启动。
+// 注意：connect 成功 ≠ RPC 可用——中途用 cli open 重开过项目会把 9420 留成僵尸端口
+// （握手能成、RPC 永不回包），所以 connect 后必须先探活；卡死的解法是
+// `cli quit` 彻底退出工具后 `cli auto --project <dist> --auto-port 9420` 重启。
 async function getMp() {
   try {
     const mp = await Promise.race([
       automator.connect({ wsEndpoint: 'ws://127.0.0.1:9420' }),
       new Promise((_, rej) => setTimeout(() => rej(new Error('connect 5s 超时')), 5000)),
+    ])
+    // RPC 探活：5s 无响应按僵尸端口处理（见上方注释）
+    await Promise.race([
+      mp.systemInfo(),
+      new Promise((_, rej) =>
+        setTimeout(() => rej(new Error('RPC 探活 5s 无响应，工具需 cli quit 后 cli auto 重启')), 5000),
+      ),
     ])
     console.log('已连上现成实例（connect）')
     return mp
