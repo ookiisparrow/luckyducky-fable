@@ -6,7 +6,7 @@
  * 条目结构：{ id, name, phone, region, detail, isDefault }
  */
 import { defineStore } from 'pinia'
-import { SAMPLE_ADDRESS } from '@/data/checkout.js'
+import { SAMPLE_ADDRESS } from '@/data/address.js'
 import { keepValid } from '@/utils/validate.js'
 
 // 下一个 id：取现有最大 + 1。不用模块计数器 —— 否则持久化回灌后计数器从头开始，
