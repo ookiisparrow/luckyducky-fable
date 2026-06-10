@@ -14,7 +14,9 @@ import { useAddressStore } from '@/store/address.js'
 import { PENDING_ORDER as O, COUPON, SHIP } from '@/data/orders.js'
 import { goBack } from '@/utils/nav.js'
 import { money } from '@/utils/format.js'
+import { useTimers } from '@/composables/useTimers.js'
 
+const { later } = useTimers()
 const address = useAddressStore()
 const addr = computed(() => address.defaultAddress)
 const goods = O.price * (O.qty || 1)
@@ -29,7 +31,7 @@ const timer = setInterval(() => {
     clearInterval(timer)
     expired.value = true
     uni.showToast({ title: '订单已超时取消', icon: 'none' })
-    setTimeout(back, 1500)
+    later(back, 1500)
   }
 }, 1000)
 onUnmounted(() => clearInterval(timer))
@@ -49,7 +51,7 @@ function cancel() {
     success: (r) => {
       if (r.confirm) {
         uni.showToast({ title: '订单已取消', icon: 'none' })
-        setTimeout(back, 300)
+        later(back, 300)
       }
     },
   })

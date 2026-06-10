@@ -11,6 +11,9 @@ import CoNavBar from '@/components/CoNavBar.vue'
 import MediaSlot from '@/components/MediaSlot.vue'
 import { useUserStore } from '@/store/user.js'
 import { goBack } from '@/utils/nav.js'
+import { useTimers } from '@/composables/useTimers.js'
+
+const { later } = useTimers()
 
 const user = useUserStore()
 const name = ref(user.profile.name || '')
@@ -38,7 +41,7 @@ function save() {
     avatar: avatar.value,
   })
   uni.showToast({ title: '资料已保存', icon: 'none' })
-  setTimeout(back, 300)
+  later(back, 300)
 }
 </script>
 

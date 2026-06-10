@@ -25,7 +25,9 @@ import { useAddressStore } from '@/store/address.js'
 import { CHECKOUT_ADDONS, COUPON, SHIP } from '@/data/checkout.js'
 import { goBack } from '@/utils/nav.js'
 import { money } from '@/utils/format.js'
+import { useTimers } from '@/composables/useTimers.js'
 
+const { later } = useTimers()
 const cart = useCartStore()
 const address = useAddressStore()
 const addr = computed(() => address.defaultAddress) // 来自地址簿（可能为 null）
@@ -39,7 +41,7 @@ onLoad(() => {
   if (!cart.checkoutItems.length) {
     invalidCheckout.value = true
     uni.showToast({ title: '购物车是空的，先去选购吧～', icon: 'none' })
-    setTimeout(() => goBack('/pages/cart/index'), 800)
+    later(() => goBack('/pages/cart/index'), 800)
   }
 })
 const addons = ref(CHECKOUT_ADDONS.map((a) => ({ ...a, qty: 1 })))

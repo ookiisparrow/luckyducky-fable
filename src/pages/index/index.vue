@@ -19,7 +19,9 @@ import SiteFooter from '@/components/SiteFooter.vue'
 import TabBar from '@/components/TabBar.vue'
 import Toast from '@/components/Toast.vue'
 import BackTop from '@/components/BackTop.vue'
+import { useTimers } from '@/composables/useTimers.js'
 
+const { later } = useTimers()
 const instance = getCurrentInstance()
 const windowHeight = uni.getSystemInfoSync().windowHeight
 
@@ -38,9 +40,9 @@ function backToTop() {
 const toast = ref({ show: false, text: '' })
 let toastTimer = null
 function ping(text) {
-  clearTimeout(toastTimer)
+  clearTimeout(toastTimer) // 新 toast 顶掉旧 toast 的隐藏计时
   toast.value = { show: true, text }
-  toastTimer = setTimeout(() => {
+  toastTimer = later(() => {
     toast.value.show = false
   }, 1600)
 }
@@ -66,9 +68,9 @@ const flashId = ref('')
 function flashProduct(id) {
   flashId.value = ''
   // 下一拍再赋值，确保动画能重新触发
-  setTimeout(() => {
+  later(() => {
     flashId.value = id
-    setTimeout(() => (flashId.value = ''), 1600)
+    later(() => (flashId.value = ''), 1600)
   }, 30)
 }
 

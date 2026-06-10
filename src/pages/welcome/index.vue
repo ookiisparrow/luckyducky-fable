@@ -7,6 +7,7 @@
 import { ref } from 'vue'
 import Icon from '@/components/Icon.vue'
 import { getSystemBarVars } from '@/utils/systemBar.js'
+import { STORAGE_KEYS } from '@/constants/storage.js'
 
 const page = ref(0) // 0=欢迎屏 1=开始屏
 
@@ -17,7 +18,7 @@ const barVars = getSystemBarVars()
 // 只在用户「开始学习」或「关闭」这类明确动作时才记 —— 之前是在 onLoad 一进页面就记，
 // 导致「打开后没看就被动关掉」也算看过、下次不再自动引导。改成动作触发更贴合真实意图。
 function markSeen() {
-  uni.setStorageSync('ld_video_intro_seen', true)
+  uni.setStorageSync(STORAGE_KEYS.VIDEO_INTRO_SEEN, true)
 }
 
 function next() {

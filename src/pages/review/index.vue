@@ -10,6 +10,9 @@ import CoNavBar from '@/components/CoNavBar.vue'
 import CoSwitch from '@/components/CoSwitch.vue'
 import MediaSlot from '@/components/MediaSlot.vue'
 import { goBack } from '@/utils/nav.js'
+import { useTimers } from '@/composables/useTimers.js'
+
+const { later } = useTimers()
 
 const REV_TAGS = ['教程清晰', '很可爱', '适合新手', '包装用心', '物流快', '线材好']
 const REV_LABEL = ['', '非常不满', '不满意', '一般', '满意', '非常满意']
@@ -35,7 +38,7 @@ function rmPhoto() {
 const back = () => goBack('/pages/me/index')
 function publish() {
   uni.showToast({ title: '评价已发布 · 感谢分享~', icon: 'none' })
-  setTimeout(back, 400)
+  later(back, 400)
 }
 </script>
 

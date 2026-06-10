@@ -11,6 +11,9 @@ import CoNavBar from '@/components/CoNavBar.vue'
 import CoSwitch from '@/components/CoSwitch.vue'
 import { useAddressStore } from '@/store/address.js'
 import { goBack } from '@/utils/nav.js'
+import { useTimers } from '@/composables/useTimers.js'
+
+const { later } = useTimers()
 
 const address = useAddressStore()
 const editId = ref(null)
@@ -50,7 +53,7 @@ function save() {
     isDefault: isDefault.value,
   })
   uni.showToast({ title: editId.value != null ? '地址已保存' : '地址已添加', icon: 'none' })
-  setTimeout(back, 300)
+  later(back, 300)
 }
 function del() {
   uni.showModal({
@@ -61,7 +64,7 @@ function del() {
       if (r.confirm) {
         address.remove(editId.value)
         uni.showToast({ title: '已删除', icon: 'none' })
-        setTimeout(back, 300)
+        later(back, 300)
       }
     },
   })

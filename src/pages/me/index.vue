@@ -15,6 +15,7 @@ import ContinueVideo from './components/ContinueVideo.vue'
 import OrderGrid from './components/OrderGrid.vue'
 import { CONTINUE_VIDEO as V, ORDER_TABS } from '@/data/profile.js'
 import { useUserStore } from '@/store/user.js'
+import { STORAGE_KEYS } from '@/constants/storage.js'
 
 const user = useUserStore()
 
@@ -27,7 +28,7 @@ function continueWatch() {
 }
 function allCourses() {
   // 首次进视频课先看欢迎引导，之后直达目录
-  const seen = uni.getStorageSync('ld_video_intro_seen')
+  const seen = uni.getStorageSync(STORAGE_KEYS.VIDEO_INTRO_SEEN)
   uni.navigateTo({ url: seen ? '/pages/catalog/index' : '/pages/welcome/index' })
 }
 function onOrder(key) {
