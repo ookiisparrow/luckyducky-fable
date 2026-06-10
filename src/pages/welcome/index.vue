@@ -42,7 +42,7 @@ function start() {
 
 <template>
   <view class="wel" :style="barVars">
-    <image class="wel-photo" src="/static/hero-full.png" mode="aspectFill" />
+    <image class="wel-photo" src="/static/hero-full.jpg" mode="aspectFill" />
     <view class="wel-scrim"></view>
 
     <!-- 屏 0：欢迎 -->

@@ -12,7 +12,7 @@ const emit = defineEmits(['buy', 'explore'])
 
 <template>
   <view class="ld-hero">
-    <image class="ld-hero-photo" src="/static/hero-full.png" mode="aspectFill" />
+    <image class="ld-hero-photo" src="/static/hero-full.jpg" mode="aspectFill" />
     <view class="ld-hero-scrim"></view>
     <view class="ld-hero-copy">
       <text class="ld-display">{{ title }}</text>
