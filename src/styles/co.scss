@@ -5,7 +5,9 @@
  * (coam-/coas-/corev-/coord-/copend-/cosuc- 等) 与个别差异(底部坞按钮排布)仍写在各页内。
  *
  * uni.scss 的 $ 变量全局注入，这里可直接用。
+ * 与组件 scoped 双写的取值收在 co-mixins.scss（单一来源），这里只 @include。
  */
+@import './co-mixins.scss';
 
 .co {
   min-height: 100vh;
@@ -21,11 +23,7 @@
   padding: 12px 14px 4px;
 }
 .co-card {
-  background: $white;
-  border-radius: $r-md;
-  box-shadow: $shadow-soft;
-  overflow: hidden;
-  margin-bottom: 12px;
+  @include co-card;
 }
 
 /* 信息行 */
@@ -61,12 +59,7 @@
    仅保留「默认」徽标基础样式 —— 地址管理页（coam-）也用同一个 .co-addr-tag，
    两处布局独立、不互相 import，故 AddressBlock 内另带一份同款。外边距各页/各组件另加。 */
 .co-addr-tag {
-  font-size: 10.5px;
-  color: $purple;
-  background: $bg-lilac;
-  border: 0.5px solid $purple-line;
-  border-radius: 4px;
-  padding: 1px 6px;
+  @include co-addr-tag;
 }
 
 /* 店铺 + 商品行 */
@@ -90,18 +83,10 @@
    下面 co-item-spec / co-price / .cny 是跨处共用的原子类（评价页、搭配购买、底坞），
    组件 scoped 够不到，故 OrderItem 内另带一份，这里保留给组件外的用处。 */
 .co-item-spec {
-  align-self: flex-start;
-  font-size: 11.5px;
-  color: $content-2;
-  background: $bg-grey;
-  border-radius: 4px;
-  padding: 3px 8px;
-  margin-top: 7px;
+  @include co-item-spec;
 }
 .co-price {
-  font-family: $font-sans;
-  font-weight: 600;
-  color: $ink;
+  @include co-price;
 }
 .co-price .cny {
   font-size: 13px;

@@ -32,6 +32,9 @@ defineProps({
 </template>
 
 <style lang="scss" scoped>
+/* 与 co.scss 同名的取值收在 co-mixins.scss 单一来源（scoped 够不到 co.scss，故 @include） */
+@import '../styles/co-mixins.scss';
+
 .co-item {
   display: flex;
   padding: 14px 16px;
@@ -56,13 +59,7 @@ defineProps({
   line-height: 1.35;
 }
 .co-item-spec {
-  align-self: flex-start;
-  font-size: 11.5px;
-  color: $content-2;
-  background: $bg-grey;
-  border-radius: 4px;
-  padding: 3px 8px;
-  margin-top: 7px;
+  @include co-item-spec;
 }
 .co-item-foot {
   display: flex;
@@ -77,9 +74,7 @@ defineProps({
   color: $content-2;
 }
 .co-price {
-  font-family: $font-sans;
-  font-weight: 600;
-  color: $ink;
+  @include co-price;
 }
 .co-price .cny {
   font-size: 13px;

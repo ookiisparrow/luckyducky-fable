@@ -38,12 +38,11 @@ defineProps({
 </template>
 
 <style lang="scss" scoped>
+/* 与 co.scss 同名的取值收在 co-mixins.scss 单一来源（scoped 够不到 co.scss，故 @include） */
+@import '../styles/co-mixins.scss';
+
 .co-card {
-  background: $white;
-  border-radius: $r-md;
-  box-shadow: $shadow-soft;
-  overflow: hidden;
-  margin-bottom: 12px;
+  @include co-card;
 }
 .co-summary {
   margin: 4px 12px 14px;

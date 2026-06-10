@@ -43,6 +43,9 @@ function onTap() {
 </template>
 
 <style lang="scss" scoped>
+/* 与 co.scss 同名的取值收在 co-mixins.scss 单一来源（scoped 够不到 co.scss，故 @include） */
+@import '../styles/co-mixins.scss';
+
 .co-addr {
   background: $white;
   border-radius: $r-md;
@@ -87,15 +90,10 @@ function onTap() {
   line-height: 1.5;
   margin-top: 6px;
 }
-/* 「默认」徽标：与地址管理卡（coam-）同款。此块里徽标在详情前 → 右间距。
-   基础样式 co.scss 也保留一份给地址管理页（两处布局独立、不互相 import）。 */
+/* 「默认」徽标：与地址管理卡（coam-）同款，取值在 co-mixins.scss 单一来源。
+   此块里徽标在详情前 → 右间距是本组件的布局差异，显式另加。 */
 .co-addr-tag {
-  font-size: 10.5px;
-  color: $purple;
-  background: $bg-lilac;
-  border: 0.5px solid $purple-line;
-  border-radius: 4px;
-  padding: 1px 6px;
+  @include co-addr-tag;
   margin-right: 6px;
 }
 .co-addr-chev {
