@@ -13,7 +13,7 @@ import Icon from '@/components/Icon.vue'
 import HelpSheet from './components/HelpSheet/index.vue'
 import { goBack } from '@/utils/nav.js'
 import { mmss as fmt } from '@/utils/format.js'
-import { ALL_LESSONS, COURSE } from '@/data/course.js'
+import { useCoursesStore } from '@/store/courses.js'
 import { getSystemBarVars } from '@/utils/systemBar.js'
 
 // 顶部控件避状态栏/胶囊：只下移浮层，视频保持铺满到顶（避免顶部露黑块）
@@ -26,22 +26,29 @@ const SRC = 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/F
 const instance = getCurrentInstance()
 let ctx = null
 
+// 课程内容从 store 取（小程序端云端、H5/App 回退本地）；load 前是安全空形状
+const store = useCoursesStore()
+const course = computed(() => store.current)
+const lessons = computed(() => store.allLessons)
+
 // 当前课时：按 id 从课程表定位，支持上一集/下一集
 const idx = ref(2) // 默认 l3
-onLoad((o) => {
+onLoad(async (o) => {
+  await store.load()
   if (o && o.id) {
-    const i = ALL_LESSONS.findIndex((l) => l.id === o.id)
+    const i = lessons.value.findIndex((l) => l.id === o.id)
     if (i >= 0) idx.value = i
   }
 })
-const lesson = computed(() => ALL_LESSONS[idx.value] || ALL_LESSONS[0])
-const title = computed(() => lesson.value.name)
+const lesson = computed(() => lessons.value[idx.value] || lessons.value[0] || {})
+const title = computed(() => lesson.value.name || '')
 const ep = computed(() => {
-  const ci = COURSE.chapters.findIndex((c) => c.id === lesson.value.chapter)
+  const ci = course.value.chapters.findIndex((c) => c.id === lesson.value.chapter)
+  if (ci < 0) return ''
   return `第 ${ci + 1} 章 · 第 ${idx.value + 1} 节`
 })
 const hasPrev = computed(() => idx.value > 0)
-const hasNext = computed(() => idx.value < ALL_LESSONS.length - 1)
+const hasNext = computed(() => idx.value < lessons.value.length - 1)
 
 const duration = ref(0)
 const current = ref(0)
@@ -150,7 +157,7 @@ function seekTap(e) {
 // 上一集 / 下一集
 function switchLesson(n) {
   const i = idx.value + n
-  if (i < 0 || i >= ALL_LESSONS.length) return
+  if (i < 0 || i >= lessons.value.length) return
   idx.value = i
   endedSeg.value = null
   playingSeg = 0

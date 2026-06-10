@@ -12,6 +12,16 @@
       "name": "getProducts",
       "timeout": 10,
       "handler": "index.main"
+    },
+    {
+      "name": "seedCourses",
+      "timeout": 20,
+      "handler": "index.main"
+    },
+    {
+      "name": "getCourses",
+      "timeout": 10,
+      "handler": "index.main"
     }
   ]
 }

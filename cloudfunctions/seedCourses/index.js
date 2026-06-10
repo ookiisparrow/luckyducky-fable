@@ -1,17 +1,28 @@
-/**
- * 课程数据 · 三层结构（规格 v2 §三：chapter 大章节 / lesson 中章节 / segment 小片段）。
- *
- * - 目录只显示 chapter + lesson 两层；segment 只在播放页出现（顶部分段进度条）。
- * - 每个 segment 将来是独立视频文件（videoFileId）；素材未按段剪辑前为 null，
- *   播放页回退「共用占位视频 + 按时长等分」。
- * - 课程内容与用户学习进度分离：本文件只放内容；done/watched 是用户态，
- *   样例进度见 SAMPLE_PROGRESS（将来由云端进度记忆按 segment 粒度替换）。
- * - 本文件是 H5 / App 端回退源；小程序端云端真源在 cloudfunctions/seedCourses，
- *   两边字段同形，改这里要同步种子。
- */
-import { mmss, parseDur } from '@/utils/format.js'
+// 一次性灌入课程种子数据（三层：chapter / lesson / segment，规格 v2 §三）。
+// 部署后调用一次即可；再次调用也安全（幂等）。
+// 幂等原理：用业务 id（course-duck）作为文档 _id，doc(id).set 是 upsert——
+// 记录存在则整体覆盖、不存在则创建，所以重复 seed 不会产生重复数据。
+//
+// ⚠️ 这份种子要与前端 src/data/course.js 保持一致：
+//    course.js 是 H5 / App 端的本地回退源，这里是小程序端的云端真源，两边字段同形。
+//    segment 字段：id / name / dur / videoFileId（素材剪好前为 null）/ free（试看）。
+const cloud = require('wx-server-sdk')
+cloud.init({ env: cloud.DYNAMIC_CURRENT_ENV })
+const db = cloud.database()
 
-// 样例分段步骤（与原播放页知识点一致；真实素材剪好后按课各自命名）
+// —— 以下数据与构建逻辑同 src/data/course.js（CommonJS 版） ——
+
+const parseDur = (s) => {
+  const [m, sec] = String(s).split(':').map(Number)
+  return m * 60 + sec
+}
+const mmss = (t) => {
+  const m = Math.floor(t / 60)
+  const s = Math.floor(t % 60)
+  return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`
+}
+
+// 样例分段步骤（真实素材剪好后按课各自命名）
 const SEG_STEPS = ['先看成品长啥样', '这个玩偶是什么', '需要的材料工具', '关键针法慢动作', '收尾与自检']
 
 // 把一节课时长按样例步骤等分成 segments（余数并入最后一段）
@@ -28,7 +39,6 @@ function buildSegments(lessonId, dur, free) {
   }))
 }
 
-// 课时源表（内容身份：id / name / dur；free = 试看，落到 segment 级）
 const CHAPTERS = [
   {
     id: 'c1',
@@ -72,8 +82,7 @@ const CHAPTERS = [
   },
 ]
 
-// 多课数组（当前一门；id 与云端 _id 一致，products.courseId 将来关联到这里）
-export const COURSES = [
+const COURSES = [
   {
     id: 'course-duck',
     title: '零基础 · 钩织你的第一只幸运小鸭',
@@ -91,18 +100,14 @@ export const COURSES = [
   },
 ]
 
-// 单课快捷导出（契约测试用；页面已改经 store/courses.js 取数，不直接 import 这里）
-export const COURSE = COURSES[0]
-
-// 拍平成一维课时表，并补 chapter 归属（契约测试用；页面用 store 的 allLessons）
-export const ALL_LESSONS = COURSE.chapters.flatMap((c) =>
-  c.lessons.map((l) => ({ ...l, chapter: c.id }))
-)
-
-// 用户学习进度 · 样例（用户态，不属于课程内容，云端不存这份）
-// done = 已学完；watched = 0~1 观看进度
-export const SAMPLE_PROGRESS = {
-  l1: { done: true },
-  l2: { done: true },
-  l3: { watched: 0.42 },
+exports.main = async () => {
+  const ids = []
+  for (const c of COURSES) {
+    await db
+      .collection('courses')
+      .doc(c.id)
+      .set({ data: { ...c, updatedAt: db.serverDate() } })
+    ids.push(c.id)
+  }
+  return { ok: true, count: ids.length, ids }
 }

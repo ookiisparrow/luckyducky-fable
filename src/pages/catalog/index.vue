@@ -4,14 +4,21 @@
  * 灰色封面 + 课程标题 + 开始学习 + 章节折叠 + 课时状态；点课时进播放页。
  * 封面/缩略按项目约定用灰占位，真实媒体以后注入。
  */
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import Icon from '@/components/Icon.vue'
-import { COURSE, ALL_LESSONS, SAMPLE_PROGRESS } from '@/data/course.js'
+import { SAMPLE_PROGRESS } from '@/data/course.js'
+import { useCoursesStore } from '@/store/courses.js'
 import { goBack } from '@/utils/nav.js'
 import { getSystemBarVars } from '@/utils/systemBar.js'
 
 // 封面浮层按钮避状态栏/胶囊：动态值经 CSS 变量进 scoped
 const barVars = getSystemBarVars()
+
+// 课程内容从 store 取（小程序端云端、H5/App 回退本地）；load 前是安全空形状
+const store = useCoursesStore()
+onMounted(() => store.load())
+const course = computed(() => store.current)
+const lessons = computed(() => store.allLessons)
 
 // 默认展开第 1 章
 const open = ref({ c1: true })
@@ -24,9 +31,9 @@ const prog = (l) => SAMPLE_PROGRESS[l.id] || {}
 // 试看标记落在 segment 级（规格 v2），目录按「任一段可试看」显示
 const lessonFree = (l) => (l.segments || []).some((s) => s.free)
 
-const doneCount = computed(() => ALL_LESSONS.filter((l) => prog(l).done).length)
-const total = ALL_LESSONS.length
-const progPct = computed(() => Math.round((doneCount.value / total) * 100))
+const doneCount = computed(() => lessons.value.filter((l) => prog(l).done).length)
+const total = computed(() => lessons.value.length)
+const progPct = computed(() => (total.value ? Math.round((doneCount.value / total.value) * 100) : 0))
 
 function lessonState(l) {
   if (prog(l).done) return 'done'
@@ -50,8 +57,8 @@ function openLesson(lesson) {
 }
 function startFirst() {
   // 从第一个未学完的课开始（没有就第一节）
-  const next = ALL_LESSONS.find((l) => !prog(l).done) || ALL_LESSONS[0]
-  openLesson(next)
+  const next = lessons.value.find((l) => !prog(l).done) || lessons.value[0]
+  if (next) openLesson(next)
 }
 const back = () => goBack('/pages/index/index')
 function fav() {
@@ -71,7 +78,7 @@ function replayIntro() {
       <view class="vc-fav" @tap="fav"><Icon name="bookmark" :size="20" /></view>
       <view class="vc-cover-copy">
         <text class="vc-cover-eyebrow">视频教程</text>
-        <text class="vc-cover-title">{{ COURSE.title }}</text>
+        <text class="vc-cover-title">{{ course.title }}</text>
         <text class="vc-cover-meta">共 {{ total }} 节 · 已学 {{ doneCount }} · {{ progPct }}%</text>
         <text class="vc-replay" @tap="replayIntro">重看视频教程引导</text>
       </view>
@@ -88,7 +95,7 @@ function replayIntro() {
     <!-- 章节折叠 -->
     <view class="vc-chapters">
       <view
-        v-for="(c, ci) in COURSE.chapters"
+        v-for="(c, ci) in course.chapters"
         :key="c.id"
         class="vc-chapter"
         :class="{ open: open[c.id] }"
