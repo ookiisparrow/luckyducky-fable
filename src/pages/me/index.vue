@@ -3,11 +3,14 @@
  * 「我」个人中心主页。对应原型 MyProfile.jsx（学习中枢版 A）。
  * 紫色资料头 + 继续学习卡 + 我的订单 + 客服/地址 列表。
  *
- * 真实接通：「继续观看」→ 播放页续播；「全部教程」→ 首次进视频课先放欢迎引导页、之后直达目录。
- * 占位（Toast，子流程后续做）：编辑资料、订单各状态、全部订单、客服、地址管理。
+ * 真实接通：「继续观看」→ 播放页续播；「全部教程」→ 首次进视频课先放欢迎引导页、之后直达目录；
+ *   订单九宫格 / 全部订单 → 订单列表页（真实订单，角标按 store 数量）；退款/售后仍样例（P4 接真）。
+ * 占位（Toast，子流程后续做）：客服。
  *
  * 图位走 MediaSlot 灰占位；my-* 类名沿用原型。
  */
+import { computed } from 'vue'
+import { onShow } from '@dcloudio/uni-app'
 import Icon from '@/components/Icon.vue'
 import TabBar from '@/components/TabBar.vue'
 import ProfileHeader from './components/ProfileHeader.vue'
@@ -15,9 +18,18 @@ import ContinueVideo from './components/ContinueVideo.vue'
 import OrderGrid from './components/OrderGrid.vue'
 import { CONTINUE_VIDEO as V, ORDER_TABS } from '@/data/profile.js'
 import { useUserStore } from '@/store/user.js'
+import { useOrdersStore } from '@/store/orders.js'
 import { STORAGE_KEYS } from '@/constants/storage.js'
 
 const user = useUserStore()
+const orders = useOrdersStore()
+
+// 角标 = 各状态真实订单数（只标可办理的三态，已完成/售后不标）
+const BADGE_STATUS = { pending: 'pending', toship: 'paid', toreceive: 'shipped' }
+const orderTabs = computed(() =>
+  ORDER_TABS.map((t) => ({ ...t, badge: orders.countByStatus[BADGE_STATUS[t.key]] || 0 })),
+)
+onShow(() => orders.load())
 
 function toast(t) {
   uni.showToast({ title: t, icon: 'none' })
@@ -32,12 +44,11 @@ function allCourses() {
   uni.navigateTo({ url: seen ? '/pages/catalog/index' : '/pages/welcome/index' })
 }
 function onOrder(key) {
-  if (key === 'pending') uni.navigateTo({ url: '/pages/pending-pay/index' })
-  else if (key === 'refund') uni.navigateTo({ url: '/pages/aftersales/index' })
-  else uni.navigateTo({ url: `/pages/order/index?status=${key}` })
+  if (key === 'refund') uni.navigateTo({ url: '/pages/aftersales/index' })
+  else uni.navigateTo({ url: `/pages/order-list/index?tab=${key}` })
 }
 function allOrders() {
-  toast('全部订单（开发中）')
+  uni.navigateTo({ url: '/pages/order-list/index' })
 }
 function goAddress() {
   uni.navigateTo({ url: '/pages/address/index' })
@@ -76,7 +87,7 @@ function goEditProfile() {
             <text>全部订单</text><Icon name="chevron-right" :size="14" />
           </view>
         </view>
-        <OrderGrid :tabs="ORDER_TABS" @open="onOrder" />
+        <OrderGrid :tabs="orderTabs" @open="onOrder" />
       </view>
 
       <!-- 客服 / 地址 -->

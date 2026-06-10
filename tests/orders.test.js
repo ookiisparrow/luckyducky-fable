@@ -60,6 +60,16 @@ describe('orders store', () => {
     await store.load()
     expect(store.getById(o.id)).toBeTruthy()
   })
+
+  it('countByStatus：按状态计数（「我」页角标 / 列表 tab 数据源）', async () => {
+    const store = useOrdersStore()
+    await store.create({ items: [{ id: 'prod-1', qty: 1 }], address: {} })
+    await store.create({ items: [{ id: 'prod-2', qty: 1 }], address: {} })
+    expect(store.countByStatus.paid).toBe(2) // 模拟支付：新单直接 paid（待发货）
+    expect(store.countByStatus.pending).toBeUndefined()
+    store.list = [...store.list, { id: 'x1', status: 'shipped', items: [] }]
+    expect(store.countByStatus.shipped).toBe(1)
+  })
 })
 
 describe('format.dateTime', () => {

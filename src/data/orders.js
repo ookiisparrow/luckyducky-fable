@@ -1,12 +1,60 @@
 /**
- * 订单样例数据。来源：原型 Checkout.jsx 的 ORDER_CFG / PendingPay。
- * 现为静态样例（无真实订单系统）；以后接后端：用 api/shop.js 按状态拉订单，字段一致。
+ * 订单展示配置 + 样例数据。
+ * ORDER_STATUS：真实订单 status → 展示配置（列表 / 详情 / 「我」页共用的单一来源）。
+ * ORDER_CFG：原型样例（无 id 的 ?status= 演示路径仍在用，P4 真实支付后可删）。
  *
  * banner 图标用带主题色的变体（package-purple/truck-purple/circle-check-duck）。
  * 金额由商品现算（COUPON/SHIP 与结算一致）。
  */
 export const COUPON = 20
 export const SHIP = 0
+
+// 真实订单 status → 展示配置。现阶段 createOrder 模拟支付直接产 paid；
+// pending/shipped/done 由 P4 真实支付与 P5 后台流转产生，配置先备齐，
+// 状态一出现页面即正确显示。actions 的 key 由订单详情页 onAction 处理。
+export const ORDER_STATUS = {
+  pending: {
+    label: '待支付',
+    icon: 'wallet-purple',
+    tint: 'lilac',
+    head: '等待付款',
+    sub: '请尽快完成支付，超时订单将自动关闭',
+    actions: [{ label: '去支付', kind: 'solid', key: 'pay' }],
+  },
+  paid: {
+    label: '待发货',
+    icon: 'package-purple',
+    tint: 'lilac',
+    head: '已付款，等待商家发货',
+    sub: '商家将于 48 小时内为你打包发出',
+    actions: [
+      { label: '申请退款', kind: 'ghost', key: 'refund' },
+      { label: '提醒发货', kind: 'solid', key: 'remind' },
+    ],
+  },
+  shipped: {
+    label: '待收货',
+    icon: 'truck-purple',
+    tint: 'lilac',
+    head: '商家已发货，包裹运送中',
+    sub: '收到包裹后记得确认收货',
+    actions: [
+      { label: '查看物流', kind: 'ghost', key: 'logi' },
+      { label: '确认收货', kind: 'solid', key: 'confirm' },
+    ],
+  },
+  done: {
+    label: '已完成',
+    icon: 'circle-check-duck',
+    tint: 'sage',
+    head: '交易完成',
+    sub: '感谢你的信任，期待小鸭陪你度过快乐时光',
+    actions: [
+      { label: '再次购买', kind: 'ghost', key: 'rebuy' },
+      { label: '评价晒单', kind: 'solid', key: 'review' },
+    ],
+  },
+}
 
 export const ORDER_CFG = {
   toship: {

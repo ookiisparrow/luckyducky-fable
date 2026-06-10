@@ -17,6 +17,12 @@ export const useOrdersStore = defineStore('orders', {
   }),
   getters: {
     getById: (s) => (id) => s.list.find((o) => o.id === id) || null,
+    // 各 status 的订单数（「我」页九宫格角标用）：{ paid: 2, ... }
+    countByStatus: (s) =>
+      s.list.reduce((m, o) => {
+        m[o.status] = (m[o.status] || 0) + 1
+        return m
+      }, {}),
   },
   actions: {
     // 下单（云端定价；失败会抛错，由页面提示）。成功后插入列表头部并返回订单。

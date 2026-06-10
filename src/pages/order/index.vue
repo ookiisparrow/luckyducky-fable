@@ -1,8 +1,9 @@
 <script setup>
 /**
- * 订单状态页（待发货 / 待收货 / 已完成）。对应原型 Checkout.jsx 的 OrderStatus。
- * 两种驱动：query.id → 真实订单（store/orders，云端/回退同一笔，关调试日志 C）；
- *           query.status → 样例配置（toship/toreceive/done，data/orders.js，「我」页入口的演示路径）。
+ * 订单状态页（待支付 / 待发货 / 待收货 / 已完成）。对应原型 Checkout.jsx 的 OrderStatus。
+ * 两种驱动：query.id → 真实订单（store/orders，云端/回退同一笔，关调试日志 C；
+ *             banner/动作按 ORDER_STATUS 单一来源映射真实 status）；
+ *           query.status → 样例配置（toship/toreceive/done，ORDER_CFG 演示路径，P4 后可删）。
  * 收货地址：真单读订单地址快照；样例读地址簿默认地址。底部动作按钮：
  *   提醒发货/查看物流 → Toast；确认收货 → 弹确认；再次购买 → 进详情；
  *   申请退款 → 售后页；评价晒单 → 评价页。
@@ -16,7 +17,7 @@ import OrderItem from '@/components/OrderItem.vue'
 import PriceSummary from '@/components/PriceSummary.vue'
 import { useAddressStore } from '@/store/address.js'
 import { useOrdersStore } from '@/store/orders.js'
-import { ORDER_CFG, COUPON, SHIP } from '@/data/orders.js'
+import { ORDER_CFG, ORDER_STATUS, COUPON, SHIP } from '@/data/orders.js'
 import { goBack } from '@/utils/nav.js'
 import { money, dateTime } from '@/utils/format.js'
 
@@ -26,24 +27,22 @@ const status = ref('toship')
 const orderId = ref('')
 const order = computed(() => (orderId.value ? ordersStore.getById(orderId.value) : null))
 
-// 真实订单（现阶段均为模拟支付的 paid = 待发货）映射成与样例同构的展示配置
+// 真实订单按 status 映射展示配置（ORDER_STATUS 单一来源；未知状态兜底按待发货）
 function cfgFromOrder(o) {
+  const v = ORDER_STATUS[o.status] || ORDER_STATUS.paid
   return {
-    title: '待发货',
-    icon: 'package-purple',
-    tint: 'lilac',
-    head: '已付款，等待商家发货',
-    sub: '商家将于 48 小时内为你打包发出',
+    title: v.label,
+    icon: v.icon,
+    tint: v.tint,
+    head: v.head,
+    sub: v.sub,
     items: o.items.map((it) => ({ name: it.name, spec: it.spec, price: it.price, qty: it.qty })),
     info: [
       ['订单编号', o.id],
-      ['付款时间', dateTime(o.paidAt)],
+      o.paidAt ? ['付款时间', dateTime(o.paidAt)] : ['下单时间', dateTime(o.createdAt)],
       ['支付方式', '微信支付（模拟）'],
     ],
-    actions: [
-      { label: '申请退款', kind: 'ghost', key: 'refund' },
-      { label: '提醒发货', kind: 'solid', key: 'remind' },
-    ],
+    actions: v.actions,
   }
 }
 
@@ -91,6 +90,8 @@ function onAction(a) {
     uni.navigateTo({ url: `/pages/detail/index?id=prod-1&name=${encodeURIComponent('幸运小鸭礼盒')}` })
   } else if (k === 'remind') {
     uni.showToast({ title: '已提醒商家发货', icon: 'none' })
+  } else if (k === 'pay') {
+    uni.showToast({ title: '支付功能开发中（将接入微信支付）', icon: 'none' })
   } else if (k === 'logi') {
     uni.showToast({ title: '物流详情（开发中）', icon: 'none' })
   } else if (k === 'refund') {

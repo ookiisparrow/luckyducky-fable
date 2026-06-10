@@ -19,10 +19,11 @@ export const CONTINUE_VIDEO = {
   pct: 68,
 }
 
+// 订单九宫格入口（角标不再写死——「我」页按订单 store 真实数量计算）
 export const ORDER_TABS = [
-  { icon: 'wallet', label: '待支付', badge: 1, key: 'pending' },
+  { icon: 'wallet', label: '待支付', key: 'pending' },
   { icon: 'package', label: '待发货', key: 'toship' },
-  { icon: 'truck-ink', label: '待收货', badge: 2, key: 'toreceive' },
+  { icon: 'truck-ink', label: '待收货', key: 'toreceive' },
   { icon: 'circle-check-big', label: '已完成', key: 'done' },
   { icon: 'refresh-cw', label: '退款/售后', key: 'refund' },
 ]

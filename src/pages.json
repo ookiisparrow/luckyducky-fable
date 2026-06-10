@@ -62,6 +62,13 @@
       }
     },
     {
+      "path": "pages/order-list/index",
+      "style": {
+        "navigationBarTitleText": "我的订单",
+        "navigationStyle": "custom"
+      }
+    },
+    {
       "path": "pages/order/index",
       "style": {
         "navigationBarTitleText": "订单详情",
