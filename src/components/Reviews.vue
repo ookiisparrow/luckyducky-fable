@@ -1,9 +1,11 @@
 <script setup>
 /**
  * 「真实买家秀」区。对应原型 Sections.jsx 的 Reviews。
+ * 纯展示组件：评价列表由使用方传入（技术债 #4，评价上云后换云端来源）。
  */
 import ReviewCard from './ReviewCard.vue'
-import { REVIEWS } from '@/data/reviews.js'
+
+defineProps({ reviews: { type: Array, default: () => [] } })
 const emit = defineEmits(['more'])
 </script>
 
@@ -14,7 +16,7 @@ const emit = defineEmits(['more'])
       <text class="ld-reviews-more" @tap="emit('more')">全部 ›</text>
     </view>
     <scroll-view scroll-x class="ld-rail" :show-scrollbar="false">
-      <ReviewCard v-for="r in REVIEWS" :key="r.id" :review="r" />
+      <ReviewCard v-for="r in reviews" :key="r.id" :review="r" />
       <view class="ld-rail-end"></view>
     </scroll-view>
   </view>

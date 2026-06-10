@@ -1,9 +1,11 @@
 <script setup>
 /**
  * 「把门槛一一拆掉」区。对应原型 Sections.jsx 的 Reassurance。
+ * 纯展示组件：条目由使用方传入（技术债 #4，数据将来可换云端来源）。
  */
 import Accordion from './Accordion.vue'
-import { REASSURE_ITEMS } from '@/data/reassure.js'
+
+defineProps({ items: { type: Array, default: () => [] } })
 </script>
 
 <template>
@@ -12,7 +14,7 @@ import { REASSURE_ITEMS } from '@/data/reassure.js'
       <text class="ld-h2">把门槛一一拆掉</text>
       <text class="ld-reassure-lead">新手学习钩织存在很多门槛，我们把这些门槛一一拆掉了。</text>
     </view>
-    <Accordion :items="REASSURE_ITEMS" with-image />
+    <Accordion :items="items" with-image />
   </view>
 </template>
 

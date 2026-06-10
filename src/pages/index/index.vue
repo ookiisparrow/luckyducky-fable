@@ -21,6 +21,12 @@ import Toast from '@/components/Toast.vue'
 import BackTop from '@/components/BackTop.vue'
 import { useTimers } from '@/composables/useTimers.js'
 
+// section 组件是纯展示（技术债 #4），数据在页面收口；将来换云端来源只改这里
+import { TRUST_ITEMS } from '@/data/trust.js'
+import { REASSURE_ITEMS } from '@/data/reassure.js'
+import { REVIEWS } from '@/data/reviews.js'
+import { FAQ_ITEMS } from '@/data/faq.js'
+
 const { later } = useTimers()
 const instance = getCurrentInstance()
 const windowHeight = uni.getSystemInfoSync().windowHeight
@@ -110,10 +116,10 @@ function onReviewsMore() {
       <FeatureProducts :flash-id="flashId" @open="onProductOpen" @add="onProductAdd" />
     </view>
 
-    <TrustStrip />
-    <Reassurance />
-    <Reviews @more="onReviewsMore" />
-    <FAQ />
+    <TrustStrip :items="TRUST_ITEMS" />
+    <Reassurance :items="REASSURE_ITEMS" />
+    <Reviews :reviews="REVIEWS" @more="onReviewsMore" />
+    <FAQ :items="FAQ_ITEMS" />
     <ClosingCTA @buy="onClosingBuy" />
     <SiteFooter />
 
