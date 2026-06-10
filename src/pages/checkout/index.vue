@@ -16,15 +16,15 @@ import { onLoad } from '@dcloudio/uni-app'
 import Icon from '@/components/Icon.vue'
 import CoNavBar from '@/components/CoNavBar.vue'
 import AddressBlock from '@/components/AddressBlock.vue'
-import MediaSlot from '@/components/MediaSlot.vue'
 import OrderItem from '@/components/OrderItem.vue'
 import PriceSummary from '@/components/PriceSummary.vue'
 import QuantityStepper from '@/components/QuantityStepper.vue'
+import CheckoutAddonList from './components/CheckoutAddonList.vue'
+import CheckoutSubmitDock from './components/CheckoutSubmitDock.vue'
 import { useCartStore } from '@/store/cart.js'
 import { useAddressStore } from '@/store/address.js'
 import { CHECKOUT_ADDONS, COUPON, SHIP } from '@/data/checkout.js'
 import { goBack } from '@/utils/nav.js'
-import { money } from '@/utils/format.js'
 import { useTimers } from '@/composables/useTimers.js'
 
 const { later } = useTimers()
@@ -125,31 +125,8 @@ function onSubmit() {
         </OrderItem>
       </view>
 
-      <!-- 搭配购买 -->
-      <view class="co-card">
-        <view class="co-addon-head">
-          <text class="co-addon-title">搭配购买</text>
-          <text class="co-addon-sub">一起买更划算</text>
-        </view>
-        <view v-for="(a, i) in addons" :key="a.id" class="co-addon" :class="{ divided: i > 0 }">
-          <view class="co-radio" :class="{ on: a.on }" @tap="toggleAddon(i)">
-            <Icon v-if="a.on" name="check" :size="12" />
-          </view>
-          <view class="co-addon-img"><MediaSlot ratio="1/1" :radius="5" /></view>
-          <view class="co-addon-mid">
-            <text class="co-addon-name">{{ a.name }}</text>
-            <view class="co-addon-foot">
-              <text class="co-price co-addon-price"><text class="cny">￥</text>{{ money(a.price) }}</text>
-              <QuantityStepper
-                :n="a.qty"
-                size="sm"
-                @dec="setAddonQty(i, a.qty - 1)"
-                @inc="setAddonQty(i, a.qty + 1)"
-              />
-            </view>
-          </view>
-        </view>
-      </view>
+      <!-- 搭配购买（页内组件：状态在本页，组件只发事件） -->
+      <CheckoutAddonList :addons="addons" @toggle="toggleAddon" @set-qty="setAddonQty" />
 
       <!-- 配送 / 优惠券 / 积分 / 备注 -->
       <view class="co-card">
@@ -173,55 +150,15 @@ function onSubmit() {
     <!-- 给提交坞让位 -->
     <view class="co-foot"></view>
 
-    <!-- 固定提交坞 -->
-    <view class="co-dock">
-      <view class="co-dock-total">
-        <text class="co-dock-small">合计</text>
-        <view class="co-dock-amount">
-          <text class="co-dock-amt"><text class="cny">￥</text>{{ money(pay) }}</text>
-          <text class="co-dock-count">共 {{ count }} 件</text>
-        </view>
-      </view>
-      <view class="co-submit" :class="{ disabled: invalidCheckout }" @tap="onSubmit">提交订单</view>
-    </view>
+    <!-- 固定提交坞（页内组件：守卫在本页 onSubmit） -->
+    <CheckoutSubmitDock :pay="pay" :count="count" :disabled="invalidCheckout" @submit="onSubmit" />
   </view>
 </template>
 
 <style lang="scss" scoped>
 @import '../../styles/co.scss';
 
-/* 横排底部坞（提交按钮靠右） */
-.co-dock {
-  display: flex;
-  align-items: center;
-}
-.co-dock-amount {
-  display: flex;
-  align-items: baseline;
-}
-.co-dock-count {
-  font-size: 12px;
-  color: $content-2;
-  font-family: $font-sans;
-  margin-left: 8px;
-}
-.co-submit {
-  margin-left: auto;
-  flex: 0 0 auto;
-  background: $purple;
-  color: $white;
-  border-radius: $r-pill;
-  font-weight: 600;
-  font-size: 16px;
-  padding: 14px 34px;
-}
-.co-submit:active {
-  opacity: 0.94;
-}
-.co-submit.disabled {
-  background: $line-strong;
-  opacity: 0.6;
-}
+/* 搭配购买 / 提交坞样式已随组件迁走：见 ./components/CheckoutAddonList.vue、CheckoutSubmitDock.vue */
 
 /* 信息行 · 优惠券强调（红色） */
 .co-row-val.accent {
@@ -231,72 +168,4 @@ function onSubmit() {
 }
 
 /* 数量步进器：见 components/QuantityStepper.vue（size="sm"） */
-
-/* 搭配购买 */
-.co-addon-head {
-  display: flex;
-  align-items: baseline;
-  padding: 14px 16px 2px;
-}
-.co-addon-title {
-  font-family: $font-display;
-  font-weight: 500;
-  font-size: 15px;
-  color: $ink;
-}
-.co-addon-sub {
-  font-size: 12px;
-  color: $duck-orange;
-  margin-left: 8px;
-}
-.co-addon {
-  display: flex;
-  align-items: center;
-  padding: 12px 16px;
-}
-.co-addon.divided {
-  border-top: 0.5px solid $line-soft;
-}
-.co-radio {
-  width: 20px;
-  height: 20px;
-  border-radius: 50%;
-  border: 1px solid $line-strong;
-  background: $white;
-  flex: 0 0 auto;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  margin-right: 12px;
-}
-.co-radio.on {
-  background: $purple;
-  border-color: $purple;
-}
-.co-addon-img {
-  width: 56px;
-  height: 56px;
-  border-radius: $r-sm;
-  overflow: hidden;
-  flex: 0 0 auto;
-  margin-right: 12px;
-}
-.co-addon-mid {
-  flex: 1 1 auto;
-  min-width: 0;
-}
-.co-addon-name {
-  font-size: 14px;
-  color: $ink;
-  line-height: 1.3;
-}
-.co-addon-foot {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-top: 9px;
-}
-.co-addon-price {
-  font-size: 15px;
-}
 </style>

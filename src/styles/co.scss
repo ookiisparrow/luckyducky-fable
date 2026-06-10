@@ -100,35 +100,16 @@
   height: calc(78px + env(safe-area-inset-bottom));
 }
 .co-dock {
-  position: fixed;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  z-index: 30;
-  background: $white;
-  box-shadow: 0 -1px 0 $line;
-  padding: 10px 16px calc(10px + env(safe-area-inset-bottom));
+  @include co-dock;
 }
 .co-dock-total {
-  display: flex;
-  flex-direction: column;
-  line-height: 1.1;
-  margin-right: auto;
+  @include co-dock-total;
 }
 .co-dock-small {
-  font-size: 11px;
-  color: $content-2;
+  @include co-dock-small;
 }
 .co-dock-amt {
-  font-family: $font-sans;
-  font-weight: 700;
-  font-size: 24px;
-  color: $ink;
-  line-height: 1;
-}
-.co-dock-amt .cny {
-  font-size: 15px;
-  font-weight: 600;
+  @include co-dock-amt;
 }
 
 /* 全宽主按钮（保存 / 发布 / 新增地址等） */

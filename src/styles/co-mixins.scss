@@ -40,3 +40,41 @@
   border-radius: 4px;
   padding: 1px 6px;
 }
+
+/* 底部坞四件套（技术债 #5：CheckoutSubmitDock 拆出后与 co.scss 两侧 @include） */
+
+@mixin co-dock {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 30;
+  background: $white;
+  box-shadow: 0 -1px 0 $line;
+  padding: 10px 16px calc(10px + env(safe-area-inset-bottom));
+}
+
+@mixin co-dock-total {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.1;
+  margin-right: auto;
+}
+
+@mixin co-dock-small {
+  font-size: 11px;
+  color: $content-2;
+}
+
+@mixin co-dock-amt {
+  font-family: $font-sans;
+  font-weight: 700;
+  font-size: 24px;
+  color: $ink;
+  line-height: 1;
+
+  .cny {
+    font-size: 15px;
+    font-weight: 600;
+  }
+}
