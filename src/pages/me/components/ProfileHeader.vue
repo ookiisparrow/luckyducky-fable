@@ -1,6 +1,6 @@
 <script setup>
 /**
- * 「我」· 紫色资料头（头像 / 昵称 / 等级 / 手机 / 签名 / 编辑）。从 me 页拆出。
+ * 「我」· 紫色资料头（头像 / 昵称 / 等级 / 签名 / 编辑；手机号已放弃，不展示）。从 me 页拆出。
  * 资料数据由 profile 传入；点「编辑」发 edit 事件回父页跳转。样式自成一体（不与其它段共用）。
  */
 import Icon from '@/components/Icon.vue'
@@ -8,7 +8,7 @@ import MediaSlot from '@/components/MediaSlot.vue'
 import { getSystemBar } from '@/utils/systemBar.js'
 
 defineProps({
-  profile: { type: Object, default: () => ({}) }, // { name, lv, phone, bio, avatar }
+  profile: { type: Object, default: () => ({}) }, // { name, lv, bio, avatar }
 })
 defineEmits(['edit'])
 
@@ -26,7 +26,6 @@ const topStyle = { '--sbh': getSystemBar().statusBarHeight + 'px' }
           <text class="my-id-name">{{ profile.name }}</text>
           <text v-if="profile.lv" class="my-lv">{{ profile.lv }}</text>
         </view>
-        <text class="my-id-sub">{{ profile.phone }}</text>
         <text v-if="profile.bio" class="my-id-bio">{{ profile.bio }}</text>
       </view>
       <view class="my-edit" @tap="$emit('edit')">
@@ -107,14 +106,6 @@ const topStyle = { '--sbh': getSystemBar().statusBarHeight + 'px' }
   background: rgba(255, 255, 255, 0.22);
   color: $white;
   margin-left: 8px;
-}
-.my-id-sub {
-  display: block;
-  font-family: $font-sans;
-  font-size: 13px;
-  margin-top: 5px;
-  color: $white;
-  opacity: 0.82;
 }
 .my-id-bio {
   display: block;

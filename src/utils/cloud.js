@@ -25,3 +25,15 @@ export async function callCloud(name, data = {}) {
   // #endif
   return null
 }
+
+// 上传本地（临时）文件到云存储，返回 fileID。仅小程序端；其它端返回 null。
+// 用法：const fileID = await uploadCloudFile('avatars/xxx.png', tempFilePath)
+export async function uploadCloudFile(cloudPath, filePath) {
+  // #ifdef MP-WEIXIN
+  if (typeof wx !== 'undefined' && wx.cloud) {
+    const res = await wx.cloud.uploadFile({ cloudPath, filePath })
+    return res.fileID || null
+  }
+  // #endif
+  return null
+}

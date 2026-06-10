@@ -1,12 +1,15 @@
 /**
  * 用户 / 账号状态（Pinia）。
- * 登录态（token）仍为预留（微信登录后续做）；profile 现在承载「我的页」资料，
- * 由资料编辑页读写。以后微信登录拿到真实资料后，覆盖到 profile 即可，页面不动。
+ * 登录态（token）仍为预留；profile 承载「我的页」资料，由资料编辑页读写。
+ * 小程序端：登录后云端 users 的非空资料（nickname/avatar/bio）覆盖本地展示（跨设备以云端为准）；
+ * 保存资料时头像传云存储、字段经 updateProfile 云函数写回 users。H5 / App 端纯本地。
  *
- * profile 结构：{ name, phone, lv, bio, avatar }（avatar 为图片路径，空则灰占位）
+ * profile 结构：{ name, lv, bio, avatar }（avatar 为图片路径或云存储 fileID，空则灰占位）
  */
 import { defineStore } from 'pinia'
 import { USER } from '@/data/profile.js'
+import { updateProfile as apiUpdateProfile } from '@/api/user.js'
+import { uploadCloudFile } from '@/utils/cloud.js'
 import logger from '@/utils/logger.js'
 
 const defaultProfile = () => ({ ...USER, avatar: '' })
@@ -48,11 +51,56 @@ export const useUserStore = defineStore('user', {
         if (u) {
           this.openid = u._openid || ''
           this.cloudUser = u
+          this.mergeCloudProfile(u)
         }
       } catch (e) {
         logger.error('login', e)
       }
       // #endif
+    },
+    // 云端资料的非空字段覆盖本地展示（空字段不动本地，保留默认 / 本机改动）。
+    mergeCloudProfile(u) {
+      const patch = {}
+      if (u.nickname) patch.name = u.nickname
+      if (u.avatar) patch.avatar = u.avatar
+      if (u.bio) patch.bio = u.bio
+      if (Object.keys(patch).length) this.profile = { ...this.profile, ...patch }
+    },
+    // 保存资料：本地即时生效；已登录云端（有 openid，即小程序端）时同步到 users。
+    // 头像若是新选的本地临时路径（非 cloud:// fileID）先传云存储换 fileID；
+    // 上传失败不中断——昵称 / 签名照常同步、本次不动云端头像，但整体按「同步失败」上报。
+    // 返回云端是否同步成功（纯本地场景视为成功），页面据此提示。
+    async saveProfile(patch) {
+      this.updateProfile(patch)
+      if (!this.openid) return true
+      try {
+        const data = { nickname: this.profile.name, bio: this.profile.bio }
+        let avatar = this.profile.avatar
+        let avatarFailed = false
+        if (avatar && !avatar.startsWith('cloud://')) {
+          let fileID = null
+          try {
+            const ext = (avatar.match(/\.\w+$/) || ['.png'])[0]
+            fileID = await uploadCloudFile(`avatars/${this.openid}-${Date.now()}${ext}`, avatar)
+          } catch (e) {
+            logger.error('saveProfile.upload', e)
+          }
+          if (fileID) {
+            avatar = fileID
+            this.profile = { ...this.profile, avatar }
+          } else {
+            avatar = null
+            avatarFailed = true
+          }
+        }
+        if (avatar !== null) data.avatar = avatar
+        const u = await apiUpdateProfile(data)
+        if (u) this.cloudUser = u
+        return !!u && !avatarFailed
+      } catch (e) {
+        logger.error('saveProfile', e)
+        return false
+      }
     },
     logout() {
       this.token = ''
