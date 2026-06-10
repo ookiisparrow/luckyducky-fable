@@ -6,7 +6,7 @@
  */
 import { ref, computed } from 'vue'
 import Icon from '@/components/Icon.vue'
-import { COURSE, ALL_LESSONS } from '@/data/course.js'
+import { COURSE, ALL_LESSONS, SAMPLE_PROGRESS } from '@/data/course.js'
 import { goBack } from '@/utils/nav.js'
 import { getSystemBarVars } from '@/utils/systemBar.js'
 
@@ -19,22 +19,27 @@ function toggleChapter(id) {
   open.value = { ...open.value, [id]: !open.value[id] }
 }
 
-const doneCount = computed(() => ALL_LESSONS.filter((l) => l.done).length)
+// 学习进度是用户态，与课程内容分离（现为样例，将来云端按 segment 粒度记忆）
+const prog = (l) => SAMPLE_PROGRESS[l.id] || {}
+// 试看标记落在 segment 级（规格 v2），目录按「任一段可试看」显示
+const lessonFree = (l) => (l.segments || []).some((s) => s.free)
+
+const doneCount = computed(() => ALL_LESSONS.filter((l) => prog(l).done).length)
 const total = ALL_LESSONS.length
 const progPct = computed(() => Math.round((doneCount.value / total) * 100))
 
 function lessonState(l) {
-  if (l.done) return 'done'
-  if (l.watched) return 'watching'
+  if (prog(l).done) return 'done'
+  if (prog(l).watched) return 'watching'
   return 'todo'
 }
 function lessonIcon(l) {
-  if (l.done) return 'check-on'
+  if (prog(l).done) return 'check-on'
   return 'play-ink'
 }
 function lessonSub(l, li) {
-  if (l.done) return '已看完'
-  if (l.watched) return `上次看到 ${Math.round(l.watched * 100)}%`
+  if (prog(l).done) return '已看完'
+  if (prog(l).watched) return `上次看到 ${Math.round(prog(l).watched * 100)}%`
   return `第 ${li + 1} 节`
 }
 
@@ -45,7 +50,7 @@ function openLesson(lesson) {
 }
 function startFirst() {
   // 从第一个未学完的课开始（没有就第一节）
-  const next = ALL_LESSONS.find((l) => !l.done) || ALL_LESSONS[0]
+  const next = ALL_LESSONS.find((l) => !prog(l).done) || ALL_LESSONS[0]
   openLesson(next)
 }
 const back = () => goBack('/pages/index/index')
@@ -93,7 +98,7 @@ function replayIntro() {
           <view class="vc-chap-text">
             <text class="vc-chap-title">{{ c.title }}</text>
             <text class="vc-chap-sub">
-              {{ c.lessons.length }} 节课 · 已学 {{ c.lessons.filter((l) => l.done).length }}
+              {{ c.lessons.length }} 节课 · 已学 {{ c.lessons.filter((l) => prog(l).done).length }}
             </text>
           </view>
           <view class="vc-chap-chev"><Icon name="chevron-down" :size="20" /></view>
@@ -112,8 +117,10 @@ function replayIntro() {
               <view class="vc-lesson-mid">
                 <text class="vc-lesson-name">{{ l.name }}</text>
                 <view class="vc-lesson-subrow">
-                  <text class="vc-lesson-sub" :class="{ done: l.done }">{{ lessonSub(l, li) }}</text>
-                  <text v-if="l.free" class="vc-free">试看</text>
+                  <text class="vc-lesson-sub" :class="{ done: prog(l).done }">{{
+                    lessonSub(l, li)
+                  }}</text>
+                  <text v-if="lessonFree(l)" class="vc-free">试看</text>
                 </view>
               </view>
               <text class="vc-lesson-dur">{{ l.dur }}</text>
