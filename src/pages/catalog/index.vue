@@ -8,6 +8,10 @@ import { ref, computed } from 'vue'
 import Icon from '@/components/Icon.vue'
 import { COURSE, ALL_LESSONS } from '@/data/course.js'
 import { goBack } from '@/utils/nav.js'
+import { getSystemBarVars } from '@/utils/systemBar.js'
+
+// 封面浮层按钮避状态栏/胶囊：动态值经 CSS 变量进 scoped
+const barVars = getSystemBarVars()
 
 // 默认展开第 1 章
 const open = ref({ c1: true })
@@ -54,7 +58,7 @@ function replayIntro() {
 </script>
 
 <template>
-  <view class="vc">
+  <view class="vc" :style="barVars">
     <!-- 封面（灰占位 + 标题叠加） -->
     <view class="vc-cover">
       <view class="vc-cover-scrim"></view>
@@ -148,7 +152,13 @@ function replayIntro() {
 .vc-back,
 .vc-fav {
   position: absolute;
+  /* 小程序：与胶囊同一水平带（按钮 38px 在导航带内垂直居中） */
+  /* #ifdef MP-WEIXIN */
+  top: calc(var(--sbh, 0px) + (var(--navh, 44px) - 38px) / 2);
+  /* #endif */
+  /* #ifndef MP-WEIXIN */
   top: calc(14px + env(safe-area-inset-top));
+  /* #endif */
   width: 38px;
   height: 38px;
   border-radius: 50%;
@@ -162,7 +172,12 @@ function replayIntro() {
   left: 12px;
 }
 .vc-fav {
+  /* #ifdef MP-WEIXIN */
+  right: calc(12px + var(--gap, 0px)); /* 为胶囊让位 */
+  /* #endif */
+  /* #ifndef MP-WEIXIN */
   right: 12px;
+  /* #endif */
 }
 .vc-cover-copy {
   position: relative;

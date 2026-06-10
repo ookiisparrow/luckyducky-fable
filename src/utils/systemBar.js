@@ -45,3 +45,16 @@ export function getSystemBar() {
   }
   return _cache
 }
+
+/**
+ * 以 CSS 变量形式给出系统栏尺寸，供页面/组件 :style 注入、scoped 里 var() 取
+ * （scoped 样式拿不到 JS 值，这是约定的传值通道，见 CoNavBar / 各沉浸页）。
+ */
+export function getSystemBarVars() {
+  const bar = getSystemBar()
+  return {
+    '--sbh': bar.statusBarHeight + 'px',
+    '--navh': bar.navBarHeight + 'px',
+    '--gap': bar.capsuleGap + 'px',
+  }
+}

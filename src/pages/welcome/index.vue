@@ -6,8 +6,12 @@
  */
 import { ref } from 'vue'
 import Icon from '@/components/Icon.vue'
+import { getSystemBarVars } from '@/utils/systemBar.js'
 
 const page = ref(0) // 0=欢迎屏 1=开始屏
+
+// 顶部关闭/返回/logo 避状态栏与胶囊：动态值经 CSS 变量进 scoped
+const barVars = getSystemBarVars()
 
 // 标记「看过」（之后「全部教程」不再自动弹欢迎页，可在目录页「重看引导」再看）。
 // 只在用户「开始学习」或「关闭」这类明确动作时才记 —— 之前是在 onLoad 一进页面就记，
@@ -36,7 +40,7 @@ function start() {
 </script>
 
 <template>
-  <view class="wel">
+  <view class="wel" :style="barVars">
     <image class="wel-photo" src="/static/hero-full.png" mode="aspectFill" />
     <view class="wel-scrim"></view>
 
@@ -117,8 +121,15 @@ function start() {
 }
 .wel-close {
   position: absolute;
+  /* 小程序：与胶囊同一水平带，右端为胶囊让位 */
+  /* #ifdef MP-WEIXIN */
+  top: calc(var(--sbh, 0px) + (var(--navh, 44px) - 38px) / 2);
+  right: calc(16px + var(--gap, 0px));
+  /* #endif */
+  /* #ifndef MP-WEIXIN */
   top: calc(16px + env(safe-area-inset-top));
   right: 16px;
+  /* #endif */
   width: 38px;
   height: 38px;
   border-radius: 50%;
@@ -135,7 +146,13 @@ function start() {
 }
 .wel-top {
   position: absolute;
+  /* logo 居中行放在导航带下方 */
+  /* #ifdef MP-WEIXIN */
+  top: calc(var(--sbh, 0px) + var(--navh, 44px) + 12px);
+  /* #endif */
+  /* #ifndef MP-WEIXIN */
   top: calc(56px + env(safe-area-inset-top));
+  /* #endif */
   left: 0;
   right: 0;
   display: flex;

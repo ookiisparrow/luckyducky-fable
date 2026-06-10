@@ -25,6 +25,10 @@ import { getProduct } from '@/data/catalog.js'
 import { useCartStore } from '@/store/cart.js'
 import { useProductsStore } from '@/store/products.js'
 import { goBack } from '@/utils/nav.js'
+import { getSystemBarVars } from '@/utils/systemBar.js'
+
+// 浮层按钮避状态栏/胶囊：动态值经 CSS 变量进 scoped（scoped 拿不到 JS 值）
+const barVars = getSystemBarVars()
 
 const cart = useCartStore()
 const products = useProductsStore()
@@ -78,7 +82,7 @@ function onRecPick(p) {
 </script>
 
 <template>
-  <view class="pdp">
+  <view class="pdp" :style="barVars">
     <!-- 浮层头：返回 / 分享（盖在画廊上，含安全区） -->
     <view class="pdp-float">
       <view class="pdp-float-btn" @tap="back"><Icon name="chevron-left" :size="22" /></view>
@@ -198,9 +202,16 @@ function onRecPick(p) {
 /* ---------- 浮层头 ---------- */
 .pdp-float {
   position: absolute;
-  top: calc(14px + env(safe-area-inset-top));
   left: 12px;
+  /* 小程序：与胶囊同一水平带（按钮 36px 在导航带内垂直居中），右端为胶囊让位 */
+  /* #ifdef MP-WEIXIN */
+  top: calc(var(--sbh, 0px) + (var(--navh, 44px) - 36px) / 2);
+  right: calc(12px + var(--gap, 0px));
+  /* #endif */
+  /* #ifndef MP-WEIXIN */
+  top: calc(14px + env(safe-area-inset-top));
   right: 12px;
+  /* #endif */
   z-index: 20;
   display: flex;
   align-items: center;

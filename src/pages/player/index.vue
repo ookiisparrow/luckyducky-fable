@@ -13,6 +13,10 @@ import Icon from '@/components/Icon.vue'
 import HelpSheet from '@/components/HelpSheet.vue'
 import { goBack } from '@/utils/nav.js'
 import { ALL_LESSONS, COURSE } from '@/data/course.js'
+import { getSystemBarVars } from '@/utils/systemBar.js'
+
+// 顶部控件避状态栏/胶囊：只下移浮层，视频保持铺满到顶（避免顶部露黑块）
+const barVars = getSystemBarVars()
 
 // 占位视频（将来换真实钩织拍摄）；所有课时共用，prev/next 只换标题/进度
 const SRC = 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4'
@@ -175,7 +179,7 @@ const back = () => goBack('/pages/catalog/index')
 </script>
 
 <template>
-  <view class="vp">
+  <view class="vp" :style="barVars">
     <!-- 真实视频：非全屏铺满，自绘控件 -->
     <video
       id="lessonVideo"
@@ -297,11 +301,22 @@ const back = () => goBack('/pages/catalog/index')
   left: 0;
   right: 0;
   z-index: 5;
+  /* 只给浮层留出状态栏高度，视频容器保持铺满到顶（不整体下移，避免顶部露黑块） */
+  /* #ifdef MP-WEIXIN */
+  padding: var(--sbh, 0px) 10px 6px;
+  /* #endif */
+  /* #ifndef MP-WEIXIN */
   padding: calc(8px + env(safe-area-inset-top)) 10px 6px;
+  /* #endif */
 }
 .vp-topbar {
   display: flex;
   align-items: center;
+  /* 小程序：收起/标题/更多与胶囊同水平带居中，右端为胶囊让位 */
+  /* #ifdef MP-WEIXIN */
+  min-height: var(--navh, 44px);
+  padding-right: var(--gap, 0px);
+  /* #endif */
 }
 .vp-icbtn {
   flex: 0 0 auto;

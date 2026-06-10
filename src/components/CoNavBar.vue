@@ -7,7 +7,7 @@
  * mode='close'：左占位 + 居中标题 + 右关闭，点关闭 emit('close')
  */
 import Icon from './Icon.vue'
-import { getSystemBar } from '@/utils/systemBar.js'
+import { getSystemBarVars } from '@/utils/systemBar.js'
 
 defineProps({
   title: { type: String, default: '' },
@@ -16,12 +16,7 @@ defineProps({
 const emit = defineEmits(['back', 'close'])
 
 // 状态栏高度 + 胶囊避让，注入为 CSS 变量（scoped 样式里用 var() 取）
-const bar = getSystemBar()
-const navStyle = {
-  '--sbh': bar.statusBarHeight + 'px',
-  '--navh': bar.navBarHeight + 'px',
-  '--gap': bar.capsuleGap + 'px',
-}
+const navStyle = getSystemBarVars()
 </script>
 
 <template>
