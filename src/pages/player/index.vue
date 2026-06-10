@@ -5,13 +5,14 @@
  * 段末自动暂停→「重复播放」。控件按设计稿：顶部 收起/标题/更多，底部 上一集/求助/下一集。
  * （研究性开关 0.5×慢放/单段循环/段末暂停开关 按设计稿移除。）
  *
- * 求助面板：Phase 1 暂沿用旧面板；Phase 2 换成设计稿的完整版（客服/辅助视频/群/FAQ/反馈）。
+ * 求助面板：设计稿完整版（客服/辅助视频/群/FAQ/反馈），拆在 ./components/HelpSheet/。
  */
 import { ref, computed, onMounted, getCurrentInstance } from 'vue'
 import { onLoad } from '@dcloudio/uni-app'
 import Icon from '@/components/Icon.vue'
-import HelpSheet from '@/components/HelpSheet.vue'
+import HelpSheet from './components/HelpSheet/index.vue'
 import { goBack } from '@/utils/nav.js'
+import { mmss as fmt } from '@/utils/format.js'
 import { ALL_LESSONS, COURSE } from '@/data/course.js'
 import { getSystemBarVars } from '@/utils/systemBar.js'
 
@@ -60,10 +61,6 @@ const segFill = (i) => {
   return Math.max(0, Math.min(100, ((current.value - i * segLen.value) / segLen.value) * 100))
 }
 const pct = computed(() => (duration.value > 0 ? (current.value / duration.value) * 100 : 0))
-const fmt = (s) => {
-  s = Math.max(0, Math.round(s || 0))
-  return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`
-}
 
 onMounted(() => {
   ctx = uni.createVideoContext('lessonVideo', instance.proxy)
@@ -167,7 +164,7 @@ function more() {
   uni.showToast({ title: '更多（开发中）', icon: 'none' })
 }
 
-// —— 求助面板（已拆到 components/HelpSheet.vue）——
+// —— 求助面板（player 专属，拆在 ./components/HelpSheet/）——
 // 打开前先暂停主视频，再用 ref 调子组件的 open()
 const helpRef = ref(null)
 function openHelp() {
@@ -254,7 +251,7 @@ const back = () => goBack('/pages/catalog/index')
       </view>
     </view>
 
-    <!-- 求助面板（拆到 components/HelpSheet.vue；ep/title 传给副标题） -->
+    <!-- 求助面板（./components/HelpSheet/；ep/title 传给副标题） -->
     <HelpSheet ref="helpRef" :ep="ep" :title="title" />
   </view>
 </template>
