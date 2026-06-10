@@ -8,6 +8,7 @@ import { ref, computed, onMounted } from 'vue'
 import Icon from '@/components/Icon.vue'
 import { SAMPLE_PROGRESS } from '@/data/course.js'
 import { useCoursesStore } from '@/store/courses.js'
+import { useActivationStore } from '@/store/activation.js'
 import { goBack } from '@/utils/nav.js'
 import { getSystemBarVars } from '@/utils/systemBar.js'
 
@@ -16,9 +17,15 @@ const barVars = getSystemBarVars()
 
 // 课程内容从 store 取（小程序端云端、H5/App 回退本地）；load 前是安全空形状
 const store = useCoursesStore()
-onMounted(() => store.load())
+const act = useActivationStore()
+onMounted(() => {
+  store.load()
+  act.loadMine()
+})
 const course = computed(() => store.current)
 const lessons = computed(() => store.allLessons)
+// 课程权限（规格 §四-4）：未确认激活 → 章节锁态；H5/App 回退演示模式全解锁
+const unlocked = computed(() => act.unlocked(course.value.id))
 
 // 默认展开第 1 章
 const open = ref({ c1: true })
@@ -56,6 +63,10 @@ function openLesson(lesson) {
   uni.navigateTo({ url: `/pages/player/index?id=${lesson.id}` })
 }
 function startFirst() {
+  if (!unlocked.value) {
+    uni.showToast({ title: '课程需扫码激活后观看', icon: 'none' })
+    return
+  }
   // 从第一个未学完的课开始（没有就第一节）
   const next = lessons.value.find((l) => !prog(l).done) || lessons.value[0]
   if (next) openLesson(next)
@@ -92,8 +103,17 @@ function replayIntro() {
       </view>
     </view>
 
+    <!-- 未激活：锁态引导（规格「未激活课不可见」；章节明细不展示） -->
+    <view v-if="!unlocked" class="vc-chapters">
+      <view class="vc-lock">
+        <view class="vc-lock-ico"><Icon name="qr-code-ink" :size="28" /></view>
+        <text class="vc-lock-title">课程需扫码激活</text>
+        <text class="vc-lock-sub">视频课随材料包附赠。收到包裹后，扫描包装内的专属二维码，即可解锁全部课程。</text>
+      </view>
+    </view>
+
     <!-- 章节折叠 -->
-    <view class="vc-chapters">
+    <view v-else class="vc-chapters">
       <view
         v-for="(c, ci) in course.chapters"
         :key="c.id"
@@ -258,6 +278,33 @@ function replayIntro() {
 /* 章节 */
 .vc-chapters {
   padding: 12px 20px 0;
+}
+/* 未激活锁态卡 */
+.vc-lock {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  padding: 44px 28px;
+  background: $bg-lilac;
+  border-radius: $r-md;
+  margin-top: 8px;
+}
+.vc-lock-ico {
+  margin-bottom: 14px;
+}
+.vc-lock-title {
+  font-family: $font-display;
+  font-weight: 500;
+  font-size: 17px;
+  color: $ink;
+}
+.vc-lock-sub {
+  font-size: 13px;
+  line-height: 1.7;
+  color: $content;
+  margin-top: 8px;
+  max-width: 260px;
 }
 .vc-chapter {
   border-bottom: 1px solid $line;

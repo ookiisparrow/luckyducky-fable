@@ -14,6 +14,7 @@ import HelpSheet from './components/HelpSheet/index.vue'
 import { goBack } from '@/utils/nav.js'
 import { mmss as fmt } from '@/utils/format.js'
 import { useCoursesStore } from '@/store/courses.js'
+import { useActivationStore } from '@/store/activation.js'
 import { getSystemBarVars } from '@/utils/systemBar.js'
 
 // 顶部控件避状态栏/胶囊：只下移浮层，视频保持铺满到顶（避免顶部露黑块）
@@ -28,6 +29,7 @@ let ctx = null
 
 // 课程内容从 store 取（小程序端云端、H5/App 回退本地）；load 前是安全空形状
 const store = useCoursesStore()
+const act = useActivationStore()
 const course = computed(() => store.current)
 const lessons = computed(() => store.allLessons)
 
@@ -35,6 +37,13 @@ const lessons = computed(() => store.allLessons)
 const idx = ref(2) // 默认 l3
 onLoad(async (o) => {
   await store.load()
+  // 播放鉴权（规格 §四-4）：未确认激活 → 回目录（目录显示锁态引导）
+  await act.loadMine()
+  if (!act.unlocked(store.current.id)) {
+    uni.showToast({ title: '课程需扫码激活后观看', icon: 'none' })
+    uni.redirectTo({ url: '/pages/catalog/index' })
+    return
+  }
   if (o && o.id) {
     const i = lessons.value.findIndex((l) => l.id === o.id)
     if (i >= 0) idx.value = i

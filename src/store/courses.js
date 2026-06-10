@@ -22,8 +22,10 @@ export const useCoursesStore = defineStore('courses', {
     loading: false,
   }),
   getters: {
-    // 当前课程：暂只有一门（course-duck）；接激活权限后改为按 courseId 取（P3）
+    // 当前课程：暂只有一门（course-duck）；多课时代按激活集取
     current: (s) => s.list[0] || EMPTY_COURSE,
+    // 按 id 取课程（欢迎页按激活码渲染课程标题用；取不到返回 null）
+    getById: (s) => (id) => s.list.find((c) => c.id === id) || null,
     // 当前课程拍平课时表（带 chapter 归属）：目录进度统计 / 播放页上下集用
     allLessons() {
       return this.current.chapters.flatMap((c) => c.lessons.map((l) => ({ ...l, chapter: c.id })))

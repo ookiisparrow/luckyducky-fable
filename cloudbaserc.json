@@ -6,32 +6,62 @@
     {
       "name": "seedProducts",
       "timeout": 20,
-      "handler": "index.main"
+      "handler": "index.main",
+      "installDependency": true
     },
     {
       "name": "getProducts",
       "timeout": 10,
-      "handler": "index.main"
+      "handler": "index.main",
+      "installDependency": true
     },
     {
       "name": "seedCourses",
       "timeout": 20,
-      "handler": "index.main"
+      "handler": "index.main",
+      "installDependency": true
     },
     {
       "name": "getCourses",
       "timeout": 10,
-      "handler": "index.main"
+      "handler": "index.main",
+      "installDependency": true
     },
     {
       "name": "createOrder",
       "timeout": 10,
-      "handler": "index.main"
+      "handler": "index.main",
+      "installDependency": true
     },
     {
       "name": "getMyOrders",
       "timeout": 10,
-      "handler": "index.main"
+      "handler": "index.main",
+      "installDependency": true
+    },
+    {
+      "name": "genQrcodes",
+      "timeout": 20,
+      "handler": "index.main",
+      "installDependency": true
+    },
+    {
+      "name": "activateCourse",
+      "timeout": 10,
+      "handler": "index.main",
+      "installDependency": true
+    },
+    {
+      "name": "confirmEnter",
+      "timeout": 10,
+      "handler": "index.main",
+      "installDependency": true
+    },
+    {
+      "name": "getMyCourses",
+      "timeout": 10,
+      "handler": "index.main",
+      "installDependency": true
     }
   ]
 }
