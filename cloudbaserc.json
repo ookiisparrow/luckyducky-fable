@@ -80,6 +80,12 @@
       "timeout": 10,
       "handler": "index.main",
       "installDependency": true
+    },
+    {
+      "name": "adminApi",
+      "timeout": 30,
+      "handler": "index.main",
+      "installDependency": true
     }
   ]
 }

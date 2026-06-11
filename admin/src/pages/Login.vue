@@ -1,7 +1,7 @@
 <script setup>
 import { ref } from 'vue'
 import { useRouter } from 'vue-router'
-import { login } from '@/api/cloud.js'
+import { login, cloudMode } from '@/api/cloud.js'
 
 const router = useRouter()
 const username = ref('')
@@ -31,7 +31,13 @@ async function submit() {
     <input v-model="password" class="input" type="password" placeholder="密码" @keyup.enter="submit" />
     <p v-if="err" class="err">{{ err }}</p>
     <button class="btn primary wide" :disabled="busy" @click="submit">登 录</button>
-    <p class="note">本地演示模式：任意非空账号密码可进入；正式版接管理员账号体系</p>
+    <p class="note">
+      {{
+        cloudMode
+          ? '云端模式：密码即管理口令（至少 6 位）；首次登录设置口令，之后须凭同一口令进入'
+          : '本地演示模式：任意非空账号密码可进入；数据保存在本浏览器'
+      }}
+    </p>
   </div>
 </template>
 

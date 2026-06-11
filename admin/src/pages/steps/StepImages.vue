@@ -19,15 +19,20 @@ async function pick(e, isCover) {
   busy.value = true
   try {
     if (isCover) {
-      const url = await uploadImage(files[0])
-      await store.update(props.product.id, { cover: url })
+      const { ref: fileRef, url } = await uploadImage(files[0], props.product.id)
+      store.addUrl(fileRef, url)
+      await store.update(props.product.id, { cover: fileRef })
     } else {
-      const urls = []
-      for (const f of files) urls.push(await uploadImage(f))
-      await store.update(props.product.id, { images: [...props.product.images, ...urls] })
+      const refs = []
+      for (const f of files) {
+        const { ref: fileRef, url } = await uploadImage(f, props.product.id)
+        store.addUrl(fileRef, url)
+        refs.push(fileRef)
+      }
+      await store.update(props.product.id, { images: [...props.product.images, ...refs] })
     }
   } catch (err) {
-    alert('图片读取失败：' + err.message)
+    alert('图片上传失败：' + err.message)
   } finally {
     busy.value = false
   }
@@ -59,7 +64,7 @@ function onDrop(to) {
       <div class="group">
         <div class="g-title">封面图（1 张）</div>
         <div v-if="product.cover" class="tile cover">
-          <img :src="product.cover" alt="封面图" />
+          <img :src="store.imgUrl(product.cover)" alt="封面图" />
           <span class="badge">封面图</span>
           <button class="x" title="删除" @click="removeCover">×</button>
         </div>
@@ -83,7 +88,7 @@ function onDrop(to) {
             @dragover.prevent
             @drop="onDrop(i)"
           >
-            <img :src="img" alt="" />
+            <img :src="store.imgUrl(img)" alt="" />
             <button class="x" title="删除" @click="removeImage(i)">×</button>
           </div>
           <label class="tile up">

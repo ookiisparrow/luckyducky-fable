@@ -22,6 +22,7 @@ async function removeProduct(p) {
 
 <template>
   <div>
+    <p v-if="store.error" class="errbar">{{ store.error }}</p>
     <header class="head">
       <div>
         <h1>商品与上新</h1>
@@ -35,7 +36,7 @@ async function removeProduct(p) {
     <div class="grid">
       <div v-for="p in store.list" :key="p.id" class="card prod">
         <div class="cover" @click="open(p)">
-          <img v-if="p.cover" :src="p.cover" alt="" />
+          <img v-if="store.imgUrl(p.cover)" :src="store.imgUrl(p.cover)" alt="" />
           <span v-else class="cover-ph">尚无封面图</span>
         </div>
         <div class="body">
@@ -78,6 +79,15 @@ async function removeProduct(p) {
 </template>
 
 <style scoped>
+.errbar {
+  background: #fdf0ef;
+  border: 1px solid #f0c8c5;
+  color: var(--red);
+  border-radius: 10px;
+  padding: 10px 14px;
+  font-size: 12.5px;
+  margin: 0 0 16px;
+}
 .head {
   display: flex;
   align-items: center;
