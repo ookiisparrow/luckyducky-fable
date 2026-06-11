@@ -20,6 +20,9 @@ function newProduct() {
     tag: '',
     brief: '',
     skus: [], // [{ name, price }]
+    params: [], // 详情参数表 [[k, v]]
+    detailSections: [], // 详情段落 [{ lead, body }]（配图自动取其余图第 N 张）
+    kit: [], // 套装清单 [{ icon, name, qty }]
     courseId: '', // 配套课程（步骤④ 首次进入时生成 course-<pid>）
     videoStats: null, // { total, done } 由步骤④ 保存草稿时同步
     cardStatus: '', // 步骤⑤ 卡面状态（draft/final）

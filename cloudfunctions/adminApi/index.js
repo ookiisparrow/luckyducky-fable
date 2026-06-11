@@ -56,6 +56,15 @@ function cleanProduct(p) {
     skus: (Array.isArray(p.skus) ? p.skus : [])
       .slice(0, 30)
       .map((s) => ({ name: str(s?.name, 30), price: str(String(s?.price ?? ''), 12) })),
+    params: (Array.isArray(p.params) ? p.params : [])
+      .slice(0, 8)
+      .map((kv) => [str(kv?.[0], 10), str(kv?.[1], 40)]),
+    detailSections: (Array.isArray(p.detailSections) ? p.detailSections : [])
+      .slice(0, 4)
+      .map((d) => ({ lead: str(d?.lead, 30), body: str(d?.body, 200) })),
+    kit: (Array.isArray(p.kit) ? p.kit : [])
+      .slice(0, 8)
+      .map((k) => ({ icon: str(k?.icon, 24), name: str(k?.name, 14), qty: str(k?.qty, 14) })),
     courseId: str(p.courseId, 40),
     cardStatus: p.cardStatus === 'final' ? 'final' : p.cardStatus === 'draft' ? 'draft' : '',
     batchCount: Number(p.batchCount) || 0,
@@ -331,6 +340,9 @@ exports.main = async (event) => {
         cover: d.cover,
         images: d.images || [],
         skus: d.skus.map((x) => ({ name: x.name, price: Number(x.price) })),
+        params: d.params || [],
+        detailSections: d.detailSections || [],
+        kit: d.kit || [],
         courseId: d.courseId || '',
         featured: !!featured,
         sort,

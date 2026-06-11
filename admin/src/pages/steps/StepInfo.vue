@@ -15,7 +15,15 @@ const form = reactive({
   was: props.product.was,
   tag: props.product.tag,
   brief: props.product.brief,
+  params: JSON.parse(JSON.stringify(props.product.params || [])),
+  detailSections: JSON.parse(JSON.stringify(props.product.detailSections || [])),
+  kit: JSON.parse(JSON.stringify(props.product.kit || [])),
 })
+
+const KIT_ICONS = ['circle', 'pen-tool', 'cloud', 'eye', 'book-open', 'sparkles-purple', 'package', 'truck']
+const addParam = () => form.params.length < 8 && form.params.push(['', ''])
+const addSection = () => form.detailSections.length < 4 && form.detailSections.push({ lead: '', body: '' })
+const addKit = () => form.kit.length < 8 && form.kit.push({ icon: 'circle', name: '', qty: '' })
 // 即输即存（每步自动保存）
 watch(form, () => store.update(props.product.id, { ...form }), { deep: true })
 </script>
@@ -50,7 +58,42 @@ watch(form, () => store.update(props.product.id, { ...form }), { deep: true })
       placeholder="如：含全部材料与工具，零基础跟视频钩出第一只幸运小鸭"
     ></textarea>
 
-    <p class="hint">💡 详情页的图文介绍、规格、配套课程在后面的步骤里完成；这一步只填最基础的身份信息。</p>
+    <div class="group">
+      <div class="g-t">详情页 · 商品参数表（如 材质 / 成品尺寸 / 产地）</div>
+      <div v-for="(kv, i) in form.params" :key="i" class="rowline">
+        <input v-model="kv[0]" class="input k" maxlength="10" placeholder="参数名" />
+        <input v-model="kv[1]" class="input" maxlength="40" placeholder="参数值" />
+        <button class="del" @click="form.params.splice(i, 1)">删除</button>
+      </div>
+      <button class="addline" :disabled="form.params.length >= 8" @click="addParam">＋ 添加参数（≤8）</button>
+    </div>
+
+    <div class="group">
+      <div class="g-t">详情页 · 图文段落（每段配图自动取第 1 步「其余图」的第 N 张）</div>
+      <div v-for="(d, i) in form.detailSections" :key="i" class="secline">
+        <div class="rowline">
+          <input v-model="d.lead" class="input" maxlength="30" :placeholder="'第 ' + (i + 1) + ' 段小标题'" />
+          <button class="del" @click="form.detailSections.splice(i, 1)">删除</button>
+        </div>
+        <textarea v-model="d.body" class="input area" maxlength="200" placeholder="段落正文"></textarea>
+      </div>
+      <button class="addline" :disabled="form.detailSections.length >= 4" @click="addSection">＋ 添加段落（≤4）</button>
+    </div>
+
+    <div class="group">
+      <div class="g-t">详情页 · 套装包含清单</div>
+      <div v-for="(k, i) in form.kit" :key="i" class="rowline">
+        <select v-model="k.icon" class="input icon">
+          <option v-for="ic in KIT_ICONS" :key="ic" :value="ic">{{ ic }}</option>
+        </select>
+        <input v-model="k.name" class="input" maxlength="14" placeholder="物品名" />
+        <input v-model="k.qty" class="input k" maxlength="14" placeholder="数量（如 1 包 50g）" />
+        <button class="del" @click="form.kit.splice(i, 1)">删除</button>
+      </div>
+      <button class="addline" :disabled="form.kit.length >= 8" @click="addKit">＋ 添加物品（≤8）</button>
+    </div>
+
+    <p class="hint">💡 规格在第 3 步、配套课程在第 4 步；以上三块留空时，小程序详情页显示通用样例文案。</p>
   </div>
 </template>
 
@@ -77,6 +120,59 @@ h2 {
 }
 .field-label {
   margin-top: 2px;
+}
+.group {
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 14px 16px;
+  margin-top: 14px;
+}
+.g-t {
+  font-size: 12.5px;
+  font-weight: 700;
+  color: var(--ink);
+  margin-bottom: 10px;
+}
+.rowline {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 8px;
+  align-items: center;
+}
+.input.k {
+  max-width: 160px;
+}
+.input.icon {
+  max-width: 150px;
+}
+.secline {
+  border-bottom: 1px dashed var(--line);
+  padding-bottom: 10px;
+  margin-bottom: 10px;
+}
+.del {
+  border: none;
+  background: none;
+  color: var(--content-2);
+  font-size: 11.5px;
+  cursor: pointer;
+  flex: 0 0 auto;
+}
+.del:hover {
+  color: var(--red);
+}
+.addline {
+  border: none;
+  background: none;
+  color: var(--brand-active);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 4px 0;
+}
+.addline:disabled {
+  color: var(--line-strong);
+  cursor: not-allowed;
 }
 .hint {
   margin: 18px 0 16px;

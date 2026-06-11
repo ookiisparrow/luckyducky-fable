@@ -28,7 +28,7 @@ defineProps({
     <view v-for="(d, i) in sections" :key="i">
       <text class="pdp-detail-lead">{{ d.lead }}</text>
       <text class="pdp-detail-p">{{ d.body }}</text>
-      <view class="pdp-detail-img"><MediaSlot ratio="4/3" :radius="5" label="放入图片" /></view>
+      <view class="pdp-detail-img"><MediaSlot ratio="4/3" :radius="5" label="放入图片" :src="d.img || ''" /></view>
     </view>
   </view>
 </template>

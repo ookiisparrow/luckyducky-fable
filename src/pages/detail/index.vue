@@ -41,6 +41,10 @@ const was = ref(PD.was)
 const tag = ref(PD.tag)
 const imgs = ref([]) // 真实图（封面+其余，上架商品才有；空则灰占位）
 const skus = ref([]) // 真实规格（控制台配置；样例商品为空走原占位行为）
+// 图文详情三块：云端有则覆盖（段落配图自动取第②步其余图的第 N 张），否则共用样例
+const dparams = ref(PD.params)
+const dsections = ref(PD.detailSections)
+const dkit = ref(PD.kit)
 const selSku = ref(null) // 当前选中规格
 
 onLoad(async (q) => {
@@ -56,6 +60,11 @@ onLoad(async (q) => {
     tag.value = p.tag
     imgs.value = [p.cover, ...(p.images || [])].filter(Boolean)
     skus.value = Array.isArray(p.skus) ? p.skus.filter((s) => s && s.name) : []
+    if (Array.isArray(p.params) && p.params.length) dparams.value = p.params
+    if (Array.isArray(p.detailSections) && p.detailSections.length) {
+      dsections.value = p.detailSections.map((d, i) => ({ ...d, img: (p.images || [])[i] || '' }))
+    }
+    if (Array.isArray(p.kit) && p.kit.length) dkit.value = p.kit
     if (skus.value.length) {
       selSku.value = skus.value[0]
       price.value = Number(selSku.value.price) || p.price
@@ -199,13 +208,13 @@ function onRecPick(p) {
     <!-- 图文详情 -->
     <view class="pdp-sec">
       <view class="pdp-sec-head"><text class="pdp-sec-title">商品详情</text></view>
-      <DetailParams :params="PD.params" :sections="PD.detailSections" />
+      <DetailParams :params="dparams" :sections="dsections" />
     </view>
 
     <!-- 套装包含 -->
     <view class="pdp-sec">
       <view class="pdp-sec-head"><text class="pdp-sec-title">套装包含</text></view>
-      <DetailKit :kit="PD.kit" />
+      <DetailKit :kit="dkit" />
     </view>
 
     <!-- 为你推荐 -->
