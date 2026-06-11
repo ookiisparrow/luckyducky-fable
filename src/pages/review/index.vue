@@ -1,14 +1,21 @@
 <script setup>
 /**
  * 评价晒单页。对应原型 Checkout.jsx 的 ReviewSubmit。
- * 入口：已完成订单「评价晒单」。评分 + 标签 + 文字 + 晒图(灰占位) + 匿名。
- * 「发布评价」当前 Toast（无真实评价系统）。
+ * 入口：已完成订单「评价晒单」（真单带 ?orderId=，演示路径不带）。
+ * 评分 + 标签 + 文字 + 晒图(灰占位，v1 不上传) + 匿名。
+ * 真单「发布评价」走 submitReview 云函数（订单归属/已完成/一单一品一评，
+ * 评价进详情页评价区）；演示路径保持原 Toast。
  */
-import { ref } from 'vue'
+import { ref, computed } from 'vue'
+import { onLoad } from '@dcloudio/uni-app'
 import Icon from '@/components/Icon.vue'
 import CoNavBar from '@/components/CoNavBar.vue'
 import CoSwitch from '@/components/CoSwitch.vue'
 import MediaSlot from '@/components/MediaSlot.vue'
+import { useOrdersStore } from '@/store/orders.js'
+import { useReviewsStore } from '@/store/reviews.js'
+import { submitReview } from '@/api/review.js'
+import { CHECKOUT_ADDONS } from '@/data/checkout.js'
 import { goBack } from '@/utils/nav.js'
 import { useTimers } from '@/composables/useTimers.js'
 
@@ -16,13 +23,34 @@ const { later } = useTimers()
 
 const REV_TAGS = ['教程清晰', '很可爱', '适合新手', '包装用心', '物流快', '线材好']
 const REV_LABEL = ['', '非常不满', '不满意', '一般', '满意', '非常满意']
-const product = { name: '微笑小鸡 · 入门套装', spec: '鹅黄' }
+const SAMPLE_PRODUCT = { name: '微笑小鸡 · 入门套装', spec: '鹅黄' }
+
+const ordersStore = useOrdersStore()
+const reviewsStore = useReviewsStore()
+const orderId = ref('')
+const order = computed(() => (orderId.value ? ordersStore.getById(orderId.value) : null))
+// 评价对象：订单里第一个商品条目（跳过搭配购小件，它们不在 products/详情页体系里）
+const reviewItem = computed(() => {
+  const items = order.value?.items || []
+  return items.find((it) => !CHECKOUT_ADDONS.some((a) => a.id === it.productId)) || items[0] || null
+})
+const product = computed(() =>
+  reviewItem.value ? { name: reviewItem.value.name, spec: reviewItem.value.spec } : SAMPLE_PRODUCT,
+)
+
+onLoad(async (q) => {
+  if (q && q.orderId) {
+    orderId.value = q.orderId
+    if (!ordersStore.getById(q.orderId)) await ordersStore.load()
+  }
+})
 
 const rating = ref(5)
 const tags = ref(['很可爱', '教程清晰'])
 const text = ref('')
 const photoCount = ref(1)
 const anon = ref(false)
+const submitting = ref(false)
 
 function toggleTag(t) {
   const i = tags.value.indexOf(t)
@@ -36,9 +64,35 @@ function rmPhoto() {
   if (photoCount.value > 0) photoCount.value--
 }
 const back = () => goBack('/pages/me/index')
-function publish() {
-  uni.showToast({ title: '评价已发布 · 感谢分享~', icon: 'none' })
-  later(back, 400)
+async function publish() {
+  // 演示路径（无真单）：保持原 Toast
+  if (!order.value || !reviewItem.value) {
+    uni.showToast({ title: '评价已发布 · 感谢分享~', icon: 'none' })
+    later(back, 400)
+    return
+  }
+  if (submitting.value) return
+  submitting.value = true
+  try {
+    const res = await submitReview({
+      orderId: order.value.id,
+      productId: reviewItem.value.productId,
+      rating: rating.value,
+      tags: tags.value,
+      text: text.value,
+      anon: anon.value,
+    })
+    // res 为 null = 无云（H5/App 演示），按演示成功处理
+    if (res) reviewsStore.load(reviewItem.value.productId, true) // 详情页评价区即刻可见
+    uni.showToast({ title: '评价已发布 · 感谢分享~', icon: 'none' })
+    later(back, 400)
+  } catch (e) {
+    const msg =
+      { REVIEWED: '这笔订单已经评价过啦', NOT_DONE: '订单完成后才能评价' }[e.message] ||
+      '发布失败，请稍后再试'
+    uni.showToast({ title: msg, icon: 'none' })
+    submitting.value = false
+  }
 }
 </script>
 

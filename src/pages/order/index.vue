@@ -125,7 +125,9 @@ function onAction(a) {
   } else if (k === 'refund') {
     uni.navigateTo({ url: '/pages/aftersales/index' })
   } else if (k === 'review') {
-    uni.navigateTo({ url: '/pages/review/index' })
+    // 真单带 orderId 进评价页（真实提交链路）；样例订单走演示模式
+    const q = order.value ? `?orderId=${order.value.id}` : ''
+    uni.navigateTo({ url: `/pages/review/index${q}` })
   }
 }
 </script>

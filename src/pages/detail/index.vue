@@ -10,7 +10,7 @@
  * 图位一律走 MediaSlot 灰占位（项目约定：非 hero 全灰占位）。
  * 数据来自 src/data/productDetail.js（现为样例；以后换 api/shop.js）。
  */
-import { ref } from 'vue'
+import { ref, computed } from 'vue'
 import { onLoad } from '@dcloudio/uni-app'
 import Icon from '@/components/Icon.vue'
 import RatingSummary from '@/components/RatingSummary.vue'
@@ -24,8 +24,10 @@ import { PRODUCT_DETAIL as PD } from '@/data/productDetail.js'
 import { getProduct } from '@/data/catalog.js'
 import { useCartStore } from '@/store/cart.js'
 import { useProductsStore } from '@/store/products.js'
+import { useReviewsStore } from '@/store/reviews.js'
 import { goBack } from '@/utils/nav.js'
 import { getSystemBarVars } from '@/utils/systemBar.js'
+import { timeAgo } from '@/utils/format.js'
 
 // 浮层按钮避状态栏/胶囊：动态值经 CSS 变量进 scoped（scoped 拿不到 JS 值）
 const barVars = getSystemBarVars()
@@ -33,7 +35,7 @@ const barVars = getSystemBarVars()
 const cart = useCartStore()
 const products = useProductsStore()
 // 商品身份优先从商品 store 取（小程序端云端 / 其它端本地回退）；取不到退回 catalog 再退回 PD 样例。
-// 描述性内容（规格/评价/图文/套装）仍是共用样例。
+// 描述性内容（规格/评价/图文/套装）云端有则覆盖，否则共用样例。
 const pid = ref('prod-1')
 const title = ref(PD.title)
 const price = ref(PD.price)
@@ -47,9 +49,22 @@ const dsections = ref(PD.detailSections)
 const dkit = ref(PD.kit)
 const selSku = ref(null) // 当前选中规格
 
+// 评价：云端有真实评价则覆盖（汇总 + 前 2 条），否则共用样例（与图文三块同模式）
+const reviewsStore = useReviewsStore()
+const realReviews = computed(() => reviewsStore.forProduct(pid.value))
+const rating = computed(() => (realReviews.value ? realReviews.value.summary : PD.rating))
+const shownReviews = computed(() =>
+  realReviews.value
+    ? realReviews.value.list
+        .slice(0, 2)
+        .map((r) => ({ name: r.name, date: timeAgo(r.createdAt), n: r.rating, text: r.text, photos: 0 }))
+    : PD.reviews,
+)
+
 onLoad(async (q) => {
   const id = (q && q.id) || pid.value
   pid.value = id
+  reviewsStore.load(id) // 真实评价（有则覆盖样例），不阻塞商品加载
   // store 未就绪时 load 一次（幂等）；再按 id 取，最后退回本地 catalog 兜底。
   await products.load()
   const p = products.getById(id) || getProduct(id)
@@ -115,7 +130,7 @@ function toast(t) {
   uni.showToast({ title: t, icon: 'none' })
 }
 function goReviews() {
-  uni.navigateTo({ url: '/pages/reviews/index' })
+  uni.navigateTo({ url: `/pages/reviews/index?id=${pid.value}` })
 }
 // 点「为你推荐」里的商品 → 跳该商品详情（带 id，详情按 id 取数据）。
 // 用 navigateTo 叠加新详情页、返回键逐级退回；与首页产品卡进详情写法一致。
@@ -198,11 +213,11 @@ function onRecPick(p) {
       <view class="pdp-sec-head">
         <text class="pdp-sec-title">用户评价</text>
         <view class="pdp-sec-more" @tap="goReviews">
-          <text>全部 {{ PD.rating.count }} 条</text><Icon name="chevron-right" :size="14" />
+          <text>全部 {{ rating.count }} 条</text><Icon name="chevron-right" :size="14" />
         </view>
       </view>
-      <RatingSummary :rating="PD.rating" />
-      <ReviewItem v-for="(r, i) in PD.reviews" :key="i" :review="r" divided />
+      <RatingSummary :rating="rating" />
+      <ReviewItem v-for="(r, i) in shownReviews" :key="i" :review="r" divided />
     </view>
 
     <!-- 图文详情 -->
