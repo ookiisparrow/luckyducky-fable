@@ -1,0 +1,7 @@
+{
+  "name": "wx-server-sdk",
+  "version": "1.0.0-mock",
+  "private": true,
+  "main": "index.js",
+  "description": "测试用内存桩：通过 package.json 的 file: 依赖装进 node_modules，云函数原生 require('wx-server-sdk') 即命中此处。状态挂 globalThis，函数与测试共享同一内存库。"
+}

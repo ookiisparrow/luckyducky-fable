@@ -4,6 +4,18 @@
   "functionRoot": "cloudfunctions",
   "functions": [
     {
+      "name": "initDb",
+      "timeout": 15,
+      "handler": "index.main",
+      "installDependency": true
+    },
+    {
+      "name": "getOpenId",
+      "timeout": 10,
+      "handler": "index.main",
+      "installDependency": true
+    },
+    {
       "name": "seedProducts",
       "timeout": 20,
       "handler": "index.main",

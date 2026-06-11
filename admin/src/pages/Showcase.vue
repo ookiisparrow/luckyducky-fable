@@ -4,7 +4,7 @@
  * 左：iPhone 17 比例（393×852）手机框，渲染小程序首页关键区块（同一份云端 products 数据）；
  * 右：排序 / 上下架面板。两边同一份列表状态，拖哪边都行，松手防抖保存，小程序重开生效。
  */
-import { ref, computed, watch } from 'vue'
+import { ref, computed, watch, onBeforeUnmount } from 'vue'
 import { cloudMode, listShowcase, saveShowcase, getHomeContent, saveHomeContent } from '@/api/cloud.js'
 
 const list = ref([])
@@ -118,6 +118,18 @@ watch(
   },
   { deep: true },
 )
+// 离开页面：把还在防抖窗口内、尚未落盘的排序/上下架与首页内容立即补存（防丢编辑）。
+// 两个保存共用 saveState，pending 时两份都补发一次（保存幂等，多发无副作用）。
+onBeforeUnmount(() => {
+  clearTimeout(timer)
+  clearTimeout(homeTimer)
+  if (cloudMode && saveState.value === 'saving') {
+    const items = list.value.map((p, i) => ({ id: p.id, sort: i + 1, featured: !!p.featured }))
+    if (items.length) saveShowcase(items)
+    if (homeLoaded) saveHomeContent(JSON.parse(JSON.stringify(home.value)))
+  }
+})
+
 function addFaq() {
   if (home.value.faq.length >= 8) return
   home.value.faq.push({ title: '', body: '' })

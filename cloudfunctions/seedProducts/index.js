@@ -20,6 +20,14 @@ const PRODUCTS = [
 ]
 
 exports.main = async () => {
+  // 管理闸（与 genQrcodes 同模式）：CLI / 控制台 invoke 无 openid 放行；
+  // 小程序端任意登录用户调用须 users.isAdmin，否则拒——防客户端覆盖生产商品数据。
+  const { OPENID } = cloud.getWXContext()
+  if (OPENID) {
+    const u = await db.collection('users').where({ _openid: OPENID }).get()
+    if (!u.data.length || u.data[0].isAdmin !== true) return { ok: false, error: 'ADMIN_ONLY' }
+  }
+
   const ids = []
   for (const p of PRODUCTS) {
     await db

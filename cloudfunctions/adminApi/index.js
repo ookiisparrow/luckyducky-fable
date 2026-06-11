@@ -16,6 +16,8 @@ const CORS = {
 }
 const reply = (statusCode, data) => ({ statusCode, headers: CORS, body: JSON.stringify(data) })
 const sha = (s) => crypto.createHash('sha256').update(String(s)).digest('hex')
+// 字段截断助手（白名单清洗时统一用）：非字符串归一为空串，字符串截到 cap 长度
+const str = (v, cap) => (typeof v === 'string' ? v.slice(0, cap) : '')
 
 async function ensure(coll) {
   try {
@@ -43,7 +45,6 @@ async function checkKey(key, bootstrap) {
 // 草稿白名单字段（防杂字段入库）
 function cleanProduct(p) {
   if (!p || typeof p !== 'object' || !p.id) return null
-  const str = (v, cap) => (typeof v === 'string' ? v.slice(0, cap) : '')
   return {
     id: String(p.id).slice(0, 40),
     cover: str(p.cover, 300),
@@ -95,7 +96,6 @@ function manager() {
 // 课程草稿白名单（三层结构，与小程序 courses 同形；字段截断防杂数据）
 function cleanCourse(c) {
   if (!c || typeof c !== 'object' || !c.id) return null
-  const str = (v, cap) => (typeof v === 'string' ? v.slice(0, cap) : '')
   return {
     id: String(c.id).slice(0, 40),
     title: str(c.title, 60),
@@ -434,7 +434,6 @@ exports.main = async (event) => {
     if (action === 'saveCard') {
       const c = data.card
       if (!c || !c.productId) return reply(400, { ok: false, error: 'BAD_CARD' })
-      const str = (v, cap) => (typeof v === 'string' ? v.slice(0, cap) : '')
       const hex = (v, dft) => (/^#[0-9a-fA-F]{6}$/.test(v) ? v : dft)
       const doc = {
         productId: str(c.productId, 40),
@@ -515,7 +514,6 @@ exports.main = async (event) => {
 
     if (action === 'saveHomeContent') {
       const c = data.home || {}
-      const str = (v, cap) => (typeof v === 'string' ? v.slice(0, cap) : '')
       const doc = {
         hero: { title: str(c.hero?.title, 20), tagline: str(c.hero?.tagline, 40) },
         trust: (Array.isArray(c.trust) ? c.trust : [])

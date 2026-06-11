@@ -4,8 +4,9 @@
  * 正面 = 插画面（满版图案 + 品牌角标）；反面 = 二维码面（标题/副文案/二维码区/三步说明/品牌条）。
  * 双面并排实时预览；草稿防抖自动保存；「定稿并启用」后第 6 步才能生成批次。
  */
-import { ref, computed, watch, onBeforeUnmount } from 'vue'
+import { ref, computed } from 'vue'
 import { useProductsStore } from '@/store/products.js'
+import { useAutosave } from '@/composables/useAutosave.js'
 import { cloudMode, getCard, saveCard, uploadImage } from '@/api/cloud.js'
 
 const props = defineProps({ product: { type: Object, required: true } })
@@ -15,7 +16,6 @@ const card = ref(null)
 const artUrl = ref('')
 const loading = ref(true)
 const loadErr = ref('')
-const saveState = ref('')
 const busyArt = ref(false)
 
 const PRESETS = [
@@ -70,22 +70,12 @@ async function init() {
 }
 init()
 
-let timer = null
-watch(
-  card,
-  () => {
-    if (!card.value || loading.value) return
-    saveState.value = 'saving'
-    clearTimeout(timer)
-    timer = setTimeout(async () => {
-      const ok = await saveCard(JSON.parse(JSON.stringify(card.value)))
-      saveState.value = ok ? 'saved' : 'error'
-      await store.update(props.product.id, { cardStatus: card.value.status })
-    }, 700)
-  },
-  { deep: true },
-)
-onBeforeUnmount(() => clearTimeout(timer))
+// 防抖自动保存（含离开页面 flush）：卡面存 cards，存完同步商品的卡片状态（圆点判定）
+const { saveState } = useAutosave(card, (snap) => saveCard(snap), {
+  delay: 700,
+  ready: () => !loading.value,
+  afterSave: () => store.update(props.product.id, { cardStatus: card.value.status }),
+})
 
 const ratio = computed(() => (card.value ? card.value.sizeMM.h / card.value.sizeMM.w : 0.6))
 const prevW = computed(() => (ratio.value > 1 ? 210 : 300)) // 竖排预览：竖版卡收窄防止过高

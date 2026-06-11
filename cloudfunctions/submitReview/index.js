@@ -40,9 +40,10 @@ exports.main = async (event = {}) => {
   }
   const reviews = db.collection('reviews')
 
-  // 一单一品一评
-  const dup = await reviews.where({ _openid: OPENID, orderId, productId }).count()
-  if (dup.total > 0) return { ok: false, error: 'REVIEWED' }
+  // 一单一品一评：用确定性 _id（orderId__productId）作库级唯一约束——
+  // 并发双发时只有一条 add 成功（撞 _id 抛错即 REVIEWED），无 count 预检的竞态窗口
+  // （与 genQrcodes 的 _id=code 一码一用同思路）。
+  const _id = `${orderId}__${productId}`.slice(0, 128)
 
   // 昵称快照：users 的 nickname；匿名或无昵称给默认
   let name = '匿名钩友'
@@ -52,6 +53,7 @@ exports.main = async (event = {}) => {
   }
 
   const review = {
+    _id,
     _openid: OPENID,
     orderId,
     productId,
@@ -62,6 +64,10 @@ exports.main = async (event = {}) => {
     spec: String(item.spec || ''),
     createdAt: Date.now(),
   }
-  await reviews.add({ data: review })
+  try {
+    await reviews.add({ data: review })
+  } catch {
+    return { ok: false, error: 'REVIEWED' } // _id 已存在 = 这单这件评过了
+  }
   return { ok: true }
 }

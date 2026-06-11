@@ -5,8 +5,9 @@
  * - 名称即输即存（方便命名）；三层各自可拖拽排序；小段三态视频位（未传/上传中/已传）。
  * - 视频 ≤10MB：主路径直传云存储（秒级），凭证不可用自动回落分片通道。
  */
-import { ref, computed, watch, onBeforeUnmount } from 'vue'
+import { ref, computed } from 'vue'
 import { useProductsStore } from '@/store/products.js'
+import { useAutosave } from '@/composables/useAutosave.js'
 import { cloudMode, getCourseDraft, saveCourseDraft, publishCourse, uploadVideo } from '@/api/cloud.js'
 
 const props = defineProps({ product: { type: Object, required: true } })
@@ -15,7 +16,6 @@ const store = useProductsStore()
 const course = ref(null)
 const loading = ref(true)
 const loadErr = ref('')
-const saveState = ref('') // '' | saving | saved | error
 const publishing = ref(false)
 const publishedAt = ref(0)
 const uploads = ref({}) // segId -> 0~1 进度
@@ -62,22 +62,12 @@ const stats = computed(() => {
   return { total, done }
 })
 
-let timer = null
-watch(
-  course,
-  () => {
-    if (!course.value || loading.value) return
-    saveState.value = 'saving'
-    clearTimeout(timer)
-    timer = setTimeout(async () => {
-      const ok = await saveCourseDraft(JSON.parse(JSON.stringify(course.value)))
-      saveState.value = ok ? 'saved' : 'error'
-      await store.update(props.product.id, { videoStats: { ...stats.value } })
-    }, 800)
-  },
-  { deep: true },
-)
-onBeforeUnmount(() => clearTimeout(timer))
+// 防抖自动保存（含离开页面 flush）：草稿存 coursesDraft，存完同步商品的视频进度统计
+const { saveState } = useAutosave(course, (snap) => saveCourseDraft(snap), {
+  delay: 800,
+  ready: () => !loading.value,
+  afterSave: () => store.update(props.product.id, { videoStats: { ...stats.value } }),
+})
 
 // ---------- 结构编辑 ----------
 
