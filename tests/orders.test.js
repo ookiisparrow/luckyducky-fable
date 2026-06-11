@@ -61,6 +61,14 @@ describe('orders store', () => {
     expect(store.getById(o.id)).toBeTruthy()
   })
 
+  it('confirmReceive：shipped 单确认收货翻 done 并记 doneAt（详情/列表响应式刷新）', async () => {
+    const store = useOrdersStore()
+    store.list = [{ id: 'x9', status: 'shipped', items: [] }]
+    await store.confirmReceive('x9')
+    expect(store.getById('x9').status).toBe('done')
+    expect(store.getById('x9').doneAt).toBeGreaterThan(0)
+  })
+
   it('countByStatus：按状态计数（「我」页角标 / 列表 tab 数据源）', async () => {
     const store = useOrdersStore()
     await store.create({ items: [{ id: 'prod-1', qty: 1 }], address: {} })

@@ -537,6 +537,34 @@ exports.main = async (event) => {
       return reply(200, { ok: true })
     }
 
+    // —— 订单发货（P5 后台完善：状态流转 paid → shipped；金额/条目/地址只读不动）——
+    if (action === 'listOrders') {
+      const res = await db.collection('orders').orderBy('createdAt', 'desc').limit(200).get()
+      return reply(200, { ok: true, list: res.data })
+    }
+
+    if (action === 'shipOrder') {
+      const id = String(data.id || '')
+      const company = String(data.company || '').trim().slice(0, 30)
+      const trackingNo = String(data.trackingNo || '').trim().slice(0, 40)
+      if (!id || !company || !trackingNo) return reply(400, { ok: false, error: 'BAD_ARGS' })
+      const got = await db.collection('orders').doc(id).get().catch(() => null)
+      if (!got || !got.data) return reply(400, { ok: false, error: 'NO_ORDER' })
+      const cur = got.data.status
+      // paid = 首次发货；shipped = 改单号（错填补救）。其余状态不允许动。
+      if (cur !== 'paid' && cur !== 'shipped') {
+        return reply(400, { ok: false, error: 'BAD_STATUS:' + cur })
+      }
+      await db.collection('orders').doc(id).update({
+        data: {
+          status: 'shipped',
+          shipping: { company, trackingNo },
+          shippedAt: got.data.shippedAt || Date.now(),
+        },
+      })
+      return reply(200, { ok: true })
+    }
+
     // —— 数据看板（规格 §八 路线收官；小规模内存聚合，≤1000 条/表）——
     if (action === 'getDashboard') {
       const take = (coll, field) =>

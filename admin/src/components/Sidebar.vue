@@ -1,6 +1,6 @@
 <script setup>
 /**
- * 左侧导航（与设计稿一致）：商品与上新（列表+向导）+「按步骤直达」六入口 + 数据看板。
+ * 左侧导航（与设计稿一致）：商品与上新（列表+向导）+ 橱窗 + 订单发货 +「按步骤直达」六入口 + 数据看板。
  * 直达入口：带着「最近编辑的商品」跳对应步骤；还没有商品时回列表。
  */
 import { useRoute, useRouter } from 'vue-router'
@@ -41,6 +41,9 @@ function doLogout() {
     >
     <router-link class="nav" :class="{ on: route.path === '/showcase' }" to="/showcase"
       >📱 小程序橱窗</router-link
+    >
+    <router-link class="nav" :class="{ on: route.path === '/orders' }" to="/orders"
+      >📦 订单发货</router-link
     >
 
     <div class="caption">按步骤直达</div>

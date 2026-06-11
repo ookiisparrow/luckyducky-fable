@@ -72,6 +72,19 @@ export async function createOrder(payload) {
   return localCreateOrder(payload)
 }
 
+// 确认收货：云端流转 shipped → done（仅本人订单）。H5 / App 回退单恒为待发货、
+// 按钮不可达；小程序云端异常时本地标记完成保流程贯通（重进页面会向云端对齐）。
+export async function confirmReceive(id) {
+  try {
+    const res = await callCloud('confirmReceive', { id })
+    if (res?.ok) return { doneAt: res.doneAt }
+    throw new Error(res?.error || 'CONFIRM_FAILED')
+  } catch (e) {
+    logger.warn('order', 'confirmReceive 云端不可用，本地标记完成', e)
+    return { doneAt: Date.now() }
+  }
+}
+
 export async function getMyOrders() {
   try {
     const res = await callCloud('getMyOrders')

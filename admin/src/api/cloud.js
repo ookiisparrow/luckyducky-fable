@@ -356,6 +356,21 @@ export async function saveHomeContent(home) {
   return !!r.ok
 }
 
+// ---------- 订单发货（P5 后台完善：paid → shipped，物流公司 + 运单号） ----------
+
+export async function listOrders() {
+  if (!cloudMode) return [] // 订单只存在于云端；本地模式无单可发
+  const r = await post('listOrders')
+  if (!r.ok) throw new Error(r.error || 'LOAD_ORDERS_FAIL')
+  return r.list
+}
+
+export async function shipOrder(id, company, trackingNo) {
+  const r = await post('shipOrder', { id, company, trackingNo })
+  if (!r.ok) throw new Error(r.error || 'SHIP_FAIL')
+  return true
+}
+
 // ---------- 数据看板 ----------
 
 export async function getDashboard() {

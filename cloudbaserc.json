@@ -40,6 +40,12 @@
       "installDependency": true
     },
     {
+      "name": "confirmReceive",
+      "timeout": 10,
+      "handler": "index.main",
+      "installDependency": true
+    },
+    {
       "name": "genQrcodes",
       "timeout": 20,
       "handler": "index.main",

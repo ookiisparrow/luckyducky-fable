@@ -6,7 +6,7 @@
  * （api 层本地生成）仅存活于会话内，load 时与远端列表按 id 合并不丢失。
  */
 import { defineStore } from 'pinia'
-import { createOrder, getMyOrders } from '@/api/order.js'
+import { createOrder, getMyOrders, confirmReceive } from '@/api/order.js'
 import { logger } from '@/utils/logger.js'
 
 export const useOrdersStore = defineStore('orders', {
@@ -30,6 +30,15 @@ export const useOrdersStore = defineStore('orders', {
       const order = await createOrder(payload)
       this.list = [order, ...this.list.filter((o) => o.id !== order.id)]
       return order
+    },
+    // 确认收货（shipped → done）。成功后就地更新本笔，详情页 / 列表响应式刷新。
+    async confirmReceive(id) {
+      const { doneAt } = await confirmReceive(id)
+      const o = this.list.find((x) => x.id === id)
+      if (o) {
+        o.status = 'done'
+        o.doneAt = doneAt
+      }
     },
     // 拉取我的订单。远端列表与本地（H5 回退单）按 id 合并，本地独有的保留在前。
     async load(force = false) {

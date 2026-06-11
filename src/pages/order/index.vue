@@ -5,8 +5,9 @@
  *             banner/动作按 ORDER_STATUS 单一来源映射真实 status）；
  *           query.status → 样例配置（toship/toreceive/done，ORDER_CFG 演示路径，P4 后可删）。
  * 收货地址：真单读订单地址快照；样例读地址簿默认地址。底部动作按钮：
- *   提醒发货/查看物流 → Toast；确认收货 → 弹确认；再次购买 → 进详情；
- *   申请退款 → 售后页；评价晒单 → 评价页。
+ *   查看物流 → 真单复制运单号（shipping 快照来自控制台发货）/ 样例 Toast；
+ *   确认收货 → 真单走 confirmReceive 云函数（shipped → done）/ 样例 Toast；
+ *   提醒发货 → Toast；再次购买 → 进详情；申请退款 → 售后页；评价晒单 → 评价页。
  */
 import { ref, computed } from 'vue'
 import { onLoad } from '@dcloudio/uni-app'
@@ -30,18 +31,27 @@ const order = computed(() => (orderId.value ? ordersStore.getById(orderId.value)
 // 真实订单按 status 映射展示配置（ORDER_STATUS 单一来源；未知状态兜底按待发货）
 function cfgFromOrder(o) {
   const v = ORDER_STATUS[o.status] || ORDER_STATUS.paid
+  const info = [
+    ['订单编号', o.id],
+    o.paidAt ? ['付款时间', dateTime(o.paidAt)] : ['下单时间', dateTime(o.createdAt)],
+    ['支付方式', '微信支付（模拟）'],
+  ]
+  if (o.doneAt) info.push(['成交时间', dateTime(o.doneAt)])
   return {
     title: v.label,
     icon: v.icon,
     tint: v.tint,
     head: v.head,
     sub: v.sub,
+    // 控制台发货后订单带 shipping 快照（公司 + 运单号），物流卡显示真实信息
+    logi: o.shipping
+      ? {
+          text: `${o.shipping.company} · 运单号 ${o.shipping.trackingNo}`,
+          time: o.shippedAt ? '发货时间 ' + dateTime(o.shippedAt) : '',
+        }
+      : null,
     items: o.items.map((it) => ({ name: it.name, spec: it.spec, price: it.price, qty: it.qty })),
-    info: [
-      ['订单编号', o.id],
-      o.paidAt ? ['付款时间', dateTime(o.paidAt)] : ['下单时间', dateTime(o.createdAt)],
-      ['支付方式', '微信支付（模拟）'],
-    ],
+    info,
     actions: v.actions,
   }
 }
@@ -82,8 +92,18 @@ function onAction(a) {
     uni.showModal({
       title: '确认收货',
       content: '确认已收到商品吗？',
-      success: (r) => {
-        if (r.confirm) uni.showToast({ title: '已确认收货 · 期待你的好评~', icon: 'none' })
+      success: async (r) => {
+        if (!r.confirm) return
+        // 真单走云函数流转 shipped → done（横幅/动作随 status 响应式切换）；样例只 Toast
+        if (order.value) {
+          try {
+            await ordersStore.confirmReceive(order.value.id)
+          } catch {
+            uni.showToast({ title: '确认失败，请稍后再试', icon: 'none' })
+            return
+          }
+        }
+        uni.showToast({ title: '已确认收货 · 期待你的好评~', icon: 'none' })
       },
     })
   } else if (k === 'rebuy') {
@@ -93,7 +113,15 @@ function onAction(a) {
   } else if (k === 'pay') {
     uni.showToast({ title: '支付功能开发中（将接入微信支付）', icon: 'none' })
   } else if (k === 'logi') {
-    uni.showToast({ title: '物流详情（开发中）', icon: 'none' })
+    // 真单有物流快照：复制运单号（去快递 App / 公众号查询）；样例保持占位提示
+    if (order.value && order.value.shipping) {
+      uni.setClipboardData({
+        data: order.value.shipping.trackingNo,
+        success: () => uni.showToast({ title: '运单号已复制', icon: 'none' }),
+      })
+    } else {
+      uni.showToast({ title: '物流详情（开发中）', icon: 'none' })
+    }
   } else if (k === 'refund') {
     uni.navigateTo({ url: '/pages/aftersales/index' })
   } else if (k === 'review') {
