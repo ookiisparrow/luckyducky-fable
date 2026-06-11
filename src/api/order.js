@@ -34,7 +34,8 @@ function localCreateOrder({ items, address }) {
     }
     const p = CATALOG[l.id]
     if (!p) throw new Error('UNKNOWN_ITEM:' + l.id)
-    return { productId: p.id, name: p.name, spec: p.tag || '', price: p.price, qty: l.qty, refundable: true }
+    // 本地回退无 skus 价表：规格名透传进快照，价格用本地目录价（演示链路；云端才做规格定价）
+    return { productId: p.id, name: p.name, spec: l.sku || p.tag || '', price: p.price, qty: l.qty, refundable: true }
   })
   const goods = built.reduce((s, it) => s + it.price * it.qty, 0)
   const a = address || {}

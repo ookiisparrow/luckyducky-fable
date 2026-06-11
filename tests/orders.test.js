@@ -79,3 +79,13 @@ describe('format.dateTime', () => {
     expect(dateTime('abc')).toBe('')
   })
 })
+
+describe('SKU 链路（本地回退镜像）', () => {
+  it('带 sku 的条目：规格名进快照 spec', async () => {
+    const o = await createOrder({
+      items: [{ id: 'prod-1', qty: 1, sku: '雾霭蓝' }],
+      address: {},
+    })
+    expect(o.items[0].spec).toBe('雾霭蓝')
+  })
+})

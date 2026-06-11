@@ -40,6 +40,8 @@ const price = ref(PD.price)
 const was = ref(PD.was)
 const tag = ref(PD.tag)
 const imgs = ref([]) // 真实图（封面+其余，上架商品才有；空则灰占位）
+const skus = ref([]) // 真实规格（控制台配置；样例商品为空走原占位行为）
+const selSku = ref(null) // 当前选中规格
 
 onLoad(async (q) => {
   const id = (q && q.id) || pid.value
@@ -53,19 +55,49 @@ onLoad(async (q) => {
     was.value = p.was
     tag.value = p.tag
     imgs.value = [p.cover, ...(p.images || [])].filter(Boolean)
+    skus.value = Array.isArray(p.skus) ? p.skus.filter((s) => s && s.name) : []
+    if (skus.value.length) {
+      selSku.value = skus.value[0]
+      price.value = Number(selSku.value.price) || p.price
+    }
   } else if (q && q.name) {
     title.value = decodeURIComponent(q.name)
   }
 })
 
-// 加入购物车：真正写进 cart store（用按 id 取到的身份）
+// 选规格：有真实 SKU 时弹原生选择（跨端），更新价格与已选显示
+function chooseSpec() {
+  if (!skus.value.length) return uni.showToast({ title: '选择规格（敬请期待）', icon: 'none' })
+  uni.showActionSheet({
+    itemList: skus.value.map((s) => `${s.name} ￥${s.price}`),
+    success: (r) => {
+      selSku.value = skus.value[r.tapIndex]
+      price.value = Number(selSku.value.price) || price.value
+    },
+  })
+}
+// 加入购物车：真正写进 cart store（用按 id 取到的身份 + 所选规格）
 function addToCart() {
-  cart.add({ id: pid.value, name: title.value, tag: tag.value, price: price.value, was: was.value })
+  cart.add({
+    id: pid.value,
+    sku: selSku.value?.name || '',
+    name: title.value,
+    tag: selSku.value ? selSku.value.name : tag.value,
+    price: price.value,
+    was: was.value,
+  })
   uni.showToast({ title: '已加入购物车', icon: 'none' })
 }
 // 立即购买：单件进结算草稿，直接去结算页（不影响购物车）
 function buyNow() {
-  cart.prepareBuyNow({ id: pid.value, name: title.value, tag: tag.value, price: price.value, was: was.value })
+  cart.prepareBuyNow({
+    id: pid.value,
+    sku: selSku.value?.name || '',
+    name: title.value,
+    tag: selSku.value ? selSku.value.name : tag.value,
+    price: price.value,
+    was: was.value,
+  })
   uni.navigateTo({ url: '/pages/checkout/index' })
 }
 
@@ -115,9 +147,9 @@ function onRecPick(p) {
 
     <!-- 规格 + 服务 -->
     <view class="pdp-card pdp-rows">
-      <view class="pdp-row" @tap="toast('选择规格（敬请期待）')">
+      <view class="pdp-row" @tap="chooseSpec">
         <text class="pdp-row-key">已选</text>
-        <text class="pdp-row-val">{{ PD.spec }}</text>
+        <text class="pdp-row-val">{{ selSku ? selSku.name + ' · 1 件' : PD.spec }}</text>
         <Icon name="chevron-right" :size="18" />
       </view>
       <view class="pdp-row" @tap="toast('服务说明（敬请期待）')">

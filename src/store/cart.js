@@ -8,7 +8,8 @@
  * 以后接后端：把 add/remove/setQty 改成调用 api/shop.js 的购物车接口，
  * 字段结构尽量保持一致，购物车页模板无需改动。
  *
- * 条目结构：{ id, name, tag, price, was, qty, selected }
+ * 条目结构：{ id, sku, name, tag, price, was, qty, selected }
+ *   sku 为规格名（控制台配置的 SKU；样例商品为空串）——同 id 不同 sku 是两条独立条目。
  *   price / was 为数字（便于算合计），展示时模板再拼 ￥。
  */
 import { defineStore } from 'pinia'
@@ -28,7 +29,7 @@ export const sanitizeCart = (s) => ({
       Number.isInteger(it.qty) &&
       it.qty >= 1,
     'cart',
-  ).map((it) => ({ ...it, selected: !!it.selected })),
+  ).map((it) => ({ ...it, selected: !!it.selected, sku: typeof it.sku === 'string' ? it.sku : '' })),
 })
 
 export const useCartStore = defineStore('cart', {
@@ -53,14 +54,16 @@ export const useCartStore = defineStore('cart', {
     allSelected: (s) => s.items.length > 0 && s.items.every((it) => it.selected),
   },
   actions: {
-    // 加入购物车：已在车里则数量 +1，否则新建一条（默认选中）
+    // 加入购物车：同 id + 同规格已在车里则数量 +1，否则新建一条（默认选中）
     add(p) {
-      const ex = this.items.find((it) => it.id === p.id)
+      const sku = p.sku || ''
+      const ex = this.items.find((it) => it.id === p.id && (it.sku || '') === sku)
       if (ex) {
         ex.qty += 1
       } else {
         this.items.push({
           id: p.id,
+          sku,
           name: p.name,
           tag: p.tag || '',
           price: p.price,
@@ -70,15 +73,16 @@ export const useCartStore = defineStore('cart', {
         })
       }
     },
-    remove(id) {
-      this.items = this.items.filter((it) => it.id !== id)
+    // 以下操作按 id + sku 定位（sku 缺省空串，兼容样例商品与既有调用）
+    remove(id, sku = '') {
+      this.items = this.items.filter((it) => !(it.id === id && (it.sku || '') === sku))
     },
-    setQty(id, qty) {
-      const it = this.items.find((x) => x.id === id)
+    setQty(id, qty, sku = '') {
+      const it = this.items.find((x) => x.id === id && (x.sku || '') === sku)
       if (it) it.qty = Math.max(1, qty)
     },
-    toggle(id) {
-      const it = this.items.find((x) => x.id === id)
+    toggle(id, sku = '') {
+      const it = this.items.find((x) => x.id === id && (x.sku || '') === sku)
       if (it) it.selected = !it.selected
     },
     toggleAll() {
@@ -95,7 +99,7 @@ export const useCartStore = defineStore('cart', {
     // 详情页「立即购买」：单件直接进草稿（不动购物车）
     prepareBuyNow(p) {
       this.checkoutItems = [
-        { id: p.id, name: p.name, tag: p.tag || '', price: p.price, was: p.was, qty: 1 },
+        { id: p.id, sku: p.sku || '', name: p.name, tag: p.tag || '', price: p.price, was: p.was, qty: 1 },
       ]
       this.checkoutFromCart = false
     },
@@ -106,7 +110,7 @@ export const useCartStore = defineStore('cart', {
       if (this.checkoutFromCart) {
         const submitted = Array.isArray(lines) && lines.length ? lines : this.checkoutItems
         submitted.forEach((line) => {
-          const it = this.items.find((x) => x.id === line.id)
+          const it = this.items.find((x) => x.id === line.id && (x.sku || '') === (line.sku || ''))
           if (!it) return
           it.qty -= line.qty || 0
           if (it.qty <= 0) this.remove(it.id)

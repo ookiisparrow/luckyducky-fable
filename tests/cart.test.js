@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest'
 import { setActivePinia, createPinia } from 'pinia'
-import { useCartStore } from '@/store/cart.js'
+import { useCartStore, sanitizeCart } from '@/store/cart.js'
 
 // 不挂 persist 插件，纯测 store 逻辑
 beforeEach(() => setActivePinia(createPinia()))
@@ -41,5 +41,33 @@ describe('cart store', () => {
     cart.prepareCheckoutFromCart()
     cart.finishCheckout([{ id: 'p1', qty: 2 }])
     expect(cart.items.length).toBe(0)
+  })
+})
+
+describe('SKU 条目（同 id 不同规格 = 独立条目）', () => {
+  it('同 id 不同 sku 各成一条；同 id 同 sku 合并 +1', () => {
+    const cart = useCartStore()
+    cart.add({ id: 'p9', name: 'X', price: 198, sku: '经典暖黄' })
+    cart.add({ id: 'p9', name: 'X', price: 208, sku: '雾霭蓝' })
+    cart.add({ id: 'p9', name: 'X', price: 198, sku: '经典暖黄' })
+    expect(cart.items.length).toBe(2)
+    expect(cart.items.find((i) => i.sku === '经典暖黄').qty).toBe(2)
+  })
+
+  it('setQty / remove 按 id+sku 定位，不串台', () => {
+    const cart = useCartStore()
+    cart.add({ id: 'p9', name: 'X', price: 198, sku: 'A' })
+    cart.add({ id: 'p9', name: 'X', price: 208, sku: 'B' })
+    cart.setQty('p9', 5, 'A')
+    expect(cart.items.find((i) => i.sku === 'A').qty).toBe(5)
+    expect(cart.items.find((i) => i.sku === 'B').qty).toBe(1)
+    cart.remove('p9', 'A')
+    expect(cart.items.length).toBe(1)
+    expect(cart.items[0].sku).toBe('B')
+  })
+
+  it('回灌契约：sku 缺失归一为空串', () => {
+    const { items } = sanitizeCart({ items: [{ id: 'p1', name: 'A', price: 10, qty: 1 }] })
+    expect(items[0].sku).toBe('')
   })
 })

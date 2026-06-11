@@ -38,10 +38,10 @@ exports.main = async (event) => {
   const { OPENID } = cloud.getWXContext()
   if (!OPENID) return { ok: false, error: 'NO_OPENID' }
 
-  // 条目契约：id 非空、qty 正整数
-  const lines = (Array.isArray(event.items) ? event.items : []).filter(
-    (l) => l && l.id && Number.isInteger(l.qty) && l.qty > 0,
-  )
+  // 条目契约：id 非空、qty 正整数；sku 可选（规格名，云端按 products.skus 校验定价）
+  const lines = (Array.isArray(event.items) ? event.items : [])
+    .filter((l) => l && l.id && Number.isInteger(l.qty) && l.qty > 0)
+    .map((l) => ({ ...l, sku: typeof l.sku === 'string' ? l.sku.slice(0, 30) : '' }))
   if (!lines.length) return { ok: false, error: 'EMPTY_ITEMS' }
 
   // 云端定价：商品查 products 集合，搭配购查 ADDONS 表；未知条目整单拒绝
@@ -61,7 +61,16 @@ exports.main = async (event) => {
       items.push({ productId: l.id, name: a.name, spec: '', price: a.price, qty: l.qty, refundable: true })
     } else if (byId[l.id]) {
       const p = byId[l.id]
-      items.push({ productId: p.id, name: p.name, spec: p.tag || '', price: p.price, qty: l.qty, refundable: true })
+      // SKU 感知定价：传了规格名则必须能在云端 skus 里找到（价格以云端为准），否则拒单
+      let price = p.price
+      let spec = p.tag || ''
+      if (l.sku) {
+        const sk = (Array.isArray(p.skus) ? p.skus : []).find((x) => x && x.name === l.sku)
+        if (!sk) return { ok: false, error: 'UNKNOWN_SKU:' + l.id + ':' + l.sku }
+        price = Number(sk.price) || p.price
+        spec = l.sku
+      }
+      items.push({ productId: p.id, name: p.name, spec, price, qty: l.qty, refundable: true })
     } else {
       return { ok: false, error: 'UNKNOWN_ITEM:' + l.id }
     }

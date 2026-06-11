@@ -101,7 +101,7 @@ async function onSubmit() {
     // 真实下单：只传 id/qty + 地址快照，价格由云端按 products 现算（H5/App 回退本地生成）
     const order = await ordersStore.create({
       items: [
-        ...list.value.map((it) => ({ id: it.id, qty: it.qty })),
+        ...list.value.map((it) => ({ id: it.id, qty: it.qty, sku: it.sku || '' })),
         ...addons.value.filter((a) => a.on).map((a) => ({ id: a.id, qty: a.qty })),
       ],
       address: addr.value,
@@ -131,7 +131,7 @@ async function onSubmit() {
           <text class="co-shop-name">易织™小棉鸭® 官方旗舰店</text>
           <view class="co-shop-chev"><Icon name="chevron-right" :size="16" /></view>
         </view>
-        <OrderItem v-for="(it, i) in list" :key="it.id" :name="it.name" :spec="it.tag" :price="it.price">
+        <OrderItem v-for="(it, i) in list" :key="it.id + '|' + (it.sku || '')" :name="it.name" :spec="it.tag" :price="it.price">
           <template #foot>
             <QuantityStepper
               :n="it.qty"

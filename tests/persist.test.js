@@ -35,7 +35,7 @@ describe('persistPlugin 回灌', () => {
     )
     const store = makeStore('cart', { items: [] })
     persistPlugin({ store, options: { persist: { paths: ['items'], sanitize: sanitizeCart } } })
-    expect(store.state.items).toEqual([{ id: 'a', name: 'x', price: 1, qty: 2, selected: true }])
+    expect(store.state.items).toEqual([{ id: 'a', name: 'x', price: 1, qty: 2, selected: true, sku: '' }])
   })
 
   it('坏 JSON 不崩、退回初始 state', () => {

@@ -37,11 +37,11 @@ function dec(it) {
       content: `确定从购物车移除「${it.name}」吗？`,
       confirmText: '移除',
       success: (r) => {
-        if (r.confirm) cart.remove(it.id)
+        if (r.confirm) cart.remove(it.id, it.sku || '')
       },
     })
   } else {
-    cart.setQty(it.id, it.qty - 1)
+    cart.setQty(it.id, it.qty - 1, it.sku || '')
   }
 }
 function onCheckout() {
@@ -71,8 +71,8 @@ function onCheckout() {
 
     <!-- 有货：条目列表 -->
     <view v-else class="ld-cart-list">
-      <view v-for="it in cart.items" :key="it.id" class="ld-cart-item">
-        <view class="ld-cart-check" :class="{ on: it.selected }" @tap="cart.toggle(it.id)">
+      <view v-for="it in cart.items" :key="it.id + '|' + (it.sku || '')" class="ld-cart-item">
+        <view class="ld-cart-check" :class="{ on: it.selected }" @tap="cart.toggle(it.id, it.sku || '')">
           <Icon v-if="it.selected" name="check" :size="13" />
         </view>
         <view class="ld-cart-item-img"><MediaSlot ratio="1/1" :radius="9" /></view>
@@ -88,7 +88,7 @@ function onCheckout() {
               :n="it.qty"
               size="md"
               @dec="dec(it)"
-              @inc="cart.setQty(it.id, it.qty + 1)"
+              @inc="cart.setQty(it.id, it.qty + 1, it.sku || '')"
             />
           </view>
         </view>
