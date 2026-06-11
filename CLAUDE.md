@@ -16,6 +16,7 @@ Lucky Ducky 是钩织材料包电商 App，目标是支持微信小程序 / H5 /
 - `docs/设计规格-课程电商系统.md`：微信云开发全栈目标系统设计。
 - `docs/设计规格-管理控制台.md`：管理控制台（网页版：课程视频 + 二维码卡片）子规格。
 - `design/`：Pencil UI 设计稿（`.pen` 源文件，用 Pencil 打开；`exports/` 为导出图）。
+- `admin/`：管理控制台网页工程（独立 Vue 3 + Vite，见 `admin/README.md`；与小程序共用云开发环境）。
 - `docs/代码标准.md`：审核和自查标准。
 - `docs/技术债与重构.md`：技术债 backlog。
 - `docs/调试日志.md`：问题、根因、同类隐患记录。

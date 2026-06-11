@@ -14,7 +14,14 @@ import globals from 'globals'
 export default [
   // 不检查的目录/文件
   {
-    ignores: ['dist/**', 'node_modules/**', 'unpackage/**', 'src/uni.scss'],
+    ignores: [
+      'dist/**',
+      'node_modules/**',
+      'unpackage/**',
+      'src/uni.scss',
+      'admin/dist/**',
+      'admin/node_modules/**',
+    ],
   },
 
   // JS 推荐规则
