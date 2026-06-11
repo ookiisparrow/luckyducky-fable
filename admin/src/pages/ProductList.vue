@@ -42,8 +42,8 @@ async function removeProduct(p) {
         <div class="body">
           <div class="name-row">
             <span class="name">{{ p.name || '未命名商品' }}</span>
-            <span class="chip" :class="store.doneCount(p) >= 6 ? 'green' : 'grey'">
-              {{ store.doneCount(p) >= 6 ? '可投产' : '筹备中' }}
+            <span class="chip" :class="p.status === 'onsale' ? 'green' : 'grey'">
+              {{ p.status === 'onsale' ? '在售' : '筹备中' }}
             </span>
           </div>
           <div class="meta">

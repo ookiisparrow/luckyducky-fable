@@ -3,12 +3,14 @@
  * 上新向导（规格 §七）：单页 + 顶部六步进度条（可点跳转）+ 当前步内容 + 上一步/下一步。
  * ①产品图片 ②商品信息 ③SKU 本期可用；④教学视频 ⑤二维码卡片 ⑥码批次 为 v1.5 占位。
  */
-import { computed } from 'vue'
 import { useRouter } from 'vue-router'
+import { ref, computed } from 'vue'
 import { useProductsStore, stepDone, STEP_NAMES } from '@/store/products.js'
+import { publishProduct } from '@/api/cloud.js'
 import StepImages from '@/pages/steps/StepImages.vue'
 import StepInfo from '@/pages/steps/StepInfo.vue'
 import StepSkus from '@/pages/steps/StepSkus.vue'
+import StepVideos from '@/pages/steps/StepVideos.vue'
 import StepStub from '@/pages/steps/StepStub.vue'
 
 const props = defineProps({ id: { type: String, default: '' }, n: { type: String, default: '1' } })
@@ -18,7 +20,7 @@ store.load()
 
 const product = computed(() => store.getById(props.id))
 const step = computed(() => Math.min(6, Math.max(1, parseInt(props.n, 10) || 1)))
-const comp = computed(() => [StepImages, StepInfo, StepSkus][step.value - 1] || StepStub)
+const comp = computed(() => [StepImages, StepInfo, StepSkus, StepVideos][step.value - 1] || StepStub)
 
 function go(n) {
   if (n >= 1 && n <= 6) router.push(`/product/${props.id}/step/${n}`)
@@ -26,6 +28,28 @@ function go(n) {
 function railState(n) {
   if (n === step.value) return 'current'
   return product.value && stepDone(product.value, n) ? 'done' : 'todo'
+}
+
+// 上架小程序（设计稿 S5 顶栏）：①②③齐即可上架；④未配齐给确认提示
+const shelving = ref(false)
+const canShelve = computed(() => product.value && [1, 2, 3].every((n) => stepDone(product.value, n)))
+async function shelve() {
+  if (shelving.value || !canShelve.value) return
+  const videoMiss = !stepDone(product.value, 4)
+  const tip =
+    (videoMiss ? '配套教学视频还没配齐（第 4 步），可以先上架商品、之后再补课程。\n' : '') +
+    '上架后小程序首页与详情页立即可见。确认上架？'
+  if (!confirm(tip)) return
+  shelving.value = true
+  try {
+    await publishProduct(product.value.id)
+    await store.update(product.value.id, { status: 'onsale' })
+    alert('已上架 ✓ 打开小程序即可看到该商品')
+  } catch (e) {
+    alert(e.message)
+  } finally {
+    shelving.value = false
+  }
 }
 </script>
 
@@ -39,7 +63,11 @@ function railState(n) {
       <span class="slash">/</span>
       <h1 class="title">{{ product.name || '新建商品' }}</h1>
       <span class="chip">上新向导 · 第 {{ step }} / 6 步</span>
+      <span v-if="product.status === 'onsale'" class="chip green">在售</span>
       <span class="autosave">每步修改自动保存 ✓</span>
+      <button class="btn primary" :disabled="!canShelve || shelving" :title="canShelve ? '' : '完成前三步后可上架'" @click="shelve">
+        {{ shelving ? '上架中…' : product.status === 'onsale' ? '🏪 更新上架信息' : '🏪 上架小程序' }}
+      </button>
     </header>
 
     <div class="rail card">

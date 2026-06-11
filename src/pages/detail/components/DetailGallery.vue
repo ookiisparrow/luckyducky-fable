@@ -4,29 +4,32 @@
  * 自带「当前选中图」状态 sel —— 这是把它单独成组件的主要原因（封装局部状态）。
  * 图位仍走 MediaSlot 灰占位；缩略图数量由 count 传入。
  */
-import { ref } from 'vue'
+import { ref, computed } from 'vue'
 import MediaSlot from '@/components/MediaSlot.vue'
 
-defineProps({
+const props = defineProps({
   count: { type: Number, default: 1 },
+  // 真实图列表（控制台上架商品的 封面图+其余图，云存储 fileID）；空则全灰占位
+  imgs: { type: Array, default: () => [] },
 })
 const sel = ref(0)
+const total = computed(() => props.imgs.length || props.count)
 </script>
 
 <template>
   <view class="pdp-gallery">
     <view class="pdp-gallery-scrim"></view>
-    <MediaSlot ratio="1/1" label="放入图片" />
-    <text class="pdp-count">{{ sel + 1 }}/{{ count }}</text>
+    <MediaSlot ratio="1/1" label="放入图片" :src="imgs[sel] || ''" />
+    <text class="pdp-count">{{ sel + 1 }}/{{ total }}</text>
     <view class="pdp-thumbs">
       <view
-        v-for="i in count"
+        v-for="i in total"
         :key="i"
         class="pdp-thumb"
         :class="{ on: sel === i - 1 }"
         @tap="sel = i - 1"
       >
-        <MediaSlot ratio="1/1" :radius="5" />
+        <MediaSlot ratio="1/1" :radius="5" :src="imgs[i - 1] || ''" />
       </view>
     </view>
   </view>

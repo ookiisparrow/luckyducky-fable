@@ -20,6 +20,8 @@ function newProduct() {
     tag: '',
     brief: '',
     skus: [], // [{ name, price }]
+    courseId: '', // 配套课程（步骤④ 首次进入时生成 course-<pid>）
+    videoStats: null, // { total, done } 由步骤④ 保存草稿时同步
     status: 'preparing', // preparing 筹备中 | onsale 在售
     createdAt: Date.now(),
     updatedAt: Date.now(),
@@ -36,9 +38,11 @@ export function stepDone(p, n) {
     case 3:
       return p.skus.length > 0 && p.skus.every((s) => s.name && s.price)
     case 4:
+      // 视频编排：StepVideos 保存草稿时同步 videoStats = { total, done }
+      return !!(p.videoStats && p.videoStats.total > 0 && p.videoStats.done >= p.videoStats.total)
     case 5:
     case 6:
-      return false // ④⑤⑥ 在后续批次接入后判定
+      return false // ⑤⑥ 在 v1.5 接入后判定
     default:
       return false
   }

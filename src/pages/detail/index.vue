@@ -39,6 +39,7 @@ const title = ref(PD.title)
 const price = ref(PD.price)
 const was = ref(PD.was)
 const tag = ref(PD.tag)
+const imgs = ref([]) // 真实图（封面+其余，上架商品才有；空则灰占位）
 
 onLoad(async (q) => {
   const id = (q && q.id) || pid.value
@@ -51,6 +52,7 @@ onLoad(async (q) => {
     price.value = p.price
     was.value = p.was
     tag.value = p.tag
+    imgs.value = [p.cover, ...(p.images || [])].filter(Boolean)
   } else if (q && q.name) {
     title.value = decodeURIComponent(q.name)
   }
@@ -92,7 +94,7 @@ function onRecPick(p) {
     </view>
 
     <!-- 画廊 -->
-    <DetailGallery :count="PD.galleryCount" />
+    <DetailGallery :count="PD.galleryCount" :imgs="imgs" />
 
     <!-- 价格卡 -->
     <view class="pdp-card pdp-price">

@@ -17,7 +17,7 @@ const emit = defineEmits(['open', 'add'])
 
 <template>
   <view :id="product.id" class="ld-prod-card" :class="{ 'is-flash': flash }" @tap="emit('open')">
-    <MediaSlot ratio="1/1" label="放入产品照片" />
+    <MediaSlot ratio="1/1" label="放入产品照片" :src="product.img || ''" />
     <view class="ld-prod-body">
       <text class="ld-prod-name">{{ product.name }}</text>
       <text class="ld-prod-tag">{{ product.tag }}</text>

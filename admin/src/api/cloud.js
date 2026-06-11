@@ -176,3 +176,102 @@ export async function uploadImage(file, pid) {
   if (!r.ok) throw new Error(r.error || 'UPLOAD_FAIL')
   return { ref: r.fileID, url: r.url }
 }
+
+// ---------- 课程草稿（步骤④ 视频编排；仅云模式） ----------
+
+export async function getCourseDraft(courseId) {
+  const r = await post('getCourseDraft', { courseId })
+  if (!r.ok) throw new Error(r.error || 'LOAD_COURSE_FAIL')
+  return r.course // null = 还没有草稿
+}
+
+export async function saveCourseDraft(course) {
+  const r = await post('saveCourseDraft', { course })
+  return !!r.ok
+}
+
+export async function publishCourse(courseId) {
+  const r = await post('publishCourse', { courseId })
+  if (!r.ok) throw new Error(r.error || 'PUBLISH_FAIL')
+  return true
+}
+
+// ---------- 视频上传 ----------
+
+function putWithProgress(url, headers, body, onProgress) {
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest()
+    xhr.open('PUT', url)
+    for (const [k, v] of Object.entries(headers)) xhr.setRequestHeader(k, v)
+    if (xhr.upload) {
+      xhr.upload.onprogress = (e) => {
+        if (e.lengthComputable && onProgress) onProgress(e.loaded / e.total)
+      }
+    }
+    xhr.onload = () => (xhr.status < 300 ? resolve() : reject(new Error('直传失败 HTTP ' + xhr.status)))
+    xhr.onerror = () => reject(new Error('直传网络错误'))
+    xhr.send(body)
+  })
+}
+
+function fileToB64(file) {
+  return new Promise((resolve, reject) => {
+    const fr = new FileReader()
+    fr.onload = () => resolve(String(fr.result).split(',')[1])
+    fr.onerror = () => reject(new Error('文件读取失败'))
+    fr.readAsDataURL(file)
+  })
+}
+
+// 上传分段视频（≤10MB 约定）。主路径：云端签凭证 → 浏览器 PUT 直传云存储（秒级）；
+// 凭证不可用时自动回落分片通道（~80KB/片，10MB 约 1 分钟）。返回 { ref }（fileID）。
+export async function uploadVideo(file, courseId, segName, onProgress) {
+  if (!cloudMode) throw new Error('视频上传需云端模式（配置 VITE_ADMIN_API）')
+  if (file.size > 15 * 1024 * 1024) throw new Error('单个视频请控制在 10MB 左右（当前超过 15MB）')
+  const ext = /\.mov$/i.test(file.name) ? 'mov' : 'mp4'
+
+  const meta = await post('getVideoUploadMeta', { courseId, name: segName, ext })
+  if (meta.ok) {
+    await putWithProgress(
+      meta.url,
+      {
+        Authorization: meta.authorization,
+        'x-cos-security-token': meta.token,
+        'x-cos-meta-fileid': meta.cosFileId,
+      },
+      file,
+      onProgress,
+    )
+    return { ref: meta.fileId }
+  }
+
+  // 回落：分片 base64（与图片同通道，kind=video 落 videos/ 前缀）
+  const b64 = await fileToB64(file)
+  const uploadId = 'v' + Date.now().toString(36) + Math.random().toString(36).slice(2, 8)
+  const total = Math.ceil(b64.length / CHUNK)
+  for (let i = 0; i < total; i++) {
+    const cr = await post('uploadChunk', {
+      uploadId,
+      seq: i,
+      b64: b64.slice(i * CHUNK, (i + 1) * CHUNK),
+    })
+    if (!cr.ok) throw new Error(cr.error || `分片 ${i + 1}/${total} 上传失败`)
+    if (onProgress) onProgress((i + 1) / total)
+  }
+  const r = await post('uploadFinish', { uploadId, total, ext, pid: courseId, kind: 'video' })
+  if (!r.ok) throw new Error(r.error || 'UPLOAD_FAIL')
+  return { ref: r.fileID }
+}
+
+// 上架小程序：商品草稿发布到 products（首页/详情即刻可见）
+export async function publishProduct(id) {
+  const r = await post('publishProduct', { id })
+  if (!r.ok) {
+    const msg =
+      { NEED_COVER: '请先在第 1 步上传封面图', NEED_INFO: '请先在第 2 步填好名称和价格', NEED_SKUS: '请先在第 3 步配置规格' }[
+        r.error
+      ] || r.error || '上架失败'
+    throw new Error(msg)
+  }
+  return true
+}

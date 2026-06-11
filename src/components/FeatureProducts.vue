@@ -23,6 +23,7 @@ const list = computed(() =>
     tag: p.tag,
     was: yuan(p.was),
     now: yuan(p.price),
+    img: p.cover || '', // 控制台上架的封面图（云存储 fileID，小程序 <image> 原生支持；本地回退无图走灰占位）
   })),
 )
 </script>
