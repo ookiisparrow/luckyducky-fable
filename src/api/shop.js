@@ -5,7 +5,6 @@
  *   返回 canonical 形状 [{ id, name, tag, price, was, featured, sort }]——价为数字，展示层拼 ￥。
  *   页面不直接调这里，统一经 store/products.js 收口。
  */
-import { request } from './request'
 import { callCloud } from '@/utils/cloud.js'
 import { CATALOG, FEATURED_IDS } from '@/data/catalog.js'
 import { logger } from '@/utils/logger.js'
@@ -28,8 +27,4 @@ export async function getProducts() {
     logger.warn('shop', 'getProducts 云端失败，回退本地', e)
   }
   return localProducts()
-}
-
-export function getReviews() {
-  return request({ url: '/reviews' }) // TODO（评价上云在后续阶段）
 }

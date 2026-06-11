@@ -4,12 +4,12 @@
  * 入口：购物车「去结算」(多件) 或 详情页「立即购买」(单件)，
  * 下单清单由 cart store 的「结算草稿」(checkoutItems) 传入，本页快照到本地可改数量。
  *
- * 结构：地址 → 店铺+订单商品 → 搭配购买 → 配送/优惠/积分/备注 → 金额明细 → 固定提交坞。
+ * 结构：地址 → 店铺+订单商品 → 搭配购买 → 配送/优惠券 → 金额明细 → 固定提交坞。
  * 金额随商品数量、搭配勾选实时联动。
  *
  * 图位走 MediaSlot 灰占位；强调色用 $purple。公共 co- 样式见 styles/co.scss。
  * 收货地址来自地址簿（store/address.js）：无地址→空态引导添加。
- * 配送/优惠券/积分/备注 暂为展示 + Toast 占位。
+ * 配送/优惠券 暂为展示 + Toast 占位（积分/备注已按决策撤除，见 上线前占位清单 ⑦⑧）。
  */
 import { ref, computed } from 'vue'
 import { onLoad } from '@dcloudio/uni-app'
@@ -48,11 +48,11 @@ onLoad(() => {
 })
 const addons = ref(CHECKOUT_ADDONS.map((a) => ({ ...a, qty: 1 })))
 
+// 配送/优惠券为开发期占位（用户确认保留，上线前接真）；幸运积分（暂无会员系统）、
+// 订单备注（不做）已按决策撤除——见 docs/上线前占位清单.md ⑦⑧。
 const infoRows = [
   { key: '配送方式', val: '顺丰速运 · 包邮', cls: '' },
   { key: '优惠券', val: '-￥20.00', cls: 'accent' },
-  { key: '幸运积分', val: '可用 320 · 暂不使用', cls: 'muted' },
-  { key: '订单备注', val: '选填，给商家留言', cls: 'muted' },
 ]
 
 const goods = computed(
@@ -146,7 +146,7 @@ async function onSubmit() {
       <!-- 搭配购买（页内组件：状态在本页，组件只发事件） -->
       <CheckoutAddonList :addons="addons" @toggle="toggleAddon" @set-qty="setAddonQty" />
 
-      <!-- 配送 / 优惠券 / 积分 / 备注 -->
+      <!-- 配送 / 优惠券（开发期占位，点击 Toast；积分/备注已按决策撤除） -->
       <view class="co-card">
         <view
           v-for="(r, i) in infoRows"

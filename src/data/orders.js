@@ -6,8 +6,9 @@
  * banner 图标用带主题色的变体（package-purple/truck-purple/circle-check-duck）。
  * 金额由商品现算（COUPON/SHIP 与结算一致）。
  */
-export const COUPON = 20
-export const SHIP = 0
+// COUPON/SHIP 单一来源在 data/checkout.js（结算/下单/订单展示共用，避免两处定义漂移）；
+// 这里 re-export 让既有 `from '@/data/orders.js'` 的引用方无感。
+export { COUPON, SHIP } from './checkout.js'
 
 // 真实订单 status → 展示配置。现阶段 createOrder 模拟支付直接产 paid；
 // pending/shipped/done 由 P4 真实支付与 P5 后台流转产生，配置先备齐，

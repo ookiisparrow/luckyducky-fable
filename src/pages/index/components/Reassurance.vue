@@ -3,7 +3,7 @@
  * 「把门槛一一拆掉」区。对应原型 Sections.jsx 的 Reassurance。
  * 纯展示组件：条目由使用方传入（技术债 #4，数据将来可换云端来源）。
  */
-import Accordion from './Accordion.vue'
+import Accordion from '@/components/Accordion.vue'
 
 defineProps({ items: { type: Array, default: () => [] } })
 </script>

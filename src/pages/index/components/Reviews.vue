@@ -3,7 +3,7 @@
  * 「真实买家秀」区。对应原型 Sections.jsx 的 Reviews。
  * 纯展示组件：评价列表由使用方传入（技术债 #4，评价上云后换云端来源）。
  */
-import ReviewCard from './ReviewCard.vue'
+import ReviewCard from '@/components/ReviewCard.vue'
 
 defineProps({ reviews: { type: Array, default: () => [] } })
 const emit = defineEmits(['more'])

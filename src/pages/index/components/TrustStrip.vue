@@ -4,7 +4,7 @@
  * 对应原型 Sections.jsx 的 TrustStrip。
  * 纯展示组件：条目由使用方传入（技术债 #4，数据将来可换云端来源）。
  */
-import Icon from './Icon.vue'
+import Icon from '@/components/Icon.vue'
 
 defineProps({ items: { type: Array, default: () => [] } })
 </script>

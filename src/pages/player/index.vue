@@ -2,7 +2,7 @@
 /**
  * 视频教程 · 播放页。对照设计稿 VideoCatalog.jsx 的 VideoPlayer 重做外壳。
  * 保留真 <video>（非全屏铺满、自绘控件，保小程序同层渲染）+ 知识点分段进度 +
- * 段末自动暂停→「重复播放」。控件按设计稿：顶部 收起/标题/更多，底部 上一集/求助/下一集。
+ * 段末自动暂停→「重复播放」。控件：顶部 收起/标题（「更多」按决策撤除，占位清单 ⑫），底部 上一集/求助/下一集。
  * （研究性开关 0.5×慢放/单段循环/段末暂停开关 按设计稿移除。）
  *
  * 求助面板：设计稿完整版（客服/辅助视频/群/FAQ/反馈），拆在 ./components/HelpSheet/。
@@ -240,9 +240,6 @@ function switchLesson(n) {
 }
 const prev = () => switchLesson(-1)
 const next = () => switchLesson(1)
-function more() {
-  uni.showToast({ title: '更多（开发中）', icon: 'none' })
-}
 
 // —— 求助面板（player 专属，拆在 ./components/HelpSheet/）——
 // 打开前先暂停主视频，再用 ref 调子组件的 open()
@@ -278,7 +275,7 @@ const back = () => goBack('/pages/catalog/index')
     <view class="vp-hit" @tap="toggle"></view>
     <view class="vp-shade"></view>
 
-    <!-- 顶部：收起 + 标题(居中) + 更多 + 分段进度 -->
+    <!-- 顶部：收起 + 标题(居中) + 右等宽空位(保持标题居中) + 分段进度 -->
     <view class="vp-top">
       <view class="vp-topbar">
         <view class="vp-icbtn" @tap="back"><Icon name="chevron-down-w" :size="24" /></view>
@@ -286,7 +283,8 @@ const back = () => goBack('/pages/catalog/index')
           <text class="vp-ep">{{ ep }}</text>
           <text class="vp-title">{{ title }}</text>
         </view>
-        <view class="vp-icbtn" @tap="more"><Icon name="ellipsis-w" :size="24" /></view>
+        <!-- 「更多」按钮已按决策撤除（上线前占位清单 ⑫）；留等宽空位维持标题居中 -->
+        <view class="vp-icbtn"></view>
       </view>
       <view class="vp-seg">
         <view class="vp-seg-bars">

@@ -49,6 +49,9 @@ const dsections = ref(PD.detailSections)
 const dkit = ref(PD.kit)
 const selSku = ref(null) // 当前选中规格
 
+// 为你推荐：从样例推荐位排除当前商品自己（占位清单 ⑯：避免推荐到正在看的这款）
+const recs = computed(() => (PD.recs || []).filter((r) => r && r.id !== pid.value))
+
 // 评价：云端有真实评价则覆盖（汇总 + 前 2 条），否则共用样例（与图文三块同模式）
 const reviewsStore = useReviewsStore()
 const realReviews = computed(() => reviewsStore.forProduct(pid.value))
@@ -235,7 +238,7 @@ function onRecPick(p) {
     <!-- 为你推荐 -->
     <view class="pdp-sec pdp-sec-last">
       <view class="pdp-sec-head"><text class="pdp-sec-title">为你推荐</text></view>
-      <DetailRecs :recs="PD.recs" @pick="onRecPick" />
+      <DetailRecs :recs="recs" @pick="onRecPick" />
     </view>
 
     <!-- 固定底部购买坞（含给 fixed 坞让位的占位） -->

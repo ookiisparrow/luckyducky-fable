@@ -3,8 +3,8 @@
  * 「入门钩织的妙趣方案」+ 横滑产品。对应原型 Sections.jsx 的 Friends。
  */
 import { computed } from 'vue'
-import MediaSlot from './MediaSlot.vue'
-import ProductCard from './ProductCard.vue'
+import MediaSlot from '@/components/MediaSlot.vue'
+import ProductCard from '@/components/ProductCard.vue'
 import { useProductsStore } from '@/store/products.js'
 import { yuan } from '@/utils/format.js'
 

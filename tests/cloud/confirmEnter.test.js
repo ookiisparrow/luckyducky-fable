@@ -36,6 +36,29 @@ describe('confirmEnter 闸门', () => {
     expect(control.dump('orders')[0].items[0].refundable).toBe(false)
   })
 
+  it('退货权失效覆盖 shipped/done 订单（bug H：真实流程收货后才确认）', async () => {
+    control.seed('orders', [
+      { _id: 'o1', id: 'o1', _openid: 'user-A', status: 'shipped', createdAt: 100, items: [{ productId: 'prod-1', refundable: true }] },
+    ])
+    const res = await main({ code: 'LDCODE1' })
+    expect(res.revoked).toMatchObject({ orderId: 'o1', productId: 'prod-1' })
+    expect(control.dump('orders')[0].items[0].refundable).toBe(false)
+  })
+
+  it('重复确认不多扣（bug I：失效块限定首次进课）：二次 confirmEnter 不翻第二笔', async () => {
+    control.seed('orders', [
+      { _id: 'o1', id: 'o1', _openid: 'user-A', status: 'paid', createdAt: 100, items: [{ productId: 'prod-1', refundable: true }] },
+      { _id: 'o2', id: 'o2', _openid: 'user-A', status: 'paid', createdAt: 200, items: [{ productId: 'prod-1', refundable: true }] },
+    ])
+    const first = await main({ code: 'LDCODE1' })
+    expect(first.revoked.orderId).toBe('o1') // 最早一笔
+    const second = await main({ code: 'LDCODE1' }) // 重复确认
+    expect(second.revoked).toBeNull() // 不再翻第二笔
+    const orders = control.dump('orders')
+    expect(orders.find((o) => o._id === 'o1').items[0].refundable).toBe(false)
+    expect(orders.find((o) => o._id === 'o2').items[0].refundable).toBe(true) // o2 仍可退
+  })
+
   it('送礼场景（确认者无订单）：revoked 为 null，不报错', async () => {
     const res = await main({ code: 'LDCODE1' })
     expect(res.ok).toBe(true)
