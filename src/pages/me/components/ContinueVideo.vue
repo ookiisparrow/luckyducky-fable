@@ -3,13 +3,21 @@
  * 「我」· 继续学习的视频卡 + 续播条。从 me 页拆出（外层 my-card 与「全部教程」标题仍在父页）。
  * 视频进度等数据由 v 传入；点视频或「继续观看」发 watch 事件回父页跳播放页。
  */
+import { computed } from 'vue'
 import Icon from '@/components/Icon.vue'
 import MediaSlot from '@/components/MediaSlot.vue'
+import { parseDur } from '@/utils/format.js'
 
-defineProps({
+const props = defineProps({
   v: { type: Object, default: () => ({}) }, // { at, dur, ep, name, pct }
 })
 defineEmits(['watch'])
+
+// 还剩 X 分钟：由 at/dur 现算（原为写死文案）；不足 1 分钟按 1 算，算不出不显示
+const leftMin = computed(() => {
+  const left = parseDur(props.v.dur) - parseDur(props.v.at)
+  return left > 0 ? Math.max(1, Math.round(left / 60)) : 0
+})
 </script>
 
 <template>
@@ -25,7 +33,10 @@ defineEmits(['watch'])
     <view class="my-prog"><view class="my-prog-fill" :style="{ width: v.pct + '%' }"></view></view>
   </view>
   <view class="my-resume">
-    <text class="my-resume-text">看到 <text class="t">{{ v.at }}</text> · 还剩 4 分钟</text>
+    <text class="my-resume-text"
+      >看到 <text class="t">{{ v.at }}</text
+      ><text v-if="leftMin"> · 还剩 {{ leftMin }} 分钟</text></text
+    >
     <view class="my-resume-btn" @tap="$emit('watch')">
       <Icon name="play" :size="15" /><text>继续观看</text>
     </view>

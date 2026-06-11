@@ -3,7 +3,8 @@
  * 「我」个人中心主页。对应原型 MyProfile.jsx（学习中枢版 A）。
  * 紫色资料头 + 继续学习卡 + 我的订单 + 客服/地址 列表。
  *
- * 真实接通：「继续观看」→ 播放页续播；「全部教程」→ 首次进视频课先放欢迎引导页、之后直达目录；
+ * 真实接通：「继续学习」卡 → 云端最近观看点（progress store，无记录回退样例）；
+ *   「全部教程」→ 首次进视频课先放欢迎引导页、之后直达目录；
  *   订单九宫格 / 全部订单 → 订单列表页（真实订单，角标按 store 数量）；退款/售后仍样例（P4 接真）。
  * 占位（Toast，子流程后续做）：客服。
  *
@@ -19,24 +20,53 @@ import OrderGrid from './components/OrderGrid.vue'
 import { CONTINUE_VIDEO as V, ORDER_TABS } from '@/data/profile.js'
 import { useUserStore } from '@/store/user.js'
 import { useOrdersStore } from '@/store/orders.js'
+import { useCoursesStore } from '@/store/courses.js'
+import { useProgressStore } from '@/store/progress.js'
 import { STORAGE_KEYS } from '@/constants/storage.js'
+import { mmss } from '@/utils/format.js'
 
 const user = useUserStore()
 const orders = useOrdersStore()
+const courses = useCoursesStore()
+const progress = useProgressStore()
 
 // 角标 = 各状态真实订单数（只标可办理的三态，已完成/售后不标）
 const BADGE_STATUS = { pending: 'pending', toship: 'paid', toreceive: 'shipped' }
 const orderTabs = computed(() =>
   ORDER_TABS.map((t) => ({ ...t, badge: orders.countByStatus[BADGE_STATUS[t.key]] || 0 })),
 )
-onShow(() => orders.load())
+onShow(() => {
+  orders.load()
+  courses.load()
+  progress.load(true) // 强刷：刚看完一段回到「我」页，继续学习卡立即更新
+})
+
+// 继续学习卡：云端最近观看点定位课时与章节；无云 / 无记录回退样例 V
+const cont = computed(() => {
+  const lw = progress.lastWatch
+  if (!lw) return V
+  const ls = courses.allLessons
+  const i = ls.findIndex((l) => l.id === lw.lessonId)
+  if (i < 0) return V
+  const l = ls[i]
+  const ch = courses.current.chapters.find((c) => c.id === l.chapter)
+  const durSec = lw.dur > 0 ? lw.dur : 0
+  return {
+    ep: `${ch ? ch.title : ''} · 第 ${i + 1} 集`,
+    name: l.name,
+    at: mmss(lw.at),
+    dur: durSec > 0 ? mmss(durSec) : l.dur,
+    pct: durSec > 0 ? Math.min(100, Math.round((lw.at / durSec) * 100)) : 0,
+    lessonId: l.id,
+  }
+})
 
 function toast(t) {
   uni.showToast({ title: t, icon: 'none' })
 }
 function continueWatch() {
-  // 续播课程表里进行中的那节（l3 · 看懂图解里的符号）
-  uni.navigateTo({ url: '/pages/player/index?id=l3' })
+  // 续播云端最近观看的那节；无记录回退样例对应的 l3
+  uni.navigateTo({ url: `/pages/player/index?id=${cont.value.lessonId || 'l3'}` })
 }
 function allCourses() {
   // 首次进视频课先看欢迎引导，之后直达目录
@@ -76,7 +106,7 @@ function goEditProfile() {
           </view>
         </view>
 
-        <ContinueVideo :v="V" @watch="continueWatch" />
+        <ContinueVideo :v="cont" @watch="continueWatch" />
       </view>
 
       <!-- 我的订单 -->

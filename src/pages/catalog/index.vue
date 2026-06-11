@@ -4,11 +4,12 @@
  * 灰色封面 + 课程标题 + 开始学习 + 章节折叠 + 课时状态；点课时进播放页。
  * 封面/缩略按项目约定用灰占位，真实媒体以后注入。
  */
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed } from 'vue'
+import { onShow } from '@dcloudio/uni-app'
 import Icon from '@/components/Icon.vue'
-import { SAMPLE_PROGRESS } from '@/data/course.js'
 import { useCoursesStore } from '@/store/courses.js'
 import { useActivationStore } from '@/store/activation.js'
+import { useProgressStore } from '@/store/progress.js'
 import { goBack } from '@/utils/nav.js'
 import { getSystemBarVars } from '@/utils/systemBar.js'
 
@@ -18,9 +19,12 @@ const barVars = getSystemBarVars()
 // 课程内容从 store 取（小程序端云端、H5/App 回退本地）；load 前是安全空形状
 const store = useCoursesStore()
 const act = useActivationStore()
-onMounted(() => {
+const progress = useProgressStore()
+// onShow 而非 onMounted：从播放页返回时强刷进度，刚看完的段立即点亮
+onShow(() => {
   store.load()
   act.loadMine()
+  progress.load(true)
 })
 const course = computed(() => store.current)
 const lessons = computed(() => store.allLessons)
@@ -33,8 +37,8 @@ function toggleChapter(id) {
   open.value = { ...open.value, [id]: !open.value[id] }
 }
 
-// 学习进度是用户态，与课程内容分离（现为样例，将来云端按 segment 粒度记忆）
-const prog = (l) => SAMPLE_PROGRESS[l.id] || {}
+// 学习进度是用户态，与课程内容分离（小程序端云端 segment 粒度，H5/App 回退样例）
+const prog = (l) => progress.ofLesson(course.value.id, l)
 // 试看标记落在 segment 级（规格 v2），目录按「任一段可试看」显示
 const lessonFree = (l) => (l.segments || []).some((s) => s.free)
 

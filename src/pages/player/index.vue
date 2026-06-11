@@ -8,7 +8,7 @@
  * 求助面板：设计稿完整版（客服/辅助视频/群/FAQ/反馈），拆在 ./components/HelpSheet/。
  */
 import { ref, computed, onMounted, getCurrentInstance } from 'vue'
-import { onLoad } from '@dcloudio/uni-app'
+import { onLoad, onHide, onUnload } from '@dcloudio/uni-app'
 import Icon from '@/components/Icon.vue'
 import HelpSheet from './components/HelpSheet/index.vue'
 import { goBack } from '@/utils/nav.js'
@@ -16,6 +16,7 @@ import { mmss as fmt } from '@/utils/format.js'
 import { useCoursesStore } from '@/store/courses.js'
 import { useActivationStore } from '@/store/activation.js'
 import { getSystemBarVars } from '@/utils/systemBar.js'
+import { track } from '@/utils/track.js'
 
 // 顶部控件避状态栏/胶囊：只下移浮层，视频保持铺满到顶（避免顶部露黑块）
 const barVars = getSystemBarVars()
@@ -93,12 +94,14 @@ function onTimeupdate(e) {
   if (d.duration) duration.value = d.duration
   const t = d.currentTime || 0
   // 段末自动暂停（始终开，照顾钩织时双手被占）→ 弹「重复播放」
-  if (playing.value && segLen.value > 0 && !seeking) {
+  // endedSeg === null 守卫：pause 生效前 timeupdate 可能再触发，防重复进入（埋点防重报）
+  if (playing.value && segLen.value > 0 && !seeking && endedSeg.value === null) {
     const end = (playingSeg + 1) * segLen.value
     if (t >= end - 0.2 && playingSeg < segCount.value - 1) {
       ctx && ctx.pause()
       current.value = end
       endedSeg.value = playingSeg
+      reportSegDone(playingSeg)
       return
     }
   }
@@ -113,7 +116,28 @@ function onPause() {
 }
 function onEnded() {
   playing.value = false
+  reportSegDone(segCount.value - 1) // 整条视频播完 = 最后一段看完
 }
+
+// —— 进度上报（一次埋点两用：events 流水 + 云端进度折叠，见 utils/track.js）——
+const segIdOf = (i) => (segs.value[i] || {}).id || ''
+const progressMeta = () => ({
+  courseId: course.value.id || '',
+  lessonId: lesson.value.id || '',
+  at: Math.round(current.value),
+  dur: Math.round(duration.value),
+})
+function reportSegDone(i) {
+  if (!lesson.value.id) return
+  track('segment_done', { page: 'player', targetId: segIdOf(i), meta: progressMeta() })
+}
+// 离开播放页（切后台 / 返回）→ 记「最后看到」位置，喂「我」页继续学习卡
+function reportWatchPoint() {
+  if (!lesson.value.id || current.value <= 0) return
+  track('watch_at', { page: 'player', targetId: segIdOf(curSeg.value), meta: progressMeta() })
+}
+onHide(reportWatchPoint)
+onUnload(reportWatchPoint)
 
 // 点画面 / 大播放键：暂停↔播放；段末→继续进入下一段
 function toggle() {
