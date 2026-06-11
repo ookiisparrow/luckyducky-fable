@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Lucky Ducky · 课程激活</title>
+  <style>
+    /* 扫码落地页（印刷二维码指向 /q/?code=<激活码>）。
+       自有域名 + 微信扫码规则配好后，微信扫码不再经过本页（直接进小程序）；
+       本页服务于：① 默认域名测试期 ② 非微信扫码（普通相机/浏览器）的引导。 */
+    * { box-sizing: border-box; margin: 0; }
+    body {
+      font-family: 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', sans-serif;
+      background: #fcfaff; color: #3d3d42; min-height: 100vh;
+      display: flex; align-items: center; justify-content: center; padding: 24px;
+    }
+    .card {
+      background: #fff; border: 1px solid #e7e7e7; border-radius: 20px;
+      max-width: 360px; width: 100%; padding: 32px 28px; text-align: center;
+      box-shadow: 0 14px 34px rgba(36, 23, 51, 0.10);
+    }
+    .duck { width: 56px; height: 56px; border-radius: 16px; background: #a371ea;
+      display: inline-flex; align-items: center; justify-content: center; font-size: 30px; }
+    h1 { font-size: 19px; color: #222; margin: 14px 0 6px; }
+    .sub { font-size: 13px; color: #6e6e76; line-height: 1.7; }
+    .code-box { margin: 22px 0 8px; padding: 14px; background: #fcfaff;
+      border: 1px dashed #c9bbe0; border-radius: 12px; }
+    .code-label { font-size: 11px; color: #7e6e96; letter-spacing: 1px; }
+    .code { font-size: 22px; font-weight: 700; color: #241733; letter-spacing: 2px; margin-top: 4px; word-break: break-all; }
+    .copy { margin-top: 10px; display: inline-block; padding: 10px 22px; border-radius: 999px;
+      background: #241733; color: #fff; font-size: 13px; font-weight: 600; border: none; cursor: pointer; }
+    .steps { text-align: left; margin-top: 22px; font-size: 13px; color: #3d3d42; line-height: 2; }
+    .steps b { color: #865dc0; }
+    .tip { margin-top: 18px; font-size: 11px; color: #9a9aa2; line-height: 1.7; }
+    .copied { color: #4a9e6b; font-size: 12px; margin-top: 8px; display: none; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="duck">🦆</div>
+    <h1>恭喜你解锁钩织课程</h1>
+    <p class="sub">这是你的专属课程激活码</p>
+    <div class="code-box">
+      <div class="code-label">激活码</div>
+      <div class="code" id="code">——</div>
+    </div>
+    <button class="copy" onclick="copyCode()">复制激活码</button>
+    <p class="copied" id="copied">已复制 ✓</p>
+    <div class="steps">
+      <div><b>1</b>　打开微信，搜索小程序「幸运小鸭」</div>
+      <div><b>2</b>　进入后扫码 / 使用激活码激活课程</div>
+      <div><b>3</b>　确认开始观看，跟着视频钩出小鸭</div>
+    </div>
+    <p class="tip">提示：激活课程后，该商品将不再支持退货。<br />用微信「扫一扫」扫包装内二维码可直达激活页。</p>
+  </div>
+  <script>
+    var code = new URLSearchParams(location.search).get('code') || (location.pathname.match(/\/q\/([A-Za-z0-9]+)/) || [])[1] || ''
+    document.getElementById('code').textContent = code || '未识别到激活码'
+    function copyCode() {
+      if (!code) return
+      navigator.clipboard ? navigator.clipboard.writeText(code).then(done) : fallback()
+      function fallback() {
+        var ta = document.createElement('textarea'); ta.value = code; document.body.appendChild(ta)
+        ta.select(); document.execCommand('copy'); document.body.removeChild(ta); done()
+      }
+      function done() { document.getElementById('copied').style.display = 'block' }
+    }
+  </script>
+</body>
+</html>

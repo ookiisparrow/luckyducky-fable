@@ -6,6 +6,7 @@
  */
 import { ref, computed } from 'vue'
 import JSZip from 'jszip'
+import QRCode from 'qrcode'
 import { useProductsStore } from '@/store/products.js'
 import {
   cloudMode,
@@ -31,6 +32,21 @@ const loadErr = ref('')
 const busy = ref('')
 
 const courseId = computed(() => props.product.courseId || 'course-' + props.product.id)
+// 测试二维码弹层（手机微信扫屏幕即可走通：扫码 → 落地页显示激活码与指引）
+const qrShow = ref(false)
+const qrImg = ref('')
+const qrUrl = ref('')
+async function showTestQr(batchId) {
+  try {
+    const codes = await listBatchCodes(batchId)
+    if (!codes.length) return alert('该批次没有码')
+    qrUrl.value = `${urlPrefix.value}?code=${codes[0]}`
+    qrImg.value = await QRCode.toDataURL(qrUrl.value, { width: 360, margin: 2, color: { dark: '#241733' } })
+    qrShow.value = true
+  } catch (e) {
+    alert('生成测试二维码失败：' + e.message)
+  }
+}
 const cardFinal = computed(() => card.value?.status === 'final')
 const prefixOk = computed(() => /^https:\/\/.+\/$/.test(urlPrefix.value))
 
@@ -44,7 +60,8 @@ async function init() {
     card.value = c.card
     artUrl.value = c.artUrl
     batches.value = b
-    urlPrefix.value = s.urlPrefix || 'https://你的域名/q/'
+    // 默认用静态托管域名（测试期即可扫码验证落地页）；正式印刷前换自有域名（决策 §13）
+    urlPrefix.value = s.urlPrefix || 'https://cloudbase-d4gcssqbv06865479-1440904924.tcloudbaseapp.com/q/'
     await store.update(props.product.id, { batchCount: b.length })
   } catch (e) {
     loadErr.value = '加载失败：' + e.message
@@ -79,7 +96,7 @@ async function downloadPack(batchId, codes) {
   try {
     if (!codes) codes = await listBatchCodes(batchId)
     const art = await artDataUrl()
-    const csv = '激活码,网址\n' + codes.map((c) => `${c},${urlPrefix.value}${c}`).join('\n')
+    const csv = '激活码,网址\n' + codes.map((c) => `${c},${urlPrefix.value}?code=${c}`).join('\n')
     const zip = new JSZip()
     zip.file('卡面-正面-插画.svg', buildFrontSvg(card.value, art))
     zip.file('卡面-反面-二维码.svg', buildBackSvg(card.value))
@@ -135,7 +152,7 @@ async function generate() {
         <div class="sec-t">二维码网址前缀（印刷的码指向哪里）</div>
         <div class="prefixrow">
           <input v-model="urlPrefix" class="input" placeholder="https://你的域名/q/" @blur="persistPrefix" />
-          <span class="prefixdemo">示例：{{ urlPrefix }}LD2M67QXDDR6</span>
+          <span class="prefixdemo">示例：{{ urlPrefix }}?code=LD2M67QXDDR6</span>
         </div>
         <p class="mini">需先在微信后台配好「扫普通链接二维码打开小程序」规则（决策 §13）；前缀保存后全局通用。</p>
       </div>
@@ -147,6 +164,7 @@ async function generate() {
           <span class="bicon">▦</span>
           <b>{{ b.batchId }}</b>
           <span class="bmeta">{{ b.total }} 码 · 已激活 {{ b.activated }}</span>
+          <button class="btn ghost sm" @click="showTestQr(b.batchId)">📱 测试二维码</button>
           <button class="btn ghost sm" :disabled="busy === b.batchId || !cardFinal" @click="downloadPack(b.batchId)">
             {{ busy === b.batchId ? '打包中…' : '⬇ 下载印刷包' }}
           </button>
@@ -162,6 +180,15 @@ async function generate() {
           </button>
         </div>
         <p class="mini">印刷包.zip ＝ 正面.svg（插画面）＋ 反面.svg（二维码面）＋ 二维码地址.csv（一行一码）＋ 给印刷厂的说明.txt</p>
+      </div>
+      <div v-if="qrShow" class="qrmask" @click="qrShow = false">
+        <div class="qrbox" @click.stop>
+          <h4>测试二维码（该批次第 1 个码）</h4>
+          <img :src="qrImg" alt="测试二维码" />
+          <p class="qrurl">{{ qrUrl }}</p>
+          <p class="qrnote">用手机微信「扫一扫」扫屏幕：会打开落地页并显示激活码（默认域名测试模式）。自有域名 + 微信规则配好后，同样的码会直接跳进小程序激活页。</p>
+          <button class="btn primary" @click="qrShow = false">关闭</button>
+        </div>
       </div>
     </template>
   </div>
@@ -275,5 +302,47 @@ h2 {
   border-color: #f0c8c5;
   background: #fdf0ef;
   color: var(--red);
+}
+.qrmask {
+  position: fixed;
+  inset: 0;
+  background: rgba(36, 23, 51, 0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 50;
+}
+.qrbox {
+  background: var(--white);
+  border-radius: 16px;
+  padding: 24px 28px;
+  text-align: center;
+  max-width: 420px;
+}
+.qrbox h4 {
+  margin: 0 0 12px;
+  font-size: 14px;
+  color: var(--ink);
+}
+.qrbox img {
+  width: 240px;
+  height: 240px;
+}
+.qrurl {
+  font-size: 11px;
+  color: var(--content-2);
+  word-break: break-all;
+  margin: 8px 0;
+}
+.qrnote {
+  font-size: 11.5px;
+  color: var(--content);
+  background: var(--bg-lilac);
+  border: 1px solid var(--purple-line);
+  border-radius: 10px;
+  padding: 8px 12px;
+  margin: 0 0 14px;
+  text-align: left;
+  line-height: 1.7;
 }
 </style>
