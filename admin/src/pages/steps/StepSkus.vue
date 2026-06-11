@@ -25,7 +25,7 @@ function removeSku(i) {
 <template>
   <div>
     <h2>第 3 步 · 商品 SKU</h2>
-    <p class="desc">填写这款商品的规格与价格，与小程序详情页的规格选择一一对应</p>
+    <p class="desc"><span class="req" style="font-weight:700;color:var(--ink)">至少 1 个规格（名称＋价格）</span><span class="opt">上架必填</span>·与小程序详情页的规格选择一一对应</p>
 
     <div class="table">
       <div class="thead">

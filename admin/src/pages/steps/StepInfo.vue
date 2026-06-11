@@ -33,25 +33,25 @@ watch(form, () => store.update(props.product.id, { ...form }), { deep: true })
     <h2>第 2 步 · 商品信息</h2>
     <p class="desc">款式已由第 1 步的图片定下，这一步给它名字和价格；与小程序商品页同步显示</p>
 
-    <label class="field-label">商品名称</label>
+    <label class="field-label req">商品名称<span class="opt">上架必填</span></label>
     <input v-model="form.name" class="input" placeholder="如：幸运小鸭礼盒 · 零基础钩织套装" />
 
     <div class="row3">
       <div>
-        <label class="field-label">现价（￥）</label>
+        <label class="field-label req">现价（￥）</label>
         <input v-model="form.price" class="input" type="number" min="0" placeholder="198" />
       </div>
       <div>
-        <label class="field-label">划线价（￥，可空）</label>
+        <label class="field-label">划线价（￥）<span class="opt">选填</span></label>
         <input v-model="form.was" class="input" type="number" min="0" placeholder="258" />
       </div>
       <div>
-        <label class="field-label">角标标签（可空）</label>
+        <label class="field-label">角标标签<span class="opt">选填</span></label>
         <input v-model="form.tag" class="input" placeholder="如：送礼首选" />
       </div>
     </div>
 
-    <label class="field-label">一句话简介</label>
+    <label class="field-label">一句话简介<span class="opt">选填</span></label>
     <textarea
       v-model="form.brief"
       class="input area"

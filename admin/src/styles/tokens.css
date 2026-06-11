@@ -116,3 +116,15 @@ button {
   border-color: var(--line-strong);
   color: var(--content-2);
 }
+/* 上架必填标注 */
+.req::after {
+  content: ' *';
+  color: var(--red);
+  font-weight: 700;
+}
+.opt {
+  color: var(--content-2);
+  font-weight: 400;
+  font-size: 0.9em;
+  margin-left: 8px;
+}

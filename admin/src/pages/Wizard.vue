@@ -37,6 +37,17 @@ function railState(n) {
 // 上架小程序（设计稿 S5 顶栏）：①②③齐即可上架；④未配齐给确认提示
 const shelving = ref(false)
 const canShelve = computed(() => product.value && [1, 2, 3].every((n) => stepDone(product.value, n)))
+// 上架硬性门槛清单（与 publishProduct 云端校验一致），缺啥提示啥
+const missing = computed(() => {
+  const p = product.value
+  if (!p) return []
+  const m = []
+  if (!p.cover) m.push('封面图(第1步)')
+  if (!p.name) m.push('商品名称(第2步)')
+  if (!p.price) m.push('现价(第2步)')
+  if (!(p.skus.length && p.skus.every((s) => s.name && s.price))) m.push('至少1个规格(第3步)')
+  return m
+})
 async function shelve() {
   if (shelving.value || !canShelve.value) return
   const videoMiss = !stepDone(product.value, 4)
@@ -69,6 +80,7 @@ async function shelve() {
       <span class="chip">上新向导 · 第 {{ step }} / 6 步</span>
       <span v-if="product.status === 'onsale'" class="chip green">在售</span>
       <span class="autosave">每步修改自动保存 ✓</span>
+      <span v-if="missing.length" class="missing">上架还差：{{ missing.join('、') }}</span>
       <button class="btn primary" :disabled="!canShelve || shelving" :title="canShelve ? '' : '完成前三步后可上架'" @click="shelve">
         {{ shelving ? '上架中…' : product.status === 'onsale' ? '🏪 更新上架信息' : '🏪 上架小程序' }}
       </button>
@@ -132,6 +144,14 @@ async function shelve() {
   margin-left: auto;
   font-size: 12px;
   color: var(--content-2);
+}
+.missing {
+  font-size: 11.5px;
+  color: var(--red);
+  background: #fdf0ef;
+  border: 1px solid #f0c8c5;
+  border-radius: 99px;
+  padding: 5px 12px;
 }
 .rail {
   display: flex;

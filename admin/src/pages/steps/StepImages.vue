@@ -62,7 +62,7 @@ function onDrop(to) {
 
     <div class="groups">
       <div class="group">
-        <div class="g-title">封面图（1 张）</div>
+        <div class="g-title req">封面图（1 张）<span class="opt">上架必填</span></div>
         <div v-if="product.cover" class="tile cover">
           <img :src="store.imgUrl(product.cover)" alt="封面图" />
           <span class="badge">封面图</span>
@@ -77,7 +77,7 @@ function onDrop(to) {
       </div>
 
       <div class="group grow">
-        <div class="g-title">其余图（细节 / 场景，可拖动排序）</div>
+        <div class="g-title">其余图（细节 / 场景，可拖动排序）<span class="opt">选填</span></div>
         <div class="row">
           <div
             v-for="(img, i) in product.images"
