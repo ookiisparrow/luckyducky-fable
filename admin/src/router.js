@@ -3,6 +3,7 @@ import { isLoggedIn } from '@/api/cloud.js'
 import Login from '@/pages/Login.vue'
 import ProductList from '@/pages/ProductList.vue'
 import Wizard from '@/pages/Wizard.vue'
+import Showcase from '@/pages/Showcase.vue'
 
 export const router = createRouter({
   history: createWebHashHistory(),
@@ -10,6 +11,7 @@ export const router = createRouter({
     { path: '/login', component: Login },
     { path: '/', redirect: '/products' },
     { path: '/products', component: ProductList },
+    { path: '/showcase', component: Showcase },
     // 上新向导：/product/<id>/step/<1-6>；左侧「按步骤直达」也跳这里
     { path: '/product/:id/step/:n', component: Wizard, props: true },
   ],

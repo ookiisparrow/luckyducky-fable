@@ -344,6 +344,33 @@ exports.main = async (event) => {
       return reply(200, { ok: true })
     }
 
+    // —— 小程序橱窗（规格 §八）：一比一首页预览的排序与上下架 ——
+    if (action === 'listShowcase') {
+      const res = await db.collection('products').orderBy('sort', 'asc').limit(100).get()
+      const ids = res.data.map((p) => p.cover).filter((u) => u && u.startsWith('cloud://'))
+      const urls = {}
+      if (ids.length) {
+        const r = await cloud.getTempFileURL({ fileList: [...new Set(ids)] })
+        for (const f of r.fileList) if (f.tempFileURL) urls[f.fileID] = f.tempFileURL
+      }
+      return reply(200, { ok: true, list: res.data, urls })
+    }
+
+    if (action === 'saveShowcase') {
+      const items = Array.isArray(data.items) ? data.items.slice(0, 100) : []
+      if (!items.length) return reply(400, { ok: false, error: 'NO_ITEMS' })
+      const productsColl = db.collection('products')
+      for (const it of items) {
+        const id = String(it?.id || '')
+        if (!id) continue
+        await productsColl
+          .doc(id)
+          .update({ data: { sort: Number(it.sort) || 0, featured: !!it.featured } })
+          .catch(() => {})
+      }
+      return reply(200, { ok: true })
+    }
+
     return reply(400, { ok: false, error: 'UNKNOWN_ACTION' })
   } catch (e) {
     console.error('adminApi error', action, e)

@@ -275,3 +275,16 @@ export async function publishProduct(id) {
   }
   return true
 }
+
+// ---------- 小程序橱窗（规格 §八：排序 + 上下架） ----------
+
+export async function listShowcase() {
+  const r = await post('listShowcase')
+  if (!r.ok) throw new Error(r.error || 'LOAD_SHOWCASE_FAIL')
+  return { list: r.list, urls: r.urls || {} }
+}
+
+export async function saveShowcase(items) {
+  const r = await post('saveShowcase', { items })
+  return !!r.ok
+}

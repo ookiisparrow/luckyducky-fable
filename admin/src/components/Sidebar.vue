@@ -39,6 +39,9 @@ function doLogout() {
     <router-link class="nav" :class="{ on: route.path === '/products' }" to="/products"
       >🏪 商品与上新</router-link
     >
+    <router-link class="nav" :class="{ on: route.path === '/showcase' }" to="/showcase"
+      >📱 小程序橱窗</router-link
+    >
 
     <div class="caption">按步骤直达</div>
     <button v-for="(name, i) in STEP_NAMES" :key="i" class="nav step" :class="{ on: stepActive(i + 1) }" @click="goStep(i + 1)">
