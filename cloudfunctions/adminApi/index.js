@@ -537,6 +537,68 @@ exports.main = async (event) => {
       return reply(200, { ok: true })
     }
 
+    // —— 数据看板（规格 §八 路线收官；小规模内存聚合，≤1000 条/表）——
+    if (action === 'getDashboard') {
+      const take = (coll, field) =>
+        db.collection(coll).field(field).limit(1000).get().then((r) => r.data).catch(() => [])
+      const [users, orders, codes, progress, courses] = await Promise.all([
+        take('users', { _id: true }),
+        take('orders', { amount: true, status: true, createdAt: true, id: true, items: true }),
+        take('qrcodes', { status: true, courseId: true }),
+        take('progress', { done: true, last: true, courseId: true }),
+        take('courses', { id: true, title: true, chapters: true }),
+      ])
+
+      // segment id → 可读名（课程/课时/段名）
+      const segName = {}
+      for (const c of courses)
+        for (const ch of c.chapters || [])
+          for (const l of ch.lessons || [])
+            for (const sg of l.segments || []) segName[sg.id] = `${l.name} · ${sg.name}`
+
+      // 热点（看完次数最多的段）与卡点（最后停留次数最多的段）
+      const doneCount = {}
+      const stuckCount = {}
+      let learners = 0
+      for (const pr of progress) {
+        learners++
+        for (const k of Object.keys(pr.done || {})) doneCount[k] = (doneCount[k] || 0) + 1
+        if (pr.last?.segmentId) stuckCount[pr.last.segmentId] = (stuckCount[pr.last.segmentId] || 0) + 1
+      }
+      const top = (m) =>
+        Object.entries(m)
+          .sort((a, b) => b[1] - a[1])
+          .slice(0, 8)
+          .map(([segId, count]) => ({ segId, name: segName[segId] || segId, count }))
+
+      const gmv = orders.reduce((n, o) => n + (Number(o.amount) || 0), 0)
+      const activated = codes.filter((q) => q.status === 'activated').length
+      const recentOrders = orders
+        .sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0))
+        .slice(0, 5)
+        .map((o) => ({
+          id: o.id,
+          amount: o.amount,
+          createdAt: o.createdAt,
+          summary: (o.items || []).map((it) => `${it.name}×${it.qty}`).join('、').slice(0, 40),
+        }))
+
+      return reply(200, {
+        ok: true,
+        stats: {
+          users: users.length,
+          orders: orders.length,
+          gmv,
+          codesTotal: codes.length,
+          codesActivated: activated,
+          learners,
+        },
+        hot: top(doneCount),
+        stuck: top(stuckCount),
+        recentOrders,
+      })
+    }
+
     return reply(400, { ok: false, error: 'UNKNOWN_ACTION' })
   } catch (e) {
     console.error('adminApi error', action, e)

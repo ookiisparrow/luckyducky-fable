@@ -48,7 +48,9 @@ function doLogout() {
       {{ i + 1 }} · {{ name }}
     </button>
 
-    <div class="nav disabled">📊 数据看板 <span class="soon">规划中</span></div>
+    <router-link class="nav" :class="{ on: route.path === '/dashboard' }" to="/dashboard"
+      >📊 数据看板</router-link
+    >
 
     <div class="spacer"></div>
     <div class="admin">

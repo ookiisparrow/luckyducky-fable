@@ -342,3 +342,11 @@ export async function saveHomeContent(home) {
   const r = await post('saveHomeContent', { home })
   return !!r.ok
 }
+
+// ---------- 数据看板 ----------
+
+export async function getDashboard() {
+  const r = await post('getDashboard')
+  if (!r.ok) throw new Error(r.error || 'LOAD_DASHBOARD_FAIL')
+  return r
+}
