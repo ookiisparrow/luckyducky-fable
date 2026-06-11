@@ -288,3 +288,44 @@ export async function saveShowcase(items) {
   const r = await post('saveShowcase', { items })
   return !!r.ok
 }
+
+// ---------- 二维码卡片 + 码批次（步骤⑤⑥） ----------
+
+export async function getCard(productId) {
+  const r = await post('getCard', { productId })
+  if (!r.ok) throw new Error(r.error || 'LOAD_CARD_FAIL')
+  return { card: r.card, artUrl: r.artUrl }
+}
+
+export async function saveCard(card) {
+  const r = await post('saveCard', { card })
+  return !!r.ok
+}
+
+export async function listBatches(courseId) {
+  const r = await post('listBatches', { courseId })
+  if (!r.ok) throw new Error(r.error || 'LOAD_BATCH_FAIL')
+  return r.list
+}
+
+export async function createBatch(courseId, count) {
+  const r = await post('createBatch', { courseId, count })
+  if (!r.ok) throw new Error(r.error || 'GEN_FAIL')
+  return r // { batchId, codes }
+}
+
+export async function listBatchCodes(batchId) {
+  const r = await post('listBatchCodes', { batchId })
+  if (!r.ok) throw new Error(r.error || 'LOAD_CODES_FAIL')
+  return r.codes
+}
+
+export async function getSettings() {
+  const r = await post('getSettings')
+  return r.settings || {}
+}
+
+export async function saveSettings(settings) {
+  const r = await post('saveSettings', settings)
+  return !!r.ok
+}

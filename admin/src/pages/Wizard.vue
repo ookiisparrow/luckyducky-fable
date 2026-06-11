@@ -11,6 +11,8 @@ import StepImages from '@/pages/steps/StepImages.vue'
 import StepInfo from '@/pages/steps/StepInfo.vue'
 import StepSkus from '@/pages/steps/StepSkus.vue'
 import StepVideos from '@/pages/steps/StepVideos.vue'
+import StepCards from '@/pages/steps/StepCards.vue'
+import StepBatch from '@/pages/steps/StepBatch.vue'
 import StepStub from '@/pages/steps/StepStub.vue'
 
 const props = defineProps({ id: { type: String, default: '' }, n: { type: String, default: '1' } })
@@ -20,7 +22,9 @@ store.load()
 
 const product = computed(() => store.getById(props.id))
 const step = computed(() => Math.min(6, Math.max(1, parseInt(props.n, 10) || 1)))
-const comp = computed(() => [StepImages, StepInfo, StepSkus, StepVideos][step.value - 1] || StepStub)
+const comp = computed(
+  () => [StepImages, StepInfo, StepSkus, StepVideos, StepCards, StepBatch][step.value - 1] || StepStub,
+)
 
 function go(n) {
   if (n >= 1 && n <= 6) router.push(`/product/${props.id}/step/${n}`)

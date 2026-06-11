@@ -22,6 +22,8 @@ function newProduct() {
     skus: [], // [{ name, price }]
     courseId: '', // 配套课程（步骤④ 首次进入时生成 course-<pid>）
     videoStats: null, // { total, done } 由步骤④ 保存草稿时同步
+    cardStatus: '', // 步骤⑤ 卡面状态（draft/final）
+    batchCount: 0, // 步骤⑥ 已有码批次数
     status: 'preparing', // preparing 筹备中 | onsale 在售
     createdAt: Date.now(),
     updatedAt: Date.now(),
@@ -41,8 +43,9 @@ export function stepDone(p, n) {
       // 视频编排：StepVideos 保存草稿时同步 videoStats = { total, done }
       return !!(p.videoStats && p.videoStats.total > 0 && p.videoStats.done >= p.videoStats.total)
     case 5:
+      return p.cardStatus === 'final' // 卡面已定稿
     case 6:
-      return false // ⑤⑥ 在 v1.5 接入后判定
+      return (p.batchCount || 0) > 0 // 已有码批次
     default:
       return false
   }

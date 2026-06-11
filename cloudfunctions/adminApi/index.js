@@ -57,6 +57,8 @@ function cleanProduct(p) {
       .slice(0, 30)
       .map((s) => ({ name: str(s?.name, 30), price: str(String(s?.price ?? ''), 12) })),
     courseId: str(p.courseId, 40),
+    cardStatus: p.cardStatus === 'final' ? 'final' : p.cardStatus === 'draft' ? 'draft' : '',
+    batchCount: Number(p.batchCount) || 0,
     videoStats:
       p.videoStats && typeof p.videoStats === 'object'
         ? { total: Number(p.videoStats.total) || 0, done: Number(p.videoStats.done) || 0 }
@@ -369,6 +371,128 @@ exports.main = async (event) => {
           .catch(() => {})
       }
       return reply(200, { ok: true })
+    }
+
+    // —— 二维码卡片 + 码批次（规格 §六/§七 步骤⑤⑥）——
+    if (action === 'getSettings') {
+      const got = await db.collection('adminConfig').doc('settings').get().catch(() => null)
+      return reply(200, { ok: true, settings: got?.data || {} })
+    }
+
+    if (action === 'saveSettings') {
+      const urlPrefix = String(data.urlPrefix || '').slice(0, 200)
+      await ensure('adminConfig')
+      const coll = db.collection('adminConfig')
+      await coll
+        .doc('settings')
+        .set({ data: { urlPrefix, updatedAt: Date.now() } })
+        .catch(async () => {
+          await coll.add({ data: { _id: 'settings', urlPrefix, updatedAt: Date.now() } })
+        })
+      return reply(200, { ok: true })
+    }
+
+    if (action === 'getCard') {
+      const productId = String(data.productId || '')
+      if (!productId) return reply(400, { ok: false, error: 'NO_PRODUCT' })
+      await ensure('cards')
+      const got = await db.collection('cards').doc(`card-${productId}`).get().catch(() => null)
+      let card = got?.data || null
+      // 旧单面结构 → 双面结构（兼容已存草稿）
+      if (card && !card.front) {
+        card = {
+          ...card,
+          front: { art: card.art || '', bg: card.bgColor || '#f6e9b8', showBrand: true },
+          back: {
+            bg: '#ffffff',
+            texts: { ...(card.texts || {}), warning: '提示：激活课程后，该商品将不再支持退货' },
+            brandText: 'Lucky Ducky · 幸运小鸭',
+          },
+        }
+      }
+      let artUrl = ''
+      const art = card?.front?.art
+      if (art && art.startsWith('cloud://')) {
+        const r = await cloud.getTempFileURL({ fileList: [art] })
+        artUrl = r.fileList[0]?.tempFileURL || ''
+      }
+      return reply(200, { ok: true, card, artUrl })
+    }
+
+    if (action === 'saveCard') {
+      const c = data.card
+      if (!c || !c.productId) return reply(400, { ok: false, error: 'BAD_CARD' })
+      const str = (v, cap) => (typeof v === 'string' ? v.slice(0, cap) : '')
+      const hex = (v, dft) => (/^#[0-9a-fA-F]{6}$/.test(v) ? v : dft)
+      const doc = {
+        productId: str(c.productId, 40),
+        courseId: str(c.courseId, 40),
+        name: str(c.name, 60),
+        status: c.status === 'final' ? 'final' : 'draft',
+        // 双面（规格 §六 修订：插画一面 + 二维码一面）
+        front: {
+          art: str(c.front?.art, 300),
+          bg: hex(c.front?.bg, '#f6e9b8'),
+          showBrand: c.front?.showBrand !== false,
+        },
+        back: {
+          bg: hex(c.back?.bg, '#ffffff'),
+          texts: {
+            title: str(c.back?.texts?.title, 40),
+            sub: str(c.back?.texts?.sub, 60),
+            scanHint: str(c.back?.texts?.scanHint, 30),
+            warning: str(c.back?.texts?.warning, 50),
+          },
+          brandText: str(c.back?.brandText, 30),
+        },
+        sizeMM: {
+          w: Math.min(300, Math.max(40, Number(c.sizeMM?.w) || 90)),
+          h: Math.min(300, Math.max(40, Number(c.sizeMM?.h) || 54)),
+        },
+        updatedAt: Date.now(),
+      }
+      await ensure('cards')
+      const coll = db.collection('cards')
+      const id = `card-${doc.productId}`
+      await coll
+        .doc(id)
+        .set({ data: doc })
+        .catch(async () => {
+          await coll.add({ data: { ...doc, _id: id } })
+        })
+      return reply(200, { ok: true })
+    }
+
+    if (action === 'listBatches') {
+      const courseId = String(data.courseId || '')
+      if (!courseId) return reply(400, { ok: false, error: 'NO_COURSE_ID' })
+      // 聚合各批次的码数与已激活数（单课批次有限，内存聚合足够）
+      const res = await db.collection('qrcodes').where({ courseId }).limit(1000).get()
+      const map = {}
+      for (const q of res.data) {
+        const b = (map[q.batchId] = map[q.batchId] || { batchId: q.batchId, total: 0, activated: 0, createdAt: q.createdAt || 0 })
+        b.total++
+        if (q.status === 'activated') b.activated++
+      }
+      const list = Object.values(map).sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0))
+      return reply(200, { ok: true, list })
+    }
+
+    if (action === 'createBatch') {
+      const courseId = String(data.courseId || '')
+      const count = Math.min(500, Math.max(1, parseInt(data.count, 10) || 0))
+      if (!courseId || !count) return reply(400, { ok: false, error: 'BAD_ARGS' })
+      // 服务端互调 genQrcodes（无 OPENID 即管理通道，复用既有生成与唯一性逻辑）
+      const r = await cloud.callFunction({ name: 'genQrcodes', data: { courseId, count } })
+      if (!r.result?.ok) return reply(400, { ok: false, error: r.result?.error || 'GEN_FAIL' })
+      return reply(200, { ok: true, batchId: r.result.batchId, codes: r.result.codes })
+    }
+
+    if (action === 'listBatchCodes') {
+      const batchId = String(data.batchId || '')
+      if (!batchId) return reply(400, { ok: false, error: 'NO_BATCH' })
+      const res = await db.collection('qrcodes').where({ batchId }).limit(1000).get()
+      return reply(200, { ok: true, codes: res.data.map((q) => q._id) })
     }
 
     return reply(400, { ok: false, error: 'UNKNOWN_ACTION' })
