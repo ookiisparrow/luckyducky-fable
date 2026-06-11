@@ -4,7 +4,7 @@
  *
  * 两种进入方式（规格 §四-2 两页式课程欢迎页）：
  * - 无码（「全部教程」/「重看引导」）：通用引导 2 屏 → 开始学习进目录（原行为）。
- * - 带码（扫激活码：?code= 或小程序码 scene）：onLoad 即调 activateCourse 绑定账户，
+ * - 带码（扫激活码：?code= / 小程序码 scene / 普通链接二维码 ?q=，决策 §13）：onLoad 即调 activateCourse 绑定账户，
  *   按结果分流——'activated'（新激活/未确认）→ 课程引导屏 + 确认屏（明示「确认开始
  *   观看即失去该件商品退货权」，确认是进课唯一闸门）；'mine'（已确认）→「继续学习」
  *   直接进课；码无效 / 已被他人激活 / 网络错 → 错误屏。
@@ -16,6 +16,7 @@ import { getSystemBarVars } from '@/utils/systemBar.js'
 import { STORAGE_KEYS } from '@/constants/storage.js'
 import { useActivationStore } from '@/store/activation.js'
 import { useCoursesStore } from '@/store/courses.js'
+import { parseActivationCode } from '@/api/activation.js'
 
 const act = useActivationStore()
 const coursesStore = useCoursesStore()
@@ -31,21 +32,10 @@ const confirming = ref(false)
 // 顶部关闭/返回/logo 避状态栏与胶囊：动态值经 CSS 变量进 scoped
 const barVars = getSystemBarVars()
 
-// 解析激活码：直连参数 ?code=，或小程序码 scene（urlencode 的 'code=XXX' / 裸码）
-function parseCode(o) {
-  if (!o) return ''
-  if (o.code) return String(o.code).trim()
-  if (o.scene) {
-    const s = decodeURIComponent(o.scene)
-    const m = s.match(/code=([A-Za-z0-9]+)/)
-    if (m) return m[1]
-    if (/^[A-Za-z0-9]{8,}$/.test(s)) return s
-  }
-  return ''
-}
+// 解析激活码：?code= / scene / 普通链接二维码 ?q= 三轨，逻辑收口在 api/activation.js（带测试）
 
 onLoad(async (o) => {
-  const c = parseCode(o)
+  const c = parseActivationCode(o)
   if (!c) return // 通用引导模式
   code.value = c
   mode.value = 'loading'
