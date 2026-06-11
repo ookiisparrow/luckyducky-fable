@@ -70,17 +70,29 @@ let seeking = false
 // 分段进度条 = 当前课时的 segments（来自课程数据，不再硬编码）
 const segs = computed(() => lesson.value.segments || [])
 const segCount = computed(() => segs.value.length || 1)
+// 分段视频模式（规格 §三/决策 §14 配套）：该课时所有小段都有真实视频（控制台第④步上传）
+// → 每段独立播放（src 按段切换，段末=视频自然结束）；否则回退占位视频按时长等分
+const fileSeg = ref(0) // 文件模式下的当前段
+const fileMode = computed(() => segs.value.length > 0 && segs.value.every((s) => s.videoFileId))
+const videoSrc = computed(() =>
+  fileMode.value ? segs.value[fileSeg.value]?.videoFileId || SRC : SRC,
+)
 const segLen = computed(() => (duration.value > 0 ? duration.value / segCount.value : 0))
 const curSeg = computed(() => {
   if (segLen.value <= 0) return 0
   return Math.min(segCount.value - 1, Math.floor(current.value / segLen.value))
 })
-const curSegName = computed(() => (segs.value[curSeg.value] || {}).name || '')
+const pct = computed(() => (duration.value > 0 ? (current.value / duration.value) * 100 : 0))
+// 当前展示段：文件模式按 fileSeg，占位模式按时间切片推算
+const activeSeg = computed(() => (fileMode.value ? fileSeg.value : curSeg.value))
+const curSegName = computed(() => (segs.value[activeSeg.value] || {}).name || '')
 const segFill = (i) => {
+  if (fileMode.value) {
+    return i < fileSeg.value ? 100 : i === fileSeg.value ? pct.value : 0
+  }
   if (segLen.value <= 0) return 0
   return Math.max(0, Math.min(100, ((current.value - i * segLen.value) / segLen.value) * 100))
 }
-const pct = computed(() => (duration.value > 0 ? (current.value / duration.value) * 100 : 0))
 
 onMounted(() => {
   ctx = uni.createVideoContext('lessonVideo', instance.proxy)
@@ -93,9 +105,9 @@ function onTimeupdate(e) {
   const d = e.detail || {}
   if (d.duration) duration.value = d.duration
   const t = d.currentTime || 0
-  // 段末自动暂停（始终开，照顾钩织时双手被占）→ 弹「重复播放」
+  // 段末自动暂停（占位等分模式；文件模式由 onEnded 天然承担段末）
   // endedSeg === null 守卫：pause 生效前 timeupdate 可能再触发，防重复进入（埋点防重报）
-  if (playing.value && segLen.value > 0 && !seeking && endedSeg.value === null) {
+  if (!fileMode.value && playing.value && segLen.value > 0 && !seeking && endedSeg.value === null) {
     const end = (playingSeg + 1) * segLen.value
     if (t >= end - 0.2 && playingSeg < segCount.value - 1) {
       ctx && ctx.pause()
@@ -116,10 +128,17 @@ function onPause() {
 }
 function onEnded() {
   playing.value = false
-  reportSegDone(segCount.value - 1) // 整条视频播完 = 最后一段看完
+  if (fileMode.value) {
+    // 文件模式：一段视频自然结束 = 该段看完；非最后一段弹「重复播放/继续」
+    reportSegDone(fileSeg.value)
+    if (fileSeg.value < segCount.value - 1) endedSeg.value = fileSeg.value
+    return
+  }
+  reportSegDone(segCount.value - 1) // 占位模式：整条播完 = 最后一段看完
 }
 
 // —— 进度上报（一次埋点两用：events 流水 + 云端进度折叠，见 utils/track.js）——
+// 文件模式下 at/dur 为「当前段内」的秒数（继续学习卡随之显示段内位置）
 const segIdOf = (i) => (segs.value[i] || {}).id || ''
 const progressMeta = () => ({
   courseId: course.value.id || '',
@@ -134,7 +153,7 @@ function reportSegDone(i) {
 // 离开播放页（切后台 / 返回）→ 记「最后看到」位置，喂「我」页继续学习卡
 function reportWatchPoint() {
   if (!lesson.value.id || current.value <= 0) return
-  track('watch_at', { page: 'player', targetId: segIdOf(curSeg.value), meta: progressMeta() })
+  track('watch_at', { page: 'player', targetId: segIdOf(activeSeg.value), meta: progressMeta() })
 }
 onHide(reportWatchPoint)
 onUnload(reportWatchPoint)
@@ -143,8 +162,16 @@ onUnload(reportWatchPoint)
 function toggle() {
   if (!ctx) return
   if (endedSeg.value !== null) {
-    playingSeg = Math.min(segCount.value - 1, endedSeg.value + 1)
     endedSeg.value = null
+    if (fileMode.value) {
+      // 进入下一段：切 src（自动从头），稍候起播
+      fileSeg.value = Math.min(segCount.value - 1, fileSeg.value + 1)
+      current.value = 0
+      duration.value = 0
+      setTimeout(() => ctx && ctx.play(), 200)
+      return
+    }
+    playingSeg = Math.min(segCount.value - 1, endedSeg.value + 1)
     seeking = true
     ctx.seek(playingSeg * segLen.value)
     ctx.play()
@@ -159,6 +186,14 @@ function toggle() {
 // 重复播放本段
 function replaySeg() {
   if (!ctx) return
+  if (fileMode.value) {
+    endedSeg.value = null
+    seeking = true
+    ctx.seek(0)
+    current.value = 0
+    ctx.play()
+    return
+  }
   const s = endedSeg.value !== null ? endedSeg.value : curSeg.value
   playingSeg = s
   endedSeg.value = null
@@ -181,7 +216,7 @@ function seekTap(e) {
       const tt = ratio * duration.value
       seeking = true
       endedSeg.value = null
-      playingSeg = segLen.value > 0 ? Math.floor(tt / segLen.value) : 0
+      if (!fileMode.value) playingSeg = segLen.value > 0 ? Math.floor(tt / segLen.value) : 0
       current.value = tt
       ctx.seek(tt)
     })
@@ -194,8 +229,10 @@ function switchLesson(n) {
   idx.value = i
   endedSeg.value = null
   playingSeg = 0
+  fileSeg.value = 0
   seeking = true
   current.value = 0
+  duration.value = 0
   if (ctx) {
     ctx.seek(0)
     ctx.play()
@@ -224,7 +261,7 @@ const back = () => goBack('/pages/catalog/index')
     <video
       id="lessonVideo"
       class="vp-video"
-      :src="SRC"
+      :src="videoSrc"
       :controls="false"
       :show-center-play-btn="false"
       :enable-progress-gesture="false"
@@ -258,7 +295,7 @@ const back = () => goBack('/pages/catalog/index')
           </view>
         </view>
         <text class="vp-seg-label"
-          ><text class="num">【{{ curSeg + 1 }}/{{ segCount }}】</text>{{ curSegName }}</text
+          ><text class="num">【{{ activeSeg + 1 }}/{{ segCount }}】</text>{{ curSegName }}</text
         >
       </view>
     </view>
