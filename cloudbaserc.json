@@ -86,6 +86,12 @@
       "timeout": 30,
       "handler": "index.main",
       "installDependency": true
+    },
+    {
+      "name": "getContent",
+      "timeout": 10,
+      "handler": "index.main",
+      "installDependency": true
     }
   ]
 }

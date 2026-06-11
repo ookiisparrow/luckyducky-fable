@@ -495,6 +495,36 @@ exports.main = async (event) => {
       return reply(200, { ok: true, codes: res.data.map((q) => q._id) })
     }
 
+    // —— 首页内容（橱窗逐块接入②③：hero 文案 / 信任条 / FAQ；规格 §八）——
+    if (action === 'getHomeContent') {
+      const got = await db.collection('content').doc('home').get().catch(() => null)
+      return reply(200, { ok: true, home: got?.data || null })
+    }
+
+    if (action === 'saveHomeContent') {
+      const c = data.home || {}
+      const str = (v, cap) => (typeof v === 'string' ? v.slice(0, cap) : '')
+      const doc = {
+        hero: { title: str(c.hero?.title, 20), tagline: str(c.hero?.tagline, 40) },
+        trust: (Array.isArray(c.trust) ? c.trust : [])
+          .slice(0, 4)
+          .map((t) => ({ icon: str(t?.icon, 20), label: str(t?.label, 12) })),
+        faq: (Array.isArray(c.faq) ? c.faq : [])
+          .slice(0, 8)
+          .map((f) => ({ title: str(f?.title, 40), body: str(f?.body, 150) })),
+        updatedAt: Date.now(),
+      }
+      await ensure('content')
+      const coll = db.collection('content')
+      await coll
+        .doc('home')
+        .set({ data: doc })
+        .catch(async () => {
+          await coll.add({ data: { ...doc, _id: 'home' } })
+        })
+      return reply(200, { ok: true })
+    }
+
     return reply(400, { ok: false, error: 'UNKNOWN_ACTION' })
   } catch (e) {
     console.error('adminApi error', action, e)

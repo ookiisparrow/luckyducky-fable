@@ -4,14 +4,31 @@
  * 左：iPhone 17 比例（393×852）手机框，渲染小程序首页关键区块（同一份云端 products 数据）；
  * 右：排序 / 上下架面板。两边同一份列表状态，拖哪边都行，松手防抖保存，小程序重开生效。
  */
-import { ref, computed } from 'vue'
-import { cloudMode, listShowcase, saveShowcase } from '@/api/cloud.js'
+import { ref, computed, watch } from 'vue'
+import { cloudMode, listShowcase, saveShowcase, getHomeContent, saveHomeContent } from '@/api/cloud.js'
 
 const list = ref([])
 const urls = ref({})
 const loading = ref(true)
 const loadErr = ref('')
 const saveState = ref('')
+
+// 首页内容（hero 文案/信任条/FAQ）：与小程序同一份，默认值与小程序本地兜底一致
+const DEFAULT_HOME = {
+  hero: { title: '创造幸运', tagline: 'Get ducky get lucky' },
+  trust: [
+    { icon: 'truck', label: '包邮到家' },
+    { icon: 'rotate-ccw', label: '七天无理由退货' },
+    { icon: 'thumbs-up', label: '多数买家推荐' },
+  ],
+  faq: [
+    { title: '完全没有基础可以做吗？', body: '可以。套装专为零基础设计，附带分步视频，跟着做就能完成第一只小棉鸭。' },
+    { title: '材料包里都有什么？', body: '棉线、钩针、填充棉、安全眼、说明卡与幸运卡一应俱全，开盒即可开始。' },
+    { title: '做坏了可以补料吗？', body: '可以。线材用尽或钩错都能在社群申请补料，七天内不满意还可无理由退货。' },
+  ],
+}
+const home = ref(JSON.parse(JSON.stringify(DEFAULT_HOME)))
+let homeLoaded = false
 
 const featured = computed(() => list.value.filter((p) => p.featured))
 const imgOf = (p) => (p.cover ? urls.value[p.cover] || '' : '')
@@ -22,9 +39,17 @@ async function init() {
     return
   }
   try {
-    const r = await listShowcase()
+    const [r, hc] = await Promise.all([listShowcase(), getHomeContent()])
     list.value = r.list
     urls.value = r.urls
+    if (hc) {
+      home.value = {
+        hero: { ...DEFAULT_HOME.hero, ...hc.hero },
+        trust: hc.trust?.length ? hc.trust : home.value.trust,
+        faq: hc.faq?.length ? hc.faq : home.value.faq,
+      }
+    }
+    homeLoaded = true
   } catch (e) {
     loadErr.value = '加载失败：' + e.message
   } finally {
@@ -77,6 +102,29 @@ function drop(p) {
 }
 const isOver = (p) => over.value === idxOf(p) && drag.value >= 0 && drag.value !== idxOf(p)
 const isDrag = (p) => drag.value === idxOf(p)
+
+// 首页内容：防抖保存（与排序同一个保存状态提示）
+let homeTimer = null
+watch(
+  home,
+  () => {
+    if (!homeLoaded) return
+    saveState.value = 'saving'
+    clearTimeout(homeTimer)
+    homeTimer = setTimeout(async () => {
+      const ok = await saveHomeContent(JSON.parse(JSON.stringify(home.value)))
+      saveState.value = ok ? 'saved' : 'error'
+    }, 700)
+  },
+  { deep: true },
+)
+function addFaq() {
+  if (home.value.faq.length >= 8) return
+  home.value.faq.push({ title: '', body: '' })
+}
+function delFaq(i) {
+  home.value.faq.splice(i, 1)
+}
 </script>
 
 <template>
@@ -102,8 +150,8 @@ const isDrag = (p) => drag.value === idxOf(p)
           <div class="p-status"><span>12:30</span><span>●●●</span></div>
           <div class="p-hero">
             <div class="p-brand">🦆 Lucky Ducky</div>
-            <div class="p-title">创造幸运</div>
-            <div class="p-sub">Get ducky get lucky</div>
+            <div class="p-title">{{ home.hero.title }}</div>
+            <div class="p-sub">{{ home.hero.tagline }}</div>
           </div>
           <div class="p-strip">
             <div class="p-strip-head"><b>人气商品</b><span>全部 ›</span></div>
@@ -166,6 +214,28 @@ const isDrag = (p) => drag.value === idxOf(p)
           </button>
         </div>
         <p class="hint">开关 = 是否出现在首页橱窗；下架橱窗不影响详情页直达与历史订单。两侧画面双向联动，拖哪边都行。</p>
+
+        <h3 style="margin-top: 22px">首页 · 头图文案（左侧手机实时预览）</h3>
+        <label class="field-label">主标题</label>
+        <input v-model="home.hero.title" class="input" maxlength="20" />
+        <label class="field-label" style="margin-top: 8px">口号（副标题）</label>
+        <input v-model="home.hero.tagline" class="input" maxlength="40" />
+
+        <h3 style="margin-top: 22px">首页 · 信任条（3 项短语）</h3>
+        <div class="trustrow">
+          <input v-for="(t, i) in home.trust" :key="i" v-model="t.label" class="input" maxlength="12" />
+        </div>
+
+        <h3 style="margin-top: 22px">首页 · 大家都在问（FAQ）</h3>
+        <div v-for="(f, i) in home.faq" :key="i" class="faqrow">
+          <div class="faqhead">
+            <input v-model="f.title" class="input" maxlength="40" placeholder="问题" />
+            <button class="del" @click="delFaq(i)">删除</button>
+          </div>
+          <textarea v-model="f.body" class="input area" maxlength="150" placeholder="回答"></textarea>
+        </div>
+        <button class="btn ghost sm" :disabled="home.faq.length >= 8" @click="addFaq">＋ 添加一条（最多 8 条）</button>
+        <p class="hint" style="margin-top: 14px">文案改动自动保存；小程序重开生效。改坏了清空该块即可回到默认文案。</p>
       </div>
     </div>
   </div>
@@ -455,5 +525,40 @@ h1 {
   border-color: #f0c8c5;
   background: #fdf0ef;
   color: var(--red);
+}
+.trustrow {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+}
+.faqrow {
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 10px 12px;
+  margin-bottom: 8px;
+}
+.faqhead {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+.del {
+  border: none;
+  background: none;
+  color: var(--content-2);
+  font-size: 11.5px;
+  cursor: pointer;
+  flex: 0 0 auto;
+}
+.del:hover {
+  color: var(--red);
+}
+.area {
+  min-height: 54px;
+  resize: vertical;
+}
+.btn.sm {
+  padding: 7px 13px;
+  font-size: 12px;
 }
 </style>

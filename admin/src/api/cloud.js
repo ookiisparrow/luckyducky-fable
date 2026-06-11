@@ -329,3 +329,16 @@ export async function saveSettings(settings) {
   const r = await post('saveSettings', settings)
   return !!r.ok
 }
+
+// ---------- 首页内容（橱窗逐块接入：hero 文案 / 信任条 / FAQ） ----------
+
+export async function getHomeContent() {
+  const r = await post('getHomeContent')
+  if (!r.ok) throw new Error(r.error || 'LOAD_CONTENT_FAIL')
+  return r.home // null = 还没编辑过（小程序用默认文案）
+}
+
+export async function saveHomeContent(home) {
+  const r = await post('saveHomeContent', { home })
+  return !!r.ok
+}

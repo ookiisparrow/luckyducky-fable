@@ -22,12 +22,15 @@ import BackTop from '@/components/BackTop.vue'
 import { useTimers } from '@/composables/useTimers.js'
 
 // section 组件是纯展示（技术债 #4），数据在页面收口；将来换云端来源只改这里
-import { TRUST_ITEMS } from '@/data/trust.js'
+import { useContentStore } from '@/store/content.js'
 import { REASSURE_ITEMS } from '@/data/reassure.js'
 import { REVIEWS } from '@/data/reviews.js'
-import { FAQ_ITEMS } from '@/data/faq.js'
+
 
 const { later } = useTimers()
+// 首页内容（hero 文案/信任条/FAQ）：控制台橱窗可编辑，云端无记录回退本地默认
+const content = useContentStore()
+content.load()
 const instance = getCurrentInstance()
 const windowHeight = uni.getSystemInfoSync().windowHeight
 
@@ -106,7 +109,7 @@ function onReviewsMore() {
 
 <template>
   <view class="ld-home">
-    <Hero @buy="onHeroBuy" @explore="onExplore" />
+    <Hero :title="content.hero.title" :tagline="content.hero.tagline" @buy="onHeroBuy" @explore="onExplore" />
 
     <view id="anchor-intro">
       <BrandIntro />
@@ -116,10 +119,10 @@ function onReviewsMore() {
       <FeatureProducts :flash-id="flashId" @open="onProductOpen" @add="onProductAdd" />
     </view>
 
-    <TrustStrip :items="TRUST_ITEMS" />
+    <TrustStrip :items="content.trust" />
     <Reassurance :items="REASSURE_ITEMS" />
     <Reviews :reviews="REVIEWS" @more="onReviewsMore" />
-    <FAQ :items="FAQ_ITEMS" />
+    <FAQ :items="content.faq" />
     <ClosingCTA @buy="onClosingBuy" />
     <SiteFooter />
 
