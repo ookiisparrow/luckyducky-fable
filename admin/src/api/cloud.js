@@ -198,11 +198,16 @@ export async function publishCourse(courseId) {
 
 // ---------- 视频上传 ----------
 
-function putWithProgress(url, headers, body, onProgress) {
+// getUploadMetadata 签发的凭证只认「POST 表单上传」（微信云开发 HTTP API 约定：
+// key/Signature/x-cos-security-token/x-cos-meta-fileid + file），签名含请求方法，
+// 改用 PUT 会被云存储以 403 拒绝（调试日志 G）。
+function postFormWithProgress(url, fields, file, onProgress) {
   return new Promise((resolve, reject) => {
+    const fd = new FormData()
+    for (const [k, v] of Object.entries(fields)) fd.append(k, v)
+    fd.append('file', file)
     const xhr = new XMLHttpRequest()
-    xhr.open('PUT', url)
-    for (const [k, v] of Object.entries(headers)) xhr.setRequestHeader(k, v)
+    xhr.open('POST', url)
     if (xhr.upload) {
       xhr.upload.onprogress = (e) => {
         if (e.lengthComputable && onProgress) onProgress(e.loaded / e.total)
@@ -210,7 +215,7 @@ function putWithProgress(url, headers, body, onProgress) {
     }
     xhr.onload = () => (xhr.status < 300 ? resolve() : reject(new Error('直传失败 HTTP ' + xhr.status)))
     xhr.onerror = () => reject(new Error('直传网络错误'))
-    xhr.send(body)
+    xhr.send(fd)
   })
 }
 
@@ -232,17 +237,25 @@ export async function uploadVideo(file, courseId, segName, onProgress) {
 
   const meta = await post('getVideoUploadMeta', { courseId, name: segName, ext })
   if (meta.ok) {
-    await putWithProgress(
-      meta.url,
-      {
-        Authorization: meta.authorization,
-        'x-cos-security-token': meta.token,
-        'x-cos-meta-fileid': meta.cosFileId,
-      },
-      file,
-      onProgress,
-    )
-    return { ref: meta.fileId }
+    try {
+      // 表单 key = 对象路径，从 fileId（cloud://<env>.<bucket>/<路径>）截取
+      const key = String(meta.fileId).replace(/^cloud:\/\/[^/]+\//, '')
+      await postFormWithProgress(
+        meta.url,
+        {
+          key,
+          Signature: meta.authorization,
+          'x-cos-security-token': meta.token,
+          'x-cos-meta-fileid': meta.cosFileId,
+        },
+        file,
+        onProgress,
+      )
+      return { ref: meta.fileId }
+    } catch (e) {
+      // 直传失败不终止：回落分片通道（慢但可达），原因留控制台便于排查
+      console.warn('[uploadVideo] 直传失败，回落分片通道：', e.message)
+    }
   }
 
   // 回落：分片 base64（与图片同通道，kind=video 落 videos/ 前缀）
