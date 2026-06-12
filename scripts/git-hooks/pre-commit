@@ -6,7 +6,13 @@
 # - 检查的是当前工作区全量（非仅暂存文件）：单人短分支流下足够，且全套 <10s。
 # - 紧急绕过（不建议）：git commit --no-verify
 
-echo "提交闸：lint + test ..."
+echo "提交闸：conventions + lint + test ..."
+
+npm run check:conventions || {
+  echo ""
+  echo "❌ 约定检查未通过，已拦下本次提交（CLAUDE.md §5/§8；刻意例外加 convention-ok 注释）。"
+  exit 1
+}
 
 npm run lint || {
   echo ""

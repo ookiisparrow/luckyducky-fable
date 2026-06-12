@@ -62,6 +62,14 @@ export default [
     languageOptions: { globals: { ...globals.node } },
   },
 
+  // 日志统一走 utils/logger.js（CLAUDE.md §13），logger 自身是唯一合法 console 出口；
+  // cloudfunctions / admin / scripts 不在此列（云函数日志机制就是 console）
+  {
+    files: ['src/**/*.js', 'src/**/*.vue'],
+    ignores: ['src/utils/logger.js'],
+    rules: { 'no-console': 'error' },
+  },
+
   // 放最后：关闭与 Prettier 冲突的排版规则
   configPrettier,
 ]

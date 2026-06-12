@@ -1,0 +1,17 @@
+{
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$CLAUDE_PROJECT_DIR/scripts/check-conventions.mjs\" --hook",
+            "timeout": 15,
+            "statusMessage": "约定检查（CLAUDE.md §5/§8）"
+          }
+        ]
+      }
+    ]
+  }
+}

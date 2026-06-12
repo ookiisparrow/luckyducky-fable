@@ -146,7 +146,7 @@ onUnmounted(clearHv)
   margin-bottom: 10px;
 }
 .hs-vrow:active {
-  background: #fafafa;
+  background: $bg-faint;
 }
 .hs-vthumb {
   position: relative;

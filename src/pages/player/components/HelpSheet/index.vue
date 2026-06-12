@@ -204,7 +204,7 @@ defineExpose({ open })
   margin-bottom: 10px;
 }
 .vp-opt:active {
-  background: #fafafa;
+  background: $bg-faint;
 }
 .vp-opt-ico {
   width: 42px;

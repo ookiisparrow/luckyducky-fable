@@ -46,7 +46,7 @@ const topStyle = { '--sbh': getSystemBar().statusBarHeight + 'px' }
   /* #endif */
 }
 .my-header-purple {
-  /* 品牌紫渐变头（原型同款，渐变不入 token） */
+  /* 品牌紫渐变头（原型同款，渐变不入 token） convention-ok */
   background: linear-gradient(160deg, #b79bea 0%, #8c6fd0 58%, #7b5caf 100%);
   color: $white;
 }

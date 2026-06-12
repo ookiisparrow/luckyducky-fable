@@ -15,6 +15,7 @@
     "build:mp-weixin": "uni build -p mp-weixin",
     "build:app": "uni build -p app",
     "lint": "eslint .",
+    "check:conventions": "node scripts/check-conventions.mjs",
     "lint:fix": "eslint . --fix",
     "format": "prettier --write \"src/**/*.{vue,js,scss,json}\"",
     "test": "vitest run",
