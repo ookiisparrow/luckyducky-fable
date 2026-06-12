@@ -1,0 +1,23 @@
+#!/bin/sh
+# 提交闸（git pre-commit hook）：每次 git commit 前自动跑 lint + test，红灯则拦下提交。
+#
+# - 本目录通过 package.json 的 prepare 脚本注册为 git core.hooksPath，
+#   npm install 后自动生效，无需手动安装。
+# - 检查的是当前工作区全量（非仅暂存文件）：单人短分支流下足够，且全套 <10s。
+# - 紧急绕过（不建议）：git commit --no-verify
+
+echo "提交闸：lint + test ..."
+
+npm run lint || {
+  echo ""
+  echo "❌ ESLint 未通过，已拦下本次提交（可试 npm run lint:fix 自动修复）。"
+  exit 1
+}
+
+npm run test || {
+  echo ""
+  echo "❌ 测试未通过，已拦下本次提交。"
+  exit 1
+}
+
+echo "✅ 提交闸通过。"

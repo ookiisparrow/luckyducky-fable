@@ -1,0 +1,30 @@
+# CI 质量闸：每个 PR（和合并进 main 时）自动跑 lint + test。
+# 结果显示在 PR 页面底部——绿勾 = 机器检查通过，红叉 = 有问题先别合并。
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  lint-test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 检出代码
+        uses: actions/checkout@v4
+
+      - name: 安装 Node 20（与本地开发版本一致）
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: 安装依赖
+        run: npm ci
+
+      - name: ESLint 检查
+        run: npm run lint
+
+      - name: 运行测试
+        run: npm run test

@@ -7,6 +7,7 @@
     "npm": ">=8"
   },
   "scripts": {
+    "prepare": "git config core.hooksPath scripts/git-hooks || exit 0",
     "dev:h5": "uni",
     "dev:mp-weixin": "uni -p mp-weixin",
     "dev:app": "uni -p app",
