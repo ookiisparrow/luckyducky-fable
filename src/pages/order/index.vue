@@ -1,10 +1,9 @@
 <script setup>
 /**
- * 订单状态页（待支付 / 待发货 / 待收货 / 已完成）。对应原型 Checkout.jsx 的 OrderStatus。
- * 两种驱动：query.id → 真实订单（store/orders，云端/回退同一笔，关调试日志 C；
- *             banner/动作按 ORDER_STATUS 单一来源映射真实 status）；
- *           query.status → 样例配置（toship/toreceive/done，ORDER_CFG 演示路径，P4 后可删）。
- * 收货地址：真单读订单地址快照；样例读地址簿默认地址。底部动作按钮：
+ * 订单状态页（待支付 / 待发货 / 待收货 / 已完成 / 已关闭）。对应原型 Checkout.jsx 的 OrderStatus。
+ * 只由 query.id 驱动真实订单（store/orders，云端/回退同一笔，关调试日志 C；
+ * banner/动作按 ORDER_STATUS 单一来源映射真实 status）。样例 ?status= 演示路径已删
+ * （P4 支付接真后清账，技术债 #8）。收货地址读订单地址快照。底部动作按钮：
  *   查看物流 → 真单复制运单号（shipping 快照来自控制台发货）/ 样例 Toast；
  *   确认收货 → 真单走 confirmReceive 云函数（shipped → done）/ 样例 Toast；
  *   提醒发货 → Toast；再次购买 → 进详情；申请退款 → 售后页；评价晒单 → 评价页。
@@ -16,15 +15,12 @@ import CoNavBar from '@/components/CoNavBar.vue'
 import AddressBlock from '@/components/AddressBlock.vue'
 import OrderItem from '@/components/OrderItem.vue'
 import PriceSummary from '@/components/PriceSummary.vue'
-import { useAddressStore } from '@/store/address.js'
 import { useOrdersStore } from '@/store/orders.js'
-import { ORDER_CFG, ORDER_STATUS, COUPON, SHIP } from '@/data/orders.js'
+import { ORDER_STATUS } from '@/data/orders.js'
 import { goBack } from '@/utils/nav.js'
 import { money, dateTime, mmss } from '@/utils/format.js'
 
-const address = useAddressStore()
 const ordersStore = useOrdersStore()
-const status = ref('toship')
 const orderId = ref('')
 const order = computed(() => (orderId.value ? ordersStore.getById(orderId.value) : null))
 
@@ -89,35 +85,25 @@ function cfgFromOrder(o) {
   }
 }
 
-const cfg = computed(() =>
-  order.value ? cfgFromOrder(order.value) : ORDER_CFG[status.value] || ORDER_CFG.toship,
-)
-// 真单地址用下单时的快照；样例用地址簿默认地址
-const addr = computed(() => (order.value ? order.value.address : address.defaultAddress))
+const cfg = computed(() => (order.value ? cfgFromOrder(order.value) : null))
+// 地址用下单时的快照
+const addr = computed(() => (order.value ? order.value.address : null))
 
 onLoad(async (q) => {
   if (q && q.id) {
     orderId.value = q.id
     if (!ordersStore.getById(q.id)) await ordersStore.load()
-    if (!ordersStore.getById(q.id)) {
-      uni.showToast({ title: '没有找到这笔订单', icon: 'none' })
-      orderId.value = ''
-    }
-  } else if (q && q.status && ORDER_CFG[q.status]) {
-    status.value = q.status
+  }
+  if (!orderId.value || !ordersStore.getById(orderId.value)) {
+    uni.showToast({ title: '没有找到这笔订单', icon: 'none' })
+    orderId.value = ''
   }
 })
 
-const goods = computed(() =>
-  order.value
-    ? order.value.goods
-    : cfg.value.items.reduce((s, it) => s + it.price * (it.qty || 1), 0),
-)
-const coupon = computed(() => (order.value ? order.value.coupon : COUPON))
-const ship = computed(() => (order.value ? order.value.ship : SHIP))
-const pay = computed(() =>
-  order.value ? order.value.amount : Math.max(0, goods.value + ship.value - coupon.value),
-)
+const goods = computed(() => (order.value ? order.value.goods : 0))
+const coupon = computed(() => (order.value ? order.value.coupon : 0))
+const ship = computed(() => (order.value ? order.value.ship : 0))
+const pay = computed(() => (order.value ? order.value.amount : 0))
 const back = () => goBack('/pages/me/index')
 
 // 继续支付（pending 单）：成功置 paid 横幅响应式切换；取消留单；超时云端关单本地同步 closed
@@ -149,14 +135,12 @@ function onAction(a) {
       content: '确认已收到商品吗？',
       success: async (r) => {
         if (!r.confirm) return
-        // 真单走云函数流转 shipped → done（横幅/动作随 status 响应式切换）；样例只 Toast
-        if (order.value) {
-          try {
-            await ordersStore.confirmReceive(order.value.id)
-          } catch {
-            uni.showToast({ title: '确认失败，请稍后再试', icon: 'none' })
-            return
-          }
+        // 云函数流转 shipped → done（横幅/动作随 status 响应式切换）
+        try {
+          await ordersStore.confirmReceive(order.value.id)
+        } catch {
+          uni.showToast({ title: '确认失败，请稍后再试', icon: 'none' })
+          return
         }
         uni.showToast({ title: '已确认收货 · 期待你的好评~', icon: 'none' })
       },
@@ -166,10 +150,6 @@ function onAction(a) {
   } else if (k === 'remind') {
     uni.showToast({ title: '已提醒商家发货', icon: 'none' })
   } else if (k === 'pay') {
-    if (!order.value) {
-      uni.showToast({ title: '支付功能开发中（将接入微信支付）', icon: 'none' }) // 样例路径维持占位
-      return
-    }
     let canPay = false
     // #ifdef MP-WEIXIN
     canPay = true
@@ -177,30 +157,33 @@ function onAction(a) {
     if (canPay) payNow()
     else uni.showToast({ title: '请在微信小程序内完成支付', icon: 'none' })
   } else if (k === 'logi') {
-    // 真单有物流快照：复制运单号（去快递 App / 公众号查询）；样例保持占位提示
-    if (order.value && order.value.shipping) {
+    // 物流卡只在有 shipping 快照时渲染：复制运单号（去快递 App / 公众号查询）
+    if (order.value.shipping) {
       uni.setClipboardData({
         data: order.value.shipping.trackingNo,
         success: () => uni.showToast({ title: '运单号已复制', icon: 'none' }),
       })
-    } else {
-      uni.showToast({ title: '物流详情（开发中）', icon: 'none' })
     }
   } else if (k === 'refund') {
     uni.navigateTo({ url: '/pages/aftersales/index' })
   } else if (k === 'review') {
-    // 真单带 orderId 进评价页（真实提交链路）；样例订单走演示模式
-    const q = order.value ? `?orderId=${order.value.id}` : ''
-    uni.navigateTo({ url: `/pages/review/index${q}` })
+    // 带 orderId 进评价页（真实提交链路）
+    uni.navigateTo({ url: `/pages/review/index?orderId=${order.value.id}` })
   }
 }
 </script>
 
 <template>
   <view class="co">
-    <CoNavBar :title="cfg.title" @back="back" />
+    <CoNavBar :title="cfg ? cfg.title : '订单详情'" @back="back" />
 
-    <view class="co-body">
+    <!-- 找不到订单（直链失效等）：空态引导回订单列表 -->
+    <view v-if="!cfg" class="co-body coord-empty">
+      <text class="coord-empty-text">没有找到这笔订单</text>
+      <view class="co-cancel" @tap="back">返回</view>
+    </view>
+
+    <view v-else class="co-body">
       <!-- 状态横幅 -->
       <view class="coord-banner" :class="'coord-' + cfg.tint">
         <view class="coord-banner-ico"><Icon :name="cfg.icon" :size="22" /></view>
@@ -253,7 +236,7 @@ function onAction(a) {
     </view>
 
     <view class="co-foot"></view>
-    <view class="co-dock">
+    <view v-if="cfg" class="co-dock">
       <view class="co-dock-total">
         <text class="co-dock-small">实付款</text>
         <text class="co-dock-amt"><text class="cny">￥</text>{{ money(pay) }}</text>
@@ -276,6 +259,19 @@ function onAction(a) {
 .co-dock {
   display: flex;
   align-items: center;
+}
+
+/* 找不到订单的空态 */
+.coord-empty {
+  align-items: center;
+  text-align: center;
+  padding-top: 80px;
+}
+.coord-empty-text {
+  display: block;
+  font-size: 14px;
+  color: $content-2;
+  margin-bottom: 16px;
 }
 
 /* 状态横幅 */

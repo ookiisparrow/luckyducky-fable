@@ -35,9 +35,10 @@ function home() {
   uni.reLaunch({ url: '/pages/index/index' })
 }
 function orders() {
+  // 无单号兜底进订单列表「待发货」tab（原 ?status= 样例详情已随技术债 #8 删除）
   const url = orderNo.value
     ? `/pages/order/index?id=${orderNo.value}`
-    : '/pages/order/index?status=toship'
+    : '/pages/order-list/index?tab=toship'
   uni.reLaunch({ url })
 }
 </script>

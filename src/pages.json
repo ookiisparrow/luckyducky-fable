@@ -76,13 +76,6 @@
       }
     },
     {
-      "path": "pages/pending-pay/index",
-      "style": {
-        "navigationBarTitleText": "待支付",
-        "navigationStyle": "custom"
-      }
-    },
-    {
       "path": "pages/aftersales/index",
       "style": {
         "navigationBarTitleText": "退款 / 售后",
