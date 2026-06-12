@@ -563,6 +563,71 @@ exports.main = async (event) => {
       return reply(200, { ok: true })
     }
 
+    // —— 售后退款（P4 Batch 2，链10：审核 + 触发退款工作流；金额在申请时已云端分摊算定）——
+    if (action === 'listRefunds') {
+      await ensure('afterSales')
+      const res = await db.collection('afterSales').orderBy('appliedAt', 'desc').limit(200).get()
+      return reply(200, { ok: true, list: res.data })
+    }
+
+    if (action === 'approveRefund') {
+      const id = String(data.id || '')
+      if (!id) return reply(400, { ok: false, error: 'BAD_ARGS' })
+      const got = await db.collection('afterSales').doc(id).get().catch(() => null)
+      if (!got || !got.data) return reply(400, { ok: false, error: 'NO_RECORD' })
+      if (got.data.status !== 'applied') return reply(400, { ok: false, error: 'BAD_STATUS:' + got.data.status })
+
+      const cfg = await db.collection('config').doc('pay').get().catch(() => null)
+      const flowId = cfg && cfg.data && cfg.data.refundFlowId
+      if (!flowId) return reply(400, { ok: false, error: 'REFUND_FLOW_NOT_CONFIGURED' })
+      const order = await db.collection('orders').doc(got.data.orderId).get().catch(() => null)
+      if (!order || !order.data) return reply(400, { ok: false, error: 'NO_ORDER' })
+
+      // 触发退款工作流：refund=售后单分摊额（申请时云端算定），total=订单实付，金额不收前端
+      const res = await cloud
+        .callFunction({
+          name: 'cloudbase_module',
+          data: {
+            name: String(flowId),
+            data: {
+              out_trade_no: got.data.orderId,
+              out_refund_no: id,
+              reason: String(got.data.reason || '用户申请退款').slice(0, 80),
+              amount: {
+                refund: Math.round(got.data.refundAmount * 100),
+                total: Math.round(order.data.amount * 100),
+                currency: 'CNY',
+              },
+            },
+          },
+        })
+        .catch((err) => {
+          console.error('approveRefund 工作流调用异常', id, err && err.message)
+          return null
+        })
+      const r = res && res.result && res.result.data
+      if (!r || !(r.status || r.refund_id || r.out_refund_no)) {
+        console.error('approveRefund 工作流未受理', id, res && JSON.stringify(res.result).slice(0, 300))
+        return reply(500, { ok: false, error: 'REFUND_TRIGGER_FAIL' })
+      }
+      await db.collection('afterSales').doc(id).update({ data: { status: 'approved', approvedAt: Date.now() } })
+      return reply(200, { ok: true })
+    }
+
+    if (action === 'rejectRefund') {
+      const id = String(data.id || '')
+      const reason = String(data.reason || '').trim().slice(0, 100)
+      if (!id || !reason) return reply(400, { ok: false, error: 'BAD_ARGS' })
+      const got = await db.collection('afterSales').doc(id).get().catch(() => null)
+      if (!got || !got.data) return reply(400, { ok: false, error: 'NO_RECORD' })
+      if (got.data.status !== 'applied') return reply(400, { ok: false, error: 'BAD_STATUS:' + got.data.status })
+      await db
+        .collection('afterSales')
+        .doc(id)
+        .update({ data: { status: 'rejected', rejectedAt: Date.now(), rejectReason: reason } })
+      return reply(200, { ok: true })
+    }
+
     // —— 数据看板（规格 §八 路线收官；小规模内存聚合，≤1000 条/表）——
     if (action === 'getDashboard') {
       const take = (coll, field) =>

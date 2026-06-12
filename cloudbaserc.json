@@ -147,6 +147,24 @@
           "config": "0 */5 * * * * *"
         }
       ]
+    },
+    {
+      "name": "applyRefund",
+      "timeout": 15,
+      "handler": "index.main",
+      "installDependency": true
+    },
+    {
+      "name": "getMyAfterSales",
+      "timeout": 10,
+      "handler": "index.main",
+      "installDependency": true
+    },
+    {
+      "name": "refundCallback",
+      "timeout": 15,
+      "handler": "index.main",
+      "installDependency": true
     }
   ]
 }

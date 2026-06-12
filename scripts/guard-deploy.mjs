@@ -14,6 +14,8 @@ const SENSITIVE_FNS = [
   'createOrder', // 云端定价
   'pay', // 发起微信支付
   'payCallback', // 支付回调（pending→paid）
+  'applyRefund', // 售后申请（退款金额分摊）
+  'refundCallback', // 退款回调（approved→refunded）
   'closeExpiredOrders', // 超时关单（批量改订单状态）
   'adminApi', // 管理后台总入口（发货/上新）
   'genQrcodes', // 一码一用批次生成
