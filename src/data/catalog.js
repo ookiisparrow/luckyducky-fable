@@ -4,7 +4,7 @@
  * 改一处全店一致。价格用数字（canonical），各处展示时自行拼 ￥。
  *
  * 订单/售后里的商品是「历史快照」（当时买了啥），按真实电商惯例保留各自一份，
- * 不从这里取（见 data/orders.js、data/aftersales.js）。
+ * 不从这里取（订单快照在云端 orders / 售后快照在 afterSales 集合）。
  *
  * 以后接后端：换成 api/shop.js 的 getProduct(id) / getProducts()，字段保持一致。
  */

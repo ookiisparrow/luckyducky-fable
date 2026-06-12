@@ -5,6 +5,7 @@ import ProductList from '@/pages/ProductList.vue'
 import Wizard from '@/pages/Wizard.vue'
 import Showcase from '@/pages/Showcase.vue'
 import Orders from '@/pages/Orders.vue'
+import Refunds from '@/pages/Refunds.vue'
 import Dashboard from '@/pages/Dashboard.vue'
 
 export const router = createRouter({
@@ -15,6 +16,7 @@ export const router = createRouter({
     { path: '/products', component: ProductList },
     { path: '/showcase', component: Showcase },
     { path: '/orders', component: Orders },
+    { path: '/refunds', component: Refunds },
     { path: '/dashboard', component: Dashboard },
     // 上新向导：/product/<id>/step/<1-6>；左侧「按步骤直达」也跳这里
     { path: '/product/:id/step/:n', component: Wizard, props: true },

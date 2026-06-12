@@ -45,6 +45,9 @@ function doLogout() {
     <router-link class="nav" :class="{ on: route.path === '/orders' }" to="/orders"
       >📦 订单发货</router-link
     >
+    <router-link class="nav" :class="{ on: route.path === '/refunds' }" to="/refunds"
+      >💸 售后退款</router-link
+    >
 
     <div class="caption">按步骤直达</div>
     <button v-for="(name, i) in STEP_NAMES" :key="i" class="nav step" :class="{ on: stepActive(i + 1) }" @click="goStep(i + 1)">

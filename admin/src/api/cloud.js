@@ -371,6 +371,27 @@ export async function shipOrder(id, company, trackingNo) {
   return true
 }
 
+// ---------- 售后退款（链10：审核 + 触发退款工作流；金额申请时已云端算定） ----------
+
+export async function listRefunds() {
+  if (!cloudMode) return [] // 售后单只存在于云端
+  const r = await post('listRefunds')
+  if (!r.ok) throw new Error(r.error || 'LOAD_REFUNDS_FAIL')
+  return r.list
+}
+
+export async function approveRefund(id) {
+  const r = await post('approveRefund', { id })
+  if (!r.ok) throw new Error(r.error || 'APPROVE_FAIL')
+  return true
+}
+
+export async function rejectRefund(id, reason) {
+  const r = await post('rejectRefund', { id, reason })
+  if (!r.ok) throw new Error(r.error || 'REJECT_FAIL')
+  return true
+}
+
 // ---------- 数据看板 ----------
 
 export async function getDashboard() {

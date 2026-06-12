@@ -165,7 +165,7 @@ function onAction(a) {
       })
     }
   } else if (k === 'refund') {
-    uni.navigateTo({ url: '/pages/aftersales/index' })
+    uni.navigateTo({ url: '/pages/aftersales/index?orderId=' + order.value.id })
   } else if (k === 'review') {
     // 带 orderId 进评价页（真实提交链路）
     uni.navigateTo({ url: `/pages/review/index?orderId=${order.value.id}` })
