@@ -113,7 +113,8 @@ export const useCartStore = defineStore('cart', {
           const it = this.items.find((x) => x.id === line.id && (x.sku || '') === (line.sku || ''))
           if (!it) return
           it.qty -= line.qty || 0
-          if (it.qty <= 0) this.remove(it.id)
+          // 移除必须带 sku（审核批次B）：remove 缺省只删空规格条目，带规格商品扣到 0 会残留
+          if (it.qty <= 0) this.remove(it.id, it.sku || '')
         })
       }
       this.checkoutItems = []

@@ -93,6 +93,8 @@ onLoad(async (q) => {
   if (q && q.id) {
     orderId.value = q.id
     if (!ordersStore.getById(q.id)) await ordersStore.load()
+    // 列表 limit 之外的老单：按 id 单独取（审核批次B 兜底，防误报「没有找到」）
+    if (!ordersStore.getById(q.id)) await ordersStore.fetchById(q.id)
   }
   if (!orderId.value || !ordersStore.getById(orderId.value)) {
     uni.showToast({ title: '没有找到这笔订单', icon: 'none' })

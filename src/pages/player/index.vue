@@ -162,6 +162,7 @@ onUnload(reportWatchPoint)
 function toggle() {
   if (!ctx) return
   if (endedSeg.value !== null) {
+    const ended = endedSeg.value // 先存再清（审核批次B：清空后 null+1=1，第 2 段后继续播会跳回第 2 段）
     endedSeg.value = null
     if (fileMode.value) {
       // 进入下一段：切 src（自动从头），稍候起播
@@ -171,7 +172,7 @@ function toggle() {
       setTimeout(() => ctx && ctx.play(), 200)
       return
     }
-    playingSeg = Math.min(segCount.value - 1, endedSeg.value + 1)
+    playingSeg = Math.min(segCount.value - 1, ended + 1)
     seeking = true
     ctx.seek(playingSeg * segLen.value)
     ctx.play()

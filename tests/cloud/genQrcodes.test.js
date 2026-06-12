@@ -36,6 +36,14 @@ describe('genQrcodes 闸门', () => {
     expect((await main({ courseId: 'course-x', count: 3 })).error).toBe('UNKNOWN_COURSE:course-x')
   })
 
+  it('count 漏传/非法不再静默成 1（审核批次B）：一律 BAD_ARGS', async () => {
+    control.setOpenId('')
+    expect((await main({ courseId: 'course-duck' })).error).toBe('BAD_ARGS') // 漏传
+    expect((await main({ courseId: 'course-duck', count: 'abc' })).error).toBe('BAD_ARGS')
+    expect((await main({ courseId: 'course-duck', count: 0 })).error).toBe('BAD_ARGS')
+    expect(control.dump('qrcodes')).toHaveLength(0) // 一个码都不该生成
+  })
+
   it('count 钳制上限 500，码 _id 唯一', async () => {
     control.setOpenId('')
     const res = await main({ courseId: 'course-duck', count: 9999 })

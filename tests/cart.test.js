@@ -42,6 +42,16 @@ describe('cart store', () => {
     cart.finishCheckout([{ id: 'p1', qty: 2 }])
     expect(cart.items.length).toBe(0)
   })
+
+  it('finishCheckout：带 SKU 条目全量结算后应移除，同 id 其他 SKU 不受影响（审核批次B）', () => {
+    const cart = useCartStore()
+    cart.add({ id: 'p9', name: 'X', price: 198, sku: '经典暖黄' })
+    cart.add({ id: 'p9', name: 'X', price: 208, sku: '雾霭蓝' })
+    cart.prepareCheckoutFromCart()
+    cart.finishCheckout([{ id: 'p9', qty: 1, sku: '经典暖黄' }])
+    expect(cart.items.length).toBe(1) // 不残留 qty<=0 的暖黄条目
+    expect(cart.items[0].sku).toBe('雾霭蓝') // 另一规格不被误删
+  })
 })
 
 describe('SKU 条目（同 id 不同规格 = 独立条目）', () => {

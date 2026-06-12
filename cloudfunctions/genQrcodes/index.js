@@ -23,9 +23,12 @@ exports.main = async (event) => {
     if (!u.data.length || u.data[0].isAdmin !== true) return { ok: false, error: 'ADMIN_ONLY' }
   }
 
+  // count 必须是显式合法正整数（审核批次B：原 Math.max(1,...) 会把漏传/非法静默夹成 1，
+  // 误生成 1 个真实有效码）；合法后才钳到上限 500
   const courseId = String(event.courseId || '')
-  const count = Math.min(500, Math.max(1, parseInt(event.count, 10) || 0))
-  if (!courseId || !count) return { ok: false, error: 'BAD_ARGS' }
+  const rawCount = parseInt(event.count, 10)
+  if (!courseId || !Number.isInteger(rawCount) || rawCount < 1) return { ok: false, error: 'BAD_ARGS' }
+  const count = Math.min(500, rawCount)
   // 课程必须存在，防止生成废码
   const course = await db.collection('courses').doc(courseId).get().catch(() => null)
   if (!course || !course.data) return { ok: false, error: 'UNKNOWN_COURSE:' + courseId }

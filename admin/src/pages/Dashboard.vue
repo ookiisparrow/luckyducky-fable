@@ -4,10 +4,16 @@
  * 数据源全在云端既有集合：users / orders / qrcodes / progress（trackEvent 折叠）/ courses。
  * 热点 = 看完次数最多的段；卡点 = 学员「最后停留」次数最多的段——选题与重制的依据。
  */
-import { ref } from 'vue'
+import { ref, computed } from 'vue'
 import { cloudMode, getDashboard } from '@/api/cloud.js'
 
 const data = ref(null)
+// 交易异常合计（旧版云函数无 txAlerts 字段时安全为 0）
+const txAlertCount = computed(() => {
+  const t = data.value?.txAlerts
+  if (!t) return 0
+  return (t.feeMismatch?.length || 0) + (t.refundMismatch?.length || 0) + (t.stuckRefunds?.length || 0)
+})
 const loading = ref(true)
 const loadErr = ref('')
 
@@ -67,6 +73,23 @@ const rate = (a, b) => (b ? Math.round((a / b) * 100) + '%' : '—')
           <div class="num">{{ data.stats.learners }}</div>
           <div class="lbl">在学学员（有观看进度）</div>
         </div>
+      </div>
+
+      <!-- 交易异常（查询即对账）：三类都为空 = 资金链路健康；旧版云函数无此字段时不显示 -->
+      <div v-if="txAlertCount > 0" class="card txalerts warn-card">
+        <h3>⚠️ 交易异常待处理（{{ txAlertCount }}）</h3>
+        <p v-if="data.txAlerts.feeMismatch.length" class="alert-line">
+          支付金额异常单（去「订单发货」复核解除）：{{ data.txAlerts.feeMismatch.join('、') }}
+        </p>
+        <p v-if="data.txAlerts.refundMismatch.length" class="alert-line">
+          退款通知不符（去商户平台核对流水）：{{ data.txAlerts.refundMismatch.join('、') }}
+        </p>
+        <p v-if="data.txAlerts.stuckRefunds.length" class="alert-line">
+          退款已触发超 1 小时未回调（商户平台查退款进度）：{{ data.txAlerts.stuckRefunds.join('、') }}
+        </p>
+      </div>
+      <div v-else-if="data.txAlerts" class="card txalerts ok-card">
+        ✅ 交易链路无异常（支付金额 / 退款核验 / 退款回调均正常）
       </div>
 
       <div class="cols">
@@ -223,5 +246,26 @@ h1 {
   border-color: #f0c8c5;
   background: #fdf0ef;
   color: var(--red);
+}
+.txalerts {
+  padding: 14px 20px;
+  margin-bottom: 18px;
+}
+.txalerts h3 {
+  margin: 0 0 8px;
+  font-size: 14px;
+}
+.warn-card {
+  border-color: #f0c8c5;
+  background: #fdf0ef;
+}
+.warn-card .alert-line {
+  margin: 4px 0;
+  font-size: 12.5px;
+  color: var(--red);
+}
+.ok-card {
+  font-size: 12.5px;
+  color: var(--content-2);
 }
 </style>

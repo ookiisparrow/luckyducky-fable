@@ -11,7 +11,7 @@ exports.main = async () => {
     .collection('orders')
     .where({ _openid: OPENID })
     .orderBy('createdAt', 'desc')
-    .limit(20)
+    .limit(100) // 审核批次B：20 太小易把老单挤出列表；分页体系记技术债 #12，详情另有 getOrderById 兜底
     .get()
   return { ok: true, list: res.data }
 }

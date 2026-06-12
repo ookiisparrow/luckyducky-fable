@@ -112,6 +112,17 @@ export async function confirmReceive(id) {
   throw new Error(res?.error || 'CONFIRM_FAILED')
 }
 
+// 按单号取本人订单（详情兜底：列表 limit 之外的老单也能打开）；无云/未找到返回 null
+export async function getOrderById(id) {
+  try {
+    const res = await callCloud('getOrderById', { id })
+    if (res?.ok && res.order) return res.order
+  } catch (e) {
+    logger.warn('order', 'getOrderById 云端失败', e)
+  }
+  return null
+}
+
 export async function getMyOrders() {
   try {
     const res = await callCloud('getMyOrders')

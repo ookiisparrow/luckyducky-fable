@@ -165,6 +165,12 @@
       "timeout": 15,
       "handler": "index.main",
       "installDependency": true
+    },
+    {
+      "name": "getOrderById",
+      "timeout": 10,
+      "handler": "index.main",
+      "installDependency": true
     }
   ]
 }

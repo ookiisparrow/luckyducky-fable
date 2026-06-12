@@ -292,7 +292,13 @@ exports.main = async (event) => {
       if (!id || !(total > 0) || total > 200) return reply(400, { ok: false, error: 'BAD_FINISH' })
       const chunksColl = db.collection('uploadChunks')
       const got = await chunksColl.where({ uploadId: id }).limit(1000).get()
-      if (got.data.length !== total) {
+      // seq 必须正好是 0..total-1（审核批次B：只数数量时「0,2 共 2 片」也能过，会拼出损坏文件）
+      const seqs = new Set(got.data.map((c) => c.seq))
+      const complete =
+        got.data.length === total &&
+        seqs.size === total &&
+        Array.from({ length: total }, (_, i) => i).every((i) => seqs.has(i))
+      if (!complete) {
         return reply(400, { ok: false, error: 'CHUNKS_MISSING', have: got.data.length })
       }
       const b64 = got.data
@@ -491,8 +497,9 @@ exports.main = async (event) => {
 
     if (action === 'createBatch') {
       const courseId = String(data.courseId || '')
-      const count = Math.min(500, Math.max(1, parseInt(data.count, 10) || 0))
-      if (!courseId || !count) return reply(400, { ok: false, error: 'BAD_ARGS' })
+      const rawCount = parseInt(data.count, 10) // 漏传/非法不再静默成 1（审核批次B）
+      if (!courseId || !Number.isInteger(rawCount) || rawCount < 1) return reply(400, { ok: false, error: 'BAD_ARGS' })
+      const count = Math.min(500, rawCount)
       // 服务端互调 genQrcodes（无 OPENID 即管理通道，复用既有生成与唯一性逻辑）
       const r = await cloud.callFunction({ name: 'genQrcodes', data: { courseId, count } })
       if (!r.result?.ok) return reply(400, { ok: false, error: r.result?.error || 'GEN_FAIL' })
@@ -666,13 +673,25 @@ exports.main = async (event) => {
     if (action === 'getDashboard') {
       const take = (coll, field) =>
         db.collection(coll).field(field).limit(1000).get().then((r) => r.data).catch(() => [])
-      const [users, orders, codes, progress, courses] = await Promise.all([
+      const [users, orders, codes, progress, courses, sales] = await Promise.all([
         take('users', { _id: true }),
-        take('orders', { amount: true, status: true, createdAt: true, id: true, items: true }),
+        take('orders', { amount: true, status: true, createdAt: true, id: true, items: true, feeMismatch: true }),
         take('qrcodes', { status: true, courseId: true }),
         take('progress', { done: true, last: true, courseId: true }),
         take('courses', { id: true, title: true, chapters: true }),
+        take('afterSales', { _id: true, orderId: true, status: true, refundMismatch: true, approvedAt: true, refundAmount: true }),
       ])
+
+      // 交易异常（审核批次B「查询即对账」：不建对账任务，看板加载现算，单量小够用）
+      // ① 支付金额异常待复核 ② 退款通知不符 ③ 退款已触发超 1 小时未收到回调（疑似卡单）
+      const HOUR = 3600_000
+      const txAlerts = {
+        feeMismatch: orders.filter((o) => o.feeMismatch).map((o) => o.id),
+        refundMismatch: sales.filter((a) => a.refundMismatch).map((a) => a._id),
+        stuckRefunds: sales
+          .filter((a) => a.status === 'approved' && a.approvedAt && Date.now() - a.approvedAt > HOUR)
+          .map((a) => a._id),
+      }
 
       // segment id → 可读名（课程/课时/段名）
       const segName = {}
@@ -718,6 +737,7 @@ exports.main = async (event) => {
           codesActivated: activated,
           learners,
         },
+        txAlerts,
         hot: top(doneCount),
         stuck: top(stuckCount),
         recentOrders,

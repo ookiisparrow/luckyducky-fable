@@ -6,7 +6,7 @@
  * （api 层本地生成）仅存活于会话内，load 时与远端列表按 id 合并不丢失。
  */
 import { defineStore } from 'pinia'
-import { createOrder, getMyOrders, confirmReceive, payOrder } from '@/api/order.js'
+import { createOrder, getMyOrders, confirmReceive, payOrder, getOrderById } from '@/api/order.js'
 import { logger } from '@/utils/logger.js'
 
 export const useOrdersStore = defineStore('orders', {
@@ -60,6 +60,12 @@ export const useOrdersStore = defineStore('orders', {
         o.status = 'done'
         o.doneAt = doneAt
       }
+    },
+    // 详情兜底（审核批次B）：列表 limit 之外的老单按 id 单独取回并入列表
+    async fetchById(id) {
+      if (!id || this.getById(id)) return
+      const order = await getOrderById(id)
+      if (order) this.list = [...this.list, order]
     },
     // 拉取我的订单。远端列表与本地（H5 回退单）按 id 合并，本地独有的保留在前。
     async load(force = false) {
