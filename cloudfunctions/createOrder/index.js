@@ -3,7 +3,8 @@
 //   - openid 取自 getWXContext，不信任前端传入；写库显式写 _openid。
 //   - 前端只传 { items:[{ id, qty }], address }；价格与金额按云端 products 现算。
 //   - 商品名/规格快照进条目（历史快照惯例）；地址快照只收白名单字段。
-//   - P4 接真实支付前为「模拟支付」：直接 status:'paid' + paidAt。
+//   - PAY_MODE 开关（config 集合 pay 文档，规格 §三）：缺省 mock=直接 paid（开发期）；
+//     real=写 pending，由 pay 发起支付、payCallback 回调置 paid。
 //   - 时间戳存 epoch 毫秒（避免 serverDate 跨 callFunction 序列化问题）。
 const cloud = require('wx-server-sdk')
 cloud.init({ env: cloud.DYNAMIC_CURRENT_ENV })
@@ -88,6 +89,10 @@ exports.main = async (event) => {
     detail: String(a.detail || ''),
   }
 
+  // PAY_MODE：config 集合缺文档/缺集合一律回落 mock（保持旧行为，零回归）
+  const cfg = await db.collection('config').doc('pay').get().catch(() => null)
+  const payMode = cfg && cfg.data && cfg.data.mode === 'real' ? 'real' : 'mock'
+
   const now = Date.now()
   const id = orderNo(now)
   const order = {
@@ -99,10 +104,10 @@ exports.main = async (event) => {
     ship: SHIP,
     amount,
     address,
-    status: 'paid', // 模拟支付（P4 改 pending → 支付回调 → paid）
+    status: payMode === 'real' ? 'pending' : 'paid',
     createdAt: now,
-    paidAt: now,
   }
+  if (payMode !== 'real') order.paidAt = now // mock：模拟支付直接已付
   await db.collection('orders').doc(id).set({ data: order })
   return { ok: true, order }
 }

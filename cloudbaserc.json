@@ -122,6 +122,31 @@
       "timeout": 10,
       "handler": "index.main",
       "installDependency": true
+    },
+    {
+      "name": "pay",
+      "timeout": 15,
+      "handler": "index.main",
+      "installDependency": true
+    },
+    {
+      "name": "payCallback",
+      "timeout": 15,
+      "handler": "index.main",
+      "installDependency": true
+    },
+    {
+      "name": "closeExpiredOrders",
+      "timeout": 20,
+      "handler": "index.main",
+      "installDependency": true,
+      "triggers": [
+        {
+          "name": "closeExpiredTimer",
+          "type": "timer",
+          "config": "0 */5 * * * * *"
+        }
+      ]
     }
   ]
 }

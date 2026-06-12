@@ -9,7 +9,12 @@
 //   - where(...).update() 返回 { stats:{updated} }（activateCourse 一码一用抢占）；
 //   - add({data:{_id}}) 撞已存在 _id 抛错（genQrcodes/submitReview 库级唯一约束）。
 
-const G = (globalThis.__cloudMock = globalThis.__cloudMock || { store: {}, openid: 'openid-default' })
+const G = (globalThis.__cloudMock = globalThis.__cloudMock || {
+  store: {},
+  openid: 'openid-default',
+  cloudPayCalls: [],
+  cloudPayFail: false,
+})
 
 const clone = (v) => (v === undefined ? undefined : JSON.parse(JSON.stringify(v)))
 
@@ -167,7 +172,26 @@ const cloud = {
   init: () => {},
   DYNAMIC_CURRENT_ENV: 'test-env',
   database: () => db,
-  getWXContext: () => ({ OPENID: G.openid, APPID: 'test-appid' }),
+  getWXContext: () => ({ OPENID: G.openid, APPID: 'test-appid', ENV: 'test-env' }),
+  // 云调用支付 mock：记录调用入参；cloudPayFail 时模拟下单失败（pay 测试用）
+  cloudPay: {
+    unifiedOrder: async (params) => {
+      G.cloudPayCalls.push(JSON.parse(JSON.stringify(params)))
+      if (G.cloudPayFail) return { returnCode: 'FAIL', returnMsg: 'mock fail' }
+      return {
+        returnCode: 'SUCCESS',
+        resultCode: 'SUCCESS',
+        payment: {
+          appId: 'test-appid',
+          timeStamp: '1718000000',
+          nonceStr: 'mock-nonce',
+          package: 'prepay_id=mock',
+          signType: 'MD5',
+          paySign: 'mock-sign',
+        },
+      }
+    },
+  },
   uploadFile: async ({ cloudPath }) => ({ fileID: 'cloud://test/' + cloudPath }),
   getTempFileURL: async ({ fileList }) => ({
     fileList: fileList.map((id) => ({ fileID: id, tempFileURL: 'https://tmp/' + id })),
@@ -179,6 +203,8 @@ const control = {
   reset() {
     for (const k of Object.keys(G.store)) delete G.store[k]
     G.openid = 'openid-default'
+    G.cloudPayCalls = []
+    G.cloudPayFail = false
   },
   seed(coll, docs) {
     G.store[coll] = (G.store[coll] || []).concat(JSON.parse(JSON.stringify(docs)))
@@ -188,6 +214,12 @@ const control = {
   },
   dump(coll) {
     return JSON.parse(JSON.stringify(G.store[coll] || []))
+  },
+  cloudPayCalls() {
+    return JSON.parse(JSON.stringify(G.cloudPayCalls))
+  },
+  setCloudPayFail(v) {
+    G.cloudPayFail = !!v
   },
 }
 

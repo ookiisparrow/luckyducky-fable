@@ -67,3 +67,27 @@ describe('createOrder 闸门', () => {
     expect(saved[0]._openid).toBe('user-A')
   })
 })
+
+describe('createOrder PAY_MODE 开关（规格 §三）', () => {
+  it('缺省（无 config 集合）= mock：直接 paid + paidAt（零回归）', async () => {
+    const res = await main({ items: [{ id: 'prod-3', qty: 1 }], address: {} })
+    expect(res.order.status).toBe('paid')
+    expect(res.order.paidAt).toBeGreaterThan(0)
+  })
+
+  it('mode=mock 显式配置：行为同缺省', async () => {
+    control.seed('config', [{ _id: 'pay', mode: 'mock' }])
+    const res = await main({ items: [{ id: 'prod-3', qty: 1 }], address: {} })
+    expect(res.order.status).toBe('paid')
+  })
+
+  it('mode=real：写 pending、不记 paidAt，等支付回调', async () => {
+    control.seed('config', [{ _id: 'pay', mode: 'real', subMchId: '1900000000' }])
+    const res = await main({ items: [{ id: 'prod-3', qty: 1 }], address: {} })
+    expect(res.order.status).toBe('pending')
+    expect(res.order.paidAt).toBeUndefined()
+    const saved = control.dump('orders')[0]
+    expect(saved.status).toBe('pending')
+    expect(saved.paidAt).toBeUndefined()
+  })
+})
