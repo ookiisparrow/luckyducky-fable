@@ -15,7 +15,16 @@ exports.main = async (event) => {
   if (!got || !got.data || got.data._openid !== OPENID) return { ok: false, error: 'NOT_FOUND' }
   if (got.data.status !== 'shipped') return { ok: false, error: 'BAD_STATUS:' + got.data.status }
 
+  // 条件更新（审核批次A-6）：只在「仍是 shipped」时翻 done——防与后台改单号等并发交错
+  // 造成状态回滚（先查后写不是原子的，上面的检查只为给出准确错误码）。
   const doneAt = Date.now()
-  await db.collection('orders').doc(id).update({ data: { status: 'done', doneAt } })
+  const upd = await db
+    .collection('orders')
+    .where({ _id: id, status: 'shipped' })
+    .update({ data: { status: 'done', doneAt } })
+  if (!upd.stats || upd.stats.updated !== 1) {
+    const fresh = await db.collection('orders').doc(id).get().catch(() => null)
+    return { ok: false, error: 'BAD_STATUS:' + ((fresh && fresh.data && fresh.data.status) || 'unknown') }
+  }
   return { ok: true, doneAt }
 }

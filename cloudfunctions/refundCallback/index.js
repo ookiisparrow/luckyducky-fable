@@ -10,6 +10,12 @@ const db = cloud.database()
 const ACK = { errcode: 0, errmsg: 'OK' }
 
 exports.main = async (event) => {
+  // 防伪闸（审核批次A-1）：只应由 refundnotify 工作流服务端调用；带用户身份=客户端伪造，拒改状态。
+  const { OPENID } = cloud.getWXContext()
+  if (OPENID) {
+    console.error('[refundCallback] 拒绝带用户身份的调用（疑似客户端伪造）', OPENID)
+    return ACK
+  }
   const e = event || {}
   const outRefundNo = String(e.out_refund_no || '')
   if (!outRefundNo) return ACK
@@ -21,6 +27,18 @@ exports.main = async (event) => {
   }
   const as = got.data
   const status = String(e.refund_status || '')
+
+  // 核验（审核批次A-3，fail-closed）：成功通知的订单号与退款金额必须与售后单一致，
+  // 否则不置已退款、留 refundMismatch 痕等人工（商户平台核对流水后处理）。
+  const claimFee = e.amount && e.amount.refund != null ? Number(e.amount.refund) : NaN
+  if (
+    status === 'SUCCESS' &&
+    (String(e.out_trade_no || '') !== String(as.orderId) || claimFee !== Math.round(as.refundAmount * 100))
+  ) {
+    console.error('[refundCallback] 成功通知与售后单不符，拒置已退款', outRefundNo, e.out_trade_no, claimFee)
+    await db.collection('afterSales').doc(outRefundNo).update({ data: { refundMismatch: true } }).catch(() => {})
+    return ACK
+  }
 
   if (status !== 'SUCCESS') {
     // 退款异常（CLOSED/ABNORMAL 等）：留痕人工处理（商户平台可手动重试），不翻状态

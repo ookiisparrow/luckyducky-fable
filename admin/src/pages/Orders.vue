@@ -6,7 +6,7 @@
  * 买家「确认收货」（confirmReceive 云函数）后状态翻已完成。已发货可改单号（错填补救）。
  */
 import { ref, computed } from 'vue'
-import { cloudMode, listOrders, shipOrder } from '@/api/cloud.js'
+import { cloudMode, listOrders, shipOrder, clearFeeMismatch } from '@/api/cloud.js'
 
 const STATUS = {
   pending: { label: '待支付', chip: 'grey' },
@@ -66,6 +66,17 @@ function openForm(o) {
     trackingNo: o.shipping?.trackingNo || '',
     saving: false,
     error: '',
+  }
+}
+
+// 金额异常单复核解除：先去商户平台核对该单流水，确认无误再点（解除后才能发货）
+async function doClearMismatch(o) {
+  if (!window.confirm(`确认已在商户平台核对订单 ${o.id} 的支付流水无误？解除后该单可正常发货。`)) return
+  try {
+    await clearFeeMismatch(o.id)
+    o.feeMismatch = false
+  } catch (e) {
+    window.alert('解除失败：' + e.message)
   }
 }
 
@@ -148,8 +159,16 @@ async function doShip(o) {
           <button v-if="o.status === 'shipped'" class="btn ghost mini" @click="openForm(o)">改单号</button>
         </div>
 
-        <!-- 待发货 / 改单号：行内表单 -->
-        <div v-if="o.status === 'paid' && form?.id !== o.id" class="row">
+        <!-- 金额异常单（支付回调金额与订单不符）：标红禁发货，须人工核对流水后解除 -->
+        <div v-if="o.feeMismatch" class="row mismatch">
+          <span class="mismatch-text"
+            >⚠️ 支付金额异常待复核——请先到微信支付商户平台核对该单流水，确认无误后解除</span
+          >
+          <button class="btn ghost mini" @click="doClearMismatch(o)">已核实，解除</button>
+        </div>
+
+        <!-- 待发货 / 改单号：行内表单（金额异常单解除前不出发货按钮） -->
+        <div v-if="o.status === 'paid' && !o.feeMismatch && form?.id !== o.id" class="row">
           <button class="btn brand" @click="openForm(o)">📦 发货</button>
         </div>
         <div v-if="form?.id === o.id" class="row ship-form">
@@ -284,6 +303,17 @@ h1 {
   font-family: ui-monospace, Menlo, monospace;
 }
 .err {
+  font-size: 12px;
+  color: var(--red);
+}
+.mismatch {
+  background: #fdf0ef;
+  border: 1px solid #f0c8c5;
+  border-radius: 8px;
+  padding: 8px 12px;
+}
+.mismatch-text {
+  flex: 1;
   font-size: 12px;
   color: var(--red);
 }

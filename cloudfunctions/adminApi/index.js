@@ -553,13 +553,23 @@ exports.main = async (event) => {
       if (cur !== 'paid' && cur !== 'shipped') {
         return reply(400, { ok: false, error: 'BAD_STATUS:' + cur })
       }
-      await db.collection('orders').doc(id).update({
-        data: {
-          status: 'shipped',
-          shipping: { company, trackingNo },
-          shippedAt: got.data.shippedAt || Date.now(),
-        },
-      })
+      // 金额异常单（支付回调 feeMismatch 留痕）须先在控制台「解除」后才能发货（审核批次A 折中方案）
+      if (got.data.feeMismatch) return reply(400, { ok: false, error: 'FEE_MISMATCH_HOLD' })
+      // 条件更新（审核批次A-6）：仍是 paid/shipped 才写——防与确认收货并发交错把 done 回滚成 shipped
+      const upd = await db
+        .collection('orders')
+        .where({ _id: id, status: db.command.in(['paid', 'shipped']) })
+        .update({
+          data: {
+            status: 'shipped',
+            shipping: { company, trackingNo },
+            shippedAt: got.data.shippedAt || Date.now(),
+          },
+        })
+      if (!upd.stats || upd.stats.updated !== 1) {
+        const fresh = await db.collection('orders').doc(id).get().catch(() => null)
+        return reply(400, { ok: false, error: 'BAD_STATUS:' + ((fresh && fresh.data && fresh.data.status) || 'unknown') })
+      }
       return reply(200, { ok: true })
     }
 
@@ -582,6 +592,16 @@ exports.main = async (event) => {
       if (!flowId) return reply(400, { ok: false, error: 'REFUND_FLOW_NOT_CONFIGURED' })
       const order = await db.collection('orders').doc(got.data.orderId).get().catch(() => null)
       if (!order || !order.data) return reply(400, { ok: false, error: 'NO_ORDER' })
+
+      // 原子抢占（审核批次A-2）：仍是 applied 才置 approved——双窗口/重复请求并发时只有
+      // 一个请求能抢到，杜绝重复触发外部退款；工作流触发失败则回滚 applied 可重试。
+      const grab = await db
+        .collection('afterSales')
+        .where({ _id: id, status: 'applied' })
+        .update({ data: { status: 'approved', approvedAt: Date.now() } })
+      if (!grab.stats || grab.stats.updated !== 1) {
+        return reply(400, { ok: false, error: 'BAD_STATUS:concurrent' })
+      }
 
       // 触发退款工作流：refund=售后单分摊额（申请时云端算定），total=订单实付，金额不收前端
       const res = await cloud
@@ -608,9 +628,23 @@ exports.main = async (event) => {
       const r = res && res.result && res.result.data
       if (!r || !(r.status || r.refund_id || r.out_refund_no)) {
         console.error('approveRefund 工作流未受理', id, res && JSON.stringify(res.result).slice(0, 300))
+        // 回滚抢占，允许人工重试（审核批次A-2）
+        await db.collection('afterSales').doc(id).update({ data: { status: 'applied' } }).catch(() => {})
         return reply(500, { ok: false, error: 'REFUND_TRIGGER_FAIL' })
       }
-      await db.collection('afterSales').doc(id).update({ data: { status: 'approved', approvedAt: Date.now() } })
+      return reply(200, { ok: true })
+    }
+
+    // 金额异常单人工复核解除（审核批次A 折中方案：feeMismatch 单禁发货，核实流水后在此解除）
+    if (action === 'clearFeeMismatch') {
+      const id = String(data.id || '')
+      if (!id) return reply(400, { ok: false, error: 'BAD_ARGS' })
+      const got = await db.collection('orders').doc(id).get().catch(() => null)
+      if (!got || !got.data) return reply(400, { ok: false, error: 'NO_ORDER' })
+      await db
+        .collection('orders')
+        .doc(id)
+        .update({ data: { feeMismatch: false, feeMismatchClearedAt: Date.now() } })
       return reply(200, { ok: true })
     }
 

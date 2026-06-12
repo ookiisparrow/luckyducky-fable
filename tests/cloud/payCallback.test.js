@@ -13,6 +13,7 @@ const NOTIFY = {
 
 beforeEach(() => {
   control.reset()
+  control.setOpenId('') // 工作流服务端调用无用户上下文（防伪闸放行通道）
   control.seed('orders', [
     { _id: 'p1', id: 'p1', status: 'pending', amount: 178, createdAt: Date.now() },
     { _id: 'p2', id: 'p2', status: 'paid', amount: 178, paidAt: 111, transactionId: 'tx-old' },
@@ -61,6 +62,13 @@ describe('payCallback 回调幂等', () => {
   it('未知订单号 / 缺单号：ACK 不抛（微信重试无意义）', async () => {
     expect((await main({ ...NOTIFY, outTradeNo: 'nope' })).errcode).toBe(0)
     expect((await main({})).errcode).toBe(0)
+  })
+
+  it('防伪闸：带用户身份的调用（客户端伪造）一律不改状态', async () => {
+    control.setOpenId('attacker-openid') // 小程序客户端 callFunction 必带 OPENID
+    const res = await main(NOTIFY)
+    expect(res.errcode).toBe(0) // 静默确认，不给探测信号
+    expect(control.dump('orders').find((o) => o._id === 'p1').status).toBe('pending') // 未被翻 paid
   })
 })
 

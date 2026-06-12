@@ -59,17 +59,20 @@ function localCreateOrder({ items, address }) {
   }
 }
 
+// 下单（审核批次A-5）：本地回退**只限无云环境**（H5/App 演示，callCloud 约定返回 null）。
+// 小程序端云调用异常或云函数拒单一律向上抛——真实交易不得本地伪成功（原「异常也回退」
+// 顺带吞掉了拒单 throw，已一并修正）。
 export async function createOrder(payload) {
+  let res
   try {
-    const res = await callCloud('createOrder', payload)
-    if (res?.ok && res.order) return res.order
-    // res 非空说明云函数拒单（契约/未知条目），不回退、向上抛（提交守卫已挡常规场景）
-    if (res) throw new Error(res.error || 'CREATE_ORDER_FAILED')
+    res = await callCloud('createOrder', payload)
   } catch (e) {
-    // 小程序端云端异常也回退本地：模拟支付阶段保流程贯通；P4 接真实支付后改为阻断提交
-    logger.warn('order', 'createOrder 云端不可用，回退本地', e)
+    logger.error('order', 'createOrder 云端异常，阻断提交', e)
+    throw e instanceof Error ? e : new Error('CREATE_ORDER_FAILED')
   }
-  return localCreateOrder(payload)
+  if (res === null) return localCreateOrder(payload) // 无云演示环境
+  if (res?.ok && res.order) return res.order
+  throw new Error(res?.error || 'CREATE_ORDER_FAILED') // 云函数拒单：页面按 error 提示
 }
 
 // 发起微信支付（仅小程序端有真实链路）：云函数 pay 校验本人 pending 单并按库内金额
@@ -94,17 +97,19 @@ export async function payOrder(id) {
   return { paid: true }
 }
 
-// 确认收货：云端流转 shipped → done（仅本人订单）。H5 / App 回退单恒为待发货、
-// 按钮不可达；小程序云端异常时本地标记完成保流程贯通（重进页面会向云端对齐）。
+// 确认收货：云端流转 shipped → done（仅本人订单）。本地完成**只限无云环境**（H5/App
+// 演示，且回退单恒为待发货、按钮通常不可达）；小程序云端异常一律向上抛（审核批次A-5）。
 export async function confirmReceive(id) {
+  let res
   try {
-    const res = await callCloud('confirmReceive', { id })
-    if (res?.ok) return { doneAt: res.doneAt }
-    throw new Error(res?.error || 'CONFIRM_FAILED')
+    res = await callCloud('confirmReceive', { id })
   } catch (e) {
-    logger.warn('order', 'confirmReceive 云端不可用，本地标记完成', e)
-    return { doneAt: Date.now() }
+    logger.error('order', 'confirmReceive 云端异常', e)
+    throw e instanceof Error ? e : new Error('CONFIRM_FAILED')
   }
+  if (res === null) return { doneAt: Date.now() } // 无云演示环境
+  if (res?.ok) return { doneAt: res.doneAt }
+  throw new Error(res?.error || 'CONFIRM_FAILED')
 }
 
 export async function getMyOrders() {

@@ -11,6 +11,13 @@ const db = cloud.database()
 const ACK = { errcode: 0, errmsg: 'OK' }
 
 exports.main = async (event) => {
+  // 防伪闸（审核批次A-1）：本函数只应由 paynotify 工作流服务端调用（无用户上下文）。
+  // 小程序客户端 callFunction 必带 OPENID——带用户身份的调用一律视为伪造，拒改状态。
+  const { OPENID } = cloud.getWXContext()
+  if (OPENID) {
+    console.error('[payCallback] 拒绝带用户身份的调用（疑似客户端伪造）', OPENID)
+    return ACK
+  }
   const e = event || {}
   // 归一化 v3 / v2 两种通知形态
   const outTradeNo = String(e.out_trade_no || e.outTradeNo || '')

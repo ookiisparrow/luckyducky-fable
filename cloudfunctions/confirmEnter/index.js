@@ -24,9 +24,19 @@ exports.main = async (event) => {
 
   // 退货权失效与「首次进课」原子绑定：只在第一次确认那一刻执行一次。
   // 调试日志 I：原本失效块在守卫外、每次调用都跑 → 重复确认会多扣下一笔订单（不幂等）。
+  // 审核批次A-6：先查后写在并发下两请求都读到 enteredAt=null → 双双执行失效。
+  // 改条件更新抢占（enteredAt 仍为 null 才写得进），只有抢占成功者执行退货权失效。
   if (!enteredAt) {
+    const grab = await db
+      .collection('activations')
+      .where({ _id: act._id, enteredAt: null })
+      .update({ data: { enteredAt: now } })
+    if (!grab.stats || grab.stats.updated !== 1) {
+      // 并发输家：读回真正的首次确认时间，不执行失效
+      const fresh = await db.collection('activations').doc(act._id).get().catch(() => null)
+      return { ok: true, enteredAt: (fresh && fresh.data && fresh.data.enteredAt) || now, revoked: null }
+    }
     enteredAt = now
-    await db.collection('activations').doc(act._id).update({ data: { enteredAt: now } })
 
     // 启发式失效：该课程对应的商品 → 本人订单里最早一条可退条目翻 false。
     // 调试日志 H：订单状态放宽到 paid/shipped/done——真实流程顾客是收货后才扫码确认，

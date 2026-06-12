@@ -44,6 +44,8 @@ exports.main = async (event) => {
     .filter((l) => l && l.id && Number.isInteger(l.qty) && l.qty > 0)
     .map((l) => ({ ...l, sku: typeof l.sku === 'string' ? l.sku.slice(0, 30) : '' }))
   if (!lines.length) return { ok: false, error: 'EMPTY_ITEMS' }
+  // 服务端不变量（审核批次A-4）：搭配购不可单买，订单必须含至少一个主商品（前端守卫的云端对等物）
+  if (!lines.some((l) => !ADDONS[l.id])) return { ok: false, error: 'NO_MAIN_ITEM' }
 
   // 云端定价：商品查 products 集合，搭配购查 ADDONS 表；未知条目整单拒绝
   const prodIds = [...new Set(lines.map((l) => l.id).filter((id) => !ADDONS[id]))]
@@ -80,23 +82,25 @@ exports.main = async (event) => {
   const goods = items.reduce((s, it) => s + it.price * it.qty, 0)
   const amount = Math.max(0, goods + SHIP - COUPON)
 
-  // 地址快照：白名单字段，全部转字符串
+  // 地址快照：白名单字段，全部转字符串；四要素必填 + 手机号基本格式（审核批次A-4，不信任前端守卫）
   const a = event.address || {}
   const address = {
-    name: String(a.name || ''),
-    phone: String(a.phone || ''),
-    region: String(a.region || ''),
-    detail: String(a.detail || ''),
+    name: String(a.name || '').trim(),
+    phone: String(a.phone || '').trim(),
+    region: String(a.region || '').trim(),
+    detail: String(a.detail || '').trim(),
   }
+  if (!address.name || !address.phone || !address.region || !address.detail) {
+    return { ok: false, error: 'BAD_ADDRESS' }
+  }
+  if (address.phone.replace(/\D/g, '').length < 7) return { ok: false, error: 'BAD_ADDRESS' }
 
   // PAY_MODE：config 集合缺文档/缺集合一律回落 mock（保持旧行为，零回归）
   const cfg = await db.collection('config').doc('pay').get().catch(() => null)
   const payMode = cfg && cfg.data && cfg.data.mode === 'real' ? 'real' : 'mock'
 
   const now = Date.now()
-  const id = orderNo(now)
   const order = {
-    id,
     _openid: OPENID,
     items,
     goods,
@@ -108,6 +112,17 @@ exports.main = async (event) => {
     createdAt: now,
   }
   if (payMode !== 'real') order.paidAt = now // mock：模拟支付直接已付
-  await db.collection('orders').doc(id).set({ data: order })
-  return { ok: true, order }
+
+  // 订单号防碰撞（审核批次A-4）：同分钟随机空间仅 9000，原 doc(id).set 碰撞会覆盖旧单。
+  // 改用 add（_id 库级唯一，撞号抛错）+ 重新摇号重试，绝不覆盖既有交易单据。
+  for (let attempt = 0; attempt < 5; attempt++) {
+    const id = orderNo(now)
+    try {
+      await db.collection('orders').add({ data: { ...order, _id: id, id } })
+      return { ok: true, order: { ...order, _id: id, id } }
+    } catch {
+      /* 撞号，换号重试 */
+    }
+  }
+  return { ok: false, error: 'ORDER_ID_BUSY' }
 }

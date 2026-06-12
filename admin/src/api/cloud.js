@@ -371,6 +371,13 @@ export async function shipOrder(id, company, trackingNo) {
   return true
 }
 
+// 金额异常单解除（feeMismatch 复核通过后允许发货）
+export async function clearFeeMismatch(id) {
+  const r = await post('clearFeeMismatch', { id })
+  if (!r.ok) throw new Error(r.error || 'CLEAR_FAIL')
+  return true
+}
+
 // ---------- 售后退款（链10：审核 + 触发退款工作流；金额申请时已云端算定） ----------
 
 export async function listRefunds() {
