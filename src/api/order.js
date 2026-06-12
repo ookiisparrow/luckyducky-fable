@@ -72,6 +72,28 @@ export async function createOrder(payload) {
   return localCreateOrder(payload)
 }
 
+// 发起微信支付（仅小程序端有真实链路）：云函数 pay 校验本人 pending 单并按库内金额
+// 下单 → 拉起微信收银台。错误语义：PAY_CANCELLED=用户取消；ORDER_CLOSED=已超时关单；
+// PAY_NOT_ENABLED=支付通道未启用（PAY_MODE 未切 real）。0 元单云端直接置 paid 不拉收银台。
+export async function payOrder(id) {
+  const res = await callCloud('pay', { id })
+  if (!res) throw new Error('PAY_UNAVAILABLE') // 非小程序端无云调用，调用方界面不应暴露入口
+  if (!res.ok) throw new Error(res.error || 'PAY_FAILED')
+  if (res.paid) return { paid: true } // 0 元单：云端已直接置 paid
+  await new Promise((resolve, reject) => {
+    uni.requestPayment({
+      provider: 'wxpay',
+      ...res.payment,
+      success: resolve,
+      fail: (e) => {
+        const cancelled = e && e.errMsg && e.errMsg.includes('cancel')
+        reject(new Error(cancelled ? 'PAY_CANCELLED' : 'PAY_FAILED'))
+      },
+    })
+  })
+  return { paid: true }
+}
+
 // 确认收货：云端流转 shipped → done（仅本人订单）。H5 / App 回退单恒为待发货、
 // 按钮不可达；小程序云端异常时本地标记完成保流程贯通（重进页面会向云端对齐）。
 export async function confirmReceive(id) {

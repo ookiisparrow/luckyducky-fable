@@ -107,6 +107,28 @@ async function onSubmit() {
       address: addr.value,
     })
     cart.finishCheckout(list.value) // 按本次最终数量精确扣减购物车
+    // PAY_MODE=real：云端产 pending 单 → 当场拉起微信支付；取消/失败不丢单，进详情可继续付。
+    // mock 与 H5/App 回退恒产 paid，走原支付成功路径（零回归）。
+    if (order.status === 'pending') {
+      let paidOk = false
+      // #ifdef MP-WEIXIN
+      try {
+        await ordersStore.pay(order.id)
+        paidOk = true
+      } catch (e) {
+        uni.showToast({
+          title: e?.message === 'PAY_CANCELLED' ? '支付未完成，订单已保留' : '支付未完成，可在订单中继续支付',
+          icon: 'none',
+        })
+      }
+      // #endif
+      if (paidOk) {
+        uni.redirectTo({ url: `/pages/paysuccess/index?id=${order.id}&amount=${order.amount.toFixed(2)}` })
+      } else {
+        setTimeout(() => uni.redirectTo({ url: `/pages/order/index?id=${order.id}` }), 600)
+      }
+      return
+    }
     uni.redirectTo({ url: `/pages/paysuccess/index?id=${order.id}&amount=${order.amount.toFixed(2)}` })
   } catch {
     uni.showToast({ title: '下单失败，请稍后再试', icon: 'none' })

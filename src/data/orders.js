@@ -10,9 +10,9 @@
 // 这里 re-export 让既有 `from '@/data/orders.js'` 的引用方无感。
 export { COUPON, SHIP } from './checkout.js'
 
-// 真实订单 status → 展示配置。现阶段 createOrder 模拟支付直接产 paid；
-// pending/shipped/done 由 P4 真实支付与 P5 后台流转产生，配置先备齐，
-// 状态一出现页面即正确显示。actions 的 key 由订单详情页 onAction 处理。
+// 真实订单 status → 展示配置。PAY_MODE=mock 时 createOrder 直接产 paid；
+// =real 时产 pending（去支付 → 支付回调 → paid），超时由云端关单产 closed。
+// actions 的 key 由订单详情页 onAction 处理。
 export const ORDER_STATUS = {
   pending: {
     label: '待支付',
@@ -54,6 +54,14 @@ export const ORDER_STATUS = {
       { label: '再次购买', kind: 'ghost', key: 'rebuy' },
       { label: '评价晒单', kind: 'solid', key: 'review' },
     ],
+  },
+  closed: {
+    label: '已关闭',
+    icon: 'clock-orange',
+    tint: 'sage',
+    head: '订单已关闭',
+    sub: '超时未支付，订单已自动关闭；喜欢的话可以重新下单',
+    actions: [{ label: '再次购买', kind: 'solid', key: 'rebuy' }],
   },
 }
 

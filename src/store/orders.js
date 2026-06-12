@@ -6,7 +6,7 @@
  * （api 层本地生成）仅存活于会话内，load 时与远端列表按 id 合并不丢失。
  */
 import { defineStore } from 'pinia'
-import { createOrder, getMyOrders, confirmReceive } from '@/api/order.js'
+import { createOrder, getMyOrders, confirmReceive, payOrder } from '@/api/order.js'
 import { logger } from '@/utils/logger.js'
 
 export const useOrdersStore = defineStore('orders', {
@@ -30,6 +30,27 @@ export const useOrdersStore = defineStore('orders', {
       const order = await createOrder(payload)
       this.list = [order, ...this.list.filter((o) => o.id !== order.id)]
       return order
+    },
+    // 发起支付（pending → paid）。成功后本笔乐观置 paid（权威 paidAt 由支付回调写云端，
+    // 下次 load(force) 对齐）；云端判定超时关单时本地同步 closed，错误继续向上抛由页面提示。
+    async pay(id) {
+      try {
+        await payOrder(id)
+        const o = this.list.find((x) => x.id === id)
+        if (o) {
+          o.status = 'paid'
+          o.paidAt = Date.now()
+        }
+      } catch (e) {
+        if (e && e.message === 'ORDER_CLOSED') {
+          const o = this.list.find((x) => x.id === id)
+          if (o) {
+            o.status = 'closed'
+            o.closedAt = Date.now()
+          }
+        }
+        throw e
+      }
     },
     // 确认收货（shipped → done）。成功后就地更新本笔，详情页 / 列表响应式刷新。
     async confirmReceive(id) {

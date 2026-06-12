@@ -9,7 +9,7 @@
  *   确认收货 → 真单走 confirmReceive 云函数（shipped → done）/ 样例 Toast；
  *   提醒发货 → Toast；再次购买 → 进详情；申请退款 → 售后页；评价晒单 → 评价页。
  */
-import { ref, computed } from 'vue'
+import { ref, computed, watch, onUnmounted } from 'vue'
 import { onLoad } from '@dcloudio/uni-app'
 import Icon from '@/components/Icon.vue'
 import CoNavBar from '@/components/CoNavBar.vue'
@@ -20,7 +20,7 @@ import { useAddressStore } from '@/store/address.js'
 import { useOrdersStore } from '@/store/orders.js'
 import { ORDER_CFG, ORDER_STATUS, COUPON, SHIP } from '@/data/orders.js'
 import { goBack } from '@/utils/nav.js'
-import { money, dateTime } from '@/utils/format.js'
+import { money, dateTime, mmss } from '@/utils/format.js'
 
 const address = useAddressStore()
 const ordersStore = useOrdersStore()
@@ -28,21 +28,54 @@ const status = ref('toship')
 const orderId = ref('')
 const order = computed(() => (orderId.value ? ordersStore.getById(orderId.value) : null))
 
+// 待支付倒计时：真单 pending 才跑，15 分钟与云端关单同口径；timer 必清理（代码标准）
+const PAY_WINDOW_MS = 15 * 60 * 1000
+const nowTick = ref(Date.now())
+let payTimer = null
+watch(
+  () => order.value && order.value.status,
+  (s) => {
+    if (s === 'pending' && !payTimer) {
+      payTimer = setInterval(() => {
+        nowTick.value = Date.now()
+      }, 1000)
+    } else if (s !== 'pending' && payTimer) {
+      clearInterval(payTimer)
+      payTimer = null
+    }
+  },
+  { immediate: true },
+)
+onUnmounted(() => payTimer && clearInterval(payTimer))
+const payRemainMs = computed(() =>
+  order.value && order.value.status === 'pending'
+    ? Math.max(0, order.value.createdAt + PAY_WINDOW_MS - nowTick.value)
+    : 0,
+)
+
 // 真实订单按 status 映射展示配置（ORDER_STATUS 单一来源；未知状态兜底按待发货）
 function cfgFromOrder(o) {
   const v = ORDER_STATUS[o.status] || ORDER_STATUS.paid
   const info = [
     ['订单编号', o.id],
     o.paidAt ? ['付款时间', dateTime(o.paidAt)] : ['下单时间', dateTime(o.createdAt)],
-    ['支付方式', '微信支付（模拟）'],
+    // 真实支付的单带 transactionId（支付回调写入）；其余是模拟支付产物
+    ['支付方式', o.transactionId ? '微信支付' : '微信支付（模拟）'],
   ]
   if (o.doneAt) info.push(['成交时间', dateTime(o.doneAt)])
+  // 待支付横幅副文案换成实时倒计时（与云端 15 分钟关单同口径）
+  const sub =
+    o.status === 'pending'
+      ? payRemainMs.value > 0
+        ? `请在 ${mmss(Math.ceil(payRemainMs.value / 1000))} 内完成支付，超时订单自动关闭`
+        : '订单已超时，即将自动关闭'
+      : v.sub
   return {
     title: v.label,
     icon: v.icon,
     tint: v.tint,
     head: v.head,
-    sub: v.sub,
+    sub,
     // 控制台发货后订单带 shipping 快照（公司 + 运单号），物流卡显示真实信息
     logi: o.shipping
       ? {
@@ -86,6 +119,28 @@ const pay = computed(() =>
   order.value ? order.value.amount : Math.max(0, goods.value + ship.value - coupon.value),
 )
 const back = () => goBack('/pages/me/index')
+
+// 继续支付（pending 单）：成功置 paid 横幅响应式切换；取消留单；超时云端关单本地同步 closed
+const paying = ref(false)
+async function payNow() {
+  if (paying.value) return
+  paying.value = true
+  try {
+    await ordersStore.pay(order.value.id)
+    uni.showToast({ title: '支付成功', icon: 'success' })
+  } catch (e) {
+    const msg = e && e.message
+    const tips = {
+      ORDER_CLOSED: '订单已超时关闭',
+      PAY_CANCELLED: '支付未完成，订单已保留',
+      PAY_NOT_ENABLED: '支付通道尚未开通，请稍后再试',
+    }
+    uni.showToast({ title: tips[msg] || '支付失败，请稍后再试', icon: 'none' })
+  } finally {
+    paying.value = false
+  }
+}
+
 function onAction(a) {
   const k = a.key
   if (k === 'confirm') {
@@ -111,7 +166,16 @@ function onAction(a) {
   } else if (k === 'remind') {
     uni.showToast({ title: '已提醒商家发货', icon: 'none' })
   } else if (k === 'pay') {
-    uni.showToast({ title: '支付功能开发中（将接入微信支付）', icon: 'none' })
+    if (!order.value) {
+      uni.showToast({ title: '支付功能开发中（将接入微信支付）', icon: 'none' }) // 样例路径维持占位
+      return
+    }
+    let canPay = false
+    // #ifdef MP-WEIXIN
+    canPay = true
+    // #endif
+    if (canPay) payNow()
+    else uni.showToast({ title: '请在微信小程序内完成支付', icon: 'none' })
   } else if (k === 'logi') {
     // 真单有物流快照：复制运单号（去快递 App / 公众号查询）；样例保持占位提示
     if (order.value && order.value.shipping) {
