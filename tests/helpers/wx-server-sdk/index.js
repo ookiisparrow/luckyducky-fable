@@ -14,6 +14,9 @@ const G = (globalThis.__cloudMock = globalThis.__cloudMock || {
   openid: 'openid-default',
   cloudPayCalls: [],
   cloudPayFail: false,
+  callFunctionCalls: [],
+  callFunctionResult: null,
+  callFunctionFail: false,
 })
 
 const clone = (v) => (v === undefined ? undefined : JSON.parse(JSON.stringify(v)))
@@ -173,6 +176,12 @@ const cloud = {
   DYNAMIC_CURRENT_ENV: 'test-env',
   database: () => db,
   getWXContext: () => ({ OPENID: G.openid, APPID: 'test-appid', ENV: 'test-env' }),
+  // 服务端互调 mock（pay → 支付工作流 cloudbase_module 用）：记录入参、可配置返回/失败
+  callFunction: async (params) => {
+    G.callFunctionCalls.push(JSON.parse(JSON.stringify(params)))
+    if (G.callFunctionFail) throw new Error('CALL_FUNCTION_FAIL')
+    return JSON.parse(JSON.stringify(G.callFunctionResult != null ? G.callFunctionResult : { result: {} }))
+  },
   // 云调用支付 mock：记录调用入参；cloudPayFail 时模拟下单失败（pay 测试用）
   cloudPay: {
     unifiedOrder: async (params) => {
@@ -205,6 +214,9 @@ const control = {
     G.openid = 'openid-default'
     G.cloudPayCalls = []
     G.cloudPayFail = false
+    G.callFunctionCalls = []
+    G.callFunctionResult = null
+    G.callFunctionFail = false
   },
   seed(coll, docs) {
     G.store[coll] = (G.store[coll] || []).concat(JSON.parse(JSON.stringify(docs)))
@@ -220,6 +232,15 @@ const control = {
   },
   setCloudPayFail(v) {
     G.cloudPayFail = !!v
+  },
+  callFunctionCalls() {
+    return JSON.parse(JSON.stringify(G.callFunctionCalls))
+  },
+  setCallFunctionResult(v) {
+    G.callFunctionResult = v
+  },
+  setCallFunctionFail(v) {
+    G.callFunctionFail = !!v
   },
 }
 

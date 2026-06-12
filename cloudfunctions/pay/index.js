@@ -1,7 +1,9 @@
 // 发起支付（敏感业务：金额一律取库内订单 amount，不信任前端）。
-// 云调用 cloudPay.unifiedOrder：商户号在云开发控制台关联后写进 config.pay.subMchId；
-// 支付结果回调走 payCallback 云函数（云开发可信通道，免验签）。
-// PAY_MODE=real 且商户号配置齐全才放行（缺省 mock 下本函数不可用，防误启用）。
+// 接入方式：云开发「微信支付工作流」（2026-06-12 路线变更——实物交易类小程序
+// 被微信限制使用旧云调用支付，须走工作流；见调试日志 J）。
+// 工作流 ID 存 config.pay.flowId（控制台建好的「使用微信支付API发起支付」流），
+// 凭证/商户号/回调地址都配在工作流侧连接器里；本函数负责三道闸 + 金额 + 触发。
+// PAY_MODE=real 且 flowId 配置齐全才放行（缺省 mock 下本函数不可用，防误启用）。
 const cloud = require('wx-server-sdk')
 cloud.init({ env: cloud.DYNAMIC_CURRENT_ENV })
 const db = cloud.database()
@@ -10,7 +12,7 @@ const db = cloud.database()
 const EXPIRE_MS = 15 * 60 * 1000
 
 exports.main = async (event) => {
-  const { OPENID, ENV } = cloud.getWXContext()
+  const { OPENID } = cloud.getWXContext()
   if (!OPENID) return { ok: false, error: 'NO_OPENID' }
   const id = String(event.id || '')
   if (!id) return { ok: false, error: 'NO_ID' }
@@ -28,7 +30,7 @@ exports.main = async (event) => {
 
   const cfg = await db.collection('config').doc('pay').get().catch(() => null)
   const pay = (cfg && cfg.data) || {}
-  if (pay.mode !== 'real' || !pay.subMchId) return { ok: false, error: 'PAY_NOT_ENABLED' }
+  if (pay.mode !== 'real' || !pay.flowId) return { ok: false, error: 'PAY_NOT_ENABLED' }
 
   const totalFee = Math.round(order.amount * 100) // 微信支付单位是分
   if (totalFee <= 0) {
@@ -38,20 +40,41 @@ exports.main = async (event) => {
     return { ok: true, paid: true, paidAt }
   }
 
+  // 触发支付工作流（JSAPI 下单）：openid 显式传入（不依赖工作流环境注入），
+  // 金额/单号均来自库内订单。回调地址由工作流入参表达式固定注入（paynotify 工作流）。
   const firstName = order.items && order.items[0] ? String(order.items[0].name) : '钩织材料包'
-  const res = await cloud.cloudPay.unifiedOrder({
-    body: ('幸运小鸭 · ' + firstName).slice(0, 40),
-    outTradeNo: order.id,
-    spbillCreateIp: '127.0.0.1',
-    subMchId: String(pay.subMchId),
-    totalFee,
-    envId: ENV,
-    functionName: 'payCallback',
-  })
-  if (!res || !res.payment) {
-    console.error('[pay] unifiedOrder 失败', order.id, res && res.returnMsg)
+  const res = await cloud
+    .callFunction({
+      name: 'cloudbase_module',
+      data: {
+        name: String(pay.flowId),
+        data: {
+          description: ('幸运小鸭 · ' + firstName).slice(0, 40),
+          out_trade_no: order.id,
+          amount: { total: totalFee, currency: 'CNY' },
+          payer: { openid: OPENID },
+        },
+      },
+    })
+    .catch((e) => {
+      console.error('[pay] 工作流调用异常', order.id, e && e.message)
+      return null
+    })
+
+  const p = res && res.result && res.result.data
+  if (!p || !p.paySign) {
+    console.error('[pay] 工作流未返回预付单', order.id, res && JSON.stringify(res.result).slice(0, 300))
     return { ok: false, error: 'UNIFIED_ORDER_FAIL' }
   }
-  // payment 即 wx.requestPayment 所需参数（timeStamp/nonceStr/package/signType/paySign）
-  return { ok: true, payment: res.payment }
+  // 对齐 wx.requestPayment 参数名（工作流回传 packageVal，前端要的是 package）
+  return {
+    ok: true,
+    payment: {
+      timeStamp: String(p.timeStamp),
+      nonceStr: String(p.nonceStr),
+      package: String(p.packageVal || p.package || ''),
+      signType: String(p.signType || 'RSA'),
+      paySign: String(p.paySign),
+    },
+  }
 }

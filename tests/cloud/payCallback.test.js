@@ -63,3 +63,40 @@ describe('payCallback 回调幂等', () => {
     expect((await main({})).errcode).toBe(0)
   })
 })
+
+describe('payCallback v3 工作流回调形态（resource 字段）', () => {
+  const V3 = {
+    out_trade_no: 'p1',
+    trade_state: 'SUCCESS',
+    transaction_id: 'tx-v3',
+    amount: { total: 17800, payer_total: 17800 },
+  }
+
+  it('v3 成功通知：pending → paid + transactionId', async () => {
+    const res = await main(V3)
+    expect(res.errcode).toBe(0)
+    const p1 = control.dump('orders').find((o) => o._id === 'p1')
+    expect(p1.status).toBe('paid')
+    expect(p1.transactionId).toBe('tx-v3')
+    expect(p1.feeMismatch).toBeUndefined()
+  })
+
+  it('v3 非 SUCCESS（NOTPAY/CLOSED 等）：不改状态', async () => {
+    await main({ ...V3, trade_state: 'NOTPAY' })
+    expect(control.dump('orders').find((o) => o._id === 'p1').status).toBe('pending')
+  })
+
+  it('v3 金额不符：置 paid 但留 feeMismatch 痕', async () => {
+    await main({ ...V3, amount: { total: 17800, payer_total: 1 } })
+    const p1 = control.dump('orders').find((o) => o._id === 'p1')
+    expect(p1.status).toBe('paid')
+    expect(p1.feeMismatch).toBe(true)
+  })
+
+  it('v3 幂等：已 paid 重复通知不改写', async () => {
+    await main({ ...V3, out_trade_no: 'p2', transaction_id: 'tx-dup' })
+    const p2 = control.dump('orders').find((o) => o._id === 'p2')
+    expect(p2.paidAt).toBe(111)
+    expect(p2.transactionId).toBe('tx-old')
+  })
+})
