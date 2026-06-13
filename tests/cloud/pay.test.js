@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest'
 import { control } from 'wx-server-sdk'
-import { main } from '../../cloudfunctions/pay/index.js'
+import { main } from '../../packages/cloud/src/functions/orders/pay'
 
 // pay 闸门：openid + 本人订单 + 仅 pending + 金额取库内（不信任前端）+ 超时惰性关单 + PAY_MODE 放行。
 // 下单通道 = 支付工作流（cloudbase_module），flowId 存 config.pay。

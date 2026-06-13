@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest'
 import { control } from 'wx-server-sdk'
-import { main } from '../../cloudfunctions/applyRefund/index.js'
+import { main } from '../../packages/cloud/src/functions/orders/applyRefund'
 
 // applyRefund 闸门（链10）：openid 本人 + 订单 paid/shipped/done + 商品在单内 +
 // 条目 refundable + 一单一品一售后 + 金额云端分摊（占位券按比例摊、累计不超实付）。

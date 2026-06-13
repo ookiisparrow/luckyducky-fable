@@ -120,6 +120,16 @@ const fileRules = [
         : null,
   },
   {
+    // 平台接缝收口（根因账本 #12）：触发工作流禁裸用 cloudbase_module——经 kit.callFlow 单点，
+    // 平台规则变更时改动面最小。kit 自身放行（不在 functions 域）。
+    id: 'flow-seam-via-kit',
+    inScope: (abs) => abs.includes('/packages/cloud/src/functions/') && abs.endsWith('.ts'),
+    test: (line) =>
+      /cloudbase_module/.test(line)
+        ? '触发工作流禁裸用 cloudbase_module——经 kit.callFlow 单点收口（根因#12 平台接缝最小化）'
+        : null,
+  },
+  {
     // T1 砍多端（根因账本 #6）：api 层禁 import @/data/——api 只对接云（callCloud），
     // 不引样例数据＝不可能再造本地假数据回退。比正则抓 res===null 干净。
     id: 'api-cloud-only',
