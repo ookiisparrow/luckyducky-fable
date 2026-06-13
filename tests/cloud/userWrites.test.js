@@ -51,3 +51,17 @@ describe('updateProfile（白名单 + 截断 + 归属）', () => {
     expect(control.dump('users')[0].avatar).toBe('') // 未写入
   })
 })
+
+// 根因账本 #1 反向自检：用户域首写用确定性 _id=openid，并发首写撞号即幂等、不重复建档。
+// 随机 _id 实现下两个并发首写各自 add → 两条档（本组必红）；确定性 _id 后 → 一条。
+describe('并发首写幂等（确定性 _id=openid，根因#1）', () => {
+  it('login 并发首登 → 只一条用户档', async () => {
+    await Promise.all([login({}), login({})])
+    expect(control.dump('users')).toHaveLength(1)
+  })
+
+  it('updateProfile 并发首次保存 → 只一条用户档', async () => {
+    await Promise.all([updateProfile({ nickname: 'A' }), updateProfile({ nickname: 'B' })])
+    expect(control.dump('users')).toHaveLength(1)
+  })
+})

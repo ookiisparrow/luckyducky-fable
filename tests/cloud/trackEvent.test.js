@@ -47,6 +47,13 @@ describe('trackEvent', () => {
     expect(p2[0].done['l1-s2']).toBe(true)
   })
 
+  it('并发首个进度事件 → 只一条 progress（确定性 _id，根因#1 反向自检）', async () => {
+    control.seed('activations', [{ _openid: 'u1', courseId: 'course-duck', code: 'X', enteredAt: Date.now() }])
+    const base = { type: 'segment_done', meta: { courseId: 'course-duck', lessonId: 'l1', at: 40, dur: 40 } }
+    await Promise.all([main({ ...base, targetId: 'l1-s1' }), main({ ...base, targetId: 'l1-s2' })])
+    expect(control.dump('progress')).toHaveLength(1) // 随机 _id 时为两条=红
+  })
+
   it('防刷（审计 P3）：未激活该课的 segment_done 不折叠进度（事件仍记）', async () => {
     await main({
       type: 'segment_done',

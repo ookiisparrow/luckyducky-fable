@@ -1,4 +1,4 @@
-import { withOpenId, ok, err, str } from '../../kit'
+import { withOpenId, ok, err, str, ensureDoc } from '../../kit'
 
 const CAPS = { nickname: 20, bio: 60, avatar: 256 }
 
@@ -25,7 +25,9 @@ export const main = withOpenId(async ({ db, OPENID, event }) => {
     await users.doc(doc._id).update({ data: patch })
     return ok({ user: { ...doc, ...patch } })
   }
-  const doc = { _openid: OPENID, nickname: '', avatar: '', bio: '', createdAt: Date.now(), ...patch }
-  const addRes = await users.add({ data: doc })
-  return ok({ user: { _id: addRes._id, ...doc } })
+  // 首次保存即建档：确定性 _id=OPENID（根因#1），并发首次保存撞号即幂等、不重复建档。
+  const user = await ensureDoc('users', OPENID, {
+    _openid: OPENID, nickname: '', avatar: '', bio: '', createdAt: Date.now(), ...patch,
+  })
+  return ok({ user })
 })

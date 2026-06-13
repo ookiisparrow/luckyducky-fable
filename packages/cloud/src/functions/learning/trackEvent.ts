@@ -1,4 +1,4 @@
-import { withOpenId, ok, err, str } from '../../kit'
+import { withOpenId, ok, err, str, ensureDoc } from '../../kit'
 
 // 通用埋点 + 进度记忆（一次埋点两用，规格 §七）。
 // events：通用事件流水；progress：segment_done / watch_at 折叠进「每用户每课一条」紧凑文档。
@@ -54,14 +54,16 @@ export const main = withOpenId(async ({ db, OPENID, event }) => {
     } catch {
       found = { data: [] } // 集合未建 → 走 addTo 建档
     }
+    const patch: Record<string, unknown> = { last, updatedAt: now }
+    if (type === 'segment_done' && targetId) patch[`done.${targetId}`] = true
     if (found.data.length) {
-      const patch: Record<string, unknown> = { last, updatedAt: now }
-      if (type === 'segment_done' && targetId) patch[`done.${targetId}`] = true
-      await progress.doc(found.data[0]._id).update({ data: patch })
+      await progress.doc(found.data[0]._id).update({ data: patch }) // 老随机 _id 档命中即用
     } else {
-      const doc: any = { _openid: OPENID, courseId, done: {}, last, createdAt: now, updatedAt: now }
-      if (type === 'segment_done' && targetId) doc.done[targetId] = true
-      await addTo(db, 'progress', doc)
+      // 确定性 _id=openid__courseId（根因#1）：并发首个进度事件撞号即幂等、不重复建档；
+      // ensureDoc 保证基档存在，再 update 落本次 done.<seg>/last（点路径累加，两段并发都不丢）。
+      const pid = OPENID + '__' + courseId
+      await ensureDoc('progress', pid, { _openid: OPENID, courseId, done: {}, last, createdAt: now })
+      await progress.doc(pid).update({ data: patch })
     }
   }
   return ok()
