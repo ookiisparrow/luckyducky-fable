@@ -5,6 +5,7 @@ import { main } from '../../packages/cloud/src/functions/orders/closeExpiredOrde
 // 超时关单：只关超 15 分钟的 pending；新 pending 和其他状态不动。
 beforeEach(() => {
   control.reset()
+  control.setOpenId('') // 定时器/服务端触发：无 openid（isServerCall=true）
   control.seed('orders', [
     { _id: 'fresh', id: 'fresh', status: 'pending', createdAt: Date.now() - 5 * 60 * 1000 },
     { _id: 'old', id: 'old', status: 'pending', createdAt: Date.now() - 16 * 60 * 1000 },
@@ -28,5 +29,11 @@ describe('closeExpiredOrders 定时关单', () => {
   it('无超时单：closed=0 不抛', async () => {
     await main() // 第一遍关掉旧单
     expect((await main()).closed).toBe(0)
+  })
+
+  it('客户端带身份调用一律拒、不关任何单（根因#3 写库必过闸）', async () => {
+    control.setOpenId('user-X') // 客户端 callFunction 必带 openid
+    expect((await main()).closed).toBe(0)
+    expect(control.dump('orders').find((o) => o._id === 'old').status).toBe('pending') // 未被关
   })
 })

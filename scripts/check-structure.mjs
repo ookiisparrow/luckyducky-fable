@@ -129,6 +129,40 @@ const repoChecks = [
     },
   },
   {
+    id: 'writes-need-gate',
+    desc: '写库必过闸（根因#3「不过闸写不出来」成结构事实）：functions/ 下写 DB（.add/.set/.update/.remove）的函数须引 kit 闸（withOpenId/withAdminGate/defineNotifyCallback/isServerCall）或 checkKey；纯读（公开目录）豁免',
+    run() {
+      const root = join(ROOT, 'packages/cloud/src/functions')
+      if (!existsSync(root)) return []
+      const GATE = /\b(withOpenId|withAdminGate|defineNotifyCallback|isServerCall|checkKey)\b/
+      const WRITE = /\.(add|set|update|remove)\s*\(/
+      const readAll = (d) => {
+        let src = ''
+        for (const f of readdirSync(d)) {
+          const fp = join(d, f)
+          if (statSync(fp).isDirectory()) src += readAll(fp)
+          else if (f.endsWith('.ts')) src += readFileSync(fp, 'utf8')
+        }
+        return src
+      }
+      const bad = []
+      for (const domain of readdirSync(root)) {
+        const dp = join(root, domain)
+        if (!statSync(dp).isDirectory()) continue
+        for (const entry of readdirSync(dp)) {
+          const ep = join(dp, entry)
+          const st = statSync(ep)
+          // 函数单元：单文件 <域>/<name>.ts，或目录型 <域>/<name>/（闸在 index、写在 actions，合并看）
+          const src = st.isDirectory() ? readAll(ep) : entry.endsWith('.ts') ? readFileSync(ep, 'utf8') : ''
+          if (src && WRITE.test(src) && !GATE.test(src)) {
+            bad.push(`${domain}/${entry} 写库但未过任何 kit 闸（根因#3：写库必过闸）`)
+          }
+        }
+      }
+      return bad
+    },
+  },
+  {
     id: 'docs-budget',
     desc: '文档防膨胀（根因#11 文档职责渗漏）：CLAUDE.md 须 ≤180 行（病史曾 314 行→收口 130；约定机器化后只会更瘦，溢出沉记录类）',
     run() {
