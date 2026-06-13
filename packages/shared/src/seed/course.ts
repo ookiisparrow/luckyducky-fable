@@ -1,22 +1,43 @@
-// 一次性灌入课程种子数据（三层：chapter / lesson / segment，规格 v2 §三）。
-// 部署后调用一次即可；再次调用也安全（幂等）。
-// 幂等原理：用业务 id（course-duck）作为文档 _id，doc(id).set 是 upsert——
-// 记录存在则整体覆盖、不存在则创建，所以重复 seed 不会产生重复数据。
-//
-// ⚠️ 这份种子要与前端 src/data/course.js 保持一致：
-//    course.js 是 H5 / App 端的本地回退源，这里是小程序端的云端真源，两边字段同形。
-//    segment 字段：id / name / dur / videoFileId（素材剪好前为 null）/ free（试看）。
-const cloud = require('wx-server-sdk')
-cloud.init({ env: cloud.DYNAMIC_CURRENT_ENV })
-const db = cloud.database()
+/**
+ * 课程种子单一来源 · 三层结构（规格 v2 §三：chapter / lesson / segment）。
+ * 根因账本 #5：原 miniapp data/course.js + cloud seedCourses 各一份（连 buildSegments 派生逻辑
+ * 与 mmss/parseDur 都三处复制）。此处为唯一 canonical，两侧 import 派生。
+ *
+ * - 目录只显 chapter + lesson 两层；segment 只在播放页（顶部分段进度条）。
+ * - 每个 segment 将来是独立视频文件（videoFileId）；素材未剪前为 null，播放页按时长等分回退。
+ * - 用户学习进度（done/watched）是用户态，不在课程内容里（样例 SAMPLE_PROGRESS 留 miniapp data/course）。
+ */
+export interface SeedSegment {
+  id: string
+  name: string
+  dur: string
+  videoFileId: string | null
+  free: boolean
+}
+export interface SeedLesson {
+  id: string
+  name: string
+  dur: string
+  segments: SeedSegment[]
+}
+export interface SeedChapter {
+  id: string
+  title: string
+  lessons: SeedLesson[]
+}
+export interface SeedCourse {
+  id: string
+  title: string
+  sort: number
+  chapters: SeedChapter[]
+}
 
-// —— 以下数据与构建逻辑同 src/data/course.js（CommonJS 版） ——
-
-const parseDur = (s) => {
+// 时长 mm:ss ↔ 秒（种子模块自带，与 miniapp utils/format 的同名显示工具分属不同层，各自自洽）
+const parseDur = (s: string): number => {
   const [m, sec] = String(s).split(':').map(Number)
   return m * 60 + sec
 }
-const mmss = (t) => {
+const mmss = (t: number): string => {
   const m = Math.floor(t / 60)
   const s = Math.floor(t % 60)
   return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`
@@ -26,7 +47,7 @@ const mmss = (t) => {
 const SEG_STEPS = ['先看成品长啥样', '这个玩偶是什么', '需要的材料工具', '关键针法慢动作', '收尾与自检']
 
 // 把一节课时长按样例步骤等分成 segments（余数并入最后一段）
-function buildSegments(lessonId, dur, free) {
+function buildSegments(lessonId: string, dur: string, free?: boolean): SeedSegment[] {
   const total = parseDur(dur)
   const n = SEG_STEPS.length
   const base = Math.floor(total / n)
@@ -34,12 +55,18 @@ function buildSegments(lessonId, dur, free) {
     id: `${lessonId}-s${i + 1}`,
     name,
     dur: mmss(i === n - 1 ? total - base * (n - 1) : base),
-    videoFileId: null, // 素材按段剪好后填云存储 fileID
+    videoFileId: null,
     free: !!free,
   }))
 }
 
-const CHAPTERS = [
+interface RawLesson {
+  id: string
+  name: string
+  dur: string
+  free?: boolean
+}
+const CHAPTERS: { id: string; title: string; lessons: RawLesson[] }[] = [
   {
     id: 'c1',
     title: '开始之前 · 备好工具和心情',
@@ -82,7 +109,8 @@ const CHAPTERS = [
   },
 ]
 
-const COURSES = [
+// 多课数组（当前一门；id 与云端 _id 一致，products.courseId 关联到这里）
+export const SEED_COURSES: SeedCourse[] = [
   {
     id: 'course-duck',
     title: '零基础 · 钩织你的第一只幸运小鸭',
@@ -99,23 +127,3 @@ const COURSES = [
     })),
   },
 ]
-
-exports.main = async () => {
-  // 管理闸（与 genQrcodes 同模式）：CLI / 控制台 invoke 无 openid 放行；
-  // 小程序端任意登录用户调用须 users.isAdmin，否则拒——防客户端覆盖生产课程数据。
-  const { OPENID } = cloud.getWXContext()
-  if (OPENID) {
-    const u = await db.collection('users').where({ _openid: OPENID }).get()
-    if (!u.data.length || u.data[0].isAdmin !== true) return { ok: false, error: 'ADMIN_ONLY' }
-  }
-
-  const ids = []
-  for (const c of COURSES) {
-    await db
-      .collection('courses')
-      .doc(c.id)
-      .set({ data: { ...c, updatedAt: db.serverDate() } })
-    ids.push(c.id)
-  }
-  return { ok: true, count: ids.length, ids }
-}

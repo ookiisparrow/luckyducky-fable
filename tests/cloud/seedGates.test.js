@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach } from 'vitest'
 import { control } from 'wx-server-sdk'
 import { main as seedProducts } from '../../packages/cloud/src/functions/catalog/seedProducts'
-import { main as seedCourses } from '../../cloudfunctions/seedCourses/index.js'
+import { main as seedCourses } from '../../packages/cloud/src/functions/learning/seedCourses'
 import { main as initDb } from '../../cloudfunctions/initDb/index.js'
 
 // 锁定定向审核修复（A-1）：seed/init 客户端须 isAdmin，CLI/控制台无 openid 放行。

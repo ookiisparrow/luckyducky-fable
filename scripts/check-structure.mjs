@@ -72,17 +72,21 @@ const repoChecks = [
     },
   },
   {
-    id: 'product-seed-single-source',
-    desc: '商品种子单一来源（根因#5）：canonical 在 shared/src/seed/products.ts；miniapp data/catalog 必须派生自它，不得回潮内联',
+    id: 'seed-single-source',
+    desc: '种子单一来源（根因#5）：canonical 在 shared/src/seed/*；miniapp data 视图须派生自它，不得回潮内联',
     run() {
       const bad = []
-      const canonical = 'packages/shared/src/seed/products.ts'
-      if (!existsSync(join(ROOT, canonical))) bad.push(`${canonical} 缺失（商品种子 canonical 源）`)
-      const catalog = 'packages/miniapp/src/data/catalog.js'
-      const abs = join(ROOT, catalog)
-      if (!existsSync(abs)) bad.push(`${catalog} 缺失`)
-      else if (!/from\s+['"]@luckyducky\/shared['"]/.test(readFileSync(abs, 'utf8'))) {
-        bad.push(`${catalog} 未派生自 @luckyducky/shared——商品种子须单一来源，不得在此内联`)
+      const pairs = [
+        ['packages/shared/src/seed/products.ts', 'packages/miniapp/src/data/catalog.js'],
+        ['packages/shared/src/seed/course.ts', 'packages/miniapp/src/data/course.js'],
+      ]
+      for (const [canonical, view] of pairs) {
+        if (!existsSync(join(ROOT, canonical))) bad.push(`${canonical} 缺失（种子 canonical 源）`)
+        const abs = join(ROOT, view)
+        if (!existsSync(abs)) bad.push(`${view} 缺失`)
+        else if (!/from\s+['"]@luckyducky\/shared['"]/.test(readFileSync(abs, 'utf8'))) {
+          bad.push(`${view} 未派生自 @luckyducky/shared——种子须单一来源，不得在此内联`)
+        }
       }
       return bad
     },
