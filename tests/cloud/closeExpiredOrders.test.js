@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest'
 import { control } from 'wx-server-sdk'
-import { main } from '../../cloudfunctions/closeExpiredOrders/index.js'
+import { main } from '../../packages/cloud/src/functions/orders/closeExpiredOrders'
 
 // 超时关单：只关超 15 分钟的 pending；新 pending 和其他状态不动。
 beforeEach(() => {

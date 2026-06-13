@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import { control } from 'wx-server-sdk'
-import { main } from '../../cloudfunctions/createOrder/index.js'
+import { main } from '../../packages/cloud/src/functions/orders/createOrder'
 
 // createOrder 闸门：openid / 契约 / 云端定价（不信任前端价）/ SKU 校验 / 金额 /
 // 服务端不变量（主商品必含 + 地址四要素，审核批次A-4）/ 订单号防碰撞。

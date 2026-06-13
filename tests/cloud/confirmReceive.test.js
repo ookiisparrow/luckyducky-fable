@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest'
 import { control } from 'wx-server-sdk'
-import { main } from '../../cloudfunctions/confirmReceive/index.js'
+import { main } from '../../packages/cloud/src/functions/orders/confirmReceive'
 
 // confirmReceive 闸门：openid + 本人订单 + 仅 shipped→done（防越状态/重复确认）。
 beforeEach(() => {
