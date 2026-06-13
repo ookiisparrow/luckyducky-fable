@@ -8,9 +8,9 @@
 **数据零迁移**——这是切换最大的风险点，已查证排除：
 - 重构后函数的 `_id` 方案与现网**逐一致**：createOrder（`_id`=订单号）、genQrcodes（`_id`=兑换码）、applyRefund/submitReview（`_id`=`订单__商品`）——与生产 `cloudfunctions/` 同款。
 - activateCourse：审计 P2 修复后改为**惰性迁移**——现网随机 `_id` 旧激活命中即用、不重建；新激活用确定性 `_id`=code（幂等自愈半步失败）。故现网激活数据仍兼容、无需搬迁。
-- 仍「先查后建」的 login/trackEvent（users/progress）是**忠实迁移**，与现网写法一致。
+- login/updateProfile/trackEvent（users/progress）已升**确定性 _id**（2026-06-13 深审，`kit/ids` ensureDoc）：老随机 _id 档 where 命中即用、新档确定性 _id，**惰性迁移、数据双向兼容**。
 - 故现网既有订单/兑换码/评价/售后/用户数据，重构后函数读写**完全兼容**，无需任何数据搬迁。
-- 债#14（users/progress 升确定性 `_id`）是**切换后**的改进项，不是切换前提；做时再按根因#1 的「命中新 id 用之、未命中原子搬迁」惰性迁移。
+- 债#14（users/progress 确定性 `_id`）**已于 2026-06-13 深审批次完成**（原计划切换后做；因惰性迁移数据兼容、提前收口）——非切换前提，切换日部署的是已修版。
 
 ## 一、切换前体检
 
@@ -70,7 +70,7 @@ DEPLOY_ALLOWED=1 node scripts/deploy-fns.mjs     # 首跑：manifest 空 → 部
 ## 六、切换后收尾（非阻塞，另行排期）
 
 1. **CLAUDE 本体 reconcile**：§2 命令、§5 目录（`src/`→`packages/`）、§7 数据（删「data/catalog 单一来源」「api/shop H5 回退」旧述）、§3 闸数（四道→八闸 + deploy-fns），改到与重构后架构一致。`docs-budget` 守卫保其仍 ≤180 行。
-2. **债#14**：users/progress 升确定性 `_id`（kit 提取 `ids.ts`）+ 惰性迁移，补测试，关账根因#1 最后一环。**切换后做更安全**（忠实先查后建与现网兼容，确定性 _id 的惰性迁移宜上线后单独观察）。
+2. ~~**债#14**：users/progress 升确定性 `_id`（kit 提取 `ids.ts`）+ 惰性迁移~~ ✅ **2026-06-13 深审完成**（`kit/ids` ensureDoc + 3 并发反向测试，惰性迁移数据兼容，根因#1 最后一环关账）。**切换日观察点**：上线后留意 users/progress 老随机 _id 档是否如期惰性收敛到确定性 _id。
 3. ~~前端分页「加载更多」~~ ✅ 已接（小程序 order-list/aftersales + 控制台订单/售后四处全接游标）。残留低优先：状态角标按已载列表计，超首页需服务端计数。
 4. **依赖安全升级（另开分支，低优先）**：`npm audit` 51 项**全在构建工具链**（@dcloudio/vite/esbuild/jimp/postcss/ws/express/qs）——不随云函数/小程序产物上线、**运行时暴露近零**。非破坏性 `audit fix` 不减项（反引入 rolldown），未采纳；根治须主版本升级 uni 栈、单开分支验三端构建（勿盲跑 `--force`）。
 5. **后台账号体系 v2（产品级，另议）**：现 v1 单口令 + localStorage 是刻意简化（bootstrap 抢占窗口已关，债#15）；升级到 session token / 多账号属账号体系决策，需产品拍板。
