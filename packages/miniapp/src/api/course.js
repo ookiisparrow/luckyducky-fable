@@ -26,3 +26,16 @@ export async function getCourses() {
   }
   return []
 }
+
+// 取分段视频临时播放地址（走云函数 getPlaybackUrl，服务端鉴权后发短时效 URL）。
+// 无云 / 未授权 / 素材未剪 → 空串，播放页据此回退占位或静默（审计 P1：fileID 不出公开接口）。
+export async function getPlaybackUrl(courseId, segmentId) {
+  if (!courseId || !segmentId) return ''
+  try {
+    const res = await callCloud('getPlaybackUrl', { courseId, segmentId })
+    return (res && res.url) || ''
+  } catch (e) {
+    logger.warn('course', 'getPlaybackUrl 云端失败', e)
+    return ''
+  }
+}

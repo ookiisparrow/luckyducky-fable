@@ -10,7 +10,7 @@
  * 将来云端按 segment 粒度记忆，见 设计规格 §四）。
  */
 import { defineStore } from 'pinia'
-import { getCourses } from '@/api/course.js'
+import { getCourses, getPlaybackUrl } from '@/api/course.js'
 import { logger } from '@/utils/logger.js'
 
 const EMPTY_COURSE = { id: '', title: '', chapters: [] }
@@ -45,6 +45,10 @@ export const useCoursesStore = defineStore('courses', {
       } finally {
         this.loading = false
       }
+    },
+    // 取当前课程某分段的播放地址（服务端鉴权，转交 api；URL 是瞬时态、不入 state）
+    async playbackUrl(segmentId) {
+      return getPlaybackUrl(this.current.id, segmentId)
     },
   },
 })

@@ -7,7 +7,7 @@
  *
  * 求助面板：设计稿完整版（客服/辅助视频/群/FAQ/反馈），拆在 ./components/HelpSheet/。
  */
-import { ref, computed, onMounted, getCurrentInstance } from 'vue'
+import { ref, computed, onMounted, getCurrentInstance, watch } from 'vue'
 import { onLoad, onHide, onUnload } from '@dcloudio/uni-app'
 import Icon from '@/components/Icon.vue'
 import HelpSheet from './components/HelpSheet/index.vue'
@@ -73,10 +73,15 @@ const segCount = computed(() => segs.value.length || 1)
 // 分段视频模式（规格 §三/决策 §14 配套）：该课时所有小段都有真实视频（控制台第④步上传）
 // → 每段独立播放（src 按段切换，段末=视频自然结束）；否则回退占位视频按时长等分
 const fileSeg = ref(0) // 文件模式下的当前段
-const fileMode = computed(() => segs.value.length > 0 && segs.value.every((s) => s.videoFileId))
-const videoSrc = computed(() =>
-  fileMode.value ? segs.value[fileSeg.value]?.videoFileId || SRC : SRC,
-)
+const fileMode = computed(() => segs.value.length > 0 && segs.value.every((s) => s.hasVideo))
+// 服务端保护（审计 P1）：videoFileId 不再随目录下发，按当前段经云函数 getPlaybackUrl 换短时效临时 URL
+const playUrl = ref('')
+const videoSrc = computed(() => (fileMode.value ? playUrl.value : SRC))
+const curFileSegId = computed(() => (fileMode.value ? segs.value[fileSeg.value]?.id || '' : ''))
+async function refreshPlayUrl() {
+  playUrl.value = curFileSegId.value ? await store.playbackUrl(curFileSegId.value) : ''
+}
+watch(curFileSegId, refreshPlayUrl) // 段切换 / 换集 / 进入文件模式 → 重取地址
 const segLen = computed(() => (duration.value > 0 ? duration.value / segCount.value : 0))
 const curSeg = computed(() => {
   if (segLen.value <= 0) return 0
