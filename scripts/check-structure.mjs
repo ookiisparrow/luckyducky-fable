@@ -107,6 +107,18 @@ const repoChecks = [
     },
   },
   {
+    id: 'docs-budget',
+    desc: '文档防膨胀（根因#11 文档职责渗漏）：CLAUDE.md 须 ≤180 行（病史曾 314 行→收口 130；约定机器化后只会更瘦，溢出沉记录类）',
+    run() {
+      const abs = join(ROOT, 'CLAUDE.md')
+      if (!existsSync(abs)) return []
+      const n = readFileSync(abs, 'utf8').split('\n').length
+      return n > 180
+        ? [`CLAUDE.md ${n} 行 > 180 预算——文档职责渗漏（根因#11）；约定本体保持精简，进度/bug/欠债沉到 docs/ 记录类`]
+        : []
+    },
+  },
+  {
     id: 'console-assets-present',
     desc: '控制台资产正册不可误删（根因#9）：console-assets 关键正册文件须存在（git 外资产的唯一版本化记录）',
     run() {
