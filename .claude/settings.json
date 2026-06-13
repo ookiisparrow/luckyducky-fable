@@ -22,6 +22,12 @@
             "command": "node \"$CLAUDE_PROJECT_DIR/scripts/check-conventions.mjs\" --hook",
             "timeout": 15,
             "statusMessage": "约定检查（CLAUDE.md §5/§8）"
+          },
+          {
+            "type": "command",
+            "command": "node \"$CLAUDE_PROJECT_DIR/scripts/check-structure.mjs\" --hook",
+            "timeout": 15,
+            "statusMessage": "结构不变量检查（重构主张守卫）"
           }
         ]
       }

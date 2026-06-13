@@ -1,5 +1,8 @@
-# CI 质量闸：每个 PR（和合并进 main 时）自动跑 lint + test。
+# CI 质量闸：每个 PR（和合并进 main 时）自动跑全套 `npm run check`。
 # 结果显示在 PR 页面底部——绿勾 = 机器检查通过，红叉 = 有问题先别合并。
+# 三道闸单一定义：本 CI = 本地 pre-commit = 编辑 hook，全部以 `npm run check` 为唯一定义
+# （check = conventions + structure + typecheck + lint + test），由 check:structure 的
+# gate-single-source 不变量守护，防三闸漂移。
 name: CI
 
 on:
@@ -8,7 +11,7 @@ on:
     branches: [main]
 
 jobs:
-  lint-test:
+  check:
     runs-on: ubuntu-latest
     steps:
       - name: 检出代码
@@ -23,11 +26,5 @@ jobs:
       - name: 安装依赖
         run: npm ci
 
-      - name: 约定检查（CLAUDE.md 多端/样式规则）
-        run: npm run check:conventions
-
-      - name: ESLint 检查
-        run: npm run lint
-
-      - name: 运行测试
-        run: npm run test
+      - name: 质量闸（conventions + structure + typecheck + lint + test）
+        run: npm run check
