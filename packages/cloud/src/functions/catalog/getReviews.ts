@@ -1,15 +1,12 @@
-// 按商品取评价列表 + 汇总（公开读侧，无需登录态）。
-// 汇总在云端现算（≤200 条内存聚合，与 getDashboard 同思路）：
-//   score 均分（1 位小数）/ dist 星级分布百分比 / tags 标签计数 Top5。
+import { getDb, ok, err } from '../../kit'
+
+// 按商品取评价列表 + 云端现算汇总（公开读，无需登录）。≤200 条内存聚合。
 // 形状对齐前端 RatingSummary：{ score, count, dist:[[label,pct]], tags:[[name,count]] }。
-const cloud = require('wx-server-sdk')
-cloud.init({ env: cloud.DYNAMIC_CURRENT_ENV })
-const db = cloud.database()
-
-exports.main = async (event = {}) => {
+export const main = async (event: any = {}) => {
   const productId = String(event.productId || '')
-  if (!productId) return { ok: false, error: 'NO_PRODUCT' }
+  if (!productId) return err('NO_PRODUCT')
 
+  const db = getDb()
   const res = await db
     .collection('reviews')
     .where({ productId })
@@ -17,8 +14,7 @@ exports.main = async (event = {}) => {
     .limit(200)
     .get()
     .catch(() => null)
-  // 集合还没建（从没人评价过）也按空列表返回
-  const list = (res ? res.data : []).map((r) => ({
+  const list = (res ? res.data : []).map((r: any) => ({
     name: r.name,
     rating: r.rating,
     tags: r.tags || [],
@@ -29,8 +25,8 @@ exports.main = async (event = {}) => {
 
   const count = list.length
   let score = '0'
-  const starCount = { 5: 0, 4: 0, 3: 0, 2: 0 } // 1 星并入 2 星档（与样例四行布局一致）
-  const tagCount = {}
+  const starCount: Record<number, number> = { 5: 0, 4: 0, 3: 0, 2: 0 } // 1 星并入 2 星档
+  const tagCount: Record<string, number> = {}
   if (count) {
     let sum = 0
     for (const r of list) {
@@ -40,7 +36,7 @@ exports.main = async (event = {}) => {
     }
     score = (sum / count).toFixed(1)
   }
-  const pct = (n) => (count ? Math.round((n / count) * 100) : 0)
+  const pct = (n: number) => (count ? Math.round((n / count) * 100) : 0)
   const summary = {
     score,
     count,
@@ -54,5 +50,5 @@ exports.main = async (event = {}) => {
       .sort((a, b) => b[1] - a[1])
       .slice(0, 5),
   }
-  return { ok: true, list, summary }
+  return ok({ list, summary })
 }

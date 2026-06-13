@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest'
 import { control } from 'wx-server-sdk'
-import { main } from '../../cloudfunctions/getOrderById/index.js'
+import { main } from '../../packages/cloud/src/functions/orders/getOrderById'
 
 // getOrderById（审核批次B 详情兜底）：openid 闸门，只能查本人订单。
 beforeEach(() => {
