@@ -358,11 +358,12 @@ export async function saveHomeContent(home) {
 
 // ---------- 订单发货（P5 后台完善：paid → shipped，物流公司 + 运单号） ----------
 
-export async function listOrders() {
-  if (!cloudMode) return [] // 订单只存在于云端；本地模式无单可发
-  const r = await post('listOrders')
+// 游标分页（根因#7）：cursor 传上一页 nextCursor；返回 { list, nextCursor, hasMore }
+export async function listOrders(cursor) {
+  if (!cloudMode) return { list: [], nextCursor: null, hasMore: false } // 订单只存在于云端
+  const r = await post('listOrders', cursor != null ? { cursor } : {})
   if (!r.ok) throw new Error(r.error || 'LOAD_ORDERS_FAIL')
-  return r.list
+  return { list: r.list, nextCursor: r.nextCursor ?? null, hasMore: !!r.hasMore }
 }
 
 export async function shipOrder(id, company, trackingNo) {
@@ -380,11 +381,11 @@ export async function clearFeeMismatch(id) {
 
 // ---------- 售后退款（链10：审核 + 触发退款工作流；金额申请时已云端算定） ----------
 
-export async function listRefunds() {
-  if (!cloudMode) return [] // 售后单只存在于云端
-  const r = await post('listRefunds')
+export async function listRefunds(cursor) {
+  if (!cloudMode) return { list: [], nextCursor: null, hasMore: false } // 售后单只存在于云端
+  const r = await post('listRefunds', cursor != null ? { cursor } : {})
   if (!r.ok) throw new Error(r.error || 'LOAD_REFUNDS_FAIL')
-  return r.list
+  return { list: r.list, nextCursor: r.nextCursor ?? null, hasMore: !!r.hasMore }
 }
 
 export async function approveRefund(id) {

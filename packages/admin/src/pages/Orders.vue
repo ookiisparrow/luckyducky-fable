@@ -26,6 +26,9 @@ const list = ref([])
 const loading = ref(true)
 const loadErr = ref('')
 const tab = ref('paid')
+const nextCursor = ref(null)
+const hasMore = ref(false)
+const loadingMore = ref(false)
 // 行内发货表单（同时只开一单）：{ id, company, trackingNo, saving, error }
 const form = ref(null)
 
@@ -37,7 +40,10 @@ async function init() {
   loading.value = true
   loadErr.value = ''
   try {
-    list.value = await listOrders()
+    const paged = await listOrders()
+    list.value = paged.list
+    nextCursor.value = paged.nextCursor
+    hasMore.value = paged.hasMore
   } catch (e) {
     loadErr.value = '加载失败：' + e.message
   } finally {
@@ -45,6 +51,23 @@ async function init() {
   }
 }
 init()
+
+// 加载更多（游标分页，根因#7）：追加下一页、按 id 去重防重入
+async function loadMore() {
+  if (loadingMore.value || !hasMore.value || nextCursor.value == null) return
+  loadingMore.value = true
+  try {
+    const paged = await listOrders(nextCursor.value)
+    const ids = new Set(list.value.map((o) => o.id))
+    list.value = [...list.value, ...paged.list.filter((o) => !ids.has(o.id))]
+    nextCursor.value = paged.nextCursor
+    hasMore.value = paged.hasMore
+  } catch (e) {
+    loadErr.value = '加载更多失败：' + e.message
+  } finally {
+    loadingMore.value = false
+  }
+}
 
 const shown = computed(() =>
   tab.value === 'all' ? list.value : list.value.filter((o) => o.status === tab.value),
@@ -188,6 +211,9 @@ async function doShip(o) {
           <span v-if="form.error" class="err">{{ form.error }}</span>
         </div>
       </div>
+      <button v-if="hasMore" class="btn ghost more" :disabled="loadingMore" @click="loadMore">
+        {{ loadingMore ? '加载中…' : '加载更多' }}
+      </button>
     </template>
   </div>
 </template>
