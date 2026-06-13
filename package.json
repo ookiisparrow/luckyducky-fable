@@ -27,6 +27,7 @@
     "lint:fix": "eslint . --fix",
     "check:conventions": "node scripts/check-conventions.mjs",
     "check:structure": "node scripts/check-structure.mjs",
+    "preflight": "node scripts/preflight.mjs",
     "format": "prettier --write \"packages/miniapp/src/**/*.{vue,js,scss,json}\"",
     "test": "vitest run",
     "test:watch": "vitest",
