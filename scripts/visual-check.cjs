@@ -43,7 +43,7 @@ async function getMp() {
     console.log(`connect 不可用（${e.message}），改用 automator.launch 冷启动…`)
     return automator.launch({
       cliPath: '/Applications/wechatwebdevtools.app/Contents/MacOS/cli',
-      projectPath: __dirname + '/../dist/build/mp-weixin',
+      projectPath: __dirname + '/../packages/miniapp/dist/build/mp-weixin',
       timeout: 120000,
     })
   }

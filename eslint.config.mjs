@@ -15,12 +15,10 @@ export default [
   // 不检查的目录/文件
   {
     ignores: [
-      'dist/**',
-      'node_modules/**',
+      '**/dist/**',
+      '**/node_modules/**',
       'unpackage/**',
-      'src/uni.scss',
-      'admin/dist/**',
-      'admin/node_modules/**',
+      'packages/miniapp/src/uni.scss',
     ],
   },
 
@@ -58,15 +56,15 @@ export default [
 
   // 配置文件本身用 Node 环境
   {
-    files: ['*.config.js', 'vite.config.js'],
+    files: ['**/*.config.js', '**/vite.config.js'],
     languageOptions: { globals: { ...globals.node } },
   },
 
   // 日志统一走 utils/logger.js（CLAUDE.md §13），logger 自身是唯一合法 console 出口；
   // cloudfunctions / admin / scripts 不在此列（云函数日志机制就是 console）
   {
-    files: ['src/**/*.js', 'src/**/*.vue'],
-    ignores: ['src/utils/logger.js'],
+    files: ['packages/miniapp/src/**/*.js', 'packages/miniapp/src/**/*.vue'],
+    ignores: ['packages/miniapp/src/utils/logger.js'],
     rules: { 'no-console': 'error' },
   },
 

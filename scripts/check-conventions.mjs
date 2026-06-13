@@ -24,7 +24,7 @@ import { readFileSync, readdirSync, statSync, existsSync } from 'node:fs'
 import { join, relative, resolve } from 'node:path'
 
 const ROOT = resolve(import.meta.dirname, '..')
-const SRC = join(ROOT, 'src')
+const SRC = join(ROOT, 'packages', 'miniapp', 'src')
 const UNI_SCSS = join(SRC, 'uni.scss')
 
 // ---- 色票：运行时从 uni.scss 读，保持单一来源 ----

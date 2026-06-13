@@ -1,4 +1,4 @@
 dist
 node_modules
 unpackage
-src/static
+packages/miniapp/src/static
