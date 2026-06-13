@@ -29,3 +29,20 @@ export function withOpenId(handler: (ctx: OpenIdCtx) => Promise<any>) {
 export function isServerCall(): boolean {
   return !cloud.getWXContext().OPENID
 }
+
+/**
+ * 管理闸（根因账本 #3，审计修复 A-1）：CLI/控制台服务端调用（无 openid）放行；
+ * 客户端（带 openid）须 users.isAdmin——防任意登录用户 callFunction 覆盖生产数据。
+ * 消费者：seedProducts（B3b）+ seedCourses/initDb/genQrcodes（B4 迁入）。
+ */
+export function withAdminGate(handler: (ctx: OpenIdCtx) => Promise<any>) {
+  return async (event: any) => {
+    const db = getDb()
+    const { OPENID } = cloud.getWXContext()
+    if (OPENID) {
+      const u = await db.collection('users').where({ _openid: OPENID }).get()
+      if (!u.data.length || u.data[0].isAdmin !== true) return err(ERR.ADMIN_ONLY)
+    }
+    return handler({ db, OPENID, event })
+  }
+}

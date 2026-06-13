@@ -5,6 +5,7 @@
 export * from './money'
 export * from './order'
 export * from './errors'
+export * from './seed/products'
 
 // B0 哨兵：App.vue 仍引用以验证 workspace TS 包被 uni 构建吃下；B3 种子落地后清理。
 export const SHARED_PKG_SENTINEL = 'luckyducky-shared-b0'

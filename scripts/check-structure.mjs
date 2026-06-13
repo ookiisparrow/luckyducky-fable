@@ -72,6 +72,22 @@ const repoChecks = [
     },
   },
   {
+    id: 'product-seed-single-source',
+    desc: '商品种子单一来源（根因#5）：canonical 在 shared/src/seed/products.ts；miniapp data/catalog 必须派生自它，不得回潮内联',
+    run() {
+      const bad = []
+      const canonical = 'packages/shared/src/seed/products.ts'
+      if (!existsSync(join(ROOT, canonical))) bad.push(`${canonical} 缺失（商品种子 canonical 源）`)
+      const catalog = 'packages/miniapp/src/data/catalog.js'
+      const abs = join(ROOT, catalog)
+      if (!existsSync(abs)) bad.push(`${catalog} 缺失`)
+      else if (!/from\s+['"]@luckyducky\/shared['"]/.test(readFileSync(abs, 'utf8'))) {
+        bad.push(`${catalog} 未派生自 @luckyducky/shared——商品种子须单一来源，不得在此内联`)
+      }
+      return bad
+    },
+  },
+  {
     id: 'deploy-deny-all',
     desc: '样板房禁部署：guard-deploy 须对一切 tcb 部署/发布返回 deny（与生产仓只拦敏感名单不同）',
     run() {

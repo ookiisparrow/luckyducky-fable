@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest'
 import { control } from 'wx-server-sdk'
-import { main as seedProducts } from '../../cloudfunctions/seedProducts/index.js'
+import { main as seedProducts } from '../../packages/cloud/src/functions/catalog/seedProducts'
 import { main as seedCourses } from '../../cloudfunctions/seedCourses/index.js'
 import { main as initDb } from '../../cloudfunctions/initDb/index.js'
 
