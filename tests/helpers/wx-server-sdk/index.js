@@ -201,7 +201,11 @@ const cloud = {
       }
     },
   },
-  uploadFile: async ({ cloudPath }) => ({ fileID: 'cloud://test/' + cloudPath }),
+  uploadFile: async ({ cloudPath, fileContent }) => {
+    // 记录上传字节数，供「真实尺寸」测试断言分片重组无截断（根因#8）
+    G.lastUpload = { cloudPath, bytes: fileContent ? fileContent.length : 0 }
+    return { fileID: 'cloud://test/' + cloudPath }
+  },
   getTempFileURL: async ({ fileList }) => ({
     fileList: fileList.map((id) => ({ fileID: id, tempFileURL: 'https://tmp/' + id })),
   }),
@@ -217,6 +221,7 @@ const control = {
     G.callFunctionCalls = []
     G.callFunctionResult = null
     G.callFunctionFail = false
+    G.lastUpload = null
   },
   seed(coll, docs) {
     G.store[coll] = (G.store[coll] || []).concat(JSON.parse(JSON.stringify(docs)))
@@ -226,6 +231,9 @@ const control = {
   },
   dump(coll) {
     return JSON.parse(JSON.stringify(G.store[coll] || []))
+  },
+  lastUpload() {
+    return G.lastUpload ? { ...G.lastUpload } : null
   },
   cloudPayCalls() {
     return JSON.parse(JSON.stringify(G.cloudPayCalls))

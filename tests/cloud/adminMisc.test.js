@@ -58,3 +58,39 @@ describe('adminApi 杂项闸门', () => {
     expect(res.txAlerts.stuckRefunds).toEqual(['a1'])
   })
 })
+
+// 根因#8「验证样本失真」：原项目最小样本（1×1 测试图）过、真实 200KB 照片必拒——
+// 验收方法论要求 E2E 用真实尺寸样本。下面用真实 200KB 图走完整分片链路，断言重组无截断。
+describe('真实尺寸分片上传（根因#8 验收方法论：真实样本而非玩具）', () => {
+  // fixture：200KB 伪随机字节（非全零、可压不缩水），base64 后必然跨 90,000/片上限＝多片
+  function realImageB64(bytes) {
+    const buf = Buffer.alloc(bytes)
+    for (let i = 0; i < bytes; i++) buf[i] = (i * 37 + 11) & 0xff
+    return buf.toString('base64')
+  }
+  function splitChunks(b64, size = 90_000) {
+    const out = []
+    for (let i = 0; i < b64.length; i += size) out.push(b64.slice(i, i + size))
+    return out
+  }
+
+  it('真实 200KB 图：多片上传 → 重组字节完整（云存储收到 === 原图大小）', async () => {
+    const BYTES = 200 * 1024
+    const chunks = splitChunks(realImageB64(BYTES))
+    expect(chunks.length).toBeGreaterThan(1) // 确属多片真实尺寸，非 1×1 玩具
+    for (let seq = 0; seq < chunks.length; seq++) {
+      expect((await call('uploadChunk', { uploadId: 'big', seq, b64: chunks[seq] })).ok).toBe(true)
+    }
+    const fin = await call('uploadFinish', { uploadId: 'big', total: chunks.length, ext: 'jpg', pid: 'pbig' })
+    expect(fin.ok).toBe(true)
+    // 关键：分片→重组→base64 解码全程无截断，落库字节数等于原图 200KB
+    expect(control.lastUpload().bytes).toBe(BYTES)
+  })
+
+  it('uploadChunk 尺寸边界：90,000 放行、90,001 拒 BAD_CHUNK（边界即验，非只验逻辑）', async () => {
+    expect((await call('uploadChunk', { uploadId: 'b1', seq: 0, b64: 'a'.repeat(90_000) })).ok).toBe(true)
+    expect((await call('uploadChunk', { uploadId: 'b2', seq: 0, b64: 'a'.repeat(90_001) })).error).toBe(
+      'BAD_CHUNK',
+    )
+  })
+})
