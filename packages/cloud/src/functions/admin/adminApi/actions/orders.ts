@@ -1,9 +1,11 @@
+import { pageQuery } from '../../../../kit'
 import { reply, type Ctx } from '../lib'
 
 // —— 订单发货（状态流转 paid → shipped；金额/条目/地址只读不动）——
-export async function listOrders({ db }: Ctx) {
-  const res = await db.collection('orders').orderBy('createdAt', 'desc').limit(200).get()
-  return reply(200, { ok: true, list: res.data })
+// 列表游标分页（根因#7）：无参=首页 200（兼容旧控制台读 .list），控制台用 nextCursor 翻页。
+export async function listOrders({ db, data }: Ctx) {
+  const paged = await pageQuery(db, 'orders', {}, 'createdAt', data, 200)
+  return reply(200, { ok: true, ...paged })
 }
 
 export async function shipOrder({ db, data }: Ctx) {

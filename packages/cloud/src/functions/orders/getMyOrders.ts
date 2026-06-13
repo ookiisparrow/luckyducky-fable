@@ -1,14 +1,8 @@
-import { withOpenId, ok } from '../../kit'
+import { withOpenId, ok, pageQuery } from '../../kit'
 
-// 取本人订单列表（倒序）。openid 取自 getWXContext，只见自己的单。
-// 试点：openid 闸样板由 kit.withOpenId 收编（原 cloudfunctions/getMyOrders 的 4 行 init+闸消失）。
-// limit 100 为审核批次B 临时缓解；分页体系 B5 接 kit.paging（根因账本 #7）。
-export const main = withOpenId(async ({ db, OPENID }) => {
-  const res = await db
-    .collection('orders')
-    .where({ _openid: OPENID })
-    .orderBy('createdAt', 'desc')
-    .limit(100)
-    .get()
-  return ok({ list: res.data })
+// 取本人订单列表（游标分页，根因账本 #7：固定 limit 规模即挤出）。
+// 无参=首页 100（兼容旧前端读 .list）；前端用 nextCursor 渐进翻页取全量。
+export const main = withOpenId(async ({ db, OPENID, event }) => {
+  const paged = await pageQuery(db, 'orders', { _openid: OPENID }, 'createdAt', event, 100)
+  return ok({ ...paged })
 })

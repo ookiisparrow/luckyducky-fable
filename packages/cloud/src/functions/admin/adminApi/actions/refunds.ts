@@ -1,11 +1,12 @@
-import { callFlow } from '../../../../kit'
+import { callFlow, pageQuery } from '../../../../kit'
 import { reply, ensure, type Ctx } from '../lib'
 
 // —— 售后退款（链10：审核 + 触发退款工作流；金额在申请时已云端分摊算定）——
-export async function listRefunds({ db }: Ctx) {
+// 列表游标分页（根因#7）：无参=首页 200（兼容旧控制台读 .list）。
+export async function listRefunds({ db, data }: Ctx) {
   await ensure(db, 'afterSales')
-  const res = await db.collection('afterSales').orderBy('appliedAt', 'desc').limit(200).get()
-  return reply(200, { ok: true, list: res.data })
+  const paged = await pageQuery(db, 'afterSales', {}, 'appliedAt', data, 200)
+  return reply(200, { ok: true, ...paged })
 }
 
 export async function approveRefund({ db, data }: Ctx) {
