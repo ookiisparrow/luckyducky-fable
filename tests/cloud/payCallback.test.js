@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest'
 import { control } from 'wx-server-sdk'
-import { main } from '../../cloudfunctions/payCallback/index.js'
+import { main } from '../../packages/cloud/src/functions/orders/payCallback'
 
 // payCallback 幂等：pending→paid 只生效一次；closed 复活；失败通知不改状态；一律 ACK。
 const NOTIFY = {

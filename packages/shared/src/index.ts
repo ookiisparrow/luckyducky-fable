@@ -1,10 +1,10 @@
 /**
- * @luckyducky/shared 入口。
- *
- * B0 阶段为占位包：唯一职责是验证「miniapp（uni+vite）能直引 workspace TS 包产物」
- * （总计划 B0 判定项③）。B1 起承载状态联合类型 + Fen 金额品牌类型，
- * B3 起承载种子单一来源（catalog/course），届时哨兵常量可删。
+ * @luckyducky/shared 入口——种子单一来源（B3 起）、状态/错误码、Fen 金额品牌类型。
+ * shared 与 cloud 两包 TS（钱和权限层）；miniapp/admin 页面层维持 JS。
  */
+export * from './money'
+export * from './order'
+export * from './errors'
 
-// B0 哨兵：App.vue 引用后应原样出现在双端构建产物中（grep 验证）
+// B0 哨兵：App.vue 仍引用以验证 workspace TS 包被 uni 构建吃下；B3 种子落地后清理。
 export const SHARED_PKG_SENTINEL = 'luckyducky-shared-b0'

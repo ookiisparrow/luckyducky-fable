@@ -13,7 +13,7 @@
   "scripts": {
     "prepare": "git config core.hooksPath scripts/git-hooks || exit 0",
     "build:shared": "npm run build -w @luckyducky/shared",
-    "typecheck": "npm run build:shared",
+    "typecheck": "npm run build:shared && tsc -p packages/cloud/tsconfig.json",
     "dev:h5": "npm run build:shared && npm run dev:h5 -w luckyducky-miniapp",
     "dev:mp-weixin": "npm run build:shared && npm run dev:mp-weixin -w luckyducky-miniapp",
     "dev:app": "npm run build:shared && npm run dev:app -w luckyducky-miniapp",

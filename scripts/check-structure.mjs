@@ -87,8 +87,19 @@ const repoChecks = [
 
 // ============== 逐文件规则（fileRules）==============
 // 形状：{ id, inScope(absPath)->bool, test(line, {file, lines, i})->msg|null }
-// B2 起按主张追加（禁 #ifdef 多端回退、禁 api 运行时引 data/、禁 kit 外裸 cloud.init…）。
-const fileRules = []
+// 按主张追加（B3 起：禁 #ifdef 多端回退、禁 api 运行时引 data/…）。
+const fileRules = [
+  {
+    // T2 域分组（根因账本 #5）：云函数业务代码禁裸用 cloud.init()/getWXContext()，
+    // 身份/初始化一律经 kit（withOpenId/getDb/isServerCall）。kit 自身与类型声明放行。
+    id: 'kit-only-cloud-primitives',
+    inScope: (abs) => abs.includes('/packages/cloud/src/functions/') && abs.endsWith('.ts'),
+    test: (line) =>
+      /\bcloud\.init\s*\(/.test(line) || /\bgetWXContext\s*\(/.test(line)
+        ? '云函数业务代码禁裸用 cloud.init()/getWXContext()——经 kit（withOpenId/getDb/isServerCall）收编样板，防 28 份样板重生（T2/根因5）'
+        : null,
+  },
+]
 
 const SRC_DIRS = ['packages', 'cloudfunctions', 'scripts']
 function* walk(dir) {
