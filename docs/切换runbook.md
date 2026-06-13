@@ -73,3 +73,5 @@ DEPLOY_ALLOWED=1 node scripts/deploy-fns.mjs     # 首跑：manifest 空 → 部
 2. **债#14**：users/progress 升确定性 `_id`（kit 提取 `ids.ts`）+ 惰性迁移，补测试，关账根因#1 最后一环。
 3. **前端分页「加载更多」**：小程序 order-list / 控制台订单·售后页接 kit 游标分页（后端已就绪）。
 4. **观察期**：盯交易异常工作台（adminApi getDashboard 的 feeMismatch/refundMismatch/退款卡单）、云函数日志，确认无回归。
+
+> **管理员口令（债#15 已关抢占窗口）**：现网 `adminConfig.auth` 已存在，切换不受影响、照旧用现口令登录。**仅当迁新环境 / 重置口令**时，须先设云环境变量 `ADMIN_BOOTSTRAP_KEY`＝期望口令，再用该口令首登（无此变量则禁止 bootstrap，杜绝抢占）；设定后可移除该变量。

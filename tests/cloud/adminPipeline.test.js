@@ -26,12 +26,17 @@ describe('adminApi HTTP 外壳 + 口令闸', () => {
     expect((await call('ping')).ok).toBe(true)
     expect((await call('listDrafts', {}, 'wrong')).status).toBe(401)
   })
-  it('login bootstrap：空库首登设口令', async () => {
+  it('login bootstrap：须匹配部署密钥才首登设口令（债#15 关抢占窗口）', async () => {
     control.reset() // 无 adminConfig
-    const r = await call('login', {}, 'brand-new-key')
+    delete process.env.ADMIN_BOOTSTRAP_KEY
+    expect((await call('login', {}, 'brand-new-key')).status).toBe(401) // 未设部署密钥→禁 bootstrap
+    process.env.ADMIN_BOOTSTRAP_KEY = 'deploy-secret-xyz'
+    expect((await call('login', {}, 'wrong-key-aaa')).status).toBe(401) // 口令不匹配部署密钥→拒
+    const r = await call('login', {}, 'deploy-secret-xyz') // 匹配→首登设口令
     expect(r.ok).toBe(true)
     expect(r.bootstrapped).toBe(true)
     expect((await call('login', {}, 'another-key')).status).toBe(401) // 已设，他码被拒
+    delete process.env.ADMIN_BOOTSTRAP_KEY
   })
 })
 

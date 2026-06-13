@@ -28,13 +28,16 @@ export async function ensure(db: any, coll: string) {
   }
 }
 
-// 口令校验；首次调用（无记录）时把本次口令设为管理员口令（部署后立即登录即占位）
+// 口令校验。首次初始化（债#15 关抢占窗口）：须 bootstrap 且本次口令匹配**部署密钥**环境变量
+// ADMIN_BOOTSTRAP_KEY——杜绝「空库谁先登录谁就占管理员」。未设该环境变量＝禁 bootstrap。
+// 设密钥流程：部署时设云环境变量 ADMIN_BOOTSTRAP_KEY＝期望口令 → 首登用该口令 → 设定后可移除。
 export async function checkKey(db: any, key: any, bootstrap: boolean) {
   if (!key || String(key).length < 6) return { ok: false, error: 'KEY_TOO_SHORT' }
   await ensure(db, 'adminConfig')
   const got = await db.collection('adminConfig').doc('auth').get().catch(() => null)
   if (!got || !got.data) {
-    if (!bootstrap) return { ok: false, error: 'BAD_KEY' }
+    const secret = process.env.ADMIN_BOOTSTRAP_KEY || ''
+    if (!bootstrap || !secret || String(key) !== secret) return { ok: false, error: 'BAD_KEY' }
     await db.collection('adminConfig').add({ data: { _id: 'auth', keyHash: sha(key), createdAt: Date.now() } })
     return { ok: true, bootstrapped: true }
   }
