@@ -21,6 +21,7 @@
 import { readFileSync, readdirSync, statSync, existsSync } from 'node:fs'
 import { join, resolve, relative } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { RULES as conventionRules } from './check-conventions.mjs'
 
 const ROOT = resolve(import.meta.dirname, '..')
 
@@ -263,6 +264,48 @@ export const repoChecks = [
       return wired
         ? []
         : ['.claude/settings.json PostToolUse 未挂 format-hook.mjs——格式化退回手动，「格式交给工具」主张回退']
+    },
+  },
+  {
+    // 元守卫——守的是「框架完整性」本身（元模式 A4「闸自己守着闸」）。
+    // 把账本 §四「完整性自查」从人工对照升级为机器可证：每条病根都得有守卫或靠人豁免。
+    id: 'guard-coverage',
+    roots: ['元'],
+    desc: '覆盖率闭环：根因账本每条病根都须有 ≥1 守卫（某守卫 roots 含 #N）或 CLAUDE 靠人锚（[靠人:#N]）；且 CLAUDE [机器守:id] 与 test 型守卫文件须真实存在，防注册表空转',
+    run() {
+      const bad = []
+      const ledgerPath = join(ROOT, 'docs/根因账本.md')
+      if (!existsSync(ledgerPath)) return ['docs/根因账本.md 缺失（病根清单源）']
+      // §一「十二类病根」：取「## 二、」之前，抓 `### N.` 标题为病根 id
+      const sec1 = readFileSync(ledgerPath, 'utf8').split('## 二、')[0]
+      const rootIds = [...sec1.matchAll(/^###\s*(\d+)\.\s/gm)].map((m) => `#${m[1]}`)
+      if (!rootIds.length) bad.push('根因账本 §一 解析不到病根（### N. 标题）——覆盖率无从核')
+      // 守卫 roots：本模块三数组 + conventions 规则
+      const allGuards = [...repoChecks, ...fileRules, ...typeAndTestGuards, ...conventionRules]
+      const guardRoots = new Set()
+      for (const g of allGuards) for (const r of g.roots || []) guardRoots.add(r)
+      // CLAUDE：靠人锚 + 机器守 tag
+      const claudePath = join(ROOT, 'CLAUDE.md')
+      const claude = existsSync(claudePath) ? readFileSync(claudePath, 'utf8') : ''
+      const humanHeld = new Set([...claude.matchAll(/\[靠人:#(\d+)/g)].map((m) => `#${m[1]}`))
+      // ① 每条病根有守卫或靠人豁免
+      for (const id of rootIds) {
+        if (!guardRoots.has(id) && !humanHeld.has(id)) {
+          bad.push(`病根${id} 无机器守卫（无守卫 roots 含 ${id}）也无 CLAUDE 靠人豁免（[靠人:${id}]）——覆盖率缺口`)
+        }
+      }
+      // ②a CLAUDE [机器守:id] 必须指向真实守卫（防文档标了不存在的守卫）
+      const allIds = new Set(allGuards.map((g) => g.id))
+      for (const m of claude.matchAll(/\[机器守:\s*([\w-]+)\]/g)) {
+        if (!allIds.has(m[1])) bad.push(`CLAUDE.md 标 [机器守: ${m[1]}] 但无此守卫——文档/注册表漂移`)
+      }
+      // ②b test 型守卫 reverseTest 文件须存在（防注册表指向已删测试）
+      for (const g of typeAndTestGuards) {
+        if (g.mechanism === 'test' && !existsSync(join(ROOT, g.reverseTest))) {
+          bad.push(`${g.id} 的 reverseTest 不存在：${g.reverseTest}——守卫空转`)
+        }
+      }
+      return bad
     },
   },
 ]
