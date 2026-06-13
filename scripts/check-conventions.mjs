@@ -22,6 +22,7 @@
  */
 import { readFileSync, readdirSync, statSync, existsSync } from 'node:fs'
 import { join, relative, resolve } from 'node:path'
+import { fileURLToPath } from 'node:url'
 
 const ROOT = resolve(import.meta.dirname, '..')
 const SRC = join(ROOT, 'packages', 'miniapp', 'src')
@@ -45,15 +46,19 @@ TOKEN_COLORS.delete('#ffffff')
 TOKEN_COLORS.delete('#000000')
 
 // ---- 规则表：test 返回违例说明（null = 通过） ----
-const RULES = [
+// roots：本规则守的不变量来源（这 6 条均守 CLAUDE §5 多端硬约束，标 '多端'）——
+// 机读 provenance，与 check-structure 同一约定（见 docs/元模式.md A3）。
+export const RULES = [
   {
     id: 'rpx',
+    roots: ['多端'],
     test(line) {
       return /(?<![\w$#])\d+(\.\d+)?rpx\b/.test(line) ? '用 px，不用 rpx（CLAUDE.md §8）' : null
     },
   },
   {
     id: 'theme-hex',
+    roots: ['多端'],
     test(line) {
       const hits = (line.match(/#[0-9a-fA-F]{3,8}\b/g) || []).filter((h) =>
         TOKEN_COLORS.has(normalizeHex(h))
@@ -65,6 +70,7 @@ const RULES = [
   },
   {
     id: 'inline-svg',
+    roots: ['多端'],
     test(line) {
       return /<svg\b/.test(line)
         ? '小程序端不支持内联 <svg>，用 <image> 引 static/icons/*.svg（CLAUDE.md §5）'
@@ -73,6 +79,7 @@ const RULES = [
   },
   {
     id: 'button',
+    roots: ['多端'],
     test(line) {
       return /<button\b/.test(line) && !/open-type\s*=/.test(line)
         ? '交互元素用 <view> + @tap，不用 <button>；微信能力按钮（open-type）例外（CLAUDE.md §5）'
@@ -81,6 +88,7 @@ const RULES = [
   },
   {
     id: 'css-compat',
+    roots: ['多端'],
     test(line) {
       return /backdrop-filter\s*:|color-mix\s*\(/.test(line)
         ? 'backdrop-filter / color-mix() 多端兼容性差，避免使用（CLAUDE.md §5）'
@@ -89,6 +97,7 @@ const RULES = [
   },
   {
     id: 'bg-image-local',
+    roots: ['多端'],
     test(line) {
       const m = line.match(/background(?:-image)?\s*:[^;]*url\(\s*['"]?([^'")]+)/)
       return m && !/^(https?:\/\/|data:)/.test(m[1])
@@ -141,36 +150,43 @@ function report(violations, stream) {
   stream.write(`\n约定检查未通过：${violations.length} 处违例（刻意例外可在该行注释加 convention-ok）\n`)
 }
 
-const args = process.argv.slice(2)
+// CLI 入口包进 main()，只在被 node 直接运行时执行——这样测试可 import RULES
+// 而不触发全量检查（isMain 守门，与 check-structure 同一约定）。
+async function main() {
+  const args = process.argv.slice(2)
 
-if (args[0] === '--hook') {
-  // Claude Code PostToolUse：stdin 是 hook JSON，违例 exit 2 让 stderr 反馈给 Claude
-  let stdin = ''
-  process.stdin.setEncoding('utf8')
-  for await (const chunk of process.stdin) stdin += chunk
-  let file
-  try {
-    file = JSON.parse(stdin)?.tool_input?.file_path
-  } catch {
-    process.exit(0) // 解析不了就放行，hook 不应阻塞正常编辑
+  if (args[0] === '--hook') {
+    // Claude Code PostToolUse：stdin 是 hook JSON，违例 exit 2 让 stderr 反馈给 Claude
+    let stdin = ''
+    process.stdin.setEncoding('utf8')
+    for await (const chunk of process.stdin) stdin += chunk
+    let file
+    try {
+      file = JSON.parse(stdin)?.tool_input?.file_path
+    } catch {
+      process.exit(0) // 解析不了就放行，hook 不应阻塞正常编辑
+    }
+    if (!file || !inScope(file)) process.exit(0)
+    const violations = checkFile(resolve(file))
+    if (violations.length) {
+      report(violations, process.stderr)
+      process.exit(2)
+    }
+    process.exit(0)
   }
-  if (!file || !inScope(file)) process.exit(0)
-  const violations = checkFile(resolve(file))
+
+  const files = args.length ? args.filter(inScope).map((f) => resolve(f)) : [...walk(SRC)]
+  if (args.length && !files.length) {
+    console.log('（指定文件均不在检查范围：src/ 下 .vue/.scss）')
+    process.exit(0)
+  }
+  const violations = files.flatMap(checkFile)
   if (violations.length) {
-    report(violations, process.stderr)
-    process.exit(2)
+    report(violations, process.stdout)
+    process.exit(1)
   }
-  process.exit(0)
+  console.log(`✅ 约定检查通过（${files.length} 个文件，${RULES.length} 条规则）`)
 }
 
-const files = args.length ? args.filter(inScope).map((f) => resolve(f)) : [...walk(SRC)]
-if (args.length && !files.length) {
-  console.log('（指定文件均不在检查范围：src/ 下 .vue/.scss）')
-  process.exit(0)
-}
-const violations = files.flatMap(checkFile)
-if (violations.length) {
-  report(violations, process.stdout)
-  process.exit(1)
-}
-console.log(`✅ 约定检查通过（${files.length} 个文件，${RULES.length} 条规则）`)
+const isMain = resolve(process.argv[1] || '') === fileURLToPath(import.meta.url)
+if (isMain) main()

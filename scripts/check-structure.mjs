@@ -20,6 +20,7 @@
  */
 import { readFileSync, readdirSync, statSync, existsSync } from 'node:fs'
 import { join, resolve, relative } from 'node:path'
+import { fileURLToPath } from 'node:url'
 
 const ROOT = resolve(import.meta.dirname, '..')
 
@@ -37,9 +38,12 @@ function listPackageJsons() {
 
 // ============== 仓级不变量（repoChecks）==============
 // 每条 run() 返回违例说明数组（空 = 通过）。
-const repoChecks = [
+// roots：本守卫治哪条病根/主张（病根 #N / 主张 TN / 红线·基建·正册·格式 等标签）——
+// 机读 provenance，guard-coverage 据此断言每条病根都有守卫（见 docs/元模式.md A2/A4）。
+export const repoChecks = [
   {
     id: 'stub-only-sdk',
+    roots: ['基建'],
     desc: '测试地基：任何包对 wx-server-sdk 的依赖必须是 file: 内存桩，绝不引真实 sdk',
     run() {
       const bad = []
@@ -57,6 +61,7 @@ const repoChecks = [
   },
   {
     id: 'gate-single-source',
+    roots: ['铁律'],
     desc: '三道闸单一定义：pre-commit 与 CI 都只调 `npm run check`（防三闸语义悄悄漂移）',
     run() {
       const bad = []
@@ -73,6 +78,7 @@ const repoChecks = [
   },
   {
     id: 'seed-single-source',
+    roots: ['#5', 'T3'],
     desc: '种子单一来源（根因#5）：canonical 在 shared/src/seed/*；miniapp data 视图须派生自它，不得回潮内联',
     run() {
       const bad = []
@@ -93,6 +99,7 @@ const repoChecks = [
   },
   {
     id: 'cloud-domain-grouped',
+    roots: ['T2'],
     desc: 'T2 域分组：云函数源须在 functions/<域>/ 下，functions/ 顶层不得有裸 .ts（部署单元按域不散落）',
     run() {
       const dir = join(ROOT, 'packages/cloud/src/functions')
@@ -108,6 +115,7 @@ const repoChecks = [
   },
   {
     id: 'flow-seam-single',
+    roots: ['#12'],
     desc: '平台接缝单点（根因#12 平台规则外部风险）：cloudbase_module 工作流调用全库仅 kit/flow.ts 一处（callFlow），平台规则变化改动面最小',
     run() {
       const root = join(ROOT, 'packages/cloud/src')
@@ -130,6 +138,7 @@ const repoChecks = [
   },
   {
     id: 'interface-catalog-sync',
+    roots: ['正册'],
     desc: '接口正册同步（docs/接口正册.md 是接口权威登记册，正册自评 P1）：每个云函数 + 每个 adminApi action 都须登记，杜绝「加接口忘登记」',
     run() {
       const catPath = join(ROOT, 'docs/接口正册.md')
@@ -162,6 +171,7 @@ const repoChecks = [
   },
   {
     id: 'writes-need-gate',
+    roots: ['#3'],
     desc: '写库必过闸（根因#3「不过闸写不出来」成结构事实）：functions/ 下写 DB（.add/.set/.update/.remove）的函数须引 kit 闸（withOpenId/withAdminGate/defineNotifyCallback/isServerCall）或 checkKey；纯读（公开目录）豁免',
     run() {
       const root = join(ROOT, 'packages/cloud/src/functions')
@@ -196,6 +206,7 @@ const repoChecks = [
   },
   {
     id: 'docs-budget',
+    roots: ['#11'],
     desc: '文档防膨胀（根因#11 文档职责渗漏）：CLAUDE.md 须 ≤180 行（病史曾 314 行→收口 130；约定机器化后只会更瘦，溢出沉记录类）',
     run() {
       const abs = join(ROOT, 'CLAUDE.md')
@@ -208,6 +219,7 @@ const repoChecks = [
   },
   {
     id: 'console-assets-present',
+    roots: ['#9'],
     desc: '控制台资产正册不可误删（根因#9）：console-assets 关键正册文件须存在（git 外资产的唯一版本化记录）',
     run() {
       const bad = []
@@ -224,6 +236,7 @@ const repoChecks = [
   },
   {
     id: 'deploy-deny-all',
+    roots: ['铁律'],
     desc: '样板房禁部署：guard-deploy 须对一切 tcb 部署/发布返回 deny（与生产仓只拦敏感名单不同）',
     run() {
       const abs = join(ROOT, 'scripts/guard-deploy.mjs')
@@ -236,6 +249,7 @@ const repoChecks = [
   },
   {
     id: 'format-hook-wired',
+    roots: ['格式'],
     desc: '格式交给工具：.claude/settings.json 的 PostToolUse(Edit|Write) 须挂 format-hook.mjs——编辑即由 prettier 格式化，不退回手动 npm run format（主张回退=红灯）',
     run() {
       const abs = join(ROOT, '.claude/settings.json')
@@ -256,11 +270,12 @@ const repoChecks = [
 // ============== 逐文件规则（fileRules）==============
 // 形状：{ id, inScope(absPath)->bool, test(line, {file, lines, i})->msg|null }
 // 按主张追加（B3 起：禁 #ifdef 多端回退、禁 api 运行时引 data/…）。
-const fileRules = [
+export const fileRules = [
   {
     // T2 域分组（根因账本 #5）：云函数业务代码禁裸用 cloud.init()/getWXContext()，
     // 身份/初始化一律经 kit（withOpenId/getDb/isServerCall）。kit 自身与类型声明放行。
     id: 'kit-only-cloud-primitives',
+    roots: ['T2', '#5'],
     inScope: (abs) => abs.includes('/packages/cloud/src/functions/') && abs.endsWith('.ts'),
     test: (line) =>
       /\bcloud\.init\s*\(/.test(line) || /\bgetWXContext\s*\(/.test(line)
@@ -271,6 +286,7 @@ const fileRules = [
     // 平台接缝收口（根因账本 #12）：触发工作流禁裸用 cloudbase_module——经 kit.callFlow 单点，
     // 平台规则变更时改动面最小。kit 自身放行（不在 functions 域）。
     id: 'flow-seam-via-kit',
+    roots: ['#12'],
     inScope: (abs) => abs.includes('/packages/cloud/src/functions/') && abs.endsWith('.ts'),
     test: (line) =>
       /cloudbase_module/.test(line)
@@ -281,6 +297,7 @@ const fileRules = [
     // T1 砍多端（根因账本 #6）：api 层禁 import @/data/——api 只对接云（callCloud），
     // 不引样例数据＝不可能再造本地假数据回退。比正则抓 res===null 干净。
     id: 'api-cloud-only',
+    roots: ['T1', '#6'],
     inScope: (abs) => abs.includes('/packages/miniapp/src/api/') && abs.endsWith('.js'),
     test: (line) =>
       /\bfrom\s+['"]@\/data\//.test(line) || /\brequire\(\s*['"]@\/data\//.test(line)
@@ -290,6 +307,7 @@ const fileRules = [
   {
     // T4 按链内聚（CLAUDE §8 依赖方向）：pages→store/api→utils，data/utils 是叶。禁反向 import。
     id: 'dep-direction',
+    roots: ['T4'],
     inScope: (abs) =>
       /\/packages\/miniapp\/src\/(utils|data|api|store)\//.test(abs) && /\.(js|vue)$/.test(abs),
     test: (line, ctx) => {
@@ -313,6 +331,41 @@ const fileRules = [
         : null
     },
   },
+]
+
+// ============== 类型层 + 行为测试守卫（typeAndTestGuards）==============
+// 这些守卫没有独立的 JS 规则对象（活在 TS 编译期或 tests/），故在此声明 provenance，
+// 供 guard-coverage 读取。mechanism：'ts'（编译期，reverseTest 为手动篡改说明）
+// | 'test'（reverseTest 指向必须存在的测试文件，guard-coverage 校验其存在）。
+export const typeAndTestGuards = [
+  {
+    id: 'fen-branded-type',
+    mechanism: 'ts',
+    roots: ['#4'],
+    reverseTest: '浮点金额赋给 Fen → tsc 编译失败（packages/shared Fen 品牌类型；反向自检手动篡改）',
+  },
+  {
+    id: 'order-status-union',
+    mechanism: 'ts',
+    roots: ['#2'],
+    reverseTest: '写非法状态名 → tsc 编译失败（调用方用 ORDER_STATUS 常量联合）',
+  },
+  {
+    id: 'transition-atomic-idempotent',
+    mechanism: 'test',
+    roots: ['#1', '#2'],
+    reverseTest: 'tests/cloud/kit/transition.test.js',
+  },
+  {
+    id: 'deterministic-id-concurrency',
+    mechanism: 'test',
+    roots: ['#1'],
+    reverseTest: 'tests/cloud/userWrites.test.js',
+  },
+  { id: 'gate-fail-closed', mechanism: 'test', roots: ['#3'], reverseTest: 'tests/cloud/kit/gate.test.js' },
+  { id: 'notify-forge-proof', mechanism: 'test', roots: ['#3'], reverseTest: 'tests/cloud/kit/notify.test.js' },
+  { id: 'fen-money-chain', mechanism: 'test', roots: ['#4'], reverseTest: 'tests/cloud/createOrder.test.js' },
+  { id: 'paging-contract', mechanism: 'test', roots: ['#7'], reverseTest: 'tests/cloud/kit/paging.test.js' },
 ]
 
 const SRC_DIRS = ['packages', 'cloudfunctions', 'scripts']
@@ -356,39 +409,46 @@ function report(violations, stream) {
   stream.write(`\n结构不变量未通过：${violations.length} 处（每条对应一项重构主张守卫；刻意例外行内加 structure-ok）\n`)
 }
 
-const args = process.argv.slice(2)
+// CLI 入口包进 main()，只在被 node 直接运行时执行——这样测试 / guard-coverage
+// 可 import 上面三个守卫数组而不触发全量检查（isMain 守门）。
+async function main() {
+  const args = process.argv.slice(2)
 
-if (args[0] === '--hook') {
-  // PostToolUse：stdin 是 hook JSON，只查被编辑的单文件（fileRules），违例 exit 2 反馈 Claude
-  let stdin = ''
-  process.stdin.setEncoding('utf8')
-  for await (const chunk of process.stdin) stdin += chunk
-  let file
-  try {
-    file = JSON.parse(stdin)?.tool_input?.file_path
-  } catch {
+  if (args[0] === '--hook') {
+    // PostToolUse：stdin 是 hook JSON，只查被编辑的单文件（fileRules），违例 exit 2 反馈 Claude
+    let stdin = ''
+    process.stdin.setEncoding('utf8')
+    for await (const chunk of process.stdin) stdin += chunk
+    let file
+    try {
+      file = JSON.parse(stdin)?.tool_input?.file_path
+    } catch {
+      process.exit(0)
+    }
+    if (!file || !existsSync(file)) process.exit(0)
+    const violations = checkFile(resolve(file))
+    if (violations.length) {
+      report(violations, process.stderr)
+      process.exit(2)
+    }
     process.exit(0)
   }
-  if (!file || !existsSync(file)) process.exit(0)
-  const violations = checkFile(resolve(file))
-  if (violations.length) {
-    report(violations, process.stderr)
-    process.exit(2)
+
+  // 全量：repoChecks + 所有源文件 fileRules
+  const violations = [...runRepoChecks()]
+  if (fileRules.length) {
+    for (const dir of SRC_DIRS) {
+      for (const f of walk(join(ROOT, dir))) violations.push(...checkFile(f))
+    }
   }
-  process.exit(0)
+  if (violations.length) {
+    report(violations, process.stdout)
+    process.exit(1)
+  }
+  console.log(
+    `✅ 结构不变量通过（仓级 ${repoChecks.length} 条：${repoChecks.map((c) => c.id).join(' / ')}；逐文件规则 ${fileRules.length} 条）`
+  )
 }
 
-// 全量：repoChecks + 所有源文件 fileRules
-const violations = [...runRepoChecks()]
-if (fileRules.length) {
-  for (const dir of SRC_DIRS) {
-    for (const f of walk(join(ROOT, dir))) violations.push(...checkFile(f))
-  }
-}
-if (violations.length) {
-  report(violations, process.stdout)
-  process.exit(1)
-}
-console.log(
-  `✅ 结构不变量通过（仓级 ${repoChecks.length} 条：${repoChecks.map((c) => c.id).join(' / ')}；逐文件规则 ${fileRules.length} 条）`
-)
+const isMain = resolve(process.argv[1] || '') === fileURLToPath(import.meta.url)
+if (isMain) main()
