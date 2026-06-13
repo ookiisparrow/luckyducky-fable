@@ -99,6 +99,28 @@ export const repoChecks = [
     },
   },
   {
+    id: 'checkout-single-source',
+    roots: ['#5', '#6'],
+    desc: '结算搭配/券/运费单一来源（根因#5 复制即漂移 / #6 镜像靠注释维系）：canonical 在 shared/src/seed/checkout.ts；云端 createOrder（权威定价）与 miniapp data/checkout（UI）均从 shared 派生，杜绝逐字镜像',
+    run() {
+      const bad = []
+      const canonical = 'packages/shared/src/seed/checkout.ts'
+      if (!existsSync(join(ROOT, canonical))) bad.push(`${canonical} 缺失（结算常量 canonical 源）`)
+      const consumers = [
+        ['packages/cloud/src/functions/orders/createOrder.ts', /CHECKOUT_ADDONS/],
+        ['packages/miniapp/src/data/checkout.js', /from\s+['"]@luckyducky\/shared['"]/],
+      ]
+      for (const [f, derives] of consumers) {
+        const abs = join(ROOT, f)
+        if (!existsSync(abs)) bad.push(`${f} 缺失`)
+        else if (!derives.test(readFileSync(abs, 'utf8'))) {
+          bad.push(`${f} 未从 @luckyducky/shared 派生结算常量——禁逐字镜像（根因#5/#6）`)
+        }
+      }
+      return bad
+    },
+  },
+  {
     id: 'cloud-domain-grouped',
     roots: ['T2'],
     desc: 'T2 域分组：云函数源须在 functions/<域>/ 下，functions/ 顶层不得有裸 .ts（部署单元按域不散落）',

@@ -1,18 +1,25 @@
-import { MAX_QTY, MAX_ORDER_LINES, toFen, asFen, fenToYuan, isValidPriceYuan } from '@luckyducky/shared'
+import {
+  MAX_QTY,
+  MAX_ORDER_LINES,
+  toFen,
+  asFen,
+  fenToYuan,
+  isValidPriceYuan,
+  CHECKOUT_ADDONS,
+  COUPON,
+  SHIP,
+} from '@luckyducky/shared'
 import { withOpenId, ok, err } from '../../kit'
 
 // 创建订单（敏感：前端禁写 orders）。openid 闸 + 前端只传 {items:[{id,qty,sku?}],address}，
 // 价格/金额一律按云端 products 现算（不信任前端价）+ 服务端不变量（主商品必含 + 地址四要素）+
 // 订单号防碰撞（add 库级唯一 + 重试，绝不覆盖旧单）。PAY_MODE：mock 直接 paid / real 写 pending。
 
-// ⚠️ 与 src/data/checkout.js 镜像（搭配购小件 + 占位券）：链4 占位券（开发期无条件抵扣），
-// P4 接真实券系统时一并替换；暂为服务端权威副本（前端那份只供 UI 展示）。
-const ADDONS: Record<string, { name: string; price: number }> = {
-  hook: { name: '替换钩针组 · 2.5 / 3.0mm', price: 39 },
-  yarn: { name: '补充棉线包 · 暖色 5 色', price: 29 },
-}
-const COUPON = 20
-const SHIP = 0
+// 搭配购小件服务端权威定价 + 占位券/运费：单源 shared/seed/checkout（根因#5/#6，与 miniapp
+// data/checkout 同源、esbuild 内联）。占位券 COUPON 开发期无条件抵扣，P4 接真实券系统一并替换。
+const ADDONS: Record<string, { name: string; price: number }> = Object.fromEntries(
+  CHECKOUT_ADDONS.map((a) => [a.id, { name: a.name, price: a.price }])
+)
 
 // 订单号：yyyyMMddHHmm + 4 位随机（北京时间）
 function orderNo(now: number): string {
