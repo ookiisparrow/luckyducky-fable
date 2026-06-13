@@ -99,6 +99,16 @@ const fileRules = [
         ? '云函数业务代码禁裸用 cloud.init()/getWXContext()——经 kit（withOpenId/getDb/isServerCall）收编样板，防 28 份样板重生（T2/根因5）'
         : null,
   },
+  {
+    // T1 砍多端（根因账本 #6）：api 层禁 import @/data/——api 只对接云（callCloud），
+    // 不引样例数据＝不可能再造本地假数据回退。比正则抓 res===null 干净。
+    id: 'api-cloud-only',
+    inScope: (abs) => abs.includes('/packages/miniapp/src/api/') && abs.endsWith('.js'),
+    test: (line) =>
+      /\bfrom\s+['"]@\/data\//.test(line) || /\brequire\(\s*['"]@\/data\//.test(line)
+        ? 'api 层禁 import @/data/——api 只对接云，不引样例数据＝不可能再造本地假数据回退（T1/根因6）'
+        : null,
+  },
 ]
 
 const SRC_DIRS = ['packages', 'cloudfunctions', 'scripts']

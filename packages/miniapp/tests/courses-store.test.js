@@ -1,14 +1,21 @@
-import { describe, it, expect, beforeEach } from 'vitest'
+import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { setActivePinia, createPinia } from 'pinia'
-import { useCoursesStore } from '@/store/courses.js'
-import { getCourses } from '@/api/course.js'
 import { COURSES, COURSE, ALL_LESSONS } from '@/data/course.js'
 
-// 不挂 persist 插件，纯测 store 逻辑（courses 本就不持久化）
-beforeEach(() => setActivePinia(createPinia()))
+// T1 砍多端：getCourses 只对接云。测试 mock callCloud 返回云端课程（用 data/course 样例作云响应素材）。
+const { callCloud } = vi.hoisted(() => ({ callCloud: vi.fn() }))
+vi.mock('@/utils/cloud.js', () => ({ callCloud, initCloud: vi.fn(), uploadCloudFile: vi.fn() }))
 
-describe('courses api / store', () => {
-  it('api getCourses：无 wx.cloud（H5 / 测试环境）回退本地 COURSES', async () => {
+import { useCoursesStore } from '@/store/courses.js'
+import { getCourses } from '@/api/course.js'
+
+beforeEach(() => {
+  setActivePinia(createPinia())
+  callCloud.mockImplementation(async (name) => (name === 'getCourses' ? { list: COURSES } : null))
+})
+
+describe('courses api / store（云路径，mock callCloud）', () => {
+  it('api getCourses：透传云端课程列表', async () => {
     const list = await getCourses()
     expect(list).toEqual(COURSES)
   })
@@ -19,7 +26,7 @@ describe('courses api / store', () => {
     expect(store.allLessons).toEqual([])
   })
 
-  it('load 后 current / allLessons 与本地课程表一致（含 chapter 归属）', async () => {
+  it('load 后 current / allLessons 与课程表一致（含 chapter 归属）', async () => {
     const store = useCoursesStore()
     await store.load()
     expect(store.current.id).toBe('course-duck')

@@ -1,13 +1,10 @@
 /**
- * 课程激活接口（P3 二维码激活闭环）。激活 / 确认是敏感业务，小程序端一律走云函数；
- * H5 / App 端无云回退「演示模式」（规格 §四-4）：视为已激活，activate / confirm
- * 本地直接成功（课程取本地课程表）。
+ * 课程激活接口（P3 二维码激活闭环）。激活 / 确认是敏感、法律相关动作，一律走云函数。
  *
- * 小程序端云函数异常：getMyCourses 回退空列表（宁锁勿漏），activate / confirm
- * 返回 NETWORK 错误由页面提示——激活是法律相关动作，不做本地假成功。
+ * T1 砍多端：原 H5/App「演示模式」（视为已激活、本地假成功）已删——激活不做本地假成功。
+ * 无云/异常：activate/confirm 返回 NETWORK 错误由页面提示；getMyCourses 返回空（宁锁勿漏）。
  */
 import { callCloud } from '@/utils/cloud.js'
-import { COURSES } from '@/data/course.js'
 import { logger } from '@/utils/logger.js'
 
 // 从页面启动参数解析激活码，三种进入方式（决策记录 §13：印刷走普通链接二维码，一码一地址）：
@@ -38,10 +35,8 @@ export async function activateCourse(code) {
     if (res) return res // { ok, state:'activated'|'mine', courseId } | { ok:false, error }
   } catch (e) {
     logger.warn('activation', 'activateCourse 云端异常', e)
-    return { ok: false, error: 'NETWORK' }
   }
-  // H5 / App 演示模式
-  return { ok: true, state: 'activated', courseId: COURSES[0].id }
+  return { ok: false, error: 'NETWORK' }
 }
 
 export async function confirmEnter(code) {
@@ -50,9 +45,8 @@ export async function confirmEnter(code) {
     if (res) return res // { ok, enteredAt, revoked } | { ok:false, error }
   } catch (e) {
     logger.warn('activation', 'confirmEnter 云端异常', e)
-    return { ok: false, error: 'NETWORK' }
   }
-  return { ok: true, enteredAt: Date.now(), revoked: null }
+  return { ok: false, error: 'NETWORK' }
 }
 
 export async function getMyCourses() {
@@ -61,8 +55,6 @@ export async function getMyCourses() {
     if (res) return res.ok && Array.isArray(res.list) ? res.list : []
   } catch (e) {
     logger.warn('activation', 'getMyCourses 云端失败，按未解锁处理', e)
-    return []
   }
-  // H5 / App 演示模式：全部课程视为已解锁
-  return COURSES.map((c) => ({ courseId: c.id, enteredAt: 1 }))
+  return []
 }
