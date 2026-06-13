@@ -1,0 +1,110 @@
+import { reply, ensure, cleanCourse, storeImage, manager, type Ctx } from '../lib'
+
+// 视频直传凭证（主路径）：manager-node 签发 COS 上传元数据，浏览器 PUT 直传
+export async function getVideoUploadMeta({ data }: Ctx) {
+  const courseId = String(data.courseId || 'misc').slice(0, 40)
+  const name = String(data.name || 'seg').replace(/[^\w-]/g, '').slice(0, 40) || 'seg'
+  const ext = data.ext === 'mov' ? 'mov' : 'mp4'
+  const cloudPath = `videos/${courseId}/${name}-${Date.now()}.${ext}`
+  try {
+    const meta = await manager().storage.getUploadMetadata(cloudPath)
+    return reply(200, {
+      ok: true,
+      url: meta.url,
+      token: meta.token,
+      authorization: meta.authorization,
+      fileId: meta.fileId,
+      cosFileId: meta.cosFileId,
+    })
+  } catch (e) {
+    console.error('getVideoUploadMeta fail', e)
+    return reply(200, { ok: false, error: 'META_UNAVAILABLE' })
+  }
+}
+
+// —— 课程草稿（步骤④ 视频编排；与小程序 courses 同形，发布前学员不可见）——
+export async function getCourseDraft({ db, data }: Ctx) {
+  const courseId = String(data.courseId || '')
+  if (!courseId) return reply(400, { ok: false, error: 'NO_COURSE_ID' })
+  await ensure(db, 'coursesDraft')
+  const got = await db.collection('coursesDraft').doc(courseId).get().catch(() => null)
+  if (got && got.data) return reply(200, { ok: true, course: got.data })
+  const pub = await db.collection('courses').doc(courseId).get().catch(() => null)
+  if (pub && pub.data) return reply(200, { ok: true, course: pub.data, fromPublished: true })
+  return reply(200, { ok: true, course: null })
+}
+
+export async function saveCourseDraft({ db, data }: Ctx) {
+  const c = cleanCourse(data.course)
+  if (!c) return reply(400, { ok: false, error: 'BAD_COURSE' })
+  await ensure(db, 'coursesDraft')
+  const drafts2 = db.collection('coursesDraft')
+  await drafts2
+    .doc(c.id)
+    .set({ data: c })
+    .catch(async () => {
+      await drafts2.add({ data: { ...c, _id: c.id } })
+    })
+  return reply(200, { ok: true })
+}
+
+// 发布：草稿整体覆盖 courses（引用模型，老学员自动生效）
+export async function publishCourse({ db, data }: Ctx) {
+  const courseId = String(data.courseId || '')
+  if (!courseId) return reply(400, { ok: false, error: 'NO_COURSE_ID' })
+  const got = await db.collection('coursesDraft').doc(courseId).get().catch(() => null)
+  if (!got || !got.data) return reply(400, { ok: false, error: 'NO_DRAFT' })
+  const course = { ...got.data }
+  delete course._id
+  const coursesColl = db.collection('courses')
+  await coursesColl
+    .doc(courseId)
+    .set({ data: course })
+    .catch(async () => {
+      await coursesColl.add({ data: { ...course, _id: courseId } })
+    })
+  return reply(200, { ok: true })
+}
+
+export async function uploadChunk({ db, data }: Ctx) {
+  const { uploadId, seq, b64 } = data
+  const id = String(uploadId || '').slice(0, 40)
+  const n = parseInt(seq, 10)
+  if (!id || !(n >= 0) || typeof b64 !== 'string' || !b64 || b64.length > 90_000) {
+    return reply(400, { ok: false, error: 'BAD_CHUNK' })
+  }
+  await ensure(db, 'uploadChunks')
+  await db
+    .collection('uploadChunks')
+    .doc(`${id}-${n}`)
+    .set({ data: { uploadId: id, seq: n, b64, createdAt: Date.now() } })
+  return reply(200, { ok: true })
+}
+
+export async function uploadFinish({ db, cloud, data }: Ctx) {
+  const id = String(data.uploadId || '').slice(0, 40)
+  const total = parseInt(data.total, 10)
+  if (!id || !(total > 0) || total > 200) return reply(400, { ok: false, error: 'BAD_FINISH' })
+  const chunksColl = db.collection('uploadChunks')
+  const got = await chunksColl.where({ uploadId: id }).limit(1000).get()
+  // seq 必须正好 0..total-1（审核批次B：只数数量「0,2 共 2 片」也能过 → 拼出损坏文件）
+  const seqs = new Set(got.data.map((c: any) => c.seq))
+  const complete =
+    got.data.length === total &&
+    seqs.size === total &&
+    Array.from({ length: total }, (_, i) => i).every((i) => seqs.has(i))
+  if (!complete) {
+    return reply(400, { ok: false, error: 'CHUNKS_MISSING', have: got.data.length })
+  }
+  const b64 = got.data
+    .sort((a: any, b: any) => a.seq - b.seq)
+    .map((c: any) => c.b64)
+    .join('')
+  const res = await storeImage(cloud, b64, data)
+  await chunksColl.where({ uploadId: id }).remove()
+  await chunksColl
+    .where({ createdAt: db.command.lt(Date.now() - 3600_000) })
+    .remove()
+    .catch(() => {})
+  return reply(200, res)
+}

@@ -19,9 +19,14 @@ function collect() {
   for (const domain of readdirSync(FN_ROOT)) {
     const dpath = join(FN_ROOT, domain)
     if (!statSync(dpath).isDirectory()) continue
-    for (const f of readdirSync(dpath)) {
-      if (f.endsWith('.ts') && !f.endsWith('.d.ts')) {
-        fns.push({ name: basename(f, '.ts'), domain, entry: join(dpath, f) })
+    for (const entry of readdirSync(dpath)) {
+      const epath = join(dpath, entry)
+      if (statSync(epath).isDirectory()) {
+        // 多文件函数：<域>/<name>/index.ts（esbuild 内联本地 imports：lib/actions）
+        const idx = join(epath, 'index.ts')
+        if (existsSync(idx)) fns.push({ name: entry, domain, entry: idx })
+      } else if (entry.endsWith('.ts') && !entry.endsWith('.d.ts')) {
+        fns.push({ name: basename(entry, '.ts'), domain, entry: epath })
       }
     }
   }
@@ -44,8 +49,9 @@ for (const fn of fns) {
     external: ['wx-server-sdk', '@cloudbase/manager-node'], // 运行时提供 / installDependency 装，禁内联
     legalComments: 'none',
   })
-  // 每函数 package.json（installDependency 装）：wx-server-sdk 恒有；manager-node 按需（adminApi 用）
-  const usesManager = readFileSync(fn.entry, 'utf8').includes('@cloudbase/manager-node')
+  // 每函数 package.json（installDependency 装）：wx-server-sdk 恒有；manager-node 按需。
+  // 从打包产物检测（多文件函数里 manager-node 在 lib，不在 index 入口；产物含其 external require）
+  const usesManager = readFileSync(join(outdir, 'index.js'), 'utf8').includes('@cloudbase/manager-node')
   writeFileSync(
     join(outdir, 'package.json'),
     JSON.stringify(
