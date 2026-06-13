@@ -129,6 +129,38 @@ const repoChecks = [
     },
   },
   {
+    id: 'interface-catalog-sync',
+    desc: '接口正册同步（docs/接口正册.md 是接口权威登记册，正册自评 P1）：每个云函数 + 每个 adminApi action 都须登记，杜绝「加接口忘登记」',
+    run() {
+      const catPath = join(ROOT, 'docs/接口正册.md')
+      if (!existsSync(catPath)) return ['docs/接口正册.md 缺失（接口权威登记册）']
+      const cat = readFileSync(catPath, 'utf8')
+      const has = (name) => cat.includes('`' + name + '`')
+      const fnRoot = join(ROOT, 'packages/cloud/src/functions')
+      if (!existsSync(fnRoot)) return []
+      const bad = []
+      // 云函数（functions/<域>/<name>.ts 或 <name>/ 目录型）
+      for (const domain of readdirSync(fnRoot)) {
+        const dp = join(fnRoot, domain)
+        if (!statSync(dp).isDirectory()) continue
+        for (const e of readdirSync(dp)) {
+          const name = statSync(join(dp, e)).isDirectory() ? e : e.endsWith('.ts') ? e.slice(0, -3) : null
+          if (name && !has(name)) bad.push(`云函数 ${name} 未登记 docs/接口正册.md（正册 P1）`)
+        }
+      }
+      // adminApi action（index.ts ACTIONS 查表键 + 特例 ping/login）
+      const idxPath = join(fnRoot, 'admin/adminApi/index.ts')
+      if (existsSync(idxPath)) {
+        const m = readFileSync(idxPath, 'utf8').match(/const ACTIONS[^{]*\{([\s\S]*?)\n\}/)
+        const actions = m ? [...m[1].matchAll(/^\s*(\w+):/gm)].map((x) => x[1]) : []
+        for (const a of [...actions, 'ping', 'login']) {
+          if (!has(a)) bad.push(`adminApi action ${a} 未登记 docs/接口正册.md（正册 P1）`)
+        }
+      }
+      return bad
+    },
+  },
+  {
     id: 'writes-need-gate',
     desc: '写库必过闸（根因#3「不过闸写不出来」成结构事实）：functions/ 下写 DB（.add/.set/.update/.remove）的函数须引 kit 闸（withOpenId/withAdminGate/defineNotifyCallback/isServerCall）或 checkKey；纯读（公开目录）豁免',
     run() {
