@@ -70,9 +70,10 @@ DEPLOY_ALLOWED=1 node scripts/deploy-fns.mjs     # 首跑：manifest 空 → 部
 ## 六、切换后收尾（非阻塞，另行排期）
 
 1. **CLAUDE 本体 reconcile**：§2 命令、§5 目录（`src/`→`packages/`）、§7 数据（删「data/catalog 单一来源」「api/shop H5 回退」旧述）、§3 闸数（四道→八闸 + deploy-fns），改到与重构后架构一致。`docs-budget` 守卫保其仍 ≤180 行。
-2. **债#14**：users/progress 升确定性 `_id`（kit 提取 `ids.ts`）+ 惰性迁移，补测试，关账根因#1 最后一环。
-3. **前端分页「加载更多」**：小程序 order-list / 控制台订单·售后页接 kit 游标分页（后端已就绪）。
-4. **依赖安全升级（另开分支，低优先）**：`npm audit` 现 51 项（26 high/13 mod/12 low），**全在构建工具链**（@dcloudio/vite/esbuild/jimp/postcss/ws/express/qs）——不随云函数产物或小程序编译产物上线，**运行时暴露面近乎为零**。非破坏性 `npm audit fix` 不减项（反引入 rolldown 一大坨依赖），故未采纳；根治须主版本升级 uni-app/vite/esbuild 栈、单开分支逐项验三端构建（uni 对版本敏感，勿盲跑 `--force`）。
-5. **观察期**：盯交易异常工作台（adminApi getDashboard 的 feeMismatch/refundMismatch/退款卡单）、云函数日志，确认无回归。
+2. **债#14**：users/progress 升确定性 `_id`（kit 提取 `ids.ts`）+ 惰性迁移，补测试，关账根因#1 最后一环。**切换后做更安全**（忠实先查后建与现网兼容，确定性 _id 的惰性迁移宜上线后单独观察）。
+3. ~~前端分页「加载更多」~~ ✅ 已接（小程序 order-list/aftersales + 控制台订单/售后四处全接游标）。残留低优先：状态角标按已载列表计，超首页需服务端计数。
+4. **依赖安全升级（另开分支，低优先）**：`npm audit` 51 项**全在构建工具链**（@dcloudio/vite/esbuild/jimp/postcss/ws/express/qs）——不随云函数/小程序产物上线、**运行时暴露近零**。非破坏性 `audit fix` 不减项（反引入 rolldown），未采纳；根治须主版本升级 uni 栈、单开分支验三端构建（勿盲跑 `--force`）。
+5. **后台账号体系 v2（产品级，另议）**：现 v1 单口令 + localStorage 是刻意简化（bootstrap 抢占窗口已关，债#15）；升级到 session token / 多账号属账号体系决策，需产品拍板。
+6. **观察期**：盯交易异常工作台（adminApi getDashboard 的 feeMismatch/refundMismatch/退款卡单）、云函数日志，确认无回归。
 
 > **管理员口令（债#15 已关抢占窗口）**：现网 `adminConfig.auth` 已存在，切换不受影响、照旧用现口令登录。**仅当迁新环境 / 重置口令**时，须先设云环境变量 `ADMIN_BOOTSTRAP_KEY`＝期望口令，再用该口令首登（无此变量则禁止 bootstrap，杜绝抢占）；设定后可移除该变量。
