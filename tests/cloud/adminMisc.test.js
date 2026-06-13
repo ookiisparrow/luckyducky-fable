@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach } from 'vitest'
 import { createHash } from 'node:crypto'
 import { control } from 'wx-server-sdk'
-import { main } from '../../cloudfunctions/adminApi/index.js'
+import { main } from '../../packages/cloud/src/functions/admin/adminApi'
 
 // adminApi 杂项闸门（审核批次B）：分片 seq 连续性、批次 count 校验、看板交易异常。
 const KEY = 'test-admin-key-123'

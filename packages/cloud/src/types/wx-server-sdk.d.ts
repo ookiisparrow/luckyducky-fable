@@ -15,6 +15,10 @@ declare module 'wx-server-sdk' {
     database(): any
     getWXContext(): WXContext
     callFunction(params: { name: string; data?: any }): Promise<any>
+    uploadFile(params: { cloudPath: string; fileContent: any }): Promise<{ fileID: string }>
+    getTempFileURL(params: {
+      fileList: string[]
+    }): Promise<{ fileList: { fileID: string; tempFileURL: string }[] }>
   }
   const cloud: Cloud
   export = cloud

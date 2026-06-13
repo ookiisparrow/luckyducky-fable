@@ -7,7 +7,7 @@
  * 部署：本仓禁部署（guard-deploy 全拦）；产物经回灌点在生产仓部署验证（用户动作）。
  */
 import { build } from 'esbuild'
-import { readdirSync, statSync, mkdirSync, writeFileSync, rmSync, existsSync } from 'node:fs'
+import { readdirSync, readFileSync, statSync, mkdirSync, writeFileSync, rmSync, existsSync } from 'node:fs'
 import { join, resolve, basename } from 'node:path'
 
 const ROOT = resolve(import.meta.dirname)
@@ -41,14 +41,23 @@ for (const fn of fns) {
     platform: 'node',
     target: 'node18', // tcb 云函数运行时
     format: 'cjs',
-    external: ['wx-server-sdk'], // 运行时提供 + installDependency 装，禁内联
+    external: ['wx-server-sdk', '@cloudbase/manager-node'], // 运行时提供 / installDependency 装，禁内联
     legalComments: 'none',
   })
-  // 每函数 package.json（与现 cloudfunctions 形态一致：installDependency 装 wx-server-sdk）
+  // 每函数 package.json（installDependency 装）：wx-server-sdk 恒有；manager-node 按需（adminApi 用）
+  const usesManager = readFileSync(fn.entry, 'utf8').includes('@cloudbase/manager-node')
   writeFileSync(
     join(outdir, 'package.json'),
     JSON.stringify(
-      { name: fn.name, version: '1.0.0', main: 'index.js', dependencies: { 'wx-server-sdk': '~2.6.3' } },
+      {
+        name: fn.name,
+        version: '1.0.0',
+        main: 'index.js',
+        dependencies: {
+          'wx-server-sdk': '~2.6.3',
+          ...(usesManager ? { '@cloudbase/manager-node': '^4.2.0' } : {}),
+        },
+      },
       null,
       2
     ) + '\n'

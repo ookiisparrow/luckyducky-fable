@@ -1,12 +1,13 @@
+import cloud from 'wx-server-sdk'
+import crypto from 'crypto'
+import { getDb, str, callFlow } from '../../kit'
+
 // 管理控制台后端（HTTP 访问服务触发，网页端 fetch 调用；规格 §三 登录方案 v1）。
-// 鉴权：管理口令（adminConfig 集合，sha256 存储）——首次 login 即设置口令（bootstrap），
-//   之后所有写操作必须带对口令；HTTPS 传输。Web SDK 账号体系留作后续升级。
-// 数据：productsDraft 集合（商品上新流水线草稿，发布到 products 为后续批次）。
-// 图片：base64 经本函数转存云存储（products/ 前缀），返回 fileID + 临时 URL。
-const cloud = require('wx-server-sdk')
-const crypto = require('crypto')
-cloud.init({ env: cloud.DYNAMIC_CURRENT_ENV })
-const db = cloud.database()
+// 鉴权：管理口令（adminConfig 集合，sha256；首次 login 即 bootstrap 设置）。HTTPS 传输。
+// 数据：productsDraft 草稿；图片 base64 转存云存储；视频 manager-node 签发直传凭证。
+// B5：HTTP 框架/口令闸/28 action 一处（B5b 拆 actions/ 查表）；db 经 kit.getDb，
+// 退款流经 kit.callFlow（cloudbase_module 单点，根因#12）；str 用 kit（A-1 去重）。
+const db = getDb()
 
 const CORS = {
   'Access-Control-Allow-Origin': '*',
@@ -14,12 +15,10 @@ const CORS = {
   'Access-Control-Allow-Headers': 'Content-Type',
   'Content-Type': 'application/json',
 }
-const reply = (statusCode, data) => ({ statusCode, headers: CORS, body: JSON.stringify(data) })
-const sha = (s) => crypto.createHash('sha256').update(String(s)).digest('hex')
-// 字段截断助手（白名单清洗时统一用）：非字符串归一为空串，字符串截到 cap 长度
-const str = (v, cap) => (typeof v === 'string' ? v.slice(0, cap) : '')
+const reply = (statusCode: number, data: any) => ({ statusCode, headers: CORS, body: JSON.stringify(data) })
+const sha = (s: any) => crypto.createHash('sha256').update(String(s)).digest('hex')
 
-async function ensure(coll) {
+async function ensure(coll: string) {
   try {
     await db.createCollection(coll)
   } catch {
@@ -28,27 +27,25 @@ async function ensure(coll) {
 }
 
 // 口令校验；首次调用（无记录）时把本次口令设为管理员口令（部署后立即登录即占位）
-async function checkKey(key, bootstrap) {
+async function checkKey(key: any, bootstrap: boolean) {
   if (!key || String(key).length < 6) return { ok: false, error: 'KEY_TOO_SHORT' }
   await ensure('adminConfig')
   const got = await db.collection('adminConfig').doc('auth').get().catch(() => null)
   if (!got || !got.data) {
     if (!bootstrap) return { ok: false, error: 'BAD_KEY' }
-    await db
-      .collection('adminConfig')
-      .add({ data: { _id: 'auth', keyHash: sha(key), createdAt: Date.now() } })
+    await db.collection('adminConfig').add({ data: { _id: 'auth', keyHash: sha(key), createdAt: Date.now() } })
     return { ok: true, bootstrapped: true }
   }
   return got.data.keyHash === sha(key) ? { ok: true } : { ok: false, error: 'BAD_KEY' }
 }
 
 // 草稿白名单字段（防杂字段入库）
-function cleanProduct(p) {
+function cleanProduct(p: any) {
   if (!p || typeof p !== 'object' || !p.id) return null
   return {
     id: String(p.id).slice(0, 40),
     cover: str(p.cover, 300),
-    images: (Array.isArray(p.images) ? p.images : []).slice(0, 20).map((u) => str(u, 300)),
+    images: (Array.isArray(p.images) ? p.images : []).slice(0, 20).map((u: any) => str(u, 300)),
     name: str(p.name, 60),
     price: str(String(p.price ?? ''), 12),
     was: str(String(p.was ?? ''), 12),
@@ -56,16 +53,16 @@ function cleanProduct(p) {
     brief: str(p.brief, 120),
     skus: (Array.isArray(p.skus) ? p.skus : [])
       .slice(0, 30)
-      .map((s) => ({ name: str(s?.name, 30), price: str(String(s?.price ?? ''), 12) })),
+      .map((s: any) => ({ name: str(s?.name, 30), price: str(String(s?.price ?? ''), 12) })),
     params: (Array.isArray(p.params) ? p.params : [])
       .slice(0, 8)
-      .map((kv) => [str(kv?.[0], 10), str(kv?.[1], 40)]),
+      .map((kv: any) => [str(kv?.[0], 10), str(kv?.[1], 40)]),
     detailSections: (Array.isArray(p.detailSections) ? p.detailSections : [])
       .slice(0, 4)
-      .map((d) => ({ lead: str(d?.lead, 30), body: str(d?.body, 200) })),
+      .map((d: any) => ({ lead: str(d?.lead, 30), body: str(d?.body, 200) })),
     kit: (Array.isArray(p.kit) ? p.kit : [])
       .slice(0, 8)
-      .map((k) => ({ icon: str(k?.icon, 24), name: str(k?.name, 14), qty: str(k?.qty, 14) })),
+      .map((k: any) => ({ icon: str(k?.icon, 24), name: str(k?.name, 14), qty: str(k?.qty, 14) })),
     courseId: str(p.courseId, 40),
     cardStatus: p.cardStatus === 'final' ? 'final' : p.cardStatus === 'draft' ? 'draft' : '',
     batchCount: Number(p.batchCount) || 0,
@@ -80,7 +77,7 @@ function cleanProduct(p) {
 }
 
 // manager-node：用函数运行时临时密钥初始化（签发直传凭证用）
-let _manager = null
+let _manager: any = null
 function manager() {
   if (_manager) return _manager
   const Manager = require('@cloudbase/manager-node')
@@ -94,20 +91,20 @@ function manager() {
 }
 
 // 课程草稿白名单（三层结构，与小程序 courses 同形；字段截断防杂数据）
-function cleanCourse(c) {
+function cleanCourse(c: any) {
   if (!c || typeof c !== 'object' || !c.id) return null
   return {
     id: String(c.id).slice(0, 40),
     title: str(c.title, 60),
     sort: Number(c.sort) || 0,
-    chapters: (Array.isArray(c.chapters) ? c.chapters : []).slice(0, 30).map((ch) => ({
+    chapters: (Array.isArray(c.chapters) ? c.chapters : []).slice(0, 30).map((ch: any) => ({
       id: str(ch?.id, 40) || 'c' + Math.random().toString(36).slice(2, 8),
       title: str(ch?.title, 60),
-      lessons: (Array.isArray(ch?.lessons) ? ch.lessons : []).slice(0, 50).map((l) => ({
+      lessons: (Array.isArray(ch?.lessons) ? ch.lessons : []).slice(0, 50).map((l: any) => ({
         id: str(l?.id, 40) || 'l' + Math.random().toString(36).slice(2, 8),
         name: str(l?.name, 60),
         dur: str(l?.dur, 10),
-        segments: (Array.isArray(l?.segments) ? l.segments : []).slice(0, 30).map((sg) => ({
+        segments: (Array.isArray(l?.segments) ? l.segments : []).slice(0, 30).map((sg: any) => ({
           id: str(sg?.id, 40) || 's' + Math.random().toString(36).slice(2, 8),
           name: str(sg?.name, 60),
           dur: str(sg?.dur, 10),
@@ -121,7 +118,7 @@ function cleanCourse(c) {
 }
 
 // base64 → 云存储 products/<pid>/，返回 fileID + 临时展示 URL
-async function storeImage(b64, data) {
+async function storeImage(b64: string, data: any) {
   const ext = ['png', 'jpg', 'mp4', 'mov'].includes(data.ext) ? data.ext : 'jpg'
   const pid = String(data.pid || 'misc').slice(0, 40)
   const prefix = data.kind === 'video' ? 'videos' : 'products'
@@ -131,11 +128,11 @@ async function storeImage(b64, data) {
   return { ok: true, fileID: up.fileID, url: r.fileList[0]?.tempFileURL || '' }
 }
 
-exports.main = async (event) => {
+export const main = async (event: any) => {
   if (event.httpMethod === 'OPTIONS') return reply(204, {})
   if (event.httpMethod !== 'POST') return reply(405, { ok: false, error: 'POST_ONLY' })
 
-  let req
+  let req: any
   try {
     const raw = event.isBase64Encoded ? Buffer.from(event.body, 'base64').toString() : event.body
     req = JSON.parse(raw || '{}')
@@ -161,13 +158,12 @@ exports.main = async (event) => {
   try {
     if (action === 'listDrafts') {
       const res = await drafts.orderBy('createdAt', 'desc').limit(100).get()
-      // 给所有 fileID 换临时 URL（网页端展示用，有效期内自动续取）
-      const ids = new Set()
+      const ids = new Set<string>()
       for (const p of res.data) {
         if (p.cover && p.cover.startsWith('cloud://')) ids.add(p.cover)
         for (const u of p.images || []) if (u.startsWith('cloud://')) ids.add(u)
       }
-      const urls = {}
+      const urls: Record<string, string> = {}
       if (ids.size) {
         const r = await cloud.getTempFileURL({ fileList: [...ids] })
         for (const f of r.fileList) if (f.tempFileURL) urls[f.fileID] = f.tempFileURL
@@ -194,16 +190,14 @@ exports.main = async (event) => {
       return reply(200, { ok: true })
     }
 
-    // 小图单发（b64 ≤ 80K 字符）；大图走分片（HTTP 访问服务请求体上限约 100KB，
-    // 真实照片必超 —— 调试日志 F）
+    // 小图单发（b64 ≤ 80K 字符）；大图走分片（HTTP 请求体上限约 100KB，调试日志 F）
     if (action === 'uploadImage') {
       const b64 = String(data.b64 || '')
       if (!b64 || b64.length > 90_000) return reply(400, { ok: false, error: 'BAD_IMAGE' })
       return reply(200, await storeImage(b64, data))
     }
 
-    // 视频直传凭证（主路径）：manager-node 签发 COS 上传元数据，浏览器 PUT 直传云存储
-    // （≤10MB 视频 3–10s；不可用时前端自动回落分片通道）
+    // 视频直传凭证（主路径）：manager-node 签发 COS 上传元数据，浏览器 PUT 直传
     if (action === 'getVideoUploadMeta') {
       const courseId = String(data.courseId || 'misc').slice(0, 40)
       const name = String(data.name || 'seg').replace(/[^\w-]/g, '').slice(0, 40) || 'seg'
@@ -232,7 +226,6 @@ exports.main = async (event) => {
       await ensure('coursesDraft')
       const got = await db.collection('coursesDraft').doc(courseId).get().catch(() => null)
       if (got && got.data) return reply(200, { ok: true, course: got.data })
-      // 无草稿：若已有已发布课程（如存量 course-duck），以现网内容为底稿
       const pub = await db.collection('courses').doc(courseId).get().catch(() => null)
       if (pub && pub.data) return reply(200, { ok: true, course: pub.data, fromPublished: true })
       return reply(200, { ok: true, course: null })
@@ -252,7 +245,7 @@ exports.main = async (event) => {
       return reply(200, { ok: true })
     }
 
-    // 发布：草稿整体覆盖 courses（小程序 getCourses 即刻可见；引用模型，老学员自动生效）
+    // 发布：草稿整体覆盖 courses（引用模型，老学员自动生效）
     if (action === 'publishCourse') {
       const courseId = String(data.courseId || '')
       if (!courseId) return reply(400, { ok: false, error: 'NO_COURSE_ID' })
@@ -288,12 +281,11 @@ exports.main = async (event) => {
     if (action === 'uploadFinish') {
       const id = String(data.uploadId || '').slice(0, 40)
       const total = parseInt(data.total, 10)
-      // total 上限 200：覆盖 ≤10MB 视频的分片回落通道（b64 ≈ 13.7MB / 80K ≈ 172 片）
       if (!id || !(total > 0) || total > 200) return reply(400, { ok: false, error: 'BAD_FINISH' })
       const chunksColl = db.collection('uploadChunks')
       const got = await chunksColl.where({ uploadId: id }).limit(1000).get()
-      // seq 必须正好是 0..total-1（审核批次B：只数数量时「0,2 共 2 片」也能过，会拼出损坏文件）
-      const seqs = new Set(got.data.map((c) => c.seq))
+      // seq 必须正好 0..total-1（审核批次B：只数数量「0,2 共 2 片」也能过 → 拼出损坏文件）
+      const seqs = new Set(got.data.map((c: any) => c.seq))
       const complete =
         got.data.length === total &&
         seqs.size === total &&
@@ -302,12 +294,11 @@ exports.main = async (event) => {
         return reply(400, { ok: false, error: 'CHUNKS_MISSING', have: got.data.length })
       }
       const b64 = got.data
-        .sort((a, b) => a.seq - b.seq)
-        .map((c) => c.b64)
+        .sort((a: any, b: any) => a.seq - b.seq)
+        .map((c: any) => c.b64)
         .join('')
       const res = await storeImage(b64, data)
       await chunksColl.where({ uploadId: id }).remove()
-      // 顺手清理 1 小时前的孤儿分片（中断的上传）
       await chunksColl
         .where({ createdAt: db.command.lt(Date.now() - 3600_000) })
         .remove()
@@ -315,7 +306,7 @@ exports.main = async (event) => {
       return reply(200, res)
     }
 
-    // 上架小程序：商品草稿 → products（首页/详情即刻可见；价格转数字，重复上架保留原 sort/featured）
+    // 上架小程序：商品草稿 → products（价格转数字，重复上架保留原 sort/featured）
     if (action === 'publishProduct') {
       const id = String(data.id || '')
       if (!id) return reply(400, { ok: false, error: 'NO_ID' })
@@ -324,7 +315,7 @@ exports.main = async (event) => {
       const d = got.data
       if (!d.cover) return reply(400, { ok: false, error: 'NEED_COVER' })
       if (!d.name || !Number(d.price)) return reply(400, { ok: false, error: 'NEED_INFO' })
-      if (!Array.isArray(d.skus) || !d.skus.length || d.skus.some((x) => !x.name || !Number(x.price))) {
+      if (!Array.isArray(d.skus) || !d.skus.length || d.skus.some((x: any) => !x.name || !Number(x.price))) {
         return reply(400, { ok: false, error: 'NEED_SKUS' })
       }
       const productsColl = db.collection('products')
@@ -345,7 +336,7 @@ exports.main = async (event) => {
         brief: d.brief || '',
         cover: d.cover,
         images: d.images || [],
-        skus: d.skus.map((x) => ({ name: x.name, price: Number(x.price) })),
+        skus: d.skus.map((x: any) => ({ name: x.name, price: Number(x.price) })),
         params: d.params || [],
         detailSections: d.detailSections || [],
         kit: d.kit || [],
@@ -367,10 +358,10 @@ exports.main = async (event) => {
     // —— 小程序橱窗（规格 §八）：一比一首页预览的排序与上下架 ——
     if (action === 'listShowcase') {
       const res = await db.collection('products').orderBy('sort', 'asc').limit(100).get()
-      const ids = res.data.map((p) => p.cover).filter((u) => u && u.startsWith('cloud://'))
-      const urls = {}
+      const ids = res.data.map((p: any) => p.cover).filter((u: any) => u && u.startsWith('cloud://'))
+      const urls: Record<string, string> = {}
       if (ids.length) {
-        const r = await cloud.getTempFileURL({ fileList: [...new Set(ids)] })
+        const r = await cloud.getTempFileURL({ fileList: [...new Set<string>(ids)] })
         for (const f of r.fileList) if (f.tempFileURL) urls[f.fileID] = f.tempFileURL
       }
       return reply(200, { ok: true, list: res.data, urls })
@@ -415,7 +406,7 @@ exports.main = async (event) => {
       if (!productId) return reply(400, { ok: false, error: 'NO_PRODUCT' })
       await ensure('cards')
       const got = await db.collection('cards').doc(`card-${productId}`).get().catch(() => null)
-      let card = got?.data || null
+      let card: any = got?.data || null
       // 旧单面结构 → 双面结构（兼容已存草稿）
       if (card && !card.front) {
         card = {
@@ -440,13 +431,12 @@ exports.main = async (event) => {
     if (action === 'saveCard') {
       const c = data.card
       if (!c || !c.productId) return reply(400, { ok: false, error: 'BAD_CARD' })
-      const hex = (v, dft) => (/^#[0-9a-fA-F]{6}$/.test(v) ? v : dft)
+      const hex = (v: any, dft: string) => (/^#[0-9a-fA-F]{6}$/.test(v) ? v : dft)
       const doc = {
         productId: str(c.productId, 40),
         courseId: str(c.courseId, 40),
         name: str(c.name, 60),
         status: c.status === 'final' ? 'final' : 'draft',
-        // 双面（规格 §六 修订：插画一面 + 二维码一面）
         front: {
           art: str(c.front?.art, 300),
           bg: hex(c.front?.bg, '#f6e9b8'),
@@ -483,15 +473,14 @@ exports.main = async (event) => {
     if (action === 'listBatches') {
       const courseId = String(data.courseId || '')
       if (!courseId) return reply(400, { ok: false, error: 'NO_COURSE_ID' })
-      // 聚合各批次的码数与已激活数（单课批次有限，内存聚合足够）
       const res = await db.collection('qrcodes').where({ courseId }).limit(1000).get()
-      const map = {}
+      const map: Record<string, any> = {}
       for (const q of res.data) {
         const b = (map[q.batchId] = map[q.batchId] || { batchId: q.batchId, total: 0, activated: 0, createdAt: q.createdAt || 0 })
         b.total++
         if (q.status === 'activated') b.activated++
       }
-      const list = Object.values(map).sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0))
+      const list = Object.values(map).sort((a: any, b: any) => (b.createdAt || 0) - (a.createdAt || 0))
       return reply(200, { ok: true, list })
     }
 
@@ -510,10 +499,10 @@ exports.main = async (event) => {
       const batchId = String(data.batchId || '')
       if (!batchId) return reply(400, { ok: false, error: 'NO_BATCH' })
       const res = await db.collection('qrcodes').where({ batchId }).limit(1000).get()
-      return reply(200, { ok: true, codes: res.data.map((q) => q._id) })
+      return reply(200, { ok: true, codes: res.data.map((q: any) => q._id) })
     }
 
-    // —— 首页内容（橱窗逐块接入②③：hero 文案 / 信任条 / FAQ；规格 §八）——
+    // —— 首页内容（橱窗逐块②③：hero 文案 / 信任条 / FAQ；规格 §八）——
     if (action === 'getHomeContent') {
       const got = await db.collection('content').doc('home').get().catch(() => null)
       return reply(200, { ok: true, home: got?.data || null })
@@ -525,10 +514,10 @@ exports.main = async (event) => {
         hero: { title: str(c.hero?.title, 20), tagline: str(c.hero?.tagline, 40) },
         trust: (Array.isArray(c.trust) ? c.trust : [])
           .slice(0, 4)
-          .map((t) => ({ icon: str(t?.icon, 20), label: str(t?.label, 12) })),
+          .map((t: any) => ({ icon: str(t?.icon, 20), label: str(t?.label, 12) })),
         faq: (Array.isArray(c.faq) ? c.faq : [])
           .slice(0, 8)
-          .map((f) => ({ title: str(f?.title, 40), body: str(f?.body, 150) })),
+          .map((f: any) => ({ title: str(f?.title, 40), body: str(f?.body, 150) })),
         updatedAt: Date.now(),
       }
       await ensure('content')
@@ -542,7 +531,7 @@ exports.main = async (event) => {
       return reply(200, { ok: true })
     }
 
-    // —— 订单发货（P5 后台完善：状态流转 paid → shipped；金额/条目/地址只读不动）——
+    // —— 订单发货（状态流转 paid → shipped；金额/条目/地址只读不动）——
     if (action === 'listOrders') {
       const res = await db.collection('orders').orderBy('createdAt', 'desc').limit(200).get()
       return reply(200, { ok: true, list: res.data })
@@ -556,22 +545,16 @@ exports.main = async (event) => {
       const got = await db.collection('orders').doc(id).get().catch(() => null)
       if (!got || !got.data) return reply(400, { ok: false, error: 'NO_ORDER' })
       const cur = got.data.status
-      // paid = 首次发货；shipped = 改单号（错填补救）。其余状态不允许动。
-      if (cur !== 'paid' && cur !== 'shipped') {
-        return reply(400, { ok: false, error: 'BAD_STATUS:' + cur })
-      }
-      // 金额异常单（支付回调 feeMismatch 留痕）须先在控制台「解除」后才能发货（审核批次A 折中方案）
+      // paid = 首次发货；shipped = 改单号。其余状态不允许动。
+      if (cur !== 'paid' && cur !== 'shipped') return reply(400, { ok: false, error: 'BAD_STATUS:' + cur })
+      // 金额异常单（feeMismatch 留痕）须先「解除」后才能发货（审核批次A 折中）
       if (got.data.feeMismatch) return reply(400, { ok: false, error: 'FEE_MISMATCH_HOLD' })
-      // 条件更新（审核批次A-6）：仍是 paid/shipped 才写——防与确认收货并发交错把 done 回滚成 shipped
+      // 条件更新（审核批次A-6）：仍是 paid/shipped 才写——防与确认收货并发把 done 回滚
       const upd = await db
         .collection('orders')
         .where({ _id: id, status: db.command.in(['paid', 'shipped']) })
         .update({
-          data: {
-            status: 'shipped',
-            shipping: { company, trackingNo },
-            shippedAt: got.data.shippedAt || Date.now(),
-          },
+          data: { status: 'shipped', shipping: { company, trackingNo }, shippedAt: got.data.shippedAt || Date.now() },
         })
       if (!upd.stats || upd.stats.updated !== 1) {
         const fresh = await db.collection('orders').doc(id).get().catch(() => null)
@@ -580,7 +563,7 @@ exports.main = async (event) => {
       return reply(200, { ok: true })
     }
 
-    // —— 售后退款（P4 Batch 2，链10：审核 + 触发退款工作流；金额在申请时已云端分摊算定）——
+    // —— 售后退款（链10：审核 + 触发退款工作流；金额在申请时已云端分摊算定）——
     if (action === 'listRefunds') {
       await ensure('afterSales')
       const res = await db.collection('afterSales').orderBy('appliedAt', 'desc').limit(200).get()
@@ -600,8 +583,7 @@ exports.main = async (event) => {
       const order = await db.collection('orders').doc(got.data.orderId).get().catch(() => null)
       if (!order || !order.data) return reply(400, { ok: false, error: 'NO_ORDER' })
 
-      // 原子抢占（审核批次A-2）：仍是 applied 才置 approved——双窗口/重复请求并发时只有
-      // 一个请求能抢到，杜绝重复触发外部退款；工作流触发失败则回滚 applied 可重试。
+      // 原子抢占（审核批次A-2）：仍是 applied 才置 approved——并发只有一个抢到，杜绝重复触发退款
       const grab = await db
         .collection('afterSales')
         .where({ _id: id, status: 'applied' })
@@ -610,31 +592,19 @@ exports.main = async (event) => {
         return reply(400, { ok: false, error: 'BAD_STATUS:concurrent' })
       }
 
-      // 触发退款工作流：refund=售后单分摊额（申请时云端算定），total=订单实付，金额不收前端
-      const res = await cloud
-        .callFunction({
-          name: 'cloudbase_module',
-          data: {
-            name: String(flowId),
-            data: {
-              out_trade_no: got.data.orderId,
-              out_refund_no: id,
-              reason: String(got.data.reason || '用户申请退款').slice(0, 80),
-              amount: {
-                refund: Math.round(got.data.refundAmount * 100),
-                total: Math.round(order.data.amount * 100),
-                currency: 'CNY',
-              },
-            },
-          },
-        })
-        .catch((err) => {
-          console.error('approveRefund 工作流调用异常', id, err && err.message)
-          return null
-        })
-      const r = res && res.result && res.result.data
+      // 触发退款工作流（kit.callFlow 单点，根因#12）：金额取售后单分摊额 + 订单实付，不收前端
+      const r = await callFlow(String(flowId), {
+        out_trade_no: got.data.orderId,
+        out_refund_no: id,
+        reason: String(got.data.reason || '用户申请退款').slice(0, 80),
+        amount: {
+          refund: Math.round(got.data.refundAmount * 100),
+          total: Math.round(order.data.amount * 100),
+          currency: 'CNY',
+        },
+      })
       if (!r || !(r.status || r.refund_id || r.out_refund_no)) {
-        console.error('approveRefund 工作流未受理', id, res && JSON.stringify(res.result).slice(0, 300))
+        console.error('approveRefund 工作流未受理', id)
         // 回滚抢占，允许人工重试（审核批次A-2）
         await db.collection('afterSales').doc(id).update({ data: { status: 'applied' } }).catch(() => {})
         return reply(500, { ok: false, error: 'REFUND_TRIGGER_FAIL' })
@@ -642,16 +612,13 @@ exports.main = async (event) => {
       return reply(200, { ok: true })
     }
 
-    // 金额异常单人工复核解除（审核批次A 折中方案：feeMismatch 单禁发货，核实流水后在此解除）
+    // 金额异常单人工复核解除（feeMismatch 单禁发货，核实流水后在此解除）
     if (action === 'clearFeeMismatch') {
       const id = String(data.id || '')
       if (!id) return reply(400, { ok: false, error: 'BAD_ARGS' })
       const got = await db.collection('orders').doc(id).get().catch(() => null)
       if (!got || !got.data) return reply(400, { ok: false, error: 'NO_ORDER' })
-      await db
-        .collection('orders')
-        .doc(id)
-        .update({ data: { feeMismatch: false, feeMismatchClearedAt: Date.now() } })
+      await db.collection('orders').doc(id).update({ data: { feeMismatch: false, feeMismatchClearedAt: Date.now() } })
       return reply(200, { ok: true })
     }
 
@@ -669,10 +636,10 @@ exports.main = async (event) => {
       return reply(200, { ok: true })
     }
 
-    // —— 数据看板（规格 §八 路线收官；小规模内存聚合，≤1000 条/表）——
+    // —— 数据看板（小规模内存聚合，≤1000 条/表）——
     if (action === 'getDashboard') {
-      const take = (coll, field) =>
-        db.collection(coll).field(field).limit(1000).get().then((r) => r.data).catch(() => [])
+      const take = (coll: string, field: any) =>
+        db.collection(coll).field(field).limit(1000).get().then((r: any) => r.data).catch(() => [])
       const [users, orders, codes, progress, courses, sales] = await Promise.all([
         take('users', { _id: true }),
         take('orders', { amount: true, status: true, createdAt: true, id: true, items: true, feeMismatch: true }),
@@ -682,61 +649,51 @@ exports.main = async (event) => {
         take('afterSales', { _id: true, orderId: true, status: true, refundMismatch: true, approvedAt: true, refundAmount: true }),
       ])
 
-      // 交易异常（审核批次B「查询即对账」：不建对账任务，看板加载现算，单量小够用）
-      // ① 支付金额异常待复核 ② 退款通知不符 ③ 退款已触发超 1 小时未收到回调（疑似卡单）
+      // 交易异常（审核批次B「查询即对账」）：①支付金额异常 ②退款通知不符 ③退款触发超 1h 未回调
       const HOUR = 3600_000
       const txAlerts = {
-        feeMismatch: orders.filter((o) => o.feeMismatch).map((o) => o.id),
-        refundMismatch: sales.filter((a) => a.refundMismatch).map((a) => a._id),
+        feeMismatch: orders.filter((o: any) => o.feeMismatch).map((o: any) => o.id),
+        refundMismatch: sales.filter((a: any) => a.refundMismatch).map((a: any) => a._id),
         stuckRefunds: sales
-          .filter((a) => a.status === 'approved' && a.approvedAt && Date.now() - a.approvedAt > HOUR)
-          .map((a) => a._id),
+          .filter((a: any) => a.status === 'approved' && a.approvedAt && Date.now() - a.approvedAt > HOUR)
+          .map((a: any) => a._id),
       }
 
-      // segment id → 可读名（课程/课时/段名）
-      const segName = {}
+      const segName: Record<string, string> = {}
       for (const c of courses)
         for (const ch of c.chapters || [])
           for (const l of ch.lessons || [])
             for (const sg of l.segments || []) segName[sg.id] = `${l.name} · ${sg.name}`
 
-      // 热点（看完次数最多的段）与卡点（最后停留次数最多的段）
-      const doneCount = {}
-      const stuckCount = {}
+      const doneCount: Record<string, number> = {}
+      const stuckCount: Record<string, number> = {}
       let learners = 0
       for (const pr of progress) {
         learners++
         for (const k of Object.keys(pr.done || {})) doneCount[k] = (doneCount[k] || 0) + 1
         if (pr.last?.segmentId) stuckCount[pr.last.segmentId] = (stuckCount[pr.last.segmentId] || 0) + 1
       }
-      const top = (m) =>
+      const top = (m: Record<string, number>) =>
         Object.entries(m)
           .sort((a, b) => b[1] - a[1])
           .slice(0, 8)
           .map(([segId, count]) => ({ segId, name: segName[segId] || segId, count }))
 
-      const gmv = orders.reduce((n, o) => n + (Number(o.amount) || 0), 0)
-      const activated = codes.filter((q) => q.status === 'activated').length
+      const gmv = orders.reduce((n: number, o: any) => n + (Number(o.amount) || 0), 0)
+      const activated = codes.filter((q: any) => q.status === 'activated').length
       const recentOrders = orders
-        .sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0))
+        .sort((a: any, b: any) => (b.createdAt || 0) - (a.createdAt || 0))
         .slice(0, 5)
-        .map((o) => ({
+        .map((o: any) => ({
           id: o.id,
           amount: o.amount,
           createdAt: o.createdAt,
-          summary: (o.items || []).map((it) => `${it.name}×${it.qty}`).join('、').slice(0, 40),
+          summary: (o.items || []).map((it: any) => `${it.name}×${it.qty}`).join('、').slice(0, 40),
         }))
 
       return reply(200, {
         ok: true,
-        stats: {
-          users: users.length,
-          orders: orders.length,
-          gmv,
-          codesTotal: codes.length,
-          codesActivated: activated,
-          learners,
-        },
+        stats: { users: users.length, orders: orders.length, gmv, codesTotal: codes.length, codesActivated: activated, learners },
         txAlerts,
         hot: top(doneCount),
         stuck: top(stuckCount),

@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach } from 'vitest'
 import { createHash } from 'node:crypto'
 import { control } from 'wx-server-sdk'
-import { main } from '../../cloudfunctions/adminApi/index.js'
+import { main } from '../../packages/cloud/src/functions/admin/adminApi'
 
 // adminApi 钱相关动作首批测试（审核批次A）：approveRefund 原子抢占 + 失败回滚、
 // rejectRefund 必填原因、clearFeeMismatch、shipOrder 金额异常拦截。

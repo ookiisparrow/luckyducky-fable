@@ -5,5 +5,8 @@
   "description": "云函数 TS 源：cloud-kit 内核 + 域分组函数（orders/catalog/learning/admin）。esbuild 打包为 tcb 部署产物（build.mjs，B2-follow）；类型检查 tsc。",
   "dependencies": {
     "@luckyducky/shared": "*"
+  },
+  "devDependencies": {
+    "@types/node": "^25.9.2"
   }
 }
