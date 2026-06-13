@@ -5,6 +5,8 @@ description: Use when doing any change/batch/audit/fix in the Lucky Ducky 重构
 
 # 重构批次纪律
 
+> 本 skill = 元模式的 **genesis 环**（`docs/元模式.md` A5）：一批改动从「先守卫后实现」到「反向自检 + 归因」。循环定义见元模式，本文是它在样板房的执行纪律。
+
 样板房每一处改动（功能/审计/修复/加守卫）都按这套走。**铁律：生产仓 `/Users/sparrow/luckyducky-miniprogram` 零改动；一切在 `luckyducky-next`；本仓禁部署（guard-deploy 一律 deny，勿绕）。**
 
 ## 接活前
@@ -17,6 +19,7 @@ description: Use when doing any change/batch/audit/fix in the Lucky Ducky 重构
    - 单文件样式 / 多端写法 → `scripts/check-conventions.mjs`。
    - 类型层（金额 Fen、状态联合）→ TS 编译期。
    - 行为不变量（钱 / 权限 / 状态 / 幂等）→ `tests/`，业务不变量优先锁。
+   - **新加守卫标 `roots`**（治哪条病根 `#N` / 主张 `TN`）+ reverseTest；`guard-coverage` 据此核每病根有守卫，漏标即覆盖率红。新治一条病根 → 先在 `docs/根因账本.md` §一立条目，守卫才有归属。
 4. 不能干净机器化的（方法论 / 守则）→ 成文进 CLAUDE / 验收手册，并写清「为什么靠人」。
 5. 新增云函数 → 登记 `docs/接口正册.md`（`interface-catalog-sync` 会拦）；新增写库 → 必过 kit 闸（`writes-need-gate` 会拦）；新增敏感云函数 → 加进 `scripts/guard-deploy.mjs` SENSITIVE_FNS。
 

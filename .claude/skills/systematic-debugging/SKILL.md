@@ -5,6 +5,8 @@ description: Use when debugging a bug, failure, flaky test, or unexpected behavi
 
 # 系统化调试
 
+> 本 skill = 元模式的 **intake 环**（`docs/元模式.md` A5）：把每次痛归因到病根，归不进就长出新病根。循环（痛→本质→不变量→守卫→反向自检→归因）的定义在元模式，本文不复述、只做这一环。
+
 调试不是猜，是收敛。任何「为什么不对」的问题按四步走，**没复现前禁止改代码，没守卫不算修完**。
 
 ## 0. 先看证据，别先改代码
@@ -27,9 +29,12 @@ description: Use when debugging a bug, failure, flaky test, or unexpected behavi
 - **顺藤摸同类隐患**：同一根因在别处还有没有？一并修或记账——调试日志 K 的「同类隐患」栏就是干这个，不做碎片化救火。
 - 能升级成机器守卫就升级：数据契约（persist sanitize）、结构不变量（`scripts/check-structure.mjs` 加一条规则）、TS 类型（非法状态不可表达）——把「这次的 bug」变成「这类 bug 机器永久拦」。
 
-## 4. 记账（Ledger）
+## 4. 记账 + 归因到病根（Ledger，intake 闭环）
 - 结案记 `docs/调试日志.md`，格式：日期 / 现象 / 根因 / 同类隐患（启发式）/ 是否结构性 / 状态。
-- 目的不是记 bug 本身，是**追到根因、顺出同类**。
+- **归因到 `docs/根因账本.md`**（框架自迭代的发动机，别跳）：
+  - 命中某条病根 → 那条的守卫漏了或缺了，**补 / 收紧守卫**，别只修眼前这一处。
+  - 谁都不命中 → 它是**新病根**：在账本 §一 立 `### N.`（病史→本质→根治→落点→绝迹证明）+ 配一条守卫。`guard-coverage` 会一直红到守卫到位为止——这是安全网不是负担。
+- 目的不是记 bug 本身，是**追到根因、顺出同类、让这类 bug 机器永久拦**。
 
 ## 收尾验证
 - 跑 `npm run check`（conventions + structure + typecheck + lint + test 全绿）再算关账。

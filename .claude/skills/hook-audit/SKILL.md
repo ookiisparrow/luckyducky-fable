@@ -5,6 +5,8 @@ description: Use when 想系统性找出哪些反复手动做 / 反复被纠正 
 
 # hook-audit —— 从执行轨迹挖 hook 机会
 
+> 本 skill = 元模式的 **discovery 环**（`docs/元模式.md` A5）：从轨迹发现「该机器化却还靠人」的重复动作，喂给 genesis 环（refactor-batch）落成守卫/hook。
+
 Claude Code 在本项目反复手动做的事都记在执行轨迹里。这套＝扫轨迹 → 找可固化为 hook 的位置 → 出排序建议。**只发现、不安装**；安装走 `update-config` + 一个 `refactor-batch` 批次。**本 skill 往仓里不写任何东西。**
 
 ## 跑
