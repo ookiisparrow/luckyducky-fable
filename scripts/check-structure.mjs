@@ -107,6 +107,28 @@ const repoChecks = [
     },
   },
   {
+    id: 'flow-seam-single',
+    desc: '平台接缝单点（根因#12 平台规则外部风险）：cloudbase_module 工作流调用全库仅 kit/flow.ts 一处（callFlow），平台规则变化改动面最小',
+    run() {
+      const root = join(ROOT, 'packages/cloud/src')
+      if (!existsSync(root)) return []
+      const allowed = 'packages/cloud/src/kit/flow.ts'
+      const hits = []
+      const walk = (d) => {
+        for (const e of readdirSync(d)) {
+          const p = join(d, e)
+          if (statSync(p).isDirectory()) walk(p)
+          else if (e.endsWith('.ts') && readFileSync(p, 'utf8').includes("'cloudbase_module'")) hits.push(relative(ROOT, p))
+        }
+      }
+      walk(root)
+      const out = []
+      for (const h of hits) if (h !== allowed) out.push(`${h} 直调 cloudbase_module——接缝须收口 kit callFlow 单点（根因#12）`)
+      if (!hits.includes(allowed)) out.push(`${allowed} 应为 cloudbase_module 唯一调用点（callFlow），未见——接缝单点缺失`)
+      return out
+    },
+  },
+  {
     id: 'docs-budget',
     desc: '文档防膨胀（根因#11 文档职责渗漏）：CLAUDE.md 须 ≤180 行（病史曾 314 行→收口 130；约定机器化后只会更瘦，溢出沉记录类）',
     run() {

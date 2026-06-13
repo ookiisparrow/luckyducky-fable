@@ -123,6 +123,7 @@ src/
 2. 现象 / 根因 / 同类隐患记 `docs/调试日志.md`；查同类问题，不只修眼前一处。
 3. 能加数据契约就加；修 bug 优先补一条锁住问题的用例。
 4. 跑 conventions / lint / test / build 验证；UI 调整后至少 H5 眼校，小程序问题需开发者工具或真机。
+5. **工具守则（根因#10 工具实例状态不可信）**：开发者工具是有状态共享实例，build/自动化/真机互踩后表象不可信——跑 build 前先停自动化；遇怪象（`component not found`/真机白屏/RPC 不回包）先 `cli quit` + 重启再排查，别在僵尸实例上查业务代码。visual-check RPC 探活守卫已机器化兜第一道。
 
 ## 11. 关键决策摘要（详见 docs/关键决策记录.md，勿轻易推翻）
 
@@ -131,6 +132,7 @@ src/
 - 主题色幸运紫，变量在 `uni.scss`；Sass `@import` → `@use` 暂缓。
 - 安全区用 `systemBar.js` 动态算；敏感业务全走云函数，不信前端。
 - 代码按技术分层组织，不按业务链重组（决策 §17）；逻辑链整体视图看 `业务逻辑架构.md`。
+- **平台接缝单点（根因#12）**：支付/退款与微信平台的接缝（`cloudbase_module` 工作流调用）收口 kit `callFlow` 一处（`flow-seam-single` 守卫机器锁），接缝参数 flowId/refundFlowId/notify_url 正册在 `console-assets/`；平台规则单方变化时只改这一点。
 
 ## 12. 扩展套路与新会话
 
