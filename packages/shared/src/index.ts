@@ -5,6 +5,7 @@
 export * from './money'
 export * from './order'
 export * from './errors'
+export * from './limits'
 export * from './seed/products'
 export * from './seed/course'
 

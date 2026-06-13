@@ -29,6 +29,12 @@ describe('createOrder 闸门', () => {
     expect((await main({ items: [{ id: 'prod-1', qty: 0 }] })).error).toBe('EMPTY_ITEMS')
   })
 
+  it('BAD_QTY / TOO_MANY_ITEMS：数量与条数硬上限，拦超大单穿透（外部体检 P1）', async () => {
+    expect((await main({ items: [{ id: 'prod-1', qty: 1000 }], address: ADDR })).error).toBe('BAD_QTY')
+    const many = Array.from({ length: 101 }, () => ({ id: 'prod-1', qty: 1 }))
+    expect((await main({ items: many, address: ADDR })).error).toBe('TOO_MANY_ITEMS')
+  })
+
   it('NO_MAIN_ITEM：只买搭配购整单拒（服务端不变量，前端守卫的云端对等物）', async () => {
     expect((await main({ items: [{ id: 'yarn', qty: 1 }], address: ADDR })).error).toBe('NO_MAIN_ITEM')
     expect((await main({ items: [{ id: 'yarn', qty: 1 }, { id: 'hook', qty: 1 }], address: ADDR })).error).toBe('NO_MAIN_ITEM')

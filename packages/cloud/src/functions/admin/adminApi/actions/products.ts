@@ -1,3 +1,4 @@
+import { isValidPriceYuan } from '@luckyducky/shared'
 import { reply, cleanProduct, storeImage, type Ctx } from '../lib'
 
 export async function listDrafts({ cloud, drafts }: Ctx) {
@@ -27,10 +28,13 @@ export async function saveDraft({ drafts, data }: Ctx) {
   return reply(200, { ok: true })
 }
 
-export async function deleteDraft({ drafts, data }: Ctx) {
+// 删除：草稿 + 已上架商品一并删（外部体检 P2：原只删草稿，已上架仍被买＝「不可撤销」失真）。
+// 历史订单存快照、不回读 products，故删上架不伤订单历史；临时下架属另一功能（院外债#12）。
+export async function deleteDraft({ db, drafts, data }: Ctx) {
   const id = String(data.id || '')
   if (!id) return reply(400, { ok: false, error: 'NO_ID' })
-  await drafts.doc(id).remove()
+  await drafts.doc(id).remove().catch(() => {})
+  await db.collection('products').doc(id).remove().catch(() => {})
   return reply(200, { ok: true })
 }
 
@@ -49,8 +53,13 @@ export async function publishProduct({ db, drafts, data }: Ctx) {
   if (!got || !got.data) return reply(400, { ok: false, error: 'NO_DRAFT' })
   const d = got.data
   if (!d.cover) return reply(400, { ok: false, error: 'NEED_COVER' })
-  if (!d.name || !Number(d.price)) return reply(400, { ok: false, error: 'NEED_INFO' })
-  if (!Array.isArray(d.skus) || !d.skus.length || d.skus.some((x: any) => !x.name || !Number(x.price))) {
+  // 价格硬边界：有限正数且 ≤ 上限——拦负价 / Infinity / 超大价穿透（外部体检 P1）
+  if (!d.name || !isValidPriceYuan(d.price)) return reply(400, { ok: false, error: 'NEED_INFO' })
+  if (
+    !Array.isArray(d.skus) ||
+    !d.skus.length ||
+    d.skus.some((x: any) => !x.name || !isValidPriceYuan(x.price))
+  ) {
     return reply(400, { ok: false, error: 'NEED_SKUS' })
   }
   const productsColl = db.collection('products')
@@ -67,7 +76,7 @@ export async function publishProduct({ db, drafts, data }: Ctx) {
     name: d.name,
     tag: d.tag || '',
     price: Number(d.price),
-    was: Number(d.was) || null,
+    was: isValidPriceYuan(d.was) ? Number(d.was) : null,
     brief: d.brief || '',
     cover: d.cover,
     images: d.images || [],

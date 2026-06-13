@@ -1,3 +1,4 @@
+import { MAX_QTY, MAX_ORDER_LINES } from '@luckyducky/shared'
 import { withOpenId, ok, err } from '../../kit'
 
 // 创建订单（敏感：前端禁写 orders）。openid 闸 + 前端只传 {items:[{id,qty,sku?}],address}，
@@ -37,6 +38,9 @@ export const main = withOpenId(async ({ db, OPENID, event }) => {
     .filter((l: any) => l && l.id && Number.isInteger(l.qty) && l.qty > 0)
     .map((l: any) => ({ ...l, sku: typeof l.sku === 'string' ? l.sku.slice(0, 30) : '' }))
   if (!lines.length) return err('EMPTY_ITEMS')
+  // 数量 / 条数硬上限：拦超大单穿透（外部体检 P1，金额边界）
+  if (lines.length > MAX_ORDER_LINES) return err('TOO_MANY_ITEMS')
+  if (lines.some((l: any) => l.qty > MAX_QTY)) return err('BAD_QTY')
   // 服务端不变量：搭配购不可单买，订单必须含至少一个主商品
   if (!lines.some((l: any) => !ADDONS[l.id])) return err('NO_MAIN_ITEM')
 

@@ -36,6 +36,25 @@ describe('adminApi 杂项闸门', () => {
     expect(res.ok).toBe(true)
   })
 
+  it('上架价格硬边界：负价拒（NEED_INFO）、超大 SKU 价拒（NEED_SKUS）（外部体检 P1）', async () => {
+    control.seed('productsDraft', [
+      { _id: 'pneg', id: 'pneg', name: '测试', cover: 'cloud://c', price: -5, skus: [{ name: 'a', price: 10 }] },
+    ])
+    expect((await call('publishProduct', { id: 'pneg' })).error).toBe('NEED_INFO')
+    control.seed('productsDraft', [
+      { _id: 'pbig', id: 'pbig', name: '测试', cover: 'cloud://c', price: 198, skus: [{ name: 'a', price: 200000 }] },
+    ])
+    expect((await call('publishProduct', { id: 'pbig' })).error).toBe('NEED_SKUS')
+  })
+
+  it('删除商品：草稿 + 已上架一并删，删除诚实（外部体检 P2）', async () => {
+    control.seed('productsDraft', [{ _id: 'pd', id: 'pd', name: 'X', status: 'onsale' }])
+    control.seed('products', [{ _id: 'pd', id: 'pd', name: 'X', price: 10 }])
+    expect((await call('deleteDraft', { id: 'pd' })).ok).toBe(true)
+    expect(control.dump('productsDraft').find((x) => x._id === 'pd')).toBeUndefined()
+    expect(control.dump('products').find((x) => x._id === 'pd')).toBeUndefined()
+  })
+
   it('createBatch：count 漏传/非法一律 BAD_ARGS（不再静默生成 1 个码）', async () => {
     expect((await call('createBatch', { courseId: 'course-duck' })).error).toBe('BAD_ARGS')
     expect((await call('createBatch', { courseId: 'course-duck', count: 'x' })).error).toBe('BAD_ARGS')
