@@ -10,34 +10,27 @@ beforeEach(() => {
 })
 
 describe('kit.defineNotifyCallback（回调框架）', () => {
-  it('带用户身份（伪造）→ 不调 onSuccess，返回 ack', async () => {
+  it('带用户身份（伪造）→ 不调 onNotify，返回 ack（防伪闸）', async () => {
     control.setOpenId('attacker')
-    const onSuccess = vi.fn()
-    const fn = defineNotifyCallback({ ack: ACK, parse: () => ({ id: 'x', success: true }), onSuccess })
+    const onNotify = vi.fn()
+    const fn = defineNotifyCallback({ ack: ACK, refId: () => 'x', onNotify })
     expect(await fn({})).toBe(ACK)
-    expect(onSuccess).not.toHaveBeenCalled()
+    expect(onNotify).not.toHaveBeenCalled()
   })
 
-  it('parse 返回 null（缺单号）→ ack，不调 onSuccess', async () => {
-    const onSuccess = vi.fn()
-    const fn = defineNotifyCallback({ ack: ACK, parse: () => null, onSuccess })
+  it('refId 空（缺单号）→ ack，不调 onNotify', async () => {
+    const onNotify = vi.fn()
+    const fn = defineNotifyCallback({ ack: ACK, refId: () => '', onNotify })
     expect(await fn({})).toBe(ACK)
-    expect(onSuccess).not.toHaveBeenCalled()
+    expect(onNotify).not.toHaveBeenCalled()
   })
 
-  it('未成功通知 → ack，不调 onSuccess', async () => {
-    const onSuccess = vi.fn()
-    const fn = defineNotifyCallback({ ack: ACK, parse: () => ({ id: 'x', success: false }), onSuccess })
-    expect(await fn({})).toBe(ACK)
-    expect(onSuccess).not.toHaveBeenCalled()
-  })
-
-  it('成功通知 → 调 onSuccess（注入 db/id/event），返回 ack', async () => {
+  it('有单号 → 调 onNotify（注入 db/id/event），返回 ack', async () => {
     const seen = {}
     const fn = defineNotifyCallback({
       ack: ACK,
-      parse: () => ({ id: 'ord1', success: true }),
-      onSuccess: async (ctx) => {
+      refId: () => 'ord1',
+      onNotify: async (ctx) => {
         Object.assign(seen, { id: ctx.id, hasDb: typeof ctx.db.collection === 'function' })
       },
     })

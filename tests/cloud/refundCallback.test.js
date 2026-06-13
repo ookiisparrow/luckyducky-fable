@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest'
 import { control } from 'wx-server-sdk'
-import { main } from '../../cloudfunctions/refundCallback/index.js'
+import { main } from '../../packages/cloud/src/functions/orders/refundCallback'
 
 // refundCallback 幂等：applied/approved → refunded 只生效一次；非 SUCCESS 留痕不翻状态；订单留痕。
 const NOTIFY = {
