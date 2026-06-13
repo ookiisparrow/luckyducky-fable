@@ -4,7 +4,7 @@ import { setActivePinia, createPinia } from 'pinia'
 // 只测 store.pay 的状态同步逻辑，api 层 mock（payOrder 真实链路依赖微信收银台，云函数侧已有 pay.test.js）
 vi.mock('@/api/order.js', () => ({
   createOrder: vi.fn(),
-  getMyOrders: vi.fn(async () => []),
+  getMyOrders: vi.fn(async () => ({ list: [], nextCursor: null, hasMore: false })),
   confirmReceive: vi.fn(),
   payOrder: vi.fn(),
 }))

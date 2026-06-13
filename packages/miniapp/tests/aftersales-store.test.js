@@ -19,7 +19,11 @@ beforeEach(() => {
 describe('aftersales store', () => {
   it('load：拉取列表；无云（null）不覆盖已有数据', async () => {
     const store = useAfterSalesStore()
-    vi.mocked(getMyAfterSales).mockResolvedValue([{ _id: 'o1__p1', orderId: 'o1', productId: 'p1', status: 'applied' }])
+    vi.mocked(getMyAfterSales).mockResolvedValue({
+      list: [{ _id: 'o1__p1', orderId: 'o1', productId: 'p1', status: 'applied' }],
+      nextCursor: null,
+      hasMore: false,
+    })
     await store.load()
     expect(store.list).toHaveLength(1)
     expect(store.has('o1', 'p1')).toBe(true)
@@ -28,6 +32,28 @@ describe('aftersales store', () => {
     vi.mocked(getMyAfterSales).mockResolvedValue(null) // 云端失败/无云
     await store.load(true)
     expect(store.list).toHaveLength(1) // 不被清空
+  })
+
+  it('loadMore：游标翻页追加下一页、去重；无更多不再请求（根因#7）', async () => {
+    const store = useAfterSalesStore()
+    vi.mocked(getMyAfterSales).mockResolvedValueOnce({
+      list: [{ _id: 'a1', orderId: 'o1', productId: 'p1', status: 'applied' }],
+      nextCursor: 100,
+      hasMore: true,
+    })
+    await store.load()
+    expect(store.list).toHaveLength(1)
+    expect(store.hasMore).toBe(true)
+    vi.mocked(getMyAfterSales).mockResolvedValueOnce({
+      list: [{ _id: 'a2', orderId: 'o2', productId: 'p2', status: 'applied' }],
+      nextCursor: null,
+      hasMore: false,
+    })
+    await store.loadMore()
+    expect(store.list).toHaveLength(2)
+    expect(store.hasMore).toBe(false)
+    await store.loadMore() // 无更多 → 不再请求
+    expect(vi.mocked(getMyAfterSales)).toHaveBeenCalledTimes(2)
   })
 
   it('apply 成功：插入列表头部（可申请列表即时消失该条目）', async () => {

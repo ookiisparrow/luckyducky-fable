@@ -6,11 +6,14 @@
 import { callCloud } from '@/utils/cloud.js'
 import { logger } from '@/utils/logger.js'
 
-// 我的售后单列表；无云 / 失败返回 null（与「空列表」区分，避免覆盖已有数据）
-export async function getMyAfterSales() {
+// 我的售后单列表（游标分页，根因#7）；成功返回 { list, nextCursor, hasMore }，
+// 无云 / 失败返回 null（与「空列表」区分，避免覆盖已有数据）。cursor 传上一页 nextCursor。
+export async function getMyAfterSales(cursor) {
   try {
-    const res = await callCloud('getMyAfterSales')
-    if (res?.ok && Array.isArray(res.list)) return res.list
+    const res = await callCloud('getMyAfterSales', cursor != null ? { cursor } : {})
+    if (res?.ok && Array.isArray(res.list)) {
+      return { list: res.list, nextCursor: res.nextCursor ?? null, hasMore: !!res.hasMore }
+    }
   } catch (e) {
     logger.warn('aftersales', 'getMyAfterSales 云端失败', e)
   }

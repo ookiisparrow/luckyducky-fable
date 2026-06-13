@@ -14,6 +14,8 @@ export const useOrdersStore = defineStore('orders', {
     list: [],
     loaded: false,
     loading: false,
+    nextCursor: null,
+    hasMore: false,
   }),
   getters: {
     getById: (s) => (id) => s.list.find((o) => o.id === id) || null,
@@ -73,13 +75,31 @@ export const useOrdersStore = defineStore('orders', {
       if (this.loaded && !force) return
       this.loading = true
       try {
-        const remote = await getMyOrders()
+        const { list: remote, nextCursor, hasMore } = await getMyOrders()
         const remoteIds = new Set(remote.map((o) => o.id))
         const localOnly = this.list.filter((o) => !remoteIds.has(o.id))
         this.list = [...localOnly, ...remote]
+        this.nextCursor = nextCursor
+        this.hasMore = hasMore
         this.loaded = true
       } catch (e) {
         logger.error('orders', 'load 失败', e)
+      } finally {
+        this.loading = false
+      }
+    },
+    // 加载更多（游标翻页，根因#7）：追加下一页、按 id 去重防重入；失败/无更多静默
+    async loadMore() {
+      if (this.loading || !this.hasMore || this.nextCursor == null) return
+      this.loading = true
+      try {
+        const { list: more, nextCursor, hasMore } = await getMyOrders(this.nextCursor)
+        const ids = new Set(this.list.map((o) => o.id))
+        this.list = [...this.list, ...more.filter((o) => !ids.has(o.id))]
+        this.nextCursor = nextCursor
+        this.hasMore = hasMore
+      } catch (e) {
+        logger.error('orders', 'loadMore 失败', e)
       } finally {
         this.loading = false
       }

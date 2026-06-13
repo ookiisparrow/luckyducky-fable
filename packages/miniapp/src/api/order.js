@@ -55,12 +55,15 @@ export async function getOrderById(id) {
   return null
 }
 
-export async function getMyOrders() {
+// 游标分页（根因#7）：cursor 传上一页 nextCursor 取下一页；返回 { list, nextCursor, hasMore }。
+export async function getMyOrders(cursor) {
   try {
-    const res = await callCloud('getMyOrders')
-    if (res?.ok && Array.isArray(res.list)) return res.list
+    const res = await callCloud('getMyOrders', cursor != null ? { cursor } : {})
+    if (res?.ok && Array.isArray(res.list)) {
+      return { list: res.list, nextCursor: res.nextCursor ?? null, hasMore: !!res.hasMore }
+    }
   } catch (e) {
     logger.warn('order', 'getMyOrders 云端失败，回退空列表', e)
   }
-  return []
+  return { list: [], nextCursor: null, hasMore: false }
 }

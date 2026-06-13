@@ -10,6 +10,8 @@ export const useAfterSalesStore = defineStore('aftersales', {
     list: [],
     loaded: false,
     loading: false,
+    nextCursor: null,
+    hasMore: false,
   }),
   getters: {
     // 该订单该商品是否已有售后单（可申请列表过滤用；含已拒绝，v1 拒后重申走人工）
@@ -22,9 +24,29 @@ export const useAfterSalesStore = defineStore('aftersales', {
       if (this.loaded && !force) return
       this.loading = true
       try {
-        const list = await getMyAfterSales()
-        if (list) this.list = list
+        const paged = await getMyAfterSales()
+        if (paged) {
+          this.list = paged.list
+          this.nextCursor = paged.nextCursor
+          this.hasMore = paged.hasMore
+        }
         this.loaded = true
+      } finally {
+        this.loading = false
+      }
+    },
+    // 加载更多（游标翻页，根因#7）：追加下一页、去重防重入；失败/无更多静默
+    async loadMore() {
+      if (this.loading || !this.hasMore || this.nextCursor == null) return
+      this.loading = true
+      try {
+        const paged = await getMyAfterSales(this.nextCursor)
+        if (paged) {
+          const ids = new Set(this.list.map((a) => a._id))
+          this.list = [...this.list, ...paged.list.filter((a) => !ids.has(a._id))]
+          this.nextCursor = paged.nextCursor
+          this.hasMore = paged.hasMore
+        }
       } finally {
         this.loading = false
       }
