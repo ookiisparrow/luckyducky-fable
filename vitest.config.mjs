@@ -3,8 +3,8 @@ import { defineConfig } from 'vitest/config'
 // 一仓多包测试编排（vitest projects）：
 //   miniapp —— packages/miniapp/vitest.config.mjs（@ 别名 + uni mock setup）
 //   cloud   —— 仓根 tests/cloud/（云函数闸门测试，内存桩 wx-server-sdk 走根
-//              node_modules 的 file: 依赖；cloudfunctions/ 暂在仓根，B1 迁 packages/cloud）
-//   admin   —— B7 批次补基线后加入
+//              node_modules 的 file: 依赖；已迁 packages/cloud）
+//   admin   —— 仓根 tests/admin/（B8d 补基线；纯逻辑 cardSvg 等，node 环境无需 Vue）
 export default defineConfig({
   test: {
     projects: [
@@ -15,6 +15,14 @@ export default defineConfig({
           environment: 'node',
           globals: true,
           include: ['tests/cloud/**/*.test.js'],
+        },
+      },
+      {
+        test: {
+          name: 'admin',
+          environment: 'node',
+          globals: true,
+          include: ['tests/admin/**/*.test.js'],
         },
       },
     ],
