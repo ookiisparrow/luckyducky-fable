@@ -92,6 +92,21 @@ const repoChecks = [
     },
   },
   {
+    id: 'cloud-domain-grouped',
+    desc: 'T2 域分组：云函数源须在 functions/<域>/ 下，functions/ 顶层不得有裸 .ts（部署单元按域不散落）',
+    run() {
+      const dir = join(ROOT, 'packages/cloud/src/functions')
+      if (!existsSync(dir)) return []
+      const bad = []
+      for (const entry of readdirSync(dir)) {
+        if (statSync(join(dir, entry)).isFile() && entry.endsWith('.ts')) {
+          bad.push(`packages/cloud/src/functions/${entry} 在顶层——函数须放进域子目录（catalog/learning/orders/user/system/admin，T2）`)
+        }
+      }
+      return bad
+    },
+  },
+  {
     id: 'console-assets-present',
     desc: '控制台资产正册不可误删（根因#9）：console-assets 关键正册文件须存在（git 外资产的唯一版本化记录）',
     run() {
@@ -154,6 +169,32 @@ const fileRules = [
       /\bfrom\s+['"]@\/data\//.test(line) || /\brequire\(\s*['"]@\/data\//.test(line)
         ? 'api 层禁 import @/data/——api 只对接云，不引样例数据＝不可能再造本地假数据回退（T1/根因6）'
         : null,
+  },
+  {
+    // T4 按链内聚（CLAUDE §8 依赖方向）：pages→store/api→utils，data/utils 是叶。禁反向 import。
+    id: 'dep-direction',
+    inScope: (abs) =>
+      /\/packages\/miniapp\/src\/(utils|data|api|store)\//.test(abs) && /\.(js|vue)$/.test(abs),
+    test: (line, ctx) => {
+      const f = ctx.file
+      const layer = f.includes('/utils/')
+        ? 'utils'
+        : f.includes('/data/')
+          ? 'data'
+          : f.includes('/api/')
+            ? 'api'
+            : 'store'
+      const banned = {
+        utils: ['store', 'api', 'pages', 'components', 'data'],
+        data: ['store', 'api', 'pages', 'components'],
+        api: ['store', 'pages', 'components'],
+        store: ['pages', 'components'],
+      }[layer]
+      const m = line.match(/from\s+['"]@\/(\w+)\//)
+      return m && banned.includes(m[1])
+        ? `依赖方向反转：${layer} 层禁 import @/${m[1]}/（pages→store/api→utils，data/utils 是叶；CLAUDE §8/T4）`
+        : null
+    },
   },
 ]
 

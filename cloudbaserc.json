@@ -1,17 +1,11 @@
 {
   "$schema": "https://static.cloudbase.net/cli/cloudbaserc.schema.json",
   "envId": "cloudbase-d4gcssqbv06865479",
-  "functionRoot": "cloudfunctions",
+  "functionRoot": "packages/cloud/dist",
   "functions": [
     {
       "name": "initDb",
       "timeout": 15,
-      "handler": "index.main",
-      "installDependency": true
-    },
-    {
-      "name": "getOpenId",
-      "timeout": 10,
       "handler": "index.main",
       "installDependency": true
     },
