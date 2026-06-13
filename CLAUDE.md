@@ -7,7 +7,7 @@
 > - **生产仓**：`/Users/sparrow/luckyducky-miniprogram`（GitHub `ookiisparrow/luckyducky-miniprogram`）——生产事务只在那边做，本仓任何内容不自动进入生产。
 > - **云环境共用、本仓禁部署**：两仓共用云环境 `cloudbase-d4gcssqbv06865479`。本仓 `scripts/guard-deploy.mjs` 已改为**拦截一切 tcb 部署/发布命令**（deny），永不解除；deploy-fns 类脚本须 `DEPLOY_ALLOWED=1`，本仓永不设置。验证全靠 vitest 内存桩 + H5 回退 + 双端 build。
 > - **8 件控制台正册资产**（git 外，勿动）：微信支付连接器 `wxpay_33nb7su`、支付工作流 `sywxzfapifqzf_nncvqss2`、退款工作流 `kbgzl_n8gojr3a`、paynotify/refundnotify 及其 script1 转发节点——记录见生产仓 `docs/工作日志.md` 2026-06-12 与 `docs/调试日志.md` J；B6 批次把副本正册化进本仓 `console-assets/`。
-> - **总计划**：`/Users/sparrow/.claude/plans/encapsulated-swimming-truffle.md`（v3 定稿：设计宪章三原则 + Phase A/B0–B8 批次表）。执行纪律：每批一个 squash 提交上本仓 main、`npm run check` 全绿才推进、commit 报净化指标；批次结论与证据记 `docs/重构日志.md`；生产仓事务随时插队优先。
+> - **总计划与脊柱**：`docs/重构总计划.md`（v4 权威版，批次表挂病根编号）+ `docs/根因账本.md`（十二类病根：病史→本质→根治→绝迹证明——账本未覆盖的不做、覆盖的不漏）。执行纪律：每批一个 squash 提交上本仓 main、`npm run check` 全绿才推进、commit 报净化指标并标注根治病根；批次结论与证据记 `docs/重构日志.md`；生产仓事务随时插队优先。
 >
 > 以下为克隆自生产仓的工程约定，重构过程中随批次演进。
 
