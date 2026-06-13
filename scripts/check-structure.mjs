@@ -234,6 +234,23 @@ const repoChecks = [
         : ["guard-deploy.mjs 缺 deny-all 机制——样板房禁部署硬闸被削弱"]
     },
   },
+  {
+    id: 'format-hook-wired',
+    desc: '格式交给工具：.claude/settings.json 的 PostToolUse(Edit|Write) 须挂 format-hook.mjs——编辑即由 prettier 格式化，不退回手动 npm run format（主张回退=红灯）',
+    run() {
+      const abs = join(ROOT, '.claude/settings.json')
+      if (!existsSync(abs)) return ['.claude/settings.json 缺失——PostToolUse 格式化 hook 无处可挂']
+      const post = JSON.parse(readFileSync(abs, 'utf8'))?.hooks?.PostToolUse ?? []
+      const wired = post.some(
+        (e) =>
+          /Edit|Write/.test(e.matcher || '') &&
+          (e.hooks || []).some((h) => (h.command || '').includes('format-hook.mjs'))
+      )
+      return wired
+        ? []
+        : ['.claude/settings.json PostToolUse 未挂 format-hook.mjs——格式化退回手动，「格式交给工具」主张回退']
+    },
+  },
 ]
 
 // ============== 逐文件规则（fileRules）==============

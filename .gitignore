@@ -23,3 +23,6 @@ dist
 # 微信开发者工具在项目根生成的本地配置（不入库）
 project.config.json
 project.private.config.json
+
+# format-hook 测试的临时格式化目录（afterEach 自删，防意外残留入库）
+.fmt-test-*

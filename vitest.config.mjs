@@ -25,6 +25,14 @@ export default defineConfig({
           include: ['tests/admin/**/*.test.js'],
         },
       },
+      {
+        test: {
+          name: 'scripts',
+          environment: 'node',
+          globals: true,
+          include: ['tests/scripts/**/*.test.js'],
+        },
+      },
     ],
   },
 })
