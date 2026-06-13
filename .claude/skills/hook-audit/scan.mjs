@@ -110,6 +110,9 @@ function bump(map, k, by = 1) {
 function pad(n, w = 4) {
   return String(n).padStart(w);
 }
+function inline(map, n = TOP) { // 「k:v  k:v …」单行榜，空则 —
+  return topN(map, n).map(([k, v]) => `${k}:${v}`).join('  ') || '—';
+}
 
 // ---- 主流程 ----
 const { dir, slug } = resolveDir(process.argv[2]);
@@ -212,7 +215,7 @@ P(`sessions     : ${files.length}   lines: ${lines}   parse-skipped: ${skipped}`
 P();
 
 P(`## 工具使用次数`);
-P('  ' + topN(toolCount).map(([k, v]) => `${k}:${v}`).join('  '));
+P('  ' + inline(toolCount));
 P();
 
 P(`## 高频 Bash 命令签名 (top ${TOP}) —— 反复跑的确定性命令 = hook/allowlist 候选`);
@@ -220,8 +223,8 @@ for (const [k, v] of topN(bashSig)) P(`  ${pad(v)}  ${k}`);
 P();
 
 P(`## 编辑落点 —— 按扩展名 / 按顶层目录（PostToolUse 候选）`);
-P('  ext : ' + topN(editExt, 12).map(([k, v]) => `${k}:${v}`).join('  '));
-P('  dir : ' + topN(editDir, 12).map(([k, v]) => `${k}:${v}`).join('  '));
+P('  ext : ' + inline(editExt, 12));
+P('  dir : ' + inline(editDir, 12));
 P();
 
 P(`## 开局重复读取的文件 (前 ${EARLY} 个工具调用内, 跨会话计数) —— SessionStart 候选`);
@@ -230,19 +233,18 @@ P();
 
 P(`## 工具报错 / 授权摩擦 —— 近似, 需复核`);
 P(`  tool_result is_error : ${errResults}   permission-mode 切换 : ${permModeSwitch}`);
-P('  按工具 : ' + (topN(errByTool, 10).map(([k, v]) => `${k}:${v}`).join('  ') || '—'));
+P('  按工具 : ' + inline(errByTool, 10));
 P();
 
 P(`## 守卫 / hook 触发 (system 条目) —— 已机械化的信号, 别重复建议`);
-P('  level : ' + (topN(sysByLevel, 10).map(([k, v]) => `${k}:${v}`).join('  ') || '—'));
-P('  点名守卫 : ' + (topN(guardHits, 10).map(([k, v]) => `${k}:${v}`).join('  ') || '—'));
+P('  level : ' + inline(sysByLevel, 10));
+P('  点名守卫 : ' + inline(guardHits, 10));
 for (const s of guardSamples) P(`    · ${s}`);
 P();
 
 P(`## 收尾验证覆盖 (每会话: 编辑数 vs 验证命令数) —— 近似, 编辑远多于验证 = Stop hook 候选`);
 for (const s of perSession.sort((a, b) => b.edits - a.edits).slice(0, 12)) {
-  const flag = s.edits >= 5 && s.validates === 0 ? '  ⚠ 改了没验证' : '';
-  P(`  ${s.file.slice(0, 12)}…  edits=${pad(s.edits, 3)}  validates=${pad(s.validates, 3)}${flag}`);
+  P(`  ${s.file.slice(0, 12)}…  edits=${pad(s.edits, 3)}  validates=${pad(s.validates, 3)}`);
 }
 P();
 P(`# 读法：本 digest 只给确定性计数。判断哪些值得做成 hook、过滤判断型、减掉已机械化的、起草配置——见 SKILL.md。`);
