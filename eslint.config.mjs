@@ -19,6 +19,7 @@ export default [
       '**/node_modules/**',
       'unpackage/**',
       'packages/miniapp/src/uni.scss',
+      'console-assets/**',
     ],
   },
 

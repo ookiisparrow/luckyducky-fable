@@ -92,6 +92,22 @@ const repoChecks = [
     },
   },
   {
+    id: 'console-assets-present',
+    desc: '控制台资产正册不可误删（根因#9）：console-assets 关键正册文件须存在（git 外资产的唯一版本化记录）',
+    run() {
+      const bad = []
+      for (const f of [
+        'console-assets/README.md',
+        'console-assets/01-支付退款工作流.md',
+        'console-assets/02-库权限期望表.md',
+        'console-assets/forward-node.js',
+      ]) {
+        if (!existsSync(join(ROOT, f))) bad.push(`${f} 缺失（控制台资产正册不可删，根因#9）`)
+      }
+      return bad
+    },
+  },
+  {
     id: 'deploy-deny-all',
     desc: '样板房禁部署：guard-deploy 须对一切 tcb 部署/发布返回 deny（与生产仓只拦敏感名单不同）',
     run() {
