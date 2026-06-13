@@ -1,3 +1,4 @@
+import { toFen } from '@luckyducky/shared'
 import { callFlow, pageQuery } from '../../../../kit'
 import { reply, ensure, type Ctx } from '../lib'
 
@@ -37,8 +38,8 @@ export async function approveRefund({ db, data }: Ctx) {
     out_refund_no: id,
     reason: String(got.data.reason || '用户申请退款').slice(0, 80),
     amount: {
-      refund: Math.round(got.data.refundAmount * 100),
-      total: Math.round(order.data.amount * 100),
+      refund: toFen(got.data.refundAmount),
+      total: toFen(order.data.amount),
       currency: 'CNY',
     },
   })

@@ -1,3 +1,4 @@
+import { toFen } from '@luckyducky/shared'
 import { defineNotifyCallback } from '../../kit'
 
 // 退款结果回调（微信 → refundnotify 工作流 → 本函数）。防伪闸 + ACK + id 提取由 kit 收编。
@@ -23,7 +24,7 @@ export const main = defineNotifyCallback<any>({
     if (
       status === 'SUCCESS' &&
       (String(e.out_trade_no || '') !== String(as.orderId) ||
-        claimFee !== Math.round(as.refundAmount * 100))
+        claimFee !== toFen(as.refundAmount))
     ) {
       console.error('[refundCallback] 成功通知与售后单不符，拒置已退款', id, e.out_trade_no, claimFee)
       await db.collection('afterSales').doc(id).update({ data: { refundMismatch: true } }).catch(() => {})

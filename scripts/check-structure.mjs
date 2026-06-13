@@ -337,6 +337,20 @@ export const fileRules = [
         : null,
   },
   {
+    // 金额接 Fen 轨（根因账本 #4）：云函数里「元↔分」换算禁裸 *100 / /100——一律经 shared
+    // toFen/asFen/fenToYuan（asFen 对非整数分抛错＝脏数据 tripwire；Fen 品牌类型随之咬到本函数）。
+    // 病史：退款链（applyRefund/refundCallback/adminApi refunds）曾全手工 Math.round(*100) 绕过
+    // 类型守卫——「守卫存在却覆盖有洞」（round-2 体检挖出，2026-06-14）。非金额的百分比 / 时间
+    // 换算（getReviews 占比、*1000 毫秒）行内加 structure-ok。
+    id: 'money-via-fen',
+    roots: ['#4'],
+    inScope: (abs) => abs.includes('/packages/cloud/src/functions/') && abs.endsWith('.ts'),
+    test: (line) =>
+      /(\*|\/)\s*100\b/.test(line)
+        ? '金额「元↔分」换算禁裸 *100 / /100——经 shared toFen/asFen/fenToYuan（根因#4 Fen 接钱链，类型守卫才咬得到退款链）；非金额换算行内加 structure-ok'
+        : null,
+  },
+  {
     // T1 砍多端（根因账本 #6）：api 层禁 import @/data/——api 只对接云（callCloud），
     // 不引样例数据＝不可能再造本地假数据回退。比正则抓 res===null 干净。
     id: 'api-cloud-only',

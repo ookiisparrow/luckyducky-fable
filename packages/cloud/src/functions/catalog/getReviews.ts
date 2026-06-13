@@ -36,7 +36,7 @@ export const main = async (event: any = {}) => {
     }
     score = (sum / count).toFixed(1)
   }
-  const pct = (n: number) => (count ? Math.round((n / count) * 100) : 0)
+  const pct = (n: number) => (count ? Math.round((n / count) * 100) : 0) // structure-ok：占比百分比非金额
   const summary = {
     score,
     count,
