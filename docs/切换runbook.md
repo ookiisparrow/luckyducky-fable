@@ -1,7 +1,7 @@
 # 切换上线 Runbook（B9）—— 把重构样板房切成生产
 
 > 重构最后一批的产物。**切换动作（真部署 + 真机验收）须用户专门拍板某一天执行**；本文件让那一天可逐步照做、可回滚。
-> 切换模型：样板房 `luckyducky-next` 的重构代码部署到**共用云环境** `cloudbase-d4gcssqbv06865479`，覆盖现网 28 个旧函数（重构后 27 个，少一个已删的 getOpenId）。小程序端与控制台改用重构后的 `packages/miniapp` / `packages/admin` 构建。**数据库、云存储、控制台支付资产原地不动**（共用）。
+> 切换模型：样板房 `luckyducky-next` 的重构代码部署到**共用云环境** `cloudbase-d4gcssqbv06865479`，覆盖现网旧函数（重构后共 28 个：含审计 P1 新增 getPlaybackUrl，原 getOpenId 已删）。小程序端与控制台改用重构后的 `packages/miniapp` / `packages/admin` 构建。**数据库、云存储、控制台支付资产原地不动**（共用）。
 
 ## 〇、为什么这次切换是安全的（先读这条）
 
@@ -25,19 +25,19 @@ node scripts/preflight.mjs      # 机器体检：质量闸/27 产物/console-ass
 3. **小程序/控制台构建**：`npm run build:mp-weixin` + `npm run build:admin` 均 DONE。
 4. **回滚预案就位**（见六）：确认生产仓 `cloudfunctions/` 旧代码仍在 git，可一键回部。
 
-## 二、部署序（deploy-fns 真跑全量 27）
+## 二、部署序（deploy-fns 真跑全量 28）
 
 切换日在**生产仓或样板房**执行（共用云环境，部署目标一致）：
 
 ```bash
-DEPLOY_ALLOWED=1 node scripts/deploy-fns.mjs     # 首跑：manifest 空 → 部署全量 27
+DEPLOY_ALLOWED=1 node scripts/deploy-fns.mjs     # 首跑：manifest 空 → 部署全量 28
 ```
 
 - 敏感函数（钱/权限/状态）会被 **guard-deploy 逐个弹二次确认**：createOrder · pay · payCallback · applyRefund · refundCallback · closeExpiredOrders · adminApi · genQrcodes · activateCourse · confirmEnter · confirmReceive · submitReview · login · updateProfile · trackEvent · seedProducts · seedCourses · initDb。逐个确认放行。
 - 只读函数（get*：getProducts/getCourses/getContent/getMyOrders/getMyCourses/getMyProgress/getMyAfterSales/getOrderById/getReviews）无副作用，安全。
 - ⚠️ **seedProducts / seedCourses / initDb 只部署、切勿调用**——现网数据已存在，调用会把商品/课程表重置回种子（根因#3 A-1 的原灾难）。它们已加 `withAdminGate`，但纪律上切换日不触发。
 - `closeExpiredOrders` 的定时触发器随 cloudbaserc 部署；确认其 cron 仍在。
-- 部署后 `.deploy-manifest.json` 自动记录 27 个 hash —— **提交入 git**（下次只部署变更）。
+- 部署后 `.deploy-manifest.json` 自动记录 28 个 hash —— **提交入 git**（下次只部署变更）。
 
 ## 三、切换步骤（编号照做）
 

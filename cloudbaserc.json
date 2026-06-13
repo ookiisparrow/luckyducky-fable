@@ -34,6 +34,12 @@
       "installDependency": true
     },
     {
+      "name": "getPlaybackUrl",
+      "timeout": 10,
+      "handler": "index.main",
+      "installDependency": true
+    },
+    {
       "name": "createOrder",
       "timeout": 10,
       "handler": "index.main",

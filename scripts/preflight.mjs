@@ -25,13 +25,13 @@ const run = (label, fn) => {
 run('质量闸全绿（npm run check）', () => {
   execSync('npm run check', { cwd: ROOT, stdio: 'pipe' })
 })
-run('build:cloud 产物 = 27 个函数', () => {
+run('build:cloud 产物 = 28 个函数', () => {
   execSync('npm run build:cloud', { cwd: ROOT, stdio: 'pipe' })
   const dist = join(ROOT, 'packages/cloud/dist')
   const n = existsSync(dist)
     ? readdirSync(dist).filter((d) => existsSync(join(dist, d, 'index.js'))).length
     : 0
-  if (n !== 27) throw new Error(`产物 ${n} 个 ≠ 27`)
+  if (n !== 28) throw new Error(`产物 ${n} 个 ≠ 28`)
 })
 run('console-assets 正册齐（4 件）', () => {
   for (const f of ['README.md', '01-支付退款工作流.md', '02-库权限期望表.md', 'forward-node.js'])

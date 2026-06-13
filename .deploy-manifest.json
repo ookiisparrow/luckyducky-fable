@@ -1,5 +1,5 @@
 {
-  "note": "已部署函数清单（函数→产物 hash→时间）。deploy-fns.mjs 据此 diff 出需重部署的函数。空 functions=尚未经 deploy-fns 部署（B9 切换时首部署全量 27 个）。",
+  "note": "已部署函数清单（函数→产物 hash→时间）。deploy-fns.mjs 据此 diff 出需重部署的函数。空 functions=尚未经 deploy-fns 部署（B9 切换时首部署全量 28 个）。",
   "updatedAt": 0,
   "functions": {}
 }
