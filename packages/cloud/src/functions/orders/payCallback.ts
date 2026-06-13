@@ -1,3 +1,4 @@
+import { toFen } from '@luckyducky/shared'
 import { defineNotifyCallback, transition } from '../../kit'
 
 // 支付结果回调（微信 → paynotify 工作流 → 本函数；工作流通道可信，解密已由平台完成）。
@@ -22,7 +23,7 @@ export const main = defineNotifyCallback<any>({
     // 幂等条件流转 pending|closed → paid（closed 后钱到账，订单复活）。金额不符留 feeMismatch 痕。
     const { moved, doc } = await transition('orders', id, ['pending', 'closed'], 'paid', (order) => {
       const patch: Record<string, unknown> = { paidAt: Date.now(), transactionId }
-      if (paidFee !== Math.round(order.amount * 100)) {
+      if (paidFee !== toFen(order.amount)) {
         patch.feeMismatch = true
         console.error('[payCallback] 金额不符', id, paidFee, order.amount)
       }

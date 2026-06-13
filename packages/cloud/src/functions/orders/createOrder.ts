@@ -1,4 +1,4 @@
-import { MAX_QTY, MAX_ORDER_LINES } from '@luckyducky/shared'
+import { MAX_QTY, MAX_ORDER_LINES, toFen, asFen, fenToYuan } from '@luckyducky/shared'
 import { withOpenId, ok, err } from '../../kit'
 
 // 创建订单（敏感：前端禁写 orders）。openid 闸 + 前端只传 {items:[{id,qty,sku?}],address}，
@@ -75,8 +75,11 @@ export const main = withOpenId(async ({ db, OPENID, event }) => {
     }
   }
 
-  const goods = items.reduce((s, it) => s + it.price * it.qty, 0)
-  const amount = Math.max(0, goods + SHIP - COUPON)
+  // 金额用「分」整数运算（根因#4：杜绝元浮点累加漂移）；存库仍记元（与现网兼容），由分精确换算
+  const goodsFen = asFen(items.reduce((s, it) => s + toFen(it.price) * it.qty, 0))
+  const amountFen = asFen(Math.max(0, goodsFen + toFen(SHIP) - toFen(COUPON)))
+  const goods = fenToYuan(goodsFen)
+  const amount = fenToYuan(amountFen)
 
   // 地址快照：白名单字段，四要素必填 + 手机号基本格式（不信任前端守卫）
   const a = e.address || {}

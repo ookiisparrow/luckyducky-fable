@@ -1,3 +1,4 @@
+import { toFen } from '@luckyducky/shared'
 import { withOpenId, ok, err, transition, callFlow } from '../../kit'
 
 // 发起支付（敏感：金额一律取库内订单 amount，不信任前端）。通道=云开发微信支付工作流
@@ -24,7 +25,7 @@ export const main = withOpenId(async ({ db, OPENID, event }) => {
   const pay = (cfg && cfg.data) || {}
   if (pay.mode !== 'real' || !pay.flowId) return err('PAY_NOT_ENABLED')
 
-  const totalFee = Math.round(order.amount * 100) // 微信支付单位是分
+  const totalFee = toFen(order.amount) // 微信支付单位是分
   if (totalFee <= 0) {
     // 0 元单（券抵扣到 0）：无费可付，直接置已支付（微信支付最低 1 分）
     const paidAt = Date.now()

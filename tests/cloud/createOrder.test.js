@@ -51,6 +51,14 @@ describe('createOrder 闸门', () => {
     expect(res.order.amount).toBe(198 * 2 - 20) // - COUPON
   })
 
+  it('金额按分整数运算、无浮点漂移（外部 review P2 / 根因#4）', async () => {
+    control.seed('products', [{ _id: 'p-dec', id: 'p-dec', name: '小数价', price: 19.9, skus: [] }])
+    const res = await main({ items: [{ id: 'p-dec', qty: 3 }], address: ADDR })
+    expect(res.ok).toBe(true)
+    expect(res.order.goods).toBe(59.7) // 元浮点 sum 会得 59.699999…；分整数运算精确
+    expect(res.order.amount).toBe(39.7) // 59.7 - 20
+  })
+
   it('SKU 命中：价格用云端 sku 价，规格名进快照 spec', async () => {
     const res = await main({ items: [{ id: 'prod-1', qty: 1, sku: '雾霭蓝' }], address: ADDR })
     expect(res.order.items[0].price).toBe(210)
