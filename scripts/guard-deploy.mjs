@@ -1,32 +1,20 @@
 #!/usr/bin/env node
 /**
- * 敏感部署闸（Claude Code PreToolUse hook，matcher: Bash）。
+ * 部署硬闸——样板房版（Claude Code PreToolUse hook，matcher: Bash）。
  *
- * 固化项目惯例：「钱/权限」类云函数与静态托管的部署，须用户亲自确认——
- * 之前靠权限弹窗碰运气，现在变成确定规则。命中时返回 permissionDecision=ask，
- * 无论允许清单怎么配都强制弹确认框；其余命令一律放行（exit 0 无输出）。
+ * 本仓是重构样板房（平行仓），与生产仓 /Users/sparrow/luckyducky-miniprogram
+ * 共用同一云环境 cloudbase-d4gcssqbv06865479。为防误部署污染生产，
+ * 本闸拦截**一切** tcb 部署/发布类命令，一律 deny（生产仓的同名闸只拦敏感名单）。
+ * 唯一例外（B1 回灌点验证 getProducts）按总计划在生产仓执行，与本仓无关。
  *
- * 自测：echo '{"tool_input":{"command":"tcb fn deploy createOrder"}}' | node scripts/guard-deploy.mjs
+ * B5 衔接备忘：deploy-fns 脚本落地时要求 DEPLOY_ALLOWED=1 环境变量（本仓永不设置），
+ * 敏感名单恢复为单一来源 scripts/sensitive-fns；生产仓现行名单（迁移时核对）：
+ * createOrder / pay / payCallback / applyRefund / refundCallback / closeExpiredOrders /
+ * adminApi / genQrcodes / activateCourse / confirmEnter / confirmReceive / submitReview /
+ * seedProducts / seedCourses / initDb
+ *
+ * 自测：echo '{"tool_input":{"command":"tcb fn deploy getProducts"}}' | node scripts/guard-deploy.mjs
  */
-
-// 「钱/权限」闸门云函数（与 tests/cloud 覆盖的闸门一致 + seed/init 管理闸）
-const SENSITIVE_FNS = [
-  'createOrder', // 云端定价
-  'pay', // 发起微信支付
-  'payCallback', // 支付回调（pending→paid）
-  'applyRefund', // 售后申请（退款金额分摊）
-  'refundCallback', // 退款回调（approved→refunded）
-  'closeExpiredOrders', // 超时关单（批量改订单状态）
-  'adminApi', // 管理后台总入口（发货/上新）
-  'genQrcodes', // 一码一用批次生成
-  'activateCourse', // 激活闸门
-  'confirmEnter', // 进课留证 + 退货权失效
-  'confirmReceive', // 订单状态流转
-  'submitReview', // 评价写入
-  'seedProducts', // 种子（带管理闸）
-  'seedCourses',
-  'initDb',
-]
 
 let stdin = ''
 process.stdin.setEncoding('utf8')
@@ -41,22 +29,23 @@ try {
 
 if (!/\btcb\b/.test(command)) process.exit(0)
 
-// 云函数部署形态：fn/functions + deploy，或 code update（等效更新线上代码）
-const isFnDeploy =
-  (/\b(fn|functions?)\b/.test(command) && /\bdeploy\b/.test(command)) ||
-  /\bcode\s+update\b/.test(command)
-const hitFns = SENSITIVE_FNS.filter((name) => command.includes(name))
-const isHostingDeploy = /\bhosting\b/.test(command) && /\bdeploy\b/.test(command)
+// 一切「会改云端」的 tcb 形态：函数部署/代码更新/删除、托管发布/删除、framework、env 配置写
+const isMutating =
+  /\bdeploy\b/.test(command) ||
+  /\bcode\s+update\b/.test(command) ||
+  /\bpublish\b/.test(command) ||
+  /\b(fn|functions?|hosting)\b.*\b(delete|create)\b/.test(command) ||
+  /\bframework\b/.test(command)
 
-if ((isFnDeploy && hitFns.length) || isHostingDeploy) {
-  const what =
-    isHostingDeploy && !hitFns.length ? '静态托管发布' : `敏感云函数部署（${hitFns.join('、')}）`
+if (isMutating) {
   console.log(
     JSON.stringify({
       hookSpecificOutput: {
         hookEventName: 'PreToolUse',
-        permissionDecision: 'ask',
-        permissionDecisionReason: `部署闸：${what}涉及「钱/权限」闸门或线上发布，按项目惯例须用户亲自确认（确认框放行，或由用户自行运行 ! 命令）。`,
+        permissionDecision: 'deny',
+        permissionDecisionReason:
+          '样板房禁部署：本仓为重构平行仓，与生产共用云环境 cloudbase-d4gcssqbv06865479，' +
+          '任何 tcb 部署/发布/删除一律拒绝。需要触云请到生产仓按部署闸流程操作。',
       },
     })
   )
