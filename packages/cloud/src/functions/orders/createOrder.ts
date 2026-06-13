@@ -1,4 +1,4 @@
-import { MAX_QTY, MAX_ORDER_LINES, toFen, asFen, fenToYuan } from '@luckyducky/shared'
+import { MAX_QTY, MAX_ORDER_LINES, toFen, asFen, fenToYuan, isValidPriceYuan } from '@luckyducky/shared'
 import { withOpenId, ok, err } from '../../kit'
 
 // 创建订单（敏感：前端禁写 orders）。openid 闸 + 前端只传 {items:[{id,qty,sku?}],address}，
@@ -66,8 +66,13 @@ export const main = withOpenId(async ({ db, OPENID, event }) => {
       if (l.sku) {
         const sk = (Array.isArray(p.skus) ? p.skus : []).find((x: any) => x && x.name === l.sku)
         if (!sk) return err('UNKNOWN_SKU:' + l.id + ':' + l.sku)
-        price = Number(sk.price) || p.price
+        // 交易最终关口 fail-closed（审计 P1）：库内 SKU 价须有效，杜绝脏数据/手工写库穿透
+        if (!isValidPriceYuan(sk.price)) return err('BAD_SKU_PRICE:' + l.id + ':' + l.sku)
+        price = Number(sk.price)
         spec = l.sku
+      } else if (!isValidPriceYuan(p.price)) {
+        // 库内主商品价须有效（发布侧已挡新发布，此处再挡历史脏数据/迁移污染）
+        return err('BAD_PRICE:' + l.id)
       }
       items.push({ productId: p.id, name: p.name, spec, price, qty: l.qty, refundable: true })
     } else {

@@ -34,6 +34,13 @@ export const main = withOpenId(async ({ db, OPENID, event }) => {
   // 进度折叠：segment_done（一段看完）/ watch_at（离开播放页位置）
   const courseId = str(meta.courseId, 64)
   if ((type === 'segment_done' || type === 'watch_at') && courseId) {
+    // 防刷（审计 P3）：仅本人已激活该课才折叠进度，杜绝伪造任意课程进度污染看板/继续学习卡
+    const owns = await db
+      .collection('activations')
+      .where({ _openid: OPENID, courseId })
+      .get()
+      .catch(() => ({ data: [] }))
+    if (!owns.data.length) return ok()
     const last = {
       lessonId: str(meta.lessonId, 64),
       segmentId: targetId,

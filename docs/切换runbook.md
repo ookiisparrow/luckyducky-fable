@@ -45,7 +45,7 @@ DEPLOY_ALLOWED=1 node scripts/deploy-fns.mjs     # 首跑：manifest 空 → 部
 2. 低峰期开始（避开下单高峰）。
 3. `DEPLOY_ALLOWED=1 node scripts/deploy-fns.mjs` → 逐个确认敏感函数 → 等全部 DONE。
 4. 提交更新后的 `.deploy-manifest.json`。
-5. 发布小程序新版（`build:mp-weixin` → 微信开发者工具上传 → 提交审核/发布）。
+5. 发布小程序新版（`build:mp-weixin` → 微信开发者工具上传 → 提交审核/发布）。**发布前**：`manifest.json` 的 `urlCheck` 恢复为 `true`（现为 dev 方便关着），并确认微信后台合法域名已配齐。
 6. 控制台发布（`build:admin` → 部署静态托管，仍走部署闸二次确认）。
 7. 立即验收（四）。
 
@@ -74,6 +74,7 @@ DEPLOY_ALLOWED=1 node scripts/deploy-fns.mjs     # 首跑：manifest 空 → 部
 3. ~~前端分页「加载更多」~~ ✅ 已接（小程序 order-list/aftersales + 控制台订单/售后四处全接游标）。残留低优先：状态角标按已载列表计，超首页需服务端计数。
 4. **依赖安全升级（另开分支，低优先）**：`npm audit` 51 项**全在构建工具链**（@dcloudio/vite/esbuild/jimp/postcss/ws/express/qs）——不随云函数/小程序产物上线、**运行时暴露近零**。非破坏性 `audit fix` 不减项（反引入 rolldown），未采纳；根治须主版本升级 uni 栈、单开分支验三端构建（勿盲跑 `--force`）。
 5. **后台账号体系 v2（产品级，另议）**：现 v1 单口令 + localStorage 是刻意简化（bootstrap 抢占窗口已关，债#15）；升级到 session token / 多账号属账号体系决策，需产品拍板。
-6. **观察期**：盯交易异常工作台（adminApi getDashboard 的 feeMismatch/refundMismatch/退款卡单）、云函数日志，确认无回归。
+6. **小记债（低优先，审计 P3）**：trackEvent 已加「激活才记进度」防刷，仍可补**事件轻量限流/采样**（防 events 放大）与 segment 存在性校验；小程序 Sass `@import` 渐迁 `@use`（现仅弃用警告，将来 Dart Sass 大版本会失败）。
+7. **观察期**：盯交易异常工作台（adminApi getDashboard 的 feeMismatch/refundMismatch/退款卡单）、云函数日志，确认无回归。
 
 > **管理员口令（债#15 已关抢占窗口）**：现网 `adminConfig.auth` 已存在，切换不受影响、照旧用现口令登录。**仅当迁新环境 / 重置口令**时，须先设云环境变量 `ADMIN_BOOTSTRAP_KEY`＝期望口令，再用该口令首登（无此变量则禁止 bootstrap，杜绝抢占）；设定后可移除该变量。

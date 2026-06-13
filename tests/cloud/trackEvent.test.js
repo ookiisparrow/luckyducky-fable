@@ -24,6 +24,7 @@ describe('trackEvent', () => {
   })
 
   it('segment_done 折叠进 progress（每用户每课一条；done 标记 + last 位置）', async () => {
+    control.seed('activations', [{ _openid: 'u1', courseId: 'course-duck', code: 'X', enteredAt: Date.now() }])
     await main({
       type: 'segment_done',
       targetId: 'l1-s1',
@@ -44,5 +45,15 @@ describe('trackEvent', () => {
     expect(p2).toHaveLength(1) // 仍一条
     expect(p2[0].done['l1-s1']).toBe(true)
     expect(p2[0].done['l1-s2']).toBe(true)
+  })
+
+  it('防刷（审计 P3）：未激活该课的 segment_done 不折叠进度（事件仍记）', async () => {
+    await main({
+      type: 'segment_done',
+      targetId: 'l1-s1',
+      meta: { courseId: 'course-not-mine', lessonId: 'l1', at: 40, dur: 40 },
+    })
+    expect(control.dump('progress')).toHaveLength(0) // 未激活 → 不污染进度
+    expect(control.dump('events')).toHaveLength(1) // 事件流水仍记（分析用）
   })
 })

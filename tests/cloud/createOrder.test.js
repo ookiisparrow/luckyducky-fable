@@ -59,6 +59,17 @@ describe('createOrder 闸门', () => {
     expect(res.order.amount).toBe(39.7) // 59.7 - 20
   })
 
+  it('库内脏价 fail-closed：负价主商品 / 超大 SKU 价拒单（审计 P1，交易最终关口）', async () => {
+    control.seed('products', [
+      { _id: 'p-bad', id: 'p-bad', name: '脏价', price: -5, skus: [] },
+      { _id: 'p-sku', id: 'p-sku', name: '脏SKU', price: 100, skus: [{ name: '大', price: 200000 }] },
+    ])
+    expect((await main({ items: [{ id: 'p-bad', qty: 1 }], address: ADDR })).error).toBe('BAD_PRICE:p-bad')
+    expect(
+      (await main({ items: [{ id: 'p-sku', qty: 1, sku: '大' }], address: ADDR })).error,
+    ).toBe('BAD_SKU_PRICE:p-sku:大')
+  })
+
   it('SKU 命中：价格用云端 sku 价，规格名进快照 spec', async () => {
     const res = await main({ items: [{ id: 'prod-1', qty: 1, sku: '雾霭蓝' }], address: ADDR })
     expect(res.order.items[0].price).toBe(210)
