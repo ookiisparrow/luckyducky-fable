@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest'
 import { control } from 'wx-server-sdk'
-import { main } from '../../cloudfunctions/submitReview/index.js'
+import { main } from '../../packages/cloud/src/functions/catalog/submitReview'
 
 // submitReview 闸门：openid + 订单归属 + 已完成 + 商品在单内 + 一单一品一评 + 昵称快照/匿名。
 beforeEach(() => {

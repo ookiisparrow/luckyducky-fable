@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest'
 import { control } from 'wx-server-sdk'
-import { main } from '../../cloudfunctions/activateCourse/index.js'
+import { main } from '../../packages/cloud/src/functions/learning/activateCourse'
 
 // activateCourse 闸门：一码一用（条件更新抢占）+ 他人占用拒绝 + 本人重扫状态。
 beforeEach(() => {

@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest'
 import { control } from 'wx-server-sdk'
-import { main } from '../../cloudfunctions/confirmEnter/index.js'
+import { main } from '../../packages/cloud/src/functions/learning/confirmEnter'
 
 // confirmEnter 闸门：确认进课写 enteredAt（只写一次）+ 退货权启发失效（翻最早可退条目）。
 beforeEach(() => {

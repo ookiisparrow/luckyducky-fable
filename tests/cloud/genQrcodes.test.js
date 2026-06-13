@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest'
 import { control } from 'wx-server-sdk'
-import { main } from '../../cloudfunctions/genQrcodes/index.js'
+import { main } from '../../packages/cloud/src/functions/learning/genQrcodes'
 
 // genQrcodes 闸门：管理通道判定（无 openid=CLI/控制台放行；客户端须 isAdmin）+ 防废码 + 码唯一。
 beforeEach(() => {
