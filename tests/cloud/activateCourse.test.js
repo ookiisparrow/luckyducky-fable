@@ -55,4 +55,34 @@ describe('activateCourse 闸门', () => {
     control.setOpenId('user-B')
     expect((await main({ code: 'LDCODE1' })).error).toBe('CODE_TAKEN')
   })
+
+  it('半步失败自愈：码已 activated 但激活记录缺失 → 重扫补回（审计 P2）', async () => {
+    // 模拟：transition 翻 activated 成功，但 activations.add 没写成（函数中途挂）
+    control.reset()
+    control.setOpenId('user-A')
+    control.seed('qrcodes', [
+      { _id: 'LDCODE1', code: 'LDCODE1', courseId: 'course-duck', status: 'activated', activatedBy: 'user-A', activatedAt: Date.now() },
+    ])
+    expect(control.dump('activations')).toHaveLength(0) // 半步失败：无激活记录
+    const res = await main({ code: 'LDCODE1' })
+    expect(res).toMatchObject({ ok: true, state: 'activated', courseId: 'course-duck' })
+    const acts = control.dump('activations')
+    expect(acts).toHaveLength(1) // 自愈补回
+    expect(acts[0]).toMatchObject({ _openid: 'user-A', code: 'LDCODE1', enteredAt: null })
+  })
+
+  it('老数据兼容：随机 _id 旧激活，重扫命中即用、不重建（惰性迁移）', async () => {
+    control.reset()
+    control.setOpenId('user-A')
+    control.seed('qrcodes', [
+      { _id: 'LDCODE1', code: 'LDCODE1', courseId: 'course-duck', status: 'activated', activatedBy: 'user-A' },
+    ])
+    control.seed('activations', [
+      { _id: 'rand-old-id', _openid: 'user-A', code: 'LDCODE1', courseId: 'course-duck', enteredAt: null },
+    ])
+    expect((await main({ code: 'LDCODE1' })).state).toBe('activated')
+    const acts = control.dump('activations')
+    expect(acts).toHaveLength(1) // 不重建
+    expect(acts[0]._id).toBe('rand-old-id') // 仍用旧的随机 _id
+  })
 })

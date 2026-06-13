@@ -6,7 +6,8 @@
 ## 〇、为什么这次切换是安全的（先读这条）
 
 **数据零迁移**——这是切换最大的风险点，已查证排除：
-- 重构后函数的 `_id` 方案与现网**逐一致**：createOrder（`_id`=订单号）、genQrcodes（`_id`=兑换码）、applyRefund/submitReview（`_id`=`订单__商品`）、activateCourse（随机 `_id`）——与生产 `cloudfunctions/` 同款。
+- 重构后函数的 `_id` 方案与现网**逐一致**：createOrder（`_id`=订单号）、genQrcodes（`_id`=兑换码）、applyRefund/submitReview（`_id`=`订单__商品`）——与生产 `cloudfunctions/` 同款。
+- activateCourse：审计 P2 修复后改为**惰性迁移**——现网随机 `_id` 旧激活命中即用、不重建；新激活用确定性 `_id`=code（幂等自愈半步失败）。故现网激活数据仍兼容、无需搬迁。
 - 仍「先查后建」的 login/trackEvent（users/progress）是**忠实迁移**，与现网写法一致。
 - 故现网既有订单/兑换码/评价/售后/用户数据，重构后函数读写**完全兼容**，无需任何数据搬迁。
 - 债#14（users/progress 升确定性 `_id`）是**切换后**的改进项，不是切换前提；做时再按根因#1 的「命中新 id 用之、未命中原子搬迁」惰性迁移。
