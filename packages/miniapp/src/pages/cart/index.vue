@@ -384,7 +384,7 @@ function onCheckout() {
   display: flex;
   align-items: center;
   background: $white;
-  border-radius: 22px;
+  border-radius: 28px; /* 与 TabBar 药丸一致 */
   box-shadow: $shadow-tab;
   padding: 9px 12px 9px 16px;
 }
