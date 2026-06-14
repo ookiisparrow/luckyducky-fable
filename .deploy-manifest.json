@@ -1,5 +1,33 @@
 {
-  "note": "已部署函数清单（函数→产物 hash→时间）。deploy-fns.mjs 据此 diff 出需重部署的函数。空 functions=尚未经 deploy-fns 部署（B9 切换时首部署全量 28 个）。",
-  "updatedAt": 0,
-  "functions": {}
+  "updatedAt": 1781402740447,
+  "functions": {
+    "activateCourse": "ed80f56336e4",
+    "adminApi": "49d5afa0c672",
+    "applyRefund": "fb901e536d33",
+    "closeExpiredOrders": "1aacb5dffc69",
+    "confirmEnter": "14280de0feee",
+    "confirmReceive": "4ea27cb78089",
+    "createOrder": "f19091efdfe2",
+    "genQrcodes": "3c21df8f26b0",
+    "getContent": "480889fe94fd",
+    "getCourses": "3031bef625e6",
+    "getMyAfterSales": "fef7fc6315b4",
+    "getMyCourses": "6877f18a2d0d",
+    "getMyOrders": "ff72e83f8d96",
+    "getMyProgress": "3b91a0f8d9f9",
+    "getOrderById": "06b6f805a6b2",
+    "getPlaybackUrl": "0d21f802beb7",
+    "getProducts": "bebf53fcca33",
+    "getReviews": "b9fc331397b1",
+    "initDb": "522d93e859d8",
+    "login": "435adc8067fb",
+    "pay": "d37c9687bd0d",
+    "payCallback": "2cc7a4794067",
+    "refundCallback": "9b092800d64c",
+    "seedCourses": "1f1f4357bd61",
+    "seedProducts": "dd00210b9866",
+    "submitReview": "ec83206b5dc7",
+    "trackEvent": "354f4471bc5b",
+    "updateProfile": "776c4551551f"
+  }
 }
