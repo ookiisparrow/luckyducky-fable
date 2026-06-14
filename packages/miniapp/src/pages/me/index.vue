@@ -27,12 +27,15 @@ import { useActivationStore } from '@/store/activation.js'
 import { STORAGE_KEYS } from '@/constants/storage.js'
 import { mmss } from '@/utils/format.js'
 import { ensureLogin } from '@/composables/useAuthGate.js'
+import { useExitGuard } from '@/composables/useExitGuard.js'
 
 const user = useUserStore()
 const orders = useOrdersStore()
 const courses = useCoursesStore()
 const progress = useProgressStore()
 const act = useActivationStore()
+// 返回拦截：第一次返回弹「再按一次退出」，2s 内再返回才真退出（配模板 scroll-view + page-container）
+const { backGuard, onBackGuard } = useExitGuard()
 
 // 角标 = 各状态真实订单数（只标可办理的三态，已完成/售后不标）
 const BADGE_STATUS = { pending: 'pending', toship: 'paid', toreceive: 'shipped' }
@@ -110,75 +113,86 @@ function goLogin() {
 
 <template>
   <view class="my-profile">
-    <!-- 紫色资料头 -->
-    <ProfileHeader
-      :profile="user.profile"
-      :logged-in="user.isLogin"
-      @edit="goEditProfile"
-      @login="goLogin"
-    />
+    <scroll-view scroll-y :show-scrollbar="false" class="my-scroll">
+      <!-- 紫色资料头 -->
+      <ProfileHeader
+        :profile="user.profile"
+        :logged-in="user.isLogin"
+        @edit="goEditProfile"
+        @login="goLogin"
+      />
 
-    <view class="my-stack">
-      <!-- 继续学习 -->
-      <view class="my-card my-card-pad">
-        <view class="my-sec-head">
-          <view class="my-sec-title">
-            <view class="my-sec-ico"><Icon name="graduation-cap" :size="19" /></view>
-            <text>继续学习</text>
+      <view class="my-stack">
+        <!-- 继续学习 -->
+        <view class="my-card my-card-pad">
+          <view class="my-sec-head">
+            <view class="my-sec-title">
+              <view class="my-sec-ico"><Icon name="graduation-cap" :size="19" /></view>
+              <text>继续学习</text>
+            </view>
+            <view class="my-sec-more" @tap="allCourses">
+              <text>全部教程</text><Icon name="chevron-right" :size="14" />
+            </view>
           </view>
-          <view class="my-sec-more" @tap="allCourses">
-            <text>全部教程</text><Icon name="chevron-right" :size="14" />
+
+          <ContinueVideo v-if="!noCourse" :v="cont" @watch="continueWatch" />
+          <view v-else class="my-course-empty">
+            <view class="my-course-empty-ico"><Icon name="graduation-cap" :size="26" /></view>
+            <text class="my-course-empty-title">还没有课程</text>
+            <text class="my-course-empty-sub">购买材料包、扫码激活后即可开始视频跟学</text>
+            <view class="my-course-empty-btn" @tap="goShop">
+              <text>去逛逛</text><Icon name="chevron-right" :size="15" />
+            </view>
           </view>
         </view>
 
-        <ContinueVideo v-if="!noCourse" :v="cont" @watch="continueWatch" />
-        <view v-else class="my-course-empty">
-          <view class="my-course-empty-ico"><Icon name="graduation-cap" :size="26" /></view>
-          <text class="my-course-empty-title">还没有课程</text>
-          <text class="my-course-empty-sub">购买材料包、扫码激活后即可开始视频跟学</text>
-          <view class="my-course-empty-btn" @tap="goShop">
-            <text>去逛逛</text><Icon name="chevron-right" :size="15" />
+        <!-- 我的订单 -->
+        <view class="my-card my-card-pad">
+          <view class="my-sec-head">
+            <view class="my-sec-title"><text>我的订单</text></view>
+            <view class="my-sec-more" @tap="allOrders">
+              <text>全部订单</text><Icon name="chevron-right" :size="14" />
+            </view>
+          </view>
+          <OrderGrid :tabs="orderTabs" @open="onOrder" />
+        </view>
+
+        <!-- 客服 / 地址 -->
+        <view class="my-card my-list">
+          <view class="my-row" @tap="toast('正在接入人工客服…')">
+            <view class="my-row-ico"><Icon name="headphones-meta" :size="22" /></view>
+            <text class="my-row-label">联系客服</text>
+            <view class="my-row-chev"><Icon name="chevron-right" :size="18" /></view>
+          </view>
+          <view class="my-row divided" @tap="goAddress">
+            <view class="my-row-ico"><Icon name="map-pin-meta" :size="22" /></view>
+            <text class="my-row-label">地址管理</text>
+            <view class="my-row-chev"><Icon name="chevron-right" :size="18" /></view>
           </view>
         </view>
       </view>
 
-      <!-- 我的订单 -->
-      <view class="my-card my-card-pad">
-        <view class="my-sec-head">
-          <view class="my-sec-title"><text>我的订单</text></view>
-          <view class="my-sec-more" @tap="allOrders">
-            <text>全部订单</text><Icon name="chevron-right" :size="14" />
-          </view>
-        </view>
-        <OrderGrid :tabs="orderTabs" @open="onOrder" />
-      </view>
+      <view class="my-pad-bottom"></view>
+    </scroll-view>
 
-      <!-- 客服 / 地址 -->
-      <view class="my-card my-list">
-        <view class="my-row" @tap="toast('正在接入人工客服…')">
-          <view class="my-row-ico"><Icon name="headphones-meta" :size="22" /></view>
-          <text class="my-row-label">联系客服</text>
-          <view class="my-row-chev"><Icon name="chevron-right" :size="18" /></view>
-        </view>
-        <view class="my-row divided" @tap="goAddress">
-          <view class="my-row-ico"><Icon name="map-pin-meta" :size="22" /></view>
-          <text class="my-row-label">地址管理</text>
-          <view class="my-row-chev"><Icon name="chevron-right" :size="18" /></view>
-        </view>
-      </view>
-    </view>
-
-    <view class="my-pad-bottom"></view>
     <TabBar active="me" />
     <LoginSheet />
+    <!-- #ifdef MP-WEIXIN -->
+    <!-- 返回拦截（PoC）：内容在上方 scroll-view 内滚，page-container 武装拦返回不影响内部滚动 -->
+    <page-container :show="backGuard" :overlay="false" :duration="0" @beforeleave="onBackGuard" />
+    <!-- #endif -->
   </view>
 </template>
 
 <style lang="scss" scoped>
 .my-profile {
-  min-height: 100vh;
+  height: 100vh;
   background: $bg-grey;
   font-family: $font-cn;
+}
+/* PoC：内容滚动容器（撑满视口，内部滚动；page-container 锁页面滚动锁不到这里） */
+.my-scroll {
+  height: 100vh;
 }
 
 /* 内容堆叠 */

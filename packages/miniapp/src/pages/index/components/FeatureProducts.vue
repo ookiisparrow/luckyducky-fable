@@ -11,7 +11,7 @@ import { yuan } from '@/utils/format.js'
 defineProps({
   flashId: { type: String, default: '' }, // 命中要高亮的产品 id
 })
-const emit = defineEmits(['open', 'add'])
+const emit = defineEmits(['open', 'add', 'scrollto'])
 const instance = getCurrentInstance()
 
 // 购买按钮触发：滚到商品卡——让卡片行（rail）在屏幕垂直居中。
@@ -26,7 +26,7 @@ function scrollToProducts(currentScrollTop = 0) {
       if (!rect) return
       const winH = uni.getSystemInfoSync().windowHeight
       const top = Math.max(0, (winH - rect.height) / 2) // 卡片行垂直居中
-      uni.pageScrollTo({ scrollTop: currentScrollTop + rect.top - top, duration: 320 })
+      emit('scrollto', currentScrollTop + rect.top - top) // 父页 scroll-view 滚到此位置（不再页面级 pageScrollTo）
     })
     .exec()
 }

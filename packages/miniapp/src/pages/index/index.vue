@@ -4,8 +4,7 @@
  * 组合各区块组件，并实现：点「购买」滚动定位并高亮、点搜索滚到品牌介绍、
  * 加入弹 Toast、滚动过半显示回到顶部。
  */
-import { ref, watch, getCurrentInstance } from 'vue'
-import { onPageScroll } from '@dcloudio/uni-app'
+import { ref, watch, getCurrentInstance, nextTick } from 'vue'
 
 // 首页专用区块组件就近放在 ./components/（CLAUDE.md §9：页内自用组件归 pages/<page>/components/）
 import Hero from './components/Hero.vue'
@@ -26,6 +25,7 @@ import LoginSheet from '@/components/LoginSheet.vue'
 import { useTimers } from '@/composables/useTimers.js'
 import { splashActive } from '@/composables/useSplash.js'
 import { loginSheetVisible } from '@/composables/useAuthGate.js'
+import { useExitGuard } from '@/composables/useExitGuard.js'
 
 // section 组件是纯展示（技术债 #4），数据在页面收口；将来换云端来源只改这里
 import { useContentStore } from '@/store/content.js'
@@ -48,16 +48,26 @@ watch(splashActive, (active) => {
 const instance = getCurrentInstance()
 const windowHeight = uni.getSystemInfoSync().windowHeight
 const featureRef = ref(null) // 商品区组件实例（购买按钮调它滚到商品卡）
+// 返回拦截：第一次返回弹「再按一次退出」，2s 内再返回才真退出（配模板 scroll-view + page-container）
+const { backGuard, onBackGuard } = useExitGuard()
 
-// ---- 滚动状态：回到顶部按钮 ----
-const scrollTop = ref(0)
+// ---- 滚动状态（内容在 scroll-view 内滚）----
+const scrollTop = ref(0) // scroll-view 当前滚动量（@scroll 更新）
+const scrollTopProp = ref(0) // 受控滚动位置（回到顶部 / 定位用）
 const showTop = ref(false)
-onPageScroll((e) => {
-  scrollTop.value = e.scrollTop
-  showTop.value = e.scrollTop > windowHeight * 1.2
-})
+function onScroll(e) {
+  scrollTop.value = e.detail.scrollTop
+  showTop.value = e.detail.scrollTop > windowHeight * 1.2
+}
+// 滚到目标：先同步当前真实位置、下一拍再设目标，绕过 scroll-view「相同值不触发」
+function scrollViewTo(target) {
+  scrollTopProp.value = scrollTop.value
+  nextTick(() => {
+    scrollTopProp.value = Math.max(0, target)
+  })
+}
 function backToTop() {
-  uni.pageScrollTo({ scrollTop: 0, duration: 300 })
+  scrollViewTo(0)
 }
 
 // ---- Toast ----
@@ -79,10 +89,7 @@ function scrollToAnchor(id, offset = 0) {
     .select('#' + id)
     .boundingClientRect((rect) => {
       if (!rect) return
-      uni.pageScrollTo({
-        scrollTop: scrollTop.value + rect.top - offset,
-        duration: 320,
-      })
+      scrollViewTo(scrollTop.value + rect.top - offset)
     })
     .exec()
 }
@@ -120,32 +127,42 @@ function onClosingBuy() {
 
 <template>
   <view class="ld-home">
-    <Hero
-      :title="content.hero.title"
-      :tagline="content.hero.tagline"
-      @buy="onHeroBuy"
-      @explore="onExplore"
-    />
-
-    <view id="anchor-intro">
-      <BrandIntro />
-    </view>
-
-    <view id="anchor-products">
-      <FeatureProducts
-        ref="featureRef"
-        :flash-id="flashId"
-        @open="onProductOpen"
-        @add="onProductAdd"
+    <scroll-view
+      scroll-y
+      :scroll-top="scrollTopProp"
+      :scroll-with-animation="true"
+      :show-scrollbar="false"
+      class="ld-home-scroll"
+      @scroll="onScroll"
+    >
+      <Hero
+        :title="content.hero.title"
+        :tagline="content.hero.tagline"
+        @buy="onHeroBuy"
+        @explore="onExplore"
       />
-    </view>
 
-    <TrustStrip :items="content.trust" />
-    <Reassurance :items="REASSURE_ITEMS" />
-    <Reviews :reviews="REVIEWS" />
-    <FAQ :items="content.faq" />
-    <ClosingCTA @buy="onClosingBuy" />
-    <SiteFooter />
+      <view id="anchor-intro">
+        <BrandIntro />
+      </view>
+
+      <view id="anchor-products">
+        <FeatureProducts
+          ref="featureRef"
+          :flash-id="flashId"
+          @open="onProductOpen"
+          @add="onProductAdd"
+          @scrollto="scrollViewTo"
+        />
+      </view>
+
+      <TrustStrip :items="content.trust" />
+      <Reassurance :items="REASSURE_ITEMS" />
+      <Reviews :reviews="REVIEWS" />
+      <FAQ :items="content.faq" />
+      <ClosingCTA @buy="onClosingBuy" />
+      <SiteFooter />
+    </scroll-view>
 
     <!-- 浮层 -->
     <BackTop v-if="showTop" @tap="backToTop" />
@@ -153,11 +170,18 @@ function onClosingBuy() {
     <TabBar active="home" />
     <LoginSheet />
     <LoadingSplash v-if="splashActive" :ready="products.loaded" />
+    <!-- #ifdef MP-WEIXIN -->
+    <page-container :show="backGuard" :overlay="false" :duration="0" @beforeleave="onBackGuard" />
+    <!-- #endif -->
   </view>
 </template>
 
 <style lang="scss" scoped>
 .ld-home {
+  height: 100vh;
   background: $white;
+}
+.ld-home-scroll {
+  height: 100vh;
 }
 </style>

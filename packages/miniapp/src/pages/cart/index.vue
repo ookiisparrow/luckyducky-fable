@@ -16,11 +16,14 @@ import TabBar from '@/components/TabBar.vue'
 import { useCartStore } from '@/store/cart.js'
 import { CART_RECS } from '@/data/cart.js'
 import { getSystemBar } from '@/utils/systemBar.js'
+import { useExitGuard } from '@/composables/useExitGuard.js'
 
 const cart = useCartStore()
 
 // 顶部留白避开状态栏（注入 CSS 变量；标题左对齐不碰胶囊，无需右避让）
 const topStyle = { '--sbh': getSystemBar().statusBarHeight + 'px' }
+// 返回拦截：第一次返回弹「再按一次退出」，2s 内再返回才真退出（配模板 scroll-view + page-container）
+const { backGuard, onBackGuard } = useExitGuard()
 
 function goShop() {
   uni.reLaunch({ url: '/pages/index/index' })
@@ -56,71 +59,73 @@ function onCheckout() {
 
 <template>
   <view class="ld-cart">
-    <view class="ld-cart-top" :style="topStyle">
-      <image class="ld-cart-logo" src="/static/logo-wordmark.svg" mode="heightFix" />
-    </view>
-
-    <!-- 空车 -->
-    <view v-if="cart.isEmpty" class="ld-cart-empty">
-      <text class="ld-cart-empty-h">购物车空空的</text>
-      <text class="ld-cart-empty-p">还没有心动的小棉鸭～</text>
-      <view class="ld-cart-link" @tap="goShop">
-        <text>看看推荐</text><Icon name="arrow-right-purple" :size="16" />
+    <scroll-view scroll-y :show-scrollbar="false" class="ld-cart-scroll">
+      <view class="ld-cart-top" :style="topStyle">
+        <image class="ld-cart-logo" src="/static/logo-wordmark.svg" mode="heightFix" />
       </view>
-    </view>
 
-    <!-- 有货：条目列表 -->
-    <view v-else class="ld-cart-list">
-      <view v-for="it in cart.items" :key="it.id + '|' + (it.sku || '')" class="ld-cart-item">
-        <view
-          class="ld-cart-check"
-          :class="{ on: it.selected }"
-          @tap="cart.toggle(it.id, it.sku || '')"
-        >
-          <Icon v-if="it.selected" name="check" :size="13" />
+      <!-- 空车 -->
+      <view v-if="cart.isEmpty" class="ld-cart-empty">
+        <text class="ld-cart-empty-h">购物车空空的</text>
+        <text class="ld-cart-empty-p">还没有心动的小棉鸭～</text>
+        <view class="ld-cart-link" @tap="goShop">
+          <text>看看推荐</text><Icon name="arrow-right-purple" :size="16" />
         </view>
-        <view class="ld-cart-item-img"><MediaSlot ratio="1/1" :radius="9" /></view>
-        <view class="ld-cart-item-mid">
-          <text class="ld-cart-item-name">{{ it.name }}</text>
-          <text v-if="it.tag" class="ld-cart-item-tag">{{ it.tag }}</text>
-          <view class="ld-cart-item-foot">
-            <view class="ld-cart-item-pricegrp">
-              <text v-if="it.was" class="ld-cart-was">￥{{ it.was }}</text>
-              <text class="ld-cart-item-price">￥{{ it.price }}</text>
+      </view>
+
+      <!-- 有货：条目列表 -->
+      <view v-else class="ld-cart-list">
+        <view v-for="it in cart.items" :key="it.id + '|' + (it.sku || '')" class="ld-cart-item">
+          <view
+            class="ld-cart-check"
+            :class="{ on: it.selected }"
+            @tap="cart.toggle(it.id, it.sku || '')"
+          >
+            <Icon v-if="it.selected" name="check" :size="13" />
+          </view>
+          <view class="ld-cart-item-img"><MediaSlot ratio="1/1" :radius="9" /></view>
+          <view class="ld-cart-item-mid">
+            <text class="ld-cart-item-name">{{ it.name }}</text>
+            <text v-if="it.tag" class="ld-cart-item-tag">{{ it.tag }}</text>
+            <view class="ld-cart-item-foot">
+              <view class="ld-cart-item-pricegrp">
+                <text v-if="it.was" class="ld-cart-was">￥{{ it.was }}</text>
+                <text class="ld-cart-item-price">￥{{ it.price }}</text>
+              </view>
+              <QuantityStepper
+                :n="it.qty"
+                size="md"
+                @dec="dec(it)"
+                @inc="cart.setQty(it.id, it.qty + 1, it.sku || '')"
+              />
             </view>
-            <QuantityStepper
-              :n="it.qty"
-              size="md"
-              @dec="dec(it)"
-              @inc="cart.setQty(it.id, it.qty + 1, it.sku || '')"
-            />
           </view>
         </view>
       </view>
-    </view>
-    <view v-if="!cart.isEmpty" class="ld-cart-hr"></view>
+      <view v-if="!cart.isEmpty" class="ld-cart-hr"></view>
 
-    <!-- 为你推荐（两态共用） -->
-    <text class="ld-cart-divider-label">为你推荐</text>
-    <view class="ld-cart-recs">
-      <view v-for="r in CART_RECS" :key="r.id" class="ld-cart-rec">
-        <MediaSlot ratio="1/1" />
-        <view class="ld-cart-rec-body">
-          <text class="ld-cart-rec-name">{{ r.name }}</text>
-          <text class="ld-cart-rec-tag">{{ r.tag }}</text>
-          <view class="ld-cart-rec-foot">
-            <view class="ld-cart-pricegrp">
-              <text class="ld-cart-was">￥{{ r.was }}</text>
-              <text class="ld-cart-now">￥{{ r.price }}</text>
+      <!-- 为你推荐（两态共用） -->
+      <text class="ld-cart-divider-label">为你推荐</text>
+      <view class="ld-cart-recs">
+        <view v-for="r in CART_RECS" :key="r.id" class="ld-cart-rec">
+          <MediaSlot ratio="1/1" />
+          <view class="ld-cart-rec-body">
+            <text class="ld-cart-rec-name">{{ r.name }}</text>
+            <text class="ld-cart-rec-tag">{{ r.tag }}</text>
+            <view class="ld-cart-rec-foot">
+              <view class="ld-cart-pricegrp">
+                <text class="ld-cart-was">￥{{ r.was }}</text>
+                <text class="ld-cart-now">￥{{ r.price }}</text>
+              </view>
+              <view class="ld-add" @tap="addRec(r)"><Icon name="plus" :size="18" /></view>
             </view>
-            <view class="ld-add" @tap="addRec(r)"><Icon name="plus" :size="18" /></view>
           </view>
         </view>
       </view>
-    </view>
 
-    <!-- 给 TabBar（有货时再加结算栏）让位 -->
-    <view class="ld-cart-foot" :class="{ 'is-filled': !cart.isEmpty }"></view>
+      <!-- 给 TabBar（有货时再加结算栏）让位 -->
+      <view class="ld-cart-foot" :class="{ 'is-filled': !cart.isEmpty }"></view>
+    </scroll-view>
 
     <!-- 浮动结算栏 -->
     <view v-if="!cart.isEmpty" class="ld-checkbar">
@@ -138,14 +143,21 @@ function onCheckout() {
     </view>
 
     <TabBar active="cart" />
+    <!-- #ifdef MP-WEIXIN -->
+    <page-container :show="backGuard" :overlay="false" :duration="0" @beforeleave="onBackGuard" />
+    <!-- #endif -->
   </view>
 </template>
 
 <style lang="scss" scoped>
 .ld-cart {
-  min-height: 100vh;
+  height: 100vh;
   background: $white;
   font-family: $font-cn;
+}
+/* 内容滚动容器（撑满视口，内部滚动；page-container 锁页面滚动锁不到这里） */
+.ld-cart-scroll {
+  height: 100vh;
 }
 
 /* 顶部品牌 logo（含状态栏安全区；位置与首页 hero logo 对齐：left 20 / top sbh+10 / 高 28）。
