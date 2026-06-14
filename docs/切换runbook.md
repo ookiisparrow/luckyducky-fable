@@ -76,5 +76,6 @@ DEPLOY_ALLOWED=1 node scripts/deploy-fns.mjs     # 首跑：manifest 空 → 部
 5. **后台账号体系 v2（产品级，另议）**：现 v1 单口令 + localStorage 是刻意简化（bootstrap 抢占窗口已关，债#15）；升级到 session token / 多账号属账号体系决策，需产品拍板。
 6. **小记债（低优先，审计 P3）**：trackEvent 已加「激活才记进度」防刷，仍可补**事件轻量限流/采样**（防 events 放大）与 segment 存在性校验；小程序 Sass `@import` 渐迁 `@use`（现仅弃用警告，将来 Dart Sass 大版本会失败）。
 7. **观察期**：盯交易异常工作台（adminApi getDashboard 的 feeMismatch/refundMismatch/退款卡单）、云函数日志，确认无回归。
+8. **v0.9 孤儿函数已清**：deploy-fns 逐个覆盖同名、**不删重构里去掉的旧函数**——v0.9 的 `getOpenId`（B4a 删的死代码）部署后残留，2026-06-14 已 `tcb fn delete getOpenId` 清掉、列表核验消失。**今后部署若去掉某函数**：部署后 `tcb fn list` 对一遍、删不在当前函数集里的孤儿（deploy-fns 的 `removed` 提示只基于 `.deploy-manifest.json`，对 manifest 建立前就存在的旧函数无感）。`lowcode-automation` / `lowcode-automation-preview` 是云后台平台自管的、**勿误删**。
 
 > **管理员口令（债#15 已关抢占窗口）**：现网 `adminConfig.auth` 已存在，切换不受影响、照旧用现口令登录。**仅当迁新环境 / 重置口令**时，须先设云环境变量 `ADMIN_BOOTSTRAP_KEY`＝期望口令，再用该口令首登（无此变量则禁止 bootstrap，杜绝抢占）；设定后可移除该变量。
