@@ -1,15 +1,15 @@
-# Lucky Ducky 重构样板房（平行仓）
+# Lucky Ducky（幸运小鸭）— 生产源仓
 
-> ## ⚠️ 本仓身份：重构样板房，不是生产仓
+> ## 本仓身份：生产迭代源（v0.9.1 起）
 >
-> 本仓 = 「**高纬度自动化完全重构**」（用程序哲学与美学重构整个项目）的平行工作仓，从生产仓克隆而来。
+> 本仓 = Lucky Ducky 的**生产源**。经「**高纬度自动化完全重构**」（四主张 T1–T4 + 元模式治理 + round-2 体检）后，2026-06-14 用户拍板 **v0.9.1 转正**：云环境 `cloudbase-d4gcssqbv06865479` 从此从本仓迭代，云函数（`packages/cloud`）+ 前端（`packages/miniapp`/`packages/admin`）生产版均出自本仓。
 >
-> - **生产仓**：`/Users/sparrow/luckyducky-miniprogram`（GitHub `ookiisparrow/luckyducky-miniprogram`）——生产事务只在那边做，本仓任何内容不自动进入生产。
-> - **云环境共用、本仓禁部署**：两仓共用云环境 `cloudbase-d4gcssqbv06865479`。本仓 `scripts/guard-deploy.mjs` 已改为**拦截一切 tcb 部署/发布命令**（deny），永不解除；deploy-fns 类脚本须 `DEPLOY_ALLOWED=1`，本仓永不设置。验证全靠 vitest 内存桩 + H5 回退 + 双端 build。
-> - **8 件控制台正册资产**（git 外，勿动）：微信支付连接器 `wxpay_33nb7su`、支付工作流 `sywxzfapifqzf_nncvqss2`、退款工作流 `kbgzl_n8gojr3a`、paynotify/refundnotify 及其 script1 转发节点——记录见生产仓 `docs/工作日志.md` 2026-06-12 与 `docs/调试日志.md` J；B6 批次把副本正册化进本仓 `console-assets/`。
-> - **总计划与脊柱**：`docs/元模式.md`（治理框架 canonical 定义：痛→守卫→反向自检循环 + 三件套怎么咬合，§A 可移植 / §B 本仓绑定）+ `docs/重构总计划.md`（v4 权威版，批次表挂病根编号）+ `docs/根因账本.md`（十二类病根：病史→本质→根治→绝迹证明——账本未覆盖的不做、覆盖的不漏）。执行纪律：每批一个 squash 提交上本仓 main、`npm run check` 全绿才推进、commit 报净化指标并标注根治病根；批次结论与证据记 `docs/重构日志.md`；生产仓事务随时插队优先。
+> - **旧生产仓退役**：`/Users/sparrow/luckyducky-miniprogram`（GitHub `ookiisparrow/luckyducky-miniprogram`）= 切换前 v0.9 基线，**仅作回滚用、不再迭代**（回滚预案见 `docs/切换runbook.md` §五）。
+> - **部署只能人工、Claude 禁代部署**：部署到生产是 deliberate 的人工动作（`DEPLOY_ALLOWED=1 node scripts/deploy-fns.mjs`，人在终端执行）。`scripts/guard-deploy.mjs` 继续拦截**经 Claude 工具/自动化**发出的一切 tcb 部署（deny）——防 Claude 手滑、防脚本误部署；这条保留。本地验证靠 vitest 内存桩 + H5 回退 + 双端 build，部署前 `npm run check` 全绿 + `node scripts/preflight.mjs`。
+> - **8 件控制台正册资产**（git 外，勿动）：微信支付连接器 `wxpay_33nb7su`、支付工作流 `sywxzfapifqzf_nncvqss2`、退款工作流 `kbgzl_n8gojr3a`、paynotify/refundnotify 及其 script1 转发节点——副本正册在本仓 `console-assets/`。
+> - **治理脊柱**：`docs/元模式.md`（治理框架 canonical：痛→守卫→反向自检循环，§A 可移植 / §B 本仓绑定）+ `docs/根因账本.md`（十二类病根：病史→本质→根治→绝迹证明）+ `docs/切换runbook.md`（切换/回滚）。执行纪律：每批一个 squash 提交上 main、`npm run check` 全绿才推进、commit 报净化指标并标注根治病根；批次结论记 `docs/重构日志.md`。
 >
-> 以下为克隆自生产仓的工程约定，重构过程中随批次演进。
+> 以下为工程约定，随批次演进。
 
 Lucky Ducky（幸运小鸭）：钩织材料包电商 App，uni-app 一份代码发微信小程序 / H5 / App。后端微信云开发（环境 `cloudbase-d4gcssqbv06865479`、AppID `wxcbd2fb68b81bcfb1`）。
 
@@ -106,12 +106,10 @@ src/
 
 ## 8. Git 协作
 
-云端 GitHub 是唯一权威（私有库 `ookiisparrow/luckyducky-miniprogram`），main 是唯一长期分支。**样板房例外**：本仓不走异步 PR，每批一个 squash 提交直接上本仓 main（见脊柱执行纪律）。生产仓仍守下列：
+云端 GitHub 唯一权威（私有库 `ookiisparrow/luckyducky-next`），main 唯一长期分支。**每批一个 squash 提交直接上 main**（生产源仓快速迭代，不走异步 PR）；`npm run check` 全绿才提交（pre-commit 也拦）。部署是独立的人工动作（见身份段），与 git 提交解耦。
 
-1. **任何改动**（哪怕一行文档）都开短命分支，绝不直接改 main。
-2. 一律走 PR；用户在 GitHub 异步合并——**每批独立 PR，确认合并后再开下一批**（不堆叠）。
-3. squash 合并，main 历史一事一行；阶段节点打 tag（如 `v0.1`）。
-4. 分支名 `feature|fix|docs|chore/xxx`；提交信息 `type：中文说明`（全角冒号，type ∈ feat / fix / docs / refactor / chore / test）。
+1. squash 合并，main 历史一事一行；阶段节点打 tag（如 `v0.9.1`）。
+2. 提交信息 `type：中文说明`（全角冒号，type ∈ feat / fix / docs / refactor / chore / test）；需要时开短命分支 `feature|fix|docs|chore/xxx`。
 
 不入库：`dist/`、`node_modules/`、`*.log`、`.DS_Store`、微信工具的 `project*.config.json`。git 名词扫盲与完整教学见 `docs/archive/Git协作约定.md`。
 
@@ -119,7 +117,7 @@ src/
 
 反复出现的多步工作流已固化成可直调 skill；调试/审核/验收别从头来，走对应 skill：
 
-- **改一批（genesis）** `/refactor-batch`：根因 → 先守卫(红) → 改到绿 → `npm run check` → 反向自检 → squash + 记账。样板房任何改动都走它。
+- **改一批（genesis）** `/refactor-batch`：根因 → 先守卫(红) → 改到绿 → `npm run check` → 反向自检 → squash + 记账。本仓任何改动都走它。
 - **调 bug（intake）** `/systematic-debugging`：复现 → 根因 → 修复带守卫 → 归因病根（不命中现有病根则立新病根 + 配守卫）。
 - **体检（health）** `/deep-audit`：P0→P3 逐层验、核每病根有守卫（跑 `guard-coverage`）、分级标状态。
 - **挖 hook（discovery）** `/hook-audit`：扫执行轨迹找该机器化的重复动作（只建议不装）。

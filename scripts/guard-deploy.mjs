@@ -1,14 +1,13 @@
 #!/usr/bin/env node
 /**
- * 部署硬闸——样板房版（Claude Code PreToolUse hook，matcher: Bash）。
+ * 部署硬闸（Claude Code PreToolUse hook，matcher: Bash）。
  *
- * 本仓是重构样板房（平行仓），与生产仓 /Users/sparrow/luckyducky-miniprogram
- * 共用同一云环境 cloudbase-d4gcssqbv06865479。为防误部署污染生产，
- * 本闸拦截**一切** tcb 部署/发布类命令，一律 deny（生产仓的同名闸只拦敏感名单）。
- * 唯一例外（B1 回灌点验证 getProducts）按总计划在生产仓执行，与本仓无关。
+ * 本仓 = 生产源（v0.9.1 起，云环境 cloudbase-d4gcssqbv06865479 从本仓迭代）。
+ * 部署到生产是 deliberate 的人工动作（DEPLOY_ALLOWED=1 deploy-fns，人在终端跑）；
+ * 本闸拦截**经 Claude 工具/自动化**发出的一切 tcb 部署/发布类命令，一律 deny——
+ * 防 Claude 手滑、防脚本误部署到生产（人在自己终端的命令不经本 hook、不受限）。
  *
- * B5 衔接备忘：deploy-fns 脚本落地时要求 DEPLOY_ALLOWED=1 环境变量（本仓永不设置），
- * 敏感名单恢复为单一来源 scripts/sensitive-fns；生产仓现行名单（迁移时核对）：
+ * deploy-fns 要求 DEPLOY_ALLOWED=1（Claude 永不设置，只人工设）；敏感名单（迁移核对）：
  * createOrder / pay / payCallback / applyRefund / refundCallback / closeExpiredOrders /
  * adminApi / genQrcodes / activateCourse / confirmEnter / confirmReceive / submitReview /
  * seedProducts / seedCourses / initDb
