@@ -5,7 +5,7 @@
  * 订单图标用墨色版（truck-ink 与首页信任条的紫灰 truck 区分）。
  */
 export const USER = {
-  name: '蹦蹦跳跳的小鸭',
+  name: 'Lucky friend', // 一键登录新用户默认昵称（可在「编辑资料」改）
   lv: 'Lv.2 幸运钩织者',
   bio: '在学钩织的第 12 天，目标是钩满一窝小鸭~',
 }

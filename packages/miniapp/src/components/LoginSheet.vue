@@ -1,42 +1,27 @@
 <script setup>
 /**
  * 登录半屏弹窗（规格 §四-1 第②段）。软门槛 ensureLogin() 触发时弹出（不跳页）。
- * 背后 App 页面压暗可见；底部 sheet 滑上来：放大 logo + 微信头像昵称授权 + 勾选同意协议 + 微信授权登录。
- * 授权走微信「头像昵称填写能力」（chooseAvatar / type=nickname，条件编译，H5/App 回退相册）；
- * 须勾选同意《用户协议》《隐私政策》才可登录（“微信登录需要用户同意”）；提交走 store/user.js 的 consentLogin。
- * 「暂不登录」/点遮罩/✕ 关闭，继续逛（软门槛，不强制）。各页放一处 <LoginSheet/>，共享 loginSheetVisible。
+ * 微信一键登录：勾选同意《用户协议》《隐私政策》→「微信一键登录」——用静默 openid 身份直接登录，
+ * 登录环节不采集头像昵称（资料可稍后在「编辑资料」页用微信头像昵称能力补）。
+ * 「暂不登录」/点遮罩/✕ 关闭继续逛（软门槛，不强制）。各页放一处 <LoginSheet/>，共享 loginSheetVisible。
  */
 import { ref, watch } from 'vue'
 import Icon from '@/components/Icon.vue'
-import MediaSlot from '@/components/MediaSlot.vue'
 import { useUserStore } from '@/store/user.js'
 import { loginSheetVisible } from '@/composables/useAuthGate.js'
 
 const user = useUserStore()
-const name = ref('')
-const avatar = ref('')
 const agreed = ref(false)
 const submitting = ref(false)
 
-// 每次打开重置（组件常驻、内容 v-if，重开时清空上次输入）
+// 每次打开重置勾选 / 提交态
 watch(loginSheetVisible, (v) => {
   if (v) {
-    name.value = ''
-    avatar.value = ''
     agreed.value = false
     submitting.value = false
   }
 })
 
-function onChooseAvatar(e) {
-  avatar.value = (e.detail && e.detail.avatarUrl) || avatar.value
-}
-function pickAvatar() {
-  uni.chooseImage({
-    count: 1,
-    success: (res) => (avatar.value = res.tempFilePaths && res.tempFilePaths[0]),
-  })
-}
 function toggleAgree() {
   agreed.value = !agreed.value
 }
@@ -53,13 +38,10 @@ async function doLogin() {
     return
   }
   submitting.value = true
-  const synced = await user.consentLogin({
-    name: name.value.trim() || undefined,
-    avatar: avatar.value || undefined,
-  })
+  await user.consentLogin()
   submitting.value = false
   close()
-  uni.showToast({ title: synced ? '登录成功' : '已登录，资料稍后同步', icon: 'none' })
+  uni.showToast({ title: '登录成功', icon: 'none' })
 }
 </script>
 
@@ -73,37 +55,6 @@ async function doLogin() {
         <image class="ls-logo" src="/static/logo-wordmark.svg" mode="heightFix" />
       </view>
 
-      <view class="ls-id">
-        <!-- #ifdef MP-WEIXIN -->
-        <button class="ls-avatar-btn" open-type="chooseAvatar" @chooseavatar="onChooseAvatar">
-          <view class="ls-avatar">
-            <MediaSlot ratio="1/1" :radius="28" :src="avatar" />
-            <view class="ls-cam"><Icon name="camera" :size="11" /></view>
-          </view>
-        </button>
-        <!-- #endif -->
-        <!-- #ifndef MP-WEIXIN -->
-        <view class="ls-avatar" @tap="pickAvatar">
-          <MediaSlot ratio="1/1" :radius="28" :src="avatar" />
-          <view class="ls-cam"><Icon name="camera" :size="11" /></view>
-        </view>
-        <!-- #endif -->
-        <view class="ls-nick">
-          <!-- #ifdef MP-WEIXIN -->
-          <input
-            v-model="name"
-            type="nickname"
-            class="ls-input"
-            maxlength="20"
-            placeholder="点这里一键填入微信昵称"
-          />
-          <!-- #endif -->
-          <!-- #ifndef MP-WEIXIN -->
-          <input v-model="name" class="ls-input" maxlength="20" placeholder="给自己起个名字" />
-          <!-- #endif -->
-        </view>
-      </view>
-
       <view class="ls-foot">
         <view class="ls-agree" @tap="toggleAgree">
           <view class="ls-check" :class="{ on: agreed }">
@@ -115,7 +66,7 @@ async function doLogin() {
           </text>
         </view>
         <view class="ls-btn" :class="{ disabled: !agreed || submitting }" @tap="doLogin">
-          {{ submitting ? '登录中…' : '微信授权登录' }}
+          {{ submitting ? '登录中…' : '微信一键登录' }}
         </view>
         <text class="ls-skip" @tap="close">暂不登录</text>
       </view>
@@ -180,61 +131,13 @@ async function doLogin() {
 .ls-head {
   display: flex;
   justify-content: center;
-  margin: 26px 0 24px;
+  margin: 30px 0 28px;
 }
 .ls-logo {
   height: 40px;
 }
-.ls-id {
-  display: flex;
-  align-items: center;
-}
-/* 头像（小程序端外层原生 button，样式归零，只当点击热区） */
-.ls-avatar-btn {
-  padding: 0;
-  margin: 0;
-  border: none;
-  background: transparent;
-  line-height: 1;
-  border-radius: 0;
-  width: auto;
-}
-.ls-avatar-btn::after {
-  border: none;
-}
-.ls-avatar {
-  position: relative;
-  width: 56px;
-  height: 56px;
-  flex: 0 0 auto;
-}
-.ls-cam {
-  position: absolute;
-  right: -2px;
-  bottom: -2px;
-  width: 22px;
-  height: 22px;
-  border-radius: 50%;
-  background: $purple;
-  border: 2px solid $white;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: $white;
-}
-.ls-nick {
-  flex: 1 1 auto;
-  margin-left: 16px;
-}
-.ls-input {
-  width: 100%;
-  height: 44px;
-  font-size: 15px;
-  color: $content;
-  border-bottom: 1px solid $line;
-}
 .ls-foot {
-  padding-top: 22px;
+  padding-top: 0;
 }
 .ls-agree {
   display: flex;

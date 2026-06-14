@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest'
 import { setActivePinia, createPinia } from 'pinia'
 import { useUserStore } from '@/store/user.js'
 import { USER } from '@/data/profile.js'
+import { DEFAULT_AVATARS } from '@/data/avatars.js'
 
 // 不挂 persist 插件，纯测 store 逻辑。
 // 云调用统一 mock globalThis.wx（callCloud / uploadCloudFile 都有 typeof wx 守卫，
@@ -128,8 +129,8 @@ describe('user store · 保存资料（saveProfile）', () => {
   })
 })
 
-describe('user store · 显式同意登录（consentLogin）', () => {
-  it('小程序端：置登录态（isLogin 转真）并把授权的头像昵称推云端', async () => {
+describe('user store · 微信一键登录（consentLogin，不采集头像昵称）', () => {
+  it('小程序端：置登录态（isLogin 转真），不调 updateProfile 推资料', async () => {
     const calls = []
     globalThis.wx = {
       cloud: {
@@ -144,36 +145,65 @@ describe('user store · 显式同意登录（consentLogin）', () => {
     }
     const store = useUserStore()
     expect(store.isLogin).toBe(false)
-    const ok = await store.consentLogin({ name: '小鸭', avatar: 'cloud://env.x/a.png' })
+    const ok = await store.consentLogin()
     expect(ok).toBe(true)
     expect(store.isLogin).toBe(true) // token 置位
     expect(store.openid).toBe('oTEST') // 静默身份已就绪
-    expect(calls[0].name).toBe('updateProfile')
-    expect(calls[0].data.nickname).toBe('小鸭')
-    expect(calls[0].data.avatar).toBe('cloud://env.x/a.png')
+    expect(calls).toEqual([]) // 登录环节不采集 / 不推头像昵称
   })
 
-  it('H5 / App 端（无 wx）：仍置登录态、纯本地保存、返回 true', async () => {
+  it('H5 / App 端（无 wx）：仍置登录态、返回 true', async () => {
     const store = useUserStore()
-    const ok = await store.consentLogin({ name: '本机鸭' })
+    const ok = await store.consentLogin()
     expect(ok).toBe(true)
     expect(store.isLogin).toBe(true)
-    expect(store.profile.name).toBe('本机鸭')
   })
 
   it('已有 openid：不再重复静默 login', async () => {
     const names = []
     globalThis.wx = {
       cloud: {
-        callFunction: async ({ name, data }) => {
+        callFunction: async ({ name }) => {
           names.push(name)
-          return { result: { ok: true, user: { _openid: 'oTEST', ...data } } }
+          return { result: { ok: true, user: { _openid: 'oTEST' } } }
         },
       },
     }
     const store = useUserStore()
     store.openid = 'oTEST'
-    await store.consentLogin({ name: '小鸭', avatar: 'cloud://env.x/a.png' })
+    await store.consentLogin()
     expect(names).not.toContain('login')
+  })
+
+  it('新用户（无头像）：从头像库随机分配头像 + 默认昵称 Lucky friend', async () => {
+    const store = useUserStore()
+    expect(store.profile.avatar).toBe('') // 初始无头像
+    await store.consentLogin()
+    expect(DEFAULT_AVATARS).toContain(store.profile.avatar) // 随机分配的在 4 个库里
+    expect(store.profile.name).toBe('Lucky friend') // 默认昵称
+  })
+
+  it('已有头像：consentLogin 不覆盖（保留用户/云端头像）', async () => {
+    const store = useUserStore()
+    store.profile = { ...store.profile, avatar: 'cloud://mine.png' }
+    await store.consentLogin()
+    expect(store.profile.avatar).toBe('cloud://mine.png')
+  })
+})
+
+describe('user store · 退出登录（logout）', () => {
+  it('清空登录态（token/openid/cloudUser）+ 重置资料为默认，isLogin 转 false', () => {
+    const store = useUserStore()
+    store.token = 'oX'
+    store.openid = 'oX'
+    store.cloudUser = { _openid: 'oX', nickname: '云鸭' }
+    store.profile = { name: '云鸭', lv: 'Lv.9', bio: 'hi', avatar: 'cloud://x' }
+    expect(store.isLogin).toBe(true)
+    store.logout()
+    expect(store.isLogin).toBe(false)
+    expect(store.token).toBe('')
+    expect(store.openid).toBe('')
+    expect(store.cloudUser).toBe(null)
+    expect(store.profile.name).toBe(USER.name) // 回默认样例
   })
 })

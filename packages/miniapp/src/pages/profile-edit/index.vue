@@ -50,6 +50,20 @@ async function save() {
   uni.showToast({ title: synced ? '资料已保存' : '已存本机，云端同步失败', icon: 'none' })
   later(back, 300)
 }
+// 退出登录：二次确认 → 清登录态（store.logout）→ 回「我」页（此时显示「点击登录」）
+function onLogout() {
+  uni.showModal({
+    title: '退出登录',
+    content: '退出后需重新登录才能下单 / 看课',
+    confirmText: '退出',
+    success: (res) => {
+      if (!res.confirm) return
+      user.logout()
+      uni.showToast({ title: '已退出登录', icon: 'none' })
+      later(back, 300)
+    },
+  })
+}
 </script>
 
 <template>
@@ -101,11 +115,15 @@ async function save() {
         </view>
       </view>
       <!-- #ifdef MP-WEIXIN -->
-      <text class="coprof-tip">点击头像可直接用微信头像；点昵称输入框，键盘上方可一键填入微信昵称</text>
+      <text class="coprof-tip"
+        >点击头像可直接用微信头像；点昵称输入框，键盘上方可一键填入微信昵称</text
+      >
       <!-- #endif -->
       <!-- #ifndef MP-WEIXIN -->
       <text class="coprof-tip">点击头像，从相册上传一张照片作为形象</text>
       <!-- #endif -->
+
+      <view class="coprof-logout" @tap="onLogout">退出登录</view>
     </view>
 
     <view class="co-foot"></view>
@@ -158,5 +176,19 @@ async function save() {
   color: $purple-meta;
   line-height: 1.6;
   margin: 16px 16px 4px;
+}
+.coprof-logout {
+  margin: 28px 16px 0;
+  height: 48px;
+  border-radius: $r-lg;
+  background: $white;
+  color: $red;
+  font-size: 15px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.coprof-logout:active {
+  background: $bg-grey;
 }
 </style>

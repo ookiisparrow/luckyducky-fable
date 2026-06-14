@@ -8,6 +8,7 @@
  */
 import { defineStore } from 'pinia'
 import { USER } from '@/data/profile.js'
+import { randomAvatar } from '@/data/avatars.js'
 import { updateProfile as apiUpdateProfile } from '@/api/user.js'
 import { uploadCloudFile } from '@/utils/cloud.js'
 import logger from '@/utils/logger.js'
@@ -102,23 +103,26 @@ export const useUserStore = defineStore('user', {
         return false
       }
     },
-    // 显式同意登录：登录页里用户授权头像昵称 + 勾选同意协议后调用（规格 §四-1 第②段）。
-    // 静默 openid 已是身份（App.onLaunch 已 login，无则此处再静默拿一次）；置持久化登录标记
-    // token（isLogin 转真、跨会话不再追问）+ 把授权的头像昵称推云端 users（复用 saveProfile）。
-    // openid 为空的 H5 / App 端用占位标记 'wx'，纯本地登录。返回云端是否同步成功。
-    async consentLogin({ name, avatar } = {}) {
+    // 微信一键登录：用户勾选同意协议后调用（规格 §四-1 第②段）。静默 openid 已是身份
+    // （App.onLaunch 已 login，无则此处再静默拿一次）；只置持久化登录标记 token（isLogin 转真、
+    // 跨会话不再追问），**登录环节不采集头像昵称**——资料可稍后在「编辑资料」页用微信头像昵称能力补。
+    // openid 为空的 H5 / App 端用占位标记 'wx'，纯本地登录。返回 true 表示登录态已建立。
+    async consentLogin() {
       // #ifdef MP-WEIXIN
       if (!this.openid) await this.login()
       // #endif
       this.token = this.openid || 'wx'
-      return this.saveProfile({
-        name: (name ?? this.profile.name) || '',
-        avatar: avatar ?? this.profile.avatar,
-        bio: this.profile.bio,
-      })
+      // 新用户（还没有头像）→ 从头像库随机分配一个（默认昵称 Lucky friend 已在 defaultProfile）
+      if (!this.profile.avatar) this.profile = { ...this.profile, avatar: randomAvatar() }
+      return true
     },
+    // 退出登录：清持久登录标记 + 内存身份（openid/cloudUser）+ 资料回默认样例。
+    // openid 下次冷启动静默 login 会重拿；token 持久化为空 → isLogin 跨会话保持登出，
+    // 直到用户重新在登录弹窗显式同意。
     logout() {
       this.token = ''
+      this.openid = ''
+      this.cloudUser = null
       this.profile = defaultProfile()
     },
   },

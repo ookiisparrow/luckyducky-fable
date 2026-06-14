@@ -4,7 +4,7 @@
  * 组合各区块组件，并实现：点「购买」滚动定位并高亮、点搜索滚到品牌介绍、
  * 加入弹 Toast、滚动过半显示回到顶部。
  */
-import { ref, getCurrentInstance } from 'vue'
+import { ref, watch, getCurrentInstance } from 'vue'
 import { onPageScroll } from '@dcloudio/uni-app'
 
 // 首页专用区块组件就近放在 ./components/（CLAUDE.md §9：页内自用组件归 pages/<page>/components/）
@@ -22,12 +22,15 @@ import TabBar from '@/components/TabBar.vue'
 import Toast from '@/components/Toast.vue'
 import BackTop from '@/components/BackTop.vue'
 import LoadingSplash from '@/components/LoadingSplash.vue'
+import LoginSheet from '@/components/LoginSheet.vue'
 import { useTimers } from '@/composables/useTimers.js'
 import { splashActive } from '@/composables/useSplash.js'
+import { loginSheetVisible } from '@/composables/useAuthGate.js'
 
 // section 组件是纯展示（技术债 #4），数据在页面收口；将来换云端来源只改这里
 import { useContentStore } from '@/store/content.js'
 import { useProductsStore } from '@/store/products.js'
+import { useUserStore } from '@/store/user.js'
 import { REASSURE_ITEMS } from '@/data/reassure.js'
 import { REVIEWS } from '@/data/reviews.js'
 
@@ -37,6 +40,11 @@ const content = useContentStore()
 content.load()
 // 启动开屏遮罩据 products.loaded 提前淡出（products.load 在 App.onLaunch 触发）
 const products = useProductsStore()
+// 加载页淡出后：未登录则自动弹登录弹窗（仍可「暂不登录」关掉继续逛，软门槛不变）
+const user = useUserStore()
+watch(splashActive, (active) => {
+  if (!active && !user.isLogin) loginSheetVisible.value = true
+})
 const instance = getCurrentInstance()
 const windowHeight = uni.getSystemInfoSync().windowHeight
 
@@ -141,6 +149,7 @@ function onReviewsMore() {
     <BackTop v-if="showTop" @tap="backToTop" />
     <Toast :show="toast.show" :text="toast.text" />
     <TabBar active="home" />
+    <LoginSheet />
     <LoadingSplash v-if="splashActive" :ready="products.loaded" />
   </view>
 </template>
