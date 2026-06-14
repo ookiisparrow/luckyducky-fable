@@ -23,6 +23,7 @@ import { useUserStore } from '@/store/user.js'
 import { useOrdersStore } from '@/store/orders.js'
 import { useCoursesStore } from '@/store/courses.js'
 import { useProgressStore } from '@/store/progress.js'
+import { useActivationStore } from '@/store/activation.js'
 import { STORAGE_KEYS } from '@/constants/storage.js'
 import { mmss } from '@/utils/format.js'
 import { ensureLogin } from '@/composables/useAuthGate.js'
@@ -31,6 +32,7 @@ const user = useUserStore()
 const orders = useOrdersStore()
 const courses = useCoursesStore()
 const progress = useProgressStore()
+const act = useActivationStore()
 
 // 角标 = 各状态真实订单数（只标可办理的三态，已完成/售后不标）
 const BADGE_STATUS = { pending: 'pending', toship: 'paid', toreceive: 'shipped' }
@@ -40,8 +42,11 @@ const orderTabs = computed(() =>
 onShow(() => {
   orders.load()
   courses.load()
+  act.loadMine() // 我的已激活课程：判断「未激活」空态
   progress.load(true) // 强刷：刚看完一段回到「我」页，继续学习卡立即更新
 })
+// 未激活任何课程（act 已加载且我的课程为空）→ 继续学习卡显示空态
+const noCourse = computed(() => act.loaded && act.mine.length === 0)
 
 // 继续学习卡：云端最近观看点定位课时与章节；无云 / 无记录回退样例 V
 const cont = computed(() => {
@@ -75,6 +80,10 @@ function allCourses() {
   // 首次进视频课先看欢迎引导，之后直达目录（浏览目录不挡，进具体课时再验登录）
   const seen = uni.getStorageSync(STORAGE_KEYS.VIDEO_INTRO_SEEN)
   uni.navigateTo({ url: seen ? '/pages/catalog/index' : '/pages/welcome/index' })
+}
+// 未激活空态：去逛逛买材料包（扫码激活后才有课程）
+function goShop() {
+  uni.reLaunch({ url: '/pages/index/index' })
 }
 function onOrder(key) {
   if (!ensureLogin()) return // 我的订单 = 个人数据，需登录
@@ -122,7 +131,15 @@ function goLogin() {
           </view>
         </view>
 
-        <ContinueVideo :v="cont" @watch="continueWatch" />
+        <ContinueVideo v-if="!noCourse" :v="cont" @watch="continueWatch" />
+        <view v-else class="my-course-empty">
+          <view class="my-course-empty-ico"><Icon name="graduation-cap" :size="26" /></view>
+          <text class="my-course-empty-title">还没有课程</text>
+          <text class="my-course-empty-sub">购买材料包、扫码激活后即可开始视频跟学</text>
+          <view class="my-course-empty-btn" @tap="goShop">
+            <text>去逛逛</text><Icon name="chevron-right" :size="15" />
+          </view>
+        </view>
       </view>
 
       <!-- 我的订单 -->
@@ -238,5 +255,49 @@ function goLogin() {
 }
 .my-row-chev {
   display: flex;
+}
+
+/* 继续学习 · 未激活课程空态 */
+.my-course-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  padding: 18px 16px 8px;
+}
+.my-course-empty-ico {
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  background: $bg-lilac;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.my-course-empty-title {
+  font-size: 16px;
+  font-weight: 600;
+  color: $ink;
+  margin-top: 14px;
+}
+.my-course-empty-sub {
+  font-size: 13px;
+  line-height: 1.6;
+  color: $purple-meta;
+  margin-top: 8px;
+}
+.my-course-empty-btn {
+  display: flex;
+  align-items: center;
+  margin-top: 16px;
+  background: $purple-ink;
+  color: $white;
+  border-radius: $r-pill;
+  font-size: 14px;
+  font-weight: 600;
+  padding: 9px 14px 9px 18px;
+}
+.my-course-empty-btn:active {
+  opacity: 0.94;
 }
 </style>
