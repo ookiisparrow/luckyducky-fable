@@ -258,6 +258,30 @@ export const repoChecks = [
     },
   },
   {
+    id: 'deploy-config-complete',
+    roots: ['#8'],
+    desc: '部署配置完整（根因#8 dry-run 过≠真部署能用）：cloudbaserc.json functions 须与 packages/cloud/src/functions/<域>/ 实际函数一一对应——漏配置真部署会卡交互确认（login 漏配即此坑，2026-06-14 真切换暴露）',
+    run() {
+      const rc = join(ROOT, 'cloudbaserc.json')
+      const fnRoot = join(ROOT, 'packages/cloud/src/functions')
+      if (!existsSync(rc) || !existsSync(fnRoot)) return []
+      const configured = new Set((JSON.parse(readFileSync(rc, 'utf8')).functions || []).map((f) => f.name))
+      const actual = []
+      for (const domain of readdirSync(fnRoot)) {
+        const dp = join(fnRoot, domain)
+        if (!statSync(dp).isDirectory()) continue
+        for (const e of readdirSync(dp)) {
+          const name = statSync(join(dp, e)).isDirectory() ? e : e.endsWith('.ts') ? e.slice(0, -3) : null
+          if (name) actual.push(name)
+        }
+      }
+      const bad = []
+      for (const name of actual) if (!configured.has(name)) bad.push(`云函数 ${name} 缺 cloudbaserc.json 配置——真部署会卡交互确认（根因#8）`)
+      for (const name of configured) if (!actual.includes(name)) bad.push(`cloudbaserc.json 配了不存在的函数 ${name}——孤儿配置`)
+      return bad
+    },
+  },
+  {
     id: 'deploy-deny-all',
     roots: ['铁律'],
     desc: '样板房禁部署：guard-deploy 须对一切 tcb 部署/发布返回 deny（与生产仓只拦敏感名单不同）',

@@ -171,6 +171,12 @@
       "timeout": 10,
       "handler": "index.main",
       "installDependency": true
+    },
+    {
+      "name": "login",
+      "timeout": 10,
+      "handler": "index.main",
+      "installDependency": true
     }
   ]
 }
