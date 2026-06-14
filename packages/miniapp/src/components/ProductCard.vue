@@ -64,16 +64,25 @@ const emit = defineEmits(['open', 'add'])
   padding: 11px 14px 14px;
 }
 .ld-prod-name {
-  display: block;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
   font-size: 16px;
   color: $ink;
   line-height: 1.35;
+  min-height: 2.7em; /* 固定 2 行高，名称长短不影响卡片高度（横滑卡等高） */
 }
 .ld-prod-tag {
   display: block;
   font-size: 14px;
+  line-height: 1.3;
+  min-height: 1.3em; /* 无 tag 也占 1 行，卡片等高 */
   color: $content-2;
   margin-top: 4px;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
 }
 .ld-prod-foot {
   display: flex;

@@ -36,7 +36,6 @@ function go(tab, active) {
         <text class="ld-tab-label">{{ tab.label }}</text>
       </view>
     </view>
-    <view class="ld-home-indicator"></view>
   </view>
 </template>
 
@@ -81,12 +80,5 @@ function go(tab, active) {
 }
 .ld-tab.active .ld-tab-label {
   color: $purple-tab;
-}
-.ld-home-indicator {
-  height: 5px;
-  width: 134px;
-  background: #1c1c20;
-  border-radius: 99px;
-  margin: 4px auto 8px;
 }
 </style>

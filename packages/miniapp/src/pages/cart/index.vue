@@ -57,7 +57,7 @@ function onCheckout() {
 <template>
   <view class="ld-cart">
     <view class="ld-cart-top" :style="topStyle">
-      <text class="ld-cart-top-title">购物车</text>
+      <image class="ld-cart-logo" src="/static/logo-wordmark.svg" mode="heightFix" />
     </view>
 
     <!-- 空车 -->
@@ -72,7 +72,11 @@ function onCheckout() {
     <!-- 有货：条目列表 -->
     <view v-else class="ld-cart-list">
       <view v-for="it in cart.items" :key="it.id + '|' + (it.sku || '')" class="ld-cart-item">
-        <view class="ld-cart-check" :class="{ on: it.selected }" @tap="cart.toggle(it.id, it.sku || '')">
+        <view
+          class="ld-cart-check"
+          :class="{ on: it.selected }"
+          @tap="cart.toggle(it.id, it.sku || '')"
+        >
           <Icon v-if="it.selected" name="check" :size="13" />
         </view>
         <view class="ld-cart-item-img"><MediaSlot ratio="1/1" :radius="9" /></view>
@@ -144,20 +148,18 @@ function onCheckout() {
   font-family: $font-cn;
 }
 
-/* 顶部标题（含状态栏安全区） */
+/* 顶部品牌 logo（含状态栏安全区；位置与首页 hero logo 对齐：left 20 / top sbh+10 / 高 28） */
 .ld-cart-top {
   /* #ifdef MP-WEIXIN */
-  padding: calc(14px + var(--sbh, 0px)) 20px 8px;
+  padding: calc(10px + var(--sbh, 0px)) 20px 8px;
   /* #endif */
   /* #ifndef MP-WEIXIN */
-  padding: calc(14px + env(safe-area-inset-top)) 20px 8px;
+  padding: calc(10px + env(safe-area-inset-top)) 20px 8px;
   /* #endif */
 }
-.ld-cart-top-title {
-  font-family: $font-display;
-  font-weight: 700;
-  font-size: 22px;
-  color: $ink;
+.ld-cart-logo {
+  display: block;
+  height: 28px;
 }
 
 /* ---------- 空车 ---------- */

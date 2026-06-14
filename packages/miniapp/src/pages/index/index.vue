@@ -47,6 +47,7 @@ watch(splashActive, (active) => {
 })
 const instance = getCurrentInstance()
 const windowHeight = uni.getSystemInfoSync().windowHeight
+const featureRef = ref(null) // 商品区组件实例（购买按钮调它滚到商品卡）
 
 // ---- 滚动状态：回到顶部按钮 ----
 const scrollTop = ref(0)
@@ -99,7 +100,7 @@ function flashProduct(id) {
 
 // ---- 事件处理 ----
 function onHeroBuy() {
-  scrollToAnchor('anchor-products', 80)
+  featureRef.value?.scrollToProducts(scrollTop.value) // 滚到商品卡完全可见
   flashProduct('prod-2')
 }
 function onExplore() {
@@ -114,10 +115,6 @@ function onProductAdd(p) {
 }
 function onClosingBuy() {
   ping('Get Ducky Get Lucky')
-}
-function onReviewsMore() {
-  // 「全部买家秀」复用「全部评价」页（reviews 是不带参数的静态评价列表）
-  uni.navigateTo({ url: '/pages/reviews/index' })
 }
 </script>
 
@@ -135,12 +132,17 @@ function onReviewsMore() {
     </view>
 
     <view id="anchor-products">
-      <FeatureProducts :flash-id="flashId" @open="onProductOpen" @add="onProductAdd" />
+      <FeatureProducts
+        ref="featureRef"
+        :flash-id="flashId"
+        @open="onProductOpen"
+        @add="onProductAdd"
+      />
     </view>
 
     <TrustStrip :items="content.trust" />
     <Reassurance :items="REASSURE_ITEMS" />
-    <Reviews :reviews="REVIEWS" @more="onReviewsMore" />
+    <Reviews :reviews="REVIEWS" />
     <FAQ :items="content.faq" />
     <ClosingCTA @buy="onClosingBuy" />
     <SiteFooter />

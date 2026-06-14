@@ -51,10 +51,14 @@ defineProps({
   letter-spacing: 2px;
 }
 .ld-review-quote {
-  display: block;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
   font-size: 13.5px;
   color: $ink;
   line-height: 1.6;
+  min-height: 3.2em; /* 固定 2 行高，文案长短不影响卡片高度（横滑等高） */
   margin: 8px 0 12px;
 }
 .ld-review-meta {

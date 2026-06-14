@@ -6,15 +6,10 @@
 import ReviewCard from '@/components/ReviewCard.vue'
 
 defineProps({ reviews: { type: Array, default: () => [] } })
-const emit = defineEmits(['more'])
 </script>
 
 <template>
   <view class="ld-reviews">
-    <view class="ld-reviews-head">
-      <text class="ld-h2">真实买家秀</text>
-      <text class="ld-reviews-more" @tap="emit('more')">全部 ›</text>
-    </view>
     <scroll-view scroll-x class="ld-rail" :show-scrollbar="false">
       <ReviewCard v-for="r in reviews" :key="r.id" :review="r" />
       <view class="ld-rail-end"></view>
@@ -25,20 +20,7 @@ const emit = defineEmits(['more'])
 <style lang="scss" scoped>
 .ld-reviews {
   background: $bg-grey;
-  padding: 28px 0;
-}
-.ld-reviews-head {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  padding: 0 $pad-page 18px;
-}
-.ld-h2 {
-  @include ld-h2;
-}
-.ld-reviews-more {
-  font-size: 13px;
-  color: $purple;
+  padding: 28px 0; /* 上下对称：上 28+4 / 下 4+28（rail 自带 4） */
 }
 .ld-rail {
   white-space: nowrap;
