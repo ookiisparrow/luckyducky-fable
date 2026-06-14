@@ -376,8 +376,9 @@ function onCheckout() {
 }
 .ld-checkbar {
   position: fixed;
-  left: 16px;
-  right: 16px;
+  /* 左右边与 TabBar 药丸对齐（TabBar wrap padding 0 28px） */
+  left: 28px;
+  right: 28px;
   bottom: calc(84px + env(safe-area-inset-bottom));
   z-index: 31;
   display: flex;
