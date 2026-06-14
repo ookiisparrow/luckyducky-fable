@@ -19,6 +19,7 @@
  * 自证（B1 验收项 + 每批反向自检纪律）：篡改任一已通过不变量 → 本检查必红。
  */
 import { readFileSync, readdirSync, statSync, existsSync } from 'node:fs'
+import { execSync } from 'node:child_process'
 import { join, resolve, relative } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { RULES as conventionRules } from './check-conventions.mjs'
@@ -282,16 +283,33 @@ export const repoChecks = [
     },
   },
   {
-    id: 'deploy-deny-all',
+    id: 'deploy-gated',
     roots: ['铁律'],
-    desc: '样板房禁部署：guard-deploy 须对一切 tcb 部署/发布返回 deny（与生产仓只拦敏感名单不同）',
+    desc: '生产部署闸（接管 tcb，用户拍板 A）：**实跑** guard-deploy 断言行为——敏感函数/批量部署→ask 二次确认、读类/单个非敏感→放行、提交信息字样不误拦。行为偏离即红（grep 易被注释蒙混，故跑真行为）',
     run() {
       const abs = join(ROOT, 'scripts/guard-deploy.mjs')
-      if (!existsSync(abs)) return ['scripts/guard-deploy.mjs 不存在（禁部署硬闸缺失）']
-      const src = readFileSync(abs, 'utf8')
-      return /permissionDecision:\s*'deny'/.test(src) && /isMutating/.test(src)
-        ? []
-        : ["guard-deploy.mjs 缺 deny-all 机制——样板房禁部署硬闸被削弱"]
+      if (!existsSync(abs)) return ['scripts/guard-deploy.mjs 不存在（部署闸缺失）']
+      const decide = (command) => {
+        try {
+          const out = execSync(`node ${abs}`, { input: JSON.stringify({ tool_input: { command } }), encoding: 'utf8' })
+          return /"ask"/.test(out) ? 'ask' : 'allow'
+        } catch {
+          return 'error'
+        }
+      }
+      const cases = [
+        ['tcb fn deploy createOrder', 'ask'], // 敏感函数 → 确认
+        ['tcb fn deploy getProducts', 'allow'], // 单个非敏感读函数 → 放行
+        ['tcb fn invoke getProducts', 'allow'], // 读类 → 放行
+        ['git commit -m chore-tcb-deploy-fns', 'allow'], // 提交信息提字样 → 不拦
+        ['DEPLOY_ALLOWED=1 node scripts/deploy-fns.mjs', 'ask'], // 批量部署 → 确认
+      ]
+      const bad = []
+      for (const [cmd, want] of cases) {
+        const got = decide(cmd)
+        if (got !== want) bad.push(`guard-deploy「${cmd}」期望 ${want}、实际 ${got}——生产部署闸行为偏离（接管 tcb 安全线）`)
+      }
+      return bad
     },
   },
   {
