@@ -62,9 +62,10 @@ const topStyle = { '--sbh': getSystemBar().statusBarHeight + 'px' }
     rgba(255, 255, 255, 0.9)
   );
 }
-/* 左上角品牌字标（hero 顶部为浅色，用深色 wordmark） */
+/* 左上角品牌字标，固定常驻（滚动时不动；各区均浅底，用深色 wordmark）。
+   z-index 50：盖住滚动内容与 TabBar(30)，但在登录弹窗(200)/加载页(300)之下。 */
 .ld-hero-logo {
-  position: absolute;
+  position: fixed;
   left: 20px;
   /* #ifdef MP-WEIXIN */
   top: calc(var(--sbh, 20px) + 10px);
@@ -73,7 +74,7 @@ const topStyle = { '--sbh': getSystemBar().statusBarHeight + 'px' }
   top: calc(env(safe-area-inset-top) + 10px);
   /* #endif */
   height: 28px;
-  z-index: 5;
+  z-index: 50;
 }
 .ld-hero-copy {
   position: absolute;

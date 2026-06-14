@@ -148,8 +148,13 @@ function onCheckout() {
   font-family: $font-cn;
 }
 
-/* 顶部品牌 logo（含状态栏安全区；位置与首页 hero logo 对齐：left 20 / top sbh+10 / 高 28） */
+/* 顶部品牌 logo（含状态栏安全区；位置与首页 hero logo 对齐：left 20 / top sbh+10 / 高 28）。
+   白底顶栏吸顶固定（滚动时不动）。 */
 .ld-cart-top {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  background: $white;
   /* #ifdef MP-WEIXIN */
   padding: calc(10px + var(--sbh, 0px)) 20px 8px;
   /* #endif */

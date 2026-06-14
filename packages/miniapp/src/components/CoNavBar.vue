@@ -28,7 +28,9 @@ const navStyle = getSystemBarVars()
         <view class="co-nav-btn" @tap="emit('close')"><Icon name="x-ink" :size="22" /></view>
       </template>
       <template v-else>
-        <view class="co-nav-btn" @tap="emit('back')"><Icon name="chevron-left-ink" :size="22" /></view>
+        <view class="co-nav-btn" @tap="emit('back')"
+          ><Icon name="chevron-left-ink" :size="22"
+        /></view>
         <text class="co-nav-title">{{ title }}</text>
         <view class="co-nav-spacer"></view>
       </template>
@@ -40,6 +42,10 @@ const navStyle = getSystemBarVars()
 .co-header {
   background: $white;
   border-bottom: 0.5px solid $line;
+  /* 白底顶栏吸顶固定（滚动时不动）；sticky 不需内容偏移，不支持的端自动退回随页滚 */
+  position: sticky;
+  top: 0;
+  z-index: 20;
   /* 顶部留白 = 状态栏高度：小程序用动态值（含安卓），H5/App 用安全区兜底 */
   /* #ifdef MP-WEIXIN */
   padding-top: var(--sbh, 0px);
