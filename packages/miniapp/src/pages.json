@@ -115,6 +115,13 @@
         "navigationBarTitleText": "课程目录",
         "navigationStyle": "custom"
       }
+    },
+    {
+      "path": "pages/agreement/index",
+      "style": {
+        "navigationBarTitleText": "协议",
+        "navigationStyle": "custom"
+      }
     }
   ],
   "globalStyle": {

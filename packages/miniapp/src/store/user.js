@@ -102,6 +102,21 @@ export const useUserStore = defineStore('user', {
         return false
       }
     },
+    // 显式同意登录：登录页里用户授权头像昵称 + 勾选同意协议后调用（规格 §四-1 第②段）。
+    // 静默 openid 已是身份（App.onLaunch 已 login，无则此处再静默拿一次）；置持久化登录标记
+    // token（isLogin 转真、跨会话不再追问）+ 把授权的头像昵称推云端 users（复用 saveProfile）。
+    // openid 为空的 H5 / App 端用占位标记 'wx'，纯本地登录。返回云端是否同步成功。
+    async consentLogin({ name, avatar } = {}) {
+      // #ifdef MP-WEIXIN
+      if (!this.openid) await this.login()
+      // #endif
+      this.token = this.openid || 'wx'
+      return this.saveProfile({
+        name: (name ?? this.profile.name) || '',
+        avatar: avatar ?? this.profile.avatar,
+        bio: this.profile.bio,
+      })
+    },
     logout() {
       this.token = ''
       this.profile = defaultProfile()

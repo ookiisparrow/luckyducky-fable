@@ -127,3 +127,53 @@ describe('user store · 保存资料（saveProfile）', () => {
     expect(store.profile.name).toBe('小鸭')
   })
 })
+
+describe('user store · 显式同意登录（consentLogin）', () => {
+  it('小程序端：置登录态（isLogin 转真）并把授权的头像昵称推云端', async () => {
+    const calls = []
+    globalThis.wx = {
+      cloud: {
+        callFunction: async ({ name, data }) => {
+          if (name === 'login') {
+            return { result: { ok: true, user: { _openid: 'oTEST', nickname: '', avatar: '', bio: '' } } }
+          }
+          calls.push({ name, data })
+          return { result: { ok: true, user: { _openid: 'oTEST', ...data } } }
+        },
+      },
+    }
+    const store = useUserStore()
+    expect(store.isLogin).toBe(false)
+    const ok = await store.consentLogin({ name: '小鸭', avatar: 'cloud://env.x/a.png' })
+    expect(ok).toBe(true)
+    expect(store.isLogin).toBe(true) // token 置位
+    expect(store.openid).toBe('oTEST') // 静默身份已就绪
+    expect(calls[0].name).toBe('updateProfile')
+    expect(calls[0].data.nickname).toBe('小鸭')
+    expect(calls[0].data.avatar).toBe('cloud://env.x/a.png')
+  })
+
+  it('H5 / App 端（无 wx）：仍置登录态、纯本地保存、返回 true', async () => {
+    const store = useUserStore()
+    const ok = await store.consentLogin({ name: '本机鸭' })
+    expect(ok).toBe(true)
+    expect(store.isLogin).toBe(true)
+    expect(store.profile.name).toBe('本机鸭')
+  })
+
+  it('已有 openid：不再重复静默 login', async () => {
+    const names = []
+    globalThis.wx = {
+      cloud: {
+        callFunction: async ({ name, data }) => {
+          names.push(name)
+          return { result: { ok: true, user: { _openid: 'oTEST', ...data } } }
+        },
+      },
+    }
+    const store = useUserStore()
+    store.openid = 'oTEST'
+    await store.consentLogin({ name: '小鸭', avatar: 'cloud://env.x/a.png' })
+    expect(names).not.toContain('login')
+  })
+})

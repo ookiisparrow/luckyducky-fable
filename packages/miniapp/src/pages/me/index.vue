@@ -14,6 +14,7 @@ import { computed } from 'vue'
 import { onShow } from '@dcloudio/uni-app'
 import Icon from '@/components/Icon.vue'
 import TabBar from '@/components/TabBar.vue'
+import LoginSheet from '@/components/LoginSheet.vue'
 import ProfileHeader from './components/ProfileHeader.vue'
 import ContinueVideo from './components/ContinueVideo.vue'
 import OrderGrid from './components/OrderGrid.vue'
@@ -24,6 +25,7 @@ import { useCoursesStore } from '@/store/courses.js'
 import { useProgressStore } from '@/store/progress.js'
 import { STORAGE_KEYS } from '@/constants/storage.js'
 import { mmss } from '@/utils/format.js'
+import { ensureLogin } from '@/composables/useAuthGate.js'
 
 const user = useUserStore()
 const orders = useOrdersStore()
@@ -33,7 +35,7 @@ const progress = useProgressStore()
 // 角标 = 各状态真实订单数（只标可办理的三态，已完成/售后不标）
 const BADGE_STATUS = { pending: 'pending', toship: 'paid', toreceive: 'shipped' }
 const orderTabs = computed(() =>
-  ORDER_TABS.map((t) => ({ ...t, badge: orders.countByStatus[BADGE_STATUS[t.key]] || 0 })),
+  ORDER_TABS.map((t) => ({ ...t, badge: orders.countByStatus[BADGE_STATUS[t.key]] || 0 }))
 )
 onShow(() => {
   orders.load()
@@ -65,33 +67,47 @@ function toast(t) {
   uni.showToast({ title: t, icon: 'none' })
 }
 function continueWatch() {
+  if (!ensureLogin()) return // 续播 = 进课，需登录
   // 续播云端最近观看的那节；无记录回退样例对应的 l3
   uni.navigateTo({ url: `/pages/player/index?id=${cont.value.lessonId || 'l3'}` })
 }
 function allCourses() {
-  // 首次进视频课先看欢迎引导，之后直达目录
+  // 首次进视频课先看欢迎引导，之后直达目录（浏览目录不挡，进具体课时再验登录）
   const seen = uni.getStorageSync(STORAGE_KEYS.VIDEO_INTRO_SEEN)
   uni.navigateTo({ url: seen ? '/pages/catalog/index' : '/pages/welcome/index' })
 }
 function onOrder(key) {
+  if (!ensureLogin()) return // 我的订单 = 个人数据，需登录
   if (key === 'refund') uni.navigateTo({ url: '/pages/aftersales/index' })
   else uni.navigateTo({ url: `/pages/order-list/index?tab=${key}` })
 }
 function allOrders() {
+  if (!ensureLogin()) return
   uni.navigateTo({ url: '/pages/order-list/index' })
 }
 function goAddress() {
+  if (!ensureLogin()) return
   uni.navigateTo({ url: '/pages/address/index' })
 }
 function goEditProfile() {
+  if (!ensureLogin()) return
   uni.navigateTo({ url: '/pages/profile-edit/index' })
+}
+// 资料头未登录态点击 → 登录页
+function goLogin() {
+  ensureLogin()
 }
 </script>
 
 <template>
   <view class="my-profile">
     <!-- 紫色资料头 -->
-    <ProfileHeader :profile="user.profile" @edit="goEditProfile" />
+    <ProfileHeader
+      :profile="user.profile"
+      :logged-in="user.isLogin"
+      @edit="goEditProfile"
+      @login="goLogin"
+    />
 
     <view class="my-stack">
       <!-- 继续学习 -->
@@ -137,6 +153,7 @@ function goEditProfile() {
 
     <view class="my-pad-bottom"></view>
     <TabBar active="me" />
+    <LoginSheet />
   </view>
 </template>
 
@@ -146,7 +163,6 @@ function goEditProfile() {
   background: $bg-grey;
   font-family: $font-cn;
 }
-
 
 /* 内容堆叠 */
 .my-stack {
@@ -193,7 +209,6 @@ function goEditProfile() {
 .my-sec-more text {
   margin-right: 2px;
 }
-
 
 /* 列表行 */
 .my-list {

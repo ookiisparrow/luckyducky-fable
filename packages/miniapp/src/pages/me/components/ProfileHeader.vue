@@ -7,10 +7,15 @@ import Icon from '@/components/Icon.vue'
 import MediaSlot from '@/components/MediaSlot.vue'
 import { getSystemBar } from '@/utils/systemBar.js'
 
-defineProps({
+const props = defineProps({
   profile: { type: Object, default: () => ({}) }, // { name, lv, bio, avatar }
+  loggedIn: { type: Boolean, default: false }, // 未登录：展示「点击登录」入口（软门槛）
 })
-defineEmits(['edit'])
+const emit = defineEmits(['edit', 'login'])
+// 未登录时整块点击去登录；已登录交给「编辑」按钮（@tap.stop）
+function onTapId() {
+  if (!props.loggedIn) emit('login')
+}
 
 // 顶部留白避开状态栏（注入 CSS 变量；标题居中、胶囊在右上不重叠，无需右避让）
 const topStyle = { '--sbh': getSystemBar().statusBarHeight + 'px' }
@@ -19,18 +24,20 @@ const topStyle = { '--sbh': getSystemBar().statusBarHeight + 'px' }
 <template>
   <view class="my-header my-header-purple" :style="topStyle">
     <view class="my-navrow"><text class="my-navtitle">我的</text></view>
-    <view class="my-id">
+    <view class="my-id" :class="{ tappable: !loggedIn }" @tap="onTapId">
       <view class="my-avatar"><MediaSlot ratio="1/1" :radius="31" :src="profile.avatar" /></view>
       <view class="my-id-text">
         <view class="my-id-nameline">
-          <text class="my-id-name">{{ profile.name }}</text>
-          <text v-if="profile.lv" class="my-lv">{{ profile.lv }}</text>
+          <text class="my-id-name">{{ loggedIn ? profile.name : '点击登录' }}</text>
+          <text v-if="loggedIn && profile.lv" class="my-lv">{{ profile.lv }}</text>
         </view>
-        <text v-if="profile.bio" class="my-id-bio">{{ profile.bio }}</text>
+        <text v-if="loggedIn && profile.bio" class="my-id-bio">{{ profile.bio }}</text>
+        <text v-else-if="!loggedIn" class="my-id-bio">登录后同步资料与学习进度</text>
       </view>
-      <view class="my-edit" @tap="$emit('edit')">
+      <view v-if="loggedIn" class="my-edit" @tap.stop="$emit('edit')">
         <Icon name="pencil" :size="13" /><text>编辑</text>
       </view>
+      <view v-else class="my-edit"><text>登录</text></view>
     </view>
   </view>
 </template>

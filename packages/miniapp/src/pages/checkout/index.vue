@@ -21,11 +21,13 @@ import PriceSummary from '@/components/PriceSummary.vue'
 import QuantityStepper from '@/components/QuantityStepper.vue'
 import CheckoutAddonList from './components/CheckoutAddonList.vue'
 import CheckoutSubmitDock from './components/CheckoutSubmitDock.vue'
+import LoginSheet from '@/components/LoginSheet.vue'
 import { useCartStore } from '@/store/cart.js'
 import { useAddressStore } from '@/store/address.js'
 import { useOrdersStore } from '@/store/orders.js'
 import { CHECKOUT_ADDONS, COUPON, SHIP } from '@/data/checkout.js'
 import { goBack } from '@/utils/nav.js'
+import { ensureLogin } from '@/composables/useAuthGate.js'
 import { useTimers } from '@/composables/useTimers.js'
 
 const { later } = useTimers()
@@ -58,13 +60,13 @@ const infoRows = [
 const goods = computed(
   () =>
     list.value.reduce((s, it) => s + it.price * it.qty, 0) +
-    addons.value.reduce((s, a) => s + (a.on ? a.price * a.qty : 0), 0),
+    addons.value.reduce((s, a) => s + (a.on ? a.price * a.qty : 0), 0)
 )
 const pay = computed(() => Math.max(0, goods.value + SHIP - COUPON))
 const count = computed(
   () =>
     list.value.reduce((s, it) => s + it.qty, 0) +
-    addons.value.reduce((s, a) => s + (a.on ? a.qty : 0), 0),
+    addons.value.reduce((s, a) => s + (a.on ? a.qty : 0), 0)
 )
 function setItemQty(i, v) {
   list.value[i].qty = Math.max(1, v)
@@ -88,9 +90,12 @@ const submitting = ref(false)
 async function onSubmit() {
   // 守卫：没有主商品（空草稿）不允许提交 —— 即使搭配购默认选中，也不能凑成无主订单
   if (invalidCheckout.value || !list.value.length || submitting.value) {
-    if (!submitting.value) uni.showToast({ title: '没有可提交的商品，请先去购物车选购', icon: 'none' })
+    if (!submitting.value)
+      uni.showToast({ title: '没有可提交的商品，请先去购物车选购', icon: 'none' })
     return
   }
+  // 下单 = 个人交易，需登录（软门槛；未登录弹登录，登录后再点提交）
+  if (!ensureLogin()) return
   if (!addr.value) {
     uni.showToast({ title: '请先添加收货地址', icon: 'none' })
     uni.navigateTo({ url: '/pages/address-edit/index' })
@@ -117,19 +122,26 @@ async function onSubmit() {
         paidOk = true
       } catch (e) {
         uni.showToast({
-          title: e?.message === 'PAY_CANCELLED' ? '支付未完成，订单已保留' : '支付未完成，可在订单中继续支付',
+          title:
+            e?.message === 'PAY_CANCELLED'
+              ? '支付未完成，订单已保留'
+              : '支付未完成，可在订单中继续支付',
           icon: 'none',
         })
       }
       // #endif
       if (paidOk) {
-        uni.redirectTo({ url: `/pages/paysuccess/index?id=${order.id}&amount=${order.amount.toFixed(2)}` })
+        uni.redirectTo({
+          url: `/pages/paysuccess/index?id=${order.id}&amount=${order.amount.toFixed(2)}`,
+        })
       } else {
         setTimeout(() => uni.redirectTo({ url: `/pages/order/index?id=${order.id}` }), 600)
       }
       return
     }
-    uni.redirectTo({ url: `/pages/paysuccess/index?id=${order.id}&amount=${order.amount.toFixed(2)}` })
+    uni.redirectTo({
+      url: `/pages/paysuccess/index?id=${order.id}&amount=${order.amount.toFixed(2)}`,
+    })
   } catch {
     uni.showToast({ title: '下单失败，请稍后再试', icon: 'none' })
   } finally {
@@ -153,7 +165,13 @@ async function onSubmit() {
           <text class="co-shop-name">易织™小棉鸭® 官方旗舰店</text>
           <view class="co-shop-chev"><Icon name="chevron-right" :size="16" /></view>
         </view>
-        <OrderItem v-for="(it, i) in list" :key="it.id + '|' + (it.sku || '')" :name="it.name" :spec="it.tag" :price="it.price">
+        <OrderItem
+          v-for="(it, i) in list"
+          :key="it.id + '|' + (it.sku || '')"
+          :name="it.name"
+          :spec="it.tag"
+          :price="it.price"
+        >
           <template #foot>
             <QuantityStepper
               :n="it.qty"
@@ -197,6 +215,7 @@ async function onSubmit() {
       :disabled="invalidCheckout || submitting"
       @submit="onSubmit"
     />
+    <LoginSheet />
   </view>
 </template>
 

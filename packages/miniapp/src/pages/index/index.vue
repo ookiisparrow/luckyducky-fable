@@ -21,18 +21,22 @@ import SiteFooter from './components/SiteFooter.vue'
 import TabBar from '@/components/TabBar.vue'
 import Toast from '@/components/Toast.vue'
 import BackTop from '@/components/BackTop.vue'
+import LoadingSplash from '@/components/LoadingSplash.vue'
 import { useTimers } from '@/composables/useTimers.js'
+import { splashActive } from '@/composables/useSplash.js'
 
 // section 组件是纯展示（技术债 #4），数据在页面收口；将来换云端来源只改这里
 import { useContentStore } from '@/store/content.js'
+import { useProductsStore } from '@/store/products.js'
 import { REASSURE_ITEMS } from '@/data/reassure.js'
 import { REVIEWS } from '@/data/reviews.js'
-
 
 const { later } = useTimers()
 // 首页内容（hero 文案/信任条/FAQ）：控制台橱窗可编辑，云端无记录回退本地默认
 const content = useContentStore()
 content.load()
+// 启动开屏遮罩据 products.loaded 提前淡出（products.load 在 App.onLaunch 触发）
+const products = useProductsStore()
 const instance = getCurrentInstance()
 const windowHeight = uni.getSystemInfoSync().windowHeight
 
@@ -111,7 +115,12 @@ function onReviewsMore() {
 
 <template>
   <view class="ld-home">
-    <Hero :title="content.hero.title" :tagline="content.hero.tagline" @buy="onHeroBuy" @explore="onExplore" />
+    <Hero
+      :title="content.hero.title"
+      :tagline="content.hero.tagline"
+      @buy="onHeroBuy"
+      @explore="onExplore"
+    />
 
     <view id="anchor-intro">
       <BrandIntro />
@@ -132,6 +141,7 @@ function onReviewsMore() {
     <BackTop v-if="showTop" @tap="backToTop" />
     <Toast :show="toast.show" :text="toast.text" />
     <TabBar active="home" />
+    <LoadingSplash v-if="splashActive" :ready="products.loaded" />
   </view>
 </template>
 
