@@ -7,7 +7,7 @@
 > - **旧生产仓退役**：`/Users/sparrow/luckyducky-miniprogram`（GitHub `ookiisparrow/luckyducky-miniprogram`）= 切换前 v0.9 基线，**仅作回滚用、不再迭代**（回滚预案见 `docs/切换runbook.md` §五）。
 > - **接管 tcb·部署闸**：本仓直管 tcb 部署。`scripts/guard-deploy.mjs`（生产仓模型，用户拍板 A）对**敏感函数**（钱/权限/状态）的 tcb 写部署 + 批量 `DEPLOY_ALLOWED=1 deploy-fns` 二次确认（`ask`），读类 tcb（invoke/log/list）与单个非敏感函数部署放行；只认真正的 tcb 命令、提交信息里的字样不拦。人在自己终端不经本 hook。本地验证靠 vitest 内存桩 + H5 回退 + 双端 build，部署前 `npm run check` 全绿 + `node scripts/preflight.mjs`。
 > - **8 件控制台正册资产**（git 外，勿动）：微信支付连接器 `wxpay_33nb7su`、支付工作流 `sywxzfapifqzf_nncvqss2`、退款工作流 `kbgzl_n8gojr3a`、paynotify/refundnotify 及其 script1 转发节点——副本正册在本仓 `console-assets/`。
-> - **治理脊柱**：`docs/元模式.md`（治理框架 canonical：痛→守卫→反向自检循环，§A 可移植 / §B 本仓绑定）+ `docs/根因账本.md`（十二类病根：病史→本质→根治→绝迹证明）+ `docs/切换runbook.md`（切换/回滚）。执行纪律：每批一个 squash 提交上 main、`npm run check` 全绿才推进、commit 报净化指标并标注根治病根；批次结论记 `docs/重构日志.md`。
+> - **治理脊柱**：`docs/元模式.md`（治理框架 canonical：痛→守卫→反向自检循环，§A 可移植 / §B 本仓绑定）+ `docs/根因账本.md`（十二类病根：病史→本质→根治→绝迹证明）+ `docs/演进地图.md`（第二次重构 live 地图）+ `docs/切换runbook.md`（切换/回滚）。执行纪律：每批一个 squash 提交上 main、`npm run check` 全绿才推进、commit 报净化指标并标注根治病根；批次结论记 `docs/重构日志.md`。
 >
 > 以下为工程约定，随批次演进。
 
