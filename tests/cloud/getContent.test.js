@@ -3,7 +3,7 @@ import { control } from 'wx-server-sdk'
 import { main } from '../../packages/cloud/src/functions/catalog/getContent'
 
 // getContent（catalog 域）：只读公开首页内容；无记录返回 null（前端回退默认文案）。
-// 接口正册登记此函数原「未见独立测试」，本用例补齐契约锁。
+// 系统事实登记此函数原「未见独立测试」，本用例补齐契约锁。
 beforeEach(() => control.reset())
 
 describe('getContent', () => {

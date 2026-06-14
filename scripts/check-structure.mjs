@@ -163,10 +163,10 @@ export const repoChecks = [
   {
     id: 'interface-catalog-sync',
     roots: ['正册'],
-    desc: '接口正册同步（docs/接口正册.md 是接口权威登记册，正册自评 P1）：每个云函数 + 每个 adminApi action 都须登记，杜绝「加接口忘登记」',
+    desc: '系统事实同步（docs/系统事实.md 是接口权威登记册，正册自评 P1）：每个云函数 + 每个 adminApi action 都须登记，杜绝「加接口忘登记」',
     run() {
-      const catPath = join(ROOT, 'docs/接口正册.md')
-      if (!existsSync(catPath)) return ['docs/接口正册.md 缺失（接口权威登记册）']
+      const catPath = join(ROOT, 'docs/系统事实.md')
+      if (!existsSync(catPath)) return ['docs/系统事实.md 缺失（接口权威登记册）']
       const cat = readFileSync(catPath, 'utf8')
       const has = (name) => cat.includes('`' + name + '`')
       const fnRoot = join(ROOT, 'packages/cloud/src/functions')
@@ -178,7 +178,7 @@ export const repoChecks = [
         if (!statSync(dp).isDirectory()) continue
         for (const e of readdirSync(dp)) {
           const name = statSync(join(dp, e)).isDirectory() ? e : e.endsWith('.ts') ? e.slice(0, -3) : null
-          if (name && !has(name)) bad.push(`云函数 ${name} 未登记 docs/接口正册.md（正册 P1）`)
+          if (name && !has(name)) bad.push(`云函数 ${name} 未登记 docs/系统事实.md（正册 P1）`)
         }
       }
       // adminApi action（index.ts ACTIONS 查表键 + 特例 ping/login）
@@ -187,7 +187,7 @@ export const repoChecks = [
         const m = readFileSync(idxPath, 'utf8').match(/const ACTIONS[^{]*\{([\s\S]*?)\n\}/)
         const actions = m ? [...m[1].matchAll(/^\s*(\w+):/gm)].map((x) => x[1]) : []
         for (const a of [...actions, 'ping', 'login']) {
-          if (!has(a)) bad.push(`adminApi action ${a} 未登记 docs/接口正册.md（正册 P1）`)
+          if (!has(a)) bad.push(`adminApi action ${a} 未登记 docs/系统事实.md（正册 P1）`)
         }
       }
       return bad

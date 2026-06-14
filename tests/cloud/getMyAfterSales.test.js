@@ -3,7 +3,7 @@ import { control } from 'wx-server-sdk'
 import { main } from '../../packages/cloud/src/functions/orders/getMyAfterSales'
 
 // getMyAfterSales（orders 域）：只读本人售后单，游标分页，按 appliedAt 倒序。
-// 接口正册登记此函数原「未见独立测试」，本用例补齐契约锁（本人隔离 + 分页结构）。
+// 系统事实登记此函数原「未见独立测试」，本用例补齐契约锁（本人隔离 + 分页结构）。
 beforeEach(() => {
   control.reset()
   control.setOpenId('u1')
