@@ -433,6 +433,27 @@ export const repoChecks = [
       return bad
     },
   },
+  {
+    id: 'user-writes-throttled',
+    roots: ['#13'],
+    desc: '用户端可滥用写函数防刷（根因#13）：高频/造数写函数（trackEvent/createOrder/login/updateProfile）必经 withRateLimit（按 openid 限频），防无限刷库/堆垃圾/成本',
+    run() {
+      const targets = ['learning/trackEvent', 'orders/createOrder', 'user/login', 'user/updateProfile']
+      const bad = []
+      for (const t of targets) {
+        const f = `packages/cloud/src/functions/${t}.ts`
+        const abs = join(ROOT, f)
+        if (!existsSync(abs)) {
+          bad.push(`${f} 缺失`)
+          continue
+        }
+        if (!/withRateLimit\s*\(/.test(readFileSync(abs, 'utf8'))) {
+          bad.push(`${f} 未经 withRateLimit——可滥用写函数无频控、可被刷（根因#13）`)
+        }
+      }
+      return bad
+    },
+  },
 ]
 
 // ============== 逐文件规则（fileRules）==============

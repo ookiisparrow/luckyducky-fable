@@ -55,7 +55,7 @@ npm run build:h5 / build:mp-weixin / build:cloud
 
 **钱 / 权限 / 状态 / 幂等（病根 1–4）**
 - **信任边界 fail-closed**：写库必过 kit 闸（withOpenId/withAdminGate/isServerCall/defineNotifyCallback）；回调防伪（见 OPENID 即拒）；越权先验本人。**价格/数量/openid/订单状态一律云函数校验，不信前端。** `[机器守: writes-need-gate]` `[机器守: gate-fail-closed]` `[机器守: notify-forge-proof]`
-- **认证端点防爆破（病根13）**：公网口令端点（adminApi）口令校验前先过频控闸（`throttleLocked`/失败 `throttleFail`/成功 `throttleReset`），失败累计达阈即锁定——杜绝无限重试爆破。用户端写函数频控泛化待 P2。`[机器守: admin-login-throttled]`
+- **认证端点防爆破（病根13）**：公网口令端点（adminApi）口令校验前先过频控闸（`throttleLocked`/失败 `throttleFail`/成功 `throttleReset`），失败累计达阈即锁定——杜绝无限重试爆破；用户端高频/造数写函数（trackEvent/createOrder/login/updateProfile）经 `withRateLimit` 按 openid 限频。`[机器守: admin-login-throttled]` `[机器守: user-writes-throttled]`
 - **并发幂等 + 状态机**：一次性副作用绑首次状态转移；确定性 `_id`（撞 id 即并发方已写，天然幂等）；流转走 `transition()` 携合法流转表，钱相关自动留痕。`[机器守: deterministic-id-concurrency]` `[机器守: transition-atomic-idempotent]` `[机器守: order-status-union]`
 - **金额分整数**：全链「分」整数（Fen 品牌类型），元只在展示层；边界收元转分一次。`[机器守: fen-branded-type]` `[机器守: fen-money-chain]`
 
