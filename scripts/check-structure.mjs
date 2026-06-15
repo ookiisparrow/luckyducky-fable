@@ -560,6 +560,8 @@ export const repoChecks = [
             bad.push(`${rel} 仍含旧占位店名「${OLD}…」——定名 R23 后须全替（病根#5 复制漂移）`)
           if (rel !== brandFile && s.includes(NAME))
             bad.push(`${rel} 硬编码店名「${NAME}」——须引 constants/brand.js 的 BRAND_NAME 单源（病根#5）`)
+          if (rel !== brandFile && s.includes('官方旗舰店'))
+            bad.push(`${rel} 硬编码「官方旗舰店」店铺后缀——须引 brand.js 的 SHOP_FULL_NAME 单源（病根#5·债#30）`)
         }
       }
       return bad

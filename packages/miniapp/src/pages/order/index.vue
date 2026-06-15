@@ -20,7 +20,7 @@ import { ORDER_STATUS } from '@/data/orders.js'
 import { goBack, goProductDetail } from '@/utils/nav.js'
 import { money, dateTime, mmss } from '@/utils/format.js'
 import { expressCode } from '@/utils/express.js'
-import { BRAND_NAME } from '@/constants/brand.js'
+import { BRAND_NAME, SHOP_FULL_NAME } from '@/constants/brand.js'
 import { PAY_WINDOW_MS } from '@luckyducky/shared'
 
 const ordersStore = useOrdersStore()
@@ -232,7 +232,7 @@ function onAction(a) {
       <view class="co-card">
         <view class="co-shop">
           <Icon name="store" :size="17" />
-          <text class="co-shop-name">{{ BRAND_NAME }} 官方旗舰店</text>
+          <text class="co-shop-name">{{ SHOP_FULL_NAME }}</text>
           <view class="co-shop-chev"><Icon name="chevron-right" :size="16" /></view>
         </view>
         <OrderItem
