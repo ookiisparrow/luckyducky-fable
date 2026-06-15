@@ -25,7 +25,7 @@ import { getProduct } from '@/data/catalog.js'
 import { useCartStore } from '@/store/cart.js'
 import { useProductsStore } from '@/store/products.js'
 import { useReviewsStore } from '@/store/reviews.js'
-import { goBack } from '@/utils/nav.js'
+import { goBack, goProductDetail } from '@/utils/nav.js'
 import { getSystemBarVars } from '@/utils/systemBar.js'
 import { timeAgo } from '@/utils/format.js'
 import { buildProductShare } from '@/utils/share.js'
@@ -150,10 +150,9 @@ function toast(t) {
 function goReviews() {
   uni.navigateTo({ url: `/pages/reviews/index?id=${pid.value}` })
 }
-// 点「为你推荐」里的商品 → 跳该商品详情（带 id，详情按 id 取数据）。
-// 用 navigateTo 叠加新详情页、返回键逐级退回；与首页产品卡进详情写法一致。
+// 点「为你推荐」里的商品 → 跳该商品详情（navigateTo 叠加新详情页、返回键逐级退回）。
 function onRecPick(p) {
-  uni.navigateTo({ url: `/pages/detail/index?id=${p.id}&name=${encodeURIComponent(p.name)}` })
+  goProductDetail(p.id, p.name)
 }
 </script>
 

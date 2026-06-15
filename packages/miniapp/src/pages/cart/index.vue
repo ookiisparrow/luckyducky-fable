@@ -16,6 +16,7 @@ import TabBar from '@/components/TabBar.vue'
 import { useCartStore } from '@/store/cart.js'
 import { CART_RECS } from '@/data/cart.js'
 import { getSystemBar } from '@/utils/systemBar.js'
+import { goProductDetail } from '@/utils/nav.js'
 import { useExitGuard } from '@/composables/useExitGuard.js'
 
 const cart = useCartStore()
@@ -83,9 +84,13 @@ function onCheckout() {
           >
             <Icon v-if="it.selected" name="check" :size="13" />
           </view>
-          <view class="ld-cart-item-img"><MediaSlot ratio="1/1" :radius="9" /></view>
+          <view class="ld-cart-item-img" @tap="goProductDetail(it.id, it.name)">
+            <MediaSlot ratio="1/1" :radius="9" />
+          </view>
           <view class="ld-cart-item-mid">
-            <text class="ld-cart-item-name">{{ it.name }}</text>
+            <text class="ld-cart-item-name" @tap="goProductDetail(it.id, it.name)">{{
+              it.name
+            }}</text>
             <text v-if="it.tag" class="ld-cart-item-tag">{{ it.tag }}</text>
             <view class="ld-cart-item-foot">
               <view class="ld-cart-item-pricegrp">
@@ -107,7 +112,12 @@ function onCheckout() {
       <!-- 为你推荐（两态共用） -->
       <text class="ld-cart-divider-label">为你推荐</text>
       <view class="ld-cart-recs">
-        <view v-for="r in CART_RECS" :key="r.id" class="ld-cart-rec">
+        <view
+          v-for="r in CART_RECS"
+          :key="r.id"
+          class="ld-cart-rec"
+          @tap="goProductDetail(r.id, r.name)"
+        >
           <MediaSlot ratio="1/1" />
           <view class="ld-cart-rec-body">
             <text class="ld-cart-rec-name">{{ r.name }}</text>
@@ -117,7 +127,7 @@ function onCheckout() {
                 <text class="ld-cart-was">￥{{ r.was }}</text>
                 <text class="ld-cart-now">￥{{ r.price }}</text>
               </view>
-              <view class="ld-add" @tap="addRec(r)"><Icon name="plus" :size="18" /></view>
+              <view class="ld-add" @tap.stop="addRec(r)"><Icon name="plus" :size="18" /></view>
             </view>
           </view>
         </view>

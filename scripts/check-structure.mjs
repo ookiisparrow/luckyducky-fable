@@ -601,6 +601,32 @@ export const repoChecks = [
       return bad
     },
   },
+  {
+    // 详情导航单一来源（病根#5「样板复制即漂移」）：跳商品详情的 URL 曾在 index/detail/order 三处
+    // 内联 navigateTo 构造（首页卡/详情推荐/订单复购），购物车再加即四处漂移。根治＝收口 utils/nav.js
+    // 的 goProductDetail，URL 形状只此一处；share.js 构造的是分享卡 path（非导航）一并放行。
+    id: 'detail-nav-single-source',
+    roots: ['#5'],
+    desc: '详情导航单一来源（病根#5）：跳商品详情走 utils/nav.js 的 goProductDetail，详情 URL「pages/detail/index?id=」只在 nav.js（导航）+ share.js（分享卡 path）构造，页面/组件禁内联 navigateTo 到详情——防 URL 形状多处漂移',
+    run() {
+      const bad = []
+      const NEEDLE = 'pages/detail/index?id='
+      const allow = new Set([
+        'packages/miniapp/src/utils/nav.js',
+        'packages/miniapp/src/utils/share.js',
+      ])
+      for (const f of walk(join(ROOT, 'packages/miniapp/src'))) {
+        const rel = relative(ROOT, f)
+        if (allow.has(rel)) continue
+        if (readFileSync(f, 'utf8').includes(NEEDLE))
+          bad.push(`${rel} 内联构造详情 URL「${NEEDLE}」——须走 utils/nav.js 的 goProductDetail 单源（病根#5）`)
+      }
+      const nav = join(ROOT, 'packages/miniapp/src/utils/nav.js')
+      if (!existsSync(nav) || !/export function goProductDetail/.test(readFileSync(nav, 'utf8')))
+        bad.push('utils/nav.js 未导出 goProductDetail——详情导航单源缺失（病根#5）')
+      return bad
+    },
+  },
 ]
 
 // ============== 逐文件规则（fileRules）==============

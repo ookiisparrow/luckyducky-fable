@@ -17,7 +17,7 @@ import OrderItem from '@/components/OrderItem.vue'
 import PriceSummary from '@/components/PriceSummary.vue'
 import { useOrdersStore } from '@/store/orders.js'
 import { ORDER_STATUS } from '@/data/orders.js'
-import { goBack } from '@/utils/nav.js'
+import { goBack, goProductDetail } from '@/utils/nav.js'
 import { money, dateTime, mmss } from '@/utils/format.js'
 import { BRAND_NAME } from '@/constants/brand.js'
 
@@ -149,9 +149,7 @@ function onAction(a) {
       },
     })
   } else if (k === 'rebuy') {
-    uni.navigateTo({
-      url: `/pages/detail/index?id=prod-1&name=${encodeURIComponent('幸运小鸭礼盒')}`,
-    })
+    goProductDetail('prod-1', '幸运小鸭礼盒')
   } else if (k === 'remind') {
     uni.showToast({ title: '已提醒商家发货', icon: 'none' })
   } else if (k === 'pay') {

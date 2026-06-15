@@ -26,6 +26,7 @@ import { useTimers } from '@/composables/useTimers.js'
 import { splashActive } from '@/composables/useSplash.js'
 import { loginSheetVisible } from '@/composables/useAuthGate.js'
 import { useExitGuard } from '@/composables/useExitGuard.js'
+import { goProductDetail } from '@/utils/nav.js'
 
 // section 组件是纯展示（技术债 #4），数据在页面收口；将来换云端来源只改这里
 import { useContentStore } from '@/store/content.js'
@@ -114,8 +115,7 @@ function onExplore() {
   scrollToAnchor('anchor-intro', 12)
 }
 function onProductOpen(p) {
-  // 详情按 id 从商品总表(catalog)取数据，这里只需带 id（name 作兜底）
-  uni.navigateTo({ url: `/pages/detail/index?id=${p.id}&name=${encodeURIComponent(p.name)}` })
+  goProductDetail(p.id, p.name)
 }
 function onProductAdd(p) {
   ping(`已收藏 ${p.name}`)
