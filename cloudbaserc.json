@@ -149,6 +149,19 @@
       ]
     },
     {
+      "name": "cleanupEvents",
+      "timeout": 30,
+      "handler": "index.main",
+      "installDependency": true,
+      "triggers": [
+        {
+          "name": "cleanupEventsTimer",
+          "type": "timer",
+          "config": "0 0 3 * * * *"
+        }
+      ]
+    },
+    {
       "name": "applyRefund",
       "timeout": 15,
       "handler": "index.main",

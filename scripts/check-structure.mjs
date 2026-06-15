@@ -454,6 +454,29 @@ export const repoChecks = [
       return bad
     },
   },
+  {
+    id: 'events-cleanup-wired',
+    roots: ['债#9'],
+    desc: 'events 流水定时清理（待办债#9 无界增长）：system/cleanupEvents 存在且删 events + cloudbaserc 配 timer，防回归成只增不删',
+    run() {
+      const bad = []
+      const f = 'packages/cloud/src/functions/system/cleanupEvents.ts'
+      const abs = join(ROOT, f)
+      if (!existsSync(abs)) {
+        bad.push(`${f} 缺失——events 无定时清理（债#9 回归）`)
+      } else {
+        const src = readFileSync(abs, 'utf8')
+        if (!/collection\(['"]events['"]\)/.test(src) || !/\.remove\s*\(/.test(src)) {
+          bad.push(`${f} 未删 events——清理空转（债#9）`)
+        }
+      }
+      const rc = join(ROOT, 'cloudbaserc.json')
+      if (existsSync(rc) && !/cleanupEvents/.test(readFileSync(rc, 'utf8'))) {
+        bad.push(`cloudbaserc.json 未配 cleanupEvents——清理不被调度（债#9）`)
+      }
+      return bad
+    },
+  },
 ]
 
 // ============== 逐文件规则（fileRules）==============

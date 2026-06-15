@@ -15,11 +15,11 @@
  *       echo '{"tool_input":{"command":"git commit -m \"tcb deploy 记账\""}}' | node scripts/guard-deploy.mjs  # → 放行（无输出）
  */
 
-// 敏感函数（钱/权限/状态）：tcb 写部署须二次确认
+// 敏感函数（钱/权限/状态/毁灭性删除）：tcb 写部署须二次确认
 const SENSITIVE_FNS = [
   'createOrder', 'pay', 'payCallback', 'applyRefund', 'refundCallback', 'closeExpiredOrders',
   'adminApi', 'genQrcodes', 'activateCourse', 'confirmEnter', 'confirmReceive', 'submitReview',
-  'login', 'updateProfile', 'trackEvent', 'seedProducts', 'seedCourses', 'initDb',
+  'login', 'updateProfile', 'trackEvent', 'seedProducts', 'seedCourses', 'initDb', 'cleanupEvents',
 ]
 // 纯读函数：写部署放行（明确非敏感）
 const READONLY_FNS = [
