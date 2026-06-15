@@ -378,6 +378,38 @@ export const repoChecks = [
       return bad
     },
   },
+  {
+    id: 'requirement-trace',
+    roots: ['元'],
+    desc: '需求→守卫闭环（仿 guard-coverage 泛化「病根→守卫」为「需求→功能→守卫」）：需求清单「需求→实现映射」每条 ✅ 实现需求(L1)须有映射行，且行内 函数(见系统事实)/测试(tests/cloud)/守卫(注册表) 真实存在——改需求或改码断链当场红；`npm run trace R#` 查爆炸半径',
+    run() {
+      const reqPath = join(ROOT, 'docs/需求清单.md')
+      if (!existsSync(reqPath)) return ['docs/需求清单.md 缺失（需求源）']
+      const bad = []
+      const req = readFileSync(reqPath, 'utf8')
+      const factPath = join(ROOT, 'docs/系统事实.md')
+      const fact = existsSync(factPath) ? readFileSync(factPath, 'utf8') : ''
+      const guardIds = new Set(
+        [...repoChecks, ...fileRules, ...typeAndTestGuards, ...conventionRules].map((g) => g.id)
+      )
+      const mapSec = req.split('## 需求→实现映射')[1] || ''
+      const rows = [...mapSec.matchAll(/^\|\s*(R\d+)\s*\|([^|]*)\|([^|]*)\|([^|]*)\|/gm)]
+      const mapped = new Set(rows.map((r) => r[1]))
+      // ① 每条 ✅ 实现需求（L1）有映射行
+      const l1 = (req.split('## L1')[1] || '').split('## L2')[0]
+      for (const m of l1.matchAll(/^\|\s*(R\d+)\b[^\n]*\|\s*✅\s*\|/gm)) {
+        if (!mapped.has(m[1])) bad.push(`${m[1]}（✅ 已实现需求）无「需求→实现映射」行——需求→守卫闭环缺口`)
+      }
+      // ② 每行 函数/测试/守卫 resolve（断链当场红）
+      const cells = (s) => s.split(/[,，、]/).map((x) => x.trim().replace(/`/g, '')).filter(Boolean)
+      for (const [, R, fns, tests, guards] of rows) {
+        for (const fn of cells(fns)) if (!fact.includes(fn)) bad.push(`${R} 函数「${fn}」未见于 系统事实——链接断（改名/删了忘更新映射）`)
+        for (const t of cells(tests)) if (!existsSync(join(ROOT, 'tests/cloud', t))) bad.push(`${R} 测试「${t}」不存在 tests/cloud/`)
+        for (const g of cells(guards)) if (g !== '—' && !guardIds.has(g)) bad.push(`${R} 守卫「${g}」非已知守卫 id`)
+      }
+      return bad
+    },
+  },
 ]
 
 // ============== 逐文件规则（fileRules）==============
