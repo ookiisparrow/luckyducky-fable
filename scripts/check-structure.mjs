@@ -231,14 +231,20 @@ export const repoChecks = [
   {
     id: 'docs-budget',
     roots: ['#11'],
-    desc: '文档防膨胀（根因#11 文档职责渗漏）：CLAUDE.md 须 ≤180 行（病史曾 314 行→收口 130；约定机器化后只会更瘦，溢出沉记录类）',
+    desc: '文档防膨胀（根因#11）：CLAUDE.md ≤180 行 + docs/ 活文档 ≤15 份（一需求一家·客观→系统事实/主观→单源·历史卷档 archive）',
     run() {
+      const out = []
       const abs = join(ROOT, 'CLAUDE.md')
-      if (!existsSync(abs)) return []
-      const n = readFileSync(abs, 'utf8').split('\n').length
-      return n > 180
-        ? [`CLAUDE.md ${n} 行 > 180 预算——文档职责渗漏（根因#11）；约定本体保持精简，进度/bug/欠债沉到 docs/ 记录类`]
-        : []
+      if (existsSync(abs)) {
+        const n = readFileSync(abs, 'utf8').split('\n').length
+        if (n > 180) out.push(`CLAUDE.md ${n} 行 > 180 预算——文档职责渗漏（根因#11）；约定本体精简，进度/bug/欠债沉 docs/ 记录类`)
+      }
+      const DOC_BUDGET = 15
+      const dir = join(ROOT, 'docs')
+      const docs = existsSync(dir) ? readdirSync(dir).filter((f) => f.endsWith('.md')) : []
+      if (docs.length > DOC_BUDGET)
+        out.push(`docs/ 活文档 ${docs.length} 份 > ${DOC_BUDGET} 预算——文档膨胀（根因#11）；按"一需求一家"合并、历史卷档 archive、客观计数收口 系统事实`)
+      return out
     },
   },
   {
