@@ -23,3 +23,5 @@ export { throttleLocked, throttleFail, throttleReset, throttleHit, withRateLimit
 export type { ThrottleOpts } from './throttle'
 export { alert } from './observe'
 export type { AlertSev } from './observe'
+export { COLLECTIONS } from './collections'
+export type { CollName } from './collections'

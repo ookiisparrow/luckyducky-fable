@@ -756,6 +756,40 @@ export const repoChecks = [
       return bad
     },
   },
+  {
+    // 集合名只用已登记的（债#28·安全·根因#3 信任边界）：库权限按集合逐一锁，打错字（aftersales）
+    // → 静默建/查锁名单外的无保护集合＝洞。kit/collections.ts 的 COLLECTIONS 是集合名权威册；
+    // 校验全库 .collection()/createCollection/ensure 的字面量名都在册内——打错即红，新集合须先登记。
+    id: 'known-collections-only',
+    roots: ['#3'],
+    desc: '集合名只用已登记的（债#28）：kit/collections.ts 的 COLLECTIONS 为集合名单源；任何 .collection()/createCollection/ensure 的字面量名须在册内——防打错字建到 16 集合锁名单外的无权限保护集合',
+    run() {
+      const home = join(ROOT, 'packages/cloud/src/kit/collections.ts')
+      if (!existsSync(home)) return ['packages/cloud/src/kit/collections.ts 缺失（集合名单源·债#28）']
+      const m = readFileSync(home, 'utf8').match(/COLLECTIONS\s*=\s*\{([\s\S]*?)\}/)
+      const known = new Set(m ? [...m[1].matchAll(/['"]([a-zA-Z_]+)['"]/g)].map((x) => x[1]) : [])
+      if (!known.size) return ['kit/collections.ts 未定义 COLLECTIONS（集合名单源·债#28）']
+      const bad = []
+      const pat = /(?:\.collection|createCollection)\(\s*['"]([a-zA-Z_]+)['"]|ensure\(\s*\w+\s*,\s*['"]([a-zA-Z_]+)['"]/g
+      const root = join(ROOT, 'packages/cloud/src')
+      const walkDir = (d) => {
+        for (const e of readdirSync(d)) {
+          const p = join(d, e)
+          if (statSync(p).isDirectory()) walkDir(p)
+          else if (e.endsWith('.ts') && p !== home) {
+            const s = readFileSync(p, 'utf8')
+            for (const mm of s.matchAll(pat)) {
+              const name = mm[1] || mm[2]
+              if (!known.has(name))
+                bad.push(`${relative(ROOT, p)} 用了未登记集合名「${name}」——须先登记 kit/collections.ts COLLECTIONS（防打错字建无保护集合·债#28）`)
+            }
+          }
+        }
+      }
+      walkDir(root)
+      return bad
+    },
+  },
 ]
 
 // ============== 逐文件规则（fileRules）==============
