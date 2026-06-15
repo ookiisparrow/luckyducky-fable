@@ -518,6 +518,24 @@ export const repoChecks = [
       return bad
     },
   },
+  {
+    id: 'detail-share-wired',
+    roots: ['R29'],
+    desc: '详情页分享已接（R29 / 占位⑩）：detail 页挂 onShareAppMessage + 分享按钮 open-type="share" + utils/share 构造分享卡，防回退「敬请期待」Toast',
+    run() {
+      const bad = []
+      const f = 'packages/miniapp/src/pages/detail/index.vue'
+      const abs = join(ROOT, f)
+      if (!existsSync(abs)) return [`${f} 缺失（详情页）`]
+      const src = readFileSync(abs, 'utf8')
+      if (!/onShareAppMessage/.test(src)) bad.push(`${f} 未挂 onShareAppMessage——转发未接（R29⑩）`)
+      if (/分享（敬请期待）/.test(src)) bad.push(`${f} 仍有「分享（敬请期待）」Toast——分享未补全（R29⑩）`)
+      if (!/open-type="share"/.test(src)) bad.push(`${f} 分享按钮未用 open-type="share"——点不出转发（R29⑩）`)
+      const util = 'packages/miniapp/src/utils/share.js'
+      if (!existsSync(join(ROOT, util))) bad.push(`${util} 缺失（分享卡构造，R29⑩）`)
+      return bad
+    },
+  },
 ]
 
 // ============== 逐文件规则（fileRules）==============

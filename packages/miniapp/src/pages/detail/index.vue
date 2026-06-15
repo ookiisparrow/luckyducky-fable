@@ -11,7 +11,7 @@
  * 数据来自 src/data/productDetail.js（现为样例；以后换 api/shop.js）。
  */
 import { ref, computed } from 'vue'
-import { onLoad } from '@dcloudio/uni-app'
+import { onLoad, onShareAppMessage, onShareTimeline } from '@dcloudio/uni-app'
 import Icon from '@/components/Icon.vue'
 import RatingSummary from '@/components/RatingSummary.vue'
 import ReviewItem from '@/components/ReviewItem.vue'
@@ -28,6 +28,7 @@ import { useReviewsStore } from '@/store/reviews.js'
 import { goBack } from '@/utils/nav.js'
 import { getSystemBarVars } from '@/utils/systemBar.js'
 import { timeAgo } from '@/utils/format.js'
+import { buildProductShare } from '@/utils/share.js'
 
 // 浮层按钮避状态栏/胶囊：动态值经 CSS 变量进 scoped（scoped 拿不到 JS 值）
 const barVars = getSystemBarVars()
@@ -58,10 +59,14 @@ const realReviews = computed(() => reviewsStore.forProduct(pid.value))
 const rating = computed(() => (realReviews.value ? realReviews.value.summary : PD.rating))
 const shownReviews = computed(() =>
   realReviews.value
-    ? realReviews.value.list
-        .slice(0, 2)
-        .map((r) => ({ name: r.name, date: timeAgo(r.createdAt), n: r.rating, text: r.text, photos: 0 }))
-    : PD.reviews,
+    ? realReviews.value.list.slice(0, 2).map((r) => ({
+        name: r.name,
+        date: timeAgo(r.createdAt),
+        n: r.rating,
+        text: r.text,
+        photos: 0,
+      }))
+    : PD.reviews
 )
 
 onLoad(async (q) => {
@@ -90,6 +95,16 @@ onLoad(async (q) => {
   } else if (q && q.name) {
     title.value = decodeURIComponent(q.name)
   }
+})
+
+// 分享（R29/占位⑩）：转发给好友 + 朋友圈。微信只允许用户主动触发（胶囊菜单或
+// open-type="share" 按钮），故这里只声明分享内容，按钮在模板里。卡片由 utils/share 纯函数构造。
+onShareAppMessage(() =>
+  buildProductShare({ id: pid.value, name: title.value, image: imgs.value[0] })
+)
+onShareTimeline(() => {
+  const s = buildProductShare({ id: pid.value, name: title.value, image: imgs.value[0] })
+  return { title: s.title, query: `id=${encodeURIComponent(pid.value)}`, imageUrl: s.imageUrl }
 })
 
 // 选规格：有真实 SKU 时弹原生选择（跨端），更新价格与已选显示
@@ -147,9 +162,16 @@ function onRecPick(p) {
     <!-- 浮层头：返回 / 分享（盖在画廊上，含安全区） -->
     <view class="pdp-float">
       <view class="pdp-float-btn" @tap="back"><Icon name="chevron-left" :size="22" /></view>
-      <view class="pdp-float-btn" @tap="toast('分享（敬请期待）')">
+      <!-- #ifdef MP-WEIXIN -->
+      <button class="pdp-float-btn pdp-share-btn" open-type="share">
+        <Icon name="share-2" :size="20" />
+      </button>
+      <!-- #endif -->
+      <!-- #ifndef MP-WEIXIN -->
+      <view class="pdp-float-btn" @tap="toast('分享请在微信小程序内使用')">
         <Icon name="share-2" :size="20" />
       </view>
+      <!-- #endif -->
     </view>
 
     <!-- 画廊 -->
@@ -289,6 +311,15 @@ function onRecPick(p) {
 }
 .pdp-float-btn:active {
   background: rgba(0, 0, 0, 0.5);
+}
+/* 分享按钮在微信端是原生 button（open-type=share），样式归零、只当圆形热区用 */
+.pdp-share-btn {
+  padding: 0;
+  margin: 0;
+  line-height: 1;
+}
+.pdp-share-btn::after {
+  border: none;
 }
 
 /* ---------- 区块卡通用 ---------- */
@@ -486,5 +517,4 @@ function onRecPick(p) {
 }
 
 /* 评价相关样式已移到 components/RatingSummary.vue + ReviewItem.vue */
-
 </style>
