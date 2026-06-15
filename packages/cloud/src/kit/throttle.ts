@@ -1,5 +1,6 @@
 import { getDb } from './db'
 import { err } from './reply'
+import { alert } from './observe'
 import type { OpenIdCtx } from './gate'
 
 // 频控 / 锁定闸（根因账本 #13：无频控 → 暴力破解 / 滥用穿透）。
@@ -51,14 +52,16 @@ export async function throttleFail(key: string, opts: ThrottleOpts): Promise<voi
     const rec = got && got.data ? got.data : null
     if (!rec) {
       // 首写：集合按需建 + 确定性 _id add；撞 DUPLICATE 即并发已建 → 重试转 update 路径
+      const locked = 1 >= opts.max
       const patch: Record<string, unknown> = { _id: id, fails: 1, windowStart: now, updatedAt: now }
-      if (1 >= opts.max) {
+      if (locked) {
         patch.fails = 0
         patch.lockedUntil = now + opts.lockMs
       }
       try {
         await db.createCollection(COLL).catch(() => {})
         await db.collection(COLL).add({ data: { createdAt: now, ...patch } })
+        if (locked) alert('security', 'throttle', 'LOCKOUT', { key, lockMs: opts.lockMs })
         return
       } catch {
         continue // 并发首写撞号 → 重试
@@ -71,7 +74,8 @@ export async function throttleFail(key: string, opts: ThrottleOpts): Promise<voi
       windowStart: within ? rec.windowStart : now,
       updatedAt: now,
     }
-    if (fails >= opts.max) {
+    const locked = fails >= opts.max
+    if (locked) {
       patch.fails = 0
       patch.windowStart = now
       patch.lockedUntil = now + opts.lockMs
@@ -89,7 +93,11 @@ export async function throttleFail(key: string, opts: ThrottleOpts): Promise<voi
       .where(cond)
       .update({ data: patch })
       .catch(() => null)
-    if (r && r.stats && r.stats.updated === 1) return
+    if (r && r.stats && r.stats.updated === 1) {
+      // 锁定即爆破信号（债#23）：仅在 CAS 真生效时告警，避免重试中途误报
+      if (locked) alert('security', 'throttle', 'LOCKOUT', { key, lockMs: opts.lockMs })
+      return
+    }
     // updated=0：并发抢先改过 → 重读重试
   }
 }

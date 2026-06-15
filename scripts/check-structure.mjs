@@ -651,6 +651,35 @@ export const repoChecks = [
       return bad
     },
   },
+  {
+    // 钱链可观测告警接入（债#23 代码侧·根因#13/钱链）：平台自带指标看不见「语义级/静默失败」——
+    // payCallback 金额不符/未知订单、refundCallback 与单不符/非成功 等回调返 ACK 200 却实际出错。
+    // 这些静默失败点须经 kit/observe 的 alert() 打统一可告警标记，控制台对 [LD_ALERT] 配日志告警。
+    // 守卫锁两钱链回调引 alert，防告警被静默移除回退成「平台看着成功、实则钱链炸了无人知」。
+    id: 'moneychain-alert-wired',
+    roots: ['#13'],
+    desc: '钱链可观测告警接入（债#23 代码侧）：payCallback/refundCallback 静默语义失败须经 kit/observe 的 alert() 打 [LD_ALERT] 标记（控制台日志告警抓取）——防钱链失败信号被移除，平台指标看不见的「返200却出错」无人知',
+    run() {
+      const bad = []
+      const files = [
+        'packages/cloud/src/functions/orders/payCallback.ts',
+        'packages/cloud/src/functions/orders/refundCallback.ts',
+      ]
+      for (const f of files) {
+        const abs = join(ROOT, f)
+        if (!existsSync(abs)) {
+          bad.push(`${f} 缺失（钱链回调，债#23）`)
+          continue
+        }
+        if (!/\balert\(/.test(readFileSync(abs, 'utf8')))
+          bad.push(`${f} 未用 alert() 打钱链告警标记——静默语义失败无信号（债#23 可观测）`)
+      }
+      const obs = join(ROOT, 'packages/cloud/src/kit/observe.ts')
+      if (!existsSync(obs) || !/export function alert/.test(readFileSync(obs, 'utf8')))
+        bad.push('kit/observe.ts 未导出 alert——钱链告警标记缺失（债#23）')
+      return bad
+    },
+  },
 ]
 
 // ============== 逐文件规则（fileRules）==============

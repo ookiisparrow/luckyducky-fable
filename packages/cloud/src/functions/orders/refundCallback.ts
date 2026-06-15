@@ -1,5 +1,5 @@
 import { toFen } from '@luckyducky/shared'
-import { defineNotifyCallback } from '../../kit'
+import { defineNotifyCallback, alert } from '../../kit'
 
 // 退款结果回调（微信 → refundnotify 工作流 → 本函数）。防伪闸 + ACK + id 提取由 kit 收编。
 // v3 退款 resource：{ out_refund_no, out_trade_no, refund_status, transaction_id, amount:{refund} }。
@@ -13,7 +13,7 @@ export const main = defineNotifyCallback<any>({
   onNotify: async ({ db, id, event: e }) => {
     const got = await db.collection('afterSales').doc(id).get().catch(() => null)
     if (!got || !got.data) {
-      console.error('[refundCallback] 收到未知售后单的退款通知', id)
+      alert('money', 'refundCallback', 'UNKNOWN_AFTERSALE', { id }) // 退款通知无对应售后单（债#23）
       return
     }
     const as = got.data
@@ -26,13 +26,13 @@ export const main = defineNotifyCallback<any>({
       (String(e.out_trade_no || '') !== String(as.orderId) ||
         claimFee !== toFen(as.refundAmount))
     ) {
-      console.error('[refundCallback] 成功通知与售后单不符，拒置已退款', id, e.out_trade_no, claimFee)
+      alert('money', 'refundCallback', 'MISMATCH', { id, outTradeNo: String(e.out_trade_no || ''), claimFee }) // 单号/金额不符·拒置已退款（债#23）
       await db.collection('afterSales').doc(id).update({ data: { refundMismatch: true } }).catch(() => {})
       return
     }
     if (status !== 'SUCCESS') {
-      // 退款异常（CLOSED/ABNORMAL 等）：留痕人工处理，不翻状态
-      console.error('[refundCallback] 非成功退款通知', id, status)
+      // 退款异常（CLOSED/ABNORMAL 等）：留痕人工处理，不翻状态——退款没成功须告警（债#23）
+      alert('money', 'refundCallback', 'NOT_SUCCESS', { id, status })
       await db.collection('afterSales').doc(id).update({ data: { refundStatus: status } }).catch(() => {})
       return
     }

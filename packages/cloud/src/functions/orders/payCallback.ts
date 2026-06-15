@@ -1,5 +1,5 @@
 import { toFen } from '@luckyducky/shared'
-import { defineNotifyCallback, transition } from '../../kit'
+import { defineNotifyCallback, transition, alert } from '../../kit'
 
 // 支付结果回调（微信 → paynotify 工作流 → 本函数；工作流通道可信，解密已由平台完成）。
 // 防伪闸 + ACK 协议 + id 提取由 kit.defineNotifyCallback 收编（与 refundCallback 共享外壳）；
@@ -25,11 +25,12 @@ export const main = defineNotifyCallback<any>({
       const patch: Record<string, unknown> = { paidAt: Date.now(), transactionId }
       if (paidFee !== toFen(order.amount)) {
         patch.feeMismatch = true
-        console.error('[payCallback] 金额不符', id, paidFee, order.amount)
+        // 静默语义失败：照样翻 paid（钱已到）只留痕，平台当成功——须告警人工对账（债#23）
+        alert('money', 'payCallback', 'FEE_MISMATCH', { id, paidFee, expectFen: toFen(order.amount) })
       }
       return patch
     })
-    if (!doc) console.error('[payCallback] 收到未知订单号的成功通知', id)
+    if (!doc) alert('money', 'payCallback', 'UNKNOWN_ORDER', { id }) // 收钱无单·须告警（债#23）
     void moved // paid/shipped/done 上的重复通知：moved=false，幂等 no-op
   },
 })

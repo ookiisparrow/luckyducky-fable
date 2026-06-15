@@ -1,5 +1,5 @@
 import { toFen } from '@luckyducky/shared'
-import { withOpenId, ok, err, transition, callFlow } from '../../kit'
+import { withOpenId, ok, err, transition, callFlow, alert } from '../../kit'
 
 // 发起支付（敏感：金额一律取库内订单 amount，不信任前端）。通道=云开发微信支付工作流
 //（调试日志 J：实物类小程序被微信限制，须走工作流，cloudbase_module 经 kit.callFlow 单点）。
@@ -42,7 +42,8 @@ export const main = withOpenId(async ({ db, OPENID, event }) => {
     payer: { openid: OPENID },
   })
   if (!p || !p.paySign) {
-    console.error('[pay] 工作流未返回预付单', order.id)
+    // 支付工作流未返预付单：用户付不了款（漏单/上游故障）——须告警（债#23）
+    alert('money', 'pay', 'NO_PREPAY', { orderId: order.id })
     return err('UNIFIED_ORDER_FAIL')
   }
   // 对齐 wx.requestPayment 参数名（工作流回传 packageVal，前端要的是 package）

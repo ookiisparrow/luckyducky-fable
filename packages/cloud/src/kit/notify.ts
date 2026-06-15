@@ -1,5 +1,6 @@
 import { getDb } from './db'
 import { isServerCall } from './gate'
+import { alert } from './observe'
 
 export interface NotifyOptions<E> {
   /** 给微信的 ACK（不返回 ACK 微信会重试推送）。 */
@@ -23,7 +24,8 @@ export interface NotifyOptions<E> {
 export function defineNotifyCallback<E>(opts: NotifyOptions<E>) {
   return async (event: E) => {
     if (!isServerCall()) {
-      console.error('[notify] 拒绝带用户身份的调用（疑似客户端伪造）')
+      // 带用户身份的回调=客户端伪造（根因#3 全场最关键）；静默 ACK 不给探测信号，但须告警（债#23）
+      alert('security', 'notify', 'FORGED_CALLBACK', {})
       return opts.ack
     }
     const id = opts.refId(event || ({} as E))
