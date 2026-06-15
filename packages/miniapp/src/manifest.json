@@ -58,7 +58,13 @@
     "cloudfunctionRoot": "cloudfunctions/",
     "usingComponents": true,
     "lazyCodeLoading": "requiredComponents",
-    "__usePrivacyCheck__": true
+    "__usePrivacyCheck__": true,
+    "plugins": {
+      "kuaidi100": {
+        "version": "1.1.4",
+        "provider": "wx6885acbedba59c14"
+      }
+    }
   },
   "mp-alipay": {
     "usingComponents": true

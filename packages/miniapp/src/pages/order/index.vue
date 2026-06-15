@@ -19,6 +19,7 @@ import { useOrdersStore } from '@/store/orders.js'
 import { ORDER_STATUS } from '@/data/orders.js'
 import { goBack, goProductDetail } from '@/utils/nav.js'
 import { money, dateTime, mmss } from '@/utils/format.js'
+import { expressCode } from '@/utils/express.js'
 import { BRAND_NAME } from '@/constants/brand.js'
 import { PAY_WINDOW_MS } from '@luckyducky/shared'
 
@@ -130,6 +131,14 @@ async function payNow() {
   }
 }
 
+// 复制运单号兜底（非微信端 / 未知快递公司 / 插件打开失败）
+function copyTracking(no) {
+  uni.setClipboardData({
+    data: no,
+    success: () => uni.showToast({ title: '运单号已复制', icon: 'none' }),
+  })
+}
+
 function onAction(a) {
   const k = a.key
   if (k === 'confirm') {
@@ -160,13 +169,21 @@ function onAction(a) {
     if (canPay) payNow()
     else uni.showToast({ title: '请在微信小程序内完成支付', icon: 'none' })
   } else if (k === 'logi') {
-    // 物流卡只在有 shipping 快照时渲染：复制运单号（去快递 App / 公众号查询）
-    if (order.value.shipping) {
-      uni.setClipboardData({
-        data: order.value.shipping.trackingNo,
-        success: () => uni.showToast({ title: '运单号已复制', icon: 'none' }),
+    // 查看物流（R17/占位③）：微信端打开快递100插件轨迹页（plugin-private://，在本小程序内看不跳出），
+    // 其它端 / 未知快递公司 / 插件打开失败 → 回退复制运单号（去快递 App 自查）。
+    const s = order.value.shipping
+    if (!s) return
+    // #ifdef MP-WEIXIN
+    const com = expressCode(s.company)
+    if (com) {
+      uni.navigateTo({
+        url: `plugin-private://wx6885acbedba59c14/pages/result/result?nu=${s.trackingNo}&com=${com}&querysource=third_xcx`,
+        fail: () => copyTracking(s.trackingNo),
       })
+      return
     }
+    // #endif
+    copyTracking(s.trackingNo)
   } else if (k === 'refund') {
     uni.navigateTo({ url: '/pages/aftersales/index?orderId=' + order.value.id })
   } else if (k === 'review') {

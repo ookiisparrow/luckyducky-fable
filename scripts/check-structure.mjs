@@ -705,6 +705,32 @@ export const repoChecks = [
       return bad
     },
   },
+  {
+    // 物流轨迹接快递100免费插件（R17 / 占位③，2026-06-15 用户拍板②）：manifest mp-weixin 声明
+    // 插件 wx6885acbedba59c14 + 订单页「查看物流」微信端打开插件轨迹页（plugin-private://），
+    // 其它端 / 未知快递公司回退复制运单号（同分享/客服多端模式）；中文快递名→快递100 编码经 utils/express。
+    // 诚实边界：插件真机渲染靠人验（根因#8）；快递100 服务市场已下架＝依赖风险，回退复制兜底。
+    id: 'express-plugin-wired',
+    roots: ['R17'],
+    desc: '物流轨迹接快递100插件（R17/占位③）：manifest 声明插件 wx6885acbedba59c14 + 订单页「查看物流」开插件轨迹页（plugin-private://）+ utils/express 中文快递名→编码，防回退只复制运单号',
+    run() {
+      const bad = []
+      const APPID = 'wx6885acbedba59c14'
+      const mani = join(ROOT, 'packages/miniapp/src/manifest.json')
+      if (!existsSync(mani)) bad.push('manifest.json 缺失')
+      else if (!readFileSync(mani, 'utf8').includes(APPID))
+        bad.push(`manifest.json 未声明快递100插件 ${APPID}——物流插件未注册（R17③）`)
+      const order = join(ROOT, 'packages/miniapp/src/pages/order/index.vue')
+      if (!existsSync(order)) bad.push('pages/order/index.vue 缺失')
+      else if (!readFileSync(order, 'utf8').includes(`plugin-private://${APPID}`))
+        bad.push('order/index.vue「查看物流」未打开快递100插件（plugin-private://）——仍只复制运单号（R17③）')
+      const exp = join(ROOT, 'packages/miniapp/src/utils/express.js')
+      if (!existsSync(exp)) bad.push('utils/express.js 缺失（中文快递名→快递100 编码映射，R17③）')
+      else if (!/export function expressCode/.test(readFileSync(exp, 'utf8')))
+        bad.push('utils/express.js 未导出 expressCode——快递公司编码映射缺失（R17③）')
+      return bad
+    },
+  },
 ]
 
 // ============== 逐文件规则（fileRules）==============
