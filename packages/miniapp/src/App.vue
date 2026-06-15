@@ -4,6 +4,7 @@ import logger from '@/utils/logger.js'
 import { initCloud } from '@/utils/cloud.js'
 import { useUserStore } from '@/store/user.js'
 import { useProductsStore } from '@/store/products.js'
+import { registerPrivacyGate } from '@/composables/usePrivacyGate.js'
 import { SHARED_PKG_SENTINEL } from '@luckyducky/shared'
 
 export default {
@@ -11,6 +12,7 @@ export default {
     // B0 哨兵：验证 workspace TS 包（@luckyducky/shared）被 uni 构建吃下；B3 起 shared 承载种子/常量后可删
     logger.info('shared', SHARED_PKG_SENTINEL)
     initCloud() // 微信云开发初始化（仅小程序端生效；环境 ID 在 utils/cloud.js）
+    registerPrivacyGate() // 挂微信隐私授权回调（onNeedPrivacyAuthorization，仅小程序端；R27㉒）
     useUserStore().login() // 静默登录:用 openid upsert users 建档（仅小程序端）
     useProductsStore().load() // 拉商品列表（小程序端走云函数；其它端回退本地 catalog）
     // 全局错误兜底：应用级运行时错误 / 未捕获的 Promise 拒绝，不再静默

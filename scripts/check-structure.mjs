@@ -477,6 +477,47 @@ export const repoChecks = [
       return bad
     },
   },
+  {
+    id: 'agreement-text-real',
+    roots: ['R27'],
+    desc: '协议正文非占位（R27 上线必做㉑）：pages/agreement/index.vue 不得含「占位」语 + 须含隐私承诺「不采集手机号」+ 条款条目齐（≥8 条「第N条」），防占位文本上线',
+    run() {
+      const f = 'packages/miniapp/src/pages/agreement/index.vue'
+      const abs = join(ROOT, f)
+      if (!existsSync(abs)) return [`${f} 缺失（协议页）`]
+      const src = readFileSync(abs, 'utf8')
+      const bad = []
+      if (src.includes('占位')) bad.push(`${f} 仍含「占位」字样——协议正文未补全（R27㉑ 上线必做）`)
+      if (!src.includes('不采集手机号')) bad.push(`${f} 缺隐私承诺「不采集手机号」——隐私政策不完整（R27㉑）`)
+      const articles = (src.match(/第[一二三四五六七八九十]+条/g) || []).length
+      if (articles < 8) bad.push(`${f} 条款条目过少（${articles}<8 条「第N条」）——疑似仍是占位（R27㉑）`)
+      return bad
+    },
+  },
+  {
+    id: 'privacy-authorize-wired',
+    roots: ['R27'],
+    desc: '微信隐私授权已接（R27 上线必做㉒）：manifest mp-weixin 开 __usePrivacyCheck__ + usePrivacyGate 挂 onNeedPrivacyAuthorization + PrivacySheet 弹窗（agreePrivacyAuthorization 按钮）+ App.vue 启动注册，防隐私授权链回退',
+    run() {
+      const bad = []
+      const mani = join(ROOT, 'packages/miniapp/src/manifest.json')
+      if (!existsSync(mani)) bad.push('packages/miniapp/src/manifest.json 缺失')
+      else if (!/"__usePrivacyCheck__"\s*:\s*true/.test(readFileSync(mani, 'utf8')))
+        bad.push('manifest.json 未开 __usePrivacyCheck__:true——微信隐私授权未启用（R27㉒）')
+      const gate = join(ROOT, 'packages/miniapp/src/composables/usePrivacyGate.js')
+      if (!existsSync(gate)) bad.push('composables/usePrivacyGate.js 缺失（隐私授权闸，R27㉒）')
+      else if (!/onNeedPrivacyAuthorization/.test(readFileSync(gate, 'utf8')))
+        bad.push('usePrivacyGate.js 未挂 wx.onNeedPrivacyAuthorization——授权回调未注册（R27㉒）')
+      const sheet = join(ROOT, 'packages/miniapp/src/components/PrivacySheet.vue')
+      if (!existsSync(sheet)) bad.push('components/PrivacySheet.vue 缺失（隐私授权弹窗，R27㉒）')
+      else if (!/agreePrivacyAuthorization/.test(readFileSync(sheet, 'utf8')))
+        bad.push('PrivacySheet.vue 无 agreePrivacyAuthorization 同意按钮——授权无法落地（R27㉒）')
+      const app = join(ROOT, 'packages/miniapp/src/App.vue')
+      if (existsSync(app) && !/registerPrivacyGate/.test(readFileSync(app, 'utf8')))
+        bad.push('App.vue 未注册 registerPrivacyGate——onNeedPrivacyAuthorization 未挂（R27㉒）')
+      return bad
+    },
+  },
 ]
 
 // ============== 逐文件规则（fileRules）==============

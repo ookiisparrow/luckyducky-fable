@@ -10,6 +10,7 @@ import { ref, computed } from 'vue'
 import Icon from '@/components/Icon.vue'
 import CoNavBar from '@/components/CoNavBar.vue'
 import MediaSlot from '@/components/MediaSlot.vue'
+import PrivacySheet from '@/components/PrivacySheet.vue'
 import { useUserStore } from '@/store/user.js'
 import { goBack } from '@/utils/nav.js'
 import { useTimers } from '@/composables/useTimers.js'
@@ -132,6 +133,9 @@ function onLogout() {
         {{ saving ? '保存中…' : '保存' }}
       </view>
     </view>
+
+    <!-- 微信隐私授权弹窗（涉隐私接口调用前触发；仅小程序端，R27㉒） -->
+    <PrivacySheet />
   </view>
 </template>
 
