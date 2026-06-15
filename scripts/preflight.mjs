@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
  * 切换前体检（B9 preflight）：一条命令确认样板房「可切换」。只读、不部署、不改任何东西。
- * 机器自动核：质量闸全绿 / build:cloud 产物 27 个 / console-assets 正册齐 /
+ * 机器自动核：质量闸全绿 / build:cloud 产物 ≡ cloudbaserc 函数清单 / console-assets 正册齐 /
  *            .deploy-manifest 在册 / cloudbaserc 指向 packages/cloud/dist。
  * 再打印机器够不到、须人工核的清单（drift / 验收单 / CLAUDE reconcile）。
  * 详见 docs/切换runbook.md。
@@ -25,13 +25,29 @@ const run = (label, fn) => {
 run('质量闸全绿（npm run check）', () => {
   execSync('npm run check', { cwd: ROOT, stdio: 'pipe' })
 })
-run('build:cloud 产物 = 28 个函数', () => {
+run('build:cloud 产物 ≡ cloudbaserc 函数清单', () => {
   execSync('npm run build:cloud', { cwd: ROOT, stdio: 'pipe' })
   const dist = join(ROOT, 'packages/cloud/dist')
-  const n = existsSync(dist)
-    ? readdirSync(dist).filter((d) => existsSync(join(dist, d, 'index.js'))).length
-    : 0
-  if (n !== 28) throw new Error(`产物 ${n} 个 ≠ 28`)
+  const built = existsSync(dist)
+    ? readdirSync(dist).filter((d) => existsSync(join(dist, d, 'index.js')))
+    : []
+  // 单一真相源：cloudbaserc.json functions[]——不硬编码计数（魔法数字加函数即漂，已漂 27→28→29）。
+  // cloudbaserc≡源码 已由 check:structure 的 deploy-config-complete 钉住；这里再核「真打出来的
+  // 产物」≡ 正册，兜构建静默漏产函数（产物比源码再近一步，根因#8 真部署能用）。
+  const registered = (JSON.parse(readFileSync(join(ROOT, 'cloudbaserc.json'), 'utf8')).functions || []).map(
+    (f) => f.name
+  )
+  const builtSet = new Set(built)
+  const regSet = new Set(registered)
+  const missing = registered.filter((n) => !builtSet.has(n)) // 正册有、产物缺（构建漏产）
+  const extra = built.filter((n) => !regSet.has(n)) // 产物有、正册无（漏登记）
+  if (missing.length || extra.length) {
+    throw new Error(
+      `产物 ${built.length} 个 ≠ cloudbaserc ${registered.length} 个` +
+        (missing.length ? `；缺产物：${missing.join(',')}` : '') +
+        (extra.length ? `；未登记：${extra.join(',')}` : '')
+    )
+  }
 })
 run('console-assets 正册齐（4 件）', () => {
   for (const f of ['README.md', '01-支付退款工作流.md', '02-库权限期望表.md', 'forward-node.js'])
