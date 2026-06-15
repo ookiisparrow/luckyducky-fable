@@ -37,10 +37,11 @@
     "check": "npm run check:conventions && npm run check:structure && npm run typecheck && npm run lint && npm run test"
   },
   "devDependencies": {
+    "@cloudbase/node-sdk": "^3.18.1",
     "@eslint/js": "^9.10.0",
+    "esbuild": "^0.20.2",
     "eslint": "^9.10.0",
     "eslint-config-prettier": "^9.1.0",
-    "esbuild": "^0.20.2",
     "eslint-plugin-vue": "^9.28.0",
     "globals": "^15.9.0",
     "prettier": "^3.3.3",
