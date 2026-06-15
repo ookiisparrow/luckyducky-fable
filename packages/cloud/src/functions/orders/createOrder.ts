@@ -117,13 +117,16 @@ export const main = withOpenId(
       return err('BAD_ADDRESS')
     if (address.phone.replace(/\D/g, '').length < 7) return err('BAD_ADDRESS')
 
-    // PAY_MODE：config 缺文档/集合一律回落 mock（零回归）
+    // PAY_MODE：config/pay.mode==='real' 才走真支付（写 pending 等回调）；否则 mock。
     const cfg = await db
       .collection('config')
       .doc('pay')
       .get()
       .catch(() => null)
     const payMode = cfg && cfg.data && cfg.data.mode === 'real' ? 'real' : 'mock'
+    // fail-closed（根因#3 信任边界默认拒）：生产缺/错支付配置绝不伪造已付单——mock 仅在显式
+    // ALLOW_MOCK_PAY=1（开发/测试 env，生产永不设）放行，否则拒单。杜绝 config 漂移/误删→未付变已付。
+    if (payMode === 'mock' && process.env.ALLOW_MOCK_PAY !== '1') return err('PAY_CONFIG_MISSING')
 
     const now = Date.now()
     const order: any = {

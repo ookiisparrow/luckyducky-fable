@@ -9,13 +9,17 @@ const ADDR = { name: '陈圆圆', phone: '13800001234', region: '浙江杭州', 
 beforeEach(() => {
   control.reset()
   control.setOpenId('user-A')
+  process.env.ALLOW_MOCK_PAY = '1' // 测试/开发默认开 mock（生产永不设）；fail-closed 用例内显式删
   control.seed('products', [
     { _id: 'prod-1', id: 'prod-1', name: '幸运小鸭礼盒', tag: '送礼首选', price: 198, skus: [{ name: '雾霭蓝', price: 210 }] },
     { _id: 'prod-3', id: 'prod-3', name: '微笑小鸡', tag: '零基础', price: 128, skus: [] },
   ])
 })
 
-afterEach(() => vi.restoreAllMocks())
+afterEach(() => {
+  vi.restoreAllMocks()
+  delete process.env.ALLOW_MOCK_PAY
+})
 
 describe('createOrder 闸门', () => {
   it('NO_OPENID：未登录拒单', async () => {
@@ -122,20 +126,14 @@ describe('createOrder 闸门', () => {
   })
 })
 
-describe('createOrder PAY_MODE 开关（规格 §三）', () => {
-  it('缺省（无 config 集合）= mock：直接 paid + paidAt（零回归）', async () => {
+describe('createOrder PAY_MODE 开关（规格 §三 · fail-closed 根因#3）', () => {
+  it('ALLOW_MOCK_PAY=1（开发/测试）+ 缺 config = mock：直接 paid + paidAt', async () => {
     const res = await main({ items: [{ id: 'prod-3', qty: 1 }], address: ADDR })
     expect(res.order.status).toBe('paid')
     expect(res.order.paidAt).toBeGreaterThan(0)
   })
 
-  it('mode=mock 显式配置：行为同缺省', async () => {
-    control.seed('config', [{ _id: 'pay', mode: 'mock' }])
-    const res = await main({ items: [{ id: 'prod-3', qty: 1 }], address: ADDR })
-    expect(res.order.status).toBe('paid')
-  })
-
-  it('mode=real：写 pending、不记 paidAt，等支付回调', async () => {
+  it('mode=real：写 pending、不记 paidAt，等支付回调（env 无关）', async () => {
     control.seed('config', [{ _id: 'pay', mode: 'real', subMchId: '1900000000' }])
     const res = await main({ items: [{ id: 'prod-3', qty: 1 }], address: ADDR })
     expect(res.order.status).toBe('pending')
@@ -143,5 +141,20 @@ describe('createOrder PAY_MODE 开关（规格 §三）', () => {
     const saved = control.dump('orders')[0]
     expect(saved.status).toBe('pending')
     expect(saved.paidAt).toBeUndefined()
+  })
+
+  it('生产 fail-closed（无 ALLOW_MOCK_PAY）：缺 config 不伪造已付单，拒 PAY_CONFIG_MISSING、不落库', async () => {
+    delete process.env.ALLOW_MOCK_PAY // 模拟生产：mock 开关未开
+    const res = await main({ items: [{ id: 'prod-3', qty: 1 }], address: ADDR })
+    expect(res).toEqual({ ok: false, error: 'PAY_CONFIG_MISSING' })
+    expect(control.dump('orders')).toHaveLength(0) // 关键：拒单不得生成任何订单
+  })
+
+  it('生产 fail-closed：显式 mode=mock 也拒（env 才是安全闸，DB 配置不能伪造已付）', async () => {
+    delete process.env.ALLOW_MOCK_PAY
+    control.seed('config', [{ _id: 'pay', mode: 'mock' }])
+    const res = await main({ items: [{ id: 'prod-3', qty: 1 }], address: ADDR })
+    expect(res.error).toBe('PAY_CONFIG_MISSING')
+    expect(control.dump('orders')).toHaveLength(0)
   })
 })

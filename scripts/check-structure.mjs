@@ -590,6 +590,9 @@ export const typeAndTestGuards = [
   },
   { id: 'gate-fail-closed', mechanism: 'test', roots: ['#3'], reverseTest: 'tests/cloud/kit/gate.test.js' },
   { id: 'notify-forge-proof', mechanism: 'test', roots: ['#3'], reverseTest: 'tests/cloud/kit/notify.test.js' },
+  // 支付配置 fail-closed（根因#3 同款）：createOrder 缺/错 config/pay 时绝不伪造已付单——
+  // mock 仅 env ALLOW_MOCK_PAY=1 放行，否则拒 PAY_CONFIG_MISSING（reverseTest 锁此行为）。
+  { id: 'pay-config-fail-closed', mechanism: 'test', roots: ['#3'], reverseTest: 'tests/cloud/createOrder.test.js' },
   { id: 'fen-money-chain', mechanism: 'test', roots: ['#4'], reverseTest: 'tests/cloud/createOrder.test.js' },
   { id: 'paging-contract', mechanism: 'test', roots: ['#7'], reverseTest: 'tests/cloud/kit/paging.test.js' },
 ]
