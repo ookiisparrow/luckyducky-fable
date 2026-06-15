@@ -731,6 +731,31 @@ export const repoChecks = [
       return bad
     },
   },
+  {
+    // 看板/批次读路径不静默封顶（债#18/#22·规模）：getDashboard 曾各表 limit(1000) 内存聚合——
+    // 破千静默少算 GMV/计数；batches 列表 limit(1000) 截断旧码。治法＝计数走 .count()（精确不封顶）、
+    // 列表走分页全取（fetchAll）、钱链异常走定向 where。守卫锁 dashboard 用 count() + 两文件禁裸
+    // limit(1000)（分析样本用 limit(SAMPLE) 具名常量、不匹配此字面量）。courses uploadChunks 的
+    // limit(1000) 上游 uploadFinish 已卡 total<=200、不在此列（安全·见债#22）。
+    id: 'capacity-reads-bounded',
+    roots: ['规模'],
+    desc: '看板/批次读路径不静默封顶（债#18/#22）：dashboard 计数走 .count() 精确、batches 列表分页全取；dashboard.ts/batches.ts 禁裸 limit(1000) 内存聚合（破千静默少算/截断）',
+    run() {
+      const bad = []
+      const dash = 'packages/cloud/src/functions/admin/adminApi/actions/dashboard.ts'
+      const batches = 'packages/cloud/src/functions/admin/adminApi/actions/batches.ts'
+      const absDash = join(ROOT, dash)
+      if (!existsSync(absDash)) bad.push(`${dash} 缺失（看板）`)
+      else if (!/\.count\(/.test(readFileSync(absDash, 'utf8')))
+        bad.push(`${dash} 未用 .count() 精确计数——总量恐回退内存 length 封顶（债#18）`)
+      for (const f of [dash, batches]) {
+        const abs = join(ROOT, f)
+        if (existsSync(abs) && readFileSync(abs, 'utf8').includes('limit(1000)'))
+          bad.push(`${f} 含裸 limit(1000)——读路径须 count()/分页，不得固定上限封顶（债#18/#22）`)
+      }
+      return bad
+    },
+  },
 ]
 
 // ============== 逐文件规则（fileRules）==============

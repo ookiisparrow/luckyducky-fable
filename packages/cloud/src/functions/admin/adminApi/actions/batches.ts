@@ -1,11 +1,28 @@
 import { reply, type Ctx } from '../lib'
 
+// 分页全取（债#22：避免单次拉取封顶截断——批次/码增长后旧码被挤出工作台）。
+// 按页 skip 取尽（每页 200），不足一页即止。makeQuery 每页重建，避免复用查询对象。
+async function fetchAll(makeQuery: () => any, pageSize = 200): Promise<any[]> {
+  const out: any[] = []
+  for (let skip = 0; ; skip += pageSize) {
+    const r = await makeQuery()
+      .skip(skip)
+      .limit(pageSize)
+      .get()
+      .catch(() => ({ data: [] }))
+    const batch = (r && r.data) || []
+    out.push(...batch)
+    if (batch.length < pageSize) break
+  }
+  return out
+}
+
 export async function listBatches({ db, data }: Ctx) {
   const courseId = String(data.courseId || '')
   if (!courseId) return reply(400, { ok: false, error: 'NO_COURSE_ID' })
-  const res = await db.collection('qrcodes').where({ courseId }).limit(1000).get()
+  const all = await fetchAll(() => db.collection('qrcodes').where({ courseId }))
   const map: Record<string, any> = {}
-  for (const q of res.data) {
+  for (const q of all) {
     const b = (map[q.batchId] = map[q.batchId] || { batchId: q.batchId, total: 0, activated: 0, createdAt: q.createdAt || 0 })
     b.total++
     if (q.status === 'activated') b.activated++
@@ -28,6 +45,6 @@ export async function createBatch({ cloud, data }: Ctx) {
 export async function listBatchCodes({ db, data }: Ctx) {
   const batchId = String(data.batchId || '')
   if (!batchId) return reply(400, { ok: false, error: 'NO_BATCH' })
-  const res = await db.collection('qrcodes').where({ batchId }).limit(1000).get()
-  return reply(200, { ok: true, codes: res.data.map((q: any) => q._id) })
+  const all = await fetchAll(() => db.collection('qrcodes').where({ batchId }))
+  return reply(200, { ok: true, codes: all.map((q: any) => q._id) })
 }

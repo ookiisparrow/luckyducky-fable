@@ -101,6 +101,7 @@ class Query {
     this._filter = null
     this._order = null
     this._limit = null
+    this._skip = null
   }
   where(cond) {
     this._filter = cond
@@ -112,6 +113,10 @@ class Query {
   }
   limit(n) {
     this._limit = n
+    return this
+  }
+  skip(n) {
+    this._skip = n
     return this
   }
   field() {
@@ -131,6 +136,7 @@ class Query {
         return dir === 'desc' ? -c : c
       })
     }
+    if (this._skip != null) out = out.slice(this._skip)
     if (this._limit != null) out = out.slice(0, this._limit)
     return out
   }

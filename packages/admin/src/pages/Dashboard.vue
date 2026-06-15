@@ -63,7 +63,10 @@ const rate = (a, b) => (b ? Math.round((a / b) * 100) + '%' : '—')
         </div>
         <div class="stat card">
           <div class="num">{{ data.stats.orders }}</div>
-          <div class="lbl">订单数 · 合计 ￥{{ data.stats.gmv.toFixed(0) }}</div>
+          <div class="lbl">
+            订单数 · 合计 ￥{{ data.stats.gmv.toFixed(0) }}
+            <span v-if="data.approx?.gmv" class="dim">（近 {{ data.approx.sampleSize }} 单估算）</span>
+          </div>
         </div>
         <div class="stat card">
           <div class="num">{{ data.stats.codesActivated }}<span class="dim">/{{ data.stats.codesTotal }}</span></div>
@@ -95,6 +98,7 @@ const rate = (a, b) => (b ? Math.round((a / b) * 100) + '%' : '—')
       <div class="cols">
         <div class="card col">
           <h3>🔥 热点 · 最多人看完的段</h3>
+          <p v-if="data.approx?.hot" class="note">数据量大，下列为近 {{ data.approx.sampleSize }} 条样本估算</p>
           <p v-if="!data.hot.length" class="empty">还没有观看数据</p>
           <div v-for="(h, i) in data.hot" :key="h.segId" class="row">
             <span class="rank">{{ i + 1 }}</span>
@@ -105,6 +109,7 @@ const rate = (a, b) => (b ? Math.round((a / b) * 100) + '%' : '—')
         <div class="card col">
           <h3>🧗 卡点 · 最多人停留的段</h3>
           <p class="note">学员最后看到的位置——集中卡在哪段，哪段就值得重讲或加求助引导</p>
+          <p v-if="data.approx?.stuck" class="note">数据量大，下列为近 {{ data.approx.sampleSize }} 条样本估算</p>
           <p v-if="!data.stuck.length" class="empty">还没有观看数据</p>
           <div v-for="(h, i) in data.stuck" :key="h.segId" class="row">
             <span class="rank warn">{{ i + 1 }}</span>
