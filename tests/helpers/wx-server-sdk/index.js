@@ -25,6 +25,7 @@ const command = {
   in: (val) => ({ __op: 'in', val }),
   neq: (val) => ({ __op: 'neq', val }),
   lt: (val) => ({ __op: 'lt', val }),
+  exists: (val) => ({ __op: 'exists', val }), // 字段存在/缺失（CAS 初始化窗口前置条件，债#21）
 }
 
 function matchOne(docVal, cond) {
@@ -32,6 +33,7 @@ function matchOne(docVal, cond) {
     if (cond.__op === 'in') return Array.isArray(cond.val) && cond.val.includes(docVal)
     if (cond.__op === 'neq') return docVal !== cond.val
     if (cond.__op === 'lt') return docVal < cond.val
+    if (cond.__op === 'exists') return cond.val ? docVal !== undefined : docVal === undefined
     return false
   }
   return docVal === cond
