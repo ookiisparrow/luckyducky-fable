@@ -1,13 +1,14 @@
 {
-  "updatedAt": 1781402740447,
+  "updatedAt": 1781497776722,
   "functions": {
     "activateCourse": "ed80f56336e4",
-    "adminApi": "49d5afa0c672",
+    "adminApi": "38d450cbd96c",
     "applyRefund": "fb901e536d33",
+    "cleanupEvents": "60866dd83323",
     "closeExpiredOrders": "1aacb5dffc69",
     "confirmEnter": "14280de0feee",
     "confirmReceive": "4ea27cb78089",
-    "createOrder": "f19091efdfe2",
+    "createOrder": "7db1aae45462",
     "genQrcodes": "3c21df8f26b0",
     "getContent": "480889fe94fd",
     "getCourses": "3031bef625e6",
@@ -20,14 +21,14 @@
     "getProducts": "bebf53fcca33",
     "getReviews": "b9fc331397b1",
     "initDb": "522d93e859d8",
-    "login": "435adc8067fb",
+    "login": "3527bc2742d1",
     "pay": "d37c9687bd0d",
     "payCallback": "2cc7a4794067",
     "refundCallback": "9b092800d64c",
     "seedCourses": "1f1f4357bd61",
     "seedProducts": "dd00210b9866",
     "submitReview": "ec83206b5dc7",
-    "trackEvent": "354f4471bc5b",
-    "updateProfile": "776c4551551f"
+    "trackEvent": "42d341b08df4",
+    "updateProfile": "89b896002b58"
   }
 }
