@@ -18,6 +18,7 @@ describe('getDashboard 容量上限消除（债#18）', () => {
       { _id: 'o1', id: 'o1', amount: 100, status: 'paid', createdAt: 1000, items: [{ name: 'A', qty: 1 }] },
       { _id: 'o2', id: 'o2', amount: 50, status: 'pending', createdAt: 3000, items: [{ name: 'B', qty: 2 }] },
       { _id: 'o3', id: 'o3', amount: 30, status: 'paid', createdAt: 2000, items: [] },
+      { _id: 'o4', id: 'o4', amount: 999, status: 'closed', createdAt: 500, items: [] }, // 未付·不计 GMV
     ])
     control.seed('qrcodes', [
       { _id: 'q1', status: 'activated' },
@@ -26,12 +27,12 @@ describe('getDashboard 容量上限消除（债#18）', () => {
     ])
     const r = parse(await getDashboard(ctx()))
     expect(r.stats.users).toBe(3)
-    expect(r.stats.orders).toBe(3)
-    expect(r.stats.gmv).toBe(180) // 100+50+30
+    expect(r.stats.orders).toBe(4) // count() 全量（含未付）
+    expect(r.stats.gmv).toBe(130) // aggregate paid-only：o1(100)+o3(30)；o2 pending / o4 closed 不计（债#32）
     expect(r.stats.codesTotal).toBe(3)
     expect(r.stats.codesActivated).toBe(2)
     expect(r.approx.sampleSize).toBe(1000)
-    expect(r.approx.gmv).toBe(false) // 3 ≤ 1000：精确不标近似
+    expect(r.approx.gmv).toBe(false) // GMV 走 aggregate＝精确，恒不标近似（#18续）
     expect(r.recentOrders[0].id).toBe('o2') // orderBy createdAt desc：最新在前
   })
 

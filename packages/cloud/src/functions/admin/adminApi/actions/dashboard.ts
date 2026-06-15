@@ -1,14 +1,16 @@
 import { reply, type Ctx } from '../lib'
 
-// —— 数据看板（债#18：消除「≤1000 条/表内存聚合」静默少算）——
-// 计数走 .count()（精确·不封顶）；钱链异常走定向 where（异常稀少·结果集小·精确，不漏老单）；
-// 最近订单走 orderBy 取真·最新 5（不再从无序 1000 里捞、漏掉真最新）。
-// GMV 与 热度/卡点 仍为「近 SAMPLE 单/条样本」近似——精确 GMV 需 DB 聚合/写路径计数器（债#18 续，
-// 押后）；故 orders/progress 超 SAMPLE 时在 approx 标注，前端显「近 N 估算」（静默错 → 标注近似）。
+// —— 数据看板（债#18 + #18续：消除「≤1000 条/表内存聚合」静默少算）——
+// 计数走 .count()（精确·不封顶）；GMV 走 DB aggregate 对 paid 订单求和（精确·不封顶·#18续/债#32）；
+// 钱链异常走定向 where（稀少·小集合·精确不漏老单）；最近订单走 orderBy 取真·最新 5（createOrder
+// 必写 createdAt → orderBy 不漏单·债#31 不变量）。仅 热度/卡点 仍「近 SAMPLE 条样本」近似（progress
+// 超 SAMPLE 时 approx 标注、前端显「近 N 估算」）。
 const SAMPLE = 1000
+const PAID_STATUSES = ['paid', 'shipped', 'done'] // GMV＝已付营收口径（债#32；pending/closed 未付不计）
 
 export async function getDashboard({ db }: Ctx) {
   const _ = db.command
+  const $ = db.command.aggregate
   const HOUR = 3600_000
   const cnt = (q: any) =>
     q
@@ -27,7 +29,7 @@ export async function getDashboard({ db }: Ctx) {
     codesN,
     codesActN,
     learnersN,
-    ordersSample,
+    gmv,
     progressSample,
     courses,
     feeMismatch,
@@ -40,7 +42,14 @@ export async function getDashboard({ db }: Ctx) {
     cnt(db.collection('qrcodes')),
     cnt(db.collection('qrcodes').where({ status: 'activated' })),
     cnt(db.collection('progress')),
-    rows(db.collection('orders').field({ amount: true }).orderBy('createdAt', 'desc').limit(SAMPLE)),
+    db
+      .collection('orders')
+      .aggregate()
+      .match({ status: _.in(PAID_STATUSES) })
+      .group({ _id: null, gmv: $.sum('$amount') })
+      .end()
+      .then((r: any) => (r.list && r.list[0] ? Number(r.list[0].gmv) || 0 : 0))
+      .catch(() => 0),
     rows(db.collection('progress').field({ done: true, last: true }).limit(SAMPLE)),
     rows(db.collection('courses').field({ id: true, title: true, chapters: true }).limit(SAMPLE)),
     // 钱链异常：定向 where 精确（稀少·小集合），不再从样本 filter（防老单漏报）
@@ -86,7 +95,6 @@ export async function getDashboard({ db }: Ctx) {
       .slice(0, 8)
       .map(([segId, count]) => ({ segId, name: segName[segId] || segId, count }))
 
-  const gmv = ordersSample.reduce((n: number, o: any) => n + (Number(o.amount) || 0), 0)
   const recentOrders = recent.map((o: any) => ({
     id: o.id,
     amount: o.amount,
@@ -107,8 +115,8 @@ export async function getDashboard({ db }: Ctx) {
       codesActivated: codesActN,
       learners: learnersN,
     },
-    // 精确：计数/异常/最近单；近似：GMV、热度/卡点（仅当超 SAMPLE 时标 true，前端显「近 N 估算」）
-    approx: { gmv: ordersN > SAMPLE, hot: learnersN > SAMPLE, stuck: learnersN > SAMPLE, sampleSize: SAMPLE },
+    // 精确：计数/GMV(aggregate)/异常/最近单；近似：仅 热度/卡点（progress 超 SAMPLE 时标 true，前端显「近 N 估算」）
+    approx: { gmv: false, hot: learnersN > SAMPLE, stuck: learnersN > SAMPLE, sampleSize: SAMPLE },
     txAlerts,
     hot: top(doneCount),
     stuck: top(stuckCount),

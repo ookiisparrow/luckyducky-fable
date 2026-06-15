@@ -26,6 +26,7 @@ const command = {
   neq: (val) => ({ __op: 'neq', val }),
   lt: (val) => ({ __op: 'lt', val }),
   exists: (val) => ({ __op: 'exists', val }), // 字段存在/缺失（CAS 初始化窗口前置条件，债#21）
+  aggregate: { sum: (expr) => ({ __aggOp: 'sum', expr }) }, // 聚合算子（GMV 求和·债#18续）
 }
 
 function matchOne(docVal, cond) {
@@ -167,6 +168,39 @@ class Query {
     }
     arr.push(doc)
     return { _id: doc._id }
+  }
+  aggregate() {
+    return new Aggregate(this.coll)
+  }
+}
+
+// 聚合管线（最小实现·债#18续）：支持 .match(filter).group({_id, key:$.sum('$field')}).end()。
+class Aggregate {
+  constructor(coll) {
+    this.coll = coll
+    this._match = null
+    this._group = null
+  }
+  match(filter) {
+    this._match = filter
+    return this
+  }
+  group(spec) {
+    this._group = spec
+    return this
+  }
+  async end() {
+    const docs = rows(this.coll).filter((d) => matchDoc(d, this._match))
+    if (!this._group) return { list: docs.map(clone) }
+    const out = { _id: this._group._id ?? null }
+    for (const [k, v] of Object.entries(this._group)) {
+      if (k === '_id') continue
+      if (v && v.__aggOp === 'sum') {
+        const f = String(v.expr).replace(/^\$/, '')
+        out[k] = docs.reduce((n, d) => n + (Number(d[f]) || 0), 0)
+      }
+    }
+    return { list: [out] }
   }
 }
 
