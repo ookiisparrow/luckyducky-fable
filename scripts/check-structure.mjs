@@ -418,6 +418,21 @@ export const repoChecks = [
       return bad
     },
   },
+  {
+    id: 'admin-login-throttled',
+    roots: ['#13'],
+    desc: '认证端点防爆破（根因#13）：adminApi 口令校验路径必经频控闸（throttleLocked + 失败 throttleFail），杜绝公网口令无限重试爆破',
+    run() {
+      const f = 'packages/cloud/src/functions/admin/adminApi/index.ts'
+      const abs = join(ROOT, f)
+      if (!existsSync(abs)) return [`${f} 缺失`]
+      const src = readFileSync(abs, 'utf8')
+      const bad = []
+      if (!/throttleLocked\s*\(/.test(src)) bad.push(`${f} 未经 throttleLocked 闸——认证端点无锁定、公网口令可被爆破（根因#13）`)
+      if (!/throttleFail\s*\(/.test(src)) bad.push(`${f} 失败未 throttleFail 计数——频控空转（根因#13）`)
+      return bad
+    },
+  },
 ]
 
 // ============== 逐文件规则（fileRules）==============

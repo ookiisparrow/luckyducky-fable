@@ -1,5 +1,5 @@
 import cloud from 'wx-server-sdk'
-import { getDb } from '../../../kit'
+import { getDb, throttleLocked, throttleFail, throttleReset } from '../../../kit'
 import { reply, ensure, checkKey, type Ctx } from './lib'
 import * as products from './actions/products'
 import * as courses from './actions/courses'
@@ -55,6 +55,17 @@ const ACTIONS: Record<string, (ctx: Ctx) => Promise<any>> = {
   getDashboard: dashboard.getDashboard,
 }
 
+// 认证频控（根因#13 防爆破）：失败 5 次/10 分 → 锁 5 分；login 与其余 action 的口令校验共用此闸。
+const ADMIN_THROTTLE = { max: 5, windowMs: 10 * 60_000, lockMs: 5 * 60_000 }
+// 频控键：尽力取客户端 IP（网关 x-forwarded-for），取不到回落 global。
+// 注：x-forwarded-for 可伪造、per-IP 非绝对；但配合锁定窗口已令口令爆破不可行（5 次/5 分 ≈ 1440 次/天）。
+function clientKey(event: any): string {
+  const h = event.headers || {}
+  const xff = String(h['x-forwarded-for'] || h['X-Forwarded-For'] || '')
+  const ip = xff.split(',')[0].trim() || String(h['x-real-ip'] || h['X-Real-Ip'] || '')
+  return 'adminlogin:' + (ip || 'global')
+}
+
 export const main = async (event: any) => {
   if (event.httpMethod === 'OPTIONS') return reply(204, {})
   if (event.httpMethod !== 'POST') return reply(405, { ok: false, error: 'POST_ONLY' })
@@ -69,14 +80,26 @@ export const main = async (event: any) => {
   const { action, key, data = {} } = req
 
   if (action === 'ping') return reply(200, { ok: true, ts: Date.now() })
+
+  // 认证频控闸（根因#13）：口令校验前先查锁定——爆破到阈值即拒，不再放行任何口令尝试
+  const tkey = clientKey(event)
+  const wait = await throttleLocked(tkey)
+  if (wait > 0) return reply(429, { ok: false, error: 'TOO_MANY_ATTEMPTS', retryAfter: Math.ceil(wait / 1000) })
+
   if (action === 'login') {
     const res = await checkKey(db, key, true)
+    if (res.ok) await throttleReset(tkey)
+    else await throttleFail(tkey, ADMIN_THROTTLE)
     return reply(res.ok ? 200 : 401, res)
   }
 
-  // 其余 action 一律先验口令
+  // 其余 action 一律先验口令（同受频控，防经任一 action 入口爆破）
   const auth = await checkKey(db, key, false)
-  if (!auth.ok) return reply(401, auth)
+  if (!auth.ok) {
+    await throttleFail(tkey, ADMIN_THROTTLE)
+    return reply(401, auth)
+  }
+  await throttleReset(tkey)
   await ensure(db, 'productsDraft')
   const drafts = db.collection('productsDraft')
 

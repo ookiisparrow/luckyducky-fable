@@ -7,7 +7,7 @@
 > - **旧生产仓退役**：`/Users/sparrow/luckyducky-miniprogram`（GitHub `ookiisparrow/luckyducky-miniprogram`）= 切换前 v0.9 基线，**仅作回滚用、不再迭代**（回滚预案见 `docs/archive/切换runbook.md` §五）。
 > - **接管 tcb·部署闸**：本仓直管 tcb 部署。`scripts/guard-deploy.mjs`（生产仓模型，用户拍板 A）对**敏感函数**（钱/权限/状态）的 tcb 写部署 + 批量 `DEPLOY_ALLOWED=1 deploy-fns` 二次确认（`ask`），读类 tcb（invoke/log/list）与单个非敏感函数部署放行；只认真正的 tcb 命令、提交信息里的字样不拦。人在自己终端不经本 hook。本地验证靠 vitest 内存桩 + H5 回退 + 双端 build，部署前 `npm run check` 全绿 + `node scripts/preflight.mjs`。
 > - **8 件控制台正册资产**（git 外，勿动）：微信支付连接器 `wxpay_33nb7su`、支付工作流 `sywxzfapifqzf_nncvqss2`、退款工作流 `kbgzl_n8gojr3a`、paynotify/refundnotify 及其 script1 转发节点——副本正册在本仓 `console-assets/`。
-> - **治理脊柱**：`docs/元模式.md`（治理框架 canonical：痛→守卫→反向自检循环，§A 可移植 / §B 本仓绑定）+ `docs/根因账本.md`（十二类病根：病史→本质→根治→绝迹证明）+ `docs/现状与路线.md`（第二次重构 live 地图）+ `docs/archive/切换runbook.md`（切换/回滚）。执行纪律：每批一个 squash 提交上 main、`npm run check` 全绿才推进、commit 报净化指标并标注根治病根；批次结论记 `docs/重构日志.md`。
+> - **治理脊柱**：`docs/元模式.md`（治理框架 canonical：痛→守卫→反向自检循环，§A 可移植 / §B 本仓绑定）+ `docs/根因账本.md`（十三类病根：病史→本质→根治→绝迹证明）+ `docs/现状与路线.md`（第二次重构 live 地图）+ `docs/archive/切换runbook.md`（切换/回滚）。执行纪律：每批一个 squash 提交上 main、`npm run check` 全绿才推进、commit 报净化指标并标注根治病根；批次结论记 `docs/重构日志.md`。
 >
 > 以下为工程约定，随批次演进。
 
@@ -55,6 +55,7 @@ npm run build:h5 / build:mp-weixin / build:cloud
 
 **钱 / 权限 / 状态 / 幂等（病根 1–4）**
 - **信任边界 fail-closed**：写库必过 kit 闸（withOpenId/withAdminGate/isServerCall/defineNotifyCallback）；回调防伪（见 OPENID 即拒）；越权先验本人。**价格/数量/openid/订单状态一律云函数校验，不信前端。** `[机器守: writes-need-gate]` `[机器守: gate-fail-closed]` `[机器守: notify-forge-proof]`
+- **认证端点防爆破（病根13）**：公网口令端点（adminApi）口令校验前先过频控闸（`throttleLocked`/失败 `throttleFail`/成功 `throttleReset`），失败累计达阈即锁定——杜绝无限重试爆破。用户端写函数频控泛化待 P2。`[机器守: admin-login-throttled]`
 - **并发幂等 + 状态机**：一次性副作用绑首次状态转移；确定性 `_id`（撞 id 即并发方已写，天然幂等）；流转走 `transition()` 携合法流转表，钱相关自动留痕。`[机器守: deterministic-id-concurrency]` `[机器守: transition-atomic-idempotent]` `[机器守: order-status-union]`
 - **金额分整数**：全链「分」整数（Fen 品牌类型），元只在展示层；边界收元转分一次。`[机器守: fen-branded-type]` `[机器守: fen-money-chain]`
 
