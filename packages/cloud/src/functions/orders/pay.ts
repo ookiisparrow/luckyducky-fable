@@ -1,11 +1,9 @@
-import { toFen } from '@luckyducky/shared'
+import { toFen, PAY_WINDOW_MS } from '@luckyducky/shared'
 import { withOpenId, ok, err, transition, callFlow, alert } from '../../kit'
 
 // 发起支付（敏感：金额一律取库内订单 amount，不信任前端）。通道=云开发微信支付工作流
 //（调试日志 J：实物类小程序被微信限制，须走工作流，cloudbase_module 经 kit.callFlow 单点）。
 // 三道闸（openid/本人/pending）+ 惰性超时关单 + PAY_MODE=real 且 flowId 齐全才放行。
-const EXPIRE_MS = 15 * 60 * 1000
-
 export const main = withOpenId(async ({ db, OPENID, event }) => {
   const id = String(event.id || '')
   if (!id) return err('NO_ID')
@@ -16,7 +14,7 @@ export const main = withOpenId(async ({ db, OPENID, event }) => {
   if (order.status !== 'pending') return err('BAD_STATUS:' + order.status)
 
   // 惰性超时：到点的 pending 当场关闭（定时器只是兜底）
-  if (Date.now() - order.createdAt > EXPIRE_MS) {
+  if (Date.now() - order.createdAt > PAY_WINDOW_MS) {
     await transition('orders', id, ['pending'], 'closed', { closedAt: Date.now() })
     return err('ORDER_CLOSED')
   }

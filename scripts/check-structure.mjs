@@ -680,6 +680,31 @@ export const repoChecks = [
       return bad
     },
   },
+  {
+    // 支付窗口单一来源（病根#5「样板复制即漂移」）：15 分钟支付倒计时/超时关单窗口曾硬编码三份
+    // ——closeExpiredOrders（关单 cron）/ pay（惰性关单）/ 前端 order 页（倒计时），且跨端。一处改了
+    // 别处不改 → 前端倒计时与服务端关单口径不一致（钱/体验都会错）。根治＝收口 shared/limits.ts 的
+    // PAY_WINDOW_MS，三处引常量；字面量「15 * 60 * 1000」只许出现在 limits.ts。
+    id: 'pay-window-single-source',
+    roots: ['#5'],
+    desc: '支付窗口单一来源（病根#5）：15 分钟支付窗口 PAY_WINDOW_MS 只在 shared/limits.ts 定义，closeExpiredOrders/pay/前端 order 页引常量——防三处硬编码 15*60*1000 跨端漂移致倒计时与关单口径不一致',
+    run() {
+      const bad = []
+      const NEEDLE = '15 * 60 * 1000'
+      const home = 'packages/shared/src/limits.ts'
+      const absHome = join(ROOT, home)
+      if (!existsSync(absHome) || !/export const PAY_WINDOW_MS/.test(readFileSync(absHome, 'utf8')))
+        bad.push(`${home} 未导出 PAY_WINDOW_MS——支付窗口单源缺失（病根#5）`)
+      for (const dir of ['packages/cloud/src', 'packages/miniapp/src']) {
+        for (const f of walk(join(ROOT, dir))) {
+          const rel = relative(ROOT, f)
+          if (readFileSync(f, 'utf8').includes(NEEDLE))
+            bad.push(`${rel} 硬编码支付窗口「${NEEDLE}」——须引 shared 的 PAY_WINDOW_MS 单源（病根#5）`)
+        }
+      }
+      return bad
+    },
+  },
 ]
 
 // ============== 逐文件规则（fileRules）==============

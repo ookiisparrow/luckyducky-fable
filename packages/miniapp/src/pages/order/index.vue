@@ -20,13 +20,13 @@ import { ORDER_STATUS } from '@/data/orders.js'
 import { goBack, goProductDetail } from '@/utils/nav.js'
 import { money, dateTime, mmss } from '@/utils/format.js'
 import { BRAND_NAME } from '@/constants/brand.js'
+import { PAY_WINDOW_MS } from '@luckyducky/shared'
 
 const ordersStore = useOrdersStore()
 const orderId = ref('')
 const order = computed(() => (orderId.value ? ordersStore.getById(orderId.value) : null))
 
-// 待支付倒计时：真单 pending 才跑，15 分钟与云端关单同口径；timer 必清理（代码标准）
-const PAY_WINDOW_MS = 15 * 60 * 1000
+// 待支付倒计时：真单 pending 才跑，窗口 PAY_WINDOW_MS 与云端关单同源（病根#5 单源）；timer 必清理
 const nowTick = ref(Date.now())
 let payTimer = null
 watch(
