@@ -707,12 +707,12 @@ export const repoChecks = [
   },
   {
     // 物流轨迹接快递100免费插件（R17 / 占位③，2026-06-15 用户拍板②）：manifest mp-weixin 声明
-    // 插件 wx6885acbedba59c14 + 订单页「查看物流」微信端打开插件轨迹页（plugin-private://），
-    // 其它端 / 未知快递公司回退复制运单号（同分享/客服多端模式）；中文快递名→快递100 编码经 utils/express。
-    // 诚实边界：插件真机渲染靠人验（根因#8）；快递100 服务市场已下架＝依赖风险，回退复制兜底。
+    // 插件 wx6885acbedba59c14（别名 kuaidi100）+ 订单页「查看物流」微信端 `plugin://kuaidi100/index`
+    // 打开插件查询页（别名跳转·非 plugin-private://APPID，调试日志 O 修正），打开失败/其它端回退复制运单号；
+    // 中文快递名→快递100 编码经 utils/express（com 选填）。诚实边界：插件真机渲染靠人验（根因#8）。
     id: 'express-plugin-wired',
     roots: ['R17'],
-    desc: '物流轨迹接快递100插件（R17/占位③）：manifest 声明插件 wx6885acbedba59c14 + 订单页「查看物流」开插件轨迹页（plugin-private://）+ utils/express 中文快递名→编码，防回退只复制运单号',
+    desc: '物流轨迹接快递100插件（R17/占位③）：manifest 声明插件 wx6885acbedba59c14 + 订单页「查看物流」用 plugin://kuaidi100/index 打开插件查询页 + utils/express 中文快递名→编码，防回退只复制运单号',
     run() {
       const bad = []
       const APPID = 'wx6885acbedba59c14'
@@ -722,8 +722,8 @@ export const repoChecks = [
         bad.push(`manifest.json 未声明快递100插件 ${APPID}——物流插件未注册（R17③）`)
       const order = join(ROOT, 'packages/miniapp/src/pages/order/index.vue')
       if (!existsSync(order)) bad.push('pages/order/index.vue 缺失')
-      else if (!readFileSync(order, 'utf8').includes(`plugin-private://${APPID}`))
-        bad.push('order/index.vue「查看物流」未打开快递100插件（plugin-private://）——仍只复制运单号（R17③）')
+      else if (!readFileSync(order, 'utf8').includes('plugin://kuaidi100/'))
+        bad.push('order/index.vue「查看物流」未用 plugin://kuaidi100/ 打开插件——别名跳转缺失（R17③）')
       const exp = join(ROOT, 'packages/miniapp/src/utils/express.js')
       if (!existsSync(exp)) bad.push('utils/express.js 缺失（中文快递名→快递100 编码映射，R17③）')
       else if (!/export function expressCode/.test(readFileSync(exp, 'utf8')))
@@ -782,6 +782,38 @@ export const repoChecks = [
               const name = mm[1] || mm[2]
               if (!known.has(name))
                 bad.push(`${relative(ROOT, p)} 用了未登记集合名「${name}」——须先登记 kit/collections.ts COLLECTIONS（防打错字建无保护集合·债#28）`)
+            }
+          }
+        }
+      }
+      walkDir(root)
+      return bad
+    },
+  },
+  {
+    // 错误码只用已登记的（债#29·根因#3）：kit `err()` 返回的码是**前端按精确字符串分支的契约**；
+    // shared/errors.ts 的 ERR 是错误码权威册。校验全库 `err('字面量')` 的码都在册内——打错码即红、
+    // 新码须先登记（前端才能对得上）。动态码 `err('X:'+v)` 非纯字面量、不校验。
+    id: 'known-error-codes',
+    roots: ['#3'],
+    desc: '错误码只用已登记的（债#29）：shared/errors.ts 的 ERR 为错误码单源；全库 kit `err(\'字面量\')` 的码须在册内——防打错码致前端契约对不上（前端按精确码分支）',
+    run() {
+      const home = join(ROOT, 'packages/shared/src/errors.ts')
+      if (!existsSync(home)) return ['packages/shared/src/errors.ts 缺失（错误码单源·债#29）']
+      const m = readFileSync(home, 'utf8').match(/ERR\s*=\s*\{([\s\S]*?)\}\s*as const/)
+      const known = new Set(m ? [...m[1].matchAll(/:\s*['"]([A-Z_]+)['"]/g)].map((x) => x[1]) : [])
+      if (!known.size) return ['shared/errors.ts 未定义 ERR（错误码单源·债#29）']
+      const bad = []
+      const pat = /\berr\(\s*['"]([A-Z_]+)['"]\s*\)/g // 纯字面量 err('X')；动态 err('X:'+v) 不匹配
+      const root = join(ROOT, 'packages/cloud/src')
+      const walkDir = (d) => {
+        for (const e of readdirSync(d)) {
+          const p = join(d, e)
+          if (statSync(p).isDirectory()) walkDir(p)
+          else if (e.endsWith('.ts')) {
+            for (const mm of readFileSync(p, 'utf8').matchAll(pat)) {
+              if (!known.has(mm[1]))
+                bad.push(`${relative(ROOT, p)} 用了未登记错误码「${mm[1]}」——须先登记 shared/errors.ts ERR（前端按精确码分支·债#29）`)
             }
           }
         }

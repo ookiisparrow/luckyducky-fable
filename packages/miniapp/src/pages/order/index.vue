@@ -169,21 +169,23 @@ function onAction(a) {
     if (canPay) payNow()
     else uni.showToast({ title: '请在微信小程序内完成支付', icon: 'none' })
   } else if (k === 'logi') {
-    // 查看物流（R17/占位③）：微信端打开快递100插件轨迹页（plugin-private://，在本小程序内看不跳出），
-    // 其它端 / 未知快递公司 / 插件打开失败 → 回退复制运单号（去快递 App 自查）。
+    // 查看物流（R17/占位③）：微信端打开快递100插件查询页（在本小程序内看不跳出）。
+    // 用法（社区实测）：plugin://<别名>/index?num=运单号&appName=小程序名&com=编码——别名=manifest
+    // plugins 的 key（kuaidi100），导出页 index；com 选填，不传插件按单号自动识别。打开失败 / 非微信端
+    // 回退复制运单号（去快递 App 自查）。
     const s = order.value.shipping
     if (!s) return
     // #ifdef MP-WEIXIN
     const com = expressCode(s.company)
-    if (com) {
-      uni.navigateTo({
-        url: `plugin-private://wx6885acbedba59c14/pages/result/result?nu=${s.trackingNo}&com=${com}&querysource=third_xcx`,
-        fail: () => copyTracking(s.trackingNo),
-      })
-      return
-    }
+    const comQ = com ? `&com=${com}` : ''
+    uni.navigateTo({
+      url: `plugin://kuaidi100/index?num=${s.trackingNo}&appName=${encodeURIComponent(BRAND_NAME)}${comQ}`,
+      fail: () => copyTracking(s.trackingNo),
+    })
     // #endif
+    // #ifndef MP-WEIXIN
     copyTracking(s.trackingNo)
+    // #endif
   } else if (k === 'refund') {
     uni.navigateTo({ url: '/pages/aftersales/index?orderId=' + order.value.id })
   } else if (k === 'review') {
