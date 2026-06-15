@@ -26,3 +26,6 @@ project.private.config.json
 
 # format-hook 测试的临时格式化目录（afterEach 自删，防意外残留入库）
 .fmt-test-*
+
+# build:cloud 并发锁（原子 mkdir，构建完即删；崩溃残留由下次构建 2min 破除）
+.build-cloud.lock

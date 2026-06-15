@@ -34,6 +34,27 @@ function collect() {
 }
 
 const fns = collect()
+
+// 并发构建安全（复审报告 P2）：verify:cloud / deploy-fns 各自独立跑 build:cloud，并发时共享
+// dist 的 rmSync ↔ 写入互踩 → ENOTEMPTY / 产物损坏。用原子 mkdir 作锁串行化：第二个构建等第
+// 一个完成而非污染产物（mkdir 已存在即 EEXIST＝锁被持有）。构建脚本并发性静态测不出（无干净
+// 机器守卫）——故收口于此 + 成文（靠人纪律：别绕过锁手删 dist）。僵锁 >2min 自动破除。
+const LOCK = join(ROOT, '.build-cloud.lock')
+const lockDeadline = Date.now() + 120_000
+for (;;) {
+  try {
+    mkdirSync(LOCK) // 原子 check-and-create：已被持有则抛 EEXIST
+    break
+  } catch (e) {
+    if (e.code !== 'EEXIST') throw e
+    if (Date.now() > lockDeadline) {
+      rmSync(LOCK, { recursive: true, force: true }) // 僵锁破除（持锁进程已崩）
+      continue
+    }
+    await new Promise((r) => setTimeout(r, 150))
+  }
+}
+
 if (existsSync(OUT)) rmSync(OUT, { recursive: true })
 
 for (const fn of fns) {
@@ -69,6 +90,8 @@ for (const fn of fns) {
     ) + '\n'
   )
 }
+
+rmSync(LOCK, { recursive: true, force: true }) // 释放并发构建锁
 
 console.log(
   `✅ esbuild 打包 ${fns.length} 个云函数 → packages/cloud/dist/：` +
