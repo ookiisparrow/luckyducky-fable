@@ -11,9 +11,17 @@ defineEmits(['service', 'favorite', 'cart', 'buy'])
 <template>
   <view class="pdp-foot"></view>
   <view class="pdp-dock">
+    <!-- #ifdef MP-WEIXIN -->
+    <!-- 客服：微信原生客服会话（R18/⑨ open-type=contact，§5 能力按钮例外） -->
+    <button class="pdp-buy-ico pdp-contact-btn" open-type="contact">
+      <Icon name="headphones" :size="21" /><text>客服</text>
+    </button>
+    <!-- #endif -->
+    <!-- #ifndef MP-WEIXIN -->
     <view class="pdp-buy-ico" @tap="$emit('service')">
       <Icon name="headphones" :size="21" /><text>客服</text>
     </view>
+    <!-- #endif -->
     <view class="pdp-buy-ico" @tap="$emit('favorite')">
       <Icon name="star" :size="21" /><text>收藏</text>
     </view>
@@ -51,6 +59,16 @@ defineEmits(['service', 'favorite', 'cart', 'buy'])
 .pdp-buy-ico text {
   font-size: 10px;
   margin-top: 2px;
+}
+/* 客服在微信端是原生 button（open-type=contact），样式归零、只当图标热区用 */
+.pdp-contact-btn {
+  background: transparent;
+  border: none;
+  line-height: 1;
+  margin: 0;
+}
+.pdp-contact-btn::after {
+  border: none;
 }
 .pdp-buy-actions {
   flex: 1;

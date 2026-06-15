@@ -159,11 +159,21 @@ function goLogin() {
 
         <!-- 客服 / 地址 -->
         <view class="my-card my-list">
-          <view class="my-row" @tap="toast('正在接入人工客服…')">
+          <!-- #ifdef MP-WEIXIN -->
+          <!-- 联系客服：微信原生客服会话（R18/⑨ open-type=contact，§5 能力按钮例外） -->
+          <button class="my-row my-contact-row" open-type="contact">
+            <view class="my-row-ico"><Icon name="headphones-meta" :size="22" /></view>
+            <text class="my-row-label">联系客服</text>
+            <view class="my-row-chev"><Icon name="chevron-right" :size="18" /></view>
+          </button>
+          <!-- #endif -->
+          <!-- #ifndef MP-WEIXIN -->
+          <view class="my-row" @tap="toast('客服请在微信小程序内使用')">
             <view class="my-row-ico"><Icon name="headphones-meta" :size="22" /></view>
             <text class="my-row-label">联系客服</text>
             <view class="my-row-chev"><Icon name="chevron-right" :size="18" /></view>
           </view>
+          <!-- #endif -->
           <view class="my-row divided" @tap="goAddress">
             <view class="my-row-ico"><Icon name="map-pin-meta" :size="22" /></view>
             <text class="my-row-label">地址管理</text>
@@ -249,6 +259,20 @@ function goLogin() {
   display: flex;
   align-items: center;
   padding: 15px 16px;
+}
+/* 客服在微信端是原生 button（open-type=contact），归零成普通列表行 */
+.my-contact-row {
+  width: 100%;
+  background: transparent;
+  border: none;
+  border-radius: 0;
+  font-size: inherit;
+  line-height: inherit;
+  color: inherit;
+  text-align: left;
+}
+.my-contact-row::after {
+  border: none;
 }
 .my-row.divided {
   border-top: 1px solid $line;

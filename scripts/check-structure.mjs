@@ -565,6 +565,42 @@ export const repoChecks = [
       return bad
     },
   },
+  {
+    // 客服接微信客服官方组件（R18 / 占位⑨，2026-06-15 用户拍板①）：四个客服入口
+    // （详情坞 DetailDock / 「我」页 / 售后页 / 播放页 ServicePanel）微信端用 <button open-type="contact">
+    // 进原生客服会话，非微信端 view+toast 兜底（T1 微信原生单源·§5 open-type 例外，同 R29 分享）。
+    id: 'customer-service-wired',
+    roots: ['R18'],
+    desc: '客服已接微信客服官方组件（R18 / 占位⑨）：DetailDock/me/aftersales/ServicePanel 微信端 open-type="contact" 进原生客服会话；旧占位「正在接入人工客服」假 Toast 全库绝迹（接待人 mp 后台配置·靠人）',
+    run() {
+      const bad = []
+      const src = (f) => {
+        const abs = join(ROOT, f)
+        return existsSync(abs) ? readFileSync(abs, 'utf8') : null
+      }
+      // ① 旧占位假 Toast 绝迹（曾散在 detail/me/aftersales）
+      for (const dir of ['packages/miniapp/src']) {
+        for (const f of walk(join(ROOT, dir))) {
+          if (readFileSync(f, 'utf8').includes('正在接入人工客服'))
+            bad.push(`${relative(ROOT, f)} 仍有「正在接入人工客服」假 Toast——客服未接微信客服（R18⑨）`)
+        }
+      }
+      // ② 四入口微信端接 open-type="contact"
+      const ENTRIES = [
+        'packages/miniapp/src/pages/detail/components/DetailDock.vue',
+        'packages/miniapp/src/pages/me/index.vue',
+        'packages/miniapp/src/pages/aftersales/index.vue',
+        'packages/miniapp/src/pages/player/components/HelpSheet/ServicePanel.vue',
+      ]
+      for (const f of ENTRIES) {
+        const s = src(f)
+        if (s === null) bad.push(`${f} 缺失（客服入口，R18⑨）`)
+        else if (!/open-type="contact"/.test(s))
+          bad.push(`${f} 客服入口未用 open-type="contact"——点不出微信原生客服（R18⑨）`)
+      }
+      return bad
+    },
+  },
 ]
 
 // ============== 逐文件规则（fileRules）==============

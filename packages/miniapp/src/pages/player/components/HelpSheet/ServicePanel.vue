@@ -1,7 +1,7 @@
 <script setup>
 /**
- * 求助面板 · 在线客服。现为样例对话（toast 模拟），上线方案见设计规格（建议微信客服）。
- * 副作用（toast）上提：本组件只 emit('action', 提示文案)，由壳统一弹。
+ * 求助面板 · 在线客服。微信端：快捷问题 chip + 发送均为 open-type="contact" 原生客服会话
+ * （R18/⑨，接待人 mp 后台配置）；非微信端：emit('action') 由壳 toast 兜底（T1 微信原生单源）。
  */
 import Icon from '@/components/Icon.vue'
 import { SERVICE_CHIPS } from './data.js'
@@ -25,19 +25,39 @@ const emit = defineEmits(['action'])
     >
     <text class="hs-clabel">常见求助，点一下快速发送</text>
     <view class="hs-chips">
+      <!-- #ifdef MP-WEIXIN -->
+      <!-- 快捷问题点一下进微信原生客服会话（open-type=contact 能力按钮，§5 例外；属性被 prettier 拆多行故 convention-ok） -->
+      <button
+        v-for="(c, i) in SERVICE_CHIPS"
+        :key="i"
+        class="hs-chip hs-chip-btn"
+        open-type="contact"
+      >
+        {{ c }}
+      </button>
+      <!-- #endif -->
+      <!-- #ifndef MP-WEIXIN -->
       <view
         v-for="(c, i) in SERVICE_CHIPS"
         :key="i"
         class="hs-chip"
-        @tap="emit('action', '已为你转接客服 · ' + c)"
+        @tap="emit('action', '客服请在微信小程序内使用')"
         >{{ c }}</view
       >
+      <!-- #endif -->
     </view>
     <view class="hs-input">
       <input class="hs-input-field" placeholder="输入你的问题…" disabled />
-      <view class="hs-send" @tap="emit('action', '消息已送达 · 客服马上回复你~')"
+      <!-- #ifdef MP-WEIXIN -->
+      <button class="hs-send hs-send-btn" open-type="contact">
+        <Icon name="send-w" :size="19" />
+      </button>
+      <!-- #endif -->
+      <!-- #ifndef MP-WEIXIN -->
+      <view class="hs-send" @tap="emit('action', '客服请在微信小程序内使用')"
         ><Icon name="send-w" :size="19"
       /></view>
+      <!-- #endif -->
     </view>
   </view>
 </template>
@@ -115,6 +135,13 @@ const emit = defineEmits(['action'])
 .hs-chip:active {
   background: $bg-grey;
 }
+/* 微信端 chip 是原生 button（open-type=contact），归零成胶囊 */
+.hs-chip-btn {
+  line-height: 1.4;
+}
+.hs-chip-btn::after {
+  border: none;
+}
 .hs-input {
   display: flex;
   align-items: center;
@@ -140,5 +167,14 @@ const emit = defineEmits(['action'])
   justify-content: center;
   flex: 0 0 auto;
   margin-left: 10px;
+}
+/* 微信端发送是原生 button（open-type=contact），归零成圆钮 */
+.hs-send-btn {
+  padding: 0;
+  line-height: 1;
+  border: none;
+}
+.hs-send-btn::after {
+  border: none;
 }
 </style>

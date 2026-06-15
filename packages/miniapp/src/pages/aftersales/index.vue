@@ -107,15 +107,24 @@ function toast(t) {
         <view class="coas-sechead">
           <text class="coas-title">我的售后</text>
         </view>
-        <view v-for="(a, i) in aftersales.list" :key="a._id" class="coas-record" :class="{ divided: i > 0 }">
+        <view
+          v-for="(a, i) in aftersales.list"
+          :key="a._id"
+          class="coas-record"
+          :class="{ divided: i > 0 }"
+        >
           <view class="coas-record-top">
-            <text class="coas-order-name">{{ a.name }}{{ a.spec ? `（${a.spec}）` : '' }} ×{{ a.qty }}</text>
+            <text class="coas-order-name"
+              >{{ a.name }}{{ a.spec ? `（${a.spec}）` : '' }} ×{{ a.qty }}</text
+            >
             <text class="coas-chip" :class="'coas-chip-' + (AS_STATUS[a.status]?.cls || 'applied')">
               {{ AS_STATUS[a.status]?.label || a.status }}
             </text>
           </view>
           <view class="coas-record-mid">
-            <text class="coas-record-amt">退款 <text class="cny">￥</text>{{ money(a.refundAmount) }}</text>
+            <text class="coas-record-amt"
+              >退款 <text class="cny">￥</text>{{ money(a.refundAmount) }}</text
+            >
             <text class="coas-record-time">{{ dateTime(a.appliedAt) }}</text>
           </view>
           <text v-if="a.status === 'rejected' && a.rejectReason" class="coas-record-note">
@@ -136,12 +145,21 @@ function toast(t) {
         <text v-if="!applicable.length" class="coas-empty">
           暂无可申请的商品（已开始学习课程的商品不支持退货）
         </text>
-        <view v-for="(o, i) in applicable" :key="o.orderId + o.productId" class="coas-order" :class="{ divided: i > 0 }">
+        <view
+          v-for="(o, i) in applicable"
+          :key="o.orderId + o.productId"
+          class="coas-order"
+          :class="{ divided: i > 0 }"
+        >
           <view class="coas-order-img"><MediaSlot ratio="1/1" :radius="5" /></view>
           <view class="coas-order-mid">
             <text class="coas-order-name">{{ o.name }}</text>
-            <text class="coas-order-meta">{{ o.spec || '默认款' }} ×{{ o.qty }} · 单号 {{ o.orderId }}</text>
-            <text class="coas-order-price"><text class="cny">￥</text>{{ money(o.price * o.qty) }}</text>
+            <text class="coas-order-meta"
+              >{{ o.spec || '默认款' }} ×{{ o.qty }} · 单号 {{ o.orderId }}</text
+            >
+            <text class="coas-order-price"
+              ><text class="cny">￥</text>{{ money(o.price * o.qty) }}</text
+            >
           </view>
           <view class="coas-apply" @tap="applyFor(o)">申请售后</view>
         </view>
@@ -149,11 +167,21 @@ function toast(t) {
 
       <!-- 帮助 -->
       <view class="co-card">
-        <view class="co-row" @tap="toast('正在接入人工客服…')">
+        <!-- #ifdef MP-WEIXIN -->
+        <!-- 联系人工客服：微信原生客服会话（R18/⑨ open-type=contact，§5 能力按钮例外） -->
+        <button class="co-row co-contact-row" open-type="contact">
+          <text class="co-row-key">联系人工客服</text>
+          <text class="co-row-val muted">工作日 9:00–21:00</text>
+          <view class="co-row-chev"><Icon name="chevron-right" :size="18" /></view>
+        </button>
+        <!-- #endif -->
+        <!-- #ifndef MP-WEIXIN -->
+        <view class="co-row" @tap="toast('客服请在微信小程序内使用')">
           <text class="co-row-key">联系人工客服</text>
           <text class="co-row-val muted">工作日 9:00–21:00</text>
           <view class="co-row-chev"><Icon name="chevron-right" :size="18" /></view>
         </view>
+        <!-- #endif -->
       </view>
 
       <text class="coas-note">退货请保持包装完整（含未拆封的课程激活卡）· 审核通过后原路退回</text>
@@ -163,6 +191,21 @@ function toast(t) {
 
 <style lang="scss" scoped>
 @import '../../styles/co.scss';
+
+/* 客服在微信端是原生 button（open-type=contact），归零成普通 co-row 列表行 */
+.co-contact-row {
+  width: 100%;
+  background: transparent;
+  border: none;
+  border-radius: 0;
+  font-size: inherit;
+  line-height: inherit;
+  color: inherit;
+  text-align: left;
+}
+.co-contact-row::after {
+  border: none;
+}
 
 /* 本页无底部坞，留出底部呼吸 */
 .co-body {

@@ -265,7 +265,7 @@ function onRecPick(p) {
 
     <!-- 固定底部购买坞（含给 fixed 坞让位的占位） -->
     <DetailDock
-      @service="toast('正在接入人工客服…')"
+      @service="toast('客服请在微信小程序内使用')"
       @favorite="toast('已收藏')"
       @cart="addToCart"
       @buy="buyNow"
