@@ -30,6 +30,7 @@
     "preflight": "node scripts/preflight.mjs",
     "trace": "node scripts/trace.mjs",
     "loadtest": "node scripts/loadtest.mjs",
+    "deploy:test": "node scripts/deploy-test.mjs",
     "format": "prettier --write \"packages/miniapp/src/**/*.{vue,js,scss,json}\"",
     "test": "vitest run",
     "test:watch": "vitest",

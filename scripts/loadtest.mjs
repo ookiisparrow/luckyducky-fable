@@ -1,106 +1,117 @@
 #!/usr/bin/env node
 /**
- * 压测台骨架（债#19）——并发正确性 + 种子容量，**只打独立测试环境，绝不碰生产**。
+ * 压测台（债#19）——**只打独立测试环境，绝不碰生产**。
  *
- * 为什么：本仓从未压测、全靠看码推断（根因#8「单人能用 ≠ 千人同时」）。两件事要分清：
- *   ① 并发正确性（同 key 突发会不会算错/重复）——能廉价真证：Promise.all 灌并发 + 断言不变量。
- *   ② 吞吐/容量（峰值扛不扛、破千准不准）——需真环境真量：种子灌数 + 量延迟 + 核精确。
- * 二者只有对**真测试环境**跑才算「证」（桩测只证逻辑自洽，不证真库行为）。
+ * 为什么这么测：本仓从未压测、全靠看码推断（根因#8）。我们改的 throttle CAS / dashboard
+ * count·aggregate 全建立在一个**未验的假设**上：「真微信云 `where().update()` 是原子的、
+ * `count()/aggregate` 不受 1000 封顶」。本脚本用 node-sdk admin **直连测试库**验这两条地基
+ * （不经云函数——throttle 在 withOpenId 后、adminApi 是 HTTP 口，node-sdk 都调不动；而地基本身
+ * 才是 throttle/transition/激活码/看板 共同所依）：
+ *   ① 并发 CAS 原子性：一个 doc 上 N 个并发「读 v → where({_id,v:旧}).update(v+1)」→ 无丢更新则 v===N。
+ *      这是 bumpWindowed/transition/激活码抢占的同一招——它真原子，那套并发正确性才算证。
+ *   ② 规模精确：灌 N 条假单 → count() 应===N、aggregate 求和应精确（验 #18/#18续 破千不少算）。
  *
- * 前置（靠人，缺一不可）：
- *   1) 一个【独立测试 tcb 环境】——绝不用生产（cloudbase-d4gcssqbv06865479）。
- *   2) npm i -D @cloudbase/node-sdk
- *   3) 测试环境服务凭证：环境变量 TCB_SECRETID / TCB_SECRETKEY（或改用 CLI 登录态）。
- *   4) 把云函数部署到该测试环境（build:cloud + 部署）。
- *
+ * 前置：① 独立测试环境（非生产）② npm i -D @cloudbase/node-sdk ③ 本地 export
+ *   TCB_SECRETID/TCB_SECRETKEY（经典 CAM 密钥·别进仓库/聊天）。
  * 用法：
- *   node scripts/loadtest.mjs --env <测试envId> --mode concurrency --n 100
+ *   node scripts/loadtest.mjs --env <测试envId> --mode cas --n 200
  *   node scripts/loadtest.mjs --env <测试envId> --mode capacity --seed 2000
- *
- * 安全闸：--env 等于生产 envId 直接退出，绝不跑。
+ * 安全闸：--env 等于生产 envId 直接退出。跑完自动清理 _loadtest 数据。
  */
 
 const PROD_ENV = 'cloudbase-d4gcssqbv06865479' // 生产·禁压
+const COL = 'loadtest' // 专用集合·与业务集合隔离·跑完清空
 
 function parseArgs(argv) {
   const a = {}
-  for (let i = 0; i < argv.length; i++) {
-    if (argv[i].startsWith('--')) a[argv[i].slice(2)] = argv[i + 1]
-  }
+  for (let i = 0; i < argv.length; i++) if (argv[i].startsWith('--')) a[argv[i].slice(2)] = argv[i + 1]
   return a
 }
-
 function usage(msg) {
   if (msg) console.error('✗ ' + msg)
-  console.error(
-    '用法：node scripts/loadtest.mjs --env <测试envId> --mode <concurrency|capacity> [--n 100] [--seed 2000]'
-  )
+  console.error('用法：node scripts/loadtest.mjs --env <测试envId> --mode <cas|capacity> [--n 200] [--seed 2000]')
   process.exit(1)
 }
 
-async function getApp(env) {
+async function getDb(env) {
   let cloudbase
   try {
     cloudbase = (await import('@cloudbase/node-sdk')).default
   } catch {
     usage('缺依赖：先 npm i -D @cloudbase/node-sdk')
   }
-  return cloudbase.init({
+  const app = cloudbase.init({
     env,
     secretId: process.env.TCB_SECRETID,
     secretKey: process.env.TCB_SECRETKEY,
   })
+  return app.database()
 }
 
-// ① 并发正确性：N 个并发 trackEvent（同 openid）→ 断言恰 max 个未限频、其余 RATE_LIMITED（债#21）。
-// 真证 throttle CAS 在真库的原子性（桩只证逻辑·根因#8）。其余不变量（激活码一码一用 / 订单幂等）
-// 照此模式补：同 key 灌并发 → 断言「只 N 个生效」。
-async function runConcurrency(app, n) {
-  const call = (name, data) => app.callFunction({ name, data }).then((r) => r.result)
-  const MAX = 60 // 与 withRateLimit('trackEvent', {max:60}) 对齐
-  console.log(`并发正确性：${n} 个并发 trackEvent（同 openid）·限频阈值 ${MAX}/分…`)
-  const results = await Promise.all(
-    Array.from({ length: n }, () => call('trackEvent', { type: 'view', page: 'loadtest' }))
-  )
-  const limited = results.filter((r) => r && r.error === 'RATE_LIMITED').length
-  const passed = n - limited
-  console.log(`  放行 ${passed} · 限频 ${limited}`)
-  const expectPassed = Math.min(n, MAX)
-  if (passed === expectPassed) console.log('  ✅ 限频精确（突发并发下无丢更新）')
-  else console.log(`  ❌ 限频漂移：放行 ${passed}，期望 ${expectPassed}（CAS 在真库未严格生效？）`)
-}
-
-// ② 种子容量：灌 seed 条假订单 → 量 getDashboard 延迟 + 核 count()/aggregate 破千仍准（债#18/#18续）。
-// 直连测试库写入（admin 凭证）；务必是测试环境。
-async function runCapacity(app, seed) {
-  const db = app.database()
-  console.log(`种子容量：灌 ${seed} 条假订单到测试库…`)
-  const now = Date.now()
-  for (let i = 0; i < seed; i++) {
-    await db.collection('orders').add({
-      data: { id: 'lt-' + i, amount: 1, status: 'paid', createdAt: now + i, _loadtest: true },
+// ① 真库 CAS 原子性：N 并发自增同一 doc（读→where(旧值).update），无丢更新则 v===N。
+async function runCas(db, n) {
+  const id = 'cas-probe'
+  await db.collection(COL).doc(id).set({ data: { v: 0, _loadtest: true } })
+  console.log(`并发 CAS：${n} 个并发自增同一 doc（验真库 where().update() 原子性）…`)
+  let lost = 0
+  await Promise.all(
+    Array.from({ length: n }, async () => {
+      for (let i = 0; i < 100; i++) {
+        const got = await db.collection(COL).doc(id).get()
+        const v = (got.data && got.data.v) || (got.data && got.data[0] && got.data[0].v) || 0
+        const r = await db.collection(COL).where({ _id: id, v }).update({ data: { v: v + 1 } })
+        if (r.stats && r.stats.updated === 1) return
+      }
+      lost++ // 100 次重试仍没抢到（极端争用）
     })
+  )
+  const fin = await db.collection(COL).doc(id).get()
+  const v = (fin.data && fin.data.v) ?? (fin.data && fin.data[0] && fin.data[0].v)
+  console.log(`  最终 v=${v}（期望 ${n}）· 重试耗尽 ${lost}`)
+  if (v === n) console.log('  ✅ 真库 where().update() CAS 原子·无丢更新——throttle/transition/激活码 地基成立')
+  else console.log(`  ❌ 丢更新（v=${v}≠${n}）——真库 CAS 非原子，throttle 限频/激活抢占会漏！`)
+  await db.collection(COL).doc(id).remove().catch(() => {})
+}
+
+// ② 规模精确：灌 seed 条假单 → count() 应===seed、aggregate 求和应精确（验破千不少算）。
+async function runCapacity(db, seed) {
+  console.log(`规模：灌 ${seed} 条假单到测试集合 ${COL}…`)
+  for (let i = 0; i < seed; i++) {
+    await db.collection(COL).add({ data: { kind: 'order', status: 'paid', amount: 1, _loadtest: true } })
   }
-  console.log('  调 getDashboard 量延迟…')
   const t0 = Date.now()
-  const r = await app.callFunction({ name: 'adminApi', data: { action: 'getDashboard' } })
+  const cnt = await db.collection(COL).where({ kind: 'order' }).count()
+  const agg = await db
+    .collection(COL)
+    .aggregate()
+    .match({ kind: 'order', status: 'paid' })
+    .group({ _id: null, gmv: $sum(db) })
+    .end()
   const ms = Date.now() - t0
-  const stats = r.result && r.result.stats
-  console.log(`  getDashboard 耗时 ${ms}ms · orders=${stats && stats.orders} · gmv=${stats && stats.gmv}`)
-  console.log('  ⚠️ 跑完记得清理 _loadtest:true 的种子数据（避免污染测试库）。')
+  const list = agg.data || agg.list || []
+  const gmv = list[0] ? list[0].gmv : 0
+  console.log(`  count=${cnt.total}（期望 ${seed}）· aggregate gmv=${gmv}（期望 ${seed}）· 耗时 ${ms}ms`)
+  if (cnt.total === seed && gmv === seed) console.log('  ✅ 破千仍精确（count/aggregate 不受 1000 封顶·验 #18/#18续）')
+  else console.log('  ❌ 不精确——破千被封顶/漏算？')
+  console.log('  清理种子…')
+  await db.collection(COL).where({ _loadtest: true }).remove().catch(() => {})
+}
+
+function $sum(db) {
+  return db.command.aggregate.sum('$amount')
 }
 
 async function main() {
   const a = parseArgs(process.argv.slice(2))
   if (!a.env) usage('缺 --env <测试envId>')
   if (a.env === PROD_ENV) usage('拒绝：--env 是生产环境，压测只打独立测试环境')
-  const app = await getApp(a.env)
-  if (a.mode === 'concurrency') await runConcurrency(app, Number(a.n) || 100)
-  else if (a.mode === 'capacity') await runCapacity(app, Number(a.seed) || 2000)
-  else usage('--mode 须为 concurrency 或 capacity')
+  const db = await getDb(a.env)
+  if (a.mode === 'cas') await runCas(db, Number(a.n) || 200)
+  else if (a.mode === 'capacity') await runCapacity(db, Number(a.seed) || 2000)
+  else usage('--mode 须为 cas 或 capacity')
 }
 
 main().catch((e) => {
-  console.error('压测出错：', e && e.message)
+  console.error('压测出错：', (e && e.message) || e)
   process.exit(1)
 })
