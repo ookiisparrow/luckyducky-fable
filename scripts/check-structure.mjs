@@ -627,6 +627,30 @@ export const repoChecks = [
       return bad
     },
   },
+  {
+    // 首页商品卡加购真做事（病根#6「假反馈泄漏」：用户动作伪成功反馈而无真效果，账本 K-⑤
+    // 「拒单吞进回退＝本地伪成功」同源）。曾发病：首页 ProductCard 的 ＋（@add＝加入购物车）
+    // 被接成 onProductAdd→ping('已收藏')＝收藏占位⑪ 假反馈，点了不进购物车。守卫锁 onProductAdd
+    // 真调 cart.add 且不留「已收藏」假 toast。同「占位假 toast 占真按钮」家族（detail-share/customer-service）。
+    id: 'home-card-add-real',
+    roots: ['#6'],
+    desc: '首页商品卡加购真做事（病根#6）：pages/index/index.vue 的 onProductAdd（ProductCard @add 处理）须调 cart.add 真加购物车、不弹「已收藏」假反馈，防加购按钮接成收藏占位',
+    run() {
+      const f = 'packages/miniapp/src/pages/index/index.vue'
+      const abs = join(ROOT, f)
+      if (!existsSync(abs)) return [`${f} 缺失（首页）`]
+      const src = readFileSync(abs, 'utf8')
+      const m = src.match(/function onProductAdd\([^)]*\)\s*\{([\s\S]*?)\n\}/)
+      if (!m) return [`${f} 无 onProductAdd 处理函数（首页商品卡 @add 加购）`]
+      const body = m[1]
+      const bad = []
+      if (!/cart\.add\s*\(/.test(body))
+        bad.push(`${f} onProductAdd 未调 cart.add——加购按钮没真加购物车（病根#6 假反馈）`)
+      if (/已收藏/.test(body))
+        bad.push(`${f} onProductAdd 仍弹「已收藏」假反馈——加购按钮接成收藏占位（病根#6）`)
+      return bad
+    },
+  },
 ]
 
 // ============== 逐文件规则（fileRules）==============

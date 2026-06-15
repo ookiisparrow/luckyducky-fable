@@ -31,7 +31,9 @@ import { goProductDetail } from '@/utils/nav.js'
 // section 组件是纯展示（技术债 #4），数据在页面收口；将来换云端来源只改这里
 import { useContentStore } from '@/store/content.js'
 import { useProductsStore } from '@/store/products.js'
+import { useCartStore } from '@/store/cart.js'
 import { useUserStore } from '@/store/user.js'
+import { getProduct } from '@/data/catalog.js'
 import { REASSURE_ITEMS } from '@/data/reassure.js'
 import { REVIEWS } from '@/data/reviews.js'
 
@@ -41,6 +43,7 @@ const content = useContentStore()
 content.load()
 // 启动开屏遮罩据 products.loaded 提前淡出（products.load 在 App.onLaunch 触发）
 const products = useProductsStore()
+const cart = useCartStore()
 // 加载页淡出后：未登录则自动弹登录弹窗（仍可「暂不登录」关掉继续逛，软门槛不变）
 const user = useUserStore()
 watch(splashActive, (active) => {
@@ -118,7 +121,15 @@ function onProductOpen(p) {
   goProductDetail(p.id, p.name)
 }
 function onProductAdd(p) {
-  ping(`已收藏 ${p.name}`)
+  // ＋ = 加入购物车。FeatureProducts 传上来的是展示形状（价为字符串），
+  // 按 id 取 canonical 商品（store 云端 / catalog 回退）再加购，价格才是数字（病根#6 假反馈防回退）。
+  const prod = products.getById(p.id) || getProduct(p.id)
+  if (!prod) {
+    ping('该商品暂时无法加入')
+    return
+  }
+  cart.add({ id: prod.id, name: prod.name, tag: prod.tag, price: prod.price, was: prod.was })
+  ping(`已加入购物车`)
 }
 function onClosingBuy() {
   ping('Get Ducky Get Lucky')
