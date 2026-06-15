@@ -393,19 +393,27 @@ export const repoChecks = [
         [...repoChecks, ...fileRules, ...typeAndTestGuards, ...conventionRules].map((g) => g.id)
       )
       const mapSec = req.split('## 需求→实现映射')[1] || ''
-      const rows = [...mapSec.matchAll(/^\|\s*(R\d+)\s*\|([^|]*)\|([^|]*)\|([^|]*)\|/gm)]
+      const rows = [...mapSec.matchAll(/^\|\s*(R\d+)\s*\|([^|]*)\|([^|]*)\|([^|]*)\|([^|]*)\|/gm)]
       const mapped = new Set(rows.map((r) => r[1]))
       // ① 每条 ✅ 实现需求（L1）有映射行
       const l1 = (req.split('## L1')[1] || '').split('## L2')[0]
       for (const m of l1.matchAll(/^\|\s*(R\d+)\b[^\n]*\|\s*✅\s*\|/gm)) {
         if (!mapped.has(m[1])) bad.push(`${m[1]}（✅ 已实现需求）无「需求→实现映射」行——需求→守卫闭环缺口`)
       }
-      // ② 每行 函数/测试/守卫 resolve（断链当场红）
+      // ②③ 每行 函数/测试/守卫 resolve（断链红）+ 须守卫覆盖（钱/状态/安全类须有对应类守卫）
       const cells = (s) => s.split(/[,，、]/).map((x) => x.trim().replace(/`/g, '')).filter(Boolean)
-      for (const [, R, fns, tests, guards] of rows) {
+      const KIND_GUARDS = {
+        钱: ['fen-branded-type', 'fen-money-chain', 'money-via-fen'],
+        状态: ['transition-atomic-idempotent', 'order-status-union'],
+        安全: ['writes-need-gate', 'kit-only-cloud-primitives', 'deterministic-id-concurrency', 'notify-forge-proof', 'gate-fail-closed'],
+      }
+      for (const [, R, kind, fns, tests, guards] of rows) {
         for (const fn of cells(fns)) if (!fact.includes(fn)) bad.push(`${R} 函数「${fn}」未见于 系统事实——链接断（改名/删了忘更新映射）`)
         for (const t of cells(tests)) if (!existsSync(join(ROOT, 'tests/cloud', t))) bad.push(`${R} 测试「${t}」不存在 tests/cloud/`)
         for (const g of cells(guards)) if (g !== '—' && !guardIds.has(g)) bad.push(`${R} 守卫「${g}」非已知守卫 id`)
+        const need = KIND_GUARDS[(kind || '').trim()]
+        if (need && !cells(guards).some((g) => need.includes(g)))
+          bad.push(`${R}（${kind.trim()}类）须守卫缺口——守卫里无${kind.trim()}类（${need.join('/')}）`)
       }
       return bad
     },

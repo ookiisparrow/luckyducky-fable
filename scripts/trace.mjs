@@ -15,8 +15,8 @@ const req = readFileSync(join(ROOT, 'docs/需求清单.md'), 'utf8')
 
 const cells = (s) => s.split(/[,，、]/).map((x) => x.trim().replace(/`/g, '')).filter(Boolean)
 const mapSec = req.split('## 需求→实现映射')[1] || ''
-const rows = [...mapSec.matchAll(/^\|\s*(R\d+)\s*\|([^|]*)\|([^|]*)\|([^|]*)\|/gm)].map(
-  ([, R, fns, tests, guards]) => ({ R, fns: cells(fns), tests: cells(tests), guards: cells(guards) })
+const rows = [...mapSec.matchAll(/^\|\s*(R\d+)\s*\|([^|]*)\|([^|]*)\|([^|]*)\|([^|]*)\|/gm)].map(
+  ([, R, kind, fns, tests, guards]) => ({ R, kind: kind.trim(), fns: cells(fns), tests: cells(tests), guards: cells(guards) })
 )
 const desc = (R) => {
   const m = req.match(new RegExp(`^\\|\\s*\\*{0,2}${R}\\b[^|]*\\|\\s*([^|]+?)\\s*\\|`, 'm'))
@@ -41,7 +41,7 @@ if (a === '--fn' || a === '--guard') {
     console.log(`无 ${a} 的实现映射（R0/L2 占位无实现，或编号错）`)
     process.exit(0)
   }
-  console.log(`💥 ${r.R}  ${desc(r.R)}`)
+  console.log(`💥 ${r.R} [${r.kind}]  ${desc(r.R)}`)
   console.log(`   函数：${r.fns.join(', ') || '—'}`)
   console.log(`   测试：${r.tests.join(', ') || '—'}`)
   console.log(`   守卫：${r.guards.join(', ') || '—'}`)
