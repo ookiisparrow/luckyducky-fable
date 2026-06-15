@@ -19,6 +19,7 @@ import { useOrdersStore } from '@/store/orders.js'
 import { ORDER_STATUS } from '@/data/orders.js'
 import { goBack } from '@/utils/nav.js'
 import { money, dateTime, mmss } from '@/utils/format.js'
+import { BRAND_NAME } from '@/constants/brand.js'
 
 const ordersStore = useOrdersStore()
 const orderId = ref('')
@@ -40,13 +41,13 @@ watch(
       payTimer = null
     }
   },
-  { immediate: true },
+  { immediate: true }
 )
 onUnmounted(() => payTimer && clearInterval(payTimer))
 const payRemainMs = computed(() =>
   order.value && order.value.status === 'pending'
     ? Math.max(0, order.value.createdAt + PAY_WINDOW_MS - nowTick.value)
-    : 0,
+    : 0
 )
 
 // 真实订单按 status 映射展示配置（ORDER_STATUS 单一来源；未知状态兜底按待发货）
@@ -148,7 +149,9 @@ function onAction(a) {
       },
     })
   } else if (k === 'rebuy') {
-    uni.navigateTo({ url: `/pages/detail/index?id=prod-1&name=${encodeURIComponent('幸运小鸭礼盒')}` })
+    uni.navigateTo({
+      url: `/pages/detail/index?id=prod-1&name=${encodeURIComponent('幸运小鸭礼盒')}`,
+    })
   } else if (k === 'remind') {
     uni.showToast({ title: '已提醒商家发货', icon: 'none' })
   } else if (k === 'pay') {
@@ -212,7 +215,7 @@ function onAction(a) {
       <view class="co-card">
         <view class="co-shop">
           <Icon name="store" :size="17" />
-          <text class="co-shop-name">易织™小棉鸭® 官方旗舰店</text>
+          <text class="co-shop-name">{{ BRAND_NAME }} 官方旗舰店</text>
           <view class="co-shop-chev"><Icon name="chevron-right" :size="16" /></view>
         </view>
         <OrderItem

@@ -3,12 +3,13 @@
  * 品牌介绍区。对应原型 Sections.jsx 的 BrandIntro。
  * id="intro" 供 hero 的「入门钩织的妙趣方式」按钮滚动定位。
  */
+import { BRAND_NAME } from '@/constants/brand.js'
 </script>
 
 <template>
   <view id="intro" class="ld-intro">
     <image class="ld-intro-logo" src="/static/logo-wordmark.svg" mode="widthFix" />
-    <text class="ld-intro-name">易织™小棉鸭®</text>
+    <text class="ld-intro-name">{{ BRAND_NAME }}</text>
     <view class="ld-intro-lead">
       <text class="ld-intro-lead-line">我们希望每个人都能</text>
       <text class="ld-intro-lead-line">亲手创造自己的随身幸运物。</text>

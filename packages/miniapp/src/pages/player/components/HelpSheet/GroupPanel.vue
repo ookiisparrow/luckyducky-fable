@@ -1,6 +1,7 @@
 <script setup>
 /** 求助面板 · 学习交流群（样例二维码/群号；复制动作 emit 给壳 toast）。 */
 import Icon from '@/components/Icon.vue'
+import { BRAND_NAME } from '@/constants/brand.js'
 
 const emit = defineEmits(['action'])
 </script>
@@ -8,7 +9,7 @@ const emit = defineEmits(['action'])
 <template>
   <view class="hs-detail">
     <view class="hs-group-card">
-      <text class="hs-group-name">易织小棉鸭 · 新手互助群</text>
+      <text class="hs-group-name">{{ BRAND_NAME }} · 新手互助群</text>
       <text class="hs-group-meta">已有 1,286 位钩织小伙伴 · 老师每日在线答疑</text>
       <view class="hs-qr"><Icon name="qr-code-ink" :size="112" /></view>
       <text class="hs-group-hint">微信扫一扫，加入群聊</text>

@@ -11,6 +11,7 @@
  * 取不到 id 时的兜底。规格/评价/图文/套装等描述性内容暂为所有商品共用。
  */
 import { CATALOG } from './catalog.js'
+import { BRAND_NAME } from '@/constants/brand.js'
 
 export const PRODUCT_DETAIL = {
   // —— 头部 / 价格（兜底；实际由 catalog 按 id 覆盖）——
@@ -130,7 +131,7 @@ export const PRODUCT_DETAIL = {
 
   // —— 图文详情 ——
   params: [
-    ['品名', '幸运小鸭礼盒（易织™小棉鸭®）'],
+    ['品名', `幸运小鸭礼盒（${BRAND_NAME}）`],
     ['材质', '100% 精梳棉线 · PP 填充棉'],
     ['成品尺寸', '约 12 × 9 cm'],
     ['难度', '★☆☆☆☆ 零基础友好'],

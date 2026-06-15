@@ -22,6 +22,7 @@ import QuantityStepper from '@/components/QuantityStepper.vue'
 import CheckoutAddonList from './components/CheckoutAddonList.vue'
 import CheckoutSubmitDock from './components/CheckoutSubmitDock.vue'
 import LoginSheet from '@/components/LoginSheet.vue'
+import { BRAND_NAME } from '@/constants/brand.js'
 import { useCartStore } from '@/store/cart.js'
 import { useAddressStore } from '@/store/address.js'
 import { useOrdersStore } from '@/store/orders.js'
@@ -162,7 +163,7 @@ async function onSubmit() {
       <view class="co-card">
         <view class="co-shop">
           <Icon name="store" :size="17" />
-          <text class="co-shop-name">易织™小棉鸭® 官方旗舰店</text>
+          <text class="co-shop-name">{{ BRAND_NAME }} 官方旗舰店</text>
           <view class="co-shop-chev"><Icon name="chevron-right" :size="16" /></view>
         </view>
         <OrderItem

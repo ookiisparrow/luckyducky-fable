@@ -17,6 +17,7 @@ import { STORAGE_KEYS } from '@/constants/storage.js'
 import { useActivationStore } from '@/store/activation.js'
 import { useCoursesStore } from '@/store/courses.js'
 import { parseActivationCode } from '@/api/activation.js'
+import { BRAND_NAME } from '@/constants/brand.js'
 
 const act = useActivationStore()
 const coursesStore = useCoursesStore()
@@ -116,10 +117,14 @@ async function confirmStart() {
             <text class="wel-display-l">开启你的</text>
             <text class="wel-display-l">钩织之旅</text>
           </view>
-          <text class="wel-lead">欢迎来到易织™小棉鸭®，跟着视频一针一线，钩出属于你的幸运。</text>
+          <text class="wel-lead"
+            >欢迎来到 {{ BRAND_NAME }}，跟着视频一针一线，钩出属于你的幸运。</text
+          >
           <view class="wel-foot">
             <view class="wel-dots"><view class="dot on"></view><view class="dot"></view></view>
-            <view class="wel-mini" @tap.stop="next"><text>下一页</text><Icon name="arrow-right" :size="16" /></view>
+            <view class="wel-mini" @tap.stop="next"
+              ><text>下一页</text><Icon name="arrow-right" :size="16"
+            /></view>
           </view>
         </view>
       </view>
@@ -136,7 +141,9 @@ async function confirmStart() {
             <text class="wel-display-l">现在，</text>
             <text class="wel-display-l">从第一针开始</text>
           </view>
-          <text class="wel-lead">我们已为你备好每一步视频，跟着钩就好，慢慢来，第一次也能完成。</text>
+          <text class="wel-lead"
+            >我们已为你备好每一步视频，跟着钩就好，慢慢来，第一次也能完成。</text
+          >
           <view class="wel-cta" @tap="start">
             <text class="wel-cta-text">开始学习</text>
             <Icon name="arrow-right" :size="18" />
@@ -169,10 +176,14 @@ async function confirmStart() {
           <view class="wel-display">
             <text class="wel-display-l">{{ courseTitle }}</text>
           </view>
-          <text class="wel-lead">恭喜！材料包的配套视频课已经就绪，将绑定你的微信账号、永久有效。点「下一页」了解开课须知。</text>
+          <text class="wel-lead"
+            >恭喜！材料包的配套视频课已经就绪，将绑定你的微信账号、永久有效。点「下一页」了解开课须知。</text
+          >
           <view class="wel-foot">
             <view class="wel-dots"><view class="dot on"></view><view class="dot"></view></view>
-            <view class="wel-mini" @tap.stop="next"><text>下一页</text><Icon name="arrow-right" :size="16" /></view>
+            <view class="wel-mini" @tap.stop="next"
+              ><text>下一页</text><Icon name="arrow-right" :size="16"
+            /></view>
           </view>
         </view>
       </view>
@@ -189,7 +200,9 @@ async function confirmStart() {
             <text class="wel-display-l">确认开始观看</text>
             <text class="wel-display-l">视频教程</text>
           </view>
-          <text class="wel-lead">请注意：确认开始观看后，这件商品将不再支持退货；课程永久有效，可随时反复观看。</text>
+          <text class="wel-lead"
+            >请注意：确认开始观看后，这件商品将不再支持退货；课程永久有效，可随时反复观看。</text
+          >
           <view class="wel-cta" @tap="confirmStart">
             <text class="wel-cta-text">{{ confirming ? '确认中…' : '确认开始观看' }}</text>
             <Icon name="arrow-right" :size="18" />
@@ -264,7 +277,12 @@ async function confirmStart() {
   right: 0;
   bottom: 0;
   height: 70%;
-  background: linear-gradient(to bottom, rgba(0, 0, 0, 0) 0%, rgba(0, 0, 0, 0.35) 45%, rgba(0, 0, 0, 0.82) 100%);
+  background: linear-gradient(
+    to bottom,
+    rgba(0, 0, 0, 0) 0%,
+    rgba(0, 0, 0, 0.35) 45%,
+    rgba(0, 0, 0, 0.82) 100%
+  );
 }
 .wel-screen {
   position: absolute;

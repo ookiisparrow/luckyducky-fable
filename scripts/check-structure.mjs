@@ -536,6 +536,35 @@ export const repoChecks = [
       return bad
     },
   },
+  {
+    // 店名单一来源（决策 R23 / 占位⑲，2026-06-15 定名「Lucky Ducky 小棉鸭」）。病根#5「样板复制即漂移」：
+    // 店名曾在 order/checkout/welcome/BrandIntro/GroupPanel/productDetail 六处硬编码（order↔checkout 还逐字重复），
+    // 改名必漏改。根治＝收口 constants/brand.js 的 BRAND_NAME，「保持一致」从人工义务变机器保证。
+    id: 'brand-name-single-source',
+    roots: ['#5', 'R23'],
+    desc: '店名单一来源（决策 R23 / 占位⑲）：① 旧占位「易织…」全库绝迹（定名后须全替）② 店名字面量「Lucky Ducky 小棉鸭」只在 constants/brand.js、别处引 BRAND_NAME——改名只改一处，防散落硬编码漂移（病根#5）',
+    run() {
+      const bad = []
+      const NAME = 'Lucky Ducky 小棉鸭'
+      const OLD = '易织'
+      const brandFile = 'packages/miniapp/src/constants/brand.js'
+      const absBrand = join(ROOT, brandFile)
+      if (!existsSync(absBrand)) bad.push(`${brandFile} 缺失（店名单一来源，R23⑲）`)
+      else if (!new RegExp(`BRAND_NAME\\s*=\\s*['"]${NAME}['"]`).test(readFileSync(absBrand, 'utf8')))
+        bad.push(`${brandFile} 未导出 BRAND_NAME='${NAME}'——店名单源缺定值（R23⑲）`)
+      for (const dir of ['packages/miniapp/src', 'packages/admin/src']) {
+        for (const f of walk(join(ROOT, dir))) {
+          const rel = relative(ROOT, f)
+          const s = readFileSync(f, 'utf8')
+          if (s.includes(OLD))
+            bad.push(`${rel} 仍含旧占位店名「${OLD}…」——定名 R23 后须全替（病根#5 复制漂移）`)
+          if (rel !== brandFile && s.includes(NAME))
+            bad.push(`${rel} 硬编码店名「${NAME}」——须引 constants/brand.js 的 BRAND_NAME 单源（病根#5）`)
+        }
+      }
+      return bad
+    },
+  },
 ]
 
 // ============== 逐文件规则（fileRules）==============

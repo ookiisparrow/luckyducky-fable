@@ -4,14 +4,15 @@
  * 本条款为初稿，正式发布前请经法务复核（依据《个人信息保护法》《电子商务法》《消费者权益保护法》
  * 及《微信小程序平台运营规范》等）。微信端《小程序用户隐私保护指引》另需在 mp 后台登记、与本页
  * 隐私政策内容保持一致；代码侧的隐私授权见 components/PrivacySheet.vue + composables/usePrivacyGate.js。
- * 店名待定（待办㉓ / R23），暂以「本店」自称，定名后全局替换。
+ * 店名 R23 已定名（⑲，2026-06-15），自称引 constants/brand.js 的 BRAND_NAME 单源（原暂称「本店」已替）。
  */
 import { ref } from 'vue'
 import { onLoad } from '@dcloudio/uni-app'
 import CoNavBar from '@/components/CoNavBar.vue'
 import { goBack } from '@/utils/nav.js'
+import { BRAND_NAME } from '@/constants/brand.js'
 
-const BRAND = '本店'
+const BRAND = BRAND_NAME
 
 const USER = {
   title: '用户协议',
