@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { setActivePinia, createPinia } from 'pinia'
 import { dateTime } from '@/utils/format.js'
+import { orderItems, orderQty } from '@/data/orders.js'
 
 // T1 砍多端：api 只对接云。测试 mock callCloud 提供云响应，测 store 编排逻辑。
 // 订单定价/快照/契约拒单/SKU 的真实校验在 tests/cloud/createOrder.test.js（云端唯一权威，
@@ -88,6 +89,25 @@ describe('orders store（云路径，mock callCloud）', () => {
     expect(store.countByStatus.pending).toBeUndefined()
     store.list = [...store.list, { id: 'x1', status: 'shipped', items: [] }]
     expect(store.countByStatus.shipped).toBe(1)
+  })
+})
+
+// 渲染访问点纵深防御（根因#8）：store normalizeOrder 是第一道；orderItems/orderQty 是第二道。
+// 上一版守卫只测了「store 入库后 items 是数组」，没测访问点本身扛不扛裸脏单——这里直接喂
+// 未经 store 的原始脏单（旧构建 / 未来绕过 store 的取数路径），证明列表 orderQty / 详情
+// orderItems 绝不抛。反向自检：把 orderItems 还原成裸 o.items 即此组红。
+describe('订单 items 安全访问器（裸脏单不白屏·data/orders.js）', () => {
+  it('orderItems：缺 items / items=null / 非数组一律返回空数组，不抛', () => {
+    expect(orderItems({ id: 'a', status: 'paid' /* 无 items */ })).toEqual([])
+    expect(orderItems({ id: 'b', items: null })).toEqual([])
+    expect(orderItems({ id: 'c', items: 'oops' })).toEqual([])
+    expect(orderItems(null)).toEqual([])
+    expect(orderItems({ id: 'd', items: [{ qty: 2 }] })).toEqual([{ qty: 2 }])
+  })
+  it('orderQty：脏单（缺 items）件数降级为 0、绝不抛；正常单照常合计', () => {
+    expect(() => orderQty({ id: 'bad', status: 'paid' })).not.toThrow()
+    expect(orderQty({ id: 'bad', status: 'paid' })).toBe(0)
+    expect(orderQty({ id: 'ok', items: [{ qty: 2 }, { qty: 3 }] })).toBe(5)
   })
 })
 

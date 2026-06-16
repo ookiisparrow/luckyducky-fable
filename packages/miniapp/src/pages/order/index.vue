@@ -16,7 +16,7 @@ import AddressBlock from '@/components/AddressBlock.vue'
 import OrderItem from '@/components/OrderItem.vue'
 import PriceSummary from '@/components/PriceSummary.vue'
 import { useOrdersStore } from '@/store/orders.js'
-import { ORDER_STATUS } from '@/data/orders.js'
+import { ORDER_STATUS, orderItems } from '@/data/orders.js'
 import { goBack, goProductDetail } from '@/utils/nav.js'
 import { money, dateTime, mmss } from '@/utils/format.js'
 import { expressCode } from '@/utils/express.js'
@@ -81,7 +81,12 @@ function cfgFromOrder(o) {
           time: o.shippedAt ? '发货时间 ' + dateTime(o.shippedAt) : '',
         }
       : null,
-    items: o.items.map((it) => ({ name: it.name, spec: it.spec, price: it.price, qty: it.qty })),
+    items: orderItems(o).map((it) => ({
+      name: it.name,
+      spec: it.spec,
+      price: it.price,
+      qty: it.qty,
+    })),
     info,
     actions: v.actions,
   }

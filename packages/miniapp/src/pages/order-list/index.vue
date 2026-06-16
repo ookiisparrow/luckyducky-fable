@@ -12,7 +12,7 @@ import Icon from '@/components/Icon.vue'
 import CoNavBar from '@/components/CoNavBar.vue'
 import OrderItem from '@/components/OrderItem.vue'
 import { useOrdersStore } from '@/store/orders.js'
-import { ORDER_STATUS } from '@/data/orders.js'
+import { ORDER_STATUS, orderQty } from '@/data/orders.js'
 import { goBack } from '@/utils/nav.js'
 import { money, dateTime } from '@/utils/format.js'
 
@@ -41,7 +41,6 @@ const list = computed(() => {
   return cur && cur.status ? orders.list.filter((o) => o.status === cur.status) : orders.list
 })
 const statusLabel = (o) => (ORDER_STATUS[o.status] && ORDER_STATUS[o.status].label) || o.status
-const qtyOf = (o) => o.items.reduce((s, it) => s + it.qty, 0)
 
 const back = () => goBack('/pages/me/index')
 const open = (o) => uni.navigateTo({ url: `/pages/order/index?id=${o.id}` })
@@ -80,17 +79,17 @@ const open = (o) => uni.navigateTo({ url: `/pages/order/index?id=${o.id}` })
           :qty="it.qty"
         />
         <view class="coorl-foot">
-          <text class="coorl-count">共 {{ qtyOf(o) }} 件</text>
-          <text class="coorl-amt"
-            >实付 <text class="cny">￥</text>{{ money(o.amount) }}</text
-          >
+          <text class="coorl-count">共 {{ orderQty(o) }} 件</text>
+          <text class="coorl-amt">实付 <text class="cny">￥</text>{{ money(o.amount) }}</text>
         </view>
       </view>
 
       <!-- 空态 / 加载中 -->
       <view v-if="!list.length" class="coorl-empty">
         <view class="coorl-empty-ico"><Icon name="package" :size="26" /></view>
-        <text class="coorl-empty-text">{{ orders.loading ? '订单加载中…' : '这里还没有订单' }}</text>
+        <text class="coorl-empty-text">{{
+          orders.loading ? '订单加载中…' : '这里还没有订单'
+        }}</text>
         <text v-if="!orders.loading" class="coorl-empty-sub"
           >下单后会出现在这里（模拟支付阶段，新订单直接进「待发货」）</text
         >

@@ -9,6 +9,14 @@
 // 这里 re-export 让既有 `from '@/data/orders.js'` 的引用方无感。
 export { COUPON, SHIP } from './checkout.js'
 
+// 订单 items 安全访问（根因#8 渲染访问点纵深防御）。store 入库已 normalizeOrder 保证
+// items 恒为数组，这是渲染侧第二道闸：任何绕过 store 的取数路径 / 旧构建脏单，也绝不让
+// 列表 orderQty / 详情 cfgFromOrder 的 o.items.reduce/.map 抛 TypeError → 整页白屏。
+// 与 aftersales/review 页的 `items || []` 同约定，单源在此可被测试直接咬住。
+export const orderItems = (o) => (Array.isArray(o?.items) ? o.items : [])
+// 件数合计（列表「共 N 件」）：脏单降级为 0，绝不抛。
+export const orderQty = (o) => orderItems(o).reduce((s, it) => s + it.qty, 0)
+
 // 真实订单 status → 展示配置。PAY_MODE=mock 时 createOrder 直接产 paid；
 // =real 时产 pending（去支付 → 支付回调 → paid），超时由云端关单产 closed。
 // actions 的 key 由订单详情页 onAction 处理。
