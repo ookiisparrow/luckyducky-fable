@@ -46,7 +46,7 @@ async function doLogin() {
 </script>
 
 <template>
-  <view v-if="loginSheetVisible" class="ls-mask" @tap="close">
+  <view v-if="loginSheetVisible" class="ls-mask" @tap="close" @touchmove.stop.prevent>
     <view class="ls-sheet" @tap.stop>
       <view class="ls-grab"></view>
       <view class="ls-close" @tap="close"><Icon name="x" :size="18" /></view>

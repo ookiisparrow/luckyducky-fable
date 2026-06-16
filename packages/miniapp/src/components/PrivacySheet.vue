@@ -29,7 +29,7 @@ function openPolicy() {
 
 <template>
   <!-- #ifdef MP-WEIXIN -->
-  <view v-if="privacySheetVisible" class="ps-mask">
+  <view v-if="privacySheetVisible" class="ps-mask" @touchmove.stop.prevent>
     <view class="ps-sheet">
       <text class="ps-title">隐私保护提示</text>
       <text class="ps-body"

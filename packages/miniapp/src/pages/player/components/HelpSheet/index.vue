@@ -56,7 +56,7 @@ defineExpose({ open })
 
 <template>
   <view class="vp-helpsheet" :class="{ on: help }">
-    <view class="vp-sheet-backdrop" @tap="closeHelp"></view>
+    <view class="vp-sheet-backdrop" @tap="closeHelp" @touchmove.stop.prevent></view>
     <view class="vp-sheet">
       <view class="vp-sheet-grab"></view>
       <view class="vp-sheet-head">

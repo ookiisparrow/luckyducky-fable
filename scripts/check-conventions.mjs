@@ -117,6 +117,19 @@ export const RULES = [
         : null
     },
   },
+  {
+    // 全屏遮罩（class 含 *-mask / *-backdrop，仓内命名＝position:fixed/absolute;inset:0 的暗层）须锁背景
+    // 滚动：mp-weixin 中 fixed/absolute mask 上 touchmove 会透传滚动背景页（H5/构建看不出·根因#8）。
+    // 遮罩根 <view> 须带 catchtouchmove（uni：@touchmove.stop → catch 绑定）。开标签单行写、class 与锁同行。
+    id: 'overlay-scroll-lock',
+    test(line) {
+      const isMask = /<view\b[^>]*\bclass="[^"]*\b[\w]+-(?:mask|backdrop)\b/.test(line)
+      return isMask && !/catchtouchmove|@touchmove|catch-touch-move/.test(line)
+        ? '全屏遮罩须锁背景滚动：根 <view> 加 @touchmove.stop.prevent（catchtouchmove）——否则 mp-weixin touchmove 透传滚背景页（H5 假绿）（CLAUDE.md §5·根因#8）'
+        : null
+    },
+    roots: ['多端'],
+  },
 ]
 
 const isCommentLine = (line) => /^(\/\/|\/\*|\*|<!--)/.test(line.trim())
