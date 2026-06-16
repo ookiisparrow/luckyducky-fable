@@ -9,6 +9,12 @@ import { defineStore } from 'pinia'
 import { createOrder, getMyOrders, confirmReceive, payOrder, getOrderById } from '@/api/order.js'
 import { logger } from '@/utils/logger.js'
 
+// 渲染防御（根因#8 真实数据形状）：手工写库 / 历史 schema 的订单可能缺 items；列表「全部」
+// 渲染所有单、详情对单条订单做 o.items.reduce/.map，缺 items 即抛 TypeError → 整页白屏
+// （devtools 实测 "reduce of undefined"）。云是不可信形状边界，入库前归一保证 items 恒为数组：
+// 坏数据降级为空条目（卡片显示「共 0 件」），绝不让一条脏行白屏整页。正常单原样返回不复制。
+const normalizeOrder = (o) => (Array.isArray(o?.items) ? o : { ...o, items: [] })
+
 export const useOrdersStore = defineStore('orders', {
   state: () => ({
     list: [],
@@ -29,7 +35,7 @@ export const useOrdersStore = defineStore('orders', {
   actions: {
     // 下单（云端定价；失败会抛错，由页面提示）。成功后插入列表头部并返回订单。
     async create(payload) {
-      const order = await createOrder(payload)
+      const order = normalizeOrder(await createOrder(payload))
       this.list = [order, ...this.list.filter((o) => o.id !== order.id)]
       return order
     },
@@ -67,7 +73,7 @@ export const useOrdersStore = defineStore('orders', {
     async fetchById(id) {
       if (!id || this.getById(id)) return
       const order = await getOrderById(id)
-      if (order) this.list = [...this.list, order]
+      if (order) this.list = [...this.list, normalizeOrder(order)]
     },
     // 拉取我的订单。远端列表与本地（H5 回退单）按 id 合并，本地独有的保留在前。
     async load(force = false) {
@@ -76,9 +82,10 @@ export const useOrdersStore = defineStore('orders', {
       this.loading = true
       try {
         const { list: remote, nextCursor, hasMore } = await getMyOrders()
-        const remoteIds = new Set(remote.map((o) => o.id))
+        const clean = remote.map(normalizeOrder)
+        const remoteIds = new Set(clean.map((o) => o.id))
         const localOnly = this.list.filter((o) => !remoteIds.has(o.id))
-        this.list = [...localOnly, ...remote]
+        this.list = [...localOnly, ...clean]
         this.nextCursor = nextCursor
         this.hasMore = hasMore
         this.loaded = true
@@ -95,7 +102,7 @@ export const useOrdersStore = defineStore('orders', {
       try {
         const { list: more, nextCursor, hasMore } = await getMyOrders(this.nextCursor)
         const ids = new Set(this.list.map((o) => o.id))
-        this.list = [...this.list, ...more.filter((o) => !ids.has(o.id))]
+        this.list = [...this.list, ...more.map(normalizeOrder).filter((o) => !ids.has(o.id))]
         this.nextCursor = nextCursor
         this.hasMore = hasMore
       } catch (e) {

@@ -49,6 +49,29 @@ describe('orders store（云路径，mock callCloud）', () => {
     expect(store.getById('r1')).toBeTruthy()
   })
 
+  it('load 归一脏订单 items：缺 items 的远端单入库后 items 恒为数组（防列表 qtyOf / 详情 cfgFromOrder 的 .items 白屏·根因#8）', async () => {
+    // 真实数据形状：手工写库/历史 schema 的订单可能没有 items；列表「全部」渲染所有单，
+    // 一条坏数据就让 o.items.reduce 抛 → 整页白屏（devtools 实测 "reduce of undefined"）。
+    callCloud.mockImplementation(async (name) =>
+      name === 'getMyOrders' ? { ok: true, list: [{ id: 'bad1', status: 'paid' /* 无 items */ }] } : null
+    )
+    const store = useOrdersStore()
+    await store.load()
+    const o = store.getById('bad1')
+    expect(Array.isArray(o.items)).toBe(true) // 归一前 undefined → 红
+    // 列表渲染热点：qtyOf 对脏单不抛（「共 N 件」），详情 cfgFromOrder 的 items.map 同理
+    expect(() => o.items.reduce((s, it) => s + it.qty, 0)).not.toThrow()
+  })
+
+  it('fetchById 归一脏订单 items：单独取回的老单缺 items 也补成数组（详情兜底同样防白屏）', async () => {
+    callCloud.mockImplementation(async (name) =>
+      name === 'getOrderById' ? { ok: true, order: { id: 'old1', status: 'done' /* 无 items */ } } : null
+    )
+    const store = useOrdersStore()
+    await store.fetchById('old1')
+    expect(Array.isArray(store.getById('old1').items)).toBe(true)
+  })
+
   it('confirmReceive：shipped 单确认收货翻 done 并记 doneAt（详情/列表响应式刷新）', async () => {
     const store = useOrdersStore()
     store.list = [{ id: 'x9', status: 'shipped', items: [] }]
