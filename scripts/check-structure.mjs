@@ -810,6 +810,35 @@ export const repoChecks = [
     },
   },
   {
+    // 集合计数单源（文档体系规则⑥·客观计数机器维护）：巡检 #001-003 反复标 16/17/18 口径漂移——
+    // 库权限表标题「17」/系统事实「17+1」/真值 18 三处不一，因计数被手抄、加集合没同步。kit/collections.ts
+    // COLLECTIONS 是集合数真值；系统事实「DB collection」计数列 + 库权限表标题须报同一数、不手抄 stale。
+    id: 'collection-count-synced',
+    roots: ['#11'],
+    desc: '集合计数单源（规则⑥·客观计数机器维护）：kit/collections.ts COLLECTIONS 集合数为真值；系统事实「DB collection」计数列 + 库权限表标题须报同一数——防 16/17/18 手抄漂移（巡检 #001-003 反复标）',
+    run() {
+      const home = join(ROOT, 'packages/cloud/src/kit/collections.ts')
+      if (!existsSync(home)) return []
+      const m = readFileSync(home, 'utf8').match(/COLLECTIONS\s*=\s*\{([\s\S]*?)\}/)
+      const n = m ? new Set([...m[1].matchAll(/['"]([a-zA-Z_]+)['"]/g)].map((x) => x[1])).size : 0
+      if (!n) return []
+      const bad = []
+      const sys = join(ROOT, 'docs/系统事实.md')
+      if (existsSync(sys)) {
+        const row = readFileSync(sys, 'utf8')
+          .split('\n')
+          .find((l) => l.trimStart().startsWith('|') && l.includes('DB collection'))
+        const cell = row ? (row.split('|')[2] || '').trim() : ''
+        if (cell !== String(n))
+          bad.push(`系统事实「DB collection」计数列为「${cell}」≠ COLLECTIONS 真值 ${n}（客观计数单源·规则⑥·别手抄）`)
+      }
+      const perm = join(ROOT, 'console-assets/02-库权限期望表.md')
+      if (existsSync(perm) && !new RegExp('##\\s*' + n + '\\s*个集合').test(readFileSync(perm, 'utf8')))
+        bad.push(`库权限表标题未报 ${n} 个集合——计数漂移（巡检反复标 16/17/18·须随 COLLECTIONS 同步）`)
+      return bad
+    },
+  },
+  {
     // 错误码只用已登记的（债#29·根因#3）：kit `err()` 返回的码是**前端按精确字符串分支的契约**；
     // shared/errors.ts 的 ERR 是错误码权威册。校验全库 `err('字面量')` 的码都在册内——打错码即红、
     // 新码须先登记（前端才能对得上）。动态码 `err('X:'+v)` 非纯字面量、不校验。
