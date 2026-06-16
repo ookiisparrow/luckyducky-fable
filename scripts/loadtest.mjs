@@ -19,6 +19,8 @@
  * 安全闸：--env 等于生产 envId 直接退出。跑完自动清理 _loadtest 数据。
  */
 
+import { fileURLToPath } from 'node:url'
+
 const PROD_ENV = 'cloudbase-d4gcssqbv06865479' // 生产·禁压
 const COL = 'loadtest' // 专用集合·与业务集合隔离·跑完清空
 
@@ -34,6 +36,9 @@ function usage(msg) {
 }
 
 async function getDb(env) {
+  if (!process.env.TCB_SECRETID || !process.env.TCB_SECRETKEY) {
+    usage('缺 CAM 密钥：跑命令时内联 TCB_SECRETID=<id> TCB_SECRETKEY=<key>（别用裸 npm run loadtest；密钥别进仓库/聊天）')
+  }
   let cloudbase
   try {
     cloudbase = (await import('@cloudbase/node-sdk')).default
@@ -48,25 +53,41 @@ async function getDb(env) {
   return app.database()
 }
 
+// SDK 返回形状兼容：node-sdk（直连）get().data 是数组、update() 返回 {updated}；
+// wx-server-sdk（云函数内）get().data 是对象、update() 返回 {stats:{updated}}。两种都读对。
+// 导出供 tests/scripts/loadtest.test.js 锁两种形状（根因#8 桩绿≠真证：读错字段会假阴）。
+export function readV(res) {
+  const d = res && res.data
+  const doc = Array.isArray(d) ? d[0] : d
+  return doc && typeof doc.v === 'number' ? doc.v : 0
+}
+export function updatedCount(r) {
+  if (!r) return 0
+  if (typeof r.updated === 'number') return r.updated // node-sdk
+  if (r.stats && typeof r.stats.updated === 'number') return r.stats.updated // wx-server-sdk
+  return 0
+}
+
 // ① 真库 CAS 原子性：N 并发自增同一 doc（读→where(旧值).update），无丢更新则 v===N。
 async function runCas(db, n) {
   const id = 'cas-probe'
-  await db.collection(COL).doc(id).set({ data: { v: 0, _loadtest: true } })
+  // node-sdk(@cloudbase/database) set/update/add 都吃裸对象、不要 {data:...} 包层（云函数 wx-server-sdk 才要）
+  await db.collection(COL).doc(id).set({ v: 0, _loadtest: true })
   console.log(`并发 CAS：${n} 个并发自增同一 doc（验真库 where().update() 原子性）…`)
   let lost = 0
   await Promise.all(
     Array.from({ length: n }, async () => {
       for (let i = 0; i < 100; i++) {
         const got = await db.collection(COL).doc(id).get()
-        const v = (got.data && got.data.v) || (got.data && got.data[0] && got.data[0].v) || 0
-        const r = await db.collection(COL).where({ _id: id, v }).update({ data: { v: v + 1 } })
-        if (r.stats && r.stats.updated === 1) return
+        const v = readV(got)
+        const r = await db.collection(COL).where({ _id: id, v }).update({ v: v + 1 })
+        if (updatedCount(r) === 1) return
       }
       lost++ // 100 次重试仍没抢到（极端争用）
     })
   )
   const fin = await db.collection(COL).doc(id).get()
-  const v = (fin.data && fin.data.v) ?? (fin.data && fin.data[0] && fin.data[0].v)
+  const v = readV(fin)
   console.log(`  最终 v=${v}（期望 ${n}）· 重试耗尽 ${lost}`)
   if (v === n) console.log('  ✅ 真库 where().update() CAS 原子·无丢更新——throttle/transition/激活码 地基成立')
   else console.log(`  ❌ 丢更新（v=${v}≠${n}）——真库 CAS 非原子，throttle 限频/激活抢占会漏！`)
@@ -76,8 +97,14 @@ async function runCas(db, n) {
 // ② 规模精确：灌 seed 条假单 → count() 应===seed、aggregate 求和应精确（验破千不少算）。
 async function runCapacity(db, seed) {
   console.log(`规模：灌 ${seed} 条假单到测试集合 ${COL}…`)
-  for (let i = 0; i < seed; i++) {
-    await db.collection(COL).add({ data: { kind: 'order', status: 'paid', amount: 1, _loadtest: true } })
+  const BATCH = 20 // 小批并发灌·控在环境限流以下（CAS n=20 已验安全）·比串行快一个量级
+  for (let i = 0; i < seed; i += BATCH) {
+    const size = Math.min(BATCH, seed - i)
+    await Promise.all(
+      Array.from({ length: size }, () =>
+        db.collection(COL).add({ kind: 'order', status: 'paid', amount: 1, _loadtest: true })
+      )
+    )
   }
   const t0 = Date.now()
   const cnt = await db.collection(COL).where({ kind: 'order' }).count()
@@ -106,12 +133,17 @@ async function main() {
   if (!a.env) usage('缺 --env <测试envId>')
   if (a.env === PROD_ENV) usage('拒绝：--env 是生产环境，压测只打独立测试环境')
   const db = await getDb(a.env)
+  // CloudBase 不像 MongoDB 写时自动建集合——写不存在的集合即 ResourceNotFound；先确保测试集合在（已存在则忽略）
+  await db.createCollection(COL).catch(() => {})
   if (a.mode === 'cas') await runCas(db, Number(a.n) || 200)
   else if (a.mode === 'capacity') await runCapacity(db, Number(a.seed) || 2000)
   else usage('--mode 须为 cas 或 capacity')
 }
 
-main().catch((e) => {
-  console.error('压测出错：', (e && e.message) || e)
-  process.exit(1)
-})
+// 只在直接执行（node scripts/loadtest.mjs …）时跑；被 vitest import 时不触发 main
+if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
+  main().catch((e) => {
+    console.error('压测出错：', (e && e.message) || e)
+    process.exit(1)
+  })
+}
