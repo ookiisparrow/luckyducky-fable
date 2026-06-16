@@ -171,11 +171,9 @@ function onCheckout() {
 }
 
 /* 顶部品牌 logo（含状态栏安全区；位置与首页 hero logo 对齐：left 20 / top sbh+10 / 高 28）。
-   白底顶栏吸顶固定（滚动时不动）。 */
+   随内容流、滚动时跟着上移——与 home Hero / me ProfileHeader 同款（不吸顶）：
+   scroll-view 内的 sticky 吸顶在 mp-weixin 不生效（H5 假绿·根因#8），故不假装吸顶。 */
 .ld-cart-top {
-  position: sticky;
-  top: 0;
-  z-index: 20;
   background: $white;
   /* #ifdef MP-WEIXIN */
   padding: calc(10px + var(--sbh, 0px)) 20px 8px;

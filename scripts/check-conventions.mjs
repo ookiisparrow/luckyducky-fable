@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * 约定检查（CLAUDE.md §5 多端约束 / §8 样式规则中 ESLint 管不到的 6 条）。
+ * 约定检查（CLAUDE.md §5 多端约束 / §8 样式规则中 ESLint 管不到的几条）。
  *
  * 用法：
  *   node scripts/check-conventions.mjs            # 全量检查 src 下 .vue/.scss
@@ -46,7 +46,7 @@ TOKEN_COLORS.delete('#ffffff')
 TOKEN_COLORS.delete('#000000')
 
 // ---- 规则表：test 返回违例说明（null = 通过） ----
-// roots：本规则守的不变量来源（这 6 条均守 CLAUDE §5 多端硬约束，标 '多端'）——
+// roots：本规则守的不变量来源（均守 CLAUDE §5 多端硬约束，标 '多端'）——
 // 机读 provenance，与 check-structure 同一约定（见 docs/元模式.md A3）。
 export const RULES = [
   {
@@ -105,18 +105,33 @@ export const RULES = [
         : null
     },
   },
+  {
+    // 文件级规则：本文件含 <scroll-view> 才拦（ctx.hasScrollView）——mp-weixin 中 scroll-view
+    // 内的 CSS position:sticky 不生效（H5/浏览器 overflow 容器内支持 → 假绿），顶栏会随内容滚走。
+    // 仓内约定：品牌顶栏随内容流（home Hero / me ProfileHeader 均如此，未在 scroll-view 内 sticky）。
+    id: 'sticky-in-scroll-view',
+    roots: ['多端'],
+    test(line, ctx) {
+      return ctx?.hasScrollView && /position\s*:\s*sticky\b/.test(line)
+        ? 'scroll-view 内 position:sticky 在 mp-weixin 不吸顶（H5 假绿）；改页面级固定头或随内容流（参 home/me 顶栏）（CLAUDE.md §5·根因#8）'
+        : null
+    },
+  },
 ]
 
 const isCommentLine = (line) => /^(\/\/|\/\*|\*|<!--)/.test(line.trim())
 
 function checkFile(file) {
   const violations = []
-  const lines = readFileSync(file, 'utf8').split('\n')
+  const content = readFileSync(file, 'utf8')
+  const lines = content.split('\n')
+  // 文件级上下文（一次算好，传给需要跨行判断的规则，如 sticky-in-scroll-view）
+  const ctx = { file, lines, hasScrollView: /<scroll-view\b/.test(content) }
   lines.forEach((line, i) => {
     if (isCommentLine(line)) return
     if (line.includes('convention-ok') || (i > 0 && lines[i - 1].includes('convention-ok'))) return
     for (const rule of RULES) {
-      const msg = rule.test(line)
+      const msg = rule.test(line, { ...ctx, i })
       if (msg) {
         violations.push({
           loc: `${relative(ROOT, file)}:${i + 1}`,
