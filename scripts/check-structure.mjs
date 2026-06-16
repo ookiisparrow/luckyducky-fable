@@ -497,7 +497,7 @@ export const repoChecks = [
   {
     id: 'privacy-authorize-wired',
     roots: ['R27'],
-    desc: '微信隐私授权已接（R27 上线必做㉒）：manifest mp-weixin 开 __usePrivacyCheck__ + usePrivacyGate 挂 onNeedPrivacyAuthorization + PrivacySheet 弹窗（agreePrivacyAuthorization 按钮）+ App.vue 启动注册，防隐私授权链回退',
+    desc: '微信隐私授权已接（R27 上线必做㉒）：manifest mp-weixin 开 __usePrivacyCheck__ + usePrivacyGate 挂 onNeedPrivacyAuthorization + PrivacySheet 弹窗（agreePrivacyAuthorization 按钮）+ App.vue 启动注册，防隐私授权链回退；且任一页 mp 可达调涉隐私接口（chooseImage/getLocation…）→ 该页 index.vue 须挂 <PrivacySheet/>（挂载可达性·债#25：闸全局触发、弹窗须挂得到才渲得出）',
     run() {
       const bad = []
       const mani = join(ROOT, 'packages/miniapp/src/manifest.json')
@@ -515,6 +515,23 @@ export const repoChecks = [
       const app = join(ROOT, 'packages/miniapp/src/App.vue')
       if (existsSync(app) && !/registerPrivacyGate/.test(readFileSync(app, 'utf8')))
         bad.push('App.vue 未注册 registerPrivacyGate——onNeedPrivacyAuthorization 未挂（R27㉒）')
+      // 挂载可达性（债#25/根因#8）：闸是全局注册（App.vue onNeedPrivacyAuthorization），任意页调涉隐私接口都会
+      // 翻 privacySheetVisible；但 <PrivacySheet/> 须挂在该页才渲得出，否则用户点不了同意、resolve 永挂。
+      // 故：任一页在 mp-weixin 可达地调隐私接口 → 该页根 index.vue 必挂 <PrivacySheet/>。宁过勿漏（见 mpReachableText）。
+      const pagesRoot = join(ROOT, 'packages/miniapp/src/pages')
+      const offenders = new Set()
+      for (const f of walk(pagesRoot)) {
+        if (!f.endsWith('.vue')) continue
+        if (!PRIVACY_RE.test(mpReachableText(readFileSync(f, 'utf8')))) continue
+        const rel = relative(ROOT, f).replace(/\\/g, '/')
+        const mm = rel.match(/packages\/miniapp\/src\/pages\/([^/]+)\//)
+        if (mm) offenders.add(mm[1])
+      }
+      for (const page of offenders) {
+        const rootVue = join(pagesRoot, page, 'index.vue')
+        if (!existsSync(rootVue) || !readFileSync(rootVue, 'utf8').includes('<PrivacySheet'))
+          bad.push(`pages/${page} 调涉隐私接口却未在 index.vue 挂 <PrivacySheet/>——授权弹窗渲不出、resolve 永挂（债#25/R27㉒）`)
+      }
       return bad
     },
   },
@@ -956,6 +973,42 @@ function* walk(dir) {
   }
 }
 const isCommentLine = (line) => /^(\/\/|\/\*|\*|<!--|#)/.test(line.trim())
+
+// —— 隐私挂载可达性（守卫 privacy-authorize-wired 用·债#25/根因#8）——
+// 微信「涉隐私接口」登记：调用前会触发 onNeedPrivacyAuthorization（全局闸经弹窗放行）。新接口扩补此册。
+const PRIVACY_INTERFACES = [
+  'chooseImage', 'chooseMedia', 'chooseVideo', 'chooseMessageFile',
+  'getLocation', 'chooseLocation', 'choosePoi', 'chooseAddress',
+  'chooseInvoice', 'chooseInvoiceTitle', 'saveImageToPhotosAlbum',
+  'saveVideoToPhotosAlbum', 'getClipboardData', 'startRecord',
+  'getRecorderManager', 'getWeRunData', 'addPhoneContact', 'scanCode',
+  'createCameraContext', 'addPhoneCalendar',
+]
+const PRIVACY_RE = new RegExp('\\b(?:uni|wx)\\.(?:' + PRIVACY_INTERFACES.join('|') + ')\\s*\\(')
+
+// 剥「mp-weixin 不可达」的条件编译块（#ifndef MP-WEIXIN / #ifdef H5|APP… 等），留 mp 可达文本
+// （#ifdef MP-WEIXIN/MP + 未 gate）。宁过勿漏：未 gate 的脚本级调用一律计入（多挂个 PrivacySheet 是无害防御）。
+function mpReachableText(src) {
+  const out = []
+  const stack = [] // 每层存累积可达性（含祖先）
+  const cur = () => stack.length === 0 || stack[stack.length - 1]
+  for (const line of src.split('\n')) {
+    const m = line.match(/(?:\/\/|<!--)\s*#(ifdef|ifndef)\s+([^\n>]+?)(?:\s*-->)?\s*$/)
+    if (m) {
+      const platforms = m[2].split('||').map((s) => s.trim())
+      const mp = platforms.includes('MP-WEIXIN') || platforms.includes('MP')
+      const here = m[1] === 'ifdef' ? mp : !mp
+      stack.push(cur() && here)
+      continue
+    }
+    if (/(?:\/\/|<!--)\s*#endif/.test(line)) {
+      stack.pop()
+      continue
+    }
+    if (cur()) out.push(line)
+  }
+  return out.join('\n')
+}
 
 function checkFile(file) {
   const rules = fileRules.filter((r) => r.inScope(file))
