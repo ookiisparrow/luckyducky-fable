@@ -231,7 +231,7 @@ export const repoChecks = [
   {
     id: 'docs-budget',
     roots: ['#11'],
-    desc: '文档防膨胀（根因#11）：CLAUDE.md ≤180 行 + docs/ 活文档 ≤15 份（一需求一家·客观→系统事实/主观→单源·历史卷档 archive）',
+    desc: '文档防膨胀（根因#11）：CLAUDE.md ≤180 行 + docs/ 活文档 ≤15 份 + 记录类单文档行数上限（重构日志≤200/调试日志≤160/待办≤150·把 CLAUDE 规则②卷档从靠人变机器守）（一需求一家·客观→系统事实/主观→单源·历史卷档 archive）',
     run() {
       const out = []
       const abs = join(ROOT, 'CLAUDE.md')
@@ -244,6 +244,16 @@ export const repoChecks = [
       const docs = existsSync(dir) ? readdirSync(dir).filter((f) => f.endsWith('.md')) : []
       if (docs.length > DOC_BUDGET)
         out.push(`docs/ 活文档 ${docs.length} 份 > ${DOC_BUDGET} 预算——文档膨胀（根因#11）；按"一需求一家"合并、历史卷档 archive、客观计数收口 系统事实`)
+      // 记录类单文档行数上限：记录类（日志/账本）会随时间膨胀，超上限即逼卷档 archive（老批次/旧季/已关账）——
+      // 把 CLAUDE 规则②「卷档」从靠人记变机器守（docs-budget 原只管份数/CLAUDE 行数，不管单文档膨胀）。
+      const RECORD_LIMITS = { '重构日志.md': 200, '调试日志.md': 160, '待办与债.md': 160 }
+      for (const [f, max] of Object.entries(RECORD_LIMITS)) {
+        const p = join(dir, f)
+        if (!existsSync(p)) continue
+        const n = readFileSync(p, 'utf8').split('\n').length
+        if (n > max)
+          out.push(`docs/${f} ${n} 行 > ${max} 预算——记录类膨胀（根因#11）；老批次/旧季/已关账卷档 archive（CLAUDE 规则②）`)
+      }
       return out
     },
   },
@@ -806,6 +816,27 @@ export const repoChecks = [
         }
       }
       walkDir(root)
+      return bad
+    },
+  },
+  {
+    // 生产 env id 单源（病根#5·债#30①脚本侧）：deploy-fns 部署目标 / loadtest·deploy-test「拒生产」
+    // 安全闸 共用生产 env id；各写一份→改一漏一致安全闸与部署目标不一致。收口 scripts/lib/env.mjs 一份。
+    id: 'prod-env-single-source',
+    roots: ['#5'],
+    desc: '生产 env id 单源（病根#5·债#30①）：scripts/ 里生产云环境 id 只在 scripts/lib/env.mjs 定义（PROD_ENV）；deploy-fns/loadtest/deploy-test 须 import、不各写一份——防改一漏一致「拒生产」安全闸不一致。guard-deploy 的 id 仅在确认消息文案（非逻辑常量）·豁免',
+    run() {
+      const src = join(ROOT, 'scripts/lib/env.mjs')
+      if (!existsSync(src)) return ['scripts/lib/env.mjs 缺失（生产 env id 单源·病根#5）']
+      const m = readFileSync(src, 'utf8').match(/PROD_ENV\s*=\s*['"]([a-z0-9-]+)['"]/i)
+      const envId = m ? m[1] : ''
+      if (!envId) return ['scripts/lib/env.mjs 未定义 PROD_ENV（生产 env id 单源·病根#5）']
+      const bad = []
+      for (const f of readdirSync(join(ROOT, 'scripts'))) {
+        if (!f.endsWith('.mjs') || f === 'guard-deploy.mjs') continue // guard-deploy：id 仅在文案·非逻辑常量·豁免
+        if (readFileSync(join(ROOT, 'scripts', f), 'utf8').includes(envId))
+          bad.push(`scripts/${f} 硬编码生产 env id「${envId}」——须 import { PROD_ENV } from './lib/env.mjs'（单源·病根#5·债#30①）`)
+      }
       return bad
     },
   },

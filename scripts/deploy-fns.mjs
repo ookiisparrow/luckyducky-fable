@@ -14,11 +14,11 @@ import { execSync } from 'node:child_process'
 import { readdirSync, readFileSync, writeFileSync, existsSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import { createHash } from 'node:crypto'
+import { PROD_ENV as ENVID } from './lib/env.mjs' // 生产 env id 单源（病根#5·债#30①）
 
 const ROOT = resolve(import.meta.dirname, '..')
 const DIST = join(ROOT, 'packages/cloud/dist')
 const MANIFEST = join(ROOT, '.deploy-manifest.json')
-const ENVID = 'cloudbase-d4gcssqbv06865479'
 const dryRun = process.argv.includes('--dry-run')
 
 if (!dryRun && process.env.DEPLOY_ALLOWED !== '1') {

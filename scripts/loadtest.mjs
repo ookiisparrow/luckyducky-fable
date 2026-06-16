@@ -23,8 +23,7 @@
  */
 
 import { fileURLToPath } from 'node:url'
-
-const PROD_ENV = 'cloudbase-d4gcssqbv06865479' // 生产·禁压
+import { PROD_ENV } from './lib/env.mjs' // 生产 env id 单源（病根#5·债#30①）·禁压
 const COL = 'loadtest' // 专用集合·与业务集合隔离·跑完清空
 
 function parseArgs(argv) {
