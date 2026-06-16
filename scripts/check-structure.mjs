@@ -196,11 +196,11 @@ export const repoChecks = [
   {
     id: 'writes-need-gate',
     roots: ['#3'],
-    desc: '写库必过闸（根因#3「不过闸写不出来」成结构事实）：functions/ 下写 DB（.add/.set/.update/.remove）的函数须引 kit 闸（withOpenId/withAdminGate/defineNotifyCallback/isServerCall）或 checkKey；纯读（公开目录）豁免',
+    desc: '写库必过闸（根因#3「不过闸写不出来」成结构事实）：functions/ 下写 DB（.add/.set/.update/.remove）的函数须引 kit 闸（withOpenId/withAdminGate/defineNotifyCallback/defineKfCallback/isServerCall）或 checkKey；纯读（公开目录）豁免',
     run() {
       const root = join(ROOT, 'packages/cloud/src/functions')
       if (!existsSync(root)) return []
-      const GATE = /\b(withOpenId|withAdminGate|defineNotifyCallback|isServerCall|checkKey)\b/
+      const GATE = /\b(withOpenId|withAdminGate|defineNotifyCallback|defineKfCallback|isServerCall|checkKey)\b/
       const WRITE = /\.(add|set|update|remove)\s*\(/
       const readAll = (d) => {
         let src = ''

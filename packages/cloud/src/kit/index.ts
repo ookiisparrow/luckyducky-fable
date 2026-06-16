@@ -25,3 +25,15 @@ export { alert } from './observe'
 export type { AlertSev } from './observe'
 export { COLLECTIONS } from './collections'
 export type { CollName } from './collections'
+export {
+  defineKfCallback,
+  kfSignature,
+  verifyKfSignature,
+  decryptKfMessage,
+  getAccessToken,
+  syncMsg,
+  sendMsg,
+  transferToServicer,
+  unionidToExternalUserid,
+} from './wecom'
+export type { KfTrustedEvent } from './wecom'

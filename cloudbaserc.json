@@ -190,6 +190,18 @@
       "timeout": 10,
       "handler": "index.main",
       "installDependency": true
+    },
+    {
+      "name": "kfCallback",
+      "timeout": 20,
+      "handler": "index.main",
+      "installDependency": true
+    },
+    {
+      "name": "kfBind",
+      "timeout": 10,
+      "handler": "index.main",
+      "installDependency": true
     }
   ]
 }

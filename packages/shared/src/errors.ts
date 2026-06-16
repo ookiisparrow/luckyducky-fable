@@ -49,6 +49,11 @@ export const ERR = {
   REVIEWED: 'REVIEWED',
   // 频控（根因#13）
   RATE_LIMITED: 'RATE_LIMITED',
+  // 微信客服身份桥接（kfBind·根因#3 不信前端）
+  NO_UNIONID: 'NO_UNIONID',
+  KF_NOT_CONFIGURED: 'KF_NOT_CONFIGURED',
+  TOKEN_FAILED: 'TOKEN_FAILED',
+  NO_EXTERNAL_USERID: 'NO_EXTERNAL_USERID',
 } as const
 
 export type ErrorCode = (typeof ERR)[keyof typeof ERR]

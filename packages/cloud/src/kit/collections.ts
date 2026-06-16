@@ -25,6 +25,12 @@ export const COLLECTIONS = {
   uploadChunks: 'uploadChunks',
   events: 'events',
   rateLimit: 'rateLimit',
+  // 微信客服（in-chat 智能客服）后端状态：access_token 缓存 / sync_msg cursor / msgid 去重痕，
+  // 一律确定性 _id 前缀（token / cursor:<openKfId> / seen:<msgid>）。内部状态、客户端禁读写。
+  kfState: 'kfState',
+  // 身份桥接映射（external_userid ↔ openid，根因#3 不信前端）：_id='ext:euid' 存 openid。
+  // 由小程序侧 kfBind（withOpenId·有 unionid 时）经企业微信转换 API 建；kfCallback 读它查「你的订单」。
+  kfIdentity: 'kfIdentity',
 } as const
 
 export type CollName = (typeof COLLECTIONS)[keyof typeof COLLECTIONS]
