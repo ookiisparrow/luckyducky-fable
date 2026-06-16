@@ -9,6 +9,8 @@
 import { execSync } from 'node:child_process'
 import { readdirSync, existsSync, readFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
+import { createHash } from 'node:crypto'
+import { MONEY_CHAIN, detectDrift } from './lib/deploy-drift.mjs'
 
 const ROOT = resolve(import.meta.dirname, '..')
 const pass = []
@@ -48,6 +50,21 @@ run('build:cloud 产物 ≡ cloudbaserc 函数清单', () => {
         (extra.length ? `；未登记：${extra.join(',')}` : '')
     )
   }
+})
+run('钱链函数无未部署漂移（已提交≠已部署·根因#8）', () => {
+  // 上一项已 build:cloud → dist 是当前源。比钱链函数 dist hash vs manifest 已部署 hash，
+  // 不符＝代码改了未部署。2026-06-16 实测漏洞：钱链 [LD_ALERT]/支付窗口 改了 4 天没部署，
+  // 而 preflight 原只验 dist≡cloudbaserc 结构、不验「部署时效」——本项补这洞。manifest 由
+  // deploy-fns 部署时回填（算法同此：sha256(dist/<fn>/index.js) 前 12）。
+  const dist = join(ROOT, 'packages/cloud/dist')
+  const deployed = JSON.parse(readFileSync(join(ROOT, '.deploy-manifest.json'), 'utf8')).functions || {}
+  const cur = {}
+  for (const fn of MONEY_CHAIN) {
+    const idx = join(dist, fn, 'index.js')
+    if (existsSync(idx)) cur[fn] = createHash('sha256').update(readFileSync(idx)).digest('hex').slice(0, 12)
+  }
+  const drift = detectDrift(cur, deployed, MONEY_CHAIN)
+  if (drift.length) throw new Error(`钱链改了未部署：${drift.join(', ')}——先 DEPLOY_ALLOWED=1 deploy-fns`)
 })
 run('console-assets 正册齐（4 件）', () => {
   for (const f of ['README.md', '01-支付退款工作流.md', '02-库权限期望表.md', 'forward-node.js'])
