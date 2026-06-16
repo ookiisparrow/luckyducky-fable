@@ -596,11 +596,13 @@ export const repoChecks = [
   },
   {
     // 客服接微信客服官方组件（R18 / 占位⑨，2026-06-15 用户拍板①）：四个客服入口
-    // （详情坞 DetailDock / 「我」页 / 售后页 / 播放页 ServicePanel）微信端用 <button open-type="contact">
-    // 进原生客服会话，非微信端 view+toast 兜底（T1 微信原生单源·§5 open-type 例外，同 R29 分享）。
+    // 客服升级独立「微信客服」（R18/占位⑨·决策§19，2026-06-16 用户给真 corpId/url）：4 入口
+    // （详情坞 DetailDock / 「我」页 / 售后页 / 播放页 ServicePanel）经 utils/customerService.js 的
+    // openCustomerService() 调 wx.openCustomerServiceChat；展示组件 emit→父级调，页面直接调；
+    // corpId/url 单源此文件（病根#5 防散落）；旧 open-type="contact" 原生客服按钮退役。
     id: 'customer-service-wired',
     roots: ['R18'],
-    desc: '客服已接微信客服官方组件（R18 / 占位⑨）：DetailDock/me/aftersales/ServicePanel 微信端 open-type="contact" 进原生客服会话；旧占位「正在接入人工客服」假 Toast 全库绝迹（接待人 mp 后台配置·靠人）',
+    desc: '客服已升级独立微信客服（R18 / 占位⑨·决策§19）：utils/customerService.js 单源 corpId/url + openCustomerService()（wx.openCustomerServiceChat）；4 调用点（detail/index·me·aftersales·HelpSheet/index）接通；corpId 字面量只在单源文件 + 旧 open-type="contact" 原生客服按钮 + 「正在接入人工客服」假 Toast 全库绝迹（接待人/真机靠人·根因#8）',
     run() {
       const bad = []
       const src = (f) => {
@@ -614,18 +616,53 @@ export const repoChecks = [
             bad.push(`${relative(ROOT, f)} 仍有「正在接入人工客服」假 Toast——客服未接微信客服（R18⑨）`)
         }
       }
-      // ② 四入口微信端接 open-type="contact"
-      const ENTRIES = [
+      // ② 单源 helper：存在 + 导出 openCustomerService + 调 openCustomerServiceChat + 参数齐
+      const HELPER = 'packages/miniapp/src/utils/customerService.js'
+      const hs = src(HELPER)
+      if (hs === null) {
+        bad.push(`${HELPER} 缺失（微信客服单源 + openCustomerService helper·R18⑨）`)
+      } else {
+        if (!/export\s+function\s+openCustomerService/.test(hs))
+          bad.push(`${HELPER} 未导出 openCustomerService()——4 入口无收口（R18⑨）`)
+        if (!hs.includes('openCustomerServiceChat'))
+          bad.push(`${HELPER} 未调 wx.openCustomerServiceChat——未接独立微信客服（R18⑨）`)
+        if (!/corpId/.test(hs) || !/extInfo/.test(hs))
+          bad.push(`${HELPER} 缺 corpId/extInfo——openCustomerServiceChat 参数不全（R18⑨）`)
+      }
+      // ③ corpId 对外企业 ID 字面量单源：只能出现在 helper（病根#5 防散落）
+      for (const dir of ['packages/miniapp/src']) {
+        for (const f of walk(join(ROOT, dir))) {
+          if (f.endsWith('customerService.js')) continue
+          if (readFileSync(f, 'utf8').includes('wwda6861818cb50dd9'))
+            bad.push(
+              `${relative(ROOT, f)} 含 corpId 字面量——须收口 utils/customerService.js 单源（病根#5·R18⑨）`,
+            )
+        }
+      }
+      // ④ 4 调用点接通 openCustomerService（展示组件父级 / 页面）
+      const WIRED = [
+        'packages/miniapp/src/pages/detail/index.vue',
+        'packages/miniapp/src/pages/me/index.vue',
+        'packages/miniapp/src/pages/aftersales/index.vue',
+        'packages/miniapp/src/pages/player/components/HelpSheet/index.vue',
+      ]
+      for (const f of WIRED) {
+        const s = src(f)
+        if (s === null) bad.push(`${f} 缺失（客服调用点·R18⑨）`)
+        else if (!s.includes('openCustomerService'))
+          bad.push(`${f} 未接 openCustomerService——客服入口点不出微信客服（R18⑨）`)
+      }
+      // ⑤ 旧 open-type="contact" 原生客服按钮在 4 原入口绝迹（已升级）
+      const OLD_ENTRIES = [
         'packages/miniapp/src/pages/detail/components/DetailDock.vue',
         'packages/miniapp/src/pages/me/index.vue',
         'packages/miniapp/src/pages/aftersales/index.vue',
         'packages/miniapp/src/pages/player/components/HelpSheet/ServicePanel.vue',
       ]
-      for (const f of ENTRIES) {
+      for (const f of OLD_ENTRIES) {
         const s = src(f)
-        if (s === null) bad.push(`${f} 缺失（客服入口，R18⑨）`)
-        else if (!/open-type="contact"/.test(s))
-          bad.push(`${f} 客服入口未用 open-type="contact"——点不出微信原生客服（R18⑨）`)
+        if (s !== null && /open-type="contact"/.test(s))
+          bad.push(`${f} 仍含 open-type="contact" 旧原生客服按钮——未升级到微信客服（R18⑨）`)
       }
       return bad
     },

@@ -26,6 +26,7 @@ import { useCartStore } from '@/store/cart.js'
 import { useProductsStore } from '@/store/products.js'
 import { useReviewsStore } from '@/store/reviews.js'
 import { goBack, goProductDetail } from '@/utils/nav.js'
+import { openCustomerService } from '@/utils/customerService.js'
 import { getSystemBarVars } from '@/utils/systemBar.js'
 import { timeAgo } from '@/utils/format.js'
 import { buildProductShare } from '@/utils/share.js'
@@ -264,7 +265,7 @@ function onRecPick(p) {
 
     <!-- 固定底部购买坞（含给 fixed 坞让位的占位） -->
     <DetailDock
-      @service="toast('客服请在微信小程序内使用')"
+      @service="openCustomerService"
       @favorite="toast('已收藏')"
       @cart="addToCart"
       @buy="buyNow"

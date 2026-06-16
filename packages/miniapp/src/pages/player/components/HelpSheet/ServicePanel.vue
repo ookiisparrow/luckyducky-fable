@@ -1,12 +1,12 @@
 <script setup>
 /**
- * 求助面板 · 在线客服。微信端：快捷问题 chip + 发送均为 open-type="contact" 原生客服会话
- * （R18/⑨，接待人 mp 后台配置）；非微信端：emit('action') 由壳 toast 兜底（T1 微信原生单源）。
+ * 求助面板 · 在线客服。快捷问题 chip + 发送均 emit('service')，由壳（HelpSheet）调
+ * openCustomerService 进独立微信客服会话（R18/⑨ 升级·决策§19）；helper 内吃 mp/非 mp 条件编译。
  */
 import Icon from '@/components/Icon.vue'
 import { SERVICE_CHIPS } from './data.js'
 
-const emit = defineEmits(['action'])
+const emit = defineEmits(['action', 'service'])
 </script>
 
 <template>
@@ -25,39 +25,14 @@ const emit = defineEmits(['action'])
     >
     <text class="hs-clabel">常见求助，点一下快速发送</text>
     <view class="hs-chips">
-      <!-- #ifdef MP-WEIXIN -->
-      <!-- 快捷问题点一下进微信原生客服会话（open-type=contact 能力按钮，§5 例外；属性被 prettier 拆多行故 convention-ok） -->
-      <button
-        v-for="(c, i) in SERVICE_CHIPS"
-        :key="i"
-        class="hs-chip hs-chip-btn"
-        open-type="contact"
-      >
-        {{ c }}
-      </button>
-      <!-- #endif -->
-      <!-- #ifndef MP-WEIXIN -->
-      <view
-        v-for="(c, i) in SERVICE_CHIPS"
-        :key="i"
-        class="hs-chip"
-        @tap="emit('action', '客服请在微信小程序内使用')"
-        >{{ c }}</view
-      >
-      <!-- #endif -->
+      <!-- 快捷问题点一下 emit('service')，壳调 openCustomerService 进微信客服会话 -->
+      <view v-for="(c, i) in SERVICE_CHIPS" :key="i" class="hs-chip" @tap="emit('service')">{{
+        c
+      }}</view>
     </view>
     <view class="hs-input">
       <input class="hs-input-field" placeholder="输入你的问题…" disabled />
-      <!-- #ifdef MP-WEIXIN -->
-      <button class="hs-send hs-send-btn" open-type="contact">
-        <Icon name="send-w" :size="19" />
-      </button>
-      <!-- #endif -->
-      <!-- #ifndef MP-WEIXIN -->
-      <view class="hs-send" @tap="emit('action', '客服请在微信小程序内使用')"
-        ><Icon name="send-w" :size="19"
-      /></view>
-      <!-- #endif -->
+      <view class="hs-send" @tap="emit('service')"><Icon name="send-w" :size="19" /></view>
     </view>
   </view>
 </template>
@@ -135,13 +110,6 @@ const emit = defineEmits(['action'])
 .hs-chip:active {
   background: $bg-grey;
 }
-/* 微信端 chip 是原生 button（open-type=contact），归零成胶囊 */
-.hs-chip-btn {
-  line-height: 1.4;
-}
-.hs-chip-btn::after {
-  border: none;
-}
 .hs-input {
   display: flex;
   align-items: center;
@@ -167,14 +135,5 @@ const emit = defineEmits(['action'])
   justify-content: center;
   flex: 0 0 auto;
   margin-left: 10px;
-}
-/* 微信端发送是原生 button（open-type=contact），归零成圆钮 */
-.hs-send-btn {
-  padding: 0;
-  line-height: 1;
-  border: none;
-}
-.hs-send-btn::after {
-  border: none;
 }
 </style>

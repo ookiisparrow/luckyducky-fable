@@ -13,6 +13,7 @@ import FaqPanel from './FaqPanel.vue'
 import GroupPanel from './GroupPanel.vue'
 import ReportPanel from './ReportPanel.vue'
 import { HELP_OPTS, TROUBLE } from './data.js'
+import { openCustomerService } from '@/utils/customerService.js'
 
 defineProps({
   ep: { type: String, default: '' },
@@ -80,7 +81,11 @@ defineExpose({ open })
             <view class="vp-opt-chev"><Icon name="chevron-right" :size="18" /></view>
           </view>
         </view>
-        <ServicePanel v-else-if="helpView === 'service'" @action="helpAction" />
+        <ServicePanel
+          v-else-if="helpView === 'service'"
+          @action="helpAction"
+          @service="openCustomerService"
+        />
         <TroublePanel
           v-else-if="helpView === 'step'"
           :topic="helpTopic"

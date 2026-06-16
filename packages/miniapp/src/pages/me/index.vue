@@ -6,7 +6,7 @@
  * 真实接通：「继续学习」卡 → 云端最近观看点（progress store，无记录回退样例）；
  *   「全部教程」→ 首次进视频课先放欢迎引导页、之后直达目录；
  *   订单九宫格 / 全部订单 → 订单列表页（真实订单，角标按 store 数量）；退款/售后仍样例（P4 接真）。
- * 占位（Toast，子流程后续做）：客服。
+ *   客服 → 独立微信客服会话（openCustomerService·R18/⑨ 升级·决策§19）。
  *
  * 图位走 MediaSlot 灰占位；my-* 类名沿用原型。
  */
@@ -23,6 +23,7 @@ import { useUserStore } from '@/store/user.js'
 import { useOrdersStore } from '@/store/orders.js'
 import { useCoursesStore } from '@/store/courses.js'
 import { useProgressStore } from '@/store/progress.js'
+import { openCustomerService } from '@/utils/customerService.js'
 import { useActivationStore } from '@/store/activation.js'
 import { STORAGE_KEYS } from '@/constants/storage.js'
 import { mmss } from '@/utils/format.js'
@@ -71,9 +72,6 @@ const cont = computed(() => {
   }
 })
 
-function toast(t) {
-  uni.showToast({ title: t, icon: 'none' })
-}
 function continueWatch() {
   if (!ensureLogin()) return // 续播 = 进课，需登录
   // 续播云端最近观看的那节；无记录回退样例对应的 l3
@@ -159,21 +157,12 @@ function goLogin() {
 
         <!-- 客服 / 地址 -->
         <view class="my-card my-list">
-          <!-- #ifdef MP-WEIXIN -->
-          <!-- 联系客服：微信原生客服会话（R18/⑨ open-type=contact，§5 能力按钮例外） -->
-          <button class="my-row my-contact-row" open-type="contact">
-            <view class="my-row-ico"><Icon name="headphones-meta" :size="22" /></view>
-            <text class="my-row-label">联系客服</text>
-            <view class="my-row-chev"><Icon name="chevron-right" :size="18" /></view>
-          </button>
-          <!-- #endif -->
-          <!-- #ifndef MP-WEIXIN -->
-          <view class="my-row" @tap="toast('客服请在微信小程序内使用')">
+          <!-- 联系客服：调 openCustomerService 进独立微信客服会话（R18/⑨ 升级·决策§19；helper 内吃 mp/非 mp） -->
+          <view class="my-row" @tap="openCustomerService">
             <view class="my-row-ico"><Icon name="headphones-meta" :size="22" /></view>
             <text class="my-row-label">联系客服</text>
             <view class="my-row-chev"><Icon name="chevron-right" :size="18" /></view>
           </view>
-          <!-- #endif -->
           <view class="my-row divided" @tap="goAddress">
             <view class="my-row-ico"><Icon name="map-pin-meta" :size="22" /></view>
             <text class="my-row-label">地址管理</text>
@@ -259,20 +248,6 @@ function goLogin() {
   display: flex;
   align-items: center;
   padding: 15px 16px;
-}
-/* 客服在微信端是原生 button（open-type=contact），归零成普通列表行 */
-.my-contact-row {
-  width: 100%;
-  background: transparent;
-  border: none;
-  border-radius: 0;
-  font-size: inherit;
-  line-height: inherit;
-  color: inherit;
-  text-align: left;
-}
-.my-contact-row::after {
-  border: none;
 }
 .my-row.divided {
   border-top: 1px solid $line;

@@ -15,6 +15,7 @@ import { useOrdersStore } from '@/store/orders.js'
 import { useAfterSalesStore } from '@/store/aftersales.js'
 import { goBack } from '@/utils/nav.js'
 import { money, dateTime } from '@/utils/format.js'
+import { openCustomerService } from '@/utils/customerService.js'
 
 const AS_STATUS = {
   applied: { label: '审核中', cls: 'applied' },
@@ -92,9 +93,6 @@ function applyFor(row) {
 }
 
 const back = () => goBack('/pages/me/index')
-function toast(t) {
-  uni.showToast({ title: t, icon: 'none' })
-}
 </script>
 
 <template>
@@ -167,21 +165,12 @@ function toast(t) {
 
       <!-- 帮助 -->
       <view class="co-card">
-        <!-- #ifdef MP-WEIXIN -->
-        <!-- 联系人工客服：微信原生客服会话（R18/⑨ open-type=contact，§5 能力按钮例外） -->
-        <button class="co-row co-contact-row" open-type="contact">
-          <text class="co-row-key">联系人工客服</text>
-          <text class="co-row-val muted">工作日 9:00–21:00</text>
-          <view class="co-row-chev"><Icon name="chevron-right" :size="18" /></view>
-        </button>
-        <!-- #endif -->
-        <!-- #ifndef MP-WEIXIN -->
-        <view class="co-row" @tap="toast('客服请在微信小程序内使用')">
+        <!-- 联系人工客服：调 openCustomerService 进独立微信客服会话（R18/⑨ 升级·决策§19；helper 内吃 mp/非 mp） -->
+        <view class="co-row" @tap="openCustomerService">
           <text class="co-row-key">联系人工客服</text>
           <text class="co-row-val muted">工作日 9:00–21:00</text>
           <view class="co-row-chev"><Icon name="chevron-right" :size="18" /></view>
         </view>
-        <!-- #endif -->
       </view>
 
       <text class="coas-note">退货请保持包装完整（含未拆封的课程激活卡）· 审核通过后原路退回</text>
@@ -191,21 +180,6 @@ function toast(t) {
 
 <style lang="scss" scoped>
 @import '../../styles/co.scss';
-
-/* 客服在微信端是原生 button（open-type=contact），归零成普通 co-row 列表行 */
-.co-contact-row {
-  width: 100%;
-  background: transparent;
-  border: none;
-  border-radius: 0;
-  font-size: inherit;
-  line-height: inherit;
-  color: inherit;
-  text-align: left;
-}
-.co-contact-row::after {
-  border: none;
-}
 
 /* 本页无底部坞，留出底部呼吸 */
 .co-body {
