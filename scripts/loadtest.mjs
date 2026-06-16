@@ -10,12 +10,15 @@
  *   ① 并发 CAS 原子性：一个 doc 上 N 个并发「读 v → where({_id,v:旧}).update(v+1)」→ 无丢更新则 v===N。
  *      这是 bumpWindowed/transition/激活码抢占的同一招——它真原子，那套并发正确性才算证。
  *   ② 规模精确：灌 N 条假单 → count() 应===N、aggregate 求和应精确（验 #18/#18续 破千不少算）。
+ *   ③ 频控端到端：复刻 throttle.ts bumpWindowed 并发路径（首写 add 撞号竞争 + 窗内 CAS 计数）→
+ *      N 并发命中同 key 应恰 max 放行、无泄漏（验「频控只桩绿」那条·根因#13 并发面）。
  *
  * 前置：① 独立测试环境（非生产）② npm i -D @cloudbase/node-sdk ③ 本地 export
  *   TCB_SECRETID/TCB_SECRETKEY（经典 CAM 密钥·别进仓库/聊天）。
  * 用法：
  *   node scripts/loadtest.mjs --env <测试envId> --mode cas --n 200
  *   node scripts/loadtest.mjs --env <测试envId> --mode capacity --seed 2000
+ *   node scripts/loadtest.mjs --env <测试envId> --mode throttle --n 20 --max 10
  * 安全闸：--env 等于生产 envId 直接退出。跑完自动清理 _loadtest 数据。
  */
 
@@ -31,7 +34,7 @@ function parseArgs(argv) {
 }
 function usage(msg) {
   if (msg) console.error('✗ ' + msg)
-  console.error('用法：node scripts/loadtest.mjs --env <测试envId> --mode <cas|capacity> [--n 200] [--seed 2000]')
+  console.error('用法：node scripts/loadtest.mjs --env <测试envId> --mode <cas|capacity|throttle> [--n 200] [--seed 2000] [--max 10]')
   process.exit(1)
 }
 
@@ -56,9 +59,12 @@ async function getDb(env) {
 // SDK 返回形状兼容：node-sdk（直连）get().data 是数组、update() 返回 {updated}；
 // wx-server-sdk（云函数内）get().data 是对象、update() 返回 {stats:{updated}}。两种都读对。
 // 导出供 tests/scripts/loadtest.test.js 锁两种形状（根因#8 桩绿≠真证：读错字段会假阴）。
-export function readV(res) {
+export function readDoc(res) {
   const d = res && res.data
-  const doc = Array.isArray(d) ? d[0] : d
+  return Array.isArray(d) ? d[0] : d
+}
+export function readV(res) {
+  const doc = readDoc(res)
   return doc && typeof doc.v === 'number' ? doc.v : 0
 }
 export function updatedCount(r) {
@@ -128,6 +134,67 @@ function $sum(db) {
   return db.command.aggregate.sum('$amount')
 }
 
+// ③ 频控端到端（债#19·根因#13/#8）：忠实复刻 throttle.ts 的 bumpWindowed 并发关键路径——
+//    N 并发「命中」同一 key（大窗口、测试期不翻滚）：首写靠 add({_id}) 撞号即失败（恰一胜、其余
+//    转 update）+ 窗内 CAS 自增 where({_id,旧窗,旧计数}).update。验真库下**恰 max 放行、无丢更新、
+//    无泄漏**——allowed>max 即丢更新让超额请求漏过频控（这正是「频控只桩绿」要证伪的真风险）。
+//    throttle.ts 逻辑本身已 throttleConcurrency.test.js 桩证；本跑补「真库对这套操作的并发行为」。
+//    fails/锁定走同一 bumpWindowed 核（只差字段名+达阈动作），故验 hits 即验核。
+async function runThrottle(db, n, max) {
+  const id = 'throttle-probe'
+  const COUNT = 'hits'
+  const WINDOW = 'hitWindowStart'
+  const windowMs = 600000 // 10min·测试期不翻滚（专测并发计数、非窗口翻滚）
+  const _ = db.command
+  await db.collection(COL).doc(id).remove().catch(() => {}) // 起点干净
+  console.log(`频控 throttle：${n} 并发命中同一 key（max=${max}）·验恰 ${max} 放行 + 无丢更新 + 无泄漏…`)
+  let allowed = 0
+  let denied = 0
+  let exhausted = 0
+  await Promise.all(
+    Array.from({ length: n }, async () => {
+      for (let attempt = 0; attempt < 30; attempt++) {
+        const now = Date.now()
+        const rec = readDoc(await db.collection(COL).doc(id).get().catch(() => null))
+        const within = !!rec && typeof rec[WINDOW] === 'number' && now - rec[WINDOW] < windowMs
+        const count = (within ? rec[COUNT] || 0 : 0) + 1
+        const patch = within ? { [COUNT]: count } : { [COUNT]: count, [WINDOW]: now }
+        if (!rec) {
+          // 首写：add({_id}) 撞号即失败 → 恰一胜，败者转 update 路径（throttle.ts:56-63 同范式）
+          const r = await db.collection(COL).add({ _id: id, createdAt: now, ...patch }).catch(() => null)
+          if (r && !r.code) {
+            count > max ? denied++ : allowed++
+            return
+          }
+          continue // 撞号/失败 → 重读转 update
+        }
+        const cond = { _id: id }
+        if (within) {
+          cond[WINDOW] = rec[WINDOW]
+          cond[COUNT] = rec[COUNT] || 0
+        } else {
+          cond[WINDOW] = typeof rec[WINDOW] === 'number' ? rec[WINDOW] : _.exists(false)
+        }
+        const r = await db.collection(COL).where(cond).update(patch).catch(() => null)
+        if (updatedCount(r) === 1) {
+          count > max ? denied++ : allowed++
+          return
+        }
+        // updated=0：并发抢先改过 → 重读重试
+      }
+      exhausted++
+    })
+  )
+  const finalCount = (readDoc(await db.collection(COL).doc(id).get().catch(() => null)) || {})[COUNT] || 0
+  console.log(`  放行 ${allowed}（期望 ${max}）· 拒 ${denied}· 最终 hits=${finalCount}（期望 ${n}）· 重试耗尽 ${exhausted}`)
+  if (allowed === max && finalCount === n && exhausted === 0)
+    console.log('  ✅ 真库频控并发安全：恰 max 放行·无丢更新·无泄漏（首写 add 撞号竞争 + 窗内 CAS 计数 都原子）')
+  else if (allowed > max)
+    console.log(`  ❌ 泄漏：放行 ${allowed} > max ${max}——丢更新让超额请求漏过频控！`)
+  else console.log(`  ⚠️ 待查：allowed=${allowed}/finalCount=${finalCount}/exhausted=${exhausted}（贴回排查·限流或重试耗尽？）`)
+  await db.collection(COL).doc(id).remove().catch(() => {})
+}
+
 async function main() {
   const a = parseArgs(process.argv.slice(2))
   if (!a.env) usage('缺 --env <测试envId>')
@@ -137,7 +204,8 @@ async function main() {
   await db.createCollection(COL).catch(() => {})
   if (a.mode === 'cas') await runCas(db, Number(a.n) || 200)
   else if (a.mode === 'capacity') await runCapacity(db, Number(a.seed) || 2000)
-  else usage('--mode 须为 cas 或 capacity')
+  else if (a.mode === 'throttle') await runThrottle(db, Number(a.n) || 20, Number(a.max) || 10)
+  else usage('--mode 须为 cas / capacity / throttle')
 }
 
 // 只在直接执行（node scripts/loadtest.mjs …）时跑；被 vitest import 时不触发 main
