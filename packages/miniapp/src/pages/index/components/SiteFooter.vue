@@ -1,16 +1,20 @@
 <script setup>
 /**
  * 页脚。对应原型 Sections.jsx 的 Footer。深紫底、白色 logo。
+ * 「关于我们 / Lucky 鸭」两链接进关于我们页（守卫 footer-links-wired 锁不回退死链接）。
  */
+function goAbout() {
+  uni.navigateTo({ url: '/pages/about/index' })
+}
 </script>
 
 <template>
   <view class="ld-footer">
     <image class="ld-footer-logo" src="/static/logo-white.svg" mode="heightFix" />
     <view class="ld-footer-links">
-      <text class="ld-footer-link">关于我们</text>
+      <text class="ld-footer-link" @tap="goAbout">关于我们</text>
       <text class="ld-footer-sep">·</text>
-      <text class="ld-footer-link">Lucky 鸭</text>
+      <text class="ld-footer-link" @tap="goAbout">Lucky 鸭</text>
     </view>
     <text class="ld-footer-copy">Copyright © 2026 ZHUO DUCKI LUCKY · All Rights Reserved.</text>
   </view>

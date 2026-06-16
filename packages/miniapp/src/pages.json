@@ -122,6 +122,13 @@
         "navigationBarTitleText": "协议",
         "navigationStyle": "custom"
       }
+    },
+    {
+      "path": "pages/about/index",
+      "style": {
+        "navigationBarTitleText": "关于我们",
+        "navigationStyle": "custom"
+      }
     }
   ],
   "globalStyle": {

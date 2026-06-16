@@ -681,6 +681,31 @@ export const repoChecks = [
     },
   },
   {
+    // 页脚链接接真（病根#6「用户动作无真效果」家族·占位未接真）：SiteFooter 的「关于我们」「Lucky 鸭」
+    // 曾是纯 <text>、无 @tap、点了没反应（用户报「这两个是空的」）。守卫锁两链接必绑 @tap 导航
+    // + 关于我们页 pages/about/index.vue 存在，防回退死链接。同 detail-share-wired/customer-service-wired/
+    // home-card-add-real 的「占位/死按钮占真入口」家族。
+    id: 'footer-links-wired',
+    roots: ['#6'],
+    desc: '页脚链接接真（病根#6 占位未接真家族）：pages/index/components/SiteFooter.vue 的「关于我们」「Lucky 鸭」须绑 @tap 导航（不留纯 text 死链接），且 pages/about/index.vue 关于我们页存在——防页脚链接回退「点了没反应」',
+    run() {
+      const bad = []
+      const f = 'packages/miniapp/src/pages/index/components/SiteFooter.vue'
+      const abs = join(ROOT, f)
+      if (!existsSync(abs)) return [`${f} 缺失（页脚）`]
+      const src = readFileSync(abs, 'utf8')
+      for (const label of ['关于我们', 'Lucky 鸭']) {
+        const re = new RegExp(`<text\\b[^>]*@tap[^>]*>\\s*${label}\\s*</text>`)
+        if (!re.test(src))
+          bad.push(`${f}「${label}」链接未绑 @tap 导航——死链接占位（病根#6 占位未接真）`)
+      }
+      const about = 'packages/miniapp/src/pages/about/index.vue'
+      if (!existsSync(join(ROOT, about)))
+        bad.push(`${about} 缺失（关于我们页，页脚链接目标）`)
+      return bad
+    },
+  },
+  {
     // 钱链可观测告警接入（债#23 代码侧·根因#13/钱链）：平台自带指标看不见「语义级/静默失败」——
     // payCallback 金额不符/未知订单、refundCallback 与单不符/非成功 等回调返 ACK 200 却实际出错。
     // 这些静默失败点须经 kit/observe 的 alert() 打统一可告警标记，控制台对 [LD_ALERT] 配日志告警。
