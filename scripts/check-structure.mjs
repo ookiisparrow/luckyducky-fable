@@ -895,6 +895,37 @@ export const repoChecks = [
     },
   },
   {
+    // 守卫计数 + 测试计数自洽（文档体系规则⑥·客观计数机器维护·巡检 #009 ④/💡）：守卫数随加守卫
+    // 天天涨、被手抄进 现状与路线.md 必漂（#009 标 31 vs 真值 35）——同 collection-count-synced 的
+    // 「客观计数别手抄」病（病根#11）。repoChecks/fileRules 数组长度＝守卫数真值（含本守卫自己），
+    // 现状与路线.md 任何「N repoCheck / M fileRule」须报同一数。测试数无静态真值源（vitest 才报准、
+    // 跑全套太重不进静态闸），故只校验文档内多处「测试 N」互相自洽——封死 #009 标的 337 vs 326 手抄自相矛盾。
+    id: 'guard-count-synced',
+    roots: ['#11'],
+    desc: '守卫计数单源（规则⑥·客观计数机器维护·巡检#009④）：repoChecks/fileRules 数组长度为守卫数真值；现状与路线.md「N repoCheck / M fileRule」须报同一数（同 collection-count-synced 路子·防 31/35 手抄漂移）。测试数无静态真值源，只校验文档内多处「测试 N」自洽（防 337 vs 326 自相矛盾）',
+    run() {
+      const doc = join(ROOT, 'docs/现状与路线.md')
+      if (!existsSync(doc)) return []
+      const text = readFileSync(doc, 'utf8')
+      const bad = []
+      // ① 守卫数：数组长度为真值（含本守卫自己），文档报同一数
+      for (const m of text.matchAll(/(\d+)\s*repoCheck/g))
+        if (Number(m[1]) !== repoChecks.length)
+          bad.push(`现状与路线.md 报「${m[1]} repoCheck」≠ 真值 ${repoChecks.length}（repoChecks 数组·客观计数单源·规则⑥·别手抄）`)
+      for (const m of text.matchAll(/(\d+)\s*fileRule/g))
+        if (Number(m[1]) !== fileRules.length)
+          bad.push(`现状与路线.md 报「${m[1]} fileRule」≠ 真值 ${fileRules.length}（fileRules 数组·客观计数单源·规则⑥）`)
+      // ② 测试数：无静态真值源（vitest 才报准），只校验文档内多处互相自洽——防 337 vs 326 自相矛盾
+      const tn = [
+        ...[...text.matchAll(/(\d+)\s*测试/g)].map((m) => m[1]),
+        ...[...text.matchAll(/测试\s*\**\s*(\d+)/g)].map((m) => m[1]),
+      ]
+      if (new Set(tn).size > 1)
+        bad.push(`现状与路线.md 测试数多处不一致：${[...new Set(tn)].join(' vs ')}（手抄自相矛盾·状态只一处权威·规则⑥）`)
+      return bad
+    },
+  },
+  {
     // 错误码只用已登记的（债#29·根因#3）：kit `err()` 返回的码是**前端按精确字符串分支的契约**；
     // shared/errors.ts 的 ERR 是错误码权威册。校验全库 `err('字面量')` 的码都在册内——打错码即红、
     // 新码须先登记（前端才能对得上）。动态码 `err('X:'+v)` 非纯字面量、不校验。
