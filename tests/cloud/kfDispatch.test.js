@@ -8,11 +8,25 @@ import {
   resolveOpenid,
   summarizeOrders,
   handleMessage,
+  extUserId,
 } from '../../packages/cloud/src/functions/cs/kfCallback/dispatch'
 
 // 分流引擎：关键词识别 → 高亮 msgmenu；menu_id 路由（文字/卡片/转人工/查订单）；身份桥接查订单。
 
 beforeEach(() => control.reset())
+
+describe('extUserId wire 形状（根因#8 真机字段位置·防 40058）', () => {
+  it('text 消息：external_userid 在顶层', () => {
+    expect(extUserId({ msgtype: 'text', external_userid: 'wmAAA', text: { content: '物流' } })).toBe('wmAAA')
+  })
+  it('event 进会话：external_userid 在 event 子对象（曾取顶层取空→send_msg 40058）', () => {
+    expect(extUserId({ msgtype: 'event', event: { event_type: 'enter_session', external_userid: 'wmBBB' } })).toBe('wmBBB')
+  })
+  it('都缺 → 空串（不构造空 touser 的非法 send）', () => {
+    expect(extUserId({ msgtype: 'event', event: { event_type: 'enter_session' } })).toBe('')
+    expect(extUserId(null)).toBe('')
+  })
+})
 
 describe('关键词识别（确定性·低幻觉）', () => {
   it('命中类别 + 命中词', () => {

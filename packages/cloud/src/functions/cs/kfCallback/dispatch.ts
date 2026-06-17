@@ -28,6 +28,15 @@ export function recognize(text: string): { cat: Category; word: string } | null 
   return null
 }
 
+/**
+ * 从客服消息 wire 取 external_userid（根因#8 真机字段位置·桩测过≠真机字段对）：text 消息在**顶层**
+ * external_userid；event 消息（进会话 enter_session 等）在 **event 子对象**里。曾只取顶层 → event
+ * 取到空 touser → send_msg 报 40058（不合法参数）。两处都经此函数取，杜绝再取错层。
+ */
+export function extUserId(msg: any): string {
+  return String((msg && (msg.external_userid || (msg.event && msg.event.external_userid))) || '')
+}
+
 // ── msgmenu 内容（head 高亮识别词 + list 高亮可点选项 + tail「或直接打字」） ──
 interface MenuItem {
   id: string
