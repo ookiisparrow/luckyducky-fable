@@ -5,6 +5,7 @@
  * 加入弹 Toast、滚动过半显示回到顶部。
  */
 import { ref, watch, getCurrentInstance, nextTick } from 'vue'
+import { onLoad } from '@dcloudio/uni-app'
 
 // 首页专用区块组件就近放在 ./components/（CLAUDE.md §9：页内自用组件归 pages/<page>/components/）
 import Hero from './components/Hero.vue'
@@ -27,6 +28,7 @@ import { splashActive } from '@/composables/useSplash.js'
 import { loginSheetVisible } from '@/composables/useAuthGate.js'
 import { useExitGuard } from '@/composables/useExitGuard.js'
 import { goProductDetail } from '@/utils/nav.js'
+import { parseActivationCode } from '@/api/activation.js'
 
 // section 组件是纯展示（技术债 #4），数据在页面收口；将来换云端来源只改这里
 import { useContentStore } from '@/store/content.js'
@@ -36,6 +38,14 @@ import { useUserStore } from '@/store/user.js'
 import { getProduct } from '@/data/catalog.js'
 import { REASSURE_ITEMS } from '@/data/reassure.js'
 import { REVIEWS } from '@/data/reviews.js'
+
+// 扫普通链接二维码进站：微信把扫到的 URL（`https://www.luckyducky.cn/q/?code=XXX`，决策§13）
+// 经启动参数 q 传给入口页（=本首页）。首页非激活页，这里识别到激活码就转发 welcome 激活；
+// 无码＝正常进商城，不受影响。（真机入口落哪页须真机验·根因#8；welcome 自身也解析 q 兜底。）
+onLoad((options) => {
+  const code = parseActivationCode(options || {})
+  if (code) uni.reLaunch({ url: '/pages/welcome/index?code=' + encodeURIComponent(code) })
+})
 
 const { later } = useTimers()
 // 首页内容（hero 文案/信任条/FAQ）：控制台橱窗可编辑，云端无记录回退本地默认

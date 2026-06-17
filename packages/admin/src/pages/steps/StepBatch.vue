@@ -60,8 +60,9 @@ async function init() {
     card.value = c.card
     artUrl.value = c.artUrl
     batches.value = b
-    // 默认用静态托管域名（测试期即可扫码验证落地页）；正式印刷前换自有域名（决策 §13）
-    urlPrefix.value = s.urlPrefix || 'https://cloudbase-d4gcssqbv06865479-1440904924.tcloudbaseapp.com/q/'
+    // 默认用自有域名 www（决策 §13·已备案接入 CloudBase 静态托管·扫码落地页验证通过）；
+    // 真值仍以 adminConfig/settings 保存的为准，此处仅首次无配置时的默认。
+    urlPrefix.value = s.urlPrefix || 'https://www.luckyducky.cn/q/'
     await store.update(props.product.id, { batchCount: b.length })
   } catch (e) {
     loadErr.value = '加载失败：' + e.message

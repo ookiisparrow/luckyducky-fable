@@ -994,6 +994,26 @@ export const repoChecks = [
       return bad
     },
   },
+  {
+    // 扫普通链接二维码进站 routing（R3/决策§13）：印刷码扫码经微信「扫普通链接二维码打开小程序」进站，
+    // 微信把扫到的 URL 经启动参数 q 传给**入口页（pages/index/index）**——入口页非激活页，须识别激活码
+    // 并 reLaunch 转发 welcome，否则 q 被忽略、用户落商城首页、激活断（根因#8 真机入口落首页）。
+    id: 'activation-scan-routed',
+    roots: ['R3'],
+    desc: '扫普通链接二维码进站 routing（R3/决策§13）：入口页 pages/index/index onLoad 须 parseActivationCode 识别激活码并 reLaunch 转发 /pages/welcome/index——防微信扫码进首页时 q 被忽略、激活断（根因#8 真机入口）',
+    run() {
+      const f = 'packages/miniapp/src/pages/index/index.vue'
+      const abs = join(ROOT, f)
+      if (!existsSync(abs)) return [`${f} 缺失`]
+      const src = readFileSync(abs, 'utf8')
+      const bad = []
+      if (!/parseActivationCode/.test(src))
+        bad.push(`${f} 入口页未用 parseActivationCode 识别扫码激活码——微信扫普通链接二维码进首页时 q 被忽略（R3/决策§13/根因#8）`)
+      if (!/\/pages\/welcome\/index/.test(src))
+        bad.push(`${f} 入口页未转发 /pages/welcome/index——识别到激活码却不跳激活页、激活断（R3）`)
+      return bad
+    },
+  },
 ]
 
 // ============== 逐文件规则（fileRules）==============
