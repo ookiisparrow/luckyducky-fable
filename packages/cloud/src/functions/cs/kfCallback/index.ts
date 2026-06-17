@@ -45,15 +45,27 @@ export const main = defineKfCallback({
   aesKey: () => env('WXKF_AESKEY'),
   onEvent: async ({ syncToken, openKfId }) => {
     const db = getDb()
+    // 观测（根因#8：整条 onEvent 链路可见，非敏感字段——不打 token/openid 内容）
+    console.log('[kf] onEvent', { openKfId, hasSyncToken: !!syncToken })
     let token: string
     try {
       token = await getAccessToken(cfg())
-    } catch {
-      return // gettoken 失败已在 kit 告警；下次推送重试
+    } catch (e) {
+      console.error('[kf] getAccessToken threw', String(e)) // fetch 抛错（网络/IP）——kit errcode 路径另有告警
+      return
     }
-    const send = (payload: any) => sendMsg(token, payload)
-    const transfer = (externalUserId: string) =>
-      transferToServicer(token, { openKfId, externalUserId, servicerUserId: SERVICER() })
+    // send/transfer 收口结果检查（补盲点：原来 send 失败静默无痕，气泡发不出也查不到）
+    const send = async (payload: any) => {
+      const res = await sendMsg(token, payload)
+      if (res && res.errcode) alert('security', 'kfCallback', 'SENDMSG_FAILED', { errcode: res.errcode, msgtype: payload?.msgtype })
+      else console.log('[kf] sent', { msgtype: payload?.msgtype })
+      return res
+    }
+    const transfer = async (externalUserId: string) => {
+      const res = await transferToServicer(token, { openKfId, externalUserId, servicerUserId: SERVICER() })
+      if (res && res.errcode) alert('security', 'kfCallback', 'TRANSFER_FAILED', { errcode: res.errcode })
+      return res
+    }
     const ctx = { db, openKfId, cfg: cardCfg(), send, transfer }
 
     // cursor 持久化：从上次游标增量拉，处理完回写
@@ -64,19 +76,25 @@ export const main = defineKfCallback({
 
     for (let guard = 0; guard < 20; guard++) {
       const r = await syncMsg(token, { cursor, token: syncToken, openKfId })
+      console.log('[kf] sync', { errcode: r.errcode, msgs: r.msg_list.length, hasMore: r.has_more })
       if (r.errcode) {
         alert('security', 'kfCallback', 'SYNCMSG_FAILED', { errcode: r.errcode })
         break
       }
       for (const msg of r.msg_list) {
         const msgid = String(msg.msgid || '')
-        if (msgid && !(await firstSeen(db, msgid))) continue // 已处理
+        if (msgid && !(await firstSeen(db, msgid))) {
+          console.log('[kf] dup-skip', { msgid })
+          continue // 已处理
+        }
+        console.log('[kf] handle', { msgtype: msg.msgtype, hasText: !!msg.text?.content, hasMenuId: !!msg.text?.menu_id })
         if (msg.msgtype === 'event' && msg.event?.event_type === 'enter_session') {
           await send(buildMsgMenu(String(msg.external_userid || ''), openKfId, rootMenu())) // 进会话欢迎
           continue
         }
         const incoming = normalize(msg)
         if (incoming) await handleMessage(ctx, incoming)
+        else console.log('[kf] not-dispatched', { msgtype: msg.msgtype })
       }
       cursor = r.next_cursor || cursor
       await db
