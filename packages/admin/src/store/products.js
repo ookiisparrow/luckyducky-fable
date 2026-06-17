@@ -5,54 +5,10 @@
  */
 import { defineStore } from 'pinia'
 import { loadProducts, saveProduct, deleteProduct } from '@/api/cloud.js'
+import { STEP_NAMES, newProduct, normalizeProduct, stepDone } from './productShape.js'
 
-export const STEP_NAMES = ['产品图片', '商品信息', '商品 SKU', '教学视频', '二维码卡片', '码批次与印刷包']
-
-function newProduct() {
-  const id = 'p' + Date.now().toString(36)
-  return {
-    id,
-    cover: '', // 封面图（商品的「脸」：列表卡与详情头图）；云模式为 fileID
-    images: [], // 其余图（有序）
-    name: '',
-    price: '',
-    was: '',
-    tag: '',
-    brief: '',
-    skus: [], // [{ name, price }]
-    params: [], // 详情参数表 [[k, v]]
-    detailSections: [], // 详情段落 [{ lead, body }]（配图自动取其余图第 N 张）
-    kit: [], // 套装清单 [{ icon, name, qty }]
-    courseId: '', // 配套课程（步骤④ 首次进入时生成 course-<pid>）
-    videoStats: null, // { total, done } 由步骤④ 保存草稿时同步
-    cardStatus: '', // 步骤⑤ 卡面状态（draft/final）
-    batchCount: 0, // 步骤⑥ 已有码批次数
-    status: 'preparing', // preparing 筹备中 | onsale 在售
-    createdAt: Date.now(),
-    updatedAt: Date.now(),
-  }
-}
-
-// 每步是否已完成（向导圆点与列表进度共用一套判定）
-export function stepDone(p, n) {
-  switch (n) {
-    case 1:
-      return !!p.cover
-    case 2:
-      return !!(p.name && p.price)
-    case 3:
-      return p.skus.length > 0 && p.skus.every((s) => s.name && s.price)
-    case 4:
-      // 视频编排：StepVideos 保存草稿时同步 videoStats = { total, done }
-      return !!(p.videoStats && p.videoStats.total > 0 && p.videoStats.done >= p.videoStats.total)
-    case 5:
-      return p.cardStatus === 'final' // 卡面已定稿
-    case 6:
-      return (p.batchCount || 0) > 0 // 已有码批次
-    default:
-      return false
-  }
-}
+// 纯形状逻辑在 productShape.js（无云依赖·可被测试直接 import）；这里 re-export 保持调用方 import 不变
+export { STEP_NAMES, normalizeProduct, stepDone }
 
 export const useProductsStore = defineStore('products', {
   state: () => ({
@@ -72,7 +28,7 @@ export const useProductsStore = defineStore('products', {
       if (this.loaded && !force) return
       try {
         const { list, urls } = await loadProducts()
-        this.list = list
+        this.list = list.map(normalizeProduct) // 入库归一·脏商品降级安全形状不白屏（根因#8）
         this.urls = urls
         this.loaded = true
         this.error = ''
