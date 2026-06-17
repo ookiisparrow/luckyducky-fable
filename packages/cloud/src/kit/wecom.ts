@@ -1,4 +1,5 @@
 import crypto from 'crypto'
+import https from 'https'
 import { getDb } from './db'
 import { COLLECTIONS } from './collections'
 import { alert } from './observe'
@@ -9,7 +10,8 @@ import { alert } from './observe'
  * ② access_token 取用 + 缓存（DB·类比 kit/throttle 的 DB 模式·7200s）③ 客服 API 调用
  * （sync_msg / send_msg / unionid→external_userid 身份转换）。消费者：cs/kfCallback、cs/kfBind。
  *
- * 出网用全局 fetch（node18 运行时自带）；fetchImpl 可注入便于单测打桩（根因#8 真证：HTTP 形状靠测试桩 + 真机）。
+ * 出网用全局 fetch（node18+ 自带），运行时低于 18 回退内置 https（杜绝「Node<18 下 fetch undefined」——
+ * 验签只做加密会照样过、真消息进来调 access_token 才崩的根因#8 隐患）；fetchImpl 可注入便于单测打桩。
  * 密钥一律走云函数环境变量（corpid/secret/token/aeskey），不入库不入日志（CLAUDE §7 敏感信息不进日志）。
  */
 
@@ -17,7 +19,26 @@ const QY = 'https://qyapi.weixin.qq.com/cgi-bin'
 
 // 最小 fetch 形状（不依赖 DOM lib·tsconfig types 只含 node）
 type FetchFn = (url: string, init?: { method?: string; body?: string; headers?: Record<string, string> }) => Promise<{ json: () => Promise<any> }>
-const defaultFetch: FetchFn = (...args) => (globalThis as any).fetch(...args)
+
+// 内置 https 兜底（运行时无全局 fetch 时用·形状对齐上面 FetchFn 的 .json()）
+const httpsFetch: FetchFn = (url, init) =>
+  new Promise((resolve, reject) => {
+    const u = new URL(url)
+    const req = https.request(
+      { method: init?.method || 'GET', hostname: u.hostname, path: u.pathname + u.search, headers: init?.headers },
+      (res) => {
+        let body = ''
+        res.on('data', (c) => (body += c))
+        res.on('end', () => resolve({ json: async () => JSON.parse(body || '{}') }))
+      }
+    )
+    req.on('error', reject)
+    if (init?.body) req.write(init.body)
+    req.end()
+  })
+
+const defaultFetch: FetchFn = (url, init) =>
+  typeof (globalThis as any).fetch === 'function' ? (globalThis as any).fetch(url, init) : httpsFetch(url, init)
 
 // ───────────────────────── 验签 + 解密（WXBizMsgCrypt） ─────────────────────────
 
