@@ -745,18 +745,15 @@ export const repoChecks = [
     // 端口到 uni-app <scroll-view> 后丢失——mp-weixin scroll-view 默认刚性、到边硬停无回弹（H5/快网看不出）。
     // mp 唯一恢复途径＝enhanced（增强模式）+ bounces（iOS 橡皮筋）。列举整页 scroll-view 承载滚动的页，
     // 其主 scroll-view 须带二者。注：enhanced 模式与 scroll-top/@scroll/refresher 共存须真机验（#8）。
+    // order-list 不入册——其 scroll-view 嵌在 swiper 内（T-F4 tab 横滑），enhanced 原生滚动器与 swiper
+    // 横滑手势仲裁抢资源致横滑掉帧（真机实测·调试日志），故让位顺滑横滑、不开 enhanced（弹性靠 refresher+原生惯性）。
     id: 'main-scroll-elastic',
     roots: ['#8'],
-    desc: '主滚动容器保留弹性拖拽（用户报·恢复原设计拖动感）：整页 scroll-view 承载滚动的页(index/me/cart/order-list)主 scroll-view 须 enhanced + bounces（mp 默认刚性无回弹·iOS 橡皮筋只此途径·根因#8 真机才感知），防拖动感再丢',
+    desc: '主滚动容器保留弹性拖拽（用户报·恢复原设计拖动感）：整页 scroll-view 承载滚动的页(index/me/cart)主 scroll-view 须 enhanced + bounces（mp 默认刚性无回弹·iOS 橡皮筋只此途径·根因#8 真机才感知），防拖动感再丢；order-list 因 scroll-view 嵌 swiper 内 enhanced 致横滑掉帧不入册',
     run() {
       const bad = []
       const MINI = 'packages/miniapp/src'
-      const ELASTIC_PAGES = [
-        'pages/index/index',
-        'pages/me/index',
-        'pages/cart/index',
-        'pages/order-list/index',
-      ]
+      const ELASTIC_PAGES = ['pages/index/index', 'pages/me/index', 'pages/cart/index']
       for (const path of ELASTIC_PAGES) {
         const f = `${MINI}/${path}.vue`
         const abs = join(ROOT, f)
