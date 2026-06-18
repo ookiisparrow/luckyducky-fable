@@ -14,12 +14,21 @@ const props = defineProps({
 })
 const sel = ref(0)
 const total = computed(() => props.imgs.length || props.count)
+// 左右滑切图（原生 swiper·T-F4）：@change 把当前页同步给 sel——与缩略图高亮、计数双向一致；
+// 点缩略图改 sel → swiper :current 跟着切。手势消歧交给原生 swiper（不自造 touchmove·根因#8）。
+function onSwipe(e) {
+  sel.value = e.detail.current
+}
 </script>
 
 <template>
   <view class="pdp-gallery">
     <view class="pdp-gallery-scrim"></view>
-    <MediaSlot ratio="1/1" label="放入图片" :src="imgs[sel] || ''" />
+    <swiper class="pdp-swiper" :current="sel" :circular="total > 1" @change="onSwipe">
+      <swiper-item v-for="i in total" :key="i">
+        <MediaSlot ratio="1/1" label="放入图片" :src="imgs[i - 1] || ''" />
+      </swiper-item>
+    </swiper>
     <text class="pdp-count">{{ sel + 1 }}/{{ total }}</text>
     <view class="pdp-thumbs">
       <view
@@ -39,6 +48,11 @@ const total = computed(() => props.imgs.length || props.count)
 .pdp-gallery {
   position: relative;
   background: $white;
+}
+/* 图廊 swiper：方图与原 MediaSlot ratio 1/1 等高（满宽=满高），swiper-item 内 MediaSlot 撑满 */
+.pdp-swiper {
+  width: 100%;
+  height: 100vw;
 }
 .pdp-gallery-scrim {
   position: absolute;
@@ -81,5 +95,4 @@ const total = computed(() => props.imgs.length || props.count)
 .pdp-thumb.on {
   border-color: $purple;
 }
-
 </style>

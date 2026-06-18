@@ -615,9 +615,10 @@ export const repoChecks = [
         if (p.style && p.style.enablePullDownRefresh === true) pullPaths.add(p.path)
       }
       // ① 列举的页面级滚动数据页必开 enablePullDownRefresh（防漏接）
+      // 注：order-list T-F4 后改 swiper+per-tab scroll-view（列表移入 scroll-view），下拉刷新随之
+      // 从页面级迁到 scroll-view refresher（见下 REFRESHER_PAGES），故不在此页面级册内。
       const PAGE_PULL = [
         'pages/catalog/index',
-        'pages/order-list/index',
         'pages/reviews/index',
         'pages/aftersales/index',
         'pages/order/index',
@@ -641,7 +642,8 @@ export const repoChecks = [
           bad.push(`${f} 开了 enablePullDownRefresh 但未调 stopPullDownRefresh——转圈不停（T-F3/根因#8）`)
       }
       // ② 列举的整页 scroll-view 数据页必走 scroll-view refresher（页面级下拉在此不触发）
-      const REFRESHER_PAGES = ['pages/index/index', 'pages/me/index']
+      // order-list T-F4 后列表在 swiper 内的 scroll-view 滚动，下拉刷新随之走 refresher。
+      const REFRESHER_PAGES = ['pages/index/index', 'pages/me/index', 'pages/order-list/index']
       for (const path of REFRESHER_PAGES) {
         const f = `${MINI}/${path}.vue`
         const abs = join(ROOT, f)
@@ -662,6 +664,34 @@ export const repoChecks = [
           bad.push(`${rel} 用 refresher-enabled 但未绑 @refresherrefresh——下拉无响应（T-F3）`)
         if (!/refresher-triggered/.test(src))
           bad.push(`${rel} 用 refresher-enabled 但未绑 :refresher-triggered——转圈不停（T-F3/根因#8）`)
+      }
+      return bad
+    },
+  },
+  {
+    // 左右滑走原生 swiper（优化批0618·T-F4）。根因#8「手势在真机才暴露」+ 守卫指令「不自造 touchmove」：
+    // mp-weixin 横滑（切图/切 tab）与纵向滚动的手势消歧，靠原生 <swiper> 才稳——自造 touchmove 计算
+    // 真机易误触纵向滚动/卡顿（H5 假绿）。钉死两个左右滑面用 <swiper>+<swiper-item>：
+    //   ① 详情图廊 DetailGallery（左右滑看图 + 指示点）；② 订单列表 order-list（tab 横滑联动顶部高亮）。
+    // catalog（派单写「分类」）实为单课程 + 竖向章节折叠、无横向 tab，无可滑面 → 不入册（不做 theater·根因#8）。
+    id: 'swipe-native-swiper',
+    roots: ['#8'],
+    desc: '左右滑走原生 swiper（优化批0618·T-F4）：详情图廊 DetailGallery.vue 与订单列表 order-list/index.vue 的左右滑须用原生 <swiper>+<swiper-item>（mp 手势消歧稳·禁自造 touchmove 计算·根因#8 真机才暴露）；catalog 无横向 tab 不入册',
+    run() {
+      const bad = []
+      const MINI = 'packages/miniapp/src'
+      const SWIPE_SURFACES = ['pages/detail/components/DetailGallery.vue', 'pages/order-list/index.vue']
+      for (const rel of SWIPE_SURFACES) {
+        const f = `${MINI}/${rel}`
+        const abs = join(ROOT, f)
+        if (!existsSync(abs)) {
+          bad.push(`${f} 缺失（左右滑面·T-F4）`)
+          continue
+        }
+        const src = readFileSync(abs, 'utf8')
+        if (!/<swiper[\s>]/.test(src))
+          bad.push(`${f} 未用原生 <swiper> 做左右滑——手势消歧不稳/疑似自造 touchmove（T-F4/根因#8）`)
+        if (!/<swiper-item[\s>]/.test(src)) bad.push(`${f} 缺 <swiper-item>——swiper 无内容项（T-F4）`)
       }
       return bad
     },

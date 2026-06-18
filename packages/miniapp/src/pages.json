@@ -66,8 +66,7 @@
       "path": "pages/order-list/index",
       "style": {
         "navigationBarTitleText": "我的订单",
-        "navigationStyle": "custom",
-        "enablePullDownRefresh": true
+        "navigationStyle": "custom"
       }
     },
     {
