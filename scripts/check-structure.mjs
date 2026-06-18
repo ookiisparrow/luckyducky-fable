@@ -590,6 +590,83 @@ export const repoChecks = [
     },
   },
   {
+    // 数据页下拉刷新闭环（优化批0618·T-F3）。根因#8「构建过+快网单人能用≠真机能用」：
+    // onPullDownRefresh 只由「页面级滚动」触发——内容装在整页 <scroll-view> 里滚动的页（index/me/cart）
+    // 页面本身不滚，页面级 enablePullDownRefresh 在 mp-weixin 根本不触发（H5 也假绿）。故分两机制：
+    //   ① 页面级滚动数据页 → pages.json enablePullDownRefresh + onPullDownRefresh + uni.stopPullDownRefresh；
+    //   ② 整页 scroll-view 数据页 → scroll-view refresher-enabled + @refresherrefresh + :refresher-triggered。
+    // 守卫钉死三件事：列举的数据页必接上对应机制（防漏接）；凡开了下拉刷新的页必有收尾（防转圈不停）。
+    // cart 整页 scroll-view 但纯本地态（购物车条目 + 静态推荐）无远端可刷 → 不做 theater，不入册。
+    id: 'pull-refresh-stops',
+    roots: ['#8'],
+    desc: '数据页下拉刷新闭环（优化批0618·T-F3）：① 页面级滚动数据页(catalog/order-list/reviews/aftersales/order)须 pages.json enablePullDownRefresh + onPullDownRefresh + stopPullDownRefresh；② 整页 scroll-view 数据页(index/me)须 refresher-enabled + @refresherrefresh + :refresher-triggered；③ 任何开 enablePullDownRefresh 的页必调 stopPullDownRefresh、任何用 refresher-enabled 的页必绑 @refresherrefresh+:refresher-triggered（防转圈不停·真机才暴露·根因#8）',
+    run() {
+      const bad = []
+      const MINI = 'packages/miniapp/src'
+      let pj = {}
+      try {
+        pj = JSON.parse(readFileSync(join(ROOT, MINI, 'pages.json'), 'utf8'))
+      } catch {
+        return ['packages/miniapp/src/pages.json 解析失败（下拉刷新核查）']
+      }
+      // pages.json：哪些 path 开了 enablePullDownRefresh
+      const pullPaths = new Set()
+      for (const p of pj.pages || []) {
+        if (p.style && p.style.enablePullDownRefresh === true) pullPaths.add(p.path)
+      }
+      // ① 列举的页面级滚动数据页必开 enablePullDownRefresh（防漏接）
+      const PAGE_PULL = [
+        'pages/catalog/index',
+        'pages/order-list/index',
+        'pages/reviews/index',
+        'pages/aftersales/index',
+        'pages/order/index',
+      ]
+      for (const path of PAGE_PULL) {
+        if (!pullPaths.has(path))
+          bad.push(`${path} 未在 pages.json 开 enablePullDownRefresh——数据页下拉刷新漏接（T-F3）`)
+      }
+      // ③a 凡开 enablePullDownRefresh 的页：.vue 必有 onPullDownRefresh + stopPullDownRefresh（防转圈不停）
+      for (const path of pullPaths) {
+        const f = `${MINI}/${path}.vue`
+        const abs = join(ROOT, f)
+        if (!existsSync(abs)) {
+          bad.push(`${f} 缺失（pages.json 开了 enablePullDownRefresh）`)
+          continue
+        }
+        const src = readFileSync(abs, 'utf8')
+        if (!/onPullDownRefresh\s*\(/.test(src))
+          bad.push(`${f} 开了 enablePullDownRefresh 但无 onPullDownRefresh——下拉无响应（T-F3）`)
+        if (!/stopPullDownRefresh/.test(src))
+          bad.push(`${f} 开了 enablePullDownRefresh 但未调 stopPullDownRefresh——转圈不停（T-F3/根因#8）`)
+      }
+      // ② 列举的整页 scroll-view 数据页必走 scroll-view refresher（页面级下拉在此不触发）
+      const REFRESHER_PAGES = ['pages/index/index', 'pages/me/index']
+      for (const path of REFRESHER_PAGES) {
+        const f = `${MINI}/${path}.vue`
+        const abs = join(ROOT, f)
+        if (!existsSync(abs)) {
+          bad.push(`${f} 缺失（整页 scroll-view 下拉刷新页）`)
+          continue
+        }
+        if (!/refresher-enabled/.test(readFileSync(abs, 'utf8')))
+          bad.push(`${f} scroll-view 未开 refresher-enabled——整页 scroll-view 下拉刷新漏接（T-F3/根因#8）`)
+      }
+      // ③b 凡用 refresher-enabled 的 .vue 必绑 @refresherrefresh + :refresher-triggered（防转圈不停）
+      for (const f of walk(join(ROOT, MINI, 'pages'))) {
+        if (!f.endsWith('.vue')) continue
+        const src = readFileSync(f, 'utf8')
+        if (!/refresher-enabled/.test(src)) continue
+        const rel = relative(ROOT, f)
+        if (!/@refresherrefresh/.test(src))
+          bad.push(`${rel} 用 refresher-enabled 但未绑 @refresherrefresh——下拉无响应（T-F3）`)
+        if (!/refresher-triggered/.test(src))
+          bad.push(`${rel} 用 refresher-enabled 但未绑 :refresher-triggered——转圈不停（T-F3/根因#8）`)
+      }
+      return bad
+    },
+  },
+  {
     // 店名单一来源（决策 R23 / 占位⑲，2026-06-15 定名「Lucky Ducky 小棉鸭」）。病根#5「样板复制即漂移」：
     // 店名曾在 order/checkout/welcome/BrandIntro/GroupPanel/productDetail 六处硬编码（order↔checkout 还逐字重复），
     // 改名必漏改。根治＝收口 constants/brand.js 的 BRAND_NAME，「保持一致」从人工义务变机器保证。

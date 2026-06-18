@@ -59,6 +59,18 @@ const user = useUserStore()
 watch(splashActive, (active) => {
   if (!active && !user.isLogin) loginSheetVisible.value = true
 })
+
+// 下拉刷新：整页内容在 scroll-view 内滚动，页面本身不滚 → 页面级 enablePullDownRefresh
+// 在 mp-weixin 根本不触发（根因#8），改用 scroll-view 自带 refresher。强刷首页内容 + 商品。
+const refreshing = ref(false)
+async function onRefresh() {
+  refreshing.value = true
+  try {
+    await Promise.all([content.load(true), products.load(true)])
+  } finally {
+    refreshing.value = false // 收转圈（失败也收，不卡）
+  }
+}
 const instance = getCurrentInstance()
 const windowHeight = uni.getSystemInfoSync().windowHeight
 const featureRef = ref(null) // 商品区组件实例（购买按钮调它滚到商品卡）
@@ -153,8 +165,11 @@ function onClosingBuy() {
       :scroll-top="scrollTopProp"
       :scroll-with-animation="true"
       :show-scrollbar="false"
+      refresher-enabled
+      :refresher-triggered="refreshing"
       class="ld-home-scroll"
       @scroll="onScroll"
+      @refresherrefresh="onRefresh"
     >
       <Hero
         :title="content.hero.title"

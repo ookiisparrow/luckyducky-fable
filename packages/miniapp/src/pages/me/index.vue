@@ -10,7 +10,7 @@
  *
  * 图位走 MediaSlot 灰占位；my-* 类名沿用原型。
  */
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import { onShow } from '@dcloudio/uni-app'
 import Icon from '@/components/Icon.vue'
 import TabBar from '@/components/TabBar.vue'
@@ -49,6 +49,22 @@ onShow(() => {
   act.loadMine() // 我的已激活课程：判断「未激活」空态
   progress.load(true) // 强刷：刚看完一段回到「我」页，继续学习卡立即更新
 })
+// 下拉刷新：内容在整页 scroll-view 内滚动，页面级 enablePullDownRefresh 在 mp 不触发（根因#8），
+// 用 scroll-view refresher 强刷订单/课程/激活/进度。
+const refreshing = ref(false)
+async function onRefresh() {
+  refreshing.value = true
+  try {
+    await Promise.all([
+      orders.load(true),
+      courses.load(true),
+      act.loadMine(true),
+      progress.load(true),
+    ])
+  } finally {
+    refreshing.value = false // 收转圈（失败也收，不卡）
+  }
+}
 // 未激活任何课程（act 已加载且我的课程为空）→ 继续学习卡显示空态
 const noCourse = computed(() => act.loaded && act.mine.length === 0)
 
@@ -111,7 +127,14 @@ function goLogin() {
 
 <template>
   <view class="my-profile">
-    <scroll-view scroll-y :show-scrollbar="false" class="my-scroll">
+    <scroll-view
+      scroll-y
+      :show-scrollbar="false"
+      refresher-enabled
+      :refresher-triggered="refreshing"
+      class="my-scroll"
+      @refresherrefresh="onRefresh"
+    >
       <!-- 紫色资料头 -->
       <ProfileHeader
         :profile="user.profile"

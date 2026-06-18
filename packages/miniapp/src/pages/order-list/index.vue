@@ -7,7 +7,7 @@
  * 退款/售后不设 tab（售后仍样例，P4 一并接真）。
  */
 import { ref, computed } from 'vue'
-import { onLoad, onShow, onReachBottom } from '@dcloudio/uni-app'
+import { onLoad, onShow, onReachBottom, onPullDownRefresh } from '@dcloudio/uni-app'
 import Icon from '@/components/Icon.vue'
 import CoNavBar from '@/components/CoNavBar.vue'
 import OrderItem from '@/components/OrderItem.vue'
@@ -36,6 +36,14 @@ onLoad((q) => {
 onShow(() => orders.load(true))
 // 触底加载更多（游标分页，根因#7：订单超首页也能翻到旧单）
 onReachBottom(() => orders.loadMore())
+// 下拉刷新：强刷订单（后台改状态/新单后手动拉新），finally 收转圈不卡（根因#8）
+onPullDownRefresh(async () => {
+  try {
+    await orders.load(true)
+  } finally {
+    uni.stopPullDownRefresh()
+  }
+})
 
 const list = computed(() => {
   const cur = TABS.find((t) => t.key === tab.value)

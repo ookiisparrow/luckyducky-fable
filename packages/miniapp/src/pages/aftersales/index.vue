@@ -7,7 +7,7 @@
  * H5 / App 无云：列表空态 + 申请走演示 Toast（零回归路径）。
  */
 import { ref, computed } from 'vue'
-import { onLoad, onReachBottom } from '@dcloudio/uni-app'
+import { onLoad, onReachBottom, onPullDownRefresh } from '@dcloudio/uni-app'
 import Icon from '@/components/Icon.vue'
 import CoNavBar from '@/components/CoNavBar.vue'
 import MediaSlot from '@/components/MediaSlot.vue'
@@ -34,6 +34,14 @@ onLoad(async (q) => {
 })
 // 触底加载更多「我的售后单」（游标分页，根因#7）
 onReachBottom(() => aftersales.loadMore())
+// 下拉刷新：强刷订单 + 售后单（退款状态后台流转后手动拉新），finally 收转圈（根因#8）
+onPullDownRefresh(async () => {
+  try {
+    await Promise.all([orders.load(true), aftersales.load(true)])
+  } finally {
+    uni.stopPullDownRefresh()
+  }
+})
 
 // 可申请条目（refundable=false 即「已开始学习」失权条目，链6 联动）
 const applicable = computed(() => {

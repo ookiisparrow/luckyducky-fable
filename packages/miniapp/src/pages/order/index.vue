@@ -9,7 +9,7 @@
  *   提醒发货 → Toast；再次购买 → 进详情；申请退款 → 售后页；评价晒单 → 评价页。
  */
 import { ref, computed, watch, onUnmounted } from 'vue'
-import { onLoad } from '@dcloudio/uni-app'
+import { onLoad, onPullDownRefresh } from '@dcloudio/uni-app'
 import Icon from '@/components/Icon.vue'
 import CoNavBar from '@/components/CoNavBar.vue'
 import AddressBlock from '@/components/AddressBlock.vue'
@@ -106,6 +106,14 @@ onLoad(async (q) => {
   if (!orderId.value || !ordersStore.getById(orderId.value)) {
     uni.showToast({ title: '没有找到这笔订单', icon: 'none' })
     orderId.value = ''
+  }
+})
+// 下拉刷新：按 id 单独强拉这笔单（付款/发货后台流转后看到最新状态），finally 收转圈（根因#8）
+onPullDownRefresh(async () => {
+  try {
+    if (orderId.value) await ordersStore.fetchById(orderId.value)
+  } finally {
+    uni.stopPullDownRefresh()
   }
 })
 

@@ -23,7 +23,8 @@
       "path": "pages/reviews/index",
       "style": {
         "navigationBarTitleText": "全部评价",
-        "navigationStyle": "custom"
+        "navigationStyle": "custom",
+        "enablePullDownRefresh": true
       }
     },
     {
@@ -65,21 +66,24 @@
       "path": "pages/order-list/index",
       "style": {
         "navigationBarTitleText": "我的订单",
-        "navigationStyle": "custom"
+        "navigationStyle": "custom",
+        "enablePullDownRefresh": true
       }
     },
     {
       "path": "pages/order/index",
       "style": {
         "navigationBarTitleText": "订单详情",
-        "navigationStyle": "custom"
+        "navigationStyle": "custom",
+        "enablePullDownRefresh": true
       }
     },
     {
       "path": "pages/aftersales/index",
       "style": {
         "navigationBarTitleText": "退款 / 售后",
-        "navigationStyle": "custom"
+        "navigationStyle": "custom",
+        "enablePullDownRefresh": true
       }
     },
     {
@@ -113,7 +117,8 @@
       "path": "pages/catalog/index",
       "style": {
         "navigationBarTitleText": "课程目录",
-        "navigationStyle": "custom"
+        "navigationStyle": "custom",
+        "enablePullDownRefresh": true
       }
     },
     {

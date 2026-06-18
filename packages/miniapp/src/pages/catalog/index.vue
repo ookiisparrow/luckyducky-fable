@@ -5,7 +5,7 @@
  * 封面/缩略按项目约定用灰占位，真实媒体以后注入。
  */
 import { ref, computed } from 'vue'
-import { onShow } from '@dcloudio/uni-app'
+import { onShow, onPullDownRefresh } from '@dcloudio/uni-app'
 import Icon from '@/components/Icon.vue'
 import Skeleton from '@/components/Skeleton.vue'
 import { useCoursesStore } from '@/store/courses.js'
@@ -26,6 +26,14 @@ onShow(() => {
   store.load()
   act.loadMine()
   progress.load(true)
+})
+// 下拉刷新：强刷课程/激活/进度后收转圈（finally 保证失败也不卡转圈·根因#8）
+onPullDownRefresh(async () => {
+  try {
+    await Promise.all([store.load(true), act.loadMine(true), progress.load(true)])
+  } finally {
+    uni.stopPullDownRefresh()
+  }
 })
 const course = computed(() => store.current)
 const lessons = computed(() => store.allLessons)

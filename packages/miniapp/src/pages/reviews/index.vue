@@ -6,7 +6,7 @@
  * （筛选为高亮态，不做真实过滤）；评分汇总/单条评价复用组件。
  */
 import { ref, computed } from 'vue'
-import { onLoad } from '@dcloudio/uni-app'
+import { onLoad, onPullDownRefresh } from '@dcloudio/uni-app'
 import CoNavBar from '@/components/CoNavBar.vue'
 import RatingSummary from '@/components/RatingSummary.vue'
 import ReviewItem from '@/components/ReviewItem.vue'
@@ -25,16 +25,30 @@ onLoad((q) => {
     reviewsStore.load(q.id)
   }
 })
+// 下拉刷新：强拉该商品最新评价（无 pid 则只收转圈），finally 防卡转圈（根因#8）
+onPullDownRefresh(async () => {
+  try {
+    if (pid.value) await reviewsStore.load(pid.value, true)
+  } finally {
+    uni.stopPullDownRefresh()
+  }
+})
 
 const real = computed(() => (pid.value ? reviewsStore.forProduct(pid.value) : null))
 const rating = computed(() => (real.value ? real.value.summary : PD.rating))
 const filters = computed(() =>
-  real.value ? [['全部', real.value.summary.count]] : PD.reviewFilters,
+  real.value ? [['全部', real.value.summary.count]] : PD.reviewFilters
 )
 const list = computed(() =>
   real.value
-    ? real.value.list.map((r) => ({ name: r.name, date: timeAgo(r.createdAt), n: r.rating, text: r.text, photos: 0 }))
-    : PD.reviewsAll,
+    ? real.value.list.map((r) => ({
+        name: r.name,
+        date: timeAgo(r.createdAt),
+        n: r.rating,
+        text: r.text,
+        photos: 0,
+      }))
+    : PD.reviewsAll
 )
 
 const back = () => goBack('/pages/index/index')
