@@ -12,55 +12,72 @@ const store = useProductsStore()
 const busy = ref(false)
 let dragFrom = -1
 
-// —— 激活欢迎页背景图（按课程·同课程同图·欢迎页与产品对应）——
-// 扫码激活进 welcome 时，小程序按 courseId 取 content.home.activationBgByCourse[courseId]（回退全局→默认）。
+// —— 激活欢迎页背景图（按课程·按状态·同课程同图·欢迎页与产品对应）——
+// 扫码激活进 welcome 时，小程序按 courseId + 屏状态取 content.home.activationBgByCourse[courseId][state]（回退全局→默认）。
 // courseId 与 StepVideos/StepCards 同源派生（product.courseId 或 course-<id>），与小程序 activate 返回一致。
+// 三态：welcome=欢迎页 / welcomeBack=欢迎回来 / taken=已被激活；「正在激活」是全局图（在橱窗页设，不在这）。
 const courseId = computed(() => props.product.courseId || 'course-' + props.product.id)
-const welBusy = ref(false)
-const welSet = ref(false) // 该课程已配欢迎图（重载只显「已设置」·fileID 解 url 不值当）
-const welPreview = ref('') // 本次上传预览 url（重载不保留）
+const WEL_STATES = [
+  { key: 'welcome', label: '欢迎页', note: '扫码激活成功进的欢迎屏' },
+  { key: 'welcomeBack', label: '欢迎回来', note: '本人重扫已激活的码·继续学习' },
+  { key: 'taken', label: '已被激活', note: '码已被他人使用的提示屏' },
+]
+const welBusy = ref('') // 正在忙的 state key（''＝空闲）
+const welSet = ref({}) // { [stateKey]: bool } 该课该态已配（重载只显「已设置」·fileID 解 url 不值当）
+const welPreview = ref({}) // { [stateKey]: url } 本次上传预览（重载不保留）
 const welErr = ref('')
+// 兼容旧结构（值为单字符串＝welcome 那张）→ 归一成对象
+function normalizeEntry(entry) {
+  if (typeof entry === 'string') return entry ? { welcome: entry } : {}
+  return entry && typeof entry === 'object' ? { ...entry } : {}
+}
 onMounted(async () => {
   try {
     const home = await getHomeContent()
-    welSet.value = !!home?.activationBgByCourse?.[courseId.value]
+    const entry = normalizeEntry(home?.activationBgByCourse?.[courseId.value])
+    welSet.value = Object.fromEntries(WEL_STATES.map((s) => [s.key, !!entry[s.key]]))
   } catch {
     /* 读不到不阻塞上传 */
   }
 })
-async function uploadWelcomeBg(e) {
+async function uploadWelcomeBg(e, stateKey) {
   const file = (e.target.files || [])[0]
   e.target.value = ''
   if (!file || welBusy.value) return
-  welBusy.value = true
+  welBusy.value = stateKey
   welErr.value = ''
   try {
     const { ref: fileID, url } = await uploadImage(file, props.product.id)
     const home = (await getHomeContent()) || {}
-    const map = { ...(home.activationBgByCourse || {}), [courseId.value]: fileID }
+    const entry = normalizeEntry(home.activationBgByCourse?.[courseId.value])
+    entry[stateKey] = fileID
+    const map = { ...(home.activationBgByCourse || {}), [courseId.value]: entry }
     await saveHomeContent({ ...home, activationBgByCourse: map })
-    welPreview.value = url
-    welSet.value = true
+    welPreview.value = { ...welPreview.value, [stateKey]: url }
+    welSet.value = { ...welSet.value, [stateKey]: true }
   } catch (err) {
     welErr.value = '上传失败：' + (err?.message || err)
   } finally {
-    welBusy.value = false
+    welBusy.value = ''
   }
 }
-async function clearWelcomeBg() {
-  welBusy.value = true
+async function clearWelcomeBg(stateKey) {
+  welBusy.value = stateKey
   welErr.value = ''
   try {
     const home = (await getHomeContent()) || {}
+    const entry = normalizeEntry(home.activationBgByCourse?.[courseId.value])
+    delete entry[stateKey]
     const map = { ...(home.activationBgByCourse || {}) }
-    delete map[courseId.value]
+    if (Object.keys(entry).length) map[courseId.value] = entry
+    else delete map[courseId.value] // 该课三态全空→剔除整条
     await saveHomeContent({ ...home, activationBgByCourse: map })
-    welPreview.value = ''
-    welSet.value = false
+    welPreview.value = { ...welPreview.value, [stateKey]: '' }
+    welSet.value = { ...welSet.value, [stateKey]: false }
   } catch (err) {
     welErr.value = '清除失败：' + (err?.message || err)
   } finally {
-    welBusy.value = false
+    welBusy.value = ''
   }
 }
 
@@ -154,31 +171,45 @@ function onDrop(to) {
     </div>
 
     <div class="group welbg">
-      <div class="g-title">激活欢迎页背景图<span class="opt">选填 · 扫码进欢迎页的底图</span></div>
-      <div class="welbg-row">
-        <div v-if="welPreview" class="tile cover">
-          <img :src="welPreview" alt="激活欢迎图" />
-          <span class="badge">欢迎图</span>
+      <div class="g-title">激活欢迎页背景图（按屏分管）<span class="opt">选填 · 扫码各屏的底图·按课程绑定</span></div>
+      <div class="welbg-states">
+        <div v-for="s in WEL_STATES" :key="s.key" class="welbg-state">
+          <div class="welbg-label">{{ s.label }}<span class="welbg-sub">{{ s.note }}</span></div>
+          <div class="welbg-row">
+            <div v-if="welPreview[s.key]" class="tile cover">
+              <img :src="welPreview[s.key]" :alt="s.label" />
+              <span class="badge">{{ s.label }}</span>
+            </div>
+            <div v-else-if="welSet[s.key]" class="tile welset">已设置 ✓</div>
+            <label class="tile up">
+              <input
+                type="file"
+                accept="image/*"
+                :disabled="!!welBusy"
+                hidden
+                @change="uploadWelcomeBg($event, s.key)"
+              />
+              <span class="up-ico">⬆</span>
+              <span class="up-t">{{
+                welBusy === s.key ? '上传中…' : welSet[s.key] ? '更换' : '上传'
+              }}</span>
+              <span class="up-s">PNG / JPG</span>
+            </label>
+            <button
+              v-if="welSet[s.key]"
+              class="welclear"
+              :disabled="!!welBusy"
+              @click="clearWelcomeBg(s.key)"
+            >
+              恢复默认
+            </button>
+          </div>
         </div>
-        <div v-else-if="welSet" class="tile welset">已设置 ✓</div>
-        <label class="tile up">
-          <input
-            type="file"
-            accept="image/*"
-            :disabled="welBusy"
-            hidden
-            @change="uploadWelcomeBg"
-          />
-          <span class="up-ico">⬆</span>
-          <span class="up-t">{{ welBusy ? '上传中…' : welSet ? '更换欢迎图' : '上传欢迎图' }}</span>
-          <span class="up-s">PNG / JPG</span>
-        </label>
-        <button v-if="welSet" class="welclear" :disabled="welBusy" @click="clearWelcomeBg">
-          恢复默认
-        </button>
       </div>
       <div v-if="welErr" class="welerr">{{ welErr }}</div>
-      <p class="welnote">同课程的产品共用这张图（按课程绑定）；不设则用通用默认底图。</p>
+      <p class="welnote">
+        同课程的产品共用这些图（按课程绑定）；不设则用通用默认底图。「正在激活」图是全局的，在「橱窗」页设置。
+      </p>
     </div>
 
     <p class="hint">💡 封面图建议 1:1、1200×1200 以上；第 5 步设计二维码卡片时可直接取用这里的图。</p>
@@ -296,6 +327,25 @@ h2 {
   margin-top: 28px;
   padding-top: 20px;
   border-top: 1px solid var(--line);
+}
+.welbg-states {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 24px;
+}
+.welbg-state {
+  min-width: 200px;
+}
+.welbg-label {
+  font-size: 11.5px;
+  font-weight: 700;
+  color: var(--content);
+  margin-bottom: 8px;
+}
+.welbg-sub {
+  margin-left: 8px;
+  font-weight: 400;
+  color: var(--content-2);
 }
 .welbg-row {
   display: flex;

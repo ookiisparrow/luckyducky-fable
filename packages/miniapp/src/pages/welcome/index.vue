@@ -9,7 +9,7 @@
  *   观看即失去该件商品退货权」，确认是进课唯一闸门）；'mine'（已确认）→「继续学习」
  *   直接进课；码无效 / 已被他人激活 / 网络错 → 错误屏。
  */
-import { ref } from 'vue'
+import { ref, computed } from 'vue'
 import { onLoad } from '@dcloudio/uni-app'
 import Icon from '@/components/Icon.vue'
 import { getSystemBarVars } from '@/utils/systemBar.js'
@@ -33,10 +33,27 @@ const code = ref('')
 const courseId = ref('')
 const courseTitle = ref('')
 const errText = ref('')
+const errCode = ref('') // 失败错误码（CODE_TAKEN「已被激活」屏按课程取图要它）
 const confirming = ref(false)
 
 // 顶部关闭/返回/logo 避状态栏与胶囊：动态值经 CSS 变量进 scoped
 const barVars = getSystemBarVars()
+
+// 激活流背景图按「屏×课程」取（用户拍板 2026-06-18）：正在激活=全局 loadingBg；欢迎页(confirm 两页)
+// =按课程 welcome；欢迎回来(mine)=按课程 welcomeBack；已被激活(CODE_TAKEN)=按课程 taken；无码引导/无效码
+// /网络错=全局 activationBg；全部最后回退写死默认 hero-full.jpg。
+const bgSrc = computed(() => {
+  const fallback = '/static/hero-full.jpg'
+  if (mode.value === 'loading') return contentStore.loadingBg || fallback
+  if (mode.value === 'confirm')
+    return contentStore.activationBgFor(courseId.value, 'welcome') || fallback
+  if (mode.value === 'mine')
+    return contentStore.activationBgFor(courseId.value, 'welcomeBack') || fallback
+  if (mode.value === 'error' && errCode.value === 'CODE_TAKEN')
+    return contentStore.activationBgFor(courseId.value, 'taken') || fallback
+  // 无码通用引导 / INVALID_CODE / NETWORK → 全局兜底
+  return contentStore.activationBg || fallback
+})
 
 // 解析激活码：?code= / scene / 普通链接二维码 ?q= 三轨，逻辑收口在 api/activation.js（带测试）
 
@@ -54,7 +71,10 @@ onLoad(async (o) => {
     mode.value = res.state === 'mine' ? 'mine' : 'confirm'
   } else {
     mode.value = 'error'
-    const err = res && res.error
+    const err = (res && res.error) || 'NETWORK'
+    errCode.value = err
+    // CODE_TAKEN：码有效仅被占用，后端带回 courseId → 「已被激活」屏按课程取图
+    if (res && res.courseId) courseId.value = res.courseId
     errText.value =
       err === 'CODE_TAKEN'
         ? '这个激活码已经被其他账号使用了。如是家人代扫，请用购买时的微信扫码。'
@@ -105,13 +125,9 @@ async function confirmStart() {
 
 <template>
   <view class="wel" :style="barVars">
-    <!-- 激活欢迎图：扫码激活后按 courseId 取该课程图（同课程同图·欢迎页与产品对应）；
-         无码（通用引导）或该课程未配 → 回退全局 activationBg → 回退默认 /static/hero-full.jpg。 -->
-    <image
-      class="wel-photo"
-      :src="contentStore.activationBgFor(courseId) || '/static/hero-full.jpg'"
-      mode="aspectFill"
-    />
+    <!-- 激活流背景图按「屏×课程」取（见 script bgSrc）：正在激活=全局 loadingBg；欢迎页=按课程 welcome；
+         欢迎回来=按课程 welcomeBack；已被激活(CODE_TAKEN)=按课程 taken；其余=全局 activationBg；兜底 hero。 -->
+    <image class="wel-photo" :src="bgSrc" mode="aspectFill" />
     <view class="wel-scrim"></view>
 
     <!-- ===== 通用引导（无码进入，原行为不变） ===== -->

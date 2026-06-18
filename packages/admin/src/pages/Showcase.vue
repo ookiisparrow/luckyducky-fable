@@ -16,7 +16,9 @@ const saveState = ref('')
 // 首页内容（hero 文案/信任条/FAQ）：与小程序同一份，默认值与小程序本地兜底一致
 const DEFAULT_HOME = {
   hero: { title: '创造幸运', tagline: 'Get ducky get lucky' },
-  activationBg: '', // 激活页（welcome）背景图 fileID；空＝小程序回退 /static/hero-full.jpg
+  activationBg: '', // 激活页（welcome）全局兜底背景图 fileID；空＝小程序回退 /static/hero-full.jpg
+  loadingBg: '', // 全局·正在激活(loading)图 fileID；loading 时拿不到 courseId 故全局；空＝回退 activationBg
+  activationBgByCourse: {}, // 按课程·按状态欢迎图（上新向导 StepImages 管）——橱窗不编辑、仅透传保全（防整存抹掉）
   trust: [
     { icon: 'truck', label: '包邮到家' },
     { icon: 'rotate-ccw', label: '七天无理由退货' },
@@ -47,6 +49,9 @@ async function init() {
       home.value = {
         hero: { ...DEFAULT_HOME.hero, ...hc.hero },
         activationBg: hc.activationBg || '',
+        loadingBg: hc.loadingBg || '',
+        // 按课程欢迎图：橱窗不编辑，但保存时整存——必须透传保全，否则会把 StepImages 配的按课程图整存抹掉
+        activationBgByCourse: hc.activationBgByCourse || {},
         trust: hc.trust?.length ? hc.trust : home.value.trust,
         faq: hc.faq?.length ? hc.faq : home.value.faq,
       }
@@ -156,6 +161,31 @@ async function uploadBg(e) {
 function clearBg() {
   home.value.activationBg = ''
   bgPreview.value = ''
+}
+
+// 正在激活(loading)全局图：loading 时拿不到 courseId 故全局（不按课程）。同 activationBg 一套：传图 → fileID 入 home.loadingBg。
+const loadingUploading = ref(false)
+const loadingPreview = ref('')
+const loadingErr = ref('')
+async function uploadLoadingBg(e) {
+  const file = e.target.files?.[0]
+  e.target.value = ''
+  if (!file) return
+  loadingErr.value = ''
+  loadingUploading.value = true
+  try {
+    const { ref: fileID, url } = await uploadImage(file, 'showcase')
+    home.value.loadingBg = fileID // 触发 watch 防抖保存
+    loadingPreview.value = url
+  } catch (err) {
+    loadingErr.value = '上传失败：' + (err?.message || err)
+  } finally {
+    loadingUploading.value = false
+  }
+}
+function clearLoadingBg() {
+  home.value.loadingBg = ''
+  loadingPreview.value = ''
 }
 
 function addFaq() {
@@ -277,7 +307,25 @@ function delFaq(i) {
           </div>
         </div>
         <p v-if="bgErr" class="hint warn">{{ bgErr }}</p>
-        <p class="hint">扫码激活页（welcome）的全屏背景图；不设＝用内置默认图。建议竖图（约 1080×1920）。改动自动保存，小程序重开生效。</p>
+        <p class="hint">扫码激活页（welcome）的全屏兜底背景图（无码引导/激活失败用）；不设＝用内置默认图。建议竖图（约 1080×1920）。改动自动保存，小程序重开生效。</p>
+
+        <h3 style="margin-top: 22px">激活页 · 正在激活图（全局）</h3>
+        <div class="bgrow">
+          <div class="bgthumb">
+            <img v-if="loadingPreview" :src="loadingPreview" alt="" />
+            <span v-else-if="home.loadingBg" class="bgset">已设置 ✓</span>
+            <span v-else class="bgph">默认底图</span>
+          </div>
+          <div class="bgctl">
+            <label class="btn ghost sm bgbtn" :class="{ disabled: loadingUploading }">
+              {{ loadingUploading ? '上传中…' : '上传背景图' }}
+              <input type="file" accept="image/*" :disabled="loadingUploading" hidden @change="uploadLoadingBg" />
+            </label>
+            <button v-if="home.loadingBg" class="del" @click="clearLoadingBg">恢复默认</button>
+          </div>
+        </div>
+        <p v-if="loadingErr" class="hint warn">{{ loadingErr }}</p>
+        <p class="hint">「正在激活…」加载屏的全屏图。此刻还没识别出是哪门课，所以是全局图（不按课程）；不设＝回退上面的兜底背景图。</p>
 
         <h3 style="margin-top: 22px">首页 · 信任条（3 项短语）</h3>
         <div class="trustrow">

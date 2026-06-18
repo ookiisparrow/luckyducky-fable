@@ -1338,7 +1338,7 @@ export const repoChecks = [
     // （mp <image> 原生支持 cloud:// fileID·无配回退 /static/hero-full.jpg）。
     id: 'activation-bg-wired',
     roots: ['橱窗'],
-    desc: '激活页背景图后台可管：① 全局——admin Showcase 传图存 home.activationBg + 云端 saveHomeContent 持久化 + miniapp welcome 读（无配回退 static）；② 按课程（同课程同图·欢迎页与产品对应）——content.home.activationBgByCourse 映射 courseId→fileID：云端 saveHomeContent 持久化 + admin 上新向导 StepImages 上传 + miniapp content store 暴露 + welcome 按 courseId 取——任一缺即链断',
+    desc: '激活页背景图后台可管（按「课程×状态」分管·用户拍板 2026-06-18）：① 全局兜底 home.activationBg（橱窗·无码引导/失败兜底）；② 按课程·按状态 home.activationBgByCourse[courseId]={welcome,welcomeBack,taken}（上新向导 StepImages 一门课传三张·欢迎页/欢迎回来/已被激活）；③ 全局·正在激活 home.loadingBg（橱窗·loading 拿不到 courseId 故全局）。每态链路：云端 saveHomeContent 持久化 + admin 上传 + miniapp content store 暴露 + welcome 按屏取——任一缺即链断。CODE_TAKEN 返 courseId（已被激活图按课程）行为由 activateCourse.test.js 锁。',
     run() {
       const bad = []
       // [文件, 须含 token, 链断说明]
@@ -1351,6 +1351,18 @@ export const repoChecks = [
         ['packages/admin/src/pages/steps/StepImages.vue', 'activationBgByCourse', 'admin 上新向导 StepImages 未接 activationBgByCourse 上传——后台管不了按产品/课程欢迎图'],
         ['packages/miniapp/src/store/content.js', 'activationBgByCourse', 'miniapp content store 未暴露 activationBgByCourse——欢迎页取不到按课程欢迎图'],
         ['packages/miniapp/src/pages/welcome/index.vue', 'activationBgFor', 'welcome 未按 courseId 取激活欢迎图（activationBgFor）——按产品欢迎图不生效'],
+        // ②b 按课程·按状态拆三张（用户拍板 2026-06-18）：欢迎回来(welcomeBack) / 已被激活(taken)
+        ['packages/cloud/src/functions/admin/adminApi/actions/content.ts', 'welcomeBack', '云端白名单未净化 welcomeBack——欢迎回来图存不下'],
+        ['packages/cloud/src/functions/admin/adminApi/actions/content.ts', 'taken', '云端白名单未净化 taken——已被激活图存不下'],
+        ['packages/admin/src/pages/steps/StepImages.vue', 'welcomeBack', 'admin StepImages 未接 welcomeBack 上传——后台管不了欢迎回来图'],
+        ['packages/admin/src/pages/steps/StepImages.vue', 'taken', 'admin StepImages 未接 taken 上传——后台管不了已被激活图'],
+        ['packages/miniapp/src/pages/welcome/index.vue', 'welcomeBack', 'welcome 未按 mine 屏取 welcomeBack 图——欢迎回来按课程图不生效'],
+        ['packages/miniapp/src/pages/welcome/index.vue', 'taken', 'welcome 未按 CODE_TAKEN 屏取 taken 图——已被激活按课程图不生效'],
+        // ③ 全局·正在激活(loading)图（用户拍板：loading 拿不到 courseId 故全局·橱窗管）
+        ['packages/cloud/src/functions/admin/adminApi/actions/content.ts', 'loadingBg', '云端 saveHomeContent 未持久化 loadingBg——正在激活全局图存不下'],
+        ['packages/admin/src/pages/Showcase.vue', 'loadingBg', 'admin 橱窗未接 loadingBg 上传——后台管不了正在激活图'],
+        ['packages/miniapp/src/store/content.js', 'loadingBg', 'miniapp content store 未暴露 loadingBg——正在激活图取不到'],
+        ['packages/miniapp/src/pages/welcome/index.vue', 'loadingBg', 'welcome 未读 loadingBg——正在激活图不生效'],
       ]
       for (const [f, token, msg] of checks) {
         const abs = join(ROOT, f)

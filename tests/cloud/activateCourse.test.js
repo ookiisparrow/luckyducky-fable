@@ -50,10 +50,13 @@ describe('activateCourse 闸门', () => {
     expect((await main({ code: 'LDCODE1' })).state).toBe('mine')
   })
 
-  it('他人扫已用码：CODE_TAKEN', async () => {
+  it('他人扫已用码：CODE_TAKEN 且带回 courseId（welcome「已被激活」屏按课程取图）', async () => {
     await main({ code: 'LDCODE1' }) // user-A 激活
     control.setOpenId('user-B')
-    expect((await main({ code: 'LDCODE1' })).error).toBe('CODE_TAKEN')
+    const res = await main({ code: 'LDCODE1' })
+    expect(res.error).toBe('CODE_TAKEN')
+    // 已被激活屏要按课程显图：码有效仅被占用，courseId 此刻在手边（qr.courseId）须返回
+    expect(res.courseId).toBe('course-duck')
   })
 
   it('半步失败自愈：码已 activated 但激活记录缺失 → 重扫补回（审计 P2）', async () => {

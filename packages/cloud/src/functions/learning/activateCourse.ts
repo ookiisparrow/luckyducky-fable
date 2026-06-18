@@ -42,5 +42,5 @@ export const main = withOpenId(async ({ db, OPENID, event }) => {
     const act = await ensureActivation(db, code, qr.courseId, OPENID, now)
     return ok({ state: act && act.enteredAt ? 'mine' : 'activated', courseId: qr.courseId })
   }
-  return err('CODE_TAKEN') // 被他人激活
+  return err('CODE_TAKEN', { courseId: qr.courseId }) // 被他人激活——码有效仅被占用，带回 courseId 供 welcome「已被激活」屏按课程取图
 })
