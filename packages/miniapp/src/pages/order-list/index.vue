@@ -11,6 +11,7 @@ import { onLoad, onShow, onReachBottom } from '@dcloudio/uni-app'
 import Icon from '@/components/Icon.vue'
 import CoNavBar from '@/components/CoNavBar.vue'
 import OrderItem from '@/components/OrderItem.vue'
+import Skeleton from '@/components/Skeleton.vue'
 import { useOrdersStore } from '@/store/orders.js'
 import { ORDER_STATUS, orderQty } from '@/data/orders.js'
 import { goBack } from '@/utils/nav.js'
@@ -84,13 +85,31 @@ const open = (o) => uni.navigateTo({ url: `/pages/order/index?id=${o.id}` })
         </view>
       </view>
 
-      <!-- 空态 / 加载中 -->
-      <view v-if="!list.length" class="coorl-empty">
+      <!-- 冷启 / 弱网加载骨架：列表未到时占位非空白（T-F2·根因#8）；刷新已有列表不闪骨架 -->
+      <view v-if="orders.loading && !list.length">
+        <view v-for="n in 3" :key="n" class="co-card coorl-card coorl-skel">
+          <view class="coorl-head">
+            <Skeleton w="110px" h="12px" />
+            <Skeleton w="52px" h="13px" />
+          </view>
+          <view class="coorl-skel-item">
+            <Skeleton w="56px" h="56px" radius="10px" />
+            <view class="coorl-skel-lines">
+              <Skeleton w="68%" h="14px" mb="8px" />
+              <Skeleton w="38%" h="12px" />
+            </view>
+          </view>
+          <view class="coorl-foot">
+            <Skeleton w="96px" h="13px" />
+          </view>
+        </view>
+      </view>
+
+      <!-- 空态（非加载时才显，加载交给上方骨架） -->
+      <view v-else-if="!list.length" class="coorl-empty">
         <view class="coorl-empty-ico"><Icon name="package" :size="26" /></view>
-        <text class="coorl-empty-text">{{
-          orders.loading ? '订单加载中…' : '这里还没有订单'
-        }}</text>
-        <text v-if="!orders.loading" class="coorl-empty-sub"
+        <text class="coorl-empty-text">这里还没有订单</text>
+        <text class="coorl-empty-sub"
           >下单后会出现在这里（模拟支付阶段，新订单直接进「待发货」）</text
         >
       </view>
@@ -168,6 +187,17 @@ const open = (o) => uni.navigateTo({ url: `/pages/order/index?id=${o.id}` })
 }
 .coorl-amt .cny {
   font-size: 11px;
+}
+
+/* 加载骨架（T-F2）：复用订单卡骨架，结构对齐真卡 */
+.coorl-skel-item {
+  display: flex;
+  align-items: center;
+  padding: 12px 0;
+}
+.coorl-skel-lines {
+  flex: 1;
+  margin-left: 12px;
 }
 
 /* 空态 */

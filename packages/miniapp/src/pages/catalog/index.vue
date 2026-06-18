@@ -7,6 +7,7 @@
 import { ref, computed } from 'vue'
 import { onShow } from '@dcloudio/uni-app'
 import Icon from '@/components/Icon.vue'
+import Skeleton from '@/components/Skeleton.vue'
 import { useCoursesStore } from '@/store/courses.js'
 import { useActivationStore } from '@/store/activation.js'
 import { useProgressStore } from '@/store/progress.js'
@@ -44,7 +45,9 @@ const lessonFree = (l) => (l.segments || []).some((s) => s.free)
 
 const doneCount = computed(() => lessons.value.filter((l) => prog(l).done).length)
 const total = computed(() => lessons.value.length)
-const progPct = computed(() => (total.value ? Math.round((doneCount.value / total.value) * 100) : 0))
+const progPct = computed(() =>
+  total.value ? Math.round((doneCount.value / total.value) * 100) : 0
+)
 
 function lessonState(l) {
   if (prog(l).done) return 'done'
@@ -107,12 +110,25 @@ function replayIntro() {
       </view>
     </view>
 
+    <!-- 冷启 / 弱网加载骨架：课程数据未到时占位章节区，避免空白（T-F2·根因#8） -->
+    <view v-if="store.loading && !store.loaded" class="vc-chapters vc-skel">
+      <view v-for="n in 3" :key="n" class="vc-skel-chap">
+        <Skeleton circle w="26px" />
+        <view class="vc-skel-lines">
+          <Skeleton w="55%" h="15px" mb="8px" />
+          <Skeleton w="32%" h="12px" />
+        </view>
+      </view>
+    </view>
+
     <!-- 未激活：锁态引导（规格「未激活课不可见」；章节明细不展示） -->
-    <view v-if="!unlocked" class="vc-chapters">
+    <view v-else-if="!unlocked" class="vc-chapters">
       <view class="vc-lock">
         <view class="vc-lock-ico"><Icon name="qr-code-ink" :size="28" /></view>
         <text class="vc-lock-title">课程需扫码激活</text>
-        <text class="vc-lock-sub">视频课随材料包附赠。收到包裹后，扫描包装内的专属二维码，即可解锁全部课程。</text>
+        <text class="vc-lock-sub"
+          >视频课随材料包附赠。收到包裹后，扫描包装内的专属二维码，即可解锁全部课程。</text
+        >
       </view>
     </view>
 
@@ -282,6 +298,17 @@ function replayIntro() {
 /* 章节 */
 .vc-chapters {
   padding: 12px 20px 0;
+}
+/* 加载骨架（T-F2）：章节区占位，结构对齐章节头（序号圆 + 标题/小字） */
+.vc-skel-chap {
+  display: flex;
+  align-items: center;
+  padding: 16px 0;
+  border-bottom: 0.5px solid $line-soft;
+}
+.vc-skel-lines {
+  flex: 1;
+  margin-left: 14px;
 }
 /* 未激活锁态卡 */
 .vc-lock {

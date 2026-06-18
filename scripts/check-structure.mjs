@@ -564,6 +564,32 @@ export const repoChecks = [
     },
   },
   {
+    // 数据页冷启/弱网空白态用骨架占位（优化批0618·T-F2）。根因#8「构建过+快网单人能用≠真机弱网能用」：
+    // 空白/纯文字「加载中」是真机冷启才暴露的体验坑，机器先把「有真实空载态的数据页必挂骨架」钉死。
+    // 册内只收真有空载态的页（catalog 冷启 EMPTY_COURSE 空章节 / order-list 冷启空列表）；
+    // 首页走 LoadingSplash 全屏开屏、detail 样例数据即时渲染——各有其载态，强塞骨架=#8 theater，故不入册。
+    id: 'list-pages-skeleton',
+    roots: ['#8'],
+    desc: '数据页空载态用 Skeleton 非空白（优化批0618·T-F2）：components/Skeleton.vue 存在 + 有真实冷启空白态的数据页（catalog/order-list）须挂 <Skeleton> 占位，防冷启/弱网白屏或纯文字「加载中」（首页 LoadingSplash / detail 样例即时渲染另有载态，不入册）',
+    run() {
+      const bad = []
+      const comp = 'packages/miniapp/src/components/Skeleton.vue'
+      if (!existsSync(join(ROOT, comp))) bad.push(`${comp} 缺失（骨架屏组件，T-F2）`)
+      const SKELETON_PAGES = ['catalog', 'order-list']
+      for (const page of SKELETON_PAGES) {
+        const f = `packages/miniapp/src/pages/${page}/index.vue`
+        const abs = join(ROOT, f)
+        if (!existsSync(abs)) {
+          bad.push(`${f} 缺失`)
+          continue
+        }
+        if (!readFileSync(abs, 'utf8').includes('<Skeleton'))
+          bad.push(`${f} 未挂 <Skeleton> 加载占位——冷启/弱网空白态（T-F2/根因#8）`)
+      }
+      return bad
+    },
+  },
+  {
     // 店名单一来源（决策 R23 / 占位⑲，2026-06-15 定名「Lucky Ducky 小棉鸭」）。病根#5「样板复制即漂移」：
     // 店名曾在 order/checkout/welcome/BrandIntro/GroupPanel/productDetail 六处硬编码（order↔checkout 还逐字重复），
     // 改名必漏改。根治＝收口 constants/brand.js 的 BRAND_NAME，「保持一致」从人工义务变机器保证。
