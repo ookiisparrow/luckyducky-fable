@@ -18,7 +18,9 @@ const emit = defineEmits(['tap'])
 .ld-backtop {
   position: fixed;
   right: 18px;
-  bottom: 96px;
+  /* 底部安全区：TabBar 用 env(safe-area-inset-bottom) 在 iPhone 抬高，此按钮浮于其上须同步抬高，
+     否则 iPhone（home indicator）不跟随→贴/压 TabBar 错位（安卓无 indicator 故 96px 正好·根因#8） */
+  bottom: calc(96px + env(safe-area-inset-bottom));
   z-index: 25;
   width: 48px;
   height: 48px;
