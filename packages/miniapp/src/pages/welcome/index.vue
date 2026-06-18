@@ -103,10 +103,15 @@ function close() {
   if (pages.length > 1) uni.navigateBack()
   else uni.reLaunch({ url: '/pages/index/index' })
 }
+// 跳目录：带上 courseId 让目录聚焦激活/继续的那门课（多课时不再默认 list[0]·根因#8）。无码引导无 courseId→目录走默认。
+// 用 redirectTo 替换掉欢迎页：返回时直接回上一层，不再夹一屏引导。
+function goCatalog() {
+  const q = courseId.value ? '?courseId=' + encodeURIComponent(courseId.value) : ''
+  uni.redirectTo({ url: '/pages/catalog/index' + q })
+}
 function start() {
   markSeen()
-  // 用 redirectTo 替换掉欢迎页：返回时直接回上一层，不再夹一屏引导
-  uni.redirectTo({ url: '/pages/catalog/index' })
+  goCatalog()
 }
 // 确认开始观看：写 enteredAt（退货权法律节点）→ 解锁进目录
 async function confirmStart() {
@@ -116,7 +121,7 @@ async function confirmStart() {
   confirming.value = false
   if (res && res.ok) {
     markSeen()
-    uni.redirectTo({ url: '/pages/catalog/index' })
+    goCatalog()
   } else {
     uni.showToast({ title: '确认失败，请重试', icon: 'none' })
   }

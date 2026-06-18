@@ -34,3 +34,44 @@ describe('courses api / store（云路径，mock callCloud）', () => {
     expect(store.allLessons[0].chapter).toBe(COURSE.chapters[0].id)
   })
 })
+
+// 多课程聚焦（根因#8：单课样本下 current=list[0] 恰对，真上第二门课才暴露——激活小熊跳目录仍显 list[0]＝小鸭）。
+// 用 ≥2 门课的真实样本锁：current 必须随 currentId 走、不再恒 list[0]。
+describe('courses store · 多课程聚焦 current 随激活课（根因#8）', () => {
+  const TWO = [
+    { id: 'course-duck', title: '幸运小鸭', chapters: [] },
+    { id: 'course-bear', title: '幸运小熊', chapters: [] },
+  ]
+  beforeEach(() => {
+    callCloud.mockImplementation(async (name) => (name === 'getCourses' ? { list: TWO } : null))
+  })
+
+  it('未指定 currentId → 回退第一门（保持原行为）', async () => {
+    const store = useCoursesStore()
+    await store.load()
+    expect(store.current.id).toBe('course-duck')
+  })
+
+  it('setCurrent 指定小熊 → current 是小熊，不再是 list[0] 小鸭', async () => {
+    const store = useCoursesStore()
+    await store.load()
+    store.setCurrent('course-bear')
+    expect(store.current.id).toBe('course-bear') // ★ bug 核心：激活小熊就该看小熊
+    expect(store.currentId).toBe('course-bear')
+  })
+
+  it('currentId 指向不存在的课 → 回退第一门（防脏 id 白屏）', async () => {
+    const store = useCoursesStore()
+    await store.load()
+    store.setCurrent('course-ghost')
+    expect(store.current.id).toBe('course-duck')
+  })
+
+  it('setCurrent("") 清空 → 回退第一门', async () => {
+    const store = useCoursesStore()
+    await store.load()
+    store.setCurrent('course-bear')
+    store.setCurrent('')
+    expect(store.current.id).toBe('course-duck')
+  })
+})

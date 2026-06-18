@@ -1375,6 +1375,34 @@ export const repoChecks = [
       return bad
     },
   },
+  {
+    // 目录课程随激活集/扫码 courseId 取，不恒 list[0]（根因#8：单课样本曾掩盖·多课暴露）。
+    // 病史：current=list[0] 硬编码（注释「暂只有一门·多课按激活集取」的 TODO 未做）——只有 course-duck
+    // 一门时 list[0] 恰等于用户课，看不出错；真上 小熊 第二门课后，激活小熊跳目录仍显 list[0]＝小鸭。
+    // 链 3 处缺一即回到「永远 list[0]」：① courses store 有 currentId + setCurrent；② catalog 按
+    // courseId/激活集 setCurrent；③ welcome 跳目录带 courseId=。
+    id: 'catalog-course-by-activation',
+    roots: ['#8'],
+    desc: '目录课程随激活/扫码取，不恒 list[0]（根因#8 单课样本失真·多课暴露）：courses store currentId+setCurrent + catalog 按 courseId/激活集 setCurrent + welcome 跳目录带 courseId=——任一缺即目录恒显第一门课',
+    run() {
+      const bad = []
+      const checks = [
+        ['packages/miniapp/src/store/courses.js', 'currentId', 'courses store 无 currentId——current 又回到恒 list[0]'],
+        ['packages/miniapp/src/store/courses.js', 'setCurrent', 'courses store 无 setCurrent——无法聚焦激活课'],
+        ['packages/miniapp/src/pages/catalog/index.vue', 'setCurrent', 'catalog 未按 courseId/激活集 setCurrent——目录不随激活课'],
+        ['packages/miniapp/src/pages/welcome/index.vue', 'courseId=', 'welcome 跳目录未带 courseId=——目录不知聚焦哪门课'],
+      ]
+      for (const [f, token, msg] of checks) {
+        const abs = join(ROOT, f)
+        if (!existsSync(abs)) {
+          bad.push(`${f} 缺失`)
+          continue
+        }
+        if (!new RegExp(token).test(readFileSync(abs, 'utf8'))) bad.push(`${f}：${msg}（${token} 未见·链断）`)
+      }
+      return bad
+    },
+  },
 ]
 
 // ============== 逐文件规则（fileRules）==============

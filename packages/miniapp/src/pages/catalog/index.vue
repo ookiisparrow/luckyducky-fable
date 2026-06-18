@@ -5,7 +5,7 @@
  * 封面/缩略按项目约定用灰占位，真实媒体以后注入。
  */
 import { ref, computed } from 'vue'
-import { onShow, onPullDownRefresh } from '@dcloudio/uni-app'
+import { onLoad, onShow, onPullDownRefresh } from '@dcloudio/uni-app'
 import Icon from '@/components/Icon.vue'
 import Skeleton from '@/components/Skeleton.vue'
 import { useCoursesStore } from '@/store/courses.js'
@@ -21,11 +21,15 @@ const barVars = getSystemBarVars()
 const store = useCoursesStore()
 const act = useActivationStore()
 const progress = useProgressStore()
+// 扫码激活跳转带的 courseId → 目录聚焦该课（多课不再恒 list[0]·根因#8）
+onLoad((q) => {
+  if (q && q.courseId) store.setCurrent(decodeURIComponent(q.courseId))
+})
 // onShow 而非 onMounted：从播放页返回时强刷进度，刚看完的段立即点亮
-onShow(() => {
-  store.load()
-  act.loadMine()
-  progress.load(true)
+onShow(async () => {
+  await Promise.all([store.load(), act.loadMine(), progress.load(true)])
+  // 从 TabBar 直接进（无 courseId）且尚未聚焦 → 默认聚焦用户已解锁的课，而非恒 list[0]（根因#8）
+  if (!store.currentId && act.mine.length) store.setCurrent(act.mine[act.mine.length - 1].courseId)
 })
 // 下拉刷新：强刷课程/激活/进度后收转圈（finally 保证失败也不卡转圈·根因#8）
 onPullDownRefresh(async () => {

@@ -18,12 +18,15 @@ const EMPTY_COURSE = { id: '', title: '', chapters: [] }
 export const useCoursesStore = defineStore('courses', {
   state: () => ({
     list: [],
+    currentId: '', // 当前聚焦课程 id（扫码激活/继续学习/目录入口设）；空＝回退第一门
     loaded: false,
     loading: false,
   }),
   getters: {
-    // 当前课程：暂只有一门（course-duck）；多课时代按激活集取
-    current: (s) => s.list[0] || EMPTY_COURSE,
+    // 当前课程：优先 currentId 指定的那门（扫码激活的课）；未指定 / 指向不存在的课 → 回退 list[0]。
+    // 根因#8：原来恒 list[0]，单课样本下恰好对，真上第二门课（小熊）后激活它却仍显第一门，故改按 currentId 取。
+    current: (s) =>
+      (s.currentId && s.list.find((c) => c.id === s.currentId)) || s.list[0] || EMPTY_COURSE,
     // 按 id 取课程（欢迎页按激活码渲染课程标题用；取不到返回 null）
     getById: (s) => (id) => s.list.find((c) => c.id === id) || null,
     // 当前课程拍平课时表（带 chapter 归属）：目录进度统计 / 播放页上下集用
@@ -32,6 +35,10 @@ export const useCoursesStore = defineStore('courses', {
     },
   },
   actions: {
+    // 聚焦某门课（welcome 激活后 / catalog 带 courseId 进入 / 默认激活集时设）；空＝回退第一门。
+    setCurrent(id) {
+      this.currentId = id || ''
+    },
     // 拉取课程列表。已加载则跳过；force=true 强制刷新。
     async load(force = false) {
       if (this.loading) return
