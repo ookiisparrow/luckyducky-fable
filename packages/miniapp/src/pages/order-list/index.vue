@@ -36,6 +36,9 @@ const tabIndex = computed(() =>
     TABS.findIndex((t) => t.key === tab.value)
   )
 )
+// 横滑性能：只渲染当前 ± 相邻 tab 的列表（5 个全渲染时 swiper 拖拽要合成全部内容→掉帧·调试日志 U）。
+// 相邻 tab 已预渲染，逐个横滑不空白；点远 tab 跳越时中间 tab 短暂空（可接受·罕见）。
+const nearTab = (i) => Math.abs(i - tabIndex.value) <= 1
 const selectTab = (i) => {
   tab.value = TABS[i].key
 }
@@ -91,9 +94,10 @@ const open = (o) => uni.navigateTo({ url: `/pages/order/index?id=${o.id}` })
          手势消歧（横滑切 tab vs 纵滚列表）交原生 swiper，不自造 touchmove（T-F4/根因#8 真机验）。
          注：此处 scroll-view 不用 enhanced/bounces——enhanced 原生滚动器嵌在 swiper 内会与横滑手势仲裁
          抢资源致横滑掉帧（真机实测·调试日志），故 swiper 内列表用普通 scroll-view，弹性回弹让位顺滑横滑。 -->
-    <swiper class="coorl-swiper" :current="tabIndex" @change="onSwipe">
-      <swiper-item v-for="t in TABS" :key="t.key">
+    <swiper class="coorl-swiper" :current="tabIndex" :duration="280" @change="onSwipe">
+      <swiper-item v-for="(t, ti) in TABS" :key="t.key">
         <scroll-view
+          v-if="nearTab(ti)"
           scroll-y
           class="coorl-scroll"
           :show-scrollbar="false"
