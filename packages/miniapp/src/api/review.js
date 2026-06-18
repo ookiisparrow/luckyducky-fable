@@ -8,10 +8,17 @@ import { callCloud } from '@/utils/cloud.js'
 import { logger } from '@/utils/logger.js'
 
 // 返回 { list, summary } 或 null（无云 / 云端失败，由调用方回退样例）
-export async function getReviews(productId) {
+// cursor 续页（债#13·根因#7）：首页不传 cursor（带回汇总）；续页传 nextCursor（只追列表、无汇总）。
+export async function getReviews(productId, cursor = null) {
   try {
-    const res = await callCloud('getReviews', { productId })
-    if (res?.ok) return { list: res.list, summary: res.summary }
+    const res = await callCloud('getReviews', { productId, cursor })
+    if (res?.ok)
+      return {
+        list: res.list,
+        summary: res.summary,
+        nextCursor: res.nextCursor,
+        hasMore: res.hasMore,
+      }
   } catch (e) {
     logger.warn('review', 'getReviews 云端失败，回退样例', e)
   }

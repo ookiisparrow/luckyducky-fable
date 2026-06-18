@@ -6,7 +6,7 @@
  * （筛选为高亮态，不做真实过滤）；评分汇总/单条评价复用组件。
  */
 import { ref, computed } from 'vue'
-import { onLoad, onPullDownRefresh } from '@dcloudio/uni-app'
+import { onLoad, onPullDownRefresh, onReachBottom } from '@dcloudio/uni-app'
 import CoNavBar from '@/components/CoNavBar.vue'
 import RatingSummary from '@/components/RatingSummary.vue'
 import ReviewItem from '@/components/ReviewItem.vue'
@@ -33,6 +33,10 @@ onPullDownRefresh(async () => {
     uni.stopPullDownRefresh()
   }
 })
+// 触底续页（债#13·根因#7）：评价过多时翻下一页追加，云端有真实评价才翻（样例不分页）
+onReachBottom(() => {
+  if (pid.value) reviewsStore.loadMore(pid.value)
+})
 
 const real = computed(() => (pid.value ? reviewsStore.forProduct(pid.value) : null))
 const rating = computed(() => (real.value ? real.value.summary : PD.rating))
@@ -50,6 +54,14 @@ const list = computed(() =>
       }))
     : PD.reviewsAll
 )
+
+// 触底提示：仅云端真实评价显示（样例列表不分页）
+const footText = computed(() => {
+  if (!real.value) return ''
+  if (real.value.loadingMore) return '加载中…'
+  if (real.value.done) return list.value.length ? '没有更多了' : ''
+  return ''
+})
 
 const back = () => goBack('/pages/index/index')
 </script>
@@ -79,6 +91,8 @@ const back = () => goBack('/pages/index/index')
     <view class="pdr-list">
       <ReviewItem v-for="(r, i) in list" :key="i" :review="r" :divided="i > 0" />
     </view>
+
+    <view v-if="footText" class="pdr-more">{{ footText }}</view>
 
     <view class="pdr-foot"></view>
   </view>
@@ -128,6 +142,12 @@ const back = () => goBack('/pages/index/index')
 .pdr-list {
   background: $white;
   margin-top: 10px;
+}
+.pdr-more {
+  padding: 14px 0;
+  text-align: center;
+  font-size: 12px;
+  color: $content;
 }
 .pdr-foot {
   height: calc(8px + env(safe-area-inset-bottom));

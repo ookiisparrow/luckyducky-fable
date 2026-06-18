@@ -1186,6 +1186,23 @@ export const repoChecks = [
     },
   },
   {
+    // 评价列表 cursor 分页（根因#7 固定 limit 规模挤出·债#13）：原 getReviews `limit(200)` 固定——
+    // 商品评价过 200 时「全部评价」页旧评价被截断挤出。列表须走 pageQuery 游标分页（同订单/售后）；
+    // 汇总仍基于 bounded 样本（≤200·approx 标注·真增量聚合属院外债#13 后半·同 dashboard 近似口径）。
+    id: 'reviews-list-paged',
+    roots: ['#7'],
+    desc: '评价列表 cursor 分页（根因#7·债#13）：catalog/getReviews.ts 列表须经 kit pageQuery 游标分页（不再固定 limit 截断·>200 评价被挤出全部评价页）；汇总另走 bounded 样本（approx）',
+    run() {
+      const f = 'packages/cloud/src/functions/catalog/getReviews.ts'
+      if (!existsSync(join(ROOT, f))) return [`${f} 缺失（评价列表·债#13）`]
+      const src = readFileSync(join(ROOT, f), 'utf8')
+      const bad = []
+      if (!/pageQuery\s*\(/.test(src))
+        bad.push(`${f} 列表未经 pageQuery 游标分页——固定 limit 规模即把旧评价挤出全部评价页（根因#7·债#13）`)
+      return bad
+    },
+  },
+  {
     // 集合名只用已登记的（债#28·安全·根因#3 信任边界）：库权限按集合逐一锁，打错字（aftersales）
     // → 静默建/查锁名单外的无保护集合＝洞。kit/collections.ts 的 COLLECTIONS 是集合名权威册；
     // 校验全库 .collection()/createCollection/ensure 的字面量名都在册内——打错即红，新集合须先登记。
@@ -1580,6 +1597,9 @@ export const typeAndTestGuards = [
   // 商品停售生效（债#12）：unpublishProduct 置 listed:false 后 getProducts 不再下发该商品（顾客端列表消失），
   // republishProduct 恢复；旧无 listed 字段的商品视为可售（兼容）。reverseTest 锁此端到端行为。
   { id: 'product-unpublish-effective', mechanism: 'test', roots: ['债#12'], reverseTest: 'tests/cloud/productListed.test.js' },
+  // 评价列表分页端到端（根因#7·债#13）：getReviews 列表 cursor 翻页（>limit 返 nextCursor·续页接上），
+  // 汇总仅首页基于 bounded 样本返回（approx 标注）。reverseTest 锁此行为。
+  { id: 'reviews-paged-effective', mechanism: 'test', roots: ['#7'], reverseTest: 'tests/cloud/getReviewsPaged.test.js' },
 ]
 
 const SRC_DIRS = ['packages', 'cloudfunctions', 'scripts']
