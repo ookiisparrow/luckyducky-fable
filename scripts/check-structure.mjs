@@ -882,6 +882,38 @@ export const repoChecks = [
     },
   },
   {
+    // 付费视频白嫖防护单源（审计 P1·根因#3 信任边界）：付费课视频是受保护资产，播放地址只能
+    // 经鉴权云函数 getPlaybackUrl 服务端换短时效临时 URL 下发——既现有架构正确，又防新加 learning
+    // 函数把 fileID 漏进公开返回 / 绕鉴权自行造 URL（既有 getCourses 剥成 hasVideo·getPlaybackUrl
+    // 鉴权后发 URL，已被 getPlaybackUrl.test.js 行为锁；本守卫补结构闸——新函数撞规即红，防回归）。
+    id: 'video-url-via-cloud-only',
+    roots: ['#3'],
+    desc: '付费视频白嫖防护单源（审计 P1·根因#3 信任边界）：learning/ 域内 ① 临时 URL 接缝 getTempUrl 只许 getPlaybackUrl.ts 调（播放地址单源经鉴权云函数下发）；② 原始 videoFileId 只许在 getPlaybackUrl.ts(服务端定位)/getCourses.ts(剥成 hasVideo 布尔) 出现，其他 learning 函数引用即红——防新函数漏 fileID 进公开返回 / 绕鉴权造 URL（白嫖付费课视频）；③ getPlaybackUrl.ts 须既经 getTempUrl 又有权属闸 NOT_ENTITLED，缺任一即白嫖洞',
+    run() {
+      const dir = join(ROOT, 'packages/cloud/src/functions/learning')
+      if (!existsSync(dir)) return ['learning 域缺失（付费视频保护单点·审计 P1）']
+      const GATE = 'getPlaybackUrl.ts' // 唯一鉴权后下发播放 URL 的云函数
+      const FILEID_ALLOW = new Set([GATE, 'getCourses.ts']) // 定位 / 剥 hasVideo·已审计
+      const bad = []
+      for (const e of readdirSync(dir)) {
+        if (!e.endsWith('.ts')) continue
+        const src = readFileSync(join(dir, e), 'utf8')
+        if (e !== GATE && /\bgetTempUrl\s*\(/.test(src))
+          bad.push(`learning/${e} 调 getTempUrl 造播放 URL——临时 URL 只许经鉴权云函数 ${GATE} 下发（白嫖防护·审计 P1·根因#3）`)
+        if (!FILEID_ALLOW.has(e) && /videoFileId/.test(src))
+          bad.push(`learning/${e} 引用 videoFileId——原始 fileID 只许在 ${GATE}(定位)/getCourses.ts(剥 hasVideo) 出现，防漏进公开返回（审计 P1·根因#3）`)
+      }
+      const gate = join(dir, GATE)
+      if (!existsSync(gate)) bad.push(`learning/${GATE} 缺失——播放 URL 鉴权单点丢失（审计 P1）`)
+      else {
+        const g = readFileSync(gate, 'utf8')
+        if (!/\bgetTempUrl\s*\(/.test(g)) bad.push(`learning/${GATE} 未经 getTempUrl 接缝下发 URL——临时 URL 单源失守（审计 P1）`)
+        if (!/NOT_ENTITLED/.test(g)) bad.push(`learning/${GATE} 缺权属闸 NOT_ENTITLED——付费段白嫖防护失守（审计 P1·根因#3）`)
+      }
+      return bad
+    },
+  },
+  {
     // 生产 env id 单源（病根#5·债#30①脚本侧）：deploy-fns 部署目标 / loadtest·deploy-test「拒生产」
     // 安全闸 共用生产 env id；各写一份→改一漏一致安全闸与部署目标不一致。收口 scripts/lib/env.mjs 一份。
     id: 'prod-env-single-source',
