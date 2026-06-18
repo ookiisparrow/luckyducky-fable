@@ -24,6 +24,8 @@ export const useContentStore = defineStore('content', {
         tagline: h?.tagline || DEFAULT_HERO.tagline,
       }
     },
+    // 激活页背景图（welcome）：控制台上传的云存储 fileID，空＝welcome 回退 /static/hero-full.jpg
+    activationBg: (s) => s.home?.activationBg || '',
     trust: (s) => (s.home?.trust?.length ? s.home.trust : TRUST_ITEMS),
     faq: (s) => (s.home?.faq?.length ? s.home.faq : FAQ_ITEMS),
   },

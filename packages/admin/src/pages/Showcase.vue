@@ -5,7 +5,7 @@
  * 右：排序 / 上下架面板。两边同一份列表状态，拖哪边都行，松手防抖保存，小程序重开生效。
  */
 import { ref, computed, watch, onBeforeUnmount } from 'vue'
-import { cloudMode, listShowcase, saveShowcase, getHomeContent, saveHomeContent } from '@/api/cloud.js'
+import { cloudMode, listShowcase, saveShowcase, getHomeContent, saveHomeContent, uploadImage } from '@/api/cloud.js'
 
 const list = ref([])
 const urls = ref({})
@@ -16,6 +16,7 @@ const saveState = ref('')
 // 首页内容（hero 文案/信任条/FAQ）：与小程序同一份，默认值与小程序本地兜底一致
 const DEFAULT_HOME = {
   hero: { title: '创造幸运', tagline: 'Get ducky get lucky' },
+  activationBg: '', // 激活页（welcome）背景图 fileID；空＝小程序回退 /static/hero-full.jpg
   trust: [
     { icon: 'truck', label: '包邮到家' },
     { icon: 'rotate-ccw', label: '七天无理由退货' },
@@ -45,6 +46,7 @@ async function init() {
     if (hc) {
       home.value = {
         hero: { ...DEFAULT_HOME.hero, ...hc.hero },
+        activationBg: hc.activationBg || '',
         trust: hc.trust?.length ? hc.trust : home.value.trust,
         faq: hc.faq?.length ? hc.faq : home.value.faq,
       }
@@ -129,6 +131,32 @@ onBeforeUnmount(() => {
     if (homeLoaded) saveHomeContent(JSON.parse(JSON.stringify(home.value)))
   }
 })
+
+// 激活页背景图上传：传云存储 → fileID 入 home.activationBg（watch 自动保存）。
+// 预览 url 仅本会话（上传即得）；重载只显「已设置 ✓」（fileID 解析 url 需额外云端、不值当）。
+const bgUploading = ref(false)
+const bgPreview = ref('') // 本次上传得到的展示 url（重载不保留）
+const bgErr = ref('')
+async function uploadBg(e) {
+  const file = e.target.files?.[0]
+  e.target.value = '' // 允许重复选同一文件
+  if (!file) return
+  bgErr.value = ''
+  bgUploading.value = true
+  try {
+    const { ref: fileID, url } = await uploadImage(file, 'showcase')
+    home.value.activationBg = fileID // 触发 watch 防抖保存
+    bgPreview.value = url
+  } catch (err) {
+    bgErr.value = '上传失败：' + (err?.message || err)
+  } finally {
+    bgUploading.value = false
+  }
+}
+function clearBg() {
+  home.value.activationBg = ''
+  bgPreview.value = ''
+}
 
 function addFaq() {
   if (home.value.faq.length >= 8) return
@@ -232,6 +260,24 @@ function delFaq(i) {
         <input v-model="home.hero.title" class="input" maxlength="20" />
         <label class="field-label" style="margin-top: 8px">口号（副标题）</label>
         <input v-model="home.hero.tagline" class="input" maxlength="40" />
+
+        <h3 style="margin-top: 22px">激活页 · 背景图（扫码激活页全屏底图）</h3>
+        <div class="bgrow">
+          <div class="bgthumb">
+            <img v-if="bgPreview" :src="bgPreview" alt="" />
+            <span v-else-if="home.activationBg" class="bgset">已设置 ✓</span>
+            <span v-else class="bgph">默认底图</span>
+          </div>
+          <div class="bgctl">
+            <label class="btn ghost sm bgbtn" :class="{ disabled: bgUploading }">
+              {{ bgUploading ? '上传中…' : '上传背景图' }}
+              <input type="file" accept="image/*" :disabled="bgUploading" hidden @change="uploadBg" />
+            </label>
+            <button v-if="home.activationBg" class="del" @click="clearBg">恢复默认</button>
+          </div>
+        </div>
+        <p v-if="bgErr" class="hint warn">{{ bgErr }}</p>
+        <p class="hint">扫码激活页（welcome）的全屏背景图；不设＝用内置默认图。建议竖图（约 1080×1920）。改动自动保存，小程序重开生效。</p>
 
         <h3 style="margin-top: 22px">首页 · 信任条（3 项短语）</h3>
         <div class="trustrow">
@@ -572,5 +618,50 @@ h1 {
 .btn.sm {
   padding: 7px 13px;
   font-size: 12px;
+}
+.bgrow {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+.bgthumb {
+  width: 56px;
+  height: 84px;
+  border-radius: 8px;
+  background: var(--bg-sage);
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  border: 1px solid var(--line);
+}
+.bgthumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.bgset {
+  font-size: 11px;
+  color: var(--green);
+  font-weight: 600;
+  text-align: center;
+}
+.bgph {
+  font-size: 10.5px;
+  color: var(--content-2);
+  text-align: center;
+}
+.bgctl {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.bgbtn {
+  cursor: pointer;
+}
+.bgbtn.disabled {
+  opacity: 0.6;
+  pointer-events: none;
 }
 </style>

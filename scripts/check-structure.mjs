@@ -1014,6 +1014,32 @@ export const repoChecks = [
       return bad
     },
   },
+  {
+    // 激活页背景图后台可管（橱窗·用户请求 2026-06-18）：welcome 激活页背景图从写死改为内容控制台可上传。
+    // 链路 3 处缺一即断：① admin Showcase 传图存 fileID 到 home.activationBg；② 云端 saveHomeContent
+    // 持久化 activationBg（content 文档白名单·不加这字段会被整存抹掉）；③ miniapp welcome 读它渲染
+    // （mp <image> 原生支持 cloud:// fileID·无配回退 /static/hero-full.jpg）。
+    id: 'activation-bg-wired',
+    roots: ['橱窗'],
+    desc: '激活页背景图后台可管（橱窗）：admin Showcase 传图存 home.activationBg + 云端 saveHomeContent 持久化 activationBg + miniapp welcome 读 activationBg 渲染（无配回退 static）——三处缺一链断',
+    run() {
+      const checks = [
+        ['packages/cloud/src/functions/admin/adminApi/actions/content.ts', '云端 saveHomeContent 未持久化 activationBg——后台传的背景图被整存抹掉、存不下来'],
+        ['packages/admin/src/pages/Showcase.vue', 'admin Showcase 未接 activationBg 上传——后台管不了激活页背景图'],
+        ['packages/miniapp/src/pages/welcome/index.vue', 'welcome 未读 activationBg——后台配的背景图不生效'],
+      ]
+      const bad = []
+      for (const [f, msg] of checks) {
+        const abs = join(ROOT, f)
+        if (!existsSync(abs)) {
+          bad.push(`${f} 缺失`)
+          continue
+        }
+        if (!/activationBg/.test(readFileSync(abs, 'utf8'))) bad.push(`${f}：${msg}（activationBg 未见·链断）`)
+      }
+      return bad
+    },
+  },
 ]
 
 // ============== 逐文件规则（fileRules）==============

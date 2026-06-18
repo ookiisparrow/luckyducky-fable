@@ -10,6 +10,8 @@ export async function saveHomeContent({ db, data }: Ctx) {
   const c = data.home || {}
   const doc = {
     hero: { title: str(c.hero?.title, 20), tagline: str(c.hero?.tagline, 40) },
+    // 激活页背景图（welcome）：存云存储 fileID（cloud://…，≤200）；空＝小程序回退 /static/hero-full.jpg
+    activationBg: str(c.activationBg, 200),
     trust: (Array.isArray(c.trust) ? c.trust : [])
       .slice(0, 4)
       .map((t: any) => ({ icon: str(t?.icon, 20), label: str(t?.label, 12) })),

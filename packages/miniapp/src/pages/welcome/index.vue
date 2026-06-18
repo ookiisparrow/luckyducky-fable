@@ -16,11 +16,16 @@ import { getSystemBarVars } from '@/utils/systemBar.js'
 import { STORAGE_KEYS } from '@/constants/storage.js'
 import { useActivationStore } from '@/store/activation.js'
 import { useCoursesStore } from '@/store/courses.js'
+import { useContentStore } from '@/store/content.js'
 import { parseActivationCode } from '@/api/activation.js'
 import { BRAND_NAME } from '@/constants/brand.js'
 
 const act = useActivationStore()
 const coursesStore = useCoursesStore()
+// 激活页背景图：控制台（橱窗）可上传，存 content.home.activationBg（云存储 fileID·mp <image> 原生渲染）；
+// 无配置回退 /static/hero-full.jpg。扫码进站是新启动，主动拉一次内容。
+const contentStore = useContentStore()
+contentStore.load()
 
 const page = ref(0) // 0=欢迎/引导屏 1=开始/确认屏
 const mode = ref('intro') // intro 通用引导 | confirm 激活待确认 | mine 已解锁继续学习 | error
@@ -100,7 +105,11 @@ async function confirmStart() {
 
 <template>
   <view class="wel" :style="barVars">
-    <image class="wel-photo" src="/static/hero-full.jpg" mode="aspectFill" />
+    <image
+      class="wel-photo"
+      :src="contentStore.activationBg || '/static/hero-full.jpg'"
+      mode="aspectFill"
+    />
     <view class="wel-scrim"></view>
 
     <!-- ===== 通用引导（无码进入，原行为不变） ===== -->
