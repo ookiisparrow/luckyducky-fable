@@ -75,7 +75,7 @@ function lessonSub(l, li) {
 // 点课时 → 进播放页，带上 章节/节次/课名（播放页显示用）
 function openLesson(lesson) {
   // 只传 id，播放页按 id 从课程表取名/章节、并支持上一集/下一集
-  uni.navigateTo({ url: `/pages/player/index?id=${lesson.id}` })
+  uni.navigateTo({ url: `/pkg-video/player/index?id=${lesson.id}` })
 }
 function startFirst() {
   if (!unlocked.value) {

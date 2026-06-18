@@ -31,7 +31,13 @@ const padding = computed(() => {
     <view class="ld-slot-sizer" :style="{ paddingBottom: padding }"></view>
 
     <!-- 有真实图片时显示图片，否则灰色占位 -->
-    <image v-if="type === 'image' && src" class="ld-slot-fill" :src="src" mode="aspectFill" />
+    <image
+      v-if="type === 'image' && src"
+      class="ld-slot-fill"
+      :src="src"
+      mode="aspectFill"
+      lazy-load
+    />
     <!-- TODO: type === 'video' / 'gif' / 'lottie' 的真实渲染，后续在此扩展 -->
     <view v-else class="ld-slot-fill ld-slot-ph">
       <text v-if="label" class="ld-slot-label">{{ label }}</text>

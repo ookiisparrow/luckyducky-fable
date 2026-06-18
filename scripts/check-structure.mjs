@@ -775,6 +775,54 @@ export const repoChecks = [
     },
   },
   {
+    // 分包配置存在（优化批0618·T-F6 加载优化）。根因#8「真机冷启/真网才感知」：所有页塞主包→主包大→冷启慢
+    // （dev/快网无感），非首屏重页（player 视频 ~124K 编译态）应拆分包按需载 + preloadRule 预载减首跳卡顿。
+    id: 'subpackage-config-present',
+    roots: ['#8'],
+    desc: '分包配置存在（T-F6 加载优化）：pages.json 须有非空 subPackages（≥1 分包页）+ preloadRule 预载规则——非首屏重页拆分包按需载、减主包冷启（根因#8 真机冷启才感知）',
+    run() {
+      const bad = []
+      let pj = {}
+      try {
+        pj = JSON.parse(readFileSync(join(ROOT, 'packages/miniapp/src/pages.json'), 'utf8'))
+      } catch {
+        return ['packages/miniapp/src/pages.json 解析失败（分包核查）']
+      }
+      const subs = pj.subPackages || pj.subpackages || []
+      if (!subs.some((s) => Array.isArray(s.pages) && s.pages.length))
+        bad.push('pages.json 无 subPackages 分包页——非首屏重页未拆分包、主包冷启慢（T-F6/根因#8）')
+      if (!pj.preloadRule || !Object.keys(pj.preloadRule).length)
+        bad.push('pages.json 无 preloadRule 预载规则——分包页首次跳转前未预载、首跳卡顿（T-F6）')
+      return bad
+    },
+  },
+  {
+    // 主包体积预算（优化批0618·T-F6）。根因#8：最重非首屏页 player（视频 ~124K 编译态）须在分包、不回主包；
+    // 主包页数设上限，防新页无脑塞主包致冷启退化（dev 无感·真机真网才慢）。
+    id: 'main-package-budget',
+    roots: ['#8'],
+    desc: '主包体积预算（T-F6 加载优化）：最重非首屏页 player 须在 subPackages 不在主包 pages；主包 pages ≤ 18——防重页/新页无脑塞主包致冷启退化（根因#8 真机冷启才感知）',
+    run() {
+      const bad = []
+      let pj = {}
+      try {
+        pj = JSON.parse(readFileSync(join(ROOT, 'packages/miniapp/src/pages.json'), 'utf8'))
+      } catch {
+        return ['packages/miniapp/src/pages.json 解析失败（主包预算核查）']
+      }
+      const mainPages = pj.pages || []
+      if (mainPages.some((p) => /player/.test(p.path || '')))
+        bad.push('player（最重非首屏页·视频）仍在主包 pages——须移入 subPackages 减主包冷启（T-F6/根因#8）')
+      const subs = pj.subPackages || pj.subpackages || []
+      if (!subs.some((s) => (s.pages || []).some((pg) => /player/.test(pg.path || pg || ''))))
+        bad.push('subPackages 无 player——player 未分包（T-F6）')
+      const BUDGET = 18
+      if (mainPages.length > BUDGET)
+        bad.push(`主包 pages ${mainPages.length} 超预算 ${BUDGET}——新页优先入分包、勿胀主包（T-F6/根因#8）`)
+      return bad
+    },
+  },
+  {
     // 店名单一来源（决策 R23 / 占位⑲，2026-06-15 定名「Lucky Ducky 小棉鸭」）。病根#5「样板复制即漂移」：
     // 店名曾在 order/checkout/welcome/BrandIntro/GroupPanel/productDetail 六处硬编码（order↔checkout 还逐字重复），
     // 改名必漏改。根治＝收口 constants/brand.js 的 BRAND_NAME，「保持一致」从人工义务变机器保证。
@@ -855,7 +903,7 @@ export const repoChecks = [
         'packages/miniapp/src/pages/detail/index.vue',
         'packages/miniapp/src/pages/me/index.vue',
         'packages/miniapp/src/pages/aftersales/index.vue',
-        'packages/miniapp/src/pages/player/components/HelpSheet/index.vue',
+        'packages/miniapp/src/pkg-video/player/components/HelpSheet/index.vue',
       ]
       for (const f of WIRED) {
         const s = src(f)
@@ -868,7 +916,7 @@ export const repoChecks = [
         'packages/miniapp/src/pages/detail/components/DetailDock.vue',
         'packages/miniapp/src/pages/me/index.vue',
         'packages/miniapp/src/pages/aftersales/index.vue',
-        'packages/miniapp/src/pages/player/components/HelpSheet/ServicePanel.vue',
+        'packages/miniapp/src/pkg-video/player/components/HelpSheet/ServicePanel.vue',
       ]
       for (const f of OLD_ENTRIES) {
         const s = src(f)

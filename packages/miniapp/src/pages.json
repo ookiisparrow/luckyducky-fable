@@ -99,13 +99,6 @@
       }
     },
     {
-      "path": "pages/player/index",
-      "style": {
-        "navigationBarTitleText": "视频教程",
-        "navigationStyle": "custom"
-      }
-    },
-    {
       "path": "pages/welcome/index",
       "style": {
         "navigationBarTitleText": "视频教程",
@@ -135,6 +128,24 @@
       }
     }
   ],
+  "subPackages": [
+    {
+      "root": "pkg-video",
+      "pages": [
+        {
+          "path": "player/index",
+          "style": {
+            "navigationBarTitleText": "视频教程",
+            "navigationStyle": "custom"
+          }
+        }
+      ]
+    }
+  ],
+  "preloadRule": {
+    "pages/catalog/index": { "network": "all", "packages": ["pkg-video"] },
+    "pages/me/index": { "network": "all", "packages": ["pkg-video"] }
+  },
   "globalStyle": {
     "navigationStyle": "custom",
     "navigationBarTextStyle": "black",

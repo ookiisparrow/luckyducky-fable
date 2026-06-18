@@ -91,7 +91,7 @@ const cont = computed(() => {
 function continueWatch() {
   if (!ensureLogin()) return // 续播 = 进课，需登录
   // 续播云端最近观看的那节；无记录回退样例对应的 l3
-  uni.navigateTo({ url: `/pages/player/index?id=${cont.value.lessonId || 'l3'}` })
+  uni.navigateTo({ url: `/pkg-video/player/index?id=${cont.value.lessonId || 'l3'}` })
 }
 function allCourses() {
   // 首次进视频课先看欢迎引导，之后直达目录（浏览目录不挡，进具体课时再验登录）
