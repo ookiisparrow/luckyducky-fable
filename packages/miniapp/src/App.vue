@@ -47,6 +47,40 @@ scroll-view {
   box-sizing: border-box;
 }
 
+/* —— 微动效（T-F5·克制版·纯 CSS·不引动画库；token 在 uni.scss）——
+   全局工具类，元素加 class 即生效；只动 transform/opacity（合成层·mp 低端机不掉帧·根因#8）。
+   已有 scoped transition/animation 的元素（如 ProductCard 根）在其 scoped 内合并，避免特异性冲突。 */
+.ld-press {
+  transition:
+    transform $dur-press $ease-out,
+    opacity $dur-press $ease-out;
+}
+.ld-press:active {
+  transform: scale(0.97);
+  opacity: 0.94;
+}
+/* 整宽行的点击态：只变淡不缩放（行缩放会露边显怪）——列表行/菜单行用 */
+.ld-tap {
+  transition: opacity $dur-press $ease-out;
+}
+.ld-tap:active {
+  opacity: 0.6;
+}
+/* 列表项进场：淡入 + 轻微上移，一次性（both 保留终态）。短时长、无 stagger——避长列表逐项延迟掉帧。 */
+@keyframes ld-rise {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+.ld-rise {
+  animation: ld-rise $dur-rise $ease-out both;
+}
+
 /* 文本截断工具类（多端通用） */
 .ellipsis {
   overflow: hidden;

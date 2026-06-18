@@ -45,7 +45,16 @@ const emit = defineEmits(['open', 'add'])
   border: 1px solid $surface-cream;
   border-radius: $r-sm;
   overflow: hidden;
-  transition: box-shadow 0.2s ease;
+  /* 合并点击态 transition（根已有 box-shadow transition，全局 .ld-press 会被 scoped 盖过，故在此并入·T-F5） */
+  transition:
+    box-shadow 0.2s ease,
+    transform $dur-press $ease-out,
+    opacity $dur-press $ease-out;
+}
+/* 点击态：卡片整体轻微缩放变淡（比通用 .ld-press 略轻，卡内另有 ＋ 按钮） */
+.ld-prod-card:active {
+  transform: scale(0.98);
+  opacity: 0.96;
 }
 .is-flash {
   animation: ld-prod-flash 1.5s ease;

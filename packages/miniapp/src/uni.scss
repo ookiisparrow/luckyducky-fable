@@ -93,6 +93,12 @@ $shadow-tab:
   0 8px 30px rgba(28, 28, 32, 0.22),
   0 2px 8px rgba(28, 28, 32, 0.12);
 
+/* ---- 微动效 token（T-F5·克制版单一来源；全局类 .ld-press/.ld-rise 在 App.vue 引用） ----
+   只用 transform/opacity（合成层·GPU 友好·mp 低端机不掉帧）；时长短、缓出克制。改手感只改这几个值。 */
+$ease-out: cubic-bezier(0.22, 1, 0.36, 1); // 标准缓出（进场/释放）
+$dur-press: 0.12s; // 点击态（按下→释放）
+$dur-rise: 0.3s; // 列表项进场（淡入上移）
+
 /* ---- 排版 mixin（标题样式单一来源；组件用 @include 复用，避免各写一遍） ----
    uni.scss 会被注入每个组件的 <style>，所以这些 mixin 全局可用，无需 import。 */
 @mixin ld-display {

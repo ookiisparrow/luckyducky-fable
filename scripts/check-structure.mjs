@@ -697,6 +697,49 @@ export const repoChecks = [
     },
   },
   {
+    // 微动效保持 CSS 克制版·不引重动画库（优化批0618·T-F5·决策「不引重动画库」）。根因#8「mp 真机才暴露」：
+    // 重 JS 动画库在 mp 低端机掉帧/卡顿（H5 快网假绿），克制版微交互应纯 CSS（transform/opacity 走合成层）。
+    // 本守卫只钉「不引重动画库」这条可机器化的子约束（denylist 依赖 + import）；视觉手感（跟手/不掉帧/低端机不卡）
+    // 不可机器证——按派单 T-F5 决策靠 /frontend-check 真机验（#8 已 CLAUDE 靠人锚，覆盖率不缺）。
+    id: 'anim-no-heavy-lib',
+    roots: ['#8'],
+    desc: '微动效克制版不引重动画库（优化批0618·T-F5）：packages/miniapp 不依赖也不 import 重 JS 动画库（gsap/anime.js/lottie/animate.css/framer-motion/velocity/popmotion/mo.js）——微交互保持纯 CSS transform/opacity（GPU 友好·防 mp 掉帧·根因#8）；视觉手感靠 /frontend-check 真机验',
+    run() {
+      const bad = []
+      const HEAVY = [
+        'gsap',
+        'animejs',
+        'anime.js',
+        'lottie-web',
+        'lottie-miniprogram',
+        'animate.css',
+        'framer-motion',
+        'velocity-animate',
+        'popmotion',
+        'mo.js',
+        'mojs',
+      ]
+      // ① package.json 依赖
+      const pkgPath = join(ROOT, 'packages/miniapp/package.json')
+      if (existsSync(pkgPath)) {
+        const pkg = JSON.parse(readFileSync(pkgPath, 'utf8'))
+        const allDeps = { ...(pkg.dependencies || {}), ...(pkg.devDependencies || {}) }
+        for (const name of Object.keys(allDeps)) {
+          if (HEAVY.some((h) => name === h)) bad.push(`packages/miniapp 依赖重动画库 ${name}——微动效应纯 CSS 克制版（T-F5/根因#8）`)
+        }
+      }
+      // ② src import（防绕过 package.json 直接 import）
+      const escaped = HEAVY.map((h) => h.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))
+      const importRe = new RegExp(`from\\s+['"](?:${escaped.join('|')})['"]`)
+      for (const f of walk(join(ROOT, 'packages/miniapp/src'))) {
+        if (!/\.(js|ts|vue)$/.test(f)) continue
+        if (importRe.test(readFileSync(f, 'utf8')))
+          bad.push(`${relative(ROOT, f)} import 了重动画库——微动效应纯 CSS 克制版（T-F5/根因#8）`)
+      }
+      return bad
+    },
+  },
+  {
     // 店名单一来源（决策 R23 / 占位⑲，2026-06-15 定名「Lucky Ducky 小棉鸭」）。病根#5「样板复制即漂移」：
     // 店名曾在 order/checkout/welcome/BrandIntro/GroupPanel/productDetail 六处硬编码（order↔checkout 还逐字重复），
     // 改名必漏改。根治＝收口 constants/brand.js 的 BRAND_NAME，「保持一致」从人工义务变机器保证。

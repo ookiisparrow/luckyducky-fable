@@ -164,7 +164,7 @@ function replayIntro() {
             <view
               v-for="(l, li) in c.lessons"
               :key="l.id"
-              class="vc-lesson"
+              class="vc-lesson ld-tap"
               :class="lessonState(l)"
               @tap="openLesson(l)"
             >
@@ -411,9 +411,6 @@ function replayIntro() {
   align-items: center;
   gap: 12px;
   padding: 12px 0 12px 38px;
-}
-.vc-lesson:active {
-  opacity: 0.6;
 }
 .vc-lesson-ico {
   width: 24px;

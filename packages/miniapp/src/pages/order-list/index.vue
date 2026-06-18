@@ -102,7 +102,12 @@ const open = (o) => uni.navigateTo({ url: `/pages/order/index?id=${o.id}` })
         >
           <view class="co-body">
             <!-- 订单卡列表 -->
-            <view v-for="o in listFor(t)" :key="o.id" class="co-card coorl-card" @tap="open(o)">
+            <view
+              v-for="o in listFor(t)"
+              :key="o.id"
+              class="co-card coorl-card ld-press ld-rise"
+              @tap="open(o)"
+            >
               <view class="coorl-head">
                 <text class="coorl-time">{{ dateTime(o.createdAt) }}</text>
                 <text class="coorl-status">{{ statusLabel(o) }}</text>
@@ -200,10 +205,7 @@ const open = (o) => uni.navigateTo({ url: `/pages/order/index?id=${o.id}` })
   border-bottom-color: $purple;
 }
 
-/* 订单卡 */
-.coorl-card:active {
-  opacity: 0.92;
-}
+/* 订单卡（点击态/进场走全局 .ld-press/.ld-rise·T-F5） */
 .coorl-head {
   display: flex;
   align-items: center;

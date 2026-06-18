@@ -181,12 +181,12 @@ function goLogin() {
         <!-- 客服 / 地址 -->
         <view class="my-card my-list">
           <!-- 联系客服：调 openCustomerService 进独立微信客服会话（R18/⑨ 升级·决策§19；helper 内吃 mp/非 mp） -->
-          <view class="my-row" @tap="openCustomerService">
+          <view class="my-row ld-tap" @tap="openCustomerService">
             <view class="my-row-ico"><Icon name="headphones-meta" :size="22" /></view>
             <text class="my-row-label">联系客服</text>
             <view class="my-row-chev"><Icon name="chevron-right" :size="18" /></view>
           </view>
-          <view class="my-row divided" @tap="goAddress">
+          <view class="my-row divided ld-tap" @tap="goAddress">
             <view class="my-row-ico"><Icon name="map-pin-meta" :size="22" /></view>
             <text class="my-row-label">地址管理</text>
             <view class="my-row-chev"><Icon name="chevron-right" :size="18" /></view>
