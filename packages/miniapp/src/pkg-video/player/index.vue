@@ -21,10 +21,8 @@ import { track } from '@/utils/track.js'
 // 顶部控件避状态栏/胶囊：只下移浮层，视频保持铺满到顶（避免顶部露黑块）
 const barVars = getSystemBarVars()
 
-// 占位视频：segment.videoFileId 剪好前所有段共用一条，按时长等分模拟分段；
-// 素材按段剪好后改为「每段独立文件 + 云函数换临时 URL」（规格 v2 §三/§四）
-const SRC = 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4'
-
+// 视频源单一来源：只走云端 getPlaybackUrl 换短时效临时 URL（见 playUrl/videoSrc）。
+// 无真实视频（素材未剪好/未上传）→ 本地占位封面，绝不播外链（T-F7·合规红线·守卫 no-external-video-src）。
 const instance = getCurrentInstance()
 let ctx = null
 
@@ -76,7 +74,10 @@ const fileSeg = ref(0) // 文件模式下的当前段
 const fileMode = computed(() => segs.value.length > 0 && segs.value.every((s) => s.hasVideo))
 // 服务端保护（审计 P1）：videoFileId 不再随目录下发，按当前段经云函数 getPlaybackUrl 换短时效临时 URL
 const playUrl = ref('')
-const videoSrc = computed(() => (fileMode.value ? playUrl.value : SRC))
+// 视频源：有真实分段视频走云端临时 URL；否则空（占位态显封面·不播外链·T-F7）
+const videoSrc = computed(() => (fileMode.value ? playUrl.value : ''))
+// 占位态：无真实视频时显本地封面、隐藏播放控件（不播任何外链·T-F7 合规）
+const placeholderMode = computed(() => !fileMode.value)
 const curFileSegId = computed(() => (fileMode.value ? segs.value[fileSeg.value]?.id || '' : ''))
 async function refreshPlayUrl() {
   playUrl.value = curFileSegId.value ? await store.playbackUrl(curFileSegId.value) : ''
@@ -277,9 +278,16 @@ const back = () => goBack('/pages/catalog/index')
       @ended="onEnded"
     ></video>
 
-    <!-- 点画面：播放/暂停（在控件下方一层） -->
-    <view class="vp-hit" @tap="toggle"></view>
+    <!-- 点画面：播放/暂停（在控件下方一层）；占位态无视频不响应点播 -->
+    <view v-if="!placeholderMode" class="vp-hit" @tap="toggle"></view>
     <view class="vp-shade"></view>
+
+    <!-- 占位封面（无真实视频·素材未剪好）：本地占位、绝不播外链（T-F7·合规）。
+         顶栏 z-index 高于此层，返回键仍可点。 -->
+    <view v-if="placeholderMode" class="vp-placeholder">
+      <text class="vp-ph-title">课程视频整理中</text>
+      <text class="vp-ph-sub">视频上线后即可在此观看，敬请期待</text>
+    </view>
 
     <!-- 顶部：收起 + 标题(居中) + 右等宽空位(保持标题居中) + 分段进度 -->
     <view class="vp-top">
@@ -292,7 +300,7 @@ const back = () => goBack('/pages/catalog/index')
         <!-- 「更多」按钮已按决策撤除（上线前占位清单 ⑫）；留等宽空位维持标题居中 -->
         <view class="vp-icbtn"></view>
       </view>
-      <view class="vp-seg">
+      <view v-if="!placeholderMode" class="vp-seg">
         <view class="vp-seg-bars">
           <view v-for="(s, i) in segs" :key="s.id" class="vp-seg-bar">
             <view class="vp-seg-fill" :style="{ width: segFill(i) + '%' }"></view>
@@ -304,13 +312,13 @@ const back = () => goBack('/pages/catalog/index')
       </view>
     </view>
 
-    <!-- 中央大播放键（暂停且非段末时） -->
-    <view v-if="!playing && endedSeg === null" class="vp-bigplay" @tap="toggle">
+    <!-- 中央大播放键（暂停且非段末时；占位态无视频不显） -->
+    <view v-if="!playing && endedSeg === null && !placeholderMode" class="vp-bigplay" @tap="toggle">
       <Icon name="play-fill-w" :size="34" />
     </view>
 
-    <!-- 底部控制 -->
-    <view class="vp-ctl">
+    <!-- 底部控制（占位态无视频不显） -->
+    <view v-if="!placeholderMode" class="vp-ctl">
       <view v-if="endedSeg !== null" class="vp-replay-bar" @tap="replaySeg">
         <Icon name="rotate-ccw-dark" :size="21" /><text>重复播放</text>
       </view>
@@ -363,6 +371,30 @@ const back = () => goBack('/pages/catalog/index')
   position: absolute;
   inset: 0;
   z-index: 1;
+}
+/* 占位封面（无真实视频·T-F7）：盖住黑底视频区，居中文案；z-index 低于顶栏(5) 故返回键可点 */
+.vp-placeholder {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 0 40px;
+  text-align: center;
+  background: linear-gradient(160deg, rgba(123, 92, 175, 0.28) 0%, rgba(0, 0, 0, 0.72) 100%);
+}
+.vp-ph-title {
+  font-size: 17px;
+  font-weight: 600;
+  color: #fff;
+}
+.vp-ph-sub {
+  margin-top: 10px;
+  font-size: 13px;
+  line-height: 1.6;
+  color: rgba(255, 255, 255, 0.6);
 }
 /* 顶+底渐变,保证控件清晰 */
 .vp-shade {

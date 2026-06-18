@@ -823,6 +823,32 @@ export const repoChecks = [
     },
   },
   {
+    // 视频源不走外链（优化批0618·T-F7·合规红线）。根因#8「urlCheck 翻 true 后真机才暴露」：
+    // player 曾硬编码 Google 外链占位视频（.mp4），合规非法域名 + 小程序 urlCheck 开启后真机根本播不了
+    // （dev/未校验时能播=假绿）。视频源只许经 getPlaybackUrl/store.playbackUrl 换云端短时效 URL；
+    // 前端禁裸 http(s) 视频 URL 字面量。无真实视频 → 本地占位封面（不播外链）。
+    id: 'no-external-video-src',
+    roots: ['#8'],
+    desc: '视频源不走外链（T-F7·合规）：packages/miniapp/src 禁裸 http(s) 视频 URL 字面量（.mp4/.m3u8/.mov/.webm 等）——视频源只经 getPlaybackUrl/store.playbackUrl 换云端临时 URL，无真视频显本地占位；防外链合规红线 + urlCheck 翻 true 后真机播不了（根因#8）',
+    run() {
+      const bad = []
+      const re = /https?:\/\/[^'"`\s)]+\.(?:mp4|m3u8|mov|webm|avi|mkv)\b/i
+      for (const f of walk(join(ROOT, 'packages/miniapp/src'))) {
+        if (!/\.(js|ts|vue)$/.test(f)) continue
+        readFileSync(f, 'utf8')
+          .split('\n')
+          .forEach((line, i) => {
+            if (isCommentLine(line) || line.includes('structure-ok')) return
+            if (re.test(line))
+              bad.push(
+                `${relative(ROOT, f)}:${i + 1} 裸 http(s) 视频 URL 字面量——视频源须经 getPlaybackUrl/云、禁外链（T-F7/合规·根因#8）`,
+              )
+          })
+      }
+      return bad
+    },
+  },
+  {
     // 店名单一来源（决策 R23 / 占位⑲，2026-06-15 定名「Lucky Ducky 小棉鸭」）。病根#5「样板复制即漂移」：
     // 店名曾在 order/checkout/welcome/BrandIntro/GroupPanel/productDetail 六处硬编码（order↔checkout 还逐字重复），
     // 改名必漏改。根治＝收口 constants/brand.js 的 BRAND_NAME，「保持一致」从人工义务变机器保证。
