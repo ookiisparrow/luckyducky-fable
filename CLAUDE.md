@@ -34,7 +34,7 @@ uni-app + Vue 3（`<script setup>`）· JavaScript（页面层不用 TS，cloud/
 ```bash
 npm install            # prepare 会自动注册 git hooks
 npm run dev:h5         # H5 预览优先用这个
-npm run dev:mp-weixin  # 构建后导入 dist/dev/mp-weixin
+npm run dev:mp-weixin  # 构建后导入 packages/miniapp/dist/dev/mp-weixin（workspaces 后产物在 packages/miniapp/dist·非仓根 dist；导错空目录会被微信工具填「云开发 quickstart」示例）
 npm run check          # 提交前全套：conventions+structure+typecheck+lint+test（pre-commit 也会自动跑）
 npm run build:h5 / build:mp-weixin / build:cloud
 ```
