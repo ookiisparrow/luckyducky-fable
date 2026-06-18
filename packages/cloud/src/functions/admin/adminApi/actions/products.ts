@@ -99,6 +99,34 @@ export async function publishProduct({ db, drafts, data }: Ctx) {
   return reply(200, { ok: true })
 }
 
+// 停售（软下架·债#12）：products.listed=false → getProducts 不再下发（顾客端列表消失）。
+// 区别 deleteDraft（硬删商品记录）：停售可恢复、保留记录；区别 saveShowcase 的 featured（只管首页橱窗位）。
+// 详情页直达（按 id）与历史订单快照不受影响（订单存快照、不回读 products）。
+export async function unpublishProduct({ db, data }: Ctx) {
+  const id = String(data.id || '')
+  if (!id) return reply(400, { ok: false, error: 'NO_ID' })
+  const upd = await db
+    .collection('products')
+    .doc(id)
+    .update({ data: { listed: false, unlistedAt: Date.now() } })
+    .catch(() => null)
+  if (!upd || !upd.stats || upd.stats.updated !== 1) return reply(400, { ok: false, error: 'NO_PRODUCT' })
+  return reply(200, { ok: true })
+}
+
+// 恢复销售（债#12）：listed=true → getProducts 重新下发。
+export async function republishProduct({ db, data }: Ctx) {
+  const id = String(data.id || '')
+  if (!id) return reply(400, { ok: false, error: 'NO_ID' })
+  const upd = await db
+    .collection('products')
+    .doc(id)
+    .update({ data: { listed: true, unlistedAt: null } })
+    .catch(() => null)
+  if (!upd || !upd.stats || upd.stats.updated !== 1) return reply(400, { ok: false, error: 'NO_PRODUCT' })
+  return reply(200, { ok: true })
+}
+
 // —— 小程序橱窗（规格 §八）：一比一首页预览的排序与上下架 ——
 export async function listShowcase({ db, cloud }: Ctx) {
   const res = await db.collection('products').orderBy('sort', 'asc').limit(100).get()

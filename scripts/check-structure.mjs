@@ -195,6 +195,24 @@ export const repoChecks = [
     },
   },
   {
+    // 商品下架生效（债#12）：原 publishProduct 写 products 后永久可售（getProducts 全量下发·featured 只管橱窗·
+    // deleteDraft 是硬删非停售）——无「临时停售」路径。本守卫锁 getProducts 必按 listed 过滤（where listed!=false·
+    // 兼容旧无字段=可售），防回退成全量下发把已停售商品又露给顾客；停售/恢复经 adminApi unpublishProduct/republishProduct。
+    id: 'catalog-getproducts-listed-filter',
+    roots: ['债#12'],
+    desc: '商品下架生效（债#12）：catalog/getProducts.ts 须按 listed 过滤（listed!=false·兼容旧无字段=可售）——防已停售商品仍全量下发给顾客；停售/恢复经 adminApi unpublishProduct/republishProduct',
+    run() {
+      const f = 'packages/cloud/src/functions/catalog/getProducts.ts'
+      if (!existsSync(join(ROOT, f))) return [`${f} 缺失（商品列表·债#12）`]
+      const src = readFileSync(join(ROOT, f), 'utf8')
+      const bad = []
+      // 须是真正的 where 过滤含 listed（不认注释里的 listed 字样·防只留注释假绿）
+      if (!/\.where\(\{[^}]*listed/.test(src))
+        bad.push(`${f} 未按 listed 过滤（.where({...listed...}) 未见）——已停售商品仍全量下发给顾客（债#12·下架不生效）`)
+      return bad
+    },
+  },
+  {
     id: 'interface-catalog-sync',
     roots: ['正册'],
     desc: '系统事实同步（docs/系统事实.md 是接口权威登记册，正册自评 P1）：每个云函数 + 每个 adminApi action 都须登记，杜绝「加接口忘登记」',
@@ -1559,6 +1577,9 @@ export const typeAndTestGuards = [
   // 发货上传 fail-soft（根因#12 + 合规债#26）：微信发货上传失败绝不反噬本地发货——shipOrder 仍翻 shipped、
   // 留痕 wxShipError、打 [LD_ALERT] sev=money 告警人工补录；上传成功留痕 wxShipUploaded。reverseTest 锁此行为。
   { id: 'shipping-upload-fail-soft', mechanism: 'test', roots: ['#12'], reverseTest: 'tests/cloud/shipOrder.test.js' },
+  // 商品停售生效（债#12）：unpublishProduct 置 listed:false 后 getProducts 不再下发该商品（顾客端列表消失），
+  // republishProduct 恢复；旧无 listed 字段的商品视为可售（兼容）。reverseTest 锁此端到端行为。
+  { id: 'product-unpublish-effective', mechanism: 'test', roots: ['债#12'], reverseTest: 'tests/cloud/productListed.test.js' },
 ]
 
 const SRC_DIRS = ['packages', 'cloudfunctions', 'scripts']
