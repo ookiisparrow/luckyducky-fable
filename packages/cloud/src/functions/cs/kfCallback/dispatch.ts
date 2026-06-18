@@ -212,6 +212,12 @@ export async function handleMessage(ctx: DispatchCtx, incoming: Incoming): Promi
 
   switch (r.type) {
     case 'transfer':
+      // 先给顾客明确反馈（转接确认），再尽力调转接 API。会话分配接口属「客户联系」权限域、内部接入密钥
+      // 无权（48002）→ 自动分配暂不可用；但顾客有了文字兜底、接待人员可在接待台手动接入。权限打通后
+      // transfer() 自动生效、无需再改（根因#8：真机暴露 48002·见 微信客服配置手册.md 转人工节）。
+      await send(
+        buildText(to, openKfId, '已为你转接人工客服～工作人员会尽快在这里回复你。你也可以先把问题描述清楚，方便更快处理 🙇')
+      )
       await transfer(to)
       return
     case 'text':

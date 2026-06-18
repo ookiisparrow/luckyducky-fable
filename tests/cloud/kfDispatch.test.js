@@ -110,11 +110,13 @@ describe('handleMessage 编排', () => {
     expect(sent[0].msgmenu.head_content).toContain('没到')
   })
 
-  it('点 human → 转人工（不发消息）', async () => {
+  it('点 human → 先发转接确认文字 + 尽力转人工（48002 兜底·见配置手册）', async () => {
     const { ctx, sent, transferred } = mkCtx()
     await handleMessage(ctx, { externalUserId: 'e2', menuId: 'human', text: '' })
-    expect(transferred).toEqual(['e2'])
-    expect(sent).toHaveLength(0)
+    expect(transferred).toEqual(['e2']) // 仍尝试转接（权限通了即自动分配）
+    expect(sent).toHaveLength(1) // 顾客必有文字反馈，不再静默无响应
+    expect(sent[0].msgtype).toBe('text')
+    expect(sent[0].text.content).toContain('人工')
   })
 
   it('点 order:query 但未绑定 → 引导登录文字', async () => {
