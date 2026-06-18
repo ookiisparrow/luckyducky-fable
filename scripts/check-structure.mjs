@@ -524,7 +524,7 @@ export const repoChecks = [
   {
     id: 'agreement-text-real',
     roots: ['R27'],
-    desc: '协议正文非占位（R27 上线必做㉑）：pages/agreement/index.vue 不得含「占位」语 + 须含隐私承诺「不采集手机号」+ 条款条目齐（≥8 条「第N条」），防占位文本上线',
+    desc: '协议正文非占位（R27 上线必做㉑）：pages/agreement/index.vue 不得含「占位」语 + 须含精确隐私承诺「不通过微信授权获取」手机号（债#21：原「不采集手机号」与 address-edit 手填收货电话自相矛盾·须精确到微信授权口径）+ 条款条目齐（≥8 条「第N条」），防占位文本上线',
     run() {
       const f = 'packages/miniapp/src/pages/agreement/index.vue'
       const abs = join(ROOT, f)
@@ -532,7 +532,8 @@ export const repoChecks = [
       const src = readFileSync(abs, 'utf8')
       const bad = []
       if (src.includes('占位')) bad.push(`${f} 仍含「占位」字样——协议正文未补全（R27㉑ 上线必做）`)
-      if (!src.includes('不采集手机号')) bad.push(`${f} 缺隐私承诺「不采集手机号」——隐私政策不完整（R27㉑）`)
+      if (!src.includes('不通过微信授权获取'))
+        bad.push(`${f} 缺精确隐私承诺「不通过微信授权获取」手机号——隐私政策不完整 / 措辞不精确（R27㉑·债#21：blanket「不采集手机号」与手填收货电话矛盾）`)
       const articles = (src.match(/第[一二三四五六七八九十]+条/g) || []).length
       if (articles < 8) bad.push(`${f} 条款条目过少（${articles}<8 条「第N条」）——疑似仍是占位（R27㉑）`)
       return bad
