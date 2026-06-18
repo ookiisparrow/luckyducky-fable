@@ -129,6 +129,8 @@ function goLogin() {
   <view class="my-profile">
     <scroll-view
       scroll-y
+      enhanced
+      :bounces="true"
       :show-scrollbar="false"
       refresher-enabled
       :refresher-triggered="refreshing"

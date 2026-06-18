@@ -60,7 +60,7 @@ function onCheckout() {
 
 <template>
   <view class="ld-cart">
-    <scroll-view scroll-y :show-scrollbar="false" class="ld-cart-scroll">
+    <scroll-view scroll-y enhanced :bounces="true" :show-scrollbar="false" class="ld-cart-scroll">
       <view class="ld-cart-top" :style="topStyle">
         <image class="ld-cart-logo" src="/static/logo-wordmark.svg" mode="heightFix" />
       </view>

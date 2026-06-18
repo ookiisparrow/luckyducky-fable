@@ -93,6 +93,8 @@ const open = (o) => uni.navigateTo({ url: `/pages/order/index?id=${o.id}` })
       <swiper-item v-for="t in TABS" :key="t.key">
         <scroll-view
           scroll-y
+          enhanced
+          :bounces="true"
           class="coorl-scroll"
           :show-scrollbar="false"
           refresher-enabled

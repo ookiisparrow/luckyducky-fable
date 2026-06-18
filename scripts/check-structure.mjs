@@ -740,6 +740,44 @@ export const repoChecks = [
     },
   },
   {
+    // 主滚动容器保留弹性拖拽——恢复原 UI 设计的「拖动感」（用户报·优化批0618 续）。根因#8「真机才感知」：
+    // 原设计＝HTML 原型在手机上跑、有 iOS 原生弹性滚动（橡皮筋回弹 + 整体跟手弹性惯性·含板块间微弱弹性）；
+    // 端口到 uni-app <scroll-view> 后丢失——mp-weixin scroll-view 默认刚性、到边硬停无回弹（H5/快网看不出）。
+    // mp 唯一恢复途径＝enhanced（增强模式）+ bounces（iOS 橡皮筋）。列举整页 scroll-view 承载滚动的页，
+    // 其主 scroll-view 须带二者。注：enhanced 模式与 scroll-top/@scroll/refresher 共存须真机验（#8）。
+    id: 'main-scroll-elastic',
+    roots: ['#8'],
+    desc: '主滚动容器保留弹性拖拽（用户报·恢复原设计拖动感）：整页 scroll-view 承载滚动的页(index/me/cart/order-list)主 scroll-view 须 enhanced + bounces（mp 默认刚性无回弹·iOS 橡皮筋只此途径·根因#8 真机才感知），防拖动感再丢',
+    run() {
+      const bad = []
+      const MINI = 'packages/miniapp/src'
+      const ELASTIC_PAGES = [
+        'pages/index/index',
+        'pages/me/index',
+        'pages/cart/index',
+        'pages/order-list/index',
+      ]
+      for (const path of ELASTIC_PAGES) {
+        const f = `${MINI}/${path}.vue`
+        const abs = join(ROOT, f)
+        if (!existsSync(abs)) {
+          bad.push(`${f} 缺失（弹性滚动页）`)
+          continue
+        }
+        const src = readFileSync(abs, 'utf8')
+        if (!/<scroll-view/.test(src)) {
+          bad.push(`${f} 无 scroll-view（弹性滚动核查）`)
+          continue
+        }
+        if (!/\benhanced\b/.test(src))
+          bad.push(`${f} 主 scroll-view 未开 enhanced——弹性增强模式关（恢复拖动感·根因#8）`)
+        if (!/\bbounces\b/.test(src))
+          bad.push(`${f} 主 scroll-view 未开 bounces——橡皮筋回弹关（恢复拖动感·根因#8）`)
+      }
+      return bad
+    },
+  },
+  {
     // 店名单一来源（决策 R23 / 占位⑲，2026-06-15 定名「Lucky Ducky 小棉鸭」）。病根#5「样板复制即漂移」：
     // 店名曾在 order/checkout/welcome/BrandIntro/GroupPanel/productDetail 六处硬编码（order↔checkout 还逐字重复），
     // 改名必漏改。根治＝收口 constants/brand.js 的 BRAND_NAME，「保持一致」从人工义务变机器保证。

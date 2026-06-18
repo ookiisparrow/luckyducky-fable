@@ -162,6 +162,8 @@ function onClosingBuy() {
   <view class="ld-home">
     <scroll-view
       scroll-y
+      enhanced
+      :bounces="true"
       :scroll-top="scrollTopProp"
       :scroll-with-animation="true"
       :show-scrollbar="false"
