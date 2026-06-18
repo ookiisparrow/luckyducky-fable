@@ -161,6 +161,40 @@ export const repoChecks = [
     },
   },
   {
+    // 微信发货上传接缝单点（根因#12 平台规则外部风险 + 合规债#26）：实物 + 微信支付小程序支付后须上传
+    // 发货信息（upload_shipping_info），否则订单资金冻结/无法结算 + 后台反复弹「待接入发货管理」。
+    // ① 发货上传调用（uploadShippingInfo）只许在 kit/shipping.ts 接缝单点（别处直调即红·平台规则变化改一处）；
+    // ② adminApi shipOrder 成功路径须经 uploadShippingToWx（防回退成只写本地·真顾客订单钱被锁）。
+    // fail-soft 行为（上传失败不反噬本地发货 + 留痕 + [LD_ALERT] 告警）由 shipOrder.test 行为锁。
+    id: 'shipping-info-uploaded-to-wx',
+    roots: ['#12'],
+    desc: '微信发货上传接缝单点（根因#12 + 合规债#26）：upload_shipping_info 调用收口 kit/shipping.ts（别处直调即红）+ adminApi shipOrder 成功路径须调 uploadShippingToWx（不上传→实物+微信支付资金冻结）',
+    run() {
+      const seam = 'packages/cloud/src/kit/shipping.ts'
+      if (!existsSync(join(ROOT, seam))) return [`${seam} 缺失——微信发货上传接缝单点（合规债#26·根因#12）`]
+      const bad = []
+      if (!/uploadShippingInfo/.test(readFileSync(join(ROOT, seam), 'utf8')))
+        bad.push(`${seam} 未见 uploadShippingInfo 上传调用——接缝空壳（债#26）`)
+      const srcRoot = join(ROOT, 'packages/cloud/src')
+      const walk = (d) => {
+        for (const e of readdirSync(d)) {
+          const p = join(d, e)
+          if (statSync(p).isDirectory()) walk(p)
+          else if (e.endsWith('.ts')) {
+            const rel = relative(ROOT, p).replace(/\\/g, '/')
+            if (rel !== seam && /uploadShippingInfo/.test(readFileSync(p, 'utf8')))
+              bad.push(`${rel} 直调 uploadShippingInfo——发货上传须收口 kit/shipping.ts 接缝单点（根因#12·债#26）`)
+          }
+        }
+      }
+      if (existsSync(srcRoot)) walk(srcRoot)
+      const ship = join(ROOT, 'packages/cloud/src/functions/admin/adminApi/actions/orders.ts')
+      if (existsSync(ship) && !/uploadShippingToWx\s*\(/.test(readFileSync(ship, 'utf8')))
+        bad.push('adminApi shipOrder 未调 uploadShippingToWx——发货后未向微信上传发货信息（实物+微信支付资金会被冻结·合规债#26·根因#12）')
+      return bad
+    },
+  },
+  {
     id: 'interface-catalog-sync',
     roots: ['正册'],
     desc: '系统事实同步（docs/系统事实.md 是接口权威登记册，正册自评 P1）：每个云函数 + 每个 adminApi action 都须登记，杜绝「加接口忘登记」',
@@ -1521,6 +1555,9 @@ export const typeAndTestGuards = [
   { id: 'pay-config-fail-closed', mechanism: 'test', roots: ['#3'], reverseTest: 'tests/cloud/createOrder.test.js' },
   { id: 'fen-money-chain', mechanism: 'test', roots: ['#4'], reverseTest: 'tests/cloud/createOrder.test.js' },
   { id: 'paging-contract', mechanism: 'test', roots: ['#7'], reverseTest: 'tests/cloud/kit/paging.test.js' },
+  // 发货上传 fail-soft（根因#12 + 合规债#26）：微信发货上传失败绝不反噬本地发货——shipOrder 仍翻 shipped、
+  // 留痕 wxShipError、打 [LD_ALERT] sev=money 告警人工补录；上传成功留痕 wxShipUploaded。reverseTest 锁此行为。
+  { id: 'shipping-upload-fail-soft', mechanism: 'test', roots: ['#12'], reverseTest: 'tests/cloud/shipOrder.test.js' },
 ]
 
 const SRC_DIRS = ['packages', 'cloudfunctions', 'scripts']
