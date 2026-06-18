@@ -1338,21 +1338,27 @@ export const repoChecks = [
     // （mp <image> 原生支持 cloud:// fileID·无配回退 /static/hero-full.jpg）。
     id: 'activation-bg-wired',
     roots: ['橱窗'],
-    desc: '激活页背景图后台可管（橱窗）：admin Showcase 传图存 home.activationBg + 云端 saveHomeContent 持久化 activationBg + miniapp welcome 读 activationBg 渲染（无配回退 static）——三处缺一链断',
+    desc: '激活页背景图后台可管：① 全局——admin Showcase 传图存 home.activationBg + 云端 saveHomeContent 持久化 + miniapp welcome 读（无配回退 static）；② 按课程（同课程同图·欢迎页与产品对应）——content.home.activationBgByCourse 映射 courseId→fileID：云端 saveHomeContent 持久化 + admin 上新向导 StepImages 上传 + miniapp content store 暴露 + welcome 按 courseId 取——任一缺即链断',
     run() {
-      const checks = [
-        ['packages/cloud/src/functions/admin/adminApi/actions/content.ts', '云端 saveHomeContent 未持久化 activationBg——后台传的背景图被整存抹掉、存不下来'],
-        ['packages/admin/src/pages/Showcase.vue', 'admin Showcase 未接 activationBg 上传——后台管不了激活页背景图'],
-        ['packages/miniapp/src/pages/welcome/index.vue', 'welcome 未读 activationBg——后台配的背景图不生效'],
-      ]
       const bad = []
-      for (const [f, msg] of checks) {
+      // [文件, 须含 token, 链断说明]
+      const checks = [
+        ['packages/cloud/src/functions/admin/adminApi/actions/content.ts', 'activationBg', '云端 saveHomeContent 未持久化 activationBg——后台传的背景图被整存抹掉'],
+        ['packages/admin/src/pages/Showcase.vue', 'activationBg', 'admin Showcase 未接 activationBg 上传——后台管不了激活页背景图'],
+        ['packages/miniapp/src/pages/welcome/index.vue', 'activationBg', 'welcome 未读 activationBg——后台配的背景图不生效'],
+        // ② 按课程映射（欢迎页与产品对应·用户请求 2026-06-18）
+        ['packages/cloud/src/functions/admin/adminApi/actions/content.ts', 'activationBgByCourse', '云端 saveHomeContent 未持久化 activationBgByCourse——按课程欢迎图存不下（白名单漏＝整存抹掉）'],
+        ['packages/admin/src/pages/steps/StepImages.vue', 'activationBgByCourse', 'admin 上新向导 StepImages 未接 activationBgByCourse 上传——后台管不了按产品/课程欢迎图'],
+        ['packages/miniapp/src/store/content.js', 'activationBgByCourse', 'miniapp content store 未暴露 activationBgByCourse——欢迎页取不到按课程欢迎图'],
+        ['packages/miniapp/src/pages/welcome/index.vue', 'activationBgFor', 'welcome 未按 courseId 取激活欢迎图（activationBgFor）——按产品欢迎图不生效'],
+      ]
+      for (const [f, token, msg] of checks) {
         const abs = join(ROOT, f)
         if (!existsSync(abs)) {
           bad.push(`${f} 缺失`)
           continue
         }
-        if (!/activationBg/.test(readFileSync(abs, 'utf8'))) bad.push(`${f}：${msg}（activationBg 未见·链断）`)
+        if (!new RegExp(token).test(readFileSync(abs, 'utf8'))) bad.push(`${f}：${msg}（${token} 未见·链断）`)
       }
       return bad
     },

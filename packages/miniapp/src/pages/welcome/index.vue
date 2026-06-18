@@ -105,9 +105,11 @@ async function confirmStart() {
 
 <template>
   <view class="wel" :style="barVars">
+    <!-- 激活欢迎图：扫码激活后按 courseId 取该课程图（同课程同图·欢迎页与产品对应）；
+         无码（通用引导）或该课程未配 → 回退全局 activationBg → 回退默认 /static/hero-full.jpg。 -->
     <image
       class="wel-photo"
-      :src="contentStore.activationBg || '/static/hero-full.jpg'"
+      :src="contentStore.activationBgFor(courseId) || '/static/hero-full.jpg'"
       mode="aspectFill"
     />
     <view class="wel-scrim"></view>

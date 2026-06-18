@@ -3,14 +3,66 @@
  * 第 1 步 · 产品图片（图片款式驱动，新建商品的起点）。
  * 封面图 1 张（列表卡与详情头图）+ 其余图若干（拖拽排序）；同步用于小程序商品页。
  */
-import { ref } from 'vue'
+import { computed, ref, onMounted } from 'vue'
 import { useProductsStore } from '@/store/products.js'
-import { uploadImage } from '@/api/cloud.js'
+import { uploadImage, getHomeContent, saveHomeContent } from '@/api/cloud.js'
 
 const props = defineProps({ product: { type: Object, required: true } })
 const store = useProductsStore()
 const busy = ref(false)
 let dragFrom = -1
+
+// —— 激活欢迎页背景图（按课程·同课程同图·欢迎页与产品对应）——
+// 扫码激活进 welcome 时，小程序按 courseId 取 content.home.activationBgByCourse[courseId]（回退全局→默认）。
+// courseId 与 StepVideos/StepCards 同源派生（product.courseId 或 course-<id>），与小程序 activate 返回一致。
+const courseId = computed(() => props.product.courseId || 'course-' + props.product.id)
+const welBusy = ref(false)
+const welSet = ref(false) // 该课程已配欢迎图（重载只显「已设置」·fileID 解 url 不值当）
+const welPreview = ref('') // 本次上传预览 url（重载不保留）
+const welErr = ref('')
+onMounted(async () => {
+  try {
+    const home = await getHomeContent()
+    welSet.value = !!home?.activationBgByCourse?.[courseId.value]
+  } catch {
+    /* 读不到不阻塞上传 */
+  }
+})
+async function uploadWelcomeBg(e) {
+  const file = (e.target.files || [])[0]
+  e.target.value = ''
+  if (!file || welBusy.value) return
+  welBusy.value = true
+  welErr.value = ''
+  try {
+    const { ref: fileID, url } = await uploadImage(file, props.product.id)
+    const home = (await getHomeContent()) || {}
+    const map = { ...(home.activationBgByCourse || {}), [courseId.value]: fileID }
+    await saveHomeContent({ ...home, activationBgByCourse: map })
+    welPreview.value = url
+    welSet.value = true
+  } catch (err) {
+    welErr.value = '上传失败：' + (err?.message || err)
+  } finally {
+    welBusy.value = false
+  }
+}
+async function clearWelcomeBg() {
+  welBusy.value = true
+  welErr.value = ''
+  try {
+    const home = (await getHomeContent()) || {}
+    const map = { ...(home.activationBgByCourse || {}) }
+    delete map[courseId.value]
+    await saveHomeContent({ ...home, activationBgByCourse: map })
+    welPreview.value = ''
+    welSet.value = false
+  } catch (err) {
+    welErr.value = '清除失败：' + (err?.message || err)
+  } finally {
+    welBusy.value = false
+  }
+}
 
 async function pick(e, isCover) {
   const files = [...(e.target.files || [])]
@@ -99,6 +151,34 @@ function onDrop(to) {
           </label>
         </div>
       </div>
+    </div>
+
+    <div class="group welbg">
+      <div class="g-title">激活欢迎页背景图<span class="opt">选填 · 扫码进欢迎页的底图</span></div>
+      <div class="welbg-row">
+        <div v-if="welPreview" class="tile cover">
+          <img :src="welPreview" alt="激活欢迎图" />
+          <span class="badge">欢迎图</span>
+        </div>
+        <div v-else-if="welSet" class="tile welset">已设置 ✓</div>
+        <label class="tile up">
+          <input
+            type="file"
+            accept="image/*"
+            :disabled="welBusy"
+            hidden
+            @change="uploadWelcomeBg"
+          />
+          <span class="up-ico">⬆</span>
+          <span class="up-t">{{ welBusy ? '上传中…' : welSet ? '更换欢迎图' : '上传欢迎图' }}</span>
+          <span class="up-s">PNG / JPG</span>
+        </label>
+        <button v-if="welSet" class="welclear" :disabled="welBusy" @click="clearWelcomeBg">
+          恢复默认
+        </button>
+      </div>
+      <div v-if="welErr" class="welerr">{{ welErr }}</div>
+      <p class="welnote">同课程的产品共用这张图（按课程绑定）；不设则用通用默认底图。</p>
     </div>
 
     <p class="hint">💡 封面图建议 1:1、1200×1200 以上；第 5 步设计二维码卡片时可直接取用这里的图。</p>
@@ -210,5 +290,45 @@ h2 {
   background: var(--bg-lilac);
   border: 1px solid var(--purple-line);
   font-size: 11.5px;
+}
+/* 激活欢迎页背景图块 */
+.welbg {
+  margin-top: 28px;
+  padding-top: 20px;
+  border-top: 1px solid var(--line);
+}
+.welbg-row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+.tile.welset {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--brand-active);
+}
+.welclear {
+  border: 1px solid var(--line);
+  background: var(--white);
+  border-radius: 8px;
+  padding: 8px 14px;
+  font-size: 12px;
+  cursor: pointer;
+}
+.welclear:hover {
+  color: var(--red);
+}
+.welerr {
+  margin-top: 8px;
+  font-size: 11.5px;
+  color: var(--red);
+}
+.welnote {
+  margin: 10px 0 0;
+  font-size: 11px;
+  color: var(--content-2);
 }
 </style>
