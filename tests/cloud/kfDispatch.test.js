@@ -139,4 +139,12 @@ describe('handleMessage 编排', () => {
     expect(sent[0].miniprogram.pagepath).toBe('pages/aftersale/index')
     expect(sent[0].miniprogram.appid).toBe('wxapp')
   })
+
+  it('卡片缺封面素材(thumbMediaId)→ 降级发文字（防 40058·小程序未发布/thumb 未配时）', async () => {
+    const { ctx, sent } = mkCtx()
+    ctx.cfg = { appid: 'wxapp', thumbMediaId: '' } // 有 appid 无封面
+    await handleMessage(ctx, { externalUserId: 'e6', menuId: 'aftersale:apply', text: '' })
+    expect(sent[0].msgtype).toBe('text')
+    expect(sent[0].text.content).toContain('申请售后')
+  })
 })

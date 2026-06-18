@@ -99,7 +99,8 @@ export function menuFor(cat: Category, word: string): MsgMenuContent {
 export type Route =
   | { type: 'menu'; content: MsgMenuContent }
   | { type: 'text'; text: string }
-  | { type: 'miniprogram'; page: string; title: string }
+  // fallbackText：小程序卡片需封面素材(thumb_media_id)+已发布小程序，未配齐时降级为这段文字（防 40058·见下）
+  | { type: 'miniprogram'; page: string; title: string; fallbackText: string }
   | { type: 'order_query' }
   | { type: 'transfer' }
 
@@ -113,8 +114,20 @@ const TEXT_ANSWERS: Record<string, string> = {
 export function route(menuId: string): Route {
   if (menuId === 'human') return { type: 'transfer' }
   if (menuId === 'order:query') return { type: 'order_query' }
-  if (menuId === 'aftersale:apply') return { type: 'miniprogram', page: 'pages/aftersale/index', title: '申请售后' }
-  if (menuId === 'course:open') return { type: 'miniprogram', page: 'pages/course/index', title: '我的课程' }
+  if (menuId === 'aftersale:apply')
+    return {
+      type: 'miniprogram',
+      page: 'pages/aftersale/index',
+      title: '申请售后',
+      fallbackText: '申请售后请在小程序「我的 → 订单 → 申请售后」操作。需要我协助可点「转人工」。',
+    }
+  if (menuId === 'course:open')
+    return {
+      type: 'miniprogram',
+      page: 'pages/course/index',
+      title: '我的课程',
+      fallbackText: '在小程序「我的 → 课程」即可观看已激活的课程。激活码相关点上方菜单，或点「转人工」。',
+    }
   if (menuId.startsWith('cat:')) {
     const cat = menuId.slice(4) as Category
     return { type: 'menu', content: menuFor(cat, '该分类') }
@@ -208,7 +221,9 @@ export async function handleMessage(ctx: DispatchCtx, incoming: Incoming): Promi
       await send(buildMsgMenu(to, openKfId, r.content))
       return
     case 'miniprogram':
-      await send(buildMiniprogram(to, openKfId, cfg, r.page, r.title))
+      // 卡片需 appid + 封面素材都齐才发；缺任一即降级文字（防 thumb 空致 send_msg 40058）
+      if (cfg.appid && cfg.thumbMediaId) await send(buildMiniprogram(to, openKfId, cfg, r.page, r.title))
+      else await send(buildText(to, openKfId, r.fallbackText))
       return
     case 'order_query': {
       const openid = await resolveOpenid(db, to)
