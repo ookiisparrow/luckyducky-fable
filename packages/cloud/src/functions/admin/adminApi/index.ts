@@ -22,6 +22,8 @@ const ACTIONS: Record<string, (ctx: Ctx) => Promise<any>> = {
   deleteDraft: products.deleteDraft,
   uploadImage: products.uploadImage,
   publishProduct: products.publishProduct,
+  unpublishProduct: products.unpublishProduct,
+  republishProduct: products.republishProduct,
   listShowcase: products.listShowcase,
   saveShowcase: products.saveShowcase,
   // 课程草稿 / 发布 / 视频

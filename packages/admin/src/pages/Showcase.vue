@@ -5,7 +5,16 @@
  * 右：排序 / 上下架面板。两边同一份列表状态，拖哪边都行，松手防抖保存，小程序重开生效。
  */
 import { ref, computed, watch, onBeforeUnmount } from 'vue'
-import { cloudMode, listShowcase, saveShowcase, getHomeContent, saveHomeContent, uploadImage } from '@/api/cloud.js'
+import {
+  cloudMode,
+  listShowcase,
+  saveShowcase,
+  unpublishProduct,
+  republishProduct,
+  getHomeContent,
+  saveHomeContent,
+  uploadImage,
+} from '@/api/cloud.js'
 
 const list = ref([])
 const urls = ref({})
@@ -79,6 +88,22 @@ function persist() {
 function toggle(p) {
   p.featured = !p.featured
   persist()
+}
+
+// 停售/恢复销售（债#12）：独立于橱窗开关——停售即从顾客端商品列表移除（getProducts 不再下发），可恢复。
+async function toggleListed(p) {
+  try {
+    if (p.listed === false) {
+      await republishProduct(p.id)
+      p.listed = true
+    } else {
+      if (!confirm(`确定停售「${p.name}」？\n停售后顾客端商品列表不再显示（详情直达与历史订单不受影响），可随时恢复。`)) return
+      await unpublishProduct(p.id)
+      p.listed = false
+    }
+  } catch (e) {
+    alert(e.message || '操作失败')
+  }
 }
 
 // 拖拽（手机画面与面板共用同一份 list；手机画面只显示 featured 子集，拖动按全列表索引换位）
@@ -276,14 +301,21 @@ function delFaq(i) {
             <span v-else>📦</span>
           </div>
           <div class="info">
-            <div class="name">{{ p.name }}</div>
+            <div class="name">{{ p.name }}<span v-if="p.listed === false" class="off-tag">已停售</span></div>
             <div class="meta">￥{{ p.price }} · 排序 {{ idxOf(p) + 1 }}{{ p.featured ? '' : ' · 不在首页橱窗' }}</div>
           </div>
+          <button
+            class="btn ghost sm"
+            :title="p.listed === false ? '恢复销售：顾客端列表重新出现' : '停售：从顾客端列表移除（详情直达/历史订单不受影响）'"
+            @click="toggleListed(p)"
+          >
+            {{ p.listed === false ? '恢复销售' : '停售' }}
+          </button>
           <button class="switch" :class="{ on: p.featured }" :title="p.featured ? '点击下架橱窗' : '点击上架橱窗'" @click="toggle(p)">
             <span class="knob"></span>
           </button>
         </div>
-        <p class="hint">开关 = 是否出现在首页橱窗；下架橱窗不影响详情页直达与历史订单。两侧画面双向联动，拖哪边都行。</p>
+        <p class="hint">「停售」= 从顾客端商品列表移除（可恢复·详情直达与历史订单不受影响）；开关 = 是否出现在首页橱窗。两侧画面双向联动，拖哪边都行。</p>
 
         <h3 style="margin-top: 22px">首页 · 头图文案（左侧手机实时预览）</h3>
         <label class="field-label">主标题</label>
@@ -586,6 +618,15 @@ h1 {
   font-size: 12.5px;
   font-weight: 600;
   color: var(--ink);
+}
+.off-tag {
+  margin-left: 6px;
+  padding: 1px 6px;
+  font-size: 10px;
+  font-weight: 600;
+  color: #b42318;
+  background: #fee4e2;
+  border-radius: 6px;
 }
 .meta {
   font-size: 10.5px;

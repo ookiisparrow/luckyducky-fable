@@ -289,6 +289,20 @@ export async function publishProduct(id) {
   return true
 }
 
+// 停售（软下架·债#12）：商品从顾客端列表消失（详情直达/历史订单不受影响），可恢复
+export async function unpublishProduct(id) {
+  const r = await post('unpublishProduct', { id })
+  if (!r.ok) throw new Error(r.error || '停售失败')
+  return true
+}
+
+// 恢复销售（债#12）
+export async function republishProduct(id) {
+  const r = await post('republishProduct', { id })
+  if (!r.ok) throw new Error(r.error || '恢复销售失败')
+  return true
+}
+
 // ---------- 小程序橱窗（规格 §八：排序 + 上下架） ----------
 
 export async function listShowcase() {

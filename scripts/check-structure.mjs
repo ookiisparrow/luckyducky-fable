@@ -161,6 +161,58 @@ export const repoChecks = [
     },
   },
   {
+    // 微信发货上传接缝单点（根因#12 平台规则外部风险 + 合规债#26）：实物 + 微信支付小程序支付后须上传
+    // 发货信息（upload_shipping_info），否则订单资金冻结/无法结算 + 后台反复弹「待接入发货管理」。
+    // ① 发货上传调用（uploadShippingInfo）只许在 kit/shipping.ts 接缝单点（别处直调即红·平台规则变化改一处）；
+    // ② adminApi shipOrder 成功路径须经 uploadShippingToWx（防回退成只写本地·真顾客订单钱被锁）。
+    // fail-soft 行为（上传失败不反噬本地发货 + 留痕 + [LD_ALERT] 告警）由 shipOrder.test 行为锁。
+    id: 'shipping-info-uploaded-to-wx',
+    roots: ['#12'],
+    desc: '微信发货上传接缝单点（根因#12 + 合规债#26）：upload_shipping_info 调用收口 kit/shipping.ts（别处直调即红）+ adminApi shipOrder 成功路径须调 uploadShippingToWx（不上传→实物+微信支付资金冻结）',
+    run() {
+      const seam = 'packages/cloud/src/kit/shipping.ts'
+      if (!existsSync(join(ROOT, seam))) return [`${seam} 缺失——微信发货上传接缝单点（合规债#26·根因#12）`]
+      const bad = []
+      if (!/uploadShippingInfo/.test(readFileSync(join(ROOT, seam), 'utf8')))
+        bad.push(`${seam} 未见 uploadShippingInfo 上传调用——接缝空壳（债#26）`)
+      const srcRoot = join(ROOT, 'packages/cloud/src')
+      const walk = (d) => {
+        for (const e of readdirSync(d)) {
+          const p = join(d, e)
+          if (statSync(p).isDirectory()) walk(p)
+          else if (e.endsWith('.ts')) {
+            const rel = relative(ROOT, p).replace(/\\/g, '/')
+            if (rel !== seam && /uploadShippingInfo/.test(readFileSync(p, 'utf8')))
+              bad.push(`${rel} 直调 uploadShippingInfo——发货上传须收口 kit/shipping.ts 接缝单点（根因#12·债#26）`)
+          }
+        }
+      }
+      if (existsSync(srcRoot)) walk(srcRoot)
+      const ship = join(ROOT, 'packages/cloud/src/functions/admin/adminApi/actions/orders.ts')
+      if (existsSync(ship) && !/uploadShippingToWx\s*\(/.test(readFileSync(ship, 'utf8')))
+        bad.push('adminApi shipOrder 未调 uploadShippingToWx——发货后未向微信上传发货信息（实物+微信支付资金会被冻结·合规债#26·根因#12）')
+      return bad
+    },
+  },
+  {
+    // 商品下架生效（债#12）：原 publishProduct 写 products 后永久可售（getProducts 全量下发·featured 只管橱窗·
+    // deleteDraft 是硬删非停售）——无「临时停售」路径。本守卫锁 getProducts 必按 listed 过滤（where listed!=false·
+    // 兼容旧无字段=可售），防回退成全量下发把已停售商品又露给顾客；停售/恢复经 adminApi unpublishProduct/republishProduct。
+    id: 'catalog-getproducts-listed-filter',
+    roots: ['债#12'],
+    desc: '商品下架生效（债#12）：catalog/getProducts.ts 须按 listed 过滤（listed!=false·兼容旧无字段=可售）——防已停售商品仍全量下发给顾客；停售/恢复经 adminApi unpublishProduct/republishProduct',
+    run() {
+      const f = 'packages/cloud/src/functions/catalog/getProducts.ts'
+      if (!existsSync(join(ROOT, f))) return [`${f} 缺失（商品列表·债#12）`]
+      const src = readFileSync(join(ROOT, f), 'utf8')
+      const bad = []
+      // 须是真正的 where 过滤含 listed（不认注释里的 listed 字样·防只留注释假绿）
+      if (!/\.where\(\{[^}]*listed/.test(src))
+        bad.push(`${f} 未按 listed 过滤（.where({...listed...}) 未见）——已停售商品仍全量下发给顾客（债#12·下架不生效）`)
+      return bad
+    },
+  },
+  {
     id: 'interface-catalog-sync',
     roots: ['正册'],
     desc: '系统事实同步（docs/系统事实.md 是接口权威登记册，正册自评 P1）：每个云函数 + 每个 adminApi action 都须登记，杜绝「加接口忘登记」',
@@ -490,7 +542,7 @@ export const repoChecks = [
   {
     id: 'agreement-text-real',
     roots: ['R27'],
-    desc: '协议正文非占位（R27 上线必做㉑）：pages/agreement/index.vue 不得含「占位」语 + 须含隐私承诺「不采集手机号」+ 条款条目齐（≥8 条「第N条」），防占位文本上线',
+    desc: '协议正文非占位（R27 上线必做㉑）：pages/agreement/index.vue 不得含「占位」语 + 须含精确隐私承诺「不通过微信授权获取」手机号（债#21：原「不采集手机号」与 address-edit 手填收货电话自相矛盾·须精确到微信授权口径）+ 条款条目齐（≥8 条「第N条」），防占位文本上线',
     run() {
       const f = 'packages/miniapp/src/pages/agreement/index.vue'
       const abs = join(ROOT, f)
@@ -498,7 +550,8 @@ export const repoChecks = [
       const src = readFileSync(abs, 'utf8')
       const bad = []
       if (src.includes('占位')) bad.push(`${f} 仍含「占位」字样——协议正文未补全（R27㉑ 上线必做）`)
-      if (!src.includes('不采集手机号')) bad.push(`${f} 缺隐私承诺「不采集手机号」——隐私政策不完整（R27㉑）`)
+      if (!src.includes('不通过微信授权获取'))
+        bad.push(`${f} 缺精确隐私承诺「不通过微信授权获取」手机号——隐私政策不完整 / 措辞不精确（R27㉑·债#21：blanket「不采集手机号」与手填收货电话矛盾）`)
       const articles = (src.match(/第[一二三四五六七八九十]+条/g) || []).length
       if (articles < 8) bad.push(`${f} 条款条目过少（${articles}<8 条「第N条」）——疑似仍是占位（R27㉑）`)
       return bad
@@ -1133,6 +1186,23 @@ export const repoChecks = [
     },
   },
   {
+    // 评价列表 cursor 分页（根因#7 固定 limit 规模挤出·债#13）：原 getReviews `limit(200)` 固定——
+    // 商品评价过 200 时「全部评价」页旧评价被截断挤出。列表须走 pageQuery 游标分页（同订单/售后）；
+    // 汇总仍基于 bounded 样本（≤200·approx 标注·真增量聚合属院外债#13 后半·同 dashboard 近似口径）。
+    id: 'reviews-list-paged',
+    roots: ['#7'],
+    desc: '评价列表 cursor 分页（根因#7·债#13）：catalog/getReviews.ts 列表须经 kit pageQuery 游标分页（不再固定 limit 截断·>200 评价被挤出全部评价页）；汇总另走 bounded 样本（approx）',
+    run() {
+      const f = 'packages/cloud/src/functions/catalog/getReviews.ts'
+      if (!existsSync(join(ROOT, f))) return [`${f} 缺失（评价列表·债#13）`]
+      const src = readFileSync(join(ROOT, f), 'utf8')
+      const bad = []
+      if (!/pageQuery\s*\(/.test(src))
+        bad.push(`${f} 列表未经 pageQuery 游标分页——固定 limit 规模即把旧评价挤出全部评价页（根因#7·债#13）`)
+      return bad
+    },
+  },
+  {
     // 集合名只用已登记的（债#28·安全·根因#3 信任边界）：库权限按集合逐一锁，打错字（aftersales）
     // → 静默建/查锁名单外的无保护集合＝洞。kit/collections.ts 的 COLLECTIONS 是集合名权威册；
     // 校验全库 .collection()/createCollection/ensure 的字面量名都在册内——打错即红，新集合须先登记。
@@ -1521,6 +1591,15 @@ export const typeAndTestGuards = [
   { id: 'pay-config-fail-closed', mechanism: 'test', roots: ['#3'], reverseTest: 'tests/cloud/createOrder.test.js' },
   { id: 'fen-money-chain', mechanism: 'test', roots: ['#4'], reverseTest: 'tests/cloud/createOrder.test.js' },
   { id: 'paging-contract', mechanism: 'test', roots: ['#7'], reverseTest: 'tests/cloud/kit/paging.test.js' },
+  // 发货上传 fail-soft（根因#12 + 合规债#26）：微信发货上传失败绝不反噬本地发货——shipOrder 仍翻 shipped、
+  // 留痕 wxShipError、打 [LD_ALERT] sev=money 告警人工补录；上传成功留痕 wxShipUploaded。reverseTest 锁此行为。
+  { id: 'shipping-upload-fail-soft', mechanism: 'test', roots: ['#12'], reverseTest: 'tests/cloud/shipOrder.test.js' },
+  // 商品停售生效（债#12）：unpublishProduct 置 listed:false 后 getProducts 不再下发该商品（顾客端列表消失），
+  // republishProduct 恢复；旧无 listed 字段的商品视为可售（兼容）。reverseTest 锁此端到端行为。
+  { id: 'product-unpublish-effective', mechanism: 'test', roots: ['债#12'], reverseTest: 'tests/cloud/productListed.test.js' },
+  // 评价列表分页端到端（根因#7·债#13）：getReviews 列表 cursor 翻页（>limit 返 nextCursor·续页接上），
+  // 汇总仅首页基于 bounded 样本返回（approx 标注）。reverseTest 锁此行为。
+  { id: 'reviews-paged-effective', mechanism: 'test', roots: ['#7'], reverseTest: 'tests/cloud/getReviewsPaged.test.js' },
 ]
 
 const SRC_DIRS = ['packages', 'cloudfunctions', 'scripts']

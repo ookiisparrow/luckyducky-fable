@@ -17,6 +17,10 @@ const G = (globalThis.__cloudMock = globalThis.__cloudMock || {
   callFunctionCalls: [],
   callFunctionResult: null,
   callFunctionFail: false,
+  openapiCalls: [],
+  openapiResult: null,
+  openapiFail: false,
+  openapiErrCode: null,
 })
 
 const clone = (v) => (v === undefined ? undefined : JSON.parse(JSON.stringify(v)))
@@ -251,6 +255,25 @@ const cloud = {
   getTempFileURL: async ({ fileList }) => ({
     fileList: fileList.map((id) => ({ fileID: id, tempFileURL: 'https://tmp/' + id })),
   }),
+  // 云调用 mock（cloud.openapi.*·债#26 发货上传走它）：嵌套属性任意命中、调用记录入参，
+  // openapiFail 时抛错（模拟能力未开通/权限未声明）、否则返 openapiResult（默认 errCode:0 成功）。
+  // 真 sdk openapi 绑定名 + config.json 权限属真机验（根因#8），桩只锁「接缝被调 + 成功/失败分支」。
+  openapi: (() => {
+    const node = () =>
+      new Proxy(function () {}, {
+        get: () => node(),
+        apply: async (_f, _t, args) => {
+          G.openapiCalls.push(JSON.parse(JSON.stringify((args && args[0]) || {})))
+          if (G.openapiFail) {
+            const e = new Error('OPENAPI_FAIL')
+            e.errCode = G.openapiErrCode != null ? G.openapiErrCode : -1
+            throw e
+          }
+          return JSON.parse(JSON.stringify(G.openapiResult != null ? G.openapiResult : { errCode: 0 }))
+        },
+      })
+    return node()
+  })(),
 }
 
 // 测试控制面：reset/seed/setOpenId/dump，全部操作 globalThis 上的同一份状态
@@ -264,6 +287,10 @@ const control = {
     G.callFunctionResult = null
     G.callFunctionFail = false
     G.lastUpload = null
+    G.openapiCalls = []
+    G.openapiResult = null
+    G.openapiFail = false
+    G.openapiErrCode = null
   },
   seed(coll, docs) {
     G.store[coll] = (G.store[coll] || []).concat(JSON.parse(JSON.stringify(docs)))
@@ -291,6 +318,17 @@ const control = {
   },
   setCallFunctionFail(v) {
     G.callFunctionFail = !!v
+  },
+  // 云调用 mock 控制（债#26 发货上传）
+  openapiCalls() {
+    return JSON.parse(JSON.stringify(G.openapiCalls))
+  },
+  setOpenapiResult(v) {
+    G.openapiResult = v
+  },
+  setOpenapiFail(v, errCode) {
+    G.openapiFail = !!v
+    G.openapiErrCode = errCode != null ? errCode : null
   },
 }
 
