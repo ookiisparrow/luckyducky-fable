@@ -1,8 +1,8 @@
 {
-  "updatedAt": 1782297079502,
+  "updatedAt": 1782301521386,
   "functions": {
     "activateCourse": "32d953d6986e",
-    "adminApi": "63cf1bebf695",
+    "adminApi": "bbb148af6f8a",
     "applyRefund": "5ce932b689b8",
     "cleanupEvents": "0c58fc4e8c4a",
     "closeExpiredOrders": "1dd217b14499",
