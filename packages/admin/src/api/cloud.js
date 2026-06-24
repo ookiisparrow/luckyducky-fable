@@ -357,6 +357,22 @@ export async function saveSettings(settings) {
   return !!r.ok
 }
 
+// ---------- 库存（库存#1·下单即预留·乐观 CAS；写库存收口云端 kit/inventory） ----------
+
+export async function listInventory(productIds) {
+  if (!cloudMode) return [] // 库存只存在于云端
+  const r = await post('listInventory', productIds && productIds.length ? { productIds } : {})
+  if (!r.ok) throw new Error(r.error || 'LOAD_INVENTORY_FAIL')
+  return r.list || []
+}
+
+// stock：number≥0 或 null（不限量）；threshold 低库存阈值（可选）
+export async function saveStock(productId, spec, stock, threshold) {
+  const r = await post('saveStock', { productId, spec, stock, threshold })
+  if (!r.ok) throw new Error(r.error === 'BAD_STOCK' ? '库存须为非负整数或留空（不限量）' : r.error || 'SAVE_STOCK_FAIL')
+  return true
+}
+
 // ---------- 首页内容（橱窗逐块接入：hero 文案 / 信任条 / FAQ） ----------
 
 export async function getHomeContent() {

@@ -1,5 +1,5 @@
 import cloud from 'wx-server-sdk'
-import { getDb, throttleLocked, throttleFail, throttleReset } from '../../../kit'
+import { getDb, throttleLocked, throttleFail, throttleReset, recordAudit, shouldAudit } from '../../../kit'
 import { reply, ensure, checkKey, type Ctx } from './lib'
 import * as products from './actions/products'
 import * as courses from './actions/courses'
@@ -9,6 +9,7 @@ import * as content from './actions/content'
 import * as orders from './actions/orders'
 import * as refunds from './actions/refunds'
 import * as dashboard from './actions/dashboard'
+import * as inventory from './actions/inventory'
 
 // 管理控制台后端（HTTP 访问服务触发）。B5b：HTTP 外壳 + 口令闸在此，28+ action 拆 actions/ 查表。
 // 鉴权：管理口令（adminConfig sha256，首登 bootstrap）。db 经 kit.getDb；退款流经 kit.callFlow。
@@ -55,6 +56,9 @@ const ACTIONS: Record<string, (ctx: Ctx) => Promise<any>> = {
   rejectRefund: refunds.rejectRefund,
   // 看板
   getDashboard: dashboard.getDashboard,
+  // 库存（库存#1）
+  listInventory: inventory.listInventory,
+  saveStock: inventory.saveStock,
 }
 
 // 认证频控（根因#13 防爆破）：失败 5 次/10 分 → 锁 5 分；login 与其余 action 的口令校验共用此闸。
@@ -107,9 +111,13 @@ export const main = async (event: any) => {
 
   const handler = ACTIONS[action]
   if (!handler) return reply(400, { ok: false, error: 'UNKNOWN_ACTION' })
+  const auditIp = tkey.replace('adminlogin:', '') // 操作审计#4：动钱/状态操作留痕（fail-soft·不反噬响应）
   try {
-    return await handler({ db, cloud, data, drafts })
+    const res = await handler({ db, cloud, data, drafts })
+    if (shouldAudit(action)) await recordAudit({ action, ip: auditIp, data, ok: !!res && res.statusCode === 200 })
+    return res
   } catch (e) {
+    if (shouldAudit(action)) await recordAudit({ action, ip: auditIp, data, ok: false, error: 'SERVER_ERROR' })
     console.error('adminApi error', action, e)
     return reply(500, { ok: false, error: 'SERVER_ERROR' })
   }

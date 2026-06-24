@@ -9,7 +9,7 @@ import {
   COUPON,
   SHIP,
 } from '@luckyducky/shared'
-import { withOpenId, withRateLimit, ok, err } from '../../kit'
+import { withOpenId, withRateLimit, ok, err, reserveStock, restoreStock } from '../../kit'
 
 // 创建订单（敏感：前端禁写 orders）。openid 闸 + 前端只传 {items:[{id,qty,sku?}],address}，
 // 价格/金额一律按云端 products 现算（不信任前端价）+ 服务端不变量（主商品必含 + 地址四要素）+
@@ -128,6 +128,15 @@ export const main = withOpenId(
     // ALLOW_MOCK_PAY=1（开发/测试 env，生产永不设）放行，否则拒单。杜绝 config 漂移/误删→未付变已付。
     if (payMode === 'mock' && process.env.ALLOW_MOCK_PAY !== '1') return err('PAY_CONFIG_MISSING')
 
+    // 下单即预留库存（库存#1·乐观 CAS 防超卖）：实物主商品逐 SKU 原子扣减；不限量（无 inventory 文档）放行；
+    // 任一不足→整单拒 OUT_OF_STOCK（已扣回滚在 reserveStock 内）。reserved 记进订单供超时/退款回补。
+    const stockLines = items
+      .filter((it) => !ADDONS[it.productId])
+      .map((it) => ({ productId: it.productId, spec: it.spec, qty: it.qty }))
+    const rsv = await reserveStock(stockLines)
+    if (!rsv.ok)
+      return err('OUT_OF_STOCK' + (rsv.short ? ':' + rsv.short.productId + ':' + rsv.short.spec : ''))
+
     const now = Date.now()
     const order: any = {
       _openid: OPENID,
@@ -137,6 +146,7 @@ export const main = withOpenId(
       ship: SHIP,
       amount,
       address,
+      reserved: rsv.reserved,
       status: payMode === 'real' ? 'pending' : 'paid',
       createdAt: now,
     }
@@ -152,6 +162,7 @@ export const main = withOpenId(
         /* 撞号，换号重试 */
       }
     }
+    await restoreStock(rsv.reserved) // 建单彻底失败：把已预留库存还回去（不锁死库存）
     return err('ORDER_ID_BUSY')
   })
 )

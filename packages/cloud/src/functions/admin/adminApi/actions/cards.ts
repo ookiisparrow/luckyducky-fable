@@ -6,15 +6,28 @@ export async function getSettings({ db }: Ctx) {
   return reply(200, { ok: true, settings: got?.data || {} })
 }
 
+// 合并保存（非整存覆盖）：urlPrefix(步骤⑥) 与 alertWebhook/alertEvents(消息通知) 各自分别保存、互不抹除。
 export async function saveSettings({ db, data }: Ctx) {
-  const urlPrefix = String(data.urlPrefix || '').slice(0, 200)
   await ensure(db, 'adminConfig')
   const coll = db.collection('adminConfig')
+  const got = await coll.doc('settings').get().catch(() => null)
+  const cur = (got?.data as Record<string, any>) || {}
+  const patch: Record<string, any> = { updatedAt: Date.now() }
+  if (data.urlPrefix !== undefined) patch.urlPrefix = String(data.urlPrefix || '').slice(0, 200)
+  if (data.alertWebhook !== undefined) {
+    // 企微群机器人 webhook 形态校验（空＝清除推送·退回纯日志告警）；非法直接拒
+    const w = String(data.alertWebhook || '').slice(0, 300)
+    if (w && !/^https:\/\/qyapi\.weixin\.qq\.com\/cgi-bin\/webhook\/send\?key=[\w-]+$/.test(w))
+      return reply(400, { ok: false, error: 'BAD_WEBHOOK' })
+    patch.alertWebhook = w
+  }
+  if (data.alertEvents && typeof data.alertEvents === 'object') patch.alertEvents = data.alertEvents
+  const next = { ...cur, ...patch }
   await coll
     .doc('settings')
-    .set({ data: { urlPrefix, updatedAt: Date.now() } })
+    .set({ data: next })
     .catch(async () => {
-      await coll.add({ data: { _id: 'settings', urlPrefix, updatedAt: Date.now() } })
+      await coll.add({ data: { _id: 'settings', ...next } })
     })
   return reply(200, { ok: true })
 }
