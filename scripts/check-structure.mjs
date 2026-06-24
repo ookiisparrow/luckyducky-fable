@@ -1744,7 +1744,7 @@ export const repoChecks = [
         while ((tm = transRe.exec(src))) {
           const coll = tm[1]
           if (!COLLS.has(coll)) continue // 未声明集合不在本守卫范围（声明集合＝orders/afterSales/qrcodes）
-          const from = [...tm[2].matchAll(/['"]([a-z]+)['"]/g)].map((x) => x[1])
+          const from = [...tm[2].matchAll(/['"]([a-z_]+)['"]/g)].map((x) => x[1])
           const to = tm[3]
           // union 语义：每个 from 元素都须有声明的原子边 from→to，缺一即越流转
           const undeclared = from.filter((f) => !declaredEdges[coll].has(f + '=>' + to))
@@ -1755,7 +1755,7 @@ export const repoChecks = [
         // ② 写库 status 字面量：.update({ data: { … status: 'X' … } })（含 add/set 初始态）须是声明状态。
         // 只在写侧（update/add/set 的 data 对象内）取值，避开 .where 过滤侧与 err('BAD_STATUS') 等读侧。
         // 判定哪个集合：取该 status 写入点之前最近的 .collection('<coll>') / transition('<coll>')。
-        const writeRe = /\bstatus:\s*['"]([a-z]+)['"]/g
+        const writeRe = /\bstatus:\s*['"]([a-z_]+)['"]/g
         let wm
         while ((wm = writeRe.exec(src))) {
           const val = wm[1]
@@ -1788,7 +1788,20 @@ export const repoChecks = [
     roots: ['#2', '#5', 'P3'],
     desc: '前端订单/售后状态值只走 shared 单源（根因#2 账本「限调用方用 ORDER_STATUS 常量」延伸到消费侧·#5 散落·P3 生成物消费侧）：受管前端文件里订单/售后状态字面量出现在逻辑位（比较/status:值/.status=赋值/.includes 成员）即红，须引 @luckyducky/shared 的 ORDER_STATUS/AFTERSALE_STATUS——防散写打错状态名静默不匹配（同形异义的 UI 键/CSS 类/课程进度不误伤）',
     run() {
-      const STATUS = '(?:pending|paid|shipped|done|closed|applied|approved|refunded|rejected)'
+      // 状态枚举从声明派生（让守卫读声明·不手写枚举追状态·根因#2 元模式本仓核心主张）：orders + afterSales
+      // 全状态从 order-domain.generated.json 取——新增状态（如 refund_required）自动纳入覆盖，不再靠手补枚举。
+      const jsonPath = join(ROOT, 'scripts/order-domain.generated.json')
+      let states
+      try {
+        const spec = JSON.parse(readFileSync(jsonPath, 'utf8'))
+        const set = new Set()
+        for (const coll of ['orders', 'afterSales']) for (const s of spec[coll]?.states || []) set.add(s)
+        states = [...set]
+      } catch {
+        return ['scripts/order-domain.generated.json 缺失/解析失败——跑 `node scripts/gen-order-domain.mjs`（前端状态枚举派生源·P3）']
+      }
+      if (!states.length) return ['order-domain.generated.json 无 orders/afterSales 状态——派生源损坏（P3）']
+      const STATUS = '(?:' + states.join('|') + ')'
       // 逻辑位侦测（只咬会因打错状态名静默坏逻辑的位置；UI 键/标签/CSS 类不在内）
       const pats = [
         new RegExp(`(?:===|!==|==|!=)\\s*['"]${STATUS}['"]`), // 比较右值
