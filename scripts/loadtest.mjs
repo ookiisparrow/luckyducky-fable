@@ -33,7 +33,7 @@ function parseArgs(argv) {
 }
 function usage(msg) {
   if (msg) console.error('✗ ' + msg)
-  console.error('用法：node scripts/loadtest.mjs --env <测试envId> --mode <cas|capacity|throttle> [--n 200] [--seed 2000] [--max 10]')
+  console.error('用法：node scripts/loadtest.mjs --env <测试envId> --mode <cas|capacity|throttle|stock> [--n 200] [--seed 2000] [--max 10] [--stockN 10]')
   process.exit(1)
 }
 
@@ -194,6 +194,46 @@ async function runThrottle(db, n, max) {
   await db.collection(COL).doc(id).remove().catch(() => {})
 }
 
+// ④ 库存防超卖（库存#1·根因#1/#2/#8）：真库验 reserveStock 乐观 CAS——n 并发抢同 SKU、库存仅 stockN，
+//    复刻 kit/inventory casDecrement（读 stock→where({_id,stock:旧}).update(stock-1)·撞改重试·stock<1 拒）。
+//    应恰 stockN 扣成、余者缺货拒、最终 stock===0——扣成 > stockN 或 stock 穿底即超卖（丢更新让多扣）。
+async function runStock(db, n, stockN) {
+  const id = 'stock-probe'
+  await db.collection(COL).doc(id).set({ stock: stockN, _loadtest: true })
+  console.log(`库存防超卖：${n} 并发抢同 SKU（库存 ${stockN}）·验恰 ${stockN} 扣成 + 最终 stock=0 + 无超卖…`)
+  let ok = 0
+  let short = 0
+  let exhausted = 0
+  await Promise.all(
+    Array.from({ length: n }, async () => {
+      for (let i = 0; i < 30; i++) {
+        const cur = readDoc(await db.collection(COL).doc(id).get().catch(() => null))
+        const stock = cur && typeof cur.stock === 'number' ? cur.stock : 0
+        if (stock < 1) {
+          short++
+          return
+        }
+        const r = await db.collection(COL).where({ _id: id, stock }).update({ stock: stock - 1 }).catch(() => null)
+        if (updatedCount(r) === 1) {
+          ok++
+          return
+        }
+        // updated=0：并发抢先改过 → 重读重试
+      }
+      exhausted++
+    })
+  )
+  const fin = readDoc(await db.collection(COL).doc(id).get().catch(() => null))
+  const stockFin = fin && typeof fin.stock === 'number' ? fin.stock : -1
+  console.log(`  扣成 ${ok}（期望 ${stockN}）· 拒(缺货) ${short}· 最终 stock=${stockFin}（期望 0）· 重试耗尽 ${exhausted}`)
+  if (ok === stockN && stockFin === 0 && exhausted === 0)
+    console.log('  ✅ 真库库存 CAS 无超卖：恰库存数扣成·余者缺货拒·stock 见底不穿底——下单预留防超卖成立（库存#1）')
+  else if (ok > stockN || stockFin < 0)
+    console.log(`  ❌ 超卖：扣成 ${ok} > 库存 ${stockN} 或 stock 穿底 ${stockFin}——丢更新让多扣穿底！`)
+  else console.log(`  ⚠️ 待查：ok=${ok}/stock=${stockFin}/exhausted=${exhausted}（限流或重试耗尽？贴回排查）`)
+  await db.collection(COL).doc(id).remove().catch(() => {})
+}
+
 async function main() {
   const a = parseArgs(process.argv.slice(2))
   if (!a.env) usage('缺 --env <测试envId>')
@@ -204,7 +244,8 @@ async function main() {
   if (a.mode === 'cas') await runCas(db, Number(a.n) || 200)
   else if (a.mode === 'capacity') await runCapacity(db, Number(a.seed) || 2000)
   else if (a.mode === 'throttle') await runThrottle(db, Number(a.n) || 20, Number(a.max) || 10)
-  else usage('--mode 须为 cas / capacity / throttle')
+  else if (a.mode === 'stock') await runStock(db, Number(a.n) || 50, Number(a.stockN) || 10)
+  else usage('--mode 须为 cas / capacity / throttle / stock')
 }
 
 // 只在直接执行（node scripts/loadtest.mjs …）时跑；被 vitest import 时不触发 main
