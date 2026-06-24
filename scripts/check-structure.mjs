@@ -1768,6 +1768,73 @@ export const repoChecks = [
       return bad
     },
   },
+  {
+    // 用户反馈写库过闸 + 限频 + 集合登记（运营钩子①·待办#23 前端半边）。根因#3「写库必过闸 fail-closed」
+    // + 根因#13「用户端写函数防刷」：submitFeedback 是公网可调的用户写函数，必经 withOpenId（不信前端 openid）
+    // + withRateLimit（防刷库堆垃圾），且写入的 feedback 集合须在 COLLECTIONS 册（known-collections-only 同治·
+    // 否则建到锁名单外无保护集合）。注：writes-need-gate 已普查「写库必过闸」、known-collections-only 已普查
+    // 「集合在册」——本守卫额外钉死「这个具体函数」的频控与目标集合，防回退成无频控 / 写错集合（运营钩子绝迹证明）。
+    id: 'feedback-write-gated',
+    roots: ['债#23', '#13'],
+    desc: '用户反馈写库过闸+限频+集合登记（运营钩子①·待办#23）：submitFeedback 须经 withOpenId + withRateLimit（根因#3/#13·公网用户写函数防伪+防刷）且写 COLLECTIONS.feedback（known-collections-only 同治）；cloudbaserc 须配 submitFeedback（漏配真部署卡交互·根因#8）',
+    run() {
+      const bad = []
+      const f = 'packages/cloud/src/functions/feedback/submitFeedback.ts'
+      const abs = join(ROOT, f)
+      if (!existsSync(abs)) return [`${f} 缺失——用户反馈云函数（运营钩子①·待办#23）`]
+      const src = readFileSync(abs, 'utf8')
+      if (!/withOpenId\s*\(/.test(src)) bad.push(`${f} 未经 withOpenId——写库不过身份闸（根因#3 fail-closed）`)
+      if (!/withRateLimit\s*\(/.test(src)) bad.push(`${f} 未经 withRateLimit——用户写函数无频控、可被刷（根因#13）`)
+      // 须写 feedback 集合（认 COLLECTIONS.feedback 或裸 'feedback'；known-collections-only 另查在册）
+      if (!/COLLECTIONS\.feedback|['"]feedback['"]/.test(src))
+        bad.push(`${f} 未写 feedback 集合——反馈无处落库（待办#23）`)
+      // 集合须登记 COLLECTIONS 册（与 known-collections-only 同治，缺则建到锁名单外无保护集合）
+      const coll = join(ROOT, 'packages/cloud/src/kit/collections.ts')
+      if (existsSync(coll) && !/feedback:\s*['"]feedback['"]/.test(readFileSync(coll, 'utf8')))
+        bad.push('kit/collections.ts COLLECTIONS 未登记 feedback——写到锁名单外无权限保护集合（债#28/#23）')
+      // cloudbaserc 须配（漏配真部署卡交互确认·根因#8·同 deploy-config-complete 兜一道）
+      const rc = join(ROOT, 'cloudbaserc.json')
+      if (existsSync(rc) && !/"submitFeedback"/.test(readFileSync(rc, 'utf8')))
+        bad.push('cloudbaserc.json 未配 submitFeedback——真部署会卡交互确认（根因#8）')
+      return bad
+    },
+  },
+  {
+    // 前端错误自动上报接通（运营钩子①·待办#23 前端半边）。根因#8「构建过+单人能用≠线上无 bug」：
+    // 上线初期前端 JS 错误 / 未捕获 Promise 拒绝若只静默在用户端，开发侧看不见 → 主动上报复用 events 通道
+    // （有 cleanupEvents TTL 兜底·只写不读·安全）。钉死：① utils/report.js 经 track 上报（不改 trackEvent 本体、
+    // 复用既有通道）；② App.vue 全局 onError + onUnhandledRejection 都调 reportError（防回退成只 logger 静默）。
+    id: 'error-report-wired',
+    roots: ['债#23', '#8'],
+    desc: '前端错误自动上报接通（运营钩子①·待办#23）：utils/report.js reportError 经 track 走 events 通道（不改 trackEvent 本体）+ App.vue onError/onUnhandledRejection 都调 reportError（防回退成只本地静默·线上 bug 收不到·根因#8）',
+    run() {
+      const bad = []
+      const rep = 'packages/miniapp/src/utils/report.js'
+      const repAbs = join(ROOT, rep)
+      if (!existsSync(repAbs)) return [`${rep} 缺失——前端错误自动上报（运营钩子①·待办#23）`]
+      const repSrc = readFileSync(repAbs, 'utf8')
+      if (!/export function reportError/.test(repSrc)) bad.push(`${rep} 未导出 reportError——上报入口缺失（待办#23）`)
+      // 复用既有 events 通道（经 track/trackEvent），不另起新写库链
+      if (!/from '@\/utils\/track\.js'|utils\/track/.test(repSrc))
+        bad.push(`${rep} 未经 utils/track（events 通道）上报——应复用既有 trackEvent 通道（待办#23）`)
+      const app = 'packages/miniapp/src/App.vue'
+      const appAbs = join(ROOT, app)
+      if (!existsSync(appAbs)) {
+        bad.push(`${app} 缺失`)
+        return bad
+      }
+      const appSrc = readFileSync(appAbs, 'utf8')
+      if (!/reportError\s*\(/.test(appSrc))
+        bad.push(`${app} 未调 reportError——全局错误未自动上报（线上 bug 静默·待办#23/根因#8）`)
+      // onError 与 onUnhandledRejection 两条全局兜底都须接上报（任一漏即半边静默）
+      for (const hook of ['onError', 'onUnhandledRejection']) {
+        const m = appSrc.match(new RegExp(hook + '\\([\\s\\S]{0,200}?\\}\\)'))
+        if (!m || !/reportError/.test(m[0]))
+          bad.push(`${app} ${hook} 未调 reportError——该路径错误不上报（待办#23）`)
+      }
+      return bad
+    },
+  },
 ]
 
 // ============== 逐文件规则（fileRules）==============
@@ -1895,6 +1962,9 @@ export const typeAndTestGuards = [
   // 评价列表分页端到端（根因#7·债#13）：getReviews 列表 cursor 翻页（>limit 返 nextCursor·续页接上），
   // 汇总仅首页基于 bounded 样本返回（approx 标注）。reverseTest 锁此行为。
   { id: 'reviews-paged-effective', mechanism: 'test', roots: ['#7'], reverseTest: 'tests/cloud/getReviewsPaged.test.js' },
+  // 用户反馈写库行为端到端（运营钩子①·待办#23）：submitFeedback 缺身份 fail-closed（NO_OPENID·根因#3）、
+  // content 空/越长截断、category 白名单越界归 other、超 10 次/分 RATE_LIMITED（根因#13）。reverseTest 锁此行为。
+  { id: 'feedback-throttled-gated', mechanism: 'test', roots: ['#13', '债#23'], reverseTest: 'tests/cloud/submitFeedback.test.js' },
 ]
 
 const SRC_DIRS = ['packages', 'cloudfunctions', 'scripts']

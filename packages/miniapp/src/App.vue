@@ -1,6 +1,7 @@
 <script>
 // 应用根组件。生命周期钩子用 uni-app 的 onLaunch/onShow/onHide。
 import logger from '@/utils/logger.js'
+import { reportError } from '@/utils/report.js'
 import { initCloud } from '@/utils/cloud.js'
 import { useUserStore } from '@/store/user.js'
 import { useProductsStore } from '@/store/products.js'
@@ -15,9 +16,17 @@ export default {
     registerPrivacyGate() // 挂微信隐私授权回调（onNeedPrivacyAuthorization，仅小程序端；R27㉒）
     useUserStore().login() // 静默登录:用 openid upsert users 建档（仅小程序端）
     useProductsStore().load() // 拉商品列表（小程序端走云函数；其它端回退本地 catalog）
-    // 全局错误兜底：应用级运行时错误 / 未捕获的 Promise 拒绝，不再静默
-    uni.onError((err) => logger.error('app', err))
-    uni.onUnhandledRejection((e) => logger.error('promise', (e && e.reason) || e))
+    // 全局错误兜底：应用级运行时错误 / 未捕获的 Promise 拒绝，不再静默。
+    // 既本地分级日志（开发可见），又自动上报 events 通道（线上 bug 高发期主动收集·待办#23·运营钩子①）。
+    uni.onError((err) => {
+      logger.error('app', err)
+      reportError('app', err)
+    })
+    uni.onUnhandledRejection((e) => {
+      const reason = (e && e.reason) || e
+      logger.error('promise', reason)
+      reportError('promise', reason)
+    })
     // 以后可在此做：读取本地登录态、初始化全局配置等。
   },
   onShow() {},

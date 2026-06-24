@@ -31,6 +31,9 @@ export const COLLECTIONS = {
   // 身份桥接映射（external_userid ↔ openid，根因#3 不信前端）：_id='ext:euid' 存 openid。
   // 由小程序侧 kfBind（withOpenId·有 unionid 时）经企业微信转换 API 建；kfCallback 读它查「你的订单」。
   kfIdentity: 'kfIdentity',
+  // 用户意见反馈（运营钩子①·待办#23）：submitFeedback（withOpenId+withRateLimit）写入，
+  // 内部状态、仅管理端可读（控制台锁权限）；客户端只写不读。字段 category/content/contact/page/version/platform。
+  feedback: 'feedback',
 } as const
 
 export type CollName = (typeof COLLECTIONS)[keyof typeof COLLECTIONS]

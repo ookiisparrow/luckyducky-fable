@@ -54,6 +54,8 @@ export const ERR = {
   KF_NOT_CONFIGURED: 'KF_NOT_CONFIGURED',
   TOKEN_FAILED: 'TOKEN_FAILED',
   NO_EXTERNAL_USERID: 'NO_EXTERNAL_USERID',
+  // 意见反馈（submitFeedback·运营钩子①·待办#23）
+  EMPTY_FEEDBACK: 'EMPTY_FEEDBACK',
 } as const
 
 export type ErrorCode = (typeof ERR)[keyof typeof ERR]

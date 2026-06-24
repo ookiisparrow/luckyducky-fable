@@ -148,6 +148,18 @@
           }
         }
       ]
+    },
+    {
+      "root": "pkg-extra",
+      "pages": [
+        {
+          "path": "feedback/index",
+          "style": {
+            "navigationBarTitleText": "意见反馈",
+            "navigationStyle": "custom"
+          }
+        }
+      ]
     }
   ],
   "preloadRule": {

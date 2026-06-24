@@ -127,6 +127,11 @@ function goAddress() {
   if (!ensureLogin()) return
   uni.navigateTo({ url: '/pages/address/index' })
 }
+// 意见反馈：上线初期主动收集反馈/bug（运营钩子①·待办#23）
+function goFeedback() {
+  if (!ensureLogin()) return // 反馈绑 openid，需登录
+  uni.navigateTo({ url: '/pkg-extra/feedback/index' })
+}
 function goEditProfile() {
   if (!ensureLogin()) return
   uni.navigateTo({ url: '/pages/profile-edit/index' })
@@ -208,6 +213,12 @@ function goLogin() {
           <view class="my-row divided ld-tap" @tap="goAddress">
             <view class="my-row-ico"><Icon name="map-pin-meta" :size="22" /></view>
             <text class="my-row-label">地址管理</text>
+            <view class="my-row-chev"><Icon name="chevron-right" :size="18" /></view>
+          </view>
+          <!-- 意见反馈：上线初期主动收集反馈/bug（运营钩子①·待办#23） -->
+          <view class="my-row divided ld-tap" @tap="goFeedback">
+            <view class="my-row-ico"><Icon name="message-square-warning-meta" :size="22" /></view>
+            <text class="my-row-label">意见反馈</text>
             <view class="my-row-chev"><Icon name="chevron-right" :size="18" /></view>
           </view>
         </view>
