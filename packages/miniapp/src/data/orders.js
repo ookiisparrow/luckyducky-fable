@@ -8,6 +8,9 @@
 // COUPON/SHIP 单一来源在 data/checkout.js（结算/下单/订单展示共用，避免两处定义漂移）；
 // 这里 re-export 让既有 `from '@/data/orders.js'` 的引用方无感。
 export { COUPON, SHIP } from './checkout.js'
+// 订单状态值单源 = shared 生成物（order.spec.ts → ORDER_STATUS·根因#2「调用方用常量」）；
+// 本文件的展示映射用 OS.* 计算键派生，状态集随声明走、打错状态名编译/运行即露（守卫 order-status-frontend-via-shared）。
+import { ORDER_STATUS as OS } from '@luckyducky/shared'
 
 // 订单 items 安全访问（根因#8 渲染访问点纵深防御）。store 入库已 normalizeOrder 保证
 // items 恒为数组，这是渲染侧第二道闸：任何绕过 store 的取数路径 / 旧构建脏单，也绝不让
@@ -21,7 +24,7 @@ export const orderQty = (o) => orderItems(o).reduce((s, it) => s + it.qty, 0)
 // =real 时产 pending（去支付 → 支付回调 → paid），超时由云端关单产 closed。
 // actions 的 key 由订单详情页 onAction 处理。
 export const ORDER_STATUS = {
-  pending: {
+  [OS.PENDING]: {
     label: '待支付',
     icon: 'wallet-purple',
     tint: 'lilac',
@@ -29,7 +32,7 @@ export const ORDER_STATUS = {
     sub: '请尽快完成支付，超时订单将自动关闭',
     actions: [{ label: '去支付', kind: 'solid', key: 'pay' }],
   },
-  paid: {
+  [OS.PAID]: {
     label: '待发货',
     icon: 'package-purple',
     tint: 'lilac',
@@ -40,7 +43,7 @@ export const ORDER_STATUS = {
       { label: '提醒发货', kind: 'solid', key: 'remind' },
     ],
   },
-  shipped: {
+  [OS.SHIPPED]: {
     label: '待收货',
     icon: 'truck-purple',
     tint: 'lilac',
@@ -51,7 +54,7 @@ export const ORDER_STATUS = {
       { label: '确认收货', kind: 'solid', key: 'confirm' },
     ],
   },
-  done: {
+  [OS.DONE]: {
     label: '已完成',
     icon: 'circle-check-duck',
     tint: 'sage',
@@ -62,7 +65,7 @@ export const ORDER_STATUS = {
       { label: '评价晒单', kind: 'solid', key: 'review' },
     ],
   },
-  closed: {
+  [OS.CLOSED]: {
     label: '已关闭',
     icon: 'clock-orange',
     tint: 'sage',

@@ -1777,6 +1777,50 @@ export const repoChecks = [
     },
   },
   {
+    // 前端订单/售后状态值只走 shared 单源（根因#2「限调用方用 ORDER_STATUS 常量」+ #5 散落·P3 消费侧）：
+    // 云端 transition()/写库已被 order-transitions-declared 对账，但前端散写 `=== 'pending'` / `status:'paid'`
+    // 仍能打错状态名静默不匹配（根因#2 账本：「限调用方用常量」）。本守卫把那条不变量延伸到消费侧——
+    // 受管前端文件里订单/售后状态字面量出现在**逻辑位**（比较 ===/!== / `status:` 值 / `.status =` 赋值 /
+    // `[…].includes` 成员）即红，须改引 `@luckyducky/shared` 的 ORDER_STATUS/AFTERSALE_STATUS 常量（P3 生成物）。
+    // 只咬逻辑位：UI 标签键（order-list `key:'pending'`）、CSS 类名（aftersales `cls:'applied'`）、课程进度
+    // （catalog 的 'done'·非订单域·不在册）等同形异义不误伤；故 catalog/profile 等不入受管册。
+    id: 'order-status-frontend-via-shared',
+    roots: ['#2', '#5', 'P3'],
+    desc: '前端订单/售后状态值只走 shared 单源（根因#2 账本「限调用方用 ORDER_STATUS 常量」延伸到消费侧·#5 散落·P3 生成物消费侧）：受管前端文件里订单/售后状态字面量出现在逻辑位（比较/status:值/.status=赋值/.includes 成员）即红，须引 @luckyducky/shared 的 ORDER_STATUS/AFTERSALE_STATUS——防散写打错状态名静默不匹配（同形异义的 UI 键/CSS 类/课程进度不误伤）',
+    run() {
+      const STATUS = '(?:pending|paid|shipped|done|closed|applied|approved|refunded|rejected)'
+      // 逻辑位侦测（只咬会因打错状态名静默坏逻辑的位置；UI 键/标签/CSS 类不在内）
+      const pats = [
+        new RegExp(`(?:===|!==|==|!=)\\s*['"]${STATUS}['"]`), // 比较右值
+        new RegExp(`['"]${STATUS}['"]\\s*(?:===|!==|==|!=)`), // 比较左值
+        new RegExp(`\\bstatus:\\s*['"]${STATUS}['"]`), // 对象 status: 值（如 order-list tab 过滤 status）
+        new RegExp(`\\.status\\s*=\\s*['"]${STATUS}['"]`), // .status = 赋值（store 乐观置态）
+        new RegExp(`\\[[^\\]]*['"]${STATUS}['"][^\\]]*\\]\\s*\\.includes`), // [..状态..].includes 成员
+      ]
+      // 受管册：订单/售后状态进逻辑分支的前端文件。新增此类逻辑文件须入册（同 order-transitions-declared 扫固定处的边界）。
+      const managed = [
+        'packages/miniapp/src/pages/order/index.vue',
+        'packages/miniapp/src/pages/order-list/index.vue',
+        'packages/miniapp/src/pages/checkout/index.vue',
+        'packages/miniapp/src/pages/aftersales/index.vue',
+        'packages/miniapp/src/pages/me/index.vue',
+        'packages/miniapp/src/store/orders.js',
+        'packages/miniapp/src/data/orders.js',
+      ]
+      const bad = []
+      for (const rel of managed) {
+        const abs = join(ROOT, rel)
+        if (!existsSync(abs)) continue
+        readFileSync(abs, 'utf8').split('\n').forEach((line, i) => {
+          if (/^\s*(\/\/|\/\*|\*)/.test(line) || line.includes('structure-ok')) return
+          if (pats.some((re) => re.test(line)))
+            bad.push(`${rel}:${i + 1}：订单/售后状态字面量在逻辑位裸写——改引 @luckyducky/shared 的 ORDER_STATUS/AFTERSALE_STATUS 常量（根因#2·别散写打错状态名）：${line.trim().slice(0, 70)}`)
+        })
+      }
+      return bad
+    },
+  },
+  {
     // 扫普通链接二维码进站 routing（R3/决策§13）：印刷码扫码经微信「扫普通链接二维码打开小程序」进站，
     // 微信把扫到的 URL 经启动参数 q 传给**入口页（pages/index/index）**——入口页非激活页，须识别激活码
     // 并 reLaunch 转发 welcome，否则 q 被忽略、用户落商城首页、激活断（根因#8 真机入口落首页）。

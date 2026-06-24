@@ -21,7 +21,7 @@ import { goBack, goProductDetail } from '@/utils/nav.js'
 import { money, dateTime, mmss } from '@/utils/format.js'
 import { expressCode } from '@/utils/express.js'
 import { BRAND_NAME, SHOP_FULL_NAME } from '@/constants/brand.js'
-import { PAY_WINDOW_MS } from '@luckyducky/shared'
+import { PAY_WINDOW_MS, ORDER_STATUS as OS } from '@luckyducky/shared'
 
 const ordersStore = useOrdersStore()
 const orderId = ref('')
@@ -33,11 +33,11 @@ let payTimer = null
 watch(
   () => order.value && order.value.status,
   (s) => {
-    if (s === 'pending' && !payTimer) {
+    if (s === OS.PENDING && !payTimer) {
       payTimer = setInterval(() => {
         nowTick.value = Date.now()
       }, 1000)
-    } else if (s !== 'pending' && payTimer) {
+    } else if (s !== OS.PENDING && payTimer) {
       clearInterval(payTimer)
       payTimer = null
     }
@@ -46,14 +46,14 @@ watch(
 )
 onUnmounted(() => payTimer && clearInterval(payTimer))
 const payRemainMs = computed(() =>
-  order.value && order.value.status === 'pending'
+  order.value && order.value.status === OS.PENDING
     ? Math.max(0, order.value.createdAt + PAY_WINDOW_MS - nowTick.value)
     : 0
 )
 
 // 真实订单按 status 映射展示配置（ORDER_STATUS 单一来源；未知状态兜底按待发货）
 function cfgFromOrder(o) {
-  const v = ORDER_STATUS[o.status] || ORDER_STATUS.paid
+  const v = ORDER_STATUS[o.status] || ORDER_STATUS[OS.PAID]
   const info = [
     ['订单编号', o.id],
     o.paidAt ? ['付款时间', dateTime(o.paidAt)] : ['下单时间', dateTime(o.createdAt)],
@@ -63,7 +63,7 @@ function cfgFromOrder(o) {
   if (o.doneAt) info.push(['成交时间', dateTime(o.doneAt)])
   // 待支付横幅副文案换成实时倒计时（与云端 15 分钟关单同口径）
   const sub =
-    o.status === 'pending'
+    o.status === OS.PENDING
       ? payRemainMs.value > 0
         ? `请在 ${mmss(Math.ceil(payRemainMs.value / 1000))} 内完成支付，超时订单自动关闭`
         : '订单已超时，即将自动关闭'

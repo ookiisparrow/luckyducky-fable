@@ -6,6 +6,7 @@
  * （api 层本地生成）仅存活于会话内，load 时与远端列表按 id 合并不丢失。
  */
 import { defineStore } from 'pinia'
+import { ORDER_STATUS as OS } from '@luckyducky/shared'
 import { createOrder, getMyOrders, confirmReceive, payOrder, getOrderById } from '@/api/order.js'
 import { logger } from '@/utils/logger.js'
 
@@ -46,14 +47,14 @@ export const useOrdersStore = defineStore('orders', {
         await payOrder(id)
         const o = this.list.find((x) => x.id === id)
         if (o) {
-          o.status = 'paid'
+          o.status = OS.PAID
           o.paidAt = Date.now()
         }
       } catch (e) {
         if (e && e.message === 'ORDER_CLOSED') {
           const o = this.list.find((x) => x.id === id)
           if (o) {
-            o.status = 'closed'
+            o.status = OS.CLOSED
             o.closedAt = Date.now()
           }
         }
@@ -65,7 +66,7 @@ export const useOrdersStore = defineStore('orders', {
       const { doneAt } = await confirmReceive(id)
       const o = this.list.find((x) => x.id === id)
       if (o) {
-        o.status = 'done'
+        o.status = OS.DONE
         o.doneAt = doneAt
       }
     },

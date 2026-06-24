@@ -27,6 +27,7 @@ import { useCartStore } from '@/store/cart.js'
 import { useAddressStore } from '@/store/address.js'
 import { useOrdersStore } from '@/store/orders.js'
 import { CHECKOUT_ADDONS, COUPON, SHIP } from '@/data/checkout.js'
+import { ORDER_STATUS as OS } from '@luckyducky/shared'
 import { goBack } from '@/utils/nav.js'
 import { ensureLogin } from '@/composables/useAuthGate.js'
 import { useTimers } from '@/composables/useTimers.js'
@@ -115,7 +116,7 @@ async function onSubmit() {
     cart.finishCheckout(list.value) // 按本次最终数量精确扣减购物车
     // PAY_MODE=real：云端产 pending 单 → 当场拉起微信支付；取消/失败不丢单，进详情可继续付。
     // mock 与 H5/App 回退恒产 paid，走原支付成功路径（零回归）。
-    if (order.status === 'pending') {
+    if (order.status === OS.PENDING) {
       let paidOk = false
       // #ifdef MP-WEIXIN
       try {

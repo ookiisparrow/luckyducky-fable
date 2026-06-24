@@ -16,12 +16,14 @@ import { useAfterSalesStore } from '@/store/aftersales.js'
 import { goBack } from '@/utils/nav.js'
 import { money, dateTime } from '@/utils/format.js'
 import { openCustomerService } from '@/utils/customerService.js'
+import { ORDER_STATUS as OS, AFTERSALE_STATUS as AS } from '@luckyducky/shared'
 
+// 状态值走 shared 单源（order.spec.ts → AFTERSALE_STATUS/ORDER_STATUS·根因#2）；cls＝状态名作 CSS 类后缀（同源派生）
 const AS_STATUS = {
-  applied: { label: '审核中', cls: 'applied' },
-  approved: { label: '退款处理中', cls: 'approved' },
-  refunded: { label: '已退款', cls: 'refunded' },
-  rejected: { label: '已拒绝', cls: 'rejected' },
+  [AS.APPLIED]: { label: '审核中', cls: AS.APPLIED },
+  [AS.APPROVED]: { label: '退款处理中', cls: AS.APPROVED },
+  [AS.REFUNDED]: { label: '已退款', cls: AS.REFUNDED },
+  [AS.REJECTED]: { label: '已拒绝', cls: AS.REJECTED },
 }
 
 const orders = useOrdersStore()
@@ -47,7 +49,7 @@ onPullDownRefresh(async () => {
 const applicable = computed(() => {
   const rows = []
   for (const o of orders.list) {
-    if (!['paid', 'shipped', 'done'].includes(o.status)) continue
+    if (![OS.PAID, OS.SHIPPED, OS.DONE].includes(o.status)) continue
     for (const it of o.items || []) {
       if (it.refundable === false) continue
       if (aftersales.has(o.id, it.productId)) continue
@@ -123,7 +125,10 @@ const back = () => goBack('/pages/me/index')
             <text class="coas-order-name"
               >{{ a.name }}{{ a.spec ? `（${a.spec}）` : '' }} ×{{ a.qty }}</text
             >
-            <text class="coas-chip" :class="'coas-chip-' + (AS_STATUS[a.status]?.cls || 'applied')">
+            <text
+              class="coas-chip"
+              :class="'coas-chip-' + (AS_STATUS[a.status]?.cls || AS.APPLIED)"
+            >
               {{ AS_STATUS[a.status]?.label || a.status }}
             </text>
           </view>
@@ -133,10 +138,10 @@ const back = () => goBack('/pages/me/index')
             >
             <text class="coas-record-time">{{ dateTime(a.appliedAt) }}</text>
           </view>
-          <text v-if="a.status === 'rejected' && a.rejectReason" class="coas-record-note">
+          <text v-if="a.status === AS.REJECTED && a.rejectReason" class="coas-record-note">
             拒绝原因：{{ a.rejectReason }}
           </text>
-          <text v-else-if="a.status === 'refunded'" class="coas-record-note ok">
+          <text v-else-if="a.status === AS.REFUNDED" class="coas-record-note ok">
             已原路退回微信支付{{ a.refundedAt ? ' · ' + dateTime(a.refundedAt) : '' }}
           </text>
         </view>

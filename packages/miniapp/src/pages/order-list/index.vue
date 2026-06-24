@@ -14,16 +14,17 @@ import OrderItem from '@/components/OrderItem.vue'
 import Skeleton from '@/components/Skeleton.vue'
 import { useOrdersStore } from '@/store/orders.js'
 import { ORDER_STATUS, orderQty } from '@/data/orders.js'
+import { ORDER_STATUS as OS } from '@luckyducky/shared'
 import { goBack } from '@/utils/nav.js'
 import { money, dateTime } from '@/utils/format.js'
 
-// tab key 沿用「我」页九宫格的 key；status 是订单数据里的真实状态值
+// tab key 沿用「我」页九宫格的 key（UI 标识·与状态值同形异义勿混）；status 是过滤用的真实状态值，走 shared 单源
 const TABS = [
   { key: 'all', label: '全部' },
-  { key: 'pending', label: '待支付', status: 'pending' },
-  { key: 'toship', label: '待发货', status: 'paid' },
-  { key: 'toreceive', label: '待收货', status: 'shipped' },
-  { key: 'done', label: '已完成', status: 'done' },
+  { key: 'pending', label: '待支付', status: OS.PENDING },
+  { key: 'toship', label: '待发货', status: OS.PAID },
+  { key: 'toreceive', label: '待收货', status: OS.SHIPPED },
+  { key: 'done', label: '已完成', status: OS.DONE },
 ]
 
 const orders = useOrdersStore()

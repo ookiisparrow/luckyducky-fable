@@ -20,6 +20,7 @@ import ProfileHeader from './components/ProfileHeader.vue'
 import ContinueVideo from './components/ContinueVideo.vue'
 import OrderGrid from './components/OrderGrid.vue'
 import { CONTINUE_VIDEO as V, ORDER_TABS } from '@/data/profile.js'
+import { ORDER_STATUS as OS } from '@luckyducky/shared'
 import { resolveContinue } from './continueResolve.js'
 import { useUserStore } from '@/store/user.js'
 import { useOrdersStore } from '@/store/orders.js'
@@ -40,7 +41,8 @@ const act = useActivationStore()
 const { backGuard, onBackGuard } = useExitGuard()
 
 // 角标 = 各状态真实订单数（只标可办理的三态，已完成/售后不标）
-const BADGE_STATUS = { pending: 'pending', toship: 'paid', toreceive: 'shipped' }
+// 键＝九宫格 tab 标识（UI·同形异义勿混）；值＝订单真实状态，走 shared 单源
+const BADGE_STATUS = { pending: OS.PENDING, toship: OS.PAID, toreceive: OS.SHIPPED }
 const orderTabs = computed(() =>
   ORDER_TABS.map((t) => ({ ...t, badge: orders.countByStatus[BADGE_STATUS[t.key]] || 0 }))
 )
