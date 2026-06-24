@@ -36,6 +36,7 @@ export async function getDashboard({ db }: Ctx) {
     refundMismatch,
     stuckRefunds,
     recent,
+    paidOrdersN,
   ] = await Promise.all([
     cnt(db.collection('users')),
     cnt(db.collection('orders')),
@@ -68,6 +69,8 @@ export async function getDashboard({ db }: Ctx) {
         .orderBy('createdAt', 'desc')
         .limit(5)
     ),
+    // 转化速览：已支付订单数（口径同 GMV·PAID_STATUSES）——下单→支付→激活 各环节量级（指示性·非同批追踪）
+    cnt(db.collection('orders').where({ status: _.in(PAID_STATUSES) })),
   ])
 
   const txAlerts = {
@@ -117,6 +120,9 @@ export async function getDashboard({ db }: Ctx) {
     },
     // 精确：计数/GMV(aggregate)/异常/最近单；近似：仅 热度/卡点（progress 超 SAMPLE 时标 true，前端显「近 N 估算」）
     approx: { gmv: false, hot: learnersN > SAMPLE, stuck: learnersN > SAMPLE, sampleSize: SAMPLE },
+    // 转化速览（指示性量级·非同批 cohort 追踪）：下单→支付→激活。访问/加购未采（前端无 page_view/add_cart
+    // 埋点）、完课需逐课判定——均后续。各环节走 .count() 精确不封顶。
+    funnel: { ordered: ordersN, paid: paidOrdersN, activated: codesActN },
     txAlerts,
     hot: top(doneCount),
     stuck: top(stuckCount),

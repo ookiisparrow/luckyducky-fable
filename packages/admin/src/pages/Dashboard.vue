@@ -62,6 +62,20 @@ const TODOS = computed(() => [
 ])
 const todoTotal = computed(() => TODOS.value.reduce((s, t) => s + t.n, 0))
 
+// 转化速览（指示性量级·非同批 cohort 追踪）：下单→已支付→已激活。条宽相对「下单」、标步进转化率。
+const funnelStages = computed(() => {
+  const f = data.value?.funnel
+  if (!f) return []
+  const base = f.ordered || 0
+  const w = (n) => (base ? Math.round((n / base) * 100) : 0)
+  const step = (n, prev) => (prev ? Math.round((n / prev) * 100) : null)
+  return [
+    { label: '下单', n: f.ordered, width: 100, conv: null },
+    { label: '已支付', n: f.paid, width: w(f.paid), conv: step(f.paid, f.ordered) },
+    { label: '已激活', n: f.activated, width: w(f.activated), conv: step(f.activated, f.paid) },
+  ]
+})
+
 const fmtTime = (ms) => {
   if (!ms) return ''
   const d = new Date(ms)
@@ -172,7 +186,18 @@ const rate = (a, b) => (b ? Math.round((a / b) * 100) : 0)
         </div>
       </div>
 
-      <p class="defer">趋势曲线 / 时间范围 / 经营漏斗（访问→加购→下单→支付→激活→完课）需事件时序聚合，待后续接入。</p>
+      <div v-if="funnelStages.length" class="card col funnel">
+        <h3>转化速览 · 下单 → 支付 → 激活</h3>
+        <p class="note">各环节累计量（指示性量级，非同批追踪）。访问 / 加购未采集（需前端埋点）、完课需逐课判定，均后续。</p>
+        <div v-for="s in funnelStages" :key="s.label" class="fn-row">
+          <span class="fn-lbl">{{ s.label }}</span>
+          <div class="fn-bar"><i :style="{ width: Math.max(s.width, 2) + '%' }" /></div>
+          <b class="fn-n">{{ s.n }}</b>
+          <em v-if="s.conv != null" class="fn-conv">较上环 {{ s.conv }}%</em>
+        </div>
+      </div>
+
+      <p class="defer">趋势曲线 / 时间范围 与完整经营漏斗（含访问/加购/完课）需前端埋点 + 事件时序聚合，列后续。</p>
     </template>
   </div>
 </template>
@@ -367,6 +392,47 @@ h1 {
   font-size: 12px;
   color: var(--content-2);
   padding: 10px 0;
+}
+.funnel {
+  margin-top: 18px;
+}
+.fn-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 7px 0;
+}
+.fn-lbl {
+  flex: 0 0 56px;
+  font-size: 12.5px;
+  color: var(--content);
+}
+.fn-bar {
+  flex: 1;
+  height: 16px;
+  border-radius: 8px;
+  background: var(--bg-grey);
+  overflow: hidden;
+}
+.fn-bar i {
+  display: block;
+  height: 100%;
+  background: var(--brand);
+  border-radius: 8px;
+}
+.fn-n {
+  flex: 0 0 auto;
+  width: 56px;
+  text-align: right;
+  font-size: 13px;
+  color: var(--ink);
+}
+.fn-conv {
+  flex: 0 0 auto;
+  width: 96px;
+  font-style: normal;
+  font-size: 11px;
+  color: var(--content-2);
 }
 .defer {
   margin: 18px 0 0;
