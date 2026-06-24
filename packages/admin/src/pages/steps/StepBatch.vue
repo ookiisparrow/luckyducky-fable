@@ -4,7 +4,7 @@
  * 前置：卡面已定稿（第 5 步）。生成批次复用云端 genQrcodes（一码一用唯一性既有）；
  * 印刷包 = ZIP（卡面.svg 矢量设计图 + 二维码地址.csv），交印刷厂一地址一码。
  */
-import { ref, computed } from 'vue'
+import { ref, computed, watch } from 'vue'
 import JSZip from 'jszip'
 import QRCode from 'qrcode'
 import { useProductsStore } from '@/store/products.js'
@@ -54,6 +54,30 @@ const prefixOk = computed(() => /^https:\/\/.+\/$/.test(urlPrefix.value))
 const STATUS = { new: ['全新', 'grey'], using: ['使用中', ''], done: ['已用尽', 'green'] }
 const statusOf = (b) => (b.activated === 0 ? 'new' : b.activated >= b.total ? 'done' : 'using')
 const pct = (b) => (b.total ? Math.round((b.activated / b.total) * 100) : 0)
+
+// 批次筛选 + 分页（用户反馈：批次多了扁平一页管不过来）——按使用状态 + 时间快捷区间筛，分页翻看
+const STATUS_TABS = [['all', '全部'], ['using', '使用中'], ['done', '已用尽'], ['new', '全新']]
+const TIME_OPTS = [[0, '全部时间'], [7, '近 7 天'], [30, '近 30 天'], [90, '近 90 天']]
+const fStatus = ref('all')
+const fTime = ref(0)
+const bpage = ref(1)
+const PAGE_SIZE = 8
+const statusCounts = computed(() => {
+  const c = { all: batches.value.length, new: 0, using: 0, done: 0 }
+  for (const b of batches.value) c[statusOf(b)]++
+  return c
+})
+const filteredBatches = computed(() => {
+  const cutoff = fTime.value ? Date.now() - fTime.value * 86400000 : 0
+  return batches.value.filter((b) => {
+    if (fStatus.value !== 'all' && statusOf(b) !== fStatus.value) return false
+    if (cutoff && (b.createdAt || 0) < cutoff) return false
+    return true
+  })
+})
+const totalPages = computed(() => Math.max(1, Math.ceil(filteredBatches.value.length / PAGE_SIZE)))
+const pagedBatches = computed(() => filteredBatches.value.slice((Math.min(bpage.value, totalPages.value) - 1) * PAGE_SIZE, Math.min(bpage.value, totalPages.value) * PAGE_SIZE))
+watch([fStatus, fTime, batches], () => (bpage.value = 1))
 // 查看码弹层（列码 + 复制全部导出）
 const codesShow = ref(false)
 const codesBatch = ref('')
@@ -192,22 +216,42 @@ async function generate() {
       </div>
 
       <div class="sec">
-        <div class="sec-t">已有批次</div>
+        <div class="sec-t">已有批次<span v-if="batches.length" class="bcount"> · 共 {{ batches.length }}</span></div>
         <p v-if="!batches.length" class="mini">还没有批次</p>
-        <div v-for="b in batches" :key="b.batchId" class="batchrow">
-          <span class="bicon">▦</span>
-          <b class="bid">{{ b.batchId }}</b>
-          <span class="chip" :class="STATUS[statusOf(b)][1]">{{ STATUS[statusOf(b)][0] }}</span>
-          <span class="bprog">
-            <span class="pbar"><i :class="statusOf(b)" :style="{ width: Math.max(pct(b), 2) + '%' }" /></span>
-            <em>{{ b.activated }}/{{ b.total }} 激活 · {{ pct(b) }}%</em>
-          </span>
-          <button class="btn ghost sm" @click="showCodes(b.batchId)">查看码</button>
-          <button class="btn ghost sm" @click="showTestQr(b.batchId)">📱 测试</button>
-          <button class="btn ghost sm" :disabled="busy === b.batchId || !cardFinal" @click="downloadPack(b.batchId)">
-            {{ busy === b.batchId ? '打包中…' : '⬇ 印刷包' }}
-          </button>
-        </div>
+        <template v-else>
+          <div class="bfilter">
+            <div class="bpills">
+              <button v-for="[k, label] in STATUS_TABS" :key="k" class="pill" :class="{ on: fStatus === k }" @click="fStatus = k">
+                {{ label }}<span class="pn">{{ statusCounts[k] }}</span>
+              </button>
+            </div>
+            <select v-model.number="fTime" class="input tsel">
+              <option v-for="[d, label] in TIME_OPTS" :key="d" :value="d">{{ label }}</option>
+            </select>
+          </div>
+
+          <p v-if="!filteredBatches.length" class="mini">这个筛选下没有批次</p>
+          <div v-for="b in pagedBatches" :key="b.batchId" class="batchrow">
+            <span class="bicon">▦</span>
+            <b class="bid">{{ b.batchId }}</b>
+            <span class="chip" :class="STATUS[statusOf(b)][1]">{{ STATUS[statusOf(b)][0] }}</span>
+            <span class="bprog">
+              <span class="pbar"><i :class="statusOf(b)" :style="{ width: Math.max(pct(b), 2) + '%' }" /></span>
+              <em>{{ b.activated }}/{{ b.total }} 激活 · {{ pct(b) }}%</em>
+            </span>
+            <button class="btn ghost sm" @click="showCodes(b.batchId)">查看码</button>
+            <button class="btn ghost sm" @click="showTestQr(b.batchId)">📱 测试</button>
+            <button class="btn ghost sm" :disabled="busy === b.batchId || !cardFinal" @click="downloadPack(b.batchId)">
+              {{ busy === b.batchId ? '打包中…' : '⬇ 印刷包' }}
+            </button>
+          </div>
+
+          <div v-if="totalPages > 1" class="bpager">
+            <button class="btn ghost sm" :disabled="bpage <= 1" @click="bpage--">‹ 上一页</button>
+            <span class="pginfo">第 {{ Math.min(bpage, totalPages) }} / {{ totalPages }} 页</span>
+            <button class="btn ghost sm" :disabled="bpage >= totalPages" @click="bpage++">下一页 ›</button>
+          </div>
+        </template>
       </div>
 
       <div class="sec genbox">
@@ -379,6 +423,58 @@ h2 {
 .btn.sm {
   padding: 7px 13px;
   font-size: 12px;
+}
+.bcount {
+  font-weight: 400;
+  color: var(--content-2);
+  font-size: 11.5px;
+}
+.bfilter {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 10px;
+}
+.bpills {
+  display: flex;
+  gap: 6px;
+}
+.pill {
+  border: 1px solid var(--line-strong);
+  background: var(--white);
+  border-radius: var(--r-pill);
+  padding: 5px 12px;
+  font-size: 12px;
+  color: var(--content-2);
+  cursor: pointer;
+}
+.pill.on {
+  background: var(--purple-ink);
+  border-color: var(--purple-ink);
+  color: var(--white);
+  font-weight: 600;
+}
+.pn {
+  margin-left: 5px;
+  font-size: 10.5px;
+  opacity: 0.75;
+}
+.tsel {
+  width: 120px;
+  padding: 6px 10px;
+}
+.bpager {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  margin-top: 12px;
+}
+.pginfo {
+  font-size: 12px;
+  color: var(--content-2);
 }
 .codesbox {
   background: var(--white);
