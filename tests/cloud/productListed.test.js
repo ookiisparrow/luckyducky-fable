@@ -57,6 +57,29 @@ describe('商品停售/恢复（债#12）', () => {
   })
 })
 
+// 重新上架不隐式恢复销售（审核 P1·债#12）：publishProduct 整文档 set 会抹掉 listed——编辑并重发
+// 已停售商品时 listed:false 丢失→按「旧无字段=可售」隐式复活销售。本组锁「保留旧 listed，须显式 republish 才恢复」。
+describe('publishProduct 不隐式恢复销售（审核 P1·债#12）', () => {
+  beforeEach(() => {
+    control.seed('productsDraft', [
+      { _id: 'p3', id: 'p3', name: 'C', cover: 'cloud://c.png', price: 30, skus: [{ name: '默认', price: 30 }], status: 'onsale' },
+      { _id: 'p2', id: 'p2', name: 'B', cover: 'cloud://b.png', price: 30, skus: [{ name: '默认', price: 30 }], status: 'onsale' },
+    ])
+  })
+
+  it('重新上架已停售商品：保留 listed:false（不隐式复活销售·须显式 republish）', async () => {
+    expect((await admin('publishProduct', { id: 'p3' })).ok).toBe(true) // p3 顶层 seed listed:false
+    expect(control.dump('products').find((x) => x._id === 'p3').listed).toBe(false) // 编辑重发仍停售
+    expect((await getProducts()).list.map((x) => x._id)).not.toContain('p3') // getProducts 仍不下发
+  })
+
+  it('重新上架在售商品（listed:true）：保持可售', async () => {
+    expect((await admin('publishProduct', { id: 'p2' })).ok).toBe(true)
+    expect(control.dump('products').find((x) => x._id === 'p2').listed).not.toBe(false)
+    expect((await getProducts()).list.map((x) => x._id)).toContain('p2')
+  })
+})
+
 // S11 控制台商品页：listDrafts 须附 listed 映射，控制台才能分「在售 / 已下架 / 筹备中」三态
 // （在售=onsale+listed≠false·已下架=onsale+listed:false·筹备中=未上架无 products 文档）。
 // 软下架（债#12）此前无管理端 UI，本映射是其在控制台显形的数据来源。

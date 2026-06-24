@@ -85,6 +85,13 @@ export async function publishProduct({ db, drafts, data }: Ctx) {
     sort = (top.data[0]?.sort ?? 0) + 1
     featured = true
   }
+  // 重新上架（编辑后再发布）不得隐式改变销售状态：保留旧 listed/unlistedAt——已停售（listed:false）商品
+  // 编辑重发仍停售，须显式 republishProduct 才恢复销售（审核 P1·债#12·防整文档 set 抹掉 listed→「无字段=可售」隐式复活）。
+  const carry: Record<string, unknown> = {}
+  if (exist?.data && 'listed' in exist.data) {
+    carry.listed = exist.data.listed
+    if (exist.data.unlistedAt != null) carry.unlistedAt = exist.data.unlistedAt
+  }
   const doc = {
     id,
     name: d.name,
@@ -102,6 +109,7 @@ export async function publishProduct({ db, drafts, data }: Ctx) {
     featured: !!featured,
     sort,
     updatedAt: Date.now(),
+    ...carry, // 保留旧 listed/unlistedAt（重新上架不隐式恢复销售·审核 P1）
   }
   await productsColl
     .doc(id)

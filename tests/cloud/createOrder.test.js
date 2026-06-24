@@ -21,6 +21,43 @@ afterEach(() => {
   delete process.env.ALLOW_MOCK_PAY
 })
 
+// 停售商品挡交易入口（审核 P1·债#12·根因#3 fail-closed）：软下架（listed:false）此前只挡 getProducts
+// 列表，createOrder 不校验——旧购物车/缓存/直调云函数仍能买。本组锁「下单入口拒停售品·不建单·不扣库存」。
+describe('createOrder 停售商品挡交易入口（审核 P1·债#12·根因#3）', () => {
+  beforeEach(() => {
+    control.seed('products', [
+      { _id: 'gone', id: 'gone', name: '已停售礼盒', price: 88, skus: [], listed: false },
+    ])
+  })
+
+  it('UNLISTED_ITEM：已停售主商品（listed:false）拒单·不建单·不扣库存', async () => {
+    control.seed('inventory', [{ _id: 'gone__', productId: 'gone', spec: '', stock: 5 }])
+    const r = await main({ items: [{ id: 'gone', qty: 1 }], address: ADDR })
+    expect(r.ok).toBe(false)
+    expect(r.error).toBe('UNLISTED_ITEM:gone')
+    expect(control.dump('orders').length).toBe(0) // 没建单
+    expect(control.dump('inventory').find((d) => d._id === 'gone__').stock).toBe(5) // 库存没扣
+  })
+
+  it('停售品夹带在多条目里：整单拒（不放过夹带）', async () => {
+    const r = await main({
+      items: [{ id: 'prod-1', qty: 1, sku: '雾霭蓝' }, { id: 'gone', qty: 1 }],
+      address: ADDR,
+    })
+    expect(r.ok).toBe(false)
+    expect(r.error).toBe('UNLISTED_ITEM:gone')
+    expect(control.dump('orders').length).toBe(0)
+  })
+
+  it('在售商品（listed:true / 旧无字段）不受影响', async () => {
+    const r1 = await main({ items: [{ id: 'prod-1', qty: 1, sku: '雾霭蓝' }], address: ADDR }) // 旧无字段=可售
+    expect(r1.ok).toBe(true)
+    control.seed('products', [{ _id: 'live', id: 'live', name: '在售', price: 50, skus: [], listed: true }])
+    const r2 = await main({ items: [{ id: 'live', qty: 1 }], address: ADDR })
+    expect(r2.ok).toBe(true)
+  })
+})
+
 describe('createOrder 闸门', () => {
   it('NO_OPENID：未登录拒单', async () => {
     control.setOpenId('')

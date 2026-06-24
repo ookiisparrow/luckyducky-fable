@@ -80,6 +80,9 @@ export const main = withOpenId(
         })
       } else if (byId[l.id]) {
         const p = byId[l.id]
+        // 停售挡交易入口 fail-closed（审核 P1·债#12·根因#3）：软下架商品（listed:false）此前只挡 getProducts
+        // 列表，旧购物车/缓存/直调仍能下单——这里整单拒，且在定价/预留库存之前返回（不建单·不扣库存）。
+        if (p.listed === false) return err('UNLISTED_ITEM:' + l.id)
         let price = p.price
         let spec = p.tag || ''
         if (l.sku) {
