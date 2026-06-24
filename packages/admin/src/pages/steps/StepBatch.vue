@@ -78,6 +78,16 @@ const filteredBatches = computed(() => {
 const totalPages = computed(() => Math.max(1, Math.ceil(filteredBatches.value.length / PAGE_SIZE)))
 const pagedBatches = computed(() => filteredBatches.value.slice((Math.min(bpage.value, totalPages.value) - 1) * PAGE_SIZE, Math.min(bpage.value, totalPages.value) * PAGE_SIZE))
 watch([fStatus, fTime, batches], () => (bpage.value = 1))
+
+// 默认折叠仅显最近 3 条（批次最新在前·listBatches 已按 createdAt 倒序）；查看更多展开后才出筛选+分页
+const expanded = ref(false)
+const displayed = computed(() => (expanded.value ? pagedBatches.value : batches.value.slice(0, 3)))
+function collapse() {
+  expanded.value = false
+  fStatus.value = 'all'
+  fTime.value = 0
+  bpage.value = 1
+}
 // 查看码弹层（列码 + 复制全部导出）
 const codesShow = ref(false)
 const codesBatch = ref('')
@@ -219,7 +229,7 @@ async function generate() {
         <div class="sec-t">已有批次<span v-if="batches.length" class="bcount"> · 共 {{ batches.length }}</span></div>
         <p v-if="!batches.length" class="mini">还没有批次</p>
         <template v-else>
-          <div class="bfilter">
+          <div v-if="expanded" class="bfilter">
             <div class="bpills">
               <button v-for="[k, label] in STATUS_TABS" :key="k" class="pill" :class="{ on: fStatus === k }" @click="fStatus = k">
                 {{ label }}<span class="pn">{{ statusCounts[k] }}</span>
@@ -230,8 +240,8 @@ async function generate() {
             </select>
           </div>
 
-          <p v-if="!filteredBatches.length" class="mini">这个筛选下没有批次</p>
-          <div v-for="b in pagedBatches" :key="b.batchId" class="batchrow">
+          <p v-if="expanded && !filteredBatches.length" class="mini">这个筛选下没有批次</p>
+          <div v-for="b in displayed" :key="b.batchId" class="batchrow">
             <span class="bicon">▦</span>
             <b class="bid">{{ b.batchId }}</b>
             <span class="chip" :class="STATUS[statusOf(b)][1]">{{ STATUS[statusOf(b)][0] }}</span>
@@ -246,11 +256,16 @@ async function generate() {
             </button>
           </div>
 
-          <div v-if="totalPages > 1" class="bpager">
+          <div v-if="expanded && totalPages > 1" class="bpager">
             <button class="btn ghost sm" :disabled="bpage <= 1" @click="bpage--">‹ 上一页</button>
             <span class="pginfo">第 {{ Math.min(bpage, totalPages) }} / {{ totalPages }} 页</span>
             <button class="btn ghost sm" :disabled="bpage >= totalPages" @click="bpage++">下一页 ›</button>
           </div>
+
+          <button v-if="!expanded && batches.length > 3" class="morebtn" @click="expanded = true">
+            查看更多（共 {{ batches.length }} 个批次）↓
+          </button>
+          <button v-else-if="expanded" class="morebtn" @click="collapse">收起 ↑</button>
         </template>
       </div>
 
@@ -475,6 +490,23 @@ h2 {
 .pginfo {
   font-size: 12px;
   color: var(--content-2);
+}
+.morebtn {
+  display: block;
+  width: 100%;
+  margin-top: 8px;
+  padding: 9px;
+  border: 1px dashed var(--line-strong);
+  border-radius: 10px;
+  background: none;
+  color: var(--content-2);
+  font-size: 12.5px;
+  cursor: pointer;
+}
+.morebtn:hover {
+  border-color: var(--purple-line);
+  background: var(--bg-lilac);
+  color: var(--brand);
 }
 .codesbox {
   background: var(--white);
