@@ -4,6 +4,7 @@
  */
 export * from './money'
 export * from './order'
+export * from './order.spec'
 export * from './errors'
 export * from './limits'
 export * from './seed/products'

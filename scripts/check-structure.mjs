@@ -1571,6 +1571,109 @@ export const repoChecks = [
     },
   },
   {
+    // 订单域派生物与声明同步（P3「安全处生成」spike·北极星 A）：order.spec.ts 是订单/售后状态机的
+    // 声明单源；order.ts（类型/常量/流转表）与 scripts/order-domain.generated.json 是其生成物。
+    // 改声明须跑 `node scripts/gen-order-domain.mjs` 同步生成物——漂移即红，杜绝「改了声明忘重生成」。
+    id: 'gen-order-domain-synced',
+    roots: ['#2', 'P3'],
+    desc: '订单域派生物与声明同步（P3 安全处生成）：order.ts/order-domain.generated.json 由 order.spec.ts 经 scripts/gen-order-domain.mjs 生成；漂移（改声明未重生成）即红——跑 `node scripts/gen-order-domain.mjs` 修复',
+    run() {
+      const spec = join(ROOT, 'packages/shared/src/order.spec.ts')
+      if (!existsSync(spec)) return ['packages/shared/src/order.spec.ts 缺失（订单域声明单源·P3）']
+      try {
+        execSync(`node ${join(ROOT, 'scripts/gen-order-domain.mjs')} --check`, { encoding: 'utf8', stdio: 'pipe' })
+        return []
+      } catch (e) {
+        const msg = (e && (e.stderr || e.stdout || e.message)) || '生成物与声明不同步'
+        return [String(msg).trim()]
+      }
+    },
+  },
+  {
+    // 订单域状态写入只走声明流转（根因#2 状态散写从「靠人记」升「机器对账」·P3 spike 核心 ROI）：
+    // order.spec.ts 声明合法流转表，本守卫把散落在云函数里的状态写入与之对账——
+    // ① 任何 transition('orders'|'afterSales', …, [from], 'to') 的 (from[]→to) 须是声明里的一条边；
+    // ② 任何写 orders/afterSales status 的字面量值须是声明里出现过的状态（init/terminal/流转两端）。
+    // 函数私自越流转（写未声明状态 / transition 走未声明边）当场红——防「散写各自背诵规则」回归。
+    id: 'order-transitions-declared',
+    roots: ['#2', 'P3'],
+    desc: '订单域状态写入只走声明流转（根因#2·P3 spike）：transition(orders/afterSales) 的边须在 order.spec.ts 声明流转表内；写 orders/afterSales status 的字面量须是声明状态——函数私自越流转/写未声明状态即红',
+    run() {
+      const jsonPath = join(ROOT, 'scripts/order-domain.generated.json')
+      if (!existsSync(jsonPath)) return ['scripts/order-domain.generated.json 缺失——跑 `node scripts/gen-order-domain.mjs`（订单域声明派生物·P3）']
+      let spec
+      try {
+        spec = JSON.parse(readFileSync(jsonPath, 'utf8'))
+      } catch {
+        return ['scripts/order-domain.generated.json 解析失败——重生成（P3）']
+      }
+      // 声明流转表（拆成「单个 from → to」原子边集）+ 状态集（按集合）。
+      // 拆原子边：声明里 from:['a','b']→c 记为 a→c 与 b→c 两条；实现里 transition([a,b],c) 的每个
+      // from 元素都须有声明的原子边到 c（union 语义：当前态 ∈ {a,b} 则翻 c）。
+      const declaredEdges = {} // coll -> Set("from=>to")（原子边·单 from）
+      const declaredStates = {} // coll -> Set(state)
+      for (const coll of Object.keys(spec)) {
+        declaredStates[coll] = new Set(spec[coll].states)
+        const edges = new Set()
+        for (const t of spec[coll].transitions) for (const f of t.from) edges.add(f + '=>' + t.to)
+        declaredEdges[coll] = edges
+      }
+      const COLLS = new Set(Object.keys(spec)) // 'orders' / 'afterSales'
+
+      // 受管订单域文件：orders 函数 + admin 订单/退款 actions（状态写入散落处）
+      const files = []
+      const ordersDir = join(ROOT, 'packages/cloud/src/functions/orders')
+      if (existsSync(ordersDir))
+        for (const e of readdirSync(ordersDir)) if (e.endsWith('.ts')) files.push(join(ordersDir, e))
+      for (const a of ['orders.ts', 'refunds.ts']) {
+        const p = join(ROOT, 'packages/cloud/src/functions/admin/adminApi/actions', a)
+        if (existsSync(p)) files.push(p)
+      }
+
+      const bad = []
+      for (const p of files) {
+        const src = readFileSync(p, 'utf8')
+        const rel = relative(ROOT, p)
+
+        // ① transition('<coll>', id, [<from...>], '<to>', …)：整条边对账
+        const transRe = /transition\(\s*['"](\w+)['"]\s*,[^,]+,\s*\[([^\]]*)\]\s*,\s*['"](\w+)['"]/g
+        let tm
+        while ((tm = transRe.exec(src))) {
+          const coll = tm[1]
+          if (!COLLS.has(coll)) continue // 非订单域集合（如 qrcodes）不在本守卫范围
+          const from = [...tm[2].matchAll(/['"]([a-z]+)['"]/g)].map((x) => x[1])
+          const to = tm[3]
+          // union 语义：每个 from 元素都须有声明的原子边 from→to，缺一即越流转
+          const undeclared = from.filter((f) => !declaredEdges[coll].has(f + '=>' + to))
+          if (undeclared.length)
+            bad.push(`${rel}：transition('${coll}', …, [${from.join(',')}] → '${to}') 含未声明边 ${undeclared.map((f) => f + '→' + to).join('、')}——order.spec.ts 流转表里没有，越流转或改声明再生成（根因#2·P3）`)
+        }
+
+        // ② 写库 status 字面量：.update({ data: { … status: 'X' … } })（含 add/set 初始态）须是声明状态。
+        // 只在写侧（update/add/set 的 data 对象内）取值，避开 .where 过滤侧与 err('BAD_STATUS') 等读侧。
+        // 判定哪个集合：取该 status 写入点之前最近的 .collection('<coll>') / transition('<coll>')。
+        const writeRe = /\bstatus:\s*['"]([a-z]+)['"]/g
+        let wm
+        while ((wm = writeRe.exec(src))) {
+          const val = wm[1]
+          const at = wm.index
+          // 写侧判定：本次匹配往前 120 字符内须出现 update(/add(/set( 的 data: 上下文（排除 where 过滤）
+          const before = src.slice(Math.max(0, at - 160), at)
+          const inWhere = /\.where\(\s*\{[^}]*$/.test(before)
+          if (inWhere) continue // where 过滤侧（from 条件），不是写入
+          // 找最近归属集合
+          const head = src.slice(0, at)
+          const collMatches = [...head.matchAll(/(?:\.collection\(|transition\()\s*['"](\w+)['"]/g)]
+          const coll = collMatches.length ? collMatches[collMatches.length - 1][1] : null
+          if (!coll || !COLLS.has(coll)) continue // 非订单域集合
+          if (!declaredStates[coll].has(val))
+            bad.push(`${rel}：写 ${coll}.status='${val}' 不是 order.spec.ts 声明状态（${[...declaredStates[coll]].join('/')}）——打错状态名或改声明再生成（根因#2·P3）`)
+        }
+      }
+      return bad
+    },
+  },
+  {
     // 扫普通链接二维码进站 routing（R3/决策§13）：印刷码扫码经微信「扫普通链接二维码打开小程序」进站，
     // 微信把扫到的 URL 经启动参数 q 传给**入口页（pages/index/index）**——入口页非激活页，须识别激活码
     // 并 reLaunch 转发 welcome，否则 q 被忽略、用户落商城首页、激活断（根因#8 真机入口落首页）。

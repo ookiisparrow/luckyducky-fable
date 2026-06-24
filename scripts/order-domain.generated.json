@@ -1,0 +1,103 @@
+{
+  "orders": {
+    "states": [
+      "closed",
+      "done",
+      "paid",
+      "pending",
+      "shipped"
+    ],
+    "initial": [
+      "pending",
+      "paid"
+    ],
+    "terminal": [
+      "done",
+      "closed"
+    ],
+    "transitions": [
+      {
+        "from": [
+          "pending"
+        ],
+        "to": "paid",
+        "trigger": "pay/payCallback（0元单/支付成功）"
+      },
+      {
+        "from": [
+          "pending"
+        ],
+        "to": "closed",
+        "trigger": "pay 惰性关单 / closeExpiredOrders 定时关单"
+      },
+      {
+        "from": [
+          "closed"
+        ],
+        "to": "paid",
+        "trigger": "payCallback（关单后钱到账·订单复活）"
+      },
+      {
+        "from": [
+          "paid",
+          "shipped"
+        ],
+        "to": "shipped",
+        "trigger": "adminApi.shipOrder（首发/改单号·幂等）"
+      },
+      {
+        "from": [
+          "shipped"
+        ],
+        "to": "done",
+        "trigger": "confirmReceive（确认收货）"
+      }
+    ]
+  },
+  "afterSales": {
+    "states": [
+      "applied",
+      "approved",
+      "refunded",
+      "rejected"
+    ],
+    "initial": [
+      "applied"
+    ],
+    "terminal": [
+      "refunded",
+      "rejected"
+    ],
+    "transitions": [
+      {
+        "from": [
+          "applied"
+        ],
+        "to": "approved",
+        "trigger": "adminApi.approveRefund（原子抢占·触发退款工作流）"
+      },
+      {
+        "from": [
+          "approved"
+        ],
+        "to": "applied",
+        "trigger": "adminApi.approveRefund 回滚（工作流未受理）"
+      },
+      {
+        "from": [
+          "applied"
+        ],
+        "to": "rejected",
+        "trigger": "adminApi.rejectRefund（拒绝售后）"
+      },
+      {
+        "from": [
+          "applied",
+          "approved"
+        ],
+        "to": "refunded",
+        "trigger": "refundCallback（退款成功幂等）"
+      }
+    ]
+  }
+}
