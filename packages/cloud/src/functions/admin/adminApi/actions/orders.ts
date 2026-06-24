@@ -1,4 +1,4 @@
-import { pageQuery, uploadShippingToWx, alert } from '../../../../kit'
+import { pageQuery, uploadShippingToWx, notifyAlert } from '../../../../kit'
 import { reply, type Ctx } from '../lib'
 
 // —— 订单发货（状态流转 paid → shipped；金额/条目/地址只读不动）——
@@ -49,7 +49,7 @@ export async function shipOrder({ db, data }: Ctx) {
         : { wxShipUploaded: false, wxShipError: ship.error || 'WX_SHIP_FAIL' },
     })
     .catch(() => null)
-  if (!ship.ok) alert('money', 'shipOrder', 'WX_SHIP_UPLOAD_FAIL', { orderId: id, error: ship.error })
+  if (!ship.ok) await notifyAlert('money', 'shipOrder', 'WX_SHIP_UPLOAD_FAIL', { orderId: id, error: ship.error })
   return reply(200, { ok: true, wxShip: ship.ok })
 }
 

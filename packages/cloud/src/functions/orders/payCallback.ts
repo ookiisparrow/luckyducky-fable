@@ -1,5 +1,5 @@
 import { toFen } from '@luckyducky/shared'
-import { defineNotifyCallback, transition, alert } from '../../kit'
+import { defineNotifyCallback, transition, alert, notifyAlert } from '../../kit'
 
 // 支付结果回调（微信 → paynotify 工作流 → 本函数；工作流通道可信，解密已由平台完成）。
 // 防伪闸 + ACK 协议 + id 提取由 kit.defineNotifyCallback 收编（与 refundCallback 共享外壳）；
@@ -30,7 +30,7 @@ export const main = defineNotifyCallback<any>({
       }
       return patch
     })
-    if (!doc) alert('money', 'payCallback', 'UNKNOWN_ORDER', { id }) // 收钱无单·须告警（债#23）
+    if (!doc) await notifyAlert('money', 'payCallback', 'UNKNOWN_ORDER', { id }) // 收钱无单·须告警+推送（债#23续）
     void moved // paid/shipped/done 上的重复通知：moved=false，幂等 no-op
   },
 })

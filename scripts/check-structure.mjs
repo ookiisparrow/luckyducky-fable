@@ -213,6 +213,39 @@ export const repoChecks = [
     },
   },
   {
+    // 企微群机器人告警推送单一收口（债#23续·根因#13 可观测落地 + #12 平台接缝单点）：钱链/安全告警的
+    // 群机器人推送只经 kit/botpush.ts(pushBotAlert)、业务码一律经 kit/observe 的 notifyAlert——杜绝散调
+    // （重复推/绕开关/webhook 凭证多处）。除 botpush(定义) 与 observe(唯一调用) 外，cloud/src 不得引用 pushBotAlert/botpush。
+    id: 'bot-push-single-seam',
+    roots: ['#13', '债#23'],
+    desc: '企微推送单一收口（债#23续·根因#13/#12）：pushBotAlert 仅定义于 kit/botpush.ts、仅 kit/observe.ts(notifyAlert) 调用；其余 packages/cloud/src 不得 import botpush 或调 pushBotAlert（防散调/绕开关/凭证多处）',
+    run() {
+      const seam = 'packages/cloud/src/kit/botpush.ts'
+      const caller = 'packages/cloud/src/kit/observe.ts'
+      if (!existsSync(join(ROOT, seam))) return [`${seam} 缺失——企微推送接缝单点（债#23续·根因#13）`]
+      const bad = []
+      if (!/export\s+async\s+function\s+pushBotAlert/.test(readFileSync(join(ROOT, seam), 'utf8')))
+        bad.push(`${seam} 未导出 pushBotAlert——接缝空壳`)
+      const srcRoot = join(ROOT, 'packages/cloud/src')
+      const walk = (d) => {
+        for (const e of readdirSync(d)) {
+          const p = join(d, e)
+          if (statSync(p).isDirectory()) walk(p)
+          else if (e.endsWith('.ts')) {
+            const rel = relative(ROOT, p).replace(/\\/g, '/')
+            if (rel === seam || rel === caller) continue
+            if (/pushBotAlert|['"][^'"]*\/botpush['"]/.test(readFileSync(p, 'utf8')))
+              bad.push(`${rel} 直达 pushBotAlert/botpush——企微推送须经 kit/observe.notifyAlert 单一收口（债#23续·根因#12）`)
+          }
+        }
+      }
+      if (existsSync(srcRoot)) walk(srcRoot)
+      if (existsSync(join(ROOT, caller)) && !/pushBotAlert/.test(readFileSync(join(ROOT, caller), 'utf8')))
+        bad.push(`${caller}(notifyAlert) 未调 pushBotAlert——接缝未接通（死代码）`)
+      return bad
+    },
+  },
+  {
     id: 'interface-catalog-sync',
     roots: ['正册'],
     desc: '系统事实同步（docs/系统事实.md 是接口权威登记册，正册自评 P1）：每个云函数 + 每个 adminApi action 都须登记，杜绝「加接口忘登记」',
@@ -1155,7 +1188,7 @@ export const repoChecks = [
     // 守卫锁两钱链回调引 alert，防告警被静默移除回退成「平台看着成功、实则钱链炸了无人知」。
     id: 'moneychain-alert-wired',
     roots: ['#13'],
-    desc: '钱链可观测告警接入（债#23 代码侧）：payCallback/refundCallback 静默语义失败须经 kit/observe 的 alert() 打 [LD_ALERT] 标记（控制台日志告警抓取）——防钱链失败信号被移除，平台指标看不见的「返200却出错」无人知',
+    desc: '钱链可观测告警接入（债#23 代码侧）：payCallback/refundCallback 静默语义失败须经 kit/observe 的 alert()/notifyAlert() 打 [LD_ALERT] 标记（控制台日志告警抓取；notifyAlert＝alert+企微群机器人推送·债#23续）——防钱链失败信号被移除，平台指标看不见的「返200却出错」无人知',
     run() {
       const bad = []
       const files = [
@@ -1168,8 +1201,8 @@ export const repoChecks = [
           bad.push(`${f} 缺失（钱链回调，债#23）`)
           continue
         }
-        if (!/\balert\(/.test(readFileSync(abs, 'utf8')))
-          bad.push(`${f} 未用 alert() 打钱链告警标记——静默语义失败无信号（债#23 可观测）`)
+        if (!/\b(notifyAlert|alert)\(/.test(readFileSync(abs, 'utf8')))
+          bad.push(`${f} 未用 alert()/notifyAlert() 打钱链告警标记——静默语义失败无信号（债#23 可观测）`)
       }
       const obs = join(ROOT, 'packages/cloud/src/kit/observe.ts')
       if (!existsSync(obs) || !/export function alert/.test(readFileSync(obs, 'utf8')))
@@ -1668,6 +1701,9 @@ export const typeAndTestGuards = [
   // 评价列表分页端到端（根因#7·债#13）：getReviews 列表 cursor 翻页（>limit 返 nextCursor·续页接上），
   // 汇总仅首页基于 bounded 样本返回（approx 标注）。reverseTest 锁此行为。
   { id: 'reviews-paged-effective', mechanism: 'test', roots: ['#7'], reverseTest: 'tests/cloud/getReviewsPaged.test.js' },
+  // 企微推送 fail-soft（债#23续·根因#13）：pushBotAlert 推送失败/网络异常/非企微 webhook 一律返回 ok:false
+  // 而**绝不抛错**——可观测性不反噬主流程（钱链回调照常 ACK）。reverseTest 锁此行为。
+  { id: 'bot-alert-fail-soft', mechanism: 'test', roots: ['#13', '债#23'], reverseTest: 'tests/cloud/kit/botpush.test.js' },
 ]
 
 const SRC_DIRS = ['packages', 'cloudfunctions', 'scripts']
