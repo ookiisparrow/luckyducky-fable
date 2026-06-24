@@ -1760,7 +1760,7 @@ export const repoChecks = [
         while ((wm = writeRe.exec(src))) {
           const val = wm[1]
           const at = wm.index
-          // 写侧判定：本次匹配往前 120 字符内须出现 update(/add(/set( 的 data: 上下文（排除 where 过滤）
+          // 写侧判定：往前 160 字符若处于未闭合 .where({… 则跳过（过滤侧 from 条件，非写入）——只对账写库 status
           const before = src.slice(Math.max(0, at - 160), at)
           const inWhere = /\.where\(\s*\{[^}]*$/.test(before)
           if (inWhere) continue // where 过滤侧（from 条件），不是写入
