@@ -4,7 +4,7 @@
  * 经 api/cloud.js 适配层读写（云模式存云端 productsDraft；本地模式 localStorage）。
  */
 import { defineStore } from 'pinia'
-import { loadProducts, saveProduct, deleteProduct } from '@/api/cloud.js'
+import { loadProducts, saveProduct, deleteProduct, unpublishProduct, republishProduct } from '@/api/cloud.js'
 import { STEP_NAMES, newProduct, normalizeProduct, stepDone } from './productShape.js'
 
 // 纯形状逻辑在 productShape.js（无云依赖·可被测试直接 import）；这里 re-export 保持调用方 import 不变
@@ -14,6 +14,7 @@ export const useProductsStore = defineStore('products', {
   state: () => ({
     list: [],
     urls: {}, // fileID → 临时展示 URL（云模式；本地模式 dataURL 直接可显）
+    listed: {}, // productId → 是否在售（S11·债#12 软下架显形；无键=筹备中/未上架）
     loaded: false,
     error: '',
   }),
@@ -22,19 +23,32 @@ export const useProductsStore = defineStore('products', {
     doneCount: () => (p) => [1, 2, 3, 4, 5, 6].filter((n) => stepDone(p, n)).length,
     // 图引用 → 可显示地址：dataURL 原样；fileID 查映射（取不到给空，由占位兜底）
     imgUrl: (s) => (ref) => (!ref ? '' : ref.startsWith('cloud://') ? s.urls[ref] || '' : ref),
+    // 三态（S11）：未上架=preparing；已上架按 listed 分 在售/已下架
+    statusOf: (s) => (p) =>
+      p.status !== 'onsale' ? 'preparing' : s.listed[p.id] === false ? 'unlisted' : 'onsale',
   },
   actions: {
     async load(force = false) {
       if (this.loaded && !force) return
       try {
-        const { list, urls } = await loadProducts()
+        const { list, urls, listed } = await loadProducts()
         this.list = list.map(normalizeProduct) // 入库归一·脏商品降级安全形状不白屏（根因#8）
         this.urls = urls
+        this.listed = listed || {}
         this.loaded = true
         this.error = ''
       } catch (e) {
         this.error = '加载失败：' + e.message
       }
+    },
+    // 软下架/恢复（债#12·S11 控制台显形）：翻转 products.listed，本地 listed 映射同步
+    async unpublish(id) {
+      await unpublishProduct(id)
+      this.listed = { ...this.listed, [id]: false }
+    },
+    async republish(id) {
+      await republishProduct(id)
+      this.listed = { ...this.listed, [id]: true }
     },
     addUrl(ref, url) {
       if (ref && url) this.urls = { ...this.urls, [ref]: url }

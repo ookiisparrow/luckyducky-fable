@@ -56,3 +56,33 @@ describe('商品停售/恢复（债#12）', () => {
     expect(p.name).toBe('A') // 商品数据完整保留
   })
 })
+
+// S11 控制台商品页：listDrafts 须附 listed 映射，控制台才能分「在售 / 已下架 / 筹备中」三态
+// （在售=onsale+listed≠false·已下架=onsale+listed:false·筹备中=未上架无 products 文档）。
+// 软下架（债#12）此前无管理端 UI，本映射是其在控制台显形的数据来源。
+describe('listDrafts 附 listed 映射（S11·债#12 软下架显形）', () => {
+  beforeEach(() => {
+    // 草稿：p1/p2/p3 已上架（products 已 seed：p1 旧无字段 / p2 listed:true / p3 listed:false），p4 筹备中
+    control.seed('productsDraft', [
+      { _id: 'p1', id: 'p1', name: 'A', status: 'onsale', createdAt: 4 },
+      { _id: 'p2', id: 'p2', name: 'B', status: 'onsale', createdAt: 3 },
+      { _id: 'p3', id: 'p3', name: 'C', status: 'onsale', createdAt: 2 },
+      { _id: 'p4', id: 'p4', name: 'D', status: 'preparing', createdAt: 1 },
+    ])
+  })
+
+  it('listed 映射：旧无字段 true / listed:true true / listed:false false / 筹备中 undefined', async () => {
+    const r = await admin('listDrafts')
+    expect(r.ok).toBe(true)
+    expect(r.listed.p1).toBe(true) // 旧无字段=可售（与 getProducts 同口径）
+    expect(r.listed.p2).toBe(true)
+    expect(r.listed.p3).toBe(false) // 已下架
+    expect(r.listed.p4).toBeUndefined() // 筹备中无 products 文档
+  })
+
+  it('unpublishProduct 后 listDrafts 即反映 listed:false（已下架在控制台显形）', async () => {
+    await admin('unpublishProduct', { id: 'p2' })
+    const r = await admin('listDrafts')
+    expect(r.listed.p2).toBe(false)
+  })
+})

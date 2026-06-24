@@ -90,12 +90,13 @@ function localSave(list) {
   localStorage.setItem(DATA_KEY, JSON.stringify(list))
 }
 
-// 返回 { list, urls }：urls 为 fileID → 可显示 URL 的映射（本地模式恒为空，dataURL 直接可显）
+// 返回 { list, urls, listed }：urls 为 fileID → 可显示 URL 的映射（本地模式恒为空，dataURL 直接可显）；
+// listed 为 productId → 是否在售（S11·债#12 软下架显形，本地模式恒为空）。
 export async function loadProducts() {
-  if (!cloudMode) return { list: localList(), urls: {} }
+  if (!cloudMode) return { list: localList(), urls: {}, listed: {} }
   const r = await post('listDrafts')
   if (!r.ok) throw new Error(r.error || 'LOAD_FAIL')
-  return { list: r.list, urls: r.urls || {} }
+  return { list: r.list, urls: r.urls || {}, listed: r.listed || {} }
 }
 
 export async function saveProduct(product) {

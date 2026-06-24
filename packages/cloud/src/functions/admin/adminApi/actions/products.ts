@@ -1,7 +1,7 @@
 import { isValidPriceYuan } from '@luckyducky/shared'
 import { reply, cleanProduct, storeImage, type Ctx } from '../lib'
 
-export async function listDrafts({ cloud, drafts }: Ctx) {
+export async function listDrafts({ cloud, db, drafts }: Ctx) {
   const res = await drafts.orderBy('createdAt', 'desc').limit(100).get()
   const ids = new Set<string>()
   for (const p of res.data) {
@@ -13,7 +13,21 @@ export async function listDrafts({ cloud, drafts }: Ctx) {
     const r = await cloud.getTempFileURL({ fileList: [...ids] })
     for (const f of r.fileList) if (f.tempFileURL) urls[f.fileID] = f.tempFileURL
   }
-  return reply(200, { ok: true, list: res.data, urls })
+  // 上架/下架状态映射（S11·债#12 软下架显形）：listed 标记在 products、不在草稿，控制台靠它分
+  // 「在售（onsale+listed≠false）/ 已下架（onsale+listed:false）/ 筹备中（未上架·无 products 文档）」。
+  // 一次性批量取（草稿 ≤100·bounded·根因#7），口径与 getProducts 一致（旧无字段=可售）。
+  const draftIds = res.data.map((p: any) => p.id || p._id).filter(Boolean)
+  const listed: Record<string, boolean> = {}
+  if (draftIds.length) {
+    const pr = await db
+      .collection('products')
+      .where({ _id: db.command.in(draftIds) })
+      .field({ listed: true })
+      .get()
+      .catch(() => ({ data: [] as any[] }))
+    for (const p of pr.data) listed[p._id] = p.listed !== false
+  }
+  return reply(200, { ok: true, list: res.data, urls, listed })
 }
 
 export async function saveDraft({ drafts, data }: Ctx) {
