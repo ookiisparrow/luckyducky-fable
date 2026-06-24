@@ -8,6 +8,7 @@ import Orders from '@/pages/Orders.vue'
 import Refunds from '@/pages/Refunds.vue'
 import Dashboard from '@/pages/Dashboard.vue'
 import Inventory from '@/pages/Inventory.vue'
+import Notifications from '@/pages/Notifications.vue'
 
 export const router = createRouter({
   history: createWebHashHistory(),
@@ -20,6 +21,7 @@ export const router = createRouter({
     { path: '/refunds', component: Refunds },
     { path: '/inventory', component: Inventory },
     { path: '/dashboard', component: Dashboard },
+    { path: '/notifications', component: Notifications },
     // 上新向导：/product/<id>/step/<1-6>；左侧「按步骤直达」也跳这里
     { path: '/product/:id/step/:n', component: Wizard, props: true },
   ],

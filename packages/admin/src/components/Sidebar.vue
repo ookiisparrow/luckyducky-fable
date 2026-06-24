@@ -60,6 +60,9 @@ function doLogout() {
     <router-link class="nav" :class="{ on: route.path === '/dashboard' }" to="/dashboard"
       >📊 数据看板</router-link
     >
+    <router-link class="nav" :class="{ on: route.path === '/notifications' }" to="/notifications"
+      >🔔 消息通知</router-link
+    >
 
     <div class="spacer"></div>
     <div class="admin">
