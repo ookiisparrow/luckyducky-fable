@@ -424,11 +424,24 @@ export async function clearFeeMismatch(id) {
 
 // ---------- 售后退款（链10：审核 + 触发退款工作流；金额申请时已云端算定） ----------
 
-export async function listRefunds(cursor) {
+// 游标分页（根因#7）：status 服务端筛选、q 按订单号搜索（都在云端做·不靠已加载页过滤）。
+export async function listRefunds({ cursor, status, q } = {}) {
   if (!cloudMode) return { list: [], nextCursor: null, hasMore: false } // 售后单只存在于云端
-  const r = await post('listRefunds', cursor != null ? { cursor } : {})
+  const payload = {}
+  if (cursor != null) payload.cursor = cursor
+  if (status && status !== 'all') payload.status = status
+  if (q) payload.q = q
+  const r = await post('listRefunds', payload)
   if (!r.ok) throw new Error(r.error || 'LOAD_REFUNDS_FAIL')
   return { list: r.list, nextCursor: r.nextCursor ?? null, hasMore: !!r.hasMore }
+}
+
+// 按状态服务端精确计数（标签计数单源·根因#7）：{ all, applied, approved, refunded, rejected }
+export async function refundCounts() {
+  if (!cloudMode) return {}
+  const r = await post('refundCounts')
+  if (!r.ok) throw new Error(r.error || 'LOAD_REFUND_COUNTS_FAIL')
+  return r.counts || {}
 }
 
 export async function approveRefund(id) {

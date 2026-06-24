@@ -1,13 +1,20 @@
 <script setup>
 /**
- * 售后退款（P4 Batch 2，链10）：买家申请退款后在这里审核。
- * 列表来自云端 afterSales（adminApi listRefunds，倒序）；
- * 同意 = approveRefund 触发退款工作流（金额申请时已云端分摊算定，原路退回微信支付）→
- * 微信退款回调（refundCallback）把状态翻「已退款」；拒绝必须填原因（买家小程序可见）。
- * 流程提醒：先线下收到寄回包装并验收扫码（激活码未用）再点同意。
+ * 售后退款（S10 重设计·密集表格 + 决策抽屉）。买家申请退款后在这里审核。
+ *
+ * 重设计要点（与订单同治·根因#7 计数/筛选/搜索失真）：
+ * - 标签计数走服务端 refundCounts（.count() 精确·不受分页影响），不再数「已加载页」。
+ * - 切状态走服务端筛选（listRefunds status）；搜索按订单号服务端精确命中（q）。
+ * - 卡片流改密集表格；同意/拒绝funnel进右侧「决策抽屉」。
+ * - 决策抽屉的核心＝**人工验收闸**：同意前必须勾选「已收到寄回包装并验收」+「激活卡未拆封/未用」
+ *   才放行（贴现有业务规则：先收到寄回验收再同意）。自动判据（激活码/进课/寄回物流状态）需数据
+ *   补链（afterSales 未快照·qrcodes 无 orderId·无寄回流），列为后续，不在此伪造徽章。
+ *
+ * 同意 = approveRefund 触发退款工作流（金额申请时已云端分摊算定，原路退回）→ refundCallback 翻
+ * 「已退款」；拒绝必须填原因（买家小程序可见）。
  */
 import { ref, computed } from 'vue'
-import { cloudMode, listRefunds, approveRefund, rejectRefund } from '@/api/cloud.js'
+import { cloudMode, listRefunds, refundCounts, approveRefund, rejectRefund } from '@/api/cloud.js'
 
 const STATUS = {
   applied: { label: '待审核', chip: 'warn' },
@@ -16,24 +23,39 @@ const STATUS = {
   rejected: { label: '已拒绝', chip: 'grey' },
 }
 const TABS = [
-  { key: 'applied', label: '待审核' },
-  { key: 'approved', label: '退款处理中' },
-  { key: 'refunded', label: '已退款' },
-  { key: 'rejected', label: '已拒绝' },
-  { key: 'all', label: '全部' },
+  { key: 'applied', label: '待审核', status: 'applied' },
+  { key: 'approved', label: '退款处理中', status: 'approved' },
+  { key: 'refunded', label: '已退款', status: 'refunded' },
+  { key: 'rejected', label: '已拒绝', status: 'rejected' },
+  { key: 'all', label: '全部', status: 'all' },
 ]
 
+const counts = ref({}) // 服务端精确计数 { all, applied, approved, refunded, rejected }
 const list = ref([])
 const loading = ref(true)
 const loadErr = ref('')
 const tab = ref('applied')
+const q = ref('')
+const activeQ = ref('')
 const nextCursor = ref(null)
 const hasMore = ref(false)
 const loadingMore = ref(false)
-// 行内表单（同时只开一单）：{ id, mode: 'approve'|'reject', reason, saving, error }
-const form = ref(null)
+// 决策抽屉：{ record, mode:'review'|'view', received, cardUnused, rejecting, reason, saving, error }
+const drawer = ref(null)
 
-async function init() {
+const activeStatus = computed(() => TABS.find((t) => t.key === tab.value)?.status || 'all')
+const tabCount = (t) => (t.status === 'all' ? (counts.value.all ?? 0) : (counts.value[t.status] ?? 0))
+
+async function loadCounts() {
+  if (!cloudMode) return
+  try {
+    counts.value = await refundCounts()
+  } catch {
+    /* 计数失败不阻断列表 */
+  }
+}
+
+async function loadList() {
   if (!cloudMode) {
     loading.value = false
     return
@@ -41,7 +63,7 @@ async function init() {
   loading.value = true
   loadErr.value = ''
   try {
-    const paged = await listRefunds()
+    const paged = await listRefunds({ status: activeStatus.value, q: activeQ.value })
     list.value = paged.list
     nextCursor.value = paged.nextCursor
     hasMore.value = paged.hasMore
@@ -51,14 +73,17 @@ async function init() {
     loading.value = false
   }
 }
+
+async function init() {
+  await Promise.all([loadCounts(), loadList()])
+}
 init()
 
-// 加载更多（游标分页，根因#7）：追加下一页、按 _id 去重防重入
 async function loadMore() {
   if (loadingMore.value || !hasMore.value || nextCursor.value == null) return
   loadingMore.value = true
   try {
-    const paged = await listRefunds(nextCursor.value)
+    const paged = await listRefunds({ status: activeStatus.value, q: activeQ.value, cursor: nextCursor.value })
     const ids = new Set(list.value.map((a) => a._id))
     list.value = [...list.value, ...paged.list.filter((a) => !ids.has(a._id))]
     nextCursor.value = paged.nextCursor
@@ -70,55 +95,97 @@ async function loadMore() {
   }
 }
 
-const shown = computed(() =>
-  tab.value === 'all' ? list.value : list.value.filter((a) => a.status === tab.value),
-)
-const countOf = (k) => (k === 'all' ? list.value.length : list.value.filter((a) => a.status === k).length)
+function switchTab(key) {
+  if (tab.value === key && !activeQ.value) return
+  tab.value = key
+  q.value = ''
+  activeQ.value = ''
+  loadList()
+}
+function doSearch() {
+  const t = q.value.trim()
+  if (t === activeQ.value) return
+  activeQ.value = t
+  loadList()
+}
+function clearSearch() {
+  if (!activeQ.value && !q.value) return
+  q.value = ''
+  activeQ.value = ''
+  loadList()
+}
 
 const fmtTime = (ms) => {
-  if (!ms) return ''
+  if (!ms) return '—'
   const d = new Date(ms)
   const p = (n) => String(n).padStart(2, '0')
-  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`
+  return `${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`
+}
+const maskPhone = (p) => (p && p.length >= 7 ? p.slice(0, 3) + '****' + p.slice(-4) : p || '')
+const goodsLine = (a) => `${a.name}${a.spec ? `（${a.spec}）` : ''} ×${a.qty}`
+
+function matchesFilter(a) {
+  if (activeQ.value) return true
+  if (activeStatus.value === 'all') return true
+  return a.status === activeStatus.value
 }
 
-function openForm(a, mode) {
-  form.value = { id: a._id, mode, reason: '', saving: false, error: '' }
+function openDrawer(a, mode) {
+  drawer.value = {
+    record: a,
+    mode,
+    received: false,
+    cardUnused: false,
+    rejecting: false,
+    reason: '',
+    saving: false,
+    error: '',
+  }
+}
+function closeDrawer() {
+  if (drawer.value?.saving) return
+  drawer.value = null
 }
 
-async function doApprove(a) {
-  const f = form.value
-  if (!f || f.saving) return
-  f.saving = true
-  f.error = ''
+const canApprove = computed(() => !!drawer.value && drawer.value.received && drawer.value.cardUnused)
+
+async function doApprove() {
+  const d = drawer.value
+  if (!d || d.saving || !canApprove.value) return
+  d.saving = true
+  d.error = ''
   try {
-    await approveRefund(a._id)
-    a.status = 'approved'
-    a.approvedAt = Date.now()
-    form.value = null
+    await approveRefund(d.record._id)
+    d.record.status = 'approved'
+    d.record.approvedAt = Date.now()
+    drawer.value = null
+    if (!matchesFilter(d.record)) list.value = list.value.filter((x) => x._id !== d.record._id)
+    loadCounts()
   } catch (e) {
-    f.error = '退款触发失败：' + e.message
-    f.saving = false
+    d.error = '退款触发失败：' + e.message
+    d.saving = false
   }
 }
 
-async function doReject(a) {
-  const f = form.value
-  if (!f || f.saving) return
-  if (!f.reason.trim()) {
-    f.error = '拒绝必须填写原因（买家会看到）'
+async function doReject() {
+  const d = drawer.value
+  if (!d || d.saving) return
+  if (!d.reason.trim()) {
+    d.error = '拒绝必须填写原因（买家会看到）'
     return
   }
-  f.saving = true
-  f.error = ''
+  d.saving = true
+  d.error = ''
   try {
-    await rejectRefund(a._id, f.reason.trim())
-    a.status = 'rejected'
-    a.rejectReason = f.reason.trim()
-    form.value = null
+    await rejectRefund(d.record._id, d.reason.trim())
+    d.record.status = 'rejected'
+    d.record.rejectReason = d.reason.trim()
+    drawer.value = null
+    if (!matchesFilter(d.record)) list.value = list.value.filter((x) => x._id !== d.record._id)
+    loadCounts()
   } catch (e) {
-    f.error = '操作失败：' + e.message
-    f.saving = false
+    d.error = '操作失败：' + e.message
+    d.saving = false
   }
 }
 </script>
@@ -134,81 +201,138 @@ async function doReject(a) {
     </header>
 
     <p v-if="!cloudMode" class="hint warn">售后审核需云端模式（配置 VITE_ADMIN_API）。</p>
-    <p v-else-if="loadErr" class="hint warn">{{ loadErr }}</p>
-    <p v-else-if="loading" class="hint">加载中…</p>
 
     <template v-else>
-      <div class="tabs">
-        <button
-          v-for="t in TABS"
-          :key="t.key"
-          class="tab"
-          :class="{ on: tab === t.key }"
-          @click="tab = t.key"
-        >
-          {{ t.label }}<span class="tab-n">{{ countOf(t.key) }}</span>
-        </button>
-      </div>
-
-      <p v-if="!shown.length" class="hint">
-        {{ tab === 'applied' ? '没有待审核的售后申请' : '这个状态下还没有售后单' }}
-      </p>
-
-      <div v-for="a in shown" :key="a._id" class="card refund">
-        <div class="row head-row">
-          <span class="oid">订单 {{ a.orderId }}</span>
-          <span class="time">申请 {{ fmtTime(a.appliedAt) }}</span>
-          <span class="chip" :class="STATUS[a.status]?.chip">{{ STATUS[a.status]?.label || a.status }}</span>
-        </div>
-
-        <div class="row">
-          <div class="goods">
-            <div class="goods-line">{{ a.name }}{{ a.spec ? `（${a.spec}）` : '' }} ×{{ a.qty }}</div>
-            <div v-if="a.reason" class="reason">买家原因：{{ a.reason }}</div>
-          </div>
-          <b class="amount">退 ￥{{ Number(a.refundAmount).toFixed(2) }}</b>
-        </div>
-
-        <div class="row addr">
-          <span>👤 {{ a.addressName }} {{ a.phone }}</span>
-          <span v-if="a.status === 'refunded'" class="time"
-            >退款完成 {{ fmtTime(a.refundedAt) }}{{ a.refundTransactionId ? ' · 退款单 ' + a.refundTransactionId.slice(-8) : '' }}</span
+      <div class="bar">
+        <div class="tabs">
+          <button
+            v-for="t in TABS"
+            :key="t.key"
+            class="tab"
+            :class="{ on: tab === t.key && !activeQ }"
+            @click="switchTab(t.key)"
           >
-          <span v-else-if="a.status === 'rejected'" class="time">拒绝原因：{{ a.rejectReason }}</span>
-          <span v-else-if="a.status === 'approved'" class="time">已触发退款，等微信回调确认</span>
-        </div>
-
-        <!-- 待审核：同意 / 拒绝 -->
-        <div v-if="a.status === 'applied' && form?.id !== a._id" class="row">
-          <button class="btn brand" @click="openForm(a, 'approve')">✅ 同意退款</button>
-          <button class="btn ghost" @click="openForm(a, 'reject')">拒绝</button>
-        </div>
-        <div v-if="form?.id === a._id && form.mode === 'approve'" class="row act-form">
-          <span class="confirm-text">确认原路退回 <b>￥{{ Number(a.refundAmount).toFixed(2) }}</b>？（请先确认已收到寄回包装）</span>
-          <button class="btn brand" :disabled="form.saving" @click="doApprove(a)">
-            {{ form.saving ? '退款中…' : '确认退款' }}
+            {{ t.label }}<span class="tab-n">{{ tabCount(t) }}</span>
           </button>
-          <button class="btn ghost" :disabled="form.saving" @click="form = null">取消</button>
-          <span v-if="form.error" class="err">{{ form.error }}</span>
         </div>
-        <div v-if="form?.id === a._id && form.mode === 'reject'" class="row act-form">
-          <input
-            v-model="form.reason"
-            class="input reject-reason"
-            placeholder="拒绝原因（买家会看到）"
-            @keyup.enter="doReject(a)"
-          />
-          <button class="btn brand" :disabled="form.saving" @click="doReject(a)">
-            {{ form.saving ? '提交中…' : '确认拒绝' }}
-          </button>
-          <button class="btn ghost" :disabled="form.saving" @click="form = null">取消</button>
-          <span v-if="form.error" class="err">{{ form.error }}</span>
+        <div class="search">
+          <input v-model="q" class="input" placeholder="搜索订单号（精确）" @keyup.enter="doSearch" />
+          <button class="btn ghost mini" @click="doSearch">搜索</button>
         </div>
       </div>
-      <button v-if="hasMore" class="btn ghost more" :disabled="loadingMore" @click="loadMore">
-        {{ loadingMore ? '加载中…' : '加载更多' }}
-      </button>
+
+      <p class="cloud-note">状态计数与筛选均来自云端实时统计，不受当前页加载量影响（修原「计数失真」问题）。</p>
+
+      <div v-if="activeQ" class="searching">
+        搜索订单号「<b>{{ activeQ }}</b>」的结果（跨全部状态）
+        <button class="link" @click="clearSearch">清除搜索</button>
+      </div>
+
+      <p v-if="loadErr" class="hint warn">{{ loadErr }}</p>
+      <p v-else-if="loading" class="hint">加载中…</p>
+
+      <template v-else>
+        <p v-if="!list.length" class="hint">
+          {{ activeQ ? '没有匹配该订单号的售后单' : tab === 'applied' ? '没有待审核的售后申请' : '这个状态下还没有售后单' }}
+        </p>
+
+        <div v-else class="card table">
+          <div class="row hrow">
+            <span>订单号</span><span>申请时间</span><span>买家</span><span>退款商品 / 原因</span>
+            <span class="r">退款额</span><span>状态</span><span class="r">操作</span>
+          </div>
+          <div v-for="a in list" :key="a._id" class="row">
+            <span class="oid">{{ a.orderId }}</span>
+            <span class="muted">{{ fmtTime(a.appliedAt) }}</span>
+            <span class="buyer"><b>{{ a.addressName || '—' }}</b><em>{{ maskPhone(a.phone) }}</em></span>
+            <span class="goods" :title="goodsLine(a) + (a.reason ? ' · ' + a.reason : '')">
+              {{ goodsLine(a) }}<small v-if="a.reason">原因：{{ a.reason }}</small>
+            </span>
+            <span class="r amount">退 ￥{{ Number(a.refundAmount).toFixed(2) }}</span>
+            <span><span class="chip" :class="STATUS[a.status]?.chip">{{ STATUS[a.status]?.label || a.status }}</span></span>
+            <span class="r ops">
+              <button v-if="a.status === 'applied'" class="btn primary mini" @click="openDrawer(a, 'review')">审核</button>
+              <button v-else class="btn ghost mini" @click="openDrawer(a, 'view')">查看</button>
+            </span>
+          </div>
+        </div>
+
+        <div v-if="list.length" class="foot">
+          <span class="muted">已加载 {{ list.length }}{{ activeQ ? '' : ` / ${tabCount(TABS.find((t) => t.key === tab))} 单` }}</span>
+          <button v-if="hasMore" class="btn ghost mini" :disabled="loadingMore" @click="loadMore">
+            {{ loadingMore ? '加载中…' : '加载更多' }}
+          </button>
+        </div>
+      </template>
     </template>
+
+    <!-- 决策抽屉 -->
+    <div v-if="drawer" class="drawer-mask" @click="closeDrawer">
+      <aside class="drawer" @click.stop>
+        <div class="d-head">
+          <div>
+            <span class="d-title">{{ drawer.mode === 'review' ? '退款审核' : '售后详情' }}</span>
+            <span class="chip" :class="STATUS[drawer.record.status]?.chip">{{
+              STATUS[drawer.record.status]?.label || drawer.record.status
+            }}</span>
+          </div>
+          <button class="x" :disabled="drawer.saving" @click="closeDrawer">×</button>
+        </div>
+
+        <div class="d-body">
+          <p class="d-order">订单 {{ drawer.record.orderId }}</p>
+          <div class="d-summary">
+            <div class="d-row"><span class="d-k">退款商品</span><span>{{ goodsLine(drawer.record) }}</span></div>
+            <div class="d-row"><span class="d-k">退款金额</span><b class="amount">￥{{ Number(drawer.record.refundAmount).toFixed(2) }}</b></div>
+            <div class="d-row"><span class="d-k">买家原因</span><span>{{ drawer.record.reason || '—' }}</span></div>
+            <div class="d-row"><span class="d-k">收货人</span><span>{{ drawer.record.addressName }} · {{ drawer.record.phone }}</span></div>
+          </div>
+
+          <!-- 审核模式：人工验收闸 -->
+          <template v-if="drawer.mode === 'review'">
+            <p class="d-section">人工验收（勾选后才可同意）</p>
+            <label class="check"><input v-model="drawer.received" type="checkbox" />已收到买家寄回包装并验收</label>
+            <label class="check"><input v-model="drawer.cardUnused" type="checkbox" />激活卡未拆封 / 未使用</label>
+            <p class="d-tip">
+              说明：寄回签收、激活码使用状态暂无法自动核验（需数据补链），先靠人工勾选把关；勾全才放行同意。
+            </p>
+
+            <div v-if="drawer.rejecting" class="reject-box">
+              <label class="field-label">拒绝原因（买家会看到）</label>
+              <input v-model="drawer.reason" class="input" placeholder="如：激活码已使用 / 未收到寄回" @keyup.enter="doReject" />
+            </div>
+            <p v-if="drawer.error" class="err">{{ drawer.error }}</p>
+          </template>
+
+          <!-- 查看模式：结果信息 -->
+          <template v-else>
+            <div class="d-result">
+              <template v-if="drawer.record.status === 'refunded'">
+                ✅ 退款完成 {{ fmtTime(drawer.record.refundedAt) }}
+                <small v-if="drawer.record.refundTransactionId">退款单 …{{ drawer.record.refundTransactionId.slice(-8) }}</small>
+              </template>
+              <template v-else-if="drawer.record.status === 'rejected'">⛔ 已拒绝 · 原因：{{ drawer.record.rejectReason }}</template>
+              <template v-else>⏳ 已触发退款，等待微信回调确认</template>
+            </div>
+          </template>
+        </div>
+
+        <div v-if="drawer.mode === 'review'" class="d-foot">
+          <template v-if="!drawer.rejecting">
+            <button class="btn ghost" :disabled="drawer.saving" @click="drawer.rejecting = true">拒绝退款</button>
+            <button class="btn primary" :disabled="!canApprove || drawer.saving" @click="doApprove">
+              {{ drawer.saving ? '退款中…' : `同意 · 原路退回 ￥${Number(drawer.record.refundAmount).toFixed(2)}` }}
+            </button>
+          </template>
+          <template v-else>
+            <button class="btn ghost" :disabled="drawer.saving" @click="drawer.rejecting = false">返回</button>
+            <button class="btn primary" :disabled="drawer.saving" @click="doReject">
+              {{ drawer.saving ? '提交中…' : '确认拒绝' }}
+            </button>
+          </template>
+        </div>
+      </aside>
+    </div>
   </div>
 </template>
 
@@ -217,7 +341,7 @@ async function doReject(a) {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 22px;
+  margin-bottom: 18px;
 }
 h1 {
   font-size: 22px;
@@ -229,10 +353,16 @@ h1 {
   font-size: 12.5px;
   color: var(--content-2);
 }
+.bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+}
 .tabs {
   display: flex;
   gap: 8px;
-  margin-bottom: 16px;
 }
 .tab {
   border: 1px solid var(--line-strong);
@@ -254,74 +384,116 @@ h1 {
   font-size: 11px;
   opacity: 0.75;
 }
-.refund {
-  padding: 14px 20px;
-  margin-bottom: 14px;
+.search {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+.search .input {
+  width: 220px;
+}
+.cloud-note {
+  margin: 12px 0 6px;
+  font-size: 11.5px;
+  color: var(--purple-meta);
+}
+.searching {
+  margin: 4px 0 12px;
+  font-size: 12.5px;
+  color: var(--content);
+}
+.link {
+  margin-left: 10px;
+  border: none;
+  background: none;
+  color: var(--brand);
+  cursor: pointer;
+  font-size: 12px;
+}
+
+.table {
+  overflow: hidden;
 }
 .row {
-  display: flex;
+  display: grid;
+  grid-template-columns: 104px 84px 1fr 1.5fr 96px 84px 88px;
   align-items: center;
   gap: 12px;
-  padding: 7px 0;
+  padding: 11px 18px;
+  font-size: 12.5px;
 }
 .row + .row {
   border-top: 1px solid var(--line);
 }
-.head-row {
-  padding-top: 0;
+.hrow {
+  background: var(--bg-lilac);
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--content-2);
+}
+.r {
+  text-align: right;
+  justify-self: end;
 }
 .oid {
+  font-family: ui-monospace, Menlo, monospace;
   font-weight: 600;
-  font-size: 13px;
+  font-size: 12px;
   color: var(--ink);
 }
-.time {
-  flex: 1;
-  font-size: 11.5px;
+.muted {
   color: var(--content-2);
+  font-size: 11.5px;
+}
+.buyer {
+  min-width: 0;
+}
+.buyer b {
+  color: var(--ink);
+}
+.buyer em {
+  font-style: normal;
+  color: var(--content-2);
+  margin-left: 6px;
+  font-size: 11.5px;
+}
+.goods {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  color: var(--content);
+  line-height: 1.45;
+}
+.goods small {
+  color: var(--content-2);
+  font-size: 11px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.amount {
+  font-weight: 600;
+  color: var(--ink);
+  font-size: 13px;
+}
+.ops {
+  display: flex;
+  justify-content: flex-end;
+}
+.btn.mini {
+  padding: 6px 12px;
+  font-size: 12px;
 }
 .chip.warn {
   background: #fdf6ec;
   border-color: #f0ddc0;
   color: #8a6420;
 }
-.chip.grey {
-  background: var(--bg-grey, #f3f3f3);
-  color: var(--content-2);
-}
-.goods {
-  flex: 1;
-  min-width: 0;
-}
-.goods-line {
-  font-size: 12.5px;
-  color: var(--content);
-  padding: 1px 0;
-}
-.reason {
-  font-size: 12px;
-  color: var(--content-2);
-  padding: 2px 0;
-}
-.amount {
-  font-size: 14px;
-  color: var(--ink);
-}
-.addr {
-  font-size: 12px;
-  color: var(--content-2);
-}
-.act-form .confirm-text {
-  font-size: 12.5px;
-  color: var(--content);
-}
-.reject-reason {
-  width: 280px;
-  flex: 0 0 auto;
-}
-.err {
-  font-size: 12px;
-  color: var(--red);
+.foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 14px;
 }
 .hint {
   padding: 10px 14px;
@@ -334,5 +506,131 @@ h1 {
   border-color: #f0c8c5;
   background: #fdf0ef;
   color: var(--red);
+}
+
+/* 抽屉 */
+.drawer-mask {
+  position: fixed;
+  inset: 0;
+  background: rgba(36, 23, 51, 0.32);
+  display: flex;
+  justify-content: flex-end;
+  z-index: 50;
+}
+.drawer {
+  width: 420px;
+  max-width: 92vw;
+  height: 100%;
+  background: var(--white);
+  display: flex;
+  flex-direction: column;
+  box-shadow: -8px 0 30px rgba(36, 23, 51, 0.18);
+}
+.d-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 18px 22px;
+  border-bottom: 1px solid var(--line);
+}
+.d-title {
+  font-weight: 700;
+  font-size: 16px;
+  color: var(--ink);
+  margin-right: 10px;
+}
+.x {
+  border: none;
+  background: none;
+  font-size: 22px;
+  line-height: 1;
+  color: var(--content-2);
+  cursor: pointer;
+}
+.d-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 18px 22px;
+}
+.d-order {
+  font-family: ui-monospace, Menlo, monospace;
+  font-size: 12.5px;
+  color: var(--content-2);
+  margin: 0 0 12px;
+}
+.d-summary {
+  background: var(--bg-lilac);
+  border: 1px solid var(--purple-line);
+  border-radius: 10px;
+  padding: 10px 14px;
+}
+.d-row {
+  display: flex;
+  gap: 12px;
+  padding: 5px 0;
+  font-size: 13px;
+  color: var(--content);
+}
+.d-k {
+  flex: 0 0 64px;
+  color: var(--content-2);
+  font-size: 12px;
+}
+.d-section {
+  margin: 18px 0 10px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--purple-meta);
+}
+.check {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 8px 0;
+  font-size: 13px;
+  color: var(--content);
+  cursor: pointer;
+}
+.check input {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--purple-ink);
+}
+.d-tip {
+  margin: 8px 0 0;
+  font-size: 11.5px;
+  color: var(--content-2);
+  line-height: 1.5;
+}
+.reject-box {
+  margin-top: 16px;
+}
+.d-result {
+  margin-top: 16px;
+  padding: 12px 14px;
+  background: var(--bg-lilac);
+  border: 1px solid var(--purple-line);
+  border-radius: 10px;
+  font-size: 12.5px;
+  color: var(--content);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.d-result small {
+  color: var(--content-2);
+  font-size: 11.5px;
+}
+.err {
+  color: var(--red);
+  font-size: 12px;
+  margin: 10px 0 0;
+}
+.d-foot {
+  display: flex;
+  gap: 10px;
+  justify-content: flex-end;
+  padding: 16px 22px;
+  border-top: 1px solid var(--line);
 }
 </style>

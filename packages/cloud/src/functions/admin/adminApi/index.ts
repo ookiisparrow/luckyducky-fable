@@ -53,6 +53,7 @@ const ACTIONS: Record<string, (ctx: Ctx) => Promise<any>> = {
   clearFeeMismatch: orders.clearFeeMismatch,
   // 售后退款
   listRefunds: refunds.listRefunds,
+  refundCounts: refunds.refundCounts,
   approveRefund: refunds.approveRefund,
   rejectRefund: refunds.rejectRefund,
   // 看板
