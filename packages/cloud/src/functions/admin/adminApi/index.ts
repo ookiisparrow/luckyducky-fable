@@ -48,6 +48,7 @@ const ACTIONS: Record<string, (ctx: Ctx) => Promise<any>> = {
   saveHomeContent: content.saveHomeContent,
   // 订单发货
   listOrders: orders.listOrders,
+  orderCounts: orders.orderCounts,
   shipOrder: orders.shipOrder,
   clearFeeMismatch: orders.clearFeeMismatch,
   // 售后退款

@@ -388,12 +388,25 @@ export async function saveHomeContent(home) {
 
 // ---------- 订单发货（P5 后台完善：paid → shipped，物流公司 + 运单号） ----------
 
-// 游标分页（根因#7）：cursor 传上一页 nextCursor；返回 { list, nextCursor, hasMore }
-export async function listOrders(cursor) {
+// 游标分页（根因#7）：cursor 传上一页 nextCursor；status 服务端筛选、q 按单号搜索（都在云端做、
+// 不靠已加载页过滤——防分页后漏单/计数失真）。返回 { list, nextCursor, hasMore }。
+export async function listOrders({ cursor, status, q } = {}) {
   if (!cloudMode) return { list: [], nextCursor: null, hasMore: false } // 订单只存在于云端
-  const r = await post('listOrders', cursor != null ? { cursor } : {})
+  const payload = {}
+  if (cursor != null) payload.cursor = cursor
+  if (status && status !== 'all') payload.status = status
+  if (q) payload.q = q
+  const r = await post('listOrders', payload)
   if (!r.ok) throw new Error(r.error || 'LOAD_ORDERS_FAIL')
   return { list: r.list, nextCursor: r.nextCursor ?? null, hasMore: !!r.hasMore }
+}
+
+// 按状态服务端精确计数（标签计数单源·根因#7）：{ all, pending, paid, shipped, done, closed }
+export async function orderCounts() {
+  if (!cloudMode) return {}
+  const r = await post('orderCounts')
+  if (!r.ok) throw new Error(r.error || 'LOAD_COUNTS_FAIL')
+  return r.counts || {}
 }
 
 export async function shipOrder(id, company, trackingNo) {

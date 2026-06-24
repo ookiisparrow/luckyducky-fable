@@ -1,11 +1,39 @@
+import { ORDER_STATUS } from '@luckyducky/shared'
 import { pageQuery, uploadShippingToWx, notifyAlert } from '../../../../kit'
 import { reply, type Ctx } from '../lib'
 
 // —— 订单发货（状态流转 paid → shipped；金额/条目/地址只读不动）——
 // 列表游标分页（根因#7）：无参=首页 200（兼容旧控制台读 .list），控制台用 nextCursor 翻页。
+// 服务端筛选/搜索（根因#7 计数/筛选/搜索失真）：status 在云端 where 过滤（不让前端从已加载页筛、
+// 防分页后漏单）；q=单号精确命中（_id），无视状态标签搜全部。计数另走 orderCounts（.count() 精确）。
 export async function listOrders({ db, data }: Ctx) {
-  const paged = await pageQuery(db, 'orders', {}, 'createdAt', data, 200)
+  const q = String((data && data.q) || '').trim()
+  const status = String((data && data.status) || '')
+  const filter: Record<string, any> = q
+    ? { _id: q } // 搜索：单号精确，跨全部状态
+    : status && status !== 'all'
+      ? { status }
+      : {}
+  const paged = await pageQuery(db, 'orders', filter, 'createdAt', data, 200)
   return reply(200, { ok: true, ...paged })
+}
+
+// 按状态服务端精确计数（根因#7 计数失真）：每状态 + 全部走 .count()（精确·不封顶·不受分页影响），
+// 状态枚举绑订单域单源 ORDER_STATUS（新增状态自动覆盖·根因#2）。前端标签计数只读此结果、不数已加载页。
+export async function orderCounts({ db }: Ctx) {
+  const cnt = (query: any) =>
+    query
+      .count()
+      .then((r: any) => r.total || 0)
+      .catch(() => 0)
+  const statuses = Object.values(ORDER_STATUS) as string[]
+  const [all, ...nums] = await Promise.all([
+    cnt(db.collection('orders')),
+    ...statuses.map((s) => cnt(db.collection('orders').where({ status: s }))),
+  ])
+  const counts: Record<string, number> = { all }
+  statuses.forEach((s, i) => (counts[s] = nums[i]))
+  return reply(200, { ok: true, counts })
 }
 
 export async function shipOrder({ db, data }: Ctx) {
