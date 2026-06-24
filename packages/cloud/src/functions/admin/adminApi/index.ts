@@ -49,6 +49,7 @@ const ACTIONS: Record<string, (ctx: Ctx) => Promise<any>> = {
   // 订单发货
   listOrders: orders.listOrders,
   orderCounts: orders.orderCounts,
+  getOrderDetail: orders.getOrderDetail,
   shipOrder: orders.shipOrder,
   clearFeeMismatch: orders.clearFeeMismatch,
   // 售后退款

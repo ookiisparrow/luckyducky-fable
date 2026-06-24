@@ -1,6 +1,6 @@
 import { toFen, AFTERSALE_STATUS } from '@luckyducky/shared'
 import { callFlow, pageQuery } from '../../../../kit'
-import { reply, ensure, type Ctx } from '../lib'
+import { reply, ensure, activationFor, type Ctx } from '../lib'
 
 // —— 售后退款（链10：审核 + 触发退款工作流；金额在申请时已云端分摊算定）——
 // 列表游标分页（根因#7）：无参=首页 200（兼容旧控制台读 .list）。
@@ -47,27 +47,7 @@ export async function getRefundDetail({ db, data }: Ctx) {
   const got = await db.collection('afterSales').doc(id).get().catch(() => null)
   if (!got || !got.data) return reply(400, { ok: false, error: 'NO_RECORD' })
   const a = got.data
-  const prod = await db.collection('products').doc(String(a.productId)).get().catch(() => null)
-  const courseId = (prod && prod.data && prod.data.courseId) || 'course-' + a.productId
-  const acts = a._openid
-    ? await db
-        .collection('activations')
-        .where({ _openid: a._openid, courseId })
-        .get()
-        .then((r: any) => r.data)
-        .catch(() => [])
-    : []
-  const act = acts[0] || null
-  return reply(200, {
-    ok: true,
-    activation: {
-      courseId,
-      activated: !!act,
-      entered: !!(act && act.enteredAt),
-      code: act ? act.qrcodeId || act.code || act._id : '',
-      enteredAt: act ? act.enteredAt || null : null,
-    },
-  })
+  return reply(200, { ok: true, activation: await activationFor(db, a._openid, a.productId) })
 }
 
 export async function approveRefund({ db, data }: Ctx) {

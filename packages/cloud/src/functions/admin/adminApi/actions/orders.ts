@@ -1,6 +1,25 @@
 import { ORDER_STATUS } from '@luckyducky/shared'
 import { pageQuery, uploadShippingToWx, notifyAlert } from '../../../../kit'
-import { reply, type Ctx } from '../lib'
+import { reply, activationFor, type Ctx } from '../lib'
+
+// 订单详情补充（VMlhp·读类）：逐商品的激活码状态数据链（复用 activationFor·与退款判据同口径）。
+// 时间线/交易单号/物流/合规上报等都在订单对象里、前端直接读；本 action 只补「需联查 activations」的激活态。
+export async function getOrderDetail({ db, data }: Ctx) {
+  const id = String((data && data.id) || '')
+  if (!id) return reply(400, { ok: false, error: 'BAD_ARGS' })
+  const got = await db.collection('orders').doc(id).get().catch(() => null)
+  if (!got || !got.data) return reply(400, { ok: false, error: 'NO_ORDER' })
+  const o = got.data
+  const seen = new Set<string>()
+  const activations: Record<string, any> = {}
+  for (const it of o.items || []) {
+    const pid = String(it.productId || '')
+    if (!pid || seen.has(pid)) continue
+    seen.add(pid)
+    activations[pid] = await activationFor(db, o._openid, pid)
+  }
+  return reply(200, { ok: true, activations })
+}
 
 // —— 订单发货（状态流转 paid → shipped；金额/条目/地址只读不动）——
 // 列表游标分页（根因#7）：无参=首页 200（兼容旧控制台读 .list），控制台用 nextCursor 翻页。

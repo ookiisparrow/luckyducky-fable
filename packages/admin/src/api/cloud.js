@@ -410,6 +410,13 @@ export async function orderCounts() {
   return r.counts || {}
 }
 
+// 订单详情补充（VMlhp）：逐商品激活码状态（{ productId: {courseId,activated,entered,code} }）
+export async function getOrderDetail(id) {
+  const r = await post('getOrderDetail', { id })
+  if (!r.ok) throw new Error(r.error || 'LOAD_ORDER_DETAIL_FAIL')
+  return r.activations || {}
+}
+
 export async function shipOrder(id, company, trackingNo) {
   const r = await post('shipOrder', { id, company, trackingNo })
   if (!r.ok) throw new Error(r.error || 'SHIP_FAIL')

@@ -28,6 +28,31 @@ export async function ensure(db: any, coll: string) {
   }
 }
 
+// 激活码状态数据链（退款判据 + 订单详情共用·根因#8 真数据不伪造）：买家对某商品对应课程是否
+// 已激活/已进课。courseId＝products.courseId·回退 course-<productId>（与 genQrcodes/StepBatch 同口径）；
+// 查 activations（activateCourse 写的 {_openid, courseId, enteredAt}）。
+export async function activationFor(db: any, openid: string, productId: string) {
+  const pid = String(productId || '')
+  const prod = await db.collection('products').doc(pid).get().catch(() => null)
+  const courseId = (prod && prod.data && prod.data.courseId) || 'course-' + pid
+  const acts = openid
+    ? await db
+        .collection('activations')
+        .where({ _openid: openid, courseId })
+        .get()
+        .then((r: any) => r.data)
+        .catch(() => [])
+    : []
+  const act = acts[0] || null
+  return {
+    courseId,
+    activated: !!act,
+    entered: !!(act && act.enteredAt),
+    code: act ? act.qrcodeId || act.code || act._id : '',
+    enteredAt: act ? act.enteredAt || null : null,
+  }
+}
+
 // 口令校验。首次初始化（债#15 关抢占窗口）：须 bootstrap 且本次口令匹配**部署密钥**环境变量
 // ADMIN_BOOTSTRAP_KEY——杜绝「空库谁先登录谁就占管理员」。未设该环境变量＝禁 bootstrap。
 // 设密钥流程：部署时设云环境变量 ADMIN_BOOTSTRAP_KEY＝期望口令 → 首登用该口令 → 设定后可移除。

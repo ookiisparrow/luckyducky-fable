@@ -13,7 +13,7 @@
  * 买家「确认收货」后翻已完成。金额异常单（feeMismatch）须先核对流水解除才能发货。
  */
 import { ref, computed } from 'vue'
-import { cloudMode, listOrders, orderCounts, shipOrder, clearFeeMismatch } from '@/api/cloud.js'
+import { cloudMode, listOrders, orderCounts, getOrderDetail, shipOrder, clearFeeMismatch } from '@/api/cloud.js'
 
 const STATUS = {
   pending: { label: '待支付', chip: 'grey' },
@@ -149,8 +149,28 @@ function openDrawer(o, mode) {
     trackingNo: o.shipping?.trackingNo || '',
     saving: false,
     error: '',
+    acts: null, // 逐商品激活态（getOrderDetail 异步取·VMlhp）
+  }
+  if (cloudMode) {
+    getOrderDetail(o.id)
+      .then((acts) => {
+        if (drawer.value && drawer.value.order.id === o.id) drawer.value.acts = acts
+      })
+      .catch(() => {})
   }
 }
+
+// 订单进度时间线（VMlhp）：下单→付款→发货→收货，从订单字段派生（已发生=有时间戳）
+function timeline(o) {
+  const steps = [
+    { label: '下单', at: o.createdAt, done: true },
+    { label: '付款成功', at: o.paidAt, sub: o.transactionId ? '微信支付' : '', done: ['paid', 'shipped', 'done'].includes(o.status) || !!o.paidAt },
+    { label: '已发货', at: o.shippedAt, sub: o.shipping ? `${o.shipping.company} · ${o.shipping.trackingNo}` : '', done: ['shipped', 'done'].includes(o.status) },
+    { label: o.status === 'done' ? '已完成' : '待收货', at: o.status === 'done' ? o.doneAt : null, sub: o.status === 'done' ? '' : '买家确认收货后完成', done: o.status === 'done' },
+  ]
+  return steps
+}
+const actOf = (pid) => (drawer.value?.acts ? drawer.value.acts[pid] : null)
 function closeDrawer() {
   if (drawer.value?.saving) return
   drawer.value = null
@@ -295,7 +315,17 @@ async function doClearMismatch(o) {
         </div>
 
         <div class="d-body">
-          <div class="d-row"><span class="d-k">下单时间</span><span>{{ fmtTime(drawer.order.createdAt) }}</span></div>
+          <!-- 订单进度时间线（VMlhp） -->
+          <div class="timeline">
+            <div v-for="(s, i) in timeline(drawer.order)" :key="i" class="tl-step" :class="{ done: s.done }">
+              <span class="tl-dot" />
+              <div class="tl-c">
+                <span class="tl-l">{{ s.label }}<em v-if="s.at" class="tl-t">{{ fmtTime(s.at) }}</em></span>
+                <span v-if="s.sub" class="tl-s">{{ s.sub }}</span>
+              </div>
+            </div>
+          </div>
+
           <div class="d-row">
             <span class="d-k">收货人</span>
             <span>{{ drawer.order.address?.name }} · {{ drawer.order.address?.phone }}</span>
@@ -304,19 +334,29 @@ async function doClearMismatch(o) {
             <span class="d-k">收货地址</span>
             <span>{{ drawer.order.address?.region }} {{ drawer.order.address?.detail }}</span>
           </div>
+          <!-- 商品 + 逐商品激活态（激活码状态数据链） -->
           <div class="d-row top">
             <span class="d-k">商品</span>
-            <span class="d-goods">
-              <span v-for="(line, i) in itemLines(drawer.order)" :key="i">{{ line }}</span>
+            <span class="d-items">
+              <span v-for="it in drawer.order.items || []" :key="it.productId" class="d-item">
+                <b>{{ it.name }}{{ it.spec ? `（${it.spec}）` : '' }} ×{{ it.qty }}</b>
+                <em v-if="actOf(it.productId)" class="act-tag" :class="actOf(it.productId).activated ? 'used' : 'fresh'">{{
+                  actOf(it.productId).activated ? (actOf(it.productId).entered ? '已激活·已进课' : '已激活') : '未激活'
+                }}</em>
+              </span>
             </span>
           </div>
           <div class="d-row"><span class="d-k">金额</span><b class="amount">￥{{ Number(drawer.order.amount).toFixed(2) }}</b></div>
+          <div v-if="drawer.order.transactionId" class="d-row">
+            <span class="d-k">交易单号</span><span class="txid">{{ drawer.order.transactionId }}</span>
+          </div>
 
-          <!-- 已发货：现有物流信息 -->
+          <!-- 已发货：物流 + 微信发货合规上报状态 -->
           <div v-if="drawer.order.shipping" class="d-logi">
             🚚 {{ drawer.order.shipping.company }} · 运单号 {{ drawer.order.shipping.trackingNo }}
             <small>发货 {{ fmtTime(drawer.order.shippedAt) }}</small>
             <small v-if="drawer.order.wxShipUploaded === false" class="wx-warn">微信发货信息未上传，请到商户平台手动录入</small>
+            <small v-else-if="drawer.order.wxShipUploaded" class="wx-ok">✓ 微信发货合规已上报</small>
           </div>
 
           <!-- 发货表单（ship 模式：paid 首发 / shipped 改单号） -->
@@ -571,6 +611,99 @@ h1 {
   flex: 1;
   overflow-y: auto;
   padding: 18px 22px;
+}
+.timeline {
+  margin: 0 0 14px;
+  padding: 0 0 2px 2px;
+}
+.tl-step {
+  display: flex;
+  gap: 11px;
+  position: relative;
+  padding-bottom: 12px;
+}
+.tl-step:not(:last-child)::before {
+  content: '';
+  position: absolute;
+  left: 4px;
+  top: 12px;
+  bottom: 0;
+  width: 1px;
+  background: var(--line);
+}
+.tl-dot {
+  flex: 0 0 auto;
+  width: 9px;
+  height: 9px;
+  margin-top: 3px;
+  border-radius: 50%;
+  background: var(--bg-grey);
+  border: 1px solid var(--line-strong);
+  z-index: 1;
+}
+.tl-step.done .tl-dot {
+  background: var(--green);
+  border-color: var(--green);
+}
+.tl-c {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.4;
+}
+.tl-l {
+  font-size: 13px;
+  color: var(--content-2);
+}
+.tl-step.done .tl-l {
+  color: var(--ink);
+  font-weight: 600;
+}
+.tl-t {
+  font-style: normal;
+  margin-left: 10px;
+  font-size: 11.5px;
+  color: var(--content-2);
+  font-weight: 400;
+}
+.tl-s {
+  font-size: 11.5px;
+  color: var(--content-2);
+}
+.d-items {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+.d-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.act-tag {
+  font-style: normal;
+  font-size: 10.5px;
+  font-weight: 600;
+  padding: 1px 7px;
+  border-radius: 999px;
+}
+.act-tag.fresh {
+  background: var(--green-bg);
+  border: 1px solid var(--green-line);
+  color: var(--green);
+}
+.act-tag.used {
+  background: #fdf6ec;
+  border: 1px solid #f0ddc0;
+  color: #8a6420;
+}
+.txid {
+  font-family: ui-monospace, Menlo, monospace;
+  font-size: 11.5px;
+  color: var(--content);
+  word-break: break-all;
+}
+.d-logi .wx-ok {
+  color: var(--green);
 }
 .d-row {
   display: flex;
