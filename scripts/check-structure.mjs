@@ -902,6 +902,74 @@ export const repoChecks = [
     },
   },
   {
+    // dev-only H5 演示路不得泄漏生产（T1「微信原生单源」逃生舱双门控）。痛：T1 下 callCloud 在 H5
+    // 返回 null，视频播放页因无课程/未解锁/无播放地址直接弹回目录、在 H5 完全跑不起来，测视频只能开
+    // 微信开发者工具弄一堆。逃生舱＝加 utils/devCloudMock.js 喂样本课程 + 本地样本视频，让播放器外壳/
+    // 交互在 dev:h5 浏览器里热重载调试。风险两面：① 忘 #ifdef H5 包裹 → mp-weixin 生产小程序带上假
+    // 数据；② 忘 import.meta.env.DEV 门控 → H5 正式包也启用 mock。本守卫机器保证两道门都在 + mock 不
+    // 外溢，逃生舱永不出 dev:h5。（mock 落 utils/cloud.js 不碰 api/，故 api-cloud-only 天然全绿、无需豁免。）
+    id: 'dev-mock-h5-only',
+    roots: ['T1'],
+    desc: 'dev-only H5 演示路不泄漏生产（T1 逃生舱双门控）：utils/devCloudMock.js 存在且仅被 utils/cloud.js 引用；cloud.js 对它的 import/调用须全在 #ifdef H5 块内（mp-weixin 编译期删除）、调用块经 import.meta.env.DEV 门控（H5 正式包不启用）——防视频测试 mock 漏进生产小程序/H5 正式包（根因#8 同源：dev 能用≠生产该有）',
+    run() {
+      const bad = []
+      const mockRel = 'packages/miniapp/src/utils/devCloudMock.js'
+      const cloudRel = 'packages/miniapp/src/utils/cloud.js'
+      const mockAbs = join(ROOT, mockRel)
+      const cloudAbs = join(ROOT, cloudRel)
+      if (!existsSync(mockAbs)) return [`${mockRel} 缺失（dev:h5 视频演示路 mock·T1 逃生舱）`]
+      // ① 只许 utils/cloud.js 引用 dev mock（不外溢到别处文件）
+      for (const f of walk(join(ROOT, 'packages/miniapp/src'))) {
+        if (f === mockAbs || f === cloudAbs) continue
+        if (/devCloudMock|devMockCloud/.test(readFileSync(f, 'utf8')))
+          bad.push(`${relative(ROOT, f)} 引用 dev mock——只许 utils/cloud.js 一处接入（防外溢·T1 逃生舱）`)
+      }
+      // ② cloud.js 里所有 dev mock 引用须落在 #ifdef H5 块内；调用块须 import.meta.env.DEV 门控
+      const src = readFileSync(cloudAbs, 'utf8')
+      const blocks = [] // 各 #ifdef H5 ... #endif 块的正文
+      const lines = src.split('\n')
+      let inH5 = false
+      let nest = 0
+      let cur = []
+      for (const raw of lines) {
+        const t = raw.trim()
+        if (!inH5) {
+          if (/^\/\/\s*#ifdef\s+H5\b/.test(t)) {
+            inH5 = true
+            nest = 0
+            cur = []
+          }
+          continue
+        }
+        if (/^\/\/\s*#if(?:def|ndef)\b/.test(t)) {
+          nest++
+          cur.push(raw)
+        } else if (/^\/\/\s*#endif\b/.test(t)) {
+          if (nest === 0) {
+            blocks.push(cur.join('\n'))
+            inH5 = false
+          } else {
+            nest--
+            cur.push(raw)
+          }
+        } else {
+          cur.push(raw)
+        }
+      }
+      const h5Text = blocks.join('\n')
+      const reRef = /devCloudMock|devMockCloud/g
+      const totalRefs = (src.match(reRef) || []).length
+      const h5Refs = (h5Text.match(reRef) || []).length
+      if (totalRefs === 0)
+        bad.push(`${cloudRel} 未接入 dev mock——dev:h5 视频演示路未生效（应在 #ifdef H5 块内路由）`)
+      if (totalRefs !== h5Refs)
+        bad.push(`${cloudRel} 有 dev mock 引用落在 #ifdef H5 块外——mp-weixin 生产小程序会带上 dev mock（T1 逃生舱泄漏）`)
+      if (!blocks.some((b) => /devMockCloud\s*\(/.test(b) && /import\.meta\.env\.DEV/.test(b)))
+        bad.push(`${cloudRel} 调 devMockCloud 的 #ifdef H5 块缺 import.meta.env.DEV 门控——H5 正式包会启用 dev mock`)
+      return bad
+    },
+  },
+  {
     // 店名单一来源（决策 R23 / 占位⑲，2026-06-15 定名「Lucky Ducky 小棉鸭」）。病根#5「样板复制即漂移」：
     // 店名曾在 order/checkout/welcome/BrandIntro/GroupPanel/productDetail 六处硬编码（order↔checkout 还逐字重复），
     // 改名必漏改。根治＝收口 constants/brand.js 的 BRAND_NAME，「保持一致」从人工义务变机器保证。
