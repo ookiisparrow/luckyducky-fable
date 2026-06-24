@@ -25,6 +25,9 @@ export const COLLECTIONS = {
   uploadChunks: 'uploadChunks',
   events: 'events',
   rateLimit: 'rateLimit',
+  // 实物 SKU 库存（库存#1·下单即预留·乐观 CAS）：_id 为 productId__spec，字段 stock（null=不限量）/threshold。
+  // 仅 kit/inventory 读写（守卫 stock-atomic-conditional）；客户端禁读写，上线前控制台锁「仅管理端」。
+  inventory: 'inventory',
   // 微信客服（in-chat 智能客服）后端状态：access_token 缓存 / sync_msg cursor / msgid 去重痕，
   // 一律确定性 _id 前缀（token / cursor:<openKfId> / seen:<msgid>）。内部状态、客户端禁读写。
   kfState: 'kfState',

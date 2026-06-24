@@ -1,5 +1,5 @@
 import { toFen, PAY_WINDOW_MS } from '@luckyducky/shared'
-import { withOpenId, ok, err, transition, callFlow, alert } from '../../kit'
+import { withOpenId, ok, err, transition, callFlow, alert, restoreStock } from '../../kit'
 
 // 发起支付（敏感：金额一律取库内订单 amount，不信任前端）。通道=云开发微信支付工作流
 //（调试日志 J：实物类小程序被微信限制，须走工作流，cloudbase_module 经 kit.callFlow 单点）。
@@ -13,9 +13,10 @@ export const main = withOpenId(async ({ db, OPENID, event }) => {
   const order = got.data
   if (order.status !== 'pending') return err('BAD_STATUS:' + order.status)
 
-  // 惰性超时：到点的 pending 当场关闭（定时器只是兜底）
+  // 惰性超时：到点的 pending 当场关闭（定时器只是兜底）；抢占成功才回补预留库存（库存#1·幂等绑转移）
   if (Date.now() - order.createdAt > PAY_WINDOW_MS) {
-    await transition('orders', id, ['pending'], 'closed', { closedAt: Date.now() })
+    const { moved } = await transition('orders', id, ['pending'], 'closed', { closedAt: Date.now() })
+    if (moved && Array.isArray(order.reserved) && order.reserved.length) await restoreStock(order.reserved)
     return err('ORDER_CLOSED')
   }
 

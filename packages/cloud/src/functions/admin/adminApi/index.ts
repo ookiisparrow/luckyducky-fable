@@ -9,6 +9,7 @@ import * as content from './actions/content'
 import * as orders from './actions/orders'
 import * as refunds from './actions/refunds'
 import * as dashboard from './actions/dashboard'
+import * as inventory from './actions/inventory'
 
 // 管理控制台后端（HTTP 访问服务触发）。B5b：HTTP 外壳 + 口令闸在此，28+ action 拆 actions/ 查表。
 // 鉴权：管理口令（adminConfig sha256，首登 bootstrap）。db 经 kit.getDb；退款流经 kit.callFlow。
@@ -55,6 +56,9 @@ const ACTIONS: Record<string, (ctx: Ctx) => Promise<any>> = {
   rejectRefund: refunds.rejectRefund,
   // 看板
   getDashboard: dashboard.getDashboard,
+  // 库存（库存#1）
+  listInventory: inventory.listInventory,
+  saveStock: inventory.saveStock,
 }
 
 // 认证频控（根因#13 防爆破）：失败 5 次/10 分 → 锁 5 分；login 与其余 action 的口令校验共用此闸。

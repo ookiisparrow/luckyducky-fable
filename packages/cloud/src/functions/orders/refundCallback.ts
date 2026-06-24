@@ -1,5 +1,5 @@
 import { toFen } from '@luckyducky/shared'
-import { defineNotifyCallback, notifyAlert } from '../../kit'
+import { defineNotifyCallback, notifyAlert, restoreStock } from '../../kit'
 
 // 退款结果回调（微信 → refundnotify 工作流 → 本函数）。防伪闸 + ACK + id 提取由 kit 收编。
 // v3 退款 resource：{ out_refund_no, out_trade_no, refund_status, transaction_id, amount:{refund} }。
@@ -37,19 +37,28 @@ export const main = defineNotifyCallback<any>({
       return
     }
     if (as.status === 'applied' || as.status === 'approved') {
-      await db.collection('afterSales').doc(id).update({
-        data: {
-          status: 'refunded',
-          refundedAt: Date.now(),
-          refundTransactionId: String(e.transaction_id || ''),
-        },
-      })
-      // 订单留痕（失败不阻塞 ACK：售后单是退款状态的单一来源）
-      await db
-        .collection('orders')
-        .doc(as.orderId)
-        .update({ data: { ['refunded.' + as.productId]: as.refundAmount } })
-        .catch(() => {})
+      // 抢占式翻 refunded（库存#1：原子转移只一次→回补库存幂等，防重复回调重复回补）
+      const _ = db.command
+      const grab = await db
+        .collection('afterSales')
+        .where({ _id: id, status: _.in(['applied', 'approved']) })
+        .update({
+          data: {
+            status: 'refunded',
+            refundedAt: Date.now(),
+            refundTransactionId: String(e.transaction_id || ''),
+          },
+        })
+      if (grab.stats && grab.stats.updated === 1) {
+        // 仅抢占成功者回补该退款条目库存（绑状态转移·幂等）
+        await restoreStock([{ productId: as.productId, spec: as.spec || '', qty: as.qty }])
+        // 订单留痕（失败不阻塞 ACK：售后单是退款状态的单一来源）
+        await db
+          .collection('orders')
+          .doc(as.orderId)
+          .update({ data: { ['refunded.' + as.productId]: as.refundAmount } })
+          .catch(() => {})
+      }
     }
   },
 })

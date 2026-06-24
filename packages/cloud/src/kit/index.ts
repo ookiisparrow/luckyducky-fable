@@ -25,6 +25,8 @@ export { throttleLocked, throttleFail, throttleReset, throttleHit, withRateLimit
 export type { ThrottleOpts } from './throttle'
 export { alert, notifyAlert } from './observe'
 export type { AlertSev } from './observe'
+export { reserveStock, restoreStock, setStock, getInventory } from './inventory'
+export type { StockLine } from './inventory'
 export { COLLECTIONS } from './collections'
 export type { CollName } from './collections'
 export {

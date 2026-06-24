@@ -246,6 +246,38 @@ export const repoChecks = [
     },
   },
   {
+    // 库存原子单一收口（库存#1·根因#1/#2 防超卖）：inventory 集合仅 kit/inventory.ts 读写（reserveStock/
+    // restoreStock/setStock）；扣减走乐观 CAS（where 含 stock 精确匹配·非读后写盲改）；其余 cloud/src
+    // 不得直碰 inventory 集合（一律经 kit/inventory·防绕 CAS 超卖）。
+    id: 'stock-atomic-conditional',
+    roots: ['#1', '#2'],
+    desc: '库存原子单一收口（库存#1·根因#1/#2）：inventory 集合仅 kit/inventory.ts 读写、扣减走条件 where(stock) 乐观 CAS（非盲改）；其余 cloud/src 直碰 inventory 即红（防绕 CAS 超卖）',
+    run() {
+      const seam = 'packages/cloud/src/kit/inventory.ts'
+      if (!existsSync(join(ROOT, seam))) return [`${seam} 缺失——库存原子原语（库存#1）`]
+      const bad = []
+      const src = readFileSync(join(ROOT, seam), 'utf8')
+      if (!/export\s+async\s+function\s+reserveStock/.test(src)) bad.push(`${seam} 未导出 reserveStock——原语空壳`)
+      if (!/\.where\(\{[^}]*stock/.test(src)) bad.push(`${seam} 扣减未用条件 where(stock) 乐观 CAS——有超卖风险（库存#1）`)
+      const allow = new Set([seam, 'packages/cloud/src/kit/collections.ts'])
+      const srcRoot = join(ROOT, 'packages/cloud/src')
+      const walk = (d) => {
+        for (const e of readdirSync(d)) {
+          const p = join(d, e)
+          if (statSync(p).isDirectory()) walk(p)
+          else if (e.endsWith('.ts')) {
+            const rel = relative(ROOT, p).replace(/\\/g, '/')
+            if (allow.has(rel)) continue
+            if (/COLLECTIONS\.inventory|\.collection\(\s*['"]inventory['"]\s*\)/.test(readFileSync(p, 'utf8')))
+              bad.push(`${rel} 直碰 inventory 集合——库存读写须经 kit/inventory（库存#1·防绕 CAS 超卖）`)
+          }
+        }
+      }
+      if (existsSync(srcRoot)) walk(srcRoot)
+      return bad
+    },
+  },
+  {
     id: 'interface-catalog-sync',
     roots: ['正册'],
     desc: '系统事实同步（docs/系统事实.md 是接口权威登记册，正册自评 P1）：每个云函数 + 每个 adminApi action 都须登记，杜绝「加接口忘登记」',
@@ -1704,6 +1736,9 @@ export const typeAndTestGuards = [
   // 企微推送 fail-soft（债#23续·根因#13）：pushBotAlert 推送失败/网络异常/非企微 webhook 一律返回 ok:false
   // 而**绝不抛错**——可观测性不反噬主流程（钱链回调照常 ACK）。reverseTest 锁此行为。
   { id: 'bot-alert-fail-soft', mechanism: 'test', roots: ['#13', '债#23'], reverseTest: 'tests/cloud/kit/botpush.test.js' },
+  // 下单库存预留 + 回补端到端（库存#1·根因#1/#2 防超卖）：createOrder 缺货拒单(OUT_OF_STOCK)、预留扣减记 reserved；
+  // 超时关单回补且幂等；乐观 CAS 抢最后一件只一个赢；不限量(无文档)放行。reverseTest 锁此行为。
+  { id: 'order-reserves-stock', mechanism: 'test', roots: ['#1', '#2'], reverseTest: 'tests/cloud/inventory.test.js' },
 ]
 
 const SRC_DIRS = ['packages', 'cloudfunctions', 'scripts']
