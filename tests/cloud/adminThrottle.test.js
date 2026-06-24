@@ -49,4 +49,26 @@ describe('adminApi 认证频控（根因#13 防爆破）', () => {
     for (let i = 0; i < 5; i++) expect((await call('listOrders', 'wrong', {}, ip)).status).toBe(401)
     expect((await call('listOrders', KEY, {}, ip)).status).toBe(429)
   })
+
+  // 审核 P1：x-forwarded-for 可伪造，攻击者每次换 IP 可让 per-IP 永不达 5 次锁定。全局/账户级失败计数兜底——
+  // 跨所有 IP 累计失败达全局阈值即锁，轮换伪造 header 的爆破仍被挡。
+  it('全局兜底：轮换伪造 x-forwarded-for 仍在全局维度触顶锁定（审核 P1）', async () => {
+    // 每次换全新 IP（per-IP 恒 1 次·永不达 5），全局累计 20 次失败 → 锁定
+    for (let i = 0; i < 20; i++) {
+      const r = await call('login', 'wrong', {}, { 'x-forwarded-for': '7.7.7.' + i })
+      expect(r.status).toBe(401) // 未锁前逐次失败
+    }
+    // 第 21 次：全新 IP + 正确口令也被全局锁挡下（per-IP 维度该 IP 干净·证明是全局兜底生效）
+    const blocked = await call('login', KEY, {}, { 'x-forwarded-for': '8.8.8.8' })
+    expect(blocked.status).toBe(429)
+    expect(blocked.error).toBe('TOO_MANY_ATTEMPTS')
+  })
+
+  it('全局阈值高于 per-IP：单 IP 正常 5 次失败锁的是 per-IP、不误触全局锁别的 IP', async () => {
+    const A = { 'x-forwarded-for': '11.0.0.1' }
+    const B = { 'x-forwarded-for': '11.0.0.2' }
+    for (let i = 0; i < 5; i++) await call('login', 'wrong', {}, A)
+    expect((await call('login', KEY, {}, A)).status).toBe(429) // A per-IP 锁
+    expect((await call('login', KEY, {}, B)).status).toBe(200) // 全局未达阈（仅 5<20）·B 正常登录
+  })
 })

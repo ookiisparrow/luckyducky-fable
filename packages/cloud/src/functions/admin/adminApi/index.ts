@@ -65,13 +65,29 @@ const ACTIONS: Record<string, (ctx: Ctx) => Promise<any>> = {
 
 // 认证频控（根因#13 防爆破）：失败 5 次/10 分 → 锁 5 分；login 与其余 action 的口令校验共用此闸。
 const ADMIN_THROTTLE = { max: 5, windowMs: 10 * 60_000, lockMs: 5 * 60_000 }
+// 全局/账户级失败计数兜底（审核 P1）：x-forwarded-for 可伪造，攻击者每次换 IP 可让 per-IP 永不达 5 次锁。
+// 故叠加跨所有 IP 的全局计数——阈值更高（单管理员正常极少触发），轮换伪造 header 的爆破累计达此阈仍锁。
+// 代价：全局锁期间所有 admin 登录受阻（攻击者可借此短时 DoS 真管理员），但 lockMs 仅 5 分自愈、控制台内部用，可接受。
+const ADMIN_THROTTLE_GLOBAL = { max: 20, windowMs: 10 * 60_000, lockMs: 5 * 60_000 }
+const GLOBAL_KEY = 'adminlogin:global'
 // 频控键：尽力取客户端 IP（网关 x-forwarded-for），取不到回落 global。
-// 注：x-forwarded-for 可伪造、per-IP 非绝对；但配合锁定窗口已令口令爆破不可行（5 次/5 分 ≈ 1440 次/天）。
+// 注：x-forwarded-for 可伪造、per-IP 非绝对——故配 GLOBAL_KEY 全局兜底；per-IP 仍给正常用户细粒度隔离。
 function clientKey(event: any): string {
   const h = event.headers || {}
   const xff = String(h['x-forwarded-for'] || h['X-Forwarded-For'] || '')
   const ip = xff.split(',')[0].trim() || String(h['x-real-ip'] || h['X-Real-Ip'] || '')
   return 'adminlogin:' + (ip || 'global')
+}
+
+// 锁定检查：per-IP 或 全局任一锁定即拒（全局兜 x-forwarded-for 轮换爆破·审核 P1）。返回较长的剩余锁定毫秒。
+async function throttleGate(tkey: string): Promise<number> {
+  const [ipWait, globalWait] = await Promise.all([throttleLocked(tkey), throttleLocked(GLOBAL_KEY)])
+  return Math.max(ipWait, globalWait)
+}
+// 记一次认证失败：per-IP 与 全局两个维度同时累加（全局兜底防轮换伪造 header·审核 P1）。
+async function throttleFailBoth(tkey: string): Promise<void> {
+  await throttleFail(tkey, ADMIN_THROTTLE)
+  await throttleFail(GLOBAL_KEY, ADMIN_THROTTLE_GLOBAL)
 }
 
 export const main = async (event: any) => {
@@ -89,22 +105,22 @@ export const main = async (event: any) => {
 
   if (action === 'ping') return reply(200, { ok: true, ts: Date.now() })
 
-  // 认证频控闸（根因#13）：口令校验前先查锁定——爆破到阈值即拒，不再放行任何口令尝试
+  // 认证频控闸（根因#13）：口令校验前先查锁定——per-IP 或全局任一到阈即拒（全局兜轮换伪造 header·审核 P1）
   const tkey = clientKey(event)
-  const wait = await throttleLocked(tkey)
+  const wait = await throttleGate(tkey)
   if (wait > 0) return reply(429, { ok: false, error: 'TOO_MANY_ATTEMPTS', retryAfter: Math.ceil(wait / 1000) })
 
   if (action === 'login') {
     const res = await checkKey(db, key, true)
-    if (res.ok) await throttleReset(tkey)
-    else await throttleFail(tkey, ADMIN_THROTTLE)
+    if (res.ok) await throttleReset(tkey) // 成功只清 per-IP；全局计数靠滚动窗口自然衰减（不被单次成功抹平·防分布式爆破信号丢失）
+    else await throttleFailBoth(tkey)
     return reply(res.ok ? 200 : 401, res)
   }
 
   // 其余 action 一律先验口令（同受频控，防经任一 action 入口爆破）
   const auth = await checkKey(db, key, false)
   if (!auth.ok) {
-    await throttleFail(tkey, ADMIN_THROTTLE)
+    await throttleFailBoth(tkey)
     return reply(401, auth)
   }
   await throttleReset(tkey)
