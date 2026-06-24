@@ -6,15 +6,16 @@
  * - 标签计数走服务端 refundCounts（.count() 精确·不受分页影响），不再数「已加载页」。
  * - 切状态走服务端筛选（listRefunds status）；搜索按订单号服务端精确命中（q）。
  * - 卡片流改密集表格；同意/拒绝funnel进右侧「决策抽屉」。
- * - 决策抽屉的核心＝**人工验收闸**：同意前必须勾选「已收到寄回包装并验收」+「激活卡未拆封/未用」
- *   才放行（贴现有业务规则：先收到寄回验收再同意）。自动判据（激活码/进课/寄回物流状态）需数据
- *   补链（afterSales 未快照·qrcodes 无 orderId·无寄回流），列为后续，不在此伪造徽章。
+ * - 决策抽屉＝**自动判据 + 人工验收闸**：① 自动判据（getRefundDetail·激活码状态数据链）显买家是否
+ *   已激活/已进课该课程 + 退货权判语（未激活未进课=未失·可退；已激活=已失·谨慎）；② 人工验收闸——
+ *   同意前仍须勾「已收寄回包装并验收」+「激活卡未拆封/未用」（寄回物流无数据·靠人）。
+ *   不伪造：激活/进课来自真数据（activations），寄回签收暂无数据故留人工（根因#8）。
  *
  * 同意 = approveRefund 触发退款工作流（金额申请时已云端分摊算定，原路退回）→ refundCallback 翻
  * 「已退款」；拒绝必须填原因（买家小程序可见）。
  */
 import { ref, computed } from 'vue'
-import { cloudMode, listRefunds, refundCounts, approveRefund, rejectRefund } from '@/api/cloud.js'
+import { cloudMode, listRefunds, refundCounts, getRefundDetail, approveRefund, rejectRefund } from '@/api/cloud.js'
 
 const STATUS = {
   applied: { label: '待审核', chip: 'warn' },
@@ -140,6 +141,19 @@ function openDrawer(a, mode) {
     reason: '',
     saving: false,
     error: '',
+    activation: null, // 激活判据（getRefundDetail 异步取）
+    actLoading: cloudMode,
+  }
+  // 激活码状态数据链：买家激活/进课该课程没？给审核员真判据（异步·失败不阻断审核）
+  if (cloudMode) {
+    getRefundDetail(a._id)
+      .then((act) => {
+        if (drawer.value && drawer.value.record._id === a._id) drawer.value.activation = act
+      })
+      .catch(() => {})
+      .finally(() => {
+        if (drawer.value && drawer.value.record._id === a._id) drawer.value.actLoading = false
+      })
   }
 }
 function closeDrawer() {
@@ -148,6 +162,17 @@ function closeDrawer() {
 }
 
 const canApprove = computed(() => !!drawer.value && drawer.value.received && drawer.value.cardUnused)
+// 退货权判语（来自激活码状态数据链）：未激活未进课=退货权未失·可放心退；否则已失·谨慎
+const verdict = computed(() => {
+  const act = drawer.value?.activation
+  if (!act) return null
+  if (!act.activated && !act.entered) return { ok: true, label: '退货权未失', detail: '买家未激活该课程，可放心退' }
+  return {
+    ok: false,
+    label: '退货权已失 · 谨慎',
+    detail: '买家已激活' + (act.entered ? '并已进课' : '') + '该课程——商品价值已交付，原则上不退',
+  }
+})
 
 async function doApprove() {
   const d = drawer.value
@@ -286,6 +311,24 @@ async function doReject() {
             <div class="d-row"><span class="d-k">退款金额</span><b class="amount">￥{{ Number(drawer.record.refundAmount).toFixed(2) }}</b></div>
             <div class="d-row"><span class="d-k">买家原因</span><span>{{ drawer.record.reason || '—' }}</span></div>
             <div class="d-row"><span class="d-k">收货人</span><span>{{ drawer.record.addressName }} · {{ drawer.record.phone }}</span></div>
+          </div>
+
+          <!-- 退货权判据（激活码状态数据链·给审核员真判断·非人工猜） -->
+          <div class="d-act">
+            <p class="d-section">退货权判据</p>
+            <p v-if="drawer.actLoading" class="mini-l">查激活状态…</p>
+            <template v-else-if="drawer.activation">
+              <div v-if="verdict" class="verdict" :class="verdict.ok ? 'good' : 'bad'">
+                <b>{{ verdict.ok ? '✓ ' : '⚠ ' }}{{ verdict.label }}</b>
+                <span>{{ verdict.detail }}</span>
+              </div>
+              <div class="act-rows">
+                <div class="act-row"><span class="d-k">激活课程</span><span :class="drawer.activation.activated ? 'bad-t' : 'good-t'">{{ drawer.activation.activated ? '已激活' : '未激活' }}</span></div>
+                <div class="act-row"><span class="d-k">进入学习</span><span :class="drawer.activation.entered ? 'bad-t' : 'good-t'">{{ drawer.activation.entered ? '已进课' : '未进课' }}</span></div>
+                <div v-if="drawer.activation.code" class="act-row"><span class="d-k">激活码</span><code>{{ drawer.activation.code }}</code></div>
+              </div>
+            </template>
+            <p v-else class="mini-l">激活状态取不到（不影响人工判断）</p>
           </div>
 
           <!-- 审核模式：人工验收闸 -->
@@ -581,6 +624,60 @@ h1 {
   font-size: 12px;
   font-weight: 600;
   color: var(--purple-meta);
+}
+.mini-l {
+  font-size: 12px;
+  color: var(--content-2);
+  margin: 0;
+}
+.verdict {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 10px 13px;
+  border-radius: 10px;
+  font-size: 12.5px;
+  margin-bottom: 10px;
+}
+.verdict b {
+  font-size: 13px;
+}
+.verdict.good {
+  background: var(--green-bg);
+  border: 1px solid var(--green-line);
+  color: var(--green);
+}
+.verdict.bad {
+  background: #fdf6ec;
+  border: 1px solid #f0ddc0;
+  color: #8a6420;
+}
+.verdict span {
+  color: var(--content);
+}
+.act-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.act-row {
+  display: flex;
+  gap: 12px;
+  font-size: 12.5px;
+  padding: 3px 0;
+}
+.act-row code {
+  font-family: ui-monospace, Menlo, monospace;
+  font-size: 11.5px;
+  color: var(--content);
+}
+.good-t {
+  color: var(--green);
+  font-weight: 600;
+}
+.bad-t {
+  color: #8a6420;
+  font-weight: 600;
 }
 .check {
   display: flex;

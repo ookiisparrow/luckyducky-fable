@@ -54,6 +54,7 @@ const ACTIONS: Record<string, (ctx: Ctx) => Promise<any>> = {
   // 售后退款
   listRefunds: refunds.listRefunds,
   refundCounts: refunds.refundCounts,
+  getRefundDetail: refunds.getRefundDetail,
   approveRefund: refunds.approveRefund,
   rejectRefund: refunds.rejectRefund,
   // 看板

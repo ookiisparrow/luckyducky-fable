@@ -445,6 +445,13 @@ export async function refundCounts() {
   return r.counts || {}
 }
 
+// 退款决策判据（激活码状态数据链）：买家是否已激活/已进课该课程，供审核员判断退货权
+export async function getRefundDetail(id) {
+  const r = await post('getRefundDetail', { id })
+  if (!r.ok) throw new Error(r.error || 'LOAD_DETAIL_FAIL')
+  return r.activation || {}
+}
+
 export async function approveRefund(id) {
   const r = await post('approveRefund', { id })
   if (!r.ok) throw new Error(r.error || 'APPROVE_FAIL')

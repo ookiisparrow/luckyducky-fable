@@ -38,6 +38,38 @@ export async function refundCounts({ db }: Ctx) {
   return reply(200, { ok: true, counts })
 }
 
+// 退款决策判据（激活码状态数据链·闭 S10「自动判据」洞·根因#8：不伪造徽章→补真数据）。读类·不写库。
+// 按 afterSale._openid + 该商品对应课程（products.courseId·回退 course-<productId>·与 genQrcodes/StepBatch
+// 同口径），查 activations 算「买家是否已激活/已进课该课程」——给审核员真判据（已激活=退货权失·谨慎）。
+export async function getRefundDetail({ db, data }: Ctx) {
+  const id = String((data && data.id) || '')
+  if (!id) return reply(400, { ok: false, error: 'BAD_ARGS' })
+  const got = await db.collection('afterSales').doc(id).get().catch(() => null)
+  if (!got || !got.data) return reply(400, { ok: false, error: 'NO_RECORD' })
+  const a = got.data
+  const prod = await db.collection('products').doc(String(a.productId)).get().catch(() => null)
+  const courseId = (prod && prod.data && prod.data.courseId) || 'course-' + a.productId
+  const acts = a._openid
+    ? await db
+        .collection('activations')
+        .where({ _openid: a._openid, courseId })
+        .get()
+        .then((r: any) => r.data)
+        .catch(() => [])
+    : []
+  const act = acts[0] || null
+  return reply(200, {
+    ok: true,
+    activation: {
+      courseId,
+      activated: !!act,
+      entered: !!(act && act.enteredAt),
+      code: act ? act.qrcodeId || act.code || act._id : '',
+      enteredAt: act ? act.enteredAt || null : null,
+    },
+  })
+}
+
 export async function approveRefund({ db, data }: Ctx) {
   const id = String(data.id || '')
   if (!id) return reply(400, { ok: false, error: 'BAD_ARGS' })
