@@ -15,17 +15,18 @@ import { onShow } from '@dcloudio/uni-app'
 import Icon from '@/components/Icon.vue'
 import TabBar from '@/components/TabBar.vue'
 import LoginSheet from '@/components/LoginSheet.vue'
+import Skeleton from '@/components/Skeleton.vue'
 import ProfileHeader from './components/ProfileHeader.vue'
 import ContinueVideo from './components/ContinueVideo.vue'
 import OrderGrid from './components/OrderGrid.vue'
 import { CONTINUE_VIDEO as V, ORDER_TABS } from '@/data/profile.js'
+import { resolveContinue } from './continueResolve.js'
 import { useUserStore } from '@/store/user.js'
 import { useOrdersStore } from '@/store/orders.js'
 import { useCoursesStore } from '@/store/courses.js'
 import { useProgressStore } from '@/store/progress.js'
 import { openCustomerService } from '@/utils/customerService.js'
 import { useActivationStore } from '@/store/activation.js'
-import { STORAGE_KEYS } from '@/constants/storage.js'
 import { mmss } from '@/utils/format.js'
 import { ensureLogin } from '@/composables/useAuthGate.js'
 import { useExitGuard } from '@/composables/useExitGuard.js'
@@ -67,36 +68,47 @@ async function onRefresh() {
 }
 // 未激活任何课程（act 已加载且我的课程为空）→ 继续学习卡显示空态
 const noCourse = computed(() => act.loaded && act.mine.length === 0)
+// 继续学习卡就绪：激活态 + 课程列表都到位才决定显什么；未就绪显骨架，不抢先显演示样例
+// （冷启那一瞬 act.mine/课程未到 → cont 会回退演示 V → 闪现演示课·根因#8）。progress 不入门槛：
+// 它只细化「续到第几节」，未到时 resolveContinue 用 act.mine 已能定位正确那门课。
+const contReady = computed(() => act.loaded && courses.loaded)
 
-// 继续学习卡：云端最近观看点定位课时与章节；无云 / 无记录回退样例 V
+// 继续学习卡：按「最近观看记录自己的 courseId / 用户已解锁的课」定位（纯函数 resolveContinue），
+// 绝不靠 courses.current（默认 list[0]=演示鸭课）——否则进小程序显演示课、点进演示列表（根因#8·同 bug W）。
+// 无可定位课程（数据未就绪/无课）→ 演示样例 V 兜底（noCourse 已挡掉真无课用户的卡片）。
 const cont = computed(() => {
   const lw = progress.lastWatch
-  if (!lw) return V
-  const ls = courses.allLessons
-  const i = ls.findIndex((l) => l.id === lw.lessonId)
-  if (i < 0) return V
-  const l = ls[i]
-  const ch = courses.current.chapters.find((c) => c.id === l.chapter)
-  const durSec = lw.dur > 0 ? lw.dur : 0
+  const r = resolveContinue(lw, courses.getById, act.mine)
+  if (!r) return V
+  const l = r.lessons[r.index]
+  const ch = r.course.chapters.find((c) => c.id === l.chapter)
+  const durSec = lw && lw.dur > 0 ? lw.dur : 0
+  const at = lw ? lw.at : 0
   return {
-    ep: `${ch ? ch.title : ''} · 第 ${i + 1} 集`,
+    ep: `${ch ? ch.title : ''} · 第 ${r.index + 1} 集`,
     name: l.name,
-    at: mmss(lw.at),
+    at: mmss(at),
     dur: durSec > 0 ? mmss(durSec) : l.dur,
-    pct: durSec > 0 ? Math.min(100, Math.round((lw.at / durSec) * 100)) : 0,
+    pct: durSec > 0 ? Math.min(100, Math.round((at / durSec) * 100)) : 0,
     lessonId: l.id,
+    courseId: r.course.id,
+    segmentId: lw ? lw.segmentId || '' : '', // 续到原小段（播放器按 seg 定位 fileSeg·非恒第一段）
   }
 })
 
 function continueWatch() {
   if (!ensureLogin()) return // 续播 = 进课，需登录
-  // 续播云端最近观看的那节；无记录回退样例对应的 l3
-  uni.navigateTo({ url: `/pkg-video/player/index?id=${cont.value.lessonId || 'l3'}` })
+  const c = cont.value
+  // 数据未就绪/无解析课程（courseId 空）→ 去目录，不开可能错的演示播放页（根因#8）
+  if (!c.courseId) return allCourses()
+  courses.setCurrent(c.courseId) // 先聚焦续播那门课，播放器据此取课（多课·防默认 list[0]）
+  const seg = c.segmentId ? `&seg=${c.segmentId}` : '' // 续到原小段
+  uni.navigateTo({ url: `/pkg-video/player/index?id=${c.lessonId}${seg}` })
 }
 function allCourses() {
-  // 首次进视频课先看欢迎引导，之后直达目录（浏览目录不挡，进具体课时再验登录）
-  const seen = uni.getStorageSync(STORAGE_KEYS.VIDEO_INTRO_SEEN)
-  uni.navigateTo({ url: seen ? '/pages/catalog/index' : '/pages/welcome/index' })
+  // 「全部教程」→ 我的课程列表（已激活的全部课程），而非某单门课的课时列表（根因#8 多课）。
+  // 视频教程首次引导属扫码激活流程（welcome），不在此入口。
+  uni.navigateTo({ url: '/pkg-video/courses/index' })
 }
 // 未激活空态：去逛逛买材料包（扫码激活后才有课程）
 function goShop() {
@@ -158,7 +170,12 @@ function goLogin() {
             </view>
           </view>
 
-          <ContinueVideo v-if="!noCourse" :v="cont" @watch="continueWatch" />
+          <!-- 数据未就绪：骨架占位，不抢先显演示样例（防冷启演示课闪现·根因#8） -->
+          <view v-if="!contReady" class="my-cont-skel">
+            <Skeleton w="100%" h="178px" radius="12px" mb="12px" />
+            <Skeleton w="52%" h="14px" />
+          </view>
+          <ContinueVideo v-else-if="!noCourse" :v="cont" @watch="continueWatch" />
           <view v-else class="my-course-empty">
             <view class="my-course-empty-ico"><Icon name="graduation-cap" :size="26" /></view>
             <text class="my-course-empty-title">还没有课程</text>

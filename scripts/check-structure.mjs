@@ -623,12 +623,12 @@ export const repoChecks = [
     // 首页走 LoadingSplash 全屏开屏、detail 样例数据即时渲染——各有其载态，强塞骨架=#8 theater，故不入册。
     id: 'list-pages-skeleton',
     roots: ['#8'],
-    desc: '数据页空载态用 Skeleton 非空白（优化批0618·T-F2）：components/Skeleton.vue 存在 + 有真实冷启空白态的数据页（catalog/order-list）须挂 <Skeleton> 占位，防冷启/弱网白屏或纯文字「加载中」（首页 LoadingSplash / detail 样例即时渲染另有载态，不入册）',
+    desc: '数据页空载态用 Skeleton 非空白（优化批0618·T-F2）：components/Skeleton.vue 存在 + 有真实冷启空白态的数据页（catalog/order-list/me）须挂 <Skeleton> 占位，防冷启/弱网白屏或纯文字「加载中」（「我」页继续学习卡冷启须骨架·不抢先显演示样例·根因#8；首页 LoadingSplash / detail 样例即时渲染另有载态，不入册）',
     run() {
       const bad = []
       const comp = 'packages/miniapp/src/components/Skeleton.vue'
       if (!existsSync(join(ROOT, comp))) bad.push(`${comp} 缺失（骨架屏组件，T-F2）`)
-      const SKELETON_PAGES = ['catalog', 'order-list']
+      const SKELETON_PAGES = ['catalog', 'order-list', 'me']
       for (const page of SKELETON_PAGES) {
         const f = `packages/miniapp/src/pages/${page}/index.vue`
         const abs = join(ROOT, f)
@@ -966,6 +966,127 @@ export const repoChecks = [
         bad.push(`${cloudRel} 有 dev mock 引用落在 #ifdef H5 块外——mp-weixin 生产小程序会带上 dev mock（T1 逃生舱泄漏）`)
       if (!blocks.some((b) => /devMockCloud\s*\(/.test(b) && /import\.meta\.env\.DEV/.test(b)))
         bad.push(`${cloudRel} 调 devMockCloud 的 #ifdef H5 块缺 import.meta.env.DEV 门控——H5 正式包会启用 dev mock`)
+      return bad
+    },
+  },
+  {
+    // 播放器「上一段/下一段」=小段切换、连续跨课时（规格 R8 分步播放·用户拍板升级）。痛：原 prev/next
+    // 是 switchLesson 整集跳（偏离 R8「下一段播本 lesson 的下一个 segment」），真机一点直接换课时。
+    // 改＝抽纯函数 segNav.stepSegment（边界/跨课时/空课时单测锁），player 经它定位目标段。本守卫防回退：
+    // ① segNav.js 在 ② player 引用 stepSegment 做导航 ③ 旧 switchLesson 整集跳绝迹。
+    id: 'player-seg-nav',
+    roots: ['R8'],
+    desc: '播放器上一段/下一段=小段切换连续跨课时（规格 R8）：pkg-video/player/segNav.js 存在 + player/index.vue 经 stepSegment 定位上/下一段 + 旧 switchLesson 整集跳绝迹——防回退成「上一集/下一集」整集跳偏离 R8 分步播放',
+    run() {
+      const bad = []
+      const navRel = 'packages/miniapp/src/pkg-video/player/segNav.js'
+      const playerRel = 'packages/miniapp/src/pkg-video/player/index.vue'
+      if (!existsSync(join(ROOT, navRel))) bad.push(`${navRel} 缺失（分段导航纯函数·R8）`)
+      const playerAbs = join(ROOT, playerRel)
+      if (!existsSync(playerAbs)) return [`${playerRel} 缺失（播放器·R8）`, ...bad]
+      const p = readFileSync(playerAbs, 'utf8')
+      if (!/\bstepSegment\s*\(/.test(p))
+        bad.push(`${playerRel} 未经 stepSegment 定位上/下一段——分段导航须走 segNav 助手（防回退整集跳·R8）`)
+      if (/\bswitchLesson\b/.test(p))
+        bad.push(`${playerRel} 仍有 switchLesson 整集跳——上一段/下一段应切小段、连续跨课时（R8）`)
+      return bad
+    },
+  },
+  {
+    // 切段起播等就绪、不靠定时器猜（根因#8 真机才暴露的卡顿）。痛：换段后新段播放地址是异步现取
+    // （getPlaybackUrl 云函数），原 goSeg/toggle 固定 setTimeout(…play…,200) 起播——地址常没取回/
+    // 没加载完就 play → 先播旧段残帧再切到新 src → 真机「播一瞬间后卡顿」（dev/模拟器快网常掩盖）。
+    // 修＝切段置 pendingPlay，待新段元数据就绪事件 onLoaded(loadedmetadata) 再起播。本守卫防回退竞态写法。
+    id: 'player-seg-play-on-ready',
+    roots: ['#8'],
+    desc: '切段起播等就绪不靠定时器（根因#8 真机卡顿）：pkg-video/player/index.vue 切段后经 pendingPlay + onLoaded(loadedmetadata) 起播，禁 setTimeout 内 play()——防回退「新段地址异步未到就 play→播一瞬间卡顿」',
+    run() {
+      const bad = []
+      const rel = 'packages/miniapp/src/pkg-video/player/index.vue'
+      const abs = join(ROOT, rel)
+      if (!existsSync(abs)) return [`${rel} 缺失`]
+      const src = readFileSync(abs, 'utf8')
+      src.split('\n').forEach((ln, i) => {
+        if (/setTimeout\s*\(/.test(ln) && /\bplay\s*\(/.test(ln))
+          bad.push(`${rel}:${i + 1} setTimeout 内起播——切段起播须等 onLoaded 就绪、不猜定时（防真机卡顿·根因#8）`)
+      })
+      if (!/\bpendingPlay\b/.test(src))
+        bad.push(`${rel} 无 pendingPlay——切段起播未挂到 onLoaded 就绪事件（防竞态卡顿·根因#8）`)
+      return bad
+    },
+  },
+  {
+    // 进度条可拖拽（用户报·真机手势体验·根因#8 拖拽只能真机验）。原进度条只 @tap 点按跳转、不能拖。
+    // 改＝scrub.js 纯函数 scrubTimeAt（触点→时间·钳位单测锁）+ 进度条绑 touchstart/move/end 拖动，
+    // 拖动期 dragging 挡住 onTimeupdate 回写（拇指与播放头不打架）。本守卫防回退成只点按/拖动打架。
+    id: 'player-scrub-draggable',
+    roots: ['#8'],
+    desc: '进度条可拖拽（真机手势·根因#8）：pkg-video/player/scrub.js 存在 + player/index.vue 进度条绑 @touchmove 拖动 + 经 scrubTimeAt 换算 + onTimeupdate 拖动中(dragging)不回写 current——防回退成只点按、或拖动时播放头与手指打架',
+    run() {
+      const bad = []
+      const navRel = 'packages/miniapp/src/pkg-video/player/scrub.js'
+      const playerRel = 'packages/miniapp/src/pkg-video/player/index.vue'
+      if (!existsSync(join(ROOT, navRel))) bad.push(`${navRel} 缺失（进度条触点定位纯函数·根因#8）`)
+      const playerAbs = join(ROOT, playerRel)
+      if (!existsSync(playerAbs)) return [`${playerRel} 缺失`, ...bad]
+      const p = readFileSync(playerAbs, 'utf8')
+      if (!/@touchmove/.test(p))
+        bad.push(`${playerRel} 进度条无 @touchmove——进度条须支持拖拽非仅点按（用户报·根因#8）`)
+      if (!/\bscrubTimeAt\s*\(/.test(p))
+        bad.push(`${playerRel} 未用 scrubTimeAt——触点→时间须经钳位纯函数（防越界乱 seek·根因#8）`)
+      if (!/\bdragging\b/.test(p))
+        bad.push(`${playerRel} 无 dragging——拖动期未挡住 onTimeupdate 回写，拇指与播放头会打架（根因#8）`)
+      return bad
+    },
+  },
+  {
+    // 播放页进入不闪默认课时（根因#8 真机才显的初始渲染闪烁）。痛：idx 原默认 2（老「l3」单课默认），
+    // onLoad 异步走完才按传入 lessonId 定位 → 先渲默认课时、再跳到续播那节＝点进去闪一下。
+    // 修＝onLoad 首个 await 前同步 locateLesson（从「我」/目录进来时 store 已就绪→首帧即正确那节）。
+    // 本守卫锁「同步定位在 await 之前」，防回退异步定位再闪。
+    id: 'player-resume-no-flash',
+    roots: ['#8'],
+    desc: '播放页进入不闪默认课时、不黑屏、自动续播（根因#8 真机才显）：pkg-video/player/index.vue 的 onLoad ① 首个 await 前同步 locateLesson 按 lessonId 定位（防先渲默认再跳闪烁）② 末尾 pendingPlay=true 后显式 refreshPlayUrl 取首段地址（防续播到默认那节时段 id 不变→watch 不取址→黑屏不播）',
+    run() {
+      const bad = []
+      const rel = 'packages/miniapp/src/pkg-video/player/index.vue'
+      const abs = join(ROOT, rel)
+      if (!existsSync(abs)) return [`${rel} 缺失`]
+      const src = readFileSync(abs, 'utf8')
+      if (!/locateLesson\s*\(o\)[^\n]*\n\s*await\s+store\.load/.test(src))
+        bad.push(`${rel} onLoad 未在首个 await 前同步 locateLesson 定位课时——进入会先渲默认课时再跳（闪烁·根因#8）`)
+      if (!/pendingPlay\s*=\s*true[^\n]*\n\s*refreshPlayUrl\s*\(\)/.test(src))
+        bad.push(`${rel} onLoad 未在定位后显式 refreshPlayUrl + pendingPlay——续播到默认那节会黑屏不播（段 id 不变·watch 不取址·根因#8）`)
+      if (!/o\.seg\b/.test(src))
+        bad.push(`${rel} locateLesson 未按 o.seg 定位小段——继续观看恒落第一段、不回到原小段（根因#8）`)
+      return bad
+    },
+  },
+  {
+    // 「全部教程」指向「我的课程」列表，非某单门课的课时（根因#8 多课·用户报）。痛：me 页「全部教程」
+    // 原跳 catalog（store.current 单门课的课时列表，多课下还会显默认/演示那门），应跳「我已激活的全部课程」列表。
+    // 修＝新建 pages/courses（act.mine 去重取课程·resolveMyCourses 纯函数单测锁）；me allCourses 跳 /pages/courses/。
+    id: 'my-courses-entry',
+    roots: ['#8'],
+    desc: '「全部教程」→ 我的课程列表（根因#8 多课）：pkg-video/courses/index.vue + myCourses.js 存在、courses 页经 resolveMyCourses 按 act.mine 去重取课程且冷启挂 <Skeleton> 不抢先显空/演示；me 页 allCourses 跳 /pkg-video/courses/——防回退指向某单门课的课时列表（catalog/welcome）。页入 pkg-video 分包（me 已 preloadRule 预载·不胀主包·T-F6）',
+    run() {
+      const bad = []
+      const pageRel = 'packages/miniapp/src/pkg-video/courses/index.vue'
+      const helperRel = 'packages/miniapp/src/pkg-video/courses/myCourses.js'
+      const meRel = 'packages/miniapp/src/pages/me/index.vue'
+      if (!existsSync(join(ROOT, helperRel))) bad.push(`${helperRel} 缺失（我的课程解析纯函数·根因#8）`)
+      if (!existsSync(join(ROOT, pageRel))) {
+        bad.push(`${pageRel} 缺失（我的课程列表页·根因#8）`)
+      } else {
+        const page = readFileSync(join(ROOT, pageRel), 'utf8')
+        if (!/resolveMyCourses\s*\(/.test(page))
+          bad.push(`${pageRel} 未用 resolveMyCourses——我的课程须按 act.mine 去重取列表`)
+        if (!page.includes('<Skeleton'))
+          bad.push(`${pageRel} 冷启未挂 <Skeleton>——会抢先显空/演示态（T-F2·根因#8）`)
+      }
+      const meAbs = join(ROOT, meRel)
+      if (existsSync(meAbs) && !/['"]\/pkg-video\/courses\//.test(readFileSync(meAbs, 'utf8')))
+        bad.push(`${meRel} 「全部教程」未跳 /pkg-video/courses/——又指向某单门课的课时列表（根因#8 多课）`)
       return bad
     },
   },
@@ -1521,7 +1642,7 @@ export const repoChecks = [
     // courseId/激活集 setCurrent；③ welcome 跳目录带 courseId=。
     id: 'catalog-course-by-activation',
     roots: ['#8'],
-    desc: '目录课程随激活/扫码取，不恒 list[0]（根因#8 单课样本失真·多课暴露）：courses store currentId+setCurrent + catalog 按 courseId/激活集 setCurrent + welcome 跳目录带 courseId=——任一缺即目录恒显第一门课',
+    desc: '课程随激活/观看记录取，不恒 list[0]（根因#8 单课样本失真·多课暴露）：courses store currentId+setCurrent + catalog 按 courseId/激活集 setCurrent + welcome 跳目录带 courseId= + 「我」页继续学习按 resolveContinue(观看记录/已解锁课)定位并 setCurrent 聚焦——任一缺即恒显第一门(演示)课',
     run() {
       const bad = []
       const checks = [
@@ -1529,6 +1650,9 @@ export const repoChecks = [
         ['packages/miniapp/src/store/courses.js', 'setCurrent', 'courses store 无 setCurrent——无法聚焦激活课'],
         ['packages/miniapp/src/pages/catalog/index.vue', 'setCurrent', 'catalog 未按 courseId/激活集 setCurrent——目录不随激活课'],
         ['packages/miniapp/src/pages/welcome/index.vue', 'courseId=', 'welcome 跳目录未带 courseId=——目录不知聚焦哪门课'],
+        ['packages/miniapp/src/pages/me/index.vue', 'resolveContinue', '「我」页继续学习未按 resolveContinue(观看记录/已解锁课)定位——进小程序又显默认演示课、点进演示列表'],
+        ['packages/miniapp/src/pages/me/index.vue', 'setCurrent', '「我」页续播未 setCurrent 聚焦那门课——播放器仍取默认 list[0]演示课'],
+        ['packages/miniapp/src/pages/me/index.vue', 'seg=', '「我」页继续观看未传 seg= 段标识——续播恒落第一段、不回到原小段（根因#8）'],
       ]
       for (const [f, token, msg] of checks) {
         const abs = join(ROOT, f)

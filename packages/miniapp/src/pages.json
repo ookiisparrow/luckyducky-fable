@@ -138,6 +138,14 @@
             "navigationBarTitleText": "视频教程",
             "navigationStyle": "custom"
           }
+        },
+        {
+          "path": "courses/index",
+          "style": {
+            "navigationBarTitleText": "我的课程",
+            "navigationStyle": "custom",
+            "enablePullDownRefresh": true
+          }
         }
       ]
     }

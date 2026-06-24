@@ -2,7 +2,7 @@
 /**
  * 视频教程 · 播放页。对照设计稿 VideoCatalog.jsx 的 VideoPlayer 重做外壳。
  * 保留真 <video>（非全屏铺满、自绘控件，保小程序同层渲染）+ 知识点分段进度 +
- * 段末自动暂停→「重复播放」。控件：顶部 收起/标题（「更多」按决策撤除，占位清单 ⑫），底部 上一集/求助/下一集。
+ * 段末自动暂停→「重复播放」。控件：顶部 收起/标题（「更多」按决策撤除，占位清单 ⑫），底部 上一段/求助/下一段（小段切换·连续跨课时）。
  * （研究性开关 0.5×慢放/单段循环/段末暂停开关 按设计稿移除。）
  *
  * 求助面板：设计稿完整版（客服/辅助视频/群/FAQ/反馈），拆在 ./components/HelpSheet/。
@@ -13,6 +13,8 @@ import Icon from '@/components/Icon.vue'
 import HelpSheet from './components/HelpSheet/index.vue'
 import { goBack } from '@/utils/nav.js'
 import { mmss as fmt } from '@/utils/format.js'
+import { stepSegment } from './segNav.js'
+import { scrubTimeAt } from './scrub.js'
 import { useCoursesStore } from '@/store/courses.js'
 import { useActivationStore } from '@/store/activation.js'
 import { getSystemBarVars } from '@/utils/systemBar.js'
@@ -32,9 +34,23 @@ const act = useActivationStore()
 const course = computed(() => store.current)
 const lessons = computed(() => store.allLessons)
 
-// 当前课时：按 id 从课程表定位，支持上一集/下一集
-const idx = ref(2) // 默认 l3
+// 当前课时：按 id 从课程表定位（上一段/下一段会连续跨课时切换 idx）
+const idx = ref(0) // 默认第一课时（实际由 onLoad 按传入 lessonId 定位）
+// 按传入 lessonId 定位课时 + segmentId 定位小段（继续观看续到原小段·非恒第一段）；store 已就绪时同步生效
+function locateLesson(o) {
+  if (!o) return
+  if (o.id) {
+    const i = lessons.value.findIndex((l) => l.id === o.id)
+    if (i >= 0) idx.value = i
+  }
+  // 段定位放在课时之后：segs 随 idx 重算，从「这门课时」的小段里找 o.seg
+  if (o.seg) {
+    const s = segs.value.findIndex((x) => x.id === o.seg)
+    if (s >= 0) fileSeg.value = s
+  }
+}
 onLoad(async (o) => {
+  locateLesson(o) // 首个 await 前同步定位 → 首帧即正确那节，不先渲默认再跳（闪烁·根因#8）
   await store.load()
   // 播放鉴权（规格 §四-4）：未确认激活 → 回目录（目录显示锁态引导）
   await act.loadMine()
@@ -43,10 +59,11 @@ onLoad(async (o) => {
     uni.redirectTo({ url: '/pages/catalog/index' })
     return
   }
-  if (o && o.id) {
-    const i = lessons.value.findIndex((l) => l.id === o.id)
-    if (i >= 0) idx.value = i
-  }
+  locateLesson(o) // 冷启直达播放页：store 刚加载完再定位一次
+  // 进入即续播：显式取首段地址（watch 仅在段 id 变化时取址，续播到默认那节时段 id 不变→不取→黑屏·根因#8）
+  // + 标记自动起播（pendingPlay → onLoaded 就绪即播）。
+  pendingPlay = true
+  refreshPlayUrl()
 })
 const lesson = computed(() => lessons.value[idx.value] || lessons.value[0] || {})
 const title = computed(() => lesson.value.name || '')
@@ -55,8 +72,9 @@ const ep = computed(() => {
   if (ci < 0) return ''
   return `第 ${ci + 1} 章 · 第 ${idx.value + 1} 节`
 })
-const hasPrev = computed(() => idx.value > 0)
-const hasNext = computed(() => idx.value < lessons.value.length - 1)
+// 段粒度（连续跨课时）：非全课首段即可上一段、非全课末段即可下一段；与 goSeg 同源 stepSegment 保持一致
+const hasPrev = computed(() => stepSegment(lessons.value, idx.value, fileSeg.value, -1) !== null)
+const hasNext = computed(() => stepSegment(lessons.value, idx.value, fileSeg.value, 1) !== null)
 
 const duration = ref(0)
 const current = ref(0)
@@ -64,6 +82,13 @@ const playing = ref(false)
 const endedSeg = ref(null) // 刚在哪段末尾停下（显示「重复播放」）
 let playingSeg = 0
 let seeking = false
+// 切段起播标记：换段后新 src 异步现取，置 true → 待新段元数据就绪（onLoaded）再起播，
+// 不靠固定 setTimeout 猜（地址常没取回/没加载完就 play → 播一瞬间旧残帧再切→真机卡顿·根因#8）。
+let pendingPlay = false
+// 进度条拖拽：dragging 期间 onTimeupdate 不回写 current（进度跟手指走·防与播放头打架）；
+// scrubRect 缓存进度条几何（拖动每帧同步用，不每帧异步 createSelectorQuery）。
+let dragging = false
+let scrubRect = null
 
 // 分段进度条 = 当前课时的 segments（来自课程数据，不再硬编码）
 const segs = computed(() => lesson.value.segments || [])
@@ -79,10 +104,14 @@ const videoSrc = computed(() => (fileMode.value ? playUrl.value : ''))
 // 占位态：无真实视频时显本地封面、隐藏播放控件（不播任何外链·T-F7 合规）
 const placeholderMode = computed(() => !fileMode.value)
 const curFileSegId = computed(() => (fileMode.value ? segs.value[fileSeg.value]?.id || '' : ''))
+let lastFetchedSeg = '' // 已取过地址的段 id：去重，防 watch 与 onLoad 显式调对同段双取（双取=两个不同临时 URL→重载闪）
 async function refreshPlayUrl() {
-  playUrl.value = curFileSegId.value ? await store.playbackUrl(curFileSegId.value) : ''
+  const seg = curFileSegId.value
+  if (seg && seg === lastFetchedSeg) return // 同段已取，不重取
+  lastFetchedSeg = seg
+  playUrl.value = seg ? await store.playbackUrl(seg) : ''
 }
-watch(curFileSegId, refreshPlayUrl) // 段切换 / 换集 / 进入文件模式 → 重取地址
+watch(curFileSegId, refreshPlayUrl) // 段切换 / 换集 → 段 id 变 → 取址（首段=默认段时不变，由 onLoad 显式取）
 const segLen = computed(() => (duration.value > 0 ? duration.value / segCount.value : 0))
 const curSeg = computed(() => {
   if (segLen.value <= 0) return 0
@@ -106,10 +135,17 @@ onMounted(() => {
 
 function onLoaded(e) {
   if (e.detail && e.detail.duration) duration.value = e.detail.duration
+  measureScrub() // 控件就绪 → 缓存进度条几何，供点按/拖拽同步换算
+  // 切段后新 src 元数据就绪 → 此刻起播（避免固定 200ms 撞上未加载完→卡顿·根因#8）
+  if (pendingPlay) {
+    pendingPlay = false
+    ctx && ctx.play()
+  }
 }
 function onTimeupdate(e) {
   const d = e.detail || {}
   if (d.duration) duration.value = d.duration
+  if (dragging) return // 拖动中：进度由手指控制，忽略播放回报，避免拇指与播放头打架
   const t = d.currentTime || 0
   // 段末自动暂停（占位等分模式；文件模式由 onEnded 天然承担段末）
   // endedSeg === null 守卫：pause 生效前 timeupdate 可能再触发，防重复进入（埋点防重报）
@@ -171,11 +207,11 @@ function toggle() {
     const ended = endedSeg.value // 先存再清（审核批次B：清空后 null+1=1，第 2 段后继续播会跳回第 2 段）
     endedSeg.value = null
     if (fileMode.value) {
-      // 进入下一段：切 src（自动从头），稍候起播
+      // 进入下一段：切 src（自动从头），待新段元数据就绪再起播（pendingPlay·同 goSeg·非猜定时）
       fileSeg.value = Math.min(segCount.value - 1, fileSeg.value + 1)
       current.value = 0
       duration.value = 0
-      setTimeout(() => ctx && ctx.play(), 200)
+      pendingPlay = true
       return
     }
     playingSeg = Math.min(segCount.value - 1, ended + 1)
@@ -209,44 +245,65 @@ function replaySeg() {
   current.value = s * segLen.value
   ctx.play()
 }
-// 进度条点按跳转
-function seekTap(e) {
-  if (!ctx || duration.value <= 0) return
-  const x = (e.detail && e.detail.x) || (e.touches && e.touches[0] && e.touches[0].clientX) || 0
+// 进度条拖拽 + 点按：触点 clientX + 缓存的进度条几何 scrubRect → 目标时间（scrubTimeAt 钳位·单测锁）。
+// 拖动中只更新 current（拇指实时跟随、onTimeupdate 被 dragging 挡住不打架）；松手才真 seek。
+// 点按＝touchstart+touchend 无 move，同一套处理（touchend 按落点 seek），不再单设 @tap。
+function measureScrub() {
   uni
     .createSelectorQuery()
     .in(instance.proxy)
     .select('.vp-scrub-bg')
     .boundingClientRect((r) => {
-      if (!r) return
-      const ratio = Math.min(1, Math.max(0, (x - r.left) / r.width))
-      const tt = ratio * duration.value
-      seeking = true
-      endedSeg.value = null
-      if (!fileMode.value) playingSeg = segLen.value > 0 ? Math.floor(tt / segLen.value) : 0
-      current.value = tt
-      ctx.seek(tt)
+      if (r) scrubRect = r
     })
     .exec()
 }
-// 上一集 / 下一集
-function switchLesson(n) {
-  const i = idx.value + n
-  if (i < 0 || i >= lessons.value.length) return
-  idx.value = i
+function touchX(e) {
+  const t = (e.touches && e.touches[0]) || (e.changedTouches && e.changedTouches[0])
+  return t ? t.clientX : null
+}
+function onScrubStart(e) {
+  if (duration.value <= 0) return
+  dragging = true
+  measureScrub() // 刷新几何（拖动期间用缓存，不每帧异步查）
+  const tt = scrubTimeAt(touchX(e), scrubRect, duration.value)
+  if (tt != null) current.value = tt
+}
+function onScrubMove(e) {
+  if (!dragging) return
+  const tt = scrubTimeAt(touchX(e), scrubRect, duration.value)
+  if (tt != null) current.value = tt
+}
+function onScrubEnd(e) {
+  if (!dragging) return
+  dragging = false
+  if (!ctx) return
+  const tt = scrubTimeAt(touchX(e), scrubRect, duration.value)
+  const target = tt != null ? tt : current.value
+  current.value = target
+  endedSeg.value = null
+  seeking = true
+  if (!fileMode.value) playingSeg = segLen.value > 0 ? Math.floor(target / segLen.value) : 0
+  ctx.seek(target)
+}
+// 上一段 / 下一段（小段切换·连续跨课时）：到本课时边界自动接相邻课时（规格 R8 升级·纯函数 segNav）。
+// 目标段定位交给 stepSegment（边界/跨课时/空课时逻辑单测锁），这里只把结果落到 idx/fileSeg 并起播。
+function goSeg(dir) {
+  const t = stepSegment(lessons.value, idx.value, fileSeg.value, dir)
+  if (!t) return // 全课首/末段，无处可去（按钮已灰）
+  ctx && ctx.pause() // 先停当前段，切换间隙不续播旧段残帧
+  idx.value = t.lessonIdx
+  fileSeg.value = t.segIdx
   endedSeg.value = null
   playingSeg = 0
-  fileSeg.value = 0
   seeking = true
   current.value = 0
   duration.value = 0
-  if (ctx) {
-    ctx.seek(0)
-    ctx.play()
-  }
+  // 段 id 变 → watch(curFileSegId) 重取 playUrl → 新 src 元数据就绪（onLoaded）再起播（pendingPlay·非猜定时）
+  pendingPlay = true
 }
-const prev = () => switchLesson(-1)
-const next = () => switchLesson(1)
+const prev = () => goSeg(-1)
+const next = () => goSeg(1)
 
 // —— 求助面板（player 专属，拆在 ./components/HelpSheet/）——
 // 打开前先暂停主视频，再用 ref 调子组件的 open()
@@ -322,7 +379,13 @@ const back = () => goBack('/pages/catalog/index')
       <view v-if="endedSeg !== null" class="vp-replay-bar" @tap="replaySeg">
         <Icon name="rotate-ccw-dark" :size="21" /><text>重复播放</text>
       </view>
-      <view class="vp-scrub" @tap="seekTap">
+      <view
+        class="vp-scrub"
+        @touchstart="onScrubStart"
+        @touchmove.stop.prevent="onScrubMove"
+        @touchend="onScrubEnd"
+        @touchcancel="onScrubEnd"
+      >
         <view class="vp-scrub-bg">
           <view class="vp-scrub-fill" :style="{ width: pct + '%' }"></view>
           <view class="vp-scrub-thumb" :style="{ left: pct + '%' }"></view>
