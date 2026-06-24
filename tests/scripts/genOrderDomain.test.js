@@ -55,7 +55,7 @@ describe('gen-order-domain（订单域声明→派生物·P3 安全处生成）'
       const ts = tsByFile[mt.file]
       const m = ts.match(new RegExp(`export type ${mt.tn} = ([^\\n]+)`))
       expect(m, `${mt.tn} 未在 ${mt.file}.ts 生成`).toBeTruthy()
-      const tsStates = new Set([...m[1].matchAll(/'([a-z]+)'/g)].map((x) => x[1]))
+      const tsStates = new Set([...m[1].matchAll(/'([a-z_]+)'/g)].map((x) => x[1]))
       expect([...tsStates].sort(), `${mt.tn} 状态联合 ≠ JSON 状态集`).toEqual([...spec[coll].states].sort())
     }
   })

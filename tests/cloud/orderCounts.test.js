@@ -47,7 +47,7 @@ describe('orderCounts 按状态服务端精确计数（计数失真·根因#7）
     seedOrders()
     const r = await call('orderCounts')
     expect(r.ok).toBe(true)
-    expect(r.counts).toEqual({ pending: 3, paid: 7, shipped: 5, done: 11, closed: 2, all: 28 })
+    expect(r.counts).toEqual({ pending: 3, paid: 7, shipped: 5, done: 11, closed: 2, refund_required: 0, all: 28 })
   })
   it('空集合返回全 0', async () => {
     const r = await call('orderCounts')

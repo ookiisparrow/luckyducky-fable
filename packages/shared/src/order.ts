@@ -6,21 +6,23 @@
 // ⚠️ 此段由 scripts/gen-order-domain.mjs 从对应 *.spec.ts 生成——勿手改。改流转改声明源（order.spec.ts/learning.spec.ts）再跑生成器。
 // === GENERATED:order-domain BEGIN ===
 /** orders 状态联合（从 order.spec.ts 生成·写错状态名编译失败·根因#2）。 */
-export type OrderStatus = 'closed' | 'done' | 'paid' | 'pending' | 'shipped'
+export type OrderStatus = 'closed' | 'done' | 'paid' | 'pending' | 'refund_required' | 'shipped'
 
 export const ORDER_STATUS = {
   CLOSED: 'closed',
   DONE: 'done',
   PAID: 'paid',
   PENDING: 'pending',
+  REFUND_REQUIRED: 'refund_required',
   SHIPPED: 'shipped',
 } as const satisfies Record<string, OrderStatus>
 
 /** orders 合法流转表（机读·守卫 order-transitions-declared 对账散落实现）。 */
 export const ORDER_TRANSITIONS: ReadonlyArray<{ from: readonly OrderStatus[]; to: OrderStatus }> = [
-  { from: ['pending'], to: 'paid' }, // pay/payCallback（0元单/支付成功）
+  { from: ['pending'], to: 'paid' }, // pay/payCallback（0元单/支付成功·库存自下单持有）
   { from: ['pending'], to: 'closed' }, // pay 惰性关单 / closeExpiredOrders 定时关单
-  { from: ['closed'], to: 'paid' }, // payCallback（关单后钱到账·订单复活）
+  { from: ['closed'], to: 'paid' }, // payCallback（关单后钱到账·重抢库存成功才复活）
+  { from: ['closed'], to: 'refund_required' }, // payCallback（关单回补后晚到回调·库存已被买走·钱已收待人工退款·审核 P0）
   { from: ['paid', 'shipped'], to: 'shipped' }, // adminApi.shipOrder（首发/改单号·幂等）
   { from: ['shipped'], to: 'done' }, // confirmReceive（确认收货）
 ]

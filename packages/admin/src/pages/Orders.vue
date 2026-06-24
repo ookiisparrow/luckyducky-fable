@@ -21,6 +21,9 @@ const STATUS = {
   shipped: { label: '已发货', chip: '' },
   done: { label: '已完成', chip: 'green' },
   closed: { label: '已关闭', chip: 'grey' },
+  // 钱已收但缺货的死信态（审核 P0）：超时关单回补后晚到的支付到账、库存已售罄，待人工退款。
+  // [LD_ALERT] PAID_BUT_OOS 实时告警；退款须商家凭 transactionId 手动发起（后续接 admin 退款工具）。
+  refund_required: { label: '待退款', chip: 'warn' },
 }
 const TABS = [
   { key: 'paid', label: '待发货', status: 'paid' },

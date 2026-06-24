@@ -72,6 +72,44 @@ describe('payCallback 回调幂等', () => {
   })
 })
 
+// 关单回补后晚到的成功回调（审核 P0·根因#1/#2 防超卖）：closed 单库存已在关单时回补，
+// 复活 paid 前须**重抢库存**——抢到才翻 paid，抢不到（已被别人买走）进 refund_required 待退款态。
+describe('payCallback 关单后晚到回调·库存重抢防超卖（审核 P0·根因#1/#2）', () => {
+  const inv = (id) => control.dump('inventory').find((d) => d._id === id)
+  const find = (oid) => control.dump('orders').find((o) => o._id === oid)
+
+  it('库存仍在：closed 单重抢库存成功 → 复活 paid 且扣减库存', async () => {
+    control.seed('inventory', [{ _id: 'k1__红', productId: 'k1', spec: '红', stock: 2 }])
+    control.seed('orders', [
+      { _id: 'k1o', id: 'k1o', status: 'closed', amount: 50, closedAt: 1, reserved: [{ productId: 'k1', spec: '红', qty: 1 }] },
+    ])
+    await main({ ...NOTIFY, outTradeNo: 'k1o', totalFee: 5000, transactionId: 'tx-revive' })
+    const o = find('k1o')
+    expect(o.status).toBe('paid')
+    expect(o.transactionId).toBe('tx-revive')
+    expect(inv('k1__红').stock).toBe(1) // 重抢扣回 1
+  })
+
+  it('库存已被买走：closed 单重抢失败 → 不超卖·进 refund_required 待退款（钱已收·人工退款）', async () => {
+    control.seed('inventory', [{ _id: 'k2__红', productId: 'k2', spec: '红', stock: 0 }])
+    control.seed('orders', [
+      { _id: 'k2o', id: 'k2o', status: 'closed', amount: 50, closedAt: 1, reserved: [{ productId: 'k2', spec: '红', qty: 1 }] },
+    ])
+    await main({ ...NOTIFY, outTradeNo: 'k2o', totalFee: 5000, transactionId: 'tx-oos' })
+    const o = find('k2o')
+    expect(o.status).toBe('refund_required') // 没翻 paid（不超卖）
+    expect(o.paidAt).toBeUndefined()
+    expect(o.feeReceivedAt).toBeGreaterThan(0)
+    expect(inv('k2__红').stock).toBe(0) // 库存没被扣穿（不足·宁缺勿超卖）
+  })
+
+  it('reserved 为空（不限量/无实物）：closed 单直接复活 paid', async () => {
+    control.seed('orders', [{ _id: 'k3o', id: 'k3o', status: 'closed', amount: 50, closedAt: 1, reserved: [] }])
+    await main({ ...NOTIFY, outTradeNo: 'k3o', totalFee: 5000, transactionId: 'tx-unlimited' })
+    expect(find('k3o').status).toBe('paid')
+  })
+})
+
 describe('payCallback v3 工作流回调形态（resource 字段）', () => {
   const V3 = {
     out_trade_no: 'p1',

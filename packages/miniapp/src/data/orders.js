@@ -73,4 +73,15 @@ export const ORDER_STATUS = {
     sub: '超时未支付，订单已自动关闭；喜欢的话可以重新下单',
     actions: [{ label: '再次购买', kind: 'solid', key: 'rebuy' }],
   },
+  // 钱已收但缺货的死信态（审核 P0）：超时关单后晚到的支付到账、库存已被买走，无法履约 → 待人工退款。
+  // 用户已被扣款，故明示「将为你退款」，绝不显示成「已关闭」误导。无动作按钮（退款由商家人工发起，
+  // 联系客服走「我」页客服入口·open-type=contact 不在此处触发）。
+  [OS.REFUND_REQUIRED]: {
+    label: '待退款',
+    icon: 'wallet-purple',
+    tint: 'lilac',
+    head: '已付款，但商品已售罄',
+    sub: '很抱歉，付款到账时库存已售罄；货款将原路退回，如有疑问可在「我的」页联系客服',
+    actions: [],
+  },
 }

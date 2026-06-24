@@ -5,6 +5,7 @@
       "done",
       "paid",
       "pending",
+      "refund_required",
       "shipped"
     ],
     "initial": [
@@ -13,7 +14,8 @@
     ],
     "terminal": [
       "done",
-      "closed"
+      "closed",
+      "refund_required"
     ],
     "transitions": [
       {
@@ -21,7 +23,7 @@
           "pending"
         ],
         "to": "paid",
-        "trigger": "pay/payCallback（0元单/支付成功）"
+        "trigger": "pay/payCallback（0元单/支付成功·库存自下单持有）"
       },
       {
         "from": [
@@ -35,7 +37,14 @@
           "closed"
         ],
         "to": "paid",
-        "trigger": "payCallback（关单后钱到账·订单复活）"
+        "trigger": "payCallback（关单后钱到账·重抢库存成功才复活）"
+      },
+      {
+        "from": [
+          "closed"
+        ],
+        "to": "refund_required",
+        "trigger": "payCallback（关单回补后晚到回调·库存已被买走·钱已收待人工退款·审核 P0）"
       },
       {
         "from": [
