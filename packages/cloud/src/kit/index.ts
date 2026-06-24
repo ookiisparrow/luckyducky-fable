@@ -27,6 +27,7 @@ export { alert, notifyAlert } from './observe'
 export type { AlertSev } from './observe'
 export { reserveStock, restoreStock, setStock, getInventory } from './inventory'
 export type { StockLine } from './inventory'
+export { recordAudit, shouldAudit } from './audit'
 export { COLLECTIONS } from './collections'
 export type { CollName } from './collections'
 export {

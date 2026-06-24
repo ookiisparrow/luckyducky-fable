@@ -1,5 +1,5 @@
 import cloud from 'wx-server-sdk'
-import { getDb, throttleLocked, throttleFail, throttleReset } from '../../../kit'
+import { getDb, throttleLocked, throttleFail, throttleReset, recordAudit, shouldAudit } from '../../../kit'
 import { reply, ensure, checkKey, type Ctx } from './lib'
 import * as products from './actions/products'
 import * as courses from './actions/courses'
@@ -111,9 +111,13 @@ export const main = async (event: any) => {
 
   const handler = ACTIONS[action]
   if (!handler) return reply(400, { ok: false, error: 'UNKNOWN_ACTION' })
+  const auditIp = tkey.replace('adminlogin:', '') // 操作审计#4：动钱/状态操作留痕（fail-soft·不反噬响应）
   try {
-    return await handler({ db, cloud, data, drafts })
+    const res = await handler({ db, cloud, data, drafts })
+    if (shouldAudit(action)) await recordAudit({ action, ip: auditIp, data, ok: !!res && res.statusCode === 200 })
+    return res
   } catch (e) {
+    if (shouldAudit(action)) await recordAudit({ action, ip: auditIp, data, ok: false, error: 'SERVER_ERROR' })
     console.error('adminApi error', action, e)
     return reply(500, { ok: false, error: 'SERVER_ERROR' })
   }

@@ -278,6 +278,41 @@ export const repoChecks = [
     },
   },
   {
+    // 操作审计单一收口（操作审计#4·根因#3 可追溯）：管理端动钱/状态操作经 recordAudit 留痕；recordAudit/auditLog
+    // 仅 kit/audit.ts（定义）+ collections/index（登记导出）+ adminApi/index.ts（分发处调用），其余 cloud/src 不得引用；
+    // adminApi 分发处须接 recordAudit + shouldAudit（防回退成无痕）。
+    id: 'admin-actions-audited',
+    roots: ['#3'],
+    desc: '操作审计单一收口（操作审计#4·根因#3）：recordAudit 仅 kit/audit.ts 定义、仅 adminApi/index.ts 分发处调用并接 shouldAudit；其余 cloud/src 引用 recordAudit/auditLog 即红（防散记/漏记）',
+    run() {
+      const seam = 'packages/cloud/src/kit/audit.ts'
+      const caller = 'packages/cloud/src/functions/admin/adminApi/index.ts'
+      if (!existsSync(join(ROOT, seam))) return [`${seam} 缺失——操作审计原语（操作审计#4）`]
+      const bad = []
+      if (!/export\s+async\s+function\s+recordAudit/.test(readFileSync(join(ROOT, seam), 'utf8')))
+        bad.push(`${seam} 未导出 recordAudit——审计空壳`)
+      const idx = readFileSync(join(ROOT, caller), 'utf8')
+      if (!/recordAudit/.test(idx) || !/shouldAudit/.test(idx))
+        bad.push(`${caller} 分发处未接 recordAudit+shouldAudit——管理操作无痕（操作审计#4）`)
+      const allow = new Set([seam, caller, 'packages/cloud/src/kit/collections.ts', 'packages/cloud/src/kit/index.ts'])
+      const srcRoot = join(ROOT, 'packages/cloud/src')
+      const walk = (d) => {
+        for (const e of readdirSync(d)) {
+          const p = join(d, e)
+          if (statSync(p).isDirectory()) walk(p)
+          else if (e.endsWith('.ts')) {
+            const rel = relative(ROOT, p).replace(/\\/g, '/')
+            if (allow.has(rel)) continue
+            if (/recordAudit|COLLECTIONS\.auditLog|\.collection\(\s*['"]auditLog['"]\s*\)/.test(readFileSync(p, 'utf8')))
+              bad.push(`${rel} 直碰 recordAudit/auditLog——审计须经 kit/audit + adminApi 分发单点（操作审计#4）`)
+          }
+        }
+      }
+      if (existsSync(srcRoot)) walk(srcRoot)
+      return bad
+    },
+  },
+  {
     id: 'interface-catalog-sync',
     roots: ['正册'],
     desc: '系统事实同步（docs/系统事实.md 是接口权威登记册，正册自评 P1）：每个云函数 + 每个 adminApi action 都须登记，杜绝「加接口忘登记」',
@@ -1739,6 +1774,8 @@ export const typeAndTestGuards = [
   // 下单库存预留 + 回补端到端（库存#1·根因#1/#2 防超卖）：createOrder 缺货拒单(OUT_OF_STOCK)、预留扣减记 reserved；
   // 超时关单回补且幂等；乐观 CAS 抢最后一件只一个赢；不限量(无文档)放行。reverseTest 锁此行为。
   { id: 'order-reserves-stock', mechanism: 'test', roots: ['#1', '#2'], reverseTest: 'tests/cloud/inventory.test.js' },
+  // 管理操作审计（操作审计#4·根因#3）：recordAudit 写痕 + 剥凭证 + fail-soft；shouldAudit 只记动钱/状态操作、跳只读/上传/认证。reverseTest 锁此行为。
+  { id: 'admin-action-audit-logged', mechanism: 'test', roots: ['#3'], reverseTest: 'tests/cloud/kit/audit.test.js' },
 ]
 
 const SRC_DIRS = ['packages', 'cloudfunctions', 'scripts']
