@@ -50,6 +50,39 @@ async function showTestQr(batchId) {
 const cardFinal = computed(() => card.value?.status === 'final')
 const prefixOk = computed(() => /^https:\/\/.+\/$/.test(urlPrefix.value))
 
+// 激活进度 + 三态（增强第6步·原独立批次页能力并入此处·仅该商品）
+const STATUS = { new: ['全新', 'grey'], using: ['使用中', ''], done: ['已用尽', 'green'] }
+const statusOf = (b) => (b.activated === 0 ? 'new' : b.activated >= b.total ? 'done' : 'using')
+const pct = (b) => (b.total ? Math.round((b.activated / b.total) * 100) : 0)
+// 查看码弹层（列码 + 复制全部导出）
+const codesShow = ref(false)
+const codesBatch = ref('')
+const codesList = ref([])
+const codesCopied = ref(false)
+const codesLoading = ref(false)
+async function showCodes(batchId) {
+  codesBatch.value = batchId
+  codesList.value = []
+  codesCopied.value = false
+  codesShow.value = true
+  codesLoading.value = true
+  try {
+    codesList.value = await listBatchCodes(batchId)
+  } catch (e) {
+    alert('加载码失败：' + e.message)
+    codesShow.value = false
+  } finally {
+    codesLoading.value = false
+  }
+}
+function copyCodes() {
+  if (!codesList.value.length) return
+  navigator.clipboard?.writeText(codesList.value.join('\n')).then(() => {
+    codesCopied.value = true
+    setTimeout(() => (codesCopied.value = false), 1500)
+  })
+}
+
 async function init() {
   if (!cloudMode) {
     loading.value = false
@@ -163,11 +196,16 @@ async function generate() {
         <p v-if="!batches.length" class="mini">还没有批次</p>
         <div v-for="b in batches" :key="b.batchId" class="batchrow">
           <span class="bicon">▦</span>
-          <b>{{ b.batchId }}</b>
-          <span class="bmeta">{{ b.total }} 码 · 已激活 {{ b.activated }}</span>
-          <button class="btn ghost sm" @click="showTestQr(b.batchId)">📱 测试二维码</button>
+          <b class="bid">{{ b.batchId }}</b>
+          <span class="chip" :class="STATUS[statusOf(b)][1]">{{ STATUS[statusOf(b)][0] }}</span>
+          <span class="bprog">
+            <span class="pbar"><i :class="statusOf(b)" :style="{ width: Math.max(pct(b), 2) + '%' }" /></span>
+            <em>{{ b.activated }}/{{ b.total }} 激活 · {{ pct(b) }}%</em>
+          </span>
+          <button class="btn ghost sm" @click="showCodes(b.batchId)">查看码</button>
+          <button class="btn ghost sm" @click="showTestQr(b.batchId)">📱 测试</button>
           <button class="btn ghost sm" :disabled="busy === b.batchId || !cardFinal" @click="downloadPack(b.batchId)">
-            {{ busy === b.batchId ? '打包中…' : '⬇ 下载印刷包' }}
+            {{ busy === b.batchId ? '打包中…' : '⬇ 印刷包' }}
           </button>
         </div>
       </div>
@@ -189,6 +227,25 @@ async function generate() {
           <p class="qrurl">{{ qrUrl }}</p>
           <p class="qrnote">用手机微信「扫一扫」扫屏幕：会打开落地页并显示激活码（默认域名测试模式）。自有域名 + 微信规则配好后，同样的码会直接跳进小程序激活页。</p>
           <button class="btn primary" @click="qrShow = false">关闭</button>
+        </div>
+      </div>
+
+      <div v-if="codesShow" class="qrmask" @click="codesShow = false">
+        <div class="codesbox" @click.stop>
+          <div class="codes-head">
+            <h4>批次 {{ codesBatch }} 的码</h4>
+            <button class="x" @click="codesShow = false">×</button>
+          </div>
+          <p v-if="codesLoading" class="mini">加载码…</p>
+          <template v-else>
+            <div class="codes-act">
+              <span class="mini">共 {{ codesList.length }} 个码（一码一用）</span>
+              <button class="btn ghost sm" @click="copyCodes">{{ codesCopied ? '✓ 已复制' : '复制全部码' }}</button>
+            </div>
+            <div class="codes-list">
+              <code v-for="c in codesList" :key="c">{{ c }}</code>
+            </div>
+          </template>
         </div>
       </div>
     </template>
@@ -263,14 +320,113 @@ h2 {
 .bicon {
   color: var(--brand);
 }
-.bmeta {
-  flex: 1;
-  color: var(--content-2);
+.bid {
+  font-family: ui-monospace, Menlo, monospace;
   font-size: 12px;
+}
+.chip {
+  padding: 2px 9px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+  background: var(--bg-lilac);
+  border: 1px solid var(--purple-line);
+  color: var(--brand-active);
+}
+.chip.green {
+  background: var(--green-bg);
+  border-color: var(--green-line);
+  color: var(--green);
+}
+.chip.grey {
+  background: var(--bg-grey);
+  border-color: var(--line-strong);
+  color: var(--content-2);
+}
+.bprog {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 120px;
+}
+.pbar {
+  flex: 1;
+  height: 8px;
+  border-radius: 4px;
+  background: var(--bg-grey);
+  overflow: hidden;
+  max-width: 160px;
+}
+.pbar i {
+  display: block;
+  height: 100%;
+  border-radius: 4px;
+  background: var(--brand);
+}
+.pbar i.done {
+  background: var(--green);
+}
+.pbar i.new {
+  background: var(--line-strong);
+}
+.bprog em {
+  font-style: normal;
+  font-size: 11px;
+  color: var(--content-2);
+  white-space: nowrap;
 }
 .btn.sm {
   padding: 7px 13px;
   font-size: 12px;
+}
+.codesbox {
+  background: var(--white);
+  border-radius: 16px;
+  padding: 18px 22px;
+  width: 460px;
+  max-width: 92vw;
+  max-height: 80vh;
+  display: flex;
+  flex-direction: column;
+}
+.codes-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.codes-head h4 {
+  margin: 0;
+  font-size: 14px;
+  color: var(--ink);
+}
+.codes-head .x {
+  border: none;
+  background: none;
+  font-size: 22px;
+  line-height: 1;
+  color: var(--content-2);
+  cursor: pointer;
+}
+.codes-act {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin: 12px 0 10px;
+}
+.codes-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  overflow-y: auto;
+}
+.codes-list code {
+  font-family: ui-monospace, Menlo, monospace;
+  font-size: 11.5px;
+  color: var(--content);
+  padding: 5px 8px;
+  background: var(--bg-lilac);
+  border-radius: 6px;
 }
 .genbox {
   border: 1px solid var(--line);

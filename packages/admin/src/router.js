@@ -9,7 +9,6 @@ import Refunds from '@/pages/Refunds.vue'
 import Dashboard from '@/pages/Dashboard.vue'
 import Inventory from '@/pages/Inventory.vue'
 import Notifications from '@/pages/Notifications.vue'
-import Batches from '@/pages/Batches.vue'
 import Externals from '@/pages/Externals.vue'
 
 export const router = createRouter({
@@ -24,7 +23,6 @@ export const router = createRouter({
     { path: '/inventory', component: Inventory },
     { path: '/dashboard', component: Dashboard },
     { path: '/notifications', component: Notifications },
-    { path: '/batches', component: Batches },
     { path: '/externals', component: Externals },
     // 上新向导：/product/<id>/step/<1-6>；左侧「按步骤直达」也跳这里
     { path: '/product/:id/step/:n', component: Wizard, props: true },
