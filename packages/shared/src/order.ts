@@ -3,7 +3,7 @@
  * 见 order.spec.ts 头注；改流转改声明再跑 scripts/gen-order-domain.mjs。
  */
 
-// ⚠️ 此段由 scripts/gen-order-domain.mjs 从 order.spec.ts 生成——勿手改。改流转改 order.spec.ts 再跑生成器。
+// ⚠️ 此段由 scripts/gen-order-domain.mjs 从对应 *.spec.ts 生成——勿手改。改流转改声明源（order.spec.ts/learning.spec.ts）再跑生成器。
 // === GENERATED:order-domain BEGIN ===
 /** orders 状态联合（从 order.spec.ts 生成·写错状态名编译失败·根因#2）。 */
 export type OrderStatus = 'closed' | 'done' | 'paid' | 'pending' | 'shipped'

@@ -99,5 +99,26 @@
         "trigger": "refundCallback（退款成功幂等）"
       }
     ]
+  },
+  "qrcodes": {
+    "states": [
+      "activated",
+      "unused"
+    ],
+    "initial": [
+      "unused"
+    ],
+    "terminal": [
+      "activated"
+    ],
+    "transitions": [
+      {
+        "from": [
+          "unused"
+        ],
+        "to": "activated",
+        "trigger": "activateCourse 扫码激活（一码一用·transition 原子抢占·moved 即赢）"
+      }
+    ]
   }
 }

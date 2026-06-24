@@ -1676,10 +1676,12 @@ export const repoChecks = [
     // 改声明须跑 `node scripts/gen-order-domain.mjs` 同步生成物——漂移即红，杜绝「改了声明忘重生成」。
     id: 'gen-order-domain-synced',
     roots: ['#2', 'P3'],
-    desc: '订单域派生物与声明同步（P3 安全处生成）：order.ts/order-domain.generated.json 由 order.spec.ts 经 scripts/gen-order-domain.mjs 生成；漂移（改声明未重生成）即红——跑 `node scripts/gen-order-domain.mjs` 修复',
+    desc: '订单+learning 域派生物与声明同步（P3 安全处生成·扩 learning）：order.ts/learning.ts/order-domain.generated.json 由 order.spec.ts+learning.spec.ts 经 scripts/gen-order-domain.mjs 生成；漂移（改声明未重生成）即红——跑 `node scripts/gen-order-domain.mjs` 修复',
     run() {
       const spec = join(ROOT, 'packages/shared/src/order.spec.ts')
+      const learnSpec = join(ROOT, 'packages/shared/src/learning.spec.ts')
       if (!existsSync(spec)) return ['packages/shared/src/order.spec.ts 缺失（订单域声明单源·P3）']
+      if (!existsSync(learnSpec)) return ['packages/shared/src/learning.spec.ts 缺失（learning 域声明单源·P3 扩）']
       try {
         execSync(`node ${join(ROOT, 'scripts/gen-order-domain.mjs')} --check`, { encoding: 'utf8', stdio: 'pipe' })
         return []
@@ -1697,7 +1699,7 @@ export const repoChecks = [
     // 函数私自越流转（写未声明状态 / transition 走未声明边）当场红——防「散写各自背诵规则」回归。
     id: 'order-transitions-declared',
     roots: ['#2', 'P3'],
-    desc: '订单域状态写入只走声明流转（根因#2·P3 spike）：transition(orders/afterSales) 的边须在 order.spec.ts 声明流转表内；写 orders/afterSales status 的字面量须是声明状态——函数私自越流转/写未声明状态即红',
+    desc: '订单+learning 域状态写入只走声明流转（根因#2·P3 spike·扩 learning）：transition(orders/afterSales/qrcodes) 的边须在 order.spec.ts/learning.spec.ts 声明流转表内；写这些集合 status 的字面量须是声明状态——函数私自越流转/写未声明状态即红（扫 functions/orders+learning + admin orders/refunds）',
     run() {
       const jsonPath = join(ROOT, 'scripts/order-domain.generated.json')
       if (!existsSync(jsonPath)) return ['scripts/order-domain.generated.json 缺失——跑 `node scripts/gen-order-domain.mjs`（订单域声明派生物·P3）']
@@ -1720,11 +1722,12 @@ export const repoChecks = [
       }
       const COLLS = new Set(Object.keys(spec)) // 'orders' / 'afterSales'
 
-      // 受管订单域文件：orders 函数 + admin 订单/退款 actions（状态写入散落处）
+      // 受管域文件：orders 函数 + admin 订单/退款 actions + learning 函数（qrcodes 状态写入散落处·P3 扩 learning）
       const files = []
-      const ordersDir = join(ROOT, 'packages/cloud/src/functions/orders')
-      if (existsSync(ordersDir))
-        for (const e of readdirSync(ordersDir)) if (e.endsWith('.ts')) files.push(join(ordersDir, e))
+      for (const dir of ['packages/cloud/src/functions/orders', 'packages/cloud/src/functions/learning']) {
+        const abs = join(ROOT, dir)
+        if (existsSync(abs)) for (const e of readdirSync(abs)) if (e.endsWith('.ts')) files.push(join(abs, e))
+      }
       for (const a of ['orders.ts', 'refunds.ts']) {
         const p = join(ROOT, 'packages/cloud/src/functions/admin/adminApi/actions', a)
         if (existsSync(p)) files.push(p)
@@ -1740,7 +1743,7 @@ export const repoChecks = [
         let tm
         while ((tm = transRe.exec(src))) {
           const coll = tm[1]
-          if (!COLLS.has(coll)) continue // 非订单域集合（如 qrcodes）不在本守卫范围
+          if (!COLLS.has(coll)) continue // 未声明集合不在本守卫范围（声明集合＝orders/afterSales/qrcodes）
           const from = [...tm[2].matchAll(/['"]([a-z]+)['"]/g)].map((x) => x[1])
           const to = tm[3]
           // union 语义：每个 from 元素都须有声明的原子边 from→to，缺一即越流转
@@ -1765,7 +1768,7 @@ export const repoChecks = [
           const head = src.slice(0, at)
           const collMatches = [...head.matchAll(/(?:\.collection\(|transition\()\s*['"](\w+)['"]/g)]
           const coll = collMatches.length ? collMatches[collMatches.length - 1][1] : null
-          if (!coll || !COLLS.has(coll)) continue // 非订单域集合
+          if (!coll || !COLLS.has(coll)) continue // 未声明集合（声明集合＝orders/afterSales/qrcodes）
           if (!declaredStates[coll].has(val))
             bad.push(`${rel}：写 ${coll}.status='${val}' 不是 order.spec.ts 声明状态（${[...declaredStates[coll]].join('/')}）——打错状态名或改声明再生成（根因#2·P3）`)
         }

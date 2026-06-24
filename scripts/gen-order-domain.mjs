@@ -13,17 +13,30 @@
  *
  * 改流转：改 order.spec.ts → 跑本脚本 → check 绿。守卫 gen-order-domain-synced 焊「派生物必与声明同步」。
  */
-import { readFileSync, writeFileSync } from 'node:fs'
+import { readFileSync, writeFileSync, existsSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { dirname, join } from 'node:path'
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..')
-const SPEC = join(ROOT, 'packages/shared/src/order.spec.ts')
-const ORDER_TS = join(ROOT, 'packages/shared/src/order.ts')
 const JSON_OUT = join(ROOT, 'scripts/order-domain.generated.json')
+// 多域声明（北极星 A·新域只加一项 DOMAINS）。每项：声明源 spec → TS 派生物 ts；流转表全并进一个 JSON。
+const DOMAINS = [
+  {
+    spec: join(ROOT, 'packages/shared/src/order.spec.ts'),
+    ts: join(ROOT, 'packages/shared/src/order.ts'),
+    label: 'order.spec.ts',
+    header: `/**\n * 订单域类型/常量/流转表——**生成物**（单源 order.spec.ts·勿手改生成段）。\n * 见 order.spec.ts 头注；改流转改声明再跑 scripts/gen-order-domain.mjs。\n */\n`,
+  },
+  {
+    spec: join(ROOT, 'packages/shared/src/learning.spec.ts'),
+    ts: join(ROOT, 'packages/shared/src/learning.ts'),
+    label: 'learning.spec.ts',
+    header: `/**\n * learning 域类型/常量/流转表——**生成物**（单源 learning.spec.ts·勿手改生成段）。\n * 见 learning.spec.ts 头注；改流转改声明再跑 scripts/gen-order-domain.mjs。\n */\n`,
+  },
+]
 
 const GEN_BANNER =
-  '// ⚠️ 此段由 scripts/gen-order-domain.mjs 从 order.spec.ts 生成——勿手改。改流转改 order.spec.ts 再跑生成器。'
+  '// ⚠️ 此段由 scripts/gen-order-domain.mjs 从对应 *.spec.ts 生成——勿手改。改流转改声明源（order.spec.ts/learning.spec.ts）再跑生成器。'
 const GEN_BEGIN = '// === GENERATED:order-domain BEGIN ==='
 const GEN_END = '// === GENERATED:order-domain END ==='
 
@@ -52,7 +65,7 @@ function parseSpec(src) {
     }
     machines.push({ name, collection, initial, terminal, transitions })
   }
-  if (!machines.length) throw new Error('order.spec.ts 未解析到任何 *_STATUS_SPEC（声明单源损坏）')
+  if (!machines.length) throw new Error('状态机声明源未解析到任何 *_STATUS_SPEC（声明单源损坏）')
   return machines
 }
 
@@ -71,12 +84,12 @@ function statesOf(mc) {
   return [...set].sort()
 }
 
-/** PascalCase 类型名前缀：ORDER_STATUS_SPEC → Order；AFTERSALE_STATUS_SPEC → AfterSale。 */
-const TYPE_PREFIX = { ORDER_STATUS_SPEC: 'Order', AFTERSALE_STATUS_SPEC: 'AfterSale' }
-/** 常量名前缀：ORDER_STATUS_SPEC → ORDER；AFTERSALE_STATUS_SPEC → AFTERSALE。 */
-const CONST_PREFIX = { ORDER_STATUS_SPEC: 'ORDER', AFTERSALE_STATUS_SPEC: 'AFTERSALE' }
+/** PascalCase 类型名前缀：ORDER_STATUS_SPEC → Order；AFTERSALE_STATUS_SPEC → AfterSale；QRCODE_STATUS_SPEC → Qrcode。 */
+const TYPE_PREFIX = { ORDER_STATUS_SPEC: 'Order', AFTERSALE_STATUS_SPEC: 'AfterSale', QRCODE_STATUS_SPEC: 'Qrcode' }
+/** 常量名前缀：…→ ORDER / AFTERSALE / QRCODE。 */
+const CONST_PREFIX = { ORDER_STATUS_SPEC: 'ORDER', AFTERSALE_STATUS_SPEC: 'AFTERSALE', QRCODE_STATUS_SPEC: 'QRCODE' }
 
-function genTs(machines) {
+function genTs(machines, specLabel) {
   const parts = []
   for (const mc of machines) {
     const tp = TYPE_PREFIX[mc.name]
@@ -85,7 +98,7 @@ function genTs(machines) {
     const states = statesOf(mc)
     const union = states.map((s) => `'${s}'`).join(' | ')
     // 类型联合
-    parts.push(`/** ${mc.collection} 状态联合（从 order.spec.ts 生成·写错状态名编译失败·根因#2）。 */`)
+    parts.push(`/** ${mc.collection} 状态联合（从 ${specLabel} 生成·写错状态名编译失败·根因#2）。 */`)
     parts.push(`export type ${tp}Status = ${union}`)
     parts.push('')
     // 常量对象（UPPER_SNAKE → 状态值；连字符状态转下划线键）
@@ -106,13 +119,8 @@ function genTs(machines) {
   return parts.join('\n').trimEnd() + '\n'
 }
 
-function genOrderTs(machines) {
-  const header = `/**
- * 订单域类型/常量/流转表——**生成物**（单源 order.spec.ts·勿手改生成段）。
- * 见 order.spec.ts 头注；改流转改声明再跑 scripts/gen-order-domain.mjs。
- */
-`
-  return header + '\n' + GEN_BANNER + '\n' + GEN_BEGIN + '\n' + genTs(machines).trimEnd() + '\n' + GEN_END + '\n'
+function genDomainTs(machines, header, specLabel) {
+  return header + '\n' + GEN_BANNER + '\n' + GEN_BEGIN + '\n' + genTs(machines, specLabel).trimEnd() + '\n' + GEN_END + '\n'
 }
 
 function genJson(machines) {
@@ -131,14 +139,21 @@ function genJson(machines) {
 
 function main() {
   const check = process.argv.includes('--check')
-  const spec = readFileSync(SPEC, 'utf8')
-  const machines = parseSpec(spec)
-  const orderTs = genOrderTs(machines)
-  const json = genJson(machines)
+  // 逐域解析 → 各生成 .ts；全域 machines 并进一个 JSON（守卫对账总源）。
+  const allMachines = []
+  const tsOut = [] // { ts, content }
+  for (const d of DOMAINS) {
+    const machines = parseSpec(readFileSync(d.spec, 'utf8'))
+    allMachines.push(...machines)
+    tsOut.push({ ts: d.ts, content: genDomainTs(machines, d.header, d.label) })
+  }
+  const json = genJson(allMachines)
 
   if (check) {
     const drift = []
-    if (readFileSync(ORDER_TS, 'utf8') !== orderTs) drift.push('packages/shared/src/order.ts')
+    for (const { ts, content } of tsOut) {
+      if (!existsSync(ts) || readFileSync(ts, 'utf8') !== content) drift.push('packages/shared/src/' + ts.split('/').pop())
+    }
     let curJson = ''
     try {
       curJson = readFileSync(JSON_OUT, 'utf8')
@@ -150,13 +165,13 @@ function main() {
       console.error('[gen-order-domain] 派生物与声明不同步：' + drift.join('、') + '——跑 `node scripts/gen-order-domain.mjs` 重生成')
       process.exit(1)
     }
-    console.log('[gen-order-domain] 派生物与声明同步 ✓')
+    console.log('[gen-order-domain] 派生物与声明同步 ✓（order + learning）')
     return
   }
 
-  writeFileSync(ORDER_TS, orderTs)
+  for (const { ts, content } of tsOut) writeFileSync(ts, content)
   writeFileSync(JSON_OUT, json)
-  console.log('[gen-order-domain] 已生成 packages/shared/src/order.ts + scripts/order-domain.generated.json')
+  console.log('[gen-order-domain] 已生成 order.ts + learning.ts + order-domain.generated.json')
 }
 
 main()
