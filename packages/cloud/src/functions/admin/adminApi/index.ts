@@ -66,6 +66,8 @@ const ACTIONS: Record<string, (ctx: Ctx) => Promise<any>> = {
   getReconciliation: reconciliation.getReconciliation,
   // 外部对账（S16·Batch 2）：拉微信交易账单落 wxBills
   downloadBill: wxbill.downloadBill,
+  // 外部对账（S16·Batch 3）：我方付款单 ⋈ wxBills 逐笔比对
+  getBillMatch: reconciliation.getBillMatch,
   // 库存（库存#1）
   listInventory: inventory.listInventory,
   saveStock: inventory.saveStock,

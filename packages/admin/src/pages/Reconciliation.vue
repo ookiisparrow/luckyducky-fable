@@ -11,7 +11,7 @@
  * （外部对账·Batch 2/3·需商户 APIv3 凭证）。CSV 导出按当前每日流水。
  */
 import { ref, computed } from 'vue'
-import { cloudMode, getReconciliation } from '@/api/cloud.js'
+import { cloudMode, getReconciliation, downloadBill, getBillMatch } from '@/api/cloud.js'
 
 const fmtDate = (d) => {
   const p = (n) => String(n).padStart(2, '0')
@@ -47,6 +47,53 @@ async function load() {
   }
 }
 load()
+
+// —— 外部对账（微信账单逐笔比对·Batch 3）——
+const match = ref(null)
+const matchBusy = ref(false)
+const matchMsg = ref('')
+const matchClean = computed(
+  () => match.value && !match.value.summary.wxOnly && !match.value.summary.oursOnly && !match.value.summary.amountMismatch,
+)
+
+// from~to 的 CST 日期串（cap 31 天·稳健于浏览器时区）
+function daysBetween(f, t, cap = 31) {
+  const out = []
+  const fmt = (ms) => new Date(ms).toLocaleDateString('sv-SE', { timeZone: 'Asia/Shanghai' })
+  let ms = Date.parse(f + 'T12:00:00+08:00')
+  const end = Date.parse(t + 'T12:00:00+08:00')
+  while (ms <= end && out.length < cap) {
+    out.push(fmt(ms))
+    ms += 86400000
+  }
+  return out
+}
+
+// 逐日拉微信账单 → 再逐笔对账
+async function pullAndMatch() {
+  if (!cloudMode || matchBusy.value) return
+  matchBusy.value = true
+  matchMsg.value = ''
+  try {
+    const days = daysBetween(from.value, to.value)
+    let total = 0
+    let firstErr = ''
+    for (const day of days) {
+      try {
+        const r = await downloadBill(day)
+        total += r?.count || 0
+      } catch (e) {
+        if (!firstErr) firstErr = `${day}：${e.message}`
+      }
+    }
+    matchMsg.value = firstErr ? `拉取有失败（${firstErr}）` : `已拉 ${days.length} 天 · 共 ${total} 笔微信账单`
+    match.value = await getBillMatch({ from: from.value, to: to.value })
+  } catch (e) {
+    matchMsg.value = '对账失败：' + e.message
+  } finally {
+    matchBusy.value = false
+  }
+}
 
 function exportCsv() {
   const rows = data.value?.daily || []
@@ -162,10 +209,45 @@ function exportCsv() {
           </template>
         </div>
 
-        <p class="defer">
-          以上为「我方账」自洽核对。逐笔比对微信支付官方账单（抓「微信有款我方无单」）属外部对账，
-          需商户 APIv3 凭证，列后续批次。
-        </p>
+        <!-- 外部对账：微信账单逐笔比对（Batch 3） -->
+        <div class="card col extbox">
+          <h3>微信账单对账（外部）</h3>
+          <p class="note">
+            拉微信官方账单逐笔比对——抓内部账抓不到的「微信收了款、我方无单」。需先配好商户 API 凭证（环境变量）。
+          </p>
+          <button class="btn" :disabled="matchBusy" @click="pullAndMatch">
+            {{ matchBusy ? '拉取对账中…' : `拉取 ${from} ~ ${to} 微信账单并对账` }}
+          </button>
+          <p v-if="matchMsg" class="ext-msg">{{ matchMsg }}</p>
+
+          <template v-if="match">
+            <div class="match-cards">
+              <div class="mc ok"><b>{{ match.summary.matched }}</b><span>已对平</span></div>
+              <div class="mc" :class="{ bad: match.summary.wxOnly }"><b>{{ match.summary.wxOnly }}</b><span>微信有·我方无</span></div>
+              <div class="mc" :class="{ bad: match.summary.oursOnly }"><b>{{ match.summary.oursOnly }}</b><span>我方有·微信无</span></div>
+              <div class="mc" :class="{ bad: match.summary.amountMismatch }"><b>{{ match.summary.amountMismatch }}</b><span>金额不符</span></div>
+            </div>
+            <p class="note">已拉账单日：{{ match.billDays.join('、') || '（无）' }}（未拉的日期不计入差异）</p>
+
+            <p v-if="matchClean && match.billDays.length" class="ok-line">✓ 已拉账单范围内全部对平</p>
+            <div v-if="match.discrepancies.wxOnly.length" class="disc">
+              <b class="red">🔴 微信有款 · 我方无单（最需查）</b>
+              <p v-for="x in match.discrepancies.wxOnly" :key="x.transactionId" class="disc-line">
+                微信单 {{ x.transactionId }} / 商户单 {{ x.outTradeNo }} · ￥{{ x.amount }} · {{ x.date }}
+              </p>
+            </div>
+            <div v-if="match.discrepancies.amountMismatch.length" class="disc">
+              <b class="red">🔴 金额不符</b>
+              <p v-for="x in match.discrepancies.amountMismatch" :key="x.transactionId" class="disc-line">
+                订单 {{ x.id }}：我方 ￥{{ x.ourAmount }} vs 微信 ￥{{ x.wxAmount }}
+              </p>
+            </div>
+            <div v-if="match.discrepancies.oursOnly.length" class="disc">
+              <b class="red">🔴 我方记已付 · 微信账单无（查回调/结算）</b>
+              <p v-for="x in match.discrepancies.oursOnly" :key="x.id" class="disc-line">订单 {{ x.id }} · ￥{{ x.amount }}</p>
+            </div>
+          </template>
+        </div>
       </template>
     </template>
   </div>
@@ -332,6 +414,59 @@ h1 {
   margin: 0;
   font-size: 12.5px;
   color: var(--green);
+}
+.extbox .btn {
+  margin: 4px 0 8px;
+}
+.ext-msg {
+  margin: 6px 0;
+  font-size: 12px;
+  color: var(--content-2);
+}
+.match-cards {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
+  margin: 10px 0;
+}
+.mc {
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 12px;
+  text-align: center;
+}
+.mc b {
+  display: block;
+  font-size: 22px;
+  color: var(--ink);
+}
+.mc span {
+  font-size: 11.5px;
+  color: var(--content-2);
+}
+.mc.ok b {
+  color: var(--green);
+}
+.mc.bad {
+  border-color: #f0c8c5;
+  background: #fdf0ef;
+}
+.mc.bad b {
+  color: var(--red);
+}
+.disc {
+  margin-top: 10px;
+  padding-top: 8px;
+  border-top: 1px solid var(--line);
+}
+.disc .red {
+  font-size: 12.5px;
+  color: var(--red);
+}
+.disc-line {
+  margin: 4px 0;
+  font-size: 12px;
+  color: var(--content);
 }
 .defer {
   margin: 4px 0 0;

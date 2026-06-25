@@ -129,3 +129,61 @@ export async function getReconciliation({ db, data }: Ctx) {
     exceptions,
   })
 }
+
+// —— S16 外部对账 Batch 3：我方付款单 ⋈ wxBills（微信权威账单）逐笔比对 ——
+// 四类：✅平 / 🔴微信有我方无（收了款无单·最危险）/ 🔴我方有微信无（仅该日账单已拉时才判·防误报）/ 🔴金额不符。
+// 抓内部账抓不到的「微信有款我方无单」。须先 downloadBill 拉账单进 wxBills（未拉的日期 = 无数据·非差异）。
+export async function getBillMatch({ db, data }: Ctx) {
+  const _ = db.command
+  const to = isDate(data?.to) ? data.to : dayKey(Date.now())
+  const from = isDate(data?.from) ? data.from : dayKey(Date.now() - 29 * DAY)
+  const fromMs = dayStartMs(from)
+  const toMs = dayStartMs(to) + DAY - 1
+  const rows = (q: any) =>
+    q
+      .get()
+      .then((r: any) => r.data)
+      .catch(() => [])
+
+  const ourOrders = (
+    await rows(db.collection('orders').where({ status: _.in(PAID_STATUSES) }).orderBy('paidAt', 'desc').limit(CAP))
+  ).filter((o: any) => typeof o.paidAt === 'number' && o.paidAt >= fromMs && o.paidAt <= toMs)
+  const wxRows = (await rows(db.collection('wxBills').orderBy('date', 'desc').limit(CAP))).filter(
+    (w: any) => w.date >= from && w.date <= to && String(w.tradeState) === 'SUCCESS'
+  )
+
+  const billDays = [...new Set(wxRows.map((w: any) => w.date))].sort()
+  const ourByTxn = new Map(ourOrders.map((o: any) => [String(o.transactionId || ''), o]))
+  const ourById = new Map(ourOrders.map((o: any) => [String(o.id || ''), o]))
+  const wxByTxn = new Map(wxRows.map((w: any) => [String(w.transactionId || ''), w]))
+  const wxByOut = new Map(wxRows.map((w: any) => [String(w.outTradeNo || ''), w]))
+
+  const matched: string[] = []
+  const wxOnly: any[] = []
+  const oursOnly: any[] = []
+  const amountMismatch: any[] = []
+
+  for (const w of wxRows) {
+    const our: any = ourByTxn.get(String(w.transactionId || '')) || ourById.get(String(w.outTradeNo || ''))
+    if (!our) {
+      wxOnly.push({ transactionId: w.transactionId, outTradeNo: w.outTradeNo, amount: w.orderAmount, date: w.date })
+      continue
+    }
+    if (toFen(Number(our.amount) || 0) !== toFen(Number(w.orderAmount) || 0))
+      amountMismatch.push({ id: our.id, transactionId: w.transactionId, ourAmount: our.amount, wxAmount: w.orderAmount })
+    else matched.push(our.id)
+  }
+  for (const o of ourOrders) {
+    if (!billDays.includes(dayKey(o.paidAt))) continue // 该日未拉账单·无数据·不判（防误报）
+    if (!wxByTxn.get(String(o.transactionId || '')) && !wxByOut.get(String(o.id || '')))
+      oursOnly.push({ id: o.id, transactionId: o.transactionId || '', amount: o.amount, paidAt: o.paidAt })
+  }
+
+  return reply(200, {
+    ok: true,
+    range: { from, to },
+    summary: { matched: matched.length, wxOnly: wxOnly.length, oursOnly: oursOnly.length, amountMismatch: amountMismatch.length },
+    discrepancies: { wxOnly, oursOnly, amountMismatch },
+    billDays,
+  })
+}

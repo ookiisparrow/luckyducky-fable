@@ -150,13 +150,20 @@ export async function fetchTradeBill(
     const sub = o.subMchId ? `&sub_mchid=${o.subMchId}` : ''
     const queryPath = `/v3/bill/tradebill?bill_date=${o.date}&bill_type=${o.billType || 'ALL'}${sub}`
     const q = await fetchImpl(WXPAY_HOST + queryPath, { method: 'GET', headers: signedHeaders('GET', queryPath, o) })
-    if (q.status !== 200) return { ok: false, error: 'BILL_QUERY_' + q.status }
+    if (q.status !== 200) {
+      // 带回微信错误码/消息（非敏感·诊断用）：区分 NO_STATEMENT_EXIST(auth 通·无账单) vs SIGN_ERROR(签名/服务商问题)
+      const b = await q.text().catch(() => '')
+      return { ok: false, error: `BILL_QUERY_${q.status}` + (b ? ':' + b.slice(0, 300) : '') }
+    }
     const meta = JSON.parse((await q.text()) || '{}')
     if (!meta.download_url) return { ok: false, error: 'NO_DOWNLOAD_URL' }
     const dl = new URL(meta.download_url)
     const dlPath = dl.pathname + dl.search
     const d = await fetchImpl(meta.download_url, { method: 'GET', headers: signedHeaders('GET', dlPath, o) })
-    if (d.status !== 200) return { ok: false, error: 'BILL_DOWNLOAD_' + d.status }
+    if (d.status !== 200) {
+      const b = await d.text().catch(() => '')
+      return { ok: false, error: `BILL_DOWNLOAD_${d.status}` + (b ? ':' + b.slice(0, 300) : '') }
+    }
     return { ok: true, rows: parseTradeBill(await d.text()) }
   } catch (e: any) {
     return { ok: false, error: 'WXPAY_FETCH_FAIL:' + (e?.message || 'unknown') }

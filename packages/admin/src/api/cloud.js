@@ -491,3 +491,23 @@ export async function getReconciliation({ from, to } = {}) {
   if (!r.ok) throw new Error(r.error || 'LOAD_RECONCILIATION_FAIL')
   return r
 }
+
+// 外部对账（S16·Batch 2/3）：拉一天微信交易账单落 wxBills。返回 { date, count }。
+// 失败（缺凭证/微信错误）抛出含微信错误码的 error 供 UI 显示诊断。
+export async function downloadBill(date) {
+  if (!cloudMode) return null
+  const r = await post('downloadBill', { date })
+  if (!r.ok) throw new Error(r.error || 'DOWNLOAD_BILL_FAIL')
+  return r
+}
+
+// 逐笔对账：我方付款单 ⋈ wxBills → { summary, discrepancies, billDays }。
+export async function getBillMatch({ from, to } = {}) {
+  if (!cloudMode) return null
+  const payload = {}
+  if (from) payload.from = from
+  if (to) payload.to = to
+  const r = await post('getBillMatch', payload)
+  if (!r.ok) throw new Error(r.error || 'BILL_MATCH_FAIL')
+  return r
+}
