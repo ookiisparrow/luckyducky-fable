@@ -3,22 +3,30 @@
  * 数据看板（S12 重设计）：从「干瞪眼的数字」改成 owner 的行动入口。
  *
  * 重设计要点：
- * - 顶部「待处理」行动条：待发货 / 待审退款 / 低库存 / 钱链告警——数字直接点进对应页处理。
- *   计数复用服务端精确口径（orderCounts/refundCounts·根因#7）+ 库存按 SKU 实算，不再要 owner
- *   自己去各页数。这是看板真正的价值：一眼知道今天要干嘛。
- * - KPI 卡精炼（去 emoji）、激活率给进度条；热点/卡点/最近订单沿用 getDashboard 既有数据。
+ * - 顶部「待处理」行动条：待发货 / 待审退款 / 低库存 / 钱链告警 / 上新未完成（S15）——数字直接点进对应页。
+ *   计数复用服务端精确口径（orderCounts/refundCounts·根因#7）+ 库存按 SKU 实算 + 上新未完成按 products
+ *   statusOf preparing 前端判（S11 同口径）。这是看板真正的价值：一眼知道今天要干嘛。
+ * - KPI 卡精炼（去 emoji）、激活率给进度条；热点/卡点沿用 getDashboard 既有数据。
+ * - 最近动态（S15）：订单/激活/进课/退款近期事件合并成一条时间轴（getDashboard.recentActivity·替代原最近订单）。
  * - 趋势 / 时间范围 / 经营漏斗（访问→加购→下单→支付→激活→完课）需事件时序聚合 + 容量评估
  *   （根因#8·看板内存聚合封顶），列后续、不伪造时序。
  */
 import { ref, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { cloudMode, getDashboard, orderCounts, refundCounts, listInventory } from '@/api/cloud.js'
+import { useProductsStore } from '@/store/products.js'
 
 const router = useRouter()
+const store = useProductsStore()
+store.load() // 上新未完成计数用：商品草稿全量小，statusOf 前端判（与 S11 同口径）
 const data = ref(null)
 const todo = ref({ ship: 0, refund: 0, lowStock: 0, money: 0 })
 const loading = ref(true)
 const loadErr = ref('')
+
+// 上新未完成（S15·待办）：未上架商品＝仍在筹备的流水线（statusOf preparing·S11 同口径），点进商品列表继续
+const prepCount = computed(() => store.list.filter((p) => store.statusOf(p) === 'preparing').length)
+const ACT_LABEL = { order: '新订单', activate: '激活', enter: '进课', refund: '退款' }
 
 const txAlertCount = (t) =>
   !t ? 0 : (t.feeMismatch?.length || 0) + (t.refundMismatch?.length || 0) + (t.stuckRefunds?.length || 0)
@@ -59,6 +67,7 @@ const TODOS = computed(() => [
   { key: 'refund', label: '待审退款', n: todo.value.refund, to: '/refunds', tone: 'warn' },
   { key: 'lowStock', label: '低库存 / 售罄', n: todo.value.lowStock, to: '/inventory', tone: 'red' },
   { key: 'money', label: '钱链告警', n: todo.value.money, to: '/orders', tone: 'red' },
+  { key: 'prep', label: '上新未完成', n: prepCount.value, to: '/products', tone: '' },
 ])
 const todoTotal = computed(() => TODOS.value.reduce((s, t) => s + t.n, 0))
 
@@ -177,12 +186,12 @@ const rate = (a, b) => (b ? Math.round((a / b) * 100) : 0)
       </div>
 
       <div class="card col recent">
-        <h3>最近订单</h3>
-        <p v-if="!data.recentOrders.length" class="empty">还没有订单</p>
-        <div v-for="o in data.recentOrders" :key="o.id" class="row">
-          <span class="name">{{ o.summary || o.id }}</span>
-          <span class="time">{{ fmtTime(o.createdAt) }}</span>
-          <b class="count">￥{{ Number(o.amount).toFixed(2) }}</b>
+        <h3>最近动态</h3>
+        <p v-if="!data.recentActivity || !data.recentActivity.length" class="empty">还没有动态</p>
+        <div v-for="(e, i) in data.recentActivity" :key="i" class="row act-row">
+          <span class="act-tag" :class="e.type">{{ ACT_LABEL[e.type] || '动态' }}</span>
+          <span class="name">{{ e.text }}</span>
+          <span class="time">{{ fmtTime(e.at) }}</span>
         </div>
       </div>
 
@@ -221,7 +230,7 @@ h1 {
 }
 .todobar {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
   gap: 12px;
   margin-bottom: 18px;
   position: relative;
@@ -387,6 +396,30 @@ h1 {
 .time {
   font-size: 11px;
   color: var(--content-2);
+}
+.act-tag {
+  flex: 0 0 auto;
+  font-size: 10.5px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: var(--r-pill);
+  background: var(--bg-lilac);
+  border: 1px solid var(--purple-line);
+  color: var(--brand-active);
+}
+.act-tag.order {
+  background: #f3eefb;
+}
+.act-tag.refund {
+  background: #fdf6ec;
+  border-color: #f0ddc0;
+  color: #8a6420;
+}
+.act-tag.activate,
+.act-tag.enter {
+  background: var(--green-bg);
+  border-color: var(--green-line);
+  color: var(--green);
 }
 .empty {
   font-size: 12px;

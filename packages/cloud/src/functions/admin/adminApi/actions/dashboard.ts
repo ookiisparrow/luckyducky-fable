@@ -33,6 +33,8 @@ export async function getDashboard({ db }: Ctx) {
     txAlerts,
     recent,
     paidOrdersN,
+    recentActs,
+    recentRefs,
   ] = await Promise.all([
     cnt(db.collection('users')),
     cnt(db.collection('orders')),
@@ -60,6 +62,21 @@ export async function getDashboard({ db }: Ctx) {
     ),
     // 转化速览：已支付订单数（口径同 GMV·PAID_STATUSES）——下单→支付→激活 各环节量级（指示性·非同批追踪）
     cnt(db.collection('orders').where({ status: _.in(PAID_STATUSES) })),
+    // 最近动态混合流（S15）：近期激活/进课 + 退款申请，与最近订单合并成一条时间轴（各 orderBy+limit 有界·债#18）
+    rows(
+      db
+        .collection('activations')
+        .field({ code: true, courseId: true, createdAt: true, enteredAt: true })
+        .orderBy('createdAt', 'desc')
+        .limit(6)
+    ),
+    rows(
+      db
+        .collection('afterSales')
+        .field({ orderId: true, refundAmount: true, appliedAt: true })
+        .orderBy('appliedAt', 'desc')
+        .limit(6)
+    ),
   ])
 
   // 段名映射（课程数少·全量）
@@ -81,15 +98,21 @@ export async function getDashboard({ db }: Ctx) {
       .slice(0, 8)
       .map(([segId, count]) => ({ segId, name: segName[segId] || segId, count }))
 
-  const recentOrders = recent.map((o: any) => ({
-    id: o.id,
-    amount: o.amount,
-    createdAt: o.createdAt,
-    summary: (o.items || [])
-      .map((it: any) => `${it.name}×${it.qty}`)
-      .join('、')
-      .slice(0, 40),
+  // 最近动态混合流（S15）：订单(createdAt) + 激活/进课(activations) + 退款申请(afterSales) 合并按事件时间倒序。
+  // 指示性：激活按 createdAt 取近 6（已进课的取 enteredAt 作事件时刻）——非穷尽审计，与看板其余近似口径一致（#8）。
+  const yuan = (n: any) => '￥' + Number(n || 0).toFixed(2)
+  const ords = recent.map((o: any) => ({ type: 'order', at: o.createdAt || 0, text: `新订单 ${o.id} · ${yuan(o.amount)}` }))
+  const acts = (recentActs || []).map((a: any) =>
+    a.enteredAt
+      ? { type: 'enter', at: a.enteredAt, text: `确认进课 ${a.courseId || ''}`.trim() }
+      : { type: 'activate', at: a.createdAt || 0, text: `激活 ${a.code || a.courseId || ''}`.trim() }
+  )
+  const refs = (recentRefs || []).map((r: any) => ({
+    type: 'refund',
+    at: r.appliedAt || 0,
+    text: `退款申请 ${r.orderId || ''} · ${yuan(r.refundAmount)}`,
   }))
+  const recentActivity = [...ords, ...acts, ...refs].sort((a, b) => b.at - a.at).slice(0, 8)
 
   return reply(200, {
     ok: true,
@@ -109,6 +132,6 @@ export async function getDashboard({ db }: Ctx) {
     txAlerts,
     hot: top(doneCount),
     stuck: top(stuckCount),
-    recentOrders,
+    recentActivity,
   })
 }

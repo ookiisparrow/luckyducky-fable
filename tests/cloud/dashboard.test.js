@@ -33,7 +33,27 @@ describe('getDashboard 容量上限消除（债#18）', () => {
     expect(r.stats.codesActivated).toBe(2)
     expect(r.approx.sampleSize).toBe(1000)
     expect(r.approx.gmv).toBe(false) // GMV 走 aggregate＝精确，恒不标近似（#18续）
-    expect(r.recentOrders[0].id).toBe('o2') // orderBy createdAt desc：最新在前
+    expect(r.recentActivity[0].text).toContain('o2') // 最近动态：最新订单在前（o2 createdAt 3000）
+  })
+
+  it('最近动态混合流（S15）：订单/激活/进课/退款按时间合并·最近在前', async () => {
+    control.seed('orders', [
+      { _id: 'o1', id: 'o1', amount: 198, status: 'paid', createdAt: 5000, items: [] },
+      { _id: 'o2', id: 'o2', amount: 50, status: 'paid', createdAt: 1000, items: [] },
+    ])
+    control.seed('activations', [
+      { _id: 'c1', code: 'c1', courseId: 'k1', createdAt: 3000, enteredAt: null }, // 激活 @3000
+      { _id: 'c2', code: 'c2', courseId: 'k1', createdAt: 2000, enteredAt: 4000 }, // 进课 @4000（取 enteredAt）
+    ])
+    control.seed('afterSales', [
+      { _id: 'o1__p1', orderId: 'o1', refundAmount: 50, status: 'applied', appliedAt: 6000 }, // 退款申请 @6000
+    ])
+    const r = parse(await getDashboard(ctx()))
+    // 按事件时间倒序合并：6000 退款 / 5000 新订单 / 4000 进课 / 3000 激活 / 1000 新订单
+    expect(r.recentActivity.map((e) => e.at)).toEqual([6000, 5000, 4000, 3000, 1000])
+    expect(r.recentActivity.map((e) => e.type)).toEqual(['refund', 'order', 'enter', 'activate', 'order'])
+    expect(r.recentActivity[0].text).toContain('退款')
+    expect(r.recentActivity[2].text).toContain('进课')
   })
 
   it('钱链异常走定向 where 精确（不从样本 filter）', async () => {
