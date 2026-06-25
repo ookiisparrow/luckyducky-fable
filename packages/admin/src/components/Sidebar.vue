@@ -4,6 +4,7 @@
  * 直达入口：带着「最近编辑的商品」跳对应步骤；还没有商品时回列表。
  */
 import { useRoute, useRouter } from 'vue-router'
+import { Store, Smartphone, Truck, RotateCcw, Boxes, ChartColumn, Wallet, Bell, ExternalLink } from 'lucide-vue-next'
 import { useProductsStore, STEP_NAMES } from '@/store/products.js'
 import { logout, currentUser } from '@/api/cloud.js'
 
@@ -36,39 +37,39 @@ function doLogout() {
       </div>
     </div>
 
-    <router-link class="nav" :class="{ on: route.path === '/products' }" to="/products"
-      >🏪 商品与上新</router-link
-    >
-    <router-link class="nav" :class="{ on: route.path === '/showcase' }" to="/showcase"
-      >📱 小程序橱窗</router-link
-    >
-    <router-link class="nav" :class="{ on: route.path === '/orders' }" to="/orders"
-      >📦 订单发货</router-link
-    >
-    <router-link class="nav" :class="{ on: route.path === '/refunds' }" to="/refunds"
-      >💸 售后退款</router-link
-    >
-    <router-link class="nav" :class="{ on: route.path === '/inventory' }" to="/inventory"
-      >🗄️ 库存管理</router-link
-    >
+    <router-link class="nav" :class="{ on: route.path === '/products' }" to="/products">
+      <Store :size="16" /><span>商品与上新</span>
+    </router-link>
+    <router-link class="nav" :class="{ on: route.path === '/showcase' }" to="/showcase">
+      <Smartphone :size="16" /><span>小程序橱窗</span>
+    </router-link>
+    <router-link class="nav" :class="{ on: route.path === '/orders' }" to="/orders">
+      <Truck :size="16" /><span>订单发货</span>
+    </router-link>
+    <router-link class="nav" :class="{ on: route.path === '/refunds' }" to="/refunds">
+      <RotateCcw :size="16" /><span>售后退款</span>
+    </router-link>
+    <router-link class="nav" :class="{ on: route.path === '/inventory' }" to="/inventory">
+      <Boxes :size="16" /><span>库存管理</span>
+    </router-link>
 
     <div class="caption">按步骤直达</div>
     <button v-for="(name, i) in STEP_NAMES" :key="i" class="nav step" :class="{ on: stepActive(i + 1) }" @click="goStep(i + 1)">
       {{ i + 1 }} · {{ name }}
     </button>
 
-    <router-link class="nav" :class="{ on: route.path === '/dashboard' }" to="/dashboard"
-      >📊 数据看板</router-link
-    >
-    <router-link class="nav" :class="{ on: route.path === '/reconciliation' }" to="/reconciliation"
-      >💰 财务对账</router-link
-    >
-    <router-link class="nav" :class="{ on: route.path === '/notifications' }" to="/notifications"
-      >🔔 消息通知</router-link
-    >
-    <router-link class="nav" :class="{ on: route.path === '/externals' }" to="/externals"
-      >🌐 外部后台</router-link
-    >
+    <router-link class="nav" :class="{ on: route.path === '/dashboard' }" to="/dashboard">
+      <ChartColumn :size="16" /><span>数据看板</span>
+    </router-link>
+    <router-link class="nav" :class="{ on: route.path === '/reconciliation' }" to="/reconciliation">
+      <Wallet :size="16" /><span>财务对账</span>
+    </router-link>
+    <router-link class="nav" :class="{ on: route.path === '/notifications' }" to="/notifications">
+      <Bell :size="16" /><span>消息通知</span>
+    </router-link>
+    <router-link class="nav" :class="{ on: route.path === '/externals' }" to="/externals">
+      <ExternalLink :size="16" /><span>外部后台</span>
+    </router-link>
 
     <div class="spacer"></div>
     <div class="admin">
@@ -145,6 +146,13 @@ function doLogout() {
 }
 .nav.disabled {
   cursor: default;
+}
+/* 「按步骤直达」无图标，左缩进对齐到带图标项的文字（图标 16 + gap 8） */
+.nav.step {
+  padding-left: 36px;
+}
+.nav :deep(svg) {
+  flex: 0 0 auto;
 }
 .caption {
   padding: 14px 12px 4px;
