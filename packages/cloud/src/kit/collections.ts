@@ -40,6 +40,10 @@ export const COLLECTIONS = {
   // 用户意见反馈（运营钩子①·待办#23）：submitFeedback（withOpenId+withRateLimit）写入，
   // 内部状态、仅管理端可读（控制台锁权限）；客户端只写不读。字段 category/content/contact/page/version/platform。
   feedback: 'feedback',
+  // 微信支付交易账单缓存（S16 外部对账 Batch 2）：downloadBill 拉的微信权威账单逐笔落此，确定性
+  // _id=`<date>:<transactionId>`（幂等·重拉覆盖）；供逐笔对账（Batch 3）比对我方 orders/afterSales。
+  // 仅 adminApi.downloadBill 写（经 kit/wxpay）；客户端禁读写，上线前控制台锁「仅管理端」。
+  wxBills: 'wxBills',
 } as const
 
 export type CollName = (typeof COLLECTIONS)[keyof typeof COLLECTIONS]

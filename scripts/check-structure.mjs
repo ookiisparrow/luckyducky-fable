@@ -246,6 +246,37 @@ export const repoChecks = [
     },
   },
   {
+    // 微信支付 APIv3 商户接缝单一收口（S16 外部对账·根因#12 平台接缝单点）：商户 API 出站 + v3 签名只在
+    // kit/wxpay.ts；主机 api.mch.weixin.qq.com 字面量只许此文件出现，其余 cloud/src 引用即红（防散签/绕单点/凭证多处）。
+    id: 'wxpay-seam-single',
+    roots: ['#12'],
+    desc: '微信支付商户 API 接缝单点（S16·根因#12）：v3 签名/账单出站仅 kit/wxpay.ts；主机 api.mch.weixin.qq.com 只此文件可现，其余 cloud/src 直拼商户 API 即红（防散签/绕单点）',
+    run() {
+      const seam = 'packages/cloud/src/kit/wxpay.ts'
+      if (!existsSync(join(ROOT, seam))) return [`${seam} 缺失——微信支付商户接缝（S16 外部对账·根因#12）`]
+      const bad = []
+      const src = readFileSync(join(ROOT, seam), 'utf8')
+      if (!/export\s+function\s+wxpaySign/.test(src) || !/export\s+async\s+function\s+fetchTradeBill/.test(src))
+        bad.push(`${seam} 未导出 wxpaySign/fetchTradeBill——接缝空壳`)
+      const srcRoot = join(ROOT, 'packages/cloud/src')
+      const HOST = 'api.mch.weixin.qq.com'
+      const walk = (d) => {
+        for (const e of readdirSync(d)) {
+          const p = join(d, e)
+          if (statSync(p).isDirectory()) walk(p)
+          else if (e.endsWith('.ts')) {
+            const rel = relative(ROOT, p).replace(/\\/g, '/')
+            if (rel === seam) continue
+            if (readFileSync(p, 'utf8').includes(HOST))
+              bad.push(`${rel} 直引 ${HOST}——微信支付商户 API 出站须经 kit/wxpay（根因#12 接缝单点）`)
+          }
+        }
+      }
+      if (existsSync(srcRoot)) walk(srcRoot)
+      return bad
+    },
+  },
+  {
     // 库存原子单一收口（库存#1·根因#1/#2 防超卖）：inventory 集合仅 kit/inventory.ts 读写（reserveStock/
     // restoreStock/setStock）；扣减走乐观 CAS（where 含 stock 精确匹配·非读后写盲改）；其余 cloud/src
     // 不得直碰 inventory 集合（一律经 kit/inventory·防绕 CAS 超卖）。

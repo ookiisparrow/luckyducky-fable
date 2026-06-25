@@ -1,0 +1,40 @@
+import { reply, type Ctx } from '../lib'
+import { fetchTradeBill, COLLECTIONS, type BillRow } from '../../../../kit'
+
+// —— S16 外部对账 Batch 2：拉微信交易账单落 wxBills（供 Batch 3 逐笔比对）——
+// 凭证（敏感·非 git/DB·根因#9）：商户私钥/证书序列号读云开发环境变量；mchid 取 config.pay.subMchId（1113881793）。
+// fail-soft：缺凭证 / 拉取失败 → ok:false（不抛·不落库）。出站签名/解析收口 kit/wxpay（守卫 wxpay-seam-single）。
+
+const isDate = (s: any) => typeof s === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(s)
+
+/** 幂等落库：确定性 _id=`<date>:<transactionId>`（重拉同日覆盖不重复）。导出供守卫直测。 */
+export async function upsertBills(db: any, date: string, rows: BillRow[]): Promise<number> {
+  let n = 0
+  for (const r of rows) {
+    if (!r.transactionId) continue
+    await db
+      .collection(COLLECTIONS.wxBills)
+      .doc(`${date}:${r.transactionId}`)
+      .set({ data: { date, ...r, _syncedAt: Date.now() } })
+      .catch(() => {})
+    n++
+  }
+  return n
+}
+
+/** 拉一天微信交易账单 → 落 wxBills。data={ date:'YYYY-MM-DD', billType? }。 */
+export async function downloadBill({ db, data }: Ctx) {
+  const date = isDate(data?.date) ? data.date : ''
+  if (!date) return reply(400, { ok: false, error: 'BAD_DATE' })
+  const serial = process.env.WXPAY_MCH_SERIAL || ''
+  // 私钥可能以转义 \n 存（控制台单行环境变量）→ 还原真换行
+  const privateKey = (process.env.WXPAY_MCH_PRIVATE_KEY || '').replace(/\\n/g, '\n')
+  if (!serial || !privateKey) return reply(200, { ok: false, error: 'NO_WXPAY_CREDS' })
+  const cfg = await db.collection(COLLECTIONS.config).doc('pay').get().catch(() => null)
+  const mchid = (cfg && cfg.data && cfg.data.subMchId) || ''
+  if (!mchid) return reply(200, { ok: false, error: 'NO_MCHID' })
+  const r = await fetchTradeBill({ date, mchid: String(mchid), serial, privateKey, billType: data?.billType })
+  if (!r.ok) return reply(200, { ok: false, error: r.error || 'BILL_FETCH_FAIL' })
+  const count = await upsertBills(db, date, r.rows || [])
+  return reply(200, { ok: true, date, count })
+}

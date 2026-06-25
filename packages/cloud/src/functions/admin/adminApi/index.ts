@@ -10,6 +10,7 @@ import * as orders from './actions/orders'
 import * as refunds from './actions/refunds'
 import * as dashboard from './actions/dashboard'
 import * as reconciliation from './actions/reconciliation'
+import * as wxbill from './actions/wxbill'
 import * as inventory from './actions/inventory'
 
 // 管理控制台后端（HTTP 访问服务触发）。B5b：HTTP 外壳 + 口令闸在此，28+ action 拆 actions/ 查表。
@@ -63,6 +64,8 @@ const ACTIONS: Record<string, (ctx: Ctx) => Promise<any>> = {
   getDashboard: dashboard.getDashboard,
   // 财务对账（S16·内部账）
   getReconciliation: reconciliation.getReconciliation,
+  // 外部对账（S16·Batch 2）：拉微信交易账单落 wxBills
+  downloadBill: wxbill.downloadBill,
   // 库存（库存#1）
   listInventory: inventory.listInventory,
   saveStock: inventory.saveStock,
