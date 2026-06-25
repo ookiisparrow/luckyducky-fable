@@ -1,8 +1,8 @@
 {
-  "updatedAt": 1782382393538,
+  "updatedAt": 1782383484689,
   "functions": {
     "activateCourse": "32d953d6986e",
-    "adminApi": "b89cfec758b7",
+    "adminApi": "ea897ee2ea1a",
     "applyRefund": "5ce932b689b8",
     "cleanupEvents": "0c58fc4e8c4a",
     "closeExpiredOrders": "1eb87a7e3f6e",
@@ -12,7 +12,7 @@
     "genQrcodes": "bd1dbedd2ab7",
     "getContent": "395d3669e926",
     "getCourses": "3236b2835d0d",
-    "getHelpVideos": "7b0bbed385b7",
+    "getHelpVideos": "0e25eca21591",
     "getMyAfterSales": "5d3c591f8610",
     "getMyCourses": "442d38917aa5",
     "getMyOrders": "6195876afff4",
