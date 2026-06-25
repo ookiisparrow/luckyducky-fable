@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { createPlaybackResolver } from '@/pkg-video/player/playbackCache.js'
+import { createPlaybackResolver } from '@/utils/playbackCache.js'
 
 // 分段视频播放地址解析器：缓存（按 segId+TTL）+ 预取 + in-flight 去重（治真机段间转场卡顿·根因#8）。
 // 纯函数工厂，fetcher/now 注入 → 缓存命中/过期/去重/预取边界可单测，不依赖云端/计时器。

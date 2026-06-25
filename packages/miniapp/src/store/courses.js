@@ -10,13 +10,15 @@
  */
 import { defineStore } from 'pinia'
 import { getCourses, getPlaybackUrl } from '@/api/course.js'
-import { createPlaybackResolver } from '@/pkg-video/player/playbackCache.js'
+import { createPlaybackResolver } from '@/utils/playbackCache.js'
 import { logger } from '@/utils/logger.js'
 
 const EMPTY_COURSE = { id: '', title: '', chapters: [] }
 
 // 分段播放地址解析器（模块层单例·跨播放页/组件共享缓存）：按 segId 缓存临时 URL + in-flight 去重 +
-// 预取（见 pkg-video/player/playbackCache.js）。fetcher 闭包绑「当前聚焦课 id」——一次播放会话同一门课，
+// 预取（见 utils/playbackCache.js）。解析器放 utils（主包）而非 pkg-video（分包）——store 在主包，
+// 主包 require 分包模块在 mp-weixin 会运行时崩（白屏·根因#8·守卫 main-no-subpackage-import）。
+// fetcher 闭包绑「当前聚焦课 id」——一次播放会话同一门课，
 // 取址/预取前由 action 同步 _courseId（getPlaybackUrl 鉴权按 courseId+segmentId）。治真机段间转场卡顿（根因#8）。
 let _courseId = ''
 const _resolver = createPlaybackResolver({ fetcher: (segId) => getPlaybackUrl(_courseId, segId) })

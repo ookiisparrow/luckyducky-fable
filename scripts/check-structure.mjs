@@ -1203,10 +1203,11 @@ export const repoChecks = [
     // prefetchPlaybackUrl），player 当前段就绪即预取下一段。本守卫防回退成「每次切段都现取、无缓存无预取」。
     id: 'player-playback-prefetch-cache',
     roots: ['#8'],
-    desc: '分段视频地址缓存+预取（根因#8 真机段间卡顿）：pkg-video/player/playbackCache.js 导出 createPlaybackResolver + store/courses.js 经它收口 playbackUrl(缓存优先) 且有 prefetchPlaybackUrl + player/index.vue 当前段就绪即 prefetch 下一段——防回退成「每次切段都现取地址、无缓存无预取」',
+    desc: '分段视频地址缓存+预取（根因#8 真机段间卡顿）：utils/playbackCache.js 导出 createPlaybackResolver + store/courses.js 经它收口 playbackUrl(缓存优先) 且有 prefetchPlaybackUrl + player/index.vue 当前段就绪即 prefetch 下一段——防回退成「每次切段都现取地址、无缓存无预取」',
     run() {
       const bad = []
-      const cacheRel = 'packages/miniapp/src/pkg-video/player/playbackCache.js'
+      // 解析器在主包 utils（非分包 pkg-video）：store 在主包·主包不能 require 分包模块（mp-weixin 白屏·根因#8）
+      const cacheRel = 'packages/miniapp/src/utils/playbackCache.js'
       const storeRel = 'packages/miniapp/src/store/courses.js'
       const playerRel = 'packages/miniapp/src/pkg-video/player/index.vue'
       const cacheAbs = join(ROOT, cacheRel)
@@ -1257,6 +1258,45 @@ export const repoChecks = [
         bad.push(`${rel} 无 vp-loading 加载浮层——视频区加载/失败须有可见浮层（根因#8）`)
       if (!/@error\s*=/.test(src) || !/\bvideoError\b/.test(src))
         bad.push(`${rel} 无 @error/videoError 兜底——取址失败 / 视频出错须可重试，不能永久黑（根因#8）`)
+      return bad
+    },
+  },
+  {
+    // 主包不得 import 分包模块（mp-weixin 平台硬规则·根因#8 真机才崩）。病史：playbackCache 解析器原放
+    // pkg-video（分包），主包 store/courses.js import 它 → mp-weixin 主包 require 分包路径运行时找不到 →
+    // useCoursesStore 模块求值即抛 → 用到它的「我」页等白屏（H5 无分包概念故假绿、npm check 也测不出·#8）。
+    // 不变量：主包源码（src/ 除 pkg-video/pkg-extra）的 import/require 禁指向分包根。navigateTo 的 '/pkg-*'
+    // 是路由字符串（跨包跳转合法）不在此列——只扫 import/from/require 语句。分包→主包 允许，不拦。
+    id: 'main-no-subpackage-import',
+    roots: ['#8'],
+    desc: '主包禁 import 分包模块（mp-weixin 主包不能 require 分包·根因#8 真机白屏）：packages/miniapp/src 主包文件（除分包 pkg-video/pkg-extra 自身）的 import/from/require 不得指向 @/pkg-video 或 @/pkg-extra——防回退成主包引分包→真机模块找不到→白屏（H5 假绿）',
+    run() {
+      const bad = []
+      const srcRoot = join(ROOT, 'packages/miniapp/src')
+      if (!existsSync(srcRoot)) return bad
+      const SUB = /(?:^|['"\s(/])@?\/?pkg-(?:video|extra)\//
+      // 仅 import/from/require 语句行才算「引模块」；navigateTo 路由字符串不算
+      const isImportLine = (l) => /\b(?:import|require)\b/.test(l) || /\bfrom\s+['"]/.test(l)
+      const walk = (dir, relBase) => {
+        for (const e of readdirSync(dir)) {
+          const abs = join(dir, e)
+          const rel = relBase ? `${relBase}/${e}` : e
+          if (statSync(abs).isDirectory()) {
+            if (e === 'pkg-video' || e === 'pkg-extra') continue // 分包自身放行
+            walk(abs, rel)
+          } else if (/\.(js|vue|ts)$/.test(e)) {
+            readFileSync(abs, 'utf8')
+              .split('\n')
+              .forEach((l, i) => {
+                if (isImportLine(l) && SUB.test(l))
+                  bad.push(
+                    `packages/miniapp/src/${rel}:${i + 1} 主包 import 了分包模块（@/pkg-video|pkg-extra）——mp-weixin 主包不能 require 分包·真机会白屏（根因#8）；把被引模块挪进主包 utils/`
+                  )
+              })
+          }
+        }
+      }
+      walk(srcRoot, '')
       return bad
     },
   },
