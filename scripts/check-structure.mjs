@@ -1194,7 +1194,42 @@ export const repoChecks = [
     },
   },
   {
+    // 分段视频地址「缓存 + 预取」（根因#8 真机才暴露的段间转场卡顿，dev/模拟器快网掩盖）。痛：原 player
+    // 只在「段 id 真变了」那一刻才云调用 getPlaybackUrl 换临时 URL（watch 触发），当前段播放期间下一段
+    // 地址闲着没取、回看过的段也重新现取 → 切段要等一个云往返才起播。改＝纯函数解析器 playbackCache.js
+    // （createPlaybackResolver：按 segId+TTL 缓存 + in-flight 去重）收口于 store（playbackUrl 缓存优先 +
+    // prefetchPlaybackUrl），player 当前段就绪即预取下一段。本守卫防回退成「每次切段都现取、无缓存无预取」。
+    id: 'player-playback-prefetch-cache',
+    roots: ['#8'],
+    desc: '分段视频地址缓存+预取（根因#8 真机段间卡顿）：pkg-video/player/playbackCache.js 导出 createPlaybackResolver + store/courses.js 经它收口 playbackUrl(缓存优先) 且有 prefetchPlaybackUrl + player/index.vue 当前段就绪即 prefetch 下一段——防回退成「每次切段都现取地址、无缓存无预取」',
+    run() {
+      const bad = []
+      const cacheRel = 'packages/miniapp/src/pkg-video/player/playbackCache.js'
+      const storeRel = 'packages/miniapp/src/store/courses.js'
+      const playerRel = 'packages/miniapp/src/pkg-video/player/index.vue'
+      const cacheAbs = join(ROOT, cacheRel)
+      if (!existsSync(cacheAbs)) bad.push(`${cacheRel} 缺失（分段地址缓存/预取纯函数·根因#8）`)
+      else if (!/export\s+function\s+createPlaybackResolver\b/.test(readFileSync(cacheAbs, 'utf8')))
+        bad.push(`${cacheRel} 未导出 createPlaybackResolver——缓存/去重/预取逻辑须在纯函数工厂里（单测锁·根因#8）`)
+      const storeAbs = join(ROOT, storeRel)
+      if (!existsSync(storeAbs)) bad.push(`${storeRel} 缺失`)
+      else {
+        const s = readFileSync(storeAbs, 'utf8')
+        if (!/createPlaybackResolver\s*\(/.test(s))
+          bad.push(`${storeRel} 未经 createPlaybackResolver 收口取址——playbackUrl 须走缓存优先解析器（防每次现取·根因#8）`)
+        if (!/\bprefetchPlaybackUrl\b/.test(s))
+          bad.push(`${storeRel} 无 prefetchPlaybackUrl——下一段地址须可预取（防切段等云往返·根因#8）`)
+      }
+      const playerAbs = join(ROOT, playerRel)
+      if (!existsSync(playerAbs)) bad.push(`${playerRel} 缺失`)
+      else if (!/\bprefetchPlaybackUrl\b/.test(readFileSync(playerAbs, 'utf8')))
+        bad.push(`${playerRel} 未预取下一段——当前段就绪时须 prefetch 下一段地址（防切段卡一下·根因#8）`)
+      return bad
+    },
+  },
+  {
     // 「全部教程」指向「我的课程」列表，非某单门课的课时（根因#8 多课·用户报）。痛：me 页「全部教程」
+    // 原跳 catalog（store.current 单门课的课时列表，多课下还会显默认/演示那门），应跳「我已激活的全部课程」列表。
     // 原跳 catalog（store.current 单门课的课时列表，多课下还会显默认/演示那门），应跳「我已激活的全部课程」列表。
     // 修＝新建 pages/courses（act.mine 去重取课程·resolveMyCourses 纯函数单测锁）；me allCourses 跳 /pages/courses/。
     id: 'my-courses-entry',

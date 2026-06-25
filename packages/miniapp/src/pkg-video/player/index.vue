@@ -141,6 +141,16 @@ function onLoaded(e) {
     pendingPlay = false
     ctx && ctx.play()
   }
+  prefetchNext() // 当前段已就绪/起播 → 后台预热下一段地址，切段时直接命中缓存（接近秒切·根因#8）
+}
+// 预取下一段播放地址（当前段就绪即预热）：仅文件模式且下一段确有视频时取；占位/全课末段静默跳过。
+// 目标段经 stepSegment 定位（与 goSeg 同源·连续跨课时），地址换取与去重交给 store/解析器。
+function prefetchNext() {
+  if (!fileMode.value) return
+  const t = stepSegment(lessons.value, idx.value, fileSeg.value, 1)
+  if (!t) return
+  const seg = (lessons.value[t.lessonIdx]?.segments || [])[t.segIdx]
+  if (seg && seg.hasVideo) store.prefetchPlaybackUrl(seg.id)
 }
 function onTimeupdate(e) {
   const d = e.detail || {}

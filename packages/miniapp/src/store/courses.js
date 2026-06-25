@@ -10,9 +10,16 @@
  */
 import { defineStore } from 'pinia'
 import { getCourses, getPlaybackUrl } from '@/api/course.js'
+import { createPlaybackResolver } from '@/pkg-video/player/playbackCache.js'
 import { logger } from '@/utils/logger.js'
 
 const EMPTY_COURSE = { id: '', title: '', chapters: [] }
+
+// 分段播放地址解析器（模块层单例·跨播放页/组件共享缓存）：按 segId 缓存临时 URL + in-flight 去重 +
+// 预取（见 pkg-video/player/playbackCache.js）。fetcher 闭包绑「当前聚焦课 id」——一次播放会话同一门课，
+// 取址/预取前由 action 同步 _courseId（getPlaybackUrl 鉴权按 courseId+segmentId）。治真机段间转场卡顿（根因#8）。
+let _courseId = ''
+const _resolver = createPlaybackResolver({ fetcher: (segId) => getPlaybackUrl(_courseId, segId) })
 
 export const useCoursesStore = defineStore('courses', {
   state: () => ({
@@ -52,9 +59,16 @@ export const useCoursesStore = defineStore('courses', {
         this.loading = false
       }
     },
-    // 取当前课程某分段的播放地址（服务端鉴权，转交 api；URL 是瞬时态、不入 state）
+    // 取当前课程某分段的播放地址：经解析器缓存优先（命中即返回·回看/重复段零云往返），未命中才换址。
+    // URL 是瞬时态、不入 state；服务端鉴权按 courseId+segmentId（见 getPlaybackUrl 云函数）。
     async playbackUrl(segmentId) {
-      return getPlaybackUrl(this.current.id, segmentId)
+      _courseId = this.current.id
+      return _resolver.load(segmentId)
+    },
+    // 预取某分段地址（当前段播放期间预热下一段·静默失败不影响主流程）→ 切段时直接命中缓存、接近秒切。
+    prefetchPlaybackUrl(segmentId) {
+      _courseId = this.current.id
+      _resolver.prefetch(segmentId)
     },
   },
 })
