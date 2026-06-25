@@ -84,7 +84,10 @@ export async function uploadChunk({ db, data }: Ctx) {
 export async function uploadFinish({ db, cloud, data }: Ctx) {
   const id = String(data.uploadId || '').slice(0, 40)
   const total = parseInt(data.total, 10)
-  if (!id || !(total > 0) || total > 200) return reply(400, { ok: false, error: 'BAD_FINISH' })
+  // 片数上限须覆盖 admin 体积闸（uploadVideo 放行 ≤15MB·~80KB/片 b64 → 15MB≈263 片）+ 余量，
+  // 否则 12~15MB 视频走回落分片必 BAD_FINISH（P2·回落容量 vs 体积闸不一致）。300 片≈17MB，封顶防无界回落。
+  // 任一片数变动同步 tests/cloud/adminMisc.test.js「视频回落分片」用例。
+  if (!id || !(total > 0) || total > 300) return reply(400, { ok: false, error: 'BAD_FINISH' })
   const chunksColl = db.collection('uploadChunks')
   const got = await chunksColl.where({ uploadId: id }).limit(1000).get()
   // seq 必须正好 0..total-1（审核批次B：只数数量「0,2 共 2 片」也能过 → 拼出损坏文件）
