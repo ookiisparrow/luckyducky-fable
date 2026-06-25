@@ -1192,6 +1192,10 @@ export const repoChecks = [
         bad.push(`${rel} onLoad 未在定位后显式 refreshPlayUrl + pendingPlay——续播到默认那节会黑屏不播（段 id 不变·watch 不取址·根因#8）`)
       if (!/o\.seg\b/.test(src))
         bad.push(`${rel} locateLesson 未按 o.seg 定位小段——继续观看恒落第一段、不回到原小段（根因#8）`)
+      // 审计 #9：onLoad 首个 await 后须 if (unloaded) return——慢网下 await 期间快返离开，回调别再写已卸载页 /
+      // 别再 redirectTo 把人从别页拽回；unloaded 由 onUnload 置（onHide 切后台不算卸载）。
+      if (!/await Promise\.all[\s\S]{0,120}?if \(unloaded\) return/.test(src) || !/onUnload\([\s\S]*?unloaded\s*=\s*true/.test(src))
+        bad.push(`${rel} onLoad await 后无 unloaded 早退守卫（或 onUnload 未置 unloaded）——慢网快返会写已卸载页/误 redirectTo 拽回（审计 #9·根因#8）`)
       return bad
     },
   },
@@ -1758,6 +1762,11 @@ export const repoChecks = [
         if (!/\bgetTempUrl\s*\(/.test(g)) bad.push(`learning/${GATE} 未经 getTempUrl 接缝下发 URL——临时 URL 单源失守（审计 P1）`)
         if (!/NOT_ENTITLED/.test(g)) bad.push(`learning/${GATE} 缺权属闸 NOT_ENTITLED——付费段白嫖防护失守（审计 P1·根因#3）`)
       }
+      // 审计 #10：getCourses 课/章/节须逐层显式白名单、不裸 ...c/...ch/...l 展开原始文档——否则往课/课时文档
+      // 加内部字段会静默漏进公开返回，而上面只盯 videoFileId 字面量、抓不到对象展开（fail-open）。
+      const gc = join(dir, 'getCourses.ts')
+      if (existsSync(gc) && /\.\.\.(c|ch|l)\b/.test(readFileSync(gc, 'utf8')))
+        bad.push(`learning/getCourses.ts 裸 ...c/...ch/...l 展开原始文档——课/章/节须逐层显式白名单（fail-closed·防加字段静默漏进公开返回·审计 #10）`)
       return bad
     },
   },

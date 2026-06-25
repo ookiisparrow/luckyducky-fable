@@ -27,7 +27,12 @@ export const main = withOpenId(async ({ db, OPENID, event }) => {
   if (!seg) return err('NO_SEGMENT')
   if (!seg.videoFileId) return ok({ url: null }) // 素材未剪：无视频
 
-  // 付费段鉴权：本人已确认进课才发地址（免费段放行）
+  // 付费段鉴权：本人已确认进课才发地址（免费段放行）。
+  // 退款后观看权（审计 #5·有意设计·灰色靠人工，非 bug 故不自动收回）：闸只看 enteredAt 非空、不查订单是否已退。
+  // 但「确认进课」本身就会失效退货权（confirmEnter 把对应订单项 refundable=false + admin 退款审核以 activations
+  // 为「已激活=退货权失」判据）——所以正常路径走不到「退款后仍在看」。唯一能到该状态的是管理员**强行批退**（无视
+  // 失效的退货权），那种情况下要不要连观看权一起收回是一单一议的人工判断（实体材料包 + 一次性扫码激活·收回不干净）。
+  // 故此处不据退款自动失效 activations；若将来定「退款即收回观看权」，在退款链回写 activations、别在这里加。
   if (!seg.free) {
     const _ = db.command
     const acts = await db

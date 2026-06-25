@@ -55,6 +55,7 @@ onLoad(async (o) => {
   locateLesson(o) // 首个 await 前同步定位 → 首帧即正确那节，不先渲默认再跳（闪烁·根因#8）
   // 拉课程 + 鉴权并行（互不依赖）→ 冷启动少串一趟云往返、缩短首屏加载窗口（根因#8）
   await Promise.all([store.load(), act.loadMine()])
+  if (unloaded) return // 慢网下 await 期间用户已快返离开 → 别再写已卸载页状态 / 别再 redirectTo 把人拽回（审计 #9·根因#8）
   // 播放鉴权（规格 §四-4）：未确认激活 → 回目录（目录显示锁态引导）
   if (!act.unlocked(store.current.id)) {
     uni.showToast({ title: '课程需扫码激活后观看', icon: 'none' })
@@ -85,6 +86,7 @@ const playing = ref(false)
 const endedSeg = ref(null) // 刚在哪段末尾停下（显示「重复播放」）
 let playingSeg = 0
 let seeking = false
+let unloaded = false // 页已卸载（onUnload 置）→ onLoad 异步回调据此早退，不写已卸载页 / 不误 redirectTo（审计 #9）
 // 切段起播标记：换段后新 src 异步现取，置 true → 待新段元数据就绪（onLoaded）再起播，
 // 不靠固定 setTimeout 猜（地址常没取回/没加载完就 play → 播一瞬间旧残帧再切→真机卡顿·根因#8）。
 let pendingPlay = false
@@ -250,7 +252,10 @@ function reportWatchPoint() {
   track('watch_at', { page: 'player', targetId: segIdOf(activeSeg.value), meta: progressMeta() })
 }
 onHide(reportWatchPoint)
-onUnload(reportWatchPoint)
+onUnload(() => {
+  unloaded = true // 标记已卸载 → onLoad 异步回调早退（审计 #9）；onHide(切后台) 不算卸载、不置
+  reportWatchPoint()
+})
 
 // 点画面 / 大播放键：暂停↔播放；段末→继续进入下一段
 function toggle() {
