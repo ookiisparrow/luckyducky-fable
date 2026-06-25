@@ -1,6 +1,6 @@
 /**
  * 用户 / 账号状态（Pinia）。
- * 登录态（token）仍为预留；profile 承载「我的页」资料，由资料编辑页读写。
+ * 登录态 token 是用户显式同意后的持久标记；profile 承载「我的页」资料，由资料编辑页读写。
  * 小程序端：登录后云端 users 的非空资料（nickname/avatar/bio）覆盖本地展示（跨设备以云端为准）；
  * 保存资料时头像传云存储、字段经 updateProfile 云函数写回 users。H5 / App 端纯本地。
  *
@@ -17,7 +17,7 @@ const defaultProfile = () => ({ ...USER, avatar: '' })
 
 export const useUserStore = defineStore('user', {
   state: () => ({
-    token: '', // 登录令牌（以后微信登录后写入）
+    token: '', // 持久登录标记：用户同意登录后置 openid 或 H5/App 本地标记
     profile: defaultProfile(), // 用户资料（现为样例，可在资料编辑页修改）
     openid: '', // 微信登录后的 openid（不持久化，每次启动静默 login 重新拿）
     cloudUser: null, // 云端 users 记录（P0 起步；资料展示迁移留待"完善资料"步）

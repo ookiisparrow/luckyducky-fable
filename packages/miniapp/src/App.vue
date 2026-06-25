@@ -27,7 +27,6 @@ export default {
       logger.error('promise', reason)
       reportError('promise', reason)
     })
-    // 以后可在此做：读取本地登录态、初始化全局配置等。
   },
   onShow() {},
   onHide() {},

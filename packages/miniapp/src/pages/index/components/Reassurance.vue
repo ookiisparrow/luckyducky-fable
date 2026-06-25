@@ -1,7 +1,7 @@
 <script setup>
 /**
  * 「把门槛一一拆掉」区。对应原型 Sections.jsx 的 Reassurance。
- * 纯展示组件：条目由使用方传入（技术债 #4，数据将来可换云端来源）。
+ * 纯展示组件：条目由使用方传入（技术债 #4；来源可为本地默认或 content store 云端覆盖）。
  */
 import Accordion from '@/components/Accordion.vue'
 

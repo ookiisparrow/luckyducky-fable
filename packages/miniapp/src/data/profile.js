@@ -10,7 +10,7 @@ export const USER = {
   bio: '在学钩织的第 12 天，目标是钩满一窝小鸭~',
 }
 
-// 继续学习（样例进度；以后由真实观看记录驱动）
+// 继续学习默认样例；真实卡片优先由 progress store 的最近观看记录驱动。
 export const CONTINUE_VIDEO = {
   ep: '基础课 · 第 3 集',
   name: '起针与锁针 · 钩出第一行',

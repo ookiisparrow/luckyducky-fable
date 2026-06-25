@@ -6,8 +6,7 @@
  * list 恒为可用列表；load 前 getters 给安全空形状，页面不用判空。
  *
  * 不持久化：课程内容以云端为准，每次启动拉最新。
- * 学习进度是用户态，不在这里（现为 data/course.js 的 SAMPLE_PROGRESS 样例，
- * 将来云端按 segment 粒度记忆，见 设计规格 §四）。
+ * 学习进度是用户态，不在这里；segment 粒度进度由 progress store 从云端读取。
  */
 import { defineStore } from 'pinia'
 import { getCourses, getPlaybackUrl } from '@/api/course.js'
