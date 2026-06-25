@@ -1,13 +1,14 @@
 <script setup>
 /**
- * 左侧导航（按 design/console.pen「Component/Sidebar」对齐）：
- * - 商品与上新（主入口）+ 其下「按步骤直达」六步，每步带 lucide 图标（与设计稿同序同图标）。
- * - 其余模块按 经营 / 数据 / 系统 三组小标题分组（设计稿 v1 只画到数据看板，分组是其语言的延伸）。
+ * 左侧导航（按 design/console.pen「Component/Sidebar」对齐 + 用户拍板：上新六步收进「商品与上新」内）：
+ * - 「商品与上新」是可展开父项，六步作为子菜单缩进其下；进入上新区（列表/向导）自动展开，可手动收起。
+ * - 其余模块按 经营 / 数据 / 系统 三组小标题分组。
  * 直达入口：带着「最近编辑的商品」跳对应步骤；还没有商品时回列表。
  */
+import { ref, computed, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import {
-  Package, Image, FileText, Tags, Clapperboard, QrCode, Printer,
+  Package, ChevronDown, Image, FileText, Tags, Clapperboard, QrCode, Printer,
   Smartphone, Truck, RotateCcw, Boxes, ChartColumn, Wallet, Bell, ExternalLink,
 } from 'lucide-vue-next'
 import { useProductsStore, STEP_NAMES } from '@/store/products.js'
@@ -48,6 +49,22 @@ const GROUPS = [
   },
 ]
 
+// 上新区（列表或向导）= 商品与上新的势力范围；进入即自动展开六步子菜单
+const inProductSection = computed(
+  () => route.path === '/products' || route.path.startsWith('/product/'),
+)
+const expanded = ref(inProductSection.value)
+watch(inProductSection, (v) => {
+  if (v) expanded.value = true
+})
+
+function openProducts() {
+  expanded.value = true
+  router.push('/products')
+}
+function toggleSteps() {
+  expanded.value = !expanded.value
+}
 function goStep(n) {
   const p = store.list[0]
   if (!p) return router.push('/products')
@@ -72,20 +89,24 @@ function doLogout() {
       </div>
     </div>
 
-    <router-link class="nav" :class="{ on: route.path === '/products' }" to="/products">
+    <!-- 商品与上新（可展开父项，六步收其内） -->
+    <div class="nav nav-parent" :class="{ on: route.path === '/products' }" @click="openProducts">
       <Package :size="17" /><span>商品与上新</span>
-    </router-link>
-
-    <div class="caption">按步骤直达</div>
-    <button
-      v-for="(name, i) in STEP_NAMES"
-      :key="i"
-      class="nav"
-      :class="{ on: stepActive(i + 1) }"
-      @click="goStep(i + 1)"
-    >
-      <component :is="STEP_ICONS[i]" :size="17" /><span>{{ i + 1 }} · {{ name }}</span>
-    </button>
+      <button class="chev-btn" title="展开/收起步骤" @click.stop="toggleSteps">
+        <ChevronDown :size="15" class="chev" :class="{ open: expanded }" />
+      </button>
+    </div>
+    <div v-if="expanded" class="substeps">
+      <button
+        v-for="(name, i) in STEP_NAMES"
+        :key="i"
+        class="nav step"
+        :class="{ on: stepActive(i + 1) }"
+        @click="goStep(i + 1)"
+      >
+        <component :is="STEP_ICONS[i]" :size="16" /><span>{{ i + 1 }} · {{ name }}</span>
+      </button>
+    </div>
 
     <template v-for="g in GROUPS" :key="g.caption">
       <div class="caption">{{ g.caption }}</div>
@@ -179,6 +200,40 @@ function doLogout() {
 }
 .nav :deep(svg) {
   flex: 0 0 auto;
+}
+/* 父项「商品与上新」：标签撑开把折叠箭头推到最右 */
+.nav-parent > span {
+  flex: 1;
+}
+.chev-btn {
+  border: none;
+  background: none;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  cursor: pointer;
+  color: inherit;
+}
+.chev {
+  transition: transform 0.16s ease;
+  transform: rotate(-90deg);
+  color: var(--content-2);
+}
+.chev.open {
+  transform: rotate(0deg);
+}
+/* 六步子菜单：缩进 + 左侧连接线，读作「商品与上新」的子项 */
+.substeps {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 2px 0 2px 17px;
+  padding-left: 9px;
+  border-left: 1px solid var(--line);
+}
+.nav.step {
+  padding: 8px 10px;
+  font-size: 13px;
 }
 .caption {
   padding: 14px 12px 4px;
