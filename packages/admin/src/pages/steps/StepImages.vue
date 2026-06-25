@@ -6,6 +6,7 @@
 import { computed, ref, onMounted } from 'vue'
 import { useProductsStore } from '@/store/products.js'
 import { uploadImage, getHomeContent, saveHomeContent } from '@/api/cloud.js'
+import { toast } from '@/utils/ui.js'
 
 const props = defineProps({ product: { type: Object, required: true } })
 const store = useProductsStore()
@@ -101,7 +102,7 @@ async function pick(e, isCover) {
       await store.update(props.product.id, { images: [...props.product.images, ...refs] })
     }
   } catch (err) {
-    alert('图片上传失败：' + err.message)
+    toast('图片上传失败：' + err.message, 'err')
   } finally {
     busy.value = false
   }

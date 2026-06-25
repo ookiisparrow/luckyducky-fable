@@ -7,6 +7,7 @@ import { useRouter } from 'vue-router'
 import { ref, computed } from 'vue'
 import { useProductsStore, stepDone, STEP_NAMES } from '@/store/products.js'
 import { publishProduct } from '@/api/cloud.js'
+import { confirmDialog, toast } from '@/utils/ui.js'
 import StepImages from '@/pages/steps/StepImages.vue'
 import StepInfo from '@/pages/steps/StepInfo.vue'
 import StepSkus from '@/pages/steps/StepSkus.vue'
@@ -54,14 +55,14 @@ async function shelve() {
   const tip =
     (videoMiss ? '配套教学视频还没配齐（第 4 步），可以先上架商品、之后再补课程。\n' : '') +
     '上架后小程序首页与详情页立即可见。确认上架？'
-  if (!confirm(tip)) return
+  if (!(await confirmDialog({ title: '上架商品', message: tip, confirmText: '上架' }))) return
   shelving.value = true
   try {
     await publishProduct(product.value.id)
     await store.update(product.value.id, { status: 'onsale' })
-    alert('已上架 ✓ 打开小程序即可看到该商品')
+    toast('已上架，打开小程序即可看到该商品', 'ok')
   } catch (e) {
-    alert(e.message)
+    toast(e.message, 'err')
   } finally {
     shelving.value = false
   }

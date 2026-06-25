@@ -15,6 +15,7 @@ import {
   saveHomeContent,
   uploadImage,
 } from '@/api/cloud.js'
+import { confirmDialog, toast } from '@/utils/ui.js'
 
 const list = ref([])
 const urls = ref({})
@@ -97,12 +98,18 @@ async function toggleListed(p) {
       await republishProduct(p.id)
       p.listed = true
     } else {
-      if (!confirm(`确定停售「${p.name}」？\n停售后顾客端商品列表不再显示（详情直达与历史订单不受影响），可随时恢复。`)) return
+      const ok = await confirmDialog({
+        title: '停售商品',
+        message: `确定停售「${p.name}」？\n停售后顾客端商品列表不再显示（详情直达与历史订单不受影响），可随时恢复。`,
+        confirmText: '停售',
+        danger: true,
+      })
+      if (!ok) return
       await unpublishProduct(p.id)
       p.listed = false
     }
   } catch (e) {
-    alert(e.message || '操作失败')
+    toast(e.message || '操作失败', 'err')
   }
 }
 

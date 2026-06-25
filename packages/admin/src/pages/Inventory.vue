@@ -7,6 +7,7 @@
 import { ref, computed } from 'vue'
 import { cloudMode, listInventory, saveStock } from '@/api/cloud.js'
 import { useProductsStore } from '@/store/products.js'
+import { promptDialog, toast } from '@/utils/ui.js'
 
 const store = useProductsStore()
 const invMap = ref({}) // `${productId}__${spec}` -> { stock, threshold }
@@ -64,17 +65,22 @@ const shown = computed(() => (tab.value === 'all' ? rows.value : rows.value.filt
 
 async function adjust(r) {
   const cur = r.stock == null ? '' : String(r.stock)
-  const v = window.prompt(`调整库存 · ${r.productName}${r.spec ? ' / ' + r.spec : ''}\n输入数量（留空 = 不限量）：`, cur)
+  const v = await promptDialog({
+    title: '调整库存',
+    message: `${r.productName}${r.spec ? ' / ' + r.spec : ''}\n输入数量（留空 = 不限量）：`,
+    defaultValue: cur,
+    placeholder: '留空 = 不限量',
+  })
   if (v === null) return
   const t = v.trim()
   const stock = t === '' ? null : parseInt(t, 10)
-  if (stock !== null && (!Number.isInteger(stock) || stock < 0)) return window.alert('请输入非负整数，或留空表示不限量')
+  if (stock !== null && (!Number.isInteger(stock) || stock < 0)) return toast('请输入非负整数，或留空表示不限量', 'err')
   busy.value = `${r.productId}__${r.spec}`
   try {
     await saveStock(r.productId, r.spec, stock, r.threshold)
     await init()
   } catch (e) {
-    window.alert('保存失败：' + e.message)
+    toast('保存失败：' + e.message, 'err')
   } finally {
     busy.value = ''
   }

@@ -9,6 +9,7 @@ import { ref, computed } from 'vue'
 import { useProductsStore } from '@/store/products.js'
 import { useAutosave } from '@/composables/useAutosave.js'
 import { cloudMode, getCourseDraft, saveCourseDraft, publishCourse, uploadVideo } from '@/api/cloud.js'
+import { confirmDialog, toast } from '@/utils/ui.js'
 
 const props = defineProps({ product: { type: Object, required: true } })
 const store = useProductsStore()
@@ -80,8 +81,9 @@ function addLesson(ch) {
 function addSegment(l) {
   l.segments.push({ id: 's' + rid(), name: `第 ${l.segments.length + 1} 段`, dur: '', videoFileId: '', free: false })
 }
-function removeAt(arr, i, label) {
-  if (confirm(`删除${label}？该层级下的内容会一并移除。`)) arr.splice(i, 1)
+async function removeAt(arr, i, label) {
+  if (await confirmDialog({ title: '删除', message: `删除${label}？该层级下的内容会一并移除。`, confirmText: '删除', danger: true }))
+    arr.splice(i, 1)
 }
 
 // 拖拽排序（三层通用：同一列表内移动；目标位置显示紫色落点线）
@@ -138,7 +140,7 @@ async function pickVideo(e, l, sg) {
     })
     sg.videoFileId = fileId
   } catch (err) {
-    alert('视频上传失败：' + err.message)
+    toast('视频上传失败：' + err.message, 'err')
   } finally {
     const u = { ...uploads.value }
     delete u[sg.id]
@@ -163,19 +165,19 @@ function readDuration(file) {
 
 async function doPublish() {
   if (publishing.value) return
-  if (stats.value.total === 0) return alert('还没有任何小段，先搭好结构再发布')
+  if (stats.value.total === 0) return toast('还没有任何小段，先搭好结构再发布', 'err')
   const miss = stats.value.total - stats.value.done
   const tip =
     (miss > 0 ? `还有 ${miss} 段没传视频（学员会看到无视频的段）。\n` : '') +
     '发布后小程序端立即可见（已激活学员自动看到新内容）。确认发布？'
-  if (!confirm(tip)) return
+  if (!(await confirmDialog({ title: '发布课程', message: tip, confirmText: '发布' }))) return
   publishing.value = true
   try {
     await saveCourseDraft(JSON.parse(JSON.stringify(course.value)))
     await publishCourse(course.value.id)
     publishedAt.value = Date.now()
   } catch (e) {
-    alert('发布失败：' + e.message)
+    toast('发布失败：' + e.message, 'err')
   } finally {
     publishing.value = false
   }

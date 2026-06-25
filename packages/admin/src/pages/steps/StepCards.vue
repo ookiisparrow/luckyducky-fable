@@ -8,6 +8,7 @@ import { ref, computed } from 'vue'
 import { useProductsStore } from '@/store/products.js'
 import { useAutosave } from '@/composables/useAutosave.js'
 import { cloudMode, getCard, saveCard, uploadImage } from '@/api/cloud.js'
+import { toast } from '@/utils/ui.js'
 
 const props = defineProps({ product: { type: Object, required: true } })
 const store = useProductsStore()
@@ -93,18 +94,18 @@ async function pickArt(e) {
     card.value.front.art = fileRef
     artUrl.value = url
   } catch (err) {
-    alert('图片上传失败：' + err.message)
+    toast('图片上传失败：' + err.message, 'err')
   } finally {
     busyArt.value = false
   }
 }
 function useCover() {
-  if (!props.product.cover) return alert('该商品还没有封面图（第 1 步上传）')
+  if (!props.product.cover) return toast('该商品还没有封面图（第 1 步上传）', 'err')
   card.value.front.art = props.product.cover
   artUrl.value = store.imgUrl(props.product.cover)
 }
 function finalize() {
-  if (!card.value.front.art) return alert('正面还没有图案——取商品封面图或上传插画')
+  if (!card.value.front.art) return toast('正面还没有图案——取商品封面图或上传插画', 'err')
   card.value.status = card.value.status === 'final' ? 'draft' : 'final'
 }
 </script>

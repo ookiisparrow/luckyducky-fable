@@ -1,6 +1,7 @@
 <script setup>
 import { useRoute } from 'vue-router'
 import Sidebar from '@/components/Sidebar.vue'
+import FeedbackHost from '@/components/FeedbackHost.vue'
 import { computed } from 'vue'
 
 const route = useRoute()
@@ -13,6 +14,7 @@ const bare = computed(() => route.path === '/login')
     <Sidebar />
     <main class="main"><router-view /></main>
   </div>
+  <FeedbackHost />
 </template>
 
 <style scoped>

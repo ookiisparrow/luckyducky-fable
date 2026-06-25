@@ -69,6 +69,13 @@ export default [
     rules: { 'no-console': 'error' },
   },
 
+  // 管理端操作反馈统一走 utils/ui.js（toast/confirmDialog）——禁原生 alert/confirm/prompt
+  // （阻塞线程 + 破坏紫色设计体系的灰色原生框·UX 一致性守卫·防回归）
+  {
+    files: ['packages/admin/src/**/*.js', 'packages/admin/src/**/*.vue'],
+    rules: { 'no-alert': 'error' },
+  },
+
   // 放最后：关闭与 Prettier 冲突的排版规则
   configPrettier,
 ]

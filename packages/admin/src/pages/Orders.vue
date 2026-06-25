@@ -16,6 +16,7 @@
  */
 import { ref, computed } from 'vue'
 import { cloudMode, listOrders, orderCounts, getOrderDetail, shipOrder, shipOrders, clearFeeMismatch } from '@/api/cloud.js'
+import { confirmDialog, toast } from '@/utils/ui.js'
 
 const STATUS = {
   pending: { label: '待支付', chip: 'grey' },
@@ -279,12 +280,18 @@ async function doBatchShip() {
 
 // 金额异常单复核解除：先去商户平台核对流水，确认无误再点（解除后才能发货）
 async function doClearMismatch(o) {
-  if (!window.confirm(`确认已在商户平台核对订单 ${o.id} 的支付流水无误？解除后该单可正常发货。`)) return
+  const ok = await confirmDialog({
+    title: '解除金额异常',
+    message: `确认已在商户平台核对订单 ${o.id} 的支付流水无误？解除后该单可正常发货。`,
+    confirmText: '已核对·解除',
+  })
+  if (!ok) return
   try {
     await clearFeeMismatch(o.id)
     o.feeMismatch = false
+    toast('已解除，该单可正常发货', 'ok')
   } catch (e) {
-    window.alert('解除失败：' + e.message)
+    toast('解除失败：' + e.message, 'err')
   }
 }
 </script>

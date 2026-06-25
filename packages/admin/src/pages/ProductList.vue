@@ -12,6 +12,7 @@
 import { ref, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { useProductsStore, stepDone, STEP_NAMES } from '@/store/products.js'
+import { confirmDialog, toast } from '@/utils/ui.js'
 
 const router = useRouter()
 const store = useProductsStore()
@@ -63,19 +64,30 @@ function open(p) {
   router.push(`/product/${p.id}/step/${n}`)
 }
 async function removeProduct(p) {
-  if (confirm(`删除「${p.name || '未命名商品'}」？此操作不可撤销（草稿与已上架商品一并删，历史订单不受影响）。`))
-    await store.remove(p.id)
+  const ok = await confirmDialog({
+    title: '删除商品',
+    message: `删除「${p.name || '未命名商品'}」？此操作不可撤销（草稿与已上架商品一并删，历史订单不受影响）。`,
+    confirmText: '删除',
+    danger: true,
+  })
+  if (ok) await store.remove(p.id)
 }
 async function toggleListing(p) {
   const unlisted = store.statusOf(p) === 'unlisted'
   const verb = unlisted ? '恢复上架' : '下架'
-  if (!confirm(`确认${verb}「${p.name || '未命名商品'}」？${unlisted ? '恢复后顾客端重新可见。' : '下架后顾客端列表不再显示（详情直达与历史订单不受影响）。'}`)) return
+  const ok = await confirmDialog({
+    title: verb,
+    message: `确认${verb}「${p.name || '未命名商品'}」？${unlisted ? '恢复后顾客端重新可见。' : '下架后顾客端列表不再显示（详情直达与历史订单不受影响）。'}`,
+    confirmText: verb,
+    danger: !unlisted,
+  })
+  if (!ok) return
   busy.value = p.id
   try {
     if (unlisted) await store.republish(p.id)
     else await store.unpublish(p.id)
   } catch (e) {
-    alert(verb + '失败：' + e.message)
+    toast(verb + '失败：' + e.message, 'err')
   } finally {
     busy.value = ''
   }

@@ -18,6 +18,7 @@ import {
   saveSettings,
 } from '@/api/cloud.js'
 import { buildFrontSvg, buildBackSvg } from '@/utils/cardSvg.js'
+import { confirmDialog, toast } from '@/utils/ui.js'
 
 const props = defineProps({ product: { type: Object, required: true } })
 const store = useProductsStore()
@@ -39,12 +40,12 @@ const qrUrl = ref('')
 async function showTestQr(batchId) {
   try {
     const codes = await listBatchCodes(batchId)
-    if (!codes.length) return alert('该批次没有码')
+    if (!codes.length) return toast('该批次没有码', 'err')
     qrUrl.value = `${urlPrefix.value}?code=${codes[0]}`
     qrImg.value = await QRCode.toDataURL(qrUrl.value, { width: 360, margin: 2, color: { dark: '#241733' } })
     qrShow.value = true
   } catch (e) {
-    alert('生成测试二维码失败：' + e.message)
+    toast('生成测试二维码失败：' + e.message, 'err')
   }
 }
 const cardFinal = computed(() => card.value?.status === 'final')
@@ -103,7 +104,7 @@ async function showCodes(batchId) {
   try {
     codesList.value = await listBatchCodes(batchId)
   } catch (e) {
-    alert('加载码失败：' + e.message)
+    toast('加载码失败：' + e.message, 'err')
     codesShow.value = false
   } finally {
     codesLoading.value = false
@@ -177,7 +178,7 @@ async function downloadPack(batchId, codes) {
     a.click()
     URL.revokeObjectURL(a.href)
   } catch (e) {
-    alert('打包失败：' + e.message)
+    toast('打包失败：' + e.message, 'err')
   } finally {
     busy.value = ''
   }
@@ -185,9 +186,9 @@ async function downloadPack(batchId, codes) {
 
 async function generate() {
   if (busy.value) return
-  if (!cardFinal.value) return alert('请先在第 5 步定稿卡面')
-  if (!prefixOk.value) return alert('请先填好网址前缀（https:// 开头、/ 结尾），它决定印刷出的二维码指向哪里')
-  if (!confirm(`生成 ${count.value} 个激活码并打包下载印刷包？\n（码一经生成即有效，请按备货量填写）`)) return
+  if (!cardFinal.value) return toast('请先在第 5 步定稿卡面', 'err')
+  if (!prefixOk.value) return toast('请先填好网址前缀（https:// 开头、/ 结尾），它决定印刷出的二维码指向哪里', 'err')
+  if (!(await confirmDialog({ title: '生成码批次', message: `生成 ${count.value} 个激活码并打包下载印刷包？\n（码一经生成即有效，请按备货量填写）`, confirmText: '生成' }))) return
   busy.value = 'gen'
   try {
     const r = await createBatch(courseId.value, count.value)
@@ -195,7 +196,7 @@ async function generate() {
     await store.update(props.product.id, { batchCount: batches.value.length })
     await downloadPack(r.batchId, r.codes)
   } catch (e) {
-    alert('生成失败：' + e.message)
+    toast('生成失败：' + e.message, 'err')
   } finally {
     busy.value = ''
   }
