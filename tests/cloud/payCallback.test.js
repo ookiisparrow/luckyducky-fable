@@ -1,6 +1,39 @@
 import { describe, it, expect, beforeEach } from 'vitest'
 import { control } from 'wx-server-sdk'
-import { main } from '../../packages/cloud/src/functions/orders/payCallback'
+import { main, reserveWithRetry } from '../../packages/cloud/src/functions/orders/payCallback'
+
+// reserveWithRetry 竞态缓冲（审计 P2·关单回补非原子）：closed 复活重抢失败若是「关单回补未落定」瞬时窗，
+// 重试即成功（不误判售罄）；真售罄重试仍失败 → 上层走 refund_required（不超卖）。sleep 注入·不真等。
+describe('reserveWithRetry 竞态缓冲（审计 P2）', () => {
+  const noSleep = async () => {}
+  it('首次失败、回补落定后第二次成功 → ok（不误判 refund_required）', async () => {
+    let n = 0
+    const reserve = async () => (++n >= 2 ? { ok: true, reserved: [{ productId: 'x', spec: '', qty: 1 }] } : { ok: false, reserved: [] })
+    const r = await reserveWithRetry(reserve, { tries: 3, sleep: noSleep })
+    expect(r.ok).toBe(true)
+    expect(n).toBe(2) // 重试到成功
+  })
+  it('真售罄：重试到上限仍失败 → ok:false（上层 refund_required·不超卖）', async () => {
+    let n = 0
+    const reserve = async () => {
+      n++
+      return { ok: false, reserved: [] }
+    }
+    const r = await reserveWithRetry(reserve, { tries: 3, sleep: noSleep })
+    expect(r.ok).toBe(false)
+    expect(n).toBe(3) // 用满重试次数
+  })
+  it('首次即成功：不重试（常态零额外开销）', async () => {
+    let n = 0
+    const reserve = async () => {
+      n++
+      return { ok: true, reserved: [] }
+    }
+    const r = await reserveWithRetry(reserve, { tries: 3, sleep: noSleep })
+    expect(r.ok).toBe(true)
+    expect(n).toBe(1)
+  })
+})
 
 // payCallback 幂等：pending→paid 只生效一次；closed 复活；失败通知不改状态；一律 ACK。
 const NOTIFY = {

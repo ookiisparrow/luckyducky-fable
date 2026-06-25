@@ -18,6 +18,26 @@ import {
 // 入参兼容 v3 resource 与旧 v2 字段。
 const ACK = { errcode: 0, errmsg: 'OK' }
 
+// 关单回补与晚到回调的竞态缓冲（审计 P2·关单回补非原子）：closeExpiredOrders/pay 惰性关单是「先原子转
+// closed、再回补库存」两步（跨 orders/inventory 集合，无法单事务原子）。晚到的成功回调若卡在「已 closed
+// 但库存尚未回补」那一瞬重抢，会对**本单自己**尚未还回的预留扣second次而失败 → 误判售罄进 refund_required。
+// 缓冲：closed 复活重抢失败时短暂重试——回补只差一两步、瞬时窗很快闭合，重试即成功；**真被别人买走**则
+// 重试仍失败（库存确实没有）→ refund_required（不超卖·错向安全侧）。sleep 可注入便于单测（根因#8 时序）。
+export async function reserveWithRetry(
+  reserve: () => Promise<{ ok: boolean; reserved: any[] }>,
+  opts: { tries?: number; delayMs?: number; sleep?: (ms: number) => Promise<void> } = {}
+): Promise<{ ok: boolean; reserved: any[] }> {
+  const tries = opts.tries ?? 3
+  const delayMs = opts.delayMs ?? 200
+  const sleep = opts.sleep ?? ((ms: number) => new Promise<void>((r) => setTimeout(r, ms)))
+  let res = await reserve()
+  for (let i = 1; i < tries && !res.ok; i++) {
+    await sleep(delayMs)
+    res = await reserve()
+  }
+  return res
+}
+
 export const main = defineNotifyCallback<any>({
   ack: ACK,
   refId: (e) => String(e.out_trade_no || e.outTradeNo || ''),
@@ -50,8 +70,10 @@ export const main = defineNotifyCallback<any>({
     if (p.doc.status !== 'closed') return // 已 paid/shipped/done：重复通知幂等 no-op
 
     // 关单后晚到的成功回调：库存已在关单时回补，须重抢回 reserved 才可复活（否则与已买走的 B 单超卖·审核 P0）。
+    // 重抢带竞态缓冲（审计 P2·关单回补非原子）：闪失多为「已 closed 但回补未落定」瞬时窗·重试即成功；
+    // 真售罄则重试仍失败 → refund_required（不超卖）。
     const reserved = Array.isArray(p.doc.reserved) ? p.doc.reserved : []
-    const re = await reserveStock(reserved)
+    const re = await reserveWithRetry(() => reserveStock(reserved))
     if (re.ok) {
       // 抢回库存（含 reserved 为空/不限量）→ closed → paid 复活（绑本次转移·幂等）
       const c = await transition('orders', id, ['closed'], 'paid', (order) => ({
