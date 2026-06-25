@@ -1,10 +1,15 @@
 <script setup>
 /**
- * 左侧导航（与设计稿一致）：商品与上新（列表+向导）+ 橱窗 + 订单发货 +「按步骤直达」六入口 + 数据看板。
+ * 左侧导航（按 design/console.pen「Component/Sidebar」对齐）：
+ * - 商品与上新（主入口）+ 其下「按步骤直达」六步，每步带 lucide 图标（与设计稿同序同图标）。
+ * - 其余模块按 经营 / 数据 / 系统 三组小标题分组（设计稿 v1 只画到数据看板，分组是其语言的延伸）。
  * 直达入口：带着「最近编辑的商品」跳对应步骤；还没有商品时回列表。
  */
 import { useRoute, useRouter } from 'vue-router'
-import { Store, Smartphone, Truck, RotateCcw, Boxes, ChartColumn, Wallet, Bell, ExternalLink } from 'lucide-vue-next'
+import {
+  Package, Image, FileText, Tags, Clapperboard, QrCode, Printer,
+  Smartphone, Truck, RotateCcw, Boxes, ChartColumn, Wallet, Bell, ExternalLink,
+} from 'lucide-vue-next'
 import { useProductsStore, STEP_NAMES } from '@/store/products.js'
 import { logout, currentUser } from '@/api/cloud.js'
 
@@ -12,6 +17,36 @@ const route = useRoute()
 const router = useRouter()
 const store = useProductsStore()
 store.load()
+
+// 「按步骤直达」每步图标（与 design/console.pen Component/Sidebar 同序）
+const STEP_ICONS = [Image, FileText, Tags, Clapperboard, QrCode, Printer]
+
+// 分组导航（设计稿小标题语言延伸到 v1 之后新增的 7 个模块）
+const GROUPS = [
+  {
+    caption: '经营',
+    items: [
+      { to: '/showcase', label: '小程序橱窗', icon: Smartphone },
+      { to: '/orders', label: '订单发货', icon: Truck },
+      { to: '/refunds', label: '售后退款', icon: RotateCcw },
+      { to: '/inventory', label: '库存管理', icon: Boxes },
+    ],
+  },
+  {
+    caption: '数据',
+    items: [
+      { to: '/dashboard', label: '数据看板', icon: ChartColumn },
+      { to: '/reconciliation', label: '财务对账', icon: Wallet },
+    ],
+  },
+  {
+    caption: '系统',
+    items: [
+      { to: '/notifications', label: '消息通知', icon: Bell },
+      { to: '/externals', label: '外部后台', icon: ExternalLink },
+    ],
+  },
+]
 
 function goStep(n) {
   const p = store.list[0]
@@ -38,38 +73,32 @@ function doLogout() {
     </div>
 
     <router-link class="nav" :class="{ on: route.path === '/products' }" to="/products">
-      <Store :size="16" /><span>商品与上新</span>
-    </router-link>
-    <router-link class="nav" :class="{ on: route.path === '/showcase' }" to="/showcase">
-      <Smartphone :size="16" /><span>小程序橱窗</span>
-    </router-link>
-    <router-link class="nav" :class="{ on: route.path === '/orders' }" to="/orders">
-      <Truck :size="16" /><span>订单发货</span>
-    </router-link>
-    <router-link class="nav" :class="{ on: route.path === '/refunds' }" to="/refunds">
-      <RotateCcw :size="16" /><span>售后退款</span>
-    </router-link>
-    <router-link class="nav" :class="{ on: route.path === '/inventory' }" to="/inventory">
-      <Boxes :size="16" /><span>库存管理</span>
+      <Package :size="17" /><span>商品与上新</span>
     </router-link>
 
     <div class="caption">按步骤直达</div>
-    <button v-for="(name, i) in STEP_NAMES" :key="i" class="nav step" :class="{ on: stepActive(i + 1) }" @click="goStep(i + 1)">
-      {{ i + 1 }} · {{ name }}
+    <button
+      v-for="(name, i) in STEP_NAMES"
+      :key="i"
+      class="nav"
+      :class="{ on: stepActive(i + 1) }"
+      @click="goStep(i + 1)"
+    >
+      <component :is="STEP_ICONS[i]" :size="17" /><span>{{ i + 1 }} · {{ name }}</span>
     </button>
 
-    <router-link class="nav" :class="{ on: route.path === '/dashboard' }" to="/dashboard">
-      <ChartColumn :size="16" /><span>数据看板</span>
-    </router-link>
-    <router-link class="nav" :class="{ on: route.path === '/reconciliation' }" to="/reconciliation">
-      <Wallet :size="16" /><span>财务对账</span>
-    </router-link>
-    <router-link class="nav" :class="{ on: route.path === '/notifications' }" to="/notifications">
-      <Bell :size="16" /><span>消息通知</span>
-    </router-link>
-    <router-link class="nav" :class="{ on: route.path === '/externals' }" to="/externals">
-      <ExternalLink :size="16" /><span>外部后台</span>
-    </router-link>
+    <template v-for="g in GROUPS" :key="g.caption">
+      <div class="caption">{{ g.caption }}</div>
+      <router-link
+        v-for="it in g.items"
+        :key="it.to"
+        class="nav"
+        :class="{ on: route.path === it.to }"
+        :to="it.to"
+      >
+        <component :is="it.icon" :size="17" /><span>{{ it.label }}</span>
+      </router-link>
+    </template>
 
     <div class="spacer"></div>
     <div class="admin">
@@ -124,7 +153,7 @@ function doLogout() {
 .nav {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 10px;
   padding: 10px 12px;
   border-radius: 9px;
   font-size: 13.5px;
@@ -141,15 +170,12 @@ function doLogout() {
   color: var(--purple-ink);
   font-weight: 600;
 }
-.nav:not(.disabled):hover {
+/* 选中态图标用品牌紫，标签仍是 purple-ink（与设计稿 NavActive 一致） */
+.nav.on :deep(svg) {
+  color: var(--brand);
+}
+.nav:hover {
   background: var(--bg-lilac);
-}
-.nav.disabled {
-  cursor: default;
-}
-/* 「按步骤直达」无图标，左缩进对齐到带图标项的文字（图标 16 + gap 8） */
-.nav.step {
-  padding-left: 36px;
 }
 .nav :deep(svg) {
   flex: 0 0 auto;
@@ -159,12 +185,6 @@ function doLogout() {
   font-size: 10.5px;
   letter-spacing: 0.5px;
   color: var(--purple-meta);
-}
-.soon {
-  font-size: 10px;
-  background: var(--bg-grey);
-  border-radius: var(--r-pill);
-  padding: 2px 6px;
 }
 .spacer {
   flex: 1;
