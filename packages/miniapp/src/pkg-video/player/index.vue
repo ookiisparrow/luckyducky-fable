@@ -7,7 +7,7 @@
  *
  * 求助面板：设计稿完整版（客服/辅助视频/群/FAQ/反馈），拆在 ./components/HelpSheet/。
  */
-import { ref, computed, onMounted, getCurrentInstance, watch } from 'vue'
+import { ref, computed, onMounted, getCurrentInstance, watch, nextTick } from 'vue'
 import { onLoad, onHide, onUnload } from '@dcloudio/uni-app'
 import Icon from '@/components/Icon.vue'
 import HelpSheet from './components/HelpSheet/index.vue'
@@ -117,6 +117,11 @@ const stage = computed(() => {
   if (!firstFrame.value) return 'loading' // 有视频·取址 + 缓冲首帧中
   return 'ready'
 })
+// 进度条几何（measureScrub）须在底部控件渲染后量；onLoaded 时多半还是 loading、控件未渲染 → 量不到 →
+// 首次点/拖进度条用空几何不响应（F3）。stage 进 ready（控件已显）后 nextTick 补量一次，保证首触即准。
+watch(stage, (s) => {
+  if (s === 'ready') nextTick(measureScrub)
+})
 const curFileSegId = computed(() => (fileMode.value ? segs.value[fileSeg.value]?.id || '' : ''))
 let lastFetchedSeg = '' // 已取过地址的段 id：去重，防 watch 与 onLoad 显式调对同段双取（双取=两个不同临时 URL→重载闪）
 async function refreshPlayUrl() {
@@ -199,6 +204,9 @@ function onTimeupdate(e) {
 function onPlay() {
   playing.value = true
   firstFrame.value = true // 首帧已出 → stage 进 ready、加载浮层撤（sticky：之后切段不再重盖、不闪控件）
+  // 真在播 = 没出错：清错误态，让瞬时 @error（切后台回来/网络抖动/空 src 一瞬）后能自愈，
+  // 不至于「视频在播、错误浮层却盖死不消」（F1·错误态黏住·根因#8 真机才显）。
+  videoError.value = false
 }
 // 视频出错（取址失效 / 解码失败 / 网络断）→ 进错误态显「点此重试」，不再永久黑（兜底·根因#8）
 function onError() {

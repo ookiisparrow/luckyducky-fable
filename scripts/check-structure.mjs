@@ -1258,6 +1258,10 @@ export const repoChecks = [
         bad.push(`${rel} 无 vp-loading 加载浮层——视频区加载/失败须有可见浮层（根因#8）`)
       if (!/@error\s*=/.test(src) || !/\bvideoError\b/.test(src))
         bad.push(`${rel} 无 @error/videoError 兜底——取址失败 / 视频出错须可重试，不能永久黑（根因#8）`)
+      // F1：错误态须能自愈——视频真在播(onPlay)即清 videoError，否则瞬时 @error 后错误浮层盖死正在播的视频。
+      // [^}]* 限定在 onPlay 函数体内（onPlay 无嵌套花括号），不跨到 retry/goSeg 的 videoError 清除（防误绿）。
+      if (!/function onPlay\(\)\s*\{[^}]*videoError\.value\s*=\s*false/.test(src))
+        bad.push(`${rel} onPlay 未清 videoError——瞬时 @error 后错误态会黏住盖死正在播的视频（F1·根因#8）`)
       return bad
     },
   },
