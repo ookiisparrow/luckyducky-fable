@@ -1,5 +1,5 @@
 {
-  "updatedAt": 1782387103622,
+  "updatedAt": 1782387656643,
   "functions": {
     "activateCourse": "32d953d6986e",
     "adminApi": "e31335cf2afe",
@@ -11,7 +11,7 @@
     "createOrder": "34deb6943ed5",
     "genQrcodes": "bd1dbedd2ab7",
     "getContent": "395d3669e926",
-    "getCourses": "3236b2835d0d",
+    "getCourses": "942ce5921254",
     "getHelpVideos": "0e25eca21591",
     "getMyAfterSales": "5d3c591f8610",
     "getMyCourses": "442d38917aa5",
@@ -23,7 +23,7 @@
     "getReviews": "ebf9dcc399f5",
     "initDb": "9e52dca0cdf1",
     "kfBind": "2c53cfca6dc2",
-    "kfCallback": "9ba8ffa30a33",
+    "kfCallback": "c30392d862e8",
     "login": "02ae976e9e25",
     "pay": "f371f3327b17",
     "payCallback": "2262b4acb3dc",
