@@ -225,6 +225,8 @@ const cloud = {
   // 服务端互调 mock（pay → 支付工作流 cloudbase_module 用）：记录入参、可配置返回/失败
   callFunction: async (params) => {
     G.callFunctionCalls.push(JSON.parse(JSON.stringify(params)))
+    // 注入钩子（测试并发：可在「调用进行中」改库，模拟回调抢先翻状态）。默认无。
+    if (typeof G.callFunctionImpl === 'function') await G.callFunctionImpl(params)
     if (G.callFunctionFail) throw new Error('CALL_FUNCTION_FAIL')
     return JSON.parse(JSON.stringify(G.callFunctionResult != null ? G.callFunctionResult : { result: {} }))
   },
@@ -286,6 +288,7 @@ const control = {
     G.callFunctionCalls = []
     G.callFunctionResult = null
     G.callFunctionFail = false
+    G.callFunctionImpl = null
     G.lastUpload = null
     G.openapiCalls = []
     G.openapiResult = null
@@ -315,6 +318,10 @@ const control = {
   },
   setCallFunctionResult(v) {
     G.callFunctionResult = v
+  },
+  // 注入「调用进行中」副作用（测试并发：如 callFlow 期间退款回调抢先翻 refunded）
+  setCallFunctionImpl(fn) {
+    G.callFunctionImpl = fn
   },
   setCallFunctionFail(v) {
     G.callFunctionFail = !!v

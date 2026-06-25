@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest'
 import { createHash } from 'node:crypto'
-import { control } from 'wx-server-sdk'
+import cloud, { control } from 'wx-server-sdk'
 import { main } from '../../packages/cloud/src/functions/admin/adminApi'
 
 // adminApi 钱相关动作首批测试（审核批次A）：approveRefund 原子抢占 + 失败回滚、
@@ -62,6 +62,22 @@ describe('adminApi 售后退款动作', () => {
     expect(res.status).toBe(500)
     expect(res.error).toBe('REFUND_TRIGGER_FAIL')
     expect(control.dump('afterSales')[0].status).toBe('applied') // 已回滚
+  })
+
+  it('回滚条件化：触发退款期间回调抢先置 refunded → 回滚不打回 applied（防二次退款·审计 P1）', async () => {
+    // 模拟并发：callFlow 进行中（cloudbase_module 已提交但响应丢失/超时），退款回调抢先 approved→refunded
+    control.setCallFunctionImpl(async () => {
+      await cloud
+        .database()
+        .collection('afterSales')
+        .doc('o1__p1')
+        .update({ data: { status: 'refunded', refundedAt: 999 } })
+    })
+    control.setCallFunctionResult({ result: {} }) // data 缺失 → callFlow 返回 null → 走回滚分支
+    await call('approveRefund', { id: 'o1__p1' })
+    const as = control.dump('afterSales')[0]
+    expect(as.status).toBe('refunded') // 关键：条件回滚（where status:approved）未把已 refunded 打回 applied
+    expect(as.refundedAt).toBe(999)
   })
 
   it('rejectRefund：必填原因；成功置 rejected + 原因落库', async () => {

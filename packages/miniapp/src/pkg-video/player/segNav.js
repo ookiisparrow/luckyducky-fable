@@ -18,20 +18,24 @@ export function stepSegment(lessons, lessonIdx, segIdx, dir) {
   if (!Array.isArray(lessons) || !lessons.length) return null
   const segCount = (i) =>
     lessons[i] && Array.isArray(lessons[i].segments) ? lessons[i].segments.length : 0
+  // 可播课时：有段 + 每段都有视频（= 播放器 fileMode 口径）。跨课时只落到可播课时——否则会落到
+  // 「整理中」占位态（stage==='placeholder'），那里底部上一段/下一段控件全隐藏（v-if stage==='ready'）→
+  // 用户被困、回不去原课时（审计 P1·根因#8 真机·半上线课程相邻无视频课时触发）。
+  const playable = (i) => segCount(i) > 0 && lessons[i].segments.every((s) => s.hasVideo)
 
   if (dir > 0) {
     if (segIdx < segCount(lessonIdx) - 1) return { lessonIdx, segIdx: segIdx + 1 }
-    // 本课时最后一段 → 下一个有段的课时第一段（跳过无段课时，防卡死）
+    // 本课时最后一段 → 下一个可播课时第一段（跳过无段/无视频课时，防卡死/困死）
     for (let i = lessonIdx + 1; i < lessons.length; i++) {
-      if (segCount(i) > 0) return { lessonIdx: i, segIdx: 0 }
+      if (playable(i)) return { lessonIdx: i, segIdx: 0 }
     }
     return null // 全课最后一段
   }
   if (dir < 0) {
     if (segIdx > 0) return { lessonIdx, segIdx: segIdx - 1 }
-    // 本课时第一段 → 上一个有段的课时最后一段
+    // 本课时第一段 → 上一个可播课时最后一段
     for (let i = lessonIdx - 1; i >= 0; i--) {
-      if (segCount(i) > 0) return { lessonIdx: i, segIdx: segCount(i) - 1 }
+      if (playable(i)) return { lessonIdx: i, segIdx: segCount(i) - 1 }
     }
     return null // 全课第一段
   }

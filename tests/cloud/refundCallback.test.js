@@ -80,4 +80,22 @@ describe('refundCallback 回调幂等', () => {
     expect((await main({ ...NOTIFY, out_refund_no: 'nope' })).errcode).toBe(0)
     expect((await main({})).errcode).toBe(0)
   })
+
+  it('回补库存：订单未发货(paid) → 退款成功回补该条目库存', async () => {
+    control.seed('inventory', [{ _id: 'prod-9__', productId: 'prod-9', spec: '', stock: 5 }])
+    control.seed('afterSales', [{ _id: 'o9__prod-9', orderId: 'o9', productId: 'prod-9', spec: '', qty: 2, status: 'approved', refundAmount: 10 }])
+    control.seed('orders', [{ _id: 'o9', id: 'o9', status: 'paid', amount: 10 }])
+    await main({ out_refund_no: 'o9__prod-9', out_trade_no: 'o9', refund_status: 'SUCCESS', transaction_id: 'tx9', amount: { refund: 1000, total: 1000 } })
+    expect(control.dump('inventory').find((i) => i._id === 'prod-9__').stock).toBe(7) // 5+2 回补
+  })
+
+  it('不回补库存：订单已发货(shipped) → 退款仍完成，但实物已出库不回补（防幻影库存超卖·审计 P1）', async () => {
+    control.seed('inventory', [{ _id: 'prod-8__', productId: 'prod-8', spec: '', stock: 5 }])
+    control.seed('afterSales', [{ _id: 'o8__prod-8', orderId: 'o8', productId: 'prod-8', spec: '', qty: 2, status: 'approved', refundAmount: 10 }])
+    control.seed('orders', [{ _id: 'o8', id: 'o8', status: 'shipped', amount: 10 }])
+    const res = await main({ out_refund_no: 'o8__prod-8', out_trade_no: 'o8', refund_status: 'SUCCESS', transaction_id: 'tx8', amount: { refund: 1000, total: 1000 } })
+    expect(res.errcode).toBe(0)
+    expect(control.dump('afterSales').find((a) => a._id === 'o8__prod-8').status).toBe('refunded') // 退款正常完成
+    expect(control.dump('inventory').find((i) => i._id === 'prod-8__').stock).toBe(5) // 实物已发·不回补
+  })
 })

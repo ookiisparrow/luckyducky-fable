@@ -3,11 +3,12 @@ import { stepSegment } from '@/pkg-video/player/segNav.js'
 
 // 播放器「上一段/下一段」= 小段切换、连续跨课时（用户拍板·规格 R8「下一段」升级）。
 // stepSegment 是纯函数:本课时内切段;到边界自动接相邻课时;全课首/末段返回 null（无处可去→按钮灰）。
-// 两门课样本:课时1(4 段)→课时2(2 段)→课时3(3 段)。
+// 课样本:课时1(4 段)→课时2(2 段)→课时3(3 段)。段含 hasVideo（生产 getCourses 形状·决定可播）。
+const seg = (id) => ({ id, hasVideo: true })
 const lessons = [
-  { id: 'lA', segments: [{ id: 'a1' }, { id: 'a2' }, { id: 'a3' }, { id: 'a4' }] },
-  { id: 'lB', segments: [{ id: 'b1' }, { id: 'b2' }] },
-  { id: 'lC', segments: [{ id: 'c1' }, { id: 'c2' }, { id: 'c3' }] },
+  { id: 'lA', segments: [seg('a1'), seg('a2'), seg('a3'), seg('a4')] },
+  { id: 'lB', segments: [seg('b1'), seg('b2')] },
+  { id: 'lC', segments: [seg('c1'), seg('c2'), seg('c3')] },
 ]
 
 describe('stepSegment 分段导航（连续跨课时）', () => {
@@ -47,11 +48,24 @@ describe('stepSegment 分段导航（连续跨课时）', () => {
 
   it('跳过无段课时（防中间空课时把导航卡死）', () => {
     const withEmpty = [
-      { id: 'lA', segments: [{ id: 'a1' }] },
+      { id: 'lA', segments: [seg('a1')] },
       { id: 'lEmpty', segments: [] },
-      { id: 'lC', segments: [{ id: 'c1' }] },
+      { id: 'lC', segments: [seg('c1')] },
     ]
     expect(stepSegment(withEmpty, 0, 0, 1)).toEqual({ lessonIdx: 2, segIdx: 0 })
     expect(stepSegment(withEmpty, 2, 0, -1)).toEqual({ lessonIdx: 0, segIdx: 0 })
+  })
+
+  it('跳过无视频课时（半上线·有段但未传视频 → 不落整理中占位把控件隐藏困死·审计 P1）', () => {
+    const withNoVideo = [
+      { id: 'lA', segments: [seg('a1')] },
+      { id: 'lNoVid', segments: [{ id: 'x1', hasVideo: false }, { id: 'x2', hasVideo: true }] }, // 部分有视频也算不可播
+      { id: 'lC', segments: [seg('c1')] },
+    ]
+    expect(stepSegment(withNoVideo, 0, 0, 1)).toEqual({ lessonIdx: 2, segIdx: 0 }) // 越过无视频课时
+    expect(stepSegment(withNoVideo, 2, 0, -1)).toEqual({ lessonIdx: 0, segIdx: 0 })
+    // 全为无视频课时 → 无处可去
+    const allNoVid = [{ id: 'l1', segments: [seg('a1')] }, { id: 'l2', segments: [{ id: 'x', hasVideo: false }] }]
+    expect(stepSegment(allNoVid, 0, 0, 1)).toBeNull()
   })
 })

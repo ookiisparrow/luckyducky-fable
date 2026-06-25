@@ -50,8 +50,12 @@ export const main = defineNotifyCallback<any>({
           },
         })
       if (grab.stats && grab.stats.updated === 1) {
-        // 仅抢占成功者回补该退款条目库存（绑状态转移·幂等）
-        await restoreStock([{ productId: as.productId, spec: as.spec || '', qty: as.qty }])
+        // 回补库存仅限「未发货」订单（审计 P1·防幻影库存超卖）：实物未出库(status==='paid')才把这件还回库存；
+        // 已发货/已完成(shipped/done)退款时实物已在客户手中，回补会凭空多一件→超卖。订单读不到/已发货→不回补（保守）。
+        const ord = await db.collection('orders').doc(as.orderId).get().catch(() => null)
+        if (ord && ord.data && ord.data.status === 'paid') {
+          await restoreStock([{ productId: as.productId, spec: as.spec || '', qty: as.qty }])
+        }
         // 订单留痕（失败不阻塞 ACK：售后单是退款状态的单一来源）
         await db
           .collection('orders')

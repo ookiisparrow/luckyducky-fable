@@ -85,8 +85,14 @@ export async function approveRefund({ db, data }: Ctx) {
   })
   if (!r || !(r.status || r.refund_id || r.out_refund_no)) {
     console.error('approveRefund 工作流未受理', id)
-    // 回滚抢占，允许人工重试（审核批次A-2）
-    await db.collection('afterSales').doc(id).update({ data: { status: 'applied' } }).catch(() => {})
+    // 条件回滚（审计 P1·防二次退款）：仅当仍是 approved 才退回 applied。callFlow 超时返 null 时微信可能已真退款，
+    // 退款回调会抢先 approved→refunded；无条件 .doc().update 会把 refunded 打回 applied→可二次审批重复退款。
+    // where(status:approved) 保证只回滚未被回调推进的那一笔。
+    await db
+      .collection('afterSales')
+      .where({ _id: id, status: 'approved' })
+      .update({ data: { status: 'applied' } })
+      .catch(() => {})
     return reply(500, { ok: false, error: 'REFUND_TRIGGER_FAIL' })
   }
   return reply(200, { ok: true })
