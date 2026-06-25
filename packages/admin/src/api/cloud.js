@@ -423,6 +423,13 @@ export async function shipOrder(id, company, trackingNo) {
   return true
 }
 
+// 批量发货（P1）：items=[{id,trackingNo,company?}]，company=整批共用快递公司；返回 { okCount, failCount, results }
+export async function shipOrders(items, company) {
+  const r = await post('shipOrders', { items, company })
+  if (!r.ok) throw new Error(r.error || 'SHIP_BATCH_FAIL')
+  return r
+}
+
 // 金额异常单解除（feeMismatch 复核通过后允许发货）
 export async function clearFeeMismatch(id) {
   const r = await post('clearFeeMismatch', { id })

@@ -8,12 +8,14 @@
  * - 搜索按单号走服务端精确命中（listOrders q），跨全部状态、不受当前页/标签限制。
  * - 卡片流改密集表格（单号/时间/买家·收货/商品/金额/状态/操作），一屏看更多单。
  * - 发货/改单号/查看收进右侧抽屉，列表保持紧凑。
+ * - 批量发货（P1·上量瓶颈）：待发货 tab 行多选 → 浮现批量操作栏 → 批量发货面板逐单填运单号 → shipOrders
+ *   一次发（各自上报微信合规·一单失败不拖累其余）。电子面单取号/打印需快递 API·诚实延后（手动填）。
  *
  * 发货 = 填物流公司 + 运单号 → shipOrder 流转 paid→shipped，小程序订单页即刻显示物流卡；
  * 买家「确认收货」后翻已完成。金额异常单（feeMismatch）须先核对流水解除才能发货。
  */
 import { ref, computed } from 'vue'
-import { cloudMode, listOrders, orderCounts, getOrderDetail, shipOrder, clearFeeMismatch } from '@/api/cloud.js'
+import { cloudMode, listOrders, orderCounts, getOrderDetail, shipOrder, shipOrders, clearFeeMismatch } from '@/api/cloud.js'
 
 const STATUS = {
   pending: { label: '待支付', chip: 'grey' },
@@ -105,6 +107,7 @@ function switchTab(key) {
   tab.value = key
   q.value = ''
   activeQ.value = '' // 切标签即退出搜索
+  selectedIds.value = [] // 切标签清空批量选择（防跨标签残留）
   loadList()
 }
 
@@ -112,12 +115,14 @@ function doSearch() {
   const t = q.value.trim()
   if (t === activeQ.value) return
   activeQ.value = t
+  selectedIds.value = []
   loadList()
 }
 function clearSearch() {
   if (!activeQ.value && !q.value) return
   q.value = ''
   activeQ.value = ''
+  selectedIds.value = []
   loadList()
 }
 
@@ -201,6 +206,77 @@ async function doShip() {
   }
 }
 
+// —— 批量发货（P1·上量瓶颈）：待发货 tab 多选 → 一次发 ——
+// 仅 paid 且非金额异常单可批量发（feeMismatch 须先单独核对·shipped/done 不在此列）。
+const selectedIds = ref([])
+const canBatch = computed(() => tab.value === 'paid' && !activeQ.value)
+const shippableInList = computed(() => list.value.filter((o) => o.status === 'paid' && !o.feeMismatch))
+const isShippable = (o) => o.status === 'paid' && !o.feeMismatch
+const isSel = (id) => selectedIds.value.includes(id)
+function toggleSel(o) {
+  if (!isShippable(o)) return
+  selectedIds.value = isSel(o.id) ? selectedIds.value.filter((x) => x !== o.id) : [...selectedIds.value, o.id]
+}
+const allSelected = computed(
+  () => shippableInList.value.length > 0 && shippableInList.value.every((o) => isSel(o.id))
+)
+function toggleAll() {
+  selectedIds.value = allSelected.value ? [] : shippableInList.value.map((o) => o.id)
+}
+function clearSel() {
+  selectedIds.value = []
+}
+
+// 批量发货面板：{ rows:[{id,name,trackingNo,result?}], company, saving, error, done }
+const batch = ref(null)
+function openBatch() {
+  const chosen = list.value.filter((o) => isSel(o.id))
+  if (!chosen.length) return
+  batch.value = {
+    company: COMPANIES[0],
+    rows: chosen.map((o) => ({ id: o.id, name: o.address?.name || '—', trackingNo: '', result: null })),
+    saving: false,
+    error: '',
+    done: false,
+  }
+}
+function closeBatch() {
+  if (batch.value?.saving) return
+  batch.value = null
+}
+const batchReady = computed(
+  () => !!batch.value && batch.value.company.trim() && batch.value.rows.every((r) => r.trackingNo.trim())
+)
+async function doBatchShip() {
+  const b = batch.value
+  if (!b || b.saving) return
+  if (!batchReady.value) {
+    b.error = '每单都要填运单号、并选择快递公司'
+    return
+  }
+  b.saving = true
+  b.error = ''
+  try {
+    const items = b.rows.map((r) => ({ id: r.id, trackingNo: r.trackingNo.trim() }))
+    const res = await shipOrders(items, b.company.trim())
+    const byId = Object.fromEntries((res.results || []).map((x) => [x.id, x]))
+    for (const r of b.rows) r.result = byId[r.id] || { ok: false, error: 'NO_RESULT' }
+    // 成功的从列表/选择中裁掉 + 本地翻 shipped
+    const okIds = new Set(b.rows.filter((r) => r.result.ok).map((r) => r.id))
+    for (const o of list.value) if (okIds.has(o.id)) o.status = 'shipped'
+    if (canBatch.value) list.value = list.value.filter((o) => !okIds.has(o.id)) // 待发货 tab：发完即移出
+    selectedIds.value = selectedIds.value.filter((id) => !okIds.has(id))
+    b.rows = b.rows.filter((r) => !r.result.ok) // 只留失败的待重试
+    b.done = true
+    b.saving = false
+    loadCounts()
+    if (!b.rows.length) batch.value = null // 全成功即关
+  } catch (e) {
+    b.error = '批量发货失败：' + e.message
+    b.saving = false
+  }
+}
+
 // 金额异常单复核解除：先去商户平台核对流水，确认无误再点（解除后才能发货）
 async function doClearMismatch(o) {
   if (!window.confirm(`确认已在商户平台核对订单 ${o.id} 的支付流水无误？解除后该单可正常发货。`)) return
@@ -268,11 +344,31 @@ async function doClearMismatch(o) {
 
         <div v-else class="card table">
           <div class="row hrow">
-            <span>单号</span><span>下单时间</span><span>买家 / 收货</span><span>商品</span>
+            <span class="oid">
+              <input
+                v-if="canBatch"
+                type="checkbox"
+                class="ck"
+                :checked="allSelected"
+                :disabled="!shippableInList.length"
+                @change="toggleAll"
+              />单号
+            </span>
+            <span>下单时间</span><span>买家 / 收货</span><span>商品</span>
             <span class="r">金额</span><span>状态</span><span class="r">操作</span>
           </div>
-          <div v-for="o in list" :key="o.id" class="row" :class="{ alert: o.feeMismatch }">
-            <span class="oid">{{ o.id }}</span>
+          <div v-for="o in list" :key="o.id" class="row" :class="{ alert: o.feeMismatch, sel: canBatch && isSel(o.id) }">
+            <span class="oid">
+              <input
+                v-if="canBatch"
+                type="checkbox"
+                class="ck"
+                :checked="isSel(o.id)"
+                :disabled="!isShippable(o)"
+                @click.stop
+                @change="toggleSel(o)"
+              />{{ o.id }}
+            </span>
             <span class="muted">{{ fmtTime(o.createdAt) }}</span>
             <span class="buyer">
               <b>{{ o.address?.name || '—' }}</b><em>{{ maskPhone(o.address?.phone) }}</em>
@@ -300,6 +396,49 @@ async function doClearMismatch(o) {
         </div>
       </template>
     </template>
+
+    <!-- 批量操作栏（待发货 tab 勾选后浮现·进度式披露） -->
+    <div v-if="canBatch && selectedIds.length" class="batchbar">
+      <span>已选 <b>{{ selectedIds.length }}</b> 单待发货</span>
+      <div class="batchbar-r">
+        <button class="btn ghost mini" @click="clearSel">取消</button>
+        <button class="btn primary mini" @click="openBatch">批量发货</button>
+      </div>
+    </div>
+
+    <!-- 批量发货面板 -->
+    <div v-if="batch" class="drawer-mask" @click="closeBatch">
+      <aside class="drawer" @click.stop>
+        <div class="d-head">
+          <span class="d-title">批量发货（{{ batch.rows.length }} 单）</span>
+          <button class="x" :disabled="batch.saving" @click="closeBatch">×</button>
+        </div>
+        <div class="d-body">
+          <p class="batch-note">
+            电子面单取号 / 打印需接快递平台 API（待接）；当前手动填运单号，每单发货后自动上报微信发货合规。
+          </p>
+          <label class="field-label">快递公司（整批共用）</label>
+          <select v-model="batch.company" class="input">
+            <option v-for="c in COMPANIES" :key="c" :value="c">{{ c }}</option>
+          </select>
+          <div class="batch-list">
+            <div v-for="r in batch.rows" :key="r.id" class="batch-row" :class="{ bad: r.result && !r.result.ok }">
+              <div class="batch-oid">{{ r.id }}<small>{{ r.name }}</small></div>
+              <input v-model="r.trackingNo" class="input mini" placeholder="运单号" />
+              <span v-if="r.result && !r.result.ok" class="batch-err">{{ r.result.error }}</span>
+            </div>
+          </div>
+          <p v-if="batch.error" class="err">{{ batch.error }}</p>
+          <p v-if="batch.done && batch.rows.length" class="hint warn">部分单失败，已保留可改运单号重试。</p>
+        </div>
+        <div class="d-foot">
+          <button class="btn ghost" :disabled="batch.saving" @click="closeBatch">关闭</button>
+          <button class="btn primary" :disabled="batch.saving || !batchReady" @click="doBatchShip">
+            {{ batch.saving ? '发货中…' : `确认发货 ${batch.rows.length} 单` }}
+          </button>
+        </div>
+      </aside>
+    </div>
 
     <!-- 发货 / 查看抽屉 -->
     <div v-if="drawer" class="drawer-mask" @click="closeDrawer">
@@ -488,10 +627,27 @@ h1 {
   justify-self: end;
 }
 .oid {
+  display: flex;
+  align-items: center;
+  gap: 6px;
   font-family: ui-monospace, Menlo, monospace;
   font-weight: 600;
   font-size: 12px;
   color: var(--ink);
+}
+.ck {
+  flex: 0 0 auto;
+  width: 15px;
+  height: 15px;
+  cursor: pointer;
+  accent-color: var(--brand);
+}
+.ck:disabled {
+  cursor: not-allowed;
+  opacity: 0.4;
+}
+.row.sel {
+  background: var(--bg-lilac);
 }
 .muted {
   color: var(--content-2);
@@ -764,5 +920,80 @@ h1 {
   justify-content: flex-end;
   padding: 16px 22px;
   border-top: 1px solid var(--line);
+}
+
+/* 批量发货 */
+.batchbar {
+  position: fixed;
+  left: 50%;
+  bottom: 24px;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  background: var(--purple-ink);
+  color: var(--white);
+  padding: 12px 18px;
+  border-radius: 12px;
+  box-shadow: 0 12px 34px #241f3333;
+  z-index: 40;
+  font-size: 13px;
+}
+.batchbar b {
+  font-size: 15px;
+}
+.batchbar-r {
+  display: flex;
+  gap: 8px;
+}
+.batch-note {
+  margin: 0 0 14px;
+  font-size: 11.5px;
+  line-height: 1.6;
+  color: var(--content-2);
+  background: var(--bg-lilac);
+  border: 1px solid var(--purple-line);
+  border-radius: 9px;
+  padding: 9px 12px;
+}
+.batch-list {
+  margin-top: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.batch-row {
+  display: grid;
+  grid-template-columns: 1fr 150px;
+  align-items: center;
+  gap: 10px;
+}
+.batch-row.bad {
+  outline: 1px solid #f0c8c5;
+  border-radius: 8px;
+  padding: 4px;
+}
+.batch-oid {
+  display: flex;
+  flex-direction: column;
+  font-family: ui-monospace, Menlo, monospace;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ink);
+}
+.batch-oid small {
+  font-family: inherit;
+  font-weight: 400;
+  font-size: 11px;
+  color: var(--content-2);
+}
+.input.mini {
+  padding: 7px 10px;
+  font-size: 12.5px;
+}
+.batch-err {
+  grid-column: 1 / -1;
+  font-size: 11px;
+  color: var(--red);
 }
 </style>

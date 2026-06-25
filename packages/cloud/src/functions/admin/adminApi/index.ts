@@ -53,6 +53,7 @@ const ACTIONS: Record<string, (ctx: Ctx) => Promise<any>> = {
   orderCounts: orders.orderCounts,
   getOrderDetail: orders.getOrderDetail,
   shipOrder: orders.shipOrder,
+  shipOrders: orders.shipOrders,
   clearFeeMismatch: orders.clearFeeMismatch,
   // 售后退款
   listRefunds: refunds.listRefunds,

@@ -55,18 +55,21 @@ export async function orderCounts({ db }: Ctx) {
   return reply(200, { ok: true, counts })
 }
 
-export async function shipOrder({ db, data }: Ctx) {
-  const id = String(data.id || '')
-  const company = String(data.company || '').trim().slice(0, 30)
-  const trackingNo = String(data.trackingNo || '').trim().slice(0, 40)
-  if (!id || !company || !trackingNo) return reply(400, { ok: false, error: 'BAD_ARGS' })
+// 单单发货核心（shipOrder 与 shipOrders 批量共用·DRY 单源）：状态闸 paid/shipped + feeMismatch 挡单
+// + 条件转移防并发回滚 done + 微信 upload_shipping_info 合规上报（fail-soft·债#26·根因#12）。
+// 返回纯结果对象（不含 HTTP 包装），调用方各自 reply / 汇总。
+async function shipOne(db: any, idRaw: any, companyRaw: any, trackingRaw: any) {
+  const id = String(idRaw || '')
+  const company = String(companyRaw || '').trim().slice(0, 30)
+  const trackingNo = String(trackingRaw || '').trim().slice(0, 40)
+  if (!id || !company || !trackingNo) return { ok: false, error: 'BAD_ARGS' }
   const got = await db.collection('orders').doc(id).get().catch(() => null)
-  if (!got || !got.data) return reply(400, { ok: false, error: 'NO_ORDER' })
+  if (!got || !got.data) return { ok: false, error: 'NO_ORDER' }
   const cur = got.data.status
   // paid = 首次发货；shipped = 改单号。其余状态不允许动。
-  if (cur !== 'paid' && cur !== 'shipped') return reply(400, { ok: false, error: 'BAD_STATUS:' + cur })
+  if (cur !== 'paid' && cur !== 'shipped') return { ok: false, error: 'BAD_STATUS:' + cur }
   // 金额异常单（feeMismatch 留痕）须先「解除」后才能发货（审核批次A 折中）
-  if (got.data.feeMismatch) return reply(400, { ok: false, error: 'FEE_MISMATCH_HOLD' })
+  if (got.data.feeMismatch) return { ok: false, error: 'FEE_MISMATCH_HOLD' }
   // 条件更新（审核批次A-6）：仍是 paid/shipped 才写——防与确认收货并发把 done 回滚
   const upd = await db
     .collection('orders')
@@ -76,7 +79,7 @@ export async function shipOrder({ db, data }: Ctx) {
     })
   if (!upd.stats || upd.stats.updated !== 1) {
     const fresh = await db.collection('orders').doc(id).get().catch(() => null)
-    return reply(400, { ok: false, error: 'BAD_STATUS:' + ((fresh && fresh.data && fresh.data.status) || 'unknown') })
+    return { ok: false, error: 'BAD_STATUS:' + ((fresh && fresh.data && fresh.data.status) || 'unknown') }
   }
   // 合规债#26（根因#12）：本地发货成功后向微信上传发货信息——实物+微信支付不上传则订单资金冻结/无法结算。
   // fail-soft：上传失败绝不回滚本地发货（已 shipped），只留痕 + [LD_ALERT] sev=money 告警，靠人去 mp 后台手动录入兜底。
@@ -97,7 +100,29 @@ export async function shipOrder({ db, data }: Ctx) {
     })
     .catch(() => null)
   if (!ship.ok) await notifyAlert('money', 'shipOrder', 'WX_SHIP_UPLOAD_FAIL', { orderId: id, error: ship.error })
-  return reply(200, { ok: true, wxShip: ship.ok })
+  return { ok: true, wxShip: ship.ok }
+}
+
+export async function shipOrder({ db, data }: Ctx) {
+  const r = await shipOne(db, data.id, data.company, data.trackingNo)
+  return reply(r.ok ? 200 : 400, r)
+}
+
+// 批量发货（P1·上量瓶颈）：多选订单一次发，逐单走 shipOne（串行·各自独立·一单失败不拖累其余），
+// per-order 回报。company 可整批共用或逐单覆盖。电子面单取号/打印需快递 API 账号·诚实延后（不在此造·根因#8）。
+export async function shipOrders({ db, data }: Ctx) {
+  const items = Array.isArray(data && data.items) ? data.items : []
+  if (!items.length) return reply(400, { ok: false, error: 'BAD_ARGS' })
+  if (items.length > 100) return reply(400, { ok: false, error: 'TOO_MANY' }) // 单批上限·防滥用/超时
+  const batchCompany = String((data && data.company) || '')
+  const results: any[] = []
+  for (const it of items) {
+    const id = String((it && it.id) || '')
+    const r = await shipOne(db, id, (it && it.company) || batchCompany, it && it.trackingNo)
+    results.push({ id, ...r })
+  }
+  const okCount = results.filter((r) => r.ok).length
+  return reply(200, { ok: true, okCount, failCount: results.length - okCount, results })
 }
 
 // 金额异常单人工复核解除（feeMismatch 单禁发货，核实流水后在此解除）
