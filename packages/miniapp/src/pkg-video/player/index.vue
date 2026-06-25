@@ -51,15 +51,16 @@ function locateLesson(o) {
 }
 onLoad(async (o) => {
   locateLesson(o) // 首个 await 前同步定位 → 首帧即正确那节，不先渲默认再跳（闪烁·根因#8）
-  await store.load()
+  // 拉课程 + 鉴权并行（互不依赖）→ 冷启动少串一趟云往返、缩短首屏加载窗口（根因#8）
+  await Promise.all([store.load(), act.loadMine()])
   // 播放鉴权（规格 §四-4）：未确认激活 → 回目录（目录显示锁态引导）
-  await act.loadMine()
   if (!act.unlocked(store.current.id)) {
     uni.showToast({ title: '课程需扫码激活后观看', icon: 'none' })
     uni.redirectTo({ url: '/pages/catalog/index' })
     return
   }
   locateLesson(o) // 冷启直达播放页：store 刚加载完再定位一次
+  dataReady.value = true // 数据+鉴权就绪 → stage 由 loading 进入 placeholder/可播判定
   // 进入即续播：显式取首段地址（watch 仅在段 id 变化时取址，续播到默认那节时段 id 不变→不取→黑屏·根因#8）
   // + 标记自动起播（pendingPlay → onLoaded 就绪即播）。
   pendingPlay = true
@@ -101,17 +102,41 @@ const fileMode = computed(() => segs.value.length > 0 && segs.value.every((s) =>
 const playUrl = ref('')
 // 视频源：有真实分段视频走云端临时 URL；否则空（占位态显封面·不播外链·T-F7）
 const videoSrc = computed(() => (fileMode.value ? playUrl.value : ''))
-// 占位态：无真实视频时显本地封面、隐藏播放控件（不播任何外链·T-F7 合规）
-const placeholderMode = computed(() => !fileMode.value)
+
+// 首次进课不黑屏（根因#8 真机才显·dev 快网掩盖）：原视频区在「拉课程→鉴权→取址→缓冲首帧」整段只是黑底
+// （#000），既无加载提示、又因 placeholderMode=!fileMode 在加载途中误闪「整理中」、还会在「标了 hasVideo
+// 却取不到地址」时永久黑。改＝三态机分清 加载中 / 确无视频(整理中) / 失败 / 可播，视频区按 stage 盖浮层。
+// dataReady：onLoad 鉴权+定位完成；firstFrame：视频首帧已出（onPlay 起·sticky 不回退·切段不重闪控件）；
+// videoError：取址为空 / video @error → 显「加载失败·点此重试」，不再永久黑。
+const dataReady = ref(false)
+const firstFrame = ref(false)
+const videoError = ref(false)
+const stage = computed(() => {
+  if (videoError.value) return 'error'
+  if (!dataReady.value) return 'loading' // 数据未就绪（拉课程 / 鉴权）
+  if (!fileMode.value) return 'placeholder' // 就绪但确无真实视频 → 整理中
+  if (!firstFrame.value) return 'loading' // 有视频·取址 + 缓冲首帧中
+  return 'ready'
+})
 const curFileSegId = computed(() => (fileMode.value ? segs.value[fileSeg.value]?.id || '' : ''))
 let lastFetchedSeg = '' // 已取过地址的段 id：去重，防 watch 与 onLoad 显式调对同段双取（双取=两个不同临时 URL→重载闪）
 async function refreshPlayUrl() {
   const seg = curFileSegId.value
   if (seg && seg === lastFetchedSeg) return // 同段已取，不重取
   lastFetchedSeg = seg
-  playUrl.value = seg ? await store.playbackUrl(seg) : ''
+  const url = seg ? await store.playbackUrl(seg) : ''
+  playUrl.value = url
+  // 该段标了 hasVideo（fileMode）却取不到地址（服务端无 videoFileId / 未授权 / 网络失败）→ 别永久黑，进错误态
+  if (seg && !url) videoError.value = true
 }
 watch(curFileSegId, refreshPlayUrl) // 段切换 / 换集 → 段 id 变 → 取址（首段=默认段时不变，由 onLoad 显式取）
+// 取址失败 / 视频出错后重试：清错误态 + 去重标记，重新取址 + 自动起播
+function retry() {
+  videoError.value = false
+  lastFetchedSeg = ''
+  pendingPlay = true
+  refreshPlayUrl()
+}
 const segLen = computed(() => (duration.value > 0 ? duration.value / segCount.value : 0))
 const curSeg = computed(() => {
   if (segLen.value <= 0) return 0
@@ -174,6 +199,11 @@ function onTimeupdate(e) {
 }
 function onPlay() {
   playing.value = true
+  firstFrame.value = true // 首帧已出 → stage 进 ready、加载浮层撤（sticky：之后切段不再重盖、不闪控件）
+}
+// 视频出错（取址失效 / 解码失败 / 网络断）→ 进错误态显「点此重试」，不再永久黑（兜底·根因#8）
+function onError() {
+  videoError.value = true
 }
 function onPause() {
   playing.value = false
@@ -305,6 +335,7 @@ function goSeg(dir) {
   idx.value = t.lessonIdx
   fileSeg.value = t.segIdx
   endedSeg.value = null
+  videoError.value = false // 清上一段可能的错误态（firstFrame 已 sticky·切段不重盖加载浮层）
   playingSeg = 0
   seeking = true
   current.value = 0
@@ -343,15 +374,28 @@ const back = () => goBack('/pages/catalog/index')
       @play="onPlay"
       @pause="onPause"
       @ended="onEnded"
+      @error="onError"
     ></video>
 
-    <!-- 点画面：播放/暂停（在控件下方一层）；占位态无视频不响应点播 -->
-    <view v-if="!placeholderMode" class="vp-hit" @tap="toggle"></view>
+    <!-- 点画面：播放/暂停（在控件下方一层）；仅可播态响应点播 -->
+    <view v-if="stage === 'ready'" class="vp-hit" @tap="toggle"></view>
     <view class="vp-shade"></view>
 
-    <!-- 占位封面（无真实视频·素材未剪好）：本地占位、绝不播外链（T-F7·合规）。
+    <!-- 加载态（首次进课 / 取址 + 缓冲首帧中）：盖住黑底显三点 + 文案，不再让用户对黑屏干等（根因#8）。
          顶栏 z-index 高于此层，返回键仍可点。 -->
-    <view v-if="placeholderMode" class="vp-placeholder">
+    <view v-if="stage === 'loading'" class="vp-loading">
+      <view class="vp-load-dots"><view></view><view></view><view></view></view>
+      <text class="vp-load-text">正在加载课程视频…</text>
+    </view>
+
+    <!-- 错误态（取址为空 / 视频出错）：兜底点此重试，绝不永久黑（根因#8） -->
+    <view v-if="stage === 'error'" class="vp-loading" @tap="retry">
+      <text class="vp-ph-title">视频加载失败</text>
+      <text class="vp-load-text">点此重试</text>
+    </view>
+
+    <!-- 占位封面（无真实视频·素材未剪好）：本地占位、绝不播外链（T-F7·合规）。 -->
+    <view v-if="stage === 'placeholder'" class="vp-placeholder">
       <text class="vp-ph-title">课程视频整理中</text>
       <text class="vp-ph-sub">视频上线后即可在此观看，敬请期待</text>
     </view>
@@ -367,7 +411,7 @@ const back = () => goBack('/pages/catalog/index')
         <!-- 「更多」按钮已按决策撤除（上线前占位清单 ⑫）；留等宽空位维持标题居中 -->
         <view class="vp-icbtn"></view>
       </view>
-      <view v-if="!placeholderMode" class="vp-seg">
+      <view v-if="stage === 'ready'" class="vp-seg">
         <view class="vp-seg-bars">
           <view v-for="(s, i) in segs" :key="s.id" class="vp-seg-bar">
             <view class="vp-seg-fill" :style="{ width: segFill(i) + '%' }"></view>
@@ -379,13 +423,17 @@ const back = () => goBack('/pages/catalog/index')
       </view>
     </view>
 
-    <!-- 中央大播放键（暂停且非段末时；占位态无视频不显） -->
-    <view v-if="!playing && endedSeg === null && !placeholderMode" class="vp-bigplay" @tap="toggle">
+    <!-- 中央大播放键（暂停且非段末时；仅可播态显） -->
+    <view
+      v-if="!playing && endedSeg === null && stage === 'ready'"
+      class="vp-bigplay"
+      @tap="toggle"
+    >
       <Icon name="play-fill-w" :size="34" />
     </view>
 
-    <!-- 底部控制（占位态无视频不显） -->
-    <view v-if="!placeholderMode" class="vp-ctl">
+    <!-- 底部控制（仅可播态显） -->
+    <view v-if="stage === 'ready'" class="vp-ctl">
       <view v-if="endedSeg !== null" class="vp-replay-bar" @tap="replaySeg">
         <Icon name="rotate-ccw-dark" :size="21" /><text>重复播放</text>
       </view>
@@ -468,6 +516,53 @@ const back = () => goBack('/pages/catalog/index')
   font-size: 13px;
   line-height: 1.6;
   color: rgba(255, 255, 255, 0.6);
+}
+/* 加载/错误浮层（首次进课不黑屏·根因#8）：盖黑底·居中三点+文案；z-index 低于顶栏(5) 故返回键可点 */
+.vp-loading {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 0 40px;
+  text-align: center;
+  background: linear-gradient(160deg, rgba(123, 92, 175, 0.28) 0%, rgba(0, 0, 0, 0.72) 100%);
+}
+.vp-load-text {
+  margin-top: 14px;
+  font-size: 13.5px;
+  color: rgba(255, 255, 255, 0.78);
+}
+/* 三点波浪（与开屏同语汇·纯 CSS 无依赖） */
+.vp-load-dots {
+  display: flex;
+  gap: 7px;
+}
+.vp-load-dots view {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.95);
+  animation: vp-load-wave 1s ease-in-out infinite;
+}
+.vp-load-dots view:nth-child(2) {
+  animation-delay: 0.16s;
+}
+.vp-load-dots view:nth-child(3) {
+  animation-delay: 0.32s;
+}
+@keyframes vp-load-wave {
+  0%,
+  100% {
+    transform: translateY(0);
+    opacity: 0.5;
+  }
+  50% {
+    transform: translateY(-7px);
+    opacity: 1;
+  }
 }
 /* 顶+底渐变,保证控件清晰 */
 .vp-shade {

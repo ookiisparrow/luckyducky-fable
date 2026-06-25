@@ -30,7 +30,17 @@ onShow(async () => {
   await Promise.all([store.load(), act.loadMine(), progress.load(true)])
   // 从 TabBar 直接进（无 courseId）且尚未聚焦 → 默认聚焦用户已解锁的课，而非恒 list[0]（根因#8）
   if (!store.currentId && act.mine.length) store.setCurrent(act.mine[act.mine.length - 1].courseId)
+  prefetchFirstSegment() // 还在列表页时就预热第一段地址 → 点进去免取址往返、缩短首屏黑屏（根因#8）
 })
+// 在列表页提前换好「续看课时」首段的播放地址，塞进跨页共享缓存（解析器单例）→ 进播放页 refreshPlayUrl
+// 直接命中、省掉那趟 getPlaybackUrl 云往返（课程/鉴权进播放页时已是热的，取址是唯一剩下的延迟）。
+// 只预热已解锁课（未授权 getPlaybackUrl 必返空·白跑）；目标段与 startFirst 同口径（第一个未学完课时·首段）。
+function prefetchFirstSegment() {
+  if (!act.unlocked(course.value.id)) return
+  const l = lessons.value.find((x) => !prog(x).done) || lessons.value[0]
+  const seg = l && (l.segments || [])[0]
+  if (seg && seg.hasVideo) store.prefetchPlaybackUrl(seg.id)
+}
 // 下拉刷新：强刷课程/激活/进度后收转圈（finally 保证失败也不卡转圈·根因#8）
 onPullDownRefresh(async () => {
   try {

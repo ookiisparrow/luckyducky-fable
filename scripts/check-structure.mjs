@@ -1184,7 +1184,9 @@ export const repoChecks = [
       const abs = join(ROOT, rel)
       if (!existsSync(abs)) return [`${rel} 缺失`]
       const src = readFileSync(abs, 'utf8')
-      if (!/locateLesson\s*\(o\)[^\n]*\n\s*await\s+store\.load/.test(src))
+      // locateLesson(o) 须在 onLoad 首个 await 前（同步定位·防先渲默认再跳闪烁）；await 可为 store.load
+      // 单独或 Promise.all([store.load()…])（拉课程+鉴权并行提速·缩短首屏），故两种形态都认。
+      if (!/locateLesson\s*\(o\)[\s\S]*?await\s+(?:store\.load|Promise\.all\(\[\s*store\.load)/.test(src))
         bad.push(`${rel} onLoad 未在首个 await 前同步 locateLesson 定位课时——进入会先渲默认课时再跳（闪烁·根因#8）`)
       if (!/pendingPlay\s*=\s*true[^\n]*\n\s*refreshPlayUrl\s*\(\)/.test(src))
         bad.push(`${rel} onLoad 未在定位后显式 refreshPlayUrl + pendingPlay——续播到默认那节会黑屏不播（段 id 不变·watch 不取址·根因#8）`)
@@ -1224,6 +1226,37 @@ export const repoChecks = [
       if (!existsSync(playerAbs)) bad.push(`${playerRel} 缺失`)
       else if (!/\bprefetchPlaybackUrl\b/.test(readFileSync(playerAbs, 'utf8')))
         bad.push(`${playerRel} 未预取下一段——当前段就绪时须 prefetch 下一段地址（防切段卡一下·根因#8）`)
+      // 列表页提前预热：还在课时列表时就把第一段地址换好进缓存 → 点进播放页免取址往返（首屏提速）
+      const catRel = 'packages/miniapp/src/pages/catalog/index.vue'
+      const catAbs = join(ROOT, catRel)
+      if (!existsSync(catAbs)) bad.push(`${catRel} 缺失`)
+      else if (!/\bprefetchPlaybackUrl\b/.test(readFileSync(catAbs, 'utf8')))
+        bad.push(`${catRel} 列表页未预热第一段地址——进课时列表即应 prefetchPlaybackUrl 暖缓存（防回退成进播放页才取址·根因#8）`)
+      return bad
+    },
+  },
+  {
+    // 首次进课不黑屏（根因#8 真机才显·dev 快网掩盖）。痛：视频区在「拉课程→鉴权→取址→缓冲首帧」整段只是
+    // #000 黑底——无加载提示、placeholderMode=!fileMode 在加载途中误闪「整理中」、「标了 hasVideo 却取不到
+    // 地址」时永久黑。修＝三态机（dataReady/firstFrame/videoError → stage）按 loading/placeholder/error/ready
+    // 盖加载浮层 + 错误重试 + @error 兜底。本守卫防回退成「视频区裸黑、无加载态、失败永久黑」。
+    id: 'player-loading-until-firstframe',
+    roots: ['#8'],
+    desc: '首次进课不黑屏（根因#8）：pkg-video/player/index.vue 用 stage 三态机（dataReady/firstFrame/videoError）+ vp-loading 加载浮层盖到首帧出 + video @error 兜底重试——防回退成视频区裸黑等待、加载途中误闪「整理中」、取址失败永久黑',
+    run() {
+      const bad = []
+      const rel = 'packages/miniapp/src/pkg-video/player/index.vue'
+      const abs = join(ROOT, rel)
+      if (!existsSync(abs)) return [`${rel} 缺失`]
+      const src = readFileSync(abs, 'utf8')
+      if (!/\bfirstFrame\b/.test(src))
+        bad.push(`${rel} 无 firstFrame——加载浮层须盖到视频首帧真正出来（防回退成裸黑等首帧·根因#8）`)
+      if (!/\bstage\b/.test(src) || !/'loading'/.test(src))
+        bad.push(`${rel} 无 stage='loading' 态——首屏须显加载态而非黑底（根因#8）`)
+      if (!/vp-loading/.test(src))
+        bad.push(`${rel} 无 vp-loading 加载浮层——视频区加载/失败须有可见浮层（根因#8）`)
+      if (!/@error\s*=/.test(src) || !/\bvideoError\b/.test(src))
+        bad.push(`${rel} 无 @error/videoError 兜底——取址失败 / 视频出错须可重试，不能永久黑（根因#8）`)
       return bad
     },
   },
