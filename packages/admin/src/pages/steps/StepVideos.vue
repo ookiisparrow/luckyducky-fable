@@ -10,6 +10,7 @@ import { useProductsStore } from '@/store/products.js'
 import { useAutosave } from '@/composables/useAutosave.js'
 import { cloudMode, getCourseDraft, saveCourseDraft, publishCourse, uploadVideo } from '@/api/cloud.js'
 import { confirmDialog, toast } from '@/utils/ui.js'
+import { planLessonBatch } from '@/utils/videoBatch.js'
 
 const props = defineProps({ product: { type: Object, required: true } })
 const store = useProductsStore()
@@ -20,6 +21,7 @@ const loadErr = ref('')
 const publishing = ref(false)
 const publishedAt = ref(0)
 const uploads = ref({}) // segId -> 0~1 进度
+const lessonBusy = ref({}) // lessonId -> { done, total } 课时级批量上传进度
 
 const rid = () => Math.random().toString(36).slice(2, 8)
 
@@ -125,10 +127,9 @@ function drop(list, index, e) {
 
 // ---------- 视频上传 ----------
 
-async function pickVideo(e, l, sg) {
-  const file = e.target.files?.[0]
-  e.target.value = ''
-  if (!file) return
+// 单段上传核心（单传 + 批量共用）：置进度 → 读时长 → 上传 → 写 videoFileId → 清进度。
+// 失败向上抛，由调用方决定提示/是否继续（批量里 fail-soft·不中断整批）。
+async function uploadOne(sg, file) {
   try {
     uploads.value = { ...uploads.value, [sg.id]: 0 }
     // 读时长自动填 dur（mm:ss）
@@ -139,12 +140,51 @@ async function pickVideo(e, l, sg) {
       uploads.value = { ...uploads.value, [sg.id]: p }
     })
     sg.videoFileId = fileId
-  } catch (err) {
-    toast('视频上传失败：' + err.message, 'err')
   } finally {
     const u = { ...uploads.value }
     delete u[sg.id]
     uploads.value = u
+  }
+}
+
+async function pickVideo(e, l, sg) {
+  const file = e.target.files?.[0]
+  e.target.value = ''
+  if (!file) return
+  try {
+    await uploadOne(sg, file)
+  } catch (err) {
+    toast('视频上传失败：' + err.message, 'err')
+  }
+}
+
+// 课时级批量上传：一次选多个文件，按文件名顺序依次灌进小段（不够自动新建），串行逐个传。
+// fail-soft：单个失败提示并继续其余（含 >15MB 被 uploadVideo 拒）；课时级忙碌锁防重入。
+async function pickVideosBatch(e, l) {
+  const files = [...(e.target.files || [])]
+  e.target.value = ''
+  if (!files.length || lessonBusy.value[l.id]) return
+  const plan = planLessonBatch(files, l.segments.length)
+  lessonBusy.value = { ...lessonBusy.value, [l.id]: { done: 0, total: plan.length } }
+  try {
+    for (const item of plan) {
+      let sg = l.segments[item.segIndex]
+      if (!sg) {
+        sg = { id: 's' + rid(), name: item.segName, dur: '', videoFileId: '', free: false }
+        l.segments.push(sg)
+      }
+      try {
+        await uploadOne(sg, item.file)
+      } catch (err) {
+        toast(`${item.file.name} 上传失败：${err.message}`, 'err')
+      }
+      const b = lessonBusy.value[l.id]
+      if (b) lessonBusy.value = { ...lessonBusy.value, [l.id]: { done: b.done + 1, total: b.total } }
+    }
+  } finally {
+    const b = { ...lessonBusy.value }
+    delete b[l.id]
+    lessonBusy.value = b
   }
 }
 function readDuration(file) {
@@ -245,6 +285,11 @@ async function doPublish() {
             <span class="ls-num">{{ ci + 1 }}-{{ li + 1 }}</span>
             <input v-model="l.name" class="name" placeholder="课时名称" />
             <span class="meta">{{ l.segments.length }} 段</span>
+            <span v-if="lessonBusy[l.id]" class="upstate">上传中 {{ lessonBusy[l.id].done }}/{{ lessonBusy[l.id].total }}…</span>
+            <label v-else class="upbtn" title="一次选多个视频，按文件名顺序填进本课时的小段（不够自动新建）">
+              <input type="file" accept="video/mp4,video/quicktime" multiple hidden @change="pickVideosBatch($event, l)" />
+              ⬆ 批量传
+            </label>
             <button class="mini del" @click="removeAt(ch.lessons, li, '本课时')">删除</button>
           </div>
 
@@ -295,6 +340,7 @@ async function doPublish() {
 
       <p class="hint">
         💡 改名直接在输入框里改；拖住 ⠿ 在同层内调顺序；视频文件名随意，传到哪段就挂哪段。
+        课时右侧「⬆ 批量传」可一次选多个视频，按文件名顺序依次灌进小段（段不够自动新建·每个 ≤10MB）。
         草稿随改随存，点「发布更新」学员才能看到。
       </p>
     </template>
