@@ -49,6 +49,9 @@ function locateLesson(o) {
   }
 }
 onLoad(async (o) => {
+  // 自带 courseId 定身份（审计 #3）：播放页不寄生全局 store.currentId——入口（catalog/me）带 courseId 进来即
+  // 先聚焦本课，鉴权 / 定位 / 续段 / 返回全用对的那门课（多课 + 跨入口下防串课）。无 courseId 才回退 currentId。
+  if (o && o.courseId) store.setCurrent(decodeURIComponent(o.courseId))
   locateLesson(o) // 首个 await 前同步定位 → 首帧即正确那节，不先渲默认再跳（闪烁·根因#8）
   // 拉课程 + 鉴权并行（互不依赖）→ 冷启动少串一趟云往返、缩短首屏加载窗口（根因#8）
   await Promise.all([store.load(), act.loadMine()])
@@ -134,10 +137,12 @@ async function refreshPlayUrl() {
   if (seg && !url) videoError.value = true
 }
 watch(curFileSegId, refreshPlayUrl) // 段切换 / 换集 → 段 id 变 → 取址（首段=默认段时不变，由 onLoad 显式取）
-// 取址失败 / 视频出错后重试：清错误态 + 去重标记，重新取址 + 自动起播
+// 取址失败 / 视频出错后重试：清错误态 + 去重标记 + 失效本段缓存（审计 #2：否则命中那条已失效的旧
+// URL、重试形同空操作），重新取一个新地址 + 自动起播
 function retry() {
   videoError.value = false
   lastFetchedSeg = ''
+  store.invalidatePlaybackUrl(curFileSegId.value)
   pendingPlay = true
   refreshPlayUrl()
 }

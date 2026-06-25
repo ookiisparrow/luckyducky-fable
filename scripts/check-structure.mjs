@@ -1237,6 +1237,47 @@ export const repoChecks = [
     },
   },
   {
+    // 课程身份显式流转、不寄生全局可变态（审计 #1+#3·根因#8 单课样本掩盖）。痛：① 取址缓存键原只用 segId，
+    // 而种子段 id 课内局部命名（`${lessonId}-s${i}`·不带 courseId）跨课不唯一 → 上第二门课撞同段 id → 命中别课
+    // 临时 URL 真机播错课；② 播放页身份原寄生全局 store.currentId（入口只传 lessonId）→ 任何改 currentId 处都让
+    // 鉴权/定位/续段/返回串到别课。修＝缓存键 `courseId::segId`、courseId 作参数流入（非模块裸变量）；入口带
+    // courseId 进播放页、onLoad 据此 setCurrent。本守卫防回退成「键只 segId / 播放页只认 currentId」。
+    id: 'playback-course-identity-explicit',
+    roots: ['#8'],
+    desc: '课程身份显式流转防串课（审计 #1+#3·根因#8）：utils/playbackCache.js 缓存键含 courseId（`courseId::segId`）+ store 取址传 this.current.id + player onLoad 据 o.courseId setCurrent + catalog/me 入口 player URL 带 courseId——防回退成「缓存键只 segId（上第二门课撞段 id 串课）/ 播放页只认全局 currentId」',
+    run() {
+      const bad = []
+      const cacheRel = 'packages/miniapp/src/utils/playbackCache.js'
+      const storeRel = 'packages/miniapp/src/store/courses.js'
+      const playerRel = 'packages/miniapp/src/pkg-video/player/index.vue'
+      const catRel = 'packages/miniapp/src/pages/catalog/index.vue'
+      const meRel = 'packages/miniapp/src/pages/me/index.vue'
+      const rd = (rel) => {
+        const abs = join(ROOT, rel)
+        if (!existsSync(abs)) {
+          bad.push(`${rel} 缺失`)
+          return ''
+        }
+        return readFileSync(abs, 'utf8')
+      }
+      const cache = rd(cacheRel)
+      // 锚定 keyOf 定义本身（非全文搜串·防注释里写了同样字样致假绿——反向自检逮到过）
+      if (cache && !/keyOf\s*=\s*\(courseId,\s*segId\)\s*=>\s*`\$\{courseId\}::\$\{segId\}`/.test(cache))
+        bad.push(`${cacheRel} keyOf 缓存键未含 courseId（须 \`courseId::segId\`）——只用 segId 会让上第二门课撞同段 id 串课（根因#8）`)
+      const store = rd(storeRel)
+      if (store && !/_resolver\.load\(this\.current\.id/.test(store))
+        bad.push(`${storeRel} 取址未把 this.current.id 作 courseId 传入解析器——courseId 须作参数流入、非模块裸变量（防竞态串课·审计 #3）`)
+      const player = rd(playerRel)
+      if (player && !/store\.setCurrent\(decodeURIComponent\(o\.courseId\)\)/.test(player))
+        bad.push(`${playerRel} onLoad 未据 o.courseId setCurrent——播放页身份须自带 courseId、不寄生全局 currentId（防串课·审计 #3）`)
+      if (rd(catRel) && !/player\/index\?id=[^'"]*courseId=/.test(rd(catRel)))
+        bad.push(`${catRel} 进播放页未带 courseId（防串课·审计 #3）`)
+      if (rd(meRel) && !/player\/index\?id=[^'"]*courseId=/.test(rd(meRel)))
+        bad.push(`${meRel} 续学进播放页未带 courseId（防串课·审计 #3）`)
+      return bad
+    },
+  },
+  {
     // 首次进课不黑屏（根因#8 真机才显·dev 快网掩盖）。痛：视频区在「拉课程→鉴权→取址→缓冲首帧」整段只是
     // #000 黑底——无加载提示、placeholderMode=!fileMode 在加载途中误闪「整理中」、「标了 hasVideo 却取不到
     // 地址」时永久黑。修＝三态机（dataReady/firstFrame/videoError → stage）按 loading/placeholder/error/ready
@@ -1262,6 +1303,9 @@ export const repoChecks = [
       // [^}]* 限定在 onPlay 函数体内（onPlay 无嵌套花括号），不跨到 retry/goSeg 的 videoError 清除（防误绿）。
       if (!/function onPlay\(\)\s*\{[^}]*videoError\.value\s*=\s*false/.test(src))
         bad.push(`${rel} onPlay 未清 videoError——瞬时 @error 后错误态会黏住盖死正在播的视频（F1·根因#8）`)
+      // 审计 #2：retry 须失效本段缓存再重取，否则命中那条已失效的旧 URL → 重试形同空操作
+      if (!/function retry\(\)\s*\{[^}]*invalidatePlaybackUrl/.test(src))
+        bad.push(`${rel} retry 未 invalidatePlaybackUrl——重试会命中已失效的旧缓存 URL、点了没用（审计 #2·根因#8）`)
       return bad
     },
   },

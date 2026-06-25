@@ -86,10 +86,9 @@ function lessonSub(l, li) {
   return `第 ${li + 1} 节`
 }
 
-// 点课时 → 进播放页，带上 章节/节次/课名（播放页显示用）
+// 点课时 → 进播放页，带上 lessonId + courseId（播放页据 courseId 定身份·防串课·审计 #3）
 function openLesson(lesson) {
-  // 只传 id，播放页按 id 从课程表取名/章节、并支持上一集/下一集
-  uni.navigateTo({ url: `/pkg-video/player/index?id=${lesson.id}` })
+  uni.navigateTo({ url: `/pkg-video/player/index?id=${lesson.id}&courseId=${course.value.id}` })
 }
 function startFirst() {
   if (!unlocked.value) {

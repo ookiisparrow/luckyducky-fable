@@ -15,13 +15,12 @@ import { logger } from '@/utils/logger.js'
 
 const EMPTY_COURSE = { id: '', title: '', chapters: [] }
 
-// 分段播放地址解析器（模块层单例·跨播放页/组件共享缓存）：按 segId 缓存临时 URL + in-flight 去重 +
-// 预取（见 utils/playbackCache.js）。解析器放 utils（主包）而非 pkg-video（分包）——store 在主包，
-// 主包 require 分包模块在 mp-weixin 会运行时崩（白屏·根因#8·守卫 main-no-subpackage-import）。
-// fetcher 闭包绑「当前聚焦课 id」——一次播放会话同一门课，
-// 取址/预取前由 action 同步 _courseId（getPlaybackUrl 鉴权按 courseId+segmentId）。治真机段间转场卡顿（根因#8）。
-let _courseId = ''
-const _resolver = createPlaybackResolver({ fetcher: (segId) => getPlaybackUrl(_courseId, segId) })
+// 分段播放地址解析器（模块层单例·跨播放页/组件共享缓存）：按 (courseId, segId) 缓存临时 URL +
+// in-flight 去重 + 预取 + 失效（见 utils/playbackCache.js）。解析器放 utils（主包）而非 pkg-video（分包）
+// ——store 在主包，主包 require 分包模块在 mp-weixin 会运行时崩（白屏·根因#8·守卫 main-no-subpackage-import）。
+// courseId 作参数随每次调用传入（不再用模块级可变变量）——缓存键含 courseId 防上第二门课段 id 撞键串课（审计 #1），
+// 取址带的永远是发起那门课、无竞态（审计 #3）。治真机段间转场卡顿（根因#8）。
+const _resolver = createPlaybackResolver({ fetcher: getPlaybackUrl })
 
 export const useCoursesStore = defineStore('courses', {
   state: () => ({
@@ -64,13 +63,15 @@ export const useCoursesStore = defineStore('courses', {
     // 取当前课程某分段的播放地址：经解析器缓存优先（命中即返回·回看/重复段零云往返），未命中才换址。
     // URL 是瞬时态、不入 state；服务端鉴权按 courseId+segmentId（见 getPlaybackUrl 云函数）。
     async playbackUrl(segmentId) {
-      _courseId = this.current.id
-      return _resolver.load(segmentId)
+      return _resolver.load(this.current.id, segmentId)
     },
     // 预取某分段地址（当前段播放期间预热下一段·静默失败不影响主流程）→ 切段时直接命中缓存、接近秒切。
     prefetchPlaybackUrl(segmentId) {
-      _courseId = this.current.id
-      _resolver.prefetch(segmentId)
+      _resolver.prefetch(this.current.id, segmentId)
+    },
+    // 失效本段缓存（错误重试用·审计 #2）：清掉这条可能已失效的临时 URL，下次 playbackUrl 真重取新地址。
+    invalidatePlaybackUrl(segmentId) {
+      _resolver.invalidate(this.current.id, segmentId)
     },
   },
 })

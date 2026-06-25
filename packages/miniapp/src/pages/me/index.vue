@@ -105,7 +105,8 @@ function continueWatch() {
   if (!c.courseId) return allCourses()
   courses.setCurrent(c.courseId) // 先聚焦续播那门课，播放器据此取课（多课·防默认 list[0]）
   const seg = c.segmentId ? `&seg=${c.segmentId}` : '' // 续到原小段
-  uni.navigateTo({ url: `/pkg-video/player/index?id=${c.lessonId}${seg}` })
+  // 带 courseId 进播放页定身份（防串课·审计 #3）：不只靠上面的 setCurrent（全局态可能被别处改）
+  uni.navigateTo({ url: `/pkg-video/player/index?id=${c.lessonId}&courseId=${c.courseId}${seg}` })
 }
 function allCourses() {
   // 「全部教程」→ 我的课程列表（已激活的全部课程），而非某单门课的课时列表（根因#8 多课）。
