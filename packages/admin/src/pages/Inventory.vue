@@ -8,6 +8,7 @@ import { ref, computed } from 'vue'
 import { cloudMode, listInventory, saveStock } from '@/api/cloud.js'
 import { useProductsStore } from '@/store/products.js'
 import { promptDialog, toast } from '@/utils/ui.js'
+import { RefreshCw } from 'lucide-vue-next'
 
 const store = useProductsStore()
 const invMap = ref({}) // `${productId}__${spec}` -> { stock, threshold }
@@ -94,7 +95,7 @@ async function adjust(r) {
         <h1>库存管理</h1>
         <p class="sub">实物库存按 SKU 追踪 · 下单即预留、超时/退款自动回补、缺货自动售罄 · 留空 = 不限量</p>
       </div>
-      <button class="btn ghost" @click="init">↻ 刷新</button>
+      <button class="btn ghost" @click="init"><RefreshCw :size="14" />刷新</button>
     </header>
 
     <p v-if="!cloudMode" class="hint warn">库存管理需云端模式（配置 VITE_ADMIN_API）。</p>

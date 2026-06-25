@@ -6,45 +6,47 @@
  *
  * 云开发三入口带本环境 envId（cloudbase-d4gcssqbv06865479）直达；到期日以控制台为准。
  */
+import { Database, Package, Activity, MessageSquare, Wallet, Wrench, Headphones } from 'lucide-vue-next'
+
 const ENV = 'cloudbase-d4gcssqbv06865479'
 const LINKS = [
   {
-    icon: '🗄️',
+    icon: Database,
     title: '云开发控制台',
     desc: '数据库 · 云存储 · 云函数 · 调用日志——数据与函数的原始管理和排查',
     host: 'console.cloud.tencent.com',
     url: `https://console.cloud.tencent.com/tcb/env/index?envId=${ENV}`,
   },
   {
-    icon: '📦',
+    icon: Package,
     title: '套餐与用量',
     desc: '资源用量 · 到期续费（当前到期 2026-07-11 · 以控制台为准）',
     host: '控制台 · 套餐管理',
     url: `https://console.cloud.tencent.com/tcb/env/index?envId=${ENV}`,
   },
   {
-    icon: '📈',
+    icon: Activity,
     title: '运维监控告警',
     desc: '云函数调用量 · 报错率 · 资源用量告警阈值设置',
     host: '云开发 · 监控',
     url: `https://console.cloud.tencent.com/tcb/env/monitor?envId=${ENV}`,
   },
   {
-    icon: '💬',
+    icon: MessageSquare,
     title: '微信公众平台',
     desc: '小程序发布审核 · 隐私保护引导 · 扫码通链接 / 二维码规则',
     host: 'mp.weixin.qq.com',
     url: 'https://mp.weixin.qq.com',
   },
   {
-    icon: '💰',
+    icon: Wallet,
     title: '微信支付商户平台',
     desc: '支付 / 退款流水核对 · 处理金额异常单（钱链告警去这核对）',
     host: 'pay.weixin.qq.com',
     url: 'https://pay.weixin.qq.com',
   },
   {
-    icon: '🛠️',
+    icon: Wrench,
     title: '微信开发者工具',
     desc: '本地调试 · 真机预览 · 上传体验版（桌面应用，点开到下载页）',
     host: '桌面应用',
@@ -52,7 +54,7 @@ const LINKS = [
     url: 'https://developers.weixin.qq.com/miniprogram/dev/devtools/download.html',
   },
   {
-    icon: '🎧',
+    icon: Headphones,
     title: '企业微信',
     desc: '客服接待人员配置 · 钱链 / 告警企业微信送 · 应用与群机器人',
     host: 'work.weixin.qq.com',
@@ -77,7 +79,7 @@ const LINKS = [
     <div class="grid">
       <a v-for="l in LINKS" :key="l.title" class="card ext" :href="l.url" target="_blank" rel="noopener noreferrer">
         <div class="ext-top">
-          <span class="ico">{{ l.icon }}</span>
+          <span class="ico"><component :is="l.icon" :size="20" /></span>
           <span class="open">打开 ↗</span>
         </div>
         <div class="ext-title">{{ l.title }}<span v-if="l.desktop" class="tag">桌面应用</span></div>
@@ -145,7 +147,7 @@ h1 {
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 18px;
+  color: var(--brand-active);
 }
 .open {
   font-size: 12px;

@@ -12,6 +12,7 @@
  */
 import { ref, computed } from 'vue'
 import { cloudMode, getReconciliation, downloadBill, getBillMatch } from '@/api/cloud.js'
+import { RefreshCw } from 'lucide-vue-next'
 
 const fmtDate = (d) => {
   const p = (n) => String(n).padStart(2, '0')
@@ -141,7 +142,7 @@ function exportCsv() {
         <h1>财务对账</h1>
         <p class="sub">收支汇总 · 每日流水 · 内部异常核对（已付营收口径）</p>
       </div>
-      <button class="btn ghost" @click="load">↻ 刷新</button>
+      <button class="btn ghost" @click="load"><RefreshCw :size="14" />刷新</button>
     </header>
 
     <p v-if="!cloudMode" class="hint warn">财务对账需云端模式。</p>

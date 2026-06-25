@@ -15,6 +15,7 @@ import { ref, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { cloudMode, getDashboard, orderCounts, refundCounts, listInventory } from '@/api/cloud.js'
 import { useProductsStore } from '@/store/products.js'
+import { RefreshCw } from 'lucide-vue-next'
 
 const router = useRouter()
 const store = useProductsStore()
@@ -101,7 +102,7 @@ const rate = (a, b) => (b ? Math.round((a / b) * 100) : 0)
         <h1>数据看板</h1>
         <p class="sub">经营与学习数据一屏总览 · 待处理项可直接点进去处理</p>
       </div>
-      <button class="btn ghost" @click="init">↻ 刷新</button>
+      <button class="btn ghost" @click="init"><RefreshCw :size="14" />刷新</button>
     </header>
 
     <p v-if="!cloudMode" class="hint warn">数据看板需云端模式。</p>

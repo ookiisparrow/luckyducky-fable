@@ -16,6 +16,7 @@
  */
 import { ref, computed } from 'vue'
 import { cloudMode, listRefunds, refundCounts, getRefundDetail, approveRefund, rejectRefund } from '@/api/cloud.js'
+import { RefreshCw } from 'lucide-vue-next'
 
 const STATUS = {
   applied: { label: '待审核', chip: 'warn' },
@@ -222,7 +223,7 @@ async function doReject() {
         <h1>售后退款</h1>
         <p class="sub">先收到寄回包装并验收（激活卡未拆用）再同意 · 同意后原路退回微信支付</p>
       </div>
-      <button class="btn ghost" @click="init">↻ 刷新</button>
+      <button class="btn ghost" @click="init"><RefreshCw :size="14" />刷新</button>
     </header>
 
     <p v-if="!cloudMode" class="hint warn">售后审核需云端模式（配置 VITE_ADMIN_API）。</p>

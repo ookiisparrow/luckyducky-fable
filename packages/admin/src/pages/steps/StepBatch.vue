@@ -19,6 +19,7 @@ import {
 } from '@/api/cloud.js'
 import { buildFrontSvg, buildBackSvg } from '@/utils/cardSvg.js'
 import { confirmDialog, toast } from '@/utils/ui.js'
+import { Smartphone } from 'lucide-vue-next'
 
 const props = defineProps({ product: { type: Object, required: true } })
 const store = useProductsStore()
@@ -251,7 +252,7 @@ async function generate() {
               <em>{{ b.activated }}/{{ b.total }} 激活 · {{ pct(b) }}%</em>
             </span>
             <button class="btn ghost sm" @click="showCodes(b.batchId)">查看码</button>
-            <button class="btn ghost sm" @click="showTestQr(b.batchId)">📱 测试</button>
+            <button class="btn ghost sm" @click="showTestQr(b.batchId)"><Smartphone :size="13" />测试</button>
             <button class="btn ghost sm" :disabled="busy === b.batchId || !cardFinal" @click="downloadPack(b.batchId)">
               {{ busy === b.batchId ? '打包中…' : '⬇ 印刷包' }}
             </button>

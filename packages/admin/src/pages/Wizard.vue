@@ -8,6 +8,7 @@ import { ref, computed } from 'vue'
 import { useProductsStore, stepDone, STEP_NAMES } from '@/store/products.js'
 import { publishProduct } from '@/api/cloud.js'
 import { confirmDialog, toast } from '@/utils/ui.js'
+import { Store } from 'lucide-vue-next'
 import StepImages from '@/pages/steps/StepImages.vue'
 import StepInfo from '@/pages/steps/StepInfo.vue'
 import StepSkus from '@/pages/steps/StepSkus.vue'
@@ -83,7 +84,8 @@ async function shelve() {
       <span class="autosave">每步修改自动保存 ✓</span>
       <span v-if="missing.length" class="missing">上架还差：{{ missing.join('、') }}</span>
       <button class="btn primary" :disabled="!canShelve || shelving" :title="canShelve ? '' : '完成前三步后可上架'" @click="shelve">
-        {{ shelving ? '上架中…' : product.status === 'onsale' ? '🏪 更新上架信息' : '🏪 上架小程序' }}
+        <Store v-if="!shelving" :size="15" />
+        {{ shelving ? '上架中…' : product.status === 'onsale' ? '更新上架信息' : '上架小程序' }}
       </button>
     </header>
 

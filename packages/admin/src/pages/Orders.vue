@@ -17,6 +17,7 @@
 import { ref, computed } from 'vue'
 import { cloudMode, listOrders, orderCounts, getOrderDetail, shipOrder, shipOrders, clearFeeMismatch } from '@/api/cloud.js'
 import { confirmDialog, toast } from '@/utils/ui.js'
+import { RefreshCw, AlertTriangle } from 'lucide-vue-next'
 
 const STATUS = {
   pending: { label: '待支付', chip: 'grey' },
@@ -303,7 +304,7 @@ async function doClearMismatch(o) {
         <h1>订单发货</h1>
         <p class="sub">买家付款后在这里发货 · 填好运单号，小程序订单页即刻可见</p>
       </div>
-      <button class="btn ghost" @click="init">↻ 刷新</button>
+      <button class="btn ghost" @click="init"><RefreshCw :size="14" />刷新</button>
     </header>
 
     <p v-if="!cloudMode" class="hint warn">订单发货需云端模式（配置 VITE_ADMIN_API）。</p>
@@ -387,7 +388,7 @@ async function doClearMismatch(o) {
               <span class="chip" :class="STATUS[o.status]?.chip">{{ STATUS[o.status]?.label || o.status }}</span>
             </span>
             <span class="r ops">
-              <button v-if="o.feeMismatch" class="btn ghost mini danger" @click="doClearMismatch(o)">⚠ 去核对</button>
+              <button v-if="o.feeMismatch" class="btn ghost mini danger" @click="doClearMismatch(o)"><AlertTriangle :size="13" />去核对</button>
               <button v-else-if="o.status === 'paid'" class="btn primary mini" @click="openDrawer(o, 'ship')">发货</button>
               <button v-else-if="o.status === 'shipped'" class="btn ghost mini" @click="openDrawer(o, 'ship')">改单号</button>
               <button v-else class="btn ghost mini" @click="openDrawer(o, 'view')">查看</button>
