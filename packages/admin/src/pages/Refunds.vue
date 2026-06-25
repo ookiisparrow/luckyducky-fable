@@ -17,6 +17,7 @@
 import { ref, computed } from 'vue'
 import { cloudMode, listRefunds, refundCounts, getRefundDetail, approveRefund, rejectRefund } from '@/api/cloud.js'
 import { RefreshCw } from 'lucide-vue-next'
+import Skeleton from '@/components/Skeleton.vue'
 
 const STATUS = {
   applied: { label: '待审核', chip: 'warn' },
@@ -255,7 +256,7 @@ async function doReject() {
       </div>
 
       <p v-if="loadErr" class="hint warn">{{ loadErr }}</p>
-      <p v-else-if="loading" class="hint">加载中…</p>
+      <Skeleton v-else-if="loading" class="card" :rows="7" />
 
       <template v-else>
         <p v-if="!list.length" class="hint">

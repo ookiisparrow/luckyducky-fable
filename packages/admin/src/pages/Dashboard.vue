@@ -16,6 +16,7 @@ import { useRouter } from 'vue-router'
 import { cloudMode, getDashboard, orderCounts, refundCounts, listInventory } from '@/api/cloud.js'
 import { useProductsStore } from '@/store/products.js'
 import { RefreshCw } from 'lucide-vue-next'
+import Skeleton from '@/components/Skeleton.vue'
 
 const router = useRouter()
 const store = useProductsStore()
@@ -107,7 +108,7 @@ const rate = (a, b) => (b ? Math.round((a / b) * 100) : 0)
 
     <p v-if="!cloudMode" class="hint warn">数据看板需云端模式。</p>
     <p v-else-if="loadErr" class="hint warn">{{ loadErr }}</p>
-    <p v-else-if="loading" class="hint">统计中…</p>
+    <Skeleton v-else-if="loading" :rows="4" :height="72" />
 
     <template v-else-if="data">
       <!-- 待处理行动条：数字点进对应页 -->

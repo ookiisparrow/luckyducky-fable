@@ -18,6 +18,7 @@ import { ref, computed } from 'vue'
 import { cloudMode, listOrders, orderCounts, getOrderDetail, shipOrder, shipOrders, clearFeeMismatch } from '@/api/cloud.js'
 import { confirmDialog, toast } from '@/utils/ui.js'
 import { RefreshCw, AlertTriangle } from 'lucide-vue-next'
+import Skeleton from '@/components/Skeleton.vue'
 
 const STATUS = {
   pending: { label: '待支付', chip: 'grey' },
@@ -343,7 +344,7 @@ async function doClearMismatch(o) {
       </div>
 
       <p v-if="loadErr" class="hint warn">{{ loadErr }}</p>
-      <p v-else-if="loading" class="hint">加载中…</p>
+      <Skeleton v-else-if="loading" class="card" :rows="7" />
 
       <template v-else>
         <p v-if="!list.length" class="hint">

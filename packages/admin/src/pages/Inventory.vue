@@ -9,6 +9,7 @@ import { cloudMode, listInventory, saveStock } from '@/api/cloud.js'
 import { useProductsStore } from '@/store/products.js'
 import { promptDialog, toast } from '@/utils/ui.js'
 import { RefreshCw } from 'lucide-vue-next'
+import Skeleton from '@/components/Skeleton.vue'
 
 const store = useProductsStore()
 const invMap = ref({}) // `${productId}__${spec}` -> { stock, threshold }
@@ -100,7 +101,7 @@ async function adjust(r) {
 
     <p v-if="!cloudMode" class="hint warn">库存管理需云端模式（配置 VITE_ADMIN_API）。</p>
     <p v-else-if="loadErr" class="hint warn">{{ loadErr }}</p>
-    <p v-else-if="loading" class="hint">加载中…</p>
+    <Skeleton v-else-if="loading" class="card" :rows="6" />
 
     <template v-else>
       <div class="tabs">

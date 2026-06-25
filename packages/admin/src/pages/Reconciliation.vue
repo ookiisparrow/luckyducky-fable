@@ -13,6 +13,7 @@
 import { ref, computed } from 'vue'
 import { cloudMode, getReconciliation, downloadBill, getBillMatch } from '@/api/cloud.js'
 import { RefreshCw } from 'lucide-vue-next'
+import Skeleton from '@/components/Skeleton.vue'
 
 const fmtDate = (d) => {
   const p = (n) => String(n).padStart(2, '0')
@@ -158,7 +159,7 @@ function exportCsv() {
       </section>
 
       <p v-if="loadErr" class="hint warn">{{ loadErr }}</p>
-      <p v-else-if="loading" class="hint">统计中…</p>
+      <Skeleton v-else-if="loading" class="card" :rows="7" />
 
       <template v-else-if="data">
         <!-- 对账状态横幅（综合内部异常 + 外部差异） -->
