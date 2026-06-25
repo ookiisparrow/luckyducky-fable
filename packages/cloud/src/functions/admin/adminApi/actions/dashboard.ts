@@ -1,4 +1,4 @@
-import { reply, type Ctx } from '../lib'
+import { reply, getTxAlerts, PAID_STATUSES, type Ctx } from '../lib'
 
 // —— 数据看板（债#18 + #18续：消除「≤1000 条/表内存聚合」静默少算）——
 // 计数走 .count()（精确·不封顶）；GMV 走 DB aggregate 对 paid 订单求和（精确·不封顶·#18续/债#32）；
@@ -6,12 +6,10 @@ import { reply, type Ctx } from '../lib'
 // 必写 createdAt → orderBy 不漏单·债#31 不变量）。仅 热度/卡点 仍「近 SAMPLE 条样本」近似（progress
 // 超 SAMPLE 时 approx 标注、前端显「近 N 估算」）。
 const SAMPLE = 1000
-const PAID_STATUSES = ['paid', 'shipped', 'done'] // GMV＝已付营收口径（债#32；pending/closed 未付不计）
 
 export async function getDashboard({ db }: Ctx) {
   const _ = db.command
   const $ = db.command.aggregate
-  const HOUR = 3600_000
   const cnt = (q: any) =>
     q
       .count()
@@ -32,9 +30,7 @@ export async function getDashboard({ db }: Ctx) {
     gmv,
     progressSample,
     courses,
-    feeMismatch,
-    refundMismatch,
-    stuckRefunds,
+    txAlerts,
     recent,
     paidOrdersN,
   ] = await Promise.all([
@@ -53,15 +49,8 @@ export async function getDashboard({ db }: Ctx) {
       .catch(() => 0),
     rows(db.collection('progress').field({ done: true, last: true }).limit(SAMPLE)),
     rows(db.collection('courses').field({ id: true, title: true, chapters: true }).limit(SAMPLE)),
-    // 钱链异常：定向 where 精确（稀少·小集合），不再从样本 filter（防老单漏报）
-    rows(db.collection('orders').where({ feeMismatch: true }).field({ id: true })),
-    rows(db.collection('afterSales').where({ refundMismatch: true }).field({ _id: true })),
-    rows(
-      db
-        .collection('afterSales')
-        .where({ status: 'approved', approvedAt: _.lt(Date.now() - HOUR) })
-        .field({ _id: true })
-    ),
+    // 钱链异常：单源 helper（dashboard 与 S16 对账共用·防漂移）；内部定向 where 精确（不从样本 filter）
+    getTxAlerts(db),
     rows(
       db
         .collection('orders')
@@ -72,12 +61,6 @@ export async function getDashboard({ db }: Ctx) {
     // 转化速览：已支付订单数（口径同 GMV·PAID_STATUSES）——下单→支付→激活 各环节量级（指示性·非同批追踪）
     cnt(db.collection('orders').where({ status: _.in(PAID_STATUSES) })),
   ])
-
-  const txAlerts = {
-    feeMismatch: feeMismatch.map((o: any) => o.id),
-    refundMismatch: refundMismatch.map((a: any) => a._id),
-    stuckRefunds: stuckRefunds.map((a: any) => a._id),
-  }
 
   // 段名映射（课程数少·全量）
   const segName: Record<string, string> = {}

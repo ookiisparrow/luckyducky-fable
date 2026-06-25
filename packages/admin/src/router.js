@@ -7,6 +7,7 @@ import Showcase from '@/pages/Showcase.vue'
 import Orders from '@/pages/Orders.vue'
 import Refunds from '@/pages/Refunds.vue'
 import Dashboard from '@/pages/Dashboard.vue'
+import Reconciliation from '@/pages/Reconciliation.vue'
 import Inventory from '@/pages/Inventory.vue'
 import Notifications from '@/pages/Notifications.vue'
 import Externals from '@/pages/Externals.vue'
@@ -22,6 +23,7 @@ export const router = createRouter({
     { path: '/refunds', component: Refunds },
     { path: '/inventory', component: Inventory },
     { path: '/dashboard', component: Dashboard },
+    { path: '/reconciliation', component: Reconciliation },
     { path: '/notifications', component: Notifications },
     { path: '/externals', component: Externals },
     // 上新向导：/product/<id>/step/<1-6>；左侧「按步骤直达」也跳这里

@@ -53,6 +53,32 @@ export async function activationFor(db: any, openid: string, productId: string) 
   }
 }
 
+// 已付营收口径（GMV / 财务对账单源·债#32）：pending/closed 未付不计。看板与 S16 对账共用·防口径漂移。
+export const PAID_STATUSES = ['paid', 'shipped', 'done']
+
+// 钱链内部异常（txAlerts·债#23 单源）：金额不符单 / 退款金额不符 / 审批超 1h 未到回调的卡单。
+// 看板（dashboard）与财务对账（reconciliation·S16）共用此单源——同 activationFor 范式，防两处漂移
+// （钱链异常是 money 正确性判据，散两份易一处改漏）。各项走定向 where 精确（稀少·小集合·不从样本 filter）。
+export async function getTxAlerts(db: any): Promise<{ feeMismatch: string[]; refundMismatch: string[]; stuckRefunds: string[] }> {
+  const _ = db.command
+  const HOUR = 3600_000
+  const rows = (q: any) =>
+    q
+      .get()
+      .then((r: any) => r.data)
+      .catch(() => [])
+  const [feeMismatch, refundMismatch, stuckRefunds] = await Promise.all([
+    rows(db.collection('orders').where({ feeMismatch: true }).field({ id: true })),
+    rows(db.collection('afterSales').where({ refundMismatch: true }).field({ _id: true })),
+    rows(db.collection('afterSales').where({ status: 'approved', approvedAt: _.lt(Date.now() - HOUR) }).field({ _id: true })),
+  ])
+  return {
+    feeMismatch: feeMismatch.map((o: any) => o.id),
+    refundMismatch: refundMismatch.map((a: any) => a._id),
+    stuckRefunds: stuckRefunds.map((a: any) => a._id),
+  }
+}
+
 // 口令校验。首次初始化（债#15 关抢占窗口）：须 bootstrap 且本次口令匹配**部署密钥**环境变量
 // ADMIN_BOOTSTRAP_KEY——杜绝「空库谁先登录谁就占管理员」。未设该环境变量＝禁 bootstrap。
 // 设密钥流程：部署时设云环境变量 ADMIN_BOOTSTRAP_KEY＝期望口令 → 首登用该口令 → 设定后可移除。

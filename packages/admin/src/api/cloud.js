@@ -478,3 +478,16 @@ export async function getDashboard() {
   if (!r.ok) throw new Error(r.error || 'LOAD_DASHBOARD_FAIL')
   return r
 }
+
+// ---------- 财务对账（S16·内部账：收支汇总 + 每日流水 + 内部异常） ----------
+
+// from/to 为 'YYYY-MM-DD'（不传则后端默认近 30 天）。返回 { range, cumulative, summary, daily, approx, exceptions }。
+export async function getReconciliation({ from, to } = {}) {
+  if (!cloudMode) return null // 财务数据只存在于云端
+  const payload = {}
+  if (from) payload.from = from
+  if (to) payload.to = to
+  const r = await post('getReconciliation', payload)
+  if (!r.ok) throw new Error(r.error || 'LOAD_RECONCILIATION_FAIL')
+  return r
+}
