@@ -95,6 +95,26 @@ async function pullAndMatch() {
   }
 }
 
+// 顶部对账状态横幅：综合「内部异常 + 外部差异」一眼出结论
+const statusBanner = computed(() => {
+  if (!data.value) return null
+  const ext = match.value
+    ? match.value.summary.wxOnly + match.value.summary.oursOnly + match.value.summary.amountMismatch
+    : 0
+  const issues = exceptionCount.value + ext
+  if (issues === 0)
+    return {
+      ok: true,
+      text: match.value
+        ? `对账正常 · 我方账内部一致，微信账单已对平 ${match.value.summary.matched} 笔`
+        : '我方账内部一致，无异常单（拉微信账单可做外部逐笔核对）',
+    }
+  const parts = []
+  if (exceptionCount.value) parts.push(`内部异常 ${exceptionCount.value}`)
+  if (ext) parts.push(`微信对账差异 ${ext}`)
+  return { ok: false, text: `发现 ${issues} 处待核 · ${parts.join(' / ')}` }
+})
+
 function exportCsv() {
   const rows = data.value?.daily || []
   if (!rows.length) return
@@ -140,6 +160,11 @@ function exportCsv() {
       <p v-else-if="loading" class="hint">统计中…</p>
 
       <template v-else-if="data">
+        <!-- 对账状态横幅（综合内部异常 + 外部差异） -->
+        <div v-if="statusBanner" class="banner" :class="statusBanner.ok ? 'ok' : 'warn'">
+          <span class="banner-ic">{{ statusBanner.ok ? '✓' : '⚠' }}</span>{{ statusBanner.text }}
+        </div>
+
         <!-- 累计（精确·money 锚） -->
         <div class="cards">
           <div class="stat card accent">
@@ -180,15 +205,25 @@ function exportCsv() {
               <tr><th>日期</th><th class="r">收入</th><th class="r">退款</th><th class="r">净额</th><th class="r">订单</th><th class="r">退款笔</th></tr>
             </thead>
             <tbody>
-              <tr v-for="d in data.daily" :key="d.day">
+              <tr v-for="d in data.daily" :key="d.day" :class="{ hasrefund: d.refund > 0 }">
                 <td>{{ d.day }}</td>
                 <td class="r">{{ yuan(d.income) }}</td>
-                <td class="r refund">{{ d.refund ? '−' + yuan(d.refund).slice(1) : '—' }}</td>
+                <td class="r refund" :class="{ out: d.refund > 0 }">{{ d.refund ? '−' + yuan(d.refund).slice(1) : '—' }}</td>
                 <td class="r net">{{ yuan(d.net) }}</td>
                 <td class="r">{{ d.orders }}</td>
                 <td class="r">{{ d.refunds }}</td>
               </tr>
             </tbody>
+            <tfoot>
+              <tr class="total">
+                <td>总计</td>
+                <td class="r">{{ yuan(data.summary.income) }}</td>
+                <td class="r refund" :class="{ out: data.summary.refund > 0 }">{{ data.summary.refund ? '−' + yuan(data.summary.refund).slice(1) : '—' }}</td>
+                <td class="r net">{{ yuan(data.summary.net) }}</td>
+                <td class="r">{{ data.summary.orders }}</td>
+                <td class="r">{{ data.summary.refunds }}</td>
+              </tr>
+            </tfoot>
           </table>
         </div>
 
@@ -391,6 +426,39 @@ h1 {
 }
 .flow .refund {
   color: var(--content-2);
+}
+.flow .refund.out {
+  color: var(--red);
+}
+.flow tfoot .total td {
+  border-top: 2px solid var(--line);
+  border-bottom: none;
+  font-weight: 700;
+  color: var(--ink);
+  padding-top: 10px;
+}
+.banner {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 18px;
+  border-radius: 10px;
+  margin-bottom: 18px;
+  font-size: 13px;
+  font-weight: 600;
+}
+.banner-ic {
+  font-size: 15px;
+}
+.banner.ok {
+  background: #eef7ee;
+  border: 1px solid #cfe6cf;
+  color: var(--green);
+}
+.banner.warn {
+  background: #fdf6ec;
+  border: 1px solid #f0ddc0;
+  color: #8a6420;
 }
 .empty {
   font-size: 12px;
