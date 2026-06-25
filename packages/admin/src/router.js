@@ -4,6 +4,7 @@ import Login from '@/pages/Login.vue'
 import ProductList from '@/pages/ProductList.vue'
 import Wizard from '@/pages/Wizard.vue'
 import Showcase from '@/pages/Showcase.vue'
+import HelpVideos from '@/pages/HelpVideos.vue'
 import Orders from '@/pages/Orders.vue'
 import Refunds from '@/pages/Refunds.vue'
 import Dashboard from '@/pages/Dashboard.vue'
@@ -19,6 +20,7 @@ export const router = createRouter({
     { path: '/', redirect: '/products' },
     { path: '/products', component: ProductList },
     { path: '/showcase', component: Showcase },
+    { path: '/help-videos', component: HelpVideos },
     { path: '/orders', component: Orders },
     { path: '/refunds', component: Refunds },
     { path: '/inventory', component: Inventory },

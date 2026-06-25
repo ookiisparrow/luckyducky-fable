@@ -12,7 +12,8 @@ import TroublePanel from './TroublePanel.vue'
 import FaqPanel from './FaqPanel.vue'
 import GroupPanel from './GroupPanel.vue'
 import ReportPanel from './ReportPanel.vue'
-import { HELP_OPTS, TROUBLE } from './data.js'
+import { HELP_OPTS } from './data.js'
+import { getHelpVideos } from '@/api/help.js'
 import { openCustomerService } from '@/utils/customerService.js'
 
 defineProps({
@@ -24,9 +25,18 @@ const help = ref(false)
 const helpView = ref(null) // null=选项 / service / step / faq / group / report
 const helpTopic = ref(null) // 'step' 下选中的辅助视频 index（标题/返回键依赖，故放壳里）
 
+// 辅助视频（控制台「帮助视频」管理·全局共用）：首次打开面板时拉一次，列表/标题/播放共用
+const helpVideos = ref([])
+let helpVideosLoaded = false
+async function loadHelpVideos() {
+  if (helpVideosLoaded) return
+  helpVideosLoaded = true
+  helpVideos.value = await getHelpVideos()
+}
+
 const inTopic = computed(() => helpView.value === 'step' && helpTopic.value !== null)
 const sheetTitle = computed(() => {
-  if (inTopic.value) return TROUBLE[helpTopic.value].title
+  if (inTopic.value) return helpVideos.value[helpTopic.value]?.title || '辅助视频'
   if (helpView.value)
     return (HELP_OPTS.find((o) => o.id === helpView.value) || {}).title || '需要帮忙吗？'
   return '需要帮忙吗？'
@@ -37,6 +47,7 @@ function open() {
   help.value = true
   helpView.value = null
   helpTopic.value = null
+  loadHelpVideos()
 }
 function closeHelp() {
   help.value = false
@@ -88,6 +99,7 @@ defineExpose({ open })
         />
         <TroublePanel
           v-else-if="helpView === 'step'"
+          :items="helpVideos"
           :topic="helpTopic"
           @pick="helpTopic = $event"
         />

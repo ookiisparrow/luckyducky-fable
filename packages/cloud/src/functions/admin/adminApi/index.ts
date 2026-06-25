@@ -48,6 +48,9 @@ const ACTIONS: Record<string, (ctx: Ctx) => Promise<any>> = {
   // 首页内容
   getHomeContent: content.getHomeContent,
   saveHomeContent: content.saveHomeContent,
+  // 求助面板「辅助视频」（全局共用）
+  listHelpVideos: content.listHelpVideos,
+  saveHelpVideos: content.saveHelpVideos,
   // 订单发货
   listOrders: orders.listOrders,
   orderCounts: orders.orderCounts,

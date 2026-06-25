@@ -124,6 +124,12 @@
       "installDependency": true
     },
     {
+      "name": "getHelpVideos",
+      "timeout": 10,
+      "handler": "index.main",
+      "installDependency": true
+    },
+    {
       "name": "pay",
       "timeout": 15,
       "handler": "index.main",

@@ -56,3 +56,37 @@ export async function saveHomeContent({ db, data }: Ctx) {
     })
   return reply(200, { ok: true })
 }
+
+// —— 求助面板「辅助视频」（全局共用·所有课程同一份；存 content 集合 doc 'helpVideos'）——
+// 小程序播放页求助面板「遇到问题了」列表即此；控制台「帮助视频」增删改 + 上传视频（复用 getVideoUploadMeta 直传）。
+// 管理端读回原始 videoFileId（已过口令闸）便于显「已传」/保存；小程序公开读经 catalog/getHelpVideos 换临时 URL（fileID 不出口）。
+export async function listHelpVideos({ db }: Ctx) {
+  const got = await db.collection('content').doc('helpVideos').get().catch(() => null)
+  return reply(200, { ok: true, items: (got?.data as any)?.items || [] })
+}
+
+export async function saveHelpVideos({ db, data }: Ctx) {
+  // 白名单净化：每条 id/title/sub/desc/dur/videoFileId 限长；封顶 20 条防滥用；空条（无标题且无视频）剔除。
+  const raw = Array.isArray(data.items) ? data.items : []
+  const items = raw
+    .slice(0, 20)
+    .map((it: any) => ({
+      id: str(it.id, 40) || 'h' + Math.random().toString(36).slice(2, 8),
+      title: str(it.title, 40),
+      sub: str(it.sub, 40),
+      desc: str(it.desc, 150),
+      dur: str(it.dur, 10),
+      videoFileId: str(it.videoFileId, 200),
+    }))
+    .filter((it: any) => it.title || it.videoFileId)
+  const doc = { items, updatedAt: Date.now() }
+  await ensure(db, 'content')
+  const coll = db.collection('content')
+  await coll
+    .doc('helpVideos')
+    .set({ data: doc })
+    .catch(async () => {
+      await coll.add({ data: { ...doc, _id: 'helpVideos' } })
+    })
+  return reply(200, { ok: true })
+}

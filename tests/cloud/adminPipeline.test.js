@@ -114,6 +114,32 @@ describe('adminApi 课程草稿 / 卡片 / 内容 / 批次（特征锁）', () =
     expect(r.home.trust[0].label).toBe('l')
   })
 
+  it('saveHelpVideos 白名单（限长/封顶）+ listHelpVideos 取回原始 fileID', async () => {
+    // 25 条全有效 → 封顶 20；首条标题超长 → 截断 40；管理端读回原始 videoFileId（已过口令闸）
+    await call('saveHelpVideos', {
+      items: [
+        { id: 'h1', title: 'T'.repeat(80), sub: 's', desc: 'd', dur: '01:00', videoFileId: 'cloud://v1' },
+        ...Array.from({ length: 24 }, (_, i) => ({ title: 'x' + i, videoFileId: 'cloud://x' + i })),
+      ],
+    })
+    const r = await call('listHelpVideos')
+    expect(r.items.length).toBe(20) // 封顶 20
+    expect(r.items[0].title).toHaveLength(40) // 标题截断
+    expect(r.items[0].videoFileId).toBe('cloud://v1')
+  })
+
+  it('saveHelpVideos 剔除空条（无标题且无视频）', async () => {
+    await call('saveHelpVideos', {
+      items: [
+        { title: '起手结', videoFileId: 'cloud://a' },
+        { title: '', sub: '只填了副标题', videoFileId: '' }, // 无标题无视频 → 剔除
+      ],
+    })
+    const r = await call('listHelpVideos')
+    expect(r.items.length).toBe(1)
+    expect(r.items[0].title).toBe('起手结')
+  })
+
   it('createBatch 互调 genQrcodes（mock 返回）+ listBatches 聚合 + listBatchCodes', async () => {
     control.setCallFunctionResult({ result: { ok: true, batchId: 'b-1', codes: ['LDAAA', 'LDBBB'] } })
     const r = await call('createBatch', { courseId: 'course-duck', count: 2 })

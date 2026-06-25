@@ -387,6 +387,19 @@ export async function saveHomeContent(home) {
   return !!r.ok
 }
 
+// ---------- 求助面板「辅助视频」（全局共用·所有课程同一份；小程序播放页求助→「遇到问题了」） ----------
+
+export async function listHelpVideos() {
+  const r = await post('listHelpVideos')
+  if (!r.ok) throw new Error(r.error || 'LOAD_HELP_FAIL')
+  return r.items || []
+}
+
+export async function saveHelpVideos(items) {
+  const r = await post('saveHelpVideos', { items })
+  return !!r.ok
+}
+
 // ---------- 订单发货（P5 后台完善：paid → shipped，物流公司 + 运单号） ----------
 
 // 游标分页（根因#7）：cursor 传上一页 nextCursor；status 服务端筛选、q 按单号搜索（都在云端做、

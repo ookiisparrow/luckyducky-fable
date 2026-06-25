@@ -1657,6 +1657,35 @@ export const repoChecks = [
     },
   },
   {
+    // 帮助视频地址经云端临时 URL 单源（审计 P1·根因#3 信任边界·同 video-url-via-cloud-only 思路）：
+    // 求助面板「辅助视频」是云存储资产（控制台「帮助视频」上传），播放地址只能经 catalog/getHelpVideos.ts
+    // 服务端换短时效临时 URL 下发——videoFileId 不出公开接口（前端拿裸 fileID 会造外链·撞合规红线 +
+    // urlCheck 翻 true 真机播不了·根因#8）。本守卫补结构闸：新加 catalog 函数若漏 fileID 进返回 / 自行
+    // 造 URL 当场红。getHelpVideos 是免费通用求助内容（非付费课），故无 NOT_ENTITLED 权属闸（与付费版区别）。
+    id: 'help-video-url-via-cloud-only',
+    roots: ['#3'],
+    desc: '帮助视频地址经云端临时 URL 单源（审计 P1·根因#3 信任边界）：catalog/ 域内 ① 帮助视频临时 URL 接缝 getHelpVideos.ts 须经 getTempUrl 下发；② 原始 videoFileId 只许在 getHelpVideos.ts 服务端解析、其他 catalog 函数引用即红——防新函数漏 fileID 进公开返回 / 前端拿裸 fileID 造外链（合规红线·根因#8/#3）',
+    run() {
+      const dir = join(ROOT, 'packages/cloud/src/functions/catalog')
+      if (!existsSync(dir)) return ['catalog 域缺失（帮助视频地址单点·审计 P1）']
+      const GATE = 'getHelpVideos.ts' // 唯一服务端换帮助视频临时 URL 的云函数
+      const bad = []
+      for (const e of readdirSync(dir)) {
+        if (!e.endsWith('.ts')) continue
+        const src = readFileSync(join(dir, e), 'utf8')
+        if (e !== GATE && /\bgetTempUrl\s*\(/.test(src))
+          bad.push(`catalog/${e} 调 getTempUrl 造帮助视频 URL——临时 URL 只许经 ${GATE} 下发（审计 P1·根因#3）`)
+        if (e !== GATE && /videoFileId/.test(src))
+          bad.push(`catalog/${e} 引用 videoFileId——帮助视频原始 fileID 只许在 ${GATE} 服务端解析，防漏进公开返回（审计 P1·根因#3）`)
+      }
+      const gate = join(dir, GATE)
+      if (!existsSync(gate)) bad.push(`catalog/${GATE} 缺失——帮助视频播放 URL 单点丢失（审计 P1）`)
+      else if (!/\bgetTempUrl\s*\(/.test(readFileSync(gate, 'utf8')))
+        bad.push(`catalog/${GATE} 未经 getTempUrl 接缝下发 URL——临时 URL 单源失守（审计 P1）`)
+      return bad
+    },
+  },
+  {
     // 生产 env id 单源（病根#5·债#30①脚本侧）：deploy-fns 部署目标 / loadtest·deploy-test「拒生产」
     // 安全闸 共用生产 env id；各写一份→改一漏一致安全闸与部署目标不一致。收口 scripts/lib/env.mjs 一份。
     id: 'prod-env-single-source',
