@@ -10,8 +10,6 @@ import Icon from '@/components/Icon.vue'
 import ServicePanel from './ServicePanel.vue'
 import TroublePanel from './TroublePanel.vue'
 import FaqPanel from './FaqPanel.vue'
-import GroupPanel from './GroupPanel.vue'
-import ReportPanel from './ReportPanel.vue'
 import { HELP_OPTS } from './data.js'
 import { getHelpVideos } from '@/api/help.js'
 import { openCustomerService } from '@/utils/customerService.js'
@@ -104,8 +102,6 @@ defineExpose({ open })
           @pick="helpTopic = $event"
         />
         <FaqPanel v-else-if="helpView === 'faq'" />
-        <GroupPanel v-else-if="helpView === 'group'" @action="helpAction" />
-        <ReportPanel v-else-if="helpView === 'report'" @action="helpAction" />
       </view>
     </view>
   </view>
