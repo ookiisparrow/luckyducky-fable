@@ -43,6 +43,7 @@ async function firstSeen(db: any, msgid: string): Promise<boolean> {
 export const main = defineKfCallback({
   token: () => env('WXKF_TOKEN'),
   aesKey: () => env('WXKF_AESKEY'),
+  corpid: () => env('WXKF_CORPID'), // 企业内部单 corp：解密 receiveId 须等于它，拒跨 corp 伪造（审计 P1）
   onEvent: async ({ syncToken, openKfId }) => {
     const db = getDb()
     // 观测（根因#8：整条 onEvent 链路可见，非敏感字段——不打 token/openid 内容）

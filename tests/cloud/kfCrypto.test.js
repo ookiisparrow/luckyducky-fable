@@ -42,8 +42,60 @@ describe('WXBizMsgCrypt 验签 + 解密', () => {
   })
 })
 
+// 构造「合法加密但 raw 结构非法」的密文（绕过 encryptKf 的正确 len 字段）——验 decrypt 边界纵深
+function encryptRaw(encodingAESKey, rawBuf) {
+  const key = Buffer.from(encodingAESKey + '=', 'base64')
+  const iv = key.subarray(0, 16)
+  const pad = 32 - (rawBuf.length % 32)
+  const padded = Buffer.concat([rawBuf, Buffer.alloc(pad, pad)])
+  const cipher = crypto.createCipheriv('aes-256-cbc', key, iv)
+  cipher.setAutoPadding(false)
+  return Buffer.concat([cipher.update(padded), cipher.final()]).toString('base64')
+}
+
+describe('decryptKfMessage 边界纵深（审计 P1·根因#3）', () => {
+  it('msgLen 越界 → 抛错（不返回错位切片）', () => {
+    const len = Buffer.alloc(4)
+    len.writeUInt32BE(9999, 0) // 声明 9999 字节但实际只有 5 字节
+    const raw = Buffer.concat([crypto.randomBytes(16), len, Buffer.from('short')])
+    expect(() => decryptKfMessage(AESKEY, encryptRaw(AESKEY, raw))).toThrow()
+  })
+})
+
 describe('defineKfCallback fail-closed（反向自检·根因#3）', () => {
   const make = (onEvent) => defineKfCallback({ token: () => TOKEN, aesKey: () => AESKEY, onEvent })
+  const makeWithCorp = (onEvent, corpid) =>
+    defineKfCallback({ token: () => TOKEN, aesKey: () => AESKEY, corpid: () => corpid, onEvent })
+
+  it('POST receiveId≠corpid（跨 corp 伪造·企业内部单 corp）：onEvent 不调 + 告警', async () => {
+    const inner = '<xml><Token><![CDATA[T]]></Token><OpenKfId><![CDATA[K]]></OpenKfId></xml>'
+    const enc = encryptKf(AESKEY, inner, 'wwOTHERCORP') // 异 corp，签名合法
+    const ts = '1700000004'
+    const nonce = 'n-corp'
+    const sig = kfSignature(TOKEN, ts, nonce, enc)
+    const spy = vi.fn(async () => {})
+    const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const handler = makeWithCorp(spy, CORPID)
+    const body = `<xml><Encrypt><![CDATA[${enc}]]></Encrypt></xml>`
+    const res = await handler({ httpMethod: 'POST', queryStringParameters: { msg_signature: sig, timestamp: ts, nonce }, body })
+    expect(spy).not.toHaveBeenCalled()
+    expect(res.body).toBe('')
+    expect(errSpy.mock.calls.flat().join(' ')).toContain('RECEIVEID_MISMATCH')
+    errSpy.mockRestore()
+  })
+
+  it('POST receiveId===corpid：配 corpid 不误伤本 corp，照常处理', async () => {
+    const inner = '<xml><Token><![CDATA[SYNC-TOK]]></Token><OpenKfId><![CDATA[wkOpenKf]]></OpenKfId></xml>'
+    const enc = encryptKf(AESKEY, inner, CORPID)
+    const ts = '1700000005'
+    const nonce = 'n-corp-ok'
+    const sig = kfSignature(TOKEN, ts, nonce, enc)
+    const spy = vi.fn(async () => {})
+    const handler = makeWithCorp(spy, CORPID)
+    const body = `<xml><Encrypt><![CDATA[${enc}]]></Encrypt></xml>`
+    await handler({ httpMethod: 'POST', queryStringParameters: { msg_signature: sig, timestamp: ts, nonce }, body })
+    expect(spy).toHaveBeenCalledOnce()
+  })
 
   it('GET 验 URL：签名对 → 回解密后明文 echostr；签名错 → 回空', async () => {
     const echo = encryptKf(AESKEY, 'echo-plaintext-123', CORPID)

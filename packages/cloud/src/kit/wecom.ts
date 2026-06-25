@@ -78,10 +78,14 @@ export function decryptKfMessage(encodingAESKey: string, encrypted: string): { m
   const decipher = crypto.createDecipheriv('aes-256-cbc', key, iv)
   decipher.setAutoPadding(false)
   const buf = Buffer.concat([decipher.update(Buffer.from(encrypted, 'base64')), decipher.final()])
-  // 去 PKCS7：末字节 = padding 长度
+  // 去 PKCS7：末字节 = padding 长度（WXBizMsgCrypt 块 32）。边界纵深（审计 P1）：验签虽在前，仍兜
+  // 非法 pad/msgLen 即抛、不返回错位切片——防签名异常路径吐出越界数据（调用方 try/catch 转告警）。
   const pad = buf[buf.length - 1]
+  if (!(pad >= 1 && pad <= 32) || pad > buf.length) throw new Error('BAD_PADDING')
   const data = buf.subarray(16, buf.length - pad) // 去前 16 字节随机 + 尾 padding
+  if (data.length < 4) throw new Error('BAD_PLAINTEXT')
   const msgLen = data.readUInt32BE(0)
+  if (msgLen < 0 || 4 + msgLen > data.length) throw new Error('BAD_MSGLEN')
   const message = data.subarray(4, 4 + msgLen).toString('utf8')
   const receiveId = data.subarray(4 + msgLen).toString('utf8')
   return { message, receiveId }
@@ -126,8 +130,16 @@ function readBody(event: any): string {
 export function defineKfCallback(opts: {
   token: () => string
   aesKey: () => string
+  /** 自己的 corpid（企业内部单 corp）：解密后 receiveId 须等于它，否则拒（WXBizMsgCrypt 验签三要素之一·
+   * 防跨 corp 共享 key 的合法签名消息被本应用处理）。未配置（空）时跳过校验，配齐即 fail-closed。 */
+  corpid?: () => string
   onEvent: (e: KfTrustedEvent) => Promise<void>
 }) {
+  // receiveId 绑定校验：配了 corpid 才生效（配置就绪即 fail-closed·未配不阻断现网）
+  const receiveIdOk = (receiveId: string): boolean => {
+    const want = opts.corpid ? opts.corpid() : ''
+    return !want || receiveId === want
+  }
   return async (event: any) => {
     const token = opts.token()
     const aesKey = opts.aesKey()
@@ -141,7 +153,9 @@ export function defineKfCallback(opts: {
         return httpReply(200, '') // 验签不过：回空（多为配置期口令不符，非运行时探测）
       }
       try {
-        return httpReply(200, decryptKfMessage(aesKey, echostr).message)
+        const dec = decryptKfMessage(aesKey, echostr)
+        if (!receiveIdOk(dec.receiveId)) return httpReply(200, '') // receiveId 非本 corp：验 URL 失败
+        return httpReply(200, dec.message)
       } catch {
         return httpReply(200, '')
       }
@@ -156,13 +170,19 @@ export function defineKfCallback(opts: {
       alert('security', 'kfCallback', 'FORGED_CALLBACK', {})
       return httpReply(200, '')
     }
-    let xml: string
+    let dec: { message: string; receiveId: string }
     try {
-      xml = decryptKfMessage(aesKey, encrypt).message
+      dec = decryptKfMessage(aesKey, encrypt)
     } catch {
       alert('security', 'kfCallback', 'DECRYPT_FAILED', {})
       return httpReply(200, '')
     }
+    // receiveId 须本 corp（验签三要素之三）：跨 corp 合法签名消息也拒，不进 onEvent（审计 P1·根因#3）
+    if (!receiveIdOk(dec.receiveId)) {
+      alert('security', 'kfCallback', 'RECEIVEID_MISMATCH', {})
+      return httpReply(200, '')
+    }
+    const xml = dec.message
     await opts.onEvent({ syncToken: xmlTag(xml, 'Token'), openKfId: xmlTag(xml, 'OpenKfId'), raw: xml })
     return httpReply(200, '') // 客服回调回空即可，消息经 send API 异步推送
   }
