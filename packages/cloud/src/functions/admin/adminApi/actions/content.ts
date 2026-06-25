@@ -66,19 +66,30 @@ export async function listHelpVideos({ db }: Ctx) {
 }
 
 export async function saveHelpVideos({ db, data }: Ctx) {
-  // 白名单净化：每条 id/title/sub/desc/dur/videoFileId 限长；封顶 20 条防滥用；空条（无标题且无视频）剔除。
+  // 白名单净化（两级：主题→小段）：主题 id/title/sub/desc 限长；小段 id/name/dur/videoFileId 限长。
+  // 主题封顶 20、每主题小段封顶 20 防滥用；空小段（无视频）剔除；空主题（无标题且无任何带视频小段）剔除。
   const raw = Array.isArray(data.items) ? data.items : []
   const items = raw
     .slice(0, 20)
-    .map((it: any) => ({
-      id: str(it.id, 40) || 'h' + Math.random().toString(36).slice(2, 8),
-      title: str(it.title, 40),
-      sub: str(it.sub, 40),
-      desc: str(it.desc, 150),
-      dur: str(it.dur, 10),
-      videoFileId: str(it.videoFileId, 200),
-    }))
-    .filter((it: any) => it.title || it.videoFileId)
+    .map((it: any) => {
+      const segments = (Array.isArray(it.segments) ? it.segments : [])
+        .slice(0, 20)
+        .map((sg: any) => ({
+          id: str(sg.id, 40) || 's' + Math.random().toString(36).slice(2, 8),
+          name: str(sg.name, 40),
+          dur: str(sg.dur, 10),
+          videoFileId: str(sg.videoFileId, 200),
+        }))
+        .filter((sg: any) => sg.videoFileId)
+      return {
+        id: str(it.id, 40) || 'h' + Math.random().toString(36).slice(2, 8),
+        title: str(it.title, 40),
+        sub: str(it.sub, 40),
+        desc: str(it.desc, 150),
+        segments,
+      }
+    })
+    .filter((it: any) => it.title || it.segments.length)
   const doc = { items, updatedAt: Date.now() }
   await ensure(db, 'content')
   const coll = db.collection('content')

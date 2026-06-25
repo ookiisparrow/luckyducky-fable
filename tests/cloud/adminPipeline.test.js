@@ -114,25 +114,36 @@ describe('adminApi 课程草稿 / 卡片 / 内容 / 批次（特征锁）', () =
     expect(r.home.trust[0].label).toBe('l')
   })
 
-  it('saveHelpVideos 白名单（限长/封顶）+ listHelpVideos 取回原始 fileID', async () => {
-    // 25 条全有效 → 封顶 20；首条标题超长 → 截断 40；管理端读回原始 videoFileId（已过口令闸）
+  it('saveHelpVideos 两级白名单（主题/小段限长 + 封顶 + 剔无视频小段）+ listHelpVideos 取回原始 fileID', async () => {
+    // 25 主题全有效 → 封顶 20；首主题标题/小段名超长 → 截断 40；无视频小段剔除；管理端读回原始 videoFileId
     await call('saveHelpVideos', {
       items: [
-        { id: 'h1', title: 'T'.repeat(80), sub: 's', desc: 'd', dur: '01:00', videoFileId: 'cloud://v1' },
-        ...Array.from({ length: 24 }, (_, i) => ({ title: 'x' + i, videoFileId: 'cloud://x' + i })),
+        {
+          id: 'h1',
+          title: 'T'.repeat(80),
+          sub: 's',
+          desc: 'd',
+          segments: [
+            { id: 's1', name: 'N'.repeat(80), dur: '00:30', videoFileId: 'cloud://v1' },
+            { id: 's2', name: '空段', dur: '', videoFileId: '' }, // 无视频小段 → 剔除
+          ],
+        },
+        ...Array.from({ length: 24 }, (_, i) => ({ title: 'x' + i, segments: [{ videoFileId: 'cloud://x' + i }] })),
       ],
     })
     const r = await call('listHelpVideos')
-    expect(r.items.length).toBe(20) // 封顶 20
-    expect(r.items[0].title).toHaveLength(40) // 标题截断
-    expect(r.items[0].videoFileId).toBe('cloud://v1')
+    expect(r.items.length).toBe(20) // 主题封顶 20
+    expect(r.items[0].title).toHaveLength(40) // 主题标题截断
+    expect(r.items[0].segments).toHaveLength(1) // 无视频小段被剔除
+    expect(r.items[0].segments[0].name).toHaveLength(40) // 小段名截断
+    expect(r.items[0].segments[0].videoFileId).toBe('cloud://v1') // 管理端读回原始 fileID（已过口令闸）
   })
 
-  it('saveHelpVideos 剔除空条（无标题且无视频）', async () => {
+  it('saveHelpVideos 剔除空主题（无标题且无带视频小段）', async () => {
     await call('saveHelpVideos', {
       items: [
-        { title: '起手结', videoFileId: 'cloud://a' },
-        { title: '', sub: '只填了副标题', videoFileId: '' }, // 无标题无视频 → 剔除
+        { title: '起手结', segments: [{ videoFileId: 'cloud://a' }] },
+        { title: '', sub: '只填了副标题', segments: [{ videoFileId: '' }] }, // 无标题 + 无带视频小段 → 剔除
       ],
     })
     const r = await call('listHelpVideos')
