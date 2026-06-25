@@ -1,5 +1,5 @@
 import { reply, type Ctx } from '../lib'
-import { fetchTradeBill, COLLECTIONS, type BillRow } from '../../../../kit'
+import { fetchTradeBill, normalizePem, COLLECTIONS, type BillRow } from '../../../../kit'
 
 // —— S16 外部对账 Batch 2：拉微信交易账单落 wxBills（供 Batch 3 逐笔比对）——
 // 凭证（敏感·非 git/DB·根因#9）：商户私钥/证书序列号读云开发环境变量；mchid 取 config.pay.subMchId（1113881793）。
@@ -27,8 +27,8 @@ export async function downloadBill({ db, data }: Ctx) {
   const date = isDate(data?.date) ? data.date : ''
   if (!date) return reply(400, { ok: false, error: 'BAD_DATE' })
   const serial = process.env.WXPAY_MCH_SERIAL || ''
-  // 私钥可能以转义 \n 存（控制台单行环境变量）→ 还原真换行
-  const privateKey = (process.env.WXPAY_MCH_PRIVATE_KEY || '').replace(/\\n/g, '\n')
+  // 私钥换行常被控制台塌成空格/字面 \n（→ OpenSSL DECODER 报错）→ 稳健重建规范 PEM
+  const privateKey = normalizePem(process.env.WXPAY_MCH_PRIVATE_KEY || '')
   if (!serial || !privateKey) return reply(200, { ok: false, error: 'NO_WXPAY_CREDS' })
   const cfg = await db.collection(COLLECTIONS.config).doc('pay').get().catch(() => null)
   const mchid = (cfg && cfg.data && cfg.data.subMchId) || ''

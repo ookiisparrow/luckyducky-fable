@@ -48,6 +48,18 @@ const defaultFetch: WxFetch = (url, init) =>
         .then((r: any) => ({ status: r.status, text: () => r.text() }))
     : httpsFetch(url, init)
 
+// 还原 PEM 私钥：环境变量里换行常被控制台塌成空格/丢失（→ OpenSSL `DECODER routines::unsupported`）。
+// 取 BEGIN/END 间内容、只留 base64 字符、按 64 列重折，重建规范 PEM。兼容字面 \n / 空格塌行 / 无换行。
+export function normalizePem(raw: string): string {
+  const s = String(raw || '').replace(/\\n/g, '\n').trim()
+  const m = s.match(/-----BEGIN ([A-Z0-9 ]+?)-----([\s\S]*?)-----END [A-Z0-9 ]+?-----/)
+  if (!m) return s // 非 PEM 形态原样返回（让上层报真错）
+  const type = m[1].trim()
+  const body = (m[2].match(/[A-Za-z0-9+/=]/g) || []).join('')
+  const lines = body.match(/.{1,64}/g) || []
+  return `-----BEGIN ${type}-----\n${lines.join('\n')}\n-----END ${type}-----\n`
+}
+
 export interface SignOpts {
   method: string
   urlPath: string // path + query（被签内容·须与请求一致）

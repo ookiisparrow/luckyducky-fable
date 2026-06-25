@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach } from 'vitest'
 import { generateKeyPairSync, createVerify } from 'crypto'
 import cloud, { control } from 'wx-server-sdk'
-import { wxpaySign, parseTradeBill, fetchTradeBill } from '../../packages/cloud/src/kit/wxpay'
+import { wxpaySign, parseTradeBill, fetchTradeBill, normalizePem } from '../../packages/cloud/src/kit/wxpay'
 import { downloadBill, upsertBills } from '../../packages/cloud/src/functions/admin/adminApi/actions/wxbill'
 
 // S16 外部对账 Batch 2（离线基础）：微信支付 v3 签名器 + 账单 CSV 解析 + 落 wxBills。
@@ -51,6 +51,21 @@ describe('wxpaySign — APIv3 RSA-SHA256 签名（密码学正确）', () => {
     // 重建被签消息（METHOD\nURL\nTS\nNONCE\nBODY\n）并验签
     const message = `GET\n${urlPath}\n1700000000\ntestnonce\n\n`
     expect(createVerify('RSA-SHA256').update(message).verify(PUB, sig, 'base64')).toBe(true)
+  })
+})
+
+describe('normalizePem — 还原塌行的 PEM 私钥（修 DECODER unsupported）', () => {
+  it('换行被空格塌掉的 PEM → 重建后可正常签名验签', () => {
+    const mangled = PRIV.replace(/\n/g, ' ') // 模拟控制台把换行塌成空格（泄露输出实见此形）
+    const fixed = normalizePem(mangled)
+    expect(fixed).toMatch(/-----BEGIN PRIVATE KEY-----\n/)
+    expect(fixed).toMatch(/\n-----END PRIVATE KEY-----/)
+    const auth = wxpaySign({ method: 'GET', urlPath: '/x', body: '', mchid: 'm', serial: 's', privateKey: fixed, timestamp: '1', nonce: 'n' })
+    const sig = auth.match(/signature="([^"]+)"/)[1]
+    expect(createVerify('RSA-SHA256').update('GET\n/x\n1\nn\n\n').verify(PUB, sig, 'base64')).toBe(true)
+  })
+  it('字面 \\n 塌行也能还原成规范 PEM', () => {
+    expect(normalizePem(PRIV.replace(/\n/g, '\\n'))).toMatch(/-----BEGIN PRIVATE KEY-----\n[A-Za-z0-9+/=]/)
   })
 })
 
