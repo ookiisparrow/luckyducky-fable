@@ -41,12 +41,9 @@ const httpsFetch: WxFetch = (url, init) =>
     req.end()
   })
 
-const defaultFetch: WxFetch = (url, init) =>
-  typeof (globalThis as any).fetch === 'function'
-    ? (globalThis as any)
-        .fetch(url, init)
-        .then((r: any) => ({ status: r.status, text: () => r.text() }))
-    : httpsFetch(url, init)
+// 默认走 Node 原生 https（HTTP/1.1）——云函数里 undici fetch 对 api.mch 易报 "terminated"（socket 终止）；
+// 原生 https 更稳、错误更清晰。测试注入 mock 不走这里。
+const defaultFetch: WxFetch = (url, init) => httpsFetch(url, init)
 
 // 还原 PEM 私钥：环境变量里换行常被控制台塌成空格/丢失（→ OpenSSL `DECODER routines::unsupported`）。
 // 取 BEGIN/END 间内容、只留 base64 字符、按 64 列重折，重建规范 PEM。兼容字面 \n / 空格塌行 / 无换行。
@@ -178,6 +175,7 @@ export async function fetchTradeBill(
     }
     return { ok: true, rows: parseTradeBill(await d.text()) }
   } catch (e: any) {
-    return { ok: false, error: 'WXPAY_FETCH_FAIL:' + (e?.message || 'unknown') }
+    const detail = e?.cause?.code || e?.cause?.message || e?.code || e?.message || 'unknown'
+    return { ok: false, error: 'WXPAY_FETCH_FAIL:' + detail }
   }
 }
