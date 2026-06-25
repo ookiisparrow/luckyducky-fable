@@ -1278,6 +1278,31 @@ export const repoChecks = [
         bad.push(`${catRel} 进播放页未带 courseId（防串课·审计 #3）`)
       if (rd(meRel) && !/player\/index\?id=[^'"]*courseId=/.test(rd(meRel)))
         bad.push(`${meRel} 续学进播放页未带 courseId（防串课·审计 #3）`)
+      // P1-3 尾：① 鉴权失败 redirect 落本课目录（带 courseId·F7）；② 带 courseId 却命中不到课（漂移/下架）→ 不在错课上播
+      if (player && !/act\.unlocked\(cid\)[\s\S]{0,240}?\/pages\/catalog\/index\?courseId=/.test(player))
+        bad.push(`${playerRel} 鉴权失败 redirect 未带 courseId——应落本课目录而非裸目录（审计 P1-3 尾/F7）`)
+      if (player && !/o\.courseId && cid !== decodeURIComponent\(o\.courseId\)/.test(player))
+        bad.push(`${playerRel} 缺课程可用性校验——带 courseId 命中不到课会回退别课错播（审计 P1-3 尾）`)
+      return bad
+    },
+  },
+  {
+    // mp 端进度云失败 fail-closed、不回退演示数据（审计 P2-5·根因#8）。痛：store/progress.js 的 `remote` 仅在
+    // getMyProgress 成功时置 true，mp 端云失败 remote 留 false → ofLesson 回退 SAMPLE_PROGRESS（演示进度）→ 真用户
+    // 看到假的「已学完/观看中」、继续学习从错课时起。修＝演示回退由 DEMO_FALLBACK 门控、mp(#ifdef) 下 false（空进度）。
+    id: 'progress-mp-fail-closed',
+    roots: ['#8'],
+    desc: 'mp 端进度云失败 fail-closed 不演示（审计 P2-5·根因#8）：store/progress.js 演示回退 SAMPLE_PROGRESS 经 DEMO_FALLBACK 门控、mp(#ifdef MP-WEIXIN) 下为 false——云失败显空进度不显假「已学完/观看中」误导继续学习；防回退成 mp 也吃演示进度',
+    run() {
+      const rel = 'packages/miniapp/src/store/progress.js'
+      const abs = join(ROOT, rel)
+      if (!existsSync(abs)) return [`${rel} 缺失`]
+      const src = readFileSync(abs, 'utf8')
+      const bad = []
+      if (!/#ifdef MP-WEIXIN[\s\S]*?DEMO_FALLBACK = false[\s\S]*?#endif/.test(src))
+        bad.push(`${rel} mp 下 DEMO_FALLBACK 未置 false——mp 端云失败会回退演示进度误导（审计 P2-5·根因#8）`)
+      if (!/!s\.remote\) return DEMO_FALLBACK \?/.test(src))
+        bad.push(`${rel} ofLesson 未经 DEMO_FALLBACK 门控演示回退——mp 端会吃演示进度（审计 P2-5）`)
       return bad
     },
   },
@@ -1790,6 +1815,14 @@ export const repoChecks = [
       const gc = join(dir, 'getCourses.ts')
       if (existsSync(gc) && /\.\.\.(c|ch|l)\b/.test(readFileSync(gc, 'utf8')))
         bad.push(`learning/getCourses.ts 裸 ...c/...ch/...l 展开原始文档——课/章/节须逐层显式白名单（fail-closed·防加字段静默漏进公开返回·审计 #10）`)
+      // 审计 P2-4：trackEvent 进度折叠须按「已确认进课 enteredAt 非空」过滤·与播放鉴权同闸——否则「已激活
+      // 未确认」直调 trackEvent 可污染进度 + 看板统计。
+      const te = join(dir, 'trackEvent.ts')
+      if (existsSync(te)) {
+        const t = readFileSync(te, 'utf8')
+        if (/collection\('activations'\)/.test(t) && !/enteredAt:\s*_\.neq\(null\)/.test(t))
+          bad.push(`learning/trackEvent.ts 进度折叠 activations 查询未要求 enteredAt 非空——「已激活未确认进课」可污染进度/看板（须与 getPlaybackUrl/getMyCourses 同闸·审计 P2-4）`)
+      }
       return bad
     },
   },

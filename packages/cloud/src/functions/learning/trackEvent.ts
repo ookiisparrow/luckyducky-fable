@@ -36,10 +36,13 @@ export const main = withOpenId(
     // 进度折叠：segment_done（一段看完）/ watch_at（离开播放页位置）
     const courseId = str(meta.courseId, 64)
     if ((type === 'segment_done' || type === 'watch_at') && courseId) {
-      // 防刷（审计 P3）：仅本人已激活该课才折叠进度，杜绝伪造任意课程进度污染看板/继续学习卡
+      // 防刷（审计 P2-4·口径统一）：仅本人已**确认进课**（enteredAt 非空）才折叠进度——与播放鉴权
+      // getPlaybackUrl / getMyCourses 同闸。否则「已激活未确认」用户直调 trackEvent 可污染自己进度 +
+      // 后台统计、确认后还看到伪造的「继续观看/已学完」。
+      const _ = db.command
       const owns = await db
         .collection('activations')
-        .where({ _openid: OPENID, courseId })
+        .where({ _openid: OPENID, courseId, enteredAt: _.neq(null) })
         .get()
         .catch(() => ({ data: [] }))
       if (!owns.data.length) return ok()

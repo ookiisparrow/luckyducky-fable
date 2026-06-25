@@ -56,10 +56,18 @@ onLoad(async (o) => {
   // 拉课程 + 鉴权并行（互不依赖）→ 冷启动少串一趟云往返、缩短首屏加载窗口（根因#8）
   await Promise.all([store.load(), act.loadMine()])
   if (unloaded) return // 慢网下 await 期间用户已快返离开 → 别再写已卸载页状态 / 别再 redirectTo 把人拽回（审计 #9·根因#8）
-  // 播放鉴权（规格 §四-4）：未确认激活 → 回目录（目录显示锁态引导）
-  if (!act.unlocked(store.current.id)) {
-    uni.showToast({ title: '课程需扫码激活后观看', icon: 'none' })
+  const cid = store.current.id // 已 setCurrent 后的本课 id（兜底 currentId）
+  // 课程可用性校验（审计 P1-3 尾）：带了 courseId 却没在课程表里命中（数据漂移/该课下架）→ store.current 回退到
+  // list[0]=别课，会播错课。此时回目录、别在错课上播。
+  if (o && o.courseId && cid !== decodeURIComponent(o.courseId)) {
+    uni.showToast({ title: '课程不可用', icon: 'none' })
     uni.redirectTo({ url: '/pages/catalog/index' })
+    return
+  }
+  // 播放鉴权（规格 §四-4）：未确认激活 → 回目录（目录显示锁态引导·带 courseId 落本课目录·审计 P1-3 尾/F7）
+  if (!act.unlocked(cid)) {
+    uni.showToast({ title: '课程需扫码激活后观看', icon: 'none' })
+    uni.redirectTo({ url: `/pages/catalog/index?courseId=${cid}` })
     return
   }
   locateLesson(o) // 冷启直达播放页：store 刚加载完再定位一次

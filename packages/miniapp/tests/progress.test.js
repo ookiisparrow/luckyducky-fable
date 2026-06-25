@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest'
 import { setActivePinia, createPinia } from 'pinia'
 import { useProgressStore } from '@/store/progress.js'
 import { track } from '@/utils/track.js'
-import { ALL_LESSONS, SAMPLE_PROGRESS } from '@/data/course.js'
+import { ALL_LESSONS } from '@/data/course.js'
 
 const L1 = ALL_LESSONS.find((l) => l.id === 'l1')
 const L2 = ALL_LESSONS.find((l) => l.id === 'l2')
@@ -48,9 +48,10 @@ describe('progress store（云端 segment 粒度 → 页面 lesson 级形状）'
     }
   }
 
-  it('无云（H5 / 未登录）：lesson 级回退样例，lastWatch 为 null', () => {
+  it('云未就绪（mp 端 fail-closed·测试=mp 路径 DEMO_FALLBACK=false）：不回退演示进度→空进度 + lastWatch null（审计 P2-5）', () => {
     const s = useProgressStore()
-    expect(s.ofLesson('course-duck', L1)).toEqual(SAMPLE_PROGRESS.l1)
+    // mp 端云为唯一源·失败不显演示「已学完/观看中」误导继续学习；H5/App 的演示回退是编译期分支、vitest 测不到
+    expect(s.ofLesson('course-duck', L1)).toEqual({})
     expect(s.lastWatch).toBe(null)
   })
 
