@@ -13,6 +13,23 @@ function genCode(): string {
   return s
 }
 
+// 批次 ID（外审 R1-R4·P1.9·根因#1 唯一标识粒度不足）：曾只到分钟（b-<course>-yyyyMMddHHmm），
+// 同课同分钟生成两批撞同 batchId → 后台按 batchId 合并、批次追踪/核销混乱。改北京时间到秒 + 随机后缀，
+// 同课同秒并发两批也必不同（batches.ts 按存库 batchId 字段分组、不解析串，加后缀不破坏分组）。
+export function makeBatchId(courseId: string, now: number): string {
+  const d = new Date(now + 8 * 3600 * 1000)
+  const p = (n: number) => String(n).padStart(2, '0')
+  const ts =
+    String(d.getUTCFullYear()) +
+    p(d.getUTCMonth() + 1) +
+    p(d.getUTCDate()) +
+    p(d.getUTCHours()) +
+    p(d.getUTCMinutes()) +
+    p(d.getUTCSeconds())
+  const rand = randomBytes(3).toString('hex')
+  return `b-${courseId}-${ts}-${rand}`
+}
+
 export const main = withAdminGate(async ({ db, event }) => {
   const e: any = event
   // count 必须显式合法正整数（审核批次B：漏传/非法不再静默夹成 1）；合法后才钳到上限 500
@@ -25,15 +42,7 @@ export const main = withAdminGate(async ({ db, event }) => {
   if (!course || !course.data) return err('UNKNOWN_COURSE:' + courseId)
 
   const now = Date.now()
-  const d = new Date(now + 8 * 3600 * 1000)
-  const p = (n: number) => String(n).padStart(2, '0')
-  const batchId =
-    `b-${courseId}-` +
-    d.getUTCFullYear() +
-    p(d.getUTCMonth() + 1) +
-    p(d.getUTCDate()) +
-    p(d.getUTCHours()) +
-    p(d.getUTCMinutes())
+  const batchId = makeBatchId(courseId, now)
 
   const codes: string[] = []
   for (let i = 0; i < count; i++) {

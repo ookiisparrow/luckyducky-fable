@@ -158,14 +158,14 @@ export function route(menuId: string): Route {
   if (menuId === 'aftersale:apply')
     return {
       type: 'miniprogram',
-      page: 'pages/aftersale/index',
+      page: 'pages/aftersales/index', // pages.json 注册名带 s（外审 P2.11·kf-card-page-registered 守卫锁）
       title: '申请售后',
       fallbackText: '申请售后请在小程序「我的 → 订单 → 申请售后」操作。需要我协助可点「转人工」。',
     }
   if (menuId === 'course:open')
     return {
       type: 'miniprogram',
-      page: 'pages/course/index',
+      page: 'pkg-video/courses/index', // 课程页在 pkg-video 分包（外审 P2.11·守卫锁须为已注册路由）
       title: '我的课程',
       fallbackText: '在小程序「我的 → 课程」即可观看已激活的课程。激活码相关点上方菜单，或点「转人工」。',
     }
@@ -197,7 +197,11 @@ export async function summarizeOrders(db: any, openid: string): Promise<string> 
   const list = (r && r.data) || []
   if (!list.length) return '没查到你名下的订单。如果刚下单可稍后再试，或点「转人工」。'
   const STAT: Record<string, string> = { pending: '待支付', paid: '已支付/待发货', shipped: '已发货', done: '已完成', closed: '已关闭' }
-  const lines = list.map((o: any) => `· 订单 ${o.id || o._id}：${STAT[o.status] || o.status}${o.trackingNo ? '（运单 ' + o.trackingNo + '）' : ''}`)
+  // 运单号在 shipping 子对象（发货时 adminApi 写 shipping:{company,trackingNo}）——曾错取顶层 o.trackingNo→永远显示不出（外审 P2.19·根因#8）
+  const lines = list.map((o: any) => {
+    const tracking = o.shipping && o.shipping.trackingNo
+    return `· 订单 ${o.id || o._id}：${STAT[o.status] || o.status}${tracking ? '（运单 ' + tracking + '）' : ''}`
+  })
   return '你最近的订单：\n' + lines.join('\n') + '\n需要更多帮助点「转人工」。'
 }
 

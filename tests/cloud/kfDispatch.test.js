@@ -96,7 +96,9 @@ describe('menu_id 路由', () => {
     expect(route('human')).toEqual({ type: 'transfer' })
     expect(route('order:query')).toEqual({ type: 'order_query' })
     expect(route('aftersale:policy').type).toBe('text')
-    expect(route('aftersale:apply')).toMatchObject({ type: 'miniprogram', page: 'pages/aftersale/index' })
+    // 卡片 page 须是 pages.json 已注册路由（外审 P2.11·根因#8）：售后页是 aftersales(带 s)、课程页在 pkg-video 分包
+    expect(route('aftersale:apply')).toMatchObject({ type: 'miniprogram', page: 'pages/aftersales/index' })
+    expect(route('course:open')).toMatchObject({ type: 'miniprogram', page: 'pkg-video/courses/index' })
     expect(route('cat:logistics').type).toBe('menu')
     expect(route('未知id').type).toBe('menu') // 兜底回根菜单
   })
@@ -113,13 +115,14 @@ describe('身份桥接 + 订单摘要', () => {
   it('summarizeOrders：取最近订单 + 状态中文', async () => {
     const db = cloud.database()
     control.seed('orders', [
-      { _id: 'o1', id: 'o1', _openid: 'openid-A', status: 'shipped', trackingNo: 'SF123', createdAt: 200 },
+      // 运单号写在 shipping 子对象（发货时 adminApi 写 shipping:{company,trackingNo}）——真机 wire 形状（外审 P2.19·根因#8）
+      { _id: 'o1', id: 'o1', _openid: 'openid-A', status: 'shipped', shipping: { company: 'SF', trackingNo: 'SF123' }, createdAt: 200 },
       { _id: 'o2', id: 'o2', _openid: 'openid-A', status: 'paid', createdAt: 100 },
     ])
     const txt = await summarizeOrders(db, 'openid-A')
     expect(txt).toContain('o1')
     expect(txt).toContain('已发货')
-    expect(txt).toContain('SF123')
+    expect(txt).toContain('SF123') // 取 o.shipping.trackingNo（曾错取顶层 o.trackingNo→永远显示不出运单号）
     expect(await summarizeOrders(db, 'openid-empty')).toContain('没查到')
   })
 })
@@ -176,7 +179,7 @@ describe('handleMessage 编排', () => {
     const { ctx, sent } = mkCtx()
     await handleMessage(ctx, { externalUserId: 'e5', menuId: 'aftersale:apply', text: '' })
     expect(sent[0].msgtype).toBe('miniprogram')
-    expect(sent[0].miniprogram.pagepath).toBe('pages/aftersale/index')
+    expect(sent[0].miniprogram.pagepath).toBe('pages/aftersales/index') // 已注册路由（外审 P2.11）
     expect(sent[0].miniprogram.appid).toBe('wxapp')
   })
 

@@ -2,11 +2,11 @@
  * 收货地址簿（Pinia）。供「我的页·地址管理」与「结算页·收货地址」共用。
  * 以后接后端：把 save/remove/setDefault 换成 api/user.js 的地址接口，字段一致即可。
  *
- * 初始播一条样例地址（陈圆圆），保证结算开箱即可下单；可编辑/删除/新增。
+ * 初始为空簿（外审 R1-R4·P1.6·根因#6）：不再内置样例地址——真支付一开，首购用户没改地址就下单
+ * 会误发到样例人致错发货。空态由结算页「请先添加收货地址」引导新增（checkout/index.vue addr=null 已处理）。
  * 条目结构：{ id, name, phone, region, detail, isDefault }
  */
 import { defineStore } from 'pinia'
-import { SAMPLE_ADDRESS } from '@/data/address.js'
 import { keepValid } from '@/utils/validate.js'
 
 // 下一个 id：取现有最大 + 1。不用模块计数器 —— 否则持久化回灌后计数器从头开始，
@@ -15,7 +15,7 @@ const nextId = (list) => list.reduce((m, a) => Math.max(m, a.id || 0), 0) + 1
 
 export const useAddressStore = defineStore('address', {
   state: () => ({
-    list: [{ ...SAMPLE_ADDRESS, id: 1 }],
+    list: [],
   }),
   // 回灌按契约清洗：丢弃残缺地址（缺 id/姓名/电话/地区/详址），
   // 防脏地址撑乱地址簿、或污染结算页默认地址。
@@ -25,7 +25,7 @@ export const useAddressStore = defineStore('address', {
       list: keepValid(
         s.list,
         (a) => a && a.id != null && !!a.name && !!a.phone && !!a.region && !!a.detail,
-        'address',
+        'address'
       ),
     }),
   },

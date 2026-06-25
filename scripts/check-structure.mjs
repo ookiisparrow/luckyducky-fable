@@ -213,6 +213,56 @@ export const repoChecks = [
     },
   },
   {
+    // 生产初始态零内置真实收货地址（根因#6 演示回退泄漏·外审 R1-R4·P1.6）：data/address.js 的 SAMPLE_ADDRESS
+    // 是演示/H5 回退样本，曾被 address store 初始 state 直接播一条（list:[{...SAMPLE_ADDRESS,id:1}]）——真支付一开，
+    // 首购用户没改地址就下单会误发到样例人（陈圆圆/杭州）致错发货+售后。锁 store 初始 list 必须为空 + 不得引
+    // SAMPLE_ADDRESS；空态由结算页「请先添加收货地址」既有路径兜（checkout/index.vue addr=null 已处理）。
+    id: 'address-no-sample-seed',
+    roots: ['#6'],
+    desc: '生产初始态零内置收货地址（根因#6·外审 P1.6）：store/address.js 初始 list 须空 + 不引 SAMPLE_ADDRESS——防样例地址误进真实下单链路致错发货',
+    run() {
+      const f = 'packages/miniapp/src/store/address.js'
+      if (!existsSync(join(ROOT, f))) return [`${f} 缺失（地址簿 store）`]
+      const src = readFileSync(join(ROOT, f), 'utf8')
+      const bad = []
+      if (/SAMPLE_ADDRESS/.test(src))
+        bad.push(`${f} 引用 SAMPLE_ADDRESS——样例地址混入生产初始态（误发货·根因#6·外审 P1.6）`)
+      // 初始 state 须 list: []（空数组容空白）——非空即内置了地址
+      if (!/list:\s*\[\s*\]/.test(src))
+        bad.push(`${f} 初始 list 非空——生产不得内置收货地址（空态由结算页引导新增·外审 P1.6）`)
+      return bad
+    },
+  },
+  {
+    // 客服小程序卡片 pagepath 须为已注册路由（根因#8 桩过≠真机能开·外审 R1-R4·P2.11）：cs/kfCallback/dispatch.ts
+    // 的 miniprogram route 写死 page 字符串，曾写错 pages/aftersale（少 s·实际 aftersales）、pages/course（实际在
+    // pkg-video 分包 = pkg-video/courses/index）——桩测把错路径锁成假绿，真机点卡片打不开目标页。锁每个 page 都在
+    // pages.json 注册（主包 path + 分包 root/path），路由改名/迁分包后客服卡片当场红。
+    id: 'kf-card-page-registered',
+    roots: ['#8'],
+    desc: '客服卡片 pagepath 须为小程序已注册路由（根因#8·外审 P2.11）：cs/kfCallback/dispatch.ts miniprogram 的 page 须在 pages.json（主包 + 分包 root/path）登记——防卡片跳不存在页真机打不开',
+    run() {
+      const dispatch = 'packages/cloud/src/functions/cs/kfCallback/dispatch.ts'
+      const pagesJson = 'packages/miniapp/src/pages.json'
+      if (!existsSync(join(ROOT, dispatch)) || !existsSync(join(ROOT, pagesJson))) return []
+      const reg = new Set()
+      try {
+        const pj = JSON.parse(readFileSync(join(ROOT, pagesJson), 'utf8'))
+        ;(pj.pages || []).forEach((p) => reg.add(p.path))
+        ;(pj.subPackages || []).forEach((sp) => (sp.pages || []).forEach((p) => reg.add(`${sp.root}/${p.path}`)))
+      } catch {
+        return [`${pagesJson} 解析失败——无法校验客服卡片路由`]
+      }
+      const bad = []
+      const src = readFileSync(join(ROOT, dispatch), 'utf8')
+      for (const m of src.matchAll(/page:\s*'([^']+)'/g)) {
+        if (!reg.has(m[1]))
+          bad.push(`${dispatch} 客服卡片 page '${m[1]}' 不是 pages.json 已注册路由——真机点卡片打不开（根因#8·外审 P2.11）`)
+      }
+      return bad
+    },
+  },
+  {
     // 企微群机器人告警推送单一收口（债#23续·根因#13 可观测落地 + #12 平台接缝单点）：钱链/安全告警的
     // 群机器人推送只经 kit/botpush.ts(pushBotAlert)、业务码一律经 kit/observe 的 notifyAlert——杜绝散调
     // （重复推/绕开关/webhook 凭证多处）。除 botpush(定义) 与 observe(唯一调用) 外，cloud/src 不得引用 pushBotAlert/botpush。

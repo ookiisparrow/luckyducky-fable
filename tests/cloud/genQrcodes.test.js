@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest'
 import { control } from 'wx-server-sdk'
-import { main } from '../../packages/cloud/src/functions/learning/genQrcodes'
+import { main, makeBatchId } from '../../packages/cloud/src/functions/learning/genQrcodes'
 
 // genQrcodes 闸门：管理通道判定（无 openid=CLI/控制台放行；客户端须 isAdmin）+ 防废码 + 码唯一。
 beforeEach(() => {
@@ -50,5 +50,15 @@ describe('genQrcodes 闸门', () => {
     expect(res.count).toBe(500)
     const ids = control.dump('qrcodes').map((q) => q._id)
     expect(new Set(ids).size).toBe(500) // 全唯一
+  })
+})
+
+describe('makeBatchId 唯一性（外审 P1.9·同课同分钟两批不再撞合并）', () => {
+  it('同 courseId + 同 now 的两批 batchId 必不同（曾只到分钟→撞同 id 被后台合并）', () => {
+    const now = Date.UTC(2026, 5, 25, 6, 30, 0) // 任意固定时刻
+    const a = makeBatchId('course-duck', now)
+    const b = makeBatchId('course-duck', now)
+    expect(a).not.toBe(b)
+    expect(a.startsWith('b-course-duck-')).toBe(true)
   })
 })
