@@ -11,7 +11,6 @@ import { ref, computed, onMounted, getCurrentInstance, watch } from 'vue'
 import { onLoad, onHide, onUnload } from '@dcloudio/uni-app'
 import Icon from '@/components/Icon.vue'
 import HelpSheet from './components/HelpSheet/index.vue'
-import { goBack } from '@/utils/nav.js'
 import { mmss as fmt } from '@/utils/format.js'
 import { stepSegment } from './segNav.js'
 import { scrubTimeAt } from './scrub.js'
@@ -354,7 +353,14 @@ function openHelp() {
   helpRef.value && helpRef.value.open()
 }
 
-const back = () => goBack('/pages/catalog/index')
+// 退出/返回固定指向「本课程目录」（catalog）：从目录进来 → navigateBack 保留其滚动；从「我」页续看 /
+// 我的课程 / 深链进来 → redirectTo 本课目录（带 courseId），不回到来源页（用户拍板·根因#8 真机才显）。
+function back() {
+  const pages = getCurrentPages()
+  const prev = pages[pages.length - 2]
+  if (prev && prev.route === 'pages/catalog/index') uni.navigateBack()
+  else uni.redirectTo({ url: `/pages/catalog/index?courseId=${course.value.id}` })
+}
 </script>
 
 <template>

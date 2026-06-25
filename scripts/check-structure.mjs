@@ -1262,6 +1262,23 @@ export const repoChecks = [
     },
   },
   {
+    // 播放页返回固定指向「本课程目录」（根因#8 真机才显·用户报）。痛：back 原用 goBack（栈里有上一页就
+    // navigateBack）——从「我」页续看 / 我的课程进来时返回会回到来源页，而非课程目录。修＝从目录来则
+    // navigateBack（保留滚动），否则 redirectTo /pages/catalog/index?courseId=<本课>。本守卫防回退成 goBack
+    // 回任意来源页（鉴权失败的 redirect 到 catalog 无 courseId，故用带 courseId 区分 back 处理）。
+    id: 'player-back-to-catalog',
+    roots: ['#8'],
+    desc: '播放页返回固定指向本课程目录（根因#8 真机·用户报）：pkg-video/player/index.vue 的 back 从非目录来源 redirectTo /pages/catalog/index?courseId=<本课>——防回退成 goBack 回到「我」页等任意来源页',
+    run() {
+      const rel = 'packages/miniapp/src/pkg-video/player/index.vue'
+      const abs = join(ROOT, rel)
+      if (!existsSync(abs)) return [`${rel} 缺失`]
+      return /\/pages\/catalog\/index\?courseId=/.test(readFileSync(abs, 'utf8'))
+        ? []
+        : [`${rel} back 未 redirectTo 本课程目录（/pages/catalog/index?courseId=）——返回须落课程目录而非回任意来源页（根因#8）`]
+    },
+  },
+  {
     // 主包不得 import 分包模块（mp-weixin 平台硬规则·根因#8 真机才崩）。病史：playbackCache 解析器原放
     // pkg-video（分包），主包 store/courses.js import 它 → mp-weixin 主包 require 分包路径运行时找不到 →
     // useCoursesStore 模块求值即抛 → 用到它的「我」页等白屏（H5 无分包概念故假绿、npm check 也测不出·#8）。
