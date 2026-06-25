@@ -1,4 +1,4 @@
-import { COLLECTIONS } from '../../../kit'
+import { COLLECTIONS, alert } from '../../../kit'
 
 /**
  * 客服分流引擎（避免幻觉第一·非生成式）：关键词识别 → 高亮 msgmenu 气泡分流；按回传 menu_id →
@@ -8,6 +8,47 @@ import { COLLECTIONS } from '../../../kit'
  * ⚠️ 线上消息 wire 形状（msgmenu 点击回什么字段）以真机为准（根因#8）：normalize 同时兼容
  * text.menu_id（点击回传）与 text.content（自由打字），真机验证后按实际收口。
  */
+
+// ── 一批消息处理：去重认领 + 防吞单（审计 P2） ──
+
+/** 原子认领去重（确定性 _id 撞号即已处理过·根因#1 幂等）。返回 true=本次认领成功（首见）。 */
+export async function firstSeen(db: any, msgid: string): Promise<boolean> {
+  try {
+    await db.collection(COLLECTIONS.kfState).add({ data: { _id: 'seen:' + msgid, at: Date.now() } })
+    return true
+  } catch {
+    return false // DUPLICATE_ID = 重复推送，已处理
+  }
+}
+
+/**
+ * 逐条处理一批客服消息（防吞单·审计 P2）：① 原子认领去重（撞号跳过）② 每条包 try/catch——
+ * 单条失败**不再中断整批**（原来 handleMessage 抛错会 unwind 整个 sync 循环：游标不推进 +
+ * 已认领的消息永久跳过 = 静默吞掉顾客消息）；失败时 **撤回认领 + alert HANDLE_FAILED**，并返回
+ * anyFailed。调用方据 anyFailed **保留旧游标**下次重拉：成功项 seen 去重、失败项重试——顾客消息
+ * 至少处理一次，不再因一次崩溃/超时永久丢。（抛错路径均为瞬时：DB/网络；send errcode 不抛·已自 alert。）
+ */
+export async function processKfBatch(
+  db: any,
+  msgs: any[],
+  handleOne: (msg: any) => Promise<void>
+): Promise<boolean> {
+  let anyFailed = false
+  for (const msg of msgs || []) {
+    const msgid = String((msg && msg.msgid) || '')
+    if (msgid && !(await firstSeen(db, msgid))) continue // 已处理过·跳过
+    try {
+      await handleOne(msg)
+    } catch (e) {
+      console.error('[kf] handle threw', { msgid }, String(e))
+      alert('security', 'kfCallback', 'HANDLE_FAILED', {})
+      // 撤回认领 → 不永久吞单（配合调用方保留旧游标重试）
+      if (msgid) await db.collection(COLLECTIONS.kfState).doc('seen:' + msgid).remove().catch(() => {})
+      anyFailed = true
+    }
+  }
+  return anyFailed
+}
 
 // ── 关键词识别（确定性·低幻觉）：命中类别 + 被识别词 ──
 const KEYWORDS: { cat: Category; words: string[] }[] = [

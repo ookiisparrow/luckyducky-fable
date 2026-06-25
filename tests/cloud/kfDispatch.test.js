@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest'
 import cloud, { control } from 'wx-server-sdk'
+import { vi } from 'vitest'
 import {
   recognize,
   rootMenu,
@@ -9,6 +10,7 @@ import {
   summarizeOrders,
   handleMessage,
   extUserId,
+  processKfBatch,
 } from '../../packages/cloud/src/functions/cs/kfCallback/dispatch'
 
 // 分流引擎：关键词识别 → 高亮 msgmenu；menu_id 路由（文字/卡片/转人工/查订单）；身份桥接查订单。
@@ -25,6 +27,42 @@ describe('extUserId wire 形状（根因#8 真机字段位置·防 40058）', ()
   it('都缺 → 空串（不构造空 touser 的非法 send）', () => {
     expect(extUserId({ msgtype: 'event', event: { event_type: 'enter_session' } })).toBe('')
     expect(extUserId(null)).toBe('')
+  })
+})
+
+describe('processKfBatch 防吞单（审计 P2·一条崩不拖垮整批/不永久跳过）', () => {
+  it('单条失败：不中断整批 + 撤回认领 + anyFailed=true；成功项留 seen 去重', async () => {
+    const db = cloud.database()
+    const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const handled = []
+    const handleOne = async (msg) => {
+      if (msg.msgid === 'm2') throw new Error('boom')
+      handled.push(msg.msgid)
+    }
+    const anyFailed = await processKfBatch(db, [{ msgid: 'm1' }, { msgid: 'm2' }, { msgid: 'm3' }], handleOne)
+    expect(anyFailed).toBe(true)
+    expect(handled).toEqual(['m1', 'm3']) // m2 抛错但 m1/m3 照常处理（不被中断）
+    const seen = control.dump('kfState').map((d) => d._id)
+    expect(seen).toContain('seen:m1') // 成功项保留认领
+    expect(seen).toContain('seen:m3')
+    expect(seen).not.toContain('seen:m2') // 失败项撤回认领 → 下次重拉可重试（不吞单）
+    expect(errSpy.mock.calls.flat().join(' ')).toContain('HANDLE_FAILED')
+    errSpy.mockRestore()
+  })
+
+  it('全成功：anyFailed=false，全部认领', async () => {
+    const db = cloud.database()
+    const anyFailed = await processKfBatch(db, [{ msgid: 'a' }, { msgid: 'b' }], async () => {})
+    expect(anyFailed).toBe(false)
+    expect(control.dump('kfState').map((d) => d._id).sort()).toEqual(['seen:a', 'seen:b'])
+  })
+
+  it('去重：已 seen 的消息跳过不再 handle（确定性 _id 撞号·幂等）', async () => {
+    const db = cloud.database()
+    control.seed('kfState', [{ _id: 'seen:dup', at: 1 }])
+    const handled = []
+    await processKfBatch(db, [{ msgid: 'dup' }, { msgid: 'fresh' }], async (msg) => handled.push(msg.msgid))
+    expect(handled).toEqual(['fresh']) // dup 已处理过 → 跳过
   })
 })
 

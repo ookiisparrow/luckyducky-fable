@@ -8,7 +8,7 @@ import {
   getDb,
   alert,
 } from '../../../kit'
-import { handleMessage, rootMenu, buildMsgMenu, extUserId, type Incoming } from './dispatch'
+import { handleMessage, rootMenu, buildMsgMenu, extUserId, processKfBatch, type Incoming } from './dispatch'
 
 // 微信客服 in-chat 智能客服回调（HTTP 访问服务·类比 adminApi 的 /adminapi）。
 // 验签 + AES 解密 + fail-closed 由 kit.defineKfCallback 强制（根因#3）；本函数只做「收到事件 → 拉消息
@@ -28,16 +28,6 @@ function normalize(msg: any): Incoming | null {
     return { externalUserId, menuId: String(msg.text?.menu_id || ''), text: String(msg.text?.content || '') }
   }
   return null // 非文本（图片/语音/事件）本期不进分流，由 onEvent 的进会话欢迎兜
-}
-
-// 去重：确定性 _id 撞号即已处理过（根因#1 幂等）——撞号吞掉、跳过。
-async function firstSeen(db: any, msgid: string): Promise<boolean> {
-  try {
-    await db.collection(COLLECTIONS.kfState).add({ data: { _id: 'seen:' + msgid, at: Date.now() } })
-    return true
-  } catch {
-    return false // DUPLICATE_ID = 重复推送，已处理
-  }
 }
 
 export const main = defineKfCallback({
@@ -76,6 +66,18 @@ export const main = defineKfCallback({
     if (cur && cur.data && typeof cur.data.cursor === 'string') cursor = cur.data.cursor
     console.log('[kf] cursor-read', { has: !!cursor }) // 观测：游标有没有读到（根因#8 定「为何每次重拉历史」）
 
+    // 单条消息处理（防吞单经 processKfBatch 包 try/catch·见 dispatch）：进会话欢迎 / 文本分流
+    const handleOne = async (msg: any) => {
+      console.log('[kf] handle', { msgtype: msg.msgtype, hasText: !!msg.text?.content, hasMenuId: !!msg.text?.menu_id })
+      if (msg.msgtype === 'event' && msg.event?.event_type === 'enter_session') {
+        await send(buildMsgMenu(extUserId(msg), openKfId, rootMenu())) // 进会话欢迎（euid 在 event 子对象·根因#8）
+        return
+      }
+      const incoming = normalize(msg)
+      if (incoming) await handleMessage(ctx, incoming)
+      else console.log('[kf] not-dispatched', { msgtype: msg.msgtype })
+    }
+
     for (let guard = 0; guard < 20; guard++) {
       const r = await syncMsg(token, { cursor, token: syncToken, openKfId })
       // nc=本轮 sync 是否回了 next_cursor（定根因：empty 即 WeChat 没回、游标无从推进）
@@ -84,20 +86,11 @@ export const main = defineKfCallback({
         alert('security', 'kfCallback', 'SYNCMSG_FAILED', { errcode: r.errcode })
         break
       }
-      for (const msg of r.msg_list) {
-        const msgid = String(msg.msgid || '')
-        if (msgid && !(await firstSeen(db, msgid))) {
-          console.log('[kf] dup-skip', { msgid })
-          continue // 已处理
-        }
-        console.log('[kf] handle', { msgtype: msg.msgtype, hasText: !!msg.text?.content, hasMenuId: !!msg.text?.menu_id })
-        if (msg.msgtype === 'event' && msg.event?.event_type === 'enter_session') {
-          await send(buildMsgMenu(extUserId(msg), openKfId, rootMenu())) // 进会话欢迎（euid 在 event 子对象·根因#8）
-          continue
-        }
-        const incoming = normalize(msg)
-        if (incoming) await handleMessage(ctx, incoming)
-        else console.log('[kf] not-dispatched', { msgtype: msg.msgtype })
+      // 防吞单（审计 P2）：单条失败不中断整批、撤回认领；本批有失败则**保留旧游标**下次重拉重试
+      const anyFailed = await processKfBatch(db, r.msg_list, handleOne)
+      if (anyFailed) {
+        console.log('[kf] batch-failed → 保留旧游标下次重试（不吞单）')
+        break // 不推进游标：下次重拉，成功项 seen 去重、失败项重试
       }
       cursor = r.next_cursor || cursor
       await db
