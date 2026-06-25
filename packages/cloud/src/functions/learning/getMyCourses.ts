@@ -7,6 +7,7 @@ export const main = withOpenId(async ({ db, OPENID }) => {
   const res = await db
     .collection('activations')
     .where({ _openid: OPENID, enteredAt: _.neq(null) })
+    .limit(200) // 显式上界（规模·根因#7）：本人激活远不及 200·防裸 .get() 默认 100 静默截断漏课
     .get()
   const byCourse: Record<string, { courseId: string; enteredAt: number }> = {}
   for (const a of res.data) {

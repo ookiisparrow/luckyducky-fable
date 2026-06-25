@@ -1683,6 +1683,29 @@ export const repoChecks = [
     },
   },
   {
+    // 学习域按用户读路径有界（规模·根因#7/#8）：getMyCourses/getMyProgress/confirmEnter 对
+    // activations/progress/orders 的本人查询裸 `.get()` 会吃 CloudBase 默认 100 上限静默截断——
+    // 重度用户漏课/漏进度，confirmEnter 漏撤退货权（>100 单时退货权失效漏判=可白退）。mock 不复现
+    // 默认截断（根因#8 桩≠真），故以结构守卫钉「这些读须带 .limit() 显式上界」防回退裸 .get()。
+    id: 'learning-user-reads-bounded',
+    roots: ['#7'],
+    desc: '学习域按用户读有界（规模·根因#7/#8 mock 不复现默认 100 截断）：getMyCourses/getMyProgress/confirmEnter 对 activations/progress/orders 的本人查询须带 .limit() 显式上界——杜绝裸 .get() 默认 100 静默截断（重度用户漏课/漏撤退货权）',
+    run() {
+      const bad = []
+      const dir = join(ROOT, 'packages/cloud/src/functions/learning')
+      for (const f of ['getMyCourses.ts', 'getMyProgress.ts', 'confirmEnter.ts']) {
+        const abs = join(dir, f)
+        if (!existsSync(abs)) {
+          bad.push(`learning/${f} 缺失（按用户读有界·规模）`)
+          continue
+        }
+        if (!/\.limit\(/.test(readFileSync(abs, 'utf8')))
+          bad.push(`learning/${f} 本人读未带 .limit() 上界——裸 .get() 默认 100 静默截断（规模·根因#7/#8）`)
+      }
+      return bad
+    },
+  },
+  {
     // 评价列表 cursor 分页（根因#7 固定 limit 规模挤出·债#13）：原 getReviews `limit(200)` 固定——
     // 商品评价过 200 时「全部评价」页旧评价被截断挤出。列表须走 pageQuery 游标分页（同订单/售后）；
     // 汇总仍基于 bounded 样本（≤200·approx 标注·真增量聚合属院外债#13 后半·同 dashboard 近似口径）。

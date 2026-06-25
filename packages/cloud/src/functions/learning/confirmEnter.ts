@@ -39,6 +39,7 @@ export const main = withOpenId(async ({ db, OPENID, event }) => {
         .collection('orders')
         .where({ _openid: OPENID, status: _.in(['paid', 'shipped', 'done']) })
         .orderBy('createdAt', 'asc')
+        .limit(200) // 显式上界（规模·根因#7）：防裸 .get() 默认 100 截断漏到要撤退货权的订单（>100 单可白退）
         .get()
       for (const order of orders.data) {
         const idx = (order.items || []).findIndex(
