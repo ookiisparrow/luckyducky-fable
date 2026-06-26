@@ -11,8 +11,10 @@ import cloud from 'wx-server-sdk'
  * 失败绝不回滚本地发货，只回 { ok, error } 供调用方留痕 + [LD_ALERT] 告警人工补录（mp 后台手动录入兜底）。
  *
  * ⚠️ 真发前置（靠人·根因#8「拿到 ≠ 用通」；未满足时本接缝失败→fail-soft→本地照发 + 告警，不阻塞）：
- *   ① mp 后台开通「发货信息管理」能力；② 云函数 config.json 声明 openapi 权限 wxa.sec.order.uploadShippingInfo；
- *   ③ 真单真机验上传成功 + mp 后台无「待接入发货管理」提醒。代码替不了这三步，只把链路做成「配好即生效」。
+ *   ① mp 后台开通「发货信息管理」能力（2026-06-26 用户确认已开通）；② 云函数部署产物 config.json 声明 openapi
+ *      权限 `wxaSecOrder.uploadShippingInfo`（权限串 === JS 调用路径 cloud.openapi.<串>·官方云调用规则；已由
+ *      build.mjs OPENAPI_PERMS 自动产出·守卫 openapi-perm-declared 锁登记不漏）；③ 真单真机验上传成功 +
+ *      mp 后台无「待接入发货管理」提醒。代码替不了 ①③ 两步，只把链路做成「配好即生效」。
  */
 export type ShipUpload = {
   orderId: string // 商户订单号 out_trade_no（= order.id）

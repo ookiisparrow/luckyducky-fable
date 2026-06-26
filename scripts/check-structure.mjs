@@ -195,6 +195,40 @@ export const repoChecks = [
     },
   },
   {
+    // 云调用权限随产物声明（根因#12 平台接缝 + 合规债#26）：用 cloud.openapi.<ns>.<method> 的云函数（现仅
+    // 发货上传 wxaSecOrder.uploadShippingInfo），其部署产物 dist/<fn>/config.json 必声明该 openapi 权限——
+    // 否则云调用被微信拒（权限不足 errcode）、发货信息永远传不上去（实物+微信支付资金冻结·债#26）。
+    // 机制：build.mjs 按产物检测用到的云调用、产 config.json（同 usesManager 检测路子·权限串=JS 调用路径）；
+    // 本守卫静态锁「源里每个 cloud.openapi 调用路径都在 build.mjs OPENAPI_PERMS 登记」——加新云调用却忘登记
+    // 权限即红（漏登记=部署产物缺权限=云调用失败·无声无息发不出货）。
+    id: 'openapi-perm-declared',
+    roots: ['#12'],
+    desc: '云调用权限随产物声明（根因#12·债#26）：cloud 源每个 cloud.openapi.<ns>.<method> 调用须在 build.mjs OPENAPI_PERMS 登记（据此产 config.json 声明权限）——否则部署产物缺 openapi 权限·云调用被拒·发货上传不生效',
+    run() {
+      const bad = []
+      const srcRoot = join(ROOT, 'packages/cloud/src')
+      const calls = new Set()
+      const walk = (d) => {
+        for (const e of readdirSync(d)) {
+          const p = join(d, e)
+          if (statSync(p).isDirectory()) walk(p)
+          else if (e.endsWith('.ts'))
+            for (const m of readFileSync(p, 'utf8').matchAll(/\.openapi\.(\w+)\.(\w+)/g)) calls.add(`${m[1]}.${m[2]}`)
+        }
+      }
+      if (existsSync(srcRoot)) walk(srcRoot)
+      const buildMjs = join(ROOT, 'packages/cloud/build.mjs')
+      if (!existsSync(buildMjs)) return ['packages/cloud/build.mjs 缺失——云调用权限声明机制（债#26·根因#12）']
+      const build = readFileSync(buildMjs, 'utf8')
+      if (!/OPENAPI_PERMS/.test(build) || !/config\.json/.test(build))
+        bad.push('build.mjs 未见 OPENAPI_PERMS 登记或 config.json 产出——部署产物不带 openapi 权限声明（云调用失败·债#26·根因#12）')
+      for (const c of calls)
+        if (!build.includes(`'${c}'`) && !build.includes(`"${c}"`))
+          bad.push(`云调用 cloud.openapi.${c} 未在 build.mjs OPENAPI_PERMS 登记——部署产物 config.json 缺权限「${c}」·云调用会被微信拒（根因#12·债#26）`)
+      return bad
+    },
+  },
+  {
     // 商品下架生效（债#12）：原 publishProduct 写 products 后永久可售（getProducts 全量下发·featured 只管橱窗·
     // deleteDraft 是硬删非停售）——无「临时停售」路径。本守卫锁 getProducts 必按 listed 过滤（where listed!=false·
     // 兼容旧无字段=可售），防回退成全量下发把已停售商品又露给顾客；停售/恢复经 adminApi unpublishProduct/republishProduct。

@@ -35,6 +35,14 @@ function collect() {
 
 const fns = collect()
 
+// 云调用（cloud.openapi）权限登记（根因#12 平台接缝 + 合规债#26）：每个云函数若用到下列云调用，其部署产物
+// 须带 config.json 声明对应 openapi 权限，否则微信拒调用（权限不足）。权限串 === JS 调用路径 cloud.openapi.<串>
+// （官方云调用规则·如 wxacode.getUnlimited / subscribeMessage.send）。当前仅发货上传一处；新增云调用须在此登记，
+// 否则 check-structure 的 openapi-perm-declared 守卫会红。
+const OPENAPI_PERMS = [
+  'wxaSecOrder.uploadShippingInfo', // 发货信息上传 upload_shipping_info（kit/shipping.ts·实物+微信支付合规·债#26）
+]
+
 // 并发构建安全（复审报告 P2）：verify:cloud / deploy-fns 各自独立跑 build:cloud，并发时共享
 // dist 的 rmSync ↔ 写入互踩 → ENOTEMPTY / 产物损坏。用原子 mkdir 作锁串行化：第二个构建等第
 // 一个完成而非污染产物（mkdir 已存在即 EEXIST＝锁被持有）。构建脚本并发性静态测不出（无干净
@@ -72,7 +80,8 @@ for (const fn of fns) {
   })
   // 每函数 package.json（installDependency 装）：wx-server-sdk 恒有；manager-node 按需。
   // 从打包产物检测（多文件函数里 manager-node 在 lib，不在 index 入口；产物含其 external require）
-  const usesManager = readFileSync(join(outdir, 'index.js'), 'utf8').includes('@cloudbase/manager-node')
+  const bundle = readFileSync(join(outdir, 'index.js'), 'utf8')
+  const usesManager = bundle.includes('@cloudbase/manager-node')
   writeFileSync(
     join(outdir, 'package.json'),
     JSON.stringify(
@@ -89,6 +98,10 @@ for (const fn of fns) {
       2
     ) + '\n'
   )
+  // 云调用权限 config.json（债#26·根因#12）：产物用到登记的 cloud.openapi.<串>（串在打包产物里以属性访问形式
+  // 保留，如 .wxaSecOrder.uploadShippingInfo）即声明对应 openapi 权限；用不到则不产（避免空 config.json）。
+  const openapi = OPENAPI_PERMS.filter((perm) => bundle.includes(perm))
+  if (openapi.length) writeFileSync(join(outdir, 'config.json'), JSON.stringify({ permissions: { openapi } }, null, 2) + '\n')
 }
 
 rmSync(LOCK, { recursive: true, force: true }) // 释放并发构建锁
