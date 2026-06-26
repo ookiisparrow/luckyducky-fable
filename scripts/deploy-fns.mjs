@@ -34,7 +34,15 @@ execSync('npm run build:cloud', { cwd: ROOT, stdio: 'inherit' })
 const cur = {}
 for (const name of readdirSync(DIST)) {
   const idx = join(DIST, name, 'index.js')
-  if (existsSync(idx)) cur[name] = createHash('sha256').update(readFileSync(idx)).digest('hex').slice(0, 12)
+  if (!existsSync(idx)) continue
+  // hash 覆盖随产物部署的文件：index.js（恒有）+ config.json（云调用 openapi 权限声明·债#26）。
+  // 只算 index.js 会漏判「仅 config.json 变」（如改 openapi 权限）→ index.js 不变 → hash 不变 → 不重部署
+  // → 权限永不生效（根因#8 部署≠生效·守卫 openapi-perm-declared ③ 锁此）。无 config.json 的函数 hash 与
+  // 旧算法一致（update 不被调用·值不变），故引入本改只 adminApi 一个会显「待部署」、其余 32 个不受扰。
+  const h = createHash('sha256').update(readFileSync(idx))
+  const cfg = join(DIST, name, 'config.json')
+  if (existsSync(cfg)) h.update(readFileSync(cfg))
+  cur[name] = h.digest('hex').slice(0, 12)
 }
 
 // 3. 与已部署清单 diff

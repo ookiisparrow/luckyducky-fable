@@ -195,15 +195,16 @@ export const repoChecks = [
     },
   },
   {
-    // 云调用权限随产物声明（根因#12 平台接缝 + 合规债#26）：用 cloud.openapi.<ns>.<method> 的云函数（现仅
-    // 发货上传 wxaSecOrder.uploadShippingInfo），其部署产物 dist/<fn>/config.json 必声明该 openapi 权限——
-    // 否则云调用被微信拒（权限不足 errcode）、发货信息永远传不上去（实物+微信支付资金冻结·债#26）。
-    // 机制：build.mjs 按产物检测用到的云调用、产 config.json（同 usesManager 检测路子·权限串=JS 调用路径）；
-    // 本守卫静态锁「源里每个 cloud.openapi 调用路径都在 build.mjs OPENAPI_PERMS 登记」——加新云调用却忘登记
-    // 权限即红（漏登记=部署产物缺权限=云调用失败·无声无息发不出货）。
+    // 云调用权限随产物声明并真部署（根因#12 平台接缝 + 合规债#26 + 根因#8 部署≠生效）：用 cloud.openapi.<ns>.<method>
+    // 的云函数（现仅发货上传 wxaSecOrder.uploadShippingInfo），其部署产物 dist/<fn>/config.json 必声明该 openapi
+    // 权限——否则云调用被微信拒（权限不足 errcode）、发货信息永远传不上去（实物+微信支付资金冻结·债#26）。
+    // 端到端三关：① build.mjs 按产物检测用到的云调用、产 config.json（同 usesManager 检测路子·权限串=JS 调用路径）；
+    // ② 源里每个 cloud.openapi 调用路径都在 build.mjs OPENAPI_PERMS 登记（漏登记=产物缺权限）；③ deploy-fns.mjs 的
+    // 部署 hash 必纳入 config.json——否则只改 config.json（如改 openapi 权限）时 index.js 不变 → hash 不变 → 漂移
+    // 检测漏判「待部署」→ 权限永远没真上去（根因#8 部署≠生效·实测：本债加 config.json 后 deploy-fns 报「待部署 0」）。
     id: 'openapi-perm-declared',
-    roots: ['#12'],
-    desc: '云调用权限随产物声明（根因#12·债#26）：cloud 源每个 cloud.openapi.<ns>.<method> 调用须在 build.mjs OPENAPI_PERMS 登记（据此产 config.json 声明权限）——否则部署产物缺 openapi 权限·云调用被拒·发货上传不生效',
+    roots: ['#12', '#8'],
+    desc: '云调用权限随产物声明并真部署（根因#12/#8·债#26）：cloud 源每个 cloud.openapi.<ns>.<method> 调用须在 build.mjs OPENAPI_PERMS 登记（据此产 config.json）+ deploy-fns hash 须纳入 config.json——否则产物缺权限或改权限不重部署·云调用被拒·发货上传不生效',
     run() {
       const bad = []
       const srcRoot = join(ROOT, 'packages/cloud/src')
@@ -225,6 +226,15 @@ export const repoChecks = [
       for (const c of calls)
         if (!build.includes(`'${c}'`) && !build.includes(`"${c}"`))
           bad.push(`云调用 cloud.openapi.${c} 未在 build.mjs OPENAPI_PERMS 登记——部署产物 config.json 缺权限「${c}」·云调用会被微信拒（根因#12·债#26）`)
+      // ③ 部署侧：有云调用（=会产 config.json）时，deploy-fns 的部署 hash 必把 config.json 真喂进 hash，否则改权限
+      // 不重部署。校验真实代码模式（'config.json') 路径构造后近距出现 .update(readFileSync——喂入 hash），不认注释里
+      // 的 config.json 字样（防关键词存在=假绿·宽松匹配踩坑教训：注释提及不等于功能存在）。
+      if (calls.size) {
+        const deployFns = join(ROOT, 'scripts/deploy-fns.mjs')
+        if (!existsSync(deployFns)) bad.push('scripts/deploy-fns.mjs 缺失——无法核「config.json 改动触发重部署」（根因#8·债#26）')
+        else if (!/'config\.json'\)[\s\S]{0,160}\.update\(\s*readFileSync/.test(readFileSync(deployFns, 'utf8')))
+          bad.push('scripts/deploy-fns.mjs 部署 hash 未把 config.json 喂进 hash——只改 openapi 权限（config.json）时漂移检测漏判·权限永不部署（根因#8 部署≠生效·债#26）')
+      }
       return bad
     },
   },
