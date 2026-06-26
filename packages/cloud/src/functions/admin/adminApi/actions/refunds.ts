@@ -63,6 +63,14 @@ export async function approveRefund({ db, data }: Ctx) {
   const order = await db.collection('orders').doc(got.data.orderId).get().catch(() => null)
   if (!order || !order.data) return reply(400, { ok: false, error: 'NO_ORDER' })
 
+  // 复核进课退货权（外审 R1-R4·P1.2·根因#1 副作用绑状态机）：用户先申请退款（applied）后再确认进课时，
+  // confirmEnter 会把该订单行 refundable 翻 false（退货权失效·链6）。同意退款前必须复核此刻该订单行是否仍可退——
+  // 否则形成「已交付课程 + 已退款」。读该售后对应订单行（productId 匹配），已撤退货权即拒、不触发退款工作流。
+  const line = (order.data.items || []).find((it: any) => it.productId === got.data.productId)
+  if (line && line.refundable === false) {
+    return reply(400, { ok: false, error: 'ENTERED_NOT_REFUNDABLE' })
+  }
+
   // 原子抢占（审核批次A-2）：仍是 applied 才置 approved——并发只有一个抢到，杜绝重复触发退款
   const grab = await db
     .collection('afterSales')

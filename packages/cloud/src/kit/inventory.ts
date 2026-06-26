@@ -83,23 +83,42 @@ export async function restoreStock(lines: StockLine[]): Promise<void> {
   }
 }
 
-/** 管理端设/调库存（绝对值·上新或补货）。stock=null＝不限量。低库存阈值 threshold 可选。 */
+/**
+ * 管理端设/调库存（绝对值·上新或补货）。stock=null＝不限量。低库存阈值 threshold 可选。
+ *
+ * **CAS 防覆盖并发预留（库存#1·外审 R1-R4·P1.8·根因#1）**：绝对写若无条件落库，管理员开着旧页面保存会把
+ * 「下单并发预留扣减后的库存」覆盖回旧值 → 超卖窗口。`expectedUpdatedAt` 提供时走条件写——仅当现存文档的
+ * 更新时间戳仍等于管理员加载时拿到的值才落库（命中即 updated===1），期间被任何预留/他人改动推进过就判定已变动、
+ * 回 {ok:false} 带变动标记让管理端刷新重试。省略/为空＝上新或首设（无文档可覆盖，且预留只动已存在且 stock≠null
+ * 的文档·无并发可踩），走原无条件 upsert。
+ */
 export async function setStock(
   productId: string,
   spec: string,
   stock: number | null,
-  threshold?: number
-): Promise<void> {
+  threshold?: number,
+  expectedUpdatedAt?: number | null
+): Promise<{ ok: boolean; conflict?: boolean }> {
   const coll = getDb().collection(COLLECTIONS.inventory)
   const _id = idOf(productId, spec)
   const data: Record<string, unknown> = { productId, spec, stock, updatedAt: Date.now() }
   if (threshold != null) data.threshold = threshold
+  if (expectedUpdatedAt != null) {
+    // 条件写（CAS）：仅当库存自管理员加载以来未被并发预留/他人改动才落
+    const r = await coll
+      .where({ _id, updatedAt: expectedUpdatedAt })
+      .update({ data })
+      .catch(() => ({ stats: { updated: 0 } }))
+    if (r.stats && r.stats.updated === 1) return { ok: true }
+    return { ok: false, conflict: true } // 库存已变动 → 管理端刷新重试，不覆盖并发预留
+  }
   await coll
     .doc(_id)
     .set({ data })
     .catch(async () => {
       await coll.add({ data: { _id, ...data } })
     })
+  return { ok: true }
 }
 
 /** 读库存（管理端 S14 列表 / 看板低库存）。productIds 为空＝全量（管理端 bounded 调用方限页）。 */

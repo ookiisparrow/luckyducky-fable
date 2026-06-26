@@ -11,13 +11,23 @@ import { COLLECTIONS, alert } from '../../../kit'
 
 // ── 一批消息处理：去重认领 + 防吞单（审计 P2） ──
 
-/** 原子认领去重（确定性 _id 撞号即已处理过·根因#1 幂等）。返回 true=本次认领成功（首见）。 */
-export async function firstSeen(db: any, msgid: string): Promise<boolean> {
+/**
+ * 原子认领去重（确定性 _id 撞号即已处理过·根因#1 幂等）。三态（外审 R1-R4·P1.4·根因#8）：
+ * - `first`：本次认领成功（首见）→ 处理；
+ * - `duplicate`：撞号·真重复（已认领过）→ 跳过安全；
+ * - `error`：add 因基建失败（DB 权限/集合缺/瞬时）→ **绝不可当重复静默跳过**（会无回复、无告警、不重试＝永久吞消息）。
+ *
+ * 旧实现把 add 的任何异常都返 false（=已处理·跳过），基建错也被当重复 → 真实客服消息静默丢失。改为 add 失败后
+ * **回查该 seen 文档是否真存在**：存在＝真撞号（duplicate）；不存在＝add 没写进去（基建错·error），消息未认领须重试。
+ */
+export type ClaimResult = 'first' | 'duplicate' | 'error'
+export async function firstSeen(db: any, msgid: string): Promise<ClaimResult> {
   try {
     await db.collection(COLLECTIONS.kfState).add({ data: { _id: 'seen:' + msgid, at: Date.now() } })
-    return true
+    return 'first'
   } catch {
-    return false // DUPLICATE_ID = 重复推送，已处理
+    const got = await db.collection(COLLECTIONS.kfState).doc('seen:' + msgid).get().catch(() => null)
+    return got && got.data ? 'duplicate' : 'error'
   }
 }
 
@@ -36,7 +46,17 @@ export async function processKfBatch(
   let anyFailed = false
   for (const msg of msgs || []) {
     const msgid = String((msg && msg.msgid) || '')
-    if (msgid && !(await firstSeen(db, msgid))) continue // 已处理过·跳过
+    if (msgid) {
+      const claim = await firstSeen(db, msgid)
+      if (claim === 'duplicate') continue // 真重复·已处理过·跳过安全
+      if (claim === 'error') {
+        // 认领基础设施错误（DB 权限/集合缺/瞬时）：告警 + 本批失败 → 调用方保留旧游标重试，绝不静默跳过吞消息（外审 P1.4）
+        console.error('[kf] claim failed (infra)', { msgid })
+        alert('security', 'kfCallback', 'CLAIM_FAILED', {})
+        anyFailed = true
+        continue // 未认领成功就不处理，留待下次重拉重认领（避免无认领下重复副作用）
+      }
+    }
     try {
       await handleOne(msg)
     } catch (e) {

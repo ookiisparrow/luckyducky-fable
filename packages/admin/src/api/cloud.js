@@ -368,9 +368,17 @@ export async function listInventory(productIds) {
 }
 
 // stock：number≥0 或 null（不限量）；threshold 低库存阈值（可选）
-export async function saveStock(productId, spec, stock, threshold) {
-  const r = await post('saveStock', { productId, spec, stock, threshold })
-  if (!r.ok) throw new Error(r.error === 'BAD_STOCK' ? '库存须为非负整数或留空（不限量）' : r.error || 'SAVE_STOCK_FAIL')
+// expectedUpdatedAt：加载时该 SKU 的 updatedAt，回传给云端 CAS——库存自加载已被并发预留/他人改动则冲突（外审 P1.8）
+export async function saveStock(productId, spec, stock, threshold, expectedUpdatedAt) {
+  const r = await post('saveStock', { productId, spec, stock, threshold, expectedUpdatedAt })
+  if (!r.ok)
+    throw new Error(
+      r.error === 'BAD_STOCK'
+        ? '库存须为非负整数或留空（不限量）'
+        : r.error === 'STOCK_CONFLICT'
+          ? '库存已变动（可能刚有下单预留），请刷新后重试'
+          : r.error || 'SAVE_STOCK_FAIL'
+    )
   return true
 }
 

@@ -29,7 +29,7 @@ async function init() {
     await store.load()
     const list = await listInventory()
     const m = {}
-    for (const d of list) m[`${d.productId}__${d.spec || ''}`] = { stock: d.stock, threshold: d.threshold }
+    for (const d of list) m[`${d.productId}__${d.spec || ''}`] = { stock: d.stock, threshold: d.threshold, updatedAt: d.updatedAt }
     invMap.value = m
   } catch (e) {
     loadErr.value = '加载失败：' + e.message
@@ -51,7 +51,7 @@ const rows = computed(() => {
       const threshold = inv && inv.threshold != null ? inv.threshold : 10
       let status = 'unlimited'
       if (stock != null) status = stock === 0 ? 'out' : stock <= threshold ? 'low' : 'ok'
-      out.push({ productId: p.id, productName: p.name || '未命名商品', spec, price: sk.price ?? p.price, stock, threshold, status })
+      out.push({ productId: p.id, productName: p.name || '未命名商品', spec, price: sk.price ?? p.price, stock, threshold, status, updatedAt: inv ? inv.updatedAt : null })
     }
   }
   return out
@@ -79,9 +79,11 @@ async function adjust(r) {
   if (stock !== null && (!Number.isInteger(stock) || stock < 0)) return toast('请输入非负整数，或留空表示不限量', 'err')
   busy.value = `${r.productId}__${r.spec}`
   try {
-    await saveStock(r.productId, r.spec, stock, r.threshold)
+    // 回传加载时的 updatedAt 走云端 CAS（外审 P1.8）：库存自加载已被并发预留/他人改动则冲突，刷新后重试不覆盖预留
+    await saveStock(r.productId, r.spec, stock, r.threshold, r.updatedAt)
     await init()
   } catch (e) {
+    await init() // 冲突或失败都拉最新库存，避免管理员在旧值上继续覆盖
     toast('保存失败：' + e.message, 'err')
   } finally {
     busy.value = ''

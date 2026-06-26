@@ -20,6 +20,10 @@ export async function saveStock({ data }: Ctx) {
     stock = n
   }
   const threshold = data.threshold != null ? Math.max(0, parseInt(data.threshold, 10) || 0) : undefined
-  await setStock(productId, spec, stock, threshold)
+  // CAS 防覆盖并发预留（外审 P1.8）：前端把加载时的 updatedAt 回传，库存自加载已变动则冲突、提示刷新（不覆盖预留）
+  const expectedUpdatedAt =
+    data.expectedUpdatedAt != null && Number.isFinite(Number(data.expectedUpdatedAt)) ? Number(data.expectedUpdatedAt) : undefined
+  const res = await setStock(productId, spec, stock, threshold, expectedUpdatedAt)
+  if (!res.ok && res.conflict) return reply(409, { ok: false, error: 'STOCK_CONFLICT' })
   return reply(200, { ok: true })
 }

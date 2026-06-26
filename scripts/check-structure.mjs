@@ -263,6 +263,89 @@ export const repoChecks = [
     },
   },
   {
+    // 同意退款前复核进课退货权（外审 R1-R4·P1.2·根因#1 副作用绑状态机）：用户先申请退款（applied）后又确认进课时，
+    // confirmEnter 把该订单行 refundable 翻 false（退货权失效·链6）；approveRefund 若只查售后状态不复核订单行，会形成
+    // 「已交付课程 + 已退款」。锁 approveRefund 触发退款前读订单行 refundable、已撤即拒 ENTERED_NOT_REFUNDABLE。
+    id: 'approve-refund-rechecks-entered',
+    roots: ['#1'],
+    desc: '同意退款前复核进课退货权（根因#1·外审 P1.2）：admin/adminApi/actions/refunds.ts approveRefund 触发退款工作流前须读该订单行 refundable、已撤(进课)即拒 ENTERED_NOT_REFUNDABLE——防"已交付课程+已退款"',
+    run() {
+      const f = 'packages/cloud/src/functions/admin/adminApi/actions/refunds.ts'
+      if (!existsSync(join(ROOT, f))) return [`${f} 缺失（售后退款动作）`]
+      const src = readFileSync(join(ROOT, f), 'utf8')
+      const bad = []
+      if (!/ENTERED_NOT_REFUNDABLE/.test(src))
+        bad.push(`${f} approveRefund 未复核进课退货权（缺 ENTERED_NOT_REFUNDABLE）——可"已交付课程+已退款"（根因#1·外审 P1.2）`)
+      if (!/refundable\s*===\s*false/.test(src))
+        bad.push(`${f} approveRefund 未读订单行 refundable 复核——进课撤退货权后仍触发退款（外审 P1.2）`)
+      return bad
+    },
+  },
+  {
+    // 管理端写库存须 CAS 防覆盖并发预留（外审 R1-R4·P1.8·根因#1 并发正确性）：绝对写若无条件 set，管理员开旧页面
+    // 保存会把「下单并发预留扣减后的库存」覆盖回旧值 → 超卖窗口。锁 kit/inventory.ts setStock 接 expectedUpdatedAt
+    // 走条件写（where{updatedAt}+冲突返 conflict）；adminApi saveStock 须透传并把冲突映射 STOCK_CONFLICT 提示刷新。
+    id: 'stock-cas-conditional-save',
+    roots: ['#1'],
+    desc: '管理端写库存 CAS 防覆盖并发预留（根因#1·外审 P1.8）：kit/inventory.ts setStock 须接 expectedUpdatedAt 条件写(where{updatedAt}+conflict)；adminApi/actions/inventory.ts saveStock 须透传并映射 STOCK_CONFLICT——防旧页面覆盖预留致超卖',
+    run() {
+      const kit = 'packages/cloud/src/kit/inventory.ts'
+      const action = 'packages/cloud/src/functions/admin/adminApi/actions/inventory.ts'
+      if (!existsSync(join(ROOT, kit))) return [`${kit} 缺失（库存原语）`]
+      const bad = []
+      const ks = readFileSync(join(ROOT, kit), 'utf8')
+      if (!/expectedUpdatedAt/.test(ks))
+        bad.push(`${kit} setStock 未接 expectedUpdatedAt——绝对写无 CAS 会覆盖并发预留(超卖·根因#1·外审 P1.8)`)
+      if (!/where\(\{[^}]*updatedAt[^}]*\}\)/.test(ks) || !/conflict:\s*true/.test(ks))
+        bad.push(`${kit} setStock 未走条件写(where{updatedAt})+conflict:true——CAS 防覆盖缺失(外审 P1.8)`)
+      if (existsSync(join(ROOT, action))) {
+        const as = readFileSync(join(ROOT, action), 'utf8')
+        if (!/expectedUpdatedAt/.test(as) || !/STOCK_CONFLICT/.test(as))
+          bad.push(`${action} saveStock 未透传 expectedUpdatedAt / 未映射 STOCK_CONFLICT——CAS 未接通(外审 P1.8)`)
+      }
+      return bad
+    },
+  },
+  {
+    // 客服认领去重须区分撞号 vs 基建错（外审 R1-R4·P1.4·根因#8 桩过≠真机能用）：firstSeen 旧实现把 add 任何异常都当
+    // 「已处理·跳过」，DB 权限/集合缺/瞬时错被当重复 → 真实客服消息无回复无告警不重试＝永久吞消息。锁 firstSeen 三态
+    // (first/duplicate/error)、add 失败回查 seen 文档存在性区分；processKfBatch 对 error 必告警 CLAIM_FAILED + anyFailed。
+    id: 'kf-claim-distinguishes-infra',
+    roots: ['#8'],
+    desc: '客服认领区分撞号 vs 基建错（根因#8·外审 P1.4）：cs/kfCallback/dispatch.ts firstSeen 须三态(first/duplicate/error)、add 失败回查 seen 文档存在性区分；基建错(error)经 CLAIM_FAILED 告警+anyFailed 保留游标重试——防基建错被当重复静默吞消息',
+    run() {
+      const f = 'packages/cloud/src/functions/cs/kfCallback/dispatch.ts'
+      if (!existsSync(join(ROOT, f))) return [`${f} 缺失（客服分流）`]
+      const src = readFileSync(join(ROOT, f), 'utf8')
+      const bad = []
+      if (!/'error'/.test(src) || !/'duplicate'/.test(src))
+        bad.push(`${f} firstSeen 未区分基建错(error)/撞号(duplicate)——基建错被当重复会永久吞消息(根因#8·外审 P1.4)`)
+      if (!/CLAIM_FAILED/.test(src))
+        bad.push(`${f} 认领基建错未告警 CLAIM_FAILED——静默吞消息无可观测(外审 P1.4)`)
+      return bad
+    },
+  },
+  {
+    // 客服回调防超时吞消息（外审 R1-R4·P1.5·根因#8）：函数超时 20s，单批 limit 旧默认 1000 逐条串行可能做不完 →
+    // 已认领但副作用未完成时被硬超时杀掉、下次因 seen 跳过＝吞消息。锁 index.ts 单批 limit 有界(<200)且传 syncMsg +
+    // 设墙钟时间预算(Date.now()-startedAt 临近超时停、保留旧游标续拉)——去掉预算或放大批量当场红。
+    id: 'kf-callback-bounded-and-budgeted',
+    roots: ['#8'],
+    desc: '客服回调有界批量 + 墙钟预算防超时吞消息（根因#8·外审 P1.5）：cs/kfCallback/index.ts 须给 syncMsg 传有界 limit(<200) 且设时间预算(Date.now()-startedAt 临近 20s 超时停、保留旧游标续拉)——防大批量串行做不完被硬超时杀致吞消息',
+    run() {
+      const f = 'packages/cloud/src/functions/cs/kfCallback/index.ts'
+      if (!existsSync(join(ROOT, f))) return [`${f} 缺失（客服回调）`]
+      const src = readFileSync(join(ROOT, f), 'utf8')
+      const bad = []
+      const lim = src.match(/KF_BATCH_LIMIT\s*=\s*(\d+)/)
+      if (!lim || Number(lim[1]) >= 200 || !/syncMsg\([^)]*limit:/.test(src.replace(/\n/g, ' ')))
+        bad.push(`${f} syncMsg 未传有界 limit(<200)——单批过大逐条串行可能超时吞消息(根因#8·外审 P1.5)`)
+      if (!/Date\.now\(\)\s*-\s*startedAt/.test(src))
+        bad.push(`${f} 缺墙钟时间预算(Date.now()-startedAt)——backlog/慢API 下可能在副作用未完成时被硬超时杀(外审 P1.5)`)
+      return bad
+    },
+  },
+  {
     // 企微群机器人告警推送单一收口（债#23续·根因#13 可观测落地 + #12 平台接缝单点）：钱链/安全告警的
     // 群机器人推送只经 kit/botpush.ts(pushBotAlert)、业务码一律经 kit/observe 的 notifyAlert——杜绝散调
     // （重复推/绕开关/webhook 凭证多处）。除 botpush(定义) 与 observe(唯一调用) 外，cloud/src 不得引用 pushBotAlert/botpush。

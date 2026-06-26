@@ -78,8 +78,19 @@ export const main = defineKfCallback({
       else console.log('[kf] not-dispatched', { msgtype: msg.msgtype })
     }
 
+    // 防超时吞消息（外审 R1-R4·P1.5·根因#8）：函数超时 20s，单批 limit 降到 KF_BATCH_LIMIT（旧默认 1000 一批
+    // 逐条串行处理可能在 20s 内做不完）；并设 KF_TIME_BUDGET_MS 墙钟预算——临近超时即停、保留旧游标下次续拉，
+    // 绝不在「已认领但副作用未完成」时被硬超时杀掉（那会下次因 seen 跳过＝吞消息）。游标只在整批成功后才推进+落库，
+    // 故 budget break 时停在上次已落游标处，剩余 backlog 下次回调续拉，不丢。
+    const KF_BATCH_LIMIT = 50
+    const KF_TIME_BUDGET_MS = 15000
+    const startedAt = Date.now()
     for (let guard = 0; guard < 20; guard++) {
-      const r = await syncMsg(token, { cursor, token: syncToken, openKfId })
+      if (Date.now() - startedAt > KF_TIME_BUDGET_MS) {
+        console.log('[kf] time-budget reached → 保留旧游标下次续拉（不吞单）')
+        break // 临近超时：保留上次已落游标，剩余 backlog 下次续拉
+      }
+      const r = await syncMsg(token, { cursor, token: syncToken, openKfId, limit: KF_BATCH_LIMIT })
       // nc=本轮 sync 是否回了 next_cursor（定根因：empty 即 WeChat 没回、游标无从推进）
       console.log('[kf] sync', { errcode: r.errcode, msgs: r.msg_list.length, hasMore: r.has_more, nc: !!r.next_cursor })
       if (r.errcode) {

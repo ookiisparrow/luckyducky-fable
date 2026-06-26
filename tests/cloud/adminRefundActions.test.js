@@ -48,6 +48,19 @@ describe('adminApi 售后退款动作', () => {
     expect(calls[0].data.data.amount).toEqual({ refund: 17800, total: 17800, currency: 'CNY' })
   })
 
+  it('进课后撤退货权：同意退款被复核拦（ENTERED_NOT_REFUNDABLE·不触发退款·外审 P1.2）', async () => {
+    // 用户先申请退款（applied）后又确认进课 → confirmEnter 把该订单行 refundable 翻 false。
+    control.seed('orders', [
+      { _id: 'o3', id: 'o3', status: 'paid', amount: 100, address: {}, items: [{ productId: 'p3', price: 100, qty: 1, refundable: false }] },
+    ])
+    control.seed('afterSales', [{ _id: 'o3__p3', orderId: 'o3', productId: 'p3', status: 'applied', refundAmount: 100, reason: '测试' }])
+    const res = await call('approveRefund', { id: 'o3__p3' })
+    expect(res.status).toBe(400)
+    expect(res.error).toBe('ENTERED_NOT_REFUNDABLE')
+    expect(control.dump('afterSales').find((a) => a._id === 'o3__p3').status).toBe('applied') // 未被抢占
+    expect(control.callFunctionCalls()).toHaveLength(0) // 退款工作流未触发（防"已交付课程+已退款"）
+  })
+
   it('重复审批：第二次请求被状态闸拒绝，不会二次触发退款', async () => {
     await call('approveRefund', { id: 'o1__p1' })
     const res = await call('approveRefund', { id: 'o1__p1' })
