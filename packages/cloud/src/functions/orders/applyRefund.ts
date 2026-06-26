@@ -20,14 +20,20 @@ export const main = withOpenId(async ({ db, OPENID, event }) => {
   // 有效行键：新单 item.lineId / 旧单回退 productId（两端一致·外审 P1.1）——同商品多 SKU 各自定位、不再撞行
   const item = (order.items || []).find((it: any) => (it.lineId || it.productId) === reqLine)
   if (!item) return err('UNKNOWN_ITEM:' + reqLine)
-  if (item.refundable === false) return err('NOT_REFUNDABLE') // 进课即失退货权
+  // 退剩余可退件数（外审 P1.3·根因#1 数量级权益）：进课按件撤退货权，剩余 = 购买件数 - 已进课件数；
+  // 全进（refundable=false 或 refundableQty≤0）则无可退。旧订单无 enteredQty 视 0＝整行可退（兼容）。
+  const qty = item.qty || 1
+  const enteredQty = item.enteredQty || 0
+  const refundableQty = qty - enteredQty
+  if (item.refundable === false || refundableQty <= 0) return err('NOT_REFUNDABLE')
   const lineId = item.lineId || item.productId // 落库/确定性 _id 用有效键（旧单=productId·兼容）
   const productId = item.productId // 课程/激活仍按 productId（一商品对一课程）
 
-  // 分摊全程 shared Fen（分整数，根因#4：asFen 对非整数分抛错＝脏数据 tripwire）；同单已占额度（申请中/已同意/已退）不可重复退
+  // 分摊全程 shared Fen（分整数，根因#4：asFen 对非整数分抛错＝脏数据 tripwire）；同单已占额度（申请中/已同意/已退）不可重复退。
+  // itemFen 按剩余可退件数（refundableQty）摊、不再整行 item.qty——买 N 进 M 只退 N−M 件的钱（外审 P1.3）。
   const amountFen = toFen(Number(order.amount))
   const goodsFen = toFen(Number(order.goods))
-  const itemFen = asFen(toFen(item.price) * item.qty)
+  const itemFen = asFen(toFen(item.price) * refundableQty)
   const share = goodsFen > 0 ? asFen(Math.min(amountFen, Math.round((amountFen * itemFen) / goodsFen))) : asFen(0)
 
   await db.createCollection('afterSales').catch(() => {})
@@ -52,7 +58,7 @@ export const main = withOpenId(async ({ db, OPENID, event }) => {
     productId,
     name: item.name,
     spec: item.spec || '',
-    qty: item.qty,
+    qty: refundableQty, // 退款件数=剩余可退件（外审 P1.3）·回补库存按此（refundCallback restoreStock as.qty）
     itemTotal: fenToYuan(itemFen),
     refundAmount: fenToYuan(refundFen),
     reason,

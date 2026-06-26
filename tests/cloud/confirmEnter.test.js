@@ -64,4 +64,30 @@ describe('confirmEnter 闸门', () => {
     expect(res.ok).toBe(true)
     expect(res.revoked).toBeNull()
   })
+
+  it('数量级进课：买3件进1件→enteredQty=1·仍可退（不整行作废·外审 P1.3）', async () => {
+    control.seed('orders', [
+      { _id: 'o1', id: 'o1', _openid: 'user-A', status: 'paid', createdAt: 100, items: [{ productId: 'prod-1', qty: 3, enteredQty: 0, refundable: true }] },
+    ])
+    const res = await main({ code: 'LDCODE1' })
+    expect(res.revoked).toMatchObject({ orderId: 'o1', productId: 'prod-1' })
+    const item = control.dump('orders')[0].items[0]
+    expect(item.enteredQty).toBe(1)
+    expect(item.refundable).toBe(true) // 剩 2 件仍可退（买 N 进 1 不再废全行）
+  })
+
+  it('数量级进课：买3进满3件→整行不可退（外审 P1.3）', async () => {
+    control.seed('activations', [
+      { _id: 'act2', _openid: 'user-A', courseId: 'course-duck', code: 'LDCODE2', enteredAt: null },
+      { _id: 'act3', _openid: 'user-A', courseId: 'course-duck', code: 'LDCODE3', enteredAt: null },
+    ])
+    control.seed('orders', [
+      { _id: 'o1', id: 'o1', _openid: 'user-A', status: 'paid', createdAt: 100, items: [{ productId: 'prod-1', qty: 3, enteredQty: 0, refundable: true }] },
+    ])
+    await main({ code: 'LDCODE1' })
+    await main({ code: 'LDCODE2' })
+    expect(control.dump('orders')[0].items[0]).toMatchObject({ enteredQty: 2, refundable: true }) // 剩1可退
+    await main({ code: 'LDCODE3' })
+    expect(control.dump('orders')[0].items[0]).toMatchObject({ enteredQty: 3, refundable: false }) // 全进·不可退
+  })
 })

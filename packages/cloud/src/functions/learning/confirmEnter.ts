@@ -42,13 +42,20 @@ export const main = withOpenId(async ({ db, OPENID, event }) => {
         .limit(200) // 显式上界（规模·根因#7）：防裸 .get() 默认 100 截断漏到要撤退货权的订单（>100 单可白退）
         .get()
       for (const order of orders.data) {
+        // 找一条仍有可退件的本课程行（refundable 未失 + 已进课件数 < 购买件数·外审 P1.3）
         const idx = (order.items || []).findIndex(
-          (it: any) => prodIds.includes(it.productId) && it.refundable
+          (it: any) =>
+            prodIds.includes(it.productId) && it.refundable !== false && (it.enteredQty || 0) < (it.qty || 1)
         )
         if (idx >= 0) {
-          const items = order.items.map((it: any, i: number) =>
-            i === idx ? { ...it, refundable: false } : it
-          )
+          const items = order.items.map((it: any, i: number) => {
+            if (i !== idx) return it
+            // 进课撤一件退货权（外审 P1.3·根因#1 数量级权益）：enteredQty++ 而非整行作废；全部进课才整行不可退。
+            // 旧订单无 enteredQty 视 0：qty=1 行进一次即 refundable=false（与原整行翻 false 等效·兼容）。
+            const entered = (it.enteredQty || 0) + 1
+            const qty = it.qty || 1
+            return { ...it, enteredQty: entered, refundable: entered < qty }
+          })
           await db.collection('orders').doc(order._id).update({ data: { items } })
           const ri = order.items[idx]
           // revoked 带有效行键（外审 P1.1）：标识撤退货权的具体订单行（新单 lineId / 旧单 productId）

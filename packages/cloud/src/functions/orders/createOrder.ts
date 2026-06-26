@@ -82,6 +82,7 @@ export const main = withOpenId(
           spec: '',
           price: a.price,
           qty: l.qty,
+          enteredQty: 0, // 件级进课账（外审 P1.3）：进课按件递增·退款退 qty-enteredQty 剩余件
           refundable: true,
         })
       } else if (byId[l.id]) {
@@ -102,7 +103,7 @@ export const main = withOpenId(
           // 库内主商品价须有效（发布侧已挡新发布，此处再挡历史脏数据/迁移污染）
           return err('BAD_PRICE:' + l.id)
         }
-        items.push({ productId: p.id, lineId: lineIdOf(p.id, spec), name: p.name, spec, price, qty: l.qty, refundable: true })
+        items.push({ productId: p.id, lineId: lineIdOf(p.id, spec), name: p.name, spec, price, qty: l.qty, enteredQty: 0, refundable: true })
       } else {
         return err('UNKNOWN_ITEM:' + l.id)
       }

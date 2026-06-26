@@ -52,6 +52,9 @@ const applicable = computed(() => {
     if (![OS.PAID, OS.SHIPPED, OS.DONE].includes(o.status)) continue
     for (const it of o.items || []) {
       if (it.refundable === false) continue
+      // 剩余可退件数（外审 P1.3）：进课按件撤退货权，剩余 = 购买件 - 已进课件；旧单无 enteredQty 视 0
+      const refundableQty = (it.qty || 1) - (it.enteredQty || 0)
+      if (refundableQty <= 0) continue
       // 有效行键（外审 P1.1）：新单 it.lineId（productId__spec）/ 旧单回退 productId——同商品多 SKU 各自成行
       const lineId = it.lineId || it.productId
       if (aftersales.has(o.id, lineId)) continue
@@ -61,7 +64,7 @@ const applicable = computed(() => {
         productId: it.productId,
         name: it.name,
         spec: it.spec,
-        qty: it.qty,
+        qty: refundableQty, // 显示/估价按剩余可退件（×N 与 ￥price×N 自动反映·云端权威重算不信此值）
         price: it.price,
       })
     }

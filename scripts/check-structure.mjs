@@ -373,6 +373,30 @@ export const repoChecks = [
     },
   },
   {
+    // 进课件级 + 退剩余件数（外审 R1-R4·P1.3·根因#1 数量级权益不足）：refundable 原行级布尔，买 N 件进课 1 件即整行
+    // 作废（剩 N-1 件白丢退货权）。锁 createOrder 行带 enteredQty（件级进课账）；confirmEnter 进课按件递增 enteredQty
+    //（refundable=enteredQty<qty·非整行翻 false）；applyRefund 退 refundableQty=qty-enteredQty 件、金额按剩余件数摊（不再整行 item.qty）。
+    id: 'refund-remaining-qty-after-enter',
+    roots: ['#1'],
+    desc: '进课件级 + 退剩余件数（根因#1·外审 P1.3）：createOrder 行带 enteredQty；confirmEnter 进课按件递增 enteredQty（非整行翻 refundable=false）；applyRefund 退 refundableQty=qty-enteredQty 件·金额按剩余件数摊——防买 N 件进 1 件整行作废退货权',
+    run() {
+      const create = 'packages/cloud/src/functions/orders/createOrder.ts'
+      const enter = 'packages/cloud/src/functions/learning/confirmEnter.ts'
+      const refund = 'packages/cloud/src/functions/orders/applyRefund.ts'
+      const bad = []
+      if (existsSync(join(ROOT, create)) && !/enteredQty/.test(readFileSync(join(ROOT, create), 'utf8')))
+        bad.push(`${create} 订单行未带 enteredQty——无件级进课账（根因#1·外审 P1.3）`)
+      if (existsSync(join(ROOT, enter)) && !/enteredQty/.test(readFileSync(join(ROOT, enter), 'utf8')))
+        bad.push(`${enter} 进课未按件递增 enteredQty——仍整行作废退货权（买 N 进 1 废全行·外审 P1.3）`)
+      if (existsSync(join(ROOT, refund))) {
+        const src = readFileSync(join(ROOT, refund), 'utf8')
+        if (!/refundableQty/.test(src) || !/enteredQty/.test(src))
+          bad.push(`${refund} 未按 refundableQty=qty-enteredQty 退剩余件数——整行退/进课废全行（外审 P1.3）`)
+      }
+      return bad
+    },
+  },
+  {
     // 企微群机器人告警推送单一收口（债#23续·根因#13 可观测落地 + #12 平台接缝单点）：钱链/安全告警的
     // 群机器人推送只经 kit/botpush.ts(pushBotAlert)、业务码一律经 kit/observe 的 notifyAlert——杜绝散调
     // （重复推/绕开关/webhook 凭证多处）。除 botpush(定义) 与 observe(唯一调用) 外，cloud/src 不得引用 pushBotAlert/botpush。

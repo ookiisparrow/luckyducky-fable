@@ -108,6 +108,31 @@ describe('applyRefund 闸门与金额分摊', () => {
     expect(saved.lineId).toBe('prod-1') // 有效键回退 productId
   })
 
+  it('数量级退款：买3进1→退剩余2件·金额按2件摊·afterSale.qty=2（外审 P1.3）', async () => {
+    control.seed('orders', [
+      {
+        _id: 'o6', id: 'o6', _openid: 'user-A', status: 'paid', goods: 594, amount: 594, // 3×198·无券
+        address: { name: 'x', phone: '138' },
+        items: [{ productId: 'kit-2', lineId: 'kit-2__', name: '材料包', spec: '', price: 198, qty: 3, enteredQty: 1, refundable: true }],
+      },
+    ])
+    const r = await main({ orderId: 'o6', lineId: 'kit-2__' })
+    expect(r.ok).toBe(true)
+    expect(r.afterSale.qty).toBe(2) // 退剩余 2 件（不是整行 3 件）
+    expect(r.afterSale.refundAmount).toBe(396) // 198×2·按件数摊（不再整行 594）
+  })
+
+  it('数量级退款：全部进课的行不可退（NOT_REFUNDABLE·外审 P1.3）', async () => {
+    control.seed('orders', [
+      {
+        _id: 'o7', id: 'o7', _openid: 'user-A', status: 'paid', goods: 396, amount: 396,
+        address: { name: 'x', phone: '138' },
+        items: [{ productId: 'kit-3', lineId: 'kit-3__', name: '包', spec: '', price: 198, qty: 2, enteredQty: 2, refundable: false }],
+      },
+    ])
+    expect((await main({ orderId: 'o7', lineId: 'kit-3__' })).error).toBe('NOT_REFUNDABLE')
+  })
+
   it('NOTHING_LEFT：额度用尽不可再退', async () => {
     control.seed('afterSales', [
       { _id: 'o1__other', orderId: 'o1', status: 'refunded', refundAmount: 178 },
