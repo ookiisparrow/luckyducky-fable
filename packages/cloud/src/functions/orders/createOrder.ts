@@ -115,13 +115,14 @@ export const main = withOpenId(
     const goods = fenToYuan(goodsFen)
     const amount = fenToYuan(amountFen)
 
-    // 地址快照：白名单字段，四要素必填 + 手机号基本格式（不信任前端守卫）
+    // 地址快照：白名单字段，四要素必填 + 手机号基本格式（不信任前端守卫）。
+    // 长度上限（外审 P2.13·根因#3 不信前端）：截断防超长字段撑爆订单文档/拖慢列表（前端表单本有限，云端再兜一道）。
     const a = e.address || {}
     const address = {
-      name: String(a.name || '').trim(),
-      phone: String(a.phone || '').trim(),
-      region: String(a.region || '').trim(),
-      detail: String(a.detail || '').trim(),
+      name: String(a.name || '').trim().slice(0, 40),
+      phone: String(a.phone || '').trim().slice(0, 20),
+      region: String(a.region || '').trim().slice(0, 60),
+      detail: String(a.detail || '').trim().slice(0, 120),
     }
     if (!address.name || !address.phone || !address.region || !address.detail)
       return err('BAD_ADDRESS')

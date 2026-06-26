@@ -53,6 +53,7 @@ async function bumpWindowed(
       ? { [countField]: count }
       : { [countField]: count, [windowField]: now }
     if (onPatch) onPatch(count, patch, now)
+    patch.updatedAt = now // TTL 清理锚（外审 P2.14·债#9）：每次写更新·cleanupEvents 按 updatedAt 删过期窗口（不入 CAS cond·不扰抢占）
     if (!rec) {
       try {
         await db.createCollection(COLL).catch(() => {})

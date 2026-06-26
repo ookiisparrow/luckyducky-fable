@@ -36,4 +36,26 @@ describe('cleanupEvents 定时清理 events 流水（债#9）', () => {
     await main() // 第一遍删旧
     expect((await main()).removed).toBe(0)
   })
+
+  it('P2.14：清过期 rateLimit(按 updatedAt) + kfState seen:*(按 at)·保活跃窗口/token/cursor', async () => {
+    control.seed('rateLimit', [
+      { _id: 'rl-old', hits: 3, updatedAt: Date.now() - 91 * DAY }, // 90 天前·无锁无窗·删
+      { _id: 'rl-fresh', hits: 1, updatedAt: Date.now() - 1 * DAY }, // 活跃·保
+    ])
+    control.seed('kfState', [
+      { _id: 'seen:old-msg', at: Date.now() - 91 * DAY }, // 过期去重痕·删
+      { _id: 'seen:new-msg', at: Date.now() - 1 * DAY }, // 新·保
+      { _id: 'token', accessToken: 'x', expireAt: Date.now() + 1000, updatedAt: Date.now() }, // 无 at·不误删
+      { _id: 'cursor:wkKf', cursor: 'c1', updatedAt: Date.now() }, // 无 at·不误删
+    ])
+    const res = await main()
+    expect(res).toMatchObject({ rateLimit: 1, kfSeen: 1 })
+    expect(control.dump('rateLimit').map((d) => d._id)).toEqual(['rl-fresh'])
+    expect(
+      control
+        .dump('kfState')
+        .map((d) => d._id)
+        .sort()
+    ).toEqual(['cursor:wkKf', 'seen:new-msg', 'token']) // 过期 seen 删·token/cursor(无 at) 不动
+  })
 })

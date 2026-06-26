@@ -397,6 +397,25 @@ export const repoChecks = [
     },
   },
   {
+    // 登出清用户态本地数据（外审 R1-R4·P1.7·根因#3 信任边界·PII）：logout 原只清 user store，address（持久化姓名/
+    // 电话/收货地址＝PII）/cart 等仍在 → 同设备换账号新用户看见并误用上一位的收货信息。锁 logout() 须 $reset 全部用户态 store。
+    id: 'logout-resets-user-scoped',
+    roots: ['#3'],
+    desc: '登出清用户态本地数据防换账号 PII 泄露（根因#3·外审 P1.7）：store/user.js logout() 须 $reset address/cart/orders/aftersales/progress/activation——防同设备换账号泄露上一位地址(PII)/购物车/订单',
+    run() {
+      const f = 'packages/miniapp/src/store/user.js'
+      if (!existsSync(join(ROOT, f))) return [`${f} 缺失（用户 store）`]
+      const src = readFileSync(join(ROOT, f), 'utf8')
+      const need = ['useAddressStore', 'useCartStore', 'useOrdersStore', 'useAfterSalesStore', 'useProgressStore', 'useActivationStore']
+      const bad = []
+      for (const s of need) {
+        if (!new RegExp(s + '\\(\\)\\.\\$reset').test(src))
+          bad.push(`${f} logout 未 ${s}().$reset()——换账号残留用户态(PII 泄露·根因#3·外审 P1.7)`)
+      }
+      return bad
+    },
+  },
+  {
     // 企微群机器人告警推送单一收口（债#23续·根因#13 可观测落地 + #12 平台接缝单点）：钱链/安全告警的
     // 群机器人推送只经 kit/botpush.ts(pushBotAlert)、业务码一律经 kit/observe 的 notifyAlert——杜绝散调
     // （重复推/绕开关/webhook 凭证多处）。除 botpush(定义) 与 observe(唯一调用) 外，cloud/src 不得引用 pushBotAlert/botpush。
@@ -834,7 +853,7 @@ export const repoChecks = [
   {
     id: 'events-cleanup-wired',
     roots: ['债#9'],
-    desc: 'events 流水定时清理（待办债#9 无界增长）：system/cleanupEvents 存在且删 events + cloudbaserc 配 timer，防回归成只增不删',
+    desc: 'events/rateLimit/kfSeen 定时清理（待办债#9 无界增长·外审 P2.14）：system/cleanupEvents 存在且删 events + 清过期 rateLimit 窗口 + kfState seen:* 去重痕 + cloudbaserc 配 timer，防回归成只增不删',
     run() {
       const bad = []
       const f = 'packages/cloud/src/functions/system/cleanupEvents.ts'
@@ -846,6 +865,12 @@ export const repoChecks = [
         if (!/collection\(['"]events['"]\)/.test(src) || !/\.remove\s*\(/.test(src)) {
           bad.push(`${f} 未删 events——清理空转（债#9）`)
         }
+        // P2.14 扩（无界增长·债#9 同治）：频控窗口 + 客服去重痕也须 TTL 清理。断言实清代码（collection(...).remove），
+        // 非仅 token——防注释含 rateLimit/kfState 字样却没真清（守卫够不到「码 vs 注释」·见 stock-cas 同坑）。
+        if (!/collection\(['"]rateLimit['"]\)[\s\S]{0,120}\.remove/.test(src))
+          bad.push(`${f} 未清 rateLimit 过期窗口——频控集合无界增长（外审 P2.14·债#9）`)
+        if (!/collection\(['"]kfState['"]\)[\s\S]{0,120}\.remove/.test(src))
+          bad.push(`${f} 未清 kfState seen:* 去重痕——客服去重集合无界增长（外审 P2.14·债#9）`)
       }
       const rc = join(ROOT, 'cloudbaserc.json')
       if (existsSync(rc) && !/cleanupEvents/.test(readFileSync(rc, 'utf8'))) {

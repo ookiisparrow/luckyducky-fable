@@ -12,6 +12,13 @@ import { randomAvatar } from '@/data/avatars.js'
 import { updateProfile as apiUpdateProfile } from '@/api/user.js'
 import { uploadCloudFile } from '@/utils/cloud.js'
 import logger from '@/utils/logger.js'
+// 登出时清用户态本地数据（外审 P1.7）：这些 store 不 import user.js（无循环），useXxx 仅在 logout action 内实例化
+import { useAddressStore } from '@/store/address.js'
+import { useCartStore } from '@/store/cart.js'
+import { useOrdersStore } from '@/store/orders.js'
+import { useAfterSalesStore } from '@/store/aftersales.js'
+import { useProgressStore } from '@/store/progress.js'
+import { useActivationStore } from '@/store/activation.js'
 
 const defaultProfile = () => ({ ...USER, avatar: '' })
 
@@ -124,6 +131,14 @@ export const useUserStore = defineStore('user', {
       this.openid = ''
       this.cloudUser = null
       this.profile = defaultProfile()
+      // 清用户态本地数据（外审 P1.7·根因#3 信任边界/PII）：同设备换账号不泄露上一位的地址(PII)/购物车/订单/售后/进度/激活。
+      // address/cart 持久化→$reset 连带清 storage；orders/aftersales/progress/activation 清内存防新用户加载前看到残留。
+      useAddressStore().$reset()
+      useCartStore().$reset()
+      useOrdersStore().$reset()
+      useAfterSalesStore().$reset()
+      useProgressStore().$reset()
+      useActivationStore().$reset()
     },
   },
 })
