@@ -35,7 +35,7 @@ const reviewItem = computed(() => {
   return items.find((it) => !CHECKOUT_ADDONS.some((a) => a.id === it.productId)) || items[0] || null
 })
 const product = computed(() =>
-  reviewItem.value ? { name: reviewItem.value.name, spec: reviewItem.value.spec } : SAMPLE_PRODUCT,
+  reviewItem.value ? { name: reviewItem.value.name, spec: reviewItem.value.spec } : SAMPLE_PRODUCT
 )
 
 onLoad(async (q) => {
@@ -76,7 +76,8 @@ async function publish() {
   try {
     const res = await submitReview({
       orderId: order.value.id,
-      productId: reviewItem.value.productId,
+      // 行键（外审 P1.1）：新单 item.lineId（productId__spec）/ 旧单回退 productId——同商品多 SKU 可各自评
+      lineId: reviewItem.value.lineId || reviewItem.value.productId,
       rating: rating.value,
       tags: tags.value,
       text: text.value,

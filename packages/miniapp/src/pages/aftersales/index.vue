@@ -52,9 +52,12 @@ const applicable = computed(() => {
     if (![OS.PAID, OS.SHIPPED, OS.DONE].includes(o.status)) continue
     for (const it of o.items || []) {
       if (it.refundable === false) continue
-      if (aftersales.has(o.id, it.productId)) continue
+      // 有效行键（外审 P1.1）：新单 it.lineId（productId__spec）/ 旧单回退 productId——同商品多 SKU 各自成行
+      const lineId = it.lineId || it.productId
+      if (aftersales.has(o.id, lineId)) continue
       rows.push({
         orderId: o.id,
+        lineId,
         productId: it.productId,
         name: it.name,
         spec: it.spec,
@@ -80,7 +83,7 @@ function applyFor(row) {
       try {
         const rec = await aftersales.apply({
           orderId: row.orderId,
-          productId: row.productId,
+          lineId: row.lineId, // 行键定位（外审 P1.1）·云端按此找行、productId 云端从行派生不信前端
           reason: r.content || '',
         })
         if (!rec) {
@@ -158,7 +161,7 @@ const back = () => goBack('/pages/me/index')
         </text>
         <view
           v-for="(o, i) in applicable"
-          :key="o.orderId + o.productId"
+          :key="o.orderId + o.lineId"
           class="coas-order"
           :class="{ divided: i > 0 }"
         >

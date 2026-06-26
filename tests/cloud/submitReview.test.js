@@ -56,4 +56,24 @@ describe('submitReview 闸门', () => {
     await main({ ...base, anon: true })
     expect(control.dump('reviews')[0].name).toBe('匿名钩友')
   })
+
+  it('同商品多 SKU：两行按 lineId 各自评价（外审 P1.1·不再 REVIEWED 撞）', async () => {
+    control.reset()
+    control.setOpenId('user-A')
+    control.seed('users', [{ _id: 'u1', _openid: 'user-A', nickname: '圆圆' }])
+    control.seed('orders', [
+      {
+        _id: 'o5', id: 'o5', _openid: 'user-A', status: 'done',
+        items: [
+          { productId: 'kit-1', lineId: 'kit-1__红', name: '材料包', spec: '红' },
+          { productId: 'kit-1', lineId: 'kit-1__蓝', name: '材料包', spec: '蓝' },
+        ],
+      },
+    ])
+    expect(await main({ orderId: 'o5', lineId: 'kit-1__红', rating: 5, text: '红款好' })).toEqual({ ok: true })
+    expect(await main({ orderId: 'o5', lineId: 'kit-1__蓝', rating: 4, text: '蓝款也好' })).toEqual({ ok: true }) // 旧版同 productId 会 REVIEWED
+    const reviews = control.dump('reviews').filter((r) => r.orderId === 'o5')
+    expect(reviews.map((r) => r._id).sort()).toEqual(['o5__kit-1__红', 'o5__kit-1__蓝'])
+    expect(reviews.every((r) => r.productId === 'kit-1' && r.lineId)).toBe(true)
+  })
 })

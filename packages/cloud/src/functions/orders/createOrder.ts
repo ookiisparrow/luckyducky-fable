@@ -21,6 +21,11 @@ const ADDONS: Record<string, { name: string; price: number }> = Object.fromEntri
   CHECKOUT_ADDONS.map((a) => [a.id, { name: a.name, price: a.price }])
 )
 
+// 订单行稳定身份（外审 R1-R4·P1.1·根因#1 唯一标识粒度不足）：同商品多 SKU 同单需稳定行键，售后/评价/退款按此
+// 定位、不靠 productId（多 SKU 撞）。取 productId__spec（与 inventory idOf 同款·单内唯一·可读）；旧订单无此字段，
+// 读路径回退 productId（applyRefund/submitReview 用 `it.lineId || it.productId` 作有效键，两端一致）。
+const lineIdOf = (productId: string, spec: string) => `${productId}__${spec || ''}`
+
 // 订单号：yyyyMMddHHmm + 4 位随机（北京时间）
 function orderNo(now: number): string {
   const d = new Date(now + 8 * 3600 * 1000)
@@ -72,6 +77,7 @@ export const main = withOpenId(
         const a = ADDONS[l.id]
         items.push({
           productId: l.id,
+          lineId: lineIdOf(l.id, ''),
           name: a.name,
           spec: '',
           price: a.price,
@@ -96,7 +102,7 @@ export const main = withOpenId(
           // 库内主商品价须有效（发布侧已挡新发布，此处再挡历史脏数据/迁移污染）
           return err('BAD_PRICE:' + l.id)
         }
-        items.push({ productId: p.id, name: p.name, spec, price, qty: l.qty, refundable: true })
+        items.push({ productId: p.id, lineId: lineIdOf(p.id, spec), name: p.name, spec, price, qty: l.qty, refundable: true })
       } else {
         return err('UNKNOWN_ITEM:' + l.id)
       }

@@ -65,8 +65,10 @@ export async function approveRefund({ db, data }: Ctx) {
 
   // 复核进课退货权（外审 R1-R4·P1.2·根因#1 副作用绑状态机）：用户先申请退款（applied）后再确认进课时，
   // confirmEnter 会把该订单行 refundable 翻 false（退货权失效·链6）。同意退款前必须复核此刻该订单行是否仍可退——
-  // 否则形成「已交付课程 + 已退款」。读该售后对应订单行（productId 匹配），已撤退货权即拒、不触发退款工作流。
-  const line = (order.data.items || []).find((it: any) => it.productId === got.data.productId)
+  // 否则形成「已交付课程 + 已退款」。按有效行键定位该售后对应订单行（外审 P1.1：新售后有 lineId 精确、旧售后回退
+  // productId），已撤退货权即拒、不触发退款工作流。
+  const reqLine = got.data.lineId || got.data.productId
+  const line = (order.data.items || []).find((it: any) => (it.lineId || it.productId) === reqLine)
   if (line && line.refundable === false) {
     return reply(400, { ok: false, error: 'ENTERED_NOT_REFUNDABLE' })
   }

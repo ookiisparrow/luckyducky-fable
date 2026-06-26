@@ -80,6 +80,34 @@ describe('applyRefund 闸门与金额分摊', () => {
     expect((await main({ orderId: 'o1', productId: 'prod-1' })).error).toBe('ALREADY_APPLIED')
   })
 
+  it('同商品多 SKU：两行按 lineId 各自申请售后（外审 P1.1·不再撞 _id）', async () => {
+    control.seed('orders', [
+      {
+        _id: 'o4', id: 'o4', _openid: 'user-A', status: 'paid', goods: 396, amount: 396,
+        address: { name: 'x', phone: '138' },
+        items: [
+          { productId: 'kit-1', lineId: 'kit-1__红', name: '材料包', spec: '红', price: 198, qty: 1, refundable: true },
+          { productId: 'kit-1', lineId: 'kit-1__蓝', name: '材料包', spec: '蓝', price: 198, qty: 1, refundable: true },
+        ],
+      },
+    ])
+    const r1 = await main({ orderId: 'o4', lineId: 'kit-1__红' })
+    const r2 = await main({ orderId: 'o4', lineId: 'kit-1__蓝' }) // 同 productId 第二 SKU 旧版会 ALREADY_APPLIED
+    expect(r1.ok).toBe(true)
+    expect(r2.ok).toBe(true)
+    const saved = control.dump('afterSales').filter((a) => a.orderId === 'o4')
+    expect(saved.map((a) => a._id).sort()).toEqual(['o4__kit-1__红', 'o4__kit-1__蓝'])
+    expect(saved.every((a) => a.productId === 'kit-1' && a.lineId)).toBe(true)
+  })
+
+  it('旧订单无 lineId：传 productId 仍可退（读兼容·lineId 落库=productId·外审 P1.1）', async () => {
+    const r = await main({ orderId: 'o1', productId: 'prod-1' })
+    expect(r.ok).toBe(true)
+    const saved = control.dump('afterSales')[0]
+    expect(saved._id).toBe('o1__prod-1') // 旧形态确定性 _id 不变
+    expect(saved.lineId).toBe('prod-1') // 有效键回退 productId
+  })
+
   it('NOTHING_LEFT：额度用尽不可再退', async () => {
     control.seed('afterSales', [
       { _id: 'o1__other', orderId: 'o1', status: 'refunded', refundAmount: 178 },

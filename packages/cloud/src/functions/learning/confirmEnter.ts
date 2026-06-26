@@ -17,7 +17,7 @@ export const main = withOpenId(async ({ db, OPENID, event }) => {
 
   const now = Date.now()
   let enteredAt = act.enteredAt
-  let revoked: { orderId: string; productId: string } | null = null
+  let revoked: { orderId: string; lineId: string; productId: string } | null = null
 
   if (!enteredAt) {
     const grab = await db
@@ -50,7 +50,9 @@ export const main = withOpenId(async ({ db, OPENID, event }) => {
             i === idx ? { ...it, refundable: false } : it
           )
           await db.collection('orders').doc(order._id).update({ data: { items } })
-          revoked = { orderId: order.id, productId: order.items[idx].productId }
+          const ri = order.items[idx]
+          // revoked 带有效行键（外审 P1.1）：标识撤退货权的具体订单行（新单 lineId / 旧单 productId）
+          revoked = { orderId: order.id, lineId: ri.lineId || ri.productId, productId: ri.productId }
           break
         }
       }

@@ -346,6 +346,33 @@ export const repoChecks = [
     },
   },
   {
+    // 订单行稳定身份 lineId（外审 R1-R4·P1.1·根因#1 唯一标识粒度不足·同 P1.9 batchId 一根）：order.items 行原靠
+    // productId 定位（applyRefund/submitReview 找行 + 售后/评价确定性 _id=orderId__productId），同商品多 SKU 同单 →
+    // _id 撞、退错/评错行、第二个 SKU 直接 ALREADY_APPLIED/REVIEWED。锁 createOrder 每行带 lineId（=productId__spec）；
+    // applyRefund/submitReview 按有效行键定位 + 售后/评价 _id 用 lineId（orderId__lineId）——退回纯 orderId__productId 当 _id 即红。
+    id: 'order-line-identity',
+    roots: ['#1'],
+    desc: '订单行稳定身份 lineId（根因#1·外审 P1.1）：createOrder 每行带 lineId；applyRefund/submitReview 按有效行键定位 + 售后/评价 _id=orderId__lineId（不再纯 orderId__productId·防同商品多 SKU 退错/评错行）',
+    run() {
+      const create = 'packages/cloud/src/functions/orders/createOrder.ts'
+      const refund = 'packages/cloud/src/functions/orders/applyRefund.ts'
+      const review = 'packages/cloud/src/functions/catalog/submitReview.ts'
+      const bad = []
+      if (existsSync(join(ROOT, create)) && !/lineId/.test(readFileSync(join(ROOT, create), 'utf8')))
+        bad.push(`${create} 订单行未带 lineId——同商品多 SKU 无稳定行身份（根因#1·外审 P1.1）`)
+      for (const f of [refund, review]) {
+        if (!existsSync(join(ROOT, f))) continue
+        const src = readFileSync(join(ROOT, f), 'utf8')
+        if (!/lineId/.test(src))
+          bad.push(`${f} 未按 lineId 定位订单行——同商品多 SKU 退错/评错行（外审 P1.1）`)
+        // 旧形态（纯 orderId__productId 作确定性 _id）残留即红：同 productId 多 SKU 撞 _id
+        if (/orderId\s*\+\s*'__'\s*\+\s*productId/.test(src) || /`\$\{orderId\}__\$\{productId\}`/.test(src))
+          bad.push(`${f} 售后/评价 _id 仍用纯 orderId__productId——同商品多 SKU _id 撞（外审 P1.1）`)
+      }
+      return bad
+    },
+  },
+  {
     // 企微群机器人告警推送单一收口（债#23续·根因#13 可观测落地 + #12 平台接缝单点）：钱链/安全告警的
     // 群机器人推送只经 kit/botpush.ts(pushBotAlert)、业务码一律经 kit/observe 的 notifyAlert——杜绝散调
     // （重复推/绕开关/webhook 凭证多处）。除 botpush(定义) 与 observe(唯一调用) 外，cloud/src 不得引用 pushBotAlert/botpush。

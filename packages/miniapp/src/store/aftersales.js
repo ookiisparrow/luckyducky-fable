@@ -14,9 +14,10 @@ export const useAfterSalesStore = defineStore('aftersales', {
     hasMore: false,
   }),
   getters: {
-    // 该订单该商品是否已有售后单（可申请列表过滤用；含已拒绝，v1 拒后重申走人工）
-    has: (s) => (orderId, productId) =>
-      s.list.some((a) => a.orderId === orderId && a.productId === productId),
+    // 该订单该行是否已有售后单（可申请列表过滤用；含已拒绝，v1 拒后重申走人工）。
+    // 按有效行键（外审 P1.1）：新售后有 lineId / 旧售后回退 productId——同商品多 SKU 是不同行、各自可申请。
+    has: (s) => (orderId, lineId) =>
+      s.list.some((a) => a.orderId === orderId && (a.lineId || a.productId) === lineId),
   },
   actions: {
     async load(force = false) {

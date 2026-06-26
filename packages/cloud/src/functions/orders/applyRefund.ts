@@ -7,8 +7,9 @@ import { withOpenId, ok, err } from '../../kit'
 export const main = withOpenId(async ({ db, OPENID, event }) => {
   const e: any = event
   const orderId = String(e.orderId || '')
-  const productId = String(e.productId || '')
-  if (!orderId || !productId) return err('BAD_ARGS')
+  // 行键（外审 P1.1·根因#1）：前端传 lineId（新单 productId__spec）；兼容旧单/旧前端传 productId（回退）
+  const reqLine = String(e.lineId || e.productId || '')
+  if (!orderId || !reqLine) return err('BAD_ARGS')
   const reason = String(e.reason || '').slice(0, 200)
 
   const got = await db.collection('orders').doc(orderId).get().catch(() => null)
@@ -16,9 +17,12 @@ export const main = withOpenId(async ({ db, OPENID, event }) => {
   const order = got.data
   if (!['paid', 'shipped', 'done'].includes(order.status)) return err('BAD_STATUS:' + order.status)
 
-  const item = (order.items || []).find((it: any) => it.productId === productId)
-  if (!item) return err('UNKNOWN_ITEM:' + productId)
+  // 有效行键：新单 item.lineId / 旧单回退 productId（两端一致·外审 P1.1）——同商品多 SKU 各自定位、不再撞行
+  const item = (order.items || []).find((it: any) => (it.lineId || it.productId) === reqLine)
+  if (!item) return err('UNKNOWN_ITEM:' + reqLine)
   if (item.refundable === false) return err('NOT_REFUNDABLE') // 进课即失退货权
+  const lineId = item.lineId || item.productId // 落库/确定性 _id 用有效键（旧单=productId·兼容）
+  const productId = item.productId // 课程/激活仍按 productId（一商品对一课程）
 
   // 分摊全程 shared Fen（分整数，根因#4：asFen 对非整数分抛错＝脏数据 tripwire）；同单已占额度（申请中/已同意/已退）不可重复退
   const amountFen = toFen(Number(order.amount))
@@ -28,8 +32,9 @@ export const main = withOpenId(async ({ db, OPENID, event }) => {
 
   await db.createCollection('afterSales').catch(() => {})
   const exist = await db.collection('afterSales').where({ orderId }).get().catch(() => ({ data: [] }))
-  // 一单一品一售后：同条目已有记录（含已拒绝，v1 拒后重申走人工）→ 先于额度判定报已申请
-  if (exist.data.some((a: any) => a.productId === productId)) return err('ALREADY_APPLIED')
+  // 一单一行一售后：同行已有记录（含已拒绝，v1 拒后重申走人工）→ 先于额度判定报已申请。
+  // 按有效行键查重（兼容旧售后记录无 lineId·回退 productId·外审 P1.1）——同商品不同 SKU 是不同行，可各自申请。
+  if (exist.data.some((a: any) => (a.lineId || a.productId) === lineId)) return err('ALREADY_APPLIED')
   const used = asFen(
     exist.data
       .filter((a: any) => ['applied', 'approved', 'refunded'].includes(a.status))
@@ -40,9 +45,10 @@ export const main = withOpenId(async ({ db, OPENID, event }) => {
 
   const now = Date.now()
   const rec = {
-    _id: orderId + '__' + productId,
+    _id: orderId + '__' + lineId,
     orderId,
     _openid: OPENID,
+    lineId,
     productId,
     name: item.name,
     spec: item.spec || '',
