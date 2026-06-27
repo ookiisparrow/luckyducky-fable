@@ -1,4 +1,4 @@
-# Lucky Ducky（幸运小鸭）— 生产源仓
+# Lucky Ducky（小棉鸭）— 生产源仓
 
 > ## 本仓身份：生产迭代源（v0.9.1 起）
 >
@@ -11,7 +11,7 @@
 >
 > 以下为工程约定，随批次演进。
 
-Lucky Ducky（幸运小鸭）：钩织材料包电商 App，uni-app 一份代码发微信小程序 / H5 / App。后端微信云开发（环境 `cloudbase-d4gcssqbv06865479`、AppID `wxcbd2fb68b81bcfb1`）。
+Lucky Ducky（小棉鸭）：钩织材料包电商 App，uni-app 一份代码发微信小程序 / H5 / App。后端微信云开发（环境 `cloudbase-d4gcssqbv06865479`、AppID `wxcbd2fb68b81bcfb1`）。
 
 **本文件 = 全部工程约定（代码怎么写、git 怎么走、质量怎么把），按元模式组织：每条约束尽量配机器守卫。当前完成度与下一步只看 `docs/现状与路线.md`，本文件不放进度。**
 
