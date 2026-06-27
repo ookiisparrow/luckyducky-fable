@@ -1,9 +1,10 @@
 <script setup>
 /**
  * 用户协议 / 隐私政策。?type=user|privacy 切标题与正文。
- * 本条款为初稿，正式发布前请经法务复核（依据《个人信息保护法》《电子商务法》《消费者权益保护法》
- * 及《微信小程序平台运营规范》等）。微信端《小程序用户隐私保护指引》另需在 mp 后台登记、与本页
- * 隐私政策内容保持一致；代码侧的隐私授权见 components/PrivacySheet.vue + composables/usePrivacyGate.js。
+ * 本条款依据《个人信息保护法》《电子商务法》《消费者权益保护法》及《微信小程序平台运营规范》等结构化拟定；
+ * 2026-06-27 经营者评估后拍板上线（无外部法务复核·用户自行接受法律风险·㉑·见待办与债）。微信端《小程序
+ * 用户隐私保护指引》另需在 mp 后台登记、与本页隐私政策内容保持一致；代码侧的隐私授权见 components/PrivacySheet.vue
+ * + composables/usePrivacyGate.js。
  * 店名 R23 已定名（⑲，2026-06-15），自称引 constants/brand.js 的 BRAND_NAME 单源（原暂称「本店」已替）。
  */
 import { ref } from 'vue'
@@ -129,7 +130,7 @@ const back = () => goBack('/pages/index/index')
           <text class="agree-h">{{ a[0] }}</text>
           <text class="agree-p">{{ a[1] }}</text>
         </view>
-        <text class="agree-note">本条款为初稿，正式发布前将经法务复核。</text>
+        <text class="agree-note">如对本条款有任何疑问，可通过本小程序客服与我们联系。</text>
       </view>
     </view>
   </view>
