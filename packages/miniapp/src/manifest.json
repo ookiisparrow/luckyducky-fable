@@ -52,7 +52,7 @@
   "mp-weixin": {
     "appid": "wxcbd2fb68b81bcfb1",
     "setting": {
-      "urlCheck": false,
+      "urlCheck": true,
       "minified": true
     },
     "cloudfunctionRoot": "cloudfunctions/",
