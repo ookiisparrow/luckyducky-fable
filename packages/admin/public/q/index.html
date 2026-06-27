@@ -4,10 +4,16 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Lucky Ducky · 课程激活</title>
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
   <style>
     /* 扫码落地页（印刷二维码指向 /q/?code=<激活码>）。
        自有域名 + 微信扫码规则配好后，微信扫码不再经过本页（直接进小程序）；
-       本页服务于：① 默认域名测试期 ② 非微信扫码（普通相机/浏览器）的引导。 */
+       本页服务于：① 默认域名测试期 ② 非微信扫码（普通相机/浏览器）的引导。
+       场景②走「明文 URL Scheme」一键拉起小程序（weixin://dl/business/...），把激活码作
+       启动 query 带进 pages/welcome/index（小程序端 parseActivationCode 认 ?code=）；
+       前置：MP后台「隐私与安全 - 明文Scheme拉起此小程序」须开启，否则链接拉不起。
+       兼容性兜底：部分安卓浏览器拦自定义 scheme、微信内置浏览器不支持 scheme 拉小程序，
+       故保留下方手动激活步骤。 */
     * { box-sizing: border-box; margin: 0; }
     body {
       font-family: 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', sans-serif;
@@ -29,6 +35,12 @@
     .code { font-size: 22px; font-weight: 700; color: #241733; letter-spacing: 2px; margin-top: 4px; word-break: break-all; }
     .copy { margin-top: 10px; display: inline-block; padding: 10px 22px; border-radius: 999px;
       background: #241733; color: #fff; font-size: 13px; font-weight: 600; border: none; cursor: pointer; }
+    .launch { display: none; margin: 4px 0 0; width: 100%; padding: 15px 22px; border-radius: 14px;
+      background: #a371ea; color: #fff; font-size: 16px; font-weight: 700; border: none; cursor: pointer;
+      box-shadow: 0 8px 20px rgba(163, 113, 234, 0.32); }
+    .launch:active { opacity: 0.9; }
+    .manual-toggle { display: none; margin-top: 16px; font-size: 12px; color: #865dc0; cursor: pointer; text-decoration: underline; }
+    .manual { margin-top: 8px; }
     .steps { text-align: left; margin-top: 22px; font-size: 13px; color: #3d3d42; line-height: 2; }
     .steps b { color: #865dc0; }
     .tip { margin-top: 18px; font-size: 11px; color: #9a9aa2; line-height: 1.7; }
@@ -44,18 +56,42 @@
       <div class="code-label">激活码</div>
       <div class="code" id="code">——</div>
     </div>
-    <button class="copy" onclick="copyCode()">复制激活码</button>
-    <p class="copied" id="copied">已复制 ✓</p>
-    <div class="steps">
-      <div><b>1</b>　打开微信，搜索小程序「幸运小鸭」</div>
-      <div><b>2</b>　进入后扫码 / 使用激活码激活课程</div>
-      <div><b>3</b>　确认开始观看，跟着视频钩出小鸭</div>
+    <button class="launch" id="launch" onclick="openMiniApp()">📲 打开「幸运小鸭」激活</button>
+    <p class="manual-toggle" id="manualToggle" onclick="showManual()">打不开？手动激活 →</p>
+    <div class="manual" id="manual">
+      <button class="copy" onclick="copyCode()">复制激活码</button>
+      <p class="copied" id="copied">已复制 ✓</p>
+      <div class="steps">
+        <div><b>1</b>　打开微信，搜索小程序「幸运小鸭」</div>
+        <div><b>2</b>　进入后扫码 / 使用激活码激活课程</div>
+        <div><b>3</b>　确认开始观看，跟着视频钩出小鸭</div>
+      </div>
     </div>
     <p class="tip">提示：激活课程后，该商品将不再支持退货。<br />用微信「扫一扫」扫包装内二维码可直达激活页。</p>
   </div>
   <script>
+    // 小程序标识（与 CLAUDE.md / 云环境一致）；welcome 页须为已发布版本存在的页面（明文 Scheme 要求）。
+    var APPID = 'wxcbd2fb68b81bcfb1'
+    var PATH = 'pages/welcome/index'
     var code = new URLSearchParams(location.search).get('code') || (location.pathname.match(/\/q\/([A-Za-z0-9]+)/) || [])[1] || ''
     document.getElementById('code').textContent = code || '未识别到激活码'
+    if (code) {
+      // 有码：默认露出「一键拉起」主按钮，手动步骤折叠为兜底；无码则保持原手动引导。
+      document.getElementById('launch').style.display = 'block'
+      document.getElementById('manualToggle').style.display = 'block'
+      document.getElementById('manual').style.display = 'none'
+    }
+    function openMiniApp() {
+      if (!code) return
+      // 明文 URL Scheme：query 整体需 url_encode（code=XXX → code%3DXXX）；启动后小程序 onLoad 收到 o.code。
+      var query = encodeURIComponent('code=' + code)
+      var scheme = 'weixin://dl/business/?appid=' + APPID + '&path=' + PATH + '&query=' + query + '&env_version=release'
+      location.href = scheme
+    }
+    function showManual() {
+      document.getElementById('manual').style.display = 'block'
+      document.getElementById('manualToggle').style.display = 'none'
+    }
     function copyCode() {
       if (!code) return
       navigator.clipboard ? navigator.clipboard.writeText(code).then(done) : fallback()
