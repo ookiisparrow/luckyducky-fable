@@ -687,7 +687,7 @@ export const repoChecks = [
   {
     id: 'docs-budget',
     roots: ['#11'],
-    desc: '文档防膨胀（根因#11）：CLAUDE.md ≤180 行 + docs/ 活文档 ≤15 份 + 记录类单文档行数上限（重构日志≤200/调试日志≤160/待办≤150·把 CLAUDE 规则②卷档从靠人变机器守）（一需求一家·客观→系统事实/主观→单源·历史卷档 archive）',
+    desc: '文档防膨胀（根因#11）：CLAUDE.md ≤180 行 + docs/ 活文档 ≤15 份 + 记录类单文档行数上限（重构日志≤200/调试日志≤160/待办≤160·把 CLAUDE 规则②卷档从靠人变机器守）（一需求一家·客观→系统事实/主观→单源·历史卷档 archive）',
     run() {
       const out = []
       const abs = join(ROOT, 'CLAUDE.md')
@@ -2205,6 +2205,35 @@ export const repoChecks = [
       const perm = join(ROOT, 'console-assets/02-库权限期望表.md')
       if (existsSync(perm) && !new RegExp('##\\s*' + n + '\\s*个集合').test(readFileSync(perm, 'utf8')))
         bad.push(`库权限表标题未报 ${n} 个集合——计数漂移（巡检反复标 16/17/18·须随 COLLECTIONS 同步）`)
+      return bad
+    },
+  },
+  {
+    id: 'function-count-synced',
+    roots: ['#11'],
+    desc: '云函数计数单源（规则⑥·客观计数机器维护）：cloudbaserc.json 的 functions 数为真值；系统事实「云函数」计数行须报同一数——防 28/32/33 手抄漂移（doc-audit 首审命中：部署后没回写状态文档）',
+    run() {
+      const rc = join(ROOT, 'cloudbaserc.json')
+      if (!existsSync(rc)) return []
+      let n = 0
+      try {
+        const fns = JSON.parse(readFileSync(rc, 'utf8')).functions
+        n = Array.isArray(fns) ? fns.length : 0
+      } catch {
+        return []
+      }
+      if (!n) return []
+      const bad = []
+      const sys = join(ROOT, 'docs/系统事实.md')
+      if (existsSync(sys)) {
+        // §3 扫描基线表里「| 云函数 | N | …」那行（数字格·区别于 §2 归口表的同名行）
+        const row = readFileSync(sys, 'utf8')
+          .split('\n')
+          .find((l) => l.trimStart().startsWith('| 云函数 |') && /^\d+$/.test((l.split('|')[2] || '').trim()))
+        const cell = row ? (row.split('|')[2] || '').trim() : ''
+        if (cell !== String(n))
+          bad.push(`系统事实「云函数」计数为「${cell || '缺'}」≠ cloudbaserc.json functions 真值 ${n}（客观计数单源·规则⑥·别手抄·部署后回写）`)
+      }
       return bad
     },
   },
