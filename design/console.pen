@@ -32724,8 +32724,8 @@
     {
       "type": "frame",
       "id": "B7KMb8",
-      "x": 1520,
-      "y": 16812,
+      "x": 1504,
+      "y": 17036,
       "name": "经营漏斗",
       "width": 720,
       "fill": "$white",
@@ -35770,6 +35770,9 @@
       "type": "color",
       "value": "#ffffff"
     }
+  },
+  "imports": {
+    "q": "pencil:halo.lib.pen"
   },
   "fileToken": "a603457b-04c6-442f-8bd1-50b97b809076"
 }
