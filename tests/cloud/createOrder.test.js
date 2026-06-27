@@ -11,7 +11,7 @@ beforeEach(() => {
   control.setOpenId('user-A')
   process.env.ALLOW_MOCK_PAY = '1' // 测试/开发默认开 mock（生产永不设）；fail-closed 用例内显式删
   control.seed('products', [
-    { _id: 'prod-1', id: 'prod-1', name: '幸运小鸭礼盒', tag: '送礼首选', price: 198, skus: [{ name: '雾霭蓝', price: 210 }] },
+    { _id: 'prod-1', id: 'prod-1', name: '小棉鸭礼盒', tag: '送礼首选', price: 198, skus: [{ name: '雾霭蓝', price: 210 }] },
     { _id: 'prod-3', id: 'prod-3', name: '微笑小鸡', tag: '零基础', price: 128, skus: [] },
   ])
 })

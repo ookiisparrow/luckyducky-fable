@@ -22,7 +22,7 @@ beforeEach(() => {
   control.setCallFunctionResult(WORKFLOW_OK)
   control.seed('config', [{ _id: 'pay', mode: 'real', flowId: 'flow-test' }])
   control.seed('orders', [
-    { _id: 'o1', id: 'o1', _openid: 'user-A', status: 'pending', amount: 178, createdAt: Date.now(), items: [{ name: '幸运小鸭礼盒' }] },
+    { _id: 'o1', id: 'o1', _openid: 'user-A', status: 'pending', amount: 178, createdAt: Date.now(), items: [{ name: '小棉鸭礼盒' }] },
     { _id: 'o2', id: 'o2', _openid: 'user-A', status: 'paid', amount: 178, createdAt: Date.now(), items: [] },
     { _id: 'o3', id: 'o3', _openid: 'user-A', status: 'pending', amount: 178, createdAt: Date.now() - 16 * 60 * 1000, items: [] },
     { _id: 'o4', id: 'o4', _openid: 'user-A', status: 'pending', amount: 0, createdAt: Date.now(), items: [] },

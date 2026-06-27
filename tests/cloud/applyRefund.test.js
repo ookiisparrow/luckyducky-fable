@@ -16,7 +16,7 @@ beforeEach(() => {
       goods: 198, // 礼盒 198
       amount: 178, // 实付 = 198 - 20 券
       address: { name: '陈圆圆', phone: '138' },
-      items: [{ productId: 'prod-1', name: '幸运小鸭礼盒', spec: '经典暖黄', price: 198, qty: 1, refundable: true }],
+      items: [{ productId: 'prod-1', name: '小棉鸭礼盒', spec: '经典暖黄', price: 198, qty: 1, refundable: true }],
     },
     {
       _id: 'o2',

@@ -7,7 +7,7 @@ beforeEach(() => {
   control.reset()
   control.setOpenId('user-A')
   control.seed('orders', [
-    { _id: 'o1', id: 'o1', _openid: 'user-A', status: 'done', items: [{ productId: 'prod-1', name: '幸运小鸭', spec: '雾霭蓝' }] },
+    { _id: 'o1', id: 'o1', _openid: 'user-A', status: 'done', items: [{ productId: 'prod-1', name: '小棉鸭', spec: '雾霭蓝' }] },
   ])
   control.seed('users', [{ _id: 'u1', _openid: 'user-A', nickname: '圆圆' }])
 })

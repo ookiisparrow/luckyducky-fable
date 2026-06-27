@@ -48,7 +48,7 @@ export async function getCard({ db, cloud, data }: Ctx) {
       back: {
         bg: '#ffffff',
         texts: { ...(card.texts || {}), warning: '提示：激活课程后，该商品将不再支持退货' },
-        brandText: 'Lucky Ducky · 幸运小鸭',
+        brandText: 'Lucky Ducky · 小棉鸭',
       },
     }
   }

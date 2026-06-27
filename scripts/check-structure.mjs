@@ -1712,28 +1712,46 @@ export const repoChecks = [
     // 改名必漏改。根治＝收口 constants/brand.js 的 BRAND_NAME，「保持一致」从人工义务变机器保证。
     id: 'brand-name-single-source',
     roots: ['#5', 'R23'],
-    desc: '店名单一来源（决策 R23 / 占位⑲）：① 旧占位「易织…」全库绝迹（定名后须全替）② 店名字面量「Lucky Ducky 小棉鸭」只在 constants/brand.js、别处引 BRAND_NAME——改名只改一处，防散落硬编码漂移（病根#5）',
+    desc: '店名单一来源（决策 R23 / 占位⑲）：① 旧占位「易织…」+ 漂移变体「幸运小鸭」全库绝迹（中文名定「小棉鸭」；当初只堵「易织」没堵「幸运小鸭」才让中文名漂进来）② 店名字面量「Lucky Ducky 小棉鸭」只在 constants/brand.js、别处引 BRAND_NAME——改名只改一处，防散落硬编码漂移（病根#5）',
     run() {
       const bad = []
       const NAME = 'Lucky Ducky 小棉鸭'
-      const OLD = '易织'
+      // 全库绝迹名单：旧占位「易织」+ 中文名漂移变体「幸运小鸭」（定名小棉鸭，幸运小鸭是错掺入的旧名）。
+      const BANNED = ['易织', '幸运小鸭']
       const brandFile = 'packages/miniapp/src/constants/brand.js'
       const absBrand = join(ROOT, brandFile)
       if (!existsSync(absBrand)) bad.push(`${brandFile} 缺失（店名单一来源，R23⑲）`)
       else if (!new RegExp(`BRAND_NAME\\s*=\\s*['"]${NAME}['"]`).test(readFileSync(absBrand, 'utf8')))
         bad.push(`${brandFile} 未导出 BRAND_NAME='${NAME}'——店名单源缺定值（R23⑲）`)
+      // ① NAME / 官方旗舰店 单源：只在 brand.js，别处引 BRAND_NAME（限引它的 miniapp/admin 两端）
       for (const dir of ['packages/miniapp/src', 'packages/admin/src']) {
         for (const f of walk(join(ROOT, dir))) {
           const rel = relative(ROOT, f)
           const s = readFileSync(f, 'utf8')
-          if (s.includes(OLD))
-            bad.push(`${rel} 仍含旧占位店名「${OLD}…」——定名 R23 后须全替（病根#5 复制漂移）`)
           if (rel !== brandFile && s.includes(NAME))
             bad.push(`${rel} 硬编码店名「${NAME}」——须引 constants/brand.js 的 BRAND_NAME 单源（病根#5）`)
           if (rel !== brandFile && s.includes('官方旗舰店'))
             bad.push(`${rel} 硬编码「官方旗舰店」店铺后缀——须引 brand.js 的 SHOP_FULL_NAME 单源（病根#5·债#30）`)
         }
       }
+      // ② 绝迹名单全库扫（含 shared 种子 / cloud 云函数 / 根级 tests 夹具——中文名当初从这些「单源缺守」处漂进来；
+      //    tests 当初不在扫描内＝守卫盲区，纳入。注意 walk 只看 .js/.ts/.vue，.json/.html 不在内，故 /q 落地页另走 ③）
+      for (const dir of ['packages/miniapp/src', 'packages/admin/src', 'packages/shared/src', 'packages/cloud/src', 'tests']) {
+        for (const f of walk(join(ROOT, dir))) {
+          const rel = relative(ROOT, f)
+          const s = readFileSync(f, 'utf8')
+          for (const ban of BANNED)
+            if (s.includes(ban))
+              bad.push(`${rel} 仍含品牌名漂移变体「${ban}…」——中文名定「小棉鸭」，须全替（病根#5 复制漂移）`)
+        }
+      }
+      // ③ /q 扫码落地页是用户可见品牌面，但 .html 不被 walk 扫（反向自检逮出的假绿·根因#8）——显式钉死该文件
+      const qLanding = 'packages/admin/public/q/index.html'
+      const absQ = join(ROOT, qLanding)
+      if (existsSync(absQ))
+        for (const ban of BANNED)
+          if (readFileSync(absQ, 'utf8').includes(ban))
+            bad.push(`${qLanding} 仍含品牌名漂移变体「${ban}…」——/q 落地页用户可见，须替为「小棉鸭」（病根#5）`)
       return bad
     },
   },

@@ -75,7 +75,7 @@ describe('createOrder 库存预留 + 超时回补（端到端·库存#1）', () 
     control.setOpenId('user-A')
     process.env.ALLOW_MOCK_PAY = '1'
     control.seed('products', [
-      { _id: 'prod-1', id: 'prod-1', name: '幸运小鸭礼盒', tag: '送礼首选', price: 198, skus: [{ name: '雾霭蓝', price: 210 }] },
+      { _id: 'prod-1', id: 'prod-1', name: '小棉鸭礼盒', tag: '送礼首选', price: 198, skus: [{ name: '雾霭蓝', price: 210 }] },
     ])
   })
   afterEach(() => {

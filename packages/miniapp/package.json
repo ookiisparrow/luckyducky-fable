@@ -2,7 +2,7 @@
   "name": "luckyducky-miniapp",
   "version": "0.1.0",
   "private": true,
-  "description": "Lucky Ducky 幸运小鸭 · 小程序/H5/App 端（uni-app，页面层维持 JS）",
+  "description": "Lucky Ducky 小棉鸭 · 小程序/H5/App 端（uni-app，页面层维持 JS）",
   "scripts": {
     "dev:h5": "uni",
     "dev:mp-weixin": "uni -p mp-weixin",

@@ -5,7 +5,7 @@
  * imageUrl 仅在是 http(s) 网络图时透传——商品封面多为云存储 fileID（cloud://…），微信分享卡
  * imageUrl 渲不出，留空即用当前页截图兜底（更稳，避免传无效地址）。
  */
-const DEFAULT_TITLE = '幸运小鸭 · 钩织材料包'
+const DEFAULT_TITLE = '小棉鸭 · 钩织材料包'
 
 export function buildProductShare({ id, name, image } = {}) {
   const useImg = typeof image === 'string' && /^https?:\/\//.test(image)

@@ -8,7 +8,7 @@ const card = {
   front: { art: '', bg: '#f6e9b8', showBrand: true },
   back: {
     bg: '#ffffff',
-    brandText: 'Lucky Ducky · 幸运小鸭',
+    brandText: 'Lucky Ducky · 小棉鸭',
     texts: { title: '快乐钩织', sub: '副标题', scanHint: '微信扫码', warning: '一码一用' },
   },
 }
@@ -20,7 +20,7 @@ describe('admin cardSvg 卡面生成（B8d 基线）', () => {
     expect(svg).toContain('width="90mm"')
     expect(svg).toContain('height="54mm"')
     expect(svg).toContain('fill="#f6e9b8"')
-    expect(svg).toContain('幸运小鸭')
+    expect(svg).toContain('小棉鸭')
   })
 
   it('buildBackSvg：含标题 / 二维码占位区 / 扫码说明', () => {

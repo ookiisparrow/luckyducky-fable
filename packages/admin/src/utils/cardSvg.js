@@ -21,7 +21,7 @@ export function buildFrontSvg(card, artHref) {
   ${
     f.showBrand
       ? `<rect x="${fs * 0.06}" y="${h - chipH - fs * 0.06}" width="${chipW}" height="${chipH}" rx="${chipH / 2}" fill="#241733" opacity="0.92"/>
-  <text x="${fs * 0.06 + chipW / 2}" y="${h - chipH / 2 - fs * 0.06 + fs * 0.018}" text-anchor="middle" font-size="${fs * 0.045}" font-weight="600" fill="#ffffff">Lucky Ducky · 幸运小鸭</text>`
+  <text x="${fs * 0.06 + chipW / 2}" y="${h - chipH / 2 - fs * 0.06 + fs * 0.018}" text-anchor="middle" font-size="${fs * 0.045}" font-weight="600" fill="#ffffff">Lucky Ducky · 小棉鸭</text>`
       : ''
   }
 </svg>
@@ -52,7 +52,7 @@ export function buildBackSvg(card) {
   <text x="${w / 2}" y="${hintY}" text-anchor="middle" font-size="${fs * 0.042}" font-weight="600" fill="#3d3d42">${esc(t.scanHint)}</text>
   <text x="${w / 2}" y="${warnY}" text-anchor="middle" font-size="${fs * 0.03}" fill="#9a9aa2">${esc(t.warning)}</text>
   <rect x="0" y="${h - barH}" width="${w}" height="${barH}" fill="#241733"/>
-  <text x="${w / 2}" y="${h - barH / 2 + fs * 0.016}" text-anchor="middle" font-size="${fs * 0.04}" font-weight="600" fill="#ffffff">${esc(b.brandText || 'Lucky Ducky · 幸运小鸭')}</text>
+  <text x="${w / 2}" y="${h - barH / 2 + fs * 0.016}" text-anchor="middle" font-size="${fs * 0.04}" font-weight="600" fill="#ffffff">${esc(b.brandText || 'Lucky Ducky · 小棉鸭')}</text>
 </svg>
 `
 }

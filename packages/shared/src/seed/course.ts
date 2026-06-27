@@ -113,7 +113,7 @@ const CHAPTERS: { id: string; title: string; lessons: RawLesson[] }[] = [
 export const SEED_COURSES: SeedCourse[] = [
   {
     id: 'course-duck',
-    title: '零基础 · 钩织你的第一只幸运小鸭',
+    title: '零基础 · 钩织你的第一只小棉鸭',
     sort: 0,
     chapters: CHAPTERS.map((c) => ({
       id: c.id,

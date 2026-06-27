@@ -40,7 +40,7 @@ function freshCard() {
         scanHint: '请使用微信扫一扫激活课程',
         warning: '提示：激活课程后，该商品将不再支持退货',
       },
-      brandText: 'Lucky Ducky · 幸运小鸭',
+      brandText: 'Lucky Ducky · 小棉鸭',
     },
     sizeMM: { w: 90, h: 54 },
   }
@@ -136,7 +136,7 @@ function finalize() {
           <div class="cardprev front" :style="{ width: prevW + 'px', height: prevW * ratio + 'px', background: card.front.bg }">
             <img v-if="artUrl" :src="artUrl" alt="" class="front-art" />
             <span v-else class="front-ph">满版插画 / 产品图</span>
-            <span v-if="card.front.showBrand" class="front-chip">🦆 Lucky Ducky · 幸运小鸭</span>
+            <span v-if="card.front.showBrand" class="front-chip">🦆 Lucky Ducky · 小棉鸭</span>
           </div>
           <p class="side-label">正面 · 插画面</p>
         </div>

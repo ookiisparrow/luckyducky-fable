@@ -14,9 +14,9 @@ describe('getContent', () => {
   })
 
   it('有记录：返回 home 文档', async () => {
-    control.seed('content', [{ _id: 'home', hero: { title: '幸运小鸭' }, faq: [] }])
+    control.seed('content', [{ _id: 'home', hero: { title: '小棉鸭' }, faq: [] }])
     const res = await main()
     expect(res.ok).toBe(true)
-    expect(res.home).toMatchObject({ _id: 'home', hero: { title: '幸运小鸭' } })
+    expect(res.home).toMatchObject({ _id: 'home', hero: { title: '小棉鸭' } })
   })
 })

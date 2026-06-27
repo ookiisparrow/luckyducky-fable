@@ -35,7 +35,7 @@ export const main = withOpenId(async ({ db, OPENID, event }) => {
   // 触发支付工作流（JSAPI 下单）：openid 显式传入，金额/单号均来自库内订单
   const firstName = order.items && order.items[0] ? String(order.items[0].name) : '钩织材料包'
   const p = await callFlow(String(pay.flowId), {
-    description: ('幸运小鸭 · ' + firstName).slice(0, 40),
+    description: ('小棉鸭 · ' + firstName).slice(0, 40),
     out_trade_no: order.id,
     amount: { total: totalFee, currency: 'CNY' },
     payer: { openid: OPENID },

@@ -39,7 +39,7 @@ describe('courses api / store（云路径，mock callCloud）', () => {
 // 用 ≥2 门课的真实样本锁：current 必须随 currentId 走、不再恒 list[0]。
 describe('courses store · 多课程聚焦 current 随激活课（根因#8）', () => {
   const TWO = [
-    { id: 'course-duck', title: '幸运小鸭', chapters: [] },
+    { id: 'course-duck', title: '小棉鸭', chapters: [] },
     { id: 'course-bear', title: '幸运小熊', chapters: [] },
   ]
   beforeEach(() => {

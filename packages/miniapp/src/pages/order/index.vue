@@ -171,7 +171,7 @@ function onAction(a) {
       },
     })
   } else if (k === 'rebuy') {
-    goProductDetail('prod-1', '幸运小鸭礼盒')
+    goProductDetail('prod-1', '小棉鸭礼盒')
   } else if (k === 'remind') {
     uni.showToast({ title: '已提醒商家发货', icon: 'none' })
   } else if (k === 'pay') {

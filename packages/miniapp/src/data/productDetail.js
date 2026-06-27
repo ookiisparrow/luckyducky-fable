@@ -15,7 +15,7 @@ import { BRAND_NAME } from '@/constants/brand.js'
 
 export const PRODUCT_DETAIL = {
   // —— 头部 / 价格（兜底；实际由 catalog 按 id 覆盖）——
-  title: '幸运小鸭礼盒 · 零基础钩织套装',
+  title: '小棉鸭礼盒 · 零基础钩织套装',
   sub: '送礼首选 · 内含分步视频教程，第一次钩织也能轻松完成。',
   price: 198, // 现价（数字，￥ 由模板拼）
   was: 298, // 划线原价
@@ -131,7 +131,7 @@ export const PRODUCT_DETAIL = {
 
   // —— 图文详情 ——
   params: [
-    ['品名', `幸运小鸭礼盒（${BRAND_NAME}）`],
+    ['品名', `小棉鸭礼盒（${BRAND_NAME}）`],
     ['材质', '100% 精梳棉线 · PP 填充棉'],
     ['成品尺寸', '约 12 × 9 cm'],
     ['难度', '★☆☆☆☆ 零基础友好'],

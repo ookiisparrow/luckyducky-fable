@@ -17,8 +17,8 @@ describe('buildProductShare · 分享卡构造', () => {
   })
 
   it('缺名：回退默认标题', () => {
-    expect(buildProductShare({ id: 'p1' }).title).toBe('幸运小鸭 · 钩织材料包')
-    expect(buildProductShare({ id: 'p1', name: '   ' }).title).toBe('幸运小鸭 · 钩织材料包')
+    expect(buildProductShare({ id: 'p1' }).title).toBe('小棉鸭 · 钩织材料包')
+    expect(buildProductShare({ id: 'p1', name: '   ' }).title).toBe('小棉鸭 · 钩织材料包')
   })
 
   it('id 编码进 path（含特殊字符不破坏链接）', () => {
@@ -27,7 +27,7 @@ describe('buildProductShare · 分享卡构造', () => {
 
   it('空入参：不抛错，给安全兜底', () => {
     const s = buildProductShare()
-    expect(s.title).toBe('幸运小鸭 · 钩织材料包')
+    expect(s.title).toBe('小棉鸭 · 钩织材料包')
     expect(s.path).toBe('/pages/detail/index?id=')
     expect(s.imageUrl).toBe('')
   })

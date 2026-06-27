@@ -34,7 +34,7 @@ watch(form, () => store.update(props.product.id, { ...form }), { deep: true })
     <p class="desc">款式已由第 1 步的图片定下，这一步给它名字和价格；与小程序商品页同步显示</p>
 
     <label class="field-label req">商品名称<span class="opt">上架必填</span></label>
-    <input v-model="form.name" class="input" placeholder="如：幸运小鸭礼盒 · 零基础钩织套装" />
+    <input v-model="form.name" class="input" placeholder="如：小棉鸭礼盒 · 零基础钩织套装" />
 
     <div class="row3">
       <div>
@@ -55,7 +55,7 @@ watch(form, () => store.update(props.product.id, { ...form }), { deep: true })
     <textarea
       v-model="form.brief"
       class="input area"
-      placeholder="如：含全部材料与工具，零基础跟视频钩出第一只幸运小鸭"
+      placeholder="如：含全部材料与工具，零基础跟视频钩出第一只小棉鸭"
     ></textarea>
 
     <div class="group">
