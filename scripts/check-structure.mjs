@@ -2268,6 +2268,32 @@ export const repoChecks = [
     },
   },
   {
+    // CLAUDE §9 把工作流声明为「可直调 skill」，但原先没守卫校验这些 `/skill` 引用真有对应 skill 目录——
+    // 治理体检抓到 `/anti-overengineering-check` 列在册却无 .claude/skills/ 目录（悬空指针·点了调不出）。
+    // 与 archive-index-synced 守归档指针、guard-coverage 守 [机器守:id]/test 文件指针同类（防文档指向不存在的东西）。
+    id: 'skills-referenced-exist',
+    roots: ['#11'],
+    desc: 'skill 指针不悬空（根因#11·同 archive-index-synced）：CLAUDE §9 工作流注册表里每个 `/skill-name` 引用须有 .claude/skills/<name>/SKILL.md——防列了点不出的悬空 skill 指针',
+    run() {
+      const claudePath = join(ROOT, 'CLAUDE.md')
+      if (!existsSync(claudePath)) return []
+      const claude = readFileSync(claudePath, 'utf8')
+      // 取 §9 段（## 9. … 到 ## 10. 之前）——「工作流 = skills」的声明册
+      const seg = claude.match(/## 9\.[\s\S]*?(?=\n## 10\.)/)
+      if (!seg) return ['CLAUDE.md 解析不到 §9 工作流段（## 9. … ## 10.）——skills 注册表无从核（根因#11）']
+      const bad = []
+      const seen = new Set()
+      for (const m of seg[0].matchAll(/`\/([a-z][a-z-]+)`/g)) {
+        const name = m[1]
+        if (seen.has(name)) continue
+        seen.add(name)
+        if (!existsSync(join(ROOT, '.claude/skills', name, 'SKILL.md')))
+          bad.push(`CLAUDE §9 列 \`/${name}\` 但无 .claude/skills/${name}/SKILL.md——悬空 skill 指针（点了调不出·根因#11）`)
+      }
+      return bad
+    },
+  },
+  {
     // 守卫计数 + 病根计数 + 测试计数自洽（文档体系规则⑥·客观计数机器维护·巡检 #009 ④/💡）：守卫数随加守卫
     // 天天涨、病根数随立新病根涨（12→13）、被手抄进治理文档必漂（#009 标 31 vs 真值 35；治理体检抓到
     // 自动化验证系统「13 条 repoCheck」vs 真值 86、元模式/账本「12 类病根」vs 真值 13）——同 collection-count-synced
