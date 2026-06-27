@@ -79,6 +79,10 @@ class DocRef {
     return { data: clone(found) }
   }
   async set({ data }) {
+    // 真 sdk：doc().set({data}) 的 data 不得含 _id（_id 由 doc(id) 指定），含则 reject。
+    // 桩对齐此约束——否则「get().data(含_id) 原样 set 回」的 bug 在桩里假绿、真机 500（根因#8·saveSettings 实测踩中）。
+    if (data && Object.prototype.hasOwnProperty.call(data, '_id'))
+      throw new Error('INVALID_PARAM: set data 不能含 _id（真 sdk 约束）')
     const arr = rows(this.coll)
     const i = arr.findIndex((d) => d._id === this.id)
     const doc = { ...clone(data), _id: this.id }

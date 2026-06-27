@@ -107,7 +107,7 @@ export const main = defineKfCallback({
       await db
         .collection(COLLECTIONS.kfState)
         .doc(cursorId)
-        .set({ data: { _id: cursorId, cursor, updatedAt: Date.now() } })
+        .set({ data: { cursor, updatedAt: Date.now() } }) // _id 由 doc(id) 指定·data 不带（真 sdk reject·根因#8）
         .catch(() => {})
       if (!r.has_more) break
     }

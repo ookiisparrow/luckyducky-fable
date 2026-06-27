@@ -11,7 +11,9 @@ export async function saveSettings({ db, data }: Ctx) {
   await ensure(db, 'adminConfig')
   const coll = db.collection('adminConfig')
   const got = await coll.doc('settings').get().catch(() => null)
-  const cur = (got?.data as Record<string, any>) || {}
+  // 去掉 get 回来的 _id：真 sdk doc(id).set({data}) 的 data 含 _id 即 reject（_id 由 doc(id) 指定）——
+  // 不剥则二次保存（doc 已存在·get 带回 _id）必 500（根因#8 桩≠真 SDK 藏过·守卫 no-id-in-set-data 兜字面版）。
+  const { _id: _omitId, ...cur } = (got?.data as Record<string, any>) || {}
   const patch: Record<string, any> = { updatedAt: Date.now() }
   if (data.urlPrefix !== undefined) patch.urlPrefix = String(data.urlPrefix || '').slice(0, 200)
   if (data.alertWebhook !== undefined) {

@@ -41,7 +41,7 @@ export const main = withOpenId(
     await db
       .collection(COLLECTIONS.kfIdentity)
       .doc('ext:' + externalUserId)
-      .set({ data: { _id: 'ext:' + externalUserId, openid: OPENID, unionid, updatedAt: Date.now() } })
+      .set({ data: { openid: OPENID, unionid, updatedAt: Date.now() } }) // _id 由 doc(id) 指定·data 不带（真 sdk reject·根因#8）
     return ok({ bound: true })
   })
 )

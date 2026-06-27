@@ -218,7 +218,7 @@ export async function getAccessToken(
   await db
     .collection(COLLECTIONS.kfState)
     .doc(TOKEN_ID)
-    .set({ data: { _id: TOKEN_ID, accessToken: j.access_token, expireAt, updatedAt: now } })
+    .set({ data: { accessToken: j.access_token, expireAt, updatedAt: now } }) // _id 由 doc(id) 指定·data 不带（真 sdk reject·根因#8）
     .catch(() => {})
   return j.access_token as string
 }

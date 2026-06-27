@@ -239,6 +239,32 @@ export const repoChecks = [
     },
   },
   {
+    // 云库 set 不得在 data 里带 _id（根因#8 桩≠真 SDK 藏过的坑）：真 wx-server-sdk `doc(id).set({data})` 的
+    // data 含 _id 即 reject（_id 由 doc(id) 指定）。藏过 4 处：saveSettings（`{...cur}` 把 get 回来的 _id 带回·
+    // 真机 500）、wecom getAccessToken token 缓存 / kfCallback cursor 缓存（fail-soft `.catch(()=>{})` 静默废·
+    // 每次重取）、kfBind 映射（写不进）。测试桩已对齐「set data 含 _id 即抛」；本守卫静态再补一道扫**字面**
+    // `.set({ data: { …_id… } })`（`.add` 合法带 _id 不在此列；隐式 `{...cur}` 由桩 + 往返测试兜）。
+    id: 'no-id-in-set-data',
+    roots: ['#8'],
+    desc: '云库 set 不带 _id（根因#8 桩≠真 SDK）：wx-server-sdk doc(id).set({data}) 的 data 含 _id 即真机 reject（_id 由 doc(id) 定）——禁字面 .set({data:{…_id…}})（.add 合法带 _id 例外；隐式 {...cur} 由桩+往返测试兜）',
+    run() {
+      const bad = []
+      const root = join(ROOT, 'packages/cloud/src')
+      const walkSet = (d) => {
+        for (const e of readdirSync(d)) {
+          const p = join(d, e)
+          if (statSync(p).isDirectory()) walkSet(p)
+          else if (e.endsWith('.ts') && /\.set\(\{\s*data:\s*\{[^}]*\b_id\b/.test(readFileSync(p, 'utf8')))
+            bad.push(
+              `${relative(ROOT, p).replace(/\\/g, '/')} 在 .set({data:{…}}) 里带 _id——真 sdk 会 reject（_id 由 doc(id) 指定·根因#8）·改用 doc(id) + data 去掉 _id；.add 才合法带 _id`
+            )
+        }
+      }
+      if (existsSync(root)) walkSet(root)
+      return bad
+    },
+  },
+  {
     // 商品下架生效（债#12）：原 publishProduct 写 products 后永久可售（getProducts 全量下发·featured 只管橱窗·
     // deleteDraft 是硬删非停售）——无「临时停售」路径。本守卫锁 getProducts 必按 listed 过滤（where listed!=false·
     // 兼容旧无字段=可售），防回退成全量下发把已停售商品又露给顾客；停售/恢复经 adminApi unpublishProduct/republishProduct。
