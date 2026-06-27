@@ -926,7 +926,7 @@ export const repoChecks = [
   {
     id: 'agreement-text-real',
     roots: ['R27'],
-    desc: '协议正文非占位（R27 上线必做㉑）：pages/agreement/index.vue 不得含「占位」语 + 须含精确隐私承诺「不通过微信授权获取」手机号（债#21：原「不采集手机号」与 address-edit 手填收货电话自相矛盾·须精确到微信授权口径）+ 条款条目齐（≥8 条「第N条」），防占位文本上线',
+    desc: '协议正文非占位 + 第三方披露与代码一致（R27 上线必做㉑）：pages/agreement/index.vue 不得含「占位」语 + 须含精确隐私承诺「不通过微信授权获取」手机号（债#21：原「不采集手机号」与 address-edit 手填收货电话自相矛盾·须精确到微信授权口径）+ 条款条目齐（≥8 条「第N条」）+ 隐私政策第三方须如实列「快递100」（物流轨迹经其插件共享快递单号·事实对齐·与 express-plugin-wired 绑定·非法律判断），防占位文本/第三方漏披露上线',
     run() {
       const f = 'packages/miniapp/src/pages/agreement/index.vue'
       const abs = join(ROOT, f)
@@ -938,6 +938,10 @@ export const repoChecks = [
         bad.push(`${f} 缺精确隐私承诺「不通过微信授权获取」手机号——隐私政策不完整 / 措辞不精确（R27㉑·债#21：blanket「不采集手机号」与手填收货电话矛盾）`)
       const articles = (src.match(/第[一二三四五六七八九十]+条/g) || []).length
       if (articles < 8) bad.push(`${f} 条款条目过少（${articles}<8 条「第N条」）——疑似仍是占位（R27㉑）`)
+      // 第三方披露事实一致性（非法律判断·CC 可做的机械对齐）：物流轨迹经快递100 插件把快递单号给到第三方
+      // （express-plugin-wired 锁此链路），隐私政策第三方条须如实列出，否则政策漏披露真实第三方（mp 隐私指引登记亦列此）。
+      if (!/快递\s*100|kuaidi100/i.test(src))
+        bad.push(`${f} 隐私政策第三方未列「快递100」——物流轨迹经快递100 插件共享快递单号·政策漏披露该第三方（事实对齐·与 express-plugin-wired 绑定·R27㉑）`)
       return bad
     },
   },
