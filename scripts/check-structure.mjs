@@ -1745,13 +1745,15 @@ export const repoChecks = [
               bad.push(`${rel} 仍含品牌名漂移变体「${ban}…」——中文名定「小棉鸭」，须全替（病根#5 复制漂移）`)
         }
       }
-      // ③ /q 扫码落地页是用户可见品牌面，但 .html 不被 walk 扫（反向自检逮出的假绿·根因#8）——显式钉死该文件
-      const qLanding = 'packages/admin/public/q/index.html'
-      const absQ = join(ROOT, qLanding)
-      if (existsSync(absQ))
-        for (const ban of BANNED)
-          if (readFileSync(absQ, 'utf8').includes(ban))
-            bad.push(`${qLanding} 仍含品牌名漂移变体「${ban}…」——/q 落地页用户可见，须替为「小棉鸭」（病根#5）`)
+      // ③ 用户可见的静态品牌页（.html 不被 walk 扫·反向自检逮出的假绿·根因#8）——逐个显式钉死
+      //    /q 扫码落地页 + site/ 公网官网落地页（www.luckyducky.cn 根）
+      for (const page of ['packages/admin/public/q/index.html', 'site/index.html']) {
+        const absP = join(ROOT, page)
+        if (existsSync(absP))
+          for (const ban of BANNED)
+            if (readFileSync(absP, 'utf8').includes(ban))
+              bad.push(`${page} 仍含品牌名漂移变体「${ban}…」——用户可见品牌页，须替为「小棉鸭」（病根#5）`)
+      }
       return bad
     },
   },
