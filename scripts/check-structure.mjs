@@ -2238,6 +2238,36 @@ export const repoChecks = [
     },
   },
   {
+    id: 'archive-index-synced',
+    roots: ['#11'],
+    desc: '退役-唤起闭环（根因#11·文档生命周期）：docs/archive/ 每份归档须在 archive/README.md 索引登记（防退役了查不到=唤起失效）+ 活文档（CLAUDE/docs 顶层）引用的 archive/* 路径须真实存在（防悬空退役指针）。索引本身被守＝不会自己 stale',
+    run() {
+      const adir = join(ROOT, 'docs/archive')
+      if (!existsSync(adir)) return []
+      const readmePath = join(adir, 'README.md')
+      if (!existsSync(readmePath)) return ['docs/archive/README.md 缺失——退役归档无索引、不可唤起（根因#11）']
+      const readme = readFileSync(readmePath, 'utf8')
+      const bad = []
+      // 正向：每份归档在索引有登记
+      for (const f of readdirSync(adir)) {
+        if (!f.endsWith('.md') || f === 'README.md') continue
+        if (!readme.includes(f)) bad.push(`docs/archive/${f} 未登记 archive/README.md 索引——退役了查不到（唤起失效·根因#11）`)
+      }
+      // 反向：活文档引用的 archive/* 路径须存在（防悬空指针）
+      const actives = ['CLAUDE.md']
+      const docsDir = join(ROOT, 'docs')
+      if (existsSync(docsDir))
+        for (const f of readdirSync(docsDir)) if (f.endsWith('.md')) actives.push('docs/' + f)
+      for (const rel of actives) {
+        const p = join(ROOT, rel)
+        if (!existsSync(p)) continue
+        for (const m of readFileSync(p, 'utf8').matchAll(/archive\/([^\s)）`、，。"']+\.md)/g))
+          if (!existsSync(join(adir, m[1]))) bad.push(`${rel} 引用 archive/${m[1]} 但文件不存在——悬空退役指针（根因#11）`)
+      }
+      return bad
+    },
+  },
+  {
     // 守卫计数 + 测试计数自洽（文档体系规则⑥·客观计数机器维护·巡检 #009 ④/💡）：守卫数随加守卫
     // 天天涨、被手抄进 现状与路线.md 必漂（#009 标 31 vs 真值 35）——同 collection-count-synced 的
     // 「客观计数别手抄」病（病根#11）。repoChecks/fileRules 数组长度＝守卫数真值（含本守卫自己），
