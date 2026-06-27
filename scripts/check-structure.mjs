@@ -812,7 +812,7 @@ export const repoChecks = [
       const bad = []
       const ledgerPath = join(ROOT, 'docs/根因账本.md')
       if (!existsSync(ledgerPath)) return ['docs/根因账本.md 缺失（病根清单源）']
-      // §一「十二类病根」：取「## 二、」之前，抓 `### N.` 标题为病根 id
+      // §一「13 类病根」：取「## 二、」之前，抓 `### N.` 标题为病根 id（数随立新病根增·别在注释手抄）
       const sec1 = readFileSync(ledgerPath, 'utf8').split('## 二、')[0]
       const rootIds = [...sec1.matchAll(/^###\s*(\d+)\.\s/gm)].map((m) => `#${m[1]}`)
       if (!rootIds.length) bad.push('根因账本 §一 解析不到病根（### N. 标题）——覆盖率无从核')
@@ -2268,33 +2268,60 @@ export const repoChecks = [
     },
   },
   {
-    // 守卫计数 + 测试计数自洽（文档体系规则⑥·客观计数机器维护·巡检 #009 ④/💡）：守卫数随加守卫
-    // 天天涨、被手抄进 现状与路线.md 必漂（#009 标 31 vs 真值 35）——同 collection-count-synced 的
-    // 「客观计数别手抄」病（病根#11）。repoChecks/fileRules 数组长度＝守卫数真值（含本守卫自己），
-    // 现状与路线.md 任何「N repoCheck / M fileRule」须报同一数。测试数无静态真值源（vitest 才报准、
-    // 跑全套太重不进静态闸），故只校验文档内多处「测试 N」互相自洽——封死 #009 标的 337 vs 326 手抄自相矛盾。
+    // 守卫计数 + 病根计数 + 测试计数自洽（文档体系规则⑥·客观计数机器维护·巡检 #009 ④/💡）：守卫数随加守卫
+    // 天天涨、病根数随立新病根涨（12→13）、被手抄进治理文档必漂（#009 标 31 vs 真值 35；治理体检抓到
+    // 自动化验证系统「13 条 repoCheck」vs 真值 86、元模式/账本「12 类病根」vs 真值 13）——同 collection-count-synced
+    // 的「客观计数别手抄」病（病根#11），但作用在**治理文档自身**：元守卫 guard-coverage 只核「病根↔守卫」逻辑闭环、
+    // 不核这些计数，于是它们漂了没人发现。本守卫补这条缝：repoChecks/fileRules 数组长度＝守卫数真值（含本守卫自己）、
+    // 根因账本 §一 `### N.` 病根数＝病根数真值（与 guard-coverage 同源），**全部治理文档**里「N repoCheck / M fileRule /
+    // K 类病根」须报同一数。测试数无静态真值源（vitest 才报准·跑全套太重不进静态闸），只校验 现状与路线 内多处「测试 N」自洽。
     id: 'guard-count-synced',
     roots: ['#11'],
-    desc: '守卫计数单源（规则⑥·客观计数机器维护·巡检#009④）：repoChecks/fileRules 数组长度为守卫数真值；现状与路线.md「N repoCheck / M fileRule」须报同一数（同 collection-count-synced 路子·防 31/35 手抄漂移）。测试数无静态真值源，只校验文档内多处「测试 N」自洽（防 337 vs 326 自相矛盾）',
+    desc: '客观计数机器维护（规则⑥·病根#11·治理文档自身防漂）：repoChecks/fileRules 数组长度为守卫数真值、根因账本 §一 `### N.` 数为病根数真值（与 guard-coverage 同源）；所有治理文档（现状与路线/自动化验证系统/CLAUDE/元模式/根因账本）里「N repoCheck / M fileRule / K 类病根」须报同一数（防手抄漂移·体检抓的 13≠86、12≠13 那类）。测试数无静态真值源，只校验现状与路线内多处「测试 N」自洽',
     run() {
-      const doc = join(ROOT, 'docs/现状与路线.md')
-      if (!existsSync(doc)) return []
-      const text = readFileSync(doc, 'utf8')
       const bad = []
-      // ① 守卫数：数组长度为真值（含本守卫自己），文档报同一数
-      for (const m of text.matchAll(/(\d+)\s*repoCheck/g))
-        if (Number(m[1]) !== repoChecks.length)
-          bad.push(`现状与路线.md 报「${m[1]} repoCheck」≠ 真值 ${repoChecks.length}（repoChecks 数组·客观计数单源·规则⑥·别手抄）`)
-      for (const m of text.matchAll(/(\d+)\s*fileRule/g))
-        if (Number(m[1]) !== fileRules.length)
-          bad.push(`现状与路线.md 报「${m[1]} fileRule」≠ 真值 ${fileRules.length}（fileRules 数组·客观计数单源·规则⑥）`)
-      // ② 测试数：无静态真值源（vitest 才报准），只校验文档内多处互相自洽——防 337 vs 326 自相矛盾
-      const tn = [
-        ...[...text.matchAll(/(\d+)\s*测试/g)].map((m) => m[1]),
-        ...[...text.matchAll(/测试\s*\**\s*(\d+)/g)].map((m) => m[1]),
+      const realRepo = repoChecks.length
+      const realFile = fileRules.length
+      // 病根数真值：根因账本 §一 `### N.` 标题数（与 guard-coverage 解析同源·单一来源不二抄）
+      const ledgerPath = join(ROOT, 'docs/根因账本.md')
+      const ledger = existsSync(ledgerPath) ? readFileSync(ledgerPath, 'utf8') : ''
+      const realRoots = ledger
+        ? [...ledger.split('## 二、')[0].matchAll(/^###\s*(\d+)\.\s/gm)].length
+        : 0
+      // 扫全部治理文档：守卫计数 + 病根计数 须报真值（客观计数机器维护·别手抄·病根#11 作用在治理文档自身）
+      const govDocs = [
+        'docs/现状与路线.md',
+        'docs/自动化验证系统.md',
+        'CLAUDE.md',
+        'docs/元模式.md',
+        'docs/根因账本.md',
       ]
-      if (new Set(tn).size > 1)
-        bad.push(`现状与路线.md 测试数多处不一致：${[...new Set(tn)].join(' vs ')}（手抄自相矛盾·状态只一处权威·规则⑥）`)
+      for (const rel of govDocs) {
+        const p = join(ROOT, rel)
+        if (!existsSync(p)) continue
+        const text = readFileSync(p, 'utf8')
+        for (const m of text.matchAll(/(\d+)\s*条?\s*(?:仓级\s*)?repoCheck/g))
+          if (Number(m[1]) !== realRepo)
+            bad.push(`${rel} 报「${m[1]} repoCheck」≠ 真值 ${realRepo}（repoChecks 数组·客观计数单源·别手抄·#11）`)
+        for (const m of text.matchAll(/(\d+)\s*条?\s*(?:逐文件\s*)?fileRule/g))
+          if (Number(m[1]) !== realFile)
+            bad.push(`${rel} 报「${m[1]} fileRule」≠ 真值 ${realFile}（fileRules 数组·客观计数单源·别手抄·#11）`)
+        if (realRoots)
+          for (const m of text.matchAll(/(\d+)\s*类病根/g))
+            if (Number(m[1]) !== realRoots)
+              bad.push(`${rel} 报「${m[1]} 类病根」≠ 真值 ${realRoots}（根因账本 §一 病根数·客观计数单源·别手抄·#11）`)
+      }
+      // 测试数：无静态真值源（vitest 才报准），只校验现状与路线内多处「测试 N」互相自洽——防 337 vs 326 自相矛盾
+      const sl = join(ROOT, 'docs/现状与路线.md')
+      if (existsSync(sl)) {
+        const text = readFileSync(sl, 'utf8')
+        const tn = [
+          ...[...text.matchAll(/(\d+)\s*测试/g)].map((m) => m[1]),
+          ...[...text.matchAll(/测试\s*\**\s*(\d+)/g)].map((m) => m[1]),
+        ]
+        if (new Set(tn).size > 1)
+          bad.push(`现状与路线.md 测试数多处不一致：${[...new Set(tn)].join(' vs ')}（手抄自相矛盾·状态只一处权威·规则⑥）`)
+      }
       return bad
     },
   },
