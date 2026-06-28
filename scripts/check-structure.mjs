@@ -888,6 +888,37 @@ export const repoChecks = [
     },
   },
   {
+    id: 'requirement-tally-synced',
+    roots: ['#11'],
+    desc: '需求复核计数自洽（规则⑥·客观计数机器维护·熵地图 E2）：需求清单「复核进度/复核小结」的 ✅/⚠️/💬/🗑️/⬜ 计数须等于 L0/L1/L2 判定列实际 tally——防 R 逐条定论后摘要忘回写漂移（doc-audit round-2 命中 26 ✅/4 💬 vs 真值 29/1）。tally 源＝判定列本身（映射表行末格是守卫名无 emoji·自然排除）',
+    run() {
+      const p = join(ROOT, 'docs/需求清单.md')
+      if (!existsSync(p)) return []
+      const text = readFileSync(p, 'utf8')
+      const MARKS = ['✅', '⚠️', '🗑️', '💬', '⬜']
+      const tally = { '✅': 0, '⚠️': 0, '🗑️': 0, '💬': 0, '⬜': 0 }
+      // 判定列＝以「| R<数字>」起的表行的最后一个非空单元格里首个判定 emoji
+      for (const line of text.split('\n')) {
+        if (!/^\|\s*\*{0,2}R\d/.test(line)) continue
+        const cells = line.split('|').map((c) => c.trim()).filter(Boolean)
+        const last = cells[cells.length - 1] || ''
+        const mark = MARKS.find((m) => last.includes(m))
+        if (mark) tally[mark]++
+      }
+      const bad = []
+      // 摘要行＝形如「N ✅ / N ⚠️ …」；各 emoji 计数须等于 tally（图例行无前导数字·不匹配）
+      for (const line of text.split('\n')) {
+        if (!/\d+\s*✅\s*\/\s*\d+\s*⚠️/.test(line)) continue
+        for (const m of MARKS) {
+          const mm = line.match(new RegExp('(\\d+)\\s*' + m))
+          if (mm && Number(mm[1]) !== tally[m])
+            bad.push(`需求清单摘要「${mm[1]} ${m}」≠ 判定列实际 tally ${tally[m]}（R 逐条定论后摘要忘回写·熵地图 E2·别手抄）`)
+        }
+      }
+      return bad
+    },
+  },
+  {
     id: 'admin-login-throttled',
     roots: ['#13'],
     desc: '认证端点防爆破（根因#13）：adminApi 口令校验路径必经频控闸（throttleLocked + 失败 throttleFail），杜绝公网口令无限重试爆破',
