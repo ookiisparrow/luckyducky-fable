@@ -129,6 +129,7 @@ src/
 - **前端体检（health·前端）** `/frontend-check`：机器层过后专攻真机/多端/交互坑（page-container/scroll/返回/SVG image…），「构建过≠真机能用」（根因#8）。
 - **容量体检（health·规模）** `/capacity-check`：量上来扛不扛得住——峰值 QPS 换算、热路径扫规模杀手（聚合封顶/无界查询/缺索引）、基建维度（DB 套餐/视频带宽，代码看不到去控制台）、分清并发正确性 vs 容量、没压测就说推断（根因#8）。
 - **文档体检（health·文档·loop ②周期发现的人工节拍）** `/doc-audit`：一句话起一圈——取真值快照 → 并行只读猎手扫全 15 份活文档（清晰/准确/精准/简洁四维）→ **每条 finding 亲核**（猎手会误数/高估，验证不是相信）；「准确」对 git/代码交叉核（看现象不看声称·A7）；能喂回守卫的扩守卫面、不能的改文本，findings 交 refactor-batch 修。
+- **治熵一圈（loop 总谱·串全环）** `/anti-entropy-loop`：一整轮对抗熵增的总谱——取真值快照 → ②并行猎手发现(7 类熵 E1–E7·每条亲核) → 三选一闭环(喂回守卫/改文本写明/退役) → 走 `/refactor-batch` 落地（沙箱 PR·本机直上 main）；含跨切判断纪律（验证不是相信/挡猎手 over-reach/不为凑数砍/不递扳机/不破单源）。composes `/doc-audit`(②)+`/refactor-batch`(落地)·不复述。
 - **挖 hook（discovery）** `/hook-audit`：扫执行轨迹找该机器化的重复动作（只建议不装）。
 - **验收（acceptance）** `/acceptance-check`：非技术看现象、真机验支付退款、验收单 X/Y/Z。
 - **写 skill（meta）** `/writing-skills`：把反复用的工作流固化成 skill。
