@@ -21,7 +21,7 @@ description: Use when doing any change/batch/audit/fix in the Lucky Ducky 重构
    - 行为不变量（钱 / 权限 / 状态 / 幂等）→ `tests/`，业务不变量优先锁。
    - **新加守卫标 `roots`**（治哪条病根 `#N` / 主张 `TN`）+ reverseTest；`guard-coverage` 据此核每病根有守卫，漏标即覆盖率红。新治一条病根 → 先在 `docs/根因账本.md` §一立条目，守卫才有归属。
 4. 不能干净机器化的（方法论 / 守则）→ 成文进 CLAUDE / 验收手册，并写清「为什么靠人」。
-5. 新增云函数 → 登记 `docs/接口正册.md`（`interface-catalog-sync` 会拦）；新增写库 → 必过 kit 闸（`writes-need-gate` 会拦）；新增敏感云函数 → 加进 `scripts/guard-deploy.mjs` SENSITIVE_FNS。
+5. 新增云函数 → 登记 `docs/系统事实.md`（接口正册·`interface-catalog-sync` 会拦）；新增写库 → 必过 kit 闸（`writes-need-gate` 会拦）；新增敏感云函数 → 加进 `scripts/guard-deploy.mjs` SENSITIVE_FNS。
 
 ## 验证（缺一不可）
 6. `npm run check` 全绿（conventions + structure + typecheck + lint + test）。被拦先修代码、不绕闸。

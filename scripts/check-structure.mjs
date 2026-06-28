@@ -2208,13 +2208,15 @@ export const repoChecks = [
       const perm = join(ROOT, 'console-assets/02-库权限期望表.md')
       if (existsSync(perm) && !new RegExp('##\\s*' + n + '\\s*个集合').test(readFileSync(perm, 'utf8')))
         bad.push(`库权限表标题未报 ${n} 个集合——计数漂移（巡检反复标 16/17/18·须随 COLLECTIONS 同步）`)
-      // 跨文档防漂（熵地图 E2·守卫盲区补缺）：业务逻辑架构 等引用文档不得手抄集合总数（应纯指针指 系统事实·
-      // 该文档自己也写着「不在此手抄」却漏了个 stale「16 集合」）——任何「N 集合」数字 ≠ 真值即红
-      const biz = join(ROOT, 'docs/业务逻辑架构.md')
-      if (existsSync(biz))
-        for (const mm of readFileSync(biz, 'utf8').matchAll(/(\d+)\s*集合/g))
+      // 跨文档防漂（熵地图 E2·守卫盲区补缺）：引用文档不得手抄集合总数（应纯指针指 系统事实）——任何「N 集合」≠ 真值即红。
+      // 扫描面含 active-15 之外的层（console-assets/README·这层原漏守·「看别的文档」批补入）。
+      for (const rel of ['docs/业务逻辑架构.md', 'console-assets/README.md']) {
+        const p = join(ROOT, rel)
+        if (!existsSync(p)) continue
+        for (const mm of readFileSync(p, 'utf8').matchAll(/(\d+)\s*集合/g))
           if (Number(mm[1]) !== n)
-            bad.push(`业务逻辑架构 手抄「${mm[1]} 集合」≠ COLLECTIONS 真值 ${n}（客观计数单源·应纯指针指 系统事实·别手抄·熵地图 E2）`)
+            bad.push(`${rel} 手抄「${mm[1]} 集合」≠ COLLECTIONS 真值 ${n}（客观计数单源·应纯指针指 系统事实·别手抄·熵地图 E2）`)
+      }
       return bad
     },
   },
@@ -2329,6 +2331,35 @@ export const repoChecks = [
           `docs/archive/ ${files.length} 份归档 > ${CAP} 上限——归档层膨胀（根因#11·熵地图 E4）；季度合并旧档（同主题归并为一卷）+ 更新 README 索引`,
         ]
       return []
+    },
+  },
+  {
+    // 文档引用不失效（「看别的文档」批·泛化 archive-index-synced 反向指针检查到所有 doc 引用）：active docs +
+    // CLAUDE + skills 里写的 `docs/X.md` / `archive/X.md` 引用，被引文件须真实存在——治「接口正册→已并入系统事实 /
+    // 切换runbook→已归档 / 上线前占位清单→不存在」这类失活指针（重命名/归档/删除后引用没跟·active-15 之外的层原漏守）。
+    id: 'doc-refs-exist',
+    roots: ['#11'],
+    desc: '文档引用不失效（根因#11）：docs/* + CLAUDE + skills 里的 `docs/X.md`/`archive/X.md` 引用须 resolve——防重命名/归档/删除后失活指针（泛化 archive-index-synced 反向检查到所有 doc 引用·覆盖 active-15 之外的层）',
+    run() {
+      const bad = []
+      const targets = ['CLAUDE.md']
+      const docsDir = join(ROOT, 'docs')
+      if (existsSync(docsDir)) for (const f of readdirSync(docsDir)) if (f.endsWith('.md')) targets.push('docs/' + f)
+      const skillsDir = join(ROOT, '.claude/skills')
+      if (existsSync(skillsDir))
+        for (const d of readdirSync(skillsDir)) {
+          const sp = join('.claude/skills', d, 'SKILL.md')
+          if (existsSync(join(ROOT, sp))) targets.push(sp)
+        }
+      for (const rel of targets) {
+        const text = readFileSync(join(ROOT, rel), 'utf8')
+        for (const m of text.matchAll(/(docs\/archive\/|docs\/|archive\/)([^\s)）、，。`"'\]|]+\.md)/g)) {
+          const [, pre, name] = m
+          const target = pre === 'docs/' ? join(ROOT, 'docs', name) : join(ROOT, 'docs/archive', name)
+          if (!existsSync(target)) bad.push(`${rel} 引用 ${pre}${name} 但文件不存在——失活文档指针（重命名/归档/删除后没跟·根因#11）`)
+        }
+      }
+      return bad
     },
   },
   {
