@@ -709,6 +709,9 @@ export const repoChecks = [
         const n = readFileSync(p, 'utf8').split('\n').length
         if (n > max)
           out.push(`docs/${f} ${n} 行 > ${max} 预算——记录类膨胀（根因#11）；老批次/旧季/已关账卷档 archive（CLAUDE 规则②）`)
+        else if (n >= Math.floor(max * 0.9))
+          // 软线预警（熵地图 E3·非阻断）：≥90% 预算即催卷档，别等撞顶才被动触发——治「卷档逾期」盲区
+          console.warn(`⚠️ docs/${f} ${n}/${max} 行（≥90%）——卷档逾期预警（熵地图 E3）：老批次/旧季/已关账早卷 archive、别等撞顶`)
       }
       return out
     },
@@ -2205,6 +2208,13 @@ export const repoChecks = [
       const perm = join(ROOT, 'console-assets/02-库权限期望表.md')
       if (existsSync(perm) && !new RegExp('##\\s*' + n + '\\s*个集合').test(readFileSync(perm, 'utf8')))
         bad.push(`库权限表标题未报 ${n} 个集合——计数漂移（巡检反复标 16/17/18·须随 COLLECTIONS 同步）`)
+      // 跨文档防漂（熵地图 E2·守卫盲区补缺）：业务逻辑架构 等引用文档不得手抄集合总数（应纯指针指 系统事实·
+      // 该文档自己也写着「不在此手抄」却漏了个 stale「16 集合」）——任何「N 集合」数字 ≠ 真值即红
+      const biz = join(ROOT, 'docs/业务逻辑架构.md')
+      if (existsSync(biz))
+        for (const mm of readFileSync(biz, 'utf8').matchAll(/(\d+)\s*集合/g))
+          if (Number(mm[1]) !== n)
+            bad.push(`业务逻辑架构 手抄「${mm[1]} 集合」≠ COLLECTIONS 真值 ${n}（客观计数单源·应纯指针指 系统事实·别手抄·熵地图 E2）`)
       return bad
     },
   },
@@ -2265,6 +2275,60 @@ export const repoChecks = [
           if (!existsSync(join(adir, m[1]))) bad.push(`${rel} 引用 archive/${m[1]} 但文件不存在——悬空退役指针（根因#11）`)
       }
       return bad
+    },
+  },
+  {
+    // 跨文档「重构日志 <日期>」指针随批次卷档失活（熵地图 E1·我边治边造的盲区）：批次卷档到 archive 后，
+    // 活文档里「详 重构日志 2026-06-24」这类指针指向的日期已不在活档（只剩卷档标签）→ 读者扑空。
+    // 守卫扫活文档紧邻「重构日志」的日期引用，该日期须在活 重构日志 有 ## 标题（排除卷档标签行），
+    // 否则该处须显式指 archive（含 'archive'）。同 archive-index-synced 守指针不悬空。
+    id: 'docs-pointer-liveness',
+    roots: ['#11'],
+    desc: '跨文档指针不失活（根因#11·熵地图 E1）：活文档「重构日志 <YYYY-MM-DD>」引用，该日期须在活 重构日志.md 有真标题（非卷档标签）；否则该行须显式指 archive——防批次卷档后指针扑空',
+    run() {
+      const log = join(ROOT, 'docs/重构日志.md')
+      if (!existsSync(log)) return []
+      // 活日期＝真标题里的日期；排除卷档标签行（含「卷档」或「archive」）——那些日期已搬走、不算活
+      const liveDates = new Set(
+        readFileSync(log, 'utf8')
+          .split('\n')
+          .filter((l) => /^#{2,3}\s/.test(l) && !l.includes('卷档') && !l.includes('archive'))
+          .flatMap((l) => [...l.matchAll(/(\d{4}-\d{2}-\d{2})/g)].map((m) => m[1]))
+      )
+      const bad = []
+      const dir = join(ROOT, 'docs')
+      for (const f of readdirSync(dir)) {
+        if (!f.endsWith('.md') || f === '重构日志.md') continue
+        readFileSync(join(dir, f), 'utf8')
+          .split('\n')
+          .forEach((line, i) => {
+            if (line.includes('archive')) return // 已显式指归档·放行
+            for (const m of line.matchAll(/重构日志[`\s]{0,4}(\d{4}-\d{2}-\d{2})/g))
+              if (!liveDates.has(m[1]))
+                bad.push(
+                  `docs/${f}:${i + 1} 引用「重构日志 ${m[1]}」但该日期已不在活 重构日志（卷档了）——失活指针，须改指 archive（根因#11·熵地图 E1）`
+                )
+          })
+      }
+      return bad
+    },
+  },
+  {
+    // 归档层无界增长（熵地图 E4·我早先 flag 过没闭的盲区）：退役制把熵移进 archive 而非消除，archive 同样
+    // 会无界膨胀（archive-index-synced 只守索引在、不守量）。超份数上限即提示季度合并——治「熵只是搬家不是消失」。
+    id: 'archive-bounded',
+    roots: ['#11'],
+    desc: '归档层有界（根因#11·熵地图 E4）：docs/archive/ 归档文件数 ≤ 上限；超限即提示季度合并（同主题旧档归并为一卷 + 更新 README 索引）——退役制的熵搬进 archive 后同样需治膨胀',
+    run() {
+      const adir = join(ROOT, 'docs/archive')
+      if (!existsSync(adir)) return []
+      const CAP = 30
+      const files = readdirSync(adir).filter((f) => f.endsWith('.md') && f !== 'README.md')
+      if (files.length > CAP)
+        return [
+          `docs/archive/ ${files.length} 份归档 > ${CAP} 上限——归档层膨胀（根因#11·熵地图 E4）；季度合并旧档（同主题归并为一卷）+ 更新 README 索引`,
+        ]
+      return []
     },
   },
   {
