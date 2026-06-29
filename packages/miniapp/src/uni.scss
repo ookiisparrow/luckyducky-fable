@@ -54,9 +54,12 @@ $line-soft: #eeeeee; // 更浅的分隔线（详情页区块内）
 $bg-faint: #fafafa; // 极浅灰：参数表名列底
 
 /* ---- 字体族 ----
-   设计原用「文源圆体」，体积过大不打包，先用系统圆润字体栈替代。 */
+   标题字＝品牌字「文源圆体 WenYuan Rounded SC」：子集 WebFont（GB2312 一级·M+B）走 wx.loadFontFace
+   远程加载（不进包·守卫 font-not-in-package；加载/常量见 constants/brandFont.js + App.vue）。
+   首选品牌字，到达前/子集外字回退系统圆体栈（FOUT 可接受）。 */
 $font-display:
-  'PingFang SC', 'SF Pro Rounded', ui-rounded, 'Hiragino Sans GB', system-ui, sans-serif;
+  'WenYuan Rounded SC', 'PingFang SC', 'SF Pro Rounded', ui-rounded, 'Hiragino Sans GB', system-ui,
+  sans-serif;
 $font-cn:
   'PingFang SC',
   'Hiragino Sans GB',

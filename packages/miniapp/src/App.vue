@@ -6,12 +6,22 @@ import { initCloud } from '@/utils/cloud.js'
 import { useUserStore } from '@/store/user.js'
 import { useProductsStore } from '@/store/products.js'
 import { registerPrivacyGate } from '@/composables/usePrivacyGate.js'
+import { BRAND_FONT_FACES } from '@/constants/brandFont.js'
 import { SHARED_PKG_SENTINEL } from '@luckyducky/shared'
 
 export default {
   onLaunch() {
     // B0 哨兵：验证 workspace TS 包（@luckyducky/shared）被 uni 构建吃下；B3 起 shared 承载种子/常量后可删
     logger.info('shared', SHARED_PKG_SENTINEL)
+    // 品牌字体远程加载（子集 WebFont·托管·不进包·守卫 font-not-in-package）：标题字 $font-display 首选
+    // WenYuan Rounded SC，到达前回退系统圆体（FOUT 可接受）。失败不反噬启动（如域名未配·真机静默）。
+    BRAND_FONT_FACES.forEach((face) => {
+      uni.loadFontFace({
+        global: true,
+        ...face,
+        fail: (e) => logger.warn('font', face.desc.weight, e),
+      })
+    })
     initCloud() // 微信云开发初始化（仅小程序端生效；环境 ID 在 utils/cloud.js）
     registerPrivacyGate() // 挂微信隐私授权回调（onNeedPrivacyAuthorization，仅小程序端；R27㉒）
     useUserStore().login() // 静默登录:用 openid upsert users 建档（仅小程序端）

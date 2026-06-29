@@ -1418,6 +1418,46 @@ export const repoChecks = [
     },
   },
   {
+    // 品牌字体走远程加载（wx.loadFontFace）、绝不进小程序包——杜绝字体二进制撑爆包体积（主包 2MB·总包 20MB）。
+    // 痛：文源圆体单字重 ~14MB，若有人把 .otf/.ttf 丢进 src/static（构建原样拷入包）或 base64 内嵌进 wxss，
+    // 包体积瞬间爆掉。锁两条进包路径：① src 下无字体二进制 ② mp 可达源码无字体 data-URI（base64 内嵌）。
+    // 子集产物正本在仓根 assets/brand-fonts/（不在 src·不进包，仅作部署到托管的真相源 + OFL 授权随附）。
+    id: 'font-not-in-package',
+    roots: ['基建'],
+    desc: '品牌字体远程加载不进包：packages/miniapp/src 下无字体二进制(.otf/.ttf/.woff/.woff2/.eot) + mp 可达源码无字体 data-URI（base64 内嵌进 wxss）——防 ~14MB 字重撑爆包体积（主包 2MB），字体须走 wx.loadFontFace 远程拉取（正本在 assets/brand-fonts/·远程托管）',
+    run() {
+      const bad = []
+      const srcDir = join(ROOT, 'packages/miniapp/src')
+      const FONT_BIN = /\.(otf|ttf|woff2?|eot)$/i
+      const FONT_DATAURI =
+        /data:(?:font\/[a-z0-9.+-]+|application\/(?:x-)?font[a-z0-9.+-]*|application\/vnd\.ms-fontobject)/i
+      const scan = (dir) => {
+        if (!existsSync(dir)) return
+        for (const name of readdirSync(dir)) {
+          if (name === 'node_modules' || name === 'dist') continue
+          const p = join(dir, name)
+          if (statSync(p).isDirectory()) {
+            scan(p)
+            continue
+          }
+          if (FONT_BIN.test(name)) {
+            bad.push(
+              `${relative(ROOT, p)} 是字体二进制——会被构建打进小程序包（~MB 级撑爆包体积）。品牌字体放仓根 assets/brand-fonts/ 并走 wx.loadFontFace 远程加载`
+            )
+          } else if (/\.(vue|scss|css|js|mjs|ts)$/.test(name)) {
+            if (FONT_DATAURI.test(mpReachableText(readFileSync(p, 'utf8')))) {
+              bad.push(
+                `${relative(ROOT, p)} 在 mp 可达处内嵌字体 data-URI（base64）——会编进 wxss 撑爆包体积。字体走 wx.loadFontFace 远程加载、勿 base64 内嵌`
+              )
+            }
+          }
+        }
+      }
+      scan(srcDir)
+      return bad
+    },
+  },
+  {
     // 播放器「上一段/下一段」=小段切换、连续跨课时（规格 R8 分步播放·用户拍板升级）。痛：原 prev/next
     // 是 switchLesson 整集跳（偏离 R8「下一段播本 lesson 的下一个 segment」），真机一点直接换课时。
     // 改＝抽纯函数 segNav.stepSegment（边界/跨课时/空课时单测锁），player 经它定位目标段。本守卫防回退：
