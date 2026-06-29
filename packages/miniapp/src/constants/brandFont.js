@@ -10,9 +10,10 @@ export const BRAND_FONT_FAMILY = 'WenYuan Rounded SC'
 const FONT_HOST = 'https://www.luckyducky.cn'
 
 // 设计 --font-display 实际只用 Medium(500)/Bold(700) 两档（600 回退 700）；加字重在此追加并重跑构建脚本。
+// ⚠ 用 woff 不用 woff2：wx.loadFontFace 真机只稳吃 TTF/WOFF，woff2 工具能渲染但真机静默失败（根因#8·2026-06-29 真机逮出）。
 export const BRAND_FONT_FACES = [
-  { weight: '500', file: 'wenyuan-rounded-medium.woff2' },
-  { weight: '700', file: 'wenyuan-rounded-bold.woff2' },
+  { weight: '500', file: 'wenyuan-rounded-medium.woff' },
+  { weight: '700', file: 'wenyuan-rounded-bold.woff' },
 ].map((f) => ({
   family: BRAND_FONT_FAMILY,
   source: `url("${FONT_HOST}/fonts/${f.file}")`,

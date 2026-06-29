@@ -4,9 +4,11 @@
 **不进 src、不打进小程序包**（守卫 `font-not-in-package` 机器盯）。
 
 ## 文件
-- `wenyuan-rounded-medium.woff2` — Medium(500)，~777KB
-- `wenyuan-rounded-bold.woff2` — Bold(700)，~792KB
+- `wenyuan-rounded-medium.woff` — Medium(500)，~962KB
+- `wenyuan-rounded-bold.woff` — Bold(700)，~971KB
 - `LICENSE` — SIL OFL-1.1 全文 + 版权（随字体分发的授权条件③）
+
+> ⚠ 用 **woff** 不用 woff2：`wx.loadFontFace` 真机（iOS/安卓）只稳吃 TTF/WOFF，woff2 开发者工具能渲染但真机静默失败（根因#8·2026-06-29 真机逮出）。woff2 更小但用不了。
 
 子集范围：GB2312 一级常用字（3755 汉字）+ ASCII + 常用中文标点。子集外的字、字体到达前，
 自动回退到系统圆体栈（见 `packages/miniapp/src/uni.scss` 的 `$font-display`）。
@@ -18,11 +20,11 @@
 # 前置：pip install fonttools brotli（提供 pyftsubset）
 BRAND_FONT_SRC=/path/to/otf-dir node scripts/build-brand-font.mjs
 ```
-文案出现 GB2312 一级外的字、或要加字重时，改 `scripts/build-brand-font.mjs` 重跑、提交新 woff2、
+文案出现 GB2312 一级外的字、或要加字重时，改 `scripts/build-brand-font.mjs` 重跑、提交新 woff、
 重新部署到托管。
 
 ## 部署（靠人·控制台）
-1. 把两个 `.woff2` 传到 CloudBase 静态托管 `/fonts/` 下（URL 单源在 `packages/miniapp/src/constants/brandFont.js`）。
+1. 把两个 `.woff` 传到 CloudBase 静态托管 `/fonts/` 下（URL 单源在 `packages/miniapp/src/constants/brandFont.js`）。
 2. 小程序后台「downloadFile 合法域名」加该托管域名——否则 `wx.loadFontFace` 真机静默失败。
 
 ## 授权
