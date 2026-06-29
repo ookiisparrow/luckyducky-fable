@@ -132,8 +132,10 @@ function flashProduct(id) {
 }
 
 // ---- 事件处理 ----
-function onHeroBuy() {
-  featureRef.value?.scrollToProducts(scrollTop.value) // 滚到商品卡完全可见
+// 「购买」(Hero·顶部) 与「Get ducky get lucky」(ClosingCTA·结尾) 共用同一处滚动逻辑：
+// 滚到商品卡居中并高亮。单源收口，保证两按钮落点/高亮效果完全一致、不会两处漂移。
+function scrollToFeatured() {
+  featureRef.value?.scrollToProducts(scrollTop.value) // 滚到商品卡完全可见（rail 垂直居中）
   flashProduct('prod-2')
 }
 function onExplore() {
@@ -152,9 +154,6 @@ function onProductAdd(p) {
   }
   cart.add({ id: prod.id, name: prod.name, tag: prod.tag, price: prod.price, was: prod.was })
   ping(`已加入购物车`)
-}
-function onClosingBuy() {
-  ping('Get Ducky Get Lucky')
 }
 </script>
 
@@ -176,7 +175,7 @@ function onClosingBuy() {
       <Hero
         :title="content.hero.title"
         :tagline="content.hero.tagline"
-        @buy="onHeroBuy"
+        @buy="scrollToFeatured"
         @explore="onExplore"
       />
 
@@ -198,7 +197,7 @@ function onClosingBuy() {
       <Reassurance :items="REASSURE_ITEMS" />
       <Reviews :reviews="REVIEWS" />
       <FAQ :items="content.faq" />
-      <ClosingCTA @buy="onClosingBuy" />
+      <ClosingCTA @buy="scrollToFeatured" />
       <SiteFooter />
     </scroll-view>
 
