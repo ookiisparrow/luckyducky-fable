@@ -6,8 +6,11 @@
 
 export const BRAND_FONT_FAMILY = 'WenYuan Rounded SC'
 
-// 托管基址：CloudBase 静态托管·与官网 www 同域（决策§13）。字体放其 /fonts/ 下。
-const FONT_HOST = 'https://www.luckyducky.cn'
+// 托管基址：CloudBase 静态托管**默认域名**（Tencent/DigiCert 证书）。字体放其 /fonts/ 下。
+// ⚠ 不用自有域名 www.luckyducky.cn：它用 TrustAsia 证书，手机微信 loadFontFace 真机报
+// "A network error occurred"（2026-06-29 真机逮出·桌面/开发者工具接受该 CA·手机不认）；默认域名与
+// 真机已能用的视频域名同 DigiCert CA，稳。⚠ 此域名须在小程序后台「downloadFile 合法域名」内。
+const FONT_HOST = 'https://cloudbase-d4gcssqbv06865479-1440904924.tcloudbaseapp.com'
 
 // 设计 --font-display 实际只用 Medium(500)/Bold(700) 两档（600 回退 700）；加字重在此追加并重跑构建脚本。
 // ⚠ 用 woff 不用 woff2：wx.loadFontFace 真机只稳吃 TTF/WOFF，woff2 工具能渲染但真机静默失败（根因#8·2026-06-29 真机逮出）。
