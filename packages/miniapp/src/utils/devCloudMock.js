@@ -15,7 +15,7 @@
  * 边界提醒（根因#8）：这测的是「播放器外壳/交互逻辑」，不是真实云数据/鉴权/小程序同层渲染——
  * 后者仍只有真机能证，H5 演示路替代不了上线前那一次真机验。
  */
-import { SEED_COURSES } from '@luckyducky/shared'
+import { SEED_COURSES, SEED_PRODUCTS } from '@luckyducky/shared'
 
 // 内联样本视频（data URI·8 秒 160×96 H.264，自制 CC0）。
 // 为什么内联而非放文件：uni-app 不认 vite 的 public/，H5 静态只走 src/static/——而那目录会被无条件拷进
@@ -51,6 +51,8 @@ function publicCourses() {
 
 // 函数名 → 返回（贴合各云函数真实返回形状，调用方 api 层零改动）。
 const handlers = {
+  // 首页/商城商品列表：喂样本商品（含 featured），让首页横滑商品卡在 H5 可见、可验滚动定位（否则 H5 横滑区空白）
+  getProducts: () => ({ list: SEED_PRODUCTS }),
   // 三层课程目录
   getCourses: () => ({ list: publicCourses() }),
   // 我的已解锁课程：所有种子课都视为已激活，播放页鉴权直接放行
