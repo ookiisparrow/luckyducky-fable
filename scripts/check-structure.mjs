@@ -1424,13 +1424,15 @@ export const repoChecks = [
     // 子集产物正本在仓根 assets/brand-fonts/（不在 src·不进包，仅作部署到托管的真相源 + OFL 授权随附）。
     id: 'font-not-in-package',
     roots: ['基建'],
-    desc: '品牌字体远程加载不进包：packages/miniapp/src 下无字体二进制(.otf/.ttf/.woff/.woff2/.eot) + mp 可达源码无字体 data-URI（base64 内嵌进 wxss）——防 ~14MB 字重撑爆包体积（主包 2MB），字体须走 wx.loadFontFace 远程拉取（正本在 assets/brand-fonts/·远程托管）',
+    desc: '品牌字体远程加载不进包：packages/miniapp/src 下无字体二进制(.otf/.ttf/.woff/.woff2/.eot) + mp 可达源码无字面内嵌字体 blob（base64 长串·非运行时 downloadFile→base64 模板）——防 ~14MB 字重撑爆包体积（主包 2MB），字体须远程拉取（正本在 assets/brand-fonts/·远程托管·mp 端 downloadFile→base64 绕 CORS 见 App.vue）',
     run() {
       const bad = []
       const srcDir = join(ROOT, 'packages/miniapp/src')
       const FONT_BIN = /\.(otf|ttf|woff2?|eot)$/i
+      // 只拦「字面内嵌的字体 blob」（base64, 后跟一长串 base64=真把字体打进包），不拦运行时拼的 data URI
+      // 模板（如 `data:font/woff;base64,${data}`·downloadFile 后运行时构造·字体不在包里·见 App.vue 绕 CORS）。
       const FONT_DATAURI =
-        /data:(?:font\/[a-z0-9.+-]+|application\/(?:x-)?font[a-z0-9.+-]*|application\/vnd\.ms-fontobject)/i
+        /data:(?:font\/[a-z0-9.+-]+|application\/(?:x-)?font[a-z0-9.+-]*|application\/vnd\.ms-fontobject)[^"')]*?base64,[A-Za-z0-9+/]{200,}/i
       const scan = (dir) => {
         if (!existsSync(dir)) return
         for (const name of readdirSync(dir)) {

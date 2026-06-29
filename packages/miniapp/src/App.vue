@@ -6,39 +6,60 @@ import { initCloud } from '@/utils/cloud.js'
 import { useUserStore } from '@/store/user.js'
 import { useProductsStore } from '@/store/products.js'
 import { registerPrivacyGate } from '@/composables/usePrivacyGate.js'
-import { BRAND_FONT_FACES } from '@/constants/brandFont.js'
+import { BRAND_FONT_FAMILY, BRAND_FONTS } from '@/constants/brandFont.js'
 import { SHARED_PKG_SENTINEL } from '@luckyducky/shared'
 
 // 品牌字体远程加载（子集 WebFont·托管·不进包·守卫 font-not-in-package）：标题字 $font-display 首选
-// WenYuan Rounded SC，到达前回退系统圆体（FOUT 可接受）。
-// ⚠ 真机坑（根因#8·2026-06-29 真机逮出）：wx.loadFontFace 在 onLaunch 阶段（首页/渲染层尚未就绪）必报
-// "A network error occurred"——开发者工具宽容(假绿)、真机才暴露。域名/证书/格式均已排除（downloadFile
-// 白名单✓·DigiCert 默认域名✓·woff✓），根因纯属调用时机。故：延后到首帧之后再加载、失败按节奏重试几次、
-// 成功即停；失败不反噬启动。
+// WenYuan Rounded SC，到达前/失败时回退系统圆体（FOUT 可接受·失败不反噬启动）。
+// ⚠ 绕 CORS（根因#8·2026-06-29 真机逮出）：mp 渲染层 origin=servicewechat.com，跨域字体须 CDN 发
+// Access-Control-Allow-Origin，而静态托管 CDN 不发 → loadFontFace(网络URL) 渲染层 ERR_CACHE_MISS。
+// 故 mp 端用 downloadFile（逻辑层·不受跨域限制·域名在 downloadFile 白名单）拉字体 → 读 base64 →
+// loadFontFace(data URI·同源·无 CORS)。H5/App 无 getFileSystemManager，退回直接 loadFontFace(网络URL)
+// （App 可用·H5 缺 CORS 则回退系统字·均不阻断）。
 function loadBrandFonts() {
-  const pending = [...BRAND_FONT_FACES]
-  function tick(attempt) {
-    pending.slice().forEach((face) => {
-      uni.loadFontFace({
-        global: true,
-        ...face,
-        success: () => {
-          const i = pending.indexOf(face)
-          if (i >= 0) pending.splice(i, 1)
-        },
-        fail: (e) => logger.warn('font', face.desc.weight, 'retry', attempt, e),
-      })
+  // #ifdef MP-WEIXIN
+  const fs = uni.getFileSystemManager()
+  BRAND_FONTS.forEach(({ weight, url }) => {
+    uni.downloadFile({
+      url,
+      success: (res) => {
+        if (res.statusCode !== 200) return logger.warn('font', weight, 'http', res.statusCode)
+        fs.readFile({
+          filePath: res.tempFilePath,
+          encoding: 'base64',
+          success: ({ data }) =>
+            uni.loadFontFace({
+              global: true,
+              family: BRAND_FONT_FAMILY,
+              source: `url("data:font/woff;base64,${data}")`,
+              desc: { weight },
+              fail: (e) => logger.warn('font', weight, 'face', e),
+            }),
+          fail: (e) => logger.warn('font', weight, 'read', e),
+        })
+      },
+      fail: (e) => logger.warn('font', weight, 'dl', e),
     })
-    if (pending.length && attempt < 4) setTimeout(() => tick(attempt + 1), 1500)
-  }
-  setTimeout(() => tick(0), 300) // 延后首次：让首页先挂载，避开 onLaunch 渲染层未就绪
+  })
+  // #endif
+  // #ifndef MP-WEIXIN
+  BRAND_FONTS.forEach(({ weight, url }) =>
+    uni.loadFontFace({
+      global: true,
+      family: BRAND_FONT_FAMILY,
+      source: `url("${url}")`,
+      desc: { weight },
+      fail: (e) => logger.warn('font', weight, e),
+    })
+  )
+  // #endif
 }
 
 export default {
   onLaunch() {
     // B0 哨兵：验证 workspace TS 包（@luckyducky/shared）被 uni 构建吃下；B3 起 shared 承载种子/常量后可删
     logger.info('shared', SHARED_PKG_SENTINEL)
-    loadBrandFonts() // 品牌字体远程加载（延后+重试·真机 onLaunch 调 loadFontFace 时机坑·见函数注释·根因#8）
+    loadBrandFonts() // 品牌字体远程加载（mp 端 downloadFile→base64 绕 CORS·见函数注释·根因#8）
     initCloud() // 微信云开发初始化（仅小程序端生效；环境 ID 在 utils/cloud.js）
     registerPrivacyGate() // 挂微信隐私授权回调（onNeedPrivacyAuthorization，仅小程序端；R27㉒）
     useUserStore().login() // 静默登录:用 openid upsert users 建档（仅小程序端）
