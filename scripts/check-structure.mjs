@@ -710,32 +710,38 @@ export const repoChecks = [
   {
     id: 'cs-360-read-audited',
     roots: ['#3'],
-    desc: '360 读他人全貌破例留痕（§1.5·根因#3）：getCustomer360 是「坐席批量读他人订单/PII/学习轨迹」越权面，shouldAudit 跳 ^get 不覆盖它——kit/audit.ts 须有 FORCE_AUDIT 名单含 getCustomer360 强制留痕（防 PII 访问 0 痕）',
+    desc: '360 读他人全貌破例留痕（§1.5·根因#3）：getCustomer360/getUser/searchCustomer 是「坐席批量读他人订单/PII/学习轨迹/检索客户」越权面，shouldAudit 跳 ^get 不覆盖 get* 类——kit/audit.ts 须有 FORCE_AUDIT 名单含三者强制留痕（防 PII 访问 0 痕·B1.2 扩 getUser/searchCustomer）',
     run() {
       const audit = 'packages/cloud/src/kit/audit.ts'
       if (!existsSync(join(ROOT, audit))) return [`${audit} 缺失——审计原语`]
       const src = readFileSync(join(ROOT, audit), 'utf8')
       const bad = []
-      // 只扫 FORCE_AUDIT Set 字面量内部（防注释里出现 getCustomer360 造假绿·反向自检逮出的摆设守卫盲区）
+      // 只扫 FORCE_AUDIT Set 字面量内部（防注释里出现 action 名造假绿·反向自检逮出的摆设守卫盲区）
       const set = src.match(/FORCE_AUDIT\s*=\s*new Set\(\[([\s\S]*?)\]\)/)
       if (!set) bad.push(`${audit} 无 FORCE_AUDIT 名单——360 读越权面无法破例留痕（§1.5·根因#3）`)
-      else if (!/getCustomer360/.test(set[1])) bad.push(`${audit} FORCE_AUDIT 未含 getCustomer360——读他人全貌 0 留痕（§1.5·根因#3）`)
+      else
+        for (const a of ['getCustomer360', 'getUser', 'searchCustomer'])
+          if (!new RegExp(`['"]${a}['"]`).test(set[1]))
+            bad.push(`${audit} FORCE_AUDIT 未含 ${a}——读他人全貌/检索 0 留痕（§1.5·根因#3）`)
       return bad
     },
   },
   {
     id: 'cs-360-rbac-gated',
     roots: ['#3'],
-    desc: '360 读须能力闸（§1.5·根因#3·别让单超管裸奔）：adminApi/index.ts 须有 ACTION_CAPS 含 getCustomer360→customer:view，且按 caps 校验拒绝（非任何登录都自动能批量读他人数据·B5.2 扩多角色）',
+    desc: '360 读须能力闸（§1.5·根因#3·别让单超管裸奔）：adminApi/index.ts 须有 ACTION_CAPS 含 getCustomer360/getUser/searchCustomer→customer:view，且按 caps 校验拒绝（非任何登录都自动能批量读他人数据/检索客户·B1.2 扩两读·B5.2 扩多角色）',
     run() {
       const idx = 'packages/cloud/src/functions/admin/adminApi/index.ts'
       if (!existsSync(join(ROOT, idx))) return [`${idx} 缺失`]
       const src = readFileSync(join(ROOT, idx), 'utf8')
       const bad = []
-      // 只扫 ACTION_CAPS 对象字面量内部（防 ACTIONS 注册行/import 里的 getCustomer360 造假绿·反向自检逮出）
+      // 只扫 ACTION_CAPS 对象字面量内部（防 ACTIONS 注册行/import 里的 action 名造假绿·反向自检逮出）
       const caps = src.match(/const ACTION_CAPS[^{]*\{([\s\S]*?)\}/)
       if (!caps) bad.push(`${idx} 无 ACTION_CAPS 能力闸——360 读无 RBAC（§1.5·根因#3）`)
-      else if (!/getCustomer360/.test(caps[1])) bad.push(`ACTION_CAPS 未含 getCustomer360——任何登录即可读他人全貌（§1.5·根因#3）`)
+      else
+        for (const a of ['getCustomer360', 'getUser', 'searchCustomer'])
+          if (!new RegExp(`\\b${a}\\s*:`).test(caps[1]))
+            bad.push(`ACTION_CAPS 未含 ${a}——任何登录即可读他人全貌/检索客户（§1.5·根因#3）`)
       if (!/\bcaps\b/.test(src)) bad.push(`${idx} 未按 caps 校验——能力闸空转（§1.5）`)
       return bad
     },

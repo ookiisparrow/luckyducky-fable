@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach } from 'vitest'
 import { createHash } from 'node:crypto'
 import cloud, { control } from 'wx-server-sdk'
-import { getCustomer360 } from '../../packages/cloud/src/functions/admin/adminApi/actions/customer360'
+import { getCustomer360, searchCustomer, getUser } from '../../packages/cloud/src/functions/admin/adminApi/actions/customer360'
 import { enabledProviders } from '../../packages/cloud/src/functions/admin/adminApi/customer360/registry'
 import { shouldAudit } from '../../packages/cloud/src/kit/audit'
 import { main } from '../../packages/cloud/src/functions/admin/adminApi'
@@ -93,5 +93,106 @@ describe('§1.5 信任边界（B1.1·根因#3·360 读越权面）', () => {
     const log = await db.collection('auditLog').where({ action: 'getCustomer360' }).get()
     expect(log.data.length).toBeGreaterThanOrEqual(1)
     expect(log.data[0].summary.openid).toBe('A') // 留痕「查了谁」（防 PII 访问 0 痕）
+  })
+})
+
+// ── B1.2 客户检索 + 单人画像（车道 A·同属 360 越权读·§1.5）──
+describe('客户检索 searchCustomer（B1.2·精确命中四键）', () => {
+  beforeEach(() => {
+    control.seed('users', [
+      { _id: 'A', _openid: 'A', nickname: '小棉', phone: '13800000001', avatar: 'cloud://a', createdAt: 100 },
+      { _id: 'B', _openid: 'B', nickname: '阿鸭', phone: '13900000002', createdAt: 200 },
+    ])
+    control.seed('orders', [{ _id: 'ORD-1', id: 'ORD-1', _openid: 'B', status: 'paid', amount: 30, createdAt: 300 }])
+  })
+
+  it('按 openid 精确命中（返摘要 + matchedBy）', async () => {
+    const r = parse(await searchCustomer(ctx({ q: 'A' })))
+    expect(r.ok).toBe(true)
+    expect(r.customers.map((c) => c.openid)).toEqual(['A'])
+    expect(r.customers[0].matchedBy).toContain('openid')
+    expect(r.customers[0].nickname).toBe('小棉')
+  })
+
+  it('按手机号精确命中', async () => {
+    const r = parse(await searchCustomer(ctx({ q: '13900000002' })))
+    expect(r.customers.map((c) => c.openid)).toEqual(['B'])
+    expect(r.customers[0].matchedBy).toContain('phone')
+  })
+
+  it('按昵称精确命中', async () => {
+    const r = parse(await searchCustomer(ctx({ q: '阿鸭' })))
+    expect(r.customers.map((c) => c.openid)).toEqual(['B'])
+    expect(r.customers[0].matchedBy).toContain('nickname')
+  })
+
+  it('按订单号反查客户（orders→_openid）', async () => {
+    const r = parse(await searchCustomer(ctx({ q: 'ORD-1' })))
+    expect(r.customers.map((c) => c.openid)).toEqual(['B'])
+    expect(r.customers[0].matchedBy).toContain('orderId')
+  })
+
+  it('q 缺失 → BAD_ARGS', async () => {
+    const r = parse(await searchCustomer(ctx({ q: '  ' })))
+    expect(r.ok).toBe(false)
+    expect(r.error).toBe('BAD_ARGS')
+  })
+
+  it('无匹配 → 空列表（不报错）', async () => {
+    const r = parse(await searchCustomer(ctx({ q: 'nobody' })))
+    expect(r.ok).toBe(true)
+    expect(r.count).toBe(0)
+  })
+})
+
+describe('单客户画像 getUser（B1.2）', () => {
+  it('返回白名单画像（按 _openid 命中·兼容老随机 _id 档）', async () => {
+    control.seed('users', [
+      { _id: 'rnd-xyz', _openid: 'A', nickname: '小棉', phone: '138', bio: 'hi', createdAt: 1, updatedAt: 2 },
+    ])
+    const r = parse(await getUser(ctx({ openid: 'A' })))
+    expect(r.ok).toBe(true)
+    expect(r.user.openid).toBe('A')
+    expect(r.user.nickname).toBe('小棉')
+    expect(r.user.bio).toBe('hi')
+    expect(r.user._id).toBeUndefined() // 白名单·不回原始档字段
+  })
+
+  it('无档 → user:null（不报错）', async () => {
+    const r = parse(await getUser(ctx({ openid: 'ghost' })))
+    expect(r.ok).toBe(true)
+    expect(r.user).toBe(null)
+  })
+
+  it('openid 缺失 → BAD_ARGS', async () => {
+    const r = parse(await getUser(ctx({})))
+    expect(r.ok).toBe(false)
+    expect(r.error).toBe('BAD_ARGS')
+  })
+})
+
+describe('§1.5 信任边界：searchCustomer/getUser 同闸（B1.2·根因#3）', () => {
+  it('cs-360-read-audited：两者强制审计（破 ^get 跳过）', () => {
+    expect(shouldAudit('getUser')).toBe(true) // get* 默认跳·FORCE_AUDIT 破例
+    expect(shouldAudit('searchCustomer')).toBe(true)
+  })
+
+  it('cs-360-rbac-gated：无 customer:view → 403（经 main·两 action）', async () => {
+    control.seed('adminConfig', [{ _id: 'auth', keyHash: sha(KEY), caps: ['products:edit'] }])
+    expect((await call('searchCustomer', KEY, { q: 'A' })).status).toBe(403)
+    expect((await call('getUser', KEY, { openid: 'A' })).status).toBe(403)
+  })
+
+  it('经 main 分发留痕 auditLog（搜了什么/查了谁·FORCE_AUDIT）', async () => {
+    control.seed('adminConfig', [{ _id: 'auth', keyHash: sha(KEY), caps: ['*'] }])
+    control.seed('users', [{ _id: 'A', _openid: 'A', nickname: '小棉' }])
+    await call('searchCustomer', KEY, { q: 'A' })
+    await call('getUser', KEY, { openid: 'A' })
+    const sLog = await db.collection('auditLog').where({ action: 'searchCustomer' }).get()
+    const gLog = await db.collection('auditLog').where({ action: 'getUser' }).get()
+    expect(sLog.data.length).toBeGreaterThanOrEqual(1)
+    expect(sLog.data[0].summary.q).toBe('A') // 留痕搜了什么
+    expect(gLog.data.length).toBeGreaterThanOrEqual(1)
+    expect(gLog.data[0].summary.openid).toBe('A') // 留痕查了谁
   })
 })

@@ -46,10 +46,10 @@ export async function recordAudit(entry: {
   }
 }
 
-// 破例强制审计（§1.5·根因#3）：读他人全貌的 360 越权面 action 以 get 开头会被下方 ^get 跳过——
-// 但坐席批量读他人订单/PII/学习轨迹必须留痕（防 0 痕）。名单内 action 无视 ^get 跳过、一律记。
-// 守卫 cs-360-read-audited 焊 getCustomer360 在册；B1.2 加 getUser/searchCustomer 时同步扩名单。
-const FORCE_AUDIT = new Set(['getCustomer360'])
+// 破例强制审计（§1.5·根因#3）：读他人全貌/检索他人的 360 越权面 action（getCustomer360 聚合 / getUser 单人画像 /
+// searchCustomer 检索客户）以 get 开头会被下方 ^get 跳过——但坐席批量读他人订单/PII/学习轨迹必须留痕（防 0 痕）。
+// 名单内 action 无视 ^get 跳过、一律记。守卫 cs-360-read-audited 焊三者在册（删一个即红）。
+const FORCE_AUDIT = new Set(['getCustomer360', 'getUser', 'searchCustomer'])
 
 // 是否审计：跳过只读（list*/get*）+ 媒体上传（upload*·高频大件噪声）+ ping/login（认证·已有频控审计语义）；
 // 其余（save*/ship*/approve*/reject*/publish*/delete*/clear*/create* 等动钱动状态）一律记。

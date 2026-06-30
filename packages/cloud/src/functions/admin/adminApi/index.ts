@@ -76,13 +76,19 @@ const ACTIONS: Record<string, (ctx: Ctx) => Promise<any>> = {
   // 库存（库存#1）
   listInventory: inventory.listInventory,
   saveStock: inventory.saveStock,
-  // 客户360（B1.1·后台360工作站·只读聚合·越权面：ACTION_CAPS 能力闸 + FORCE_AUDIT 强制留痕）
-  getCustomer360: customer360.getCustomer360,
+  // 客户360（B1.1/1.2·后台360工作站·只读·越权面：ACTION_CAPS 能力闸 + FORCE_AUDIT 强制留痕）
+  getCustomer360: customer360.getCustomer360, // 聚合全貌（provider registry）
+  searchCustomer: customer360.searchCustomer, // 按 openid/手机/单号/昵称检索客户
+  getUser: customer360.getUser, // 单 openid 用户画像（users 集合）
 }
 
 // 能力闸（§1.5 RBAC·根因#3·别让单超管裸奔）：受限 action 须 principal 具备对应能力（'*'=全能力）。
-// 360 读他人全貌＝customer:view。守卫 cs-360-rbac-gated 焊本表含 getCustomer360 + 下方 caps 校验。
-const ACTION_CAPS: Record<string, string> = { getCustomer360: 'customer:view' }
+// 360 读他人全貌/检索＝customer:view。守卫 cs-360-rbac-gated 焊本表含三个 360 读 action + 下方 caps 校验。
+const ACTION_CAPS: Record<string, string> = {
+  getCustomer360: 'customer:view',
+  searchCustomer: 'customer:view',
+  getUser: 'customer:view',
+}
 
 // 认证频控（根因#13 防爆破）：失败 5 次/10 分 → 锁 5 分；login 与其余 action 的口令校验共用此闸。
 const ADMIN_THROTTLE = { max: 5, windowMs: 10 * 60_000, lockMs: 5 * 60_000 }
