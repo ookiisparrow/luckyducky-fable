@@ -1,14 +1,15 @@
 <script setup>
 /**
- * 客服会话台（后台360工作站 B5.1·板块#9·外包管控底座）。坐席/质检按客户检索归档会话（微信客服·未来承面C），
- * 看完整时间轴（客户↔客服），供历史追溯 + 质检取证（B5.3 报表/SLA 在此页顶部补）。
+ * 客服会话台（后台360工作站·板块#9/#11·外包管控底座）。坐席/质检按客户检索归档会话（微信客服·未来承面C），
+ * 看完整时间轴（客户↔客服），供历史追溯 + 质检取证；顶部「质检报表」（B5.3）显会话量/首次响应时长/SLA/答复率。
  *
  * 越权读（§1.5）：searchConversations 后端经 customer:view 闸 + 强制留痕（查了谁的会话），本页只发起读、不碰审计/能力。
- * bounded：cursor 分页（「加载更多」续取更早消息）·keyword 为当前结果集内子串过滤（真全文检索待真机后升级·根因#8）。
+ * bounded：cursor 分页（「加载更多」续取更早消息）·keyword 为当前结果集内子串过滤（真全文检索待真机后升级·根因#8）；
+ * 报表为近 N 条 bounded 样本聚合（超量近似·同看板）。
  */
-import { ref } from 'vue'
-import { cloudMode, searchConversations } from '@/api/cloud.js'
-import { Search, MessagesSquare, ArrowDownToLine } from 'lucide-vue-next'
+import { ref, onMounted } from 'vue'
+import { cloudMode, searchConversations, conversationsReport } from '@/api/cloud.js'
+import { Search, MessagesSquare, ArrowDownToLine, RefreshCw } from 'lucide-vue-next'
 
 const idType = ref('openid') // openid（kfBind 绑定后稳定·首选）| externalUserId（未绑定时用外部联系人ID）
 const idValue = ref('')
@@ -56,6 +57,35 @@ async function doSearch(more = false) {
     loading.value = false
   }
 }
+
+// ── 质检报表（B5.3·会话量/首次响应/SLA/答复率·bounded 聚合）──
+const report = ref(null)
+const reportLoading = ref(false)
+const reportErr = ref('')
+const slaMin = ref(5) // SLA 阈值（分钟·首次响应）
+
+const fmtDur = (ms) => {
+  const n = Number(ms) || 0
+  if (n < 1000) return n + ' 毫秒'
+  if (n < 60_000) return (n / 1000).toFixed(1) + ' 秒'
+  if (n < 3_600_000) return (n / 60_000).toFixed(1) + ' 分'
+  return (n / 3_600_000).toFixed(1) + ' 小时'
+}
+
+async function loadReport() {
+  if (!cloudMode || reportLoading.value) return
+  reportLoading.value = true
+  reportErr.value = ''
+  try {
+    report.value = await conversationsReport({ slaMs: Math.max(1, Number(slaMin.value) || 5) * 60_000 })
+  } catch (e) {
+    reportErr.value = '报表加载失败：' + e.message
+  } finally {
+    reportLoading.value = false
+  }
+}
+
+onMounted(loadReport)
 </script>
 
 <template>
@@ -70,6 +100,33 @@ async function doSearch(more = false) {
     <p v-if="!cloudMode" class="hint warn">客服会话需云端模式（配置 VITE_ADMIN_API）。</p>
 
     <template v-else>
+      <!-- 质检报表（B5.3·会话量/首次响应/SLA/答复率·近 N 条 bounded 样本聚合·超量近似） -->
+      <section class="report card">
+        <div class="rhead">
+          <h3>质检报表<span v-if="report" class="rsub"> · 近 {{ report.sampleSize }} 条{{ report.approx ? '（近似）' : '' }}</span></h3>
+          <div class="sla-ctl">
+            <label>SLA 首响阈值</label>
+            <input v-model.number="slaMin" class="input mini-in" type="number" min="1" />
+            <span class="unit">分钟</span>
+            <button class="btn ghost mini" :disabled="reportLoading" @click="loadReport"><RefreshCw :size="13" />刷新</button>
+          </div>
+        </div>
+        <p v-if="reportErr" class="hint warn">{{ reportErr }}</p>
+        <p v-else-if="reportLoading && !report" class="muted">报表加载中…</p>
+        <div v-else-if="report" class="tiles">
+          <div class="tile"><span class="tk">会话消息</span><span class="tv">{{ report.volume.messages }}</span></div>
+          <div class="tile"><span class="tk">客户数</span><span class="tv">{{ report.volume.customers }}</span></div>
+          <div class="tile"><span class="tk">客户消息</span><span class="tv">{{ report.volume.inbound }}</span></div>
+          <div class="tile"><span class="tk">客服消息</span><span class="tv">{{ report.volume.outbound }}</span></div>
+          <div class="tile"><span class="tk">平均首响</span><span class="tv">{{ fmtDur(report.response.avgResponseMs) }}</span></div>
+          <div class="tile"><span class="tk">最长首响</span><span class="tv">{{ fmtDur(report.response.maxResponseMs) }}</span></div>
+          <div class="tile"><span class="tk">答复率</span><span class="tv">{{ report.response.answeredRate }}%</span></div>
+          <div class="tile"><span class="tk">未答复</span><span class="tv" :class="{ bad: report.response.unanswered > 0 }">{{ report.response.unanswered }}</span></div>
+          <div class="tile"><span class="tk">超 SLA</span><span class="tv" :class="{ bad: report.sla.breaches > 0 }">{{ report.sla.breaches }}（{{ report.sla.breachRate }}%）</span></div>
+        </div>
+        <p class="rnote">首次响应含机器人自动应答（近实时）；人工接待时长待承面C 人工回复落档后显著。</p>
+      </section>
+
       <div class="bar">
         <select v-model="idType" class="input sel">
           <option value="openid">openid</option>
@@ -119,6 +176,73 @@ h1 {
 .sub {
   margin: 0;
   font-size: 12.5px;
+  color: var(--content-2);
+}
+/* 质检报表 */
+.report {
+  padding: 16px 18px;
+  margin-bottom: 16px;
+}
+.rhead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+.rhead h3 {
+  margin: 0;
+  font-size: 14px;
+  color: var(--ink);
+}
+.rsub {
+  font-weight: 400;
+  font-size: 12px;
+  color: var(--content-2);
+}
+.sla-ctl {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--content-2);
+}
+.mini-in {
+  width: 56px;
+  text-align: center;
+}
+.unit {
+  margin-right: 4px;
+}
+.tiles {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+  gap: 10px;
+}
+.tile {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 10px 12px;
+  background: var(--bg-lilac);
+  border-radius: 9px;
+}
+.tk {
+  font-size: 11px;
+  color: var(--content-2);
+}
+.tv {
+  font-size: 17px;
+  font-weight: 700;
+  color: var(--ink);
+}
+.tv.bad {
+  color: var(--red);
+}
+.rnote {
+  margin: 12px 0 0;
+  font-size: 11px;
   color: var(--content-2);
 }
 .bar {

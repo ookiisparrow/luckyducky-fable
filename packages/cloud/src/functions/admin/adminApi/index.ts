@@ -87,6 +87,8 @@ const ACTIONS: Record<string, (ctx: Ctx) => Promise<any>> = {
   saveCheckpoints: checkpoints.saveCheckpoints,
   // 客服会话检索（B5.1·后台360工作站·外包管控底座·只读·越权读：ACTION_CAPS customer:view 闸 + shouldAudit 默认留痕）
   searchConversations: conversations.searchConversations,
+  // 客服质检报表（B5.3·后台360工作站·会话量/响应时长/SLA/答复率·bounded 聚合·运营统计无逐人 PII·同 dashboard 不设 cap 闸）
+  conversationsReport: conversations.conversationsReport,
 }
 
 // 能力闸（§1.5 RBAC·根因#3·别让单超管裸奔）：受限 action 须 principal 具备对应能力（'*'=全能力）。

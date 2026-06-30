@@ -843,6 +843,22 @@ export const repoChecks = [
     },
   },
   {
+    // 后台360工作站 B5.3：质检 + 报表 + SLA（板块#11·依赖归档·车道 E）。报表聚合会话算响应时长/SLA/答复率·须 bounded。
+    id: 'conversations-report-bounded',
+    roots: ['#7'],
+    desc: '会话质检报表聚合有界（后台360工作站 B5.3·根因#7/#18 规模）：adminApi/actions/conversations.ts 的 conversationsReport 须 bounded 样本读（带 .limit() 上界·同 dashboard SAMPLE）——杜绝全量扫会话算 SLA/响应时长拖垮（量上来即慢·超量标 approx）',
+    run() {
+      const f = 'packages/cloud/src/functions/admin/adminApi/actions/conversations.ts'
+      if (!existsSync(join(ROOT, f))) return [`${f} 缺失（会话质检报表·B5.3）`]
+      const src = readFileSync(join(ROOT, f), 'utf8')
+      const bad = []
+      if (!/conversationsReport/.test(src)) bad.push(`${f} 无 conversationsReport——质检报表缺失（B5.3）`)
+      else if (!/\.limit\s*\(/.test(src))
+        bad.push(`${f} conversationsReport 聚合未带 .limit() 上界——全量扫会话拖垮（根因#7/#18·须 bounded 样本·同 dashboard）`)
+      return bad
+    },
+  },
+  {
     id: 'interface-catalog-sync',
     roots: ['正册'],
     desc: '系统事实同步（docs/系统事实.md 是接口权威登记册，正册自评 P1）：每个云函数 + 每个 adminApi action 都须登记，杜绝「加接口忘登记」',

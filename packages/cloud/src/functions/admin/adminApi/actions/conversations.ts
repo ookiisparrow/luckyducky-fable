@@ -46,3 +46,77 @@ export async function searchConversations({ db, data }: Ctx) {
     hasMore: paged.hasMore,
   })
 }
+
+// ── 质检 + 报表 + SLA（B5.3·板块#11·依赖归档·车道 E）──
+// 近 REPORT_SAMPLE 条会话的运营度量：会话量 / 首次响应时长 / SLA 达标 / 答复率。聚合属运营统计（无逐人 PII·同
+// dashboard 不另设 cap 闸）。bounded 样本读（守卫 conversations-report-bounded·根因#7/#18·超量标 approx·同 dashboard）。
+// 配对口径：按客户（externalUserId 优先·稳定·无则 openid）把消息按 at 升序，每条入站找其后首个出站算「首次响应」。
+// 诚实标注（根因#8）：当前出站含机器人自动应答（近实时）→首响多近 0；人工接待时长待承面C 人工回复落档后才显著。
+const REPORT_SAMPLE = 1000
+const DEFAULT_SLA_MS = 5 * 60_000 // 首次响应 SLA 默认 5 分钟（前端可传 slaMs 覆盖）
+
+export async function conversationsReport({ db, data }: Ctx) {
+  const d = data || {}
+  const slaMs = Math.max(0, Number(d.slaMs) || DEFAULT_SLA_MS)
+  const channel = String(d.channel || '').trim()
+  const filter: Record<string, any> = {}
+  if (channel) filter.channel = channel
+  // bounded 样本（最近 SAMPLE 条·orderBy at desc·守卫 conversations-report-bounded·防全量扫拖垮）
+  const res = await db
+    .collection(COLLECTIONS.conversations)
+    .where(filter)
+    .orderBy('at', 'desc')
+    .limit(REPORT_SAMPLE)
+    .get()
+    .catch(() => ({ data: [] }))
+  const rows: any[] = (res && res.data) || []
+
+  let inbound = 0
+  let outbound = 0
+  const byCustomer = new Map<string, any[]>()
+  for (const m of rows) {
+    if (m.direction === 'in') inbound++
+    else if (m.direction === 'out') outbound++
+    const key = String(m.externalUserId || m.openid || '')
+    if (!key) continue
+    const arr = byCustomer.get(key) || []
+    arr.push(m)
+    byCustomer.set(key, arr)
+  }
+
+  // 首次响应配对：每客户消息按 at 升序，每条入站找其后首个出站算 delta（答复）；无后续出站＝未答复（unanswered）。
+  const deltas: number[] = []
+  let unanswered = 0
+  for (const msgs of byCustomer.values()) {
+    const sorted = msgs.slice().sort((a, b) => (Number(a.at) || 0) - (Number(b.at) || 0))
+    for (let i = 0; i < sorted.length; i++) {
+      if (sorted[i].direction !== 'in') continue
+      const inAt = Number(sorted[i].at) || 0
+      let replyAt = 0
+      for (let j = i + 1; j < sorted.length; j++) {
+        if (sorted[j].direction === 'out') {
+          replyAt = Number(sorted[j].at) || 0
+          break
+        }
+      }
+      if (replyAt && replyAt >= inAt) deltas.push(replyAt - inAt)
+      else unanswered++
+    }
+  }
+  const answered = deltas.length
+  const avgResponseMs = answered ? Math.round(deltas.reduce((s, x) => s + x, 0) / answered) : 0
+  const maxResponseMs = answered ? Math.max(...deltas) : 0
+  const breaches = deltas.filter((x) => x > slaMs).length
+  const pct = (n: number) => Math.round(n * 1000) / 10 // 百分比·一位小数
+  return reply(200, {
+    ok: true,
+    sampleSize: rows.length,
+    approx: rows.length >= REPORT_SAMPLE, // 触顶＝近似（只算样本·同 dashboard）
+    slaMs,
+    volume: { messages: rows.length, inbound, outbound, customers: byCustomer.size },
+    // 答复率＝有出站回复的入站占比（解决率近似·MVP·承面C 人工接入后更准）
+    response: { avgResponseMs, maxResponseMs, answered, unanswered, answeredRate: inbound ? pct(answered / inbound) : 0 },
+    // SLA：首次响应超 slaMs 的占比（已答复中）+ 未答复数（也算违约信号）
+    sla: { slaMs, breaches, breachRate: answered ? pct(breaches / answered) : 0, unanswered },
+  })
+}

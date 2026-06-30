@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach } from 'vitest'
 import { createHash } from 'node:crypto'
 import cloud, { control } from 'wx-server-sdk'
 import { archiveInbound, archiveOutbound, incomingText, payloadText } from '../../packages/cloud/src/functions/cs/kfCallback/archive'
-import { searchConversations } from '../../packages/cloud/src/functions/admin/adminApi/actions/conversations'
+import { searchConversations, conversationsReport } from '../../packages/cloud/src/functions/admin/adminApi/actions/conversations'
 import { shouldAudit } from '../../packages/cloud/src/kit/audit'
 import { main } from '../../packages/cloud/src/functions/admin/adminApi'
 
@@ -176,5 +176,64 @@ describe('§1.5 信任边界：searchConversations＝越权读他人会话（B5.
     const log = await db.collection('auditLog').where({ action: 'searchConversations' }).get()
     expect(log.data.length).toBeGreaterThanOrEqual(1)
     expect(log.data[0].summary.openid).toBe('A') // 留痕查了谁
+  })
+})
+
+// ── B5.3 质检报表 + SLA（板块#11·依赖归档·bounded 聚合）──
+describe('会话质检报表 conversationsReport（B5.3·会话量/首响/SLA/答复率）', () => {
+  beforeEach(() => {
+    control.seed('conversations', [
+      // 客户 A：两轮·各有回复（首响 300/500ms）
+      { _id: 'a1', channel: 'wxkf', direction: 'in', externalUserId: 'wmA', openid: 'A', text: 'q1', at: 1000 },
+      { _id: 'a2', channel: 'wxkf', direction: 'out', externalUserId: 'wmA', openid: 'A', text: 'r1', at: 1300 },
+      { _id: 'a3', channel: 'wxkf', direction: 'in', externalUserId: 'wmA', openid: 'A', text: 'q2', at: 2000 },
+      { _id: 'a4', channel: 'wxkf', direction: 'out', externalUserId: 'wmA', openid: 'A', text: 'r2', at: 2500 },
+      // 客户 B：一条入站·无回复（未答复）
+      { _id: 'b1', channel: 'wxkf', direction: 'in', externalUserId: 'wmB', openid: 'B', text: 'q', at: 5000 },
+    ])
+  })
+
+  it('会话量：消息/入站/出站/客户数', async () => {
+    const r = parse(await conversationsReport(ctx({})))
+    expect(r.ok).toBe(true)
+    expect(r.volume).toEqual({ messages: 5, inbound: 3, outbound: 2, customers: 2 })
+  })
+
+  it('首次响应：入站→其后首个出站配对·avg/max·未答复计入', async () => {
+    const r = parse(await conversationsReport(ctx({})))
+    expect(r.response.answered).toBe(2) // 300 + 500
+    expect(r.response.avgResponseMs).toBe(400)
+    expect(r.response.maxResponseMs).toBe(500)
+    expect(r.response.unanswered).toBe(1) // 客户 B 无回复
+    expect(r.response.answeredRate).toBe(66.7) // 2/3
+  })
+
+  it('SLA：slaMs 阈值下超时数 + 占比（首响 500 > 400ms 阈→1 违约）', async () => {
+    const r = parse(await conversationsReport(ctx({ slaMs: 400 })))
+    expect(r.slaMs).toBe(400)
+    expect(r.sla.breaches).toBe(1) // 仅 500ms 那条超 400
+    expect(r.sla.breachRate).toBe(50) // 1/2 已答复
+    expect(r.sla.unanswered).toBe(1)
+  })
+
+  it('channel 筛选：非 wxkf 渠道无数据 → 全 0（不报错）', async () => {
+    const r = parse(await conversationsReport(ctx({ channel: 'faceC' })))
+    expect(r.volume.messages).toBe(0)
+    expect(r.response.avgResponseMs).toBe(0)
+    expect(r.response.answeredRate).toBe(0)
+  })
+
+  it('bounded：sampleSize 反映样本量·approx 触顶才 true（本例未触顶）', async () => {
+    const r = parse(await conversationsReport(ctx({})))
+    expect(r.sampleSize).toBe(5)
+    expect(r.approx).toBe(false)
+  })
+
+  it('报表非 PII 越权面：不设 cap 闸（普通 caps 也能拉·同 dashboard）+ 默认审计', async () => {
+    control.seed('adminConfig', [{ _id: 'auth', keyHash: sha(KEY), caps: ['products:edit'] }])
+    const r = await call('conversationsReport', KEY, {})
+    expect(r.status).toBe(200) // 非 customer:view 也过（聚合无逐人 PII）
+    expect(r.ok).toBe(true)
+    expect(shouldAudit('conversationsReport')).toBe(true) // 默认留痕（非 ^get/list/upload）
   })
 })

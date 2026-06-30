@@ -594,3 +594,14 @@ export async function searchConversations({ openid, externalUserId, channel, key
   if (!r.ok) throw new Error(r.error || 'SEARCH_CONVERSATIONS_FAIL')
   return { messages: r.messages || [], count: r.count || 0, nextCursor: r.nextCursor ?? null, hasMore: !!r.hasMore }
 }
+
+// 客服质检报表（B5.3·会话量/首次响应时长/SLA 达标/答复率·bounded 聚合）。返回 { sampleSize, approx, slaMs, volume, response, sla }。
+export async function conversationsReport({ slaMs, channel } = {}) {
+  if (!cloudMode) return null // 报表只存在于云端
+  const payload = {}
+  if (slaMs != null) payload.slaMs = slaMs
+  if (channel) payload.channel = channel
+  const r = await post('conversationsReport', payload)
+  if (!r.ok) throw new Error(r.error || 'CONVERSATIONS_REPORT_FAIL')
+  return r
+}
