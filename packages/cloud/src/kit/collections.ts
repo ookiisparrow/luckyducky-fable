@@ -48,6 +48,10 @@ export const COLLECTIONS = {
   // `def:<courseId>:<nodeId>` 关键节点定义（admin 策展：title/remedy 挽回办法·order）；`sub:<openid>:<courseId>:<nodeId>`
   // 用户拍照提交（submitCheckpointPhoto·imgSecCheck 过后才入库·幂等重传覆盖最新）。仅云函数读写、客户端禁，上线前控制台锁「仅管理端」。
   checkpoints: 'checkpoints',
+  // 知识库（后台360工作站 B4.1·FAQ/知识条目单源·根因#5 复制即漂移）：确定性 _id=FAQ 键（如 `logistics:eta`·
+  // 同客服分流菜单叶子 id）；字段 question/answer/category/enabled/order。admin 经 adminApi listKb/saveKb 维护（整体覆盖式），
+  // 客服 bot dispatch 读它发 FAQ 答案（替代原写死 TEXT_ANSWERS·守卫 faq-via-kb-single-source）。仅云函数读写、客户端禁，上线前控制台锁「仅管理端」。
+  kb: 'kb',
 } as const
 
 export type CollName = (typeof COLLECTIONS)[keyof typeof COLLECTIONS]

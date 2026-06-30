@@ -396,6 +396,26 @@ export const repoChecks = [
     },
   },
   {
+    // 知识库单源（后台360工作站 B4.1·根因#5 样板复制即漂移）：客服 bot 的 FAQ 答案原写死在 dispatch.ts 的
+    // TEXT_ANSWERS map，admin 改不了、与知识库两处漂移。锁 FAQ 答案只从 kb 集合单源取——dispatch 须读 kb
+    // （COLLECTIONS.kb）发答案、不得残留写死 FAQ 答案 map（TEXT_ANSWERS）；admin 经 listKb/saveKb 维护 kb，
+    // bot/坐席共用同一份答案。改答案只改 kb 一处，杜绝两份漂移。
+    id: 'faq-via-kb-single-source',
+    roots: ['#5'],
+    desc: 'FAQ 答案只从 kb 单源（后台360工作站 B4.1·根因#5）：cs/kfCallback/dispatch.ts 须读 kb 集合（COLLECTIONS.kb / .collection("kb")）发 FAQ 答案、不得残留写死 FAQ 答案 map（TEXT_ANSWERS 字面量答案）——防 bot 答案与 admin 维护的知识库两处漂移',
+    run() {
+      const f = 'packages/cloud/src/functions/cs/kfCallback/dispatch.ts'
+      if (!existsSync(join(ROOT, f))) return [`${f} 缺失（客服分流·B4.1）`]
+      const src = readFileSync(join(ROOT, f), 'utf8')
+      const bad = []
+      if (!/COLLECTIONS\.kb|\.collection\(\s*['"]kb['"]\s*\)/.test(src))
+        bad.push(`${f} 未读 kb 集合——FAQ 答案须从 kb 单源取（B4.1·根因#5·防写死漂移）`)
+      if (/TEXT_ANSWERS/.test(src))
+        bad.push(`${f} 残留写死 FAQ 答案 map（TEXT_ANSWERS）——FAQ 答案须只在 kb 单源（B4.1·根因#5）`)
+      return bad
+    },
+  },
+  {
     // 客服回调防超时吞消息（外审 R1-R4·P1.5·根因#8）：函数超时 20s，单批 limit 旧默认 1000 逐条串行可能做不完 →
     // 已认领但副作用未完成时被硬超时杀掉、下次因 seen 跳过＝吞消息。锁 index.ts 单批 limit 有界(<200)且传 syncMsg +
     // 设墙钟时间预算(Date.now()-startedAt 临近超时停、保留旧游标续拉)——去掉预算或放大批量当场红。

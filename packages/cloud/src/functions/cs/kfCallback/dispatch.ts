@@ -159,18 +159,13 @@ export function menuFor(cat: Category, word: string): MsgMenuContent {
 // ── menu_id 路由 ──
 export type Route =
   | { type: 'menu'; content: MsgMenuContent }
-  | { type: 'text'; text: string }
+  // faqKey：FAQ 叶子答案的键（=kb 文档 _id·同菜单叶子 menu_id）；答案由 handleMessage 从 kb 单源读
+  // （B4.1·守卫 faq-via-kb-single-source·不再在本文件写死 FAQ 文案）。
+  | { type: 'faq'; faqKey: string }
   // fallbackText：小程序卡片需封面素材(thumb_media_id)+已发布小程序，未配齐时降级为这段文字（防 40058·见下）
   | { type: 'miniprogram'; page: string; title: string; fallbackText: string }
   | { type: 'order_query' }
   | { type: 'transfer' }
-
-const TEXT_ANSWERS: Record<string, string> = {
-  'logistics:eta': '现货商品付款后 48 小时内发货；预售商品以商品页标注为准。发出后可在「查我的订单 / 物流」看单号。',
-  'addr:change': '未发货前可在小程序「我的订单 → 订单详情」修改收货地址；已发货请点「转人工」协助拦截。',
-  'activation:howto': '收到的激活码在小程序「我的 → 课程 / 激活」页输入即可解锁；一码一用，激活后绑定本账号。',
-  'aftersale:policy': '未使用且不影响二次销售可 7 天无理由退换；材料包拆封后如有质量问题（缺件/损坏）凭照片走售后。具体以商品页与售后页为准。',
-}
 
 export function route(menuId: string): Route {
   if (menuId === 'human') return { type: 'transfer' }
@@ -193,8 +188,23 @@ export function route(menuId: string): Route {
     const cat = menuId.slice(4) as Category
     return { type: 'menu', content: menuFor(cat, '该分类') }
   }
-  if (TEXT_ANSWERS[menuId]) return { type: 'text', text: TEXT_ANSWERS[menuId] }
+  // FAQ 叶子答案：键含「:」且非上述结构路由（人工/查单/卡片/分类）→ 当作 kb FAQ 键，答案由 handleMessage
+  // 从 kb 单源读（B4.1）；未含「:」的未知 id → 兜底回根菜单（与原行为一致）。
+  if (menuId.includes(':')) return { type: 'faq', faqKey: menuId }
   return { type: 'menu', content: rootMenu() }
+}
+
+// ── 知识库 FAQ 答案（单源·B4.1·守卫 faq-via-kb-single-source）──
+/**
+ * 从 kb 集合读 FAQ 答案（_id=faqKey·同菜单叶子 menu_id）。未命中 / 未启用（enabled:false）/ 无答案 → 返 null，
+ * 调用方兜底回根菜单。**答案只在 kb、admin 经 adminApi listKb/saveKb 维护**——本文件不再写死 FAQ 文案（根因#5 防漂移）。
+ */
+export async function faqAnswer(db: any, faqKey: string): Promise<string | null> {
+  if (!faqKey) return null
+  const got = await db.collection(COLLECTIONS.kb).doc(faqKey).get().catch(() => null)
+  const d = got && got.data
+  if (!d || d.enabled === false) return null
+  return d.answer ? String(d.answer) : null
 }
 
 // ── 身份桥接（external_userid → openid）+ 订单摘要 ──
@@ -285,9 +295,13 @@ export async function handleMessage(ctx: DispatchCtx, incoming: Incoming): Promi
       )
       await transfer(to)
       return
-    case 'text':
-      await send(buildText(to, openKfId, r.text))
+    case 'faq': {
+      // FAQ 答案从 kb 单源读（B4.1·守卫 faq-via-kb-single-source）；kb 无此条/未启用 → 兜底回根菜单（不写死答案）
+      const ans = await faqAnswer(db, r.faqKey)
+      if (ans) await send(buildText(to, openKfId, ans))
+      else await send(buildMsgMenu(to, openKfId, rootMenu()))
       return
+    }
     case 'menu':
       await send(buildMsgMenu(to, openKfId, r.content))
       return

@@ -111,10 +111,11 @@ describe('msgmenu 内容', () => {
 })
 
 describe('menu_id 路由', () => {
-  it('human→转人工 / order:query→查订单 / 政策→文字 / 申请售后→小程序卡片 / 分类→下级菜单', () => {
+  it('human→转人工 / order:query→查订单 / FAQ→读 kb / 申请售后→小程序卡片 / 分类→下级菜单', () => {
     expect(route('human')).toEqual({ type: 'transfer' })
     expect(route('order:query')).toEqual({ type: 'order_query' })
-    expect(route('aftersale:policy').type).toBe('text')
+    // FAQ 叶子答案改从 kb 单源读（B4.1·守卫 faq-via-kb-single-source）：route 只回 faqKey，答案由 handleMessage 读 kb
+    expect(route('aftersale:policy')).toEqual({ type: 'faq', faqKey: 'aftersale:policy' })
     // 卡片 page 须是 pages.json 已注册路由（外审 P2.11·根因#8）：售后页是 aftersales(带 s)、课程页在 pkg-video 分包
     expect(route('aftersale:apply')).toMatchObject({ type: 'miniprogram', page: 'pages/aftersales/index' })
     expect(route('course:open')).toMatchObject({ type: 'miniprogram', page: 'pkg-video/courses/index' })
