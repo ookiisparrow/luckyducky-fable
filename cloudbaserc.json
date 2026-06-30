@@ -216,6 +216,19 @@
       "installDependency": true
     },
     {
+      "name": "recallScan",
+      "timeout": 30,
+      "handler": "index.main",
+      "installDependency": true,
+      "triggers": [
+        {
+          "name": "recallTimer",
+          "type": "timer",
+          "config": "0 0 9 * * * *"
+        }
+      ]
+    },
+    {
       "name": "submitFeedback",
       "timeout": 10,
       "handler": "index.main",

@@ -434,6 +434,31 @@ export const repoChecks = [
     },
   },
   {
+    // 主动召回经唯一推送接缝（后台360工作站 B4.4·根因#12 平台接缝单点）：召回是「该主动联系的客户」运营摘要，
+    // 推送须复用既有 botpush 单一接缝（经 kit/observe 的 notifyRecall），**不另起一套客服推送通道**（防散调/绕开关/
+    // 凭证多处·与 bot-push-single-seam 同脉）。且 recallScan 自身不直拼 https 推送；纯决策 rules.ts 不碰 I/O（无
+    // .collection/getDb/await·根因#8 决策与 I/O 分离·便于单测）。
+    id: 'recall-via-bot-seam',
+    roots: ['#12'],
+    desc: '主动召回经唯一推送接缝（后台360工作站 B4.4·根因#12）：cs/recallScan/index.ts 须经 kit/observe 的 notifyRecall 推送（复用 botpush 单一接缝·不另起客服推送通道）且不直拼 https；纯决策 cs/recallScan/rules.ts 不碰 I/O（无 .collection/getDb/await·根因#8 便于单测）',
+    run() {
+      const dir = 'packages/cloud/src/functions/cs/recallScan'
+      const idx = join(ROOT, dir, 'index.ts')
+      const rules = join(ROOT, dir, 'rules.ts')
+      if (!existsSync(idx)) return [`${dir}/index.ts 缺失（主动召回触发·B4.4）`]
+      const bad = []
+      const isrc = readFileSync(idx, 'utf8')
+      if (!/notifyRecall/.test(isrc))
+        bad.push(`${dir}/index.ts 未经 notifyRecall 推送——召回须复用 botpush 单一接缝（根因#12·别另起推送通道）`)
+      if (/from\s+['"]https['"]|require\(\s*['"]https['"]\s*\)/.test(isrc))
+        bad.push(`${dir}/index.ts 直拼 https 推送——召回推送须经 kit/observe 单一接缝（根因#12）`)
+      if (!existsSync(rules)) bad.push(`${dir}/rules.ts 缺失（纯决策函数·B4.4·便于单测·根因#8）`)
+      else if (/\.collection\(|getDb|await\s/.test(readFileSync(rules, 'utf8')))
+        bad.push(`${dir}/rules.ts 含 I/O（.collection/getDb/await）——召回决策须纯函数（根因#8 便于单测·I/O 留 index.ts）`)
+      return bad
+    },
+  },
+  {
     // 客服回调防超时吞消息（外审 R1-R4·P1.5·根因#8）：函数超时 20s，单批 limit 旧默认 1000 逐条串行可能做不完 →
     // 已认领但副作用未完成时被硬超时杀掉、下次因 seen 跳过＝吞消息。锁 index.ts 单批 limit 有界(<200)且传 syncMsg +
     // 设墙钟时间预算(Date.now()-startedAt 临近超时停、保留旧游标续拉)——去掉预算或放大批量当场红。

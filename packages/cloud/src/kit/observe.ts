@@ -53,3 +53,38 @@ export async function notifyAlert(
     /* fail-soft：可观测性不反噬主流程 */
   }
 }
+
+// 主动召回摘要（后台360工作站 B4.4·复用本接缝·根因#12 平台接缝单点）：把「该主动联系的客户」分类计数推到
+// 运营群机器人，运营据此触达。与 notifyAlert 同走 botpush 唯一接缝（守卫 bot-push-single-seam），但召回是
+// 运营信号、非钱链/安全告警，故 sev='recall'、不打 [LD_ALERT] 日志（不触发告警规则）。
+export interface RecallSummary {
+  unpaid: number
+  logistics: number
+  unstarted: number
+  unfinished: number
+  total: number
+}
+/** 推一条主动召回摘要；**fail-soft——绝不抛错**（未配 webhook / 推送失败一律静默·不反噬扫描任务）。 */
+export async function notifyRecall(summary: RecallSummary): Promise<void> {
+  console.log('[recall] digest', summary) // 观测 backstop（非 [LD_ALERT]·不触发告警规则）
+  try {
+    const got = await getDb().collection('adminConfig').doc('settings').get().catch(() => null)
+    const s = (got && (got as any).data) || {}
+    if (!s.alertWebhook) return
+    if (s.alertEvents && s.alertEvents['RECALL_DIGEST'] === false) return
+    await pushBotAlert(s.alertWebhook, {
+      sev: 'recall',
+      fn: 'recallScan',
+      code: 'RECALL_DIGEST',
+      ctx: {
+        催付: summary.unpaid,
+        物流久未签收: summary.logistics,
+        激活未进课: summary.unstarted,
+        进课未学: summary.unfinished,
+        合计: summary.total,
+      },
+    })
+  } catch {
+    /* fail-soft */
+  }
+}
