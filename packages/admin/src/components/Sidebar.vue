@@ -9,7 +9,7 @@ import { ref, computed, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import {
   Package, ChevronDown, Image, FileText, Tags, Clapperboard, QrCode, Printer,
-  Smartphone, Truck, RotateCcw, Boxes, ChartColumn, Wallet, Bell, ExternalLink, LifeBuoy, UserSearch, ClipboardCheck, BookOpen,
+  Smartphone, Truck, RotateCcw, Boxes, ChartColumn, Wallet, Bell, ExternalLink, LifeBuoy, UserSearch, ClipboardCheck, BookOpen, Star,
 } from 'lucide-vue-next'
 import { useProductsStore, STEP_NAMES } from '@/store/products.js'
 import { logout, currentUser } from '@/api/cloud.js'
@@ -41,6 +41,7 @@ const GROUPS = [
     caption: '数据',
     items: [
       { to: '/dashboard', label: '数据看板', icon: ChartColumn },
+      { to: '/csat', label: '客服满意度', icon: Star },
       { to: '/reconciliation', label: '财务对账', icon: Wallet },
     ],
   },

@@ -15,6 +15,7 @@ import Externals from '@/pages/Externals.vue'
 import Customer360 from '@/pages/Customer360.vue'
 import Checkpoints from '@/pages/Checkpoints.vue'
 import Kb from '@/pages/Kb.vue'
+import Csat from '@/pages/Csat.vue'
 
 export const router = createRouter({
   history: createWebHashHistory(),
@@ -31,6 +32,7 @@ export const router = createRouter({
     { path: '/checkpoints', component: Checkpoints },
     { path: '/kb', component: Kb },
     { path: '/dashboard', component: Dashboard },
+    { path: '/csat', component: Csat },
     { path: '/reconciliation', component: Reconciliation },
     { path: '/notifications', component: Notifications },
     { path: '/externals', component: Externals },

@@ -96,9 +96,9 @@ describe('关键词识别（确定性·低幻觉）', () => {
 })
 
 describe('msgmenu 内容', () => {
-  it('rootMenu 五大入口 + tail 提示打字', () => {
+  it('rootMenu 入口（四分类 + 评价服务 + 人工）+ tail 提示打字', () => {
     const m = rootMenu()
-    expect(m.list.map((i) => i.click.id)).toEqual(['cat:logistics', 'cat:activation', 'cat:aftersale', 'cat:tutorial', 'human'])
+    expect(m.list.map((i) => i.click.id)).toEqual(['cat:logistics', 'cat:activation', 'cat:aftersale', 'cat:tutorial', 'csat', 'human'])
     expect(m.tail_content).toContain('打字')
   })
   it('menuFor 物流：head 高亮识别词 + 含查订单/转人工', () => {

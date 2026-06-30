@@ -416,6 +416,24 @@ export const repoChecks = [
     },
   },
   {
+    // CSAT 评分入库前必校验 1..5（后台360工作站 B4.3·根因#3 不信前端）：满意度均分是业务信号，伪造/越界分
+    // （rate:9 / 负数 / 非数）混入会污染均分。锁 dispatch.ts recordCsat 须 fail-closed 校验 score∈1..5 才入库——
+    // 去掉边界判断当场红。
+    id: 'csat-score-bounded',
+    roots: ['#3'],
+    desc: 'CSAT 评分入库前校验 1..5（后台360工作站 B4.3·根因#3 不信前端）：cs/kfCallback/dispatch.ts recordCsat 须校验 score∈1..5 才入库（越界/伪造分 fail-closed 不入库）——防脏分污染满意度均分',
+    run() {
+      const f = 'packages/cloud/src/functions/cs/kfCallback/dispatch.ts'
+      if (!existsSync(join(ROOT, f))) return [`${f} 缺失（客服分流·B4.3）`]
+      const src = readFileSync(join(ROOT, f), 'utf8')
+      const bad = []
+      if (!/recordCsat/.test(src)) bad.push(`${f} 缺 recordCsat——CSAT 评分入口缺失（B4.3）`)
+      else if (!/score\s*>=\s*1/.test(src) || !/score\s*<=\s*5/.test(src))
+        bad.push(`${f} recordCsat 未校验 score∈1..5——越界/伪造分会污染满意度均分（根因#3·B4.3）`)
+      return bad
+    },
+  },
+  {
     // 客服回调防超时吞消息（外审 R1-R4·P1.5·根因#8）：函数超时 20s，单批 limit 旧默认 1000 逐条串行可能做不完 →
     // 已认领但副作用未完成时被硬超时杀掉、下次因 seen 跳过＝吞消息。锁 index.ts 单批 limit 有界(<200)且传 syncMsg +
     // 设墙钟时间预算(Date.now()-startedAt 临近超时停、保留旧游标续拉)——去掉预算或放大批量当场红。

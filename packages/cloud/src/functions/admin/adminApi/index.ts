@@ -15,6 +15,7 @@ import * as inventory from './actions/inventory'
 import * as customer360 from './actions/customer360'
 import * as checkpoints from './actions/checkpoints'
 import * as kb from './actions/kb'
+import * as csat from './actions/csat'
 
 // 管理控制台后端（HTTP 访问服务触发）。B5b：HTTP 外壳 + 口令闸在此，28+ action 拆 actions/ 查表。
 // 鉴权：管理口令（adminConfig sha256，首登 bootstrap）。db 经 kit.getDb；退款流经 kit.callFlow。
@@ -88,6 +89,8 @@ const ACTIONS: Record<string, (ctx: Ctx) => Promise<any>> = {
   // 知识库（B4.1·后台360工作站·FAQ/知识条目单源·admin 维护、客服 bot dispatch 读同一份）
   listKb: kb.listKb,
   saveKb: kb.saveKb,
+  // 客服满意度报表（B4.3·后台360工作站·只读·均分/分布·bounded）
+  getCsatReport: csat.getCsatReport,
 }
 
 // 能力闸（§1.5 RBAC·根因#3·别让单超管裸奔）：受限 action 须 principal 具备对应能力（'*'=全能力）。
