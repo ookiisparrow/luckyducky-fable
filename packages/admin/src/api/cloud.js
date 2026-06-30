@@ -421,6 +421,27 @@ export async function saveCheckpoints(courseId, nodes) {
   return !!r.ok
 }
 
+// ---------- 知识库（后台360工作站 B4.1·FAQ/知识条目维护；客服 bot 与坐席共用同一份答案·整体覆盖式保存） ----------
+
+export async function listKb() {
+  const r = await post('listKb')
+  if (!r.ok) throw new Error(r.error || 'LOAD_KB_FAIL')
+  return r.list || []
+}
+
+export async function saveKb(entries) {
+  const r = await post('saveKb', { entries })
+  return !!r.ok
+}
+
+// ---------- 客服满意度报表（后台360工作站 B4.3·只读·均分/分布） ----------
+
+export async function getCsatReport() {
+  const r = await post('getCsatReport')
+  if (!r.ok) throw new Error(r.error || 'LOAD_CSAT_FAIL')
+  return r // { total, avg, dist, withNote, approx }
+}
+
 // ---------- 订单发货（P5 后台完善：paid → shipped，物流公司 + 运单号） ----------
 
 // 游标分页（根因#7）：cursor 传上一页 nextCursor；status 服务端筛选、q 按单号搜索（都在云端做、

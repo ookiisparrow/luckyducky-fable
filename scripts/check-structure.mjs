@@ -396,6 +396,69 @@ export const repoChecks = [
     },
   },
   {
+    // 知识库单源（后台360工作站 B4.1·根因#5 样板复制即漂移）：客服 bot 的 FAQ 答案原写死在 dispatch.ts 的
+    // TEXT_ANSWERS map，admin 改不了、与知识库两处漂移。锁 FAQ 答案只从 kb 集合单源取——dispatch 须读 kb
+    // （COLLECTIONS.kb）发答案、不得残留写死 FAQ 答案 map（TEXT_ANSWERS）；admin 经 listKb/saveKb 维护 kb，
+    // bot/坐席共用同一份答案。改答案只改 kb 一处，杜绝两份漂移。
+    id: 'faq-via-kb-single-source',
+    roots: ['#5'],
+    desc: 'FAQ 答案只从 kb 单源（后台360工作站 B4.1·根因#5）：cs/kfCallback/dispatch.ts 须读 kb 集合（COLLECTIONS.kb / .collection("kb")）发 FAQ 答案、不得残留写死 FAQ 答案 map（TEXT_ANSWERS 字面量答案）——防 bot 答案与 admin 维护的知识库两处漂移',
+    run() {
+      const f = 'packages/cloud/src/functions/cs/kfCallback/dispatch.ts'
+      if (!existsSync(join(ROOT, f))) return [`${f} 缺失（客服分流·B4.1）`]
+      const src = readFileSync(join(ROOT, f), 'utf8')
+      const bad = []
+      if (!/COLLECTIONS\.kb|\.collection\(\s*['"]kb['"]\s*\)/.test(src))
+        bad.push(`${f} 未读 kb 集合——FAQ 答案须从 kb 单源取（B4.1·根因#5·防写死漂移）`)
+      if (/TEXT_ANSWERS/.test(src))
+        bad.push(`${f} 残留写死 FAQ 答案 map（TEXT_ANSWERS）——FAQ 答案须只在 kb 单源（B4.1·根因#5）`)
+      return bad
+    },
+  },
+  {
+    // CSAT 评分入库前必校验 1..5（后台360工作站 B4.3·根因#3 不信前端）：满意度均分是业务信号，伪造/越界分
+    // （rate:9 / 负数 / 非数）混入会污染均分。锁 dispatch.ts recordCsat 须 fail-closed 校验 score∈1..5 才入库——
+    // 去掉边界判断当场红。
+    id: 'csat-score-bounded',
+    roots: ['#3'],
+    desc: 'CSAT 评分入库前校验 1..5（后台360工作站 B4.3·根因#3 不信前端）：cs/kfCallback/dispatch.ts recordCsat 须校验 score∈1..5 才入库（越界/伪造分 fail-closed 不入库）——防脏分污染满意度均分',
+    run() {
+      const f = 'packages/cloud/src/functions/cs/kfCallback/dispatch.ts'
+      if (!existsSync(join(ROOT, f))) return [`${f} 缺失（客服分流·B4.3）`]
+      const src = readFileSync(join(ROOT, f), 'utf8')
+      const bad = []
+      if (!/recordCsat/.test(src)) bad.push(`${f} 缺 recordCsat——CSAT 评分入口缺失（B4.3）`)
+      else if (!/score\s*>=\s*1/.test(src) || !/score\s*<=\s*5/.test(src))
+        bad.push(`${f} recordCsat 未校验 score∈1..5——越界/伪造分会污染满意度均分（根因#3·B4.3）`)
+      return bad
+    },
+  },
+  {
+    // 主动召回经唯一推送接缝（后台360工作站 B4.4·根因#12 平台接缝单点）：召回是「该主动联系的客户」运营摘要，
+    // 推送须复用既有 botpush 单一接缝（经 kit/observe 的 notifyRecall），**不另起一套客服推送通道**（防散调/绕开关/
+    // 凭证多处·与 bot-push-single-seam 同脉）。且 recallScan 自身不直拼 https 推送；纯决策 rules.ts 不碰 I/O（无
+    // .collection/getDb/await·根因#8 决策与 I/O 分离·便于单测）。
+    id: 'recall-via-bot-seam',
+    roots: ['#12'],
+    desc: '主动召回经唯一推送接缝（后台360工作站 B4.4·根因#12）：cs/recallScan/index.ts 须经 kit/observe 的 notifyRecall 推送（复用 botpush 单一接缝·不另起客服推送通道）且不直拼 https；纯决策 cs/recallScan/rules.ts 不碰 I/O（无 .collection/getDb/await·根因#8 便于单测）',
+    run() {
+      const dir = 'packages/cloud/src/functions/cs/recallScan'
+      const idx = join(ROOT, dir, 'index.ts')
+      const rules = join(ROOT, dir, 'rules.ts')
+      if (!existsSync(idx)) return [`${dir}/index.ts 缺失（主动召回触发·B4.4）`]
+      const bad = []
+      const isrc = readFileSync(idx, 'utf8')
+      if (!/notifyRecall/.test(isrc))
+        bad.push(`${dir}/index.ts 未经 notifyRecall 推送——召回须复用 botpush 单一接缝（根因#12·别另起推送通道）`)
+      if (/from\s+['"]https['"]|require\(\s*['"]https['"]\s*\)/.test(isrc))
+        bad.push(`${dir}/index.ts 直拼 https 推送——召回推送须经 kit/observe 单一接缝（根因#12）`)
+      if (!existsSync(rules)) bad.push(`${dir}/rules.ts 缺失（纯决策函数·B4.4·便于单测·根因#8）`)
+      else if (/\.collection\(|getDb|await\s/.test(readFileSync(rules, 'utf8')))
+        bad.push(`${dir}/rules.ts 含 I/O（.collection/getDb/await）——召回决策须纯函数（根因#8 便于单测·I/O 留 index.ts）`)
+      return bad
+    },
+  },
+  {
     // 客服回调防超时吞消息（外审 R1-R4·P1.5·根因#8）：函数超时 20s，单批 limit 旧默认 1000 逐条串行可能做不完 →
     // 已认领但副作用未完成时被硬超时杀掉、下次因 seen 跳过＝吞消息。锁 index.ts 单批 limit 有界(<200)且传 syncMsg +
     // 设墙钟时间预算(Date.now()-startedAt 临近超时停、保留旧游标续拉)——去掉预算或放大批量当场红。

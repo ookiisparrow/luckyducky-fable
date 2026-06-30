@@ -39,10 +39,11 @@ const defaultFetch: BotFetch = (url, init) =>
 // 企微群机器人 webhook 形态校验（凭证 key 在 query·非此形态直接拒，不发）。
 const WEBHOOK_RE = /^https:\/\/qyapi\.weixin\.qq\.com\/cgi-bin\/webhook\/send\?key=[\w-]+$/
 
-const SEV_LABEL: Record<string, string> = { money: '钱链告警', security: '安全告警' }
+// recall＝主动召回运营摘要（B4.4·复用同一接缝·非钱链/安全告警）。
+const SEV_LABEL: Record<string, string> = { money: '钱链告警', security: '安全告警', recall: '主动召回清单' }
 
 export interface BotAlert {
-  sev: 'money' | 'security'
+  sev: 'money' | 'security' | 'recall'
   fn: string
   code: string
   ctx?: Record<string, unknown>
@@ -67,7 +68,8 @@ export async function pushBotAlert(
     } catch {
       ctxLine = ''
     }
-    const content = `**⚠️ Lucky Ducky · ${SEV_LABEL[a.sev] || a.sev}**\n> 来源: ${a.fn}\n> 代码: ${a.code}${ctxLine}`
+    const icon = a.sev === 'recall' ? '📋' : '⚠️' // 召回是运营摘要·非告警·换中性图标
+    const content = `**${icon} Lucky Ducky · ${SEV_LABEL[a.sev] || a.sev}**\n> 来源: ${a.fn}\n> 代码: ${a.code}${ctxLine}`
     const r = await fetchImpl(webhookUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },

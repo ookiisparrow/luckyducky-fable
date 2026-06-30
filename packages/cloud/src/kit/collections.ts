@@ -53,6 +53,14 @@ export const COLLECTIONS = {
   // channel/direction/externalUserId/openid/msgtype/text/at（含 PII：会话全文·协议页已声明）。仅 cs/kfCallback 写、
   // adminApi.searchConversations 读（customer:view 闸 + 强制留痕·§1.5 越权读）；客户端禁，上线前控制台锁「仅管理端」。
   conversations: 'conversations',
+  // 知识库（后台360工作站 B4.1·FAQ/知识条目单源·根因#5 复制即漂移）：确定性 _id=FAQ 键（如 `logistics:eta`·
+  // 同客服分流菜单叶子 id）；字段 question/answer/category/enabled/order。admin 经 adminApi listKb/saveKb 维护（整体覆盖式），
+  // 客服 bot dispatch 读它发 FAQ 答案（替代原写死 TEXT_ANSWERS·守卫 faq-via-kb-single-source）。仅云函数读写、客户端禁，上线前控制台锁「仅管理端」。
+  kb: 'kb',
+  // 客服满意度评分（后台360工作站 B4.3·CSAT）：会话后评分 1-5 + 可选备注。确定性 _id=`csat:<euid>:<createdAt>`；
+  // 字段 externalUserId/openid?/score(1-5·入库前 fail-closed 校验·守卫 csat-score-bounded)/note/createdAt。
+  // cs/kfCallback dispatch 写（recordCsat·经 defineKfCallback 闸），adminApi getCsatReport 读（均分/分布·bounded）。仅云函数读写、客户端禁，上线前控制台锁「仅管理端」。
+  csat: 'csat',
 } as const
 
 export type CollName = (typeof COLLECTIONS)[keyof typeof COLLECTIONS]
