@@ -671,7 +671,7 @@ export const repoChecks = [
   {
     id: 'cs-panel-via-provider',
     roots: ['铁律'],
-    desc: '360 经 provider 接口聚合（架构规范铁律三）：编排器 orchestrator.ts 须经 registry 遍历 + 统一调 provider.fetch；禁 switch 按 key 硬分发（编排器不认识具体板块·加/删板块只动 provider）',
+    desc: '360 经 provider 接口聚合 + admin 同构（架构规范铁律三·§2）：后端编排器 orchestrator.ts 须经 registry 遍历 + 统一调 provider.fetch、禁 switch 按 key 硬分发；前端 admin Customer360.vue 须 v-for 遍历后端 panels 通用渲染、禁 .key===字面量 硬编码面板类型（后端加/删板块 admin 零改·开放-封闭·B1.4 扩前端面）',
     run() {
       const orch = 'packages/cloud/src/functions/admin/adminApi/customer360/orchestrator.ts'
       if (!existsSync(join(ROOT, orch))) return [`${orch} 缺失——360 编排器`]
@@ -680,6 +680,17 @@ export const repoChecks = [
       if (!/from\s+['"]\.\/registry['"]/.test(src)) bad.push(`${orch} 未引 registry——编排器须遍历注册表（铁律三）`)
       if (!/\.fetch\s*\(/.test(src)) bad.push(`${orch} 未统一调 provider.fetch——须经接口聚合（铁律三）`)
       if (/switch\s*\(/.test(src)) bad.push(`${orch} 出现 switch 硬分发——编排器不得按 key 认板块（铁律三）`)
+      // admin 同构（铁律三·§2「页面壳只渲染注册表里的板块·不硬编码板块列表」）：客户360 页须通用渲染后端 panels
+      const vuePath = 'packages/admin/src/pages/Customer360.vue'
+      const absVue = join(ROOT, vuePath)
+      if (!existsSync(absVue)) bad.push(`${vuePath} 缺失——360 工作台页（铁律三 admin 同构·M①）`)
+      else {
+        const vue = readFileSync(absVue, 'utf8')
+        if (!/v-for=["'][^"']*panels\b/.test(vue))
+          bad.push(`${vuePath} 未 v-for 遍历 panels——admin 须通用渲染后端面板（铁律三·后端加板块零改）`)
+        if (/\.key\s*===\s*['"]/.test(vue))
+          bad.push(`${vuePath} 出现 .key==='字面量' 硬编码面板类型——须通用渲染（铁律三·开放-封闭）`)
+      }
       return bad
     },
   },

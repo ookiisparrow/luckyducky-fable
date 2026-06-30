@@ -539,3 +539,28 @@ export async function getBillMatch({ from, to } = {}) {
   if (!r.ok) throw new Error(r.error || 'BILL_MATCH_FAIL')
   return r
 }
+
+// ---------- 客户360（后台360工作站·只读·越权面经 customer:view 闸 + 审计留痕） ----------
+
+// 检索客户（B1.2）：按 openid/手机/订单号/昵称命中，返 [{openid,nickname,phone,avatar,createdAt,matchedBy}]。
+export async function searchCustomer(q) {
+  if (!cloudMode) return [] // 客户数据只存在于云端
+  const r = await post('searchCustomer', { q })
+  if (!r.ok) throw new Error(r.error || 'SEARCH_FAIL')
+  return r.customers || []
+}
+
+// 客户360 全貌（B1.1/1.3）：返 { openid, panels:[{key,label,order,data,error?}] }——
+// 通用渲染由页面遍历 panels（铁律三 admin 同构·后端给什么面板渲什么·不硬编码面板类型）。
+export async function getCustomer360(openid) {
+  const r = await post('getCustomer360', { openid })
+  if (!r.ok) throw new Error(r.error || 'LOAD_360_FAIL')
+  return { openid: r.openid, panels: r.panels || [] }
+}
+
+// 单客户画像（B1.2）：返回白名单 user（身份头·nickname/avatar/phone/bio）；无档回 null。
+export async function getUser(openid) {
+  const r = await post('getUser', { openid })
+  if (!r.ok) throw new Error(r.error || 'LOAD_USER_FAIL')
+  return r.user // 可能为 null
+}

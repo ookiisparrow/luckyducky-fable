@@ -12,6 +12,7 @@ import Reconciliation from '@/pages/Reconciliation.vue'
 import Inventory from '@/pages/Inventory.vue'
 import Notifications from '@/pages/Notifications.vue'
 import Externals from '@/pages/Externals.vue'
+import Customer360 from '@/pages/Customer360.vue'
 
 export const router = createRouter({
   history: createWebHashHistory(),
@@ -23,6 +24,7 @@ export const router = createRouter({
     { path: '/help-videos', component: HelpVideos },
     { path: '/orders', component: Orders },
     { path: '/refunds', component: Refunds },
+    { path: '/customer360', component: Customer360 },
     { path: '/inventory', component: Inventory },
     { path: '/dashboard', component: Dashboard },
     { path: '/reconciliation', component: Reconciliation },
