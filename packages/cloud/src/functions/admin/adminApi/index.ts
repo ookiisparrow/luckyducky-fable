@@ -108,6 +108,9 @@ const ACTION_CAPS: Record<string, string> = {
   // 守卫 conversations-pii-gated 独立焊本行（不动 cs-360-rbac-gated 那三行·并行整合取并集）。
   searchConversations: 'customer:view',
 }
+// 默认拒（B5.2 坐席 RBAC·守卫 agent-rbac-gated）：未登记 ACTION_CAPS 的 action 须此高权默认 cap——
+// 非超管角色（caps 不含 '*'/此 cap）默认进不去钱/状态/管理 action（外包/坐席不经未 gate 的 action 越权）。超管 ['*'] 匹配一切·行为不变。
+const ADMIN_DEFAULT_CAP = 'admin:write'
 
 // 认证频控（根因#13 防爆破）：失败 5 次/10 分 → 锁 5 分；login 与其余 action 的口令校验共用此闸。
 const ADMIN_THROTTLE = { max: 5, windowMs: 10 * 60_000, lockMs: 5 * 60_000 }
@@ -170,10 +173,11 @@ export const main = async (event: any) => {
     return reply(401, auth)
   }
   await throttleReset(tkey)
-  // 能力闸（§1.5·根因#3·别让单超管裸奔）：受 ACTION_CAPS 限的 action 校验 caps（'*'=全能力）；无能力即 403。
+  // 能力闸·默认拒（§1.5·根因#3·别让单超管裸奔·B5.2）：每个 action 都需 cap——登记的取 ACTION_CAPS、
+  // 未登记的默认高权 ADMIN_DEFAULT_CAP（防外包/坐席经未 gate 的 action 越权动钱/状态）。超管 '*' 匹配一切·行为不变。
   const caps: string[] = Array.isArray((auth as any).caps) ? (auth as any).caps : []
-  const needCap = ACTION_CAPS[action]
-  if (needCap && !caps.some((c) => c === '*' || c === needCap))
+  const needCap = ACTION_CAPS[action] || ADMIN_DEFAULT_CAP
+  if (!caps.some((c) => c === '*' || c === needCap))
     return reply(403, { ok: false, error: 'FORBIDDEN' })
   await ensure(db, 'productsDraft')
   const drafts = db.collection('productsDraft')

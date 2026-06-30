@@ -821,6 +821,33 @@ export const repoChecks = [
     },
   },
   {
+    id: 'agent-rbac-gated',
+    roots: ['#3'],
+    desc: '坐席 RBAC 默认拒（§1.5·根因#3·别让单超管裸奔·B5.2）：① index.ts 能力闸默认拒（needCap 须 `ACTION_CAPS[action] || <默认高权 cap>`·未登记 action 不放行→非超管角色默认进不去钱/状态 action）；② lib.ts 有 ROLES 角色表·outsourced 外包角色非全权（不含 `*`·最小权）；③ checkKey 支持 disabled（账号开停）',
+    run() {
+      const idx = 'packages/cloud/src/functions/admin/adminApi/index.ts'
+      const lib = 'packages/cloud/src/functions/admin/adminApi/lib.ts'
+      if (!existsSync(join(ROOT, idx)) || !existsSync(join(ROOT, lib))) return [`${idx} 或 ${lib} 缺失`]
+      const bad = []
+      const isrc = readFileSync(join(ROOT, idx), 'utf8')
+      // ① 默认拒：needCap 须 fallback（ACTION_CAPS[action] || …）——否则未登记 action 放行＝非超管账号越权
+      if (!/ACTION_CAPS\[\s*action\s*\]\s*\|\|/.test(isrc))
+        bad.push(`${idx} 能力闸非默认拒——须 ACTION_CAPS[action] || <默认高权 cap>（否则未登记 action 放行→外包/坐席越权·B5.2）`)
+      const lsrc = readFileSync(join(ROOT, lib), 'utf8')
+      // ② ROLES 角色表 + outsourced 最小权（不含 '*'）
+      const m = lsrc.match(/ROLES[^{]*\{([\s\S]*?)\n\s*\}/)
+      if (!m) bad.push(`${lib} 无 ROLES 角色表（B5.2 多角色）`)
+      else {
+        const om = m[1].match(/outsourced\s*:\s*\[([^\]]*)\]/)
+        if (!om) bad.push(`${lib} ROLES 无 outsourced 外包角色（最小权骨架·别让外包裸奔超管）`)
+        else if (/['"]\*['"]/.test(om[1])) bad.push(`${lib} outsourced 外包角色含 '*' 全权——违最小权（B5.2 外包防越权·§1.5）`)
+      }
+      // ③ checkKey 支持 disabled（账号开停）
+      if (!/disabled/.test(lsrc)) bad.push(`${lib} 未支持 disabled（账号开停·外包可停）`)
+      return bad
+    },
+  },
+  {
     // 后台360工作站 B2.2 节点诊断·UGC 图片入库前必过内容安全（根因#3 信任边界 fail-closed）：学员拍照上传是
     // 本项目第一个「用户图片入库」越权写面——黄暴恐违规图直接入库＝合规风险。守此不变量：① kit/contentsec.ts
     // 内容安全接缝须真调 cloud.openapi.security.imgSecCheck（非注释摆设·扫真实调用模式·防假绿）；② 写 checkpoints

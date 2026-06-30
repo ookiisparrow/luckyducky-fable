@@ -82,21 +82,40 @@ export async function getTxAlerts(db: any): Promise<{ feeMismatch: string[]; ref
 // 口令校验。首次初始化（债#15 关抢占窗口）：须 bootstrap 且本次口令匹配**部署密钥**环境变量
 // ADMIN_BOOTSTRAP_KEY——杜绝「空库谁先登录谁就占管理员」。未设该环境变量＝禁 bootstrap。
 // 设密钥流程：部署时设云环境变量 ADMIN_BOOTSTRAP_KEY＝期望口令 → 首登用该口令 → 设定后可移除。
-// 能力位（§1.5 RBAC 骨架·先粗后细）：caps 决定能调哪些受 ACTION_CAPS 限的 action（如 360 读需 customer:view）。
-// 单超管＝['*']（全能力）；旧 auth doc 无 caps 字段 → 回退 ['*']（向后兼容·现仅你本人）。B5.2 扩多账号/角色。
+// 坐席 RBAC 角色→能力位单源（§1.5·B5.2·别让单超管裸奔）：superadmin 全能力；outsourced 外包最小权
+// （只读客户360+会话检索·余皆默认拒·防越权动钱/状态/导出）。中间角色（如内部坐席）按需扩——
+// 加新角色 + 给对应 action 标 cap 即可（现只 360/会话读标了 customer:view·不立无 action 消费者的空 cap·防过度工程）。
+export const ROLES: Record<string, string[]> = {
+  superadmin: ['*'],
+  outsourced: ['customer:view'],
+}
+const capsForRole = (role: string): string[] => ROLES[role] || []
+
+// 能力位（§1.5 RBAC·B5.2 多账号/角色）：caps 来源优先级 role 派生（ROLES 单源）＞显式 caps 字段＞回退 ['*']
+// （向后兼容旧超管 'auth' doc·无 role/caps 字段·现网单超管不变）。disabled=账号开停（外包可停·B5.2）。
 export async function checkKey(db: any, key: any, bootstrap: boolean) {
   if (!key || String(key).length < 6) return { ok: false, error: 'KEY_TOO_SHORT' }
   await ensure(db, 'adminConfig')
+  const hash = sha(key)
   const got = await db.collection('adminConfig').doc('auth').get().catch(() => null)
   if (!got || !got.data) {
+    // 首登 bootstrap（债#15 关抢占）：无超管 doc 时·须 bootstrap + 部署密钥 ADMIN_BOOTSTRAP_KEY → 建首个超管。
     const secret = process.env.ADMIN_BOOTSTRAP_KEY || ''
     if (!bootstrap || !secret || String(key) !== secret) return { ok: false, error: 'BAD_KEY' }
-    await db.collection('adminConfig').add({ data: { _id: 'auth', keyHash: sha(key), caps: ['*'], createdAt: Date.now() } })
+    await db.collection('adminConfig').add({ data: { _id: 'auth', keyHash: hash, role: 'superadmin', caps: ['*'], createdAt: Date.now() } })
     return { ok: true, bootstrapped: true, caps: ['*'] as string[] }
   }
-  if (got.data.keyHash !== sha(key)) return { ok: false, error: 'BAD_KEY' }
-  const caps: string[] = Array.isArray(got.data.caps) ? got.data.caps : ['*']
-  return { ok: true, caps }
+  // ① 超管 'auth' doc 命中（向后兼容：无 role 取 caps 字段·旧 ['*']）
+  if (got.data.keyHash === hash) {
+    if (got.data.disabled) return { ok: false, error: 'ACCOUNT_DISABLED' }
+    return { ok: true, caps: got.data.role ? capsForRole(got.data.role) : Array.isArray(got.data.caps) ? got.data.caps : ['*'] }
+  }
+  // ② B5.2 多账号：非超管·按 keyHash 查 agent/外包 账号 doc（均有 role；disabled 即停）
+  const hit = await db.collection('adminConfig').where({ keyHash: hash }).limit(1).get().catch(() => ({ data: [] }))
+  const acct = (hit && hit.data && hit.data[0]) || null
+  if (!acct) return { ok: false, error: 'BAD_KEY' }
+  if (acct.disabled) return { ok: false, error: 'ACCOUNT_DISABLED' }
+  return { ok: true, caps: acct.role ? capsForRole(acct.role) : Array.isArray(acct.caps) ? acct.caps : [] }
 }
 
 // 草稿白名单字段（防杂字段入库）
