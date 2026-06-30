@@ -577,3 +577,20 @@ export async function getUser(openid) {
   if (!r.ok) throw new Error(r.error || 'LOAD_USER_FAIL')
   return r.user // 可能为 null
 }
+
+// ---------- 客服会话（后台360工作站 B5.1·检索归档会话·外包管控底座·只读·越权读经 customer:view 闸 + 留痕） ----------
+
+// 检索会话（按客户 openid/externalUserId + 渠道 + keyword·cursor 分页 bounded）。返回 { messages, count, nextCursor, hasMore }。
+export async function searchConversations({ openid, externalUserId, channel, keyword, cursor, limit } = {}) {
+  if (!cloudMode) return { messages: [], count: 0, nextCursor: null, hasMore: false } // 会话只存在于云端
+  const payload = {}
+  if (openid) payload.openid = openid
+  if (externalUserId) payload.externalUserId = externalUserId
+  if (channel) payload.channel = channel
+  if (keyword) payload.keyword = keyword
+  if (cursor != null) payload.cursor = cursor
+  if (limit != null) payload.limit = limit
+  const r = await post('searchConversations', payload)
+  if (!r.ok) throw new Error(r.error || 'SEARCH_CONVERSATIONS_FAIL')
+  return { messages: r.messages || [], count: r.count || 0, nextCursor: r.nextCursor ?? null, hasMore: !!r.hasMore }
+}

@@ -14,6 +14,7 @@ import * as wxbill from './actions/wxbill'
 import * as inventory from './actions/inventory'
 import * as customer360 from './actions/customer360'
 import * as checkpoints from './actions/checkpoints'
+import * as conversations from './actions/conversations'
 
 // 管理控制台后端（HTTP 访问服务触发）。B5b：HTTP 外壳 + 口令闸在此，28+ action 拆 actions/ 查表。
 // 鉴权：管理口令（adminConfig sha256，首登 bootstrap）。db 经 kit.getDb；退款流经 kit.callFlow。
@@ -84,6 +85,8 @@ const ACTIONS: Record<string, (ctx: Ctx) => Promise<any>> = {
   // 节点诊断·关键节点定义策展（B2.2·后台360工作站·admin 维护 def 节点+挽回办法）
   listCheckpoints: checkpoints.listCheckpoints,
   saveCheckpoints: checkpoints.saveCheckpoints,
+  // 客服会话检索（B5.1·后台360工作站·外包管控底座·只读·越权读：ACTION_CAPS customer:view 闸 + shouldAudit 默认留痕）
+  searchConversations: conversations.searchConversations,
 }
 
 // 能力闸（§1.5 RBAC·根因#3·别让单超管裸奔）：受限 action 须 principal 具备对应能力（'*'=全能力）。
@@ -92,6 +95,9 @@ const ACTION_CAPS: Record<string, string> = {
   getCustomer360: 'customer:view',
   searchCustomer: 'customer:view',
   getUser: 'customer:view',
+  // 会话检索＝读他人会话全文越权面（B5.1·后台360工作站·车道 E）：复用 customer:view（同 360 读·不另立 cap）。
+  // 守卫 conversations-pii-gated 独立焊本行（不动 cs-360-rbac-gated 那三行·并行整合取并集）。
+  searchConversations: 'customer:view',
 }
 
 // 认证频控（根因#13 防爆破）：失败 5 次/10 分 → 锁 5 分；login 与其余 action 的口令校验共用此闸。

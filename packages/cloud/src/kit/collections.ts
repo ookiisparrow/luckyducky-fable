@@ -48,6 +48,11 @@ export const COLLECTIONS = {
   // `def:<courseId>:<nodeId>` 关键节点定义（admin 策展：title/remedy 挽回办法·order）；`sub:<openid>:<courseId>:<nodeId>`
   // 用户拍照提交（submitCheckpointPhoto·imgSecCheck 过后才入库·幂等重传覆盖最新）。仅云函数读写、客户端禁，上线前控制台锁「仅管理端」。
   checkpoints: 'checkpoints',
+  // 客服会话归档（后台360工作站 B5.1·板块#9·外包管控底座）：一会话消息一文档，供坐席检索 + 质检取证（B5.3 依赖）。
+  // 入站客户消息确定性 _id=`wxkf:in:<msgid>`（幂等·同 seen 去重·重拉不重复）；出站回复 _id 自动。字段
+  // channel/direction/externalUserId/openid/msgtype/text/at（含 PII：会话全文·协议页已声明）。仅 cs/kfCallback 写、
+  // adminApi.searchConversations 读（customer:view 闸 + 强制留痕·§1.5 越权读）；客户端禁，上线前控制台锁「仅管理端」。
+  conversations: 'conversations',
 } as const
 
 export type CollName = (typeof COLLECTIONS)[keyof typeof COLLECTIONS]

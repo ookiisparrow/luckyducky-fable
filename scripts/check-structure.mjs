@@ -784,6 +784,64 @@ export const repoChecks = [
       return bad
     },
   },
+  // ── 后台360工作站 B5.1：会话归档 + 检索（板块#9·外包管控底座·车道 E）──
+  // 微信客服会话（未来承面C）归档进 conversations 集合，供坐席检索 + 质检取证（B5.3 依赖）。会话含 PII，三守卫焊：
+  // ① 归档挂载不可悄悄摘（入站客户消息/出站回复都落档）+ 隐私须声明；② 检索须 bounded 分页（规模·根因#7）；
+  // ③ 检索＝读他人会话全文越权面、须能力闸（§1.5 信任边界·根因#3·同 360 读 customer:view·独立焊本 action·不动 master 的 cs-360-* 两条）。
+  {
+    id: 'conversations-archived',
+    roots: ['#3'],
+    desc: '客服会话归档挂载 + 隐私声明（后台360工作站 B5.1·根因#3 信任边界资产）：cs/kfCallback/archive.ts 须真写 conversations 集合（归档接缝非摆设）；index.ts 须真调 archiveInbound + archiveOutbound（入站客户消息/出站回复都落档·防悄悄摘掉归档=质检取证资产丢失）；会话含 PII，协议页须声明「客服会话记录」被收集留存（隐私声明不可漏）',
+    run() {
+      const bad = []
+      const arch = 'packages/cloud/src/functions/cs/kfCallback/archive.ts'
+      const absArch = join(ROOT, arch)
+      if (!existsSync(absArch)) bad.push(`${arch} 缺失——会话归档接缝（B5.1）`)
+      else if (!/COLLECTIONS\.conversations|['"]conversations['"]/.test(readFileSync(absArch, 'utf8')))
+        bad.push(`${arch} 未写 conversations 集合——归档接缝是摆设（B5.1·扫真实写入·非注释）`)
+      const idx = 'packages/cloud/src/functions/cs/kfCallback/index.ts'
+      const absIdx = join(ROOT, idx)
+      if (!existsSync(absIdx)) bad.push(`${idx} 缺失——微信客服回调（归档挂点）`)
+      else {
+        const s = readFileSync(absIdx, 'utf8')
+        if (!/archiveInbound\s*\(/.test(s)) bad.push(`${idx} 未调 archiveInbound——入站客户消息未落档（B5.1·防摘归档）`)
+        if (!/archiveOutbound\s*\(/.test(s)) bad.push(`${idx} 未调 archiveOutbound——出站回复未落档（B5.1·防摘归档）`)
+      }
+      const agr = 'packages/miniapp/src/pages/agreement/index.vue'
+      const absAgr = join(ROOT, agr)
+      if (existsSync(absAgr) && !/客服.{0,8}会话|会话记录/.test(readFileSync(absAgr, 'utf8')))
+        bad.push(`${agr} 未声明「客服会话记录」被收集留存——会话含 PII·隐私声明漏（B5.1·根因#3）`)
+      return bad
+    },
+  },
+  {
+    id: 'conversations-search-bounded',
+    roots: ['#7'],
+    desc: '会话检索 cursor 分页有界（后台360工作站 B5.1·根因#7 规模）：adminApi/actions/conversations.ts 的检索须经 kit pageQuery 游标分页——杜绝裸 .get() 一次拉爆某客户/全量会话（大客户/长会话拖垮工作台·同评价/订单分页·paging-contract）',
+    run() {
+      const f = 'packages/cloud/src/functions/admin/adminApi/actions/conversations.ts'
+      if (!existsSync(join(ROOT, f))) return [`${f} 缺失（会话检索·B5.1）`]
+      const src = readFileSync(join(ROOT, f), 'utf8')
+      const bad = []
+      if (!/pageQuery\s*\(/.test(src))
+        bad.push(`${f} 检索未经 pageQuery 游标分页——裸读规模即拖垮工作台（根因#7·paging-contract）`)
+      return bad
+    },
+  },
+  {
+    id: 'conversations-pii-gated',
+    roots: ['#3'],
+    desc: '会话检索＝读他人会话全文越权面（后台360工作站 B5.1·§1.5 信任边界·根因#3）：searchConversations 须经能力闸——adminApi/index.ts ACTION_CAPS 含 searchConversations（非任何登录可检索他人会话全文·同 360 读 customer:view）。审计由 shouldAudit 默认覆盖（search* 非 ^get·自动留痕·测试锁）。与 master 的 cs-360-rbac-gated 同范式·独立焊本 action·不动那条',
+    run() {
+      const idx = 'packages/cloud/src/functions/admin/adminApi/index.ts'
+      const absIdx = join(ROOT, idx)
+      if (!existsSync(absIdx)) return [`${idx} 缺失`]
+      const caps = readFileSync(absIdx, 'utf8').match(/const ACTION_CAPS[^{]*\{([\s\S]*?)\}/)
+      if (!caps || !/\bsearchConversations\s*:/.test(caps[1]))
+        return [`ACTION_CAPS 未含 searchConversations——任何登录即可检索他人会话全文（§1.5·根因#3·别让坐席越权读会话 PII）`]
+      return []
+    },
+  },
   {
     id: 'interface-catalog-sync',
     roots: ['正册'],

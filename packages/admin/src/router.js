@@ -14,6 +14,7 @@ import Notifications from '@/pages/Notifications.vue'
 import Externals from '@/pages/Externals.vue'
 import Customer360 from '@/pages/Customer360.vue'
 import Checkpoints from '@/pages/Checkpoints.vue'
+import Conversations from '@/pages/Conversations.vue'
 
 export const router = createRouter({
   history: createWebHashHistory(),
@@ -26,6 +27,7 @@ export const router = createRouter({
     { path: '/orders', component: Orders },
     { path: '/refunds', component: Refunds },
     { path: '/customer360', component: Customer360 },
+    { path: '/conversations', component: Conversations },
     { path: '/inventory', component: Inventory },
     { path: '/checkpoints', component: Checkpoints },
     { path: '/dashboard', component: Dashboard },

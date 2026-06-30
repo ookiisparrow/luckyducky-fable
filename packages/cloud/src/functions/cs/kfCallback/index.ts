@@ -9,6 +9,7 @@ import {
   alert,
 } from '../../../kit'
 import { handleMessage, rootMenu, buildMsgMenu, extUserId, processKfBatch, type Incoming } from './dispatch'
+import { archiveInbound, archiveOutbound } from './archive' // 会话归档（B5.1·入站/出站落档·守卫 conversations-archived）
 
 // 微信客服 in-chat 智能客服回调（HTTP 访问服务·类比 adminApi 的 /adminapi）。
 // 验签 + AES 解密 + fail-closed 由 kit.defineKfCallback 强制（根因#3）；本函数只做「收到事件 → 拉消息
@@ -49,7 +50,10 @@ export const main = defineKfCallback({
     const send = async (payload: any) => {
       const res = await sendMsg(token, payload)
       if (res && res.errcode) alert('security', 'kfCallback', 'SENDMSG_FAILED', { errcode: res.errcode, msgtype: payload?.msgtype })
-      else console.log('[kf] sent', { msgtype: payload?.msgtype })
+      else {
+        console.log('[kf] sent', { msgtype: payload?.msgtype })
+        await archiveOutbound(db, payload, openKfId) // 出站回复落档（B5.1·仅记真发出的·fail-soft 不反噬发送）
+      }
       return res
     }
     const transfer = async (externalUserId: string) => {
@@ -69,6 +73,7 @@ export const main = defineKfCallback({
     // 单条消息处理（防吞单经 processKfBatch 包 try/catch·见 dispatch）：进会话欢迎 / 文本分流
     const handleOne = async (msg: any) => {
       console.log('[kf] handle', { msgtype: msg.msgtype, hasText: !!msg.text?.content, hasMenuId: !!msg.text?.menu_id })
+      await archiveInbound(db, msg, openKfId) // 入站客户消息落档（B5.1·有 msgid 才记·确定性 _id 幂等·fail-soft）
       if (msg.msgtype === 'event' && msg.event?.event_type === 'enter_session') {
         await send(buildMsgMenu(extUserId(msg), openKfId, rootMenu())) // 进会话欢迎（euid 在 event 子对象·根因#8）
         return
