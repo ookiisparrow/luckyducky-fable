@@ -3,6 +3,7 @@ import { createHash } from 'node:crypto'
 import cloud, { control } from 'wx-server-sdk'
 import { getCustomer360, searchCustomer, getUser } from '../../packages/cloud/src/functions/admin/adminApi/actions/customer360'
 import { enabledProviders } from '../../packages/cloud/src/functions/admin/adminApi/customer360/registry'
+import { profileProvider } from '../../packages/cloud/src/functions/admin/adminApi/customer360/providers/profile'
 import { shouldAudit } from '../../packages/cloud/src/kit/audit'
 import { main } from '../../packages/cloud/src/functions/admin/adminApi'
 
@@ -21,7 +22,7 @@ const call = (action, key, data = {}) =>
 beforeEach(() => control.reset())
 
 describe('客户360 编排器 + provider（B1.1·铁律三）', () => {
-  it('按 openid 聚合订单+激活两面板（经 registry·bounded·只本人数据）', async () => {
+  it('按 openid 聚合画像+订单+激活三面板（经 registry·bounded·只本人数据）', async () => {
     control.seed('orders', [
       { _id: 'o1', id: 'o1', _openid: 'A', status: 'paid', amount: 100, createdAt: 2000, items: [{}], shipping: { trackingNo: 'T1' } },
       { _id: 'o2', id: 'o2', _openid: 'A', status: 'pending', amount: 50, createdAt: 3000, items: [] },
@@ -42,7 +43,12 @@ describe('客户360 编排器 + provider（B1.1·铁律三）', () => {
     expect(byKey.activation.data.count).toBe(2)
     expect(byKey.activation.data.activations.find((a) => a.courseId === 'k1').entered).toBe(true)
     expect(byKey.activation.data.activations.find((a) => a.courseId === 'k2').entered).toBe(false)
-    expect(r.panels.map((p) => p.key)).toEqual(['orders', 'activation']) // 按 order 排序
+    // 画像 rollup（B1.3）：只计已付（o1 paid 100·o2 pending 不计）→ totalSpent 100·进课率 1/2=50%
+    expect(byKey.profile.data.orderCount).toBe(2)
+    expect(byKey.profile.data.paidCount).toBe(1)
+    expect(byKey.profile.data.totalSpent).toBe(100)
+    expect(byKey.profile.data.enterRate).toBe(50)
+    expect(r.panels.map((p) => p.key)).toEqual(['profile', 'orders', 'activation']) // 按 order 排序（profile 5/orders 10/activation 20）
   })
 
   it('openid 缺失 → BAD_ARGS', async () => {
@@ -54,12 +60,12 @@ describe('客户360 编排器 + provider（B1.1·铁律三）', () => {
   it('feature-flag 可关板块（铁律四·config 覆盖 enabled）', async () => {
     control.seed('config', [{ _id: 'csModules', modules: { activation: { enabled: false } } }])
     const provs = await enabledProviders(db)
-    expect(provs.map((p) => p.key)).toEqual(['orders']) // activation 被 config 关掉·不进聚合
+    expect(provs.map((p) => p.key)).toEqual(['profile', 'orders']) // activation 被 config 关掉·不进聚合
   })
 
   it('无数据客人：面板结构齐全·空集不报错（错误隔离）', async () => {
     const r = parse(await getCustomer360(ctx({ openid: 'Z' })))
-    expect(r.panels.length).toBe(2)
+    expect(r.panels.length).toBe(3)
     expect(r.panels.every((p) => !p.error)).toBe(true)
     const byKey = Object.fromEntries(r.panels.map((p) => [p.key, p]))
     expect(byKey.orders.data.count).toBe(0)
@@ -93,6 +99,50 @@ describe('§1.5 信任边界（B1.1·根因#3·360 读越权面）', () => {
     const log = await db.collection('auditLog').where({ action: 'getCustomer360' }).get()
     expect(log.data.length).toBeGreaterThanOrEqual(1)
     expect(log.data[0].summary.openid).toBe('A') // 留痕「查了谁」（防 PII 访问 0 痕）
+  })
+})
+
+// ── B1.3 画像 rollup provider（车道 A·铁律三·从 orders/activations/events 派生·bounded）──
+describe('画像 provider profile（B1.3）', () => {
+  it('fetch 派生：总消费(仅已付)/单数/激活进课率/最近活跃（只本人）', async () => {
+    control.seed('orders', [
+      { _id: 'o1', _openid: 'A', status: 'paid', amount: 100, createdAt: 1 },
+      { _id: 'o2', _openid: 'A', status: 'shipped', amount: 30, createdAt: 2 },
+      { _id: 'o3', _openid: 'A', status: 'pending', amount: 999, createdAt: 3 }, // 未付·不计入 totalSpent
+      { _id: 'o4', _openid: 'B', status: 'paid', amount: 7, createdAt: 4 }, // 别人的·不该出现
+    ])
+    control.seed('activations', [
+      { _id: 'a1', _openid: 'A', courseId: 'k1', enteredAt: 50 },
+      { _id: 'a2', _openid: 'A', courseId: 'k2', enteredAt: null },
+      { _id: 'a3', _openid: 'A', courseId: 'k3', enteredAt: 60 },
+    ])
+    control.seed('events', [
+      { _id: 'e1', _openid: 'A', type: 'watch_at', createdAt: 1000 },
+      { _id: 'e2', _openid: 'A', type: 'segment_done', createdAt: 9999 }, // 最近一条
+    ])
+    const d = await profileProvider.fetch(db, 'A')
+    expect(d.orderCount).toBe(3) // A 的三单（不含 B）
+    expect(d.paidCount).toBe(2) // paid + shipped
+    expect(d.totalSpent).toBe(130) // 100+30·pending 999 不计（元口径）
+    expect(d.ordersCapped).toBe(false)
+    expect(d.activatedCount).toBe(3)
+    expect(d.enteredCount).toBe(2)
+    expect(d.enterRate).toBe(67) // 2/3 四舍五入
+    expect(d.lastActiveAt).toBe(9999) // events 最近一条
+  })
+
+  it('画像 provider 已注册且默认开（registry·铁律一/四）', async () => {
+    const provs = await enabledProviders(db)
+    expect(provs.map((p) => p.key)).toContain('profile')
+    expect(profileProvider.enabled).toBe(true)
+  })
+
+  it('空客人：零值不报错（错误隔离·空态）', async () => {
+    const d = await profileProvider.fetch(db, 'ghost')
+    expect(d.orderCount).toBe(0)
+    expect(d.totalSpent).toBe(0)
+    expect(d.enterRate).toBe(0)
+    expect(d.lastActiveAt).toBe(null)
   })
 })
 
