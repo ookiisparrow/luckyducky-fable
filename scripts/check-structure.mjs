@@ -758,6 +758,33 @@ export const repoChecks = [
     },
   },
   {
+    // 后台360工作站 B2.2 节点诊断·UGC 图片入库前必过内容安全（根因#3 信任边界 fail-closed）：学员拍照上传是
+    // 本项目第一个「用户图片入库」越权写面——黄暴恐违规图直接入库＝合规风险。守此不变量：① kit/contentsec.ts
+    // 内容安全接缝须真调 cloud.openapi.security.imgSecCheck（非注释摆设·扫真实调用模式·防假绿）；② 写 checkpoints
+    // 的 UGC 上传函数 submitCheckpointPhoto 须调 imgSecCheck 接缝（入库前·校不过不存）。真机验图真能拦属根因#8 靠人。
+    id: 'ugc-imgsecchecked',
+    roots: ['#3'],
+    desc: 'UGC 图片入库前必过内容安全（根因#3 fail-closed）：kit/contentsec.ts 接缝须真调 cloud.openapi.security.imgSecCheck；写 checkpoints 的 submitCheckpointPhoto 须调 imgSecCheck 接缝校验后才入库——防违规图直接入库（节点诊断拍照·后台360工作站 B2.2）',
+    run() {
+      const bad = []
+      const sec = 'packages/cloud/src/kit/contentsec.ts'
+      const absSec = join(ROOT, sec)
+      if (!existsSync(absSec)) bad.push(`${sec} 缺失——内容安全接缝（根因#3·UGC 入库前校验）`)
+      else if (!/\.openapi\.security\.imgSecCheck/.test(readFileSync(absSec, 'utf8')))
+        bad.push(`${sec} 未真调 cloud.openapi.security.imgSecCheck——内容安全接缝是摆设（根因#3·扫真实调用非注释）`)
+      const fn = 'packages/cloud/src/functions/learning/submitCheckpointPhoto.ts'
+      const absFn = join(ROOT, fn)
+      if (!existsSync(absFn)) bad.push(`${fn} 缺失——节点拍照上传 UGC 写入口（B2.2）`)
+      else {
+        const fsrc = readFileSync(absFn, 'utf8')
+        const writesCheckpoints = /COLLECTIONS\.checkpoints|['"]checkpoints['"]/.test(fsrc)
+        if (writesCheckpoints && !/imgSecCheck\s*\(/.test(fsrc))
+          bad.push(`${fn} 写 checkpoints 但未调 imgSecCheck——UGC 图片未过内容安全即入库（根因#3·fail-closed）`)
+      }
+      return bad
+    },
+  },
+  {
     id: 'interface-catalog-sync',
     roots: ['正册'],
     desc: '系统事实同步（docs/系统事实.md 是接口权威登记册，正册自评 P1）：每个云函数 + 每个 adminApi action 都须登记，杜绝「加接口忘登记」',

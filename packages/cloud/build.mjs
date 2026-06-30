@@ -41,6 +41,7 @@ const fns = collect()
 // 否则 check-structure 的 openapi-perm-declared 守卫会红。
 const OPENAPI_PERMS = [
   'wxaSecOrder.uploadShippingInfo', // 发货信息上传 upload_shipping_info（kit/shipping.ts·实物+微信支付合规·债#26）
+  'security.imgSecCheck', // 图片内容安全校验（kit/contentsec.ts·UGC 节点诊断拍照入库前·后台360工作站 B2.2）
 ]
 
 // 并发构建安全（复审报告 P2）：verify:cloud / deploy-fns 各自独立跑 build:cloud，并发时共享

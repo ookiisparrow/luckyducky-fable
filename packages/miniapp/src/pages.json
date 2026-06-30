@@ -158,6 +158,13 @@
             "navigationBarTitleText": "意见反馈",
             "navigationStyle": "custom"
           }
+        },
+        {
+          "path": "checkpoint/index",
+          "style": {
+            "navigationBarTitleText": "上传节点照片",
+            "navigationStyle": "custom"
+          }
         }
       ]
     }

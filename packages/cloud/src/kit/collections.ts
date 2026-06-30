@@ -44,6 +44,10 @@ export const COLLECTIONS = {
   // _id=`<date>:<transactionId>`（幂等·重拉覆盖）；供逐笔对账（Batch 3）比对我方 orders/afterSales。
   // 仅 adminApi.downloadBill 写（经 kit/wxpay）；客户端禁读写，上线前控制台锁「仅管理端」。
   wxBills: 'wxBills',
+  // 节点诊断（后台360工作站 B2.2·节点诊断 MVP）：一集合两形状（确定性 _id 前缀区分·同 kfState 范式）——
+  // `def:<courseId>:<nodeId>` 关键节点定义（admin 策展：title/remedy 挽回办法·order）；`sub:<openid>:<courseId>:<nodeId>`
+  // 用户拍照提交（submitCheckpointPhoto·imgSecCheck 过后才入库·幂等重传覆盖最新）。仅云函数读写、客户端禁，上线前控制台锁「仅管理端」。
+  checkpoints: 'checkpoints',
 } as const
 
 export type CollName = (typeof COLLECTIONS)[keyof typeof COLLECTIONS]
