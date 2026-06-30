@@ -42,7 +42,7 @@ describe('客户360 编排器 + provider（B1.1·铁律三）', () => {
     expect(byKey.activation.data.count).toBe(2)
     expect(byKey.activation.data.activations.find((a) => a.courseId === 'k1').entered).toBe(true)
     expect(byKey.activation.data.activations.find((a) => a.courseId === 'k2').entered).toBe(false)
-    expect(r.panels.map((p) => p.key)).toEqual(['orders', 'activation', 'learning']) // 按 order 排序（B2.1 加学习位置）
+    expect(r.panels.map((p) => p.key)).toEqual(['orders', 'activation', 'learning', 'checkpoints']) // 按 order 排序（B2.1 学习位置·B2.2 节点照片）
   })
 
   it('openid 缺失 → BAD_ARGS', async () => {
@@ -54,12 +54,12 @@ describe('客户360 编排器 + provider（B1.1·铁律三）', () => {
   it('feature-flag 可关板块（铁律四·config 覆盖 enabled）', async () => {
     control.seed('config', [{ _id: 'csModules', modules: { activation: { enabled: false } } }])
     const provs = await enabledProviders(db)
-    expect(provs.map((p) => p.key)).toEqual(['orders', 'learning']) // activation 被 config 关掉·不进聚合（learning 仍开·B2.1）
+    expect(provs.map((p) => p.key)).toEqual(['orders', 'learning', 'checkpoints']) // activation 被 config 关掉·不进聚合（learning/checkpoints 仍开）
   })
 
   it('无数据客人：面板结构齐全·空集不报错（错误隔离）', async () => {
     const r = parse(await getCustomer360(ctx({ openid: 'Z' })))
-    expect(r.panels.length).toBe(3)
+    expect(r.panels.length).toBe(4)
     expect(r.panels.every((p) => !p.error)).toBe(true)
     const byKey = Object.fromEntries(r.panels.map((p) => [p.key, p]))
     expect(byKey.orders.data.count).toBe(0)

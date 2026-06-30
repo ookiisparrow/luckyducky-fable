@@ -261,6 +261,11 @@ const cloud = {
   getTempFileURL: async ({ fileList }) => ({
     fileList: fileList.map((id) => ({ fileID: id, tempFileURL: 'https://tmp/' + id })),
   }),
+  // 下载云存储文件 mock（kit/contentsec imgSecCheck 取图字节走它）：返回固定小 buffer；内容安全的
+  // 通过/违规分支由 openapi mock（setOpenapiFail/Result）驱动（真 sdk 下载属根因#8 靠人·桩只锁链路）。
+  downloadFile: async ({ fileList }) => ({
+    fileList: (fileList || []).map((id) => ({ fileID: id, fileContent: Buffer.from('mock-image-bytes') })),
+  }),
   // 云调用 mock（cloud.openapi.*·债#26 发货上传走它）：嵌套属性任意命中、调用记录入参，
   // openapiFail 时抛错（模拟能力未开通/权限未声明）、否则返 openapiResult（默认 errCode:0 成功）。
   // 真 sdk openapi 绑定名 + config.json 权限属真机验（根因#8），桩只锁「接缝被调 + 成功/失败分支」。

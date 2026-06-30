@@ -408,6 +408,19 @@ export async function saveHelpVideos(items) {
   return !!r.ok
 }
 
+// ---------- 节点诊断（后台360工作站 B2.2·关键节点 + 挽回办法策展；学员节点拍照 + 坐席 360 看轨迹） ----------
+
+export async function listCheckpoints(courseId) {
+  const r = await post('listCheckpoints', courseId ? { courseId } : {})
+  if (!r.ok) throw new Error(r.error || 'LOAD_CHECKPOINTS_FAIL')
+  return r.list || []
+}
+
+export async function saveCheckpoints(courseId, nodes) {
+  const r = await post('saveCheckpoints', { courseId, nodes })
+  return !!r.ok
+}
+
 // ---------- 订单发货（P5 后台完善：paid → shipped，物流公司 + 运单号） ----------
 
 // 游标分页（根因#7）：cursor 传上一页 nextCursor；status 服务端筛选、q 按单号搜索（都在云端做、

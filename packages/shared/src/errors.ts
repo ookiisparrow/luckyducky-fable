@@ -56,6 +56,9 @@ export const ERR = {
   NO_EXTERNAL_USERID: 'NO_EXTERNAL_USERID',
   // 意见反馈（submitFeedback·运营钩子①·待办#23）
   EMPTY_FEEDBACK: 'EMPTY_FEEDBACK',
+  // 节点诊断 UGC 内容安全（submitCheckpointPhoto·后台360工作站 B2.2·根因#3 fail-closed）
+  IMG_RISKY: 'IMG_RISKY', // 图片内容违规（imgSecCheck 87014）——拒、不入库
+  SEC_CHECK_FAIL: 'SEC_CHECK_FAIL', // 内容安全校不了（能力未开/网络）——fail-closed 拒，UGC 不放行
 } as const
 
 export type ErrorCode = (typeof ERR)[keyof typeof ERR]

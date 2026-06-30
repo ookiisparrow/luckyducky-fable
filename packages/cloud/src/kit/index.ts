@@ -30,6 +30,8 @@ export type { AlertSev } from './observe'
 export { reserveStock, restoreStock, setStock, getInventory } from './inventory'
 export type { StockLine } from './inventory'
 export { recordAudit, shouldAudit } from './audit'
+export { imgSecCheck } from './contentsec'
+export type { SecResult } from './contentsec'
 export { COLLECTIONS } from './collections'
 export type { CollName } from './collections'
 export {

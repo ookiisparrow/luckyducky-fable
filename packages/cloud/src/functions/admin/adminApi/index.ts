@@ -13,6 +13,7 @@ import * as reconciliation from './actions/reconciliation'
 import * as wxbill from './actions/wxbill'
 import * as inventory from './actions/inventory'
 import * as customer360 from './actions/customer360'
+import * as checkpoints from './actions/checkpoints'
 
 // 管理控制台后端（HTTP 访问服务触发）。B5b：HTTP 外壳 + 口令闸在此，28+ action 拆 actions/ 查表。
 // 鉴权：管理口令（adminConfig sha256，首登 bootstrap）。db 经 kit.getDb；退款流经 kit.callFlow。
@@ -78,6 +79,9 @@ const ACTIONS: Record<string, (ctx: Ctx) => Promise<any>> = {
   saveStock: inventory.saveStock,
   // 客户360（B1.1·后台360工作站·只读聚合·越权面：ACTION_CAPS 能力闸 + FORCE_AUDIT 强制留痕）
   getCustomer360: customer360.getCustomer360,
+  // 节点诊断·关键节点定义策展（B2.2·后台360工作站·admin 维护 def 节点+挽回办法）
+  listCheckpoints: checkpoints.listCheckpoints,
+  saveCheckpoints: checkpoints.saveCheckpoints,
 }
 
 // 能力闸（§1.5 RBAC·根因#3·别让单超管裸奔）：受限 action 须 principal 具备对应能力（'*'=全能力）。
