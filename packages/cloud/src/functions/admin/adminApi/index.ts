@@ -12,6 +12,7 @@ import * as dashboard from './actions/dashboard'
 import * as reconciliation from './actions/reconciliation'
 import * as wxbill from './actions/wxbill'
 import * as inventory from './actions/inventory'
+import * as customer360 from './actions/customer360'
 
 // 管理控制台后端（HTTP 访问服务触发）。B5b：HTTP 外壳 + 口令闸在此，28+ action 拆 actions/ 查表。
 // 鉴权：管理口令（adminConfig sha256，首登 bootstrap）。db 经 kit.getDb；退款流经 kit.callFlow。
@@ -75,7 +76,13 @@ const ACTIONS: Record<string, (ctx: Ctx) => Promise<any>> = {
   // 库存（库存#1）
   listInventory: inventory.listInventory,
   saveStock: inventory.saveStock,
+  // 客户360（B1.1·后台360工作站·只读聚合·越权面：ACTION_CAPS 能力闸 + FORCE_AUDIT 强制留痕）
+  getCustomer360: customer360.getCustomer360,
 }
+
+// 能力闸（§1.5 RBAC·根因#3·别让单超管裸奔）：受限 action 须 principal 具备对应能力（'*'=全能力）。
+// 360 读他人全貌＝customer:view。守卫 cs-360-rbac-gated 焊本表含 getCustomer360 + 下方 caps 校验。
+const ACTION_CAPS: Record<string, string> = { getCustomer360: 'customer:view' }
 
 // 认证频控（根因#13 防爆破）：失败 5 次/10 分 → 锁 5 分；login 与其余 action 的口令校验共用此闸。
 const ADMIN_THROTTLE = { max: 5, windowMs: 10 * 60_000, lockMs: 5 * 60_000 }
@@ -138,6 +145,11 @@ export const main = async (event: any) => {
     return reply(401, auth)
   }
   await throttleReset(tkey)
+  // 能力闸（§1.5·根因#3·别让单超管裸奔）：受 ACTION_CAPS 限的 action 校验 caps（'*'=全能力）；无能力即 403。
+  const caps: string[] = Array.isArray((auth as any).caps) ? (auth as any).caps : []
+  const needCap = ACTION_CAPS[action]
+  if (needCap && !caps.some((c) => c === '*' || c === needCap))
+    return reply(403, { ok: false, error: 'FORBIDDEN' })
   await ensure(db, 'productsDraft')
   const drafts = db.collection('productsDraft')
 

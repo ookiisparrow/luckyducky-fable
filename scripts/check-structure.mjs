@@ -616,6 +616,130 @@ export const repoChecks = [
       return bad
     },
   },
+  // ── 后台360工作站 B1.1：模块化框架（架构规范五铁律）+ §1.5 信任边界（360 读越权面）──
+  // provider/registry/编排器在 functions/admin/adminApi/customer360/；4 模块守卫焊「板块不散落/解耦/经接口/可开关」，
+  // 2 信任边界守卫焊「360 读他人全貌→破例留痕 + 能力闸」（补 admin-actions-audited 跳 ^get 的盲区）。原 B0 框架并入本批·守卫随首个真 provider 立、咬真板块（防过度工程裁决）。
+  {
+    id: 'cs-module-registered',
+    roots: ['铁律'],
+    desc: '360 板块必注册（架构规范铁律一/五）：customer360/providers/ 下每个 provider 都须在 registry.ts import 注册（防散落/绕过）；且至少 1 个真 provider（空框架=守空气·防过度工程裁决）',
+    run() {
+      const base = 'packages/cloud/src/functions/admin/adminApi/customer360'
+      const provDir = join(ROOT, base, 'providers')
+      const registry = join(ROOT, base, 'registry.ts')
+      if (!existsSync(provDir)) return [`${base}/providers/ 缺失——360 provider 目录`]
+      if (!existsSync(registry)) return [`${base}/registry.ts 缺失——provider 注册表`]
+      const reg = readFileSync(registry, 'utf8')
+      const bad = []
+      let count = 0
+      for (const e of readdirSync(provDir)) {
+        if (!e.endsWith('.ts')) continue
+        count++
+        const name = e.slice(0, -3)
+        if (!new RegExp(`from\\s+['"]\\./providers/${name}['"]`).test(reg))
+          bad.push(`provider ${e} 未在 registry.ts 注册（import ./providers/${name}）——板块须注册（铁律一/五）`)
+      }
+      if (count === 0) bad.push(`${base}/providers/ 无 provider——360 框架空转（守空气·防过度工程裁决）`)
+      return bad
+    },
+  },
+  {
+    id: 'cs-no-cross-module-import',
+    roots: ['铁律', 'T4'],
+    desc: '360 板块解耦（架构规范铁律二/三）：provider 之间禁直接互 import；编排器 orchestrator.ts 禁直接 import providers/（须只经 registry 取板块·不认识具体板块）',
+    run() {
+      const base = 'packages/cloud/src/functions/admin/adminApi/customer360'
+      const provDir = join(ROOT, base, 'providers')
+      const orch = join(ROOT, base, 'orchestrator.ts')
+      const bad = []
+      if (existsSync(provDir)) {
+        const provs = readdirSync(provDir).filter((e) => e.endsWith('.ts'))
+        for (const e of provs) {
+          const src = readFileSync(join(provDir, e), 'utf8')
+          for (const other of provs) {
+            const oname = other.slice(0, -3)
+            if (other !== e && new RegExp(`from\\s+['"]\\./${oname}['"]`).test(src))
+              bad.push(`provider ${e} 直接 import 另一 provider ${other}——板块间禁互 import（铁律二）`)
+          }
+        }
+      }
+      if (existsSync(orch) && /from\s+['"]\.\/providers\//.test(readFileSync(orch, 'utf8')))
+        bad.push(`orchestrator.ts 直接 import providers/——编排器须只经 registry 取板块（铁律三）`)
+      return bad
+    },
+  },
+  {
+    id: 'cs-panel-via-provider',
+    roots: ['铁律'],
+    desc: '360 经 provider 接口聚合（架构规范铁律三）：编排器 orchestrator.ts 须经 registry 遍历 + 统一调 provider.fetch；禁 switch 按 key 硬分发（编排器不认识具体板块·加/删板块只动 provider）',
+    run() {
+      const orch = 'packages/cloud/src/functions/admin/adminApi/customer360/orchestrator.ts'
+      if (!existsSync(join(ROOT, orch))) return [`${orch} 缺失——360 编排器`]
+      const src = readFileSync(join(ROOT, orch), 'utf8')
+      const bad = []
+      if (!/from\s+['"]\.\/registry['"]/.test(src)) bad.push(`${orch} 未引 registry——编排器须遍历注册表（铁律三）`)
+      if (!/\.fetch\s*\(/.test(src)) bad.push(`${orch} 未统一调 provider.fetch——须经接口聚合（铁律三）`)
+      if (/switch\s*\(/.test(src)) bad.push(`${orch} 出现 switch 硬分发——编排器不得按 key 认板块（铁律三）`)
+      return bad
+    },
+  },
+  {
+    id: 'cs-module-toggleable',
+    roots: ['铁律'],
+    desc: '360 板块可开关（架构规范铁律四·feature-flag）：每个 provider 声明 enabled；registry.ts 按 enabled + config 集合覆盖过滤（真可灰度/停某板块·非硬编码恒开=守空气）',
+    run() {
+      const base = 'packages/cloud/src/functions/admin/adminApi/customer360'
+      const provDir = join(ROOT, base, 'providers')
+      const registry = join(ROOT, base, 'registry.ts')
+      const bad = []
+      if (existsSync(provDir)) {
+        for (const e of readdirSync(provDir)) {
+          if (!e.endsWith('.ts')) continue
+          if (!/\benabled\b/.test(readFileSync(join(provDir, e), 'utf8')))
+            bad.push(`provider ${e} 未声明 enabled——板块须可开关（铁律四）`)
+        }
+      }
+      if (existsSync(registry)) {
+        const reg = readFileSync(registry, 'utf8')
+        if (!/enabled/.test(reg) || !/config/.test(reg))
+          bad.push(`registry.ts 未按 enabled+config 过滤——feature-flag 须真驱动开关（铁律四·防恒开守空气）`)
+      }
+      return bad
+    },
+  },
+  {
+    id: 'cs-360-read-audited',
+    roots: ['#3'],
+    desc: '360 读他人全貌破例留痕（§1.5·根因#3）：getCustomer360 是「坐席批量读他人订单/PII/学习轨迹」越权面，shouldAudit 跳 ^get 不覆盖它——kit/audit.ts 须有 FORCE_AUDIT 名单含 getCustomer360 强制留痕（防 PII 访问 0 痕）',
+    run() {
+      const audit = 'packages/cloud/src/kit/audit.ts'
+      if (!existsSync(join(ROOT, audit))) return [`${audit} 缺失——审计原语`]
+      const src = readFileSync(join(ROOT, audit), 'utf8')
+      const bad = []
+      // 只扫 FORCE_AUDIT Set 字面量内部（防注释里出现 getCustomer360 造假绿·反向自检逮出的摆设守卫盲区）
+      const set = src.match(/FORCE_AUDIT\s*=\s*new Set\(\[([\s\S]*?)\]\)/)
+      if (!set) bad.push(`${audit} 无 FORCE_AUDIT 名单——360 读越权面无法破例留痕（§1.5·根因#3）`)
+      else if (!/getCustomer360/.test(set[1])) bad.push(`${audit} FORCE_AUDIT 未含 getCustomer360——读他人全貌 0 留痕（§1.5·根因#3）`)
+      return bad
+    },
+  },
+  {
+    id: 'cs-360-rbac-gated',
+    roots: ['#3'],
+    desc: '360 读须能力闸（§1.5·根因#3·别让单超管裸奔）：adminApi/index.ts 须有 ACTION_CAPS 含 getCustomer360→customer:view，且按 caps 校验拒绝（非任何登录都自动能批量读他人数据·B5.2 扩多角色）',
+    run() {
+      const idx = 'packages/cloud/src/functions/admin/adminApi/index.ts'
+      if (!existsSync(join(ROOT, idx))) return [`${idx} 缺失`]
+      const src = readFileSync(join(ROOT, idx), 'utf8')
+      const bad = []
+      // 只扫 ACTION_CAPS 对象字面量内部（防 ACTIONS 注册行/import 里的 getCustomer360 造假绿·反向自检逮出）
+      const caps = src.match(/const ACTION_CAPS[^{]*\{([\s\S]*?)\}/)
+      if (!caps) bad.push(`${idx} 无 ACTION_CAPS 能力闸——360 读无 RBAC（§1.5·根因#3）`)
+      else if (!/getCustomer360/.test(caps[1])) bad.push(`ACTION_CAPS 未含 getCustomer360——任何登录即可读他人全貌（§1.5·根因#3）`)
+      if (!/\bcaps\b/.test(src)) bad.push(`${idx} 未按 caps 校验——能力闸空转（§1.5）`)
+      return bad
+    },
+  },
   {
     id: 'interface-catalog-sync',
     roots: ['正册'],

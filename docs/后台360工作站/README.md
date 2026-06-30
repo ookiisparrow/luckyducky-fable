@@ -67,7 +67,8 @@
 | 押后 | AI(Hunyuan) | — | ⬜ |
 | 方案外 | 直播教学(企微群直播·单独立项) | — | ⬜ |
 
-> **下一步**：B1.1 `getCustomer360`(M①·不待 P0·可立即·**含模块框架地基:provider 接口+registry+flag+4 守卫·原 B0 并入·防过度工程裁决**)；**同批落信任边界三件套**(360 读审计 / 坐席 RBAC 骨架 / 数据共享告知·开工前「充分且必要」核出·不滞后·见 `施工蓝图.md` 阶段一前置 + `架构规范.md §1.5`)。P0 前置(尤其链②)并行去办。外包中期上→承面C 线(序 3-4)提到中段。
+> **B1.1 ✅ 已落**（本批·模块框架地基 provider 接口+registry+flag+4 守卫[原 B0 并入] + `getCustomer360` 编排器 + 订单/激活 provider + 信任边界 2 守卫 `cs-360-read-audited`/`cs-360-rbac-gated`；告知同意 `cs-data-share-consented` 挪 B3.3·防过度工程裁决）。
+> **下一步**：B1.2 检索 `searchCustomer`+`getUser` · B1.3 画像 rollup provider · B1.4 「客户360查询页」admin UI（M① 续·**可起并行车道 A**·见 `并行工作流.md`）。P0 前置(尤其链②)并行去办。外包中期上→承面C 线(序 3-4)提到中段。
 
 ## 指针（单源·不重复抄）
 

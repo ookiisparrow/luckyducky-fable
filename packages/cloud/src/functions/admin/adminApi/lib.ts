@@ -82,6 +82,8 @@ export async function getTxAlerts(db: any): Promise<{ feeMismatch: string[]; ref
 // 口令校验。首次初始化（债#15 关抢占窗口）：须 bootstrap 且本次口令匹配**部署密钥**环境变量
 // ADMIN_BOOTSTRAP_KEY——杜绝「空库谁先登录谁就占管理员」。未设该环境变量＝禁 bootstrap。
 // 设密钥流程：部署时设云环境变量 ADMIN_BOOTSTRAP_KEY＝期望口令 → 首登用该口令 → 设定后可移除。
+// 能力位（§1.5 RBAC 骨架·先粗后细）：caps 决定能调哪些受 ACTION_CAPS 限的 action（如 360 读需 customer:view）。
+// 单超管＝['*']（全能力）；旧 auth doc 无 caps 字段 → 回退 ['*']（向后兼容·现仅你本人）。B5.2 扩多账号/角色。
 export async function checkKey(db: any, key: any, bootstrap: boolean) {
   if (!key || String(key).length < 6) return { ok: false, error: 'KEY_TOO_SHORT' }
   await ensure(db, 'adminConfig')
@@ -89,10 +91,12 @@ export async function checkKey(db: any, key: any, bootstrap: boolean) {
   if (!got || !got.data) {
     const secret = process.env.ADMIN_BOOTSTRAP_KEY || ''
     if (!bootstrap || !secret || String(key) !== secret) return { ok: false, error: 'BAD_KEY' }
-    await db.collection('adminConfig').add({ data: { _id: 'auth', keyHash: sha(key), createdAt: Date.now() } })
-    return { ok: true, bootstrapped: true }
+    await db.collection('adminConfig').add({ data: { _id: 'auth', keyHash: sha(key), caps: ['*'], createdAt: Date.now() } })
+    return { ok: true, bootstrapped: true, caps: ['*'] as string[] }
   }
-  return got.data.keyHash === sha(key) ? { ok: true } : { ok: false, error: 'BAD_KEY' }
+  if (got.data.keyHash !== sha(key)) return { ok: false, error: 'BAD_KEY' }
+  const caps: string[] = Array.isArray(got.data.caps) ? got.data.caps : ['*']
+  return { ok: true, caps }
 }
 
 // 草稿白名单字段（防杂字段入库）
