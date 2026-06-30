@@ -50,7 +50,7 @@ npm run build:h5 / build:mp-weixin / build:cloud
 ## 4. 痛 → 不变量 → 守卫（每条标来源）
 
 **架构主张（T1–T4）**
-- **T1 微信原生单源**：H5/App 不连核心交易流程；api 层只对接云、不引样例数据回退。`[机器守: api-cloud-only]`
+- **T1 微信原生单源**：H5/App 不连核心交易流程；api 层只对接云、不引样例数据回退。`[机器守: api-cloud-only]` ——**代码不变量不松**；**分发范围已放开（决策§19，2026-06-30）**：可经微信小店官方 API「小程序连接小店」拿微信生态多节点分发（不 fork 端、不增回退分支，故不违 T1），H5 自有官网暂缓。
 - **T2 云函数域分组**：函数在 `functions/<域>/` 下；业务码禁裸 `cloud.init`/`getWXContext`，身份/初始化经 kit。`[机器守: cloud-domain-grouped]` `[机器守: kit-only-cloud-primitives]`
 - **T3 云为唯一真相**：商品/课程种子单源在 `packages/shared/seed`，`data/` 仅派生视图。`[机器守: seed-single-source]`
 - **T4 按链内聚**：依赖方向 pages→store/api→utils/data（叶），不反转、无环。`[机器守: dep-direction]`
