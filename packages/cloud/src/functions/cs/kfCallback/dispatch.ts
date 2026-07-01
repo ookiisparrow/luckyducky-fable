@@ -344,6 +344,27 @@ export async function summarizeOrders(db: any, openid: string): Promise<string> 
   return '你最近的订单：\n' + lines.join('\n') + '\n需要更多帮助点「转人工」。'
 }
 
+// ── 承面 C 会话入队（M0.c·让 csSession 有真实 writer·会话进自建工作台待接队列）──
+/**
+ * 转人工时把这通会话写入 csSession 待接队列（承面 C 坐席台 `listQueue` 读它·阶段0地基）。
+ * 确定性 _id=`wxkf:<openKfId>:<externalUserId>`（一顾客一活会话）：用 `add`——撞 id 即会话已在队列
+ * （pending/active/…）→ 抛错被吞 → **不 clobber**（坐席已认领的 active 不被顾客再点转人工重置回 pending·根因#1 幂等）。
+ * 创建于**初始态 pending**（cs.spec.ts `initial`）——非 `transition()`（状态流转 claim/close/escalate 是坐席台 action·车道 A）。
+ * best-effort：入队失败不反噬顾客回复/平台转接（同 ensureKfIdentity）。closed 会话重开为新 pending 属会话生命周期（车道 A）。
+ */
+export async function enqueueSession(db: any, openKfId: string, externalUserId: string): Promise<void> {
+  const euid = String(externalUserId || '')
+  if (!euid || !openKfId) return // 不造无主会话
+  const now = Date.now()
+  try {
+    await db.collection(COLLECTIONS.csSession).add({
+      data: { _id: 'wxkf:' + openKfId + ':' + euid, status: 'pending', externalUserId: euid, openKfId, createdAt: now, updatedAt: now },
+    })
+  } catch {
+    /* 撞确定性 _id：会话已在队列·天然幂等·不 clobber（best-effort·不反噬回复/转接） */
+  }
+}
+
 // ── 发送负载构造（touser + open_kfid + msgtype） ──
 const base = (touser: string, openKfId: string) => ({ touser, open_kfid: openKfId })
 export const buildText = (touser: string, openKfId: string, content: string) => ({
@@ -396,6 +417,9 @@ export async function handleMessage(ctx: DispatchCtx, incoming: Incoming): Promi
 
   switch (r.type) {
     case 'transfer':
+      // 承面 C（M0.c）：会话进自建工作台待接队列（pending·幂等·坐席台 listQueue 读它）——与平台 service_state 两层，
+      // 我方队列不依赖平台转接是否成功（best-effort·enqueueSession 内吞错·不反噬顾客回复/转接）。
+      await enqueueSession(db, openKfId, to)
       // 先给顾客明确反馈（转接确认），再尽力调转接 API。会话分配接口属「客户联系」权限域、内部接入密钥
       // 无权（48002）→ 自动分配暂不可用；但顾客有了文字兜底、接待人员可在接待台手动接入。权限打通后
       // transfer() 自动生效、无需再改（根因#8：真机暴露 48002·见 微信客服配置手册.md 转人工节）。

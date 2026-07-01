@@ -11,6 +11,7 @@ import {
   handleMessage,
   extUserId,
   processKfBatch,
+  enqueueSession,
 } from '../../packages/cloud/src/functions/cs/kfCallback/dispatch'
 
 // 分流引擎：关键词识别 → 高亮 msgmenu；menu_id 路由（文字/卡片/转人工/查订单）；身份桥接查订单。
@@ -209,5 +210,45 @@ describe('handleMessage 编排', () => {
     await handleMessage(ctx, { externalUserId: 'e6', menuId: 'aftersale:apply', text: '' })
     expect(sent[0].msgtype).toBe('text')
     expect(sent[0].text.content).toContain('申请售后')
+  })
+
+  it('点 human 转人工 → 会话入自建工作台待接队列（承面C·M0.c·csSession pending·确定性 _id）', async () => {
+    const { ctx } = mkCtx()
+    await handleMessage(ctx, { externalUserId: 'e2', menuId: 'human', text: '' })
+    const rows = control.dump('csSession')
+    expect(rows).toHaveLength(1)
+    expect(rows[0]._id).toBe('wxkf:wkKf:e2') // 确定性 _id=wxkf:<openKfId>:<externalUserId>
+    expect(rows[0].status).toBe('pending') // 初始态·待坐席认领（cs.spec.ts）
+    expect(rows[0].externalUserId).toBe('e2')
+    expect(rows[0].openKfId).toBe('wkKf')
+  })
+})
+
+describe('enqueueSession 承面C 入队（M0.c·会话进待接队列·让 csSession 有真实 writer·幂等）', () => {
+  it('首次入队：建 pending 会话（确定性 _id·带 createdAt/updatedAt）', async () => {
+    const db = cloud.database()
+    await enqueueSession(db, 'wkKf', 'euidA')
+    const rows = control.dump('csSession')
+    expect(rows).toHaveLength(1)
+    expect(rows[0]._id).toBe('wxkf:wkKf:euidA')
+    expect(rows[0].status).toBe('pending')
+    expect(typeof rows[0].createdAt).toBe('number')
+    expect(typeof rows[0].updatedAt).toBe('number')
+  })
+
+  it('幂等：会话已在处理中（active·坐席已认领）→ 再入队不 clobber（撞确定性 _id 天然幂等·根因#1）', async () => {
+    const db = cloud.database()
+    control.seed('csSession', [{ _id: 'wxkf:wkKf:euidB', status: 'active', agentId: 'agent-1' }])
+    await enqueueSession(db, 'wkKf', 'euidB')
+    const rows = control.dump('csSession')
+    expect(rows).toHaveLength(1) // 不新增
+    expect(rows[0].status).toBe('active') // 不被打回 pending（坐席正在接·不能被顾客再点转人工重置）
+    expect(rows[0].agentId).toBe('agent-1') // 认领信息保留
+  })
+
+  it('缺 externalUserId → 不写（不造无主会话）', async () => {
+    const db = cloud.database()
+    await enqueueSession(db, 'wkKf', '')
+    expect(control.dump('csSession')).toHaveLength(0)
   })
 })

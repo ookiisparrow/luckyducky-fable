@@ -7,7 +7,7 @@
 ## 0. 当前进度锚（真值见 `README.md` 进度表）
 
 - ✅ **阶段0地基 Batch 1（数据契约）** 已落（commit `b6c2c9b`）：cs 会话状态机 `pending→active→closed(+escalated)`（单源 `shared/cs.spec.ts`·纳 `gen-order-domain-synced`）+ `csSession`/`agentState` 集合登记。
-- ⬜ **阶段0地基 Batch 2（契约收尾·master 串行·扇出闸）**：见 §2——**做完才开 3 车道并行**（否则各造一套 API 契约=整合灾难）。
+- ✅ **阶段0地基 Batch 2（契约收尾·扇出闸）** 已落：**M0.a** 坐席台 8 action I/O 契约单源 `packages/shared/src/csAgentDesk.ts`（车道 A 实现·车道 B 对 mock 共同遵·经 `@luckyducky/shared` 引·同步导出 `./cs`）；**M0.c** `kfCallback` 转人工分支 upsert `csSession` pending（`enqueueSession`·确定性 _id·幂等不 clobber active·让 csSession 有真实 writer→listQueue 有数据）。**cap `agent:handle` 运行时 wire + `order-transitions-declared` 扩扫 `functions/cs/` 按 §3 归车道 A**（与 action 同批落·不空守·契约里已文档化 cap 要求·本 Batch 不建 dead config）。→ **可扇出**。
 
 ## 1. 四未定点定稿（2026-07-01·据此实现·别再问）
 
@@ -23,9 +23,9 @@
 > 目的：把「所有车道遵的 API 契约 + 权限位 + 会话写入者」立齐，车道才能各自对着契约干、不打架。
 
 - **M0.a 坐席台 API 契约声明**：`packages/cloud/src/functions/cs/agentDesk/contract.ts`（或 shared）——8 个 action 的 **输入/输出 TS 类型**（不含实现）：`listQueue`/`claimConversation`/`releaseConversation`/`sendAgentMessage`/`getThread`/`setAgentStatus`/`escalateToMerchant`/`closeConversation`。这是车道 A（实现）与车道 B（对 mock）**共同 import 的单一契约**。
-- **M0.b cap `agent:handle`**：`ROLES.outsourced` 加 `agent:handle`；`ACTION_CAPS` 给上述 8 action 标 `agent:handle`（**与 action 同批落·不空守**）。
-- **M0.c 会话入队写入者**：`kfCallback` 转人工分支（dispatch `transfer`）→ upsert `csSession`（`pending`·确定性 _id）——让 csSession 有真实 writer（会话进待接队列）。守卫 `order-transitions-declared` 扩扫 `functions/cs/`（首个 `transition('csSession')` 出现）。
-- 产出：契约 types + cap + 队列写入 + check 绿 → **打 `cs/c-base/ready` → 扇出**。
+- **M0.b cap `agent:handle`**：`ROLES.outsourced` 加 `agent:handle`；`ACTION_CAPS` 给上述 8 action 标 `agent:handle`（**与 action 同批落·不空守**）。→ **✅ 决策：不在 Batch 2 造 dead config，随车道 A 的 action 落**（现网 `ACTION_CAPS` 仅登记有实现的 action、未 gate 者默认拒 `admin:write`·守卫 `agent-rbac-gated` 在；空标 8 个不存在的 action = 空守，违 `lib.ts`「不立无 action 消费者的空 cap」+ Batch 1 提交明示）。Batch 2 已把「8 action 均须 `agent:handle`」写进契约（`csAgentDesk.ts` 头注 + 逐 action），车道 A wire 时引同一 cap 串（防漂移·根因#5）。
+- **M0.c 会话入队写入者**：`kfCallback` 转人工分支（dispatch `transfer`）→ upsert `csSession`（`pending`·确定性 _id）——让 csSession 有真实 writer（会话进待接队列）。→ **✅ 已落 `enqueueSession`**（`.add` 撞确定性 _id 天然幂等·不 clobber 已认领的 active·根因#1；行为测试钉）。守卫 `order-transitions-declared` 扩扫 `functions/cs/` 随**首个 `transition('csSession')`**（车道 A claim/close/escalate 用字面量 `transition('csSession',…)` 时守卫才真发挥·§3 车道 A 办）。
+- 产出：**✅ 契约 types（M0.a·shared）+ 队列写入（M0.c）+ `npm run check` 全绿（测试 787·守卫 112）**；cap 运行时 wire + 守卫扩扫 = 车道 A（§3）。→ **可扇出**（打 `cs/c-base/ready` 由 master 起并行时执行）。
 
 ## 3. 三车道细化拆分（阶段0地基 Batch 2 后并行）
 

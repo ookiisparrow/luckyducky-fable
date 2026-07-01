@@ -61,7 +61,7 @@
 | 1 | M① 只读客户360查询页(手动搜·不待链②·天级见效·**含模块框架地基:provider 接口+注册表+flag+4 守卫·原 B0 并入·防过度工程裁决**) | 无(可立即) | ✅ 上线(B1.1+车道A·真机验"能用"·后端+控制台 UI 已部署) |
 | 2 | M② 学习位置 + 节点诊断雏形 | M①(+imgSecCheck) | 🟢 代码完成(车道B·后端已部署·控台锁✅·待真机/拍照入口接播放页) |
 | 3 | M⑤ 会话归档 + 坐席RBAC + 质检(外包管控底座) | M① | ✅ 归档+质检+**RBAC细化已部署**(车道E·控台锁✅)·**B5.4 审计操作者身份已部署** |
-| 4 | M⑥ 承面 C 外包后台(L·**用户 2026-07-01 拍板自建·直接上·不评 SaaS**) | M⑤✅·48002 权限✅·send_msg✅ | 🟢 开建中：**阶段0地基·数据契约已落**（cs 会话状态机 pending→active→closed[+escalated]·单源 `shared/cs.spec.ts`→gen→`cs.ts`·纳 gen-order-domain-synced 守卫；`csSession`/`agentState` 集合登记）·下 B6.1 会话收发（cap `agent:handle` 随首个 action 落） |
+| 4 | M⑥ 承面 C 外包后台(L·**用户 2026-07-01 拍板自建·直接上·不评 SaaS**) | M⑤✅·48002 权限✅·send_msg✅ | 🟢 开建中：**阶段0地基 Batch 1（数据契约）+ Batch 2（契约扇出闸）已落**——B1：cs 会话状态机 pending→active→closed[+escalated]（单源 `shared/cs.spec.ts`）+ `csSession`/`agentState` 集合；B2：坐席台 8 action I/O 契约单源 `shared/csAgentDesk.ts` + `kfCallback` 转人工入队 `csSession` pending（`enqueueSession`·幂等）。**扇出闸已开**·下＝并行 3 车道（A 坐席台后端 / B 前端对 mock / C 前置件·见 `承面C工单.md` §3；cap `agent:handle` wire + 守卫扩扫随车道 A 的 action 落） |
 | 5 | M③ 承面 A 内部 VIP(企微侧栏·与外包线独立可并行) | 链②·48002 | ⬜ |
 | 6 | M④ 知识库 + CSAT + 主动召回 | M① | 🟢 已部署(车道D·控台锁✅) |
 | 7 | 合规补全 + 其余 G(支付投诉/换货/风控/跨openid/SOP) | 按需 | ⬜ |
