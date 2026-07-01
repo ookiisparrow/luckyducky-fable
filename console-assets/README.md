@@ -6,7 +6,7 @@
 
 - `01-支付退款工作流.md` — 8 件支付/退款资产（连接器/3 工作流/转发节点/config.pay/商户号）+ 30 分钟重建手册（根因#9/#12）。
 - `forward-node.js` — paynotify/refundnotify 转发节点代码正册副本。
-- `02-库权限期望表.md` — 28 集合 + 云存储权限期望档位（固化验收单 X，根因#9）。
+- `02-库权限期望表.md` — 30 集合 + 云存储权限期望档位（固化验收单 X，根因#9）。
 
 ## 变更纪律：先 repo 后控制台
 
@@ -19,7 +19,7 @@
 - [ ] 退款工作流 `kbgzl_n8gojr3a` 存在且已发布；方法=申请退款，数据源=wxpay_33nb7su。
 - [ ] paynotify（正册 URL 含 `2065345255437447170`）+ refundnotify（尾号 `1863425`）的 script 节点代码 == `forward-node.js`（核对函数名 payCallback/refundCallback 与 resource 取值路径）。
 - [ ] `config.pay` 文档 == `01-支付退款工作流.md` §⑦（`tcb db` 可读核对 mode/subMchId/flowId/refundFlowId）。
-- [ ] 28 集合 + 云存储权限档位 == `02-库权限期望表.md`（绝无「所有人可读写」）。
+- [ ] 30 集合 + 云存储权限档位 == `02-库权限期望表.md`（绝无「所有人可读写」）。
 - [ ] **forward-node.js 与线上节点逐字核对**（本副本是据记录重建，首次须校正为权威）。
 
 ## 运维坑册（根因账本 #12 + 工作日志教训）

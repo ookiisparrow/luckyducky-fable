@@ -61,6 +61,15 @@ export const COLLECTIONS = {
   // 字段 externalUserId/openid?/score(1-5·入库前 fail-closed 校验·守卫 csat-score-bounded)/note/createdAt。
   // cs/kfCallback dispatch 写（recordCsat·经 defineKfCallback 闸），adminApi getCsatReport 读（均分/分布·bounded）。仅云函数读写、客户端禁，上线前控制台锁「仅管理端」。
   csat: 'csat',
+  // 承面 C 会话态（后台360工作站 B6·板块#12·阶段0地基）：一顾客一活会话·确定性 _id=`wxkf:<openKfId>:<externalUserId>`。
+  // status 状态机 pending→active→closed(+escalated)（单源 shared/cs.spec.ts·经 transition() 流转·守卫 order-transitions-declared 对账）；
+  // 字段 status/externalUserId/openKfId/openid?/agentId?(认领坐席)/claimedAt?/lastCursor?/updatedAt。与微信平台 service_state 两层：
+  // service_state 管「谁在微信侧收发」、csSession.status 管「自建工作台里这通会话的处理阶段」。仅坐席台 actions 写、客户端禁，上线前控制台锁「仅管理端」。
+  csSession: 'csSession',
+  // 承面 C 坐席在线态（后台360工作站 B6·阶段0地基）：一坐席一文档·_id=agentId（adminConfig 账号 _id）。
+  // 字段 status(online/busy/offline)/activeCount(在接会话数)/limit(接待上限)/updatedAt。排队分配据此选可接坐席（示忙/满额排除·B6.3）。
+  // 仅坐席台 actions（setAgentStatus/claim/release）写、客户端禁，上线前控制台锁「仅管理端」。
+  agentState: 'agentState',
 } as const
 
 export type CollName = (typeof COLLECTIONS)[keyof typeof COLLECTIONS]

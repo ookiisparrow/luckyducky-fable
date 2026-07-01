@@ -33,6 +33,12 @@ const DOMAINS = [
     label: 'learning.spec.ts',
     header: `/**\n * learning 域类型/常量/流转表——**生成物**（单源 learning.spec.ts·勿手改生成段）。\n * 见 learning.spec.ts 头注；改流转改声明再跑 scripts/gen-order-domain.mjs。\n */\n`,
   },
+  {
+    spec: join(ROOT, 'packages/shared/src/cs.spec.ts'),
+    ts: join(ROOT, 'packages/shared/src/cs.ts'),
+    label: 'cs.spec.ts',
+    header: `/**\n * cs 域（承面 C 会话）类型/常量/流转表——**生成物**（单源 cs.spec.ts·勿手改生成段）。\n * 见 cs.spec.ts 头注；改流转改声明再跑 scripts/gen-order-domain.mjs。\n */\n`,
+  },
 ]
 
 const GEN_BANNER =
@@ -84,10 +90,10 @@ function statesOf(mc) {
   return [...set].sort()
 }
 
-/** PascalCase 类型名前缀：ORDER_STATUS_SPEC → Order；AFTERSALE_STATUS_SPEC → AfterSale；QRCODE_STATUS_SPEC → Qrcode。 */
-const TYPE_PREFIX = { ORDER_STATUS_SPEC: 'Order', AFTERSALE_STATUS_SPEC: 'AfterSale', QRCODE_STATUS_SPEC: 'Qrcode' }
-/** 常量名前缀：…→ ORDER / AFTERSALE / QRCODE。 */
-const CONST_PREFIX = { ORDER_STATUS_SPEC: 'ORDER', AFTERSALE_STATUS_SPEC: 'AFTERSALE', QRCODE_STATUS_SPEC: 'QRCODE' }
+/** PascalCase 类型名前缀：ORDER_STATUS_SPEC → Order；AFTERSALE_STATUS_SPEC → AfterSale；QRCODE_STATUS_SPEC → Qrcode；CS_SESSION_STATUS_SPEC → CsSession。 */
+const TYPE_PREFIX = { ORDER_STATUS_SPEC: 'Order', AFTERSALE_STATUS_SPEC: 'AfterSale', QRCODE_STATUS_SPEC: 'Qrcode', CS_SESSION_STATUS_SPEC: 'CsSession' }
+/** 常量名前缀：…→ ORDER / AFTERSALE / QRCODE / CS_SESSION。 */
+const CONST_PREFIX = { ORDER_STATUS_SPEC: 'ORDER', AFTERSALE_STATUS_SPEC: 'AFTERSALE', QRCODE_STATUS_SPEC: 'QRCODE', CS_SESSION_STATUS_SPEC: 'CS_SESSION' }
 
 function genTs(machines, specLabel) {
   const parts = []
@@ -165,13 +171,13 @@ function main() {
       console.error('[gen-order-domain] 派生物与声明不同步：' + drift.join('、') + '——跑 `node scripts/gen-order-domain.mjs` 重生成')
       process.exit(1)
     }
-    console.log('[gen-order-domain] 派生物与声明同步 ✓（order + learning）')
+    console.log(`[gen-order-domain] 派生物与声明同步 ✓（${DOMAINS.map((d) => d.label.replace('.spec.ts', '')).join(' + ')}）`)
     return
   }
 
   for (const { ts, content } of tsOut) writeFileSync(ts, content)
   writeFileSync(JSON_OUT, json)
-  console.log('[gen-order-domain] 已生成 order.ts + learning.ts + order-domain.generated.json')
+  console.log(`[gen-order-domain] 已生成 ${DOMAINS.map((d) => d.ts.split('/').pop()).join(' + ')} + order-domain.generated.json`)
 }
 
 main()
