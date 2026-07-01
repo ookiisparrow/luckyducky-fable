@@ -134,15 +134,16 @@ describe('会话状态·接入智能助手（防 95018·调试日志 AB）', () 
     expect(f.calls.some((c) => c.url.includes('/service_state/trans'))).toBe(false)
   })
 
-  it('ensureSmartAssistant：state 2（待接入池排队·bot-first）→ 尽力接管·trans 到 1 后 proceed', async () => {
-    const f = mkFetch((url) => (url.includes('/service_state/get') ? { errcode: 0, service_state: 2 } : { errcode: 0 }))
-    expect(await ensureSmartAssistant('TKN', { openKfId: 'KF', externalUserId: 'e1' }, f)).toBe('proceed')
-    const trans = f.calls.find((c) => c.url.includes('/service_state/trans'))
-    expect(trans.body).toMatchObject({ service_state: 1 })
+  it('ensureSmartAssistant：state 2（待接入池）/ 4（已结束）→ skip 且不硬试 trans（平台不允许·免告警噪声）', async () => {
+    for (const st of [2, 4]) {
+      const f = mkFetch((url) => (url.includes('/service_state/get') ? { errcode: 0, service_state: st } : { errcode: 0 }))
+      expect(await ensureSmartAssistant('TKN', { openKfId: 'KF', externalUserId: 'e1' }, f)).toBe('skip')
+      expect(f.calls.some((c) => c.url.includes('/service_state/trans'))).toBe(false) // 不硬试（4→1 报 95013·徒增噪声）
+    }
   })
 
-  it('ensureSmartAssistant：接管失败（trans errcode·如平台不允许该态→1）→ skip 不硬发（免二次 95018·告警定位）', async () => {
-    const f = mkFetch((url) => (url.includes('/service_state/get') ? { errcode: 0, service_state: 2 } : { errcode: 95018 }))
+  it('ensureSmartAssistant：state 0 接管失败（trans errcode）→ skip 不硬发（真异常·告警值得看·免二次 95018）', async () => {
+    const f = mkFetch((url) => (url.includes('/service_state/get') ? { errcode: 0, service_state: 0 } : { errcode: 95018 }))
     expect(await ensureSmartAssistant('TKN', { openKfId: 'KF', externalUserId: 'e1' }, f)).toBe('skip')
   })
 })

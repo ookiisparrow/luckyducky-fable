@@ -321,9 +321,9 @@ export async function enterSmartAssistant(
 /**
  * 确保会话可由 bot 自动回复（防 95018·调试日志 AB·根因#12 平台规则外部风险）：读会话状态 → 决策——
  * - 1 智能助手：可直接发 → 'proceed'
- * - 0 未处理 / 2 待接入池排队 / 4 已结束 / -1 读失败：bot-first 账号尽力 trans 到 1 接手会话 → 'proceed'（trans 失败 → 'skip'·不硬发触 95018）
- * - 3 人工接待：有坐席分配（转人工后），bot 不抢话 → 'skip'
- * 抗漂移：不靠后台「接待方式」默认（迁移到企业微信内后新会话默认态漂移致 95018）·每条回复前主动置态。
+ * - 0 未处理(新会话) / -1 读失败：尽力 trans 到 1 接管 → 'proceed'（trans 失败 → 'skip'·不硬发触 95018）
+ * - 2 待接入池 / 3 人工接待 / 4 已结束：让位不接管 → 'skip'（平台不允许 2→1、4→1·3 有坐席；4 待顾客新消息重激活成 0）
+ * 抗漂移：不靠后台「接待方式」默认·每条回复前读态决策；只接管新会话(0)、不硬试边界态（免告警噪声）。
  */
 export async function ensureSmartAssistant(
   accessToken: string,
@@ -331,13 +331,15 @@ export async function ensureSmartAssistant(
   fetchImpl: FetchFn = defaultFetch
 ): Promise<'proceed' | 'skip'> {
   const state = await getServiceState(accessToken, args, fetchImpl)
-  console.log('[kf] service-state', { state }) // 实测会话态数字（定位账号接待方式·根因#8 不假设·调试日志 AB）
+  console.log('[kf] service-state', { state }) // 实测会话态（根因#8 不假设·调试日志 AB）
   if (state === 1) return 'proceed' // 已智能助手态·可直接发
-  if (state === 3) return 'skip' // 人工接待中·有坐席分配（转人工后）·bot 不抢话
-  // 0 未处理 / 2 待接入池排队 / 4 已结束 / -1 读失败 → bot-first 账号：尽力接入智能助手（claim 本会话）
+  // 只接管 0（未处理·新会话）与 -1（读取失败·尽力）——0→1 平台允许（真机实证）。其余让位不接管：
+  // 2 待接入池 / 3 人工接待（有坐席）/ 4 已结束——平台不允许 2→1、4→1（真机 4→1 报 95013），
+  // 且 API 托管下新会话本就是 0、不会经 2；硬试只徒增失败告警噪声（污染企微告警渠道）。
+  if (state !== 0 && state !== -1) return 'skip'
   const r = await enterSmartAssistant(accessToken, args, fetchImpl)
   if (r && r.errcode) {
-    // 接入失败（平台不允许该态→1·或账号接待方式为纯人工排队 state 2）——不硬发触 95018，靠告警 + 后台接待方式修
+    // 接管新会话都失败＝真异常（非 benign 边界态），告警值得看；且不硬发 send 触二次 95018
     alert('security', 'wecom', 'ENTER_ASSISTANT_FAILED', { errcode: r.errcode, fromState: state })
     return 'skip'
   }
