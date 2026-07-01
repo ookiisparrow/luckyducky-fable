@@ -1,5 +1,5 @@
 {
-  "updatedAt": 1782907739915,
+  "updatedAt": 1782908440409,
   "functions": {
     "activateCourse": "9b6fbfa85bc5",
     "adminApi": "9b7ba13b5050",
@@ -23,10 +23,10 @@
     "getReviews": "f2c8b3defcf8",
     "initDb": "0752078b6a36",
     "kfBind": "af0ff4de2cfb",
-    "kfCallback": "04242a25d29f",
+    "kfCallback": "f33edc01a3a6",
     "kfHealthProbe": "5f817e2a23c7",
     "kfSend": "3eb7a2276306",
-    "login": "2ec0df75c818",
+    "login": "ab906c333bab",
     "pay": "902bd791c74f",
     "payCallback": "43972b398425",
     "recallScan": "21769cbd9164",
