@@ -8,6 +8,8 @@
 
 - ✅ **阶段0地基 Batch 1（数据契约）** 已落（commit `b6c2c9b`）：cs 会话状态机 `pending→active→closed(+escalated)`（单源 `shared/cs.spec.ts`·纳 `gen-order-domain-synced`）+ `csSession`/`agentState` 集合登记。
 - ✅ **阶段0地基 Batch 2（契约收尾·扇出闸）** 已落：**M0.a** 坐席台 8 action I/O 契约单源 `packages/shared/src/csAgentDesk.ts`（车道 A 实现·车道 B 对 mock 共同遵·经 `@luckyducky/shared` 引·同步导出 `./cs`）；**M0.c** `kfCallback` 转人工分支 upsert `csSession` pending（`enqueueSession`·确定性 _id·幂等不 clobber active·让 csSession 有真实 writer→listQueue 有数据）。**cap `agent:handle` 运行时 wire + `order-transitions-declared` 扩扫 `functions/cs/` 按 §3 归车道 A**（与 action 同批落·不空守·契约里已文档化 cap 要求·本 Batch 不建 dead config）。→ **可扇出**。
+- ✅ **三车道并行 + master 整合已落**（`integrate/cs-agent` squash 上 main）：A 坐席台后端 8 action（`adminApi/actions/agentDesk.ts`·cap wire·`transition('csSession')`）‖ B 独立 `/agent` 工作台（新包 `packages/agent`·对 mock）‖ C 前置件（数据共享告知同意 `cs/dataConsent`+同意页 / 外包账号管理 `actions/agents.ts`+admin 页 / 防导出 kit `assertOwnedByAgent`）。**master 安全收敛**：外包 RBAC 收窄为仅 `agent:handle`（去裸 `customer:view`·闭合批量导出洞）+ scope 闸单源化（A 经 `scopedLoad`→C 的 `assertOwnedByAgent`）+ 11 action 注册 adminApi ACTIONS/系统事实 + listKb 标 agent:handle。守卫 117·测试 852·云函数 38·check 全绿·build:cloud+agent 均过。
+  - **follow-up（未做·待「接真接口 + 真机」阶段）**：① **scoped-360-for-outsourced**——外包收窄后不能直调 getCustomer360；B 的 360 侧栏（现 mock）接真时须建 scoped 路径（经 `assertOwnedByAgent`+`assertDataShareConsent`·后者是其真实消费者）；② **listMyActive**——契约缺「列我在接会话」，坐席刷新丢 active 会话（listQueue 加 status/mine 或补 action）；③ **B 接真后端**（`VITE_ADMIN_API`）+ 真坐席真会话验顺手/可靠（根因#8）；④ 部署（含 `cs/dataConsent` 新函数·build:agent 静态托管 `/agent`）+ 控制台锁新集合权限。
 
 ## 1. 四未定点定稿（2026-07-01·据此实现·别再问）
 

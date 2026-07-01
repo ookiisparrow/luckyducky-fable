@@ -17,6 +17,8 @@ import * as checkpoints from './actions/checkpoints'
 import * as conversations from './actions/conversations'
 import * as kb from './actions/kb'
 import * as csat from './actions/csat'
+import * as agentDesk from './actions/agentDesk' // 承面C 车道A·坐席台 8 action（B6·cap agent:handle）
+import * as agents from './actions/agents' // 承面C 车道C·外包账号管理（B5.2·超管建/停/列·默认拒 admin:write）
 
 // 管理控制台后端（HTTP 访问服务触发）。B5b：HTTP 外壳 + 口令闸在此，28+ action 拆 actions/ 查表。
 // 鉴权：管理口令（adminConfig sha256，首登 bootstrap）。db 经 kit.getDb；退款流经 kit.callFlow。
@@ -96,6 +98,19 @@ const ACTIONS: Record<string, (ctx: Ctx) => Promise<any>> = {
   saveKb: kb.saveKb,
   // 客服满意度报表（B4.3·后台360工作站·只读·均分/分布·bounded）
   getCsatReport: csat.getCsatReport,
+  // 承面C 车道A·坐席台 8 action（B6·§1 定稿·cap agent:handle·ACTION_CAPS 已标·分配 scope 经 assertOwnedByAgent）
+  listQueue: agentDesk.listQueue,
+  claimConversation: agentDesk.claimConversation,
+  releaseConversation: agentDesk.releaseConversation,
+  sendAgentMessage: agentDesk.sendAgentMessage,
+  getThread: agentDesk.getThread,
+  setAgentStatus: agentDesk.setAgentStatus,
+  escalateToMerchant: agentDesk.escalateToMerchant,
+  closeConversation: agentDesk.closeConversation,
+  // 承面C 车道C·外包账号管理（B5.2·未登记 ACTION_CAPS→默认拒 admin:write·天然仅超管建/停/列·外包无权）
+  createAgent: agents.createAgent,
+  disableAgent: agents.disableAgent,
+  listAgents: agents.listAgents,
 }
 
 // 能力闸（§1.5 RBAC·根因#3·别让单超管裸奔）：受限 action 须 principal 具备对应能力（'*'=全能力）。
@@ -107,6 +122,20 @@ const ACTION_CAPS: Record<string, string> = {
   // 会话检索＝读他人会话全文越权面（B5.1·后台360工作站·车道 E）：复用 customer:view（同 360 读·不另立 cap）。
   // 守卫 conversations-pii-gated 独立焊本行（不动 cs-360-rbac-gated 那三行·并行整合取并集）。
   searchConversations: 'customer:view',
+  // 承面 C 坐席台 8 action（B6·§1 定稿·外包最小权 agent:handle·根因#3）：查(listQueue/getThread)+回复(send)+
+  // 认领/放手/升级/结束——**不含**动钱/动状态/退款（留商户超管·外包无权）。wire 与 actions/agentDesk.ts 同批落
+  // （不空守·契约 shared/csAgentDesk.ts 头注要求）；未 gate 的 action 默认拒 ADMIN_DEFAULT_CAP（守卫 agent-rbac-gated）。
+  listQueue: 'agent:handle',
+  claimConversation: 'agent:handle',
+  releaseConversation: 'agent:handle',
+  sendAgentMessage: 'agent:handle',
+  getThread: 'agent:handle',
+  setAgentStatus: 'agent:handle',
+  escalateToMerchant: 'agent:handle',
+  closeConversation: 'agent:handle',
+  // 快捷回复读知识库（承面C 车道B·坐席台 QuickReplies 读 kb 发 FAQ）：外包 agent:handle 可读（kb=公司 FAQ·非客户 PII）；
+  // saveKb 仍默认拒 admin:write（仅超管维护）。整合补：原 listKb 未标 cap→外包调不了（车道B 报的接缝缺口）。
+  listKb: 'agent:handle',
 }
 // 默认拒（B5.2 坐席 RBAC·守卫 agent-rbac-gated）：未登记 ACTION_CAPS 的 action 须此高权默认 cap——
 // 非超管角色（caps 不含 '*'/此 cap）默认进不去钱/状态/管理 action（外包/坐席不经未 gate 的 action 越权）。超管 ['*'] 匹配一切·行为不变。
@@ -187,8 +216,11 @@ export const main = async (event: any) => {
   const auditIp = tkey.replace('adminlogin:', '') // 操作审计#4：动钱/状态操作留痕（fail-soft·不反噬响应）
   // B5.4·§1.5 可追溯：真实操作者身份（checkKey 解析的账号 name/_id·多账号上线后不再糊成单口令 admin·谁查/改了谁）
   const operator = String((auth as any).operator || 'admin')
+  // 承面 C 坐席台（§1.5·根因#3 不信前端）：认证坐席身份 + 能力位贯入 Ctx，供 agentDesk actions 做 claim 绑定/
+  // 分配 scope/接待上限（agentId 取 checkKey 解析的账号身份·非 data 前端传入）。其余 action 忽略这两字段（附加·无副作用）。
+  const agentId = String((auth as any).agentId || operator)
   try {
-    const res = await handler({ db, cloud, data, drafts })
+    const res = await handler({ db, cloud, data, drafts, agentId, caps })
     if (shouldAudit(action)) await recordAudit({ action, operator, ip: auditIp, data, ok: !!res && res.statusCode === 200 })
     return res
   } catch (e) {

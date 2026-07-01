@@ -17,6 +17,7 @@ import Checkpoints from '@/pages/Checkpoints.vue'
 import Conversations from '@/pages/Conversations.vue'
 import Kb from '@/pages/Kb.vue'
 import Csat from '@/pages/Csat.vue'
+import Agents from '@/pages/Agents.vue'
 
 export const router = createRouter({
   history: createWebHashHistory(),
@@ -38,6 +39,7 @@ export const router = createRouter({
     { path: '/reconciliation', component: Reconciliation },
     { path: '/notifications', component: Notifications },
     { path: '/externals', component: Externals },
+    { path: '/agents', component: Agents },
     // 上新向导：/product/<id>/step/<1-6>；左侧「按步骤直达」也跳这里
     { path: '/product/:id/step/:n', component: Wizard, props: true },
   ],

@@ -9,6 +9,9 @@ export interface Ctx {
   cloud: any
   data: any
   drafts: any
+  // 承面 C 坐席台（B6·§1.5·根因#3 不信前端）：认证主体身份，由 index.ts 分发处从 checkKey 结果贯入（非 data）。
+  agentId?: string // 认证坐席身份＝账号 _id（外包 adminConfig._id / 超管 'admin'）·claim/scope/agentState 用
+  caps?: string[] // 认证主体能力位（'*'=超管全量·坐席台分配 scope 判超管用）
 }
 
 export const CORS = {
@@ -83,11 +86,14 @@ export async function getTxAlerts(db: any): Promise<{ feeMismatch: string[]; ref
 // ADMIN_BOOTSTRAP_KEY——杜绝「空库谁先登录谁就占管理员」。未设该环境变量＝禁 bootstrap。
 // 设密钥流程：部署时设云环境变量 ADMIN_BOOTSTRAP_KEY＝期望口令 → 首登用该口令 → 设定后可移除。
 // 坐席 RBAC 角色→能力位单源（§1.5·B5.2·别让单超管裸奔）：superadmin 全能力；outsourced 外包最小权
-// （只读客户360+会话检索·余皆默认拒·防越权动钱/状态/导出）。中间角色（如内部坐席）按需扩——
-// 加新角色 + 给对应 action 标 cap 即可（现只 360/会话读标了 customer:view·不立无 action 消费者的空 cap·防过度工程）。
+// （只 agent:handle·余皆默认拒·防越权动钱/状态/导出）。中间角色（如内部坐席）按需扩——加新角色 + 给对应 action 标 cap 即可。
 export const ROLES: Record<string, string[]> = {
   superadmin: ['*'],
-  outsourced: ['customer:view'],
+  // 外包最小权（§1 定稿·根因#3·master 整合收窄）：**仅 agent:handle**——承面C 坐席台（查 listQueue/getThread + 回复 send +
+  // 认领/放手/升级/结束 + 快捷回复读 kb·**不含**动钱/动状态/退款·留商户超管）。**刻意去掉裸 customer:view**：
+  // 否则外包一建号即可调 getCustomer360/searchCustomer 遍历全量客户＝批量导出（车道 C 报的洞·§1 定稿「分配制·只看自己 claim 的会话+对应360」）。
+  // 外包看客户 360 只能经「自己 claim 的会话」的 scoped 路径（assertOwnedByAgent + assertDataShareConsent·scoped-360 follow-up 落地·见 承面C工单）。
+  outsourced: ['agent:handle'],
 }
 const capsForRole = (role: string): string[] => ROLES[role] || []
 
@@ -105,19 +111,21 @@ export async function checkKey(db: any, key: any, bootstrap: boolean) {
     const secret = process.env.ADMIN_BOOTSTRAP_KEY || ''
     if (!bootstrap || !secret || String(key) !== secret) return { ok: false, error: 'BAD_KEY' }
     await db.collection('adminConfig').add({ data: { _id: 'auth', keyHash: hash, role: 'superadmin', caps: ['*'], createdAt: Date.now() } })
-    return { ok: true, bootstrapped: true, caps: ['*'] as string[], operator: 'admin' }
+    return { ok: true, bootstrapped: true, caps: ['*'] as string[], operator: 'admin', agentId: 'admin' }
   }
   // ① 超管 'auth' doc 命中（向后兼容：无 role 取 caps 字段·旧 ['*']）
   if (got.data.keyHash === hash) {
     if (got.data.disabled) return { ok: false, error: 'ACCOUNT_DISABLED' }
-    return { ok: true, operator: got.data.name || 'admin', caps: got.data.role ? capsForRole(got.data.role) : Array.isArray(got.data.caps) ? got.data.caps : ['*'] }
+    // 超管 agentId 固定 'admin'（商户本人·承面C 可 claim/setAgentStatus·稳定可读·§1.5）
+    return { ok: true, operator: got.data.name || 'admin', agentId: 'admin', caps: got.data.role ? capsForRole(got.data.role) : Array.isArray(got.data.caps) ? got.data.caps : ['*'] }
   }
   // ② B5.2 多账号：非超管·按 keyHash 查 agent/外包 账号 doc（均有 role；disabled 即停）
   const hit = await db.collection('adminConfig').where({ keyHash: hash }).limit(1).get().catch(() => ({ data: [] }))
   const acct = (hit && hit.data && hit.data[0]) || null
   if (!acct) return { ok: false, error: 'BAD_KEY' }
   if (acct.disabled) return { ok: false, error: 'ACCOUNT_DISABLED' }
-  return { ok: true, operator: acct.name || acct._id, caps: acct.role ? capsForRole(acct.role) : Array.isArray(acct.caps) ? acct.caps : [] }
+  // 外包/坐席 agentId＝账号 _id（承面C claim 绑定/分配 scope/agentState 键·§1.5·根因#3 取认证主体非前端）
+  return { ok: true, operator: acct.name || acct._id, agentId: acct._id, caps: acct.role ? capsForRole(acct.role) : Array.isArray(acct.caps) ? acct.caps : [] }
 }
 
 // 草稿白名单字段（防杂字段入库）

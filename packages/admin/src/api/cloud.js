@@ -626,3 +626,33 @@ export async function conversationsReport({ slaMs, channel } = {}) {
   if (!r.ok) throw new Error(r.error || 'CONVERSATIONS_REPORT_FAIL')
   return r
 }
+
+// ---------- 外包账号管理（后台360工作站 B5.2·承面C 车道 C·商户超管建/停/列外包坐席账号·adminConfig 多账号） ----------
+
+// 列外包账号（白名单·不含口令）：[{ id, name, role, disabled, createdAt }]。
+export async function listAgents() {
+  if (!cloudMode) return [] // 账号只存在于云端
+  const r = await post('listAgents')
+  if (!r.ok) throw new Error(r.error || 'LOAD_AGENTS_FAIL')
+  return r.agents || []
+}
+
+// 建外包账号：name（显示名）+ key（登录口令·≥6 位·不入明文·撞既有口令拒）。返回 { id, name, role, disabled }。
+export async function createAgent(name, key) {
+  const r = await post('createAgent', { name, key })
+  if (!r.ok) {
+    const msg =
+      { BAD_NAME: '请填写账号名称', KEY_TOO_SHORT: '登录口令至少 6 位', KEY_TAKEN: '该口令已被占用，请换一个' }[r.error] ||
+      r.error ||
+      '创建失败'
+    throw new Error(msg)
+  }
+  return r.agent
+}
+
+// 停用 / 恢复外包账号：disabled=true 停（该账号即刻无法登录）·false 恢复。
+export async function setAgentDisabled(id, disabled) {
+  const r = await post('disableAgent', { id, disabled })
+  if (!r.ok) throw new Error(r.error === 'AGENT_NOT_FOUND' ? '账号不存在' : r.error || '操作失败')
+  return true
+}

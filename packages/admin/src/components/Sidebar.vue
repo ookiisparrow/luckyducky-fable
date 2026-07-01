@@ -9,7 +9,7 @@ import { ref, computed, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import {
   Package, ChevronDown, Image, FileText, Tags, Clapperboard, QrCode, Printer,
-  Smartphone, Truck, RotateCcw, Boxes, ChartColumn, Wallet, Bell, ExternalLink, LifeBuoy, UserSearch, ClipboardCheck, MessagesSquare, BookOpen, Star,
+  Smartphone, Truck, RotateCcw, Boxes, ChartColumn, Wallet, Bell, ExternalLink, LifeBuoy, UserSearch, ClipboardCheck, MessagesSquare, BookOpen, Star, Users,
 } from 'lucide-vue-next'
 import { useProductsStore, STEP_NAMES } from '@/store/products.js'
 import { logout, currentUser } from '@/api/cloud.js'
@@ -49,6 +49,7 @@ const GROUPS = [
   {
     caption: '系统',
     items: [
+      { to: '/agents', label: '外包账号', icon: Users },
       { to: '/notifications', label: '消息通知', icon: Bell },
       { to: '/externals', label: '外部后台', icon: ExternalLink },
     ],

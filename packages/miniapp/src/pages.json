@@ -165,6 +165,13 @@
             "navigationBarTitleText": "上传节点照片",
             "navigationStyle": "custom"
           }
+        },
+        {
+          "path": "consent/index",
+          "style": {
+            "navigationBarTitleText": "数据共享授权",
+            "navigationStyle": "custom"
+          }
         }
       ]
     }

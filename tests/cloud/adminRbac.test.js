@@ -27,9 +27,10 @@ beforeEach(() => {
 })
 
 describe('坐席 RBAC 默认拒（B5.2·§1.5）', () => {
-  it('ROLES：outsourced 外包最小权·不含全权 *；superadmin 全权', () => {
+  it('ROLES：outsourced 外包最小权=仅 agent:handle（去裸 customer:view 闭合批量导出洞·§1 定稿）；superadmin 全权', () => {
     expect(ROLES.outsourced).not.toContain('*')
-    expect(ROLES.outsourced).toContain('customer:view')
+    expect(ROLES.outsourced).toContain('agent:handle')
+    expect(ROLES.outsourced).not.toContain('customer:view') // master 整合收窄：外包不能直调 getCustomer360 遍历全量客户（车道C 报的洞）
     expect(ROLES.superadmin).toContain('*')
   })
 
@@ -40,10 +41,18 @@ describe('坐席 RBAC 默认拒（B5.2·§1.5）', () => {
     }
   })
 
-  it('外包 customer:view：360 读/检索过闸（非 403）', async () => {
-    expect((await call('getCustomer360', OUT, { openid: 'x' })).status).not.toBe(403)
-    expect((await call('searchCustomer', OUT, { q: 'x' })).status).not.toBe(403)
-    expect((await call('searchConversations', OUT, {})).status).not.toBe(403)
+  it('外包无 customer:view：直调 360 读/检索 → 403 FORBIDDEN（闭合批量导出·外包看 360 只走 claim 会话 scoped 路径·§1 定稿）', async () => {
+    for (const a of ['getCustomer360', 'searchCustomer', 'searchConversations']) {
+      const r = await call(a, OUT, { openid: 'x', q: 'x' })
+      expect(r.status, `外包直调 ${a} 应 403（批量读洞已闭合）`).toBe(403)
+      expect(r.error).toBe('FORBIDDEN')
+    }
+  })
+
+  it('外包 agent:handle：承面C 坐席台 action 过闸（非 403·到 handler·分配 scope 在 handler 内 assertOwnedByAgent 二次把关）', async () => {
+    for (const a of ['listQueue', 'getThread', 'sendAgentMessage', 'claimConversation', 'setAgentStatus']) {
+      expect((await call(a, OUT, { sessionId: 's', text: 't', status: 'online' })).status, `外包 ${a} 不应被 cap 闸 403`).not.toBe(403)
+    }
   })
 
   it('外包默认拒：未授 cap 的钱/状态/管理 action → 403 FORBIDDEN', async () => {
@@ -60,7 +69,7 @@ describe('坐席 RBAC 默认拒（B5.2·§1.5）', () => {
       { _id: 'auth', keyHash: sha(SUPER), role: 'superadmin', caps: ['*'] },
       { _id: 'agent:out1', keyHash: sha(OUT), role: 'outsourced', disabled: true },
     ])
-    const r = await call('getCustomer360', OUT, { openid: 'x' })
+    const r = await call('listQueue', OUT, {}) // 外包实际可用的 action·disabled 应在口令闸即拒（早于 cap/handler）
     expect(r.status).toBe(401)
     expect(r.error).toBe('ACCOUNT_DISABLED')
   })

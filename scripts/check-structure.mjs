@@ -886,7 +886,7 @@ export const repoChecks = [
     // 承面C 落地时本闸升级为坐席 RBAC（agent:handle）+ 会话归属校验——本守卫防在那之前退回无闸。
     id: 'kf-send-server-gated',
     roots: ['#3'],
-    desc: '客服主动发消息服务端专用闸（§P0 ④·根因#3 信任边界 fail-closed）：cs/kfSend（向顾客主动发 send_msg 的越权发送面）须经 isServerCall 闸——仅后端/CLI 放行、带 openid 的客户端调用拒；且须真调 send_msg 发送接缝。防退回无闸致任意登录用户向顾客发任意消息',
+    desc: '向顾客主动发消息必过闸（§P0 ④·承面C B6·根因#3 信任边界 fail-closed）：① cs/kfSend（向顾客主动发 send_msg 的越权发送面）须经 isServerCall 闸——仅后端/CLI 放行、带 openid 的客户端调用拒 + 真调 send_msg；② 承面C 坐席台 agentDesk.sendAgentMessage 须先过分配 scope（scopedLoad→assertOwnedByAgent·外包只发自己 claim 的会话）+ 接待窗口（仅 active 态·防越窗）再经 kfSend/sendMsg 发。防退回无闸致任意登录用户/坐席向顾客发任意消息',
     run() {
       const f = 'packages/cloud/src/functions/cs/kfSend/index.ts'
       if (!existsSync(join(ROOT, f))) return [`${f} 缺失——客服主动发消息接缝（§P0 ④·承面C sendAgentMessage 雏形）`]
@@ -898,6 +898,106 @@ export const repoChecks = [
       // ② 真调发送接缝（非空壳）
       if (!/sendMsg\s*\(/.test(s))
         bad.push(`${f} 未调 sendMsg 发送接缝——非真发送（§P0 ④）`)
+      // ③ 承面C 坐席台 sendAgentMessage 同族越权发送面（B6·§1.5·根因#3）：坐席回复须先过分配 scope + 接待窗口再发
+      const desk = 'packages/cloud/src/functions/admin/adminApi/actions/agentDesk.ts'
+      if (existsSync(join(ROOT, desk))) {
+        const ds = readFileSync(join(ROOT, desk), 'utf8')
+        const st = ds.indexOf('export async function sendAgentMessage')
+        const body = st < 0 ? '' : (() => { const nx = ds.indexOf('export async function ', st + 1); return nx < 0 ? ds.slice(st) : ds.slice(st, nx) })()
+        if (!body) bad.push(`${desk} 缺 sendAgentMessage（承面C 坐席回复·B6）`)
+        else {
+          if (!/scopedLoad\s*\(/.test(body))
+            bad.push(`${desk} sendAgentMessage 未过分配 scope（scopedLoad→assertOwnedByAgent·外包越权发他人会话·§1.5·根因#3）`)
+          if (!/['"]active['"]/.test(body))
+            bad.push(`${desk} sendAgentMessage 未校验接待窗口（仅 active 态·防越窗发已结束/未接会话·B6）`)
+          if (!/kfSend|sendMsg\s*\(/.test(body))
+            bad.push(`${desk} sendAgentMessage 未经 kfSend/sendMsg 发送接缝（非真发送·接缝单点#12）`)
+        }
+      }
+      return bad
+    },
+  },
+  {
+    // 数据共享告知同意（后台360工作站 §1.5·B3.3·承面C 车道 C·根因#3 信任边界）：外包/第三方坐席（≠商户
+    // 本人）看客户 360 数据前须有「告知同意」——不同于 C 端微信隐私授权（privacy-authorize-wired 管小程序
+    // 系统级隐私接口）。这是「第三方访问客户数据」的义务，焊三件：① 协议/隐私页如实声明外包/第三方客服可
+    // 访问客户数据（**文案已声明**·法律定稿归律师·CC 只机械化不判措辞对错·守 cc-scope-mechanical-not-legal）；
+    // ② kit/csAccess 有 fail-closed assertDataShareConsent 同意闸（未同意即 ok:false 拒·非默认放行）；
+    // ③ cs/dataConsent 经 withOpenId 写 users.csDataShare·agreed 双向可切（用户同意 + 可撤回）。防第三方
+    // 访问客户数据「零告知/零同意闸」。C3 outsourced-reads-scoped 焊 scope、本条焊 consent，两层各守其面。
+    id: 'cs-data-share-consented',
+    roots: ['#3'],
+    desc: '数据共享告知同意（§1.5·B3.3·承面C 车道 C·根因#3）：外包/第三方坐席看客户数据前须有告知同意——① 协议/隐私页如实声明外包/第三方客服可访问客户数据（文案已声明·法律定稿归律师）；② kit/csAccess 有 fail-closed assertDataShareConsent 同意闸（未同意即 ok:false 拒·非默认放行）；③ cs/dataConsent 经 withOpenId 写 users.csDataShare（用户同意 + 可撤回）。独立于 C 端 privacy-authorize-wired',
+    run() {
+      const bad = []
+      // ① 声明文案：协议/隐私页如实披露外包/第三方客服访问客户数据（CC 只核「已声明」·法律对错归律师）
+      const agr = 'packages/miniapp/src/pages/agreement/index.vue'
+      if (!existsSync(join(ROOT, agr))) bad.push(`${agr} 缺失（协议/隐私页·声明落点）`)
+      else {
+        const s = readFileSync(join(ROOT, agr), 'utf8')
+        // 锚定 §3 声明专属措辞「受托客服」（导航标签/注释里不出现·防「关键词散落别处→删声明仍假绿」·反向自检逼出）+ 外包概念
+        if (!/受托客服/.test(s) || !/外包/.test(s))
+          bad.push(`${agr} 隐私政策未声明外包/受托（第三方）客服可访问客户数据——数据共享告知缺声明（§1.5·B3.3·文案已声明·法律定稿归律师）`)
+      }
+      // ② fail-closed 同意闸：kit/csAccess assertDataShareConsent 存在且默认拒（未同意即 ok:false·非默认放行）
+      const acc = 'packages/cloud/src/kit/csAccess.ts'
+      if (!existsSync(join(ROOT, acc))) bad.push(`${acc} 缺失——无数据共享同意闸（§1.5·B3.3）`)
+      else {
+        const s = readFileSync(join(ROOT, acc), 'utf8')
+        if (!/export\s+(async\s+)?function\s+assertDataShareConsent|export\s+const\s+assertDataShareConsent/.test(s))
+          bad.push(`${acc} 无 assertDataShareConsent 同意闸（§1.5·B3.3）`)
+        // fail-closed：精确焊未同意的拒绝返回形状 { ok:false, error:'NO_CONSENT' }——防 ok:false→ok:true 篡改假绿（反向自检逼出·邻近匹配会串到别的函数）
+        else if (!/\{\s*ok:\s*false,\s*error:\s*'NO_CONSENT'\s*\}/.test(s))
+          bad.push(`${acc} assertDataShareConsent 无 { ok:false, error:'NO_CONSENT' } 拒绝返回——同意闸空转默认放行（§1.5·根因#3）`)
+      }
+      // ③ 用户同意 + 可撤回：cs/dataConsent 经 withOpenId 写 users.csDataShare（agreed 双向可切＝撤回）
+      const dc = 'packages/cloud/src/functions/cs/dataConsent/index.ts'
+      if (!existsSync(join(ROOT, dc))) bad.push(`${dc} 缺失——无用户同意/撤回机制（§1.5·B3.3）`)
+      else {
+        const s = readFileSync(join(ROOT, dc), 'utf8')
+        if (!/csDataShare/.test(s)) bad.push(`${dc} 未写 users.csDataShare 同意态（§1.5·B3.3）`)
+        if (!/withOpenId/.test(s)) bad.push(`${dc} 未经 withOpenId 闸——同意写入未验本人（根因#3）`)
+      }
+      return bad
+    },
+  },
+  {
+    // 外包读路径分配 scope 防批量导出（后台360工作站 §1 定稿/B6·承面C 车道 C·根因#3 信任边界）：外包坐席
+    // （outsourced）「查」权只应及**自己 claim 的会话 + 对应 360**（分配制）——否则一个外包账号即可遍历
+    // 全量客户 360＝批量导出。守此不变量：① kit/csAccess 有 fail-closed assertOwnedByAgent（会话 agentId≠本
+    // 坐席即 ok:false 拒·会话不存在亦拒·非默认放行）且经 kit 导出（车道 A 引用）；② 车道 A 坐席台 per-session
+    // 读/操作 action（getThread/sendAgentMessage/release/escalate/close·落 functions/cs/agentDesk/）落地时须引
+    // assertOwnedByAgent 校验会话归属（本守卫在其文件出现时才真发挥·接缝见承面C工单 §3 车道 A + 车道 C ready
+    // 报告）。**外包 customer:view 无 scope 批量读（searchCustomer/getCustomer360）是另一层 RBAC 决策·adminRbac
+    // 测试锁死现含 customer:view·报 master/车道 A 协调收窄·本守卫不越界改共享 ROLES / 破锁测**。守卫定义在车道 C。
+    id: 'outsourced-reads-scoped',
+    roots: ['#3'],
+    desc: '外包读路径分配 scope 防批量导出（§1 定稿·B6·承面C 车道 C·根因#3）：① kit/csAccess 有 fail-closed assertOwnedByAgent（会话 agentId≠本坐席/会话不存在即 ok:false 拒·非默认放行）并经 kit 导出；② 车道 A 坐席台 per-session 读/操作 action（adminApi/actions/agentDesk.ts 里 getThread/sendAgentMessage/release/escalate/close）须引 assertOwnedByAgent 校验会话归属（防一外包账号遍历全量客户 360＝批量导出）。master 整合已收敛：外包端态 caps 收窄为仅 agent:handle（去掉裸 customer:view·闭合批量读洞）+ 坐席台 scope 走 assertOwnedByAgent 单源',
+    run() {
+      const bad = []
+      const acc = 'packages/cloud/src/kit/csAccess.ts'
+      if (!existsSync(join(ROOT, acc))) return [`${acc} 缺失——无外包读 scope 闸（§1 定稿·B6·根因#3）`]
+      const s = readFileSync(join(ROOT, acc), 'utf8')
+      // ① assertOwnedByAgent 存在 + fail-closed（会话归属不符/不存在即 ok:false 拒·查真实代码非注释）
+      if (!/export\s+(async\s+)?function\s+assertOwnedByAgent|export\s+const\s+assertOwnedByAgent/.test(s))
+        bad.push(`${acc} 无 assertOwnedByAgent scope 闸（§1 定稿·B6·防批量导出）`)
+      // fail-closed：精确焊会话归属不符的拒绝返回形状 { ok:false, error:'NOT_OWNER' }——防 ok:false→ok:true 篡改假绿（反向自检逼出·邻近匹配会串到别的函数）
+      else if (!/\{\s*ok:\s*false,\s*error:\s*'NOT_OWNER'\s*\}/.test(s))
+        bad.push(`${acc} assertOwnedByAgent 无 { ok:false, error:'NOT_OWNER' } 拒绝返回——scope 闸空转默认放行（§1 定稿·根因#3）`)
+      // ② 经 kit 导出（车道 A 引用·防私有不可用）
+      const idx = 'packages/cloud/src/kit/index.ts'
+      if (existsSync(join(ROOT, idx)) && !/assertOwnedByAgent/.test(readFileSync(join(ROOT, idx), 'utf8')))
+        bad.push(`${idx} 未导出 assertOwnedByAgent——车道 A 坐席台无法引用 scope 闸（接缝·§3 车道 A）`)
+      // ③ 车道 A per-session 读/操作 action 须引 scope 闸（master 整合校正：车道 A 落点＝adminApi/actions/agentDesk.ts
+      //    ·非 functions/cs/agentDesk/·作为 adminApi action 复用口令闸/ACTION_CAPS）。该文件出现 per-session action 即须引 assertOwnedByAgent。
+      const deskFile = join(ROOT, 'packages/cloud/src/functions/admin/adminApi/actions/agentDesk.ts')
+      if (existsSync(deskFile)) {
+        const src = readFileSync(deskFile, 'utf8')
+        const perSession = /\b(getThread|sendAgentMessage|releaseConversation|escalateToMerchant|closeConversation)\b/.test(src)
+        // 查真实调用 assertOwnedByAgent( 而非裸 token（防注释里提一句就假绿·反向自检逼出·根因#8）
+        if (perSession && !/assertOwnedByAgent\s*\(/.test(src))
+          bad.push(`${relative(ROOT, deskFile)} per-session 读/操作 action 未真调 assertOwnedByAgent() 校验会话归属——外包可越 scope 读他人会话/批量导出（§1 定稿·B6·根因#3）`)
+      }
       return bad
     },
   },
@@ -2241,6 +2341,68 @@ export const repoChecks = [
       return bad
     },
   },
+  // ── 承面 C 车道 B·外包坐席工作台前端（独立 /agent 部署单元·对 mock 建·不进 /admin）守卫 ──
+  {
+    id: 'agent-desk-registered',
+    roots: ['承面C'],
+    desc: '承面C 车道 B·外包坐席工作台接线（独立 /agent 部署单元·不进 /admin）：packages/agent 入口(main.js/App.vue/router.js) + Login/Desk 页 + 接缝(agentApi.js)/mock 存在，router 注册 /login 与 /desk——防独立工作台漏接线/路由缺失（同 my-courses-entry/kf-card-page-registered 接线守卫）',
+    run() {
+      const bad = []
+      const base = 'packages/agent/src'
+      const need = ['main.js', 'App.vue', 'router.js', 'pages/Login.vue', 'pages/Desk.vue', 'api/agentApi.js', 'api/mock.js']
+      for (const f of need)
+        if (!existsSync(join(ROOT, base, f))) bad.push(`${base}/${f} 缺失（外包坐席工作台接线·承面C 车道 B）`)
+      const routerAbs = join(ROOT, base, 'router.js')
+      if (existsSync(routerAbs)) {
+        const r = readFileSync(routerAbs, 'utf8')
+        for (const p of ["'/login'", "'/desk'"])
+          if (!r.includes(p)) bad.push(`${base}/router.js 未注册路由 ${p}（工作台入口缺失·承面C 车道 B）`)
+      }
+      return bad
+    },
+  },
+  {
+    id: 'agent-poll-cleanup',
+    roots: ['承面C', '#8'],
+    desc: '承面C 车道 B·轮询 timer 清理（实时=轮询 getThread/listQueue·§1 定稿）：packages/agent 下任何 setInterval 的 .vue 必同时有 clearInterval + onUnmounted/onBeforeUnmount 卸载清理——防切会话/卸载后 timer 泄漏持续拉取（根因#8 运行时坑·同 pull-refresh-stops/events-cleanup-wired）',
+    run() {
+      const bad = []
+      const dir = join(ROOT, 'packages/agent/src')
+      if (!existsSync(dir)) return bad
+      for (const f of walk(dir)) {
+        if (!f.endsWith('.vue')) continue
+        const s = readFileSync(f, 'utf8')
+        if (!s.includes('setInterval')) continue
+        const rel = relative(ROOT, f)
+        if (!s.includes('clearInterval'))
+          bad.push(`${rel} 用 setInterval 却无 clearInterval——轮询 timer 未清理（根因#8·承面C 车道 B）`)
+        if (!/onUnmounted|onBeforeUnmount/.test(s))
+          bad.push(`${rel} 用 setInterval 却无 onUnmounted/onBeforeUnmount——卸载不清理 timer（根因#8·承面C 车道 B）`)
+      }
+      return bad
+    },
+  },
+  {
+    id: 'agent-api-single-seam',
+    roots: ['承面C'],
+    desc: '承面C 车道 B·前后端单点接缝（mock↔真接口）：packages/agent 下唯 api/agentApi.js 可 import api/mock.js——组件/页面/其他模块禁直接引 mock（否则 master 整合切车道 A 真接口时假数据散落、「组件零改」承诺破功）。同 api-cloud-only 精神：可替换点收口一处',
+    run() {
+      const bad = []
+      const dir = join(ROOT, 'packages/agent/src')
+      if (!existsSync(dir)) return bad
+      const SEAM = 'packages/agent/src/api/agentApi.js'
+      const MOCK = 'packages/agent/src/api/mock.js'
+      for (const f of walk(dir)) {
+        if (!/\.(js|vue)$/.test(f)) continue
+        const rel = relative(ROOT, f)
+        if (rel === SEAM || rel === MOCK) continue // 接缝自身与 mock 自身豁免
+        const s = readFileSync(f, 'utf8')
+        if (/from\s+['"][^'"]*\/mock(\.js)?['"]/.test(s))
+          bad.push(`${rel} 直接 import api/mock.js——只能经 api/agentApi.js 单点接缝调用（承面C 车道 B·防假数据散落、整合切真接口时组件零改）`)
+      }
+      return bad
+    },
+  },
   {
     // 店名单一来源（决策 R23 / 占位⑲，2026-06-15 定名「Lucky Ducky 小棉鸭」）。病根#5「样板复制即漂移」：
     // 店名曾在 order/checkout/welcome/BrandIntro/GroupPanel/productDetail 六处硬编码（order↔checkout 还逐字重复），
@@ -2530,7 +2692,7 @@ export const repoChecks = [
     // 防大客户 360 聚合一次拉爆某板块（坐席查一个老客户即拖垮整页·架构规范铁律三注「每 provider bounded」）。
     id: 'capacity-reads-bounded',
     roots: ['规模'],
-    desc: '读路径不静默封顶（债#18/#22·规模）：dashboard 计数走 .count() 精确、batches 列表分页全取（禁裸 limit(1000)）；customer360/providers/ 每个 provider 列表 .get() 须带 .limit()（防大客户 360 拖垮·铁律三）',
+    desc: '读路径不静默封顶（债#18/#22·规模）：dashboard 计数走 .count() 精确、batches 列表分页全取（禁裸 limit(1000)）；customer360/providers/ 每个 provider 列表 .get() 须带 .limit()（防大客户 360 拖垮·铁律三）；承面C 坐席台 agentDesk listQueue/getThread 列表读须带 .limit()（防大待接队列/长会话拖垮·B6）',
     run() {
       const bad = []
       const dash = 'packages/cloud/src/functions/admin/adminApi/actions/dashboard.ts'
@@ -2552,6 +2714,23 @@ export const repoChecks = [
           const src = readFileSync(join(provDir, e), 'utf8')
           if (/\.get\s*\(/.test(src) && !/\.limit\s*\(/.test(src))
             bad.push(`customer360/providers/${e} 列表 .get() 未带 .limit() 上界——provider 读须 bounded（防大客户 360 拖垮·铁律三）`)
+        }
+      }
+      // 承面C 坐席台读路径 bounded（B6·根因#7）：listQueue（待接队列）/getThread（会话消息流）列表读须带 .limit() 上界
+      const desk = join(ROOT, 'packages/cloud/src/functions/admin/adminApi/actions/agentDesk.ts')
+      if (existsSync(desk)) {
+        const dsrc = readFileSync(desk, 'utf8')
+        const sliceFn = (name) => {
+          const st = dsrc.indexOf('export async function ' + name)
+          if (st < 0) return ''
+          const nx = dsrc.indexOf('export async function ', st + 1)
+          return nx < 0 ? dsrc.slice(st) : dsrc.slice(st, nx)
+        }
+        for (const fn of ['listQueue', 'getThread']) {
+          const body = sliceFn(fn)
+          if (!body) bad.push(`agentDesk.ts 缺 ${fn}（承面C 坐席台读路径·B6）`)
+          else if (!/\.limit\s*\(/.test(body))
+            bad.push(`agentDesk.ts ${fn} 列表读未带 .limit() 上界——坐席台读须 bounded（防大待接队列/长会话拖垮·根因#7·B6）`)
         }
       }
       return bad
@@ -3051,7 +3230,7 @@ export const repoChecks = [
     // 函数私自越流转（写未声明状态 / transition 走未声明边）当场红——防「散写各自背诵规则」回归。
     id: 'order-transitions-declared',
     roots: ['#2', 'P3'],
-    desc: '订单+learning 域状态写入只走声明流转（根因#2·P3 spike·扩 learning）：transition(orders/afterSales/qrcodes) 的边须在 order.spec.ts/learning.spec.ts 声明流转表内；写这些集合 status 的字面量须是声明状态——函数私自越流转/写未声明状态即红（扫 functions/orders+learning + admin orders/refunds）',
+    desc: '订单+learning+cs 域状态写入只走声明流转（根因#2·P3 spike·扩 learning·承面C 扩 cs）：transition(orders/afterSales/qrcodes/csSession) 的边须在 order.spec.ts/learning.spec.ts/cs.spec.ts 声明流转表内；写这些集合 status 的字面量须是声明状态——函数私自越流转/写未声明状态即红（扫 functions/orders+learning + admin orders/refunds/agentDesk）',
     run() {
       const jsonPath = join(ROOT, 'scripts/order-domain.generated.json')
       if (!existsSync(jsonPath)) return ['scripts/order-domain.generated.json 缺失——跑 `node scripts/gen-order-domain.mjs`（订单域声明派生物·P3）']
@@ -3080,7 +3259,8 @@ export const repoChecks = [
         const abs = join(ROOT, dir)
         if (existsSync(abs)) for (const e of readdirSync(abs)) if (e.endsWith('.ts')) files.push(join(abs, e))
       }
-      for (const a of ['orders.ts', 'refunds.ts']) {
+      // + 承面C 坐席台 actions（B6·transition('csSession')·对账 cs 流转·工单 §3 车道 A）
+      for (const a of ['orders.ts', 'refunds.ts', 'agentDesk.ts']) {
         const p = join(ROOT, 'packages/cloud/src/functions/admin/adminApi/actions', a)
         if (existsSync(p)) files.push(p)
       }

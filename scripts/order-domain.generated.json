@@ -169,6 +169,13 @@
         "from": [
           "active"
         ],
+        "to": "pending",
+        "trigger": "releaseConversation（坐席放手退回待接队列·调 activeCount）"
+      },
+      {
+        "from": [
+          "active"
+        ],
         "to": "closed",
         "trigger": "closeConversation（坐席结束会话·触 CSAT）"
       },

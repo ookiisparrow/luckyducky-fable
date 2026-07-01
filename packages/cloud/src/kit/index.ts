@@ -52,3 +52,5 @@ export {
   kfCustomerBatchget,
 } from './wecom'
 export type { KfTrustedEvent } from './wecom'
+// 承面 C 外包会话访问控制闸（§1.5·B3.3/B6·车道 C·守卫 cs-data-share-consented / outsourced-reads-scoped）
+export { assertDataShareConsent, assertOwnedByAgent } from './csAccess'

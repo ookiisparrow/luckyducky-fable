@@ -20,6 +20,7 @@ export const CS_SESSION_TRANSITIONS: ReadonlyArray<{ from: readonly CsSessionSta
   { from: ['pending'], to: 'active' }, // claimConversation（坐席认领接起·绑 agentId·受接待上限约束）
   { from: ['pending'], to: 'closed' }, // closeConversation（超时未接/顾客离开·放弃排队）
   { from: ['active'], to: 'escalated' }, // escalateToMerchant（外包答不了·升级转商户超管·外包最小权只能升不能拍板）
+  { from: ['active'], to: 'pending' }, // releaseConversation（坐席放手退回待接队列·调 activeCount）
   { from: ['active'], to: 'closed' }, // closeConversation（坐席结束会话·触 CSAT）
   { from: ['escalated'], to: 'active' }, // claimConversation（商户/坐席重新接手升级来的会话）
   { from: ['escalated'], to: 'closed' }, // closeConversation（商户处理完关闭·触 CSAT）

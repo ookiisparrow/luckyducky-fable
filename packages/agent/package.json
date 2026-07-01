@@ -1,0 +1,21 @@
+{
+  "name": "luckyducky-agent",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Lucky Ducky 外包坐席工作台（承面 C·独立部署单元·部署到静态托管 /agent；与 /admin 分开）",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "lucide-vue-next": "^1.0.0",
+    "vue": "^3.4.21",
+    "vue-router": "^4.3.0"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-vue": "^5.0.4",
+    "vite": "^5.2.8"
+  }
+}

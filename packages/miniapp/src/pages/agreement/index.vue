@@ -78,7 +78,7 @@ const PRIVACY = {
     ],
     [
       '第三条 对外提供与第三方',
-      '为完成支付与退款，相关交易信息会提供给微信支付；本小程序基于微信云开发（腾讯云）提供后端服务与数据存储；当你在订单中查询物流轨迹时，相关快递单号会提供给第三方物流查询服务“快递100”，仅用于查询并向你展示配送进度。除法律要求或为完成上述服务所必需外，我们不会向第三方提供你的个人信息。你提供的收货信息在你选择配送时用于履约。',
+      '为完成支付与退款，相关交易信息会提供给微信支付；本小程序基于微信云开发（腾讯云）提供后端服务与数据存储；当你在订单中查询物流轨迹时，相关快递单号会提供给第三方物流查询服务“快递100”，仅用于查询并向你展示配送进度。为向你提供客服与售后支持，我们可能安排外包或第三方客服（受托客服人员）在为你服务所必需的范围内查看你的订单、物流、学习进度与咨询记录等数据以响应你的请求；此类第三方受托客服访问以你的同意为前提，你可随时在小程序内查看并撤回该数据共享授权（撤回后不影响此前已依约进行的处理）。除法律要求或为完成上述服务所必需外，我们不会向第三方提供你的个人信息。你提供的收货信息在你选择配送时用于履约。',
     ],
     [
       '第四条 信息的存储与安全',
@@ -117,6 +117,8 @@ onLoad((q) => {
   data.value = MAP[q && q.type] || USER
 })
 const back = () => goBack('/pages/index/index')
+// 数据共享授权入口（承面C 车道 C·B3.3）：隐私视图下可跳「数据共享授权」页同意/撤回外包客服访问客户数据。
+const goConsent = () => uni.navigateTo({ url: '/pkg-extra/consent/index' })
 </script>
 
 <template>
@@ -129,6 +131,9 @@ const back = () => goBack('/pages/index/index')
         <view v-for="(a, i) in data.articles" :key="i" class="agree-art">
           <text class="agree-h">{{ a[0] }}</text>
           <text class="agree-p">{{ a[1] }}</text>
+        </view>
+        <view v-if="data === PRIVACY" class="agree-consent" @tap="goConsent">
+          <text class="agree-consent-t">管理数据共享授权 ›</text>
         </view>
         <text class="agree-note">如对本条款有任何疑问，可通过本小程序客服与我们联系。</text>
       </view>
@@ -176,5 +181,17 @@ const back = () => goBack('/pages/index/index')
   margin-top: 8px;
   font-size: 12px;
   color: $purple-meta;
+}
+.agree-consent {
+  margin: 14px 0 4px;
+  padding: 12px 14px;
+  border-radius: 10px;
+  background: $bg-lilac;
+  border: 1px solid $purple-line;
+}
+.agree-consent-t {
+  font-size: 13px;
+  font-weight: 600;
+  color: $brand;
 }
 </style>
