@@ -2,9 +2,9 @@
  * 承面 C 坐席台 · 前后端接缝（**单点**·唯一 mock ↔ 真接口切换处）。
  *
  * 组件/页面只经本模块调用后端，**绝不直接引 api/mock.js**（守卫 agent-api-single-seam 焊之）——
- * master 整合车道 A 真接口时，只需配 VITE_ADMIN_API，本模块自动从 mock 切到真 adminApi 网关，
- * 组件零改。8 个坐席 action + getCustomer360 + listKb 均走同一网关（同 admin/api/cloud.js 的
- * `{ action, key, data }` POST 形状；cap agent:handle / customer:view·见 shared/csAgentDesk.ts）。
+ * 配 VITE_ADMIN_API（.env.production 已配生产网关）即自动从 mock 切到真 adminApi 网关，组件零改。
+ * 10 个坐席 action + listKb 均走同一网关（同 admin/api/cloud.js 的 `{ action, key, data }` POST 形状；
+ * cap 全部 agent:handle——外包无 customer:view，360 走 getSessionCustomer360 scoped 路径·见 shared/csAgentDesk.ts）。
  *
  * 模式：
  *  - mock（默认·车道 B 对 mock 建）：不配 VITE_ADMIN_API 或 VITE_AGENT_MOCK=1 → 走 mock.handle。
@@ -94,7 +94,7 @@ export async function login(password) {
 // 刷新页面后恢复 mock 内部 agentId（保 claim 归属一致·mock 态不持久）。
 if (useMock && isLoggedIn()) mock.resume('agent_demo')
 
-// ── 8 个坐席 action（严格贴 shared/csAgentDesk.ts 的 Req/Res）───────────────
+// ── 10 个坐席 action（严格贴 shared/csAgentDesk.ts 的 Req/Res）──────────────
 export const listQueue = (params = {}) => call('listQueue', params) // { limit?, cursor? } → { ok, items, nextCursor? }
 export const claimConversation = (sessionId) => call('claimConversation', { sessionId }) // → { ok, session }
 export const releaseConversation = (sessionId) => call('releaseConversation', { sessionId }) // → { ok }
@@ -103,7 +103,8 @@ export const getThread = (sessionId, cursor) => call('getThread', { sessionId, c
 export const setAgentStatus = (status) => call('setAgentStatus', { status }) // → { ok }
 export const escalateToMerchant = (sessionId) => call('escalateToMerchant', { sessionId }) // → { ok }
 export const closeConversation = (sessionId) => call('closeConversation', { sessionId }) // → { ok }
+export const listMyActive = () => call('listMyActive', {}) // → { ok, sessions }（刷新恢复在接·follow-up ②）
 
-// ── 侧栏 360（复用 getCustomer360·cap customer:view）+ 快捷回复（复用 listKb）──
-export const getCustomer360 = (openid) => call('getCustomer360', { openid }) // → { ok, openid, panels }
+// ── 侧栏 360（scoped 版·follow-up ①：外包无 customer:view·按会话经双闸看对应客户）+ 快捷回复 ──
+export const getSessionCustomer360 = (sessionId) => call('getSessionCustomer360', { sessionId }) // → { ok, openid, panels } | { ok:false, error:'NO_BRIDGE'|'NO_CONSENT' }
 export const listKb = () => call('listKb', {}) // → { ok, list:[{id,question,answer}] }

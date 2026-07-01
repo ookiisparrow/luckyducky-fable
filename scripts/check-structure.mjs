@@ -784,7 +784,7 @@ export const repoChecks = [
   {
     id: 'cs-360-read-audited',
     roots: ['#3'],
-    desc: '360 读他人全貌破例留痕（§1.5·根因#3）：getCustomer360/getUser/searchCustomer 是「坐席批量读他人订单/PII/学习轨迹/检索客户」越权面，shouldAudit 跳 ^get 不覆盖 get* 类——kit/audit.ts 须有 FORCE_AUDIT 名单含三者强制留痕（防 PII 访问 0 痕·B1.2 扩 getUser/searchCustomer）',
+    desc: '360 读他人全貌破例留痕（§1.5·根因#3）：getCustomer360/getUser/searchCustomer/getSessionCustomer360 是「坐席批量读他人订单/PII/学习轨迹/检索客户」越权面，shouldAudit 跳 ^get 不覆盖 get* 类——kit/audit.ts 须有 FORCE_AUDIT 名单含四者强制留痕（防 PII 访问 0 痕·B1.2 扩 getUser/searchCustomer·接真接口批扩外包 scoped 读）',
     run() {
       const audit = 'packages/cloud/src/kit/audit.ts'
       if (!existsSync(join(ROOT, audit))) return [`${audit} 缺失——审计原语`]
@@ -794,7 +794,7 @@ export const repoChecks = [
       const set = src.match(/FORCE_AUDIT\s*=\s*new Set\(\[([\s\S]*?)\]\)/)
       if (!set) bad.push(`${audit} 无 FORCE_AUDIT 名单——360 读越权面无法破例留痕（§1.5·根因#3）`)
       else
-        for (const a of ['getCustomer360', 'getUser', 'searchCustomer'])
+        for (const a of ['getCustomer360', 'getUser', 'searchCustomer', 'getSessionCustomer360'])
           if (!new RegExp(`['"]${a}['"]`).test(set[1]))
             bad.push(`${audit} FORCE_AUDIT 未含 ${a}——读他人全貌/检索 0 留痕（§1.5·根因#3）`)
       return bad
@@ -958,6 +958,21 @@ export const repoChecks = [
         if (!/csDataShare/.test(s)) bad.push(`${dc} 未写 users.csDataShare 同意态（§1.5·B3.3）`)
         if (!/withOpenId/.test(s)) bad.push(`${dc} 未经 withOpenId 闸——同意写入未验本人（根因#3）`)
       }
+      // ④ 读侧真实消费者（scoped-360-for-outsourced·接真接口批落地）：外包看 claim 会话对应 360 的唯一路径
+      //    getSessionCustomer360 须真调 assertDataShareConsent(（外包读须过同意闸·非只有 write 侧空转）——
+      //    防「同意闸建了没人消费＝摆设」（元模式·别摆设守卫）。查真实调用非注释（根因#8）。
+      const desk = 'packages/cloud/src/functions/admin/adminApi/actions/agentDesk.ts'
+      if (existsSync(join(ROOT, desk))) {
+        const s = readFileSync(join(ROOT, desk), 'utf8')
+        const st = s.indexOf('export async function getSessionCustomer360')
+        if (st < 0) bad.push(`${desk} 缺 getSessionCustomer360——外包无 scoped 360 读路径（收窄后直调 getCustomer360 已 403·B 侧栏接真断头·§1.5）`)
+        else {
+          const nx = s.indexOf('export async function ', st + 1)
+          const body = nx < 0 ? s.slice(st) : s.slice(st, nx)
+          if (!/assertDataShareConsent\s*\(/.test(body))
+            bad.push(`${desk} getSessionCustomer360 未真调 assertDataShareConsent()——外包读客户 360 绕过数据共享同意闸（§1.5·B3.3·根因#3）`)
+        }
+      }
       return bad
     },
   },
@@ -993,7 +1008,7 @@ export const repoChecks = [
       const deskFile = join(ROOT, 'packages/cloud/src/functions/admin/adminApi/actions/agentDesk.ts')
       if (existsSync(deskFile)) {
         const src = readFileSync(deskFile, 'utf8')
-        const perSession = /\b(getThread|sendAgentMessage|releaseConversation|escalateToMerchant|closeConversation)\b/.test(src)
+        const perSession = /\b(getThread|sendAgentMessage|releaseConversation|escalateToMerchant|closeConversation|getSessionCustomer360)\b/.test(src)
         // 查真实调用 assertOwnedByAgent( 而非裸 token（防注释里提一句就假绿·反向自检逼出·根因#8）
         if (perSession && !/assertOwnedByAgent\s*\(/.test(src))
           bad.push(`${relative(ROOT, deskFile)} per-session 读/操作 action 未真调 assertOwnedByAgent() 校验会话归属——外包可越 scope 读他人会话/批量导出（§1 定稿·B6·根因#3）`)

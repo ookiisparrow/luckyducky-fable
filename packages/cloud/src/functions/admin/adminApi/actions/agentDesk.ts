@@ -1,5 +1,6 @@
 import { reply, str, type Ctx } from '../lib'
-import { transition, pageParams, COLLECTIONS, assertOwnedByAgent } from '../../../../kit'
+import { transition, pageParams, COLLECTIONS, assertOwnedByAgent, assertDataShareConsent } from '../../../../kit'
+import { assembleCustomer360 } from '../customer360/orchestrator'
 
 // 承面 C 外包会话工作台·坐席台后端（B6.1–6.3·板块#12）。实现 shared/csAgentDesk.ts 契约的 8 个 action：
 //   listQueue / claimConversation / releaseConversation / sendAgentMessage / getThread /
@@ -95,11 +96,13 @@ async function loadSession(db: any, sessionId: string): Promise<any | null> {
 
 // ── ① listQueue：待接队列（pending 会话·FIFO createdAt 升序·bounded cursor/limit·根因#7）──
 // 待接队列对所有坐席可见（pending 会话无归属·可被任一坐席认领）；分配 scope 只在认领后的读/操作侧生效。
+// 超管队列另含 escalated（外包甩单只有商户能看见/重接——否则 escalateToMerchant 是黑洞·接真接口批补）。
 export async function listQueue(ctx: Ctx): Promise<any> {
   const { db, data } = ctx
-  const { limit, cursor } = pageParams(data, LIST_LIMIT)
+  const p = principal(ctx)
   const _ = db.command
-  const filter: Record<string, any> = { status: 'pending' }
+  const { limit, cursor } = pageParams(data, LIST_LIMIT)
+  const filter: Record<string, any> = { status: p.isSuper ? _.in(['pending', 'escalated']) : 'pending' }
   if (cursor != null) filter.createdAt = _.gt(cursor) // 游标＝上一页末条 createdAt·取其后（FIFO 续页）
   const res = await db
     .collection(COLLECTIONS.csSession)
@@ -303,4 +306,48 @@ export async function closeConversation(ctx: Ctx): Promise<any> {
       .catch(() => {})
   }
   return reply(200, { ok: true })
+}
+
+// ── ⑨ listMyActive：本坐席在接（active）会话（follow-up ②·刷新/重登后恢复在接·多会话切换）──
+// 只回 agentId===认证主体 的 active 会话（天然 scoped·非批量导出面）；bounded（接待上限本就 ≤limit·仍封顶防漂）。
+export async function listMyActive(ctx: Ctx): Promise<any> {
+  const { db, data } = ctx
+  const p = principal(ctx)
+  if (!p.agentId) return reply(403, { ok: false, error: 'NO_AGENT' })
+  const { limit } = pageParams(data, LIST_LIMIT)
+  const res = await db
+    .collection(COLLECTIONS.csSession)
+    .where({ agentId: p.agentId, status: 'active' })
+    .orderBy('claimedAt', 'asc')
+    .limit(limit)
+    .get()
+    .catch(() => ({ data: [] }))
+  const rows: any[] = (res && res.data) || []
+  const sessions = await Promise.all(rows.map(async (s) => toView(s, await resolveOpenid(db, s))))
+  return reply(200, { ok: true, sessions })
+}
+
+// ── ⑩ getSessionCustomer360：按会话看对应客户 360（follow-up ①·外包唯一 360 读路径·§1.5 双闸）──
+// RBAC 收窄后外包无 customer:view、直调 getCustomer360 已 403（防批量导出）——外包看 360 只能走本 scoped 路径：
+// ① 分配 scope（scopedLoad→assertOwnedByAgent·只看自己 claim 的会话·超管数据控制者 bypass）；
+// ② 数据共享同意闸（assertDataShareConsent·客户未同意第三方访问即拒·fail-closed·读侧真实消费者·B3.3）。
+// 留痕：FORCE_AUDIT 含本 action（^get 被 shouldAudit 跳过·破例强制留痕·守卫 cs-360-read-audited）。
+export async function getSessionCustomer360(ctx: Ctx): Promise<any> {
+  const { db, data } = ctx
+  const p = principal(ctx)
+  const sessionId = str(data && data.sessionId, 200)
+  if (!sessionId) return reply(400, { ok: false, error: 'BAD_ARGS' })
+  const sl = await scopedLoad(db, p, sessionId)
+  if (sl.code) return reply(sl.code, { ok: false, error: sl.code === 404 ? 'NOT_FOUND' : 'FORBIDDEN' }) // 分配 scope
+  const s = sl.s
+  const openid = await resolveOpenid(db, s)
+  if (!openid) return reply(200, { ok: false, error: 'NO_BRIDGE' }) // 身份桥接未建（kfIdentity 无映射）·如实回·前端有提示
+  if (!p.isSuper) {
+    // 数据共享同意（§1.5·B3.3·根因#3 fail-closed）：外包（第三方受托客服）看客户 360 前客户须已同意；
+    // 超管＝商户本人＝数据控制者，走现有隐私政策覆盖、不经本闸（csAccess 头注口径）。
+    const consent = await assertDataShareConsent(db, openid)
+    if (!consent.ok) return reply(403, { ok: false, error: 'NO_CONSENT' })
+  }
+  const result = await assembleCustomer360(db, openid)
+  return reply(200, { ok: true, ...result })
 }

@@ -1,13 +1,15 @@
 <script setup>
 /**
- * 客户 360 侧栏（B2·复用 getCustomer360 编排器·cap customer:view + 后端强制审计留痕）。
+ * 客户 360 侧栏（B2·scoped 版·follow-up ①）：按**会话**调 getSessionCustomer360（外包唯一 360 读路径·
+ * cap agent:handle·后端双闸：分配 scope assertOwnedByAgent + 数据共享同意 assertDataShareConsent + 强制审计留痕）。
  * 通用渲染 panels 数组（铁律三·后端给什么面板渲什么·不硬编码面板类型），与 admin Customer360.vue 同构。
- * 身份桥接（kfIdentity）未建时 SessionView.openid 为 null → 无法拉 360（真实存在的状态·根因#8·如实提示）。
+ * 身份桥接（kfIdentity）未建时 openid 为 null → 后端回 NO_BRIDGE（真实存在的状态·根因#8·如实提示）；
+ * 客户未同意数据共享 → NO_CONSENT（fail-closed·如实提示坐席·不静默空白）。
  */
 import { ref, watch } from 'vue'
-import { getCustomer360 } from '@/api/agentApi.js'
+import { getSessionCustomer360 } from '@/api/agentApi.js'
 
-const props = defineProps({ openid: { type: String, default: null } })
+const props = defineProps({ session: { type: Object, default: null } }) // SessionView（null=未接入会话）
 
 const panels = ref([])
 const loading = ref(false)
@@ -39,14 +41,24 @@ function fmtVal(k, v) {
   return String(v)
 }
 
-async function load(openid) {
+// 后端拒绝态 → 坐席可读的解释（如实提示·不静默空白）
+const DENY_HINTS = {
+  NO_BRIDGE: '该会话尚未建立身份桥接（客户未登录小程序 / kfIdentity 未建），暂无法关联客户档案。',
+  NO_CONSENT: '该客户尚未同意向受托客服共享数据（隐私保护），档案不可见——如需核单请「升级转商户」处理。',
+  FORBIDDEN: '只能查看自己认领会话的客户档案。',
+}
+const denied = ref('')
+
+async function load(session) {
   panels.value = []
   err.value = ''
-  if (!openid) return
+  denied.value = ''
+  if (!session || !session.sessionId) return
   loading.value = true
   try {
-    const r = await getCustomer360(openid)
-    panels.value = (r && r.panels) || []
+    const r = await getSessionCustomer360(session.sessionId)
+    if (r && r.ok) panels.value = r.panels || []
+    else denied.value = DENY_HINTS[r && r.error] || '暂时取不到该客户档案。'
   } catch (e) {
     err.value = '加载 360 失败：' + e.message
   } finally {
@@ -54,15 +66,16 @@ async function load(openid) {
   }
 }
 
-watch(() => props.openid, (v) => load(v), { immediate: true })
+watch(() => props.session, (v) => load(v), { immediate: true })
 </script>
 
 <template>
   <section class="c360">
     <h3 class="s-title">客户 360</h3>
-    <p v-if="!openid" class="hint">该会话尚未建立身份桥接（未登录小程序 / kfIdentity 未建），暂无法关联客户档案。</p>
+    <p v-if="!session" class="hint">认领会话后，这里显示对应客户的档案（订单 / 激活课程 / 学习位置）。</p>
     <p v-else-if="err" class="hint warn">{{ err }}</p>
     <p v-else-if="loading" class="muted">加载中…</p>
+    <p v-else-if="denied" class="hint">{{ denied }}</p>
     <p v-else-if="!panels.length" class="hint">未找到该客户的档案数据。</p>
 
     <div v-else class="panels">

@@ -1,18 +1,20 @@
 <script setup>
 /**
- * 待接队列（B2·未读/待接）：调 listQueue 拉 pending 会话（bounded·cursor/limit·根因#7），
- * 定时刷新（轮询·带清理）。每条「认领接入」→ claimConversation（pending→active·绑当前坐席），
- * 成功 emit('claimed', session) 交父级打开会话窗口。
+ * 待接队列 + 我的在接（B2·follow-up ②）：调 listQueue 拉 pending 会话（bounded·cursor/limit·根因#7）+
+ * listMyActive 拉本坐席在接会话（**刷新/重登不丢在接**·多会话切换），定时刷新（轮询·带清理）。
+ * 待接条「认领接入」→ claimConversation → emit('claimed', session)；在接条点击 → emit('open', session)
+ * （切回在接会话·交父级打开会话窗口）。
  */
 import { ref, onMounted, onUnmounted } from 'vue'
 import { RefreshCw, UserPlus } from 'lucide-vue-next'
-import { listQueue, claimConversation } from '@/api/agentApi.js'
+import { listQueue, claimConversation, listMyActive } from '@/api/agentApi.js'
 import { toast } from '@/utils/ui.js'
 
 defineProps({ currentId: { type: String, default: '' } }) // currentId 在模板中直接引用（高亮当前会话）
-const emit = defineEmits(['claimed'])
+const emit = defineEmits(['claimed', 'open'])
 
 const items = ref([])
+const mine = ref([]) // 我的在接（active·刷新恢复·多会话切换）
 const loading = ref(false)
 const err = ref('')
 const claiming = ref('')
@@ -23,8 +25,9 @@ async function refresh() {
   loading.value = true
   err.value = ''
   try {
-    const r = await listQueue({ limit: 30 })
-    items.value = r && r.ok ? r.items : []
+    const [q, my] = await Promise.all([listQueue({ limit: 30 }), listMyActive()])
+    items.value = q && q.ok ? q.items : []
+    mine.value = my && my.ok ? my.sessions : []
   } catch (e) {
     err.value = '队列加载失败：' + e.message
   } finally {
@@ -73,6 +76,21 @@ defineExpose({ refresh })
 
 <template>
   <section class="queue">
+    <!-- 我的在接（active·点击切回·刷新恢复·follow-up ②） -->
+    <header v-if="mine.length" class="q-head">
+      <div class="q-title">
+        我的在接 <span class="cnt green">{{ mine.length }}</span>
+      </div>
+    </header>
+    <ul v-if="mine.length" class="q-list mine">
+      <li v-for="it in mine" :key="it.sessionId" class="q-item clickable" :class="{ on: it.sessionId === currentId }" @click="emit('open', it)">
+        <div class="q-main">
+          <div class="q-name">{{ it.display || it.externalUserId }}</div>
+          <div class="q-meta"><span class="chip green">在接</span></div>
+        </div>
+      </li>
+    </ul>
+
     <header class="q-head">
       <div class="q-title">
         待接队列 <span class="cnt">{{ items.length }}</span>
@@ -128,6 +146,17 @@ defineExpose({ refresh })
   background: var(--brand);
   color: var(--white);
   font-size: 11px;
+}
+.cnt.green {
+  background: var(--green);
+}
+.q-list.mine {
+  flex: 0 0 auto; /* 在接区不挤占待接列表的滚动空间 */
+  max-height: 40%;
+  overflow-y: auto;
+}
+.q-item.clickable {
+  cursor: pointer;
 }
 .icon-btn {
   border: none;

@@ -26,6 +26,10 @@ const queueRef = ref(null)
 function onClaimed(session) {
   current.value = session
 }
+// 切回在接会话（我的在接区点击·刷新恢复后重开会话窗口·follow-up ②）
+function onOpen(session) {
+  current.value = session
+}
 function onEnded() {
   current.value = null
   if (queueRef.value) queueRef.value.refresh() // 结束/退回后立即刷新待接队列（退回的会重回队列）
@@ -61,7 +65,7 @@ function doLogout() {
 
     <!-- 三栏工作区 -->
     <div class="grid">
-      <aside class="col-queue card"><QueueList ref="queueRef" :current-id="current ? current.sessionId : ''" @claimed="onClaimed" /></aside>
+      <aside class="col-queue card"><QueueList ref="queueRef" :current-id="current ? current.sessionId : ''" @claimed="onClaimed" @open="onOpen" /></aside>
 
       <main class="col-conv card">
         <ConversationWindow v-if="current" :key="current.sessionId" :session="current" :insert="insert" @ended="onEnded" />
@@ -73,7 +77,7 @@ function doLogout() {
       </main>
 
       <aside class="col-side">
-        <div class="card side-360"><Customer360Panel :openid="current ? current.openid : null" /></div>
+        <div class="card side-360"><Customer360Panel :session="current" /></div>
         <div class="card side-qr"><QuickReplies @pick="onPick" /></div>
       </aside>
     </div>

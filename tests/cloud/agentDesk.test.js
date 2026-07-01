@@ -9,6 +9,8 @@ import {
   setAgentStatus,
   escalateToMerchant,
   closeConversation,
+  listMyActive,
+  getSessionCustomer360,
 } from '../../packages/cloud/src/functions/admin/adminApi/actions/agentDesk'
 import { ROLES } from '../../packages/cloud/src/functions/admin/adminApi/lib'
 
@@ -62,6 +64,15 @@ describe('① listQueue：待接队列（pending·FIFO·bounded cursor/limit）'
     expect(p1.nextCursor).toBe(1000)
     const p2 = parse(await listQueue(ctx({ limit: 1, cursor: p1.nextCursor })))
     expect(p2.items[0].externalUserId).toBe('e2')
+  })
+
+  it('超管队列另含 escalated（外包甩单只有商户能看见/重接·否则升级是黑洞）；外包仍只见 pending', async () => {
+    seedSession('eP', 'pending', { createdAt: 1000 })
+    seedSession('eE', 'escalated', { createdAt: 2000, agentId: 'agent:out1' })
+    const su = parse(await listQueue(ctx({}, SUPER)))
+    expect(su.items.map((i) => i.externalUserId)).toEqual(['eP', 'eE']) // 超管看见甩单
+    const out = parse(await listQueue(ctx({})))
+    expect(out.items.map((i) => i.externalUserId)).toEqual(['eP']) // 外包看不见 escalated
   })
 })
 
@@ -280,5 +291,74 @@ describe('⑧ closeConversation：→closed（终态·触 CSAT）', () => {
     expect(parse(await closeConversation(ctx({ sessionId: sid('wk1', 'e1') }, OUT2))).status).toBe(403)
     seedSession('e2', 'closed', { agentId: 'agent:out1' })
     expect(parse(await closeConversation(ctx({ sessionId: sid('wk1', 'e2') }))).error).toBe('ALREADY_CLOSED')
+  })
+})
+
+describe('⑨ listMyActive：本坐席在接会话（刷新恢复·天然 scoped·follow-up ②）', () => {
+  it('只回自己的 active（不含他人 active / 自己 pending·escalated·closed）+ openid 桥接', async () => {
+    seedSession('mine1', 'active', { agentId: 'agent:out1', claimedAt: 2000 })
+    seedSession('mine2', 'active', { agentId: 'agent:out1', claimedAt: 1000 })
+    seedSession('other', 'active', { agentId: 'agent:out2', claimedAt: 500 }) // 他人在接·不回（scoped）
+    seedSession('gone', 'escalated', { agentId: 'agent:out1' }) // 已甩单·不再在接
+    seedSession('done', 'closed', { agentId: 'agent:out1' })
+    control.seed('kfIdentity', [{ _id: 'ext:mine1', openid: 'openid-m1' }])
+    const r = parse(await listMyActive(ctx({})))
+    expect(r.ok).toBe(true)
+    expect(r.sessions.map((s) => s.externalUserId)).toEqual(['mine2', 'mine1']) // claimedAt 升序（先接的在前）
+    expect(r.sessions.find((s) => s.externalUserId === 'mine1').openid).toBe('openid-m1') // 桥接补 openid
+  })
+
+  it('无认证坐席身份 → NO_AGENT（不信前端）', async () => {
+    expect(parse(await listMyActive({ db, cloud, data: {}, drafts: {} })).error).toBe('NO_AGENT')
+  })
+})
+
+describe('⑩ getSessionCustomer360：按会话看客户 360（外包唯一 360 读路径·双闸·follow-up ①）', () => {
+  // 已桥接会话 + 客户档（users._openid 建档·csDataShare 同意态由各例自设）
+  const seedBridged = (consented) => {
+    seedSession('e1', 'active', { agentId: 'agent:out1' })
+    control.seed('kfIdentity', [{ _id: 'ext:e1', openid: 'openid-1' }])
+    control.seed('users', [{ _id: 'openid-1', _openid: 'openid-1', nickname: '周周', ...(consented ? { csDataShare: { agreed: true, at: 1 } } : {}) }])
+  }
+
+  it('owner + 客户已同意数据共享 → 聚合 panels（经 assembleCustomer360·provider registry）', async () => {
+    seedBridged(true)
+    const r = parse(await getSessionCustomer360(ctx({ sessionId: sid('wk1', 'e1') })))
+    expect(r.ok).toBe(true)
+    expect(r.openid).toBe('openid-1')
+    expect(Array.isArray(r.panels)).toBe(true)
+    expect(r.panels.length).toBeGreaterThan(0) // registry 有 enabled provider 即出面板
+  })
+
+  it('owner 但客户未同意数据共享 → 403 NO_CONSENT（fail-closed·B3.3 读侧真实消费者）', async () => {
+    seedBridged(false)
+    const r = parse(await getSessionCustomer360(ctx({ sessionId: sid('wk1', 'e1') })))
+    expect(r.status).toBe(403)
+    expect(r.error).toBe('NO_CONSENT')
+  })
+
+  it('非 owner 外包看他人会话 360 → FORBIDDEN（分配 scope·防批量导出·§1.5）', async () => {
+    seedBridged(true)
+    const r = parse(await getSessionCustomer360(ctx({ sessionId: sid('wk1', 'e1') }, OUT2)))
+    expect(r.status).toBe(403)
+    expect(r.error).toBe('FORBIDDEN')
+  })
+
+  it('超管＝数据控制者：非 owner + 客户未同意 也可看（两闸 bypass·走现有隐私政策）', async () => {
+    seedBridged(false)
+    const r = parse(await getSessionCustomer360(ctx({ sessionId: sid('wk1', 'e1') }, SUPER)))
+    expect(r.ok).toBe(true)
+    expect(r.openid).toBe('openid-1')
+  })
+
+  it('会话未建身份桥接（无 openid 映射）→ ok:false NO_BRIDGE（如实回·前端有提示）', async () => {
+    seedSession('e1', 'active', { agentId: 'agent:out1' }) // 无 kfIdentity 映射
+    const r = parse(await getSessionCustomer360(ctx({ sessionId: sid('wk1', 'e1') })))
+    expect(r.ok).toBe(false)
+    expect(r.error).toBe('NO_BRIDGE')
+  })
+
+  it('会话不存在 → 404', async () => {
+    expect(parse(await getSessionCustomer360(ctx({ sessionId: 'wxkf:wk1:nope' }))).status).toBe(404)
   })
 })

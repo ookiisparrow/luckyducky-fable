@@ -126,7 +126,30 @@ export interface CloseConversationRes {
   ok: true
 }
 
-/** 坐席台 8 个 action 名（车道 A 实现·车道 B 对 mock·共同遵此契约·均须 cap `agent:handle`）。 */
+/** ⑨ listMyActive：本坐席在接（active）会话（刷新/重登后恢复在接·多会话切换·bounded·follow-up ②）。 */
+export interface ListMyActiveReq {
+  limit?: number
+}
+export interface ListMyActiveRes {
+  ok: true
+  sessions: SessionView[]
+}
+
+/**
+ * ⑩ getSessionCustomer360：按**会话**看对应客户 360（外包唯一 360 读路径·follow-up ①·§1.5 双闸）：
+ * 分配 scope（assertOwnedByAgent·只看自己 claim 的会话）+ 数据共享同意（assertDataShareConsent·客户未同意即拒）；
+ * 超管（数据控制者）两闸 bypass。会话未建身份桥接（openid null）回 ok:false error:'NO_BRIDGE'。
+ */
+export interface GetSessionCustomer360Req {
+  sessionId: SessionId
+}
+export interface GetSessionCustomer360Res {
+  ok: true
+  openid: string
+  panels: Array<{ key: string; label: string; order?: number; data?: unknown; error?: string }>
+}
+
+/** 坐席台 10 个 action 名（车道 A 实现·车道 B 对 mock·共同遵此契约·均须 cap `agent:handle`）。 */
 export type AgentDeskAction =
   | 'listQueue'
   | 'claimConversation'
@@ -136,3 +159,5 @@ export type AgentDeskAction =
   | 'setAgentStatus'
   | 'escalateToMerchant'
   | 'closeConversation'
+  | 'listMyActive'
+  | 'getSessionCustomer360'

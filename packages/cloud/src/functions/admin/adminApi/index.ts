@@ -107,6 +107,8 @@ const ACTIONS: Record<string, (ctx: Ctx) => Promise<any>> = {
   setAgentStatus: agentDesk.setAgentStatus,
   escalateToMerchant: agentDesk.escalateToMerchant,
   closeConversation: agentDesk.closeConversation,
+  listMyActive: agentDesk.listMyActive, // 在接会话恢复（刷新不丢·follow-up ②）
+  getSessionCustomer360: agentDesk.getSessionCustomer360, // 外包 scoped 360 读路径（双闸·follow-up ①）
   // 承面C 车道C·外包账号管理（B5.2·未登记 ACTION_CAPS→默认拒 admin:write·天然仅超管建/停/列·外包无权）
   createAgent: agents.createAgent,
   disableAgent: agents.disableAgent,
@@ -133,6 +135,10 @@ const ACTION_CAPS: Record<string, string> = {
   setAgentStatus: 'agent:handle',
   escalateToMerchant: 'agent:handle',
   closeConversation: 'agent:handle',
+  listMyActive: 'agent:handle',
+  // scoped 360（接真接口批·follow-up ①）：外包看「自己 claim 会话」对应 360 的唯一路径——cap 只需 agent:handle
+  // （非 customer:view·那是无 scope 批量读面），action 内再过 assertOwnedByAgent + assertDataShareConsent 双闸。
+  getSessionCustomer360: 'agent:handle',
   // 快捷回复读知识库（承面C 车道B·坐席台 QuickReplies 读 kb 发 FAQ）：外包 agent:handle 可读（kb=公司 FAQ·非客户 PII）；
   // saveKb 仍默认拒 admin:write（仅超管维护）。整合补：原 listKb 未标 cap→外包调不了（车道B 报的接缝缺口）。
   listKb: 'agent:handle',

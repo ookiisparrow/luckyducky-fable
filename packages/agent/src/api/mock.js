@@ -1,7 +1,7 @@
 /**
  * 承面 C 坐席台 · mock 层（车道 B 对 mock 建·**全站唯一假数据源**）。
  *
- * 按 `@luckyducky/shared` 的 `csAgentDesk.ts` 契约 mock 8 个坐席 action + getCustomer360 + listKb 的响应，
+ * 按 `@luckyducky/shared` 的 `csAgentDesk.ts` 契约 mock 10 个坐席 action + listKb 的响应，
  * 让全套 UI 先跑起来。**组件/页面绝不直接引本文件**——只经 api/agentApi.js 调用（单点接缝·守卫
  * agent-api-single-seam 焊之）；master 整合车道 A 真接口时，只改 agentApi.js 的路由、组件零改。
  *
@@ -23,9 +23,9 @@ const sid = (ext) => `wxkf:${OPEN_KF}:${ext}` // 会话 _id = 确定性 wxkf:<op
 let _agentId = 'agent_demo'
 export function login(key) {
   if (!key || String(key).length < MIN_KEY) return { ok: false, error: 'KEY_TOO_SHORT' }
-  // mock：任意 ≥6 位口令即视为一名外包坐席，权限＝外包最小权（§1 定稿：查 + 回复 + 升级）。
+  // mock：任意 ≥6 位口令即视为一名外包坐席，权限＝外包最小权（§1 定稿·收窄后仅 agent:handle·同 ROLES.outsourced）。
   _agentId = 'agent_demo'
-  return { ok: true, operator: '外包坐席·演示', caps: ['customer:view', 'agent:handle'] }
+  return { ok: true, operator: '外包坐席·演示', caps: ['agent:handle'] }
 }
 // 刷新页面后 agentApi 用 localStorage 恢复登录态时同步 mock 内部 agentId（保 claim 归属一致）。
 export function resume(agentId) {
@@ -246,11 +246,18 @@ function closeConversation(data = {}) {
   s.updatedAt = now()
   return { ok: true }
 }
+// ⑨ 本坐席在接会话（刷新恢复·claimedAt 升序·贴真后端 listMyActive）
+function listMyActive() {
+  const mine = SESSIONS.filter((s) => s.status === 'active' && s.agentId === _agentId).sort((a, b) => (a.claimedAt || 0) - (b.claimedAt || 0))
+  return { ok: true, sessions: mine.map(toSessionView) }
+}
 
-// ── 侧栏 360 + 快捷回复（复用既有 adminApi action 形状）────────────────────
-function getCustomer360(data = {}) {
-  const openid = data.openid
-  return { ok: true, openid, panels: CUSTOMER360[openid] || [] }
+// ── 侧栏 360（scoped 版·按会话经双闸·贴真后端 getSessionCustomer360）+ 快捷回复 ──
+function getSessionCustomer360(data = {}) {
+  const s = find(data.sessionId)
+  if (!s) return { ok: false, error: 'NOT_FOUND' }
+  if (!s.openid) return { ok: false, error: 'NO_BRIDGE' } // 身份桥接未建（同真后端·前端有提示）
+  return { ok: true, openid: s.openid, panels: CUSTOMER360[s.openid] || [] }
 }
 function listKb() {
   return { ok: true, list: KB.map((e) => ({ ...e })) }
@@ -266,7 +273,8 @@ const HANDLERS = {
   setAgentStatus,
   escalateToMerchant,
   closeConversation,
-  getCustomer360,
+  listMyActive,
+  getSessionCustomer360,
   listKb,
 }
 export function handle(action, data = {}) {
