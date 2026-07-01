@@ -285,6 +285,61 @@ export async function transferToServicer(
 }
 
 /**
+ * 读会话状态（`kf/service_state/get`）：返回 service_state 数字——
+ * 0 未处理 / 1 由智能助手接待 / 2 待接入池排队 / 3 由人工接待 / 4 已结束。errcode/无值返 -1（调用方尽力接入）。
+ */
+export async function getServiceState(
+  accessToken: string,
+  args: { openKfId: string; externalUserId: string },
+  fetchImpl: FetchFn = defaultFetch
+): Promise<number> {
+  const j = await post('kf/service_state/get', accessToken, { open_kfid: args.openKfId, external_userid: args.externalUserId }, fetchImpl)
+  if (j.errcode) {
+    alert('security', 'wecom', 'SERVICE_STATE_GET_FAILED', { errcode: j.errcode })
+    return -1
+  }
+  return typeof j.service_state === 'number' ? j.service_state : -1
+}
+
+/**
+ * 接入「由智能助手接待」态（`kf/service_state/trans` → service_state=1·**不需要** servicer_userid·转 3 才需）：
+ * send_msg 仅在 state 1/3 可发，新会话默认 0未处理，不置态直接发报 95018；转 1 让 API（bot）接手本会话。
+ */
+export async function enterSmartAssistant(
+  accessToken: string,
+  args: { openKfId: string; externalUserId: string },
+  fetchImpl: FetchFn = defaultFetch
+): Promise<any> {
+  return post(
+    'kf/service_state/trans',
+    accessToken,
+    { open_kfid: args.openKfId, external_userid: args.externalUserId, service_state: 1 },
+    fetchImpl
+  )
+}
+
+/**
+ * 确保会话可由 bot 自动回复（防 95018·调试日志 AB·根因#12 平台规则外部风险）：读会话状态 → 决策——
+ * - 1 智能助手：可直接发 → 'proceed'
+ * - 0 未处理 / 4 已结束(新消息重激活) / -1 读取失败：主动 trans 到 1（0→1 平台允许）→ 'proceed'
+ * - 2 排队 / 3 人工：让接待人员处理，bot 不抢话 → 'skip'
+ * 抗漂移：不靠后台「接待方式」默认（迁移到企业微信内后新会话默认态漂移致 95018）·每条回复前主动置态。
+ */
+export async function ensureSmartAssistant(
+  accessToken: string,
+  args: { openKfId: string; externalUserId: string },
+  fetchImpl: FetchFn = defaultFetch
+): Promise<'proceed' | 'skip'> {
+  const state = await getServiceState(accessToken, args, fetchImpl)
+  if (state === 1) return 'proceed' // 已智能助手态·可直接发
+  if (state === 2 || state === 3) return 'skip' // 排队/人工·让接待人员处理·bot 不抢话
+  // 0 未处理 / 4 已结束 / -1 读取失败：尽力接入智能助手（0→1 平台允许），置态后放行
+  const r = await enterSmartAssistant(accessToken, args, fetchImpl)
+  if (r && r.errcode) alert('security', 'wecom', 'ENTER_ASSISTANT_FAILED', { errcode: r.errcode, fromState: state })
+  return 'proceed'
+}
+
+/**
  * unionid → external_userid 转换（身份桥接·限频：5万/时·24万/天·禁批量·须用户主动触发）。
  * openid 用于绑定主体确认（同一微信开放平台主体下小程序 openid）。返回 external_userid 或 ''。
  */

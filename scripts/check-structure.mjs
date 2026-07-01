@@ -946,6 +946,35 @@ export const repoChecks = [
     },
   },
   {
+    // kfCallback 回复前必先把会话置为「由智能助手接待」态（service_state=1）才能 send_msg（防 95018·根因#12 平台规则外部风险·
+    // 调试日志 AB）。微信客服 send_msg 仅在 service_state ∈ {1 智能助手, 3 人工} 可发；新会话默认 0 未处理，直接 send 报
+    // 95018「session status invalid」＝消息被消费却静默无回复。迁移到企业微信内后新会话默认态漂移（旧独立端自动进 1）——
+    // 正解是与平台会话状态机的接缝收口 kit/wecom.ts.ensureSmartAssistant（get→trans 主动置态·抗后台「接待方式」默认漂移·
+    // 同 AA「配过一次≠一直通」#8 静默故障宗）。焊两端：① index.ts handleOne 回复前经 ensureSmartAssistant 置态；② 人工态(3)
+    // 返 'skip' 短路——bot 不抢话。
+    id: 'kf-reply-after-smart-assistant',
+    roots: ['#12'],
+    desc: 'kfCallback 回复前必经 ensureSmartAssistant 置会话为智能助手态 service_state=1（接缝收口 kit/wecom.ts）——微信客服 send_msg 仅 state 1/3 可发，新会话默认 0未处理直接发报 95018 静默无回复（调试日志 AB·迁移到企业微信内后平台默认态漂移·根因#12 接缝主动置态不靠后台默认·同 AA #8 配过一次≠一直通）；且人工接待态(3) 返 skip·bot 不抢话',
+    run() {
+      const f = 'packages/cloud/src/functions/cs/kfCallback/index.ts'
+      const w = 'packages/cloud/src/kit/wecom.ts'
+      const bad = []
+      if (!existsSync(join(ROOT, f))) return [`${f} 缺失`]
+      if (!existsSync(join(ROOT, w))) return [`${w} 缺失——会话状态接缝`]
+      const s = readFileSync(join(ROOT, f), 'utf8')
+      const ws = readFileSync(join(ROOT, w), 'utf8')
+      // ① 接缝在 kit/wecom.ts：真调 service_state get + trans（非空壳·平台接缝单点·根因#12）
+      if (!/service_state\/get/.test(ws)) bad.push(`${w} ensureSmartAssistant 未真调 kf/service_state/get 读会话态（根因#12 接缝）`)
+      if (!/service_state:\s*1\b/.test(ws)) bad.push(`${w} 未 trans 到 service_state=1（智能助手接待）——send_msg 报 95018（根因#12）`)
+      // ② index.ts 回复前经 ensureSmartAssistant 置态 + 人工态短路（防退回「不置态直接 send」＝95018 静默无回复）
+      if (!/ensureSmartAssistant\s*\(/.test(s))
+        bad.push(`${f} 回复前未经 ensureSmartAssistant 置智能助手态——新会话 state 0 直接 send_msg 报 95018 无回复（调试日志 AB·根因#12）`)
+      if (!/['"]skip['"]/.test(s))
+        bad.push(`${f} 未据 ensureSmartAssistant 的 'skip' 短路——人工接待态(3) bot 会抢话（调试日志 AB）`)
+      return bad
+    },
+  },
+  {
     // 后台360工作站 B2.2 节点诊断·UGC 图片入库前必过内容安全（根因#3 信任边界 fail-closed）：学员拍照上传是
     // 本项目第一个「用户图片入库」越权写面——黄暴恐违规图直接入库＝合规风险。守此不变量：① kit/contentsec.ts
     // 内容安全接缝须真调 cloud.openapi.security.imgSecCheck（非注释摆设·扫真实调用模式·防假绿）；② 写 checkpoints

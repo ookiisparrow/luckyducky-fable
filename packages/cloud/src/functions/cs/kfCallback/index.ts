@@ -5,6 +5,7 @@ import {
   syncMsg,
   sendMsg,
   transferToServicer,
+  ensureSmartAssistant,
   getDb,
   alert,
   kfCustomerBatchget,
@@ -103,7 +104,18 @@ export const main = defineKfCallback({
       console.log('[kf] handle', { msgtype: msg.msgtype, hasText: !!msg.text?.content, hasMenuId: !!msg.text?.menu_id })
       await archiveInbound(db, msg, openKfId) // 入站客户消息落档（B5.1·有 msgid 才记·确定性 _id 幂等·fail-soft）
       const euid = extUserId(msg)
-      // 先回顾客（回复优先·batchget 延迟不拖累回复·防回复太晚 95018），再 best-effort 建身份桥接
+      // 回复前确保会话为「智能助手接待」态(service_state=1)：新会话默认 0未处理，不置态 send_msg 报 95018 静默无回复
+      // （调试日志 AB·迁移到企业微信内后平台默认态漂移·根因#12）。人工/排队态 bot 不抢话（skip·仍尽力建身份桥接）。
+      if (euid) {
+        const gate = await ensureSmartAssistant(token, { openKfId, externalUserId: euid })
+        console.log('[kf] assistant-gate', { gate }) // 观测：实测会话态决策（根因#8 定「为何发不出」）
+        if (gate === 'skip') {
+          console.log('[kf] 人工/排队接待中 → bot 不抢话')
+          await ensureKfIdentity(db, token, euid)
+          return
+        }
+      }
+      // 先回顾客（回复优先·batchget 延迟不拖累回复），再 best-effort 建身份桥接
       if (msg.msgtype === 'event' && msg.event?.event_type === 'enter_session') {
         await send(buildMsgMenu(euid, openKfId, rootMenu())) // 进会话欢迎（euid 在 event 子对象·根因#8）
       } else {

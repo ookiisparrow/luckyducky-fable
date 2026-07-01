@@ -7,6 +7,9 @@ import {
   transferToServicer,
   unionidToExternalUserid,
   kfCustomerBatchget,
+  getServiceState,
+  enterSmartAssistant,
+  ensureSmartAssistant,
 } from '../../packages/cloud/src/kit/wecom'
 
 // 企业微信客服 API 客户端（access_token DB 缓存 + sync_msg/send_msg/idconvert/转人工）。
@@ -85,5 +88,55 @@ describe('客服消息 API', () => {
     expect(await kfCustomerBatchget('TKN', 'e1', fail)).toBe('')
     const noUnion = mkFetch(() => ({ errcode: 0, customer_list: [{ external_userid: 'e1' }] }))
     expect(await kfCustomerBatchget('TKN', 'e1', noUnion)).toBe('')
+  })
+})
+
+// 会话状态接缝（防 95018·调试日志 AB·根因#12）：微信客服 send_msg 仅在 service_state ∈ {1 智能助手,3 人工} 可发，
+// 新会话默认 0未处理直接发报 95018 静默无回复。迁移到企业微信内后新会话默认态漂移，故回复前主动置态。
+describe('会话状态·接入智能助手（防 95018·调试日志 AB）', () => {
+  it('getServiceState：POST service_state/get 带 open_kfid+external_userid，回 service_state 数字', async () => {
+    const f = mkFetch(() => ({ errcode: 0, service_state: 0 }))
+    expect(await getServiceState('TKN', { openKfId: 'KF', externalUserId: 'e1' }, f)).toBe(0)
+    expect(f.calls[0].url).toContain('/kf/service_state/get')
+    expect(f.calls[0].body).toMatchObject({ open_kfid: 'KF', external_userid: 'e1' })
+  })
+
+  it('getServiceState：errcode → -1（读取失败·调用方尽力接入）', async () => {
+    const f = mkFetch(() => ({ errcode: 95017 }))
+    expect(await getServiceState('TKN', { openKfId: 'KF', externalUserId: 'e1' }, f)).toBe(-1)
+  })
+
+  it('enterSmartAssistant：trans 到 service_state=1（智能助手·不带 servicer_userid）', async () => {
+    const f = mkFetch(() => ({ errcode: 0 }))
+    await enterSmartAssistant('TKN', { openKfId: 'KF', externalUserId: 'e1' }, f)
+    expect(f.calls[0].url).toContain('/kf/service_state/trans')
+    expect(f.calls[0].body).toMatchObject({ service_state: 1, open_kfid: 'KF', external_userid: 'e1' })
+    expect(f.calls[0].body.servicer_userid).toBeUndefined() // 转 1 不需 servicer（转 3 才需）
+  })
+
+  it('ensureSmartAssistant：state 0（未处理）→ 先 trans 到 1 再放行 proceed（THE BUG·迁移后新会话默认 0）', async () => {
+    const f = mkFetch((url) => (url.includes('/service_state/get') ? { errcode: 0, service_state: 0 } : { errcode: 0 }))
+    expect(await ensureSmartAssistant('TKN', { openKfId: 'KF', externalUserId: 'e1' }, f)).toBe('proceed')
+    const trans = f.calls.find((c) => c.url.includes('/service_state/trans'))
+    expect(trans).toBeTruthy() // 置态了才能 send（否则 95018）
+    expect(trans.body).toMatchObject({ service_state: 1 })
+  })
+
+  it('ensureSmartAssistant：state 1（已智能助手）→ 直接 proceed，不重复 trans', async () => {
+    const f = mkFetch((url) => (url.includes('/service_state/get') ? { errcode: 0, service_state: 1 } : { errcode: 0 }))
+    expect(await ensureSmartAssistant('TKN', { openKfId: 'KF', externalUserId: 'e1' }, f)).toBe('proceed')
+    expect(f.calls.some((c) => c.url.includes('/service_state/trans'))).toBe(false)
+  })
+
+  it('ensureSmartAssistant：state 3（人工接待）→ skip，bot 不抢话（不 trans）', async () => {
+    const f = mkFetch((url) => (url.includes('/service_state/get') ? { errcode: 0, service_state: 3 } : { errcode: 0 }))
+    expect(await ensureSmartAssistant('TKN', { openKfId: 'KF', externalUserId: 'e1' }, f)).toBe('skip')
+    expect(f.calls.some((c) => c.url.includes('/service_state/trans'))).toBe(false)
+  })
+
+  it('ensureSmartAssistant：state 2（排队）→ skip（让人工接待池处理·不抢话）', async () => {
+    const f = mkFetch((url) => (url.includes('/service_state/get') ? { errcode: 0, service_state: 2 } : { errcode: 0 }))
+    expect(await ensureSmartAssistant('TKN', { openKfId: 'KF', externalUserId: 'e1' }, f)).toBe('skip')
+    expect(f.calls.some((c) => c.url.includes('/service_state/trans'))).toBe(false)
   })
 })
