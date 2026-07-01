@@ -102,14 +102,16 @@ export const main = defineKfCallback({
     const handleOne = async (msg: any) => {
       console.log('[kf] handle', { msgtype: msg.msgtype, hasText: !!msg.text?.content, hasMenuId: !!msg.text?.menu_id })
       await archiveInbound(db, msg, openKfId) // 入站客户消息落档（B5.1·有 msgid 才记·确定性 _id 幂等·fail-soft）
-      await ensureKfIdentity(db, token, extUserId(msg)) // §查订单·平台原生 batchget 反查建 ext→openid 映射（best-effort）
+      const euid = extUserId(msg)
+      // 先回顾客（回复优先·batchget 延迟不拖累回复·防回复太晚 95018），再 best-effort 建身份桥接
       if (msg.msgtype === 'event' && msg.event?.event_type === 'enter_session') {
-        await send(buildMsgMenu(extUserId(msg), openKfId, rootMenu())) // 进会话欢迎（euid 在 event 子对象·根因#8）
-        return
+        await send(buildMsgMenu(euid, openKfId, rootMenu())) // 进会话欢迎（euid 在 event 子对象·根因#8）
+      } else {
+        const incoming = normalize(msg)
+        if (incoming) await handleMessage(ctx, incoming)
+        else console.log('[kf] not-dispatched', { msgtype: msg.msgtype })
       }
-      const incoming = normalize(msg)
-      if (incoming) await handleMessage(ctx, incoming)
-      else console.log('[kf] not-dispatched', { msgtype: msg.msgtype })
+      await ensureKfIdentity(db, token, euid) // §查订单·回复后再 batchget 反查建 ext→openid 映射（best-effort·不延迟回复）
     }
 
     // 防超时吞消息（外审 R1-R4·P1.5·根因#8）：函数超时 20s，单批 limit 降到 KF_BATCH_LIMIT（旧默认 1000 一批
