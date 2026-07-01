@@ -216,6 +216,12 @@
       "installDependency": true
     },
     {
+      "name": "kfSend",
+      "timeout": 10,
+      "handler": "index.main",
+      "installDependency": true
+    },
+    {
       "name": "recallScan",
       "timeout": 30,
       "handler": "index.main",

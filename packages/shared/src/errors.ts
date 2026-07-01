@@ -11,6 +11,7 @@ export const ERR = {
   // 闸 / 身份（kit gate）
   NO_OPENID: 'NO_OPENID',
   ADMIN_ONLY: 'ADMIN_ONLY',
+  SERVER_ONLY: 'SERVER_ONLY', // 服务端专用端点（isServerCall 闸·带 openid 的客户端调用拒·如 cs/kfSend）
   // 通用参数 / 校验
   NO_ID: 'NO_ID',
   NO_TYPE: 'NO_TYPE',

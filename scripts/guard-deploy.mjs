@@ -20,7 +20,7 @@ const SENSITIVE_FNS = [
   'createOrder', 'pay', 'payCallback', 'applyRefund', 'refundCallback', 'closeExpiredOrders',
   'adminApi', 'genQrcodes', 'activateCourse', 'confirmEnter', 'confirmReceive', 'submitReview',
   'login', 'updateProfile', 'trackEvent', 'seedProducts', 'seedCourses', 'initDb', 'cleanupEvents',
-  'kfCallback', 'kfBind', // 微信客服：回调状态写 + 身份桥接映射写（权限/状态敏感·根因#3）
+  'kfCallback', 'kfBind', 'kfSend', // 微信客服：回调状态写 + 身份桥接映射写 + 主动发消息给顾客（权限/状态/越权发送敏感·根因#3）
   'submitFeedback', // 用户写函数（写库·频控敏感·根因#13），同 trackEvent/updateProfile 二次确认
 ]
 // 纯读函数：写部署放行（明确非敏感）

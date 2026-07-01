@@ -880,6 +880,28 @@ export const repoChecks = [
     },
   },
   {
+    // 客服主动发消息服务端专用闸（§P0 ④·根因#3 信任边界 fail-closed）：cs/kfSend 是「向顾客主动发 send_msg」
+    // 的越权发送面——若对客户端开放，任意登录用户可借此向任意顾客发任意消息。守此不变量：kfSend 须经
+    // isServerCall 闸（仅后端/CLI 无 openid 放行·带 openid 的客户端调用拒）+ 真调 send_msg 发送接缝。
+    // 承面C 落地时本闸升级为坐席 RBAC（agent:handle）+ 会话归属校验——本守卫防在那之前退回无闸。
+    id: 'kf-send-server-gated',
+    roots: ['#3'],
+    desc: '客服主动发消息服务端专用闸（§P0 ④·根因#3 信任边界 fail-closed）：cs/kfSend（向顾客主动发 send_msg 的越权发送面）须经 isServerCall 闸——仅后端/CLI 放行、带 openid 的客户端调用拒；且须真调 send_msg 发送接缝。防退回无闸致任意登录用户向顾客发任意消息',
+    run() {
+      const f = 'packages/cloud/src/functions/cs/kfSend/index.ts'
+      if (!existsSync(join(ROOT, f))) return [`${f} 缺失——客服主动发消息接缝（§P0 ④·承面C sendAgentMessage 雏形）`]
+      const s = readFileSync(join(ROOT, f), 'utf8')
+      const bad = []
+      // ① 服务端专用闸：无 isServerCall 拒即对客户端开放（越权发送面）
+      if (!/if\s*\(\s*!\s*isServerCall\s*\(\s*\)\s*\)/.test(s))
+        bad.push(`${f} 未经 isServerCall fail-closed 拒客户端——越权发送面对登录用户开放（根因#3·§P0 ④）`)
+      // ② 真调发送接缝（非空壳）
+      if (!/sendMsg\s*\(/.test(s))
+        bad.push(`${f} 未调 sendMsg 发送接缝——非真发送（§P0 ④）`)
+      return bad
+    },
+  },
+  {
     // 后台360工作站 B2.2 节点诊断·UGC 图片入库前必过内容安全（根因#3 信任边界 fail-closed）：学员拍照上传是
     // 本项目第一个「用户图片入库」越权写面——黄暴恐违规图直接入库＝合规风险。守此不变量：① kit/contentsec.ts
     // 内容安全接缝须真调 cloud.openapi.security.imgSecCheck（非注释摆设·扫真实调用模式·防假绿）；② 写 checkpoints
