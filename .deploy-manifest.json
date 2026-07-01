@@ -1,5 +1,5 @@
 {
-  "updatedAt": 1782881108714,
+  "updatedAt": 1782885637219,
   "functions": {
     "activateCourse": "9b6fbfa85bc5",
     "adminApi": "9b7ba13b5050",
@@ -25,7 +25,7 @@
     "kfBind": "af0ff4de2cfb",
     "kfCallback": "7c3fff89ed5c",
     "kfSend": "3eb7a2276306",
-    "login": "8c5e7461c00b",
+    "login": "f0d5743e1abc",
     "pay": "902bd791c74f",
     "payCallback": "43972b398425",
     "recallScan": "21769cbd9164",
