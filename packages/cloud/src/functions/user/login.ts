@@ -1,4 +1,5 @@
 import { withOpenId, withRateLimit, ok, ensureDoc, currentUnionId } from '../../kit'
+import { createHash } from 'crypto'
 
 // 微信登录（静默）：用可信 openid upsert users，返回用户。前端无需传身份。
 // 无 openid 无法建立身份 → NO_OPENID（withOpenId 缺省，较原「裸用空 openid」更正确）。
@@ -24,7 +25,9 @@ export const main = withOpenId(
 // best-effort 存 unionid 到 users（§查订单·不反噬登录）：供 kfCallback batchget 反查 openid。无 unionid / 已存过即跳。
 async function storeUnionId(db: any, OPENID: string, user: any): Promise<void> {
   const unionid = currentUnionId()
-  console.log('[login-bind]', { hasUnionid: !!unionid }) // 观测（无 PII·根因#8）：小程序登录到底拿没拿到 unionid
+  // 观测（无 PII·根因#8）：hasUnionid=登录拿没拿到 unionid；uh=unionid 短哈希（不可逆·临时诊断·比对两端 unionid 是否同源·查订单桥接 AB 续查）
+  const uh = unionid ? createHash('sha256').update(unionid).digest('hex').slice(0, 8) : '-'
+  console.log('[login-bind]', { hasUnionid: !!unionid, uh })
   if (!unionid || (user && user.unionid === unionid)) return // 无 unionid / 已存过：跳
   await db.collection('users').doc(OPENID).update({ data: { unionid } }).catch(() => {})
 }

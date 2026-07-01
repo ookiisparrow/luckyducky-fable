@@ -12,6 +12,7 @@ import {
 } from '../../../kit'
 import { handleMessage, rootMenu, buildMsgMenu, extUserId, processKfBatch, type Incoming } from './dispatch'
 import { archiveInbound, archiveOutbound } from './archive' // 会话归档（B5.1·入站/出站落档·守卫 conversations-archived）
+import { createHash } from 'crypto' // 临时诊断：unionid 短哈希比对两端同源（查订单桥接·结案后清）
 
 // 微信客服 in-chat 智能客服回调（HTTP 访问服务·类比 adminApi 的 /adminapi）。
 // 验签 + AES 解密 + fail-closed 由 kit.defineKfCallback 强制（根因#3）；本函数只做「收到事件 → 拉消息
@@ -39,6 +40,9 @@ async function ensureKfIdentity(db: any, token: string, euid: string): Promise<v
     }
     const u = await db.collection('users').where({ unionid }).limit(1).get().catch(() => ({ data: [] }))
     const openid = u.data && u.data[0] && u.data[0]._openid
+    // 临时诊断（查订单桥接续查）：uh=batchget unionid 短哈希（比对 login 侧 uh 是否同源）·whereFound=按 unionid 查到几条·hasOpenid=查到的有无 _openid
+    const uh = createHash('sha256').update(unionid).digest('hex').slice(0, 8)
+    console.log('[kf-bind] lookup', { uh, whereFound: u.data ? u.data.length : 0, hasOpenid: !!openid })
     if (!openid) {
       console.log('[kf-bind] unionid 不在 users（顾客没登录过小程序）')
       return
