@@ -225,7 +225,7 @@ const cloud = {
   init: () => {},
   DYNAMIC_CURRENT_ENV: 'test-env',
   database: () => db,
-  getWXContext: () => ({ OPENID: G.openid, APPID: 'test-appid', ENV: 'test-env' }),
+  getWXContext: () => ({ OPENID: G.openid, UNIONID: G.unionid, APPID: 'test-appid', ENV: 'test-env' }),
   // 服务端互调 mock（pay → 支付工作流 cloudbase_module 用）：记录入参、可配置返回/失败
   callFunction: async (params) => {
     G.callFunctionCalls.push(JSON.parse(JSON.stringify(params)))
@@ -292,6 +292,7 @@ const control = {
   reset() {
     for (const k of Object.keys(G.store)) delete G.store[k]
     G.openid = 'openid-default'
+    G.unionid = ''
     G.cloudPayCalls = []
     G.cloudPayFail = false
     G.callFunctionCalls = []
@@ -309,6 +310,9 @@ const control = {
   },
   setOpenId(id) {
     G.openid = id
+  },
+  setUnionId(id) {
+    G.unionid = id
   },
   dump(coll) {
     return JSON.parse(JSON.stringify(G.store[coll] || []))

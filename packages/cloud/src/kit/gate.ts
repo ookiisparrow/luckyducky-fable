@@ -22,6 +22,15 @@ export function withOpenId(handler: (ctx: OpenIdCtx) => Promise<any>) {
 }
 
 /**
+ * 当前调用者的 unionid（小程序绑微信开放平台后 getWXContext 才有值·否则 ''）：客服身份桥接用（§P0 链②）。
+ * 经 kit 取——业务码禁裸 getWXContext（T2 `kit-only-cloud-primitives`），身份原语收口在 kit。
+ */
+export function currentUnionId(): string {
+  // UNIONID 运行时有（小程序绑开放平台后）但 wx-server-sdk 的 WXContext 类型未声明 → as any 取（SDK 类型滞后）
+  return (cloud.getWXContext() as any).UNIONID || ''
+}
+
+/**
  * 回调防伪（根因账本 #3，审核批次A-1 全场最关键）：
  * 回调只应由工作流服务端调用（无用户上下文）；客户端 callFunction 必带 OPENID，
  * 带身份即视为伪造。无 OPENID → true（可信服务端调用）。

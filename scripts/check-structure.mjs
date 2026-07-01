@@ -902,6 +902,25 @@ export const repoChecks = [
     },
   },
   {
+    // 登录建客服身份桥接（§P0 链②·根因#3 不信前端）：小程序绑微信开放平台后 login 拿得到 unionid → 经企业微信
+    // idconvert 建 external_userid→openid 映射写 kfIdentity，供客服会话「查你的订单」（kfCallback 读它解析 openid）。
+    // 焊三链：① currentUnionId 取 unionid（经 kit·非裸 getWXContext）② unionidToExternalUserid 真转 ③ 写 kfIdentity。
+    // 防桥接被摘 → 查订单静默失效（best-effort 不反噬登录本身属根因#8 靠人·此处只焊「链在」）。
+    id: 'login-kf-identity-bridge',
+    roots: ['#3'],
+    desc: '登录建客服身份桥接（§P0 链②·根因#3 不信前端）：login 须经 currentUnionId 取 unionid + unionidToExternalUserid（企业微信 idconvert）建 external_userid→openid 映射写 kfIdentity——供客服会话查订单解析 openid；防桥接被摘致查订单静默失效',
+    run() {
+      const f = 'packages/cloud/src/functions/user/login.ts'
+      if (!existsSync(join(ROOT, f))) return [`${f} 缺失`]
+      const s = readFileSync(join(ROOT, f), 'utf8')
+      const bad = []
+      if (!/currentUnionId\s*\(/.test(s)) bad.push(`${f} 未经 currentUnionId 取 unionid——无从桥接（§P0 链②）`)
+      if (!/unionidToExternalUserid\s*\(/.test(s)) bad.push(`${f} 未经 idconvert unionidToExternalUserid 转 external_userid（§P0 链②）`)
+      if (!/COLLECTIONS\.kfIdentity|['"]kfIdentity['"]/.test(s)) bad.push(`${f} 未写 kfIdentity 映射——客服查订单无从解析 openid（§P0 链②·根因#3）`)
+      return bad
+    },
+  },
+  {
     // 后台360工作站 B2.2 节点诊断·UGC 图片入库前必过内容安全（根因#3 信任边界 fail-closed）：学员拍照上传是
     // 本项目第一个「用户图片入库」越权写面——黄暴恐违规图直接入库＝合规风险。守此不变量：① kit/contentsec.ts
     // 内容安全接缝须真调 cloud.openapi.security.imgSecCheck（非注释摆设·扫真实调用模式·防假绿）；② 写 checkpoints

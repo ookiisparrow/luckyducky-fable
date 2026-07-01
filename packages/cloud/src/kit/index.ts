@@ -7,7 +7,7 @@
  */
 export { getDb } from './db'
 export { ok, err } from './reply'
-export { withOpenId, isServerCall, withAdminGate } from './gate'
+export { withOpenId, isServerCall, withAdminGate, currentUnionId } from './gate'
 export type { OpenIdCtx } from './gate'
 export { transition } from './transition'
 export type { TransitionResult } from './transition'
@@ -40,6 +40,7 @@ export {
   verifyKfSignature,
   decryptKfMessage,
   getAccessToken,
+  getCachedKfToken,
   syncMsg,
   sendMsg,
   transferToServicer,

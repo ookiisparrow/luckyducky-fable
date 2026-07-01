@@ -223,6 +223,19 @@ export async function getAccessToken(
   return j.access_token as string
 }
 
+/**
+ * 只读缓存的 access_token（未过期返回·过期/无返 ''）：给**不持密钥**的函数（如 login·§P0 链② 客服身份桥接）
+ * 复用 kfCallback/getAccessToken 维护的令牌做 idconvert，自己不 gettoken（不需 Secret·根因#3 密钥不扩散到 login）。
+ * best-effort：取不到（过期/kfCallback 近期没活动）返 ''，调用方跳过、下次再试。
+ */
+export async function getCachedKfToken(db: any): Promise<string> {
+  const now = Date.now()
+  const got = await db.collection(COLLECTIONS.kfState).doc(TOKEN_ID).get().catch(() => null)
+  const rec = got && got.data ? got.data : null
+  if (rec && typeof rec.expireAt === 'number' && rec.expireAt - TOKEN_SKEW_MS > now && rec.accessToken) return rec.accessToken as string
+  return ''
+}
+
 // ───────────────────────── 客服 API（sync_msg / send_msg / idconvert） ─────────────────────────
 
 async function post(path: string, accessToken: string, payload: any, fetchImpl: FetchFn): Promise<any> {
