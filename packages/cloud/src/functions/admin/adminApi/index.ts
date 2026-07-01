@@ -185,12 +185,14 @@ export const main = async (event: any) => {
   const handler = ACTIONS[action]
   if (!handler) return reply(400, { ok: false, error: 'UNKNOWN_ACTION' })
   const auditIp = tkey.replace('adminlogin:', '') // 操作审计#4：动钱/状态操作留痕（fail-soft·不反噬响应）
+  // B5.4·§1.5 可追溯：真实操作者身份（checkKey 解析的账号 name/_id·多账号上线后不再糊成单口令 admin·谁查/改了谁）
+  const operator = String((auth as any).operator || 'admin')
   try {
     const res = await handler({ db, cloud, data, drafts })
-    if (shouldAudit(action)) await recordAudit({ action, ip: auditIp, data, ok: !!res && res.statusCode === 200 })
+    if (shouldAudit(action)) await recordAudit({ action, operator, ip: auditIp, data, ok: !!res && res.statusCode === 200 })
     return res
   } catch (e) {
-    if (shouldAudit(action)) await recordAudit({ action, ip: auditIp, data, ok: false, error: 'SERVER_ERROR' })
+    if (shouldAudit(action)) await recordAudit({ action, operator, ip: auditIp, data, ok: false, error: 'SERVER_ERROR' })
     console.error('adminApi error', action, e)
     return reply(500, { ok: false, error: 'SERVER_ERROR' })
   }

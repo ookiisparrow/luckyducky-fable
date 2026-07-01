@@ -848,6 +848,38 @@ export const repoChecks = [
     },
   },
   {
+    // 操作审计记真实操作者身份（§1.5·根因#3 可追溯·B5.4·承 M⑤ 多账号 RBAC 上线）：多账号既已上线，审计不能再把
+    // 所有人记成单口令 'admin'——否则外包/坐席「查了谁·改了谁」全糊成 admin、追溯即失效。焊三链：① kit/audit.ts
+    // recordAudit 须接 operator 入参并以 entry.operator 落库（非硬编码 operator:'admin'）；② adminApi/index.ts 分发处
+    // 须读 checkKey 返回 auth 的 operator + 贯到 recordAudit 调用；③ lib.ts checkKey 须返回 operator 账号身份
+    // （否则 operator 恒 undefined、回退 admin＝没真解析）。防退回「全记 admin」审计假身份。
+    id: 'audit-operator-threaded',
+    roots: ['#3'],
+    desc: '操作审计记真实操作者身份（§1.5·根因#3 可追溯·B5.4·承 M⑤ 多账号）：① kit/audit.ts recordAudit 以 entry.operator 落库（非硬编码 admin）；② adminApi/index.ts 读 auth.operator 并贯到 recordAudit 调用；③ lib.ts checkKey 返回 operator 账号身份——防多账号上线后审计仍把所有人记成 admin、追溯失效',
+    run() {
+      const bad = []
+      const audit = 'packages/cloud/src/kit/audit.ts'
+      const idx = 'packages/cloud/src/functions/admin/adminApi/index.ts'
+      const lib = 'packages/cloud/src/functions/admin/adminApi/lib.ts'
+      for (const f of [audit, idx, lib]) if (!existsSync(join(ROOT, f))) return [`${f} 缺失`]
+      // ① audit.ts：operator 由 entry.operator 落库（非硬编码 'admin'）
+      const asrc = readFileSync(join(ROOT, audit), 'utf8')
+      if (!/operator:\s*String\(\s*entry\.operator/.test(asrc))
+        bad.push(`${audit} recordAudit operator 未取自 entry.operator——审计记死 admin（§1.5·根因#3·B5.4）`)
+      // ② index.ts：读 auth.operator + 贯到 recordAudit 调用
+      const isrc = readFileSync(join(ROOT, idx), 'utf8')
+      if (!/\.operator\b/.test(isrc))
+        bad.push(`${idx} 未读取 auth.operator——真实操作者身份没从 checkKey 取出（§1.5·根因#3·B5.4）`)
+      if (!/recordAudit\(\s*\{[^}]*\boperator\b/.test(isrc))
+        bad.push(`${idx} recordAudit 调用未传 operator——操作者身份没贯到审计（§1.5·根因#3·B5.4）`)
+      // ③ lib.ts checkKey：返回 operator 账号身份（否则 operator 恒 undefined 回退 admin）
+      const lsrc = readFileSync(join(ROOT, lib), 'utf8')
+      if (!/checkKey[\s\S]*?operator:/.test(lsrc))
+        bad.push(`${lib} checkKey 未返回 operator 账号身份——operator 恒 undefined 回退 admin（§1.5·根因#3·B5.4）`)
+      return bad
+    },
+  },
+  {
     // 后台360工作站 B2.2 节点诊断·UGC 图片入库前必过内容安全（根因#3 信任边界 fail-closed）：学员拍照上传是
     // 本项目第一个「用户图片入库」越权写面——黄暴恐违规图直接入库＝合规风险。守此不变量：① kit/contentsec.ts
     // 内容安全接缝须真调 cloud.openapi.security.imgSecCheck（非注释摆设·扫真实调用模式·防假绿）；② 写 checkpoints

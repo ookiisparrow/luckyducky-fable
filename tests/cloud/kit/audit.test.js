@@ -35,10 +35,16 @@ describe('kit.recordAudit（写痕·剥凭证·fail-soft）', () => {
     const e = rows[0]
     expect(e.action).toBe('saveSettings')
     expect(e.ok).toBe(true)
-    expect(e.operator).toBe('admin')
+    expect(e.operator).toBe('admin') // 未传 operator → 回退 admin（fail-soft·向后兼容）
     expect(e.summary.urlPrefix).toBe('https://x/') // 非敏感保留
     expect(e.summary.alertWebhook).toBeUndefined() // 凭证剥除
     expect(e.summary.key).toBeUndefined()
+  })
+
+  it('operator 贯入 → 记真实操作者身份（B5.4·§1.5 多账号可追溯·非糊成 admin）', async () => {
+    await recordAudit({ action: 'approveRefund', operator: 'agent-lin', ip: '1.2.3.4', ok: true, data: { id: 'a1' } })
+    const e = control.dump('auditLog')[0]
+    expect(e.operator).toBe('agent-lin') // 谁查/改了谁：记真实账号身份、不再糊成单口令 admin
   })
 
   it('fail-soft：调用不向上抛（审计不反噬业务）', async () => {

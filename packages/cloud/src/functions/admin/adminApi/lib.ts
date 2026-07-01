@@ -93,6 +93,8 @@ const capsForRole = (role: string): string[] => ROLES[role] || []
 
 // 能力位（§1.5 RBAC·B5.2 多账号/角色）：caps 来源优先级 role 派生（ROLES 单源）＞显式 caps 字段＞回退 ['*']
 // （向后兼容旧超管 'auth' doc·无 role/caps 字段·现网单超管不变）。disabled=账号开停（外包可停·B5.2）。
+// operator＝真实操作者账号身份（B5.4·§1.5 可追溯）：随 caps 一起返回，供 adminApi 分发处贯入操作审计
+// 留痕「谁查/改了谁」（多账号上线后不再糊成单口令 admin）；超管 doc 无 name 时回退 'admin'、外包回退其 _id。
 export async function checkKey(db: any, key: any, bootstrap: boolean) {
   if (!key || String(key).length < 6) return { ok: false, error: 'KEY_TOO_SHORT' }
   await ensure(db, 'adminConfig')
@@ -103,19 +105,19 @@ export async function checkKey(db: any, key: any, bootstrap: boolean) {
     const secret = process.env.ADMIN_BOOTSTRAP_KEY || ''
     if (!bootstrap || !secret || String(key) !== secret) return { ok: false, error: 'BAD_KEY' }
     await db.collection('adminConfig').add({ data: { _id: 'auth', keyHash: hash, role: 'superadmin', caps: ['*'], createdAt: Date.now() } })
-    return { ok: true, bootstrapped: true, caps: ['*'] as string[] }
+    return { ok: true, bootstrapped: true, caps: ['*'] as string[], operator: 'admin' }
   }
   // ① 超管 'auth' doc 命中（向后兼容：无 role 取 caps 字段·旧 ['*']）
   if (got.data.keyHash === hash) {
     if (got.data.disabled) return { ok: false, error: 'ACCOUNT_DISABLED' }
-    return { ok: true, caps: got.data.role ? capsForRole(got.data.role) : Array.isArray(got.data.caps) ? got.data.caps : ['*'] }
+    return { ok: true, operator: got.data.name || 'admin', caps: got.data.role ? capsForRole(got.data.role) : Array.isArray(got.data.caps) ? got.data.caps : ['*'] }
   }
   // ② B5.2 多账号：非超管·按 keyHash 查 agent/外包 账号 doc（均有 role；disabled 即停）
   const hit = await db.collection('adminConfig').where({ keyHash: hash }).limit(1).get().catch(() => ({ data: [] }))
   const acct = (hit && hit.data && hit.data[0]) || null
   if (!acct) return { ok: false, error: 'BAD_KEY' }
   if (acct.disabled) return { ok: false, error: 'ACCOUNT_DISABLED' }
-  return { ok: true, caps: acct.role ? capsForRole(acct.role) : Array.isArray(acct.caps) ? acct.caps : [] }
+  return { ok: true, operator: acct.name || acct._id, caps: acct.role ? capsForRole(acct.role) : Array.isArray(acct.caps) ? acct.caps : [] }
 }
 
 // 草稿白名单字段（防杂字段入库）
