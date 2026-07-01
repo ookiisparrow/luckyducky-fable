@@ -23,12 +23,13 @@ export const main = withOpenId(
 
 // best-effort 客服身份桥接（§P0 链②·不反噬登录）：已绑过（kfBound）或无 unionid/缓存令牌/48h 会话身份即跳过。
 async function bindKfIdentity(db: any, OPENID: string, user: any): Promise<void> {
+  if (user && user.kfBound) return // 已绑·静默跳（省 idconvert 限频）
   const unionid = currentUnionId()
-  if (!unionid || (user && user.kfBound)) return
-  const token = await getCachedKfToken(db)
-  if (!token) return
-  const ext = await unionidToExternalUserid(token, unionid, OPENID)
-  if (!ext) return // 无 48h 会话身份/转换失败：不写、下次登录再试
+  const token = unionid ? await getCachedKfToken(db) : ''
+  const ext = unionid && token ? await unionidToExternalUserid(token, unionid, OPENID) : ''
+  // 观测（无 PII·只布尔·pinpoint 桥接哪步断·根因#8）：unionid 到没到 / 缓存令牌有没有 / idconvert 出没出 ext
+  console.log('[login-bind]', { hasUnionid: !!unionid, hasToken: !!token, hasExt: !!ext })
+  if (!ext) return // 任一环空（无 unionid / 无缓存令牌 / idconvert 空[48h窗·客户联系权限]）：不写、下次登录再试
   await db.collection(COLLECTIONS.kfIdentity).doc('ext:' + ext).set({ data: { openid: OPENID, unionid, updatedAt: Date.now() } })
   await db.collection('users').doc(OPENID).update({ data: { kfBound: true } }).catch(() => {})
 }
