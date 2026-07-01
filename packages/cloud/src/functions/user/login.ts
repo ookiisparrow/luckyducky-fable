@@ -1,4 +1,4 @@
-import { withOpenId, withRateLimit, ok, ensureDoc, currentUnionId, getCachedKfToken, unionidToExternalUserid, COLLECTIONS } from '../../kit'
+import { withOpenId, withRateLimit, ok, ensureDoc, currentUnionId } from '../../kit'
 
 // 微信登录（静默）：用可信 openid upsert users，返回用户。前端无需传身份。
 // 无 openid 无法建立身份 → NO_OPENID（withOpenId 缺省，较原「裸用空 openid」更正确）。
@@ -13,23 +13,18 @@ export const main = withOpenId(
     const user = isNew
       ? await ensureDoc('users', OPENID, { _openid: OPENID, nickname: '', avatar: '', phone: '', createdAt: db.serverDate() })
       : found.data[0]
-    // 客服身份桥接（§P0 链②·根因#3 不信前端·best-effort 绝不反噬登录）：小程序绑微信开放平台后有 unionid，
-    // 首次（未绑过·当前有活跃客服会话身份时）经企业微信 idconvert 建 external_userid→openid 映射，供客服会话查订单
-    // （kfCallback 读 kfIdentity）。复用 kfCallback 缓存的令牌（login 不持密钥·getCachedKfToken）；取不到就跳过下次再试。
-    await bindKfIdentity(db, OPENID, user).catch(() => {})
+    // 客服身份桥接（§查订单·根因#3 不信前端·best-effort 绝不反噬登录）：小程序绑开放平台后有 unionid，存进 users；
+    // kfCallback 收到客服消息时用微信客服 `kf/customer/batchget` 反查 external_userid→unionid→openid 查订单
+    // （不用客户联系 idconvert·那条撞 48002 墙·改走平台原生的微信客服顾客接口）。login 只存 unionid、不调外部 API。
+    await storeUnionId(db, OPENID, user).catch(() => {})
     return ok({ isNew, user })
   })
 )
 
-// best-effort 客服身份桥接（§P0 链②·不反噬登录）：已绑过（kfBound）或无 unionid/缓存令牌/48h 会话身份即跳过。
-async function bindKfIdentity(db: any, OPENID: string, user: any): Promise<void> {
-  if (user && user.kfBound) return // 已绑·静默跳（省 idconvert 限频）
+// best-effort 存 unionid 到 users（§查订单·不反噬登录）：供 kfCallback batchget 反查 openid。无 unionid / 已存过即跳。
+async function storeUnionId(db: any, OPENID: string, user: any): Promise<void> {
   const unionid = currentUnionId()
-  const token = unionid ? await getCachedKfToken(db) : ''
-  const ext = unionid && token ? await unionidToExternalUserid(token, unionid, OPENID) : ''
-  // 观测（无 PII·只布尔·pinpoint 桥接哪步断·根因#8）：unionid 到没到 / 缓存令牌有没有 / idconvert 出没出 ext
-  console.log('[login-bind]', { hasUnionid: !!unionid, hasToken: !!token, hasExt: !!ext })
-  if (!ext) return // 任一环空（无 unionid / 无缓存令牌 / idconvert 空[48h窗·客户联系权限]）：不写、下次登录再试
-  await db.collection(COLLECTIONS.kfIdentity).doc('ext:' + ext).set({ data: { openid: OPENID, unionid, updatedAt: Date.now() } })
-  await db.collection('users').doc(OPENID).update({ data: { kfBound: true } }).catch(() => {})
+  console.log('[login-bind]', { hasUnionid: !!unionid }) // 观测（无 PII·根因#8）：小程序登录到底拿没拿到 unionid
+  if (!unionid || (user && user.unionid === unionid)) return // 无 unionid / 已存过：跳
+  await db.collection('users').doc(OPENID).update({ data: { unionid } }).catch(() => {})
 }

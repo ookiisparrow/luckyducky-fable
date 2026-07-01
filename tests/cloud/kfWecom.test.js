@@ -6,6 +6,7 @@ import {
   sendMsg,
   transferToServicer,
   unionidToExternalUserid,
+  kfCustomerBatchget,
 } from '../../packages/cloud/src/kit/wecom'
 
 // 企业微信客服 API 客户端（access_token DB 缓存 + sync_msg/send_msg/idconvert/转人工）。
@@ -73,5 +74,16 @@ describe('客服消息 API', () => {
     expect(ok.calls[0].body).toMatchObject({ unionid: 'uni1', openid: 'oid1' })
     const fail = mkFetch(() => ({ errcode: 60020 }))
     expect(await unionidToExternalUserid('TKN', 'uni1', 'oid1', fail)).toBe('')
+  })
+
+  it('kfCustomerBatchget：反查顾客 unionid（§查订单·平台原生）；errcode/无 unionid 返空', async () => {
+    const ok = mkFetch(() => ({ errcode: 0, customer_list: [{ external_userid: 'e1', unionid: 'uni-9' }] }))
+    expect(await kfCustomerBatchget('TKN', 'e1', ok)).toBe('uni-9')
+    expect(ok.calls[0].url).toContain('/kf/customer/batchget')
+    expect(ok.calls[0].body).toMatchObject({ external_userid_list: ['e1'] })
+    const fail = mkFetch(() => ({ errcode: 48002 }))
+    expect(await kfCustomerBatchget('TKN', 'e1', fail)).toBe('')
+    const noUnion = mkFetch(() => ({ errcode: 0, customer_list: [{ external_userid: 'e1' }] }))
+    expect(await kfCustomerBatchget('TKN', 'e1', noUnion)).toBe('')
   })
 })

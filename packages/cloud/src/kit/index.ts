@@ -46,5 +46,6 @@ export {
   transferToServicer,
   unionidToExternalUserid,
   listKfAccounts,
+  kfCustomerBatchget,
 } from './wecom'
 export type { KfTrustedEvent } from './wecom'

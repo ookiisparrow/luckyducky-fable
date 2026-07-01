@@ -7,6 +7,7 @@ import {
   transferToServicer,
   getDb,
   alert,
+  kfCustomerBatchget,
 } from '../../../kit'
 import { handleMessage, rootMenu, buildMsgMenu, extUserId, processKfBatch, type Incoming } from './dispatch'
 import { archiveInbound, archiveOutbound } from './archive' // 会话归档（B5.1·入站/出站落档·守卫 conversations-archived）
@@ -20,6 +21,33 @@ const cardCfg = () => ({ appid: env('WXKF_MINIAPP_APPID'), thumbMediaId: env('WX
 const SERVICER = () => env('WXKF_SERVICER')
 
 const SEEN_TTL_NOTE = 'seen:<msgid> 去重痕只增（量级=客服消息数·远低于 events）；如需回收随 cleanupEvents 扩展'
+
+// §查订单·平台原生身份桥接（根因#3 不信前端·best-effort 不反噬消息处理）：顾客的 external_userid 经微信客服
+// `kf/customer/batchget` 反查 unionid → users 找 openid → 建 `ext→openid` 映射（dispatch.resolveOpenid 读它查订单）。
+// **绕开客户联系 idconvert 的 48002 墙**（用微信客服自己的顾客接口·平台原生）。已建映射即跳（省 batchget）。
+// 守卫 login-kf-identity-bridge 焊「login 存 unionid + 本处 batchget 建 kfIdentity」两端。
+async function ensureKfIdentity(db: any, token: string, euid: string): Promise<void> {
+  try {
+    if (!euid) return
+    const got = await db.collection(COLLECTIONS.kfIdentity).doc('ext:' + euid).get().catch(() => null)
+    if (got && got.data && got.data.openid) return // 已建映射·不重复 batchget
+    const unionid = await kfCustomerBatchget(token, euid)
+    if (!unionid) {
+      console.log('[kf-bind] no-unionid via batchget（顾客没绑开放平台/没授权）')
+      return
+    }
+    const u = await db.collection('users').where({ unionid }).limit(1).get().catch(() => ({ data: [] }))
+    const openid = u.data && u.data[0] && u.data[0]._openid
+    if (!openid) {
+      console.log('[kf-bind] unionid 不在 users（顾客没登录过小程序）')
+      return
+    }
+    await db.collection(COLLECTIONS.kfIdentity).doc('ext:' + euid).set({ data: { openid, unionid, updatedAt: Date.now() } })
+    console.log('[kf-bind] bound via batchget')
+  } catch {
+    /* best-effort：身份桥接不反噬消息处理 */
+  }
+}
 
 // 一条消息 → 规范化入站（wire 形状以真机为准·根因#8：兼容点击回传 menu_id 与自由打字 content）
 function normalize(msg: any): Incoming | null {
@@ -74,6 +102,7 @@ export const main = defineKfCallback({
     const handleOne = async (msg: any) => {
       console.log('[kf] handle', { msgtype: msg.msgtype, hasText: !!msg.text?.content, hasMenuId: !!msg.text?.menu_id })
       await archiveInbound(db, msg, openKfId) // 入站客户消息落档（B5.1·有 msgid 才记·确定性 _id 幂等·fail-soft）
+      await ensureKfIdentity(db, token, extUserId(msg)) // §查订单·平台原生 batchget 反查建 ext→openid 映射（best-effort）
       if (msg.msgtype === 'event' && msg.event?.event_type === 'enter_session') {
         await send(buildMsgMenu(extUserId(msg), openKfId, rootMenu())) // 进会话欢迎（euid 在 event 子对象·根因#8）
         return

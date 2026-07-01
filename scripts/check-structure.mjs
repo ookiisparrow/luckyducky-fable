@@ -902,21 +902,26 @@ export const repoChecks = [
     },
   },
   {
-    // 登录建客服身份桥接（§P0 链②·根因#3 不信前端）：小程序绑微信开放平台后 login 拿得到 unionid → 经企业微信
-    // idconvert 建 external_userid→openid 映射写 kfIdentity，供客服会话「查你的订单」（kfCallback 读它解析 openid）。
-    // 焊三链：① currentUnionId 取 unionid（经 kit·非裸 getWXContext）② unionidToExternalUserid 真转 ③ 写 kfIdentity。
-    // 防桥接被摘 → 查订单静默失效（best-effort 不反噬登录本身属根因#8 靠人·此处只焊「链在」）。
+    // 查订单·平台原生身份桥接（§查订单·根因#3 不信前端）：小程序绑开放平台后 login 拿得到 unionid → 存进 users；
+    // kfCallback 收到客服消息时经微信客服 kf/customer/batchget 反查 external_userid→unionid→openid 建 kfIdentity 映射，
+    // 供 resolveOpenid「查你的订单」。**绕开客户联系 idconvert 的 48002 墙**（用微信客服自己的顾客接口·平台原生·2026-07-01
+    // 真机逼出 48002 后改此路）。焊两端：① login 经 currentUnionId 存 unionid；② kfCallback 经 kfCustomerBatchget 写 kfIdentity。
     id: 'login-kf-identity-bridge',
     roots: ['#3'],
-    desc: '登录建客服身份桥接（§P0 链②·根因#3 不信前端）：login 须经 currentUnionId 取 unionid + unionidToExternalUserid（企业微信 idconvert）建 external_userid→openid 映射写 kfIdentity——供客服会话查订单解析 openid；防桥接被摘致查订单静默失效',
+    desc: '查订单平台原生身份桥接（§查订单·根因#3 不信前端）：login 经 currentUnionId 存 unionid 到 users；kfCallback 经微信客服 kfCustomerBatchget 反查建 external_userid→openid 映射写 kfIdentity（resolveOpenid 读它查订单·绕客户联系 idconvert 48002）——防桥接被摘致查订单静默失效',
     run() {
-      const f = 'packages/cloud/src/functions/user/login.ts'
-      if (!existsSync(join(ROOT, f))) return [`${f} 缺失`]
-      const s = readFileSync(join(ROOT, f), 'utf8')
       const bad = []
-      if (!/currentUnionId\s*\(/.test(s)) bad.push(`${f} 未经 currentUnionId 取 unionid——无从桥接（§P0 链②）`)
-      if (!/unionidToExternalUserid\s*\(/.test(s)) bad.push(`${f} 未经 idconvert unionidToExternalUserid 转 external_userid（§P0 链②）`)
-      if (!/COLLECTIONS\.kfIdentity|['"]kfIdentity['"]/.test(s)) bad.push(`${f} 未写 kfIdentity 映射——客服查订单无从解析 openid（§P0 链②·根因#3）`)
+      const lf = 'packages/cloud/src/functions/user/login.ts'
+      const kf = 'packages/cloud/src/functions/cs/kfCallback/index.ts'
+      for (const f of [lf, kf]) if (!existsSync(join(ROOT, f))) return [`${f} 缺失`]
+      const ls = readFileSync(join(ROOT, lf), 'utf8')
+      const ks = readFileSync(join(ROOT, kf), 'utf8')
+      // ① login 取 unionid 并存 users（供 kfCallback 反查）
+      if (!/currentUnionId\s*\(/.test(ls)) bad.push(`${lf} 未经 currentUnionId 取 unionid（§查订单）`)
+      if (!/data:\s*\{\s*unionid\s*\}/.test(ls)) bad.push(`${lf} 未存 unionid 到 users——kfCallback 反查无从落地（§查订单）`)
+      // ② kfCallback 经微信客服 batchget 反查 + 写 kfIdentity（平台原生·绕客户联系 idconvert 48002）
+      if (!/kfCustomerBatchget\s*\(/.test(ks)) bad.push(`${kf} 未经 kfCustomerBatchget 反查 unionid——查订单身份无从解析（§查订单·平台原生）`)
+      if (!/COLLECTIONS\.kfIdentity|['"]kfIdentity['"]/.test(ks)) bad.push(`${kf} 未写 kfIdentity 映射——resolveOpenid 查不到 openid（§查订单·根因#3）`)
       return bad
     },
   },

@@ -309,3 +309,18 @@ export async function unionidToExternalUserid(
 export async function listKfAccounts(accessToken: string, fetchImpl: FetchFn = defaultFetch): Promise<any> {
   return post('kf/account/list', accessToken, { offset: 0, limit: 1 }, fetchImpl)
 }
+
+/**
+ * 查客服顾客的 unionid（`kf/customer/batchget`·**平台原生反查**·须小程序绑开放平台）：给定 external_userid，
+ * 用微信客服**自己的**顾客接口拿该顾客的 unionid——查订单身份桥接用（绕开客户联系 idconvert 的 48002·§查订单）。
+ * 返回 unionid 或 ''（errcode/无 unionid[顾客没授权/没绑开放平台]即空·best-effort）。
+ */
+export async function kfCustomerBatchget(accessToken: string, externalUserId: string, fetchImpl: FetchFn = defaultFetch): Promise<string> {
+  const j = await post('kf/customer/batchget', accessToken, { external_userid_list: [externalUserId] }, fetchImpl)
+  if (j.errcode) {
+    alert('security', 'wecom', 'KF_BATCHGET_FAILED', { errcode: j.errcode })
+    return ''
+  }
+  const c = j.customer_list && j.customer_list[0]
+  return c && c.unionid ? String(c.unionid) : ''
+}
