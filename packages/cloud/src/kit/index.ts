@@ -45,5 +45,6 @@ export {
   sendMsg,
   transferToServicer,
   unionidToExternalUserid,
+  listKfAccounts,
 } from './wecom'
 export type { KfTrustedEvent } from './wecom'

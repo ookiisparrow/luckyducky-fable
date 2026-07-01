@@ -235,6 +235,19 @@
       ]
     },
     {
+      "name": "kfHealthProbe",
+      "timeout": 20,
+      "handler": "index.main",
+      "installDependency": true,
+      "triggers": [
+        {
+          "name": "kfProbeTimer",
+          "type": "timer",
+          "config": "0 */30 * * * * *"
+        }
+      ]
+    },
+    {
       "name": "submitFeedback",
       "timeout": 10,
       "handler": "index.main",

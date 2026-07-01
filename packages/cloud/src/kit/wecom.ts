@@ -301,3 +301,11 @@ export async function unionidToExternalUserid(
   }
   return j.external_userid || ''
 }
+
+/**
+ * 探活：列客服账号（`kf/account/list`·轻量读·limit 1）。返回原始响应（含 errcode）。
+ * 活体探针用——`getAccessToken`(gettoken) 抓不到可信IP问题（60020 在真 API 调用才报），故须真调一次读接口探。
+ */
+export async function listKfAccounts(accessToken: string, fetchImpl: FetchFn = defaultFetch): Promise<any> {
+  return post('kf/account/list', accessToken, { offset: 0, limit: 1 }, fetchImpl)
+}

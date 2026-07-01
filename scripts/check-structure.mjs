@@ -921,6 +921,26 @@ export const repoChecks = [
     },
   },
   {
+    // 微信客服活体探针经唯一 botpush 接缝告警（根因#12 接缝单点·补根因#8「上线后静默故障」隐患·调试日志 AA）：
+    // kfHealthProbe 定时探令牌/API 健康，静默故障（Secret 漂/可信IP 丢/权限丢·这次逼出 60020/40001 那类）经
+    // notifyAlert 唯一接缝推企微——防探针被悄悄摘掉 → 又回到「断了没人知道」的静默故障。焊：① 探针在 + isServerCall
+    // 防刷 ② 真调 getAccessToken + listKfAccounts 探（gettoken 抓不到可信IP·须真调读接口）③ 经 notifyAlert 推（不直拼 https）。
+    id: 'kf-health-probe-wired',
+    roots: ['#12'],
+    desc: '微信客服活体探针经唯一接缝告警（根因#12·补根因#8 上线后静默故障隐患·调试日志 AA）：cs/kfHealthProbe 须 isServerCall 闸 + 真调 getAccessToken/listKfAccounts 探健康 + 经 notifyAlert 唯一 botpush 接缝推企微告警——防探针被摘致「断了没人知道」',
+    run() {
+      const f = 'packages/cloud/src/functions/cs/kfHealthProbe/index.ts'
+      if (!existsSync(join(ROOT, f))) return [`${f} 缺失——微信客服活体探针（调试日志 AA 隐患补法）`]
+      const s = readFileSync(join(ROOT, f), 'utf8')
+      const bad = []
+      if (!/isServerCall\s*\(/.test(s)) bad.push(`${f} 未经 isServerCall——探针对客户端开放可被刷告警（根因#3）`)
+      if (!/getAccessToken\s*\(/.test(s) || !/listKfAccounts\s*\(/.test(s))
+        bad.push(`${f} 未真调 getAccessToken+listKfAccounts——探不到令牌/可信IP 静默故障（gettoken 抓不到 60020）`)
+      if (!/notifyAlert\s*\(/.test(s)) bad.push(`${f} 未经 notifyAlert 推告警——静默故障无人知（根因#12 唯一接缝）`)
+      return bad
+    },
+  },
+  {
     // 后台360工作站 B2.2 节点诊断·UGC 图片入库前必过内容安全（根因#3 信任边界 fail-closed）：学员拍照上传是
     // 本项目第一个「用户图片入库」越权写面——黄暴恐违规图直接入库＝合规风险。守此不变量：① kit/contentsec.ts
     // 内容安全接缝须真调 cloud.openapi.security.imgSecCheck（非注释摆设·扫真实调用模式·防假绿）；② 写 checkpoints
