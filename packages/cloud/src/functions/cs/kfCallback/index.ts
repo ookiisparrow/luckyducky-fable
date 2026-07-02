@@ -4,7 +4,6 @@ import {
   getAccessToken,
   syncMsg,
   sendMsg,
-  transferToServicer,
   ensureSmartAssistant,
   getDb,
   alert,
@@ -19,7 +18,6 @@ import { archiveInbound, archiveOutbound } from './archive' // 会话归档（B5
 const env = (k: string) => process.env[k] || ''
 const cfg = () => ({ corpid: env('WXKF_CORPID'), secret: env('WXKF_SECRET') })
 const cardCfg = () => ({ appid: env('WXKF_MINIAPP_APPID'), thumbMediaId: env('WXKF_THUMB_MEDIA_ID') })
-const SERVICER = () => env('WXKF_SERVICER')
 
 const SEEN_TTL_NOTE = 'seen:<msgid> 去重痕只增（量级=客服消息数·远低于 events）；如需回收随 cleanupEvents 扩展'
 
@@ -85,12 +83,9 @@ export const main = defineKfCallback({
       }
       return res
     }
-    const transfer = async (externalUserId: string) => {
-      const res = await transferToServicer(token, { openKfId, externalUserId, servicerUserId: SERVICER() })
-      if (res && res.errcode) alert('security', 'kfCallback', 'TRANSFER_FAILED', { errcode: res.errcode })
-      return res
-    }
-    const ctx = { db, openKfId, cfg: cardCfg(), send, transfer }
+    // 转人工不再调平台 service_state 转接（守卫 agent-channel-stays-assistant·根因#12·调试日志 AC）：
+    // 平台会话恒智能助手态(1)，人工由承面C 自建工作台（csSession 队列）承接——转 3 会让坐席 send_msg 全被 95018 拒。
+    const ctx = { db, openKfId, cfg: cardCfg(), send }
 
     // cursor 持久化：从上次游标增量拉，处理完回写
     const cursorId = 'cursor:' + openKfId

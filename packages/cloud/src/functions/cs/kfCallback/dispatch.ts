@@ -400,13 +400,19 @@ export interface DispatchCtx {
   openKfId: string
   cfg: { appid: string; thumbMediaId: string }
   send: (payload: any) => Promise<any>
-  transfer: (externalUserId: string) => Promise<any>
 }
 
 /** 处理单条入站消息：menu_id 优先按路由走，否则自由文本走关键词识别→高亮气泡。 */
 export async function handleMessage(ctx: DispatchCtx, incoming: Incoming): Promise<void> {
-  const { db, openKfId, cfg, send, transfer } = ctx
+  const { db, openKfId, cfg, send } = ctx
   const to = incoming.externalUserId
+
+  // 人工接管时 bot 不抢话（平台态恒 1 后「谁在接待」由**我方** csSession 状态机判·非平台 service_state·调试日志 AC）：
+  // pending/active/escalated＝排队中/坐席接待中/待商户——bot 静默（消息仍归档+身份桥接在 index 侧不受影响·坐席经
+  // getThread 看到顾客新消息）；closed/无会话＝bot 正常应答。曾靠平台 state 3 让 bot 让位（AB），随转 3 退役改此判。
+  const held = await db.collection(COLLECTIONS.csSession).doc('wxkf:' + openKfId + ':' + to).get().catch(() => null)
+  const hs = held && held.data && held.data.status
+  if (hs === 'pending' || hs === 'active' || hs === 'escalated') return
 
   const r: Route = incoming.menuId
     ? route(incoming.menuId)
@@ -417,16 +423,14 @@ export async function handleMessage(ctx: DispatchCtx, incoming: Incoming): Promi
 
   switch (r.type) {
     case 'transfer':
-      // 承面 C（M0.c）：会话进自建工作台待接队列（pending·幂等·坐席台 listQueue 读它）——与平台 service_state 两层，
-      // 我方队列不依赖平台转接是否成功（best-effort·enqueueSession 内吞错·不反噬顾客回复/转接）。
+      // 承面 C：转人工 = 会话进**自建工作台**待接队列（pending·幂等·坐席台 listQueue 读它）+ 给顾客文字确认。
+      // **不动平台 service_state**（守卫 agent-channel-stays-assistant·根因#12·调试日志 AC）：坐席回复走
+      // send_msg API、仅智能助手态(1)可发——曾在此调 transferToServicer 转 3（原生接待台模式）致坐席发送
+      // 全被 95018 拒（2026-07-02 真机逼出）。人工排队/认领/结束由 csSession 状态机管，平台侧全程留 1。
       await enqueueSession(db, openKfId, to)
-      // 先给顾客明确反馈（转接确认），再尽力调转接 API。会话分配接口属「客户联系」权限域、内部接入密钥
-      // 无权（48002）→ 自动分配暂不可用；但顾客有了文字兜底、接待人员可在接待台手动接入。权限打通后
-      // transfer() 自动生效、无需再改（根因#8：真机暴露 48002·见 微信客服配置手册.md 转人工节）。
       await send(
         buildText(to, openKfId, '已为你转接人工客服～工作人员会尽快在这里回复你。你也可以先把问题描述清楚，方便更快处理 🙇')
       )
-      await transfer(to)
       return
     case 'faq': {
       // FAQ 答案从 kb 单源读（B4.1·守卫 faq-via-kb-single-source）；kb 无此条/未启用 → 兜底回根菜单（不写死答案）

@@ -43,7 +43,6 @@ export {
   getCachedKfToken,
   syncMsg,
   sendMsg,
-  transferToServicer,
   getServiceState,
   enterSmartAssistant,
   ensureSmartAssistant,

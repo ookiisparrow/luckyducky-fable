@@ -151,16 +151,13 @@ describe('身份桥接 + 订单摘要', () => {
 describe('handleMessage 编排', () => {
   function mkCtx() {
     const sent = []
-    const transferred = []
     return {
       sent,
-      transferred,
       ctx: {
         db: cloud.database(),
         openKfId: 'wkKf',
         cfg: { appid: 'wxapp', thumbMediaId: 'thumb1' },
         send: async (p) => sent.push(p),
-        transfer: async (eid) => transferred.push(eid),
       },
     }
   }
@@ -172,13 +169,30 @@ describe('handleMessage 编排', () => {
     expect(sent[0].msgmenu.head_content).toContain('没到')
   })
 
-  it('点 human → 先发转接确认文字 + 尽力转人工（48002 兜底·见配置手册）', async () => {
-    const { ctx, sent, transferred } = mkCtx()
+  it('点 human → 入自建队列 csSession(pending) + 发转接确认文字·不动平台 service_state（95018 根治·调试日志 AC）', async () => {
+    const { ctx, sent } = mkCtx()
     await handleMessage(ctx, { externalUserId: 'e2', menuId: 'human', text: '' })
-    expect(transferred).toEqual(['e2']) // 仍尝试转接（权限通了即自动分配）
     expect(sent).toHaveLength(1) // 顾客必有文字反馈，不再静默无响应
     expect(sent[0].msgtype).toBe('text')
     expect(sent[0].text.content).toContain('人工')
+    // 人工=自建 csSession 队列承接（承面C·坐席台 listQueue 读它）；DispatchCtx 已无 transfer 回调=平台态不可能被动
+    const s = control.dump('csSession').find((x) => x.externalUserId === 'e2')
+    expect(s).toMatchObject({ status: 'pending', openKfId: 'wkKf' })
+  })
+
+  it('会话在自建人工队列/接待中（pending/active/escalated）→ bot 不抢话；closed → bot 恢复应答（调试日志 AC）', async () => {
+    for (const status of ['pending', 'active', 'escalated']) {
+      control.reset()
+      control.seed('csSession', [{ _id: 'wxkf:wkKf:e9', status, externalUserId: 'e9', openKfId: 'wkKf', createdAt: 1, updatedAt: 1 }])
+      const { ctx, sent } = mkCtx()
+      await handleMessage(ctx, { externalUserId: 'e9', menuId: '', text: '还在吗' })
+      expect(sent).toHaveLength(0) // 人工接管·bot 静默（顾客消息经归档进坐席 getThread·不丢）
+    }
+    control.reset()
+    control.seed('csSession', [{ _id: 'wxkf:wkKf:e9', status: 'closed', externalUserId: 'e9', openKfId: 'wkKf', createdAt: 1, updatedAt: 1 }])
+    const { ctx, sent } = mkCtx()
+    await handleMessage(ctx, { externalUserId: 'e9', menuId: '', text: '在吗' })
+    expect(sent).toHaveLength(1) // 会话已结束 → bot 正常接回
   })
 
   it('点 order:query 但未绑定 → 引导登录文字', async () => {

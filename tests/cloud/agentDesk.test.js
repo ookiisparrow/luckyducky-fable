@@ -181,11 +181,12 @@ describe('④ sendAgentMessage：坐席回复·经 kfSend·出站落 conversatio
     expect(control.callFunctionCalls()).toHaveLength(0)
   })
 
-  it('kfSend 失败（errcode 非0·如 95018 窗外）→ 带回 errcode·不归档', async () => {
+  it('kfSend 失败（errcode 非0·如 95018）→ ok:false + errcode·不归档（防前端把失败当成功静默吞·调试日志 AC）', async () => {
     control.setCallFunctionResult({ result: { ok: true, sent: false, errcode: 95018 } })
     seedSession('e1', 'active', { agentId: 'agent:out1' })
     const r = parse(await sendAgentMessage(ctx({ sessionId: sid('wk1', 'e1'), text: 'x' })))
-    expect(r.ok).toBe(true)
+    expect(r.ok).toBe(false) // 失败必须 ok:false——前端只看 ok·曾回 ok:true+errcode 被当成功（清输入框+无提示）
+    expect(r.error).toBe('SEND_FAIL')
     expect(r.errcode).toBe(95018)
     expect(control.dump('conversations').filter((m) => m.direction === 'out')).toHaveLength(0)
   })
@@ -225,6 +226,16 @@ describe('⑤ getThread：会话消息流·cursor 增量·分配 scope·bounded'
   it('非 owner 外包读他人会话 → FORBIDDEN（分配 scope·防批量导出·§1.5）', async () => {
     seedSession('e1', 'active', { agentId: 'agent:out1' })
     expect(parse(await getThread(ctx({ sessionId: sid('wk1', 'e1') }, OUT2))).status).toBe(403)
+  })
+
+  it('平台事件（msgtype=event·状态变更等）不进坐席消息流（存量档过滤·新档 archive 侧已跳·调试日志 AC）', async () => {
+    seedSession('e1', 'active', { agentId: 'agent:out1', createdAt: 1000 })
+    control.seed('conversations', [
+      { _id: 'c1', externalUserId: 'e1', openKfId: 'wk1', direction: 'in', msgtype: 'text', text: '在吗', at: 1200 },
+      { _id: 'ev', externalUserId: 'e1', openKfId: 'wk1', direction: 'in', msgtype: 'event', text: '[event]', at: 1250 },
+    ])
+    const r = parse(await getThread(ctx({ sessionId: sid('wk1', 'e1') })))
+    expect(r.messages.map((m) => m.text)).toEqual(['在吗']) // [event] 噪声不显示
   })
 })
 

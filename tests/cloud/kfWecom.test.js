@@ -4,7 +4,6 @@ import {
   getAccessToken,
   syncMsg,
   sendMsg,
-  transferToServicer,
   unionidToExternalUserid,
   kfCustomerBatchget,
   getServiceState,
@@ -12,8 +11,9 @@ import {
   ensureSmartAssistant,
 } from '../../packages/cloud/src/kit/wecom'
 
-// 企业微信客服 API 客户端（access_token DB 缓存 + sync_msg/send_msg/idconvert/转人工）。
+// 企业微信客服 API 客户端（access_token DB 缓存 + sync_msg/send_msg/idconvert）。
 // HTTP 形状用注入 fetch 打桩（根因#8：桩证形状，真机证真能用）。
+// （transferToServicer 已退役 2026-07-02·调试日志 AC：state 3 与自建坐席 send_msg 互斥·守卫 agent-channel-stays-assistant）
 
 function mkFetch(responder) {
   const calls = []
@@ -62,13 +62,6 @@ describe('客服消息 API', () => {
     await sendMsg('TKN', { touser: 'e1', open_kfid: 'KF', msgtype: 'text', text: { content: 'hi' } }, f)
     expect(f.calls[0].url).toContain('/kf/send_msg')
     expect(f.calls[0].body.msgtype).toBe('text')
-  })
-
-  it('transferToServicer：service_state=3 + servicer', async () => {
-    const f = mkFetch(() => ({ errcode: 0 }))
-    await transferToServicer('TKN', { openKfId: 'KF', externalUserId: 'e1', servicerUserId: 'staff1' }, f)
-    expect(f.calls[0].url).toContain('/kf/service_state/trans')
-    expect(f.calls[0].body).toMatchObject({ service_state: 3, servicer_userid: 'staff1', external_userid: 'e1' })
   })
 
   it('unionidToExternalUserid：成功返 external_userid；errcode 返空串', async () => {

@@ -918,6 +918,42 @@ export const repoChecks = [
     },
   },
   {
+    // 自建坐席通道恒智能助手态（承面C·根因#12 平台规则）：坐席工作台回复走微信客服 send_msg API，
+    // 而 send_msg 在平台会话态≠1(智能助手) 时被拒（95018·真机逼出·调试日志 AC）——「转人工」若把平台
+    // service_state 转 3（原生接待台模式），自建坐席发送即全断。承面C 上线后人工排队/认领由自建 csSession
+    // 状态机管，平台侧会话必须留智能助手态：① functions/cs/ 不得出现 transferToServicer/service_state 转 3；
+    // ② dispatch 转人工分支仍须 enqueueSession（人工=入自建队列·不是丢给平台）。
+    id: 'agent-channel-stays-assistant',
+    roots: ['#12'],
+    desc: '自建坐席通道恒智能助手态（承面C·根因#12）：send_msg 仅 state=1 可发（95018 真机逼出）——① functions/cs/ 禁调 transferToServicer（转人工不得把平台会话转 3=原生接待台模式·自建坐席发送全断）；② dispatch 转人工分支须 enqueueSession（人工=自建 csSession 队列承接）',
+    run() {
+      const bad = []
+      const dir = join(ROOT, 'packages/cloud/src/functions/cs')
+      const walk = (d) => {
+        for (const e of readdirSync(d, { withFileTypes: true })) {
+          const p = join(d, e.name)
+          if (e.isDirectory()) walk(p)
+          else if (e.name.endsWith('.ts')) {
+            const s = readFileSync(p, 'utf8')
+            // 查真实标识符（import/调用都算——有 import 就有被调风险；注释里带括号的调用样式不匹配裸词）
+            if (/\btransferToServicer\b/.test(s.replace(/\/\/[^\n]*/g, '').replace(/\/\*[\s\S]*?\*\//g, '')))
+              bad.push(`${relative(ROOT, p)} 引用 transferToServicer——转人工把平台会话转 3=自建坐席 send_msg 全被 95018 拒（承面C·根因#12·调试日志 AC）`)
+          }
+        }
+      }
+      if (existsSync(dir)) walk(dir)
+      const disp = 'packages/cloud/src/functions/cs/kfCallback/dispatch.ts'
+      if (existsSync(join(ROOT, disp))) {
+        const s = readFileSync(join(ROOT, disp), 'utf8')
+        const st = s.indexOf("case 'transfer'")
+        const body = st < 0 ? '' : s.slice(st, s.indexOf('case ', st + 1))
+        if (!/enqueueSession\s*\(/.test(body))
+          bad.push(`${disp} 转人工分支未 enqueueSession()——人工须由自建 csSession 队列承接（承面C·B6）`)
+      }
+      return bad
+    },
+  },
+  {
     // 数据共享告知同意（后台360工作站 §1.5·B3.3·承面C 车道 C·根因#3 信任边界）：外包/第三方坐席（≠商户
     // 本人）看客户 360 数据前须有「告知同意」——不同于 C 端微信隐私授权（privacy-authorize-wired 管小程序
     // 系统级隐私接口）。这是「第三方访问客户数据」的义务，焊三件：① 协议/隐私页如实声明外包/第三方客服可

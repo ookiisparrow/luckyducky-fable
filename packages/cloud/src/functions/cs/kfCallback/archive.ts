@@ -59,6 +59,7 @@ export async function archiveInbound(db: any, msg: any, openKfId: string): Promi
   try {
     const msgid = String((msg && msg.msgid) || '')
     if (!msgid) return // 无 msgid（部分事件）不归档——无幂等键
+    if (String((msg && msg.msgtype) || '') === 'event') return // 平台事件（进会话/状态变更）非会话内容——不归档（会话流/质检统计免噪声·调试日志 AC）
     const euid = msgEuid(msg)
     const openid = await resolveOpenidBestEffort(db, euid)
     await db.collection(COLLECTIONS.conversations).add({

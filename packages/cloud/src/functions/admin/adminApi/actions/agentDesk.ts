@@ -214,7 +214,8 @@ export async function sendAgentMessage(ctx: Ctx): Promise<any> {
     await db.collection(COLLECTIONS.csSession).doc(sessionId).update({ data: { updatedAt: Date.now() } }).catch(() => {})
     return reply(200, { ok: true, errcode: 0 })
   }
-  return reply(200, { ok: true, errcode: errcode || -1 }) // 发送失败：errcode 非 0 便于前端提示（同 kfSend 语义）
+  // 发送失败 = ok:false（前端只看 ok·曾回 ok:true+errcode 被当成功→静默吞错+清输入框·95018 真机逼出·调试日志 AC）
+  return reply(200, { ok: false, error: 'SEND_FAIL', errcode: errcode || -1 })
 }
 
 // ── ⑤ getThread：拉会话消息流·cursor 增量（前端轮询·分配 scope：外包只读自己 claim 的会话·根因#3/#7）──
@@ -239,12 +240,14 @@ export async function getThread(ctx: Ctx): Promise<any> {
   const raw: any[] = (res && res.data) || []
   const hasMore = raw.length > THREAD_LIMIT
   const list = hasMore ? raw.slice(0, THREAD_LIMIT) : raw
-  const messages = list.map((m) => ({
-    direction: m.direction === 'out' ? 'out' : 'in',
-    msgtype: m.msgtype || '',
-    text: m.text || '',
-    at: Number(m.at) || 0,
-  }))
+  const messages = list
+    .filter((m) => (m.msgtype || '') !== 'event') // 平台事件非会话内容·存量档也不进坐席消息流（新档已在 archive 侧跳过）
+    .map((m) => ({
+      direction: m.direction === 'out' ? 'out' : 'in',
+      msgtype: m.msgtype || '',
+      text: m.text || '',
+      at: Number(m.at) || 0,
+    }))
   const nextCursor = list.length ? list[list.length - 1].at : Number(data && data.cursor) || undefined
   const openid = await resolveOpenid(db, s)
   return reply(200, { ok: true, session: toView(s, openid), messages, nextCursor })

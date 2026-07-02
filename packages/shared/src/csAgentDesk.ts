@@ -87,7 +87,7 @@ export interface SendAgentMessageReq {
 }
 export interface SendAgentMessageRes {
   ok: true
-  errcode?: number // 微信 send_msg 回执（0/缺=成功·非 0 便于联调看结果·同 kfSend）
+  errcode?: number // 微信 send_msg 回执（成功恒 0）；发送失败回 { ok:false, error:'SEND_FAIL', errcode }（前端按 ok 判·errcode 供提示·调试日志 AC）
 }
 
 /** ⑤ getThread：拉会话消息流·cursor 增量（前端轮询·分配 scope 校验：外包只读自己 claim 的会话）。 */

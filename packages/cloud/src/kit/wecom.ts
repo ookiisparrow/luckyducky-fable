@@ -267,22 +267,9 @@ export async function sendMsg(accessToken: string, payload: any, fetchImpl: Fetc
   return post('kf/send_msg', accessToken, payload, fetchImpl)
 }
 
-/**
- * 转人工（同会话转接待人员·item 6）：把会话服务状态置 3（人工接待）并指定 servicer。
- * 超范围/拿不准/承诺（退款金额/特批/赔偿）一律转人工，机器人不拍板。
- */
-export async function transferToServicer(
-  accessToken: string,
-  args: { openKfId: string; externalUserId: string; servicerUserId: string },
-  fetchImpl: FetchFn = defaultFetch
-): Promise<any> {
-  return post(
-    'kf/service_state/trans',
-    accessToken,
-    { open_kfid: args.openKfId, external_userid: args.externalUserId, service_state: 3, servicer_userid: args.servicerUserId },
-    fetchImpl
-  )
-}
+// （已退役 2026-07-02·调试日志 AC）transferToServicer（service_state→3 原生接待台转接）：与承面C 自建坐席
+// 通道互斥——state 3 下坐席 send_msg 全被 95018 拒。人工由自建 csSession 队列承接、平台会话恒智能助手态(1)；
+// 守卫 agent-channel-stays-assistant 焊 functions/cs/ 禁再引入。历史实现见 git（2026-07-02 前）。
 
 /**
  * 读会话状态（`kf/service_state/get`）：返回 service_state 数字——
