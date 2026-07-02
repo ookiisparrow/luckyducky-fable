@@ -412,6 +412,64 @@ export async function listLedger(materialId, limit) {
   return r.list || []
 }
 
+// ---------- 进销存车道 B·外协加工（发最大团原团→收带结→计件工钱·蓝图 docs/进销存ERP/ §4B） ----------
+
+const OUTWORK_ERR = {
+  NO_WORKER: '请先在「物料与供应商」建织女档（类型选织女）',
+  NOT_OUTWORKER: '发料对象必须是织女档（厂家走采购线）',
+  BAD_LINES: '发料/收货行不完整：每行要有料号和正整数团数、料号不重复',
+  BAD_QTY: '数量必须是正整数（按团计）',
+  BAD_RATE: '计件单价必须是非负整数分（页面按元填、自动转分）',
+  ISSUE_L_RAW_ONLY: '发出的只能是最大团·原团（业务定稿：起手结只做在最大团上）',
+  RECEIVE_L_KNOTTED_ONLY: '收回的只能是最大团·带结',
+  COLOR_NOT_ISSUED: '这个颜色本单没发过料，收不了',
+  RECEIVE_EXCEEDS_ISSUE: '收回数不能超过发出数（防收比发多）',
+  NO_OUTWORK: '外协单不存在',
+  NOT_DRAFT: '只有草稿单能改/发料/取消（已发料的异常走物料页调整单）',
+  NOT_ISSUED: '只有已发料的单能收货（可能已收过）',
+  NOT_DELIVERED: '只有已收货的单能结算（可能已结清）',
+}
+const outworkErr = (e, hint) => new Error(hint || OUTWORK_ERR[e] || SCM_ERR[e] || e || 'OUTWORK_FAIL')
+
+export async function listOutworks(filter) {
+  if (!cloudMode) return []
+  const r = await post('listOutworks', filter || {})
+  if (!r.ok) throw new Error(r.error || 'LOAD_OUTWORKS_FAIL')
+  return r.list || []
+}
+
+// payload：{ outworkId?, workerId, issueLines:[{materialId,qty}], pieceRateFen }（金额整数分·元转分在调用侧一次）
+export async function saveOutwork(payload) {
+  const r = await post('saveOutwork', payload)
+  if (!r.ok) throw outworkErr(r.error)
+  return r.outworkId
+}
+
+export async function issueOutwork(outworkId) {
+  const r = await post('issueOutwork', { outworkId })
+  if (!r.ok) throw outworkErr(r.error === 'INSUFFICIENT' ? 'INSUFFICIENT' : r.error)
+  return r
+}
+
+// receiveLines：[{materialId:'yarn:<color>:L:knotted', qty}]；返 { payableFen, lossQty }
+export async function receiveOutwork(outworkId, receiveLines) {
+  const r = await post('receiveOutwork', { outworkId, receiveLines })
+  if (!r.ok) throw outworkErr(r.error, r.hint)
+  return r
+}
+
+export async function settleOutwork(outworkId) {
+  const r = await post('settleOutwork', { outworkId })
+  if (!r.ok) throw outworkErr(r.error)
+  return r
+}
+
+export async function cancelOutwork(outworkId) {
+  const r = await post('cancelOutwork', { outworkId })
+  if (!r.ok) throw outworkErr(r.error)
+  return r
+}
+
 // ---------- 库存（库存#1·下单即预留·乐观 CAS；写库存收口云端 kit/inventory） ----------
 
 export async function listInventory(productIds) {

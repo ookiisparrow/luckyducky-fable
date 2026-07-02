@@ -21,6 +21,7 @@ import * as agentDesk from './actions/agentDesk' // 承面C 车道A·坐席台 8
 import * as agents from './actions/agents' // 承面C 车道C·外包账号管理（B5.2·超管建/停/列·默认拒 admin:write）
 import * as wecomLogin from './actions/wecomLogin' // M⑦ 车道B·企微 OAuth 免登（pre-auth·特殊分发·同 login 受频控）
 import * as scmMaterials from './actions/scmMaterials' // 进销存 SCM-0 地基·物料/供应商主档+期初调整（默认拒 admin:write·仅超管）
+import * as scmOutwork from './actions/scmOutwork' // 进销存车道 B·外协线（发原团→收带结→计件工钱·默认拒 admin:write·仅超管）
 
 // 管理控制台后端（HTTP 访问服务触发）。B5b：HTTP 外壳 + 口令闸在此，28+ action 拆 actions/ 查表。
 // 鉴权：管理口令（adminConfig sha256，首登 bootstrap）。db 经 kit.getDb；退款流经 kit.callFlow。
@@ -124,6 +125,14 @@ const ACTIONS: Record<string, (ctx: Ctx) => Promise<any>> = {
   saveSupplier: scmMaterials.saveSupplier,
   adjustStock: scmMaterials.adjustStock,
   listLedger: scmMaterials.listLedger,
+  // 进销存车道 B·外协线（蓝图 docs/进销存ERP/ §4B·门5 文件级隔离·未登记 ACTION_CAPS→默认拒 admin:write＝
+  // 仅超管·写类自动审计）：外协单 草稿→发料(出库)→收货(入带结+定格应付/损耗)→结算销账；仅 draft 可取消
+  listOutworks: scmOutwork.listOutworks,
+  saveOutwork: scmOutwork.saveOutwork,
+  issueOutwork: scmOutwork.issueOutwork,
+  receiveOutwork: scmOutwork.receiveOutwork,
+  settleOutwork: scmOutwork.settleOutwork,
+  cancelOutwork: scmOutwork.cancelOutwork,
 }
 
 // 能力闸（§1.5 RBAC·根因#3·别让单超管裸奔）：受限 action 须 principal 具备对应能力（'*'=全能力）。

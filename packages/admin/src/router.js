@@ -19,6 +19,7 @@ import Kb from '@/pages/Kb.vue'
 import Csat from '@/pages/Csat.vue'
 import Agents from '@/pages/Agents.vue'
 import ScmMaterials from '@/pages/ScmMaterials.vue'
+import ScmOutwork from '@/pages/ScmOutwork.vue'
 
 export const router = createRouter({
   history: createWebHashHistory(),
@@ -42,6 +43,7 @@ export const router = createRouter({
     { path: '/externals', component: Externals },
     { path: '/agents', component: Agents },
     { path: '/scm-materials', component: ScmMaterials },
+    { path: '/scm-outwork', component: ScmOutwork },
     // 上新向导：/product/<id>/step/<1-6>；左侧「按步骤直达」也跳这里
     { path: '/product/:id/step/:n', component: Wizard, props: true },
   ],
