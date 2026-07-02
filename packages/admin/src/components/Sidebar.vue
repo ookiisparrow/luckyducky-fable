@@ -1,15 +1,19 @@
 <script setup>
 /**
- * 左侧导航（按 design/console.pen「Component/Sidebar」对齐 + 用户拍板：上新六步收进「商品与上新」内）：
- * - 「商品与上新」是可展开父项，六步作为子菜单缩进其下；进入上新区（列表/向导）自动展开，可手动收起。
- * - 其余模块按 经营 / 数据 / 系统 三组小标题分组。
+ * 左侧导航（业务域主类目结构·用户拍板方案A 2026-07-02）：
+ * - 「数据看板」独立置顶当经营总览入口；其余模块按「商品与内容 / 订单与交易 / 客户服务 / 系统」
+ *   四个可折叠主类目收纳（原「经营」一组 9 项混商品/交易/客服，无层次）。
+ * - 主类目默认全展开、可手动收起（记 localStorage）；跳进某组页面时该组自动弹开。
+ * - 「商品与上新」保持可展开子级（六步向导），进入上新区自动展开，可手动收起。
+ * - 导航路径 ↔ router.js 由守卫 admin-nav-route-synced 双向核对（防死链/孤儿页·根因#5）。
  * 直达入口：带着「最近编辑的商品」跳对应步骤；还没有商品时回列表。
  */
-import { ref, computed, watch } from 'vue'
+import { ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import {
   Package, ChevronDown, Image, FileText, Tags, Clapperboard, QrCode, Printer,
   Smartphone, Truck, RotateCcw, Boxes, ChartColumn, Wallet, Bell, ExternalLink, LifeBuoy, UserSearch, ClipboardCheck, MessagesSquare, BookOpen, Star, Users,
+  Store, Receipt, Headphones, Settings,
 } from 'lucide-vue-next'
 import { useProductsStore, STEP_NAMES } from '@/store/products.js'
 import { logout, currentUser } from '@/api/cloud.js'
@@ -22,32 +26,44 @@ store.load()
 // 「按步骤直达」每步图标（与 design/console.pen Component/Sidebar 同序）
 const STEP_ICONS = [Image, FileText, Tags, Clapperboard, QrCode, Printer]
 
-// 分组导航（设计稿小标题语言延伸到 v1 之后新增的 7 个模块）
+// 业务域主类目（方案A）：key 供折叠状态寻址；「商品与上新」是 catalog 组的特例首项（模板单独渲染）
 const GROUPS = [
   {
-    caption: '经营',
+    key: 'catalog',
+    caption: '商品与内容',
+    icon: Store,
     items: [
       { to: '/showcase', label: '小程序橱窗', icon: Smartphone },
-      { to: '/help-videos', label: '帮助视频', icon: LifeBuoy },
-      { to: '/orders', label: '订单发货', icon: Truck },
-      { to: '/refunds', label: '售后退款', icon: RotateCcw },
-      { to: '/customer360', label: '客户360', icon: UserSearch },
-      { to: '/conversations', label: '客服会话', icon: MessagesSquare },
       { to: '/inventory', label: '库存管理', icon: Boxes },
-      { to: '/checkpoints', label: '节点诊断', icon: ClipboardCheck },
-      { to: '/kb', label: '知识库', icon: BookOpen },
+      { to: '/help-videos', label: '帮助视频', icon: LifeBuoy },
     ],
   },
   {
-    caption: '数据',
+    key: 'trade',
+    caption: '订单与交易',
+    icon: Receipt,
     items: [
-      { to: '/dashboard', label: '数据看板', icon: ChartColumn },
-      { to: '/csat', label: '客服满意度', icon: Star },
+      { to: '/orders', label: '订单发货', icon: Truck },
+      { to: '/refunds', label: '售后退款', icon: RotateCcw },
       { to: '/reconciliation', label: '财务对账', icon: Wallet },
     ],
   },
   {
+    key: 'service',
+    caption: '客户服务',
+    icon: Headphones,
+    items: [
+      { to: '/conversations', label: '客服会话', icon: MessagesSquare },
+      { to: '/customer360', label: '客户360', icon: UserSearch },
+      { to: '/checkpoints', label: '节点诊断', icon: ClipboardCheck },
+      { to: '/kb', label: '知识库', icon: BookOpen },
+      { to: '/csat', label: '客服满意度', icon: Star },
+    ],
+  },
+  {
+    key: 'system',
     caption: '系统',
+    icon: Settings,
     items: [
       { to: '/agents', label: '外包账号', icon: Users },
       { to: '/notifications', label: '消息通知', icon: Bell },
@@ -56,14 +72,52 @@ const GROUPS = [
   },
 ]
 
-// 上新区（列表或向导）= 商品与上新的势力范围；进入即自动展开六步子菜单
-const inProductSection = computed(
-  () => route.path === '/products' || route.path.startsWith('/product/'),
+// 主类目折叠状态：默认全展开（collapsed 空表），手动收起记 localStorage；回灌 sanitize 防脏数据
+const NAV_COLLAPSED_KEY = 'ld-admin-nav-collapsed'
+function loadCollapsed() {
+  try {
+    const v = JSON.parse(localStorage.getItem(NAV_COLLAPSED_KEY) || '{}')
+    return v && typeof v === 'object' && !Array.isArray(v) ? v : {}
+  } catch {
+    return {}
+  }
+}
+const collapsed = ref(loadCollapsed())
+function saveCollapsed() {
+  localStorage.setItem(NAV_COLLAPSED_KEY, JSON.stringify(collapsed.value))
+}
+function toggleGroup(key) {
+  collapsed.value = { ...collapsed.value, [key]: !collapsed.value[key] }
+  saveCollapsed()
+}
+
+// 路由 → 所在主类目；跳进组内页面时该组自动弹开（收起状态不困住当前页）
+function groupOfPath(path) {
+  if (path === '/products' || path.startsWith('/product/')) return 'catalog'
+  for (const g of GROUPS) if (g.items.some((it) => it.to === path)) return g.key
+  return ''
+}
+watch(
+  () => route.path,
+  (p) => {
+    const k = groupOfPath(p)
+    if (k && collapsed.value[k]) {
+      collapsed.value = { ...collapsed.value, [k]: false }
+      saveCollapsed()
+    }
+  },
+  { immediate: true },
 )
-const expanded = ref(inProductSection.value)
-watch(inProductSection, (v) => {
-  if (v) expanded.value = true
-})
+
+// 上新区（列表或向导）= 商品与上新的势力范围；进入即自动展开六步子菜单
+const inProductSection = () => route.path === '/products' || route.path.startsWith('/product/')
+const expanded = ref(inProductSection())
+watch(
+  () => route.path,
+  () => {
+    if (inProductSection()) expanded.value = true
+  },
+)
 
 function openProducts() {
   expanded.value = true
@@ -96,36 +150,48 @@ function doLogout() {
       </div>
     </div>
 
-    <!-- 商品与上新（可展开父项，六步收其内） -->
-    <div class="nav nav-parent" :class="{ on: route.path === '/products' }" @click="openProducts">
-      <Package :size="17" /><span>商品与上新</span>
-      <button class="chev-btn" title="展开/收起步骤" @click.stop="toggleSteps">
-        <ChevronDown :size="15" class="chev" :class="{ open: expanded }" />
-      </button>
-    </div>
-    <div v-if="expanded" class="substeps">
-      <button
-        v-for="(name, i) in STEP_NAMES"
-        :key="i"
-        class="nav step"
-        :class="{ on: stepActive(i + 1) }"
-        @click="goStep(i + 1)"
-      >
-        <component :is="STEP_ICONS[i]" :size="16" /><span>{{ i + 1 }} · {{ name }}</span>
-      </button>
-    </div>
+    <!-- 数据看板：独立置顶的经营总览入口 -->
+    <router-link class="nav" :class="{ on: route.path === '/dashboard' }" to="/dashboard">
+      <ChartColumn :size="17" /><span>数据看板</span>
+    </router-link>
 
-    <template v-for="g in GROUPS" :key="g.caption">
-      <div class="caption">{{ g.caption }}</div>
-      <router-link
-        v-for="it in g.items"
-        :key="it.to"
-        class="nav"
-        :class="{ on: route.path === it.to }"
-        :to="it.to"
-      >
-        <component :is="it.icon" :size="17" /><span>{{ it.label }}</span>
-      </router-link>
+    <template v-for="g in GROUPS" :key="g.key">
+      <button class="group-head" @click="toggleGroup(g.key)">
+        <component :is="g.icon" :size="14" />
+        <span>{{ g.caption }}</span>
+        <ChevronDown :size="14" class="chev" :class="{ open: !collapsed[g.key] }" />
+      </button>
+      <div v-if="!collapsed[g.key]" class="group-body">
+        <!-- 商品与上新（catalog 组特例首项：可再展开六步向导） -->
+        <template v-if="g.key === 'catalog'">
+          <div class="nav nav-parent" :class="{ on: route.path === '/products' }" @click="openProducts">
+            <Package :size="17" /><span>商品与上新</span>
+            <button class="chev-btn" title="展开/收起步骤" @click.stop="toggleSteps">
+              <ChevronDown :size="15" class="chev" :class="{ open: expanded }" />
+            </button>
+          </div>
+          <div v-if="expanded" class="substeps">
+            <button
+              v-for="(name, i) in STEP_NAMES"
+              :key="i"
+              class="nav step"
+              :class="{ on: stepActive(i + 1) }"
+              @click="goStep(i + 1)"
+            >
+              <component :is="STEP_ICONS[i]" :size="16" /><span>{{ i + 1 }} · {{ name }}</span>
+            </button>
+          </div>
+        </template>
+        <router-link
+          v-for="it in g.items"
+          :key="it.to"
+          class="nav"
+          :class="{ on: route.path === it.to }"
+          :to="it.to"
+        >
+          <component :is="it.icon" :size="17" /><span>{{ it.label }}</span>
+        </router-link>
+      </div>
     </template>
 
     <div class="spacer"></div>
@@ -152,6 +218,7 @@ function doLogout() {
   position: sticky;
   top: 0;
   height: 100vh;
+  overflow-y: auto; /* 全展开条目多，矮屏也要滚得到底部账号区 */
 }
 .logo {
   display: flex;
@@ -208,6 +275,32 @@ function doLogout() {
 .nav :deep(svg) {
   flex: 0 0 auto;
 }
+/* 主类目行：沿用小标题的字号/色，但整行可点折叠，标签撑开把箭头推到最右 */
+.group-head {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  width: 100%;
+  padding: 14px 12px 4px;
+  border: none;
+  background: none;
+  cursor: pointer;
+  font-size: 11px;
+  letter-spacing: 0.5px;
+  color: var(--purple-meta);
+  text-align: left;
+}
+.group-head > span {
+  flex: 1;
+}
+.group-head:hover {
+  color: var(--purple-ink);
+}
+.group-body {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
 /* 父项「商品与上新」：标签撑开把折叠箭头推到最右 */
 .nav-parent > span {
   flex: 1;
@@ -241,12 +334,6 @@ function doLogout() {
 .nav.step {
   padding: 8px 10px;
   font-size: 13px;
-}
-.caption {
-  padding: 14px 12px 4px;
-  font-size: 10.5px;
-  letter-spacing: 0.5px;
-  color: var(--purple-meta);
 }
 .spacer {
   flex: 1;

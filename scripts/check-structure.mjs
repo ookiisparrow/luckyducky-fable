@@ -3592,6 +3592,38 @@ export const repoChecks = [
       return bad
     },
   },
+  {
+    // admin 导航 ↔ 路由同步（根因#5 样板复制即漂移）：页面路径在 router.js 与 Sidebar.vue 各写一份，
+    // 漂移两种形态：① Sidebar 引了未注册路由＝死链（点了白屏）；② router 注册了页面但侧边栏没入口＝
+    // 孤儿页（加页忘加导航，页面部署了没人能进）。侧边栏重组为主类目结构后条目分散四组，人眼更难核全，交机器。
+    id: 'admin-nav-route-synced',
+    roots: ['#5'],
+    desc: 'admin 导航与路由同步（根因#5 复制即漂移）：Sidebar.vue 引用的每个路径须在 router.js 注册（防死链）；router.js 每个静态页面路由（除 /login、重定向、带参向导）须在 Sidebar.vue 有入口（防加页忘加导航的孤儿页）',
+    run() {
+      const routerRel = 'packages/admin/src/router.js'
+      const sidebarRel = 'packages/admin/src/components/Sidebar.vue'
+      const routerAbs = join(ROOT, routerRel)
+      const sidebarAbs = join(ROOT, sidebarRel)
+      const bad = []
+      if (!existsSync(routerAbs) || !existsSync(sidebarAbs))
+        return [`${routerRel} / ${sidebarRel} 缺失（admin 导航同步守卫无从核起·#5）`]
+      const routerSrc = readFileSync(routerAbs, 'utf8')
+      const sidebar = readFileSync(sidebarAbs, 'utf8')
+      const routePaths = [...routerSrc.matchAll(/path:\s*['"]([^'"]+)['"]/g)].map((m) => m[1])
+      // ① 防死链：Sidebar 声明/绑定的路径（to: 'x' 或 to="x"）都须已注册
+      for (const m of sidebar.matchAll(/\bto[:=]\s*['"](\/[^'"]*)['"]/g)) {
+        if (!routePaths.includes(m[1]))
+          bad.push(`${sidebarRel} 引用未注册路由 ${m[1]}——死链，点了白屏（router.js 无此 path·#5）`)
+      }
+      // ② 防孤儿页：每个静态页面路由（非 /login、非 '/' 重定向、非带参向导）须在 Sidebar 出现
+      const staticPages = routePaths.filter((p) => p !== '/login' && p !== '/' && !p.includes(':'))
+      for (const p of staticPages) {
+        if (!sidebar.includes(`'${p}'`) && !sidebar.includes(`"${p}"`))
+          bad.push(`router.js 注册了 ${p} 但 ${sidebarRel} 无入口——孤儿页（加页忘加导航·#5）`)
+      }
+      return bad
+    },
+  },
 ]
 
 // ============== 逐文件规则（fileRules）==============
