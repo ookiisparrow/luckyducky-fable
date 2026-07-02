@@ -1,5 +1,5 @@
 {
-  "updatedAt": 1782950106192,
+  "updatedAt": 1782951005359,
   "functions": {
     "activateCourse": "9b6fbfa85bc5",
     "adminApi": "c827fbc8432a",
@@ -22,7 +22,7 @@
     "getPlaybackUrl": "85ffda2871e2",
     "getProducts": "855627484b14",
     "getReviews": "f2c8b3defcf8",
-    "initDb": "0752078b6a36",
+    "initDb": "72a5dbad06ea",
     "kfBind": "d9479d4610d5",
     "kfCallback": "4effa067453d",
     "kfHealthProbe": "e21955256812",
