@@ -412,6 +412,54 @@ export async function listLedger(materialId, limit) {
   return r.list || []
 }
 
+// —— 采购线（进销存车道 A·蓝图 docs/进销存ERP/ §4）——
+// 错误映射独立成块（不改上方共享 SCM_ERR 行·车道文件级隔离·master 整合取并集）；金额传输/存储全是分。
+
+const PURCHASE_ERR = {
+  BAD_SUPPLIER: '供应商不存在或不是厂家（织女外协走外协单）',
+  BAD_LINES: '至少要有一行、且每行选好物料（单张上限 50 行）',
+  BAD_QTY: '数量必须是正整数（克/件全链整数）',
+  BAD_PRICE: '单价必须是非负金额（分整数）',
+  DUP_LINE: '同一物料只能一行（同料合并数量后再提交）',
+  NO_PURCHASE: '采购单不存在',
+  NOT_DRAFT: '只有草稿单可以修改（已下单/入库/取消的单不可改）',
+  BAD_STATUS: '当前状态不允许该操作（入库后不可取消，走「调整」入账）',
+  STOCK_APPLY_FAIL: '入库记账失败，请查流水后用「调整」补账',
+}
+const purchaseErr = (e) => new Error(PURCHASE_ERR[e] || SCM_ERR[e] || e || 'SCM_FAIL')
+
+export async function listPurchases(status, limit) {
+  if (!cloudMode) return []
+  const r = await post('listPurchases', { status, limit })
+  if (!r.ok) throw new Error(r.error || 'LOAD_PURCHASES_FAIL')
+  return r.list || []
+}
+
+// payload：{ purchaseId?, supplierId, lines:[{materialId,qty,unitPriceFen}] }；totalFen 云端算、不传也不信
+export async function savePurchase(payload) {
+  const r = await post('savePurchase', payload)
+  if (!r.ok) throw purchaseErr(r.error)
+  return r // { purchaseId, totalFen }
+}
+
+export async function markPurchaseOrdered(purchaseId) {
+  const r = await post('markOrdered', { purchaseId })
+  if (!r.ok) throw purchaseErr(r.error)
+  return r
+}
+
+export async function receivePurchase(purchaseId) {
+  const r = await post('receivePurchase', { purchaseId })
+  if (!r.ok) throw purchaseErr(r.error)
+  return r // { moved, applied? }
+}
+
+export async function cancelPurchase(purchaseId) {
+  const r = await post('cancelPurchase', { purchaseId })
+  if (!r.ok) throw purchaseErr(r.error)
+  return r
+}
+
 // ---------- 库存（库存#1·下单即预留·乐观 CAS；写库存收口云端 kit/inventory） ----------
 
 export async function listInventory(productIds) {

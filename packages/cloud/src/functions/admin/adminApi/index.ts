@@ -21,6 +21,7 @@ import * as agentDesk from './actions/agentDesk' // 承面C 车道A·坐席台 8
 import * as agents from './actions/agents' // 承面C 车道C·外包账号管理（B5.2·超管建/停/列·默认拒 admin:write）
 import * as wecomLogin from './actions/wecomLogin' // M⑦ 车道B·企微 OAuth 免登（pre-auth·特殊分发·同 login 受频控）
 import * as scmMaterials from './actions/scmMaterials' // 进销存 SCM-0 地基·物料/供应商主档+期初调整（默认拒 admin:write·仅超管）
+import * as scmPurchase from './actions/scmPurchase' // 进销存车道 A·采购线（默认拒 admin:write·仅超管）
 
 // 管理控制台后端（HTTP 访问服务触发）。B5b：HTTP 外壳 + 口令闸在此，28+ action 拆 actions/ 查表。
 // 鉴权：管理口令（adminConfig sha256，首登 bootstrap）。db 经 kit.getDb；退款流经 kit.callFlow。
@@ -124,6 +125,13 @@ const ACTIONS: Record<string, (ctx: Ctx) => Promise<any>> = {
   saveSupplier: scmMaterials.saveSupplier,
   adjustStock: scmMaterials.adjustStock,
   listLedger: scmMaterials.listLedger,
+  // 进销存车道 A·采购线（蓝图 §4·状态机 draft→ordered→received[首次流转绑门1 入库]+cancelled·totalFen 服务端算·
+  // 未登记 ACTION_CAPS→默认拒 admin:write＝仅超管·写类自动审计）
+  listPurchases: scmPurchase.listPurchases,
+  savePurchase: scmPurchase.savePurchase,
+  markOrdered: scmPurchase.markOrdered,
+  receivePurchase: scmPurchase.receivePurchase,
+  cancelPurchase: scmPurchase.cancelPurchase,
 }
 
 // 能力闸（§1.5 RBAC·根因#3·别让单超管裸奔）：受限 action 须 principal 具备对应能力（'*'=全能力）。
