@@ -518,6 +518,66 @@ export async function cancelOutwork(outworkId) {
   return r
 }
 
+// ---------- 进销存车道 C·配方组装（全局一张模板+每产品差异位→打包执行·蓝图 docs/进销存ERP/ §4C） ----------
+// 错误映射独立成块（车道文件级隔离·master 整合取并集）；组装执行 assemblyId 每次提交生成一次、重试复用＝幂等。
+
+const BOM_ERR = {
+  BAD_TEMPLATE: '模板不合法：每行选好料号、数量为正整数；带结槽只能配在大团',
+  NO_PRODUCT: '请选产品',
+  BAD_COLOR: '三档颜色都要填（小写英文，如 red / light-blue）',
+  NO_SPECIFIC: '专属包装和专属卡片料号都要选（先在物料页建档）',
+  NO_TEMPLATE: '还没保存全局配方模板——先去「配方模板」页配一张',
+  NO_PROFILE: '这个产品还没填差异位（三档颜色+专属包装/卡片）',
+  BAD_SETS: '套数必须是正整数',
+  DUPLICATE: '这单已经执行过了（重复提交被幂等挡下）',
+  PRODUCE_FAIL: '原料已扣但成品入账遇到争用：去物料页查流水核对，勿直接重试',
+}
+const bomErr = (e) => new Error(BOM_ERR[e] || SCM_ERR[e] || e || 'SCM_FAIL')
+
+export async function getBomSetup() {
+  if (!cloudMode) return { template: null, profiles: [] }
+  const r = await post('getBomSetup')
+  if (!r.ok) throw new Error(r.error || 'LOAD_BOM_FAIL')
+  return { template: r.template, profiles: r.profiles || [] }
+}
+
+// template：{ commonLines:[{materialId,qtyPerSet}], yarnSlots:[{tier,form,qtyPerSet}] }（数值全是正整数）
+export async function saveBomTemplate(template) {
+  const r = await post('saveBomTemplate', { template })
+  if (!r.ok) throw bomErr(r.error)
+  return true
+}
+
+// profile：{ productId, yarnColors:{L,M,S}, packagingMaterialId, cardMaterialId }
+export async function saveBomProfile(profile) {
+  const r = await post('saveBomProfile', { profile })
+  if (!r.ok) throw bomErr(r.error)
+  return r.productId
+}
+
+export async function previewAssembly(productId, sets) {
+  const r = await post('previewAssembly', { productId, sets })
+  if (!r.ok) throw bomErr(r.error)
+  return r.lines || []
+}
+
+export async function runAssembly(assemblyId, productId, spec, sets) {
+  const r = await post('runAssembly', { assemblyId, productId, spec, sets })
+  if (!r.ok) {
+    const err = bomErr(r.error)
+    err.materialId = r.materialId // INSUFFICIENT 时带短缺料号，页面标红
+    throw err
+  }
+  return r
+}
+
+export async function listAssemblies(limit) {
+  if (!cloudMode) return []
+  const r = await post('listAssemblies', limit ? { limit } : {})
+  if (!r.ok) throw new Error(r.error || 'LOAD_ASSEMBLIES_FAIL')
+  return r.list || []
+}
+
 // ---------- 库存（库存#1·下单即预留·乐观 CAS；写库存收口云端 kit/inventory） ----------
 
 export async function listInventory(productIds) {

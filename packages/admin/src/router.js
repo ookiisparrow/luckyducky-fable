@@ -21,6 +21,8 @@ import Agents from '@/pages/Agents.vue'
 import ScmMaterials from '@/pages/ScmMaterials.vue'
 import ScmPurchase from '@/pages/ScmPurchase.vue'
 import ScmOutwork from '@/pages/ScmOutwork.vue'
+import ScmBom from '@/pages/ScmBom.vue'
+import ScmAssembly from '@/pages/ScmAssembly.vue'
 
 export const router = createRouter({
   history: createWebHashHistory(),
@@ -46,6 +48,8 @@ export const router = createRouter({
     { path: '/scm-materials', component: ScmMaterials },
     { path: '/scm-purchase', component: ScmPurchase },
     { path: '/scm-outwork', component: ScmOutwork },
+    { path: '/scm-bom', component: ScmBom },
+    { path: '/scm-assembly', component: ScmAssembly },
     // 上新向导：/product/<id>/step/<1-6>；左侧「按步骤直达」也跳这里
     { path: '/product/:id/step/:n', component: Wizard, props: true },
   ],

@@ -13,7 +13,7 @@ import { useRoute, useRouter } from 'vue-router'
 import {
   Package, ChevronDown, Image, FileText, Tags, Clapperboard, QrCode, Printer,
   Smartphone, Truck, RotateCcw, Boxes, ChartColumn, Wallet, Bell, ExternalLink, LifeBuoy, UserSearch, ClipboardCheck, MessagesSquare, BookOpen, Star, Users,
-  Store, Receipt, Headphones, Settings, Factory, ShoppingCart, Scissors,
+  Store, Receipt, Headphones, Settings, Factory, ShoppingCart, Scissors, LayoutTemplate, PackageOpen,
 } from 'lucide-vue-next'
 import { useProductsStore, STEP_NAMES } from '@/store/products.js'
 import { logout, currentUser } from '@/api/cloud.js'
@@ -70,6 +70,8 @@ const GROUPS = [
       { to: '/scm-materials', label: '物料与供应商', icon: Package },
       { to: '/scm-purchase', label: '采购管理', icon: ShoppingCart },
       { to: '/scm-outwork', label: '外协加工', icon: Scissors },
+      { to: '/scm-bom', label: '配方模板', icon: LayoutTemplate },
+      { to: '/scm-assembly', label: '打包组装', icon: PackageOpen },
     ],
   },
   {

@@ -23,6 +23,8 @@ import * as wecomLogin from './actions/wecomLogin' // M⑦ 车道B·企微 OAuth
 import * as scmMaterials from './actions/scmMaterials' // 进销存 SCM-0 地基·物料/供应商主档+期初调整（默认拒 admin:write·仅超管）
 import * as scmPurchase from './actions/scmPurchase' // 进销存车道 A·采购线（默认拒 admin:write·仅超管）
 import * as scmOutwork from './actions/scmOutwork' // 进销存车道 B·外协线（发原团→收带结→计件工钱·默认拒 admin:write·仅超管）
+import * as scmBom from './actions/scmBom' // 进销存车道 C·配方模板/差异位管理（默认拒 admin:write·仅超管）
+import * as scmAssembly from './actions/scmAssembly' // 进销存车道 C·组装执行（门3 解析→快照→门1 扣料→门4 入成品·默认拒仅超管）
 
 // 管理控制台后端（HTTP 访问服务触发）。B5b：HTTP 外壳 + 口令闸在此，28+ action 拆 actions/ 查表。
 // 鉴权：管理口令（adminConfig sha256，首登 bootstrap）。db 经 kit.getDb；退款流经 kit.callFlow。
@@ -141,6 +143,14 @@ const ACTIONS: Record<string, (ctx: Ctx) => Promise<any>> = {
   receiveOutwork: scmOutwork.receiveOutwork,
   settleOutwork: scmOutwork.settleOutwork,
   cancelOutwork: scmOutwork.cancelOutwork,
+  // 进销存车道 C·配方组装线（蓝图 §4C·门5 文件级隔离·未登记 ACTION_CAPS→默认拒 admin:write＝仅超管·写类自动审计）：
+  // 全局模板+每产品差异位管理 → 组装执行（门3 resolveBom→快照冻结→门1 扣料→门4 produceStock 入成品·assemblyId 幂等）
+  getBomSetup: scmBom.getBomSetup,
+  saveBomTemplate: scmBom.saveBomTemplate,
+  saveBomProfile: scmBom.saveBomProfile,
+  previewAssembly: scmAssembly.previewAssembly,
+  runAssembly: scmAssembly.runAssembly,
+  listAssemblies: scmAssembly.listAssemblies,
 }
 
 // 能力闸（§1.5 RBAC·根因#3·别让单超管裸奔）：受限 action 须 principal 具备对应能力（'*'=全能力）。

@@ -121,6 +121,38 @@ export async function setStock(
   return { ok: true }
 }
 
+/**
+ * 组装入成品（进销存 SCM 门4·蓝图 docs/进销存ERP/施工蓝图.md §3·本文件唯一新增出口，车道 C 只调用不直碰）：
+ * CAS 增·无文档则建（组装出来的成品第一次入账时 SKU 可能还没建库存档）。stock=null（不限量）保持不动——
+ * 不把「不限量」隐式翻成限量（改计量语义须管理员在库存页显式设置）。qty 非正整数 fail-closed。
+ */
+export async function produceStock(productId: string, spec: string, qty: number): Promise<{ ok: boolean; error?: string }> {
+  if (!productId || !Number.isInteger(qty) || qty <= 0) return { ok: false, error: 'BAD_QTY' }
+  const coll = getDb().collection(COLLECTIONS.inventory)
+  const _id = idOf(productId, spec)
+  for (let i = 0; i < CAS_RETRY; i++) {
+    const got = await coll.doc(_id).get().catch(() => null)
+    if (!got || !got.data) {
+      // 无文档则建（确定性 _id·并发双建一方撞 DUPLICATE 走下轮 CAS 累加）
+      const created = await coll
+        .add({ data: { _id, productId, spec, stock: qty, updatedAt: Date.now() } })
+        .then(() => true)
+        .catch(() => false)
+      if (created) return { ok: true }
+      continue
+    }
+    const stock = got.data.stock
+    if (stock == null) return { ok: true } // 不限量：入成品无账可加·保持不限量
+    const r = await coll
+      .where({ _id, stock })
+      .update({ data: { stock: stock + qty, updatedAt: Date.now() } })
+      .catch(() => ({ stats: { updated: 0 } }))
+    if (r.stats && r.stats.updated === 1) return { ok: true }
+    // updated:0＝并发改动→重读重试
+  }
+  return { ok: false, error: 'CONTENTION' } // 争用耗尽（管理端低频·几乎不至）
+}
+
 /** 读库存（管理端 S14 列表 / 看板低库存）。productIds 为空＝全量（管理端 bounded 调用方限页）。 */
 export async function getInventory(productIds?: string[]): Promise<any[]> {
   const coll = getDb().collection(COLLECTIONS.inventory)

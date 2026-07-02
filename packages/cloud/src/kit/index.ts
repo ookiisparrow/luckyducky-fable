@@ -27,7 +27,7 @@ export { throttleLocked, throttleFail, throttleReset, throttleHit, withRateLimit
 export type { ThrottleOpts } from './throttle'
 export { alert, notifyAlert, notifyRecall } from './observe'
 export type { AlertSev, RecallSummary } from './observe'
-export { reserveStock, restoreStock, setStock, getInventory } from './inventory'
+export { reserveStock, restoreStock, setStock, getInventory, produceStock } from './inventory'
 export type { StockLine } from './inventory'
 export { applyStockMoves, listStockLedger, saveMaterialDoc, listMaterialDocs } from './scmStock'
 export type { StockMove, MoveDoc, MoveDocType, ApplyResult, MaterialDoc } from './scmStock'
