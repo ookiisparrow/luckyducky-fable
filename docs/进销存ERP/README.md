@@ -31,7 +31,7 @@
 | 序 | 批次 | 前置 | 状态 |
 |---|---|---|---|
 | 1 | SCM-0 地基（master 串行·先） | 无 | ✅ 代码完成（2026-07-02·`feat/scm-0` 独立 worktree·避让主树 M⑦ CC）：7 集合登记+库权限期望表 · 门1 `kit/scmStock`（applyStockMoves 幂等流水+CAS·主档 uom 锁）· 门2 `scm.spec.ts` 两状态机+gen 扩域+对账守卫扩扫 scm\*.ts · 门3 `resolveBom` 纯函数 · 门5 `actions/scmMaterials` 6 action（默认拒仅超管·写类自动审计）· admin「供应链」组+物料/供应商页（期初盘点/调整必留因）· 守卫 +3（结构×2+test×1）反向自检×4 咬红 · 测试 885→911 · **门4 produceStock 纪律修正随车道 C**（蓝图§3）。**✅ 已整合上 main**（2026-07-02·rebase 到 M⑦ 车道B 之上取并集[adminApi import/系统事实计数]·check 全绿 122 守卫/919 测试·main `ba0509a`·tag `scm/0/merged-1`）。**✅ 已部署上线（2026-07-02·用户终端三步全过）**：deploy-fns 14 函数（adminApi+kit 波及钱链/客服·preflight 钱链漂移清零）+ initDb 建齐 7 新集合 + **7 集合全锁 adminonly（tcb permission get 逐一核过）** + smoke（adminApi 非 POST 拒 405/POST_ONLY·getProducts 真数据 ok）。**SCM-0 整线闭环**；剩期初盘点录入（靠人·上线首日）+ 真单真机验随 SCM-Z |
-| 2 | 第一波并行：SCM-A 采购 ‖ SCM-B 外协 | SCM-0 | ⬜ |
+| 2 | 第一波并行：SCM-A 采购 ‖ SCM-B 外协 | SCM-0 | ✅ 代码完成+已整合（2026-07-02·**两条车道=两个后台 agent worktree 并行**·用户拍板 agent 自驱动）：A=`scmPurchase` 5 action+采购管理页（received 绑门1 幂等入库·totalFen 服务端算·同料重复行拒防撞幂等键·测试+12）；B=`scmOutwork` 6 action+外协加工页（发原团→收带结·payableFen/lossQty 与流转同次条件更新定格·库存不足状态补偿回滚·测试+14）；零新守卫（transitions 对账/单点收口/审计/RBAC 全白捡·各自反向 sanity 咬红过）；master 取并集（ACTIONS/系统事实 87=84+3[顺带校正旧行漏计 14 的 stale]/router/Sidebar/重构日志）·组合态 check 全绿·**待部署 adminApi + admin 静态托管** |
 | 3 | 第二波并行：SCM-C 配方组装 ‖ SCM-D 计划核销 | SCM-0（门3/门4 已在 0 定义） | ⬜ |
 | 4 | SCM-Z 整合 + 部署 + 真单验收 | A–D | ⬜ |
 | 靠人 | 控制台锁 7 新集合仅管理端 · **期初盘点录入**（不录=账实必偏）· 真单真机验（根因#8）· 模板数值/单价由用户在 admin 填 | 随批 | ⬜ |
