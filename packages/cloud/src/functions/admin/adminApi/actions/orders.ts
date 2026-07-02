@@ -1,5 +1,5 @@
 import { ORDER_STATUS } from '@luckyducky/shared'
-import { pageQuery, uploadShippingToWx, notifyAlert } from '../../../../kit'
+import { pageQuery, uploadShippingToWx, notifyAlert, applyStockMoves } from '../../../../kit'
 import { reply, activationFor, type Ctx } from '../lib'
 
 // 订单详情补充（VMlhp·读类）：逐商品的激活码状态数据链（复用 activationFor·与退款判据同口径）。
@@ -80,6 +80,19 @@ async function shipOne(db: any, idRaw: any, companyRaw: any, trackingRaw: any) {
   if (!upd.stats || upd.stats.updated !== 1) {
     const fresh = await db.collection('orders').doc(id).get().catch(() => null)
     return { ok: false, error: 'BAD_STATUS:' + ((fresh && fresh.data && fresh.data.status) || 'unknown') }
+  }
+  // SCM-D 核销留痕（守卫 ship-verify-ledger·根因#2·「如实核销」蓝图定稿）：**首次** paid→shipped 逐行落
+  // ship 流水（fg 行只留痕不动账——成品扣账在下单预留 reserveStock；确定性 _id=ship:<orderId>:fg:<pid>__<spec>
+  // 并发/重试天然幂等）；改单号（shipped→shipped）不重复留痕。fail-soft：留痕失败不反噬发货（发货是主动作），
+  // 但 fg 行无 CAS 面、除入参形状外无失败路径；旧单无 items 静默跳过（不落假流水·根因#8）。
+  if (cur === 'paid') {
+    const moves = ((got.data.items as any[]) || [])
+      .filter((it) => it && it.productId && Number.isInteger(it.qty) && it.qty > 0)
+      .map((it) => ({ materialId: `fg:${it.productId}__${it.spec || ''}`, delta: -it.qty }))
+    if (moves.length) {
+      const led = await applyStockMoves(moves, { docType: 'ship', docId: id, operator: 'admin' }).catch(() => ({ ok: false as const }))
+      if (!led.ok) console.error('[SCM] ship ledger fail', id)
+    }
   }
   // 合规债#26（根因#12）：本地发货成功后向微信上传发货信息——实物+微信支付不上传则订单资金冻结/无法结算。
   // fail-soft：上传失败绝不回滚本地发货（已 shipped），只留痕 + [LD_ALERT] sev=money 告警，靠人去 mp 后台手动录入兜底。

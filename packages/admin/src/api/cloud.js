@@ -578,6 +578,20 @@ export async function listAssemblies(limit) {
   return r.list || []
 }
 
+// ---------- 进销存车道 D·备货计算器（只读·目标套数→外协/采购缺口·蓝图 docs/进销存ERP/ §4D） ----------
+
+// targets：[{productId, sets}]；返 { outworkGaps, purchaseGroups, missingMaterials }
+export async function getRestockPlan(targets) {
+  const r = await post('getRestockPlan', { targets })
+  if (!r.ok) {
+    const PLANNER_ERR = { BAD_TARGETS: '每行都要选产品、套数为正整数（最多 50 行）' }
+    const err = new Error(PLANNER_ERR[r.error] || BOM_ERR[r.error] || r.error || 'PLAN_FAIL')
+    err.productId = r.productId // NO_PROFILE 时带产品·页面点名
+    throw err
+  }
+  return r
+}
+
 // ---------- 库存（库存#1·下单即预留·乐观 CAS；写库存收口云端 kit/inventory） ----------
 
 export async function listInventory(productIds) {

@@ -3834,6 +3834,9 @@ export const typeAndTestGuards = [
   // 组装快照冻结 + 幂等（SCM-C·根因#2·同订单快照原则）：组装单执行时冻结 bomSnapshot/consumedLines——改模板后
   // 历史单不追新（重放旧单结果不变）；同 assemblyId 重放 409 不双扣（claim=确定性 _id）；料不足全单回滚（宁不动账勿错账）。
   { id: 'bom-snapshot-frozen', mechanism: 'test', roots: ['#2'], reverseTest: 'tests/cloud/scmAssembly.test.js' },
+  // 发货核销流水（SCM-D·根因#2·「如实核销」蓝图定稿）：shipOrder 首次 paid→shipped 必落 ship 流水
+  // （fg 行确定性 _id=ship:<orderId>:fg:<pid>__<spec>·只留痕不动账）；改单号/重试/批量不双记账。reverseTest 锁此行为。
+  { id: 'ship-verify-ledger', mechanism: 'test', roots: ['#2'], reverseTest: 'tests/cloud/scmShipLedger.test.js' },
   // admin 频控全局/账户级兜底（审核 P1·根因#13）：per-IP 频控 key 取 x-forwarded-for（可伪造·轮换可绕 5 次锁），
   // 故叠加跨所有 IP 的全局失败计数——轮换伪造 header 的爆破累计达全局阈值仍锁。reverseTest 锁此组合行为。
   { id: 'admin-throttle-global-backstop', mechanism: 'test', roots: ['#13'], reverseTest: 'tests/cloud/adminThrottle.test.js' },
