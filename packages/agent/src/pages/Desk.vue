@@ -7,7 +7,7 @@
 import { ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { LogOut } from 'lucide-vue-next'
-import { currentAgent, logout } from '@/api/agentApi.js'
+import { currentAgent, currentCaps, logout } from '@/api/agentApi.js'
 import AgentStatusToggle from '@/components/desk/AgentStatusToggle.vue'
 import QueueList from '@/components/desk/QueueList.vue'
 import ConversationWindow from '@/components/desk/ConversationWindow.vue'
@@ -16,6 +16,10 @@ import QuickReplies from '@/components/desk/QuickReplies.vue'
 
 const router = useRouter()
 const agent = currentAgent() || '坐席'
+// 角色显形（超管 vs 外包·防身份混淆）：超管＝商户本人（全量会话+升级件在此接手），外包＝最小权坐席。
+const isSuper = currentCaps().includes('*')
+const deskTitle = isSuper ? '商户客服工作台' : '外包坐席工作台'
+document.title = 'Lucky Ducky · ' + deskTitle
 
 const current = ref(null) // 当前处理的会话 SessionView（null=未接入任何会话）
 const status = ref('online')
@@ -48,10 +52,13 @@ function doLogout() {
     <!-- 顶栏 -->
     <header class="topbar">
       <div class="brand">
-        <div class="logo-badge">🦆</div>
+        <div class="logo-badge" :class="{ super: isSuper }">🦆</div>
         <div>
-          <div class="brand-title">外包坐席工作台</div>
-          <div class="brand-sub">Lucky Ducky · 承面 C</div>
+          <div class="brand-title">
+            {{ deskTitle }}
+            <span class="role-chip" :class="isSuper ? 'super' : 'out'">{{ isSuper ? '超管' : '外包' }}</span>
+          </div>
+          <div class="brand-sub">{{ isSuper ? 'Lucky Ducky · 全量会话 + 升级件在此接手' : 'Lucky Ducky · 承面 C' }}</div>
         </div>
       </div>
       <div class="top-right">
@@ -112,6 +119,28 @@ function doLogout() {
   align-items: center;
   justify-content: center;
   font-size: 18px;
+}
+.logo-badge.super {
+  background: var(--ink); /* 超管深色徽标·一眼区别外包紫 */
+}
+.role-chip {
+  display: inline-flex;
+  align-items: center;
+  margin-left: 6px;
+  padding: 1px 8px;
+  border-radius: var(--r-pill);
+  font-size: 10.5px;
+  font-weight: 700;
+  vertical-align: 2px;
+}
+.role-chip.super {
+  background: var(--ink);
+  color: var(--white);
+}
+.role-chip.out {
+  background: var(--bg-lilac);
+  border: 1px solid var(--purple-line);
+  color: var(--purple-meta);
 }
 .brand-title {
   font-weight: 700;

@@ -27,17 +27,17 @@ async function submit() {
 <template>
   <div class="login card">
     <div class="logo-badge">🦆</div>
-    <h1>外包坐席工作台</h1>
-    <p class="sub">Lucky Ducky · 承面 C 会话工作台</p>
+    <h1>客服工作台</h1>
+    <p class="sub">Lucky Ducky · 外包坐席 / 商户超管 同门登录·按口令分身份</p>
     <label class="field-label" style="margin-top: 8px">登录口令</label>
-    <input v-model="password" class="input" type="password" placeholder="外包账号口令" @keyup.enter="submit" />
+    <input v-model="password" class="input" type="password" placeholder="外包账号口令 / 商户管理口令" @keyup.enter="submit" />
     <p v-if="err" class="err">{{ err }}</p>
     <button class="btn primary wide" :disabled="busy" @click="submit">登 录</button>
     <p class="note">
       {{
         useMock
           ? '演示（mock）模式：任意 ≥6 位口令即以演示外包身份进入，数据为内存 mock。'
-          : '口令即外包账号登录密钥；须由商户在后台开通「坐席台」权限（agent:handle）。'
+          : '外包口令由商户在控制台「外包账号」页创建转交；商户管理口令登录＝超管视角（全量会话+升级件）。'
       }}
     </p>
   </div>
