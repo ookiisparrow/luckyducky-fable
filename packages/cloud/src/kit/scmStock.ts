@@ -124,6 +124,20 @@ export async function listStockLedger(materialId?: string, limit = 50): Promise<
   return r.data || []
 }
 
+/** 某类流水按 itemKey 分组求和（管理端只读汇总·产销统计用·DB aggregate 不封顶精确不近似）。 */
+export async function sumLedgerByItemKey(docType: MoveDocType): Promise<{ itemKey: string; total: number }[]> {
+  const db = getDb()
+  const $ = db.command.aggregate
+  const r = await db
+    .collection(COLLECTIONS.stockLedger)
+    .aggregate()
+    .match({ docType })
+    .group({ _id: '$itemKey', total: $.sum('$delta') })
+    .end()
+    .catch(() => ({ list: [] }))
+  return (r.list || []).map((x: any) => ({ itemKey: x._id, total: x.total }))
+}
+
 // ── 物料主档持久化（同在门1：materials 集合全库仅本文件读写·守卫 material-stock-single-seam）──
 // 主档字段与库存字段分治：saveMaterialDoc 只写主档字段（name/category/uom/…），**绝不碰 stock**
 // （建档初始化 stock:0 除外）；库存只经 applyStockMoves。uom 建档锁死（守卫 scm-uom-integer 行为锁）。

@@ -114,3 +114,39 @@ describe('getRestockPlan（备货计算器·只读）', () => {
     expect((await call('getRestockPlan', SUPER, { targets: [{ productId: 'p-duck', sets: 1 }] })).status).toBe(200)
   })
 })
+
+// getFgSummary（产销统计·只读）：stockLedger 里 assembly_in/ship 两类 fg 流水按 itemKey 分组求和——
+// 这是本仓第一个真按字段分组的聚合（此前 GMV/评分聚合都是 _id:null 单桶），专测「按 itemKey 分桶」不串——
+// 内存桩曾把 group({_id:'$field'}) 当单桶处理（根因#8 桩≠真 SDK·同批一并修桩），本用例即该修复的行为证据。
+describe('getFgSummary（产销统计·只读）', () => {
+  it('按 productId__spec 分桶求和：assembly_in 累计打包、ship 累计发货（delta 负转正）·不同产品互不串账', async () => {
+    control.seed('stockLedger', [
+      { _id: 'l1', itemKey: 'fg:p-duck__', delta: 50, docType: 'assembly_in' },
+      { _id: 'l2', itemKey: 'fg:p-duck__', delta: 30, docType: 'assembly_in' }, // 同产品两次打包·须求和成 80 而非各占一桶
+      { _id: 'l3', itemKey: 'fg:p-cat__grey', delta: 20, docType: 'assembly_in' },
+      { _id: 'l4', itemKey: 'fg:p-duck__', delta: -12, docType: 'ship' },
+      { _id: 'l5', itemKey: 'fg:p-duck__', delta: -3, docType: 'ship' },
+      { _id: 'l6', itemKey: 'purchase:po1:hook', delta: 5, docType: 'purchase_in' }, // 非 fg 流水·不应混入
+    ])
+    const r = body(await planner.getFgSummary(dctx()))
+    expect(r.status).toBe(200)
+    expect(r.packed).toHaveLength(2) // p-duck + p-cat（grey 规格）两桶，不是塌成一桶
+    const duckPacked = r.packed.find((x) => x.productId === 'p-duck')
+    expect(duckPacked).toMatchObject({ productId: 'p-duck', spec: '', qty: 80 })
+    expect(r.packed.find((x) => x.productId === 'p-cat')).toMatchObject({ productId: 'p-cat', spec: 'grey', qty: 20 })
+    expect(r.shipped).toHaveLength(1)
+    expect(r.shipped[0]).toMatchObject({ productId: 'p-duck', spec: '', qty: 15 }) // 12+3，负转正
+  })
+
+  it('无流水 → 两个空数组（不报错）', async () => {
+    const r = body(await planner.getFgSummary(dctx()))
+    expect(r.status).toBe(200)
+    expect(r.packed).toEqual([])
+    expect(r.shipped).toEqual([])
+  })
+
+  it('RBAC 默认拒：外包 403·超管过', async () => {
+    expect((await call('getFgSummary', OUT)).status).toBe(403)
+    expect((await call('getFgSummary', SUPER)).status).toBe(200)
+  })
+})

@@ -24,6 +24,7 @@ import ScmPlanner from '@/pages/ScmPlanner.vue'
 import ScmPurchase from '@/pages/ScmPurchase.vue'
 import ScmOutwork from '@/pages/ScmOutwork.vue'
 import ScmAssembly from '@/pages/ScmAssembly.vue'
+import ScmSummary from '@/pages/ScmSummary.vue'
 
 export const router = createRouter({
   history: createWebHashHistory(),
@@ -46,13 +47,14 @@ export const router = createRouter({
     { path: '/notifications', component: Notifications },
     { path: '/externals', component: Externals },
     { path: '/agents', component: Agents },
-    // 进销存 SCM（按使用流程排序：建档 → 算缺口 → 补料 → 产出·同 Sidebar/ScmFlowTabs 顺序）
+    // 进销存 SCM（按使用流程排序：建档 → 算缺口 → 补料 → 产出 → 统计·同 Sidebar/ScmFlowTabs 顺序）
     { path: '/scm-materials', component: ScmMaterials },
     { path: '/scm-bom', component: ScmBom },
     { path: '/scm-planner', component: ScmPlanner },
     { path: '/scm-purchase', component: ScmPurchase },
     { path: '/scm-outwork', component: ScmOutwork },
     { path: '/scm-assembly', component: ScmAssembly },
+    { path: '/scm-summary', component: ScmSummary },
     // 上新向导：/product/<id>/step/<1-6>；左侧「按步骤直达」也跳这里
     { path: '/product/:id/step/:n', component: Wizard, props: true },
   ],

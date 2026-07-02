@@ -1,5 +1,5 @@
 import { reply, type Ctx } from '../lib'
-import { COLLECTIONS, listMaterialDocs } from '../../../../kit'
+import { COLLECTIONS, listMaterialDocs, sumLedgerByItemKey } from '../../../../kit'
 import { resolveBom, yarnMaterialId } from '@luckyducky/shared'
 
 // 进销存 SCM-D 备货计算器（蓝图 docs/进销存ERP/ §4D·门5 文件级隔离：本文件=车道 D 计划面）。
@@ -8,6 +8,7 @@ import { resolveBom, yarnMaterialId } from '@luckyducky/shared'
 //     派生的原团需求叠回采购口径（发出去的原团也是要备的料）。
 //   ② 采购缺口——按供应商分列（够扣不出行·未建档料点名+归「未挂供应商」组）。
 // fail-closed：无模板/无差异位/坏 targets 即拒（不静默补默认·根因#8）。RBAC：默认拒 admin:write＝仅超管。
+// getFgSummary 同车道另一只读视角：不算缺口，是 stockLedger fg 流水事后按产品汇总（打包累计/发货累计），不动账。
 
 const KNOTTED_RE = /^yarn:([a-z][a-z0-9-]*):L:knotted$/
 
@@ -67,4 +68,23 @@ export async function getRestockPlan({ db, data }: Ctx) {
   const supName = new Map((sups.data || []).map((s: any) => [s._id, s.name]))
   const purchaseGroups = [...groups.values()].map((g) => ({ ...g, supplierName: supName.get(g.supplierId) || (g.supplierId || '未挂供应商') }))
   return reply(200, { ok: true, outworkGaps, purchaseGroups, missingMaterials })
+}
+
+/** 拆 fg 流水的 itemKey（`fg:${productId}__${spec}`）回 productId/spec，供产销统计展示用。 */
+function parseFgKey(itemKey: string): { productId: string; spec: string } {
+  const s = itemKey.slice(3) // 去掉 'fg:' 前缀
+  const i = s.indexOf('__')
+  return i < 0 ? { productId: s, spec: '' } : { productId: s.slice(0, i), spec: s.slice(i + 2) }
+}
+
+/** 产销统计（只读）：stockLedger 里 assembly_in（打包产出）/ ship（发货核销）两类 fg 流水按 itemKey 汇总——
+ * 回应「一共打包/卖出多少」，不产生任何新写入（对账口径见 scmAssembly.ts 注释：Σ成品流水 ⇄ inventory）。
+ * 汇总经门1 kit/scmStock.sumLedgerByItemKey 读（守卫 material-stock-single-seam：stockLedger 全库仅门1 读写）。 */
+export async function getFgSummary(_ctx: Ctx) {
+  const [packed, shipped] = await Promise.all([sumLedgerByItemKey('assembly_in'), sumLedgerByItemKey('ship')])
+  return reply(200, {
+    ok: true,
+    packed: packed.map((r) => ({ ...parseFgKey(r.itemKey), qty: r.total })),
+    shipped: shipped.map((r) => ({ ...parseFgKey(r.itemKey), qty: -r.total })), // delta 存负数（出库），展示转正
+  })
 }

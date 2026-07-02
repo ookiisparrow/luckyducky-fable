@@ -155,6 +155,8 @@ const ACTIONS: Record<string, (ctx: Ctx) => Promise<any>> = {
   // 进销存车道 D·计划核销线（蓝图 §4D·门5 文件级隔离·默认拒 admin:write＝仅超管）：备货计算器（只读）；
   // 发货核销流水在 orders.shipOrder 内绑首次 shipped 流转（守卫 ship-verify-ledger）、不另立 action
   getRestockPlan: scmPlanner.getRestockPlan,
+  // 产销统计（只读·同车道 D）：stockLedger fg 流水按 itemKey 汇总——打包累计 + 发货/销售累计，不动账
+  getFgSummary: scmPlanner.getFgSummary,
 }
 
 // 能力闸（§1.5 RBAC·根因#3·别让单超管裸奔）：受限 action 须 principal 具备对应能力（'*'=全能力）。

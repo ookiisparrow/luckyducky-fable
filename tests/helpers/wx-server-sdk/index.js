@@ -188,7 +188,8 @@ class Query {
   }
 }
 
-// 聚合管线（最小实现·债#18续）：支持 .match(filter).group({_id, key:$.sum('$field')}).end()。
+// 聚合管线（最小实现·债#18续 + SCM 产销统计续）：支持 .match(filter).group({_id, key:$.sum('$field')}).end()。
+// _id 为 '$field' 时真按该字段值分桶（真实 wx-server-sdk 语义）；_id:null 仍是单桶（GMV/评分求和等既有用法不变）。
 class Aggregate {
   constructor(coll) {
     this.coll = coll
@@ -206,15 +207,27 @@ class Aggregate {
   async end() {
     const docs = rows(this.coll).filter((d) => matchDoc(d, this._match))
     if (!this._group) return { list: docs.map(clone) }
-    const out = { _id: this._group._id ?? null }
-    for (const [k, v] of Object.entries(this._group)) {
-      if (k === '_id') continue
-      if (v && v.__aggOp === 'sum') {
-        const f = String(v.expr).replace(/^\$/, '')
-        out[k] = docs.reduce((n, d) => n + (Number(d[f]) || 0), 0)
-      }
+    const idExpr = this._group._id
+    const keyOf = (d) => (typeof idExpr === 'string' && idExpr.startsWith('$') ? d[idExpr.slice(1)] : idExpr ?? null)
+    const buckets = new Map() // 分桶键需 JSON 化（对象/undefined 也能落桶），值存 {_id, docs}
+    for (const d of docs) {
+      const key = keyOf(d)
+      const bk = JSON.stringify(key)
+      if (!buckets.has(bk)) buckets.set(bk, { _id: key, docs: [] })
+      buckets.get(bk).docs.push(d)
     }
-    return { list: [out] }
+    const list = [...buckets.values()].map((b) => {
+      const out = { _id: b._id }
+      for (const [k, v] of Object.entries(this._group)) {
+        if (k === '_id') continue
+        if (v && v.__aggOp === 'sum') {
+          const f = String(v.expr).replace(/^\$/, '')
+          out[k] = b.docs.reduce((n, d) => n + (Number(d[f]) || 0), 0)
+        }
+      }
+      return out
+    })
+    return { list }
   }
 }
 

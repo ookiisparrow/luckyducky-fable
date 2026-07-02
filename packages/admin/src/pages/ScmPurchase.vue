@@ -7,6 +7,7 @@
 import { ref, computed } from 'vue'
 import { cloudMode, listPurchases, savePurchase, markPurchaseOrdered, receivePurchase, cancelPurchase, listMaterials, listSuppliers } from '@/api/cloud.js'
 import { confirmDialog, toast } from '@/utils/ui.js'
+import { consumePurchaseHandoff } from '@/store/scmHandoff.js'
 import { RefreshCw, Plus, Trash2 } from 'lucide-vue-next'
 import Skeleton from '@/components/Skeleton.vue'
 import ScmFlowTabs from '@/components/ScmFlowTabs.vue'
@@ -31,6 +32,7 @@ async function init() {
     purchases.value = ps
     materials.value = ms
     suppliers.value = ss
+    applyHandoff()
   } catch (e) {
     loadErr.value = '加载失败：' + e.message
   } finally {
@@ -53,6 +55,13 @@ const saving = ref(false)
 
 function resetForm() {
   form.value = { purchaseId: '', supplierId: '', lines: [emptyLine()] }
+}
+// 备货计算器带过来的缺口（去开单按钮）：预填供应商+物料+数量，单价缺口算不出来、留空待人工补
+function applyHandoff() {
+  const h = consumePurchaseHandoff()
+  if (!h) return
+  form.value = { purchaseId: '', supplierId: h.supplierId, lines: h.lines.map((l) => ({ materialId: l.materialId, qty: l.qty, priceYuan: '' })) }
+  toast('已带入备货缺口，请补单价后建草稿')
 }
 function addLine() {
   form.value.lines.push(emptyLine())

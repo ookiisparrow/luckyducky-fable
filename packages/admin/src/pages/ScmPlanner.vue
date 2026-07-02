@@ -5,11 +5,15 @@
  * ② 采购缺口（按供应商分列·够扣的不出行）。不动任何账——照单去开采购单/外协单。
  */
 import { ref } from 'vue'
+import { useRouter } from 'vue-router'
 import { cloudMode, getRestockPlan, loadProducts } from '@/api/cloud.js'
 import { toast } from '@/utils/ui.js'
-import { RefreshCw, Plus, Trash2 } from 'lucide-vue-next'
+import { setPurchaseHandoff, setOutworkHandoff } from '@/store/scmHandoff.js'
+import { RefreshCw, Plus, Trash2, ArrowRight } from 'lucide-vue-next'
 import Skeleton from '@/components/Skeleton.vue'
 import ScmFlowTabs from '@/components/ScmFlowTabs.vue'
+
+const router = useRouter()
 
 const loading = ref(true)
 const loadErr = ref('')
@@ -51,6 +55,16 @@ async function compute() {
   } finally {
     computing.value = false
   }
+}
+
+// ── 联动开单：算完缺口直接带数据跳过去，不用手抄颜色/物料/数量（用户反馈「使用流程割裂」）──
+function goOutworkOrder() {
+  setOutworkHandoff({ lines: plan.value.outworkGaps.map((g) => ({ materialId: `yarn:${g.color}:L:raw`, qty: g.rawToIssue })) })
+  router.push('/scm-outwork')
+}
+function goPurchaseOrder(group) {
+  setPurchaseHandoff({ supplierId: group.supplierId, lines: group.lines.map((l) => ({ materialId: l.materialId, qty: l.gap })) })
+  router.push('/scm-purchase')
 }
 </script>
 
@@ -98,7 +112,10 @@ async function compute() {
             <span class="c-num"><b class="red">{{ g.gap }}</b></span>
             <span class="c-num strong"><b>{{ g.rawToIssue }} 团</b></span>
           </div>
-          <p v-if="plan.outworkGaps.length" class="hint inset">照这个数去「外协加工」开单发料（发出去的原团已叠进下方采购口径）。</p>
+          <p v-if="plan.outworkGaps.length" class="hint inset">
+            照这个数去「外协加工」开单发料（发出去的原团已叠进下方采购口径）。
+            <button class="btn ghost mini" @click="goOutworkOrder">去外协加工开单 <ArrowRight :size="12" /></button>
+          </p>
         </div>
 
         <!-- 采购缺口（按供应商分列） -->
@@ -106,7 +123,10 @@ async function compute() {
           <div class="row hrow"><span class="c-name">采购缺口（够扣的不列）</span><span class="c-num">要用</span><span class="c-num">现库存</span><span class="c-num">缺</span></div>
           <p v-if="!plan.purchaseGroups.length" class="hint inset">原料都够——不用采购。</p>
           <template v-for="g in plan.purchaseGroups" :key="g.supplierId || 'none'">
-            <div class="row group"><span class="c-name"><b>{{ g.supplierName }}</b></span><span class="c-num" /><span class="c-num" /><span class="c-num" /></div>
+            <div class="row group">
+              <span class="c-name"><b>{{ g.supplierName }}</b></span><span class="c-num" /><span class="c-num" /><span class="c-num" />
+              <button v-if="g.supplierId" class="btn ghost mini" @click="goPurchaseOrder(g)">去采购管理开单 <ArrowRight :size="12" /></button>
+            </div>
             <div v-for="l in g.lines" :key="l.materialId" class="row">
               <span class="c-name">{{ l.name }} <span class="mono dim">{{ l.materialId }}</span><em v-if="l.missing">（未建档）</em></span>
               <span class="c-num">{{ l.need }} {{ l.uom === 'gram' ? '克' : '件' }}</span>

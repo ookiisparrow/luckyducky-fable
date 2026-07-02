@@ -8,6 +8,7 @@
 import { ref, computed } from 'vue'
 import { cloudMode, listOutworks, saveOutwork, issueOutwork, receiveOutwork, settleOutwork, cancelOutwork, listSuppliers, listMaterials } from '@/api/cloud.js'
 import { confirmDialog, toast } from '@/utils/ui.js'
+import { consumeOutworkHandoff } from '@/store/scmHandoff.js'
 import { RefreshCw, Plus, X } from 'lucide-vue-next'
 import Skeleton from '@/components/Skeleton.vue'
 import ScmFlowTabs from '@/components/ScmFlowTabs.vue'
@@ -31,6 +32,7 @@ async function init() {
     orders.value = os
     suppliers.value = ss
     materials.value = ms
+    applyHandoff()
   } catch (e) {
     loadErr.value = '加载失败：' + e.message
   } finally {
@@ -69,6 +71,13 @@ function editDraft(o) {
     rateYuan: (o.pieceRateFen / 100).toFixed(2),
     lines: (o.issueLines || []).map((l) => ({ ...l })),
   }
+}
+// 备货计算器带过来的缺口（去开单按钮）：预填发料行，织女/计件单价缺口算不出来、留空待人工补
+function applyHandoff() {
+  const h = consumeOutworkHandoff()
+  if (!h) return
+  form.value = { outworkId: '', workerId: '', rateYuan: '', lines: h.lines.map((l) => ({ ...l })) }
+  toast('已带入备货缺口，请选织女、填计件单价后建草稿')
 }
 async function submitForm() {
   const f = form.value

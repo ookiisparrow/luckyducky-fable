@@ -592,6 +592,14 @@ export async function getRestockPlan(targets) {
   return r
 }
 
+// 产销统计（同车道 D·只读）：stockLedger fg 流水按产品汇总，返 { packed, shipped }（各为 [{productId,spec,qty}]）
+export async function getFgSummary() {
+  if (!cloudMode) return { packed: [], shipped: [] }
+  const r = await post('getFgSummary', {})
+  if (!r.ok) throw new Error(r.error || 'FG_SUMMARY_FAIL')
+  return { packed: r.packed || [], shipped: r.shipped || [] }
+}
+
 // ---------- 库存（库存#1·下单即预留·乐观 CAS；写库存收口云端 kit/inventory） ----------
 
 export async function listInventory(productIds) {
