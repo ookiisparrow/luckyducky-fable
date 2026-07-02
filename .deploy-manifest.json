@@ -1,8 +1,8 @@
 {
-  "updatedAt": 1782988834160,
+  "updatedAt": 1782990721970,
   "functions": {
     "activateCourse": "cf56e220d07c",
-    "adminApi": "86d850b812ef",
+    "adminApi": "915a99c04e16",
     "applyRefund": "bd792272e130",
     "cleanupEvents": "120c8630e91e",
     "closeExpiredOrders": "25deb30b5970",
@@ -24,7 +24,7 @@
     "getReviews": "2a4018fc52b6",
     "initDb": "06d62709ce17",
     "kfBind": "b60dc1f54337",
-    "kfCallback": "3fd61fa09833",
+    "kfCallback": "2864330169a6",
     "kfHealthProbe": "efc7cb80e807",
     "kfSend": "0ff0426c826d",
     "login": "5f502218a519",
