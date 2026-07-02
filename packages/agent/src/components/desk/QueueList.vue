@@ -106,7 +106,8 @@ defineExpose({ refresh })
         <div class="q-main">
           <div class="q-name">{{ it.display || it.externalUserId }}</div>
           <div class="q-meta">
-            <span class="chip amber">待接</span>
+            <!-- 升级件与普通待接区分（超管队列含 escalated·外包甩单一眼可辨） -->
+            <span class="chip amber">{{ it.status === 'escalated' ? '升级' : '待接' }}</span>
             <span class="q-wait">{{ waitLabel(it.waitingMs) }}</span>
           </div>
         </div>
