@@ -58,6 +58,7 @@ const GROUPS = [
       { to: '/checkpoints', label: '节点诊断', icon: ClipboardCheck },
       { to: '/kb', label: '知识库', icon: BookOpen },
       { to: '/csat', label: '客服满意度', icon: Star },
+      { to: '/agents', label: '外包账号', icon: Users },
     ],
   },
   {
@@ -65,7 +66,6 @@ const GROUPS = [
     caption: '系统',
     icon: Settings,
     items: [
-      { to: '/agents', label: '外包账号', icon: Users },
       { to: '/notifications', label: '消息通知', icon: Bell },
       { to: '/externals', label: '外部后台', icon: ExternalLink },
     ],
