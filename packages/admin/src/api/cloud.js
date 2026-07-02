@@ -457,6 +457,9 @@ export async function receivePurchase(purchaseId) {
 export async function cancelPurchase(purchaseId) {
   const r = await post('cancelPurchase', { purchaseId })
   if (!r.ok) throw purchaseErr(r.error)
+  return r
+}
+
 // ---------- 进销存车道 B·外协加工（发最大团原团→收带结→计件工钱·蓝图 docs/进销存ERP/ §4B） ----------
 
 const OUTWORK_ERR = {
