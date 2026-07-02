@@ -1,4 +1,4 @@
-import { COLLECTIONS, alert, transition } from '../../../kit'
+import { COLLECTIONS, alert, transition, sendAgentCard, AGENT_DESK_URL } from '../../../kit'
 
 /**
  * 客服分流引擎（避免幻觉第一·非生成式）：关键词识别 → 高亮 msgmenu 气泡分流；按回传 menu_id →
@@ -357,21 +357,49 @@ export async function enqueueSession(db: any, openKfId: string, externalUserId: 
   if (!euid || !openKfId) return // 不造无主会话
   const now = Date.now()
   const id = 'wxkf:' + openKfId + ':' + euid
+  let queued = false // 真正新入队（首建 or closed 重开）才推送——已在 pending/active 的不重复骚扰坐席
   try {
     await db.collection(COLLECTIONS.csSession).add({
       data: { _id: id, status: 'pending', externalUserId: euid, openKfId, createdAt: now, updatedAt: now },
     })
+    queued = true
   } catch {
     // 撞确定性 _id＝该顾客已有会话 doc：pending/active/escalated 不动（不 clobber·坐席已认领的不被重置·根因#1）；
     // **closed 则重开**（closed→pending·声明流转 cs.spec.ts·原子：非 closed 时 moved=false 天然不 clobber）——
     // 老客二次点「找人工」曾被此撞 id 静默吞、永进不了队列（2026-07-02 真机逼出·调试日志 AD）。
     // createdAt 刷新＝重新排队（FIFO 队尾）+ getThread 消息流从重开起算（不翻旧会话历史）。
-    await transition('csSession', id, ['closed'], 'pending', {
+    const r = await transition('csSession', id, ['closed'], 'pending', {
       agentId: null,
       claimedAt: null,
       createdAt: now,
       updatedAt: now,
-    }).catch(() => {}) /* best-effort：不反噬顾客回复 */
+    }).catch(() => ({ moved: false })) /* best-effort：不反噬顾客回复 */
+    queued = !!(r && (r as any).moved)
+  }
+  if (queued) await notifyOnlineAgents(db, id) // M⑦ 推送线·fail-soft（sendAgentCard 内吞错·不反噬入队）
+}
+
+// 新会话入队 → 推「新会话待接」到在线坐席手机（M⑦ 承面C 增强·推送线·fail-soft）。
+// 在线坐席＝agentState.status='online'；其 wecomUserId 从 adminConfig 同 _id doc 取（坐席账号加的字段·M⑦ 地基）。
+// 全程 fail-soft（sendAgentCard 内吞错·此处 try/catch 兜查询）：推送失败绝不反噬顾客转人工入队（守卫 enqueue-push-fail-soft）。
+async function notifyOnlineAgents(db: any, sessionId: string): Promise<void> {
+  try {
+    const st = await db.collection(COLLECTIONS.agentState).where({ status: 'online' }).get().catch(() => ({ data: [] }))
+    const ids = (st.data || []).map((a: any) => a._id).filter(Boolean)
+    if (!ids.length) return
+    const touser: string[] = []
+    for (const id of ids) {
+      const g = await db.collection('adminConfig').doc(id).get().catch(() => null)
+      const uid = g && g.data && g.data.wecomUserId
+      if (uid) touser.push(String(uid))
+    }
+    await sendAgentCard(db, touser, {
+      title: '新会话待接',
+      description: '有顾客转入人工客服，请及时到工作台接待。',
+      url: AGENT_DESK_URL + '?session=' + sessionId,
+    })
+  } catch {
+    /* fail-soft：推送不反噬转人工入队 */
   }
 }
 

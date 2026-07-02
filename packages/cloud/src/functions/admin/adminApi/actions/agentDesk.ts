@@ -1,5 +1,5 @@
 import { reply, str, type Ctx } from '../lib'
-import { transition, pageParams, COLLECTIONS, assertOwnedByAgent, assertDataShareConsent } from '../../../../kit'
+import { transition, pageParams, COLLECTIONS, assertOwnedByAgent, assertDataShareConsent, sendAgentCard, AGENT_DESK_URL } from '../../../../kit'
 import { assembleCustomer360 } from '../customer360/orchestrator'
 
 // 承面 C 外包会话工作台·坐席台后端（B6.1–6.3·板块#12）。实现 shared/csAgentDesk.ts 契约的 8 个 action：
@@ -283,6 +283,19 @@ export async function escalateToMerchant(ctx: Ctx): Promise<any> {
   // active → escalated（保留 agentId＝记录谁升的·activeCount 派生随 status 降·商户可 claim 重接）
   const r = await transition('csSession', sessionId, ['active'], 'escalated', { updatedAt: now })
   if (!r.moved) return reply(200, { ok: false, error: 'NOT_ACTIVE' })
+  // M⑦ 推送线·fail-soft：会话升级 → 推商户超管手机（其 wecomUserId 存 adminConfig 'auth' doc·超管在 /agent 队列可见 escalated）
+  try {
+    const boss = await db.collection('adminConfig').doc('auth').get().catch(() => null)
+    const uid = boss && boss.data && boss.data.wecomUserId
+    if (uid)
+      await sendAgentCard(db, [String(uid)], {
+        title: '会话已升级待处理',
+        description: '外包坐席升级了一个会话，需要你处理。',
+        url: AGENT_DESK_URL + '?session=' + sessionId,
+      })
+  } catch {
+    /* fail-soft：推送不反噬升级 */
+  }
   return reply(200, { ok: true })
 }
 

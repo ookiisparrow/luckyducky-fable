@@ -267,6 +267,62 @@ export async function sendMsg(accessToken: string, payload: any, fetchImpl: Fetc
   return post('kf/send_msg', accessToken, payload, fetchImpl)
 }
 
+// ───────────── 应用消息（自建应用主动推送·M⑦ 承面C 增强·推送线）─────────────
+// 与微信客服 send_msg 的区别：这是企业微信「应用消息」（message/send·带 agentid·推给企业成员 userid）——
+// 把「新会话待接 / 会话升级」主动推到坐席手机（app 消息不受 48h 会话窗口限制·解「页面关着无提醒」）。
+// **单接缝**（守卫 app-message-single-seam）：全库 message/send 只经本文件出。
+
+/** 坐席台工作台 URL（推送卡片点入·车道 C 消费 ?session·单源）。可 env WXKF_AGENT_URL 覆盖。 */
+export const AGENT_DESK_URL = process.env.WXKF_AGENT_URL || 'https://www.luckyducky.cn/agent/'
+
+/** 发一条应用消息 textcard（touser 用 '|' 连接·企微规范）。原始接缝——全库只此一处调 message/send。 */
+export async function sendAppMessage(
+  accessToken: string,
+  args: { agentid: string | number; touser: string[]; textcard: { title: string; description: string; url: string; btntxt?: string } },
+  fetchImpl: FetchFn = defaultFetch
+): Promise<any> {
+  return post(
+    'message/send',
+    accessToken,
+    {
+      touser: (args.touser || []).join('|'),
+      msgtype: 'textcard',
+      agentid: args.agentid,
+      textcard: {
+        title: args.textcard.title,
+        description: args.textcard.description,
+        url: args.textcard.url,
+        btntxt: args.textcard.btntxt || '接待',
+      },
+    },
+    fetchImpl
+  )
+}
+
+/**
+ * 主动卡片推给若干坐席（fail-soft·**绝不抛错**）：内部取缓存令牌 + agentid（env WXKF_AGENTID），
+ * 未配 / 无令牌 / 无收件人一律静默跳过——推送是增益，失败不得反噬转人工入队 / 升级等主流程
+ * （守卫 enqueue-push-fail-soft）。touser = 企微成员 userid 列表（坐席账号 wecomUserId）。
+ */
+export async function sendAgentCard(
+  db: any,
+  touser: string[],
+  card: { title: string; description: string; url: string },
+  fetchImpl: FetchFn = defaultFetch
+): Promise<void> {
+  try {
+    const to = (touser || []).filter(Boolean)
+    if (!to.length) return
+    const agentid = process.env.WXKF_AGENTID || ''
+    if (!agentid) return
+    const token = await getCachedKfToken(db)
+    if (!token) return
+    await sendAppMessage(token, { agentid, touser: to, textcard: card }, fetchImpl)
+  } catch {
+    /* fail-soft：推送不反噬主流程 */
+  }
+}
+
 // （已退役 2026-07-02·调试日志 AC）transferToServicer（service_state→3 原生接待台转接）：与承面C 自建坐席
 // 通道互斥——state 3 下坐席 send_msg 全被 95018 拒。人工由自建 csSession 队列承接、平台会话恒智能助手态(1)；
 // 守卫 agent-channel-stays-assistant 焊 functions/cs/ 禁再引入。历史实现见 git（2026-07-02 前）。

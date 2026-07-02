@@ -596,6 +596,40 @@ export const repoChecks = [
     },
   },
   {
+    // 应用消息单一收口（M⑦ 承面C 增强·推送线·根因#12 平台接缝单点）：企业微信「应用消息」（message/send·带
+    // agentid·主动推坐席手机）只经 kit/wecom.ts 出——sendAppMessage 是唯一调 message/send 的原始接缝、
+    // sendAgentCard 是唯一 fail-soft 编排。其余 packages/cloud/src 不得出现 message/send 字面量（防散调/绕
+    // agentid 配置/令牌多处）；调用方（kfCallback dispatch / agentDesk）经 kit sendAgentCard 推送、不直拼。
+    id: 'app-message-single-seam',
+    roots: ['#12'],
+    desc: '应用消息单一收口（M⑦ 推送线·根因#12）：企业微信 message/send（应用消息·推坐席手机）只经 kit/wecom.ts（sendAppMessage 原始接缝 + sendAgentCard fail-soft 编排）；其余 cloud/src 不得出现 message/send 字面量（防散调/绕 agentid/令牌多处），推送经 kit sendAgentCard',
+    run() {
+      const seam = 'packages/cloud/src/kit/wecom.ts'
+      if (!existsSync(join(ROOT, seam))) return [`${seam} 缺失——应用消息接缝单点（M⑦·根因#12）`]
+      const bad = []
+      const seamSrc = readFileSync(join(ROOT, seam), 'utf8')
+      if (!/export\s+async\s+function\s+sendAppMessage/.test(seamSrc))
+        bad.push(`${seam} 未导出 sendAppMessage——应用消息原始接缝空壳`)
+      if (!/export\s+async\s+function\s+sendAgentCard/.test(seamSrc))
+        bad.push(`${seam} 未导出 sendAgentCard——应用消息 fail-soft 编排缺失`)
+      const srcRoot = join(ROOT, 'packages/cloud/src')
+      const walk = (d) => {
+        for (const e of readdirSync(d)) {
+          const p = join(d, e)
+          if (statSync(p).isDirectory()) walk(p)
+          else if (e.endsWith('.ts')) {
+            const rel = relative(ROOT, p).replace(/\\/g, '/')
+            if (rel === seam) continue
+            if (/['"]message\/send['"]/.test(readFileSync(p, 'utf8')))
+              bad.push(`${rel} 直出 message/send——应用消息须经 kit/wecom.sendAgentCard 单一收口（M⑦·根因#12）`)
+          }
+        }
+      }
+      if (existsSync(srcRoot)) walk(srcRoot)
+      return bad
+    },
+  },
+  {
     // 微信支付 APIv3 商户接缝单一收口（S16 外部对账·根因#12 平台接缝单点）：商户 API 出站 + v3 签名只在
     // kit/wxpay.ts；主机 api.mch.weixin.qq.com 字面量只许此文件出现，其余 cloud/src 引用即红（防散签/绕单点/凭证多处）。
     id: 'wxpay-seam-single',
@@ -3776,6 +3810,10 @@ export const typeAndTestGuards = [
   { id: 'paycallback-revive-reserves-stock', mechanism: 'test', roots: ['#1', '#2'], reverseTest: 'tests/cloud/payCallback.test.js' },
   // 管理操作审计（操作审计#4·根因#3）：recordAudit 写痕 + 剥凭证 + fail-soft；shouldAudit 只记动钱/状态操作、跳只读/上传/认证。reverseTest 锁此行为。
   { id: 'admin-action-audit-logged', mechanism: 'test', roots: ['#3'], reverseTest: 'tests/cloud/kit/audit.test.js' },
+  // 新会话推送 fail-soft（M⑦ 推送线·根因#8「构建过≠真能用」防推送反噬）：enqueueSession 推在线坐席（应用消息）
+  // 失败/网络异常一律静默——转人工入队照常完成、顾客回复不受影响；且只在「真正新入队」（首建/closed 重开）才推，
+  // 已 pending/active 不重复骚扰。reverseTest 锁此行为（推送抛错→enqueue 仍 resolves + 会话入队）。
+  { id: 'enqueue-push-fail-soft', mechanism: 'test', roots: ['#8'], reverseTest: 'tests/cloud/agentPush.test.js' },
 ]
 
 const SRC_DIRS = ['packages', 'cloudfunctions', 'scripts']
