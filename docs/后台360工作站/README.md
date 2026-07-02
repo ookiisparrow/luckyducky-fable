@@ -64,7 +64,7 @@
 | 4 | M⑥ 承面 C 外包后台(L·**用户 2026-07-01 拍板自建·直接上·不评 SaaS**) | M⑤✅·48002 权限✅·send_msg✅ | 🟢 **已部署（2026-07-02·代码全清·剩真坐席验）**：阶段0地基 Batch 1/2 + 三车道并行 + master 整合（A 坐席台后端‖B `/agent` 工作台‖C 前置件·外包 RBAC 收窄仅 `agent:handle`）+ **接真接口批**——① `getSessionCustomer360` 外包唯一 360 读路径（双闸 `assertOwnedByAgent`+`assertDataShareConsent`·同意闸读侧消费者落地·NO_BRIDGE/NO_CONSENT 如实提示·FORCE_AUDIT 留痕）② `listMyActive` 在接恢复+「我的在接」区（刷新不丢·多会话切换）+ 超管队列含 escalated（甩单黑洞补）③ `/agent` 接真网关（`.env.production`·mock 语义对齐）。**部署✅**：14 函数（含 dataConsent 新上·钱链波及累积清零）+ `/agent` 静态托管 LIVE（四路径核验完好）·smoke ok。守卫 117·测试 862·云函数 38。**集合 ACL ✅**（initDb 单源化建齐 6 缺失集合 csSession/agentState/inventory/auditLog/feedback/reviews·用户全锁 ADMINONLY·2026-07-02）。**✅ 真坐席真会话验收通过（2026-07-02·用户「成功」）**——验收当场逮出并根治 P0：转人工曾把平台会话转 3（原生接待台模式）与自建坐席 send_msg 互斥（95018·调试日志 AC·守卫 `agent-channel-stays-assistant`·守卫 118/测试 864）；人工自此单通道=自建工作台，企业微信原生接待台退出人工链路。**M⑥ 整线闭环。** 见 `承面C工单.md` §0 |
 | 5 | M③ 承面 A 内部 VIP(企微侧栏·与外包线独立可并行) | 链②·48002 | ⬜ |
 | 6 | M④ 知识库 + CSAT + 主动召回 | M① | 🟢 已部署(车道D·控台锁✅) |
-| 7 | **M⑦ 承面C 增强：企微自建应用坐席台（推送+免登+移动化）** | M⑥✅·企微应用✅ | 📋 **已出工单+并行计划**（`承面推送免登工单.md`·2026-07-02·用户拍板企微线）：应用消息推送新会话到坐席手机 + OAuth 免登 + `/agent` 移动化·**不新增函数/集合**·master 地基 + A 推送‖B 免登‖C 移动化 3 车道·剩靠人企微后台配置 + 真机验 |
+| 7 | **M⑦ 承面C 增强：企微自建应用坐席台（推送+免登+移动化）** | M⑥✅·企微应用✅ | 🟢 **地基已落**（`承面推送免登工单.md`·2026-07-02·用户拍板企微线）：✅ 阶段0 地基＝坐席账号 `wecomUserId` 字段全链（create/`setAgentWecomUserId` 回填/list 回显/唯一性·admin Agents.vue 可填可改·免登共同前置）；**剩** 车道 A 推送‖B 免登‖C 移动化（**不新增函数/集合**）+ 靠人企微后台配置 + 真机验 |
 | 8 | 合规补全 + 其余 G(支付投诉/换货/风控/跨openid/SOP) | 按需 | ⬜ |
 | 押后 | AI(Hunyuan) | — | ⬜ |
 | 方案外 | 直播教学(企微群直播·单独立项) | — | ⬜ |

@@ -113,6 +113,7 @@ const ACTIONS: Record<string, (ctx: Ctx) => Promise<any>> = {
   createAgent: agents.createAgent,
   disableAgent: agents.disableAgent,
   listAgents: agents.listAgents,
+  setAgentWecomUserId: agents.setAgentWecomUserId, // M⑦ 地基·回填企微 userid（免登用·默认拒 admin:write·仅超管）
 }
 
 // 能力闸（§1.5 RBAC·根因#3·别让单超管裸奔）：受限 action 须 principal 具备对应能力（'*'=全能力）。

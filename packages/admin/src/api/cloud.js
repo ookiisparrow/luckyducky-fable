@@ -637,17 +637,36 @@ export async function listAgents() {
   return r.agents || []
 }
 
-// 建外包账号：name（显示名）+ key（登录口令·≥6 位·不入明文·撞既有口令拒）。返回 { id, name, role, disabled }。
-export async function createAgent(name, key) {
-  const r = await post('createAgent', { name, key })
+// 建外包账号：name（显示名）+ key（登录口令·≥6 位·不入明文·撞既有口令拒）+ wecomUserId?（企微 userid·可空·免登用）。
+// 返回 { id, name, role, disabled, wecomUserId }。
+export async function createAgent(name, key, wecomUserId = '') {
+  const r = await post('createAgent', { name, key, wecomUserId })
   if (!r.ok) {
     const msg =
-      { BAD_NAME: '请填写账号名称', KEY_TOO_SHORT: '登录口令至少 6 位', KEY_TAKEN: '该口令已被占用，请换一个' }[r.error] ||
+      {
+        BAD_NAME: '请填写账号名称',
+        KEY_TOO_SHORT: '登录口令至少 6 位',
+        KEY_TAKEN: '该口令已被占用，请换一个',
+        WECOM_ID_TAKEN: '该企微 userid 已绑定其他账号',
+      }[r.error] ||
       r.error ||
       '创建失败'
     throw new Error(msg)
   }
   return r.agent
+}
+
+// 回填/改绑企微 userid（免登用·M⑦）：空串=解绑。唯一性冲突 WECOM_ID_TAKEN。
+export async function setAgentWecomUserId(id, wecomUserId) {
+  const r = await post('setAgentWecomUserId', { id, wecomUserId })
+  if (!r.ok) {
+    const msg =
+      { AGENT_NOT_FOUND: '账号不存在', WECOM_ID_TAKEN: '该企微 userid 已绑定其他账号', BAD_ID: '账号 ID 无效' }[r.error] ||
+      r.error ||
+      '操作失败'
+    throw new Error(msg)
+  }
+  return r.wecomUserId
 }
 
 // 停用 / 恢复外包账号：disabled=true 停（该账号即刻无法登录）·false 恢复。

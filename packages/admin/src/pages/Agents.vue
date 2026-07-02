@@ -7,8 +7,8 @@
  * - 口令只在创建时展示一次给你转交外包坐席，之后不再回显（后端不回明文·白名单只回 id/name/role/disabled）。
  */
 import { ref } from 'vue'
-import { cloudMode, listAgents, createAgent, setAgentDisabled } from '@/api/cloud.js'
-import { confirmDialog, toast } from '@/utils/ui.js'
+import { cloudMode, listAgents, createAgent, setAgentDisabled, setAgentWecomUserId } from '@/api/cloud.js'
+import { confirmDialog, promptDialog, toast } from '@/utils/ui.js'
 
 const agents = ref([])
 const loading = ref(false)
@@ -16,6 +16,7 @@ const loadErr = ref('')
 const creating = ref(false)
 const newName = ref('')
 const newKey = ref('')
+const newWecomId = ref('')
 const lastCreated = ref(null) // { name, key } 创建后一次性展示口令，供转交外包
 
 async function load() {
@@ -40,16 +41,37 @@ async function create() {
   if (key.length < 6) return toast('登录口令至少 6 位', 'err')
   creating.value = true
   try {
-    const agent = await createAgent(name, key)
+    const agent = await createAgent(name, key, newWecomId.value.trim())
     lastCreated.value = { name: agent.name, key } // 一次性展示口令（后端不再回显）
     newName.value = ''
     newKey.value = ''
+    newWecomId.value = ''
     await load()
     toast('已创建 ✓，请把登录口令转交该外包坐席', 'ok')
   } catch (e) {
     toast(e.message, 'err')
   } finally {
     creating.value = false
+  }
+}
+
+// 回填/改绑企微 userid（免登用）：promptDialog 取值·空串=解绑·唯一性由后端校验
+async function editWecomId(a) {
+  const next = await promptDialog({
+    title: '绑定企业微信 userid',
+    message: `「${a.name}」的企业微信 userid（用于企微内免登；留空=解绑）`,
+    defaultValue: a.wecomUserId || '',
+    placeholder: '如 LiSi（企业微信通讯录里的成员账号）',
+  })
+  if (next === null) return // 取消
+  const val = next.trim()
+  if (val === (a.wecomUserId || '')) return // 未改
+  try {
+    await setAgentWecomUserId(a.id, val)
+    a.wecomUserId = val
+    toast(val ? '已绑定企微 userid ✓' : '已解绑', 'ok')
+  } catch (e) {
+    toast(e.message, 'err')
   }
 }
 
@@ -96,6 +118,7 @@ function fmtDate(ts) {
       <div class="create">
         <input v-model="newName" class="inp" placeholder="账号名称（如「客服-小李」·审计留痕用）" />
         <input v-model="newKey" class="inp" type="text" placeholder="登录口令（≥6 位·转交该坐席）" />
+        <input v-model="newWecomId" class="inp" type="text" placeholder="企微 userid（可选·免登用·可后补）" />
         <button class="add" :disabled="creating" @click="create">{{ creating ? '创建中…' : '＋ 建外包账号' }}</button>
       </div>
       <p v-if="lastCreated" class="hint ok">
@@ -110,12 +133,17 @@ function fmtDate(ts) {
         <p v-if="!agents.length" class="hint">还没有外包账号。上面填名称 + 口令即可建第一个。</p>
         <table v-else class="tbl">
           <thead>
-            <tr><th>名称</th><th>角色</th><th>创建于</th><th>状态</th><th class="ta-r">操作</th></tr>
+            <tr><th>名称</th><th>角色</th><th>企微免登</th><th>创建于</th><th>状态</th><th class="ta-r">操作</th></tr>
           </thead>
           <tbody>
             <tr v-for="a in agents" :key="a.id" :class="{ off: a.disabled }">
               <td>{{ a.name || '（未命名）' }}</td>
               <td><span class="role">外包坐席</span></td>
+              <td>
+                <button class="wecom" :class="{ unbound: !a.wecomUserId }" @click="editWecomId(a)">
+                  {{ a.wecomUserId || '＋ 绑定' }}
+                </button>
+              </td>
               <td class="meta">{{ fmtDate(a.createdAt) }}</td>
               <td>
                 <span class="badge" :class="a.disabled ? 'b-off' : 'b-on'">{{ a.disabled ? '已停用' : '启用中' }}</span>
@@ -213,6 +241,23 @@ h2 {
 .role {
   font-size: 12px;
   color: var(--content-2);
+}
+.wecom {
+  border: 1px solid var(--line);
+  background: var(--white);
+  font-size: 12px;
+  font-family: inherit;
+  color: var(--ink);
+  border-radius: 7px;
+  padding: 4px 10px;
+  cursor: pointer;
+}
+.wecom.unbound {
+  color: var(--purple-meta);
+  border-style: dashed;
+}
+.wecom:hover {
+  border-color: var(--brand);
 }
 .badge {
   font-size: 11px;
