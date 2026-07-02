@@ -38,7 +38,7 @@ const leftMin = computed(() => {
       ><text v-if="leftMin"> · 还剩 {{ leftMin }} 分钟</text></text
     >
     <view class="my-resume-btn" @tap="$emit('watch')">
-      <Icon name="play" :size="15" /><text>继续观看</text>
+      <Icon name="play" :size="15" /><text class="my-resume-btn-txt">继续观看</text>
     </view>
   </view>
 </template>
@@ -149,11 +149,10 @@ const leftMin = computed(() => {
   font-size: 14px;
   padding: 9px 20px;
 }
-.my-resume-btn text {
+.my-resume-btn-txt {
   margin-left: 6px;
 }
 .my-resume-btn:active {
   opacity: 0.94;
 }
-
 </style>

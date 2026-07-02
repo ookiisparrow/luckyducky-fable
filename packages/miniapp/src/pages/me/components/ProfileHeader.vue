@@ -35,9 +35,9 @@ const topStyle = { '--sbh': getSystemBar().statusBarHeight + 'px' }
         <text v-else-if="!loggedIn" class="my-id-bio">登录后同步资料与学习进度</text>
       </view>
       <view v-if="loggedIn" class="my-edit" @tap.stop="$emit('edit')">
-        <Icon name="pencil" :size="13" /><text>编辑</text>
+        <Icon name="pencil" :size="13" /><text class="my-edit-txt">编辑</text>
       </view>
-      <view v-else class="my-edit"><text>登录</text></view>
+      <view v-else class="my-edit"><text class="my-edit-txt">登录</text></view>
     </view>
   </view>
 </template>
@@ -133,7 +133,7 @@ const topStyle = { '--sbh': getSystemBar().statusBarHeight + 'px' }
   padding: 6px 12px;
   border-radius: $r-pill;
 }
-.my-edit text {
+.my-edit-txt {
   margin-left: 4px;
 }
 .my-edit:active {

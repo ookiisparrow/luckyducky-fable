@@ -68,7 +68,7 @@ npm run build:h5 / build:mp-weixin / build:cloud
 - **文档防膨胀**：本文件 ≤180 行、活文档条目 ≤8 行，溢出沉记录类。`[机器守: docs-budget]`
 
 **多端样式（标 ⚙ 的由 conventions 机器拦）**
-- ⚙ 单位 px 不用 rpx `[机器守: rpx]`；⚙ 不写死主题色（与色票同值 hex 被拦）`[机器守: theme-hex]`；⚙ 不内联 `<svg>`、图标用 `<image>` 引 static/icons `[机器守: inline-svg]`；⚙ 交互用 `<view>`+`@tap` 不用 `<button>`（微信能力按钮 open-type 例外）`[机器守: button]`；⚙ 避 `backdrop-filter`/`color-mix()` `[机器守: css-compat]`；⚙ 本地图不走 `background-image:url()` 用 `<image>`、占位用 `MediaSlot` `[机器守: bg-image-local]`；⚙ `<scroll-view>` 内不写 sticky 吸顶（mp-weixin 不生效·H5 假绿·改随内容流参 home/me）`[机器守: sticky-in-scroll-view]`；⚙ 全屏遮罩（`*-mask`/`*-backdrop`）根 `<view>` 须 `@touchmove.stop.prevent` 锁背景滚动（mp 不锁则 touchmove 透传滚背景·H5 假绿）`[机器守: overlay-scroll-lock]`。
+- ⚙ 单位 px 不用 rpx `[机器守: rpx]`；⚙ 不写死主题色（与色票同值 hex 被拦）`[机器守: theme-hex]`；⚙ 不内联 `<svg>`、图标用 `<image>` 引 static/icons `[机器守: inline-svg]`；⚙ 交互用 `<view>`+`@tap` 不用 `<button>`（微信能力按钮 open-type 例外）`[机器守: button]`；⚙ 避 `backdrop-filter`/`color-mix()` `[机器守: css-compat]`；⚙ 本地图不走 `background-image:url()` 用 `<image>`、占位用 `MediaSlot` `[机器守: bg-image-local]`；⚙ `<scroll-view>` 内不写 sticky 吸顶（mp-weixin 不生效·H5 假绿·改随内容流参 home/me）`[机器守: sticky-in-scroll-view]`；⚙ 全屏遮罩（`*-mask`/`*-backdrop`）根 `<view>` 须 `@touchmove.stop.prevent` 锁背景滚动（mp 不锁则 touchmove 透传滚背景·H5 假绿）`[机器守: overlay-scroll-lock]`；⚙ 组件（`/components/` 下 .vue）样式禁标签选择器（`.cls text{}` 页面合法·自定义组件 wxss 不允许·真机可能静默不生效，加 class 再选）`[机器守: tag-selector-in-component]`。
 - 无独立守卫（靠 review / 条件编译纪律）：只用 `uni.xxx` 跨端 API、端私有能力 `// #ifdef MP-WEIXIN` 隔离；安全区/胶囊避让用 `utils/systemBar.js` 动态算、不硬编码 `env()`；scoped 拿不到 JS 值时经 `:style` 注入 CSS 变量、样式里 `var()` 取。
 
 **靠人（机器守不了的病根，写清为什么）**

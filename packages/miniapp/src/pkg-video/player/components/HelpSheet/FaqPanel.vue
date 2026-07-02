@@ -17,11 +17,11 @@ const faqOpen = ref(0)
         :class="{ open: faqOpen === i }"
       >
         <view class="hs-faq-q" @tap="faqOpen = faqOpen === i ? -1 : i">
-          <text>{{ qa.q }}</text>
+          <text class="hs-faq-q-txt">{{ qa.q }}</text>
           <view class="hs-faq-chev"><Icon name="chevron-right" :size="18" /></view>
         </view>
         <view class="hs-faq-a" :class="{ open: faqOpen === i }"
-          ><text>{{ qa.a }}</text></view
+          ><text class="hs-faq-a-txt">{{ qa.a }}</text></view
         >
       </view>
     </view>
@@ -41,7 +41,7 @@ const faqOpen = ref(0)
   justify-content: space-between;
   padding: 16px 2px;
 }
-.hs-faq-q text {
+.hs-faq-q-txt {
   font-family: $font-display;
   font-weight: 500;
   font-size: 15.5px;
@@ -63,7 +63,7 @@ const faqOpen = ref(0)
 .hs-faq-a.open {
   max-height: 260px;
 }
-.hs-faq-a text {
+.hs-faq-a-txt {
   display: block;
   padding: 0 2px 16px;
   font-size: 14px;

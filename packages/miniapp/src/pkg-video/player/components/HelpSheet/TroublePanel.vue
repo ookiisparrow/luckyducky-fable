@@ -76,7 +76,7 @@ watch(
             <text class="hs-vrow-title">{{ t.title }}</text>
             <text v-if="t.sub" class="hs-vrow-sub">{{ t.sub }}</text>
             <view class="hs-vrow-meta"
-              ><Icon name="play-purple" :size="13" /><text
+              ><Icon name="play-purple" :size="13" /><text class="hs-vrow-meta-txt"
                 >视频{{
                   (t.segments || []).length > 1 ? ' · ' + t.segments.length + ' 段' : ''
                 }}</text
@@ -105,7 +105,7 @@ watch(
         ></video>
         <template v-else>
           <MediaSlot ratio="4/5" />
-          <view class="hv-soon"><text>视频整理中…</text></view>
+          <view class="hv-soon"><text class="hv-soon-txt">视频整理中…</text></view>
         </template>
 
         <!-- 顶部 stories 式分段进度条（多段才显·可点段跳转） -->
@@ -213,7 +213,7 @@ watch(
   font-size: 11.5px;
   color: $purple;
 }
-.hs-vrow-meta text {
+.hs-vrow-meta-txt {
   margin-left: 4px;
 }
 .hs-vrow-chev {
@@ -243,7 +243,7 @@ watch(
   align-items: center;
   justify-content: center;
 }
-.hv-soon text {
+.hv-soon-txt {
   font-size: 13px;
   color: rgba(255, 255, 255, 0.86);
 }

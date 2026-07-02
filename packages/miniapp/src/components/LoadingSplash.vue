@@ -68,7 +68,9 @@ const sparks = Array.from({ length: 12 }, () => ({
       <image class="lsp-logo" src="/static/logo-white.svg" mode="heightFix" />
       <text class="lsp-tag">创造幸运</text>
     </view>
-    <view class="lsp-dots"><view></view><view></view><view></view></view>
+    <view class="lsp-dots"
+      ><view class="lsp-dot"></view><view class="lsp-dot"></view><view class="lsp-dot"></view
+    ></view>
   </view>
 </template>
 
@@ -148,17 +150,17 @@ const sparks = Array.from({ length: 12 }, () => ({
   display: flex;
   gap: 8px;
 }
-.lsp-dots view {
+.lsp-dot {
   width: 8px;
   height: 8px;
   border-radius: 50%;
   background: rgba(255, 255, 255, 0.95);
   animation: lsp-wave 1s ease-in-out infinite;
 }
-.lsp-dots view:nth-child(2) {
+.lsp-dot:nth-child(2) {
   animation-delay: 0.16s;
 }
-.lsp-dots view:nth-child(3) {
+.lsp-dot:nth-child(3) {
   animation-delay: 0.32s;
 }
 @keyframes lsp-wave {

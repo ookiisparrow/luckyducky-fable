@@ -130,6 +130,22 @@ export const RULES = [
     },
     roots: ['多端'],
   },
+  {
+    // 微信自定义组件 wxss 禁标签选择器（2026-07-02 me 页 devtools 逮出·根因#8「页面合法组件不合法」）：
+    // 页面 wxss 里 `text {}` 合法，但组件（路径含 /components/ 的 .vue）编译成自定义组件后，
+    // `.cls text` 这类标签选择器被微信判「Some selectors are not allowed in component wxss」——真机可能
+    // 静默不生效。给节点加 class 再选；页面文件不拦（合法）。
+    id: 'tag-selector-in-component',
+    roots: ['多端'],
+    test(line, ctx) {
+      if (!ctx?.file || !/\/components\//.test(ctx.file) || !ctx.file.endsWith('.vue')) return null
+      return /(^|[\s,>+~])(view|text|image|button|input|textarea|label|form|navigator|swiper|swiper-item|scroll-view|cover-view|rich-text)(::?[a-z-]+(\([^)]*\))?)*\s*\{/.test(
+        line
+      )
+        ? '组件（/components/ 下 .vue）样式禁标签选择器（view/text/image…）——mp 自定义组件 wxss 不允许·真机可能静默不生效；给节点加 class 再选（页面文件里合法）（根因#8）'
+        : null
+    },
+  },
 ]
 
 const isCommentLine = (line) => /^(\/\/|\/\*|\*|<!--)/.test(line.trim())

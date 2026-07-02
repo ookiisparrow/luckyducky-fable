@@ -13,10 +13,10 @@ defineEmits(['service', 'favorite', 'cart', 'buy'])
   <view class="pdp-dock">
     <!-- 客服：emit 交父级调 openCustomerService（R18/⑨ 升级独立微信客服·决策§19；展示组件不做副作用·§6） -->
     <view class="pdp-buy-ico" @tap="$emit('service')">
-      <Icon name="headphones" :size="21" /><text>客服</text>
+      <Icon name="headphones" :size="21" /><text class="pdp-buy-ico-txt">客服</text>
     </view>
     <view class="pdp-buy-ico" @tap="$emit('favorite')">
-      <Icon name="star" :size="21" /><text>收藏</text>
+      <Icon name="star" :size="21" /><text class="pdp-buy-ico-txt">收藏</text>
     </view>
     <view class="pdp-buy-actions">
       <view class="pdp-btn pdp-btn-cart" @tap="$emit('cart')">加入购物车</view>
@@ -49,7 +49,7 @@ defineEmits(['service', 'favorite', 'cart', 'buy'])
   padding: 4px 6px;
   flex: 0 0 auto;
 }
-.pdp-buy-ico text {
+.pdp-buy-ico-txt {
   font-size: 10px;
   margin-top: 2px;
 }
