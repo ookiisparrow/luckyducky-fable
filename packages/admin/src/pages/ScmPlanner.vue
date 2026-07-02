@@ -9,6 +9,7 @@ import { cloudMode, getRestockPlan, loadProducts } from '@/api/cloud.js'
 import { toast } from '@/utils/ui.js'
 import { RefreshCw, Plus, Trash2 } from 'lucide-vue-next'
 import Skeleton from '@/components/Skeleton.vue'
+import ScmFlowTabs from '@/components/ScmFlowTabs.vue'
 
 const loading = ref(true)
 const loadErr = ref('')
@@ -55,6 +56,7 @@ async function compute() {
 
 <template>
   <div>
+    <ScmFlowTabs />
     <header class="head">
       <div>
         <h1>备货计算</h1>

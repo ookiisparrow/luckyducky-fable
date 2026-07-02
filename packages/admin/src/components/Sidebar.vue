@@ -13,10 +13,11 @@ import { useRoute, useRouter } from 'vue-router'
 import {
   Package, ChevronDown, Image, FileText, Tags, Clapperboard, QrCode, Printer,
   Smartphone, Truck, RotateCcw, Boxes, ChartColumn, Wallet, Bell, ExternalLink, LifeBuoy, UserSearch, ClipboardCheck, MessagesSquare, BookOpen, Star, Users,
-  Store, Receipt, Headphones, Settings, Factory, ShoppingCart, Scissors, LayoutTemplate, PackageOpen, Calculator,
+  Store, Receipt, Headphones, Settings, Factory,
 } from 'lucide-vue-next'
 import { useProductsStore, STEP_NAMES } from '@/store/products.js'
 import { logout, currentUser } from '@/api/cloud.js'
+import { SCM_FLOW } from '@/utils/scmFlow.js'
 
 const route = useRoute()
 const router = useRouter()
@@ -62,18 +63,12 @@ const GROUPS = [
     ],
   },
   {
-    // 进销存 SCM（蓝图 docs/进销存ERP/·SCM-0 起）：车道 A/B/C/D 的采购/外协/打包/备货页后续加进本组
+    // 进销存 SCM（蓝图 docs/进销存ERP/）：顺序 = utils/scmFlow.js 单源（建档 → 算缺口 → 补料 → 产出）——
+    // 与顶部流程标签 components/ScmFlowTabs.vue 共用同一份数据，改顺序只改那一处、这里不重抄。
     key: 'scm',
     caption: '供应链',
     icon: Factory,
-    items: [
-      { to: '/scm-materials', label: '物料与供应商', icon: Package },
-      { to: '/scm-purchase', label: '采购管理', icon: ShoppingCart },
-      { to: '/scm-outwork', label: '外协加工', icon: Scissors },
-      { to: '/scm-bom', label: '配方模板', icon: LayoutTemplate },
-      { to: '/scm-assembly', label: '打包组装', icon: PackageOpen },
-      { to: '/scm-planner', label: '备货计算', icon: Calculator },
-    ],
+    items: SCM_FLOW,
   },
   {
     key: 'system',

@@ -3719,7 +3719,13 @@ export const repoChecks = [
       if (!existsSync(routerAbs) || !existsSync(sidebarAbs))
         return [`${routerRel} / ${sidebarRel} 缺失（admin 导航同步守卫无从核起·#5）`]
       const routerSrc = readFileSync(routerAbs, 'utf8')
-      const sidebar = readFileSync(sidebarAbs, 'utf8')
+      let sidebar = readFileSync(sidebarAbs, 'utf8')
+      // 跟随 Sidebar.vue 本地 @/ 静态 import 一层（如 utils/scmFlow.js 把某组 nav items 拆成共享单源
+      // 供顶部标签条复用·防两处各写一份顺序漂移）：把被引文件内容并入扫描面，见得到里面的 to: 路径。
+      for (const m of sidebar.matchAll(/from\s+['"]@\/([^'"]+)['"]/g)) {
+        const dep = join(ROOT, 'packages/admin/src', m[1])
+        if (existsSync(dep)) sidebar += '\n' + readFileSync(dep, 'utf8')
+      }
       const routePaths = [...routerSrc.matchAll(/path:\s*['"]([^'"]+)['"]/g)].map((m) => m[1])
       // ① 防死链：Sidebar 声明/绑定的路径（to: 'x' 或 to="x"）都须已注册
       for (const m of sidebar.matchAll(/\bto[:=]\s*['"](\/[^'"]*)['"]/g)) {

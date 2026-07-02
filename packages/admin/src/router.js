@@ -19,11 +19,11 @@ import Kb from '@/pages/Kb.vue'
 import Csat from '@/pages/Csat.vue'
 import Agents from '@/pages/Agents.vue'
 import ScmMaterials from '@/pages/ScmMaterials.vue'
+import ScmBom from '@/pages/ScmBom.vue'
+import ScmPlanner from '@/pages/ScmPlanner.vue'
 import ScmPurchase from '@/pages/ScmPurchase.vue'
 import ScmOutwork from '@/pages/ScmOutwork.vue'
-import ScmBom from '@/pages/ScmBom.vue'
 import ScmAssembly from '@/pages/ScmAssembly.vue'
-import ScmPlanner from '@/pages/ScmPlanner.vue'
 
 export const router = createRouter({
   history: createWebHashHistory(),
@@ -46,12 +46,13 @@ export const router = createRouter({
     { path: '/notifications', component: Notifications },
     { path: '/externals', component: Externals },
     { path: '/agents', component: Agents },
+    // 进销存 SCM（按使用流程排序：建档 → 算缺口 → 补料 → 产出·同 Sidebar/ScmFlowTabs 顺序）
     { path: '/scm-materials', component: ScmMaterials },
+    { path: '/scm-bom', component: ScmBom },
+    { path: '/scm-planner', component: ScmPlanner },
     { path: '/scm-purchase', component: ScmPurchase },
     { path: '/scm-outwork', component: ScmOutwork },
-    { path: '/scm-bom', component: ScmBom },
     { path: '/scm-assembly', component: ScmAssembly },
-    { path: '/scm-planner', component: ScmPlanner },
     // 上新向导：/product/<id>/step/<1-6>；左侧「按步骤直达」也跳这里
     { path: '/product/:id/step/:n', component: Wizard, props: true },
   ],

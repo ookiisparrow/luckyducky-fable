@@ -9,6 +9,7 @@ import { cloudMode, previewAssembly, runAssembly, listAssemblies, getBomSetup, l
 import { confirmDialog, toast } from '@/utils/ui.js'
 import { RefreshCw } from 'lucide-vue-next'
 import Skeleton from '@/components/Skeleton.vue'
+import ScmFlowTabs from '@/components/ScmFlowTabs.vue'
 
 const loading = ref(true)
 const loadErr = ref('')
@@ -96,6 +97,7 @@ const fmtTime = (t) => (t ? new Date(t).toLocaleString('zh-CN', { hour12: false 
 
 <template>
   <div>
+    <ScmFlowTabs />
     <header class="head">
       <div>
         <h1>打包组装</h1>

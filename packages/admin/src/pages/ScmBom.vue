@@ -9,6 +9,7 @@ import { cloudMode, getBomSetup, saveBomTemplate, saveBomProfile, listMaterials,
 import { toast } from '@/utils/ui.js'
 import { RefreshCw, Plus, Trash2 } from 'lucide-vue-next'
 import Skeleton from '@/components/Skeleton.vue'
+import ScmFlowTabs from '@/components/ScmFlowTabs.vue'
 
 const loading = ref(true)
 const loadErr = ref('')
@@ -104,6 +105,7 @@ async function submitProfile() {
 
 <template>
   <div>
+    <ScmFlowTabs />
     <header class="head">
       <div>
         <h1>配方模板</h1>

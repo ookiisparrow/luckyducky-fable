@@ -9,6 +9,7 @@ import { cloudMode, listMaterials, saveMaterial, listSuppliers, saveSupplier, ad
 import { promptDialog, toast } from '@/utils/ui.js'
 import { RefreshCw } from 'lucide-vue-next'
 import Skeleton from '@/components/Skeleton.vue'
+import ScmFlowTabs from '@/components/ScmFlowTabs.vue'
 
 const loading = ref(true)
 const loadErr = ref('')
@@ -137,6 +138,7 @@ const matRows = computed(() =>
 
 <template>
   <div>
+    <ScmFlowTabs />
     <header class="head">
       <div>
         <h1>物料与供应商</h1>

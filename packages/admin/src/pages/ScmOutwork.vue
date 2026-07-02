@@ -10,6 +10,7 @@ import { cloudMode, listOutworks, saveOutwork, issueOutwork, receiveOutwork, set
 import { confirmDialog, toast } from '@/utils/ui.js'
 import { RefreshCw, Plus, X } from 'lucide-vue-next'
 import Skeleton from '@/components/Skeleton.vue'
+import ScmFlowTabs from '@/components/ScmFlowTabs.vue'
 
 const loading = ref(true)
 const loadErr = ref('')
@@ -187,6 +188,7 @@ async function submitReceive() {
 
 <template>
   <div>
+    <ScmFlowTabs />
     <header class="head">
       <div>
         <h1>外协加工</h1>

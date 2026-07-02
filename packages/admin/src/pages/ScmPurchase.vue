@@ -9,6 +9,7 @@ import { cloudMode, listPurchases, savePurchase, markPurchaseOrdered, receivePur
 import { confirmDialog, toast } from '@/utils/ui.js'
 import { RefreshCw, Plus, Trash2 } from 'lucide-vue-next'
 import Skeleton from '@/components/Skeleton.vue'
+import ScmFlowTabs from '@/components/ScmFlowTabs.vue'
 
 const loading = ref(true)
 const loadErr = ref('')
@@ -117,6 +118,7 @@ async function doAction(p, kind) {
 
 <template>
   <div>
+    <ScmFlowTabs />
     <header class="head">
       <div>
         <h1>采购管理</h1>
