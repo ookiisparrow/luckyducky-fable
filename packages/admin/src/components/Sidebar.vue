@@ -275,7 +275,7 @@ function doLogout() {
 .nav :deep(svg) {
   flex: 0 0 auto;
 }
-/* 主类目行：沿用小标题的字号/色，但整行可点折叠，标签撑开把箭头推到最右 */
+/* 主类目行：深紫粗体 + 品牌紫图标，与灰色小分类明显区分（层次一眼可辨）；整行可点折叠，标签撑开把箭头推到最右 */
 .group-head {
   display: flex;
   align-items: center;
@@ -285,16 +285,23 @@ function doLogout() {
   border: none;
   background: none;
   cursor: pointer;
-  font-size: 11px;
+  font-size: 12.5px;
+  font-weight: 700;
   letter-spacing: 0.5px;
-  color: var(--purple-meta);
+  color: var(--purple-ink);
   text-align: left;
 }
 .group-head > span {
   flex: 1;
 }
+.group-head :deep(svg) {
+  color: var(--brand);
+}
+.group-head .chev {
+  color: var(--purple-meta);
+}
 .group-head:hover {
-  color: var(--purple-ink);
+  color: var(--brand-active);
 }
 .group-body {
   display: flex;
