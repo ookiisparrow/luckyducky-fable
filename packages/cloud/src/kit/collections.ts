@@ -70,6 +70,25 @@ export const COLLECTIONS = {
   // 字段 status(online/busy/offline)/activeCount(在接会话数)/limit(接待上限)/updatedAt。排队分配据此选可接坐席（示忙/满额排除·B6.3）。
   // 仅坐席台 actions（setAgentStatus/claim/release）写、客户端禁，上线前控制台锁「仅管理端」。
   agentState: 'agentState',
+  // ── 进销存 SCM（蓝图 docs/进销存ERP/·SCM-0 地基·7 集合一次预登记消灭并行冲突面·全部上线前控制台锁「仅管理端」）──
+  // 物料主档+原料账（SCM-0）：_id=确定性料号（毛线 yarn:<color>:<L|M|S>:<raw|knotted>[knotted 仅 L]·专属件 pkg:/card:<productId>·
+  // 辅料语义名）。字段 name/category/uom(count|gram·建档锁死)/supplierId/stock(整数·仅经 kit/scmStock 门1 改·守卫
+  // material-stock-single-seam)/threshold/active/updatedAt。
+  materials: 'materials',
+  // 往来单位（SCM-0）：type(factory 厂家|outworker 织女·织女每人一档)/name/contact/note/active。仅 scmMaterials actions 读写。
+  suppliers: 'suppliers',
+  // 采购单（车道 A）：状态机 draft→ordered→received(+cancelled)·单源 shared/scm.spec.ts·received 首次流转绑入库（门1 幂等）。
+  purchaseOrders: 'purchaseOrders',
+  // 外协加工单（车道 B）：状态机 draft→issued→delivered→settled(+cancelled)·发最大团原团/收带结团/计件工钱 payableFen。
+  outworkOrders: 'outworkOrders',
+  // 组装单（车道 C）：单步执行（建即执行·无状态机·撤销走调整单）·bomSnapshot 快照冻结不回读模板（守卫 bom-snapshot-frozen 随车道 C）。
+  assemblyOrders: 'assemblyOrders',
+  // 原料/成品流水（SCM-0）：append-only·确定性 _id=`<docType>:<docId>:<itemKey>`（幂等·守卫 scm-ledger-idempotent）；
+  // docType∈ purchase_in/outwork_issue/outwork_receive/assembly_out/assembly_in/adjust/ship·itemKey=料号或 fg:<productId>__<spec>。
+  // （注释别用花括号——collection-count-synced 窄解析器以首个右花括号截断计数。）
+  stockLedger: 'stockLedger',
+  // 产品配方差异位（车道 C）：_id=productId·yarnColors L/M/S 三色 + packagingMaterialId + cardMaterialId（全局模板存 config `scmBomTemplate`）。
+  bomProfiles: 'bomProfiles',
 } as const
 
 export type CollName = (typeof COLLECTIONS)[keyof typeof COLLECTIONS]

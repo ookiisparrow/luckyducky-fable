@@ -358,6 +358,60 @@ export async function saveSettings(settings) {
   return !!r.ok
 }
 
+// ---------- 进销存 SCM（SCM-0 地基·物料/供应商主档 + 期初盘点/调整·蓝图 docs/进销存ERP/） ----------
+
+export async function listMaterials() {
+  if (!cloudMode) return []
+  const r = await post('listMaterials')
+  if (!r.ok) throw new Error(r.error || 'LOAD_MATERIALS_FAIL')
+  return r.list || []
+}
+
+const SCM_ERR = {
+  UOM_LOCKED: '计量方式建档后不可改（改了会两种单位混账）',
+  KNOT_ONLY_L: '带结形态只有最大团有（业务定稿）',
+  BAD_UOM: '计量方式只能选 按件 或 按克',
+  BAD_COLOR: '颜色请用小写英文（如 red / light-blue）',
+  BAD_SLUG: '料号名请用小写英文（如 marker / eyes）',
+  NO_REASON: '请填写调整原因（留痕审计用）',
+  BAD_DELTA: '数量必须是非零整数（克/件全链整数）',
+  INSUFFICIENT: '库存不够扣（余额不允许为负）',
+  NO_MATERIAL: '料号不存在，请先建档',
+}
+const scmErr = (e) => new Error(SCM_ERR[e] || e || 'SCM_FAIL')
+
+export async function saveMaterial(payload) {
+  const r = await post('saveMaterial', payload)
+  if (!r.ok) throw scmErr(r.error)
+  return r.materialId
+}
+
+export async function listSuppliers() {
+  if (!cloudMode) return []
+  const r = await post('listSuppliers')
+  if (!r.ok) throw new Error(r.error || 'LOAD_SUPPLIERS_FAIL')
+  return r.list || []
+}
+
+export async function saveSupplier(payload) {
+  const r = await post('saveSupplier', payload)
+  if (!r.ok) throw scmErr(r.error)
+  return r.supplierId
+}
+
+// 期初盘点/人工调整：delta ± 非零整数（克或件·随主档计量）；adjustId 每次提交生成一次、重试复用＝幂等
+export async function adjustMaterialStock(materialId, delta, reason, adjustId) {
+  const r = await post('adjustStock', { materialId, delta, reason, adjustId })
+  if (!r.ok) throw scmErr(r.error)
+  return r
+}
+
+export async function listLedger(materialId, limit) {
+  const r = await post('listLedger', { materialId, limit })
+  if (!r.ok) throw new Error(r.error || 'LOAD_LEDGER_FAIL')
+  return r.list || []
+}
+
 // ---------- 库存（库存#1·下单即预留·乐观 CAS；写库存收口云端 kit/inventory） ----------
 
 export async function listInventory(productIds) {

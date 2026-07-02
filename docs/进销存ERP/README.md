@@ -30,7 +30,7 @@
 
 | 序 | 批次 | 前置 | 状态 |
 |---|---|---|---|
-| 1 | SCM-0 地基（master 串行·先） | 无 | ⬜ |
+| 1 | SCM-0 地基（master 串行·先） | 无 | ✅ 代码完成（2026-07-02·`feat/scm-0` 独立 worktree·避让主树 M⑦ CC）：7 集合登记+库权限期望表 · 门1 `kit/scmStock`（applyStockMoves 幂等流水+CAS·主档 uom 锁）· 门2 `scm.spec.ts` 两状态机+gen 扩域+对账守卫扩扫 scm\*.ts · 门3 `resolveBom` 纯函数 · 门5 `actions/scmMaterials` 6 action（默认拒仅超管·写类自动审计）· admin「供应链」组+物料/供应商页（期初盘点/调整必留因）· 守卫 +3（结构×2+test×1）反向自检×4 咬红 · 测试 885→911 · **门4 produceStock 纪律修正随车道 C**（蓝图§3）。**待整合上 main + 部署**（等主树 CC 空档·tag `scm/0/ready-1`·集合控制台锁随部署办） |
 | 2 | 第一波并行：SCM-A 采购 ‖ SCM-B 外协 | SCM-0 | ⬜ |
 | 3 | 第二波并行：SCM-C 配方组装 ‖ SCM-D 计划核销 | SCM-0（门3/门4 已在 0 定义） | ⬜ |
 | 4 | SCM-Z 整合 + 部署 + 真单验收 | A–D | ⬜ |

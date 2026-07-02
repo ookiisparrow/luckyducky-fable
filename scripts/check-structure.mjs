@@ -693,6 +693,59 @@ export const repoChecks = [
     },
   },
   {
+    // 原料账单点收口（进销存 SCM-0 门1·根因#1/#2·镜像 stock-atomic-conditional）：materials.stock 与 stockLedger
+    // 仅 kit/scmStock.ts 读写（applyStockMoves 唯一入口）；库存变更走乐观 CAS（where 含 stock 精确匹配·非读后写盲改）；
+    // 其余 cloud/src 不得直碰 materials/stockLedger 集合（一律经门1·防绕 CAS/绕流水改账）。
+    id: 'material-stock-single-seam',
+    roots: ['#1', '#2'],
+    desc: '原料账单点收口（SCM 门1·根因#1/#2·镜像 stock-atomic-conditional）：materials.stock/stockLedger 仅 kit/scmStock.ts 读写（applyStockMoves 唯一入口·乐观 CAS）；其余 cloud/src 直碰即红（防绕 CAS/绕流水改账）',
+    run() {
+      const seam = 'packages/cloud/src/kit/scmStock.ts'
+      if (!existsSync(join(ROOT, seam))) return [`${seam} 缺失——原料账原语（SCM 门1）`]
+      const bad = []
+      const src = readFileSync(join(ROOT, seam), 'utf8')
+      if (!/export\s+async\s+function\s+applyStockMoves/.test(src)) bad.push(`${seam} 未导出 applyStockMoves——门1 空壳`)
+      if (!/\.where\(\{[^}]*stock/.test(src)) bad.push(`${seam} 库存变更未用条件 where(stock) 乐观 CAS——有并发互覆盖风险（根因#1）`)
+      const allow = new Set([seam, 'packages/cloud/src/kit/collections.ts'])
+      const srcRoot = join(ROOT, 'packages/cloud/src')
+      const walk = (d) => {
+        for (const e of readdirSync(d)) {
+          const p = join(d, e)
+          if (statSync(p).isDirectory()) walk(p)
+          else if (e.endsWith('.ts')) {
+            const rel = relative(ROOT, p).replace(/\\/g, '/')
+            if (allow.has(rel)) continue
+            if (/COLLECTIONS\.(materials|stockLedger)\b|\.collection\(\s*['"](materials|stockLedger)['"]\s*\)/.test(readFileSync(p, 'utf8')))
+              bad.push(`${rel} 直碰 materials/stockLedger 集合——原料账读写须经 kit/scmStock（SCM 门1·防绕 CAS/绕流水）`)
+          }
+        }
+      }
+      if (existsSync(srcRoot)) walk(srcRoot)
+      return bad
+    },
+  },
+  {
+    // 原料流水确定性幂等（进销存 SCM·根因#2）：stockLedger 每笔流水 _id 必是确定性 `<docType>:<docId>:<itemKey>`
+    // （撞 id＝并发方已写＝天然幂等·同 deterministic-id 范式）——门1 内的流水写入必先构造确定性 _id 再 add，
+    // 禁自动 id（自动 id＝重放双记账）。静态锁 kit/scmStock.ts 的写入形态。
+    id: 'scm-ledger-idempotent',
+    roots: ['#2'],
+    desc: '原料流水确定性幂等（SCM·根因#2）：kit/scmStock.ts 写 stockLedger 必构造确定性 _id=`docType:docId:itemKey`（撞 id=并发方已写）·禁自动 id 双记账',
+    run() {
+      const seam = 'packages/cloud/src/kit/scmStock.ts'
+      if (!existsSync(join(ROOT, seam))) return [`${seam} 缺失——流水写入点（SCM 门1）`]
+      const bad = []
+      const src = readFileSync(join(ROOT, seam), 'utf8')
+      // 确定性 id 构造必在场（模板字面量 docType:docId:itemKey 三段拼接）
+      if (!/\$\{[^}]*docType[^}]*\}:\$\{[^}]*docId[^}]*\}:\$\{/.test(src))
+        bad.push(`${seam} 未见确定性流水 _id 构造（\`\${docType}:\${docId}:\${itemKey}\` 三段模板）——流水失幂等（根因#2）`)
+      // 流水写入必带 _id（add 的 data 里出现 _id 键）——禁自动 id
+      const ledgerAdds = [...src.matchAll(/stockLedger[\s\S]{0,200}?\.add\(\s*\{\s*data:\s*\{([\s\S]{0,120}?)\}/g)]
+      for (const m of ledgerAdds) if (!/_id\s*:/.test(m[1])) bad.push(`${seam} stockLedger add 未带确定性 _id——自动 id=重放双记账（根因#2）`)
+      return bad
+    },
+  },
+  {
     // 操作审计单一收口（操作审计#4·根因#3 可追溯）：管理端动钱/状态操作经 recordAudit 留痕；recordAudit/auditLog
     // 仅 kit/audit.ts（定义）+ collections/index（登记导出）+ adminApi/index.ts（分发处调用），其余 cloud/src 不得引用；
     // adminApi 分发处须接 recordAudit + shouldAudit（防回退成无痕）。
@@ -3363,6 +3416,12 @@ export const repoChecks = [
         const p = join(ROOT, 'packages/cloud/src/functions/admin/adminApi/actions', a)
         if (existsSync(p)) files.push(p)
       }
+      // + 进销存 SCM actions（SCM-0 门2 扩面·蓝图 docs/进销存ERP/：车道文件 scm*.ts 按前缀全纳对账——
+      // purchaseOrders/outworkOrders 状态写入散落处·车道 A/B 新增 scmPurchase/scmOutwork 自动覆盖、不用再改本守卫）
+      {
+        const actionsDir = join(ROOT, 'packages/cloud/src/functions/admin/adminApi/actions')
+        if (existsSync(actionsDir)) for (const e of readdirSync(actionsDir)) if (/^scm\w*\.ts$/.test(e)) files.push(join(actionsDir, e))
+      }
 
       const bad = []
       for (const p of files) {
@@ -3769,6 +3828,9 @@ export const typeAndTestGuards = [
     roots: ['#1'],
     reverseTest: 'tests/cloud/userWrites.test.js',
   },
+  // 进销存计量整数一致（SCM-0·根因#8 假数据入账）：物料 uom 只收 count|gram 且建档后锁死（改 uom→400 UOM_LOCKED）；
+  // 单据行数量/调整 delta 必整数（克/件全链整数·镜像金额「分整数」纪律·浮点入账即拒）。reverseTest 锁此组合行为。
+  { id: 'scm-uom-integer', mechanism: 'test', roots: ['#8'], reverseTest: 'tests/cloud/scmMaterials.test.js' },
   // admin 频控全局/账户级兜底（审核 P1·根因#13）：per-IP 频控 key 取 x-forwarded-for（可伪造·轮换可绕 5 次锁），
   // 故叠加跨所有 IP 的全局失败计数——轮换伪造 header 的爆破累计达全局阈值仍锁。reverseTest 锁此组合行为。
   { id: 'admin-throttle-global-backstop', mechanism: 'test', roots: ['#13'], reverseTest: 'tests/cloud/adminThrottle.test.js' },

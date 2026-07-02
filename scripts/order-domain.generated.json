@@ -199,5 +199,90 @@
         "trigger": "enqueueSession（顾客再点「找人工」重开·清归属·createdAt 刷新＝重新排队·调试日志 AD）"
       }
     ]
+  },
+  "purchaseOrders": {
+    "states": [
+      "cancelled",
+      "draft",
+      "ordered",
+      "received"
+    ],
+    "initial": [
+      "draft"
+    ],
+    "terminal": [
+      "received",
+      "cancelled"
+    ],
+    "transitions": [
+      {
+        "from": [
+          "draft"
+        ],
+        "to": "ordered",
+        "trigger": "markOrdered 向厂家下单（车道 A）"
+      },
+      {
+        "from": [
+          "ordered"
+        ],
+        "to": "received",
+        "trigger": "receivePurchase 到货入库（首次流转绑 applyStockMoves purchase_in·幂等）"
+      },
+      {
+        "from": [
+          "draft",
+          "ordered"
+        ],
+        "to": "cancelled",
+        "trigger": "cancelPurchase 取消（未入库的单·入库后不可取消，走调整单）"
+      }
+    ]
+  },
+  "outworkOrders": {
+    "states": [
+      "cancelled",
+      "delivered",
+      "draft",
+      "issued",
+      "settled"
+    ],
+    "initial": [
+      "draft"
+    ],
+    "terminal": [
+      "settled",
+      "cancelled"
+    ],
+    "transitions": [
+      {
+        "from": [
+          "draft"
+        ],
+        "to": "issued",
+        "trigger": "issueOutwork 发料（最大团原团按色出库·applyStockMoves outwork_issue）"
+      },
+      {
+        "from": [
+          "issued"
+        ],
+        "to": "delivered",
+        "trigger": "receiveOutwork 交付（带结团入库 outwork_receive + 定格损耗与 payableFen）"
+      },
+      {
+        "from": [
+          "delivered"
+        ],
+        "to": "settled",
+        "trigger": "settleOutwork 工钱结清销账"
+      },
+      {
+        "from": [
+          "draft"
+        ],
+        "to": "cancelled",
+        "trigger": "cancelOutwork 取消（仅未发料·发料后异常走调整单兜底·MVP 不做逆向流转）"
+      }
+    ]
   }
 }

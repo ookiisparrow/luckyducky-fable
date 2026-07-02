@@ -39,6 +39,12 @@ const DOMAINS = [
     label: 'cs.spec.ts',
     header: `/**\n * cs 域（承面 C 会话）类型/常量/流转表——**生成物**（单源 cs.spec.ts·勿手改生成段）。\n * 见 cs.spec.ts 头注；改流转改声明再跑 scripts/gen-order-domain.mjs。\n */\n`,
   },
+  {
+    spec: join(ROOT, 'packages/shared/src/scm.spec.ts'),
+    ts: join(ROOT, 'packages/shared/src/scm.ts'),
+    label: 'scm.spec.ts',
+    header: `/**\n * SCM 进销存域（采购/外协单）类型/常量/流转表——**生成物**（单源 scm.spec.ts·勿手改生成段）。\n * 见 scm.spec.ts 头注；改流转改声明再跑 scripts/gen-order-domain.mjs。\n */\n`,
+  },
 ]
 
 const GEN_BANNER =
@@ -91,9 +97,9 @@ function statesOf(mc) {
 }
 
 /** PascalCase 类型名前缀：ORDER_STATUS_SPEC → Order；AFTERSALE_STATUS_SPEC → AfterSale；QRCODE_STATUS_SPEC → Qrcode；CS_SESSION_STATUS_SPEC → CsSession。 */
-const TYPE_PREFIX = { ORDER_STATUS_SPEC: 'Order', AFTERSALE_STATUS_SPEC: 'AfterSale', QRCODE_STATUS_SPEC: 'Qrcode', CS_SESSION_STATUS_SPEC: 'CsSession' }
-/** 常量名前缀：…→ ORDER / AFTERSALE / QRCODE / CS_SESSION。 */
-const CONST_PREFIX = { ORDER_STATUS_SPEC: 'ORDER', AFTERSALE_STATUS_SPEC: 'AFTERSALE', QRCODE_STATUS_SPEC: 'QRCODE', CS_SESSION_STATUS_SPEC: 'CS_SESSION' }
+const TYPE_PREFIX = { ORDER_STATUS_SPEC: 'Order', AFTERSALE_STATUS_SPEC: 'AfterSale', QRCODE_STATUS_SPEC: 'Qrcode', CS_SESSION_STATUS_SPEC: 'CsSession', PURCHASE_ORDER_STATUS_SPEC: 'PurchaseOrder', OUTWORK_ORDER_STATUS_SPEC: 'OutworkOrder' }
+/** 常量名前缀：…→ ORDER / AFTERSALE / QRCODE / CS_SESSION / PURCHASE_ORDER / OUTWORK_ORDER。 */
+const CONST_PREFIX = { ORDER_STATUS_SPEC: 'ORDER', AFTERSALE_STATUS_SPEC: 'AFTERSALE', QRCODE_STATUS_SPEC: 'QRCODE', CS_SESSION_STATUS_SPEC: 'CS_SESSION', PURCHASE_ORDER_STATUS_SPEC: 'PURCHASE_ORDER', OUTWORK_ORDER_STATUS_SPEC: 'OUTWORK_ORDER' }
 
 function genTs(machines, specLabel) {
   const parts = []

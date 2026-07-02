@@ -20,6 +20,7 @@ import * as csat from './actions/csat'
 import * as agentDesk from './actions/agentDesk' // 承面C 车道A·坐席台 8 action（B6·cap agent:handle）
 import * as agents from './actions/agents' // 承面C 车道C·外包账号管理（B5.2·超管建/停/列·默认拒 admin:write）
 import * as wecomLogin from './actions/wecomLogin' // M⑦ 车道B·企微 OAuth 免登（pre-auth·特殊分发·同 login 受频控）
+import * as scmMaterials from './actions/scmMaterials' // 进销存 SCM-0 地基·物料/供应商主档+期初调整（默认拒 admin:write·仅超管）
 
 // 管理控制台后端（HTTP 访问服务触发）。B5b：HTTP 外壳 + 口令闸在此，28+ action 拆 actions/ 查表。
 // 鉴权：管理口令（adminConfig sha256，首登 bootstrap）。db 经 kit.getDb；退款流经 kit.callFlow。
@@ -115,6 +116,14 @@ const ACTIONS: Record<string, (ctx: Ctx) => Promise<any>> = {
   disableAgent: agents.disableAgent,
   listAgents: agents.listAgents,
   setAgentWecomUserId: agents.setAgentWecomUserId, // M⑦ 地基·回填企微 userid（免登用·默认拒 admin:write·仅超管）
+  // 进销存 SCM-0 地基（蓝图 docs/进销存ERP/·门5 文件级隔离·未登记 ACTION_CAPS→默认拒 admin:write＝仅超管·
+  // 写类自动审计）：物料/供应商主档 + 期初盘点/调整（经门1 kit/scmStock）+ 流水查账
+  listMaterials: scmMaterials.listMaterials,
+  saveMaterial: scmMaterials.saveMaterial,
+  listSuppliers: scmMaterials.listSuppliers,
+  saveSupplier: scmMaterials.saveSupplier,
+  adjustStock: scmMaterials.adjustStock,
+  listLedger: scmMaterials.listLedger,
 }
 
 // 能力闸（§1.5 RBAC·根因#3·别让单超管裸奔）：受限 action 须 principal 具备对应能力（'*'=全能力）。

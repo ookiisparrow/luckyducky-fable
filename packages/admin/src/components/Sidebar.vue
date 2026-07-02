@@ -13,7 +13,7 @@ import { useRoute, useRouter } from 'vue-router'
 import {
   Package, ChevronDown, Image, FileText, Tags, Clapperboard, QrCode, Printer,
   Smartphone, Truck, RotateCcw, Boxes, ChartColumn, Wallet, Bell, ExternalLink, LifeBuoy, UserSearch, ClipboardCheck, MessagesSquare, BookOpen, Star, Users,
-  Store, Receipt, Headphones, Settings,
+  Store, Receipt, Headphones, Settings, Factory,
 } from 'lucide-vue-next'
 import { useProductsStore, STEP_NAMES } from '@/store/products.js'
 import { logout, currentUser } from '@/api/cloud.js'
@@ -59,6 +59,15 @@ const GROUPS = [
       { to: '/kb', label: '知识库', icon: BookOpen },
       { to: '/csat', label: '客服满意度', icon: Star },
       { to: '/agents', label: '外包账号', icon: Users },
+    ],
+  },
+  {
+    // 进销存 SCM（蓝图 docs/进销存ERP/·SCM-0 起）：车道 A/B/C/D 的采购/外协/打包/备货页后续加进本组
+    key: 'scm',
+    caption: '供应链',
+    icon: Factory,
+    items: [
+      { to: '/scm-materials', label: '物料与供应商', icon: Package },
     ],
   },
   {
