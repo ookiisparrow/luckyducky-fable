@@ -21,15 +21,17 @@
 
 /**
  * 承面 C 会话状态机声明（csSession 集合·一顾客一活会话·确定性 _id=`wxkf:<openKfId>:<externalUserId>`）。
- * 状态：pending 待接入队列 / active 坐席接起处理中 / escalated 外包升级转商户处理 / closed 已结束（终态·触 CSAT）。
- * 说明：closed 是终态——顾客再来新消息＝开一通新会话（新 pending·同微信客服「会话超时结束」语义），不复活旧会话。
+ * 状态：pending 待接入队列 / active 坐席接起处理中 / escalated 外包升级转商户处理 / closed 已结束（静止态·触 CSAT）。
+ * 说明：closed 是**静止态而非无出边终态**——确定性 _id＝一顾客一 doc，顾客再点「找人工」由 enqueueSession
+ * 重开同一 doc（closed→pending·清归属·createdAt 刷新＝重新排队+消息流从重开起算）。原「closed 终态·再来
+ * 开新会话」的设想与确定性 _id 相矛盾（撞 id 静默吞→老客二次求助进不了队列·2026-07-02 真机逼出·调试日志 AD）。
  */
 export const CS_SESSION_STATUS_SPEC = {
   collection: 'csSession',
   /** 初始态：客户消息进入待接队列（inbound 落库时 upsert 建会话）。 */
   initial: ['pending'] as const,
-  /** 终态：会话已结束（无出边·结束即触 CSAT + 归档已在）。 */
-  terminal: ['closed'] as const,
+  /** 无出边终态：无——closed 可被「找人工」重开（静止态）；结束仍触 CSAT + 归档不受影响。 */
+  terminal: [] as const,
   /** 合法流转：from[] → to，trigger 标触发的坐席台 action（守卫据此对账 B6.1 起散落的 transition 实现）。 */
   transitions: [
     { from: ['pending'], to: 'active', trigger: 'claimConversation（坐席认领接起·绑 agentId·受接待上限约束）' },
@@ -39,5 +41,6 @@ export const CS_SESSION_STATUS_SPEC = {
     { from: ['active'], to: 'closed', trigger: 'closeConversation（坐席结束会话·触 CSAT）' },
     { from: ['escalated'], to: 'active', trigger: 'claimConversation（商户/坐席重新接手升级来的会话）' },
     { from: ['escalated'], to: 'closed', trigger: 'closeConversation（商户处理完关闭·触 CSAT）' },
+    { from: ['closed'], to: 'pending', trigger: 'enqueueSession（顾客再点「找人工」重开·清归属·createdAt 刷新＝重新排队·调试日志 AD）' },
   ],
 } as const

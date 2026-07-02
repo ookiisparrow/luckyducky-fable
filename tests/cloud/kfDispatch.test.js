@@ -195,6 +195,38 @@ describe('handleMessage 编排', () => {
     expect(sent).toHaveLength(1) // 会话已结束 → bot 正常接回
   })
 
+  it('已在队列/接待中再点「找人工」→ 回当前状态·不装死·不重复入队/不重置态（调试日志 AD·闸太宽回归锁）', async () => {
+    // active：回「服务中」
+    control.seed('csSession', [{ _id: 'wxkf:wkKf:e9', status: 'active', agentId: 'a1', externalUserId: 'e9', openKfId: 'wkKf', createdAt: 1, updatedAt: 1 }])
+    const a = mkCtx()
+    await handleMessage(a.ctx, { externalUserId: 'e9', menuId: 'human', text: '' })
+    expect(a.sent).toHaveLength(1)
+    expect(a.sent[0].text.content).toContain('服务中')
+    let s = control.dump('csSession')[0]
+    expect(s.status).toBe('active') // 不被重置（坐席认领不丢）
+    expect(s.agentId).toBe('a1')
+    // pending：回「已在队列」
+    control.reset()
+    control.seed('csSession', [{ _id: 'wxkf:wkKf:e9', status: 'pending', externalUserId: 'e9', openKfId: 'wkKf', createdAt: 1, updatedAt: 1 }])
+    const b = mkCtx()
+    await handleMessage(b.ctx, { externalUserId: 'e9', menuId: 'human', text: '' })
+    expect(b.sent[0].text.content).toContain('队列')
+  })
+
+  it('closed 旧会话再点「找人工」→ 重开 closed→pending（清归属·createdAt 刷新＝重新排队）+ 发转接确认（调试日志 AD·撞 id 静默吞根治）', async () => {
+    control.seed('csSession', [
+      { _id: 'wxkf:wkKf:e9', status: 'closed', agentId: 'a1', claimedAt: 5, externalUserId: 'e9', openKfId: 'wkKf', createdAt: 1, updatedAt: 1 },
+    ])
+    const { ctx, sent } = mkCtx()
+    await handleMessage(ctx, { externalUserId: 'e9', menuId: 'human', text: '' })
+    const s = control.dump('csSession')[0]
+    expect(s.status).toBe('pending') // 重开进队列（曾撞确定性 _id 被静默吞·老客二次求助进不了队列）
+    expect(s.agentId).toBeNull() // 清旧归属
+    expect(s.createdAt).toBeGreaterThan(1) // 重新排队（FIFO 队尾）+ 消息流从重开起算
+    expect(sent).toHaveLength(1)
+    expect(sent[0].text.content).toContain('人工') // 顾客有转接确认反馈
+  })
+
   it('点 order:query 但未绑定 → 引导登录文字', async () => {
     const { ctx, sent } = mkCtx()
     await handleMessage(ctx, { externalUserId: 'e3', menuId: 'order:query', text: '' })

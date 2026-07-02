@@ -1,4 +1,4 @@
-import { COLLECTIONS, alert } from '../../../kit'
+import { COLLECTIONS, alert, transition } from '../../../kit'
 
 /**
  * 客服分流引擎（避免幻觉第一·非生成式）：关键词识别 → 高亮 msgmenu 气泡分流；按回传 menu_id →
@@ -356,12 +356,22 @@ export async function enqueueSession(db: any, openKfId: string, externalUserId: 
   const euid = String(externalUserId || '')
   if (!euid || !openKfId) return // 不造无主会话
   const now = Date.now()
+  const id = 'wxkf:' + openKfId + ':' + euid
   try {
     await db.collection(COLLECTIONS.csSession).add({
-      data: { _id: 'wxkf:' + openKfId + ':' + euid, status: 'pending', externalUserId: euid, openKfId, createdAt: now, updatedAt: now },
+      data: { _id: id, status: 'pending', externalUserId: euid, openKfId, createdAt: now, updatedAt: now },
     })
   } catch {
-    /* 撞确定性 _id：会话已在队列·天然幂等·不 clobber（best-effort·不反噬回复/转接） */
+    // 撞确定性 _id＝该顾客已有会话 doc：pending/active/escalated 不动（不 clobber·坐席已认领的不被重置·根因#1）；
+    // **closed 则重开**（closed→pending·声明流转 cs.spec.ts·原子：非 closed 时 moved=false 天然不 clobber）——
+    // 老客二次点「找人工」曾被此撞 id 静默吞、永进不了队列（2026-07-02 真机逼出·调试日志 AD）。
+    // createdAt 刷新＝重新排队（FIFO 队尾）+ getThread 消息流从重开起算（不翻旧会话历史）。
+    await transition('csSession', id, ['closed'], 'pending', {
+      agentId: null,
+      claimedAt: null,
+      createdAt: now,
+      updatedAt: now,
+    }).catch(() => {}) /* best-effort：不反噬顾客回复 */
   }
 }
 
@@ -410,9 +420,23 @@ export async function handleMessage(ctx: DispatchCtx, incoming: Incoming): Promi
   // 人工接管时 bot 不抢话（平台态恒 1 后「谁在接待」由**我方** csSession 状态机判·非平台 service_state·调试日志 AC）：
   // pending/active/escalated＝排队中/坐席接待中/待商户——bot 静默（消息仍归档+身份桥接在 index 侧不受影响·坐席经
   // getThread 看到顾客新消息）；closed/无会话＝bot 正常应答。曾靠平台 state 3 让 bot 让位（AB），随转 3 退役改此判。
+  // **例外：顾客明确再点「找人工」不许装死**（调试日志 AD·闸太宽把求人工也吞了）——回一句当前状态、不重复入队。
   const held = await db.collection(COLLECTIONS.csSession).doc('wxkf:' + openKfId + ':' + to).get().catch(() => null)
   const hs = held && held.data && held.data.status
-  if (hs === 'pending' || hs === 'active' || hs === 'escalated') return
+  if (hs === 'pending' || hs === 'active' || hs === 'escalated') {
+    if (incoming.menuId && route(incoming.menuId).type === 'transfer') {
+      await send(
+        buildText(
+          to,
+          openKfId,
+          hs === 'active'
+            ? '人工客服正在为你服务中～直接留言即可，客服都能看到 🙌'
+            : '你已在人工队列中，客服会尽快接入～有补充可以直接留言，接入后都能看到 🙌'
+        )
+      )
+    }
+    return
+  }
 
   const r: Route = incoming.menuId
     ? route(incoming.menuId)

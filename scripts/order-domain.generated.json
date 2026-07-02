@@ -140,9 +140,7 @@
     "initial": [
       "pending"
     ],
-    "terminal": [
-      "closed"
-    ],
+    "terminal": [],
     "transitions": [
       {
         "from": [
@@ -192,6 +190,13 @@
         ],
         "to": "closed",
         "trigger": "closeConversation（商户处理完关闭·触 CSAT）"
+      },
+      {
+        "from": [
+          "closed"
+        ],
+        "to": "pending",
+        "trigger": "enqueueSession（顾客再点「找人工」重开·清归属·createdAt 刷新＝重新排队·调试日志 AD）"
       }
     ]
   }

@@ -24,5 +24,6 @@ export const CS_SESSION_TRANSITIONS: ReadonlyArray<{ from: readonly CsSessionSta
   { from: ['active'], to: 'closed' }, // closeConversation（坐席结束会话·触 CSAT）
   { from: ['escalated'], to: 'active' }, // claimConversation（商户/坐席重新接手升级来的会话）
   { from: ['escalated'], to: 'closed' }, // closeConversation（商户处理完关闭·触 CSAT）
+  { from: ['closed'], to: 'pending' }, // enqueueSession（顾客再点「找人工」重开·清归属·createdAt 刷新＝重新排队·调试日志 AD）
 ]
 // === GENERATED:order-domain END ===
