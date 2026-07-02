@@ -15,8 +15,18 @@ const loadErr = ref('')
 const products = ref([])
 const rows = ref([])
 
+// 本地演示数据（cloudMode 由构建期 VITE_ADMIN_API 决定——生产构建必配该变量，此分支生产不可达，
+// 同 loadProducts() 等既有函数的本地模式范式）：仅供 `npm run dev` 未接云端时看页面效果，不改
+// cloud.js 里被 Inventory.vue 等其他页面共用的 listInventory()，改动面收在本文件、不外溢。
+const DEMO_ROWS = [
+  { productId: 'demo-hat', spec: '', packed: 80, shipped: 15, stock: 65 },
+  { productId: 'demo-scarf', spec: 'grey', packed: 20, shipped: 5, stock: 15 },
+  { productId: 'demo-mittens', spec: '', packed: 40, shipped: 40, stock: null }, // 不限量款
+]
+
 async function init() {
   if (!cloudMode) {
+    rows.value = DEMO_ROWS
     loading.value = false
     return
   }
@@ -63,25 +73,23 @@ const productName = (pid) => products.value.find((p) => p.id === pid)?.name || p
       <button class="btn ghost" @click="init"><RefreshCw :size="14" />刷新</button>
     </header>
 
-    <p v-if="!cloudMode" class="hint warn">产销统计需云端模式（配置 VITE_ADMIN_API）。</p>
-    <p v-else-if="loadErr" class="hint warn">{{ loadErr }}</p>
-    <Skeleton v-else-if="loading" class="card" :rows="6" />
+    <p v-if="!cloudMode" class="hint warn">演示数据——本地未配置云端（VITE_ADMIN_API），下表为效果预览、非真实统计。</p>
+    <p v-if="loadErr" class="hint warn">{{ loadErr }}</p>
+    <Skeleton v-if="loading" class="card" :rows="6" />
 
-    <template v-else>
-      <div class="card">
-        <div class="row hrow">
-          <span class="c-name">产品</span><span class="c-spec">规格</span><span class="c-num">累计打包</span><span class="c-num">累计发货/售出</span><span class="c-num">现存库存</span>
-        </div>
-        <p v-if="!rows.length" class="hint inset">还没有打包/发货记录——先去「打包组装」打第一批。</p>
-        <div v-for="r in rows" :key="r.productId + '__' + r.spec" class="row">
-          <span class="c-name"><b>{{ productName(r.productId) }}</b></span>
-          <span class="c-spec">{{ r.spec || '—' }}</span>
-          <span class="c-num">{{ r.packed }}</span>
-          <span class="c-num">{{ r.shipped }}</span>
-          <span class="c-num">{{ r.stock === null ? '不限量' : r.stock }}</span>
-        </div>
+    <div v-if="!loading && !loadErr" class="card">
+      <div class="row hrow">
+        <span class="c-name">产品</span><span class="c-spec">规格</span><span class="c-num">累计打包</span><span class="c-num">累计发货/售出</span><span class="c-num">现存库存</span>
       </div>
-    </template>
+      <p v-if="!rows.length" class="hint inset">还没有打包/发货记录——先去「打包组装」打第一批。</p>
+      <div v-for="r in rows" :key="r.productId + '__' + r.spec" class="row">
+        <span class="c-name"><b>{{ productName(r.productId) }}</b></span>
+        <span class="c-spec">{{ r.spec || '—' }}</span>
+        <span class="c-num">{{ r.packed }}</span>
+        <span class="c-num">{{ r.shipped }}</span>
+        <span class="c-num">{{ r.stock === null ? '不限量' : r.stock }}</span>
+      </div>
+    </div>
   </div>
 </template>
 
