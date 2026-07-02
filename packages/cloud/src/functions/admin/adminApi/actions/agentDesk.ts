@@ -228,8 +228,10 @@ export async function getThread(ctx: Ctx): Promise<any> {
   if (sl.code) return reply(sl.code, { ok: false, error: sl.code === 404 ? 'NOT_FOUND' : 'FORBIDDEN' }) // 分配 scope
   const s = sl.s
   const _ = db.command
-  // 增量游标：默认从会话建起（scope 到本通会话时间线·不回溯该顾客历史会话）；cursor 有则取其后（轮询取新消息）
-  const since = Math.max(Number(data && data.cursor) || 0, (Number(s.createdAt) || 0) - 1)
+  // 增量游标：首拉（无 cursor）从会话建立**前 10 分钟**起（深审 F5——顾客点「转人工」之前打的字往往是真正的
+  // 问题描述，坐席须看得到；10 分钟窗兼顾「不整段回溯该顾客历史会话」的 AD 语义）；cursor 有则取其后（轮询取新消息）。
+  const PRE_CONTEXT_MS = 10 * 60_000
+  const since = Math.max(Number(data && data.cursor) || 0, (Number(s.createdAt) || 0) - PRE_CONTEXT_MS - 1)
   const res = await db
     .collection(COLLECTIONS.conversations)
     .where({ externalUserId: s.externalUserId || '', openKfId: s.openKfId || '', at: _.gt(since) })
@@ -315,11 +317,38 @@ export async function closeConversation(ctx: Ctx): Promise<any> {
     updatedAt: now,
   })
   if (!r.moved) return reply(200, { ok: false, error: 'ALREADY_CLOSED' })
-  // 触 CSAT（best-effort·fail-soft·仅接待过的会话·顾客回复 1-5 由 kfCallback recordCsat 归档·B4.3）
+  // 触 CSAT（best-effort·fail-soft·仅接待过的会话·B4.3）。深审 F2/F6 闭环：
+  //  - 立 `csatask:<euid>` 标记（48h·dispatch 收到纯数字 1-5 且有此标记才 recordCsat——「回复 1-5 分」的兑现·
+  //    曾只发提示无人认自由文本数字＝评分链断·顾客照做收到根菜单分数丢失）；
+  //  - 提示文字落 conversations 归档（质检回看得到「我们问了什么」·曾只有顾客的「5」没有我们的提问）。
   if (wasEngaged && s.externalUserId && s.openKfId) {
-    await cloud
+    const res = await cloud
       .callFunction({ name: 'kfSend', data: { externalUserId: s.externalUserId, openKfId: s.openKfId, text: CSAT_PROMPT } })
-      .catch(() => {})
+      .catch(() => null)
+    const sent = !!(res && res.result && res.result.ok !== false && !Number(res.result.errcode))
+    if (sent) {
+      await db
+        .collection(COLLECTIONS.kfState)
+        .doc('csatask:' + s.externalUserId)
+        .set({ data: { at: now } })
+        .catch(() => {}) // fail-soft：标记失败只是这条评分收不到·不反噬关单
+      await db
+        .collection(COLLECTIONS.conversations)
+        .add({
+          data: {
+            channel: CHANNEL,
+            direction: 'out',
+            openKfId: s.openKfId,
+            externalUserId: s.externalUserId,
+            openid: '',
+            msgtype: 'text',
+            text: CSAT_PROMPT,
+            at: Date.now(),
+            agentId: p.agentId, // 谁触发的结束（提示随关单发·可溯）
+          },
+        })
+        .catch(() => {}) // fail-soft：归档不反噬关单
+    }
   }
   return reply(200, { ok: true })
 }

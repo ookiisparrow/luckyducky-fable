@@ -198,19 +198,20 @@ describe('④ sendAgentMessage：坐席回复·经 kfSend·出站落 conversatio
 })
 
 describe('⑤ getThread：会话消息流·cursor 增量·分配 scope·bounded', () => {
-  it('owner 读本通会话消息（asc·scope 到会话建起）+ openid 桥接', async () => {
-    seedSession('e1', 'active', { agentId: 'agent:out1', createdAt: 1000 })
+  it('owner 读本通会话消息（asc·scope 到会话建起前 10 分钟上下文窗·深审 F5）+ openid 桥接', async () => {
+    const T0 = Date.now()
+    seedSession('e1', 'active', { agentId: 'agent:out1', createdAt: T0 })
     control.seed('kfIdentity', [{ _id: 'ext:e1', openid: 'openid-1' }])
     control.seed('conversations', [
-      { _id: 'old', externalUserId: 'e1', openKfId: 'wk1', direction: 'in', text: '会话前的历史', at: 500 }, // < createdAt·排除
-      { _id: 'c1', externalUserId: 'e1', openKfId: 'wk1', direction: 'in', text: '在吗', at: 1200 },
-      { _id: 'c2', externalUserId: 'e1', openKfId: 'wk1', direction: 'out', text: '在的', at: 1300 },
+      { _id: 'old', externalUserId: 'e1', openKfId: 'wk1', direction: 'in', text: '会话前的历史', at: T0 - 11 * 60_000 }, // 超上下文窗（>10min）·排除
+      { _id: 'c1', externalUserId: 'e1', openKfId: 'wk1', direction: 'in', text: '在吗', at: T0 + 200 },
+      { _id: 'c2', externalUserId: 'e1', openKfId: 'wk1', direction: 'out', text: '在的', at: T0 + 300 },
     ])
     const r = parse(await getThread(ctx({ sessionId: sid('wk1', 'e1') })))
     expect(r.ok).toBe(true)
-    expect(r.messages.map((m) => m.text)).toEqual(['在吗', '在的']) // 排除会话建起前的历史·asc
+    expect(r.messages.map((m) => m.text)).toEqual(['在吗', '在的']) // 排除超窗历史·asc
     expect(r.session.openid).toBe('openid-1') // 身份桥接补 openid（供 360 侧栏）
-    expect(r.nextCursor).toBe(1300)
+    expect(r.nextCursor).toBe(T0 + 300)
   })
 
   it('cursor 增量：只取游标之后的新消息（前端轮询）', async () => {
@@ -371,5 +372,43 @@ describe('⑩ getSessionCustomer360：按会话看客户 360（外包唯一 360 
 
   it('会话不存在 → 404', async () => {
     expect(parse(await getSessionCustomer360(ctx({ sessionId: 'wxkf:wk1:nope' }))).status).toBe(404)
+  })
+})
+
+// ── 深审客服批（2026-07-02）：F2 关单评分标记 / F5 转人工前上下文窗 / F6 CSAT 提示归档 ──
+describe('closeConversation 关单评分闭环 + 提示归档（深审 F2/F6）', () => {
+  it('结束 active 会话 → 写 csatask 标记（dispatch 认自由文本 1-5 的凭据）+ CSAT 提示落 conversations 归档', async () => {
+    seedSession('e1', 'active', { agentId: OUT.agentId })
+    const r = parse(await closeConversation(ctx({ sessionId: sid('wk1', 'e1') })))
+    expect(r.ok).toBe(true)
+    // F2：等评分标记（48h 窗口·dispatch 收纯数字 1-5 时消费）
+    const ask = control.dump('kfState').find((d) => d._id === 'csatask:e1')
+    expect(ask).toBeTruthy()
+    expect(typeof ask.at).toBe('number')
+    // F6：提示文字落归档（质检回看得到「我们问了什么」）
+    const out = control.dump('conversations').find((d) => d.direction === 'out' && d.externalUserId === 'e1')
+    expect(out).toBeTruthy()
+    expect(out.text).toContain('1-5')
+  })
+  it('关 pending（未接待过）→ 不发提示·不写标记·不归档', async () => {
+    seedSession('e2', 'pending')
+    parse(await closeConversation(ctx({ sessionId: sid('wk1', 'e2') }, SUPER)))
+    expect(control.dump('kfState').find((d) => d._id === 'csatask:e2')).toBeUndefined()
+    expect(control.dump('conversations').filter((d) => d.externalUserId === 'e2')).toHaveLength(0)
+  })
+})
+
+describe('getThread 转人工前上下文窗（深审 F5·坐席能看到顾客点转人工之前说了什么）', () => {
+  it('首拉（无 cursor）：会话建立前 10 分钟内的顾客消息可见·更早的不回溯', async () => {
+    const NOW = Date.now()
+    seedSession('e5', 'active', { agentId: OUT.agentId, createdAt: NOW })
+    control.seed('conversations', [
+      { _id: 'c1', direction: 'in', openKfId: 'wk1', externalUserId: 'e5', msgtype: 'text', text: '退款怎么弄', at: NOW - 5 * 60_000 }, // 转人工前 5 分钟（真正的问题）
+      { _id: 'c2', direction: 'in', openKfId: 'wk1', externalUserId: 'e5', msgtype: 'text', text: '上次的旧会话', at: NOW - 11 * 60_000 }, // 超窗·不回溯
+    ])
+    const r = parse(await getThread(ctx({ sessionId: sid('wk1', 'e5') })))
+    const texts = r.messages.map((m) => m.text)
+    expect(texts).toContain('退款怎么弄')
+    expect(texts).not.toContain('上次的旧会话')
   })
 })

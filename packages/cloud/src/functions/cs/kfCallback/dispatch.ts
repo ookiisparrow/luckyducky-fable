@@ -352,9 +352,15 @@ export async function summarizeOrders(db: any, openid: string): Promise<string> 
  * 创建于**初始态 pending**（cs.spec.ts `initial`）——非 `transition()`（状态流转 claim/close/escalate 是坐席台 action·车道 A）。
  * best-effort：入队失败不反噬顾客回复/平台转接（同 ensureKfIdentity）。closed 会话重开为新 pending 属会话生命周期（车道 A）。
  */
-export async function enqueueSession(db: any, openKfId: string, externalUserId: string): Promise<void> {
+/**
+ * 三态返回（深审 F4·同 firstSeen 三态款·根因#8）：'queued'＝真正新入队（首建/closed 重开）；'already'＝已在
+ * 队列/接待中（撞号不 clobber）；'failed'＝基建错（add 没写进去且回查确认 doc 不存在）——**绝不可当成功**：
+ * 曾把任何 add 异常都当撞号吞掉，DB 故障时会话没入队、顾客却收到「已为你转接」＝假转接无人接。
+ * 调用方（transfer 分支）据 'failed' 改话术如实提示重试。
+ */
+export async function enqueueSession(db: any, openKfId: string, externalUserId: string): Promise<'queued' | 'already' | 'failed'> {
   const euid = String(externalUserId || '')
-  if (!euid || !openKfId) return // 不造无主会话
+  if (!euid || !openKfId) return 'failed' // 不造无主会话
   const now = Date.now()
   const id = 'wxkf:' + openKfId + ':' + euid
   let queued = false // 真正新入队（首建 or closed 重开）才推送——已在 pending/active 的不重复骚扰坐席
@@ -364,6 +370,13 @@ export async function enqueueSession(db: any, openKfId: string, externalUserId: 
     })
     queued = true
   } catch {
+    // add 失败先回查：doc 真存在＝撞确定性 _id（正常幂等路径）；不存在＝基建错（DB 权限/瞬时）→ 'failed' 如实上报
+    const got = await db.collection(COLLECTIONS.csSession).doc(id).get().catch(() => null)
+    if (!got || !got.data) {
+      console.error('[kf] enqueue failed (infra)', { id })
+      alert('security', 'kfCallback', 'ENQUEUE_FAILED', {})
+      return 'failed'
+    }
     // 撞确定性 _id＝该顾客已有会话 doc：pending/active/escalated 不动（不 clobber·坐席已认领的不被重置·根因#1）；
     // **closed 则重开**（closed→pending·声明流转 cs.spec.ts·原子：非 closed 时 moved=false 天然不 clobber）——
     // 老客二次点「找人工」曾被此撞 id 静默吞、永进不了队列（2026-07-02 真机逼出·调试日志 AD）。
@@ -377,6 +390,7 @@ export async function enqueueSession(db: any, openKfId: string, externalUserId: 
     queued = !!(r && (r as any).moved)
   }
   if (queued) await notifyOnlineAgents(db, id) // M⑦ 推送线·fail-soft（sendAgentCard 内吞错·不反噬入队）
+  return queued ? 'queued' : 'already'
 }
 
 // 新会话入队 → 推「新会话待接」到在线坐席手机（M⑦ 承面C 增强·推送线·fail-soft）。
@@ -389,7 +403,10 @@ async function notifyOnlineAgents(db: any, sessionId: string): Promise<void> {
     if (!ids.length) return
     const touser: string[] = []
     for (const id of ids) {
-      const g = await db.collection('adminConfig').doc(id).get().catch(() => null)
+      // 键映射（深审 F1）：超管坐席身份是 'admin'（checkKey 固定），但其账号 doc 是 'auth'——不映射则超管
+      // 在线也查不到 wecomUserId＝只有超管值班时推送恒为空（escalate 推送读 'auth' 同口径）。
+      const docId = id === 'admin' ? 'auth' : id
+      const g = await db.collection('adminConfig').doc(docId).get().catch(() => null)
       const uid = g && g.data && g.data.wecomUserId
       if (uid) touser.push(String(uid))
     }
@@ -440,6 +457,22 @@ export interface DispatchCtx {
   send: (payload: any) => Promise<any>
 }
 
+/**
+ * 「谁在接待」单源判定（深审 F3·调试日志 AC/AD 语义的唯一出口）：pending/active/escalated＝人工链路占用中
+ * （bot 须让位）→ 返状态串；closed/无会话＝bot 可应答 → 返 null。handleMessage 与 index.ts 进会话欢迎
+ * （enter_session）都过它——曾只有 handleMessage 查、enter_session 直发欢迎菜单＝排队中顾客重开聊天窗被
+ * bot 抢话（且点菜单又被本闸静默＝发了菜单点了没反应的自相矛盾）。
+ */
+export async function heldStatus(db: any, openKfId: string, externalUserId: string): Promise<string | null> {
+  const held = await db.collection(COLLECTIONS.csSession).doc('wxkf:' + openKfId + ':' + externalUserId).get().catch(() => null)
+  const hs = held && held.data && held.data.status
+  return hs === 'pending' || hs === 'active' || hs === 'escalated' ? hs : null
+}
+
+// 关单评分标记（深审 F2·CSAT 闭环）：closeConversation 发「回复 1-5 分」提示时立 `csatask:<euid>` 标记，
+// 本文件收到纯数字 1-5 且标记在 48h 窗口内才记分——防顾客随口发的数字被误当评分（副作用绑提示·不裸吃数字）。
+const CSAT_ASK_TTL_MS = 48 * 3600_000
+
 /** 处理单条入站消息：menu_id 优先按路由走，否则自由文本走关键词识别→高亮气泡。 */
 export async function handleMessage(ctx: DispatchCtx, incoming: Incoming): Promise<void> {
   const { db, openKfId, cfg, send } = ctx
@@ -449,8 +482,7 @@ export async function handleMessage(ctx: DispatchCtx, incoming: Incoming): Promi
   // pending/active/escalated＝排队中/坐席接待中/待商户——bot 静默（消息仍归档+身份桥接在 index 侧不受影响·坐席经
   // getThread 看到顾客新消息）；closed/无会话＝bot 正常应答。曾靠平台 state 3 让 bot 让位（AB），随转 3 退役改此判。
   // **例外：顾客明确再点「找人工」不许装死**（调试日志 AD·闸太宽把求人工也吞了）——回一句当前状态、不重复入队。
-  const held = await db.collection(COLLECTIONS.csSession).doc('wxkf:' + openKfId + ':' + to).get().catch(() => null)
-  const hs = held && held.data && held.data.status
+  const hs = await heldStatus(db, openKfId, to)
   if (hs === 'pending' || hs === 'active' || hs === 'escalated') {
     if (incoming.menuId && route(incoming.menuId).type === 'transfer') {
       await send(
@@ -466,6 +498,23 @@ export async function handleMessage(ctx: DispatchCtx, incoming: Incoming): Promi
     return
   }
 
+  // 关单评分闭环（深审 F2·CSAT_PROMPT「回复 1-5 分」的兑现）：自由文本纯数字 1-5 + 48h 内有 csatask 标记
+  // → 记分 + 消费标记 + 回可选原因菜单（与菜单评分路径同款收尾）。无标记/过期 → 落回下面正常分流（不误记）。
+  if (!incoming.menuId) {
+    const m = /^\s*([1-5])\s*$/.exec(incoming.text)
+    if (m) {
+      const ask = await db.collection(COLLECTIONS.kfState).doc('csatask:' + to).get().catch(() => null)
+      const askAt = ask && ask.data && Number(ask.data.at)
+      if (askAt && Date.now() - askAt < CSAT_ASK_TTL_MS) {
+        await db.collection(COLLECTIONS.kfState).doc('csatask:' + to).remove().catch(() => {})
+        const openid = await resolveOpenid(db, to)
+        await recordCsat(db, { externalUserId: to, openid, score: Number(m[1]) })
+        await send(buildMsgMenu(to, openKfId, csatReasonMenu()))
+        return
+      }
+    }
+  }
+
   const r: Route = incoming.menuId
     ? route(incoming.menuId)
     : (() => {
@@ -474,16 +523,24 @@ export async function handleMessage(ctx: DispatchCtx, incoming: Incoming): Promi
       })()
 
   switch (r.type) {
-    case 'transfer':
+    case 'transfer': {
       // 承面 C：转人工 = 会话进**自建工作台**待接队列（pending·幂等·坐席台 listQueue 读它）+ 给顾客文字确认。
       // **不动平台 service_state**（守卫 agent-channel-stays-assistant·根因#12·调试日志 AC）：坐席回复走
       // send_msg API、仅智能助手态(1)可发——曾在此调 transferToServicer 转 3（原生接待台模式）致坐席发送
       // 全被 95018 拒（2026-07-02 真机逼出）。人工排队/认领/结束由 csSession 状态机管，平台侧全程留 1。
-      await enqueueSession(db, openKfId, to)
+      const q = await enqueueSession(db, openKfId, to)
+      // 深审 F4：基建错入队失败＝如实提示重试，不发假「已转接」（会话没进队列·无人会接）
       await send(
-        buildText(to, openKfId, '已为你转接人工客服～工作人员会尽快在这里回复你。你也可以先把问题描述清楚，方便更快处理 🙇')
+        buildText(
+          to,
+          openKfId,
+          q === 'failed'
+            ? '转接人工时遇到点问题，请稍后再点一次「找人工」🙏 也可以先把问题描述在这里。'
+            : '已为你转接人工客服～工作人员会尽快在这里回复你。你也可以先把问题描述清楚，方便更快处理 🙇'
+        )
       )
       return
+    }
     case 'faq': {
       // FAQ 答案从 kb 单源读（B4.1·守卫 faq-via-kb-single-source）；kb 无此条/未启用 → 兜底回根菜单（不写死答案）
       const ans = await faqAnswer(db, r.faqKey)

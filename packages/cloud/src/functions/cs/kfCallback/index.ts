@@ -9,7 +9,7 @@ import {
   alert,
   kfCustomerBatchget,
 } from '../../../kit'
-import { handleMessage, rootMenu, buildMsgMenu, extUserId, processKfBatch, type Incoming } from './dispatch'
+import { handleMessage, rootMenu, buildMsgMenu, extUserId, processKfBatch, heldStatus, type Incoming } from './dispatch'
 import { archiveInbound, archiveOutbound } from './archive' // 会话归档（B5.1·入站/出站落档·守卫 conversations-archived）
 
 // 微信客服 in-chat 智能客服回调（HTTP 访问服务·类比 adminApi 的 /adminapi）。
@@ -112,7 +112,10 @@ export const main = defineKfCallback({
       }
       // 先回顾客（回复优先·batchget 延迟不拖累回复），再 best-effort 建身份桥接
       if (msg.msgtype === 'event' && msg.event?.event_type === 'enter_session') {
-        await send(buildMsgMenu(euid, openKfId, rootMenu())) // 进会话欢迎（euid 在 event 子对象·根因#8）
+        // 深审 F3：排队/接待中顾客重开聊天窗（enter_session）不发欢迎菜单——bot 抢话且顾客点菜单又被
+        // held 闸静默＝发了菜单点了没反应；「谁在接待」判定单源 heldStatus（与 handleMessage 同口径）。
+        if (euid && (await heldStatus(db, openKfId, euid))) console.log('[kf] enter_session held → bot 不抢话')
+        else await send(buildMsgMenu(euid, openKfId, rootMenu())) // 进会话欢迎（euid 在 event 子对象·根因#8）
       } else {
         const incoming = normalize(msg)
         if (incoming) await handleMessage(ctx, incoming)

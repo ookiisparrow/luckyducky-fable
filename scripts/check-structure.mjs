@@ -421,7 +421,7 @@ export const repoChecks = [
     // 去掉边界判断当场红。
     id: 'csat-score-bounded',
     roots: ['#3'],
-    desc: 'CSAT 评分入库前校验 1..5（后台360工作站 B4.3·根因#3 不信前端）：cs/kfCallback/dispatch.ts recordCsat 须校验 score∈1..5 才入库（越界/伪造分 fail-closed 不入库）——防脏分污染满意度均分',
+    desc: 'CSAT 评分入库前校验 1..5（后台360工作站 B4.3·根因#3 不信前端）+ 关单评分闭环（深审 F2）：recordCsat 须校验 score∈1..5 才入库（越界/伪造分 fail-closed）；closeConversation 发「回复 1-5 分」提示须立 csatask 标记、dispatch 须消费该标记记分——两端缺一即「提示说了没人认」评分链断（曾发生·顾客照做分数丢失）',
     run() {
       const f = 'packages/cloud/src/functions/cs/kfCallback/dispatch.ts'
       if (!existsSync(join(ROOT, f))) return [`${f} 缺失（客服分流·B4.3）`]
@@ -430,6 +430,14 @@ export const repoChecks = [
       if (!/recordCsat/.test(src)) bad.push(`${f} 缺 recordCsat——CSAT 评分入口缺失（B4.3）`)
       else if (!/score\s*>=\s*1/.test(src) || !/score\s*<=\s*5/.test(src))
         bad.push(`${f} recordCsat 未校验 score∈1..5——越界/伪造分会污染满意度均分（根因#3·B4.3）`)
+      // 关单评分闭环（深审 F2）：dispatch 须有 csatask 标记消费路径（自由文本 1-5 记分）——否则关单提示「回复 1-5 分」无人认
+      if (!/csatask:/.test(src)) bad.push(`${f} 缺 csatask 标记消费——关单提示「回复 1-5 分」顾客照做分数丢失（深审 F2·评分链断）`)
+      const g = 'packages/cloud/src/functions/admin/adminApi/actions/agentDesk.ts'
+      if (existsSync(join(ROOT, g))) {
+        const gsrc = readFileSync(join(ROOT, g), 'utf8')
+        if (/CSAT_PROMPT/.test(gsrc) && !/csatask:/.test(gsrc))
+          bad.push(`${g} 发 CSAT_PROMPT 却不立 csatask 标记——dispatch 收到数字无凭据不记分（深审 F2·评分链断）`)
+      }
       return bad
     },
   },
@@ -1026,7 +1034,7 @@ export const repoChecks = [
     // ② dispatch 转人工分支仍须 enqueueSession（人工=入自建队列·不是丢给平台）。
     id: 'agent-channel-stays-assistant',
     roots: ['#12'],
-    desc: '自建坐席通道恒智能助手态（承面C·根因#12）：send_msg 仅 state=1 可发（95018 真机逼出）——① functions/cs/ 禁调 transferToServicer（转人工不得把平台会话转 3=原生接待台模式·自建坐席发送全断）；② dispatch 转人工分支须 enqueueSession（人工=自建 csSession 队列承接）',
+    desc: '自建坐席通道恒智能助手态（承面C·根因#12）：send_msg 仅 state=1 可发（95018 真机逼出）——① functions/cs/ 禁调 transferToServicer（转人工不得把平台会话转 3=原生接待台模式·自建坐席发送全断）；② dispatch 转人工分支须 enqueueSession（人工=自建 csSession 队列承接）；③ index.ts 进会话欢迎（enter_session）须过 heldStatus（排队/接待中 bot 不抢话·深审 F3——曾直发欢迎菜单且点了又被 held 闸静默=自相矛盾）',
     run() {
       const bad = []
       const dir = join(ROOT, 'packages/cloud/src/functions/cs')
@@ -1050,6 +1058,16 @@ export const repoChecks = [
         const body = st < 0 ? '' : s.slice(st, s.indexOf('case ', st + 1))
         if (!/enqueueSession\s*\(/.test(body))
           bad.push(`${disp} 转人工分支未 enqueueSession()——人工须由自建 csSession 队列承接（承面C·B6）`)
+      }
+      // ③ 进会话欢迎须过 held 判定（深审 F3）：enter_session 分支须引用 heldStatus——排队/接待中顾客重开聊天窗
+      // 不被 bot 抢话（发菜单点了又被 held 闸静默＝自相矛盾体验）。
+      const idx = 'packages/cloud/src/functions/cs/kfCallback/index.ts'
+      if (existsSync(join(ROOT, idx))) {
+        const s = readFileSync(join(ROOT, idx), 'utf8')
+        const st = s.indexOf('enter_session')
+        const seg = st < 0 ? '' : s.slice(st, st + 600)
+        if (st >= 0 && !/heldStatus\s*\(/.test(seg))
+          bad.push(`${idx} enter_session 欢迎未过 heldStatus——排队/接待中顾客重开聊天窗会被 bot 抢话（深审 F3·调试日志 AC/AD 语义）`)
       }
       return bad
     },

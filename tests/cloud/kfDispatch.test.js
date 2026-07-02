@@ -298,3 +298,83 @@ describe('enqueueSession 承面C 入队（M0.c·会话进待接队列·让 csSes
     expect(control.dump('csSession')).toHaveLength(0)
   })
 })
+
+// ── 深审客服批（2026-07-02）：CSAT 关单评分闭环 + held 状态 helper + 入队三态 ──
+import { heldStatus } from '../../packages/cloud/src/functions/cs/kfCallback/dispatch'
+
+describe('CSAT 关单自由文本评分（深审 F2·闭环 CSAT_PROMPT「回复 1-5 分」）', () => {
+  function mkCtx() {
+    const sent = []
+    return { sent, ctx: { db: cloud.database(), openKfId: 'wkKf', cfg: { appid: '', thumbMediaId: '' }, send: async (p) => sent.push(p) } }
+  }
+  it('有关单标记（csatask 48h 内）+ 回复纯数字 → 记分入库 + 消费标记 + 回可选原因菜单', async () => {
+    const { ctx, sent } = mkCtx()
+    control.seed('kfState', [{ _id: 'csatask:e9', at: Date.now() - 60_000 }])
+    await handleMessage(ctx, { externalUserId: 'e9', menuId: '', text: ' 5 ' })
+    const rows = control.dump('csat')
+    expect(rows).toHaveLength(1)
+    expect(rows[0].score).toBe(5)
+    expect(control.dump('kfState').find((d) => d._id === 'csatask:e9')).toBeUndefined() // 标记消费
+    expect(sent[0].msgtype).toBe('msgmenu') // 回「补充原因」可选菜单（与菜单评分路径一致）
+  })
+  it('无标记的纯数字 → 不记分（防随口数字误当评分）·照旧回根菜单', async () => {
+    const { ctx, sent } = mkCtx()
+    await handleMessage(ctx, { externalUserId: 'e9', menuId: '', text: '5' })
+    expect(control.dump('csat')).toHaveLength(0)
+    expect(sent[0].msgtype).toBe('msgmenu')
+    expect(sent[0].msgmenu.head_content).toContain('想咨询什么') // 根菜单
+  })
+  it('过期标记（>48h）→ 不记分·标记不消费为评分', async () => {
+    const { ctx } = mkCtx()
+    control.seed('kfState', [{ _id: 'csatask:e9', at: Date.now() - 49 * 3600_000 }])
+    await handleMessage(ctx, { externalUserId: 'e9', menuId: '', text: '3' })
+    expect(control.dump('csat')).toHaveLength(0)
+  })
+})
+
+describe('heldStatus（深审 F3·「谁在接待」单源判定·enter_session 欢迎也须过它）', () => {
+  it('pending/active/escalated 返状态串·closed/无会话返 null', async () => {
+    const db = cloud.database()
+    control.seed('csSession', [{ _id: 'wxkf:wkKf:eh', status: 'pending' }])
+    expect(await heldStatus(db, 'wkKf', 'eh')).toBe('pending')
+    control.reset()
+    control.seed('csSession', [{ _id: 'wxkf:wkKf:eh', status: 'closed' }])
+    expect(await heldStatus(db, 'wkKf', 'eh')).toBe(null)
+    expect(await heldStatus(db, 'wkKf', 'ghost')).toBe(null)
+  })
+})
+
+describe('enqueueSession 三态返回（深审 F4·基建错不假装转接·同 firstSeen 三态款）', () => {
+  // 基建错桩：csSession add 抛 + doc.get 抛（回查也失败=确认没写进去）·其余集合走真桩
+  function infraFailDb(real) {
+    return {
+      command: real.command,
+      collection(name) {
+        if (name !== 'csSession') return real.collection(name)
+        return {
+          add: async () => { throw new Error('infra down') },
+          doc: () => ({ get: async () => { throw new Error('infra down') } }),
+        }
+      },
+    }
+  }
+  it('新入队 → queued·已在队列 → already·基建错 → failed（不假装成功）', async () => {
+    const db = cloud.database()
+    expect(await enqueueSession(db, 'wkKf', 'eq1')).toBe('queued')
+    expect(await enqueueSession(db, 'wkKf', 'eq1')).toBe('already') // pending 撞号不 clobber
+    const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    expect(await enqueueSession(infraFailDb(db), 'wkKf', 'eq2')).toBe('failed')
+    errSpy.mockRestore()
+  })
+  it('转人工遇基建错 → 顾客收到「稍后再试」而非假「已转接」（深审 F4）', async () => {
+    const sent = []
+    const db = cloud.database()
+    const ctx = { db: infraFailDb(db), openKfId: 'wkKf', cfg: { appid: '', thumbMediaId: '' }, send: async (p) => sent.push(p) }
+    const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    await handleMessage(ctx, { externalUserId: 'ef', menuId: 'human', text: '' })
+    errSpy.mockRestore()
+    expect(sent).toHaveLength(1)
+    expect(sent[0].text.content).toContain('稍后') // 如实提示重试·不说「已为你转接」
+    expect(sent[0].text.content).not.toContain('已为你转接')
+  })
+})

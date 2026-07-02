@@ -108,8 +108,23 @@ describe('enqueueSession 推送在线坐席（M⑦）', () => {
     }
     seedToken()
     onlineAgent('agent:1', 'LiSi')
-    await expect(enqueueSession(db, 'KF-1', 'EXT-FAIL')).resolves.toBeUndefined() // 不抛
+    await expect(enqueueSession(db, 'KF-1', 'EXT-FAIL')).resolves.toBe('queued') // 不抛·入队本身成功（推送失败不改结果·三态见 kfDispatch 测试）
     const s = control.dump('csSession').find((x) => x._id === 'wxkf:KF-1:EXT-FAIL')
     expect(s.status).toBe('pending') // 入队照常
+  })
+})
+
+describe('超管在线也收推送（深审 F1·agentId=admin ↔ adminConfig doc=auth 键错位）', () => {
+  it('超管 agentState _id=admin 在线·wecomUserId 存 auth doc → 推送含超管', async () => {
+    let sentTo = null
+    globalThis.fetch = async (url, opts) => {
+      if (String(url).includes('/message/send')) sentTo = JSON.parse(opts.body).touser
+      return { json: async () => ({ errcode: 0 }) }
+    }
+    seedToken()
+    control.seed('agentState', [{ _id: 'admin', status: 'online' }]) // 超管在线（setAgentStatus 写 agentId='admin'）
+    control.seed('adminConfig', [{ _id: 'auth', role: 'superadmin', wecomUserId: 'BossId' }]) // 但账号 doc 是 'auth'
+    await enqueueSession(db, 'KF-1', 'EXT-BOSS')
+    expect(sentTo).toBe('BossId') // 键映射 admin→auth 后才推得到
   })
 })
