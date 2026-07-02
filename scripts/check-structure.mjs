@@ -3814,6 +3814,10 @@ export const typeAndTestGuards = [
   // 失败/网络异常一律静默——转人工入队照常完成、顾客回复不受影响；且只在「真正新入队」（首建/closed 重开）才推，
   // 已 pending/active 不重复骚扰。reverseTest 锁此行为（推送抛错→enqueue 仍 resolves + 会话入队）。
   { id: 'enqueue-push-fail-soft', mechanism: 'test', roots: ['#8'], reverseTest: 'tests/cloud/agentPush.test.js' },
+  // 企微免登 fail-closed（M⑦ 车道B·根因#3 信任边界）：loginByWecomCode 无 code/换不到 userid/userid 未绑账号/
+  // 账号停用/无缓存令牌 → 一律拒、绝不签发 session 令牌；checkKey 认令牌时过期/停用 → 拒（不放行）。签发的令牌
+  // 存 sha 不存明文·令牌不持密钥（复用缓存令牌·根因#3）。reverseTest 锁此 fail-closed 组合行为。
+  { id: 'wecom-login-gated', mechanism: 'test', roots: ['#3'], reverseTest: 'tests/cloud/wecomLogin.test.js' },
 ]
 
 const SRC_DIRS = ['packages', 'cloudfunctions', 'scripts']

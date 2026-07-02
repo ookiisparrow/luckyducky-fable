@@ -46,6 +46,7 @@ export {
   sendAppMessage,
   sendAgentCard,
   AGENT_DESK_URL,
+  getWecomOAuthUserId,
   getServiceState,
   enterSmartAssistant,
   ensureSmartAssistant,

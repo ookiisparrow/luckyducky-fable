@@ -91,6 +91,40 @@ export async function login(password) {
   return { ok: true }
 }
 
+const WECOM_LOGIN_ERR = {
+  BAD_CODE: '企业微信授权失败，请重试',
+  NO_BOUND_ACCOUNT: '你的企业微信未绑定坐席账号，请联系商户在控制台绑定',
+  ACCOUNT_DISABLED: '账号已停用',
+  KF_TOKEN_UNAVAILABLE: '服务暂时不可用，请稍后重试或用口令登录',
+  BAD_ARGS: '缺少授权码',
+}
+
+// M⑦ 车道B·企微 OAuth 免登：在企业微信自建应用内静默授权拿 code → 换 session 令牌进工作台（免口令）。
+// 令牌作 key 存本机·后续请求带它（服务端 checkKey 认）。失败回退口令登录（Login.vue 兜底）。
+export async function loginByWecomCode(code) {
+  if (!code) return { ok: false, error: '缺少授权码' }
+  let r
+  try {
+    if (useMock) {
+      r = { ok: true, sessionToken: 'mock-wecom-token', operator: '演示坐席', caps: ['agent:handle'] }
+    } else {
+      const res = await fetch(API_BASE, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'loginByWecomCode', data: { code } }),
+      })
+      r = await res.json()
+    }
+  } catch {
+    return { ok: false, error: '连不上服务，请检查网络' }
+  }
+  if (!r.ok) return { ok: false, error: WECOM_LOGIN_ERR[r.error] || '免登失败', code: r.error }
+  if (!hasAgentCap(r.caps)) return { ok: false, error: '该账号无坐席台权限（需 agent:handle），请联系商户开通' }
+  persist({ operator: r.operator || '坐席', caps: r.caps, key: r.sessionToken })
+  if (useMock) mock.resume('agent_demo')
+  return { ok: true }
+}
+
 // 刷新页面后恢复 mock 内部 agentId（保 claim 归属一致·mock 态不持久）。
 if (useMock && isLoggedIn()) mock.resume('agent_demo')
 

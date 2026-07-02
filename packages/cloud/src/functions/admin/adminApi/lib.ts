@@ -95,7 +95,26 @@ export const ROLES: Record<string, string[]> = {
   // 外包看客户 360 只能经「自己 claim 的会话」的 scoped 路径（assertOwnedByAgent + assertDataShareConsent·scoped-360 follow-up 落地·见 承面C工单）。
   outsourced: ['agent:handle'],
 }
-const capsForRole = (role: string): string[] => ROLES[role] || []
+export const capsForRole = (role: string): string[] => ROLES[role] || []
+
+// M⑦ 企微免登会话令牌解析（车道 B·根因#3 fail-closed）：key=loginByWecomCode 签发的 sessionToken（非口令），
+// 其 sha 存账号 doc.wecomSessionHash + 过期戳 wecomSessionExp。命中且未过期未停用 → 解析身份（同口令分支形状：
+// 超管 auth→agentId 'admin'·外包→_id）；否则 BAD_KEY / SESSION_EXPIRED / ACCOUNT_DISABLED（fail-closed·不放行）。
+// hash 已是 sha(key)——免登令牌 sha 撞不上口令 keyHash，故只在口令全未命中后 fallback 到此。
+async function resolveWecomSession(db: any, hash: string) {
+  const s = await db.collection('adminConfig').where({ wecomSessionHash: hash }).limit(1).get().catch(() => ({ data: [] }))
+  const a = (s && s.data && s.data[0]) || null
+  if (!a) return { ok: false as const, error: 'BAD_KEY' }
+  if (a.disabled) return { ok: false as const, error: 'ACCOUNT_DISABLED' }
+  if (!a.wecomSessionExp || a.wecomSessionExp < Date.now()) return { ok: false as const, error: 'SESSION_EXPIRED' }
+  const isSuper = a._id === 'auth'
+  return {
+    ok: true as const,
+    operator: a.name || (isSuper ? 'admin' : a._id),
+    agentId: isSuper ? 'admin' : a._id,
+    caps: a.role ? capsForRole(a.role) : Array.isArray(a.caps) ? a.caps : isSuper ? ['*'] : [],
+  }
+}
 
 // 能力位（§1.5 RBAC·B5.2 多账号/角色）：caps 来源优先级 role 派生（ROLES 单源）＞显式 caps 字段＞回退 ['*']
 // （向后兼容旧超管 'auth' doc·无 role/caps 字段·现网单超管不变）。disabled=账号开停（外包可停·B5.2）。
@@ -122,7 +141,7 @@ export async function checkKey(db: any, key: any, bootstrap: boolean) {
   // ② B5.2 多账号：非超管·按 keyHash 查 agent/外包 账号 doc（均有 role；disabled 即停）
   const hit = await db.collection('adminConfig').where({ keyHash: hash }).limit(1).get().catch(() => ({ data: [] }))
   const acct = (hit && hit.data && hit.data[0]) || null
-  if (!acct) return { ok: false, error: 'BAD_KEY' }
+  if (!acct) return resolveWecomSession(db, hash) // 口令全未命中 → fallback 企微免登令牌（M⑦ 车道 B）
   if (acct.disabled) return { ok: false, error: 'ACCOUNT_DISABLED' }
   // 外包/坐席 agentId＝账号 _id（承面C claim 绑定/分配 scope/agentState 键·§1.5·根因#3 取认证主体非前端）
   return { ok: true, operator: acct.name || acct._id, agentId: acct._id, caps: acct.role ? capsForRole(acct.role) : Array.isArray(acct.caps) ? acct.caps : [] }

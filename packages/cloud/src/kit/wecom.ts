@@ -267,6 +267,22 @@ export async function sendMsg(accessToken: string, payload: any, fetchImpl: Fetc
   return post('kf/send_msg', accessToken, payload, fetchImpl)
 }
 
+/**
+ * 企业微信网页 OAuth：code → userid（`auth/getuserinfo`·用 app access_token·M⑦ 免登线·车道 B）。
+ * 成员在自建应用内打开授权（snsapi_base 静默）拿 code，本函数换回其企业成员 userid（坐席身份）。
+ * errcode / 无 userid（非成员返 openid·我们只认 userid）→ 返 '' —— 调用方 fail-closed 拒登。
+ */
+export async function getWecomOAuthUserId(
+  accessToken: string,
+  code: string,
+  fetchImpl: FetchFn = defaultFetch
+): Promise<string> {
+  const r = await fetchImpl(`${QY}/auth/getuserinfo?access_token=${encodeURIComponent(accessToken)}&code=${encodeURIComponent(code)}`)
+  const j = await r.json()
+  if (j.errcode || !j.userid) return ''
+  return String(j.userid)
+}
+
 // ───────────── 应用消息（自建应用主动推送·M⑦ 承面C 增强·推送线）─────────────
 // 与微信客服 send_msg 的区别：这是企业微信「应用消息」（message/send·带 agentid·推给企业成员 userid）——
 // 把「新会话待接 / 会话升级」主动推到坐席手机（app 消息不受 48h 会话窗口限制·解「页面关着无提醒」）。

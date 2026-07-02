@@ -19,6 +19,7 @@ import * as kb from './actions/kb'
 import * as csat from './actions/csat'
 import * as agentDesk from './actions/agentDesk' // 承面C 车道A·坐席台 8 action（B6·cap agent:handle）
 import * as agents from './actions/agents' // 承面C 车道C·外包账号管理（B5.2·超管建/停/列·默认拒 admin:write）
+import * as wecomLogin from './actions/wecomLogin' // M⑦ 车道B·企微 OAuth 免登（pre-auth·特殊分发·同 login 受频控）
 
 // 管理控制台后端（HTTP 访问服务触发）。B5b：HTTP 外壳 + 口令闸在此，28+ action 拆 actions/ 查表。
 // 鉴权：管理口令（adminConfig sha256，首登 bootstrap）。db 经 kit.getDb；退款流经 kit.callFlow。
@@ -200,6 +201,14 @@ export const main = async (event: any) => {
     if (res.ok) await throttleReset(tkey) // 成功只清 per-IP；全局计数靠滚动窗口自然衰减（不被单次成功抹平·防分布式爆破信号丢失）
     else await throttleFailBoth(tkey)
     return reply(res.ok ? 200 : 401, res)
+  }
+
+  // M⑦ 车道B·企微 OAuth 免登（pre-auth·坐席无口令·同 login 受频控防刷 code）：换 userid→查绑定账号→签发 session 令牌。
+  if (action === 'loginByWecomCode') {
+    const res = await wecomLogin.loginByWecomCode({ db, data })
+    if (res.statusCode === 200) await throttleReset(tkey)
+    else await throttleFailBoth(tkey)
+    return res
   }
 
   // 其余 action 一律先验口令（同受频控，防经任一 action 入口爆破）
