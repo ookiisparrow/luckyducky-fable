@@ -26,10 +26,15 @@ export const main = withOpenId(async ({ db, OPENID, event }) => {
 
   const totalFee = toFen(order.amount) // 微信支付单位是分
   if (totalFee <= 0) {
-    // 0 元单（券抵扣到 0）：无费可付，直接置已支付（微信支付最低 1 分）
+    // 0 元单（券抵扣到 0）：无费可付，直接置已支付（微信支付最低 1 分）。
+    // 查 moved（深审④）：读到 pending 后可能被定时关单/并发支付抢先——没抢到不谎报支付成功。
     const paidAt = Date.now()
-    await transition('orders', id, ['pending'], 'paid', { paidAt })
-    return ok({ paid: true, paidAt })
+    const { moved } = await transition('orders', id, ['pending'], 'paid', { paidAt })
+    if (moved) return ok({ paid: true, paidAt })
+    const fresh = await db.collection('orders').doc(id).get().catch(() => null)
+    const st = (fresh && fresh.data && fresh.data.status) || 'unknown'
+    if (st === 'paid') return ok({ paid: true, paidAt: fresh!.data.paidAt || paidAt }) // 并发已付：幂等成功
+    return err('BAD_STATUS:' + st)
   }
 
   // 触发支付工作流（JSAPI 下单）：openid 显式传入，金额/单号均来自库内订单

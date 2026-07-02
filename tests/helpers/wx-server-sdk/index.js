@@ -93,6 +93,8 @@ class DocRef {
     return { _id: this.id }
   }
   async update({ data }) {
+    // 写前注入（测试并发：读-改-写窗口里让「并发方」先落库·同 setCallFunctionImpl 范式）。默认无。
+    if (typeof G.beforeUpdate === 'function') await G.beforeUpdate({ coll: this.coll, data })
     const found = rows(this.coll).find((d) => d._id === this.id)
     if (!found) return { stats: { updated: 0 } }
     applyPatch(found, clone(data))
@@ -158,6 +160,8 @@ class Query {
     return { total: rows(this.coll).filter((d) => matchDoc(d, this._filter)).length }
   }
   async update({ data }) {
+    // 写前注入（测试并发：条件更新 where 求值前让「并发方」先改库·验 CAS 真在咬）。默认无。
+    if (typeof G.beforeUpdate === 'function') await G.beforeUpdate({ coll: this.coll, data })
     const hit = this._rows()
     hit.forEach((d) => applyPatch(d, clone(data)))
     return { stats: { updated: hit.length } }
@@ -306,6 +310,7 @@ const control = {
     G.openapiResult = null
     G.openapiFail = false
     G.openapiErrCode = null
+    G.beforeUpdate = null
   },
   seed(coll, docs) {
     G.store[coll] = (G.store[coll] || []).concat(JSON.parse(JSON.stringify(docs)))
@@ -337,6 +342,10 @@ const control = {
   // 注入「调用进行中」副作用（测试并发：如 callFlow 期间退款回调抢先翻 refunded）
   setCallFunctionImpl(fn) {
     G.callFunctionImpl = fn
+  },
+  // 注入「写库前」副作用（测试并发：读-改-写/条件更新窗口里模拟并发方抢先改库·验 CAS/moved 校验真在咬）
+  setBeforeUpdate(fn) {
+    G.beforeUpdate = fn
   },
   setCallFunctionFail(v) {
     G.callFunctionFail = !!v

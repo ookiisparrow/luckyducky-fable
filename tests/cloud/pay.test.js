@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest'
-import { control } from 'wx-server-sdk'
+import cloud, { control } from 'wx-server-sdk'
 import { main } from '../../packages/cloud/src/functions/orders/pay'
 
 // pay 闸门：openid + 本人订单 + 仅 pending + 金额取库内（不信任前端）+ 超时惰性关单 + PAY_MODE 放行。
@@ -87,6 +87,21 @@ describe('pay 闸门与发起支付（工作流通道）', () => {
     expect(res.paid).toBe(true)
     expect(control.callFunctionCalls()).toHaveLength(0)
     expect(control.dump('orders').find((o) => o._id === 'o4').status).toBe('paid')
+  })
+
+  it('0 元单竞态：置 paid 前被关单抢先 → 不谎报支付成功（深审④·moved 校验）', async () => {
+    let fired = false
+    control.setBeforeUpdate(async ({ coll }) => {
+      if (coll !== 'orders' || fired) return
+      fired = true
+      // 并发方：定时关单抢先落库（pending → closed）
+      await cloud.database().collection('orders').doc('o4').update({ data: { status: 'closed', closedAt: 1 } })
+    })
+    const res = await main({ id: 'o4' })
+    control.setBeforeUpdate(null)
+    expect(res.paid).toBeUndefined() // 旧码不查 moved：订单已 closed 仍回 { paid: true } 谎报成功
+    expect(res.error).toMatch(/^BAD_STATUS:/)
+    expect(control.dump('orders').find((o) => o._id === 'o4').status).toBe('closed') // 保持并发方结果·不被覆盖
   })
 
   it('UNIFIED_ORDER_FAIL：工作流无预付单 / 调用异常，订单留 pending', async () => {

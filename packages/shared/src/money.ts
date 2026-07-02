@@ -20,3 +20,13 @@ export function asFen(n: number): Fen {
 export function fenToYuan(fen: Fen): number {
   return (fen as number) / 100
 }
+
+/**
+ * 售后行分摊额（根因#4/#5 单源）：按行金额占实付比例分摊，封顶「实付 − 同单已占额度」。
+ * applyRefund（申请时算定）与 approveRefund（同意时按当下重算封顶·深审① 用户拍板）共用——
+ * 钱的分摊公式只此一份，两处独立演化必漂移。
+ */
+export function refundShareFen(amountFen: Fen, goodsFen: Fen, itemFen: Fen, usedFen: Fen): Fen {
+  const share = goodsFen > 0 ? asFen(Math.min(amountFen, Math.round((amountFen * itemFen) / goodsFen))) : asFen(0)
+  return asFen(Math.min(share, Math.max(0, amountFen - usedFen)))
+}

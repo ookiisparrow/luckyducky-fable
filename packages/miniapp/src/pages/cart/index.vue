@@ -18,6 +18,7 @@ import { CART_RECS } from '@/data/cart.js'
 import { getSystemBar } from '@/utils/systemBar.js'
 import { goProductDetail } from '@/utils/nav.js'
 import { useExitGuard } from '@/composables/useExitGuard.js'
+import { money } from '@/utils/format.js'
 
 const cart = useCartStore()
 
@@ -147,7 +148,8 @@ function onCheckout() {
       </view>
       <view class="ld-checkbar-total">
         <text class="ld-checkbar-total-label">合计</text>
-        <text class="ld-checkbar-total-num">￥{{ cart.selectedTotal }}</text>
+        <!-- 合计过 money()（深审③）：price*qty 浮点累加直显会出 59.699999999999996（价格设小数后显现） -->
+        <text class="ld-checkbar-total-num">￥{{ money(cart.selectedTotal) }}</text>
       </view>
       <view class="ld-checkout-btn" @tap="onCheckout">去结算 ({{ cart.selectedCount }})</view>
     </view>

@@ -511,20 +511,34 @@ export const repoChecks = [
     //（refundable=enteredQty<qty·非整行翻 false）；applyRefund 退 refundableQty=qty-enteredQty 件、金额按剩余件数摊（不再整行 item.qty）。
     id: 'refund-remaining-qty-after-enter',
     roots: ['#1'],
-    desc: '进课件级 + 退剩余件数（根因#1·外审 P1.3）：createOrder 行带 enteredQty；confirmEnter 进课按件递增 enteredQty（非整行翻 refundable=false）；applyRefund 退 refundableQty=qty-enteredQty 件·金额按剩余件数摊——防买 N 件进 1 件整行作废退货权',
+    desc: '进课件级 + 退剩余件数（根因#1·外审 P1.3 + 深审①②⑤ 2026-07-02）：createOrder 行带 enteredQty；confirmEnter 进课按件递增 enteredQty（非整行翻 refundable=false）且 items 写入过 entVer 版本位 CAS（防并发互覆盖少记件）；applyRefund 退 refundableQty=qty-enteredQty 件·金额按剩余件数摊；approveRefund 同意时按当下重算封顶（用户拍板）+ rejectRefund 条件更新原子化',
     run() {
       const create = 'packages/cloud/src/functions/orders/createOrder.ts'
       const enter = 'packages/cloud/src/functions/learning/confirmEnter.ts'
       const refund = 'packages/cloud/src/functions/orders/applyRefund.ts'
+      const approve = 'packages/cloud/src/functions/admin/adminApi/actions/refunds.ts'
       const bad = []
       if (existsSync(join(ROOT, create)) && !/enteredQty/.test(readFileSync(join(ROOT, create), 'utf8')))
         bad.push(`${create} 订单行未带 enteredQty——无件级进课账（根因#1·外审 P1.3）`)
-      if (existsSync(join(ROOT, enter)) && !/enteredQty/.test(readFileSync(join(ROOT, enter), 'utf8')))
-        bad.push(`${enter} 进课未按件递增 enteredQty——仍整行作废退货权（买 N 进 1 废全行·外审 P1.3）`)
+      if (existsSync(join(ROOT, enter))) {
+        const src = readFileSync(join(ROOT, enter), 'utf8')
+        if (!/enteredQty/.test(src))
+          bad.push(`${enter} 进课未按件递增 enteredQty——仍整行作废退货权（买 N 进 1 废全行·外审 P1.3）`)
+        if (!/entVer/.test(src))
+          bad.push(`${enter} 进课件数写入无 entVer 版本位 CAS——同单并发进课整数组读-改-写互覆盖少记件数＝剩余可退虚高·可多退钱（深审⑤·根因#1）`)
+      }
       if (existsSync(join(ROOT, refund))) {
         const src = readFileSync(join(ROOT, refund), 'utf8')
         if (!/refundableQty/.test(src) || !/enteredQty/.test(src))
           bad.push(`${refund} 未按 refundableQty=qty-enteredQty 退剩余件数——整行退/进课废全行（外审 P1.3）`)
+      }
+      if (existsSync(join(ROOT, approve))) {
+        const src = readFileSync(join(ROOT, approve), 'utf8')
+        if (!/refundableQty/.test(src))
+          bad.push(`${approve} 同意退款未按当下重算剩余可退件封顶——申请后又进课仍按申请时件数打款＝多退钱（深审①·用户拍板重算封顶）`)
+        const grabs = src.match(/status:\s*'applied'\s*\}\)/g) || []
+        if (grabs.length < 2)
+          bad.push(`${approve} rejectRefund 未条件更新（where status:'applied'）——与同意竞态可把 approved 打回 rejected·钱退了状态错（深审②）`)
       }
       return bad
     },

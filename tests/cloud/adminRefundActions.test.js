@@ -102,6 +102,71 @@ describe('adminApi 售后退款动作', () => {
     expect(as.rejectReason).toBe('包装已拆')
   })
 
+  // ── 深审修复批（2026-07-02）①②：申请后又进课重算封顶（用户拍板）+ rejectRefund 原子化 ──
+
+  it('申请后又进课（qty≥2 未全进）：同意时按当下重算封顶——件数/金额降级落库并按新额打款（深审①·用户拍板）', async () => {
+    // 买 3 件×100 实付 300；申请时进课 1 件（rec qty=2·200）→ 审批前又进 1 件（enteredQty=2）→ 只剩 1 件可退
+    control.seed('orders', [
+      {
+        _id: 'o5',
+        id: 'o5',
+        status: 'paid',
+        amount: 300,
+        goods: 300,
+        address: {},
+        items: [{ productId: 'p5', lineId: 'p5__', spec: '', price: 100, qty: 3, enteredQty: 2, refundable: true }],
+      },
+    ])
+    control.seed('afterSales', [
+      { _id: 'o5__p5__', orderId: 'o5', lineId: 'p5__', productId: 'p5', status: 'applied', qty: 2, itemTotal: 200, refundAmount: 200, reason: '测试' },
+    ])
+    const res = await call('approveRefund', { id: 'o5__p5__' })
+    expect(res.ok).toBe(true)
+    const as = control.dump('afterSales').find((a) => a._id === 'o5__p5__')
+    expect(as.status).toBe('approved')
+    expect(as.qty).toBe(1) // 按当下重算封顶：只退剩余 1 件
+    expect(as.refundAmount).toBe(100)
+    expect(as.requalifiedAt).toBeGreaterThan(0) // 留痕：这单在审批时降过级
+    const calls = control.callFunctionCalls()
+    expect(calls[0].data.data.amount.refund).toBe(10000) // 打款按重算后的金额（分）
+  })
+
+  it('申请后全进课（enteredQty=qty 而 refundable 痕未翻）：同意被拒 ENTERED_NOT_REFUNDABLE（深审①·fail-closed）', async () => {
+    control.seed('orders', [
+      {
+        _id: 'o6',
+        id: 'o6',
+        status: 'paid',
+        amount: 200,
+        goods: 200,
+        address: {},
+        items: [{ productId: 'p6', lineId: 'p6__', spec: '', price: 100, qty: 2, enteredQty: 2, refundable: true }],
+      },
+    ])
+    control.seed('afterSales', [
+      { _id: 'o6__p6__', orderId: 'o6', lineId: 'p6__', productId: 'p6', status: 'applied', qty: 2, itemTotal: 200, refundAmount: 200, reason: '测试' },
+    ])
+    const res = await call('approveRefund', { id: 'o6__p6__' })
+    expect(res.status).toBe(400)
+    expect(res.error).toBe('ENTERED_NOT_REFUNDABLE')
+    expect(control.callFunctionCalls()).toHaveLength(0)
+  })
+
+  it('rejectRefund 竞态窗口：读到 applied 后被同意抢先 → 条件更新不把 approved 打回 rejected（深审②·原子化）', async () => {
+    let fired = false
+    control.setBeforeUpdate(async ({ coll }) => {
+      if (coll !== 'afterSales' || fired) return
+      fired = true
+      // 并发方：同意退款抢先落库（applied → approved·钱已进退款通道）
+      await cloud.database().collection('afterSales').doc('o1__p1').update({ data: { status: 'approved', approvedAt: 1 } })
+    })
+    const res = await call('rejectRefund', { id: 'o1__p1', reason: '竞态测试' })
+    control.setBeforeUpdate(null)
+    expect(res.status).toBe(400)
+    const as = control.dump('afterSales')[0]
+    expect(as.status).toBe('approved') // 不被 clobber：钱一旦进退款通道，状态不能倒回「已拒绝」
+  })
+
   it('金额异常单：shipOrder 被拦（FEE_MISMATCH_HOLD），clearFeeMismatch 解除后可发', async () => {
     const blocked = await call('shipOrder', { id: 'o2', company: '顺丰速运', trackingNo: 'SF123' })
     expect(blocked.error).toBe('FEE_MISMATCH_HOLD')

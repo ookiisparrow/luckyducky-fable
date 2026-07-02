@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest'
-import { control } from 'wx-server-sdk'
+import cloud, { control } from 'wx-server-sdk'
 import { main } from '../../packages/cloud/src/functions/learning/confirmEnter'
 
 // confirmEnter 闸门：确认进课写 enteredAt（只写一次）+ 退货权启发失效（翻最早可退条目）。
@@ -89,5 +89,49 @@ describe('confirmEnter 闸门', () => {
     expect(control.dump('orders')[0].items[0]).toMatchObject({ enteredQty: 2, refundable: true }) // 剩1可退
     await main({ code: 'LDCODE3' })
     expect(control.dump('orders')[0].items[0]).toMatchObject({ enteredQty: 3, refundable: false }) // 全进·不可退
+  })
+
+  // ── 深审修复批（2026-07-02）⑤：进课件数写入 entVer 版本位 CAS（防整数组读-改-写互覆盖·根因#1）──
+
+  it('进课件数并发防少记：items 写入被并发进课抢先 → entVer CAS 重试后两件都入账（深审⑤）', async () => {
+    control.seed('orders', [
+      {
+        _id: 'oA',
+        id: 'oA',
+        _openid: 'user-A',
+        status: 'paid',
+        createdAt: 1,
+        items: [{ productId: 'prod-1', lineId: 'prod-1__', price: 100, qty: 3, enteredQty: 0, refundable: true }],
+      },
+    ])
+    let fired = false
+    control.setBeforeUpdate(async ({ coll }) => {
+      if (coll !== 'orders' || fired) return
+      fired = true
+      // 并发方：另一次进课先落一件（enteredQty 0→1·entVer →1）
+      await cloud
+        .database()
+        .collection('orders')
+        .doc('oA')
+        .update({
+          data: { items: [{ productId: 'prod-1', lineId: 'prod-1__', price: 100, qty: 3, enteredQty: 1, refundable: true }], entVer: 1 },
+        })
+    })
+    const res = await main({ code: 'LDCODE1' })
+    control.setBeforeUpdate(null)
+    expect(res.revoked).toBeTruthy()
+    const o = control.dump('orders').find((x) => x._id === 'oA')
+    expect(o.items[0].enteredQty).toBe(2) // 旧码整数组读-改-写互覆盖只记 1 件 → 剩余可退虚高·可多退一件的钱
+    expect(o.entVer).toBe(2)
+  })
+
+  it('entVer 版本位随进课递增；无 entVer 旧单首次进课兼容（深审⑤）', async () => {
+    control.seed('orders', [
+      { _id: 'oB', id: 'oB', _openid: 'user-A', status: 'paid', createdAt: 1, items: [{ productId: 'prod-1', price: 100, qty: 2, refundable: true }] },
+    ])
+    await main({ code: 'LDCODE1' })
+    const o = control.dump('orders').find((x) => x._id === 'oB')
+    expect(o.items[0].enteredQty).toBe(1)
+    expect(o.entVer).toBe(1) // 旧单无 entVer（exists(false) 前置条件）首写 → 1
   })
 })

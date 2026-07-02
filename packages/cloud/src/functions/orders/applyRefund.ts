@@ -1,4 +1,4 @@
-import { toFen, asFen, fenToYuan } from '@luckyducky/shared'
+import { toFen, asFen, fenToYuan, refundShareFen } from '@luckyducky/shared'
 import { withOpenId, ok, err } from '../../kit'
 
 // 申请售后退款（敏感：退款金额一律云端分摊算定，不信任前端）。闸门（链10）：openid 本人 +
@@ -34,7 +34,6 @@ export const main = withOpenId(async ({ db, OPENID, event }) => {
   const amountFen = toFen(Number(order.amount))
   const goodsFen = toFen(Number(order.goods))
   const itemFen = asFen(toFen(item.price) * refundableQty)
-  const share = goodsFen > 0 ? asFen(Math.min(amountFen, Math.round((amountFen * itemFen) / goodsFen))) : asFen(0)
 
   await db.createCollection('afterSales').catch(() => {})
   const exist = await db.collection('afterSales').where({ orderId }).get().catch(() => ({ data: [] }))
@@ -46,7 +45,8 @@ export const main = withOpenId(async ({ db, OPENID, event }) => {
       .filter((a: any) => ['applied', 'approved', 'refunded'].includes(a.status))
       .reduce((s: number, a: any) => s + toFen(Number(a.refundAmount)), 0)
   )
-  const refundFen = asFen(Math.min(share, Math.max(0, amountFen - used)))
+  // 分摊公式单源 shared refundShareFen（深审①·与 approveRefund 同意时重算共用·根因#5）
+  const refundFen = refundShareFen(amountFen, goodsFen, itemFen, used)
   if (refundFen <= 0) return err('NOTHING_LEFT')
 
   const now = Date.now()
