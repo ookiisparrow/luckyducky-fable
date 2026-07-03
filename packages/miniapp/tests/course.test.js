@@ -30,7 +30,7 @@ describe('course 三层课程数据契约', () => {
             expect(s.name).toBeTruthy()
             expect(parseDur(s.dur)).toBeGreaterThan(0)
             expect(s).toHaveProperty('videoFileId') // 占位期为 null，但字段必须在
-            expect(typeof s.free).toBe('boolean')
+            expect(s.free).toBeUndefined() // 试看已整条撤除（守卫 free-trial-extinct）
           }
         }
       }

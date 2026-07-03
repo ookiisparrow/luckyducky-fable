@@ -2444,6 +2444,88 @@ export const repoChecks = [
     },
   },
   {
+    // 快速切段取址竞态（视频链路深审 P1·根因#8 网络时序才显、快网/慢点掩盖）。痛：refreshPlayUrl 在
+    // await 取址后直接 playUrl.value = url——用户快速连点「下一段」时两个在途取址若乱序回包（后发先至），
+    // 先发的旧段地址会覆盖新段：界面标注 C 段、实际播 B 段，且去重标记已停在 C、watch 不再触发、不自愈；
+    // 慢回的失败还会把错误浮层误盖到已在播的画面。修＝await 后先核对「当前段还是发起那段」再落地。
+    id: 'player-playurl-stale-guarded',
+    roots: ['#8'],
+    desc: '切段取址防乱序覆盖（深审 P1·根因#8）：pkg-video/player/index.vue 的 refreshPlayUrl 在 await 取址后须复核 curFileSegId 未变才写 playUrl——防「快速连点下一段、慢回的旧段地址覆盖新段」播错段且不自愈',
+    run() {
+      const rel = 'packages/miniapp/src/pkg-video/player/index.vue'
+      const abs = join(ROOT, rel)
+      if (!existsSync(abs)) return [`${rel} 缺失`]
+      const m = readFileSync(abs, 'utf8').match(/async function refreshPlayUrl[\s\S]*?\n}/)
+      if (!m) return [`${rel} 找不到 refreshPlayUrl——取址单点丢失（深审 P1）`]
+      const awaitAt = m[0].indexOf('await')
+      const staleAt = m[0].indexOf('curFileSegId.value !== seg')
+      if (awaitAt < 0 || staleAt < 0 || staleAt < awaitAt)
+        return [
+          `${rel} refreshPlayUrl 取址 await 后未复核 curFileSegId 再写 playUrl——快速切段乱序回包会播错段且不自愈（深审 P1·根因#8）`,
+        ]
+      return []
+    },
+  },
+  {
+    // 目录章节折叠正确性（深审 P2×2·根因#8 单课种子样本掩盖）。痛①：折叠动画写死 max-height:600px，
+    // 章节超约 9 节时尾部课时被截断不可见不可点（控制台允许每章 50 节）；痛②：默认展开写死 { c1: true }，
+    // 只有种子鸭课第一章 id 恰为 c1，控制台建的课章节 id 随机 → 进目录全折叠。修＝展开高度按课时数动态、
+    // 默认展开从 chapters[0] 动态取。本守卫防两处回退。
+    id: 'catalog-chapter-fold-correct',
+    roots: ['#8'],
+    desc: '目录章节折叠不截断+默认展开不写死（深审 P2·根因#8 种子样本掩盖）：pages/catalog/index.vue ① 展开态禁写死 max-height 数值（长章节截断不可点），须按课时数 :style 动态；② 默认展开禁写死章节 id（c1），须从 chapters[0] 动态取',
+    run() {
+      const rel = 'packages/miniapp/src/pages/catalog/index.vue'
+      const abs = join(ROOT, rel)
+      if (!existsSync(abs)) return [`${rel} 缺失`]
+      const src = readFileSync(abs, 'utf8')
+      const bad = []
+      if (/vc-chap-body\.open\s*\{[^}]*max-height\s*:\s*\d/.test(src))
+        bad.push(`${rel} 章节展开态写死 max-height 数值——超约 9 节的章节尾部课时被截断不可点（每章上限 50 节·深审 P2）`)
+      if (!/lessons\.length/.test(src) || !/maxHeight/.test(src))
+        bad.push(`${rel} 展开高度未按课时数动态计算（:style maxHeight）——防回退成写死高度截断长章节（深审 P2）`)
+      if (/open\s*=\s*ref\(\s*\{\s*c1\s*:/.test(src))
+        bad.push(`${rel} 默认展开写死 { c1: true }——控制台建的课章节 id 随机、进目录全折叠（深审 P2·根因#8）`)
+      if (!/chapters\[0\]/.test(src))
+        bad.push(`${rel} 未从 chapters[0] 动态取默认展开章节（深审 P2）`)
+      return bad
+    },
+  },
+  {
+    // 试看功能整条撤除（深审 P2·用户拍板 2026-07-03「项目无试看功能，完全取消」·根因#8 功能假绿：
+    // 控制台可勾「试看」、云端 getPlaybackUrl 也放行 free 段，但小程序端未激活用户根本走不到播放器——
+    // 三层只通两层，admin 的承诺用户永远兑现不了）。修＝segment.free 字段与「试看」字样全链绝迹
+    // （种子/清洗白名单/公开目录/播放鉴权/控制台/目录页/dev mock）。防半接回：要恢复试看须整条通路一起接。
+    id: 'free-trial-extinct',
+    roots: ['#8'],
+    desc: '试看（segment.free）全链绝迹（深审 P2·用户拍板取消）：种子/cleanCourse/getCourses/getPlaybackUrl/StepVideos/catalog/devCloudMock 不得再引段级 free 或「试看」——防半接回（只回 admin 勾选却无用户通路=功能假绿·根因#8）',
+    run() {
+      const files = [
+        'packages/shared/src/seed/course.ts',
+        'packages/cloud/src/functions/learning/getCourses.ts',
+        'packages/cloud/src/functions/learning/getPlaybackUrl.ts',
+        'packages/cloud/src/functions/admin/adminApi/lib.ts',
+        'packages/admin/src/pages/steps/StepVideos.vue',
+        'packages/miniapp/src/pages/catalog/index.vue',
+        'packages/miniapp/src/utils/devCloudMock.js',
+      ]
+      const bad = []
+      for (const rel of files) {
+        const abs = join(ROOT, rel)
+        if (!existsSync(abs)) continue
+        readFileSync(abs, 'utf8')
+          .split('\n')
+          .forEach((ln, i) => {
+            if (/试看/.test(ln))
+              bad.push(`${rel}:${i + 1} 残留「试看」——试看已撤除（用户拍板 2026-07-03），恢复须整条通路一起接、别只回一层`)
+            if (/\bfree\s*[:?]|\.free\b/.test(ln))
+              bad.push(`${rel}:${i + 1} 残留段级 free 字段——试看已整条撤除（深审 P2）`)
+          })
+      }
+      return bad
+    },
+  },
+  {
     // 主包不得 import 分包模块（mp-weixin 平台硬规则·根因#8 真机才崩）。病史：playbackCache 解析器原放
     // pkg-video（分包），主包 store/courses.js import 它 → mp-weixin 主包 require 分包路径运行时找不到 →
     // useCoursesStore 模块求值即抛 → 用到它的「我」页等白屏（H5 无分包概念故假绿、npm check 也测不出·#8）。
@@ -3042,15 +3124,15 @@ export const repoChecks = [
       for (const e of readdirSync(dir)) {
         if (!e.endsWith('.ts')) continue
         const src = readFileSync(join(dir, e), 'utf8')
-        if (e !== GATE && /\bgetTempUrl\s*\(/.test(src))
-          bad.push(`catalog/${e} 调 getTempUrl 造帮助视频 URL——临时 URL 只许经 ${GATE} 下发（审计 P1·根因#3）`)
+        if (e !== GATE && /\bgetTempUrls?\s*\(/.test(src))
+          bad.push(`catalog/${e} 调 getTempUrl(s) 造帮助视频 URL——临时 URL 只许经 ${GATE} 下发（审计 P1·根因#3）`)
         if (e !== GATE && /videoFileId/.test(src))
           bad.push(`catalog/${e} 引用 videoFileId——帮助视频原始 fileID 只许在 ${GATE} 服务端解析，防漏进公开返回（审计 P1·根因#3）`)
       }
       const gate = join(dir, GATE)
       if (!existsSync(gate)) bad.push(`catalog/${GATE} 缺失——帮助视频播放 URL 单点丢失（审计 P1）`)
-      else if (!/\bgetTempUrl\s*\(/.test(readFileSync(gate, 'utf8')))
-        bad.push(`catalog/${GATE} 未经 getTempUrl 接缝下发 URL——临时 URL 单源失守（审计 P1）`)
+      else if (!/\bgetTempUrls?\s*\(/.test(readFileSync(gate, 'utf8')))
+        bad.push(`catalog/${GATE} 未经 getTempUrl(s) 接缝下发 URL——临时 URL 单源失守（审计 P1）`)
       return bad
     },
   },

@@ -33,15 +33,25 @@ export const useProgressStore = defineStore('progress', {
       const doc = s.byCourse[courseId]
       const segs = Array.isArray(lesson.segments) ? lesson.segments : []
       if (!doc || !segs.length) return {}
-      const n = segs.filter((seg) => doc.done && doc.done[seg.id]).length
+      const isDone = (sid) => !!(doc.done && doc.done[sid])
+      const n = segs.filter((seg) => isDone(seg.id)).length
       if (n >= segs.length) return { done: true }
-      if (n > 0) return { watched: n / segs.length }
-      // 整段还没看完一个、但「最后看到」停在这节 → 按位置给进行中
+      // 段内部分观看按段数折算（深审 P3 口径修正）：last.at/last.dur 是「段内」进度（播放页 fileMode 上报
+      // 口径），原实现直接当整节百分比 →「5 段中第 1 段看一半」误显 50%。折算 = (已看完段数 + 段内比例)/段数；
+      // 停在已 done 的段不重复计（防超过实际）。
       const last = doc.last
-      if (last && last.lessonId === lesson.id && last.at > 0 && last.dur > 0) {
-        return { watched: Math.min(0.99, last.at / last.dur) }
+      let partial = 0
+      if (
+        last &&
+        last.lessonId === lesson.id &&
+        last.at > 0 &&
+        last.dur > 0 &&
+        !isDone(last.segmentId)
+      ) {
+        partial = Math.min(1, last.at / last.dur)
       }
-      return {}
+      const frac = (n + partial) / segs.length
+      return frac > 0 ? { watched: Math.min(0.99, frac) } : {}
     },
     // 最近的继续学习点：{ courseId, lessonId, segmentId, at, dur } | null（「我」页卡回退样例）
     lastWatch: (s) => {

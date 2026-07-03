@@ -41,7 +41,6 @@ function publicCourses() {
           id: s.id,
           name: s.name,
           dur: s.dur,
-          free: !!s.free,
           hasVideo: true,
         })),
       })),

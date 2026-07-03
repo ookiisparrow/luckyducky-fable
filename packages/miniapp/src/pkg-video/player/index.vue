@@ -79,10 +79,12 @@ onLoad(async (o) => {
 })
 const lesson = computed(() => lessons.value[idx.value] || lessons.value[0] || {})
 const title = computed(() => lesson.value.name || '')
+// 节次按「章内序」（与目录页 lessonSub 同口径·深审 P3：原用全课拍平序，同一节目录显「第1节」播放页显「第5节」）
 const ep = computed(() => {
   const ci = course.value.chapters.findIndex((c) => c.id === lesson.value.chapter)
   if (ci < 0) return ''
-  return `第 ${ci + 1} 章 · 第 ${idx.value + 1} 节`
+  const li = course.value.chapters[ci].lessons.findIndex((l) => l.id === lesson.value.id)
+  return `第 ${ci + 1} 章 · 第 ${li + 1} 节`
 })
 // 段粒度（连续跨课时）：非全课首段即可上一段、非全课末段即可下一段；与 goSeg 同源 stepSegment 保持一致
 const hasPrev = computed(() => stepSegment(lessons.value, idx.value, fileSeg.value, -1) !== null)
@@ -92,8 +94,6 @@ const duration = ref(0)
 const current = ref(0)
 const playing = ref(false)
 const endedSeg = ref(null) // 刚在哪段末尾停下（显示「重复播放」）
-let playingSeg = 0
-let seeking = false
 let unloaded = false // 页已卸载（onUnload 置）→ onLoad 异步回调据此早退，不写已卸载页 / 不误 redirectTo（审计 #9）
 // 切段起播标记：换段后新 src 异步现取，置 true → 待新段元数据就绪（onLoaded）再起播，
 // 不靠固定 setTimeout 猜（地址常没取回/没加载完就 play → 播一瞬间旧残帧再切→真机卡顿·根因#8）。
@@ -107,7 +107,8 @@ let scrubRect = null
 const segs = computed(() => lesson.value.segments || [])
 const segCount = computed(() => segs.value.length || 1)
 // 分段视频模式（规格 §三/决策 §14 配套）：该课时所有小段都有真实视频（控制台第④步上传）
-// → 每段独立播放（src 按段切换，段末=视频自然结束）；否则回退占位视频按时长等分
+// → 每段独立播放（src 按段切换，段末=视频自然结束）；否则整课时显「整理中」占位、不播任何内容
+// （all-or-nothing·用户拍板；旧「占位视频按时长等分」回退已死代码清除——非 fileMode 时 videoSrc 恒空）
 const fileSeg = ref(0) // 文件模式下的当前段
 const fileMode = computed(() => segs.value.length > 0 && segs.value.every((s) => s.hasVideo))
 // 服务端保护（审计 P1）：videoFileId 不再随目录下发，按当前段经云函数 getPlaybackUrl 换短时效临时 URL
@@ -142,6 +143,10 @@ async function refreshPlayUrl() {
   if (seg && seg === lastFetchedSeg) return // 同段已取，不重取
   lastFetchedSeg = seg
   const url = seg ? await store.playbackUrl(seg) : ''
+  // 乱序回包防覆盖（深审 P1·守卫 player-playurl-stale-guarded）：快速连点上/下一段时两个取址在途，
+  // 慢回的旧段地址若直接落地会覆盖新段——界面标注新段、实际播旧段，且去重标记已停在新段、watch 不再
+  // 触发、不自愈。await 后核对「当前段还是发起那段」，不是则丢弃本次结果（新段由它自己那次调用落地）。
+  if (curFileSegId.value !== seg) return
   playUrl.value = url
   // 该段标了 hasVideo（fileMode）却取不到地址（服务端无 videoFileId / 未授权 / 网络失败）→ 别永久黑，进错误态
   if (seg && !url) videoError.value = true
@@ -156,22 +161,9 @@ function retry() {
   pendingPlay = true
   refreshPlayUrl()
 }
-const segLen = computed(() => (duration.value > 0 ? duration.value / segCount.value : 0))
-const curSeg = computed(() => {
-  if (segLen.value <= 0) return 0
-  return Math.min(segCount.value - 1, Math.floor(current.value / segLen.value))
-})
 const pct = computed(() => (duration.value > 0 ? (current.value / duration.value) * 100 : 0))
-// 当前展示段：文件模式按 fileSeg，占位模式按时间切片推算
-const activeSeg = computed(() => (fileMode.value ? fileSeg.value : curSeg.value))
-const curSegName = computed(() => (segs.value[activeSeg.value] || {}).name || '')
-const segFill = (i) => {
-  if (fileMode.value) {
-    return i < fileSeg.value ? 100 : i === fileSeg.value ? pct.value : 0
-  }
-  if (segLen.value <= 0) return 0
-  return Math.max(0, Math.min(100, ((current.value - i * segLen.value) / segLen.value) * 100))
-}
+const curSegName = computed(() => (segs.value[fileSeg.value] || {}).name || '')
+const segFill = (i) => (i < fileSeg.value ? 100 : i === fileSeg.value ? pct.value : 0)
 
 onMounted(() => {
   ctx = uni.createVideoContext('lessonVideo', instance.proxy)
@@ -200,21 +192,7 @@ function onTimeupdate(e) {
   const d = e.detail || {}
   if (d.duration) duration.value = d.duration
   if (dragging) return // 拖动中：进度由手指控制，忽略播放回报，避免拇指与播放头打架
-  const t = d.currentTime || 0
-  // 段末自动暂停（占位等分模式；文件模式由 onEnded 天然承担段末）
-  // endedSeg === null 守卫：pause 生效前 timeupdate 可能再触发，防重复进入（埋点防重报）
-  if (!fileMode.value && playing.value && segLen.value > 0 && !seeking && endedSeg.value === null) {
-    const end = (playingSeg + 1) * segLen.value
-    if (t >= end - 0.2 && playingSeg < segCount.value - 1) {
-      ctx && ctx.pause()
-      current.value = end
-      endedSeg.value = playingSeg
-      reportSegDone(playingSeg)
-      return
-    }
-  }
-  seeking = false
-  current.value = t
+  current.value = d.currentTime || 0
 }
 function onPlay() {
   playing.value = true
@@ -232,13 +210,9 @@ function onPause() {
 }
 function onEnded() {
   playing.value = false
-  if (fileMode.value) {
-    // 文件模式：一段视频自然结束 = 该段看完；非最后一段弹「重复播放/继续」
-    reportSegDone(fileSeg.value)
-    if (fileSeg.value < segCount.value - 1) endedSeg.value = fileSeg.value
-    return
-  }
-  reportSegDone(segCount.value - 1) // 占位模式：整条播完 = 最后一段看完
+  // 一段视频自然结束 = 该段看完；非本课时最后一段弹「重复播放/继续」
+  reportSegDone(fileSeg.value)
+  if (fileSeg.value < segCount.value - 1) endedSeg.value = fileSeg.value
 }
 
 // —— 进度上报（一次埋点两用：events 流水 + 云端进度折叠，见 utils/track.js）——
@@ -257,7 +231,7 @@ function reportSegDone(i) {
 // 离开播放页（切后台 / 返回）→ 记「最后看到」位置，喂「我」页继续学习卡
 function reportWatchPoint() {
   if (!lesson.value.id || current.value <= 0) return
-  track('watch_at', { page: 'player', targetId: segIdOf(activeSeg.value), meta: progressMeta() })
+  track('watch_at', { page: 'player', targetId: segIdOf(fileSeg.value), meta: progressMeta() })
 }
 onHide(reportWatchPoint)
 onUnload(() => {
@@ -265,49 +239,26 @@ onUnload(() => {
   reportWatchPoint()
 })
 
-// 点画面 / 大播放键：暂停↔播放；段末→继续进入下一段
+// 点画面 / 大播放键：暂停↔播放；段末→继续进入下一段（切 src 自动从头，待新段元数据就绪再起播·同 goSeg）
 function toggle() {
   if (!ctx) return
   if (endedSeg.value !== null) {
-    const ended = endedSeg.value // 先存再清（审核批次B：清空后 null+1=1，第 2 段后继续播会跳回第 2 段）
     endedSeg.value = null
-    if (fileMode.value) {
-      // 进入下一段：切 src（自动从头），待新段元数据就绪再起播（pendingPlay·同 goSeg·非猜定时）
-      fileSeg.value = Math.min(segCount.value - 1, fileSeg.value + 1)
-      current.value = 0
-      duration.value = 0
-      pendingPlay = true
-      return
-    }
-    playingSeg = Math.min(segCount.value - 1, ended + 1)
-    seeking = true
-    ctx.seek(playingSeg * segLen.value)
-    ctx.play()
+    fileSeg.value = Math.min(segCount.value - 1, fileSeg.value + 1)
+    current.value = 0
+    duration.value = 0
+    pendingPlay = true
     return
   }
   if (playing.value) ctx.pause()
-  else {
-    playingSeg = curSeg.value
-    ctx.play()
-  }
+  else ctx.play()
 }
 // 重复播放本段
 function replaySeg() {
   if (!ctx) return
-  if (fileMode.value) {
-    endedSeg.value = null
-    seeking = true
-    ctx.seek(0)
-    current.value = 0
-    ctx.play()
-    return
-  }
-  const s = endedSeg.value !== null ? endedSeg.value : curSeg.value
-  playingSeg = s
   endedSeg.value = null
-  seeking = true
-  ctx.seek(s * segLen.value)
-  current.value = s * segLen.value
+  ctx.seek(0)
+  current.value = 0
   ctx.play()
 }
 // 进度条拖拽 + 点按：触点 clientX + 缓存的进度条几何 scrubRect → 目标时间（scrubTimeAt 钳位·单测锁）。
@@ -347,8 +298,6 @@ function onScrubEnd(e) {
   const target = tt != null ? tt : current.value
   current.value = target
   endedSeg.value = null
-  seeking = true
-  if (!fileMode.value) playingSeg = segLen.value > 0 ? Math.floor(target / segLen.value) : 0
   ctx.seek(target)
 }
 // 上一段 / 下一段（小段切换·连续跨课时）：到本课时边界自动接相邻课时（规格 R8 升级·纯函数 segNav）。
@@ -361,8 +310,6 @@ function goSeg(dir) {
   fileSeg.value = t.segIdx
   endedSeg.value = null
   videoError.value = false // 清上一段可能的错误态（firstFrame 已 sticky·切段不重盖加载浮层）
-  playingSeg = 0
-  seeking = true
   current.value = 0
   duration.value = 0
   // 段 id 变 → watch(curFileSegId) 重取 playUrl → 新 src 元数据就绪（onLoaded）再起播（pendingPlay·非猜定时）
@@ -450,7 +397,7 @@ function back() {
           </view>
         </view>
         <text class="vp-seg-label"
-          ><text class="num">【{{ activeSeg + 1 }}/{{ segCount }}】</text>{{ curSegName }}</text
+          ><text class="num">【{{ fileSeg + 1 }}/{{ segCount }}】</text>{{ curSegName }}</text
         >
       </view>
     </view>

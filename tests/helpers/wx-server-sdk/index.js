@@ -21,6 +21,8 @@ const G = (globalThis.__cloudMock = globalThis.__cloudMock || {
   openapiResult: null,
   openapiFail: false,
   openapiErrCode: null,
+  deletedFiles: [],
+  tempUrlCalls: [],
 })
 
 const clone = (v) => (v === undefined ? undefined : JSON.parse(JSON.stringify(v)))
@@ -277,9 +279,17 @@ const cloud = {
     G.lastUpload = { cloudPath, bytes: fileContent ? fileContent.length : 0 }
     return { fileID: 'cloud://test/' + cloudPath }
   },
-  getTempFileURL: async ({ fileList }) => ({
-    fileList: fileList.map((id) => ({ fileID: id, tempFileURL: 'https://tmp/' + id })),
-  }),
+  getTempFileURL: async ({ fileList }) => {
+    // 记录每次调用的批大小：真 sdk 单次 fileList 上限 50，getTempUrls 分批逻辑靠此断言（桩对齐真 SDK）
+    G.tempUrlCalls.push((fileList || []).length)
+    if ((fileList || []).length > 50) throw new Error('MOCK: getTempFileURL fileList 超 50 上限（真 sdk 会拒）')
+    return { fileList: fileList.map((id) => ({ fileID: id, tempFileURL: 'https://tmp/' + id })) }
+  },
+  // 删云存储文件（孤儿视频 GC 用）：记录删除的 fileID，返回真 sdk 形状 { fileList:[{fileID,status:0}] }
+  deleteFile: async ({ fileList }) => {
+    G.deletedFiles.push(...(fileList || []))
+    return { fileList: (fileList || []).map((id) => ({ fileID: id, status: 0 })) }
+  },
   // 下载云存储文件 mock（kit/contentsec imgSecCheck 取图字节走它）：返回固定小 buffer；内容安全的
   // 通过/违规分支由 openapi mock（setOpenapiFail/Result）驱动（真 sdk 下载属根因#8 靠人·桩只锁链路）。
   downloadFile: async ({ fileList }) => ({
@@ -324,6 +334,8 @@ const control = {
     G.openapiFail = false
     G.openapiErrCode = null
     G.beforeUpdate = null
+    G.deletedFiles = []
+    G.tempUrlCalls = []
   },
   seed(coll, docs) {
     G.store[coll] = (G.store[coll] || []).concat(JSON.parse(JSON.stringify(docs)))
@@ -373,6 +385,13 @@ const control = {
   setOpenapiFail(v, errCode) {
     G.openapiFail = !!v
     G.openapiErrCode = errCode != null ? errCode : null
+  },
+  // 孤儿视频 GC 断言用：deleteFile 删过哪些 fileID / getTempFileURL 每次批大小（分批 ≤50 断言）
+  deletedFiles() {
+    return [...G.deletedFiles]
+  },
+  tempUrlCalls() {
+    return [...G.tempUrlCalls]
   },
 }
 

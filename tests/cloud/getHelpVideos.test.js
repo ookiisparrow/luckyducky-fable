@@ -49,4 +49,32 @@ describe('getHelpVideos', () => {
     expect(topic.segments[0]).not.toHaveProperty('videoFileId')
     expect(topic.segments[1].url).toBe(null) // 无视频小段
   })
+
+  it('批量换临时 URL 分批 ≤50/次（真 sdk getTempFileURL 单次上限 50·深审 P3：原逐段一次一调）', async () => {
+    // 3 主题 × 20 小段 = 60 条视频 → 须分 2 批（50 + 10），且每段 url 映射正确
+    control.seed('content', [
+      {
+        _id: 'helpVideos',
+        items: Array.from({ length: 3 }, (_, t) => ({
+          id: 'h' + t,
+          title: '主题' + t,
+          segments: Array.from({ length: 20 }, (_, i) => ({
+            id: `s${t}-${i}`,
+            name: '段',
+            dur: '00:10',
+            videoFileId: `cloud://v${t}-${i}`,
+          })),
+        })),
+      },
+    ])
+    const res = await main({})
+    expect(res.ok).toBe(true)
+    const calls = control.tempUrlCalls()
+    expect(Math.max(...calls)).toBeLessThanOrEqual(50) // 单批不超真 sdk 上限
+    expect(calls.reduce((a, b) => a + b, 0)).toBe(60) // 60 条全换到
+    expect(calls.length).toBe(2) // 分 2 批，不是 60 次逐段调
+    // 抽查映射不串位
+    expect(res.items[2].segments[19].url).toBe('https://tmp/cloud://v2-19')
+    expect(res.items[0].segments[0].url).toBe('https://tmp/cloud://v0-0')
+  })
 })

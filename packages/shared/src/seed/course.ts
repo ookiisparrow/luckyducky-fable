@@ -12,7 +12,6 @@ export interface SeedSegment {
   name: string
   dur: string
   videoFileId: string | null
-  free: boolean
 }
 export interface SeedLesson {
   id: string
@@ -47,7 +46,7 @@ const mmss = (t: number): string => {
 const SEG_STEPS = ['先看成品长啥样', '这个玩偶是什么', '需要的材料工具', '关键针法慢动作', '收尾与自检']
 
 // 把一节课时长按样例步骤等分成 segments（余数并入最后一段）
-function buildSegments(lessonId: string, dur: string, free?: boolean): SeedSegment[] {
+function buildSegments(lessonId: string, dur: string): SeedSegment[] {
   const total = parseDur(dur)
   const n = SEG_STEPS.length
   const base = Math.floor(total / n)
@@ -56,7 +55,6 @@ function buildSegments(lessonId: string, dur: string, free?: boolean): SeedSegme
     name,
     dur: mmss(i === n - 1 ? total - base * (n - 1) : base),
     videoFileId: null,
-    free: !!free,
   }))
 }
 
@@ -64,7 +62,6 @@ interface RawLesson {
   id: string
   name: string
   dur: string
-  free?: boolean
 }
 const CHAPTERS: { id: string; title: string; lessons: RawLesson[] }[] = [
   {
@@ -74,7 +71,7 @@ const CHAPTERS: { id: string; title: string; lessons: RawLesson[] }[] = [
       { id: 'l1', name: '认识你的钩织工具包', dur: '03:20' },
       { id: 'l2', name: '毛线与钩针怎么挑选', dur: '04:05' },
       { id: 'l3', name: '看懂图解里的符号', dur: '05:12' },
-      { id: 'l4', name: '起手 · 钩一个魔术环', dur: '06:40', free: true },
+      { id: 'l4', name: '起手 · 钩一个魔术环', dur: '06:40' },
     ],
   },
   {
@@ -122,7 +119,7 @@ export const SEED_COURSES: SeedCourse[] = [
         id: l.id,
         name: l.name,
         dur: l.dur,
-        segments: buildSegments(l.id, l.dur, l.free),
+        segments: buildSegments(l.id, l.dur),
       })),
     })),
   },

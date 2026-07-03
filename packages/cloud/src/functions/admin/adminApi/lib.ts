@@ -231,7 +231,6 @@ export function cleanCourse(c: any) {
           name: str(sg?.name, 60),
           dur: str(sg?.dur, 10),
           videoFileId: str(sg?.videoFileId, 300),
-          free: !!sg?.free,
         })),
       })),
     })),

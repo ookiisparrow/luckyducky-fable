@@ -49,8 +49,19 @@ export async function saveCourseDraft({ db, data }: Ctx) {
   return reply(200, { ok: true })
 }
 
-// 发布：草稿整体覆盖 courses（引用模型，老学员自动生效）
-export async function publishCourse({ db, data }: Ctx) {
+// 收集课程文档引用的全部 videoFileId（发布时孤儿视频 GC 用）
+function collectVideoIds(course: any): string[] {
+  const out: string[] = []
+  for (const ch of course?.chapters || [])
+    for (const l of ch.lessons || [])
+      for (const sg of l.segments || []) if (sg && sg.videoFileId) out.push(String(sg.videoFileId))
+  return out
+}
+
+// 发布：草稿整体覆盖 courses（引用模型，老学员自动生效）+ 孤儿视频 GC（深审 P3：每次替换视频都生成
+// 新 cloudPath、旧文件无人删 → 云存储只增不减）。GC 基线取「旧发布 − 新发布」：发布那刻旧发布不再引用
+// 的文件才删（草稿期替换不删——已发布课程可能仍在引用旧文件，删了学员播放即断）。fail-soft 不反噬发布。
+export async function publishCourse({ db, cloud, data }: Ctx) {
   const courseId = String(data.courseId || '')
   if (!courseId) return reply(400, { ok: false, error: 'NO_COURSE_ID' })
   const got = await db.collection('coursesDraft').doc(courseId).get().catch(() => null)
@@ -58,12 +69,16 @@ export async function publishCourse({ db, data }: Ctx) {
   const course = { ...got.data }
   delete course._id
   const coursesColl = db.collection('courses')
+  const prev = await coursesColl.doc(courseId).get().catch(() => null) // GC 基线：读旧发布
   await coursesColl
     .doc(courseId)
     .set({ data: course })
     .catch(async () => {
       await coursesColl.add({ data: { ...course, _id: courseId } })
     })
+  const keep = new Set(collectVideoIds(course))
+  const orphans = [...new Set(collectVideoIds(prev && prev.data))].filter((id) => !keep.has(id))
+  if (orphans.length) await cloud.deleteFile({ fileList: orphans }).catch(() => {})
   return reply(200, { ok: true })
 }
 

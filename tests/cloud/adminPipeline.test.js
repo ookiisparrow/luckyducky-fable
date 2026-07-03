@@ -97,6 +97,49 @@ describe('adminApi 课程草稿 / 卡片 / 内容 / 批次（特征锁）', () =
     expect(pub.chapters[0].lessons[0].name).toBe('课')
   })
 
+  it('publishCourse 孤儿视频 GC：再发布时删「旧发布有、新发布没有」的 videoFileId（替换/删段不留孤儿）', async () => {
+    const draft = (segs) => ({
+      id: 'c-gc',
+      title: '课',
+      chapters: [{ id: 'ch1', title: '章', lessons: [{ id: 'l1', name: '课时', dur: '03:00', segments: segs }] }],
+    })
+    // 首次发布：A + B（无旧发布 → 不删任何文件）
+    await call('saveCourseDraft', {
+      course: draft([
+        { id: 's1', name: '一', dur: '01:00', videoFileId: 'cloud://video-A' },
+        { id: 's2', name: '二', dur: '01:00', videoFileId: 'cloud://video-B' },
+      ]),
+    })
+    expect((await call('publishCourse', { courseId: 'c-gc' })).ok).toBe(true)
+    expect(control.deletedFiles()).toEqual([])
+    // 二次发布：s1 视频 A→C（替换）、s2 整段删除 → 旧发布的 A、B 成孤儿须删；C 不能误删
+    await call('saveCourseDraft', {
+      course: draft([{ id: 's1', name: '一', dur: '01:00', videoFileId: 'cloud://video-C' }]),
+    })
+    expect((await call('publishCourse', { courseId: 'c-gc' })).ok).toBe(true)
+    const deleted = control.deletedFiles()
+    expect(deleted).toContain('cloud://video-A')
+    expect(deleted).toContain('cloud://video-B')
+    expect(deleted).not.toContain('cloud://video-C')
+    const pub = control.dump('courses').find((c) => c._id === 'c-gc')
+    expect(pub.chapters[0].lessons[0].segments[0].videoFileId).toBe('cloud://video-C')
+  })
+
+  it('saveHelpVideos 孤儿视频 GC：保存时删「旧份有、新份没有」的 videoFileId', async () => {
+    await call('saveHelpVideos', {
+      items: [
+        { id: 'h1', title: '起手结', segments: [{ id: 's1', videoFileId: 'cloud://help-a' }, { id: 's2', videoFileId: 'cloud://help-b' }] },
+      ],
+    })
+    expect(control.deletedFiles()).toEqual([]) // 首存无旧份
+    await call('saveHelpVideos', {
+      items: [{ id: 'h1', title: '起手结', segments: [{ id: 's1', videoFileId: 'cloud://help-a' }] }],
+    })
+    const deleted = control.deletedFiles()
+    expect(deleted).toContain('cloud://help-b') // 被移除的小段视频删除
+    expect(deleted).not.toContain('cloud://help-a') // 仍在用的不动
+  })
+
   it('saveCard 双面 + 颜色校验 + 尺寸夹取；getCard 取回', async () => {
     await call('saveCard', {
       card: { productId: 'p1', name: '小鸭卡', front: { bg: 'nothex' }, sizeMM: { w: 9999, h: 10 } },

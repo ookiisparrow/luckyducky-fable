@@ -4,7 +4,7 @@
  * 灰色封面 + 课程标题 + 开始学习 + 章节折叠 + 课时状态；点课时进播放页。
  * 封面/缩略按项目约定用灰占位，真实媒体以后注入。
  */
-import { ref, computed } from 'vue'
+import { ref, computed, watch } from 'vue'
 import { onLoad, onShow, onPullDownRefresh } from '@dcloudio/uni-app'
 import Icon from '@/components/Icon.vue'
 import Skeleton from '@/components/Skeleton.vue'
@@ -54,16 +54,25 @@ const lessons = computed(() => store.allLessons)
 // 课程权限（规格 §四-4）：未确认激活 → 章节锁态；H5/App 回退演示模式全解锁
 const unlocked = computed(() => act.unlocked(course.value.id))
 
-// 默认展开第 1 章
-const open = ref({ c1: true })
+// 默认展开第一章——从 chapters[0] 动态取（深审 P2·守卫 catalog-chapter-fold-correct：原写死 { c1: true }，
+// 只有种子鸭课第一章 id 恰为 c1，控制台建的课章节 id 随机 → 进目录全折叠）。课程切换（第一章 id 变）即重置。
+const open = ref({})
+watch(
+  () => course.value.chapters[0] && course.value.chapters[0].id,
+  (first) => {
+    if (first) open.value = { [first]: true }
+  },
+  { immediate: true }
+)
 function toggleChapter(id) {
   open.value = { ...open.value, [id]: !open.value[id] }
 }
+// 展开高度按课时数动态算（深审 P2·同守卫）：写死 max-height 会截断超高章节（每章上限 50 节·约 9 节即溢出）。
+// 120px/节 为宽裕上界（行高 ~60px·名称换行也够），只影响折叠动画曲线、保证不裁内容。
+const chapMaxH = (c) => `${((c.lessons && c.lessons.length) || 0) * 120 + 24}px`
 
 // 学习进度是用户态，与课程内容分离（小程序端云端 segment 粒度，H5/App 回退样例）
 const prog = (l) => progress.ofLesson(course.value.id, l)
-// 试看标记落在 segment 级（规格 v2），目录按「任一段可试看」显示
-const lessonFree = (l) => (l.segments || []).some((s) => s.free)
 
 const doneCount = computed(() => lessons.value.filter((l) => prog(l).done).length)
 const total = computed(() => lessons.value.length)
@@ -172,7 +181,11 @@ function replayIntro() {
           <view class="vc-chap-chev"><Icon name="chevron-down" :size="20" /></view>
         </view>
 
-        <view class="vc-chap-body" :class="{ open: open[c.id] }">
+        <view
+          class="vc-chap-body"
+          :class="{ open: open[c.id] }"
+          :style="open[c.id] ? { maxHeight: chapMaxH(c) } : null"
+        >
           <view class="vc-chap-inner">
             <view
               v-for="(l, li) in c.lessons"
@@ -188,7 +201,6 @@ function replayIntro() {
                   <text class="vc-lesson-sub" :class="{ done: prog(l).done }">{{
                     lessonSub(l, li)
                   }}</text>
-                  <text v-if="lessonFree(l)" class="vc-free">试看</text>
                 </view>
               </view>
               <text class="vc-lesson-dur">{{ l.dur }}</text>
@@ -406,13 +418,12 @@ function replayIntro() {
 .vc-chapter.open .vc-chap-chev {
   transform: rotate(180deg);
 }
+/* 折叠动画：闭合态 max-height:0；展开高度由 :style 按课时数动态给（守卫 catalog-chapter-fold-correct：
+   写死数值会截断超高章节·深审 P2） */
 .vc-chap-body {
   max-height: 0;
   overflow: hidden;
   transition: max-height 0.3s ease;
-}
-.vc-chap-body.open {
-  max-height: 600px;
 }
 .vc-chap-inner {
   padding-bottom: 8px;
@@ -458,13 +469,6 @@ function replayIntro() {
 }
 .vc-lesson-sub.done {
   color: $purple;
-}
-.vc-free {
-  font-size: 11px;
-  color: $purple;
-  border: 0.5px solid $purple-line;
-  border-radius: 4px;
-  padding: 1px 6px;
 }
 .vc-lesson-dur {
   flex: 0 0 auto;

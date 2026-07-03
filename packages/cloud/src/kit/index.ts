@@ -20,7 +20,7 @@ export { wxpaySign, parseTradeBill, fetchTradeBill, normalizePem } from './wxpay
 export type { WxFetch, SignOpts, BillRow, FetchBillOpts } from './wxpay'
 export { uploadShippingToWx, wxDeliveryCode } from './shipping'
 export type { ShipUpload, ShipResult } from './shipping'
-export { getTempUrl } from './storage'
+export { getTempUrl, getTempUrls } from './storage'
 export { pageParams, pageQuery } from './paging'
 export type { PageReq, Paged } from './paging'
 export { throttleLocked, throttleFail, throttleReset, throttleHit, withRateLimit } from './throttle'

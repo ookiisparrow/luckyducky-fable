@@ -3,7 +3,9 @@ import { control } from 'wx-server-sdk'
 import { main as getCourses } from '../../packages/cloud/src/functions/learning/getCourses'
 import { main as getPlaybackUrl } from '../../packages/cloud/src/functions/learning/getPlaybackUrl'
 
-// 课程视频服务端保护（审计 P1）：目录不漏 fileID；播放地址须 free 或已确认进课。
+// 课程视频服务端保护（审计 P1）：目录不漏 fileID；播放地址一律须本人已确认进课。
+// 试看（segment.free）已整条撤除（用户拍板 2026-07-03·守卫 free-trial-extinct）：
+// 不再有「免费段登录即看」通道；旧库文档残留的 free:true 也不放行（stale 字段不构成授权）。
 const COURSE = {
   _id: 'course-duck',
   id: 'course-duck',
@@ -19,9 +21,10 @@ const COURSE = {
           name: 'lesson',
           dur: '03:20',
           segments: [
-            { id: 'l1-s1', name: '免费段', dur: '00:40', free: true, videoFileId: 'cloud://free.mp4' },
-            { id: 'l1-s2', name: '付费段', dur: '00:40', free: false, videoFileId: 'cloud://paid.mp4' },
-            { id: 'l1-s3', name: '未剪段', dur: '00:40', free: false, videoFileId: null },
+            // free:true = 模拟撤除前发布的旧库残留字段——授权闸必须无视它
+            { id: 'l1-s1', name: '旧免费段', dur: '00:40', free: true, videoFileId: 'cloud://free.mp4' },
+            { id: 'l1-s2', name: '正常段', dur: '00:40', videoFileId: 'cloud://paid.mp4' },
+            { id: 'l1-s3', name: '未剪段', dur: '00:40', videoFileId: null },
           ],
         },
       ],
@@ -36,40 +39,39 @@ beforeEach(() => {
 })
 
 describe('getCourses 目录不漏 videoFileId（审计 P1）', () => {
-  it('段只返回 hasVideo/free，不含 videoFileId；全返回无 cloud:// fileID', async () => {
+  it('段只返回 id/name/dur/hasVideo，不含 videoFileId 也不含 free；全返回无 cloud:// fileID', async () => {
     const res = await getCourses()
     const segs = res.list[0].chapters[0].lessons[0].segments
-    expect(segs[0]).toMatchObject({ id: 'l1-s1', free: true, hasVideo: true })
+    expect(segs[0]).toMatchObject({ id: 'l1-s1', hasVideo: true })
     expect(segs[0].videoFileId).toBeUndefined()
-    expect(segs[2]).toMatchObject({ free: false, hasVideo: false }) // 未剪段
+    expect(segs[0].free).toBeUndefined() // 试看已撤除：旧库残留 free 不再出公开目录
+    expect(segs[2]).toMatchObject({ hasVideo: false }) // 未剪段
     expect(JSON.stringify(res)).not.toContain('cloud://')
   })
 })
 
-describe('getPlaybackUrl 鉴权（审计 P1）', () => {
-  it('免费段：任何登录用户可取地址', async () => {
-    const res = await getPlaybackUrl({ courseId: 'course-duck', segmentId: 'l1-s1' })
-    expect(res.ok).toBe(true)
-    expect(res.url).toContain('tmp')
-  })
-
-  it('付费段 + 未确认进课：NOT_ENTITLED（白嫖被挡）', async () => {
+describe('getPlaybackUrl 鉴权（审计 P1·试看撤除后全段需进课）', () => {
+  it('未确认进课：任何段一律 NOT_ENTITLED（含旧库残留 free:true 的段·stale 字段不构成授权）', async () => {
+    expect((await getPlaybackUrl({ courseId: 'course-duck', segmentId: 'l1-s1' })).error).toBe('NOT_ENTITLED')
     expect((await getPlaybackUrl({ courseId: 'course-duck', segmentId: 'l1-s2' })).error).toBe('NOT_ENTITLED')
   })
 
-  it('付费段 + 已确认进课：放行发地址', async () => {
+  it('已确认进课：放行发地址（含旧 free 段）', async () => {
     control.seed('activations', [{ _openid: 'user-A', courseId: 'course-duck', code: 'X', enteredAt: Date.now() }])
-    const res = await getPlaybackUrl({ courseId: 'course-duck', segmentId: 'l1-s2' })
-    expect(res.ok).toBe(true)
-    expect(res.url).toBeTruthy()
+    const r1 = await getPlaybackUrl({ courseId: 'course-duck', segmentId: 'l1-s1' })
+    expect(r1.ok).toBe(true)
+    expect(r1.url).toContain('tmp')
+    const r2 = await getPlaybackUrl({ courseId: 'course-duck', segmentId: 'l1-s2' })
+    expect(r2.ok).toBe(true)
+    expect(r2.url).toBeTruthy()
   })
 
-  it('付费段 + 仅激活未确认（enteredAt=null）：仍 NOT_ENTITLED', async () => {
+  it('仅激活未确认（enteredAt=null）：仍 NOT_ENTITLED', async () => {
     control.seed('activations', [{ _openid: 'user-A', courseId: 'course-duck', code: 'X', enteredAt: null }])
     expect((await getPlaybackUrl({ courseId: 'course-duck', segmentId: 'l1-s2' })).error).toBe('NOT_ENTITLED')
   })
 
-  it('未剪段（videoFileId 空）：url=null', async () => {
+  it('未剪段（videoFileId 空）：已进课取 url=null', async () => {
     control.seed('activations', [{ _openid: 'user-A', courseId: 'course-duck', code: 'X', enteredAt: Date.now() }])
     const res = await getPlaybackUrl({ courseId: 'course-duck', segmentId: 'l1-s3' })
     expect(res.ok).toBe(true)

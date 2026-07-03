@@ -65,7 +65,7 @@ export async function listHelpVideos({ db }: Ctx) {
   return reply(200, { ok: true, items: (got?.data as any)?.items || [] })
 }
 
-export async function saveHelpVideos({ db, data }: Ctx) {
+export async function saveHelpVideos({ db, cloud, data }: Ctx) {
   // 白名单净化（两级：主题→小段）：主题 id/title/sub/desc 限长；小段 id/name/dur/videoFileId 限长。
   // 主题封顶 20、每主题小段封顶 20 防滥用；空小段（无视频）剔除；空主题（无标题且无任何带视频小段）剔除。
   const raw = Array.isArray(data.items) ? data.items : []
@@ -93,11 +93,19 @@ export async function saveHelpVideos({ db, data }: Ctx) {
   const doc = { items, updatedAt: Date.now() }
   await ensure(db, 'content')
   const coll = db.collection('content')
+  const prev = await coll.doc('helpVideos').get().catch(() => null) // GC 基线：读旧份
   await coll
     .doc('helpVideos')
     .set({ data: doc })
     .catch(async () => {
       await coll.add({ data: { ...doc, _id: 'helpVideos' } })
     })
+  // 孤儿视频 GC（深审 P3·同 publishCourse 思路）：删「旧份有、新份没有」的 videoFileId；fail-soft 不反噬保存
+  const keep = new Set(items.flatMap((it: any) => it.segments.map((sg: any) => String(sg.videoFileId))))
+  const prevIds = (((prev && (prev.data as any)) || {}).items || []).flatMap((it: any) =>
+    ((it.segments || []) as any[]).map((sg: any) => String(sg.videoFileId || '')).filter(Boolean)
+  )
+  const orphans = [...new Set(prevIds)].filter((id) => !keep.has(id))
+  if (orphans.length) await cloud.deleteFile({ fileList: orphans }).catch(() => {})
   return reply(200, { ok: true })
 }

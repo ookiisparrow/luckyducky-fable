@@ -42,7 +42,9 @@ async function init() {
     course.value = c || {
       id: courseId,
       title: props.product.name ? props.product.name + ' · 配套教程' : '新课程',
-      sort: 100,
+      // sort 取创建时刻（深审 P3）：原恒 100，多课并列时顺序靠 _id 隐式、不可控；时间戳保证互不相同、
+      // 新课稳定排最后（getCourses 按 sort 升序·种子鸭课 0 恒最前）。课程排序管理 UI 暂无需求、不建。
+      sort: Date.now(),
       chapters: [],
     }
   } catch (e) {
@@ -81,7 +83,7 @@ function addLesson(ch) {
   ch.lessons.push({ id: 'l' + rid(), name: '新课时', dur: '', segments: [] })
 }
 function addSegment(l) {
-  l.segments.push({ id: 's' + rid(), name: `第 ${l.segments.length + 1} 段`, dur: '', videoFileId: '', free: false })
+  l.segments.push({ id: 's' + rid(), name: `第 ${l.segments.length + 1} 段`, dur: '', videoFileId: '' })
 }
 async function removeAt(arr, i, label) {
   if (await confirmDialog({ title: '删除', message: `删除${label}？该层级下的内容会一并移除。`, confirmText: '删除', danger: true }))
@@ -170,7 +172,7 @@ async function pickVideosBatch(e, l) {
     for (const item of plan) {
       let sg = l.segments[item.segIndex]
       if (!sg) {
-        sg = { id: 's' + rid(), name: item.segName, dur: '', videoFileId: '', free: false }
+        sg = { id: 's' + rid(), name: item.segName, dur: '', videoFileId: '' }
         l.segments.push(sg)
       }
       try {
@@ -324,9 +326,6 @@ async function doPublish() {
               </label>
             </span>
 
-            <label class="free" title="未激活学员可试看本段">
-              <input v-model="sg.free" type="checkbox" /> 试看
-            </label>
             <button class="mini del" @click="removeAt(l.segments, si, '本段')">×</button>
           </div>
 
@@ -551,14 +550,6 @@ h2 {
   cursor: pointer;
   margin-left: 4px;
   text-decoration: underline;
-}
-.free {
-  flex: 0 0 auto;
-  font-size: 11.5px;
-  color: var(--content-2);
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
 }
 .mini {
   border: none;
