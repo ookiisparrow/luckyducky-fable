@@ -28,6 +28,15 @@ export function currentUser() {
     return ''
   }
 }
+// 登录回包的能力位（RBAC·与后端 ACTION_CAPS 同源）：侧边栏/路由按此隐藏无权面（后端仍 fail-closed 兜底）
+export function currentCaps() {
+  try {
+    const c = JSON.parse(localStorage.getItem(AUTH_KEY))?.caps
+    return Array.isArray(c) ? c : []
+  } catch {
+    return []
+  }
+}
 export function logout() {
   localStorage.removeItem(AUTH_KEY)
 }
@@ -65,11 +74,16 @@ export async function login(username, password) {
     })
     const r = await res.json()
     if (!r.ok) {
-      const msg = { KEY_TOO_SHORT: '口令至少 6 位', BAD_KEY: '口令不正确' }[r.error] || '登录失败'
+      const msg = { KEY_TOO_SHORT: '口令至少 6 位', BAD_KEY: '口令不正确', ACCOUNT_DISABLED: '账号已停用' }[r.error] || '登录失败'
       return { ok: false, error: msg }
     }
-    // 口令留在本机用于后续请求签发（单管理员 v1；升级账号体系后移除）
-    localStorage.setItem(AUTH_KEY, JSON.stringify({ username, key: password, at: Date.now() }))
+    // 只存服务端签发的会话令牌（深审 P1·守卫 admin-session-token-not-password）：口令原文不落 localStorage
+    // ——口令是可复用主凭证，落盘即被同源脚本/共用机器读走；令牌 12h 自灭、停号即拒。无令牌＝后端过旧，拒登。
+    if (!r.sessionToken) return { ok: false, error: '后端未签发会话令牌（版本过旧），请先部署 adminApi' }
+    localStorage.setItem(
+      AUTH_KEY,
+      JSON.stringify({ username, key: r.sessionToken, caps: r.caps || [], operator: r.operator || username, at: Date.now() })
+    )
     return { ok: true, bootstrapped: r.bootstrapped }
   } catch {
     return { ok: false, error: '连不上服务，请检查网络' }

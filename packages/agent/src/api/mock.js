@@ -25,7 +25,8 @@ export function login(key) {
   if (!key || String(key).length < MIN_KEY) return { ok: false, error: 'KEY_TOO_SHORT' }
   // mock：任意 ≥6 位口令即视为一名外包坐席，权限＝外包最小权（§1 定稿·收窄后仅 agent:handle·同 ROLES.outsourced）。
   _agentId = 'agent_demo'
-  return { ok: true, operator: '外包坐席·演示', caps: ['agent:handle'] }
+  // sessionToken 与真后端同形（深审 P1·前端一律只存令牌不存口令原文）
+  return { ok: true, operator: '外包坐席·演示', caps: ['agent:handle'], sessionToken: 'mock-session-token' }
 }
 // 刷新页面后 agentApi 用 localStorage 恢复登录态时同步 mock 内部 agentId（保 claim 归属一致）。
 export function resume(agentId) {

@@ -4,8 +4,8 @@ import { createHash } from 'node:crypto'
 import { loginByWecomCode } from '../../packages/cloud/src/functions/admin/adminApi/actions/wecomLogin'
 import { checkKey } from '../../packages/cloud/src/functions/admin/adminApi/lib'
 
-// M⑦ 车道 B·企微 OAuth 免登（承面C 增强）：code→userid→查绑定账号→签发 session 令牌；
-// checkKey 认令牌（口令全未命中→resolveWecomSession fallback）。守卫 wecom-login-gated 的行为侧锁（fail-closed·根因#3）。
+// M⑦ 车道 B·企微 OAuth 免登（承面C 增强）：code→userid→查绑定账号→签发 session 令牌（issueSession 单源·
+// 口令登录同款·深审 P1）；checkKey 认令牌（口令全未命中→会话解析 fallback）。守卫 wecom-login-gated 的行为侧锁（fail-closed·根因#3）。
 const db = cloud.database()
 const ctx = (data) => ({ db, data })
 const parse = (res) => JSON.parse(res.body)
@@ -46,8 +46,11 @@ describe('loginByWecomCode 免登签发（fail-closed）', () => {
     expect(r.operator).toBe('客服-小李')
     expect(r.agentId).toBe('agent:1')
     const doc = control.dump('adminConfig').find((a) => a._id === 'agent:1')
-    expect(doc.wecomSessionHash).toBe(sha(r.sessionToken)) // 存 sha·不存明文
-    expect(doc.wecomSessionExp).toBeGreaterThan(Date.now())
+    // 存 sessions 数组（口令登录同款单源 issueSession·深审 P1）：sha 入库·不存明文
+    expect(doc.sessions).toHaveLength(1)
+    expect(doc.sessions[0].hash).toBe(sha(r.sessionToken))
+    expect(doc.sessions[0].exp).toBeGreaterThan(Date.now())
+    expect(doc.sessions[0].via).toBe('wecom')
   })
 
   it('签发的令牌可经 checkKey 认（后续请求鉴权·免口令）', async () => {
@@ -91,7 +94,7 @@ describe('loginByWecomCode 免登签发（fail-closed）', () => {
     stubOAuth('LiSi')
     const r = parse(await loginByWecomCode(ctx({ code: 'C' })))
     expect(r.error).toBe('ACCOUNT_DISABLED')
-    expect(control.dump('adminConfig').find((a) => a._id === 'agent:1').wecomSessionHash).toBeUndefined() // 拒登不签发
+    expect(control.dump('adminConfig').find((a) => a._id === 'agent:1').sessions).toBeUndefined() // 拒登不签发
   })
 })
 
@@ -101,8 +104,9 @@ describe('checkKey 免登令牌分支 fail-closed', () => {
     seedAgent('LiSi')
     stubOAuth('LiSi')
     const token = parse(await loginByWecomCode(ctx({ code: 'C' }))).sessionToken
-    // 手动把过期戳改到过去
-    await db.collection('adminConfig').doc('agent:1').update({ data: { wecomSessionExp: Date.now() - 1000 } })
+    // 手动把过期戳改到过去（sessions 数组内该条目的 exp）
+    const stale = [{ hash: sha(token), exp: Date.now() - 1000, via: 'wecom', at: Date.now() }]
+    await db.collection('adminConfig').doc('agent:1').update({ data: { sessions: stale } })
     expect((await checkKey(db, token, false)).error).toBe('SESSION_EXPIRED')
   })
 
@@ -115,7 +119,7 @@ describe('checkKey 免登令牌分支 fail-closed', () => {
     expect((await checkKey(db, token, false)).error).toBe('ACCOUNT_DISABLED')
   })
 
-  it('乱造令牌 → BAD_KEY（撞不上任何 wecomSessionHash）', async () => {
+  it('乱造令牌 → BAD_KEY（撞不上任何会话 hash）', async () => {
     seedAgent('LiSi')
     expect((await checkKey(db, 'a'.repeat(64), false)).error).toBe('BAD_KEY')
   })

@@ -97,16 +97,44 @@ export const ROLES: Record<string, string[]> = {
 }
 export const capsForRole = (role: string): string[] => ROLES[role] || []
 
-// M⑦ 企微免登会话令牌解析（车道 B·根因#3 fail-closed）：key=loginByWecomCode 签发的 sessionToken（非口令），
-// 其 sha 存账号 doc.wecomSessionHash + 过期戳 wecomSessionExp。命中且未过期未停用 → 解析身份（同口令分支形状：
-// 超管 auth→agentId 'admin'·外包→_id）；否则 BAD_KEY / SESSION_EXPIRED / ACCOUNT_DISABLED（fail-closed·不放行）。
-// hash 已是 sha(key)——免登令牌 sha 撞不上口令 keyHash，故只在口令全未命中后 fallback 到此。
-async function resolveWecomSession(db: any, hash: string) {
-  const s = await db.collection('adminConfig').where({ wecomSessionHash: hash }).limit(1).get().catch(() => ({ data: [] }))
-  const a = (s && s.data && s.data[0]) || null
+// 会话令牌（深审 P1·根因#3 口令不落盘）：口令登录与企微免登共用一套签发/解析——登录成功签发高熵令牌，
+// 前端只存令牌不存口令原文（口令是可复用主凭证，落在外包机器上=失守；令牌 12h 自灭 + 停号即拒）。
+// 存储形状：账号 doc.sessions = [{ hash, exp, via, at }]（sha 入库·绝不存明文）；数组容多设备
+// （商户同时登控制台+坐席台不互踢），签发时剪过期、超容剪最旧。守卫 admin-session-token-not-password。
+export const SESSION_TTL_MS = 12 * 60 * 60 * 1000 // 12h·一个工作班次；过期重登（企微内静默 OAuth 无感）
+const SESSION_MAX = 8 // 单账号并存会话上限（多设备够用·防 sessions 数组无界膨胀）
+
+/** 签发会话令牌：写进账号 doc.sessions（剪过期/超容），返回令牌明文（只此一次·不再可取回）。 */
+export async function issueSession(db: any, docId: string, via: 'pwd' | 'wecom'): Promise<string> {
+  const token = crypto.randomBytes(32).toString('hex')
+  const now = Date.now()
+  const got = await db.collection('adminConfig').doc(docId).get().catch(() => null)
+  const prev: any[] = (got && got.data && Array.isArray(got.data.sessions) ? got.data.sessions : [])
+    .filter((s: any) => s && typeof s.exp === 'number' && s.exp > now) // 剪过期
+    .slice(-(SESSION_MAX - 1)) // 超容剪最旧（保留末 N-1 + 新签 1）
+  const sessions = [...prev, { hash: sha(token), exp: now + SESSION_TTL_MS, via, at: now }]
+  await db.collection('adminConfig').doc(docId).update({ data: { sessions, updatedAt: now } })
+  return token
+}
+
+// 会话令牌解析（fail-closed）：key=登录签发的 sessionToken（非口令）。在账号 doc.sessions 里命中 sha 且
+// 未过期未停用 → 解析身份（同口令分支形状：超管 auth→agentId 'admin'·外包→_id）；否则 BAD_KEY /
+// SESSION_EXPIRED / ACCOUNT_DISABLED（不放行）。账号 doc 个位数（bounded 扫描·不依赖数组嵌套查询语义），
+// 令牌 sha 撞不上口令 keyHash，故只在口令全未命中后 fallback 到此。
+async function resolveSession(db: any, hash: string) {
+  const _ = db.command
+  const s = await db
+    .collection('adminConfig')
+    .where({ sessions: _.exists(true) })
+    .limit(50)
+    .get()
+    .catch(() => ({ data: [] }))
+  const rows: any[] = (s && s.data) || []
+  const a = rows.find((acc) => Array.isArray(acc.sessions) && acc.sessions.some((x: any) => x && x.hash === hash)) || null
   if (!a) return { ok: false as const, error: 'BAD_KEY' }
   if (a.disabled) return { ok: false as const, error: 'ACCOUNT_DISABLED' }
-  if (!a.wecomSessionExp || a.wecomSessionExp < Date.now()) return { ok: false as const, error: 'SESSION_EXPIRED' }
+  const hit = a.sessions.find((x: any) => x && x.hash === hash)
+  if (!hit || typeof hit.exp !== 'number' || hit.exp < Date.now()) return { ok: false as const, error: 'SESSION_EXPIRED' }
   const isSuper = a._id === 'auth'
   return {
     ok: true as const,
@@ -141,7 +169,7 @@ export async function checkKey(db: any, key: any, bootstrap: boolean) {
   // ② B5.2 多账号：非超管·按 keyHash 查 agent/外包 账号 doc（均有 role；disabled 即停）
   const hit = await db.collection('adminConfig').where({ keyHash: hash }).limit(1).get().catch(() => ({ data: [] }))
   const acct = (hit && hit.data && hit.data[0]) || null
-  if (!acct) return resolveWecomSession(db, hash) // 口令全未命中 → fallback 企微免登令牌（M⑦ 车道 B）
+  if (!acct) return resolveSession(db, hash) // 口令全未命中 → fallback 会话令牌（口令登录/企微免登共用·深审 P1）
   if (acct.disabled) return { ok: false, error: 'ACCOUNT_DISABLED' }
   // 外包/坐席 agentId＝账号 _id（承面C claim 绑定/分配 scope/agentState 键·§1.5·根因#3 取认证主体非前端）
   return { ok: true, operator: acct.name || acct._id, agentId: acct._id, caps: acct.role ? capsForRole(acct.role) : Array.isArray(acct.caps) ? acct.caps : [] }

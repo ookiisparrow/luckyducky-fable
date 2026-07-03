@@ -3741,6 +3741,39 @@ export const repoChecks = [
       return bad
     },
   },
+  {
+    // 控制台/坐席台凭证不落盘（深审 P1·根因#3 信任边界）：口令是可复用主凭证——明文写 localStorage 且每请求
+    // 回传，落在外包机器/共用浏览器＝失守。登录后前端只准存服务端签发的会话令牌（12h 自灭·停号即拒·sha 入库），
+    // 后端 login 必经 issueSession 签发（否则前端被迫回退存口令）。行为侧由 admin-session-issued（测试）锁。
+    id: 'admin-session-token-not-password',
+    roots: ['#3'],
+    desc: '控制台/坐席台前端登录只存服务端签发 sessionToken、口令原文不写 localStorage（深审 P1·#3）；adminApi login 必经 issueSession 签发令牌',
+    run() {
+      const bad = []
+      for (const rel of ['packages/admin/src/api/cloud.js', 'packages/agent/src/api/agentApi.js']) {
+        const abs = join(ROOT, rel)
+        if (!existsSync(abs)) {
+          bad.push(`${rel} 缺失（凭证不落盘守卫无从核起·#3）`)
+          continue
+        }
+        const src = readFileSync(abs, 'utf8')
+        // 只盯「持久化点」：persist(...) / localStorage.setItem(...) 的实参窗口内出现口令即红。
+        // 登录请求上送一次口令（body 里 key: password）是协议必需、不落盘，放行。
+        for (const m of src.matchAll(/(?:\bpersist\s*\(|localStorage\.setItem\s*\()/g)) {
+          const windowSrc = src.slice(m.index, m.index + 200)
+          if (/(?:\bkey|token)\s*:\s*password\b/.test(windowSrc))
+            bad.push(`${rel} 把口令原文写进持久化存储——只准存服务端签发的 sessionToken（深审 P1·#3）`)
+        }
+        if (!src.includes('sessionToken'))
+          bad.push(`${rel} 未使用 sessionToken——登录须存服务端签发的会话令牌、不存口令（深审 P1·#3）`)
+      }
+      const idxAbs = join(ROOT, 'packages/cloud/src/functions/admin/adminApi/index.ts')
+      const idxSrc = existsSync(idxAbs) ? readFileSync(idxAbs, 'utf8') : ''
+      if (!/issueSession\s*\(/.test(idxSrc))
+        bad.push('adminApi/index.ts login 未经 issueSession 签发会话令牌——前端将被迫存口令原文（深审 P1·#3）')
+      return bad
+    },
+  },
 ]
 
 // ============== 逐文件规则（fileRules）==============
@@ -3910,6 +3943,10 @@ export const typeAndTestGuards = [
   // 账号停用/无缓存令牌 → 一律拒、绝不签发 session 令牌；checkKey 认令牌时过期/停用 → 拒（不放行）。签发的令牌
   // 存 sha 不存明文·令牌不持密钥（复用缓存令牌·根因#3）。reverseTest 锁此 fail-closed 组合行为。
   { id: 'wecom-login-gated', mechanism: 'test', roots: ['#3'], reverseTest: 'tests/cloud/wecomLogin.test.js' },
+  // 口令登录签发会话令牌（深审 P1·根因#3 口令不落盘）：login 成功必随包返 sessionToken（sha 入 sessions 数组·
+  // 绝不存明文）；令牌可作后续请求 key（checkKey 会话解析）；过期/停号 fail-closed 拒；多设备并存（sessions
+  // 数组·剪过期/超容剪最旧）；口令作 key 兼容不破（旧已部署前端）。reverseTest 锁此组合行为。
+  { id: 'admin-session-issued', mechanism: 'test', roots: ['#3'], reverseTest: 'tests/cloud/adminSession.test.js' },
 ]
 
 const SRC_DIRS = ['packages', 'cloudfunctions', 'scripts']

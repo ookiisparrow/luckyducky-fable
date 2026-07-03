@@ -18,7 +18,7 @@ export const useMock = !API_BASE || FORCE_MOCK
 
 const AUTH_KEY = 'ld_agent_auth'
 
-// ── 会话（登录态存本机·同 admin 单口令 v1；真接口下 key 用于每次请求签发）─────
+// ── 会话（登录态存本机·key=服务端签发的会话令牌，非口令原文·深审 P1；每次请求带它鉴权）─────
 export function isLoggedIn() {
   return !!localStorage.getItem(AUTH_KEY)
 }
@@ -85,8 +85,11 @@ export async function login(password) {
   if (!r.ok) return { ok: false, error: LOGIN_ERR[r.error] || '登录失败' }
   // 外包最小权闸（§1 定稿）：无坐席台能力位（agent:handle / '*'）不得进工作台。
   if (!hasAgentCap(r.caps)) return { ok: false, error: '该账号无坐席台权限（需 agent:handle），请联系商户开通' }
+  // 只存服务端签发的会话令牌（深审 P1·守卫 admin-session-token-not-password）：口令原文不落 localStorage
+  // ——外包机器商户不可控，口令落盘即失守；令牌 12h 自灭、停号即拒。无令牌＝后端过旧，拒登（fail-closed）。
+  if (!r.sessionToken) return { ok: false, error: '后端未签发会话令牌（版本过旧），请联系商户部署' }
   // agentId：真后端由登录态派生（服务端不信前端传身份·§1.5）；mock 下同用 operator 作 agentId。
-  persist({ operator: r.operator || '坐席', caps: r.caps, key: password })
+  persist({ operator: r.operator || '坐席', caps: r.caps, key: r.sessionToken })
   if (useMock) mock.resume('agent_demo')
   return { ok: true }
 }

@@ -1,6 +1,6 @@
 import cloud from 'wx-server-sdk'
 import { getDb, throttleLocked, throttleFail, throttleReset, recordAudit, shouldAudit } from '../../../kit'
-import { reply, ensure, checkKey, type Ctx } from './lib'
+import { reply, ensure, checkKey, issueSession, type Ctx } from './lib'
 import * as products from './actions/products'
 import * as courses from './actions/courses'
 import * as cards from './actions/cards'
@@ -240,9 +240,16 @@ export const main = async (event: any) => {
 
   if (action === 'login') {
     const res = await checkKey(db, key, true)
-    if (res.ok) await throttleReset(tkey) // 成功只清 per-IP；全局计数靠滚动窗口自然衰减（不被单次成功抹平·防分布式爆破信号丢失）
-    else await throttleFailBoth(tkey)
-    return reply(res.ok ? 200 : 401, res)
+    if (!res.ok) {
+      await throttleFailBoth(tkey)
+      return reply(401, res)
+    }
+    await throttleReset(tkey) // 成功只清 per-IP；全局计数靠滚动窗口自然衰减（不被单次成功抹平·防分布式爆破信号丢失）
+    // 签发会话令牌（深审 P1·根因#3 口令不落盘）：前端此后只存/只发令牌，不再把口令原文写 localStorage。
+    // 口令作 key 的旧请求仍被 checkKey 认（旧已部署前端兼容）；签发失败如实返空、前端 fail-closed 拒登。
+    const docId = (res as any).agentId === 'admin' ? 'auth' : String((res as any).agentId || 'auth')
+    const sessionToken = await issueSession(db, docId, 'pwd').catch(() => '')
+    return reply(200, { ...res, sessionToken })
   }
 
   // M⑦ 车道B·企微 OAuth 免登（pre-auth·坐席无口令·同 login 受频控防刷 code）：换 userid→查绑定账号→签发 session 令牌。
