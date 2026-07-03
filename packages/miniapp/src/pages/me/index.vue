@@ -29,6 +29,7 @@ import { useProgressStore } from '@/store/progress.js'
 import { openCustomerService } from '@/utils/customerService.js'
 import { useActivationStore } from '@/store/activation.js'
 import { mmss } from '@/utils/format.js'
+import { logger } from '@/utils/logger.js'
 import { ensureLogin } from '@/composables/useAuthGate.js'
 import { useExitGuard } from '@/composables/useExitGuard.js'
 
@@ -39,6 +40,23 @@ const progress = useProgressStore()
 const act = useActivationStore()
 // 返回拦截：第一次返回弹「再按一次退出」，2s 内再返回才真退出（配模板 scroll-view + page-container）
 const { backGuard, onBackGuard } = useExitGuard()
+
+// 版本自查（真机测试用，非业务信息）：manifest.json 的 versionName/versionCode 与小程序后台
+// 真实发布版本不同步（无 bump 惯例，曾撞见真机扫码走线上旧版 v0.9.4、很多修复已合并未发布），
+// 不能作为自查依据——改读微信平台真实值 wx.getAccountInfoSync()。
+// envVersion：release=正式版/trial=体验版/develop=开发版；仅 release 下 version 才保证有值
+// （微信特性），trial/develop 常为空字符串——用 envVersion 兜底展示，不留空白误导。
+const buildVersion = ref('')
+// #ifdef MP-WEIXIN
+try {
+  const { miniProgram } = wx.getAccountInfoSync()
+  const ENV_LABEL = { release: '正式版', trial: '体验版', develop: '开发版' }
+  const envLabel = ENV_LABEL[miniProgram.envVersion] || miniProgram.envVersion
+  buildVersion.value = miniProgram.version ? `${miniProgram.version}（${envLabel}）` : envLabel
+} catch (e) {
+  logger.warn('me', 'getAccountInfoSync 失败', e)
+}
+// #endif
 
 // 角标 = 各状态真实订单数（只标可办理的三态，已完成/售后不标）
 // 键＝九宫格 tab 标识（UI·同形异义勿混）；值＝订单真实状态，走 shared 单源
@@ -225,6 +243,13 @@ function goLogin() {
             <view class="my-row-chev"><Icon name="chevron-right" :size="18" /></view>
           </view>
         </view>
+
+        <!-- 版本自查（真机测试用，非业务信息）：读微信平台真实发布版本，manifest 版本号不可信 -->
+        <!-- #ifdef MP-WEIXIN -->
+        <view v-if="buildVersion" class="my-version">
+          <text>当前版本 {{ buildVersion }}</text>
+        </view>
+        <!-- #endif -->
       </view>
 
       <view class="my-pad-bottom"></view>
@@ -266,6 +291,14 @@ function goLogin() {
 }
 .my-pad-bottom {
   height: 112px;
+}
+.my-version {
+  text-align: center;
+  padding-top: 2px;
+}
+.my-version text {
+  font-size: 12px;
+  color: $purple-meta;
 }
 
 .my-sec-head {
