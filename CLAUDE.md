@@ -1,15 +1,16 @@
-# Lucky Ducky（小棉鸭）— 生产源仓
+# Lucky Ducky（小棉鸭）— 重构线仓（fable）
 
-> ## 本仓身份：生产迭代源（v0.9.1 起）
+> ## 本仓身份：重构线（自 2026-07-03 起）
 >
-> 本仓 = Lucky Ducky 的**生产源**。经「**高纬度自动化完全重构**」（四主张 T1–T4 + 元模式治理 + round-2 体检）后，2026-06-14 用户拍板 **v0.9.1 转正**：云环境 `cloudbase-d4gcssqbv06865479` 从此从本仓迭代，云函数（`packages/cloud`）+ 前端（`packages/miniapp`/`packages/admin`）生产版均出自本仓。
+> 本仓 = Lucky Ducky 的**重构线**，2026-07-03 从生产源仓 `luckyducky-next`（GitHub `ookiisparrow/luckyducky-next`，HEAD `ff02afb`）完整复制而来（git 历史保留）。**云环境与 next 共用同一个 `cloudbase-d4gcssqbv06865479`**——不新建、不隔离，沿用上一次「luckyducky-miniprogram → luckyducky-next」切换验证过的路数（见 `docs/archive/切换runbook.md`）；因此本仓对该环境的部署/建表/删表等改动是**真实生效**的，不是隔离沙盒，操作前务必想清楚。
 >
-> - **旧生产仓退役**：`/Users/sparrow/luckyducky-miniprogram`（GitHub `ookiisparrow/luckyducky-miniprogram`）= 切换前 v0.9 基线，**仅作回滚用、不再迭代**（回滚预案见 `docs/archive/切换runbook.md` §五）。
-> - **接管 tcb·部署闸**：本仓直管 tcb 部署。`scripts/guard-deploy.mjs`（生产仓模型，用户拍板 A）对**敏感函数**（钱/权限/状态）的 tcb 写部署 + 批量 `DEPLOY_ALLOWED=1 deploy-fns` 二次确认（`ask`），读类 tcb（invoke/log/list）与单个非敏感函数部署放行；只认真正的 tcb 命令、提交信息里的字样不拦。人在自己终端不经本 hook。本地验证靠 vitest 内存桩 + H5 回退 + 双端 build，部署前 `npm run check` 全绿 + `node scripts/preflight.mjs`。
-> - **8 件控制台正册资产**（git 外，勿动）：微信支付连接器 `wxpay_33nb7su`、支付工作流 `sywxzfapifqzf_nncvqss2`、退款工作流 `kbgzl_n8gojr3a`、paynotify/refundnotify 及其 script1 转发节点——副本正册在本仓 `console-assets/`。
-> - **治理脊柱**：`docs/元模式.md`（治理框架 canonical：痛→守卫→反向自检循环，§A 可移植 / §B 本仓绑定）+ `docs/根因账本.md`（13 类病根：病史→本质→根治→绝迹证明）+ `docs/现状与路线.md`（第二次重构 live 地图）+ `docs/archive/切换runbook.md`（切换/回滚）。执行纪律：每批一个 squash 提交上 main、`npm run check` 全绿才推进、commit 报净化指标并标注根治病根；批次结论记 `docs/重构日志.md`。
+> - **next 仓冻结**：`/Users/sparrow/luckyducky-next`（GitHub `ookiisparrow/luckyducky-next`）自本仓建立起**只做紧急止血修复，不再迭代新功能/新批次**，部署权转到本仓，直到重构完成、用户拍板切换那天（届时 next 转为回滚基线，本仓转正为生产源——复刻当年 next 自己被扶正的路数）。
+> - **重构目标待定义**：本次重构具体要改什么（技术栈/架构分层/目录组织/其它）尚未定案；下面 §2 起的工程约定原样继承自 next（分叉时刻的状态），随重构推进逐步改写为本仓自己的约定——**改动前先确认哪条约定因重构目标而失效，不要凭旧文字办事**。
+> - **接管 tcb·部署闸**：机制与 next 相同（`scripts/guard-deploy.mjs`），因共用同一个云环境，规则原样适用——见下方 §3。
+> - **8 件控制台正册资产**：与 next 共用同一套（微信支付连接器 `wxpay_33nb7su` 等），git 外、勿动，副本正册在本仓 `console-assets/`（复制自 next，需与 next 保持一致，不要各自漂移）。
+> - **治理脊柱**：`docs/元模式.md` / `docs/根因账本.md` 原样继承（治理方法论与病根史不因重构失效）；`docs/现状与路线.md` / `docs/重构日志.md` / `docs/调试日志.md` / `docs/待办与债.md` 已重新起页（本仓自己的进度，分叉前的 next 全史见 `docs/archive/现状与路线-next基线-至20260703.md` / `docs/archive/重构日志-next基线-至20260703.md` / `docs/archive/调试日志-next基线-至20260703.md` / `docs/archive/待办与债-next基线-至20260703.md`）。
 >
-> 以下为工程约定，随批次演进。
+> 以下为工程约定，继承自 next、随批次演进（有效性待复核，见上）。
 
 Lucky Ducky（小棉鸭）：钩织材料包电商 App，uni-app 一份代码发微信小程序 / H5 / App。后端微信云开发（环境 `cloudbase-d4gcssqbv06865479`、AppID `wxcbd2fb68b81bcfb1`）。
 
