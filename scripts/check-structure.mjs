@@ -3775,6 +3775,25 @@ export const repoChecks = [
     },
   },
   {
+    // 坐席台 mock 懒加载（深审 P3·根因#8 样本数据卫生）：静态 import mock 会把整套演示数据（样本客户/订单/
+    // 激活码/FAQ）打进生产 JS——内部数据形状对公网可见；动态 import 让 Vite 拆独立 chunk、只有 mock 模式才加载。
+    id: 'agent-mock-lazy-only',
+    roots: ['#8'],
+    desc: '坐席台 mock 只准动态 import 懒加载（深审 P3·#8）：agentApi.js 禁静态 import ./mock，须 await import 按需拆 chunk——演示数据不进生产包',
+    run() {
+      const rel = 'packages/agent/src/api/agentApi.js'
+      const abs = join(ROOT, rel)
+      if (!existsSync(abs)) return [`${rel} 缺失（mock 懒加载守卫无从核起·#8）`]
+      const src = readFileSync(abs, 'utf8')
+      const bad = []
+      if (/^import\s[^\n]*from\s+['"]\.\/mock(\.js)?['"]/m.test(src))
+        bad.push(`${rel} 静态 import mock——演示数据整套进生产包，改动态 import 懒加载（深审 P3·#8）`)
+      if (!/await import\(['"]\.\/mock\.js['"]\)/.test(src))
+        bad.push(`${rel} 未见 mock 动态 import——mock 模式将不可用（须 await import('./mock.js')·#8）`)
+      return bad
+    },
+  },
+  {
     // 认证失效前端统一处理（深审 P2·根因#3 配套）：会话令牌有 12h 过期/账号可停用——前端请求层必须认 401
     // 清登录态回登录页（否则操作者卡满屏「加载失败」不知重登，令牌过期从安全特性变成每日故障）。403 只提示不登出。
     id: 'admin-auth-expiry-handled',
@@ -3974,6 +3993,9 @@ export const typeAndTestGuards = [
   // 外部对账比对面截断如实标注（深审 P2·根因#7 固定样本失真）：getBillMatch 取最近 CAP 条触顶时必返 approx:true
   // ——否则老窗口真单配不上账单被误报「微信有我方无（最危险）」＝截断假象当真差异。reverseTest 灌满 CAP 锁此标注。
   { id: 'billmatch-approx-flag', mechanism: 'test', roots: ['#7'], reverseTest: 'tests/cloud/bill-match.test.js' },
+  // 云存储上传路径消毒（深审 P3·根因#3 不信前端）：storeImage/getVideoUploadMeta 的 pid/courseId 客户端串
+  // 直接拼对象键——'../' 等路径字符须剥净（[^\w-] 白名单·同 name 口径）、全非法回退 misc。reverseTest 锁此行为。
+  { id: 'upload-path-sanitized', mechanism: 'test', roots: ['#3'], reverseTest: 'tests/cloud/adminUploadPath.test.js' },
 ]
 
 const SRC_DIRS = ['packages', 'cloudfunctions', 'scripts']

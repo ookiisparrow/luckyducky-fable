@@ -51,6 +51,16 @@ describe('客户360 编排器 + provider（B1.1·铁律三）', () => {
     expect(r.panels.map((p) => p.key)).toEqual(['profile', 'orders', 'activation', 'learning', 'checkpoints']) // 按 order 排序（profile 5/orders 10/activation 20/learning 30/checkpoints 40）
   })
 
+  it('totalSpent 分累加不漂（深审 P3·钱链口径）：0.1 元 ×3 单 → 0.3 精确（元浮点直加会得 0.30000000000000004）', async () => {
+    control.seed('orders', [
+      { _id: 'f1', _openid: 'oF', status: 'paid', amount: 0.1, createdAt: 1 },
+      { _id: 'f2', _openid: 'oF', status: 'paid', amount: 0.1, createdAt: 2 },
+      { _id: 'f3', _openid: 'oF', status: 'paid', amount: 0.1, createdAt: 3 },
+    ])
+    const p = await profileProvider.fetch(db, 'oF')
+    expect(p.totalSpent).toBe(0.3)
+  })
+
   it('openid 缺失 → BAD_ARGS', async () => {
     const r = parse(await getCustomer360(ctx({})))
     expect(r.ok).toBe(false)

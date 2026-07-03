@@ -2,7 +2,8 @@ import { reply, ensure, cleanCourse, storeImage, manager, type Ctx } from '../li
 
 // 视频直传凭证（主路径）：manager-node 签发 COS 上传元数据，浏览器 PUT 直传
 export async function getVideoUploadMeta({ data }: Ctx) {
-  const courseId = String(data.courseId || 'misc').slice(0, 40)
+  // 与 name 同款消毒（深审 P3）：客户端串直接拼对象键，'../' 类字符不入路径
+  const courseId = String(data.courseId || 'misc').replace(/[^\w-]/g, '').slice(0, 40) || 'misc'
   const name = String(data.name || 'seg').replace(/[^\w-]/g, '').slice(0, 40) || 'seg'
   const ext = data.ext === 'mov' ? 'mov' : 'mp4'
   const cloudPath = `videos/${courseId}/${name}-${Date.now()}.${ext}`

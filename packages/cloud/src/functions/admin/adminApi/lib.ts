@@ -242,7 +242,8 @@ export function cleanCourse(c: any) {
 // base64 → 云存储 products/<pid>/，返回 fileID + 临时展示 URL
 export async function storeImage(cloud: any, b64: string, data: any) {
   const ext = ['png', 'jpg', 'mp4', 'mov'].includes(data.ext) ? data.ext : 'jpg'
-  const pid = String(data.pid || 'misc').slice(0, 40)
+  // 消毒（深审 P3·同 getVideoUploadMeta）：客户端串直接拼云存储对象键，'../' 类字符不入路径
+  const pid = String(data.pid || 'misc').replace(/[^\w-]/g, '').slice(0, 40) || 'misc'
   const prefix = data.kind === 'video' ? 'videos' : 'products'
   const cloudPath = `${prefix}/${pid}/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`
   const up = await cloud.uploadFile({ cloudPath, fileContent: Buffer.from(b64, 'base64') })

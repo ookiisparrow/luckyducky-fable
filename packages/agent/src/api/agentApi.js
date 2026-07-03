@@ -10,11 +10,17 @@
  *  - mock（默认·车道 B 对 mock 建）：不配 VITE_ADMIN_API 或 VITE_AGENT_MOCK=1 → 走 mock.handle。
  *  - 真接口（整合后）：配 VITE_ADMIN_API → POST 到 adminApi。
  */
-import * as mock from './mock.js'
-
 const API_BASE = import.meta.env.VITE_ADMIN_API || ''
 const FORCE_MOCK = import.meta.env.VITE_AGENT_MOCK === '1' || import.meta.env.VITE_AGENT_MOCK === 'true'
 export const useMock = !API_BASE || FORCE_MOCK
+
+// mock 懒加载（深审 P3·守卫 agent-mock-lazy-only）：静态 import 会把整套演示数据（样本客户/订单/激活码）
+// 打进生产包——内部数据形状对外可见。动态 import 让 Vite 拆独立 chunk，只有 mock 模式才真加载。
+let _mock = null
+async function getMock() {
+  if (!_mock) _mock = await import('./mock.js')
+  return _mock
+}
 
 const AUTH_KEY = 'ld_agent_auth'
 
@@ -68,7 +74,7 @@ async function realPost(action, data = {}) {
 
 // 统一调用（**单点接缝**）：mock 或真网关，其余代码不感知差异。
 async function call(action, data = {}) {
-  return useMock ? mock.handle(action, data) : realPost(action, data)
+  return useMock ? getMock().then((m) => m.handle(action, data)) : realPost(action, data)
 }
 
 const LOGIN_ERR = { KEY_TOO_SHORT: '口令至少 6 位', BAD_KEY: '口令不正确', ACCOUNT_DISABLED: '账号已停用' }
@@ -78,7 +84,7 @@ export async function login(password) {
   let r
   try {
     if (useMock) {
-      r = mock.login(password)
+      r = (await getMock()).login(password)
     } else {
       const res = await fetch(API_BASE, {
         method: 'POST',
@@ -98,7 +104,7 @@ export async function login(password) {
   if (!r.sessionToken) return { ok: false, error: '后端未签发会话令牌（版本过旧），请联系商户部署' }
   // agentId：真后端由登录态派生（服务端不信前端传身份·§1.5）；mock 下同用 operator 作 agentId。
   persist({ operator: r.operator || '坐席', caps: r.caps, key: r.sessionToken })
-  if (useMock) mock.resume('agent_demo')
+  if (useMock) await getMock().then((m) => m.resume('agent_demo'))
   return { ok: true }
 }
 
@@ -132,12 +138,12 @@ export async function loginByWecomCode(code) {
   if (!r.ok) return { ok: false, error: WECOM_LOGIN_ERR[r.error] || '免登失败', code: r.error }
   if (!hasAgentCap(r.caps)) return { ok: false, error: '该账号无坐席台权限（需 agent:handle），请联系商户开通' }
   persist({ operator: r.operator || '坐席', caps: r.caps, key: r.sessionToken })
-  if (useMock) mock.resume('agent_demo')
+  if (useMock) await getMock().then((m) => m.resume('agent_demo'))
   return { ok: true }
 }
 
 // 刷新页面后恢复 mock 内部 agentId（保 claim 归属一致·mock 态不持久）。
-if (useMock && isLoggedIn()) mock.resume('agent_demo')
+if (useMock && isLoggedIn()) getMock().then((m) => m.resume('agent_demo'))
 
 // ── 10 个坐席 action（严格贴 shared/csAgentDesk.ts 的 Req/Res）──────────────
 export const listQueue = (params = {}) => call('listQueue', params) // { limit?, cursor? } → { ok, items, nextCursor? }

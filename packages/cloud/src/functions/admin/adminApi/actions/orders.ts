@@ -58,7 +58,7 @@ export async function orderCounts({ db }: Ctx) {
 // 单单发货核心（shipOrder 与 shipOrders 批量共用·DRY 单源）：状态闸 paid/shipped + feeMismatch 挡单
 // + 条件转移防并发回滚 done + 微信 upload_shipping_info 合规上报（fail-soft·债#26·根因#12）。
 // 返回纯结果对象（不含 HTTP 包装），调用方各自 reply / 汇总。
-async function shipOne(db: any, idRaw: any, companyRaw: any, trackingRaw: any) {
+async function shipOne(db: any, idRaw: any, companyRaw: any, trackingRaw: any, operator: string) {
   const id = String(idRaw || '')
   const company = String(companyRaw || '').trim().slice(0, 30)
   const trackingNo = String(trackingRaw || '').trim().slice(0, 40)
@@ -90,7 +90,8 @@ async function shipOne(db: any, idRaw: any, companyRaw: any, trackingRaw: any) {
       .filter((it) => it && it.productId && Number.isInteger(it.qty) && it.qty > 0)
       .map((it) => ({ materialId: `fg:${it.productId}__${it.spec || ''}`, delta: -it.qty }))
     if (moves.length) {
-      const led = await applyStockMoves(moves, { docType: 'ship', docId: id, operator: 'admin' }).catch(() => ({ ok: false as const }))
+      // operator＝认证账号身份（B5.4 同款·与 SCM 各线 agentId 口径一致）：多账号后流水可溯「谁发的货」
+      const led = await applyStockMoves(moves, { docType: 'ship', docId: id, operator }).catch(() => ({ ok: false as const }))
       if (!led.ok) console.error('[SCM] ship ledger fail', id)
     }
   }
@@ -116,14 +117,14 @@ async function shipOne(db: any, idRaw: any, companyRaw: any, trackingRaw: any) {
   return { ok: true, wxShip: ship.ok }
 }
 
-export async function shipOrder({ db, data }: Ctx) {
-  const r = await shipOne(db, data.id, data.company, data.trackingNo)
+export async function shipOrder({ db, data, agentId }: Ctx) {
+  const r = await shipOne(db, data.id, data.company, data.trackingNo, agentId || 'admin')
   return reply(r.ok ? 200 : 400, r)
 }
 
 // 批量发货（P1·上量瓶颈）：多选订单一次发，逐单走 shipOne（串行·各自独立·一单失败不拖累其余），
 // per-order 回报。company 可整批共用或逐单覆盖。电子面单取号/打印需快递 API 账号·诚实延后（不在此造·根因#8）。
-export async function shipOrders({ db, data }: Ctx) {
+export async function shipOrders({ db, data, agentId }: Ctx) {
   const items = Array.isArray(data && data.items) ? data.items : []
   if (!items.length) return reply(400, { ok: false, error: 'BAD_ARGS' })
   if (items.length > 100) return reply(400, { ok: false, error: 'TOO_MANY' }) // 单批上限·防滥用/超时
@@ -131,7 +132,7 @@ export async function shipOrders({ db, data }: Ctx) {
   const results: any[] = []
   for (const it of items) {
     const id = String((it && it.id) || '')
-    const r = await shipOne(db, id, (it && it.company) || batchCompany, it && it.trackingNo)
+    const r = await shipOne(db, id, (it && it.company) || batchCompany, it && it.trackingNo, agentId || 'admin')
     results.push({ id, ...r })
   }
   const okCount = results.filter((r) => r.ok).length

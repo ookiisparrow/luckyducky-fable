@@ -71,8 +71,13 @@ export async function runAssembly({ db, data, agentId }: Ctx) {
     // 单据保留供追查，人工经「期初盘点/调整」对平（撤销走调整单·蓝图 §1）。
     return reply(500, { ok: false, error: 'PRODUCE_FAIL' })
   }
-  // ④ assembly_in 成品流水留痕（fg 行只留痕不动 materials·对账公式 Σ成品流水 ⇄ inventory）
-  await applyStockMoves([{ materialId: `fg:${productId}__${spec}`, delta: sets }], { docType: 'assembly_in', docId: assemblyId, operator })
+  // ④ assembly_in 成品流水留痕（fg 行只留痕不动 materials·对账公式 Σ成品流水 ⇄ inventory）。
+  // fail-soft 但不静默（深审 P3）：库存已在③入账正确，流水缺痕只坏对账可溯性；重试会撞 assemblyId 幂等闸
+  // 补不回来，故失败必留 error 痕（同 ship ledger 口径），人工经期初调整对平。
+  const fin = await applyStockMoves([{ materialId: `fg:${productId}__${spec}`, delta: sets }], { docType: 'assembly_in', docId: assemblyId, operator }).catch(
+    () => ({ ok: false as const })
+  )
+  if (!fin.ok) console.error('[SCM] assembly_in ledger fail', assemblyId)
   return reply(200, { ok: true, sets, consumed: r.lines })
 }
 

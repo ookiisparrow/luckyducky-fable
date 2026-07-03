@@ -1,3 +1,4 @@
+import { toFen, fenToYuan, asFen } from '@luckyducky/shared'
 import type { CustomerPanelProvider } from '../types'
 
 // 画像 rollup 板块（B1.3·铁律三）：坐席看某客人的总消费/单数/激活与进课/最近活跃——从 orders/activations/events
@@ -26,7 +27,8 @@ export const profileProvider: CustomerPanelProvider = {
       rows(db.collection('events').where({ _openid: openid }).orderBy('createdAt', 'desc').limit(1)),
     ])
     const paid = orders.filter((o: any) => PAID.includes(o.status))
-    const totalSpent = paid.reduce((n: number, o: any) => n + (Number(o.amount) || 0), 0) // 元（与 orders.amount 同口径）
+    // 分累加再回元（深审 P3·钱链口径）：元浮点直加会漂（0.1+0.2 类），逐单 toFen 求和后 fenToYuan 一次
+    const totalSpent = fenToYuan(asFen(paid.reduce((n: number, o: any) => n + toFen(Number(o.amount) || 0), 0)))
     const entered = acts.filter((a: any) => !!a.enteredAt).length
     return {
       orderCount: orders.length,

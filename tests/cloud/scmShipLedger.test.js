@@ -11,6 +11,9 @@ const KEY = 'ship-key-123'
 const sha = (s) => createHash('sha256').update(String(s)).digest('hex')
 const call = (action, data = {}) =>
   main({ httpMethod: 'POST', headers: {}, body: JSON.stringify({ action, key: KEY, data }) }).then((r) => ({ status: r.statusCode, ...JSON.parse(r.body) }))
+// 指定口令版（operator 溯源用例·多账号）
+const call2 = (action, key, data = {}) =>
+  main({ httpMethod: 'POST', headers: {}, body: JSON.stringify({ action, key, data }) }).then((r) => ({ status: r.statusCode, ...JSON.parse(r.body) }))
 
 beforeEach(() => {
   control.reset()
@@ -69,5 +72,15 @@ describe('shipOrder 发货核销流水（SCM-D·守卫 ship-verify-ledger）', (
     expect(r.ok).toBe(true)
     expect(control.dump('orders').find((o) => o._id === 'o3').status).toBe('shipped')
     expect(control.dump('stockLedger').filter((l) => l.docId === 'o3')).toHaveLength(0)
+  })
+
+  it('流水 operator＝认证账号身份（深审 P3·B5.4 同款）：多账号发货可溯「谁发的」·不糊成 admin', async () => {
+    const K2 = 'packer-key-456'
+    control.seed('adminConfig', [{ _id: 'agent:packer', keyHash: sha(K2), role: 'superadmin', name: '打包员' }])
+    const r = await call2('shipOrder', K2, { id: 'o1', company: '顺丰', trackingNo: 'SF-P' })
+    expect(r.ok).toBe(true)
+    const rows = control.dump('stockLedger').filter((l) => l.docType === 'ship')
+    expect(rows.length).toBeGreaterThan(0)
+    for (const l of rows) expect(l.operator).toBe('agent:packer') // 账号 _id（与 SCM 各线 agentId 口径一致）
   })
 })
