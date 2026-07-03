@@ -49,6 +49,7 @@ function locateLesson(o) {
   }
 }
 onLoad(async (o) => {
+  markFirstFrame('enter') // 首帧耗时·进课冷启：从落地到首播出画（含拉课程/鉴权/取址/缓冲全程）
   // 自带 courseId 定身份（审计 #3）：播放页不寄生全局 store.currentId——入口（catalog/me）带 courseId 进来即
   // 先聚焦本课，鉴权 / 定位 / 续段 / 返回全用对的那门课（多课 + 跨入口下防串课）。无 courseId 才回退 currentId。
   if (o && o.courseId) store.setCurrent(decodeURIComponent(o.courseId))
@@ -155,6 +156,7 @@ watch(curFileSegId, refreshPlayUrl) // 段切换 / 换集 → 段 id 变 → 取
 // 取址失败 / 视频出错后重试：清错误态 + 去重标记 + 失效本段缓存（审计 #2：否则命中那条已失效的旧
 // URL、重试形同空操作），重新取一个新地址 + 自动起播
 function retry() {
+  markFirstFrame('retry') // 首帧耗时·错误重试：从点「重试」到出画
   videoError.value = false
   lastFetchedSeg = ''
   store.invalidatePlaybackUrl(curFileSegId.value)
@@ -196,6 +198,7 @@ function onTimeupdate(e) {
 }
 function onPlay() {
   playing.value = true
+  reportFirstFrame() // 首帧出画时刻：mark 在挂才上报（onPlay 每次恢复播放都触发，靠 mark 单发）
   firstFrame.value = true // 首帧已出 → stage 进 ready、加载浮层撤（sticky：之后切段不再重盖、不闪控件）
   // 真在播 = 没出错：清错误态，让瞬时 @error（切后台回来/网络抖动/空 src 一瞬）后能自愈，
   // 不至于「视频在播、错误浮层却盖死不消」（F1·错误态黏住·根因#8 真机才显）。
@@ -213,6 +216,30 @@ function onEnded() {
   // 一段视频自然结束 = 该段看完；非本课时最后一段弹「重复播放/继续」
   reportSegDone(fileSeg.value)
   if (fileSeg.value < segCount.value - 1) endedSeg.value = fileSeg.value
+}
+
+// —— 首帧耗时埋点（容量体检·根因#8「构建过≠真机能用」的度量腿·守卫 player-firstframe-metric-wired）——
+// 从「动作发起」到「首播出画」的毫秒差；kind：enter=进课冷启（含拉课程/鉴权/取址/缓冲）/ seg=切段 /
+// retry=错误重试。onPlay 每次恢复播放都触发，靠一次性 mark 单发；fire-and-forget 不阻塞播放。
+// 读数：控制台 events 集合筛 type='first_frame'（meta.ms 毫秒·meta.kind 场景）。
+let ffMark = null
+const markFirstFrame = (kind) => {
+  ffMark = { kind, at: Date.now() }
+}
+function reportFirstFrame() {
+  if (!ffMark) return
+  const { kind, at } = ffMark
+  ffMark = null
+  track('first_frame', {
+    page: 'player',
+    targetId: curFileSegId.value,
+    meta: {
+      courseId: course.value.id || '',
+      lessonId: lesson.value.id || '',
+      kind,
+      ms: Date.now() - at,
+    },
+  })
 }
 
 // —— 进度上报（一次埋点两用：events 流水 + 云端进度折叠，见 utils/track.js）——
@@ -243,6 +270,7 @@ onUnload(() => {
 function toggle() {
   if (!ctx) return
   if (endedSeg.value !== null) {
+    markFirstFrame('seg') // 首帧耗时·段末继续进下一段
     endedSeg.value = null
     fileSeg.value = Math.min(segCount.value - 1, fileSeg.value + 1)
     current.value = 0
@@ -305,6 +333,7 @@ function onScrubEnd(e) {
 function goSeg(dir) {
   const t = stepSegment(lessons.value, idx.value, fileSeg.value, dir)
   if (!t) return // 全课首/末段，无处可去（按钮已灰）
+  markFirstFrame('seg') // 首帧耗时·上一段/下一段切换（预取命中与否都算进这数字）
   ctx && ctx.pause() // 先停当前段，切换间隙不续播旧段残帧
   idx.value = t.lessonIdx
   fileSeg.value = t.segIdx

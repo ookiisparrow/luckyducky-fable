@@ -2526,6 +2526,31 @@ export const repoChecks = [
     },
   },
   {
+    // 首帧耗时埋点（容量体检续·根因#8「构建过≠真机能用」的度量腿）：加载速度此前只能「看码推断已优」，
+    // 无真机数字。埋点＝进课(enter)/切段(seg)/重试(retry)三种发起动作各挂一次性 mark，onPlay 首播出画
+    // 上报毫秒差（track('first_frame')→events 流水·fire-and-forget 不阻塞播放）。本守卫防埋点被顺手
+    // 删掉/漏场景——三个 kind 缺一即红，度量腿断了「已优」又退回推断。
+    id: 'player-firstframe-metric-wired',
+    roots: ['#8'],
+    desc: '首帧耗时埋点在线（容量体检·根因#8）：pkg-video/player/index.vue 须 markFirstFrame 覆盖 enter/seg/retry 三场景 + onPlay 经 reportFirstFrame 单发上报 track(first_frame)——防埋点被删/漏场景致加载速度退回不可测',
+    run() {
+      const rel = 'packages/miniapp/src/pkg-video/player/index.vue'
+      const abs = join(ROOT, rel)
+      if (!existsSync(abs)) return [`${rel} 缺失`]
+      const src = readFileSync(abs, 'utf8')
+      const bad = []
+      if (!/track\(\s*'first_frame'/.test(src))
+        bad.push(`${rel} 无 track('first_frame') 上报——首帧耗时度量断线（容量体检·根因#8）`)
+      for (const kind of ['enter', 'seg', 'retry']) {
+        if (!new RegExp(`markFirstFrame\\(\\s*'${kind}'\\s*\\)`).test(src))
+          bad.push(`${rel} 缺 markFirstFrame('${kind}') 场景——首帧耗时漏测该场景（enter=进课/seg=切段/retry=重试）`)
+      }
+      if (!/function onPlay\(\)[\s\S]{0,200}reportFirstFrame\(\)/.test(src))
+        bad.push(`${rel} onPlay 未调 reportFirstFrame——首帧出画时刻无人上报（须单发·mark 在挂才报）`)
+      return bad
+    },
+  },
+  {
     // 主包不得 import 分包模块（mp-weixin 平台硬规则·根因#8 真机才崩）。病史：playbackCache 解析器原放
     // pkg-video（分包），主包 store/courses.js import 它 → mp-weixin 主包 require 分包路径运行时找不到 →
     // useCoursesStore 模块求值即抛 → 用到它的「我」页等白屏（H5 无分包概念故假绿、npm check 也测不出·#8）。
