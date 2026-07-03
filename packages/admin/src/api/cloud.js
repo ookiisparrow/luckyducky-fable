@@ -55,6 +55,14 @@ async function post(action, data = {}) {
     body: JSON.stringify({ action, key: session().key || '', data }),
   })
   const r = await res.json()
+  // 认证失效统一处理（深审 P2·守卫 admin-auth-expiry-handled）：令牌过期/被撤/账号停用 → 清登录态、
+  // 回登录页重登；此前只抛通用错误，操作者卡在满屏「加载失败」不知要重登。403=无权限（登录仍有效，不登出）。
+  if (res.status === 401) {
+    logout()
+    location.hash = '#/login'
+    throw new Error('登录已过期，请重新登录')
+  }
+  if (res.status === 403) throw new Error('无权限执行此操作')
   // 网关层错误（如请求体超限）没有 ok 字段，转成可读错误抛出
   if (r.ok === undefined && r.code) throw new Error(`网关拒绝（${r.code}）`)
   return r
@@ -80,6 +88,12 @@ export async function login(username, password) {
     // 只存服务端签发的会话令牌（深审 P1·守卫 admin-session-token-not-password）：口令原文不落 localStorage
     // ——口令是可复用主凭证，落盘即被同源脚本/共用机器读走；令牌 12h 自灭、停号即拒。无令牌＝后端过旧，拒登。
     if (!r.sessionToken) return { ok: false, error: '后端未签发会话令牌（版本过旧），请先部署 adminApi' }
+    // 控制台门禁（深审 P2·与后端 RBAC 一致）：无控制台侧能力位（超管 '*' / customer:view）的账号（如外包坐席
+    // 仅 agent:handle）进来满屏 403 徒增困惑——门口拒清楚、指去坐席台。后端 fail-closed 仍兜底，此处只是 UX 一致性。
+    // 现网仅 superadmin/outsourced 两角色；将来出现部分能力中间角色时，再按 caps 做菜单级隐藏（别为不存在的角色先建机制）。
+    const caps = Array.isArray(r.caps) ? r.caps : []
+    if (!caps.includes('*') && !caps.includes('customer:view'))
+      return { ok: false, error: '该账号无控制台权限（坐席请用坐席工作台 /agent 登录）' }
     localStorage.setItem(
       AUTH_KEY,
       JSON.stringify({ username, key: r.sessionToken, caps: r.caps || [], operator: r.operator || username, at: Date.now() })
@@ -617,10 +631,10 @@ export async function getFgSummary() {
 // ---------- 库存（库存#1·下单即预留·乐观 CAS；写库存收口云端 kit/inventory） ----------
 
 export async function listInventory(productIds) {
-  if (!cloudMode) return [] // 库存只存在于云端
+  if (!cloudMode) return { list: [], truncated: false } // 库存只存在于云端
   const r = await post('listInventory', productIds && productIds.length ? { productIds } : {})
   if (!r.ok) throw new Error(r.error || 'LOAD_INVENTORY_FAIL')
-  return r.list || []
+  return { list: r.list || [], truncated: !!r.truncated } // truncated：SKU 超扫描封顶、列表可能不全（深审 P2）
 }
 
 // stock：number≥0 或 null（不限量）；threshold 低库存阈值（可选）

@@ -54,6 +54,14 @@ async function realPost(action, data = {}) {
     body: JSON.stringify({ action, key: session().key || '', data }),
   })
   const r = await res.json()
+  // 认证失效统一处理（深审 P2·守卫 admin-auth-expiry-handled）：令牌过期（12h）/账号被停 → 清登录态回登录页，
+  // 不让坐席对着满屏报错干等（企微内会静默 OAuth 重签无感）。403=无权限，登录仍有效不登出。
+  if (res.status === 401) {
+    logout()
+    location.hash = '#/login'
+    throw new Error('登录已过期，请重新登录')
+  }
+  if (res.status === 403) throw new Error('无权限执行此操作')
   if (r.ok === undefined && r.code) throw new Error(`网关拒绝（${r.code}）`)
   return r
 }

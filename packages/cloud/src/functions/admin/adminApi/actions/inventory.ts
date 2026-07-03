@@ -4,8 +4,10 @@ import { getInventory, setStock } from '../../../../kit'
 // 管理端库存（库存#1·S14 库存管理屏）：读全量 / 设单 SKU 库存（绝对值·上新或补货）。
 // 写库存收口 kit/inventory（守卫 stock-atomic-conditional）；本 action 只做入参校验 + 转调。
 export async function listInventory({ data }: Ctx) {
-  const ids = Array.isArray(data.productIds) ? data.productIds.map((x: any) => String(x)) : undefined
-  return reply(200, { ok: true, list: await getInventory(ids) })
+  // productIds 入参封顶（防超长 in() 查询）；全量路径在 kit 内分页取齐 + 封顶如实报 truncated（深审 P2·根因#7）
+  const ids = Array.isArray(data.productIds) ? data.productIds.slice(0, 200).map((x: any) => String(x)) : undefined
+  const { list, truncated } = await getInventory(ids)
+  return reply(200, { ok: true, list, truncated })
 }
 
 export async function saveStock({ data }: Ctx) {

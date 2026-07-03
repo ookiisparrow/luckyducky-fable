@@ -150,7 +150,7 @@ class Query {
       })
     }
     if (this._skip != null) out = out.slice(this._skip)
-    if (this._limit != null) out = out.slice(0, this._limit)
+    out = out.slice(0, this._limit != null ? this._limit : 100) // 对齐真 SDK：服务端裸 .get() 默认 100 条封顶（根因#8 桩≠真藏无界读）
     return out
   }
   async get() {

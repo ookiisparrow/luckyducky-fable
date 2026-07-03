@@ -27,10 +27,12 @@ async function init() {
   loadErr.value = ''
   try {
     await store.load()
-    const list = await listInventory()
+    const { list, truncated } = await listInventory()
     const m = {}
     for (const d of list) m[`${d.productId}__${d.spec || ''}`] = { stock: d.stock, threshold: d.threshold, updatedAt: d.updatedAt }
     invMap.value = m
+    // 触扫描封顶（深审 P2·如实报）：超出部分没加载到，无记录 SKU 会误显示「不限量」——明示而非装全量
+    if (truncated) loadErr.value = '库存记录超过扫描上限（1000 条），列表可能不全——请按商品筛选查看'
   } catch (e) {
     loadErr.value = '加载失败：' + e.message
   } finally {

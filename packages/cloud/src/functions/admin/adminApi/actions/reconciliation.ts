@@ -145,12 +145,13 @@ export async function getBillMatch({ db, data }: Ctx) {
       .then((r: any) => r.data)
       .catch(() => [])
 
-  const ourOrders = (
-    await rows(db.collection('orders').where({ status: _.in(PAID_STATUSES) }).orderBy('paidAt', 'desc').limit(CAP))
-  ).filter((o: any) => typeof o.paidAt === 'number' && o.paidAt >= fromMs && o.paidAt <= toMs)
-  const wxRows = (await rows(db.collection('wxBills').orderBy('date', 'desc').limit(CAP))).filter(
-    (w: any) => w.date >= from && w.date <= to && String(w.tradeState) === 'SUCCESS'
-  )
+  // 取最近 CAP 条再按窗过滤；触顶＝更早的单没进比对面，老窗口里的真单会被误判 wxOnly——必须 approx 如实标注
+  //（深审 P2·同 getReconciliation 口径·守卫 billmatch-approx-flag），前端见 approx 提示「窗口可能不全」而非当真差异。
+  const rawOur = await rows(db.collection('orders').where({ status: _.in(PAID_STATUSES) }).orderBy('paidAt', 'desc').limit(CAP))
+  const rawWx = await rows(db.collection('wxBills').orderBy('date', 'desc').limit(CAP))
+  const approx = rawOur.length >= CAP || rawWx.length >= CAP
+  const ourOrders = rawOur.filter((o: any) => typeof o.paidAt === 'number' && o.paidAt >= fromMs && o.paidAt <= toMs)
+  const wxRows = rawWx.filter((w: any) => w.date >= from && w.date <= to && String(w.tradeState) === 'SUCCESS')
 
   const billDays = [...new Set(wxRows.map((w: any) => w.date))].sort()
   const ourByTxn = new Map(ourOrders.map((o: any) => [String(o.transactionId || ''), o]))
@@ -185,5 +186,6 @@ export async function getBillMatch({ db, data }: Ctx) {
     summary: { matched: matched.length, wxOnly: wxOnly.length, oursOnly: oursOnly.length, amountMismatch: amountMismatch.length },
     discrepancies: { wxOnly, oursOnly, amountMismatch },
     billDays,
+    approx, // 比对面触 CAP 截断（深审 P2）：true 时差异可能是截断假象、勿当真差异（前端提示）
   })
 }

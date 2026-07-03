@@ -153,10 +153,21 @@ export async function produceStock(productId: string, spec: string, qty: number)
   return { ok: false, error: 'CONTENTION' } // 争用耗尽（管理端低频·几乎不至）
 }
 
-/** 读库存（管理端 S14 列表 / 看板低库存）。productIds 为空＝全量（管理端 bounded 调用方限页）。 */
-export async function getInventory(productIds?: string[]): Promise<any[]> {
+// 全量扫描上限（深审 P2·根因#7）：裸 .get() 服务端默认 100 条静默截断——SKU 破百后库存页少显示、
+// 像没库存记录。改分页循环取齐（100/页），封顶 1000 防无界；到顶如实报 truncated（调用方提示、不装全量）。
+export const INVENTORY_SCAN_CAP = 1000
+
+/** 读库存（管理端 S14 列表 / 看板低库存）。productIds 为空＝全量（分页取齐·封顶 INVENTORY_SCAN_CAP）。 */
+export async function getInventory(productIds?: string[]): Promise<{ list: any[]; truncated: boolean }> {
   const coll = getDb().collection(COLLECTIONS.inventory)
-  const q = productIds && productIds.length ? coll.where({ productId: getDb().command.in(productIds) }) : coll
-  const r = await q.get().catch(() => ({ data: [] }))
-  return r.data || []
+  const base = productIds && productIds.length ? coll.where({ productId: getDb().command.in(productIds) }) : coll
+  const PAGE = 100
+  const list: any[] = []
+  for (let skip = 0; skip < INVENTORY_SCAN_CAP; skip += PAGE) {
+    const r = await base.orderBy('productId', 'asc').skip(skip).limit(PAGE).get().catch(() => ({ data: [] }))
+    const rows: any[] = (r && r.data) || []
+    list.push(...rows)
+    if (rows.length < PAGE) return { list, truncated: false }
+  }
+  return { list, truncated: true } // 到顶＝可能还有（如实报·守卫 inventory-reads-bounded）
 }

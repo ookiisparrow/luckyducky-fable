@@ -42,5 +42,24 @@ describe('getBillMatch 逐笔对账（S16 Batch 3）', () => {
     const r = parse(await getBillMatch(ctx({ from: '2026-06-20', to: '2026-06-21' })))
     expect(r.summary).toEqual({ matched: 0, wxOnly: 0, oursOnly: 0, amountMismatch: 0 })
     expect(r.billDays).toEqual([])
+    expect(r.approx).toBe(false) // 低量不触截断
+  })
+
+  it('比对面触 CAP 截断 → approx:true 如实标注（深审 P2·防截断假象当真差异「微信有我方无」）', async () => {
+    // 灌满 CAP(2000) 条已付订单：orderBy paidAt desc 取回整 2000 条＝触顶（更早的单没进比对面）
+    control.seed(
+      'orders',
+      Array.from({ length: 2000 }, (_, i) => ({
+        _id: `mass${i}`,
+        id: `mass${i}`,
+        amount: 1,
+        status: 'paid',
+        transactionId: `t${i}`,
+        paidAt: A + i,
+      }))
+    )
+    const r = parse(await getBillMatch(ctx({ from: '2026-06-20', to: '2026-06-21' })))
+    expect(r.ok).toBe(true)
+    expect(r.approx).toBe(true) // 触顶必标注——前端提示「差异可能是截断假象」
   })
 })

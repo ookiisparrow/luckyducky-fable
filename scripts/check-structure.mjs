@@ -3774,6 +3774,27 @@ export const repoChecks = [
       return bad
     },
   },
+  {
+    // 认证失效前端统一处理（深审 P2·根因#3 配套）：会话令牌有 12h 过期/账号可停用——前端请求层必须认 401
+    // 清登录态回登录页（否则操作者卡满屏「加载失败」不知重登，令牌过期从安全特性变成每日故障）。403 只提示不登出。
+    id: 'admin-auth-expiry-handled',
+    roots: ['#3'],
+    desc: '控制台/坐席台请求层统一处理 401（清登录态+回登录页）——令牌过期/停号后引导重登，不卡死在报错页（深审 P2·#3 配套）',
+    run() {
+      const bad = []
+      for (const rel of ['packages/admin/src/api/cloud.js', 'packages/agent/src/api/agentApi.js']) {
+        const abs = join(ROOT, rel)
+        if (!existsSync(abs)) {
+          bad.push(`${rel} 缺失（401 统一处理守卫无从核起·#3）`)
+          continue
+        }
+        const src = readFileSync(abs, 'utf8')
+        const has401 = /status\s*===\s*401/.test(src) && /logout\(\)/.test(src)
+        if (!has401) bad.push(`${rel} 请求层未统一处理 401（须清登录态 logout() + 回登录页）——令牌过期后操作者卡死报错页（深审 P2·#3）`)
+      }
+      return bad
+    },
+  },
 ]
 
 // ============== 逐文件规则（fileRules）==============
@@ -3947,6 +3968,12 @@ export const typeAndTestGuards = [
   // 绝不存明文）；令牌可作后续请求 key（checkKey 会话解析）；过期/停号 fail-closed 拒；多设备并存（sessions
   // 数组·剪过期/超容剪最旧）；口令作 key 兼容不破（旧已部署前端）。reverseTest 锁此组合行为。
   { id: 'admin-session-issued', mechanism: 'test', roots: ['#3'], reverseTest: 'tests/cloud/adminSession.test.js' },
+  // 库存列表有界读（深审 P2·根因#7/#8）：真 SDK 裸 .get() 默认 100 条静默截断（桩已对齐此语义·根因#8）——
+  // getInventory 分页取齐（100/页·封顶 1000）、到顶如实报 truncated（前端明示不装全量）。reverseTest 灌 150 条锁「不被 100 截断」。
+  { id: 'inventory-reads-bounded', mechanism: 'test', roots: ['#7', '#8'], reverseTest: 'tests/cloud/adminInventoryBounded.test.js' },
+  // 外部对账比对面截断如实标注（深审 P2·根因#7 固定样本失真）：getBillMatch 取最近 CAP 条触顶时必返 approx:true
+  // ——否则老窗口真单配不上账单被误报「微信有我方无（最危险）」＝截断假象当真差异。reverseTest 灌满 CAP 锁此标注。
+  { id: 'billmatch-approx-flag', mechanism: 'test', roots: ['#7'], reverseTest: 'tests/cloud/bill-match.test.js' },
 ]
 
 const SRC_DIRS = ['packages', 'cloudfunctions', 'scripts']

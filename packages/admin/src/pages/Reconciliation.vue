@@ -265,6 +265,7 @@ function exportCsv() {
               <div class="mc" :class="{ bad: match.summary.amountMismatch }"><b>{{ match.summary.amountMismatch }}</b><span>金额不符</span></div>
             </div>
             <p class="note">已拉账单日：{{ match.billDays.join('、') || '（无）' }}（未拉的日期不计入差异）</p>
+            <p v-if="match.approx" class="alert-line">⚠ 比对面已触数据量上限截断——差异（尤其「微信有·我方无」）可能是截断假象，请缩小日期区间重对</p>
 
             <p v-if="matchClean && match.billDays.length" class="ok-line">✓ 已拉账单范围内全部对平</p>
             <div v-if="match.discrepancies.wxOnly.length" class="disc">
