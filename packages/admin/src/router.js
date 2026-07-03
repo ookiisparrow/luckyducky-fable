@@ -25,6 +25,7 @@ import ScmPurchase from '@/pages/ScmPurchase.vue'
 import ScmOutwork from '@/pages/ScmOutwork.vue'
 import ScmAssembly from '@/pages/ScmAssembly.vue'
 import ScmSummary from '@/pages/ScmSummary.vue'
+import Fulfill from '@/pages/Fulfill.vue'
 
 export const router = createRouter({
   history: createWebHashHistory(),
@@ -57,6 +58,8 @@ export const router = createRouter({
     { path: '/scm-summary', component: ScmSummary },
     // 上新向导：/product/<id>/step/<1-6>；左侧「按步骤直达」也跳这里
     { path: '/product/:id/step/:n', component: Wizard, props: true },
+    // 发货工作台（R32·主流程同上新形态）：/fulfill/step/<1-3> 拣货备货→打印标签→扫码发货
+    { path: '/fulfill/step/:n', component: Fulfill, props: true },
   ],
 })
 

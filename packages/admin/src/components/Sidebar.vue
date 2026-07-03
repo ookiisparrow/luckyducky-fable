@@ -13,11 +13,12 @@ import { useRoute, useRouter } from 'vue-router'
 import {
   Package, ChevronDown, Image, FileText, Tags, Clapperboard, QrCode, Printer,
   Smartphone, Truck, RotateCcw, Boxes, ChartColumn, Wallet, Bell, ExternalLink, LifeBuoy, UserSearch, ClipboardCheck, MessagesSquare, BookOpen, Star, Users,
-  Store, Receipt, Headphones, Settings, Factory,
+  Store, Receipt, Headphones, Settings, Factory, PackageCheck, ClipboardList, ScanLine,
 } from 'lucide-vue-next'
 import { useProductsStore, STEP_NAMES } from '@/store/products.js'
 import { logout, currentUser } from '@/api/cloud.js'
 import { SCM_FLOW } from '@/utils/scmFlow.js'
+import { FULFILL_STEP_NAMES } from '@/utils/fulfill.js'
 
 const route = useRoute()
 const router = useRouter()
@@ -26,6 +27,8 @@ store.load()
 
 // 「按步骤直达」每步图标（与 design/console.pen Component/Sidebar 同序）
 const STEP_ICONS = [Image, FileText, Tags, Clapperboard, QrCode, Printer]
+// 发货工作台三步图标（步骤名单源 utils/fulfill.js，与向导 rail 共用）
+const FULFILL_ICONS = [ClipboardList, Printer, ScanLine]
 
 // 业务域主类目（方案A）：key 供折叠状态寻址；「商品与上新」是 catalog 组的特例首项（模板单独渲染）
 const GROUPS = [
@@ -103,6 +106,7 @@ function toggleGroup(key) {
 // 路由 → 所在主类目；跳进组内页面时该组自动弹开（收起状态不困住当前页）
 function groupOfPath(path) {
   if (path === '/products' || path.startsWith('/product/')) return 'catalog'
+  if (path.startsWith('/fulfill')) return 'trade'
   for (const g of GROUPS) if (g.items.some((it) => it.to === path)) return g.key
   return ''
 }
@@ -140,8 +144,32 @@ function goStep(n) {
   if (!p) return router.push('/products')
   router.push(`/product/${p.id}/step/${n}`)
 }
+// 两个向导共用路由参数 :n——高亮必须限定各自势力范围，否则 /fulfill/step/2 会点亮上新第 2 步
 function stepActive(n) {
-  return route.params.n === String(n)
+  return inProductSection() && route.params.n === String(n)
+}
+
+// 发货工作台（trade 组特例首项·同上新形态）：进入即自动展开三步子菜单
+const inFulfillSection = () => route.path.startsWith('/fulfill')
+const fulfillExpanded = ref(inFulfillSection())
+watch(
+  () => route.path,
+  () => {
+    if (inFulfillSection()) fulfillExpanded.value = true
+  },
+)
+function openFulfill() {
+  fulfillExpanded.value = true
+  router.push('/fulfill/step/1')
+}
+function toggleFulfillSteps() {
+  fulfillExpanded.value = !fulfillExpanded.value
+}
+function goFulfillStep(n) {
+  router.push(`/fulfill/step/${n}`)
+}
+function fulfillStepActive(n) {
+  return inFulfillSection() && route.params.n === String(n)
 }
 function doLogout() {
   logout()
@@ -188,6 +216,26 @@ function doLogout() {
               @click="goStep(i + 1)"
             >
               <component :is="STEP_ICONS[i]" :size="16" /><span>{{ i + 1 }} · {{ name }}</span>
+            </button>
+          </div>
+        </template>
+        <!-- 发货工作台（trade 组特例首项：三步主流程·R32，同上新形态） -->
+        <template v-if="g.key === 'trade'">
+          <div class="nav nav-parent" :class="{ on: inFulfillSection() }" @click="openFulfill">
+            <PackageCheck :size="17" /><span>发货工作台</span>
+            <button class="chev-btn" title="展开/收起步骤" @click.stop="toggleFulfillSteps">
+              <ChevronDown :size="15" class="chev" :class="{ open: fulfillExpanded }" />
+            </button>
+          </div>
+          <div v-if="fulfillExpanded" class="substeps">
+            <button
+              v-for="(name, i) in FULFILL_STEP_NAMES"
+              :key="i"
+              class="nav step"
+              :class="{ on: fulfillStepActive(i + 1) }"
+              @click="goFulfillStep(i + 1)"
+            >
+              <component :is="FULFILL_ICONS[i]" :size="16" /><span>{{ i + 1 }} · {{ name }}</span>
             </button>
           </div>
         </template>

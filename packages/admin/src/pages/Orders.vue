@@ -17,6 +17,7 @@
 import { ref, computed } from 'vue'
 import { cloudMode, listOrders, orderCounts, getOrderDetail, shipOrder, shipOrders, clearFeeMismatch } from '@/api/cloud.js'
 import { confirmDialog, toast } from '@/utils/ui.js'
+import { COMPANIES } from '@/utils/fulfill.js'
 import { RefreshCw, AlertTriangle } from 'lucide-vue-next'
 import Skeleton from '@/components/Skeleton.vue'
 
@@ -36,7 +37,6 @@ const TABS = [
   { key: 'done', label: '已完成', status: 'done' },
   { key: 'all', label: '全部', status: 'all' },
 ]
-const COMPANIES = ['顺丰速运', '中通快递', '圆通速递', '韵达快递', '申通快递', '邮政 EMS', '京东物流']
 
 const counts = ref({}) // 服务端精确计数 { all, pending, paid, shipped, done, closed }
 const list = ref([])
