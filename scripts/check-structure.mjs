@@ -3987,6 +3987,85 @@ export const repoChecks = [
     },
   },
   {
+    id: 'rw-openapi-perm-declared',
+    roots: ['#12', '#8'],
+    desc: '新线云调用权限随产物声明（移植 openapi-perm-declared·根因#12/#8·债#26）：rewrite/cloud 源每个 cloud.openapi.<ns>.<method> 调用须在 rewrite/cloud/build.mjs OPENAPI_PERMS 登记（据此产 config.json）——否则部署产物缺权限、云调用被微信拒',
+    run() {
+      const bad = []
+      const srcRoot = join(ROOT, 'rewrite/cloud/src')
+      if (!existsSync(srcRoot)) return bad
+      const calls = new Set()
+      const walk = (d) => {
+        for (const e of readdirSync(d)) {
+          const p = join(d, e)
+          if (statSync(p).isDirectory()) walk(p)
+          else if (e.endsWith('.ts'))
+            for (const m of readFileSync(p, 'utf8').matchAll(/\.openapi\.(\w+)\.(\w+)/g)) calls.add(`${m[1]}.${m[2]}`)
+        }
+      }
+      walk(srcRoot)
+      const buildMjs = join(ROOT, 'rewrite/cloud/build.mjs')
+      if (!existsSync(buildMjs)) return ['rewrite/cloud/build.mjs 缺失——新线云函数无部署产物形态（M1 收口·根因#12）']
+      const build = readFileSync(buildMjs, 'utf8')
+      if (!/OPENAPI_PERMS/.test(build) || !/config\.json/.test(build))
+        bad.push('rewrite/cloud/build.mjs 未见 OPENAPI_PERMS 登记或 config.json 产出——产物不带 openapi 权限声明（根因#12·债#26）')
+      for (const c of calls)
+        if (!build.includes(`'${c}'`) && !build.includes(`"${c}"`))
+          bad.push(`新线云调用 cloud.openapi.${c} 未在 rewrite/cloud/build.mjs OPENAPI_PERMS 登记——产物 config.json 缺权限「${c}」（根因#12）`)
+      return bad
+    },
+  },
+  {
+    id: 'rw-interface-catalog-sync',
+    roots: ['正册'],
+    desc: '新线接口正册同步（移植 interface-catalog-sync）：rewrite 每个云函数（export const main 单元）+ app action + adminApi action 须登记 docs/系统事实.md「重写线」节内（按节内文本核·不借旧线登记假绿）——杜绝「加接口忘登记」',
+    run() {
+      const base = join(ROOT, 'rewrite/cloud/src/functions')
+      if (!existsSync(base)) return []
+      const catPath = join(ROOT, 'docs/系统事实.md')
+      if (!existsSync(catPath)) return ['docs/系统事实.md 缺失（接口权威登记册）']
+      const cat = readFileSync(catPath, 'utf8')
+      const sec = cat.split(/^## .*重写线.*$/m)[1]
+      if (!sec) return ['docs/系统事实.md 缺「重写线」正册节——新线函数/action 无登记处（正册 P1）']
+      const section = sec.split(/^## /m)[0]
+      const has = (name) => section.includes('`' + name + '`')
+      const bad = []
+      // 云函数单元：顶层 dir 含 index.ts（且有 main）＝一函数；组目录下逐文件/子目录含 main 者＝一函数
+      const isFn = (p) => readFileSync(p, 'utf8').includes('export const main')
+      for (const e of readdirSync(base)) {
+        const p = join(base, e)
+        if (!statSync(p).isDirectory()) continue
+        const idx = join(p, 'index.ts')
+        if (existsSync(idx) && isFn(idx)) {
+          if (!has(e)) bad.push(`新线云函数 ${e} 未登记 系统事实「重写线」节（正册 P1）`)
+          continue
+        }
+        for (const c of readdirSync(p)) {
+          const cp = join(p, c)
+          let name = null
+          if (statSync(cp).isDirectory()) {
+            const ci = join(cp, 'index.ts')
+            if (existsSync(ci) && isFn(ci)) name = c
+          } else if (c.endsWith('.ts') && isFn(cp)) name = c.slice(0, -3)
+          if (name && !has(name)) bad.push(`新线云函数 ${name} 未登记 系统事实「重写线」节（正册 P1）`)
+        }
+      }
+      // app / adminApi action 查表键
+      for (const [idxRel, extra] of [
+        ['rewrite/cloud/src/functions/app/index.ts', []],
+        ['rewrite/cloud/src/functions/adminApi/index.ts', ['ping', 'login', 'loginByWecomCode']],
+      ]) {
+        const ip = join(ROOT, idxRel)
+        if (!existsSync(ip)) continue
+        const m = readFileSync(ip, 'utf8').match(/const ACTIONS[^{]*\{([\s\S]*?)\n\}/)
+        const keys = m ? [...m[1].matchAll(/^\s{2}(\w+)[:,]/gm)].map((x) => x[1]) : []
+        for (const a of [...keys, ...extra])
+          if (!has(a)) bad.push(`新线 action ${a} 未登记 系统事实「重写线」节（正册 P1）`)
+      }
+      return bad
+    },
+  },
+  {
     id: 'oldline-frozen',
     roots: ['铁律'],
     desc: '重写期旧线冻结（ADR §23 切换策略）：packages/ 五包在本仓是参照基线、字节级冻结——逐文件摘要须与 scripts/oldline-freeze.json 清单一致（防误改旧线以为生效：重写改动只进 rewrite/，线上止血走 next 仓）；确需有意识同步旧线时 node scripts/freeze-oldline.mjs 刷新清单并在提交信息写明缘由',

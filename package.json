@@ -24,6 +24,7 @@
     "build:admin": "npm run build -w luckyducky-admin",
     "build:agent": "npm run build -w luckyducky-agent",
     "build:cloud": "npm run build:shared && node packages/cloud/build.mjs",
+    "build:rw-cloud": "node rewrite/cloud/build.mjs",
     "verify:cloud": "npm run build:cloud && node scripts/verify-cloud-bundles.cjs",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
