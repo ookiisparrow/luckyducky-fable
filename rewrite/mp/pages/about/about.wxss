@@ -1,0 +1,54 @@
+.ld-about {
+  min-height: 100vh;
+  background: var(--ld-bg-lilac);
+  padding: 48rpx 32rpx;
+}
+.ld-ab-brand {
+  font-size: 44rpx;
+  font-weight: 700;
+  color: var(--ld-purple-ink);
+  text-align: center;
+}
+.ld-ab-lead {
+  margin: 16rpx 0 36rpx;
+  font-size: 26rpx;
+  color: var(--ld-purple-meta);
+  text-align: center;
+}
+.ld-panel {
+  padding: 28rpx;
+  margin-bottom: 20rpx;
+  background: var(--ld-bg);
+  border-radius: var(--ld-radius);
+  border: 2rpx solid var(--ld-purple-line);
+}
+.ld-ab-h {
+  font-size: 28rpx;
+  font-weight: 600;
+  color: var(--ld-ink);
+  margin-bottom: 12rpx;
+}
+.ld-ab-p {
+  font-size: 26rpx;
+  color: var(--ld-ink);
+  line-height: 1.7;
+}
+.ld-ab-links {
+  margin-top: 32rpx;
+  text-align: center;
+  font-size: 24rpx;
+}
+.ld-ab-link {
+  color: var(--ld-purple-tab);
+  text-decoration: underline;
+}
+.ld-ab-sep {
+  margin: 0 16rpx;
+  color: var(--ld-purple-meta);
+}
+.ld-ab-version {
+  margin-top: 20rpx;
+  text-align: center;
+  font-size: 22rpx;
+  color: var(--ld-purple-meta);
+}

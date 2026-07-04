@@ -1,0 +1,47 @@
+.ld-agree {
+  min-height: 100vh;
+  background: var(--ld-bg-lilac);
+  padding: 32rpx 28rpx 60rpx;
+}
+.ld-ag-updated {
+  font-size: 22rpx;
+  color: var(--ld-purple-meta);
+  margin-bottom: 16rpx;
+}
+.ld-ag-intro {
+  font-size: 26rpx;
+  color: var(--ld-ink);
+  line-height: 1.7;
+  margin-bottom: 24rpx;
+}
+.ld-panel {
+  padding: 26rpx;
+  margin-bottom: 18rpx;
+  background: var(--ld-bg);
+  border-radius: var(--ld-radius);
+  border: 2rpx solid var(--ld-purple-line);
+}
+.ld-ag-h {
+  font-size: 27rpx;
+  font-weight: 600;
+  color: var(--ld-ink);
+  margin-bottom: 10rpx;
+}
+.ld-ag-p {
+  font-size: 25rpx;
+  color: var(--ld-ink);
+  line-height: 1.7;
+}
+.ld-ag-consent {
+  margin-top: 24rpx;
+  text-align: center;
+  font-size: 26rpx;
+  color: var(--ld-purple-tab);
+  text-decoration: underline;
+}
+.ld-ag-note {
+  margin-top: 24rpx;
+  text-align: center;
+  font-size: 22rpx;
+  color: var(--ld-purple-meta);
+}

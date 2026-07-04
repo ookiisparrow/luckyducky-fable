@@ -1,0 +1,14 @@
+<view class="ld-about">
+  <view class="ld-ab-brand">{{brand}}</view>
+  <view class="ld-ab-lead">{{lead}}</view>
+  <view class="ld-panel" wx:for="{{sections}}" wx:key="*this">
+    <view class="ld-ab-h">{{item[0]}}</view>
+    <view class="ld-ab-p">{{item[1]}}</view>
+  </view>
+  <view class="ld-ab-links">
+    <text class="ld-ab-link" bind:tap="onUserAgreement">用户协议</text>
+    <text class="ld-ab-sep">·</text>
+    <text class="ld-ab-link" bind:tap="onPrivacy">隐私政策</text>
+  </view>
+  <view class="ld-ab-version" wx:if="{{version}}">版本 {{version}}</view>
+</view>

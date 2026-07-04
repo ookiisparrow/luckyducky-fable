@@ -15,7 +15,11 @@
     "pages/player/player",
     "pages/reviews/reviews",
     "pages/review/review",
-    "pages/me/me"
+    "pages/me/me",
+    "pages/profile-edit/profile-edit",
+    "pages/feedback/feedback",
+    "pages/about/about",
+    "pages/agreement/agreement"
   ],
   "window": {
     "navigationBarTitleText": "小棉鸭",

@@ -1,0 +1,69 @@
+.ld-pe {
+  min-height: 100vh;
+  background: var(--ld-bg-lilac);
+  padding: 40rpx 24rpx;
+}
+.ld-pe-avatarbtn {
+  background: transparent;
+  border: none;
+  padding: 0;
+  margin: 0 auto 40rpx;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12rpx;
+  line-height: inherit;
+}
+.ld-pe-avatarbtn::after {
+  border: none;
+}
+.ld-pe-avatar {
+  width: 160rpx;
+  height: 160rpx;
+  border-radius: 50%;
+  background: var(--ld-bg-sage);
+}
+.ld-pe-avatar-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 72rpx;
+}
+.ld-pe-avatarhint {
+  font-size: 22rpx;
+  color: var(--ld-purple-meta);
+}
+.ld-field {
+  display: flex;
+  align-items: center;
+  gap: 24rpx;
+  padding: 26rpx 28rpx;
+  margin-bottom: 20rpx;
+  background: var(--ld-bg);
+  border-radius: var(--ld-radius);
+  border: 2rpx solid var(--ld-purple-line);
+}
+.ld-field-label {
+  width: 100rpx;
+  font-size: 26rpx;
+  color: var(--ld-purple-meta);
+  flex-shrink: 0;
+}
+.ld-field-input {
+  flex: 1;
+  font-size: 28rpx;
+  color: var(--ld-ink);
+}
+.ld-pe-save {
+  margin-top: 20rpx;
+  text-align: center;
+  padding: 26rpx 0;
+  border-radius: var(--ld-radius-pill);
+  background: var(--ld-purple-ink);
+  color: #ffffff;
+  font-size: 30rpx;
+  font-weight: 600;
+}
+.ld-pe-save.dim {
+  opacity: 0.5;
+}

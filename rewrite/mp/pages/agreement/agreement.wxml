@@ -1,0 +1,10 @@
+<view class="ld-agree">
+  <view class="ld-ag-updated">更新日期：{{doc.updated}}</view>
+  <view class="ld-ag-intro">{{doc.intro}}</view>
+  <view class="ld-panel" wx:for="{{doc.articles}}" wx:key="*this">
+    <view class="ld-ag-h">{{item[0]}}</view>
+    <view class="ld-ag-p">{{item[1]}}</view>
+  </view>
+  <view class="ld-ag-consent" wx:if="{{isPrivacy}}" bind:tap="onConsent">管理数据共享授权 ›</view>
+  <view class="ld-ag-note">如对本条款有任何疑问，可通过本小程序客服与我们联系。</view>
+</view>

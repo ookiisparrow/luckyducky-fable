@@ -1,0 +1,66 @@
+.ld-fb {
+  min-height: 100vh;
+  background: var(--ld-bg-lilac);
+  padding: 32rpx 24rpx;
+}
+.ld-fb-cats {
+  display: flex;
+  gap: 16rpx;
+  margin-bottom: 24rpx;
+}
+.ld-fb-cat {
+  padding: 12rpx 36rpx;
+  border-radius: var(--ld-radius-pill);
+  border: 2rpx solid var(--ld-purple-line);
+  font-size: 26rpx;
+  color: var(--ld-purple-meta);
+}
+.ld-fb-cat.on {
+  background: var(--ld-bg);
+  border-color: var(--ld-purple-tab);
+  color: var(--ld-purple-tab);
+  font-weight: 600;
+}
+.ld-fb-text {
+  width: 100%;
+  min-height: 260rpx;
+  padding: 24rpx;
+  box-sizing: border-box;
+  background: var(--ld-bg);
+  border: 2rpx solid var(--ld-purple-line);
+  border-radius: var(--ld-radius);
+  font-size: 26rpx;
+  margin-bottom: 20rpx;
+}
+.ld-field {
+  display: flex;
+  align-items: center;
+  gap: 24rpx;
+  padding: 26rpx 28rpx;
+  margin-bottom: 24rpx;
+  background: var(--ld-bg);
+  border-radius: var(--ld-radius);
+  border: 2rpx solid var(--ld-purple-line);
+}
+.ld-field-label {
+  width: 140rpx;
+  font-size: 26rpx;
+  color: var(--ld-purple-meta);
+  flex-shrink: 0;
+}
+.ld-field-input {
+  flex: 1;
+  font-size: 26rpx;
+}
+.ld-fb-submit {
+  text-align: center;
+  padding: 26rpx 0;
+  border-radius: var(--ld-radius-pill);
+  background: var(--ld-purple-ink);
+  color: #ffffff;
+  font-size: 30rpx;
+  font-weight: 600;
+}
+.ld-fb-submit.dim {
+  opacity: 0.5;
+}

@@ -1,0 +1,18 @@
+<view class="ld-pe">
+  <button class="ld-pe-avatarbtn" open-type="chooseAvatar" bind:chooseavatar="onChooseAvatar">
+    <image wx:if="{{avatarTemp || avatar}}" class="ld-pe-avatar" src="{{avatarTemp || avatar}}" mode="aspectFill" />
+    <view wx:else class="ld-pe-avatar ld-pe-avatar-empty">🦆</view>
+    <view class="ld-pe-avatarhint">点击更换头像</view>
+  </button>
+
+  <view class="ld-field">
+    <text class="ld-field-label">昵称</text>
+    <input class="ld-field-input" type="nickname" value="{{nickname}}" bind:input="onNickname" maxlength="20" placeholder="怎么称呼你" />
+  </view>
+  <view class="ld-field">
+    <text class="ld-field-label">签名</text>
+    <input class="ld-field-input" value="{{bio}}" bind:input="onBio" maxlength="60" placeholder="一句话介绍自己（选填）" />
+  </view>
+
+  <view class="ld-pe-save {{busy ? 'dim' : ''}}" bind:tap="onSave">保存</view>
+</view>

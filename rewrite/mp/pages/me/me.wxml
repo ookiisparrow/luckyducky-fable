@@ -1,26 +1,31 @@
 <view class="ld-me">
-  <view class="ld-me-head">
-    <view class="ld-me-title">我</view>
-    <view class="ld-me-hint">个人中心随后续批完善</view>
-  </view>
-  <view class="ld-me-entry" bind:tap="onCourses">
-    <text>我的课程</text>
+  <view class="ld-me-profile" bind:tap="onEditProfile">
+    <image wx:if="{{avatar}}" class="ld-me-avatar" src="{{avatar}}" mode="aspectFill" />
+    <view wx:else class="ld-me-avatar ld-me-avatar-empty">🦆</view>
+    <view class="ld-me-info">
+      <view class="ld-me-name">{{nickname}}</view>
+      <view class="ld-me-bio">{{bio || '点这里编辑资料'}}</view>
+    </view>
     <text class="ld-me-arrow">›</text>
   </view>
-  <view class="ld-me-entry" bind:tap="onActivate">
-    <text>输入激活码</text>
-    <text class="ld-me-arrow">›</text>
+
+  <view class="ld-me-continue" bind:tap="onContinue">
+    <block wx:if="{{cont}}">
+      <view class="ld-me-ct-label">继续学习</view>
+      <view class="ld-me-ct-title">{{cont.courseTitle}}</view>
+      <view class="ld-me-ct-lesson">{{cont.lessonName}}</view>
+    </block>
+    <block wx:else>
+      <view class="ld-me-ct-label">开始你的第一针</view>
+      <view class="ld-me-ct-title">挑一个材料包开课吧</view>
+    </block>
   </view>
-  <view class="ld-me-entry" bind:tap="onOrders">
-    <text>我的订单</text>
-    <text class="ld-me-arrow">›</text>
-  </view>
-  <view class="ld-me-entry" bind:tap="onAfterSales">
-    <text>售后/退款</text>
-    <text class="ld-me-arrow">›</text>
-  </view>
-  <view class="ld-me-entry" bind:tap="onAddress">
-    <text>收货地址</text>
-    <text class="ld-me-arrow">›</text>
-  </view>
+
+  <view class="ld-me-entry" bind:tap="onCourses"><text>我的课程</text><text class="ld-me-arrow">›</text></view>
+  <view class="ld-me-entry" bind:tap="onActivate"><text>输入激活码</text><text class="ld-me-arrow">›</text></view>
+  <view class="ld-me-entry" bind:tap="onOrders"><text>我的订单</text><text class="ld-me-arrow">›</text></view>
+  <view class="ld-me-entry" bind:tap="onAfterSales"><text>售后/退款</text><text class="ld-me-arrow">›</text></view>
+  <view class="ld-me-entry" bind:tap="onAddress"><text>收货地址</text><text class="ld-me-arrow">›</text></view>
+  <view class="ld-me-entry" bind:tap="onFeedback"><text>意见反馈</text><text class="ld-me-arrow">›</text></view>
+  <view class="ld-me-entry" bind:tap="onAbout"><text>关于我们</text><text class="ld-me-arrow">›</text></view>
 </view>
