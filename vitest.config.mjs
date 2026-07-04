@@ -42,6 +42,15 @@ export default defineConfig({
           include: ['tests/agent/**/*.test.js'],
         },
       },
+      {
+        // 新线（rewrite/）测试——rw-line-in-gates 守卫要求新线包必须被测试闸扫到
+        test: {
+          name: 'rw-shared',
+          environment: 'node',
+          globals: true,
+          include: ['rewrite/shared/tests/**/*.test.ts'],
+        },
+      },
     ],
   },
 })

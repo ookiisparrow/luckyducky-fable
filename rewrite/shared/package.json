@@ -1,0 +1,18 @@
+{
+  "name": "@ldrw/shared",
+  "version": "0.1.0",
+  "private": true,
+  "description": "新线契约单源（M1 批1）：金额 Fen 品牌类型 / 状态机声明（类型级派生·零生成器）/ 集合册 / 错误码册。并存期与旧线逐字一致（parity 测试焊死·数据零迁移前提·M5 清退旧线时 parity 随之退役）。",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json"
+  }
+}

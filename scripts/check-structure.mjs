@@ -28,11 +28,13 @@ import { oldlineDigest } from './oldline-freeze-lib.mjs'
 const ROOT = resolve(import.meta.dirname, '..')
 
 function listPackageJsons() {
-  const dir = join(ROOT, 'packages')
   const out = ['package.json']
-  if (existsSync(dir)) {
+  // 旧线 packages/ + 新线 rewrite/（rw-line-in-gates：包级守卫不许漏扫新线）
+  for (const base of ['packages', 'rewrite']) {
+    const dir = join(ROOT, base)
+    if (!existsSync(dir)) continue
     for (const n of readdirSync(dir)) {
-      const p = `packages/${n}/package.json`
+      const p = `${base}/${n}/package.json`
       if (existsSync(join(ROOT, p))) out.push(p)
     }
   }
@@ -3923,6 +3925,26 @@ export const repoChecks = [
     },
   },
   {
+    id: 'rw-line-in-gates',
+    roots: ['铁律'],
+    desc: '新线包必须被三道闸扫到（M1 批1·ADR §24 测试一等公民）：root typecheck 覆盖 rewrite/shared、vitest projects 含 rewrite 测试、listPackageJsons 扫描 rewrite/*（stub-only-sdk 等包级守卫随之覆盖新线）——防 rewrite/ 代码默默漏出 check',
+    run() {
+      const bad = []
+      const pkg = JSON.parse(readFileSync(join(ROOT, 'package.json'), 'utf8'))
+      if (!/rewrite\/shared/.test(pkg.scripts?.typecheck || '')) {
+        bad.push('package.json scripts.typecheck 未覆盖 rewrite/shared——新线类型不过闸')
+      }
+      const vconf = readFileSync(join(ROOT, 'vitest.config.mjs'), 'utf8')
+      if (!/rewrite\//.test(vconf)) {
+        bad.push('vitest.config.mjs 未含 rewrite 测试 project——新线测试不过闸')
+      }
+      if (!listPackageJsons().some((p) => p.startsWith('rewrite/'))) {
+        bad.push('listPackageJsons() 未扫描 rewrite/*——包级守卫（stub-only-sdk 等）漏新线')
+      }
+      return bad
+    },
+  },
+  {
     id: 'oldline-frozen',
     roots: ['铁律'],
     desc: '重写期旧线冻结（ADR §23 切换策略）：packages/ 五包在本仓是参照基线、字节级冻结——逐文件摘要须与 scripts/oldline-freeze.json 清单一致（防误改旧线以为生效：重写改动只进 rewrite/，线上止血走 next 仓）；确需有意识同步旧线时 node scripts/freeze-oldline.mjs 刷新清单并在提交信息写明缘由',
@@ -4041,6 +4063,18 @@ export const typeAndTestGuards = [
     mechanism: 'ts',
     roots: ['#4'],
     reverseTest: '浮点金额赋给 Fen → tsc 编译失败（packages/shared Fen 品牌类型；反向自检手动篡改）',
+  },
+  {
+    id: 'rw-fen-branded-type',
+    mechanism: 'ts',
+    roots: ['#4'],
+    reverseTest: '新线：浮点金额赋给 Fen → tsc 编译失败（rewrite/shared Fen 品牌类型；随 rw-line-in-gates 接入 typecheck 闸）',
+  },
+  {
+    id: 'rw-contracts-golden',
+    mechanism: 'test',
+    roots: ['#4', '#2', '#5'],
+    reverseTest: 'rewrite/shared/tests/money.test.ts',
   },
   {
     id: 'order-status-union',
