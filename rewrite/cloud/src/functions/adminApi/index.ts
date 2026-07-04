@@ -1,6 +1,11 @@
 import cloud from 'wx-server-sdk'
 import { getDb, throttleLocked, throttleFail, throttleReset, recordAudit, shouldAudit } from '../../kit'
 import { reply, ensure, checkKey, issueSession, type Ctx } from './lib'
+import * as products from './actions/products'
+import * as courses from './actions/courses'
+import * as cards from './actions/cards'
+import * as batches from './actions/batches'
+import * as content from './actions/content'
 
 // 管理控制台后端 v2（HTTP 访问服务触发·鉴权外壳逐字承接旧线 index.ts·批11 只挂 ping/login，
 // 业务 action 后续批逐域挂进 ACTIONS/ACTION_CAPS——挂载时与旧线注册表逐行核对）。
@@ -8,8 +13,40 @@ import { reply, ensure, checkKey, issueSession, type Ctx } from './lib'
 // 认证频控 per-IP + 全局兜底。M5 切换日以新名部署、admin 前端切 endpoint。
 const db = getDb()
 
-// action → handler 查表（业务批逐域填充）
-const ACTIONS: Record<string, (ctx: Ctx) => Promise<any>> = {}
+// action → handler 查表（业务批逐域填充·与旧线注册表逐行核对）
+const ACTIONS: Record<string, (ctx: Ctx) => Promise<any>> = {
+  // 商品草稿 / 上架 / 橱窗（批12）
+  listDrafts: products.listDrafts,
+  saveDraft: products.saveDraft,
+  deleteDraft: products.deleteDraft,
+  uploadImage: products.uploadImage,
+  publishProduct: products.publishProduct,
+  unpublishProduct: products.unpublishProduct,
+  republishProduct: products.republishProduct,
+  listShowcase: products.listShowcase,
+  saveShowcase: products.saveShowcase,
+  // 课程草稿 / 发布 / 视频（批12）
+  getVideoUploadMeta: courses.getVideoUploadMeta,
+  getCourseDraft: courses.getCourseDraft,
+  saveCourseDraft: courses.saveCourseDraft,
+  publishCourse: courses.publishCourse,
+  uploadChunk: courses.uploadChunk,
+  uploadFinish: courses.uploadFinish,
+  // 卡片 / 设置（批12）
+  getSettings: cards.getSettings,
+  saveSettings: cards.saveSettings,
+  getCard: cards.getCard,
+  saveCard: cards.saveCard,
+  // 码批次（批12·createBatch 并行期经 callFunction 打旧线 genQrcodes 同名函数·M5 收口）
+  listBatches: batches.listBatches,
+  createBatch: batches.createBatch,
+  listBatchCodes: batches.listBatchCodes,
+  // 首页内容 / 辅助视频（批12）
+  getHomeContent: content.getHomeContent,
+  saveHomeContent: content.saveHomeContent,
+  listHelpVideos: content.listHelpVideos,
+  saveHelpVideos: content.saveHelpVideos,
+}
 
 // 能力闸（RBAC·别让单超管裸奔）：受限 action 须 principal 具备对应能力（'*'=全能力）。
 // 坐席台/360 读的 cap 随对应域批次登记（与 action 同批落·不空守）。
