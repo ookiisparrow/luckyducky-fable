@@ -3931,8 +3931,10 @@ export const repoChecks = [
     run() {
       const bad = []
       const pkg = JSON.parse(readFileSync(join(ROOT, 'package.json'), 'utf8'))
-      if (!/rewrite\/shared/.test(pkg.scripts?.typecheck || '')) {
-        bad.push('package.json scripts.typecheck 未覆盖 rewrite/shared——新线类型不过闸')
+      for (const p of ['rewrite/shared', 'rewrite/cloud']) {
+        if (!new RegExp(p).test(pkg.scripts?.typecheck || '')) {
+          bad.push(`package.json scripts.typecheck 未覆盖 ${p}——新线类型不过闸`)
+        }
       }
       const vconf = readFileSync(join(ROOT, 'vitest.config.mjs'), 'utf8')
       if (!/rewrite\//.test(vconf)) {
@@ -4075,6 +4077,12 @@ export const typeAndTestGuards = [
     mechanism: 'test',
     roots: ['#4', '#2', '#5'],
     reverseTest: 'rewrite/shared/tests/money.test.ts',
+  },
+  {
+    id: 'rw-kit-golden',
+    mechanism: 'test',
+    roots: ['#1', '#2', '#3', '#7', '#13'],
+    reverseTest: 'rewrite/cloud/tests/transition.test.ts',
   },
   {
     id: 'order-status-union',

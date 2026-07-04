@@ -43,12 +43,18 @@ export default defineConfig({
         },
       },
       {
-        // 新线（rewrite/）测试——rw-line-in-gates 守卫要求新线包必须被测试闸扫到
+        // 新线（rewrite/）测试——rw-line-in-gates 守卫要求新线包必须被测试闸扫到。
+        // @ldrw/shared 走源码别名（免建 dist）；wx-server-sdk 经根 node_modules 命中内存桩。
+        resolve: {
+          alias: {
+            '@ldrw/shared': new URL('./rewrite/shared/src/index.ts', import.meta.url).pathname,
+          },
+        },
         test: {
-          name: 'rw-shared',
+          name: 'rw',
           environment: 'node',
           globals: true,
-          include: ['rewrite/shared/tests/**/*.test.ts'],
+          include: ['rewrite/*/tests/**/*.test.ts'],
         },
       },
     ],

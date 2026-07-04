@@ -1,0 +1,13 @@
+{
+  "name": "@ldrw/cloud",
+  "version": "0.1.0",
+  "private": true,
+  "description": "新线云函数层（M1）：kit 横切原语（批2）+ 函数域（逐批立）。运行于微信云开发；测试一律内存桩 wx-server-sdk（stub-only-sdk 守卫焊死，不触真云）。",
+  "type": "module",
+  "dependencies": {
+    "@ldrw/shared": "*"
+  },
+  "devDependencies": {
+    "wx-server-sdk": "file:../../tests/helpers/wx-server-sdk"
+  }
+}
