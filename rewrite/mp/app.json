@@ -6,6 +6,7 @@
     "pages/checkout/checkout",
     "pages/address/address",
     "pages/address-edit/address-edit",
+    "pages/paysuccess/paysuccess",
     "pages/me/me"
   ],
   "window": {

@@ -1,0 +1,48 @@
+.ld-paysuccess {
+  min-height: 100vh;
+  background: var(--ld-bg-lilac);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 16rpx;
+  padding: 0 48rpx;
+}
+.ld-ps-badge {
+  width: 120rpx;
+  height: 120rpx;
+  line-height: 120rpx;
+  text-align: center;
+  border-radius: 50%;
+  background: var(--ld-purple-tab);
+  color: #ffffff;
+  font-size: 60rpx;
+  margin-bottom: 16rpx;
+}
+.ld-ps-title {
+  font-size: 40rpx;
+  font-weight: 700;
+  color: var(--ld-purple-ink);
+}
+.ld-ps-hint {
+  font-size: 24rpx;
+  color: var(--ld-purple-meta);
+}
+.ld-ps-actions {
+  margin-top: 48rpx;
+  display: flex;
+  gap: 24rpx;
+}
+.ld-ps-btn {
+  padding: 20rpx 56rpx;
+  border-radius: var(--ld-radius-pill);
+  background: var(--ld-purple-ink);
+  color: #ffffff;
+  font-size: 28rpx;
+  font-weight: 600;
+}
+.ld-ps-btn.ghost {
+  background: var(--ld-bg);
+  color: var(--ld-purple-tab);
+  border: 2rpx solid var(--ld-purple-line);
+}

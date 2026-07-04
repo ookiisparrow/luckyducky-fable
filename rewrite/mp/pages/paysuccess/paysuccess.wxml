@@ -1,0 +1,10 @@
+<view class="ld-paysuccess">
+  <view class="ld-ps-badge">✓</view>
+  <view class="ld-ps-title">支付成功</view>
+  <view class="ld-ps-hint" wx:if="{{orderId}}">订单号 {{orderId}}</view>
+  <view class="ld-ps-hint">我们会尽快为你备货发货</view>
+  <view class="ld-ps-actions">
+    <view class="ld-ps-btn ghost" bind:tap="onViewOrder">查看订单</view>
+    <view class="ld-ps-btn" bind:tap="onGoHome">回首页</view>
+  </view>
+</view>

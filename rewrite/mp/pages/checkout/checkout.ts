@@ -1,9 +1,10 @@
-// 结算页（M2 批5）：地址 + 条目预览 + 搭配购 + 金额明细 + 提交订单。
-// 提交经 app 网关 createOrder（云端定价/校验/预留库存·不信前端）；支付拉起随批6。
+// 结算页（M2 批5·批6 接收银）：地址 + 条目预览 + 搭配购 + 金额明细 + 提交订单 + 拉起支付。
+// 提交经 app 网关 createOrder（云端定价/校验/预留库存·不信前端）；支付参数经 mapPayResult fail-closed。
 import * as addr from '../../lib/address'
 import * as checkout from '../../lib/checkout'
 import { CHECKOUT_ADDONS } from '../../lib/checkoutConst'
-import { createOrder } from '../../api/orders'
+import { createOrder, pay } from '../../api/orders'
+import { mapPayResult } from '../../lib/payFlow'
 
 Page({
   data: {
@@ -66,9 +67,40 @@ Page({
       return
     }
     checkout.finishSubmitted() // 购物车按实际提交数量精确扣
+    const order = (r.order || {}) as Record<string, any>
+    if (order.status === 'paid') {
+      // mock 模式建单即付（开发环境）——直接进成功页
+      wx.redirectTo({ url: '/pages/paysuccess/paysuccess?id=' + order.id })
+      return
+    }
+    await this.startPay(String(order.id || ''))
+  },
+  async startPay(orderId: string) {
+    const outcome = mapPayResult(await pay(orderId))
+    if (outcome.kind === 'paid') {
+      wx.redirectTo({ url: '/pages/paysuccess/paysuccess?id=' + orderId })
+      return
+    }
+    if (outcome.kind === 'request') {
+      wx.requestPayment({
+        ...outcome.payment,
+        success: () => wx.redirectTo({ url: '/pages/paysuccess/paysuccess?id=' + orderId }),
+        fail: (res) => {
+          // 取消/失败：订单保留待支付（支付窗口内可续付·订单列表随下一批开通）
+          const cancelled = String(res.errMsg || '').includes('cancel')
+          wx.showModal({
+            title: cancelled ? '支付已取消' : '支付没成功',
+            content: '订单已保留，超时前都可以继续支付。订单页随下一批开通。',
+            showCancel: false,
+            success: () => wx.switchTab({ url: '/pages/home/home' }),
+          })
+        },
+      })
+      return
+    }
     wx.showModal({
-      title: '订单已创建',
-      content: '支付功能随下一批开通，订单可在管理后台看到。',
+      title: outcome.kind === 'closed' ? '订单已关闭' : '支付没成功',
+      content: outcome.message,
       showCancel: false,
       success: () => wx.switchTab({ url: '/pages/home/home' }),
     })

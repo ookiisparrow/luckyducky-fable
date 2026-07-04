@@ -9,3 +9,5 @@ export interface OrderLine {
 
 export const createOrder = (items: OrderLine[], address: { name: string; phone: string; region: string; detail: string }): Promise<ApiResult> =>
   callApp('createOrder', { items, address })
+
+export const pay = (id: string): Promise<ApiResult> => callApp('pay', { id })
