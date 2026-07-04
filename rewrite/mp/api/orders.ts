@@ -1,0 +1,11 @@
+// 订单域 api（经 app 网关·价格数量一律云端校验，前端只传 id/sku/qty 与地址快照）
+import { callApp, type ApiResult } from '../utils/cloud'
+
+export interface OrderLine {
+  id: string
+  sku?: string
+  qty: number
+}
+
+export const createOrder = (items: OrderLine[], address: { name: string; phone: string; region: string; detail: string }): Promise<ApiResult> =>
+  callApp('createOrder', { items, address })

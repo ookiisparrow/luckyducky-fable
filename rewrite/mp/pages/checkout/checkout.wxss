@@ -1,0 +1,166 @@
+.ld-checkout {
+  min-height: 100vh;
+  background: var(--ld-bg-lilac);
+  padding: 24rpx 24rpx 0;
+}
+.ld-addr {
+  padding: 28rpx;
+  background: var(--ld-bg);
+  border-radius: var(--ld-radius);
+  border: 2rpx solid var(--ld-purple-line);
+}
+.ld-addr-line1 {
+  display: flex;
+  gap: 20rpx;
+  align-items: baseline;
+}
+.ld-addr-name {
+  font-size: 30rpx;
+  font-weight: 600;
+  color: var(--ld-ink);
+}
+.ld-addr-phone {
+  font-size: 26rpx;
+  color: var(--ld-purple-meta);
+}
+.ld-addr-line2 {
+  margin-top: 10rpx;
+  font-size: 26rpx;
+  color: var(--ld-ink);
+  line-height: 1.5;
+}
+.ld-addr-empty {
+  font-size: 28rpx;
+  color: var(--ld-purple-tab);
+  padding: 8rpx 0;
+}
+.ld-panel {
+  margin-top: 24rpx;
+  padding: 24rpx 28rpx;
+  background: var(--ld-bg);
+  border-radius: var(--ld-radius);
+  border: 2rpx solid var(--ld-purple-line);
+}
+.ld-panel-title {
+  font-size: 28rpx;
+  font-weight: 600;
+  color: var(--ld-ink);
+  margin-bottom: 12rpx;
+}
+.ld-line {
+  display: flex;
+  align-items: center;
+  gap: 20rpx;
+  padding: 14rpx 0;
+}
+.ld-line-media {
+  width: 110rpx;
+  height: 110rpx;
+  border-radius: 14rpx;
+  background: var(--ld-bg-sage);
+  flex-shrink: 0;
+}
+.ld-line-main {
+  flex: 1;
+  min-width: 0;
+}
+.ld-line-name {
+  font-size: 28rpx;
+  color: var(--ld-ink);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ld-line-sku {
+  margin-top: 6rpx;
+  font-size: 22rpx;
+  color: var(--ld-purple-meta);
+}
+.ld-line-right {
+  text-align: right;
+}
+.ld-line-price {
+  font-size: 28rpx;
+  font-weight: 600;
+  color: var(--ld-purple-ink);
+}
+.ld-line-qty {
+  margin-top: 6rpx;
+  font-size: 22rpx;
+  color: var(--ld-purple-meta);
+}
+.ld-addon {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14rpx 0;
+}
+.ld-addon-name {
+  font-size: 26rpx;
+  color: var(--ld-ink);
+}
+.ld-addon-price {
+  margin-top: 6rpx;
+  font-size: 24rpx;
+  color: var(--ld-purple-meta);
+}
+.ld-addon-btn {
+  padding: 10rpx 24rpx;
+  border-radius: var(--ld-radius-pill);
+  border: 2rpx solid var(--ld-purple-line);
+  font-size: 24rpx;
+  color: var(--ld-purple-tab);
+}
+.ld-addon-btn.on {
+  background: var(--ld-bg-lilac);
+  border-color: var(--ld-purple-tab);
+  font-weight: 600;
+}
+.ld-sum-row {
+  display: flex;
+  justify-content: space-between;
+  padding: 10rpx 0;
+  font-size: 26rpx;
+  color: var(--ld-ink);
+}
+.ld-sum-coupon {
+  color: var(--ld-purple);
+}
+.ld-submitbar-space {
+  height: 160rpx;
+}
+.ld-submitbar {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  display: flex;
+  align-items: center;
+  padding: 20rpx 32rpx calc(20rpx + env(safe-area-inset-bottom));
+  background: var(--ld-bg);
+  box-shadow: 0 -4rpx 24rpx rgba(36, 23, 51, 0.08);
+}
+.ld-sub-total {
+  flex: 1;
+}
+.ld-sub-label {
+  font-size: 24rpx;
+  color: var(--ld-purple-meta);
+  margin-right: 10rpx;
+}
+.ld-sub-num {
+  font-size: 40rpx;
+  font-weight: 700;
+  color: var(--ld-purple-ink);
+}
+.ld-sub-btn {
+  padding: 22rpx 56rpx;
+  border-radius: var(--ld-radius-pill);
+  background: var(--ld-purple-ink);
+  color: #ffffff;
+  font-size: 30rpx;
+  font-weight: 600;
+}
+.ld-sub-btn.dim {
+  opacity: 0.5;
+}

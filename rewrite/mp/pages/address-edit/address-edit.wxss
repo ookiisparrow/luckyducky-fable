@@ -1,0 +1,53 @@
+.ld-aedit {
+  min-height: 100vh;
+  background: var(--ld-bg-lilac);
+  padding: 24rpx;
+}
+.ld-field {
+  display: flex;
+  align-items: center;
+  gap: 24rpx;
+  padding: 26rpx 28rpx;
+  margin-bottom: 20rpx;
+  background: var(--ld-bg);
+  border-radius: var(--ld-radius);
+  border: 2rpx solid var(--ld-purple-line);
+}
+.ld-field-label {
+  width: 140rpx;
+  font-size: 26rpx;
+  color: var(--ld-purple-meta);
+  flex-shrink: 0;
+}
+.ld-field-input {
+  flex: 1;
+  font-size: 28rpx;
+  color: var(--ld-ink);
+}
+.ld-default {
+  display: flex;
+  align-items: center;
+  gap: 14rpx;
+  padding: 8rpx 8rpx 32rpx;
+  font-size: 26rpx;
+  color: var(--ld-purple-meta);
+}
+.ld-check {
+  width: 36rpx;
+  height: 36rpx;
+  border-radius: 50%;
+  border: 3rpx solid var(--ld-purple-line);
+}
+.ld-check.on {
+  background: var(--ld-purple-tab);
+  border-color: var(--ld-purple-tab);
+}
+.ld-savebtn {
+  text-align: center;
+  padding: 24rpx 0;
+  border-radius: var(--ld-radius-pill);
+  background: var(--ld-purple-ink);
+  color: #ffffff;
+  font-size: 30rpx;
+  font-weight: 600;
+}

@@ -1,5 +1,13 @@
 {
-  "pages": ["pages/home/home", "pages/detail/detail", "pages/cart/cart", "pages/me/me"],
+  "pages": [
+    "pages/home/home",
+    "pages/detail/detail",
+    "pages/cart/cart",
+    "pages/checkout/checkout",
+    "pages/address/address",
+    "pages/address-edit/address-edit",
+    "pages/me/me"
+  ],
   "window": {
     "navigationBarTitleText": "小棉鸭",
     "navigationBarBackgroundColor": "#ffffff",

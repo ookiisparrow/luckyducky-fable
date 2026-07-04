@@ -1,0 +1,23 @@
+<view class="ld-addrbook">
+  <view class="ld-arow" wx:for="{{list}}" wx:key="id" data-id="{{item.id}}" bind:tap="onTapRow">
+    <view class="ld-arow-main">
+      <view class="ld-arow-line1">
+        <text class="ld-arow-name">{{item.name}}</text>
+        <text class="ld-arow-phone">{{item.phone}}</text>
+        <text class="ld-arow-default" wx:if="{{item.isDefault}}">默认</text>
+      </view>
+      <view class="ld-arow-line2">{{item.region}} {{item.detail}}</view>
+    </view>
+    <view class="ld-arow-ops" wx:if="{{!picking}}">
+      <text class="ld-arow-op" wx:if="{{!item.isDefault}}" data-id="{{item.id}}" catch:tap="onSetDefault">设默认</text>
+      <text class="ld-arow-op" data-id="{{item.id}}" catch:tap="onRemove">删</text>
+    </view>
+  </view>
+
+  <view class="ld-addr-empty" wx:if="{{!list.length}}">
+    <view class="ld-empty-title">还没有收货地址</view>
+    <view class="ld-empty-hint">添加一个，结算时直接用</view>
+  </view>
+
+  <view class="ld-addbtn" bind:tap="onAdd">+ 新增地址</view>
+</view>

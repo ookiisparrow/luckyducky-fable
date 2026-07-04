@@ -1,0 +1,53 @@
+<view class="ld-checkout">
+  <view class="ld-addr" bind:tap="onPickAddress">
+    <block wx:if="{{address}}">
+      <view class="ld-addr-line1">
+        <text class="ld-addr-name">{{address.name}}</text>
+        <text class="ld-addr-phone">{{address.phone}}</text>
+      </view>
+      <view class="ld-addr-line2">{{address.region}} {{address.detail}}</view>
+    </block>
+    <view class="ld-addr-empty" wx:else>请先添加收货地址 ›</view>
+  </view>
+
+  <view class="ld-panel">
+    <view class="ld-line" wx:for="{{items}}" wx:key="index">
+      <image wx:if="{{item.cover}}" class="ld-line-media" src="{{item.cover}}" mode="aspectFill" />
+      <view wx:else class="ld-line-media"></view>
+      <view class="ld-line-main">
+        <view class="ld-line-name">{{item.name}}</view>
+        <view class="ld-line-sku" wx:if="{{item.sku}}">{{item.sku}}</view>
+      </view>
+      <view class="ld-line-right">
+        <view class="ld-line-price">¥{{item.price}}</view>
+        <view class="ld-line-qty">×{{item.qty}}</view>
+      </view>
+    </view>
+  </view>
+
+  <view class="ld-panel">
+    <view class="ld-panel-title">搭配购</view>
+    <view class="ld-addon" wx:for="{{addons}}" wx:key="id" data-id="{{item.id}}" bind:tap="onToggleAddon">
+      <view class="ld-addon-main">
+        <view class="ld-addon-name">{{item.name}}</view>
+        <view class="ld-addon-price">¥{{item.price}}</view>
+      </view>
+      <view class="ld-addon-btn {{item.added ? 'on' : ''}}">{{item.added ? '已加' : '+ 加一件'}}</view>
+    </view>
+  </view>
+
+  <view class="ld-panel">
+    <view class="ld-sum-row"><text>商品合计</text><text>{{goodsLabel}}</text></view>
+    <view class="ld-sum-row"><text>运费</text><text>{{shipLabel}}</text></view>
+    <view class="ld-sum-row"><text>优惠券</text><text class="ld-sum-coupon">{{couponLabel}}</text></view>
+  </view>
+
+  <view class="ld-submitbar-space"></view>
+  <view class="ld-submitbar">
+    <view class="ld-sub-total">
+      <text class="ld-sub-label">应付</text>
+      <text class="ld-sub-num">{{amountLabel}}</text>
+    </view>
+    <view class="ld-sub-btn {{submitting ? 'dim' : ''}}" bind:tap="onSubmit">提交订单</view>
+  </view>
+</view>

@@ -1,0 +1,23 @@
+<view class="ld-aedit">
+  <view class="ld-field">
+    <text class="ld-field-label">收货人</text>
+    <input class="ld-field-input" value="{{name}}" data-field="name" bind:input="onInput" placeholder="姓名" />
+  </view>
+  <view class="ld-field">
+    <text class="ld-field-label">电话</text>
+    <input class="ld-field-input" value="{{phone}}" data-field="phone" bind:input="onInput" type="number" placeholder="手机号" />
+  </view>
+  <view class="ld-field">
+    <text class="ld-field-label">地区</text>
+    <input class="ld-field-input" value="{{region}}" data-field="region" bind:input="onInput" placeholder="省 市 区" />
+  </view>
+  <view class="ld-field">
+    <text class="ld-field-label">详细地址</text>
+    <input class="ld-field-input" value="{{detail}}" data-field="detail" bind:input="onInput" placeholder="街道、小区、门牌号" />
+  </view>
+  <view class="ld-default" bind:tap="onToggleDefault">
+    <view class="ld-check {{isDefault ? 'on' : ''}}"></view>
+    <text>设为默认地址</text>
+  </view>
+  <view class="ld-savebtn" bind:tap="onSave">保存</view>
+</view>

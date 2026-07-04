@@ -3987,6 +3987,32 @@ export const repoChecks = [
     },
   },
   {
+    id: 'rw-mp-checkout-consts-synced',
+    roots: ['#5'],
+    desc: '结算常量镜像同步（根因#5·mp 包进不了 @ldrw/shared——开发者工具编译不出仓外引用，故 mp 落副本 + 本守卫焊死）：rewrite/mp/lib/checkoutConst.ts 的 COUPON/SHIP/CHECKOUT_ADDONS 必须与 rewrite/shared/src/checkout.ts 逐值一致',
+    run() {
+      const mpPath = join(ROOT, 'rewrite/mp/lib/checkoutConst.ts')
+      const shPath = join(ROOT, 'rewrite/shared/src/checkout.ts')
+      if (!existsSync(shPath)) return []
+      if (!existsSync(mpPath)) return ['rewrite/mp/lib/checkoutConst.ts 缺失——结算常量副本未落（mp 无法引 @ldrw/shared·守卫需两份对账）']
+      const bad = []
+      const parse = (src) => {
+        const num = (name) => {
+          const m = src.match(new RegExp(`export const ${name} = ([0-9.]+)`))
+          return m ? Number(m[1]) : NaN
+        }
+        const addons = [...src.matchAll(/\{ id: '([^']+)', name: '([^']+)', price: ([0-9.]+) \}/g)].map((m) => `${m[1]}|${m[2]}|${m[3]}`)
+        return { coupon: num('COUPON'), ship: num('SHIP'), addons: addons.join(';') }
+      }
+      const mp = parse(readFileSync(mpPath, 'utf8'))
+      const sh = parse(readFileSync(shPath, 'utf8'))
+      if (mp.coupon !== sh.coupon) bad.push(`结算常量漂移：COUPON mp=${mp.coupon} ≠ shared=${sh.coupon}（结算页展示价与云端定价不一致·下单必对不上账）`)
+      if (mp.ship !== sh.ship) bad.push(`结算常量漂移：SHIP mp=${mp.ship} ≠ shared=${sh.ship}`)
+      if (mp.addons !== sh.addons) bad.push('结算常量漂移：CHECKOUT_ADDONS mp 与 shared 不一致（搭配购展示与云端定价漂移）')
+      return bad
+    },
+  },
+  {
     id: 'rw-mp-line-in-gates',
     roots: ['铁律'],
     desc: '新线小程序包必须被三道闸扫到（M2 批1·ADR §24 测试一等公民）：root typecheck 覆盖 rewrite/mp；app.json 每个注册页面四件套（.wxml/.ts/.json/.wxss）齐全（缺件=真机白屏或工具报错·构建过≠真机能用的结构半边）；tabBar.custom 时 custom-tab-bar 组件四件套在位',
@@ -4339,6 +4365,12 @@ export const typeAndTestGuards = [
     mechanism: 'test',
     roots: ['#4', '#8'],
     reverseTest: 'rewrite/mp/tests/cart.test.ts',
+  },
+  {
+    id: 'rw-mp-checkout-golden',
+    mechanism: 'test',
+    roots: ['#4', '#6', '#8'],
+    reverseTest: 'rewrite/mp/tests/checkout.test.ts',
   },
   {
     id: 'order-status-union',

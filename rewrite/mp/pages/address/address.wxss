@@ -1,0 +1,80 @@
+.ld-addrbook {
+  min-height: 100vh;
+  background: var(--ld-bg-lilac);
+  padding: 24rpx;
+}
+.ld-arow {
+  display: flex;
+  align-items: center;
+  gap: 16rpx;
+  padding: 26rpx;
+  margin-bottom: 20rpx;
+  background: var(--ld-bg);
+  border-radius: var(--ld-radius);
+  border: 2rpx solid var(--ld-purple-line);
+}
+.ld-arow-main {
+  flex: 1;
+  min-width: 0;
+}
+.ld-arow-line1 {
+  display: flex;
+  align-items: baseline;
+  gap: 16rpx;
+}
+.ld-arow-name {
+  font-size: 30rpx;
+  font-weight: 600;
+  color: var(--ld-ink);
+}
+.ld-arow-phone {
+  font-size: 24rpx;
+  color: var(--ld-purple-meta);
+}
+.ld-arow-default {
+  font-size: 20rpx;
+  color: var(--ld-purple-tab);
+  border: 2rpx solid var(--ld-purple-line);
+  border-radius: var(--ld-radius-pill);
+  padding: 2rpx 12rpx;
+}
+.ld-arow-line2 {
+  margin-top: 8rpx;
+  font-size: 26rpx;
+  color: var(--ld-ink);
+  line-height: 1.5;
+}
+.ld-arow-ops {
+  display: flex;
+  gap: 8rpx;
+  flex-shrink: 0;
+}
+.ld-arow-op {
+  font-size: 24rpx;
+  color: var(--ld-purple-meta);
+  padding: 10rpx;
+}
+.ld-addr-empty {
+  text-align: center;
+  padding: 120rpx 0 40rpx;
+}
+.ld-empty-title {
+  font-size: 30rpx;
+  font-weight: 600;
+  color: var(--ld-purple-ink);
+}
+.ld-empty-hint {
+  margin-top: 10rpx;
+  font-size: 24rpx;
+  color: var(--ld-purple-meta);
+}
+.ld-addbtn {
+  margin-top: 24rpx;
+  text-align: center;
+  padding: 24rpx 0;
+  border-radius: var(--ld-radius-pill);
+  background: var(--ld-purple-ink);
+  color: #ffffff;
+  font-size: 28rpx;
+  font-weight: 600;
+}

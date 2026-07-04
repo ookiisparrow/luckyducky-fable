@@ -1,5 +1,6 @@
-// 购物车页（M2 批4）：行列表/数量步进/勾选合计/删行/空态。状态单源 lib/cart，页面 onShow 全量刷新。
+// 购物车页（M2 批4·批5 接结算）：行列表/数量步进/勾选合计/删行/空态。状态单源 lib/cart，页面 onShow 全量刷新。
 import * as cart from '../../lib/cart'
+import { prepareFromCart } from '../../lib/checkout'
 
 Page({
   data: {
@@ -50,7 +51,8 @@ Page({
       wx.showToast({ title: '先勾选要买的宝贝', icon: 'none' })
       return
     }
-    wx.showToast({ title: '结算链路随下一批开通', icon: 'none' })
+    prepareFromCart() // 选中项快照进草稿（fromCart·提交成功按实际数量扣车）
+    wx.navigateTo({ url: '/pages/checkout/checkout' })
   },
   onGoHome() {
     wx.switchTab({ url: '/pages/home/home' })

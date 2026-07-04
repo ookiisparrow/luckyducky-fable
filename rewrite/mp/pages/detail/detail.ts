@@ -1,5 +1,6 @@
-// 商品详情（M2 批3·批4 接购物车）：图册 swiper + SKU 选择（价格联动）+ 加购。
+// 商品详情（M2 批3·批4 接购物车·批5 接立即购买）：图册 swiper + SKU 选择（价格联动）+ 加购/直买。
 import * as cart from '../../lib/cart'
+import { prepareBuyNow } from '../../lib/checkout'
 import { getProductById } from '../../lib/catalog'
 import { mapDetail, priceForSelection, type DetailVM } from '../../lib/mapDetail'
 
@@ -42,6 +43,10 @@ Page({
     wx.showToast({ title: '已加入购物车', icon: 'success' })
   },
   onBuyNow() {
-    wx.showToast({ title: '下单链路随下一批开通', icon: 'none' })
+    const vm = this.data.vm
+    if (!vm) return
+    const sku = vm.skus[this.data.skuIndex]
+    prepareBuyNow({ id: vm.id, sku: sku ? sku.name : '', name: vm.name, tag: vm.tag, price: sku ? sku.price : vm.price, cover: vm.gallery[0] || '' }) // 直买不动购物车
+    wx.navigateTo({ url: '/pages/checkout/checkout' })
   },
 })
