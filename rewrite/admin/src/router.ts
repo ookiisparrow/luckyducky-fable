@@ -13,6 +13,11 @@ const Showcase = () => import('./pages/Showcase.vue')
 const HomeContent = () => import('./pages/HomeContent.vue')
 const HelpVideos = () => import('./pages/HelpVideos.vue')
 const Courses = () => import('./pages/Courses.vue')
+const Conversations = () => import('./pages/Conversations.vue')
+const Customer360 = () => import('./pages/Customer360.vue')
+const Kb = () => import('./pages/Kb.vue')
+const Csat = () => import('./pages/Csat.vue')
+const Checkpoints = () => import('./pages/Checkpoints.vue')
 
 export const router = createRouter({
   history: createWebHashHistory(),
@@ -30,6 +35,11 @@ export const router = createRouter({
         { path: 'home-content', component: HomeContent },
         { path: 'help-videos', component: HelpVideos },
         { path: 'courses', component: Courses },
+        { path: 'conversations', component: Conversations },
+        { path: 'customer360', component: Customer360 },
+        { path: 'kb', component: Kb },
+        { path: 'csat', component: Csat },
+        { path: 'checkpoints', component: Checkpoints },
       ],
     },
   ],

@@ -24,7 +24,16 @@ const NAV = [
       { label: '售后退款', path: '/refunds' },
     ],
   },
-  { group: '客服', items: [] },
+  {
+    group: '客服',
+    items: [
+      { label: '客服会话', path: '/conversations' },
+      { label: '客户 360', path: '/customer360' },
+      { label: '知识库', path: '/kb' },
+      { label: '满意度', path: '/csat' },
+      { label: '节点诊断', path: '/checkpoints' },
+    ],
+  },
   { group: '进销存', items: [] },
   { group: '系统', items: [] },
 ] as Array<{ group: string; items: Array<{ label: string; path: string }> }>
