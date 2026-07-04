@@ -21,3 +21,12 @@ export function alert(sev: AlertSev, fn: string, code: string, ctx: Record<strin
 export async function notifyAlert(sev: AlertSev, fn: string, code: string, ctx: Record<string, unknown> = {}): Promise<void> {
   alert(sev, fn, code, ctx)
 }
+
+/** 召回汇总推运营群（同上·botpush 接缝随观测批接上·现仅落结构化行）。 */
+export async function notifyRecall(summary: Record<string, number>): Promise<void> {
+  try {
+    console.error(`[LD_RECALL] ${JSON.stringify(summary)}`)
+  } catch {
+    /* fail-soft */
+  }
+}
