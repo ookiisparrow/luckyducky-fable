@@ -22,6 +22,8 @@ import {
   getMyAfterSales,
 } from './actions/orders'
 import { kfBind, dataConsent } from './actions/cs'
+import { submitFeedback } from './actions/feedback'
+import { submitCheckpointPhoto } from './actions/checkpoint'
 
 /**
  * 用户端聚合网关（蓝图定案·adminApi registry 范式）：event = { action, data }。
@@ -52,6 +54,8 @@ const ACTIONS: Record<string, (event: unknown) => Promise<unknown>> = {
   getMyAfterSales,
   kfBind,
   dataConsent,
+  submitFeedback,
+  submitCheckpointPhoto,
 }
 
 export const main = async (event: any) => {
