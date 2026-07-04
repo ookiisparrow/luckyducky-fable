@@ -62,10 +62,11 @@ npm run build:h5 / build:mp-weixin / build:cloud
 - **并发幂等 + 状态机**：一次性副作用绑首次状态转移；确定性 `_id`（撞 id 即并发方已写，天然幂等）；流转走 `transition()` 携合法流转表，钱相关自动留痕。`[机器守: deterministic-id-concurrency]` `[机器守: transition-atomic-idempotent]` `[机器守: order-status-union]`
 - **金额分整数**：全链「分」整数（Fen 品牌类型），元只在展示层；边界收元转分一次。`[机器守: fen-branded-type]` `[机器守: fen-money-chain]`
 
-**规模 / 资产 / 平台 / 文档（病根 7,9,11,12）**
+**规模 / 资产 / 平台 / 文档 / 可观测（病根 7,9,11,12,14）**
 - **分页协议**：列表走 cursor/limit 契约，杜绝固定 limit 静默挤出旧数据。`[机器守: paging-contract]`
 - **平台接缝单点**：支付/退款与微信的接缝（`cloudbase_module`）收口 kit `callFlow` 一处；参数 flowId/refundFlowId/notify_url 正册在 `console-assets/`，平台规则单方变化只改这点。`[机器守: flow-seam-single]` `[机器守: flow-seam-via-kit]`
 - **git 外资产正册**：控制台 8 件资产 + 库权限期望表副本在 `console-assets/`，变更先 repo 后控制台。`[机器守: console-assets-present]`
+- **失败必可观测（病根14）**：动作类失败（接缝外呼/发送/回调验签）禁静默吞——留痕告警走 kit `observe.alert` 单出口（`[LD_ALERT]`+webhook 触达），fail-soft 只改返回语义、不抹可观测性；读路径 `doc.get().catch(()=>null)`（缺席=null）不在此列；刻意静默行内注释写明为什么。`[机器守: rw-flow-observable]` `[机器守: moneychain-alert-wired]`
 - **文档防膨胀**：本文件 ≤180 行、活文档条目 ≤8 行，溢出沉记录类。`[机器守: docs-budget]`
 
 **多端样式（标 ⚙ 的由 conventions 机器拦）**

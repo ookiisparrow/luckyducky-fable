@@ -43,10 +43,10 @@ describe('体检面板=注册表派生（check-report-derived）', () => {
     expect(ids.length, '面板守卫数 ≠ 注册表总数（多造或重复 id）').toBe(allIds.length)
   })
 
-  it('病根地图与根因账本 §一 同源：#1..#13 全在且带标题', () => {
+  it('病根地图与根因账本 §一 同源：#1..#14 全在且带标题', () => {
     const ledger = parseRootLedger()
     const nums = ledger.map((r) => r.num)
-    for (let n = 1; n <= 13; n++) expect(nums, `病根 #${n} 未解析到`).toContain(n)
+    for (let n = 1; n <= 14; n++) expect(nums, `病根 #${n} 未解析到`).toContain(n)
     expect(ledger.every((r) => r.title.length > 0), '病根标题为空').toBe(true)
   })
 
