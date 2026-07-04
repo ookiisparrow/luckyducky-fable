@@ -22,6 +22,7 @@ const SENSITIVE_FNS = [
   'login', 'updateProfile', 'trackEvent', 'seedProducts', 'seedCourses', 'initDb', 'cleanupEvents',
   'kfCallback', 'kfBind', 'kfSend', 'kfHealthProbe', // 微信客服：回调状态写 + 身份桥接映射写 + 主动发消息给顾客 + 活体探针（读密钥/调API/推告警·敏感·根因#3）
   'submitFeedback', // 用户写函数（写库·频控敏感·根因#13），同 trackEvent/updateProfile 二次确认
+  'app', 'adminApiV2', // 重写线并行期部署面（M2/M3）：app 含钱链用户 action、adminApiV2 含审批退款/改库存——重部署二次确认
 ]
 // 纯读函数：写部署放行（明确非敏感）
 const READONLY_FNS = [
