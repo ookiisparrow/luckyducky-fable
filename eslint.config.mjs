@@ -82,7 +82,7 @@ export default [
   // 重写线后台（M3·Vue3+TS）：.vue 的 <script lang="ts"> 用 TS 解析器（espree 解不了 TS 语法）；
   // 同承旧 admin 的 no-alert 纪律。纯 .ts 文件仍归 tsc strict 管（与全仓 TS 文件同口径·不入 lint）。
   {
-    files: ['rewrite/admin/src/**/*.vue'],
+    files: ['rewrite/admin/src/**/*.vue', 'rewrite/agent/src/**/*.vue'],
     languageOptions: { parserOptions: { parser: tsParser } },
     rules: { 'no-alert': 'error' },
   },

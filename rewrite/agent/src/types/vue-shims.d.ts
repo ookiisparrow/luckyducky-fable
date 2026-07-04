@@ -1,0 +1,6 @@
+// .vue 模块声明（同 rewrite/admin·tsc 只查 .ts）
+declare module '*.vue' {
+  import type { DefineComponent } from 'vue'
+  const component: DefineComponent<Record<string, never>, Record<string, never>, unknown>
+  export default component
+}

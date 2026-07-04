@@ -1,0 +1,19 @@
+{
+  "name": "@ldrw/agent",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Lucky Ducky 坐席工作台 v2（M3 重写·外包客服·对接 adminApiV2）",
+  "type": "module",
+  "scripts": {
+    "dev": "vite --port 5174",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "vue": "^3.4.21"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-vue": "^5.0.4",
+    "vite": "^5.2.8"
+  }
+}

@@ -4013,6 +4013,22 @@ export const repoChecks = [
     },
   },
   {
+    id: 'rw-agent-in-gates',
+    roots: ['铁律'],
+    desc: '新坐席台包必须被三道闸扫到（M3 批8·坐席台=在用人工客服唯一通道·零断档红线）：root typecheck 覆盖 rewrite/agent；轮询合并纯函数有行为测试；package.json 有 build 脚本',
+    run() {
+      const base = join(ROOT, 'rewrite/agent')
+      if (!existsSync(base)) return []
+      const bad = []
+      const pkg = JSON.parse(readFileSync(join(ROOT, 'package.json'), 'utf8'))
+      if (!/rewrite\/agent/.test(pkg.scripts?.typecheck || '')) bad.push('package.json scripts.typecheck 未覆盖 rewrite/agent——新坐席台类型不过闸')
+      if (!existsSync(join(base, 'tests/desk.test.ts'))) bad.push('rewrite/agent/tests/desk.test.ts 缺失——轮询合并（不重气泡/游标只进不退）无行为测试')
+      const apkg = join(base, 'package.json')
+      if (!existsSync(apkg) || !JSON.parse(readFileSync(apkg, 'utf8')).scripts?.build) bad.push('rewrite/agent 缺 build 脚本——产物形态不在')
+      return bad
+    },
+  },
+  {
     id: 'rw-admin-ui-in-gates',
     roots: ['铁律'],
     desc: '新后台包必须被三道闸扫到（M3 批1）：root typecheck 覆盖 rewrite/admin；api 客户端有行为测试在位（会话/规整属钱链入口）；package.json 有 build 脚本（vite 产物形态在）',
@@ -4471,6 +4487,12 @@ export const typeAndTestGuards = [
     mechanism: 'test',
     roots: ['#4', '#8'],
     reverseTest: 'rewrite/admin/tests/scm-ui.test.ts',
+  },
+  {
+    id: 'rw-agent-ui-golden',
+    mechanism: 'test',
+    roots: ['#8'],
+    reverseTest: 'rewrite/agent/tests/desk.test.ts',
   },
   {
     id: 'order-status-union',
