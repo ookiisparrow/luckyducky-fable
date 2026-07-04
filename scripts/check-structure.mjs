@@ -4391,6 +4391,12 @@ export const typeAndTestGuards = [
     reverseTest: 'rewrite/mp/tests/aftersales-map.test.ts',
   },
   {
+    id: 'rw-flow-observable',
+    mechanism: 'test',
+    roots: ['#12', '#8'],
+    reverseTest: 'rewrite/cloud/tests/flow.test.ts',
+  },
+  {
     id: 'order-status-union',
     mechanism: 'ts',
     roots: ['#2'],
