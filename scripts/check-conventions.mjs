@@ -150,7 +150,8 @@ export const RULES = [
 
 const isCommentLine = (line) => /^(\/\/|\/\*|\*|<!--)/.test(line.trim())
 
-function checkFile(file) {
+// export：供 check-report 体检面板复用同一套遍历/判定（面板=派生视图，禁自建第二套语义）
+export function checkFile(file) {
   const violations = []
   const content = readFileSync(file, 'utf8')
   const lines = content.split('\n')
@@ -163,6 +164,7 @@ function checkFile(file) {
       const msg = rule.test(line, { ...ctx, i })
       if (msg) {
         violations.push({
+          id: rule.id,
           loc: `${relative(ROOT, file)}:${i + 1}`,
           msg,
           src: line.trim().slice(0, 80),
@@ -181,13 +183,14 @@ function inScope(file) {
   )
 }
 
-function* walk(dir) {
+export function* walk(dir) {
   for (const name of readdirSync(dir)) {
     const p = join(dir, name)
     if (statSync(p).isDirectory()) yield* walk(p)
     else if (inScope(p)) yield p
   }
 }
+export { SRC as CONVENTION_SRC }
 
 function report(violations, stream) {
   for (const v of violations) stream.write(`${v.loc}\n  ✗ ${v.msg}\n  → ${v.src}\n`)

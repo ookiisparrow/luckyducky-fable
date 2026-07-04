@@ -31,3 +31,6 @@ project.private.config.json
 
 # build:cloud 并发锁（原子 mkdir，构建完即删；崩溃残留由下次构建 2min 破除）
 .build-cloud.lock
+
+# 体检面板产物（npm run report 生成·守卫 check-report-in-gates 核不入库）
+reports/

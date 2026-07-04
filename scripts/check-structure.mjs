@@ -4294,6 +4294,28 @@ export const repoChecks = [
       ]
     },
   },
+  {
+    id: 'check-report-in-gates',
+    roots: ['正册'],
+    desc: '体检面板是守卫注册表的派生视图（防手抄清单漂移·病根#11 同款）：生成器在位且从 check-structure/check-conventions 两注册表 import（禁手抄守卫清单）、package.json 挂 report 脚本、派生性行为测试在位、产物目录 reports/ 不入库',
+    run() {
+      const bad = []
+      const gen = 'scripts/check-report.mjs'
+      const genAbs = join(ROOT, gen)
+      if (!existsSync(genAbs)) return [`${gen} 缺失——体检面板生成器未建（npm run report 的载体）`]
+      const src = readFileSync(genAbs, 'utf8')
+      if (!/from\s+'\.\/check-structure\.mjs'/.test(src) || !/from\s+'\.\/check-conventions\.mjs'/.test(src))
+        bad.push(`${gen} 未从两守卫注册表 import——面板必须单源派生，不许手抄守卫清单`)
+      const pkg = JSON.parse(readFileSync(join(ROOT, 'package.json'), 'utf8'))
+      if (!/check-report\.mjs/.test(String(pkg.scripts?.report || '')))
+        bad.push('package.json 缺 report 脚本（npm run report → 体检面板）')
+      if (!existsSync(join(ROOT, 'tests/scripts/checkReport.test.js')))
+        bad.push('tests/scripts/checkReport.test.js 缺失——面板派生性行为测试（守卫 check-report-derived）')
+      if (!/^reports\/$/m.test(readFileSync(join(ROOT, '.gitignore'), 'utf8')))
+        bad.push('.gitignore 缺 reports/ ——体检面板产物不入库')
+      return bad
+    },
+  },
 ]
 
 // ============== 逐文件规则（fileRules）==============
@@ -4716,10 +4738,14 @@ export const typeAndTestGuards = [
   // 云存储上传路径消毒（深审 P3·根因#3 不信前端）：storeImage/getVideoUploadMeta 的 pid/courseId 客户端串
   // 直接拼对象键——'../' 等路径字符须剥净（[^\w-] 白名单·同 name 口径）、全非法回退 misc。reverseTest 锁此行为。
   { id: 'upload-path-sanitized', mechanism: 'test', roots: ['#3'], reverseTest: 'tests/cloud/adminUploadPath.test.js' },
+  // 体检面板派生性（正册·可视检查系统批）：面板守卫清单必须=四注册表机器派生（一条不漏不多造）、
+  // 失败现场置顶可见、单测带复跑命令、病根地图与根因账本 §一 同源。reverseTest 锁此派生性。
+  { id: 'check-report-derived', mechanism: 'test', roots: ['正册'], reverseTest: 'tests/scripts/checkReport.test.js' },
 ]
 
-const SRC_DIRS = ['packages', 'cloudfunctions', 'scripts']
-function* walk(dir) {
+// export：供 check-report 体检面板复用同一套遍历/判定（面板=派生视图，禁自建第二套语义）
+export const SRC_DIRS = ['packages', 'cloudfunctions', 'scripts']
+export function* walk(dir) {
   if (!existsSync(dir)) return
   for (const name of readdirSync(dir)) {
     if (name === 'node_modules' || name === 'dist') continue
@@ -4767,7 +4793,7 @@ function mpReachableText(src) {
   return out.join('\n')
 }
 
-function checkFile(file) {
+export function checkFile(file) {
   const rules = fileRules.filter((r) => r.inScope(file))
   if (!rules.length) return []
   const violations = []
@@ -4776,7 +4802,7 @@ function checkFile(file) {
     if (isCommentLine(line) || line.includes('structure-ok')) return
     for (const rule of rules) {
       const msg = rule.test(line, { file, lines, i })
-      if (msg) violations.push({ loc: `${relative(ROOT, file)}:${i + 1}`, msg, src: line.trim().slice(0, 80) })
+      if (msg) violations.push({ id: rule.id, loc: `${relative(ROOT, file)}:${i + 1}`, msg, src: line.trim().slice(0, 80) })
     }
   })
   return violations

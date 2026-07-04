@@ -30,6 +30,7 @@
     "lint:fix": "eslint . --fix",
     "check:conventions": "node scripts/check-conventions.mjs",
     "check:structure": "node scripts/check-structure.mjs",
+    "report": "node scripts/check-report.mjs",
     "preflight": "node scripts/preflight.mjs",
     "trace": "node scripts/trace.mjs",
     "loadtest": "node scripts/loadtest.mjs",
