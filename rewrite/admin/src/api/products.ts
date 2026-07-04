@@ -1,0 +1,12 @@
+// 商品与内容组 api（薄封装）
+import { client } from './index'
+
+export const listDrafts = () => client.post('listDrafts')
+export const saveDraft = (product: Record<string, unknown>) => client.post('saveDraft', { product })
+export const deleteDraft = (id: string) => client.post('deleteDraft', { id })
+export const uploadImage = (b64: string, pid: string, ext: string) => client.post('uploadImage', { b64, pid, ext })
+export const publishProduct = (id: string) => client.post('publishProduct', { id })
+export const unpublishProduct = (id: string) => client.post('unpublishProduct', { id })
+export const republishProduct = (id: string) => client.post('republishProduct', { id })
+export const listShowcase = () => client.post('listShowcase')
+export const saveShowcase = (items: Array<{ id: string; sort: number; featured: boolean }>) => client.post('saveShowcase', { items })

@@ -7,7 +7,13 @@ const router = useRouter()
 
 const NAV = [
   { group: '总览', items: [{ label: '数据看板', path: '/' }] },
-  { group: '商品与内容', items: [] },
+  {
+    group: '商品与内容',
+    items: [
+      { label: '商品管理', path: '/products' },
+      { label: '小程序橱窗', path: '/showcase' },
+    ],
+  },
   {
     group: '订单与钱',
     items: [

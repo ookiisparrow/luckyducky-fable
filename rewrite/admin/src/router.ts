@@ -8,6 +8,8 @@ const Shell = () => import('./shell/Shell.vue')
 const Dashboard = () => import('./pages/Dashboard.vue')
 const Orders = () => import('./pages/Orders.vue')
 const Refunds = () => import('./pages/Refunds.vue')
+const Products = () => import('./pages/Products.vue')
+const Showcase = () => import('./pages/Showcase.vue')
 
 export const router = createRouter({
   history: createWebHashHistory(),
@@ -20,6 +22,8 @@ export const router = createRouter({
         { path: '', component: Dashboard },
         { path: 'orders', component: Orders },
         { path: 'refunds', component: Refunds },
+        { path: 'products', component: Products },
+        { path: 'showcase', component: Showcase },
       ],
     },
   ],
