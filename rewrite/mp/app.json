@@ -13,6 +13,8 @@
     "pages/welcome/welcome",
     "pages/my-courses/my-courses",
     "pages/player/player",
+    "pages/reviews/reviews",
+    "pages/review/review",
     "pages/me/me"
   ],
   "window": {

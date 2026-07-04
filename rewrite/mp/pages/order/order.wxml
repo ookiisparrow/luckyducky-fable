@@ -19,6 +19,7 @@
       <view class="ld-oline-right">
         <view>{{item.priceLabel}}</view>
         <view class="ld-oline-qty">×{{item.qty}}</view>
+        <view class="ld-oline-review" wx:if="{{vm.status === 'done'}}" data-lineid="{{item.lineId}}" data-name="{{item.name}}" catch:tap="onWriteReview">写评价</view>
       </view>
     </view>
   </view>

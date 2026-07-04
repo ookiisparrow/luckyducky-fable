@@ -62,6 +62,12 @@
   font-size: 22rpx;
   color: var(--ld-purple-meta);
 }
+.ld-oline-review {
+  margin-top: 8rpx;
+  font-size: 22rpx;
+  color: var(--ld-purple-tab);
+  text-decoration: underline;
+}
 .ld-sum-row {
   display: flex;
   justify-content: space-between;

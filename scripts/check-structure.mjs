@@ -4409,6 +4409,12 @@ export const typeAndTestGuards = [
     reverseTest: 'rewrite/mp/tests/player.test.ts',
   },
   {
+    id: 'rw-mp-reviews-golden',
+    mechanism: 'test',
+    roots: ['#8'],
+    reverseTest: 'rewrite/mp/tests/reviews-map.test.ts',
+  },
+  {
     id: 'order-status-union',
     mechanism: 'ts',
     roots: ['#2'],

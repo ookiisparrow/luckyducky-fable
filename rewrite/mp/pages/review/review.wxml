@@ -1,0 +1,34 @@
+<view class="ld-review">
+  <view class="ld-panel">
+    <view class="ld-rw-name" wx:if="{{name}}">{{name}}</view>
+    <view class="ld-rw-stars">
+      <text
+        wx:for="{{starIdx}}"
+        wx:key="*this"
+        class="ld-rw-star {{rating >= item ? 'on' : ''}}"
+        data-n="{{item}}"
+        bind:tap="onStar"
+      >★</text>
+      <text class="ld-rw-starlabel">{{ratingLabel}}</text>
+    </view>
+  </view>
+
+  <view class="ld-panel">
+    <view class="ld-rw-tags">
+      <text
+        wx:for="{{tags}}"
+        wx:key="t"
+        class="ld-rw-tag {{item.on ? 'on' : ''}}"
+        data-i="{{index}}"
+        bind:tap="onTag"
+      >{{item.t}}</text>
+    </view>
+    <textarea class="ld-rw-text" value="{{text}}" bind:input="onText" maxlength="500" placeholder="说说这次钩织的体验（选填，最多 500 字）" />
+    <view class="ld-rw-anon" bind:tap="onAnon">
+      <view class="ld-check {{anon ? 'on' : ''}}"></view>
+      <text>匿名评价（显示为「匿名钩友」）</text>
+    </view>
+  </view>
+
+  <view class="ld-rw-submit {{busy ? 'dim' : ''}}" bind:tap="onSubmit">提交评价</view>
+</view>

@@ -110,6 +110,17 @@
   line-height: 1.7;
   white-space: pre-wrap;
 }
+.ld-panel-link {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 28rpx;
+  color: var(--ld-ink);
+}
+.ld-panel-arrow {
+  color: var(--ld-purple-meta);
+  font-size: 32rpx;
+}
 .ld-actionbar-space {
   height: 140rpx;
 }

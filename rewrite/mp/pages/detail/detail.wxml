@@ -32,6 +32,11 @@
     </view>
   </view>
 
+  <view class="ld-panel ld-panel-link" bind:tap="onViewReviews">
+    <text>看看钩友们怎么说</text>
+    <text class="ld-panel-arrow">›</text>
+  </view>
+
   <view class="ld-panel" wx:if="{{vm.kit.length}}">
     <view class="ld-panel-title">材料包里有什么</view>
     <view class="ld-kit-row" wx:for="{{vm.kit}}" wx:key="name">

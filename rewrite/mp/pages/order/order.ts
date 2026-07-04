@@ -55,6 +55,10 @@ Page({
       },
     })
   },
+  onWriteReview(e: WechatMiniprogram.TouchEvent) {
+    const { lineid, name } = e.currentTarget.dataset as { lineid: string; name: string }
+    wx.navigateTo({ url: `/pages/review/review?orderId=${this.orderId}&lineId=${lineid}&name=${encodeURIComponent(name || '')}` })
+  },
   async onAfterSale() {
     const vm = this.data.vm
     if (!vm) return

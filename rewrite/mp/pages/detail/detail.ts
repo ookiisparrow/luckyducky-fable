@@ -42,6 +42,10 @@ Page({
     })
     wx.showToast({ title: '已加入购物车', icon: 'success' })
   },
+  onViewReviews() {
+    const vm = this.data.vm
+    if (vm) wx.navigateTo({ url: '/pages/reviews/reviews?productId=' + vm.id })
+  },
   onBuyNow() {
     const vm = this.data.vm
     if (!vm) return

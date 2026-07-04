@@ -9,7 +9,7 @@
 |---|---|---|---|
 | `rewrite/golden/` | M0 | 黄金用例册：旧线 1033 测试（123 文件）的行为断言提炼成栈无关验收基准，约 650 条·七册（orders-money / kit-security / learning-content / cs-agent / inventory-scm / frontend-store / admin-misc），123 文件全认领无静默丢弃 | ✅ 2026-07-04 |
 | `rewrite/spike-skyline/` | M0 | Skyline 真机 spike——已验（2026-07-04）：三存疑全过、T4 过、T5 吸顶双引擎未吸（增益未证实·M2 纯结构复验后即删本工程） | ✅ 已验·留作复验台 |
-| `rewrite/mp/` | M2 | 微信原生小程序（TypeScript + glass-easel，默认 WebView、按页 Skyline）——工程骨架已立（devtools 直导 rewrite/mp·TS 经编译插件·守卫 rw-mp-line-in-gates） | 🚧 批11 播放页 |
+| `rewrite/mp/` | M2 | 微信原生小程序（TypeScript + glass-easel，默认 WebView、按页 Skyline）——工程骨架已立（devtools 直导 rewrite/mp·TS 经编译插件·守卫 rw-mp-line-in-gates） | 🚧 批12 评价 |
 | `rewrite/shared/` | M1 | 新线契约 `@ldrw/shared`（Fen 品牌类型/状态机声明类型级派生/37 集合册/42 错误码册·与旧线 parity 焊死） | 🟢 批1 已立（2026-07-04） |
 | `rewrite/cloud/` | M1 | 云函数重写 `@ldrw/cloud`（kit 八件横切原语 ✅ 批2·函数域逐批立·新命名空间与旧函数并行；回调点位 M5 切换日同名替换） | 🟢 kit 已立（2026-07-04） |
 | `rewrite/admin/` `rewrite/agent/` | M3 | 后台重写（Vue3+Vite；坐席台新旧并行零断档） | ⬜ |

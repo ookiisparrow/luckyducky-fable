@@ -1,0 +1,127 @@
+.ld-reviews {
+  min-height: 100vh;
+  background: var(--ld-bg-lilac);
+  padding: 24rpx 24rpx 40rpx;
+}
+.ld-rv-summary {
+  padding: 28rpx;
+  margin-bottom: 24rpx;
+  background: var(--ld-bg);
+  border-radius: var(--ld-radius);
+  border: 2rpx solid var(--ld-purple-line);
+}
+.ld-rv-scorerow {
+  display: flex;
+  align-items: baseline;
+  gap: 16rpx;
+  margin-bottom: 16rpx;
+}
+.ld-rv-score {
+  font-size: 56rpx;
+  font-weight: 700;
+  color: var(--ld-purple-ink);
+}
+.ld-rv-count {
+  font-size: 24rpx;
+  color: var(--ld-purple-meta);
+}
+.ld-rv-dist {
+  display: flex;
+  align-items: center;
+  gap: 16rpx;
+  padding: 6rpx 0;
+}
+.ld-rv-dist-label {
+  width: 80rpx;
+  font-size: 22rpx;
+  color: var(--ld-purple-meta);
+}
+.ld-rv-bar {
+  flex: 1;
+  height: 12rpx;
+  border-radius: var(--ld-radius-pill);
+  background: var(--ld-bg-faint);
+  overflow: hidden;
+}
+.ld-rv-bar-fill {
+  height: 100%;
+  background: var(--ld-purple);
+  border-radius: var(--ld-radius-pill);
+}
+.ld-rv-dist-pct {
+  width: 64rpx;
+  text-align: right;
+  font-size: 22rpx;
+  color: var(--ld-purple-meta);
+}
+.ld-rv-tags,
+.ld-rv-tagrow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12rpx;
+  margin-top: 16rpx;
+}
+.ld-rv-tag {
+  padding: 6rpx 20rpx;
+  border-radius: var(--ld-radius-pill);
+  background: var(--ld-bg-lilac);
+  border: 2rpx solid var(--ld-purple-line);
+  font-size: 22rpx;
+  color: var(--ld-purple-tab);
+}
+.ld-rv {
+  padding: 24rpx 28rpx;
+  margin-bottom: 20rpx;
+  background: var(--ld-bg);
+  border-radius: var(--ld-radius);
+  border: 2rpx solid var(--ld-purple-line);
+}
+.ld-rv-head {
+  display: flex;
+  justify-content: space-between;
+}
+.ld-rv-name {
+  font-size: 26rpx;
+  font-weight: 600;
+  color: var(--ld-ink);
+}
+.ld-rv-stars {
+  font-size: 24rpx;
+  color: var(--ld-purple);
+}
+.ld-rv-spec {
+  margin-top: 6rpx;
+  font-size: 22rpx;
+  color: var(--ld-purple-meta);
+}
+.ld-rv-text {
+  margin-top: 12rpx;
+  font-size: 26rpx;
+  color: var(--ld-ink);
+  line-height: 1.6;
+}
+.ld-rv-time {
+  margin-top: 12rpx;
+  font-size: 22rpx;
+  color: var(--ld-purple-meta);
+}
+.ld-rv-empty {
+  text-align: center;
+  padding: 140rpx 0;
+}
+.ld-empty-title {
+  font-size: 30rpx;
+  font-weight: 600;
+  color: var(--ld-purple-ink);
+}
+.ld-empty-hint {
+  margin-top: 10rpx;
+  font-size: 24rpx;
+  color: var(--ld-purple-meta);
+}
+.ld-rv-more {
+  text-align: center;
+  padding: 20rpx 0;
+  font-size: 22rpx;
+  color: var(--ld-purple-meta);
+}

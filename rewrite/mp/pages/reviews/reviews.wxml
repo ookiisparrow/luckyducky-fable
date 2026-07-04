@@ -1,0 +1,35 @@
+<view class="ld-reviews">
+  <view class="ld-rv-summary" wx:if="{{summary}}">
+    <view class="ld-rv-scorerow">
+      <text class="ld-rv-score">{{summary.scoreLabel}}</text>
+      <text class="ld-rv-count">{{summary.count}} 条评价</text>
+    </view>
+    <view class="ld-rv-dist" wx:for="{{summary.dist}}" wx:key="label">
+      <text class="ld-rv-dist-label">{{item.label}}</text>
+      <view class="ld-rv-bar"><view class="ld-rv-bar-fill" style="width: {{item.pct}}%"></view></view>
+      <text class="ld-rv-dist-pct">{{item.pct}}%</text>
+    </view>
+    <view class="ld-rv-tags" wx:if="{{summary.tags.length}}">
+      <text class="ld-rv-tag" wx:for="{{summary.tags}}" wx:key="tag">{{item.tag}} {{item.n}}</text>
+    </view>
+  </view>
+
+  <view class="ld-rv" wx:for="{{list}}" wx:key="index">
+    <view class="ld-rv-head">
+      <text class="ld-rv-name">{{item.name}}</text>
+      <text class="ld-rv-stars">{{item.stars}}</text>
+    </view>
+    <view class="ld-rv-spec" wx:if="{{item.spec}}">{{item.spec}}</view>
+    <view class="ld-rv-text" wx:if="{{item.text}}">{{item.text}}</view>
+    <view class="ld-rv-tagrow" wx:if="{{item.tags.length}}">
+      <text class="ld-rv-tag" wx:for="{{item.tags}}" wx:for-item="t" wx:key="*this">{{t}}</text>
+    </view>
+    <view class="ld-rv-time">{{item.timeLabel}}</view>
+  </view>
+
+  <view class="ld-rv-empty" wx:if="{{!loading && !list.length}}">
+    <view class="ld-empty-title">还没有评价</view>
+    <view class="ld-empty-hint">买过的钩友完成订单后可以来写第一条</view>
+  </view>
+  <view class="ld-rv-more" wx:if="{{hasMore}}">上拉加载更多</view>
+</view>
