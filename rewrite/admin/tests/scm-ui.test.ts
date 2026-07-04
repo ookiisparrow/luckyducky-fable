@@ -1,0 +1,56 @@
+// 进销存映射（守卫 rw-admin-scm-ui-golden）：料号人话/元→分整数闸（超两位小数拒·不静默取整）/
+// 状态中文/错误码人话原文兜底/流水类型中文。
+import { describe, it, expect } from 'vitest'
+import { materialHuman, uomLabel, purchaseStatusLabel, outworkStatusLabel, yuanToFen, fenLabel, scmErrorText, docTypeLabel, mapLedger } from '../src/lib/mapScm'
+
+describe('料号人话', () => {
+  it('大白话：毛线拆 色·档·形态；pkg/card 挂产品；fg 成品；其余辅料；空回空', () => {
+    expect(materialHuman('yarn:pink:L:knotted')).toBe('毛线·pink·大团·带结')
+    expect(materialHuman('yarn:blue:M:raw')).toBe('毛线·blue·中团·原团')
+    expect(materialHuman('pkg:p1')).toBe('包装·p1')
+    expect(materialHuman('card:p1')).toBe('卡片·p1')
+    expect(materialHuman('fg:p1__red')).toBe('成品·p1 red')
+    expect(materialHuman('stuffing')).toBe('辅料·stuffing')
+    expect(materialHuman('')).toBe('')
+    expect(uomLabel('gram')).toBe('克')
+    expect(uomLabel('count')).toBe('件')
+  })
+})
+
+describe('元→分整数闸（输入侧钱链纪律）', () => {
+  it('大白话：19.99→1999；0 合法（义务工）；超两位小数/负数/非数一律拒（不静默取整）', () => {
+    expect(yuanToFen('19.99')).toBe(1999)
+    expect(yuanToFen(3)).toBe(300)
+    expect(yuanToFen(0)).toBe(0)
+    expect(yuanToFen('0.001')).toBeNull() // 超两位小数拒
+    expect(yuanToFen(-1)).toBeNull()
+    expect(yuanToFen('abc')).toBeNull()
+    expect(yuanToFen('')).toBeNull() // Number('')=0 但空串应显式填——空串按 0？业务上空=没填→此处 Number('')===0 合法边界：明确拒
+    expect(fenLabel(1999)).toBe('¥19.99')
+    expect(fenLabel(null)).toBe('')
+  })
+})
+
+describe('状态与错误人话', () => {
+  it('大白话：采购/外协状态中文；错误码给人话；带冒号错误取主码；未知原文兜底', () => {
+    expect(purchaseStatusLabel('ordered')).toBe('已下单')
+    expect(outworkStatusLabel('delivered')).toBe('已收货')
+    expect(outworkStatusLabel('weird')).toBe('weird')
+    expect(scmErrorText('KNOT_ONLY_L')).toContain('大团')
+    expect(scmErrorText('UOM_LOCKED')).toContain('混账')
+    expect(scmErrorText('BAD_STATUS:received')).toContain('不允许') // 冒号取主码
+    expect(scmErrorText('X_WEIRD')).toContain('X_WEIRD') // 原文兜底
+    expect(docTypeLabel('assembly_out')).toBe('组装扣料')
+  })
+
+  it('大白话：流水行归一（料号人话/类型中文/脏行安全）', () => {
+    const rows = mapLedger([
+      { _id: 'l1', itemKey: 'yarn:pink:L:raw', delta: -4, docType: 'outwork_issue', operator: 'admin', at: 1 },
+      null,
+    ])
+    expect(rows).toHaveLength(1)
+    expect(rows[0].material).toBe('毛线·pink·大团·原团')
+    expect(rows[0].docType).toBe('外协发料')
+    expect(mapLedger('garbage')).toEqual([])
+  })
+})

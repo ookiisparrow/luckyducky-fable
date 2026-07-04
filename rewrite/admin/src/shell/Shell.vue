@@ -36,7 +36,16 @@ const NAV = [
       { label: '节点诊断', path: '/checkpoints' },
     ],
   },
-  { group: '进销存', items: [] },
+  {
+    group: '进销存',
+    items: [
+      { label: '物料与供应商', path: '/scm-materials' },
+      { label: '采购单', path: '/scm-purchase' },
+      { label: '外协单', path: '/scm-outwork' },
+      { label: '配方与组装', path: '/scm-bom' },
+      { label: '备货与产销', path: '/scm-planner' },
+    ],
+  },
   {
     group: '系统',
     items: [

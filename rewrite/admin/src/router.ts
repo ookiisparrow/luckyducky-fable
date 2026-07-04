@@ -13,6 +13,11 @@ const Showcase = () => import('./pages/Showcase.vue')
 const HomeContent = () => import('./pages/HomeContent.vue')
 const HelpVideos = () => import('./pages/HelpVideos.vue')
 const Courses = () => import('./pages/Courses.vue')
+const ScmMaterials = () => import('./pages/ScmMaterials.vue')
+const ScmPurchase = () => import('./pages/ScmPurchase.vue')
+const ScmOutwork = () => import('./pages/ScmOutwork.vue')
+const ScmBom = () => import('./pages/ScmBom.vue')
+const ScmPlanner = () => import('./pages/ScmPlanner.vue')
 const Agents = () => import('./pages/Agents.vue')
 const Batches = () => import('./pages/Batches.vue')
 const Settings = () => import('./pages/Settings.vue')
@@ -45,6 +50,11 @@ export const router = createRouter({
         { path: 'kb', component: Kb },
         { path: 'csat', component: Csat },
         { path: 'checkpoints', component: Checkpoints },
+        { path: 'scm-materials', component: ScmMaterials },
+        { path: 'scm-purchase', component: ScmPurchase },
+        { path: 'scm-outwork', component: ScmOutwork },
+        { path: 'scm-bom', component: ScmBom },
+        { path: 'scm-planner', component: ScmPlanner },
         { path: 'agents', component: Agents },
         { path: 'batches', component: Batches },
         { path: 'settings', component: Settings },
