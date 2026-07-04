@@ -1,5 +1,5 @@
-// 商品详情（M2 批3）：图册 swiper + SKU 选择（价格联动）+ 参数/段落/材料清单。
-// 加购/立即购买本批占位 toast（批4 接购物车·按钮不做摆设、点了有明确反馈）。
+// 商品详情（M2 批3·批4 接购物车）：图册 swiper + SKU 选择（价格联动）+ 加购。
+import * as cart from '../../lib/cart'
 import { getProductById } from '../../lib/catalog'
 import { mapDetail, priceForSelection, type DetailVM } from '../../lib/mapDetail'
 
@@ -27,9 +27,21 @@ Page({
     this.setData({ skuIndex: idx, currentPrice: priceForSelection(vm, idx) })
   },
   onAddCart() {
-    wx.showToast({ title: '购物车即将开通', icon: 'none' })
+    const vm = this.data.vm
+    if (!vm) return
+    const sku = vm.skus[this.data.skuIndex] // 选中规格随行入车（价用规格价·双键行身份）
+    cart.add({
+      id: vm.id,
+      sku: sku ? sku.name : '',
+      name: vm.name,
+      tag: vm.tag,
+      price: sku ? sku.price : vm.price,
+      was: vm.was,
+      cover: vm.gallery[0] || '',
+    })
+    wx.showToast({ title: '已加入购物车', icon: 'success' })
   },
   onBuyNow() {
-    wx.showToast({ title: '下单链路随后开通', icon: 'none' })
+    wx.showToast({ title: '下单链路随下一批开通', icon: 'none' })
   },
 })

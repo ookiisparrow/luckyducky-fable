@@ -3,6 +3,7 @@
 
 export interface SkuVM {
   name: string
+  price: number // 元数字（加购用·展示用 priceLabel）
   priceLabel: string
 }
 
@@ -12,6 +13,8 @@ export interface DetailVM {
   tag: string
   brief: string
   gallery: string[]
+  price: number // 元数字（加购用）
+  was?: number
   priceLabel: string
   wasLabel: string
   skus: SkuVM[]
@@ -45,7 +48,7 @@ export function mapDetail(p: unknown): DetailVM | null {
     for (const s of d.skus) {
       const sname = String((s && s.name) || '')
       const sprice = priceText(s && s.price)
-      if (sname && sprice) skus.push({ name: sname, priceLabel: sprice })
+      if (sname && sprice) skus.push({ name: sname, price: Number(s.price), priceLabel: sprice })
     }
   }
 
@@ -65,7 +68,21 @@ export function mapDetail(p: unknown): DetailVM | null {
     .filter((k: any) => k && k.name)
     .map((k: any) => ({ name: String(k.name), qty: String(k.qty || '') }))
 
-  return { id, name, tag: String(d.tag || ''), brief: String(d.brief || ''), gallery, priceLabel, wasLabel: priceText(d.was), skus, params, sections, kit }
+  return {
+    id,
+    name,
+    tag: String(d.tag || ''),
+    brief: String(d.brief || ''),
+    gallery,
+    price: Number(d.price),
+    was: typeof d.was === 'number' ? d.was : undefined,
+    priceLabel,
+    wasLabel: priceText(d.was),
+    skus,
+    params,
+    sections,
+    kit,
+  }
 }
 
 /** SKU 选择价格联动：选中 SKU 用 SKU 价；未选/无 SKU 用商品价（原样标·不算术）。 */

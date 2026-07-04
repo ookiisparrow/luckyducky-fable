@@ -20,9 +20,27 @@
   padding: 8rpx 28rpx;
   border-radius: var(--ld-radius-pill);
 }
+.ld-tab-iconwrap {
+  position: relative;
+}
 .ld-tab-icon {
   width: 40rpx;
   height: 40rpx;
+  display: block;
+}
+.ld-tab-badge {
+  position: absolute;
+  top: -10rpx;
+  right: -18rpx;
+  min-width: 28rpx;
+  padding: 0 8rpx;
+  height: 28rpx;
+  line-height: 28rpx;
+  text-align: center;
+  border-radius: var(--ld-radius-pill);
+  background: var(--ld-purple);
+  color: #ffffff;
+  font-size: 18rpx;
 }
 .ld-tab-label {
   font-size: 20rpx;

@@ -1,4 +1,39 @@
-<view class="ld-stub">
-  <view class="ld-stub-title">购物车</view>
-  <view class="ld-stub-hint">占位页 · 随 M2 对应批次落地</view>
+<view class="ld-cart" wx:if="{{items.length}}">
+  <view class="ld-row" wx:for="{{items}}" wx:key="index">
+    <view class="ld-check {{item.selected ? 'on' : ''}}" data-id="{{item.id}}" data-sku="{{item.sku}}" bind:tap="onToggle"></view>
+    <image wx:if="{{item.cover}}" class="ld-row-media" src="{{item.cover}}" mode="aspectFill" />
+    <view wx:else class="ld-row-media"></view>
+    <view class="ld-row-main">
+      <view class="ld-row-name">{{item.name}}</view>
+      <view class="ld-row-sku" wx:if="{{item.sku}}">{{item.sku}}</view>
+      <view class="ld-row-bottom">
+        <text class="ld-row-price">¥{{item.price}}</text>
+        <view class="ld-stepper">
+          <view class="ld-step {{item.qty <= 1 ? 'dim' : ''}}" data-id="{{item.id}}" data-sku="{{item.sku}}" data-qty="{{item.qty}}" bind:tap="onDec">−</view>
+          <text class="ld-step-qty">{{item.qty}}</text>
+          <view class="ld-step" data-id="{{item.id}}" data-sku="{{item.sku}}" data-qty="{{item.qty}}" bind:tap="onInc">+</view>
+        </view>
+      </view>
+    </view>
+    <view class="ld-row-del" data-id="{{item.id}}" data-sku="{{item.sku}}" bind:tap="onRemove">删</view>
+  </view>
+
+  <view class="ld-checkoutbar-space"></view>
+  <view class="ld-checkoutbar">
+    <view class="ld-selectall" bind:tap="onToggleAll">
+      <view class="ld-check {{allSelected ? 'on' : ''}}"></view>
+      <text>全选</text>
+    </view>
+    <view class="ld-total">
+      <text class="ld-total-label">合计</text>
+      <text class="ld-total-num">{{totalLabel}}</text>
+    </view>
+    <view class="ld-gobtn {{selectedCount ? '' : 'dim'}}" bind:tap="onCheckout">结算({{selectedCount}})</view>
+  </view>
+</view>
+
+<view class="ld-cart-empty" wx:else>
+  <view class="ld-empty-title">小车还空着</view>
+  <view class="ld-empty-hint">去挑一只喜欢的小鸭吧</view>
+  <view class="ld-empty-btn" bind:tap="onGoHome">去逛逛</view>
 </view>

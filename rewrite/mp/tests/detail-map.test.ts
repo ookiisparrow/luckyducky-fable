@@ -28,9 +28,9 @@ describe('详情映射（fail-closed：脏档回 null·脏行剔除·图册回�
     const vm = mapDetail(FULL)!
     expect(vm.gallery).toEqual(['cloud://x/cover.jpg', 'cloud://x/1.jpg', 'cloud://x/2.jpg']) // cover 领衔·空项剔除
     expect(vm.skus).toEqual([
-      { name: '经典黄', priceLabel: '¥128' },
-      { name: '云朵白', priceLabel: '¥138' },
-    ]) // 脏 SKU 剔除
+      { name: '经典黄', price: 128, priceLabel: '¥128' },
+      { name: '云朵白', price: 138, priceLabel: '¥138' },
+    ]) // 脏 SKU 剔除·数值价随行（加购用）
     expect(vm.params).toEqual([{ k: '尺寸', v: '18cm' }]) // 坏行剔除
     expect(vm.sections).toEqual([{ lead: '缝合要点', body: '藏线收尾' }]) // 全空段剔除
     expect(vm.kit).toEqual([{ name: '毛线', qty: '3 团' }]) // 无名剔除·icon 不进视图

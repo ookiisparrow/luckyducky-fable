@@ -7,7 +7,10 @@
     data-path="{{item.path}}"
     bind:tap="onTap"
   >
-    <image class="ld-tab-icon" src="/static/icons/{{active === item.id ? item.icon + '-on' : item.icon}}.svg" mode="aspectFit" />
+    <view class="ld-tab-iconwrap">
+      <image class="ld-tab-icon" src="/static/icons/{{active === item.id ? item.icon + '-on' : item.icon}}.svg" mode="aspectFit" />
+      <view class="ld-tab-badge" wx:if="{{item.id === 'cart' && cartCount > 0}}">{{cartCount > 99 ? '99+' : cartCount}}</view>
+    </view>
     <text class="ld-tab-label">{{item.label}}</text>
   </view>
 </view>
