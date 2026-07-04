@@ -6,6 +6,8 @@ import * as courses from './actions/courses'
 import * as cards from './actions/cards'
 import * as batches from './actions/batches'
 import * as content from './actions/content'
+import * as ordersA from './actions/orders'
+import * as refunds from './actions/refunds'
 
 // 管理控制台后端 v2（HTTP 访问服务触发·鉴权外壳逐字承接旧线 index.ts·批11 只挂 ping/login，
 // 业务 action 后续批逐域挂进 ACTIONS/ACTION_CAPS——挂载时与旧线注册表逐行核对）。
@@ -46,6 +48,19 @@ const ACTIONS: Record<string, (ctx: Ctx) => Promise<any>> = {
   saveHomeContent: content.saveHomeContent,
   listHelpVideos: content.listHelpVideos,
   saveHelpVideos: content.saveHelpVideos,
+  // 订单发货（批13）
+  listOrders: ordersA.listOrders,
+  orderCounts: ordersA.orderCounts,
+  getOrderDetail: ordersA.getOrderDetail,
+  shipOrder: ordersA.shipOrder,
+  shipOrders: ordersA.shipOrders,
+  clearFeeMismatch: ordersA.clearFeeMismatch,
+  // 售后退款审批（批13）
+  listRefunds: refunds.listRefunds,
+  refundCounts: refunds.refundCounts,
+  getRefundDetail: refunds.getRefundDetail,
+  approveRefund: refunds.approveRefund,
+  rejectRefund: refunds.rejectRefund,
 }
 
 // 能力闸（RBAC·别让单超管裸奔）：受限 action 须 principal 具备对应能力（'*'=全能力）。

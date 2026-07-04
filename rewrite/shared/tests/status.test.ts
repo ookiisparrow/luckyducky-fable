@@ -1,7 +1,8 @@
 // 新线状态机声明——结构健全性 + 与旧线声明逐字 parity（数据零迁移前提；M5 清退旧线时 parity 段随之退役）。
 import { describe, it, expect } from 'vitest'
 import { statesOf } from '../src/status'
-import { ORDER_STATUS_SPEC, AFTERSALE_STATUS_SPEC } from '../src/order'
+import { ORDER_STATUS_SPEC, AFTERSALE_STATUS_SPEC, ORDER_STATUS, AFTERSALE_STATUS } from '../src/order'
+import { ORDER_STATUS as OLD_OS, AFTERSALE_STATUS as OLD_AS_DICT } from '../../../packages/shared/src/order'
 import { QRCODE_STATUS_SPEC } from '../src/learning'
 import { ORDER_STATUS_SPEC as OLD_ORDER, AFTERSALE_STATUS_SPEC as OLD_AS } from '../../../packages/shared/src/order.spec'
 import { QRCODE_STATUS_SPEC as OLD_QR } from '../../../packages/shared/src/learning.spec'
@@ -39,6 +40,11 @@ describe('与旧线声明逐字 parity（并存期铁律）', () => {
       OLD_ORDER.transitions.map((t) => `${[...t.from].join(',')}→${t.to}`)
     )
   })
+  it('运行时状态字典与旧线生成器产物逐键一致（消费方 Object.values 口径不漂）', () => {
+    expect(Object.keys(ORDER_STATUS).sort()).toEqual(Object.keys(OLD_OS).sort())
+    expect(Object.keys(AFTERSALE_STATUS).sort()).toEqual(Object.keys(OLD_AS_DICT).sort())
+  })
+
   it('afterSales / qrcodes：状态全集与流转逐字一致', () => {
     expect(statesOf(AFTERSALE_STATUS_SPEC)).toEqual(statesOf(OLD_AS as never))
     expect(statesOf(QRCODE_STATUS_SPEC)).toEqual(statesOf(OLD_QR as never))

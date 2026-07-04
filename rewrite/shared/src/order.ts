@@ -2,7 +2,7 @@
  * 订单域状态机声明单源（镜像旧线 order.spec.ts·状态串=前后端契约与库内数据，不可改名——数据零迁移前提）。
  * 类型经 SpecStates 类型级派生，改声明即改类型，零生成器。（守卫 rw-contracts-golden parity 测试焊死与旧线逐字一致）
  */
-import type { SpecStates } from './status'
+import { statesOf, type SpecStates } from './status'
 
 /** 订单状态机声明（orders 集合）。 */
 export const ORDER_STATUS_SPEC = {
@@ -36,3 +36,10 @@ export const AFTERSALE_STATUS_SPEC = {
 
 export type OrderStatus = SpecStates<typeof ORDER_STATUS_SPEC>
 export type AfterSaleStatus = SpecStates<typeof AFTERSALE_STATUS_SPEC>
+
+// 运行时常量（从声明**运行时派生**·旧线由生成器产出，新线直接派生零漂移）：
+// 键=值的状态字典，消费方 Object.values() 作状态全集（计数/筛选枚举用）。
+const dictOf = <T extends string>(states: readonly string[]) =>
+  Object.fromEntries(states.map((s) => [s.toUpperCase(), s])) as Record<string, T>
+export const ORDER_STATUS = dictOf<OrderStatus>(statesOf(ORDER_STATUS_SPEC))
+export const AFTERSALE_STATUS = dictOf<AfterSaleStatus>(statesOf(AFTERSALE_STATUS_SPEC))
