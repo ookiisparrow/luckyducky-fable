@@ -22,6 +22,8 @@ const NAV = [
     items: [
       { label: '订单发货', path: '/orders' },
       { label: '售后退款', path: '/refunds' },
+      { label: '财务对账', path: '/reconciliation' },
+      { label: '实物库存', path: '/inventory' },
     ],
   },
   {
@@ -35,7 +37,14 @@ const NAV = [
     ],
   },
   { group: '进销存', items: [] },
-  { group: '系统', items: [] },
+  {
+    group: '系统',
+    items: [
+      { label: '外包账号', path: '/agents' },
+      { label: '激活码批次', path: '/batches' },
+      { label: '系统设置', path: '/settings' },
+    ],
+  },
 ] as Array<{ group: string; items: Array<{ label: string; path: string }> }>
 
 function logout() {

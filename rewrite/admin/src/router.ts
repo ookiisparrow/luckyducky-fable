@@ -13,6 +13,11 @@ const Showcase = () => import('./pages/Showcase.vue')
 const HomeContent = () => import('./pages/HomeContent.vue')
 const HelpVideos = () => import('./pages/HelpVideos.vue')
 const Courses = () => import('./pages/Courses.vue')
+const Agents = () => import('./pages/Agents.vue')
+const Batches = () => import('./pages/Batches.vue')
+const Settings = () => import('./pages/Settings.vue')
+const Reconciliation = () => import('./pages/Reconciliation.vue')
+const Inventory = () => import('./pages/Inventory.vue')
 const Conversations = () => import('./pages/Conversations.vue')
 const Customer360 = () => import('./pages/Customer360.vue')
 const Kb = () => import('./pages/Kb.vue')
@@ -40,6 +45,11 @@ export const router = createRouter({
         { path: 'kb', component: Kb },
         { path: 'csat', component: Csat },
         { path: 'checkpoints', component: Checkpoints },
+        { path: 'agents', component: Agents },
+        { path: 'batches', component: Batches },
+        { path: 'settings', component: Settings },
+        { path: 'reconciliation', component: Reconciliation },
+        { path: 'inventory', component: Inventory },
       ],
     },
   ],
