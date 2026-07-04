@@ -12,6 +12,14 @@ import * as dashboard from './actions/dashboard'
 import * as reconciliation from './actions/reconciliation'
 import * as wxbill from './actions/wxbill'
 import * as inventoryA from './actions/inventory'
+import * as customer360 from './actions/customer360'
+import * as checkpoints from './actions/checkpoints'
+import * as conversations from './actions/conversations'
+import * as kb from './actions/kb'
+import * as csat from './actions/csat'
+import * as agentDesk from './actions/agentDesk'
+import * as agents from './actions/agents'
+import * as wecomLogin from './actions/wecomLogin'
 
 // 管理控制台后端 v2（HTTP 访问服务触发·鉴权外壳逐字承接旧线 index.ts·批11 只挂 ping/login，
 // 业务 action 后续批逐域挂进 ACTIONS/ACTION_CAPS——挂载时与旧线注册表逐行核对）。
@@ -72,11 +80,62 @@ const ACTIONS: Record<string, (ctx: Ctx) => Promise<any>> = {
   downloadBill: wxbill.downloadBill,
   listInventory: inventoryA.listInventory,
   saveStock: inventoryA.saveStock,
+  // 客户360（批15·只读·越权面：ACTION_CAPS 能力闸 + FORCE_AUDIT 强制留痕）
+  getCustomer360: customer360.getCustomer360,
+  searchCustomer: customer360.searchCustomer,
+  getUser: customer360.getUser,
+  // 节点诊断·关键节点定义策展（批15·admin 维护 def 节点+挽回办法）
+  listCheckpoints: checkpoints.listCheckpoints,
+  saveCheckpoints: checkpoints.saveCheckpoints,
+  // 客服会话检索 + 质检报表（批15·检索过 customer:view 闸·报表 bounded 无逐人 PII 不设 cap）
+  searchConversations: conversations.searchConversations,
+  conversationsReport: conversations.conversationsReport,
+  // 知识库（批15·FAQ 单源·admin 维护、客服 bot dispatch 读同一份）
+  listKb: kb.listKb,
+  saveKb: kb.saveKb,
+  // 客服满意度报表（批15·只读·均分/分布·bounded）
+  getCsatReport: csat.getCsatReport,
+  // 坐席台 10 action（批15·cap agent:handle·分配 scope 经 assertOwnedByAgent）
+  listQueue: agentDesk.listQueue,
+  claimConversation: agentDesk.claimConversation,
+  releaseConversation: agentDesk.releaseConversation,
+  sendAgentMessage: agentDesk.sendAgentMessage,
+  getThread: agentDesk.getThread,
+  setAgentStatus: agentDesk.setAgentStatus,
+  escalateToMerchant: agentDesk.escalateToMerchant,
+  closeConversation: agentDesk.closeConversation,
+  listMyActive: agentDesk.listMyActive,
+  getSessionCustomer360: agentDesk.getSessionCustomer360,
+  // 外包账号管理（批15·未登记 ACTION_CAPS→默认拒 admin:write·天然仅超管建/停/列）
+  createAgent: agents.createAgent,
+  disableAgent: agents.disableAgent,
+  listAgents: agents.listAgents,
+  setAgentWecomUserId: agents.setAgentWecomUserId,
 }
 
 // 能力闸（RBAC·别让单超管裸奔）：受限 action 须 principal 具备对应能力（'*'=全能力）。
-// 坐席台/360 读的 cap 随对应域批次登记（与 action 同批落·不空守）。
-const ACTION_CAPS: Record<string, string> = {}
+// 360 读他人全貌/检索＝customer:view；坐席台＝外包最小权 agent:handle（不含动钱/动状态/退款——留商户超管）。
+const ACTION_CAPS: Record<string, string> = {
+  getCustomer360: 'customer:view',
+  searchCustomer: 'customer:view',
+  getUser: 'customer:view',
+  // 会话检索＝读他人会话全文越权面：复用 customer:view（同 360 读·不另立 cap）
+  searchConversations: 'customer:view',
+  listQueue: 'agent:handle',
+  claimConversation: 'agent:handle',
+  releaseConversation: 'agent:handle',
+  sendAgentMessage: 'agent:handle',
+  getThread: 'agent:handle',
+  setAgentStatus: 'agent:handle',
+  escalateToMerchant: 'agent:handle',
+  closeConversation: 'agent:handle',
+  listMyActive: 'agent:handle',
+  // scoped 360：外包看「自己 claim 会话」对应 360 的唯一路径——cap 只需 agent:handle
+  // （非 customer:view·那是无 scope 批量读面），action 内再过 assertOwnedByAgent + assertDataShareConsent 双闸
+  getSessionCustomer360: 'agent:handle',
+  // 快捷回复读知识库（kb=公司 FAQ·非客户 PII）：外包可读；saveKb 仍默认拒 admin:write（仅超管维护）
+  listKb: 'agent:handle',
+}
 // 默认拒：未登记 ACTION_CAPS 的 action 须此高权默认 cap——非超管默认进不去钱/状态/管理 action。
 const ADMIN_DEFAULT_CAP = 'admin:write'
 
@@ -135,7 +194,13 @@ export const main = async (event: any) => {
     return reply(200, { ...res, sessionToken })
   }
 
-  // loginByWecomCode（企微免登·同 login 受频控）随坐席台批挂载
+  // 企微 OAuth 免登（pre-auth·坐席无口令·同 login 受频控防刷 code）：换 userid→查绑定账号→签发 session 令牌
+  if (action === 'loginByWecomCode') {
+    const res = await wecomLogin.loginByWecomCode({ db, data })
+    if (res.statusCode === 200) await throttleReset(tkey)
+    else await throttleFailBoth(tkey)
+    return res
+  }
 
   // 其余 action 一律先验口令/令牌（同受频控，防经任一 action 入口爆破）
   const auth = await checkKey(db, key, false)
