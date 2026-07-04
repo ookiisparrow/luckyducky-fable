@@ -58,6 +58,11 @@ describe('体检面板=注册表派生（check-report-derived）', () => {
     expect(html, '单测缺复跑命令').toContain('npx vitest run rewrite/shared/tests/money.test.ts')
   })
 
+  it('面板带 noindex（会部署到公网静态托管——守卫清单不进搜索引擎）', () => {
+    const html = renderHtml(fakeData())
+    expect(html).toContain('name="robots" content="noindex')
+  })
+
   it('全绿时红灯区显式报「全绿」，不留空白让人猜', () => {
     const d = fakeData()
     d.guards = d.guards.map((g) => ({ ...g, ok: true, violations: [] }))

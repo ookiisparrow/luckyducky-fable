@@ -288,6 +288,7 @@ ${lint && !lint.ok ? `<div class="redcard"><div class="rhead"><span class="dot b
 
   return `<!doctype html>
 <html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex,nofollow">
 <title>Lucky Ducky 守卫与测试体检面板</title>
 <style>
 :root{--bg:#fcfaff;--surface:#ffffff;--ink:#241733;--meta:#7e6e96;--line:#c9bbe0;--hair:#e9e2f4;--accent:#7b5caf;--accent-soft:#f3edfb;--ok:#2e7d4f;--ok-bg:#e9f5ee;--bad:#b93a2b;--bad-bg:#fdeeea;--skip:#8d81a5;--code-bg:#f5f1fb}
