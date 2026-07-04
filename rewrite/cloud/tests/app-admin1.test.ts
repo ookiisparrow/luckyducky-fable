@@ -121,13 +121,13 @@ describe('RBAC 默认拒（黄金 kit-security §D）', () => {
       { _id: 'agent-1', keyHash: sha('outsourced-key-1'), role: 'outsourced', name: '外包一号' },
       { _id: 'agent-2', keyHash: sha('outsourced-key-2'), role: 'outsourced', disabled: true },
     ])
-    const forbidden = await post({ action: 'saveStock', key: 'outsourced-key-1' })
+    const forbidden = await post({ action: 'definitelyNotMounted', key: 'outsourced-key-1' })
     expect(forbidden.statusCode).toBe(403) // 默认拒 admin:write
 
-    const superR = await post({ action: 'saveStock', key: 'super-secret-key' })
+    const superR = await post({ action: 'definitelyNotMounted', key: 'super-secret-key' })
     expect(bodyOf(superR).error).toBe('UNKNOWN_ACTION') // 过闸（业务批未挂载）
 
-    expect(bodyOf(await post({ action: 'saveStock', key: 'outsourced-key-2' })).error).toBe('ACCOUNT_DISABLED')
+    expect(bodyOf(await post({ action: 'definitelyNotMounted', key: 'outsourced-key-2' })).error).toBe('ACCOUNT_DISABLED')
   })
 
   it('大白话：登记了 cap 的 action 按能力放行——外包持 agent:handle 可过对应闸', async () => {
