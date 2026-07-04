@@ -1,0 +1,115 @@
+.ld-odetail {
+  min-height: 100vh;
+  background: var(--ld-bg-lilac);
+  padding: 24rpx 24rpx 60rpx;
+}
+.ld-obanner {
+  padding: 32rpx 28rpx;
+  background: linear-gradient(160deg, #f3e9ff 0%, var(--ld-bg) 90%);
+  border-radius: var(--ld-radius);
+  border: 2rpx solid var(--ld-purple-line);
+}
+.ld-obanner-status {
+  font-size: 38rpx;
+  font-weight: 700;
+  color: var(--ld-purple-ink);
+}
+.ld-obanner-no,
+.ld-obanner-track {
+  margin-top: 10rpx;
+  font-size: 24rpx;
+  color: var(--ld-purple-meta);
+}
+.ld-panel {
+  margin-top: 24rpx;
+  padding: 24rpx 28rpx;
+  background: var(--ld-bg);
+  border-radius: var(--ld-radius);
+  border: 2rpx solid var(--ld-purple-line);
+}
+.ld-oaddr-line1 {
+  font-size: 28rpx;
+  font-weight: 600;
+  color: var(--ld-ink);
+}
+.ld-oaddr-line2 {
+  margin-top: 8rpx;
+  font-size: 26rpx;
+  color: var(--ld-ink);
+  line-height: 1.5;
+}
+.ld-oline {
+  display: flex;
+  justify-content: space-between;
+  padding: 12rpx 0;
+}
+.ld-oline-name {
+  font-size: 28rpx;
+  color: var(--ld-ink);
+}
+.ld-oline-spec {
+  margin-top: 6rpx;
+  font-size: 22rpx;
+  color: var(--ld-purple-meta);
+}
+.ld-oline-right {
+  text-align: right;
+  font-size: 26rpx;
+  color: var(--ld-purple-ink);
+}
+.ld-oline-qty {
+  margin-top: 6rpx;
+  font-size: 22rpx;
+  color: var(--ld-purple-meta);
+}
+.ld-sum-row {
+  display: flex;
+  justify-content: space-between;
+  padding: 10rpx 0;
+  font-size: 26rpx;
+  color: var(--ld-ink);
+}
+.ld-sum-row.total {
+  font-weight: 700;
+  color: var(--ld-purple-ink);
+  font-size: 30rpx;
+}
+.ld-sum-coupon {
+  color: var(--ld-purple);
+}
+.ld-oops {
+  display: flex;
+  justify-content: flex-end;
+  gap: 16rpx;
+  margin-top: 32rpx;
+}
+.ld-op-btn {
+  padding: 16rpx 40rpx;
+  border-radius: var(--ld-radius-pill);
+  background: var(--ld-purple-ink);
+  color: #ffffff;
+  font-size: 26rpx;
+}
+.ld-op-btn.ghost {
+  background: var(--ld-bg);
+  color: var(--ld-purple-tab);
+  border: 2rpx solid var(--ld-purple-line);
+}
+.ld-odetail-empty {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 16rpx;
+  background: var(--ld-bg-lilac);
+}
+.ld-empty-title {
+  font-size: 30rpx;
+  font-weight: 600;
+  color: var(--ld-purple-ink);
+}
+.ld-empty-hint {
+  font-size: 24rpx;
+  color: var(--ld-purple-meta);
+}

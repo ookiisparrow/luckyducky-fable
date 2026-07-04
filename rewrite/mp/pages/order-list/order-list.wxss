@@ -1,0 +1,108 @@
+.ld-orders {
+  min-height: 100vh;
+  background: var(--ld-bg-lilac);
+  padding: 0 24rpx 40rpx;
+}
+.ld-tabs {
+  display: flex;
+  gap: 8rpx;
+  padding: 20rpx 0;
+  position: sticky;
+  top: 0;
+  background: var(--ld-bg-lilac);
+  z-index: 2;
+}
+.ld-tabitem {
+  flex: 1;
+  text-align: center;
+  padding: 14rpx 0;
+  font-size: 26rpx;
+  color: var(--ld-purple-meta);
+  border-radius: var(--ld-radius-pill);
+}
+.ld-tabitem.on {
+  background: var(--ld-bg);
+  color: var(--ld-purple-tab);
+  font-weight: 600;
+  border: 2rpx solid var(--ld-purple-line);
+}
+.ld-order {
+  padding: 24rpx 28rpx;
+  margin-bottom: 20rpx;
+  background: var(--ld-bg);
+  border-radius: var(--ld-radius);
+  border: 2rpx solid var(--ld-purple-line);
+}
+.ld-order-head {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 12rpx;
+}
+.ld-order-no {
+  font-size: 24rpx;
+  color: var(--ld-purple-meta);
+}
+.ld-order-status {
+  font-size: 24rpx;
+  color: var(--ld-purple-tab);
+  font-weight: 600;
+}
+.ld-order-line {
+  display: flex;
+  justify-content: space-between;
+  padding: 6rpx 0;
+  font-size: 26rpx;
+  color: var(--ld-ink);
+}
+.ld-order-qty {
+  color: var(--ld-purple-meta);
+}
+.ld-order-foot {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 12rpx;
+  font-size: 24rpx;
+  color: var(--ld-purple-meta);
+}
+.ld-order-amount {
+  color: var(--ld-purple-ink);
+  font-weight: 600;
+}
+.ld-order-ops {
+  display: flex;
+  justify-content: flex-end;
+  gap: 16rpx;
+  margin-top: 16rpx;
+}
+.ld-op-btn {
+  padding: 12rpx 32rpx;
+  border-radius: var(--ld-radius-pill);
+  background: var(--ld-purple-ink);
+  color: #ffffff;
+  font-size: 24rpx;
+}
+.ld-op-btn.ghost {
+  background: var(--ld-bg);
+  color: var(--ld-purple-tab);
+  border: 2rpx solid var(--ld-purple-line);
+}
+.ld-orders-empty {
+  text-align: center;
+  padding: 140rpx 0;
+}
+.ld-empty-title {
+  font-size: 30rpx;
+  font-weight: 600;
+  color: var(--ld-purple-ink);
+}
+.ld-empty-hint {
+  margin-top: 10rpx;
+  font-size: 24rpx;
+  color: var(--ld-purple-meta);
+}
+.ld-orders-more {
+  text-align: center;
+  padding: 20rpx 0;
+  font-size: 22rpx;
+  color: var(--ld-purple-meta);
+}

@@ -1,4 +1,14 @@
-<view class="ld-stub">
-  <view class="ld-stub-title">我</view>
-  <view class="ld-stub-hint">占位页 · 随 M2 对应批次落地</view>
+<view class="ld-me">
+  <view class="ld-me-head">
+    <view class="ld-me-title">我</view>
+    <view class="ld-me-hint">个人中心随后续批完善</view>
+  </view>
+  <view class="ld-me-entry" bind:tap="onOrders">
+    <text>我的订单</text>
+    <text class="ld-me-arrow">›</text>
+  </view>
+  <view class="ld-me-entry" bind:tap="onAddress">
+    <text>收货地址</text>
+    <text class="ld-me-arrow">›</text>
+  </view>
 </view>

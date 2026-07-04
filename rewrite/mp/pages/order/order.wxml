@@ -1,0 +1,43 @@
+<view class="ld-odetail" wx:if="{{vm}}">
+  <view class="ld-obanner">
+    <view class="ld-obanner-status">{{vm.statusLabel}}</view>
+    <view class="ld-obanner-no">单号 {{vm.id}} · {{vm.createdAtLabel}}</view>
+    <view class="ld-obanner-track" wx:if="{{vm.trackingNo}}">运单号 {{vm.trackingNo}}</view>
+  </view>
+
+  <view class="ld-panel" wx:if="{{vm.address}}">
+    <view class="ld-oaddr-line1">{{vm.address.name}} {{vm.address.phone}}</view>
+    <view class="ld-oaddr-line2">{{vm.address.region}} {{vm.address.detail}}</view>
+  </view>
+
+  <view class="ld-panel">
+    <view class="ld-oline" wx:for="{{vm.items}}" wx:key="lineId">
+      <view class="ld-oline-main">
+        <view class="ld-oline-name">{{item.name}}</view>
+        <view class="ld-oline-spec" wx:if="{{item.spec}}">{{item.spec}}</view>
+      </view>
+      <view class="ld-oline-right">
+        <view>{{item.priceLabel}}</view>
+        <view class="ld-oline-qty">×{{item.qty}}</view>
+      </view>
+    </view>
+  </view>
+
+  <view class="ld-panel">
+    <view class="ld-sum-row"><text>商品合计</text><text>{{vm.goodsLabel}}</text></view>
+    <view class="ld-sum-row"><text>运费</text><text>{{vm.shipLabel}}</text></view>
+    <view class="ld-sum-row" wx:if="{{vm.couponLabel}}"><text>优惠券</text><text class="ld-sum-coupon">{{vm.couponLabel}}</text></view>
+    <view class="ld-sum-row total"><text>实付</text><text>{{vm.amountLabel}}</text></view>
+  </view>
+
+  <view class="ld-oops">
+    <view class="ld-op-btn" wx:if="{{vm.status === 'pending'}}" bind:tap="onPay">继续支付</view>
+    <view class="ld-op-btn ghost" wx:if="{{vm.status === 'shipped'}}" bind:tap="onConfirm">确认收货</view>
+    <view class="ld-op-btn ghost" wx:if="{{vm.status === 'paid' || vm.status === 'shipped' || vm.status === 'done'}}" bind:tap="onAfterSale">申请售后</view>
+  </view>
+</view>
+
+<view class="ld-odetail-empty" wx:elif="{{!loading}}">
+  <view class="ld-empty-title">订单不存在</view>
+  <view class="ld-empty-hint">可能已被删除或不属于当前账号</view>
+</view>

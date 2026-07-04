@@ -8,6 +8,7 @@ Page({
     wx.switchTab({ url: '/pages/home/home' })
   },
   onViewOrder() {
-    wx.showToast({ title: '订单页随下一批开通', icon: 'none' })
+    if (this.data.orderId) wx.redirectTo({ url: '/pages/order/order?id=' + this.data.orderId })
+    else wx.redirectTo({ url: '/pages/order-list/order-list' })
   },
 })

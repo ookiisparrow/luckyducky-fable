@@ -1,0 +1,30 @@
+<view class="ld-orders">
+  <view class="ld-tabs">
+    <view wx:for="{{tabs}}" wx:key="key" class="ld-tabitem {{tabKey === item.key ? 'on' : ''}}" data-key="{{item.key}}" bind:tap="onTab">{{item.label}}</view>
+  </view>
+
+  <view class="ld-order" wx:for="{{shown}}" wx:key="id" data-id="{{item.id}}" bind:tap="onTapOrder">
+    <view class="ld-order-head">
+      <text class="ld-order-no">单号 {{item.id}}</text>
+      <text class="ld-order-status">{{item.statusLabel}}</text>
+    </view>
+    <view class="ld-order-line" wx:for="{{item.items}}" wx:for-item="line" wx:key="lineId">
+      <text class="ld-order-name">{{line.name}}{{line.spec ? '（' + line.spec + '）' : ''}}</text>
+      <text class="ld-order-qty">×{{line.qty}}</text>
+    </view>
+    <view class="ld-order-foot">
+      <text class="ld-order-time">{{item.createdAtLabel}}</text>
+      <text class="ld-order-amount">{{item.count}} 件 · {{item.amountLabel}}</text>
+    </view>
+    <view class="ld-order-ops" wx:if="{{item.status === 'pending' || item.status === 'shipped'}}">
+      <view class="ld-op-btn" wx:if="{{item.status === 'pending'}}" data-id="{{item.id}}" catch:tap="onPay">继续支付</view>
+      <view class="ld-op-btn ghost" wx:if="{{item.status === 'shipped'}}" data-id="{{item.id}}" catch:tap="onConfirm">确认收货</view>
+    </view>
+  </view>
+
+  <view class="ld-orders-empty" wx:if="{{!loading && !shown.length}}">
+    <view class="ld-empty-title">这里还没有订单</view>
+    <view class="ld-empty-hint">下一单，让小鸭出发</view>
+  </view>
+  <view class="ld-orders-more" wx:if="{{hasMore}}">上拉加载更多</view>
+</view>
