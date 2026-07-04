@@ -1,0 +1,8 @@
+<view wx:if="{{visible}}" class="ps-mask" catch:touchmove="noop">
+  <view class="ps-sheet">
+    <text class="ps-title">隐私保护提示</text>
+    <text class="ps-body">为给你提供完整服务，我们需要在调用相关功能前征得你的同意。请阅读<text class="ps-link" catch:tap="onPolicy">《隐私政策》</text>了解我们如何收集与使用信息，也可<text class="ps-link" catch:tap="onContract">查看完整指引</text>。</text>
+    <button id="privacy-agree-btn" class="ps-btn" open-type="agreePrivacyAuthorization" bind:agreeprivacyauthorization="onAgree">同意并继续</button>
+    <text class="ps-skip" bind:tap="onDisagree">不同意</text>
+  </view>
+</view>

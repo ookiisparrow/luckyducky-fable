@@ -55,4 +55,7 @@ Page({
   onAbout() {
     wx.navigateTo({ url: '/pages/about/about' })
   },
+  onConsent() {
+    wx.navigateTo({ url: '/pages/consent/consent' })
+  },
 })

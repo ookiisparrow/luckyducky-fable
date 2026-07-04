@@ -1,0 +1,88 @@
+.ld-consent {
+  min-height: 100vh;
+  background: var(--ld-bg-lilac);
+  padding: 24rpx 32rpx 64rpx;
+  box-sizing: border-box;
+}
+.cs-card {
+  background: var(--ld-bg);
+  border: 1rpx solid var(--ld-purple-line);
+  border-radius: var(--ld-radius);
+  padding: 36rpx;
+}
+.cs-h {
+  display: block;
+  font-size: 30rpx;
+  font-weight: 600;
+  color: var(--ld-ink);
+  margin-bottom: 24rpx;
+}
+.cs-p {
+  display: block;
+  font-size: 26rpx;
+  line-height: 1.8;
+  color: var(--ld-ink);
+  margin-bottom: 24rpx;
+}
+.cs-state {
+  margin: 8rpx 0 32rpx;
+  padding: 20rpx 24rpx;
+  border-radius: 20rpx;
+  background: var(--ld-bg-lilac);
+  border: 1rpx solid var(--ld-purple-line);
+}
+.cs-state.on {
+  background: var(--ld-bg-sage);
+}
+.cs-state.off {
+  background: var(--ld-bg-faint);
+}
+.cs-state-t {
+  font-size: 26rpx;
+  color: var(--ld-purple-meta);
+}
+.cs-acts {
+  display: flex;
+  gap: 24rpx;
+  margin-bottom: 28rpx;
+}
+.cs-btn {
+  flex: 1;
+  height: 92rpx;
+  border-radius: 24rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.cs-btn.primary {
+  background: var(--ld-purple-ink);
+}
+.cs-btn.ghost {
+  background: var(--ld-bg);
+  border: 1rpx solid var(--ld-purple-line);
+}
+.cs-btn.dim {
+  opacity: 0.55;
+}
+.cs-btn-t {
+  font-size: 28rpx;
+  font-weight: 600;
+  color: var(--ld-ink);
+}
+.cs-btn-t.on {
+  color: var(--ld-bg);
+}
+.cs-link {
+  padding: 12rpx 0 4rpx;
+}
+.cs-link-t {
+  font-size: 26rpx;
+  color: var(--ld-purple-tab);
+}
+.cs-note {
+  display: block;
+  font-size: 24rpx;
+  line-height: 1.7;
+  color: var(--ld-purple-meta);
+  margin-top: 16rpx;
+}

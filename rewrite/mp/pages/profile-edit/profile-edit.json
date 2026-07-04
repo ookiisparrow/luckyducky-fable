@@ -1,3 +1,6 @@
 {
-  "navigationBarTitleText": "编辑资料"
+  "navigationBarTitleText": "编辑资料",
+  "usingComponents": {
+    "privacy-sheet": "/components/privacy-sheet/privacy-sheet"
+  }
 }

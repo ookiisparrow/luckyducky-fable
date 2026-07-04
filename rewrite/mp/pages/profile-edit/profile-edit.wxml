@@ -15,4 +15,6 @@
   </view>
 
   <view class="ld-pe-save {{busy ? 'dim' : ''}}" bind:tap="onSave">保存</view>
+
+  <privacy-sheet />
 </view>

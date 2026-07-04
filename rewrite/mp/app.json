@@ -19,8 +19,10 @@
     "pages/profile-edit/profile-edit",
     "pages/feedback/feedback",
     "pages/about/about",
-    "pages/agreement/agreement"
+    "pages/agreement/agreement",
+    "pages/consent/consent"
   ],
+  "__usePrivacyCheck__": true,
   "window": {
     "navigationBarTitleText": "小棉鸭",
     "navigationBarBackgroundColor": "#ffffff",

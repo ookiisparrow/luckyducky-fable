@@ -1,0 +1,57 @@
+.ps-mask {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  z-index: 300;
+  background: rgba(22, 15, 32, 0.46);
+  display: flex;
+  align-items: flex-end;
+}
+.ps-sheet {
+  width: 100%;
+  background: var(--ld-bg);
+  border-radius: 44rpx 44rpx 0 0;
+  padding: 48rpx 44rpx calc(48rpx + env(safe-area-inset-bottom));
+  box-sizing: border-box;
+}
+.ps-title {
+  display: block;
+  font-size: 34rpx;
+  font-weight: 600;
+  color: var(--ld-ink);
+  text-align: center;
+  margin-bottom: 28rpx;
+}
+.ps-body {
+  display: block;
+  font-size: 26rpx;
+  line-height: 1.7;
+  color: var(--ld-purple-meta);
+  margin-bottom: 36rpx;
+}
+.ps-link {
+  color: var(--ld-purple);
+}
+.ps-btn {
+  height: 96rpx;
+  border-radius: var(--ld-radius-pill);
+  background: var(--ld-purple-ink);
+  color: var(--ld-bg);
+  font-size: 32rpx;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.ps-btn::after {
+  border: none;
+}
+.ps-skip {
+  display: block;
+  text-align: center;
+  margin-top: 28rpx;
+  font-size: 26rpx;
+  color: var(--ld-purple-meta);
+}

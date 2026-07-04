@@ -27,5 +27,6 @@
   <view class="ld-me-entry" bind:tap="onAfterSales"><text>售后/退款</text><text class="ld-me-arrow">›</text></view>
   <view class="ld-me-entry" bind:tap="onAddress"><text>收货地址</text><text class="ld-me-arrow">›</text></view>
   <view class="ld-me-entry" bind:tap="onFeedback"><text>意见反馈</text><text class="ld-me-arrow">›</text></view>
+  <view class="ld-me-entry" bind:tap="onConsent"><text>数据共享授权</text><text class="ld-me-arrow">›</text></view>
   <view class="ld-me-entry" bind:tap="onAbout"><text>关于我们</text><text class="ld-me-arrow">›</text></view>
 </view>

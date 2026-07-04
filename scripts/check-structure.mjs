@@ -4181,6 +4181,62 @@ export const repoChecks = [
     },
   },
   {
+    // 新线镜像 privacy-authorize-wired（R27㉒）+ consent 页（cs-data-share-consented 的 C 端半边）。
+    // 原生形态：app.json __usePrivacyCheck__ + lib/privacyGate 挂 onNeedPrivacyAuthorization + app.ts 启动注册
+    // + privacy-sheet 组件（agreePrivacyAuthorization 能力按钮）；涉隐私接口页扫描制——哪页调隐私接口哪页必挂
+    // 弹窗（挂载可达性·债#25 教训：闸全局触发、弹窗挂不到就渲不出=授权链静默断）。consent 页写 dataConsent
+    // （服务端为真值·本地只提示），me 页有入口（可达性）。
+    id: 'rw-mp-privacy-gated',
+    roots: ['R27'],
+    desc: '新线隐私授权+数据共享同意已接（R27㉒·M5 前置闸1）：app.json __usePrivacyCheck__ + privacyGate 挂 onNeedPrivacyAuthorization + app.ts 注册 + privacy-sheet 组件（agreePrivacyAuthorization）+ 涉隐私接口页必挂弹窗（扫描制）+ consent 页写 dataConsent + me 入口',
+    run() {
+      const base = join(ROOT, 'rewrite/mp')
+      if (!existsSync(base)) return []
+      const bad = []
+      const rd = (rel) => (existsSync(join(base, rel)) ? readFileSync(join(base, rel), 'utf8') : null)
+      const appJson = rd('app.json')
+      if (appJson && !/"__usePrivacyCheck__"\s*:\s*true/.test(appJson))
+        bad.push('rewrite/mp/app.json 缺 __usePrivacyCheck__:true——工具端不模拟隐私拦截·真机才炸（根因#8）')
+      const gate = rd('lib/privacyGate.ts')
+      if (!gate) bad.push('rewrite/mp/lib/privacyGate.ts 缺失——隐私授权闸未建（R27㉒）')
+      else if (!gate.includes('onNeedPrivacyAuthorization'))
+        bad.push('lib/privacyGate.ts 未挂 onNeedPrivacyAuthorization——隐私接口触发无人接')
+      const appTs = rd('app.ts')
+      // 核「调用」registerPrivacyGate() 而非名字出现（只剩 import 没调用=假绿·反向自检逼出）
+      if (appTs && !appTs.includes('registerPrivacyGate()'))
+        bad.push('rewrite/mp/app.ts 未调用 registerPrivacyGate()——闸建了没通电（App 启动须挂）')
+      const sheet = rd('components/privacy-sheet/privacy-sheet.wxml')
+      if (!sheet) bad.push('rewrite/mp/components/privacy-sheet/ 缺失——隐私授权弹窗未建')
+      else {
+        if (!sheet.includes('agreePrivacyAuthorization'))
+          bad.push('privacy-sheet.wxml 缺 open-type=agreePrivacyAuthorization 能力按钮——同意点不生效')
+        if (!sheet.includes('privacy-agree-btn')) bad.push('privacy-sheet.wxml 缺 privacy-agree-btn 按钮 id——resolve buttonId 对不上')
+      }
+      // 涉隐私接口页扫描：哪页调隐私接口，哪页 wxml 必挂 <privacy-sheet/>（+ json 注册组件）
+      const PRIV = /open-type="chooseAvatar"|type="nickname"|wx\.(chooseImage|chooseMedia|getUserProfile|getClipboardData|getLocation|saveImageToPhotosAlbum)\b/
+      const pagesDir = join(base, 'pages')
+      if (existsSync(pagesDir))
+        for (const p of readdirSync(pagesDir)) {
+          const wxml = rd(`pages/${p}/${p}.wxml`)
+          const ts = rd(`pages/${p}/${p}.ts`)
+          if (!PRIV.test((wxml || '') + (ts || ''))) continue
+          if (!wxml || !wxml.includes('<privacy-sheet'))
+            bad.push(`pages/${p} 调涉隐私接口但 wxml 未挂 <privacy-sheet/>——闸触发弹窗渲不出·授权链静默断（债#25）`)
+          const pj = rd(`pages/${p}/${p}.json`)
+          if (!pj || !pj.includes('privacy-sheet')) bad.push(`pages/${p}/${p}.json 未注册 privacy-sheet 组件`)
+        }
+      // consent 页：注册 + 写 dataConsent（服务端真值）+ me 入口可达
+      if (appJson && !appJson.includes('pages/consent/consent'))
+        bad.push('app.json 未注册 pages/consent/consent——数据共享授权页缺位（隐私政策已承诺可撤回·M5 前置闸1）')
+      const consentTs = rd('pages/consent/consent.ts')
+      if (!consentTs) bad.push('rewrite/mp/pages/consent/consent.ts 缺失')
+      else if (!consentTs.includes('dataConsent')) bad.push('consent 页未调 dataConsent——同意/撤回没写到服务端真值')
+      const me = rd('pages/me/me.ts')
+      if (me && consentTs && !me.includes('consent')) bad.push('me 页无 consent 入口——授权管理页不可达')
+      return bad
+    },
+  },
+  {
     id: 'rw-m5-runbook-synced',
     roots: ['正册'],
     desc: 'M5 切换 runbook 与部署面同步：rewrite/M5-切换runbook.md 须存在，且 rewrite/cloud 每个函数单元名与并行期定名 adminApiV2 都出现在 runbook 内——函数增删改名 runbook 必跟，防切换日拿陈账操刀',
@@ -4516,6 +4572,12 @@ export const typeAndTestGuards = [
     mechanism: 'test',
     roots: ['#6', '#8'],
     reverseTest: 'rewrite/mp/tests/continue-resolve.test.ts',
+  },
+  {
+    id: 'rw-mp-privacy-golden',
+    mechanism: 'test',
+    roots: ['R27', '#8'],
+    reverseTest: 'rewrite/mp/tests/privacy-gate.test.ts',
   },
   {
     id: 'rw-admin-money-ui-golden',
