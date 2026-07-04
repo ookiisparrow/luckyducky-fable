@@ -3,6 +3,7 @@ import {
   COLLECTIONS,
   MAX_QTY,
   MAX_ORDER_LINES,
+  PAY_WINDOW_MS,
   toFen,
   asFen,
   fenToYuan,
@@ -11,7 +12,7 @@ import {
   COUPON,
   SHIP,
 } from '@ldrw/shared'
-import { withOpenId, withRateLimit, ok, err, reserveStock, restoreStock } from '../../../kit'
+import { withOpenId, withRateLimit, ok, err, reserveStock, restoreStock, transition, callFlow, alert } from '../../../kit'
 
 // 创建订单（黄金 orders-money·createOrder 节全量）：价格一律云端现算不信前端；服务端不变量
 // （主商品必含/地址四要素/数量条数硬上限）；订单号库级唯一防碰撞；支付配置 fail-closed 只认环境级开关。
@@ -174,3 +175,75 @@ export const createOrder = withOpenId(
     return err(ERR.ORDER_ID_BUSY)
   })
 )
+
+/**
+ * 发起支付（黄金 orders-money·pay 节）：金额一律取库内订单换分，不信前端；三道闸（身份/本人/待支付）
+ * + 惰性超时关单（抢占成功才回补·幂等）+ 0 元单直付并发校验（没抢到不谎报成功）+ 工作流接缝单点。
+ */
+export const pay = withOpenId(async ({ db, OPENID, event }) => {
+  const id = String((event as any).id || '')
+  if (!id) return err(ERR.NO_ID)
+
+  const got = await db
+    .collection(COLLECTIONS.orders)
+    .doc(id)
+    .get()
+    .catch(() => null)
+  if (!got || !got.data || got.data._openid !== OPENID) return err(ERR.NOT_FOUND)
+  const order = got.data
+  if (order.status !== 'pending') return err('BAD_STATUS:' + order.status)
+
+  // 惰性超时：到点的 pending 当场关闭（定时器只是兜底）；抢占成功才回补预留（幂等绑转移）
+  if (Date.now() - order.createdAt > PAY_WINDOW_MS) {
+    const { moved } = await transition(COLLECTIONS.orders, id, ['pending'], 'closed', { closedAt: Date.now() })
+    if (moved && Array.isArray(order.reserved) && order.reserved.length) await restoreStock(order.reserved)
+    return err(ERR.ORDER_CLOSED)
+  }
+
+  const cfg = await db
+    .collection(COLLECTIONS.config)
+    .doc('pay')
+    .get()
+    .catch(() => null)
+  const payCfg = (cfg && cfg.data) || {}
+  if (payCfg.mode !== 'real' || !payCfg.flowId) return err(ERR.PAY_NOT_ENABLED)
+
+  const totalFee = toFen(order.amount)
+  if (totalFee <= 0) {
+    // 0 元单（券抵扣到 0）：直接置已付；没抢到（并发关单/并发支付）绝不谎报成功
+    const paidAt = Date.now()
+    const { moved } = await transition(COLLECTIONS.orders, id, ['pending'], 'paid', { paidAt })
+    if (moved) return ok({ paid: true, paidAt })
+    const fresh = await db
+      .collection(COLLECTIONS.orders)
+      .doc(id)
+      .get()
+      .catch(() => null)
+    const st = (fresh && fresh.data && fresh.data.status) || 'unknown'
+    if (st === 'paid') return ok({ paid: true, paidAt: fresh!.data.paidAt || paidAt }) // 并发已付：幂等成功
+    return err('BAD_STATUS:' + st)
+  }
+
+  // 触发支付工作流（JSAPI 下单）：openid 显式传入，金额/单号均来自库内订单
+  const firstName = order.items && order.items[0] ? String(order.items[0].name) : '钩织材料包'
+  const p = await callFlow(String(payCfg.flowId), {
+    description: ('小棉鸭 · ' + firstName).slice(0, 40),
+    out_trade_no: order.id,
+    amount: { total: totalFee, currency: 'CNY' },
+    payer: { openid: OPENID },
+  })
+  if (!p || !p.paySign) {
+    alert('money', 'pay', 'NO_PREPAY', { orderId: order.id }) // 用户付不了款＝漏单，必须可告警
+    return err(ERR.UNIFIED_ORDER_FAIL)
+  }
+  // 对齐 wx.requestPayment 参数名（工作流回传 packageVal）
+  return ok({
+    payment: {
+      timeStamp: String(p.timeStamp),
+      nonceStr: String(p.nonceStr),
+      package: String(p.packageVal || p.package || ''),
+      signType: String(p.signType || 'RSA'),
+      paySign: String(p.paySign),
+    },
+  })
+})

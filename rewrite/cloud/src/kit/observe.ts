@@ -16,3 +16,8 @@ export function alert(sev: AlertSev, fn: string, code: string, ctx: Record<strin
     /* 可观测性绝不反噬 */
   }
 }
+
+/** 告警 + 企微推送（推送接缝随观测批接上·签名不变·现仅落 [LD_ALERT] 行）。 */
+export async function notifyAlert(sev: AlertSev, fn: string, code: string, ctx: Record<string, unknown> = {}): Promise<void> {
+  alert(sev, fn, code, ctx)
+}
