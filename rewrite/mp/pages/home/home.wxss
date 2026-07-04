@@ -54,15 +54,50 @@
   font-size: 26rpx;
   color: var(--ld-ink);
 }
+.ld-card-tag {
+  padding: 0 20rpx;
+  font-size: 22rpx;
+  color: var(--ld-purple-meta);
+}
+.ld-card-pricerow {
+  display: flex;
+  align-items: baseline;
+  gap: 12rpx;
+  padding: 8rpx 20rpx 20rpx;
+}
 .ld-card-price {
-  padding: 0 20rpx 20rpx;
   font-size: 30rpx;
   font-weight: 700;
   color: var(--ld-purple-ink);
 }
-.ld-footnote {
-  text-align: center;
-  padding: 48rpx 0 24rpx;
+.ld-card-was {
   font-size: 22rpx;
+  color: var(--ld-purple-meta);
+  text-decoration: line-through;
+}
+.ld-skeleton {
+  background: linear-gradient(90deg, var(--ld-bg-sage) 25%, var(--ld-bg-faint) 50%, var(--ld-bg-sage) 75%);
+}
+.ld-skeleton-text {
+  height: 28rpx;
+  margin: 16rpx 20rpx;
+  border-radius: 8rpx;
+  background: var(--ld-bg-sage);
+}
+.ld-skeleton-text.short {
+  width: 120rpx;
+}
+.ld-empty {
+  padding: 96rpx 0;
+  text-align: center;
+}
+.ld-empty-title {
+  font-size: 30rpx;
+  font-weight: 600;
+  color: var(--ld-purple-ink);
+}
+.ld-empty-hint {
+  margin-top: 12rpx;
+  font-size: 24rpx;
   color: var(--ld-purple-meta);
 }

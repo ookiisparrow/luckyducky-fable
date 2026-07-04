@@ -4323,6 +4323,12 @@ export const typeAndTestGuards = [
     reverseTest: 'rewrite/cloud/tests/app-misc.test.ts',
   },
   {
+    id: 'rw-mp-home-golden',
+    mechanism: 'test',
+    roots: ['#8'],
+    reverseTest: 'rewrite/mp/tests/home-map.test.ts',
+  },
+  {
     id: 'order-status-union',
     mechanism: 'ts',
     roots: ['#2'],

@@ -1,20 +1,37 @@
 <view class="ld-home">
   <view class="ld-hero" style="padding-top: {{statusBarHeight + 20}}px">
     <view class="ld-hero-brand">小棉鸭 Lucky Ducky</view>
-    <view class="ld-hero-title">一针一线，钩出一只小暖鸭</view>
-    <view class="ld-hero-sub">材料包 + 视频陪学 · 新手也能钩完</view>
+    <view class="ld-hero-title">{{hero.title}}</view>
+    <view class="ld-hero-sub">{{hero.tagline}}</view>
   </view>
 
   <view class="ld-section">
-    <view class="ld-section-title">打样占位 · 商品区</view>
-    <view class="ld-grid">
-      <view class="ld-card" wx:for="{{placeholders}}" wx:key="*this">
-        <view class="ld-card-media"></view>
-        <view class="ld-card-name">材料包占位 {{item}}</view>
-        <view class="ld-card-price">¥ --</view>
+    <view class="ld-section-title">材料包</view>
+
+    <view class="ld-grid" wx:if="{{loading}}">
+      <view class="ld-card" wx:for="{{[1, 2, 3, 4]}}" wx:key="*this">
+        <view class="ld-card-media ld-skeleton"></view>
+        <view class="ld-card-name ld-skeleton-text"></view>
+        <view class="ld-card-price ld-skeleton-text short"></view>
       </view>
     </view>
-  </view>
 
-  <view class="ld-footnote">M2 打样壳 · 真机看视觉与手感 · 数据未接</view>
+    <view class="ld-grid" wx:elif="{{products.length}}">
+      <view class="ld-card" wx:for="{{products}}" wx:key="id">
+        <image wx:if="{{item.cover}}" class="ld-card-media" src="{{item.cover}}" mode="aspectFill" />
+        <view wx:else class="ld-card-media"></view>
+        <view class="ld-card-name">{{item.name}}</view>
+        <view class="ld-card-tag" wx:if="{{item.tag}}">{{item.tag}}</view>
+        <view class="ld-card-pricerow">
+          <text class="ld-card-price">{{item.priceLabel}}</text>
+          <text class="ld-card-was" wx:if="{{item.wasLabel}}">{{item.wasLabel}}</text>
+        </view>
+      </view>
+    </view>
+
+    <view class="ld-empty" wx:else>
+      <view class="ld-empty-title">{{loadFailed ? '暂时没连上云端' : '货架整理中'}}</view>
+      <view class="ld-empty-hint">{{loadFailed ? '下拉可以重试' : '上新在路上，先逛逛别处吧'}}</view>
+    </view>
+  </view>
 </view>
