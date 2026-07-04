@@ -12,6 +12,7 @@ import {
   trackEvent,
 } from './actions/learning'
 import { getHelpVideos, getReviews, submitReview } from './actions/reviews'
+import { createOrder } from './actions/orders'
 
 /**
  * 用户端聚合网关（蓝图定案·adminApi registry 范式）：event = { action, data }。
@@ -33,6 +34,7 @@ const ACTIONS: Record<string, (event: unknown) => Promise<unknown>> = {
   getHelpVideos,
   getReviews,
   submitReview,
+  createOrder,
 }
 
 export const main = async (event: any) => {
