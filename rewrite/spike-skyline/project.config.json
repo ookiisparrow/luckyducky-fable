@@ -1,7 +1,7 @@
 {
   "miniprogramRoot": "",
   "compileType": "miniprogram",
-  "appid": "wxcbd2fb68b81bcfb1",
+  "appid": "wx41dd81830eafbaaa",
   "projectname": "luckyducky-skyline-spike",
   "libVersion": "3.4.3",
   "setting": {
@@ -9,6 +9,31 @@
     "postcss": false,
     "minified": false,
     "urlCheck": false,
-    "ignoreUploadUnusedFiles": true
-  }
+    "ignoreUploadUnusedFiles": true,
+    "compileWorklet": false,
+    "uglifyFileName": false,
+    "uploadWithSourceMap": true,
+    "enhance": false,
+    "packNpmManually": false,
+    "packNpmRelationList": [],
+    "minifyWXSS": true,
+    "minifyWXML": true,
+    "localPlugins": false,
+    "disableUseStrict": false,
+    "useCompilerPlugins": false,
+    "condition": false,
+    "swc": false,
+    "disableSWC": true,
+    "babelSetting": {
+      "ignore": [],
+      "disablePlugins": [],
+      "outputPath": ""
+    }
+  },
+  "simulatorPluginLibVersion": {},
+  "packOptions": {
+    "ignore": [],
+    "include": []
+  },
+  "editorSetting": {}
 }

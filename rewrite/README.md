@@ -8,7 +8,7 @@
 | 包 | 里程碑 | 内容 | 状态 |
 |---|---|---|---|
 | `rewrite/golden/` | M0 | 黄金用例册：旧线 1033 测试（123 文件）的行为断言提炼成栈无关验收基准，约 650 条·七册（orders-money / kit-security / learning-content / cs-agent / inventory-scm / frontend-store / admin-misc），123 文件全认领无静默丢弃 | ✅ 2026-07-04 |
-| `rewrite/spike-skyline/` | M0 | Skyline 真机 spike（双页同内容对比五测试卡·用完即弃不进地基·操作见其 README） | 🟡 工程就绪·待真机 |
+| `rewrite/spike-skyline/` | M0 | Skyline 真机 spike——已验（2026-07-04）：三存疑全过、T4 过、T5 吸顶双引擎未吸（增益未证实·M2 纯结构复验后即删本工程） | ✅ 已验·留作复验台 |
 | `rewrite/mp/` | M2 | 微信原生小程序（TypeScript + glass-easel，默认 WebView、按页 Skyline） | ⬜ |
 | `rewrite/shared/` | M1 | 新线契约（Fen/状态机声明/集合册/错误码——13 设计约束的类型层落点） | ⬜ |
 | `rewrite/cloud/` | M1 | 云函数重写（新命名空间与旧函数并行；回调点位 M5 切换日同名替换） | ⬜ |
