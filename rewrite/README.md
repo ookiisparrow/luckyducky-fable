@@ -7,7 +7,7 @@
 
 | 包 | 里程碑 | 内容 | 状态 |
 |---|---|---|---|
-| `rewrite/golden/` | M0 | 黄金用例册：旧线 1033 测试的行为断言提炼成栈无关验收基准（非 npm 包，纯文档册） | ⬜ |
+| `rewrite/golden/` | M0 | 黄金用例册：旧线 1033 测试（123 文件）的行为断言提炼成栈无关验收基准，约 650 条·七册（orders-money / kit-security / learning-content / cs-agent / inventory-scm / frontend-store / admin-misc），123 文件全认领无静默丢弃 | ✅ 2026-07-04 |
 | `rewrite/mp/` | M0 spike → M2 | 微信原生小程序（TypeScript + glass-easel，默认 WebView、按页 Skyline） | ⬜ |
 | `rewrite/shared/` | M1 | 新线契约（Fen/状态机声明/集合册/错误码——13 设计约束的类型层落点） | ⬜ |
 | `rewrite/cloud/` | M1 | 云函数重写（新命名空间与旧函数并行；回调点位 M5 切换日同名替换） | ⬜ |
