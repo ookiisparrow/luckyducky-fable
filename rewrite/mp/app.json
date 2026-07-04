@@ -1,0 +1,22 @@
+{
+  "pages": ["pages/home/home", "pages/cart/cart", "pages/me/me"],
+  "window": {
+    "navigationBarTitleText": "小棉鸭",
+    "navigationBarBackgroundColor": "#ffffff",
+    "navigationBarTextStyle": "black",
+    "backgroundColor": "#ffffff"
+  },
+  "tabBar": {
+    "custom": true,
+    "color": "#7e6e96",
+    "selectedColor": "#7b5caf",
+    "backgroundColor": "#ffffff",
+    "list": [
+      { "pagePath": "pages/home/home", "text": "首页" },
+      { "pagePath": "pages/cart/cart", "text": "购物车" },
+      { "pagePath": "pages/me/me", "text": "我" }
+    ]
+  },
+  "lazyCodeLoading": "requiredComponents",
+  "sitemapLocation": "sitemap.json"
+}

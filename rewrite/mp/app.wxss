@@ -1,0 +1,8 @@
+@import './styles/tokens.wxss';
+
+page {
+  background: var(--ld-bg);
+  color: var(--ld-ink);
+  font-size: 28rpx;
+  -webkit-font-smoothing: antialiased;
+}

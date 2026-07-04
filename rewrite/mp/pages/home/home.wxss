@@ -1,0 +1,68 @@
+.ld-home {
+  min-height: 100vh;
+  background: var(--ld-bg-lilac);
+  padding-bottom: 200rpx; /* 让开悬浮 TabBar */
+}
+.ld-hero {
+  padding: 40rpx 40rpx 56rpx;
+  background: linear-gradient(160deg, #f3e9ff 0%, var(--ld-bg-lilac) 78%);
+}
+.ld-hero-brand {
+  font-size: 26rpx;
+  color: var(--ld-purple-tab);
+  letter-spacing: 2rpx;
+}
+.ld-hero-title {
+  margin-top: 20rpx;
+  font-size: 52rpx;
+  font-weight: 700;
+  color: var(--ld-purple-ink);
+  line-height: 1.25;
+}
+.ld-hero-sub {
+  margin-top: 16rpx;
+  font-size: 26rpx;
+  color: var(--ld-purple-meta);
+}
+.ld-section {
+  padding: 24rpx 32rpx;
+}
+.ld-section-title {
+  font-size: 30rpx;
+  font-weight: 600;
+  color: var(--ld-ink);
+  margin-bottom: 20rpx;
+}
+.ld-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 24rpx;
+}
+.ld-card {
+  width: calc((100% - 24rpx) / 2);
+  background: var(--ld-bg);
+  border: 2rpx solid var(--ld-purple-line);
+  border-radius: var(--ld-radius);
+  overflow: hidden;
+}
+.ld-card-media {
+  height: 320rpx;
+  background: var(--ld-bg-sage);
+}
+.ld-card-name {
+  padding: 16rpx 20rpx 4rpx;
+  font-size: 26rpx;
+  color: var(--ld-ink);
+}
+.ld-card-price {
+  padding: 0 20rpx 20rpx;
+  font-size: 30rpx;
+  font-weight: 700;
+  color: var(--ld-purple-ink);
+}
+.ld-footnote {
+  text-align: center;
+  padding: 48rpx 0 24rpx;
+  font-size: 22rpx;
+  color: var(--ld-purple-meta);
+}

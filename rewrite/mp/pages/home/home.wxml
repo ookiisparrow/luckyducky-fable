@@ -1,0 +1,20 @@
+<view class="ld-home">
+  <view class="ld-hero" style="padding-top: {{statusBarHeight + 20}}px">
+    <view class="ld-hero-brand">小棉鸭 Lucky Ducky</view>
+    <view class="ld-hero-title">一针一线，钩出一只小暖鸭</view>
+    <view class="ld-hero-sub">材料包 + 视频陪学 · 新手也能钩完</view>
+  </view>
+
+  <view class="ld-section">
+    <view class="ld-section-title">打样占位 · 商品区</view>
+    <view class="ld-grid">
+      <view class="ld-card" wx:for="{{placeholders}}" wx:key="*this">
+        <view class="ld-card-media"></view>
+        <view class="ld-card-name">材料包占位 {{item}}</view>
+        <view class="ld-card-price">¥ --</view>
+      </view>
+    </view>
+  </view>
+
+  <view class="ld-footnote">M2 打样壳 · 真机看视觉与手感 · 数据未接</view>
+</view>

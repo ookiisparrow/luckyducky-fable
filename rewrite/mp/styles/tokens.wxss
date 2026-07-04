@@ -1,0 +1,19 @@
+/* 设计 token 单一来源（M2 打样载体·承接旧线 uni.scss 幸运紫色票——UI 重设计拍板后只改这里）。
+   CSS 变量在双引擎均已真机验证（M0 spike T1 ✅）。 */
+page {
+  /* 幸运紫 */
+  --ld-purple: #a371ea; /* 强调、已验证 */
+  --ld-purple-tab: #7b5caf; /* Tab 选中 */
+  --ld-purple-meta: #7e6e96; /* 次要图标标签 */
+  --ld-purple-line: #c9bbe0; /* 卡片描边 */
+  --ld-purple-ink: #241733; /* 深紫黑：主 CTA */
+  /* 中性 */
+  --ld-ink: #222222;
+  --ld-bg: #ffffff;
+  --ld-bg-lilac: #fcfaff;
+  --ld-bg-sage: #edeee8;
+  --ld-bg-faint: #fafafa;
+  /* 几何 */
+  --ld-radius: 24rpx;
+  --ld-radius-pill: 999rpx;
+}

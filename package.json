@@ -14,7 +14,7 @@
   "scripts": {
     "prepare": "git config core.hooksPath scripts/git-hooks || exit 0",
     "build:shared": "npm run build -w @luckyducky/shared",
-    "typecheck": "npm run build:shared && tsc -p packages/cloud/tsconfig.json && tsc -p rewrite/shared/tsconfig.json --noEmit && tsc -p rewrite/cloud/tsconfig.json",
+    "typecheck": "npm run build:shared && tsc -p packages/cloud/tsconfig.json && tsc -p rewrite/shared/tsconfig.json --noEmit && tsc -p rewrite/cloud/tsconfig.json && tsc -p rewrite/mp/tsconfig.json",
     "dev:h5": "npm run build:shared && npm run dev:h5 -w luckyducky-miniapp",
     "dev:mp-weixin": "npm run build:shared && npm run dev:mp-weixin -w luckyducky-miniapp",
     "dev:app": "npm run build:shared && npm run dev:app -w luckyducky-miniapp",
@@ -48,6 +48,7 @@
     "eslint-plugin-vue": "^9.28.0",
     "fast-check": "^4.8.0",
     "globals": "^15.9.0",
+    "miniprogram-api-typings": "^5.2.1",
     "prettier": "^3.3.3",
     "typescript": "^5.5.0",
     "vitest": "^4.1.8",

@@ -1,0 +1,13 @@
+<view class="ld-tabbar">
+  <view
+    wx:for="{{tabs}}"
+    wx:key="id"
+    class="ld-tab {{active === item.id ? 'active' : ''}}"
+    data-id="{{item.id}}"
+    data-path="{{item.path}}"
+    bind:tap="onTap"
+  >
+    <image class="ld-tab-icon" src="/static/icons/{{active === item.id ? item.icon + '-on' : item.icon}}.svg" mode="aspectFit" />
+    <text class="ld-tab-label">{{item.label}}</text>
+  </view>
+</view>

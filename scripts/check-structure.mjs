@@ -3987,6 +3987,29 @@ export const repoChecks = [
     },
   },
   {
+    id: 'rw-mp-line-in-gates',
+    roots: ['铁律'],
+    desc: '新线小程序包必须被三道闸扫到（M2 批1·ADR §24 测试一等公民）：root typecheck 覆盖 rewrite/mp；app.json 每个注册页面四件套（.wxml/.ts/.json/.wxss）齐全（缺件=真机白屏或工具报错·构建过≠真机能用的结构半边）；tabBar.custom 时 custom-tab-bar 组件四件套在位',
+    run() {
+      const base = join(ROOT, 'rewrite/mp')
+      if (!existsSync(base)) return []
+      const bad = []
+      const pkg = JSON.parse(readFileSync(join(ROOT, 'package.json'), 'utf8'))
+      if (!/rewrite\/mp/.test(pkg.scripts?.typecheck || '')) bad.push('package.json scripts.typecheck 未覆盖 rewrite/mp——新线小程序类型不过闸')
+      const appJsonPath = join(base, 'app.json')
+      if (!existsSync(appJsonPath)) return [...bad, 'rewrite/mp/app.json 缺失']
+      const appJson = JSON.parse(readFileSync(appJsonPath, 'utf8'))
+      const units = (appJson.pages || []).map((p) => join(base, p))
+      if (appJson.tabBar?.custom) units.push(join(base, 'custom-tab-bar/index'))
+      for (const u of units) {
+        for (const ext of ['.wxml', '.ts', '.json', '.wxss']) {
+          if (!existsSync(u + ext)) bad.push(`rewrite/mp：${relative(base, u)}${ext} 缺失——注册了页面/组件但文件不全（真机白屏面）`)
+        }
+      }
+      return bad
+    },
+  },
+  {
     id: 'rw-openapi-perm-declared',
     roots: ['#12', '#8'],
     desc: '新线云调用权限随产物声明（移植 openapi-perm-declared·根因#12/#8·债#26）：rewrite/cloud 源每个 cloud.openapi.<ns>.<method> 调用须在 rewrite/cloud/build.mjs OPENAPI_PERMS 登记（据此产 config.json）——否则部署产物缺权限、云调用被微信拒',

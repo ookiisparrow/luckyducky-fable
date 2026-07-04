@@ -1,0 +1,37 @@
+/* 悬浮药丸 TabBar（打样视觉·沿旧线设计语言：白底药丸悬浮 + 紫选中；UI 重设计拍板后随 token 调） */
+.ld-tabbar {
+  position: fixed;
+  left: 50%;
+  transform: translateX(-50%);
+  bottom: calc(24rpx + env(safe-area-inset-bottom));
+  display: flex;
+  align-items: center;
+  gap: 8rpx;
+  padding: 12rpx 20rpx;
+  background: var(--ld-bg);
+  border-radius: var(--ld-radius-pill);
+  box-shadow: 0 8rpx 32rpx rgba(36, 23, 51, 0.16);
+}
+.ld-tab {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4rpx;
+  padding: 8rpx 28rpx;
+  border-radius: var(--ld-radius-pill);
+}
+.ld-tab-icon {
+  width: 40rpx;
+  height: 40rpx;
+}
+.ld-tab-label {
+  font-size: 20rpx;
+  color: var(--ld-purple-meta);
+}
+.ld-tab.active {
+  background: var(--ld-bg-lilac);
+}
+.ld-tab.active .ld-tab-label {
+  color: var(--ld-purple-tab);
+  font-weight: 600;
+}
