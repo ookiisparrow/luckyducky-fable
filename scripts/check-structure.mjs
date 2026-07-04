@@ -4397,6 +4397,12 @@ export const typeAndTestGuards = [
     reverseTest: 'rewrite/cloud/tests/flow.test.ts',
   },
   {
+    id: 'rw-mp-learning-golden',
+    mechanism: 'test',
+    roots: ['#2', '#8'],
+    reverseTest: 'rewrite/mp/tests/learning-map.test.ts',
+  },
+  {
     id: 'order-status-union',
     mechanism: 'ts',
     roots: ['#2'],

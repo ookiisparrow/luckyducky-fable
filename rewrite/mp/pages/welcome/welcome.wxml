@@ -1,0 +1,36 @@
+<view class="ld-welcome">
+  <image wx:if="{{bg}}" class="ld-w-bg" src="{{bg}}" mode="aspectFill" />
+  <view class="ld-w-body" style="padding-top: {{statusBarHeight + 40}}px">
+    <block wx:if="{{phase === 'input'}}">
+      <view class="ld-w-title">激活你的课程</view>
+      <view class="ld-w-sub">输入材料包里激活卡上的激活码</view>
+      <input class="ld-w-input" value="{{code}}" bind:input="onInput" placeholder="LD 开头的激活码" />
+      <view class="ld-w-btn {{busy ? 'dim' : ''}}" bind:tap="onActivate">激活</view>
+    </block>
+
+    <block wx:elif="{{kind === 'activated'}}">
+      <view class="ld-w-title">激活成功 🎉</view>
+      <view class="ld-w-sub">点下面开始学习。注意：确认进课后，这份材料包将不可退货</view>
+      <view class="ld-w-btn {{busy ? 'dim' : ''}}" bind:tap="onEnter">确认进课 · 开始学习</view>
+      <view class="ld-w-link" bind:tap="onGoHome">先逛逛，稍后再进课</view>
+    </block>
+
+    <block wx:elif="{{kind === 'mine'}}">
+      <view class="ld-w-title">欢迎回来</view>
+      <view class="ld-w-sub">这个码已经是你的了，继续学习吧</view>
+      <view class="ld-w-btn" bind:tap="onEnter">继续学习</view>
+    </block>
+
+    <block wx:elif="{{kind === 'taken'}}">
+      <view class="ld-w-title">这个码已被使用</view>
+      <view class="ld-w-sub">它已经被别的账号激活了。如果是你的家人朋友，让 TA 用自己的手机继续学；买过材料包想自己学，用包里你自己的码</view>
+      <view class="ld-w-btn ghost" bind:tap="onRetry">换一个码试试</view>
+    </block>
+
+    <block wx:else>
+      <view class="ld-w-title">激活码不对哦</view>
+      <view class="ld-w-sub">检查一下大小写和有没有抄漏——找不到码可以联系客服</view>
+      <view class="ld-w-btn ghost" bind:tap="onRetry">重新输入</view>
+    </block>
+  </view>
+</view>

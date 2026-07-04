@@ -10,6 +10,8 @@
     "pages/order-list/order-list",
     "pages/order/order",
     "pages/aftersales/aftersales",
+    "pages/welcome/welcome",
+    "pages/my-courses/my-courses",
     "pages/me/me"
   ],
   "window": {

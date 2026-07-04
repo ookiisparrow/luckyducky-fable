@@ -1,0 +1,53 @@
+.ld-mycourses {
+  min-height: 100vh;
+  background: var(--ld-bg-lilac);
+  padding: 24rpx;
+}
+.ld-course {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 30rpx 28rpx;
+  margin-bottom: 20rpx;
+  background: var(--ld-bg);
+  border-radius: var(--ld-radius);
+  border: 2rpx solid var(--ld-purple-line);
+}
+.ld-course-title {
+  font-size: 30rpx;
+  font-weight: 600;
+  color: var(--ld-ink);
+}
+.ld-course-time {
+  margin-top: 8rpx;
+  font-size: 22rpx;
+  color: var(--ld-purple-meta);
+}
+.ld-course-go {
+  font-size: 26rpx;
+  color: var(--ld-purple-tab);
+  font-weight: 600;
+}
+.ld-mc-empty {
+  text-align: center;
+  padding: 140rpx 0;
+}
+.ld-empty-title {
+  font-size: 30rpx;
+  font-weight: 600;
+  color: var(--ld-purple-ink);
+}
+.ld-empty-hint {
+  margin-top: 10rpx;
+  font-size: 24rpx;
+  color: var(--ld-purple-meta);
+}
+.ld-empty-btn {
+  display: inline-block;
+  margin-top: 28rpx;
+  padding: 18rpx 64rpx;
+  border-radius: var(--ld-radius-pill);
+  background: var(--ld-purple-ink);
+  color: #ffffff;
+  font-size: 28rpx;
+}

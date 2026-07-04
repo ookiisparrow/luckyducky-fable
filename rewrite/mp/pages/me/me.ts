@@ -3,6 +3,12 @@ Page({
   onShow() {
     if (typeof this.getTabBar === 'function') (this.getTabBar() as unknown as LdTabBar).setActive('me')
   },
+  onCourses() {
+    wx.navigateTo({ url: '/pages/my-courses/my-courses' })
+  },
+  onActivate() {
+    wx.navigateTo({ url: '/pages/welcome/welcome' })
+  },
   onOrders() {
     wx.navigateTo({ url: '/pages/order-list/order-list' })
   },

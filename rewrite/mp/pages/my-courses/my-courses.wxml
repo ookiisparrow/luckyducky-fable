@@ -1,0 +1,15 @@
+<view class="ld-mycourses">
+  <view class="ld-course" wx:for="{{list}}" wx:key="courseId" bind:tap="onTapCourse">
+    <view class="ld-course-main">
+      <view class="ld-course-title">{{item.title}}</view>
+      <view class="ld-course-time" wx:if="{{item.enteredAtLabel}}">进课于 {{item.enteredAtLabel}}</view>
+    </view>
+    <view class="ld-course-go">继续学 ›</view>
+  </view>
+
+  <view class="ld-mc-empty" wx:if="{{!loading && !list.length}}">
+    <view class="ld-empty-title">还没有进行中的课程</view>
+    <view class="ld-empty-hint">买了材料包？用包里的激活码开课</view>
+    <view class="ld-empty-btn" bind:tap="onActivate">输入激活码</view>
+  </view>
+</view>

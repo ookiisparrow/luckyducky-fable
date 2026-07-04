@@ -3,6 +3,14 @@
     <view class="ld-me-title">我</view>
     <view class="ld-me-hint">个人中心随后续批完善</view>
   </view>
+  <view class="ld-me-entry" bind:tap="onCourses">
+    <text>我的课程</text>
+    <text class="ld-me-arrow">›</text>
+  </view>
+  <view class="ld-me-entry" bind:tap="onActivate">
+    <text>输入激活码</text>
+    <text class="ld-me-arrow">›</text>
+  </view>
   <view class="ld-me-entry" bind:tap="onOrders">
     <text>我的订单</text>
     <text class="ld-me-arrow">›</text>
