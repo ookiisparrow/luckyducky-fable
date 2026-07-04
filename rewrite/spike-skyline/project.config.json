@@ -1,0 +1,14 @@
+{
+  "miniprogramRoot": "",
+  "compileType": "miniprogram",
+  "appid": "wxcbd2fb68b81bcfb1",
+  "projectname": "luckyducky-skyline-spike",
+  "libVersion": "3.4.3",
+  "setting": {
+    "es6": true,
+    "postcss": false,
+    "minified": false,
+    "urlCheck": false,
+    "ignoreUploadUnusedFiles": true
+  }
+}

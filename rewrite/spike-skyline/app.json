@@ -1,0 +1,10 @@
+{
+  "pages": ["pages/index/index", "pages/sky/sky", "pages/web/web"],
+  "lazyCodeLoading": "requiredComponents",
+  "window": {
+    "navigationBarTitleText": "Skyline Spike",
+    "navigationBarBackgroundColor": "#f6f6f8",
+    "backgroundColor": "#f6f6f8"
+  },
+  "sitemapLocation": "sitemap.json"
+}

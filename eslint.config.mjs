@@ -20,6 +20,8 @@ export default [
       'unpackage/**',
       'packages/miniapp/src/uni.scss',
       'console-assets/**',
+      // Skyline 真机 spike：微信原生全局（wx/Page/App）、用完即弃，不入 lint 域
+      'rewrite/spike-skyline/**',
     ],
   },
 

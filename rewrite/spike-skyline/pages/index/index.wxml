@@ -1,0 +1,12 @@
+<view class="wrap">
+  <view class="h1">Skyline 真机 spike</view>
+  <view class="tip">两页内容完全相同，分别用 Skyline 与 WebView 渲染。逐页看五张测试卡，按 README 记录表回报现象。</view>
+  <view class="env">
+    <view>基础库 SDKVersion：{{sdkVersion}}（需 ≥ 3.0.2）</view>
+    <view>微信版本：{{wxVersion}}（需 ≥ 8.0.40，T4 fixed 需 ≥ 8.0.43）</view>
+    <view>平台：{{platform}}</view>
+  </view>
+  <view class="btn btn-sky" bind:tap="goSky">进入 Skyline 页</view>
+  <view class="btn btn-web" bind:tap="goWeb">进入 WebView 页</view>
+  <view class="tip small">每页顶栏右侧徽标显示实际 renderer——以徽标为准（客户端不满足版本时 Skyline 会自动降级 WebView）。</view>
+</view>

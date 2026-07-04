@@ -1,0 +1,182 @@
+/* 双页共用样式——刻意只用 Skyline 子集内写法（flex/px/单层阴影），保证降级到 WebView 也一致 */
+.page {
+  position: absolute;
+  left: 0;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  --brand: #a371ea;
+}
+.nav {
+  position: fixed;
+  left: 0;
+  right: 0;
+  top: 0;
+  height: 44px;
+  box-sizing: content-box;
+  display: flex;
+  align-items: center;
+  background: #ffffff;
+  z-index: 10;
+}
+.nav-back {
+  padding: 0 16px;
+  font-size: 16px;
+  color: #a371ea;
+}
+.nav-title {
+  flex: 1;
+  text-align: center;
+  font-size: 16px;
+  font-weight: bold;
+}
+.nav-badge {
+  margin-right: 12px;
+  padding: 3px 10px;
+  border-radius: 12px;
+  background: #a371ea;
+  color: #fff;
+  font-size: 12px;
+}
+.body {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+}
+.card {
+  margin: 12px 14px 0 14px;
+  background: #fff;
+  border-radius: 12px;
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+}
+.card-h {
+  font-size: 15px;
+  font-weight: bold;
+  margin-bottom: 6px;
+}
+.card-tip {
+  color: #888;
+  font-size: 12px;
+  line-height: 1.6;
+  margin-bottom: 10px;
+}
+.swatch-row {
+  display: flex;
+  flex-direction: row;
+}
+.swatch {
+  width: 84px;
+  height: 48px;
+  border-radius: 8px;
+  margin-right: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.swatch-t {
+  color: #fff;
+  font-size: 12px;
+}
+.swatch-var {
+  background: var(--brand, #d0d0d0);
+}
+.swatch-ref {
+  background: #a371ea;
+}
+.swatch-inj {
+  background: var(--inj, #d0d0d0);
+}
+.mini-btn {
+  height: 38px;
+  border-radius: 19px;
+  background: #a371ea;
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+}
+.svg-row {
+  display: flex;
+  flex-direction: row;
+}
+.svg-img {
+  width: 150px;
+  margin-right: 12px;
+}
+.row {
+  margin: 0 14px;
+  padding: 12px 4px;
+  border-bottom: 1px solid #eee;
+  background: #fafafa;
+}
+.sticky-bar {
+  height: 40px;
+  display: flex;
+  align-items: center;
+  padding-left: 14px;
+  background: #ffd54a;
+  font-weight: bold;
+}
+.sticky-css {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+}
+.end-pad {
+  height: 120px;
+}
+.mask {
+  position: fixed;
+  left: 0;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(20, 16, 32, 0.72);
+  z-index: 50;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+.mask-t {
+  color: #fff;
+  font-size: 15px;
+  line-height: 1.8;
+  text-align: center;
+  padding: 0 30px;
+  margin-bottom: 24px;
+}
+.mask-close {
+  height: 40px;
+  padding: 0 28px;
+  border-radius: 20px;
+  background: #fff;
+  color: #333;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.tabbar {
+  position: fixed;
+  left: 40px;
+  right: 40px;
+  bottom: 24px;
+  height: 54px;
+  border-radius: 27px;
+  background: #a371ea;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  z-index: 20;
+  box-shadow: 0 6px 18px rgba(163, 113, 234, 0.4);
+}
+.tab {
+  flex: 1;
+  text-align: center;
+  color: #fff;
+  font-size: 13px;
+}
