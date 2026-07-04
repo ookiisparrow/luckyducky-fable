@@ -4013,6 +4013,33 @@ export const repoChecks = [
     },
   },
   {
+    id: 'rw-site-in-gates',
+    roots: ['铁律'],
+    desc: '内容站三件套在位（M4·GEO 基建=可爬可收录的机器面）：astro.config 配 site 域名 + sitemap 集成；public/robots.txt 在；教程内容 frontmatter 带 reviewed 标记（AI 起草未审稿不冒充定稿——写真机器可核）',
+    run() {
+      const base = join(ROOT, 'rewrite/site')
+      if (!existsSync(base)) return []
+      const bad = []
+      const cfg = join(base, 'astro.config.mjs')
+      if (!existsSync(cfg)) bad.push('rewrite/site/astro.config.mjs 缺失')
+      else {
+        const c = readFileSync(cfg, 'utf8')
+        if (!/site:\s*'https:\/\/www\.luckyducky\.cn'/.test(c)) bad.push('astro.config 未配 site 域名——sitemap/canonical 出不了绝对地址（收录基建缺）')
+        if (!/sitemap\(\)/.test(c)) bad.push('astro.config 未挂 sitemap 集成——搜索引擎无地图可爬')
+      }
+      if (!existsSync(join(base, 'public/robots.txt'))) bad.push('public/robots.txt 缺失——爬虫策略未声明')
+      const contentDir = join(base, 'src/content/tutorials')
+      if (existsSync(contentDir)) {
+        for (const f of readdirSync(contentDir)) {
+          if (!f.endsWith('.md')) continue
+          const src = readFileSync(join(contentDir, f), 'utf8')
+          if (!/^reviewed:\s*(true|false)\s*$/m.test(src)) bad.push(`教程 ${f} frontmatter 缺 reviewed 标记——AI 起草稿与定稿无法区分（写真纪律）`)
+        }
+      }
+      return bad
+    },
+  },
+  {
     id: 'rw-agent-in-gates',
     roots: ['铁律'],
     desc: '新坐席台包必须被三道闸扫到（M3 批8·坐席台=在用人工客服唯一通道·零断档红线）：root typecheck 覆盖 rewrite/agent；轮询合并纯函数有行为测试；package.json 有 build 脚本',
@@ -4493,6 +4520,12 @@ export const typeAndTestGuards = [
     mechanism: 'test',
     roots: ['#8'],
     reverseTest: 'rewrite/agent/tests/desk.test.ts',
+  },
+  {
+    id: 'rw-site-schema-golden',
+    mechanism: 'test',
+    roots: ['#8'],
+    reverseTest: 'rewrite/site/tests/schema.test.ts',
   },
   {
     id: 'order-status-union',

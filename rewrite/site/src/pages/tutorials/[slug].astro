@@ -1,0 +1,89 @@
+---
+// 教程详情页：正文 + Article/HowTo/FAQ/面包屑四类结构化数据注入（GEO 主战场）。
+// reviewed=false 的 AI 起草稿带「初稿待审」横幅——不冒充定稿（写真纪律）。
+import Base from '../../layouts/Base.astro'
+import { getCollection, type CollectionEntry } from 'astro:content'
+import { articleSchema, howToSchema, faqSchema, breadcrumbSchema } from '../../lib/schema'
+
+export async function getStaticPaths() {
+  const tutorials = await getCollection('tutorials')
+  return tutorials.map((t) => ({ params: { slug: t.slug }, props: { entry: t } }))
+}
+
+interface Props {
+  entry: CollectionEntry<'tutorials'>
+}
+const { entry } = Astro.props
+const { Content } = await entry.render()
+const d = entry.data
+const path = `/tutorials/${entry.slug}/`
+
+const schemas = [
+  articleSchema({ title: d.title, description: d.description, path, datePublished: d.datePublished }),
+  howToSchema(d.title, d.description, d.steps),
+  faqSchema(d.faq),
+  breadcrumbSchema([
+    { name: '首页', path: '/' },
+    { name: '钩织教程', path: '/tutorials/' },
+    { name: d.title, path },
+  ]),
+].filter(Boolean)
+---
+
+<Base title={d.title} description={d.description}>
+  {schemas.map((s) => <script type="application/ld+json" set:html={JSON.stringify(s)} />)}
+  {!d.reviewed && <p class="draft-banner">📝 本文为 AI 起草的内容初稿，店主审核后转正——细节以材料包内教学视频为准。</p>}
+  <article>
+    <h1>{d.title}</h1>
+    <Content />
+  </article>
+  {d.faq.length > 0 && (
+    <section>
+      <h2>常见问题</h2>
+      {d.faq.map((f) => (
+        <details>
+          <summary>{f.q}</summary>
+          <p>{f.a}</p>
+        </details>
+      ))}
+    </section>
+  )}
+  <p class="cta">🧶 想跟着视频一步步钩？材料包与配套课程在微信小程序：<strong>微信搜「LuckyDucky小棉鸭」</strong></p>
+</Base>
+
+<style>
+  h1 {
+    color: #241733;
+  }
+  .draft-banner {
+    padding: 10px 14px;
+    background: #fff8e6;
+    border: 1px solid #e8d49a;
+    border-radius: 10px;
+    font-size: 13px;
+    color: #8a6d1a;
+  }
+  article :global(h2) {
+    color: #241733;
+    margin-top: 28px;
+  }
+  details {
+    margin-bottom: 10px;
+    padding: 8px 14px;
+    background: #fff;
+    border: 1px solid #c9bbe0;
+    border-radius: 10px;
+  }
+  summary {
+    cursor: pointer;
+    color: #7b5caf;
+    font-weight: 600;
+  }
+  .cta {
+    margin-top: 32px;
+    padding: 14px 18px;
+    background: #fff;
+    border: 1px solid #c9bbe0;
+    border-radius: 12px;
+  }
+</style>

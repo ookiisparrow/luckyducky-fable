@@ -1,0 +1,57 @@
+---
+// 官网首页（品牌锚点·成交导流小程序——本站不做交易）。
+import Base from '../layouts/Base.astro'
+import { getCollection } from 'astro:content'
+
+const tutorials = (await getCollection('tutorials')).sort((a, b) => (a.data.datePublished < b.data.datePublished ? 1 : -1))
+---
+
+<Base title="钩织材料包与新手教程" description="Lucky Ducky 小棉鸭：专注钩织的材料包品牌。毛线、工具与分步视频教学打包成材料包，零基础从第一针开始，亲手钩出属于自己的随身幸运物。">
+  <h1>一针一线，钩出一只小暖鸭</h1>
+  <p>
+    我们把毛线、配件、工具与配套教学打包成一个个<strong>钩织材料包</strong>，让没有基础的人也能从第一针开始，
+    亲手钩出属于自己的小鸭与小物。每份材料包配有分步教学视频：扫码开课、跟着一针一线，把一团毛线变成可以随身携带的幸运物。
+  </p>
+  <p class="cta">🧶 材料包购买与视频课程在微信小程序：<strong>微信搜「LuckyDucky小棉鸭」</strong></p>
+
+  <h2>钩织入门教程</h2>
+  <ul>
+    {tutorials.map((t) => (
+      <li>
+        <a href={`/tutorials/${t.slug}/`}>{t.data.title}</a>
+        <span class="desc">{t.data.description}</span>
+      </li>
+    ))}
+  </ul>
+</Base>
+
+<style>
+  h1 {
+    color: #241733;
+    font-size: 32px;
+  }
+  h2 {
+    color: #241733;
+    margin-top: 40px;
+  }
+  .cta {
+    padding: 14px 18px;
+    background: #fff;
+    border: 1px solid #c9bbe0;
+    border-radius: 12px;
+  }
+  ul {
+    padding-left: 18px;
+  }
+  li {
+    margin-bottom: 10px;
+  }
+  a {
+    color: #7b5caf;
+  }
+  .desc {
+    display: block;
+    font-size: 13px;
+    color: #7e6e96;
+  }
+</style>

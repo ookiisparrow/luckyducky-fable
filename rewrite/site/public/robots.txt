@@ -1,0 +1,5 @@
+# Lucky Ducky 小棉鸭 · 内容站（欢迎收录·含 AI 引擎爬虫）
+User-agent: *
+Allow: /
+
+Sitemap: https://www.luckyducky.cn/sitemap-index.xml
