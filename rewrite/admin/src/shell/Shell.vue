@@ -8,7 +8,13 @@ const router = useRouter()
 const NAV = [
   { group: '总览', items: [{ label: '数据看板', path: '/' }] },
   { group: '商品与内容', items: [] },
-  { group: '订单与钱', items: [] },
+  {
+    group: '订单与钱',
+    items: [
+      { label: '订单发货', path: '/orders' },
+      { label: '售后退款', path: '/refunds' },
+    ],
+  },
   { group: '客服', items: [] },
   { group: '进销存', items: [] },
   { group: '系统', items: [] },

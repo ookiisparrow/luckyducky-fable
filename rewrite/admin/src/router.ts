@@ -6,6 +6,8 @@ import { client } from './api'
 const Login = () => import('./pages/Login.vue')
 const Shell = () => import('./shell/Shell.vue')
 const Dashboard = () => import('./pages/Dashboard.vue')
+const Orders = () => import('./pages/Orders.vue')
+const Refunds = () => import('./pages/Refunds.vue')
 
 export const router = createRouter({
   history: createWebHashHistory(),
@@ -14,7 +16,11 @@ export const router = createRouter({
     {
       path: '/',
       component: Shell,
-      children: [{ path: '', component: Dashboard }],
+      children: [
+        { path: '', component: Dashboard },
+        { path: 'orders', component: Orders },
+        { path: 'refunds', component: Refunds },
+      ],
     },
   ],
 })

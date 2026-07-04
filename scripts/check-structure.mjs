@@ -4437,6 +4437,12 @@ export const typeAndTestGuards = [
     reverseTest: 'rewrite/mp/tests/continue-resolve.test.ts',
   },
   {
+    id: 'rw-admin-money-ui-golden',
+    mechanism: 'test',
+    roots: ['#4', '#8'],
+    reverseTest: 'rewrite/admin/tests/money-ui.test.ts',
+  },
+  {
     id: 'order-status-union',
     mechanism: 'ts',
     roots: ['#2'],

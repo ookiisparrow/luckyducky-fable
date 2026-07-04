@@ -12,7 +12,7 @@
 | `rewrite/mp/` | M2 | 微信原生小程序（TypeScript + glass-easel，默认 WebView、按页 Skyline）——工程骨架已立（devtools 直导 rewrite/mp·TS 经编译插件·守卫 rw-mp-line-in-gates） | 🚧 批13 我页完善·M2 页面面收齐 |
 | `rewrite/shared/` | M1 | 新线契约 `@ldrw/shared`（Fen 品牌类型/状态机声明类型级派生/37 集合册/42 错误码册·与旧线 parity 焊死） | 🟢 批1 已立（2026-07-04） |
 | `rewrite/cloud/` | M1 | 云函数重写 `@ldrw/cloud`（kit 八件横切原语 ✅ 批2·函数域逐批立·新命名空间与旧函数并行；回调点位 M5 切换日同名替换） | 🟢 kit 已立（2026-07-04） |
-| `rewrite/admin/` `rewrite/agent/` | M3 | 后台重写（Vue3+Vite+TS；坐席台新旧并行零断档）——admin 骨架已立（登录/会话/壳布局六组 IA·守卫 rw-admin-ui-in-gates） | 🚧 admin 批1 骨架 |
+| `rewrite/admin/` `rewrite/agent/` | M3 | 后台重写（Vue3+Vite+TS；坐席台新旧并行零断档）——admin 骨架已立（登录/会话/壳布局六组 IA·守卫 rw-admin-ui-in-gates） | 🚧 admin 批2 订单与钱组 |
 | `rewrite/site/` | M4（与 M1 并行） | Astro SSG 内容站+官网（GEO 语料源） | ⬜ |
 
 ## 治理地基（新线开局即有）
