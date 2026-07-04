@@ -20,6 +20,12 @@ import * as csat from './actions/csat'
 import * as agentDesk from './actions/agentDesk'
 import * as agents from './actions/agents'
 import * as wecomLogin from './actions/wecomLogin'
+import * as scmMaterials from './actions/scmMaterials'
+import * as scmPurchase from './actions/scmPurchase'
+import * as scmOutwork from './actions/scmOutwork'
+import * as scmBom from './actions/scmBom'
+import * as scmAssembly from './actions/scmAssembly'
+import * as scmPlanner from './actions/scmPlanner'
 
 // 管理控制台后端 v2（HTTP 访问服务触发·鉴权外壳逐字承接旧线 index.ts·批11 只挂 ping/login，
 // 业务 action 后续批逐域挂进 ACTIONS/ACTION_CAPS——挂载时与旧线注册表逐行核对）。
@@ -111,6 +117,38 @@ const ACTIONS: Record<string, (ctx: Ctx) => Promise<any>> = {
   disableAgent: agents.disableAgent,
   listAgents: agents.listAgents,
   setAgentWecomUserId: agents.setAgentWecomUserId,
+  // 进销存 SCM（批16·未登记 ACTION_CAPS→默认拒 admin:write＝仅超管·写类自动审计）
+  // 地基：物料/供应商主档 + 期初盘点/调整（经门1 kit/scmStock）+ 流水查账
+  listMaterials: scmMaterials.listMaterials,
+  saveMaterial: scmMaterials.saveMaterial,
+  listSuppliers: scmMaterials.listSuppliers,
+  saveSupplier: scmMaterials.saveSupplier,
+  adjustStock: scmMaterials.adjustStock,
+  listLedger: scmMaterials.listLedger,
+  // 车道 A·采购线：状态机 draft→ordered→received（首次流转绑门1 入库）+cancelled·totalFen 服务端算
+  listPurchases: scmPurchase.listPurchases,
+  savePurchase: scmPurchase.savePurchase,
+  markOrdered: scmPurchase.markOrdered,
+  receivePurchase: scmPurchase.receivePurchase,
+  cancelPurchase: scmPurchase.cancelPurchase,
+  // 车道 B·外协线：草稿→发料(出库)→收货(入带结+定格应付/损耗)→结算销账；仅 draft 可取消
+  listOutworks: scmOutwork.listOutworks,
+  saveOutwork: scmOutwork.saveOutwork,
+  issueOutwork: scmOutwork.issueOutwork,
+  receiveOutwork: scmOutwork.receiveOutwork,
+  settleOutwork: scmOutwork.settleOutwork,
+  cancelOutwork: scmOutwork.cancelOutwork,
+  // 车道 C·配方组装线：全局模板+每产品差异位 → 组装执行（门3 resolveBom→快照冻结→门1 扣料→门4 produceStock 入成品·assemblyId 幂等）
+  getBomSetup: scmBom.getBomSetup,
+  saveBomTemplate: scmBom.saveBomTemplate,
+  saveBomProfile: scmBom.saveBomProfile,
+  previewAssembly: scmAssembly.previewAssembly,
+  runAssembly: scmAssembly.runAssembly,
+  listAssemblies: scmAssembly.listAssemblies,
+  // 车道 D·计划核销线：备货计算器（只读）；发货核销流水绑 orders.shipOrder 首次 shipped 流转、不另立 action
+  getRestockPlan: scmPlanner.getRestockPlan,
+  // 产销统计（只读·同车道 D）：stockLedger fg 流水按 itemKey 汇总——打包累计 + 发货/销售累计，不动账
+  getFgSummary: scmPlanner.getFgSummary,
 }
 
 // 能力闸（RBAC·别让单超管裸奔）：受限 action 须 principal 具备对应能力（'*'=全能力）。

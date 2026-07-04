@@ -4,7 +4,7 @@ import { getDb } from './db'
 // 实物库存原子原语（设计约束#1「下单即预留+乐观 CAS 防超卖」·黄金 inventory-scm §A/§B/§C）。
 // SKU 库存独立集合 inventory，确定性 _id=`${productId}__${spec}`（与 order.items[].spec 同键，回补一致）。
 // 不限量：无文档或 stock=null＝不限量（缺货前不阻断下单·安全迁移）。
-// 单一收口：全库仅本文件读写 inventory.stock。produceStock/getInventory 随 SCM/admin 域批次补。
+// 单一收口：全库仅本文件读写 inventory.stock。getInventory（批14）/produceStock（批16 SCM）已随域批次补齐。
 
 export interface StockLine {
   productId: string
@@ -114,6 +114,38 @@ export async function setStock(
       await coll.add({ data: { _id, ...data } })
     })
   return { ok: true }
+}
+
+/**
+ * 组装入成品（进销存 SCM 门4·旧线 kit/inventory 逐字承接·批16）：
+ * CAS 增·无文档则建（组装出来的成品第一次入账时 SKU 可能还没建库存档）。stock=null（不限量）保持不动——
+ * 不把「不限量」隐式翻成限量（改计量语义须管理员在库存页显式设置）。qty 非正整数 fail-closed。
+ */
+export async function produceStock(productId: string, spec: string, qty: number): Promise<{ ok: boolean; error?: string }> {
+  if (!productId || !Number.isInteger(qty) || qty <= 0) return { ok: false, error: 'BAD_QTY' }
+  const coll = getDb().collection(COLLECTIONS.inventory)
+  const _id = idOf(productId, spec)
+  for (let i = 0; i < CAS_RETRY; i++) {
+    const got = await coll.doc(_id).get().catch(() => null)
+    if (!got || !got.data) {
+      // 无文档则建（确定性 _id·并发双建一方撞 DUPLICATE 走下轮 CAS 累加）
+      const created = await coll
+        .add({ data: { _id, productId, spec, stock: qty, updatedAt: Date.now() } })
+        .then(() => true)
+        .catch(() => false)
+      if (created) return { ok: true }
+      continue
+    }
+    const stock = got.data.stock
+    if (stock == null) return { ok: true } // 不限量：入成品无账可加·保持不限量
+    const r = await coll
+      .where({ _id, stock })
+      .update({ data: { stock: stock + qty, updatedAt: Date.now() } })
+      .catch(() => ({ stats: { updated: 0 } }))
+    if (r.stats && r.stats.updated === 1) return { ok: true }
+    // updated:0＝并发改动→重读重试
+  }
+  return { ok: false, error: 'CONTENTION' } // 争用耗尽（管理端低频·几乎不至）
 }
 
 // 全量扫描上限（黄金 inventory-scm §L）：裸 .get() 服务端默认 100 条静默截断——SKU 破百后库存页
