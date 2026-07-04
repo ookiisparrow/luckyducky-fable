@@ -3947,6 +3947,30 @@ export const repoChecks = [
     },
   },
   {
+    id: 'rw-writes-need-gate',
+    roots: ['#3'],
+    desc: '新线函数写库必过 kit 闸（移植 writes-need-gate·设计约束#3「不过闸写不出库」）：rewrite/cloud/src/functions/ 下含 .add(/.update(/.remove(/.set( 的文件必须出现 withOpenId/withAdminGate/defineNotifyCallback/isServerCall 之一（kit 层自身豁免）',
+    run() {
+      const bad = []
+      const base = join(ROOT, 'rewrite/cloud/src/functions')
+      if (!existsSync(base)) return bad
+      const walk = (d) => {
+        for (const e of readdirSync(d)) {
+          const p = join(d, e)
+          if (statSync(p).isDirectory()) walk(p)
+          else if (e.endsWith('.ts')) {
+            const src = readFileSync(p, 'utf8')
+            if (/\.(add|update|remove|set)\(/.test(src) && !/(withOpenId|withAdminGate|defineNotifyCallback|isServerCall)/.test(src)) {
+              bad.push(`${relative(ROOT, p)} 有写库但未见 kit 闸（withOpenId/withAdminGate/defineNotifyCallback/isServerCall）——设计约束#3 不过闸写不出库`)
+            }
+          }
+        }
+      }
+      walk(base)
+      return bad
+    },
+  },
+  {
     id: 'oldline-frozen',
     roots: ['铁律'],
     desc: '重写期旧线冻结（ADR §23 切换策略）：packages/ 五包在本仓是参照基线、字节级冻结——逐文件摘要须与 scripts/oldline-freeze.json 清单一致（防误改旧线以为生效：重写改动只进 rewrite/，线上止血走 next 仓）；确需有意识同步旧线时 node scripts/freeze-oldline.mjs 刷新清单并在提交信息写明缘由',
@@ -4083,6 +4107,12 @@ export const typeAndTestGuards = [
     mechanism: 'test',
     roots: ['#1', '#2', '#3', '#7', '#13'],
     reverseTest: 'rewrite/cloud/tests/transition.test.ts',
+  },
+  {
+    id: 'rw-user-catalog-golden',
+    mechanism: 'test',
+    roots: ['#1', '#3'],
+    reverseTest: 'rewrite/cloud/tests/app-user.test.ts',
   },
   {
     id: 'order-status-union',
