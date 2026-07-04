@@ -8,11 +8,23 @@ import {
   asFen,
   fenToYuan,
   isValidPriceYuan,
+  refundShareFen,
   CHECKOUT_ADDONS,
   COUPON,
   SHIP,
 } from '@ldrw/shared'
-import { withOpenId, withRateLimit, ok, err, reserveStock, restoreStock, transition, callFlow, alert } from '../../../kit'
+import {
+  withOpenId,
+  withRateLimit,
+  ok,
+  err,
+  reserveStock,
+  restoreStock,
+  transition,
+  callFlow,
+  alert,
+  pageQuery,
+} from '../../../kit'
 
 // 创建订单（黄金 orders-money·createOrder 节全量）：价格一律云端现算不信前端；服务端不变量
 // （主商品必含/地址四要素/数量条数硬上限）；订单号库级唯一防碰撞；支付配置 fail-closed 只认环境级开关。
@@ -246,4 +258,129 @@ export const pay = withOpenId(async ({ db, OPENID, event }) => {
       paySign: String(p.paySign),
     },
   })
+})
+
+/**
+ * 申请售后退款（黄金 orders-money·applyRefund 节）：退款额一律云端分摊算定（refundShareFen 单源）；
+ * 一单一行一售后（确定性 _id 库级唯一）；数量级退剩余可退件；同单累计封顶实付。
+ */
+export const applyRefund = withOpenId(async ({ db, OPENID, event }) => {
+  const e: any = event
+  const orderId = String(e.orderId || '')
+  const reqLine = String(e.lineId || e.productId || '') // 新单行键/旧单回退 productId
+  if (!orderId || !reqLine) return err(ERR.BAD_ARGS)
+  const reason = String(e.reason || '').slice(0, 200)
+
+  const got = await db
+    .collection(COLLECTIONS.orders)
+    .doc(orderId)
+    .get()
+    .catch(() => null)
+  if (!got || !got.data || got.data._openid !== OPENID) return err(ERR.NOT_FOUND)
+  const order = got.data
+  if (!['paid', 'shipped', 'done'].includes(order.status)) return err('BAD_STATUS:' + order.status)
+
+  const item = (order.items || []).find((it: any) => (it.lineId || it.productId) === reqLine)
+  if (!item) return err('UNKNOWN_ITEM:' + reqLine)
+  // 剩余可退件 = 购买件数 − 已进课件数；全进则无可退（旧单无 enteredQty 视 0＝整行可退）
+  const qty = item.qty || 1
+  const enteredQty = item.enteredQty || 0
+  const refundableQty = qty - enteredQty
+  if (item.refundable === false || refundableQty <= 0) return err(ERR.NOT_REFUNDABLE)
+  const lineId = item.lineId || item.productId
+  const productId = item.productId
+
+  // 分摊全程分整数；同单已占额度（申请中/已同意/已退）不可重复退
+  const amountFen = toFen(Number(order.amount))
+  const goodsFen = toFen(Number(order.goods))
+  const itemFen = asFen(toFen(item.price) * refundableQty)
+
+  await db.createCollection(COLLECTIONS.afterSales).catch(() => {})
+  const exist = await db
+    .collection(COLLECTIONS.afterSales)
+    .where({ orderId })
+    .get()
+    .catch(() => ({ data: [] }))
+  if (exist.data.some((a: any) => (a.lineId || a.productId) === lineId)) return err(ERR.ALREADY_APPLIED)
+  const used = asFen(
+    exist.data
+      .filter((a: any) => ['applied', 'approved', 'refunded'].includes(a.status))
+      .reduce((s: number, a: any) => s + toFen(Number(a.refundAmount)), 0)
+  )
+  const refundFen = refundShareFen(amountFen, goodsFen, itemFen, used)
+  if (refundFen <= 0) return err(ERR.NOTHING_LEFT)
+
+  const now = Date.now()
+  const rec = {
+    _id: orderId + '__' + lineId,
+    orderId,
+    _openid: OPENID,
+    lineId,
+    productId,
+    name: item.name,
+    spec: item.spec || '',
+    qty: refundableQty, // 退款件数=剩余可退件·回补库存按此
+    itemTotal: fenToYuan(itemFen),
+    refundAmount: fenToYuan(refundFen),
+    reason,
+    addressName: (order.address && order.address.name) || '',
+    phone: (order.address && order.address.phone) || '',
+    status: 'applied',
+    appliedAt: now,
+  }
+  try {
+    await db.collection(COLLECTIONS.afterSales).add({ data: rec })
+  } catch {
+    return err(ERR.ALREADY_APPLIED) // 库级唯一：一单一行一售后（并发双发只落一条）
+  }
+  return ok({ afterSale: rec })
+})
+
+/** 确认收货（黄金）：本人 + 仅已发货可确认；条件流转防越状态/重复确认。 */
+export const confirmReceive = withOpenId(async ({ db, OPENID, event }) => {
+  const id = String((event as any).id || '')
+  if (!id) return err(ERR.NO_ID)
+  const got = await db
+    .collection(COLLECTIONS.orders)
+    .doc(id)
+    .get()
+    .catch(() => null)
+  if (!got || !got.data || got.data._openid !== OPENID) return err(ERR.NOT_FOUND)
+  if (got.data.status !== 'shipped') return err('BAD_STATUS:' + got.data.status)
+  const doneAt = Date.now()
+  const { moved } = await transition(COLLECTIONS.orders, id, ['shipped'], 'done', { doneAt })
+  if (!moved) {
+    const fresh = await db
+      .collection(COLLECTIONS.orders)
+      .doc(id)
+      .get()
+      .catch(() => null)
+    return err('BAD_STATUS:' + ((fresh && fresh.data && fresh.data.status) || 'unknown'))
+  }
+  return ok({ doneAt })
+})
+
+/** 本人订单列表（游标分页·属主隔离）。 */
+export const getMyOrders = withOpenId(async ({ db, OPENID, event }) => {
+  const paged = await pageQuery(db, COLLECTIONS.orders, { _openid: OPENID }, 'createdAt', event as any, 100)
+  return ok({ ...paged })
+})
+
+/** 按单号取本人订单（他人/不存在一律 NOT_FOUND·不泄露存在性）。 */
+export const getOrderById = withOpenId(async ({ db, OPENID, event }) => {
+  const id = String((event as any).id || '')
+  if (!id) return err(ERR.NO_ID)
+  const got = await db
+    .collection(COLLECTIONS.orders)
+    .doc(id)
+    .get()
+    .catch(() => null)
+  if (!got || !got.data || got.data._openid !== OPENID) return err(ERR.NOT_FOUND)
+  return ok({ order: got.data })
+})
+
+/** 本人售后单（游标分页·按申请时间倒序）。 */
+export const getMyAfterSales = withOpenId(async ({ db, OPENID, event }) => {
+  const paged = await pageQuery(db, COLLECTIONS.afterSales, { _openid: OPENID }, 'appliedAt', event as any, 100)
+  return ok({ ...paged })
 })
