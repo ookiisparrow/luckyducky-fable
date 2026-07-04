@@ -1,0 +1,51 @@
+<view class="ld-player">
+  <block wx:if="{{state === 'playing' || state === 'loading'}}">
+    <video
+      wx:if="{{src}}"
+      class="ld-video"
+      src="{{src}}"
+      autoplay
+      show-center-play-btn
+      bind:play="onFirstPlay"
+      bind:ended="onEnded"
+      bind:error="onVideoError"
+    ></video>
+    <view wx:else class="ld-video ld-video-skeleton"></view>
+  </block>
+
+  <view class="ld-video ld-video-state" wx:elif="{{state === 'empty'}}">
+    <view class="ld-vs-title">这段视频还在整理中</view>
+    <view class="ld-vs-hint">先看看别的段落吧</view>
+  </view>
+  <view class="ld-video ld-video-state" wx:elif="{{state === 'denied'}}">
+    <view class="ld-vs-title">先激活课程才能观看</view>
+    <view class="ld-vs-btn" bind:tap="onGoActivate">去输入激活码</view>
+  </view>
+  <view class="ld-video ld-video-state" wx:elif="{{state === 'missing'}}">
+    <view class="ld-vs-title">课程不存在</view>
+  </view>
+
+  <view class="ld-p-head">
+    <view class="ld-p-title">{{title}}</view>
+    <view class="ld-p-current" wx:if="{{current}}">{{current.lessonName}} · {{current.segName || '片段'}}</view>
+  </view>
+
+  <view class="ld-p-controls">
+    <view class="ld-pc-btn {{canPrev ? '' : 'dim'}}" bind:tap="onPrev">‹ 上一段</view>
+    <view class="ld-pc-btn ghost" bind:tap="onToggleList">目录</view>
+    <view class="ld-pc-btn {{canNext ? '' : 'dim'}}" bind:tap="onNext">下一段 ›</view>
+  </view>
+
+  <view class="ld-p-list" wx:if="{{listOpen}}">
+    <view
+      class="ld-p-seg {{item.segmentId === current.segmentId ? 'on' : ''}} {{item.hasVideo ? '' : 'off'}}"
+      wx:for="{{segments}}"
+      wx:key="segmentId"
+      data-id="{{item.segmentId}}"
+      bind:tap="onPickSegment"
+    >
+      <text class="ld-p-seg-name">{{item.lessonName}} · {{item.segName || '片段'}}</text>
+      <text class="ld-p-seg-flag" wx:if="{{!item.hasVideo}}">整理中</text>
+    </view>
+  </view>
+</view>

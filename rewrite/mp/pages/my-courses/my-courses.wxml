@@ -1,5 +1,5 @@
 <view class="ld-mycourses">
-  <view class="ld-course" wx:for="{{list}}" wx:key="courseId" bind:tap="onTapCourse">
+  <view class="ld-course" wx:for="{{list}}" wx:key="courseId" data-id="{{item.courseId}}" bind:tap="onTapCourse">
     <view class="ld-course-main">
       <view class="ld-course-title">{{item.title}}</view>
       <view class="ld-course-time" wx:if="{{item.enteredAtLabel}}">进课于 {{item.enteredAtLabel}}</view>

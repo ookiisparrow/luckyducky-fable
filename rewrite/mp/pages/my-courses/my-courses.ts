@@ -14,8 +14,8 @@ Page({
       list: mine.ok ? mapMyCourses(mine.list, courses.ok ? courses.list : []) : [],
     })
   },
-  onTapCourse() {
-    wx.showToast({ title: '播放页随下一批开通', icon: 'none' })
+  onTapCourse(e: WechatMiniprogram.TouchEvent) {
+    wx.navigateTo({ url: '/pages/player/player?courseId=' + String(e.currentTarget.dataset.id) })
   },
   onActivate() {
     wx.navigateTo({ url: '/pages/welcome/welcome' })
