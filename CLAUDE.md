@@ -78,6 +78,8 @@ npm run build:h5 / build:mp-weixin / build:cloud
 
 ## 5. 目录与命名
 
+**重写期布局（ADR §23·M0 骨架）**：新代码只进 `rewrite/`（按里程碑立包 `rewrite/{golden,mp,shared,cloud,admin,agent,site}`，不预建空目录，约定见 `rewrite/README.md`）；`packages/` 旧线字节级冻结为参照基线 `[机器守: oldline-frozen]`（止血走 next 仓；有意识同步跑 `node scripts/freeze-oldline.mjs`）。下表为旧线 miniapp 结构（参照用）：
+
 ```text
 src/
   pages/          页面，每页一目录（页内自用组件放 pages/<page>/components/）

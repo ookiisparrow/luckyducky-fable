@@ -23,6 +23,7 @@ import { execSync } from 'node:child_process'
 import { join, resolve, relative } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { RULES as conventionRules } from './check-conventions.mjs'
+import { oldlineDigest } from './oldline-freeze-lib.mjs'
 
 const ROOT = resolve(import.meta.dirname, '..')
 
@@ -3919,6 +3920,33 @@ export const repoChecks = [
         if (!has401) bad.push(`${rel} 请求层未统一处理 401（须清登录态 logout() + 回登录页）——令牌过期后操作者卡死报错页（深审 P2·#3）`)
       }
       return bad
+    },
+  },
+  {
+    id: 'oldline-frozen',
+    roots: ['铁律'],
+    desc: '重写期旧线冻结（ADR §23 切换策略）：packages/ 五包在本仓是参照基线、字节级冻结——逐文件摘要须与 scripts/oldline-freeze.json 清单一致（防误改旧线以为生效：重写改动只进 rewrite/，线上止血走 next 仓）；确需有意识同步旧线时 node scripts/freeze-oldline.mjs 刷新清单并在提交信息写明缘由',
+    run() {
+      const manifest = 'scripts/oldline-freeze.json'
+      const abs = join(ROOT, manifest)
+      if (!existsSync(abs)) return [`${manifest} 缺失——旧线冻结清单未建（node scripts/freeze-oldline.mjs 生成）`]
+      const expected = JSON.parse(readFileSync(abs, 'utf8')).files || {}
+      const actual = oldlineDigest(ROOT)
+      const changed = []
+      const added = []
+      const removed = []
+      for (const [p, h] of Object.entries(actual)) {
+        if (!(p in expected)) added.push(p)
+        else if (expected[p] !== h) changed.push(p)
+      }
+      for (const p of Object.keys(expected)) if (!(p in actual)) removed.push(p)
+      if (!changed.length && !added.length && !removed.length) return []
+      const fmt = (label, arr) =>
+        arr.length ? `${label} ${arr.length} 处：${arr.slice(0, 8).join('、')}${arr.length > 8 ? '…' : ''}` : ''
+      const detail = [fmt('改动', changed), fmt('新增', added), fmt('删除', removed)].filter(Boolean).join('；')
+      return [
+        `packages/ 旧线已冻结（重写改动进 rewrite/、止血走 next 仓）——检测到 ${detail}。确属有意识同步：node scripts/freeze-oldline.mjs 刷新清单并在提交信息写明缘由`,
+      ]
     },
   },
 ]

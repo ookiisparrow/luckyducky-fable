@@ -1,14 +1,15 @@
 {
-  "name": "luckyducky-next",
+  "name": "luckyducky-fable",
   "version": "0.1.0",
   "private": true,
-  "description": "Lucky Ducky 重构样板房（平行仓，禁部署）——npm workspaces 一仓四包：shared/cloud/miniapp/admin",
+  "description": "Lucky Ducky 重写线（fable）——旧线 packages/ 冻结参照（守卫 oldline-frozen），新线 rewrite/ 按里程碑立包；共用生产云环境（部署闸 guard-deploy）",
   "engines": {
     "node": ">=20",
     "npm": ">=10"
   },
   "workspaces": [
-    "packages/*"
+    "packages/*",
+    "rewrite/*"
   ],
   "scripts": {
     "prepare": "git config core.hooksPath scripts/git-hooks || exit 0",
