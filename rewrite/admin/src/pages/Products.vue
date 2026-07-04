@@ -154,6 +154,7 @@ onMounted(reload)
           <td><span :class="['state', row.state]">{{ row.stateLabel }}</span></td>
           <td>
             <button class="act ghost" @click="openEdit(row)">编辑</button>
+            <button v-if="row.raw.courseId" class="act ghost" @click="$router.push('/courses?courseId=' + row.raw.courseId)">编辑课程</button>
             <button v-if="row.state === 'preparing'" class="act" @click="doPublish(row.id)">上架</button>
             <button v-if="row.state === 'onsale'" class="act ghost" @click="doPublish(row.id)">重新上架</button>
             <button v-if="row.state === 'onsale'" class="act warn" @click="doUnpublish(row.id)">

@@ -11,7 +11,10 @@ const NAV = [
     group: '商品与内容',
     items: [
       { label: '商品管理', path: '/products' },
+      { label: '课程管理', path: '/courses' },
       { label: '小程序橱窗', path: '/showcase' },
+      { label: '首页内容', path: '/home-content' },
+      { label: '帮助视频', path: '/help-videos' },
     ],
   },
   {

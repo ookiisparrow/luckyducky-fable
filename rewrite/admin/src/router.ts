@@ -10,6 +10,9 @@ const Orders = () => import('./pages/Orders.vue')
 const Refunds = () => import('./pages/Refunds.vue')
 const Products = () => import('./pages/Products.vue')
 const Showcase = () => import('./pages/Showcase.vue')
+const HomeContent = () => import('./pages/HomeContent.vue')
+const HelpVideos = () => import('./pages/HelpVideos.vue')
+const Courses = () => import('./pages/Courses.vue')
 
 export const router = createRouter({
   history: createWebHashHistory(),
@@ -24,6 +27,9 @@ export const router = createRouter({
         { path: 'refunds', component: Refunds },
         { path: 'products', component: Products },
         { path: 'showcase', component: Showcase },
+        { path: 'home-content', component: HomeContent },
+        { path: 'help-videos', component: HelpVideos },
+        { path: 'courses', component: Courses },
       ],
     },
   ],
