@@ -4385,6 +4385,12 @@ export const typeAndTestGuards = [
     reverseTest: 'rewrite/mp/tests/orders-map.test.ts',
   },
   {
+    id: 'rw-mp-aftersales-golden',
+    mechanism: 'test',
+    roots: ['#4', '#8'],
+    reverseTest: 'rewrite/mp/tests/aftersales-map.test.ts',
+  },
+  {
     id: 'order-status-union',
     mechanism: 'ts',
     roots: ['#2'],

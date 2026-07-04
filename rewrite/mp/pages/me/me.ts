@@ -9,4 +9,7 @@ Page({
   onAddress() {
     wx.navigateTo({ url: '/pages/address/address' })
   },
+  onAfterSales() {
+    wx.navigateTo({ url: '/pages/aftersales/aftersales' })
+  },
 })

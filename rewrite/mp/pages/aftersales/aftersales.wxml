@@ -1,0 +1,19 @@
+<view class="ld-aslist">
+  <view class="ld-as" wx:for="{{list}}" wx:key="id" data-id="{{item.orderId}}" bind:tap="onTapOrder">
+    <view class="ld-as-head">
+      <text class="ld-as-name">{{item.name}}{{item.spec ? '（' + item.spec + '）' : ''}} ×{{item.qty}}</text>
+      <text class="ld-as-status">{{item.statusLabel}}</text>
+    </view>
+    <view class="ld-as-mid" wx:if="{{item.reason}}">原因：{{item.reason}}</view>
+    <view class="ld-as-foot">
+      <text class="ld-as-time">{{item.appliedAtLabel}}</text>
+      <text class="ld-as-amount">退 {{item.refundAmountLabel}}</text>
+    </view>
+  </view>
+
+  <view class="ld-as-empty" wx:if="{{!loading && !list.length}}">
+    <view class="ld-empty-title">没有售后记录</view>
+    <view class="ld-empty-hint">需要退款时，从订单详情发起申请</view>
+  </view>
+  <view class="ld-as-more" wx:if="{{hasMore}}">上拉加载更多</view>
+</view>

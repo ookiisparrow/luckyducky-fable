@@ -6,6 +6,7 @@ export interface OrderLineVM {
   spec: string
   priceLabel: string
   qty: number
+  enteredQty: number
   refundable: boolean
 }
 
@@ -62,6 +63,7 @@ export function itemsOf(raw: unknown): OrderLineVM[] {
       spec: String(it.spec || ''),
       priceLabel: money(it.price),
       qty: Number.isInteger(it.qty) && it.qty > 0 ? it.qty : 0,
+      enteredQty: Number.isInteger(it.enteredQty) && it.enteredQty > 0 ? it.enteredQty : 0, // 旧单无字段视 0
       refundable: it.refundable !== false,
     })
   }

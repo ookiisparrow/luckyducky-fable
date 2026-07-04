@@ -1,0 +1,63 @@
+.ld-aslist {
+  min-height: 100vh;
+  background: var(--ld-bg-lilac);
+  padding: 24rpx 24rpx 40rpx;
+}
+.ld-as {
+  padding: 24rpx 28rpx;
+  margin-bottom: 20rpx;
+  background: var(--ld-bg);
+  border-radius: var(--ld-radius);
+  border: 2rpx solid var(--ld-purple-line);
+}
+.ld-as-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 16rpx;
+}
+.ld-as-name {
+  font-size: 28rpx;
+  color: var(--ld-ink);
+}
+.ld-as-status {
+  flex-shrink: 0;
+  font-size: 24rpx;
+  color: var(--ld-purple-tab);
+  font-weight: 600;
+}
+.ld-as-mid {
+  margin-top: 10rpx;
+  font-size: 24rpx;
+  color: var(--ld-purple-meta);
+}
+.ld-as-foot {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 12rpx;
+  font-size: 24rpx;
+  color: var(--ld-purple-meta);
+}
+.ld-as-amount {
+  color: var(--ld-purple-ink);
+  font-weight: 600;
+}
+.ld-as-empty {
+  text-align: center;
+  padding: 140rpx 0;
+}
+.ld-empty-title {
+  font-size: 30rpx;
+  font-weight: 600;
+  color: var(--ld-purple-ink);
+}
+.ld-empty-hint {
+  margin-top: 10rpx;
+  font-size: 24rpx;
+  color: var(--ld-purple-meta);
+}
+.ld-as-more {
+  text-align: center;
+  padding: 20rpx 0;
+  font-size: 22rpx;
+  color: var(--ld-purple-meta);
+}
