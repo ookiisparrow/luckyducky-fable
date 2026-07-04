@@ -2,6 +2,15 @@ import { ERR } from '@ldrw/shared'
 import { err } from '../../kit'
 import { login, updateProfile } from './actions/user'
 import { getProducts, getContent } from './actions/catalog'
+import {
+  activateCourse,
+  confirmEnter,
+  getCourses,
+  getPlaybackUrl,
+  getMyCourses,
+  getMyProgress,
+  trackEvent,
+} from './actions/learning'
 
 /**
  * 用户端聚合网关（蓝图定案·adminApi registry 范式）：event = { action, data }。
@@ -13,6 +22,13 @@ const ACTIONS: Record<string, (event: unknown) => Promise<unknown>> = {
   updateProfile,
   getProducts,
   getContent,
+  activateCourse,
+  confirmEnter,
+  getCourses,
+  getPlaybackUrl,
+  getMyCourses,
+  getMyProgress,
+  trackEvent,
 }
 
 export const main = async (event: any) => {
