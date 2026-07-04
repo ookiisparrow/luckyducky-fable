@@ -17,7 +17,7 @@
     </view>
 
     <view class="ld-grid" wx:elif="{{products.length}}">
-      <view class="ld-card" wx:for="{{products}}" wx:key="id">
+      <view class="ld-card" wx:for="{{products}}" wx:key="id" data-id="{{item.id}}" bind:tap="onTapProduct">
         <image wx:if="{{item.cover}}" class="ld-card-media" src="{{item.cover}}" mode="aspectFill" />
         <view wx:else class="ld-card-media"></view>
         <view class="ld-card-name">{{item.name}}</view>

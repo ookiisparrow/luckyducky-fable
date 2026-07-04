@@ -1,0 +1,66 @@
+<view class="ld-detail" wx:if="{{vm}}">
+  <swiper class="ld-gallery" wx:if="{{vm.gallery.length}}" indicator-dots="{{vm.gallery.length > 1}}" indicator-active-color="#7b5caf" circular>
+    <swiper-item wx:for="{{vm.gallery}}" wx:key="*this">
+      <image class="ld-gallery-img" src="{{item}}" mode="aspectFill" />
+    </swiper-item>
+  </swiper>
+  <view class="ld-gallery ld-gallery-empty" wx:else></view>
+
+  <view class="ld-panel">
+    <view class="ld-pricerow">
+      <text class="ld-price">{{currentPrice}}</text>
+      <text class="ld-was" wx:if="{{vm.wasLabel}}">{{vm.wasLabel}}</text>
+    </view>
+    <view class="ld-name">{{vm.name}}</view>
+    <view class="ld-tag" wx:if="{{vm.tag}}">{{vm.tag}}</view>
+    <view class="ld-brief" wx:if="{{vm.brief}}">{{vm.brief}}</view>
+  </view>
+
+  <view class="ld-panel" wx:if="{{vm.skus.length}}">
+    <view class="ld-panel-title">选择规格</view>
+    <view class="ld-skus">
+      <view
+        wx:for="{{vm.skus}}"
+        wx:key="name"
+        class="ld-sku {{skuIndex === index ? 'active' : ''}}"
+        data-index="{{index}}"
+        bind:tap="onSelectSku"
+      >
+        <text>{{item.name}}</text>
+        <text class="ld-sku-price">{{item.priceLabel}}</text>
+      </view>
+    </view>
+  </view>
+
+  <view class="ld-panel" wx:if="{{vm.kit.length}}">
+    <view class="ld-panel-title">材料包里有什么</view>
+    <view class="ld-kit-row" wx:for="{{vm.kit}}" wx:key="name">
+      <text>{{item.name}}</text>
+      <text class="ld-kit-qty">{{item.qty}}</text>
+    </view>
+  </view>
+
+  <view class="ld-panel" wx:if="{{vm.params.length}}">
+    <view class="ld-panel-title">参数</view>
+    <view class="ld-param-row" wx:for="{{vm.params}}" wx:key="k">
+      <text class="ld-param-k">{{item.k}}</text>
+      <text class="ld-param-v">{{item.v}}</text>
+    </view>
+  </view>
+
+  <view class="ld-panel" wx:for="{{vm.sections}}" wx:key="lead">
+    <view class="ld-panel-title" wx:if="{{item.lead}}">{{item.lead}}</view>
+    <view class="ld-section-body" wx:if="{{item.body}}">{{item.body}}</view>
+  </view>
+
+  <view class="ld-actionbar-space"></view>
+  <view class="ld-actionbar">
+    <view class="ld-btn ld-btn-cart" bind:tap="onAddCart">加入购物车</view>
+    <view class="ld-btn ld-btn-buy" bind:tap="onBuyNow">立即购买</view>
+  </view>
+</view>
+
+<view class="ld-detail-empty" wx:elif="{{!loading}}">
+  <view class="ld-empty-title">商品不存在或已下架</view>
+  <view class="ld-empty-hint">回首页看看别的吧</view>
+</view>

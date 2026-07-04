@@ -1,5 +1,5 @@
 {
-  "pages": ["pages/home/home", "pages/cart/cart", "pages/me/me"],
+  "pages": ["pages/home/home", "pages/detail/detail", "pages/cart/cart", "pages/me/me"],
   "window": {
     "navigationBarTitleText": "小棉鸭",
     "navigationBarBackgroundColor": "#ffffff",
