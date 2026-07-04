@@ -4028,6 +4028,13 @@ export const repoChecks = [
         if (!/sitemap\(\)/.test(c)) bad.push('astro.config 未挂 sitemap 集成——搜索引擎无地图可爬')
       }
       if (!existsSync(join(base, 'public/robots.txt'))) bad.push('public/robots.txt 缺失——爬虫策略未声明')
+      const layout = join(base, 'src/layouts/Base.astro')
+      if (existsSync(layout)) {
+        const l = readFileSync(layout, 'utf8')
+        for (const og of ['og:title', 'og:description', 'og:url']) {
+          if (!l.includes(og)) bad.push(`Base.astro 缺 ${og}——社交分享/引擎摘要卡不全（GEO 面）`)
+        }
+      }
       const contentDir = join(base, 'src/content/tutorials')
       if (existsSync(contentDir)) {
         for (const f of readdirSync(contentDir)) {

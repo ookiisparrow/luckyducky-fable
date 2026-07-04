@@ -18,6 +18,11 @@ const canonical = new URL(Astro.url.pathname, Astro.site)
     <title>{title} · {BRAND_NAME}</title>
     <meta name="description" content={description} />
     <link rel="canonical" href={canonical} />
+    <meta property="og:title" content={`${title} · ${BRAND_NAME}`} />
+    <meta property="og:description" content={description} />
+    <meta property="og:type" content="article" />
+    <meta property="og:url" content={canonical} />
+    <meta property="og:site_name" content={BRAND_NAME} />
     <script type="application/ld+json" set:html={JSON.stringify(orgSchema())} />
   </head>
   <body>
@@ -25,6 +30,8 @@ const canonical = new URL(Astro.url.pathname, Astro.site)
       <a href="/" class="brand">🦆 {BRAND_NAME}</a>
       <nav>
         <a href="/tutorials/">钩织教程</a>
+        <a href="/kits/">材料包</a>
+        <a href="/about/">关于</a>
       </nav>
     </header>
     <main><slot /></main>

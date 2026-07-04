@@ -141,6 +141,13 @@ declare module 'astro:content' {
 
 	type ContentEntryMap = {
 		"tutorials": {
+"huanse-jiexian.md": {
+	id: "huanse-jiexian.md";
+  slug: "huanse-jiexian";
+  body: string;
+  collection: "tutorials";
+  data: InferEntrySchema<"tutorials">
+} & { render(): Render[".md"] };
 "qihen-magic-ring.md": {
 	id: "qihen-magic-ring.md";
   slug: "qihen-magic-ring";
@@ -151,6 +158,20 @@ declare module 'astro:content' {
 "renshi-zhenmu.md": {
 	id: "renshi-zhenmu.md";
   slug: "renshi-zhenmu";
+  body: string;
+  collection: "tutorials";
+  data: InferEntrySchema<"tutorials">
+} & { render(): Render[".md"] };
+"shouwei-cangxian.md": {
+	id: "shouwei-cangxian.md";
+  slug: "shouwei-cangxian";
+  body: string;
+  collection: "tutorials";
+  data: InferEntrySchema<"tutorials">
+} & { render(): Render[".md"] };
+"suozhen-zhengfanmian.md": {
+	id: "suozhen-zhengfanmian.md";
+  slug: "suozhen-zhengfanmian";
   body: string;
   collection: "tutorials";
   data: InferEntrySchema<"tutorials">
