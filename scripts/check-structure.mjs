@@ -3949,24 +3949,40 @@ export const repoChecks = [
   {
     id: 'rw-writes-need-gate',
     roots: ['#3'],
-    desc: '新线函数写库必过 kit 闸（移植 writes-need-gate·设计约束#3「不过闸写不出库」）：rewrite/cloud/src/functions/ 下含 .add(/.update(/.remove(/.set( 的文件必须出现 withOpenId/withAdminGate/defineNotifyCallback/isServerCall 之一（kit 层自身豁免）',
+    desc: '新线函数写库必过 kit 闸（移植 writes-need-gate·设计约束#3「不过闸写不出库」）：rewrite/cloud/src/functions/ 下每个函数单元（app/actions 逐文件；callbacks/timers/cs 顶层逐文件；多文件函数目录如 kfCallback 聚合判——index 的 defineKfCallback 外壳即全单元的闸）含写库者必须出现 withOpenId/withAdminGate/defineNotifyCallback/defineKfCallback/isServerCall/checkKey 之一',
     run() {
       const bad = []
       const base = join(ROOT, 'rewrite/cloud/src/functions')
       if (!existsSync(base)) return bad
-      const walk = (d) => {
+      const GATE = /\b(withOpenId|withAdminGate|defineNotifyCallback|defineKfCallback|isServerCall|checkKey)\b/
+      const WRITE = /\.(add|set|update|remove)\s*\(/
+      const readAll = (d) => {
+        let src = ''
+        for (const f of readdirSync(d)) {
+          const fp = join(d, f)
+          if (statSync(fp).isDirectory()) src += readAll(fp)
+          else if (f.endsWith('.ts')) src += readFileSync(fp, 'utf8')
+        }
+        return src
+      }
+      // 单元清单：functions/ 递归到「文件」或「含 index.ts 的目录」为一单元（与旧线域级聚合同保护强度、粒度更细）
+      const units = []
+      const collect = (d) => {
         for (const e of readdirSync(d)) {
           const p = join(d, e)
-          if (statSync(p).isDirectory()) walk(p)
-          else if (e.endsWith('.ts')) {
-            const src = readFileSync(p, 'utf8')
-            if (/\.(add|update|remove|set)\(/.test(src) && !/(withOpenId|withAdminGate|defineNotifyCallback|isServerCall)/.test(src)) {
-              bad.push(`${relative(ROOT, p)} 有写库但未见 kit 闸（withOpenId/withAdminGate/defineNotifyCallback/isServerCall）——设计约束#3 不过闸写不出库`)
-            }
-          }
+          if (statSync(p).isDirectory()) {
+            if (existsSync(join(p, 'index.ts'))) units.push(p)
+            else collect(p)
+          } else if (e.endsWith('.ts')) units.push(p)
         }
       }
-      walk(base)
+      collect(base)
+      for (const u of units) {
+        const src = statSync(u).isDirectory() ? readAll(u) : readFileSync(u, 'utf8')
+        if (WRITE.test(src) && !GATE.test(src)) {
+          bad.push(`${relative(ROOT, u)} 有写库但未见 kit 闸——设计约束#3 不过闸写不出库`)
+        }
+      }
       return bad
     },
   },
@@ -4149,6 +4165,12 @@ export const typeAndTestGuards = [
     mechanism: 'test',
     roots: ['#1', '#3', '#12'],
     reverseTest: 'rewrite/cloud/tests/app-cs1.test.ts',
+  },
+  {
+    id: 'rw-cs2-golden',
+    mechanism: 'test',
+    roots: ['#1', '#3', '#5', '#8'],
+    reverseTest: 'rewrite/cloud/tests/app-cs2.test.ts',
   },
   {
     id: 'order-status-union',
