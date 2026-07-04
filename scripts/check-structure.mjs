@@ -4181,6 +4181,37 @@ export const repoChecks = [
     },
   },
   {
+    id: 'rw-m5-runbook-synced',
+    roots: ['正册'],
+    desc: 'M5 切换 runbook 与部署面同步：rewrite/M5-切换runbook.md 须存在，且 rewrite/cloud 每个函数单元名与并行期定名 adminApiV2 都出现在 runbook 内——函数增删改名 runbook 必跟，防切换日拿陈账操刀',
+    run() {
+      const base = join(ROOT, 'rewrite/cloud/src/functions')
+      if (!existsSync(base)) return []
+      const rbPath = join(ROOT, 'rewrite/M5-切换runbook.md')
+      if (!existsSync(rbPath)) return ['rewrite/M5-切换runbook.md 缺失——M5 切换脚本未成文（切换日无脚本可循）']
+      const rb = readFileSync(rbPath, 'utf8')
+      const bad = []
+      const isFn = (p) => readFileSync(p, 'utf8').includes('export const main')
+      const need = ['adminApiV2']
+      for (const e of readdirSync(base)) {
+        const p = join(base, e)
+        if (!statSync(p).isDirectory()) continue
+        if (existsSync(join(p, 'index.ts')) && isFn(join(p, 'index.ts'))) {
+          need.push(e)
+          continue
+        }
+        for (const c of readdirSync(p)) {
+          const cp = join(p, c)
+          if (statSync(cp).isDirectory()) {
+            if (existsSync(join(cp, 'index.ts')) && isFn(join(cp, 'index.ts'))) need.push(c)
+          } else if (c.endsWith('.ts') && isFn(cp)) need.push(c.slice(0, -3))
+        }
+      }
+      for (const n of need) if (!rb.includes('`' + n + '`')) bad.push(`M5 runbook 缺函数 ${n}——部署面与脚本漂移（切换日会漏部署/漏核）`)
+      return bad
+    },
+  },
+  {
     id: 'oldline-frozen',
     roots: ['铁律'],
     desc: '重写期旧线冻结（ADR §23 切换策略）：packages/ 五包在本仓是参照基线、字节级冻结——逐文件摘要须与 scripts/oldline-freeze.json 清单一致（防误改旧线以为生效：重写改动只进 rewrite/，线上止血走 next 仓）；确需有意识同步旧线时 node scripts/freeze-oldline.mjs 刷新清单并在提交信息写明缘由',
