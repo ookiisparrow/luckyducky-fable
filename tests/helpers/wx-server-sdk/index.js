@@ -33,7 +33,14 @@ const command = {
   lt: (val) => ({ __op: 'lt', val }),
   gt: (val) => ({ __op: 'gt', val }), // 大于（承面C 坐席台 cursor 增量：listQueue FIFO / getThread 轮询取新消息）
   exists: (val) => ({ __op: 'exists', val }), // 字段存在/缺失（CAS 初始化窗口前置条件，债#21）
+  inc: (val) => ({ __op: 'inc', val }), // 原子自增（recordAnomaly 去重计数·真 sdk 服务端原子加，避免读-改-写并发窗）
   aggregate: { sum: (expr) => ({ __aggOp: 'sum', expr }) }, // 聚合算子（GMV 求和·债#18续）
+}
+
+// 写入一个叶子值：inc 算子作原子自增（对齐真 sdk _.inc），否则直接赋值。
+function writeLeaf(obj, key, v) {
+  if (v && typeof v === 'object' && v.__op === 'inc') obj[key] = (Number(obj[key]) || 0) + v.val
+  else obj[key] = v
 }
 
 function matchOne(docVal, cond) {
@@ -62,9 +69,9 @@ function applyPatch(doc, data) {
         if (typeof cur[parts[i]] !== 'object' || cur[parts[i]] == null) cur[parts[i]] = {}
         cur = cur[parts[i]]
       }
-      cur[parts[parts.length - 1]] = v
+      writeLeaf(cur, parts[parts.length - 1], v)
     } else {
-      doc[k] = v
+      writeLeaf(doc, k, v)
     }
   }
 }

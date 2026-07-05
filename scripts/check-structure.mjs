@@ -4616,6 +4616,15 @@ export const typeAndTestGuards = [
     reverseTest: 'rewrite/cloud/tests/app-misc.test.ts',
   },
   {
+    // 运行期观测地基（bug 收集器·防治静默 bug）：recordAnomaly 四路来源统一落库口——指纹去重防刷屏、
+    // 高危去重感知告警、fail-soft 不反噬主流程、对业务集合零写入（「只读看护线上」安全铁律）。
+    // 归 #3 信任边界可追溯（留痕，同 recordAudit 家族）；巡检机的「探出静默失败」主张随批2 立。
+    id: 'rw-anomaly-record-golden',
+    mechanism: 'test',
+    roots: ['#3'],
+    reverseTest: 'rewrite/cloud/tests/anomaly.test.ts',
+  },
+  {
     id: 'rw-mp-home-golden',
     mechanism: 'test',
     roots: ['#8'],

@@ -5,7 +5,7 @@
  * 企微机器人推送接缝随观测批接上（届时本函数内部接 botpush 单点，签名不变）。
  * 安全：ctx 只放非敏感标识，绝不放 openid/口令/凭证。绝不抛错（可观测性不反噬主流程）。
  */
-export type AlertSev = 'money' | 'security'
+export type AlertSev = 'money' | 'security' | 'anomaly'
 
 const MARK = '[LD_ALERT]'
 

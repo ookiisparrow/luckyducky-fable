@@ -10,9 +10,13 @@ import { CHECKOUT_ADDONS as OLD_ADDONS, COUPON as OLD_COUPON, SHIP as OLD_SHIP }
 import * as OLD_LIMITS from '../../../packages/shared/src/limits'
 
 describe('与旧线契约逐键 parity', () => {
-  it('大白话：37 个集合名一个不多一个不少、逐键逐值一致（同一个生产库，名字是数据契约）', () => {
-    expect(COLLECTIONS).toEqual(OLD_COLLECTIONS)
-    expect(Object.keys(COLLECTIONS).length).toBe(37)
+  it('大白话：旧线 37 集合逐键逐值一致；新线只追加的观测集合走显式登记名单，不多不少', () => {
+    // 旧集合逐字不动（同一生产库·名字是数据契约）；新线只追加的新集合在此点名登记
+    // （collections.ts 头注「新集合先登记并去控制台锁权限再用」，同错误码册的新增机制）——
+    // 巡检机 + bug 收集器地基（防治静默 bug）：anomalies（异常账本·指纹去重·仅管理端·recordAnomaly 单口写入）
+    const RW_NEW_COLLECTIONS = { anomalies: 'anomalies' }
+    expect(COLLECTIONS).toEqual({ ...OLD_COLLECTIONS, ...RW_NEW_COLLECTIONS })
+    expect(Object.keys(COLLECTIONS).length).toBe(37 + Object.keys(RW_NEW_COLLECTIONS).length)
   })
   it('大白话：错误码册逐键逐值一致（码是前端分支契约，不可改名）；新线新增码走显式登记名单，不多不少', () => {
     // 旧码逐字不动（前端分支契约）；新线只追加的新码在此点名登记（errors.ts 头注「新增只追加」）——
