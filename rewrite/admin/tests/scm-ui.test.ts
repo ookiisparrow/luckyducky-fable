@@ -2,7 +2,7 @@
 // 状态中文/错误码人话原文兜底/流水类型中文。
 import { describe, it, expect } from 'vitest'
 import shellRaw from '../src/shell/Shell.vue?raw'
-import { materialHuman, materialCategoryLabel, uomLabel, purchaseStatusLabel, outworkStatusLabel, yuanToFen, fenLabel, scmErrorText, docTypeLabel, mapLedger } from '../src/lib/mapScm'
+import { materialHuman, materialCategoryLabel, uomLabel, purchaseStatusLabel, outworkStatusLabel, yuanToFen, fenLabel, scmErrorText, docTypeLabel, mapLedger, unprofiledProducts } from '../src/lib/mapScm'
 import { SCM_FLOW } from '../src/lib/scmFlow'
 import { setPurchaseHandoff, consumePurchaseHandoff, setOutworkHandoff, consumeOutworkHandoff } from '../src/lib/scmHandoff'
 
@@ -61,6 +61,21 @@ describe('状态与错误人话', () => {
     expect(rows[0].material).toBe('毛线·pink·大团·原团')
     expect(rows[0].docType).toBe('外协发料')
     expect(mapLedger('garbage')).toEqual([])
+  })
+})
+
+// 未填差异位总览（换皮丢·ScmBom 只遍历已建 profile·没建过差异位的在售产品完全不出现·组装前会被拒却发现不了）：
+// 全产品 − 已建 profile = 待建差异位，接回 listDrafts 全目录才看得见。
+describe('未填差异位总览（全产品 − 已建 profile）', () => {
+  it('大白话：列出还没建差异位的产品（带名字）；已建的剔除；脏档安全', () => {
+    const products = [{ id: 'p1', name: '小熊' }, { id: 'p2', name: '小鸭' }, { _id: 'p3', name: '兔子' }, null]
+    const profiles = [{ _id: 'p2' }]
+    expect(unprofiledProducts(products, profiles)).toEqual([
+      { id: 'p1', name: '小熊' },
+      { id: 'p3', name: '兔子' },
+    ])
+    expect(unprofiledProducts(null, null)).toEqual([])
+    expect(unprofiledProducts([{ id: 'p1', name: 'x' }], [{ _id: 'p1' }])).toEqual([]) // 全建过=空
   })
 })
 

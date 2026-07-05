@@ -4,7 +4,8 @@
 import { ref, onMounted, watch, computed } from 'vue'
 import { Plus } from 'lucide-vue-next'
 import { getBomSetup, saveBomTemplate, saveBomProfile, previewAssembly, runAssembly, listAssemblies, listMaterials } from '../api/scm'
-import { materialHuman, scmErrorText } from '../lib/mapScm'
+import { listDrafts } from '../api/products'
+import { materialHuman, scmErrorText, unprofiledProducts, productNameOf } from '../lib/mapScm'
 import { dateTime } from '../lib/format'
 import ScmFlowTabs from '../components/ScmFlowTabs.vue'
 
@@ -12,6 +13,15 @@ const template = ref<{ commonLines: Array<{ materialId: string; qtyPerSet: numbe
 const profiles = ref<Array<Record<string, any>>>([])
 const mats = ref<Array<Record<string, any>>>([])
 const assemblies = ref<Array<Record<string, any>>>([])
+const products = ref<Array<Record<string, any>>>([]) // 全产品目录（换皮 SCM 域整体没接·致只显 id/无 SKU 下拉/看不到未填差异位）
+// 产品名解析 + 未填差异位总览 + 组装规格 SKU 下拉（接回 listDrafts 一并复原）
+const productName = (id: unknown) => productNameOf(products.value, id)
+const unprofiled = computed(() => unprofiledProducts(products.value, profiles.value))
+const runSkus = computed(() => {
+  const p = products.value.find((x) => String(x.id || x._id) === String(run.value.productId))
+  return Array.isArray(p?.skus) ? (p!.skus as Record<string, any>[]).map((s) => String(s.name || '')).filter(Boolean) : []
+})
+const shortCount = computed(() => preview.value.filter((l) => (l as any).short > 0 || (l as any).missing).length) // 执行前缺料预警
 const message = ref('')
 const msgOk = ref(false) // 换皮 .status 恒红→成功信息显红 bug·区分成功(绿)/失败(红)
 function note(ok: boolean, okText: string, errText: string) {
@@ -30,6 +40,7 @@ const commonCandidates = computed(() => mats.value.filter((m) => m.category !== 
 const packagingList = computed(() => mats.value.filter((m) => m.category === 'packaging'))
 const cardList = computed(() => mats.value.filter((m) => m.category === 'card'))
 const profileIds = computed(() => profiles.value.map((p) => String(p._id))) // 差异位建议 + 执行可选（有差异位才可组装）
+const allProductIds = computed(() => products.value.map((p) => String(p.id || p._id)).filter(Boolean)) // 全产品（差异位可选未建过的）
 
 // 编辑既有差异位（换皮丢·填完只能新建覆盖）：点列表项回填表单
 function editProfile(p: Record<string, any>) {
@@ -53,7 +64,7 @@ watch(() => prof.value.productId, (id) => {
 const pendingAsmId = ref('')
 
 async function reload() {
-  const [b, m, a] = await Promise.all([getBomSetup(), listMaterials(), listAssemblies()])
+  const [b, m, a, d] = await Promise.all([getBomSetup(), listMaterials(), listAssemblies(), listDrafts()])
   if (b.ok) {
     const t = (b.template as Record<string, any>) || {}
     template.value = { commonLines: t.commonLines || [], yarnSlots: t.yarnSlots || [] }
@@ -61,6 +72,7 @@ async function reload() {
   }
   mats.value = m.ok ? (m.list as Record<string, any>[]) : []
   assemblies.value = a.ok ? (a.list as Record<string, any>[]) : []
+  products.value = d.ok ? ((d as any).list as Record<string, any>[]) : []
   note(b.ok, '', '加载失败：' + String(b.error || ''))
 }
 
@@ -150,7 +162,7 @@ onMounted(reload)
       <section class="card">
         <h2>产品差异位（三色 + 专属件）</h2>
         <input v-model="prof.productId" list="bom-prof-ids" placeholder="产品 id（选既有或输新）" />
-        <datalist id="bom-prof-ids"><option v-for="pid in profileIds" :key="pid" :value="pid" /></datalist>
+        <datalist id="bom-prof-ids"><option v-for="pid in allProductIds" :key="pid" :value="pid">{{ productName(pid) }}</option></datalist>
         <input v-model="prof.L" placeholder="大团颜色（如 pink）" />
         <input v-model="prof.M" placeholder="中团颜色" />
         <input v-model="prof.S" placeholder="小团颜色" />
@@ -165,10 +177,15 @@ onMounted(reload)
         <button class="btn-primary" @click="doSaveProfile">{{ profileIds.includes(prof.productId.trim()) ? '更新差异位' : '保存差异位' }}</button>
         <div class="prof-list">
           <div v-for="p in profiles" :key="p._id" class="prof-line" :class="{ on: prof.productId === p._id }" title="点击编辑" @click="editProfile(p)">
-            <span>{{ p._id }}：L={{ p.yarnColors?.L || '—' }} M={{ p.yarnColors?.M || '—' }} S={{ p.yarnColors?.S || '—' }}</span>
+            <span>{{ productName(p._id) }}：L={{ p.yarnColors?.L || '—' }} M={{ p.yarnColors?.M || '—' }} S={{ p.yarnColors?.S || '—' }}</span>
             <span v-if="!p.packagingMaterialId || !p.cardMaterialId" class="prof-warn">缺专属件</span>
           </div>
           <p v-if="!profiles.length" class="prof-empty">还没有差异位——填上面表单保存</p>
+        </div>
+        <!-- 未填差异位总览（换皮丢·没建过差异位的在售产品完全不出现·组装前会被拒却发现不了·接回 listDrafts 全目录） -->
+        <div v-if="unprofiled.length" class="unprof">
+          <h3>未填差异位（打包前必填·{{ unprofiled.length }}）</h3>
+          <button v-for="u in unprofiled" :key="u.id" class="unprof-chip" :title="'去建 ' + u.id + ' 的差异位'" @click="prof.productId = u.id">{{ productName(u.id) }} +</button>
         </div>
       </section>
 
@@ -176,13 +193,15 @@ onMounted(reload)
         <h2>组装执行（扣原料·入成品）</h2>
         <select v-model="run.productId">
           <option value="">选产品（须有差异位）…</option>
-          <option v-for="pid in profileIds" :key="pid" :value="pid">{{ pid }}</option>
+          <option v-for="pid in profileIds" :key="pid" :value="pid">{{ productName(pid) }}</option>
         </select>
-        <input v-model="run.spec" placeholder="规格（可空）" />
+        <!-- 组装规格：有 SKU 走下拉（换皮退成裸文本框·易与商品实际 SKU 不一致·拼错成品入错 spec）·无 SKU 退文本 -->
+        <select v-if="runSkus.length" v-model="run.spec"><option value="">规格（可空）…</option><option v-for="s in runSkus" :key="s" :value="s">{{ s }}</option></select>
+        <input v-else v-model="run.spec" placeholder="规格（可空）" />
         <input v-model.number="run.sets" type="number" min="1" placeholder="套数" />
         <div class="ops">
           <button class="btn-ghost" @click="doPreview">预演（只看不扣）</button>
-          <button class="btn-warn" @click="doRun">{{ runConfirm ? '确认扣料入成品？' : '执行组装' }}</button>
+          <button class="btn-warn" @click="doRun">{{ runConfirm ? (shortCount ? `有 ${shortCount} 项缺料·仍执行？` : '确认扣料入成品？') : '执行组装' }}</button>
         </div>
         <div v-if="preview.length" class="preview">
           <div class="pv-head"><span>料</span><span class="r">需</span><span class="r">存</span><span class="r">缺</span></div>
@@ -201,7 +220,7 @@ onMounted(reload)
         <template v-for="a in assemblies" :key="a._id">
           <div class="trow">
             <span class="mono">{{ a._id }}</span>
-            <span>{{ a.productId }}{{ a.spec ? '（' + a.spec + '）' : '' }}</span>
+            <span>{{ productName(a.productId) }}{{ a.spec ? '（' + a.spec + '）' : '' }}</span>
             <span class="r">{{ a.sets }}</span>
             <span class="muted">{{ a.operator }}</span>
             <span class="muted mono">{{ dateTime(a.at) }}</span>
@@ -391,6 +410,26 @@ h3 {
   margin: 8px 0 0;
   font-size: 12px;
   color: var(--ld-content-2);
+}
+.unprof {
+  margin-top: 12px;
+  padding-top: 10px;
+  border-top: 1px dashed var(--ld-line);
+}
+.unprof h3 {
+  margin: 0 0 7px;
+  color: var(--ld-red);
+}
+.unprof-chip {
+  display: inline-block;
+  margin: 0 6px 6px 0;
+  padding: 4px 11px;
+  border: 1px solid var(--ld-red-line);
+  border-radius: 999px;
+  background: var(--ld-bg-red-soft);
+  color: var(--ld-red);
+  font-size: 11.5px;
+  cursor: pointer;
 }
 .preview {
   margin-top: 12px;

@@ -20,6 +20,8 @@ function note(ok: boolean, okText: string, errText: string) {
 }
 const form = ref<{ purchaseId?: string; supplierId: string; lines: Array<{ materialId: string; qty: number; priceYuan: string }> } | null>(null)
 const confirmKey = ref('')
+const expanded = ref('') // 采购行项展开（换皮丢·非草稿单看不到买了啥·只显行数）
+const supplierName = (id: unknown) => (sups.value.find((s) => s._id === id) || {}).name || String(id || '')
 const filter = ref('') // 状态筛选（换皮丢·恒取全部）
 const FILTERS = [
   { key: '', label: '全部' },
@@ -89,7 +91,8 @@ async function doSave() {
 }
 
 async function step(fn: (_id: string) => Promise<Record<string, unknown>>, id: string, key: string) {
-  if (key.startsWith('recv') || key.startsWith('cancel')) {
+  if (key.startsWith('recv') || key.startsWith('cancel') || key.startsWith('ord')) {
+    // 下单/收货/取消都两步确认（换皮下单无任何确认·花钱的动作应有一道·带金额）
     if (confirmKey.value !== key) {
       confirmKey.value = key
       return
@@ -157,24 +160,32 @@ onMounted(async () => {
 
     <div v-if="orders.length" class="table">
       <div class="thead"><span>单号</span><span>供应商</span><span class="r">行数</span><span class="r">总价</span><span>状态</span><span>时间</span><span class="r">操作</span></div>
-      <div v-for="o in orders" :key="o._id" class="trow">
-        <span class="mono">{{ o._id }}</span>
-        <span>{{ (sups.find((s) => s._id === o.supplierId) || {}).name || o.supplierId }}</span>
-        <span class="r">{{ (o.lines || []).length }}</span>
-        <span class="r strong">{{ fenLabel(o.totalFen) }}</span>
-        <span><span class="state" :class="o.status">{{ purchaseStatusLabel(o.status) }}</span></span>
-        <span class="muted">{{ dateTime(o.createdAt) }}</span>
-        <div class="c-ops r">
-          <button v-if="o.status === 'draft'" class="act ghost" @click="editDraft(o)">编辑</button>
-          <button v-if="o.status === 'draft'" class="act primary" @click="step(markOrdered, o._id, 'ord:' + o._id)">标记已下单</button>
-          <button v-if="o.status === 'ordered'" class="act primary" @click="step(receivePurchase, o._id, 'recv:' + o._id)">
-            {{ confirmKey === 'recv:' + o._id ? '确认到货入库？' : '收货入库' }}
-          </button>
-          <button v-if="o.status === 'draft' || o.status === 'ordered'" class="act warn" @click="step(cancelPurchase, o._id, 'cancel:' + o._id)">
-            {{ confirmKey === 'cancel:' + o._id ? '确认取消？' : '取消' }}
-          </button>
+      <template v-for="o in orders" :key="o._id">
+        <div class="trow">
+          <span class="mono">{{ o._id }}</span>
+          <span>{{ supplierName(o.supplierId) }}</span>
+          <span class="r"><button class="lines-btn" :title="'看这单买了啥'" @click="expanded = expanded === o._id ? '' : o._id">{{ (o.lines || []).length }} 行 {{ expanded === o._id ? '▴' : '▾' }}</button></span>
+          <span class="r strong">{{ fenLabel(o.totalFen) }}</span>
+          <span><span class="state" :class="o.status">{{ purchaseStatusLabel(o.status) }}</span></span>
+          <span class="muted">{{ dateTime(o.createdAt) }}</span>
+          <div class="c-ops r">
+            <button v-if="o.status === 'draft'" class="act ghost" @click="editDraft(o)">编辑</button>
+            <button v-if="o.status === 'draft'" class="act primary" @click="step(markOrdered, o._id, 'ord:' + o._id)">
+              {{ confirmKey === 'ord:' + o._id ? `向「${supplierName(o.supplierId)}」下单 ${fenLabel(o.totalFen)}？` : '标记已下单' }}
+            </button>
+            <button v-if="o.status === 'ordered'" class="act primary" @click="step(receivePurchase, o._id, 'recv:' + o._id)">
+              {{ confirmKey === 'recv:' + o._id ? '确认到货入库？' : '收货入库' }}
+            </button>
+            <button v-if="o.status === 'draft' || o.status === 'ordered'" class="act warn" @click="step(cancelPurchase, o._id, 'cancel:' + o._id)">
+              {{ confirmKey === 'cancel:' + o._id ? '确认取消？' : '取消' }}
+            </button>
+          </div>
         </div>
-      </div>
+        <!-- 采购行项（换皮丢·非草稿单看不到买了啥）：物料名 ×数量（所有状态可查） -->
+        <div v-if="expanded === o._id" class="trow sub-row">
+          <span class="lines-detail">{{ (o.lines || []).map((l) => materialHuman(l.materialId) + ' ×' + (Number(l.qty) || 0) + (l.unitPriceFen != null ? '（' + fenLabel(l.unitPriceFen) + '）' : '')).join(' · ') || '（无行项）' }}</span>
+        </div>
+      </template>
     </div>
     <p v-else-if="!form" class="status-soft">{{ filter ? '这个状态下没有采购单' : '还没有采购单' }}</p>
   </div>
@@ -328,6 +339,26 @@ h1 {
   border-top: 1px solid var(--ld-line);
   font-size: 13px;
   color: var(--ld-content);
+}
+.trow.sub-row {
+  display: block;
+  padding: 8px 18px 10px;
+  background: var(--ld-bg-lilac);
+}
+.lines-detail {
+  font-size: 12px;
+  color: var(--ld-content);
+  font-family: var(--ld-font-mono);
+  line-height: 1.5;
+}
+.lines-btn {
+  padding: 2px 9px;
+  border: 1px solid var(--ld-line);
+  border-radius: 999px;
+  background: var(--ld-bg);
+  color: var(--ld-brand-active);
+  font-size: 11px;
+  cursor: pointer;
 }
 .r {
   text-align: right;

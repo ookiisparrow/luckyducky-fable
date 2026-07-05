@@ -109,6 +109,22 @@ const DOC_CN: Record<string, string> = {
 }
 export const docTypeLabel = (t: unknown): string => DOC_CN[String(t)] || String(t || '')
 
+/** 未填差异位的产品（全产品 − 已建 profile·组装前必填·换皮只列已建 profile·没建过差异位的产品看不见）。 */
+export function unprofiledProducts(products: unknown, profiles: unknown): Array<{ id: string; name: string }> {
+  const prof = new Set((Array.isArray(profiles) ? profiles : []).map((p: any) => String((p && p._id) || '')))
+  return (Array.isArray(products) ? products : [])
+    .filter(Boolean)
+    .map((p: any) => ({ id: String((p && (p.id || p._id)) || ''), name: String((p && p.name) || '') }))
+    .filter((p) => p.id && !prof.has(p.id))
+}
+
+/** 产品 id → 名字（换皮 SCM 全程只显 id·长表不好读）；找不到回退 id。 */
+export function productNameOf(products: unknown, id: unknown): string {
+  const wanted = String(id || '')
+  const hit = (Array.isArray(products) ? products : []).find((p: any) => String((p && (p.id || p._id)) || '') === wanted)
+  return hit ? String((hit as any).name || wanted) : wanted
+}
+
 export function mapLedger(list: unknown): LedgerRow[] {
   if (!Array.isArray(list)) return []
   return (list as Record<string, any>[]).filter(Boolean).map((l) => ({

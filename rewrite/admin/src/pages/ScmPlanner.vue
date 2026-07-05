@@ -6,7 +6,8 @@ import { Plus, ArrowRight } from 'lucide-vue-next'
 import { useRouter } from 'vue-router'
 import { getRestockPlan, getFgSummary } from '../api/scm'
 import { listInventory } from '../api/system'
-import { materialHuman, scmErrorText } from '../lib/mapScm'
+import { listDrafts } from '../api/products'
+import { materialHuman, scmErrorText, productNameOf } from '../lib/mapScm'
 import { setPurchaseHandoff, setOutworkHandoff } from '../lib/scmHandoff'
 import ScmFlowTabs from '../components/ScmFlowTabs.vue'
 
@@ -25,6 +26,9 @@ const targets = ref<Array<{ productId: string; sets: number }>>([{ productId: ''
 const plan = ref<Record<string, any> | null>(null)
 const fg = ref<{ packed: Array<Record<string, any>>; shipped: Array<Record<string, any>> } | null>(null)
 const inv = ref<Record<string, number>>({}) // 成品现存库存 fg:<pid>__<spec> → stock（换皮丢了「现存库存」列）
+const products = ref<Array<Record<string, any>>>([]) // 全产品目录（换皮 SCM 未接·产品只显 id·手敲易错）
+const productName = (id: unknown) => productNameOf(products.value, id)
+const allProductIds = computed(() => products.value.map((p) => String(p.id || p._id)).filter(Boolean))
 const message = ref('')
 
 // 产销三列并表（换皮只两列打包/发货·丢了现存库存）：按 产品×规格 union 打包/发货/现存
@@ -36,7 +40,7 @@ const produceRows = computed(() => {
     ;(arr || []).forEach((p) => {
       const key = String(p.productId || '') + '__' + String(p.spec || '')
       tgt[key] = (tgt[key] || 0) + (Number(p.qty) || 0)
-      label[key] = String(p.productId || '') + (p.spec ? '（' + p.spec + '）' : '')
+      label[key] = productName(p.productId) + (p.spec ? '（' + p.spec + '）' : '')
     })
   }
   add(fg.value?.packed, packed)
@@ -44,7 +48,7 @@ const produceRows = computed(() => {
   Object.keys(inv.value).forEach((k) => {
     if (!label[k]) {
       const [pid, spec] = k.split('__')
-      label[k] = pid + (spec ? '（' + spec + '）' : '')
+      label[k] = productName(pid) + (spec ? '（' + spec + '）' : '')
     }
   })
   const keys = new Set([...Object.keys(packed), ...Object.keys(shipped), ...Object.keys(inv.value)])
@@ -63,7 +67,8 @@ async function calc() {
 }
 
 onMounted(async () => {
-  const [r, i] = await Promise.all([getFgSummary(), listInventory()])
+  const [r, i, d] = await Promise.all([getFgSummary(), listInventory(), listDrafts()])
+  products.value = d.ok ? ((d as any).list as Record<string, any>[]) : []
   fg.value = r.ok ? { packed: (r.packed as Record<string, any>[]) || [], shipped: (r.shipped as Record<string, any>[]) || [] } : null
   if (i.ok) {
     const list = ((i as any).list as Record<string, any>[]) || []
@@ -90,10 +95,11 @@ onMounted(async () => {
     <section class="card">
       <h2>备货计算器（只读·不动账）</h2>
       <div v-for="(t, i) in targets" :key="i" class="linerow">
-        <input v-model="t.productId" placeholder="产品 id" />
+        <input v-model="t.productId" list="planner-pids" placeholder="产品（选或输 id）" />
         <input v-model.number="t.sets" type="number" min="1" placeholder="目标套数" />
         <button class="icon-x" @click="targets.splice(i, 1)">×</button>
       </div>
+      <datalist id="planner-pids"><option v-for="pid in allProductIds" :key="pid" :value="pid">{{ productName(pid) }}</option></datalist>
       <div class="ops">
         <button class="act ghost" @click="targets.push({ productId: '', sets: 10 })"><Plus :size="13" :stroke-width="2" /><span>加产品</span></button>
         <button class="act primary" @click="calc">算缺口</button>

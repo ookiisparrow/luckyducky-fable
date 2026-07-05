@@ -5,6 +5,7 @@ import { ref, onMounted, computed } from 'vue'
 import { Plus } from 'lucide-vue-next'
 import { listOutworks, saveOutwork, issueOutwork, receiveOutwork, settleOutwork, cancelOutwork, listMaterials, listSuppliers } from '../api/scm'
 import { materialHuman, outworkStatusLabel, yuanToFen, fenLabel, scmErrorText } from '../lib/mapScm'
+import { dateTime } from '../lib/format'
 import { consumeOutworkHandoff } from '../lib/scmHandoff'
 import ScmFlowTabs from '../components/ScmFlowTabs.vue'
 
@@ -167,7 +168,7 @@ onMounted(async () => {
     </section>
 
     <div v-if="orders.length" class="table">
-      <div class="thead"><span>单号</span><span>织女</span><span>发料</span><span class="r">计件价</span><span>应付/损耗</span><span>状态</span><span class="r">操作</span></div>
+      <div class="thead"><span>单号</span><span>织女</span><span>发料</span><span class="r">计件价</span><span>应付/损耗</span><span>状态</span><span>建单时间</span><span class="r">操作</span></div>
       <div v-for="o in orders" :key="o._id" class="trow">
         <span class="mono">{{ o._id }}</span>
         <span>{{ (workers.find((w) => w._id === o.workerId) || {}).name || o.workerId }}</span>
@@ -175,6 +176,7 @@ onMounted(async () => {
         <span class="r">{{ fenLabel(o.pieceRateFen) }}/团</span>
         <span class="muted">{{ o.payableFen != null ? fenLabel(o.payableFen) + ' / 损 ' + (o.lossQty || 0) : '—' }}</span>
         <span><span class="state" :class="o.status">{{ outworkStatusLabel(o.status) }}</span></span>
+        <span class="muted mono">{{ dateTime(o.createdAt) }}</span>
         <div class="c-ops r">
           <button v-if="o.status === 'draft'" class="act ghost" @click="editDraft(o)">编辑</button>
           <button v-if="o.status === 'draft'" class="act primary" @click="step(issueOutwork, o._id, 'iss:' + o._id)">
@@ -365,7 +367,7 @@ h1 {
 .thead,
 .trow {
   display: grid;
-  grid-template-columns: 1.3fr 1.1fr 1.4fr 0.9fr 1.2fr 0.9fr 1.4fr;
+  grid-template-columns: 1.2fr 1fr 1.3fr 0.8fr 1.1fr 0.8fr 1fr 1.3fr;
   align-items: center;
   gap: 12px;
   padding: 11px 18px;
