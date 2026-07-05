@@ -2,11 +2,14 @@
 // 激活码批次（design/console.pen S9 视觉 + 批次详情抽屉·M3 UI 批6）：统计卡/进度条/状态 chip 由真聚合派生、
 // 详情抽屉码表接 listBatchCodes 真码 + CSV 导出（客户端真生成）。
 // 诚实边界：后端 listBatches 需 courseId（无「列全量批次」action）——按课程范围查（非跨课「全部」）；
-// listBatchCodes 只回码串无每码激活态——码表不标单码已激活/未用（记待办）；印刷包 ZIP/二维码图导出属旧台待补（记待办）。
+// listBatchCodes 只回码串无每码激活态——码表不标单码已激活/未用（记待办）。印刷包 ZIP 已还原（卡面SVG+地址CSV+说明·二轮批Cards-2）。
 import { ref, computed, onMounted } from 'vue'
 import QRCode from 'qrcode'
-import { Layers, QrCode, CircleCheck, TrendingUp, X, Download } from 'lucide-vue-next'
+import JSZip from 'jszip'
+import { Layers, QrCode, CircleCheck, TrendingUp, X, Download, Package } from 'lucide-vue-next'
 import { listBatches, createBatch, listBatchCodes, getSettings } from '../api/system'
+import { getCard } from '../api/products'
+import { buildFrontSvg, buildBackSvg } from '../lib/cardSvg'
 import { mapBatches, type BatchRow } from '../lib/mapSystem'
 
 const courseId = ref('')
@@ -24,6 +27,7 @@ const codes = ref<string[]>([])
 const codesLoading = ref(false)
 const urlPrefix = ref('') // 激活码落地网址前缀（换皮 CSV 只导码不导网址·印刷厂拿不到落地地址）
 const testQr = ref('') // 测试二维码 dataURL（量产前扫码验落地页·换皮丢了这个·根因#8）
+const packing = ref(false)
 const codeUrl = (code: string) => urlPrefix.value + code
 
 onMounted(async () => {
@@ -111,6 +115,41 @@ async function makeTestQr() {
   if (!first) return
   testQr.value = await QRCode.toDataURL(codeUrl(first), { width: 320, margin: 1 })
 }
+// 印刷包 ZIP（换皮丢·旧台 downloadPack·印刷厂拿不到矢量卡面与制卡说明·整条「设计→打包→交付」链断）：
+// 卡面正面.svg + 卡面反面.svg（取该课产品的卡片设计·课程编号 course-<productId> 反推 productId）+ 地址清单.csv + 说明.txt。
+async function downloadPack() {
+  if (!detail.value || !codes.value.length || packing.value) return
+  packing.value = true
+  try {
+    const productId = loadedCourse.value.replace(/^course-/, '')
+    const r = await getCard(productId)
+    const zip = new JSZip()
+    const head = urlPrefix.value ? '激活码,网址' : '激活码'
+    const csv = [head, ...codes.value.map((c) => (urlPrefix.value ? `${c},${codeUrl(c)}` : c))].join('\n')
+    zip.file('二维码地址.csv', '﻿' + csv) // BOM 防 Excel 中文乱码
+    const card = (r as any).ok ? (r as any).card : null
+    if (card) {
+      zip.file('卡面-正面-插画.svg', buildFrontSvg(card, String((r as any).artUrl || '')))
+      zip.file('卡面-反面-二维码.svg', buildBackSvg(card))
+      zip.file(
+        '说明.txt',
+        `批次 ${detail.value.batchId}\n课程 ${loadedCourse.value}\n数量 ${detail.value.total} 张\n卡面尺寸 ${card.sizeMM.w}×${card.sizeMM.h} mm（双面同尺寸）\n\n给印刷厂：卡面正反两张矢量 SVG；反面二维码区为占位框，按「二维码地址.csv」一码一图（每张卡一个唯一二维码，扫码即落地激活页）。`
+      )
+    } else {
+      zip.file('说明.txt', `批次 ${detail.value.batchId}\n课程 ${loadedCourse.value}\n数量 ${detail.value.total} 张\n\n注意：该产品还没有卡面设计（去「卡片设计」定稿后重新打包），本包仅含二维码地址清单。`)
+    }
+    const blob = await zip.generateAsync({ type: 'blob' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = detail.value.batchId + '-印刷包.zip'
+    a.click()
+    URL.revokeObjectURL(url)
+  } finally {
+    packing.value = false
+  }
+}
+
 // CSV 导出：换皮只导「激活码」单列·印刷厂拿不到落地地址；补「网址」列（激活码,完整URL·Excel BOM）
 function exportCsv() {
   if (!detail.value || !codes.value.length) return
@@ -230,6 +269,7 @@ function exportCsv() {
           <div class="codes-ops">
             <button class="export" :disabled="!codes.length" @click="makeTestQr"><QrCode :size="13" :stroke-width="1.8" /><span>测试二维码</span></button>
             <button class="export" :disabled="!codes.length" @click="exportCsv"><Download :size="13" :stroke-width="1.8" /><span>导出 CSV</span></button>
+            <button class="export" :disabled="!codes.length || packing" @click="downloadPack"><Package :size="13" :stroke-width="1.8" /><span>{{ packing ? '打包中…' : '印刷包 ZIP' }}</span></button>
           </div>
         </div>
         <div v-if="testQr" class="testqr">
