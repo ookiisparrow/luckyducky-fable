@@ -1,7 +1,7 @@
 <script setup lang="ts">
 // 物料与供应商（设计语言一致性·M3 UI 批16）：主档（毛线按 色×档×形态 推导料号·计量建档锁死）+ 供应商/织女
 // + 库存调整（必留原因·扣超整单拒）+ 流水查账。逻辑未动，仅套设计语言（页头/表单卡/grid 表/token）。
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, watch } from 'vue'
 import { listMaterials, saveMaterial, listSuppliers, saveSupplier, adjustStock, listLedger } from '../api/scm'
 import { materialHuman, uomLabel, scmErrorText, mapLedger, type LedgerRow } from '../lib/mapScm'
 import { dateTime } from '../lib/format'
@@ -26,8 +26,20 @@ async function loadLedger(materialId?: string) {
 }
 
 const matForm = ref({ category: 'yarn', name: '', uom: 'count', color: '', tier: 'L', form: 'raw', productId: '', slug: '', supplierId: '', threshold: 0 })
-const supForm = ref({ name: '', type: 'factory', contact: '' })
+const supForm = ref({ supplierId: '', name: '', type: 'factory', contact: '', note: '' })
 const adj = ref({ materialId: '', delta: 0, reason: '' })
+
+// 毛线按团/件计（换皮 uom 选择对毛线仍开放·毛线只能 count·按克会污染三档槽语义）：category=yarn 强制 count
+watch(() => matForm.value.category, (c) => {
+  if (c === 'yarn') matForm.value.uom = 'count'
+})
+// 编辑既有供应商（换皮丢·填完只能新建·后端 saveSupplier 收 supplierId 支持改+note）：点列表回填
+function editSupplier(s: Record<string, any>) {
+  supForm.value = { supplierId: String(s._id || ''), name: String(s.name || ''), type: String(s.type || 'factory'), contact: String(s.contact || ''), note: String(s.note || '') }
+}
+function resetSupForm() {
+  supForm.value = { supplierId: '', name: '', type: 'factory', contact: '', note: '' }
+}
 
 async function reload() {
   const [m, s] = await Promise.all([listMaterials(), listSuppliers()])
@@ -45,7 +57,8 @@ async function doSaveMaterial() {
 
 async function doSaveSupplier() {
   const r = await saveSupplier({ ...supForm.value })
-  note(r.ok, '供应商已保存', scmErrorText(r.error))
+  note(r.ok, supForm.value.supplierId ? '供应商已更新' : '供应商已保存', scmErrorText(r.error))
+  if (r.ok) resetSupForm()
   void reload()
 }
 
@@ -78,7 +91,7 @@ onMounted(reload)
           <option value="accessory">辅料</option>
         </select>
         <input v-model="matForm.name" placeholder="名称" maxlength="60" />
-        <select v-model="matForm.uom"><option value="count">按件</option><option value="gram">按克</option></select>
+        <select v-model="matForm.uom" :disabled="matForm.category === 'yarn'" :title="matForm.category === 'yarn' ? '毛线按团/件计·锁定' : ''"><option value="count">按件</option><option value="gram">按克</option></select>
         <template v-if="matForm.category === 'yarn'">
           <input v-model="matForm.color" placeholder="颜色（小写英文如 pink）" />
           <select v-model="matForm.tier"><option value="L">大团</option><option value="M">中团</option><option value="S">小团</option></select>
@@ -96,14 +109,18 @@ onMounted(reload)
       </section>
 
       <section class="card">
-        <h2>供应商 / 织女</h2>
+        <h2>供应商 / 织女 <span v-if="supForm.supplierId" class="edit-tag">编辑中</span></h2>
         <input v-model="supForm.name" placeholder="名称" maxlength="60" />
         <select v-model="supForm.type"><option value="factory">厂家（可下采购单）</option><option value="outworker">织女（走外协单）</option></select>
         <input v-model="supForm.contact" placeholder="联系方式" maxlength="120" />
-        <button class="btn-primary" @click="doSaveSupplier">保存</button>
+        <input v-model="supForm.note" placeholder="备注（如结算周期/擅长款·可空）" maxlength="200" />
+        <div class="ops">
+          <button class="btn-primary" @click="doSaveSupplier">{{ supForm.supplierId ? '更新' : '保存' }}</button>
+          <button v-if="supForm.supplierId" class="btn-ghost" @click="resetSupForm">取消编辑</button>
+        </div>
         <div class="sup-list">
-          <div v-for="s in sups" :key="s._id" class="sup-line">
-            <span>{{ s.name }}</span>
+          <div v-for="s in sups" :key="s._id" class="sup-line" :class="{ on: supForm.supplierId === s._id }" title="点击编辑" @click="editSupplier(s)">
+            <span class="sup-name">{{ s.name }}<span v-if="s.note" class="sup-note">· {{ s.note }}</span></span>
             <span class="tag">{{ s.type === 'factory' ? '厂家' : '织女' }}</span>
           </div>
         </div>
@@ -260,6 +277,29 @@ h2 {
   font-weight: 600;
   cursor: pointer;
 }
+.ops {
+  display: flex;
+  gap: 8px;
+}
+.btn-ghost {
+  padding: 8px 16px;
+  border: 1px solid var(--ld-line);
+  border-radius: 999px;
+  background: var(--ld-bg);
+  color: var(--ld-content-2);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.edit-tag {
+  margin-left: 6px;
+  padding: 1px 8px;
+  border-radius: 999px;
+  background: var(--ld-bg-lilac);
+  color: var(--ld-brand-active);
+  font-size: 10.5px;
+  font-weight: 600;
+}
 .hint {
   margin: 8px 0 0;
   font-size: 11px;
@@ -272,10 +312,29 @@ h2 {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 6px 0;
+  gap: 8px;
+  padding: 6px 8px;
   border-top: 1px solid var(--ld-line);
   font-size: 13px;
   color: var(--ld-content);
+  cursor: pointer;
+  border-radius: 6px;
+}
+.sup-line:hover {
+  background: var(--ld-bg-lilac);
+}
+.sup-line.on {
+  background: var(--ld-bg-lilac);
+}
+.sup-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.sup-note {
+  color: var(--ld-content-2);
+  font-size: 11.5px;
 }
 .tag {
   padding: 2px 9px;

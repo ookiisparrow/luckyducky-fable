@@ -1,7 +1,7 @@
 <script setup lang="ts">
 // 采购单（设计语言一致性·M3 UI 批16）：草稿→已下单→已收货（收货首次流转入库·重复收货不双入）；总价服务端算。
 // 逻辑未动，仅套设计语言（页头/草稿表单卡/grid 表/token）。
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, computed } from 'vue'
 import { Plus } from 'lucide-vue-next'
 import { listPurchases, savePurchase, markOrdered, receivePurchase, cancelPurchase, listMaterials, listSuppliers } from '../api/scm'
 import { materialHuman, purchaseStatusLabel, yuanToFen, fenLabel, scmErrorText } from '../lib/mapScm'
@@ -31,6 +31,22 @@ function pickFilter(k: string) {
   filter.value = k
   void reload()
 }
+
+// 逐行小计 + 总价预览（换皮丢·建单看不到花多少钱·总价要保存后才知道）：客户端预览，服务端 savePurchase 仍权威核算
+function lineFen(l: { qty: number; priceYuan: string }): number | null {
+  const fen = yuanToFen(l.priceYuan)
+  return fen === null ? null : fen * (Number(l.qty) || 0)
+}
+const draftTotalFen = computed(() => {
+  if (!form.value) return null
+  let sum = 0
+  for (const l of form.value.lines) {
+    const f = lineFen(l)
+    if (f === null) return null // 有非法/未填价的行→整单无法预览
+    sum += f
+  }
+  return sum
+})
 
 async function reload() {
   const [p, m, s] = await Promise.all([listPurchases(filter.value || undefined), listMaterials(), listSuppliers()])
@@ -112,7 +128,12 @@ onMounted(reload)
         </select>
         <input v-model.number="l.qty" type="number" min="1" placeholder="数量" />
         <input v-model="l.priceYuan" placeholder="单价（元）" />
+        <span class="line-sub">{{ lineFen(l) === null ? '—' : fenLabel(lineFen(l)) }}</span>
         <button class="act ghost" @click="form.lines.splice(i, 1)">删行</button>
+      </div>
+      <div class="draft-total">
+        合计预览：<strong>{{ draftTotalFen === null ? '填全单价后显示' : fenLabel(draftTotalFen) }}</strong>
+        <span class="total-hint">（保存时以服务端核算为准）</span>
       </div>
       <div class="ops">
         <button class="act ghost" @click="form.lines.push({ materialId: '', qty: 1, priceYuan: '' })"><Plus :size="13" :stroke-width="2" /><span>加行</span></button>
@@ -238,9 +259,30 @@ h1 {
 }
 .linerow {
   display: grid;
-  grid-template-columns: 2fr 90px 120px auto;
+  grid-template-columns: 2fr 90px 120px 90px auto;
+  align-items: center;
   gap: 8px;
   margin-bottom: 8px;
+}
+.line-sub {
+  text-align: right;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--ld-content-2);
+  font-family: var(--ld-font-mono);
+}
+.draft-total {
+  margin: 4px 0 12px;
+  font-size: 13px;
+  color: var(--ld-content);
+}
+.draft-total strong {
+  color: var(--ld-brand-active);
+  font-size: 15px;
+}
+.total-hint {
+  font-size: 11px;
+  color: var(--ld-content-2);
 }
 .linerow select,
 .linerow input {
