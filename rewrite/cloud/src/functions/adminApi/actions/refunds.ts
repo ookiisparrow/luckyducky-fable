@@ -1,5 +1,5 @@
 import { toFen, asFen, fenToYuan, refundShareFen, AFTERSALE_STATUS } from '@ldrw/shared'
-import { callFlow, pageQuery } from '../../../kit'
+import { callFlow, refundNoFor, pageQuery } from '../../../kit'
 import { reply, ensure, activationFor, type Ctx } from '../lib'
 
 // —— 管理员越规退款（决策§26·客服端退货管理权限 refund:manage·净新增·超出旧线 92 parity）——
@@ -42,6 +42,7 @@ export async function overrideRefund({ db, data }: Ctx) {
 
   // 越规单独立 _id（客户 orderId__lineId 可能被 rejected 单占用）：加操作时戳后缀·管理员单点低并发
   const asId = orderId + '__' + lineId + '__ovr' + Date.now()
+  const outRefundNo = refundNoFor(asId) // 微信合规退款单号（asId 含中文 SKU/spec·根因#12·案 A）
   await ensure(db, 'afterSales')
   const now = Date.now()
   await db
@@ -59,6 +60,7 @@ export async function overrideRefund({ db, data }: Ctx) {
         itemTotal: fenToYuan(itemFen),
         refundAmount: fenToYuan(refundFen),
         reason,
+        outRefundNo, // 落库供退款回调反查
         status: 'approved', // 越规直批（管理员发起·非客户 applied→approved）
         appliedAt: now,
         approvedAt: now,
@@ -69,7 +71,7 @@ export async function overrideRefund({ db, data }: Ctx) {
 
   const r = await callFlow(String(flowId), {
     out_trade_no: orderId,
-    out_refund_no: asId,
+    out_refund_no: outRefundNo,
     reason: reason.slice(0, 80),
     amount: { refund: refundFen, total: toFen(order.amount), currency: 'CNY' },
   })
@@ -184,12 +186,16 @@ export async function approveRefund({ db, data }: Ctx) {
     }
   }
 
+  // 微信合规退款单号（根因#12·案 A 卡单真因）：老单存了 outRefundNo 直接用；没有（本批前建的单/纯 ASCII 老单）
+  // 按 _id 现派生——含中文 SKU/spec 的 _id 会被规整成 ASCII 单号，不再被微信 PARAM_ERROR 拒。落库供退款回调反查。
+  const refundNo = got.data.outRefundNo || refundNoFor(id)
+
   // 原子抢占（审核批次A-2）：仍是 applied 才置 approved——并发只有一个抢到，杜绝重复触发退款；
   // 重算降级（requalify）与抢占同一次条件更新落库：打款金额与售后单永远一致（refundCallback 金额核验依赖它）。
   const grab = await db
     .collection('afterSales')
     .where({ _id: id, status: 'applied' })
-    .update({ data: { status: 'approved', approvedAt: Date.now(), ...(requalify || {}) } })
+    .update({ data: { status: 'approved', approvedAt: Date.now(), outRefundNo: refundNo, ...(requalify || {}) } })
   if (!grab.stats || grab.stats.updated !== 1) {
     return reply(400, { ok: false, error: 'BAD_STATUS:concurrent' })
   }
@@ -198,7 +204,7 @@ export async function approveRefund({ db, data }: Ctx) {
   const refundYuan = requalify ? (requalify.refundAmount as number) : Number(got.data.refundAmount)
   const r = await callFlow(String(flowId), {
     out_trade_no: got.data.orderId,
-    out_refund_no: id,
+    out_refund_no: refundNo,
     reason: String(got.data.reason || '用户申请退款').slice(0, 80),
     amount: {
       refund: toFen(refundYuan),

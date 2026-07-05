@@ -22,6 +22,7 @@ import {
   restoreStock,
   transition,
   callFlow,
+  refundNoFor,
   alert,
   pageQuery,
 } from '../../../kit'
@@ -314,8 +315,9 @@ export const applyRefund = withOpenId(async ({ db, OPENID, event }) => {
   if (refundFen <= 0) return err(ERR.NOTHING_LEFT)
 
   const now = Date.now()
+  const asId = orderId + '__' + lineId
   const rec = {
-    _id: orderId + '__' + lineId,
+    _id: asId,
     orderId,
     _openid: OPENID,
     lineId,
@@ -328,6 +330,8 @@ export const applyRefund = withOpenId(async ({ db, OPENID, event }) => {
     reason,
     addressName: (order.address && order.address.name) || '',
     phone: (order.address && order.address.phone) || '',
+    // 微信退款单号（根因#12·案 A）：_id 可含中文 SKU/spec，派生成合规单号存库供退款回调反查
+    outRefundNo: refundNoFor(asId),
     status: 'applied',
     appliedAt: now,
   }

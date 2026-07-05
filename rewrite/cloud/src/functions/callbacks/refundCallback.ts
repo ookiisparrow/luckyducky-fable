@@ -11,16 +11,28 @@ export const main = defineNotifyCallback<any>({
   ack: ACK,
   refId: (e) => String(e.out_refund_no || ''),
   onNotify: async ({ db, id, event: e }) => {
-    const got = await db
+    // id = 微信回传 out_refund_no。本批解耦（根因#12·案 A）：退款单号不再等于内部 _id（含中文/超长者被规整），
+    // 故先按售后单 outRefundNo 字段反查；回退 .doc(id) 兼容纯 ASCII 老单（out_refund_no===_id·无 outRefundNo 字段）。
+    const byField = await db
       .collection(COLLECTIONS.afterSales)
-      .doc(id)
+      .where({ outRefundNo: id })
+      .limit(1)
       .get()
-      .catch(() => null)
-    if (!got || !got.data) {
+      .catch(() => ({ data: [] }))
+    let as = (byField.data && byField.data[0]) || null
+    if (!as) {
+      const got = await db
+        .collection(COLLECTIONS.afterSales)
+        .doc(id)
+        .get()
+        .catch(() => null)
+      as = (got && got.data) || null
+    }
+    if (!as) {
       await notifyAlert('money', 'refundCallback', 'UNKNOWN_AFTERSALE', { id })
       return
     }
-    const as = got.data
+    const asId = as._id // 后续状态流转/留痕一律按真实 _id（非 out_refund_no）
     const status = String(e.refund_status || '')
     const claimFee = e.amount && e.amount.refund != null ? Number(e.amount.refund) : NaN
 
@@ -32,7 +44,7 @@ export const main = defineNotifyCallback<any>({
       await notifyAlert('money', 'refundCallback', 'MISMATCH', { id, outTradeNo: String(e.out_trade_no || ''), claimFee })
       await db
         .collection(COLLECTIONS.afterSales)
-        .doc(id)
+        .doc(asId)
         .update({ data: { refundMismatch: true } })
         .catch(() => {})
       return
@@ -42,7 +54,7 @@ export const main = defineNotifyCallback<any>({
       await notifyAlert('money', 'refundCallback', 'NOT_SUCCESS', { id, status })
       await db
         .collection(COLLECTIONS.afterSales)
-        .doc(id)
+        .doc(asId)
         .update({ data: { refundStatus: status } })
         .catch(() => {})
       return
@@ -51,7 +63,7 @@ export const main = defineNotifyCallback<any>({
       const _ = db.command
       const grab = await db
         .collection(COLLECTIONS.afterSales)
-        .where({ _id: id, status: _.in(['applied', 'approved']) })
+        .where({ _id: asId, status: _.in(['applied', 'approved']) })
         .update({
           data: {
             status: 'refunded',
