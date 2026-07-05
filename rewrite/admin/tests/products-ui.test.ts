@@ -19,6 +19,13 @@ describe('三态口径（与云端 listDrafts listed 表一致）', () => {
     expect(rows[0]).toMatchObject({ stateLabel: '在售', coverUrl: 'https://tmp/c.jpg', skuCount: 1 })
     expect(rows[0].raw).toEqual(draft) // 整档在·高级字段不丢
   })
+
+  it('大白话：多规格价显最低价 +「起」（换皮平铺 product.price 丢了起价语义）；单规格无「起」；无 SKU 退商品价', () => {
+    expect(mapDraftRows([{ id: 'm', name: 'x', price: 30, skus: [{ name: 'a', price: 22 }, { name: 'b', price: 35 }] }], {}, {})[0].priceLabel).toBe('¥22 起')
+    expect(mapDraftRows([{ id: 's', name: 'x', price: 30, skus: [{ name: 'a', price: 22 }] }], {}, {})[0].priceLabel).toBe('¥22') // 单规格无起
+    expect(mapDraftRows([{ id: 'n', name: 'x', price: 30, skus: [] }], {}, {})[0].priceLabel).toBe('¥30') // 无 SKU 退商品价
+    expect(mapDraftRows([{ id: 'u', name: 'x', skus: [] }], {}, {})[0].priceLabel).toBe('未定价')
+  })
 })
 
 describe('上架四道门人话（原文兜底不吞）', () => {

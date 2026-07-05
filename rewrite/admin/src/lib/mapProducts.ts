@@ -27,6 +27,14 @@ export interface DraftRowVM {
   raw: Record<string, unknown> // 整档（编辑 round-trip 用·防覆盖式保存抹字段）
 }
 
+/** 价格标签：多规格显最低 SKU 价 +「起」（换皮丢了起价语义·平铺 product.price）；无 SKU 退商品价。 */
+export function skuPriceLabel(p: Record<string, any>): string {
+  const skus = Array.isArray(p.skus) ? p.skus : []
+  const prices = skus.map((s: any) => Number(s && s.price)).filter((n: number) => n > 0)
+  if (prices.length) return `¥${Math.min(...prices)}${skus.length > 1 ? ' 起' : ''}`
+  return p.price != null && String(p.price) !== '' ? '¥' + String(p.price) : '未定价'
+}
+
 export function mapDraftRows(list: unknown, urls: unknown, listedMap: unknown): DraftRowVM[] {
   if (!Array.isArray(list)) return []
   const u = (urls && typeof urls === 'object' ? urls : {}) as Record<string, string>
@@ -39,7 +47,7 @@ export function mapDraftRows(list: unknown, urls: unknown, listedMap: unknown): 
     out.push({
       id,
       name: String(p.name || '（未命名）'),
-      priceLabel: p.price != null && String(p.price) !== '' ? '¥' + String(p.price) : '未定价',
+      priceLabel: skuPriceLabel(p),
       state,
       stateLabel: STATE_LABELS[state],
       coverUrl: p.cover ? u[String(p.cover)] || '' : '',

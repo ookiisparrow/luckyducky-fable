@@ -2,16 +2,24 @@
 // 商品管理（design/console.pen S11 视觉·M3 UI 批3）：页头+流水线副标+筛选 chip（真计数）+ 搜索（按名）
 // + 三态表格（关联课程/规格·图列）+ 编辑器（整档 round-trip·图片压缩·危操作两步确认，逻辑批3 未动）。
 // 设计稿「6 步上新进度」需分步完成态数据（上新向导 S5-S9 才有），当前无源——省略并记待办，不编进度。
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, onBeforeUnmount, watch, nextTick } from 'vue'
 import { Search, Trash2 } from 'lucide-vue-next'
 import { listDrafts, saveDraft, deleteDraft, uploadImage, publishProduct, unpublishProduct, republishProduct } from '../api/products'
 import { mapDraftRows, publishErrorText, b64SizeOk, type DraftRowVM } from '../lib/mapProducts'
 import { useRouter } from 'vue-router'
 
+const KIT_ICONS = ['circle', 'pen-tool', 'cloud', 'eye', 'book-open', 'sparkles-purple', 'package', 'truck'] // 材料清单图标（换皮丢了选择器·恒 circle）
+
 const router = useRouter()
 // 商品→课程深链（换皮丢了入口·Courses 页占位文案承诺「商品页会带入」但没按钮）：courseId=商品档 courseId 或 course-<id>
-function editCourse(row: DraftRowVM) {
-  const cid = String((row.raw as any).courseId || '') || 'course-' + row.id
+async function editCourse(row: DraftRowVM) {
+  const existing = String((row.raw as any).courseId || '')
+  const cid = existing || 'course-' + row.id
+  // courseId 落库（换皮只算不存·商品与课程/批次关联要人工输易错）：首次深链即写回商品档
+  if (!existing) {
+    await saveDraft({ ...(row.raw as Record<string, unknown>), courseId: cid })
+    void silentRefresh()
+  }
   void router.push({ path: '/courses', query: { courseId: cid } })
 }
 
@@ -57,19 +65,76 @@ async function reload() {
   rows.value = r.ok ? mapDraftRows(r.list, r.urls, r.listed) : []
   message.value = r.ok ? '' : '加载失败：' + String(r.error || '')
 }
+// 静默刷新列表（不闪「加载中」·不打断正在编辑的编辑器）
+async function silentRefresh() {
+  const r = await listDrafts()
+  if (r.ok) {
+    urlMap.value = (r as any).urls || {}
+    rows.value = mapDraftRows(r.list, r.urls, r.listed)
+  }
+}
+
+// —— 防抖自动保存（换皮把「编排即自动存」退成手动「保存草稿」·忘点即丢·且已上传的封面/相册 fileID 成孤儿）——
+const autoState = ref('') // '' | saving | saved | error
+let saveTimer: ReturnType<typeof setTimeout> | null = null
+let editorLoaded = false // load-guard：打开/新建时的赋值不触发自动保存
+watch(
+  edit,
+  () => {
+    if (!edit.value || !editorLoaded) return
+    autoState.value = 'saving'
+    if (saveTimer) clearTimeout(saveTimer)
+    saveTimer = setTimeout(() => void autosave(), 900)
+  },
+  { deep: true }
+)
+async function autosave() {
+  if (!edit.value) return
+  const r = await saveDraft(edit.value)
+  autoState.value = r.ok ? 'saved' : 'error'
+  if (r.ok) void silentRefresh()
+}
+function markLoaded() {
+  editorLoaded = false
+  autoState.value = ''
+  void nextTick(() => (editorLoaded = true)) // 赋值落定后再放开自动保存
+}
+function closeEditor() {
+  if (saveTimer) {
+    clearTimeout(saveTimer)
+    saveTimer = null
+    void autosave() // 关闭前补存 pending（离页不丢）
+  }
+  editorLoaded = false
+  edit.value = null
+}
+onBeforeUnmount(() => {
+  if (saveTimer) {
+    clearTimeout(saveTimer)
+    void autosave()
+  }
+})
 
 function newProduct() {
   edit.value = { id: 'p' + Date.now().toString(36), name: '', tag: '', brief: '', price: '', was: '', cover: '', images: [], skus: [], params: [], detailSections: [], kit: [], courseId: '' }
   coverPreview.value = ''
+  markLoaded()
 }
 
 function openEdit(row: DraftRowVM) {
   edit.value = JSON.parse(JSON.stringify(row.raw)) // 整档拷贝·round-trip 防抹字段
   coverPreview.value = row.coverUrl
+  markLoaded()
 }
 
 function addSku() {
-  if (edit.value) (edit.value.skus as any[]).push({ name: '', price: '' })
+  if (edit.value) (edit.value.skus as any[]).push({ name: '', price: edit.value.price || '' }) // 默认带商品现价（换皮恒空价·手抄易错）
+}
+function clearCover() {
+  if (edit.value) {
+    edit.value.cover = ''
+    coverPreview.value = ''
+  }
 }
 function delSku(i: number) {
   if (edit.value) (edit.value.skus as any[]).splice(i, 1)
@@ -122,23 +187,30 @@ async function compress(file: File): Promise<string> {
 
 async function doSave() {
   if (!edit.value || busy.value) return
+  if (saveTimer) {
+    clearTimeout(saveTimer)
+    saveTimer = null
+  }
   busy.value = true
   const r = await saveDraft(edit.value)
   busy.value = false
   message.value = r.ok ? '' : '保存失败：' + String(r.error || '')
   if (r.ok) {
+    editorLoaded = false
     edit.value = null
     void reload()
   }
 }
 
-async function doPublish(id: string) {
-  busy.value = true
-  const r = await publishProduct(id)
-  busy.value = false
-  message.value = r.ok ? '' : publishErrorText(r.error) // 四道门人话
-  void reload()
-}
+// 上架两步确认（换皮直接上架无确认·上架即对小程序可见·应有一道）
+const doPublish = (id: string) =>
+  twoStep('pub:' + id, async () => {
+    busy.value = true
+    const r = await publishProduct(id)
+    busy.value = false
+    message.value = r.ok ? '' : publishErrorText(r.error) // 四道门人话
+    void reload()
+  })
 
 async function twoStep(key: string, run: () => Promise<void>) {
   if (confirmKey.value !== key) {
@@ -294,8 +366,8 @@ onMounted(reload)
         <div class="c-ops ops">
           <button class="act ghost" @click="openEdit(row)">编辑</button>
           <button class="act ghost" @click="editCourse(row)">编辑课程</button>
-          <button v-if="row.state === 'preparing'" class="act" @click="doPublish(row.id)">上架</button>
-          <button v-if="row.state === 'onsale'" class="act ghost" @click="doPublish(row.id)">重新上架</button>
+          <button v-if="row.state === 'preparing'" class="act" @click="doPublish(row.id)">{{ confirmKey === 'pub:' + row.id ? '确认上架？' : '上架' }}</button>
+          <button v-if="row.state === 'onsale'" class="act ghost" @click="doPublish(row.id)">{{ confirmKey === 'pub:' + row.id ? '确认重上？' : '重新上架' }}</button>
           <button v-if="row.state === 'onsale'" class="act warn" @click="doUnpublish(row.id)">
             {{ confirmKey === 'off:' + row.id ? '确认下架？' : '下架' }}
           </button>
@@ -310,7 +382,9 @@ onMounted(reload)
     <p v-else-if="!message" class="status-soft">{{ rows.length ? '没有符合筛选的商品' : '还没有商品，点「新建商品」开始' }}</p>
 
     <div v-if="edit" class="editor">
-      <h3>{{ edit.name || '新商品' }} <span class="pid">{{ edit.id }}</span></h3>
+      <h3>{{ edit.name || '新商品' }} <span class="pid">{{ edit.id }}</span>
+        <span class="auto" :class="autoState">{{ autoState === 'saving' ? '自动保存中…' : autoState === 'saved' ? '已自动保存' : autoState === 'error' ? '自动保存失败' : '' }}</span>
+      </h3>
       <div class="grid">
         <label>名称 <input v-model="edit.name" maxlength="60" /></label>
         <label>标签 <input v-model="edit.tag" maxlength="20" placeholder="如 送礼首选" /></label>
@@ -322,7 +396,10 @@ onMounted(reload)
           <input type="file" accept="image/*" @change="pickCover" />
         </label>
       </div>
-      <img v-if="coverPreview" :src="coverPreview" class="cover-preview" />
+      <div v-if="coverPreview" class="cover-wrap">
+        <img :src="coverPreview" class="cover-preview" />
+        <button class="cover-del" @click="clearCover">删除封面</button>
+      </div>
       <h4>规格（SKU）</h4>
       <div v-for="(s, i) in edit.skus" :key="i" class="skurow">
         <input v-model="s.name" placeholder="规格名" maxlength="30" />
@@ -361,7 +438,10 @@ onMounted(reload)
       <button class="act ghost" :disabled="(edit.detailSections as unknown[]).length >= 4" @click="addSection">+ 加段落</button>
 
       <h4>材料清单（≤8）</h4>
-      <div v-for="(k, i) in (edit.kit as { name: string; qty: string }[])" :key="i" class="kvrow">
+      <div v-for="(k, i) in (edit.kit as { icon: string; name: string; qty: string }[])" :key="i" class="kvrow">
+        <select v-model="k.icon" class="kit-icon" title="图标">
+          <option v-for="ic in KIT_ICONS" :key="ic" :value="ic">{{ ic }}</option>
+        </select>
         <input v-model="k.name" placeholder="物品名" maxlength="14" />
         <input v-model="k.qty" placeholder="数量（如 1 包 50g）" maxlength="14" />
         <button class="act ghost" @click="delKit(i)">删</button>
@@ -374,7 +454,7 @@ onMounted(reload)
 
       <div class="editor-ops">
         <button class="act" :disabled="busy" @click="doSave">保存草稿</button>
-        <button class="act ghost" @click="edit = null">关闭</button>
+        <button class="act ghost" @click="closeEditor">关闭</button>
       </div>
     </div>
   </div>
@@ -648,10 +728,47 @@ h1 {
   border-radius: 8px;
   font-size: 13px;
 }
-.cover-preview {
+.cover-wrap {
   margin-top: 10px;
+  display: flex;
+  align-items: flex-end;
+  gap: 10px;
+}
+.cover-preview {
   width: 120px;
   border-radius: 8px;
+}
+.cover-del {
+  padding: 5px 12px;
+  border: 1px solid var(--ld-red-line);
+  border-radius: 999px;
+  background: var(--ld-bg);
+  color: var(--ld-red);
+  font-size: 12px;
+  cursor: pointer;
+}
+.auto {
+  margin-left: 10px;
+  font-size: 11.5px;
+  font-weight: 400;
+}
+.auto.saving {
+  color: var(--ld-content-2);
+}
+.auto.saved {
+  color: var(--ld-green);
+}
+.auto.error {
+  color: var(--ld-red);
+}
+.kit-icon {
+  flex: none;
+  width: 108px;
+  padding: 8px 8px;
+  border: 1px solid var(--ld-line-strong);
+  border-radius: 8px;
+  font-size: 12px;
+  background: var(--ld-bg);
 }
 .skurow {
   display: flex;
