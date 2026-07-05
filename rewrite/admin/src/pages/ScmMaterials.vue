@@ -9,17 +9,25 @@ import { dateTime } from '../lib/format'
 const mats = ref<Array<Record<string, any>>>([])
 const sups = ref<Array<Record<string, any>>>([])
 const ledger = ref<LedgerRow[]>([])
+const ledgerMat = ref('') // 当前流水按哪个料号过滤（空=全部·换皮丢了行内按料查流水）
 const message = ref('')
+
+// 行内按料号查流水（换皮只有全局最近流水·listLedger 支持 materialId 过滤）
+async function loadLedger(materialId?: string) {
+  const l = await listLedger(materialId)
+  ledger.value = l.ok ? mapLedger(l.list) : []
+  ledgerMat.value = materialId || ''
+}
 
 const matForm = ref({ category: 'yarn', name: '', uom: 'count', color: '', tier: 'L', form: 'raw', productId: '', slug: '', supplierId: '', threshold: 0 })
 const supForm = ref({ name: '', type: 'factory', contact: '' })
 const adj = ref({ materialId: '', delta: 0, reason: '' })
 
 async function reload() {
-  const [m, s, l] = await Promise.all([listMaterials(), listSuppliers(), listLedger()])
+  const [m, s] = await Promise.all([listMaterials(), listSuppliers()])
   mats.value = m.ok ? (m.list as Record<string, any>[]) : []
   sups.value = s.ok ? (s.list as Record<string, any>[]) : []
-  ledger.value = l.ok ? mapLedger(l.list) : []
+  await loadLedger(ledgerMat.value || undefined) // 保持当前料号筛选
   message.value = m.ok ? '' : '加载失败：' + String(m.error || '')
 }
 
@@ -115,13 +123,19 @@ onMounted(reload)
           <span>{{ m.name }}</span>
           <span class="muted">{{ uomLabel(m.uom) }}</span>
           <span class="r" :class="{ low: m.threshold && m.stock <= m.threshold }">{{ m.stock }}</span>
-          <span class="muted">{{ (sups.find((s) => s._id === m.supplierId) || {}).name || '—' }}</span>
+          <span class="muted sup-cell">
+            {{ (sups.find((s) => s._id === m.supplierId) || {}).name || '—' }}
+            <button class="led-btn" title="看这个料的流水" @click="loadLedger(m._id)">流水</button>
+          </span>
         </div>
       </div>
     </section>
 
     <section class="table-card">
-      <h2>最近流水</h2>
+      <h2>
+        {{ ledgerMat ? '流水 · ' + materialHuman(ledgerMat) : '最近流水（全部料）' }}
+        <button v-if="ledgerMat" class="led-reset" @click="loadLedger()">← 看全部</button>
+      </h2>
       <div class="table">
         <div class="thead thead-led"><span>时间</span><span>类型</span><span>料</span><span class="r">±</span><span>操作者</span><span>原因</span></div>
         <div v-for="l in ledger" :key="l.id" class="trow trow-led">
@@ -186,6 +200,33 @@ h2 {
   font-size: 14px;
   font-weight: 700;
   color: var(--ld-ink);
+}
+.led-reset {
+  margin-left: 10px;
+  padding: 3px 10px;
+  border: 1px solid var(--ld-line);
+  border-radius: 999px;
+  background: var(--ld-bg);
+  color: var(--ld-content-2);
+  font-size: 11px;
+  font-weight: 400;
+  cursor: pointer;
+}
+.sup-cell {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+}
+.led-btn {
+  flex: none;
+  padding: 2px 9px;
+  border: 1px solid var(--ld-line);
+  border-radius: 999px;
+  background: var(--ld-bg);
+  color: var(--ld-brand-active);
+  font-size: 10.5px;
+  cursor: pointer;
 }
 .card input,
 .card select {

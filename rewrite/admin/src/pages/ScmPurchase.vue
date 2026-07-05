@@ -13,9 +13,21 @@ const sups = ref<Array<Record<string, any>>>([])
 const message = ref('')
 const form = ref<{ purchaseId?: string; supplierId: string; lines: Array<{ materialId: string; qty: number; priceYuan: string }> } | null>(null)
 const confirmKey = ref('')
+const filter = ref('') // 状态筛选（换皮丢·恒取全部）
+const FILTERS = [
+  { key: '', label: '全部' },
+  { key: 'draft', label: '草稿' },
+  { key: 'ordered', label: '已下单' },
+  { key: 'received', label: '已收货' },
+  { key: 'cancelled', label: '已取消' },
+]
+function pickFilter(k: string) {
+  filter.value = k
+  void reload()
+}
 
 async function reload() {
-  const [p, m, s] = await Promise.all([listPurchases(), listMaterials(), listSuppliers()])
+  const [p, m, s] = await Promise.all([listPurchases(filter.value || undefined), listMaterials(), listSuppliers()])
   orders.value = p.ok ? (p.list as Record<string, any>[]) : []
   mats.value = m.ok ? (m.list as Record<string, any>[]) : []
   sups.value = s.ok ? ((s.list as Record<string, any>[]) || []).filter((x) => x.type === 'factory') : []
@@ -102,6 +114,10 @@ onMounted(reload)
       </div>
     </section>
 
+    <div class="filters">
+      <button v-for="f in FILTERS" :key="f.key" class="fchip" :class="{ on: filter === f.key }" @click="pickFilter(f.key)">{{ f.label }}</button>
+    </div>
+
     <div v-if="orders.length" class="table">
       <div class="thead"><span>单号</span><span>供应商</span><span class="r">行数</span><span class="r">总价</span><span>状态</span><span>时间</span><span class="r">操作</span></div>
       <div v-for="o in orders" :key="o._id" class="trow">
@@ -123,7 +139,7 @@ onMounted(reload)
         </div>
       </div>
     </div>
-    <p v-else-if="!form" class="status-soft">还没有采购单</p>
+    <p v-else-if="!form" class="status-soft">{{ filter ? '这个状态下没有采购单' : '还没有采购单' }}</p>
   </div>
 </template>
 
@@ -171,6 +187,26 @@ h1 {
 .status-soft {
   font-size: 13px;
   color: var(--ld-content-2);
+}
+.filters {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 12px;
+  flex-wrap: wrap;
+}
+.fchip {
+  padding: 6px 14px;
+  border: 1px solid var(--ld-line);
+  border-radius: 999px;
+  background: var(--ld-bg);
+  color: var(--ld-content-2);
+  font-size: 12.5px;
+  cursor: pointer;
+}
+.fchip.on {
+  background: var(--ld-purple-ink);
+  border-color: var(--ld-purple-ink);
+  color: #fff;
 }
 .draft {
   padding: 16px 18px;
