@@ -1,7 +1,7 @@
 <script setup lang="ts">
 // 配方与组装（设计语言一致性·M3 UI 批17）：全局模板（共用料+毛线槽）+ 每产品差异位（三色+专属件）→
 // 预演（只读看短缺）→ 执行组装（快照冻结·同单不双扣）。逻辑未动，仅套设计语言。
-import { ref, onMounted, watch } from 'vue'
+import { ref, onMounted, watch, computed } from 'vue'
 import { Plus } from 'lucide-vue-next'
 import { getBomSetup, saveBomTemplate, saveBomProfile, previewAssembly, runAssembly, listAssemblies, listMaterials } from '../api/scm'
 import { materialHuman, scmErrorText } from '../lib/mapScm'
@@ -23,6 +23,32 @@ const prof = ref({ productId: '', L: '', M: '', S: '', packagingMaterialId: '', 
 const run = ref({ productId: '', spec: '', sets: 1 })
 const preview = ref<Array<Record<string, any>>>([])
 const runConfirm = ref(false)
+const expanded = ref('') // 组装记录用料展开（换皮丢·点单号看扣了哪些料）
+
+// 下拉候选（换皮退成裸文本框·易打错料号）：共用料限非毛线非成品（毛线走三档槽·颜色由差异位定）；专属件按类过滤
+const commonCandidates = computed(() => mats.value.filter((m) => m.category !== 'yarn' && !String(m._id).startsWith('fg:')))
+const packagingList = computed(() => mats.value.filter((m) => m.category === 'packaging'))
+const cardList = computed(() => mats.value.filter((m) => m.category === 'card'))
+const profileIds = computed(() => profiles.value.map((p) => String(p._id))) // 差异位建议 + 执行可选（有差异位才可组装）
+
+// 编辑既有差异位（换皮丢·填完只能新建覆盖）：点列表项回填表单
+function editProfile(p: Record<string, any>) {
+  prof.value = {
+    productId: String(p._id || ''),
+    L: String(p.yarnColors?.L || ''),
+    M: String(p.yarnColors?.M || ''),
+    S: String(p.yarnColors?.S || ''),
+    packagingMaterialId: String(p.packagingMaterialId || ''),
+    cardMaterialId: String(p.cardMaterialId || ''),
+  }
+}
+// 专属件按料号命名契约（pkg:/card:<productId>）自动预选——若该料已建档且当前未填
+watch(() => prof.value.productId, (id) => {
+  const pid = String(id || '').trim()
+  if (!pid) return
+  if (!prof.value.packagingMaterialId && packagingList.value.some((m) => m._id === 'pkg:' + pid)) prof.value.packagingMaterialId = 'pkg:' + pid
+  if (!prof.value.cardMaterialId && cardList.value.some((m) => m._id === 'card:' + pid)) prof.value.cardMaterialId = 'card:' + pid
+})
 // B1 幂等键：每次组装意图生成一次·重试复用·成功才换新（换皮在 api 内每次现生成→双击/慢网双扣料双入库）
 const pendingAsmId = ref('')
 
@@ -103,7 +129,8 @@ onMounted(reload)
         <h3>共用料（每套用量）</h3>
         <div v-for="(l, i) in template.commonLines" :key="i" class="linerow">
           <select v-model="l.materialId">
-            <option v-for="m in mats" :key="m._id" :value="m._id">{{ materialHuman(m._id) }}</option>
+            <option value="">选料号…</option>
+            <option v-for="m in commonCandidates" :key="m._id" :value="m._id">{{ materialHuman(m._id) }}</option>
           </select>
           <input v-model.number="l.qtyPerSet" type="number" min="1" />
           <button class="icon-x" @click="template.commonLines.splice(i, 1)">×</button>
@@ -122,21 +149,35 @@ onMounted(reload)
 
       <section class="card">
         <h2>产品差异位（三色 + 专属件）</h2>
-        <input v-model="prof.productId" placeholder="产品 id" />
+        <input v-model="prof.productId" list="bom-prof-ids" placeholder="产品 id（选既有或输新）" />
+        <datalist id="bom-prof-ids"><option v-for="pid in profileIds" :key="pid" :value="pid" /></datalist>
         <input v-model="prof.L" placeholder="大团颜色（如 pink）" />
         <input v-model="prof.M" placeholder="中团颜色" />
         <input v-model="prof.S" placeholder="小团颜色" />
-        <input v-model="prof.packagingMaterialId" placeholder="包装料号（pkg:产品id）" />
-        <input v-model="prof.cardMaterialId" placeholder="卡片料号（card:产品id）" />
-        <button class="btn-primary" @click="doSaveProfile">保存差异位</button>
+        <select v-model="prof.packagingMaterialId">
+          <option value="">选包装料号（pkg:产品id）…</option>
+          <option v-for="m in packagingList" :key="m._id" :value="m._id">{{ materialHuman(m._id) }}（{{ m._id }}）</option>
+        </select>
+        <select v-model="prof.cardMaterialId">
+          <option value="">选卡片料号（card:产品id）…</option>
+          <option v-for="m in cardList" :key="m._id" :value="m._id">{{ materialHuman(m._id) }}（{{ m._id }}）</option>
+        </select>
+        <button class="btn-primary" @click="doSaveProfile">{{ profileIds.includes(prof.productId.trim()) ? '更新差异位' : '保存差异位' }}</button>
         <div class="prof-list">
-          <div v-for="p in profiles" :key="p._id" class="prof-line">{{ p._id }}：L={{ p.yarnColors?.L }} M={{ p.yarnColors?.M }} S={{ p.yarnColors?.S }}</div>
+          <div v-for="p in profiles" :key="p._id" class="prof-line" :class="{ on: prof.productId === p._id }" title="点击编辑" @click="editProfile(p)">
+            <span>{{ p._id }}：L={{ p.yarnColors?.L || '—' }} M={{ p.yarnColors?.M || '—' }} S={{ p.yarnColors?.S || '—' }}</span>
+            <span v-if="!p.packagingMaterialId || !p.cardMaterialId" class="prof-warn">缺专属件</span>
+          </div>
+          <p v-if="!profiles.length" class="prof-empty">还没有差异位——填上面表单保存</p>
         </div>
       </section>
 
       <section class="card">
         <h2>组装执行（扣原料·入成品）</h2>
-        <input v-model="run.productId" placeholder="产品 id" />
+        <select v-model="run.productId">
+          <option value="">选产品（须有差异位）…</option>
+          <option v-for="pid in profileIds" :key="pid" :value="pid">{{ pid }}</option>
+        </select>
         <input v-model="run.spec" placeholder="规格（可空）" />
         <input v-model.number="run.sets" type="number" min="1" placeholder="套数" />
         <div class="ops">
@@ -156,14 +197,20 @@ onMounted(reload)
     <section class="table-card">
       <h2>组装记录</h2>
       <div class="table">
-        <div class="thead"><span>单号</span><span>产品</span><span class="r">套数</span><span>操作者</span><span>时间</span></div>
-        <div v-for="a in assemblies" :key="a._id" class="trow">
-          <span class="mono">{{ a._id }}</span>
-          <span>{{ a.productId }}{{ a.spec ? '（' + a.spec + '）' : '' }}</span>
-          <span class="r">{{ a.sets }}</span>
-          <span class="muted">{{ a.operator }}</span>
-          <span class="muted mono">{{ dateTime(a.at) }}</span>
-        </div>
+        <div class="thead"><span>单号</span><span>产品</span><span class="r">套数</span><span>操作者</span><span>时间</span><span>用料</span></div>
+        <template v-for="a in assemblies" :key="a._id">
+          <div class="trow">
+            <span class="mono">{{ a._id }}</span>
+            <span>{{ a.productId }}{{ a.spec ? '（' + a.spec + '）' : '' }}</span>
+            <span class="r">{{ a.sets }}</span>
+            <span class="muted">{{ a.operator }}</span>
+            <span class="muted mono">{{ dateTime(a.at) }}</span>
+            <span><button class="expand-btn" @click="expanded = expanded === a._id ? '' : a._id">{{ expanded === a._id ? '收起' : '展开' }}</button></span>
+          </div>
+          <div v-if="expanded === a._id" class="trow sub-row">
+            <span class="consumed" :style="{ gridColumn: '1 / -1' }">扣料快照：{{ (a.consumedLines || []).map((l) => materialHuman(l.materialId) + '×' + l.qty).join(' · ') || '（无快照）' }}</span>
+          </div>
+        </template>
       </div>
     </section>
   </div>
@@ -312,10 +359,37 @@ h3 {
   margin-top: 10px;
 }
 .prof-line {
-  padding: 5px 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 6px 8px;
   border-top: 1px solid var(--ld-line);
   font-size: 11.5px;
   font-family: var(--ld-font-mono);
+  color: var(--ld-content-2);
+  cursor: pointer;
+  border-radius: 6px;
+}
+.prof-line:hover {
+  background: var(--ld-bg-lilac);
+}
+.prof-line.on {
+  background: var(--ld-bg-lilac);
+  color: var(--ld-brand-active);
+}
+.prof-warn {
+  flex: none;
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: var(--ld-bg-red-soft);
+  color: var(--ld-red);
+  font-size: 10.5px;
+  font-family: var(--ld-font);
+}
+.prof-empty {
+  margin: 8px 0 0;
+  font-size: 12px;
   color: var(--ld-content-2);
 }
 .preview {
@@ -352,10 +426,34 @@ h3 {
 .thead,
 .trow {
   display: grid;
-  grid-template-columns: 1.6fr 1.6fr 0.7fr 1.1fr 1.4fr;
+  grid-template-columns: 1.6fr 1.6fr 0.7fr 1.1fr 1.4fr auto;
   align-items: center;
   gap: 12px;
   padding: 10px 14px;
+}
+.trow.sub-row {
+  display: block;
+  padding: 8px 14px 10px;
+  background: var(--ld-bg-lilac);
+}
+.consumed {
+  font-size: 12px;
+  color: var(--ld-content);
+  font-family: var(--ld-font-mono);
+  line-height: 1.5;
+}
+.expand-btn {
+  padding: 3px 10px;
+  border: 1px solid var(--ld-line);
+  border-radius: 999px;
+  background: var(--ld-bg);
+  color: var(--ld-content-2);
+  font-size: 11.5px;
+  cursor: pointer;
+}
+.expand-btn:hover {
+  border-color: var(--ld-purple-line);
+  color: var(--ld-brand-active);
 }
 .thead {
   background: var(--ld-bg-lilac);
