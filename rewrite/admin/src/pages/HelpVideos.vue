@@ -1,7 +1,7 @@
 <script setup lang="ts">
 // 帮助视频（设计语言一致性·M3 UI 批12）：播放页「遇到问题了」求助面板内容源（主题→小段两级·全课程共用一份）。
 // 逻辑未动，仅套设计语言（页头/主题卡/段上传 chip/token）。
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, onBeforeUnmount, watch, nextTick } from 'vue'
 import { Upload, Check, Trash2, Plus } from 'lucide-vue-next'
 import { listHelpVideos, saveHelpVideos, uploadVideo } from '../api/content'
 import { normalizeHelpItems, type HelpItem } from '../lib/mapContent'
@@ -14,9 +14,49 @@ const confirmKey = ref('') // no-alert 两步删除确认（换皮改直接 spli
 
 async function reload() {
   const r = await listHelpVideos()
+  loaded = false // 载入期不触发自动保存
   items.value = r.ok ? normalizeHelpItems(r.items) : []
   message.value = r.ok ? '' : '加载失败：' + String(r.error || '')
+  saveState.value = ''
+  void nextTick(() => (loaded = true)) // 载入后的用户编辑才自动保存
 }
+
+// 视频时长自动读取（换皮丢·选完视频读元数据填 dur·mm:ss）
+function readDuration(file: File): Promise<string> {
+  return new Promise((resolve) => {
+    const url = URL.createObjectURL(file)
+    const v = document.createElement('video')
+    v.preload = 'metadata'
+    v.onloadedmetadata = () => {
+      URL.revokeObjectURL(url)
+      const s = Math.round(v.duration || 0)
+      resolve(s > 0 ? `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}` : '')
+    }
+    v.onerror = () => {
+      URL.revokeObjectURL(url)
+      resolve('')
+    }
+    v.src = url
+  })
+}
+
+// 防抖自动保存（换皮退成手动按钮·编排忘点即丢）：900ms + 离页补存·load 期不触发·不 reload（免打断编辑）
+const saveState = ref<'' | 'saving' | 'saved' | 'error'>('')
+let loaded = false
+let saveTimer: ReturnType<typeof setTimeout> | null = null
+function autosave() {
+  saveState.value = 'saving'
+  if (saveTimer) clearTimeout(saveTimer)
+  saveTimer = setTimeout(async () => {
+    const r = await saveHelpVideos(items.value)
+    saveState.value = r.ok ? 'saved' : 'error'
+  }, 900)
+}
+watch(items, () => { if (loaded) autosave() }, { deep: true })
+onBeforeUnmount(() => {
+  if (saveTimer) clearTimeout(saveTimer)
+  if (saveState.value === 'saving') void saveHelpVideos(items.value)
+})
 
 function twoStep(key: string, run: () => void) {
   if (confirmKey.value !== key) {
@@ -52,6 +92,7 @@ async function pickVideo(t: HelpItem, i: number, ev: Event) {
   const file = (ev.target as HTMLInputElement).files?.[0]
   if (!file) return
   progress.value = '上传中 0%'
+  if (!t.segments[i].dur) t.segments[i].dur = await readDuration(file) // 时长自动读取（未填才读）
   const r = await uploadVideo('help', t.segments[i].name || 'seg', file, (p) => (progress.value = `上传中 ${Math.round(p * 100)}%`))
   progress.value = ''
   if (r.ok) {
@@ -79,7 +120,10 @@ onMounted(reload)
         <h1>帮助视频</h1>
         <p class="sub">小程序播放页「遇到问题了」面板的内容；主题下每个小段挂一条视频，全课程共用一份。</p>
       </div>
-      <button class="btn-primary" :disabled="busy" @click="save">{{ busy ? '保存中…' : '保存全部' }}</button>
+      <div class="head-save">
+        <span v-if="saveState" class="autosave" :class="saveState">{{ saveState === 'saving' ? '自动保存中…' : saveState === 'saved' ? '已自动保存' : '自动保存失败·点保存重试' }}</span>
+        <button class="btn-primary" :disabled="busy" @click="save">{{ busy ? '保存中…' : '保存全部' }}</button>
+      </div>
     </header>
 
     <p v-if="message" class="status">{{ message }}</p>
@@ -134,6 +178,26 @@ h1 {
   margin: 4px 0 0;
   font-size: 12.5px;
   color: var(--ld-content-2);
+}
+.head-save {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex: none;
+}
+.autosave {
+  font-size: 11.5px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.autosave.saving {
+  color: var(--ld-content-2);
+}
+.autosave.saved {
+  color: var(--ld-green);
+}
+.autosave.error {
+  color: var(--ld-red);
 }
 .btn-primary {
   flex: none;

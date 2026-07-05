@@ -1,7 +1,7 @@
 <script setup lang="ts">
 // 课程管理（design/console.pen S2 课程编排视觉·M3 UI 批10）：章→课时→段 树编辑 + 每段视频直传 + 发布
 // （引用模型·老学员自动生效；孤儿视频云端 GC）。逻辑批10 未动，仅套设计语言（页头/视频进度条/章节卡/段上传 chip）。
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, onBeforeUnmount, watch, nextTick } from 'vue'
 import { useRoute } from 'vue-router'
 import { RotateCcw, Plus, Trash2, Upload, Check } from 'lucide-vue-next'
 import { getCourseDraft, saveCourseDraft, publishCourse, uploadVideo } from '../api/content'
@@ -70,15 +70,57 @@ async function load() {
     message.value = '加载失败：' + String(r.error || '')
     return
   }
+  loaded = false // 载入期不触发自动保存
   fromPublished.value = r.fromPublished === true
   course.value = (r.course as Record<string, any>) || { id: courseId.value.trim(), title: '', sort: 0, chapters: [] }
   refreshStats()
   message.value = ''
+  saveState.value = ''
+  void nextTick(() => (loaded = true)) // 载入后的用户编辑才自动保存
 }
 
 function refreshStats() {
   stats.value = courseVideoStats(course.value)
 }
+
+// 视频时长自动读取（换皮丢·选完视频读元数据填 dur·mm:ss）
+function readDuration(file: File): Promise<string> {
+  return new Promise((resolve) => {
+    const url = URL.createObjectURL(file)
+    const v = document.createElement('video')
+    v.preload = 'metadata'
+    v.onloadedmetadata = () => {
+      URL.revokeObjectURL(url)
+      const s = Math.round(v.duration || 0)
+      resolve(s > 0 ? `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}` : '')
+    }
+    v.onerror = () => {
+      URL.revokeObjectURL(url)
+      resolve('')
+    }
+    v.src = url
+  })
+}
+
+// 防抖自动保存（换皮退成手动按钮·编视频编排忘点即丢）：900ms + 离页补存·load 期不触发
+const saveState = ref<'' | 'saving' | 'saved' | 'error'>('')
+let loaded = false
+let saveTimer: ReturnType<typeof setTimeout> | null = null
+function autosave() {
+  if (!course.value) return
+  saveState.value = 'saving'
+  fromPublished.value = false
+  if (saveTimer) clearTimeout(saveTimer)
+  saveTimer = setTimeout(async () => {
+    const r = await saveCourseDraft(course.value!)
+    saveState.value = r.ok ? 'saved' : 'error'
+  }, 900)
+}
+watch(course, () => { if (loaded && course.value) autosave() }, { deep: true })
+onBeforeUnmount(() => {
+  if (saveTimer) clearTimeout(saveTimer)
+  if (saveState.value === 'saving' && course.value) void saveCourseDraft(course.value)
+})
 
 function addChapter() {
   course.value?.chapters.push({ id: '', title: '', lessons: [] })
@@ -94,6 +136,7 @@ async function pickVideo(sg: Record<string, any>, ev: Event) {
   const file = (ev.target as HTMLInputElement).files?.[0]
   if (!file || !course.value) return
   progress.value = '上传中 0%'
+  if (!sg.dur) sg.dur = await readDuration(file) // 时长自动读取（未填才读·不覆盖手填）
   const r = await uploadVideo(String(course.value.id), String(sg.name || 'seg'), file, (p) => (progress.value = `上传中 ${Math.round(p * 100)}%`))
   progress.value = ''
   if (r.ok) {
@@ -113,6 +156,7 @@ async function batchUpload(l: Record<string, any>, ev: Event) {
     if (item.isNew) l.segments.push({ id: '', name: item.segName, dur: '', videoFileId: '' })
     const sg = l.segments[item.segIndex]
     if (!sg.name) sg.name = item.segName
+    if (!sg.dur) sg.dur = await readDuration(item.file) // 时长自动读取（未填才读）
     const r = await uploadVideo(String(course.value.id), sg.name || 'seg', item.file, (p) => (progress.value = `课时批量传 ${item.segIndex + 1}/${plan.length} · ${Math.round(p * 100)}%`))
     if (r.ok) sg.videoFileId = r.fileId || ''
     else message.value = '有视频上传失败：' + String(r.error || '') // fail-soft·一段失败不拖累其余
@@ -176,6 +220,7 @@ onMounted(load)
             <span class="vstat-num">视频 {{ stats.done }}/{{ stats.total }}</span>
             <div class="vbar"><div class="vbar-fill" :style="{ width: pct + '%' }" /></div>
           </div>
+          <span v-if="saveState" class="autosave" :class="saveState">{{ saveState === 'saving' ? '自动保存中…' : saveState === 'saved' ? '已自动存草稿' : '自动保存失败·点保存重试' }}</span>
           <button class="act ghost" :disabled="busy" @click="save">保存草稿</button>
           <button class="act primary" :disabled="busy" @click="publish">
             {{ publishConfirm ? '确认发布？老学员立即生效' : '发布上线' }}
@@ -320,6 +365,20 @@ h1 {
   margin: 0 0 12px;
   font-size: 12px;
   color: var(--ld-amber);
+}
+.autosave {
+  font-size: 11.5px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.autosave.saving {
+  color: var(--ld-content-2);
+}
+.autosave.saved {
+  color: var(--ld-green);
+}
+.autosave.error {
+  color: var(--ld-red);
 }
 .chapter {
   padding: 14px 16px;
