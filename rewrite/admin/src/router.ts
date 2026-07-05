@@ -14,6 +14,7 @@ const Showcase = () => import('./pages/Showcase.vue')
 const HomeContent = () => import('./pages/HomeContent.vue')
 const HelpVideos = () => import('./pages/HelpVideos.vue')
 const Courses = () => import('./pages/Courses.vue')
+const Cards = () => import('./pages/Cards.vue')
 const ScmMaterials = () => import('./pages/ScmMaterials.vue')
 const ScmPurchase = () => import('./pages/ScmPurchase.vue')
 const ScmOutwork = () => import('./pages/ScmOutwork.vue')
@@ -50,6 +51,7 @@ export const router = createRouter({
         { path: 'home-content', component: HomeContent },
         { path: 'help-videos', component: HelpVideos },
         { path: 'courses', component: Courses },
+        { path: 'cards', component: Cards },
         { path: 'conversations', component: Conversations },
         { path: 'customer360', component: Customer360 },
         { path: 'kb', component: Kb },

@@ -366,6 +366,7 @@ onMounted(reload)
         <div class="c-ops ops">
           <button class="act ghost" @click="openEdit(row)">编辑</button>
           <button class="act ghost" @click="editCourse(row)">编辑课程</button>
+          <button class="act ghost" @click="router.push({ path: '/cards', query: { productId: row.id } })">卡片设计</button>
           <button v-if="row.state === 'preparing'" class="act" @click="doPublish(row.id)">{{ confirmKey === 'pub:' + row.id ? '确认上架？' : '上架' }}</button>
           <button v-if="row.state === 'onsale'" class="act ghost" @click="doPublish(row.id)">{{ confirmKey === 'pub:' + row.id ? '确认重上？' : '重新上架' }}</button>
           <button v-if="row.state === 'onsale'" class="act warn" @click="doUnpublish(row.id)">

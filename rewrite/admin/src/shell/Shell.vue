@@ -9,6 +9,7 @@ import {
   ChartColumn,
   Package,
   GraduationCap,
+  CreditCard,
   Store,
   LayoutGrid,
   Clapperboard,
@@ -47,6 +48,7 @@ const NAV = [
     items: [
       { label: '商品管理', path: '/products', icon: Package },
       { label: '课程管理', path: '/courses', icon: GraduationCap },
+      { label: '卡片设计', path: '/cards', icon: CreditCard },
       { label: '小程序橱窗', path: '/showcase', icon: Store },
       { label: '首页内容', path: '/home-content', icon: LayoutGrid },
       { label: '帮助视频', path: '/help-videos', icon: Clapperboard },
