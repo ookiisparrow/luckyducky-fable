@@ -8,7 +8,26 @@ export interface StatCard {
   note?: string
 }
 
-export function mapDashboard(r: unknown): { cards: StatCard[]; funnel: StatCard[]; alerts: Array<{ label: string; ids: string[] }> } | null {
+export interface SegStat {
+  name: string
+  count: number
+}
+export interface ActivityItem {
+  type: string
+  text: string
+  at: number
+}
+export interface DashboardVM {
+  cards: StatCard[]
+  funnel: StatCard[]
+  alerts: Array<{ label: string; ids: string[] }>
+  hot: SegStat[] // 最多人看完的段位（换皮误删·后端 dashboard.ts hot=top(doneCount) 仍返回·B5）
+  stuck: SegStat[] // 最多人卡住停留的段位
+  recent: ActivityItem[] // 最近动态四类事件流（订单/激活/进课/退款·换皮退成纯订单列表）
+  approxSeg: boolean // 热点/卡点为抽样近似（诚实标注·透传 approx.hot）
+}
+
+export function mapDashboard(r: unknown): DashboardVM | null {
   const d = (r && typeof r === 'object' ? r : {}) as Record<string, any>
   if (d.ok !== true || !d.stats) return null
   const s = d.stats
@@ -33,7 +52,13 @@ export function mapDashboard(r: unknown): { cards: StatCard[]; funnel: StatCard[
     { label: '退款金额不符', ids: list(t.refundMismatch) },
     { label: '审批后卡单', ids: list(t.stuckRefunds) },
   ].filter((a) => a.ids.length) // 无异常不渲染空警报（不吓人也不假绿：有则必显）
-  return { cards, funnel, alerts }
+  // 热点/卡点段位（B5·后端仍返回·换皮误以为「无数据源」删掉）：top(doneCount)/top(stuckCount)＝[{segId,name,count}]
+  const seg = (v: unknown): SegStat[] =>
+    Array.isArray(v) ? v.map((s: any) => ({ name: String((s && (s.name || s.segId)) || ''), count: Number(s && s.count) || 0 })).filter((s) => s.name) : []
+  const recent: ActivityItem[] = Array.isArray(d.recentActivity)
+    ? d.recentActivity.map((e: any) => ({ type: String((e && e.type) || ''), text: String((e && e.text) || ''), at: Number(e && e.at) || 0 })).filter((e) => e.text)
+    : []
+  return { cards, funnel, alerts, hot: seg(d.hot), stuck: seg(d.stuck), recent, approxSeg: !!(d.approx && d.approx.hot) }
 }
 
 // 手机号掩码（PII·根因#3 信任边界）：列表只显掩码，抽屉给操作员看完整号（联系买家/填面单）。
