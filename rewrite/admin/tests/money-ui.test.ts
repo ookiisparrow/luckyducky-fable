@@ -93,12 +93,16 @@ describe('售后行映射（裁决入口收窄）', () => {
   it('大白话：只有待审核能同意/拒绝；金额恒两位；退什么带规格件数；脏档剔除', () => {
     const rows = mapRefundRows([
       { _id: 'a1', orderId: 'o1', status: 'applied', name: '小熊', spec: 'sku测试文案', qty: 1, refundAmount: 2, reason: '测试', appliedAt: 1783046400000 },
-      { _id: 'a2', orderId: 'o2', status: 'refunded', name: 'x', qty: 1, refundAmount: 10 },
-      { orderId: 'o3' },
+      { _id: 'a2', orderId: 'o2', status: 'refunded', name: 'x', qty: 1, refundAmount: 10, refundedAt: 1783046460000 },
+      { _id: 'a3', orderId: 'o3', status: 'rejected', name: 'y', qty: 1, refundAmount: 5, rejectReason: '激活卡已拆用' },
+      { orderId: 'o4' },
     ])
-    expect(rows).toHaveLength(2)
+    expect(rows).toHaveLength(3)
     expect(rows[0]).toMatchObject({ canDecide: true, refundAmountLabel: '¥2.00' })
     expect(rows[0].what).toBe('小熊（sku测试文案） ×1')
     expect(rows[1].canDecide).toBe(false) // 已退款不可再裁决
+    expect(rows[1].refundedAtLabel).not.toBe('') // 已退款结果区：到账时间
+    expect(rows[2].rejectReason).toBe('激活卡已拆用') // 已拒绝结果区：原因
+    expect(rows[0].refundedAtLabel).toBe('') // 未退款无到账时间·不谎报
   })
 })

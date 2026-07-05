@@ -13,6 +13,8 @@ const match = ref<BillMatchVM | null>(null)
 const message = ref('')
 const billDate = ref('')
 const busy = ref(false)
+const from = ref('') // 自定义对账区间起（空=默认近 30 天窗）
+const to = ref('')
 
 const totals = computed(() => {
   if (!recon.value) return null
@@ -20,14 +22,31 @@ const totals = computed(() => {
   const orders = recon.value.daily.reduce((s, d) => s + d.orders, 0)
   return { income: find('收入'), refund: find('退款'), net: find('净额'), orders }
 })
+// 内部异常总笔数（B2 修后·换皮误当数组恒 0·明细块永不渲染）
+const exCount = computed(() => (recon.value ? recon.value.exceptions.reduce((n, e) => n + e.ids.length, 0) : 0))
 
 async function reload() {
   message.value = '加载中…'
-  const [r, m] = await Promise.all([getReconciliation(), getBillMatch()])
+  const [r, m] = await Promise.all([getReconciliation(from.value, to.value), getBillMatch(from.value, to.value)])
   if ((r as any).error === 'SESSION_LOST' || (m as any).error === 'SESSION_LOST') return
   recon.value = mapRecon(r)
   match.value = mapBillMatch(m)
   message.value = recon.value || match.value ? '' : '加载失败：' + String((r as any).error || (m as any).error || '')
+}
+
+// 自定义对账区间（后端 from/to 就绪·换皮丢了这个·只能看死 30 天窗）
+function applyRange() {
+  const ok = (s: string) => !s || /^\d{4}-\d{2}-\d{2}$/.test(s)
+  if (!ok(from.value) || !ok(to.value)) {
+    message.value = '日期格式 YYYY-MM-DD'
+    return
+  }
+  void reload()
+}
+function clearRange() {
+  from.value = ''
+  to.value = ''
+  void reload()
 }
 
 async function pullBill() {
@@ -70,14 +89,33 @@ onMounted(reload)
       </button>
     </header>
 
+    <div class="range">
+      <label>对账区间</label>
+      <input v-model="from" placeholder="起 YYYY-MM-DD" class="date-in" />
+      <span class="dash">→</span>
+      <input v-model="to" placeholder="止 YYYY-MM-DD" class="date-in" />
+      <button class="range-btn" @click="applyRange">查询</button>
+      <button v-if="from || to" class="range-clear" @click="clearRange">近 30 天</button>
+      <span class="range-note">留空＝默认近 30 天窗</span>
+    </div>
+
     <p v-if="message" class="status">{{ message }}</p>
 
     <template v-if="totals">
-      <div class="balance">
+      <div class="balance" :class="{ warn: exCount }">
         <CircleCheck :size="20" :stroke-width="1.8" />
         <div>
-          <div class="balance-t">内部账已对平</div>
+          <div class="balance-t">{{ exCount ? `内部有 ${exCount} 笔异常待处理` : '内部账已对平' }}</div>
           <div class="balance-s">应收 {{ totals.income }} − 退款 {{ totals.refund }} = 净额 {{ totals.net }}</div>
+        </div>
+      </div>
+
+      <!-- 内部异常明细块（bug B2 修·换皮误当数组恒 0 永不渲染）：feeMismatch/refundMismatch/stuckRefunds 带单号 -->
+      <div v-if="recon && recon.exceptions.length" class="ex-block">
+        <h3 class="ex-h">内部异常明细（须人工处理）</h3>
+        <div v-for="e in recon.exceptions" :key="e.label" class="ex-group">
+          <div class="ex-label">{{ e.label }}（{{ e.ids.length }}）</div>
+          <p v-for="id in e.ids" :key="id" class="ex-id">{{ id }}</p>
         </div>
       </div>
 
@@ -199,6 +237,81 @@ h1 {
 }
 .status {
   font-size: 13px;
+  color: var(--ld-content-2);
+}
+.range {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 16px;
+  font-size: 12.5px;
+  color: var(--ld-content-2);
+}
+.date-in {
+  padding: 7px 11px;
+  border: 1px solid var(--ld-line-strong);
+  border-radius: 8px;
+  font-size: 12.5px;
+  background: var(--ld-bg);
+  color: var(--ld-ink);
+  font-family: var(--ld-font-mono);
+  width: 148px;
+}
+.dash {
+  color: var(--ld-content-2);
+}
+.range-btn {
+  padding: 7px 16px;
+  border: none;
+  border-radius: 999px;
+  background: var(--ld-purple-ink);
+  color: #fff;
+  font-size: 12.5px;
+  cursor: pointer;
+}
+.range-clear {
+  padding: 7px 14px;
+  border: 1px solid var(--ld-line);
+  border-radius: 999px;
+  background: var(--ld-bg);
+  color: var(--ld-content);
+  font-size: 12.5px;
+  cursor: pointer;
+}
+.range-note {
+  font-size: 11px;
+  color: var(--ld-content-2);
+}
+.balance.warn {
+  background: var(--ld-bg-red-soft);
+  border-color: var(--ld-red-line);
+  color: var(--ld-red);
+}
+.ex-block {
+  padding: 16px 20px;
+  margin-bottom: 18px;
+  background: var(--ld-bg);
+  border: 1px solid var(--ld-red-line);
+  border-radius: var(--ld-radius-l);
+}
+.ex-h {
+  margin: 0 0 10px;
+  font-size: 13px;
+  color: var(--ld-red);
+}
+.ex-group {
+  margin-top: 8px;
+}
+.ex-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ld-content);
+}
+.ex-id {
+  margin: 2px 0;
+  font-size: 12px;
+  font-family: var(--ld-font-mono);
   color: var(--ld-content-2);
 }
 .balance {

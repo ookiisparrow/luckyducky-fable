@@ -18,9 +18,12 @@ const TABS = [
 const tab = ref('applied')
 const counts = ref<Record<string, number>>({})
 const rows = ref<RefundRowVM[]>([])
+const cursor = ref<unknown>(null)
+const hasMore = ref(false)
 const message = ref('')
 const busy = ref(false)
-const search = ref('')
+const search = ref('') // 搜索框输入
+const activeQ = ref('') // 已提交搜索词（空=按标签·跨全部状态服务端命中）
 
 interface Verdict {
   loading: boolean
@@ -36,24 +39,46 @@ const checkCard = ref(false)
 const rejecting = ref(false)
 const rejectReason = ref('')
 
-const shown = computed(() => {
-  const q = search.value.trim().toLowerCase()
-  if (!q) return rows.value
-  return rows.value.filter((r) => r.orderId.toLowerCase().includes(q))
-})
 const canApprove = computed(() => !!decideRow.value?.canDecide && checkPkg.value && checkCard.value && !busy.value)
 
 async function reload() {
   message.value = '加载中…'
-  const [r, c] = await Promise.all([listRefunds(tab.value), refundCounts()])
+  const [r, c] = await Promise.all([listRefunds(tab.value, undefined, 20, activeQ.value), refundCounts()])
   if ((r as any).error === 'SESSION_LOST') return
-  rows.value = r.ok ? mapRefundRows(r.list) : []
+  rows.value = r.ok ? mapRefundRows((r as any).list) : []
+  cursor.value = r.ok ? (r as any).nextCursor : null
+  hasMore.value = !!(r.ok && (r as any).hasMore)
   if (c.ok && c.counts) counts.value = c.counts as Record<string, number>
   message.value = r.ok ? '' : '加载失败：' + String(r.error || '')
 }
 
+// 加载更多（游标分页·根因#7·换皮丢了这个·退款首页 20 条封顶·第 21 单起翻不到）
+async function more() {
+  if (!hasMore.value || cursor.value == null) return
+  const r = await listRefunds(tab.value, cursor.value, 20, activeQ.value)
+  if (!r.ok) return
+  const seen = new Set(rows.value.map((x) => x.id))
+  rows.value = [...rows.value, ...mapRefundRows((r as any).list).filter((x) => !seen.has(x.id))]
+  cursor.value = (r as any).nextCursor
+  hasMore.value = !!(r as any).hasMore
+}
+
 function pickTab(k: string) {
   tab.value = k
+  search.value = ''
+  activeQ.value = '' // 切标签退出搜索
+  void reload()
+}
+function doSearch() {
+  const t = search.value.trim()
+  if (t === activeQ.value) return
+  activeQ.value = t
+  void reload()
+}
+function clearSearch() {
+  if (!activeQ.value && !search.value) return
+  search.value = ''
+  activeQ.value = ''
   void reload()
 }
 
@@ -131,14 +156,19 @@ onMounted(reload)
       </div>
       <div class="searchbox">
         <Search :size="15" :stroke-width="1.8" class="search-ico" />
-        <input v-model="search" placeholder="搜索订单号（已载）" />
+        <input v-model="search" placeholder="搜索订单号（精确·跨全部状态）" @keyup.enter="doSearch" />
+        <button class="search-btn" @click="doSearch">搜索</button>
       </div>
     </div>
-    <p class="note">状态计数为云端实时总数、切换状态走服务端筛选——不受当前分页影响。</p>
+    <p class="note">状态计数为云端实时总数、切换状态走服务端筛选、搜索按订单号跨全部状态精确命中——都不受当前分页影响。</p>
+    <div v-if="activeQ" class="searching">
+      搜索订单号「<b>{{ activeQ }}</b>」的结果（跨全部状态）
+      <button class="link" @click="clearSearch">清除搜索</button>
+    </div>
 
     <p v-if="message" class="status">{{ message }}</p>
 
-    <div v-if="shown.length" class="table">
+    <div v-if="rows.length" class="table">
       <div class="thead">
         <span>订单号</span>
         <span>申请时间</span>
@@ -147,7 +177,7 @@ onMounted(reload)
         <span>状态</span>
         <span class="r">操作</span>
       </div>
-      <div v-for="row in shown" :key="row.id" class="trow">
+      <div v-for="row in rows" :key="row.id" class="trow">
         <span class="oid">{{ row.orderId }}</span>
         <span class="time">{{ row.timeLabel }}</span>
         <div class="what">
@@ -164,10 +194,11 @@ onMounted(reload)
         </div>
       </div>
       <div class="tfoot">
-        <span>已加载 {{ rows.length }} 单{{ counts.all != null ? ' / ' + counts.all + ' 单' : '' }}</span>
+        <span>已加载 {{ rows.length }} 单{{ !activeQ && counts.all != null ? ' / ' + counts.all + ' 单' : '' }}</span>
+        <button v-if="hasMore" class="more" @click="more">加载更多</button>
       </div>
     </div>
-    <p v-else-if="!message" class="status-soft">这一栏没有售后单</p>
+    <p v-else-if="!message" class="status-soft">{{ activeQ ? '没有匹配该订单号的售后单' : '这一栏没有售后单' }}</p>
 
     <div v-if="decideRow" class="drawer-mask" @click.self="closeDecide">
       <aside class="drawer">
@@ -183,6 +214,12 @@ onMounted(reload)
           <div class="srow"><span>退款商品</span><strong>{{ decideRow.what }}</strong></div>
           <div class="srow"><span>退款金额</span><strong>{{ decideRow.refundAmountLabel }}</strong></div>
           <div class="srow"><span>买家原因</span><span class="sval">{{ decideRow.reason || '—' }}</span></div>
+        </div>
+
+        <!-- 结果区（已退款/已拒绝单·换皮丢了这块）：到账时间 / 拒绝原因 -->
+        <div v-if="decideRow.refundedAtLabel || decideRow.rejectReason" class="result" :class="decideRow.status">
+          <template v-if="decideRow.refundedAtLabel">✓ 已原路退回微信 · 到账 {{ decideRow.refundedAtLabel }}</template>
+          <template v-else>✕ 已拒绝 · 原因：{{ decideRow.rejectReason }}</template>
         </div>
 
         <div v-if="verdict && !verdict.loading" class="verdict" :class="verdict.entered ? 'lost' : 'ok'">
@@ -316,11 +353,57 @@ h1 {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 8px 14px;
+  padding: 4px 4px 4px 14px;
   border: 1px solid var(--ld-line);
   border-radius: 999px;
   background: var(--ld-bg);
-  min-width: 240px;
+  min-width: 280px;
+}
+.search-btn {
+  flex: none;
+  padding: 6px 14px;
+  border: none;
+  border-radius: 999px;
+  background: var(--ld-purple-ink);
+  color: #fff;
+  font-size: 12.5px;
+  cursor: pointer;
+}
+.searching {
+  margin: 0 0 12px;
+  font-size: 12.5px;
+  color: var(--ld-content);
+}
+.link {
+  margin-left: 10px;
+  border: none;
+  background: none;
+  color: var(--ld-brand);
+  cursor: pointer;
+  font-size: 12px;
+}
+.result {
+  padding: 11px 14px;
+  border-radius: 10px;
+  font-size: 12.5px;
+  font-weight: 600;
+}
+.result.refunded {
+  background: var(--ld-bg-green-soft);
+  color: var(--ld-green);
+}
+.result.rejected {
+  background: var(--ld-bg-red-soft);
+  color: var(--ld-red);
+}
+.more {
+  padding: 7px 18px;
+  border: 1px solid var(--ld-line);
+  border-radius: 999px;
+  background: var(--ld-bg);
+  cursor: pointer;
+  font-size: 12.5px;
+  color: var(--ld-content);
 }
 .search-ico {
   color: var(--ld-content-2);
@@ -444,6 +527,9 @@ h1 {
   border: 1px solid var(--ld-line);
 }
 .tfoot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
   padding: 12px 20px;
   border-top: 1px solid var(--ld-line);
   font-size: 12px;

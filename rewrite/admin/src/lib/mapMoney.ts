@@ -139,6 +139,8 @@ export interface RefundRowVM {
   reason: string
   timeLabel: string
   canDecide: boolean
+  refundedAtLabel: string // 已退款单：到账时间（空=未退/无）
+  rejectReason: string // 已拒绝单：拒绝原因（买家可见）
 }
 
 export function mapRefundRows(list: unknown): RefundRowVM[] {
@@ -158,6 +160,8 @@ export function mapRefundRows(list: unknown): RefundRowVM[] {
       reason: String(a.reason || ''),
       timeLabel: dateTime(a.appliedAt),
       canDecide: String(a.status) === 'applied', // 只有待审核可同意/拒绝（云端原子抢占裁决·这里入口收窄）
+      refundedAtLabel: a.refundedAt ? dateTime(a.refundedAt) : '', // 结果区：到账时间
+      rejectReason: String(a.rejectReason || ''), // 结果区：拒绝原因
     })
   }
   return out

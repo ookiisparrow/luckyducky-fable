@@ -24,11 +24,23 @@ describe('外包账号与批次', () => {
 
 describe('对账映射（approx 诚实·wxOnly 最危险）', () => {
   it('大白话：累计三卡金额两位小数；窗内触顶标近似；「微信有我方无」大于 0 必标红', () => {
-    const recon = mapRecon({ ok: true, cumulative: { income: 150, refund: 30, net: 120 }, daily: [{ day: '2026-07-01', income: 100, refund: 0, net: 100, orders: 1, refunds: 0 }], approx: true, exceptions: [] })!
+    const recon = mapRecon({
+      ok: true,
+      cumulative: { income: 150, refund: 30, net: 120 },
+      daily: [{ day: '2026-07-01', income: 100, refund: 0, net: 100, orders: 1, refunds: 0 }],
+      approx: true,
+      exceptions: { feeMismatch: ['o-bad'], refundMismatch: [], stuckRefunds: ['a-stuck'] },
+    })!
     expect(recon.cumulative[2]).toEqual({ label: '净额', value: '¥120.00' })
     expect(recon.approxNote).toContain('近似')
+    // B2 修：exceptions 是 {feeMismatch,refundMismatch,stuckRefunds} 对象·结构化成带单号明细（有则渲染·空类不显）
+    expect(recon.exceptions).toEqual([
+      { label: '金额不符单（发货前须核对流水解除）', ids: ['o-bad'] },
+      { label: '审批后卡单（死信·退款未走通）', ids: ['a-stuck'] },
+    ])
     const clean = mapRecon({ ok: true, cumulative: { income: 0, refund: 0, net: 0 }, daily: [], approx: false })!
     expect(clean.approxNote).toBe('')
+    expect(clean.exceptions).toEqual([]) // 无异常空数组·不吓人
     const m = mapBillMatch({ ok: true, summary: { matched: 5, wxOnly: 1, oursOnly: 0, amountMismatch: 0 }, discrepancies: { wxOnly: [{ transactionId: 'tx-ghost', amount: 5, date: '2026-07-01' }], oursOnly: [], amountMismatch: [] } })!
     expect(m.summary[1]).toMatchObject({ danger: true }) // wxOnly>0 标红
     expect(m.summary[0].danger).toBeFalsy() // 已平不标红

@@ -13,8 +13,9 @@ export const listBatchCodes = (batchId: string) => client.post('listBatchCodes',
 export const getSettings = () => client.post('getSettings')
 export const saveSettings = (patch: Record<string, unknown>) => client.post('saveSettings', patch)
 
-export const getReconciliation = () => client.post('getReconciliation')
-export const getBillMatch = () => client.post('getBillMatch')
+// from/to='YYYY-MM-DD' 自定义对账区间（后端支持·不传=近 30 天默认窗·根因#7）
+export const getReconciliation = (from?: string, to?: string) => client.post('getReconciliation', { from: from || undefined, to: to || undefined })
+export const getBillMatch = (from?: string, to?: string) => client.post('getBillMatch', { from: from || undefined, to: to || undefined })
 export const downloadBill = (date: string) => client.post('downloadBill', { date })
 
 export const listInventory = () => client.post('listInventory')
