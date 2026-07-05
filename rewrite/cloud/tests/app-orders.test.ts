@@ -80,6 +80,12 @@ describe('createOrder · 契约与定价（黄金 orders-money）', () => {
     expect(r.order.goods).toBe(59.7)
   })
 
+  it('大白话：占位券吞穿地板即拒单——单件 19.9 被 20 元券抵到 0 元不白送（深审 2026-07-05）', async () => {
+    control.seed('products', [{ _id: 'p9', id: 'p9', name: '小件', price: 19.9 }])
+    const r = await order([{ id: 'p9', qty: 1 }])
+    expect(r.error).toBe('COUPON_EXCEEDS_GOODS')
+  })
+
   it('大白话：地址四要素缺一拒、电话过短拒；超长截断、非白名单字段丢弃', async () => {
     expect((await order([{ id: 'p1', qty: 1 }], { ...ADDR, detail: '' })).error).toBe('BAD_ADDRESS')
     expect((await order([{ id: 'p1', qty: 1 }], { ...ADDR, phone: '123' })).error).toBe('BAD_ADDRESS')

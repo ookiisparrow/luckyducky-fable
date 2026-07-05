@@ -2,6 +2,90 @@ import { toFen, asFen, fenToYuan, refundShareFen, AFTERSALE_STATUS } from '@ldrw
 import { callFlow, pageQuery } from '../../../kit'
 import { reply, ensure, activationFor, type Ctx } from '../lib'
 
+// —— 管理员越规退款（决策§26·客服端退货管理权限 refund:manage·净新增·超出旧线 92 parity）——
+// 越过**资格规则**（一行一售后锁/拒后锁死/已进课不可退）主动发起退款；但**保留钱守恒不变量**：退款额仍
+// ≤ 该行实付分摊 − 全单已退额度（refundShareFen 单源公式封顶·退超实付被 NOTHING_LEFT 挡）。越的是「能不能
+// 退」的退货规则，不越「退多少」的钱红线——退超实付不是退货规则、是资损洞。直建 approved 售后单（越客户
+// applied→approved 流转·管理员发起）+ 触发退款工作流；未受理条件回滚 approved→applied 可重试。写类自动审计。
+export async function overrideRefund({ db, data }: Ctx) {
+  const orderId = String((data && data.orderId) || '')
+  const reqLine = String((data && data.lineId) || '')
+  const reason = String((data && data.reason) || '').trim().slice(0, 100)
+  if (!orderId || !reqLine || !reason) return reply(400, { ok: false, error: 'BAD_ARGS' })
+
+  const cfg = await db.collection('config').doc('pay').get().catch(() => null)
+  const flowId = cfg && cfg.data && cfg.data.refundFlowId
+  if (!flowId) return reply(400, { ok: false, error: 'REFUND_FLOW_NOT_CONFIGURED' })
+
+  const got = await db.collection('orders').doc(orderId).get().catch(() => null)
+  if (!got || !got.data) return reply(400, { ok: false, error: 'NO_ORDER' })
+  const order = got.data
+  if (!['paid', 'shipped', 'done'].includes(order.status)) return reply(400, { ok: false, error: 'BAD_STATUS:' + order.status })
+
+  const line = (order.items || []).find((it: any) => (it.lineId || it.productId) === reqLine)
+  if (!line) return reply(400, { ok: false, error: 'UNKNOWN_ITEM' })
+  const lineId = line.lineId || line.productId
+
+  // 越过资格：不看 refundable/enteredQty/既有售后（含 rejected），按整行件数算分摊上限。
+  // 钱守恒保留：refundShareFen 封顶「该行实付分摊」再减「全单已提交退款额」（used＝applied/approved/refunded 之和）。
+  const amountFen = toFen(Number(order.amount))
+  const goodsFen = toFen(Number(order.goods))
+  const itemFen = asFen(toFen(line.price) * (line.qty || 1))
+  const exist = await db.collection('afterSales').where({ orderId }).get().catch(() => ({ data: [] }))
+  const used = asFen(
+    exist.data
+      .filter((a: any) => ['applied', 'approved', 'refunded'].includes(a.status))
+      .reduce((s: number, a: any) => s + toFen(Number(a.refundAmount)), 0)
+  )
+  const refundFen = refundShareFen(amountFen, goodsFen, itemFen, used)
+  if (refundFen <= 0) return reply(400, { ok: false, error: 'NOTHING_LEFT' })
+
+  // 越规单独立 _id（客户 orderId__lineId 可能被 rejected 单占用）：加操作时戳后缀·管理员单点低并发
+  const asId = orderId + '__' + lineId + '__ovr' + Date.now()
+  await ensure(db, 'afterSales')
+  const now = Date.now()
+  await db
+    .collection('afterSales')
+    .add({
+      data: {
+        _id: asId,
+        orderId,
+        _openid: order._openid,
+        lineId,
+        productId: line.productId,
+        name: line.name,
+        spec: line.spec || '',
+        qty: line.qty || 1,
+        itemTotal: fenToYuan(itemFen),
+        refundAmount: fenToYuan(refundFen),
+        reason,
+        status: 'approved', // 越规直批（管理员发起·非客户 applied→approved）
+        appliedAt: now,
+        approvedAt: now,
+        overridden: true, // 留痕：越规发起（对账/客诉可溯）
+      },
+    })
+    .catch(() => {})
+
+  const r = await callFlow(String(flowId), {
+    out_trade_no: orderId,
+    out_refund_no: asId,
+    reason: reason.slice(0, 80),
+    amount: { refund: refundFen, total: toFen(order.amount), currency: 'CNY' },
+  })
+  if (!r || !(r.status || r.refund_id || r.out_refund_no)) {
+    console.error('overrideRefund 工作流未受理', asId)
+    // 条件回滚（同 approveRefund·仅 approved 才回 applied·防退款回调抢先 refunded 被打回二次退款）
+    await db
+      .collection('afterSales')
+      .where({ _id: asId, status: 'approved' })
+      .update({ data: { status: 'applied' } })
+      .catch(() => {})
+    return reply(500, { ok: false, error: 'REFUND_TRIGGER_FAIL' })
+  }
+  return reply(200, { ok: true, id: asId })
+}
+
 // —— 售后退款（链10：审核 + 触发退款工作流；金额在申请时已云端分摊算定）——
 // 列表游标分页（根因#7）：无参=首页 200（兼容旧控制台读 .list）。
 // 服务端筛选/搜索（根因#7 计数/筛选/搜索失真·与订单同治）：status 云端 where 过滤、q=订单号精确

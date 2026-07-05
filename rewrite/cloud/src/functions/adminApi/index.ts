@@ -79,6 +79,7 @@ const ACTIONS: Record<string, (ctx: Ctx) => Promise<any>> = {
   getRefundDetail: refunds.getRefundDetail,
   approveRefund: refunds.approveRefund,
   rejectRefund: refunds.rejectRefund,
+  overrideRefund: refunds.overrideRefund,
   // 看板 / 对账 / 库存（批14）
   getDashboard: dashboard.getDashboard,
   getReconciliation: reconciliation.getReconciliation,
@@ -173,6 +174,8 @@ const ACTION_CAPS: Record<string, string> = {
   getSessionCustomer360: 'agent:handle',
   // 快捷回复读知识库（kb=公司 FAQ·非客户 PII）：外包可读；saveKb 仍默认拒 admin:write（仅超管维护）
   listKb: 'agent:handle',
+  // 越规退款（决策§26·退货管理权限）：单立 refund:manage 能力——超管 '*' 天然匹配，未来可给中间角色单授而不放全量 admin:write
+  overrideRefund: 'refund:manage',
 }
 // 默认拒：未登记 ACTION_CAPS 的 action 须此高权默认 cap——非超管默认进不去钱/状态/管理 action。
 const ADMIN_DEFAULT_CAP = 'admin:write'

@@ -119,6 +119,9 @@ export const createOrder = withOpenId(
     // 金额全程「分」整数运算（设计约束#4）；存库记元（与现网数据兼容），由分精确换算
     const goodsFen = asFen(items.reduce((s, it) => s + toFen(it.price) * it.qty, 0))
     const amountFen = asFen(Math.max(0, goodsFen + toFen(SHIP) - toFen(COUPON)))
+    // 占位券 fail-closed（深审 2026-07-05）：货款被券抵到 0 即拒——mp 结算页展示的抵扣与实收永远一致，
+    // 不给「上架低价 SKU 即白送」留面；0 元直付路径只服务将来显式免费场景。真券系统落地时随新规则重写。
+    if (goodsFen > 0 && amountFen === 0) return err(ERR.COUPON_EXCEEDS_GOODS)
     const goods = fenToYuan(goodsFen)
     const amount = fenToYuan(amountFen)
 

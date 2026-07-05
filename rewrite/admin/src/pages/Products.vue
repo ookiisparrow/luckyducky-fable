@@ -1,7 +1,9 @@
 <script setup lang="ts">
-// 商品管理（M3 批3）：三态列表 + 编辑（整档 round-trip·只绑核心字段防覆盖抹值）+ 图片上传（前端压缩到限内）
-// + 上架/下架/恢复/删除（危操作两步确认·no-alert 纪律）。参数表/详情段落/材料清单高级编辑随内容批补（编辑不丢值）。
-import { ref, onMounted } from 'vue'
+// 商品管理（design/console.pen S11 视觉·M3 UI 批3）：页头+流水线副标+筛选 chip（真计数）+ 搜索（按名）
+// + 三态表格（关联课程/规格·图列）+ 编辑器（整档 round-trip·图片压缩·危操作两步确认，逻辑批3 未动）。
+// 设计稿「6 步上新进度」需分步完成态数据（上新向导 S5-S9 才有），当前无源——省略并记待办，不编进度。
+import { ref, computed, onMounted } from 'vue'
+import { Search, Trash2 } from 'lucide-vue-next'
 import { listDrafts, saveDraft, deleteDraft, uploadImage, publishProduct, unpublishProduct, republishProduct } from '../api/products'
 import { mapDraftRows, publishErrorText, b64SizeOk, type DraftRowVM } from '../lib/mapProducts'
 
@@ -11,6 +13,29 @@ const busy = ref(false)
 const confirmKey = ref('') // 两步确认（`del:<id>` / `off:<id>`）
 const edit = ref<Record<string, any> | null>(null)
 const coverPreview = ref('')
+const search = ref('')
+const filter = ref<'all' | 'onsale' | 'preparing' | 'unlisted'>('all')
+
+const counts = computed(() => ({
+  all: rows.value.length,
+  onsale: rows.value.filter((r) => r.state === 'onsale').length,
+  preparing: rows.value.filter((r) => r.state === 'preparing').length,
+  unlisted: rows.value.filter((r) => r.state === 'unlisted').length,
+}))
+const FILTERS = [
+  { key: 'all', label: '全部' },
+  { key: 'onsale', label: '在售' },
+  { key: 'preparing', label: '筹备中' },
+  { key: 'unlisted', label: '已下架' },
+] as const
+const shown = computed(() => {
+  const q = search.value.trim().toLowerCase()
+  return rows.value.filter(
+    (r) => (filter.value === 'all' || r.state === filter.value) && (!q || r.name.toLowerCase().includes(q) || r.id.toLowerCase().includes(q))
+  )
+})
+const imgCount = (r: DraftRowVM) => (Array.isArray((r.raw as any).images) ? (r.raw as any).images.length : 0)
+const courseOf = (r: DraftRowVM) => String((r.raw as any).courseId || '')
 
 async function reload() {
   message.value = '加载中…'
@@ -134,41 +159,73 @@ onMounted(reload)
 </script>
 
 <template>
-  <div>
-    <h2>商品管理</h2>
-    <div class="topbar">
-      <button class="act" @click="newProduct">+ 新建商品</button>
-      <span v-if="message" class="status">{{ message }}</span>
+  <div class="page">
+    <header class="page-head">
+      <div>
+        <h1>商品与上新</h1>
+        <p class="sub">一款商品一条流水线：产品图片 → 商品信息 → SKU → 教学视频 → 二维码卡片 → 码批次</p>
+      </div>
+      <button class="btn-primary" @click="newProduct">＋ 新建商品</button>
+    </header>
+
+    <div class="toolbar">
+      <div class="chips">
+        <button
+          v-for="f in FILTERS"
+          :key="f.key"
+          class="chip"
+          :class="{ on: filter === f.key }"
+          @click="filter = f.key"
+        >
+          {{ f.label }} <span class="chip-n">{{ counts[f.key] }}</span>
+        </button>
+      </div>
+      <div class="searchbox">
+        <Search :size="15" :stroke-width="1.8" class="search-ico" />
+        <input v-model="search" placeholder="搜索商品名 / 编号" />
+      </div>
     </div>
 
-    <table v-if="rows.length">
-      <thead>
-        <tr><th>封面</th><th>商品</th><th>价格</th><th>规格</th><th>状态</th><th>操作</th></tr>
-      </thead>
-      <tbody>
-        <tr v-for="row in rows" :key="row.id">
-          <td><img v-if="row.coverUrl" :src="row.coverUrl" class="thumb" /><span v-else class="thumb empty">无图</span></td>
-          <td>{{ row.name }}<div class="pid">{{ row.id }}</div></td>
-          <td>{{ row.priceLabel }}</td>
-          <td>{{ row.skuCount }} 个</td>
-          <td><span :class="['state', row.state]">{{ row.stateLabel }}</span></td>
-          <td>
-            <button class="act ghost" @click="openEdit(row)">编辑</button>
-            <button v-if="row.raw.courseId" class="act ghost" @click="$router.push('/courses?courseId=' + row.raw.courseId)">编辑课程</button>
-            <button v-if="row.state === 'preparing'" class="act" @click="doPublish(row.id)">上架</button>
-            <button v-if="row.state === 'onsale'" class="act ghost" @click="doPublish(row.id)">重新上架</button>
-            <button v-if="row.state === 'onsale'" class="act warn" @click="doUnpublish(row.id)">
-              {{ confirmKey === 'off:' + row.id ? '确认下架？' : '下架' }}
-            </button>
-            <button v-if="row.state === 'unlisted'" class="act" @click="doRepublish(row.id)">恢复销售</button>
-            <button class="act warn" @click="doDelete(row.id)">
-              {{ confirmKey === 'del:' + row.id ? '连已上架一起删？' : '删除' }}
-            </button>
-          </td>
-        </tr>
-      </tbody>
-    </table>
-    <p v-else-if="!message" class="status-soft">还没有商品，点「新建商品」开始</p>
+    <p v-if="message" class="status">{{ message }}</p>
+
+    <div v-if="shown.length" class="table">
+      <div class="thead">
+        <span class="c-prod">商品</span>
+        <span class="c-course">关联课程</span>
+        <span class="c-price">价格</span>
+        <span class="c-spec">规格 / 图</span>
+        <span class="c-state">状态</span>
+        <span class="c-ops">操作</span>
+      </div>
+      <div v-for="row in shown" :key="row.id" class="trow">
+        <div class="c-prod prod">
+          <img v-if="row.coverUrl" :src="row.coverUrl" class="thumb" />
+          <span v-else class="thumb empty">无图</span>
+          <div class="prod-text">
+            <div class="prod-name">{{ row.name }}</div>
+            <div class="pid">{{ row.id }}</div>
+          </div>
+        </div>
+        <span class="c-course course">{{ courseOf(row) || '未关联' }}</span>
+        <span class="c-price price">{{ row.priceLabel }}</span>
+        <span class="c-spec spec">{{ row.skuCount }} 规格 · {{ imgCount(row) }} 图</span>
+        <span class="c-state"><span :class="['state', row.state]">{{ row.stateLabel }}</span></span>
+        <div class="c-ops ops">
+          <button class="act ghost" @click="openEdit(row)">编辑</button>
+          <button v-if="row.state === 'preparing'" class="act" @click="doPublish(row.id)">上架</button>
+          <button v-if="row.state === 'onsale'" class="act ghost" @click="doPublish(row.id)">重新上架</button>
+          <button v-if="row.state === 'onsale'" class="act warn" @click="doUnpublish(row.id)">
+            {{ confirmKey === 'off:' + row.id ? '确认下架？' : '下架' }}
+          </button>
+          <button v-if="row.state === 'unlisted'" class="act" @click="doRepublish(row.id)">恢复销售</button>
+          <button class="icon-btn" :title="confirmKey === 'del:' + row.id ? '连已上架一起删？' : '删除'" @click="doDelete(row.id)">
+            <Trash2 :size="15" :stroke-width="1.8" />
+          </button>
+        </div>
+      </div>
+      <div class="tfoot">共 {{ counts.all }} 款商品<span v-if="filter !== 'all' || search">（当前筛选 {{ shown.length }}）</span></div>
+    </div>
+    <p v-else-if="!message" class="status-soft">{{ rows.length ? '没有符合筛选的商品' : '还没有商品，点「新建商品」开始' }}</p>
 
     <div v-if="edit" class="editor">
       <h3>{{ edit.name || '新商品' }} <span class="pid">{{ edit.id }}</span></h3>
@@ -191,8 +248,8 @@ onMounted(reload)
         <button class="act ghost" @click="delSku(i)">删行</button>
       </div>
       <button class="act ghost" @click="addSku">+ 加规格</button>
-      <p class="hint">参数表 / 详情段落 / 材料清单的可视化编辑随内容批补——本页保存不会丢掉草稿里已有的这些字段。</p>
-      <div class="ops">
+      <p class="hint">参数表 / 详情段落 / 材料清单的可视化编辑随上新向导批补——本页保存不会丢掉草稿里已有的这些字段。</p>
+      <div class="editor-ops">
         <button class="act" :disabled="busy" @click="doSave">保存草稿</button>
         <button class="act ghost" @click="edit = null">关闭</button>
       </div>
@@ -201,78 +258,190 @@ onMounted(reload)
 </template>
 
 <style scoped>
-h2 {
-  margin: 0 0 16px;
-  color: var(--ld-purple-ink);
+.page {
+  max-width: 1160px;
 }
-.topbar {
+.page-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 18px;
+}
+h1 {
+  margin: 0;
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--ld-ink);
+}
+.sub {
+  margin: 4px 0 0;
+  font-size: 12.5px;
+  color: var(--ld-content-2);
+}
+.btn-primary {
+  flex: none;
+  padding: 10px 18px;
+  border: none;
+  border-radius: 999px;
+  background: var(--ld-purple-ink);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.toolbar {
   display: flex;
   align-items: center;
-  gap: 14px;
+  justify-content: space-between;
+  gap: 16px;
   margin-bottom: 14px;
+}
+.chips {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.chip {
+  padding: 6px 14px;
+  border: 1px solid var(--ld-line);
+  border-radius: 999px;
+  background: var(--ld-bg);
+  color: var(--ld-content-2);
+  font-size: 13px;
+  cursor: pointer;
+}
+.chip.on {
+  background: var(--ld-purple-ink);
+  border-color: var(--ld-purple-ink);
+  color: #fff;
+}
+.chip-n {
+  opacity: 0.7;
+  margin-left: 2px;
+}
+.searchbox {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 14px;
+  border: 1px solid var(--ld-line);
+  border-radius: 999px;
+  background: var(--ld-bg);
+  min-width: 240px;
+}
+.search-ico {
+  color: var(--ld-content-2);
+  flex: none;
+}
+.searchbox input {
+  border: none;
+  outline: none;
+  background: transparent;
+  font-size: 13px;
+  width: 100%;
+  color: var(--ld-ink);
 }
 .status {
   font-size: 13px;
-  color: #c0392b;
+  color: var(--ld-red);
 }
 .status-soft {
   font-size: 13px;
-  color: var(--ld-purple-meta);
+  color: var(--ld-content-2);
 }
-table {
-  width: 100%;
-  border-collapse: collapse;
+.table {
   background: var(--ld-bg);
-  border: 1px solid var(--ld-purple-line);
-  border-radius: var(--ld-radius);
+  border: 1px solid var(--ld-line);
+  border-radius: var(--ld-radius-l);
   overflow: hidden;
 }
-th,
-td {
-  padding: 10px 12px;
-  font-size: 13px;
-  text-align: left;
-  border-bottom: 1px solid var(--ld-bg-faint);
+.thead,
+.trow {
+  display: grid;
+  grid-template-columns: 2.4fr 1.2fr 1fr 1.2fr 0.9fr 1.8fr;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 20px;
 }
-th {
+.thead {
   background: var(--ld-bg-lilac);
-  color: var(--ld-purple-meta);
+  font-size: 12px;
+  color: var(--ld-content-2);
+}
+.trow {
+  border-top: 1px solid var(--ld-line);
+  font-size: 13px;
+}
+.prod {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
 }
 .thumb {
-  width: 48px;
-  height: 48px;
+  width: 46px;
+  height: 46px;
+  flex: none;
   object-fit: cover;
-  border-radius: 8px;
-  background: var(--ld-bg-faint);
-  display: inline-block;
+  border-radius: 10px;
+  background: var(--ld-bg-sage);
 }
 .thumb.empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
   font-size: 11px;
-  color: var(--ld-purple-meta);
-  text-align: center;
-  line-height: 48px;
+  color: var(--ld-content-2);
+}
+.prod-text {
+  min-width: 0;
+}
+.prod-name {
+  font-weight: 600;
+  color: var(--ld-ink);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .pid {
   font-size: 11px;
-  color: var(--ld-purple-meta);
-  font-family: ui-monospace, monospace;
+  color: var(--ld-content-2);
+  font-family: var(--ld-font-mono);
+  margin-top: 2px;
+}
+.course {
+  color: var(--ld-content-2);
+}
+.price {
+  font-weight: 600;
+  color: var(--ld-ink);
+}
+.spec {
+  color: var(--ld-content-2);
 }
 .state {
-  padding: 2px 10px;
+  padding: 3px 12px;
   border-radius: 999px;
   font-size: 12px;
 }
 .state.onsale {
-  background: #eefbf1;
-  color: #1e8e4e;
+  background: var(--ld-bg-green-soft);
+  color: var(--ld-green);
 }
 .state.unlisted {
-  background: #fff6f5;
-  color: #c0392b;
+  background: var(--ld-bg-red-soft);
+  color: var(--ld-red);
 }
 .state.preparing {
   background: var(--ld-bg-lilac);
-  color: var(--ld-purple-tab);
+  color: var(--ld-brand-active);
+}
+.ops {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
 }
 .act {
   padding: 5px 12px;
@@ -282,26 +451,46 @@ th {
   color: #fff;
   font-size: 12px;
   cursor: pointer;
-  margin-right: 4px;
-  margin-bottom: 4px;
 }
 .act.ghost {
   background: transparent;
-  color: var(--ld-purple-meta);
-  border: 1px solid var(--ld-purple-line);
+  color: var(--ld-content-2);
+  border: 1px solid var(--ld-line);
 }
 .act.warn {
-  background: #c0392b;
+  background: var(--ld-red);
 }
 .act:disabled {
   opacity: 0.5;
 }
+.icon-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border: 1px solid var(--ld-line);
+  border-radius: 8px;
+  background: var(--ld-bg);
+  color: var(--ld-content-2);
+  cursor: pointer;
+}
+.icon-btn:hover {
+  color: var(--ld-red);
+  border-color: var(--ld-red-line);
+}
+.tfoot {
+  padding: 12px 20px;
+  border-top: 1px solid var(--ld-line);
+  font-size: 12px;
+  color: var(--ld-content-2);
+}
 .editor {
   margin-top: 18px;
-  padding: 18px;
+  padding: 20px;
   background: var(--ld-bg);
-  border: 1px solid var(--ld-purple-line);
-  border-radius: var(--ld-radius);
+  border: 1px solid var(--ld-line);
+  border-radius: var(--ld-radius-l);
   max-width: 720px;
 }
 .editor h3 {
@@ -321,7 +510,7 @@ th {
 }
 .grid label {
   font-size: 12px;
-  color: var(--ld-purple-meta);
+  color: var(--ld-content-2);
   display: flex;
   flex-direction: column;
   gap: 4px;
@@ -332,7 +521,7 @@ th {
 .grid input,
 .skurow input {
   padding: 7px 10px;
-  border: 1px solid var(--ld-purple-line);
+  border: 1px solid var(--ld-line);
   border-radius: 8px;
   font-size: 13px;
 }
@@ -348,9 +537,9 @@ th {
 }
 .hint {
   font-size: 12px;
-  color: var(--ld-purple-meta);
+  color: var(--ld-content-2);
 }
-.ops {
+.editor-ops {
   margin-top: 12px;
   display: flex;
   gap: 8px;

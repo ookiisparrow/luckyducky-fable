@@ -154,6 +154,54 @@ describe('退款审批（黄金：原子抢占/回滚条件化/进课重算封�
     expect(control.dump('afterSales')[0].status).toBe('refunded') // 未被打回 applied
   })
 
+  it('大白话：管理员越规退款（refund:manage）——拒后锁死/已进课的行也能主动退，但退款额仍≤实付分摊（决策§26）', async () => {
+    const seedFlow = () => control.seed('config', [{ _id: 'pay', mode: 'real', refundFlowId: 'flow-refund' }])
+    control.setCallFunctionResult({ result: { data: { status: 'PROCESSING', refund_id: 'r1' } } })
+
+    // ① 越过「拒后锁死」：客户申请被拒（rejected 占住 orderId__lineId），管理员仍能主动退
+    seedOrder()
+    control.seed('afterSales', [{ _id: 'o1__p1__红', orderId: 'o1', _openid: 'oBUYER', lineId: 'p1__红', productId: 'p1', qty: 2, refundAmount: 0, status: 'rejected', appliedAt: 2000 }])
+    seedFlow()
+    const r1 = await post('overrideRefund', { orderId: 'o1', lineId: 'p1__红', reason: '客服特批' })
+    expect(r1.ok).toBe(true)
+    const created = control.dump('afterSales').find((a: any) => a.overridden)
+    expect(created.status).toBe('approved')
+    expect(created.refundAmount).toBe(178) // 该行分摊≤实付 178
+    const sent = control.callFunctionCalls()[0]
+    expect(sent.data.data.amount.refund).toBe(17800)
+
+    // ② 越过「已进课不可退」：refundable=false 的行管理员也能退
+    control.reset(); control.setOpenId('')
+    control.seed('adminConfig', [{ _id: 'auth', keyHash: sha('super-secret-key'), role: 'superadmin' }])
+    seedOrder({ items: [{ productId: 'p1', lineId: 'p1__红', spec: '红', name: '鸭', price: 198, qty: 2, enteredQty: 2, refundable: false }] } as any)
+    seedFlow()
+    control.setCallFunctionResult({ result: { data: { status: 'PROCESSING' } } })
+    expect((await post('overrideRefund', { orderId: 'o1', lineId: 'p1__红', reason: '特批' })).ok).toBe(true)
+
+    // ③ 钱守恒保留：该行已全额退过（used 占满）→ 越规也退不出，NOTHING_LEFT 挡（越资格规则·不越钱红线）
+    control.reset(); control.setOpenId('')
+    control.seed('adminConfig', [{ _id: 'auth', keyHash: sha('super-secret-key'), role: 'superadmin' }])
+    seedOrder()
+    control.seed('afterSales', [{ _id: 'o1__p1__红', orderId: 'o1', _openid: 'oBUYER', lineId: 'p1__红', productId: 'p1', qty: 2, refundAmount: 178, status: 'refunded', appliedAt: 2000 }])
+    seedFlow()
+    expect((await post('overrideRefund', { orderId: 'o1', lineId: 'p1__红', reason: '再退' })).error).toBe('NOTHING_LEFT')
+  })
+
+  it('大白话：越规退款须 refund:manage 能力——外包坐席（仅 agent:handle）被拒 FORBIDDEN', async () => {
+    control.reset(); control.setOpenId('')
+    control.seed('adminConfig', [
+      { _id: 'auth', keyHash: sha('super-secret-key'), role: 'superadmin' },
+      { _id: 'agent-1', keyHash: sha('outsourced-key'), role: 'outsourced', name: '外包' },
+    ])
+    const r = await adminApi({
+      httpMethod: 'POST',
+      headers: { 'x-forwarded-for': '2.2.2.2' },
+      body: JSON.stringify({ action: 'overrideRefund', key: 'outsourced-key', data: { orderId: 'o1', lineId: 'p1__红', reason: 'x' } }),
+    }).then((r: any) => ({ status: r.statusCode, ...JSON.parse(r.body) }))
+    expect(r.status).toBe(403)
+    expect(r.error).toBe('FORBIDDEN')
+  })
+
   it('大白话：申请后又进课——全进拒退；部分进按当下剩余件降级金额打款并留降级痕', async () => {
     // 全进：refundable false
     seedOrder({ items: [{ productId: 'p1', lineId: 'p1__红', spec: '红', price: 198, qty: 2, enteredQty: 2, refundable: false }] } as any)

@@ -140,7 +140,7 @@ h3 {
 }
 .status {
   font-size: 13px;
-  color: #c0392b;
+  color: var(--ld-red);
 }
 .cols {
   display: grid;
@@ -195,14 +195,14 @@ th {
   color: var(--ld-purple-meta);
 }
 .low {
-  color: #c0392b;
+  color: var(--ld-red);
   font-weight: 700;
 }
 .pos {
-  color: #1e8e4e;
+  color: var(--ld-green);
 }
 .neg {
-  color: #c0392b;
+  color: var(--ld-red);
 }
 .act {
   padding: 7px 18px;

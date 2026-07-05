@@ -155,7 +155,7 @@ h4 {
 }
 .status {
   font-size: 13px;
-  color: #c0392b;
+  color: var(--ld-red);
 }
 .cols {
   display: grid;
@@ -214,7 +214,7 @@ th {
   color: var(--ld-purple-meta);
 }
 tr.short td {
-  color: #c0392b;
+  color: var(--ld-red);
 }
 .mono {
   font-family: ui-monospace, monospace;
@@ -235,7 +235,7 @@ tr.short td {
   border: 1px solid var(--ld-purple-line);
 }
 .act.warn {
-  background: #c0392b;
+  background: var(--ld-red);
 }
 .act.small {
   font-size: 11px;

@@ -92,6 +92,6 @@ button:disabled {
 .error {
   margin-top: 12px;
   font-size: 12px;
-  color: #c0392b;
+  color: var(--ld-red);
 }
 </style>

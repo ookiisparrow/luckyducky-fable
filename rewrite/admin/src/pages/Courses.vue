@@ -152,11 +152,11 @@ h2 {
   color: var(--ld-purple-tab);
 }
 .warn-text {
-  color: #b9770e;
+  color: var(--ld-amber);
 }
 .status {
   font-size: 13px;
-  color: #c0392b;
+  color: var(--ld-red);
 }
 .hint {
   font-size: 12px;
@@ -239,7 +239,7 @@ input {
   border: 1px solid var(--ld-purple-line);
 }
 .act.warn {
-  background: #c0392b;
+  background: var(--ld-red);
 }
 .act.small {
   font-size: 11px;

@@ -1,0 +1,12 @@
+/* 控制台全局基础（design/console.pen 设计语言）——token 见 tokens.css，页面差异写页面 scoped */
+@import './tokens.css';
+
+* {
+  box-sizing: border-box;
+}
+body {
+  margin: 0;
+  font-family: var(--ld-font);
+  background: var(--ld-bg-lilac);
+  color: var(--ld-ink);
+}

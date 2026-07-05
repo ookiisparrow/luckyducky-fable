@@ -3955,6 +3955,93 @@ export const repoChecks = [
     },
   },
   {
+    id: 'rw-order-transitions-declared',
+    roots: ['#2'],
+    desc: '新线订单/售后状态写入只走声明流转（根因#2·移植 order-transitions-declared·深审 2026-07-05 抓到旧守卫只扫冻结线的缺口）：rewrite/cloud 里 transition(orders/afterSales) 的边、裸条件 CAS（where status→update status）的边须在 rewrite/shared/src/order.ts 声明流转表内；写这两集合 status 的字面量须是声明状态——越流转/打错状态名即红（谱源直接解析 order.ts·零生成器·qrcode/cs/scm 域各有 spec 派生调用不在本册）',
+    run() {
+      const specPath = join(ROOT, 'rewrite/shared/src/order.ts')
+      const base = join(ROOT, 'rewrite/cloud/src/functions')
+      if (!existsSync(specPath) || !existsSync(base)) return []
+      const specSrc = readFileSync(specPath, 'utf8')
+      // 谱源解析：ORDER_STATUS_SPEC / AFTERSALE_STATUS_SPEC → 每集合 原子边集 + 状态集
+      const declaredEdges = {} // coll -> Set('from=>to')
+      const declaredStates = {} // coll -> Set(state)
+      for (const bm of specSrc.matchAll(/export const \w+_STATUS_SPEC = \{([\s\S]*?)\n\} as const/g)) {
+        const body = bm[1]
+        const coll = (body.match(/collection:\s*'(\w+)'/) || [])[1]
+        if (!coll) continue
+        const states = new Set()
+        for (const lm of body.matchAll(/(?:initial|terminal):\s*\[([^\]]*)\]/g))
+          for (const s of lm[1].matchAll(/'([a-z_]+)'/g)) states.add(s[1])
+        const edges = new Set()
+        for (const tm of body.matchAll(/\{\s*from:\s*\[([^\]]*)\]\s*,\s*to:\s*'([a-z_]+)'/g)) {
+          const to = tm[2]
+          states.add(to)
+          for (const f of tm[1].matchAll(/'([a-z_]+)'/g)) {
+            edges.add(f[1] + '=>' + to)
+            states.add(f[1])
+          }
+        }
+        declaredEdges[coll] = edges
+        declaredStates[coll] = states
+      }
+      const COLLS = new Set(Object.keys(declaredEdges)) // orders / afterSales
+      const files = []
+      const collectTs = (d) => {
+        for (const e of readdirSync(d)) {
+          const p = join(d, e)
+          if (statSync(p).isDirectory()) collectTs(p)
+          else if (e.endsWith('.ts')) files.push(p)
+        }
+      }
+      collectTs(base)
+      const collOf = (head) => {
+        const ms = [...head.matchAll(/(?:\.collection\(|transition\()\s*(?:['"](\w+)['"]|COLLECTIONS\.(\w+))/g)]
+        return ms.length ? ms[ms.length - 1][1] || ms[ms.length - 1][2] : null
+      }
+      const bad = []
+      for (const p of files) {
+        const src = readFileSync(p, 'utf8')
+        const rel = relative(ROOT, p)
+        // ① transition(<coll>, id, [from...], 'to')：整条边对账（union 语义每个 from 元素都须有声明原子边）
+        const transRe = /transition\(\s*(?:['"](\w+)['"]|COLLECTIONS\.(\w+))\s*,[^,]+,\s*\[([^\]]*)\]\s*,\s*['"]([a-z_]+)['"]/g
+        let tm
+        while ((tm = transRe.exec(src))) {
+          const coll = tm[1] || tm[2]
+          if (!COLLS.has(coll)) continue
+          const from = [...tm[3].matchAll(/['"]([a-z_]+)['"]/g)].map((x) => x[1])
+          const undeclared = from.filter((f) => !declaredEdges[coll].has(f + '=>' + tm[4]))
+          if (undeclared.length)
+            bad.push(`${rel}：transition('${coll}', …, [${from.join(',')}] → '${tm[4]}') 含未声明边 ${undeclared.map((f) => f + '→' + tm[4]).join('、')}——rewrite/shared/src/order.ts 流转表里没有，越流转或先改声明（根因#2）`)
+        }
+        // ①' 裸条件 CAS：where({…status:'X'|_.in([..])…}).update({data:{…status:'Y'…}}) 的边对账（refunds/shipOne/关单/refundCallback 形态）
+        const casRe = /\.where\(\s*\{[^{}]*?status:\s*(?:['"]([a-z_]+)['"]|(?:db\.command|_)\.in\(\[([^\]]*)\]\))[^{}]*?\}\s*\)[\s\S]{0,60}?\.update\(\s*\{\s*data:\s*\{[\s\S]{0,160}?\bstatus:\s*['"]([a-z_]+)['"]/g
+        let cm
+        while ((cm = casRe.exec(src))) {
+          const coll = collOf(src.slice(0, cm.index))
+          if (!coll || !COLLS.has(coll)) continue
+          const from = cm[1] ? [cm[1]] : [...cm[2].matchAll(/['"]([a-z_]+)['"]/g)].map((x) => x[1])
+          const to = cm[3]
+          const undeclared = from.filter((f) => !declaredEdges[coll].has(f + '=>' + to))
+          if (undeclared.length)
+            bad.push(`${rel}：条件 CAS ${coll} [${from.join(',')}] → '${to}' 含未声明边 ${undeclared.map((f) => f + '→' + to).join('、')}——rewrite/shared/src/order.ts 流转表里没有（根因#2）`)
+        }
+        // ② 写侧 status 字面量须是声明状态（add/update 的 data 内·where 过滤侧跳过——打错状态名即红）
+        const writeRe = /\bstatus:\s*['"]([a-z_]+)['"]/g
+        let wm
+        while ((wm = writeRe.exec(src))) {
+          const before = src.slice(Math.max(0, wm.index - 160), wm.index)
+          if (/\.where\(\s*\{[^}]*$/.test(before)) continue
+          const coll = collOf(src.slice(0, wm.index))
+          if (!coll || !COLLS.has(coll)) continue
+          if (!declaredStates[coll].has(wm[1]))
+            bad.push(`${rel}：写 ${coll}.status='${wm[1]}' 不是 rewrite/shared/src/order.ts 声明状态（${[...declaredStates[coll]].join('/')}）——打错状态名或先改声明（根因#2）`)
+        }
+      }
+      return bad
+    },
+  },
+  {
     id: 'rw-mp-checkout-consts-synced',
     roots: ['#5'],
     desc: '结算常量镜像同步（根因#5·mp 包进不了 @ldrw/shared——开发者工具编译不出仓外引用，故 mp 落副本 + 本守卫焊死）：rewrite/mp/lib/checkoutConst.ts 的 COUPON/SHIP/CHECKOUT_ADDONS 必须与 rewrite/shared/src/checkout.ts 逐值一致',
@@ -4281,6 +4368,43 @@ export const repoChecks = [
         bad.push('tests/scripts/checkReport.test.js 缺失——面板派生性行为测试（守卫 check-report-derived）')
       if (!/^reports\/$/m.test(readFileSync(join(ROOT, '.gitignore'), 'utf8')))
         bad.push('.gitignore 缺 reports/ ——体检面板产物不入库')
+      return bad
+    },
+  },
+  {
+    // 控制台调色板单源（design/console.pen 落地·M3 UI 批1）：旧台 #c0392b 散写 36 处即
+    // 病根#5「样板复制即漂移」在色值上的病征——色值一旦散写，换皮＝全仓 sed 碰运气。
+    id: 'rw-admin-theme-single-source',
+    roots: ['#5'],
+    desc: '控制台调色板单源（design/console.pen 落地批1·病根#5 样板复制即漂移）：rewrite/admin/src 除 styles/ 外禁裸 hex 色值（纯黑白 #fff/#000 中性放行·注释行与 structure-ok 豁免），颜色一律 var(--ld-*)；styles/tokens.css 为唯一调色板定义地——换皮只改 token 文件',
+    run() {
+      const bad = []
+      const base = join(ROOT, 'rewrite/admin/src')
+      if (!existsSync(base)) return bad
+      const NEUTRAL = new Set(['#fff', '#ffffff', '#000', '#000000'])
+      const scan = (d) => {
+        for (const e of readdirSync(d)) {
+          const p = join(d, e)
+          if (statSync(p).isDirectory()) {
+            if (e === 'styles') continue
+            scan(p)
+          } else if (/\.(vue|ts|css)$/.test(e)) {
+            const lines = readFileSync(p, 'utf8').split('\n')
+            lines.forEach((line, i) => {
+              if (/^(\/\/|\/\*|\*|<!--)/.test(line.trim())) return
+              if (line.includes('structure-ok') || (i > 0 && lines[i - 1].includes('structure-ok'))) return
+              const hits = (line.match(/#[0-9a-fA-F]{3,8}\b/g) || []).filter(
+                (h) => !NEUTRAL.has(h.toLowerCase())
+              )
+              if (hits.length)
+                bad.push(
+                  `${relative(ROOT, p)}:${i + 1} 裸 hex ${hits.join(' ')}——颜色走 var(--ld-*)，调色板单源 rewrite/admin/src/styles/tokens.css（#5）`
+                )
+            })
+          }
+        }
+      }
+      scan(base)
       return bad
     },
   },
