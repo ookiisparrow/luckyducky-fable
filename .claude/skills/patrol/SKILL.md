@@ -20,10 +20,10 @@ description: Use when 自主巡视/值守 Lucky Ducky 重构线仓（fable），
 6. **轮报 → `docs/巡逻日志.md`**：置顶追加一条（轮次/日期/镜头/基线态/findings 三分诊去向/「与本轮报同批提交」或「跑了·验了·干净」）；随修复批同批提交，无修复批则单独 `chore：巡逻轮报 #N`。零发现 = 负结果照报，不凑数。
 
 ## 镜头（轮换 A→B→C→D）
-- **A 状态文档准确性**：`git log -20 --oneline` vs `docs/现状与路线.md`/`docs/调试日志.md`/`docs/待办与债.md` 全文 + `docs/重构日志.md` **顶部 3 条**（省 token·全史看 git）——核「声称 vs commit 真相」（`/doc-audit` 真值法切片），揪进度报低/已修未勾/已落未回写。
+- **A 文档准确性**：`git log -20 --oneline` vs `docs/现状与路线.md`/`docs/调试日志.md`/`docs/待办与债.md` 全文 + `docs/重构日志.md` **顶部 3 条**（省 token·全史看 git）——核「声称 vs commit 真相」（`/doc-audit` 真值法切片），揪进度报低/已修未勾/已落未回写。**另抽 2–3 份其余活文档**（按 `docs/` 顶层清单轮转，轮报记名以便下圈接续）同法核——几圈扫满全部活文档。
 - **B 台账核对**：`待办与债`/`调试日志` 挂账项逐条问「被后续 commit 悄悄解决没有」「解冻条件达成没有」；达成的勾销/推进，未达成的不催。
 - **C 守卫抽检**：从近 5 批提交挑 1 条新守卫做反向自检（篡改→必红→还原→绿）；不红 = 摆设守卫，即重大 finding 走修复批。
-- **D 代码红旗有界扫**：CLAUDE §7 red flags 在 `rewrite/` 单包轮转（mp→cloud→admin→agent→site→shared），只报静态可证的。
+- **D 代码红旗有界扫**：CLAUDE §7 red flags 在 `rewrite/` 单包轮转（mp→cloud→admin→agent→site→shared），只报静态可证的。红旗五类：裸 console｜敏感信息进日志/告警｜eval/动态执行｜storage/元分换算散落｜**无界查询**（collection 读不带 limit/分页契约——容量维度的静态可证半边，参 `/capacity-check`）。
 
 ## 节奏（给 /loop 自定节奏的提示）
 干净 2 轮 → 建议拉长间隔（≥30 分钟或睡到下个自然节点）；有修复/基线红 → 正常或缩短。单轮预算 ~15 分钟，超了收敛范围下轮续，不熬长轮。
