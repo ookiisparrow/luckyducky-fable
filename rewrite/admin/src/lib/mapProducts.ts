@@ -67,6 +67,8 @@ export interface ShowcaseRowVM {
   featured: boolean
   listed: boolean
   coverUrl: string
+  price: string // iPhone WYSIWYG 预览用（换皮丢了手机预览）
+  tag: string
 }
 
 export function mapShowcaseRows(list: unknown, urls: unknown): ShowcaseRowVM[] {
@@ -84,6 +86,8 @@ export function mapShowcaseRows(list: unknown, urls: unknown): ShowcaseRowVM[] {
       featured: p.featured === true,
       listed: p.listed !== false,
       coverUrl: p.cover ? u[String(p.cover)] || '' : '',
+      price: String(p.price || ''),
+      tag: String(p.tag || ''),
     })
   }
   return out.sort((a, b) => a.sort - b.sort)

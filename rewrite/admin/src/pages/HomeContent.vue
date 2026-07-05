@@ -11,6 +11,8 @@ import { b64SizeOk } from '../lib/mapProducts'
 const model = ref<HomeModel | null>(null)
 const message = ref('')
 const busy = ref(false)
+const sessionUrls = ref<Record<string, string>>({}) // 新上传 fileID→url 缩略预览
+const thumb = (fileID: string) => sessionUrls.value[fileID] || ''
 
 onMounted(async () => {
   const r = await getHomeContent()
@@ -30,7 +32,9 @@ async function uploadTo(assign: (_fileID: string) => void, ev: Event) {
   const r = await uploadImage(b64, 'homecontent', 'jpg')
   busy.value = false
   if (r.ok) {
-    assign(String(r.fileID || ''))
+    const fid = String(r.fileID || '')
+    assign(fid)
+    if (fid) sessionUrls.value[fid] = String(r.url || '') // 缩略预览（本会话）
     message.value = ''
   } else message.value = '图片上传失败：' + String(r.error || '')
 }
@@ -68,6 +72,16 @@ function addTrust() {
 function addFaq() {
   if (model.value && model.value.faq.length < 8) model.value.faq.push({ title: '', body: '' })
 }
+// 删除（换皮只增不删·脏行永久残留）：
+function delCourseRow(i: number) {
+  model.value?.byCourse.splice(i, 1)
+}
+function delTrust(i: number) {
+  model.value?.trust.splice(i, 1)
+}
+function delFaq(i: number) {
+  model.value?.faq.splice(i, 1)
+}
 
 async function save() {
   if (!model.value || busy.value) return
@@ -102,14 +116,18 @@ async function save() {
         <label>全局背景（激活/loading 回退用）</label>
         <div class="upload-row">
           <input type="file" accept="image/*" @change="(e) => uploadTo((f) => (model!.activationBg = f), e)" />
-          <span v-if="model.activationBg" class="filetag"><Check :size="12" :stroke-width="2" />{{ model.activationBg.slice(-18) }}</span>
+          <img v-if="thumb(model.activationBg)" :src="thumb(model.activationBg)" class="bg-thumb" alt="" />
+          <span v-if="model.activationBg" class="filetag"><Check :size="12" :stroke-width="2" />已设置</span>
+          <button v-if="model.activationBg" class="del-x" title="恢复默认" @click="model.activationBg = ''">✕</button>
         </div>
       </div>
       <div class="upload-field">
         <label>Loading 图</label>
         <div class="upload-row">
           <input type="file" accept="image/*" @change="(e) => uploadTo((f) => (model!.loadingBg = f), e)" />
-          <span v-if="model.loadingBg" class="filetag"><Check :size="12" :stroke-width="2" />{{ model.loadingBg.slice(-18) }}</span>
+          <img v-if="thumb(model.loadingBg)" :src="thumb(model.loadingBg)" class="bg-thumb" alt="" />
+          <span v-if="model.loadingBg" class="filetag"><Check :size="12" :stroke-width="2" />已设置</span>
+          <button v-if="model.loadingBg" class="del-x" title="恢复默认" @click="model.loadingBg = ''">✕</button>
         </div>
       </div>
       <h3>按课程三态图（欢迎 / 欢迎回来 / 已被激活）</h3>
@@ -118,6 +136,7 @@ async function save() {
         <label class="mini">欢迎<input type="file" accept="image/*" @change="(e) => uploadTo((f) => (row.welcome = f), e)" /><Check v-if="row.welcome" :size="13" :stroke-width="2" class="ok" /></label>
         <label class="mini">回访<input type="file" accept="image/*" @change="(e) => uploadTo((f) => (row.welcomeBack = f), e)" /><Check v-if="row.welcomeBack" :size="13" :stroke-width="2" class="ok" /></label>
         <label class="mini">已用<input type="file" accept="image/*" @change="(e) => uploadTo((f) => (row.taken = f), e)" /><Check v-if="row.taken" :size="13" :stroke-width="2" class="ok" /></label>
+        <button class="del-x" title="删除这门课" @click="delCourseRow(i)">✕</button>
       </div>
       <button class="add-btn" @click="addCourseRow"><Plus :size="13" :stroke-width="2" /><span>加一门课</span></button>
     </section>
@@ -127,6 +146,7 @@ async function save() {
       <div v-for="(t, i) in model.trust" :key="i" class="pair">
         <input v-model="t.icon" placeholder="图标名（如 truck）" />
         <input v-model="t.label" placeholder="文案（≤12 字）" maxlength="12" />
+        <button class="del-x" title="删除" @click="delTrust(i)">✕</button>
       </div>
       <button class="add-btn" @click="addTrust"><Plus :size="13" :stroke-width="2" /><span>加一条</span></button>
     </section>
@@ -136,6 +156,7 @@ async function save() {
       <div v-for="(f, i) in model.faq" :key="i" class="faq">
         <input v-model="f.title" placeholder="问题（≤40 字）" maxlength="40" />
         <textarea v-model="f.body" placeholder="回答（≤150 字）" maxlength="150" />
+        <button class="del-x" title="删除" @click="delFaq(i)">✕</button>
       </div>
       <button class="add-btn" @click="addFaq"><Plus :size="13" :stroke-width="2" /><span>加一条</span></button>
     </section>
@@ -246,10 +267,29 @@ textarea {
 }
 .course-row {
   display: grid;
-  grid-template-columns: 160px 1fr 1fr 1fr;
+  grid-template-columns: 150px 1fr 1fr 1fr auto;
   gap: 8px;
   align-items: center;
   margin-bottom: 8px;
+}
+.del-x {
+  border: none;
+  background: transparent;
+  color: var(--ld-content-2);
+  font-size: 14px;
+  cursor: pointer;
+  padding: 4px 6px;
+  align-self: start;
+}
+.del-x:hover {
+  color: var(--ld-red);
+}
+.bg-thumb {
+  width: 40px;
+  height: 40px;
+  object-fit: cover;
+  border-radius: 6px;
+  border: 1px solid var(--ld-line);
 }
 .cid {
   font-family: var(--ld-font-mono);
@@ -272,7 +312,7 @@ textarea {
 .pair,
 .faq {
   display: grid;
-  grid-template-columns: 1fr 2fr;
+  grid-template-columns: 1fr 2fr auto;
   gap: 8px;
   margin-bottom: 8px;
 }

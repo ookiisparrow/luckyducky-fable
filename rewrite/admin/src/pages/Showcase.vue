@@ -1,13 +1,16 @@
 <script setup lang="ts">
-// 小程序橱窗（设计语言一致性·M3 UI 批11）：首页排序 + 推荐位勾选，一键保存（与小程序 getProducts 排序同源）。
-// 逻辑未动，仅套设计语言（页头/grid 表/状态 chip/token）。
-import { ref, onMounted } from 'vue'
+// 小程序橱窗（换皮回归还原批·1:1 承接旧线 Showcase 手感）：左 iPhone WYSIWYG 实时预览（同一份云端数据
+// 渲染小程序首页人气条），右排序/推荐面板。两边同一份列表状态，拖哪边都行，松手防抖自动保存、离页补存。
+// 停售/恢复已迁至 Products（在售态这里只读显示）；hero/背景/信任条/FAQ 已迁至 HomeContent。
+import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
 import { listShowcase, saveShowcase } from '../api/products'
 import { mapShowcaseRows, type ShowcaseRowVM } from '../lib/mapProducts'
 
 const rows = ref<ShowcaseRowVM[]>([])
 const message = ref('')
-const busy = ref(false)
+const saveState = ref<'' | 'saving' | 'saved' | 'error'>('')
+
+const featured = computed(() => rows.value.filter((r) => r.featured))
 
 async function reload() {
   message.value = '加载中…'
@@ -16,14 +19,53 @@ async function reload() {
   message.value = r.ok ? '' : '加载失败：' + String(r.error || '')
 }
 
-async function save() {
-  if (busy.value) return
-  busy.value = true
-  const r = await saveShowcase(rows.value.map((x) => ({ id: x.id, sort: Number(x.sort) || 0, featured: x.featured })))
-  busy.value = false
-  message.value = r.ok ? '已保存，小程序首页立即生效' : '保存失败：' + String(r.error || '')
-  void reload()
+// 防抖自动保存（700ms·换皮退成手动按钮·忘点即丢编辑）：拖动/开关都走它
+let timer: ReturnType<typeof setTimeout> | null = null
+function persist() {
+  saveState.value = 'saving'
+  if (timer) clearTimeout(timer)
+  timer = setTimeout(async () => {
+    const r = await saveShowcase(rows.value.map((x, i) => ({ id: x.id, sort: i + 1, featured: x.featured })))
+    saveState.value = r.ok ? 'saved' : 'error'
+  }, 700)
 }
+function toggle(r: ShowcaseRowVM) {
+  r.featured = !r.featured
+  persist()
+}
+
+// 拖拽排序（手机人气条与面板共用同一份 rows·拖哪边都行）——HTML5 DnD
+const drag = ref(-1)
+const over = ref(-1)
+const idxOf = (r: ShowcaseRowVM) => rows.value.indexOf(r)
+function dragStart(r: ShowcaseRowVM) {
+  drag.value = idxOf(r)
+}
+function dragOver(r: ShowcaseRowVM, e: DragEvent) {
+  e.preventDefault()
+  if (drag.value >= 0) over.value = idxOf(r)
+}
+function dragEnd() {
+  drag.value = -1
+  over.value = -1
+}
+function drop(r: ShowcaseRowVM) {
+  const from = drag.value
+  const to = idxOf(r)
+  dragEnd()
+  if (from < 0 || to < 0 || from === to) return
+  const moved = rows.value.splice(from, 1)[0]
+  rows.value.splice(to, 0, moved)
+  persist()
+}
+const isOver = (r: ShowcaseRowVM) => over.value === idxOf(r) && drag.value >= 0 && drag.value !== idxOf(r)
+const isDrag = (r: ShowcaseRowVM) => drag.value === idxOf(r)
+
+// 离页补存：还在防抖窗口内未落盘的改动立即补发（保存幂等·多发无副作用）
+onBeforeUnmount(() => {
+  if (timer) clearTimeout(timer)
+  if (saveState.value === 'saving') void saveShowcase(rows.value.map((x, i) => ({ id: x.id, sort: i + 1, featured: x.featured })))
+})
 
 onMounted(reload)
 </script>
@@ -33,29 +75,68 @@ onMounted(reload)
     <header class="page-head">
       <div>
         <h1>小程序橱窗</h1>
-        <p class="sub">sort 越小越靠前；「推荐」对应首页推荐位。已下架商品不出现在小程序里，但保留排序。</p>
+        <p class="sub">左侧一比一预览小程序首页 · 在画面或右侧列表上拖动排序、点开关上下架橱窗 · 改动自动保存，小程序重开生效</p>
       </div>
-      <button v-if="rows.length" class="btn-primary" :disabled="busy" @click="save">{{ busy ? '保存中…' : '保存橱窗' }}</button>
+      <span class="save" :class="saveState">{{ { saving: '保存中…', saved: '已保存 ✓', error: '保存失败' }[saveState] || '' }}</span>
     </header>
 
     <p v-if="message" class="status">{{ message }}</p>
 
-    <div v-if="rows.length" class="table">
-      <div class="thead">
-        <span>商品</span><span class="r">排序 sort</span><span>推荐位</span><span>在售</span>
-      </div>
-      <div v-for="row in rows" :key="row.id" class="trow">
-        <div class="prod">
-          <img v-if="row.coverUrl" :src="row.coverUrl" class="thumb" />
-          <span v-else class="thumb empty">无图</span>
-          <div class="prod-text">
-            <div class="prod-name">{{ row.name }}</div>
-            <div class="pid">{{ row.id }}</div>
+    <div v-if="rows.length" class="work">
+      <!-- iPhone WYSIWYG 预览（393×852 比例·同一份云端数据） -->
+      <div class="stage">
+        <div class="phone">
+          <div class="p-status"><span>12:30</span><span>●●●</span></div>
+          <div class="p-hero"><div class="p-brand">🦆 Lucky Ducky</div><div class="p-title">创造幸运</div><div class="p-sub">Get ducky get lucky</div></div>
+          <div class="p-strip">
+            <div class="p-strip-head"><b>人气商品</b><span>全部 ›</span></div>
+            <div class="p-cards">
+              <div
+                v-for="r in featured"
+                :key="r.id"
+                class="p-card"
+                :class="{ over: isOver(r), dragging: isDrag(r) }"
+                draggable="true"
+                @dragstart="dragStart(r)"
+                @dragover="dragOver(r, $event)"
+                @dragend="dragEnd"
+                @drop="drop(r)"
+              >
+                <div class="p-img"><img v-if="r.coverUrl" :src="r.coverUrl" alt="" /><span v-else class="p-img-ph">📦</span></div>
+                <div class="p-body"><div class="p-name">{{ r.name }}</div><div class="p-tag">{{ r.tag }}</div><div class="p-price">￥{{ r.price }}</div></div>
+              </div>
+              <p v-if="!featured.length" class="p-empty">橱窗空了——右侧打开几个商品的开关</p>
+            </div>
           </div>
+          <div class="p-spacer"></div>
+          <div class="p-tabbar"><b>● 首页</b><span>购物车</span><span>我</span></div>
         </div>
-        <span class="r"><input v-model.number="row.sort" type="number" class="sortin" /></span>
-        <label class="feat"><input v-model="row.featured" type="checkbox" /><span>推荐</span></label>
-        <span><span class="state" :class="row.listed ? 'on' : 'off'">{{ row.listed ? '在售' : '已下架' }}</span></span>
+        <p class="stage-note">iPhone 比例（393×852）· 与小程序首页同一份数据</p>
+      </div>
+
+      <!-- 排序与推荐面板 -->
+      <div class="panel">
+        <h3>首页 · 人气商品（拖动排序 · 开关上下架橱窗）</h3>
+        <div
+          v-for="r in rows"
+          :key="r.id"
+          class="row"
+          :class="{ over: isOver(r), dragging: isDrag(r), off: !r.featured }"
+          draggable="true"
+          @dragstart="dragStart(r)"
+          @dragover="dragOver(r, $event)"
+          @dragend="dragEnd"
+          @drop="drop(r)"
+        >
+          <span class="grip">⠿</span>
+          <div class="thumb"><img v-if="r.coverUrl" :src="r.coverUrl" alt="" /><span v-else>📦</span></div>
+          <div class="info">
+            <div class="name">{{ r.name }}<span v-if="!r.listed" class="off-tag">已下架</span></div>
+            <div class="meta">￥{{ r.price }} · 排序 {{ idxOf(r) + 1 }}{{ r.featured ? '' : ' · 不在首页橱窗' }}</div>
+          </div>
+          <button class="switch" :class="{ on: r.featured }" :title="r.featured ? '点击下架橱窗' : '点击上架橱窗'" @click="toggle(r)"><span class="knob"></span></button>
+        </div>
+        <p class="hint">开关 = 是否出现在首页橱窗；拖哪边都行、两侧画面双向联动。停售/恢复销售在「商品管理」页。</p>
       </div>
     </div>
     <p v-else-if="!message" class="status-soft">还没有可排序的商品</p>
@@ -64,14 +145,14 @@ onMounted(reload)
 
 <style scoped>
 .page {
-  max-width: 960px;
+  max-width: 1000px;
 }
 .page-head {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   justify-content: space-between;
   gap: 16px;
-  margin-bottom: 16px;
+  margin-bottom: 18px;
 }
 h1 {
   margin: 0;
@@ -84,19 +165,16 @@ h1 {
   font-size: 12.5px;
   color: var(--ld-content-2);
 }
-.btn-primary {
-  flex: none;
-  padding: 10px 18px;
-  border: none;
-  border-radius: 999px;
-  background: var(--ld-purple-ink);
-  color: #fff;
-  font-size: 13px;
-  font-weight: 600;
-  cursor: pointer;
+.save {
+  font-size: 12px;
+  color: var(--ld-content-2);
+  white-space: nowrap;
 }
-.btn-primary:disabled {
-  opacity: 0.5;
+.save.error {
+  color: var(--ld-red);
+}
+.save.saved {
+  color: var(--ld-green);
 }
 .status {
   font-size: 13px;
@@ -106,96 +184,271 @@ h1 {
   font-size: 13px;
   color: var(--ld-content-2);
 }
-.table {
-  background: var(--ld-bg);
-  border: 1px solid var(--ld-line);
-  border-radius: var(--ld-radius-l);
-  overflow: hidden;
+.work {
+  display: flex;
+  gap: 22px;
+  align-items: flex-start;
 }
-.thead,
-.trow {
-  display: grid;
-  grid-template-columns: 3fr 1fr 1fr 1fr;
+.stage {
+  flex: 0 0 380px;
+  background: var(--ld-bg-grey);
+  border-radius: 14px;
+  padding: 24px 0;
+  display: flex;
+  flex-direction: column;
   align-items: center;
-  gap: 12px;
-  padding: 12px 20px;
+  gap: 14px;
 }
-.thead {
-  background: var(--ld-bg-lilac);
-  font-size: 12px;
+.phone {
+  width: 300px;
+  aspect-ratio: 393 / 852;
+  border: 6px solid var(--ld-purple-ink);
+  border-radius: 34px;
+  background: var(--ld-bg);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+.stage-note {
+  font-size: 11px;
+  color: var(--ld-content-2);
+  margin: 0;
+}
+.p-status {
+  display: flex;
+  justify-content: space-between;
+  padding: 8px 18px 4px;
+  font-size: 10px;
+  color: var(--ld-ink);
+}
+.p-hero {
+  background: var(--ld-bg-sage);
+  padding: 18px 18px 16px;
+}
+.p-brand {
+  font-size: 11px;
+  font-weight: 700;
+}
+.p-title {
+  font-size: 24px;
+  font-weight: 700;
+  color: var(--ld-ink);
+  margin: 4px 0 2px;
+}
+.p-sub {
+  font-size: 10.5px;
   color: var(--ld-content-2);
 }
-.trow {
-  border-top: 1px solid var(--ld-line);
-  font-size: 13px;
+.p-strip {
+  padding: 14px;
 }
-.r {
-  text-align: right;
-  justify-self: end;
-}
-.prod {
+.p-strip-head {
   display: flex;
-  align-items: center;
-  gap: 12px;
-  min-width: 0;
+  justify-content: space-between;
+  font-size: 13px;
+  margin-bottom: 10px;
 }
-.thumb {
-  width: 46px;
-  height: 46px;
-  flex: none;
-  object-fit: cover;
-  border-radius: 10px;
+.p-strip-head span {
+  color: var(--ld-content-2);
+  font-size: 10.5px;
+}
+.p-cards {
+  display: flex;
+  gap: 10px;
+  overflow-x: auto;
+  padding-bottom: 4px;
+}
+.p-card {
+  flex: 0 0 116px;
+  border: 1px solid var(--ld-line);
+  border-radius: 12px;
+  overflow: hidden;
+  background: var(--ld-bg);
+  cursor: grab;
+  position: relative;
+}
+.p-card.over::before,
+.row.over::before {
+  content: '';
+  position: absolute;
+  left: -6px;
+  top: 6px;
+  bottom: 6px;
+  width: 3px;
+  border-radius: 99px;
+  background: var(--ld-brand);
+}
+.row.over::before {
+  left: 0;
+  top: -5px;
+  bottom: auto;
+  width: auto;
+  right: 0;
+  height: 3px;
+}
+.p-card.dragging,
+.row.dragging {
+  opacity: 0.45;
+  border-color: var(--ld-brand);
+}
+.p-img {
+  height: 88px;
   background: var(--ld-bg-sage);
-}
-.thumb.empty {
   display: flex;
   align-items: center;
   justify-content: center;
+}
+.p-img img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.p-img-ph {
+  font-size: 26px;
+}
+.p-body {
+  padding: 8px 9px 9px;
+}
+.p-name {
+  font-size: 9.5px;
+  font-weight: 600;
+  color: var(--ld-ink);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.p-tag {
+  font-size: 8px;
+  color: var(--ld-purple-meta);
+  margin: 2px 0;
+}
+.p-price {
+  font-size: 11px;
+  font-weight: 700;
+}
+.p-empty {
   font-size: 11px;
   color: var(--ld-content-2);
+  padding: 20px 10px;
 }
-.prod-name {
+.p-spacer {
+  flex: 1;
+}
+.p-tabbar {
+  display: flex;
+  justify-content: space-around;
+  border-top: 1px solid var(--ld-line);
+  padding: 10px 20px 14px;
+  font-size: 9.5px;
+  color: var(--ld-content-2);
+}
+.p-tabbar b {
+  color: var(--ld-brand-active);
+}
+.panel {
+  flex: 1;
+  min-width: 0;
+  padding: 20px;
+  background: var(--ld-bg);
+  border: 1px solid var(--ld-line);
+  border-radius: var(--ld-radius-l);
+}
+.panel h3 {
+  font-size: 13.5px;
+  color: var(--ld-ink);
+  margin: 0 0 12px;
+}
+.row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  border: 1px solid var(--ld-line);
+  border-radius: 10px;
+  padding: 9px 12px;
+  margin-bottom: 8px;
+  cursor: grab;
+  position: relative;
+  background: var(--ld-bg);
+}
+.row.off {
+  background: var(--ld-bg-grey);
+  opacity: 0.75;
+}
+.grip {
+  color: var(--ld-line-strong);
+}
+.thumb {
+  width: 38px;
+  height: 38px;
+  border-radius: 8px;
+  background: var(--ld-bg-sage);
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+}
+.thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.info {
+  flex: 1;
+  min-width: 0;
+}
+.name {
+  font-size: 12.5px;
   font-weight: 600;
   color: var(--ld-ink);
 }
-.pid {
-  font-size: 11px;
+.off-tag {
+  margin-left: 6px;
+  padding: 1px 6px;
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--ld-red);
+  background: var(--ld-bg-red-soft);
+  border-radius: 6px;
+}
+.meta {
+  font-size: 10.5px;
   color: var(--ld-content-2);
-  font-family: var(--ld-font-mono);
   margin-top: 2px;
 }
-.sortin {
-  width: 72px;
-  padding: 6px 10px;
-  border: 1px solid var(--ld-line);
-  border-radius: 8px;
-  font-size: 13px;
-  text-align: right;
-}
-.feat {
-  display: inline-flex;
-  align-items: center;
-  gap: 7px;
-  font-size: 12.5px;
-  color: var(--ld-content);
+.switch {
+  width: 36px;
+  height: 20px;
+  border-radius: 99px;
+  border: none;
+  background: var(--ld-line-strong);
+  position: relative;
   cursor: pointer;
+  flex: 0 0 auto;
+  transition: background 0.15s;
 }
-.feat input {
+.switch.on {
+  background: var(--ld-brand);
+}
+.knob {
+  position: absolute;
+  top: 2px;
+  left: 2px;
   width: 16px;
   height: 16px;
-  accent-color: var(--ld-brand);
+  border-radius: 50%;
+  background: var(--ld-bg);
+  transition: left 0.15s;
 }
-.state {
-  padding: 3px 11px;
-  border-radius: 999px;
+.switch.on .knob {
+  left: 18px;
+}
+.hint {
+  padding: 10px 14px;
+  border-radius: 10px;
+  background: var(--ld-bg-lilac);
   font-size: 11.5px;
-}
-.state.on {
-  background: var(--ld-bg-green-soft);
-  color: var(--ld-green);
-}
-.state.off {
-  background: var(--ld-bg-red-soft);
-  color: var(--ld-red);
+  margin: 8px 0 0;
+  color: var(--ld-content-2);
 }
 </style>
