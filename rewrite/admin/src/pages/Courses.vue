@@ -1,8 +1,9 @@
 <script setup lang="ts">
-// 课程管理（M3 批4）：章节→课时→段 树编辑 + 每段视频直传 + 发布（引用模型·老学员自动生效；
-// 发布时孤儿视频 GC 在云端——旧发布不再引用的文件才删）。?courseId= 从商品页带入或手输。
-import { ref, onMounted } from 'vue'
+// 课程管理（design/console.pen S2 课程编排视觉·M3 UI 批10）：章→课时→段 树编辑 + 每段视频直传 + 发布
+// （引用模型·老学员自动生效；孤儿视频云端 GC）。逻辑批10 未动，仅套设计语言（页头/视频进度条/章节卡/段上传 chip）。
+import { ref, computed, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
+import { RotateCcw, Plus, Trash2, Upload, Check } from 'lucide-vue-next'
 import { getCourseDraft, saveCourseDraft, publishCourse, uploadVideo } from '../api/content'
 import { courseVideoStats } from '../lib/mapContent'
 
@@ -15,6 +16,8 @@ const busy = ref(false)
 const progress = ref('')
 const publishConfirm = ref(false)
 const stats = ref({ total: 0, done: 0 })
+
+const pct = computed(() => (stats.value.total ? Math.round((stats.value.done / stats.value.total) * 100) : 0))
 
 async function load() {
   if (!courseId.value.trim()) return
@@ -83,174 +86,322 @@ onMounted(load)
 </script>
 
 <template>
-  <div>
-    <h2>课程管理</h2>
-    <div class="topbar">
+  <div class="page">
+    <header class="page-head">
+      <div>
+        <h1>课程编排</h1>
+        <p class="sub">一门课 = 章 → 课时 → 段；每段挂一条视频。保存＝存草稿（学员不可见），发布＝老学员立即看到新版。</p>
+      </div>
+    </header>
+
+    <div class="toolbar">
       <input v-model="courseId" placeholder="course-xxx（商品页「编辑课程」会带入）" class="cid" @keyup.enter="load" />
-      <button class="act" @click="load">载入</button>
-      <span v-if="course" class="stat">视频 已传 {{ stats.done }}/{{ stats.total }}</span>
-      <span v-if="fromPublished" class="stat warn-text">当前显示已发布版（尚无草稿·保存即建草稿）</span>
+      <button class="act ghost" @click="load"><RotateCcw :size="14" :stroke-width="1.8" /><span>载入</span></button>
     </div>
     <p v-if="message" class="status">{{ message }}</p>
-    <p v-if="progress" class="hint">{{ progress }}</p>
+    <p v-if="progress" class="uploading">{{ progress }}</p>
 
-    <div v-if="course" class="editor">
-      <label>课程标题 <input v-model="course.title" maxlength="60" /></label>
+    <template v-if="course">
+      <div class="course-head">
+        <input v-model="course.title" maxlength="60" placeholder="课程标题" class="title-in" />
+        <div class="head-right">
+          <div class="vstat">
+            <span class="vstat-num">视频 {{ stats.done }}/{{ stats.total }}</span>
+            <div class="vbar"><div class="vbar-fill" :style="{ width: pct + '%' }" /></div>
+          </div>
+          <button class="act ghost" :disabled="busy" @click="save">保存草稿</button>
+          <button class="act primary" :disabled="busy" @click="publish">
+            {{ publishConfirm ? '确认发布？老学员立即生效' : '发布上线' }}
+          </button>
+        </div>
+      </div>
+      <p v-if="fromPublished" class="from-pub">当前显示已发布版（尚无草稿·保存即建草稿）</p>
+
       <div v-for="(ch, ci) in course.chapters" :key="ci" class="chapter">
-        <div class="chhead">
-          <input v-model="ch.title" placeholder="章标题" maxlength="60" />
-          <button class="act ghost" @click="course.chapters.splice(ci, 1)">删章</button>
+        <div class="ch-head">
+          <span class="ch-badge">第 {{ ci + 1 }} 章</span>
+          <input v-model="ch.title" placeholder="章标题" maxlength="60" class="ch-title" />
+          <button class="icon-btn" title="删章" @click="course.chapters.splice(ci, 1)"><Trash2 :size="14" :stroke-width="1.8" /></button>
         </div>
+
         <div v-for="(l, li) in ch.lessons" :key="li" class="lesson">
-          <div class="lhead">
-            <input v-model="l.name" placeholder="课时名" maxlength="60" />
+          <div class="l-head">
+            <input v-model="l.name" placeholder="课时名" maxlength="60" class="l-name" />
             <input v-model="l.dur" placeholder="时长" class="dur" maxlength="10" />
-            <button class="act ghost" @click="ch.lessons.splice(li, 1)">删课时</button>
+            <button class="icon-btn" title="删课时" @click="ch.lessons.splice(li, 1)"><Trash2 :size="14" :stroke-width="1.8" /></button>
           </div>
-          <div v-for="(sg, si) in l.segments" :key="si" class="segrow">
-            <input v-model="sg.name" placeholder="段名" maxlength="60" />
+          <div v-for="(sg, si) in l.segments" :key="si" class="seg">
+            <input v-model="sg.name" placeholder="段名" maxlength="60" class="seg-name" />
             <input v-model="sg.dur" placeholder="时长" class="dur" maxlength="10" />
-            <label class="file">{{ sg.videoFileId ? '已传 ✓ 替换' : '选视频' }}<input type="file" accept="video/mp4,video/quicktime" hidden @change="(e) => pickVideo(sg, e)" /></label>
-            <button class="act ghost" @click="l.segments.splice(si, 1); refreshStats()">删段</button>
+            <label class="upload" :class="{ done: sg.videoFileId }">
+              <component :is="sg.videoFileId ? Check : Upload" :size="13" :stroke-width="2" />
+              <span>{{ sg.videoFileId ? '已传 · 替换' : '选视频' }}</span>
+              <input type="file" accept="video/mp4,video/quicktime" hidden @change="(e) => pickVideo(sg, e)" />
+            </label>
+            <button class="icon-btn" title="删段" @click="l.segments.splice(si, 1); refreshStats()"><Trash2 :size="14" :stroke-width="1.8" /></button>
           </div>
-          <button class="act ghost small" @click="addSegment(l)">+ 加段</button>
+          <button class="add-btn" @click="addSegment(l)"><Plus :size="13" :stroke-width="2" /><span>加段</span></button>
         </div>
-        <button class="act ghost small" @click="addLesson(ch)">+ 加课时</button>
+        <button class="add-btn" @click="addLesson(ch)"><Plus :size="13" :stroke-width="2" /><span>加课时</span></button>
       </div>
-      <button class="act ghost" @click="addChapter">+ 加章</button>
-      <div class="ops">
-        <button class="act" :disabled="busy" @click="save">保存草稿</button>
-        <button class="act warn" :disabled="busy" @click="publish">
-          {{ publishConfirm ? '确认发布？老学员立即看到新版' : '发布上线' }}
-        </button>
-      </div>
-    </div>
+
+      <button class="add-chapter" @click="addChapter"><Plus :size="15" :stroke-width="2" /><span>加章</span></button>
+    </template>
+    <p v-else-if="!message" class="status-soft">输入课程编号（course-xxx）载入其章节结构</p>
   </div>
 </template>
 
 <style scoped>
-h2 {
-  margin: 0 0 14px;
-  color: var(--ld-purple-ink);
+.page {
+  max-width: 900px;
 }
-.topbar {
+.page-head {
+  margin-bottom: 16px;
+}
+h1 {
+  margin: 0;
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--ld-ink);
+}
+.sub {
+  margin: 4px 0 0;
+  font-size: 12.5px;
+  color: var(--ld-content-2);
+}
+.toolbar {
   display: flex;
-  gap: 10px;
-  align-items: center;
+  gap: 8px;
   margin-bottom: 12px;
-  flex-wrap: wrap;
 }
 .cid {
-  width: 280px;
-  padding: 7px 10px;
-  border: 1px solid var(--ld-purple-line);
-  border-radius: 8px;
+  width: 320px;
+  padding: 8px 12px;
+  border: 1px solid var(--ld-line);
+  border-radius: 999px;
   font-size: 13px;
-}
-.stat {
-  font-size: 12px;
-  color: var(--ld-purple-tab);
-}
-.warn-text {
-  color: var(--ld-amber);
 }
 .status {
   font-size: 13px;
   color: var(--ld-red);
 }
-.hint {
-  font-size: 12px;
-  color: var(--ld-purple-meta);
-}
-.editor {
-  max-width: 800px;
-}
-.editor > label {
-  display: block;
-  font-size: 12px;
-  color: var(--ld-purple-meta);
-  margin-bottom: 12px;
-}
-input {
-  padding: 7px 10px;
-  border: 1px solid var(--ld-purple-line);
-  border-radius: 8px;
+.status-soft {
   font-size: 13px;
+  color: var(--ld-content-2);
 }
-.editor > label input {
-  width: 100%;
-  margin-top: 4px;
-  box-sizing: border-box;
+.uploading {
+  font-size: 12.5px;
+  color: var(--ld-brand-active);
+  font-weight: 600;
+}
+.course-head {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 16px 18px;
+  margin-bottom: 8px;
+  background: var(--ld-bg);
+  border: 1px solid var(--ld-line);
+  border-radius: var(--ld-radius-l);
+}
+.title-in {
+  flex: 1;
+  min-width: 0;
+  padding: 8px 12px;
+  border: 1px solid var(--ld-line);
+  border-radius: 10px;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--ld-ink);
+}
+.head-right {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex: none;
+}
+.vstat {
+  min-width: 120px;
+}
+.vstat-num {
+  font-size: 11.5px;
+  color: var(--ld-content-2);
+}
+.vbar {
+  margin-top: 5px;
+  height: 6px;
+  background: var(--ld-bg-faint);
+  border-radius: 999px;
+  overflow: hidden;
+}
+.vbar-fill {
+  height: 100%;
+  background: var(--ld-brand);
+  border-radius: 999px;
+}
+.from-pub {
+  margin: 0 0 12px;
+  font-size: 12px;
+  color: var(--ld-amber);
 }
 .chapter {
-  padding: 12px 14px;
+  padding: 14px 16px;
   margin-bottom: 12px;
   background: var(--ld-bg);
-  border: 1px solid var(--ld-purple-line);
-  border-radius: var(--ld-radius);
+  border: 1px solid var(--ld-line);
+  border-radius: var(--ld-radius-l);
 }
-.chhead,
-.lhead {
+.ch-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+.ch-badge {
+  flex: none;
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: var(--ld-bg-lilac);
+  color: var(--ld-brand-active);
+  font-size: 11.5px;
+  font-weight: 600;
+}
+.ch-title {
+  flex: 1;
+  min-width: 0;
+  padding: 7px 12px;
+  border: 1px solid var(--ld-line);
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 600;
+}
+.lesson {
+  margin: 10px 0 10px 20px;
+  padding: 12px 14px;
+  background: var(--ld-bg-lilac);
+  border-radius: 12px;
+}
+.l-head {
   display: flex;
   gap: 8px;
   margin-bottom: 8px;
 }
-.chhead input,
-.lhead input:first-child {
+.l-name {
   flex: 1;
+  min-width: 0;
+  padding: 6px 10px;
+  border: 1px solid var(--ld-line);
+  border-radius: 8px;
+  font-size: 13px;
+  background: var(--ld-bg);
 }
 .dur {
-  width: 90px;
+  width: 84px;
+  flex: none;
+  padding: 6px 10px;
+  border: 1px solid var(--ld-line);
+  border-radius: 8px;
+  font-size: 13px;
+  background: var(--ld-bg);
 }
-.lesson {
-  margin: 8px 0 8px 16px;
-  padding: 10px 12px;
-  background: var(--ld-bg-lilac);
-  border-radius: 10px;
-}
-.segrow {
+.seg {
   display: grid;
-  grid-template-columns: 2fr 90px auto auto;
+  grid-template-columns: 1fr 84px auto auto;
   gap: 8px;
-  margin-bottom: 6px;
   align-items: center;
+  margin-bottom: 6px;
 }
-.file {
-  font-size: 12px;
-  color: var(--ld-purple-tab);
+.seg-name {
+  padding: 6px 10px;
+  border: 1px solid var(--ld-line);
+  border-radius: 8px;
+  font-size: 13px;
+  background: var(--ld-bg);
+}
+.upload {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 6px 12px;
   border: 1px solid var(--ld-purple-line);
   border-radius: 999px;
-  padding: 6px 14px;
+  background: var(--ld-bg);
+  color: var(--ld-brand-active);
+  font-size: 12px;
+  font-weight: 600;
   cursor: pointer;
-  text-align: center;
+  white-space: nowrap;
+}
+.upload.done {
+  border-color: var(--ld-green);
+  color: var(--ld-green);
+  background: var(--ld-bg-green-soft);
+}
+.icon-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  flex: none;
+  border: 1px solid var(--ld-line);
+  border-radius: 8px;
+  background: var(--ld-bg);
+  color: var(--ld-content-2);
+  cursor: pointer;
+}
+.icon-btn:hover {
+  color: var(--ld-red);
+  border-color: var(--ld-red-line);
+}
+.add-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  margin-top: 4px;
+  padding: 6px 14px;
+  border: 1px dashed var(--ld-purple-line);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--ld-brand-active);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.add-chapter {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 9px 18px;
+  border: 1px dashed var(--ld-purple-line);
+  border-radius: 999px;
+  background: var(--ld-bg-lilac);
+  color: var(--ld-brand-active);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
 }
 .act {
-  padding: 6px 16px;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 8px 16px;
   border: none;
   border-radius: 999px;
-  background: var(--ld-purple-ink);
-  color: #fff;
-  font-size: 12px;
+  font-size: 13px;
+  font-weight: 600;
   cursor: pointer;
 }
+.act.primary {
+  background: var(--ld-purple-ink);
+  color: #fff;
+}
 .act.ghost {
-  background: transparent;
-  color: var(--ld-purple-meta);
-  border: 1px solid var(--ld-purple-line);
-}
-.act.warn {
-  background: var(--ld-red);
-}
-.act.small {
-  font-size: 11px;
-  padding: 4px 12px;
+  background: var(--ld-bg);
+  color: var(--ld-content-2);
+  border: 1px solid var(--ld-line);
 }
 .act:disabled {
   opacity: 0.5;
-}
-.ops {
-  margin-top: 14px;
-  display: flex;
-  gap: 8px;
 }
 </style>

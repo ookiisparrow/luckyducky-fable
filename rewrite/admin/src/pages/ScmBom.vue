@@ -1,7 +1,8 @@
 <script setup lang="ts">
-// 配方与组装（M3 批7）：全局模板（共用料+毛线槽）+ 每产品差异位（三色+专属件）→
-// 预演（只读看短缺）→ 执行组装（快照冻结·同单不双扣）。
+// 配方与组装（设计语言一致性·M3 UI 批17）：全局模板（共用料+毛线槽）+ 每产品差异位（三色+专属件）→
+// 预演（只读看短缺）→ 执行组装（快照冻结·同单不双扣）。逻辑未动，仅套设计语言。
 import { ref, onMounted } from 'vue'
+import { Plus } from 'lucide-vue-next'
 import { getBomSetup, saveBomTemplate, saveBomProfile, previewAssembly, runAssembly, listAssemblies, listMaterials } from '../api/scm'
 import { materialHuman, scmErrorText } from '../lib/mapScm'
 import { dateTime } from '../lib/format'
@@ -63,182 +64,290 @@ onMounted(reload)
 </script>
 
 <template>
-  <div>
-    <h2>配方与组装</h2>
+  <div class="page">
+    <header class="page-head">
+      <h1>配方与组装</h1>
+      <p class="sub">全局模板（共用料 + 毛线槽）+ 产品差异位（三色 + 专属件）→ 预演看短缺 → 执行组装（快照冻结·同单不双扣）。</p>
+    </header>
+
     <p v-if="message" class="status">{{ message }}</p>
 
     <div class="cols">
-      <div class="panel">
-        <h3>全局模板（所有产品共用）</h3>
-        <h4>共用料（每套用量）</h4>
+      <section class="card">
+        <h2>全局模板（所有产品共用）</h2>
+        <h3>共用料（每套用量）</h3>
         <div v-for="(l, i) in template.commonLines" :key="i" class="linerow">
           <select v-model="l.materialId">
             <option v-for="m in mats" :key="m._id" :value="m._id">{{ materialHuman(m._id) }}</option>
           </select>
           <input v-model.number="l.qtyPerSet" type="number" min="1" />
-          <button class="act ghost" @click="template.commonLines.splice(i, 1)">删</button>
+          <button class="icon-x" @click="template.commonLines.splice(i, 1)">×</button>
         </div>
-        <button class="act ghost small" @click="template.commonLines.push({ materialId: '', qtyPerSet: 1 })">+ 加料</button>
-        <h4>毛线槽（颜色按产品填）</h4>
+        <button class="add-btn" @click="template.commonLines.push({ materialId: '', qtyPerSet: 1 })"><Plus :size="12" :stroke-width="2" /><span>加料</span></button>
+        <h3>毛线槽（颜色按产品填）</h3>
         <div v-for="(s, i) in template.yarnSlots" :key="i" class="linerow">
           <select v-model="s.tier"><option value="L">大团</option><option value="M">中团</option><option value="S">小团</option></select>
           <select v-model="s.form"><option value="raw">原团</option><option value="knotted">带结（仅大团）</option></select>
           <input v-model.number="s.qtyPerSet" type="number" min="1" />
-          <button class="act ghost" @click="template.yarnSlots.splice(i, 1)">删</button>
+          <button class="icon-x" @click="template.yarnSlots.splice(i, 1)">×</button>
         </div>
-        <button class="act ghost small" @click="template.yarnSlots.push({ tier: 'L', form: 'knotted', qtyPerSet: 1 })">+ 加槽</button>
-        <div class="ops"><button class="act" @click="doSaveTemplate">保存模板</button></div>
-      </div>
+        <button class="add-btn" @click="template.yarnSlots.push({ tier: 'L', form: 'knotted', qtyPerSet: 1 })"><Plus :size="12" :stroke-width="2" /><span>加槽</span></button>
+        <div class="ops"><button class="btn-primary" @click="doSaveTemplate">保存模板</button></div>
+      </section>
 
-      <div class="panel">
-        <h3>产品差异位（三色 + 专属件）</h3>
+      <section class="card">
+        <h2>产品差异位（三色 + 专属件）</h2>
         <input v-model="prof.productId" placeholder="产品 id" />
         <input v-model="prof.L" placeholder="大团颜色（如 pink）" />
         <input v-model="prof.M" placeholder="中团颜色" />
         <input v-model="prof.S" placeholder="小团颜色" />
         <input v-model="prof.packagingMaterialId" placeholder="包装料号（pkg:产品id）" />
         <input v-model="prof.cardMaterialId" placeholder="卡片料号（card:产品id）" />
-        <button class="act" @click="doSaveProfile">保存差异位</button>
-        <p v-for="p in profiles" :key="p._id" class="row-line">{{ p._id }}：L={{ p.yarnColors?.L }} M={{ p.yarnColors?.M }} S={{ p.yarnColors?.S }}</p>
-      </div>
+        <button class="btn-primary" @click="doSaveProfile">保存差异位</button>
+        <div class="prof-list">
+          <div v-for="p in profiles" :key="p._id" class="prof-line">{{ p._id }}：L={{ p.yarnColors?.L }} M={{ p.yarnColors?.M }} S={{ p.yarnColors?.S }}</div>
+        </div>
+      </section>
 
-      <div class="panel">
-        <h3>组装执行（扣原料·入成品）</h3>
+      <section class="card">
+        <h2>组装执行（扣原料·入成品）</h2>
         <input v-model="run.productId" placeholder="产品 id" />
         <input v-model="run.spec" placeholder="规格（可空）" />
         <input v-model.number="run.sets" type="number" min="1" placeholder="套数" />
         <div class="ops">
-          <button class="act ghost" @click="doPreview">预演（只看不扣）</button>
-          <button class="act warn" @click="doRun">{{ runConfirm ? '确认扣料入成品？' : '执行组装' }}</button>
+          <button class="btn-ghost" @click="doPreview">预演（只看不扣）</button>
+          <button class="btn-warn" @click="doRun">{{ runConfirm ? '确认扣料入成品？' : '执行组装' }}</button>
         </div>
-        <table v-if="preview.length">
-          <thead><tr><th>料</th><th>需</th><th>存</th><th>缺</th></tr></thead>
-          <tbody>
-            <tr v-for="l in preview" :key="l.materialId" :class="{ short: l.short > 0 || l.missing }">
-              <td>{{ materialHuman(l.materialId) }}{{ l.missing ? '（未建档）' : '' }}</td>
-              <td>{{ l.need }}</td><td>{{ l.stock }}</td><td>{{ l.short }}</td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
+        <div v-if="preview.length" class="preview">
+          <div class="pv-head"><span>料</span><span class="r">需</span><span class="r">存</span><span class="r">缺</span></div>
+          <div v-for="l in preview" :key="l.materialId" class="pv-row" :class="{ short: l.short > 0 || l.missing }">
+            <span>{{ materialHuman(l.materialId) }}{{ l.missing ? '（未建档）' : '' }}</span>
+            <span class="r">{{ l.need }}</span><span class="r">{{ l.stock }}</span><span class="r">{{ l.short }}</span>
+          </div>
+        </div>
+      </section>
     </div>
 
-    <div class="panel">
-      <h3>组装记录</h3>
-      <table>
-        <thead><tr><th>单号</th><th>产品</th><th>套数</th><th>操作者</th><th>时间</th></tr></thead>
-        <tbody>
-          <tr v-for="a in assemblies" :key="a._id">
-            <td class="mono">{{ a._id }}</td><td>{{ a.productId }}{{ a.spec ? '（' + a.spec + '）' : '' }}</td>
-            <td>{{ a.sets }}</td><td>{{ a.operator }}</td><td>{{ dateTime(a.at) }}</td>
-          </tr>
-        </tbody>
-      </table>
-    </div>
+    <section class="table-card">
+      <h2>组装记录</h2>
+      <div class="table">
+        <div class="thead"><span>单号</span><span>产品</span><span class="r">套数</span><span>操作者</span><span>时间</span></div>
+        <div v-for="a in assemblies" :key="a._id" class="trow">
+          <span class="mono">{{ a._id }}</span>
+          <span>{{ a.productId }}{{ a.spec ? '（' + a.spec + '）' : '' }}</span>
+          <span class="r">{{ a.sets }}</span>
+          <span class="muted">{{ a.operator }}</span>
+          <span class="muted mono">{{ dateTime(a.at) }}</span>
+        </div>
+      </div>
+    </section>
   </div>
 </template>
 
 <style scoped>
-h2 {
-  margin: 0 0 14px;
-  color: var(--ld-purple-ink);
+.page {
+  max-width: 1160px;
 }
-h3 {
-  margin: 0 0 10px;
-  font-size: 14px;
-  color: var(--ld-purple-ink);
+.page-head {
+  margin-bottom: 16px;
 }
-h4 {
-  margin: 10px 0 6px;
-  font-size: 12px;
-  color: var(--ld-purple-meta);
+h1 {
+  margin: 0;
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--ld-ink);
+}
+.sub {
+  margin: 4px 0 0;
+  font-size: 12.5px;
+  color: var(--ld-content-2);
 }
 .status {
   font-size: 13px;
   color: var(--ld-red);
+  margin-bottom: 10px;
 }
 .cols {
   display: grid;
   grid-template-columns: 1fr 1fr 1fr;
-  gap: 12px;
-  margin-bottom: 14px;
+  gap: 14px;
+  margin-bottom: 16px;
 }
-.panel {
-  padding: 14px 16px;
+@media (max-width: 940px) {
+  .cols {
+    grid-template-columns: 1fr;
+  }
+}
+.card,
+.table-card {
+  padding: 16px 18px;
   background: var(--ld-bg);
-  border: 1px solid var(--ld-purple-line);
-  border-radius: var(--ld-radius);
-  margin-bottom: 12px;
+  border: 1px solid var(--ld-line);
+  border-radius: var(--ld-radius-l);
 }
-select,
-input {
-  padding: 6px 9px;
-  border: 1px solid var(--ld-purple-line);
+h2 {
+  margin: 0 0 12px;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--ld-ink);
+}
+h3 {
+  margin: 12px 0 7px;
+  font-size: 12px;
+  color: var(--ld-purple-meta);
+}
+.card input,
+.card select {
+  padding: 8px 10px;
+  border: 1px solid var(--ld-line);
   border-radius: 8px;
   font-size: 13px;
-  margin-bottom: 6px;
   width: 100%;
   box-sizing: border-box;
+  margin-bottom: 7px;
+  background: var(--ld-bg);
 }
 .linerow {
   display: grid;
-  grid-template-columns: 2fr 70px auto;
+  grid-template-columns: 2fr 68px auto;
   gap: 6px;
+  align-items: center;
 }
-.linerow select + select {
-  grid-column: auto;
+.linerow input,
+.linerow select {
+  margin-bottom: 0;
+}
+.icon-x {
+  width: 28px;
+  height: 30px;
+  border: 1px solid var(--ld-line);
+  border-radius: 8px;
+  background: var(--ld-bg);
+  color: var(--ld-content-2);
+  font-size: 15px;
+  cursor: pointer;
+}
+.icon-x:hover {
+  color: var(--ld-red);
+  border-color: var(--ld-red-line);
+}
+.add-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin: 6px 0 2px;
+  padding: 5px 12px;
+  border: 1px dashed var(--ld-purple-line);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--ld-brand-active);
+  font-size: 11.5px;
+  font-weight: 600;
+  cursor: pointer;
 }
 .ops {
   display: flex;
   gap: 8px;
-  margin-top: 8px;
+  margin-top: 10px;
 }
-.row-line {
-  font-size: 12px;
-  margin: 4px 0;
-  font-family: ui-monospace, monospace;
-}
-table {
-  width: 100%;
-  border-collapse: collapse;
-  margin-top: 8px;
-}
-th,
-td {
-  padding: 7px 9px;
-  font-size: 12px;
-  text-align: left;
-  border-bottom: 1px solid var(--ld-bg-faint);
-}
-th {
-  color: var(--ld-purple-meta);
-}
-tr.short td {
-  color: var(--ld-red);
-}
-.mono {
-  font-family: ui-monospace, monospace;
-  font-size: 11px;
-}
-.act {
-  padding: 6px 14px;
+.btn-primary {
+  padding: 8px 16px;
   border: none;
   border-radius: 999px;
   background: var(--ld-purple-ink);
   color: #fff;
-  font-size: 12px;
+  font-size: 12.5px;
+  font-weight: 600;
   cursor: pointer;
 }
-.act.ghost {
-  background: transparent;
-  color: var(--ld-purple-meta);
-  border: 1px solid var(--ld-purple-line);
+.btn-ghost {
+  padding: 8px 14px;
+  border: 1px solid var(--ld-line);
+  border-radius: 999px;
+  background: var(--ld-bg);
+  color: var(--ld-content-2);
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
 }
-.act.warn {
+.btn-warn {
+  padding: 8px 16px;
+  border: none;
+  border-radius: 999px;
   background: var(--ld-red);
+  color: #fff;
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
 }
-.act.small {
-  font-size: 11px;
-  padding: 4px 10px;
+.prof-list {
+  margin-top: 10px;
+}
+.prof-line {
+  padding: 5px 0;
+  border-top: 1px solid var(--ld-line);
+  font-size: 11.5px;
+  font-family: var(--ld-font-mono);
+  color: var(--ld-content-2);
+}
+.preview {
+  margin-top: 12px;
+  border: 1px solid var(--ld-line);
+  border-radius: 8px;
+  overflow: hidden;
+}
+.pv-head,
+.pv-row {
+  display: grid;
+  grid-template-columns: 2fr 0.7fr 0.7fr 0.7fr;
+  gap: 8px;
+  padding: 7px 12px;
+}
+.pv-head {
+  background: var(--ld-bg-lilac);
+  font-size: 11.5px;
+  color: var(--ld-content-2);
+}
+.pv-row {
+  border-top: 1px solid var(--ld-line);
+  font-size: 12.5px;
+  color: var(--ld-content);
+}
+.pv-row.short {
+  color: var(--ld-red);
+}
+.table {
+  border: 1px solid var(--ld-line);
+  border-radius: 10px;
+  overflow: hidden;
+}
+.thead,
+.trow {
+  display: grid;
+  grid-template-columns: 1.6fr 1.6fr 0.7fr 1.1fr 1.4fr;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 14px;
+}
+.thead {
+  background: var(--ld-bg-lilac);
+  font-size: 12px;
+  color: var(--ld-content-2);
+}
+.trow {
+  border-top: 1px solid var(--ld-line);
+  font-size: 13px;
+  color: var(--ld-content);
+}
+.r {
+  text-align: right;
+  justify-self: end;
+}
+.mono {
+  font-family: var(--ld-font-mono);
+  font-size: 11.5px;
+}
+.muted {
+  color: var(--ld-content-2);
 }
 </style>

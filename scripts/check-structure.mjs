@@ -607,11 +607,11 @@ export const repoChecks = [
     },
   },
   {
-    // 企微推送单一收口·重写线（观测批5·根因#13/#12·同旧线 bot-push-single-seam）：pushBotAlert 仅定义于
-    // rewrite/cloud/src/kit/botpush.ts、仅 kit/observe.ts(notifyAlert) 调；其余 rewrite/cloud/src 不得直达
-    // （防散调/绕 alertEvents 开关/webhook 凭证多处）。合并回 main 时随病根14「失败必可观测」对齐归口。
+    // 企微推送单一收口·重写线（观测批5·治病根#14「告警不进人眼」+ 根因#13/#12 接缝单点·同旧线 bot-push-single-seam）：
+    // pushBotAlert 仅定义于 rewrite/cloud/src/kit/botpush.ts、仅 kit/observe.ts(notifyAlert) 调；其余 rewrite/cloud/src
+    // 不得直达（防散调/绕 alertEvents 开关/webhook 凭证多处）。归 #14（告警真达人眼）+ #12/#13（接缝单点/爆破）。
     id: 'rw-bot-push-single-seam',
-    roots: ['#12', '#13'],
+    roots: ['#12', '#13', '#14'],
     desc: '企微推送单一收口·重写线：pushBotAlert 仅在 rewrite/cloud/src/kit/botpush.ts 定义、仅 kit/observe.ts 调用；其余不得直达（防散调/绕开关/凭证多处·根因#13/#12）',
     run() {
       const seam = 'rewrite/cloud/src/kit/botpush.ts'
@@ -1548,7 +1548,7 @@ export const repoChecks = [
       const bad = []
       const ledgerPath = join(ROOT, 'docs/根因账本.md')
       if (!existsSync(ledgerPath)) return ['docs/根因账本.md 缺失（病根清单源）']
-      // §一「13 类病根」：取「## 二、」之前，抓 `### N.` 标题为病根 id（数随立新病根增·别在注释手抄）
+      // §一病根清单：取「## 二、」之前，抓 `### N.` 标题为病根 id（数随立新病根增·别在注释手抄）
       const sec1 = readFileSync(ledgerPath, 'utf8').split('## 二、')[0]
       const rootIds = [...sec1.matchAll(/^###\s*(\d+)\.\s/gm)].map((m) => `#${m[1]}`)
       if (!rootIds.length) bad.push('根因账本 §一 解析不到病根（### N. 标题）——覆盖率无从核')
@@ -2889,7 +2889,7 @@ export const repoChecks = [
     // 这些静默失败点须经 kit/observe 的 alert() 打统一可告警标记，控制台对 [LD_ALERT] 配日志告警。
     // 守卫锁两钱链回调引 alert，防告警被静默移除回退成「平台看着成功、实则钱链炸了无人知」。
     id: 'moneychain-alert-wired',
-    roots: ['#13'],
+    roots: ['#14'],
     desc: '钱链可观测告警接入（债#23 代码侧）：payCallback/refundCallback 静默语义失败须经 kit/observe 的 alert()/notifyAlert() 打 [LD_ALERT] 标记（控制台日志告警抓取；notifyAlert＝alert+企微群机器人推送·债#23续）——防钱链失败信号被移除，平台指标看不见的「返200却出错」无人知',
     run() {
       const bad = []
@@ -4649,21 +4649,21 @@ export const typeAndTestGuards = [
     reverseTest: 'rewrite/cloud/tests/app-misc.test.ts',
   },
   {
-    // 运行期观测地基（bug 收集器·防治静默 bug）：recordAnomaly 四路来源统一落库口——指纹去重防刷屏、
-    // 高危去重感知告警、fail-soft 不反噬主流程、对业务集合零写入（「只读看护线上」安全铁律）。
-    // 归 #3 信任边界可追溯（留痕，同 recordAudit 家族）；巡检机的「探出静默失败」主张随批2 立。
+    // 运行期观测地基（bug 收集器·治病根#14 失败静默化「告警不进人眼」）：recordAnomaly 四路来源统一落库口——
+    // 指纹去重防刷屏、高危去重感知告警、fail-soft 不反噬主流程、对业务集合零写入（「只读看护线上」安全铁律）。
+    // 归 #14（把静默失败留成痕·持久可查）+ #3 信任边界可追溯（留痕家族·同 recordAudit）。
     id: 'rw-anomaly-record-golden',
     mechanism: 'test',
-    roots: ['#3'],
+    roots: ['#3', '#14'],
     reverseTest: 'rewrite/cloud/tests/anomaly.test.ts',
   },
   {
-    // 巡检机（运行期主动核对不变量·探出静默失败·守卫 rw-inspect-golden）：跑检查目录（A 基建存活 + B 业务不变量）
-    // → inspectRuns 体检报告 + 每条红→recordAnomaly 闭环 + 只读不改业务集合。归它复核的不变量：#1 钱守恒/#3 留痕/#8 运行期真能用。
-    // 合并回 main 时随「病根14 失败必可观测」再对齐归 #14（本 worktree 基线尚无 #14）。
+    // 巡检机（运行期主动核对不变量·探出静默失败=治病根#14 失败静默化·守卫 rw-inspect-golden）：跑检查目录
+    // （A 基建存活 + B 业务不变量）→ inspectRuns 体检报告 + 每条红→recordAnomaly 闭环 + 只读不改业务集合。
+    // 归 #14（主动探出静默失败）+ 它复核的不变量 #1 钱守恒/#3 留痕/#8 运行期真能用。
     id: 'rw-inspect-golden',
     mechanism: 'test',
-    roots: ['#1', '#3', '#8'],
+    roots: ['#1', '#3', '#8', '#14'],
     reverseTest: 'rewrite/cloud/tests/inspect.test.ts',
   },
   {
@@ -4711,7 +4711,7 @@ export const typeAndTestGuards = [
   {
     id: 'rw-flow-observable',
     mechanism: 'test',
-    roots: ['#12', '#8'],
+    roots: ['#12', '#8', '#14'],
     reverseTest: 'rewrite/cloud/tests/flow.test.ts',
   },
   {

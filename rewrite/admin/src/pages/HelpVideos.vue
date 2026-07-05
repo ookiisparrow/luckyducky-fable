@@ -1,6 +1,8 @@
 <script setup lang="ts">
-// 帮助视频（M3 批4）：播放页「遇到问题了」求助面板的内容源（主题→小段两级·全课程共用一份）。
+// 帮助视频（设计语言一致性·M3 UI 批12）：播放页「遇到问题了」求助面板内容源（主题→小段两级·全课程共用一份）。
+// 逻辑未动，仅套设计语言（页头/主题卡/段上传 chip/token）。
 import { ref, onMounted } from 'vue'
+import { Upload, Check, Trash2, Plus } from 'lucide-vue-next'
 import { listHelpVideos, saveHelpVideos, uploadVideo } from '../api/content'
 import { normalizeHelpItems, type HelpItem } from '../lib/mapContent'
 
@@ -53,117 +55,190 @@ onMounted(reload)
 </script>
 
 <template>
-  <div>
-    <h2>帮助视频</h2>
-    <p class="hint">小程序播放页「遇到问题了」面板的内容；主题下每个小段一条视频。</p>
-    <p v-if="message" class="status">{{ message }}</p>
-    <p v-if="progress" class="hint">{{ progress }}</p>
+  <div class="page">
+    <header class="page-head">
+      <div>
+        <h1>帮助视频</h1>
+        <p class="sub">小程序播放页「遇到问题了」面板的内容；主题下每个小段挂一条视频，全课程共用一份。</p>
+      </div>
+      <button class="btn-primary" :disabled="busy" @click="save">{{ busy ? '保存中…' : '保存全部' }}</button>
+    </header>
 
-    <div v-for="(t, ti) in items" :key="ti" class="panel">
-      <div class="topic">
-        <input v-model="t.title" placeholder="主题（如 起针总松？）" maxlength="40" />
-        <input v-model="t.sub" placeholder="副题" maxlength="40" />
-        <button class="act warn" @click="delTopic(ti)">删主题</button>
+    <p v-if="message" class="status">{{ message }}</p>
+    <p v-if="progress" class="uploading">{{ progress }}</p>
+
+    <div v-for="(t, ti) in items" :key="ti" class="topic-card">
+      <div class="topic-head">
+        <input v-model="t.title" placeholder="主题（如 起针总松？）" maxlength="40" class="t-title" />
+        <input v-model="t.sub" placeholder="副题" maxlength="40" class="t-sub" />
+        <button class="icon-btn" title="删主题" @click="delTopic(ti)"><Trash2 :size="14" :stroke-width="1.8" /></button>
       </div>
       <textarea v-model="t.desc" placeholder="描述（≤150 字）" maxlength="150" />
-      <div v-for="(sg, si) in t.segments" :key="si" class="segrow">
-        <input v-model="sg.name" placeholder="小段名" maxlength="40" />
-        <input v-model="sg.dur" placeholder="时长（如 1:30）" maxlength="10" />
-        <label class="file">{{ sg.videoFileId ? '已传 ✓ 替换' : '选视频' }}<input type="file" accept="video/mp4,video/quicktime" hidden @change="(e) => pickVideo(t, si, e)" /></label>
-        <button class="act ghost" @click="delSeg(t, si)">删</button>
+      <div v-for="(sg, si) in t.segments" :key="si" class="seg">
+        <input v-model="sg.name" placeholder="小段名" maxlength="40" class="seg-name" />
+        <input v-model="sg.dur" placeholder="时长（如 1:30）" maxlength="10" class="dur" />
+        <label class="upload" :class="{ done: sg.videoFileId }">
+          <component :is="sg.videoFileId ? Check : Upload" :size="13" :stroke-width="2" />
+          <span>{{ sg.videoFileId ? '已传 · 替换' : '选视频' }}</span>
+          <input type="file" accept="video/mp4,video/quicktime" hidden @change="(e) => pickVideo(t, si, e)" />
+        </label>
+        <button class="icon-btn" title="删段" @click="delSeg(t, si)"><Trash2 :size="14" :stroke-width="1.8" /></button>
       </div>
-      <button class="act ghost" @click="addSeg(t)">+ 加小段</button>
+      <button class="add-btn" @click="addSeg(t)"><Plus :size="13" :stroke-width="2" /><span>加小段</span></button>
     </div>
 
-    <div class="ops">
-      <button class="act ghost" @click="addTopic">+ 加主题</button>
-      <button class="act" :disabled="busy" @click="save">保存全部</button>
-    </div>
+    <button class="add-topic" @click="addTopic"><Plus :size="15" :stroke-width="2" /><span>加主题</span></button>
   </div>
 </template>
 
 <style scoped>
-h2 {
-  margin: 0 0 8px;
-  color: var(--ld-purple-ink);
+.page {
+  max-width: 820px;
 }
-.hint {
-  font-size: 12px;
-  color: var(--ld-purple-meta);
-  margin: 0 0 12px;
+.page-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+h1 {
+  margin: 0;
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--ld-ink);
+}
+.sub {
+  margin: 4px 0 0;
+  font-size: 12.5px;
+  color: var(--ld-content-2);
+}
+.btn-primary {
+  flex: none;
+  padding: 10px 18px;
+  border: none;
+  border-radius: 999px;
+  background: var(--ld-purple-ink);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.btn-primary:disabled {
+  opacity: 0.5;
 }
 .status {
   font-size: 13px;
   color: var(--ld-red);
 }
-.panel {
-  padding: 14px 16px;
+.uploading {
+  font-size: 12.5px;
+  color: var(--ld-brand-active);
+  font-weight: 600;
+}
+.topic-card {
+  padding: 16px 18px;
   margin-bottom: 12px;
   background: var(--ld-bg);
-  border: 1px solid var(--ld-purple-line);
-  border-radius: var(--ld-radius);
-  max-width: 760px;
+  border: 1px solid var(--ld-line);
+  border-radius: var(--ld-radius-l);
 }
-.topic {
-  display: grid;
-  grid-template-columns: 1fr 1fr auto;
+.topic-head {
+  display: flex;
   gap: 8px;
-  margin-bottom: 8px;
+  margin-bottom: 10px;
+}
+.t-title {
+  flex: 2;
+  min-width: 0;
+}
+.t-sub {
+  flex: 1;
+  min-width: 0;
+}
+input,
+textarea {
+  padding: 8px 12px;
+  border: 1px solid var(--ld-line);
+  border-radius: 8px;
+  font-size: 13px;
+  font-family: var(--ld-font);
 }
 textarea {
   width: 100%;
-  min-height: 40px;
-  padding: 7px 10px;
-  border: 1px solid var(--ld-purple-line);
-  border-radius: 8px;
-  font-size: 13px;
+  min-height: 42px;
   box-sizing: border-box;
-  margin-bottom: 8px;
+  margin-bottom: 10px;
+  resize: vertical;
 }
-input {
-  padding: 7px 10px;
-  border: 1px solid var(--ld-purple-line);
-  border-radius: 8px;
-  font-size: 13px;
-}
-.segrow {
+.seg {
   display: grid;
-  grid-template-columns: 2fr 1fr auto auto;
+  grid-template-columns: 1fr 110px auto auto;
   gap: 8px;
-  margin-bottom: 6px;
   align-items: center;
+  margin-bottom: 6px;
 }
-.file {
-  font-size: 12px;
-  color: var(--ld-purple-tab);
+.upload {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 6px 12px;
   border: 1px solid var(--ld-purple-line);
   border-radius: 999px;
-  padding: 6px 14px;
-  cursor: pointer;
-}
-.act {
-  padding: 6px 16px;
-  border: none;
-  border-radius: 999px;
-  background: var(--ld-purple-ink);
-  color: #fff;
+  background: var(--ld-bg);
+  color: var(--ld-brand-active);
   font-size: 12px;
+  font-weight: 600;
   cursor: pointer;
+  white-space: nowrap;
 }
-.act.ghost {
-  background: transparent;
-  color: var(--ld-purple-meta);
-  border: 1px solid var(--ld-purple-line);
+.upload.done {
+  border-color: var(--ld-green);
+  color: var(--ld-green);
+  background: var(--ld-bg-green-soft);
 }
-.act.warn {
-  background: var(--ld-red);
-}
-.act:disabled {
-  opacity: 0.5;
-}
-.ops {
+.icon-btn {
   display: flex;
-  gap: 8px;
-  margin-top: 8px;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  flex: none;
+  border: 1px solid var(--ld-line);
+  border-radius: 8px;
+  background: var(--ld-bg);
+  color: var(--ld-content-2);
+  cursor: pointer;
+}
+.icon-btn:hover {
+  color: var(--ld-red);
+  border-color: var(--ld-red-line);
+}
+.add-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  margin-top: 4px;
+  padding: 6px 14px;
+  border: 1px dashed var(--ld-purple-line);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--ld-brand-active);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.add-topic {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 9px 18px;
+  border: 1px dashed var(--ld-purple-line);
+  border-radius: 999px;
+  background: var(--ld-bg-lilac);
+  color: var(--ld-brand-active);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
 }
 </style>

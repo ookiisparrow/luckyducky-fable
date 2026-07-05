@@ -1,6 +1,8 @@
 <script setup lang="ts">
-// 知识库（M3 批5）：FAQ 整册编辑（客服 bot 与坐席快捷回复读同一份·整体覆盖式保存——删行即真删）。
+// 知识库（设计语言一致性·M3 UI 批14）：FAQ 整册编辑（客服 bot 与坐席快捷回复读同一份·整体覆盖式保存——删行即真删）。
+// 逻辑未动，仅套设计语言（页头/FAQ 行卡/分类 select/启用勾选/token）。
 import { ref, onMounted } from 'vue'
+import { Trash2, Plus } from 'lucide-vue-next'
 import { listKb, saveKb } from '../api/cs'
 import { normalizeKb, type KbRow } from '../lib/mapCs'
 
@@ -39,92 +41,156 @@ onMounted(reload)
 </script>
 
 <template>
-  <div>
-    <h2>知识库（FAQ）</h2>
-    <p class="hint">客服机器人和坐席快捷回复读的是同一份；保存是整册覆盖——删掉的行即真删。</p>
+  <div class="page">
+    <header class="page-head">
+      <div>
+        <h1>知识库（FAQ）</h1>
+        <p class="sub">客服机器人和坐席快捷回复读的是同一份；保存是整册覆盖——删掉的行即真删。</p>
+      </div>
+      <button class="btn-primary" :disabled="busy" @click="save">{{ busy ? '保存中…' : '保存整册' }}</button>
+    </header>
+
     <p v-if="message" class="status">{{ message }}</p>
 
-    <div v-for="(row, i) in rows" :key="row.key" class="kbrow">
-      <select v-model="row.category">
-        <option v-for="c in CATS" :key="c.key" :value="c.key">{{ c.label }}</option>
-      </select>
-      <input v-model="row.question" placeholder="问题（≤200 字）" maxlength="200" />
+    <div v-for="(row, i) in rows" :key="row.key" class="kb-card">
+      <div class="kb-head">
+        <select v-model="row.category" class="cat">
+          <option v-for="c in CATS" :key="c.key" :value="c.key">{{ c.label }}</option>
+        </select>
+        <input v-model="row.question" placeholder="问题（≤200 字）" maxlength="200" class="q" />
+        <label class="en"><input v-model="row.enabled" type="checkbox" /><span>启用</span></label>
+        <button class="icon-btn" title="删行" @click="rows.splice(i, 1)"><Trash2 :size="14" :stroke-width="1.8" /></button>
+      </div>
       <textarea v-model="row.answer" placeholder="答案（≤2000 字·bot 原样发给顾客）" maxlength="2000" />
-      <label class="en"><input v-model="row.enabled" type="checkbox" />启用</label>
-      <button class="act ghost" @click="rows.splice(i, 1)">删行</button>
     </div>
 
-    <div class="ops">
-      <button class="act ghost" @click="addRow">+ 加一条</button>
-      <button class="act" :disabled="busy" @click="save">保存整册</button>
-    </div>
+    <button class="add-btn" @click="addRow"><Plus :size="14" :stroke-width="2" /><span>加一条 FAQ</span></button>
   </div>
 </template>
 
 <style scoped>
-h2 {
-  margin: 0 0 8px;
-  color: var(--ld-purple-ink);
+.page {
+  max-width: 900px;
 }
-.hint {
-  font-size: 12px;
-  color: var(--ld-purple-meta);
-  margin: 0 0 12px;
+.page-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+h1 {
+  margin: 0;
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--ld-ink);
+}
+.sub {
+  margin: 4px 0 0;
+  font-size: 12.5px;
+  color: var(--ld-content-2);
+}
+.btn-primary {
+  flex: none;
+  padding: 10px 18px;
+  border: none;
+  border-radius: 999px;
+  background: var(--ld-purple-ink);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.btn-primary:disabled {
+  opacity: 0.5;
 }
 .status {
   font-size: 13px;
   color: var(--ld-red);
 }
-.kbrow {
-  display: grid;
-  grid-template-columns: 90px 1fr 2fr auto auto;
-  gap: 8px;
-  align-items: start;
-  padding: 10px 12px;
-  margin-bottom: 8px;
+.kb-card {
+  padding: 14px 16px;
+  margin-bottom: 10px;
   background: var(--ld-bg);
-  border: 1px solid var(--ld-purple-line);
-  border-radius: var(--ld-radius);
-  max-width: 900px;
+  border: 1px solid var(--ld-line);
+  border-radius: var(--ld-radius-l);
 }
-select,
-input,
-textarea {
+.kb-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+.cat {
+  flex: none;
+  width: 90px;
   padding: 7px 10px;
-  border: 1px solid var(--ld-purple-line);
+  border: 1px solid var(--ld-line);
+  border-radius: 8px;
+  font-size: 13px;
+  background: var(--ld-bg);
+}
+.q {
+  flex: 1;
+  min-width: 0;
+  padding: 8px 12px;
+  border: 1px solid var(--ld-line);
   border-radius: 8px;
   font-size: 13px;
 }
-textarea {
-  min-height: 40px;
-}
 .en {
-  font-size: 12px;
-  color: var(--ld-purple-meta);
-  display: flex;
+  display: inline-flex;
   align-items: center;
-  gap: 4px;
-}
-.act {
-  padding: 6px 16px;
-  border: none;
-  border-radius: 999px;
-  background: var(--ld-purple-ink);
-  color: #fff;
+  gap: 6px;
+  flex: none;
   font-size: 12px;
+  color: var(--ld-content-2);
   cursor: pointer;
 }
-.act.ghost {
-  background: transparent;
-  color: var(--ld-purple-meta);
-  border: 1px solid var(--ld-purple-line);
+.en input {
+  width: 15px;
+  height: 15px;
+  accent-color: var(--ld-brand);
 }
-.act:disabled {
-  opacity: 0.5;
-}
-.ops {
+.icon-btn {
   display: flex;
-  gap: 8px;
-  margin-top: 8px;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  flex: none;
+  border: 1px solid var(--ld-line);
+  border-radius: 8px;
+  background: var(--ld-bg);
+  color: var(--ld-content-2);
+  cursor: pointer;
+}
+.icon-btn:hover {
+  color: var(--ld-red);
+  border-color: var(--ld-red-line);
+}
+textarea {
+  width: 100%;
+  min-height: 48px;
+  padding: 8px 12px;
+  border: 1px solid var(--ld-line);
+  border-radius: 8px;
+  font-size: 13px;
+  font-family: var(--ld-font);
+  box-sizing: border-box;
+  resize: vertical;
+}
+.add-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 9px 18px;
+  border: 1px dashed var(--ld-purple-line);
+  border-radius: 999px;
+  background: var(--ld-bg-lilac);
+  color: var(--ld-brand-active);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
 }
 </style>
