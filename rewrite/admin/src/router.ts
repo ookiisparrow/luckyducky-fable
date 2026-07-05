@@ -23,6 +23,7 @@ const Batches = () => import('./pages/Batches.vue')
 const Settings = () => import('./pages/Settings.vue')
 const Reconciliation = () => import('./pages/Reconciliation.vue')
 const Inventory = () => import('./pages/Inventory.vue')
+const External = () => import('./pages/External.vue')
 const Conversations = () => import('./pages/Conversations.vue')
 const Customer360 = () => import('./pages/Customer360.vue')
 const Kb = () => import('./pages/Kb.vue')
@@ -60,6 +61,7 @@ export const router = createRouter({
         { path: 'settings', component: Settings },
         { path: 'reconciliation', component: Reconciliation },
         { path: 'inventory', component: Inventory },
+        { path: 'external', component: External },
       ],
     },
   ],

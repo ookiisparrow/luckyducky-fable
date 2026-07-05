@@ -27,6 +27,7 @@ import {
   Users,
   QrCode,
   Settings,
+  ExternalLink,
   LogOut,
 } from 'lucide-vue-next'
 import { client } from '../api'
@@ -79,6 +80,7 @@ const NAV = [
     items: [
       { label: '外包账号', path: '/agents', icon: Users },
       { label: '激活码批次', path: '/batches', icon: QrCode },
+      { label: '外部后台', path: '/external', icon: ExternalLink },
       { label: '系统设置', path: '/settings', icon: Settings },
     ],
   },
