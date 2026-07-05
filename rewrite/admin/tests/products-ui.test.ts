@@ -35,14 +35,16 @@ describe('橱窗映射与图片闸', () => {
   it('大白话：按 sort 升序、带在售标记；脏档剔除；图片 80K 提前拦（云端 90K 前的缓冲）', () => {
     const rows = mapShowcaseRows(
       [
-        { id: 'b', name: 'B', sort: 2, featured: true, listed: false },
+        { id: 'b', name: 'B', sort: 2, featured: true, listed: false, price: '39', tag: '热销', cover: 'f1' },
         { id: 'a', name: 'A', sort: 1 },
         { noid: true },
       ],
-      {}
+      { f1: 'https://x/f1.jpg' }
     )
     expect(rows.map((r) => r.id)).toEqual(['a', 'b']) // sort 升序
-    expect(rows[1]).toMatchObject({ featured: true, listed: false })
+    expect(rows[1]).toMatchObject({ featured: true, listed: false, price: '39', tag: '热销' }) // 手机预览字段（换皮丢·B 组还原）
+    expect(rows[1].coverUrl).toBe('https://x/f1.jpg')
+    expect(rows[0].price).toBe('') // 缺价不谎报
     expect(b64SizeOk('x'.repeat(80_000))).toBe(true)
     expect(b64SizeOk('x'.repeat(80_001))).toBe(false)
     expect(b64SizeOk('')).toBe(false)

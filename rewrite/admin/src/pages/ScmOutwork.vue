@@ -1,20 +1,48 @@
 <script setup lang="ts">
 // 外协单（设计语言一致性·M3 UI 批17）：发织女大团原团 → 收同色带结团 → 应付=收×计件价·损耗=发−收 → 结算销账。
 // 逻辑未动，仅套设计语言（页头/草稿卡/grid 表/状态 chip/收货卡/token）。
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, computed } from 'vue'
 import { Plus } from 'lucide-vue-next'
 import { listOutworks, saveOutwork, issueOutwork, receiveOutwork, settleOutwork, cancelOutwork, listMaterials, listSuppliers } from '../api/scm'
 import { materialHuman, outworkStatusLabel, yuanToFen, fenLabel, scmErrorText } from '../lib/mapScm'
+import { consumeOutworkHandoff } from '../lib/scmHandoff'
+import ScmFlowTabs from '../components/ScmFlowTabs.vue'
 
 const orders = ref<Array<Record<string, any>>>([])
 const rawL = ref<Array<Record<string, any>>>([]) // 大团原团（可发）
 const knottedL = ref<Array<Record<string, any>>>([]) // 大团带结（可收）
 const workers = ref<Array<Record<string, any>>>([])
 const message = ref('')
-const form = ref<{ workerId: string; rateYuan: string; lines: Array<{ materialId: string; qty: number }> } | null>(null)
+const msgOk = ref(false) // 换皮 .status 恒红→成功信息显红 bug·区分成功(绿)/失败(红)
+function note(ok: boolean, okText: string, errText: string) {
+  message.value = ok ? okText : errText
+  msgOk.value = ok
+}
+const form = ref<{ outworkId?: string; workerId: string; rateYuan: string; lines: Array<{ materialId: string; qty: number }> } | null>(null)
 const recvFor = ref('')
+const recvOrder = ref<Record<string, any> | null>(null) // 当前收货单（取发料行/计件价·算预览与收≤发防呆）
 const recvLines = ref<Array<{ materialId: string; qty: number }>>([])
 const confirmKey = ref('')
+
+// 收货引导预览（换皮退成裸表单·得手抄颜色/自己算应付损耗/收超发也不拦）
+// 发的每个 raw 色 → 对应 knotted 同色的应收上限
+const issuedByKnotted = computed<Record<string, number>>(() => {
+  const map: Record<string, number> = {}
+  for (const l of recvOrder.value?.issueLines || []) {
+    const m = String(l.materialId).match(/^yarn:([a-z0-9-]+):L:raw$/)
+    if (m) map[`yarn:${m[1]}:L:knotted`] = (map[`yarn:${m[1]}:L:knotted`] || 0) + (Number(l.qty) || 0)
+  }
+  return map
+})
+const issuedTotal = computed(() => (recvOrder.value?.issueLines || []).reduce((s: number, l: Record<string, any>) => s + (Number(l.qty) || 0), 0))
+const recvTotal = computed(() => recvLines.value.reduce((s, l) => s + (Number(l.qty) || 0), 0))
+const recvRateFen = computed(() => Number(recvOrder.value?.pieceRateFen) || 0)
+const previewPayableFen = computed(() => recvTotal.value * recvRateFen.value) // 应付=收×计件价
+const previewLoss = computed(() => Math.max(0, issuedTotal.value - recvTotal.value)) // 损耗=发−收
+function lineOver(l: { materialId: string; qty: number }): boolean {
+  return !!l.materialId && (Number(l.qty) || 0) > (issuedByKnotted.value[l.materialId] ?? 0) // 收>发该色上限
+}
+const anyOver = computed(() => recvLines.value.some(lineOver)) // 任一色收超发→拦确认（后端也会拒·前端先防呆）
 
 async function reload() {
   const [o, m, s] = await Promise.all([listOutworks(), listMaterials(), listSuppliers()])
@@ -23,11 +51,21 @@ async function reload() {
   rawL.value = all.filter((x) => /^yarn:[a-z0-9-]+:L:raw$/.test(String(x._id)))
   knottedL.value = all.filter((x) => /^yarn:[a-z0-9-]+:L:knotted$/.test(String(x._id)))
   workers.value = s.ok ? ((s.list as Record<string, any>[]) || []).filter((x) => x.type === 'outworker') : []
-  message.value = o.ok ? '' : '加载失败：' + String(o.error || '')
+  note(o.ok, '', '加载失败：' + String(o.error || ''))
 }
 
 function newOrder() {
-  form.value = { workerId: '', rateYuan: '', lines: [{ materialId: '', qty: 1 }] }
+  form.value = { outworkId: '', workerId: '', rateYuan: '', lines: [{ materialId: '', qty: 1 }] }
+}
+// 草稿编辑（换皮丢·外协草稿建完只能取消重建·后端 saveOutwork 收 outworkId 支持改）：预填
+function editDraft(o: Record<string, any>) {
+  form.value = {
+    outworkId: String(o._id || ''),
+    workerId: String(o.workerId || ''),
+    rateYuan: o.pieceRateFen != null ? (Number(o.pieceRateFen) / 100).toFixed(2) : '',
+    lines: ((o.issueLines as Record<string, any>[]) || []).map((l) => ({ materialId: String(l.materialId || ''), qty: Number(l.qty) || 1 })),
+  }
+  if (!form.value.lines.length) form.value.lines.push({ materialId: '', qty: 1 })
 }
 
 async function doSave() {
@@ -35,24 +73,40 @@ async function doSave() {
   if (!f) return
   const fen = yuanToFen(f.rateYuan)
   if (fen === null) {
-    message.value = '计件单价不合法（元·最多两位小数·可为 0）'
+    note(false, '', '计件单价不合法（元·最多两位小数·可为 0）')
     return
   }
-  const r = await saveOutwork(f.workerId, fen, f.lines.map((l) => ({ materialId: l.materialId, qty: Number(l.qty) })))
-  message.value = r.ok ? '外协草稿已建' : scmErrorText(r.error)
+  const r = await saveOutwork(f.workerId, fen, f.lines.map((l) => ({ materialId: l.materialId, qty: Number(l.qty) })), f.outworkId || undefined)
+  note(r.ok, `外协草稿已${f.outworkId ? '更新' : '建'}`, scmErrorText(r.error))
   if (r.ok) form.value = null
   void reload()
 }
 
 function startRecv(o: Record<string, any>) {
   recvFor.value = String(o._id)
-  recvLines.value = [{ materialId: '', qty: 1 }]
+  recvOrder.value = o
+  // 按发料色预填：发的 raw → 收同色 knotted·默认收满(=发量·收≤发)·省手抄颜色
+  recvLines.value = (o.issueLines || [])
+    .map((l: Record<string, any>) => {
+      const m = String(l.materialId).match(/^yarn:([a-z0-9-]+):L:raw$/)
+      return { materialId: m ? `yarn:${m[1]}:L:knotted` : '', qty: Number(l.qty) || 1 }
+    })
+    .filter((r: { materialId: string }) => r.materialId)
+  if (!recvLines.value.length) recvLines.value = [{ materialId: '', qty: 1 }]
+}
+function cancelRecv() {
+  recvFor.value = ''
+  recvOrder.value = null
 }
 
 async function doRecv() {
+  if (anyOver.value) {
+    note(false, '', '有颜色收货数超过发出数（收 ≤ 发）——请核对')
+    return
+  }
   const r = await receiveOutwork(recvFor.value, recvLines.value.map((l) => ({ materialId: l.materialId, qty: Number(l.qty) })))
-  message.value = r.ok ? `已收货入库：应付 ${fenLabel(r.payableFen)} · 损耗 ${Number(r.lossQty) || 0} 团（已定格）` : scmErrorText(r.error)
-  if (r.ok) recvFor.value = ''
+  note(r.ok, `已收货入库：应付 ${fenLabel(r.payableFen)} · 损耗 ${Number(r.lossQty) || 0} 团（已定格）`, scmErrorText(r.error))
+  if (r.ok) cancelRecv()
   void reload()
 }
 
@@ -67,7 +121,15 @@ async function step(fn: (_id: string) => Promise<Record<string, unknown>>, id: s
   void reload()
 }
 
-onMounted(reload)
+onMounted(async () => {
+  await reload()
+  // 从备货计算器「去外协开单」带来的应发原团预填（一次性 consume）：新草稿 + 发料行（织女/计件价待填）
+  const h = consumeOutworkHandoff()
+  if (h && h.lines.length) {
+    form.value = { outworkId: '', workerId: '', rateYuan: '', lines: h.lines.map((l) => ({ materialId: l.materialId, qty: l.qty })) }
+    note(true, '已按备货缺口预填发料，选织女 + 填计件价后保存', '')
+  }
+})
 </script>
 
 <template>
@@ -80,7 +142,8 @@ onMounted(reload)
       <button class="btn-primary" @click="newOrder"><Plus :size="15" :stroke-width="2" /><span>新建外协单</span></button>
     </header>
 
-    <p v-if="message" class="status">{{ message }}</p>
+    <ScmFlowTabs />
+    <p v-if="message" class="status" :class="{ ok: msgOk }">{{ message }}</p>
 
     <section v-if="form" class="draft">
       <select v-model="form.workerId" class="full">
@@ -113,6 +176,7 @@ onMounted(reload)
         <span class="muted">{{ o.payableFen != null ? fenLabel(o.payableFen) + ' / 损 ' + (o.lossQty || 0) : '—' }}</span>
         <span><span class="state" :class="o.status">{{ outworkStatusLabel(o.status) }}</span></span>
         <div class="c-ops r">
+          <button v-if="o.status === 'draft'" class="act ghost" @click="editDraft(o)">编辑</button>
           <button v-if="o.status === 'draft'" class="act primary" @click="step(issueOutwork, o._id, 'iss:' + o._id)">
             {{ confirmKey === 'iss:' + o._id ? '确认发料出库？' : '发料' }}
           </button>
@@ -129,21 +193,28 @@ onMounted(reload)
     <p v-else-if="!form" class="status-soft">还没有外协单</p>
 
     <section v-if="recvFor" class="draft recv">
-      <h2>收货 · <span class="mono">{{ recvFor }}</span>（只能收发过颜色的大团带结·收 ≤ 发）</h2>
-      <div v-for="(l, i) in recvLines" :key="i" class="linerow">
+      <h2>收货 · <span class="mono">{{ recvFor }}</span>（已按发料色预填·收 ≤ 发）</h2>
+      <div v-for="(l, i) in recvLines" :key="i" class="linerow recv-row" :class="{ over: lineOver(l) }">
         <select v-model="l.materialId">
           <option value="">选带结团…</option>
           <option v-for="m in knottedL" :key="m._id" :value="m._id">{{ materialHuman(m._id) }}</option>
         </select>
         <input v-model.number="l.qty" type="number" min="1" placeholder="团数" />
+        <span class="cap">上限 {{ issuedByKnotted[l.materialId] ?? 0 }}{{ lineOver(l) ? ' · 超发！' : '' }}</span>
         <button class="act ghost" @click="recvLines.splice(i, 1)">删行</button>
+      </div>
+      <div class="recv-preview">
+        <span>发出 <strong>{{ issuedTotal }}</strong> 团</span>
+        <span>收 <strong>{{ recvTotal }}</strong> 团</span>
+        <span>应付预览 <strong class="pay">{{ fenLabel(previewPayableFen) }}</strong></span>
+        <span>损耗 <strong :class="{ loss: previewLoss > 0 }">{{ previewLoss }}</strong> 团</span>
       </div>
       <div class="ops">
         <button class="act ghost" @click="recvLines.push({ materialId: '', qty: 1 })"><Plus :size="13" :stroke-width="2" /><span>加色</span></button>
-        <button class="act primary" @click="doRecv">确认收货（定格应付与损耗）</button>
-        <button class="act ghost" @click="recvFor = ''">取消</button>
+        <button class="act primary" :disabled="anyOver" @click="doRecv">确认收货（定格应付与损耗）</button>
+        <button class="act ghost" @click="cancelRecv">取消</button>
       </div>
-      <p class="hint">带结团要先在物料页建档；收货那一刻应付与损耗一次定格，结算不重算。</p>
+      <p class="hint">带结团要先在物料页建档；应付/损耗按实际收货数一刻定格，结算不重算（上方为预览）。</p>
     </section>
   </div>
 </template>
@@ -189,6 +260,9 @@ h1 {
   color: var(--ld-red);
   margin-bottom: 10px;
 }
+.status.ok {
+  color: var(--ld-green);
+}
 .status-soft {
   font-size: 13px;
   color: var(--ld-content-2);
@@ -230,10 +304,52 @@ h1 {
   border-radius: 8px;
   font-size: 13px;
 }
+.recv-row {
+  grid-template-columns: 2fr 90px auto auto;
+  align-items: center;
+}
+.cap {
+  font-size: 11.5px;
+  color: var(--ld-content-2);
+  white-space: nowrap;
+}
+.recv-row.over .cap {
+  color: var(--ld-red);
+  font-weight: 600;
+}
+.recv-row.over input {
+  border-color: var(--ld-red-line);
+  background: var(--ld-bg-red-soft);
+}
+.recv-preview {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  margin: 6px 0 10px;
+  padding: 10px 12px;
+  background: var(--ld-bg-lilac);
+  border-radius: 10px;
+  font-size: 12.5px;
+  color: var(--ld-content-2);
+}
+.recv-preview strong {
+  color: var(--ld-ink);
+  font-size: 14px;
+}
+.recv-preview .pay {
+  color: var(--ld-brand-active);
+}
+.recv-preview .loss {
+  color: var(--ld-amber);
+}
 .ops {
   display: flex;
   gap: 8px;
   margin-top: 4px;
+}
+.act:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 .hint {
   margin: 10px 0 0;

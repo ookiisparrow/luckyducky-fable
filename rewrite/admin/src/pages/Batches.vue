@@ -3,9 +3,10 @@
 // 详情抽屉码表接 listBatchCodes 真码 + CSV 导出（客户端真生成）。
 // 诚实边界：后端 listBatches 需 courseId（无「列全量批次」action）——按课程范围查（非跨课「全部」）；
 // listBatchCodes 只回码串无每码激活态——码表不标单码已激活/未用（记待办）；印刷包 ZIP/二维码图导出属旧台待补（记待办）。
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted } from 'vue'
+import QRCode from 'qrcode'
 import { Layers, QrCode, CircleCheck, TrendingUp, X, Download } from 'lucide-vue-next'
-import { listBatches, createBatch, listBatchCodes } from '../api/system'
+import { listBatches, createBatch, listBatchCodes, getSettings } from '../api/system'
 import { mapBatches, type BatchRow } from '../lib/mapSystem'
 
 const courseId = ref('')
@@ -21,6 +22,14 @@ const filter = ref<'all' | 'using' | 'used' | 'fresh'>('all')
 const detail = ref<BatchRow | null>(null)
 const codes = ref<string[]>([])
 const codesLoading = ref(false)
+const urlPrefix = ref('') // 激活码落地网址前缀（换皮 CSV 只导码不导网址·印刷厂拿不到落地地址）
+const testQr = ref('') // 测试二维码 dataURL（量产前扫码验落地页·换皮丢了这个·根因#8）
+const codeUrl = (code: string) => urlPrefix.value + code
+
+onMounted(async () => {
+  const r = await getSettings()
+  if (r.ok) urlPrefix.value = String((r as any).settings?.urlPrefix || (r as any).urlPrefix || '')
+})
 
 function statusOf(b: BatchRow): 'using' | 'used' | 'fresh' {
   if (b.activated <= 0) return 'fresh'
@@ -86,6 +95,7 @@ async function doCreate() {
 async function openDetail(b: BatchRow) {
   detail.value = b
   codes.value = []
+  testQr.value = ''
   codesLoading.value = true
   const r = await listBatchCodes(b.batchId)
   codes.value = r.ok ? (r.codes as string[]) : []
@@ -93,11 +103,21 @@ async function openDetail(b: BatchRow) {
 }
 function closeDetail() {
   detail.value = null
+  testQr.value = ''
 }
+// 测试二维码（量产前扫码验落地页·换皮丢·根因#8「拿到≠用通」）：取首码生成 QR，手机微信扫屏验证
+async function makeTestQr() {
+  const first = codes.value[0]
+  if (!first) return
+  testQr.value = await QRCode.toDataURL(codeUrl(first), { width: 320, margin: 1 })
+}
+// CSV 导出：换皮只导「激活码」单列·印刷厂拿不到落地地址；补「网址」列（激活码,完整URL·Excel BOM）
 function exportCsv() {
   if (!detail.value || !codes.value.length) return
-  const csv = '激活码\n' + codes.value.join('\n')
-  const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }))
+  const head = urlPrefix.value ? '激活码,网址' : '激活码'
+  const lines = codes.value.map((c) => (urlPrefix.value ? `${c},${codeUrl(c)}` : c))
+  const csv = [head, ...lines].join('\n')
+  const url = URL.createObjectURL(new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8' })) // BOM 防 Excel 中文乱码
   const a = document.createElement('a')
   a.href = url
   a.download = detail.value.batchId + '-codes.csv'
@@ -207,11 +227,16 @@ function exportCsv() {
 
         <div class="codes-head">
           <span class="codes-title">激活码 · {{ detail.total }}</span>
-          <button class="export" :disabled="!codes.length" @click="exportCsv">
-            <Download :size="13" :stroke-width="1.8" /><span>导出 CSV</span>
-          </button>
+          <div class="codes-ops">
+            <button class="export" :disabled="!codes.length" @click="makeTestQr"><QrCode :size="13" :stroke-width="1.8" /><span>测试二维码</span></button>
+            <button class="export" :disabled="!codes.length" @click="exportCsv"><Download :size="13" :stroke-width="1.8" /><span>导出 CSV</span></button>
+          </div>
         </div>
-        <p class="codes-note">码表为批次全部激活码（一码一地址）；单码「已激活/未用」状态后端暂未随码返回，看整体激活率。</p>
+        <div v-if="testQr" class="testqr">
+          <img :src="testQr" alt="测试二维码" />
+          <p>手机微信扫这个码，量产前验证激活落地页正常（首码 <b>{{ codes[0] }}</b>）<br /><code>{{ codeUrl(codes[0]) }}</code></p>
+        </div>
+        <p class="codes-note">码表为批次全部激活码（一码一地址）；导出 CSV 含「激活码,网址」双列（印刷厂据此制卡）。单码「已激活/未用」状态后端暂未随码返回，看整体激活率。</p>
         <div class="code-list">
           <p v-if="codesLoading" class="code-loading">取码中…</p>
           <p v-else-if="!codes.length" class="code-loading">无码</p>
@@ -568,6 +593,38 @@ h1 {
   font-size: 13px;
   font-weight: 600;
   color: var(--ld-ink);
+}
+.codes-ops {
+  display: flex;
+  gap: 8px;
+}
+.testqr {
+  display: flex;
+  gap: 14px;
+  align-items: center;
+  margin: 10px 0;
+  padding: 12px;
+  background: var(--ld-bg-lilac);
+  border-radius: 10px;
+}
+.testqr img {
+  width: 120px;
+  height: 120px;
+  flex: none;
+  background: #fff;
+  border-radius: 8px;
+}
+.testqr p {
+  margin: 0;
+  font-size: 12px;
+  color: var(--ld-content);
+  line-height: 1.6;
+}
+.testqr code {
+  font-family: var(--ld-font-mono);
+  font-size: 11px;
+  color: var(--ld-content-2);
+  word-break: break-all;
 }
 .export {
   display: flex;

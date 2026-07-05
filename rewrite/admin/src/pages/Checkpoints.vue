@@ -1,7 +1,7 @@
 <script setup lang="ts">
 // 节点诊断策展（设计语言一致性·M3 UI 批15）：为某门课维护「关键节点 + 挽回办法」（学员卡壳时坐席据此精准指导）。
 // 整课覆盖式保存——只动定义、绝不碰学员拍照提交（云端保证）。逻辑未动，仅套设计语言。
-import { ref } from 'vue'
+import { ref, onMounted } from 'vue'
 import { RotateCcw, Trash2, Plus } from 'lucide-vue-next'
 import { listCheckpoints, saveCheckpoints } from '../api/cs'
 
@@ -12,11 +12,12 @@ interface NodeRow {
   order: number
 }
 
-const courseId = ref('')
+const courseId = ref('course-duck') // 默认旗舰课（换皮丢了默认载入·每次手敲）
 const nodes = ref<NodeRow[]>([])
 const loaded = ref(false)
 const message = ref('')
 const busy = ref(false)
+const confirmKey = ref('')
 
 async function load() {
   if (!courseId.value.trim()) return
@@ -31,14 +32,34 @@ async function load() {
 function addNode() {
   nodes.value.push({ nodeId: 'n' + (nodes.value.length + 1), title: '', remedy: '', order: nodes.value.length })
 }
+// ↑↓ 重排（换皮丢·节点顺序有业务含义·且 order 曾在 addNode 定死不重算＝排序错乱隐患）
+function move(i: number, dir: number) {
+  const j = i + dir
+  if (j < 0 || j >= nodes.value.length) return
+  const t = nodes.value[i]
+  nodes.value[i] = nodes.value[j]
+  nodes.value[j] = t
+}
+function delNode(i: number) {
+  if (confirmKey.value !== 'd:' + i) {
+    confirmKey.value = 'd:' + i
+    return
+  }
+  confirmKey.value = ''
+  nodes.value.splice(i, 1)
+}
 
 async function save() {
   if (busy.value || !courseId.value.trim()) return
   busy.value = true
-  const r = await saveCheckpoints(courseId.value.trim(), nodes.value)
+  // order 按当前位置重算（修排序错乱：换皮 order 在 addNode 定死、删除后不重算）+ 过滤空标题节点
+  const payload = nodes.value.filter((n) => n.title.trim()).map((n, i) => ({ ...n, order: i }))
+  const r = await saveCheckpoints(courseId.value.trim(), payload)
   busy.value = false
   message.value = r.ok ? `已保存 ${Number(r.count) || 0} 个节点（整课覆盖·学员提交不受影响）` : '保存失败：' + String(r.error || '')
 }
+
+onMounted(load) // 默认旗舰课自动载入
 </script>
 
 <template>
@@ -60,9 +81,12 @@ async function save() {
     <template v-if="loaded">
       <div v-for="(n, i) in nodes" :key="i" class="node-card">
         <div class="node-head">
+          <span class="nrank">{{ i + 1 }}</span>
           <input v-model="n.nodeId" placeholder="节点 id（如 n1）" class="nid" />
           <input v-model="n.title" placeholder="节点名（如 第二段收口）" maxlength="100" class="ntitle" />
-          <button class="icon-btn" title="删节点" @click="nodes.splice(i, 1)"><Trash2 :size="14" :stroke-width="1.8" /></button>
+          <button class="icon-btn" title="上移" :disabled="i === 0" @click="move(i, -1)">↑</button>
+          <button class="icon-btn" title="下移" :disabled="i === nodes.length - 1" @click="move(i, 1)">↓</button>
+          <button class="icon-btn" :class="{ warn: confirmKey === 'd:' + i }" :title="confirmKey === 'd:' + i ? '再点确认删除' : '删节点'" @click="delNode(i)"><Trash2 :size="14" :stroke-width="1.8" /></button>
         </div>
         <textarea v-model="n.remedy" placeholder="挽回办法（学员卡这里时坐席照此指导·≤2000 字）" maxlength="2000" />
       </div>
@@ -174,6 +198,24 @@ h1 {
 .icon-btn:hover {
   color: var(--ld-red);
   border-color: var(--ld-red-line);
+}
+.icon-btn.warn {
+  color: var(--ld-red);
+  border-color: var(--ld-red-line);
+  background: var(--ld-bg-red-soft);
+}
+.nrank {
+  flex: none;
+  width: 22px;
+  height: 22px;
+  border-radius: 6px;
+  background: var(--ld-bg-lilac);
+  color: var(--ld-content-2);
+  font-size: 11px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 textarea {
   width: 100%;

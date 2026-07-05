@@ -1,43 +1,70 @@
 <script setup lang="ts">
 // 物料与供应商（设计语言一致性·M3 UI 批16）：主档（毛线按 色×档×形态 推导料号·计量建档锁死）+ 供应商/织女
 // + 库存调整（必留原因·扣超整单拒）+ 流水查账。逻辑未动，仅套设计语言（页头/表单卡/grid 表/token）。
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, watch } from 'vue'
 import { listMaterials, saveMaterial, listSuppliers, saveSupplier, adjustStock, listLedger } from '../api/scm'
 import { materialHuman, uomLabel, scmErrorText, mapLedger, type LedgerRow } from '../lib/mapScm'
 import { dateTime } from '../lib/format'
+import ScmFlowTabs from '../components/ScmFlowTabs.vue'
 
 const mats = ref<Array<Record<string, any>>>([])
 const sups = ref<Array<Record<string, any>>>([])
 const ledger = ref<LedgerRow[]>([])
+const ledgerMat = ref('') // 当前流水按哪个料号过滤（空=全部·换皮丢了行内按料查流水）
 const message = ref('')
+const msgOk = ref(false) // 换皮 .status 恒红→成功信息显红 bug·区分成功(绿)/失败(红)
+function note(ok: boolean, okText: string, errText: string) {
+  message.value = ok ? okText : errText
+  msgOk.value = ok
+}
+
+// 行内按料号查流水（换皮只有全局最近流水·listLedger 支持 materialId 过滤）
+async function loadLedger(materialId?: string) {
+  const l = await listLedger(materialId)
+  ledger.value = l.ok ? mapLedger(l.list) : []
+  ledgerMat.value = materialId || ''
+}
 
 const matForm = ref({ category: 'yarn', name: '', uom: 'count', color: '', tier: 'L', form: 'raw', productId: '', slug: '', supplierId: '', threshold: 0 })
-const supForm = ref({ name: '', type: 'factory', contact: '' })
+const supForm = ref({ supplierId: '', name: '', type: 'factory', contact: '', note: '' })
 const adj = ref({ materialId: '', delta: 0, reason: '' })
 
+// 毛线按团/件计（换皮 uom 选择对毛线仍开放·毛线只能 count·按克会污染三档槽语义）：category=yarn 强制 count
+watch(() => matForm.value.category, (c) => {
+  if (c === 'yarn') matForm.value.uom = 'count'
+})
+// 编辑既有供应商（换皮丢·填完只能新建·后端 saveSupplier 收 supplierId 支持改+note）：点列表回填
+function editSupplier(s: Record<string, any>) {
+  supForm.value = { supplierId: String(s._id || ''), name: String(s.name || ''), type: String(s.type || 'factory'), contact: String(s.contact || ''), note: String(s.note || '') }
+}
+function resetSupForm() {
+  supForm.value = { supplierId: '', name: '', type: 'factory', contact: '', note: '' }
+}
+
 async function reload() {
-  const [m, s, l] = await Promise.all([listMaterials(), listSuppliers(), listLedger()])
+  const [m, s] = await Promise.all([listMaterials(), listSuppliers()])
   mats.value = m.ok ? (m.list as Record<string, any>[]) : []
   sups.value = s.ok ? (s.list as Record<string, any>[]) : []
-  ledger.value = l.ok ? mapLedger(l.list) : []
-  message.value = m.ok ? '' : '加载失败：' + String(m.error || '')
+  await loadLedger(ledgerMat.value || undefined) // 保持当前料号筛选
+  note(m.ok, '', '加载失败：' + String(m.error || ''))
 }
 
 async function doSaveMaterial() {
   const r = await saveMaterial({ ...matForm.value })
-  message.value = r.ok ? `已建档：${String(r.materialId)}` : scmErrorText(r.error)
+  note(r.ok, `已建档：${String(r.materialId)}`, scmErrorText(r.error))
   void reload()
 }
 
 async function doSaveSupplier() {
   const r = await saveSupplier({ ...supForm.value })
-  message.value = r.ok ? '供应商已保存' : scmErrorText(r.error)
+  note(r.ok, supForm.value.supplierId ? '供应商已更新' : '供应商已保存', scmErrorText(r.error))
+  if (r.ok) resetSupForm()
   void reload()
 }
 
 async function doAdjust() {
   const r = await adjustStock(adj.value.materialId, Number(adj.value.delta), adj.value.reason.trim())
-  message.value = r.ok ? '已调整并留流水' : scmErrorText(r.error)
+  note(r.ok, '已调整并留流水', scmErrorText(r.error))
   void reload()
 }
 
@@ -51,7 +78,8 @@ onMounted(reload)
       <p class="sub">物料主档（毛线料号按 色×档×形态 推导·计量建档后锁死）+ 供应商/织女 + 库存调整（必留原因）。</p>
     </header>
 
-    <p v-if="message" class="status">{{ message }}</p>
+    <ScmFlowTabs />
+    <p v-if="message" class="status" :class="{ ok: msgOk }">{{ message }}</p>
 
     <div class="cols">
       <section class="card">
@@ -63,7 +91,7 @@ onMounted(reload)
           <option value="accessory">辅料</option>
         </select>
         <input v-model="matForm.name" placeholder="名称" maxlength="60" />
-        <select v-model="matForm.uom"><option value="count">按件</option><option value="gram">按克</option></select>
+        <select v-model="matForm.uom" :disabled="matForm.category === 'yarn'" :title="matForm.category === 'yarn' ? '毛线按团/件计·锁定' : ''"><option value="count">按件</option><option value="gram">按克</option></select>
         <template v-if="matForm.category === 'yarn'">
           <input v-model="matForm.color" placeholder="颜色（小写英文如 pink）" />
           <select v-model="matForm.tier"><option value="L">大团</option><option value="M">中团</option><option value="S">小团</option></select>
@@ -75,19 +103,24 @@ onMounted(reload)
           <option value="">（不挂供应商）</option>
           <option v-for="s in sups" :key="s._id" :value="s._id">{{ s.name }}</option>
         </select>
+        <input v-model.number="matForm.threshold" type="number" min="0" placeholder="安全库存阈值（低于报警·0=不报警）" />
         <button class="btn-primary" @click="doSaveMaterial">建档 / 更新</button>
-        <p class="hint">计量方式建档后锁死；毛线料号按 颜色×档位×形态 自动生成。</p>
+        <p class="hint">计量方式建档后锁死；毛线料号按 颜色×档位×形态 自动生成。安全库存阈值＝低于此值列表标红报警（B4：换皮漏了这个输入·恒 0 致低库存告警失效）。</p>
       </section>
 
       <section class="card">
-        <h2>供应商 / 织女</h2>
+        <h2>供应商 / 织女 <span v-if="supForm.supplierId" class="edit-tag">编辑中</span></h2>
         <input v-model="supForm.name" placeholder="名称" maxlength="60" />
         <select v-model="supForm.type"><option value="factory">厂家（可下采购单）</option><option value="outworker">织女（走外协单）</option></select>
         <input v-model="supForm.contact" placeholder="联系方式" maxlength="120" />
-        <button class="btn-primary" @click="doSaveSupplier">保存</button>
+        <input v-model="supForm.note" placeholder="备注（如结算周期/擅长款·可空）" maxlength="200" />
+        <div class="ops">
+          <button class="btn-primary" @click="doSaveSupplier">{{ supForm.supplierId ? '更新' : '保存' }}</button>
+          <button v-if="supForm.supplierId" class="btn-ghost" @click="resetSupForm">取消编辑</button>
+        </div>
         <div class="sup-list">
-          <div v-for="s in sups" :key="s._id" class="sup-line">
-            <span>{{ s.name }}</span>
+          <div v-for="s in sups" :key="s._id" class="sup-line" :class="{ on: supForm.supplierId === s._id }" title="点击编辑" @click="editSupplier(s)">
+            <span class="sup-name">{{ s.name }}<span v-if="s.note" class="sup-note">· {{ s.note }}</span></span>
             <span class="tag">{{ s.type === 'factory' ? '厂家' : '织女' }}</span>
           </div>
         </div>
@@ -114,13 +147,19 @@ onMounted(reload)
           <span>{{ m.name }}</span>
           <span class="muted">{{ uomLabel(m.uom) }}</span>
           <span class="r" :class="{ low: m.threshold && m.stock <= m.threshold }">{{ m.stock }}</span>
-          <span class="muted">{{ (sups.find((s) => s._id === m.supplierId) || {}).name || '—' }}</span>
+          <span class="muted sup-cell">
+            {{ (sups.find((s) => s._id === m.supplierId) || {}).name || '—' }}
+            <button class="led-btn" title="看这个料的流水" @click="loadLedger(m._id)">流水</button>
+          </span>
         </div>
       </div>
     </section>
 
     <section class="table-card">
-      <h2>最近流水</h2>
+      <h2>
+        {{ ledgerMat ? '流水 · ' + materialHuman(ledgerMat) : '最近流水（全部料）' }}
+        <button v-if="ledgerMat" class="led-reset" @click="loadLedger()">← 看全部</button>
+      </h2>
       <div class="table">
         <div class="thead thead-led"><span>时间</span><span>类型</span><span>料</span><span class="r">±</span><span>操作者</span><span>原因</span></div>
         <div v-for="l in ledger" :key="l.id" class="trow trow-led">
@@ -159,6 +198,9 @@ h1 {
   color: var(--ld-red);
   margin-bottom: 10px;
 }
+.status.ok {
+  color: var(--ld-green);
+}
 .cols {
   display: grid;
   grid-template-columns: 1fr 1fr 1fr;
@@ -186,6 +228,33 @@ h2 {
   font-weight: 700;
   color: var(--ld-ink);
 }
+.led-reset {
+  margin-left: 10px;
+  padding: 3px 10px;
+  border: 1px solid var(--ld-line);
+  border-radius: 999px;
+  background: var(--ld-bg);
+  color: var(--ld-content-2);
+  font-size: 11px;
+  font-weight: 400;
+  cursor: pointer;
+}
+.sup-cell {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+}
+.led-btn {
+  flex: none;
+  padding: 2px 9px;
+  border: 1px solid var(--ld-line);
+  border-radius: 999px;
+  background: var(--ld-bg);
+  color: var(--ld-brand-active);
+  font-size: 10.5px;
+  cursor: pointer;
+}
 .card input,
 .card select {
   display: block;
@@ -208,6 +277,29 @@ h2 {
   font-weight: 600;
   cursor: pointer;
 }
+.ops {
+  display: flex;
+  gap: 8px;
+}
+.btn-ghost {
+  padding: 8px 16px;
+  border: 1px solid var(--ld-line);
+  border-radius: 999px;
+  background: var(--ld-bg);
+  color: var(--ld-content-2);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.edit-tag {
+  margin-left: 6px;
+  padding: 1px 8px;
+  border-radius: 999px;
+  background: var(--ld-bg-lilac);
+  color: var(--ld-brand-active);
+  font-size: 10.5px;
+  font-weight: 600;
+}
 .hint {
   margin: 8px 0 0;
   font-size: 11px;
@@ -220,10 +312,29 @@ h2 {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 6px 0;
+  gap: 8px;
+  padding: 6px 8px;
   border-top: 1px solid var(--ld-line);
   font-size: 13px;
   color: var(--ld-content);
+  cursor: pointer;
+  border-radius: 6px;
+}
+.sup-line:hover {
+  background: var(--ld-bg-lilac);
+}
+.sup-line.on {
+  background: var(--ld-bg-lilac);
+}
+.sup-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.sup-note {
+  color: var(--ld-content-2);
+  font-size: 11.5px;
 }
 .tag {
   padding: 2px 9px;

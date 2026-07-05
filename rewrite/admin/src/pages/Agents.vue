@@ -10,6 +10,7 @@ const message = ref('')
 const busy = ref(false)
 const form = ref({ name: '', key: '', wecomUserId: '' })
 const confirmId = ref('')
+const lastCreated = ref<{ name: string; key: string } | null>(null) // 建号后回显口令（换皮不回显·超管拿不到明文转交坐席）
 
 async function reload() {
   const r = await listAgents()
@@ -27,8 +28,9 @@ async function doCreate() {
   const r = await createAgent(form.value.name.trim(), form.value.key, form.value.wecomUserId.trim() || undefined)
   busy.value = false
   if (r.ok) {
+    lastCreated.value = { name: form.value.name.trim(), key: form.value.key } // 回显供转交（系统只存哈希·这里回显你刚输的口令一次）
     form.value = { name: '', key: '', wecomUserId: '' }
-    message.value = '已建号——把口令告诉对方（系统只存哈希·这里不再显示）'
+    message.value = ''
     void reload()
   } else {
     const e = String(r.error || '')
@@ -43,7 +45,7 @@ async function toggle(row: AgentRow) {
   }
   confirmId.value = ''
   const r = await disableAgent(row.id, !row.disabled)
-  message.value = r.ok ? '' : '操作失败：' + String(r.error || '')
+  message.value = r.ok ? (row.disabled ? `已恢复 ${row.name}` : `已停用 ${row.name}（对方即刻登不了）`) : '操作失败：' + String(r.error || '')
   void reload()
 }
 
@@ -84,6 +86,11 @@ onMounted(reload)
       <input v-model="form.key" type="password" placeholder="登录口令（≥6 位）" />
       <input v-model="form.wecomUserId" placeholder="企微 userid（选填·免登用）" maxlength="64" />
       <button class="act primary" :disabled="busy" @click="doCreate">建号</button>
+    </div>
+
+    <div v-if="lastCreated" class="created-card">
+      <div>已建号 <b>{{ lastCreated.name }}</b> · 登录口令（<b>只显示这一次</b>，抄给对方后关闭）：<code>{{ lastCreated.key }}</code></div>
+      <button class="act small" @click="lastCreated = null">已抄下·关闭</button>
     </div>
 
     <div v-if="rows.length" class="table">
@@ -153,6 +160,28 @@ h1 {
   border: 1px solid var(--ld-line);
   border-radius: var(--ld-radius-l);
   max-width: 820px;
+}
+.created-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 16px;
+  margin-bottom: 16px;
+  max-width: 820px;
+  background: var(--ld-bg-green-soft);
+  border: 1px solid var(--ld-green);
+  border-radius: var(--ld-radius-l);
+  font-size: 12.5px;
+  color: var(--ld-content);
+}
+.created-card code {
+  font-family: var(--ld-font-mono);
+  font-weight: 700;
+  color: var(--ld-ink);
+  background: var(--ld-bg);
+  padding: 2px 8px;
+  border-radius: 6px;
 }
 .form-card input {
   padding: 8px 12px;

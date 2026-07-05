@@ -2,8 +2,10 @@
 // 壳布局（M3 信息架构：按运营动作六组重排）。视觉按 design/console.pen Component/Sidebar 规格：
 // 232px 白底右分线、鸭徽 logo、分组小标题、图标导航项（active=淡紫底+紫描边）、底部管理员条。
 // 设计稿侧栏只画了重设计屏子集；六组全量 IA 是 M3「运营动作零缺失」要求，保留不裁（刻意偏离，见重构日志）。
-import { useRouter } from 'vue-router'
+import { ref } from 'vue'
+import { useRouter, useRoute } from 'vue-router'
 import {
+  ChevronDown,
   ChartColumn,
   Package,
   GraduationCap,
@@ -92,6 +94,28 @@ const NAV = [
   },
 ]
 
+// 侧栏分组折叠（换皮丢了折叠/持久·24 项平铺偏长）：localStorage 记忆 + 进组自动展开
+const route = useRoute()
+const COLLAPSE_KEY = 'ldrw-admin-nav-collapsed'
+function loadCollapsed(): Set<string> {
+  try {
+    const v = JSON.parse(localStorage.getItem(COLLAPSE_KEY) || '[]')
+    return new Set(Array.isArray(v) ? (v as string[]) : [])
+  } catch {
+    return new Set()
+  }
+}
+const collapsed = ref<Set<string>>(loadCollapsed())
+function toggleGroup(g: string) {
+  const s = new Set(collapsed.value)
+  s.has(g) ? s.delete(g) : s.add(g)
+  collapsed.value = s
+  localStorage.setItem(COLLAPSE_KEY, JSON.stringify([...s]))
+}
+// 当前路由所在组强制展开（进组自动展开·不受折叠影响）；否则看用户折叠态
+const isOpen = (g: { group: string; items: Array<{ path: string }> }) =>
+  g.items.some((it) => it.path === route.path) || !collapsed.value.has(g.group)
+
 function logout() {
   client.logout()
   void router.push('/login')
@@ -110,11 +134,16 @@ function logout() {
       </div>
       <nav>
         <div v-for="g in NAV" :key="g.group" class="group">
-          <div class="group-title">{{ g.group }}</div>
-          <router-link v-for="it in g.items" :key="it.path" :to="it.path" class="item">
-            <component :is="it.icon" class="item-icon" :size="17" :stroke-width="1.8" />
-            <span>{{ it.label }}</span>
-          </router-link>
+          <button class="group-title" @click="toggleGroup(g.group)">
+            <span>{{ g.group }}</span>
+            <ChevronDown class="grp-caret" :class="{ closed: !isOpen(g) }" :size="13" :stroke-width="2" />
+          </button>
+          <template v-if="isOpen(g)">
+            <router-link v-for="it in g.items" :key="it.path" :to="it.path" class="item">
+              <component :is="it.icon" class="item-icon" :size="17" :stroke-width="1.8" />
+              <span>{{ it.label }}</span>
+            </router-link>
+          </template>
         </div>
       </nav>
       <div class="admin">
@@ -183,10 +212,25 @@ aside {
   margin-top: 2px;
 }
 .group-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
   font-size: 11px;
   letter-spacing: 0.5px;
   color: var(--ld-purple-meta);
   padding: 14px 12px 4px;
+  border: none;
+  background: none;
+  cursor: pointer;
+  text-align: left;
+}
+.grp-caret {
+  color: var(--ld-content-2);
+  transition: transform 0.15s;
+}
+.grp-caret.closed {
+  transform: rotate(-90deg);
 }
 .item {
   display: flex;

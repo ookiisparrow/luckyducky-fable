@@ -107,7 +107,20 @@ export function mapPanels(r: unknown): PanelVM[] {
         rows.push({ k: label, v: k === 'lastActiveAt' ? dateTime(v) || String(v) : Array.isArray(v) ? `${v.length} 条` : String(v) })
       }
     } else if (!failed && Array.isArray(p.data)) {
-      rows.push({ k: '条数', v: String(p.data.length) })
+      // 数组明细逐行渲染（换皮误塌成「条数:N」·废掉 360 取证核心价值）：订单/激活/进课/照片等逐条成键值行
+      const arr = p.data as unknown[]
+      if (!arr.length) rows.push({ k: '（空）', v: '暂无记录' })
+      arr.slice(0, 50).forEach((item, i) => {
+        let v: string
+        if (item && typeof item === 'object') {
+          v = Object.entries(item as Record<string, unknown>)
+            .filter(([, val]) => val != null && val !== '' && val !== false)
+            .map(([kk, val]) => (kk.toLowerCase().endsWith('at') && typeof val === 'number' ? dateTime(val) || String(val) : String(val)))
+            .join(' · ')
+        } else v = String(item)
+        rows.push({ k: '#' + (i + 1), v })
+      })
+      if (arr.length > 50) rows.push({ k: '…', v: `共 ${arr.length} 条（余略）` }) // 有界·不假装全渲染
     }
     return { key: String(p.key || ''), label: String(p.label || p.key || ''), failed, rows } // 单面板 error 隔离·其余照渲染
   })

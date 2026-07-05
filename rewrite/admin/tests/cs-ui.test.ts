@@ -32,7 +32,11 @@ describe('360 面板（单面板失败隔离）', () => {
     expect(panels[0].rows.find((r) => r.k === '订单数')!.v).toBe('3') // 人话标签
     expect(panels[1].failed).toBe(true) // 只标挂的
     expect(panels[2].failed).toBe(false)
-    expect(panels[2].rows).toEqual([{ k: '条数', v: '2' }]) // 数组面板给条数
+    // B-issue 修：数组面板逐行渲明细（换皮误塌成「条数:N」·废掉 360 取证核心价值）
+    expect(panels[2].rows).toEqual([
+      { k: '#1', v: '1' },
+      { k: '#2', v: '2' },
+    ])
     expect(mapPanels(null)).toEqual([])
   })
 

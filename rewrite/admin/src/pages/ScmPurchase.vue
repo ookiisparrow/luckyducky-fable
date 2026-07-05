@@ -1,29 +1,73 @@
 <script setup lang="ts">
 // 采购单（设计语言一致性·M3 UI 批16）：草稿→已下单→已收货（收货首次流转入库·重复收货不双入）；总价服务端算。
 // 逻辑未动，仅套设计语言（页头/草稿表单卡/grid 表/token）。
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, computed } from 'vue'
 import { Plus } from 'lucide-vue-next'
 import { listPurchases, savePurchase, markOrdered, receivePurchase, cancelPurchase, listMaterials, listSuppliers } from '../api/scm'
 import { materialHuman, purchaseStatusLabel, yuanToFen, fenLabel, scmErrorText } from '../lib/mapScm'
 import { dateTime } from '../lib/format'
+import { consumePurchaseHandoff } from '../lib/scmHandoff'
+import ScmFlowTabs from '../components/ScmFlowTabs.vue'
 
 const orders = ref<Array<Record<string, any>>>([])
 const mats = ref<Array<Record<string, any>>>([])
 const sups = ref<Array<Record<string, any>>>([])
 const message = ref('')
-const form = ref<{ supplierId: string; lines: Array<{ materialId: string; qty: number; priceYuan: string }> } | null>(null)
+const msgOk = ref(false) // 换皮 .status 恒红→成功信息显红 bug·区分成功(绿)/失败(红)
+function note(ok: boolean, okText: string, errText: string) {
+  message.value = ok ? okText : errText
+  msgOk.value = ok
+}
+const form = ref<{ purchaseId?: string; supplierId: string; lines: Array<{ materialId: string; qty: number; priceYuan: string }> } | null>(null)
 const confirmKey = ref('')
+const filter = ref('') // 状态筛选（换皮丢·恒取全部）
+const FILTERS = [
+  { key: '', label: '全部' },
+  { key: 'draft', label: '草稿' },
+  { key: 'ordered', label: '已下单' },
+  { key: 'received', label: '已收货' },
+  { key: 'cancelled', label: '已取消' },
+]
+function pickFilter(k: string) {
+  filter.value = k
+  void reload()
+}
+
+// 逐行小计 + 总价预览（换皮丢·建单看不到花多少钱·总价要保存后才知道）：客户端预览，服务端 savePurchase 仍权威核算
+function lineFen(l: { qty: number; priceYuan: string }): number | null {
+  const fen = yuanToFen(l.priceYuan)
+  return fen === null ? null : fen * (Number(l.qty) || 0)
+}
+const draftTotalFen = computed(() => {
+  if (!form.value) return null
+  let sum = 0
+  for (const l of form.value.lines) {
+    const f = lineFen(l)
+    if (f === null) return null // 有非法/未填价的行→整单无法预览
+    sum += f
+  }
+  return sum
+})
 
 async function reload() {
-  const [p, m, s] = await Promise.all([listPurchases(), listMaterials(), listSuppliers()])
+  const [p, m, s] = await Promise.all([listPurchases(filter.value || undefined), listMaterials(), listSuppliers()])
   orders.value = p.ok ? (p.list as Record<string, any>[]) : []
   mats.value = m.ok ? (m.list as Record<string, any>[]) : []
   sups.value = s.ok ? ((s.list as Record<string, any>[]) || []).filter((x) => x.type === 'factory') : []
-  message.value = p.ok ? '' : '加载失败：' + String(p.error || '')
+  note(p.ok, '', '加载失败：' + String(p.error || ''))
 }
 
 function newOrder() {
-  form.value = { supplierId: '', lines: [{ materialId: '', qty: 1, priceYuan: '' }] }
+  form.value = { purchaseId: '', supplierId: '', lines: [{ materialId: '', qty: 1, priceYuan: '' }] }
+}
+// 草稿编辑（换皮丢·草稿建完只能取消重建·后端 savePurchase 收 purchaseId 支持改）：预填表单
+function editDraft(o: Record<string, any>) {
+  form.value = {
+    purchaseId: String(o._id || ''),
+    supplierId: String(o.supplierId || ''),
+    lines: ((o.lines as Record<string, any>[]) || []).map((l) => ({ materialId: String(l.materialId || ''), qty: Number(l.qty) || 1, priceYuan: l.unitPriceFen != null ? (Number(l.unitPriceFen) / 100).toFixed(2) : '' })),
+  }
+  if (!form.value.lines.length) form.value.lines.push({ materialId: '', qty: 1, priceYuan: '' })
 }
 
 async function doSave() {
@@ -33,13 +77,13 @@ async function doSave() {
   for (const l of f.lines) {
     const fen = yuanToFen(l.priceYuan)
     if (fen === null) {
-      message.value = '单价不合法（元·最多两位小数）'
+      note(false, '', '单价不合法（元·最多两位小数）')
       return
     }
     lines.push({ materialId: l.materialId, qty: Number(l.qty), unitPriceFen: fen })
   }
-  const r = await savePurchase(f.supplierId, lines)
-  message.value = r.ok ? `草稿已建（总价 ${fenLabel(r.totalFen)}·服务端核算）` : scmErrorText(r.error)
+  const r = await savePurchase(f.supplierId, lines, f.purchaseId || undefined) // 传 purchaseId＝改草稿·空＝新建
+  note(r.ok, `草稿已${f.purchaseId ? '更新' : '建'}（总价 ${fenLabel(r.totalFen)}·服务端核算）`, scmErrorText(r.error))
   if (r.ok) form.value = null
   void reload()
 }
@@ -57,7 +101,15 @@ async function step(fn: (_id: string) => Promise<Record<string, unknown>>, id: s
   void reload()
 }
 
-onMounted(reload)
+onMounted(async () => {
+  await reload()
+  // 从备货计算器「去采购开单」带来的缺口预填（一次性 consume）：新草稿 + 供应商 + 缺口行（价待填）
+  const h = consumePurchaseHandoff()
+  if (h) {
+    form.value = { purchaseId: '', supplierId: h.supplierId, lines: h.lines.length ? h.lines.map((l) => ({ materialId: l.materialId, qty: l.qty, priceYuan: '' })) : [{ materialId: '', qty: 1, priceYuan: '' }] }
+    note(true, '已按备货缺口预填草稿，补单价后保存', '')
+  }
+})
 </script>
 
 <template>
@@ -70,7 +122,8 @@ onMounted(reload)
       <button class="btn-primary" @click="newOrder"><Plus :size="15" :stroke-width="2" /><span>新建采购单</span></button>
     </header>
 
-    <p v-if="message" class="status">{{ message }}</p>
+    <ScmFlowTabs />
+    <p v-if="message" class="status" :class="{ ok: msgOk }">{{ message }}</p>
 
     <section v-if="form" class="draft">
       <select v-model="form.supplierId" class="sup-sel">
@@ -84,7 +137,12 @@ onMounted(reload)
         </select>
         <input v-model.number="l.qty" type="number" min="1" placeholder="数量" />
         <input v-model="l.priceYuan" placeholder="单价（元）" />
+        <span class="line-sub">{{ lineFen(l) === null ? '—' : fenLabel(lineFen(l)) }}</span>
         <button class="act ghost" @click="form.lines.splice(i, 1)">删行</button>
+      </div>
+      <div class="draft-total">
+        合计预览：<strong>{{ draftTotalFen === null ? '填全单价后显示' : fenLabel(draftTotalFen) }}</strong>
+        <span class="total-hint">（保存时以服务端核算为准）</span>
       </div>
       <div class="ops">
         <button class="act ghost" @click="form.lines.push({ materialId: '', qty: 1, priceYuan: '' })"><Plus :size="13" :stroke-width="2" /><span>加行</span></button>
@@ -92,6 +150,10 @@ onMounted(reload)
         <button class="act ghost" @click="form = null">取消</button>
       </div>
     </section>
+
+    <div class="filters">
+      <button v-for="f in FILTERS" :key="f.key" class="fchip" :class="{ on: filter === f.key }" @click="pickFilter(f.key)">{{ f.label }}</button>
+    </div>
 
     <div v-if="orders.length" class="table">
       <div class="thead"><span>单号</span><span>供应商</span><span class="r">行数</span><span class="r">总价</span><span>状态</span><span>时间</span><span class="r">操作</span></div>
@@ -103,6 +165,7 @@ onMounted(reload)
         <span><span class="state" :class="o.status">{{ purchaseStatusLabel(o.status) }}</span></span>
         <span class="muted">{{ dateTime(o.createdAt) }}</span>
         <div class="c-ops r">
+          <button v-if="o.status === 'draft'" class="act ghost" @click="editDraft(o)">编辑</button>
           <button v-if="o.status === 'draft'" class="act primary" @click="step(markOrdered, o._id, 'ord:' + o._id)">标记已下单</button>
           <button v-if="o.status === 'ordered'" class="act primary" @click="step(receivePurchase, o._id, 'recv:' + o._id)">
             {{ confirmKey === 'recv:' + o._id ? '确认到货入库？' : '收货入库' }}
@@ -113,7 +176,7 @@ onMounted(reload)
         </div>
       </div>
     </div>
-    <p v-else-if="!form" class="status-soft">还没有采购单</p>
+    <p v-else-if="!form" class="status-soft">{{ filter ? '这个状态下没有采购单' : '还没有采购单' }}</p>
   </div>
 </template>
 
@@ -158,9 +221,32 @@ h1 {
   color: var(--ld-red);
   margin-bottom: 10px;
 }
+.status.ok {
+  color: var(--ld-green);
+}
 .status-soft {
   font-size: 13px;
   color: var(--ld-content-2);
+}
+.filters {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 12px;
+  flex-wrap: wrap;
+}
+.fchip {
+  padding: 6px 14px;
+  border: 1px solid var(--ld-line);
+  border-radius: 999px;
+  background: var(--ld-bg);
+  color: var(--ld-content-2);
+  font-size: 12.5px;
+  cursor: pointer;
+}
+.fchip.on {
+  background: var(--ld-purple-ink);
+  border-color: var(--ld-purple-ink);
+  color: #fff;
 }
 .draft {
   padding: 16px 18px;
@@ -182,9 +268,30 @@ h1 {
 }
 .linerow {
   display: grid;
-  grid-template-columns: 2fr 90px 120px auto;
+  grid-template-columns: 2fr 90px 120px 90px auto;
+  align-items: center;
   gap: 8px;
   margin-bottom: 8px;
+}
+.line-sub {
+  text-align: right;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--ld-content-2);
+  font-family: var(--ld-font-mono);
+}
+.draft-total {
+  margin: 4px 0 12px;
+  font-size: 13px;
+  color: var(--ld-content);
+}
+.draft-total strong {
+  color: var(--ld-brand-active);
+  font-size: 15px;
+}
+.total-hint {
+  font-size: 11px;
+  color: var(--ld-content-2);
 }
 .linerow select,
 .linerow input {

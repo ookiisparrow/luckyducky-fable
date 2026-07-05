@@ -8,14 +8,32 @@ describe('看板映射', () => {
     const vm = mapDashboard({
       ok: true,
       stats: { users: 3, orders: 250, gmv: 258.5, codesTotal: 30, codesActivated: 5, learners: 2 },
-      approx: { gmv: false },
+      approx: { gmv: false, hot: true },
       funnel: { ordered: 250, paid: 200, activated: 5 },
       txAlerts: { feeMismatch: ['o-bad'], refundMismatch: [], stuckRefunds: [] },
+      hot: [{ segId: 's1', name: '第1节·起头', count: 40 }],
+      stuck: [{ segId: 's9', name: '第9节·收针', count: 12 }],
+      recentActivity: [
+        { type: 'order', at: 200, text: '新订单 o1 · ￥2.00' },
+        { type: 'refund', at: 100, text: '退款申请 a1' },
+        { type: 'x', at: 50, text: '' },
+      ],
     })!
     expect(vm.cards.find((c) => c.label.includes('成交额'))).toMatchObject({ value: '¥258.50', note: '精确' })
     expect(vm.alerts).toEqual([{ label: '金额不符单', ids: ['o-bad'] }]) // 空类不渲染
+    // B5：热点/卡点段位后端仍返回·换皮误删——结构化透传 + 抽样近似诚实标注
+    expect(vm.hot).toEqual([{ name: '第1节·起头', count: 40 }])
+    expect(vm.stuck).toEqual([{ name: '第9节·收针', count: 12 }])
+    expect(vm.approxSeg).toBe(true)
+    // 最近动态四类事件流（非纯订单列表）：空 text 剔除
+    expect(vm.recent).toEqual([
+      { type: 'order', at: 200, text: '新订单 o1 · ￥2.00' },
+      { type: 'refund', at: 100, text: '退款申请 a1' },
+    ])
     const clean = mapDashboard({ ok: true, stats: { users: 0 }, txAlerts: {} })!
     expect(clean.alerts).toEqual([]) // 无异常零警报
+    expect(clean.hot).toEqual([]) // 无源空数组·不编数
+    expect(clean.recent).toEqual([])
     expect(mapDashboard({ ok: false, error: 'X' })).toBeNull()
     expect(mapDashboard(null)).toBeNull()
   })

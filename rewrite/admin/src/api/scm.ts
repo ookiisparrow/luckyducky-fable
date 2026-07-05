@@ -27,8 +27,10 @@ export const getBomSetup = () => client.post('getBomSetup')
 export const saveBomTemplate = (template: Record<string, unknown>) => client.post('saveBomTemplate', { template })
 export const saveBomProfile = (profile: Record<string, unknown>) => client.post('saveBomProfile', { profile })
 export const previewAssembly = (productId: string, sets: number) => client.post('previewAssembly', { productId, sets })
-export const runAssembly = (productId: string, spec: string, sets: number) =>
-  client.post('runAssembly', { productId, spec, sets, assemblyId: 'asm-' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6) })
+// B1 修：assemblyId 由页面持有传入（每次组装意图生成一次·重试复用·成功才换新）——后端 _id=assemblyId
+// 确定性 claim 幂等；换皮在此内联现生成新 id，重试/双击送不同 id 绕过幂等闸→双扣料双入库。
+export const runAssembly = (productId: string, spec: string, sets: number, assemblyId: string) =>
+  client.post('runAssembly', { productId, spec, sets, assemblyId })
 export const listAssemblies = () => client.post('listAssemblies')
 
 export const getRestockPlan = (targets: Array<{ productId: string; sets: number }>) => client.post('getRestockPlan', { targets })

@@ -40,6 +40,7 @@ async function submit() {
       <input v-model="password" type="password" placeholder="管理口令" @keyup.enter="submit" />
       <button :disabled="busy" @click="submit">{{ busy ? '登录中…' : '登录' }}</button>
       <p v-if="message" class="error">{{ message }}</p>
+      <p class="agent-note">外包坐席请用<b>坐席工作台</b>登录（不是这个管理后台）——口令登不进这里是正常的。</p>
     </div>
   </div>
 </template>
@@ -93,5 +94,13 @@ button:disabled {
   margin-top: 12px;
   font-size: 12px;
   color: var(--ld-red);
+}
+.agent-note {
+  margin: 16px 0 0;
+  padding-top: 14px;
+  border-top: 1px solid var(--ld-line);
+  font-size: 11.5px;
+  color: var(--ld-content-2);
+  line-height: 1.5;
 }
 </style>

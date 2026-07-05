@@ -1,15 +1,55 @@
 <script setup lang="ts">
 // 备货计算 + 产销统计（设计语言一致性·M3 UI 批18·只读）：目标套数 → 外协缺口（带结不外购）+ 采购缺口按供应商分列；
 // 产销 = 打包累计 vs 发货累计。逻辑未动，仅套设计语言。
-import { ref, onMounted } from 'vue'
-import { Plus } from 'lucide-vue-next'
+import { ref, onMounted, computed } from 'vue'
+import { Plus, ArrowRight } from 'lucide-vue-next'
+import { useRouter } from 'vue-router'
 import { getRestockPlan, getFgSummary } from '../api/scm'
+import { listInventory } from '../api/system'
 import { materialHuman, scmErrorText } from '../lib/mapScm'
+import { setPurchaseHandoff, setOutworkHandoff } from '../lib/scmHandoff'
+import ScmFlowTabs from '../components/ScmFlowTabs.vue'
+
+const router = useRouter()
+// 去开单联动（换皮丢·算完缺口只能手抄颜色/料号/数量去另一页开单·流程割裂）：带数据跳转·目标页 consume 预填
+function goOutworkOrder() {
+  setOutworkHandoff({ lines: (plan.value?.outworkGaps || []).map((g: Record<string, any>) => ({ materialId: `yarn:${g.color}:L:raw`, qty: Number(g.rawToIssue) || 0 })).filter((l) => l.qty > 0) })
+  void router.push('/scm-outwork')
+}
+function goPurchaseOrder(g: Record<string, any>) {
+  setPurchaseHandoff({ supplierId: String(g.supplierId || ''), lines: (g.lines || []).map((l: Record<string, any>) => ({ materialId: String(l.materialId), qty: Number(l.gap) || 0 })).filter((l) => l.qty > 0) })
+  void router.push('/scm-purchase')
+}
 
 const targets = ref<Array<{ productId: string; sets: number }>>([{ productId: '', sets: 10 }])
 const plan = ref<Record<string, any> | null>(null)
 const fg = ref<{ packed: Array<Record<string, any>>; shipped: Array<Record<string, any>> } | null>(null)
+const inv = ref<Record<string, number>>({}) // 成品现存库存 fg:<pid>__<spec> → stock（换皮丢了「现存库存」列）
 const message = ref('')
+
+// 产销三列并表（换皮只两列打包/发货·丢了现存库存）：按 产品×规格 union 打包/发货/现存
+const produceRows = computed(() => {
+  const packed: Record<string, number> = {}
+  const shipped: Record<string, number> = {}
+  const label: Record<string, string> = {}
+  const add = (arr: Record<string, any>[] | undefined, tgt: Record<string, number>) => {
+    ;(arr || []).forEach((p) => {
+      const key = String(p.productId || '') + '__' + String(p.spec || '')
+      tgt[key] = (tgt[key] || 0) + (Number(p.qty) || 0)
+      label[key] = String(p.productId || '') + (p.spec ? '（' + p.spec + '）' : '')
+    })
+  }
+  add(fg.value?.packed, packed)
+  add(fg.value?.shipped, shipped)
+  Object.keys(inv.value).forEach((k) => {
+    if (!label[k]) {
+      const [pid, spec] = k.split('__')
+      label[k] = pid + (spec ? '（' + spec + '）' : '')
+    }
+  })
+  const keys = new Set([...Object.keys(packed), ...Object.keys(shipped), ...Object.keys(inv.value)])
+  return [...keys].map((k) => ({ key: k, name: label[k] || k, packed: packed[k] || 0, shipped: shipped[k] || 0, stock: inv.value[k] ?? null })).sort((a, b) => a.name.localeCompare(b.name))
+})
 
 async function calc() {
   const ts = targets.value.filter((t) => t.productId.trim())
@@ -23,8 +63,17 @@ async function calc() {
 }
 
 onMounted(async () => {
-  const r = await getFgSummary()
+  const [r, i] = await Promise.all([getFgSummary(), listInventory()])
   fg.value = r.ok ? { packed: (r.packed as Record<string, any>[]) || [], shipped: (r.shipped as Record<string, any>[]) || [] } : null
+  if (i.ok) {
+    const list = ((i as any).list as Record<string, any>[]) || []
+    const map: Record<string, number> = {}
+    list.forEach((row) => {
+      const id = String(row._id || '')
+      if (id.startsWith('fg:')) map[id.slice(3)] = Number(row.stock) || 0 // fg:<pid>__<spec> → 现存
+    })
+    inv.value = map
+  }
 })
 </script>
 
@@ -35,6 +84,7 @@ onMounted(async () => {
       <p class="sub">目标套数 → 外协缺口（带结不外购）+ 采购缺口按供应商分列；产销 = 打包累计 vs 发货累计。只读、不动账。</p>
     </header>
 
+    <ScmFlowTabs />
     <p v-if="message" class="status">{{ message }}</p>
 
     <section class="card">
@@ -57,12 +107,16 @@ onMounted(async () => {
             <span class="gap-name">{{ g.color }}</span>
             <span>带结需 {{ g.knottedNeed }} · 存 {{ g.knottedStock }} · <strong class="short">缺 {{ g.gap }}（应发原团 {{ g.rawToIssue }}）</strong></span>
           </div>
+          <button v-if="(plan.outworkGaps || []).length" class="handoff-btn" @click="goOutworkOrder">照这个去外协开单发料<ArrowRight :size="13" :stroke-width="2" /></button>
         </div>
         <div class="gap-block">
           <h3>采购缺口（按供应商）</h3>
           <p v-if="!(plan.purchaseGroups || []).length" class="ok-line">原料都够，不用采购 ✓</p>
           <div v-for="g in plan.purchaseGroups" :key="g.supplierId" class="sup-group">
-            <div class="sup-name">{{ g.supplierName }}</div>
+            <div class="sup-name-row">
+              <span class="sup-name">{{ g.supplierName }}</span>
+              <button v-if="g.supplierId" class="handoff-btn sm" @click="goPurchaseOrder(g)">去这家开采购单<ArrowRight :size="12" :stroke-width="2" /></button>
+            </div>
             <div v-for="l in g.lines" :key="l.materialId" class="gap-line">
               <span class="gap-name">{{ materialHuman(l.materialId) }}{{ l.missing ? '（未建档·按需全采）' : '' }}</span>
               <span>需 {{ l.need }} · 存 {{ l.stock }} · <strong class="short">缺 {{ l.gap }}</strong></span>
@@ -74,22 +128,16 @@ onMounted(async () => {
     </section>
 
     <section v-if="fg" class="card">
-      <h2>产销统计（打包 vs 卖出）</h2>
-      <div class="cols">
-        <div class="col">
-          <h3>打包累计（组装入库）</h3>
-          <div v-for="p in fg.packed" :key="p.productId + p.spec" class="fg-line">
-            <span>{{ p.productId }}{{ p.spec ? '（' + p.spec + '）' : '' }}</span><strong>{{ p.qty }} 套</strong>
-          </div>
-          <p v-if="!fg.packed.length" class="empty">还没打包记录</p>
+      <h2>产销统计（打包 · 发货 · 现存库存）</h2>
+      <div class="pt">
+        <div class="pt-head"><span>产品 / 规格</span><span class="r">打包累计</span><span class="r">发货核销</span><span class="r">现存库存</span></div>
+        <div v-for="r in produceRows" :key="r.key" class="pt-row">
+          <span class="pt-name">{{ r.name }}</span>
+          <span class="r">{{ r.packed }} 套</span>
+          <span class="r">{{ r.shipped }} 件</span>
+          <span class="r strong">{{ r.stock == null ? '—' : r.stock }}</span>
         </div>
-        <div class="col">
-          <h3>发货累计（核销）</h3>
-          <div v-for="p in fg.shipped" :key="p.productId + p.spec" class="fg-line">
-            <span>{{ p.productId }}{{ p.spec ? '（' + p.spec + '）' : '' }}</span><strong>{{ p.qty }} 件</strong>
-          </div>
-          <p v-if="!fg.shipped.length" class="empty">还没发货核销记录</p>
-        </div>
+        <p v-if="!produceRows.length" class="empty">还没有产销记录</p>
       </div>
     </section>
   </div>
@@ -218,16 +266,79 @@ input {
 .sup-group {
   margin-bottom: 10px;
 }
+.sup-name-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 6px 0 2px;
+}
 .sup-name {
   font-size: 12.5px;
   font-weight: 700;
   color: var(--ld-brand-active);
-  padding: 6px 0 2px;
+}
+.handoff-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 8px;
+  padding: 6px 14px;
+  border: 1px solid var(--ld-purple-line);
+  border-radius: 999px;
+  background: var(--ld-bg-lilac);
+  color: var(--ld-brand-active);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.handoff-btn:hover {
+  background: var(--ld-purple-ink);
+  color: #fff;
+}
+.handoff-btn.sm {
+  margin-top: 0;
+  padding: 4px 10px;
+  font-size: 11px;
 }
 .warn-note {
   margin-top: 8px;
   font-size: 12px;
   color: var(--ld-amber);
+}
+.pt {
+  border: 1px solid var(--ld-line);
+  border-radius: 10px;
+  overflow: hidden;
+}
+.pt-head,
+.pt-row {
+  display: grid;
+  grid-template-columns: 2fr 1fr 1fr 1fr;
+  gap: 10px;
+  padding: 9px 14px;
+  font-size: 12.5px;
+  align-items: center;
+}
+.pt-head {
+  background: var(--ld-bg-lilac);
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--ld-content-2);
+}
+.pt-row {
+  border-top: 1px solid var(--ld-line);
+}
+.pt-name {
+  font-family: var(--ld-font-mono);
+  color: var(--ld-content);
+}
+.pt .r {
+  text-align: right;
+}
+.pt .strong {
+  font-weight: 700;
+  color: var(--ld-ink);
 }
 .cols {
   display: grid;
