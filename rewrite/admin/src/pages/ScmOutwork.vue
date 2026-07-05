@@ -1,9 +1,10 @@
 <script setup lang="ts">
-// 外协单（M3 批7）：发织女大团原团 → 收同色带结团 → 应付=收×计件价·损耗=发−收 → 结算销账。
+// 外协单（设计语言一致性·M3 UI 批17）：发织女大团原团 → 收同色带结团 → 应付=收×计件价·损耗=发−收 → 结算销账。
+// 逻辑未动，仅套设计语言（页头/草稿卡/grid 表/状态 chip/收货卡/token）。
 import { ref, onMounted } from 'vue'
+import { Plus } from 'lucide-vue-next'
 import { listOutworks, saveOutwork, issueOutwork, receiveOutwork, settleOutwork, cancelOutwork, listMaterials, listSuppliers } from '../api/scm'
 import { materialHuman, outworkStatusLabel, yuanToFen, fenLabel, scmErrorText } from '../lib/mapScm'
-import { dateTime } from '../lib/format'
 
 const orders = ref<Array<Record<string, any>>>([])
 const rawL = ref<Array<Record<string, any>>>([]) // 大团原团（可发）
@@ -55,7 +56,7 @@ async function doRecv() {
   void reload()
 }
 
-async function step(fn: (id: string) => Promise<Record<string, unknown>>, id: string, key: string) {
+async function step(fn: (_id: string) => Promise<Record<string, unknown>>, id: string, key: string) {
   if (confirmKey.value !== key) {
     confirmKey.value = key
     return
@@ -70,19 +71,23 @@ onMounted(reload)
 </script>
 
 <template>
-  <div>
-    <h2>外协单（发织女织带结）</h2>
-    <div class="topbar">
-      <button class="act" @click="newOrder">+ 新建外协单</button>
-      <span v-if="message" class="status">{{ message }}</span>
-    </div>
+  <div class="page">
+    <header class="page-head">
+      <div>
+        <h1>外协单（发织女织带结）</h1>
+        <p class="sub">发大团原团 → 收同色带结团 → 应付=收×计件价、损耗=发−收（收货一刻定格）→ 结算销账。</p>
+      </div>
+      <button class="btn-primary" @click="newOrder"><Plus :size="15" :stroke-width="2" /><span>新建外协单</span></button>
+    </header>
 
-    <div v-if="form" class="panel">
-      <select v-model="form.workerId">
+    <p v-if="message" class="status">{{ message }}</p>
+
+    <section v-if="form" class="draft">
+      <select v-model="form.workerId" class="full">
         <option value="">选织女…</option>
         <option v-for="w in workers" :key="w._id" :value="w._id">{{ w.name }}</option>
       </select>
-      <input v-model="form.rateYuan" placeholder="计件单价（元/团·可 0）" />
+      <input v-model="form.rateYuan" placeholder="计件单价（元/团·可 0）" class="full" />
       <div v-for="(l, i) in form.lines" :key="i" class="linerow">
         <select v-model="l.materialId">
           <option value="">选大团原团…</option>
@@ -92,42 +97,39 @@ onMounted(reload)
         <button class="act ghost" @click="form.lines.splice(i, 1)">删行</button>
       </div>
       <div class="ops">
-        <button class="act ghost" @click="form.lines.push({ materialId: '', qty: 1 })">+ 加色</button>
-        <button class="act" @click="doSave">保存草稿</button>
+        <button class="act ghost" @click="form.lines.push({ materialId: '', qty: 1 })"><Plus :size="13" :stroke-width="2" /><span>加色</span></button>
+        <button class="act primary" @click="doSave">保存草稿</button>
         <button class="act ghost" @click="form = null">取消</button>
       </div>
+    </section>
+
+    <div v-if="orders.length" class="table">
+      <div class="thead"><span>单号</span><span>织女</span><span>发料</span><span class="r">计件价</span><span>应付/损耗</span><span>状态</span><span class="r">操作</span></div>
+      <div v-for="o in orders" :key="o._id" class="trow">
+        <span class="mono">{{ o._id }}</span>
+        <span>{{ (workers.find((w) => w._id === o.workerId) || {}).name || o.workerId }}</span>
+        <div class="issue"><div v-for="l in o.issueLines || []" :key="l.materialId">{{ materialHuman(l.materialId) }} ×{{ l.qty }}</div></div>
+        <span class="r">{{ fenLabel(o.pieceRateFen) }}/团</span>
+        <span class="muted">{{ o.payableFen != null ? fenLabel(o.payableFen) + ' / 损 ' + (o.lossQty || 0) : '—' }}</span>
+        <span><span class="state" :class="o.status">{{ outworkStatusLabel(o.status) }}</span></span>
+        <div class="c-ops r">
+          <button v-if="o.status === 'draft'" class="act primary" @click="step(issueOutwork, o._id, 'iss:' + o._id)">
+            {{ confirmKey === 'iss:' + o._id ? '确认发料出库？' : '发料' }}
+          </button>
+          <button v-if="o.status === 'issued'" class="act primary" @click="startRecv(o)">收货</button>
+          <button v-if="o.status === 'delivered'" class="act primary" @click="step(settleOutwork, o._id, 'set:' + o._id)">
+            {{ confirmKey === 'set:' + o._id ? '确认工钱已付？' : '结算销账' }}
+          </button>
+          <button v-if="o.status === 'draft'" class="act warn" @click="step(cancelOutwork, o._id, 'can:' + o._id)">
+            {{ confirmKey === 'can:' + o._id ? '确认取消？' : '取消' }}
+          </button>
+        </div>
+      </div>
     </div>
+    <p v-else-if="!form" class="status-soft">还没有外协单</p>
 
-    <table v-if="orders.length">
-      <thead><tr><th>单号</th><th>织女</th><th>发料</th><th>计件价</th><th>应付/损耗</th><th>状态</th><th>时间</th><th>操作</th></tr></thead>
-      <tbody>
-        <tr v-for="o in orders" :key="o._id">
-          <td class="mono">{{ o._id }}</td>
-          <td>{{ (workers.find((w) => w._id === o.workerId) || {}).name || o.workerId }}</td>
-          <td><div v-for="l in o.issueLines || []" :key="l.materialId">{{ materialHuman(l.materialId) }} ×{{ l.qty }}</div></td>
-          <td>{{ fenLabel(o.pieceRateFen) }}/团</td>
-          <td>{{ o.payableFen != null ? fenLabel(o.payableFen) + ' / 损 ' + (o.lossQty || 0) : '—' }}</td>
-          <td>{{ outworkStatusLabel(o.status) }}</td>
-          <td>{{ dateTime(o.createdAt) }}</td>
-          <td>
-            <button v-if="o.status === 'draft'" class="act" @click="step(issueOutwork, o._id, 'iss:' + o._id)">
-              {{ confirmKey === 'iss:' + o._id ? '确认发料出库？' : '发料' }}
-            </button>
-            <button v-if="o.status === 'issued'" class="act" @click="startRecv(o)">收货</button>
-            <button v-if="o.status === 'delivered'" class="act" @click="step(settleOutwork, o._id, 'set:' + o._id)">
-              {{ confirmKey === 'set:' + o._id ? '确认工钱已付？' : '结算销账' }}
-            </button>
-            <button v-if="o.status === 'draft'" class="act warn" @click="step(cancelOutwork, o._id, 'can:' + o._id)">
-              {{ confirmKey === 'can:' + o._id ? '确认取消？' : '取消' }}
-            </button>
-          </td>
-        </tr>
-      </tbody>
-    </table>
-    <p v-else class="hint">还没有外协单</p>
-
-    <div v-if="recvFor" class="panel">
-      <h3>收货 · {{ recvFor }}（只能收发过颜色的大团带结·收≤发）</h3>
+    <section v-if="recvFor" class="draft recv">
+      <h2>收货 · <span class="mono">{{ recvFor }}</span>（只能收发过颜色的大团带结·收 ≤ 发）</h2>
       <div v-for="(l, i) in recvLines" :key="i" class="linerow">
         <select v-model="l.materialId">
           <option value="">选带结团…</option>
@@ -137,104 +139,199 @@ onMounted(reload)
         <button class="act ghost" @click="recvLines.splice(i, 1)">删行</button>
       </div>
       <div class="ops">
-        <button class="act ghost" @click="recvLines.push({ materialId: '', qty: 1 })">+ 加色</button>
-        <button class="act" @click="doRecv">确认收货（定格应付与损耗）</button>
+        <button class="act ghost" @click="recvLines.push({ materialId: '', qty: 1 })"><Plus :size="13" :stroke-width="2" /><span>加色</span></button>
+        <button class="act primary" @click="doRecv">确认收货（定格应付与损耗）</button>
         <button class="act ghost" @click="recvFor = ''">取消</button>
       </div>
       <p class="hint">带结团要先在物料页建档；收货那一刻应付与损耗一次定格，结算不重算。</p>
-    </div>
+    </section>
   </div>
 </template>
 
 <style scoped>
-h2 {
-  margin: 0 0 14px;
-  color: var(--ld-purple-ink);
+.page {
+  max-width: 1140px;
 }
-h3 {
-  margin: 0 0 10px;
-  font-size: 13px;
-  color: var(--ld-purple-ink);
-}
-.topbar {
+.page-head {
   display: flex;
-  gap: 12px;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+h1 {
+  margin: 0;
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--ld-ink);
+}
+.sub {
+  margin: 4px 0 0;
+  font-size: 12.5px;
+  color: var(--ld-content-2);
+}
+.btn-primary {
+  display: inline-flex;
   align-items: center;
-  margin-bottom: 12px;
+  gap: 5px;
+  flex: none;
+  padding: 10px 18px;
+  border: none;
+  border-radius: 999px;
+  background: var(--ld-purple-ink);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
 }
 .status {
   font-size: 13px;
   color: var(--ld-red);
+  margin-bottom: 10px;
 }
-.hint {
-  font-size: 12px;
-  color: var(--ld-purple-meta);
+.status-soft {
+  font-size: 13px;
+  color: var(--ld-content-2);
 }
-.panel {
-  padding: 14px 16px;
-  margin-bottom: 12px;
+.draft {
+  padding: 16px 18px;
+  margin-bottom: 14px;
   background: var(--ld-bg);
-  border: 1px solid var(--ld-purple-line);
-  border-radius: var(--ld-radius);
-  max-width: 720px;
+  border: 1px solid var(--ld-line);
+  border-radius: var(--ld-radius-l);
+  max-width: 760px;
 }
-select,
-input {
-  padding: 7px 10px;
-  border: 1px solid var(--ld-purple-line);
+.recv h2 {
+  margin: 0 0 12px;
+  font-size: 13.5px;
+  font-weight: 700;
+  color: var(--ld-ink);
+}
+.full {
+  display: block;
+  width: 100%;
+  padding: 8px 12px;
+  margin-bottom: 10px;
+  border: 1px solid var(--ld-line);
   border-radius: 8px;
   font-size: 13px;
-  margin-bottom: 8px;
+  box-sizing: border-box;
 }
 .linerow {
   display: grid;
   grid-template-columns: 2fr 90px auto;
   gap: 8px;
+  margin-bottom: 8px;
+}
+.linerow select,
+.linerow input {
+  padding: 8px 10px;
+  border: 1px solid var(--ld-line);
+  border-radius: 8px;
+  font-size: 13px;
 }
 .ops {
   display: flex;
   gap: 8px;
+  margin-top: 4px;
 }
-table {
-  width: 100%;
-  border-collapse: collapse;
+.hint {
+  margin: 10px 0 0;
+  font-size: 11.5px;
+  color: var(--ld-content-2);
+}
+.table {
   background: var(--ld-bg);
-  border: 1px solid var(--ld-purple-line);
-  border-radius: var(--ld-radius);
+  border: 1px solid var(--ld-line);
+  border-radius: var(--ld-radius-l);
   overflow: hidden;
 }
-th,
-td {
-  padding: 9px 11px;
-  font-size: 13px;
-  text-align: left;
-  border-bottom: 1px solid var(--ld-bg-faint);
+.thead,
+.trow {
+  display: grid;
+  grid-template-columns: 1.3fr 1.1fr 1.4fr 0.9fr 1.2fr 0.9fr 1.4fr;
+  align-items: center;
+  gap: 12px;
+  padding: 11px 18px;
 }
-th {
+.thead {
   background: var(--ld-bg-lilac);
-  color: var(--ld-purple-meta);
+  font-size: 12px;
+  color: var(--ld-content-2);
+}
+.trow {
+  border-top: 1px solid var(--ld-line);
+  font-size: 13px;
+  color: var(--ld-content);
+}
+.r {
+  text-align: right;
+  justify-self: end;
 }
 .mono {
-  font-family: ui-monospace, monospace;
-  font-size: 11px;
+  font-family: var(--ld-font-mono);
+  font-size: 11.5px;
+  color: var(--ld-ink);
+}
+.issue {
+  font-size: 12px;
+  color: var(--ld-content);
+}
+.muted {
+  color: var(--ld-content-2);
+  font-size: 12.5px;
+}
+.state {
+  padding: 3px 11px;
+  border-radius: 999px;
+  font-size: 11.5px;
+  white-space: nowrap;
+  background: var(--ld-bg-faint);
+  color: var(--ld-content-2);
+}
+.state.draft {
+  background: var(--ld-bg-lilac);
+  color: var(--ld-brand-active);
+}
+.state.issued {
+  background: var(--ld-bg-lilac);
+  color: var(--ld-amber);
+}
+.state.delivered {
+  background: var(--ld-bg-lilac);
+  color: var(--ld-brand-active);
+}
+.state.settled {
+  background: var(--ld-bg-green-soft);
+  color: var(--ld-green);
+}
+.c-ops {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
 }
 .act {
-  padding: 5px 13px;
+  padding: 5px 12px;
   border: none;
   border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.act.primary {
   background: var(--ld-purple-ink);
   color: #fff;
-  font-size: 12px;
-  cursor: pointer;
-  margin-right: 4px;
-  margin-bottom: 4px;
 }
 .act.ghost {
-  background: transparent;
-  color: var(--ld-purple-meta);
-  border: 1px solid var(--ld-purple-line);
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: var(--ld-bg);
+  color: var(--ld-content-2);
+  border: 1px solid var(--ld-line);
 }
 .act.warn {
   background: var(--ld-red);
+  color: #fff;
 }
 </style>
