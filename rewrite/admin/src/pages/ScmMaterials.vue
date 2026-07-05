@@ -75,8 +75,9 @@ onMounted(reload)
           <option value="">（不挂供应商）</option>
           <option v-for="s in sups" :key="s._id" :value="s._id">{{ s.name }}</option>
         </select>
+        <input v-model.number="matForm.threshold" type="number" min="0" placeholder="安全库存阈值（低于报警·0=不报警）" />
         <button class="btn-primary" @click="doSaveMaterial">建档 / 更新</button>
-        <p class="hint">计量方式建档后锁死；毛线料号按 颜色×档位×形态 自动生成。</p>
+        <p class="hint">计量方式建档后锁死；毛线料号按 颜色×档位×形态 自动生成。安全库存阈值＝低于此值列表标红报警（B4：换皮漏了这个输入·恒 0 致低库存告警失效）。</p>
       </section>
 
       <section class="card">

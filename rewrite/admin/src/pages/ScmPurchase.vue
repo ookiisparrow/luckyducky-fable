@@ -11,7 +11,7 @@ const orders = ref<Array<Record<string, any>>>([])
 const mats = ref<Array<Record<string, any>>>([])
 const sups = ref<Array<Record<string, any>>>([])
 const message = ref('')
-const form = ref<{ supplierId: string; lines: Array<{ materialId: string; qty: number; priceYuan: string }> } | null>(null)
+const form = ref<{ purchaseId?: string; supplierId: string; lines: Array<{ materialId: string; qty: number; priceYuan: string }> } | null>(null)
 const confirmKey = ref('')
 
 async function reload() {
@@ -23,7 +23,16 @@ async function reload() {
 }
 
 function newOrder() {
-  form.value = { supplierId: '', lines: [{ materialId: '', qty: 1, priceYuan: '' }] }
+  form.value = { purchaseId: '', supplierId: '', lines: [{ materialId: '', qty: 1, priceYuan: '' }] }
+}
+// 草稿编辑（换皮丢·草稿建完只能取消重建·后端 savePurchase 收 purchaseId 支持改）：预填表单
+function editDraft(o: Record<string, any>) {
+  form.value = {
+    purchaseId: String(o._id || ''),
+    supplierId: String(o.supplierId || ''),
+    lines: ((o.lines as Record<string, any>[]) || []).map((l) => ({ materialId: String(l.materialId || ''), qty: Number(l.qty) || 1, priceYuan: l.unitPriceFen != null ? (Number(l.unitPriceFen) / 100).toFixed(2) : '' })),
+  }
+  if (!form.value.lines.length) form.value.lines.push({ materialId: '', qty: 1, priceYuan: '' })
 }
 
 async function doSave() {
@@ -38,8 +47,8 @@ async function doSave() {
     }
     lines.push({ materialId: l.materialId, qty: Number(l.qty), unitPriceFen: fen })
   }
-  const r = await savePurchase(f.supplierId, lines)
-  message.value = r.ok ? `草稿已建（总价 ${fenLabel(r.totalFen)}·服务端核算）` : scmErrorText(r.error)
+  const r = await savePurchase(f.supplierId, lines, f.purchaseId || undefined) // 传 purchaseId＝改草稿·空＝新建
+  message.value = r.ok ? `草稿已${f.purchaseId ? '更新' : '建'}（总价 ${fenLabel(r.totalFen)}·服务端核算）` : scmErrorText(r.error)
   if (r.ok) form.value = null
   void reload()
 }
@@ -103,6 +112,7 @@ onMounted(reload)
         <span><span class="state" :class="o.status">{{ purchaseStatusLabel(o.status) }}</span></span>
         <span class="muted">{{ dateTime(o.createdAt) }}</span>
         <div class="c-ops r">
+          <button v-if="o.status === 'draft'" class="act ghost" @click="editDraft(o)">编辑</button>
           <button v-if="o.status === 'draft'" class="act primary" @click="step(markOrdered, o._id, 'ord:' + o._id)">标记已下单</button>
           <button v-if="o.status === 'ordered'" class="act primary" @click="step(receivePurchase, o._id, 'recv:' + o._id)">
             {{ confirmKey === 'recv:' + o._id ? '确认到货入库？' : '收货入库' }}
