@@ -1,6 +1,8 @@
 <script setup lang="ts">
-// 采购单（M3 批7）：草稿→已下单→已收货（收货首次流转入库·重复收货不双入）；总价服务端算。
+// 采购单（设计语言一致性·M3 UI 批16）：草稿→已下单→已收货（收货首次流转入库·重复收货不双入）；总价服务端算。
+// 逻辑未动，仅套设计语言（页头/草稿表单卡/grid 表/token）。
 import { ref, onMounted } from 'vue'
+import { Plus } from 'lucide-vue-next'
 import { listPurchases, savePurchase, markOrdered, receivePurchase, cancelPurchase, listMaterials, listSuppliers } from '../api/scm'
 import { materialHuman, purchaseStatusLabel, yuanToFen, fenLabel, scmErrorText } from '../lib/mapScm'
 import { dateTime } from '../lib/format'
@@ -42,7 +44,7 @@ async function doSave() {
   void reload()
 }
 
-async function step(fn: (id: string) => Promise<Record<string, unknown>>, id: string, key: string) {
+async function step(fn: (_id: string) => Promise<Record<string, unknown>>, id: string, key: string) {
   if (key.startsWith('recv') || key.startsWith('cancel')) {
     if (confirmKey.value !== key) {
       confirmKey.value = key
@@ -59,15 +61,19 @@ onMounted(reload)
 </script>
 
 <template>
-  <div>
-    <h2>采购单（向厂家）</h2>
-    <div class="topbar">
-      <button class="act" @click="newOrder">+ 新建采购单</button>
-      <span v-if="message" class="status">{{ message }}</span>
-    </div>
+  <div class="page">
+    <header class="page-head">
+      <div>
+        <h1>采购单（向厂家）</h1>
+        <p class="sub">草稿 → 已下单 → 已收货；收货首次流转才入库（重复收货不双入），总价服务端核算。</p>
+      </div>
+      <button class="btn-primary" @click="newOrder"><Plus :size="15" :stroke-width="2" /><span>新建采购单</span></button>
+    </header>
 
-    <div v-if="form" class="panel">
-      <select v-model="form.supplierId">
+    <p v-if="message" class="status">{{ message }}</p>
+
+    <section v-if="form" class="draft">
+      <select v-model="form.supplierId" class="sup-sel">
         <option value="">选厂家…</option>
         <option v-for="s in sups" :key="s._id" :value="s._id">{{ s.name }}</option>
       </select>
@@ -81,121 +87,205 @@ onMounted(reload)
         <button class="act ghost" @click="form.lines.splice(i, 1)">删行</button>
       </div>
       <div class="ops">
-        <button class="act ghost" @click="form.lines.push({ materialId: '', qty: 1, priceYuan: '' })">+ 加行</button>
-        <button class="act" @click="doSave">保存草稿</button>
+        <button class="act ghost" @click="form.lines.push({ materialId: '', qty: 1, priceYuan: '' })"><Plus :size="13" :stroke-width="2" /><span>加行</span></button>
+        <button class="act primary" @click="doSave">保存草稿</button>
         <button class="act ghost" @click="form = null">取消</button>
       </div>
-    </div>
+    </section>
 
-    <table v-if="orders.length">
-      <thead><tr><th>单号</th><th>供应商</th><th>行数</th><th>总价</th><th>状态</th><th>时间</th><th>操作</th></tr></thead>
-      <tbody>
-        <tr v-for="o in orders" :key="o._id">
-          <td class="mono">{{ o._id }}</td>
-          <td>{{ (sups.find((s) => s._id === o.supplierId) || {}).name || o.supplierId }}</td>
-          <td>{{ (o.lines || []).length }}</td>
-          <td>{{ fenLabel(o.totalFen) }}</td>
-          <td>{{ purchaseStatusLabel(o.status) }}</td>
-          <td>{{ dateTime(o.createdAt) }}</td>
-          <td>
-            <button v-if="o.status === 'draft'" class="act" @click="step(markOrdered, o._id, 'ord:' + o._id)">标记已下单</button>
-            <button v-if="o.status === 'ordered'" class="act" @click="step(receivePurchase, o._id, 'recv:' + o._id)">
-              {{ confirmKey === 'recv:' + o._id ? '确认到货入库？' : '收货入库' }}
-            </button>
-            <button v-if="o.status === 'draft' || o.status === 'ordered'" class="act warn" @click="step(cancelPurchase, o._id, 'cancel:' + o._id)">
-              {{ confirmKey === 'cancel:' + o._id ? '确认取消？' : '取消' }}
-            </button>
-          </td>
-        </tr>
-      </tbody>
-    </table>
-    <p v-else class="hint">还没有采购单</p>
+    <div v-if="orders.length" class="table">
+      <div class="thead"><span>单号</span><span>供应商</span><span class="r">行数</span><span class="r">总价</span><span>状态</span><span>时间</span><span class="r">操作</span></div>
+      <div v-for="o in orders" :key="o._id" class="trow">
+        <span class="mono">{{ o._id }}</span>
+        <span>{{ (sups.find((s) => s._id === o.supplierId) || {}).name || o.supplierId }}</span>
+        <span class="r">{{ (o.lines || []).length }}</span>
+        <span class="r strong">{{ fenLabel(o.totalFen) }}</span>
+        <span><span class="state" :class="o.status">{{ purchaseStatusLabel(o.status) }}</span></span>
+        <span class="muted">{{ dateTime(o.createdAt) }}</span>
+        <div class="c-ops r">
+          <button v-if="o.status === 'draft'" class="act primary" @click="step(markOrdered, o._id, 'ord:' + o._id)">标记已下单</button>
+          <button v-if="o.status === 'ordered'" class="act primary" @click="step(receivePurchase, o._id, 'recv:' + o._id)">
+            {{ confirmKey === 'recv:' + o._id ? '确认到货入库？' : '收货入库' }}
+          </button>
+          <button v-if="o.status === 'draft' || o.status === 'ordered'" class="act warn" @click="step(cancelPurchase, o._id, 'cancel:' + o._id)">
+            {{ confirmKey === 'cancel:' + o._id ? '确认取消？' : '取消' }}
+          </button>
+        </div>
+      </div>
+    </div>
+    <p v-else-if="!form" class="status-soft">还没有采购单</p>
   </div>
 </template>
 
 <style scoped>
-h2 {
-  margin: 0 0 14px;
-  color: var(--ld-purple-ink);
+.page {
+  max-width: 1120px;
 }
-.topbar {
+.page-head {
   display: flex;
-  gap: 12px;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+h1 {
+  margin: 0;
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--ld-ink);
+}
+.sub {
+  margin: 4px 0 0;
+  font-size: 12.5px;
+  color: var(--ld-content-2);
+}
+.btn-primary {
+  display: inline-flex;
   align-items: center;
-  margin-bottom: 12px;
-}
-.status {
-  font-size: 13px;
-  color: var(--ld-red);
-}
-.hint {
-  font-size: 13px;
-  color: var(--ld-purple-meta);
-}
-.panel {
-  padding: 14px 16px;
-  margin-bottom: 12px;
-  background: var(--ld-bg);
-  border: 1px solid var(--ld-purple-line);
-  border-radius: var(--ld-radius);
-  max-width: 720px;
-}
-select,
-input {
-  padding: 7px 10px;
-  border: 1px solid var(--ld-purple-line);
-  border-radius: 8px;
-  font-size: 13px;
-  margin-bottom: 8px;
-}
-.linerow {
-  display: grid;
-  grid-template-columns: 2fr 90px 110px auto;
-  gap: 8px;
-}
-.ops {
-  display: flex;
-  gap: 8px;
-}
-table {
-  width: 100%;
-  border-collapse: collapse;
-  background: var(--ld-bg);
-  border: 1px solid var(--ld-purple-line);
-  border-radius: var(--ld-radius);
-  overflow: hidden;
-}
-th,
-td {
-  padding: 9px 11px;
-  font-size: 13px;
-  text-align: left;
-  border-bottom: 1px solid var(--ld-bg-faint);
-}
-th {
-  background: var(--ld-bg-lilac);
-  color: var(--ld-purple-meta);
-}
-.mono {
-  font-family: ui-monospace, monospace;
-  font-size: 11px;
-}
-.act {
-  padding: 5px 13px;
+  gap: 5px;
+  flex: none;
+  padding: 10px 18px;
   border: none;
   border-radius: 999px;
   background: var(--ld-purple-ink);
   color: #fff;
-  font-size: 12px;
+  font-size: 13px;
+  font-weight: 600;
   cursor: pointer;
-  margin-right: 4px;
+}
+.status {
+  font-size: 13px;
+  color: var(--ld-red);
+  margin-bottom: 10px;
+}
+.status-soft {
+  font-size: 13px;
+  color: var(--ld-content-2);
+}
+.draft {
+  padding: 16px 18px;
+  margin-bottom: 14px;
+  background: var(--ld-bg);
+  border: 1px solid var(--ld-line);
+  border-radius: var(--ld-radius-l);
+  max-width: 760px;
+}
+.sup-sel {
+  display: block;
+  width: 100%;
+  padding: 8px 12px;
+  margin-bottom: 10px;
+  border: 1px solid var(--ld-line);
+  border-radius: 8px;
+  font-size: 13px;
+  box-sizing: border-box;
+}
+.linerow {
+  display: grid;
+  grid-template-columns: 2fr 90px 120px auto;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+.linerow select,
+.linerow input {
+  padding: 8px 10px;
+  border: 1px solid var(--ld-line);
+  border-radius: 8px;
+  font-size: 13px;
+}
+.ops {
+  display: flex;
+  gap: 8px;
+  margin-top: 4px;
+}
+.table {
+  background: var(--ld-bg);
+  border: 1px solid var(--ld-line);
+  border-radius: var(--ld-radius-l);
+  overflow: hidden;
+}
+.thead,
+.trow {
+  display: grid;
+  grid-template-columns: 1.4fr 1.4fr 0.6fr 0.9fr 0.9fr 1.1fr 1.6fr;
+  align-items: center;
+  gap: 12px;
+  padding: 11px 18px;
+}
+.thead {
+  background: var(--ld-bg-lilac);
+  font-size: 12px;
+  color: var(--ld-content-2);
+}
+.trow {
+  border-top: 1px solid var(--ld-line);
+  font-size: 13px;
+  color: var(--ld-content);
+}
+.r {
+  text-align: right;
+  justify-self: end;
+}
+.mono {
+  font-family: var(--ld-font-mono);
+  font-size: 11.5px;
+  color: var(--ld-ink);
+}
+.strong {
+  font-weight: 700;
+  color: var(--ld-ink);
+}
+.muted {
+  color: var(--ld-content-2);
+  font-size: 12.5px;
+}
+.state {
+  padding: 3px 11px;
+  border-radius: 999px;
+  font-size: 11.5px;
+  white-space: nowrap;
+  background: var(--ld-bg-faint);
+  color: var(--ld-content-2);
+}
+.state.draft {
+  background: var(--ld-bg-lilac);
+  color: var(--ld-brand-active);
+}
+.state.ordered {
+  background: var(--ld-bg-lilac);
+  color: var(--ld-amber);
+}
+.state.received {
+  background: var(--ld-bg-green-soft);
+  color: var(--ld-green);
+}
+.c-ops {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.act {
+  padding: 5px 12px;
+  border: none;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.act.primary {
+  background: var(--ld-purple-ink);
+  color: #fff;
 }
 .act.ghost {
-  background: transparent;
-  color: var(--ld-purple-meta);
-  border: 1px solid var(--ld-purple-line);
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: var(--ld-bg);
+  color: var(--ld-content-2);
+  border: 1px solid var(--ld-line);
 }
 .act.warn {
   background: var(--ld-red);
+  color: #fff;
 }
 </style>
