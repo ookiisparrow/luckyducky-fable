@@ -20,6 +20,14 @@ describe('看板映射', () => {
       ],
     })!
     expect(vm.cards.find((c) => c.label.includes('成交额'))).toMatchObject({ value: '¥258.50', note: '精确' })
+    // 漏斗逐环转化率（换皮丢·只剩绝对值看不出支付率/激活率）
+    expect(vm.funnel.find((f) => f.label === '支付')!.sub).toBe('较上环 80%') // 200/250
+    expect(vm.funnel.find((f) => f.label === '激活')!.sub).toContain('%')
+    expect(vm.funnel.find((f) => f.label === '下单')!.sub).toBe('') // 首环无上环
+    // 激活率进度条（换皮把进度条+百分比退成纯「已激活/总」文本·丢了激活率）
+    const codes = vm.cards.find((c) => c.label.includes('激活码'))!
+    expect(codes.pct).toBe(17) // 5/30≈17%
+    expect(codes.sub).toContain('激活率')
     expect(vm.alerts).toEqual([{ label: '金额不符单', ids: ['o-bad'] }]) // 空类不渲染
     // B5：热点/卡点段位后端仍返回·换皮误删——结构化透传 + 抽样近似诚实标注
     expect(vm.hot).toEqual([{ name: '第1节·起头', count: 40 }])

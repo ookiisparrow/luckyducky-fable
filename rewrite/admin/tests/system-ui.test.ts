@@ -27,11 +27,16 @@ describe('对账映射（approx 诚实·wxOnly 最危险）', () => {
     const recon = mapRecon({
       ok: true,
       cumulative: { income: 150, refund: 30, net: 120 },
+      summary: { income: 100, refund: 0, net: 100, orders: 1, refunds: 0 },
+      range: { from: '2026-07-01', to: '2026-07-01' },
       daily: [{ day: '2026-07-01', income: 100, refund: 0, net: 100, orders: 1, refunds: 0 }],
       approx: true,
       exceptions: { feeMismatch: ['o-bad'], refundMismatch: [], stuckRefunds: ['a-stuck'] },
     })!
     expect(recon.cumulative[2]).toEqual({ label: '净额', value: '¥120.00' })
+    // 窗内合计（所选区间真值·换皮误用全时累计致口径错乱：窗内订单数与全时钱额混在一排·tfoot 穿帮）
+    expect(recon.summary).toEqual({ income: '¥100.00', refund: '¥0.00', net: '¥100.00', orders: 1, refunds: 0 })
+    expect(recon.range).toEqual({ from: '2026-07-01', to: '2026-07-01' })
     expect(recon.approxNote).toContain('近似')
     // B2 修：exceptions 是 {feeMismatch,refundMismatch,stuckRefunds} 对象·结构化成带单号明细（有则渲染·空类不显）
     expect(recon.exceptions).toEqual([
@@ -41,6 +46,8 @@ describe('对账映射（approx 诚实·wxOnly 最危险）', () => {
     const clean = mapRecon({ ok: true, cumulative: { income: 0, refund: 0, net: 0 }, daily: [], approx: false })!
     expect(clean.approxNote).toBe('')
     expect(clean.exceptions).toEqual([]) // 无异常空数组·不吓人
+    expect(clean.summary).toEqual({ income: '¥0.00', refund: '¥0.00', net: '¥0.00', orders: 0, refunds: 0 }) // 缺 summary 安全归零
+    expect(clean.range).toEqual({ from: '', to: '' })
     const m = mapBillMatch({ ok: true, summary: { matched: 5, wxOnly: 1, oursOnly: 0, amountMismatch: 0 }, discrepancies: { wxOnly: [{ transactionId: 'tx-ghost', amount: 5, date: '2026-07-01' }], oursOnly: [], amountMismatch: [] } })!
     expect(m.summary[1]).toMatchObject({ danger: true }) // wxOnly>0 标红
     expect(m.summary[0].danger).toBeFalsy() // 已平不标红

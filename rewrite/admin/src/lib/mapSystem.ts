@@ -49,6 +49,9 @@ export const webhookOk = (w: string): boolean => !w || /^https:\/\/qyapi\.weixin
 
 export interface ReconVM {
   cumulative: Array<{ label: string; value: string }>
+  // 窗内合计（所选区间真值·后端 summary 就绪·换皮误用全时 cumulative 致口径错乱：窗内订单数与全时钱额混排、tfoot 穿帮）
+  summary: { income: string; refund: string; net: string; orders: number; refunds: number }
+  range: { from: string; to: string }
   daily: Array<{ day: string; income: string; refund: string; net: string; orders: number; refunds: number }>
   approxNote: string
   // 内部异常明细（bug B2 修：后端 getTxAlerts 返回 {feeMismatch,refundMismatch,stuckRefunds} 三数组对象·
@@ -60,12 +63,22 @@ export function mapRecon(r: unknown): ReconVM | null {
   const d = (r && typeof r === 'object' ? r : {}) as Record<string, any>
   if (d.ok !== true || !d.cumulative) return null
   const c = d.cumulative
+  const sm = (d.summary && typeof d.summary === 'object' ? d.summary : {}) as Record<string, any>
+  const rg = (d.range && typeof d.range === 'object' ? d.range : {}) as Record<string, any>
   return {
     cumulative: [
       { label: '累计收入', value: yuan(c.income) },
       { label: '累计退款', value: yuan(c.refund) },
       { label: '净额', value: yuan(c.net) },
     ],
+    summary: {
+      income: yuan(Number(sm.income) || 0),
+      refund: yuan(Number(sm.refund) || 0),
+      net: yuan(Number(sm.net) || 0),
+      orders: Number(sm.orders) || 0,
+      refunds: Number(sm.refunds) || 0,
+    },
+    range: { from: String(rg.from || ''), to: String(rg.to || '') },
     daily: (Array.isArray(d.daily) ? d.daily : []).map((b: Record<string, any>) => ({
       day: String(b.day || ''),
       income: yuan(b.income),

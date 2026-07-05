@@ -22,6 +22,7 @@
     "build:mp-weixin": "npm run build:shared && npm run build:mp-weixin -w luckyducky-miniapp",
     "build:app": "npm run build:shared && npm run build:app -w luckyducky-miniapp",
     "build:admin": "npm run build -w luckyducky-admin",
+    "build:rw-admin": "npm run build -w @ldrw/admin",
     "build:agent": "npm run build -w luckyducky-agent",
     "build:cloud": "npm run build:shared && node packages/cloud/build.mjs",
     "build:rw-cloud": "node rewrite/cloud/build.mjs",

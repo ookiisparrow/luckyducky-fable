@@ -16,11 +16,13 @@ const busy = ref(false)
 const from = ref('') // 自定义对账区间起（空=默认近 30 天窗）
 const to = ref('')
 
-const totals = computed(() => {
-  if (!recon.value) return null
+// 窗内合计（所选区间真值·后端 summary 就绪·换皮误用 cumulative 全时值致口径错乱：窗内订单数与全时钱额混排、tfoot 穿帮）
+const totals = computed(() => (recon.value ? recon.value.summary : null))
+// 全账累计（money 锚·恒可信·横幅+顶部小条用）
+const cum = computed(() => {
+  if (!recon.value) return { income: '¥0.00', refund: '¥0.00', net: '¥0.00' }
   const find = (kw: string) => recon.value!.cumulative.find((c) => c.label.includes(kw))?.value || '¥0.00'
-  const orders = recon.value.daily.reduce((s, d) => s + d.orders, 0)
-  return { income: find('收入'), refund: find('退款'), net: find('净额'), orders }
+  return { income: find('收入'), refund: find('退款'), net: find('净额') }
 })
 // 内部异常总笔数（B2 修后·换皮误当数组恒 0·明细块永不渲染）
 const exCount = computed(() => (recon.value ? recon.value.exceptions.reduce((n, e) => n + e.ids.length, 0) : 0))
@@ -58,6 +60,42 @@ async function pullBill() {
   const r = await downloadBill(billDate.value)
   busy.value = false
   message.value = r.ok ? '账单已拉取入库，勾对已刷新' : '拉取失败：' + String(r.error || '')
+  void reload()
+}
+
+// CST 起止（含端）逐日列表（cap 62 天·防误填超长区间刷爆）
+function daysBetween(a: string, b: string): string[] {
+  const CST = 8 * 3600_000
+  const s = Date.parse(a + 'T00:00:00+08:00')
+  const e = Date.parse(b + 'T00:00:00+08:00')
+  const out: string[] = []
+  if (!Number.isFinite(s) || !Number.isFinite(e) || s > e) return out
+  for (let t = s; t <= e && out.length < 62; t += 86400_000) out.push(new Date(t + CST).toISOString().slice(0, 10))
+  return out
+}
+
+// 区间批量拉账单（换皮退成一次一天·核对一个月要手填 30 次）：按对账区间逐日 downloadBill 后刷新勾对。
+// 区间空则默认近 30 天窗（与后端默认对齐）。
+async function pullRange() {
+  if (busy.value) return
+  const CST = 8 * 3600_000
+  const today = new Date(Date.now() + CST).toISOString().slice(0, 10)
+  const f = /^\d{4}-\d{2}-\d{2}$/.test(from.value) ? from.value : new Date(Date.now() - 29 * 86400_000 + CST).toISOString().slice(0, 10)
+  const t = /^\d{4}-\d{2}-\d{2}$/.test(to.value) ? to.value : today
+  const days = daysBetween(f, t)
+  if (!days.length) {
+    message.value = '区间不合法（起须早于止·YYYY-MM-DD）'
+    return
+  }
+  busy.value = true
+  let ok = 0
+  for (let i = 0; i < days.length; i++) {
+    message.value = `拉取账单 ${i + 1}/${days.length}（${days[i]}）…`
+    const r = await downloadBill(days[i])
+    if (r.ok) ok++
+  }
+  busy.value = false
+  message.value = `区间账单已拉取 ${ok}/${days.length} 天，勾对已刷新`
   void reload()
 }
 
@@ -106,8 +144,15 @@ onMounted(reload)
         <CircleCheck :size="20" :stroke-width="1.8" />
         <div>
           <div class="balance-t">{{ exCount ? `内部有 ${exCount} 笔异常待处理` : '内部账已对平' }}</div>
-          <div class="balance-s">应收 {{ totals.income }} − 退款 {{ totals.refund }} = 净额 {{ totals.net }}</div>
+          <div class="balance-s">全账累计 应收 {{ cum.income }} − 退款 {{ cum.refund }} = 净额 {{ cum.net }}</div>
         </div>
+      </div>
+
+      <!-- 累计（全账·money 锚·恒可信·aggregate 全量精确·与下方区间窗口分开呈现·换皮把二者搅成一排致口径错乱） -->
+      <div class="cum-strip">
+        <div class="cum-item"><span>累计收入（全账）</span><b>{{ cum.income }}</b></div>
+        <div class="cum-item"><span>累计退款（全账）</span><b>{{ cum.refund }}</b></div>
+        <div class="cum-item"><span>累计净额（全账）</span><b>{{ cum.net }}</b></div>
       </div>
 
       <!-- 内部异常明细块（bug B2 修·换皮误当数组恒 0 永不渲染）：feeMismatch/refundMismatch/stuckRefunds 带单号 -->
@@ -119,22 +164,27 @@ onMounted(reload)
         </div>
       </div>
 
+      <div class="range-cap">区间收支 · {{ recon && recon.range.from ? recon.range.from + ' ~ ' + recon.range.to : '近 30 天' }}</div>
       <div class="stat-grid">
         <div class="stat-card">
-          <div class="stat-head"><span class="stat-label">应收 GMV（已付）</span><CircleDollarSign class="stat-ico" :size="18" :stroke-width="1.8" /></div>
+          <div class="stat-head"><span class="stat-label">区间应收 GMV（已付）</span><CircleDollarSign class="stat-ico" :size="18" :stroke-width="1.8" /></div>
           <div class="stat-value">{{ totals.income }}</div>
         </div>
         <div class="stat-card">
-          <div class="stat-head"><span class="stat-label">退款合计</span><RotateCcw class="stat-ico amber" :size="18" :stroke-width="1.8" /></div>
+          <div class="stat-head"><span class="stat-label">区间退款合计</span><RotateCcw class="stat-ico amber" :size="18" :stroke-width="1.8" /></div>
           <div class="stat-value amber">{{ totals.refund }}</div>
         </div>
         <div class="stat-card">
-          <div class="stat-head"><span class="stat-label">净额（应收−退款）</span><Wallet class="stat-ico ok" :size="18" :stroke-width="1.8" /></div>
+          <div class="stat-head"><span class="stat-label">区间净额（应收−退款）</span><Wallet class="stat-ico ok" :size="18" :stroke-width="1.8" /></div>
           <div class="stat-value ok">{{ totals.net }}</div>
         </div>
         <div class="stat-card">
-          <div class="stat-head"><span class="stat-label">已付订单数</span><CircleCheck class="stat-ico" :size="18" :stroke-width="1.8" /></div>
+          <div class="stat-head"><span class="stat-label">区间已付订单数</span><CircleCheck class="stat-ico" :size="18" :stroke-width="1.8" /></div>
           <div class="stat-value">{{ totals.orders }}</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-head"><span class="stat-label">区间退款笔数</span><RotateCcw class="stat-ico amber" :size="18" :stroke-width="1.8" /></div>
+          <div class="stat-value">{{ totals.refunds }}</div>
         </div>
       </div>
 
@@ -159,7 +209,7 @@ onMounted(reload)
           <span class="r num">{{ totals.income }}</span>
           <span class="r num amber">{{ totals.refund }}</span>
           <span class="r num strong">{{ totals.net }}</span>
-          <span class="r">—</span>
+          <span class="r">{{ totals.refunds }}</span>
         </div>
       </div>
     </template>
@@ -171,7 +221,8 @@ onMounted(reload)
       </div>
       <div class="billrow">
         <input v-model="billDate" placeholder="拉某日账单 YYYY-MM-DD" />
-        <button class="act" :disabled="busy" @click="pullBill">拉取账单</button>
+        <button class="act" :disabled="busy" @click="pullBill">拉单日</button>
+        <button class="act ghost" :disabled="busy" title="按上方对账区间逐日拉取（空=近 30 天）" @click="pullRange">拉整个区间</button>
       </div>
       <div class="ext-cards">
         <div v-for="s in match.summary" :key="s.label" class="ext-card" :class="{ danger: s.danger }">
@@ -192,7 +243,7 @@ onMounted(reload)
         <p v-for="o in match.oursOnly" :key="o.id" class="row-line">{{ o.id }} · {{ o.amount }}</p>
       </template>
     </section>
-    <p class="foot-note">「微信手续费 / 实际到账」需微信结算数据源，后端暂无——本页只作应收/退款/净额真等式与账单逐笔勾对；月份筛选（近 30 天固定窗）待后端加参数。</p>
+    <p class="foot-note">「微信手续费 / 实际到账」需微信结算数据源，后端暂无——本页只作应收/退款/净额真等式与账单逐笔勾对（区间可自选·全账累计恒为 money 锚）。</p>
   </div>
 </template>
 
@@ -333,6 +384,41 @@ h1 {
   margin-top: 3px;
   font-size: 12.5px;
   opacity: 0.9;
+}
+.cum-strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 22px;
+  padding: 12px 20px;
+  margin-bottom: 16px;
+  background: var(--ld-bg-lilac);
+  border-radius: var(--ld-radius-l);
+}
+.cum-item {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.cum-item span {
+  font-size: 11px;
+  color: var(--ld-content-2);
+}
+.cum-item b {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--ld-ink);
+  font-variant-numeric: tabular-nums;
+}
+.range-cap {
+  margin-bottom: 10px;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--ld-content-2);
+}
+.act.ghost {
+  background: var(--ld-bg);
+  color: var(--ld-content);
+  border: 1px solid var(--ld-line);
 }
 .stat-grid {
   display: grid;

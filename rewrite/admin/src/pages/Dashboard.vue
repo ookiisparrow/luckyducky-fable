@@ -4,15 +4,17 @@
 // 留待独立学习分析 action（记 docs/待办与债.md），本页只渲染 getDashboard/listOrders 真值。
 import { ref, onMounted, computed } from 'vue'
 import { useRouter } from 'vue-router'
-import { Users, ShoppingBag, Wallet, QrCode, GraduationCap, RefreshCw, TriangleAlert, Truck, RotateCcw, Boxes, Flame, PauseCircle } from 'lucide-vue-next'
+import { Users, ShoppingBag, Wallet, QrCode, GraduationCap, RefreshCw, TriangleAlert, Truck, RotateCcw, Boxes, Flame, PauseCircle, PackagePlus } from 'lucide-vue-next'
 import { getDashboard, orderCounts, refundCounts } from '../api/money'
 import { listInventory } from '../api/system'
+import { listDrafts } from '../api/products'
 import { mapDashboard } from '../lib/mapMoney'
+import { mapDraftRows } from '../lib/mapProducts'
 
 const LOW = 10 // 低库存阈值（与 Inventory 同口径·前端预警线）
 const router = useRouter()
 const vm = ref<ReturnType<typeof mapDashboard>>(null)
-const todo = ref({ ship: 0, refund: 0, lowStock: 0 })
+const todo = ref({ ship: 0, refund: 0, lowStock: 0, prep: 0 })
 const message = ref('加载中…')
 const busy = ref(false)
 
@@ -20,6 +22,7 @@ const alertCount = computed(() => (vm.value?.alerts || []).reduce((n, a) => n + 
 const TODOS = computed(() => [
   { key: 'ship', label: '待发货', n: todo.value.ship, to: '/orders', icon: Truck, tone: 'warn' },
   { key: 'refund', label: '待审退款', n: todo.value.refund, to: '/refunds', icon: RotateCcw, tone: 'warn' },
+  { key: 'prep', label: '上新未完成', n: todo.value.prep, to: '/products', icon: PackagePlus, tone: 'warn' }, // 换皮删了这卡（owner 少一个「有商品还在筹备未上架」的行动入口）
   { key: 'low', label: '低库存 / 售罄', n: todo.value.lowStock, to: '/inventory', icon: Boxes, tone: 'red' },
   { key: 'money', label: '钱链告警', n: alertCount.value, to: '/orders', icon: TriangleAlert, tone: 'red' },
 ])
@@ -49,11 +52,12 @@ const funnelMax = computed(() => Math.max(1, ...(vm.value?.funnel || []).map((f)
 async function load() {
   busy.value = true
   // 行动条计数复用服务端精确口径（orderCounts/refundCounts·根因#7）+ 库存按 SKU 实算；任一失败不拖累看板
-  const [d, oc, rc, inv] = await Promise.all([
+  const [d, oc, rc, inv, dr] = await Promise.all([
     getDashboard(),
     orderCounts().catch(() => ({}) as any),
     refundCounts().catch(() => ({}) as any),
     listInventory().catch(() => ({}) as any),
+    listDrafts().catch(() => ({}) as any),
   ])
   busy.value = false
   if ((d as any).error === 'SESSION_LOST') {
@@ -64,10 +68,13 @@ async function load() {
   const ocC = (oc as any)?.counts || {}
   const rcC = (rc as any)?.counts || {}
   const invList = Array.isArray((inv as any)?.list) ? (inv as any).list : []
+  // 上新未完成＝筹备中（未上架）商品数（换皮丢·复用 productState 三态口径）
+  const drafts = (dr as any)?.ok ? mapDraftRows((dr as any).list, (dr as any).urls, (dr as any).listed) : []
   todo.value = {
     ship: Number(ocC.paid) || 0,
     refund: Number(rcC.applied) || 0,
     lowStock: invList.filter((r: any) => typeof r?.stock === 'number' && r.stock <= LOW).length,
+    prep: drafts.filter((d2) => d2.state === 'preparing').length,
   }
   message.value = vm.value ? '' : '看板加载失败：' + String((d as any).error || '')
 }
@@ -123,6 +130,9 @@ onMounted(load)
             <component :is="iconFor(c.label)" class="stat-ico" :size="18" :stroke-width="1.8" />
           </div>
           <div class="stat-value">{{ c.value }}</div>
+          <!-- 激活率进度条 + 百分比（换皮退成纯「已激活/总」文本·丢了进度条与激活率） -->
+          <div v-if="c.pct != null" class="pbar"><i :style="{ width: c.pct + '%' }" /></div>
+          <div v-if="c.sub" class="stat-note">{{ c.sub }}</div>
           <div v-if="c.note" class="stat-note">{{ c.note }}</div>
         </div>
       </div>
@@ -155,6 +165,7 @@ onMounted(load)
               <div class="funnel-bar" :style="{ width: (Number(f.value) / funnelMax) * 100 + '%' }" />
             </div>
             <span class="funnel-value">{{ f.value }}</span>
+            <span class="funnel-conv">{{ f.sub || '—' }}</span>
           </div>
         </section>
 
@@ -310,6 +321,19 @@ h1 {
   font-size: 11.5px;
   color: var(--ld-content-2);
 }
+.pbar {
+  margin-top: 10px;
+  height: 8px;
+  background: var(--ld-bg-lilac);
+  border-radius: 999px;
+  overflow: hidden;
+}
+.pbar i {
+  display: block;
+  height: 100%;
+  background: var(--ld-brand);
+  border-radius: 999px;
+}
 .panels {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -379,6 +403,13 @@ h1 {
   font-size: 13px;
   font-weight: 700;
   color: var(--ld-ink);
+}
+.funnel-conv {
+  width: 76px;
+  flex: none;
+  text-align: right;
+  font-size: 11px;
+  color: var(--ld-content-2);
 }
 .empty {
   font-size: 13px;

@@ -6,6 +6,8 @@ export interface StatCard {
   label: string
   value: string
   note?: string
+  sub?: string // 副文案（漏斗逐环转化率「较上环 X%」·换皮丢了逐环转化率只剩绝对值）
+  pct?: number // 进度条百分比（激活率·换皮把进度条退成纯「已激活/总」文本）
 }
 
 export interface SegStat {
@@ -32,18 +34,27 @@ export function mapDashboard(r: unknown): DashboardVM | null {
   if (d.ok !== true || !d.stats) return null
   const s = d.stats
   const approx = d.approx || {}
+  const codesTotal = Number(s.codesTotal) || 0
+  const codesAct = Number(s.codesActivated) || 0
+  const actRate = codesTotal ? Math.round((codesAct / codesTotal) * 100) : 0 // structure-ok：激活率百分比·非金额换算
   const cards: StatCard[] = [
     { label: '注册用户', value: String(Number(s.users) || 0) },
     { label: '订单总数', value: String(Number(s.orders) || 0) },
     { label: '成交额（已付）', value: yuan(s.gmv), note: approx.gmv ? '近似' : '精确' },
-    { label: '激活码（已激活/总）', value: `${Number(s.codesActivated) || 0} / ${Number(s.codesTotal) || 0}` },
+    // 激活码卡：进度条 + 激活率%（换皮丢了进度条/百分比·只剩「已激活/总」文本）
+    { label: '激活码（已激活/总）', value: `${codesAct} / ${codesTotal}`, sub: codesTotal ? `激活率 ${actRate}%` : '', pct: codesTotal ? actRate : undefined },
     { label: '学习者', value: String(Number(s.learners) || 0) },
   ]
   const f = d.funnel || {}
+  const ordered = Number(f.ordered) || 0
+  const paid = Number(f.paid) || 0
+  const activated = Number(f.activated) || 0
+  // 逐环转化率（较上环 %·换皮丢·只剩绝对值看不出支付率/激活率）；首环无上环故空
+  const conv = (n: number, prev: number) => (prev ? `较上环 ${Math.round((n / prev) * 100)}%` : '') // structure-ok：转化率百分比
   const funnel: StatCard[] = [
-    { label: '下单', value: String(Number(f.ordered) || 0) },
-    { label: '支付', value: String(Number(f.paid) || 0) },
-    { label: '激活', value: String(Number(f.activated) || 0) },
+    { label: '下单', value: String(ordered), sub: '' },
+    { label: '支付', value: String(paid), sub: conv(paid, ordered) },
+    { label: '激活', value: String(activated), sub: conv(activated, paid) },
   ]
   const t = d.txAlerts || {}
   const list = (v: unknown) => (Array.isArray(v) ? v.map(String) : [])
