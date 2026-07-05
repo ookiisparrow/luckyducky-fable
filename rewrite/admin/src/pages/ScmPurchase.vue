@@ -6,6 +6,7 @@ import { Plus } from 'lucide-vue-next'
 import { listPurchases, savePurchase, markOrdered, receivePurchase, cancelPurchase, listMaterials, listSuppliers } from '../api/scm'
 import { materialHuman, purchaseStatusLabel, yuanToFen, fenLabel, scmErrorText } from '../lib/mapScm'
 import { dateTime } from '../lib/format'
+import { consumePurchaseHandoff } from '../lib/scmHandoff'
 import ScmFlowTabs from '../components/ScmFlowTabs.vue'
 
 const orders = ref<Array<Record<string, any>>>([])
@@ -100,7 +101,15 @@ async function step(fn: (_id: string) => Promise<Record<string, unknown>>, id: s
   void reload()
 }
 
-onMounted(reload)
+onMounted(async () => {
+  await reload()
+  // 从备货计算器「去采购开单」带来的缺口预填（一次性 consume）：新草稿 + 供应商 + 缺口行（价待填）
+  const h = consumePurchaseHandoff()
+  if (h) {
+    form.value = { purchaseId: '', supplierId: h.supplierId, lines: h.lines.length ? h.lines.map((l) => ({ materialId: l.materialId, qty: l.qty, priceYuan: '' })) : [{ materialId: '', qty: 1, priceYuan: '' }] }
+    note(true, '已按备货缺口预填草稿，补单价后保存', '')
+  }
+})
 </script>
 
 <template>

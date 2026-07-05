@@ -2,11 +2,24 @@
 // 备货计算 + 产销统计（设计语言一致性·M3 UI 批18·只读）：目标套数 → 外协缺口（带结不外购）+ 采购缺口按供应商分列；
 // 产销 = 打包累计 vs 发货累计。逻辑未动，仅套设计语言。
 import { ref, onMounted, computed } from 'vue'
-import { Plus } from 'lucide-vue-next'
+import { Plus, ArrowRight } from 'lucide-vue-next'
+import { useRouter } from 'vue-router'
 import { getRestockPlan, getFgSummary } from '../api/scm'
 import { listInventory } from '../api/system'
 import { materialHuman, scmErrorText } from '../lib/mapScm'
+import { setPurchaseHandoff, setOutworkHandoff } from '../lib/scmHandoff'
 import ScmFlowTabs from '../components/ScmFlowTabs.vue'
+
+const router = useRouter()
+// 去开单联动（换皮丢·算完缺口只能手抄颜色/料号/数量去另一页开单·流程割裂）：带数据跳转·目标页 consume 预填
+function goOutworkOrder() {
+  setOutworkHandoff({ lines: (plan.value?.outworkGaps || []).map((g: Record<string, any>) => ({ materialId: `yarn:${g.color}:L:raw`, qty: Number(g.rawToIssue) || 0 })).filter((l) => l.qty > 0) })
+  void router.push('/scm-outwork')
+}
+function goPurchaseOrder(g: Record<string, any>) {
+  setPurchaseHandoff({ supplierId: String(g.supplierId || ''), lines: (g.lines || []).map((l: Record<string, any>) => ({ materialId: String(l.materialId), qty: Number(l.gap) || 0 })).filter((l) => l.qty > 0) })
+  void router.push('/scm-purchase')
+}
 
 const targets = ref<Array<{ productId: string; sets: number }>>([{ productId: '', sets: 10 }])
 const plan = ref<Record<string, any> | null>(null)
@@ -94,12 +107,16 @@ onMounted(async () => {
             <span class="gap-name">{{ g.color }}</span>
             <span>带结需 {{ g.knottedNeed }} · 存 {{ g.knottedStock }} · <strong class="short">缺 {{ g.gap }}（应发原团 {{ g.rawToIssue }}）</strong></span>
           </div>
+          <button v-if="(plan.outworkGaps || []).length" class="handoff-btn" @click="goOutworkOrder">照这个去外协开单发料<ArrowRight :size="13" :stroke-width="2" /></button>
         </div>
         <div class="gap-block">
           <h3>采购缺口（按供应商）</h3>
           <p v-if="!(plan.purchaseGroups || []).length" class="ok-line">原料都够，不用采购 ✓</p>
           <div v-for="g in plan.purchaseGroups" :key="g.supplierId" class="sup-group">
-            <div class="sup-name">{{ g.supplierName }}</div>
+            <div class="sup-name-row">
+              <span class="sup-name">{{ g.supplierName }}</span>
+              <button v-if="g.supplierId" class="handoff-btn sm" @click="goPurchaseOrder(g)">去这家开采购单<ArrowRight :size="12" :stroke-width="2" /></button>
+            </div>
             <div v-for="l in g.lines" :key="l.materialId" class="gap-line">
               <span class="gap-name">{{ materialHuman(l.materialId) }}{{ l.missing ? '（未建档·按需全采）' : '' }}</span>
               <span>需 {{ l.need }} · 存 {{ l.stock }} · <strong class="short">缺 {{ l.gap }}</strong></span>
@@ -249,11 +266,40 @@ input {
 .sup-group {
   margin-bottom: 10px;
 }
+.sup-name-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 6px 0 2px;
+}
 .sup-name {
   font-size: 12.5px;
   font-weight: 700;
   color: var(--ld-brand-active);
-  padding: 6px 0 2px;
+}
+.handoff-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 8px;
+  padding: 6px 14px;
+  border: 1px solid var(--ld-purple-line);
+  border-radius: 999px;
+  background: var(--ld-bg-lilac);
+  color: var(--ld-brand-active);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.handoff-btn:hover {
+  background: var(--ld-purple-ink);
+  color: #fff;
+}
+.handoff-btn.sm {
+  margin-top: 0;
+  padding: 4px 10px;
+  font-size: 11px;
 }
 .warn-note {
   margin-top: 8px;

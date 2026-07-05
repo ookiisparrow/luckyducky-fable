@@ -4,6 +4,7 @@ import { describe, it, expect } from 'vitest'
 import shellRaw from '../src/shell/Shell.vue?raw'
 import { materialHuman, uomLabel, purchaseStatusLabel, outworkStatusLabel, yuanToFen, fenLabel, scmErrorText, docTypeLabel, mapLedger } from '../src/lib/mapScm'
 import { SCM_FLOW } from '../src/lib/scmFlow'
+import { setPurchaseHandoff, consumePurchaseHandoff, setOutworkHandoff, consumeOutworkHandoff } from '../src/lib/scmHandoff'
 
 describe('料号人话', () => {
   it('大白话：毛线拆 色·档·形态；pkg/card 挂产品；fg 成品；其余辅料；空回空', () => {
@@ -66,5 +67,23 @@ describe('SCM 流程条单源同步（防死链/防漂移）', () => {
     expect(flowPaths.size).toBe(5)
     expect([...flowPaths].sort()).toEqual([...shellScmPaths].sort()) // 集合相等（顺序各自可不同·内容不许漂移）
     expect(SCM_FLOW.every((s) => s.label && s.icon)).toBe(true) // 每步有中文标签+图标
+  })
+})
+
+// 备货→采购/外协去开单中转（旧线 store/scmHandoff 移植·换皮丢·流程割裂手抄）：
+// 存一份→目标页读一次即清（consume），返回页不重复预填；两条通道互不串。
+describe('SCM 去开单 handoff（读一次即清）', () => {
+  it('大白话：set 后 consume 拿到；再 consume 得 null（不重复预填）；采购/外协两通道独立', () => {
+    setPurchaseHandoff({ supplierId: 'sup1', lines: [{ materialId: 'yarn:pink:L:raw', qty: 3 }] })
+    const p1 = consumePurchaseHandoff()
+    expect(p1?.supplierId).toBe('sup1')
+    expect(p1?.lines[0].qty).toBe(3)
+    expect(consumePurchaseHandoff()).toBeNull() // 读一次即清·防返回重填
+
+    setOutworkHandoff({ lines: [{ materialId: 'yarn:blue:L:raw', qty: 5 }] })
+    expect(consumePurchaseHandoff()).toBeNull() // 外协通道不污染采购通道
+    const o1 = consumeOutworkHandoff()
+    expect(o1?.lines[0].qty).toBe(5)
+    expect(consumeOutworkHandoff()).toBeNull()
   })
 })

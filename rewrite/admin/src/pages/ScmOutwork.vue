@@ -5,6 +5,7 @@ import { ref, onMounted } from 'vue'
 import { Plus } from 'lucide-vue-next'
 import { listOutworks, saveOutwork, issueOutwork, receiveOutwork, settleOutwork, cancelOutwork, listMaterials, listSuppliers } from '../api/scm'
 import { materialHuman, outworkStatusLabel, yuanToFen, fenLabel, scmErrorText } from '../lib/mapScm'
+import { consumeOutworkHandoff } from '../lib/scmHandoff'
 import ScmFlowTabs from '../components/ScmFlowTabs.vue'
 
 const orders = ref<Array<Record<string, any>>>([])
@@ -83,7 +84,15 @@ async function step(fn: (_id: string) => Promise<Record<string, unknown>>, id: s
   void reload()
 }
 
-onMounted(reload)
+onMounted(async () => {
+  await reload()
+  // 从备货计算器「去外协开单」带来的应发原团预填（一次性 consume）：新草稿 + 发料行（织女/计件价待填）
+  const h = consumeOutworkHandoff()
+  if (h && h.lines.length) {
+    form.value = { outworkId: '', workerId: '', rateYuan: '', lines: h.lines.map((l) => ({ materialId: l.materialId, qty: l.qty })) }
+    note(true, '已按备货缺口预填发料，选织女 + 填计件价后保存', '')
+  }
+})
 </script>
 
 <template>
