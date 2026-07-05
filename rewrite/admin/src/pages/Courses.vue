@@ -6,6 +6,7 @@ import { useRoute } from 'vue-router'
 import { RotateCcw, Plus, Trash2, Upload, Check } from 'lucide-vue-next'
 import { getCourseDraft, saveCourseDraft, publishCourse, uploadVideo } from '../api/content'
 import { courseVideoStats } from '../lib/mapContent'
+import { planLessonBatch } from '../lib/videoBatch'
 
 const route = useRoute()
 const courseId = ref(String(route.query.courseId || ''))
@@ -102,6 +103,25 @@ async function pickVideo(sg: Record<string, any>, ev: Event) {
   } else message.value = '视频上传失败：' + String(r.error || '')
 }
 
+// 课时级批量传视频（换皮丢·多选按文件名 numeric 顺序灌入/自动新建段·串行 fail-soft·课时级进度）
+async function batchUpload(l: Record<string, any>, ev: Event) {
+  const input = ev.target as HTMLInputElement
+  const files = Array.from(input.files || [])
+  if (!files.length || !course.value) return
+  const plan = planLessonBatch(files, (l.segments as any[]).length)
+  for (const item of plan) {
+    if (item.isNew) l.segments.push({ id: '', name: item.segName, dur: '', videoFileId: '' })
+    const sg = l.segments[item.segIndex]
+    if (!sg.name) sg.name = item.segName
+    const r = await uploadVideo(String(course.value.id), sg.name || 'seg', item.file, (p) => (progress.value = `课时批量传 ${item.segIndex + 1}/${plan.length} · ${Math.round(p * 100)}%`))
+    if (r.ok) sg.videoFileId = r.fileId || ''
+    else message.value = '有视频上传失败：' + String(r.error || '') // fail-soft·一段失败不拖累其余
+  }
+  progress.value = ''
+  refreshStats()
+  input.value = ''
+}
+
 async function save() {
   if (!course.value || busy.value) return
   busy.value = true
@@ -194,7 +214,10 @@ onMounted(load)
             <button class="icon-btn" title="下移" :disabled="si === l.segments.length - 1" @click="move(l.segments, si, 1)">↓</button>
             <button class="icon-btn" :class="{ warn: confirmKey === 's:' + ci + ':' + li + ':' + si }" title="删段" @click="delSegment(l, ci, li, si)"><Trash2 :size="14" :stroke-width="1.8" /></button>
           </div>
-          <button class="add-btn" @click="addSegment(l)"><Plus :size="13" :stroke-width="2" /><span>加段</span></button>
+          <div class="seg-adds">
+            <button class="add-btn" @click="addSegment(l)"><Plus :size="13" :stroke-width="2" /><span>加段</span></button>
+            <label class="add-btn batch-up" title="多选视频·按文件名顺序自动灌入/新建小段"><Upload :size="13" :stroke-width="2" /><span>批量传视频</span><input type="file" accept="video/mp4,video/quicktime" multiple hidden @change="(e) => batchUpload(l, e)" /></label>
+          </div>
         </div>
         <button class="add-btn" @click="addLesson(ch)"><Plus :size="13" :stroke-width="2" /><span>加课时</span></button>
       </div>
@@ -434,6 +457,15 @@ h1 {
   font-size: 12px;
   font-weight: 600;
   cursor: pointer;
+}
+.seg-adds {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.batch-up {
+  border-style: solid;
+  background: var(--ld-bg-lilac);
 }
 .add-chapter {
   display: inline-flex;
