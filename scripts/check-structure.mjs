@@ -3913,6 +3913,40 @@ export const repoChecks = [
     },
   },
   {
+    id: 'rw-admin-nav-route-synced',
+    roots: ['#5'],
+    desc: '新线 admin 导航↔路由同步（根因#5 复制即漂移·旧 admin-nav-route-synced 只护 packages·换皮期新线加页/改路径无机器兜底而失守）：Shell.vue nav 引用的每个 path 须在 router.ts 注册（防死链·点了白屏）；router.ts 每个子页路由（除 login·父 /·带参）须在 Shell.vue nav 有入口（防加页忘加导航的孤儿页）。新线子路由用相对 path（orders / 空=Dashboard）·nav 用绝对（/orders /）——归一后对账',
+    run() {
+      const routerRel = 'rewrite/admin/src/router.ts'
+      const shellRel = 'rewrite/admin/src/shell/Shell.vue'
+      const routerAbs = join(ROOT, routerRel)
+      const shellAbs = join(ROOT, shellRel)
+      if (!existsSync(routerAbs) || !existsSync(shellAbs)) return [`${routerRel} / ${shellRel} 缺失（新线导航同步守卫无从核起·#5）`]
+      const routerSrc = readFileSync(routerAbs, 'utf8')
+      const shellSrc = readFileSync(shellAbs, 'utf8')
+      const bad = []
+      // 路由所有 path（含子页相对 path 与父/顶层绝对 path）
+      const routePaths = [...routerSrc.matchAll(/path:\s*['"]([^'"]*)['"]/g)].map((m) => m[1])
+      // 子页＝不带前导 / 的 path（相对·如 orders、''=Dashboard）；父 '/' 与顶层 '/login' 带前导 / 排除
+      const childPages = routePaths.filter((p) => !p.startsWith('/'))
+      // Shell nav 的绝对 path（{ path: '/x' }）
+      const navPaths = [...shellSrc.matchAll(/\bpath:\s*['"](\/[^'"]*)['"]/g)].map((m) => m[1])
+      const norm = (p) => p.replace(/^\//, '') // /orders→orders，/→''
+      const childSet = new Set(childPages)
+      // ① 死链：Shell nav 每个 path 须有对应子路由
+      for (const np of navPaths) {
+        if (!childSet.has(norm(np))) bad.push(`${shellRel} nav 引用未注册路由 ${np}——死链，点了白屏（router.ts 无对应子 path '${norm(np)}'·#5）`)
+      }
+      // ② 孤儿页：每个子路由（非 login·非带参）须在 Shell nav 有入口
+      const navSet = new Set(navPaths.map(norm))
+      for (const p of childPages) {
+        if (p === 'login' || p.includes(':')) continue
+        if (!navSet.has(p)) bad.push(`router.ts 注册了子路由 '${p}' 但 ${shellRel} nav 无入口——孤儿页（加页忘加导航·#5）`)
+      }
+      return bad
+    },
+  },
+  {
     // 控制台/坐席台凭证不落盘（深审 P1·根因#3 信任边界）：口令是可复用主凭证——明文写 localStorage 且每请求
     // 回传，落在外包机器/共用浏览器＝失守。登录后前端只准存服务端签发的会话令牌（12h 自灭·停号即拒·sha 入库），
     // 后端 login 必经 issueSession 签发（否则前端被迫回退存口令）。行为侧由 admin-session-issued（测试）锁。
