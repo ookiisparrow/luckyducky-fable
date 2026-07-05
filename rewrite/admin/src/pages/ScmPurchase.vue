@@ -126,7 +126,7 @@ h2 {
 }
 .status {
   font-size: 13px;
-  color: #c0392b;
+  color: var(--ld-red);
 }
 .hint {
   font-size: 13px;
@@ -196,6 +196,6 @@ th {
   border: 1px solid var(--ld-purple-line);
 }
 .act.warn {
-  background: #c0392b;
+  background: var(--ld-red);
 }
 </style>

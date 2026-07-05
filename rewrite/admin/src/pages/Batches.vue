@@ -160,7 +160,7 @@ th {
   border: 1px solid var(--ld-purple-line);
 }
 .act.warn {
-  background: #c0392b;
+  background: var(--ld-red);
 }
 .act.small {
   padding: 3px 12px;

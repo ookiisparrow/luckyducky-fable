@@ -1,0 +1,47 @@
+/**
+ * 调色板单源（design/console.pen 变量表抄录·2026-07-05）。
+ * 换皮只改这个文件——src 其余地方禁裸 hex（守卫 rw-admin-theme-single-source）。
+ * 命名沿用设计稿 token 名，加 --ld- 前缀；旧名（purple-tab 等）以别名保留，屏批次逐步换新名。
+ */
+:root {
+  /* 品牌 */
+  --ld-brand: #a371ea; /* brand·幸运紫 */
+  --ld-brand-active: #865dc0; /* brand-active·按下/链接态 */
+
+  /* 墨色层级 */
+  --ld-ink: #222222; /* ink·标题主文 */
+  --ld-purple-ink: #241733; /* purple-ink·品牌墨（主按钮底/重标题） */
+  --ld-content: #3d3d42; /* content·正文 */
+  --ld-content-2: #6e6e76; /* content-2·次要文字/未激活导航 */
+  --ld-purple-meta: #7e6e96; /* purple-meta·紫系说明文字 */
+
+  /* 线与底 */
+  --ld-purple-line: #c9bbe0; /* purple-line·紫描边（激活项/chip） */
+  --ld-line: #e7e7e7; /* line·常规分隔线 */
+  --ld-line-strong: #dcdcdc; /* line-strong·强分隔线 */
+  --ld-bg: #ffffff;
+  --ld-bg-lilac: #fcfaff; /* bg-lilac·页面底/激活项底 */
+  --ld-bg-grey: #f3f3f3; /* bg-grey·灰底（禁用章/占位） */
+  --ld-bg-sage: #edeee8; /* bg-sage·灰绿底（头像等） */
+  --ld-bg-faint: #fafafa; /* 旧台既有·近白底 */
+
+  /* 语义色（设计稿 green/red + 旧台琥珀暂留原值，做到对应屏时对稿校准） */
+  --ld-green: #4a9e6b;
+  --ld-red: #d54941;
+  --ld-amber: #b9770e;
+  --ld-bg-green-soft: #eefbf1; /* 成功底 */
+  --ld-bg-red-soft: #fff6f5; /* 危险底 */
+  --ld-red-line: #f0c0ba; /* 危险描边 */
+
+  /* 旧名别名（24 页存量在用；单源仍是上面的值） */
+  --ld-purple: var(--ld-brand);
+  --ld-purple-tab: var(--ld-brand-active);
+
+  /* 形状与字体 */
+  --ld-radius: 12px;
+  --ld-radius-l: 16px;
+  --ld-radius-item: 9px; /* 侧栏项/小件 */
+  --ld-font:
+    'Noto Sans SC', -apple-system, 'PingFang SC', 'Microsoft YaHei', sans-serif;
+  --ld-font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+}

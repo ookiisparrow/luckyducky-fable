@@ -95,13 +95,13 @@ h3 {
   color: var(--ld-purple-meta);
 }
 .alert-h {
-  color: #c0392b;
+  color: var(--ld-red);
 }
 .alert {
   padding: 10px 14px;
   margin-bottom: 8px;
-  background: #fff6f5;
-  border: 1px solid #f0c0ba;
+  background: var(--ld-bg-red-soft);
+  border: 1px solid var(--ld-red-line);
   border-radius: var(--ld-radius);
   font-size: 13px;
 }

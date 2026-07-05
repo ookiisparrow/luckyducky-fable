@@ -73,7 +73,7 @@ h2 {
 }
 .status {
   font-size: 13px;
-  color: #c0392b;
+  color: var(--ld-red);
 }
 .kbrow {
   display: grid;

@@ -4371,6 +4371,43 @@ export const repoChecks = [
       return bad
     },
   },
+  {
+    // 控制台调色板单源（design/console.pen 落地·M3 UI 批1）：旧台 #c0392b 散写 36 处即
+    // 病根#5「样板复制即漂移」在色值上的病征——色值一旦散写，换皮＝全仓 sed 碰运气。
+    id: 'rw-admin-theme-single-source',
+    roots: ['#5'],
+    desc: '控制台调色板单源（design/console.pen 落地批1·病根#5 样板复制即漂移）：rewrite/admin/src 除 styles/ 外禁裸 hex 色值（纯黑白 #fff/#000 中性放行·注释行与 structure-ok 豁免），颜色一律 var(--ld-*)；styles/tokens.css 为唯一调色板定义地——换皮只改 token 文件',
+    run() {
+      const bad = []
+      const base = join(ROOT, 'rewrite/admin/src')
+      if (!existsSync(base)) return bad
+      const NEUTRAL = new Set(['#fff', '#ffffff', '#000', '#000000'])
+      const scan = (d) => {
+        for (const e of readdirSync(d)) {
+          const p = join(d, e)
+          if (statSync(p).isDirectory()) {
+            if (e === 'styles') continue
+            scan(p)
+          } else if (/\.(vue|ts|css)$/.test(e)) {
+            const lines = readFileSync(p, 'utf8').split('\n')
+            lines.forEach((line, i) => {
+              if (/^(\/\/|\/\*|\*|<!--)/.test(line.trim())) return
+              if (line.includes('structure-ok') || (i > 0 && lines[i - 1].includes('structure-ok'))) return
+              const hits = (line.match(/#[0-9a-fA-F]{3,8}\b/g) || []).filter(
+                (h) => !NEUTRAL.has(h.toLowerCase())
+              )
+              if (hits.length)
+                bad.push(
+                  `${relative(ROOT, p)}:${i + 1} 裸 hex ${hits.join(' ')}——颜色走 var(--ld-*)，调色板单源 rewrite/admin/src/styles/tokens.css（#5）`
+                )
+            })
+          }
+        }
+      }
+      scan(base)
+      return bad
+    },
+  },
 ]
 
 // ============== 逐文件规则（fileRules）==============

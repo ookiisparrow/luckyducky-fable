@@ -94,7 +94,7 @@ h2 {
 }
 .status {
   font-size: 13px;
-  color: #c0392b;
+  color: var(--ld-red);
 }
 .panel {
   padding: 14px 16px;
@@ -156,7 +156,7 @@ input {
   border: 1px solid var(--ld-purple-line);
 }
 .act.warn {
-  background: #c0392b;
+  background: var(--ld-red);
 }
 .act:disabled {
   opacity: 0.5;

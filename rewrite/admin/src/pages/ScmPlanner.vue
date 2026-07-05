@@ -97,7 +97,7 @@ h4 {
 }
 .status {
   font-size: 13px;
-  color: #c0392b;
+  color: var(--ld-red);
 }
 .panel {
   padding: 14px 16px;
@@ -130,11 +130,11 @@ input {
 }
 .ok-line {
   font-size: 13px;
-  color: #1e8e4e;
+  color: var(--ld-green);
 }
 .warn-note {
   font-size: 12px;
-  color: #b9770e;
+  color: var(--ld-amber);
 }
 .group {
   margin: 6px 0;

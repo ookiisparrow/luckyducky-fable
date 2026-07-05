@@ -64,7 +64,7 @@ h2 {
   color: var(--ld-purple-meta);
 }
 .meta em {
-  color: #b9770e;
+  color: var(--ld-amber);
   font-style: normal;
 }
 .dist {

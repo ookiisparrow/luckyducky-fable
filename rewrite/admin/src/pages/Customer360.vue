@@ -148,7 +148,7 @@ h2 {
 }
 .failed {
   font-size: 12px;
-  color: #c0392b;
+  color: var(--ld-red);
 }
 .empty {
   font-size: 12px;

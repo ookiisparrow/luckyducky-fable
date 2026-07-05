@@ -88,11 +88,11 @@ h2 {
 }
 .warn-note {
   font-size: 12px;
-  color: #b9770e;
+  color: var(--ld-amber);
 }
 .status {
   font-size: 13px;
-  color: #c0392b;
+  color: var(--ld-red);
 }
 table {
   width: 100%;

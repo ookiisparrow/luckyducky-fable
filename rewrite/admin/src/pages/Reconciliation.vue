@@ -101,12 +101,12 @@ h4 {
   color: var(--ld-purple-ink);
 }
 .danger-h {
-  color: #c0392b;
+  color: var(--ld-red);
 }
 .warn-note {
   margin-left: 8px;
   font-size: 11px;
-  color: #b9770e;
+  color: var(--ld-amber);
   font-weight: 400;
 }
 .status {
@@ -133,8 +133,8 @@ h4 {
   border-radius: 10px;
 }
 .card.danger {
-  background: #fff6f5;
-  border: 1px solid #f0c0ba;
+  background: var(--ld-bg-red-soft);
+  border: 1px solid var(--ld-red-line);
 }
 .card .k {
   font-size: 11px;
@@ -176,7 +176,7 @@ th {
   margin: 2px 0;
 }
 .danger-line {
-  color: #c0392b;
+  color: var(--ld-red);
 }
 .act {
   padding: 7px 18px;

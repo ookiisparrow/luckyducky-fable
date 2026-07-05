@@ -163,7 +163,7 @@ h2 {
 }
 .status {
   font-size: 13px;
-  color: #c0392b;
+  color: var(--ld-red);
 }
 table {
   width: 100%;
@@ -192,12 +192,12 @@ th {
   max-width: 220px;
 }
 tr.mismatch {
-  background: #fff6f5;
+  background: var(--ld-bg-red-soft);
 }
 .flag {
   margin-left: 6px;
   font-size: 11px;
-  color: #c0392b;
+  color: var(--ld-red);
 }
 .track {
   margin-left: 6px;
@@ -220,7 +220,7 @@ tr.mismatch {
   border: 1px solid var(--ld-purple-line);
 }
 .act.warn {
-  background: #c0392b;
+  background: var(--ld-red);
 }
 .more {
   margin-top: 14px;
