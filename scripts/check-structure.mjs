@@ -607,6 +607,39 @@ export const repoChecks = [
     },
   },
   {
+    // 企微推送单一收口·重写线（观测批5·根因#13/#12·同旧线 bot-push-single-seam）：pushBotAlert 仅定义于
+    // rewrite/cloud/src/kit/botpush.ts、仅 kit/observe.ts(notifyAlert) 调；其余 rewrite/cloud/src 不得直达
+    // （防散调/绕 alertEvents 开关/webhook 凭证多处）。合并回 main 时随病根14「失败必可观测」对齐归口。
+    id: 'rw-bot-push-single-seam',
+    roots: ['#12', '#13'],
+    desc: '企微推送单一收口·重写线：pushBotAlert 仅在 rewrite/cloud/src/kit/botpush.ts 定义、仅 kit/observe.ts 调用；其余不得直达（防散调/绕开关/凭证多处·根因#13/#12）',
+    run() {
+      const seam = 'rewrite/cloud/src/kit/botpush.ts'
+      const caller = 'rewrite/cloud/src/kit/observe.ts'
+      if (!existsSync(join(ROOT, seam))) return [`${seam} 缺失——企微推送接缝单点（重写线·根因#13）`]
+      const bad = []
+      if (!/export\s+async\s+function\s+pushBotAlert/.test(readFileSync(join(ROOT, seam), 'utf8')))
+        bad.push(`${seam} 未导出 pushBotAlert——接缝空壳`)
+      const srcRoot = join(ROOT, 'rewrite/cloud/src')
+      const walk = (d) => {
+        for (const e of readdirSync(d)) {
+          const p = join(d, e)
+          if (statSync(p).isDirectory()) walk(p)
+          else if (e.endsWith('.ts')) {
+            const rel = relative(ROOT, p).replace(/\\/g, '/')
+            if (rel === seam || rel === caller) continue
+            if (/pushBotAlert|['"][^'"]*\/botpush['"]/.test(readFileSync(p, 'utf8')))
+              bad.push(`${rel} 直达 pushBotAlert/botpush——企微推送须经 kit/observe.notifyAlert 单一收口（重写线·根因#12）`)
+          }
+        }
+      }
+      if (existsSync(srcRoot)) walk(srcRoot)
+      if (existsSync(join(ROOT, caller)) && !/pushBotAlert/.test(readFileSync(join(ROOT, caller), 'utf8')))
+        bad.push(`${caller}(notifyAlert) 未调 pushBotAlert——接缝未接通（死代码）`)
+      return bad
+    },
+  },
+  {
     // 应用消息单一收口（M⑦ 承面C 增强·推送线·根因#12 平台接缝单点）：企业微信「应用消息」（message/send·带
     // agentid·主动推坐席手机）只经 kit/wecom.ts 出——sendAppMessage 是唯一调 message/send 的原始接缝、
     // sendAgentCard 是唯一 fail-soft 编排。其余 packages/cloud/src 不得出现 message/send 字面量（防散调/绕

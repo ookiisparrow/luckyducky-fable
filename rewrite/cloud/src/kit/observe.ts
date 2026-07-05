@@ -1,5 +1,7 @@
 import { recordAnomaly } from './anomaly'
-import type { AnomalyKind } from '@ldrw/shared'
+import { getDb } from './db'
+import { pushBotAlert } from './botpush'
+import { COLLECTIONS, type AnomalyKind } from '@ldrw/shared'
 
 /**
  * 可观测性告警标记（设计约束「钱链静默失败必须主动可告警」）。
@@ -33,11 +35,23 @@ const SEV_TO_KIND: Record<AlertSev, AnomalyKind> = {
  * recordAnomaly 不再重复推告警（防递归 + 防双日志）。fail-soft：落账失败绝不反噬告警本身。
  */
 export async function notifyAlert(sev: AlertSev, fn: string, code: string, ctx: Record<string, unknown> = {}): Promise<void> {
-  alert(sev, fn, code, ctx)
+  alert(sev, fn, code, ctx) // ① 结构化日志行（控制台日志告警 backstop·不变）
+  // ② 桥（批4）：动作失败告警自动进 bug 账本（持久·控制台可查·指纹去重）。
   try {
     await recordAnomaly(SEV_TO_KIND[sev], code, { fn, ...ctx }, 'high', { alertOnHigh: false })
   } catch {
     /* 可观测性绝不反噬主流程 */
+  }
+  // ③ 推送（批5·botpush 唯一接缝）：按 adminConfig/settings.alertWebhook 推企微群机器人（owner 手机实时收）；
+  //   alertEvents[code]=false 可逐事件静音。**fail-soft**：未配置/推送失败一律静默、绝不抛错、不反噬主流程。
+  try {
+    const got = await getDb().collection(COLLECTIONS.adminConfig).doc('settings').get().catch(() => null)
+    const s = (got && (got as any).data) || {}
+    if (!s.alertWebhook) return
+    if (s.alertEvents && s.alertEvents[code] === false) return
+    await pushBotAlert(s.alertWebhook, { sev, fn, code, ctx })
+  } catch {
+    /* fail-soft：可观测性不反噬主流程 */
   }
 }
 
