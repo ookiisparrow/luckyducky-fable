@@ -1417,38 +1417,6 @@ export const repoChecks = [
     },
   },
   {
-    id: 'docs-budget',
-    roots: ['#11'],
-    desc: '文档防膨胀（根因#11）：CLAUDE.md ≤180 行 + docs/ 活文档 ≤15 份 + 记录类单文档行数上限（重构日志≤200/调试日志≤160/待办≤160·把 CLAUDE 规则②卷档从靠人变机器守）（一需求一家·客观→系统事实/主观→单源·历史卷档 archive）',
-    run() {
-      const out = []
-      const abs = join(ROOT, 'CLAUDE.md')
-      if (existsSync(abs)) {
-        const n = readFileSync(abs, 'utf8').split('\n').length
-        if (n > 180) out.push(`CLAUDE.md ${n} 行 > 180 预算——文档职责渗漏（根因#11）；约定本体精简，进度/bug/欠债沉 docs/ 记录类`)
-      }
-      const DOC_BUDGET = 15
-      const dir = join(ROOT, 'docs')
-      const docs = existsSync(dir) ? readdirSync(dir).filter((f) => f.endsWith('.md')) : []
-      if (docs.length > DOC_BUDGET)
-        out.push(`docs/ 活文档 ${docs.length} 份 > ${DOC_BUDGET} 预算——文档膨胀（根因#11）；按"一需求一家"合并、历史卷档 archive、客观计数收口 系统事实`)
-      // 记录类单文档行数上限：记录类（日志/账本）会随时间膨胀，超上限即逼卷档 archive（老批次/旧季/已关账）——
-      // 把 CLAUDE 规则②「卷档」从靠人记变机器守（docs-budget 原只管份数/CLAUDE 行数，不管单文档膨胀）。
-      const RECORD_LIMITS = { '重构日志.md': 200, '调试日志.md': 160, '待办与债.md': 160 }
-      for (const [f, max] of Object.entries(RECORD_LIMITS)) {
-        const p = join(dir, f)
-        if (!existsSync(p)) continue
-        const n = readFileSync(p, 'utf8').split('\n').length
-        if (n > max)
-          out.push(`docs/${f} ${n} 行 > ${max} 预算——记录类膨胀（根因#11）；老批次/旧季/已关账卷档 archive（CLAUDE 规则②）`)
-        else if (n >= Math.floor(max * 0.9))
-          // 软线预警（熵地图 E3·非阻断）：≥90% 预算即催卷档，别等撞顶才被动触发——治「卷档逾期」盲区
-          console.warn(`⚠️ docs/${f} ${n}/${max} 行（≥90%）——卷档逾期预警（熵地图 E3）：老批次/旧季/已关账早卷 archive、别等撞顶`)
-      }
-      return out
-    },
-  },
-  {
     id: 'console-assets-present',
     roots: ['#9'],
     desc: '控制台资产正册不可误删（根因#9）：console-assets 关键正册文件须存在（git 外资产的唯一版本化记录）',

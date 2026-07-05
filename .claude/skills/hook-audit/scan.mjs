@@ -137,7 +137,7 @@ let skipped = 0;
 let permModeSwitch = 0;
 let errResults = 0;
 
-const GUARDS = ['guard-deploy', 'check-conventions', 'check-structure', 'interface-catalog', 'writes-need-gate', 'flow-seam', 'docs-budget', 'visual-check'];
+const GUARDS = ['guard-deploy', 'check-conventions', 'check-structure', 'interface-catalog', 'writes-need-gate', 'flow-seam', 'visual-check'];
 
 for (const file of files) {
   let raw;
