@@ -36,6 +36,20 @@ export function mapDashboard(r: unknown): { cards: StatCard[]; funnel: StatCard[
   return { cards, funnel, alerts }
 }
 
+// 手机号掩码（PII·根因#3 信任边界）：列表只显掩码，抽屉给操作员看完整号（联系买家/填面单）。
+// 短号（<7 位·脏档/占位）原样返回，不假掩成 ****。
+export function maskPhone(p: unknown): string {
+  const s = String(p || '')
+  return s.length >= 7 ? s.slice(0, 3) + '****' + s.slice(-4) : s
+}
+
+export interface OrderItemVM {
+  productId: string
+  name: string
+  spec: string
+  qty: number
+}
+
 export interface OrderRowVM {
   id: string
   statusLabel: string
@@ -46,9 +60,25 @@ export interface OrderRowVM {
   timeLabel: string
   feeMismatch: boolean
   trackingNo: string
-  address: string
-  canShip: boolean
+  address: string // 列表用·手机号已掩码（PII）
+  canShip: boolean // paid & 非金额异常 → 首次发货
+  canModify: boolean // shipped → 改单号
+  company: string // 当前物流公司（改单号预填）
+  // —— 详情抽屉数据链（时间线/逐商品/交易号/微信合规·VMlhp）——
+  items: OrderItemVM[]
+  addrName: string
+  addrPhone: string // 完整号（抽屉用·非列表）
+  addrRegion: string
+  addrDetail: string
+  transactionId: string
+  wxShipUploaded: boolean | null // 三态：true=已上报 / false=上报失败 / null=未知（未发货·别谎报未上传）
+  createdAtMs: number | null
+  paidAtMs: number | null
+  shippedAtMs: number | null
+  doneAtMs: number | null
 }
+
+const ms = (v: unknown): number | null => (typeof v === 'number' && v > 0 ? v : null)
 
 export function mapOrderRows(list: unknown): OrderRowVM[] {
   if (!Array.isArray(list)) return []
@@ -57,21 +87,43 @@ export function mapOrderRows(list: unknown): OrderRowVM[] {
     if (!o || typeof o !== 'object') continue
     const id = String(o.id || o._id || '')
     if (!id) continue
-    const items = Array.isArray(o.items) ? o.items : []
-    const names = items.map((it: any) => String((it && it.name) || '')).filter(Boolean)
+    const rawItems = Array.isArray(o.items) ? o.items : []
+    const items: OrderItemVM[] = rawItems
+      .filter((it: any) => it && typeof it === 'object')
+      .map((it: any) => ({
+        productId: String(it.productId || ''),
+        name: String(it.name || ''),
+        spec: String(it.spec || ''),
+        qty: Number.isInteger(it.qty) && it.qty > 0 ? it.qty : 0,
+      }))
+    const names = items.map((it) => it.name).filter(Boolean)
     const a = o.address && typeof o.address === 'object' ? o.address : {}
+    const status = String(o.status || '')
     out.push({
       id,
-      status: String(o.status || ''),
+      status,
       statusLabel: orderStatusLabel(o.status),
       summary: names.slice(0, 2).join('、') + (names.length > 2 ? ` 等 ${names.length} 件商品` : ''),
-      count: items.reduce((n: number, it: any) => n + (Number.isInteger(it && it.qty) && it.qty > 0 ? it.qty : 0), 0),
+      count: items.reduce((n, it) => n + it.qty, 0),
       amountLabel: yuan(o.amount) || '¥0.00',
       timeLabel: dateTime(o.createdAt),
       feeMismatch: o.feeMismatch === true,
       trackingNo: String((o.shipping && o.shipping.trackingNo) || o.trackingNo || ''),
-      address: [a.name, a.phone, a.region, a.detail].filter(Boolean).join(' '),
-      canShip: o.status === 'paid' && o.feeMismatch !== true, // 金额不符单禁发货（云端也挡·这里只是入口收窄）
+      address: [a.name, maskPhone(a.phone), a.region, a.detail].filter(Boolean).join(' '), // 列表掩码
+      canShip: status === 'paid' && o.feeMismatch !== true, // 金额不符单禁发货（云端也挡·这里只是入口收窄）
+      canModify: status === 'shipped', // 已发货可改单号
+      company: String((o.shipping && o.shipping.company) || ''),
+      items,
+      addrName: String(a.name || ''),
+      addrPhone: String(a.phone || ''), // 完整·抽屉专用
+      addrRegion: String(a.region || ''),
+      addrDetail: String(a.detail || ''),
+      transactionId: String(o.transactionId || ''),
+      wxShipUploaded: typeof o.wxShipUploaded === 'boolean' ? o.wxShipUploaded : null,
+      createdAtMs: ms(o.createdAt),
+      paidAtMs: ms(o.paidAt),
+      shippedAtMs: ms(o.shippedAt),
+      doneAtMs: ms(o.doneAt),
     })
   }
   return out
