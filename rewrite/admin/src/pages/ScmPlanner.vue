@@ -1,15 +1,41 @@
 <script setup lang="ts">
 // 备货计算 + 产销统计（设计语言一致性·M3 UI 批18·只读）：目标套数 → 外协缺口（带结不外购）+ 采购缺口按供应商分列；
 // 产销 = 打包累计 vs 发货累计。逻辑未动，仅套设计语言。
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, computed } from 'vue'
 import { Plus } from 'lucide-vue-next'
 import { getRestockPlan, getFgSummary } from '../api/scm'
+import { listInventory } from '../api/system'
 import { materialHuman, scmErrorText } from '../lib/mapScm'
 
 const targets = ref<Array<{ productId: string; sets: number }>>([{ productId: '', sets: 10 }])
 const plan = ref<Record<string, any> | null>(null)
 const fg = ref<{ packed: Array<Record<string, any>>; shipped: Array<Record<string, any>> } | null>(null)
+const inv = ref<Record<string, number>>({}) // 成品现存库存 fg:<pid>__<spec> → stock（换皮丢了「现存库存」列）
 const message = ref('')
+
+// 产销三列并表（换皮只两列打包/发货·丢了现存库存）：按 产品×规格 union 打包/发货/现存
+const produceRows = computed(() => {
+  const packed: Record<string, number> = {}
+  const shipped: Record<string, number> = {}
+  const label: Record<string, string> = {}
+  const add = (arr: Record<string, any>[] | undefined, tgt: Record<string, number>) => {
+    ;(arr || []).forEach((p) => {
+      const key = String(p.productId || '') + '__' + String(p.spec || '')
+      tgt[key] = (tgt[key] || 0) + (Number(p.qty) || 0)
+      label[key] = String(p.productId || '') + (p.spec ? '（' + p.spec + '）' : '')
+    })
+  }
+  add(fg.value?.packed, packed)
+  add(fg.value?.shipped, shipped)
+  Object.keys(inv.value).forEach((k) => {
+    if (!label[k]) {
+      const [pid, spec] = k.split('__')
+      label[k] = pid + (spec ? '（' + spec + '）' : '')
+    }
+  })
+  const keys = new Set([...Object.keys(packed), ...Object.keys(shipped), ...Object.keys(inv.value)])
+  return [...keys].map((k) => ({ key: k, name: label[k] || k, packed: packed[k] || 0, shipped: shipped[k] || 0, stock: inv.value[k] ?? null })).sort((a, b) => a.name.localeCompare(b.name))
+})
 
 async function calc() {
   const ts = targets.value.filter((t) => t.productId.trim())
@@ -23,8 +49,17 @@ async function calc() {
 }
 
 onMounted(async () => {
-  const r = await getFgSummary()
+  const [r, i] = await Promise.all([getFgSummary(), listInventory()])
   fg.value = r.ok ? { packed: (r.packed as Record<string, any>[]) || [], shipped: (r.shipped as Record<string, any>[]) || [] } : null
+  if (i.ok) {
+    const list = ((i as any).list as Record<string, any>[]) || []
+    const map: Record<string, number> = {}
+    list.forEach((row) => {
+      const id = String(row._id || '')
+      if (id.startsWith('fg:')) map[id.slice(3)] = Number(row.stock) || 0 // fg:<pid>__<spec> → 现存
+    })
+    inv.value = map
+  }
 })
 </script>
 
@@ -74,22 +109,16 @@ onMounted(async () => {
     </section>
 
     <section v-if="fg" class="card">
-      <h2>产销统计（打包 vs 卖出）</h2>
-      <div class="cols">
-        <div class="col">
-          <h3>打包累计（组装入库）</h3>
-          <div v-for="p in fg.packed" :key="p.productId + p.spec" class="fg-line">
-            <span>{{ p.productId }}{{ p.spec ? '（' + p.spec + '）' : '' }}</span><strong>{{ p.qty }} 套</strong>
-          </div>
-          <p v-if="!fg.packed.length" class="empty">还没打包记录</p>
+      <h2>产销统计（打包 · 发货 · 现存库存）</h2>
+      <div class="pt">
+        <div class="pt-head"><span>产品 / 规格</span><span class="r">打包累计</span><span class="r">发货核销</span><span class="r">现存库存</span></div>
+        <div v-for="r in produceRows" :key="r.key" class="pt-row">
+          <span class="pt-name">{{ r.name }}</span>
+          <span class="r">{{ r.packed }} 套</span>
+          <span class="r">{{ r.shipped }} 件</span>
+          <span class="r strong">{{ r.stock == null ? '—' : r.stock }}</span>
         </div>
-        <div class="col">
-          <h3>发货累计（核销）</h3>
-          <div v-for="p in fg.shipped" :key="p.productId + p.spec" class="fg-line">
-            <span>{{ p.productId }}{{ p.spec ? '（' + p.spec + '）' : '' }}</span><strong>{{ p.qty }} 件</strong>
-          </div>
-          <p v-if="!fg.shipped.length" class="empty">还没发货核销记录</p>
-        </div>
+        <p v-if="!produceRows.length" class="empty">还没有产销记录</p>
       </div>
     </section>
   </div>
@@ -228,6 +257,40 @@ input {
   margin-top: 8px;
   font-size: 12px;
   color: var(--ld-amber);
+}
+.pt {
+  border: 1px solid var(--ld-line);
+  border-radius: 10px;
+  overflow: hidden;
+}
+.pt-head,
+.pt-row {
+  display: grid;
+  grid-template-columns: 2fr 1fr 1fr 1fr;
+  gap: 10px;
+  padding: 9px 14px;
+  font-size: 12.5px;
+  align-items: center;
+}
+.pt-head {
+  background: var(--ld-bg-lilac);
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--ld-content-2);
+}
+.pt-row {
+  border-top: 1px solid var(--ld-line);
+}
+.pt-name {
+  font-family: var(--ld-font-mono);
+  color: var(--ld-content);
+}
+.pt .r {
+  text-align: right;
+}
+.pt .strong {
+  font-weight: 700;
+  color: var(--ld-ink);
 }
 .cols {
   display: grid;

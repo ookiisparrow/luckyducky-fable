@@ -11,7 +11,7 @@ const rawL = ref<Array<Record<string, any>>>([]) // 大团原团（可发）
 const knottedL = ref<Array<Record<string, any>>>([]) // 大团带结（可收）
 const workers = ref<Array<Record<string, any>>>([])
 const message = ref('')
-const form = ref<{ workerId: string; rateYuan: string; lines: Array<{ materialId: string; qty: number }> } | null>(null)
+const form = ref<{ outworkId?: string; workerId: string; rateYuan: string; lines: Array<{ materialId: string; qty: number }> } | null>(null)
 const recvFor = ref('')
 const recvLines = ref<Array<{ materialId: string; qty: number }>>([])
 const confirmKey = ref('')
@@ -27,7 +27,17 @@ async function reload() {
 }
 
 function newOrder() {
-  form.value = { workerId: '', rateYuan: '', lines: [{ materialId: '', qty: 1 }] }
+  form.value = { outworkId: '', workerId: '', rateYuan: '', lines: [{ materialId: '', qty: 1 }] }
+}
+// 草稿编辑（换皮丢·外协草稿建完只能取消重建·后端 saveOutwork 收 outworkId 支持改）：预填
+function editDraft(o: Record<string, any>) {
+  form.value = {
+    outworkId: String(o._id || ''),
+    workerId: String(o.workerId || ''),
+    rateYuan: o.pieceRateFen != null ? (Number(o.pieceRateFen) / 100).toFixed(2) : '',
+    lines: ((o.issueLines as Record<string, any>[]) || []).map((l) => ({ materialId: String(l.materialId || ''), qty: Number(l.qty) || 1 })),
+  }
+  if (!form.value.lines.length) form.value.lines.push({ materialId: '', qty: 1 })
 }
 
 async function doSave() {
@@ -38,8 +48,8 @@ async function doSave() {
     message.value = '计件单价不合法（元·最多两位小数·可为 0）'
     return
   }
-  const r = await saveOutwork(f.workerId, fen, f.lines.map((l) => ({ materialId: l.materialId, qty: Number(l.qty) })))
-  message.value = r.ok ? '外协草稿已建' : scmErrorText(r.error)
+  const r = await saveOutwork(f.workerId, fen, f.lines.map((l) => ({ materialId: l.materialId, qty: Number(l.qty) })), f.outworkId || undefined)
+  message.value = r.ok ? `外协草稿已${f.outworkId ? '更新' : '建'}` : scmErrorText(r.error)
   if (r.ok) form.value = null
   void reload()
 }
@@ -113,6 +123,7 @@ onMounted(reload)
         <span class="muted">{{ o.payableFen != null ? fenLabel(o.payableFen) + ' / 损 ' + (o.lossQty || 0) : '—' }}</span>
         <span><span class="state" :class="o.status">{{ outworkStatusLabel(o.status) }}</span></span>
         <div class="c-ops r">
+          <button v-if="o.status === 'draft'" class="act ghost" @click="editDraft(o)">编辑</button>
           <button v-if="o.status === 'draft'" class="act primary" @click="step(issueOutwork, o._id, 'iss:' + o._id)">
             {{ confirmKey === 'iss:' + o._id ? '确认发料出库？' : '发料' }}
           </button>
