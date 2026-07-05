@@ -7,6 +7,7 @@ const Login = () => import('./pages/Login.vue')
 const Shell = () => import('./shell/Shell.vue')
 const Dashboard = () => import('./pages/Dashboard.vue')
 const Orders = () => import('./pages/Orders.vue')
+const Fulfill = () => import('./pages/Fulfill.vue')
 const Refunds = () => import('./pages/Refunds.vue')
 const Products = () => import('./pages/Products.vue')
 const Showcase = () => import('./pages/Showcase.vue')
@@ -42,6 +43,7 @@ export const router = createRouter({
       children: [
         { path: '', component: Dashboard },
         { path: 'orders', component: Orders },
+        { path: 'fulfill', component: Fulfill },
         { path: 'refunds', component: Refunds },
         { path: 'products', component: Products },
         { path: 'showcase', component: Showcase },
