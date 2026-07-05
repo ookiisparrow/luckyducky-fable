@@ -66,7 +66,7 @@ async function open(openid: string) {
       <div v-for="h in hits" :key="h.openid" class="hit" @click="open(h.openid)">
         <div class="hit-main">
           <div class="hit-name">{{ h.nickname }}</div>
-          <div class="hit-sub">{{ maskPhone(h.phone) || '—' }} · <span class="mono">{{ h.openid.slice(-12) }}</span></div>
+          <div class="hit-sub">{{ maskPhone(h.phone) || '—' }} · <span class="mono">{{ h.openid }}</span></div>
         </div>
         <span class="matched">命中 {{ h.matched }}</span>
         <span class="time">{{ h.createdAt }}</span>
@@ -86,7 +86,7 @@ async function open(openid: string) {
         <div v-else class="avatar ph">👤</div>
         <div class="id-info">
           <div class="id-name">{{ user.nickname }}</div>
-          <div class="id-meta">{{ maskPhone(user.phone) || '（无手机）' }} · <span class="mono">{{ current.slice(-16) }}</span></div>
+          <div class="id-meta">{{ maskPhone(user.phone) || '（无手机）' }} · <span class="mono">{{ current }}</span></div>
           <div v-if="user.bio" class="id-bio">{{ user.bio }}</div>
         </div>
       </div>
@@ -95,10 +95,24 @@ async function open(openid: string) {
         <div v-for="p in panels" :key="p.key" class="panel">
           <h2>{{ p.label }}</h2>
           <p v-if="p.failed" class="failed">该面板取数失败（其余不受影响）</p>
-          <div v-else-if="p.rows.length" class="kv">
-            <div v-for="row in p.rows" :key="row.k" class="kvrow"><span class="k">{{ row.k }}</span><span class="v">{{ row.v }}</span></div>
-          </div>
-          <p v-else class="empty">无数据</p>
+          <template v-else>
+            <!-- 标量字段：键值网格 -->
+            <div v-if="p.rows.length" class="kv">
+              <div v-for="row in p.rows" :key="row.k" class="kvrow"><span class="k">{{ row.k }}</span><span class="v">{{ row.v }}</span></div>
+            </div>
+            <!-- 嵌套数组明细：逐行逐字段成键值卡片（换皮误塌成「N 条」·真复原 360 取证价值） -->
+            <div v-for="g in p.groups" :key="g.name" class="grp">
+              <p class="grp-cap">{{ g.name }}（{{ g.count }}）</p>
+              <p v-if="!g.items.length" class="empty">暂无</p>
+              <ul v-else class="rows">
+                <li v-for="(item, i) in g.items" :key="i" class="rowcard">
+                  <span v-for="(f, j) in item" :key="j" class="cell"><em>{{ f.k }}</em>{{ f.v }}</span>
+                </li>
+              </ul>
+              <p v-if="g.capped" class="empty">共 {{ g.count }} 条·仅显前 {{ g.items.length }}（余略）</p>
+            </div>
+            <p v-if="!p.rows.length && !p.groups.length" class="empty">无数据</p>
+          </template>
         </div>
       </div>
     </div>
@@ -326,5 +340,42 @@ h1 {
   flex: 1;
   color: var(--ld-content);
   word-break: break-word;
+}
+.grp {
+  margin-top: 14px;
+}
+.grp-cap {
+  margin: 0 0 8px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ld-brand-active);
+}
+.rows {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.rowcard {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+  padding: 10px 12px;
+  border: 1px solid var(--ld-line);
+  border-radius: 9px;
+  font-size: 12.5px;
+  color: var(--ld-content);
+}
+.cell {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 5px;
+}
+.cell em {
+  font-style: normal;
+  font-size: 11px;
+  color: var(--ld-content-2);
 }
 </style>

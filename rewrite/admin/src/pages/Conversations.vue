@@ -63,11 +63,13 @@ onMounted(loadReport)
         <button class="sla-btn" :disabled="reportBusy" @click="loadReport"><RotateCcw :size="13" :stroke-width="1.8" />{{ reportBusy ? '算中…' : '重算' }}</button>
       </div>
       <div class="stat-grid">
-        <div v-for="s in [...report.volume, ...report.response, ...report.sla]" :key="s.label" class="stat-card">
+        <div v-for="s in [...report.volume, ...report.response, ...report.sla]" :key="s.label" class="stat-card" :class="{ bad: s.bad }">
           <div class="stat-label">{{ s.label }}</div>
           <div class="stat-value">{{ s.value }}</div>
         </div>
       </div>
+      <!-- 首响口径诚实告知（换皮丢·防把机器人秒回误读成人工绩效） -->
+      <p class="report-note">首次响应含机器人自动应答；人工接待时长待落档后单列，届时更真实反映坐席绩效。</p>
     </div>
 
     <section class="card">
@@ -85,11 +87,12 @@ onMounted(loadReport)
           <div class="bubble">
             <div class="msg-head">
               <span class="who">{{ m.who }}</span>
+              <span v-if="m.kind" class="kind-chip">{{ m.kind }}</span>
               <span v-if="m.channel" class="ch-chip">{{ m.channel }}</span>
               <span class="flex"></span>
               <span class="time">{{ m.timeLabel }}</span>
             </div>
-            <div class="text">{{ m.text }}</div>
+            <div v-if="m.text" class="text">{{ m.text }}</div>
           </div>
         </div>
         <button v-if="hasMore" class="more" @click="more">更早的消息</button>
@@ -159,6 +162,25 @@ h2 {
   font-size: 19px;
   font-weight: 700;
   color: var(--ld-ink);
+}
+.stat-card.bad {
+  background: var(--ld-bg-red-soft);
+}
+.stat-card.bad .stat-value {
+  color: var(--ld-red);
+}
+.report-note {
+  margin: 12px 0 0;
+  font-size: 11px;
+  color: var(--ld-content-2);
+}
+.kind-chip {
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: var(--ld-bg-lilac);
+  color: var(--ld-brand-active);
+  font-size: 10px;
+  font-weight: 600;
 }
 .card {
   padding: 18px 20px;

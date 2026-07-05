@@ -70,8 +70,10 @@ async function save() {
     message.value = `键重复：「${dup}」——键必须唯一，否则 bot 命中会互相覆盖`
     return
   }
+  // 落库前 trim（键是 bot 精确命中命脉·带尾随空格的键能绕过 trim 唯一校验入库却命不中·数据卫生）
+  const cleaned = rows.value.map((row) => ({ ...row, key: row.key.trim(), question: row.question.trim(), answer: row.answer.trim() }))
   busy.value = true
-  const r = await saveKb(rows.value)
+  const r = await saveKb(cleaned)
   busy.value = false
   message.value = r.ok ? `已保存 ${Number(r.count) || 0} 条（整册覆盖·被删的行已真删）` : '保存失败：' + String(r.error || '')
   void reload()
