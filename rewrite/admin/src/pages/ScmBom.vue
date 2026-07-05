@@ -1,7 +1,7 @@
 <script setup lang="ts">
 // 配方与组装（设计语言一致性·M3 UI 批17）：全局模板（共用料+毛线槽）+ 每产品差异位（三色+专属件）→
 // 预演（只读看短缺）→ 执行组装（快照冻结·同单不双扣）。逻辑未动，仅套设计语言。
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, watch } from 'vue'
 import { Plus } from 'lucide-vue-next'
 import { getBomSetup, saveBomTemplate, saveBomProfile, previewAssembly, runAssembly, listAssemblies, listMaterials } from '../api/scm'
 import { materialHuman, scmErrorText } from '../lib/mapScm'
@@ -17,6 +17,8 @@ const prof = ref({ productId: '', L: '', M: '', S: '', packagingMaterialId: '', 
 const run = ref({ productId: '', spec: '', sets: 1 })
 const preview = ref<Array<Record<string, any>>>([])
 const runConfirm = ref(false)
+// B1 幂等键：每次组装意图生成一次·重试复用·成功才换新（换皮在 api 内每次现生成→双击/慢网双扣料双入库）
+const pendingAsmId = ref('')
 
 async function reload() {
   const [b, m, a] = await Promise.all([getBomSetup(), listMaterials(), listAssemblies()])
@@ -43,6 +45,9 @@ async function doSaveProfile() {
 }
 
 async function doPreview() {
+  // 新预演＝新组装意图·换新幂等键（防拿旧 id 组装改过的产品/套数）
+  pendingAsmId.value = ''
+  runConfirm.value = false
   const r = await previewAssembly(run.value.productId, Number(run.value.sets))
   preview.value = r.ok ? (r.lines as Record<string, any>[]) : []
   message.value = r.ok ? '' : scmErrorText(r.error)
@@ -50,15 +55,28 @@ async function doPreview() {
 
 async function doRun() {
   if (!runConfirm.value) {
+    if (!pendingAsmId.value) pendingAsmId.value = 'asm-' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6) // 确认时生成一次
     runConfirm.value = true // 两步确认：执行即扣原料入成品
     return
   }
   runConfirm.value = false
-  const r = await runAssembly(run.value.productId, run.value.spec, Number(run.value.sets))
-  message.value = r.ok ? `组装完成：扣料 ${(r.consumed as unknown[]).length} 行·入成品 ${Number(r.sets)} 套` : scmErrorText(r.error)
-  preview.value = []
-  void reload()
+  const r = await runAssembly(run.value.productId, run.value.spec, Number(run.value.sets), pendingAsmId.value)
+  if (r.ok) {
+    message.value = `组装完成：扣料 ${(r.consumed as unknown[]).length} 行·入成品 ${Number(r.sets)} 套`
+    pendingAsmId.value = '' // 成功才换新 id·下次组装全新幂等键
+    preview.value = []
+    void reload()
+  } else {
+    // 失败保留 pendingAsmId：重试复用同一幂等键·撞 id 幂等闸挡双扣（B1 修·后端 _id=assemblyId 确定性 claim）
+    message.value = scmErrorText(r.error)
+  }
 }
+
+// 改组装表单（产品/规格/套数）＝新意图·重置幂等键与确认态（防拿旧 id 组装改过的入参）
+watch(run, () => {
+  pendingAsmId.value = ''
+  runConfirm.value = false
+}, { deep: true })
 
 onMounted(reload)
 </script>
