@@ -220,8 +220,8 @@ onMounted(reload)
 
         <template v-if="decideRow.canDecide && !rejecting">
           <div class="crit-label">人工验收（勾选后才可同意）</div>
-          <label class="ck"><input type="checkbox" v-model="checkPkg" /><span>已收到买家寄回包装并验收</span></label>
-          <label class="ck"><input type="checkbox" v-model="checkCard" /><span>激活卡未拆封 / 未使用</span></label>
+          <label class="ck"><input v-model="checkPkg" type="checkbox" /><span>已收到买家寄回包装并验收</span></label>
+          <label class="ck"><input v-model="checkCard" type="checkbox" /><span>激活卡未拆封 / 未使用</span></label>
           <div class="drawer-foot">
             <button class="approve-btn" :disabled="!canApprove" @click="doApprove">
               <CircleCheck :size="16" :stroke-width="1.8" /><span>{{ busy ? '受理中…' : '同意退款 · 原路退回 ' + decideRow.refundAmountLabel }}</span>
