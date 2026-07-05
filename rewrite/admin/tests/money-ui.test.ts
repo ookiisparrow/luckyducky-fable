@@ -62,6 +62,10 @@ describe('订单行映射（发货入口收窄）', () => {
     expect(rows[1]).toMatchObject({ canShip: false, feeMismatch: true }) // 金额不符禁发
     expect(rows[2]).toMatchObject({ canShip: false, trackingNo: 'SF123' }) // 已发货不再发
     expect(rows[2].summary).toContain('等 3 件商品')
+    // refund_required（PAID_BUT_OOS 死信·待人工退款）标「待退款」·非「退款处理中」（换皮误标·与退款 approved 语义撞车）
+    const [rq] = mapOrderRows([{ id: 'oq', status: 'refund_required', amount: 2, items: [] }])
+    expect(rq.statusLabel).toBe('待退款')
+    expect(rq.canShip).toBe(false)
     expect(mapOrderRows('garbage')).toEqual([])
   })
 })
@@ -118,7 +122,7 @@ describe('订单行映射·详情抽屉数据链 + 列表掩码（还原批 Orde
 describe('售后行映射（裁决入口收窄）', () => {
   it('大白话：只有待审核能同意/拒绝；金额恒两位；退什么带规格件数；脏档剔除', () => {
     const rows = mapRefundRows([
-      { _id: 'a1', orderId: 'o1', status: 'applied', name: '小熊', spec: 'sku测试文案', qty: 1, refundAmount: 2, reason: '测试', appliedAt: 1783046400000 },
+      { _id: 'a1', orderId: 'o1', status: 'applied', name: '小熊', spec: 'sku测试文案', qty: 1, refundAmount: 2, reason: '测试', appliedAt: 1783046400000, buyerName: '赵四', buyerPhone: '13812345678' },
       { _id: 'a2', orderId: 'o2', status: 'refunded', name: 'x', qty: 1, refundAmount: 10, refundedAt: 1783046460000 },
       { _id: 'a3', orderId: 'o3', status: 'rejected', name: 'y', qty: 1, refundAmount: 5, rejectReason: '激活卡已拆用' },
       { orderId: 'o4' },
@@ -126,6 +130,11 @@ describe('售后行映射（裁决入口收窄）', () => {
     expect(rows).toHaveLength(3)
     expect(rows[0]).toMatchObject({ canDecide: true, refundAmountLabel: '¥2.00' })
     expect(rows[0].what).toBe('小熊（sku测试文案） ×1')
+    // 买家身份（换皮丢·审退款只见订单号无法识别申请人/联系寄回）：抽屉用全号、列表用掩码（PII·根因#3）
+    expect(rows[0].buyerName).toBe('赵四')
+    expect(rows[0].buyerPhone).toBe('13812345678') // 抽屉全号
+    expect(rows[0].buyerMasked).toBe('138****5678') // 列表掩码
+    expect(rows[1].buyerName).toBe('') // 缺字段安全空
     expect(rows[1].canDecide).toBe(false) // 已退款不可再裁决
     expect(rows[1].refundedAtLabel).not.toBe('') // 已退款结果区：到账时间
     expect(rows[2].rejectReason).toBe('激活卡已拆用') // 已拒绝结果区：原因

@@ -10,7 +10,7 @@ const ORDER_LABELS: Record<string, string> = {
   shipped: '已发货',
   done: '已完成',
   closed: '已关闭',
-  refund_required: '退款处理中',
+  refund_required: '待退款', // PAID_BUT_OOS 死信（已付但缺货·待人工退款）·非「退款处理中」（换皮误标·与退款 approved 撞车）
 }
 export const orderStatusLabel = (s: unknown): string => ORDER_LABELS[String(s)] || String(s || '')
 

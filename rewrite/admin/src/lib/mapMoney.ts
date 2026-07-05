@@ -177,6 +177,10 @@ export interface RefundRowVM {
   canDecide: boolean
   refundedAtLabel: string // 已退款单：到账时间（空=未退/无）
   rejectReason: string // 已拒绝单：拒绝原因（买家可见）
+  // 买家收货人（换皮丢·审退款需识别申请人+联系寄回·后端 listRefunds join 订单地址）
+  buyerName: string
+  buyerPhone: string // 完整·抽屉用（联系买家）
+  buyerMasked: string // 列表用·掩码（PII·根因#3）
 }
 
 export function mapRefundRows(list: unknown): RefundRowVM[] {
@@ -198,6 +202,9 @@ export function mapRefundRows(list: unknown): RefundRowVM[] {
       canDecide: String(a.status) === 'applied', // 只有待审核可同意/拒绝（云端原子抢占裁决·这里入口收窄）
       refundedAtLabel: a.refundedAt ? dateTime(a.refundedAt) : '', // 结果区：到账时间
       rejectReason: String(a.rejectReason || ''), // 结果区：拒绝原因
+      buyerName: String(a.buyerName || ''),
+      buyerPhone: String(a.buyerPhone || ''), // 全号·抽屉
+      buyerMasked: maskPhone(a.buyerPhone), // 掩码·列表
     })
   }
   return out

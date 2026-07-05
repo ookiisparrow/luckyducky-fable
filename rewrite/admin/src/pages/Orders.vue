@@ -32,6 +32,9 @@ const clearConfirmId = ref('')
 type Acts = Record<string, { activated?: boolean; entered?: boolean } | undefined>
 const drawer = ref<{ row: OrderRowVM; mode: 'ship' | 'view'; company: string; trackingNo: string; acts: Acts | null } | null>(null)
 
+// 列表页脚分母＝当前标签计数（换皮恒用 counts.all·在「待发货」栏也显全量总数·误导以为本栏还有一堆没翻）
+const tabTotal = computed(() => counts.value[tab.value || 'all'])
+
 // 批量发货（P1·上量瓶颈）：仅待发货 tab 且非搜索态可批量
 const selectedIds = ref<string[]>([])
 const batch = ref<{
@@ -284,7 +287,7 @@ onMounted(reload)
         </div>
       </div>
       <div class="tfoot">
-        <span>已加载 {{ rows.length }} 单{{ !activeQ && counts.all != null ? ' / ' + counts.all + ' 单' : '' }}</span>
+        <span>已加载 {{ rows.length }} 单{{ !activeQ && tabTotal != null ? ' / ' + tabTotal + ' 单（本栏）' : '' }}</span>
         <button v-if="hasMore" class="more" @click="more">加载更多</button>
       </div>
     </div>
@@ -660,6 +663,10 @@ h1 {
 .state.warn {
   background: var(--ld-bg-red-soft);
   color: var(--ld-red);
+}
+.state.refund_required {
+  background: var(--ld-bg-red-soft);
+  color: var(--ld-amber);
 }
 .state.inline {
   margin-left: 8px;

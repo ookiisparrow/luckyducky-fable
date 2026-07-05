@@ -102,7 +102,24 @@ export async function listRefunds({ db, data }: Ctx) {
       ? { status }
       : {}
   const paged = await pageQuery(db, 'afterSales', filter, 'appliedAt', data, 200)
-  return reply(200, { ok: true, ...paged })
+  // 补买家收货人（换皮丢·审退款需识别申请人+联系寄回；afterSale 本身无地址→join 订单收货地址·
+  // 有界批量一次 _.in 查·不逐单 doc.get·capacity-reads-bounded）。前端列表掩码、抽屉给全号（PII·根因#3）。
+  const list: any[] = Array.isArray(paged.list) ? paged.list : []
+  const orderIds = [...new Set(list.map((a) => String(a.orderId || '')).filter(Boolean))]
+  const addrByOrder: Record<string, { name: string; phone: string }> = {}
+  if (orderIds.length) {
+    const _ = db.command
+    const or = await db.collection('orders').where({ _id: _.in(orderIds) }).limit(orderIds.length).get().catch(() => ({ data: [] }))
+    for (const o of (or && or.data) || []) {
+      const ad = o.address && typeof o.address === 'object' ? o.address : {}
+      addrByOrder[String(o._id || o.id || '')] = { name: String(ad.name || ''), phone: String(ad.phone || '') }
+    }
+  }
+  const enriched = list.map((a) => {
+    const b = addrByOrder[String(a.orderId || '')] || { name: '', phone: '' }
+    return { ...a, buyerName: b.name, buyerPhone: b.phone }
+  })
+  return reply(200, { ok: true, ...paged, list: enriched })
 }
 
 // 按状态服务端精确计数（根因#7 计数失真）：每状态 + 全部走 .count()（精确·不封顶·不受分页影响），

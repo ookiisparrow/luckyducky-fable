@@ -44,6 +44,8 @@ const rejectReason = ref('')
 const actionMsg = ref('') // 审批结果（成功·持久·reload 不清·别一闪而过）
 const decideErr = ref('') // 同意/拒绝失败原因（抽屉内红条·不被 reload 的"加载中"吞·P2·根因#14）
 
+// 列表页脚分母＝当前标签计数（换皮恒用 counts.all·在「待审核」栏也显全量总数·误导）
+const tabTotal = computed(() => counts.value[tab.value || 'all'])
 const canApprove = computed(() => !!decideRow.value?.canDecide && checkPkg.value && checkCard.value && !busy.value)
 // 判据文案绑本单订单行（P2·根因#8 不失真）：以 lineRefundable 为准，不被课程级激活误导
 const verdictVM = computed<RefundVerdictVM | null>(() =>
@@ -202,7 +204,7 @@ onMounted(reload)
         <span class="r">操作</span>
       </div>
       <div v-for="row in rows" :key="row.id" class="trow">
-        <span class="oid">{{ row.orderId }}</span>
+        <span class="oid">{{ row.orderId }}<small v-if="row.buyerName || row.buyerMasked" class="buyer">{{ row.buyerName }} {{ row.buyerMasked }}</small></span>
         <span class="time">{{ row.timeLabel }}</span>
         <div class="what">
           <div class="what-goods">{{ row.what }}</div>
@@ -218,7 +220,7 @@ onMounted(reload)
         </div>
       </div>
       <div class="tfoot">
-        <span>已加载 {{ rows.length }} 单{{ !activeQ && counts.all != null ? ' / ' + counts.all + ' 单' : '' }}</span>
+        <span>已加载 {{ rows.length }} 单{{ !activeQ && tabTotal != null ? ' / ' + tabTotal + ' 单（本栏）' : '' }}</span>
         <button v-if="hasMore" class="more" @click="more">加载更多</button>
       </div>
     </div>
@@ -237,6 +239,8 @@ onMounted(reload)
         <div class="summary">
           <div class="srow"><span>退款商品</span><strong>{{ decideRow.what }}</strong></div>
           <div class="srow"><span>退款金额</span><strong>{{ decideRow.refundAmountLabel }}</strong></div>
+          <!-- 收货人（换皮丢·联系买家核对寄回/退货）：抽屉给全号 -->
+          <div v-if="decideRow.buyerName || decideRow.buyerPhone" class="srow"><span>收货人</span><span class="sval">{{ decideRow.buyerName || '—' }} · {{ decideRow.buyerPhone || '（无电话）' }}</span></div>
           <div class="srow"><span>买家原因</span><span class="sval">{{ decideRow.reason || '—' }}</span></div>
         </div>
 
@@ -499,6 +503,13 @@ h1 {
   font-family: var(--ld-font-mono);
   font-size: 12.5px;
   color: var(--ld-ink);
+}
+.buyer {
+  display: block;
+  margin-top: 3px;
+  font-family: var(--ld-font);
+  font-size: 11px;
+  color: var(--ld-content-2);
 }
 .time {
   color: var(--ld-content-2);
