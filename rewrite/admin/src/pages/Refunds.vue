@@ -5,7 +5,7 @@
 import { ref, computed, onMounted } from 'vue'
 import { RefreshCw, Search, X, CircleCheck, Ticket, GraduationCap, Check } from 'lucide-vue-next'
 import { listRefunds, refundCounts, approveRefund, rejectRefund, getRefundDetail } from '../api/money'
-import { mapRefundRows, type RefundRowVM } from '../lib/mapMoney'
+import { mapRefundRows, refundVerdict, type RefundRowVM, type RefundVerdictVM } from '../lib/mapMoney'
 
 const TABS = [
   { key: 'applied', label: '待审核' },
@@ -31,6 +31,9 @@ interface Verdict {
   entered: boolean
   code: string
   courseId: string
+  lineRefundable: boolean // 本单此行真实可退性（P2·判据绑单·非课程级）
+  refundableQty: number | null
+  lineFound: boolean
 }
 const decideRow = ref<RefundRowVM | null>(null)
 const verdict = ref<Verdict | null>(null)
@@ -38,8 +41,16 @@ const checkPkg = ref(false)
 const checkCard = ref(false)
 const rejecting = ref(false)
 const rejectReason = ref('')
+const actionMsg = ref('') // 审批结果（成功·持久·reload 不清·别一闪而过）
+const decideErr = ref('') // 同意/拒绝失败原因（抽屉内红条·不被 reload 的"加载中"吞·P2·根因#14）
 
 const canApprove = computed(() => !!decideRow.value?.canDecide && checkPkg.value && checkCard.value && !busy.value)
+// 判据文案绑本单订单行（P2·根因#8 不失真）：以 lineRefundable 为准，不被课程级激活误导
+const verdictVM = computed<RefundVerdictVM | null>(() =>
+  verdict.value && !verdict.value.loading
+    ? refundVerdict({ lineRefundable: verdict.value.lineRefundable, entered: verdict.value.entered, refundableQty: verdict.value.refundableQty })
+    : null
+)
 
 async function reload() {
   message.value = '加载中…'
@@ -88,7 +99,8 @@ async function openDecide(row: RefundRowVM) {
   checkCard.value = false
   rejecting.value = false
   rejectReason.value = ''
-  verdict.value = { loading: true, activated: false, entered: false, code: '', courseId: '' }
+  decideErr.value = ''
+  verdict.value = { loading: true, activated: false, entered: false, code: '', courseId: '', lineRefundable: true, refundableQty: null, lineFound: false }
   const r = await getRefundDetail(row.id)
   const a = (r as any)?.activation || {}
   verdict.value = {
@@ -97,6 +109,9 @@ async function openDecide(row: RefundRowVM) {
     entered: !!a.entered,
     code: String(a.code || ''),
     courseId: String(a.courseId || ''),
+    lineRefundable: (r as any)?.lineRefundable !== false, // 缺字段/老后端默认可退（不误判会拦）
+    refundableQty: (r as any)?.refundableQty ?? null,
+    lineFound: !!(r as any)?.lineFound,
   }
 }
 function closeDecide() {
@@ -107,30 +122,38 @@ async function doApprove() {
   const row = decideRow.value
   if (!row || !canApprove.value) return
   busy.value = true
+  decideErr.value = ''
   const r = await approveRefund(row.id)
   busy.value = false
-  message.value = r.ok ? '已受理，等微信回调确认到账' : `退款触发失败：${String(r.error || '')}`
-  closeDecide()
-  void reload()
+  if (r.ok) {
+    actionMsg.value = `✓ 已受理退款 ${row.orderId}，等微信回调确认到账`
+    closeDecide()
+    void reload()
+  } else {
+    // 失败：不关抽屉、不刷新——真实原因留在眼前（P2·根因#14 admin 侧·别被 reload 的"加载中…"盖掉）
+    decideErr.value = `退款触发失败：${String(r.error || '未知错误')}`
+  }
 }
 
 async function doReject() {
   const row = decideRow.value
   if (!row || busy.value) return
   if (!rejectReason.value.trim()) {
-    message.value = '拒绝必须写原因（会展示给买家）'
+    decideErr.value = '拒绝必须写原因（会展示给买家）'
     return
   }
   busy.value = true
+  decideErr.value = ''
   const r = await rejectRefund(row.id, rejectReason.value.trim())
   busy.value = false
   if (r.ok) {
-    message.value = ''
+    actionMsg.value = `已拒绝退款 ${row.orderId}`
     closeDecide()
+    void reload()
   } else {
-    message.value = '拒绝没成功：' + String(r.error || '')
+    // 失败：留抽屉 + 红条（同 doApprove·不被刷新吞）
+    decideErr.value = '拒绝没成功：' + String(r.error || '')
   }
-  void reload()
 }
 
 onMounted(reload)
@@ -167,6 +190,7 @@ onMounted(reload)
     </div>
 
     <p v-if="message" class="status">{{ message }}</p>
+    <p v-if="actionMsg" class="action-msg">{{ actionMsg }}<button class="link" @click="actionMsg = ''">知道了</button></p>
 
     <div v-if="rows.length" class="table">
       <div class="thead">
@@ -222,11 +246,11 @@ onMounted(reload)
           <template v-else>✕ 已拒绝 · 原因：{{ decideRow.rejectReason }}</template>
         </div>
 
-        <div v-if="verdict && !verdict.loading" class="verdict" :class="verdict.entered ? 'lost' : 'ok'">
+        <div v-if="verdictVM" class="verdict" :class="verdictVM.tone">
           <CircleCheck :size="20" :stroke-width="1.8" />
           <div>
-            <div class="verdict-t">{{ verdict.entered ? '退货权已失 · 已确认进课' : '退货权未失 · 未进课' }}</div>
-            <div class="verdict-s">{{ verdict.entered ? '买家已确认进课，同意退款服务端会拦（ENTERED_NOT_REFUNDABLE）' : '未进课，符合退货规则；同意后服务端仍按当下订单行复核' }}</div>
+            <div class="verdict-t">{{ verdictVM.title }}</div>
+            <div class="verdict-s">{{ verdictVM.sub }}</div>
           </div>
         </div>
         <p v-else-if="verdict" class="verdict-loading">判据加载中…</p>
@@ -247,13 +271,16 @@ onMounted(reload)
             <div class="crit-l">
               <div class="crit-ib"><GraduationCap :size="15" :stroke-width="1.8" /></div>
               <div>
-                <div class="crit-a">确认进课</div>
-                <div class="crit-b">{{ verdict.courseId || '—' }}</div>
+                <div class="crit-a">这门课进课（课程级）</div>
+                <div class="crit-b">{{ verdict.courseId || '—' }} · 是否拦本单看上方判据</div>
               </div>
             </div>
-            <span class="crit-chip" :class="verdict.entered ? 'bad' : 'good'">{{ verdict.entered ? '已进课' : '未进课' }}</span>
+            <span class="crit-chip" :class="verdict.entered ? 'note' : 'good'">{{ verdict.entered ? '已进课' : '未进课' }}</span>
           </div>
         </div>
+
+        <!-- 同意/拒绝失败原因（P2·不被刷新的"加载中"吞·留在眼前直到重试或关抽屉） -->
+        <p v-if="decideErr" class="decide-err">{{ decideErr }}</p>
 
         <template v-if="decideRow.canDecide && !rejecting">
           <div class="crit-label">人工验收（勾选后才可同意）</div>
@@ -429,6 +456,17 @@ h1 {
 .status-soft {
   font-size: 13px;
   color: var(--ld-content-2);
+}
+.action-msg {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 13px;
+  color: var(--ld-green);
+  background: var(--ld-bg-green-soft);
+  padding: 8px 14px;
+  border-radius: 10px;
+  margin: 0 0 6px;
 }
 .table {
   background: var(--ld-bg);
@@ -711,6 +749,19 @@ h1 {
 .crit-chip.bad {
   background: var(--ld-bg-red-soft);
   color: var(--ld-red);
+}
+.crit-chip.note {
+  background: var(--ld-bg-lilac);
+  color: var(--ld-amber);
+}
+.decide-err {
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: var(--ld-bg-red-soft);
+  color: var(--ld-red);
+  font-size: 12.5px;
+  font-weight: 600;
+  border: 1px solid var(--ld-red-line);
 }
 .ck {
   display: flex;

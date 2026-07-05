@@ -166,3 +166,29 @@ export function mapRefundRows(list: unknown): RefundRowVM[] {
   }
   return out
 }
+
+export interface RefundVerdictVM {
+  tone: 'ok' | 'lost'
+  title: string
+  sub: string
+}
+
+// 退款判据文案（P2·根因#8 判据不失真）：以「本单此行真实可退性 lineRefundable」（getRefundDetail 绑订单行·
+// 与 approveRefund ENTERED_NOT_REFUNDABLE 同口径）为准，不被课程级激活（activation.entered）误导——买家可能经
+// 别单/别码进过这门课，但本单此行仍可退，绝不显"会拦"。审核员据此判会不会被服务端拦。
+export function refundVerdict(v: { lineRefundable: boolean; entered: boolean; refundableQty: number | null }): RefundVerdictVM {
+  if (v.lineRefundable) {
+    return {
+      tone: 'ok',
+      title: '本单此行仍可退',
+      sub: v.entered
+        ? '买家进过这门课，但本单此行未被撤退货权（进课撤的是别单/别码）——同意后服务端按当下订单行复核放行'
+        : '未进课，符合退货规则——同意后服务端按当下订单行复核',
+    }
+  }
+  return {
+    tone: 'lost',
+    title: '本单此行退货权已失',
+    sub: '本单此行已被撤退货权（进课）——同意退款服务端会拦（ENTERED_NOT_REFUNDABLE）',
+  }
+}

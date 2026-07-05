@@ -133,7 +133,22 @@ export async function getRefundDetail({ db, data }: Ctx) {
   const got = await db.collection('afterSales').doc(id).get().catch(() => null)
   if (!got || !got.data) return reply(400, { ok: false, error: 'NO_RECORD' })
   const a = got.data
-  return reply(200, { ok: true, activation: await activationFor(db, a._openid, a.productId) })
+  // 本单此行真实可退性（P2·根因#8 判据不失真·与 approveRefund 的 ENTERED_NOT_REFUNDABLE 同口径）：
+  // 判据须绑「本单这一订单行」的 refundable/enteredQty，而非「买家这门课有没有进过」——买家可能经别单/别码
+  // 进过这门课（activation.entered=true），但本单此行仍可退。审核员据 lineRefundable 判会不会被拦，不被课程级激活误导。
+  const reqLine = a.lineId || a.productId
+  const order = await db.collection('orders').doc(String(a.orderId || '')).get().catch(() => null)
+  const line = order && order.data && (order.data.items || []).find((it: any) => (it.lineId || it.productId) === reqLine)
+  const refundableQty = line ? (Number(line.qty) || 1) - (Number(line.enteredQty) || 0) : 0
+  // 行缺失＝approveRefund 的 if(line) 跳过、不因进课拦 → 视作不被 ENTERED 拦（lineRefundable:true）
+  const lineRefundable = line ? line.refundable !== false && refundableQty > 0 : true
+  return reply(200, {
+    ok: true,
+    activation: await activationFor(db, a._openid, a.productId),
+    lineRefundable,
+    refundableQty: line ? refundableQty : null,
+    lineFound: !!line,
+  })
 }
 
 export async function approveRefund({ db, data }: Ctx) {

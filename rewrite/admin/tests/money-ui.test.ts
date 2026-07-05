@@ -1,7 +1,7 @@
 // 订单与钱组映射（守卫 rw-admin-money-ui-golden）：看板近似诚实标注/警报有则必显无则不吓人/
 // 订单行金额不符禁发入口收窄/售后行只待审核可裁决/脏档安全（与 mp 同口径）。
 import { describe, it, expect } from 'vitest'
-import { mapDashboard, mapOrderRows, mapRefundRows, maskPhone } from '../src/lib/mapMoney'
+import { mapDashboard, mapOrderRows, mapRefundRows, maskPhone, refundVerdict } from '../src/lib/mapMoney'
 
 describe('看板映射', () => {
   it('大白话：成交额标「精确/近似」如实；异常有则必显（含单号）、无则一条不渲染；坏响应回 null 不渲染假看板', () => {
@@ -104,5 +104,21 @@ describe('售后行映射（裁决入口收窄）', () => {
     expect(rows[1].refundedAtLabel).not.toBe('') // 已退款结果区：到账时间
     expect(rows[2].rejectReason).toBe('激活卡已拆用') // 已拒绝结果区：原因
     expect(rows[0].refundedAtLabel).toBe('') // 未退款无到账时间·不谎报
+  })
+})
+
+describe('退款判据文案（绑本单订单行·非课程级·根因#8 判据不失真·P2 修）', () => {
+  it('大白话：本单此行可退→判放行（即便买家这门课已进过·进课撤的是别单/别码）；本单此行已撤→判会拦', () => {
+    // P2 核心：买家经别单/别码进过这门课（entered:true），但本单此行仍可退——绝不显"会拦"
+    const ok = refundVerdict({ lineRefundable: true, entered: true, refundableQty: 1 })
+    expect(ok.tone).toBe('ok')
+    expect(ok.title).toContain('可退')
+    expect(ok.sub).not.toContain('ENTERED_NOT_REFUNDABLE') // 可退单不吓唬"会拦"
+    // 未进课也可退
+    expect(refundVerdict({ lineRefundable: true, entered: false, refundableQty: 1 }).tone).toBe('ok')
+    // 本单此行被撤退货权（进课）→ 会拦
+    const lost = refundVerdict({ lineRefundable: false, entered: true, refundableQty: 0 })
+    expect(lost.tone).toBe('lost')
+    expect(lost.sub).toContain('ENTERED_NOT_REFUNDABLE')
   })
 })
