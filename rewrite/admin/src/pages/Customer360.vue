@@ -1,7 +1,8 @@
 <script setup lang="ts">
-// 客户 360（M3 批5）：搜人（openid/手机/昵称/订单号）→ 全景面板（单面板失败隔离·其余照渲染）。
-// 本页读他人数据全程强制留痕（云端 FORCE_AUDIT）。
+// 客户 360（设计语言一致性·M3 UI 批14）：搜人（openid/手机/昵称/订单号）→ 全景面板（单面板失败隔离·其余照渲染）。
+// 本页读他人数据全程强制留痕（云端 FORCE_AUDIT）。逻辑未动，仅套设计语言。
 import { ref } from 'vue'
+import { Search, ChevronLeft } from 'lucide-vue-next'
 import { searchCustomer, getCustomer360 } from '../api/cs'
 import { matchLabel, mapPanels, type PanelVM } from '../lib/mapCs'
 import { dateTime } from '../lib/format'
@@ -40,111 +41,197 @@ async function open(openid: string) {
 </script>
 
 <template>
-  <div>
-    <h2>客户 360</h2>
-    <p class="hint">按 openid / 手机号 / 昵称 / 订单号 搜索。每次查看都会留审计痕。</p>
-    <div class="searchrow">
-      <input v-model="q" placeholder="搜索客户…" @keyup.enter="search" />
-      <button class="act" @click="search">搜索</button>
+  <div class="page">
+    <header class="page-head">
+      <h1>客户 360</h1>
+      <p class="sub">按 openid / 手机号 / 昵称 / 订单号 搜索。每次查看都会留审计痕。</p>
+    </header>
+
+    <div class="searchbox">
+      <Search :size="15" :stroke-width="1.8" class="search-ico" />
+      <input v-model="q" placeholder="搜索客户（openid / 手机 / 昵称 / 订单号）…" @keyup.enter="search" />
+      <button class="btn-primary" @click="search">搜索</button>
     </div>
     <p v-if="message" class="status">{{ message }}</p>
 
     <div v-if="hits.length && !current" class="hits">
       <div v-for="h in hits" :key="h.openid" class="hit" @click="open(h.openid)">
-        <strong>{{ h.nickname }}</strong>
-        <span v-if="h.phone">{{ h.phone }}</span>
-        <span class="matched">命中：{{ h.matched }}</span>
+        <div class="hit-main">
+          <div class="hit-name">{{ h.nickname }}</div>
+          <div class="hit-sub">{{ h.phone || '—' }} · <span class="mono">{{ h.openid.slice(-12) }}</span></div>
+        </div>
+        <span class="matched">命中 {{ h.matched }}</span>
         <span class="time">{{ h.createdAt }}</span>
       </div>
     </div>
 
     <div v-if="panels.length" class="panels">
-      <p class="backline"><button class="act ghost" @click="panels = []; current = ''">‹ 返回结果</button> <code>{{ current }}</code></p>
-      <div v-for="p in panels" :key="p.key" class="panel">
-        <h3>{{ p.label }}</h3>
-        <p v-if="p.failed" class="failed">该面板取数失败（其余不受影响）</p>
-        <table v-else-if="p.rows.length">
-          <tbody>
-            <tr v-for="row in p.rows" :key="row.k"><td class="k">{{ row.k }}</td><td>{{ row.v }}</td></tr>
-          </tbody>
-        </table>
-        <p v-else class="empty">无数据</p>
+      <div class="backline">
+        <button class="back" @click="panels = []; current = ''"><ChevronLeft :size="14" :stroke-width="2" /><span>返回结果</span></button>
+        <code>{{ current }}</code>
+      </div>
+      <div class="panel-grid">
+        <div v-for="p in panels" :key="p.key" class="panel">
+          <h2>{{ p.label }}</h2>
+          <p v-if="p.failed" class="failed">该面板取数失败（其余不受影响）</p>
+          <div v-else-if="p.rows.length" class="kv">
+            <div v-for="row in p.rows" :key="row.k" class="kvrow"><span class="k">{{ row.k }}</span><span class="v">{{ row.v }}</span></div>
+          </div>
+          <p v-else class="empty">无数据</p>
+        </div>
       </div>
     </div>
   </div>
 </template>
 
 <style scoped>
-h2 {
-  margin: 0 0 8px;
-  color: var(--ld-purple-ink);
+.page {
+  max-width: 980px;
 }
-.hint {
-  font-size: 12px;
-  color: var(--ld-purple-meta);
-  margin: 0 0 12px;
+.page-head {
+  margin-bottom: 16px;
 }
-.searchrow {
+h1 {
+  margin: 0;
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--ld-ink);
+}
+.sub {
+  margin: 4px 0 0;
+  font-size: 12.5px;
+  color: var(--ld-content-2);
+}
+.searchbox {
   display: flex;
+  align-items: center;
   gap: 8px;
+  padding: 6px 6px 6px 14px;
   margin-bottom: 12px;
-  max-width: 480px;
+  border: 1px solid var(--ld-line);
+  border-radius: 999px;
+  background: var(--ld-bg);
+  max-width: 560px;
 }
-.searchrow input {
+.search-ico {
+  color: var(--ld-content-2);
+  flex: none;
+}
+.searchbox input {
   flex: 1;
-  padding: 8px 12px;
-  border: 1px solid var(--ld-purple-line);
-  border-radius: 8px;
+  border: none;
+  outline: none;
+  background: transparent;
   font-size: 13px;
+  color: var(--ld-ink);
+}
+.btn-primary {
+  flex: none;
+  padding: 8px 18px;
+  border: none;
+  border-radius: 999px;
+  background: var(--ld-purple-ink);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
 }
 .status {
   font-size: 13px;
-  color: var(--ld-purple-meta);
+  color: var(--ld-content-2);
 }
 .hits {
-  max-width: 560px;
+  max-width: 640px;
 }
 .hit {
   display: flex;
-  gap: 12px;
-  align-items: baseline;
-  padding: 10px 14px;
+  align-items: center;
+  gap: 14px;
+  padding: 12px 16px;
   margin-bottom: 8px;
   background: var(--ld-bg);
-  border: 1px solid var(--ld-purple-line);
-  border-radius: var(--ld-radius);
+  border: 1px solid var(--ld-line);
+  border-radius: var(--ld-radius-l);
   cursor: pointer;
-  font-size: 13px;
+}
+.hit:hover {
+  border-color: var(--ld-purple-line);
+}
+.hit-main {
+  flex: 1;
+  min-width: 0;
+}
+.hit-name {
+  font-weight: 600;
+  color: var(--ld-ink);
+}
+.hit-sub {
+  margin-top: 2px;
+  font-size: 11.5px;
+  color: var(--ld-content-2);
+}
+.mono {
+  font-family: var(--ld-font-mono);
 }
 .matched {
+  flex: none;
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: var(--ld-bg-lilac);
+  color: var(--ld-brand-active);
   font-size: 11px;
-  color: var(--ld-purple-tab);
+  font-weight: 600;
 }
 .time {
-  margin-left: auto;
+  flex: none;
   font-size: 11px;
-  color: var(--ld-purple-meta);
+  color: var(--ld-content-2);
+  font-family: var(--ld-font-mono);
 }
 .backline {
   display: flex;
-  gap: 10px;
   align-items: center;
-  font-size: 12px;
+  gap: 12px;
+  margin-bottom: 12px;
 }
-.panels {
-  max-width: 720px;
+.back {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 6px 14px;
+  border: 1px solid var(--ld-line);
+  border-radius: 999px;
+  background: var(--ld-bg);
+  color: var(--ld-content-2);
+  font-size: 12.5px;
+  cursor: pointer;
+}
+.backline code {
+  font-size: 11.5px;
+  color: var(--ld-content-2);
+  font-family: var(--ld-font-mono);
+}
+.panel-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+}
+@media (max-width: 800px) {
+  .panel-grid {
+    grid-template-columns: 1fr;
+  }
 }
 .panel {
-  padding: 14px 16px;
-  margin-bottom: 12px;
+  padding: 16px 18px;
   background: var(--ld-bg);
-  border: 1px solid var(--ld-purple-line);
-  border-radius: var(--ld-radius);
+  border: 1px solid var(--ld-line);
+  border-radius: var(--ld-radius-l);
 }
-.panel h3 {
-  margin: 0 0 8px;
+.panel h2 {
+  margin: 0 0 10px;
   font-size: 14px;
-  color: var(--ld-purple-ink);
+  font-weight: 700;
+  color: var(--ld-ink);
 }
 .failed {
   font-size: 12px;
@@ -152,35 +239,30 @@ h2 {
 }
 .empty {
   font-size: 12px;
-  color: var(--ld-purple-meta);
+  color: var(--ld-content-2);
 }
-table {
-  width: 100%;
-  border-collapse: collapse;
+.kv {
+  display: flex;
+  flex-direction: column;
 }
-td {
-  padding: 5px 8px;
-  font-size: 13px;
-  border-bottom: 1px solid var(--ld-bg-faint);
+.kvrow {
+  display: flex;
+  gap: 12px;
+  padding: 6px 0;
+  border-top: 1px solid var(--ld-line);
+  font-size: 12.5px;
 }
-td.k {
-  width: 220px;
-  color: var(--ld-purple-meta);
+.kvrow:first-child {
+  border-top: none;
 }
-.act {
-  padding: 7px 18px;
-  border: none;
-  border-radius: 999px;
-  background: var(--ld-purple-ink);
-  color: #fff;
-  font-size: 13px;
-  cursor: pointer;
+.k {
+  width: 40%;
+  flex: none;
+  color: var(--ld-content-2);
 }
-.act.ghost {
-  background: transparent;
-  color: var(--ld-purple-meta);
-  border: 1px solid var(--ld-purple-line);
-  padding: 4px 12px;
-  font-size: 12px;
+.v {
+  flex: 1;
+  color: var(--ld-content);
+  word-break: break-word;
 }
 </style>
