@@ -78,6 +78,11 @@ function applyPatch(doc, data) {
 
 const genId = () => 'mock_' + Math.random().toString(36).slice(2, 12)
 const rows = (name) => (G.store[name] = G.store[name] || [])
+// 集合存在性（根因#8·真机 sdk：未 createCollection 的集合 add/update 抛错；桩默认自动建掩过·control.markUncreated 逼真机行为）
+const uncreated = () => (G.uncreated = G.uncreated || new Set())
+const ensureColl = (coll) => {
+  if (uncreated().has(coll)) throw new Error('DATABASE_COLLECTION_NOT_EXIST:' + coll)
+}
 
 class DocRef {
   constructor(coll, id) {
@@ -102,6 +107,7 @@ class DocRef {
     return { _id: this.id }
   }
   async update({ data }) {
+    ensureColl(this.coll)
     // 写前注入（测试并发：读-改-写窗口里让「并发方」先落库·同 setCallFunctionImpl 范式）。默认无。
     if (typeof G.beforeUpdate === 'function') await G.beforeUpdate({ coll: this.coll, data })
     const found = rows(this.coll).find((d) => d._id === this.id)
@@ -182,6 +188,7 @@ class Query {
     return { stats: { removed: before - G.store[this.coll].length } }
   }
   async add({ data }) {
+    ensureColl(this.coll)
     const arr = rows(this.coll)
     const doc = clone(data)
     if (doc._id != null) {
@@ -244,8 +251,8 @@ const db = {
   collection: (name) => new Query(name),
   command,
   serverDate: () => new Date(),
-  createCollection: async () => {
-    /* 集合按需自建，空操作 */
+  createCollection: async (name) => {
+    uncreated().delete(name) /* 建集合=从「未建」集合移除·解除 add/update 抛错（其余按需自建·空操作） */
   },
 }
 
@@ -341,6 +348,7 @@ const control = {
     G.openapiFail = false
     G.openapiErrCode = null
     G.beforeUpdate = null
+    G.uncreated = new Set()
     G.deletedFiles = []
     G.tempUrlCalls = []
   },
@@ -378,6 +386,10 @@ const control = {
   // 注入「写库前」副作用（测试并发：读-改-写/条件更新窗口里模拟并发方抢先改库·验 CAS/moved 校验真在咬）
   setBeforeUpdate(fn) {
     G.beforeUpdate = fn
+  },
+  // 逼真机「集合未建」（根因#8）：标记集合未 createCollection·其 add/update 抛错·验代码有 createCollection 兜底
+  markUncreated(name) {
+    ;(G.uncreated = G.uncreated || new Set()).add(name)
   },
   setCallFunctionFail(v) {
     G.callFunctionFail = !!v

@@ -84,6 +84,12 @@ describe('recordAnomaly（bug 收集器地基·防治静默 bug）', () => {
     expect(control.dump('orders')).toEqual([{ _id: 'A', status: 'paid' }]) // 业务集合原样未动
     expect(control.dump(COLLECTIONS.anomalies).length).toBe(1)
   })
+
+  it('大白话：集合尚未建也能落库（真机 add 到未建集合抛→自建重试·根因#8 桩曾自动建集合掩过·部署真机逼出）', async () => {
+    control.markUncreated(COLLECTIONS.anomalies) // 逼真机：anomalies 未 createCollection·其 add/update 抛错
+    await recordAnomaly('invariant-violation', 'STUCK_ORDER', { fp: 'A' }, 'high')
+    expect(control.dump(COLLECTIONS.anomalies).length).toBe(1) // add-first + createCollection 兜底 → 落库成功
+  })
 })
 
 describe('notifyAlert→recordAnomaly 桥（批4·动作失败自动进 bug 账本·零逐函数改造）', () => {

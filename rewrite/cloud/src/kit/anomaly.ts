@@ -53,18 +53,30 @@ export async function recordAnomaly(
     const db = getDb()
     const _ = db.command
     const coll = db.collection(COLLECTIONS.anomalies)
-    // update-first 幂等：已存在→原子自增 count（去重）；不存在→建档。
-    const bumped = await coll.doc(fp).update({ data: { count: _.inc(1), lastSeen: now } })
+    // 写入（确定性 _id 幂等·**add-first**）：首见→建档；撞号（并发/重复）→原子自增 count；集合缺失→建集合重试。
+    // 为何 add-first 不 update-first：真机 sdk `doc(缺失).update()` **抛错**（非返 updated:0），会被外层 fail-soft 吞掉、
+    // 再也到不了 add——测试桩却返 updated:0 掩过（根因#8「桩≠真机」·部署真机首现 anomalies 恒空逼出）。add-first 不依赖
+    // update-on-missing，任其抛/返0 都稳。同 runInspection 写 inspectRuns 的 add + createCollection 兜底。
+    const base = { _id: fp, kind, code, severity, ctx: sctx, count: 1, firstSeen: now, lastSeen: now, resolved: false }
     let isNew = false
-    if (!bumped || !bumped.stats || bumped.stats.updated === 0) {
-      try {
-        await coll.add({
-          data: { _id: fp, kind, code, severity, ctx: sctx, count: 1, firstSeen: now, lastSeen: now, resolved: false },
-        })
-        isNew = true
-      } catch {
-        // 撞号=并发方在 update 后 add 前抢先建档 → 补一次自增（天然幂等）
-        await coll.doc(fp).update({ data: { count: _.inc(1), lastSeen: now } })
+    try {
+      await coll.add({ data: base })
+      isNew = true
+    } catch {
+      // add 失败＝撞号（已存在）或集合缺失。先试自增（已存在→updated:1 收工·去重）；自增没命中＝集合缺失→建集合重试 add。
+      const r = await coll.doc(fp).update({ data: { count: _.inc(1), lastSeen: now } }).catch(() => null)
+      if (!r || !r.stats || r.stats.updated === 0) {
+        try {
+          await db.createCollection(COLLECTIONS.anomalies)
+        } catch {
+          /* 已存在 */
+        }
+        await coll
+          .add({ data: base })
+          .then(() => {
+            isNew = true
+          })
+          .catch(() => {})
       }
     }
     // 高危去重感知告警：仅首见推送、重复不刷（防告警疲劳）。经 alert 直发（不走 notifyAlert·防桥接递归）；
