@@ -1,7 +1,7 @@
 // 订单与钱组映射（守卫 rw-admin-money-ui-golden）：看板近似诚实标注/警报有则必显无则不吓人/
 // 订单行金额不符禁发入口收窄/售后行只待审核可裁决/脏档安全（与 mp 同口径）。
 import { describe, it, expect } from 'vitest'
-import { mapDashboard, mapOrderRows, mapRefundRows } from '../src/lib/mapMoney'
+import { mapDashboard, mapOrderRows, mapRefundRows, maskPhone } from '../src/lib/mapMoney'
 
 describe('看板映射', () => {
   it('大白话：成交额标「精确/近似」如实；异常有则必显（含单号）、无则一条不渲染；坏响应回 null 不渲染假看板', () => {
@@ -37,6 +37,55 @@ describe('订单行映射（发货入口收窄）', () => {
     expect(rows[2]).toMatchObject({ canShip: false, trackingNo: 'SF123' }) // 已发货不再发
     expect(rows[2].summary).toContain('等 3 件商品')
     expect(mapOrderRows('garbage')).toEqual([])
+  })
+})
+
+describe('手机号掩码（PII·还原批 Orders）', () => {
+  it('大白话：11 位号掩中间四位，短号/空原样不假掩', () => {
+    expect(maskPhone('13812345678')).toBe('138****5678')
+    expect(maskPhone('123')).toBe('123')
+    expect(maskPhone('')).toBe('')
+  })
+})
+
+describe('订单行映射·详情抽屉数据链 + 列表掩码（还原批 Orders）', () => {
+  it('大白话：列表 address 掩码手机号不泄全号；抽屉字段带完整号+逐商品+交易号+微信合规三态+时间线时间戳；shipped 可改单号', () => {
+    const rows = mapOrderRows([
+      {
+        id: 'o1',
+        status: 'shipped',
+        amount: 12.5,
+        items: [{ productId: 'p1', name: '小熊', spec: '基础', qty: 2 }],
+        address: { name: '赵四', phone: '13812345678', region: '贵州省', detail: '某路1号' },
+        createdAt: 1783046400000,
+        paidAt: 1783046460000,
+        shippedAt: 1783046520000,
+        transactionId: '4200TX',
+        shipping: { company: '顺丰速运', trackingNo: 'SF9' },
+        wxShipUploaded: false,
+      },
+    ])
+    const r = rows[0]
+    expect(r.address).toContain('138****5678') // 列表掩码
+    expect(r.address).not.toContain('13812345678') // 绝不泄全号（PII）
+    expect(r.addrPhone).toBe('13812345678') // 抽屉用完整号（操作员联系买家）
+    expect(r.addrName).toBe('赵四')
+    expect(r.items).toEqual([{ productId: 'p1', name: '小熊', spec: '基础', qty: 2 }])
+    expect(r.transactionId).toBe('4200TX')
+    expect(r.wxShipUploaded).toBe(false) // 三态：已知上传失败
+    expect(r.company).toBe('顺丰速运')
+    expect(r.canModify).toBe(true) // shipped 可改单号
+    expect({ c: r.createdAtMs, p: r.paidAtMs, s: r.shippedAtMs }).toEqual({
+      c: 1783046400000,
+      p: 1783046460000,
+      s: 1783046520000,
+    })
+  })
+  it('大白话：微信合规未知＝null 不谎报未上传；未发货 canModify=false', () => {
+    const [r] = mapOrderRows([{ id: 'o2', status: 'paid', amount: 1, items: [], address: { phone: '186' } }])
+    expect(r.wxShipUploaded).toBeNull() // 未知不是 false
+    expect(r.canModify).toBe(false)
+    expect(r.address).toBe('186') // 短号不假掩
   })
 })
 
