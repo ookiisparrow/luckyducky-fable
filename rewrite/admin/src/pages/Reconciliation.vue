@@ -1,7 +1,10 @@
 <script setup lang="ts">
-// 财务对账（M3 批6）：内部累计（收入−退款=净额·全量精确）+ 按日分桶 + 外部逐笔勾对
-// （微信官方账单 ⋈ 我方付款单·四类差异·「微信有我方无」最危险标红）+ 拉某日账单。
-import { ref, onMounted } from 'vue'
+// 财务对账（design/console.pen S16 视觉·M3 UI 批8）：内部对账（应收/退款/净额·全量精确 + 按日表·真值）
+// + 外部微信官方账单逐笔勾对（四类差异·「微信有我方无」最危险标红——真对账口）+ 导出 CSV（客户端真生成）。
+// 诚实边界：设计稿「微信手续费≈0.6% / 微信实际到账」为估算/结算数据，后端 getReconciliation 无——不伪造，
+// 只渲染应收−退款=净额真等式；月份选择器（近 30 天固定窗，无 month 参数）与「导出 Excel」（改 CSV）记待办。
+import { ref, computed, onMounted } from 'vue'
+import { CircleDollarSign, RotateCcw, Wallet, Download, CircleCheck } from 'lucide-vue-next'
 import { getReconciliation, getBillMatch, downloadBill } from '../api/system'
 import { mapRecon, mapBillMatch, type ReconVM, type BillMatchVM } from '../lib/mapSystem'
 
@@ -11,12 +14,20 @@ const message = ref('')
 const billDate = ref('')
 const busy = ref(false)
 
+const totals = computed(() => {
+  if (!recon.value) return null
+  const find = (kw: string) => recon.value!.cumulative.find((c) => c.label.includes(kw))?.value || '¥0.00'
+  const orders = recon.value.daily.reduce((s, d) => s + d.orders, 0)
+  return { income: find('收入'), refund: find('退款'), net: find('净额'), orders }
+})
+
 async function reload() {
   message.value = '加载中…'
   const [r, m] = await Promise.all([getReconciliation(), getBillMatch()])
+  if ((r as any).error === 'SESSION_LOST' || (m as any).error === 'SESSION_LOST') return
   recon.value = mapRecon(r)
   match.value = mapBillMatch(m)
-  message.value = recon.value || match.value ? '' : '加载失败：' + String(r.error || m.error || '')
+  message.value = recon.value || match.value ? '' : '加载失败：' + String((r as any).error || (m as any).error || '')
 }
 
 async function pullBill() {
@@ -31,155 +42,363 @@ async function pullBill() {
   void reload()
 }
 
+function exportCsv() {
+  if (!recon.value) return
+  const head = '日期,订单数,应收GMV,退款,净额,退款笔数'
+  const lines = recon.value.daily.map((d) => [d.day, d.orders, d.income, d.refund, d.net, d.refunds].join(','))
+  const csv = [head, ...lines].join('\n')
+  const url = URL.createObjectURL(new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8' }))
+  const a = document.createElement('a')
+  a.href = url
+  a.download = '财务对账-按日.csv'
+  a.click()
+  URL.revokeObjectURL(url)
+}
+
 onMounted(reload)
 </script>
 
 <template>
-  <div>
-    <h2>财务对账</h2>
+  <div class="page">
+    <header class="page-head">
+      <div>
+        <h1>财务对账</h1>
+        <p class="sub">应收 GMV、退款按日对账 + 微信官方账单逐笔勾对 · 资金对得上才安心（内部近 30 天窗）</p>
+      </div>
+      <button class="btn-primary" :disabled="!recon" @click="exportCsv">
+        <Download :size="15" :stroke-width="1.8" /><span>导出 CSV</span>
+      </button>
+    </header>
+
     <p v-if="message" class="status">{{ message }}</p>
 
-    <div v-if="recon" class="panel">
-      <h3>内部对账（全量精确）<span v-if="recon.approxNote" class="warn-note">{{ recon.approxNote }}</span></h3>
-      <div class="cards">
-        <div v-for="c in recon.cumulative" :key="c.label" class="card">
-          <div class="k">{{ c.label }}</div>
-          <div class="v">{{ c.value }}</div>
+    <template v-if="totals">
+      <div class="balance">
+        <CircleCheck :size="20" :stroke-width="1.8" />
+        <div>
+          <div class="balance-t">内部账已对平</div>
+          <div class="balance-s">应收 {{ totals.income }} − 退款 {{ totals.refund }} = 净额 {{ totals.net }}</div>
         </div>
       </div>
-      <table v-if="recon.daily.length">
-        <thead><tr><th>日期</th><th>收入</th><th>退款</th><th>净额</th><th>单数</th><th>退款笔数</th></tr></thead>
-        <tbody>
-          <tr v-for="d in recon.daily" :key="d.day">
-            <td>{{ d.day }}</td><td>{{ d.income }}</td><td>{{ d.refund }}</td><td>{{ d.net }}</td><td>{{ d.orders }}</td><td>{{ d.refunds }}</td>
-          </tr>
-        </tbody>
-      </table>
-    </div>
 
-    <div v-if="match" class="panel">
-      <h3>外部逐笔勾对（微信官方账单）<span v-if="match.approxNote" class="warn-note">{{ match.approxNote }}</span></h3>
+      <div class="stat-grid">
+        <div class="stat-card">
+          <div class="stat-head"><span class="stat-label">应收 GMV（已付）</span><CircleDollarSign class="stat-ico" :size="18" :stroke-width="1.8" /></div>
+          <div class="stat-value">{{ totals.income }}</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-head"><span class="stat-label">退款合计</span><RotateCcw class="stat-ico amber" :size="18" :stroke-width="1.8" /></div>
+          <div class="stat-value amber">{{ totals.refund }}</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-head"><span class="stat-label">净额（应收−退款）</span><Wallet class="stat-ico ok" :size="18" :stroke-width="1.8" /></div>
+          <div class="stat-value ok">{{ totals.net }}</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-head"><span class="stat-label">已付订单数</span><CircleCheck class="stat-ico" :size="18" :stroke-width="1.8" /></div>
+          <div class="stat-value">{{ totals.orders }}</div>
+        </div>
+      </div>
+
+      <div v-if="recon && recon.approxNote" class="approx">{{ recon.approxNote }}</div>
+
+      <div v-if="recon && recon.daily.length" class="table">
+        <div class="thead">
+          <span>日期</span><span class="r">订单数</span><span class="r">应收 GMV</span>
+          <span class="r">退款</span><span class="r">净额</span><span class="r">退款笔数</span>
+        </div>
+        <div v-for="d in recon.daily" :key="d.day" class="trow">
+          <span class="day">{{ d.day }}</span>
+          <span class="r">{{ d.orders }}</span>
+          <span class="r num">{{ d.income }}</span>
+          <span class="r num" :class="{ amber: d.refund !== '¥0.00' }">{{ d.refund }}</span>
+          <span class="r num strong">{{ d.net }}</span>
+          <span class="r">{{ d.refunds }}</span>
+        </div>
+        <div class="trow total">
+          <span class="day">窗内合计</span>
+          <span class="r">{{ totals.orders }}</span>
+          <span class="r num">{{ totals.income }}</span>
+          <span class="r num amber">{{ totals.refund }}</span>
+          <span class="r num strong">{{ totals.net }}</span>
+          <span class="r">—</span>
+        </div>
+      </div>
+    </template>
+
+    <section v-if="match" class="ext-panel">
+      <div class="ext-head">
+        <h2>外部逐笔勾对 · 微信官方账单</h2>
+        <span v-if="match.approxNote" class="approx-inline">{{ match.approxNote }}</span>
+      </div>
       <div class="billrow">
         <input v-model="billDate" placeholder="拉某日账单 YYYY-MM-DD" />
         <button class="act" :disabled="busy" @click="pullBill">拉取账单</button>
       </div>
-      <div class="cards">
-        <div v-for="s in match.summary" :key="s.label" class="card" :class="{ danger: s.danger }">
-          <div class="k">{{ s.label }}</div>
-          <div class="v">{{ s.value }}</div>
+      <div class="ext-cards">
+        <div v-for="s in match.summary" :key="s.label" class="ext-card" :class="{ danger: s.danger }">
+          <div class="ext-k">{{ s.label }}</div>
+          <div class="ext-v" :class="{ danger: s.danger }">{{ s.value }}</div>
         </div>
       </div>
       <template v-if="match.wxOnly.length">
-        <h4 class="danger-h">微信收了钱、我方没单（立即人工核）</h4>
+        <h3 class="danger-h">微信收了钱、我方没单（立即人工核）</h3>
         <p v-for="w in match.wxOnly" :key="w.transactionId" class="row-line danger-line">{{ w.date }} · {{ w.transactionId }} · {{ w.amount }}</p>
       </template>
       <template v-if="match.amountMismatch.length">
-        <h4 class="danger-h">金额不符</h4>
-        <p v-for="m in match.amountMismatch" :key="m.id" class="row-line">{{ m.id }} · 我方 {{ m.ours }} ≠ 微信 {{ m.wx }}</p>
+        <h3 class="danger-h">金额不符</h3>
+        <p v-for="mm in match.amountMismatch" :key="mm.id" class="row-line">{{ mm.id }} · 我方 {{ mm.ours }} ≠ 微信 {{ mm.wx }}</p>
       </template>
       <template v-if="match.oursOnly.length">
-        <h4>我方有单微信无（多为账单未拉/未支付成功）</h4>
+        <h3>我方有单微信无（多为账单未拉/未支付成功）</h3>
         <p v-for="o in match.oursOnly" :key="o.id" class="row-line">{{ o.id }} · {{ o.amount }}</p>
       </template>
-    </div>
+    </section>
+    <p class="foot-note">「微信手续费 / 实际到账」需微信结算数据源，后端暂无——本页只作应收/退款/净额真等式与账单逐笔勾对；月份筛选（近 30 天固定窗）待后端加参数。</p>
   </div>
 </template>
 
 <style scoped>
-h2 {
-  margin: 0 0 14px;
-  color: var(--ld-purple-ink);
+.page {
+  max-width: 1200px;
 }
-h3 {
-  margin: 0 0 10px;
-  font-size: 14px;
-  color: var(--ld-purple-ink);
+.page-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 18px;
 }
-h4 {
-  margin: 14px 0 6px;
+h1 {
+  margin: 0;
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--ld-ink);
+}
+.sub {
+  margin: 4px 0 0;
+  font-size: 12.5px;
+  color: var(--ld-content-2);
+}
+.btn-primary {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: none;
+  padding: 10px 18px;
+  border: none;
+  border-radius: 999px;
+  background: var(--ld-purple-ink);
+  color: #fff;
   font-size: 13px;
-  color: var(--ld-purple-ink);
+  font-weight: 600;
+  cursor: pointer;
 }
-.danger-h {
-  color: var(--ld-red);
-}
-.warn-note {
-  margin-left: 8px;
-  font-size: 11px;
-  color: var(--ld-amber);
-  font-weight: 400;
+.btn-primary:disabled {
+  opacity: 0.5;
 }
 .status {
   font-size: 13px;
-  color: var(--ld-purple-meta);
+  color: var(--ld-content-2);
 }
-.panel {
-  padding: 16px 18px;
-  margin-bottom: 14px;
-  background: var(--ld-bg);
-  border: 1px solid var(--ld-purple-line);
-  border-radius: var(--ld-radius);
-}
-.cards {
+.balance {
   display: flex;
+  align-items: center;
   gap: 12px;
-  flex-wrap: wrap;
+  padding: 16px 20px;
+  margin-bottom: 18px;
+  background: var(--ld-bg-green-soft);
+  border: 1px solid var(--ld-green);
+  border-radius: var(--ld-radius-l);
+  color: var(--ld-green);
+}
+.balance-t {
+  font-size: 14px;
+  font-weight: 700;
+}
+.balance-s {
+  margin-top: 3px;
+  font-size: 12.5px;
+  opacity: 0.9;
+}
+.stat-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 16px;
+  margin-bottom: 16px;
+}
+.stat-card {
+  padding: 18px 20px;
+  background: var(--ld-bg);
+  border: 1px solid var(--ld-line);
+  border-radius: var(--ld-radius-l);
+}
+.stat-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.stat-label {
+  font-size: 12.5px;
+  color: var(--ld-content-2);
+}
+.stat-ico {
+  color: var(--ld-brand);
+}
+.stat-ico.ok {
+  color: var(--ld-green);
+}
+.stat-ico.amber {
+  color: var(--ld-amber);
+}
+.stat-value {
+  margin-top: 10px;
+  font-size: 26px;
+  font-weight: 700;
+  color: var(--ld-ink);
+  line-height: 1.1;
+}
+.stat-value.ok {
+  color: var(--ld-green);
+}
+.stat-value.amber {
+  color: var(--ld-amber);
+}
+.approx {
+  margin-bottom: 10px;
+  font-size: 11.5px;
+  color: var(--ld-amber);
+}
+.table {
+  background: var(--ld-bg);
+  border: 1px solid var(--ld-line);
+  border-radius: var(--ld-radius-l);
+  overflow: hidden;
+  margin-bottom: 18px;
+}
+.thead,
+.trow {
+  display: grid;
+  grid-template-columns: 1.4fr 1fr 1.2fr 1fr 1.2fr 1fr;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 20px;
+}
+.thead {
+  background: var(--ld-bg-lilac);
+  font-size: 12px;
+  color: var(--ld-content-2);
+}
+.trow {
+  border-top: 1px solid var(--ld-line);
+  font-size: 13px;
+}
+.trow.total {
+  background: var(--ld-bg-faint);
+  font-weight: 700;
+}
+.r {
+  text-align: right;
+  justify-self: end;
+}
+.day {
+  color: var(--ld-content);
+  font-family: var(--ld-font-mono);
+  font-size: 12.5px;
+}
+.num {
+  font-variant-numeric: tabular-nums;
+  color: var(--ld-content);
+}
+.num.strong {
+  font-weight: 700;
+  color: var(--ld-ink);
+}
+.num.amber {
+  color: var(--ld-amber);
+}
+.ext-panel {
+  padding: 20px 22px;
+  background: var(--ld-bg);
+  border: 1px solid var(--ld-line);
+  border-radius: var(--ld-radius-l);
+}
+.ext-head {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
   margin-bottom: 12px;
 }
-.card {
-  min-width: 130px;
-  padding: 12px 14px;
-  background: var(--ld-bg-lilac);
-  border-radius: 10px;
-}
-.card.danger {
-  background: var(--ld-bg-red-soft);
-  border: 1px solid var(--ld-red-line);
-}
-.card .k {
-  font-size: 11px;
-  color: var(--ld-purple-meta);
-}
-.card .v {
-  font-size: 20px;
+.ext-head h2 {
+  margin: 0;
+  font-size: 15px;
   font-weight: 700;
-  color: var(--ld-purple-ink);
+  color: var(--ld-ink);
 }
-table {
-  width: 100%;
-  border-collapse: collapse;
-}
-th,
-td {
-  padding: 8px 10px;
-  font-size: 13px;
-  text-align: left;
-  border-bottom: 1px solid var(--ld-bg-faint);
-}
-th {
-  color: var(--ld-purple-meta);
+.approx-inline {
+  font-size: 11px;
+  color: var(--ld-amber);
 }
 .billrow {
   display: flex;
   gap: 8px;
-  margin-bottom: 12px;
+  margin-bottom: 14px;
 }
 .billrow input {
-  padding: 7px 10px;
-  border: 1px solid var(--ld-purple-line);
+  padding: 8px 12px;
+  border: 1px solid var(--ld-line-strong);
   border-radius: 8px;
   font-size: 13px;
 }
-.row-line {
+.ext-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 12px;
+  margin-bottom: 8px;
+}
+.ext-card {
+  padding: 12px 14px;
+  background: var(--ld-bg-lilac);
+  border-radius: 10px;
+}
+.ext-card.danger {
+  background: var(--ld-bg-red-soft);
+  border: 1px solid var(--ld-red-line);
+}
+.ext-k {
+  font-size: 11px;
+  color: var(--ld-content-2);
+}
+.ext-v {
+  margin-top: 4px;
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--ld-ink);
+}
+.ext-v.danger {
+  color: var(--ld-red);
+}
+.danger-h {
+  color: var(--ld-red);
   font-size: 13px;
-  font-family: ui-monospace, monospace;
+  margin: 14px 0 6px;
+}
+.ext-panel h3 {
+  font-size: 13px;
+  color: var(--ld-content);
+  margin: 14px 0 6px;
+}
+.row-line {
+  font-size: 12.5px;
+  font-family: var(--ld-font-mono);
   margin: 2px 0;
+  color: var(--ld-content);
 }
 .danger-line {
   color: var(--ld-red);
 }
 .act {
-  padding: 7px 18px;
+  padding: 8px 18px;
   border: none;
   border-radius: 999px;
   background: var(--ld-purple-ink);
@@ -189,5 +408,10 @@ th {
 }
 .act:disabled {
   opacity: 0.5;
+}
+.foot-note {
+  margin-top: 14px;
+  font-size: 11.5px;
+  color: var(--ld-content-2);
 }
 </style>
