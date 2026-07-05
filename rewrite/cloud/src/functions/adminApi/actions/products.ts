@@ -27,7 +27,35 @@ export async function listDrafts({ cloud, db, drafts }: Ctx) {
       .catch(() => ({ data: [] as any[] }))
     for (const p of pr.data) listed[p._id] = p.listed !== false
   }
-  return reply(200, { ok: true, list: res.data, urls, listed })
+
+  // 6 步上新进度派生（换皮误判「分步态无源·略」·实则可由 cards/courses/qrcodes 批量 join·bounded 同 listed 范式·根因#7）：
+  // 视频(课程有段带 videoFileId) / 卡片(card 定稿 final) / 批次(该课有 qrcode·aggregate group 只回有码的课·不扫全表)。
+  const _ = db.command
+  const courseIds = res.data.map((p: any) => String(p.courseId || '') || 'course-' + (p.id || p._id)).filter(Boolean)
+  const cardFinal: Record<string, boolean> = {}
+  const hasVideo: Record<string, boolean> = {}
+  const hasBatch: Record<string, boolean> = {}
+  if (draftIds.length) {
+    const cardIds = draftIds.map((id: string) => 'card-' + id)
+    const [cr, cor, br] = await Promise.all([
+      db.collection('cards').where({ _id: _.in(cardIds) }).get().catch(() => ({ data: [] as any[] })),
+      db.collection('courses').where({ _id: _.in(courseIds) }).get().catch(() => ({ data: [] as any[] })),
+      // aggregate group：只回「有 qrcode 的 courseId」一行/课·不逐码扫（capacity·根因#7）
+      db.collection('qrcodes').aggregate().match({ courseId: _.in(courseIds) }).group({ _id: '$courseId' }).end().catch(() => ({ list: [] as any[] })),
+    ])
+    for (const c of (cr as any).data || []) {
+      const pid = String(c.productId || String(c._id || '').replace(/^card-/, ''))
+      cardFinal[pid] = c.status === 'final'
+    }
+    for (const c of (cor as any).data || []) {
+      const cid = String(c.id || c._id || '')
+      let vid = false
+      for (const ch of c.chapters || []) for (const ls of ch.lessons || []) for (const sg of ls.segments || []) if (sg && sg.videoFileId) vid = true
+      hasVideo[cid] = vid
+    }
+    for (const g of (br as any).list || []) hasBatch[String(g._id || '')] = true
+  }
+  return reply(200, { ok: true, list: res.data, urls, listed, cardFinal, hasVideo, hasBatch })
 }
 
 export async function saveDraft({ drafts, data }: Ctx) {

@@ -16,6 +16,33 @@ export function productState(id: string, listedMap: unknown): ProductState {
   return m[id] === false ? 'unlisted' : 'onsale'
 }
 
+export interface StepDot {
+  key: string
+  label: string
+  done: boolean
+}
+// listDrafts 后端派生的分步态（换皮误判「无源」·实则 cards/courses/qrcodes 可 join）
+export interface StepExtras {
+  hasVideo?: Record<string, boolean> // courseId → 有教学视频
+  cardFinal?: Record<string, boolean> // productId → 卡片已定稿
+  hasBatch?: Record<string, boolean> // courseId → 有码批次
+}
+
+/** 6 步上新进度（S11·换皮误判「无源·略」）：图片/信息/SKU 前端算·视频/卡片/批次取后端 listDrafts extras。 */
+export function productSteps(p: Record<string, any>, extras?: StepExtras): StepDot[] {
+  const id = String((p && (p.id || p._id)) || '')
+  const courseId = String((p && p.courseId) || '') || 'course-' + id
+  const e = extras || {}
+  return [
+    { key: 'image', label: '产品图片', done: !!(p && p.cover) },
+    { key: 'info', label: '商品信息', done: !!String((p && p.name) || '').trim() && !!(p && p.price != null && String(p.price) !== '') },
+    { key: 'sku', label: 'SKU', done: Array.isArray(p && p.skus) && p.skus.length > 0 },
+    { key: 'video', label: '教学视频', done: !!(e.hasVideo && e.hasVideo[courseId]) },
+    { key: 'card', label: '二维码卡片', done: !!(e.cardFinal && e.cardFinal[id]) },
+    { key: 'batch', label: '码批次', done: !!(e.hasBatch && e.hasBatch[courseId]) },
+  ]
+}
+
 export interface DraftRowVM {
   id: string
   name: string
@@ -24,6 +51,8 @@ export interface DraftRowVM {
   stateLabel: string
   coverUrl: string
   skuCount: number
+  steps: StepDot[] // 6 步上新进度圆点（换皮删了这列·「无源」说法误·后端 extras 就绪即真）
+  doneCount: number
   raw: Record<string, unknown> // 整档（编辑 round-trip 用·防覆盖式保存抹字段）
 }
 
@@ -35,7 +64,7 @@ export function skuPriceLabel(p: Record<string, any>): string {
   return p.price != null && String(p.price) !== '' ? '¥' + String(p.price) : '未定价'
 }
 
-export function mapDraftRows(list: unknown, urls: unknown, listedMap: unknown): DraftRowVM[] {
+export function mapDraftRows(list: unknown, urls: unknown, listedMap: unknown, extras?: StepExtras): DraftRowVM[] {
   if (!Array.isArray(list)) return []
   const u = (urls && typeof urls === 'object' ? urls : {}) as Record<string, string>
   const out: DraftRowVM[] = []
@@ -44,6 +73,7 @@ export function mapDraftRows(list: unknown, urls: unknown, listedMap: unknown): 
     const id = String(p.id || p._id || '')
     if (!id) continue
     const state = productState(id, listedMap)
+    const steps = productSteps(p, extras)
     out.push({
       id,
       name: String(p.name || '（未命名）'),
@@ -52,6 +82,8 @@ export function mapDraftRows(list: unknown, urls: unknown, listedMap: unknown): 
       stateLabel: STATE_LABELS[state],
       coverUrl: p.cover ? u[String(p.cover)] || '' : '',
       skuCount: Array.isArray(p.skus) ? p.skus.length : 0,
+      steps,
+      doneCount: steps.filter((s) => s.done).length,
       raw: p,
     })
   }

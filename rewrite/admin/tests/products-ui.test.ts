@@ -1,7 +1,7 @@
 // 商品与橱窗映射（守卫 rw-admin-products-ui-golden）：三态口径与云端一致/四道门人话原文兜底/
 // 整档 round-trip 保真/图片尺寸闸提前拦/脏档安全。
 import { describe, it, expect } from 'vitest'
-import { productState, mapDraftRows, publishErrorText, mapShowcaseRows, b64SizeOk } from '../src/lib/mapProducts'
+import { productState, mapDraftRows, publishErrorText, mapShowcaseRows, b64SizeOk, productSteps } from '../src/lib/mapProducts'
 
 describe('三态口径（与云端 listDrafts listed 表一致）', () => {
   it('大白话：表里 true=在售、false=已下架、不在表=筹备中（未上架）', () => {
@@ -25,6 +25,24 @@ describe('三态口径（与云端 listDrafts listed 表一致）', () => {
     expect(mapDraftRows([{ id: 's', name: 'x', price: 30, skus: [{ name: 'a', price: 22 }] }], {}, {})[0].priceLabel).toBe('¥22') // 单规格无起
     expect(mapDraftRows([{ id: 'n', name: 'x', price: 30, skus: [] }], {}, {})[0].priceLabel).toBe('¥30') // 无 SKU 退商品价
     expect(mapDraftRows([{ id: 'u', name: 'x', skus: [] }], {}, {})[0].priceLabel).toBe('未定价')
+  })
+
+  it('大白话：6 步上新进度（换皮误判「无源·略」·实则 cards/courses/qrcodes 后端 join 派生）：图片/信息/SKU 前端算·视频/卡片/批次取后端 extras', () => {
+    const steps = productSteps(
+      { id: 'p1', name: '熊', price: 20, cover: 'c', skus: [{ name: 'a' }], courseId: 'course-p1' },
+      { hasVideo: { 'course-p1': true }, cardFinal: { p1: true }, hasBatch: {} }
+    )
+    expect(steps.map((s) => s.done)).toEqual([true, true, true, true, true, false]) // 图片/信息/SKU/视频/卡片 done·批次未
+    expect(steps.map((s) => s.key)).toEqual(['image', 'info', 'sku', 'video', 'card', 'batch'])
+    // 缺项全灭；courseId 缺省回退 course-<id>
+    const empty = productSteps({ id: 'p2', name: '', price: '', cover: '', skus: [] }, {})
+    expect(empty.every((s) => !s.done)).toBe(true)
+    const derived = productSteps({ id: 'p3', name: 'x', price: 1, cover: 'c', skus: [{}] }, { hasBatch: { 'course-p3': true } })
+    expect(derived.find((s) => s.key === 'batch')!.done).toBe(true) // courseId 缺→course-p3 回退命中
+    // mapDraftRows 带 extras 时行含 steps + doneCount
+    const rows = mapDraftRows([{ id: 'p1', name: '熊', price: 20, cover: 'c', skus: [{ name: 'a' }], courseId: 'course-p1' }], {}, { p1: true }, { hasVideo: { 'course-p1': true }, cardFinal: { p1: true }, hasBatch: { 'course-p1': true } })
+    expect(rows[0].doneCount).toBe(6)
+    expect(rows[0].steps).toHaveLength(6)
   })
 })
 

@@ -1,7 +1,7 @@
 <script setup lang="ts">
 // 商品管理（design/console.pen S11 视觉·M3 UI 批3）：页头+流水线副标+筛选 chip（真计数）+ 搜索（按名）
-// + 三态表格（关联课程/规格·图列）+ 编辑器（整档 round-trip·图片压缩·危操作两步确认，逻辑批3 未动）。
-// 设计稿「6 步上新进度」需分步完成态数据（上新向导 S5-S9 才有），当前无源——省略并记待办，不编进度。
+// + 三态表格（关联课程/规格·图列 + 6 步上新进度圆点）+ 编辑器（整档 round-trip·图片压缩·危操作两步确认）。
+// 「6 步上新进度」换皮误判「无源」——实则 cards/courses/qrcodes 后端 listDrafts bounded join 派生（视频/卡片/批次态·二轮批Cards-3 还原）。
 import { ref, computed, onMounted, onBeforeUnmount, watch, nextTick } from 'vue'
 import { Search, Trash2 } from 'lucide-vue-next'
 import { listDrafts, saveDraft, deleteDraft, uploadImage, publishProduct, unpublishProduct, republishProduct } from '../api/products'
@@ -62,15 +62,17 @@ async function reload() {
   message.value = '加载中…'
   const r = await listDrafts()
   urlMap.value = r.ok && (r as any).urls ? (r as any).urls : {}
-  rows.value = r.ok ? mapDraftRows(r.list, r.urls, r.listed) : []
+  rows.value = r.ok ? mapDraftRows(r.list, r.urls, r.listed, stepExtras(r)) : []
   message.value = r.ok ? '' : '加载失败：' + String(r.error || '')
 }
+// listDrafts 派生的 6 步分步态（后端 join·换皮误判「无源」）
+const stepExtras = (r: any) => ({ hasVideo: r.hasVideo || {}, cardFinal: r.cardFinal || {}, hasBatch: r.hasBatch || {} })
 // 静默刷新列表（不闪「加载中」·不打断正在编辑的编辑器）
 async function silentRefresh() {
   const r = await listDrafts()
   if (r.ok) {
     urlMap.value = (r as any).urls || {}
-    rows.value = mapDraftRows(r.list, r.urls, r.listed)
+    rows.value = mapDraftRows(r.list, r.urls, r.listed, stepExtras(r))
   }
 }
 
@@ -347,6 +349,7 @@ onMounted(reload)
         <span class="c-course">关联课程</span>
         <span class="c-price">价格</span>
         <span class="c-spec">规格 / 图</span>
+        <span class="c-steps">上新进度</span>
         <span class="c-state">状态</span>
         <span class="c-ops">操作</span>
       </div>
@@ -362,6 +365,11 @@ onMounted(reload)
         <span class="c-course course">{{ courseOf(row) || '未关联' }}</span>
         <span class="c-price price">{{ row.priceLabel }}</span>
         <span class="c-spec spec">{{ row.skuCount }} 规格 · {{ imgCount(row) }} 图</span>
+        <!-- 6 步上新进度圆点（换皮删了这列·「无源」误·后端 listDrafts 派生视频/卡片/批次态·根因#7 bounded join） -->
+        <div class="c-steps steps-cell" :title="row.steps.map((s) => (s.done ? '✓' : '○') + ' ' + s.label).join(' · ')">
+          <span v-for="s in row.steps" :key="s.key" class="dot" :class="{ on: s.done }"></span>
+          <span class="done-n">{{ row.doneCount }}/6</span>
+        </div>
         <span class="c-state"><span :class="['state', row.state]">{{ row.stateLabel }}</span></span>
         <div class="c-ops ops">
           <button class="act ghost" @click="openEdit(row)">编辑</button>
@@ -563,10 +571,32 @@ h1 {
 .thead,
 .trow {
   display: grid;
-  grid-template-columns: 2.4fr 1.2fr 1fr 1.2fr 0.9fr 1.8fr;
+  grid-template-columns: 2.1fr 1fr 0.8fr 1fr 1.2fr 0.9fr 1.7fr;
   align-items: center;
   gap: 12px;
   padding: 12px 20px;
+}
+.steps-cell {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+}
+.dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--ld-bg-faint);
+  border: 1px solid var(--ld-line-strong);
+  flex: none;
+}
+.dot.on {
+  background: var(--ld-brand);
+  border-color: var(--ld-brand);
+}
+.done-n {
+  margin-left: 5px;
+  font-size: 11px;
+  color: var(--ld-content-2);
 }
 .thead {
   background: var(--ld-bg-lilac);
