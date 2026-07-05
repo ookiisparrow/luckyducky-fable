@@ -1,4 +1,21 @@
 {
+  "permissions": {
+    "allow": [
+      "Bash(git status:*)",
+      "Bash(git log:*)",
+      "Bash(git diff:*)",
+      "Bash(git show:*)",
+      "Bash(npm run check)",
+      "Bash(npm run check:*)",
+      "Bash(npm run report)",
+      "Bash(npm run report:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(git push)",
+      "Bash(date:*)",
+      "Bash(wc:*)"
+    ]
+  },
   "hooks": {
     "PreToolUse": [
       {
