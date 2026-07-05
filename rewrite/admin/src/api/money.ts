@@ -8,5 +8,6 @@ export const shipOrder = (id: string, company: string, trackingNo: string) => cl
 export const clearFeeMismatch = (id: string) => client.post('clearFeeMismatch', { id })
 export const listRefunds = (status?: string, cursor?: unknown, limit = 20) => client.post('listRefunds', { status: status || undefined, cursor, limit })
 export const refundCounts = () => client.post('refundCounts')
+export const getRefundDetail = (id: string) => client.post('getRefundDetail', { id })
 export const approveRefund = (id: string) => client.post('approveRefund', { id })
 export const rejectRefund = (id: string, reason: string) => client.post('rejectRefund', { id, reason })
