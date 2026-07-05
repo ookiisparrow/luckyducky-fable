@@ -37,9 +37,15 @@ const shown = computed(() => {
 const imgCount = (r: DraftRowVM) => (Array.isArray((r.raw as any).images) ? (r.raw as any).images.length : 0)
 const courseOf = (r: DraftRowVM) => String((r.raw as any).courseId || '')
 
+// 图片 fileID→url 解析：listDrafts 回的 urls 映射（已存图）+ 本会话新上传的 url
+const urlMap = ref<Record<string, string>>({})
+const sessionUrls = ref<Record<string, string>>({})
+const imgUrl = (fileID: string) => sessionUrls.value[fileID] || urlMap.value[fileID] || ''
+
 async function reload() {
   message.value = '加载中…'
   const r = await listDrafts()
+  urlMap.value = r.ok && (r as any).urls ? (r as any).urls : {}
   rows.value = r.ok ? mapDraftRows(r.list, r.urls, r.listed) : []
   message.value = r.ok ? '' : '加载失败：' + String(r.error || '')
 }
@@ -155,6 +161,73 @@ const doDelete = (id: string) =>
     void reload()
   })
 
+// —— 多图相册（换皮丢·仅 round-trip 保全无编辑 UI）：多选上传·压缩·增删·排序 ——
+async function addImages(ev: Event) {
+  const input = ev.target as HTMLInputElement
+  const files = input.files
+  if (!files || !edit.value) return
+  busy.value = true
+  for (const file of Array.from(files)) {
+    const b64 = await compress(file)
+    if (!b64SizeOk(b64)) {
+      message.value = '有图压缩后仍超限，已跳过'
+      continue
+    }
+    const r = await uploadImage(b64, String(edit.value.id), 'jpg')
+    if (r.ok && r.fileID) {
+      ;(edit.value.images as string[]).push(String(r.fileID))
+      sessionUrls.value[String(r.fileID)] = String(r.url || '')
+    } else {
+      message.value = '有图上传失败：' + String(r.error || '')
+    }
+  }
+  busy.value = false
+  input.value = '' // 允许再次选同一批
+}
+function delImage(i: number) {
+  if (edit.value) (edit.value.images as unknown[]).splice(i, 1)
+}
+function moveImage(i: number, dir: number) {
+  if (!edit.value) return
+  const arr = edit.value.images as unknown[]
+  const j = i + dir
+  if (j < 0 || j >= arr.length) return
+  const t = arr[i]
+  arr[i] = arr[j]
+  arr[j] = t
+}
+// —— 参数表(≤8·[k,v] 元组) / 详情段落(≤4·{lead,body}) / 材料清单(≤8·{icon,name,qty})：1:1 旧 StepInfo shape ——
+function addParam() {
+  if (edit.value && (edit.value.params as unknown[]).length < 8) (edit.value.params as unknown[]).push(['', ''])
+}
+function delParam(i: number) {
+  if (edit.value) (edit.value.params as unknown[]).splice(i, 1)
+}
+function addSection() {
+  if (edit.value && (edit.value.detailSections as unknown[]).length < 4) (edit.value.detailSections as unknown[]).push({ lead: '', body: '' })
+}
+function delSection(i: number) {
+  if (edit.value) (edit.value.detailSections as unknown[]).splice(i, 1)
+}
+function addKit() {
+  if (edit.value && (edit.value.kit as unknown[]).length < 8) (edit.value.kit as unknown[]).push({ icon: 'circle', name: '', qty: '' })
+}
+function delKit(i: number) {
+  if (edit.value) (edit.value.kit as unknown[]).splice(i, 1)
+}
+
+// 上架前缺项预检（1:1 旧 Wizard missing·换皮退成事后报错）：封面/名称/价格/规格四项必备
+const missing = computed(() => {
+  const e = edit.value
+  if (!e) return [] as string[]
+  const m: string[] = []
+  if (!e.cover) m.push('封面图')
+  if (!String(e.name || '').trim()) m.push('商品名称')
+  if (!String(e.price || '').trim()) m.push('价格')
+  if (!Array.isArray(e.skus) || !e.skus.length) m.push('至少一个规格')
+  return m
+})
+
 onMounted(reload)
 </script>
 
@@ -248,7 +321,48 @@ onMounted(reload)
         <button class="act ghost" @click="delSku(i)">删行</button>
       </div>
       <button class="act ghost" @click="addSku">+ 加规格</button>
-      <p class="hint">参数表 / 详情段落 / 材料清单的可视化编辑随上新向导批补——本页保存不会丢掉草稿里已有的这些字段。</p>
+
+      <h4>商品相册（小程序详情页轮播 · 可拖序 ‹ ›）</h4>
+      <div class="gallery">
+        <div v-for="(f, i) in (edit.images as string[])" :key="i" class="g-item">
+          <img v-if="imgUrl(f)" :src="imgUrl(f)" alt="" />
+          <span v-else class="g-ph">已存图</span>
+          <div class="g-ops">
+            <button v-if="i > 0" title="前移" @click="moveImage(i, -1)">‹</button>
+            <button v-if="i < (edit.images as string[]).length - 1" title="后移" @click="moveImage(i, 1)">›</button>
+            <button class="g-del" title="删除" @click="delImage(i)">✕</button>
+          </div>
+        </div>
+        <label class="g-add">＋ 加图<input type="file" accept="image/*" multiple hidden @change="addImages" /></label>
+      </div>
+
+      <h4>参数表（≤8）</h4>
+      <div v-for="(p, i) in (edit.params as string[][])" :key="i" class="kvrow">
+        <input v-model="p[0]" placeholder="参数名（如 适用年龄）" maxlength="20" />
+        <input v-model="p[1]" placeholder="参数值（如 8 岁+）" maxlength="40" />
+        <button class="act ghost" @click="delParam(i)">删</button>
+      </div>
+      <button class="act ghost" :disabled="(edit.params as unknown[]).length >= 8" @click="addParam">+ 加参数</button>
+
+      <h4>详情段落（≤4）</h4>
+      <div v-for="(d, i) in (edit.detailSections as { lead: string; body: string }[])" :key="i" class="secrow">
+        <div class="secrow-head"><input v-model="d.lead" placeholder="小标题" maxlength="30" /><button class="act ghost" @click="delSection(i)">删</button></div>
+        <textarea v-model="d.body" placeholder="段落正文" maxlength="200" rows="2" />
+      </div>
+      <button class="act ghost" :disabled="(edit.detailSections as unknown[]).length >= 4" @click="addSection">+ 加段落</button>
+
+      <h4>材料清单（≤8）</h4>
+      <div v-for="(k, i) in (edit.kit as { name: string; qty: string }[])" :key="i" class="kvrow">
+        <input v-model="k.name" placeholder="物品名" maxlength="14" />
+        <input v-model="k.qty" placeholder="数量（如 1 包 50g）" maxlength="14" />
+        <button class="act ghost" @click="delKit(i)">删</button>
+      </div>
+      <button class="act ghost" :disabled="(edit.kit as unknown[]).length >= 8" @click="addKit">+ 加材料</button>
+
+      <!-- 上架前缺项预检（换皮退成事后报错·1:1 旧 Wizard missing） -->
+      <p v-if="missing.length" class="preflight">上架还差：<b>{{ missing.join('、') }}</b>（补齐保存后到列表点「上架」）</p>
+      <p v-else class="preflight ok">✓ 必备项齐全，保存后可到列表上架</p>
+
       <div class="editor-ops">
         <button class="act" :disabled="busy" @click="doSave">保存草稿</button>
         <button class="act ghost" @click="edit = null">关闭</button>
@@ -543,5 +657,117 @@ h1 {
   margin-top: 12px;
   display: flex;
   gap: 8px;
+}
+/* 相册 */
+.gallery {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin: 6px 0 4px;
+}
+.g-item {
+  position: relative;
+  width: 84px;
+  height: 84px;
+  border-radius: 10px;
+  overflow: hidden;
+  border: 1px solid var(--ld-line);
+  background: var(--ld-bg-sage);
+}
+.g-item img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.g-ph {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  font-size: 11px;
+  color: var(--ld-content-2);
+}
+.g-ops {
+  position: absolute;
+  inset: auto 0 0 0;
+  display: flex;
+  justify-content: center;
+  gap: 4px;
+  padding: 3px;
+  background: rgba(20, 15, 30, 0.5);
+}
+.g-ops button {
+  border: none;
+  background: rgba(255, 255, 255, 0.85);
+  border-radius: 5px;
+  width: 20px;
+  height: 18px;
+  font-size: 12px;
+  line-height: 1;
+  cursor: pointer;
+}
+.g-del {
+  color: var(--ld-red);
+}
+.g-add {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 84px;
+  height: 84px;
+  border: 1px dashed var(--ld-line-strong);
+  border-radius: 10px;
+  font-size: 12px;
+  color: var(--ld-content-2);
+  cursor: pointer;
+}
+/* 参数/材料 kv 行 + 详情段落 */
+.kvrow {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+.kvrow input {
+  flex: 1;
+  padding: 8px 10px;
+  border: 1px solid var(--ld-line-strong);
+  border-radius: 8px;
+  font-size: 12.5px;
+}
+.secrow {
+  margin-bottom: 8px;
+}
+.secrow-head {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+.secrow-head input {
+  flex: 1;
+  padding: 8px 10px;
+  border: 1px solid var(--ld-line-strong);
+  border-radius: 8px;
+  font-size: 12.5px;
+}
+.secrow textarea {
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid var(--ld-line-strong);
+  border-radius: 8px;
+  font-size: 12.5px;
+  font-family: var(--ld-font);
+  resize: vertical;
+}
+.preflight {
+  margin: 14px 0 0;
+  padding: 9px 13px;
+  border-radius: 9px;
+  font-size: 12px;
+  background: var(--ld-bg-red-soft);
+  color: var(--ld-red);
+}
+.preflight.ok {
+  background: var(--ld-bg-green-soft);
+  color: var(--ld-green);
 }
 </style>
