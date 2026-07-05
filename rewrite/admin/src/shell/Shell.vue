@@ -28,6 +28,8 @@ import {
   QrCode,
   Settings,
   ExternalLink,
+  ShieldCheck,
+  Siren,
   LogOut,
 } from 'lucide-vue-next'
 import { client } from '../api'
@@ -78,6 +80,8 @@ const NAV = [
   {
     group: '系统',
     items: [
+      { label: '系统巡检', path: '/inspect', icon: ShieldCheck },
+      { label: '异常监测', path: '/anomalies', icon: Siren },
       { label: '外包账号', path: '/agents', icon: Users },
       { label: '激活码批次', path: '/batches', icon: QrCode },
       { label: '外部后台', path: '/external', icon: ExternalLink },

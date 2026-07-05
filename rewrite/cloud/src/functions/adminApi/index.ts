@@ -26,6 +26,7 @@ import * as scmOutwork from './actions/scmOutwork'
 import * as scmBom from './actions/scmBom'
 import * as scmAssembly from './actions/scmAssembly'
 import * as scmPlanner from './actions/scmPlanner'
+import * as ops from './actions/ops'
 
 // 管理控制台后端 v2（HTTP 访问服务触发·鉴权外壳逐字承接旧线 index.ts·批11 只挂 ping/login，
 // 业务 action 后续批逐域挂进 ACTIONS/ACTION_CAPS——挂载时与旧线注册表逐行核对）。
@@ -150,6 +151,12 @@ const ACTIONS: Record<string, (ctx: Ctx) => Promise<any>> = {
   getRestockPlan: scmPlanner.getRestockPlan,
   // 产销统计（只读·同车道 D）：stockLedger fg 流水按 itemKey 汇总——打包累计 + 发货/销售累计，不动账
   getFgSummary: scmPlanner.getFgSummary,
+  // 运行期观测（批3·体检面板 + 异常账本·治病根#14 告警进人眼）：未登记 ACTION_CAPS→默认仅超管·
+  // runInspect/resolveAnomaly 写类自动审计（不以 list/get 开头）·只读业务数据（只碰 inspectRuns/anomalies）
+  runInspect: ops.runInspect,
+  getInspectStatus: ops.getInspectStatus,
+  listAnomalies: ops.listAnomalies,
+  resolveAnomaly: ops.resolveAnomaly,
 }
 
 // 能力闸（RBAC·别让单超管裸奔）：受限 action 须 principal 具备对应能力（'*'=全能力）。

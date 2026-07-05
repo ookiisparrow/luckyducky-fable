@@ -29,6 +29,8 @@ const Customer360 = () => import('./pages/Customer360.vue')
 const Kb = () => import('./pages/Kb.vue')
 const Csat = () => import('./pages/Csat.vue')
 const Checkpoints = () => import('./pages/Checkpoints.vue')
+const Inspect = () => import('./pages/Inspect.vue')
+const Anomalies = () => import('./pages/Anomalies.vue')
 
 export const router = createRouter({
   history: createWebHashHistory(),
@@ -62,6 +64,8 @@ export const router = createRouter({
         { path: 'reconciliation', component: Reconciliation },
         { path: 'inventory', component: Inventory },
         { path: 'external', component: External },
+        { path: 'inspect', component: Inspect },
+        { path: 'anomalies', component: Anomalies },
       ],
     },
   ],

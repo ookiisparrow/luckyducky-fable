@@ -4667,6 +4667,14 @@ export const typeAndTestGuards = [
     reverseTest: 'rewrite/cloud/tests/inspect.test.ts',
   },
   {
+    // 运行期观测控制台数据层（批3·体检面板 + 异常账本·治病根#14 告警进人眼）：adminApi 4 action——立即巡检 /
+    // 最新体检 / 异常列表(筛+有界) / 标记已处理(写+审计)；只读业务数据（只碰 inspectRuns/anomalies）。归 #14 + #3 留痕。
+    id: 'rw-ops-console-golden',
+    mechanism: 'test',
+    roots: ['#3', '#14'],
+    reverseTest: 'rewrite/cloud/tests/ops-console.test.ts',
+  },
+  {
     id: 'rw-mp-home-golden',
     mechanism: 'test',
     roots: ['#8'],
