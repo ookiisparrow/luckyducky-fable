@@ -5,8 +5,10 @@ export const listMaterials = () => client.post('listMaterials')
 export const saveMaterial = (m: Record<string, unknown>) => client.post('saveMaterial', m)
 export const listSuppliers = () => client.post('listSuppliers')
 export const saveSupplier = (s: Record<string, unknown>) => client.post('saveSupplier', s)
-export const adjustStock = (materialId: string, delta: number, reason: string) =>
-  client.post('adjustStock', { materialId, delta, reason, adjustId: 'adm-' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6) })
+// adjustId 由页面按调整意图持有传入（生成一次·重试复用·成功才换新）——同 runAssembly B1 幂等契约。
+// 换皮在此内联现造新 id（Date.now+random）→ 重试/双击每次不同幂等键，绕过后端 docId 幂等闸→库存被调两次（根因#4）。
+export const adjustStock = (materialId: string, delta: number, reason: string, adjustId: string) =>
+  client.post('adjustStock', { materialId, delta, reason, adjustId })
 export const listLedger = (materialId?: string) => client.post('listLedger', materialId ? { materialId } : {})
 
 export const listPurchases = (status?: string) => client.post('listPurchases', status ? { status } : {})

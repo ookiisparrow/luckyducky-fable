@@ -1,9 +1,9 @@
 <script setup lang="ts">
 // 物料与供应商（设计语言一致性·M3 UI 批16）：主档（毛线按 色×档×形态 推导料号·计量建档锁死）+ 供应商/织女
 // + 库存调整（必留原因·扣超整单拒）+ 流水查账。逻辑未动，仅套设计语言（页头/表单卡/grid 表/token）。
-import { ref, onMounted, watch } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import { listMaterials, saveMaterial, listSuppliers, saveSupplier, adjustStock, listLedger } from '../api/scm'
-import { materialHuman, uomLabel, scmErrorText, mapLedger, type LedgerRow } from '../lib/mapScm'
+import { materialHuman, materialCategoryLabel, uomLabel, scmErrorText, mapLedger, type LedgerRow } from '../lib/mapScm'
 import { dateTime } from '../lib/format'
 import ScmFlowTabs from '../components/ScmFlowTabs.vue'
 
@@ -28,6 +28,16 @@ async function loadLedger(materialId?: string) {
 const matForm = ref({ category: 'yarn', name: '', uom: 'count', color: '', tier: 'L', form: 'raw', productId: '', slug: '', supplierId: '', threshold: 0 })
 const supForm = ref({ supplierId: '', name: '', type: 'factory', contact: '', note: '' })
 const adj = ref({ materialId: '', delta: 0, reason: '' })
+const adjustId = ref('') // 本次调整意图的幂等键（生成一次·重试复用·成功才换新·根因#4·同 runAssembly B1）
+const adjustBusy = ref(false)
+
+// 主档按 类别→料号 排序（换皮丢了排序·长表乱序不好扫）
+const sortedMats = computed(() =>
+  [...mats.value].sort((a, b) => (a.category === b.category ? String(a._id).localeCompare(String(b._id)) : String(a.category || '').localeCompare(String(b.category || ''))))
+)
+
+// 改调整表单即换新幂等键（不同意图·不复用旧 id 被后端当重复拒）；毛线越档带结在模板 v-if 前置拦
+watch(adj, () => (adjustId.value = ''), { deep: true })
 
 // 毛线按团/件计（换皮 uom 选择对毛线仍开放·毛线只能 count·按克会污染三档槽语义）：category=yarn 强制 count
 watch(() => matForm.value.category, (c) => {
@@ -63,8 +73,16 @@ async function doSaveSupplier() {
 }
 
 async function doAdjust() {
-  const r = await adjustStock(adj.value.materialId, Number(adj.value.delta), adj.value.reason.trim())
+  if (adjustBusy.value) return // 在途禁再发（防快速双击·换皮无此闸）
+  if (!adjustId.value) adjustId.value = 'adm-' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6) // 本意图生成一次
+  adjustBusy.value = true
+  const r = await adjustStock(adj.value.materialId, Number(adj.value.delta), adj.value.reason.trim(), adjustId.value)
+  adjustBusy.value = false
   note(r.ok, '已调整并留流水', scmErrorText(r.error))
+  if (r.ok) {
+    adjustId.value = '' // 成功才换新（下次全新意图·重试期间复用同 id→后端 docId 幂等挡双调）
+    adj.value = { materialId: '', delta: 0, reason: '' }
+  }
   void reload()
 }
 
@@ -95,7 +113,7 @@ onMounted(reload)
         <template v-if="matForm.category === 'yarn'">
           <input v-model="matForm.color" placeholder="颜色（小写英文如 pink）" />
           <select v-model="matForm.tier"><option value="L">大团</option><option value="M">中团</option><option value="S">小团</option></select>
-          <select v-model="matForm.form"><option value="raw">原团</option><option value="knotted">带结（仅大团）</option></select>
+          <select v-model="matForm.form"><option value="raw">原团</option><option v-if="matForm.tier === 'L'" value="knotted">带结（仅大团）</option></select>
         </template>
         <input v-else-if="matForm.category !== 'accessory'" v-model="matForm.productId" placeholder="所属产品 id" />
         <input v-else v-model="matForm.slug" placeholder="辅料名（小写英文）" />
@@ -134,19 +152,20 @@ onMounted(reload)
         </select>
         <input v-model.number="adj.delta" type="number" placeholder="±整数（克/件）" />
         <input v-model="adj.reason" placeholder="原因（如 期初盘点）" maxlength="200" />
-        <button class="btn-primary" @click="doAdjust">调整</button>
+        <button class="btn-primary" :disabled="adjustBusy" @click="doAdjust">{{ adjustBusy ? '调整中…' : '调整' }}</button>
       </section>
     </div>
 
     <section class="table-card">
       <h2>物料主档（{{ mats.length }}）</h2>
       <div class="table">
-        <div class="thead thead-mat"><span>料号</span><span>名称</span><span>计量</span><span class="r">库存</span><span>供应商</span></div>
-        <div v-for="m in mats" :key="m._id" class="trow trow-mat">
+        <div class="thead thead-mat"><span>料号</span><span>名称</span><span>类别</span><span>计量</span><span class="r">库存</span><span>供应商</span></div>
+        <div v-for="m in sortedMats" :key="m._id" class="trow trow-mat">
           <div><div class="human">{{ materialHuman(m._id) }}</div><div class="mono">{{ m._id }}</div></div>
           <span>{{ m.name }}</span>
+          <span class="muted">{{ materialCategoryLabel(m.category) }}</span>
           <span class="muted">{{ uomLabel(m.uom) }}</span>
-          <span class="r" :class="{ low: m.threshold && m.stock <= m.threshold }">{{ m.stock }}</span>
+          <span class="r" :class="{ low: m.threshold && m.stock <= m.threshold }">{{ m.stock }}<em v-if="m.threshold && m.stock <= m.threshold" class="low-tag"> · 低于 {{ m.threshold }}</em></span>
           <span class="muted sup-cell">
             {{ (sups.find((s) => s._id === m.supplierId) || {}).name || '—' }}
             <button class="led-btn" title="看这个料的流水" @click="loadLedger(m._id)">流水</button>
@@ -357,7 +376,12 @@ h2 {
 }
 .thead-mat,
 .trow-mat {
-  grid-template-columns: 1.6fr 1.4fr 0.8fr 0.8fr 1.2fr;
+  grid-template-columns: 1.5fr 1.2fr 0.8fr 0.7fr 0.9fr 1.2fr;
+}
+.low-tag {
+  font-style: normal;
+  font-size: 10.5px;
+  font-weight: 400;
 }
 .thead-led,
 .trow-led {

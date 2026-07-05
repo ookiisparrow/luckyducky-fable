@@ -2,7 +2,7 @@
 // 状态中文/错误码人话原文兜底/流水类型中文。
 import { describe, it, expect } from 'vitest'
 import shellRaw from '../src/shell/Shell.vue?raw'
-import { materialHuman, uomLabel, purchaseStatusLabel, outworkStatusLabel, yuanToFen, fenLabel, scmErrorText, docTypeLabel, mapLedger } from '../src/lib/mapScm'
+import { materialHuman, materialCategoryLabel, uomLabel, purchaseStatusLabel, outworkStatusLabel, yuanToFen, fenLabel, scmErrorText, docTypeLabel, mapLedger } from '../src/lib/mapScm'
 import { SCM_FLOW } from '../src/lib/scmFlow'
 import { setPurchaseHandoff, consumePurchaseHandoff, setOutworkHandoff, consumeOutworkHandoff } from '../src/lib/scmHandoff'
 
@@ -17,6 +17,12 @@ describe('料号人话', () => {
     expect(materialHuman('')).toBe('')
     expect(uomLabel('gram')).toBe('克')
     expect(uomLabel('count')).toBe('件')
+    // 物料类别中文（换皮丢了类别列·长表不好扫）：主档 category 字段→人话
+    expect(materialCategoryLabel('yarn')).toBe('毛线')
+    expect(materialCategoryLabel('packaging')).toBe('外包装')
+    expect(materialCategoryLabel('card')).toBe('激活卡片')
+    expect(materialCategoryLabel('accessory')).toBe('辅料')
+    expect(materialCategoryLabel('weird')).toBe('weird') // 未知原文兜底
   })
 })
 

@@ -19,6 +19,10 @@ export function materialHuman(id: unknown): string {
 
 export const uomLabel = (u: unknown): string => (String(u) === 'gram' ? '克' : '件')
 
+// 物料类别中文（主档 category 字段→人话·换皮丢了类别列·长表只靠 id 前缀猜类别不好扫）
+const CATEGORY_CN: Record<string, string> = { yarn: '毛线', packaging: '外包装', card: '激活卡片', accessory: '辅料' }
+export const materialCategoryLabel = (c: unknown): string => CATEGORY_CN[String(c)] || String(c || '')
+
 const PURCHASE_CN: Record<string, string> = { draft: '草稿', ordered: '已下单', received: '已收货', cancelled: '已取消' }
 export const purchaseStatusLabel = (s: unknown): string => PURCHASE_CN[String(s)] || String(s || '')
 
