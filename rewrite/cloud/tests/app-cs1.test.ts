@@ -154,6 +154,19 @@ describe('会话态接管与令牌（黄金 §四/§十一）', () => {
     control.reset() // 清缓存
     await expect(getAccessToken({ corpid: 'c', secret: 's' }, bad)).rejects.toThrow()
   })
+
+  it('大白话：fetch 抛错也绝不把 corpsecret 带进错误串（深审 2026-07-05·防 secret 进云日志）', async () => {
+    control.reset()
+    const SECRET = 'super-secret-xyz'
+    // 模拟底层 fetch 把请求 URL（含 corpsecret）嵌进错误消息的最坏情形
+    const leaky = (async (url: string) => {
+      throw new Error('fetch failed to ' + url)
+    }) as any
+    let caught: Error | null = null
+    await getAccessToken({ corpid: 'c', secret: SECRET }, leaky).catch((e) => (caught = e))
+    expect(caught).toBeTruthy()
+    expect(String(caught)).not.toContain(SECRET)
+  })
 })
 
 describe('kfBind / dataConsent（黄金 §九/§三）', () => {

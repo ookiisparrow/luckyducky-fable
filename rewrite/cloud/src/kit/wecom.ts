@@ -208,7 +208,16 @@ export async function getAccessToken(
   if (rec && typeof rec.expireAt === 'number' && rec.expireAt - TOKEN_SKEW_MS > now && rec.accessToken) {
     return rec.accessToken as string
   }
-  const r = await fetchImpl(`${QY}/gettoken?corpid=${encodeURIComponent(cfg.corpid)}&corpsecret=${encodeURIComponent(cfg.secret)}`)
+  // secret 拼在 query 里——底层 fetch 若把请求 URL 嵌进错误消息（运行时相关），raw error 冒泡到
+  // kfCallback 的 console.error(String(e)) 就会把 corpsecret 写进云日志。故在源头消毒：吞 fetch 原始错误、
+  // 只抛不含 secret 的定型码（深审 2026-07-05·纵深加固）。
+  let r: { json: () => Promise<any> }
+  try {
+    r = await fetchImpl(`${QY}/gettoken?corpid=${encodeURIComponent(cfg.corpid)}&corpsecret=${encodeURIComponent(cfg.secret)}`)
+  } catch {
+    alert('security', 'wecom', 'GETTOKEN_FETCH_FAIL', {})
+    throw new Error('GETTOKEN_FETCH_FAIL')
+  }
   const j = await r.json()
   if (j.errcode || !j.access_token) {
     alert('security', 'wecom', 'GETTOKEN_FAILED', { errcode: j.errcode })
