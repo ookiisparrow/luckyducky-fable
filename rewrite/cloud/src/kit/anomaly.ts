@@ -1,5 +1,5 @@
 import { getDb } from './db'
-import { notifyAlert } from './observe'
+import { alert } from './observe'
 import { COLLECTIONS, anomalyFingerprint, type AnomalyKind, type AnomalySeverity } from '@ldrw/shared'
 
 // bug 收集器地基（运行期观测·防治静默 bug·守卫 rw-anomaly-record-golden）：四路来源（服务端异常/
@@ -43,6 +43,7 @@ export async function recordAnomaly(
   code: string,
   ctx: Record<string, unknown> = {},
   severity: AnomalySeverity = 'low',
+  opts: { alertOnHigh?: boolean } = {}, // notifyAlert 桥接进来时 alertOnHigh:false（它已自行告警·不重复·防递归）
 ): Promise<void> {
   try {
     const sctx = sanitizeCtx(ctx)
@@ -66,8 +67,9 @@ export async function recordAnomaly(
         await coll.doc(fp).update({ data: { count: _.inc(1), lastSeen: now } })
       }
     }
-    // 高危去重感知告警：仅首见推送，重复不刷（防告警疲劳）。
-    if (isNew && severity === 'high') await notifyAlert('anomaly', kind, code, { fp, ...sctx })
+    // 高危去重感知告警：仅首见推送、重复不刷（防告警疲劳）。经 alert 直发（不走 notifyAlert·防桥接递归）；
+    // notifyAlert 桥接进来时 alertOnHigh:false（它已自行告警过·不重复推、不再落第二条）。
+    if (isNew && severity === 'high' && opts.alertOnHigh !== false) alert('anomaly', kind, code, { fp, ...sctx })
   } catch {
     /* fail-soft：可观测性绝不反噬主流程 */
   }

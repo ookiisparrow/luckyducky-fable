@@ -4,7 +4,7 @@
 // fail-soft 不反噬主流程、对业务集合零写入（「现在就只读看护线上」的安全铁律）。
 import { describe, it, expect, beforeEach } from 'vitest'
 import { control } from 'wx-server-sdk'
-import { recordAnomaly } from '../src/kit'
+import { recordAnomaly, notifyAlert } from '../src/kit'
 import { COLLECTIONS, anomalyFingerprint } from '@ldrw/shared'
 
 // 捕获 notifyAlert 的 [LD_ALERT] 结构化行（现落 console.error·观测批接企微推送时签名不变）
@@ -83,5 +83,27 @@ describe('recordAnomaly（bug 收集器地基·防治静默 bug）', () => {
     await recordAnomaly('invariant-violation', 'STUCK_ORDER', { fp: 'A', orderId: 'A' }, 'high')
     expect(control.dump('orders')).toEqual([{ _id: 'A', status: 'paid' }]) // 业务集合原样未动
     expect(control.dump(COLLECTIONS.anomalies).length).toBe(1)
+  })
+})
+
+describe('notifyAlert→recordAnomaly 桥（批4·动作失败自动进 bug 账本·零逐函数改造）', () => {
+  it('大白话：任一 notifyAlert 告警自动落一条 anomaly（收钱无单/退款异常/探针故障…持久可查）', async () => {
+    await notifyAlert('money', 'payCallback', 'UNKNOWN_ORDER', { id: 'o1' })
+    const an = control.dump(COLLECTIONS.anomalies)
+    expect(an.length).toBe(1)
+    expect(an[0].code).toBe('UNKNOWN_ORDER')
+    expect(an[0].severity).toBe('high') // 告警＝值得注意＝高危
+  })
+
+  it('大白话：同一告警反复→账本去重不刷屏（count 累加·一条）', async () => {
+    await notifyAlert('security', 'kfHealthProbe', 'KF_TOKEN_FAILED', {})
+    await notifyAlert('security', 'kfHealthProbe', 'KF_TOKEN_FAILED', {})
+    const an = control.dump(COLLECTIONS.anomalies)
+    expect(an.length).toBe(1)
+    expect(an[0].count).toBe(2)
+  })
+
+  it('大白话：桥不无限递归（notifyAlert→record→不再回调 notifyAlert·跑得完·fail-soft）', async () => {
+    await expect(notifyAlert('money', 'pay', 'X', {})).resolves.toBeUndefined()
   })
 })
