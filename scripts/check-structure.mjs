@@ -1515,7 +1515,7 @@ export const repoChecks = [
       const bad = []
       const ledgerPath = join(ROOT, 'docs/根因账本.md')
       if (!existsSync(ledgerPath)) return ['docs/根因账本.md 缺失（病根清单源）']
-      // §一「13 类病根」：取「## 二、」之前，抓 `### N.` 标题为病根 id（数随立新病根增·别在注释手抄）
+      // §一病根清单：取「## 二、」之前，抓 `### N.` 标题为病根 id（数随立新病根增·别在注释手抄）
       const sec1 = readFileSync(ledgerPath, 'utf8').split('## 二、')[0]
       const rootIds = [...sec1.matchAll(/^###\s*(\d+)\.\s/gm)].map((m) => `#${m[1]}`)
       if (!rootIds.length) bad.push('根因账本 §一 解析不到病根（### N. 标题）——覆盖率无从核')
@@ -2856,7 +2856,7 @@ export const repoChecks = [
     // 这些静默失败点须经 kit/observe 的 alert() 打统一可告警标记，控制台对 [LD_ALERT] 配日志告警。
     // 守卫锁两钱链回调引 alert，防告警被静默移除回退成「平台看着成功、实则钱链炸了无人知」。
     id: 'moneychain-alert-wired',
-    roots: ['#13'],
+    roots: ['#14'],
     desc: '钱链可观测告警接入（债#23 代码侧）：payCallback/refundCallback 静默语义失败须经 kit/observe 的 alert()/notifyAlert() 打 [LD_ALERT] 标记（控制台日志告警抓取；notifyAlert＝alert+企微群机器人推送·债#23续）——防钱链失败信号被移除，平台指标看不见的「返200却出错」无人知',
     run() {
       const bad = []
@@ -4669,7 +4669,7 @@ export const typeAndTestGuards = [
   {
     id: 'rw-flow-observable',
     mechanism: 'test',
-    roots: ['#12', '#8'],
+    roots: ['#12', '#8', '#14'],
     reverseTest: 'rewrite/cloud/tests/flow.test.ts',
   },
   {
