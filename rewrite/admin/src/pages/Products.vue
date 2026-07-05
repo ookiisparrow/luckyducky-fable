@@ -6,6 +6,14 @@ import { ref, computed, onMounted } from 'vue'
 import { Search, Trash2 } from 'lucide-vue-next'
 import { listDrafts, saveDraft, deleteDraft, uploadImage, publishProduct, unpublishProduct, republishProduct } from '../api/products'
 import { mapDraftRows, publishErrorText, b64SizeOk, type DraftRowVM } from '../lib/mapProducts'
+import { useRouter } from 'vue-router'
+
+const router = useRouter()
+// 商品→课程深链（换皮丢了入口·Courses 页占位文案承诺「商品页会带入」但没按钮）：courseId=商品档 courseId 或 course-<id>
+function editCourse(row: DraftRowVM) {
+  const cid = String((row.raw as any).courseId || '') || 'course-' + row.id
+  void router.push({ path: '/courses', query: { courseId: cid } })
+}
 
 const rows = ref<DraftRowVM[]>([])
 const message = ref('')
@@ -285,6 +293,7 @@ onMounted(reload)
         <span class="c-state"><span :class="['state', row.state]">{{ row.stateLabel }}</span></span>
         <div class="c-ops ops">
           <button class="act ghost" @click="openEdit(row)">编辑</button>
+          <button class="act ghost" @click="editCourse(row)">编辑课程</button>
           <button v-if="row.state === 'preparing'" class="act" @click="doPublish(row.id)">上架</button>
           <button v-if="row.state === 'onsale'" class="act ghost" @click="doPublish(row.id)">重新上架</button>
           <button v-if="row.state === 'onsale'" class="act warn" @click="doUnpublish(row.id)">

@@ -16,8 +16,50 @@ const busy = ref(false)
 const progress = ref('')
 const publishConfirm = ref(false)
 const stats = ref({ total: 0, done: 0 })
+const confirmKey = ref('') // no-alert 两步删除确认（换皮改直接 splice·误删即丢）
 
 const pct = computed(() => (stats.value.total ? Math.round((stats.value.done / stats.value.total) * 100) : 0))
+
+function twoStep(key: string, run: () => void) {
+  if (confirmKey.value !== key) {
+    confirmKey.value = key
+    return
+  }
+  confirmKey.value = ''
+  run()
+}
+// ↑↓ 重排（换皮丢·章/课时/段顺序＝内容语义·嵌套 ↑↓ 比拖拽稳）
+function move<T>(arr: T[], i: number, dir: number) {
+  const j = i + dir
+  if (j < 0 || j >= arr.length) return
+  const t = arr[i]
+  arr[i] = arr[j]
+  arr[j] = t
+}
+function delChapter(ci: number) {
+  twoStep('ch:' + ci, () => course.value!.chapters.splice(ci, 1))
+}
+function delLesson(ch: Record<string, any>, ci: number, li: number) {
+  twoStep('l:' + ci + ':' + li, () => ch.lessons.splice(li, 1))
+}
+function delSegment(l: Record<string, any>, ci: number, li: number, si: number) {
+  twoStep('s:' + ci + ':' + li + ':' + si, () => {
+    l.segments.splice(si, 1)
+    refreshStats()
+  })
+}
+// 发布前护栏（换皮退成可静默发布残课）：空结构硬拦、缺视频软提醒
+const publishIssues = computed(() => {
+  const c = course.value
+  if (!c) return [] as string[]
+  const chs = (c.chapters || []) as Record<string, any>[]
+  const issues: string[] = []
+  if (!chs.length || !chs.some((ch) => (ch.lessons || []).length)) issues.push('课程还没有章节/课时')
+  let missing = 0
+  for (const ch of chs) for (const l of ch.lessons || []) for (const s of l.segments || []) if (!s.videoFileId) missing++
+  if (missing) issues.push(`还有 ${missing} 段没传视频`)
+  return issues
+})
 
 async function load() {
   if (!courseId.value.trim()) return
@@ -71,8 +113,13 @@ async function save() {
 
 async function publish() {
   if (!course.value || busy.value) return
+  // 空结构硬拦截（发布无意义）
+  if (publishIssues.value.some((i) => i.includes('章节'))) {
+    message.value = '课程还没有章节/课时，先加内容再发布'
+    return
+  }
   if (!publishConfirm.value) {
-    publishConfirm.value = true // 两步确认：发布即对老学员生效 + 孤儿视频 GC
+    publishConfirm.value = true // 两步确认：发布即对老学员生效 + 孤儿视频 GC（缺视频软提醒见 banner）
     return
   }
   publishConfirm.value = false
@@ -116,19 +163,24 @@ onMounted(load)
         </div>
       </div>
       <p v-if="fromPublished" class="from-pub">当前显示已发布版（尚无草稿·保存即建草稿）</p>
+      <p v-if="publishConfirm && publishIssues.length" class="pub-warn">发布提醒：{{ publishIssues.join('；') }}——确认无碍请再点一次「确认发布」</p>
 
       <div v-for="(ch, ci) in course.chapters" :key="ci" class="chapter">
         <div class="ch-head">
           <span class="ch-badge">第 {{ ci + 1 }} 章</span>
           <input v-model="ch.title" placeholder="章标题" maxlength="60" class="ch-title" />
-          <button class="icon-btn" title="删章" @click="course.chapters.splice(ci, 1)"><Trash2 :size="14" :stroke-width="1.8" /></button>
+          <button class="icon-btn" title="上移" :disabled="ci === 0" @click="move(course.chapters, ci, -1)">↑</button>
+          <button class="icon-btn" title="下移" :disabled="ci === course.chapters.length - 1" @click="move(course.chapters, ci, 1)">↓</button>
+          <button class="icon-btn" :class="{ warn: confirmKey === 'ch:' + ci }" :title="confirmKey === 'ch:' + ci ? '再点确认删章' : '删章'" @click="delChapter(ci)"><Trash2 :size="14" :stroke-width="1.8" /></button>
         </div>
 
         <div v-for="(l, li) in ch.lessons" :key="li" class="lesson">
           <div class="l-head">
             <input v-model="l.name" placeholder="课时名" maxlength="60" class="l-name" />
             <input v-model="l.dur" placeholder="时长" class="dur" maxlength="10" />
-            <button class="icon-btn" title="删课时" @click="ch.lessons.splice(li, 1)"><Trash2 :size="14" :stroke-width="1.8" /></button>
+            <button class="icon-btn" title="上移" :disabled="li === 0" @click="move(ch.lessons, li, -1)">↑</button>
+            <button class="icon-btn" title="下移" :disabled="li === ch.lessons.length - 1" @click="move(ch.lessons, li, 1)">↓</button>
+            <button class="icon-btn" :class="{ warn: confirmKey === 'l:' + ci + ':' + li }" :title="confirmKey === 'l:' + ci + ':' + li ? '再点确认删课时' : '删课时'" @click="delLesson(ch, ci, li)"><Trash2 :size="14" :stroke-width="1.8" /></button>
           </div>
           <div v-for="(sg, si) in l.segments" :key="si" class="seg">
             <input v-model="sg.name" placeholder="段名" maxlength="60" class="seg-name" />
@@ -138,7 +190,9 @@ onMounted(load)
               <span>{{ sg.videoFileId ? '已传 · 替换' : '选视频' }}</span>
               <input type="file" accept="video/mp4,video/quicktime" hidden @change="(e) => pickVideo(sg, e)" />
             </label>
-            <button class="icon-btn" title="删段" @click="l.segments.splice(si, 1); refreshStats()"><Trash2 :size="14" :stroke-width="1.8" /></button>
+            <button class="icon-btn" title="上移" :disabled="si === 0" @click="move(l.segments, si, -1)">↑</button>
+            <button class="icon-btn" title="下移" :disabled="si === l.segments.length - 1" @click="move(l.segments, si, 1)">↓</button>
+            <button class="icon-btn" :class="{ warn: confirmKey === 's:' + ci + ':' + li + ':' + si }" title="删段" @click="delSegment(l, ci, li, si)"><Trash2 :size="14" :stroke-width="1.8" /></button>
           </div>
           <button class="add-btn" @click="addSegment(l)"><Plus :size="13" :stroke-width="2" /><span>加段</span></button>
         </div>
@@ -306,10 +360,23 @@ h1 {
 }
 .seg {
   display: grid;
-  grid-template-columns: 1fr 84px auto auto;
-  gap: 8px;
+  grid-template-columns: 1fr 84px auto auto auto auto;
+  gap: 6px;
   align-items: center;
   margin-bottom: 6px;
+}
+.icon-btn.warn {
+  color: var(--ld-red);
+  border-color: var(--ld-red-line);
+  background: var(--ld-bg-red-soft);
+}
+.pub-warn {
+  margin: 0 0 12px;
+  padding: 9px 13px;
+  border-radius: 9px;
+  font-size: 12px;
+  background: var(--ld-bg-red-soft);
+  color: var(--ld-red);
 }
 .seg-name {
   padding: 6px 10px;

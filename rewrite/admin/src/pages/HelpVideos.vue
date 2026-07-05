@@ -10,6 +10,7 @@ const items = ref<HelpItem[]>([])
 const message = ref('')
 const busy = ref(false)
 const progress = ref('')
+const confirmKey = ref('') // no-alert 两步删除确认（换皮改直接 splice·误删即丢）
 
 async function reload() {
   const r = await listHelpVideos()
@@ -17,17 +18,34 @@ async function reload() {
   message.value = r.ok ? '' : '加载失败：' + String(r.error || '')
 }
 
+function twoStep(key: string, run: () => void) {
+  if (confirmKey.value !== key) {
+    confirmKey.value = key
+    return
+  }
+  confirmKey.value = ''
+  run()
+}
+// ↑↓ 重排（换皮丢了重排·主题/小段顺序有意义·嵌套结构 ↑↓ 比拖拽稳）
+function move<T>(arr: T[], i: number, dir: number) {
+  const j = i + dir
+  if (j < 0 || j >= arr.length) return
+  const t = arr[i]
+  arr[i] = arr[j]
+  arr[j] = t
+}
+
 function addTopic() {
   items.value.push({ id: '', title: '', sub: '', desc: '', segments: [] })
 }
 function delTopic(i: number) {
-  items.value.splice(i, 1)
+  twoStep('t:' + i, () => items.value.splice(i, 1))
 }
 function addSeg(t: HelpItem) {
   t.segments.push({ id: '', name: '', dur: '', videoFileId: '' })
 }
-function delSeg(t: HelpItem, i: number) {
-  t.segments.splice(i, 1)
+function delSeg(t: HelpItem, ti: number, i: number) {
+  twoStep('s:' + ti + ':' + i, () => t.segments.splice(i, 1))
 }
 
 async function pickVideo(t: HelpItem, i: number, ev: Event) {
@@ -71,7 +89,9 @@ onMounted(reload)
       <div class="topic-head">
         <input v-model="t.title" placeholder="主题（如 起针总松？）" maxlength="40" class="t-title" />
         <input v-model="t.sub" placeholder="副题" maxlength="40" class="t-sub" />
-        <button class="icon-btn" title="删主题" @click="delTopic(ti)"><Trash2 :size="14" :stroke-width="1.8" /></button>
+        <button class="icon-btn" title="上移" :disabled="ti === 0" @click="move(items, ti, -1)">↑</button>
+        <button class="icon-btn" title="下移" :disabled="ti === items.length - 1" @click="move(items, ti, 1)">↓</button>
+        <button class="icon-btn" :class="{ warn: confirmKey === 't:' + ti }" :title="confirmKey === 't:' + ti ? '再点确认删除' : '删主题'" @click="delTopic(ti)"><Trash2 :size="14" :stroke-width="1.8" /></button>
       </div>
       <textarea v-model="t.desc" placeholder="描述（≤150 字）" maxlength="150" />
       <div v-for="(sg, si) in t.segments" :key="si" class="seg">
@@ -82,7 +102,9 @@ onMounted(reload)
           <span>{{ sg.videoFileId ? '已传 · 替换' : '选视频' }}</span>
           <input type="file" accept="video/mp4,video/quicktime" hidden @change="(e) => pickVideo(t, si, e)" />
         </label>
-        <button class="icon-btn" title="删段" @click="delSeg(t, si)"><Trash2 :size="14" :stroke-width="1.8" /></button>
+        <button class="icon-btn" title="上移" :disabled="si === 0" @click="move(t.segments, si, -1)">↑</button>
+        <button class="icon-btn" title="下移" :disabled="si === t.segments.length - 1" @click="move(t.segments, si, 1)">↓</button>
+        <button class="icon-btn" :class="{ warn: confirmKey === 's:' + ti + ':' + si }" :title="confirmKey === 's:' + ti + ':' + si ? '再点确认删除' : '删段'" @click="delSeg(t, ti, si)"><Trash2 :size="14" :stroke-width="1.8" /></button>
       </div>
       <button class="add-btn" @click="addSeg(t)"><Plus :size="13" :stroke-width="2" /><span>加小段</span></button>
     </div>
@@ -173,10 +195,15 @@ textarea {
 }
 .seg {
   display: grid;
-  grid-template-columns: 1fr 110px auto auto;
-  gap: 8px;
+  grid-template-columns: 1fr 100px auto auto auto auto;
+  gap: 6px;
   align-items: center;
   margin-bottom: 6px;
+}
+.icon-btn.warn {
+  color: var(--ld-red);
+  border-color: var(--ld-red-line);
+  background: var(--ld-bg-red-soft);
 }
 .upload {
   display: inline-flex;
