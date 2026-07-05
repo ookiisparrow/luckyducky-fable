@@ -1,5 +1,6 @@
 <script setup lang="ts">
-// 外包账号（M3 批6）：建号（口令只在建号请求用一次·库存哈希）/停启/企微 userid 绑定（免登用·全局唯一）。
+// 外包账号（设计语言一致性·M3 UI 批11）：建号（口令只在建号请求用一次·库存哈希）/停启/企微 userid 绑定
+// （免登用·全局唯一）。逻辑未动，仅套设计语言（页头/建号卡/grid 表/状态 chip/token）。
 import { ref, onMounted } from 'vue'
 import { listAgents, createAgent, disableAgent, setAgentWecomUserId } from '../api/system'
 import { mapAgents, type AgentRow } from '../lib/mapSystem'
@@ -70,128 +71,194 @@ onMounted(reload)
 </script>
 
 <template>
-  <div>
-    <h2>外包账号</h2>
-    <p class="hint">外包坐席只有「接待」最小权限：能接会话、按已认领会话看客户资料（需客户同意），碰不到钱和商品。</p>
+  <div class="page">
+    <header class="page-head">
+      <h1>外包账号</h1>
+      <p class="sub">外包坐席只有「接待」最小权限：能接会话、按已认领会话看客户资料（需客户同意），碰不到钱和商品。</p>
+    </header>
+
     <p v-if="message" class="status">{{ message }}</p>
 
-    <div class="panel form">
+    <div class="form-card">
       <input v-model="form.name" placeholder="名字（如 外包一号）" maxlength="40" />
       <input v-model="form.key" type="password" placeholder="登录口令（≥6 位）" />
       <input v-model="form.wecomUserId" placeholder="企微 userid（选填·免登用）" maxlength="64" />
-      <button class="act" :disabled="busy" @click="doCreate">建号</button>
+      <button class="act primary" :disabled="busy" @click="doCreate">建号</button>
     </div>
 
-    <table v-if="rows.length">
-      <thead><tr><th>名字</th><th>账号</th><th>企微绑定</th><th>建号时间</th><th>状态</th><th>操作</th></tr></thead>
-      <tbody>
-        <tr v-for="row in rows" :key="row.id" :class="{ off: row.disabled }">
-          <td>{{ row.name }}</td>
-          <td class="mono">{{ row.id }}</td>
-          <td>
-            <template v-if="editingId === row.id">
-              <input v-model="editingVal" class="inline" placeholder="userid（空=解绑）" />
-              <button class="act small" @click="bindWecom(row)">存</button>
-            </template>
-            <template v-else>
-              {{ row.wecomUserId || '—' }}
-              <button class="act ghost small" @click="bindWecom(row)">改绑</button>
-            </template>
-          </td>
-          <td>{{ row.createdAt }}</td>
-          <td>{{ row.disabled ? '已停用' : '正常' }}</td>
-          <td>
-            <button class="act" :class="{ warn: !row.disabled }" @click="toggle(row)">
-              {{ row.disabled ? '恢复' : confirmId === row.id ? '确认停用？即时生效' : '停用' }}
-            </button>
-          </td>
-        </tr>
-      </tbody>
-    </table>
-    <p v-else-if="!message" class="hint">还没有外包账号</p>
+    <div v-if="rows.length" class="table">
+      <div class="thead">
+        <span>名字</span><span>账号</span><span>企微绑定</span><span>建号时间</span><span>状态</span><span class="r">操作</span>
+      </div>
+      <div v-for="row in rows" :key="row.id" class="trow" :class="{ off: row.disabled }">
+        <span class="name">{{ row.name }}</span>
+        <span class="mono">{{ row.id }}</span>
+        <div class="bind">
+          <template v-if="editingId === row.id">
+            <input v-model="editingVal" class="inline" placeholder="userid（空=解绑）" />
+            <button class="act small" @click="bindWecom(row)">存</button>
+          </template>
+          <template v-else>
+            <span class="bind-val">{{ row.wecomUserId || '—' }}</span>
+            <button class="act ghost small" @click="bindWecom(row)">改绑</button>
+          </template>
+        </div>
+        <span class="time">{{ row.createdAt }}</span>
+        <span><span class="state" :class="row.disabled ? 'off' : 'on'">{{ row.disabled ? '已停用' : '正常' }}</span></span>
+        <div class="r">
+          <button class="act" :class="row.disabled ? 'ghost' : 'warn'" @click="toggle(row)">
+            {{ row.disabled ? '恢复' : confirmId === row.id ? '确认停用？即时生效' : '停用' }}
+          </button>
+        </div>
+      </div>
+    </div>
+    <p v-else-if="!message" class="status-soft">还没有外包账号</p>
   </div>
 </template>
 
 <style scoped>
-h2 {
-  margin: 0 0 8px;
-  color: var(--ld-purple-ink);
+.page {
+  max-width: 1080px;
 }
-.hint {
-  font-size: 12px;
-  color: var(--ld-purple-meta);
-  margin: 0 0 12px;
+.page-head {
+  margin-bottom: 16px;
+}
+h1 {
+  margin: 0;
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--ld-ink);
+}
+.sub {
+  margin: 4px 0 0;
+  font-size: 12.5px;
+  color: var(--ld-content-2);
 }
 .status {
   font-size: 13px;
   color: var(--ld-red);
   margin-bottom: 10px;
 }
-.panel.form {
+.status-soft {
+  font-size: 13px;
+  color: var(--ld-content-2);
+}
+.form-card {
   display: grid;
   grid-template-columns: 1fr 1fr 1fr auto;
   gap: 8px;
-  padding: 14px 16px;
-  margin-bottom: 14px;
+  padding: 16px;
+  margin-bottom: 16px;
   background: var(--ld-bg);
-  border: 1px solid var(--ld-purple-line);
-  border-radius: var(--ld-radius);
-  max-width: 760px;
+  border: 1px solid var(--ld-line);
+  border-radius: var(--ld-radius-l);
+  max-width: 820px;
 }
-input {
-  padding: 7px 10px;
-  border: 1px solid var(--ld-purple-line);
+.form-card input {
+  padding: 8px 12px;
+  border: 1px solid var(--ld-line);
   border-radius: 8px;
   font-size: 13px;
 }
-input.inline {
-  width: 160px;
-}
-table {
-  width: 100%;
-  border-collapse: collapse;
+.table {
   background: var(--ld-bg);
-  border: 1px solid var(--ld-purple-line);
-  border-radius: var(--ld-radius);
+  border: 1px solid var(--ld-line);
+  border-radius: var(--ld-radius-l);
   overflow: hidden;
 }
-th,
-td {
-  padding: 10px 12px;
-  font-size: 13px;
-  text-align: left;
-  border-bottom: 1px solid var(--ld-bg-faint);
+.thead,
+.trow {
+  display: grid;
+  grid-template-columns: 1.2fr 1.4fr 1.6fr 1.2fr 0.9fr 1.4fr;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 20px;
 }
-th {
+.thead {
   background: var(--ld-bg-lilac);
-  color: var(--ld-purple-meta);
+  font-size: 12px;
+  color: var(--ld-content-2);
 }
-tr.off {
+.trow {
+  border-top: 1px solid var(--ld-line);
+  font-size: 13px;
+}
+.trow.off {
   opacity: 0.55;
 }
+.r {
+  text-align: right;
+  justify-self: end;
+}
+.name {
+  font-weight: 600;
+  color: var(--ld-ink);
+}
 .mono {
-  font-family: ui-monospace, monospace;
+  font-family: var(--ld-font-mono);
   font-size: 12px;
+  color: var(--ld-content-2);
+}
+.bind {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+.bind-val {
+  color: var(--ld-content);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.inline {
+  width: 150px;
+  padding: 6px 10px;
+  border: 1px solid var(--ld-line);
+  border-radius: 8px;
+  font-size: 12.5px;
+}
+.time {
+  color: var(--ld-content-2);
+  font-size: 12.5px;
+}
+.state {
+  padding: 3px 11px;
+  border-radius: 999px;
+  font-size: 11.5px;
+  white-space: nowrap;
+}
+.state.on {
+  background: var(--ld-bg-green-soft);
+  color: var(--ld-green);
+}
+.state.off {
+  background: var(--ld-bg-faint);
+  color: var(--ld-content-2);
 }
 .act {
-  padding: 5px 14px;
+  padding: 6px 13px;
   border: none;
   border-radius: 999px;
   background: var(--ld-purple-ink);
   color: #fff;
   font-size: 12px;
+  font-weight: 600;
   cursor: pointer;
 }
+.act.primary {
+  background: var(--ld-purple-ink);
+}
 .act.ghost {
-  background: transparent;
-  color: var(--ld-purple-meta);
-  border: 1px solid var(--ld-purple-line);
+  background: var(--ld-bg);
+  color: var(--ld-content-2);
+  border: 1px solid var(--ld-line);
 }
 .act.warn {
   background: var(--ld-red);
 }
 .act.small {
-  padding: 3px 10px;
+  padding: 4px 10px;
   font-size: 11px;
 }
 .act:disabled {
