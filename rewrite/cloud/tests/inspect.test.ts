@@ -37,11 +37,24 @@ describe('runInspection（巡检机·探出静默失败）', () => {
   })
 
   it('大白话：付款超 72h 未发货→卡单红', async () => {
-    control.seed(COLLECTIONS.orders, [{ _id: 'A', status: 'paid', amount: 100, paidAt: Date.now() - 80 * HOUR }])
+    control.seed(COLLECTIONS.orders, [{ _id: 'A', status: 'paid', amount: 100, transactionId: 'wxA', paidAt: Date.now() - 80 * HOUR }])
     const run = await runInspection('timer')
     const stuck = run.results.find((r) => r.id === 'stuck-order')!
     expect(stuck.status).toBe('red')
     expect(stuck.samples).toContain('A')
+  })
+
+  it('大白话：mock 单（无真微信 transactionId=演示/非真钱）不算卡单——只报真付款', async () => {
+    control.seed(COLLECTIONS.orders, [{ _id: 'M', status: 'paid', amount: 100, paidAt: Date.now() - 80 * HOUR }]) // 无 transactionId=mock/演示
+    const run = await runInspection('timer')
+    expect(run.results.find((r) => r.id === 'stuck-order')!.status).toBe('green')
+  })
+
+  it('大白话：真付款但正在退款（有活跃售后）不算卡单——不是发货义务', async () => {
+    control.seed(COLLECTIONS.orders, [{ _id: 'R', status: 'paid', amount: 100, transactionId: 'wxR', paidAt: Date.now() - 80 * HOUR }])
+    control.seed(COLLECTIONS.afterSales, [{ _id: 'R__l1', orderId: 'R', status: 'approved', refundAmount: 100 }])
+    const run = await runInspection('timer')
+    expect(run.results.find((r) => r.id === 'stuck-order')!.status).toBe('green')
   })
 
   it('大白话：refund_required 死信单（钱已收待人工退款没人管）→卡单红+高危告警', async () => {

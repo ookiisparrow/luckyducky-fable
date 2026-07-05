@@ -75,7 +75,19 @@ const CHECKS: Check[] = [
     kind: 'invariant-violation',
     async run(db) {
       const now = Date.now()
-      // ① paid 超 72h 未发货（无 shippedAt）
+      const _ = db.command
+      // 排除：有活跃售后（申请中/已同意/已退）的订单＝正在退款·非发货义务（不误报卡单）
+      const asRows: any[] =
+        (
+          await db
+            .collection(COLLECTIONS.afterSales)
+            .where({ status: _.in(['applied', 'approved', 'refunded']) })
+            .limit(SCAN_CAP)
+            .get()
+            .catch(() => ({ data: [] }))
+        ).data || []
+      const refunding = new Set(asRows.map((a) => String(a.orderId)))
+      // ① paid 超 72h 未发货——只算**真付款**（有微信 transactionId·mock/演示单非真钱不算）且**未在退款**：只报真金白银该发没发的单。
       const paid = await db
         .collection(COLLECTIONS.orders)
         .where({ status: 'paid' })
@@ -83,7 +95,12 @@ const CHECKS: Check[] = [
         .get()
         .catch(() => ({ data: [] }))
       const paidRows: any[] = paid.data || []
-      const stuck = paidRows.filter((o) => !o.shippedAt && Number(o.paidAt || 0) > 0 && now - Number(o.paidAt) > STUCK_PAID_MS).map((o) => String(o._id))
+      const stuck = paidRows
+        .filter(
+          (o) =>
+            !o.shippedAt && o.transactionId && Number(o.paidAt || 0) > 0 && now - Number(o.paidAt) > STUCK_PAID_MS && !refunding.has(String(o._id)),
+        )
+        .map((o) => String(o._id))
       // ② refund_required 死信（钱已收待人工退款·没人管＝高危静默）
       const dead = await db
         .collection(COLLECTIONS.orders)
@@ -94,12 +111,12 @@ const CHECKS: Check[] = [
       const deadRows: any[] = dead.data || []
       const deadIds = deadRows.map((o) => String(o._id))
       const all = [...stuck, ...deadIds]
-      const scanned = paidRows.length + deadRows.length
-      const capped = paidRows.length >= SCAN_CAP || deadRows.length >= SCAN_CAP
+      const scanned = paidRows.length + deadRows.length + asRows.length
+      const capped = paidRows.length >= SCAN_CAP || deadRows.length >= SCAN_CAP || asRows.length >= SCAN_CAP
       return all.length
         ? {
             status: 'red',
-            detail: `${stuck.length} 单付款超 72h 未发货·${deadIds.length} 单待人工退款死信`,
+            detail: `${stuck.length} 单真付款超 72h 未发货·${deadIds.length} 单待人工退款死信`,
             count: all.length,
             samples: all.slice(0, 10),
             severity: deadIds.length ? 'high' : 'low', // 死信＝钱已收没人管·高危；纯超时未发＝低危提醒

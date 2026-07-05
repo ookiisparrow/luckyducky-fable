@@ -14,7 +14,7 @@ beforeEach(() => control.reset())
 
 describe('运行期观测控制台数据层（批3·rw-ops-console-golden）', () => {
   it('大白话：立即巡检→跑一轮·回报体检·写 inspectRuns（卡单被逮）', async () => {
-    control.seed(COLLECTIONS.orders, [{ _id: 'A', status: 'paid', amount: 100, paidAt: Date.now() - 80 * HOUR }])
+    control.seed(COLLECTIONS.orders, [{ _id: 'A', status: 'paid', amount: 100, transactionId: 'wxA', paidAt: Date.now() - 80 * HOUR }])
     const r = body(await runInspect(ctx()))
     expect(r.ok).toBe(true)
     expect(r.run.summary.red).toBeGreaterThanOrEqual(1)
