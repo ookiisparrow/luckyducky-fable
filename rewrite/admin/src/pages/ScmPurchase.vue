@@ -6,11 +6,17 @@ import { Plus } from 'lucide-vue-next'
 import { listPurchases, savePurchase, markOrdered, receivePurchase, cancelPurchase, listMaterials, listSuppliers } from '../api/scm'
 import { materialHuman, purchaseStatusLabel, yuanToFen, fenLabel, scmErrorText } from '../lib/mapScm'
 import { dateTime } from '../lib/format'
+import ScmFlowTabs from '../components/ScmFlowTabs.vue'
 
 const orders = ref<Array<Record<string, any>>>([])
 const mats = ref<Array<Record<string, any>>>([])
 const sups = ref<Array<Record<string, any>>>([])
 const message = ref('')
+const msgOk = ref(false) // 换皮 .status 恒红→成功信息显红 bug·区分成功(绿)/失败(红)
+function note(ok: boolean, okText: string, errText: string) {
+  message.value = ok ? okText : errText
+  msgOk.value = ok
+}
 const form = ref<{ purchaseId?: string; supplierId: string; lines: Array<{ materialId: string; qty: number; priceYuan: string }> } | null>(null)
 const confirmKey = ref('')
 const filter = ref('') // 状态筛选（换皮丢·恒取全部）
@@ -31,7 +37,7 @@ async function reload() {
   orders.value = p.ok ? (p.list as Record<string, any>[]) : []
   mats.value = m.ok ? (m.list as Record<string, any>[]) : []
   sups.value = s.ok ? ((s.list as Record<string, any>[]) || []).filter((x) => x.type === 'factory') : []
-  message.value = p.ok ? '' : '加载失败：' + String(p.error || '')
+  note(p.ok, '', '加载失败：' + String(p.error || ''))
 }
 
 function newOrder() {
@@ -54,13 +60,13 @@ async function doSave() {
   for (const l of f.lines) {
     const fen = yuanToFen(l.priceYuan)
     if (fen === null) {
-      message.value = '单价不合法（元·最多两位小数）'
+      note(false, '', '单价不合法（元·最多两位小数）')
       return
     }
     lines.push({ materialId: l.materialId, qty: Number(l.qty), unitPriceFen: fen })
   }
   const r = await savePurchase(f.supplierId, lines, f.purchaseId || undefined) // 传 purchaseId＝改草稿·空＝新建
-  message.value = r.ok ? `草稿已${f.purchaseId ? '更新' : '建'}（总价 ${fenLabel(r.totalFen)}·服务端核算）` : scmErrorText(r.error)
+  note(r.ok, `草稿已${f.purchaseId ? '更新' : '建'}（总价 ${fenLabel(r.totalFen)}·服务端核算）`, scmErrorText(r.error))
   if (r.ok) form.value = null
   void reload()
 }
@@ -91,7 +97,8 @@ onMounted(reload)
       <button class="btn-primary" @click="newOrder"><Plus :size="15" :stroke-width="2" /><span>新建采购单</span></button>
     </header>
 
-    <p v-if="message" class="status">{{ message }}</p>
+    <ScmFlowTabs />
+    <p v-if="message" class="status" :class="{ ok: msgOk }">{{ message }}</p>
 
     <section v-if="form" class="draft">
       <select v-model="form.supplierId" class="sup-sel">
@@ -183,6 +190,9 @@ h1 {
   font-size: 13px;
   color: var(--ld-red);
   margin-bottom: 10px;
+}
+.status.ok {
+  color: var(--ld-green);
 }
 .status-soft {
   font-size: 13px;

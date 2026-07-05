@@ -5,12 +5,18 @@ import { ref, onMounted } from 'vue'
 import { Plus } from 'lucide-vue-next'
 import { listOutworks, saveOutwork, issueOutwork, receiveOutwork, settleOutwork, cancelOutwork, listMaterials, listSuppliers } from '../api/scm'
 import { materialHuman, outworkStatusLabel, yuanToFen, fenLabel, scmErrorText } from '../lib/mapScm'
+import ScmFlowTabs from '../components/ScmFlowTabs.vue'
 
 const orders = ref<Array<Record<string, any>>>([])
 const rawL = ref<Array<Record<string, any>>>([]) // 大团原团（可发）
 const knottedL = ref<Array<Record<string, any>>>([]) // 大团带结（可收）
 const workers = ref<Array<Record<string, any>>>([])
 const message = ref('')
+const msgOk = ref(false) // 换皮 .status 恒红→成功信息显红 bug·区分成功(绿)/失败(红)
+function note(ok: boolean, okText: string, errText: string) {
+  message.value = ok ? okText : errText
+  msgOk.value = ok
+}
 const form = ref<{ outworkId?: string; workerId: string; rateYuan: string; lines: Array<{ materialId: string; qty: number }> } | null>(null)
 const recvFor = ref('')
 const recvLines = ref<Array<{ materialId: string; qty: number }>>([])
@@ -23,7 +29,7 @@ async function reload() {
   rawL.value = all.filter((x) => /^yarn:[a-z0-9-]+:L:raw$/.test(String(x._id)))
   knottedL.value = all.filter((x) => /^yarn:[a-z0-9-]+:L:knotted$/.test(String(x._id)))
   workers.value = s.ok ? ((s.list as Record<string, any>[]) || []).filter((x) => x.type === 'outworker') : []
-  message.value = o.ok ? '' : '加载失败：' + String(o.error || '')
+  note(o.ok, '', '加载失败：' + String(o.error || ''))
 }
 
 function newOrder() {
@@ -45,11 +51,11 @@ async function doSave() {
   if (!f) return
   const fen = yuanToFen(f.rateYuan)
   if (fen === null) {
-    message.value = '计件单价不合法（元·最多两位小数·可为 0）'
+    note(false, '', '计件单价不合法（元·最多两位小数·可为 0）')
     return
   }
   const r = await saveOutwork(f.workerId, fen, f.lines.map((l) => ({ materialId: l.materialId, qty: Number(l.qty) })), f.outworkId || undefined)
-  message.value = r.ok ? `外协草稿已${f.outworkId ? '更新' : '建'}` : scmErrorText(r.error)
+  note(r.ok, `外协草稿已${f.outworkId ? '更新' : '建'}`, scmErrorText(r.error))
   if (r.ok) form.value = null
   void reload()
 }
@@ -61,7 +67,7 @@ function startRecv(o: Record<string, any>) {
 
 async function doRecv() {
   const r = await receiveOutwork(recvFor.value, recvLines.value.map((l) => ({ materialId: l.materialId, qty: Number(l.qty) })))
-  message.value = r.ok ? `已收货入库：应付 ${fenLabel(r.payableFen)} · 损耗 ${Number(r.lossQty) || 0} 团（已定格）` : scmErrorText(r.error)
+  note(r.ok, `已收货入库：应付 ${fenLabel(r.payableFen)} · 损耗 ${Number(r.lossQty) || 0} 团（已定格）`, scmErrorText(r.error))
   if (r.ok) recvFor.value = ''
   void reload()
 }
@@ -90,7 +96,8 @@ onMounted(reload)
       <button class="btn-primary" @click="newOrder"><Plus :size="15" :stroke-width="2" /><span>新建外协单</span></button>
     </header>
 
-    <p v-if="message" class="status">{{ message }}</p>
+    <ScmFlowTabs />
+    <p v-if="message" class="status" :class="{ ok: msgOk }">{{ message }}</p>
 
     <section v-if="form" class="draft">
       <select v-model="form.workerId" class="full">
@@ -199,6 +206,9 @@ h1 {
   font-size: 13px;
   color: var(--ld-red);
   margin-bottom: 10px;
+}
+.status.ok {
+  color: var(--ld-green);
 }
 .status-soft {
   font-size: 13px;

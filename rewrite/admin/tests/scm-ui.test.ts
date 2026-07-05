@@ -1,7 +1,9 @@
 // 进销存映射（守卫 rw-admin-scm-ui-golden）：料号人话/元→分整数闸（超两位小数拒·不静默取整）/
 // 状态中文/错误码人话原文兜底/流水类型中文。
 import { describe, it, expect } from 'vitest'
+import shellRaw from '../src/shell/Shell.vue?raw'
 import { materialHuman, uomLabel, purchaseStatusLabel, outworkStatusLabel, yuanToFen, fenLabel, scmErrorText, docTypeLabel, mapLedger } from '../src/lib/mapScm'
+import { SCM_FLOW } from '../src/lib/scmFlow'
 
 describe('料号人话', () => {
   it('大白话：毛线拆 色·档·形态；pkg/card 挂产品；fg 成品；其余辅料；空回空', () => {
@@ -52,5 +54,17 @@ describe('状态与错误人话', () => {
     expect(rows[0].material).toBe('毛线·pink·大团·原团')
     expect(rows[0].docType).toBe('外协发料')
     expect(mapLedger('garbage')).toEqual([])
+  })
+})
+
+// ScmFlowTabs 顶部流程条来源（旧线还原·换皮丢）：SCM_FLOW 顺序单源 path 集合必须 === Shell 侧栏「供应链」组，
+// 否则流程条会链到死路由 / 与侧栏漂移。Shell↔router 由 rw-admin-nav-route-synced 兜，故 ===Shell ⇒ ⊆router。
+describe('SCM 流程条单源同步（防死链/防漂移）', () => {
+  it('大白话：SCM_FLOW 的路由集合与 Shell 侧栏供应链组一字不差', () => {
+    const shellScmPaths = new Set((shellRaw.match(/\/scm-[a-z]+/g) || []))
+    const flowPaths = new Set(SCM_FLOW.map((s) => s.to))
+    expect(flowPaths.size).toBe(5)
+    expect([...flowPaths].sort()).toEqual([...shellScmPaths].sort()) // 集合相等（顺序各自可不同·内容不许漂移）
+    expect(SCM_FLOW.every((s) => s.label && s.icon)).toBe(true) // 每步有中文标签+图标
   })
 })

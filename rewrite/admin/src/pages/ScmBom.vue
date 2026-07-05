@@ -6,12 +6,18 @@ import { Plus } from 'lucide-vue-next'
 import { getBomSetup, saveBomTemplate, saveBomProfile, previewAssembly, runAssembly, listAssemblies, listMaterials } from '../api/scm'
 import { materialHuman, scmErrorText } from '../lib/mapScm'
 import { dateTime } from '../lib/format'
+import ScmFlowTabs from '../components/ScmFlowTabs.vue'
 
 const template = ref<{ commonLines: Array<{ materialId: string; qtyPerSet: number }>; yarnSlots: Array<{ tier: string; form: string; qtyPerSet: number }> }>({ commonLines: [], yarnSlots: [] })
 const profiles = ref<Array<Record<string, any>>>([])
 const mats = ref<Array<Record<string, any>>>([])
 const assemblies = ref<Array<Record<string, any>>>([])
 const message = ref('')
+const msgOk = ref(false) // 换皮 .status 恒红→成功信息显红 bug·区分成功(绿)/失败(红)
+function note(ok: boolean, okText: string, errText: string) {
+  message.value = ok ? okText : errText
+  msgOk.value = ok
+}
 
 const prof = ref({ productId: '', L: '', M: '', S: '', packagingMaterialId: '', cardMaterialId: '' })
 const run = ref({ productId: '', spec: '', sets: 1 })
@@ -29,18 +35,18 @@ async function reload() {
   }
   mats.value = m.ok ? (m.list as Record<string, any>[]) : []
   assemblies.value = a.ok ? (a.list as Record<string, any>[]) : []
-  message.value = b.ok ? '' : '加载失败：' + String(b.error || '')
+  note(b.ok, '', '加载失败：' + String(b.error || ''))
 }
 
 async function doSaveTemplate() {
   const r = await saveBomTemplate(template.value)
-  message.value = r.ok ? '模板已保存（历史组装单的快照不受影响）' : scmErrorText(r.error)
+  note(r.ok, '模板已保存（历史组装单的快照不受影响）', scmErrorText(r.error))
 }
 
 async function doSaveProfile() {
   const p = prof.value
   const r = await saveBomProfile({ productId: p.productId, yarnColors: { L: p.L, M: p.M, S: p.S }, packagingMaterialId: p.packagingMaterialId, cardMaterialId: p.cardMaterialId })
-  message.value = r.ok ? '差异位已保存' : scmErrorText(r.error)
+  note(r.ok, '差异位已保存', scmErrorText(r.error))
   void reload()
 }
 
@@ -50,7 +56,7 @@ async function doPreview() {
   runConfirm.value = false
   const r = await previewAssembly(run.value.productId, Number(run.value.sets))
   preview.value = r.ok ? (r.lines as Record<string, any>[]) : []
-  message.value = r.ok ? '' : scmErrorText(r.error)
+  note(r.ok, '', scmErrorText(r.error))
 }
 
 async function doRun() {
@@ -62,13 +68,13 @@ async function doRun() {
   runConfirm.value = false
   const r = await runAssembly(run.value.productId, run.value.spec, Number(run.value.sets), pendingAsmId.value)
   if (r.ok) {
-    message.value = `组装完成：扣料 ${(r.consumed as unknown[]).length} 行·入成品 ${Number(r.sets)} 套`
+    note(true, `组装完成：扣料 ${(r.consumed as unknown[]).length} 行·入成品 ${Number(r.sets)} 套`, '')
     pendingAsmId.value = '' // 成功才换新 id·下次组装全新幂等键
     preview.value = []
     void reload()
   } else {
     // 失败保留 pendingAsmId：重试复用同一幂等键·撞 id 幂等闸挡双扣（B1 修·后端 _id=assemblyId 确定性 claim）
-    message.value = scmErrorText(r.error)
+    note(false, '', scmErrorText(r.error))
   }
 }
 
@@ -88,7 +94,8 @@ onMounted(reload)
       <p class="sub">全局模板（共用料 + 毛线槽）+ 产品差异位（三色 + 专属件）→ 预演看短缺 → 执行组装（快照冻结·同单不双扣）。</p>
     </header>
 
-    <p v-if="message" class="status">{{ message }}</p>
+    <ScmFlowTabs />
+    <p v-if="message" class="status" :class="{ ok: msgOk }">{{ message }}</p>
 
     <div class="cols">
       <section class="card">
@@ -184,6 +191,9 @@ h1 {
   font-size: 13px;
   color: var(--ld-red);
   margin-bottom: 10px;
+}
+.status.ok {
+  color: var(--ld-green);
 }
 .cols {
   display: grid;

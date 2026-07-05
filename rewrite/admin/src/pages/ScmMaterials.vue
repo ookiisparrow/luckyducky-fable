@@ -5,12 +5,18 @@ import { ref, onMounted } from 'vue'
 import { listMaterials, saveMaterial, listSuppliers, saveSupplier, adjustStock, listLedger } from '../api/scm'
 import { materialHuman, uomLabel, scmErrorText, mapLedger, type LedgerRow } from '../lib/mapScm'
 import { dateTime } from '../lib/format'
+import ScmFlowTabs from '../components/ScmFlowTabs.vue'
 
 const mats = ref<Array<Record<string, any>>>([])
 const sups = ref<Array<Record<string, any>>>([])
 const ledger = ref<LedgerRow[]>([])
 const ledgerMat = ref('') // 当前流水按哪个料号过滤（空=全部·换皮丢了行内按料查流水）
 const message = ref('')
+const msgOk = ref(false) // 换皮 .status 恒红→成功信息显红 bug·区分成功(绿)/失败(红)
+function note(ok: boolean, okText: string, errText: string) {
+  message.value = ok ? okText : errText
+  msgOk.value = ok
+}
 
 // 行内按料号查流水（换皮只有全局最近流水·listLedger 支持 materialId 过滤）
 async function loadLedger(materialId?: string) {
@@ -28,24 +34,24 @@ async function reload() {
   mats.value = m.ok ? (m.list as Record<string, any>[]) : []
   sups.value = s.ok ? (s.list as Record<string, any>[]) : []
   await loadLedger(ledgerMat.value || undefined) // 保持当前料号筛选
-  message.value = m.ok ? '' : '加载失败：' + String(m.error || '')
+  note(m.ok, '', '加载失败：' + String(m.error || ''))
 }
 
 async function doSaveMaterial() {
   const r = await saveMaterial({ ...matForm.value })
-  message.value = r.ok ? `已建档：${String(r.materialId)}` : scmErrorText(r.error)
+  note(r.ok, `已建档：${String(r.materialId)}`, scmErrorText(r.error))
   void reload()
 }
 
 async function doSaveSupplier() {
   const r = await saveSupplier({ ...supForm.value })
-  message.value = r.ok ? '供应商已保存' : scmErrorText(r.error)
+  note(r.ok, '供应商已保存', scmErrorText(r.error))
   void reload()
 }
 
 async function doAdjust() {
   const r = await adjustStock(adj.value.materialId, Number(adj.value.delta), adj.value.reason.trim())
-  message.value = r.ok ? '已调整并留流水' : scmErrorText(r.error)
+  note(r.ok, '已调整并留流水', scmErrorText(r.error))
   void reload()
 }
 
@@ -59,7 +65,8 @@ onMounted(reload)
       <p class="sub">物料主档（毛线料号按 色×档×形态 推导·计量建档后锁死）+ 供应商/织女 + 库存调整（必留原因）。</p>
     </header>
 
-    <p v-if="message" class="status">{{ message }}</p>
+    <ScmFlowTabs />
+    <p v-if="message" class="status" :class="{ ok: msgOk }">{{ message }}</p>
 
     <div class="cols">
       <section class="card">
@@ -173,6 +180,9 @@ h1 {
   font-size: 13px;
   color: var(--ld-red);
   margin-bottom: 10px;
+}
+.status.ok {
+  color: var(--ld-green);
 }
 .cols {
   display: grid;

@@ -6,6 +6,7 @@ import { Plus } from 'lucide-vue-next'
 import { getRestockPlan, getFgSummary } from '../api/scm'
 import { listInventory } from '../api/system'
 import { materialHuman, scmErrorText } from '../lib/mapScm'
+import ScmFlowTabs from '../components/ScmFlowTabs.vue'
 
 const targets = ref<Array<{ productId: string; sets: number }>>([{ productId: '', sets: 10 }])
 const plan = ref<Record<string, any> | null>(null)
@@ -70,6 +71,7 @@ onMounted(async () => {
       <p class="sub">目标套数 → 外协缺口（带结不外购）+ 采购缺口按供应商分列；产销 = 打包累计 vs 发货累计。只读、不动账。</p>
     </header>
 
+    <ScmFlowTabs />
     <p v-if="message" class="status">{{ message }}</p>
 
     <section class="card">
