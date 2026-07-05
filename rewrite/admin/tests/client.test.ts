@@ -29,12 +29,15 @@ describe('登录与令牌（fail-closed）', () => {
       storage,
       fetchImpl: ((_u: string, init: RequestInit) => {
         sentBody = String(init.body)
-        return respond(200, { ok: true, sessionToken: 'tok-abc' })
+        return respond(200, { ok: true, sessionToken: 'tok-abc', operator: '店主' })
       }) as unknown as typeof fetch,
     })
     const r = await c.login('my-secret-password')
     expect(r.ok).toBe(true)
     expect(c.token()).toBe('tok-abc')
+    expect(c.who()).toBe('店主') // 登录存操作者名·Shell 显真实身份（换皮硬编码「管理员」）
+    c.logout()
+    expect(c.who()).toBe('') // 退出清身份
     expect(JSON.stringify(store)).not.toContain('my-secret-password') // 口令不落存储
     expect(sentBody).toContain('my-secret-password') // 只在登录请求里用一次
     // 云端没发令牌：不算登成（fail-closed）

@@ -60,7 +60,7 @@ describe('库存映射与保存错误人话', () => {
   it('大白话：null=不限量（绝不显成 0）；触顶如实标非全量；409 冲突说「刚被改过·拒绝覆盖」', () => {
     const { rows, truncNote } = mapStock(
       [
-        { _id: 'p1__', productId: 'p1', spec: '', stock: 5, updatedAt: 1000 },
+        { _id: 'p1__', productId: 'p1', spec: '', stock: 5, threshold: 8, updatedAt: 1000 },
         { _id: 'p2__', productId: 'p2', spec: '', stock: null, updatedAt: 1000 },
         { noid: 1 },
       ],
@@ -68,6 +68,8 @@ describe('库存映射与保存错误人话', () => {
     )
     expect(rows).toHaveLength(2)
     expect(rows[0].stockLabel).toBe('5')
+    expect(rows[0].threshold).toBe(8) // per-SKU 阈值读回（换皮丢·硬编码 10·后端 saveStock 早支持 threshold）
+    expect(rows[1].threshold).toBe(0) // 缺=0（无 per-SKU 阈值·前端退默认）
     expect(rows[1].stockLabel).toBe('不限量') // null 不显 0
     expect(truncNote).toContain('非全量')
     expect(mapStock([], false).truncNote).toBe('')

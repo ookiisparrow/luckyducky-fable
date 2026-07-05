@@ -38,6 +38,7 @@ import {
 import { client } from '../api'
 
 const router = useRouter()
+const who = client.who() // 真实登录身份（换皮硬编码「管理员」·多账号无法辨认当前是谁）
 
 const NAV = [
   { group: '总览', items: [{ label: '数据看板', path: '/', icon: ChartColumn }] },
@@ -147,9 +148,9 @@ function logout() {
         </div>
       </nav>
       <div class="admin">
-        <div class="admin-avatar">管</div>
+        <div class="admin-avatar">{{ (who || '管')[0] }}</div>
         <div class="admin-text">
-          <div class="admin-name">管理员</div>
+          <div class="admin-name">{{ who || '管理员' }}</div>
           <div class="admin-role">口令会话</div>
         </div>
         <button class="logout" title="退出登录" @click="logout">

@@ -78,10 +78,17 @@ async function save() {
         <label>推送哪些事件（关掉的事件只记日志不推群；无 webhook 时开关不生效）</label>
         <div class="events" :class="{ muted: !pushing }">
           <label v-for="e in EVENTS" :key="e.code" class="ev">
-            <input type="checkbox" :checked="enabled(e.code)" @change="toggleEvent(e.code)" />
+            <input type="checkbox" :checked="enabled(e.code)" :disabled="!pushing" @change="toggleEvent(e.code)" />
             <span>{{ e.label }}</span>
           </label>
         </div>
+        <p v-if="!pushing" class="ev-note">先填 webhook 才能逐事件开关（无 webhook 时只记日志、开关不生效）</p>
+      </div>
+
+      <!-- 规划中·未接入（换皮删了这段诚实披露·as-is 标注不做假开关） -->
+      <div class="field roadmap">
+        <label>规划中（未接入·不做假开关）</label>
+        <p>更多企微告警维度（库存预警日报 / 会话堆积）· 面向买家的微信订阅消息（发货 / 物流 / 激活 / 完课 / 复购）——需通知偏好后端字段，后端就绪后再逐项接入，当前不占位假开关。</p>
       </div>
 
       <div class="field">
@@ -194,6 +201,20 @@ input {
 }
 .events.muted {
   opacity: 0.55;
+}
+.ev-note {
+  margin: 6px 0 0;
+  font-size: 11px;
+  color: var(--ld-content-2);
+}
+.roadmap p {
+  margin: 0;
+  padding: 10px 12px;
+  border: 1px dashed var(--ld-line-strong);
+  border-radius: 8px;
+  font-size: 11.5px;
+  line-height: 1.6;
+  color: var(--ld-content-2);
 }
 .ev {
   display: flex;

@@ -15,6 +15,7 @@ export interface ClientDeps {
 }
 
 const TOKEN_KEY = 'ldrw_admin_token'
+const WHO_KEY = 'ldrw_admin_who' // 登录操作者名（Shell 显真实身份·换皮硬编码「管理员」·多账号无法辨认）
 
 const defaultStorage = {
   get: (k: string) => (typeof localStorage !== 'undefined' ? localStorage.getItem(k) : null),
@@ -54,13 +55,21 @@ export function createClient(deps: ClientDeps) {
   return {
     token: () => storage.get(TOKEN_KEY) || '',
     hasSession: () => !!storage.get(TOKEN_KEY),
-    logout: () => storage.remove(TOKEN_KEY),
+    who: () => storage.get(WHO_KEY) || '', // 当前登录操作者名（Shell 底部身份条）
+    logout: () => {
+      storage.remove(TOKEN_KEY)
+      storage.remove(WHO_KEY)
+    },
 
-    /** 口令登录：成功存会话令牌（口令不落存储·用完即弃）。 */
+    /** 口令登录：成功存会话令牌（口令不落存储·用完即弃）+ 操作者名（显真实身份）。 */
     async login(password: string): Promise<ClientResult> {
       const r = await raw('login', password, {})
       const token = typeof r.sessionToken === 'string' ? r.sessionToken : ''
-      if (r.ok && token) storage.set(TOKEN_KEY, token) // 只存令牌·绝不存口令
+      if (r.ok && token) {
+        storage.set(TOKEN_KEY, token) // 只存令牌·绝不存口令
+        const op = typeof r.operator === 'string' ? r.operator : ''
+        if (op) storage.set(WHO_KEY, op)
+      }
       if (r.ok && !token) return { ...r, ok: false, error: 'NO_SESSION_TOKEN' } // 云端没发令牌不算登成（fail-closed）
       return r
     },

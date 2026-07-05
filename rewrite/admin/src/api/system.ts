@@ -19,5 +19,6 @@ export const getBillMatch = (from?: string, to?: string) => client.post('getBill
 export const downloadBill = (date: string) => client.post('downloadBill', { date })
 
 export const listInventory = () => client.post('listInventory')
-export const saveStock = (productId: string, spec: string, stock: number | null, expectedUpdatedAt: number) =>
-  client.post('saveStock', { productId, spec, stock, expectedUpdatedAt })
+// threshold＝per-SKU 低库存阈值（后端 saveStock 早支持·换皮漏传·恒硬编码 10）；undefined=不改
+export const saveStock = (productId: string, spec: string, stock: number | null, expectedUpdatedAt: number, threshold?: number) =>
+  client.post('saveStock', { productId, spec, stock, expectedUpdatedAt, threshold })

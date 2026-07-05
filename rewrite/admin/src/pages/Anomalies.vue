@@ -53,7 +53,13 @@ async function load() {
   message.value = r.ok ? '' : '加载失败：' + String(r.error || '')
 }
 
+const confirmId = ref('') // 两步确认（换皮一键无撤销·标记已处理是破坏性动作）
 async function markResolved(a: any) {
+  if (confirmId.value !== a._id) {
+    confirmId.value = a._id
+    return
+  }
+  confirmId.value = ''
   const r: any = await resolveAnomaly(a._id)
   if (r.error === 'SESSION_LOST') return void router.push('/login')
   if (r.ok) await load()
@@ -101,9 +107,9 @@ onMounted(load)
         <div v-if="ctxPairs(a.ctx)" class="ctx">{{ ctxPairs(a.ctx) }}</div>
         <div class="meta">最近 {{ fmt(a.lastSeen) }}<span v-if="a.resolved"> · 已处理 {{ a.resolvedBy || '' }}</span></div>
       </div>
-      <button v-if="!a.resolved" class="btn-resolve" @click="markResolved(a)">
+      <button v-if="!a.resolved" class="btn-resolve" :class="{ confirming: confirmId === a._id }" @click="markResolved(a)">
         <Check :size="14" :stroke-width="2" />
-        <span>标记已处理</span>
+        <span>{{ confirmId === a._id ? '确认已处理？' : '标记已处理' }}</span>
       </button>
     </div>
   </div>

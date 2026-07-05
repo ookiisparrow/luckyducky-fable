@@ -136,6 +136,7 @@ export interface StockRow {
   spec: string
   stock: number | null
   stockLabel: string
+  threshold: number // per-SKU 低库存阈值（0=无·前端退默认·换皮硬编码 10 丢了 per-SKU·后端 saveStock 早支持）
   updatedAt: number
 }
 
@@ -151,6 +152,7 @@ export function mapStock(list: unknown, truncated: unknown): { rows: StockRow[];
         spec: String(it.spec || ''),
         stock,
         stockLabel: stock == null ? '不限量' : String(stock), // null=不限量·不显 0
+        threshold: Math.max(0, Number(it.threshold) || 0),
         updatedAt: Number(it.updatedAt) || 0,
       })
     }

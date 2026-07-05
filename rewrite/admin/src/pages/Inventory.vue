@@ -3,12 +3,12 @@
 // 真数据·当前库存/低库存预警/售罄/不限量派生）+ 行内调整（保留版本校验 409 并发逻辑）。
 // 诚实边界：低库存阈值 10 为显示常量（后端无 per-SKU 阈值）；「批量导入/盘点」无后端 action——省略不加假钮（记待办）。
 import { ref, computed, onMounted } from 'vue'
-import { Search, Boxes, CircleCheck, TriangleAlert, XCircle, Infinity as InfinityIcon } from 'lucide-vue-next'
+import { Search, Boxes, CircleCheck, TriangleAlert, XCircle, Infinity as InfinityIcon, RefreshCw } from 'lucide-vue-next'
 import { listInventory, saveStock } from '../api/system'
 import { listDrafts } from '../api/products'
 import { mapStock, stockErrorText, type StockRow } from '../lib/mapSystem'
 
-const LOW_STOCK = 10 // 显示阈值（后端无 per-SKU 阈值·仅前端预警线）
+const LOW_STOCK = 10 // 默认阈值（per-SKU 未设时退此·仅前端预警线）
 
 interface Row extends StockRow {
   name: string
@@ -19,15 +19,18 @@ interface Row extends StockRow {
 const rows = ref<Row[]>([])
 const truncNote = ref('')
 const message = ref('')
+const busy = ref(false)
 const editKey = ref('')
 const editVal = ref('')
+const editThreshold = ref('') // per-SKU 阈值编辑（换皮丢·后端 saveStock 早支持 threshold）
 const search = ref('')
 const filter = ref<'all' | 'onsale' | 'low' | 'out' | 'unlimited'>('all')
 
-function statusOf(stock: number | null): Row['status'] {
+const effThreshold = (row: Row) => (row.threshold > 0 ? row.threshold : LOW_STOCK) // per-SKU 优先·未设退默认
+function statusOf(stock: number | null, threshold: number): Row['status'] {
   if (stock == null) return 'unlimited'
   if (stock === 0) return 'out'
-  if (stock <= LOW_STOCK) return 'low'
+  if (stock <= (threshold > 0 ? threshold : LOW_STOCK)) return 'low'
   return 'onsale'
 }
 const STATUS = {
@@ -61,7 +64,9 @@ const shown = computed(() => {
 })
 
 async function reload() {
+  busy.value = true
   const [inv, drafts] = await Promise.all([listInventory(), listDrafts()])
+  busy.value = false
   const cat: Record<string, { name: string; price: string }> = {}
   if ((drafts as any).ok && Array.isArray((drafts as any).list)) {
     for (const p of (drafts as any).list as Record<string, any>[]) {
@@ -74,7 +79,7 @@ async function reload() {
     ...r,
     name: cat[r.productId]?.name || r.productId,
     priceLabel: cat[r.productId]?.price || '—',
-    status: statusOf(r.stock),
+    status: statusOf(r.stock, r.threshold),
   }))
   truncNote.value = m.truncNote
   message.value = (inv as any).ok ? '' : '加载失败：' + String((inv as any).error || '')
@@ -83,6 +88,7 @@ async function reload() {
 function startEdit(row: Row) {
   editKey.value = row.key
   editVal.value = row.stock == null ? '' : String(row.stock)
+  editThreshold.value = row.threshold > 0 ? String(row.threshold) : ''
 }
 
 async function doSave(row: Row) {
@@ -92,7 +98,13 @@ async function doSave(row: Row) {
     message.value = '库存数须为非负整数，或留空表示不限量'
     return
   }
-  const r = await saveStock(row.productId, row.spec, stock, row.updatedAt) // 带版本·被人先改过会 409
+  const th = editThreshold.value.trim()
+  const threshold = th === '' ? 0 : Number(th)
+  if (th !== '' && (!Number.isInteger(threshold) || threshold < 0)) {
+    message.value = '低库存阈值须为非负整数（留空=用默认 ' + LOW_STOCK + '）'
+    return
+  }
+  const r = await saveStock(row.productId, row.spec, stock, row.updatedAt, threshold) // 带版本·被人先改过会 409
   if (r.ok) {
     editKey.value = ''
     message.value = ''
@@ -112,6 +124,9 @@ onMounted(reload)
         <h1>库存管理</h1>
         <p class="sub">实物库存按 SKU 追踪 · 下单即预留、超时/退款自动回补、缺货自动售罄</p>
       </div>
+      <button class="btn-refresh" :disabled="busy" @click="reload">
+        <RefreshCw :size="15" :stroke-width="1.8" :class="{ spin: busy }" /><span>{{ busy ? '刷新中…' : '刷新' }}</span>
+      </button>
     </header>
 
     <p v-if="truncNote" class="warn-note">{{ truncNote }}</p>
@@ -166,13 +181,14 @@ onMounted(reload)
         <div class="stock">
           <template v-if="editKey === row.key">
             <input v-model="editVal" class="stockin" placeholder="空=不限量" @keyup.enter="doSave(row)" />
+            <input v-model="editThreshold" class="threshin" :placeholder="'阈值(默认' + LOW_STOCK + ')'" title="低库存预警阈值·per-SKU" @keyup.enter="doSave(row)" />
           </template>
           <template v-else-if="row.status === 'unlimited'">
             <InfinityIcon :size="16" :stroke-width="1.8" class="inf" /><span class="stock-hint">现做不限量</span>
           </template>
           <template v-else>
             <span class="stock-num" :class="row.status">{{ row.stock }}</span><span class="unit">件</span>
-            <span v-if="row.status === 'low'" class="stock-hint amber">低于阈值 {{ LOW_STOCK }}</span>
+            <span v-if="row.status === 'low'" class="stock-hint amber">低于阈值 {{ effThreshold(row) }}</span>
             <span v-else-if="row.status === 'out'" class="stock-hint red">需补货</span>
           </template>
         </div>
@@ -190,7 +206,7 @@ onMounted(reload)
       </div>
     </div>
     <p v-else-if="!message" class="status-soft">{{ rows.length ? '没有符合筛选的 SKU' : '还没有库存档（不限量商品无档是正常的）' }}</p>
-    <p class="foot-note">留空 = 不限量（缺货前不拦下单）；下单即预留、超时关单自动回补。低库存阈值 {{ LOW_STOCK }} 为前端预警线。</p>
+    <p class="foot-note">留空 = 不限量（缺货前不拦下单）；下单即预留、超时关单自动回补。调整时可设 per-SKU 低库存阈值（留空退默认 {{ LOW_STOCK }}）。</p>
   </div>
 </template>
 
@@ -199,7 +215,43 @@ onMounted(reload)
   max-width: 1160px;
 }
 .page-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
   margin-bottom: 18px;
+}
+.btn-refresh {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: none;
+  padding: 8px 14px;
+  border: 1px solid var(--ld-line);
+  border-radius: 999px;
+  background: var(--ld-bg);
+  color: var(--ld-content);
+  font-size: 13px;
+  cursor: pointer;
+}
+.btn-refresh:disabled {
+  opacity: 0.6;
+}
+.spin {
+  animation: spin 0.9s linear infinite;
+}
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+.threshin {
+  width: 92px;
+  margin-left: 6px;
+  padding: 6px 10px;
+  border: 1px solid var(--ld-line-strong);
+  border-radius: 8px;
+  font-size: 12px;
 }
 h1 {
   margin: 0;
