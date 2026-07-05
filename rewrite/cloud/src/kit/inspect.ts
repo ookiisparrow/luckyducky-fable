@@ -1,0 +1,156 @@
+import { getDb } from './db'
+import { recordAnomaly } from './anomaly'
+import {
+  COLLECTIONS,
+  type CheckResult,
+  type CheckLayer,
+  type AnomalyKind,
+  type InspectRunRecord,
+} from '@ldrw/shared'
+
+// 巡检机（运行期主动核对·不依赖 AI·守卫 rw-inspect-golden）：定时/手动跑一遍检查目录——
+// A 基建存活（探得动）+ B 业务不变量（数据自洽）。北极星＝把没抛异常/没人投诉的静默失败主动探出：
+// 每条红 → recordAnomaly 落 bug 账本（违反→闭环）+ 高危经 recordAnomaly 内部推告警。**只读铁律**：
+// 只读业务集合、只写 inspectRuns/anomalies，绝不改业务数据（「现在只读看护线上」的安全前提）。
+
+const SCAN_CAP = 500 // 单类单次扫描上限（有界·防容量炸弹）；触顶显式标 capped、不假装扫全了（no silent caps）
+const STUCK_PAID_MS = 72 * 3600 * 1000 // 付款超 72h 仍未发货＝卡单（付了钱没发货·典型静默伤客）
+
+type Partial = Omit<CheckResult, 'id' | 'title' | 'layer'>
+
+interface Check {
+  id: string
+  title: string
+  layer: CheckLayer
+  kind: AnomalyKind // 红时落 anomaly 的来源分类
+  run(db: any): Promise<Partial>
+}
+
+const CHECKS: Check[] = [
+  {
+    id: 'db-reachable',
+    title: '数据库可达',
+    layer: 'infra',
+    kind: 'flow-failure',
+    async run(db) {
+      try {
+        await db.collection(COLLECTIONS.config).limit(1).get()
+        return { status: 'green', detail: 'DB 读通', severity: 'low' }
+      } catch (e) {
+        return { status: 'red', detail: 'DB 读失败：' + String(e).slice(0, 80), severity: 'high' }
+      }
+    },
+  },
+  {
+    id: 'money-conserved',
+    title: '钱守恒（退款不超实付）',
+    layer: 'invariant',
+    kind: 'invariant-violation',
+    async run(db) {
+      // 扫已退款售后（有界），按 orderId 归集退款额，比对该单实付 order.amount——超了＝静默多退钱。
+      const as = await db
+        .collection(COLLECTIONS.afterSales)
+        .where({ status: 'refunded' })
+        .limit(SCAN_CAP)
+        .get()
+        .catch(() => ({ data: [] }))
+      const rows: any[] = as.data || []
+      const byOrder = new Map<string, number>()
+      for (const a of rows) byOrder.set(String(a.orderId), (byOrder.get(String(a.orderId)) || 0) + Number(a.refundAmount || 0))
+      const bad: string[] = []
+      for (const [orderId, refunded] of byOrder) {
+        const o = await db.collection(COLLECTIONS.orders).doc(orderId).get().catch(() => null)
+        if (o && o.data && refunded > Number(o.data.amount || 0) + 1e-6) bad.push(orderId)
+      }
+      const capped = rows.length >= SCAN_CAP
+      return bad.length
+        ? { status: 'red', detail: `${bad.length} 单退款超实付（静默多退钱）`, count: bad.length, samples: bad.slice(0, 10), severity: 'high', scanned: rows.length, capped }
+        : { status: 'green', detail: '退款均未超实付', severity: 'low', scanned: rows.length, capped }
+    },
+  },
+  {
+    id: 'stuck-order',
+    title: '卡单（付了钱没发货 / 待人工退款死信）',
+    layer: 'invariant',
+    kind: 'invariant-violation',
+    async run(db) {
+      const now = Date.now()
+      // ① paid 超 72h 未发货（无 shippedAt）
+      const paid = await db
+        .collection(COLLECTIONS.orders)
+        .where({ status: 'paid' })
+        .limit(SCAN_CAP)
+        .get()
+        .catch(() => ({ data: [] }))
+      const paidRows: any[] = paid.data || []
+      const stuck = paidRows.filter((o) => !o.shippedAt && Number(o.paidAt || 0) > 0 && now - Number(o.paidAt) > STUCK_PAID_MS).map((o) => String(o._id))
+      // ② refund_required 死信（钱已收待人工退款·没人管＝高危静默）
+      const dead = await db
+        .collection(COLLECTIONS.orders)
+        .where({ status: 'refund_required' })
+        .limit(SCAN_CAP)
+        .get()
+        .catch(() => ({ data: [] }))
+      const deadRows: any[] = dead.data || []
+      const deadIds = deadRows.map((o) => String(o._id))
+      const all = [...stuck, ...deadIds]
+      const scanned = paidRows.length + deadRows.length
+      const capped = paidRows.length >= SCAN_CAP || deadRows.length >= SCAN_CAP
+      return all.length
+        ? {
+            status: 'red',
+            detail: `${stuck.length} 单付款超 72h 未发货·${deadIds.length} 单待人工退款死信`,
+            count: all.length,
+            samples: all.slice(0, 10),
+            severity: deadIds.length ? 'high' : 'low', // 死信＝钱已收没人管·高危；纯超时未发＝低危提醒
+            scanned,
+            capped,
+          }
+        : { status: 'green', detail: '无卡单/死信', severity: 'low', scanned, capped }
+    },
+  },
+]
+
+/**
+ * 跑一轮巡检：逐条检查（单条异常→本条红、不炸整轮·fail-soft）→ 写 inspectRuns 体检报告 →
+ * 每条红落 recordAnomaly（违反→bug 账本闭环·指纹=检查 id·同类反复只累加不刷屏·高危内部推告警）。
+ * 返回本轮报告。**只读**：只读业务集合、只写 inspectRuns/anomalies。
+ */
+export async function runInspection(trigger: 'timer' | 'manual'): Promise<InspectRunRecord> {
+  const db = getDb()
+  const startedAt = Date.now()
+  const results: CheckResult[] = []
+  for (const c of CHECKS) {
+    let partial: Partial
+    try {
+      partial = await c.run(db)
+    } catch (e) {
+      partial = { status: 'red', detail: '检查自身异常：' + String(e).slice(0, 80), severity: 'high' }
+    }
+    const r: CheckResult = { id: c.id, title: c.title, layer: c.layer, ...partial }
+    results.push(r)
+    if (r.status === 'red') {
+      const code = 'INSPECT_' + c.id.toUpperCase().replace(/-/g, '_')
+      await recordAnomaly(c.kind, code, { fp: c.id, count: r.count, samples: (r.samples || []).join(','), detail: r.detail }, r.severity)
+    }
+  }
+  const finishedAt = Date.now()
+  const summary = {
+    green: results.filter((r) => r.status === 'green').length,
+    yellow: results.filter((r) => r.status === 'yellow').length,
+    red: results.filter((r) => r.status === 'red').length,
+  }
+  const run: InspectRunRecord = { _id: `inspect_${trigger}_${startedAt}`, startedAt, finishedAt, trigger, results, summary }
+  // 写巡检史（fail-soft·写失败不炸巡检结论）
+  try {
+    await db.collection(COLLECTIONS.inspectRuns).add({ data: run })
+  } catch {
+    try {
+      await db.createCollection(COLLECTIONS.inspectRuns)
+      await db.collection(COLLECTIONS.inspectRuns).add({ data: run })
+    } catch {
+      /* fail-soft */
+    }
+  }
+  return run
+}

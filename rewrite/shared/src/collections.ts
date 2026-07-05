@@ -42,6 +42,7 @@ export const COLLECTIONS = {
   bomProfiles: 'bomProfiles',
   // —— 新线新增（观测·旧线无·走 parity 显式登记名单）——
   anomalies: 'anomalies', // bug 收集器账本（防治静默 bug·指纹去重·仅管理端·recordAnomaly 单口写入）
+  inspectRuns: 'inspectRuns', // 巡检机体检报告（每次运行 A/B 检查红绿灯·仅管理端·runInspection 单口写入）
 } as const
 
 export type CollectionName = (typeof COLLECTIONS)[keyof typeof COLLECTIONS]

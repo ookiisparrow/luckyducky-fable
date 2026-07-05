@@ -12,7 +12,7 @@
 | 用户端网关 `app` | **已部署**（2026-07-04·新名零覆盖·25 action） | 无动作（已在线） |
 | 管理端 `adminApiV2` | **已部署**（HTTP 路径 `/adminv2`·92 action） | **定名决策：保留 `adminApiV2` 为长期名**（admin/agent 前端已指向·改名只有代价没有收益）；旧 `adminApi` 与旧路径 `/adminapi` 进 Phase 4 清退 |
 | 回调×2 | 旧线在跑 | **同名替换** `payCallback` `refundCallback`（微信支付/退款工作流按函数名转发·替换即接管） |
-| 定时器×4 | 旧线在跑（触发器配置见 `cloudbaserc.json`） | **同名替换** `closeExpiredOrders` `cleanupEvents` `recallScan` `kfHealthProbe`，部署后逐个核验定时触发器仍挂 |
+| 定时器×5 | 旧线在跑 4 个（触发器配置见 `cloudbaserc.json`）·`inspect` 净新增无旧线对应 | **同名替换** `closeExpiredOrders` `cleanupEvents` `recallScan` `kfHealthProbe`，部署后逐个核验定时触发器仍挂；**净新增** `inspect`（巡检机·观测·可随只读看护批先部署）建新触发器 + 建 `anomalies`/`inspectRuns` 两集合并锁 adminonly |
 | 客服×2 | 旧线在跑（`kfCallback` 绑 HTTP 访问服务路径） | **同名替换** `kfCallback` `kfSend`（路径按函数名绑定·同名替换不掉线） |
 | ops×4 | 旧线在（只部署勿调用） | **同名替换** `genQrcodes` `seedProducts` `seedCourses` `initDb` |
 | 静态托管 | `/admin` `/agent` = 旧后台在跑（**零断档红线：M5 前不下线**） | 新 admin/agent build 覆盖 `/admin` `/agent`（旧包先备份）；内容站部署根路径（M4 收口·可先行·与切换日解耦） |
@@ -43,7 +43,7 @@
 
 ### Phase 1 后端同名替换（按险级从低到高·每组 smoke 过了才下一组）
 1. **ops 组**：部署 `genQrcodes` `seedProducts` `seedCourses` `initDb`。验证=部署成功即可（只部署勿调用）。↩ 单函数从 next 仓重部署（分钟级）。
-2. **定时器组**：部署 `cleanupEvents` → `kfHealthProbe` → `recallScan` → `closeExpiredOrders`。验证=控制台逐个核**触发器仍挂**+手动 invoke 一次日志无错（都幂等·safe）。↩ 同上。
+2. **定时器组**：部署 `cleanupEvents` → `kfHealthProbe` → `recallScan` → `closeExpiredOrders` → `inspect`（净新增·巡检机·可提前随只读看护批部署）。验证=控制台逐个核**触发器仍挂**+手动 invoke 一次日志无错（都幂等·safe）。↩ 同上。
 3. **客服组**：部署 `kfSend` → `kfCallback`。验证=真发一条客服消息走通问答；HTTP 访问服务 GET echostr 核验仍绑。↩ 同上。
 4. **回调组（最后·钱链）**：部署 `payCallback` → `refundCallback`。验证=**真单最低额支付一笔**看 pending→paid（新函数日志接到回调）；退款链按闸 5 结案后的姿势真验一笔。↩ 从 next 仓重部署旧回调（分钟级·期间未 ACK 的通知微信会重推·幂等设计不怕重）。
 

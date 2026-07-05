@@ -34,3 +34,35 @@ export function anomalyFingerprint(kind: AnomalyKind, code: string, scope?: stri
   const raw = `anom_${kind}_${code}${scope ? '_' + scope : ''}`
   return raw.replace(/[^a-zA-Z0-9_.-]/g, '').slice(0, 120)
 }
+
+// —— 巡检机（inspect·批2·不依赖 AI 的定时/手动体检）——
+
+/** 检查分层：基建存活 / 业务不变量（用户拍板「两层都要」）。 */
+export type CheckLayer = 'infra' | 'invariant'
+
+/** 检查结果灯：绿=过·黄=可疑降级·红=违反。 */
+export type CheckStatus = 'green' | 'yellow' | 'red'
+
+/** 一条检查结果（控制台体检面板按此渲染红绿灯·批3 用）。 */
+export interface CheckResult {
+  id: string // 检查 id（db-reachable / money-conserved / stuck-order …）
+  title: string // 大白话标题
+  layer: CheckLayer
+  status: CheckStatus
+  detail: string // 结论一句话
+  severity: AnomalySeverity // 红时落 anomaly 的严重度
+  count?: number // 命中的问题实体数（不变量类）
+  samples?: string[] // 样本 id（有界·非 PII）
+  scanned?: number // 实际扫描条数（防静默截断·no silent caps）
+  capped?: boolean // 扫描是否触顶（有界·触顶显式标·不假装扫全了）
+}
+
+/** 一次巡检运行（inspectRuns 集合·体检报告）。 */
+export interface InspectRunRecord {
+  _id: string
+  startedAt: number
+  finishedAt: number
+  trigger: 'timer' | 'manual'
+  results: CheckResult[]
+  summary: { green: number; yellow: number; red: number }
+}

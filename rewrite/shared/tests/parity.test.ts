@@ -14,7 +14,7 @@ describe('与旧线契约逐键 parity', () => {
     // 旧集合逐字不动（同一生产库·名字是数据契约）；新线只追加的新集合在此点名登记
     // （collections.ts 头注「新集合先登记并去控制台锁权限再用」，同错误码册的新增机制）——
     // 巡检机 + bug 收集器地基（防治静默 bug）：anomalies（异常账本·指纹去重·仅管理端·recordAnomaly 单口写入）
-    const RW_NEW_COLLECTIONS = { anomalies: 'anomalies' }
+    const RW_NEW_COLLECTIONS = { anomalies: 'anomalies', inspectRuns: 'inspectRuns' }
     expect(COLLECTIONS).toEqual({ ...OLD_COLLECTIONS, ...RW_NEW_COLLECTIONS })
     expect(Object.keys(COLLECTIONS).length).toBe(37 + Object.keys(RW_NEW_COLLECTIONS).length)
   })

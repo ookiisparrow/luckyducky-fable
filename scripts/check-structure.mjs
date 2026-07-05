@@ -4625,6 +4625,15 @@ export const typeAndTestGuards = [
     reverseTest: 'rewrite/cloud/tests/anomaly.test.ts',
   },
   {
+    // 巡检机（运行期主动核对不变量·探出静默失败·守卫 rw-inspect-golden）：跑检查目录（A 基建存活 + B 业务不变量）
+    // → inspectRuns 体检报告 + 每条红→recordAnomaly 闭环 + 只读不改业务集合。归它复核的不变量：#1 钱守恒/#3 留痕/#8 运行期真能用。
+    // 合并回 main 时随「病根14 失败必可观测」再对齐归 #14（本 worktree 基线尚无 #14）。
+    id: 'rw-inspect-golden',
+    mechanism: 'test',
+    roots: ['#1', '#3', '#8'],
+    reverseTest: 'rewrite/cloud/tests/inspect.test.ts',
+  },
+  {
     id: 'rw-mp-home-golden',
     mechanism: 'test',
     roots: ['#8'],
