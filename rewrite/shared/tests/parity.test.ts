@@ -14,8 +14,11 @@ describe('与旧线契约逐键 parity', () => {
     expect(COLLECTIONS).toEqual(OLD_COLLECTIONS)
     expect(Object.keys(COLLECTIONS).length).toBe(37)
   })
-  it('大白话：错误码册逐键逐值一致（码是前端分支契约，不可改名）', () => {
-    expect(ERR).toEqual(OLD_ERR)
+  it('大白话：错误码册逐键逐值一致（码是前端分支契约，不可改名）；新线新增码走显式登记名单，不多不少', () => {
+    // 旧码逐字不动（前端分支契约）；新线只追加的新码在此点名登记（errors.ts 头注「新增只追加」）——
+    // 深审 2026-07-05：COUPON_EXCEEDS_GOODS（占位券白送闸·旧线无此不变量）
+    const RW_NEW_ERR = { COUPON_EXCEEDS_GOODS: 'COUPON_EXCEEDS_GOODS' }
+    expect(ERR).toEqual({ ...OLD_ERR, ...RW_NEW_ERR })
   })
   it('大白话：结算常量（搭配购/券/运费）与交易边界（价/量/条数/支付窗）逐值一致（钱的口径不漂移）', () => {
     expect(CHECKOUT_ADDONS).toEqual(OLD_ADDONS)
