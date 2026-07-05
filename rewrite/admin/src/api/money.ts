@@ -12,7 +12,9 @@ export const shipOrder = (id: string, company: string, trackingNo: string) => cl
 export const shipOrders = (items: Array<{ id: string; trackingNo: string; company?: string }>, company: string) =>
   client.post('shipOrders', { items, company })
 export const clearFeeMismatch = (id: string) => client.post('clearFeeMismatch', { id })
-export const listRefunds = (status?: string, cursor?: unknown, limit = 20) => client.post('listRefunds', { status: status || undefined, cursor, limit })
+// q=订单号精确搜索（服务端·跨全部状态·根因#7）；有 q 时后端忽略 status
+export const listRefunds = (status?: string, cursor?: unknown, limit = 20, q?: string) =>
+  client.post('listRefunds', { status: status || undefined, cursor, limit, q: q || undefined })
 export const refundCounts = () => client.post('refundCounts')
 export const getRefundDetail = (id: string) => client.post('getRefundDetail', { id })
 export const approveRefund = (id: string) => client.post('approveRefund', { id })

@@ -12,10 +12,12 @@
   "dependencies": {
     "lucide-vue-next": "^1.0.0",
     "pinia": "^2.1.7",
+    "qrcode": "^1.5.4",
     "vue": "^3.4.21",
     "vue-router": "^4.3.0"
   },
   "devDependencies": {
+    "@types/qrcode": "^1.5.5",
     "@vitejs/plugin-vue": "^5.0.4",
     "vite": "^5.2.8"
   }

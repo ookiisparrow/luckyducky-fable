@@ -11,6 +11,7 @@ import {
   LayoutGrid,
   Clapperboard,
   Truck,
+  PackageCheck,
   RotateCcw,
   Receipt,
   Boxes,
@@ -52,6 +53,7 @@ const NAV = [
     group: '订单与钱',
     items: [
       { label: '订单发货', path: '/orders', icon: Truck },
+      { label: '发货工作台', path: '/fulfill', icon: PackageCheck },
       { label: '售后退款', path: '/refunds', icon: RotateCcw },
       { label: '财务对账', path: '/reconciliation', icon: Receipt },
       { label: '实物库存', path: '/inventory', icon: Boxes },

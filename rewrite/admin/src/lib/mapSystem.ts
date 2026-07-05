@@ -51,7 +51,9 @@ export interface ReconVM {
   cumulative: Array<{ label: string; value: string }>
   daily: Array<{ day: string; income: string; refund: string; net: string; orders: number; refunds: number }>
   approxNote: string
-  exceptions: number
+  // 内部异常明细（bug B2 修：后端 getTxAlerts 返回 {feeMismatch,refundMismatch,stuckRefunds} 三数组对象·
+  // 换皮误当数组取 .length 恒 0、明细永不渲染。改按对象结构化·有则渲染带单号、无则空数组不吓人）
+  exceptions: Array<{ label: string; ids: string[] }>
 }
 
 export function mapRecon(r: unknown): ReconVM | null {
@@ -73,8 +75,19 @@ export function mapRecon(r: unknown): ReconVM | null {
       refunds: Number(b.refunds) || 0,
     })),
     approxNote: d.approx ? '窗内明细触上限·近似（累计不受影响）' : '', // 诚实透传
-    exceptions: Array.isArray(d.exceptions) ? d.exceptions.length : 0,
+    exceptions: mapExceptions(d.exceptions),
   }
+}
+
+// B2：后端 exceptions＝{feeMismatch,refundMismatch,stuckRefunds} 三 id 数组·结构化成带单号明细块（有则渲染·空不吓人）
+function mapExceptions(ex: unknown): Array<{ label: string; ids: string[] }> {
+  const o = (ex && typeof ex === 'object' ? ex : {}) as Record<string, any>
+  const list = (v: unknown) => (Array.isArray(v) ? v.map(String) : [])
+  return [
+    { label: '金额不符单（发货前须核对流水解除）', ids: list(o.feeMismatch) },
+    { label: '退款金额不符', ids: list(o.refundMismatch) },
+    { label: '审批后卡单（死信·退款未走通）', ids: list(o.stuckRefunds) },
+  ].filter((e) => e.ids.length)
 }
 
 export interface BillMatchVM {

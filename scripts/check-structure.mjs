@@ -82,6 +82,7 @@ export const RW_GOLDEN_REGISTRY = [
   { id: 'rw-mp-me-golden', roots: ['#6', '#8'], test: 'rewrite/mp/tests/continue-resolve.test.ts' },
   { id: 'rw-mp-privacy-golden', roots: ['R27', '#8'], test: 'rewrite/mp/tests/privacy-gate.test.ts' },
   { id: 'rw-admin-money-ui-golden', roots: ['#4', '#8'], test: 'rewrite/admin/tests/money-ui.test.ts' },
+  { id: 'rw-admin-fulfill-golden', roots: ['#8'], test: 'rewrite/admin/tests/fulfill.test.ts' },
   { id: 'rw-admin-products-ui-golden', roots: ['#8'], test: 'rewrite/admin/tests/products-ui.test.ts' },
   { id: 'rw-admin-content-ui-golden', roots: ['#8', '#12'], test: 'rewrite/admin/tests/content-ui.test.ts' },
   { id: 'rw-admin-cs-ui-golden', roots: ['#8'], test: 'rewrite/admin/tests/cs-ui.test.ts' },
