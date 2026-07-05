@@ -45,7 +45,66 @@ function listPackageJsons() {
 // 每条 run() 返回违例说明数组（空 = 通过）。
 // roots：本守卫治哪条病根/主张（病根 #N / 主张 TN / 红线·基建·正册·格式 等标签）——
 // 机读 provenance，guard-coverage 据此断言每条病根都有守卫（见 docs/元模式.md A2/A4）。
+// 新线黄金用例注册表（收敛阀）：rewrite 各模块 golden 行为基准测试集中登记，被 rw-golden-registered 一条守卫统一核存在。
+// 新增模块只加一行、不加守卫（守卫总数收敛·呼应 known-collections-only / known-error-codes）。
+export const RW_GOLDEN_REGISTRY = [
+  { id: 'rw-contracts-golden', roots: ['#4', '#2', '#5'], test: 'rewrite/shared/tests/money.test.ts' },
+  { id: 'rw-kit-golden', roots: ['#1', '#2', '#3', '#7', '#13'], test: 'rewrite/cloud/tests/transition.test.ts' },
+  { id: 'rw-user-catalog-golden', roots: ['#1', '#3'], test: 'rewrite/cloud/tests/app-user.test.ts' },
+  { id: 'rw-learning-golden', roots: ['#1', '#2', '#3'], test: 'rewrite/cloud/tests/app-learning.test.ts' },
+  { id: 'rw-reviews-golden', roots: ['#1', '#3', '#7'], test: 'rewrite/cloud/tests/app-reviews.test.ts' },
+  { id: 'rw-money1-golden', roots: ['#1', '#2', '#3', '#4'], test: 'rewrite/cloud/tests/app-orders.test.ts' },
+  { id: 'rw-money2-golden', roots: ['#1', '#2', '#3', '#4', '#12'], test: 'rewrite/cloud/tests/app-pay.test.ts' },
+  { id: 'rw-money3-golden', roots: ['#1', '#2', '#3', '#4', '#7'], test: 'rewrite/cloud/tests/app-refund.test.ts' },
+  { id: 'rw-cs1-golden', roots: ['#1', '#3', '#12'], test: 'rewrite/cloud/tests/app-cs1.test.ts' },
+  { id: 'rw-cs2-golden', roots: ['#1', '#3', '#5', '#8'], test: 'rewrite/cloud/tests/app-cs2.test.ts' },
+  { id: 'rw-admin1-golden', roots: ['#3', '#13'], test: 'rewrite/cloud/tests/app-admin1.test.ts' },
+  { id: 'rw-admin2-golden', roots: ['#3', '#7', '#8'], test: 'rewrite/cloud/tests/app-admin2.test.ts' },
+  { id: 'rw-admin3-golden', roots: ['#1', '#2', '#3', '#4'], test: 'rewrite/cloud/tests/app-admin3.test.ts' },
+  { id: 'rw-admin4-golden', roots: ['#4', '#7', '#8'], test: 'rewrite/cloud/tests/app-admin4.test.ts' },
+  { id: 'rw-admin5-golden', roots: ['#3', '#7', '#8'], test: 'rewrite/cloud/tests/app-admin5.test.ts' },
+  { id: 'rw-admin6-golden', roots: ['#1', '#3', '#4'], test: 'rewrite/cloud/tests/app-admin6.test.ts' },
+  { id: 'rw-scm-golden', roots: ['#1', '#2', '#4', '#7'], test: 'rewrite/cloud/tests/app-scm.test.ts' },
+  { id: 'rw-misc-golden', roots: ['#1', '#3', '#7', '#13'], test: 'rewrite/cloud/tests/app-misc.test.ts' },
+  { id: 'rw-anomaly-record-golden', roots: ['#3', '#14'], test: 'rewrite/cloud/tests/anomaly.test.ts' },
+  { id: 'rw-inspect-golden', roots: ['#1', '#3', '#8', '#14'], test: 'rewrite/cloud/tests/inspect.test.ts' },
+  { id: 'rw-ops-console-golden', roots: ['#3', '#14'], test: 'rewrite/cloud/tests/ops-console.test.ts' },
+  { id: 'rw-mp-home-golden', roots: ['#8'], test: 'rewrite/mp/tests/home-map.test.ts' },
+  { id: 'rw-mp-detail-golden', roots: ['#8'], test: 'rewrite/mp/tests/detail-map.test.ts' },
+  { id: 'rw-mp-cart-golden', roots: ['#4', '#8'], test: 'rewrite/mp/tests/cart.test.ts' },
+  { id: 'rw-mp-checkout-golden', roots: ['#4', '#6', '#8'], test: 'rewrite/mp/tests/checkout.test.ts' },
+  { id: 'rw-mp-pay-golden', roots: ['#4', '#8'], test: 'rewrite/mp/tests/pay-flow.test.ts' },
+  { id: 'rw-mp-orders-golden', roots: ['#2', '#8'], test: 'rewrite/mp/tests/orders-map.test.ts' },
+  { id: 'rw-mp-aftersales-golden', roots: ['#4', '#8'], test: 'rewrite/mp/tests/aftersales-map.test.ts' },
+  { id: 'rw-mp-learning-golden', roots: ['#2', '#8'], test: 'rewrite/mp/tests/learning-map.test.ts' },
+  { id: 'rw-mp-player-golden', roots: ['#7', '#8'], test: 'rewrite/mp/tests/player.test.ts' },
+  { id: 'rw-mp-reviews-golden', roots: ['#8'], test: 'rewrite/mp/tests/reviews-map.test.ts' },
+  { id: 'rw-mp-me-golden', roots: ['#6', '#8'], test: 'rewrite/mp/tests/continue-resolve.test.ts' },
+  { id: 'rw-mp-privacy-golden', roots: ['R27', '#8'], test: 'rewrite/mp/tests/privacy-gate.test.ts' },
+  { id: 'rw-admin-money-ui-golden', roots: ['#4', '#8'], test: 'rewrite/admin/tests/money-ui.test.ts' },
+  { id: 'rw-admin-products-ui-golden', roots: ['#8'], test: 'rewrite/admin/tests/products-ui.test.ts' },
+  { id: 'rw-admin-content-ui-golden', roots: ['#8', '#12'], test: 'rewrite/admin/tests/content-ui.test.ts' },
+  { id: 'rw-admin-cs-ui-golden', roots: ['#8'], test: 'rewrite/admin/tests/cs-ui.test.ts' },
+  { id: 'rw-admin-system-ui-golden', roots: ['#4', '#8'], test: 'rewrite/admin/tests/system-ui.test.ts' },
+  { id: 'rw-admin-scm-ui-golden', roots: ['#4', '#8'], test: 'rewrite/admin/tests/scm-ui.test.ts' },
+  { id: 'rw-agent-ui-golden', roots: ['#8'], test: 'rewrite/agent/tests/desk.test.ts' },
+  { id: 'rw-site-schema-golden', roots: ['#8'], test: 'rewrite/site/tests/schema.test.ts' },
+]
+
 export const repoChecks = [
+  {
+    id: 'rw-golden-registered',
+    roots: [...new Set(RW_GOLDEN_REGISTRY.flatMap((r) => r.roots))],
+    desc: '新线黄金用例注册表守卫（收敛阀·元模式 A2「守卫粒度会收敛」）：rewrite 各模块的 rw-*-golden 逐条 typeAndTestGuards 指针折为 RW_GOLDEN_REGISTRY 一张表 + 本一条守卫，核每条登记的 golden 测试文件真实存在（防注册表指向已删测试空转）；roots 取全表并集、病根覆盖不丢。新增 rewrite 模块只加表行、不加守卫',
+    run() {
+      const bad = []
+      for (const g of RW_GOLDEN_REGISTRY) {
+        if (!existsSync(join(ROOT, g.test)))
+          bad.push(`${g.id} 的 golden 测试缺失：${g.test}——注册表指向不存在的测试（守卫空转）`)
+      }
+      return bad
+    },
+  },
   {
     id: 'stub-only-sdk',
     roots: ['基建'],
@@ -4541,264 +4600,10 @@ export const typeAndTestGuards = [
     reverseTest: '新线：浮点金额赋给 Fen → tsc 编译失败（rewrite/shared Fen 品牌类型；随 rw-line-in-gates 接入 typecheck 闸）',
   },
   {
-    id: 'rw-contracts-golden',
-    mechanism: 'test',
-    roots: ['#4', '#2', '#5'],
-    reverseTest: 'rewrite/shared/tests/money.test.ts',
-  },
-  {
-    id: 'rw-kit-golden',
-    mechanism: 'test',
-    roots: ['#1', '#2', '#3', '#7', '#13'],
-    reverseTest: 'rewrite/cloud/tests/transition.test.ts',
-  },
-  {
-    id: 'rw-user-catalog-golden',
-    mechanism: 'test',
-    roots: ['#1', '#3'],
-    reverseTest: 'rewrite/cloud/tests/app-user.test.ts',
-  },
-  {
-    id: 'rw-learning-golden',
-    mechanism: 'test',
-    roots: ['#1', '#2', '#3'],
-    reverseTest: 'rewrite/cloud/tests/app-learning.test.ts',
-  },
-  {
-    id: 'rw-reviews-golden',
-    mechanism: 'test',
-    roots: ['#1', '#3', '#7'],
-    reverseTest: 'rewrite/cloud/tests/app-reviews.test.ts',
-  },
-  {
-    id: 'rw-money1-golden',
-    mechanism: 'test',
-    roots: ['#1', '#2', '#3', '#4'],
-    reverseTest: 'rewrite/cloud/tests/app-orders.test.ts',
-  },
-  {
-    id: 'rw-money2-golden',
-    mechanism: 'test',
-    roots: ['#1', '#2', '#3', '#4', '#12'],
-    reverseTest: 'rewrite/cloud/tests/app-pay.test.ts',
-  },
-  {
-    id: 'rw-money3-golden',
-    mechanism: 'test',
-    roots: ['#1', '#2', '#3', '#4', '#7'],
-    reverseTest: 'rewrite/cloud/tests/app-refund.test.ts',
-  },
-  {
-    id: 'rw-cs1-golden',
-    mechanism: 'test',
-    roots: ['#1', '#3', '#12'],
-    reverseTest: 'rewrite/cloud/tests/app-cs1.test.ts',
-  },
-  {
-    id: 'rw-cs2-golden',
-    mechanism: 'test',
-    roots: ['#1', '#3', '#5', '#8'],
-    reverseTest: 'rewrite/cloud/tests/app-cs2.test.ts',
-  },
-  {
-    id: 'rw-admin1-golden',
-    mechanism: 'test',
-    roots: ['#3', '#13'],
-    reverseTest: 'rewrite/cloud/tests/app-admin1.test.ts',
-  },
-  {
-    id: 'rw-admin2-golden',
-    mechanism: 'test',
-    roots: ['#3', '#7', '#8'],
-    reverseTest: 'rewrite/cloud/tests/app-admin2.test.ts',
-  },
-  {
-    id: 'rw-admin3-golden',
-    mechanism: 'test',
-    roots: ['#1', '#2', '#3', '#4'],
-    reverseTest: 'rewrite/cloud/tests/app-admin3.test.ts',
-  },
-  {
-    id: 'rw-admin4-golden',
-    mechanism: 'test',
-    roots: ['#4', '#7', '#8'],
-    reverseTest: 'rewrite/cloud/tests/app-admin4.test.ts',
-  },
-  {
-    id: 'rw-admin5-golden',
-    mechanism: 'test',
-    roots: ['#3', '#7', '#8'],
-    reverseTest: 'rewrite/cloud/tests/app-admin5.test.ts',
-  },
-  {
-    id: 'rw-admin6-golden',
-    mechanism: 'test',
-    roots: ['#1', '#3', '#4'],
-    reverseTest: 'rewrite/cloud/tests/app-admin6.test.ts',
-  },
-  {
-    id: 'rw-scm-golden',
-    mechanism: 'test',
-    roots: ['#1', '#2', '#4', '#7'],
-    reverseTest: 'rewrite/cloud/tests/app-scm.test.ts',
-  },
-  {
-    id: 'rw-misc-golden',
-    mechanism: 'test',
-    roots: ['#1', '#3', '#7', '#13'],
-    reverseTest: 'rewrite/cloud/tests/app-misc.test.ts',
-  },
-  {
-    // 运行期观测地基（bug 收集器·治病根#14 失败静默化「告警不进人眼」）：recordAnomaly 四路来源统一落库口——
-    // 指纹去重防刷屏、高危去重感知告警、fail-soft 不反噬主流程、对业务集合零写入（「只读看护线上」安全铁律）。
-    // 归 #14（把静默失败留成痕·持久可查）+ #3 信任边界可追溯（留痕家族·同 recordAudit）。
-    id: 'rw-anomaly-record-golden',
-    mechanism: 'test',
-    roots: ['#3', '#14'],
-    reverseTest: 'rewrite/cloud/tests/anomaly.test.ts',
-  },
-  {
-    // 巡检机（运行期主动核对不变量·探出静默失败=治病根#14 失败静默化·守卫 rw-inspect-golden）：跑检查目录
-    // （A 基建存活 + B 业务不变量）→ inspectRuns 体检报告 + 每条红→recordAnomaly 闭环 + 只读不改业务集合。
-    // 归 #14（主动探出静默失败）+ 它复核的不变量 #1 钱守恒/#3 留痕/#8 运行期真能用。
-    id: 'rw-inspect-golden',
-    mechanism: 'test',
-    roots: ['#1', '#3', '#8', '#14'],
-    reverseTest: 'rewrite/cloud/tests/inspect.test.ts',
-  },
-  {
-    // 运行期观测控制台数据层（批3·体检面板 + 异常账本·治病根#14 告警进人眼）：adminApi 4 action——立即巡检 /
-    // 最新体检 / 异常列表(筛+有界) / 标记已处理(写+审计)；只读业务数据（只碰 inspectRuns/anomalies）。归 #14 + #3 留痕。
-    id: 'rw-ops-console-golden',
-    mechanism: 'test',
-    roots: ['#3', '#14'],
-    reverseTest: 'rewrite/cloud/tests/ops-console.test.ts',
-  },
-  {
-    id: 'rw-mp-home-golden',
-    mechanism: 'test',
-    roots: ['#8'],
-    reverseTest: 'rewrite/mp/tests/home-map.test.ts',
-  },
-  {
-    id: 'rw-mp-detail-golden',
-    mechanism: 'test',
-    roots: ['#8'],
-    reverseTest: 'rewrite/mp/tests/detail-map.test.ts',
-  },
-  {
-    id: 'rw-mp-cart-golden',
-    mechanism: 'test',
-    roots: ['#4', '#8'],
-    reverseTest: 'rewrite/mp/tests/cart.test.ts',
-  },
-  {
-    id: 'rw-mp-checkout-golden',
-    mechanism: 'test',
-    roots: ['#4', '#6', '#8'],
-    reverseTest: 'rewrite/mp/tests/checkout.test.ts',
-  },
-  {
-    id: 'rw-mp-pay-golden',
-    mechanism: 'test',
-    roots: ['#4', '#8'],
-    reverseTest: 'rewrite/mp/tests/pay-flow.test.ts',
-  },
-  {
-    id: 'rw-mp-orders-golden',
-    mechanism: 'test',
-    roots: ['#2', '#8'],
-    reverseTest: 'rewrite/mp/tests/orders-map.test.ts',
-  },
-  {
-    id: 'rw-mp-aftersales-golden',
-    mechanism: 'test',
-    roots: ['#4', '#8'],
-    reverseTest: 'rewrite/mp/tests/aftersales-map.test.ts',
-  },
-  {
     id: 'rw-flow-observable',
     mechanism: 'test',
     roots: ['#12', '#8', '#14'],
     reverseTest: 'rewrite/cloud/tests/flow.test.ts',
-  },
-  {
-    id: 'rw-mp-learning-golden',
-    mechanism: 'test',
-    roots: ['#2', '#8'],
-    reverseTest: 'rewrite/mp/tests/learning-map.test.ts',
-  },
-  {
-    id: 'rw-mp-player-golden',
-    mechanism: 'test',
-    roots: ['#7', '#8'],
-    reverseTest: 'rewrite/mp/tests/player.test.ts',
-  },
-  {
-    id: 'rw-mp-reviews-golden',
-    mechanism: 'test',
-    roots: ['#8'],
-    reverseTest: 'rewrite/mp/tests/reviews-map.test.ts',
-  },
-  {
-    id: 'rw-mp-me-golden',
-    mechanism: 'test',
-    roots: ['#6', '#8'],
-    reverseTest: 'rewrite/mp/tests/continue-resolve.test.ts',
-  },
-  {
-    id: 'rw-mp-privacy-golden',
-    mechanism: 'test',
-    roots: ['R27', '#8'],
-    reverseTest: 'rewrite/mp/tests/privacy-gate.test.ts',
-  },
-  {
-    id: 'rw-admin-money-ui-golden',
-    mechanism: 'test',
-    roots: ['#4', '#8'],
-    reverseTest: 'rewrite/admin/tests/money-ui.test.ts',
-  },
-  {
-    id: 'rw-admin-products-ui-golden',
-    mechanism: 'test',
-    roots: ['#8'],
-    reverseTest: 'rewrite/admin/tests/products-ui.test.ts',
-  },
-  {
-    id: 'rw-admin-content-ui-golden',
-    mechanism: 'test',
-    roots: ['#8', '#12'],
-    reverseTest: 'rewrite/admin/tests/content-ui.test.ts',
-  },
-  {
-    id: 'rw-admin-cs-ui-golden',
-    mechanism: 'test',
-    roots: ['#8'],
-    reverseTest: 'rewrite/admin/tests/cs-ui.test.ts',
-  },
-  {
-    id: 'rw-admin-system-ui-golden',
-    mechanism: 'test',
-    roots: ['#4', '#8'],
-    reverseTest: 'rewrite/admin/tests/system-ui.test.ts',
-  },
-  {
-    id: 'rw-admin-scm-ui-golden',
-    mechanism: 'test',
-    roots: ['#4', '#8'],
-    reverseTest: 'rewrite/admin/tests/scm-ui.test.ts',
-  },
-  {
-    id: 'rw-agent-ui-golden',
-    mechanism: 'test',
-    roots: ['#8'],
-    reverseTest: 'rewrite/agent/tests/desk.test.ts',
-  },
-  {
-    id: 'rw-site-schema-golden',
-    mechanism: 'test',
-    roots: ['#8'],
-    reverseTest: 'rewrite/site/tests/schema.test.ts',
   },
   {
     id: 'order-status-union',
