@@ -8,6 +8,7 @@ import { materialHuman, purchaseStatusLabel, yuanToFen, fenLabel, scmErrorText }
 import { dateTime } from '../lib/format'
 import { consumePurchaseHandoff } from '../lib/scmHandoff'
 import { useLoadStatus } from '../lib/status'
+import { useLatest } from '../lib/latest'
 import ScmFlowTabs from '../components/ScmFlowTabs.vue'
 import UiButton from '../components/ui/Button.vue'
 import PageHeader from '../components/ui/PageHeader.vue'
@@ -53,8 +54,12 @@ const draftTotalFen = computed(() => {
   return sum
 })
 
+const listGen = useLatest() // 采购单乱序守卫（P2·快切 chip 时旧结果别覆盖当前筛选·根因#8）
+const saving = ref(false) // 建单在途锁（P2·防双击建两张重复草稿·后端建单无 id 幂等）
 async function reload() {
+  const my = listGen.begin()
   const [p, m, s] = await Promise.all([listPurchases(filter.value || undefined), listMaterials(), listSuppliers()])
+  if (listGen.isStale(my)) return // 已切别 chip·丢弃过期采购单
   orders.value = p.ok ? (p.list as Record<string, any>[]) : []
   mats.value = m.ok ? (m.list as Record<string, any>[]) : []
   sups.value = s.ok ? ((s.list as Record<string, any>[]) || []).filter((x) => x.type === 'factory') : []
@@ -76,7 +81,7 @@ function editDraft(o: Record<string, any>) {
 
 async function doSave() {
   const f = form.value
-  if (!f) return
+  if (!f || saving.value) return // 在途禁再发·防双击建重复草稿
   const lines: Array<{ materialId: string; qty: number; unitPriceFen: number }> = []
   for (const l of f.lines) {
     const fen = yuanToFen(l.priceYuan)
@@ -86,7 +91,9 @@ async function doSave() {
     }
     lines.push({ materialId: l.materialId, qty: Number(l.qty), unitPriceFen: fen })
   }
+  saving.value = true
   const r = await savePurchase(f.supplierId, lines, f.purchaseId || undefined) // 传 purchaseId＝改草稿·空＝新建
+  saving.value = false
   note(r.ok, `草稿已${f.purchaseId ? '更新' : '建'}（总价 ${fenLabel(r.totalFen)}·服务端核算）`, scmErrorText(r.error))
   if (r.ok) form.value = null
   void reload()

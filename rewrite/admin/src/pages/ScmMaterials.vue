@@ -34,6 +34,7 @@ const supForm = ref({ supplierId: '', name: '', type: 'factory', contact: '', no
 const adj = ref({ materialId: '', delta: 0, reason: '' })
 const adjustId = ref('') // 本次调整意图的幂等键（生成一次·重试复用·成功才换新·根因#4·同 runAssembly B1）
 const adjustBusy = ref(false)
+const supBusy = ref(false) // 供应商建档在途锁（P2·防双击建重复供应商）
 
 // 主档按 类别→料号 排序（换皮丢了排序·长表乱序不好扫）
 const sortedMats = computed(() =>
@@ -73,7 +74,10 @@ async function doSaveMaterial() {
 }
 
 async function doSaveSupplier() {
+  if (supBusy.value) return // 在途禁再发·防双击建两个重复供应商（后端建档无 id 幂等）
+  supBusy.value = true
   const r = await saveSupplier({ ...supForm.value })
+  supBusy.value = false
   note(r.ok, supForm.value.supplierId ? '供应商已更新' : '供应商已保存', scmErrorText(r.error))
   if (r.ok) resetSupForm()
   void reload()

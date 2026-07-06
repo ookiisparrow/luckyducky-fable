@@ -109,9 +109,18 @@ onBeforeUnmount(() => {
   }
 })
 
-const ratio = computed(() => (card.value ? card.value.sizeMM.h / card.value.sizeMM.w : 0.6))
+const ratio = computed(() => {
+  const w = card.value?.sizeMM.w as number, h = card.value?.sizeMM.h as number
+  return w > 0 && h > 0 ? h / w : 0.6 // 防清空/0/负 → Infinity/NaN 塌陷预览
+})
 const prevW = computed(() => (ratio.value > 1 ? 200 : 290))
 const isPreset = (p: { w: number; h: number }) => card.value && card.value.sizeMM.w === p.w && card.value.sizeMM.h === p.h
+// 尺寸失焦即校正（P2·清空/0/负数会写 NaN 进 sizeMM·塌陷预览+导出无效印刷 SVG）：clamp 到 40–300 整数·非法回退 85
+function clampDims() {
+  if (!card.value) return
+  const fix = (n: number) => (Number.isFinite(n) && n > 0 ? Math.min(300, Math.max(40, Math.round(n))) : 85)
+  card.value.sizeMM = { w: fix(card.value.sizeMM.w), h: fix(card.value.sizeMM.h) }
+}
 
 async function pickArt(e: Event) {
   const file = (e.target as HTMLInputElement).files?.[0]
@@ -148,6 +157,10 @@ async function finalize() {
   }
   // 先落库、成功才翻定稿态（审核补漏·病根#14 伪成功）：不乐观翻——防前端显「已定稿」而后端仍 draft，
   // 第 6 步码批次依赖 cardFinal 落库·否则生成失败且排障无线索。
+  if (saveTimer) {
+    clearTimeout(saveTimer) // 取消在途防抖 autosave·防它带旧 status 并发写把定稿盖回 draft（同 Products/HomeContent 约定）
+    saveTimer = null
+  }
   const next = card.value.status === 'final' ? 'draft' : 'final'
   const r = await saveCard({ ...card.value, status: next } as unknown as Record<string, unknown>)
   if ((r as any).ok) {
@@ -255,9 +268,9 @@ function downloadSvg(kind: 'front' | 'back') {
             <button v-for="p in PRESETS" :key="p.label" class="ld-chip" :class="{ on: isPreset(p) }" @click="card.sizeMM = { w: p.w, h: p.h }">{{ p.label }}</button>
           </div>
           <div class="dims">
-            <label>宽 <input v-model.number="card.sizeMM.w" type="number" min="40" max="300" class="num" /></label>
+            <label>宽 <input v-model.number="card.sizeMM.w" @change="clampDims" type="number" min="40" max="300" class="num" /></label>
             <span>×</span>
-            <label>高 <input v-model.number="card.sizeMM.h" type="number" min="40" max="300" class="num" /></label>
+            <label>高 <input v-model.number="card.sizeMM.h" @change="clampDims" type="number" min="40" max="300" class="num" /></label>
           </div>
         </Card>
 

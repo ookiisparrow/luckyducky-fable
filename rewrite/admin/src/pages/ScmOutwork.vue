@@ -71,15 +71,18 @@ function editDraft(o: Record<string, any>) {
   if (!form.value.lines.length) form.value.lines.push({ materialId: '', qty: 1 })
 }
 
+const saving = ref(false) // 建单在途锁（P2·防双击建两张重复外协草稿·后端建单无 id 幂等）
 async function doSave() {
   const f = form.value
-  if (!f) return
+  if (!f || saving.value) return
   const fen = yuanToFen(f.rateYuan)
   if (fen === null) {
     note(false, '', '计件单价不合法（元·最多两位小数·可为 0）')
     return
   }
+  saving.value = true
   const r = await saveOutwork(f.workerId, fen, f.lines.map((l) => ({ materialId: l.materialId, qty: Number(l.qty) })), f.outworkId || undefined)
+  saving.value = false
   note(r.ok, `外协草稿已${f.outworkId ? '更新' : '建'}`, scmErrorText(r.error))
   if (r.ok) form.value = null
   void reload()

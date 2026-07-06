@@ -44,6 +44,7 @@ function move<T>(arr: T[], i: number, dir: number) {
   const t = arr[i]
   arr[i] = arr[j]
   arr[j] = t
+  confirmKey.value = '' // 重排后清「已武装删除」·防下标编码的 confirmKey 落到换位后的另一元素→删错（P2）
 }
 function delChapter(ci: number) {
   twoStep('ch:' + ci, () => course.value!.chapters.splice(ci, 1))

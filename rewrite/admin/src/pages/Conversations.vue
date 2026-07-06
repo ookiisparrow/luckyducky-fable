@@ -32,9 +32,12 @@ async function loadReport() {
   if (!r.ok) message.value = '质检报表加载失败：' + String((r as any).error || '') // 报错带原文（病根#14·对齐 search）
 }
 
+// 发起检索时的筛选快照（翻页复用·防用户改输入框后点「更早」用新筛选+旧 cursor 串档·P2）
+let searchFilter: { openid?: string; externalUserId?: string; keyword?: string } = {}
 async function search() {
   message.value = '检索中…'
-  const r = await searchConversations({ openid: openid.value.trim() || undefined, externalUserId: externalUserId.value.trim() || undefined, keyword: keyword.value.trim() || undefined })
+  searchFilter = { openid: openid.value.trim() || undefined, externalUserId: externalUserId.value.trim() || undefined, keyword: keyword.value.trim() || undefined }
+  const r = await searchConversations(searchFilter)
   msgs.value = r.ok ? mapMessages(r.messages) : []
   cursor.value = r.ok ? r.nextCursor : null
   hasMore.value = !!(r.ok && r.hasMore)
@@ -44,7 +47,7 @@ async function search() {
 
 async function more() {
   if (!hasMore.value || cursor.value == null) return
-  const r = await searchConversations({ openid: openid.value.trim() || undefined, externalUserId: externalUserId.value.trim() || undefined, keyword: keyword.value.trim() || undefined, cursor: cursor.value })
+  const r = await searchConversations({ ...searchFilter, cursor: cursor.value }) // 复用检索快照·不现读输入框（防串档）
   if (!r.ok) {
     message.value = '加载更多失败：' + String(r.error || '') // 别静默吞·反复点无反应（病根#14）
     return

@@ -7,6 +7,7 @@ import { ref, computed, onMounted } from 'vue'
 import { CircleDollarSign, RotateCcw, Wallet, Download, CircleCheck } from 'lucide-vue-next'
 import { getReconciliation, getBillMatch, downloadBill } from '../api/system'
 import { mapRecon, mapBillMatch, type ReconVM, type BillMatchVM } from '../lib/mapSystem'
+import { useLatest } from '../lib/latest'
 import UiButton from '../components/ui/Button.vue'
 import PageHeader from '../components/ui/PageHeader.vue'
 import Card from '../components/ui/Card.vue'
@@ -33,9 +34,12 @@ const cum = computed(() => {
 // 内部异常总笔数（B2 修后·换皮误当数组恒 0·明细块永不渲染）
 const exCount = computed(() => (recon.value ? recon.value.exceptions.reduce((n, e) => n + e.ids.length, 0) : 0))
 
+const listGen = useLatest() // 对账乱序守卫（P2·快改区间时旧结果别覆盖新区间·根因#8）
 async function reload() {
   message.value = '加载中…'
+  const my = listGen.begin()
   const [r, m] = await Promise.all([getReconciliation(from.value, to.value), getBillMatch(from.value, to.value)])
+  if (listGen.isStale(my)) return // 已改区间·丢弃过期对账结果
   if ((r as any).error === 'SESSION_LOST' || (m as any).error === 'SESSION_LOST') return
   recon.value = mapRecon(r)
   match.value = mapBillMatch(m)
@@ -65,8 +69,8 @@ async function pullBill() {
   busy.value = true
   const r = await downloadBill(billDate.value)
   busy.value = false
-  message.value = r.ok ? '账单已拉取入库，勾对已刷新' : '拉取失败：' + String(r.error || '')
-  void reload()
+  await reload() // 先刷新对账（其间显加载中·结束落空）
+  message.value = r.ok ? '账单已拉取入库，勾对已刷新' : '拉取失败：' + String(r.error || '') // 后写结果·不被 reload 吞（病根#14）
 }
 
 // CST 起止（含端）逐日列表（cap 62 天·防误填超长区间刷爆）
@@ -101,8 +105,8 @@ async function pullRange() {
     if (r.ok) ok++
   }
   busy.value = false
-  message.value = `区间账单已拉取 ${ok}/${days.length} 天，勾对已刷新`
-  void reload()
+  await reload() // 先刷新对账
+  message.value = `区间账单已拉取 ${ok}/${days.length} 天，勾对已刷新` // 后写结果·不被 reload 吞（病根#14）
 }
 
 function exportCsv() {

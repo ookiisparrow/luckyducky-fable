@@ -133,6 +133,7 @@ async function doRun() {
 watch(run, () => {
   pendingAsmId.value = ''
   runConfirm.value = false
+  preview.value = [] // 改产品/规格/套数即清旧预演·防显 A 的缺料表 + 「有 N 项缺料」警告落到 B（P2·误导执行决策）
 }, { deep: true })
 
 onMounted(reload)

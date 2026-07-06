@@ -4,6 +4,7 @@
 // 富详情抽屉（订单进度时间线 / 逐商品激活态 getOrderDetail / 交易单号 / 微信发货合规上报状态）、
 // shipped 改单号 · done 查看、物流公司预设下拉、列表手机号掩码（PII）。删除/解除仍走 no-alert 两步确认。
 import { ref, computed, onMounted } from 'vue'
+import { useLatest } from '../lib/latest'
 import { RefreshCw, Search, Package, X, PackageCheck, ScanLine, TriangleAlert } from 'lucide-vue-next'
 import { listOrders, orderCounts, getOrderDetail, shipOrder, shipOrders, clearFeeMismatch } from '../api/money'
 import UiButton from '../components/ui/Button.vue'
@@ -49,9 +50,12 @@ const batch = ref<{
   done: boolean
 } | null>(null)
 
+const listGen = useLatest() // 列表乱序守卫（P2·快切标签/搜索时旧结果别覆盖新标签·根因#8）
 async function reload() {
   message.value = '加载中…'
+  const my = listGen.begin()
   const [r, c] = await Promise.all([listOrders(tab.value, undefined, 20, activeQ.value), orderCounts()])
+  if (listGen.isStale(my)) return // 已切别标签/搜索·丢弃过期列表（防高亮标签与内容错配）
   if ((r as any).error === 'SESSION_LOST') return
   rows.value = r.ok ? mapOrderRows((r as any).list) : []
   cursor.value = r.ok ? (r as any).nextCursor : null
@@ -204,8 +208,12 @@ async function doClearMismatch(id: string) {
   }
   clearConfirmId.value = ''
   const r = await clearFeeMismatch(id)
-  message.value = r.ok ? '' : '解除失败：' + String(r.error || '')
-  void reload()
+  if (r.ok) {
+    message.value = ''
+    void reload()
+  } else {
+    message.value = '解除失败：' + String(r.error || '') // 失败留原文·不 reload 吞（同 doShip 约定·病根#14）
+  }
 }
 
 onMounted(reload)

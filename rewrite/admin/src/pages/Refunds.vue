@@ -60,9 +60,12 @@ const verdictVM = computed<RefundVerdictVM | null>(() =>
     : null
 )
 
+const listGen = useLatest() // 列表乱序守卫（P2·快切标签/搜索时旧结果别覆盖新标签·根因#8）
 async function reload() {
   message.value = '加载中…'
+  const my = listGen.begin()
   const [r, c] = await Promise.all([listRefunds(tab.value, undefined, 20, activeQ.value), refundCounts()])
+  if (listGen.isStale(my)) return // 已切别标签/搜索·丢弃过期列表
   if ((r as any).error === 'SESSION_LOST') return
   rows.value = r.ok ? mapRefundRows((r as any).list) : []
   cursor.value = r.ok ? (r as any).nextCursor : null
@@ -131,7 +134,7 @@ function closeDecide() {
 
 async function doApprove() {
   const row = decideRow.value
-  if (!row || !canApprove.value) return
+  if (!row || !canApprove.value || busy.value) return // 在途禁再发·防双击重复触发退款（同 doReject）
   busy.value = true
   decideErr.value = ''
   const r = await approveRefund(row.id)

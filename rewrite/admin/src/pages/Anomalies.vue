@@ -5,6 +5,7 @@
 import { ref, computed, onMounted } from 'vue'
 import { RefreshCw, Check, ClipboardList, AlertCircle, AlertTriangle, Activity, ShieldCheck } from 'lucide-vue-next'
 import { listAnomalies, resolveAnomaly } from '../api/ops'
+import { useLatest } from '../lib/latest'
 import PageHeader from '../components/ui/PageHeader.vue'
 import KpiCard from '../components/ui/KpiCard.vue'
 import Badge from '../components/ui/Badge.vue'
@@ -50,13 +51,16 @@ const openCount = computed(() => list.value.filter((a) => !a.resolved).length)
 const highCount = computed(() => list.value.filter((a) => a.severity === 'high').length)
 const totalHits = computed(() => list.value.reduce((s, a) => s + (Number(a.count) || 0), 0))
 
+const listGen = useLatest() // 异常账本乱序守卫（P2·快切筛选时旧结果别覆盖当前 chip·根因#8）
 async function load() {
   busy.value = true
   const opts: { resolved?: boolean } = {}
   if (filter.value === 'open') opts.resolved = false
   else if (filter.value === 'resolved') opts.resolved = true
+  const my = listGen.begin()
   const r: any = await listAnomalies(opts)
   busy.value = false
+  if (listGen.isStale(my)) return // 已切别 chip·丢弃过期异常账本
   if (r.error === 'SESSION_LOST') return // 会话失效集中导登录（client.onSessionLost·单源·根因#5）
   list.value = r.list || []
   message.value = r.ok ? '' : '加载失败：' + String(r.error || '')
