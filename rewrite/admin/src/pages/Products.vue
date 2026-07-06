@@ -241,11 +241,13 @@ const doUnpublish = (id: string) =>
     void reload()
   })
 
-const doRepublish = async (id: string) => {
-  const r = await republishProduct(id)
-  message.value = r.ok ? '' : '恢复失败：' + String(r.error || '')
-  void reload()
-}
+// 恢复销售＝把已下架商品重新对小程序可见（可见性变更·同上/下架应有一道二次确认·审核补漏）
+const doRepublish = (id: string) =>
+  twoStep('re:' + id, async () => {
+    const r = await republishProduct(id)
+    message.value = r.ok ? '' : '恢复失败：' + String(r.error || '')
+    void reload()
+  })
 
 const doDelete = (id: string) =>
   twoStep('del:' + id, async () => {
@@ -393,7 +395,7 @@ onMounted(async () => {
             <UiButton v-if="row.state === 'preparing'" variant="primary" size="sm" @click="doPublish(row.id)">{{ confirmKey === 'pub:' + row.id ? '确认上架？' : '上架' }}</UiButton>
             <UiButton v-if="row.state === 'onsale'" variant="ghost" size="sm" @click="doPublish(row.id)">{{ confirmKey === 'pub:' + row.id ? '确认重上？' : '重新上架' }}</UiButton>
             <UiButton v-if="row.state === 'onsale'" variant="danger" size="sm" @click="doUnpublish(row.id)">{{ confirmKey === 'off:' + row.id ? '确认下架？' : '下架' }}</UiButton>
-            <UiButton v-if="row.state === 'unlisted'" variant="primary" size="sm" @click="doRepublish(row.id)">恢复销售</UiButton>
+            <UiButton v-if="row.state === 'unlisted'" variant="primary" size="sm" @click="doRepublish(row.id)">{{ confirmKey === 're:' + row.id ? '确认恢复销售？' : '恢复销售' }}</UiButton>
             <button class="icon-btn" :title="confirmKey === 'del:' + row.id ? '连已上架一起删？' : '删除'" @click="doDelete(row.id)">
               <Trash2 :size="15" :stroke-width="1.8" />
             </button>

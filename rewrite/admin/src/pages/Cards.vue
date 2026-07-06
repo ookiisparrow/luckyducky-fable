@@ -140,13 +140,23 @@ function useCover() {
   card.value.front.art = String(product.value.cover)
   artUrl.value = coverUrl.value
 }
-function finalize() {
+async function finalize() {
   if (!card.value) return
   if (!card.value.front.art) {
     loadErr.value = '正面还没有图案——取商品封面图或上传插画'
     return
   }
-  card.value.status = card.value.status === 'final' ? 'draft' : 'final'
+  // 先落库、成功才翻定稿态（审核补漏·病根#14 伪成功）：不乐观翻——防前端显「已定稿」而后端仍 draft，
+  // 第 6 步码批次依赖 cardFinal 落库·否则生成失败且排障无线索。
+  const next = card.value.status === 'final' ? 'draft' : 'final'
+  const r = await saveCard({ ...card.value, status: next } as unknown as Record<string, unknown>)
+  if ((r as any).ok) {
+    card.value.status = next
+    loadErr.value = ''
+    autoState.value = 'saved'
+  } else {
+    loadErr.value = (next === 'final' ? '定稿' : '取消定稿') + '保存失败：' + String((r as any).error || '') + '（请重试）'
+  }
 }
 
 async function compress(file: File): Promise<string> {

@@ -1,7 +1,7 @@
 <script setup lang="ts">
 // 配方与组装（设计语言一致性·M3 UI 批17）：全局模板（共用料+毛线槽）+ 每产品差异位（三色+专属件）→
 // 预演（只读看短缺）→ 执行组装（快照冻结·同单不双扣）。逻辑未动，仅套设计语言。
-import { ref, onMounted, watch, computed } from 'vue'
+import { ref, onMounted, watch, computed, nextTick } from 'vue'
 import { Plus, X, ClipboardList } from 'lucide-vue-next'
 import { getBomSetup, saveBomTemplate, saveBomProfile, previewAssembly, runAssembly, listAssemblies, listMaterials } from '../api/scm'
 import { listDrafts } from '../api/products'
@@ -16,6 +16,11 @@ import Badge from '../components/ui/Badge.vue'
 import EmptyState from '../components/ui/EmptyState.vue'
 
 const template = ref<{ commonLines: Array<{ materialId: string; qtyPerSet: number }>; yarnSlots: Array<{ tier: string; form: string; qtyPerSet: number }> }>({ commonLines: [], yarnSlots: [] })
+// 未保存的模板编辑保护（审核补漏·P2 数据丢失）：用户改模板即标脏；reload 有脏则不覆盖模板（防
+// doSaveProfile 的 void reload() 用服务端旧值回灌、静默吞掉未存编辑）。程序化载入经 tplGuard 抑制误标。
+const tplDirty = ref(false)
+let tplGuard = false
+watch(template, () => { if (!tplGuard) tplDirty.value = true }, { deep: true })
 const profiles = ref<Array<Record<string, any>>>([])
 const mats = ref<Array<Record<string, any>>>([])
 const assemblies = ref<Array<Record<string, any>>>([])
@@ -69,7 +74,12 @@ async function reload() {
   const [b, m, a, d] = await Promise.all([getBomSetup(), listMaterials(), listAssemblies(), listDrafts()])
   if (b.ok) {
     const t = (b.template as Record<string, any>) || {}
-    template.value = { commonLines: t.commonLines || [], yarnSlots: t.yarnSlots || [] }
+    if (!tplDirty.value) {
+      // 无未保存编辑才回灌模板（有脏则保住用户编辑·不被 reload 吞）；tplGuard 抑制程序化写误标脏
+      tplGuard = true
+      template.value = { commonLines: t.commonLines || [], yarnSlots: t.yarnSlots || [] }
+      void nextTick(() => (tplGuard = false))
+    }
     profiles.value = (b.profiles as Record<string, any>[]) || []
   }
   mats.value = m.ok ? (m.list as Record<string, any>[]) : []
@@ -81,6 +91,7 @@ async function reload() {
 async function doSaveTemplate() {
   const r = await saveBomTemplate(template.value)
   note(r.ok, '模板已保存（历史组装单的快照不受影响）', scmErrorText(r.error))
+  if (r.ok) tplDirty.value = false // 已落库·允许后续 reload 回灌最新
 }
 
 async function doSaveProfile() {
