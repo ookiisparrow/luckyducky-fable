@@ -2,12 +2,16 @@
 // 首页内容（设计语言一致性·M3 UI 批12）：hero 文案/信任条/FAQ/激活页背景图（全局 + 按课三态）。
 // 图片走 uploadImage（前端压缩·与商品封面同通道）；保存走白名单（云端二次净化）。逻辑未动，仅套设计语言。
 import { ref, onMounted, onBeforeUnmount, watch, nextTick } from 'vue'
-import { Plus, Check } from 'lucide-vue-next'
+import { Plus, Check, Trash2, X, ImageOff, ShieldCheck, HelpCircle } from 'lucide-vue-next'
 import { getHomeContent, saveHomeContent } from '../api/content'
 import { uploadImage } from '../api/products'
 import { normalizeHome, homePayload, type HomeModel } from '../lib/mapContent'
 import { b64SizeOk } from '../lib/mapProducts'
 import UiButton from '../components/ui/Button.vue'
+import PageHeader from '../components/ui/PageHeader.vue'
+import Card from '../components/ui/Card.vue'
+import Badge from '../components/ui/Badge.vue'
+import EmptyState from '../components/ui/EmptyState.vue'
 
 const model = ref<HomeModel | null>(null)
 const message = ref('')
@@ -126,28 +130,26 @@ async function save() {
 </script>
 
 <template>
-  <div v-if="model" class="page">
-    <header class="page-head">
-      <div>
-        <h1>首页内容</h1>
-        <p class="sub">小程序首页 Hero / 信任条 / FAQ，以及激活页背景图（全局 + 按课三态）。保存后小程序立即生效。</p>
-      </div>
-      <div class="head-r">
-        <span class="auto" :class="autoState">{{ autoState === 'saving' ? '自动保存中…' : autoState === 'saved' ? '已自动保存' : autoState === 'error' ? '自动保存失败' : '' }}</span>
-        <UiButton :disabled="busy" @click="save">{{ busy ? '保存中…' : '保存全部' }}</UiButton>
-      </div>
-    </header>
+  <div v-if="model" class="ld-page">
+    <PageHeader
+      title="首页内容"
+      sub="小程序首页 Hero / 信任条 / FAQ，以及激活页背景图（全局 + 按课三态）。保存后小程序立即生效。"
+    >
+      <Badge v-if="autoState === 'saving'" tone="amber" dot>自动保存中…</Badge>
+      <Badge v-else-if="autoState === 'saved'" tone="green" dot>已自动保存</Badge>
+      <Badge v-else-if="autoState === 'error'" tone="red" dot>自动保存失败</Badge>
+      <UiButton :disabled="busy" @click="save">{{ busy ? '保存中…' : '保存全部' }}</UiButton>
+    </PageHeader>
 
-    <p v-if="message" class="status">{{ message }}</p>
+    <p v-if="message" class="ld-status">{{ message }}</p>
 
-    <section class="card">
-      <h2>Hero 文案</h2>
+    <!-- Hero 文案（含所见即所得预览·卡面预览本页独有） -->
+    <Card title="Hero 文案" sub="小程序首页顶部主标题与副标语">
       <div class="hero-edit">
         <div class="hero-fields">
           <div class="field"><label>主标题（≤20 字）</label><input v-model="model.heroTitle" maxlength="20" /></div>
           <div class="field"><label>副标语（≤40 字）</label><input v-model="model.heroTagline" maxlength="40" /></div>
         </div>
-        <!-- 所见即所得预览（换皮丢·改 hero 是盲编看不到首页效果） -->
         <div class="hero-preview">
           <div class="hp-frame">
             <div class="hp-title">{{ model.heroTitle || '主标题' }}</div>
@@ -156,17 +158,17 @@ async function save() {
           <span class="hp-cap">小程序首页预览</span>
         </div>
       </div>
-    </section>
+    </Card>
 
-    <section class="card">
-      <h2>激活页背景图</h2>
+    <!-- 激活页背景图（全局 + 逐课程三态·上传位本页独有） -->
+    <Card title="激活页背景图" sub="激活/加载页背景，可设全局回退与逐课程三态图">
       <div class="upload-field">
         <label>全局背景（激活/loading 回退用）</label>
         <div class="upload-row">
           <input type="file" accept="image/*" @change="(e) => uploadTo((f) => (model!.activationBg = f), e)" />
           <img v-if="thumb(model.activationBg)" :src="thumb(model.activationBg)" class="bg-thumb" alt="" />
           <span v-if="model.activationBg" class="filetag"><Check :size="12" :stroke-width="2" />已设置</span>
-          <button v-if="model.activationBg" class="del-x" title="恢复默认" @click="model.activationBg = ''">✕</button>
+          <button v-if="model.activationBg" class="clr" title="恢复默认" @click="model.activationBg = ''"><X :size="14" :stroke-width="2" /></button>
         </div>
       </div>
       <div class="upload-field">
@@ -175,86 +177,105 @@ async function save() {
           <input type="file" accept="image/*" @change="(e) => uploadTo((f) => (model!.loadingBg = f), e)" />
           <img v-if="thumb(model.loadingBg)" :src="thumb(model.loadingBg)" class="bg-thumb" alt="" />
           <span v-if="model.loadingBg" class="filetag"><Check :size="12" :stroke-width="2" />已设置</span>
-          <button v-if="model.loadingBg" class="del-x" title="恢复默认" @click="model.loadingBg = ''">✕</button>
+          <button v-if="model.loadingBg" class="clr" title="恢复默认" @click="model.loadingBg = ''"><X :size="14" :stroke-width="2" /></button>
         </div>
       </div>
-      <h3>按课程三态图（欢迎 / 欢迎回来 / 已被激活）</h3>
-      <div v-for="(row, i) in model.byCourse" :key="i" class="course-row">
-        <input v-model="row.courseId" placeholder="course-xxx" class="cid" />
-        <label class="mini">欢迎<input type="file" accept="image/*" @change="(e) => uploadTo((f) => (row.welcome = f), e)" /><template v-if="row.welcome"><img v-if="thumb(row.welcome)" :src="thumb(row.welcome)" class="state-thumb" alt="" /><Check v-else :size="13" :stroke-width="2" class="ok" /><button class="clr" title="清除这态" @click.stop.prevent="row.welcome = ''">✕</button></template></label>
-        <label class="mini">回访<input type="file" accept="image/*" @change="(e) => uploadTo((f) => (row.welcomeBack = f), e)" /><template v-if="row.welcomeBack"><img v-if="thumb(row.welcomeBack)" :src="thumb(row.welcomeBack)" class="state-thumb" alt="" /><Check v-else :size="13" :stroke-width="2" class="ok" /><button class="clr" title="清除这态" @click.stop.prevent="row.welcomeBack = ''">✕</button></template></label>
-        <label class="mini">已用<input type="file" accept="image/*" @change="(e) => uploadTo((f) => (row.taken = f), e)" /><template v-if="row.taken"><img v-if="thumb(row.taken)" :src="thumb(row.taken)" class="state-thumb" alt="" /><Check v-else :size="13" :stroke-width="2" class="ok" /><button class="clr" title="清除这态" @click.stop.prevent="row.taken = ''">✕</button></template></label>
-        <button class="del-x" title="删除这门课" @click="delCourseRow(i)">✕</button>
-      </div>
-      <button class="add-btn" @click="addCourseRow"><Plus :size="13" :stroke-width="2" /><span>加一门课</span></button>
-    </section>
 
-    <section class="card">
-      <h2>信任条（≤4）</h2>
-      <div v-for="(t, i) in model.trust" :key="i" class="pair">
-        <input v-model="t.icon" placeholder="图标名（如 truck）" />
-        <input v-model="t.label" placeholder="文案（≤12 字）" maxlength="12" />
-        <button class="del-x" title="删除" @click="delTrust(i)">✕</button>
+      <h3 class="sub-head">按课程三态图（欢迎 / 欢迎回来 / 已被激活）</h3>
+      <EmptyState v-if="!model.byCourse.length" :icon="ImageOff" text="暂无按课程配置，点「加一门课」为某门课设三态背景图" />
+      <template v-else>
+        <div v-for="(row, i) in model.byCourse" :key="i" class="course-row">
+          <input v-model="row.courseId" placeholder="course-xxx" class="cid" />
+          <label class="mini">欢迎<input type="file" accept="image/*" @change="(e) => uploadTo((f) => (row.welcome = f), e)" /><template v-if="row.welcome"><img v-if="thumb(row.welcome)" :src="thumb(row.welcome)" class="state-thumb" alt="" /><Check v-else :size="13" :stroke-width="2" class="ok" /><button class="clr" title="清除这态" @click.stop.prevent="row.welcome = ''"><X :size="12" :stroke-width="2" /></button></template></label>
+          <label class="mini">回访<input type="file" accept="image/*" @change="(e) => uploadTo((f) => (row.welcomeBack = f), e)" /><template v-if="row.welcomeBack"><img v-if="thumb(row.welcomeBack)" :src="thumb(row.welcomeBack)" class="state-thumb" alt="" /><Check v-else :size="13" :stroke-width="2" class="ok" /><button class="clr" title="清除这态" @click.stop.prevent="row.welcomeBack = ''"><X :size="12" :stroke-width="2" /></button></template></label>
+          <label class="mini">已用<input type="file" accept="image/*" @change="(e) => uploadTo((f) => (row.taken = f), e)" /><template v-if="row.taken"><img v-if="thumb(row.taken)" :src="thumb(row.taken)" class="state-thumb" alt="" /><Check v-else :size="13" :stroke-width="2" class="ok" /><button class="clr" title="清除这态" @click.stop.prevent="row.taken = ''"><X :size="12" :stroke-width="2" /></button></template></label>
+          <button class="icon-btn" title="删除这门课" @click="delCourseRow(i)"><Trash2 :size="14" :stroke-width="1.8" /></button>
+        </div>
+      </template>
+      <div class="row-add">
+        <UiButton variant="ghost" size="sm" @click="addCourseRow"><Plus :size="14" :stroke-width="2" />加一门课</UiButton>
       </div>
-      <button class="add-btn" @click="addTrust"><Plus :size="13" :stroke-width="2" /><span>加一条</span></button>
-    </section>
+    </Card>
 
-    <section class="card">
-      <h2>FAQ（≤8）</h2>
-      <div v-for="(f, i) in model.faq" :key="i" class="faq">
-        <input v-model="f.title" placeholder="问题（≤40 字）" maxlength="40" />
-        <textarea v-model="f.body" placeholder="回答（≤150 字）" maxlength="150" />
-        <button class="del-x" title="删除" @click="delFaq(i)">✕</button>
+    <!-- 信任条（≤4） -->
+    <Card title="信任条" :sub="`最多 4 条 · 当前 ${model.trust.length} 条`">
+      <template #head>
+        <UiButton variant="ghost" size="sm" :disabled="model.trust.length >= 4" @click="addTrust"><Plus :size="14" :stroke-width="2" />新增一条</UiButton>
+      </template>
+      <EmptyState v-if="!model.trust.length" :icon="ShieldCheck" text="暂无信任条，点「新增一条」添加" />
+      <div v-else class="rows">
+        <div v-for="(t, i) in model.trust" :key="i" class="pair">
+          <input v-model="t.icon" placeholder="图标名（如 truck）" />
+          <input v-model="t.label" placeholder="文案（≤12 字）" maxlength="12" />
+          <button class="icon-btn" title="删除" @click="delTrust(i)"><Trash2 :size="14" :stroke-width="1.8" /></button>
+        </div>
       </div>
-      <button class="add-btn" @click="addFaq"><Plus :size="13" :stroke-width="2" /><span>加一条</span></button>
-    </section>
+    </Card>
+
+    <!-- FAQ（≤8） -->
+    <Card title="FAQ" :sub="`最多 8 条 · 当前 ${model.faq.length} 条`">
+      <template #head>
+        <UiButton variant="ghost" size="sm" :disabled="model.faq.length >= 8" @click="addFaq"><Plus :size="14" :stroke-width="2" />新增一条</UiButton>
+      </template>
+      <EmptyState v-if="!model.faq.length" :icon="HelpCircle" text="暂无 FAQ，点「新增一条」添加" />
+      <div v-else class="rows">
+        <div v-for="(f, i) in model.faq" :key="i" class="faq">
+          <input v-model="f.title" placeholder="问题（≤40 字）" maxlength="40" />
+          <textarea v-model="f.body" placeholder="回答（≤150 字）" maxlength="150" />
+          <button class="icon-btn" title="删除" @click="delFaq(i)"><Trash2 :size="14" :stroke-width="1.8" /></button>
+        </div>
+      </div>
+    </Card>
   </div>
 </template>
 
 <style scoped>
-.page {
-  max-width: 780px;
+/* 首页内容编辑器·本页独有（共享原语管页头/卡/按钮/徽章/空态；这里只留表单位/上传位/卡面预览的私有样式） */
+
+/* 表单输入基线 */
+.field {
+  margin-bottom: 12px;
 }
-.page-head {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 16px;
-  margin-bottom: 16px;
+.field:last-child {
+  margin-bottom: 0;
 }
-h1 {
-  margin: 0;
-  font-size: 22px;
-  font-weight: 700;
-  color: var(--ld-ink);
-}
-.sub {
-  margin: 4px 0 0;
-  font-size: 12.5px;
+.field label,
+.upload-field label {
+  display: block;
+  font-size: 12px;
   color: var(--ld-content-2);
+  margin-bottom: 5px;
 }
-.head-r {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  flex: none;
-}
-.auto {
-  font-size: 11.5px;
-}
-.auto.saving {
-  color: var(--ld-content-2);
-}
-.auto.saved {
-  color: var(--ld-green);
-}
-.auto.error {
-  color: var(--ld-red);
-}
-.status {
+input,
+textarea {
+  width: 100%;
+  padding: 8px 12px;
+  border: 1px solid var(--ld-line);
+  border-radius: var(--ld-radius-sm);
   font-size: 13px;
-  color: var(--ld-red);
+  font-family: var(--ld-font);
+  color: var(--ld-content);
+  background: var(--ld-bg);
+  box-sizing: border-box;
 }
+input:focus,
+textarea:focus {
+  outline: none;
+  border-color: var(--ld-purple-line);
+}
+textarea {
+  min-height: 50px;
+  resize: vertical;
+}
+input[type='file'] {
+  width: auto;
+  border: none;
+  padding: 0;
+  background: none;
+  font-size: 12px;
+}
+
+/* Hero 卡面预览 */
 .hero-edit {
   display: flex;
   gap: 18px;
@@ -271,7 +292,7 @@ h1 {
 }
 .hp-frame {
   padding: 22px 16px;
-  border-radius: 14px;
+  border-radius: var(--ld-radius);
   background: linear-gradient(160deg, var(--ld-bg-lilac), var(--ld-bg-sage));
   border: 1px solid var(--ld-line);
 }
@@ -292,77 +313,21 @@ h1 {
   font-size: 10.5px;
   color: var(--ld-content-2);
 }
-.state-thumb {
-  width: 22px;
-  height: 22px;
-  object-fit: cover;
-  border-radius: 4px;
-  border: 1px solid var(--ld-line);
-}
-.clr {
-  border: none;
-  background: transparent;
-  color: var(--ld-content-2);
-  font-size: 11px;
-  cursor: pointer;
-  padding: 0 2px;
-}
-.clr:hover {
-  color: var(--ld-red);
-}
-.card {
-  padding: 18px 20px;
+
+/* 上传位 */
+.upload-field {
   margin-bottom: 14px;
-  background: var(--ld-bg);
-  border: 1px solid var(--ld-line);
-  border-radius: var(--ld-radius-l);
 }
-h2 {
-  margin: 0 0 12px;
-  font-size: 14px;
-  font-weight: 700;
-  color: var(--ld-ink);
-}
-h3 {
-  margin: 16px 0 8px;
+.sub-head {
+  margin: 6px 0 10px;
   font-size: 12.5px;
   font-weight: 600;
   color: var(--ld-purple-meta);
-}
-.field {
-  margin-bottom: 10px;
-}
-.field label,
-.upload-field label {
-  display: block;
-  font-size: 12px;
-  color: var(--ld-content-2);
-  margin-bottom: 5px;
-}
-input,
-textarea {
-  width: 100%;
-  padding: 8px 12px;
-  border: 1px solid var(--ld-line);
-  border-radius: 8px;
-  font-size: 13px;
-  font-family: var(--ld-font);
-  box-sizing: border-box;
-}
-textarea {
-  min-height: 50px;
-  resize: vertical;
-}
-.upload-field {
-  margin-bottom: 12px;
 }
 .upload-row {
   display: flex;
   align-items: center;
   gap: 10px;
-}
-.upload-row input {
-  width: auto;
 }
 .filetag {
   display: inline-flex;
@@ -372,31 +337,21 @@ textarea {
   color: var(--ld-green);
   font-family: var(--ld-font-mono);
 }
+.bg-thumb {
+  width: 40px;
+  height: 40px;
+  object-fit: cover;
+  border-radius: var(--ld-radius-sm);
+  border: 1px solid var(--ld-line);
+}
+
+/* 按课程三态行 */
 .course-row {
   display: grid;
   grid-template-columns: 150px 1fr 1fr 1fr auto;
   gap: 8px;
   align-items: center;
   margin-bottom: 8px;
-}
-.del-x {
-  border: none;
-  background: transparent;
-  color: var(--ld-content-2);
-  font-size: 14px;
-  cursor: pointer;
-  padding: 4px 6px;
-  align-self: start;
-}
-.del-x:hover {
-  color: var(--ld-red);
-}
-.bg-thumb {
-  width: 40px;
-  height: 40px;
-  object-fit: cover;
-  border-radius: 6px;
-  border: 1px solid var(--ld-line);
 }
 .cid {
   font-family: var(--ld-font-mono);
@@ -409,32 +364,69 @@ textarea {
   font-size: 12px;
   color: var(--ld-content-2);
 }
-.mini input {
-  width: auto;
+.mini input[type='file'] {
   font-size: 11px;
+}
+.state-thumb {
+  width: 22px;
+  height: 22px;
+  object-fit: cover;
+  border-radius: 4px;
+  border: 1px solid var(--ld-line);
 }
 .ok {
   color: var(--ld-green);
+}
+.row-add {
+  margin-top: 4px;
+}
+
+/* 信任条 / FAQ 行 */
+.rows {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
 }
 .pair,
 .faq {
   display: grid;
   grid-template-columns: 1fr 2fr auto;
   gap: 8px;
-  margin-bottom: 8px;
+  align-items: start;
 }
-.add-btn {
+
+/* 内联清除按钮（图片态清除·恢复默认） */
+.clr {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
-  margin-top: 6px;
-  padding: 6px 14px;
-  border: 1px dashed var(--ld-purple-line);
-  border-radius: 999px;
+  justify-content: center;
+  border: none;
   background: transparent;
-  color: var(--ld-brand-active);
-  font-size: 12px;
-  font-weight: 600;
+  color: var(--ld-content-2);
   cursor: pointer;
+  padding: 2px 4px;
+}
+.clr:hover {
+  color: var(--ld-red);
+}
+
+/* 行删除按钮（对齐 Courses/Kb 图标按钮语言） */
+.icon-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  flex: none;
+  align-self: start;
+  border: 1px solid var(--ld-line);
+  border-radius: var(--ld-radius-sm);
+  background: var(--ld-bg);
+  color: var(--ld-content-2);
+  cursor: pointer;
+}
+.icon-btn:hover {
+  color: var(--ld-red);
+  border-color: var(--ld-red-line);
 }
 </style>

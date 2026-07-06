@@ -7,6 +7,12 @@ import { useRoute, useRouter } from 'vue-router'
 import { getCard, saveCard, uploadImage, listDrafts } from '../api/products'
 import { b64SizeOk } from '../lib/mapProducts'
 import { buildFrontSvg, buildBackSvg, type CardModel } from '../lib/cardSvg'
+// 视图层原语（批F 共享 UI）+ lucide 图标——仅新增 import，管道零改。
+// 注意：lucide 的 Image 与 compress() 里 new Image() 的全局 Image 同名，别名 ImageIcon 防遮蔽。
+import UiButton from '../components/ui/Button.vue'
+import Card from '../components/ui/Card.vue'
+import Badge from '../components/ui/Badge.vue'
+import { Download, Upload, Image as ImageIcon } from 'lucide-vue-next'
 
 // 嵌入模式（上新向导步 5 复用·向后兼容·独立 /cards?productId 用法不传 props 行为不变）：
 // embed=true 隐页头/返回·wizardProductId 覆盖 route.query.productId。
@@ -181,21 +187,24 @@ function downloadSvg(kind: 'front' | 'back') {
 </script>
 
 <template>
-  <div class="page">
-    <header class="page-head">
-      <div v-if="!embed">
+  <div class="ld-page">
+    <!-- 编辑器头（embed 双模：向导内 v-if="!embed" 隐标题/返回，仅留自动保存 + 定稿；PageHeader 不适配此双模，标题块内部门控） -->
+    <header class="cards-head">
+      <div v-if="!embed" class="cards-title">
         <h1>二维码卡片设计</h1>
-        <p class="sub">正面 = 插画面（颜值与品牌），反面 = 二维码面（扫码与指引）；印刷包输出正反两张矢量图。</p>
+        <p class="cards-sub">正面 = 插画面（颜值与品牌），反面 = 二维码面（扫码与指引）；印刷包输出正反两张矢量图。</p>
       </div>
-      <div class="head-r">
-        <span class="auto" :class="autoState">{{ autoState === 'saving' ? '自动保存中…' : autoState === 'saved' ? '已自动保存' : autoState === 'error' ? '自动保存失败' : '' }}</span>
-        <button v-if="!embed" class="btn-ghost" @click="router.back()">← 返回</button>
-        <button v-if="card" class="btn-primary" :class="{ ghost: card.status === 'final' }" @click="finalize">{{ card.status === 'final' ? '↩ 改回草稿' : '✅ 定稿并启用' }}</button>
+      <div class="cards-actions">
+        <Badge v-if="autoState" :tone="autoState === 'saved' ? 'green' : autoState === 'error' ? 'red' : 'neutral'" dot>
+          {{ autoState === 'saving' ? '自动保存中…' : autoState === 'saved' ? '已自动保存' : '自动保存失败' }}
+        </Badge>
+        <UiButton v-if="!embed" variant="ghost" @click="router.back()">← 返回</UiButton>
+        <UiButton v-if="card" :variant="card.status === 'final' ? 'ghost' : 'primary'" @click="finalize">{{ card.status === 'final' ? '↩ 改回草稿' : '✅ 定稿并启用' }}</UiButton>
       </div>
     </header>
 
-    <p v-if="loadErr" class="status">{{ loadErr }}</p>
-    <p v-else-if="loading" class="status-soft">加载中…</p>
+    <p v-if="loadErr" class="err-line">{{ loadErr }}</p>
+    <p v-else-if="loading" class="ld-status">加载中…</p>
 
     <div v-else-if="card" class="work">
       <!-- 双面预览 -->
@@ -206,7 +215,10 @@ function downloadSvg(kind: 'front' | 'back') {
             <span v-else class="front-ph">满版插画 / 产品图</span>
             <span v-if="card.front.showBrand" class="front-chip">🦆 Lucky Ducky · 小棉鸭</span>
           </div>
-          <div class="side-foot"><span class="side-label">正面 · 插画面</span><button class="dl" @click="downloadSvg('front')">下载 SVG</button></div>
+          <div class="side-foot">
+            <span class="side-label">正面 · 插画面</span>
+            <button class="dl" @click="downloadSvg('front')"><Download :size="12" :stroke-width="1.9" /><span>下载 SVG</span></button>
+          </div>
         </div>
         <div class="side">
           <div class="cardprev back" :style="{ width: prevW + 'px', height: prevW * ratio + 'px', background: card.back.bg }">
@@ -218,32 +230,33 @@ function downloadSvg(kind: 'front' | 'back') {
             <div class="b-warn">{{ card.back.texts.warning }}</div>
             <div class="b-bar">{{ card.back.brandText }}</div>
           </div>
-          <div class="side-foot"><span class="side-label">反面 · 二维码面</span><button class="dl" @click="downloadSvg('back')">下载 SVG</button></div>
+          <div class="side-foot">
+            <span class="side-label">反面 · 二维码面</span>
+            <button class="dl" @click="downloadSvg('back')"><Download :size="12" :stroke-width="1.9" /><span>下载 SVG</span></button>
+          </div>
         </div>
         <p class="stage-note">{{ card.sizeMM.w }} × {{ card.sizeMM.h }} mm · <b :class="{ ok: card.status === 'final' }">{{ card.status === 'final' ? '已定稿' : '草稿' }}</b></p>
       </div>
 
-      <!-- 属性面板 -->
+      <!-- 属性面板（每组一张 Card） -->
       <div class="panel">
-        <div class="sec">
-          <div class="sec-t">卡片尺寸（mm，双面同尺寸）</div>
+        <Card title="卡片尺寸（mm，双面同尺寸）">
           <div class="presets">
-            <button v-for="p in PRESETS" :key="p.label" class="preset" :class="{ on: isPreset(p) }" @click="card.sizeMM = { w: p.w, h: p.h }">{{ p.label }}</button>
+            <button v-for="p in PRESETS" :key="p.label" class="ld-chip" :class="{ on: isPreset(p) }" @click="card.sizeMM = { w: p.w, h: p.h }">{{ p.label }}</button>
           </div>
           <div class="dims">
             <label>宽 <input v-model.number="card.sizeMM.w" type="number" min="40" max="300" class="num" /></label>
             <span>×</span>
             <label>高 <input v-model.number="card.sizeMM.h" type="number" min="40" max="300" class="num" /></label>
           </div>
-        </div>
+        </Card>
 
-        <div class="sec group">
-          <div class="sec-t">正面 · 插画面</div>
+        <Card title="正面 · 插画面">
           <div class="artrow">
             <div class="artthumb" :style="{ background: card.front.bg }"><img v-if="artUrl" :src="artUrl" alt="" /></div>
             <div class="artbtns">
-              <button class="btn-ghost sm" @click="useCover">取商品封面图</button>
-              <label class="btn-ghost sm"><input type="file" accept="image/*" hidden @change="pickArt" />{{ busyArt ? '上传中…' : '上传插画' }}</label>
+              <UiButton variant="ghost" size="sm" @click="useCover"><ImageIcon :size="14" :stroke-width="1.8" /><span>取商品封面图</span></UiButton>
+              <label class="upload-btn"><input type="file" accept="image/*" hidden @change="pickArt" /><Upload :size="14" :stroke-width="1.8" /><span>{{ busyArt ? '上传中…' : '上传插画' }}</span></label>
             </div>
           </div>
           <label class="check"><input v-model="card.front.showBrand" type="checkbox" /> 左下角品牌角标</label>
@@ -251,10 +264,9 @@ function downloadSvg(kind: 'front' | 'back') {
             <span class="swlabel">衬底色</span>
             <button v-for="c in SWATCHES" :key="'f' + c" class="swatch" :class="{ on: card.front.bg === c }" :style="{ background: c }" @click="card.front.bg = c"></button>
           </div>
-        </div>
+        </Card>
 
-        <div class="sec group">
-          <div class="sec-t">反面 · 二维码面</div>
+        <Card title="反面 · 二维码面">
           <label class="fl">主标题</label>
           <input v-model="card.back.texts.title" class="in" maxlength="40" />
           <label class="fl">副文案</label>
@@ -269,7 +281,8 @@ function downloadSvg(kind: 'front' | 'back') {
             <span class="swlabel">底色</span>
             <button v-for="c in SWATCHES" :key="'b' + c" class="swatch" :class="{ on: card.back.bg === c }" :style="{ background: c }" @click="card.back.bg = c"></button>
           </div>
-        </div>
+        </Card>
+
         <p class="hint">二维码区按激活码自动生成、无需设计；定稿后到「激活码批次」生成批次——印刷包含 正面.svg + 反面.svg + 地址清单。</p>
       </div>
     </div>
@@ -277,92 +290,53 @@ function downloadSvg(kind: 'front' | 'back') {
 </template>
 
 <style scoped>
-.page {
-  max-width: 1080px;
-}
-.page-head {
+/* 本页独有：编辑器头（embed 双模·标题块内部门控）· 卡面双面预览（正/背）· 属性面板内的色板/上传位/内联输入。
+ * 页头文字节奏套 PageHeader 视觉但保留手写（PageHeader 强渲标题·不适配 embed 隐标题留操作）；
+ * 卡容器/徽章/按钮/尺寸预设 chip/状态行已交共享原语（Card/Badge/UiButton/.ld-chip/.ld-status）。 */
+.cards-head {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
   gap: 16px;
-  margin-bottom: 16px;
 }
-h1 {
+.cards-title h1 {
   margin: 0;
-  font-size: 22px;
+  font-size: 20px;
   font-weight: 700;
   color: var(--ld-ink);
+  line-height: 1.25;
 }
-.sub {
+.cards-sub {
   margin: 4px 0 0;
   font-size: 12.5px;
   color: var(--ld-content-2);
 }
-.head-r {
+.cards-actions {
   display: flex;
   align-items: center;
   gap: 10px;
   flex: none;
+  margin-left: auto;
 }
-.auto {
-  font-size: 11.5px;
-}
-.auto.saving {
-  color: var(--ld-content-2);
-}
-.auto.saved {
-  color: var(--ld-green);
-}
-.auto.error {
-  color: var(--ld-red);
-}
-.btn-primary {
-  /* structure-ok: primary↔ghost 双态切换钮（定稿并启用 / 改回草稿），与 .btn-ghost 融合样式；
-     UiButton 批1 只有填充主态、无 ghost 变体，整体迁移待后续 ghost 变体批一并做 */
-  padding: 9px 18px;
-  border: none;
-  border-radius: 999px;
-  background: var(--ld-purple-ink);
-  color: #fff;
-  font-size: 13px;
-  font-weight: 600;
-  cursor: pointer;
-}
-.btn-primary.ghost,
-.btn-ghost {
-  background: var(--ld-bg);
-  color: var(--ld-content);
-  border: 1px solid var(--ld-line);
-}
-.btn-ghost {
-  padding: 9px 16px;
-  border-radius: 999px;
-  font-size: 13px;
-  font-weight: 600;
-  cursor: pointer;
-}
-.btn-ghost.sm {
-  padding: 6px 12px;
-  font-size: 12px;
-}
-.status {
+.err-line {
+  margin: 0;
   font-size: 13px;
   color: var(--ld-red);
 }
-.status-soft {
-  font-size: 13px;
-  color: var(--ld-content-2);
-}
+
 .work {
   display: flex;
   gap: 26px;
   align-items: flex-start;
   flex-wrap: wrap;
 }
+
+/* 预览台（淡紫衬底·托起正反两张卡面） */
 .stage {
   flex: 0 0 360px;
   background: var(--ld-bg-lilac);
-  border-radius: 14px;
+  border: 1px solid var(--ld-line);
+  border-radius: var(--ld-radius);
   padding: 24px 26px 14px;
   display: flex;
   flex-direction: column;
@@ -385,13 +359,20 @@ h1 {
   color: var(--ld-content-2);
 }
 .dl {
-  padding: 3px 10px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 11px;
   border: 1px solid var(--ld-line);
   border-radius: 999px;
   background: var(--ld-bg);
   color: var(--ld-brand-active);
   font-size: 11px;
+  font-family: inherit;
   cursor: pointer;
+}
+.dl:hover {
+  border-color: var(--ld-purple-line);
 }
 .stage-note {
   width: 100%;
@@ -403,6 +384,8 @@ h1 {
 .stage-note .ok {
   color: var(--ld-green);
 }
+
+/* 卡面（正/背·印刷预览·rgba 阴影/半透角标非主题色不入 token） */
 .cardprev {
   border-radius: 10px;
   box-shadow: 0 12px 28px rgba(36, 23, 51, 0.18);
@@ -487,6 +470,8 @@ h1 {
   text-align: center;
   padding: 4.5% 0;
 }
+
+/* 属性面板：右列纵向堆叠三张 Card + 提示 */
 .panel {
   flex: 1;
   min-width: 280px;
@@ -495,35 +480,10 @@ h1 {
   gap: 16px;
   max-width: 430px;
 }
-.sec.group {
-  border: 1px solid var(--ld-line);
-  border-radius: 12px;
-  padding: 14px 16px;
-}
-.sec-t {
-  font-size: 12.5px;
-  font-weight: 700;
-  color: var(--ld-ink);
-  margin-bottom: 10px;
-}
 .presets {
   display: flex;
   gap: 8px;
-  margin-bottom: 8px;
-}
-.preset {
-  border: 1px solid var(--ld-line-strong);
-  background: var(--ld-bg);
-  border-radius: 99px;
-  padding: 6px 12px;
-  font-size: 11.5px;
-  cursor: pointer;
-}
-.preset.on {
-  border-color: var(--ld-brand);
-  background: var(--ld-bg-lilac);
-  color: var(--ld-brand-active);
-  font-weight: 600;
+  margin-bottom: 10px;
 }
 .dims {
   display: flex;
@@ -541,7 +501,7 @@ h1 {
   width: 80px;
   padding: 7px 10px;
   border: 1px solid var(--ld-line);
-  border-radius: 8px;
+  border-radius: var(--ld-radius-sm);
   font-size: 13px;
 }
 .artrow {
@@ -553,7 +513,7 @@ h1 {
 .artthumb {
   width: 74px;
   height: 50px;
-  border-radius: 8px;
+  border-radius: var(--ld-radius-sm);
   overflow: hidden;
   border: 1px solid var(--ld-line);
   flex: 0 0 auto;
@@ -566,6 +526,25 @@ h1 {
 .artbtns {
   display: flex;
   gap: 8px;
+  flex-wrap: wrap;
+}
+/* 上传插画：file input 触发器必须是 <label> 包 <input>，无法用 <button> UiButton——手写成 ghost 观感 */
+.upload-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border: 1px solid var(--ld-line);
+  border-radius: var(--ld-radius-sm);
+  background: var(--ld-bg);
+  color: var(--ld-content);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.upload-btn:hover {
+  border-color: var(--ld-purple-line);
+  color: var(--ld-purple-ink);
 }
 .check {
   display: flex;
@@ -579,6 +558,7 @@ h1 {
   display: flex;
   align-items: center;
   gap: 8px;
+  flex-wrap: wrap;
 }
 .swlabel {
   font-size: 11px;
@@ -605,14 +585,15 @@ h1 {
   width: 100%;
   padding: 8px 10px;
   border: 1px solid var(--ld-line);
-  border-radius: 8px;
+  border-radius: var(--ld-radius-sm);
   font-size: 13px;
   box-sizing: border-box;
 }
 .hint {
   padding: 10px 14px;
-  border-radius: 10px;
+  border-radius: var(--ld-radius-sm);
   background: var(--ld-bg-lilac);
+  border: 1px solid var(--ld-line);
   font-size: 11.5px;
   margin: 0;
   color: var(--ld-content-2);

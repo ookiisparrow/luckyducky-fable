@@ -13,6 +13,11 @@ import { getCard } from '../api/products'
 import { buildFrontSvg, buildBackSvg } from '../lib/cardSvg'
 import { mapBatches, type BatchRow } from '../lib/mapSystem'
 import UiButton from '../components/ui/Button.vue'
+import PageHeader from '../components/ui/PageHeader.vue'
+import Card from '../components/ui/Card.vue'
+import KpiCard from '../components/ui/KpiCard.vue'
+import Badge from '../components/ui/Badge.vue'
+import EmptyState from '../components/ui/EmptyState.vue'
 
 // 嵌入模式（上新向导步 6 复用·向后兼容）+ 修独立深链 bug：换皮把 courseId 写死空 ref、不读 route.query，
 // 致商品页「码批次」深链(/batches?courseId=)落地要手输课程号；改读 props(向导)||route.query(深链)||空。
@@ -174,84 +179,83 @@ function exportCsv() {
 </script>
 
 <template>
-  <div class="page">
-    <header class="page-head">
-      <div v-if="!embed">
-        <h1>二维码批次</h1>
-        <p class="sub">激活卡批次的生成 · 印刷打包 · 激活追踪——一码一地址、一码一用</p>
-      </div>
-      <span v-else class="embed-course">课程 <b>{{ loadedCourse || courseId || '（未定稿卡片/未关联课程）' }}</b></span>
+  <div class="ld-page">
+    <PageHeader
+      v-if="!embed"
+      title="二维码批次"
+      sub="激活卡批次的生成 · 印刷打包 · 激活追踪——一码一地址、一码一用"
+    >
       <UiButton :disabled="!loadedCourse" @click="creating = !creating">＋ 生成新批次</UiButton>
-    </header>
+    </PageHeader>
+    <div v-else class="embed-head">
+      <span class="embed-course">课程 <b>{{ loadedCourse || courseId || '（未定稿卡片/未关联课程）' }}</b></span>
+      <UiButton :disabled="!loadedCourse" @click="creating = !creating">＋ 生成新批次</UiButton>
+    </div>
 
     <div v-if="creating" class="create-bar">
       <span>为课程 <b>{{ loadedCourse }}</b> 生成</span>
       <input v-model.number="count" type="number" min="1" max="500" />
       <span>张码</span>
       <UiButton size="sm" :disabled="busy" @click="doCreate">确认生成</UiButton>
-      <button class="act ghost" @click="creating = false">取消</button>
+      <UiButton variant="ghost" size="sm" @click="creating = false">取消</UiButton>
     </div>
 
-    <div class="stat-grid">
-      <div class="stat-card">
-        <div class="stat-head"><span class="stat-label">批次总数</span><Layers class="stat-ico" :size="18" :stroke-width="1.8" /></div>
-        <div class="stat-value">{{ stats.batches }}</div>
-      </div>
-      <div class="stat-card">
-        <div class="stat-head"><span class="stat-label">码总量</span><QrCode class="stat-ico" :size="18" :stroke-width="1.8" /></div>
-        <div class="stat-value">{{ stats.codes.toLocaleString() }}</div>
-      </div>
-      <div class="stat-card">
-        <div class="stat-head"><span class="stat-label">已激活</span><CircleCheck class="stat-ico" :size="18" :stroke-width="1.8" /></div>
-        <div class="stat-value">{{ stats.activated.toLocaleString() }}</div>
-      </div>
-      <div class="stat-card">
-        <div class="stat-head"><span class="stat-label">平均激活率</span><TrendingUp class="stat-ico" :size="18" :stroke-width="1.8" /></div>
-        <div class="stat-value">{{ stats.rate }}</div>
-      </div>
+    <div class="ld-kpi-grid">
+      <KpiCard label="批次总数" :value="stats.batches" :icon="Layers" />
+      <KpiCard label="码总量" :value="stats.codes.toLocaleString()" :icon="QrCode" />
+      <KpiCard label="已激活" :value="stats.activated.toLocaleString()" :icon="CircleCheck" />
+      <KpiCard label="平均激活率" :value="stats.rate" :icon="TrendingUp" />
     </div>
 
-    <div class="toolbar">
-      <div class="chips">
-        <button v-for="f in FILTERS" :key="f.key" class="chip" :class="{ on: filter === f.key }" @click="filter = f.key">
-          {{ f.label }}<span class="chip-n">{{ counts[f.key] }}</span>
-        </button>
-      </div>
-      <div v-if="!embed" class="course-picker">
-        <input v-model="courseId" placeholder="course-xxx" @keyup.enter="load" />
-        <button class="act ghost" @click="load">载入课程</button>
-      </div>
-    </div>
-    <p class="note">后端按课程查批次（一码一地址）；先输入课程编号载入，统计卡与筛选为该课程范围。</p>
-
-    <p v-if="message" class="status">{{ message }}</p>
-
-    <div v-if="shown.length" class="table">
-      <div class="thead">
-        <span>批次号</span>
-        <span>生成时间</span>
-        <span class="r">数量</span>
-        <span>激活进度</span>
-        <span>状态</span>
-        <span class="r">操作</span>
-      </div>
-      <div v-for="b in shown" :key="b.batchId" class="trow">
-        <span class="bid">{{ b.batchId }}</span>
-        <span class="time">{{ b.createdAt }}</span>
-        <span class="qty r">{{ b.total }}</span>
-        <div class="prog">
-          <div class="prog-text">{{ b.activated }} / {{ b.total }} · {{ b.rateLabel }}</div>
-          <div class="prog-track"><div class="prog-bar" :class="statusOf(b)" :style="{ width: pct(b) + '%' }" /></div>
+    <div class="filter-wrap">
+      <div class="toolbar-row">
+        <div class="ld-toolbar">
+          <button v-for="f in FILTERS" :key="f.key" class="ld-chip" :class="{ on: filter === f.key }" @click="filter = f.key">
+            <span>{{ f.label }}</span><span class="chip-n">{{ counts[f.key] }}</span>
+          </button>
         </div>
-        <span class="c-state"><span class="state" :class="statusOf(b)">{{ STATUS_LABEL[statusOf(b)] }}</span></span>
-        <div class="c-ops r">
-          <button class="act ghost" @click="openDetail(b)">详情 / 看码</button>
+        <div v-if="!embed" class="course-picker">
+          <div class="ld-search"><input v-model="courseId" placeholder="course-xxx" @keyup.enter="load" /></div>
+          <UiButton variant="ghost" size="sm" @click="load">载入课程</UiButton>
+        </div>
+      </div>
+      <p class="note">后端按课程查批次（一码一地址）；先输入课程编号载入，统计卡与筛选为该课程范围。</p>
+    </div>
+
+    <p v-if="message" class="ld-status">{{ message }}</p>
+
+    <Card v-if="shown.length" flush>
+      <div class="ld-thead">
+        <div class="ld-th grow">批次号</div>
+        <div class="ld-th" :style="{ width: '140px' }">生成时间</div>
+        <div class="ld-th r" :style="{ width: '72px' }">数量</div>
+        <div class="ld-th" :style="{ width: '240px' }">激活进度</div>
+        <div class="ld-th" :style="{ width: '104px' }">状态</div>
+        <div class="ld-th r" :style="{ width: '128px' }">操作</div>
+      </div>
+      <div class="ld-tbody">
+        <div v-for="b in shown" :key="b.batchId" class="ld-tr">
+          <div class="ld-td grow"><span class="bid">{{ b.batchId }}</span></div>
+          <div class="ld-td time" :style="{ width: '140px' }">{{ b.createdAt }}</div>
+          <div class="ld-td r qty" :style="{ width: '72px' }">{{ b.total }}</div>
+          <div class="ld-td" :style="{ width: '240px' }">
+            <div class="prog">
+              <div class="prog-text">{{ b.activated }} / {{ b.total }} · {{ b.rateLabel }}</div>
+              <div class="prog-track"><div class="prog-bar" :class="statusOf(b)" :style="{ width: pct(b) + '%' }" /></div>
+            </div>
+          </div>
+          <div class="ld-td" :style="{ width: '104px' }">
+            <Badge :tone="statusOf(b) === 'used' ? 'green' : statusOf(b) === 'using' ? 'brand' : 'neutral'">{{ STATUS_LABEL[statusOf(b)] }}</Badge>
+          </div>
+          <div class="ld-td r" :style="{ width: '128px' }">
+            <UiButton variant="ghost" size="sm" @click="openDetail(b)">详情 / 看码</UiButton>
+          </div>
         </div>
       </div>
       <div class="tfoot">已加载 {{ rows.length }} 批次（课程 {{ loadedCourse }}）</div>
-    </div>
-    <p v-else-if="!message && loadedCourse" class="status-soft">没有符合筛选的批次</p>
-    <p v-else-if="!loadedCourse" class="status-soft">输入课程编号（course-xxx）载入其激活码批次</p>
+    </Card>
+    <Card v-else-if="!message && loadedCourse"><EmptyState :icon="Layers" text="没有符合筛选的批次" /></Card>
+    <Card v-else-if="!loadedCourse"><EmptyState :icon="QrCode" text="输入课程编号（course-xxx）载入其激活码批次" /></Card>
 
     <div v-if="detail" class="drawer-mask" @click.self="closeDetail">
       <aside class="drawer">
@@ -298,8 +302,13 @@ function exportCsv() {
 </template>
 
 <style scoped>
-.page {
-  max-width: 1160px;
+/* 嵌入模式页头（向导步 6·换课程 chip·右侧仍留生成钮·独立路由走 PageHeader） */
+.embed-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
 }
 .embed-course {
   font-size: 13px;
@@ -309,30 +318,12 @@ function exportCsv() {
   color: var(--ld-ink);
   font-family: var(--ld-font-mono);
 }
-.page-head {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 16px;
-  margin-bottom: 18px;
-}
-h1 {
-  margin: 0;
-  font-size: 22px;
-  font-weight: 700;
-  color: var(--ld-ink);
-}
-.sub {
-  margin: 4px 0 0;
-  font-size: 12.5px;
-  color: var(--ld-content-2);
-}
+/* 生成新批次内联条（本页独有·bg-lilac 圆角块） */
 .create-bar {
   display: flex;
   align-items: center;
   gap: 10px;
   padding: 12px 16px;
-  margin-bottom: 16px;
   background: var(--ld-bg-lilac);
   border: 1px solid var(--ld-purple-line);
   border-radius: var(--ld-radius);
@@ -343,122 +334,53 @@ h1 {
   width: 90px;
   padding: 7px 10px;
   border: 1px solid var(--ld-line-strong);
-  border-radius: 8px;
+  border-radius: var(--ld-radius-sm);
   font-size: 13px;
 }
-.stat-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-  gap: 16px;
-  margin-bottom: 18px;
-}
-.stat-card {
-  padding: 18px 20px;
-  background: var(--ld-bg);
-  border: 1px solid var(--ld-line);
-  border-radius: var(--ld-radius-l);
-}
-.stat-head {
+/* 筛选行：chips（ld-toolbar）+ 课程选择器分列两端 */
+.filter-wrap {
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-}
-.stat-label {
-  font-size: 12.5px;
-  color: var(--ld-content-2);
-}
-.stat-ico {
-  color: var(--ld-brand);
-}
-.stat-value {
-  margin-top: 10px;
-  font-size: 28px;
-  font-weight: 700;
-  color: var(--ld-ink);
-  line-height: 1.1;
-}
-.toolbar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-  margin-bottom: 6px;
-}
-.chips {
-  display: flex;
+  flex-direction: column;
   gap: 8px;
-  flex-wrap: wrap;
 }
-.chip {
+.toolbar-row {
   display: flex;
   align-items: center;
-  gap: 6px;
-  padding: 6px 14px;
-  border: 1px solid var(--ld-line);
-  border-radius: 999px;
-  background: var(--ld-bg);
-  color: var(--ld-content-2);
-  font-size: 13px;
-  cursor: pointer;
-}
-.chip.on {
-  background: var(--ld-purple-ink);
-  border-color: var(--ld-purple-ink);
-  color: #fff;
-}
-.chip-n {
-  opacity: 0.7;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
 }
 .course-picker {
   display: flex;
+  align-items: center;
   gap: 8px;
 }
-.course-picker input {
-  padding: 8px 12px;
-  border: 1px solid var(--ld-line);
+/* chip 内嵌计数徽章（design：bg-grey·激活时 brand） */
+.chip-n {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  padding: 1px 7px;
   border-radius: 999px;
-  font-size: 13px;
-  min-width: 160px;
+  background: var(--ld-bg-grey);
+  color: var(--ld-content-2);
+  font-size: 11px;
+  font-weight: 600;
+}
+.ld-chip.on .chip-n {
+  background: var(--ld-brand);
+  color: #fff;
 }
 .note {
-  margin: 0 0 14px;
+  margin: 0;
   font-size: 11.5px;
   color: var(--ld-content-2);
 }
-.status {
-  font-size: 13px;
-  color: var(--ld-red);
-}
-.status-soft {
-  font-size: 13px;
-  color: var(--ld-content-2);
-}
-.table {
-  background: var(--ld-bg);
-  border: 1px solid var(--ld-line);
-  border-radius: var(--ld-radius-l);
-  overflow: hidden;
-}
-.thead,
-.trow {
-  display: grid;
-  grid-template-columns: 1.5fr 1.1fr 0.7fr 2fr 0.9fr 1.2fr;
-  align-items: center;
-  gap: 12px;
-  padding: 13px 20px;
-}
-.thead {
-  background: var(--ld-bg-lilac);
-  font-size: 12px;
-  color: var(--ld-content-2);
-}
-.trow {
-  border-top: 1px solid var(--ld-line);
-  font-size: 13px;
-}
+/* 表格 cell 内容（容器/表头/行走 console.css 的 ld-table 系） */
 .r {
+  justify-content: flex-end;
   text-align: right;
-  justify-self: end;
 }
 .bid {
   font-family: var(--ld-font-mono);
@@ -473,6 +395,7 @@ h1 {
   color: var(--ld-content);
 }
 .prog {
+  width: 100%;
   min-width: 0;
 }
 .prog-text {
@@ -497,51 +420,13 @@ h1 {
 .prog-bar.fresh {
   background: var(--ld-line-strong);
 }
-.state {
-  padding: 3px 11px;
-  border-radius: 999px;
-  font-size: 11.5px;
-  white-space: nowrap;
-}
-.state.using {
-  background: var(--ld-bg-lilac);
-  color: var(--ld-brand-active);
-}
-.state.used {
-  background: var(--ld-bg-green-soft);
-  color: var(--ld-green);
-}
-.state.fresh {
-  background: var(--ld-bg-faint);
-  color: var(--ld-content-2);
-}
-.c-ops {
-  display: flex;
-}
-/* .act 基类仅留次级按钮（ghost）共享布局；填充主按钮（确认生成）已收进 UiButton */
-.act {
-  padding: 6px 14px;
-  border: none;
-  border-radius: 999px;
-  font-size: 12px;
-  font-weight: 600;
-  cursor: pointer;
-}
-.act.ghost {
-  background: var(--ld-bg);
-  color: var(--ld-content-2);
-  border: 1px solid var(--ld-line);
-}
-.act:disabled {
-  opacity: 0.5;
-}
 .tfoot {
-  padding: 12px 20px;
+  padding: 12px 16px;
   border-top: 1px solid var(--ld-line);
   font-size: 12px;
   color: var(--ld-content-2);
 }
-/* 批次详情抽屉 */
+/* 批次详情抽屉（本页独有浮层·web 端无需 touchmove 锁） */
 .drawer-mask {
   position: fixed;
   inset: 0;
@@ -593,7 +478,7 @@ h1 {
   display: flex;
   padding: 6px;
   border: none;
-  border-radius: 8px;
+  border-radius: var(--ld-radius-sm);
   background: var(--ld-bg-grey);
   color: var(--ld-content-2);
   cursor: pointer;
@@ -601,7 +486,7 @@ h1 {
 .info {
   padding: 14px;
   background: var(--ld-bg-lilac);
-  border-radius: 10px;
+  border-radius: var(--ld-radius);
   display: flex;
   flex-direction: column;
   gap: 11px;
@@ -647,14 +532,14 @@ h1 {
   margin: 10px 0;
   padding: 12px;
   background: var(--ld-bg-lilac);
-  border-radius: 10px;
+  border-radius: var(--ld-radius);
 }
 .testqr img {
   width: 120px;
   height: 120px;
   flex: none;
   background: #fff;
-  border-radius: 8px;
+  border-radius: var(--ld-radius-sm);
 }
 .testqr p {
   margin: 0;
@@ -690,7 +575,7 @@ h1 {
 }
 .code-list {
   border: 1px solid var(--ld-line);
-  border-radius: 10px;
+  border-radius: var(--ld-radius);
   overflow: hidden;
 }
 .code-loading {

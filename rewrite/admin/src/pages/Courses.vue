@@ -3,10 +3,15 @@
 // （引用模型·老学员自动生效；孤儿视频云端 GC）。逻辑批10 未动，仅套设计语言（页头/视频进度条/章节卡/段上传 chip）。
 import { ref, computed, onMounted, onBeforeUnmount, watch, nextTick } from 'vue'
 import { useRoute } from 'vue-router'
-import { RotateCcw, Plus, Trash2, Upload, Check } from 'lucide-vue-next'
+import { RotateCcw, Plus, Trash2, Upload, Check, BookOpen } from 'lucide-vue-next'
 import { getCourseDraft, saveCourseDraft, publishCourse, uploadVideo } from '../api/content'
 import { courseVideoStats } from '../lib/mapContent'
 import { planLessonBatch } from '../lib/videoBatch'
+import PageHeader from '../components/ui/PageHeader.vue'
+import Card from '../components/ui/Card.vue'
+import Badge from '../components/ui/Badge.vue'
+import EmptyState from '../components/ui/EmptyState.vue'
+import UiButton from '../components/ui/Button.vue'
 
 // 嵌入模式（上新向导步 4 复用·向后兼容·独立 /courses?courseId 用法不传 props 行为不变）：
 // embed=true 隐页头/手输课程号工具条·wizardCourseId 覆盖 route.query.courseId。
@@ -200,42 +205,48 @@ onMounted(load)
 </script>
 
 <template>
-  <div class="page">
-    <header v-if="!embed" class="page-head">
-      <div>
-        <h1>课程编排</h1>
-        <p class="sub">一门课 = 章 → 课时 → 段；每段挂一条视频。保存＝存草稿（学员不可见），发布＝老学员立即看到新版。</p>
-      </div>
-    </header>
+  <div class="ld-page courses" :class="{ embed }">
+    <!-- 页头（embed 隐·向导已有步导航/面板头） -->
+    <PageHeader
+      v-if="!embed"
+      title="课程编排"
+      sub="一门课 = 章 → 课时 → 段；每段挂一条视频。保存＝存草稿（学员不可见），发布＝老学员立即看到新版。"
+    />
 
-    <div v-if="!embed" class="toolbar">
-      <input v-model="courseId" placeholder="course-xxx（商品页「编辑课程」会带入）" class="cid" @keyup.enter="load" />
-      <button class="act ghost" @click="load"><RotateCcw :size="14" :stroke-width="1.8" /><span>载入</span></button>
+    <!-- courseId 载入条（embed 隐·向导用 wizardCourseId 直接带入） -->
+    <div v-if="!embed" class="ld-toolbar">
+      <div class="ld-search cid-box">
+        <input v-model="courseId" placeholder="course-xxx（商品页「编辑课程」会带入）" @keyup.enter="load" />
+      </div>
+      <UiButton variant="ghost" @click="load"><RotateCcw :size="14" :stroke-width="1.8" /><span>载入</span></UiButton>
     </div>
+
     <p v-if="message" class="status">{{ message }}</p>
     <p v-if="progress" class="uploading">{{ progress }}</p>
 
     <template v-if="course">
-      <div class="course-head">
-        <input v-model="course.title" maxlength="60" placeholder="课程标题" class="title-in" />
-        <div class="head-right">
-          <div class="vstat">
-            <span class="vstat-num">视频 {{ stats.done }}/{{ stats.total }}</span>
-            <div class="vbar"><div class="vbar-fill" :style="{ width: pct + '%' }" /></div>
+      <!-- 课程信息 / 视频进度 / 自动保存 / 发布 -->
+      <Card>
+        <div class="course-head">
+          <input v-model="course.title" maxlength="60" placeholder="课程标题" class="title-in" />
+          <div class="head-right">
+            <div class="vstat">
+              <span class="vstat-num">视频 {{ stats.done }}/{{ stats.total }}</span>
+              <div class="vbar"><div class="vbar-fill" :style="{ width: pct + '%' }" /></div>
+            </div>
+            <span v-if="saveState" class="autosave" :class="saveState">{{ saveState === 'saving' ? '自动保存中…' : saveState === 'saved' ? '已自动存草稿' : '自动保存失败·点保存重试' }}</span>
+            <UiButton variant="ghost" size="sm" :disabled="busy" @click="save">保存草稿</UiButton>
+            <UiButton size="sm" :disabled="busy" @click="publish">{{ publishConfirm ? '确认发布？老学员立即生效' : '发布上线' }}</UiButton>
           </div>
-          <span v-if="saveState" class="autosave" :class="saveState">{{ saveState === 'saving' ? '自动保存中…' : saveState === 'saved' ? '已自动存草稿' : '自动保存失败·点保存重试' }}</span>
-          <button class="act ghost" :disabled="busy" @click="save">保存草稿</button>
-          <button class="act primary" :disabled="busy" @click="publish">
-            {{ publishConfirm ? '确认发布？老学员立即生效' : '发布上线' }}
-          </button>
         </div>
-      </div>
-      <p v-if="fromPublished" class="from-pub">当前显示已发布版（尚无草稿·保存即建草稿）</p>
-      <p v-if="publishConfirm && publishIssues.length" class="pub-warn">发布提醒：{{ publishIssues.join('；') }}——确认无碍请再点一次「确认发布」</p>
+        <p v-if="fromPublished" class="from-pub">当前显示已发布版（尚无草稿·保存即建草稿）</p>
+        <p v-if="publishConfirm && publishIssues.length" class="pub-warn">发布提醒：{{ publishIssues.join('；') }}——确认无碍请再点一次「确认发布」</p>
+      </Card>
 
-      <div v-for="(ch, ci) in course.chapters" :key="ci" class="chapter">
+      <!-- 章 → 课时 → 段 三层编排树（每章一卡） -->
+      <Card v-for="(ch, ci) in course.chapters" :key="ci">
         <div class="ch-head">
-          <span class="ch-badge">第 {{ ci + 1 }} 章</span>
+          <Badge tone="brand">第 {{ ci + 1 }} 章</Badge>
           <input v-model="ch.title" placeholder="章标题" maxlength="60" class="ch-title" />
           <button class="icon-btn" title="上移" :disabled="ci === 0" @click="move(course.chapters, ci, -1)">↑</button>
           <button class="icon-btn" title="下移" :disabled="ci === course.chapters.length - 1" @click="move(course.chapters, ci, 1)">↓</button>
@@ -268,73 +279,47 @@ onMounted(load)
           </div>
         </div>
         <button class="add-btn" @click="addLesson(ch)"><Plus :size="13" :stroke-width="2" /><span>加课时</span></button>
-      </div>
+      </Card>
 
-      <button class="add-chapter" @click="addChapter"><Plus :size="15" :stroke-width="2" /><span>加章</span></button>
+      <div><button class="add-chapter" @click="addChapter"><Plus :size="15" :stroke-width="2" /><span>加章</span></button></div>
     </template>
-    <p v-else-if="!message" class="status-soft">输入课程编号（course-xxx）载入其章节结构</p>
+    <EmptyState v-else-if="!message" :icon="BookOpen" text="输入课程编号（course-xxx）载入其章节结构" />
   </div>
 </template>
 
 <style scoped>
-.page {
+/* 页级宽度（独立路由）；嵌入向导时去约束，宽度由向导面板决定 */
+.courses {
   max-width: 900px;
 }
-.page-head {
-  margin-bottom: 16px;
+.courses.embed {
+  max-width: none;
 }
-h1 {
-  margin: 0;
-  font-size: 22px;
-  font-weight: 700;
-  color: var(--ld-ink);
-}
-.sub {
-  margin: 4px 0 0;
-  font-size: 12.5px;
-  color: var(--ld-content-2);
-}
-.toolbar {
-  display: flex;
-  gap: 8px;
-  margin-bottom: 12px;
-}
-.cid {
-  width: 320px;
-  padding: 8px 12px;
-  border: 1px solid var(--ld-line);
-  border-radius: 999px;
-  font-size: 13px;
+/* courseId 载入条：加宽输入框（ld-search 默认 min-width 偏窄） */
+.cid-box input {
+  min-width: 300px;
 }
 .status {
   font-size: 13px;
   color: var(--ld-red);
-}
-.status-soft {
-  font-size: 13px;
-  color: var(--ld-content-2);
 }
 .uploading {
   font-size: 12.5px;
   color: var(--ld-brand-active);
   font-weight: 600;
 }
+/* 课程信息行（外框由 Card 提供） */
 .course-head {
   display: flex;
   align-items: center;
   gap: 16px;
-  padding: 16px 18px;
-  margin-bottom: 8px;
-  background: var(--ld-bg);
-  border: 1px solid var(--ld-line);
-  border-radius: var(--ld-radius-l);
 }
 .title-in {
   flex: 1;
   min-width: 0;
   padding: 8px 12px;
   border: 1px solid var(--ld-line);
-  border-radius: 10px;
+  border-radius: var(--ld-radius-sm);
   font-size: 15px;
   font-weight: 600;
   color: var(--ld-ink);
@@ -365,9 +350,17 @@ h1 {
   border-radius: 999px;
 }
 .from-pub {
-  margin: 0 0 12px;
+  margin: 10px 0 0;
   font-size: 12px;
   color: var(--ld-amber);
+}
+.pub-warn {
+  margin: 10px 0 0;
+  padding: 9px 13px;
+  border-radius: var(--ld-radius-sm);
+  font-size: 12px;
+  background: var(--ld-bg-red-soft);
+  color: var(--ld-red);
 }
 .autosave {
   font-size: 11.5px;
@@ -383,42 +376,28 @@ h1 {
 .autosave.error {
   color: var(--ld-red);
 }
-.chapter {
-  padding: 14px 16px;
-  margin-bottom: 12px;
-  background: var(--ld-bg);
-  border: 1px solid var(--ld-line);
-  border-radius: var(--ld-radius-l);
-}
+/* 章头（外框由 Card 提供） */
 .ch-head {
   display: flex;
   align-items: center;
   gap: 10px;
   margin-bottom: 10px;
 }
-.ch-badge {
-  flex: none;
-  padding: 3px 10px;
-  border-radius: 999px;
-  background: var(--ld-bg-lilac);
-  color: var(--ld-brand-active);
-  font-size: 11.5px;
-  font-weight: 600;
-}
 .ch-title {
   flex: 1;
   min-width: 0;
   padding: 7px 12px;
   border: 1px solid var(--ld-line);
-  border-radius: 8px;
+  border-radius: var(--ld-radius-sm);
   font-size: 14px;
   font-weight: 600;
 }
+/* 课时块（章内缩进的淡紫盒） */
 .lesson {
   margin: 10px 0 10px 20px;
   padding: 12px 14px;
   background: var(--ld-bg-lilac);
-  border-radius: 12px;
+  border-radius: var(--ld-radius);
 }
 .l-head {
   display: flex;
@@ -430,7 +409,7 @@ h1 {
   min-width: 0;
   padding: 6px 10px;
   border: 1px solid var(--ld-line);
-  border-radius: 8px;
+  border-radius: var(--ld-radius-sm);
   font-size: 13px;
   background: var(--ld-bg);
 }
@@ -439,10 +418,11 @@ h1 {
   flex: none;
   padding: 6px 10px;
   border: 1px solid var(--ld-line);
-  border-radius: 8px;
+  border-radius: var(--ld-radius-sm);
   font-size: 13px;
   background: var(--ld-bg);
 }
+/* 小节行：段名 / 时长 / 上传位 / ↑ ↓ 删 */
 .seg {
   display: grid;
   grid-template-columns: 1fr 84px auto auto auto auto;
@@ -450,26 +430,14 @@ h1 {
   align-items: center;
   margin-bottom: 6px;
 }
-.icon-btn.warn {
-  color: var(--ld-red);
-  border-color: var(--ld-red-line);
-  background: var(--ld-bg-red-soft);
-}
-.pub-warn {
-  margin: 0 0 12px;
-  padding: 9px 13px;
-  border-radius: 9px;
-  font-size: 12px;
-  background: var(--ld-bg-red-soft);
-  color: var(--ld-red);
-}
 .seg-name {
   padding: 6px 10px;
   border: 1px solid var(--ld-line);
-  border-radius: 8px;
+  border-radius: var(--ld-radius-sm);
   font-size: 13px;
   background: var(--ld-bg);
 }
+/* 视频上传位（未传=紫描边 / 已传=绿） */
 .upload {
   display: inline-flex;
   align-items: center;
@@ -489,6 +457,7 @@ h1 {
   color: var(--ld-green);
   background: var(--ld-bg-green-soft);
 }
+/* 树内 ↑ ↓ 删 图标按钮（危态转红） */
 .icon-btn {
   display: flex;
   align-items: center;
@@ -497,7 +466,7 @@ h1 {
   height: 30px;
   flex: none;
   border: 1px solid var(--ld-line);
-  border-radius: 8px;
+  border-radius: var(--ld-radius-sm);
   background: var(--ld-bg);
   color: var(--ld-content-2);
   cursor: pointer;
@@ -505,6 +474,17 @@ h1 {
 .icon-btn:hover {
   color: var(--ld-red);
   border-color: var(--ld-red-line);
+}
+.icon-btn.warn {
+  color: var(--ld-red);
+  border-color: var(--ld-red-line);
+  background: var(--ld-bg-red-soft);
+}
+/* 加段 / 加课时 / 批量传（虚线药丸 = 树内增项） */
+.seg-adds {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
 }
 .add-btn {
   display: inline-flex;
@@ -520,15 +500,11 @@ h1 {
   font-weight: 600;
   cursor: pointer;
 }
-.seg-adds {
-  display: flex;
-  gap: 8px;
-  flex-wrap: wrap;
-}
 .batch-up {
   border-style: solid;
   background: var(--ld-bg-lilac);
 }
+/* 加章（页级增项·虚线药丸） */
 .add-chapter {
   display: inline-flex;
   align-items: center;
@@ -541,28 +517,5 @@ h1 {
   font-size: 13px;
   font-weight: 600;
   cursor: pointer;
-}
-.act {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  padding: 8px 16px;
-  border: none;
-  border-radius: 999px;
-  font-size: 13px;
-  font-weight: 600;
-  cursor: pointer;
-}
-.act.primary {
-  background: var(--ld-purple-ink);
-  color: #fff;
-}
-.act.ghost {
-  background: var(--ld-bg);
-  color: var(--ld-content-2);
-  border: 1px solid var(--ld-line);
-}
-.act:disabled {
-  opacity: 0.5;
 }
 </style>

@@ -5,6 +5,11 @@
 import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
 import { listShowcase, saveShowcase } from '../api/products'
 import { mapShowcaseRows, type ShowcaseRowVM } from '../lib/mapProducts'
+import { Store, GripVertical } from 'lucide-vue-next'
+import PageHeader from '../components/ui/PageHeader.vue'
+import Card from '../components/ui/Card.vue'
+import Badge from '../components/ui/Badge.vue'
+import EmptyState from '../components/ui/EmptyState.vue'
 
 const rows = ref<ShowcaseRowVM[]>([])
 const message = ref('')
@@ -71,128 +76,94 @@ onMounted(reload)
 </script>
 
 <template>
-  <div class="page">
-    <header class="page-head">
-      <div>
-        <h1>小程序橱窗</h1>
-        <p class="sub">左侧一比一预览小程序首页 · 在画面或右侧列表上拖动排序、点开关上下架橱窗 · 改动自动保存，小程序重开生效</p>
-      </div>
-      <span class="save" :class="saveState">{{ { saving: '保存中…', saved: '已保存 ✓', error: '保存失败' }[saveState] || '' }}</span>
-    </header>
+  <div class="ld-page">
+    <PageHeader title="小程序橱窗" sub="左侧一比一预览小程序首页 · 在画面或右侧列表上拖动排序、点开关上下架橱窗 · 改动自动保存，小程序重开生效">
+      <Badge v-if="saveState" :tone="saveState === 'saved' ? 'green' : saveState === 'error' ? 'red' : 'neutral'" dot>
+        {{ saveState === 'saving' ? '保存中…' : saveState === 'saved' ? '已保存' : '保存失败' }}
+      </Badge>
+    </PageHeader>
 
-    <p v-if="message" class="status">{{ message }}</p>
+    <p v-if="message" class="ld-status">{{ message }}</p>
 
-    <div v-if="rows.length" class="work">
-      <!-- iPhone WYSIWYG 预览（393×852 比例·同一份云端数据） -->
-      <div class="stage">
-        <div class="phone">
-          <div class="p-status"><span>12:30</span><span>●●●</span></div>
-          <div class="p-hero"><div class="p-brand">🦆 Lucky Ducky</div><div class="p-title">创造幸运</div><div class="p-sub">Get ducky get lucky</div></div>
-          <div class="p-strip">
-            <div class="p-strip-head"><b>人气商品</b><span>全部 ›</span></div>
-            <div class="p-cards">
-              <div
-                v-for="r in featured"
-                :key="r.id"
-                class="p-card"
-                :class="{ over: isOver(r), dragging: isDrag(r) }"
-                draggable="true"
-                @dragstart="dragStart(r)"
-                @dragover="dragOver(r, $event)"
-                @dragend="dragEnd"
-                @drop="drop(r)"
-              >
-                <div class="p-img"><img v-if="r.coverUrl" :src="r.coverUrl" alt="" /><span v-else class="p-img-ph">📦</span></div>
-                <div class="p-body"><div class="p-name">{{ r.name }}</div><div class="p-tag">{{ r.tag }}</div><div class="p-price">￥{{ r.price }}</div></div>
+    <Card v-if="rows.length">
+      <div class="work">
+        <!-- iPhone WYSIWYG 预览（393×852 比例·同一份云端数据） -->
+        <div class="stage">
+          <div class="phone">
+            <div class="p-status"><span>12:30</span><span>●●●</span></div>
+            <div class="p-hero"><div class="p-brand">🦆 Lucky Ducky</div><div class="p-title">创造幸运</div><div class="p-sub">Get ducky get lucky</div></div>
+            <div class="p-strip">
+              <div class="p-strip-head"><b>人气商品</b><span>全部 ›</span></div>
+              <div class="p-cards">
+                <div
+                  v-for="r in featured"
+                  :key="r.id"
+                  class="p-card"
+                  :class="{ over: isOver(r), dragging: isDrag(r) }"
+                  draggable="true"
+                  @dragstart="dragStart(r)"
+                  @dragover="dragOver(r, $event)"
+                  @dragend="dragEnd"
+                  @drop="drop(r)"
+                >
+                  <div class="p-img"><img v-if="r.coverUrl" :src="r.coverUrl" alt="" /><span v-else class="p-img-ph">📦</span></div>
+                  <div class="p-body"><div class="p-name">{{ r.name }}</div><div class="p-tag">{{ r.tag }}</div><div class="p-price">￥{{ r.price }}</div></div>
+                </div>
+                <p v-if="!featured.length" class="p-empty">橱窗空了——右侧打开几个商品的开关</p>
               </div>
-              <p v-if="!featured.length" class="p-empty">橱窗空了——右侧打开几个商品的开关</p>
             </div>
+            <div class="p-spacer"></div>
+            <div class="p-tabbar"><b>● 首页</b><span>购物车</span><span>我</span></div>
           </div>
-          <div class="p-spacer"></div>
-          <div class="p-tabbar"><b>● 首页</b><span>购物车</span><span>我</span></div>
+          <p class="stage-note">iPhone 比例（393×852）· 与小程序首页同一份数据</p>
         </div>
-        <p class="stage-note">iPhone 比例（393×852）· 与小程序首页同一份数据</p>
-      </div>
 
-      <!-- 排序与推荐面板 -->
-      <div class="panel">
-        <h3>首页 · 人气商品（拖动排序 · 开关上下架橱窗）</h3>
-        <div
-          v-for="r in rows"
-          :key="r.id"
-          class="row"
-          :class="{ over: isOver(r), dragging: isDrag(r), off: !r.featured }"
-          draggable="true"
-          @dragstart="dragStart(r)"
-          @dragover="dragOver(r, $event)"
-          @dragend="dragEnd"
-          @drop="drop(r)"
-        >
-          <span class="grip">⠿</span>
-          <div class="thumb"><img v-if="r.coverUrl" :src="r.coverUrl" alt="" /><span v-else>📦</span></div>
-          <div class="info">
-            <div class="name">{{ r.name }}<span v-if="!r.listed" class="off-tag">已下架</span></div>
-            <div class="meta">￥{{ r.price }} · 排序 {{ idxOf(r) + 1 }}{{ r.featured ? '' : ' · 不在首页橱窗' }}</div>
+        <!-- 排序与推荐面板 -->
+        <div class="panel">
+          <h3>首页 · 人气商品（拖动排序 · 开关上下架橱窗）</h3>
+          <div
+            v-for="r in rows"
+            :key="r.id"
+            class="row"
+            :class="{ over: isOver(r), dragging: isDrag(r), off: !r.featured }"
+            draggable="true"
+            @dragstart="dragStart(r)"
+            @dragover="dragOver(r, $event)"
+            @dragend="dragEnd"
+            @drop="drop(r)"
+          >
+            <GripVertical class="grip" :size="16" :stroke-width="2" />
+            <div class="thumb"><img v-if="r.coverUrl" :src="r.coverUrl" alt="" /><span v-else>📦</span></div>
+            <div class="info">
+              <div class="name">{{ r.name }}<span v-if="!r.listed" class="off-tag">已下架</span></div>
+              <div class="meta">￥{{ r.price }} · 排序 {{ idxOf(r) + 1 }}{{ r.featured ? '' : ' · 不在首页橱窗' }}</div>
+            </div>
+            <button class="switch" :class="{ on: r.featured }" :title="r.featured ? '点击下架橱窗' : '点击上架橱窗'" @click="toggle(r)"><span class="knob"></span></button>
           </div>
-          <button class="switch" :class="{ on: r.featured }" :title="r.featured ? '点击下架橱窗' : '点击上架橱窗'" @click="toggle(r)"><span class="knob"></span></button>
+          <p class="hint">开关 = 是否出现在首页橱窗；拖哪边都行、两侧画面双向联动。停售/恢复销售在「商品管理」页。</p>
         </div>
-        <p class="hint">开关 = 是否出现在首页橱窗；拖哪边都行、两侧画面双向联动。停售/恢复销售在「商品管理」页。</p>
       </div>
-    </div>
-    <p v-else-if="!message" class="status-soft">还没有可排序的商品</p>
+    </Card>
+    <EmptyState v-else-if="!message" :icon="Store" text="还没有可排序的商品" />
   </div>
 </template>
 
 <style scoped>
-.page {
-  max-width: 1000px;
-}
-.page-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-  margin-bottom: 18px;
-}
-h1 {
-  margin: 0;
-  font-size: 22px;
-  font-weight: 700;
-  color: var(--ld-ink);
-}
-.sub {
-  margin: 4px 0 0;
-  font-size: 12.5px;
-  color: var(--ld-content-2);
-}
-.save {
-  font-size: 12px;
-  color: var(--ld-content-2);
-  white-space: nowrap;
-}
-.save.error {
-  color: var(--ld-red);
-}
-.save.saved {
-  color: var(--ld-green);
-}
-.status {
-  font-size: 13px;
-  color: var(--ld-red);
-}
-.status-soft {
-  font-size: 13px;
-  color: var(--ld-content-2);
-}
+/* 两栏工作区：左 iPhone 预览定宽 · 右排序面板自适应（窄屏堆叠）。 */
 .work {
-  display: flex;
+  display: grid;
+  grid-template-columns: 360px 1fr;
   gap: 22px;
-  align-items: flex-start;
+  align-items: start;
+}
+@media (max-width: 920px) {
+  .work {
+    grid-template-columns: 1fr;
+  }
 }
 .stage {
-  flex: 0 0 380px;
   background: var(--ld-bg-grey);
-  border-radius: 14px;
+  border-radius: var(--ld-radius);
   padding: 24px 0;
   display: flex;
   flex-direction: column;
@@ -346,12 +317,7 @@ h1 {
   color: var(--ld-brand-active);
 }
 .panel {
-  flex: 1;
   min-width: 0;
-  padding: 20px;
-  background: var(--ld-bg);
-  border: 1px solid var(--ld-line);
-  border-radius: var(--ld-radius-l);
 }
 .panel h3 {
   font-size: 13.5px;
@@ -376,6 +342,8 @@ h1 {
 }
 .grip {
   color: var(--ld-line-strong);
+  flex: 0 0 auto;
+  cursor: grab;
 }
 .thumb {
   width: 38px;

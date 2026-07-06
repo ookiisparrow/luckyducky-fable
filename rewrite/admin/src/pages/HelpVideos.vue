@@ -2,9 +2,13 @@
 // 帮助视频（设计语言一致性·M3 UI 批12）：播放页「遇到问题了」求助面板内容源（主题→小段两级·全课程共用一份）。
 // 逻辑未动，仅套设计语言（页头/主题卡/段上传 chip/token）。
 import { ref, onMounted, onBeforeUnmount, watch, nextTick } from 'vue'
-import { Upload, Check, Trash2, Plus } from 'lucide-vue-next'
+import { Upload, Check, Trash2, Plus, Video } from 'lucide-vue-next'
 import { listHelpVideos, saveHelpVideos, uploadVideo } from '../api/content'
 import { normalizeHelpItems, type HelpItem } from '../lib/mapContent'
+import PageHeader from '../components/ui/PageHeader.vue'
+import Card from '../components/ui/Card.vue'
+import Badge from '../components/ui/Badge.vue'
+import EmptyState from '../components/ui/EmptyState.vue'
 import UiButton from '../components/ui/Button.vue'
 
 const items = ref<HelpItem[]>([])
@@ -115,23 +119,19 @@ onMounted(reload)
 </script>
 
 <template>
-  <div class="page">
-    <header class="page-head">
-      <div>
-        <h1>帮助视频</h1>
-        <p class="sub">小程序播放页「遇到问题了」面板的内容；主题下每个小段挂一条视频，全课程共用一份。</p>
-      </div>
-      <div class="head-save">
-        <span v-if="saveState" class="autosave" :class="saveState">{{ saveState === 'saving' ? '自动保存中…' : saveState === 'saved' ? '已自动保存' : '自动保存失败·点保存重试' }}</span>
-        <UiButton :disabled="busy" @click="save">{{ busy ? '保存中…' : '保存全部' }}</UiButton>
-      </div>
-    </header>
+  <div class="ld-page help">
+    <PageHeader title="帮助视频" sub="小程序播放页「遇到问题了」面板的内容；主题下每个小段挂一条视频，全课程共用一份。">
+      <span v-if="saveState" class="autosave" :class="saveState">{{ saveState === 'saving' ? '自动保存中…' : saveState === 'saved' ? '已自动保存' : '自动保存失败·点保存重试' }}</span>
+      <UiButton :disabled="busy" @click="save">{{ busy ? '保存中…' : '保存全部' }}</UiButton>
+    </PageHeader>
 
     <p v-if="message" class="status">{{ message }}</p>
     <p v-if="progress" class="uploading">{{ progress }}</p>
 
-    <div v-for="(t, ti) in items" :key="ti" class="topic-card">
+    <!-- 逐主题卡（外框由 Card 提供）：标题/副/描述 + 逐小段·上移下移/两步删除 -->
+    <Card v-for="(t, ti) in items" :key="ti">
       <div class="topic-head">
+        <Badge tone="brand">主题 {{ ti + 1 }}</Badge>
         <input v-model="t.title" placeholder="主题（如 起针总松？）" maxlength="40" class="t-title" />
         <input v-model="t.sub" placeholder="副题" maxlength="40" class="t-sub" />
         <button class="icon-btn" title="上移" :disabled="ti === 0" @click="move(items, ti, -1)">↑</button>
@@ -152,40 +152,29 @@ onMounted(reload)
         <button class="icon-btn" :class="{ warn: confirmKey === 's:' + ti + ':' + si }" :title="confirmKey === 's:' + ti + ':' + si ? '再点确认删除' : '删段'" @click="delSeg(t, ti, si)"><Trash2 :size="14" :stroke-width="1.8" /></button>
       </div>
       <button class="add-btn" @click="addSeg(t)"><Plus :size="13" :stroke-width="2" /><span>加小段</span></button>
-    </div>
+    </Card>
 
-    <button class="add-topic" @click="addTopic"><Plus :size="15" :stroke-width="2" /><span>加主题</span></button>
+    <EmptyState v-if="!items.length" :icon="Video" text="还没有帮助主题，点下方「加主题」新建第一个" />
+
+    <div><button class="add-topic" @click="addTopic"><Plus :size="15" :stroke-width="2" /><span>加主题</span></button></div>
   </div>
 </template>
 
 <style scoped>
-.page {
+/* 页级宽度（页头/卡/节奏由 kit：PageHeader·Card·ld-page gap） */
+.help {
   max-width: 820px;
 }
-.page-head {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 16px;
-  margin-bottom: 16px;
+.status {
+  font-size: 13px;
+  color: var(--ld-red);
 }
-h1 {
-  margin: 0;
-  font-size: 22px;
-  font-weight: 700;
-  color: var(--ld-ink);
-}
-.sub {
-  margin: 4px 0 0;
+.uploading {
   font-size: 12.5px;
-  color: var(--ld-content-2);
+  color: var(--ld-brand-active);
+  font-weight: 600;
 }
-.head-save {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  flex: none;
-}
+/* 自动保存 chip（页头右侧操作槽） */
 .autosave {
   font-size: 11.5px;
   font-weight: 600;
@@ -200,24 +189,10 @@ h1 {
 .autosave.error {
   color: var(--ld-red);
 }
-.status {
-  font-size: 13px;
-  color: var(--ld-red);
-}
-.uploading {
-  font-size: 12.5px;
-  color: var(--ld-brand-active);
-  font-weight: 600;
-}
-.topic-card {
-  padding: 16px 18px;
-  margin-bottom: 12px;
-  background: var(--ld-bg);
-  border: 1px solid var(--ld-line);
-  border-radius: var(--ld-radius-l);
-}
+/* 主题头（外框由 Card 提供）：徽章 + 标题/副题 + ↑ ↓ 删 */
 .topic-head {
   display: flex;
+  align-items: center;
   gap: 8px;
   margin-bottom: 10px;
 }
@@ -233,7 +208,7 @@ input,
 textarea {
   padding: 8px 12px;
   border: 1px solid var(--ld-line);
-  border-radius: 8px;
+  border-radius: var(--ld-radius-sm);
   font-size: 13px;
   font-family: var(--ld-font);
 }
@@ -244,6 +219,7 @@ textarea {
   margin-bottom: 10px;
   resize: vertical;
 }
+/* 小段行：段名 / 时长 / 上传位 / ↑ ↓ 删 */
 .seg {
   display: grid;
   grid-template-columns: 1fr 100px auto auto auto auto;
@@ -251,11 +227,7 @@ textarea {
   align-items: center;
   margin-bottom: 6px;
 }
-.icon-btn.warn {
-  color: var(--ld-red);
-  border-color: var(--ld-red-line);
-  background: var(--ld-bg-red-soft);
-}
+/* 视频上传位（未传=紫描边 / 已传=绿） */
 .upload {
   display: inline-flex;
   align-items: center;
@@ -275,6 +247,7 @@ textarea {
   color: var(--ld-green);
   background: var(--ld-bg-green-soft);
 }
+/* 树内 ↑ ↓ 删 图标按钮（危态转红） */
 .icon-btn {
   display: flex;
   align-items: center;
@@ -283,7 +256,7 @@ textarea {
   height: 30px;
   flex: none;
   border: 1px solid var(--ld-line);
-  border-radius: 8px;
+  border-radius: var(--ld-radius-sm);
   background: var(--ld-bg);
   color: var(--ld-content-2);
   cursor: pointer;
@@ -292,6 +265,12 @@ textarea {
   color: var(--ld-red);
   border-color: var(--ld-red-line);
 }
+.icon-btn.warn {
+  color: var(--ld-red);
+  border-color: var(--ld-red-line);
+  background: var(--ld-bg-red-soft);
+}
+/* 加小段（树内增项·虚线药丸） */
 .add-btn {
   display: inline-flex;
   align-items: center;
@@ -306,6 +285,7 @@ textarea {
   font-weight: 600;
   cursor: pointer;
 }
+/* 加主题（页级增项·虚线药丸） */
 .add-topic {
   display: inline-flex;
   align-items: center;
