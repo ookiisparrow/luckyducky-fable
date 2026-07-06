@@ -115,8 +115,12 @@ async function doCreate() {
   const batchId = String(r.batchId)
   const codeN = (r.codes as string[]).length
   courseId.value = target // 选择器回到刚生成的课·load() 据此刷新 target（P2·防用漂移的可编辑框值跳到别课、把刚建的批次藏掉）
-  await load() // 先刷新（load 会写'加载中…'/'')，刷完再显成功——否则同步 reload 的'加载中…'当帧盖掉成功提示（病根#14 伪成功）
-  message.value = `已生成批次 ${batchId}（${codeN} 张码）`
+  await load() // 先刷新（load 会写'加载中…'/'')，刷完再按刷新结果显——否则同步 reload 的'加载中…'当帧盖掉成功（病根#14 伪成功）
+  // 只在列表刷新也成功时显纯成功；刷新失败则保留其可见性、不被成功盖掉（load 成功才把 loadedCourse 设为 target·病根#14 失败必可观测·迭代I 批7 回归修）
+  message.value =
+    loadedCourse.value === target
+      ? `已生成批次 ${batchId}（${codeN} 张码）`
+      : `已生成批次 ${batchId}（${codeN} 张码），但列表刷新失败，请点「载入课程」重试`
 }
 
 const codesGen = useLatest() // 码表乱序守卫（P1·A 的码别配到 B 的批次头·防印错卡·根因#8）

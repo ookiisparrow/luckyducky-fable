@@ -35,6 +35,7 @@ async function reload() {
   const r = await listKb()
   rows.value = r.ok ? normalizeKb(r.list) : []
   message.value = r.ok ? '' : '加载失败：' + String(r.error || '')
+  return r.ok
 }
 
 // B3：新建 FAQ 键留空由人填（换皮自动生成随机 faq-<ts>·永不匹配菜单叶子·bot 命不中）
@@ -85,8 +86,9 @@ async function save() {
     return
   }
   const n = Number(r.count) || 0
-  await reload() // 成功才刷（拉回落库后的整册）
-  message.value = `已保存 ${n} 条（整册覆盖·被删的行已真删）` // 刷完再显·不被 reload 的 '' 抹掉
+  const okR = await reload() // 成功才刷（拉回落库后的整册）
+  // 只在刷新也成功时显纯成功；刷新失败保留其「加载失败」可见、不被成功盖掉（病根#14 失败必可观测·迭代I 批7 回归修）
+  message.value = okR ? `已保存 ${n} 条（整册覆盖·被删的行已真删）` : `已保存 ${n} 条，但列表刷新失败，请重开本页确认`
 }
 
 onMounted(reload)

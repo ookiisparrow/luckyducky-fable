@@ -128,12 +128,20 @@ function autosave() {
   saveState.value = 'saving'
   fromPublished.value = false
   if (saveTimer) clearTimeout(saveTimer)
-  saveTimer = setTimeout(() => void flushSave(), 900)
+  saveTimer = setTimeout(() => {
+    saveTimer = null // 触发后清空·让 saveTimer 真实反映「有未落盘的待发编辑」
+    void flushSave()
+  }, 900)
 }
 watch(course, () => { if (loaded && course.value) autosave() }, { deep: true })
+// 离页补存判据用 pending saveTimer 而非 saveState==='saving'（先发保存完成会把 saveState 复位成 'saved'、
+// 后一次编辑只在待触发 timer 里→按 saveState 判会漏补、离页丢课程编辑·P2·同 HelpVideos/Showcase·迭代I 批7 回归补 Courses）
 onBeforeUnmount(() => {
-  if (saveTimer) clearTimeout(saveTimer)
-  if (saveState.value === 'saving' && course.value) void flushSave()
+  if (saveTimer) {
+    clearTimeout(saveTimer)
+    saveTimer = null
+    if (course.value) void flushSave()
+  }
 })
 
 function addChapter() {
@@ -183,6 +191,12 @@ async function batchUpload(l: Record<string, any>, ev: Event) {
 async function save() {
   if (!course.value || busy.value) return
   busy.value = true
+  // 手动保存前排空在途/待发自动保存·成为最后一次写（防旧快照 autosave POST 后落覆盖新草稿·同 publish/HomeContent·迭代I 批7 回归补 Courses.save）
+  if (saveTimer) {
+    clearTimeout(saveTimer)
+    saveTimer = null
+  }
+  await flushSave()
   const r = await saveCourseDraft(course.value)
   busy.value = false
   message.value = r.ok ? '草稿已保存（学员不可见·发布后生效）' : '保存失败：' + String(r.error || '')

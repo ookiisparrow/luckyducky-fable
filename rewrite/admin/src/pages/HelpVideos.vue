@@ -25,6 +25,7 @@ async function reload() {
   message.value = r.ok ? '' : '加载失败：' + String(r.error || '')
   saveState.value = ''
   void nextTick(() => (loaded = true)) // 载入后的用户编辑才自动保存
+  return r.ok
 }
 
 // 视频时长自动读取（换皮丢·选完视频读元数据填 dur·mm:ss）
@@ -133,8 +134,9 @@ async function save() {
     message.value = '保存失败：' + String(r.error || '')
     return
   }
-  await reload() // 成功才刷（反映云端剔除无视频的小段）
-  message.value = '已保存（无视频的小段会被云端剔除）' // 刷完再显·不被 reload 的 '' 抹
+  const okR = await reload() // 成功才刷（反映云端剔除无视频的小段）
+  // 只在刷新也成功时显纯成功；刷新失败保留其「加载失败」可见、不被成功盖掉（病根#14 失败必可观测·迭代I 批7 回归修）
+  message.value = okR ? '已保存（无视频的小段会被云端剔除）' : '已保存，但列表刷新失败，请重开本页确认'
 }
 
 onMounted(reload)
