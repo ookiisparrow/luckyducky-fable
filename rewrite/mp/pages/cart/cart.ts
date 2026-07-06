@@ -47,13 +47,13 @@ Page({
     this.refresh()
   },
   onInc(e: WechatMiniprogram.TouchEvent) {
-    const { id, sku, qty } = e.currentTarget.dataset as { id: string; sku: string; qty: number }
-    cart.setQty(id, Number(qty) + 1, sku)
+    const { id, sku } = e.currentTarget.dataset as { id: string; sku: string }
+    cart.bump(id, 1, sku) // 相对增·读内存最新 qty（不用渲染层 data-qty）·连点不丢增量
     this.refresh()
   },
   onDec(e: WechatMiniprogram.TouchEvent) {
-    const { id, sku, qty } = e.currentTarget.dataset as { id: string; sku: string; qty: number }
-    cart.setQty(id, Number(qty) - 1, sku) // 钳位 ≥1（减到 1 再减不动·删行走「删除」→ 落回下方推荐）
+    const { id, sku } = e.currentTarget.dataset as { id: string; sku: string }
+    cart.bump(id, -1, sku) // 相对减·钳位 ≥1（减到 1 再减不动·删行走「删除」→ 落回下方推荐）
     this.refresh()
   },
   onRemove(e: WechatMiniprogram.TouchEvent) {

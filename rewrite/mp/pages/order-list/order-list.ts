@@ -56,15 +56,19 @@ Page({
     // 状态筛选下推服务端（分页与过滤同源）：tabKey 作 status 传下去·从该 tab 重新分页。
     // 修原「客户端过滤 + 服务端全量分页」：短过滤 tab 内容短于视口→不可滚→onReachBottom 不触发→深页匹配单看不到、
     // 且并存「上拉加载更多」死提示与「暂无订单」假空态（审计 P2）。
+    const tab = this.data.tabKey // 捕获本次请求的 tab·回包落地前复核，防快速切 tab 慢回包乱序覆盖（同 player playToken）
     this.setData({ loading: true })
-    const r = await getMyOrders(undefined, 20, this.data.tabKey)
+    const r = await getMyOrders(undefined, 20, tab)
+    if (tab !== this.data.tabKey) return // 已切到别的 tab：丢弃过期回包·不污染当前 tab 的列表/游标（由新 reload 落地）
     const all = r.ok ? mapOrders(r.list) : []
     this.setData({ loading: false, all, shown: all.map(decorate), cursor: r.ok ? r.nextCursor : null, hasMore: !!(r.ok && r.hasMore) })
   },
   async onReachBottom() {
     if (!this.data.hasMore || this.data.cursor == null) return
-    const r = await getMyOrders(this.data.cursor, 20, this.data.tabKey)
+    const tab = this.data.tabKey
+    const r = await getMyOrders(this.data.cursor, 20, tab)
     if (!r.ok) return // 翻页失败不覆盖已有数据（黄金 §八口径）
+    if (tab !== this.data.tabKey) return // 跨 tab 过期回包：丢弃·不并入新 tab、不错配游标
     const merged = [...this.data.all]
     const seen = new Set(merged.map((o) => o.id))
     for (const o of mapOrders(r.list)) if (!seen.has(o.id)) merged.push(o) // 追加去重

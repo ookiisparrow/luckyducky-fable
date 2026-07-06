@@ -99,4 +99,15 @@ describe('持久化回灌（黄金 §二：脏数据闸）', () => {
     expect(items).toHaveLength(2)
     expect(items.map((i) => i.sku).sort()).toEqual(['', '云朵白'])
   })
+
+  it('大白话：bump 相对增减读内存最新 qty（不靠渲染层旧值）·连点两次 +1 累加不丢·钳位 ≥1·按 SKU 行独立', () => {
+    cart.add(DUCK)
+    cart.add({ ...DUCK, sku: '云朵白', price: 138 })
+    cart.bump('p1', 1) // 无 sku 行 1→2
+    cart.bump('p1', 1) // 读内存最新 2→3（渲染层旧值仍是 1 也不丢增量·lost-update 根治）
+    expect(cart.getItems().find((i) => i.sku === '')!.qty).toBe(3)
+    expect(cart.getItems().find((i) => i.sku === '云朵白')!.qty).toBe(1) // 另一 SKU 行不受影响
+    cart.bump('p1', -5) // 钳位 ≥1
+    expect(cart.getItems().find((i) => i.sku === '')!.qty).toBe(1)
+  })
 })

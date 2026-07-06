@@ -47,9 +47,11 @@ Page({
     })
   },
   onPickAddress() {
+    if (this.data.submitting) return // 提交在途禁止跳地址页：否则地址页压栈后·下单成功的 redirectTo/switchTab 打到栈顶地址页、劫持返回
     wx.navigateTo({ url: '/pages/address/address?pick=1' })
   },
   onToggleAddon(e: WechatMiniprogram.TouchEvent) {
+    if (this.data.submitting) return // 提交在途禁止改搭配购：否则下单用 await 前草稿快照·成功页金额 await 后重算，二者分叉展示不一致
     checkout.toggleAddon(String(e.currentTarget.dataset.id))
     this.refresh()
   },

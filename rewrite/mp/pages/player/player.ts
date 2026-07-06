@@ -31,6 +31,7 @@ Page({
   playToken: 0, // 切段请求令牌（防乱序回包覆盖·守卫 rw-mp-player-stale-guarded）
   errSeg: '', // 上次因视频加载失败重试过的段
   errRetried: false, // 该段是否已重试过一次（防不可恢复媒体无限重取死循环）
+  watchReported: false, // 本段 watch_at 是否已上报（一次性·防 onHide+onUnload 双报）
 
   async onLoad(query: Record<string, string | undefined>) {
     this.courseId = String(query.courseId || '')
@@ -57,10 +58,13 @@ Page({
       this.errSeg = '' // 换段（非重试）重置视频加载失败重试计数
       this.errRetried = false
     }
+    this.watchReported = false // 新段（含重试重入）＝新观看单元·允许再上报一次 watch_at
     const token = ++this.playToken // 本次切段令牌·await 后复核，防慢回旧段覆盖新段
     this.firstFrameScene = scene
     this.firstFrameReported = false
-    this.setData({ state: 'loading', current: seg, listOpen: false })
+    // src 清空：换段加载态回到「正在加载首帧」骨架，且卸载上一段/坏地址的 <video>——否则旧视频在新段标签下继续播放、
+    // 骨架永不显，且坏 src 重挂到新段会瞬时 bind:error 白吃掉新段的一次重试预算（审计②）。
+    this.setData({ state: 'loading', current: seg, src: '', listOpen: false })
     let url = ''
     try {
       url = await cache.get(this.courseId, seg.segmentId)
@@ -139,10 +143,18 @@ Page({
   onGoActivate() {
     wx.redirectTo({ url: '/pages/welcome/welcome' })
   },
-  onHide() {
+  // 观看位置上报：onHide（前进导航离页）+ onUnload（系统返回销毁·最常见的离开方式）都触发，
+  // 一次性 watchReported 防同段双报（原只挂 onHide→返回退出静默丢失 watch_at·根因#14 可观测）。
+  reportWatchAt() {
     const cur = this.data.current
-    if (cur && this.data.state === 'playing') {
-      trackEvent('watch_at', 'player', cur.segmentId, { courseId: this.courseId, lessonId: cur.lessonId, segmentId: cur.segmentId })
-    }
+    if (!cur || this.data.state !== 'playing' || this.watchReported) return
+    this.watchReported = true
+    trackEvent('watch_at', 'player', cur.segmentId, { courseId: this.courseId, lessonId: cur.lessonId, segmentId: cur.segmentId })
+  },
+  onHide() {
+    this.reportWatchAt()
+  },
+  onUnload() {
+    this.reportWatchAt()
   },
 })
