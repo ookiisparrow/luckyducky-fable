@@ -1,4 +1,6 @@
 // 地址编辑（M2 批5）：新增/编辑一体（?id= 编辑）。四要素必填（与云端 createOrder 地址闸同口径）。
+// 重设计对齐 checkout.css coaddr-* 版式：结构/视觉重排在 wxml/wxss，本文件仅补 valid 派生态（保存按钮亮/暗）
+// 与 onDelete（编辑既有地址时删除·复用 lib/address.removeAddress），既有 handler 名与 data 字段一字未改。
 import * as addr from '../../lib/address'
 
 Page({
@@ -9,6 +11,7 @@ Page({
     region: '',
     detail: '',
     isDefault: false,
+    valid: false, // 派生：四要素齐→保存按钮亮（弱校验·onSave 内仍做强校验含电话位数）
   },
   onLoad(query: Record<string, string | undefined>) {
     const id = query.id ? Number(query.id) : null
@@ -16,13 +19,20 @@ Page({
       const a = addr.getById(id)
       if (a) this.setData({ id, name: a.name, phone: a.phone, region: a.region, detail: a.detail, isDefault: a.isDefault })
     }
+    this._syncValid()
   },
   onInput(e: WechatMiniprogram.Input) {
     const field = String(e.currentTarget.dataset.field)
-    this.setData({ [field]: e.detail.value })
+    this.setData({ [field]: e.detail.value }, () => this._syncValid())
   },
   onToggleDefault() {
     this.setData({ isDefault: !this.data.isDefault })
+  },
+  // 派生保存态：四项非空即亮（展示用弱校验，不改 onSave 的强校验语义）
+  _syncValid() {
+    const { name, phone, region, detail } = this.data
+    const valid = !!(name.trim() && phone.trim() && region.trim() && detail.trim())
+    if (valid !== this.data.valid) this.setData({ valid })
   },
   onSave() {
     const { id, name, phone, region, detail, isDefault } = this.data
@@ -36,5 +46,20 @@ Page({
     }
     addr.saveAddress({ id: id ?? undefined, name: name.trim(), phone: phone.trim(), region: region.trim(), detail: detail.trim(), isDefault })
     wx.navigateBack()
+  },
+  // 删除既有地址（仅编辑态·复用簿逻辑 removeAddress·二次确认防误删）
+  onDelete() {
+    const { id } = this.data
+    if (id == null) return
+    wx.showModal({
+      title: '删除地址',
+      content: '确定删除这个收货地址吗？',
+      success: (r) => {
+        if (r.confirm) {
+          addr.removeAddress(id)
+          wx.navigateBack()
+        }
+      },
+    })
   },
 })

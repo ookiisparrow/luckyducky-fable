@@ -4,11 +4,30 @@ import { mapPayResult } from '../../lib/payFlow'
 import { mapOrder, type OrderVM } from '../../lib/mapOrders'
 import { applicableLines, mapAfterSales } from '../../lib/mapAftersales'
 
+// 状态横幅配置（纯展示派生·icon/tint/文案随订单态·不含业务判定）。
+interface BannerVM {
+  icon: string
+  tint: string
+  head: string
+  sub: string
+}
+const BANNER: Record<string, BannerVM> = {
+  pending: { icon: 'wallet', tint: 'lilac', head: '等待付款', sub: '请尽快完成支付，超时订单将自动取消' },
+  paid: { icon: 'package', tint: 'lilac', head: '已付款，等待商家发货', sub: '商家将于 48 小时内为你打包发出' },
+  shipped: { icon: 'truck', tint: 'lilac', head: '商家已发货，包裹运送中', sub: '请注意查收，确认收货前请先验货' },
+  done: { icon: 'badge-check', tint: 'sage', head: '交易已完成', sub: '期待你钩出的小鸭，欢迎来晒图~' },
+  closed: { icon: 'info', tint: 'muted', head: '订单已关闭', sub: '订单已取消或超时未支付' },
+  refund_required: { icon: 'wallet', tint: 'lilac', head: '退款处理中', sub: '商家正在处理你的退款申请，请耐心等待' },
+}
+
 Page({
   data: {
     loading: true,
     missing: false,
     vm: null as OrderVM | null,
+    banner: null as BannerVM | null,
+    amountNum: '',
+    canAfterSale: false,
   },
   onLoad(query: Record<string, string | undefined>) {
     this.orderId = String(query.id || '')
@@ -20,7 +39,17 @@ Page({
   async reload() {
     const r = await getOrderById(this.orderId)
     const vm = r.ok ? mapOrder(r.order) : null
-    this.setData({ loading: false, missing: !vm, vm })
+    const banner = vm ? BANNER[vm.status] || { icon: 'info', tint: 'muted', head: vm.statusLabel, sub: '' } : null
+    const amountNum = vm ? (vm.amountLabel || '').replace(/[^0-9.]/g, '') : ''
+    const canAfterSale = !!vm && ['paid', 'shipped', 'done'].includes(vm.status)
+    this.setData({ loading: false, missing: !vm, vm, banner, amountNum, canAfterSale })
+  },
+  onCopyOrderNo() {
+    if (!this.orderId) return
+    wx.setClipboardData({
+      data: this.orderId,
+      success: () => wx.showToast({ title: '已复制单号', icon: 'none' }),
+    })
   },
   async onPay() {
     const outcome = mapPayResult(await pay(this.orderId))

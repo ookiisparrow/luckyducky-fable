@@ -1,108 +1,228 @@
-.ld-orders {
+/* 我的订单·重设计对齐 Checkout.jsx OrderList / coolist-* 版式（设计 402px 画板→rpx ×1.87）。
+   白色 sticky 下划线 tab + 浅灰 body + 白卡（顶行时间/状态、商品行、底行合计）；token 见 styles/tokens.wxss。 */
+.coolist {
   min-height: 100vh;
-  background: var(--ld-bg-lilac);
-  padding: 0 24rpx 40rpx;
+  background: var(--ld-bg-faint); /* 设计 coolist body #FAFAFB */
+  color: var(--ld-content);
 }
-.ld-tabs {
+.coolist image {
+  display: block;
+}
+
+/* ---------- 状态筛选 tab（下划线指示器） ---------- */
+.coolist-tabs {
   display: flex;
-  gap: 8rpx;
-  padding: 20rpx 0;
+  align-items: stretch;
+  padding: 0 12rpx;
+  background: var(--ld-bg);
+  border-bottom: 1rpx solid var(--ld-line-soft);
   position: sticky;
   top: 0;
-  background: var(--ld-bg-lilac);
-  z-index: 2;
+  z-index: 5;
 }
-.ld-tabitem {
+.coolist-tab {
   flex: 1;
+  position: relative;
   text-align: center;
-  padding: 14rpx 0;
+  padding: 22rpx 4rpx 24rpx;
   font-size: 26rpx;
-  color: var(--ld-purple-meta);
-  border-radius: var(--ld-radius-pill);
+  color: var(--ld-content-2);
 }
-.ld-tabitem.on {
-  background: var(--ld-bg);
+.coolist-tab.on {
   color: var(--ld-purple-tab);
-  font-weight: 600;
-  border: 2rpx solid var(--ld-purple-line);
+  font-weight: 500;
 }
-.ld-order {
-  padding: 24rpx 28rpx;
-  margin-bottom: 20rpx;
+.coolist-tab.on::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  bottom: 0;
+  transform: translateX(-50%);
+  width: 42rpx;
+  height: 5rpx;
+  border-radius: 4rpx;
+  background: var(--ld-purple-tab);
+}
+
+/* ---------- 列表容器 ---------- */
+.coolist-body {
+  padding: 22rpx 26rpx 40rpx;
+}
+
+/* ---------- 订单卡 ---------- */
+.coolist-card {
   background: var(--ld-bg);
-  border-radius: var(--ld-radius);
-  border: 2rpx solid var(--ld-purple-line);
+  border-radius: 30rpx; /* 设计 coolist-card 16px（比通用卡更圆） */
+  box-shadow: 0 2rpx 4rpx rgba(54, 58, 80, 0.03), 0 8rpx 24rpx rgba(54, 58, 80, 0.025);
+  margin-bottom: 26rpx;
+  overflow: hidden;
 }
-.ld-order-head {
+.coolist-card:active {
+  transform: scale(0.99);
+}
+
+/* 顶行：时间 + 状态 */
+.coolist-top {
   display: flex;
+  align-items: center;
   justify-content: space-between;
-  margin-bottom: 12rpx;
+  gap: 18rpx;
+  padding: 24rpx 34rpx;
 }
-.ld-order-no {
+.coolist-time {
   font-size: 24rpx;
-  color: var(--ld-purple-meta);
+  color: var(--ld-content-2);
+  letter-spacing: 0.2rpx;
 }
-.ld-order-status {
-  font-size: 24rpx;
-  color: var(--ld-purple-tab);
-  font-weight: 600;
-}
-.ld-order-line {
-  display: flex;
-  justify-content: space-between;
-  padding: 6rpx 0;
+.coolist-status {
+  flex: 0 0 auto;
   font-size: 26rpx;
+  font-weight: 500;
+}
+.coolist-status.coolist-purple {
+  color: var(--ld-purple-tab);
+}
+.coolist-status.coolist-sage {
+  color: var(--ld-duck-deep);
+}
+.coolist-status.coolist-muted {
+  color: #9a9a9a; /* 设计已关闭态弱灰·tokens 无对应中性灰（见 tokensNeeded） */
+}
+
+/* 商品行 */
+.coolist-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 22rpx;
+  padding: 28rpx 34rpx;
+  position: relative;
+}
+.coolist-img {
+  width: 142rpx;
+  height: 142rpx;
+  flex: 0 0 auto;
+  border-radius: 22rpx;
+  background: var(--ld-bg-sage); /* 订单无缩略图来源·灰底占位 */
+}
+.coolist-mid {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+.coolist-name {
+  font-size: 28rpx;
   color: var(--ld-ink);
+  line-height: 1.35;
+  letter-spacing: -0.3rpx;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
 }
-.ld-order-qty {
-  color: var(--ld-purple-meta);
+.coolist-tag {
+  align-self: flex-start;
+  font-size: 22rpx;
+  color: var(--ld-content-2);
+  background: var(--ld-bg-grey);
+  border-radius: 8rpx;
+  padding: 4rpx 15rpx;
+  margin: 11rpx 0 15rpx;
 }
-.ld-order-foot {
-  display: flex;
-  justify-content: space-between;
-  margin-top: 12rpx;
-  font-size: 24rpx;
-  color: var(--ld-purple-meta);
+.coolist-price {
+  font-size: 34rpx;
+  margin-top: auto;
 }
-.ld-order-amount {
-  color: var(--ld-purple-ink);
+.co-price {
   font-weight: 600;
+  color: var(--ld-ink);
+  letter-spacing: 0.4rpx;
 }
-.ld-order-ops {
-  display: flex;
-  justify-content: flex-end;
-  gap: 16rpx;
-  margin-top: 16rpx;
+.co-price .cny {
+  font-size: 25rpx;
+  font-weight: 600;
+  margin-right: 2rpx;
 }
-.ld-op-btn {
-  padding: 12rpx 32rpx;
-  border-radius: var(--ld-radius-pill);
-  background: var(--ld-purple-ink);
-  color: #ffffff;
+.coolist-qty {
+  position: absolute;
+  right: 34rpx;
+  bottom: 28rpx;
   font-size: 24rpx;
+  color: var(--ld-content-2);
+  letter-spacing: 0.4rpx;
 }
-.ld-op-btn.ghost {
+
+/* 底行：操作 + 合计（顶部发丝分隔线） */
+.coolist-foot {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 18rpx;
+  padding: 24rpx 34rpx 26rpx;
+}
+.coolist-foot::before {
+  content: '';
+  position: absolute;
+  left: 34rpx;
+  right: 34rpx;
+  top: 0;
+  height: 1rpx;
+  background: var(--ld-line-soft);
+}
+.coolist-actions {
+  display: flex;
+  gap: 16rpx;
+}
+.coolist-btn {
+  padding: 12rpx 30rpx;
+  border-radius: var(--ld-radius-pill);
+  font-size: 24rpx;
+  font-weight: 500;
+}
+.coolist-btn.primary {
+  background: var(--ld-purple);
+  color: #ffffff;
+}
+.coolist-btn.ghost {
   background: var(--ld-bg);
   color: var(--ld-purple-tab);
   border: 2rpx solid var(--ld-purple-line);
 }
-.ld-orders-empty {
-  text-align: center;
-  padding: 140rpx 0;
+.coolist-sum {
+  margin-left: auto;
+  font-size: 24rpx;
+  color: var(--ld-content-2);
 }
-.ld-empty-title {
+.coolist-sum-b {
   font-size: 30rpx;
   font-weight: 600;
-  color: var(--ld-purple-ink);
+  color: var(--ld-ink);
+  letter-spacing: 0.2rpx;
+  margin-left: 4rpx;
 }
-.ld-empty-hint {
-  margin-top: 10rpx;
-  font-size: 24rpx;
-  color: var(--ld-purple-meta);
+.coolist-sum-b .cny {
+  font-size: 22rpx;
+  margin-right: 2rpx;
 }
-.ld-orders-more {
+
+/* ---------- 空态 / 尾注 ---------- */
+.coolist-empty {
   text-align: center;
-  padding: 20rpx 0;
+  font-size: 24rpx;
+  color: var(--ld-content-2);
+  padding: 120rpx 0;
+}
+.coolist-more {
+  text-align: center;
   font-size: 22rpx;
   color: var(--ld-purple-meta);
+  padding: 20rpx 0 8rpx;
+}
+.coolist-end {
+  text-align: center;
+  font-size: 22rpx;
+  color: #b7b7b7; /* 设计尾注弱灰·tokens 无对应（见 tokensNeeded） */
+  padding: 16rpx 0 8rpx;
+  letter-spacing: 1rpx;
 }

@@ -1,44 +1,127 @@
-<view class="ld-odetail" wx:if="{{vm}}">
-  <view class="ld-obanner">
-    <view class="ld-obanner-status">{{vm.statusLabel}}</view>
-    <view class="ld-obanner-no">单号 {{vm.id}} · {{vm.createdAtLabel}}</view>
-    <view class="ld-obanner-track" wx:if="{{vm.trackingNo}}">运单号 {{vm.trackingNo}}</view>
-  </view>
+<!-- 订单详情·重设计对齐 Checkout.jsx 的 OrderStatus 版式（设计 402px 画板→rpx ×1.87）。
+     业务逻辑一字不动：续付(onPay)/确认收货(onConfirm)/申请售后(onAfterSale)/写评价(onWriteReview·per-line)
+     全承接 order.ts；本文件只重排结构与视觉。banner/amountNum/canAfterSale 为 order.ts 派生视图。
+     订单行为历史快照·只读；无商品图字段→灰底占位。token 见 styles/tokens.wxss。 -->
+<view class="co" wx:if="{{vm}}">
+  <view class="co-body">
 
-  <view class="ld-panel" wx:if="{{vm.address}}">
-    <view class="ld-oaddr-line1">{{vm.address.name}} {{vm.address.phone}}</view>
-    <view class="ld-oaddr-line2">{{vm.address.region}} {{vm.address.detail}}</view>
-  </view>
-
-  <view class="ld-panel">
-    <view class="ld-oline" wx:for="{{vm.items}}" wx:key="lineId">
-      <view class="ld-oline-main">
-        <view class="ld-oline-name">{{item.name}}</view>
-        <view class="ld-oline-spec" wx:if="{{item.spec}}">{{item.spec}}</view>
+    <!-- 状态横幅（按订单态换色·设计签名件） -->
+    <view class="coord-banner coord-{{banner.tint}}">
+      <view class="coord-banner-ico">
+        <image class="coord-banner-img" src="/static/icons/{{banner.icon}}.svg" mode="aspectFit" />
       </view>
-      <view class="ld-oline-right">
-        <view>{{item.priceLabel}}</view>
-        <view class="ld-oline-qty">×{{item.qty}}</view>
-        <view class="ld-oline-review" wx:if="{{vm.status === 'done'}}" data-lineid="{{item.lineId}}" data-name="{{item.name}}" catch:tap="onWriteReview">写评价</view>
+      <view class="coord-banner-text">
+        <view class="coord-banner-head">{{banner.head}}</view>
+        <view class="coord-banner-sub" wx:if="{{banner.sub}}">{{banner.sub}}</view>
       </view>
     </view>
+
+    <!-- 物流（有运单号时·真实数据仅运单号，不伪造轨迹） -->
+    <view class="co-card coord-logi" wx:if="{{vm.trackingNo}}">
+      <view class="coord-logi-ico">
+        <image class="coord-logi-img" src="/static/icons/truck.svg" mode="aspectFit" />
+      </view>
+      <view class="coord-logi-text">
+        <view class="coord-logi-line">运单号 {{vm.trackingNo}}</view>
+        <view class="coord-logi-time">物流状态以承运方为准</view>
+      </view>
+    </view>
+
+    <!-- 收货地址（历史快照·只读·含彩色针脚底边） -->
+    <view class="co-addr" wx:if="{{vm.address}}">
+      <view class="co-addr-main co-addr-static">
+        <view class="co-addr-pin">
+          <image class="co-ico co-ico-lg" src="/static/icons/map-pin.svg" mode="aspectFit" />
+        </view>
+        <view class="co-addr-text">
+          <view class="co-addr-line1">
+            <text class="co-addr-name">{{vm.address.name}}</text>
+            <text class="co-addr-phone">{{vm.address.phone}}</text>
+          </view>
+          <view class="co-addr-line2">{{vm.address.region}} {{vm.address.detail}}</view>
+        </view>
+      </view>
+      <view class="co-stitch"></view>
+    </view>
+
+    <!-- 订单商品（只读 ×N） -->
+    <view class="co-card">
+      <view class="co-shop">
+        <image class="co-shop-ico" src="/static/icons/store.svg" mode="aspectFit" />
+        <text class="co-shop-name">易织™小棉鸭® 官方旗舰店</text>
+        <view class="co-shop-chev">
+          <image class="co-ico" src="/static/icons/chevron-right.svg" mode="aspectFit" />
+        </view>
+      </view>
+      <view class="co-item" wx:for="{{vm.items}}" wx:key="lineId">
+        <view class="co-item-img"></view>
+        <view class="co-item-mid">
+          <text class="co-item-name">{{item.name}}</text>
+          <text class="co-item-spec" wx:if="{{item.spec}}">{{item.spec}}</text>
+          <view class="co-item-foot">
+            <text class="co-item-price co-price">{{item.priceLabel}}</text>
+            <view class="co-item-footright">
+              <text class="co-item-qty">×{{item.qty}}</text>
+              <view class="coord-review" wx:if="{{vm.status === 'done'}}"
+                data-lineid="{{item.lineId}}" data-name="{{item.name}}" catch:tap="onWriteReview">去评价</view>
+            </view>
+          </view>
+        </view>
+      </view>
+    </view>
+
+    <!-- 订单信息 -->
+    <view class="co-card co-rows">
+      <view class="co-row co-row-static">
+        <text class="co-row-key">订单编号</text>
+        <text class="co-row-val co-row-mono">{{vm.id}}</text>
+        <view class="coord-copy" catch:tap="onCopyOrderNo">
+          <image class="coord-copy-img" src="/static/icons/copy.svg" mode="aspectFit" />
+        </view>
+      </view>
+      <view class="co-row co-row-static" wx:if="{{vm.createdAtLabel}}">
+        <text class="co-row-key">下单时间</text>
+        <text class="co-row-val muted">{{vm.createdAtLabel}}</text>
+      </view>
+    </view>
+
+    <!-- 金额明细（灰色内嵌盒） -->
+    <view class="co-card">
+      <view class="co-summary">
+        <view class="co-sum-row" wx:if="{{vm.goodsLabel}}"><text>商品金额</text><text class="co-sum-v">{{vm.goodsLabel}}</text></view>
+        <view class="co-sum-row"><text>运费</text><text class="co-sum-v">{{vm.shipLabel}}</text></view>
+        <view class="co-sum-row discount" wx:if="{{vm.couponLabel}}"><text>优惠券</text><text class="co-sum-v">{{vm.couponLabel}}</text></view>
+        <view class="co-sum-div"></view>
+        <view class="co-sum-row total"><text>实付款</text><text class="co-sum-v">{{vm.amountLabel}}</text></view>
+        <!-- 申请售后（金额明细下方独立小按钮·承接 onAfterSale） -->
+        <view class="coord-refund-wrap" wx:if="{{canAfterSale}}">
+          <view class="coord-refund" bind:tap="onAfterSale">
+            <image class="coord-refund-img" src="/static/icons/rotate-ccw.svg" mode="aspectFit" />申请售后
+          </view>
+        </view>
+      </view>
+    </view>
+
   </view>
 
-  <view class="ld-panel">
-    <view class="ld-sum-row"><text>商品合计</text><text>{{vm.goodsLabel}}</text></view>
-    <view class="ld-sum-row"><text>运费</text><text>{{vm.shipLabel}}</text></view>
-    <view class="ld-sum-row" wx:if="{{vm.couponLabel}}"><text>优惠券</text><text class="ld-sum-coupon">{{vm.couponLabel}}</text></view>
-    <view class="ld-sum-row total"><text>实付</text><text>{{vm.amountLabel}}</text></view>
-  </view>
-
-  <view class="ld-oops">
-    <view class="ld-op-btn" wx:if="{{vm.status === 'pending'}}" bind:tap="onPay">继续支付</view>
-    <view class="ld-op-btn ghost" wx:if="{{vm.status === 'shipped'}}" bind:tap="onConfirm">确认收货</view>
-    <view class="ld-op-btn ghost" wx:if="{{vm.status === 'paid' || vm.status === 'shipped' || vm.status === 'done'}}" bind:tap="onAfterSale">申请售后</view>
+  <!-- 底部坞（实付款 + 状态操作） -->
+  <view class="co-dock-space"></view>
+  <view class="co-dock">
+    <view class="co-dockbar">
+      <view class="co-dock-total">
+        <text class="co-dock-small">实付款</text>
+        <view class="co-dock-amount">
+          <text class="co-dock-num"><text class="cny">¥</text>{{amountNum}}</text>
+        </view>
+      </view>
+      <view class="co-submit" wx:if="{{vm.status === 'pending'}}" bind:tap="onPay">继续支付</view>
+      <view class="co-submit" wx:if="{{vm.status === 'shipped'}}" bind:tap="onConfirm">确认收货</view>
+    </view>
   </view>
 </view>
 
-<view class="ld-odetail-empty" wx:elif="{{!loading}}">
-  <view class="ld-empty-title">订单不存在</view>
-  <view class="ld-empty-hint">可能已被删除或不属于当前账号</view>
+<!-- 订单不存在 -->
+<view class="co coord-empty" wx:elif="{{!loading}}">
+  <view class="coord-empty-title">订单不存在</view>
+  <view class="coord-empty-hint">可能已被删除或不属于当前账号</view>
 </view>

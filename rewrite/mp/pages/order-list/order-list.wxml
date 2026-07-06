@@ -1,30 +1,64 @@
-<view class="ld-orders">
-  <view class="ld-tabs">
-    <view wx:for="{{tabs}}" wx:key="key" class="ld-tabitem {{tabKey === item.key ? 'on' : ''}}" data-key="{{item.key}}" bind:tap="onTab">{{item.label}}</view>
+<!-- 我的订单·重设计对齐 Checkout.jsx OrderList / coolist-* 版式（设计 402px 画板→rpx ×1.87）。
+     业务逻辑不动：状态筛选 tab(onTab)/点单进详情(onTapOrder)/继续支付(onPay)/确认收货(onConfirm)/
+     游标分页(onReachBottom) 全部承接 order-list.ts；本文件只重排结构与视觉。
+     原生标题栏承担返回/标题（navigationBarTitleText），故不渲染设计的 co-nav 返回条，只保留下沉筛选 tab。
+     设计卡内商品缩略图订单数据无来源 → 灰底占位（不裂图·见 risks/deferred）。 -->
+<view class="coolist">
+
+  <!-- 状态筛选（下划线指示器·设计签名 tab） -->
+  <view class="coolist-tabs">
+    <view
+      wx:for="{{tabs}}"
+      wx:key="key"
+      class="coolist-tab {{tabKey === item.key ? 'on' : ''}}"
+      data-key="{{item.key}}"
+      bind:tap="onTab"
+    >{{item.label}}</view>
   </view>
 
-  <view class="ld-order" wx:for="{{shown}}" wx:key="id" data-id="{{item.id}}" bind:tap="onTapOrder">
-    <view class="ld-order-head">
-      <text class="ld-order-no">单号 {{item.id}}</text>
-      <text class="ld-order-status">{{item.statusLabel}}</text>
-    </view>
-    <view class="ld-order-line" wx:for="{{item.items}}" wx:for-item="line" wx:key="lineId">
-      <text class="ld-order-name">{{line.name}}{{line.spec ? '（' + line.spec + '）' : ''}}</text>
-      <text class="ld-order-qty">×{{line.qty}}</text>
-    </view>
-    <view class="ld-order-foot">
-      <text class="ld-order-time">{{item.createdAtLabel}}</text>
-      <text class="ld-order-amount">{{item.count}} 件 · {{item.amountLabel}}</text>
-    </view>
-    <view class="ld-order-ops" wx:if="{{item.status === 'pending' || item.status === 'shipped'}}">
-      <view class="ld-op-btn" wx:if="{{item.status === 'pending'}}" data-id="{{item.id}}" catch:tap="onPay">继续支付</view>
-      <view class="ld-op-btn ghost" wx:if="{{item.status === 'shipped'}}" data-id="{{item.id}}" catch:tap="onConfirm">确认收货</view>
-    </view>
-  </view>
+  <view class="coolist-body">
 
-  <view class="ld-orders-empty" wx:if="{{!loading && !shown.length}}">
-    <view class="ld-empty-title">这里还没有订单</view>
-    <view class="ld-empty-hint">下一单，让小鸭出发</view>
+    <!-- 空态 -->
+    <view class="coolist-empty" wx:if="{{!loading && !shown.length}}">该分类下暂无订单</view>
+
+    <!-- 订单卡 -->
+    <view
+      class="coolist-card"
+      wx:for="{{shown}}"
+      wx:key="id"
+      data-id="{{item.id}}"
+      bind:tap="onTapOrder"
+    >
+      <!-- 顶行：下单时间 + 状态标（按状态染色） -->
+      <view class="coolist-top">
+        <text class="coolist-time">{{item.createdAtLabel}}</text>
+        <text class="coolist-status coolist-{{item.tint}}">{{item.statusLabel}}</text>
+      </view>
+
+      <!-- 商品行（每单可多行） -->
+      <view class="coolist-item" wx:for="{{item.items}}" wx:for-item="line" wx:key="lineId">
+        <view class="coolist-img"></view>
+        <view class="coolist-mid">
+          <text class="coolist-name">{{line.name}}</text>
+          <text class="coolist-tag" wx:if="{{line.spec}}">{{line.spec}}</text>
+          <text class="coolist-price co-price" wx:if="{{line.priceNum}}"><text class="cny">¥</text>{{line.priceNum}}</text>
+        </view>
+        <text class="coolist-qty">×{{line.qty}}</text>
+      </view>
+
+      <!-- 底行：操作钮（如有）+ 件数实付合计 -->
+      <view class="coolist-foot">
+        <view class="coolist-actions" wx:if="{{item.status === 'pending' || item.status === 'shipped'}}">
+          <view class="coolist-btn primary" wx:if="{{item.status === 'pending'}}" data-id="{{item.id}}" catch:tap="onPay">继续支付</view>
+          <view class="coolist-btn ghost" wx:if="{{item.status === 'shipped'}}" data-id="{{item.id}}" catch:tap="onConfirm">确认收货</view>
+        </view>
+        <text class="coolist-sum">共 {{item.count}} 件 · 实付 <text class="coolist-sum-b"><text class="cny">¥</text>{{item.amountNum}}</text></text>
+      </view>
+    </view>
+
+    <!-- 尾注：分页可加载 / 到底 -->
+    <view class="coolist-more" wx:if="{{hasMore}}">上拉加载更多</view>
+    <view class="coolist-end" wx:elif="{{!loading && shown.length}}">仅展示近期订单</view>
+
   </view>
-  <view class="ld-orders-more" wx:if="{{hasMore}}">上拉加载更多</view>
 </view>

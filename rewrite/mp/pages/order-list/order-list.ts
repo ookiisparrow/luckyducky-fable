@@ -1,7 +1,7 @@
 // 我的订单（M2 批7）：状态分栏 + 游标分页 + 待支付续付 + 确认收货。列表从云端拉取、无本地回退单。
 import { getMyOrders, pay, confirmReceive } from '../../api/orders'
 import { mapPayResult } from '../../lib/payFlow'
-import { mapOrders, type OrderVM } from '../../lib/mapOrders'
+import { mapOrders, type OrderVM, type OrderLineVM } from '../../lib/mapOrders'
 
 const TABS = [
   { key: '', label: '全部' },
@@ -11,12 +11,37 @@ const TABS = [
   { key: 'done', label: '已完成' },
 ]
 
+// 状态→设计染色（coolist-* tint）：进行中紫、已完成鸭黄、关闭/退款弱灰。仅视觉，不改状态语义。
+const TINT: Record<string, string> = {
+  pending: 'purple',
+  paid: 'purple',
+  shipped: 'purple',
+  done: 'sage',
+  closed: 'muted',
+  refund_required: 'muted',
+}
+// 去 ¥ 前缀（label 已含半角 ¥·拆出纯数字供模板把货币符号做小号处理，展示不改口径）。
+const stripCny = (s: string): string => (s || '').replace(/^¥/, '')
+
+type LineRow = OrderLineVM & { priceNum: string }
+type OrderRow = Omit<OrderVM, 'items'> & { items: LineRow[]; tint: string; amountNum: string }
+
+// 视图装饰：附 tint + 拆分货币符号（不动 mapOrders 单源/守卫 rw-mp-orders-golden）。
+function decorate(o: OrderVM): OrderRow {
+  return {
+    ...o,
+    tint: TINT[o.status] || 'purple',
+    amountNum: stripCny(o.amountLabel),
+    items: o.items.map((l) => ({ ...l, priceNum: stripCny(l.priceLabel) })),
+  }
+}
+
 Page({
   data: {
     tabs: TABS,
     tabKey: '',
     all: [] as OrderVM[],
-    shown: [] as OrderVM[],
+    shown: [] as OrderRow[],
     loading: true,
     hasMore: false,
     cursor: null as unknown,
@@ -46,7 +71,8 @@ Page({
   },
   applyTab() {
     const k = this.data.tabKey
-    this.setData({ shown: k ? this.data.all.filter((o) => o.status === k) : this.data.all })
+    const filtered = k ? this.data.all.filter((o) => o.status === k) : this.data.all
+    this.setData({ shown: filtered.map(decorate) })
   },
   onTab(e: WechatMiniprogram.TouchEvent) {
     this.setData({ tabKey: String(e.currentTarget.dataset.key) })

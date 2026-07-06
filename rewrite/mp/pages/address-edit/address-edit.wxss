@@ -1,53 +1,141 @@
-.ld-aedit {
+/* 编辑收货地址·重设计对齐 Checkout.jsx AddressEdit + checkout.css coaddr-*（设计 402px 画板→rpx ×1.87）。
+   页浅灰底、白卡以圆角+浅影分隔、同卡内发丝线分行；token 见 styles/tokens.wxss。co-/coaddr- 前缀沿设计。 */
+.coaddr {
   min-height: 100vh;
-  background: var(--ld-bg-lilac);
-  padding: 24rpx;
+  background: #f4f4f5; /* 设计 co 页底浅灰（与 checkout 同调·tokens 无对应中性灰） */
+  color: var(--ld-content);
 }
-.ld-field {
+.coaddr image {
+  display: block;
+}
+
+/* ---------- 内容容器 ---------- */
+.co-body {
+  padding: 22rpx 26rpx 8rpx;
+  display: flex;
+  flex-direction: column;
+  gap: 22rpx;
+}
+
+/* ---------- 通用白卡 ---------- */
+.co-card {
+  background: var(--ld-bg);
+  border-radius: var(--ld-radius-md);
+  box-shadow: 0 2rpx 4rpx rgba(54, 58, 80, 0.05);
+  overflow: hidden;
+}
+
+/* ---------- 表单卡 ---------- */
+.coaddr-form {
+  padding: 4rpx 30rpx;
+}
+.coaddr-field {
   display: flex;
   align-items: center;
-  gap: 24rpx;
-  padding: 26rpx 28rpx;
-  margin-bottom: 20rpx;
-  background: var(--ld-bg);
-  border-radius: var(--ld-radius);
-  border: 2rpx solid var(--ld-purple-line);
+  gap: 22rpx;
+  padding: 28rpx 0;
+  border-bottom: 1rpx solid var(--ld-line-soft);
 }
-.ld-field-label {
-  width: 140rpx;
-  font-size: 26rpx;
-  color: var(--ld-purple-meta);
-  flex-shrink: 0;
+.coaddr-field:last-child {
+  border-bottom: none;
 }
-.ld-field-input {
+.coaddr-label {
+  flex: 0 0 120rpx;
+  font-size: 27rpx;
+  color: var(--ld-content);
+}
+.coaddr-input {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: 28rpx;
+  color: var(--ld-ink);
+  line-height: 1.5;
+}
+.coaddr-ph {
+  color: var(--ld-content-2);
+}
+
+/* ---------- 设为默认 + 通用开关 ---------- */
+.coaddr-default {
+  display: flex;
+  align-items: center;
+  padding: 30rpx;
+}
+.coaddr-default-text {
   flex: 1;
   font-size: 28rpx;
   color: var(--ld-ink);
 }
-.ld-default {
-  display: flex;
-  align-items: center;
-  gap: 14rpx;
-  padding: 8rpx 8rpx 32rpx;
-  font-size: 26rpx;
-  color: var(--ld-purple-meta);
+.co-switch {
+  position: relative;
+  flex: 0 0 auto;
+  width: 82rpx;
+  height: 48rpx;
+  border-radius: var(--ld-radius-pill);
+  background: #dcdcdc; /* 设计 --line-strong 关态底·tokens 无对应 */
+  transition: background 0.2s;
 }
-.ld-check {
+.coaddr-default.on .co-switch {
+  background: var(--ld-purple);
+}
+.co-switch-dot {
+  position: absolute;
+  top: 6rpx;
+  left: 6rpx;
   width: 36rpx;
   height: 36rpx;
   border-radius: 50%;
-  border: 3rpx solid var(--ld-purple-line);
+  background: #ffffff;
+  box-shadow: 0 2rpx 6rpx rgba(0, 0, 0, 0.2);
+  transition: transform 0.2s;
 }
-.ld-check.on {
-  background: var(--ld-purple-tab);
-  border-color: var(--ld-purple-tab);
+.coaddr-default.on .co-switch-dot {
+  transform: translateX(34rpx);
 }
-.ld-savebtn {
+
+/* ---------- 删除 ---------- */
+.coaddr-delete {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 13rpx;
+  padding: 28rpx;
+  font-size: 28rpx;
+  color: #d54941; /* 设计 --red 危险动作·tokens 无对应 */
+}
+.coaddr-delete-ico {
+  width: 32rpx;
+  height: 32rpx;
+  flex: 0 0 auto;
+}
+
+/* ---------- 底部保存坞 ---------- */
+.co-dock-space {
+  height: 160rpx;
+}
+.co-dock {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: var(--ld-bg);
+  box-shadow: 0 -2rpx 0 var(--ld-line), 0 -8rpx 24rpx rgba(54, 58, 80, 0.06);
+}
+.coaddr-dock {
+  display: flex;
+  align-items: center;
+  padding: 18rpx 30rpx calc(18rpx + env(safe-area-inset-bottom));
+}
+.co-submit {
+  flex: 1;
   text-align: center;
-  padding: 24rpx 0;
+  padding: 26rpx 0;
   border-radius: var(--ld-radius-pill);
-  background: var(--ld-purple-ink);
+  background: var(--ld-purple);
   color: #ffffff;
   font-size: 30rpx;
   font-weight: 600;
+}
+.co-submit.dim {
+  opacity: 0.5;
 }

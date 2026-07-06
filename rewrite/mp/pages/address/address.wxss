@@ -1,80 +1,190 @@
-.ld-addrbook {
+/* 地址管理·重设计对齐 Checkout.jsx coam-* 版式（设计 402px 画板→rpx ×1.87）。
+   页浅紫底、白卡圆角+浅影；选中圈(check)标默认、右侧笔分栏编辑；token 见 styles/tokens.wxss。
+   co-/coam- 前缀沿设计（本页 wxss 独立作用域，与 checkout 同名类互不影响）。 */
+.co {
   min-height: 100vh;
   background: var(--ld-bg-lilac);
-  padding: 24rpx;
+  color: var(--ld-content);
 }
-.ld-arow {
+.co image {
+  display: block;
+}
+
+/* ---------- 内容容器 ---------- */
+.co-body {
+  padding: 22rpx 26rpx 8rpx;
+  display: flex;
+  flex-direction: column;
+  gap: 22rpx;
+}
+
+/* ---------- 地址卡 ---------- */
+.co-card {
+  background: var(--ld-bg);
+  border-radius: var(--ld-radius-md);
+  box-shadow: 0 2rpx 4rpx rgba(54, 58, 80, 0.05);
+  overflow: hidden;
+}
+.coam-card {
+  display: flex;
+  align-items: stretch;
+}
+.coam-main {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  align-items: flex-start;
+  gap: 22rpx;
+  padding: 30rpx;
+}
+/* 选中圈：默认态填幸运紫 + 白勾 */
+.coam-radio {
+  width: 38rpx;
+  height: 38rpx;
+  flex: 0 0 auto;
+  margin-top: 4rpx;
+  border-radius: 50%;
+  border: 2rpx solid #cccccc; /* 未选圈灰边（设计 checkout.css #CCC）·tokens 无对应中性灰边 */
+  background: var(--ld-bg);
+  box-sizing: border-box;
   display: flex;
   align-items: center;
-  gap: 16rpx;
-  padding: 26rpx;
-  margin-bottom: 20rpx;
-  background: var(--ld-bg);
-  border-radius: var(--ld-radius);
-  border: 2rpx solid var(--ld-purple-line);
+  justify-content: center;
 }
-.ld-arow-main {
-  flex: 1;
+.coam-radio.on {
+  background: var(--ld-purple);
+  border-color: var(--ld-purple);
+}
+.coam-check {
+  width: 22rpx;
+  height: 22rpx;
+}
+.coam-text {
+  flex: 1 1 auto;
   min-width: 0;
 }
-.ld-arow-line1 {
+.coam-line1 {
   display: flex;
   align-items: baseline;
-  gap: 16rpx;
+  gap: 18rpx;
+  flex-wrap: wrap;
 }
-.ld-arow-name {
+.coam-name {
   font-size: 30rpx;
   font-weight: 600;
   color: var(--ld-ink);
+  letter-spacing: -0.3rpx;
 }
-.ld-arow-phone {
-  font-size: 24rpx;
-  color: var(--ld-purple-meta);
+.coam-phone {
+  font-size: 26rpx;
+  color: var(--ld-content);
+  letter-spacing: 0.4rpx;
 }
-.ld-arow-default {
+.co-addr-tag {
+  display: inline-block;
   font-size: 20rpx;
   color: var(--ld-purple-tab);
-  border: 2rpx solid var(--ld-purple-line);
-  border-radius: var(--ld-radius-pill);
-  padding: 2rpx 12rpx;
+  background: var(--ld-bg-lilac);
+  border: 1rpx solid var(--ld-purple-line);
+  border-radius: 8rpx;
+  padding: 1rpx 11rpx;
 }
-.ld-arow-line2 {
-  margin-top: 8rpx;
-  font-size: 26rpx;
-  color: var(--ld-ink);
+.coam-addr {
+  display: block;
+  font-size: 25rpx;
+  color: var(--ld-content-2);
   line-height: 1.5;
+  margin-top: 12rpx;
 }
-.ld-arow-ops {
+/* 编辑笔分栏 */
+.coam-edit {
+  flex: 0 0 auto;
+  align-self: stretch;
   display: flex;
-  gap: 8rpx;
-  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  padding: 0 30rpx;
+  border-left: 1rpx solid var(--ld-line-soft);
 }
-.ld-arow-op {
-  font-size: 24rpx;
-  color: var(--ld-purple-meta);
-  padding: 10rpx;
+.coam-edit-ico {
+  width: 36rpx;
+  height: 36rpx;
 }
-.ld-addr-empty {
+.coam-edit:active {
+  background: var(--ld-bg-lilac);
+}
+
+/* ---------- 空态 ---------- */
+.coam-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
   text-align: center;
-  padding: 120rpx 0 40rpx;
+  padding: 130rpx 52rpx;
 }
-.ld-empty-title {
+.coam-empty-ico {
+  width: 120rpx;
+  height: 120rpx;
+  border-radius: 50%;
+  background: var(--ld-bg-lilac);
+  border: 1rpx solid var(--ld-purple-line);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 30rpx;
+}
+.coam-empty-svg {
+  width: 52rpx;
+  height: 52rpx;
+}
+.coam-empty-title {
+  font-size: 32rpx;
+  font-weight: 600;
+  color: var(--ld-ink);
+  letter-spacing: -0.3rpx;
+}
+.coam-empty-sub {
+  font-size: 25rpx;
+  color: var(--ld-content-2);
+  line-height: 1.6;
+  margin-top: 15rpx;
+}
+
+/* ---------- 底部固定坞 ---------- */
+.co-dock-space {
+  height: 170rpx;
+}
+.co-dock {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: var(--ld-bg);
+  box-shadow:
+    0 -2rpx 0 var(--ld-line),
+    0 -8rpx 24rpx rgba(54, 58, 80, 0.06);
+}
+.coam-dock {
+  padding: 18rpx 30rpx calc(18rpx + env(safe-area-inset-bottom));
+}
+.co-submit {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12rpx;
+  border-radius: var(--ld-radius-pill);
+  background: var(--ld-purple);
+  color: #ffffff;
   font-size: 30rpx;
   font-weight: 600;
-  color: var(--ld-purple-ink);
 }
-.ld-empty-hint {
-  margin-top: 10rpx;
-  font-size: 24rpx;
-  color: var(--ld-purple-meta);
+.co-submit-hover {
+  opacity: 0.9;
 }
-.ld-addbtn {
-  margin-top: 24rpx;
-  text-align: center;
-  padding: 24rpx 0;
-  border-radius: var(--ld-radius-pill);
-  background: var(--ld-purple-ink);
-  color: #ffffff;
-  font-size: 28rpx;
-  font-weight: 600;
+.coam-add {
+  padding: 26rpx 0;
+}
+.coam-add-ico {
+  width: 34rpx;
+  height: 34rpx;
 }
