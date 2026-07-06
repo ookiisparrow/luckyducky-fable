@@ -3,11 +3,12 @@
 // 顶部 6 步可点进度条 → 当前步嵌入对应工作面板 → 上一步/下一步 + 上架闸。
 // 不重建 2500 行分步逻辑——功能都在 admin2 现有页里，本页只做「编排」：嵌入 Products 编辑器(步1-3)/Courses(步4)/
 // Cards(步5)/Batches(步6)（各页 embed 模式·向后兼容）。进度真值走 listDrafts 后端 join 派生（productSteps·同列表列）。
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { Store } from 'lucide-vue-next'
 import { listDrafts, publishProduct } from '../api/products'
 import { productSteps, productState, basicsMissing, wizardCanPublish, type StepDot } from '../lib/mapProducts'
+import { wizardStepFromQuery } from '../lib/nav'
 import Products from './Products.vue'
 import Courses from './Courses.vue'
 import Cards from './Cards.vue'
@@ -26,8 +27,8 @@ const busy = ref(false)
 const pubConfirm = ref(false)
 
 const STEP_NAMES = ['产品图片', '商品信息', 'SKU', '教学视频', '二维码卡片', '码批次']
-// 初始步取自 ?step=N（列表圆点深链落到第一个未完成步）·夹在 1..6·缺省 1
-const step = ref(Math.min(6, Math.max(1, parseInt(String(route.query.step || '1'), 10) || 1)))
+// 步单源=URL ?step（决策§27②·Shell 侧栏与本页横向 rail 同读它·深链落到首个未完成步）·夹 1..6
+const step = computed(() => wizardStepFromQuery(route.query.step))
 
 const courseId = computed(() => String(product.value?.courseId || '') || 'course-' + id)
 const steps = computed<StepDot[]>(() => (product.value ? productSteps(product.value, extras.value) : []))
@@ -56,10 +57,9 @@ async function reloadProduct() {
 }
 
 function go(n: number) {
-  if (n < 1 || n > 6) return
-  step.value = n
-  pubConfirm.value = false
-  void reloadProduct() // 切步时刷新进度条（上一步刚做完的态即时反映）
+  if (n < 1 || n > 6 || n === step.value) return
+  // 步写进 URL（单源）→ step 重算 → watch 触发刷新；Shell 侧栏点步走 router-link 同径同步
+  void router.push({ path: route.path, query: { ...route.query, step: String(n) } })
 }
 
 function railState(n: number): 'current' | 'done' | 'todo' {
@@ -85,6 +85,12 @@ async function shelve() {
     message.value = '上架没成功：' + String(r.error || '')
   }
 }
+
+// 切步（本页按钮或侧栏点步改 ?step）→ 刷新进度真值 + 收起上架二次确认
+watch(step, () => {
+  pubConfirm.value = false
+  void reloadProduct()
+})
 
 onMounted(reloadProduct)
 </script>

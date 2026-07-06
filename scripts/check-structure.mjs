@@ -90,6 +90,7 @@ export const RW_GOLDEN_REGISTRY = [
   { id: 'rw-admin-system-ui-golden', roots: ['#4', '#8'], test: 'rewrite/admin/tests/system-ui.test.ts' },
   { id: 'rw-admin-scm-ui-golden', roots: ['#4', '#8'], test: 'rewrite/admin/tests/scm-ui.test.ts' },
   { id: 'rw-admin-cards-golden', roots: ['#8'], test: 'rewrite/admin/tests/cards.test.ts' },
+  { id: 'rw-admin-nav-contextual', roots: ['#8'], test: 'rewrite/admin/tests/nav.test.ts' },
   { id: 'rw-agent-ui-golden', roots: ['#8'], test: 'rewrite/agent/tests/desk.test.ts' },
   { id: 'rw-site-schema-golden', roots: ['#8'], test: 'rewrite/site/tests/schema.test.ts' },
 ]

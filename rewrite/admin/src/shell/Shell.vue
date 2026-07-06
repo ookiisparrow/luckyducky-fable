@@ -2,7 +2,7 @@
 // 壳布局（M3 信息架构：按运营动作六组重排）。视觉按 design/console.pen Component/Sidebar 规格：
 // 232px 白底右分线、鸭徽 logo、分组小标题、图标导航项（active=淡紫底+紫描边）、底部管理员条。
 // 设计稿侧栏只画了重设计屏子集；六组全量 IA 是 M3「运营动作零缺失」要求，保留不裁（刻意偏离，见重构日志）。
-import { ref } from 'vue'
+import { ref, computed, type Component } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import {
   ChevronDown,
@@ -35,8 +35,13 @@ import {
   ShieldCheck,
   Siren,
   LogOut,
+  Image,
+  FileText,
+  Tags,
+  Printer,
 } from 'lucide-vue-next'
 import { client } from '../api'
+import { isWizardPath, WIZARD_STEPS, wizardStepFromQuery } from '../lib/nav'
 
 const router = useRouter()
 const who = client.who() // 真实登录身份（换皮硬编码「管理员」·多账号无法辨认当前是谁）
@@ -99,6 +104,10 @@ const NAV = [
 
 // 侧栏分组折叠（换皮丢了折叠/持久·24 项平铺偏长）：localStorage 记忆 + 进组自动展开
 const route = useRoute()
+// 上下文侧栏（决策§27②·设计 kz2uD）：进上新向导路由切「按步直达」聚焦步导航，否则六组运营 nav
+const wizardMode = computed(() => isWizardPath(route.path))
+const curStep = computed(() => wizardStepFromQuery(route.query.step))
+const STEP_ICONS: Record<string, Component> = { image: Image, 'file-text': FileText, tags: Tags, clapperboard: Clapperboard, 'qr-code': QrCode, printer: Printer }
 const COLLAPSE_KEY = 'ldrw-admin-nav-collapsed'
 function loadCollapsed(): Set<string> {
   try {
@@ -135,7 +144,25 @@ function logout() {
           <div class="logo-sub">小棉鸭 · 管理控制台</div>
         </div>
       </div>
-      <nav>
+      <!-- 上下文侧栏（决策§27②）：向导路由=按步直达聚焦；否则=六组运营 nav -->
+      <nav v-if="wizardMode" class="wiz-nav">
+        <router-link to="/products" class="wiz-head">
+          <Package class="item-icon" :size="17" :stroke-width="1.8" />
+          <span>商品与上新</span>
+        </router-link>
+        <div class="wiz-caption">按步骤直达</div>
+        <router-link
+          v-for="s in WIZARD_STEPS"
+          :key="s.n"
+          :to="{ path: route.path, query: { ...route.query, step: s.n } }"
+          class="item wiz-step"
+          :class="{ 'wiz-on': curStep === s.n }"
+        >
+          <component :is="STEP_ICONS[s.icon]" class="item-icon" :size="17" :stroke-width="1.8" />
+          <span>{{ s.n }} · {{ s.label }}</span>
+        </router-link>
+      </nav>
+      <nav v-else>
         <div v-for="g in NAV" :key="g.group" class="group">
           <button class="group-title" @click="toggleGroup(g.group)">
             <span>{{ g.group }}</span>
@@ -262,6 +289,37 @@ aside {
   font-weight: 600;
 }
 .item.router-link-exact-active .item-icon {
+  color: var(--ld-brand);
+}
+.wiz-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border: 1px solid var(--ld-purple-line);
+  border-radius: var(--ld-radius-item);
+  background: var(--ld-bg-lilac);
+  color: var(--ld-purple-ink);
+  font-size: 13.5px;
+  font-weight: 600;
+  text-decoration: none;
+}
+.wiz-head .item-icon {
+  color: var(--ld-brand);
+}
+.wiz-caption {
+  font-size: 10.5px;
+  letter-spacing: 0.5px;
+  color: var(--ld-purple-meta);
+  padding: 14px 12px 4px;
+}
+.wiz-step.wiz-on {
+  background: var(--ld-bg-lilac);
+  border-color: var(--ld-purple-line);
+  color: var(--ld-purple-ink);
+  font-weight: 600;
+}
+.wiz-step.wiz-on .item-icon {
   color: var(--ld-brand);
 }
 .admin {
