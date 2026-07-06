@@ -5,6 +5,7 @@ import { ref, onMounted, onBeforeUnmount, watch, nextTick } from 'vue'
 import { Upload, Check, Trash2, Plus } from 'lucide-vue-next'
 import { listHelpVideos, saveHelpVideos, uploadVideo } from '../api/content'
 import { normalizeHelpItems, type HelpItem } from '../lib/mapContent'
+import UiButton from '../components/ui/Button.vue'
 
 const items = ref<HelpItem[]>([])
 const message = ref('')
@@ -122,7 +123,7 @@ onMounted(reload)
       </div>
       <div class="head-save">
         <span v-if="saveState" class="autosave" :class="saveState">{{ saveState === 'saving' ? '自动保存中…' : saveState === 'saved' ? '已自动保存' : '自动保存失败·点保存重试' }}</span>
-        <button class="btn-primary" :disabled="busy" @click="save">{{ busy ? '保存中…' : '保存全部' }}</button>
+        <UiButton :disabled="busy" @click="save">{{ busy ? '保存中…' : '保存全部' }}</UiButton>
       </div>
     </header>
 
@@ -198,20 +199,6 @@ h1 {
 }
 .autosave.error {
   color: var(--ld-red);
-}
-.btn-primary {
-  flex: none;
-  padding: 10px 18px;
-  border: none;
-  border-radius: 999px;
-  background: var(--ld-purple-ink);
-  color: #fff;
-  font-size: 13px;
-  font-weight: 600;
-  cursor: pointer;
-}
-.btn-primary:disabled {
-  opacity: 0.5;
 }
 .status {
   font-size: 13px;

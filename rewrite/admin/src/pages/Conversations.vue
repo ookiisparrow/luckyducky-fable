@@ -5,6 +5,7 @@ import { ref, onMounted } from 'vue'
 import { Search, RotateCcw } from 'lucide-vue-next'
 import { searchConversations, conversationsReport } from '../api/cs'
 import { mapMessages, mapReport, type MsgVM, type ReportVM } from '../lib/mapCs'
+import UiButton from '../components/ui/Button.vue'
 
 const openid = ref('')
 const externalUserId = ref('')
@@ -78,7 +79,7 @@ onMounted(loadReport)
         <input v-model="openid" placeholder="openid" @keyup.enter="search" />
         <input v-model="externalUserId" placeholder="或 外部用户号（未绑定时）" @keyup.enter="search" />
         <input v-model="keyword" placeholder="关键词（页内过滤）" @keyup.enter="search" />
-        <button class="btn-primary" @click="search"><Search :size="14" :stroke-width="1.8" /><span>检索</span></button>
+        <UiButton @click="search"><Search :size="14" :stroke-width="1.8" /><span>检索</span></UiButton>
       </div>
       <p v-if="message" class="status">{{ message }}</p>
 
@@ -202,19 +203,6 @@ input {
   border: 1px solid var(--ld-line);
   border-radius: 8px;
   font-size: 13px;
-}
-.btn-primary {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  padding: 8px 18px;
-  border: none;
-  border-radius: 999px;
-  background: var(--ld-purple-ink);
-  color: #fff;
-  font-size: 13px;
-  font-weight: 600;
-  cursor: pointer;
 }
 .status {
   font-size: 13px;

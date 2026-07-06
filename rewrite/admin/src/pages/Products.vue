@@ -7,6 +7,7 @@ import { Search, Trash2 } from 'lucide-vue-next'
 import { listDrafts, saveDraft, deleteDraft, uploadImage, publishProduct, unpublishProduct, republishProduct } from '../api/products'
 import { mapDraftRows, publishErrorText, b64SizeOk, basicsMissing, type DraftRowVM } from '../lib/mapProducts'
 import { useRouter } from 'vue-router'
+import UiButton from '../components/ui/Button.vue'
 
 const KIT_ICONS = ['circle', 'pen-tool', 'cloud', 'eye', 'book-open', 'sparkles-purple', 'package', 'truck'] // 材料清单图标（换皮丢了选择器·恒 circle）
 
@@ -325,7 +326,7 @@ onMounted(async () => {
         <h1>商品与上新</h1>
         <p class="sub">一款商品一条流水线：产品图片 → 商品信息 → SKU → 教学视频 → 二维码卡片 → 码批次</p>
       </div>
-      <button class="btn-primary" @click="newProduct">＋ 新建商品</button>
+      <UiButton @click="newProduct">＋ 新建商品</UiButton>
     </header>
 
     <div v-if="!embed" class="toolbar">
@@ -385,12 +386,12 @@ onMounted(async () => {
           <button class="act ghost" @click="openEdit(row)">编辑</button>
           <button class="act ghost" @click="editCourse(row)">编辑课程</button>
           <button class="act ghost" @click="router.push({ path: '/cards', query: { productId: row.id } })">卡片设计</button>
-          <button v-if="row.state === 'preparing'" class="act" @click="doPublish(row.id)">{{ confirmKey === 'pub:' + row.id ? '确认上架？' : '上架' }}</button>
+          <UiButton v-if="row.state === 'preparing'" size="sm" @click="doPublish(row.id)">{{ confirmKey === 'pub:' + row.id ? '确认上架？' : '上架' }}</UiButton>
           <button v-if="row.state === 'onsale'" class="act ghost" @click="doPublish(row.id)">{{ confirmKey === 'pub:' + row.id ? '确认重上？' : '重新上架' }}</button>
           <button v-if="row.state === 'onsale'" class="act warn" @click="doUnpublish(row.id)">
             {{ confirmKey === 'off:' + row.id ? '确认下架？' : '下架' }}
           </button>
-          <button v-if="row.state === 'unlisted'" class="act" @click="doRepublish(row.id)">恢复销售</button>
+          <UiButton v-if="row.state === 'unlisted'" size="sm" @click="doRepublish(row.id)">恢复销售</UiButton>
           <button class="icon-btn" :title="confirmKey === 'del:' + row.id ? '连已上架一起删？' : '删除'" @click="doDelete(row.id)">
             <Trash2 :size="15" :stroke-width="1.8" />
           </button>
@@ -512,17 +513,6 @@ h1 {
   margin: 4px 0 0;
   font-size: 12.5px;
   color: var(--ld-content-2);
-}
-.btn-primary {
-  flex: none;
-  padding: 10px 18px;
-  border: none;
-  border-radius: 999px;
-  background: var(--ld-purple-ink);
-  color: #fff;
-  font-size: 13px;
-  font-weight: 600;
-  cursor: pointer;
 }
 .toolbar {
   display: flex;
@@ -706,12 +696,11 @@ h1 {
   gap: 6px;
   flex-wrap: wrap;
 }
+/* .act 基类仅留次级按钮共享布局；填充主按钮（原裸 .act 上架/恢复销售）已收进 UiButton */
 .act {
   padding: 5px 12px;
   border: none;
   border-radius: 999px;
-  background: var(--ld-purple-ink);
-  color: #fff;
   font-size: 12px;
   cursor: pointer;
 }
@@ -727,6 +716,7 @@ h1 {
 }
 .act.warn {
   background: var(--ld-red);
+  color: #fff;
 }
 .act:disabled {
   opacity: 0.5;

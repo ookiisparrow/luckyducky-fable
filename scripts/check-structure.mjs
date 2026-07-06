@@ -4538,6 +4538,44 @@ export const repoChecks = [
       return bad
     },
   },
+  {
+    // 控制台药丸主按钮单源（design/console.pen 落地·收敛 UI 批1·病根#5 样板复制即漂移）：
+    // 换皮期 23 页各手搓填充主按钮（.btn-primary/.act/.search-btn/.range-btn/.btn-run…），
+    // 底色在 --ld-purple-ink↔--ld-brand 间漂移（Inspect 曾用 brand·余用 purple-ink）——同 theme-single-source
+    // 的色值漂移，只是发生在按钮结构上。药丸填充主按钮样式此后单源在 components/ui/Button.vue，页面用 <UiButton>。
+    // 本守卫扫 pages/（组件不在扫描面＝唯一合法处），命中「同规则块 border-radius:999px + 填充(purple-ink|brand)
+    // + 白字 + cursor:pointer」即页面手搓药丸主按钮。圆角矩形整宽 CTA（radius≠999px·.confirm/.approve-btn）
+    // 是另一原语、不在此列；刻意例外块内加 structure-ok（如 Cards 的 primary↔ghost 切换钮待 ghost 变体批）。
+    id: 'rw-admin-btn-single-source',
+    roots: ['#5'],
+    desc: '控制台药丸主按钮单源（design/console.pen·收敛 UI 批1·病根#5 样板复制即漂移）：rewrite/admin/src/pages/*.vue 禁在 <style> 手搓填充药丸主按钮（同规则块 border-radius:999px + background:var(--ld-purple-ink|--ld-brand) + color:#fff/white + cursor:pointer）——样式单源在 components/ui/Button.vue，页面用 <UiButton>；圆角矩形整宽 CTA（radius≠999px）属另一原语不在此列，刻意例外块内加 structure-ok',
+    run() {
+      const bad = []
+      const dir = join(ROOT, 'rewrite/admin/src/pages')
+      if (!existsSync(dir)) return bad
+      for (const f of readdirSync(dir)) {
+        if (!f.endsWith('.vue')) continue
+        const css = readFileSync(join(dir, f), 'utf8')
+        for (const seg of css.split('}')) {
+          const bi = seg.lastIndexOf('{')
+          if (bi < 0) continue
+          const body = seg.slice(bi + 1)
+          if (body.includes('structure-ok')) continue
+          const fill = /background:\s*var\(--ld-(?:purple-ink|brand)\)/.test(body)
+          const white = /color:\s*(?:#fff\b|#ffffff\b|white\b)/.test(body)
+          const ptr = /cursor:\s*pointer/.test(body)
+          const pill = /border-radius:\s*999px/.test(body)
+          if (fill && white && ptr && pill) {
+            const sel = seg.slice(0, bi).split('\n').pop().trim()
+            bad.push(
+              `rewrite/admin/src/pages/${f} 手搓药丸主按钮「${sel}」——填充主按钮走 <UiButton>（样式单源 components/ui/Button.vue·病根#5）`
+            )
+          }
+        }
+      }
+      return bad
+    },
+  },
 ]
 
 // ============== 逐文件规则（fileRules）==============

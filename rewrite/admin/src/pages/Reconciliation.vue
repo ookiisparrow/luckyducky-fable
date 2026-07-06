@@ -7,6 +7,7 @@ import { ref, computed, onMounted } from 'vue'
 import { CircleDollarSign, RotateCcw, Wallet, Download, CircleCheck } from 'lucide-vue-next'
 import { getReconciliation, getBillMatch, downloadBill } from '../api/system'
 import { mapRecon, mapBillMatch, type ReconVM, type BillMatchVM } from '../lib/mapSystem'
+import UiButton from '../components/ui/Button.vue'
 
 const recon = ref<ReconVM | null>(null)
 const match = ref<BillMatchVM | null>(null)
@@ -122,9 +123,9 @@ onMounted(reload)
         <h1>财务对账</h1>
         <p class="sub">应收 GMV、退款按日对账 + 微信官方账单逐笔勾对 · 资金对得上才安心（内部近 30 天窗）</p>
       </div>
-      <button class="btn-primary" :disabled="!recon" @click="exportCsv">
+      <UiButton :disabled="!recon" @click="exportCsv">
         <Download :size="15" :stroke-width="1.8" /><span>导出 CSV</span>
-      </button>
+      </UiButton>
     </header>
 
     <div class="range">
@@ -132,7 +133,7 @@ onMounted(reload)
       <input v-model="from" placeholder="起 YYYY-MM-DD" class="date-in" />
       <span class="dash">→</span>
       <input v-model="to" placeholder="止 YYYY-MM-DD" class="date-in" />
-      <button class="range-btn" @click="applyRange">查询</button>
+      <UiButton size="sm" @click="applyRange">查询</UiButton>
       <button v-if="from || to" class="range-clear" @click="clearRange">近 30 天</button>
       <span class="range-note">留空＝默认近 30 天窗</span>
     </div>
@@ -221,7 +222,7 @@ onMounted(reload)
       </div>
       <div class="billrow">
         <input v-model="billDate" placeholder="拉某日账单 YYYY-MM-DD" />
-        <button class="act" :disabled="busy" @click="pullBill">拉单日</button>
+        <UiButton :disabled="busy" @click="pullBill">拉单日</UiButton>
         <button class="act ghost" :disabled="busy" title="按上方对账区间逐日拉取（空=近 30 天）" @click="pullRange">拉整个区间</button>
       </div>
       <div class="ext-cards">
@@ -269,20 +270,6 @@ h1 {
   font-size: 12.5px;
   color: var(--ld-content-2);
 }
-.btn-primary {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  flex: none;
-  padding: 10px 18px;
-  border: none;
-  border-radius: 999px;
-  background: var(--ld-purple-ink);
-  color: #fff;
-  font-size: 13px;
-  font-weight: 600;
-  cursor: pointer;
-}
 .btn-primary:disabled {
   opacity: 0.5;
 }
@@ -311,15 +298,6 @@ h1 {
 }
 .dash {
   color: var(--ld-content-2);
-}
-.range-btn {
-  padding: 7px 16px;
-  border: none;
-  border-radius: 999px;
-  background: var(--ld-purple-ink);
-  color: #fff;
-  font-size: 12.5px;
-  cursor: pointer;
 }
 .range-clear {
   padding: 7px 14px;
@@ -596,12 +574,11 @@ h1 {
 .danger-line {
   color: var(--ld-red);
 }
+/* .act 基类仅留次级按钮（ghost）共享布局；填充主按钮（拉单日）已收进 UiButton */
 .act {
   padding: 8px 18px;
   border: none;
   border-radius: 999px;
-  background: var(--ld-purple-ink);
-  color: #fff;
   font-size: 13px;
   cursor: pointer;
 }

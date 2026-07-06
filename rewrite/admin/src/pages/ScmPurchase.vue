@@ -8,6 +8,7 @@ import { materialHuman, purchaseStatusLabel, yuanToFen, fenLabel, scmErrorText }
 import { dateTime } from '../lib/format'
 import { consumePurchaseHandoff } from '../lib/scmHandoff'
 import ScmFlowTabs from '../components/ScmFlowTabs.vue'
+import UiButton from '../components/ui/Button.vue'
 
 const orders = ref<Array<Record<string, any>>>([])
 const mats = ref<Array<Record<string, any>>>([])
@@ -122,7 +123,7 @@ onMounted(async () => {
         <h1>采购单（向厂家）</h1>
         <p class="sub">草稿 → 已下单 → 已收货；收货首次流转才入库（重复收货不双入），总价服务端核算。</p>
       </div>
-      <button class="btn-primary" @click="newOrder"><Plus :size="15" :stroke-width="2" /><span>新建采购单</span></button>
+      <UiButton @click="newOrder"><Plus :size="15" :stroke-width="2" /><span>新建采购单</span></UiButton>
     </header>
 
     <ScmFlowTabs />
@@ -212,20 +213,6 @@ h1 {
   margin: 4px 0 0;
   font-size: 12.5px;
   color: var(--ld-content-2);
-}
-.btn-primary {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  flex: none;
-  padding: 10px 18px;
-  border: none;
-  border-radius: 999px;
-  background: var(--ld-purple-ink);
-  color: #fff;
-  font-size: 13px;
-  font-weight: 600;
-  cursor: pointer;
 }
 .status {
   font-size: 13px;

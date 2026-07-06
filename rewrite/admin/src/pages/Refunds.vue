@@ -5,6 +5,7 @@
 import { ref, computed, onMounted } from 'vue'
 import { RefreshCw, Search, X, CircleCheck, Ticket, GraduationCap, Check } from 'lucide-vue-next'
 import { listRefunds, refundCounts, approveRefund, rejectRefund, getRefundDetail } from '../api/money'
+import UiButton from '../components/ui/Button.vue'
 import { mapRefundRows, refundVerdict, type RefundRowVM, type RefundVerdictVM } from '../lib/mapMoney'
 
 const TABS = [
@@ -182,7 +183,7 @@ onMounted(reload)
       <div class="searchbox">
         <Search :size="15" :stroke-width="1.8" class="search-ico" />
         <input v-model="search" placeholder="搜索订单号（精确·跨全部状态）" @keyup.enter="doSearch" />
-        <button class="search-btn" @click="doSearch">搜索</button>
+        <UiButton size="sm" @click="doSearch">搜索</UiButton>
       </div>
     </div>
     <p class="note">状态计数为云端实时总数、切换状态走服务端筛选、搜索按订单号跨全部状态精确命中——都不受当前分页影响。</p>
@@ -389,16 +390,6 @@ h1 {
   border-radius: 999px;
   background: var(--ld-bg);
   min-width: 280px;
-}
-.search-btn {
-  flex: none;
-  padding: 6px 14px;
-  border: none;
-  border-radius: 999px;
-  background: var(--ld-purple-ink);
-  color: #fff;
-  font-size: 12.5px;
-  cursor: pointer;
 }
 .searching {
   margin: 0 0 12px;

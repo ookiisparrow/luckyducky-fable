@@ -4,6 +4,7 @@
 import { ref, computed, onMounted } from 'vue'
 import { getSettings, saveSettings } from '../api/system'
 import { webhookOk } from '../lib/mapSystem'
+import UiButton from '../components/ui/Button.vue'
 
 // 钱链告警事件开关（换皮把 webhook 迁进 Settings 但删了 5+ 事件粒度开关·alertEvents 后端字段悬空·B6 证伪 saveSettings 合并保存不抹）
 const EVENTS = [
@@ -95,7 +96,7 @@ async function save() {
         <label>激活码链接前缀（印刷二维码用）</label>
         <input v-model="urlPrefix" placeholder="https://…" />
       </div>
-      <button class="btn-primary" :disabled="busy" @click="save">{{ busy ? '保存中…' : '保存' }}</button>
+      <UiButton :disabled="busy" @click="save">{{ busy ? '保存中…' : '保存' }}</UiButton>
       <p class="hint">激活卡双面设计器（印刷排版）随印刷批补齐。事件开关存 `alertEvents`（后端合并保存·不抹已设 webhook）。</p>
     </section>
   </div>
@@ -156,19 +157,6 @@ input {
   border-radius: 8px;
   font-size: 13px;
   box-sizing: border-box;
-}
-.btn-primary {
-  padding: 9px 24px;
-  border: none;
-  border-radius: 999px;
-  background: var(--ld-purple-ink);
-  color: #fff;
-  font-size: 13px;
-  font-weight: 600;
-  cursor: pointer;
-}
-.btn-primary:disabled {
-  opacity: 0.5;
 }
 .hint {
   margin: 12px 0 0;

@@ -12,6 +12,7 @@ import { listBatches, createBatch, listBatchCodes, getSettings } from '../api/sy
 import { getCard } from '../api/products'
 import { buildFrontSvg, buildBackSvg } from '../lib/cardSvg'
 import { mapBatches, type BatchRow } from '../lib/mapSystem'
+import UiButton from '../components/ui/Button.vue'
 
 // 嵌入模式（上新向导步 6 复用·向后兼容）+ 修独立深链 bug：换皮把 courseId 写死空 ref、不读 route.query，
 // 致商品页「码批次」深链(/batches?courseId=)落地要手输课程号；改读 props(向导)||route.query(深链)||空。
@@ -180,14 +181,14 @@ function exportCsv() {
         <p class="sub">激活卡批次的生成 · 印刷打包 · 激活追踪——一码一地址、一码一用</p>
       </div>
       <span v-else class="embed-course">课程 <b>{{ loadedCourse || courseId || '（未定稿卡片/未关联课程）' }}</b></span>
-      <button class="btn-primary" :disabled="!loadedCourse" @click="creating = !creating">＋ 生成新批次</button>
+      <UiButton :disabled="!loadedCourse" @click="creating = !creating">＋ 生成新批次</UiButton>
     </header>
 
     <div v-if="creating" class="create-bar">
       <span>为课程 <b>{{ loadedCourse }}</b> 生成</span>
       <input v-model.number="count" type="number" min="1" max="500" />
       <span>张码</span>
-      <button class="act" :disabled="busy" @click="doCreate">确认生成</button>
+      <UiButton size="sm" :disabled="busy" @click="doCreate">确认生成</UiButton>
       <button class="act ghost" @click="creating = false">取消</button>
     </div>
 
@@ -325,20 +326,6 @@ h1 {
   margin: 4px 0 0;
   font-size: 12.5px;
   color: var(--ld-content-2);
-}
-.btn-primary {
-  flex: none;
-  padding: 10px 18px;
-  border: none;
-  border-radius: 999px;
-  background: var(--ld-purple-ink);
-  color: #fff;
-  font-size: 13px;
-  font-weight: 600;
-  cursor: pointer;
-}
-.btn-primary:disabled {
-  opacity: 0.4;
 }
 .create-bar {
   display: flex;
@@ -531,12 +518,11 @@ h1 {
 .c-ops {
   display: flex;
 }
+/* .act 基类仅留次级按钮（ghost）共享布局；填充主按钮（确认生成）已收进 UiButton */
 .act {
   padding: 6px 14px;
   border: none;
   border-radius: 999px;
-  background: var(--ld-purple-ink);
-  color: #fff;
   font-size: 12px;
   font-weight: 600;
   cursor: pointer;

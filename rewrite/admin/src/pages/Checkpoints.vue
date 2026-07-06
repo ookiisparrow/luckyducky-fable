@@ -4,6 +4,7 @@
 import { ref, onMounted } from 'vue'
 import { RotateCcw, Trash2, Plus } from 'lucide-vue-next'
 import { listCheckpoints, saveCheckpoints } from '../api/cs'
+import UiButton from '../components/ui/Button.vue'
 
 interface NodeRow {
   nodeId: string
@@ -69,7 +70,7 @@ onMounted(load) // 默认旗舰课自动载入
         <h1>节点诊断（关键节点策展）</h1>
         <p class="sub">为某门课维护「关键节点 + 挽回办法」，学员卡壳时坐席照此精准指导。整课覆盖保存，不碰学员提交。</p>
       </div>
-      <button v-if="loaded" class="btn-primary" :disabled="busy" @click="save">{{ busy ? '保存中…' : '保存整课' }}</button>
+      <UiButton v-if="loaded" :disabled="busy" @click="save">{{ busy ? '保存中…' : '保存整课' }}</UiButton>
     </header>
 
     <div class="toolbar">
@@ -117,20 +118,6 @@ h1 {
   margin: 4px 0 0;
   font-size: 12.5px;
   color: var(--ld-content-2);
-}
-.btn-primary {
-  flex: none;
-  padding: 10px 18px;
-  border: none;
-  border-radius: 999px;
-  background: var(--ld-purple-ink);
-  color: #fff;
-  font-size: 13px;
-  font-weight: 600;
-  cursor: pointer;
-}
-.btn-primary:disabled {
-  opacity: 0.5;
 }
 .toolbar {
   display: flex;

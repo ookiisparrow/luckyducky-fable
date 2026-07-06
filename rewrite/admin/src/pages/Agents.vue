@@ -4,6 +4,7 @@
 import { ref, onMounted } from 'vue'
 import { listAgents, createAgent, disableAgent, setAgentWecomUserId } from '../api/system'
 import { mapAgents, type AgentRow } from '../lib/mapSystem'
+import UiButton from '../components/ui/Button.vue'
 
 const rows = ref<AgentRow[]>([])
 const message = ref('')
@@ -85,12 +86,12 @@ onMounted(reload)
       <input v-model="form.name" placeholder="名字（如 外包一号）" maxlength="40" />
       <input v-model="form.key" type="password" placeholder="登录口令（≥6 位）" />
       <input v-model="form.wecomUserId" placeholder="企微 userid（选填·免登用）" maxlength="64" />
-      <button class="act primary" :disabled="busy" @click="doCreate">建号</button>
+      <UiButton size="sm" :disabled="busy" @click="doCreate">建号</UiButton>
     </div>
 
     <div v-if="lastCreated" class="created-card">
       <div>已建号 <b>{{ lastCreated.name }}</b> · 登录口令（<b>只显示这一次</b>，抄给对方后关闭）：<code>{{ lastCreated.key }}</code></div>
-      <button class="act small" @click="lastCreated = null">已抄下·关闭</button>
+      <UiButton size="sm" @click="lastCreated = null">已抄下·关闭</UiButton>
     </div>
 
     <div v-if="rows.length" class="table">
@@ -103,7 +104,7 @@ onMounted(reload)
         <div class="bind">
           <template v-if="editingId === row.id">
             <input v-model="editingVal" class="inline" placeholder="userid（空=解绑）" />
-            <button class="act small" @click="bindWecom(row)">存</button>
+            <UiButton size="sm" @click="bindWecom(row)">存</UiButton>
           </template>
           <template v-else>
             <span class="bind-val">{{ row.wecomUserId || '—' }}</span>
@@ -265,18 +266,14 @@ h1 {
   background: var(--ld-bg-faint);
   color: var(--ld-content-2);
 }
+/* .act 基类仅留次级按钮（ghost/warn/small）共享布局；填充主按钮已收进 UiButton */
 .act {
   padding: 6px 13px;
   border: none;
   border-radius: 999px;
-  background: var(--ld-purple-ink);
-  color: #fff;
   font-size: 12px;
   font-weight: 600;
   cursor: pointer;
-}
-.act.primary {
-  background: var(--ld-purple-ink);
 }
 .act.ghost {
   background: var(--ld-bg);
@@ -285,6 +282,7 @@ h1 {
 }
 .act.warn {
   background: var(--ld-red);
+  color: #fff;
 }
 .act.small {
   padding: 4px 10px;

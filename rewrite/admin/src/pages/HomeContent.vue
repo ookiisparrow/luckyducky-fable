@@ -7,6 +7,7 @@ import { getHomeContent, saveHomeContent } from '../api/content'
 import { uploadImage } from '../api/products'
 import { normalizeHome, homePayload, type HomeModel } from '../lib/mapContent'
 import { b64SizeOk } from '../lib/mapProducts'
+import UiButton from '../components/ui/Button.vue'
 
 const model = ref<HomeModel | null>(null)
 const message = ref('')
@@ -133,7 +134,7 @@ async function save() {
       </div>
       <div class="head-r">
         <span class="auto" :class="autoState">{{ autoState === 'saving' ? '自动保存中…' : autoState === 'saved' ? '已自动保存' : autoState === 'error' ? '自动保存失败' : '' }}</span>
-        <button class="btn-primary" :disabled="busy" @click="save">{{ busy ? '保存中…' : '保存全部' }}</button>
+        <UiButton :disabled="busy" @click="save">{{ busy ? '保存中…' : '保存全部' }}</UiButton>
       </div>
     </header>
 
@@ -231,20 +232,6 @@ h1 {
   margin: 4px 0 0;
   font-size: 12.5px;
   color: var(--ld-content-2);
-}
-.btn-primary {
-  flex: none;
-  padding: 10px 18px;
-  border: none;
-  border-radius: 999px;
-  background: var(--ld-purple-ink);
-  color: #fff;
-  font-size: 13px;
-  font-weight: 600;
-  cursor: pointer;
-}
-.btn-primary:disabled {
-  opacity: 0.5;
 }
 .head-r {
   display: flex;

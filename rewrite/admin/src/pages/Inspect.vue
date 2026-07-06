@@ -5,6 +5,7 @@ import { ref, onMounted, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { PlayCircle, TriangleAlert } from 'lucide-vue-next'
 import { getInspectStatus, runInspect } from '../api/ops'
+import UiButton from '../components/ui/Button.vue'
 
 const router = useRouter()
 const latest = ref<any>(null)
@@ -56,10 +57,10 @@ onMounted(load)
         <h1>系统巡检</h1>
         <p class="sub">定时/手动核对基础运行 · 主动探出静默失败（付了钱没发货 / 多退钱 / 待退款死信…）· 不依赖 AI</p>
       </div>
-      <button class="btn-run" :disabled="running" @click="runNow">
+      <UiButton :disabled="running" @click="runNow">
         <PlayCircle :size="16" :stroke-width="1.8" :class="{ spin: running }" />
         <span>{{ running ? '巡检中…' : '立即巡检' }}</span>
-      </button>
+      </UiButton>
     </header>
 
     <p v-if="message" class="status">{{ message }}</p>
@@ -121,24 +122,6 @@ h1 {
   margin: 4px 0 0;
   font-size: 12.5px;
   color: var(--ld-content-2);
-}
-.btn-run {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 9px 18px;
-  border: none;
-  border-radius: 999px;
-  background: var(--ld-brand);
-  color: #fff;
-  font-size: 13px;
-  font-weight: 600;
-  cursor: pointer;
-  flex: none;
-}
-.btn-run:disabled {
-  opacity: 0.6;
-  cursor: default;
 }
 .spin {
   animation: spin 0.9s linear infinite;

@@ -6,6 +6,7 @@ import { listMaterials, saveMaterial, listSuppliers, saveSupplier, adjustStock, 
 import { materialHuman, materialCategoryLabel, uomLabel, scmErrorText, mapLedger, type LedgerRow } from '../lib/mapScm'
 import { dateTime } from '../lib/format'
 import ScmFlowTabs from '../components/ScmFlowTabs.vue'
+import UiButton from '../components/ui/Button.vue'
 
 const mats = ref<Array<Record<string, any>>>([])
 const sups = ref<Array<Record<string, any>>>([])
@@ -122,7 +123,7 @@ onMounted(reload)
           <option v-for="s in sups" :key="s._id" :value="s._id">{{ s.name }}</option>
         </select>
         <input v-model.number="matForm.threshold" type="number" min="0" placeholder="安全库存阈值（低于报警·0=不报警）" />
-        <button class="btn-primary" @click="doSaveMaterial">建档 / 更新</button>
+        <UiButton @click="doSaveMaterial">建档 / 更新</UiButton>
         <p class="hint">计量方式建档后锁死；毛线料号按 颜色×档位×形态 自动生成。安全库存阈值＝低于此值列表标红报警（B4：换皮漏了这个输入·恒 0 致低库存告警失效）。</p>
       </section>
 
@@ -133,7 +134,7 @@ onMounted(reload)
         <input v-model="supForm.contact" placeholder="联系方式" maxlength="120" />
         <input v-model="supForm.note" placeholder="备注（如结算周期/擅长款·可空）" maxlength="200" />
         <div class="ops">
-          <button class="btn-primary" @click="doSaveSupplier">{{ supForm.supplierId ? '更新' : '保存' }}</button>
+          <UiButton @click="doSaveSupplier">{{ supForm.supplierId ? '更新' : '保存' }}</UiButton>
           <button v-if="supForm.supplierId" class="btn-ghost" @click="resetSupForm">取消编辑</button>
         </div>
         <div class="sup-list">
@@ -152,7 +153,7 @@ onMounted(reload)
         </select>
         <input v-model.number="adj.delta" type="number" placeholder="±整数（克/件）" />
         <input v-model="adj.reason" placeholder="原因（如 期初盘点）" maxlength="200" />
-        <button class="btn-primary" :disabled="adjustBusy" @click="doAdjust">{{ adjustBusy ? '调整中…' : '调整' }}</button>
+        <UiButton :disabled="adjustBusy" @click="doAdjust">{{ adjustBusy ? '调整中…' : '调整' }}</UiButton>
       </section>
     </div>
 
@@ -285,16 +286,6 @@ h2 {
   font-size: 13px;
   box-sizing: border-box;
   background: var(--ld-bg);
-}
-.btn-primary {
-  padding: 8px 18px;
-  border: none;
-  border-radius: 999px;
-  background: var(--ld-purple-ink);
-  color: #fff;
-  font-size: 13px;
-  font-weight: 600;
-  cursor: pointer;
 }
 .ops {
   display: flex;

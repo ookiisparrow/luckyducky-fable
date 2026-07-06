@@ -20,6 +20,7 @@ import {
   type FulfillOrder,
   type PrintLabel,
 } from '../lib/fulfill'
+import UiButton from '../components/ui/Button.vue'
 
 // —— 队列（壳持有·传给三步）——
 const step = ref(1)
@@ -327,9 +328,9 @@ const railState = (n: number) => (n === step.value ? 'current' : n < step.value 
           <button class="btn-ghost" @click="selectUnprinted">只选未打印</button>
           <button class="btn-ghost" @click="selectAll">全选</button>
           <span class="flex"></span>
-          <button class="btn-primary" :disabled="!chosen.length || printing" @click="doPrint">
+          <UiButton :disabled="!chosen.length || printing" @click="doPrint">
             <Printer :size="15" :stroke-width="1.8" /><span>{{ printing ? '生成中…' : `打印 ${chosen.length} 张标签` }}</span>
-          </button>
+          </UiButton>
         </div>
         <p v-if="printMsg" class="ok-line">{{ printMsg }}</p>
         <p class="tip">打印记录只记在本机浏览器；打废的单点「已打印」徽标取消，重新勾选再打。</p>
@@ -429,7 +430,7 @@ const railState = (n: number) => (n === step.value ? 'current' : n < step.value 
       <div class="nav">
         <button v-if="step > 1" class="btn-ghost" @click="go(step - 1)">← 上一步 · {{ FULFILL_STEP_NAMES[step - 2] }}</button>
         <span class="flex"></span>
-        <button v-if="step < 3" class="btn-primary" @click="go(step + 1)"><Package :size="15" :stroke-width="1.8" /><span>下一步 · {{ FULFILL_STEP_NAMES[step] }} →</span></button>
+        <UiButton v-if="step < 3" @click="go(step + 1)"><Package :size="15" :stroke-width="1.8" /><span>下一步 · {{ FULFILL_STEP_NAMES[step] }} →</span></UiButton>
       </div>
     </div>
   </div>
@@ -659,22 +660,6 @@ h1 {
 }
 .btn-ghost.sm {
   padding: 5px 11px;
-}
-.btn-primary {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 8px 16px;
-  border: none;
-  border-radius: 999px;
-  background: var(--ld-purple-ink);
-  color: #fff;
-  font-size: 13px;
-  font-weight: 600;
-  cursor: pointer;
-}
-.btn-primary:disabled {
-  opacity: 0.55;
 }
 .p-body,
 .s-body {

@@ -5,6 +5,7 @@ import { ref, onMounted } from 'vue'
 import { Trash2, Plus } from 'lucide-vue-next'
 import { listKb, saveKb } from '../api/cs'
 import { normalizeKb, type KbRow } from '../lib/mapCs'
+import UiButton from '../components/ui/Button.vue'
 
 const CATS = [
   { key: 'logistics', label: '物流' },
@@ -91,7 +92,7 @@ onMounted(reload)
       </div>
       <div class="head-ops">
         <button class="act ghost" @click="loadPreset">载入预设 FAQ</button>
-        <button class="btn-primary" :disabled="busy" @click="save">{{ busy ? '保存中…' : '保存整册' }}</button>
+        <UiButton :disabled="busy" @click="save">{{ busy ? '保存中…' : '保存整册' }}</UiButton>
       </div>
     </header>
 
@@ -135,20 +136,6 @@ h1 {
   margin: 4px 0 0;
   font-size: 12.5px;
   color: var(--ld-content-2);
-}
-.btn-primary {
-  flex: none;
-  padding: 10px 18px;
-  border: none;
-  border-radius: 999px;
-  background: var(--ld-purple-ink);
-  color: #fff;
-  font-size: 13px;
-  font-weight: 600;
-  cursor: pointer;
-}
-.btn-primary:disabled {
-  opacity: 0.5;
 }
 .head-ops {
   display: flex;

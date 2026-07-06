@@ -8,6 +8,7 @@ import { listDrafts } from '../api/products'
 import { materialHuman, scmErrorText, unprofiledProducts, productNameOf } from '../lib/mapScm'
 import { dateTime } from '../lib/format'
 import ScmFlowTabs from '../components/ScmFlowTabs.vue'
+import UiButton from '../components/ui/Button.vue'
 
 const template = ref<{ commonLines: Array<{ materialId: string; qtyPerSet: number }>; yarnSlots: Array<{ tier: string; form: string; qtyPerSet: number }> }>({ commonLines: [], yarnSlots: [] })
 const profiles = ref<Array<Record<string, any>>>([])
@@ -156,7 +157,7 @@ onMounted(reload)
           <button class="icon-x" @click="template.yarnSlots.splice(i, 1)">×</button>
         </div>
         <button class="add-btn" @click="template.yarnSlots.push({ tier: 'L', form: 'knotted', qtyPerSet: 1 })"><Plus :size="12" :stroke-width="2" /><span>加槽</span></button>
-        <div class="ops"><button class="btn-primary" @click="doSaveTemplate">保存模板</button></div>
+        <div class="ops"><UiButton @click="doSaveTemplate">保存模板</UiButton></div>
       </section>
 
       <section class="card">
@@ -174,7 +175,7 @@ onMounted(reload)
           <option value="">选卡片料号（card:产品id）…</option>
           <option v-for="m in cardList" :key="m._id" :value="m._id">{{ materialHuman(m._id) }}（{{ m._id }}）</option>
         </select>
-        <button class="btn-primary" @click="doSaveProfile">{{ profileIds.includes(prof.productId.trim()) ? '更新差异位' : '保存差异位' }}</button>
+        <UiButton @click="doSaveProfile">{{ profileIds.includes(prof.productId.trim()) ? '更新差异位' : '保存差异位' }}</UiButton>
         <div class="prof-list">
           <div v-for="p in profiles" :key="p._id" class="prof-line" :class="{ on: prof.productId === p._id }" title="点击编辑" @click="editProfile(p)">
             <span>{{ productName(p._id) }}：L={{ p.yarnColors?.L || '—' }} M={{ p.yarnColors?.M || '—' }} S={{ p.yarnColors?.S || '—' }}</span>
@@ -343,16 +344,6 @@ h3 {
   display: flex;
   gap: 8px;
   margin-top: 10px;
-}
-.btn-primary {
-  padding: 8px 16px;
-  border: none;
-  border-radius: 999px;
-  background: var(--ld-purple-ink);
-  color: #fff;
-  font-size: 12.5px;
-  font-weight: 600;
-  cursor: pointer;
 }
 .btn-ghost {
   padding: 8px 14px;

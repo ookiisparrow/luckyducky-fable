@@ -7,6 +7,7 @@ import { searchCustomer, getCustomer360, getUser } from '../api/cs'
 import { matchLabel, mapPanels, type PanelVM } from '../lib/mapCs'
 import { maskPhone } from '../lib/mapMoney'
 import { dateTime } from '../lib/format'
+import UiButton from '../components/ui/Button.vue'
 
 const q = ref('')
 const hits = ref<Array<{ openid: string; nickname: string; phone: string; matched: string; createdAt: string }>>([])
@@ -58,7 +59,7 @@ async function open(openid: string) {
     <div class="searchbox">
       <Search :size="15" :stroke-width="1.8" class="search-ico" />
       <input v-model="q" placeholder="搜索客户（openid / 手机 / 昵称 / 订单号）…" @keyup.enter="search" />
-      <button class="btn-primary" @click="search">搜索</button>
+      <UiButton @click="search">搜索</UiButton>
     </div>
     <p v-if="message" class="status">{{ message }}</p>
 
@@ -159,17 +160,6 @@ h1 {
   background: transparent;
   font-size: 13px;
   color: var(--ld-ink);
-}
-.btn-primary {
-  flex: none;
-  padding: 8px 18px;
-  border: none;
-  border-radius: 999px;
-  background: var(--ld-purple-ink);
-  color: #fff;
-  font-size: 13px;
-  font-weight: 600;
-  cursor: pointer;
 }
 .status {
   font-size: 13px;

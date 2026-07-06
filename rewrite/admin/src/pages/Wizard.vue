@@ -13,6 +13,7 @@ import Products from './Products.vue'
 import Courses from './Courses.vue'
 import Cards from './Cards.vue'
 import Batches from './Batches.vue'
+import UiButton from '../components/ui/Button.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -110,10 +111,10 @@ onMounted(reloadProduct)
         <span v-if="state === 'onsale'" class="chip green">在售</span>
         <span class="spacer"></span>
         <span v-if="missing.length" class="miss">上架还差：{{ missing.join('、') }}</span>
-        <button class="btn-primary" :disabled="!canPublish || busy" :title="canPublish ? '' : '完成前三步（图片/信息/SKU）后可上架'" @click="shelve">
+        <UiButton :disabled="!canPublish || busy" :title="canPublish ? '' : '完成前三步（图片/信息/SKU）后可上架'" @click="shelve">
           <Store v-if="!busy" :size="15" :stroke-width="1.8" />
           {{ busy ? '上架中…' : pubConfirm ? '确认上架？' : state === 'onsale' ? '更新上架信息' : '上架小程序' }}
-        </button>
+        </UiButton>
       </header>
 
       <p v-if="message" class="banner">{{ message }}</p>
@@ -147,8 +148,8 @@ onMounted(reloadProduct)
         <div class="nav">
           <button v-if="step > 1" class="btn-ghost" @click="go(step - 1)">← 上一步 · {{ STEP_NAMES[step - 2] }}</button>
           <span class="flex"></span>
-          <button v-if="step < 6" class="btn-primary" @click="go(step + 1)">下一步 · {{ STEP_NAMES[step] }} →</button>
-          <button v-else class="btn-primary" @click="router.push('/products')">✓ 完成 · 返回商品列表</button>
+          <UiButton v-if="step < 6" @click="go(step + 1)">下一步 · {{ STEP_NAMES[step] }} →</UiButton>
+          <UiButton v-else @click="router.push('/products')">✓ 完成 · 返回商品列表</UiButton>
         </div>
       </div>
     </template>
@@ -215,24 +216,6 @@ onMounted(reloadProduct)
   background: var(--ld-bg-red-soft);
   border-radius: 999px;
   padding: 5px 12px;
-}
-.btn-primary {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  flex: none;
-  padding: 9px 18px;
-  border: none;
-  border-radius: 999px;
-  background: var(--ld-purple-ink);
-  color: #fff;
-  font-size: 13px;
-  font-weight: 600;
-  cursor: pointer;
-}
-.btn-primary:disabled {
-  opacity: 0.5;
-  cursor: default;
 }
 .btn-ghost {
   padding: 9px 16px;

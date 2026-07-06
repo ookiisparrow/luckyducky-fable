@@ -3,6 +3,7 @@
 import { ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { client } from '../api'
+import UiButton from '../components/ui/Button.vue'
 
 const router = useRouter()
 const password = ref('')
@@ -38,7 +39,7 @@ async function submit() {
       <h1>小棉鸭 · 管理控制台</h1>
       <p class="hint">输入管理口令登录（登录后凭会话令牌工作，口令不会被保存）</p>
       <input v-model="password" type="password" placeholder="管理口令" @keyup.enter="submit" />
-      <button :disabled="busy" @click="submit">{{ busy ? '登录中…' : '登录' }}</button>
+      <UiButton block :disabled="busy" @click="submit">{{ busy ? '登录中…' : '登录' }}</UiButton>
       <p v-if="message" class="error">{{ message }}</p>
       <p class="agent-note">外包坐席请用<b>坐席工作台</b>登录（不是这个管理后台）——口令登不进这里是正常的。</p>
     </div>
@@ -76,19 +77,6 @@ input {
   border-radius: 8px;
   font-size: 14px;
   margin-bottom: 12px;
-}
-button {
-  width: 100%;
-  padding: 10px 0;
-  border: none;
-  border-radius: 999px;
-  background: var(--ld-purple-ink);
-  color: #fff;
-  font-size: 14px;
-  cursor: pointer;
-}
-button:disabled {
-  opacity: 0.5;
 }
 .error {
   margin-top: 12px;

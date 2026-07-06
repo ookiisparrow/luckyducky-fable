@@ -7,6 +7,7 @@ import { Search, Boxes, CircleCheck, TriangleAlert, XCircle, Infinity as Infinit
 import { listInventory, saveStock } from '../api/system'
 import { listDrafts } from '../api/products'
 import { mapStock, stockErrorText, type StockRow } from '../lib/mapSystem'
+import UiButton from '../components/ui/Button.vue'
 
 const LOW_STOCK = 10 // 默认阈值（per-SKU 未设时退此·仅前端预警线）
 
@@ -195,12 +196,12 @@ onMounted(reload)
         <span class="c-state"><span class="state" :class="STATUS[row.status].cls">{{ STATUS[row.status].label }}</span></span>
         <div class="c-ops r">
           <template v-if="editKey === row.key">
-            <button class="act" @click="doSave(row)">保存</button>
+            <UiButton size="sm" @click="doSave(row)">保存</UiButton>
             <button class="act ghost" @click="editKey = ''">取消</button>
           </template>
           <template v-else>
             <button class="act ghost" @click="startEdit(row)">调整</button>
-            <button v-if="row.status === 'low' || row.status === 'out'" class="act dark" @click="startEdit(row)">＋ 补货</button>
+            <UiButton v-if="row.status === 'low' || row.status === 'out'" size="sm" @click="startEdit(row)">＋ 补货</UiButton>
           </template>
         </div>
       </div>
@@ -482,12 +483,11 @@ h1 {
   display: flex;
   gap: 6px;
 }
+/* .act 基类仅留次级按钮（ghost）共享布局；填充主按钮（保存/补货）已收进 UiButton */
 .act {
   padding: 6px 13px;
   border: none;
   border-radius: 999px;
-  background: var(--ld-purple-ink);
-  color: #fff;
   font-size: 12px;
   font-weight: 600;
   cursor: pointer;
@@ -496,10 +496,6 @@ h1 {
   background: var(--ld-bg);
   color: var(--ld-content-2);
   border: 1px solid var(--ld-line);
-}
-.act.dark {
-  background: var(--ld-purple-ink);
-  color: #fff;
 }
 .foot-note {
   margin-top: 14px;

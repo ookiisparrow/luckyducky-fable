@@ -317,6 +317,8 @@ h1 {
   color: var(--ld-red);
 }
 .btn-primary {
+  /* structure-ok: primary↔ghost 双态切换钮（定稿并启用 / 改回草稿），与 .btn-ghost 融合样式；
+     UiButton 批1 只有填充主态、无 ghost 变体，整体迁移待后续 ghost 变体批一并做 */
   padding: 9px 18px;
   border: none;
   border-radius: 999px;

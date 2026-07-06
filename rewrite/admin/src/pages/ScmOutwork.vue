@@ -8,6 +8,7 @@ import { materialHuman, outworkStatusLabel, yuanToFen, fenLabel, scmErrorText } 
 import { dateTime } from '../lib/format'
 import { consumeOutworkHandoff } from '../lib/scmHandoff'
 import ScmFlowTabs from '../components/ScmFlowTabs.vue'
+import UiButton from '../components/ui/Button.vue'
 
 const orders = ref<Array<Record<string, any>>>([])
 const rawL = ref<Array<Record<string, any>>>([]) // 大团原团（可发）
@@ -140,7 +141,7 @@ onMounted(async () => {
         <h1>外协单（发织女织带结）</h1>
         <p class="sub">发大团原团 → 收同色带结团 → 应付=收×计件价、损耗=发−收（收货一刻定格）→ 结算销账。</p>
       </div>
-      <button class="btn-primary" @click="newOrder"><Plus :size="15" :stroke-width="2" /><span>新建外协单</span></button>
+      <UiButton @click="newOrder"><Plus :size="15" :stroke-width="2" /><span>新建外协单</span></UiButton>
     </header>
 
     <ScmFlowTabs />
@@ -242,20 +243,6 @@ h1 {
   margin: 4px 0 0;
   font-size: 12.5px;
   color: var(--ld-content-2);
-}
-.btn-primary {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  flex: none;
-  padding: 10px 18px;
-  border: none;
-  border-radius: 999px;
-  background: var(--ld-purple-ink);
-  color: #fff;
-  font-size: 13px;
-  font-weight: 600;
-  cursor: pointer;
 }
 .status {
   font-size: 13px;

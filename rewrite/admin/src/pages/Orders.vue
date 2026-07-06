@@ -6,6 +6,7 @@
 import { ref, computed, onMounted } from 'vue'
 import { RefreshCw, Search, Package, X, PackageCheck, ScanLine, TriangleAlert } from 'lucide-vue-next'
 import { listOrders, orderCounts, getOrderDetail, shipOrder, shipOrders, clearFeeMismatch } from '../api/money'
+import UiButton from '../components/ui/Button.vue'
 import { mapOrderRows, type OrderRowVM } from '../lib/mapMoney'
 import { dateTime } from '../lib/format'
 import { COMPANIES } from '../lib/fulfill'
@@ -228,7 +229,7 @@ onMounted(reload)
       <div class="searchbox">
         <Search :size="15" :stroke-width="1.8" class="search-ico" />
         <input v-model="search" placeholder="搜索单号（精确·跨全部状态）" @keyup.enter="doSearch" />
-        <button class="search-btn" @click="doSearch">搜索</button>
+        <UiButton size="sm" @click="doSearch">搜索</UiButton>
       </div>
     </div>
     <p class="note">状态计数为云端实时总数、切换状态走服务端筛选、搜索按单号跨全部状态精确命中——都不受当前分页影响。</p>
@@ -509,16 +510,6 @@ h1 {
   font-size: 13px;
   width: 100%;
   color: var(--ld-ink);
-}
-.search-btn {
-  flex: none;
-  padding: 6px 14px;
-  border: none;
-  border-radius: 999px;
-  background: var(--ld-purple-ink);
-  color: #fff;
-  font-size: 12.5px;
-  cursor: pointer;
 }
 .note {
   margin: 0 0 10px;
