@@ -47,3 +47,52 @@ describe('我的课程 join（标题缺失不崩）', () => {
     expect(mapMyCourses(undefined, undefined)).toEqual([]) // 非数组安全
   })
 })
+
+// C 类竖切（2026-07-07）：我的课程学习进度（段粒度·与后台 customer360 provider 同口径·纯前端组合三 action）。
+describe('我的课程学习进度（段粒度·交集防 stale·不除零·守卫 rw-mp-learning-golden）', () => {
+  const COURSES = [
+    {
+      id: 'c1',
+      title: '钩织入门',
+      chapters: [
+        {
+          id: 'ch1',
+          lessons: [
+            { id: 'l1', segments: [{ id: 's1' }, { id: 's2' }, { id: 's3' }] },
+            { id: 'l2', segments: [{ id: 's4' }, { id: 's5' }] },
+          ],
+        },
+      ],
+    },
+  ]
+  it('大白话：总集数=课内所有段之和；已学=done 命中的段数；百分比四舍五入', () => {
+    const vm = mapMyCourses([{ courseId: 'c1', enteredAt: 1783046400000 }], COURSES, [{ courseId: 'c1', done: { s1: true, s2: true } }])
+    expect(vm[0].totalSegments).toBe(5)
+    expect(vm[0].doneCount).toBe(2)
+    expect(vm[0].percent).toBe(40) // 2/5
+  })
+  it('大白话：done 里混入不属于该课的 stale segmentId 不计入（分子不超分母·percent≤100）', () => {
+    const vm = mapMyCourses(
+      [{ courseId: 'c1', enteredAt: 1 }],
+      COURSES,
+      [{ courseId: 'c1', done: { s1: true, s2: true, s3: true, s4: true, s5: true, sGhost: true, sDeleted: true } }]
+    )
+    expect(vm[0].doneCount).toBe(5) // sGhost/sDeleted 不在该课段集·剔除
+    expect(vm[0].totalSegments).toBe(5)
+    expect(vm[0].percent).toBe(100) // 不超 100
+  })
+  it('大白话：无 progress 文档→0/N·percent 0；空课(0 段)→percent 0 不除零·不崩', () => {
+    const vm = mapMyCourses([{ courseId: 'c1', enteredAt: 1 }], COURSES, [])
+    expect(vm[0].doneCount).toBe(0)
+    expect(vm[0].percent).toBe(0)
+    const empty = mapMyCourses([{ courseId: 'cx', enteredAt: 1 }], [{ id: 'cx', title: '空课' }], [])
+    expect(empty[0].totalSegments).toBe(0)
+    expect(empty[0].percent).toBe(0)
+  })
+  it('大白话：progress/courses/done 传脏值不崩·安全空', () => {
+    expect(() => mapMyCourses([{ courseId: 'c1', enteredAt: 1 }], null, null)).not.toThrow()
+    expect(() => mapMyCourses([{ courseId: 'c1', enteredAt: 1 }], COURSES, '坏')).not.toThrow()
+    const vm = mapMyCourses([{ courseId: 'c1', enteredAt: 1 }], COURSES, [{ courseId: 'c1', done: null }])
+    expect(vm[0].doneCount).toBe(0) // done 非对象→0
+  })
+})

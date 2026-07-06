@@ -26,6 +26,11 @@
         <view class="ld-mc-cover-title">{{item.title}}</view>
         <image class="ld-mc-cover-chev" src="/static/icons/chevron-right.svg" mode="aspectFit" />
       </view>
+      <!-- 学习进度（段粒度·与后台 360 同口径·无段不渲染·真值不编数·独立整行） -->
+      <view class="ld-mc-prog" wx:if="{{item.totalSegments}}">
+        <view class="ld-mc-prog-track"><view class="ld-mc-prog-fill" style="width: {{item.percent}}%"></view></view>
+        <view class="ld-mc-prog-text">已学 {{item.doneCount}}/{{item.totalSegments}} 集 · {{item.percent}}%</view>
+      </view>
       <view class="ld-mc-meta">
         <view class="ld-mc-entered" wx:if="{{item.enteredAtLabel}}">进课于 {{item.enteredAtLabel}}</view>
         <view class="ld-mc-entered ld-mc-entered-faint" wx:else>视频课程</view>

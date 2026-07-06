@@ -102,6 +102,27 @@
 }
 
 /* 元信息行 */
+/* 学习进度（段粒度·细进度条 + 集数文案） */
+.ld-mc-prog {
+  margin-top: 18rpx;
+  padding: 0 4rpx;
+}
+.ld-mc-prog-track {
+  height: 10rpx;
+  border-radius: var(--ld-radius-pill);
+  background: var(--ld-bg-sage);
+  overflow: hidden;
+}
+.ld-mc-prog-fill {
+  height: 100%;
+  border-radius: var(--ld-radius-pill);
+  background: var(--ld-purple);
+}
+.ld-mc-prog-text {
+  margin-top: 8rpx;
+  font-size: 22rpx;
+  color: var(--ld-content-2);
+}
 .ld-mc-meta {
   display: flex;
   align-items: center;
