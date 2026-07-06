@@ -178,24 +178,25 @@
   line-height: 1.65;
   color: var(--ld-content);
 }
+/* 横向轨走 inline-block（非 scroll-view enable-flex）：卡高=内容高、不被 flex stretch 撑到几十米（真机 bug） */
 .ld-prod-rail {
-  display: flex;
   margin-top: 24rpx;
   white-space: nowrap;
 }
 .ld-prod-card {
-  flex: 0 0 400rpx;
+  display: inline-block;
+  vertical-align: top;
+  width: 400rpx;
+  white-space: normal;
   margin-right: 22rpx;
   background: #fff;
   border: 2rpx solid var(--ld-surface-cream);
   border-radius: var(--ld-radius-sm);
   overflow: hidden;
 }
-/* 块流·非 flex-column：媒体高度无条件（防 scroll-view flex 拉伸时媒体被挤扁的真机 bug） */
 .ld-prod-media {
   width: 100%;
   height: 300rpx; /* 4:3 缩略（卡宽 400rpx）·压低卡片高度 */
-  flex-shrink: 0; /* 锁定高度·不被 flex 上下文挤扁 */
   background: var(--ld-bg-sage);
 }
 .ld-prod-media-img {
@@ -387,15 +388,17 @@
 .ld-reviews-head {
   padding: 0 36rpx 36rpx;
 }
+/* 同商品轨：inline-flex（内部仍竖排·外部按内容定高）·不被 flex stretch 撑长 */
 .ld-review-rail {
-  display: flex;
   padding: 8rpx 36rpx;
   white-space: nowrap;
 }
 .ld-review-card {
-  flex: 0 0 400rpx;
-  display: flex;
+  display: inline-flex;
   flex-direction: column;
+  vertical-align: top;
+  width: 400rpx;
+  white-space: normal;
   margin-right: 26rpx;
   background: var(--ld-bg-lilac);
   border: 2rpx solid var(--ld-purple-line);
@@ -406,7 +409,7 @@
 .ld-review-media {
   width: 100%;
   height: 300rpx; /* 4:3 缩略（卡宽 400rpx）·由 3:4 竖图压低卡片高度 */
-  flex-shrink: 0; /* flex-column 卡内锁定高度·body flex:1 吸收余量、媒体不被挤扁 */
+  flex-shrink: 0; /* 锁定高度·媒体不被挤扁 */
   background: var(--ld-bg-sage);
 }
 .ld-review-media-img {

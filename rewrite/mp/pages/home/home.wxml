@@ -34,7 +34,7 @@
       <view class="ld-feature-body">{{content.feature.body}}</view>
     </view>
 
-    <scroll-view wx:if="{{products.length}}" class="ld-prod-rail" scroll-x enable-flex enhanced show-scrollbar="{{false}}">
+    <scroll-view wx:if="{{products.length}}" class="ld-prod-rail" scroll-x enhanced show-scrollbar="{{false}}">
       <view class="ld-prod-card" wx:for="{{products}}" wx:key="id" data-id="{{item.id}}" bind:tap="onTapProduct">
         <view class="ld-prod-media">
           <image wx:if="{{item.cover}}" class="ld-prod-media-img" src="{{item.cover}}" mode="aspectFill" />
@@ -104,7 +104,7 @@
   <!-- ⑥ 真实买家秀 -->
   <view class="ld-reviews">
     <view class="ld-reviews-head"><view class="ld-h2">{{content.reviews.heading}}</view></view>
-    <scroll-view class="ld-review-rail" scroll-x enable-flex enhanced show-scrollbar="{{false}}">
+    <scroll-view class="ld-review-rail" scroll-x enhanced show-scrollbar="{{false}}">
       <view class="ld-review-card" wx:for="{{content.reviews.items}}" wx:key="user">
         <view class="ld-review-media">
           <image wx:if="{{item.img}}" class="ld-review-media-img" src="{{item.img}}" mode="aspectFill" />
