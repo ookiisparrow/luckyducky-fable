@@ -107,9 +107,16 @@ async function doCreate() {
   const target = loadedCourse.value || courseId.value.trim()
   const r = await createBatch(target, count.value)
   busy.value = false
-  message.value = r.ok ? `已生成批次 ${String(r.batchId)}（${(r.codes as string[]).length} 张码）` : '生成失败：' + String(r.error || '')
+  if (!r.ok) {
+    message.value = '生成失败：' + String(r.error || '') // 失败留原文·不 reload 吞（病根#14）
+    return
+  }
   creating.value = false
-  void load()
+  const batchId = String(r.batchId)
+  const codeN = (r.codes as string[]).length
+  courseId.value = target // 选择器回到刚生成的课·load() 据此刷新 target（P2·防用漂移的可编辑框值跳到别课、把刚建的批次藏掉）
+  await load() // 先刷新（load 会写'加载中…'/'')，刷完再显成功——否则同步 reload 的'加载中…'当帧盖掉成功提示（病根#14 伪成功）
+  message.value = `已生成批次 ${batchId}（${codeN} 张码）`
 }
 
 const codesGen = useLatest() // 码表乱序守卫（P1·A 的码别配到 B 的批次头·防印错卡·根因#8）
