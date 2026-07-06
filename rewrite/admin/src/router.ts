@@ -10,6 +10,7 @@ const Orders = () => import('./pages/Orders.vue')
 const Fulfill = () => import('./pages/Fulfill.vue')
 const Refunds = () => import('./pages/Refunds.vue')
 const Products = () => import('./pages/Products.vue')
+const Wizard = () => import('./pages/Wizard.vue')
 const Showcase = () => import('./pages/Showcase.vue')
 const HomeContent = () => import('./pages/HomeContent.vue')
 const HelpVideos = () => import('./pages/HelpVideos.vue')
@@ -47,6 +48,7 @@ export const router = createRouter({
         { path: 'fulfill', component: Fulfill },
         { path: 'refunds', component: Refunds },
         { path: 'products', component: Products },
+        { path: 'products/:id/wizard', component: Wizard }, // 上新分步向导（带参·nav-route 守卫豁免孤儿页检查）
         { path: 'showcase', component: Showcase },
         { path: 'home-content', component: HomeContent },
         { path: 'help-videos', component: HelpVideos },

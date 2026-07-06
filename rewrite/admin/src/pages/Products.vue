@@ -5,10 +5,14 @@
 import { ref, computed, onMounted, onBeforeUnmount, watch, nextTick } from 'vue'
 import { Search, Trash2 } from 'lucide-vue-next'
 import { listDrafts, saveDraft, deleteDraft, uploadImage, publishProduct, unpublishProduct, republishProduct } from '../api/products'
-import { mapDraftRows, publishErrorText, b64SizeOk, type DraftRowVM } from '../lib/mapProducts'
+import { mapDraftRows, publishErrorText, b64SizeOk, basicsMissing, type DraftRowVM } from '../lib/mapProducts'
 import { useRouter } from 'vue-router'
 
 const KIT_ICONS = ['circle', 'pen-tool', 'cloud', 'eye', 'book-open', 'sparkles-purple', 'package', 'truck'] // 材料清单图标（换皮丢了选择器·恒 circle）
+
+// 嵌入模式（上新向导步 1-3 复用本编辑器·向后兼容·独立 /products 路由用法不传 props 行为不变）：
+// embed=true 隐列表壳只留编辑器·wizardProductId 指定要编辑的商品档（向导载入后自动打开）。
+const props = defineProps<{ embed?: boolean; wizardProductId?: string }>()
 
 const router = useRouter()
 // 商品→课程深链（换皮丢了入口·Courses 页占位文案承诺「商品页会带入」但没按钮）：courseId=商品档 courseId 或 course-<id>
@@ -51,6 +55,8 @@ const shown = computed(() => {
   )
 })
 const imgCount = (r: DraftRowVM) => (Array.isArray((r.raw as any).images) ? (r.raw as any).images.length : 0)
+// 圆点深链：进上新向导落到第一个未完成步（全完成落第 1 步）
+const firstTodoStep = (r: DraftRowVM) => (r.steps.findIndex((s) => !s.done) + 1) || 1
 const courseOf = (r: DraftRowVM) => String((r.raw as any).courseId || '')
 
 // 图片 fileID→url 解析：listDrafts 回的 urls 映射（已存图）+ 本会话新上传的 url
@@ -298,24 +304,23 @@ function delKit(i: number) {
   if (edit.value) (edit.value.kit as unknown[]).splice(i, 1)
 }
 
-// 上架前缺项预检（1:1 旧 Wizard missing·换皮退成事后报错）：封面/名称/价格/规格四项必备
-const missing = computed(() => {
-  const e = edit.value
-  if (!e) return [] as string[]
-  const m: string[] = []
-  if (!e.cover) m.push('封面图')
-  if (!String(e.name || '').trim()) m.push('商品名称')
-  if (!String(e.price || '').trim()) m.push('价格')
-  if (!Array.isArray(e.skus) || !e.skus.length) m.push('至少一个规格')
-  return m
-})
+// 上架前缺项预检（1:1 旧 Wizard missing·换皮退成事后报错）：封面/名称/价格/有效规格四项必备。
+// basicsMissing 单源（向导上架闸与本页预检同口径·守卫 rw-admin-products-ui-golden）。
+const missing = computed(() => (edit.value ? basicsMissing(edit.value) : []))
 
-onMounted(reload)
+onMounted(async () => {
+  await reload()
+  // 嵌入向导：载入后自动打开目标商品的编辑器（步 1-3 面板即本编辑器）
+  if (props.embed && props.wizardProductId) {
+    const row = rows.value.find((r) => r.id === props.wizardProductId)
+    if (row) openEdit(row)
+  }
+})
 </script>
 
 <template>
-  <div class="page">
-    <header class="page-head">
+  <div class="page" :class="{ embed }">
+    <header v-if="!embed" class="page-head">
       <div>
         <h1>商品与上新</h1>
         <p class="sub">一款商品一条流水线：产品图片 → 商品信息 → SKU → 教学视频 → 二维码卡片 → 码批次</p>
@@ -323,7 +328,7 @@ onMounted(reload)
       <button class="btn-primary" @click="newProduct">＋ 新建商品</button>
     </header>
 
-    <div class="toolbar">
+    <div v-if="!embed" class="toolbar">
       <div class="chips">
         <button
           v-for="f in FILTERS"
@@ -343,7 +348,7 @@ onMounted(reload)
 
     <p v-if="message" class="status">{{ message }}</p>
 
-    <div v-if="shown.length" class="table">
+    <div v-if="shown.length && !embed" class="table">
       <div class="thead">
         <span class="c-prod">商品</span>
         <span class="c-course">关联课程</span>
@@ -365,13 +370,18 @@ onMounted(reload)
         <span class="c-course course">{{ courseOf(row) || '未关联' }}</span>
         <span class="c-price price">{{ row.priceLabel }}</span>
         <span class="c-spec spec">{{ row.skuCount }} 规格 · {{ imgCount(row) }} 图</span>
-        <!-- 6 步上新进度圆点（换皮删了这列·「无源」误·后端 listDrafts 派生视频/卡片/批次态·根因#7 bounded join） -->
-        <div class="c-steps steps-cell" :title="row.steps.map((s) => (s.done ? '✓' : '○') + ' ' + s.label).join(' · ')">
+        <!-- 6 步上新进度圆点（换皮删了这列·「无源」误·后端 listDrafts 派生视频/卡片/批次态·根因#7 bounded join）·点击进上新向导落到第一个未完成步（换皮：圆点只读点不动·不导向） -->
+        <div
+          class="c-steps steps-cell"
+          :title="row.steps.map((s) => (s.done ? '✓' : '○') + ' ' + s.label).join(' · ') + ' · 点击进上新向导'"
+          @click="router.push('/products/' + row.id + '/wizard?step=' + firstTodoStep(row))"
+        >
           <span v-for="s in row.steps" :key="s.key" class="dot" :class="{ on: s.done }"></span>
           <span class="done-n">{{ row.doneCount }}/6</span>
         </div>
         <span class="c-state"><span :class="['state', row.state]">{{ row.stateLabel }}</span></span>
         <div class="c-ops ops">
+          <button class="act wizard" title="6 步上新向导：图片→信息→SKU→视频→卡片→批次" @click="router.push('/products/' + row.id + '/wizard')">上新向导</button>
           <button class="act ghost" @click="openEdit(row)">编辑</button>
           <button class="act ghost" @click="editCourse(row)">编辑课程</button>
           <button class="act ghost" @click="router.push({ path: '/cards', query: { productId: row.id } })">卡片设计</button>
@@ -388,7 +398,7 @@ onMounted(reload)
       </div>
       <div class="tfoot">共 {{ counts.all }} 款商品<span v-if="filter !== 'all' || search">（当前筛选 {{ shown.length }}）</span></div>
     </div>
-    <p v-else-if="!message" class="status-soft">{{ rows.length ? '没有符合筛选的商品' : '还没有商品，点「新建商品」开始' }}</p>
+    <p v-else-if="!message && !embed" class="status-soft">{{ rows.length ? '没有符合筛选的商品' : '还没有商品，点「新建商品」开始' }}</p>
 
     <div v-if="edit" class="editor">
       <h3>{{ edit.name || '新商品' }} <span class="pid">{{ edit.id }}</span>
@@ -463,7 +473,7 @@ onMounted(reload)
 
       <div class="editor-ops">
         <button class="act" :disabled="busy" @click="doSave">保存草稿</button>
-        <button class="act ghost" @click="closeEditor">关闭</button>
+        <button v-if="!embed" class="act ghost" @click="closeEditor">关闭</button>
       </div>
     </div>
   </div>
@@ -472,6 +482,18 @@ onMounted(reload)
 <style scoped>
 .page {
   max-width: 1160px;
+}
+/* 嵌入向导步 1-3：去页级 max-width 与编辑器卡片外框（向导已提供卡片容器） */
+.page.embed {
+  max-width: none;
+}
+.page.embed .editor {
+  margin-top: 0;
+  padding: 0;
+  border: none;
+  border-radius: 0;
+  background: transparent;
+  max-width: none;
 }
 .page-head {
   display: flex;
@@ -580,6 +602,13 @@ h1 {
   display: flex;
   align-items: center;
   gap: 3px;
+  cursor: pointer;
+  border-radius: 999px;
+  padding: 4px 6px;
+  margin: -4px -6px;
+}
+.steps-cell:hover {
+  background: var(--ld-bg-lilac);
 }
 .dot {
   width: 8px;
@@ -690,6 +719,11 @@ h1 {
   background: transparent;
   color: var(--ld-content-2);
   border: 1px solid var(--ld-line);
+}
+.act.wizard {
+  background: var(--ld-bg-lilac);
+  color: var(--ld-brand-active);
+  font-weight: 600;
 }
 .act.warn {
   background: var(--ld-red);

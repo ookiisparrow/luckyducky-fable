@@ -1,7 +1,7 @@
 // 商品与橱窗映射（守卫 rw-admin-products-ui-golden）：三态口径与云端一致/四道门人话原文兜底/
 // 整档 round-trip 保真/图片尺寸闸提前拦/脏档安全。
 import { describe, it, expect } from 'vitest'
-import { productState, mapDraftRows, publishErrorText, mapShowcaseRows, b64SizeOk, productSteps } from '../src/lib/mapProducts'
+import { productState, mapDraftRows, publishErrorText, mapShowcaseRows, b64SizeOk, productSteps, basicsMissing, wizardCanPublish } from '../src/lib/mapProducts'
 
 describe('三态口径（与云端 listDrafts listed 表一致）', () => {
   it('大白话：表里 true=在售、false=已下架、不在表=筹备中（未上架）', () => {
@@ -43,6 +43,26 @@ describe('三态口径（与云端 listDrafts listed 表一致）', () => {
     const rows = mapDraftRows([{ id: 'p1', name: '熊', price: 20, cover: 'c', skus: [{ name: 'a' }], courseId: 'course-p1' }], {}, { p1: true }, { hasVideo: { 'course-p1': true }, cardFinal: { p1: true }, hasBatch: { 'course-p1': true } })
     expect(rows[0].doneCount).toBe(6)
     expect(rows[0].steps).toHaveLength(6)
+  })
+})
+
+describe('上新向导上架闸（basicsMissing/wizardCanPublish·前三步必备·换皮把事前预检退成事后报错）', () => {
+  it('大白话：封面/名称/价格/有效规格四项缺哪报哪；四项齐才可上架（步4-6 视频/卡片/批次非上架硬门槛）', () => {
+    // 空档：四项全缺、不可上架
+    expect(basicsMissing({})).toEqual(['封面图', '商品名称', '价格', '至少一个有效规格'])
+    expect(wizardCanPublish({})).toBe(false)
+    // 四项齐：无缺、可上架
+    const ok = { cover: 'c', name: '熊', price: 20, skus: [{ name: '标准', price: 20 }] }
+    expect(basicsMissing(ok)).toEqual([])
+    expect(wizardCanPublish(ok)).toBe(true)
+    // 规格行不完整（有名无价）算缺——与云端 NEED_SKUS 同口径（每行须名+有效价）
+    expect(basicsMissing({ cover: 'c', name: '熊', price: 20, skus: [{ name: '标准', price: '' }] })).toEqual(['至少一个有效规格'])
+    // 名称仅空白算缺（trim）
+    expect(basicsMissing({ cover: 'c', name: '  ', price: 20, skus: [{ name: 'a', price: 1 }] })).toEqual(['商品名称'])
+    // 价格空串算缺
+    expect(basicsMissing({ cover: 'c', name: '熊', price: '', skus: [{ name: 'a', price: 1 }] })).toEqual(['价格'])
+    // 脏档安全（null 不崩·当作全缺）
+    expect(wizardCanPublish(null as any)).toBe(false)
   })
 })
 

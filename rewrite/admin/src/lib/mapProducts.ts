@@ -90,6 +90,25 @@ export function mapDraftRows(list: unknown, urls: unknown, listedMap: unknown, e
   return out
 }
 
+/** 上新向导上架闸：前三步（封面/信息/SKU）缺什么——事前预检（换皮退成事后报错）·与云端 publishProduct 四道门同口径。
+ *  步 4-6（教学视频/二维码卡片/码批次）非上架硬门槛（可先上架、之后补课程），故不进此清单。 */
+export function basicsMissing(p: unknown): string[] {
+  const d = (p && typeof p === 'object' ? p : {}) as Record<string, any>
+  const m: string[] = []
+  if (!d.cover) m.push('封面图')
+  if (!String(d.name || '').trim()) m.push('商品名称')
+  if (d.price == null || String(d.price).trim() === '') m.push('价格')
+  const skus = Array.isArray(d.skus) ? d.skus : []
+  const skusOk = skus.length > 0 && skus.every((s: any) => String(s?.name || '').trim() !== '' && String(s?.price ?? '').trim() !== '')
+  if (!skusOk) m.push('至少一个有效规格')
+  return m
+}
+
+/** 前三步齐 = 可上架（basicsMissing 空）。上新向导上架按钮的闸。 */
+export function wizardCanPublish(p: unknown): boolean {
+  return basicsMissing(p).length === 0
+}
+
 /** 上架四道门 → 人话（原文兜底不吞·守卫反向测试面）。 */
 export function publishErrorText(e: unknown): string {
   const code = String(e || '')

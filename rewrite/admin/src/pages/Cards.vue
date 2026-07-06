@@ -8,9 +8,12 @@ import { getCard, saveCard, uploadImage, listDrafts } from '../api/products'
 import { b64SizeOk } from '../lib/mapProducts'
 import { buildFrontSvg, buildBackSvg, type CardModel } from '../lib/cardSvg'
 
+// 嵌入模式（上新向导步 5 复用·向后兼容·独立 /cards?productId 用法不传 props 行为不变）：
+// embed=true 隐页头/返回·wizardProductId 覆盖 route.query.productId。
+const props = defineProps<{ embed?: boolean; wizardProductId?: string }>()
 const route = useRoute()
 const router = useRouter()
-const productId = String(route.query.productId || '')
+const productId = props.wizardProductId || String(route.query.productId || '')
 
 const card = ref<CardModel | null>(null)
 const artUrl = ref('')
@@ -180,13 +183,13 @@ function downloadSvg(kind: 'front' | 'back') {
 <template>
   <div class="page">
     <header class="page-head">
-      <div>
+      <div v-if="!embed">
         <h1>二维码卡片设计</h1>
         <p class="sub">正面 = 插画面（颜值与品牌），反面 = 二维码面（扫码与指引）；印刷包输出正反两张矢量图。</p>
       </div>
       <div class="head-r">
         <span class="auto" :class="autoState">{{ autoState === 'saving' ? '自动保存中…' : autoState === 'saved' ? '已自动保存' : autoState === 'error' ? '自动保存失败' : '' }}</span>
-        <button class="btn-ghost" @click="router.back()">← 返回</button>
+        <button v-if="!embed" class="btn-ghost" @click="router.back()">← 返回</button>
         <button v-if="card" class="btn-primary" :class="{ ghost: card.status === 'final' }" @click="finalize">{{ card.status === 'final' ? '↩ 改回草稿' : '✅ 定稿并启用' }}</button>
       </div>
     </header>

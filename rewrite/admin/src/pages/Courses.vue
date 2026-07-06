@@ -8,8 +8,11 @@ import { getCourseDraft, saveCourseDraft, publishCourse, uploadVideo } from '../
 import { courseVideoStats } from '../lib/mapContent'
 import { planLessonBatch } from '../lib/videoBatch'
 
+// 嵌入模式（上新向导步 4 复用·向后兼容·独立 /courses?courseId 用法不传 props 行为不变）：
+// embed=true 隐页头/手输课程号工具条·wizardCourseId 覆盖 route.query.courseId。
+const props = defineProps<{ embed?: boolean; wizardCourseId?: string }>()
 const route = useRoute()
-const courseId = ref(String(route.query.courseId || ''))
+const courseId = ref(props.wizardCourseId || String(route.query.courseId || ''))
 const course = ref<Record<string, any> | null>(null)
 const fromPublished = ref(false)
 const message = ref('')
@@ -198,14 +201,14 @@ onMounted(load)
 
 <template>
   <div class="page">
-    <header class="page-head">
+    <header v-if="!embed" class="page-head">
       <div>
         <h1>课程编排</h1>
         <p class="sub">一门课 = 章 → 课时 → 段；每段挂一条视频。保存＝存草稿（学员不可见），发布＝老学员立即看到新版。</p>
       </div>
     </header>
 
-    <div class="toolbar">
+    <div v-if="!embed" class="toolbar">
       <input v-model="courseId" placeholder="course-xxx（商品页「编辑课程」会带入）" class="cid" @keyup.enter="load" />
       <button class="act ghost" @click="load"><RotateCcw :size="14" :stroke-width="1.8" /><span>载入</span></button>
     </div>

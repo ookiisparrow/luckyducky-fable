@@ -4,6 +4,7 @@
 // 诚实边界：后端 listBatches 需 courseId（无「列全量批次」action）——按课程范围查（非跨课「全部」）；
 // listBatchCodes 只回码串无每码激活态——码表不标单码已激活/未用（记待办）。印刷包 ZIP 已还原（卡面SVG+地址CSV+说明·二轮批Cards-2）。
 import { ref, computed, onMounted } from 'vue'
+import { useRoute } from 'vue-router'
 import QRCode from 'qrcode'
 import JSZip from 'jszip'
 import { Layers, QrCode, CircleCheck, TrendingUp, X, Download, Package } from 'lucide-vue-next'
@@ -12,7 +13,11 @@ import { getCard } from '../api/products'
 import { buildFrontSvg, buildBackSvg } from '../lib/cardSvg'
 import { mapBatches, type BatchRow } from '../lib/mapSystem'
 
-const courseId = ref('')
+// 嵌入模式（上新向导步 6 复用·向后兼容）+ 修独立深链 bug：换皮把 courseId 写死空 ref、不读 route.query，
+// 致商品页「码批次」深链(/batches?courseId=)落地要手输课程号；改读 props(向导)||route.query(深链)||空。
+const props = defineProps<{ embed?: boolean; wizardCourseId?: string }>()
+const route = useRoute()
+const courseId = ref(props.wizardCourseId || String(route.query.courseId || ''))
 const loadedCourse = ref('')
 const rows = ref<BatchRow[]>([])
 const message = ref('')
@@ -33,6 +38,8 @@ const codeUrl = (code: string) => urlPrefix.value + code
 onMounted(async () => {
   const r = await getSettings()
   if (r.ok) urlPrefix.value = String((r as any).settings?.urlPrefix || (r as any).urlPrefix || '')
+  // 深链/向导带入了课程号即自动载入该课批次（换皮丢·落地空列表要手点「载入」）
+  if (courseId.value.trim()) void load()
 })
 
 function statusOf(b: BatchRow): 'using' | 'used' | 'fresh' {
@@ -168,10 +175,11 @@ function exportCsv() {
 <template>
   <div class="page">
     <header class="page-head">
-      <div>
+      <div v-if="!embed">
         <h1>二维码批次</h1>
         <p class="sub">激活卡批次的生成 · 印刷打包 · 激活追踪——一码一地址、一码一用</p>
       </div>
+      <span v-else class="embed-course">课程 <b>{{ loadedCourse || courseId || '（未定稿卡片/未关联课程）' }}</b></span>
       <button class="btn-primary" :disabled="!loadedCourse" @click="creating = !creating">＋ 生成新批次</button>
     </header>
 
@@ -208,7 +216,7 @@ function exportCsv() {
           {{ f.label }}<span class="chip-n">{{ counts[f.key] }}</span>
         </button>
       </div>
-      <div class="course-picker">
+      <div v-if="!embed" class="course-picker">
         <input v-model="courseId" placeholder="course-xxx" @keyup.enter="load" />
         <button class="act ghost" @click="load">载入课程</button>
       </div>
@@ -291,6 +299,14 @@ function exportCsv() {
 <style scoped>
 .page {
   max-width: 1160px;
+}
+.embed-course {
+  font-size: 13px;
+  color: var(--ld-content-2);
+}
+.embed-course b {
+  color: var(--ld-ink);
+  font-family: var(--ld-font-mono);
 }
 .page-head {
   display: flex;
