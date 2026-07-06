@@ -97,12 +97,16 @@ function delSeg(t: HelpItem, ti: number, i: number) {
 async function pickVideo(t: HelpItem, i: number, ev: Event) {
   const file = (ev.target as HTMLInputElement).files?.[0]
   if (!file) return
+  // 上传前捕获段「对象引用」而非下标（P1·根因#8）：秒级上传窗口内若重排/删段，按下标回写会落到换位后的
+  // 另一段（静默错位·随 autosave 落库）或越界崩溃；写对象引用则始终落到本段、删段后写孤儿也不崩。
+  const seg = t.segments[i]
+  if (!seg) return
   progress.value = '上传中 0%'
-  if (!t.segments[i].dur) t.segments[i].dur = await readDuration(file) // 时长自动读取（未填才读）
-  const r = await uploadVideo('help', t.segments[i].name || 'seg', file, (p) => (progress.value = `上传中 ${Math.round(p * 100)}%`))
+  if (!seg.dur) seg.dur = await readDuration(file) // 时长自动读取（未填才读）
+  const r = await uploadVideo('help', seg.name || 'seg', file, (p) => (progress.value = `上传中 ${Math.round(p * 100)}%`))
   progress.value = ''
   if (r.ok) {
-    t.segments[i].videoFileId = r.fileId || ''
+    seg.videoFileId = r.fileId || ''
     message.value = ''
   } else message.value = '视频上传失败：' + String(r.error || '')
 }

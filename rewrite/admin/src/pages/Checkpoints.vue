@@ -44,6 +44,7 @@ function move(i: number, dir: number) {
   const t = nodes.value[i]
   nodes.value[i] = nodes.value[j]
   nodes.value[j] = t
+  confirmKey.value = '' // 重排后清「已武装删除」·防下标编码 confirmKey 落到换位后的另一节点→删错（P2·对齐姊妹页）
 }
 function delNode(i: number) {
   if (confirmKey.value !== 'd:' + i) {
