@@ -38,22 +38,29 @@ const LINKS = computed(() => RAW_LINKS.map((l) => ({ ...l, href: l.deepEnv ? wit
     </div>
 
     <div class="ext-grid">
-      <Card v-for="l in LINKS" :key="l.title" class="ext-card">
-        <div class="ext-top">
-          <div class="ext-id">
-            <div class="ext-ico" :class="l.tone"><component :is="l.icon" :size="20" :stroke-width="1.8" /></div>
-            <span class="ext-title">{{ l.title }}</span>
+      <a
+        v-for="l in LINKS"
+        :key="l.title"
+        class="ext-card-link"
+        :href="l.href"
+        target="_blank"
+        rel="noopener noreferrer"
+      >
+        <Card class="ext-card">
+          <div class="ext-top">
+            <div class="ext-id">
+              <div class="ext-ico" :class="l.tone"><component :is="l.icon" :size="20" :stroke-width="1.8" /></div>
+              <span class="ext-title">{{ l.title }}</span>
+            </div>
+            <Badge v-if="l.deepEnv && envId" tone="brand">预选本环境</Badge>
           </div>
-          <Badge v-if="l.deepEnv && envId" tone="brand">预选本环境</Badge>
-        </div>
-        <p class="ext-desc">{{ l.desc }}</p>
-        <div class="ext-foot">
-          <a class="ext-open" :href="l.href" target="_blank" rel="noopener noreferrer">
-            打开后台 <ExternalLink :size="14" :stroke-width="1.8" />
-          </a>
-          <span class="ext-host">{{ l.host }}</span>
-        </div>
-      </Card>
+          <p class="ext-desc">{{ l.desc }}</p>
+          <div class="ext-foot">
+            <span class="ext-open">打开后台 <ExternalLink :size="14" :stroke-width="1.8" /></span>
+            <span class="ext-host">{{ l.host }}</span>
+          </div>
+        </Card>
+      </a>
     </div>
   </div>
 </template>
@@ -82,10 +89,17 @@ const LINKS = computed(() => RAW_LINKS.map((l) => ({ ...l, href: l.deepEnv ? wit
   grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
   gap: 16px;
 }
+/* 整卡可点：卡外包一层 <a>（点卡片任意处即在新窗口打开对应后台·恢复原整卡链接语义） */
+.ext-card-link {
+  display: block;
+  height: 100%;
+  text-decoration: none;
+}
 .ext-card {
+  height: 100%;
   transition: border-color 0.15s;
 }
-.ext-card:hover {
+.ext-card-link:hover .ext-card {
   border-color: var(--ld-purple-line);
 }
 .ext-top {

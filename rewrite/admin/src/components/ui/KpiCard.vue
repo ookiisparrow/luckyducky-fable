@@ -11,7 +11,7 @@ withDefaults(
     icon?: Component
     delta?: string // 环比文案，如「+12.4% 环比」
     dir?: 'up' | 'down' | 'flat' // 决定 delta 配色与图标
-    tone?: 'neutral' | 'red' // 值本身的语气（异常数标红·如未答复/超时）
+    tone?: 'neutral' | 'red' | 'green' | 'amber' // 值本身的语气（异常红/正向绿/警示琥珀·如净额/退款/未答复）
   }>(),
   { icon: undefined, delta: undefined, dir: 'flat', tone: 'neutral' },
 )
@@ -24,7 +24,7 @@ const DELTA_ICON = { up: TrendingUp, down: TrendingDown, flat: Minus }
       <span class="kpi-label">{{ label }}</span>
       <span v-if="icon" class="kpi-chip"><component :is="icon" :size="15" :stroke-width="1.8" /></span>
     </div>
-    <div class="kpi-value" :class="{ bad: tone === 'red' }">{{ value }}</div>
+    <div class="kpi-value" :class="`tone-${tone}`">{{ value }}</div>
     <div v-if="delta" class="kpi-delta" :class="dir">
       <component :is="DELTA_ICON[dir]" :size="14" :stroke-width="1.9" />
       <span>{{ delta }}</span>
@@ -70,8 +70,14 @@ const DELTA_ICON = { up: TrendingUp, down: TrendingDown, flat: Minus }
   color: var(--ld-ink);
   line-height: 1.1;
 }
-.kpi-value.bad {
+.kpi-value.tone-red {
   color: var(--ld-red);
+}
+.kpi-value.tone-green {
+  color: var(--ld-green);
+}
+.kpi-value.tone-amber {
+  color: var(--ld-amber);
 }
 .kpi-delta {
   display: flex;

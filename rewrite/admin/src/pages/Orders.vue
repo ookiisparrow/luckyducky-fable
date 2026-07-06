@@ -252,6 +252,7 @@ onMounted(reload)
           </div>
           <div class="ld-th grow">订单</div>
           <div class="ld-th" :style="{ width: '200px' }">商品</div>
+          <div class="ld-th" :style="{ width: '170px' }">收货</div>
           <div class="ld-th" :style="{ width: '150px' }">下单时间</div>
           <div class="ld-th r" :style="{ width: '110px' }">金额</div>
           <div class="ld-th" :style="{ width: '110px' }">状态</div>
@@ -276,6 +277,7 @@ onMounted(reload)
             <div class="ld-td goods" :style="{ width: '200px' }">
               <span class="goods-name">{{ row.summary || '—' }}</span><span class="cnt">×{{ row.count }}</span>
             </div>
+            <div class="ld-td addr" :style="{ width: '170px' }"><span>{{ row.address || '—' }}</span></div>
             <div class="ld-td time" :style="{ width: '150px' }">{{ row.timeLabel }}</div>
             <div class="ld-td r amount" :style="{ width: '110px' }">{{ row.amountLabel }}</div>
             <div class="ld-td" :style="{ width: '110px' }">
@@ -561,6 +563,16 @@ onMounted(reload)
 .time {
   color: var(--ld-content-2);
   font-size: 12.5px;
+}
+.addr {
+  min-width: 0;
+}
+.addr span {
+  font-size: 12.5px;
+  color: var(--ld-content-2);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .amount {
   font-weight: 700;

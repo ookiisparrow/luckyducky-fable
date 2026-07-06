@@ -176,8 +176,8 @@ onMounted(reload)
         <div class="cap">区间收支 · {{ recon && recon.range.from ? recon.range.from + ' ~ ' + recon.range.to : '近 30 天' }}</div>
         <div class="ld-kpi-grid">
           <KpiCard label="区间应收 GMV（已付）" :value="totals.income" :icon="CircleDollarSign" />
-          <KpiCard label="区间退款合计" :value="totals.refund" :icon="RotateCcw" />
-          <KpiCard label="区间净额（应收−退款）" :value="totals.net" :icon="Wallet" />
+          <KpiCard label="区间退款合计" :value="totals.refund" :icon="RotateCcw" tone="amber" />
+          <KpiCard label="区间净额（应收−退款）" :value="totals.net" :icon="Wallet" tone="green" />
           <KpiCard label="区间已付订单数" :value="totals.orders" :icon="CircleCheck" />
           <KpiCard label="区间退款笔数" :value="totals.refunds" :icon="RotateCcw" />
         </div>

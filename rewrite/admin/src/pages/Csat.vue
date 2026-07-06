@@ -38,7 +38,7 @@ onMounted(load)
 
 <template>
   <div class="ld-page">
-    <PageHeader title="客户满意度" sub="均分 + 星级分布 + 带备注数（越界分云端已剔除，只统计有效评分）。">
+    <PageHeader title="客服满意度" sub="均分 + 星级分布 + 带备注数（越界分云端已剔除，只统计有效评分）。">
       <UiButton variant="ghost" size="sm" :disabled="busy" @click="load">
         <RotateCcw :size="14" :stroke-width="1.8" /><span>{{ busy ? '刷新中…' : '刷新' }}</span>
       </UiButton>

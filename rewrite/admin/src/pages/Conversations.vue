@@ -2,7 +2,7 @@
 // 客服会话（设计语言一致性·M3 UI 批13）：按客户检索时间轴 + 质检报表（样本口径诚实标注）。
 // 逻辑未动，仅套设计语言（页头/统计卡/检索卡/消息气泡时间轴/token）。
 import { ref, onMounted } from 'vue'
-import { Search, RotateCcw, Inbox } from 'lucide-vue-next'
+import { Search, RotateCcw } from 'lucide-vue-next'
 import { searchConversations, conversationsReport } from '../api/cs'
 import { mapMessages, mapReport, type MsgVM, type ReportVM } from '../lib/mapCs'
 import UiButton from '../components/ui/Button.vue'
@@ -87,6 +87,8 @@ onMounted(loadReport)
         <UiButton @click="search"><Search :size="14" :stroke-width="1.8" /><span>检索</span></UiButton>
       </div>
 
+      <!-- 检索状态/加载反馈：独立于时间轴显示（重检索时「检索中…」不被旧结果抑制） -->
+      <p v-if="message" class="ld-status conv-status">{{ message }}</p>
       <div v-if="msgs.length" class="timeline">
         <div v-for="m in msgs" :key="m.id" class="msg" :class="{ out: m.who === '客服' }">
           <div class="bubble">
@@ -105,8 +107,7 @@ onMounted(loadReport)
           <p v-else class="end-mark">— 已到最早 —</p>
         </div>
       </div>
-      <EmptyState v-else-if="message" :icon="Inbox" :text="message" />
-      <EmptyState v-else :icon="Search" text="输入 openid / 外部用户号 / 关键词后检索会话时间轴" />
+      <EmptyState v-else-if="!message" :icon="Search" text="输入 openid / 外部用户号 / 关键词后检索会话时间轴" />
     </Card>
   </div>
 </template>
@@ -135,6 +136,9 @@ onMounted(loadReport)
 }
 
 /* 消息时间轴气泡（本页独有·收 bg-grey 左对齐 · 发 brand 白字右对齐） */
+.conv-status {
+  margin-top: 12px;
+}
 .timeline {
   display: flex;
   flex-direction: column;

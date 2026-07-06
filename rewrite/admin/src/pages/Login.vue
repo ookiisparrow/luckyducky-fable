@@ -42,7 +42,7 @@ async function submit() {
         <div class="brand">
           <span class="brand-mark">🦆</span>
           <div class="brand-lockup">
-            <span class="brand-name">Lucky Ducky</span>
+            <h1 class="brand-name">Lucky Ducky</h1>
             <span class="brand-role">运营控制台</span>
           </div>
         </div>
@@ -95,8 +95,10 @@ async function submit() {
   gap: 2px;
 }
 .brand-name {
+  margin: 0;
   font-size: 19px;
   font-weight: 700;
+  line-height: 1.2;
   letter-spacing: 0.3px;
   color: var(--ld-purple-ink);
 }
