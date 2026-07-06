@@ -35,6 +35,10 @@
     <view class="lp-video lp-state" wx:elif="{{state === 'missing'}}">
       <view class="lp-state-title">课程不存在</view>
     </view>
+    <view class="lp-video lp-state" wx:elif="{{state === 'error'}}">
+      <view class="lp-state-title">这段视频暂时播放不了</view>
+      <view class="lp-state-hint">可能是网络或格式问题，换一段或稍后再试</view>
+    </view>
   </view>
 
   <!-- 深色控制面板 -->

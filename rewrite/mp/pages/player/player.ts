@@ -20,7 +20,7 @@ Page({
     src: '',
     canPrev: false,
     canNext: false,
-    state: 'loading' as 'loading' | 'playing' | 'empty' | 'denied' | 'missing',
+    state: 'loading' as 'loading' | 'playing' | 'empty' | 'denied' | 'missing' | 'error',
     listOpen: false,
   },
   courseId: '',
@@ -28,6 +28,9 @@ Page({
   srcSetAt: 0,
   firstFrameScene: 'enter' as 'enter' | 'seg' | 'retry',
   firstFrameReported: false,
+  playToken: 0, // 切段请求令牌（防乱序回包覆盖·守卫 rw-mp-player-stale-guarded）
+  errSeg: '', // 上次因视频加载失败重试过的段
+  errRetried: false, // 该段是否已重试过一次（防不可恢复媒体无限重取死循环）
 
   async onLoad(query: Record<string, string | undefined>) {
     this.courseId = String(query.courseId || '')
@@ -50,6 +53,11 @@ Page({
   },
 
   async playSegment(seg: FlatSegment, scene: 'enter' | 'seg' | 'retry') {
+    if (scene !== 'retry') {
+      this.errSeg = '' // 换段（非重试）重置视频加载失败重试计数
+      this.errRetried = false
+    }
+    const token = ++this.playToken // 本次切段令牌·await 后复核，防慢回旧段覆盖新段
     this.firstFrameScene = scene
     this.firstFrameReported = false
     this.setData({ state: 'loading', current: seg, listOpen: false })
@@ -57,9 +65,11 @@ Page({
     try {
       url = await cache.get(this.courseId, seg.segmentId)
     } catch {
+      if (token !== this.playToken) return // 已被更晚的切段接管·本次作废
       this.setData({ state: 'denied' }) // 未进课：导流激活
       return
     }
+    if (token !== this.playToken) return // 乱序回包：更晚的 playSegment 已接管·丢弃本次结果（不覆盖新段）
     if (!url) {
       this.setData({ state: 'empty', src: '', canPrev: !!navSegment(this.course, seg.segmentId, -1), canNext: !!navSegment(this.course, seg.segmentId, 1) })
       return
@@ -95,7 +105,15 @@ Page({
   onVideoError() {
     const cur = this.data.current
     if (!cur) return
-    cache.invalidate(this.courseId, cur.segmentId) // 地址可能过期：失效后重取
+    // 地址可能过期（可恢复）→ 失效后重取一次；但同段重试后仍失败＝媒体本身坏/机型不支持（不可恢复），
+    // 不再无限重取（否则每轮一次 getPlaybackUrl 死循环），落播放失败态让用户换段/稍后再试。
+    if (this.errSeg === cur.segmentId && this.errRetried) {
+      this.setData({ state: 'error' })
+      return
+    }
+    this.errSeg = cur.segmentId
+    this.errRetried = true
+    cache.invalidate(this.courseId, cur.segmentId)
     void this.playSegment(cur, 'retry')
   },
 

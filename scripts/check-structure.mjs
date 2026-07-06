@@ -4446,6 +4446,28 @@ export const repoChecks = [
     },
   },
   {
+    // 重写线播放页切段取址防乱序覆盖（根因#8·把老线 player-playurl-stale-guarded 的不变量迁到活跃 rewrite 线）：
+    // playSegment 可重入（快速连点下一段/点目录），await 取址后若不复核请求令牌就写 src，慢回的旧段地址会覆盖新段
+    // ——视频播旧段但目录高亮/上下段按新段算，且下次 onEnded 跳错段、不自愈。守此不变量：playSegment await 后必复核 playToken。
+    id: 'rw-mp-player-stale-guarded',
+    roots: ['#8'],
+    desc: '重写线播放页切段取址防乱序覆盖（根因#8·同老线 player-playurl-stale-guarded 迁到 rewrite）：pages/player/player.ts 的 playSegment 在 await 取址后须复核请求令牌 playToken 未变才 setData——防快速切段慢回的旧段地址覆盖新段播错段且不自愈',
+    run() {
+      const rel = 'rewrite/mp/pages/player/player.ts'
+      const abs = join(ROOT, rel)
+      if (!existsSync(abs)) return [] // 重写线未建时不红
+      const src = readFileSync(abs, 'utf8')
+      const m = src.match(/async playSegment\b[\s\S]*?\n {2}\},/)
+      if (!m) return [`${rel} 找不到 playSegment 方法——切段取址单点丢失（根因#8）`]
+      const body = m[0]
+      const awaitAt = body.indexOf('await')
+      const recheckAt = body.indexOf('!== this.playToken')
+      if (awaitAt < 0 || recheckAt < 0 || recheckAt < awaitAt)
+        return [`${rel} playSegment await 取址后未复核 playToken 再 setData——快速切段乱序回包播错段且不自愈（根因#8·同老线 player-playurl-stale-guarded）`]
+      return []
+    },
+  },
+  {
     // 延时自动返回坞的生命周期清理（病根#5 样板复制即漂移·根因#8 真机才炸）：多页把「提交成功 toast + setTimeout(navigateBack)」
     // 这段坞复制来复制去，漏了清理——用户在延时窗口内手动返回（原生返回箭头/手势），页已出栈但 mp 的 setTimeout 绑 JS VM 不随
     // navigateBack 取消，孤儿定时器到点再 navigateBack 多弹一层。守此不变量：凡 .ts 既有 setTimeout 又有 navigateBack（＝延时返回坞），
