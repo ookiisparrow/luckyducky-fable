@@ -7,6 +7,7 @@ import { getBomSetup, saveBomTemplate, saveBomProfile, previewAssembly, runAssem
 import { listDrafts } from '../api/products'
 import { materialHuman, scmErrorText, unprofiledProducts, productNameOf } from '../lib/mapScm'
 import { dateTime } from '../lib/format'
+import { useLoadStatus } from '../lib/status'
 import ScmFlowTabs from '../components/ScmFlowTabs.vue'
 import UiButton from '../components/ui/Button.vue'
 import PageHeader from '../components/ui/PageHeader.vue'
@@ -27,12 +28,8 @@ const runSkus = computed(() => {
   return Array.isArray(p?.skus) ? (p!.skus as Record<string, any>[]).map((s) => String(s.name || '')).filter(Boolean) : []
 })
 const shortCount = computed(() => preview.value.filter((l) => (l as any).short > 0 || (l as any).missing).length) // 执行前缺料预警
-const message = ref('')
-const msgOk = ref(false) // 换皮 .status 恒红→成功信息显红 bug·区分成功(绿)/失败(红)
-function note(ok: boolean, okText: string, errText: string) {
-  message.value = ok ? okText : errText
-  msgOk.value = ok
-}
+// 动作反馈(note)/加载态(load) 收口（病根#14）：reload 成功不再抹掉动作刚设的成功/失败原文。
+const { message, ok: msgOk, note, load } = useLoadStatus()
 
 const prof = ref({ productId: '', L: '', M: '', S: '', packagingMaterialId: '', cardMaterialId: '' })
 const run = ref({ productId: '', spec: '', sets: 1 })
@@ -78,7 +75,7 @@ async function reload() {
   mats.value = m.ok ? (m.list as Record<string, any>[]) : []
   assemblies.value = a.ok ? (a.list as Record<string, any>[]) : []
   products.value = d.ok ? ((d as any).list as Record<string, any>[]) : []
-  note(b.ok, '', '加载失败：' + String(b.error || ''))
+  load(b.ok, '加载失败：' + String(b.error || '')) // 只在加载失败时写·成功静默不抹动作反馈
 }
 
 async function doSaveTemplate() {

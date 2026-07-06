@@ -3,7 +3,6 @@
 // 客户端错误）统一账本·指纹去重（count 累加）·可筛未处理/已处理·标记已处理。数据走 adminApi listAnomalies/
 // resolveAnomaly 真值。
 import { ref, computed, onMounted } from 'vue'
-import { useRouter } from 'vue-router'
 import { RefreshCw, Check, ClipboardList, AlertCircle, AlertTriangle, Activity, ShieldCheck } from 'lucide-vue-next'
 import { listAnomalies, resolveAnomaly } from '../api/ops'
 import PageHeader from '../components/ui/PageHeader.vue'
@@ -12,7 +11,7 @@ import Badge from '../components/ui/Badge.vue'
 import EmptyState from '../components/ui/EmptyState.vue'
 import UiButton from '../components/ui/Button.vue'
 
-const router = useRouter()
+// 会话失效导登录由 client.onSessionLost 集中处理（单源·根因#5）——本页不再自持 router
 const list = ref<any[]>([])
 const message = ref('加载中…')
 const busy = ref(false)
@@ -58,7 +57,7 @@ async function load() {
   else if (filter.value === 'resolved') opts.resolved = true
   const r: any = await listAnomalies(opts)
   busy.value = false
-  if (r.error === 'SESSION_LOST') return void router.push('/login')
+  if (r.error === 'SESSION_LOST') return // 会话失效集中导登录（client.onSessionLost·单源·根因#5）
   list.value = r.list || []
   message.value = r.ok ? '' : '加载失败：' + String(r.error || '')
 }
@@ -71,7 +70,7 @@ async function markResolved(a: any) {
   }
   confirmId.value = ''
   const r: any = await resolveAnomaly(a._id)
-  if (r.error === 'SESSION_LOST') return void router.push('/login')
+  if (r.error === 'SESSION_LOST') return // 会话失效集中导登录（client.onSessionLost·单源·根因#5）
   if (r.ok) await load()
 }
 

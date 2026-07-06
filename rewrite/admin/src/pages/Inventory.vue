@@ -7,6 +7,7 @@ import { Search, Boxes, CircleCheck, TriangleAlert, XCircle, Infinity as Infinit
 import { listInventory, saveStock } from '../api/system'
 import { listDrafts } from '../api/products'
 import { mapStock, stockErrorText, type StockRow } from '../lib/mapSystem'
+import { useLoadStatus } from '../lib/status'
 import UiButton from '../components/ui/Button.vue'
 import PageHeader from '../components/ui/PageHeader.vue'
 import KpiCard from '../components/ui/KpiCard.vue'
@@ -23,7 +24,8 @@ interface Row extends StockRow {
 
 const rows = ref<Row[]>([])
 const truncNote = ref('')
-const message = ref('')
+// 动作反馈/加载态收口（病根#14）：reload 成功不再抹掉 doSave 刚设的 409 冲突原文等动作反馈。
+const { message, load } = useLoadStatus()
 const busy = ref(false)
 const editKey = ref('')
 const editVal = ref('')
@@ -87,7 +89,7 @@ async function reload() {
     status: statusOf(r.stock, r.threshold),
   }))
   truncNote.value = m.truncNote
-  message.value = (inv as any).ok ? '' : '加载失败：' + String((inv as any).error || '')
+  load((inv as any).ok, '加载失败：' + String((inv as any).error || '')) // 只在加载失败时写·成功不抹动作反馈（409 冲突原文留住）
 }
 
 function startEdit(row: Row) {

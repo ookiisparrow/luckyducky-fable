@@ -29,6 +29,40 @@ export interface DashboardVM {
   approxSeg: boolean // 热点/卡点为抽样近似（诚实标注·透传 approx.hot）
 }
 
+// 待处理行动条计数（治病根#14 admin 侧·守卫 rw-admin-money-ui-golden）：四路副请求各自可能失败，
+// 换皮把失败的路 `.catch(()=>({}))` 兜成 0 → 四路全失败时「待处理」塌成绿色「今日无待处理事项 ✓」，
+// 把「加载失败/未知」伪装成「真没待办」→ 运营据此漏发货。此处以 `.ok` 显式判失败并回传 partial，
+// 让上层区分「真为 0」与「没加载到」：partial=true 时不显绿色全清、提示刷新。drafts.rows 由调用方先
+// mapDraftRows（避免本层反向依赖 mapProducts）。
+export interface TodoInputs {
+  orderCounts: { ok?: boolean; counts?: Record<string, unknown> }
+  refundCounts: { ok?: boolean; counts?: Record<string, unknown> }
+  inventory: { ok?: boolean; list?: unknown }
+  drafts: { ok?: boolean; rows?: Array<{ state?: string }> }
+  low: number
+}
+export interface TodoCounts {
+  ship: number
+  refund: number
+  lowStock: number
+  prep: number
+  partial: boolean // 任一路加载失败＝true（数字不可信·上层别显「无待办」全清）
+}
+export function deriveDashboardTodos(i: TodoInputs): TodoCounts {
+  const partial = !(i.orderCounts?.ok && i.refundCounts?.ok && i.inventory?.ok && i.drafts?.ok)
+  const ocC = (i.orderCounts?.counts || {}) as Record<string, unknown>
+  const rcC = (i.refundCounts?.counts || {}) as Record<string, unknown>
+  const invList = Array.isArray(i.inventory?.list) ? (i.inventory.list as Array<{ stock?: unknown }>) : []
+  const rows = Array.isArray(i.drafts?.rows) ? i.drafts.rows : []
+  return {
+    ship: Number(ocC.paid) || 0,
+    refund: Number(rcC.applied) || 0,
+    lowStock: invList.filter((r) => typeof r?.stock === 'number' && (r.stock as number) <= i.low).length,
+    prep: rows.filter((d) => d.state === 'preparing').length,
+    partial,
+  }
+}
+
 export function mapDashboard(r: unknown): DashboardVM | null {
   const d = (r && typeof r === 'object' ? r : {}) as Record<string, any>
   if (d.ok !== true || !d.stats) return null

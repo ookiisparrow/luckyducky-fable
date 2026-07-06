@@ -9,7 +9,7 @@ import { Users, ShoppingBag, Wallet, QrCode, GraduationCap, RefreshCw, TriangleA
 import { getDashboard, orderCounts, refundCounts } from '../api/money'
 import { listInventory } from '../api/system'
 import { listDrafts } from '../api/products'
-import { mapDashboard } from '../lib/mapMoney'
+import { mapDashboard, deriveDashboardTodos } from '../lib/mapMoney'
 import { mapDraftRows } from '../lib/mapProducts'
 import PageHeader from '../components/ui/PageHeader.vue'
 import Card from '../components/ui/Card.vue'
@@ -21,6 +21,7 @@ const LOW = 10 // 低库存阈值（与 Inventory 同口径·前端预警线）
 const router = useRouter()
 const vm = ref<ReturnType<typeof mapDashboard>>(null)
 const todo = ref({ ship: 0, refund: 0, lowStock: 0, prep: 0 })
+const todoPartial = ref(false) // 待处理计数有副请求加载失败＝true（病根#14：别把「没加载到」显示成「无待办」）
 const message = ref('加载中…')
 const busy = ref(false)
 
@@ -60,28 +61,25 @@ async function load() {
   // 行动条计数复用服务端精确口径（orderCounts/refundCounts·根因#7）+ 库存按 SKU 实算；任一失败不拖累看板
   const [d, oc, rc, inv, dr] = await Promise.all([
     getDashboard(),
-    orderCounts().catch(() => ({}) as any),
-    refundCounts().catch(() => ({}) as any),
-    listInventory().catch(() => ({}) as any),
-    listDrafts().catch(() => ({}) as any),
+    orderCounts().catch(() => ({ ok: false }) as any),
+    refundCounts().catch(() => ({ ok: false }) as any),
+    listInventory().catch(() => ({ ok: false }) as any),
+    listDrafts().catch(() => ({ ok: false }) as any),
   ])
   busy.value = false
-  if ((d as any).error === 'SESSION_LOST') {
-    void router.push('/login')
-    return
-  }
+  if ((d as any).error === 'SESSION_LOST') return // 会话失效集中导登录（client.onSessionLost·单源·根因#5）
   vm.value = mapDashboard(d)
-  const ocC = (oc as any)?.counts || {}
-  const rcC = (rc as any)?.counts || {}
-  const invList = Array.isArray((inv as any)?.list) ? (inv as any).list : []
-  // 上新未完成＝筹备中（未上架）商品数（复用 productState 三态口径）
-  const drafts = (dr as any)?.ok ? mapDraftRows((dr as any).list, (dr as any).urls, (dr as any).listed) : []
-  todo.value = {
-    ship: Number(ocC.paid) || 0,
-    refund: Number(rcC.applied) || 0,
-    lowStock: invList.filter((r: any) => typeof r?.stock === 'number' && r.stock <= LOW).length,
-    prep: drafts.filter((d2) => d2.state === 'preparing').length,
-  }
+  // 上新未完成＝筹备中（未上架）商品数（复用 productState 三态口径）；失败副请求由 deriveDashboardTodos
+  // 以 .ok 识别、回传 partial——不再兜成 0 把「没加载到」伪装成「无待办」（病根#14）
+  const t = deriveDashboardTodos({
+    orderCounts: oc as any,
+    refundCounts: rc as any,
+    inventory: inv as any,
+    drafts: { ok: (dr as any)?.ok, rows: (dr as any)?.ok ? mapDraftRows((dr as any).list, (dr as any).urls, (dr as any).listed) : [] },
+    low: LOW,
+  })
+  todo.value = { ship: t.ship, refund: t.refund, lowStock: t.lowStock, prep: t.prep }
+  todoPartial.value = t.partial
   message.value = vm.value ? '' : '看板加载失败：' + String((d as any).error || '')
 }
 
@@ -109,7 +107,9 @@ onMounted(load)
           </button>
         </div>
       </Card>
-      <p v-else class="ok-line">今日无待处理事项 ✓</p>
+      <p v-else-if="!todoPartial" class="ok-line">今日无待处理事项 ✓</p>
+      <!-- 副请求加载失败：不显绿色全清（病根#14 别把「没加载到」当「无待办」→ 漏发货）·提示刷新 -->
+      <p v-if="todoPartial" class="ld-status">部分待处理计数没能加载，显示的数字可能不全，请刷新看真实待办</p>
 
       <!-- 交易异常告警（有则必显） -->
       <div v-if="vm.alerts.length" class="alert">

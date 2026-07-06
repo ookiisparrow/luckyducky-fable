@@ -83,3 +83,9 @@ router.beforeEach((to) => {
   if (to.path === '/login' && client.hasSession()) return '/'
   return true
 })
+
+// 会话失效集中导登录（单源·根因#5）：任一业务调用遇 401 → client 清令牌后回调此处导登录，
+// 各页只需早退不再各写各的跳转（治「卡死加载中/裸显 SESSION_LOST」的页间漂移）。
+client.onSessionLost(() => {
+  if (router.currentRoute.value.path !== '/login') void router.push('/login')
+})

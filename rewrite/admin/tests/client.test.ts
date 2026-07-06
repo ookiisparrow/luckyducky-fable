@@ -79,3 +79,34 @@ describe('登录与令牌（fail-closed）', () => {
     expect((await c4.login('x')).error).toBe('NO_ENDPOINT')
   })
 })
+
+describe('会话失效集中导登录（单源·病根#5 各页漂移收口 / #14 失败可见）', () => {
+  it('大白话：业务调用遇 401 清令牌后触发一次会话失效回调——壳层据此统一导登录，各页不再各写各的', async () => {
+    let fired = 0
+    const c = createClient({
+      endpoint: 'https://api.test',
+      storage,
+      fetchImpl: (() => respond(401, { ok: false, error: 'SESSION_EXPIRED' })) as unknown as typeof fetch,
+    })
+    c.onSessionLost(() => {
+      fired++
+    })
+    storage.set('ldrw_admin_token', 'tok')
+    const r = await c.post('listOrders')
+    expect(r.error).toBe('SESSION_LOST')
+    expect(c.hasSession()).toBe(false) // 令牌已清（fail-closed 核心）
+    expect(fired).toBe(1) // 集中回调恰触发一次——导登录不再靠每页自觉（治页间漂移·卡死/显合成码）
+  })
+
+  it('大白话：未注册回调时 401 也不炸（回调可选·清令牌与 SESSION_LOST 语义不受影响）', async () => {
+    const c = createClient({
+      endpoint: 'https://api.test',
+      storage,
+      fetchImpl: (() => respond(401, {})) as unknown as typeof fetch,
+    })
+    storage.set('ldrw_admin_token', 'tok')
+    const r = await c.post('listOrders')
+    expect(r.error).toBe('SESSION_LOST')
+    expect(c.hasSession()).toBe(false)
+  })
+})

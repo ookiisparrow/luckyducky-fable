@@ -5,6 +5,7 @@ import { ref, computed, onMounted, watch } from 'vue'
 import { listMaterials, saveMaterial, listSuppliers, saveSupplier, adjustStock, listLedger } from '../api/scm'
 import { materialHuman, materialCategoryLabel, uomLabel, scmErrorText, mapLedger, type LedgerRow } from '../lib/mapScm'
 import { dateTime } from '../lib/format'
+import { useLoadStatus } from '../lib/status'
 import ScmFlowTabs from '../components/ScmFlowTabs.vue'
 import UiButton from '../components/ui/Button.vue'
 import PageHeader from '../components/ui/PageHeader.vue'
@@ -18,12 +19,8 @@ const mats = ref<Array<Record<string, any>>>([])
 const sups = ref<Array<Record<string, any>>>([])
 const ledger = ref<LedgerRow[]>([])
 const ledgerMat = ref('') // 当前流水按哪个料号过滤（空=全部·换皮丢了行内按料查流水）
-const message = ref('')
-const msgOk = ref(false) // 换皮 .status 恒红→成功信息显红 bug·区分成功(绿)/失败(红)
-function note(ok: boolean, okText: string, errText: string) {
-  message.value = ok ? okText : errText
-  msgOk.value = ok
-}
+// 动作反馈(note)/加载态(load) 收口（病根#14）：reload 成功不再抹掉动作刚设的成功/失败原文。
+const { message, ok: msgOk, note, load } = useLoadStatus()
 
 // 行内按料号查流水（换皮只有全局最近流水·listLedger 支持 materialId 过滤）
 async function loadLedger(materialId?: string) {
@@ -66,7 +63,7 @@ async function reload() {
   mats.value = m.ok ? (m.list as Record<string, any>[]) : []
   sups.value = s.ok ? (s.list as Record<string, any>[]) : []
   await loadLedger(ledgerMat.value || undefined) // 保持当前料号筛选
-  note(m.ok, '', '加载失败：' + String(m.error || ''))
+  load(m.ok, '加载失败：' + String(m.error || '')) // 只在加载失败时写·成功静默不抹动作反馈
 }
 
 async function doSaveMaterial() {

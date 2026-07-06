@@ -7,6 +7,7 @@ import { listOutworks, saveOutwork, issueOutwork, receiveOutwork, settleOutwork,
 import { materialHuman, outworkStatusLabel, yuanToFen, fenLabel, scmErrorText } from '../lib/mapScm'
 import { dateTime } from '../lib/format'
 import { consumeOutworkHandoff } from '../lib/scmHandoff'
+import { useLoadStatus } from '../lib/status'
 import ScmFlowTabs from '../components/ScmFlowTabs.vue'
 import UiButton from '../components/ui/Button.vue'
 import PageHeader from '../components/ui/PageHeader.vue'
@@ -18,12 +19,8 @@ const orders = ref<Array<Record<string, any>>>([])
 const rawL = ref<Array<Record<string, any>>>([]) // 大团原团（可发）
 const knottedL = ref<Array<Record<string, any>>>([]) // 大团带结（可收）
 const workers = ref<Array<Record<string, any>>>([])
-const message = ref('')
-const msgOk = ref(false) // 换皮 .status 恒红→成功信息显红 bug·区分成功(绿)/失败(红)
-function note(ok: boolean, okText: string, errText: string) {
-  message.value = ok ? okText : errText
-  msgOk.value = ok
-}
+// 动作反馈(note)/加载态(load) 收口（病根#14）：reload 成功不再抹掉动作刚设的成功/失败原文。
+const { message, ok: msgOk, note, load } = useLoadStatus()
 const form = ref<{ outworkId?: string; workerId: string; rateYuan: string; lines: Array<{ materialId: string; qty: number }> } | null>(null)
 const recvFor = ref('')
 const recvOrder = ref<Record<string, any> | null>(null) // 当前收货单（取发料行/计件价·算预览与收≤发防呆）
@@ -57,7 +54,7 @@ async function reload() {
   rawL.value = all.filter((x) => /^yarn:[a-z0-9-]+:L:raw$/.test(String(x._id)))
   knottedL.value = all.filter((x) => /^yarn:[a-z0-9-]+:L:knotted$/.test(String(x._id)))
   workers.value = s.ok ? ((s.list as Record<string, any>[]) || []).filter((x) => x.type === 'outworker') : []
-  note(o.ok, '', '加载失败：' + String(o.error || ''))
+  load(o.ok, '加载失败：' + String(o.error || '')) // 只在加载失败时写·成功静默不抹动作反馈
 }
 
 function newOrder() {
@@ -123,7 +120,7 @@ async function step(fn: (_id: string) => Promise<Record<string, unknown>>, id: s
   }
   confirmKey.value = ''
   const r = (await fn(id)) as Record<string, any>
-  message.value = r.ok ? '' : scmErrorText(r.error)
+  note(r.ok, '', scmErrorText(r.error)) // 失败走 note 设 msgOk=false（红）·换皮只写 message 致失败显成功绿
   void reload()
 }
 

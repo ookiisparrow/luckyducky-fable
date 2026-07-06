@@ -28,7 +28,8 @@ async function loadReport() {
   reportBusy.value = true
   const r = await conversationsReport(slaMin.value > 0 ? slaMin.value * 60000 : undefined)
   reportBusy.value = false
-  report.value = mapReport(r)
+  report.value = mapReport(r) // 出错/空档都为 null（卡隐）——出错时另透传原文，别让「加载失败」被读成「暂无数据」
+  if (!r.ok) message.value = '质检报表加载失败：' + String((r as any).error || '') // 报错带原文（病根#14·对齐 search）
 }
 
 async function search() {
@@ -44,7 +45,10 @@ async function search() {
 async function more() {
   if (!hasMore.value || cursor.value == null) return
   const r = await searchConversations({ openid: openid.value.trim() || undefined, externalUserId: externalUserId.value.trim() || undefined, keyword: keyword.value.trim() || undefined, cursor: cursor.value })
-  if (!r.ok) return
+  if (!r.ok) {
+    message.value = '加载更多失败：' + String(r.error || '') // 别静默吞·反复点无反应（病根#14）
+    return
+  }
   msgs.value = [...msgs.value, ...mapMessages(r.messages)]
   cursor.value = r.nextCursor
   hasMore.value = !!r.hasMore

@@ -30,6 +30,9 @@ const defaultStorage = {
 export function createClient(deps: ClientDeps) {
   const storage = deps.storage || defaultStorage
   const doFetch = deps.fetchImpl || fetch
+  // 会话失效集中回调（单源·根因#5 收口）：post 遇 401 清令牌后触发一次，壳层注册为「导登录」，
+  // 各页不再各写各的 SESSION_LOST 跳转（曾漂成 3 种：卡死「加载中…」/裸显合成码/导登录）。
+  let sessionLostHandler: (() => void) | null = null
 
   async function raw(action: string, key: string, data: Record<string, unknown>): Promise<ClientResult> {
     if (!deps.endpoint) return { ok: false, status: 0, error: 'NO_ENDPOINT' } // 未配后端·fail-closed 不假装
@@ -56,6 +59,10 @@ export function createClient(deps: ClientDeps) {
     token: () => storage.get(TOKEN_KEY) || '',
     hasSession: () => !!storage.get(TOKEN_KEY),
     who: () => storage.get(WHO_KEY) || '', // 当前登录操作者名（Shell 底部身份条）
+    /** 注册会话失效回调（壳层调一次·如 () => router.push('/login')）——会话失效导登录的单一出口。 */
+    onSessionLost: (fn: () => void) => {
+      sessionLostHandler = fn
+    },
     logout: () => {
       storage.remove(TOKEN_KEY)
       storage.remove(WHO_KEY)
@@ -77,10 +84,14 @@ export function createClient(deps: ClientDeps) {
     /** 业务调用：带会话令牌；401 = 会话失效 → 清令牌·统一 SESSION_LOST（壳层导登录）。 */
     async post(action: string, data: Record<string, unknown> = {}): Promise<ClientResult> {
       const token = storage.get(TOKEN_KEY) || ''
-      if (!token) return { ok: false, status: 401, error: 'SESSION_LOST' }
+      if (!token) {
+        if (sessionLostHandler) sessionLostHandler() // 无令牌调业务＝会话已丢·集中导登录
+        return { ok: false, status: 401, error: 'SESSION_LOST' }
+      }
       const r = await raw(action, token, data)
       if (r.status === 401) {
         storage.remove(TOKEN_KEY)
+        if (sessionLostHandler) sessionLostHandler() // 401＝会话失效·清令牌后集中导登录（单源·各页不再各跳）
         return { ...r, ok: false, error: 'SESSION_LOST' }
       }
       return r

@@ -1,7 +1,33 @@
 // 订单与钱组映射（守卫 rw-admin-money-ui-golden）：看板近似诚实标注/警报有则必显无则不吓人/
 // 订单行金额不符禁发入口收窄/售后行只待审核可裁决/脏档安全（与 mp 同口径）。
 import { describe, it, expect } from 'vitest'
-import { mapDashboard, mapOrderRows, mapRefundRows, maskPhone, refundVerdict } from '../src/lib/mapMoney'
+import { mapDashboard, mapOrderRows, mapRefundRows, maskPhone, refundVerdict, deriveDashboardTodos } from '../src/lib/mapMoney'
+
+describe('deriveDashboardTodos（待处理计数：加载失败别伪装成 0/全清·病根#14）', () => {
+  it('大白话：某路计数加载失败时 partial=true——上层据此不把「加载失败」显示成绿色「今日无待处理」', () => {
+    const t = deriveDashboardTodos({
+      orderCounts: { ok: false }, // 待发货计数加载失败
+      refundCounts: { ok: true, counts: { applied: 0 } },
+      inventory: { ok: true, list: [] },
+      drafts: { ok: true, rows: [] },
+      low: 10,
+    })
+    expect(t.partial).toBe(true) // 有失败——不可信·上层不显「无待办 ✓」
+    expect(t.ship).toBe(0) // 失败路暂显 0，但 partial 已标记：0 是「不知道」不是「真没有」
+  })
+
+  it('大白话：四路全 ok 且真没待办时 partial=false、各计数为云端真值', () => {
+    const t = deriveDashboardTodos({
+      orderCounts: { ok: true, counts: { paid: 3 } },
+      refundCounts: { ok: true, counts: { applied: 1 } },
+      inventory: { ok: true, list: [{ stock: 2 }, { stock: 50 }] },
+      drafts: { ok: true, rows: [{ state: 'preparing' }, { state: 'listed' }] },
+      low: 10,
+    })
+    expect(t.partial).toBe(false)
+    expect(t).toMatchObject({ ship: 3, refund: 1, lowStock: 1, prep: 1 }) // 库存 2≤10 计低库存·preparing 计上新未完成
+  })
+})
 
 describe('看板映射', () => {
   it('大白话：成交额标「精确/近似」如实；异常有则必显（含单号）、无则一条不渲染；坏响应回 null 不渲染假看板', () => {

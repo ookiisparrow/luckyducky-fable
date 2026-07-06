@@ -36,7 +36,7 @@ function fmt(ms: number) {
 
 async function load() {
   const r: any = await getInspectStatus()
-  if (r.error === 'SESSION_LOST') return void router.push('/login')
+  if (r.error === 'SESSION_LOST') return // 会话失效集中导登录（client.onSessionLost·单源·根因#5）
   latest.value = r.latest
   openAnomalies.value = Number(r.openAnomalies || 0)
   message.value = r.ok ? '' : '加载失败：' + String(r.error || '')
@@ -46,7 +46,7 @@ async function runNow() {
   running.value = true
   const r: any = await runInspect()
   running.value = false
-  if (r.error === 'SESSION_LOST') return void router.push('/login')
+  if (r.error === 'SESSION_LOST') return // 会话失效集中导登录（client.onSessionLost·单源·根因#5）
   if (r.ok) latest.value = r.run
   await load()
 }

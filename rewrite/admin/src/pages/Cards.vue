@@ -72,7 +72,7 @@ onMounted(async () => {
     product.value = ((dr as any).list as Record<string, any>[]).find((p) => String(p.id || p._id) === productId) || null
     if (product.value?.cover) coverUrl.value = urls[String(product.value.cover)] || ''
   }
-  if ((r as any).error === 'SESSION_LOST') return void router.push('/login')
+  if ((r as any).error === 'SESSION_LOST') return // 会话失效集中导登录（client.onSessionLost·单源·根因#5）
   if ((r as any).ok) {
     card.value = ((r as any).card as CardModel) || freshCard()
     artUrl.value = String((r as any).artUrl || '')

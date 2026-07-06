@@ -7,6 +7,7 @@ import { listPurchases, savePurchase, markOrdered, receivePurchase, cancelPurcha
 import { materialHuman, purchaseStatusLabel, yuanToFen, fenLabel, scmErrorText } from '../lib/mapScm'
 import { dateTime } from '../lib/format'
 import { consumePurchaseHandoff } from '../lib/scmHandoff'
+import { useLoadStatus } from '../lib/status'
 import ScmFlowTabs from '../components/ScmFlowTabs.vue'
 import UiButton from '../components/ui/Button.vue'
 import PageHeader from '../components/ui/PageHeader.vue'
@@ -17,12 +18,8 @@ import EmptyState from '../components/ui/EmptyState.vue'
 const orders = ref<Array<Record<string, any>>>([])
 const mats = ref<Array<Record<string, any>>>([])
 const sups = ref<Array<Record<string, any>>>([])
-const message = ref('')
-const msgOk = ref(false) // 换皮 .status 恒红→成功信息显红 bug·区分成功(绿)/失败(红)
-function note(ok: boolean, okText: string, errText: string) {
-  message.value = ok ? okText : errText
-  msgOk.value = ok
-}
+// 动作反馈(note)/加载态(load) 收口（病根#14）：reload 成功不再抹掉动作刚设的成功/失败原文。
+const { message, ok: msgOk, note, load } = useLoadStatus()
 const form = ref<{ purchaseId?: string; supplierId: string; lines: Array<{ materialId: string; qty: number; priceYuan: string }> } | null>(null)
 const confirmKey = ref('')
 const expanded = ref('') // 采购行项展开（换皮丢·非草稿单看不到买了啥·只显行数）
@@ -61,7 +58,7 @@ async function reload() {
   orders.value = p.ok ? (p.list as Record<string, any>[]) : []
   mats.value = m.ok ? (m.list as Record<string, any>[]) : []
   sups.value = s.ok ? ((s.list as Record<string, any>[]) || []).filter((x) => x.type === 'factory') : []
-  note(p.ok, '', '加载失败：' + String(p.error || ''))
+  load(p.ok, '加载失败：' + String(p.error || '')) // 只在加载失败时写·成功静默不抹动作反馈
 }
 
 function newOrder() {
@@ -105,7 +102,7 @@ async function step(fn: (_id: string) => Promise<Record<string, unknown>>, id: s
     confirmKey.value = ''
   }
   const r = (await fn(id)) as Record<string, any>
-  message.value = r.ok ? '' : scmErrorText(r.error)
+  note(r.ok, '', scmErrorText(r.error)) // 失败走 note 设 msgOk=false（红）·换皮只写 message 致失败显成功绿
   void reload()
 }
 
