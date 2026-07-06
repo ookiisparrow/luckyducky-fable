@@ -1,6 +1,6 @@
-/* 购物车「购物袋」设计校准。设计稿 402px 画板 → rpx（×1.87 保比例）。
-   token 见 styles/tokens.wxss；标题头 + 单列卡片行 + 圆角步进器 + 信任小字 + 悬浮结算 bar。
-   业务逻辑（勾选/加减/删除/全选/合计/结算/空态）由 wxml handler + lib/cart 承接，本文件只管视觉。 */
+/* 购物车·设计「待选区」语言。设计稿 402px 画板 → rpx（×1.87）。
+   token 见 styles/tokens.wxss；标题头 + 虚线暂存区(已加购行) + 下方推荐(圆加号) + 信任小字 + 悬浮结算 bar。
+   业务逻辑（勾选/加减/删除/全选/合计/结算·lib/cart）由 wxml handler 承接，本文件只管视觉。 */
 .ld-cart {
   min-height: 100vh;
   background: var(--ld-bg-lilac);
@@ -24,11 +24,31 @@
   color: var(--ld-content-2);
 }
 
-/* 单列卡片行 */
-.ld-cart-list {
-  margin-top: 20rpx;
-  padding: 0 36rpx;
+/* 待选区（虚线暂存区） */
+.ld-cart-hold {
+  margin: 30rpx 36rpx 8rpx;
 }
+.ld-cart-hold-empty {
+  height: 400rpx;
+  border-top: 4rpx dashed var(--ld-purple);
+  border-bottom: 4rpx dashed var(--ld-purple);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.ld-cart-hold-hint {
+  font-size: 24rpx;
+  color: var(--ld-content-2);
+  letter-spacing: 2rpx;
+}
+.ld-cart-hold-list {
+  border-top: 4rpx dashed var(--ld-purple);
+  border-bottom: 4rpx dashed var(--ld-purple);
+  padding: 4rpx 0;
+  margin-bottom: 40rpx;
+}
+
+/* 行（待选区 + 推荐共用） */
 .ld-cart-row {
   display: flex;
   align-items: center;
@@ -39,11 +59,9 @@
 .ld-cart-row:last-child {
   border-bottom: none;
 }
-
-/* 勾选（真实购物袋多选·设计无此原语，沿用圆形勾选融入设计语言） */
 .ld-check {
-  width: 40rpx;
-  height: 40rpx;
+  width: 38rpx;
+  height: 38rpx;
   border-radius: 50%;
   border: 3rpx solid var(--ld-purple-line);
   flex: 0 0 auto;
@@ -52,18 +70,22 @@
   background: var(--ld-purple-tab);
   border-color: var(--ld-purple-tab);
 }
-
-/* 媒体 88px→164rpx 方图·圆角·灰底占位 */
 .ld-cart-row-img {
   width: 164rpx;
   height: 164rpx;
   flex: 0 0 auto;
   border-radius: var(--ld-radius-md);
-  background: var(--ld-bg-sage);
   overflow: hidden;
+  background: var(--ld-bg-sage);
 }
-
-/* 中段：名称 / 规格 / 价格竖排 */
+.ld-cart-hold-list .ld-cart-row-img {
+  width: 194rpx;
+  height: 194rpx;
+}
+.ld-cart-row-photo {
+  width: 100%;
+  height: 100%;
+}
 .ld-cart-row-mid {
   flex: 1 1 auto;
   min-width: 0;
@@ -79,6 +101,9 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+.ld-cart-hold-list .ld-cart-row-name {
+  font-size: 30rpx;
 }
 .ld-cart-row-tag {
   font-size: 22rpx;
@@ -102,7 +127,7 @@
   letter-spacing: 0.4rpx;
 }
 
-/* 右侧动作列：步进器 + 删除 */
+/* 动作列 */
 .ld-cart-row-act {
   flex: 0 0 auto;
   display: flex;
@@ -110,8 +135,6 @@
   align-items: flex-end;
   gap: 14rpx;
 }
-
-/* 圆角药丸步进器（设计 line-strong 描边·白底·−/qty/+） */
 .ld-stepper {
   display: flex;
   align-items: center;
@@ -145,21 +168,43 @@
   color: var(--ld-content-2);
   padding: 4rpx 8rpx;
 }
+.ld-cart-add {
+  width: 64rpx;
+  height: 64rpx;
+  border-radius: 50%;
+  background: var(--ld-purple);
+  color: #ffffff;
+  font-size: 40rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* 下方推荐 */
+.ld-cart-recs {
+  margin: 0 36rpx;
+}
+.ld-cart-recs-title {
+  margin-bottom: 4rpx;
+  font-size: 28rpx;
+  font-weight: 500;
+  color: var(--ld-ink);
+}
 
 /* 信任小字 */
 .ld-cart-trust {
-  margin: 24rpx 36rpx 0;
+  margin: 30rpx 36rpx 0;
   padding-top: 26rpx;
   border-top: 1rpx solid var(--ld-line-soft);
   font-size: 22rpx;
   color: var(--ld-content-2);
   text-align: center;
-  letter-spacing: 0.6rpx;
+  letter-spacing: 2rpx;
 }
 
-/* 悬浮结算 bar（TabBar 上方一点·白底大圆角） */
+/* 悬浮结算 bar */
 .ld-checkbar-space {
-  height: 320rpx;
+  height: 340rpx;
 }
 .ld-checkbar {
   position: fixed;
@@ -213,36 +258,4 @@
 }
 .ld-checkout-btn.dim {
   background: var(--ld-purple-line);
-}
-
-/* 空态 */
-.ld-cart-empty {
-  min-height: 100vh;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 14rpx;
-  background: var(--ld-bg-lilac);
-}
-.ld-empty-emoji {
-  font-size: 96rpx;
-  margin-bottom: 8rpx;
-}
-.ld-empty-title {
-  font-size: 34rpx;
-  font-weight: 600;
-  color: var(--ld-purple-ink);
-}
-.ld-empty-hint {
-  font-size: 24rpx;
-  color: var(--ld-content-2);
-}
-.ld-empty-btn {
-  margin-top: 28rpx;
-  padding: 20rpx 64rpx;
-  border-radius: var(--ld-radius-pill);
-  background: var(--ld-purple-ink);
-  color: #ffffff;
-  font-size: 28rpx;
 }

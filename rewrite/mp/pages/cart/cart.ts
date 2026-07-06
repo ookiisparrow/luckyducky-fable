@@ -1,6 +1,12 @@
-// 购物车页（M2 批4·批5 接结算）：行列表/数量步进/勾选合计/删行/空态。状态单源 lib/cart，页面 onShow 全量刷新。
+// 购物车页（M2 批4·批5 接结算·重设计对齐设计「待选区」）：
+//   待选区＝已加购行（勾选/加减/删除/合计），下方＝推荐商品圆加号加购（设计 options 语义·真数据）。
+//   核心逻辑（lib/cart 单源·结算走选中项）零改；本批只加「推荐加购/开详情」两个读侧 handler。
 import * as cart from '../../lib/cart'
 import { prepareFromCart } from '../../lib/checkout'
+import { getProducts } from '../../api/catalog'
+import { mapProducts, type ProductVM } from '../../lib/mapHome'
+
+let allRaw: Record<string, any>[] = [] // 全商品原档（算推荐+加购取价·onLoad 拉一次）
 
 Page({
   data: {
@@ -8,17 +14,26 @@ Page({
     allSelected: false,
     selectedCount: 0,
     totalLabel: '¥0.00',
+    recs: [] as ProductVM[], // 未在袋中的推荐（设计「下方选品」）
+  },
+  async onLoad() {
+    const r = await getProducts()
+    if (r.ok && Array.isArray(r.list)) allRaw = r.list as Record<string, any>[]
+    this.refresh()
   },
   onShow() {
     if (typeof this.getTabBar === 'function') (this.getTabBar() as unknown as LdTabBar).setActive('cart')
     this.refresh()
   },
   refresh() {
+    const items = cart.getItems()
+    const inCart = new Set(items.map((it) => it.id))
     this.setData({
-      items: cart.getItems(),
+      items,
       allSelected: cart.allSelected(),
       selectedCount: cart.selectedCount(),
       totalLabel: cart.selectedTotalLabel(),
+      recs: mapProducts(allRaw.filter((p) => !inCart.has(String(p.id || p._id || '')))).slice(0, 6), // 排除已在袋中
     })
     if (typeof this.getTabBar === 'function') (this.getTabBar() as unknown as LdTabBar).setActive('cart') // 角标随动
   },
@@ -38,13 +53,25 @@ Page({
   },
   onDec(e: WechatMiniprogram.TouchEvent) {
     const { id, sku, qty } = e.currentTarget.dataset as { id: string; sku: string; qty: number }
-    cart.setQty(id, Number(qty) - 1, sku) // 钳位 ≥1（减到 1 再减不动·删行走「删」）
+    cart.setQty(id, Number(qty) - 1, sku) // 钳位 ≥1（减到 1 再减不动·删行走「删除」→ 落回下方推荐）
     this.refresh()
   },
   onRemove(e: WechatMiniprogram.TouchEvent) {
     const { id, sku } = e.currentTarget.dataset as { id: string; sku: string }
     cart.remove(id, sku)
+    this.refresh() // 移出袋→若是已知商品会重回下方推荐（设计 qty→0 落 options 语义）
+  },
+  onAddRec(e: WechatMiniprogram.TouchEvent) {
+    const id = String(e.currentTarget.dataset.id || '')
+    const p = allRaw.find((x) => String(x.id || x._id || '') === id)
+    if (!p) return
+    cart.add({ id, name: String(p.name || ''), tag: String(p.tag || ''), price: Number(p.price), was: typeof p.was === 'number' ? p.was : undefined, cover: String(p.cover || '') })
     this.refresh()
+    wx.showToast({ title: '已加入购物袋', icon: 'success' })
+  },
+  onOpen(e: WechatMiniprogram.TouchEvent) {
+    const id = String(e.currentTarget.dataset.id || '')
+    if (id) wx.navigateTo({ url: '/pages/detail/detail?id=' + id })
   },
   onCheckout() {
     if (!this.data.selectedCount) {
@@ -53,8 +80,5 @@ Page({
     }
     prepareFromCart() // 选中项快照进草稿（fromCart·提交成功按实际数量扣车）
     wx.navigateTo({ url: '/pages/checkout/checkout' })
-  },
-  onGoHome() {
-    wx.switchTab({ url: '/pages/home/home' })
   },
 })
