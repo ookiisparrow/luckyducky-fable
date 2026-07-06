@@ -10,5 +10,8 @@ export function useLatest() {
   return {
     begin: () => ++seq,
     isStale: (token: number) => token !== seq,
+    // 取当前号但不递增：供「从属操作」（如翻页 more）绑定到「主操作」（reload/search）的代际——
+    // 新主操作会作废在途从属（isStale=true），而从属自身不递增故不会反噬在途主操作（避免互杀）。
+    peek: () => seq,
   }
 }

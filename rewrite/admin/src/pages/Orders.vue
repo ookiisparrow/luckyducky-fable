@@ -66,10 +66,10 @@ async function reload() {
 
 async function more() {
   if (!hasMore.value || cursor.value == null) return
-  const snapTab = tab.value,
-    snapQ = activeQ.value // 发起时快照·不占 listGen（避免翻页取号误杀在途 reload·迭代E 逮出）
-  const r = await listOrders(snapTab, cursor.value, 20, snapQ)
-  if (tab.value !== snapTab || activeQ.value !== snapQ) return // 期间切了标签/搜索·放弃本页（防跨标签混排 + 游标污染）
+  if (message.value === '加载中…') return // reload 在途时不翻页（cursor 还是旧的·会跳页）——覆盖 reload 先于 more 的序
+  const gen = listGen.peek() // 绑定当前 reload 代际·不递增（不反噬在途 reload）·任何新 reload 会作废本页（迭代F 逮出）
+  const r = await listOrders(tab.value, cursor.value, 20, activeQ.value)
+  if (listGen.isStale(gen)) return // 期间发生过 reload（切标签/搜索/刷新/动作后刷新）·放弃本页（防混排 + 游标跳页）
   if (!r.ok) return // 翻页失败不覆盖已有
   const seen = new Set(rows.value.map((x) => x.id))
   rows.value = [...rows.value, ...mapOrderRows((r as any).list).filter((x) => !seen.has(x.id))]

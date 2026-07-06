@@ -26,4 +26,14 @@ describe('useLatest（乱序响应守卫·只认最新一次·根因#8）', () =
     drawer.begin() // 抽屉发起不该让列表的号过期
     expect(list.isStale(l)).toBe(false)
   })
+
+  it('大白话：peek 取当前号但不递增——从属操作(翻页)据此被新主操作(reload)作废、却不反噬在途主操作', () => {
+    const g = useLatest()
+    const main = g.begin() // reload 发起（号=1）
+    const sub = g.peek() // 翻页 peek 当前号(=1)·不递增
+    expect(g.isStale(main)).toBe(false) // 翻页 peek 没让在途 reload 过期（不互杀）
+    expect(g.isStale(sub)).toBe(false) // 无更新主操作时翻页不作废
+    g.begin() // 又一次 reload（号=2）
+    expect(g.isStale(sub)).toBe(true) // 新 reload 后·先前 peek 的翻页作废（丢弃过期页）
+  })
 })

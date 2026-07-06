@@ -51,14 +51,16 @@ async function search() {
 
 async function more() {
   if (!hasMore.value || cursor.value == null) return
-  const snap = searchFilter // 发起时的检索快照·不占 pageGen（避免翻页取号误杀在途 search·迭代E 逮出）
-  const r = await searchConversations({ ...snap, cursor: cursor.value }) // 复用快照·不现读输入框（防串档）
-  if (searchFilter !== snap) return // 期间又检索（searchFilter 换了新对象）·放弃本页（防混排）
+  if (message.value === '检索中…') return // 检索在途时不翻页（cursor 还是旧的）——覆盖 search 先于 more 的序
+  const gen = pageGen.peek() // 绑定当前 search 代际·不递增（不反噬在途 search）·新检索会作废本页（迭代F 逮出）
+  const r = await searchConversations({ ...searchFilter, cursor: cursor.value }) // 复用检索快照·不现读输入框（防串档）
+  if (pageGen.isStale(gen)) return // 期间又检索·放弃本页（防混排）
   if (!r.ok) {
     message.value = '加载更多失败：' + String(r.error || '') // 别静默吞·反复点无反应（病根#14）
     return
   }
-  msgs.value = [...msgs.value, ...mapMessages(r.messages)]
+  const seen = new Set(msgs.value.map((m) => m.id)) // 去重·防双击「更早」重复追加同一页（迭代F·对齐 Orders/Refunds）
+  msgs.value = [...msgs.value, ...mapMessages(r.messages).filter((m) => !seen.has(m.id))]
   cursor.value = r.nextCursor
   hasMore.value = !!r.hasMore
 }
