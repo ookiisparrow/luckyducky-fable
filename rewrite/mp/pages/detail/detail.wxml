@@ -1,71 +1,116 @@
-<view class="ld-detail" wx:if="{{vm}}">
-  <swiper class="ld-gallery" wx:if="{{vm.gallery.length}}" indicator-dots="{{vm.gallery.length > 1}}" indicator-active-color="#7b5caf" circular>
-    <swiper-item wx:for="{{vm.gallery}}" wx:key="*this">
-      <image class="ld-gallery-img" src="{{item}}" mode="aspectFill" />
-    </swiper-item>
-  </swiper>
-  <view class="ld-gallery ld-gallery-empty" wx:else></view>
+<view class="pdp" wx:if="{{vm}}">
 
-  <view class="ld-panel">
-    <view class="ld-pricerow">
-      <text class="ld-price">{{currentPrice}}</text>
-      <text class="ld-was" wx:if="{{vm.wasLabel}}">{{vm.wasLabel}}</text>
-    </view>
-    <view class="ld-name">{{vm.name}}</view>
-    <view class="ld-tag" wx:if="{{vm.tag}}">{{vm.tag}}</view>
-    <view class="ld-brief" wx:if="{{vm.brief}}">{{vm.brief}}</view>
+  <!-- 画廊 -->
+  <view class="pdp-gallery">
+    <swiper wx:if="{{vm.gallery.length}}" class="pdp-swiper" circular="{{vm.gallery.length > 1}}" bindchange="onGallery">
+      <swiper-item wx:for="{{vm.gallery}}" wx:key="*this">
+        <image class="pdp-hero" src="{{item}}" mode="aspectFill" />
+      </swiper-item>
+    </swiper>
+    <view wx:else class="pdp-hero pdp-hero-empty"></view>
+    <view class="pdp-count" wx:if="{{vm.gallery.length > 1}}">{{galleryIndex + 1}}/{{vm.gallery.length}}</view>
   </view>
 
-  <view class="ld-panel" wx:if="{{vm.skus.length}}">
-    <view class="ld-panel-title">选择规格</view>
-    <view class="ld-skus">
-      <view
-        wx:for="{{vm.skus}}"
-        wx:key="name"
-        class="ld-sku {{skuIndex === index ? 'active' : ''}}"
-        data-index="{{index}}"
-        bind:tap="onSelectSku"
-      >
+  <!-- 价格卡 -->
+  <view class="pdp-card pdp-price">
+    <view class="pdp-price-row">
+      <text class="pdp-now"><text class="pdp-cny">¥</text>{{currentPriceNum}}</text>
+      <text class="pdp-was" wx:if="{{vm.wasLabel}}">{{vm.wasLabel}}</text>
+      <text class="pdp-ship">满 ¥100 包邮</text>
+    </view>
+    <view class="pdp-title">{{vm.name}}</view>
+    <view class="pdp-sub" wx:if="{{vm.brief}}">{{vm.brief}}</view>
+    <view class="pdp-tag" wx:elif="{{vm.tag}}">{{vm.tag}}</view>
+    <view class="pdp-meta">
+      <view class="pdp-meta-item"><text class="pdp-meta-b">顺丰</text><text class="pdp-meta-s">48h 内发出</text></view>
+      <view class="pdp-meta-item"><text class="pdp-meta-b">七天</text><text class="pdp-meta-s">无理由退换</text></view>
+      <view class="pdp-meta-item"><text class="pdp-meta-b">包邮</text><text class="pdp-meta-s">满 ¥100</text></view>
+      <view class="pdp-meta-item"><text class="pdp-meta-b">免费</text><text class="pdp-meta-s">钩错补料</text></view>
+    </view>
+  </view>
+
+  <!-- 选择规格 -->
+  <view class="pdp-card" wx:if="{{vm.skus.length}}">
+    <view class="pdp-row-key">选择规格</view>
+    <view class="pdp-skus">
+      <view wx:for="{{vm.skus}}" wx:key="name" class="pdp-sku {{skuIndex === index ? 'on' : ''}}"
+        data-index="{{index}}" bind:tap="onSelectSku">
         <text>{{item.name}}</text>
-        <text class="ld-sku-price">{{item.priceLabel}}</text>
+        <text class="pdp-sku-price">{{item.priceLabel}}</text>
       </view>
     </view>
   </view>
 
-  <view class="ld-panel ld-panel-link" bind:tap="onViewReviews">
-    <text>看看钩友们怎么说</text>
-    <text class="ld-panel-arrow">›</text>
+  <!-- 用户评价入口 -->
+  <view class="pdp-card pdp-row-link" bind:tap="onViewReviews">
+    <text class="pdp-row-key">评价</text>
+    <text class="pdp-row-val">看看钩友们怎么说</text>
+    <text class="pdp-chev">›</text>
   </view>
 
-  <view class="ld-panel" wx:if="{{vm.kit.length}}">
-    <view class="ld-panel-title">材料包里有什么</view>
-    <view class="ld-kit-row" wx:for="{{vm.kit}}" wx:key="name">
-      <text>{{item.name}}</text>
-      <text class="ld-kit-qty">{{item.qty}}</text>
+  <!-- 商品详情：参数表 + 图文段落 -->
+  <view class="pdp-sec" wx:if="{{vm.params.length || vm.sections.length}}">
+    <view class="pdp-sec-head"><text class="pdp-sec-title">商品详情</text></view>
+    <view class="pdp-detail">
+      <view class="pdp-param" wx:if="{{vm.params.length}}">
+        <view class="pdp-param-row" wx:for="{{vm.params}}" wx:key="k">
+          <text class="pdp-param-k">{{item.k}}</text>
+          <text class="pdp-param-v">{{item.v}}</text>
+        </view>
+      </view>
+      <block wx:for="{{vm.sections}}" wx:key="lead">
+        <view class="pdp-detail-lead" wx:if="{{item.lead}}">{{item.lead}}</view>
+        <view class="pdp-detail-p" wx:if="{{item.body}}">{{item.body}}</view>
+      </block>
     </view>
   </view>
 
-  <view class="ld-panel" wx:if="{{vm.params.length}}">
-    <view class="ld-panel-title">参数</view>
-    <view class="ld-param-row" wx:for="{{vm.params}}" wx:key="k">
-      <text class="ld-param-k">{{item.k}}</text>
-      <text class="ld-param-v">{{item.v}}</text>
+  <!-- 套装包含 -->
+  <view class="pdp-sec" wx:if="{{vm.kit.length}}">
+    <view class="pdp-sec-head"><text class="pdp-sec-title">套装包含</text></view>
+    <view class="pdp-kit-grid">
+      <view class="pdp-kit-cell" wx:for="{{vm.kit}}" wx:key="name">
+        <view class="pdp-kit-name">{{item.name}}</view>
+        <view class="pdp-kit-qty" wx:if="{{item.qty}}">{{item.qty}}</view>
+      </view>
     </view>
   </view>
 
-  <view class="ld-panel" wx:for="{{vm.sections}}" wx:key="lead">
-    <view class="ld-panel-title" wx:if="{{item.lead}}">{{item.lead}}</view>
-    <view class="ld-section-body" wx:if="{{item.body}}">{{item.body}}</view>
+  <!-- 为你推荐 -->
+  <view class="pdp-sec" wx:if="{{recs.length}}">
+    <view class="pdp-sec-head"><text class="pdp-sec-title">为你推荐</text></view>
+    <view class="pdp-recs">
+      <view class="pdp-rec" wx:for="{{recs}}" wx:key="id" data-id="{{item.id}}" bind:tap="onTapRec">
+        <view class="pdp-rec-media">
+          <image wx:if="{{item.cover}}" class="pdp-rec-img" src="{{item.cover}}" mode="aspectFill" />
+        </view>
+        <view class="pdp-rec-body">
+          <view class="pdp-rec-name">{{item.name}}</view>
+          <view class="pdp-rec-foot">
+            <text class="pdp-rec-now">{{item.priceLabel}}</text>
+            <text class="pdp-rec-was" wx:if="{{item.wasLabel}}">{{item.wasLabel}}</text>
+          </view>
+        </view>
+      </view>
+    </view>
   </view>
 
-  <view class="ld-actionbar-space"></view>
-  <view class="ld-actionbar">
-    <view class="ld-btn ld-btn-cart" bind:tap="onAddCart">加入购物车</view>
-    <view class="ld-btn ld-btn-buy" bind:tap="onBuyNow">立即购买</view>
+  <!-- 粘性底部购买坞 -->
+  <view class="pdp-dock-space"></view>
+  <view class="pdp-dock">
+    <view class="pdp-buy-ico" bind:tap="onService">
+      <image class="pdp-buy-ico-img" src="/static/icons/headphones.svg" mode="aspectFit" />
+      <text>客服</text>
+    </view>
+    <view class="pdp-buy-actions">
+      <view class="pdp-btn pdp-btn-cart" hover-class="pdp-btn-h" bind:tap="onAddCart">加入购物车</view>
+      <view class="pdp-btn pdp-btn-buy" hover-class="pdp-btn-h" bind:tap="onBuyNow">立即购买</view>
+    </view>
   </view>
+
 </view>
 
-<view class="ld-detail-empty" wx:elif="{{!loading}}">
-  <view class="ld-empty-title">商品不存在或已下架</view>
-  <view class="ld-empty-hint">回首页看看别的吧</view>
+<view class="pdp-empty" wx:elif="{{!loading}}">
+  <view class="pdp-empty-title">商品不存在或已下架</view>
+  <view class="pdp-empty-hint">回首页看看别的吧</view>
 </view>
