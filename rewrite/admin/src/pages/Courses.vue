@@ -7,6 +7,7 @@ import { RotateCcw, Plus, Trash2, Upload, Check, BookOpen } from 'lucide-vue-nex
 import { getCourseDraft, saveCourseDraft, publishCourse, uploadVideo } from '../api/content'
 import { courseVideoStats } from '../lib/mapContent'
 import { planLessonBatch } from '../lib/videoBatch'
+import { serialSave } from '../lib/serialSave'
 import PageHeader from '../components/ui/PageHeader.vue'
 import Card from '../components/ui/Card.vue'
 import Badge from '../components/ui/Badge.vue'
@@ -115,20 +116,23 @@ function readDuration(file: File): Promise<string> {
 const saveState = ref<'' | 'saving' | 'saved' | 'error'>('')
 let loaded = false
 let saveTimer: ReturnType<typeof setTimeout> | null = null
+// 串行化实际保存（防慢网下两次自动保存乱序覆盖·P2·根因#8）：run 现读 course.value·补存即最新
+const flushSave = serialSave(async () => {
+  if (!course.value) return
+  const r = await saveCourseDraft(course.value)
+  saveState.value = r.ok ? 'saved' : 'error'
+})
 function autosave() {
   if (!course.value) return
   saveState.value = 'saving'
   fromPublished.value = false
   if (saveTimer) clearTimeout(saveTimer)
-  saveTimer = setTimeout(async () => {
-    const r = await saveCourseDraft(course.value!)
-    saveState.value = r.ok ? 'saved' : 'error'
-  }, 900)
+  saveTimer = setTimeout(() => void flushSave(), 900)
 }
 watch(course, () => { if (loaded && course.value) autosave() }, { deep: true })
 onBeforeUnmount(() => {
   if (saveTimer) clearTimeout(saveTimer)
-  if (saveState.value === 'saving' && course.value) void saveCourseDraft(course.value)
+  if (saveState.value === 'saving' && course.value) void flushSave()
 })
 
 function addChapter() {

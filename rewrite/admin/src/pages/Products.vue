@@ -6,6 +6,7 @@ import { ref, computed, onMounted, onBeforeUnmount, watch, nextTick } from 'vue'
 import { Search, Trash2, Package } from 'lucide-vue-next'
 import { listDrafts, saveDraft, deleteDraft, uploadImage, publishProduct, unpublishProduct, republishProduct } from '../api/products'
 import { mapDraftRows, publishErrorText, b64SizeOk, basicsMissing, type DraftRowVM } from '../lib/mapProducts'
+import { serialSave } from '../lib/serialSave'
 import { useRouter } from 'vue-router'
 import UiButton from '../components/ui/Button.vue'
 import PageHeader from '../components/ui/PageHeader.vue'
@@ -97,7 +98,7 @@ watch(
     if (!edit.value || !editorLoaded) return
     autoState.value = 'saving'
     if (saveTimer) clearTimeout(saveTimer)
-    saveTimer = setTimeout(() => void autosave(), 900)
+    saveTimer = setTimeout(() => void flushSave(), 900)
   },
   { deep: true }
 )
@@ -107,6 +108,7 @@ async function autosave() {
   autoState.value = r.ok ? 'saved' : 'error'
   if (r.ok) void silentRefresh()
 }
+const flushSave = serialSave(autosave) // 串行化·防慢网下两次自动保存乱序覆盖（P2·根因#8）
 function markLoaded() {
   editorLoaded = false
   autoState.value = ''
@@ -116,7 +118,7 @@ function closeEditor() {
   if (saveTimer) {
     clearTimeout(saveTimer)
     saveTimer = null
-    void autosave() // 关闭前补存 pending（离页不丢）
+    void flushSave() // 关闭前补存 pending（离页不丢）
   }
   editorLoaded = false
   edit.value = null
@@ -124,7 +126,7 @@ function closeEditor() {
 onBeforeUnmount(() => {
   if (saveTimer) {
     clearTimeout(saveTimer)
-    void autosave()
+    void flushSave()
   }
 })
 

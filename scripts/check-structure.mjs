@@ -85,6 +85,7 @@ export const RW_GOLDEN_REGISTRY = [
   { id: 'rw-admin-client-golden', roots: ['#3', '#5', '#14'], test: 'rewrite/admin/tests/client.test.ts' },
   { id: 'rw-admin-load-status-golden', roots: ['#14'], test: 'rewrite/admin/tests/status.test.ts' },
   { id: 'rw-admin-latest-golden', roots: ['#8'], test: 'rewrite/admin/tests/latest.test.ts' },
+  { id: 'rw-admin-serialsave-golden', roots: ['#8'], test: 'rewrite/admin/tests/serialSave.test.ts' },
   { id: 'rw-admin-fulfill-golden', roots: ['#8'], test: 'rewrite/admin/tests/fulfill.test.ts' },
   { id: 'rw-admin-videobatch-golden', roots: ['#8'], test: 'rewrite/admin/tests/videobatch.test.ts' },
   { id: 'rw-admin-products-ui-golden', roots: ['#8'], test: 'rewrite/admin/tests/products-ui.test.ts' },

@@ -5,6 +5,7 @@
 import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
 import { listShowcase, saveShowcase } from '../api/products'
 import { mapShowcaseRows, type ShowcaseRowVM } from '../lib/mapProducts'
+import { serialSave } from '../lib/serialSave'
 import { Store, GripVertical } from 'lucide-vue-next'
 import PageHeader from '../components/ui/PageHeader.vue'
 import Card from '../components/ui/Card.vue'
@@ -26,13 +27,15 @@ async function reload() {
 
 // 防抖自动保存（700ms·换皮退成手动按钮·忘点即丢编辑）：拖动/开关都走它
 let timer: ReturnType<typeof setTimeout> | null = null
+// 串行化实际保存（防慢网下多次拖拽/开关的保存乱序覆盖·P2·根因#8）：run 现读 rows·补存即最新排序
+const flushSave = serialSave(async () => {
+  const r = await saveShowcase(rows.value.map((x, i) => ({ id: x.id, sort: i + 1, featured: x.featured })))
+  saveState.value = r.ok ? 'saved' : 'error'
+})
 function persist() {
   saveState.value = 'saving'
   if (timer) clearTimeout(timer)
-  timer = setTimeout(async () => {
-    const r = await saveShowcase(rows.value.map((x, i) => ({ id: x.id, sort: i + 1, featured: x.featured })))
-    saveState.value = r.ok ? 'saved' : 'error'
-  }, 700)
+  timer = setTimeout(() => void flushSave(), 700)
 }
 function toggle(r: ShowcaseRowVM) {
   r.featured = !r.featured
@@ -69,7 +72,7 @@ const isDrag = (r: ShowcaseRowVM) => drag.value === idxOf(r)
 // 离页补存：还在防抖窗口内未落盘的改动立即补发（保存幂等·多发无副作用）
 onBeforeUnmount(() => {
   if (timer) clearTimeout(timer)
-  if (saveState.value === 'saving') void saveShowcase(rows.value.map((x, i) => ({ id: x.id, sort: i + 1, featured: x.featured })))
+  if (saveState.value === 'saving') void flushSave()
 })
 
 onMounted(reload)

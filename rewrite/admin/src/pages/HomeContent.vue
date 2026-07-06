@@ -7,6 +7,7 @@ import { getHomeContent, saveHomeContent } from '../api/content'
 import { uploadImage } from '../api/products'
 import { normalizeHome, homePayload, type HomeModel } from '../lib/mapContent'
 import { b64SizeOk } from '../lib/mapProducts'
+import { serialSave } from '../lib/serialSave'
 import UiButton from '../components/ui/Button.vue'
 import PageHeader from '../components/ui/PageHeader.vue'
 import Card from '../components/ui/Card.vue'
@@ -29,7 +30,7 @@ watch(
     if (!model.value || !loaded) return
     autoState.value = 'saving'
     if (saveTimer) clearTimeout(saveTimer)
-    saveTimer = setTimeout(() => void autosave(), 900)
+    saveTimer = setTimeout(() => void flushSave(), 900)
   },
   { deep: true }
 )
@@ -38,10 +39,11 @@ async function autosave() {
   const r = await saveHomeContent(homePayload(model.value))
   autoState.value = r.ok ? 'saved' : 'error'
 }
+const flushSave = serialSave(autosave) // 串行化·防慢网下两次自动保存乱序覆盖（P2·根因#8）
 onBeforeUnmount(() => {
   if (saveTimer) {
     clearTimeout(saveTimer)
-    void autosave() // 离页补存 pending
+    void flushSave() // 离页补存 pending
   }
 })
 

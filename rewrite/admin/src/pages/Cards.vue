@@ -7,6 +7,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { getCard, saveCard, uploadImage, listDrafts } from '../api/products'
 import { b64SizeOk } from '../lib/mapProducts'
 import { buildFrontSvg, buildBackSvg, type CardModel } from '../lib/cardSvg'
+import { serialSave } from '../lib/serialSave'
 // 视图层原语（批F 共享 UI）+ lucide 图标——仅新增 import，管道零改。
 // 注意：lucide 的 Image 与 compress() 里 new Image() 的全局 Image 同名，别名 ImageIcon 防遮蔽。
 import UiButton from '../components/ui/Button.vue'
@@ -93,7 +94,7 @@ watch(
     if (!card.value || !loaded) return
     autoState.value = 'saving'
     if (saveTimer) clearTimeout(saveTimer)
-    saveTimer = setTimeout(() => void autosave(), 700)
+    saveTimer = setTimeout(() => void flushSave(), 700)
   },
   { deep: true }
 )
@@ -102,10 +103,11 @@ async function autosave() {
   const r = await saveCard(card.value as unknown as Record<string, unknown>)
   autoState.value = (r as any).ok ? 'saved' : 'error'
 }
+const flushSave = serialSave(autosave) // 串行化·防慢网下两次自动保存乱序覆盖（P2·根因#8）
 onBeforeUnmount(() => {
   if (saveTimer) {
     clearTimeout(saveTimer)
-    void autosave()
+    void flushSave()
   }
 })
 

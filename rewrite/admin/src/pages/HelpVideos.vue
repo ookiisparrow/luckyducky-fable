@@ -5,6 +5,7 @@ import { ref, onMounted, onBeforeUnmount, watch, nextTick } from 'vue'
 import { Upload, Check, Trash2, Plus, Video } from 'lucide-vue-next'
 import { listHelpVideos, saveHelpVideos, uploadVideo } from '../api/content'
 import { normalizeHelpItems, type HelpItem } from '../lib/mapContent'
+import { serialSave } from '../lib/serialSave'
 import PageHeader from '../components/ui/PageHeader.vue'
 import Card from '../components/ui/Card.vue'
 import Badge from '../components/ui/Badge.vue'
@@ -49,18 +50,20 @@ function readDuration(file: File): Promise<string> {
 const saveState = ref<'' | 'saving' | 'saved' | 'error'>('')
 let loaded = false
 let saveTimer: ReturnType<typeof setTimeout> | null = null
+// 串行化实际保存（防慢网下两次自动保存乱序覆盖·P2·根因#8）：run 现读 items.value·补存即最新
+const flushSave = serialSave(async () => {
+  const r = await saveHelpVideos(items.value)
+  saveState.value = r.ok ? 'saved' : 'error'
+})
 function autosave() {
   saveState.value = 'saving'
   if (saveTimer) clearTimeout(saveTimer)
-  saveTimer = setTimeout(async () => {
-    const r = await saveHelpVideos(items.value)
-    saveState.value = r.ok ? 'saved' : 'error'
-  }, 900)
+  saveTimer = setTimeout(() => void flushSave(), 900)
 }
 watch(items, () => { if (loaded) autosave() }, { deep: true })
 onBeforeUnmount(() => {
   if (saveTimer) clearTimeout(saveTimer)
-  if (saveState.value === 'saving') void saveHelpVideos(items.value)
+  if (saveState.value === 'saving') void flushSave()
 })
 
 function twoStep(key: string, run: () => void) {
