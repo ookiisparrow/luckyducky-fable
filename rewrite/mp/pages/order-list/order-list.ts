@@ -1,5 +1,5 @@
 // 我的订单（M2 批7）：状态分栏 + 游标分页 + 待支付续付 + 确认收货。列表从云端拉取、无本地回退单。
-import { getMyOrders, pay, confirmReceive } from '../../api/orders'
+import { getMyOrders, pay, confirmReceive, cancelOrder } from '../../api/orders'
 import { mapPayResult } from '../../lib/payFlow'
 import { mapOrders, type OrderVM, type OrderLineVM } from '../../lib/mapOrders'
 
@@ -114,6 +114,20 @@ Page({
         if (!res.confirm) return
         const r = await confirmReceive(id)
         wx.showToast({ title: r.ok ? '已确认收货' : '操作没成功，稍后再试', icon: r.ok ? 'success' : 'none' })
+        void this.reload()
+      },
+    })
+  },
+  // 取消待支付单（破坏性·二次确认；仅 pending 出此入口·最终裁决在云端）
+  onCancel(e: WechatMiniprogram.TouchEvent) {
+    const id = String(e.currentTarget.dataset.id)
+    wx.showModal({
+      title: '取消订单',
+      content: '确定取消这笔待支付订单吗？取消后不可恢复。',
+      success: async (res) => {
+        if (!res.confirm) return
+        const r = await cancelOrder(id)
+        wx.showToast({ title: r.ok ? '订单已取消' : '取消没成功，稍后再试', icon: r.ok ? 'success' : 'none' })
         void this.reload()
       },
     })

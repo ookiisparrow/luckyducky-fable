@@ -87,6 +87,7 @@ export const createOrder = withOpenId(
           qty: l.qty,
           enteredQty: 0,
           refundable: true,
+          cover: '', // 搭配购无封面·形状一致（订单行封面单源=下单快照·不留 undefined）
         })
       } else if (byId[l.id]) {
         const p = byId[l.id]
@@ -112,6 +113,9 @@ export const createOrder = withOpenId(
           qty: l.qty,
           enteredQty: 0,
           refundable: true,
+          // 封面快照（订单=历史快照·不回读 catalog·T3/§6）：下单那一刻商品封面永久留存，
+          // 商品删/停售/换图都不影响历史订单展示；products 已在 byId 手上·零额外查询。
+          cover: String(p.cover || ''),
         })
       } else {
         return err('UNKNOWN_ITEM:' + l.id)
@@ -366,6 +370,38 @@ export const confirmReceive = withOpenId(async ({ db, OPENID, event }) => {
     return err('BAD_STATUS:' + ((fresh && fresh.data && fresh.data.status) || 'unknown'))
   }
   return ok({ doneAt })
+})
+
+/**
+ * 用户主动取消待支付单（黄金 orders-money·确认收货/关单节）：仅本人 + 仅 pending 可取消；
+ * 复用已声明的 pending→closed 边（状态机零改动）；关单回补预留幂等绑 CAS——与超时关单/并发取消
+ * 天然互斥，只回补一次（照抄 pay 惰性关单/closeExpiredOrders 的错向安全：transition 先、回补后）。
+ */
+export const cancelOrder = withOpenId(async ({ db, OPENID, event }) => {
+  const id = String((event as any).id || '')
+  if (!id) return err(ERR.NO_ID)
+  const got = await db
+    .collection(COLLECTIONS.orders)
+    .doc(id)
+    .get()
+    .catch(() => null)
+  if (!got || !got.data || got.data._openid !== OPENID) return err(ERR.NOT_FOUND) // 属主隔离·不泄存在性
+  const order = got.data
+  if (order.status !== 'pending') return err('BAD_STATUS:' + order.status)
+  const { moved } = await transition(COLLECTIONS.orders, id, ['pending'], 'closed', {
+    closedAt: Date.now(),
+    cancelledBy: 'user', // 台账区分手动取消 vs 超时关单
+  })
+  if (!moved) {
+    const fresh = await db
+      .collection(COLLECTIONS.orders)
+      .doc(id)
+      .get()
+      .catch(() => null)
+    return err('BAD_STATUS:' + ((fresh && fresh.data && fresh.data.status) || 'unknown')) // 并发已被关/已付
+  }
+  if (Array.isArray(order.reserved) && order.reserved.length) await restoreStock(order.reserved) // 回补绑 moved·只一次
+  return ok({ closedAt: Date.now() })
 })
 
 /** 本人订单列表（游标分页·属主隔离）。 */

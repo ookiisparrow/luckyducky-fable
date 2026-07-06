@@ -8,6 +8,7 @@ export interface OrderLineVM {
   qty: number
   enteredQty: number
   refundable: boolean
+  cover: string // 下单快照封面（cloud:// fileID）·旧单/搭配购无则空串
 }
 
 export interface OrderVM {
@@ -19,6 +20,8 @@ export interface OrderVM {
   amountLabel: string
   createdAtLabel: string
   trackingNo: string
+  shipCompany: string
+  shippedAtLabel: string
   address: { name: string; phone: string; region: string; detail: string } | null
   goodsLabel: string
   shipLabel: string
@@ -65,6 +68,7 @@ export function itemsOf(raw: unknown): OrderLineVM[] {
       qty: Number.isInteger(it.qty) && it.qty > 0 ? it.qty : 0,
       enteredQty: Number.isInteger(it.enteredQty) && it.enteredQty > 0 ? it.enteredQty : 0, // 旧单无字段视 0
       refundable: it.refundable !== false,
+      cover: String(it.cover || ''), // 旧单/搭配购无字段→空串（模板 wx:if 回退灰底占位·不裂图）
     })
   }
   return out
@@ -79,6 +83,8 @@ export function mapOrder(raw: unknown): OrderVM | null {
   const id = String(o.id || o._id || '')
   if (!id) return null
   const a = o.address && typeof o.address === 'object' ? o.address : null
+  // 物流取自 shipping 子对象（admin shipOne 写 o.shipping={company,trackingNo}·非顶层）·脏形不抛
+  const s = o.shipping && typeof o.shipping === 'object' ? o.shipping : {}
   return {
     id,
     status: String(o.status || ''),
@@ -87,7 +93,9 @@ export function mapOrder(raw: unknown): OrderVM | null {
     count: countOf(o),
     amountLabel: money(o.amount) || '¥0.00',
     createdAtLabel: dateTime(o.createdAt),
-    trackingNo: String(o.trackingNo || ''),
+    trackingNo: String(s.trackingNo || ''),
+    shipCompany: String(s.company || ''),
+    shippedAtLabel: dateTime(o.shippedAt),
     address: a ? { name: String(a.name || ''), phone: String(a.phone || ''), region: String(a.region || ''), detail: String(a.detail || '') } : null,
     goodsLabel: money(o.goods),
     shipLabel: Number(o.ship) > 0 ? money(o.ship) : '包邮',

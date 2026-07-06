@@ -1,5 +1,5 @@
 // 订单详情（M2 批7·批8 接售后）：状态横幅/条目/地址/金额明细/操作（续付·确认收货·申请售后）。
-import { getOrderById, pay, confirmReceive, applyRefund, getMyAfterSales } from '../../api/orders'
+import { getOrderById, pay, confirmReceive, cancelOrder, applyRefund, getMyAfterSales } from '../../api/orders'
 import { mapPayResult } from '../../lib/payFlow'
 import { mapOrder, type OrderVM } from '../../lib/mapOrders'
 import { applicableLines, mapAfterSales } from '../../lib/mapAftersales'
@@ -49,6 +49,29 @@ Page({
     wx.setClipboardData({
       data: this.orderId,
       success: () => wx.showToast({ title: '已复制单号', icon: 'none' }),
+    })
+  },
+  onCopyTracking() {
+    const no = this.data.vm && this.data.vm.trackingNo
+    if (!no) return
+    wx.setClipboardData({
+      data: no,
+      success: () => wx.showToast({ title: '已复制运单号', icon: 'none' }),
+    })
+  },
+  // 取消待支付单（破坏性·二次确认；仅 pending 出此入口·最终裁决在云端）
+  onCancel() {
+    const vm = this.data.vm
+    if (!vm || vm.status !== 'pending') return
+    wx.showModal({
+      title: '取消订单',
+      content: '确定取消这笔待支付订单吗？取消后不可恢复。',
+      success: async (res) => {
+        if (!res.confirm) return
+        const r = await cancelOrder(this.orderId)
+        wx.showToast({ title: r.ok ? '订单已取消' : '取消没成功，稍后再试', icon: r.ok ? 'success' : 'none' })
+        void this.reload() // 横幅按映射自动翻 closed
+      },
     })
   },
   async onPay() {

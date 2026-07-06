@@ -455,6 +455,18 @@
   font-size: 30rpx;
   font-weight: 600;
 }
+/* 取消订单（待支付·次级 ghost·与继续支付并列右侧·margin-left:auto 把按钮组推到右边） */
+.co-cancel {
+  margin-left: auto;
+  flex: 0 0 auto;
+  padding: 24rpx 36rpx;
+  border-radius: var(--ld-radius-pill);
+  background: transparent;
+  border: 1rpx solid var(--ld-line);
+  color: var(--ld-content-2);
+  font-size: 30rpx;
+  font-weight: 600;
+}
 
 /* ---------- 订单不存在 ---------- */
 .coord-empty {

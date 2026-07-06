@@ -73,6 +73,7 @@
 - 超时关单只关超过下单超时窗的待支付单并记关单时间，新单与其他状态单不动，返回关单数。 — `tests/cloud/closeExpiredOrders.test.js`
 - 超时关单只允许服务端（定时器）调用；客户端带身份的调用一律拒、不关任何单。 — `tests/cloud/closeExpiredOrders.test.js`
 - 关单须回补该单预留库存，且幂等——已关单不重复回补。 — `tests/cloud/inventory.test.js` 等
+- 用户可主动取消待支付单：仅本人、仅待支付可取消，取消即关闭并回补预留库存；非本人表现为"不存在"，非待支付拒；回补绑状态翻转幂等——与超时关单/并发取消互斥，只回补一次。 — `rewrite/cloud/tests/app-orders.test.ts`
 
 ## 订单/售后查询（用户端）
 

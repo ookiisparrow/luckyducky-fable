@@ -15,6 +15,7 @@ export const pay = (id: string): Promise<ApiResult> => callApp('pay', { id })
 export const getMyOrders = (cursor?: unknown, limit = 20, status = ''): Promise<ApiResult> => callApp('getMyOrders', { cursor, limit, status })
 export const getOrderById = (id: string): Promise<ApiResult> => callApp('getOrderById', { id })
 export const confirmReceive = (id: string): Promise<ApiResult> => callApp('confirmReceive', { id })
+export const cancelOrder = (id: string): Promise<ApiResult> => callApp('cancelOrder', { id })
 
 export const applyRefund = (orderId: string, lineId: string, reason: string): Promise<ApiResult> => callApp('applyRefund', { orderId, lineId, reason })
 export const getMyAfterSales = (cursor?: unknown, limit = 20): Promise<ApiResult> => callApp('getMyAfterSales', { cursor, limit })

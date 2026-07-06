@@ -8,7 +8,7 @@ const GOOD = {
   id: '2026070412001234',
   status: 'paid',
   items: [
-    { productId: 'p1', lineId: 'p1__', name: '小鸭', spec: '', price: 128, qty: 2, refundable: true },
+    { productId: 'p1', lineId: 'p1__', name: '小鸭', spec: '', price: 128, qty: 2, refundable: true, cover: 'cloud://x/p1.jpg' },
     { productId: 'p2', lineId: 'p2__白', name: '小熊', spec: '白', price: 22.5, qty: 1, refundable: false },
   ],
   goods: 278.5,
@@ -53,5 +53,38 @@ describe('订单映射（黄金 §七：脏单归一·纵深防御）', () => {
     expect(statusLabel('weird_status')).toBe('weird_status')
     expect(dateTime('abc')).toBe('')
     expect(dateTime(-5)).toBe('')
+  })
+})
+
+// C 类竖切补全（2026-07-07）：订单行封面图（下单快照）+ 物流运单（取自 shipping 子对象·别再读顶层）。
+const SHIPPED = {
+  id: 'oShip',
+  status: 'shipped',
+  items: [{ productId: 'p1', lineId: 'p1__', name: '小鸭', spec: '', price: 128, qty: 1, refundable: true }],
+  amount: 128,
+  createdAt: 1783046400000,
+  shipping: { company: '顺丰', trackingNo: 'SF7788' }, // admin shipOne 写在 o.shipping 子对象
+  shippedAt: 1783050000000,
+}
+
+describe('订单行封面 + 物流运单（C 类竖切·守卫别再退回顶层 trackingNo）', () => {
+  it('大白话：商品行携带下单时快照的封面（cloud:// fileID）；无封面的行落空串不渲染裂图', () => {
+    const vm = mapOrder(GOOD)!
+    expect(vm.items[0].cover).toBe('cloud://x/p1.jpg')
+    expect(vm.items[1].cover).toBe('') // p2 无封面（旧单/搭配购同）→ 空串不留 undefined
+    expect(JSON.stringify(vm)).not.toContain('undefined')
+  })
+  it('大白话：运单号/物流公司取自 shipping 子对象（admin 发货写 o.shipping·非顶层 o.trackingNo）', () => {
+    const vm = mapOrder(SHIPPED)!
+    expect(vm.trackingNo).toBe('SF7788')
+    expect(vm.shipCompany).toBe('顺丰')
+    expect(vm.shippedAtLabel).toMatch(/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}$/)
+  })
+  it('大白话：无 shipping 的旧脏单不抛·运单空·公司空·发货时间空（向后兼容）', () => {
+    const vm = mapOrder(GOOD)! // GOOD 无 shipping 子对象
+    expect(vm.trackingNo).toBe('')
+    expect(vm.shipCompany).toBe('')
+    expect(vm.shippedAtLabel).toBe('')
+    expect(() => mapOrder({ id: 'x', shipping: '坏' })).not.toThrow() // shipping 非对象也不抛
   })
 })

@@ -12,6 +12,7 @@ const line = (over: Partial<OrderLineVM>): OrderLineVM => ({
   qty: 2,
   enteredQty: 0,
   refundable: true,
+  cover: '',
   ...over,
 })
 

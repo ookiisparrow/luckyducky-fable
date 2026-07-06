@@ -113,6 +113,19 @@ describe('createOrder · 契约与定价（黄金 orders-money）', () => {
     expect(r.order.status).toBe('paid')
     expect(r.order.paidAt).toBeGreaterThan(0)
   })
+
+  it('大白话：下单时把商品封面快照进订单行（历史快照·不回读 catalog）；搭配购行封面为空串不留 undefined', async () => {
+    control.seed('products', [{ _id: 'pc', id: 'pc', name: '带图礼盒', price: 50, cover: 'cloud://x/pc.jpg' }])
+    const r = await order([
+      { id: 'pc', qty: 1 },
+      { id: 'hook', qty: 1 },
+    ])
+    expect(r.ok).toBe(true)
+    const main = r.order.items.find((i: any) => i.productId === 'pc')
+    expect(main.cover).toBe('cloud://x/pc.jpg') // 服务端从 products 快照·非前端上送
+    const addon = r.order.items.find((i: any) => i.productId === 'hook')
+    expect(addon.cover).toBe('') // 搭配购无封面→空串（形状一致·不留 undefined）
+  })
 })
 
 describe('createOrder · 库存预留（黄金 inventory-scm §A/§B）', () => {
@@ -204,6 +217,51 @@ describe('closeExpiredOrders（黄金：服务端专用·超时窗·回补幂等
 
     expect(((await closeExpired()) as any).closed).toBe(0) // 幂等：不重复回补
     expect(control.dump('inventory')[0].stock).toBe(5)
+  })
+})
+
+describe('cancelOrder 用户主动取消待支付单（复用 pending→closed 边·回补幂等绑 CAS）', () => {
+  const seedPending = () => {
+    control.seed('orders', [
+      { _id: 'oP', id: 'oP', _openid: 'oME', status: 'pending', createdAt: Date.now(), reserved: [{ productId: 'p1', spec: '基础款', qty: 2 }] },
+      { _id: 'oPaid', id: 'oPaid', _openid: 'oME', status: 'paid', createdAt: Date.now(), reserved: [] },
+    ])
+    control.seed('inventory', [{ _id: 'p1__基础款', productId: 'p1', spec: '基础款', stock: 3 }])
+  }
+
+  it('大白话：本人取消待支付单→关闭并回补预留库存', async () => {
+    seedPending()
+    const r: any = await call('cancelOrder', { id: 'oP' })
+    expect(r.ok).toBe(true)
+    expect(control.dump('orders').find((o: any) => o._id === 'oP').status).toBe('closed')
+    expect(control.dump('inventory')[0].stock).toBe(5) // 回补 2
+  })
+
+  it('大白话：未登录拒·缺单号拒·非本人表现为不存在（不动单不回补）', async () => {
+    seedPending()
+    control.setOpenId('')
+    expect((await call('cancelOrder', { id: 'oP' })).error).toBe('NO_OPENID')
+    control.setOpenId('oME')
+    expect((await call('cancelOrder', {})).error).toBe('NO_ID')
+    control.setOpenId('oHACK')
+    expect((await call('cancelOrder', { id: 'oP' })).error).toBe('NOT_FOUND') // 属主隔离·不泄存在性
+    control.setOpenId('oME')
+    expect(control.dump('orders').find((o: any) => o._id === 'oP').status).toBe('pending')
+    expect(control.dump('inventory')[0].stock).toBe(3) // 未回补
+  })
+
+  it('大白话：非待支付单（已付/已关）不可取消·BAD_STATUS·不动单不回补', async () => {
+    seedPending()
+    expect((await call('cancelOrder', { id: 'oPaid' })).error).toContain('BAD_STATUS')
+    expect(control.dump('inventory')[0].stock).toBe(3)
+  })
+
+  it('大白话：并发双取消——只一个成功、只回补一次（CAS 幂等·与超时关单互斥）', async () => {
+    seedPending()
+    const [a, b] = await Promise.all([call('cancelOrder', { id: 'oP' }), call('cancelOrder', { id: 'oP' })])
+    expect([a, b].filter((r: any) => r.ok).length).toBe(1) // 只一个翻转成功
+    expect(control.dump('orders').find((o: any) => o._id === 'oP').status).toBe('closed')
+    expect(control.dump('inventory')[0].stock).toBe(5) // 只回补一次·不虚高
   })
 })
 

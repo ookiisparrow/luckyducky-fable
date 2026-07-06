@@ -16,14 +16,17 @@
       </view>
     </view>
 
-    <!-- 物流（有运单号时·真实数据仅运单号，不伪造轨迹） -->
+    <!-- 物流（有运单号时·真实数据仅运单号+公司，不伪造轨迹·实时轨迹需外部快递 API 见待办） -->
     <view class="co-card coord-logi" wx:if="{{vm.trackingNo}}">
       <view class="coord-logi-ico">
         <image class="coord-logi-img" src="/static/icons/truck.svg" mode="aspectFit" />
       </view>
       <view class="coord-logi-text">
-        <view class="coord-logi-line">运单号 {{vm.trackingNo}}</view>
+        <view class="coord-logi-line"><text wx:if="{{vm.shipCompany}}">{{vm.shipCompany}} · </text>运单号 {{vm.trackingNo}}</view>
         <view class="coord-logi-time">物流状态以承运方为准</view>
+      </view>
+      <view class="coord-copy" catch:tap="onCopyTracking">
+        <image class="coord-copy-img" src="/static/icons/copy.svg" mode="aspectFit" />
       </view>
     </view>
 
@@ -54,7 +57,8 @@
         </view>
       </view>
       <view class="co-item" wx:for="{{vm.items}}" wx:key="lineId">
-        <view class="co-item-img"></view>
+        <image wx:if="{{item.cover}}" class="co-item-img" src="{{item.cover}}" mode="aspectFill" />
+        <view wx:else class="co-item-img"></view>
         <view class="co-item-mid">
           <text class="co-item-name">{{item.name}}</text>
           <text class="co-item-spec" wx:if="{{item.spec}}">{{item.spec}}</text>
@@ -114,6 +118,7 @@
           <text class="co-dock-num"><text class="cny">¥</text>{{amountNum}}</text>
         </view>
       </view>
+      <view class="co-cancel" wx:if="{{vm.status === 'pending'}}" bind:tap="onCancel">取消订单</view>
       <view class="co-submit" wx:if="{{vm.status === 'pending'}}" bind:tap="onPay">继续支付</view>
       <view class="co-submit" wx:if="{{vm.status === 'shipped'}}" bind:tap="onConfirm">确认收货</view>
     </view>

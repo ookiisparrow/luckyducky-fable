@@ -37,7 +37,8 @@
 
       <!-- 商品行（每单可多行） -->
       <view class="coolist-item" wx:for="{{item.items}}" wx:for-item="line" wx:key="lineId">
-        <view class="coolist-img"></view>
+        <image wx:if="{{line.cover}}" class="coolist-img" src="{{line.cover}}" mode="aspectFill" />
+        <view wx:else class="coolist-img"></view>
         <view class="coolist-mid">
           <text class="coolist-name">{{line.name}}</text>
           <text class="coolist-tag" wx:if="{{line.spec}}">{{line.spec}}</text>
@@ -49,6 +50,7 @@
       <!-- 底行：操作钮（如有）+ 件数实付合计 -->
       <view class="coolist-foot">
         <view class="coolist-actions" wx:if="{{item.status === 'pending' || item.status === 'shipped'}}">
+          <view class="coolist-btn ghost" wx:if="{{item.status === 'pending'}}" data-id="{{item.id}}" catch:tap="onCancel">取消订单</view>
           <view class="coolist-btn primary" wx:if="{{item.status === 'pending'}}" data-id="{{item.id}}" catch:tap="onPay">继续支付</view>
           <view class="coolist-btn ghost" wx:if="{{item.status === 'shipped'}}" data-id="{{item.id}}" catch:tap="onConfirm">确认收货</view>
         </view>
