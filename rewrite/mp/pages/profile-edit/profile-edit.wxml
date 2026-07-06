@@ -1,20 +1,49 @@
-<view class="ld-pe">
-  <button class="ld-pe-avatarbtn" open-type="chooseAvatar" bind:chooseavatar="onChooseAvatar">
-    <image wx:if="{{avatarTemp || avatar}}" class="ld-pe-avatar" src="{{avatarTemp || avatar}}" mode="aspectFill" />
-    <view wx:else class="ld-pe-avatar ld-pe-avatar-empty">🦆</view>
-    <view class="ld-pe-avatarhint">点击更换头像</view>
-  </button>
+<!-- 编辑资料·重设计对齐 Checkout.jsx ProfileEdit + checkout.css coprof/coaddr-* 版式（设计 402px 画板→rpx ×1.87）。
+     业务逻辑一字不动：头像选择走 button open-type=chooseAvatar→onChooseAvatar（隐私能力·privacy-sheet 保命）；
+     昵称 type=nickname→onNickname、签名→onBio、保存→onSave 全承接 profile-edit.ts。
+     字段只留数据流真有的（昵称/签名/头像）——设计的手机号无 api 字段与 handler，不臆造（见 risks）。token 见 styles/tokens.wxss。 -->
+<view class="co coprof">
+  <view class="co-body">
 
-  <view class="ld-field">
-    <text class="ld-field-label">昵称</text>
-    <input class="ld-field-input" type="nickname" value="{{nickname}}" bind:input="onNickname" maxlength="20" placeholder="怎么称呼你" />
-  </view>
-  <view class="ld-field">
-    <text class="ld-field-label">签名</text>
-    <input class="ld-field-input" value="{{bio}}" bind:input="onBio" maxlength="60" placeholder="一句话介绍自己（选填）" />
+    <!-- 资料表单卡（头像行 + 昵称 + 个性签名·设计白卡分隔发丝线） -->
+    <view class="co-card coaddr-form">
+
+      <!-- 头像行：整行即微信头像能力按钮（open-type=chooseAvatar·带相机角标） -->
+      <button class="coaddr-field coprof-avatar-field" open-type="chooseAvatar" bind:chooseavatar="onChooseAvatar">
+        <text class="coaddr-label">头像</text>
+        <view class="coprof-avatar">
+          <image wx:if="{{avatarTemp || avatar}}" class="coprof-avatar-img" src="{{avatarTemp || avatar}}" mode="aspectFill" />
+          <view wx:else class="coprof-avatar-img coprof-avatar-empty">🦆</view>
+          <view class="coprof-cam">
+            <image class="coprof-cam-ico" src="/static/icons/camera.svg" mode="aspectFit" />
+          </view>
+        </view>
+      </button>
+
+      <!-- 昵称（微信昵称填写能力 type=nickname） -->
+      <view class="coaddr-field">
+        <text class="coaddr-label">昵称</text>
+        <input class="coaddr-input" type="nickname" value="{{nickname}}" bind:input="onNickname" maxlength="20" placeholder="给自己起个名字" placeholder-class="coaddr-ph" />
+      </view>
+
+      <!-- 个性签名（多行·设计 coaddr-area） -->
+      <view class="coaddr-field coaddr-field-area">
+        <text class="coaddr-label">个性签名</text>
+        <textarea class="coaddr-input coaddr-area" value="{{bio}}" bind:input="onBio" maxlength="60" placeholder="写句话介绍下自己吧～" placeholder-class="coaddr-ph" auto-height />
+      </view>
+
+    </view>
+
+    <text class="coprof-tip">点击头像，从相册上传一张照片作为形象</text>
   </view>
 
-  <view class="ld-pe-save {{busy ? 'dim' : ''}}" bind:tap="onSave">保存</view>
+  <!-- 底部保存坞（全宽主 CTA） -->
+  <view class="co-dock-space"></view>
+  <view class="co-dock">
+    <view class="co-dockbar coaddr-dock">
+      <view class="co-submit coaddr-save {{busy ? 'dim' : ''}}" bind:tap="onSave">保存</view>
+    </view>
+  </view>
 
   <privacy-sheet />
 </view>

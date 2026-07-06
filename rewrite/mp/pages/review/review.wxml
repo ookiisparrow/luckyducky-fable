@@ -1,34 +1,75 @@
-<view class="ld-review">
-  <view class="ld-panel">
-    <view class="ld-rw-name" wx:if="{{name}}">{{name}}</view>
-    <view class="ld-rw-stars">
-      <text
-        wx:for="{{starIdx}}"
-        wx:key="*this"
-        class="ld-rw-star {{rating >= item ? 'on' : ''}}"
-        data-n="{{item}}"
-        bind:tap="onStar"
-      >★</text>
-      <text class="ld-rw-starlabel">{{ratingLabel}}</text>
+<!-- 评价晒单·重设计对齐 Checkout.jsx ReviewSubmit（corev-* 版式·设计 402px→rpx ×1.87）。
+     业务逻辑一字不动：星级(onStar·data-n)/标签多选(onTag·data-i)/文字(onText)/匿名(onAnon)/
+     提交(onSubmit·busy 闸)全承接 review.ts；submitReview 云端签名无 photos 参数，
+     故设计「买家秀晒图」无后端落点、按诚实原则不臆造上传（见 deferred）。本文件只重排结构与视觉。 -->
+<view class="corev">
+  <view class="corev-body">
+
+    <!-- 商品行 + 综合评分（corev-top 卡） -->
+    <view class="corev-card corev-top">
+      <view class="corev-prod" wx:if="{{name}}">
+        <view class="corev-prod-img"></view>
+        <view class="corev-prod-mid">
+          <text class="corev-prod-name">{{name}}</text>
+        </view>
+      </view>
+      <view class="corev-rate">
+        <view class="corev-rate-stars">
+          <text
+            wx:for="{{starIdx}}"
+            wx:key="*this"
+            class="corev-star {{rating >= item ? 'on' : ''}}"
+            data-n="{{item}}"
+            bind:tap="onStar"
+          >★</text>
+        </view>
+        <text class="corev-rate-label">{{ratingLabel}}</text>
+      </view>
     </view>
+
+    <!-- 大家都说·预设标签多选（corev-sec 卡） -->
+    <view class="corev-card corev-sec">
+      <view class="corev-sec-title">大家都说</view>
+      <view class="corev-tags">
+        <text
+          wx:for="{{tags}}"
+          wx:key="t"
+          class="corev-tag {{item.on ? 'on' : ''}}"
+          data-i="{{index}}"
+          bind:tap="onTag"
+        >{{item.t}}</text>
+      </view>
+    </view>
+
+    <!-- 文字（corev-sec 卡） -->
+    <view class="corev-card corev-sec">
+      <textarea
+        class="corev-text"
+        value="{{text}}"
+        bind:input="onText"
+        maxlength="500"
+        placeholder="说说你的钩织体验，分享给想入坑的小伙伴吧～"
+        placeholder-class="corev-text-ph"
+      />
+      <view class="corev-count">{{text.length}}/500</view>
+    </view>
+
+    <!-- 匿名开关（corev-anon 卡） -->
+    <view class="corev-card corev-anon {{anon ? 'on' : ''}}" bind:tap="onAnon">
+      <text class="corev-anon-text">匿名评价</text>
+      <text class="corev-anon-sub">隐藏你的昵称与头像</text>
+      <view class="corev-switch">
+        <view class="corev-switch-dot"></view>
+      </view>
+    </view>
+
   </view>
 
-  <view class="ld-panel">
-    <view class="ld-rw-tags">
-      <text
-        wx:for="{{tags}}"
-        wx:key="t"
-        class="ld-rw-tag {{item.on ? 'on' : ''}}"
-        data-i="{{index}}"
-        bind:tap="onTag"
-      >{{item.t}}</text>
-    </view>
-    <textarea class="ld-rw-text" value="{{text}}" bind:input="onText" maxlength="500" placeholder="说说这次钩织的体验（选填，最多 500 字）" />
-    <view class="ld-rw-anon" bind:tap="onAnon">
-      <view class="ld-check {{anon ? 'on' : ''}}"></view>
-      <text>匿名评价（显示为「匿名钩友」）</text>
+  <!-- 底部发布坞 -->
+  <view class="corev-dock-space"></view>
+  <view class="corev-dock">
+    <view class="corev-dockbar">
+      <view class="corev-publish {{busy ? 'dim' : ''}}" bind:tap="onSubmit">发布评价</view>
     </view>
   </view>
-
-  <view class="ld-rw-submit {{busy ? 'dim' : ''}}" bind:tap="onSubmit">提交评价</view>
 </view>

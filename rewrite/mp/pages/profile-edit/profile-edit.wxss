@@ -1,69 +1,159 @@
-.ld-pe {
+/* 编辑资料·重设计对齐 Checkout.jsx ProfileEdit + checkout.css coprof/coaddr-* 版式。
+   设计 402px 画板→rpx（×1.87）。页浅灰底、白卡以圆角+浅影分隔·发丝线分行；token 见 styles/tokens.wxss。
+   co-/coaddr-/coprof- 前缀沿设计。 */
+.co {
   min-height: 100vh;
-  background: var(--ld-bg-lilac);
-  padding: 40rpx 24rpx;
+  background: #f4f4f5; /* 设计 co 页底浅灰（与 checkout 同调·tokens 无对应中性灰） */
+  color: var(--ld-content);
 }
-.ld-pe-avatarbtn {
-  background: transparent;
-  border: none;
-  padding: 0;
-  margin: 0 auto 40rpx;
+.co image {
+  display: block;
+}
+
+/* ---------- 内容容器 ---------- */
+.co-body {
+  padding: 22rpx 26rpx 8rpx;
   display: flex;
   flex-direction: column;
+  gap: 22rpx;
+}
+
+/* ---------- 通用白卡 ---------- */
+.co-card {
+  background: var(--ld-bg);
+  border-radius: var(--ld-radius-md);
+  box-shadow: 0 2rpx 4rpx rgba(54, 58, 80, 0.05);
+  overflow: hidden;
+}
+
+/* ---------- 资料表单（行间发丝线·末行无线） ---------- */
+.coaddr-form {
+  padding: 4rpx 30rpx;
+}
+.coaddr-field {
+  display: flex;
   align-items: center;
-  gap: 12rpx;
+  gap: 22rpx;
+  padding: 28rpx 0;
+  border-bottom: 1rpx solid var(--ld-line-soft);
+}
+.coaddr-field:last-child {
+  border-bottom: none;
+}
+.coaddr-field-area {
+  align-items: flex-start;
+}
+.coaddr-label {
+  flex: 0 0 120rpx;
+  font-size: 27rpx;
+  color: var(--ld-content);
+}
+.coaddr-field-area .coaddr-label {
+  padding-top: 6rpx;
+}
+.coaddr-input {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: 28rpx;
+  color: var(--ld-ink);
+  line-height: 1.5;
+}
+.coaddr-area {
+  width: 100%;
+  min-height: 60rpx;
+}
+.coaddr-ph {
+  color: var(--ld-content-2);
+}
+
+/* ---------- 头像行（整行为 chooseAvatar 能力按钮·重置按钮外观） ---------- */
+.coprof-avatar-field {
+  width: 100%;
+  text-align: left;
+  background: none;
+  padding: 26rpx 0;
   line-height: inherit;
 }
-.ld-pe-avatarbtn::after {
+.coprof-avatar-field::after {
   border: none;
 }
-.ld-pe-avatar {
-  width: 160rpx;
-  height: 160rpx;
+.coprof-avatar {
+  width: 90rpx;
+  height: 90rpx;
+  flex: 0 0 auto;
   border-radius: 50%;
+  position: relative;
   background: var(--ld-bg-sage);
 }
-.ld-pe-avatar-empty {
+.coprof-avatar-img {
+  width: 90rpx;
+  height: 90rpx;
+  border-radius: 50%;
+}
+.coprof-avatar-empty {
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 72rpx;
+  font-size: 44rpx;
+  background: var(--ld-bg-sage);
 }
-.ld-pe-avatarhint {
-  font-size: 22rpx;
-  color: var(--ld-purple-meta);
-}
-.ld-field {
+.coprof-cam {
+  position: absolute;
+  right: -4rpx;
+  bottom: -4rpx;
+  width: 38rpx;
+  height: 38rpx;
+  border-radius: 50%;
+  background: var(--ld-purple);
+  border: 4rpx solid var(--ld-bg);
   display: flex;
   align-items: center;
-  gap: 24rpx;
-  padding: 26rpx 28rpx;
-  margin-bottom: 20rpx;
-  background: var(--ld-bg);
-  border-radius: var(--ld-radius);
-  border: 2rpx solid var(--ld-purple-line);
+  justify-content: center;
 }
-.ld-field-label {
-  width: 100rpx;
-  font-size: 26rpx;
-  color: var(--ld-purple-meta);
-  flex-shrink: 0;
+.coprof-cam-ico {
+  width: 20rpx;
+  height: 20rpx;
 }
-.ld-field-input {
-  flex: 1;
-  font-size: 28rpx;
-  color: var(--ld-ink);
-}
-.ld-pe-save {
-  margin-top: 20rpx;
+
+/* 表单下说明 */
+.coprof-tip {
+  display: block;
   text-align: center;
-  padding: 26rpx 0;
-  border-radius: var(--ld-radius-pill);
-  background: var(--ld-purple-ink);
+  font-size: 22rpx;
+  color: var(--ld-purple-meta);
+  line-height: 1.6;
+  margin: 30rpx 30rpx 8rpx;
+}
+
+/* ---------- 底部保存坞 ---------- */
+.co-dock-space {
+  height: 160rpx;
+}
+.co-dock {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: var(--ld-bg);
+  box-shadow: 0 -2rpx 0 var(--ld-line), 0 -8rpx 24rpx rgba(54, 58, 80, 0.06);
+}
+.coaddr-dock {
+  display: flex;
+  align-items: center;
+  padding: 18rpx 30rpx calc(18rpx + env(safe-area-inset-bottom));
+}
+.co-submit {
+  background: var(--ld-purple);
   color: #ffffff;
+  border-radius: var(--ld-radius-pill);
   font-size: 30rpx;
   font-weight: 600;
+  text-align: center;
 }
-.ld-pe-save.dim {
+.coaddr-save {
+  flex: 1;
+  padding: 26rpx 0;
+}
+.co-submit.dim {
   opacity: 0.5;
 }

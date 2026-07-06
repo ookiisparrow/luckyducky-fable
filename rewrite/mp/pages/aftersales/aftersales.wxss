@@ -1,63 +1,218 @@
-.ld-aslist {
+/* 我的售后·重设计对齐 Checkout.jsx 的 AfterSales 版式（设计 402px 画板→rpx ×1.87）。
+   页浅灰底、白卡圆角+浅影；co-/coas- 前缀沿设计词汇（与 checkout/order 同族·本页自包含）；
+   ldas- 为「已申请记录」专属件（本页展示的是 getMyAfterSales 记录列表·非设计入口页的可申请订单，
+   故按设计 coas-order 横卡词汇承载真实售后单：状态徽/退款额/原因/查看订单）。token 见 styles/tokens.wxss。 */
+.co {
   min-height: 100vh;
-  background: var(--ld-bg-lilac);
-  padding: 24rpx 24rpx 40rpx;
+  background: #f4f4f5; /* 设计 co 页底浅灰·与 order 同族·tokens 无对应中性灰 */
+  color: var(--ld-content);
 }
-.ld-as {
-  padding: 24rpx 28rpx;
-  margin-bottom: 20rpx;
+.co image {
+  display: block;
+}
+
+/* ---------- 内容容器（设计 co-body） ---------- */
+.co-body {
+  padding: 22rpx 26rpx 8rpx;
+  display: flex;
+  flex-direction: column;
+  gap: 22rpx;
+}
+
+/* ---------- 通用白卡（设计 co-card） ---------- */
+.co-card {
   background: var(--ld-bg);
-  border-radius: var(--ld-radius);
-  border: 2rpx solid var(--ld-purple-line);
+  border-radius: var(--ld-radius-md);
+  box-shadow: 0 2rpx 4rpx rgba(54, 58, 80, 0.05);
+  overflow: hidden;
 }
-.ld-as-head {
+
+/* ---------- 区段小标题（设计 coas-sechead·独立于卡上方） ---------- */
+.coas-sechead {
   display: flex;
+  align-items: baseline;
   justify-content: space-between;
-  gap: 16rpx;
+  padding: 8rpx 8rpx 0;
 }
-.ld-as-name {
+.coas-title {
   font-size: 28rpx;
+  font-weight: 500;
   color: var(--ld-ink);
+  letter-spacing: -0.3rpx;
 }
-.ld-as-status {
-  flex-shrink: 0;
-  font-size: 24rpx;
-  color: var(--ld-purple-tab);
-  font-weight: 600;
+.coas-sechead-sub {
+  font-size: 22rpx;
+  color: var(--ld-content-2);
 }
-.ld-as-mid {
-  margin-top: 10rpx;
-  font-size: 24rpx;
-  color: var(--ld-purple-meta);
+
+/* ---------- 售后单卡（设计 coas-order 横卡 + 状态/原因扩展） ---------- */
+.ldas-card {
+  padding: 22rpx 26rpx;
 }
-.ld-as-foot {
+.ldas-top {
   display: flex;
-  justify-content: space-between;
-  margin-top: 12rpx;
-  font-size: 24rpx;
-  color: var(--ld-purple-meta);
+  align-items: center;
+  gap: 20rpx;
 }
-.ld-as-amount {
+.coas-order-img {
+  width: 120rpx;
+  height: 120rpx;
+  flex: 0 0 auto;
+  border-radius: var(--ld-radius-sm);
+  background: var(--ld-bg-sage); /* 无商品图字段→灰底占位 */
+}
+.coas-order-mid {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8rpx;
+}
+.coas-order-name {
+  font-size: 26rpx;
+  color: var(--ld-ink);
+  line-height: 1.3;
+  letter-spacing: -0.3rpx;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+.coas-order-meta {
+  font-size: 22rpx;
+  color: var(--ld-content-2);
+  letter-spacing: 0.4rpx;
+}
+.ldas-amt {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  line-height: 1.15;
+}
+.ldas-amt-num {
+  font-size: 32rpx;
+  font-weight: 700;
   color: var(--ld-purple-ink);
+  letter-spacing: 0.2rpx;
+}
+.ldas-amt-cap {
+  margin-top: 4rpx;
+  font-size: 20rpx;
+  color: var(--ld-content-2);
+}
+
+/* ---------- 原因（引用盒·设计明细盒同底） ---------- */
+.ldas-reason {
+  margin-top: 18rpx;
+  padding: 14rpx 18rpx;
+  background: #f7f7f8; /* 设计引用/明细盒浅灰底·tokens 无对应 */
+  border-radius: var(--ld-radius-sm);
+  font-size: 23rpx;
+  color: var(--ld-content-2);
+  line-height: 1.5;
+}
+
+/* ---------- 卡底：状态徽 + 查看订单 ---------- */
+.ldas-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 20rpx;
+  padding-top: 20rpx;
+  border-top: 1rpx solid var(--ld-line-soft);
+}
+.ldas-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 10rpx;
+  padding: 8rpx 18rpx;
+  border-radius: var(--ld-radius-pill);
+  font-size: 24rpx;
   font-weight: 600;
 }
-.ld-as-empty {
-  text-align: center;
-  padding: 140rpx 0;
+.ldas-dot {
+  width: 12rpx;
+  height: 12rpx;
+  border-radius: 50%;
+  background: currentColor;
 }
-.ld-empty-title {
+/* 状态语义配色（映射 mapAftersales 的 status 键·语义不变） */
+.ldas-applied {
+  color: var(--ld-purple-tab);
+  background: var(--ld-bg-lilac);
+}
+.ldas-approved {
+  color: #e37318; /* 设计 duck-orange（喙/CTA 橙）·处理中提示·tokens 无对应 */
+  background: #fff7ec; /* 设计待处理浅橙底·tokens 无对应 */
+}
+.ldas-refunded {
+  color: var(--ld-content);
+  background: var(--ld-bg-sage); /* 已结算·中性沙色（无绿 token） */
+}
+.ldas-rejected {
+  color: var(--ld-content-2);
+  background: var(--ld-bg-grey);
+}
+.ldas-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 4rpx;
+  font-size: 22rpx;
+  color: var(--ld-content-2);
+}
+.ldas-chev {
+  width: 24rpx;
+  height: 24rpx;
+  opacity: 0.6;
+}
+
+/* ---------- 底部安心文案（设计 coas-note） ---------- */
+.coas-note {
+  display: block;
+  text-align: center;
+  margin: 8rpx 20rpx 4rpx;
+  font-size: 22rpx;
+  color: var(--ld-purple-meta);
+  line-height: 1.6;
+}
+.ldas-more {
+  text-align: center;
+  padding: 20rpx 0;
+  font-size: 22rpx;
+  color: var(--ld-content-2);
+}
+
+/* ---------- 空态 ---------- */
+.coas-empty {
+  text-align: center;
+  padding: 160rpx 40rpx;
+}
+.coas-empty-ico {
+  width: 120rpx;
+  height: 120rpx;
+  margin: 0 auto 24rpx;
+  border-radius: 50%;
+  background: var(--ld-bg-lilac);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.coas-empty-img {
+  width: 52rpx;
+  height: 52rpx;
+  opacity: 0.7;
+}
+.coas-empty-title {
+  display: block;
   font-size: 30rpx;
   font-weight: 600;
   color: var(--ld-purple-ink);
 }
-.ld-empty-hint {
-  margin-top: 10rpx;
+.coas-empty-hint {
+  display: block;
+  margin-top: 12rpx;
   font-size: 24rpx;
-  color: var(--ld-purple-meta);
-}
-.ld-as-more {
-  text-align: center;
-  padding: 20rpx 0;
-  font-size: 22rpx;
-  color: var(--ld-purple-meta);
+  color: var(--ld-content-2);
 }

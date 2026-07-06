@@ -1,93 +1,195 @@
-.ld-review {
+/* 评价晒单·重设计对齐 Checkout.jsx corev-* 版式。设计 402px 画板→rpx（×1.87）。
+   页浅灰底、白卡以圆角+浅影分隔；token 见 styles/tokens.wxss。corev- 前缀沿设计。 */
+.corev {
   min-height: 100vh;
-  background: var(--ld-bg-lilac);
-  padding: 24rpx;
+  background: #f4f4f5; /* 设计 co 页底浅灰（与 checkout/detail 同调·tokens 无对应中性灰） */
+  color: var(--ld-content);
 }
-.ld-panel {
-  padding: 28rpx;
-  margin-bottom: 24rpx;
+
+/* ---------- 内容容器 ---------- */
+.corev-body {
+  padding: 22rpx 26rpx 8rpx;
+  display: flex;
+  flex-direction: column;
+  gap: 22rpx;
+}
+.corev-card {
   background: var(--ld-bg);
-  border-radius: var(--ld-radius);
-  border: 2rpx solid var(--ld-purple-line);
+  border-radius: var(--ld-radius-md);
+  box-shadow: 0 2rpx 4rpx rgba(54, 58, 80, 0.05);
 }
-.ld-rw-name {
-  font-size: 28rpx;
-  font-weight: 600;
-  color: var(--ld-ink);
-  margin-bottom: 16rpx;
+
+/* ---------- 商品行 + 评分（corev-top） ---------- */
+.corev-top {
+  padding: 30rpx;
 }
-.ld-rw-stars {
+.corev-prod {
   display: flex;
   align-items: center;
+  gap: 22rpx;
+  padding-bottom: 30rpx;
+  border-bottom: 2rpx solid var(--ld-line);
+}
+.corev-prod-img {
+  width: 98rpx;
+  height: 98rpx;
+  flex: 0 0 auto;
+  border-radius: var(--ld-radius-sm);
+  background: var(--ld-bg-sage);
+}
+.corev-prod-mid {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
   gap: 12rpx;
 }
-.ld-rw-star {
-  font-size: 56rpx;
-  color: var(--ld-purple-line);
+.corev-prod-name {
+  font-size: 28rpx;
+  color: var(--ld-ink);
+  line-height: 1.35;
 }
-.ld-rw-star.on {
-  color: var(--ld-purple);
-}
-.ld-rw-starlabel {
-  margin-left: 12rpx;
-  font-size: 24rpx;
-  color: var(--ld-purple-meta);
-}
-.ld-rw-tags {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 14rpx;
-  margin-bottom: 20rpx;
-}
-.ld-rw-tag {
-  padding: 10rpx 26rpx;
-  border-radius: var(--ld-radius-pill);
-  border: 2rpx solid var(--ld-purple-line);
-  font-size: 24rpx;
-  color: var(--ld-purple-meta);
-}
-.ld-rw-tag.on {
-  background: var(--ld-bg-lilac);
-  border-color: var(--ld-purple-tab);
-  color: var(--ld-purple-tab);
-  font-weight: 600;
-}
-.ld-rw-text {
-  width: 100%;
-  min-height: 200rpx;
-  padding: 20rpx;
-  box-sizing: border-box;
-  background: var(--ld-bg-faint);
-  border-radius: 16rpx;
-  font-size: 26rpx;
-}
-.ld-rw-anon {
+.corev-rate {
   display: flex;
   align-items: center;
-  gap: 14rpx;
-  margin-top: 20rpx;
-  font-size: 24rpx;
-  color: var(--ld-purple-meta);
+  gap: 26rpx;
+  padding-top: 30rpx;
 }
-.ld-check {
+.corev-rate-stars {
+  display: flex;
+  gap: 12rpx;
+}
+.corev-star {
+  font-size: 56rpx;
+  line-height: 1;
+  color: #d8d5dd; /* 未选星灰（设计 line-strong·tokens 无中性灰） */
+}
+.corev-star.on {
+  color: var(--ld-duck-deep);
+}
+.corev-rate-label {
+  font-size: 28rpx;
+  font-weight: 500;
+  color: var(--ld-duck-deep); /* 设计 duck-orange 暖点·tokens 无 orange 用 duck-deep 近似 */
+}
+
+/* ---------- 分区卡（corev-sec） ---------- */
+.corev-sec {
+  padding: 30rpx;
+}
+.corev-sec-title {
+  font-size: 24rpx;
+  color: var(--ld-content-2);
+  margin-bottom: 22rpx;
+}
+.corev-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16rpx;
+}
+.corev-tag {
+  font-size: 24rpx;
+  color: var(--ld-content);
+  background: var(--ld-bg-grey);
+  border: 2rpx solid transparent;
+  border-radius: var(--ld-radius-pill);
+  padding: 12rpx 26rpx;
+  line-height: 1;
+}
+.corev-tag.on {
+  background: var(--ld-bg-lilac);
+  color: var(--ld-purple);
+  border-color: var(--ld-purple-line);
+}
+
+/* ---------- 文字 ---------- */
+.corev-text {
+  width: 100%;
+  box-sizing: border-box;
+  min-height: 190rpx;
+  font-size: 28rpx;
+  line-height: 1.55;
+  color: var(--ld-ink);
+}
+.corev-text-ph {
+  color: var(--ld-content-2);
+}
+.corev-count {
+  text-align: right;
+  font-size: 20rpx;
+  color: var(--ld-content-2);
+  margin-top: 8rpx;
+}
+
+/* ---------- 匿名开关（corev-anon） ---------- */
+.corev-anon {
+  display: flex;
+  align-items: center;
+  gap: 8rpx;
+  padding: 30rpx;
+}
+.corev-anon-text {
+  font-size: 28rpx;
+  color: var(--ld-ink);
+}
+.corev-anon-sub {
+  flex: 1;
+  font-size: 22rpx;
+  color: var(--ld-content-2);
+  margin-left: 18rpx;
+}
+.corev-switch {
+  position: relative;
+  flex: 0 0 auto;
+  width: 82rpx;
+  height: 48rpx;
+  border-radius: var(--ld-radius-pill);
+  background: #d8d5dd; /* 关态轨灰（设计 line-strong） */
+  transition: background 0.18s;
+}
+.corev-anon.on .corev-switch {
+  background: var(--ld-purple);
+}
+.corev-switch-dot {
+  position: absolute;
+  top: 6rpx;
+  left: 6rpx;
   width: 36rpx;
   height: 36rpx;
   border-radius: 50%;
-  border: 3rpx solid var(--ld-purple-line);
+  background: #ffffff;
+  box-shadow: 0 2rpx 4rpx rgba(54, 58, 80, 0.2);
+  transition: transform 0.18s;
 }
-.ld-check.on {
-  background: var(--ld-purple-tab);
-  border-color: var(--ld-purple-tab);
+.corev-anon.on .corev-switch-dot {
+  transform: translateX(34rpx);
 }
-.ld-rw-submit {
+
+/* ---------- 底部发布坞 ---------- */
+.corev-dock-space {
+  height: 160rpx;
+}
+.corev-dock {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: var(--ld-bg);
+  box-shadow: 0 -2rpx 0 var(--ld-line), 0 -8rpx 24rpx rgba(54, 58, 80, 0.06);
+}
+.corev-dockbar {
+  display: flex;
+  padding: 18rpx 30rpx calc(18rpx + env(safe-area-inset-bottom)) 30rpx;
+}
+.corev-publish {
+  flex: 1;
   text-align: center;
   padding: 26rpx 0;
   border-radius: var(--ld-radius-pill);
-  background: var(--ld-purple-ink);
+  background: var(--ld-purple);
   color: #ffffff;
   font-size: 30rpx;
   font-weight: 600;
 }
-.ld-rw-submit.dim {
+.corev-publish.dim {
   opacity: 0.5;
 }

@@ -1,19 +1,57 @@
-<view class="ld-aslist">
-  <view class="ld-as" wx:for="{{list}}" wx:key="id" data-id="{{item.orderId}}" bind:tap="onTapOrder">
-    <view class="ld-as-head">
-      <text class="ld-as-name">{{item.name}}{{item.spec ? '（' + item.spec + '）' : ''}} ×{{item.qty}}</text>
-      <text class="ld-as-status">{{item.statusLabel}}</text>
+<view class="co coas">
+  <view class="co-body">
+    <!-- 我的售后申请（数据源 getMyAfterSales·状态语义不变） -->
+    <view class="coas-sechead" wx:if="{{list.length}}">
+      <text class="coas-title">我的售后申请</text>
+      <text class="coas-sechead-sub">近 90 天</text>
     </view>
-    <view class="ld-as-mid" wx:if="{{item.reason}}">原因：{{item.reason}}</view>
-    <view class="ld-as-foot">
-      <text class="ld-as-time">{{item.appliedAtLabel}}</text>
-      <text class="ld-as-amount">退 {{item.refundAmountLabel}}</text>
-    </view>
-  </view>
 
-  <view class="ld-as-empty" wx:if="{{!loading && !list.length}}">
-    <view class="ld-empty-title">没有售后记录</view>
-    <view class="ld-empty-hint">需要退款时，从订单详情发起申请</view>
+    <view
+      class="co-card ldas-card"
+      wx:for="{{list}}"
+      wx:key="id"
+      data-id="{{item.orderId}}"
+      bind:tap="onTapOrder"
+    >
+      <view class="ldas-top">
+        <!-- 售后单无商品图字段→灰底占位 -->
+        <view class="coas-order-img"></view>
+        <view class="coas-order-mid">
+          <text class="coas-order-name">{{item.name}}{{item.spec ? '（' + item.spec + '）' : ''}}</text>
+          <text class="coas-order-meta">申请于 {{item.appliedAtLabel}} · ×{{item.qty}}</text>
+        </view>
+        <view class="ldas-amt">
+          <text class="ldas-amt-num">{{item.refundAmountLabel}}</text>
+          <text class="ldas-amt-cap">退款金额</text>
+        </view>
+      </view>
+
+      <view class="ldas-reason" wx:if="{{item.reason}}">
+        <text>原因：{{item.reason}}</text>
+      </view>
+
+      <view class="ldas-foot">
+        <view class="ldas-status ldas-{{item.status}}">
+          <text class="ldas-dot"></text>
+          <text>{{item.statusLabel}}</text>
+        </view>
+        <view class="ldas-link">
+          <text>查看订单</text>
+          <image class="ldas-chev" src="/static/icons/chevron-right.svg" mode="aspectFit" />
+        </view>
+      </view>
+    </view>
+
+    <text class="coas-note" wx:if="{{list.length}}">支持七天无理由退货 · 来回运费由商家承担，放心买</text>
+    <view class="ldas-more" wx:if="{{hasMore}}">上拉加载更多</view>
+
+    <!-- 空态 -->
+    <view class="coas-empty" wx:if="{{!loading && !list.length}}">
+      <view class="coas-empty-ico">
+        <image class="coas-empty-img" src="/static/icons/package.svg" mode="aspectFit" />
+      </view>
+      <text class="coas-empty-title">还没有售后记录</text>
+      <text class="coas-empty-hint">需要退款时，从订单详情发起申请</text>
+    </view>
   </view>
-  <view class="ld-as-more" wx:if="{{hasMore}}">上拉加载更多</view>
 </view>
