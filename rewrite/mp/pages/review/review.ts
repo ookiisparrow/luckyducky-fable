@@ -21,6 +21,10 @@ Page({
   },
   orderId: '',
   lineId: '',
+  backTimer: null as ReturnType<typeof setTimeout> | null,
+  onUnload() {
+    if (this.backTimer) clearTimeout(this.backTimer) // 延时返回坞清理（守卫 rw-mp-navback-timer-cleaned）
+  },
   onLoad(query: Record<string, string | undefined>) {
     this.orderId = String(query.orderId || '')
     this.lineId = String(query.lineId || '')
@@ -96,12 +100,13 @@ Page({
       this.data.anon,
       this.data.photos
     )
-    this.setData({ busy: false })
     if (r.ok) {
-      wx.showToast({ title: '感谢你的评价', icon: 'success' })
-      setTimeout(() => wx.navigateBack(), 800)
+      // 成功不复位 busy——锁到返回·防延时窗口内二次提交（撞主键回 REVIEWED 的矛盾 toast）；toast 加 mask·定时器存实例待清
+      wx.showToast({ title: '感谢你的评价', icon: 'success', mask: true })
+      this.backTimer = setTimeout(() => wx.navigateBack(), 800)
       return
     }
+    this.setData({ busy: false })
     const e = String(r.error || '')
     const msg =
       e === 'REVIEWED'

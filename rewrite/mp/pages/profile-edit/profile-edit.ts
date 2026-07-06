@@ -10,6 +10,10 @@ Page({
     avatarTemp: '', // 本次新选的临时路径（待上传）
     busy: false,
   },
+  backTimer: null as ReturnType<typeof setTimeout> | null,
+  onUnload() {
+    if (this.backTimer) clearTimeout(this.backTimer) // 延时返回坞清理（守卫 rw-mp-navback-timer-cleaned）
+  },
   async onLoad() {
     const u = await login()
     const user = (u.ok ? u.user : null) as Record<string, any> | null
@@ -45,11 +49,15 @@ Page({
       }
     }
     const r = await updateProfile(patch)
-    this.setData({ busy: false })
     if (r.ok && !avatarFailed) {
-      wx.showToast({ title: '已保存', icon: 'success' })
-      setTimeout(() => wx.navigateBack(), 600)
-    } else if (r.ok && avatarFailed) {
+      // 成功且无需停留：清临时头像（防二次上传孤儿文件）+ 保持 busy 锁定到返回·toast 加 mask 挡点·定时器存实例待清
+      this.setData({ avatarTemp: '' })
+      wx.showToast({ title: '已保存', icon: 'success', mask: true })
+      this.backTimer = setTimeout(() => wx.navigateBack(), 600)
+      return
+    }
+    this.setData({ busy: false })
+    if (r.ok && avatarFailed) {
       wx.showToast({ title: '资料已存，头像上传没成功', icon: 'none' })
     } else {
       wx.showToast({ title: '保存没成功，稍后再试', icon: 'none' })

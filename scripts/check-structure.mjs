@@ -84,6 +84,7 @@ export const RW_GOLDEN_REGISTRY = [
   { id: 'rw-admin-money-ui-golden', roots: ['#4', '#8', '#14'], test: 'rewrite/admin/tests/money-ui.test.ts' },
   { id: 'rw-admin-client-golden', roots: ['#3', '#5', '#14'], test: 'rewrite/admin/tests/client.test.ts' },
   { id: 'rw-admin-load-status-golden', roots: ['#14'], test: 'rewrite/admin/tests/status.test.ts' },
+  { id: 'rw-admin-latest-golden', roots: ['#8'], test: 'rewrite/admin/tests/latest.test.ts' },
   { id: 'rw-admin-fulfill-golden', roots: ['#8'], test: 'rewrite/admin/tests/fulfill.test.ts' },
   { id: 'rw-admin-videobatch-golden', roots: ['#8'], test: 'rewrite/admin/tests/videobatch.test.ts' },
   { id: 'rw-admin-products-ui-golden', roots: ['#8'], test: 'rewrite/admin/tests/products-ui.test.ts' },
@@ -4441,6 +4442,32 @@ export const repoChecks = [
       else if (!consentTs.includes('dataConsent')) bad.push('consent 页未调 dataConsent——同意/撤回没写到服务端真值')
       const me = rd('pages/me/me.ts')
       if (me && consentTs && !me.includes('consent')) bad.push('me 页无 consent 入口——授权管理页不可达')
+      return bad
+    },
+  },
+  {
+    // 延时自动返回坞的生命周期清理（病根#5 样板复制即漂移·根因#8 真机才炸）：多页把「提交成功 toast + setTimeout(navigateBack)」
+    // 这段坞复制来复制去，漏了清理——用户在延时窗口内手动返回（原生返回箭头/手势），页已出栈但 mp 的 setTimeout 绑 JS VM 不随
+    // navigateBack 取消，孤儿定时器到点再 navigateBack 多弹一层。守此不变量：凡 .ts 既有 setTimeout 又有 navigateBack（＝延时返回坞），
+    // 必有 onUnload + clearTimeout 清定时器。伴生纪律「成功导航分支不复位 busy（防延时窗口内二次提交）」机器难判，靠人（见 CLAUDE §6 副作用）。
+    id: 'rw-mp-navback-timer-cleaned',
+    roots: ['#5', '#8'],
+    desc: 'mp 延时自动返回坞生命周期清理（病根#5 样板漂移·根因#8）：凡 rewrite/mp 页 .ts 既 setTimeout 又 navigateBack（延时自动返回）须 onUnload + clearTimeout 清定时器，否则用户在延时窗口内手动返回→孤儿定时器再 navigateBack 多弹页（工具端不暴露·真机才炸）',
+    run() {
+      const base = join(ROOT, 'rewrite/mp')
+      if (!existsSync(base)) return []
+      const bad = []
+      const pagesDir = join(base, 'pages')
+      if (!existsSync(pagesDir)) return []
+      for (const p of readdirSync(pagesDir)) {
+        const tsPath = join(pagesDir, p, `${p}.ts`)
+        if (!existsSync(tsPath)) continue
+        const src = readFileSync(tsPath, 'utf8')
+        // 延时返回坞：既 setTimeout 又 navigateBack（延时自动返回·同步 navigateBack 或纯定时器不算）
+        if (!/setTimeout\s*\(/.test(src) || !/navigateBack/.test(src)) continue
+        if (!/onUnload\s*\(/.test(src) || !/clearTimeout\s*\(/.test(src))
+          bad.push(`pages/${p}/${p}.ts 有 setTimeout+navigateBack 延时返回但缺 onUnload+clearTimeout——延时窗口内手动返回→孤儿定时器再 navigateBack 多弹页（病根#5·根因#8）`)
+      }
       return bad
     },
   },

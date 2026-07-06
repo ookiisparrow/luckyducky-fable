@@ -18,6 +18,10 @@ Page({
     count: 0, // 合计件数（草稿含已勾搭配购·底坞展示）
     submitting: false,
   },
+  backTimer: null as ReturnType<typeof setTimeout> | null,
+  onUnload() {
+    if (this.backTimer) clearTimeout(this.backTimer) // 空车延时返回坞清理（守卫 rw-mp-navback-timer-cleaned）
+  },
   onShow() {
     // onShow 而非 onLoad：从地址列表/编辑页返回时刷新选中地址
     this.refresh()
@@ -26,7 +30,8 @@ Page({
     const draft = checkout.getDraft()
     if (!draft.items.length) {
       wx.showToast({ title: '还没有要结算的商品', icon: 'none' })
-      setTimeout(() => wx.navigateBack(), 600)
+      if (this.backTimer) clearTimeout(this.backTimer)
+      this.backTimer = setTimeout(() => wx.navigateBack(), 600)
       return
     }
     const s = checkout.summaryFen()
@@ -61,13 +66,15 @@ Page({
       draft.items.map((l) => ({ id: l.id, sku: l.sku, qty: l.qty })),
       { name: a.name, phone: a.phone, region: a.region, detail: a.detail }
     )
-    this.setData({ submitting: false })
     if (!r.ok) {
-      // 云端拒单如实反馈（缺货/停售/配置缺失等·不吞错）
+      // 云端拒单如实反馈（缺货/停售/配置缺失等·不吞错）——唯一留在本页的路径·此处才解锁重试
+      this.setData({ submitting: false })
       const msg = String(r.error || '')
       wx.showToast({ title: msg.startsWith('OUT_OF_STOCK') ? '有商品库存不足' : '下单没成功，稍后再试', icon: 'none' })
       return
     }
+    // 建单成功后每条后续路径都会离开结算页（redirectTo 成功页 / startPay 内 requestPayment 成功→成功页、取消/失败→switchTab 首页），
+    // submitting 保持锁定不复位——防「支付发起期间草稿已被 finishSubmitted 清空、第二次点击绕过守卫再 createOrder」（病根#1 双提交）。
     const amountFen = checkout.summaryFen().amountFen // 捕获实付分（finishSubmitted 消费草稿前）·透传成功页展示用
     checkout.finishSubmitted() // 购物车按实际提交数量精确扣
     const order = (r.order || {}) as Record<string, any>
