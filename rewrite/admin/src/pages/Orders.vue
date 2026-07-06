@@ -51,11 +51,14 @@ const batch = ref<{
 } | null>(null)
 
 const listGen = useLatest() // 列表乱序守卫（P2·快切标签/搜索时旧结果别覆盖新标签·根因#8）
+const reloading = ref(false) // reload 专属在途标志（迭代G：more 的加载闸原用多写者 message 文案·脆弱·改此单写布尔）
 async function reload() {
   message.value = '加载中…'
+  reloading.value = true
   const my = listGen.begin()
   const [r, c] = await Promise.all([listOrders(tab.value, undefined, 20, activeQ.value), orderCounts()])
-  if (listGen.isStale(my)) return // 已切别标签/搜索·丢弃过期列表（防高亮标签与内容错配）
+  if (listGen.isStale(my)) return // 已切别标签/搜索·丢弃过期列表（防高亮标签与内容错配·由更新的 reload 负责复位 reloading）
+  reloading.value = false // 本次是最新·加载完成
   if ((r as any).error === 'SESSION_LOST') return
   rows.value = r.ok ? mapOrderRows((r as any).list) : []
   cursor.value = r.ok ? (r as any).nextCursor : null
@@ -66,7 +69,7 @@ async function reload() {
 
 async function more() {
   if (!hasMore.value || cursor.value == null) return
-  if (message.value === '加载中…') return // reload 在途时不翻页（cursor 还是旧的·会跳页）——覆盖 reload 先于 more 的序
+  if (reloading.value) return // reload 在途时不翻页（cursor 还是旧的·会跳页）——覆盖 reload 先于 more 的序（单写布尔·不受 message 多写者干扰）
   const gen = listGen.peek() // 绑定当前 reload 代际·不递增（不反噬在途 reload）·任何新 reload 会作废本页（迭代F 逮出）
   const r = await listOrders(tab.value, cursor.value, 20, activeQ.value)
   if (listGen.isStale(gen)) return // 期间发生过 reload（切标签/搜索/刷新/动作后刷新）·放弃本页（防混排 + 游标跳页）

@@ -36,12 +36,15 @@ async function loadReport() {
 // 发起检索时的筛选快照（翻页复用·防用户改输入框后点「更早」用新筛选+旧 cursor 串档·P2）
 let searchFilter: { openid?: string; externalUserId?: string; keyword?: string } = {}
 const pageGen = useLatest() // 检索/翻页乱序守卫（P2·在途时又检索/翻页·旧结果别覆盖/混排新结果·根因#8）
+const searching = ref(false) // search 专属在途标志（迭代G·单写布尔·more 加载闸不受 loadReport 等旁路 message 写者干扰）
 async function search() {
   message.value = '检索中…'
+  searching.value = true
   searchFilter = { openid: openid.value.trim() || undefined, externalUserId: externalUserId.value.trim() || undefined, keyword: keyword.value.trim() || undefined }
   const my = pageGen.begin()
   const r = await searchConversations(searchFilter)
-  if (pageGen.isStale(my)) return // 已发起更新的检索/翻页·丢弃过期结果
+  if (pageGen.isStale(my)) return // 已发起更新的检索·丢弃过期结果（由更新的 search 负责复位 searching）
+  searching.value = false // 本次是最新·检索完成
   msgs.value = r.ok ? mapMessages(r.messages) : []
   cursor.value = r.ok ? r.nextCursor : null
   hasMore.value = !!(r.ok && r.hasMore)
@@ -51,7 +54,7 @@ async function search() {
 
 async function more() {
   if (!hasMore.value || cursor.value == null) return
-  if (message.value === '检索中…') return // 检索在途时不翻页（cursor 还是旧的）——覆盖 search 先于 more 的序
+  if (searching.value) return // 检索在途时不翻页（cursor 还是旧的）——覆盖 search 先于 more 的序（单写布尔·不受 loadReport 等旁路 message 写者干扰）
   const gen = pageGen.peek() // 绑定当前 search 代际·不递增（不反噬在途 search）·新检索会作废本页（迭代F 逮出）
   const r = await searchConversations({ ...searchFilter, cursor: cursor.value }) // 复用检索快照·不现读输入框（防串档）
   if (pageGen.isStale(gen)) return // 期间又检索·放弃本页（防混排）
