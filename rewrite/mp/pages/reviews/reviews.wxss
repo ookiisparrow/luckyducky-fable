@@ -1,113 +1,159 @@
-.ld-reviews {
+/* 全部评价·重设计对齐 ProductDetail.jsx ReviewsPage（评分摘要+分布条+标签 chip+评价列表）。
+   设计 402px 画板→rpx（×1.87）。灰底全宽白卡·发丝线分隔行；token 见 styles/tokens.wxss。 */
+.ld-rv-page {
   min-height: 100vh;
-  background: var(--ld-bg-lilac);
-  padding: 24rpx 24rpx 40rpx;
+  background: var(--ld-bg-grey);
+  padding-bottom: 40rpx;
 }
+
+/* 评分摘要（白卡全宽） */
 .ld-rv-summary {
-  padding: 28rpx;
-  margin-bottom: 24rpx;
   background: var(--ld-bg);
-  border-radius: var(--ld-radius);
-  border: 2rpx solid var(--ld-purple-line);
 }
-.ld-rv-scorerow {
+.ld-rv-head {
   display: flex;
-  align-items: baseline;
-  gap: 16rpx;
-  margin-bottom: 16rpx;
+  align-items: center;
+  gap: 36rpx;
+  padding: 28rpx 38rpx 16rpx;
 }
 .ld-rv-score {
-  font-size: 56rpx;
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+.ld-rv-num {
+  font-size: 64rpx;
   font-weight: 700;
-  color: var(--ld-purple-ink);
+  line-height: 1;
+  color: var(--ld-ink);
 }
 .ld-rv-count {
-  font-size: 24rpx;
-  color: var(--ld-purple-meta);
+  margin-top: 8rpx;
+  font-size: 22rpx;
+  color: var(--ld-content-2);
 }
-.ld-rv-dist {
+.ld-rv-bars {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 10rpx;
+}
+.ld-rv-bar {
   display: flex;
   align-items: center;
   gap: 16rpx;
-  padding: 6rpx 0;
 }
-.ld-rv-dist-label {
-  width: 80rpx;
+.ld-rv-bar-lbl {
+  width: 60rpx;
   font-size: 22rpx;
-  color: var(--ld-purple-meta);
+  color: var(--ld-content-2);
 }
-.ld-rv-bar {
+.ld-rv-track {
   flex: 1;
-  height: 12rpx;
+  height: 10rpx;
   border-radius: var(--ld-radius-pill);
-  background: var(--ld-bg-faint);
+  background: var(--ld-line);
   overflow: hidden;
 }
-.ld-rv-bar-fill {
+.ld-rv-fill {
   height: 100%;
-  background: var(--ld-purple);
+  background: var(--ld-duck-deep);
   border-radius: var(--ld-radius-pill);
 }
-.ld-rv-dist-pct {
-  width: 64rpx;
-  text-align: right;
-  font-size: 22rpx;
-  color: var(--ld-purple-meta);
+
+/* 星（鸭黄暖点） */
+.ld-rv-stars {
+  color: var(--ld-duck-deep);
+  font-size: 24rpx;
+  letter-spacing: 3rpx;
 }
-.ld-rv-tags,
+.ld-rv-stars-lg {
+  margin-top: 8rpx;
+  font-size: 26rpx;
+}
+
+/* 标签 chip */
+.ld-rv-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16rpx;
+  padding: 12rpx 38rpx 26rpx;
+}
+.ld-rv-chip {
+  padding: 12rpx 22rpx;
+  border-radius: var(--ld-radius-pill);
+  background: var(--ld-bg-grey);
+  font-size: 24rpx;
+  color: var(--ld-content);
+}
+.ld-rv-chip-n {
+  margin-left: 6rpx;
+  color: var(--ld-content-2);
+}
+
+/* 评价列表（白卡全宽·行间发丝线） */
+.ld-rv-list {
+  margin-top: 20rpx;
+  background: var(--ld-bg);
+}
+.ld-rv-item {
+  display: flex;
+  flex-direction: column;
+  gap: 16rpx;
+  padding: 26rpx 38rpx;
+  border-top: 2rpx solid var(--ld-line-soft);
+}
+.ld-rv-item:first-child {
+  border-top: none;
+}
+.ld-rv-item-top {
+  display: flex;
+  align-items: center;
+  gap: 16rpx;
+}
+.ld-rv-av {
+  flex: 0 0 auto;
+  width: 52rpx;
+  height: 52rpx;
+  border-radius: var(--ld-radius-pill);
+  background: var(--ld-bg-sage);
+}
+.ld-rv-name {
+  flex: 1;
+  font-size: 26rpx;
+  color: var(--ld-ink);
+}
+.ld-rv-date {
+  font-size: 22rpx;
+  color: var(--ld-content-2);
+}
+.ld-rv-spec {
+  font-size: 22rpx;
+  color: var(--ld-content-2);
+}
+.ld-rv-text {
+  font-size: 26rpx;
+  line-height: 1.6;
+  color: var(--ld-content);
+}
 .ld-rv-tagrow {
   display: flex;
   flex-wrap: wrap;
   gap: 12rpx;
-  margin-top: 16rpx;
 }
 .ld-rv-tag {
-  padding: 6rpx 20rpx;
+  padding: 8rpx 18rpx;
   border-radius: var(--ld-radius-pill);
-  background: var(--ld-bg-lilac);
-  border: 2rpx solid var(--ld-purple-line);
+  background: var(--ld-bg-grey);
   font-size: 22rpx;
-  color: var(--ld-purple-tab);
+  color: var(--ld-content-2);
 }
-.ld-rv {
-  padding: 24rpx 28rpx;
-  margin-bottom: 20rpx;
-  background: var(--ld-bg);
-  border-radius: var(--ld-radius);
-  border: 2rpx solid var(--ld-purple-line);
-}
-.ld-rv-head {
-  display: flex;
-  justify-content: space-between;
-}
-.ld-rv-name {
-  font-size: 26rpx;
-  font-weight: 600;
-  color: var(--ld-ink);
-}
-.ld-rv-stars {
-  font-size: 24rpx;
-  color: var(--ld-purple);
-}
-.ld-rv-spec {
-  margin-top: 6rpx;
-  font-size: 22rpx;
-  color: var(--ld-purple-meta);
-}
-.ld-rv-text {
-  margin-top: 12rpx;
-  font-size: 26rpx;
-  color: var(--ld-ink);
-  line-height: 1.6;
-}
-.ld-rv-time {
-  margin-top: 12rpx;
-  font-size: 22rpx;
-  color: var(--ld-purple-meta);
-}
+
+/* 空态 / 加载更多 */
 .ld-rv-empty {
-  text-align: center;
   padding: 140rpx 0;
+  text-align: center;
 }
 .ld-empty-title {
   font-size: 30rpx;
@@ -117,11 +163,11 @@
 .ld-empty-hint {
   margin-top: 10rpx;
   font-size: 24rpx;
-  color: var(--ld-purple-meta);
+  color: var(--ld-content-2);
 }
 .ld-rv-more {
+  padding: 24rpx 0;
   text-align: center;
-  padding: 20rpx 0;
   font-size: 22rpx;
-  color: var(--ld-purple-meta);
+  color: var(--ld-content-2);
 }

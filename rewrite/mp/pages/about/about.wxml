@@ -1,14 +1,26 @@
 <view class="ld-about">
-  <view class="ld-ab-brand">{{brand}}</view>
-  <view class="ld-ab-lead">{{lead}}</view>
-  <view class="ld-panel" wx:for="{{sections}}" wx:key="*this">
-    <view class="ld-ab-h">{{item[0]}}</view>
-    <view class="ld-ab-p">{{item[1]}}</view>
+  <!-- 品牌区（居中·复用 wordmark） -->
+  <view class="ld-ab-hero">
+    <image class="ld-ab-logo" src="/static/logo-wordmark.svg" mode="aspectFit" />
+    <view class="ld-ab-brand">{{brand}}</view>
+    <view class="ld-ab-lead">{{lead}}</view>
   </view>
-  <view class="ld-ab-links">
-    <text class="ld-ab-link" bind:tap="onUserAgreement">用户协议</text>
-    <text class="ld-ab-sep">·</text>
-    <text class="ld-ab-link" bind:tap="onPrivacy">隐私政策</text>
+
+  <!-- 信息卡·发丝线分隔的三段自述 -->
+  <view class="ld-ab-card">
+    <view class="ld-ab-block" wx:for="{{sections}}" wx:key="index">
+      <view class="ld-ab-h">{{item[0]}}</view>
+      <view class="ld-ab-p">{{item[1]}}</view>
+    </view>
   </view>
-  <view class="ld-ab-version" wx:if="{{version}}">版本 {{version}}</view>
+
+  <!-- 页脚·协议链接 + 版本 -->
+  <view class="ld-ab-foot">
+    <view class="ld-ab-links">
+      <text class="ld-ab-link" bind:tap="onUserAgreement">用户协议</text>
+      <text class="ld-ab-sep">·</text>
+      <text class="ld-ab-link" bind:tap="onPrivacy">隐私政策</text>
+    </view>
+    <view class="ld-ab-version" wx:if="{{version}}">版本 {{version}}</view>
+  </view>
 </view>

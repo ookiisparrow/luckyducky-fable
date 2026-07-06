@@ -1,10 +1,19 @@
-<view class="ld-consent">
+<view class="cs">
   <view class="cs-card">
-    <text class="cs-h">关于外包/第三方客服访问你的数据</text>
+    <view class="cs-head">
+      <view class="cs-head-ico">
+        <image class="cs-head-img" src="/static/icons/shield-check.svg" mode="aspectFit" />
+      </view>
+      <text class="cs-h">关于外包/第三方客服访问你的数据</text>
+    </view>
+
     <text class="cs-p">为向你提供客服与售后支持，我们可能安排外包或第三方客服（受托客服人员）在为你服务所必需的范围内，查看你的订单、物流、学习进度与咨询记录等数据，以更准确地响应你的请求。</text>
     <text class="cs-p">此类第三方受托客服访问以你的同意为前提。你可在本页随时同意或撤回该数据共享授权；撤回后，外包坐席将无法再查看你的上述数据（不影响此前已依约进行的处理）。</text>
 
+    <view class="cs-div"></view>
+
     <view class="cs-state {{state === true ? 'on' : ''}} {{state === false ? 'off' : ''}}">
+      <view class="cs-dot"></view>
       <text class="cs-state-t">{{stateLabel}}</text>
     </view>
 
@@ -12,8 +21,11 @@
       <view class="cs-btn primary {{busy ? 'dim' : ''}}" bind:tap="onAgree"><text class="cs-btn-t on">同意共享</text></view>
       <view class="cs-btn ghost {{busy ? 'dim' : ''}}" bind:tap="onRevoke"><text class="cs-btn-t">撤回授权</text></view>
     </view>
-
-    <view class="cs-link" bind:tap="onPolicy"><text class="cs-link-t">查看完整隐私政策 ›</text></view>
-    <text class="cs-note">以服务端记录为准；如需协助可通过本小程序客服与我们联系。</text>
   </view>
+
+  <view class="cs-row" hover-class="cs-row-h" bind:tap="onPolicy">
+    <text class="cs-row-t">查看完整隐私政策 ›</text>
+  </view>
+
+  <text class="cs-note">以服务端记录为准；如需协助可通过本小程序客服与我们联系。</text>
 </view>

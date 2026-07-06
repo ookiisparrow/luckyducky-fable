@@ -40,6 +40,7 @@ export function mapReviews(list: unknown): ReviewVM[] {
 
 export interface SummaryVM {
   scoreLabel: string
+  scoreStars: string
   count: number
   dist: Array<{ label: string; pct: number }>
   tags: Array<{ tag: string; n: number }>
@@ -52,6 +53,7 @@ export function mapSummary(summary: unknown): SummaryVM | null {
   if (!Number.isInteger(count) || count <= 0) return null
   return {
     scoreLabel: String(s.score || '0'),
+    scoreStars: stars(s.score), // 摘要星行·由真实均分四舍五入派生（非写死）
     count,
     dist: (Array.isArray(s.dist) ? s.dist : [])
       .filter((d: any) => Array.isArray(d) && d.length >= 2)

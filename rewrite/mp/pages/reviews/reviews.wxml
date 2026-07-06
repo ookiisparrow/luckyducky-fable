@@ -1,30 +1,39 @@
-<view class="ld-reviews">
+<view class="ld-rv-page">
+  <!-- 评分摘要：大号均分 + 星 + 分布条 + 标签 chip（真实 summary·条数 0 时 mapSummary 返 null 不渲染） -->
   <view class="ld-rv-summary" wx:if="{{summary}}">
-    <view class="ld-rv-scorerow">
-      <text class="ld-rv-score">{{summary.scoreLabel}}</text>
-      <text class="ld-rv-count">{{summary.count}} 条评价</text>
+    <view class="ld-rv-head">
+      <view class="ld-rv-score">
+        <text class="ld-rv-num">{{summary.scoreLabel}}</text>
+        <text class="ld-rv-stars ld-rv-stars-lg">{{summary.scoreStars}}</text>
+        <text class="ld-rv-count">{{summary.count}} 条评价</text>
+      </view>
+      <view class="ld-rv-bars">
+        <view class="ld-rv-bar" wx:for="{{summary.dist}}" wx:key="label">
+          <text class="ld-rv-bar-lbl">{{item.label}}</text>
+          <view class="ld-rv-track"><view class="ld-rv-fill" style="width: {{item.pct}}%"></view></view>
+        </view>
+      </view>
     </view>
-    <view class="ld-rv-dist" wx:for="{{summary.dist}}" wx:key="label">
-      <text class="ld-rv-dist-label">{{item.label}}</text>
-      <view class="ld-rv-bar"><view class="ld-rv-bar-fill" style="width: {{item.pct}}%"></view></view>
-      <text class="ld-rv-dist-pct">{{item.pct}}%</text>
-    </view>
-    <view class="ld-rv-tags" wx:if="{{summary.tags.length}}">
-      <text class="ld-rv-tag" wx:for="{{summary.tags}}" wx:key="tag">{{item.tag}} {{item.n}}</text>
+    <view class="ld-rv-chips" wx:if="{{summary.tags.length}}">
+      <view class="ld-rv-chip" wx:for="{{summary.tags}}" wx:key="tag">{{item.tag}}<text class="ld-rv-chip-n">{{item.n}}</text></view>
     </view>
   </view>
 
-  <view class="ld-rv" wx:for="{{list}}" wx:key="index">
-    <view class="ld-rv-head">
-      <text class="ld-rv-name">{{item.name}}</text>
+  <!-- 评价列表（游标分页·onReachBottom 追加·守卫 reviews-list-paged） -->
+  <view class="ld-rv-list" wx:if="{{list.length}}">
+    <view class="ld-rv-item" wx:for="{{list}}" wx:key="index">
+      <view class="ld-rv-item-top">
+        <view class="ld-rv-av"></view>
+        <text class="ld-rv-name">{{item.name}}</text>
+        <text class="ld-rv-date">{{item.timeLabel}}</text>
+      </view>
       <text class="ld-rv-stars">{{item.stars}}</text>
+      <view class="ld-rv-spec" wx:if="{{item.spec}}">{{item.spec}}</view>
+      <text class="ld-rv-text" wx:if="{{item.text}}">{{item.text}}</text>
+      <view class="ld-rv-tagrow" wx:if="{{item.tags.length}}">
+        <text class="ld-rv-tag" wx:for="{{item.tags}}" wx:for-item="t" wx:key="*this">{{t}}</text>
+      </view>
     </view>
-    <view class="ld-rv-spec" wx:if="{{item.spec}}">{{item.spec}}</view>
-    <view class="ld-rv-text" wx:if="{{item.text}}">{{item.text}}</view>
-    <view class="ld-rv-tagrow" wx:if="{{item.tags.length}}">
-      <text class="ld-rv-tag" wx:for="{{item.tags}}" wx:for-item="t" wx:key="*this">{{t}}</text>
-    </view>
-    <view class="ld-rv-time">{{item.timeLabel}}</view>
   </view>
 
   <view class="ld-rv-empty" wx:if="{{!loading && !list.length}}">

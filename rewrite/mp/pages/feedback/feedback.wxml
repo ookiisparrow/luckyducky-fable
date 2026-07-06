@@ -1,11 +1,34 @@
-<view class="ld-fb">
-  <view class="ld-fb-cats">
-    <text wx:for="{{cats}}" wx:key="key" class="ld-fb-cat {{cat === item.key ? 'on' : ''}}" data-key="{{item.key}}" bind:tap="onCat">{{item.label}}</text>
+<!-- 意见反馈·一致性对齐 profile-edit/checkout co-* 白卡版式（本屏无设计源·按已建立设计语言重排·文案/字段一字未动）。
+     业务逻辑全承接 feedback.ts：cats/cat→onCat、content→onContent、contact→onContact、busy/onSubmit 提交。 -->
+<view class="co fb">
+  <view class="co-body">
+
+    <!-- 反馈类型（分段 pill·承接 cats/cat·onCat 不改） -->
+    <view class="fb-cats">
+      <text wx:for="{{cats}}" wx:key="key" class="fb-cat {{cat === item.key ? 'on' : ''}}" data-key="{{item.key}}" bind:tap="onCat">{{item.label}}</text>
+    </view>
+
+    <!-- 反馈正文卡（文本域 + 字数） -->
+    <view class="co-card fb-card">
+      <textarea class="fb-text" value="{{content}}" bind:input="onContent" maxlength="500" placeholder="遇到的问题、想要的功能，都可以告诉我们（最多 500 字）" placeholder-class="fb-ph" />
+      <view class="fb-count">{{content.length}}/500</view>
+    </view>
+
+    <!-- 联系方式卡（发丝线 field 行风格） -->
+    <view class="co-card fb-form">
+      <view class="fb-field">
+        <text class="fb-label">联系方式</text>
+        <input class="fb-input" value="{{contact}}" bind:input="onContact" maxlength="100" placeholder="微信号/手机号（选填，方便回访）" placeholder-class="fb-ph" />
+      </view>
+    </view>
+
   </view>
-  <textarea class="ld-fb-text" value="{{content}}" bind:input="onContent" maxlength="500" placeholder="遇到的问题、想要的功能，都可以告诉我们（最多 500 字）" />
-  <view class="ld-field">
-    <text class="ld-field-label">联系方式</text>
-    <input class="ld-field-input" value="{{contact}}" bind:input="onContact" maxlength="100" placeholder="微信号/手机号（选填，方便回访）" />
+
+  <!-- 底部提交坞（全宽主 CTA） -->
+  <view class="co-dock-space"></view>
+  <view class="co-dock">
+    <view class="co-dockbar">
+      <view class="co-submit {{busy ? 'dim' : ''}}" bind:tap="onSubmit">提交</view>
+    </view>
   </view>
-  <view class="ld-fb-submit {{busy ? 'dim' : ''}}" bind:tap="onSubmit">提交</view>
 </view>

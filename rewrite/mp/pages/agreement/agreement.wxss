@@ -1,47 +1,97 @@
-.ld-agree {
+/* 用户协议 / 隐私政策·法律文本阅读版式（一致性对齐·无独立设计）。
+   白卡 + 发丝线分隔（承接 me/detail 词汇）·中性文字 token·舒适行高。
+   正文文案逐字承接旧线（守卫 agreement-text-real）·此处只重排版不动内容。 */
+.ld-ag {
   min-height: 100vh;
   background: var(--ld-bg-lilac);
-  padding: 32rpx 28rpx 60rpx;
+  padding: 28rpx 28rpx 72rpx;
+}
+
+/* —— 引言块（白卡·lead） —— */
+.ld-ag-lead {
+  padding: 34rpx 32rpx;
+  background: var(--ld-bg);
+  border: 2rpx solid var(--ld-line);
+  border-radius: var(--ld-radius-md);
+  margin-bottom: 24rpx;
 }
 .ld-ag-updated {
   font-size: 22rpx;
-  color: var(--ld-purple-meta);
-  margin-bottom: 16rpx;
+  letter-spacing: 1rpx;
+  color: var(--ld-content-2);
+  margin-bottom: 18rpx;
 }
 .ld-ag-intro {
-  font-size: 26rpx;
-  color: var(--ld-ink);
-  line-height: 1.7;
-  margin-bottom: 24rpx;
+  font-size: 27rpx;
+  line-height: 1.85;
+  color: var(--ld-content);
 }
-.ld-panel {
-  padding: 26rpx;
-  margin-bottom: 18rpx;
+
+/* —— 条款正文（白卡·发丝线分隔） —— */
+.ld-ag-body {
+  padding: 6rpx 32rpx 8rpx;
   background: var(--ld-bg);
-  border-radius: var(--ld-radius);
-  border: 2rpx solid var(--ld-purple-line);
+  border: 2rpx solid var(--ld-line);
+  border-radius: var(--ld-radius-md);
+}
+.ld-ag-art {
+  position: relative;
+  padding: 30rpx 0;
+}
+.ld-ag-art + .ld-ag-art::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 1rpx;
+  background: var(--ld-line);
 }
 .ld-ag-h {
-  font-size: 27rpx;
+  font-size: 30rpx;
   font-weight: 600;
+  line-height: 1.4;
   color: var(--ld-ink);
-  margin-bottom: 10rpx;
+  margin-bottom: 14rpx;
 }
 .ld-ag-p {
-  font-size: 25rpx;
-  color: var(--ld-ink);
-  line-height: 1.7;
+  font-size: 27rpx;
+  line-height: 1.85;
+  color: var(--ld-content);
 }
+
+/* —— 隐私：数据共享授权管理入口 —— */
 .ld-ag-consent {
+  display: flex;
+  align-items: center;
+  gap: 16rpx;
   margin-top: 24rpx;
-  text-align: center;
-  font-size: 26rpx;
-  color: var(--ld-purple-tab);
-  text-decoration: underline;
+  padding: 30rpx 32rpx;
+  background: var(--ld-bg);
+  border: 2rpx solid var(--ld-line);
+  border-radius: var(--ld-radius-md);
 }
+.ld-ag-consent-h {
+  background: var(--ld-bg-lilac);
+}
+.ld-ag-consent-t {
+  flex: 1;
+  font-size: 28rpx;
+  font-weight: 500;
+  color: var(--ld-purple-tab);
+}
+.ld-ag-consent-chev {
+  font-size: 34rpx;
+  line-height: 1;
+  color: var(--ld-purple-line);
+}
+
+/* —— 结尾说明 —— */
 .ld-ag-note {
-  margin-top: 24rpx;
+  margin-top: 30rpx;
+  padding: 0 12rpx;
   text-align: center;
   font-size: 22rpx;
-  color: var(--ld-purple-meta);
+  line-height: 1.7;
+  color: var(--ld-content-2);
 }

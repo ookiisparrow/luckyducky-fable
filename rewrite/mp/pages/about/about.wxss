@@ -1,54 +1,87 @@
+/* 关于我们·一致性对齐（无设计稿·照 me/home 已建立设计语言：居中品牌区 + 白卡发丝线分隔）。
+   token 见 styles/tokens.wxss；logo 复用 static/logo-wordmark.svg。文案不动·只重版式。 */
 .ld-about {
   min-height: 100vh;
   background: var(--ld-bg-lilac);
-  padding: 48rpx 32rpx;
+  padding: 56rpx 36rpx calc(80rpx + env(safe-area-inset-bottom));
+}
+
+/* —— 品牌区（居中·同首页 intro/me 头部气质） —— */
+.ld-ab-hero {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  padding: 24rpx 12rpx 12rpx;
+}
+.ld-ab-logo {
+  width: 300rpx;
+  height: 146rpx; /* wordmark 70:34≈2.06·固定 rpx 保比例（避 aspect-ratio） */
+  filter: drop-shadow(0 2rpx 4rpx rgba(0, 0, 0, 0.08));
 }
 .ld-ab-brand {
-  font-size: 44rpx;
+  margin-top: 30rpx;
+  font-size: 40rpx;
   font-weight: 700;
+  letter-spacing: -0.5rpx;
   color: var(--ld-purple-ink);
-  text-align: center;
 }
 .ld-ab-lead {
-  margin: 16rpx 0 36rpx;
+  max-width: 540rpx;
+  margin-top: 18rpx;
   font-size: 26rpx;
-  color: var(--ld-purple-meta);
-  text-align: center;
+  line-height: 1.6;
+  color: var(--ld-content-2);
 }
-.ld-panel {
-  padding: 28rpx;
-  margin-bottom: 20rpx;
-  background: var(--ld-bg);
-  border-radius: var(--ld-radius);
-  border: 2rpx solid var(--ld-purple-line);
+
+/* —— 信息卡·发丝线分隔（同 me 页列表分隔铁律） —— */
+.ld-ab-card {
+  margin-top: 44rpx;
+  background: #fff;
+  border: 2rpx solid var(--ld-line);
+  border-radius: var(--ld-radius-md);
+  overflow: hidden;
+}
+.ld-ab-block {
+  padding: 34rpx 36rpx;
+}
+.ld-ab-block + .ld-ab-block {
+  border-top: 1rpx solid var(--ld-line);
 }
 .ld-ab-h {
   font-size: 28rpx;
   font-weight: 600;
-  color: var(--ld-ink);
-  margin-bottom: 12rpx;
+  letter-spacing: 0.5rpx;
+  color: var(--ld-purple-tab);
+  margin-bottom: 14rpx;
 }
 .ld-ab-p {
-  font-size: 26rpx;
-  color: var(--ld-ink);
-  line-height: 1.7;
+  font-size: 27rpx;
+  line-height: 1.75;
+  color: var(--ld-content);
+}
+
+/* —— 页脚·协议 + 版本 —— */
+.ld-ab-foot {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  margin-top: 48rpx;
 }
 .ld-ab-links {
-  margin-top: 32rpx;
-  text-align: center;
+  display: flex;
+  align-items: center;
+  gap: 16rpx;
   font-size: 24rpx;
 }
 .ld-ab-link {
   color: var(--ld-purple-tab);
-  text-decoration: underline;
 }
 .ld-ab-sep {
-  margin: 0 16rpx;
-  color: var(--ld-purple-meta);
+  color: var(--ld-purple-line);
 }
 .ld-ab-version {
   margin-top: 20rpx;
-  text-align: center;
   font-size: 22rpx;
-  color: var(--ld-purple-meta);
+  color: var(--ld-content-2);
 }

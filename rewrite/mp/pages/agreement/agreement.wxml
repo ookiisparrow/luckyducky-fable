@@ -1,10 +1,23 @@
-<view class="ld-agree">
-  <view class="ld-ag-updated">更新日期：{{doc.updated}}</view>
-  <view class="ld-ag-intro">{{doc.intro}}</view>
-  <view class="ld-panel" wx:for="{{doc.articles}}" wx:key="*this">
-    <view class="ld-ag-h">{{item[0]}}</view>
-    <view class="ld-ag-p">{{item[1]}}</view>
+<view class="ld-ag">
+  <!-- 引言（白卡·lead） -->
+  <view class="ld-ag-lead">
+    <view class="ld-ag-updated">更新日期：{{doc.updated}}</view>
+    <view class="ld-ag-intro">{{doc.intro}}</view>
   </view>
-  <view class="ld-ag-consent" wx:if="{{isPrivacy}}" bind:tap="onConsent">管理数据共享授权 ›</view>
+
+  <!-- 条款正文（白卡·发丝线分隔·逐条法律文本原样） -->
+  <view class="ld-ag-body">
+    <view class="ld-ag-art" wx:for="{{doc.articles}}" wx:key="*this">
+      <view class="ld-ag-h">{{item[0]}}</view>
+      <view class="ld-ag-p">{{item[1]}}</view>
+    </view>
+  </view>
+
+  <!-- 隐私政策：数据共享授权管理入口 -->
+  <view class="ld-ag-consent" wx:if="{{isPrivacy}}" hover-class="ld-ag-consent-h" bind:tap="onConsent">
+    <text class="ld-ag-consent-t">管理数据共享授权</text>
+    <text class="ld-ag-consent-chev">›</text>
+  </view>
+
   <view class="ld-ag-note">如对本条款有任何疑问，可通过本小程序客服与我们联系。</view>
 </view>

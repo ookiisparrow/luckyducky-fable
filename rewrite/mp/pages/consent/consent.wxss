@@ -1,35 +1,79 @@
-.ld-consent {
+/* 数据共享授权页·一致性对齐（无设计稿）：照 agreement 隐私页系（丁香底+紫描白卡）与 me 卡片词汇
+   重排，文案/字段/handler 一字不动·只换版式。token 见 styles/tokens.wxss。 */
+.cs {
   min-height: 100vh;
   background: var(--ld-bg-lilac);
-  padding: 24rpx 32rpx 64rpx;
+  padding: 32rpx 28rpx 60rpx;
   box-sizing: border-box;
 }
+
+/* —— 主白卡 —— */
 .cs-card {
   background: var(--ld-bg);
-  border: 1rpx solid var(--ld-purple-line);
+  border: 2rpx solid var(--ld-purple-line);
   border-radius: var(--ld-radius);
-  padding: 36rpx;
+  padding: 34rpx 30rpx;
+}
+
+/* 标题行·盾形图标点题 */
+.cs-head {
+  display: flex;
+  align-items: center;
+  gap: 20rpx;
+  margin-bottom: 26rpx;
+}
+.cs-head-ico {
+  flex: 0 0 auto;
+  width: 76rpx;
+  height: 76rpx;
+  border-radius: 50%;
+  background: #f0e9ff; /* 浅丁香圆·图标底（局部设计色·沿 me 空态·不入 tokens） */
+  border: 2rpx solid var(--ld-purple-line);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.cs-head-img {
+  width: 42rpx;
+  height: 42rpx;
 }
 .cs-h {
-  display: block;
+  flex: 1;
+  min-width: 0;
   font-size: 30rpx;
   font-weight: 600;
+  line-height: 1.35;
   color: var(--ld-ink);
-  margin-bottom: 24rpx;
 }
+
 .cs-p {
   display: block;
   font-size: 26rpx;
   line-height: 1.8;
-  color: var(--ld-ink);
-  margin-bottom: 24rpx;
+  color: var(--ld-content);
+  margin-bottom: 20rpx;
 }
+.cs-p:last-of-type {
+  margin-bottom: 0;
+}
+
+/* 发丝线分隔 */
+.cs-div {
+  height: 1rpx;
+  background: var(--ld-line);
+  margin: 30rpx 0 26rpx;
+}
+
+/* —— 当前状态胶囊 —— */
 .cs-state {
-  margin: 8rpx 0 32rpx;
+  display: flex;
+  align-items: center;
+  gap: 16rpx;
   padding: 20rpx 24rpx;
-  border-radius: 20rpx;
+  border-radius: var(--ld-radius-md);
   background: var(--ld-bg-lilac);
   border: 1rpx solid var(--ld-purple-line);
+  margin-bottom: 30rpx;
 }
 .cs-state.on {
   background: var(--ld-bg-sage);
@@ -37,19 +81,33 @@
 .cs-state.off {
   background: var(--ld-bg-faint);
 }
+.cs-dot {
+  flex: 0 0 auto;
+  width: 16rpx;
+  height: 16rpx;
+  border-radius: 50%;
+  background: var(--ld-purple-meta); /* 尚未选择 */
+}
+.cs-state.on .cs-dot {
+  background: var(--ld-purple); /* 已同意·幸运紫（mp 无绿 token） */
+}
+.cs-state.off .cs-dot {
+  background: var(--ld-content-2); /* 已撤回·中性灰 */
+}
 .cs-state-t {
   font-size: 26rpx;
-  color: var(--ld-purple-meta);
+  color: var(--ld-content);
 }
+
+/* —— 同意 / 撤回 —— */
 .cs-acts {
   display: flex;
   gap: 24rpx;
-  margin-bottom: 28rpx;
 }
 .cs-btn {
   flex: 1;
   height: 92rpx;
-  border-radius: 24rpx;
+  border-radius: var(--ld-radius);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -59,7 +117,7 @@
 }
 .cs-btn.ghost {
   background: var(--ld-bg);
-  border: 1rpx solid var(--ld-purple-line);
+  border: 2rpx solid var(--ld-purple-line);
 }
 .cs-btn.dim {
   opacity: 0.55;
@@ -72,17 +130,30 @@
 .cs-btn-t.on {
   color: var(--ld-bg);
 }
-.cs-link {
-  padding: 12rpx 0 4rpx;
+
+/* —— 完整隐私政策行（独立白卡行） —— */
+.cs-row {
+  margin-top: 20rpx;
+  padding: 28rpx 30rpx;
+  background: var(--ld-bg);
+  border: 2rpx solid var(--ld-purple-line);
+  border-radius: var(--ld-radius);
 }
-.cs-link-t {
+.cs-row-h {
+  background: var(--ld-bg-lilac);
+}
+.cs-row-t {
   font-size: 26rpx;
+  font-weight: 500;
   color: var(--ld-purple-tab);
 }
+
+/* —— 脚注 —— */
 .cs-note {
   display: block;
+  margin-top: 22rpx;
+  padding: 0 6rpx;
   font-size: 24rpx;
   line-height: 1.7;
   color: var(--ld-purple-meta);
-  margin-top: 16rpx;
 }
