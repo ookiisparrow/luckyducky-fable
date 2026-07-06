@@ -1,7 +1,7 @@
 // 客服组映射（守卫 rw-admin-cs-ui-golden）：时长人话/报表 approx 诚实透传/360 单面板失败隔离/
 // 命中依据中文/kb 行归一/满意度分布。
 import { describe, it, expect } from 'vitest'
-import { msHuman, mapReport, mapPanels, matchLabel, normalizeKb, mapCsat, mapMessages } from '../src/lib/mapCs'
+import { msHuman, mapReport, mapPanels, matchLabel, normalizeKb, mapCsat, mapMessages, nextNodeId, duplicateNodeIds } from '../src/lib/mapCs'
 
 describe('时长人话与报表', () => {
   it('大白话：秒/分/小时逐级人话；非法回 —；报表 approx 时明标「估算」，否则标「全量精确」', () => {
@@ -111,5 +111,24 @@ describe('质检报表异常指标标红（换皮把未答复/超时和正常指
     const ok = mapReport({ ok: true, sampleSize: 10, approx: false, volume: {}, response: { unanswered: 0 }, sla: { breaches: 0 } })!
     expect(ok.response.find((r) => r.label === '未答复')!.bad).toBe(false)
     expect(ok.sla.find((r) => r.label === '超时数')!.bad).toBe(false)
+  })
+})
+
+describe('节点诊断 nodeId 唯一（防删中间节点后 length+1 撞号→后端 def:课:nodeId upsert 静默覆盖丢数据）', () => {
+  it('大白话：默认 id 取不与现存冲突的最小 n_k；删 n2 后再加不再撞 n3', () => {
+    // 空表 → n1；顺加得 n1/n2/n3
+    expect(nextNodeId([])).toBe('n1')
+    expect(nextNodeId(['n1'])).toBe('n2')
+    expect(nextNodeId(['n1', 'n2'])).toBe('n3')
+    // 病根复现场景：删中间 n2，剩 [n1,n3]——length+1 会得 n3 撞车；nextNodeId 取最小可用空号 n2（复用无碍）
+    expect(nextNodeId(['n1', 'n3'])).toBe('n2')
+    // 手改成非 n 前缀也不误撞·取最小可用 n_k
+    expect(nextNodeId(['start', 'n1'])).toBe('n2')
+  })
+  it('大白话：duplicateNodeIds 揪出 trim 后重复的 id（save 前据此拦截）；无重复为空', () => {
+    expect(duplicateNodeIds(['n1', 'n2', 'n3'])).toEqual([])
+    expect(duplicateNodeIds(['n1', 'n3', 'n3'])).toEqual(['n3'])
+    expect(duplicateNodeIds(['n1', ' n1 '])).toEqual(['n1']) // 尾随空格绕不过
+    expect(duplicateNodeIds(['n1', '', ''])).toEqual([]) // 空 id 不计（save 前已过滤空标题行）
   })
 })

@@ -1,9 +1,10 @@
 <script setup lang="ts">
 // 节点诊断策展（设计语言一致性·M3 UI 批15）：为某门课维护「关键节点 + 挽回办法」（学员卡壳时坐席据此精准指导）。
 // 整课覆盖式保存——只动定义、绝不碰学员拍照提交（云端保证）。逻辑未动，仅套设计语言。
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { RotateCcw, Trash2, Plus, ListChecks, BookOpen } from 'lucide-vue-next'
 import { listCheckpoints, saveCheckpoints } from '../api/cs'
+import { nextNodeId, duplicateNodeIds } from '../lib/mapCs'
 import UiButton from '../components/ui/Button.vue'
 import PageHeader from '../components/ui/PageHeader.vue'
 import Card from '../components/ui/Card.vue'
@@ -18,24 +19,30 @@ interface NodeRow {
 }
 
 const courseId = ref('course-duck') // 默认旗舰课（换皮丢了默认载入·每次手敲）
+const loadedCourseId = ref('') // 已载入（屏上节点所属）课程·钉住身份（P1·save 写它、非可编辑输入框——防改了课号没重载即整册覆盖到别课·同姊妹页 Courses 绑载入档 id）
 const nodes = ref<NodeRow[]>([])
 const loaded = ref(false)
 const message = ref('')
 const busy = ref(false)
 const confirmKey = ref('')
 
+// 课号输入框与已载入课漂移（改了没点载入）：提示先重载，避免以为在编 A 其实要覆盖 A（save 仍写 loadedCourseId 保数据安全）
+const courseDrifted = computed(() => loaded.value && courseId.value.trim() !== loadedCourseId.value)
+
 async function load() {
   if (!courseId.value.trim()) return
-  const r = await listCheckpoints(courseId.value.trim())
+  const c = courseId.value.trim()
+  const r = await listCheckpoints(c)
   nodes.value = r.ok
     ? ((r.list as Record<string, any>[]) || []).map((n) => ({ nodeId: String(n.nodeId || ''), title: String(n.title || ''), remedy: String(n.remedy || ''), order: Number(n.order) || 0 }))
     : []
   loaded.value = r.ok
+  if (r.ok) loadedCourseId.value = c // 钉住本次载入的课·save/覆盖以它为准
   message.value = r.ok ? '' : '加载失败：' + String(r.error || '')
 }
 
 function addNode() {
-  nodes.value.push({ nodeId: 'n' + (nodes.value.length + 1), title: '', remedy: '', order: nodes.value.length })
+  nodes.value.push({ nodeId: nextNodeId(nodes.value.map((n) => n.nodeId)), title: '', remedy: '', order: nodes.value.length })
 }
 // ↑↓ 重排（换皮丢·节点顺序有业务含义·且 order 曾在 addNode 定死不重算＝排序错乱隐患）
 function move(i: number, dir: number) {
@@ -56,13 +63,20 @@ function delNode(i: number) {
 }
 
 async function save() {
-  if (busy.value || !courseId.value.trim()) return
-  busy.value = true
+  if (busy.value || !loadedCourseId.value) return
   // order 按当前位置重算（修排序错乱：换皮 order 在 addNode 定死、删除后不重算）+ 过滤空标题节点
   const payload = nodes.value.filter((n) => n.title.trim()).map((n, i) => ({ ...n, order: i }))
-  const r = await saveCheckpoints(courseId.value.trim(), payload)
+  // nodeId 重复即拦（后端 _id=`def:课:nodeId` upsert·撞键会静默相互覆盖丢节点）——用户手改 nid 或历史撞号都挡在提交前
+  const dup = duplicateNodeIds(payload.map((n) => n.nodeId))
+  if (dup.length) {
+    message.value = `节点 id 重复（${dup.join('、')}），请改成唯一后再保存`
+    return
+  }
+  busy.value = true
+  // 写「已载入的课」loadedCourseId·不是可编辑输入框（P1·改了课号没重载不会把本课节点整册覆盖到别课）
+  const r = await saveCheckpoints(loadedCourseId.value, payload)
   busy.value = false
-  message.value = r.ok ? `已保存 ${Number(r.count) || 0} 个节点（整课覆盖·学员提交不受影响）` : '保存失败：' + String(r.error || '')
+  message.value = r.ok ? `已保存 ${Number(r.count) || 0} 个节点到 ${loadedCourseId.value}（整课覆盖·学员提交不受影响）` : '保存失败：' + String(r.error || '')
 }
 
 onMounted(load) // 默认旗舰课自动载入
@@ -82,6 +96,7 @@ onMounted(load) // 默认旗舰课自动载入
       <UiButton variant="ghost" size="sm" @click="load"><RotateCcw :size="14" :stroke-width="1.8" /><span>载入</span></UiButton>
     </div>
     <p v-if="message" class="ld-status">{{ message }}</p>
+    <p v-if="courseDrifted" class="ld-status drift">课号框已改为「{{ courseId.trim() }}」但未载入——当前编辑与「保存整课」仍作用于已载入的 <b>{{ loadedCourseId }}</b>；要编另一门课请先点「载入」。</p>
 
     <template v-if="loaded">
       <Card v-for="(n, i) in nodes" :key="i">
@@ -104,6 +119,12 @@ onMounted(load) // 默认旗舰课自动载入
 <style scoped>
 /* 本页独有：节点行内编辑（id/名/上下移/删除的一行控件 + 补救话术 textarea）。
  * 页头/卡/徽章/空态/按钮/工具条/搜索/状态行已交共享原语与 .ld-* 全局类。 */
+.drift {
+  color: var(--ld-amber);
+}
+.drift b {
+  font-family: var(--ld-font-mono);
+}
 .node-head {
   display: flex;
   align-items: center;

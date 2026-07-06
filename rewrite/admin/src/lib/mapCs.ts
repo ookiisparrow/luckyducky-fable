@@ -193,6 +193,30 @@ export function normalizeKb(list: unknown): KbRow[] {
   }))
 }
 
+// 节点诊断 nodeId 生成/校验（守卫 rw-admin-cs-ui-golden·根因#8）：后端 saveCheckpoints 按 _id=`def:课:nodeId`
+// upsert（整课覆盖），nodeId 是主键——两节点同 nodeId 会静默相互覆盖丢数据、返回计数少报。换皮 addNode 用
+// `'n'+(length+1)` 生成默认 id：删中间节点后 length 回退即撞现存号（删 n2 后再加又得 n3）。收口：默认 id 取
+// 「不与现存冲突的最小 n_k」；save 前再校验无重复（用户手改 nid 也可能撞）。
+export function nextNodeId(existing: string[]): string {
+  const used = new Set(existing.map((s) => String(s).trim()))
+  let k = 1 // 取最小可用 n_k（删中间节点后复用空号也无碍·关键是不与现存撞键）
+  while (used.has('n' + k)) k++
+  return 'n' + k
+}
+
+/** 返回去重后的重复 nodeId 列表（trim 后比较·空表示无重复）——save 前据此拦截，防后端 _id 撞键覆盖。 */
+export function duplicateNodeIds(ids: string[]): string[] {
+  const seen = new Set<string>()
+  const dup = new Set<string>()
+  for (const raw of ids) {
+    const id = String(raw).trim()
+    if (!id) continue
+    if (seen.has(id)) dup.add(id)
+    else seen.add(id)
+  }
+  return [...dup]
+}
+
 export function mapCsat(r: unknown): { total: number; avg: string; dist: Array<{ star: string; n: number }>; withNote: number; approxNote: string } | null {
   const d = (r && typeof r === 'object' ? r : {}) as Record<string, any>
   if (d.ok !== true) return null
