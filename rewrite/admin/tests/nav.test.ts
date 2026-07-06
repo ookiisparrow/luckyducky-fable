@@ -2,7 +2,7 @@
 // 步单源 ?step 夹取 / 6 步文案·顺序·图标对齐设计 console.pen Component/Sidebar（kz2uD）——换皮把上新
 // 向导「按步直达」聚焦侧栏删光、退成全局 nav（决策§27②收敛为上下文侧栏·此表焊死设计单源）。
 import { describe, it, expect } from 'vitest'
-import { isWizardPath, wizardStepFromQuery, WIZARD_STEPS } from '../src/lib/nav'
+import { isWizardPath, wizardStepFromQuery, WIZARD_STEPS, currentNavGroup } from '../src/lib/nav'
 
 describe('向导路由识别（上下文侧栏切换靶·isWizardPath）', () => {
   it('大白话：只有 /products/:id/wizard 进聚焦模式；列表/其它页不进', () => {
@@ -24,6 +24,20 @@ describe('步单源 ?step 夹取（wizardStepFromQuery·URL 为步真值·侧栏
     expect(wizardStepFromQuery('0')).toBe(1) // 下越界夹到 1
     expect(wizardStepFromQuery(undefined)).toBe(1)
     expect(wizardStepFromQuery('x')).toBe(1) // 非数字回 1
+  })
+})
+
+describe('当前路由所在组定位（currentNavGroup·治组头死点击 + 反转 localStorage 展开集·根因#8）', () => {
+  const NAV = [
+    { group: '数据看板', solo: true, items: [{ path: '/' }] },
+    { group: '订单履约', items: [{ path: '/orders' }, { path: '/fulfill' }, { path: '/refunds' }] },
+    { group: '商品上新', items: [{ path: '/products' }, { path: '/courses' }] },
+  ]
+  it('大白话：命中哪个可展开组就回该组名；solo 项与未命中回空（空=没有需 pin 的当前组）', () => {
+    expect(currentNavGroup(NAV, '/fulfill')).toBe('订单履约')
+    expect(currentNavGroup(NAV, '/courses')).toBe('商品上新')
+    expect(currentNavGroup(NAV, '/')).toBe('') // solo 项不算可折叠组
+    expect(currentNavGroup(NAV, '/settings')).toBe('') // 未在任何组
   })
 })
 

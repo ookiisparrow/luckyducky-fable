@@ -101,19 +101,20 @@ async function open(openid: string) {
       </div>
     </Card>
 
-    <!-- 全景（真值：身份卡 + mapPanels 面板） -->
-    <template v-if="panels.length">
-      <!-- 返回/刷新 + 当前 openid（全显不截） -->
-      <div class="ld-toolbar back-row">
-        <UiButton size="sm" variant="ghost" @click="panels = []; current = ''; user = null">
-          <ChevronLeft :size="15" :stroke-width="2" /><span>返回结果</span>
-        </UiButton>
-        <UiButton size="sm" variant="ghost" title="刷新全景" @click="open(current)">
-          <RotateCcw :size="14" :stroke-width="2" /><span>刷新</span>
-        </UiButton>
-        <code class="cur mono">{{ current }}</code>
-      </div>
+    <!-- 返回/刷新 + 当前 openid（current 一旦选中即显·含加载失败/加载中——给「回结果」与「重试」入口·防死胡同 P2·根因#8：
+         旧版返回/刷新裹在 v-if="panels.length" 里，取数失败 panels 为空即连同返回按钮整段不渲染、命中表又因 current 有值被藏，页面成死胡同） -->
+    <div v-if="current" class="ld-toolbar back-row">
+      <UiButton size="sm" variant="ghost" @click="panels = []; current = ''; user = null">
+        <ChevronLeft :size="15" :stroke-width="2" /><span>返回结果</span>
+      </UiButton>
+      <UiButton size="sm" variant="ghost" title="刷新全景" @click="open(current)">
+        <RotateCcw :size="14" :stroke-width="2" /><span>刷新</span>
+      </UiButton>
+      <code class="cur mono">{{ current }}</code>
+    </div>
 
+    <!-- 全景（真值：身份卡 + mapPanels 面板）·取数成功才有 -->
+    <template v-if="panels.length">
       <!-- 身份头（真值·换皮丢·getUser 未导出）：头像/昵称/手机(掩码)/openid/bio -->
       <Card v-if="user">
         <div class="profile">

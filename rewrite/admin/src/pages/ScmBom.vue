@@ -135,6 +135,12 @@ watch(run, () => {
   runConfirm.value = false
   preview.value = [] // 改产品/规格/套数即清旧预演·防显 A 的缺料表 + 「有 N 项缺料」警告落到 B（P2·误导执行决策）
 }, { deep: true })
+// 切产品后清残留的旧规格（P2·根因#8）：run.spec 不在新产品 SKU 里时，规格 <select> 只显空白却仍持旧值 '红'，
+// doRun 原样发给后端生成 fg:<新产品>__红 这个不存在的幻影成品 SKU（扣料对、成品入错规格·产销/库存出假行）。
+// 单独监听 productId（非 deep run·否则会把用户刚选的规格也一起清掉）；新产品含同名规格则保留。
+watch(() => run.value.productId, () => {
+  if (run.value.spec && !runSkus.value.includes(run.value.spec)) run.value.spec = ''
+})
 
 onMounted(reload)
 </script>

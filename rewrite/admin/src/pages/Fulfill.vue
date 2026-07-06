@@ -250,7 +250,9 @@ async function doShip(order: FulfillOrder, trackingNo: string) {
   if (r.ok) {
     orders.value = orders.value.filter((o) => o.id !== order.id)
     sessionLog.value.unshift({ id: order.id as string, time, code, name, trackingNo, company: company.value, ok: true })
-    selected.value = null
+    // 只在仍选中刚发的这单时清选择——发货往返期间操作员可能已扫下一箱内码选中别单（selected=B），
+    // 无条件置空会把 B 的选择抹掉、逼其重扫箱码（P3·根因#8·扫码枪快速连扫才触发）
+    if (selected.value?.id === order.id) selected.value = null
     say(`已发货 ${code} · ${company.value} ${trackingNo}`)
   } else {
     const msg = mapShipErr(String(r.error || ''))

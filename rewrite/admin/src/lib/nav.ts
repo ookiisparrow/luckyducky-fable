@@ -14,6 +14,21 @@ export function wizardStepFromQuery(step: unknown): number {
   return Number.isFinite(n) ? Math.min(6, Math.max(1, n)) : 1
 }
 
+/** 当前路由命中的可展开组名（solo 项/未命中回 ''）——供 Shell 判「当前组自动展开」+ 组头点击不做「翻转
+ * localStorage」的死操作（守卫 rw-admin-nav-contextual·根因#8）：当前组本就 route 命中恒开，若组头 toggle 仍
+ * 写 expanded 会把它悄悄塞进持久展开集（下次点才移·可见态从不变·且离页后该组一直展开）——本函数定位当前组，
+ * Shell 据此让当前组的组头点击成干净 no-op（不污染 localStorage、不反转意图）。 */
+export function currentNavGroup(
+  nav: Array<{ group: string; solo?: boolean; items: Array<{ path: string }> }>,
+  path: string
+): string {
+  for (const n of nav) {
+    if (n.solo) continue
+    if (n.items.some((it) => it.path === path)) return n.group
+  }
+  return ''
+}
+
 /** 上新向导 6 步（文案/顺序/图标抄录设计 kz2uD·NavImg…NavBatch·icon 为 lucide 名，Shell 侧映射组件） */
 export interface WizardStep {
   n: number

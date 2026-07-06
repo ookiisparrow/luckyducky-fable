@@ -26,7 +26,7 @@ import {
   Printer,
 } from 'lucide-vue-next'
 import { client } from '../api'
-import { isWizardPath, WIZARD_STEPS, wizardStepFromQuery } from '../lib/nav'
+import { isWizardPath, WIZARD_STEPS, wizardStepFromQuery, currentNavGroup } from '../lib/nav'
 
 const router = useRouter()
 const who = client.who() // 真实登录身份
@@ -110,14 +110,18 @@ function loadExpanded(): Set<string> {
   }
 }
 const expanded = ref<Set<string>>(loadExpanded())
+// 当前路由所在组（恒展开·组头点击视作 no-op）——防组头 toggle 把 route 命中的当前组悄悄塞进持久展开集
+// （可见态被 route 命中盖过恒不变、却把该组反向写进 localStorage 下次点才移·意图反转·P3·根因#8）
+const curGroup = computed(() => currentNavGroup(NAV, route.path))
 function toggleGroup(g: string) {
+  if (g === curGroup.value) return // 当前组恒开·组头点击不做「翻转 expanded」的无效且污染 localStorage 的写
   const s = new Set(expanded.value)
   s.has(g) ? s.delete(g) : s.add(g)
   expanded.value = s
   localStorage.setItem(EXPAND_KEY, JSON.stringify([...s]))
 }
 const isOpen = (g: { group: string; items: Array<{ path: string }> }) =>
-  g.items.some((it) => it.path === route.path) || expanded.value.has(g.group)
+  curGroup.value === g.group || expanded.value.has(g.group)
 
 function logout() {
   client.logout()
@@ -296,13 +300,15 @@ aside {
   background: var(--ld-bg-faint);
   color: var(--ld-content);
 }
-.item.router-link-exact-active {
+/* 向导步链接排除在 router-link-exact-active 之外（6 步同 path 仅 query.step 不同·exact-active 不看 query→6 步会
+ * 全部命中同时高亮·当前步指示失效）——步高亮单独由 .wiz-step.wiz-on 驱动（P2·根因#8）。 */
+.item.router-link-exact-active:not(.wiz-step) {
   background: var(--ld-bg-lilac);
   border-color: var(--ld-purple-line);
   color: var(--ld-purple-ink);
   font-weight: 600;
 }
-.item.router-link-exact-active .item-icon {
+.item.router-link-exact-active:not(.wiz-step) .item-icon {
   color: var(--ld-brand);
 }
 /* 组头 */
