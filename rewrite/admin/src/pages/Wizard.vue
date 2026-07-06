@@ -26,6 +26,7 @@ const product = ref<Record<string, any> | null>(null)
 const extras = ref<{ hasVideo?: Record<string, boolean>; cardFinal?: Record<string, boolean>; hasBatch?: Record<string, boolean> }>({})
 const listed = ref<Record<string, boolean>>({})
 const loading = ref(true)
+const loadError = ref(false) // 载入失败（网络波动）≠ 商品不存在——分开显「重试」态而非误报「商品不存在」死胡同（P3）
 const message = ref('')
 const busy = ref(false)
 const pubConfirm = ref(false)
@@ -48,8 +49,11 @@ const nextTodo = computed(() => {
 
 // 载入商品档 + 6 步派生真值（listDrafts 一次给 list/listed/urls + hasVideo/cardFinal/hasBatch）
 async function reloadProduct() {
+  loadError.value = false
   const r: any = await listDrafts()
   if (!r.ok) {
+    // 载入失败 ≠ 商品不存在：product 保持原值、置 loadError 显可重试态（否则 product=null 会渲成「商品不存在」误导·且失败 banner 在 product 分支内够不到·P3）
+    loadError.value = true
     message.value = '加载失败：' + String(r.error || '')
     loading.value = false
     return
@@ -58,6 +62,10 @@ async function reloadProduct() {
   listed.value = r.listed || {}
   extras.value = { hasVideo: r.hasVideo || {}, cardFinal: r.cardFinal || {}, hasBatch: r.hasBatch || {} }
   loading.value = false
+}
+function retryLoad() {
+  loading.value = true
+  void reloadProduct()
 }
 
 function go(n: number) {
@@ -102,6 +110,10 @@ onMounted(reloadProduct)
 <template>
   <div class="ld-page">
     <EmptyState v-if="loading" text="加载中…" />
+    <EmptyState v-else-if="loadError" :icon="Store" text="加载失败（可能是网络波动，非商品不存在）">
+      <UiButton variant="primary" size="sm" @click="retryLoad">重试</UiButton>
+      <UiButton variant="ghost" size="sm" @click="router.push('/products')"><ArrowLeft :size="14" :stroke-width="1.8" /><span>回商品列表</span></UiButton>
+    </EmptyState>
     <EmptyState v-else-if="!product" :icon="Store" :text="'没有找到这个商品（编号 ' + id + '）'">
       <UiButton variant="ghost" size="sm" @click="router.push('/products')"><ArrowLeft :size="14" :stroke-width="1.8" /><span>回商品列表</span></UiButton>
     </EmptyState>

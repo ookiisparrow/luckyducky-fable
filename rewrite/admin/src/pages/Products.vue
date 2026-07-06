@@ -504,9 +504,11 @@ onMounted(async () => {
       <p v-if="missing.length" class="preflight">上架还差：<b>{{ missing.join('、') }}</b>（补齐保存后到列表点「上架」）</p>
       <p v-else class="preflight ok">✓ 必备项齐全，保存后可到列表上架</p>
 
-      <div class="editor-ops">
+      <!-- 嵌入向导步 1-3 时隐藏「保存草稿/关闭」：doSave 会 edit.value=null 关掉编辑器、而 embed 无列表可回→步面板变空白死胡同（P2）；
+           embed 下 autosave（900ms + 离页补存）已负责持久化，切步/上架走向导自身按钮 -->
+      <div v-if="!embed" class="editor-ops">
         <UiButton variant="primary" :disabled="busy" @click="doSave">保存草稿</UiButton>
-        <UiButton v-if="!embed" variant="ghost" @click="closeEditor">关闭</UiButton>
+        <UiButton variant="ghost" @click="closeEditor">关闭</UiButton>
       </div>
     </div>
   </div>

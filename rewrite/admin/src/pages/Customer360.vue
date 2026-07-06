@@ -104,7 +104,7 @@ async function open(openid: string) {
     <!-- 返回/刷新 + 当前 openid（current 一旦选中即显·含加载失败/加载中——给「回结果」与「重试」入口·防死胡同 P2·根因#8：
          旧版返回/刷新裹在 v-if="panels.length" 里，取数失败 panels 为空即连同返回按钮整段不渲染、命中表又因 current 有值被藏，页面成死胡同） -->
     <div v-if="current" class="ld-toolbar back-row">
-      <UiButton size="sm" variant="ghost" @click="panels = []; current = ''; user = null">
+      <UiButton size="sm" variant="ghost" @click="panels = []; current = ''; user = null; message = ''">
         <ChevronLeft :size="15" :stroke-width="2" /><span>返回结果</span>
       </UiButton>
       <UiButton size="sm" variant="ghost" title="刷新全景" @click="open(current)">
