@@ -7,6 +7,10 @@ import { ref, computed, onMounted } from 'vue'
 import { RefreshCw, Search, Package, X, PackageCheck, ScanLine, TriangleAlert } from 'lucide-vue-next'
 import { listOrders, orderCounts, getOrderDetail, shipOrder, shipOrders, clearFeeMismatch } from '../api/money'
 import UiButton from '../components/ui/Button.vue'
+import PageHeader from '../components/ui/PageHeader.vue'
+import Card from '../components/ui/Card.vue'
+import Badge from '../components/ui/Badge.vue'
+import EmptyState from '../components/ui/EmptyState.vue'
 import { mapOrderRows, type OrderRowVM } from '../lib/mapMoney'
 import { dateTime } from '../lib/format'
 import { COMPANIES } from '../lib/fulfill'
@@ -208,29 +212,19 @@ onMounted(reload)
 </script>
 
 <template>
-  <div class="page">
-    <header class="page-head">
-      <div>
-        <h1>订单发货</h1>
-        <p class="sub">买家付款后在这里发货 · 填好运单号，小程序订单页即刻可见</p>
-      </div>
-      <button class="btn-refresh" :disabled="message === '加载中…'" @click="reload">
-        <RefreshCw :size="15" :stroke-width="1.8" />
+  <div class="ld-page">
+    <PageHeader title="订单发货" sub="待发货订单处理与物流跟踪 · 填好运单号，小程序订单页即刻可见">
+      <UiButton variant="ghost" size="sm" :disabled="message === '加载中…'" @click="reload">
+        <RefreshCw :size="14" :stroke-width="1.8" />
         <span>刷新</span>
-      </button>
-    </header>
+      </UiButton>
+    </PageHeader>
 
-    <div class="toolbar">
-      <div class="chips">
-        <button v-for="t in TABS" :key="t.key" class="chip" :class="{ on: tab === t.key && !activeQ }" @click="pickTab(t.key)">
-          {{ t.label }}<span v-if="counts[t.key || 'all'] != null" class="chip-n">{{ counts[t.key || 'all'] }}</span>
-        </button>
-      </div>
-      <div class="searchbox">
-        <Search :size="15" :stroke-width="1.8" class="search-ico" />
-        <input v-model="search" placeholder="搜索单号（精确·跨全部状态）" @keyup.enter="doSearch" />
-        <UiButton size="sm" @click="doSearch">搜索</UiButton>
-      </div>
+    <!-- 状态 tab（云端实时计数徽章·切换走服务端筛选） -->
+    <div class="ld-toolbar">
+      <button v-for="t in TABS" :key="t.key" class="ld-chip" :class="{ on: tab === t.key && !activeQ }" @click="pickTab(t.key)">
+        {{ t.label }}<span v-if="counts[t.key || 'all'] != null" class="chip-n">{{ counts[t.key || 'all'] }}</span>
+      </button>
     </div>
     <p class="note">状态计数为云端实时总数、切换状态走服务端筛选、搜索按单号跨全部状态精确命中——都不受当前分页影响。</p>
 
@@ -239,67 +233,93 @@ onMounted(reload)
       <button class="link" @click="clearSearch">清除搜索</button>
     </div>
 
-    <p v-if="message" class="status">{{ message }}</p>
+    <p v-if="message" class="ld-status">{{ message }}</p>
 
-    <div v-if="rows.length" class="table">
-      <div class="thead">
-        <span class="c-id-h">
-          <input v-if="canBatch" type="checkbox" class="ck" :checked="allSelected" :disabled="!shippableInList.length" @change="toggleAll" />单号
-        </span>
-        <span>下单时间</span>
-        <span>收货</span>
-        <span>商品</span>
-        <span class="r">金额</span>
-        <span>状态</span>
-        <span class="r">操作</span>
-      </div>
-      <div v-for="row in rows" :key="row.id" class="trow" :class="{ mismatch: row.feeMismatch, sel: canBatch && isSel(row.id) }">
-        <div class="c-id">
-          <input
-            v-if="canBatch"
-            type="checkbox"
-            class="ck"
-            :checked="isSel(row.id)"
-            :disabled="!row.canShip"
-            @click.stop
-            @change="toggleSel(row)"
-          />
-          <span class="c-id-text">
-            <span class="oid">{{ row.id }}</span>
-            <span v-if="row.trackingNo" class="track">运单 {{ row.trackingNo }}</span>
-          </span>
+    <!-- 订单表卡（design TableCard·flush 去内边距·内含工具条 + 表格） -->
+    <Card flush>
+      <div class="tbl-bar">
+        <div class="ld-search o-search">
+          <Search :size="15" :stroke-width="1.8" />
+          <input v-model="search" placeholder="搜索单号（精确·跨全部状态）" @keyup.enter="doSearch" />
         </div>
-        <span class="time">{{ row.timeLabel }}</span>
-        <span class="addr">{{ row.address || '—' }}</span>
-        <span class="goods">{{ row.summary || '—' }}<span class="cnt">×{{ row.count }}</span></span>
-        <span class="amount r">{{ row.amountLabel }}</span>
-        <span class="c-state">
-          <span class="state" :class="row.feeMismatch ? 'warn' : row.status">{{ row.feeMismatch ? '待复核' : row.statusLabel }}</span>
-        </span>
-        <div class="c-ops r">
-          <button v-if="row.feeMismatch" class="act danger-out" @click="doClearMismatch(row.id)">
-            <TriangleAlert :size="14" :stroke-width="1.8" /><span>{{ clearConfirmId === row.id ? '确认已核对流水？' : '去核对' }}</span>
-          </button>
-          <button v-else-if="row.canShip" class="act ship" @click="openDrawer(row, 'ship')">
-            <Package :size="14" :stroke-width="1.8" /><span>发货</span>
-          </button>
-          <button v-else-if="row.canModify" class="act ghost-out" @click="openDrawer(row, 'ship')">改单号</button>
-          <button v-else class="act ghost-out" @click="openDrawer(row, 'view')">查看</button>
-        </div>
+        <UiButton size="sm" @click="doSearch">搜索</UiButton>
       </div>
-      <div class="tfoot">
-        <span>已加载 {{ rows.length }} 单{{ !activeQ && tabTotal != null ? ' / ' + tabTotal + ' 单（本栏）' : '' }}</span>
-        <button v-if="hasMore" class="more" @click="more">加载更多</button>
-      </div>
-    </div>
-    <p v-else-if="!message" class="status-soft">{{ activeQ ? '没有匹配该单号的订单' : '这一栏没有订单' }}</p>
 
-    <!-- 批量操作栏（待发货 tab 勾选后浮现·进度式披露） -->
+      <template v-if="rows.length">
+        <div class="ld-thead">
+          <div v-if="canBatch" class="ld-th col-ck">
+            <input type="checkbox" class="ck" :checked="allSelected" :disabled="!shippableInList.length" @change="toggleAll" />
+          </div>
+          <div class="ld-th grow">订单</div>
+          <div class="ld-th" :style="{ width: '200px' }">商品</div>
+          <div class="ld-th" :style="{ width: '150px' }">下单时间</div>
+          <div class="ld-th r" :style="{ width: '110px' }">金额</div>
+          <div class="ld-th" :style="{ width: '110px' }">状态</div>
+          <div class="ld-th r" :style="{ width: '150px' }">操作</div>
+        </div>
+        <div class="ld-tbody">
+          <div v-for="row in rows" :key="row.id" class="ld-tr" :class="{ mismatch: row.feeMismatch, sel: canBatch && isSel(row.id) }">
+            <div v-if="canBatch" class="ld-td col-ck">
+              <input
+                type="checkbox"
+                class="ck"
+                :checked="isSel(row.id)"
+                :disabled="!row.canShip"
+                @click.stop
+                @change="toggleSel(row)"
+              />
+            </div>
+            <div class="ld-td grow order-cell">
+              <span class="oid">{{ row.id }}</span>
+              <span v-if="row.trackingNo" class="track">运单 {{ row.trackingNo }}</span>
+            </div>
+            <div class="ld-td goods" :style="{ width: '200px' }">
+              <span class="goods-name">{{ row.summary || '—' }}</span><span class="cnt">×{{ row.count }}</span>
+            </div>
+            <div class="ld-td time" :style="{ width: '150px' }">{{ row.timeLabel }}</div>
+            <div class="ld-td r amount" :style="{ width: '110px' }">{{ row.amountLabel }}</div>
+            <div class="ld-td" :style="{ width: '110px' }">
+              <Badge
+                :tone="
+                  row.feeMismatch
+                    ? 'red'
+                    : row.status === 'done'
+                      ? 'green'
+                      : row.status === 'shipped'
+                        ? 'brand'
+                        : row.status === 'paid' || row.status === 'refund_required'
+                          ? 'amber'
+                          : 'neutral'
+                "
+                >{{ row.feeMismatch ? '待复核' : row.statusLabel }}</Badge
+              >
+            </div>
+            <div class="ld-td r ops" :style="{ width: '150px' }">
+              <UiButton v-if="row.feeMismatch" variant="danger" size="sm" @click="doClearMismatch(row.id)">
+                <TriangleAlert :size="14" :stroke-width="1.8" /><span>{{ clearConfirmId === row.id ? '确认已核对流水？' : '去核对' }}</span>
+              </UiButton>
+              <UiButton v-else-if="row.canShip" variant="primary" size="sm" @click="openDrawer(row, 'ship')">
+                <Package :size="14" :stroke-width="1.8" /><span>发货</span>
+              </UiButton>
+              <UiButton v-else-if="row.canModify" variant="ghost" size="sm" @click="openDrawer(row, 'ship')">改单号</UiButton>
+              <UiButton v-else variant="ghost" size="sm" @click="openDrawer(row, 'view')">查看</UiButton>
+            </div>
+          </div>
+        </div>
+        <div class="tbl-foot">
+          <span>已加载 {{ rows.length }} 单{{ !activeQ && tabTotal != null ? ' / ' + tabTotal + ' 单（本栏）' : '' }}</span>
+          <UiButton v-if="hasMore" variant="ghost" size="sm" @click="more">加载更多</UiButton>
+        </div>
+      </template>
+      <EmptyState v-else-if="!message" :icon="Package" :text="activeQ ? '没有匹配该单号的订单' : '这一栏没有订单'" />
+    </Card>
+
+    <!-- 批量操作栏（待发货 tab 勾选后浮现·进度式披露·白卡浮条） -->
     <div v-if="canBatch && selectedIds.length" class="batchbar">
       <span>已选 <b>{{ selectedIds.length }}</b> 单待发货</span>
       <div class="batchbar-r">
-        <button class="bb-ghost" @click="clearSel">取消</button>
-        <button class="bb-primary" @click="openBatch">批量发货</button>
+        <UiButton variant="ghost" size="sm" @click="clearSel">取消</UiButton>
+        <UiButton variant="primary" size="sm" @click="openBatch">批量发货</UiButton>
       </div>
     </div>
 
@@ -313,7 +333,7 @@ onMounted(reload)
           </div>
           <button class="drawer-close" :disabled="batch.saving" @click="closeBatch"><X :size="16" :stroke-width="1.8" /></button>
         </div>
-        <p class="batch-note">电子面单取号 / 打印需接快递平台 API（待接）；当前手动填运单号，每单发货后自动上报微信发货合规。</p>
+        <p class="drawer-note">电子面单取号 / 打印需接快递平台 API（待接）；当前手动填运单号，每单发货后自动上报微信发货合规。</p>
         <div class="field">
           <label>快递公司（整批共用）</label>
           <select v-model="batch.company">
@@ -329,10 +349,10 @@ onMounted(reload)
         </div>
         <p v-if="batch.done && batch.rows.length" class="batch-warn">部分单失败，已保留可改运单号重试。</p>
         <div class="drawer-foot">
-          <button class="confirm" :disabled="batch.saving || !batchReady" @click="doBatchShip">
+          <UiButton variant="primary" block :disabled="batch.saving || !batchReady" @click="doBatchShip">
             <PackageCheck :size="16" :stroke-width="1.8" /><span>{{ batch.saving ? '发货中…' : `确认发货 ${batch.rows.length} 单` }}</span>
-          </button>
-          <button class="cancel" :disabled="batch.saving" @click="closeBatch">关闭</button>
+          </UiButton>
+          <UiButton variant="ghost" block :disabled="batch.saving" @click="closeBatch">关闭</UiButton>
         </div>
       </aside>
     </div>
@@ -345,7 +365,21 @@ onMounted(reload)
             <div class="drawer-title">{{ drawer.mode === 'ship' ? (drawer.row.canModify ? '改单号' : '发货') : '订单详情' }}</div>
             <div class="drawer-oid">
               单号 {{ drawer.row.id }}
-              <span class="state inline" :class="drawer.row.feeMismatch ? 'warn' : drawer.row.status">{{ drawer.row.statusLabel }}</span>
+              <Badge
+                class="drawer-badge"
+                :tone="
+                  drawer.row.feeMismatch
+                    ? 'red'
+                    : drawer.row.status === 'done'
+                      ? 'green'
+                      : drawer.row.status === 'shipped'
+                        ? 'brand'
+                        : drawer.row.status === 'paid' || drawer.row.status === 'refund_required'
+                          ? 'amber'
+                          : 'neutral'
+                "
+                >{{ drawer.row.statusLabel }}</Badge
+              >
             </div>
           </div>
           <button class="drawer-close" :disabled="busy" @click="closeDrawer"><X :size="16" :stroke-width="1.8" /></button>
@@ -408,12 +442,12 @@ onMounted(reload)
 
         <div class="drawer-foot">
           <template v-if="drawer.mode === 'ship'">
-            <button class="confirm" :disabled="busy" @click="doShip">
+            <UiButton variant="primary" block :disabled="busy" @click="doShip">
               <PackageCheck :size="16" :stroke-width="1.8" /><span>{{ busy ? '提交中…' : drawer.row.canModify ? '保存改动' : '确认发货' }}</span>
-            </button>
-            <button class="cancel" :disabled="busy" @click="closeDrawer">取消</button>
+            </UiButton>
+            <UiButton variant="ghost" block :disabled="busy" @click="closeDrawer">取消</UiButton>
           </template>
-          <button v-else class="cancel solo" @click="closeDrawer">关闭</button>
+          <UiButton v-else variant="ghost" block @click="closeDrawer">关闭</UiButton>
         </div>
       </aside>
     </div>
@@ -421,103 +455,28 @@ onMounted(reload)
 </template>
 
 <style scoped>
-.page {
-  max-width: 1200px;
-}
-.page-head {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 16px;
-  margin-bottom: 18px;
-}
-h1 {
-  margin: 0;
-  font-size: 22px;
-  font-weight: 700;
-  color: var(--ld-ink);
-}
-.sub {
-  margin: 4px 0 0;
-  font-size: 12.5px;
-  color: var(--ld-content-2);
-}
-.btn-refresh {
-  display: flex;
+/* 状态 tab 计数徽章（design：bg-grey 药丸·激活时 brand 底白字） */
+.chip-n {
+  display: inline-flex;
   align-items: center;
-  gap: 6px;
-  padding: 8px 14px;
-  border: 1px solid var(--ld-line);
+  padding: 1px 7px;
   border-radius: 999px;
-  background: var(--ld-bg);
-  color: var(--ld-content);
-  font-size: 13px;
-  cursor: pointer;
-}
-.btn-refresh:disabled {
-  opacity: 0.6;
-}
-.toolbar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-  margin-bottom: 6px;
-}
-.chips {
-  display: flex;
-  gap: 8px;
-  flex-wrap: wrap;
-}
-.chip {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 6px 14px;
-  border: 1px solid var(--ld-line);
-  border-radius: 999px;
-  background: var(--ld-bg);
+  background: var(--ld-bg-grey);
   color: var(--ld-content-2);
-  font-size: 13px;
-  cursor: pointer;
+  font-size: 11px;
+  font-weight: 600;
 }
-.chip.on {
-  background: var(--ld-purple-ink);
-  border-color: var(--ld-purple-ink);
+.ld-chip.on .chip-n {
+  background: var(--ld-brand);
   color: #fff;
 }
-.chip-n {
-  opacity: 0.7;
-}
-.searchbox {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 4px 4px 4px 14px;
-  border: 1px solid var(--ld-line);
-  border-radius: 999px;
-  background: var(--ld-bg);
-  min-width: 300px;
-}
-.search-ico {
-  color: var(--ld-content-2);
-  flex: none;
-}
-.searchbox input {
-  border: none;
-  outline: none;
-  background: transparent;
-  font-size: 13px;
-  width: 100%;
-  color: var(--ld-ink);
-}
 .note {
-  margin: 0 0 10px;
+  margin: -8px 0 0;
   font-size: 11.5px;
   color: var(--ld-content-2);
 }
 .searching {
-  margin: 0 0 12px;
+  margin: 0;
   font-size: 12.5px;
   color: var(--ld-content);
 }
@@ -529,63 +488,33 @@ h1 {
   cursor: pointer;
   font-size: 12px;
 }
-.status {
-  font-size: 13px;
-  color: var(--ld-red);
-}
-.status-soft {
-  font-size: 13px;
-  color: var(--ld-content-2);
-}
-.table {
-  background: var(--ld-bg);
-  border: 1px solid var(--ld-line);
-  border-radius: var(--ld-radius-l);
-  overflow: hidden;
-}
-.thead,
-.trow {
-  display: grid;
-  grid-template-columns: 1.5fr 1fr 1.8fr 1.5fr 0.9fr 0.9fr 1.1fr;
-  align-items: center;
-  gap: 12px;
-  padding: 13px 20px;
-}
-.thead {
-  background: var(--ld-bg-lilac);
-  font-size: 12px;
-  color: var(--ld-content-2);
-}
-.c-id-h {
+
+/* 表卡内工具条（design TableCard 内 toolbar·白底描边下沿） */
+.tbl-bar {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 10px;
+  padding: 13px 16px;
+  border-bottom: 1px solid var(--ld-line);
 }
-.trow {
-  border-top: 1px solid var(--ld-line);
-  font-size: 13px;
+.o-search {
+  flex: none;
 }
-.trow.mismatch {
-  background: var(--ld-bg-red-soft);
+.o-search input {
+  min-width: 220px;
 }
-.trow.sel {
-  background: var(--ld-bg-lilac);
-}
+
+/* 表格单元（配合全局 .ld-table 系统·本页列内容样式） */
 .r {
+  justify-content: flex-end;
   text-align: right;
-  justify-self: end;
 }
-.c-id {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  min-width: 0;
-}
-.c-id-text {
-  min-width: 0;
+.col-ck {
+  width: 52px;
+  flex: none;
+  justify-content: center;
 }
 .ck {
-  flex: none;
   width: 15px;
   height: 15px;
   cursor: pointer;
@@ -595,122 +524,62 @@ h1 {
   cursor: not-allowed;
   opacity: 0.4;
 }
+.ld-tr.mismatch {
+  background: var(--ld-bg-red-soft);
+}
+.ld-tr.sel {
+  background: var(--ld-bg-lilac);
+}
+.order-cell {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 3px;
+}
 .oid {
   font-family: var(--ld-font-mono);
   font-size: 12.5px;
   color: var(--ld-ink);
 }
 .track {
-  display: block;
-  margin-top: 3px;
   font-size: 11px;
   color: var(--ld-content-2);
   font-family: var(--ld-font-mono);
 }
-.time {
-  color: var(--ld-content-2);
-  font-size: 12.5px;
-}
-.addr {
-  color: var(--ld-content);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
 .goods {
-  color: var(--ld-content);
+  gap: 6px;
+}
+.goods-name {
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 .cnt {
-  margin-left: 6px;
+  flex: none;
   color: var(--ld-content-2);
+}
+.time {
+  color: var(--ld-content-2);
+  font-size: 12.5px;
 }
 .amount {
   font-weight: 700;
   color: var(--ld-ink);
 }
-.state {
-  padding: 3px 11px;
-  border-radius: 999px;
-  font-size: 11.5px;
-  white-space: nowrap;
-  background: var(--ld-bg-faint);
-  color: var(--ld-content-2);
-}
-.state.paid {
-  background: var(--ld-bg-lilac);
-  color: var(--ld-amber);
-}
-.state.shipped {
-  background: var(--ld-bg-lilac);
-  color: var(--ld-brand-active);
-}
-.state.done {
-  background: var(--ld-bg-green-soft);
-  color: var(--ld-green);
-}
-.state.warn {
-  background: var(--ld-bg-red-soft);
-  color: var(--ld-red);
-}
-.state.refund_required {
-  background: var(--ld-bg-red-soft);
-  color: var(--ld-amber);
-}
-.state.inline {
-  margin-left: 8px;
-}
-.c-ops {
-  display: flex;
+.ops {
   gap: 6px;
 }
-.act {
-  display: flex;
-  align-items: center;
-  gap: 5px;
-  padding: 6px 13px;
-  border: none;
-  border-radius: 999px;
-  font-size: 12px;
-  font-weight: 600;
-  cursor: pointer;
-}
-.act.ship {
-  background: var(--ld-purple-ink);
-  color: #fff;
-}
-.act.danger-out {
-  background: var(--ld-bg);
-  color: var(--ld-red);
-  border: 1px solid var(--ld-red-line);
-}
-.act.ghost-out {
-  background: var(--ld-bg);
-  color: var(--ld-content);
-  border: 1px solid var(--ld-line);
-}
-.tfoot {
+.tbl-foot {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 12px 20px;
+  padding: 12px 16px;
   border-top: 1px solid var(--ld-line);
   font-size: 12px;
   color: var(--ld-content-2);
 }
-.more {
-  padding: 7px 18px;
-  border: 1px solid var(--ld-line);
-  border-radius: 999px;
-  background: var(--ld-bg);
-  cursor: pointer;
-  font-size: 12.5px;
-  color: var(--ld-content);
-}
 
-/* 批量操作浮条 */
+/* 批量操作浮条（白卡·底部居中） */
 .batchbar {
   position: fixed;
   left: 50%;
@@ -719,39 +588,22 @@ h1 {
   display: flex;
   align-items: center;
   gap: 18px;
-  background: var(--ld-purple-ink);
-  color: #fff;
+  background: var(--ld-bg);
+  color: var(--ld-content);
   padding: 12px 18px;
-  border-radius: 12px;
-  box-shadow: 0 12px 34px rgba(20, 15, 30, 0.28);
+  border: 1px solid var(--ld-line);
+  border-radius: var(--ld-radius);
+  box-shadow: 0 12px 34px rgba(20, 15, 30, 0.16);
   z-index: 30;
   font-size: 13px;
 }
 .batchbar b {
   font-size: 15px;
+  color: var(--ld-brand);
 }
 .batchbar-r {
   display: flex;
   gap: 8px;
-}
-.bb-ghost {
-  padding: 7px 14px;
-  border: 1px solid rgba(255, 255, 255, 0.4);
-  border-radius: 999px;
-  background: transparent;
-  color: #fff;
-  font-size: 12.5px;
-  cursor: pointer;
-}
-.bb-primary {
-  padding: 7px 16px;
-  border: none;
-  border-radius: 999px;
-  background: #fff;
-  color: var(--ld-purple-ink);
-  font-size: 12.5px;
-  font-weight: 600;
-  cursor: pointer;
 }
 
 /* 右滑抽屉 */
@@ -797,10 +649,15 @@ h1 {
   color: var(--ld-ink);
 }
 .drawer-oid {
-  margin-top: 4px;
+  margin-top: 6px;
+  display: flex;
+  align-items: center;
   font-size: 12px;
   color: var(--ld-content-2);
   font-family: var(--ld-font-mono);
+}
+.drawer-badge {
+  margin-left: 8px;
 }
 .drawer-close {
   display: flex;
@@ -1008,7 +865,7 @@ h1 {
   padding: 10px 0;
 }
 /* 批量面板 */
-.batch-note {
+.drawer-note {
   margin: 0;
   font-size: 11.5px;
   line-height: 1.6;
@@ -1065,41 +922,11 @@ h1 {
   font-size: 12px;
   color: var(--ld-red);
 }
-/* 抽屉底部 */
+/* 抽屉底部（两枚 block UiButton 纵向堆叠） */
 .drawer-foot {
   margin-top: auto;
   display: flex;
   flex-direction: column;
-  gap: 4px;
-}
-.confirm {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 7px;
-  padding: 13px 0;
-  border: none;
-  border-radius: 11px;
-  background: var(--ld-purple-ink);
-  color: #fff;
-  font-size: 14px;
-  font-weight: 600;
-  cursor: pointer;
-}
-.confirm:disabled {
-  opacity: 0.6;
-}
-.cancel {
-  padding: 10px 0;
-  border: none;
-  background: transparent;
-  color: var(--ld-content-2);
-  font-size: 13px;
-  cursor: pointer;
-}
-.cancel.solo {
-  padding: 13px 0;
-  border: 1px solid var(--ld-line);
-  border-radius: 11px;
+  gap: 8px;
 }
 </style>

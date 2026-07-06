@@ -8,6 +8,11 @@ import { CircleDollarSign, RotateCcw, Wallet, Download, CircleCheck } from 'luci
 import { getReconciliation, getBillMatch, downloadBill } from '../api/system'
 import { mapRecon, mapBillMatch, type ReconVM, type BillMatchVM } from '../lib/mapSystem'
 import UiButton from '../components/ui/Button.vue'
+import PageHeader from '../components/ui/PageHeader.vue'
+import Card from '../components/ui/Card.vue'
+import KpiCard from '../components/ui/KpiCard.vue'
+import Badge from '../components/ui/Badge.vue'
+import EmptyState from '../components/ui/EmptyState.vue'
 
 const recon = ref<ReconVM | null>(null)
 const match = ref<BillMatchVM | null>(null)
@@ -117,30 +122,28 @@ onMounted(reload)
 </script>
 
 <template>
-  <div class="page">
-    <header class="page-head">
-      <div>
-        <h1>财务对账</h1>
-        <p class="sub">应收 GMV、退款按日对账 + 微信官方账单逐笔勾对 · 资金对得上才安心（内部近 30 天窗）</p>
-      </div>
+  <div class="ld-page">
+    <PageHeader title="财务对账" sub="应收 GMV、退款按日对账 + 微信官方账单逐笔勾对 · 资金对得上才安心（内部近 30 天窗）">
       <UiButton :disabled="!recon" @click="exportCsv">
         <Download :size="15" :stroke-width="1.8" /><span>导出 CSV</span>
       </UiButton>
-    </header>
+    </PageHeader>
 
-    <div class="range">
-      <label>对账区间</label>
-      <input v-model="from" placeholder="起 YYYY-MM-DD" class="date-in" />
+    <!-- 对账区间筛选 -->
+    <div class="ld-toolbar">
+      <span class="range-label">对账区间</span>
+      <label class="ld-search"><input v-model="from" placeholder="起 YYYY-MM-DD" /></label>
       <span class="dash">→</span>
-      <input v-model="to" placeholder="止 YYYY-MM-DD" class="date-in" />
+      <label class="ld-search"><input v-model="to" placeholder="止 YYYY-MM-DD" /></label>
       <UiButton size="sm" @click="applyRange">查询</UiButton>
-      <button v-if="from || to" class="range-clear" @click="clearRange">近 30 天</button>
+      <UiButton v-if="from || to" size="sm" variant="ghost" @click="clearRange">近 30 天</UiButton>
       <span class="range-note">留空＝默认近 30 天窗</span>
     </div>
 
-    <p v-if="message" class="status">{{ message }}</p>
+    <p v-if="message" class="ld-status">{{ message }}</p>
 
     <template v-if="totals">
+      <!-- 账平/异常横幅（全账累计等式·真值） -->
       <div class="balance" :class="{ warn: exCount }">
         <CircleCheck :size="20" :stroke-width="1.8" />
         <div>
@@ -149,188 +152,218 @@ onMounted(reload)
         </div>
       </div>
 
-      <!-- 累计（全账·money 锚·恒可信·aggregate 全量精确·与下方区间窗口分开呈现·换皮把二者搅成一排致口径错乱） -->
-      <div class="cum-strip">
-        <div class="cum-item"><span>累计收入（全账）</span><b>{{ cum.income }}</b></div>
-        <div class="cum-item"><span>累计退款（全账）</span><b>{{ cum.refund }}</b></div>
-        <div class="cum-item"><span>累计净额（全账）</span><b>{{ cum.net }}</b></div>
+      <!-- 全账累计（money 锚·恒可信·aggregate 全量精确·与下方区间窗口口径分开呈现） -->
+      <div class="kpi-block">
+        <div class="cap">全账累计 · 全时精确</div>
+        <div class="ld-kpi-grid">
+          <KpiCard label="累计收入（全账）" :value="cum.income" :icon="CircleDollarSign" />
+          <KpiCard label="累计退款（全账）" :value="cum.refund" :icon="RotateCcw" />
+          <KpiCard label="累计净额（全账）" :value="cum.net" :icon="Wallet" />
+        </div>
       </div>
 
-      <!-- 内部异常明细块（bug B2 修·换皮误当数组恒 0 永不渲染）：feeMismatch/refundMismatch/stuckRefunds 带单号 -->
-      <div v-if="recon && recon.exceptions.length" class="ex-block">
-        <h3 class="ex-h">内部异常明细（须人工处理）</h3>
+      <!-- 内部异常明细（feeMismatch/refundMismatch/stuckRefunds 带单号·须人工处理） -->
+      <Card v-if="recon && recon.exceptions.length" title="内部异常明细" sub="须人工处理">
+        <template #head><Badge tone="red">{{ exCount }} 笔</Badge></template>
         <div v-for="e in recon.exceptions" :key="e.label" class="ex-group">
           <div class="ex-label">{{ e.label }}（{{ e.ids.length }}）</div>
           <p v-for="id in e.ids" :key="id" class="ex-id">{{ id }}</p>
         </div>
+      </Card>
+
+      <!-- 区间收支 KPI（所选区间真值） -->
+      <div class="kpi-block">
+        <div class="cap">区间收支 · {{ recon && recon.range.from ? recon.range.from + ' ~ ' + recon.range.to : '近 30 天' }}</div>
+        <div class="ld-kpi-grid">
+          <KpiCard label="区间应收 GMV（已付）" :value="totals.income" :icon="CircleDollarSign" />
+          <KpiCard label="区间退款合计" :value="totals.refund" :icon="RotateCcw" />
+          <KpiCard label="区间净额（应收−退款）" :value="totals.net" :icon="Wallet" />
+          <KpiCard label="区间已付订单数" :value="totals.orders" :icon="CircleCheck" />
+          <KpiCard label="区间退款笔数" :value="totals.refunds" :icon="RotateCcw" />
+        </div>
+        <div v-if="recon && recon.approxNote" class="approx">{{ recon.approxNote }}</div>
       </div>
 
-      <div class="range-cap">区间收支 · {{ recon && recon.range.from ? recon.range.from + ' ~ ' + recon.range.to : '近 30 天' }}</div>
-      <div class="stat-grid">
-        <div class="stat-card">
-          <div class="stat-head"><span class="stat-label">区间应收 GMV（已付）</span><CircleDollarSign class="stat-ico" :size="18" :stroke-width="1.8" /></div>
-          <div class="stat-value">{{ totals.income }}</div>
+      <!-- 逐日对账表（含窗内合计行·真值） -->
+      <Card v-if="recon && recon.daily.length" title="逐日对账" flush>
+        <div class="ld-table">
+          <div class="ld-thead">
+            <div class="ld-th grow">日期</div>
+            <div class="ld-th r" :style="{ width: '90px' }">订单数</div>
+            <div class="ld-th r" :style="{ width: '130px' }">应收 GMV</div>
+            <div class="ld-th r" :style="{ width: '120px' }">退款</div>
+            <div class="ld-th r" :style="{ width: '130px' }">净额</div>
+            <div class="ld-th r" :style="{ width: '100px' }">退款笔数</div>
+          </div>
+          <div class="ld-tbody">
+            <div v-for="d in recon.daily" :key="d.day" class="ld-tr">
+              <div class="ld-td grow mono">{{ d.day }}</div>
+              <div class="ld-td r" :style="{ width: '90px' }">{{ d.orders }}</div>
+              <div class="ld-td r num" :style="{ width: '130px' }">{{ d.income }}</div>
+              <div class="ld-td r num" :class="{ amber: d.refund !== '¥0.00' }" :style="{ width: '120px' }">{{ d.refund }}</div>
+              <div class="ld-td r num strong" :style="{ width: '130px' }">{{ d.net }}</div>
+              <div class="ld-td r" :style="{ width: '100px' }">{{ d.refunds }}</div>
+            </div>
+            <div class="ld-tr total">
+              <div class="ld-td grow mono">窗内合计</div>
+              <div class="ld-td r" :style="{ width: '90px' }">{{ totals.orders }}</div>
+              <div class="ld-td r num" :style="{ width: '130px' }">{{ totals.income }}</div>
+              <div class="ld-td r num amber" :style="{ width: '120px' }">{{ totals.refund }}</div>
+              <div class="ld-td r num strong" :style="{ width: '130px' }">{{ totals.net }}</div>
+              <div class="ld-td r" :style="{ width: '100px' }">{{ totals.refunds }}</div>
+            </div>
+          </div>
         </div>
-        <div class="stat-card">
-          <div class="stat-head"><span class="stat-label">区间退款合计</span><RotateCcw class="stat-ico amber" :size="18" :stroke-width="1.8" /></div>
-          <div class="stat-value amber">{{ totals.refund }}</div>
-        </div>
-        <div class="stat-card">
-          <div class="stat-head"><span class="stat-label">区间净额（应收−退款）</span><Wallet class="stat-ico ok" :size="18" :stroke-width="1.8" /></div>
-          <div class="stat-value ok">{{ totals.net }}</div>
-        </div>
-        <div class="stat-card">
-          <div class="stat-head"><span class="stat-label">区间已付订单数</span><CircleCheck class="stat-ico" :size="18" :stroke-width="1.8" /></div>
-          <div class="stat-value">{{ totals.orders }}</div>
-        </div>
-        <div class="stat-card">
-          <div class="stat-head"><span class="stat-label">区间退款笔数</span><RotateCcw class="stat-ico amber" :size="18" :stroke-width="1.8" /></div>
-          <div class="stat-value">{{ totals.refunds }}</div>
-        </div>
-      </div>
-
-      <div v-if="recon && recon.approxNote" class="approx">{{ recon.approxNote }}</div>
-
-      <div v-if="recon && recon.daily.length" class="table">
-        <div class="thead">
-          <span>日期</span><span class="r">订单数</span><span class="r">应收 GMV</span>
-          <span class="r">退款</span><span class="r">净额</span><span class="r">退款笔数</span>
-        </div>
-        <div v-for="d in recon.daily" :key="d.day" class="trow">
-          <span class="day">{{ d.day }}</span>
-          <span class="r">{{ d.orders }}</span>
-          <span class="r num">{{ d.income }}</span>
-          <span class="r num" :class="{ amber: d.refund !== '¥0.00' }">{{ d.refund }}</span>
-          <span class="r num strong">{{ d.net }}</span>
-          <span class="r">{{ d.refunds }}</span>
-        </div>
-        <div class="trow total">
-          <span class="day">窗内合计</span>
-          <span class="r">{{ totals.orders }}</span>
-          <span class="r num">{{ totals.income }}</span>
-          <span class="r num amber">{{ totals.refund }}</span>
-          <span class="r num strong">{{ totals.net }}</span>
-          <span class="r">{{ totals.refunds }}</span>
-        </div>
-      </div>
+      </Card>
     </template>
 
-    <section v-if="match" class="ext-panel">
-      <div class="ext-head">
-        <h2>外部逐笔勾对 · 微信官方账单</h2>
-        <span v-if="match.approxNote" class="approx-inline">{{ match.approxNote }}</span>
+    <!-- 外部逐笔勾对 · 微信官方账单 -->
+    <Card v-if="match" title="外部逐笔勾对 · 微信官方账单">
+      <p v-if="match.approxNote" class="approx-inline">{{ match.approxNote }}</p>
+
+      <div class="ld-toolbar bill-row">
+        <label class="ld-search wide"><input v-model="billDate" placeholder="拉某日账单 YYYY-MM-DD" /></label>
+        <UiButton size="sm" :disabled="busy" @click="pullBill">拉单日</UiButton>
+        <UiButton size="sm" variant="ghost" :disabled="busy" title="按上方对账区间逐日拉取（空=近 30 天）" @click="pullRange">拉整个区间</UiButton>
       </div>
-      <div class="billrow">
-        <input v-model="billDate" placeholder="拉某日账单 YYYY-MM-DD" />
-        <UiButton :disabled="busy" @click="pullBill">拉单日</UiButton>
-        <button class="act ghost" :disabled="busy" title="按上方对账区间逐日拉取（空=近 30 天）" @click="pullRange">拉整个区间</button>
+
+      <div class="ld-kpi-grid ext-sum">
+        <KpiCard v-for="s in match.summary" :key="s.label" :label="s.label" :value="s.value" :tone="s.danger ? 'red' : 'neutral'" />
       </div>
-      <div class="ext-cards">
-        <div v-for="s in match.summary" :key="s.label" class="ext-card" :class="{ danger: s.danger }">
-          <div class="ext-k">{{ s.label }}</div>
-          <div class="ext-v" :class="{ danger: s.danger }">{{ s.value }}</div>
-        </div>
-      </div>
+
+      <!-- 微信收了钱、我方没单（最危险·立即人工核） -->
       <template v-if="match.wxOnly.length">
-        <h3 class="danger-h">微信收了钱、我方没单（立即人工核）</h3>
-        <p v-for="w in match.wxOnly" :key="w.transactionId" class="row-line danger-line">{{ w.date }} · {{ w.transactionId }} · {{ w.amount }}</p>
+        <div class="sub-h danger">
+          <span>微信收了钱、我方没单</span><span class="sub-note">最危险 · 立即人工核</span><Badge tone="red">{{ match.wxOnly.length }} 笔</Badge>
+        </div>
+        <div class="ld-table">
+          <div class="ld-thead">
+            <div class="ld-th grow">日期</div>
+            <div class="ld-th" :style="{ width: '220px' }">微信交易号</div>
+            <div class="ld-th r" :style="{ width: '120px' }">金额</div>
+          </div>
+          <div class="ld-tbody">
+            <div v-for="w in match.wxOnly" :key="w.transactionId" class="ld-tr">
+              <div class="ld-td grow mono">{{ w.date }}</div>
+              <div class="ld-td mono" :style="{ width: '220px' }">{{ w.transactionId }}</div>
+              <div class="ld-td r num danger" :style="{ width: '120px' }">{{ w.amount }}</div>
+            </div>
+          </div>
+        </div>
       </template>
+
+      <!-- 金额不符 -->
       <template v-if="match.amountMismatch.length">
-        <h3 class="danger-h">金额不符</h3>
-        <p v-for="mm in match.amountMismatch" :key="mm.id" class="row-line">{{ mm.id }} · 我方 {{ mm.ours }} ≠ 微信 {{ mm.wx }}</p>
+        <div class="sub-h"><span>金额不符</span><Badge tone="amber">{{ match.amountMismatch.length }} 笔</Badge></div>
+        <div class="ld-table">
+          <div class="ld-thead">
+            <div class="ld-th grow">单号</div>
+            <div class="ld-th r" :style="{ width: '130px' }">我方</div>
+            <div class="ld-th r" :style="{ width: '130px' }">微信</div>
+          </div>
+          <div class="ld-tbody">
+            <div v-for="mm in match.amountMismatch" :key="mm.id" class="ld-tr">
+              <div class="ld-td grow mono">{{ mm.id }}</div>
+              <div class="ld-td r num" :style="{ width: '130px' }">{{ mm.ours }}</div>
+              <div class="ld-td r num amber" :style="{ width: '130px' }">{{ mm.wx }}</div>
+            </div>
+          </div>
+        </div>
       </template>
+
+      <!-- 我方有单微信无 -->
       <template v-if="match.oursOnly.length">
-        <h3>我方有单微信无（多为账单未拉/未支付成功）</h3>
-        <p v-for="o in match.oursOnly" :key="o.id" class="row-line">{{ o.id }} · {{ o.amount }}</p>
+        <div class="sub-h"><span>我方有单微信无</span><span class="sub-note">多为账单未拉/未支付成功</span><Badge tone="neutral">{{ match.oursOnly.length }} 笔</Badge></div>
+        <div class="ld-table">
+          <div class="ld-thead">
+            <div class="ld-th grow">单号</div>
+            <div class="ld-th r" :style="{ width: '130px' }">金额</div>
+          </div>
+          <div class="ld-tbody">
+            <div v-for="o in match.oursOnly" :key="o.id" class="ld-tr">
+              <div class="ld-td grow mono">{{ o.id }}</div>
+              <div class="ld-td r num" :style="{ width: '130px' }">{{ o.amount }}</div>
+            </div>
+          </div>
+        </div>
       </template>
-    </section>
+
+      <EmptyState v-if="!match.wxOnly.length && !match.amountMismatch.length && !match.oursOnly.length" :icon="CircleCheck" text="逐笔已勾对 · 无差异" />
+    </Card>
+
     <p class="foot-note">「微信手续费 / 实际到账」需微信结算数据源，后端暂无——本页只作应收/退款/净额真等式与账单逐笔勾对（区间可自选·全账累计恒为 money 锚）。</p>
   </div>
 </template>
 
 <style scoped>
-.page {
-  max-width: 1200px;
-}
-.page-head {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 16px;
-  margin-bottom: 18px;
-}
-h1 {
-  margin: 0;
-  font-size: 22px;
-  font-weight: 700;
-  color: var(--ld-ink);
-}
-.sub {
-  margin: 4px 0 0;
+/* 区间筛选条内的说明文字（工具条/搜索框/按钮走 kit） */
+.range-label {
   font-size: 12.5px;
   color: var(--ld-content-2);
-}
-.btn-primary:disabled {
-  opacity: 0.5;
-}
-.status {
-  font-size: 13px;
-  color: var(--ld-content-2);
-}
-.range {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-wrap: wrap;
-  margin-bottom: 16px;
-  font-size: 12.5px;
-  color: var(--ld-content-2);
-}
-.date-in {
-  padding: 7px 11px;
-  border: 1px solid var(--ld-line-strong);
-  border-radius: 8px;
-  font-size: 12.5px;
-  background: var(--ld-bg);
-  color: var(--ld-ink);
-  font-family: var(--ld-font-mono);
-  width: 148px;
 }
 .dash {
   color: var(--ld-content-2);
 }
-.range-clear {
-  padding: 7px 14px;
-  border: 1px solid var(--ld-line);
-  border-radius: 999px;
-  background: var(--ld-bg);
-  color: var(--ld-content);
-  font-size: 12.5px;
-  cursor: pointer;
-}
 .range-note {
   font-size: 11px;
   color: var(--ld-content-2);
+}
+.ld-toolbar .ld-search input {
+  font-family: var(--ld-font-mono);
+}
+.ld-search.wide input {
+  min-width: 210px;
+}
+
+/* 账平/异常横幅（本页独有语义块） */
+.balance {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 16px 20px;
+  background: var(--ld-bg-green-soft);
+  border: 1px solid var(--ld-green);
+  border-radius: var(--ld-radius);
+  color: var(--ld-green);
 }
 .balance.warn {
   background: var(--ld-bg-red-soft);
   border-color: var(--ld-red-line);
   color: var(--ld-red);
 }
-.ex-block {
-  padding: 16px 20px;
-  margin-bottom: 18px;
-  background: var(--ld-bg);
-  border: 1px solid var(--ld-red-line);
-  border-radius: var(--ld-radius-l);
+.balance-t {
+  font-size: 14px;
+  font-weight: 700;
 }
-.ex-h {
-  margin: 0 0 10px;
-  font-size: 13px;
-  color: var(--ld-red);
+.balance-s {
+  margin-top: 3px;
+  font-size: 12.5px;
+  opacity: 0.9;
 }
+
+/* KPI 分组：小标题紧贴其网格（全账/区间口径分开呈现） */
+.kpi-block {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.cap {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--ld-content-2);
+}
+.approx {
+  margin: 0;
+  font-size: 11.5px;
+  color: var(--ld-amber);
+}
+
+/* 内部异常明细行（外壳走 Card） */
 .ex-group {
-  margin-top: 8px;
+  margin-top: 10px;
+}
+.ex-group:first-child {
+  margin-top: 0;
 }
 .ex-label {
   font-size: 12px;
@@ -343,250 +376,67 @@ h1 {
   font-family: var(--ld-font-mono);
   color: var(--ld-content-2);
 }
-.balance {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 16px 20px;
-  margin-bottom: 18px;
-  background: var(--ld-bg-green-soft);
-  border: 1px solid var(--ld-green);
-  border-radius: var(--ld-radius-l);
-  color: var(--ld-green);
+
+/* 表格单元修饰（右对齐/等宽数字/强调/异常·外壳走 .ld-table） */
+.ld-th.r,
+.ld-td.r {
+  justify-content: flex-end;
+  text-align: right;
 }
-.balance-t {
-  font-size: 14px;
-  font-weight: 700;
-}
-.balance-s {
-  margin-top: 3px;
+.ld-td.mono {
+  font-family: var(--ld-font-mono);
   font-size: 12.5px;
-  opacity: 0.9;
 }
-.cum-strip {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 22px;
-  padding: 12px 20px;
-  margin-bottom: 16px;
-  background: var(--ld-bg-lilac);
-  border-radius: var(--ld-radius-l);
-}
-.cum-item {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-.cum-item span {
-  font-size: 11px;
-  color: var(--ld-content-2);
-}
-.cum-item b {
-  font-size: 16px;
-  font-weight: 700;
-  color: var(--ld-ink);
+.ld-td.num {
   font-variant-numeric: tabular-nums;
 }
-.range-cap {
-  margin-bottom: 10px;
-  font-size: 12.5px;
-  font-weight: 600;
-  color: var(--ld-content-2);
-}
-.act.ghost {
-  background: var(--ld-bg);
-  color: var(--ld-content);
-  border: 1px solid var(--ld-line);
-}
-.stat-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-  gap: 16px;
-  margin-bottom: 16px;
-}
-.stat-card {
-  padding: 18px 20px;
-  background: var(--ld-bg);
-  border: 1px solid var(--ld-line);
-  border-radius: var(--ld-radius-l);
-}
-.stat-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-}
-.stat-label {
-  font-size: 12.5px;
-  color: var(--ld-content-2);
-}
-.stat-ico {
-  color: var(--ld-brand);
-}
-.stat-ico.ok {
-  color: var(--ld-green);
-}
-.stat-ico.amber {
-  color: var(--ld-amber);
-}
-.stat-value {
-  margin-top: 10px;
-  font-size: 26px;
+.ld-td.strong {
   font-weight: 700;
   color: var(--ld-ink);
-  line-height: 1.1;
 }
-.stat-value.ok {
-  color: var(--ld-green);
-}
-.stat-value.amber {
+.ld-td.amber {
   color: var(--ld-amber);
 }
-.approx {
-  margin-bottom: 10px;
-  font-size: 11.5px;
-  color: var(--ld-amber);
+.ld-td.danger {
+  color: var(--ld-red);
+  font-weight: 600;
 }
-.table {
-  background: var(--ld-bg);
-  border: 1px solid var(--ld-line);
-  border-radius: var(--ld-radius-l);
-  overflow: hidden;
-  margin-bottom: 18px;
-}
-.thead,
-.trow {
-  display: grid;
-  grid-template-columns: 1.4fr 1fr 1.2fr 1fr 1.2fr 1fr;
-  align-items: center;
-  gap: 12px;
-  padding: 12px 20px;
-}
-.thead {
-  background: var(--ld-bg-lilac);
-  font-size: 12px;
-  color: var(--ld-content-2);
-}
-.trow {
-  border-top: 1px solid var(--ld-line);
-  font-size: 13px;
-}
-.trow.total {
+.ld-tr.total {
   background: var(--ld-bg-faint);
   font-weight: 700;
 }
-.r {
-  text-align: right;
-  justify-self: end;
-}
-.day {
-  color: var(--ld-content);
-  font-family: var(--ld-font-mono);
-  font-size: 12.5px;
-}
-.num {
-  font-variant-numeric: tabular-nums;
-  color: var(--ld-content);
-}
-.num.strong {
-  font-weight: 700;
-  color: var(--ld-ink);
-}
-.num.amber {
-  color: var(--ld-amber);
-}
-.ext-panel {
-  padding: 20px 22px;
-  background: var(--ld-bg);
-  border: 1px solid var(--ld-line);
-  border-radius: var(--ld-radius-l);
-}
-.ext-head {
-  display: flex;
-  align-items: baseline;
-  gap: 10px;
-  margin-bottom: 12px;
-}
-.ext-head h2 {
-  margin: 0;
-  font-size: 15px;
-  font-weight: 700;
-  color: var(--ld-ink);
-}
+
+/* 外部账单核对面板内的说明/子表头（外壳走 Card） */
 .approx-inline {
-  font-size: 11px;
+  margin: 0 0 12px;
+  font-size: 11.5px;
   color: var(--ld-amber);
 }
-.billrow {
-  display: flex;
-  gap: 8px;
+.bill-row {
   margin-bottom: 14px;
 }
-.billrow input {
-  padding: 8px 12px;
-  border: 1px solid var(--ld-line-strong);
-  border-radius: 8px;
+.ext-sum {
+  margin-bottom: 14px;
+}
+.sub-h {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 18px 0 8px;
   font-size: 13px;
+  font-weight: 600;
+  color: var(--ld-content);
 }
-.ext-cards {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-  gap: 12px;
-  margin-bottom: 8px;
+.sub-h.danger {
+  color: var(--ld-red);
 }
-.ext-card {
-  padding: 12px 14px;
-  background: var(--ld-bg-lilac);
-  border-radius: 10px;
-}
-.ext-card.danger {
-  background: var(--ld-bg-red-soft);
-  border: 1px solid var(--ld-red-line);
-}
-.ext-k {
-  font-size: 11px;
+.sub-note {
+  font-size: 11.5px;
+  font-weight: 400;
   color: var(--ld-content-2);
 }
-.ext-v {
-  margin-top: 4px;
-  font-size: 20px;
-  font-weight: 700;
-  color: var(--ld-ink);
-}
-.ext-v.danger {
-  color: var(--ld-red);
-}
-.danger-h {
-  color: var(--ld-red);
-  font-size: 13px;
-  margin: 14px 0 6px;
-}
-.ext-panel h3 {
-  font-size: 13px;
-  color: var(--ld-content);
-  margin: 14px 0 6px;
-}
-.row-line {
-  font-size: 12.5px;
-  font-family: var(--ld-font-mono);
-  margin: 2px 0;
-  color: var(--ld-content);
-}
-.danger-line {
-  color: var(--ld-red);
-}
-/* .act 基类仅留次级按钮（ghost）共享布局；填充主按钮（拉单日）已收进 UiButton */
-.act {
-  padding: 8px 18px;
-  border: none;
-  border-radius: 999px;
-  font-size: 13px;
-  cursor: pointer;
-}
-.act:disabled {
-  opacity: 0.5;
-}
 .foot-note {
-  margin-top: 14px;
+  margin: 0;
   font-size: 11.5px;
   color: var(--ld-content-2);
 }

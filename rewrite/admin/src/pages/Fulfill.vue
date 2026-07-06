@@ -21,6 +21,11 @@ import {
   type PrintLabel,
 } from '../lib/fulfill'
 import UiButton from '../components/ui/Button.vue'
+import PageHeader from '../components/ui/PageHeader.vue'
+import Card from '../components/ui/Card.vue'
+import KpiCard from '../components/ui/KpiCard.vue'
+import Badge from '../components/ui/Badge.vue'
+import EmptyState from '../components/ui/EmptyState.vue'
 
 // —— 队列（壳持有·传给三步）——
 const step = ref(1)
@@ -272,17 +277,13 @@ const railState = (n: number) => (n === step.value ? 'current' : n < step.value 
 </script>
 
 <template>
-  <div class="page">
-    <header class="page-head">
-      <div>
-        <h1>发货工作台</h1>
-        <p class="sub">拣货备货 → 打印内部标签贴箱 → 扫码逐箱发货，一箱一单不打字</p>
-      </div>
-      <div class="head-r">
-        <span v-if="!loading && !loadErr" class="q-chip">待发货 {{ summary.orderCount }} 单 · 共 {{ summary.totalQty }} 件</span>
-        <button class="btn-refresh" :disabled="loading" @click="reload"><RefreshCw :size="15" :stroke-width="1.8" /><span>刷新队列</span></button>
-      </div>
-    </header>
+  <div class="ld-page">
+    <PageHeader title="发货工作台" sub="拣货备货 → 打印内部标签贴箱 → 扫码逐箱发货，一箱一单不打字">
+      <Badge v-if="!loading && !loadErr" tone="brand">待发货 {{ summary.orderCount }} 单 · 共 {{ summary.totalQty }} 件</Badge>
+      <UiButton variant="ghost" size="sm" :disabled="loading" @click="reload">
+        <RefreshCw :size="14" :stroke-width="1.8" /><span>刷新队列</span>
+      </UiButton>
+    </PageHeader>
 
     <!-- 三步导航 rail -->
     <div class="rail">
@@ -295,61 +296,69 @@ const railState = (n: number) => (n === step.value ? 'current' : n < step.value 
       </template>
     </div>
 
-    <p v-if="loadErr" class="status">{{ loadErr }}</p>
-    <p v-else-if="loading" class="status-soft">加载待发货队列中…</p>
+    <p v-if="loadErr" class="status-err">{{ loadErr }}</p>
+    <p v-else-if="loading" class="ld-status">加载待发货队列中…</p>
 
-    <div v-else class="panel">
+    <template v-else>
       <!-- 步1 拣货备货 -->
-      <section v-if="step === 1">
-        <div class="pick-stats">
-          <span><b>{{ summary.orderCount }}</b> 单待发货</span>
-          <span>共 <b>{{ summary.totalQty }}</b> 件</span>
-          <span v-if="summary.earliestCreatedAt">最早一单 {{ fmtTime(summary.earliestCreatedAt) }}</span>
+      <template v-if="step === 1">
+        <div class="ld-kpi-grid">
+          <KpiCard label="待发货订单" :value="summary.orderCount" :icon="Package" />
+          <KpiCard label="需备货合计（件）" :value="summary.totalQty" />
+          <KpiCard v-if="summary.earliestCreatedAt" label="最早一单" :value="fmtTime(summary.earliestCreatedAt)" />
         </div>
         <p v-if="summary.mismatchCount" class="warn-line">
           其中 {{ summary.mismatchCount }} 单金额异常——货照备；发货前须到「订单发货」页核对流水解除，扫码发货时会被挡下。
         </p>
-        <p v-if="!summary.products.length" class="status-soft">没有待发货订单，今天不用备货 🎉</p>
-        <div v-else class="table">
-          <div class="thead"><span>产品</span><span class="r">需备数量</span></div>
-          <div v-for="p in summary.products" :key="p.name" class="trow">
-            <span>{{ p.name }}</span><span class="r qty">× {{ p.qty }}</span>
+        <EmptyState v-if="!summary.products.length" :icon="Package" text="没有待发货订单，今天不用备货 🎉" />
+        <div v-else class="ld-table">
+          <div class="ld-thead">
+            <div class="ld-th grow">产品</div>
+            <div class="ld-th qty-col" :style="{ width: '140px' }">需备数量</div>
+          </div>
+          <div class="ld-tbody">
+            <div v-for="p in summary.products" :key="p.name" class="ld-tr">
+              <div class="ld-td grow">{{ p.name }}</div>
+              <div class="ld-td qty-col qty-val" :style="{ width: '140px' }">× {{ p.qty }}</div>
+            </div>
           </div>
         </div>
         <p class="tip">备好货后进「打印标签」，一单一张贴箱，照标签清单装货。</p>
-      </section>
+      </template>
 
       <!-- 步2 打印标签 -->
-      <section v-else-if="step === 2">
-        <div class="p-toolbar">
+      <template v-else-if="step === 2">
+        <div class="ld-toolbar">
           <select v-model="paperKey" class="sel" @change="onPaperChange">
             <option v-for="p in PAPER_PRESETS" :key="p.key" :value="p.key">{{ p.label }}</option>
           </select>
-          <button class="btn-ghost" @click="selectUnprinted">只选未打印</button>
-          <button class="btn-ghost" @click="selectAll">全选</button>
-          <span class="flex"></span>
+          <UiButton variant="ghost" size="sm" @click="selectUnprinted">只选未打印</UiButton>
+          <UiButton variant="ghost" size="sm" @click="selectAll">全选</UiButton>
+          <span class="tb-grow"></span>
           <UiButton :disabled="!chosen.length || printing" @click="doPrint">
-            <Printer :size="15" :stroke-width="1.8" /><span>{{ printing ? '生成中…' : `打印 ${chosen.length} 张标签` }}</span>
+            <Printer :size="14" :stroke-width="1.8" /><span>{{ printing ? '生成中…' : `打印 ${chosen.length} 张标签` }}</span>
           </UiButton>
         </div>
         <p v-if="printMsg" class="ok-line">{{ printMsg }}</p>
         <p class="tip">打印记录只记在本机浏览器；打废的单点「已打印」徽标取消，重新勾选再打。</p>
-        <p v-if="!orders.length" class="status-soft">没有待发货订单，无标签可打。</p>
+        <EmptyState v-if="!orders.length" :icon="Printer" text="没有待发货订单，无标签可打" />
         <div v-else class="p-body">
-          <div class="p-list">
-            <div v-for="o in orders" :key="o.id" class="p-order" :class="{ on: previewId === o.id }" @click="openPreview(o)">
-              <input type="checkbox" :checked="checked.has(o.id as string)" @click.stop @change="toggleCheck(o.id as string)" />
-              <div class="po-main">
-                <b class="mono">{{ shortCode(o.id) }}</b>
-                <span class="po-name">{{ o.address?.name }}</span>
-                <span class="po-meta">{{ labelData(o).totalQty }} 件 · {{ fmtTime(o.createdAt) }}</span>
-                <span class="flex"></span>
-                <span v-if="printed.has(o.id as string)" class="badge printed" title="点击取消已打印标记" @click.stop="togglePrinted(o.id as string)">已打印 ✕</span>
-                <span v-if="o.feeMismatch" class="badge warn">金额异常</span>
+          <Card class="p-list-card" title="订单清单" :sub="`${orders.length} 单`" flush>
+            <div class="p-list">
+              <div v-for="o in orders" :key="o.id" class="p-order" :class="{ on: previewId === o.id }" @click="openPreview(o)">
+                <input type="checkbox" :checked="checked.has(o.id as string)" @click.stop @change="toggleCheck(o.id as string)" />
+                <div class="po-main">
+                  <b class="mono">{{ shortCode(o.id) }}</b>
+                  <span class="po-name">{{ o.address?.name }}</span>
+                  <span class="po-meta">{{ labelData(o).totalQty }} 件 · {{ fmtTime(o.createdAt) }}</span>
+                  <span class="flex"></span>
+                  <Badge v-if="printed.has(o.id as string)" tone="green" class="badge-tap" title="点击取消已打印标记" @click.stop="togglePrinted(o.id as string)">已打印 ✕</Badge>
+                  <Badge v-if="o.feeMismatch" tone="red">金额异常</Badge>
+                </div>
               </div>
             </div>
-          </div>
-          <div class="p-preview">
+          </Card>
+          <Card class="p-preview-card" title="标签预览" sub="所打即所见">
             <template v-if="previewLabel">
               <div class="pv-head">
                 <img v-if="previewQr" :src="previewQr" class="pv-qr" alt="qr" />
@@ -364,13 +373,13 @@ const railState = (n: number) => (n === step.value ? 'current' : n < step.value 
               </div>
               <div class="pv-total">共 {{ previewLabel.totalQty }} 件</div>
             </template>
-            <p v-else class="pv-empty">点左侧订单预览标签样式（所打即所见）</p>
-          </div>
+            <EmptyState v-else :icon="Printer" text="点左侧订单预览标签样式（所打即所见）" />
+          </Card>
         </div>
-      </section>
+      </template>
 
       <!-- 步3 扫码发货 -->
-      <section v-else>
+      <template v-else>
         <div class="s-toolbar">
           <label class="lb">物流公司</label>
           <select v-model="company" class="sel" @change="onCompanyChange">
@@ -395,13 +404,14 @@ const railState = (n: number) => (n === step.value ? 'current' : n < step.value 
         <p v-if="scanMsg" class="scan-msg" :class="{ bad: scanMsgBad }">{{ scanMsg }}</p>
 
         <div class="s-body">
-          <div class="check" :class="{ empty: !selectedLabel }">
+          <Card class="check-card" title="订单核对">
+            <template #head>
+              <UiButton v-if="selectedLabel" variant="ghost" size="sm" @click="selected = null; focusScan()">取消选中</UiButton>
+            </template>
             <template v-if="selectedLabel">
               <div class="ck-head">
                 <span class="ck-short">{{ selectedLabel.shortCode }}</span>
                 <span class="ck-full mono">{{ selectedLabel.id }}</span>
-                <span class="flex"></span>
-                <button class="btn-ghost sm" @click="selected = null; focusScan()">取消选中</button>
               </div>
               <p v-if="selected?.feeMismatch" class="warn-line">金额异常单——先到「订单发货」页核对流水解除，才能发货。</p>
               <div class="ck-who"><b>{{ selectedLabel.name }}&nbsp;&nbsp;{{ selectedLabel.phone }}</b><div>{{ selectedLabel.addressText }}</div></div>
@@ -410,92 +420,79 @@ const railState = (n: number) => (n === step.value ? 'current' : n < step.value 
               </div>
               <div class="ck-total">共 {{ selectedLabel.totalQty }} 件 · 核对无误后扫快递面单条码即发货{{ shipping ? '（发货中…）' : '' }}</div>
             </template>
-            <p v-else class="pv-empty">扫箱上的内部二维码，订单核对卡显示在这里</p>
-          </div>
-          <div class="feed">
-            <div class="feed-head">待发货剩 <b>{{ orders.length }}</b> 单 · 本次已发 <b>{{ shippedCount }}</b> 单</div>
-            <p v-if="!sessionLog.length" class="feed-empty">本次还没有发货记录</p>
-            <div v-for="(e, i) in sessionLog" :key="e.id + '-' + e.time + '-' + i" class="feed-row" :class="{ bad: !e.ok }">
-              <span class="f-time">{{ fmtClock(e.time) }}</span>
-              <b class="mono">{{ e.code }}</b>
-              <span class="f-name">{{ e.name }}</span>
-              <span class="f-track mono">{{ e.trackingNo }}</span>
-              <span class="f-res">{{ e.ok ? '✓ 已发货' : e.msg }}</span>
+            <EmptyState v-else :icon="ScanLine" text="扫箱上的内部二维码，订单核对卡显示在这里" />
+          </Card>
+          <Card class="feed-card" title="发货记录" :sub="`剩 ${orders.length} 单待发 · 本次已发 ${shippedCount} 单`" flush>
+            <EmptyState v-if="!sessionLog.length" text="本次还没有发货记录" />
+            <div v-else class="feed-list">
+              <div v-for="(e, i) in sessionLog" :key="e.id + '-' + e.time + '-' + i" class="feed-row" :class="{ bad: !e.ok }">
+                <span class="f-time">{{ fmtClock(e.time) }}</span>
+                <b class="mono">{{ e.code }}</b>
+                <span class="f-name">{{ e.name }}</span>
+                <span class="f-track mono">{{ e.trackingNo }}</span>
+                <span class="f-res">{{ e.ok ? '✓ 已发货' : e.msg }}</span>
+              </div>
             </div>
-          </div>
+          </Card>
         </div>
-      </section>
+      </template>
 
       <!-- 步导航 -->
       <div class="nav">
-        <button v-if="step > 1" class="btn-ghost" @click="go(step - 1)">← 上一步 · {{ FULFILL_STEP_NAMES[step - 2] }}</button>
-        <span class="flex"></span>
-        <UiButton v-if="step < 3" @click="go(step + 1)"><Package :size="15" :stroke-width="1.8" /><span>下一步 · {{ FULFILL_STEP_NAMES[step] }} →</span></UiButton>
+        <UiButton v-if="step > 1" variant="ghost" @click="go(step - 1)">← 上一步 · {{ FULFILL_STEP_NAMES[step - 2] }}</UiButton>
+        <span class="tb-grow"></span>
+        <UiButton v-if="step < 3" @click="go(step + 1)"><Package :size="14" :stroke-width="1.8" /><span>下一步 · {{ FULFILL_STEP_NAMES[step] }} →</span></UiButton>
       </div>
-    </div>
+    </template>
   </div>
 </template>
 
 <style scoped>
-.page {
-  max-width: 1120px;
-}
-.page-head {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 16px;
-  margin-bottom: 16px;
-}
-h1 {
-  margin: 0;
-  font-size: 22px;
-  font-weight: 700;
-  color: var(--ld-ink);
-}
-.sub {
-  margin: 4px 0 0;
-  font-size: 12.5px;
-  color: var(--ld-content-2);
-}
-.head-r {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-.q-chip {
-  font-size: 12px;
-  color: var(--ld-content-2);
-  background: var(--ld-bg-lilac);
-  padding: 6px 12px;
-  border-radius: 999px;
-  white-space: nowrap;
-}
-.btn-refresh {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 8px 14px;
-  border: 1px solid var(--ld-line);
-  border-radius: 999px;
-  background: var(--ld-bg);
-  color: var(--ld-content);
+/* 本页独有：三步 rail / 打印清单·标签预览 / 扫码框·核对卡·发货记录流。
+ * 页头/KPI/卡/徽章/空态/按钮/表格/工具条已交共享原语与 .ld-* 全局类。 */
+
+/* 通用小件 */
+.status-err {
   font-size: 13px;
-  cursor: pointer;
+  color: var(--ld-red);
 }
-.btn-refresh:disabled {
-  opacity: 0.6;
+.tip {
+  margin: 0;
+  font-size: 11.5px;
+  color: var(--ld-content-2);
 }
-/* rail */
+.warn-line {
+  margin: 0;
+  padding: 9px 13px;
+  border-radius: var(--ld-radius-sm);
+  background: var(--ld-bg-red-soft);
+  color: var(--ld-red);
+  font-size: 11.5px;
+}
+.ok-line {
+  margin: 0;
+  font-size: 12.5px;
+  color: var(--ld-green);
+}
+.flex {
+  flex: 1;
+}
+.tb-grow {
+  flex: 1;
+}
+.mono {
+  font-family: var(--ld-font-mono);
+}
+
+/* 三步导航 rail（步骤指示器·本页独有） */
 .rail {
   display: flex;
   align-items: center;
   gap: 10px;
   padding: 14px 18px;
-  margin-bottom: 16px;
   background: var(--ld-bg);
   border: 1px solid var(--ld-line);
-  border-radius: var(--ld-radius-l);
+  border-radius: var(--ld-radius);
 }
 .rail-line {
   flex: 1;
@@ -549,117 +546,24 @@ h1 {
   color: var(--ld-purple-ink);
   font-weight: 700;
 }
-.status {
-  font-size: 13px;
-  color: var(--ld-red);
+
+/* 步1 备货表：右列数量对齐 */
+.qty-col {
+  justify-content: flex-end;
 }
-.status-soft {
-  font-size: 13px;
-  color: var(--ld-content-2);
-}
-.panel {
-  background: var(--ld-bg);
-  border: 1px solid var(--ld-line);
-  border-radius: var(--ld-radius-l);
-  padding: 22px 24px;
-  min-height: 440px;
-  display: flex;
-  flex-direction: column;
-}
-.tip {
-  margin: 12px 2px 0;
-  font-size: 11.5px;
-  color: var(--ld-content-2);
-}
-.warn-line {
-  margin: 10px 0 0;
-  padding: 9px 13px;
-  border-radius: 10px;
-  background: var(--ld-bg-red-soft);
-  color: var(--ld-red);
-  font-size: 11.5px;
-}
-.ok-line {
-  margin: 10px 0 0;
-  font-size: 12.5px;
-  color: var(--ld-green);
-}
-.flex {
-  flex: 1;
-}
-.mono {
-  font-family: var(--ld-font-mono);
-}
-.r {
-  text-align: right;
-}
-/* 步1 表 */
-.pick-stats {
-  display: flex;
-  gap: 22px;
-  font-size: 13px;
-  color: var(--ld-content);
-  margin-bottom: 14px;
-}
-.pick-stats b {
-  font-size: 17px;
-  color: var(--ld-purple-ink);
-}
-.table {
-  border: 1px solid var(--ld-line);
-  border-radius: var(--ld-radius-l);
-  overflow: hidden;
-}
-.thead,
-.trow {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 14px;
-  padding: 11px 16px;
-  font-size: 13px;
-}
-.thead {
-  background: var(--ld-bg-lilac);
-  font-size: 11.5px;
-  font-weight: 600;
-  color: var(--ld-content-2);
-}
-.trow {
-  border-top: 1px solid var(--ld-line);
-}
-.qty {
+.qty-val {
   font-weight: 700;
   color: var(--ld-purple-ink);
 }
-/* 步2 打印 */
-.p-toolbar,
-.s-toolbar {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  margin-bottom: 6px;
-  flex-wrap: wrap;
-}
+
+/* 步2/步3 双列布局 */
 .sel {
   padding: 8px 10px;
   border: 1px solid var(--ld-line-strong);
-  border-radius: 9px;
+  border-radius: var(--ld-radius-sm);
   font-size: 12.5px;
   background: var(--ld-bg);
   color: var(--ld-ink);
-}
-.btn-ghost {
-  padding: 7px 13px;
-  border: 1px solid var(--ld-line);
-  border-radius: 999px;
-  background: var(--ld-bg);
-  color: var(--ld-content);
-  font-size: 12px;
-  cursor: pointer;
-}
-.btn-ghost.sm {
-  padding: 5px 11px;
 }
 .p-body,
 .s-body {
@@ -667,23 +571,26 @@ h1 {
   gap: 18px;
   align-items: flex-start;
   flex-wrap: wrap;
-  margin-top: 12px;
 }
-.p-list {
+.p-list-card,
+.check-card {
   flex: 1;
   min-width: 320px;
-  border: 1px solid var(--ld-line);
-  border-radius: 11px;
-  overflow: hidden;
 }
+.p-preview-card,
+.feed-card {
+  width: 320px;
+  flex: 1 0 auto;
+  max-width: 100%;
+}
+
+/* 步2 打印清单 */
 .p-order {
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: 11px 14px;
+  padding: 11px 16px;
   cursor: pointer;
-}
-.p-order + .p-order {
   border-top: 1px solid var(--ld-line);
 }
 .p-order.on {
@@ -691,6 +598,9 @@ h1 {
 }
 .p-order input {
   accent-color: var(--ld-brand);
+}
+.badge-tap {
+  cursor: pointer;
 }
 .po-main {
   flex: 1;
@@ -708,29 +618,7 @@ h1 {
   color: var(--ld-content-2);
   white-space: nowrap;
 }
-.badge {
-  font-size: 10.5px;
-  padding: 2px 8px;
-  border-radius: 999px;
-  white-space: nowrap;
-}
-.badge.printed {
-  background: var(--ld-bg-green-soft);
-  color: var(--ld-green);
-  cursor: pointer;
-}
-.badge.warn {
-  background: var(--ld-bg-red-soft);
-  color: var(--ld-red);
-}
-.p-preview,
-.check {
-  width: 300px;
-  flex: 0 0 auto;
-  padding: 16px;
-  border: 1px solid var(--ld-line);
-  border-radius: 11px;
-}
+/* 步2 标签预览 */
 .pv-head {
   display: flex;
   gap: 12px;
@@ -778,13 +666,8 @@ h1 {
   font-size: 13px;
   color: var(--ld-ink);
 }
-.pv-empty {
-  margin: 30px 0;
-  text-align: center;
-  font-size: 12px;
-  color: var(--ld-content-2);
-}
-/* 步3 扫码 */
+
+/* 步3 扫码框 */
 .lb {
   font-size: 12px;
   color: var(--ld-content-2);
@@ -797,7 +680,7 @@ h1 {
   align-items: center;
   gap: 9px;
   border: 2px solid var(--ld-brand);
-  border-radius: 10px;
+  border-radius: var(--ld-radius-sm);
   padding: 8px 13px;
   background: var(--ld-bg);
   color: var(--ld-content-2);
@@ -829,33 +712,21 @@ h1 {
   border: 1px solid var(--ld-red-line);
   background: var(--ld-bg-red-soft);
   color: var(--ld-red);
-  border-radius: 10px;
+  border-radius: var(--ld-radius-sm);
   padding: 10px;
   font-size: 12.5px;
   font-weight: 600;
   cursor: pointer;
-  margin: 8px 0 0;
 }
 .scan-msg {
-  margin: 10px 0 0;
+  margin: 0;
   font-size: 12.5px;
   color: var(--ld-green);
 }
 .scan-msg.bad {
   color: var(--ld-red);
 }
-.check.empty {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  min-height: 180px;
-  flex: 1;
-  min-width: 320px;
-}
-.check {
-  flex: 1;
-  min-width: 320px;
-}
+/* 步3 订单核对卡 */
 .ck-head {
   display: flex;
   align-items: center;
@@ -890,38 +761,18 @@ h1 {
   font-weight: 700;
   color: var(--ld-ink);
 }
-.feed {
-  width: 340px;
-  flex: 1 0 auto;
-  max-width: 100%;
-  border: 1px solid var(--ld-line);
-  border-radius: 11px;
-  overflow: hidden;
-}
-.feed-head {
-  padding: 10px 14px;
-  background: var(--ld-bg-lilac);
-  font-size: 12px;
-  color: var(--ld-content-2);
-}
-.feed-head b {
-  color: var(--ld-purple-ink);
-  font-size: 14px;
-}
-.feed-empty {
-  margin: 0;
-  padding: 16px 14px;
-  font-size: 12px;
-  color: var(--ld-content-2);
-}
+/* 步3 发货记录流 */
 .feed-row {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 8px 14px;
+  padding: 8px 16px;
   font-size: 11.5px;
   border-top: 1px solid var(--ld-line);
   flex-wrap: wrap;
+}
+.feed-row:first-child {
+  border-top: none;
 }
 .feed-row.bad {
   background: var(--ld-bg-red-soft);
@@ -947,6 +798,5 @@ h1 {
   align-items: center;
   border-top: 1px solid var(--ld-line);
   padding-top: 16px;
-  margin-top: auto;
 }
 </style>

@@ -8,6 +8,10 @@ import { listInventory, saveStock } from '../api/system'
 import { listDrafts } from '../api/products'
 import { mapStock, stockErrorText, type StockRow } from '../lib/mapSystem'
 import UiButton from '../components/ui/Button.vue'
+import PageHeader from '../components/ui/PageHeader.vue'
+import KpiCard from '../components/ui/KpiCard.vue'
+import Badge from '../components/ui/Badge.vue'
+import EmptyState from '../components/ui/EmptyState.vue'
 
 const LOW_STOCK = 10 // 默认阈值（per-SKU 未设时退此·仅前端预警线）
 
@@ -119,125 +123,100 @@ onMounted(reload)
 </script>
 
 <template>
-  <div class="page">
-    <header class="page-head">
-      <div>
-        <h1>库存管理</h1>
-        <p class="sub">实物库存按 SKU 追踪 · 下单即预留、超时/退款自动回补、缺货自动售罄</p>
-      </div>
-      <button class="btn-refresh" :disabled="busy" @click="reload">
-        <RefreshCw :size="15" :stroke-width="1.8" :class="{ spin: busy }" /><span>{{ busy ? '刷新中…' : '刷新' }}</span>
-      </button>
-    </header>
+  <div class="ld-page">
+    <PageHeader title="实物库存" sub="实物库存按 SKU 追踪 · 下单即预留、超时/退款自动回补、缺货自动售罄">
+      <UiButton variant="ghost" size="sm" :disabled="busy" @click="reload">
+        <RefreshCw :size="14" :stroke-width="1.8" :class="{ spin: busy }" />
+        <span>{{ busy ? '刷新中…' : '刷新' }}</span>
+      </UiButton>
+    </PageHeader>
 
-    <p v-if="truncNote" class="warn-note">{{ truncNote }}</p>
+    <p v-if="truncNote" class="ld-status">{{ truncNote }}</p>
 
-    <div class="stat-grid">
-      <div class="stat-card">
-        <div class="stat-head"><span class="stat-label">SKU 总数</span><Boxes class="stat-ico" :size="18" :stroke-width="1.8" /></div>
-        <div class="stat-value">{{ counts.all }}</div>
-      </div>
-      <div class="stat-card">
-        <div class="stat-head"><span class="stat-label">在售</span><CircleCheck class="stat-ico ok" :size="18" :stroke-width="1.8" /></div>
-        <div class="stat-value">{{ counts.onsale }}</div>
-      </div>
-      <div class="stat-card">
-        <div class="stat-head"><span class="stat-label">低库存预警</span><TriangleAlert class="stat-ico amber" :size="18" :stroke-width="1.8" /></div>
-        <div class="stat-value amber">{{ counts.low }}</div>
-      </div>
-      <div class="stat-card">
-        <div class="stat-head"><span class="stat-label">售罄</span><XCircle class="stat-ico red" :size="18" :stroke-width="1.8" /></div>
-        <div class="stat-value red">{{ counts.out }}</div>
-      </div>
+    <div class="ld-kpi-grid">
+      <KpiCard label="SKU 总数" :value="counts.all" :icon="Boxes" />
+      <KpiCard label="在售" :value="counts.onsale" :icon="CircleCheck" />
+      <KpiCard label="低库存预警" :value="counts.low" :icon="TriangleAlert" />
+      <KpiCard label="售罄" :value="counts.out" :icon="XCircle" tone="red" />
     </div>
 
-    <div class="toolbar">
-      <div class="chips">
-        <button v-for="f in FILTERS" :key="f.key" class="chip" :class="{ on: filter === f.key }" @click="filter = f.key">
-          {{ f.label }}<span class="chip-n">{{ counts[f.key] }}</span>
-        </button>
-      </div>
-      <div class="searchbox">
+    <div class="ld-toolbar">
+      <button v-for="f in FILTERS" :key="f.key" class="ld-chip" :class="{ on: filter === f.key }" @click="filter = f.key">
+        {{ f.label }}<span class="chip-n">{{ counts[f.key] }}</span>
+      </button>
+      <div class="ld-search search-r">
         <Search :size="15" :stroke-width="1.8" class="search-ico" />
         <input v-model="search" placeholder="搜索商品 / 规格" />
       </div>
     </div>
 
-    <p v-if="message" class="status">{{ message }}</p>
+    <p v-if="message" class="ld-status msg-err">{{ message }}</p>
 
-    <div v-if="shown.length" class="table">
-      <div class="thead">
-        <span>商品 · 规格</span>
-        <span>价格</span>
-        <span>当前库存</span>
-        <span>状态</span>
-        <span class="r">操作</span>
+    <div v-if="shown.length" class="ld-table">
+      <div class="ld-thead">
+        <div class="ld-th grow">商品 · 规格</div>
+        <div class="ld-th" :style="{ width: '100px' }">售价</div>
+        <div class="ld-th" :style="{ width: '250px' }">当前库存</div>
+        <div class="ld-th" :style="{ width: '110px' }">状态</div>
+        <div class="ld-th ops-cell" :style="{ width: '180px' }">操作</div>
       </div>
-      <div v-for="row in shown" :key="row.key" class="trow">
-        <div class="prod">
-          <div class="prod-name">{{ row.name }}</div>
-          <div class="prod-spec">规格：{{ row.spec || '默认款' }}</div>
-        </div>
-        <span class="price">{{ row.priceLabel }}</span>
-        <div class="stock">
-          <template v-if="editKey === row.key">
-            <input v-model="editVal" class="stockin" placeholder="空=不限量" @keyup.enter="doSave(row)" />
-            <input v-model="editThreshold" class="threshin" :placeholder="'阈值(默认' + LOW_STOCK + ')'" title="低库存预警阈值·per-SKU" @keyup.enter="doSave(row)" />
-          </template>
-          <template v-else-if="row.status === 'unlimited'">
-            <InfinityIcon :size="16" :stroke-width="1.8" class="inf" /><span class="stock-hint">现做不限量</span>
-          </template>
-          <template v-else>
-            <span class="stock-num" :class="row.status">{{ row.stock }}</span><span class="unit">件</span>
-            <span v-if="row.status === 'low'" class="stock-hint amber">低于阈值 {{ effThreshold(row) }}</span>
-            <span v-else-if="row.status === 'out'" class="stock-hint red">需补货</span>
-          </template>
-        </div>
-        <span class="c-state"><span class="state" :class="STATUS[row.status].cls">{{ STATUS[row.status].label }}</span></span>
-        <div class="c-ops r">
-          <template v-if="editKey === row.key">
-            <UiButton size="sm" @click="doSave(row)">保存</UiButton>
-            <button class="act ghost" @click="editKey = ''">取消</button>
-          </template>
-          <template v-else>
-            <button class="act ghost" @click="startEdit(row)">调整</button>
-            <UiButton v-if="row.status === 'low' || row.status === 'out'" size="sm" @click="startEdit(row)">＋ 补货</UiButton>
-          </template>
+      <div class="ld-tbody">
+        <div v-for="row in shown" :key="row.key" class="ld-tr">
+          <div class="ld-td grow">
+            <div class="prod">
+              <div class="prod-name">{{ row.name }}</div>
+              <div class="prod-spec">规格：{{ row.spec || '默认款' }}</div>
+            </div>
+          </div>
+          <div class="ld-td" :style="{ width: '100px' }">{{ row.priceLabel }}</div>
+          <div class="ld-td stock-cell" :style="{ width: '250px' }">
+            <template v-if="editKey === row.key">
+              <input v-model="editVal" class="stockin" placeholder="空=不限量" @keyup.enter="doSave(row)" />
+              <input
+                v-model="editThreshold"
+                class="threshin"
+                :placeholder="'阈值(默认' + LOW_STOCK + ')'"
+                title="低库存预警阈值·per-SKU"
+                @keyup.enter="doSave(row)"
+              />
+            </template>
+            <template v-else-if="row.status === 'unlimited'">
+              <InfinityIcon :size="16" :stroke-width="1.8" class="inf" /><span class="stock-hint">现做不限量</span>
+            </template>
+            <template v-else>
+              <span class="stock-num" :class="row.status">{{ row.stock }}</span><span class="unit">件</span>
+              <span v-if="row.status === 'low'" class="stock-hint amber">低于阈值 {{ effThreshold(row) }}</span>
+              <span v-else-if="row.status === 'out'" class="stock-hint red">需补货</span>
+            </template>
+          </div>
+          <div class="ld-td" :style="{ width: '110px' }">
+            <Badge :tone="row.status === 'onsale' ? 'green' : row.status === 'low' ? 'amber' : row.status === 'out' ? 'red' : 'brand'">{{
+              STATUS[row.status].label
+            }}</Badge>
+          </div>
+          <div class="ld-td ops-cell" :style="{ width: '180px' }">
+            <template v-if="editKey === row.key">
+              <UiButton size="sm" @click="doSave(row)">保存</UiButton>
+              <UiButton variant="ghost" size="sm" @click="editKey = ''">取消</UiButton>
+            </template>
+            <template v-else>
+              <UiButton variant="ghost" size="sm" @click="startEdit(row)">调整</UiButton>
+              <UiButton v-if="row.status === 'low' || row.status === 'out'" size="sm" @click="startEdit(row)">＋ 补货</UiButton>
+            </template>
+          </div>
         </div>
       </div>
     </div>
-    <p v-else-if="!message" class="status-soft">{{ rows.length ? '没有符合筛选的 SKU' : '还没有库存档（不限量商品无档是正常的）' }}</p>
+    <EmptyState
+      v-else-if="!message"
+      :icon="Boxes"
+      :text="rows.length ? '没有符合筛选的 SKU' : '还没有库存档（不限量商品无档是正常的）'"
+    />
     <p class="foot-note">留空 = 不限量（缺货前不拦下单）；下单即预留、超时关单自动回补。调整时可设 per-SKU 低库存阈值（留空退默认 {{ LOW_STOCK }}）。</p>
   </div>
 </template>
 
 <style scoped>
-.page {
-  max-width: 1160px;
-}
-.page-head {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 16px;
-  margin-bottom: 18px;
-}
-.btn-refresh {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  flex: none;
-  padding: 8px 14px;
-  border: 1px solid var(--ld-line);
-  border-radius: 999px;
-  background: var(--ld-bg);
-  color: var(--ld-content);
-  font-size: 13px;
-  cursor: pointer;
-}
-.btn-refresh:disabled {
-  opacity: 0.6;
-}
 .spin {
   animation: spin 0.9s linear infinite;
 }
@@ -246,181 +225,47 @@ onMounted(reload)
     transform: rotate(360deg);
   }
 }
-.threshin {
-  width: 92px;
-  margin-left: 6px;
-  padding: 6px 10px;
-  border: 1px solid var(--ld-line-strong);
-  border-radius: 8px;
-  font-size: 12px;
-}
-h1 {
-  margin: 0;
-  font-size: 22px;
-  font-weight: 700;
-  color: var(--ld-ink);
-}
-.sub {
-  margin: 4px 0 0;
-  font-size: 12.5px;
-  color: var(--ld-content-2);
-}
-.warn-note {
-  font-size: 12px;
-  color: var(--ld-amber);
-  margin: 0 0 12px;
-}
-.stat-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-  gap: 16px;
-  margin-bottom: 18px;
-}
-.stat-card {
-  padding: 18px 20px;
-  background: var(--ld-bg);
-  border: 1px solid var(--ld-line);
-  border-radius: var(--ld-radius-l);
-}
-.stat-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-}
-.stat-label {
-  font-size: 12.5px;
-  color: var(--ld-content-2);
-}
-.stat-ico {
-  color: var(--ld-brand);
-}
-.stat-ico.ok {
-  color: var(--ld-green);
-}
-.stat-ico.amber {
-  color: var(--ld-amber);
-}
-.stat-ico.red {
-  color: var(--ld-red);
-}
-.stat-value {
-  margin-top: 10px;
-  font-size: 28px;
-  font-weight: 700;
-  color: var(--ld-ink);
-  line-height: 1.1;
-}
-.stat-value.amber {
-  color: var(--ld-amber);
-}
-.stat-value.red {
-  color: var(--ld-red);
-}
-.toolbar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-  margin-bottom: 14px;
-}
-.chips {
-  display: flex;
-  gap: 8px;
-  flex-wrap: wrap;
-}
-.chip {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 6px 14px;
-  border: 1px solid var(--ld-line);
-  border-radius: 999px;
-  background: var(--ld-bg);
-  color: var(--ld-content-2);
-  font-size: 13px;
-  cursor: pointer;
-}
-.chip.on {
-  background: var(--ld-purple-ink);
-  border-color: var(--ld-purple-ink);
-  color: #fff;
-}
-.chip-n {
-  opacity: 0.7;
-}
-.searchbox {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 8px 14px;
-  border: 1px solid var(--ld-line);
-  border-radius: 999px;
-  background: var(--ld-bg);
-  min-width: 240px;
+/* 工具条：搜索靠右 + 内嵌搜索图标（.ld-toolbar/.ld-chip/.ld-search 走全局 console.css） */
+.search-r {
+  margin-left: auto;
 }
 .search-ico {
   color: var(--ld-content-2);
   flex: none;
 }
-.searchbox input {
-  border: none;
-  outline: none;
-  background: transparent;
-  font-size: 13px;
-  width: 100%;
-  color: var(--ld-ink);
-}
-.status {
-  font-size: 13px;
-  color: var(--ld-red);
-}
-.status-soft {
-  font-size: 13px;
+/* chip 内嵌数字徽章（design：bg-grey·激活转 brand·圆角99·小字） */
+.chip-n {
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: var(--ld-bg-grey);
   color: var(--ld-content-2);
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.5;
 }
-.table {
-  background: var(--ld-bg);
-  border: 1px solid var(--ld-line);
-  border-radius: var(--ld-radius-l);
-  overflow: hidden;
+.ld-chip.on .chip-n {
+  background: var(--ld-brand);
+  color: #fff;
 }
-.thead,
-.trow {
-  display: grid;
-  grid-template-columns: 2.2fr 1fr 1.8fr 1fr 1.4fr;
-  align-items: center;
-  gap: 12px;
-  padding: 13px 20px;
-}
-.thead {
-  background: var(--ld-bg-lilac);
-  font-size: 12px;
-  color: var(--ld-content-2);
-}
-.trow {
-  border-top: 1px solid var(--ld-line);
-  font-size: 13px;
-}
-.r {
-  text-align: right;
-  justify-self: end;
+/* 商品·规格双行单元 */
+.prod {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
 }
 .prod-name {
   font-weight: 600;
   color: var(--ld-ink);
 }
 .prod-spec {
-  margin-top: 2px;
   font-size: 11.5px;
   color: var(--ld-content-2);
 }
-.price {
-  color: var(--ld-content);
-}
-.stock {
-  display: flex;
-  align-items: center;
+/* 库存单元：数字 + 单位 + 提示 / 行内编辑双输入 */
+.stock-cell {
   gap: 6px;
+  flex-wrap: wrap;
 }
 .stock-num {
   font-size: 15px;
@@ -454,51 +299,26 @@ h1 {
   width: 110px;
   padding: 6px 10px;
   border: 1px solid var(--ld-line-strong);
-  border-radius: 8px;
+  border-radius: var(--ld-radius-sm);
   font-size: 13px;
 }
-.state {
-  padding: 3px 11px;
-  border-radius: 999px;
-  font-size: 11.5px;
-  white-space: nowrap;
+.threshin {
+  width: 92px;
+  padding: 6px 10px;
+  border: 1px solid var(--ld-line-strong);
+  border-radius: var(--ld-radius-sm);
+  font-size: 12px;
 }
-.state.onsale {
-  background: var(--ld-bg-green-soft);
-  color: var(--ld-green);
+/* 操作单元靠右 */
+.ops-cell {
+  gap: 6px;
+  justify-content: flex-end;
 }
-.state.low {
-  background: var(--ld-bg-lilac);
-  color: var(--ld-amber);
-}
-.state.out {
-  background: var(--ld-bg-red-soft);
+/* 错误/校验提示：覆盖 .ld-status 的灰底为红（本页 message 恒为错误态） */
+.msg-err {
   color: var(--ld-red);
 }
-.state.unlimited {
-  background: var(--ld-bg-lilac);
-  color: var(--ld-brand-active);
-}
-.c-ops {
-  display: flex;
-  gap: 6px;
-}
-/* .act 基类仅留次级按钮（ghost）共享布局；填充主按钮（保存/补货）已收进 UiButton */
-.act {
-  padding: 6px 13px;
-  border: none;
-  border-radius: 999px;
-  font-size: 12px;
-  font-weight: 600;
-  cursor: pointer;
-}
-.act.ghost {
-  background: var(--ld-bg);
-  color: var(--ld-content-2);
-  border: 1px solid var(--ld-line);
-}
 .foot-note {
-  margin-top: 14px;
   font-size: 11.5px;
   color: var(--ld-content-2);
 }

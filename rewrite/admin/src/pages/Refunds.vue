@@ -7,6 +7,10 @@ import { RefreshCw, Search, X, CircleCheck, Ticket, GraduationCap, Check } from 
 import { listRefunds, refundCounts, approveRefund, rejectRefund, getRefundDetail } from '../api/money'
 import UiButton from '../components/ui/Button.vue'
 import { mapRefundRows, refundVerdict, type RefundRowVM, type RefundVerdictVM } from '../lib/mapMoney'
+import PageHeader from '../components/ui/PageHeader.vue'
+import Card from '../components/ui/Card.vue'
+import Badge from '../components/ui/Badge.vue'
+import EmptyState from '../components/ui/EmptyState.vue'
 
 const TABS = [
   { key: 'applied', label: '待审核' },
@@ -163,69 +167,86 @@ onMounted(reload)
 </script>
 
 <template>
-  <div class="page">
-    <header class="page-head">
-      <div>
-        <h1>售后退款</h1>
-        <p class="sub">先收到寄回包装并验收（激活卡未拆用）再同意 · 同意后原路退回微信支付</p>
-      </div>
-      <button class="btn-refresh" :disabled="message === '加载中…'" @click="reload">
-        <RefreshCw :size="15" :stroke-width="1.8" /><span>刷新</span>
-      </button>
-    </header>
+  <div class="ld-page">
+    <PageHeader title="售后退款" sub="先收到寄回包装并验收（激活卡未拆用）再同意 · 同意后原路退回微信支付">
+      <UiButton variant="ghost" size="sm" :disabled="message === '加载中…'" @click="reload">
+        <RefreshCw :size="14" :stroke-width="1.8" /><span>刷新</span>
+      </UiButton>
+    </PageHeader>
 
-    <div class="toolbar">
-      <div class="chips">
-        <button v-for="t in TABS" :key="t.key" class="chip" :class="{ on: tab === t.key }" @click="pickTab(t.key)">
-          {{ t.label }}<span v-if="counts[t.key || 'all'] != null" class="chip-n">{{ counts[t.key || 'all'] }}</span>
+    <!-- 状态 tab（云端实时计数徽章·沿用 TABS/pickTab） -->
+    <div class="tabs-wrap">
+      <div class="ld-toolbar">
+        <button v-for="t in TABS" :key="t.key" class="ld-chip" :class="{ on: tab === t.key }" @click="pickTab(t.key)">
+          <span>{{ t.label }}</span>
+          <span v-if="counts[t.key || 'all'] != null" class="chip-n">{{ counts[t.key || 'all'] }}</span>
         </button>
       </div>
-      <div class="searchbox">
-        <Search :size="15" :stroke-width="1.8" class="search-ico" />
-        <input v-model="search" placeholder="搜索订单号（精确·跨全部状态）" @keyup.enter="doSearch" />
+      <p class="note">状态计数为云端实时总数、切换状态走服务端筛选、搜索按订单号跨全部状态精确命中——都不受当前分页影响。</p>
+    </div>
+
+    <!-- 审批结果横幅（成功·持久·root gap 内独立行） -->
+    <p v-if="actionMsg" class="action-msg">{{ actionMsg }}<button class="link" @click="actionMsg = ''">知道了</button></p>
+    <p v-if="message" class="ld-status">{{ message }}</p>
+
+    <Card flush>
+      <div class="bar">
+        <div class="ld-search">
+          <Search :size="15" :stroke-width="1.8" />
+          <input v-model="search" placeholder="搜索订单号（精确·跨全部状态）" @keyup.enter="doSearch" />
+        </div>
         <UiButton size="sm" @click="doSearch">搜索</UiButton>
       </div>
-    </div>
-    <p class="note">状态计数为云端实时总数、切换状态走服务端筛选、搜索按订单号跨全部状态精确命中——都不受当前分页影响。</p>
-    <div v-if="activeQ" class="searching">
-      搜索订单号「<b>{{ activeQ }}</b>」的结果（跨全部状态）
-      <button class="link" @click="clearSearch">清除搜索</button>
-    </div>
+      <div v-if="activeQ" class="searching">
+        搜索订单号「<b>{{ activeQ }}</b>」的结果（跨全部状态）
+        <button class="link" @click="clearSearch">清除搜索</button>
+      </div>
 
-    <p v-if="message" class="status">{{ message }}</p>
-    <p v-if="actionMsg" class="action-msg">{{ actionMsg }}<button class="link" @click="actionMsg = ''">知道了</button></p>
-
-    <div v-if="rows.length" class="table">
-      <div class="thead">
-        <span>订单号</span>
-        <span>申请时间</span>
-        <span>退款商品 / 原因</span>
-        <span class="r">退款额</span>
-        <span>状态</span>
-        <span class="r">操作</span>
-      </div>
-      <div v-for="row in rows" :key="row.id" class="trow">
-        <span class="oid">{{ row.orderId }}<small v-if="row.buyerName || row.buyerMasked" class="buyer">{{ row.buyerName }} {{ row.buyerMasked }}</small></span>
-        <span class="time">{{ row.timeLabel }}</span>
-        <div class="what">
-          <div class="what-goods">{{ row.what }}</div>
-          <div class="what-reason">原因：{{ row.reason || '—' }}</div>
+      <template v-if="rows.length">
+        <div class="ld-thead">
+          <div class="ld-th" :style="{ width: '176px' }">订单</div>
+          <div class="ld-th" :style="{ width: '120px' }">申请时间</div>
+          <div class="ld-th grow">退款商品 / 原因</div>
+          <div class="ld-th r" :style="{ width: '116px' }">退款额</div>
+          <div class="ld-th" :style="{ width: '112px' }">状态</div>
+          <div class="ld-th r" :style="{ width: '144px' }">操作</div>
         </div>
-        <span class="amount r">退 {{ row.refundAmountLabel }}</span>
-        <span class="c-state"><span class="state" :class="row.status">{{ row.statusLabel }}</span></span>
-        <div class="c-ops r">
-          <button v-if="row.canDecide" class="act approve" @click="openDecide(row)">
-            <Check :size="14" :stroke-width="2" /><span>审核</span>
-          </button>
-          <button v-else class="act view" @click="openDecide(row)">查看</button>
+        <div class="ld-tbody">
+          <div v-for="row in rows" :key="row.id" class="ld-tr">
+            <div class="ld-td" :style="{ width: '176px' }">
+              <div class="oid-cell">
+                <span class="oid">{{ row.orderId }}</span>
+                <small v-if="row.buyerName || row.buyerMasked" class="buyer">{{ row.buyerName }} {{ row.buyerMasked }}</small>
+              </div>
+            </div>
+            <div class="ld-td time" :style="{ width: '120px' }">{{ row.timeLabel }}</div>
+            <div class="ld-td grow">
+              <div class="what">
+                <div class="what-goods">{{ row.what }}</div>
+                <div class="what-reason">原因：{{ row.reason || '—' }}</div>
+              </div>
+            </div>
+            <div class="ld-td r amount" :style="{ width: '116px' }">退 {{ row.refundAmountLabel }}</div>
+            <div class="ld-td" :style="{ width: '112px' }">
+              <Badge :tone="row.status === 'refunded' ? 'green' : row.status === 'rejected' ? 'red' : row.status === 'approved' ? 'brand' : row.status === 'applied' ? 'amber' : 'neutral'">
+                {{ row.statusLabel }}
+              </Badge>
+            </div>
+            <div class="ld-td r ops" :style="{ width: '144px' }">
+              <UiButton v-if="row.canDecide" size="sm" @click="openDecide(row)">
+                <Check :size="14" :stroke-width="2" /><span>审核</span>
+              </UiButton>
+              <UiButton v-else variant="ghost" size="sm" @click="openDecide(row)">查看</UiButton>
+            </div>
+          </div>
         </div>
-      </div>
-      <div class="tfoot">
-        <span>已加载 {{ rows.length }} 单{{ !activeQ && tabTotal != null ? ' / ' + tabTotal + ' 单（本栏）' : '' }}</span>
-        <button v-if="hasMore" class="more" @click="more">加载更多</button>
-      </div>
-    </div>
-    <p v-else-if="!message" class="status-soft">{{ activeQ ? '没有匹配该订单号的售后单' : '这一栏没有售后单' }}</p>
+        <div class="tfoot">
+          <span>已加载 {{ rows.length }} 单{{ !activeQ && tabTotal != null ? ' / ' + tabTotal + ' 单（本栏）' : '' }}</span>
+          <UiButton v-if="hasMore" variant="ghost" size="sm" @click="more">加载更多</UiButton>
+        </div>
+      </template>
+      <EmptyState v-else-if="!message" :text="activeQ ? '没有匹配该订单号的售后单' : '这一栏没有售后单'" />
+    </Card>
 
     <div v-if="decideRow" class="drawer-mask" @click.self="closeDecide">
       <aside class="drawer">
@@ -292,10 +313,10 @@ onMounted(reload)
           <label class="ck"><input v-model="checkPkg" type="checkbox" /><span>已收到买家寄回包装并验收</span></label>
           <label class="ck"><input v-model="checkCard" type="checkbox" /><span>激活卡未拆封 / 未使用</span></label>
           <div class="drawer-foot">
-            <button class="approve-btn" :disabled="!canApprove" @click="doApprove">
+            <UiButton variant="primary" size="lg" block :disabled="!canApprove" @click="doApprove">
               <CircleCheck :size="16" :stroke-width="1.8" /><span>{{ busy ? '受理中…' : '同意退款 · 原路退回 ' + decideRow.refundAmountLabel }}</span>
-            </button>
-            <button class="reject-btn" @click="rejecting = true">拒绝退款（需填原因）</button>
+            </UiButton>
+            <UiButton variant="ghost" size="lg" block @click="rejecting = true">拒绝退款（需填原因）</UiButton>
           </div>
         </template>
 
@@ -303,8 +324,8 @@ onMounted(reload)
           <div class="crit-label">拒绝原因（买家可见·必填）</div>
           <textarea v-model="rejectReason" maxlength="100" rows="3" placeholder="如：激活卡已拆用，不符合退货规则" />
           <div class="drawer-foot">
-            <button class="reject-confirm" :disabled="busy" @click="doReject">确认拒绝</button>
-            <button class="cancel" @click="rejecting = false">返回</button>
+            <UiButton variant="danger" size="lg" block :disabled="busy" @click="doReject">确认拒绝</UiButton>
+            <UiButton variant="ghost" size="lg" block @click="rejecting = false">返回</UiButton>
           </div>
         </template>
       </aside>
@@ -313,182 +334,82 @@ onMounted(reload)
 </template>
 
 <style scoped>
-.page {
-  max-width: 1200px;
-}
-.page-head {
+/* 状态 tab 组：chips + 说明行（间距小于 root gap·成一组） */
+.tabs-wrap {
   display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 16px;
-  margin-bottom: 18px;
-}
-h1 {
-  margin: 0;
-  font-size: 22px;
-  font-weight: 700;
-  color: var(--ld-ink);
-}
-.sub {
-  margin: 4px 0 0;
-  font-size: 12.5px;
-  color: var(--ld-content-2);
-}
-.btn-refresh {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 8px 14px;
-  border: 1px solid var(--ld-line);
-  border-radius: 999px;
-  background: var(--ld-bg);
-  color: var(--ld-content);
-  font-size: 13px;
-  cursor: pointer;
-}
-.btn-refresh:disabled {
-  opacity: 0.6;
-}
-.toolbar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-  margin-bottom: 6px;
-}
-.chips {
-  display: flex;
+  flex-direction: column;
   gap: 8px;
-  flex-wrap: wrap;
-}
-.chip {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 6px 14px;
-  border: 1px solid var(--ld-line);
-  border-radius: 999px;
-  background: var(--ld-bg);
-  color: var(--ld-content-2);
-  font-size: 13px;
-  cursor: pointer;
-}
-.chip.on {
-  background: var(--ld-purple-ink);
-  border-color: var(--ld-purple-ink);
-  color: #fff;
-}
-.chip-n {
-  opacity: 0.7;
-}
-.searchbox {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 4px 4px 4px 14px;
-  border: 1px solid var(--ld-line);
-  border-radius: 999px;
-  background: var(--ld-bg);
-  min-width: 280px;
-}
-.searching {
-  margin: 0 0 12px;
-  font-size: 12.5px;
-  color: var(--ld-content);
-}
-.link {
-  margin-left: 10px;
-  border: none;
-  background: none;
-  color: var(--ld-brand);
-  cursor: pointer;
-  font-size: 12px;
-}
-.result {
-  padding: 11px 14px;
-  border-radius: 10px;
-  font-size: 12.5px;
-  font-weight: 600;
-}
-.result.refunded {
-  background: var(--ld-bg-green-soft);
-  color: var(--ld-green);
-}
-.result.rejected {
-  background: var(--ld-bg-red-soft);
-  color: var(--ld-red);
-}
-.more {
-  padding: 7px 18px;
-  border: 1px solid var(--ld-line);
-  border-radius: 999px;
-  background: var(--ld-bg);
-  cursor: pointer;
-  font-size: 12.5px;
-  color: var(--ld-content);
-}
-.search-ico {
-  color: var(--ld-content-2);
-  flex: none;
-}
-.searchbox input {
-  border: none;
-  outline: none;
-  background: transparent;
-  font-size: 13px;
-  width: 100%;
-  color: var(--ld-ink);
 }
 .note {
-  margin: 0 0 14px;
+  margin: 0;
   font-size: 11.5px;
   color: var(--ld-content-2);
 }
-.status {
-  font-size: 13px;
-  color: var(--ld-red);
-}
-.status-soft {
-  font-size: 13px;
+/* chip 内嵌数字徽章（design：bg-grey·激活时 brand·圆角99·小字） */
+.chip-n {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: var(--ld-bg-grey);
   color: var(--ld-content-2);
+  font-size: 11px;
+  font-weight: 600;
 }
+.ld-chip.on .chip-n {
+  background: var(--ld-brand);
+  color: #fff;
+}
+
+/* 审批结果横幅（成功·绿底） */
 .action-msg {
   display: flex;
   align-items: center;
   gap: 10px;
+  margin: 0;
   font-size: 13px;
   color: var(--ld-green);
   background: var(--ld-bg-green-soft);
-  padding: 8px 14px;
-  border-radius: 10px;
-  margin: 0 0 6px;
+  padding: 10px 14px;
+  border-radius: var(--ld-radius);
 }
-.table {
-  background: var(--ld-bg);
-  border: 1px solid var(--ld-line);
-  border-radius: var(--ld-radius-l);
-  overflow: hidden;
-}
-.thead,
-.trow {
-  display: grid;
-  grid-template-columns: 1.3fr 1fr 2.4fr 1fr 0.9fr 1fr;
-  align-items: center;
-  gap: 12px;
-  padding: 13px 20px;
-}
-.thead {
-  background: var(--ld-bg-lilac);
+.link {
+  border: none;
+  background: none;
+  padding: 0;
+  color: var(--ld-brand);
+  cursor: pointer;
   font-size: 12px;
-  color: var(--ld-content-2);
 }
-.trow {
-  border-top: 1px solid var(--ld-line);
-  font-size: 13px;
+.searching .link {
+  margin-left: 10px;
 }
+
+/* 表格卡内：搜索条 + 搜索结果说明（flush 卡自管内边距） */
+.bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 14px 16px;
+}
+.searching {
+  padding: 0 16px 12px;
+  font-size: 12.5px;
+  color: var(--ld-content);
+}
+
+/* 表格 cell 内容（容器/表头/行走 console.css 的 ld-table 系） */
 .r {
+  justify-content: flex-end;
   text-align: right;
-  justify-self: end;
+}
+.oid-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
 }
 .oid {
   font-family: var(--ld-font-mono);
@@ -496,15 +417,15 @@ h1 {
   color: var(--ld-ink);
 }
 .buyer {
-  display: block;
-  margin-top: 3px;
-  font-family: var(--ld-font);
   font-size: 11px;
   color: var(--ld-content-2);
 }
 .time {
   color: var(--ld-content-2);
   font-size: 12.5px;
+}
+.what {
+  min-width: 0;
 }
 .what-goods {
   color: var(--ld-content);
@@ -518,64 +439,20 @@ h1 {
   font-weight: 700;
   color: var(--ld-ink);
 }
-.state {
-  padding: 3px 11px;
-  border-radius: 999px;
-  font-size: 11.5px;
-  white-space: nowrap;
-  background: var(--ld-bg-faint);
-  color: var(--ld-content-2);
-}
-.state.applied {
-  background: var(--ld-bg-lilac);
-  color: var(--ld-amber);
-}
-.state.approved {
-  background: var(--ld-bg-lilac);
-  color: var(--ld-brand-active);
-}
-.state.refunded {
-  background: var(--ld-bg-green-soft);
-  color: var(--ld-green);
-}
-.state.rejected {
-  background: var(--ld-bg-red-soft);
-  color: var(--ld-red);
-}
-.c-ops {
-  display: flex;
+.ops {
   gap: 6px;
-}
-.act {
-  display: flex;
-  align-items: center;
-  gap: 5px;
-  padding: 6px 13px;
-  border: none;
-  border-radius: 999px;
-  font-size: 12px;
-  font-weight: 600;
-  cursor: pointer;
-}
-.act.approve {
-  background: var(--ld-purple-ink);
-  color: #fff;
-}
-.act.view {
-  background: transparent;
-  color: var(--ld-brand-active);
-  border: 1px solid var(--ld-line);
 }
 .tfoot {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 12px 20px;
+  padding: 12px 16px;
   border-top: 1px solid var(--ld-line);
   font-size: 12px;
   color: var(--ld-content-2);
 }
-/* 决策抽屉 */
+
+/* 决策抽屉（本页独有浮层·web 端无需 touchmove 锁） */
 .drawer-mask {
   position: fixed;
   inset: 0;
@@ -627,7 +504,7 @@ h1 {
   display: flex;
   padding: 6px;
   border: none;
-  border-radius: 8px;
+  border-radius: var(--ld-radius-sm);
   background: var(--ld-bg-grey);
   color: var(--ld-content-2);
   cursor: pointer;
@@ -635,7 +512,7 @@ h1 {
 .summary {
   padding: 14px;
   background: var(--ld-bg-lilac);
-  border-radius: 10px;
+  border-radius: var(--ld-radius);
   display: flex;
   flex-direction: column;
   gap: 8px;
@@ -658,12 +535,26 @@ h1 {
   color: var(--ld-content);
   text-align: right;
 }
+.result {
+  padding: 11px 14px;
+  border-radius: var(--ld-radius);
+  font-size: 12.5px;
+  font-weight: 600;
+}
+.result.refunded {
+  background: var(--ld-bg-green-soft);
+  color: var(--ld-green);
+}
+.result.rejected {
+  background: var(--ld-bg-red-soft);
+  color: var(--ld-red);
+}
 .verdict {
   display: flex;
   align-items: center;
   gap: 10px;
   padding: 12px 14px;
-  border-radius: 10px;
+  border-radius: var(--ld-radius);
   border: 1px solid transparent;
 }
 .verdict.ok {
@@ -708,7 +599,7 @@ h1 {
   gap: 10px;
   padding: 10px 12px;
   border: 1px solid var(--ld-line);
-  border-radius: 10px;
+  border-radius: var(--ld-radius);
 }
 .crit-l {
   display: flex;
@@ -723,7 +614,7 @@ h1 {
   width: 30px;
   height: 30px;
   flex: none;
-  border-radius: 8px;
+  border-radius: var(--ld-radius-sm);
   background: var(--ld-bg-lilac);
   color: var(--ld-brand);
 }
@@ -758,7 +649,7 @@ h1 {
 }
 .decide-err {
   padding: 10px 12px;
-  border-radius: 10px;
+  border-radius: var(--ld-radius);
   background: var(--ld-bg-red-soft);
   color: var(--ld-red);
   font-size: 12.5px;
@@ -776,72 +667,23 @@ h1 {
 .ck input {
   width: 16px;
   height: 16px;
-  accent-color: var(--ld-purple-ink);
+  accent-color: var(--ld-brand);
 }
 .drawer-foot {
   margin-top: auto;
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 8px;
   padding-top: 8px;
-}
-.approve-btn {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 7px;
-  padding: 13px 0;
-  border: none;
-  border-radius: 11px;
-  background: var(--ld-purple-ink);
-  color: #fff;
-  font-size: 13.5px;
-  font-weight: 600;
-  cursor: pointer;
-}
-.approve-btn:disabled {
-  opacity: 0.45;
-  cursor: not-allowed;
-}
-.reject-btn {
-  padding: 11px 0;
-  border: 1px solid var(--ld-line-strong);
-  border-radius: 11px;
-  background: var(--ld-bg);
-  color: var(--ld-content-2);
-  font-size: 13px;
-  font-weight: 600;
-  cursor: pointer;
 }
 textarea {
   width: 100%;
   padding: 10px 12px;
   border: 1px solid var(--ld-line-strong);
-  border-radius: 10px;
+  border-radius: var(--ld-radius);
   font-size: 13px;
   font-family: var(--ld-font);
   resize: vertical;
   color: var(--ld-ink);
-}
-.reject-confirm {
-  padding: 12px 0;
-  border: none;
-  border-radius: 11px;
-  background: var(--ld-red);
-  color: #fff;
-  font-size: 13.5px;
-  font-weight: 600;
-  cursor: pointer;
-}
-.reject-confirm:disabled {
-  opacity: 0.6;
-}
-.cancel {
-  padding: 10px 0;
-  border: none;
-  background: transparent;
-  color: var(--ld-content-2);
-  font-size: 13px;
-  cursor: pointer;
 }
 </style>
