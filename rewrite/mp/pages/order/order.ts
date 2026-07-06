@@ -33,11 +33,16 @@ Page({
     this.orderId = String(query.id || '')
   },
   orderId: '',
+  _seq: 0, // reload 代次·丢弃过期回包（onShow/取消/支付/确认收货多触发点并发·慢回包别把横幅盖回过期态）
   onShow() {
     void this.reload()
   },
   async reload() {
+    // 订单状态/钱路径页：多 reload 触发点（onShow + 取消/支付/确认收货各自 reload）并发时，慢回包迟到落地会把
+    // 横幅盖回过期态（如取消成功已 closed 又被在途 onShow 的 pending 盖回·重现取消/支付按钮）。代次不符即丢弃。
+    const seq = ++this._seq
     const r = await getOrderById(this.orderId)
+    if (seq !== this._seq) return
     const vm = r.ok ? mapOrder(r.order) : null
     const banner = vm ? BANNER[vm.status] || { icon: 'info', tint: 'muted', head: vm.statusLabel, sub: '' } : null
     const amountNum = vm ? (vm.amountLabel || '').replace(/[^0-9.]/g, '') : ''

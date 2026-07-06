@@ -46,6 +46,7 @@ Page({
     hasMore: false,
     cursor: null as unknown,
   },
+  _seq: 0, // reload 代次·同 tab 内多触发点（onShow/取消后 reload）并发时丢弃过期回包（tab-token 只挡切 tab·挡不住同 tab 乱序）
   onLoad(query: Record<string, string | undefined>) {
     if (query.tab && TABS.some((t) => t.key === query.tab)) this.setData({ tabKey: query.tab })
   },
@@ -57,18 +58,20 @@ Page({
     // 修原「客户端过滤 + 服务端全量分页」：短过滤 tab 内容短于视口→不可滚→onReachBottom 不触发→深页匹配单看不到、
     // 且并存「上拉加载更多」死提示与「暂无订单」假空态（审计 P2）。
     const tab = this.data.tabKey // 捕获本次请求的 tab·回包落地前复核，防快速切 tab 慢回包乱序覆盖（同 player playToken）
+    const seq = ++this._seq // 代次：同 tab 内被更晚 reload（如取消后 reload）取代的旧回包丢弃
     this.setData({ loading: true })
     const r = await getMyOrders(undefined, 20, tab)
-    if (tab !== this.data.tabKey) return // 已切到别的 tab：丢弃过期回包·不污染当前 tab 的列表/游标（由新 reload 落地）
+    if (seq !== this._seq || tab !== this.data.tabKey) return // 过期回包（被更晚 reload 取代）或已切 tab：丢弃·不覆盖较新结果
     const all = r.ok ? mapOrders(r.list) : []
     this.setData({ loading: false, all, shown: all.map(decorate), cursor: r.ok ? r.nextCursor : null, hasMore: !!(r.ok && r.hasMore) })
   },
   async onReachBottom() {
     if (!this.data.hasMore || this.data.cursor == null) return
     const tab = this.data.tabKey
+    const seq = this._seq // 捕获当前代次（翻页不 bump）：期间若发生 reload（_seq 递增）则本次 append 作废，不并入被替换的列表
     const r = await getMyOrders(this.data.cursor, 20, tab)
     if (!r.ok) return // 翻页失败不覆盖已有数据（黄金 §八口径）
-    if (tab !== this.data.tabKey) return // 跨 tab 过期回包：丢弃·不并入新 tab、不错配游标
+    if (seq !== this._seq || tab !== this.data.tabKey) return // reload 已取代当前列表 / 跨 tab 过期回包：丢弃·不错配游标
     const merged = [...this.data.all]
     const seen = new Set(merged.map((o) => o.id))
     for (const o of mapOrders(r.list)) if (!seen.has(o.id)) merged.push(o) // 追加去重
