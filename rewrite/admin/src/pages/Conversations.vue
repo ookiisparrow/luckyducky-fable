@@ -5,6 +5,7 @@ import { ref, onMounted } from 'vue'
 import { Search, RotateCcw } from 'lucide-vue-next'
 import { searchConversations, conversationsReport } from '../api/cs'
 import { mapMessages, mapReport, type MsgVM, type ReportVM } from '../lib/mapCs'
+import { useLatest } from '../lib/latest'
 import UiButton from '../components/ui/Button.vue'
 import PageHeader from '../components/ui/PageHeader.vue'
 import Card from '../components/ui/Card.vue'
@@ -34,10 +35,13 @@ async function loadReport() {
 
 // 发起检索时的筛选快照（翻页复用·防用户改输入框后点「更早」用新筛选+旧 cursor 串档·P2）
 let searchFilter: { openid?: string; externalUserId?: string; keyword?: string } = {}
+const pageGen = useLatest() // 检索/翻页乱序守卫（P2·在途时又检索/翻页·旧结果别覆盖/混排新结果·根因#8）
 async function search() {
   message.value = '检索中…'
   searchFilter = { openid: openid.value.trim() || undefined, externalUserId: externalUserId.value.trim() || undefined, keyword: keyword.value.trim() || undefined }
+  const my = pageGen.begin()
   const r = await searchConversations(searchFilter)
+  if (pageGen.isStale(my)) return // 已发起更新的检索/翻页·丢弃过期结果
   msgs.value = r.ok ? mapMessages(r.messages) : []
   cursor.value = r.ok ? r.nextCursor : null
   hasMore.value = !!(r.ok && r.hasMore)
@@ -47,7 +51,9 @@ async function search() {
 
 async function more() {
   if (!hasMore.value || cursor.value == null) return
+  const my = pageGen.begin()
   const r = await searchConversations({ ...searchFilter, cursor: cursor.value }) // 复用检索快照·不现读输入框（防串档）
+  if (pageGen.isStale(my)) return // 翻页在途时又检索/翻页·丢弃过期页（防混排）
   if (!r.ok) {
     message.value = '加载更多失败：' + String(r.error || '') // 别静默吞·反复点无反应（病根#14）
     return

@@ -77,7 +77,9 @@ async function reload() {
 // 加载更多（游标分页·根因#7·换皮丢了这个·退款首页 20 条封顶·第 21 单起翻不到）
 async function more() {
   if (!hasMore.value || cursor.value == null) return
+  const my = listGen.begin()
   const r = await listRefunds(tab.value, cursor.value, 20, activeQ.value)
+  if (listGen.isStale(my)) return // 翻页在途时切标签/搜索·丢弃过期页（防跨标签混排 + 游标错乱）
   if (!r.ok) return
   const seen = new Set(rows.value.map((x) => x.id))
   rows.value = [...rows.value, ...mapRefundRows((r as any).list).filter((x) => !seen.has(x.id))]

@@ -114,12 +114,14 @@ function markLoaded() {
   autoState.value = ''
   void nextTick(() => (editorLoaded = true)) // 赋值落定后再放开自动保存
 }
-function closeEditor() {
+async function closeEditor() {
   if (saveTimer) {
     clearTimeout(saveTimer)
     saveTimer = null
-    void flushSave() // 关闭前补存 pending（离页不丢）
   }
+  // 等补存链彻底排空(含在途 + 尾随最新快照)再置空 edit——否则在途保存期间关闭会让尾随补存读到已 null 的
+  // edit.value 而早退、最后一次编辑静默丢失（batch 4b serialSave 化引入的回归·迭代D 逮出）。
+  if (autoState.value === 'saving') await flushSave().catch(() => {})
   editorLoaded = false
   edit.value = null
 }
