@@ -1,51 +1,92 @@
 <view class="ld-player">
-  <block wx:if="{{state === 'playing' || state === 'loading'}}">
-    <video
-      wx:if="{{src}}"
-      class="ld-video"
-      src="{{src}}"
-      autoplay
-      show-center-play-btn
-      bind:play="onFirstPlay"
-      bind:ended="onEnded"
-      bind:error="onVideoError"
-    ></video>
-    <view wx:else class="ld-video ld-video-skeleton"></view>
-  </block>
-
-  <view class="ld-video ld-video-state" wx:elif="{{state === 'empty'}}">
-    <view class="ld-vs-title">这段视频还在整理中</view>
-    <view class="ld-vs-hint">先看看别的段落吧</view>
-  </view>
-  <view class="ld-video ld-video-state" wx:elif="{{state === 'denied'}}">
-    <view class="ld-vs-title">先激活课程才能观看</view>
-    <view class="ld-vs-btn" bind:tap="onGoActivate">去输入激活码</view>
-  </view>
-  <view class="ld-video ld-video-state" wx:elif="{{state === 'missing'}}">
-    <view class="ld-vs-title">课程不存在</view>
+  <!-- 头部：课程标题 + 当前章（沉浸式深色播放器 chrome） -->
+  <view class="lp-head">
+    <view class="lp-eyebrow" wx:if="{{current && current.chapterTitle}}">{{current.chapterTitle}}</view>
+    <view class="lp-course">{{title || '正在学习'}}</view>
   </view>
 
-  <view class="ld-p-head">
-    <view class="ld-p-title">{{title}}</view>
-    <view class="ld-p-current" wx:if="{{current}}">{{current.lessonName}} · {{current.segName || '片段'}}</view>
+  <!-- 视频舞台（16:9·padding-top 法·避 aspect-ratio） -->
+  <view class="lp-stage">
+    <block wx:if="{{state === 'playing' || state === 'loading'}}">
+      <video
+        wx:if="{{src}}"
+        class="lp-video"
+        src="{{src}}"
+        autoplay
+        show-center-play-btn
+        bind:play="onFirstPlay"
+        bind:ended="onEnded"
+        bind:error="onVideoError"
+      ></video>
+      <view wx:else class="lp-video lp-skeleton">
+        <view class="lp-skeleton-spin"></view>
+        <view class="lp-skeleton-text">正在加载首帧…</view>
+      </view>
+    </block>
+
+    <view class="lp-video lp-state" wx:elif="{{state === 'empty'}}">
+      <view class="lp-state-title">这段视频还在整理中</view>
+      <view class="lp-state-hint">先看看别的段落吧</view>
+    </view>
+    <view class="lp-video lp-state" wx:elif="{{state === 'denied'}}">
+      <view class="lp-state-title">先激活课程才能观看</view>
+      <view class="lp-state-btn" bind:tap="onGoActivate">去输入激活码</view>
+    </view>
+    <view class="lp-video lp-state" wx:elif="{{state === 'missing'}}">
+      <view class="lp-state-title">课程不存在</view>
+    </view>
   </view>
 
-  <view class="ld-p-controls">
-    <view class="ld-pc-btn {{canPrev ? '' : 'dim'}}" bind:tap="onPrev">‹ 上一段</view>
-    <view class="ld-pc-btn ghost" bind:tap="onToggleList">目录</view>
-    <view class="ld-pc-btn {{canNext ? '' : 'dim'}}" bind:tap="onNext">下一段 ›</view>
-  </view>
+  <!-- 深色控制面板 -->
+  <view class="lp-panel">
+    <!-- 当前段落主题（正在播放） -->
+    <view class="lp-now" wx:if="{{current}}">
+      <view class="lp-eq" wx:if="{{state === 'playing'}}">
+        <view class="lp-eq-bar"></view>
+        <view class="lp-eq-bar"></view>
+        <view class="lp-eq-bar"></view>
+      </view>
+      <view class="lp-now-dot" wx:else></view>
+      <view class="lp-now-text">
+        <view class="lp-now-lesson">{{current.lessonName || '本节'}}</view>
+        <view class="lp-now-seg">{{current.segName || '片段'}}</view>
+      </view>
+    </view>
 
-  <view class="ld-p-list" wx:if="{{listOpen}}">
-    <view
-      class="ld-p-seg {{item.segmentId === current.segmentId ? 'on' : ''}} {{item.hasVideo ? '' : 'off'}}"
-      wx:for="{{segments}}"
-      wx:key="segmentId"
-      data-id="{{item.segmentId}}"
-      bind:tap="onPickSegment"
-    >
-      <text class="ld-p-seg-name">{{item.lessonName}} · {{item.segName || '片段'}}</text>
-      <text class="ld-p-seg-flag" wx:if="{{!item.hasVideo}}">整理中</text>
+    <!-- 上一段 / 目录 / 下一段 -->
+    <view class="lp-controls">
+      <view class="lp-ctl {{canPrev ? '' : 'dim'}}" bind:tap="onPrev">上一段</view>
+      <view class="lp-ctl solid {{listOpen ? 'on' : ''}}" bind:tap="onToggleList">目录</view>
+      <view class="lp-ctl {{canNext ? '' : 'dim'}}" bind:tap="onNext">下一段</view>
+    </view>
+
+    <!-- 段落目录（展开·可点选切段） -->
+    <view class="lp-list" wx:if="{{listOpen}}">
+      <view
+        class="lp-seg {{item.segmentId === current.segmentId ? 'on' : ''}} {{item.hasVideo ? '' : 'off'}}"
+        wx:for="{{segments}}"
+        wx:key="segmentId"
+        data-id="{{item.segmentId}}"
+        bind:tap="onPickSegment"
+      >
+        <view class="lp-seg-ico">
+          <view class="lp-eq" wx:if="{{item.segmentId === current.segmentId && state === 'playing'}}">
+            <view class="lp-eq-bar"></view>
+            <view class="lp-eq-bar"></view>
+            <view class="lp-eq-bar"></view>
+          </view>
+          <view class="lp-seg-play" wx:elif="{{item.hasVideo}}">
+            <image class="lp-seg-play-img" src="/static/icons/play.svg" mode="aspectFit" />
+          </view>
+          <view class="lp-seg-dot" wx:else></view>
+        </view>
+        <view class="lp-seg-mid">
+          <view class="lp-seg-name">{{item.lessonName || '本节'}}</view>
+          <view class="lp-seg-sub">{{item.segName || '片段'}}</view>
+        </view>
+        <text class="lp-seg-flag" wx:if="{{!item.hasVideo}}">整理中</text>
+        <text class="lp-seg-flag hot" wx:elif="{{item.segmentId === current.segmentId}}">播放中</text>
+      </view>
     </view>
   </view>
 </view>

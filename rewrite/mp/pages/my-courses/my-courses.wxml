@@ -1,15 +1,49 @@
-<view class="ld-mycourses">
-  <view class="ld-course" wx:for="{{list}}" wx:key="courseId" data-id="{{item.courseId}}" bind:tap="onTapCourse">
-    <view class="ld-course-main">
-      <view class="ld-course-title">{{item.title}}</view>
-      <view class="ld-course-time" wx:if="{{item.enteredAtLabel}}">进课于 {{item.enteredAtLabel}}</view>
-    </view>
-    <view class="ld-course-go">继续学 ›</view>
+<view class="ld-mc">
+  <!-- 顶栏标题在原生导航条；此处编辑式副标题 -->
+  <view class="ld-mc-intro" wx:if="{{!loading && list.length}}">
+    <view class="ld-mc-eyebrow">MY COURSES</view>
+    <view class="ld-mc-lead">{{list.length}} 门课程 · 继续钩下去</view>
   </view>
 
+  <!-- 骨架占位（加载中，不写死假进度） -->
+  <view class="ld-mc-list" wx:if="{{loading}}">
+    <view class="ld-mc-card" wx:for="{{[1,2]}}" wx:key="*this">
+      <view class="ld-mc-cover ld-mc-skel"></view>
+      <view class="ld-mc-meta">
+        <view class="ld-mc-skel-line"></view>
+      </view>
+    </view>
+  </view>
+
+  <!-- 课程卡列表 -->
+  <view class="ld-mc-list" wx:if="{{!loading && list.length}}">
+    <view class="ld-mc-card" wx:for="{{list}}" wx:key="courseId" data-id="{{item.courseId}}" bind:tap="onTapCourse" hover-class="ld-mc-card-h" hover-stay-time="80">
+      <view class="ld-mc-cover">
+        <view class="ld-mc-cover-scrim"></view>
+        <view class="ld-mc-play">
+          <image class="ld-mc-play-ico" src="/static/icons/play.svg" mode="aspectFit" />
+        </view>
+        <view class="ld-mc-cover-title">{{item.title}}</view>
+        <image class="ld-mc-cover-chev" src="/static/icons/chevron-right.svg" mode="aspectFit" />
+      </view>
+      <view class="ld-mc-meta">
+        <view class="ld-mc-entered" wx:if="{{item.enteredAtLabel}}">进课于 {{item.enteredAtLabel}}</view>
+        <view class="ld-mc-entered ld-mc-entered-faint" wx:else>视频课程</view>
+        <view class="ld-mc-go">
+          继续学习
+          <image class="ld-mc-go-ico" src="/static/icons/chevron-right.svg" mode="aspectFit" />
+        </view>
+      </view>
+    </view>
+  </view>
+
+  <!-- 空态 -->
   <view class="ld-mc-empty" wx:if="{{!loading && !list.length}}">
-    <view class="ld-empty-title">还没有进行中的课程</view>
-    <view class="ld-empty-hint">买了材料包？用包里的激活码开课</view>
-    <view class="ld-empty-btn" bind:tap="onActivate">输入激活码</view>
+    <view class="ld-mc-empty-ico">
+      <image class="ld-mc-empty-img" src="/static/icons/graduation-cap.svg" mode="aspectFit" />
+    </view>
+    <view class="ld-mc-empty-title">还没有进行中的课程</view>
+    <view class="ld-mc-empty-hint">买了材料包？用包里的激活码开课</view>
+    <view class="ld-mc-empty-btn" bind:tap="onActivate" hover-class="ld-mc-empty-btn-h" hover-stay-time="80">输入激活码</view>
   </view>
 </view>

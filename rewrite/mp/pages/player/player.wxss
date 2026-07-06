@@ -1,101 +1,311 @@
+/* 课程播放页·对齐设计 VideoCatalog.jsx「vp-」沉浸式深色播放器 chrome。
+   设计 402px 画板 → rpx（×1.87）。深色播放器专用面（#17141d/#1e1a26）为局部 chrome 色·不入 tokens；
+   强调色用 --ld-duck / --ld-purple。<video> 与全部事件绑定原样不动·只重排结构与视觉。
+   诚实数据：无 bindtimeupdate 数据源，故不造假进度条/时间轴，播放进度交给 <video> 原生控件。 */
 .ld-player {
   min-height: 100vh;
-  background: var(--ld-bg-lilac);
+  background: #17141d; /* 深茄黑·播放器 chrome 底（局部深色·不入 tokens） */
+  display: flex;
+  flex-direction: column;
 }
-.ld-video {
+
+/* —— 头部 —— */
+.lp-head {
+  padding: 28rpx 34rpx 22rpx;
+}
+.lp-eyebrow {
+  font-size: 21rpx;
+  font-weight: 600;
+  letter-spacing: 3rpx;
+  color: rgba(255, 255, 255, 0.56);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.lp-course {
+  margin-top: 10rpx;
+  font-size: 34rpx;
+  font-weight: 600;
+  line-height: 1.3;
+  color: #ffffff;
+  text-shadow: 0 2rpx 12rpx rgba(0, 0, 0, 0.35);
+}
+
+/* —— 视频舞台（16:9） —— */
+.lp-stage {
+  position: relative;
   width: 100%;
-  height: 422rpx;
+  padding-top: 56.25%; /* 16:9·padding-top 百分比法（避 aspect-ratio 旧 WebView 不支持） */
   background: #000000;
+  overflow: hidden;
 }
-.ld-video-skeleton {
-  background: var(--ld-bg-sage);
+.lp-video {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
 }
-.ld-video-state {
+
+/* 首帧前骨架（loading·首帧到达前不裂播放器） */
+.lp-skeleton {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 20rpx;
+  background: #1a1620; /* 近黑丁香·骨架底（局部深色） */
+}
+.lp-skeleton-spin {
+  width: 56rpx;
+  height: 56rpx;
+  border-radius: 50%;
+  border: 5rpx solid rgba(255, 255, 255, 0.18);
+  border-top-color: var(--ld-duck);
+  animation: lp-spin 0.9s linear infinite;
+}
+@keyframes lp-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+.lp-skeleton-text {
+  font-size: 24rpx;
+  color: rgba(255, 255, 255, 0.62);
+}
+
+/* 状态占位（empty/denied/missing） */
+.lp-state {
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
   gap: 16rpx;
-  background: var(--ld-bg-sage);
+  background: #1a1620;
+  padding: 0 40rpx;
 }
-.ld-vs-title {
+.lp-state-title {
   font-size: 28rpx;
   font-weight: 600;
-  color: var(--ld-purple-ink);
-}
-.ld-vs-hint {
-  font-size: 24rpx;
-  color: var(--ld-purple-meta);
-}
-.ld-vs-btn {
-  margin-top: 8rpx;
-  padding: 14rpx 44rpx;
-  border-radius: var(--ld-radius-pill);
-  background: var(--ld-purple-ink);
   color: #ffffff;
-  font-size: 26rpx;
+  text-align: center;
 }
-.ld-p-head {
-  padding: 28rpx 32rpx 8rpx;
-}
-.ld-p-title {
-  font-size: 32rpx;
-  font-weight: 700;
-  color: var(--ld-ink);
-}
-.ld-p-current {
-  margin-top: 8rpx;
+.lp-state-hint {
   font-size: 24rpx;
-  color: var(--ld-purple-meta);
+  color: rgba(255, 255, 255, 0.56);
 }
-.ld-p-controls {
+.lp-state-btn {
+  margin-top: 10rpx;
+  padding: 16rpx 46rpx;
+  border-radius: var(--ld-radius-pill);
+  background: var(--ld-duck);
+  color: #4a3408; /* 深棕·鸭黄按钮文字（局部对比色） */
+  font-size: 26rpx;
+  font-weight: 600;
+}
+
+/* —— 控制面板 —— */
+.lp-panel {
+  flex: 1 1 auto;
+  background: #1e1a26; /* 深灰紫·控制面板底（局部深色·不入 tokens） */
+  padding: 28rpx 34rpx 60rpx;
+}
+
+/* 当前段落主题行 */
+.lp-now {
+  display: flex;
+  align-items: center;
+  gap: 18rpx;
+  padding: 18rpx 22rpx;
+  border-radius: var(--ld-radius-md);
+  background: rgba(255, 255, 255, 0.05);
+  border: 2rpx solid rgba(255, 255, 255, 0.08);
+}
+.lp-now-text {
+  flex: 1;
+  min-width: 0;
+}
+.lp-now-lesson {
+  font-size: 28rpx;
+  font-weight: 600;
+  color: #ffffff;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.lp-now-seg {
+  margin-top: 6rpx;
+  font-size: 23rpx;
+  color: rgba(255, 255, 255, 0.6);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.lp-now-dot {
+  flex: 0 0 auto;
+  width: 16rpx;
+  height: 16rpx;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.28);
+}
+
+/* 均衡器动画（正在播放·纯 CSS·诚实反映 state=playing） */
+.lp-eq {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: flex-end;
+  gap: 4rpx;
+  height: 30rpx;
+}
+.lp-eq-bar {
+  width: 5rpx;
+  border-radius: 3rpx;
+  background: var(--ld-duck);
+  animation: lp-eq 1s ease-in-out infinite;
+}
+.lp-eq-bar:nth-child(1) {
+  height: 45%;
+  animation-delay: -0.2s;
+}
+.lp-eq-bar:nth-child(2) {
+  height: 100%;
+  animation-delay: -0.5s;
+}
+.lp-eq-bar:nth-child(3) {
+  height: 68%;
+  animation-delay: 0s;
+}
+@keyframes lp-eq {
+  0%,
+  100% {
+    transform: scaleY(0.4);
+  }
+  50% {
+    transform: scaleY(1);
+  }
+}
+
+/* 控制按钮行 */
+.lp-controls {
   display: flex;
   gap: 16rpx;
-  padding: 20rpx 32rpx;
+  margin-top: 24rpx;
 }
-.ld-pc-btn {
+.lp-ctl {
   flex: 1;
   text-align: center;
-  padding: 18rpx 0;
+  padding: 20rpx 0;
   border-radius: var(--ld-radius-pill);
-  background: var(--ld-purple-ink);
-  color: #ffffff;
   font-size: 26rpx;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.9);
+  background: rgba(255, 255, 255, 0.08);
+  border: 2rpx solid rgba(255, 255, 255, 0.14);
 }
-.ld-pc-btn.ghost {
-  background: var(--ld-bg);
-  color: var(--ld-purple-tab);
-  border: 2rpx solid var(--ld-purple-line);
+.lp-ctl.solid {
+  color: #4a3408; /* 深棕·鸭黄底文字 */
+  background: var(--ld-duck);
+  border-color: transparent;
 }
-.ld-pc-btn.dim {
-  opacity: 0.4;
+.lp-ctl.solid.on {
+  background: var(--ld-duck-deep);
 }
-.ld-p-list {
-  margin: 8rpx 24rpx 40rpx;
-  background: var(--ld-bg);
-  border-radius: var(--ld-radius);
-  border: 2rpx solid var(--ld-purple-line);
+.lp-ctl.dim {
+  opacity: 0.36;
+}
+
+/* —— 段落目录 —— */
+.lp-list {
+  margin-top: 24rpx;
+  border-radius: var(--ld-radius-md);
+  background: rgba(255, 255, 255, 0.04);
+  border: 2rpx solid rgba(255, 255, 255, 0.08);
   overflow: hidden;
 }
-.ld-p-seg {
+.lp-seg {
+  position: relative;
   display: flex;
-  justify-content: space-between;
   align-items: center;
-  padding: 24rpx 28rpx;
-  border-bottom: 2rpx solid var(--ld-bg-faint);
-  font-size: 26rpx;
-  color: var(--ld-ink);
+  gap: 20rpx;
+  padding: 22rpx 24rpx;
 }
-.ld-p-seg.on {
-  color: var(--ld-purple-tab);
+.lp-seg + .lp-seg::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 68rpx;
+  right: 24rpx;
+  height: 1rpx;
+  background: rgba(255, 255, 255, 0.08);
+}
+.lp-seg.on {
+  background: rgba(163, 113, 234, 0.16); /* --ld-purple @16%·当前段高亮 */
+}
+.lp-seg.off {
+  opacity: 0.55;
+}
+
+/* 段前状态图标 */
+.lp-seg-ico {
+  flex: 0 0 auto;
+  width: 48rpx;
+  height: 48rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.lp-seg-play {
+  width: 44rpx;
+  height: 44rpx;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.92);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.lp-seg-play-img {
+  width: 24rpx;
+  height: 24rpx;
+  margin-left: 2rpx;
+}
+.lp-seg-dot {
+  width: 16rpx;
+  height: 16rpx;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.3);
+}
+
+.lp-seg-mid {
+  flex: 1;
+  min-width: 0;
+}
+.lp-seg-name {
+  font-size: 27rpx;
+  color: #ffffff;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.lp-seg.on .lp-seg-name {
+  color: var(--ld-duck);
   font-weight: 600;
-  background: var(--ld-bg-lilac);
 }
-.ld-p-seg.off {
-  color: var(--ld-purple-meta);
-  opacity: 0.7;
+.lp-seg-sub {
+  margin-top: 5rpx;
+  font-size: 22rpx;
+  color: rgba(255, 255, 255, 0.5);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
-.ld-p-seg-flag {
+.lp-seg-flag {
+  flex: 0 0 auto;
   font-size: 20rpx;
-  color: var(--ld-purple-meta);
+  color: rgba(255, 255, 255, 0.44);
+  padding: 4rpx 14rpx;
+  border-radius: var(--ld-radius-pill);
+  background: rgba(255, 255, 255, 0.08);
+}
+.lp-seg-flag.hot {
+  color: #4a3408;
+  background: var(--ld-duck);
 }

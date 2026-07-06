@@ -1,53 +1,199 @@
-.ld-mycourses {
+/* 「我的课程」列表·重设计（对齐设计源 VideoCatalog CourseList / cl- 卡片）。
+   设计 402px 画板 → rpx（×1.87）。token 见 styles/tokens.wxss；封面无真实缩略图→品牌紫占位，
+   进度/集数无真源不写死（诚实数据）。图标 <image> 引 static/icons/*.svg。 */
+.ld-mc {
   min-height: 100vh;
   background: var(--ld-bg-lilac);
-  padding: 24rpx;
+  padding: 8rpx 30rpx 60rpx;
 }
-.ld-course {
+
+/* —— 编辑式副标题（正题在原生导航条）—— */
+.ld-mc-intro {
+  padding: 22rpx 4rpx 26rpx;
+}
+.ld-mc-eyebrow {
+  font-size: 21rpx;
+  font-weight: 600;
+  letter-spacing: 3rpx;
+  color: var(--ld-purple-meta);
+  text-transform: uppercase;
+}
+.ld-mc-lead {
+  margin-top: 12rpx;
+  font-size: 40rpx;
+  font-weight: 700;
+  letter-spacing: -1rpx;
+  color: var(--ld-ink);
+}
+
+/* —— 卡片列表 —— */
+.ld-mc-list {
+  display: flex;
+  flex-direction: column;
+  gap: 30rpx;
+}
+.ld-mc-card {
+  transition: transform 0.12s;
+}
+.ld-mc-card-h {
+  transform: scale(0.99);
+}
+
+/* 封面（16:9.6·padding-top 百分比法，避 aspect-ratio 旧 WebView 不支持；同 me 页范式） */
+.ld-mc-cover {
+  position: relative;
+  width: 100%;
+  padding-top: 60%; /* 16 : 9.6 */
+  border-radius: var(--ld-radius-md);
+  overflow: hidden;
+  background: linear-gradient(135deg, #b79bea 0%, #8c6fd0 58%, #7b5caf 100%); /* 无缩略图·品牌紫占位（局部设计色·不入 tokens） */
+}
+.ld-mc-cover-scrim {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(to bottom, rgba(20, 14, 30, 0) 46%, rgba(20, 14, 30, 0.62) 100%);
+}
+.ld-mc-play {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 2;
+  width: 92rpx;
+  height: 92rpx;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.92);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 8rpx 26rpx rgba(0, 0, 0, 0.25);
+}
+.ld-mc-play-ico {
+  width: 40rpx;
+  height: 40rpx;
+  margin-left: 4rpx;
+}
+.ld-mc-cover-title {
+  position: absolute;
+  left: 26rpx;
+  right: 70rpx;
+  bottom: 22rpx;
+  z-index: 2;
+  font-size: 31rpx;
+  font-weight: 500;
+  line-height: 1.35;
+  letter-spacing: -0.5rpx;
+  color: #fff;
+  text-shadow: 0 2rpx 10rpx rgba(0, 0, 0, 0.35);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+.ld-mc-cover-chev {
+  position: absolute;
+  right: 22rpx;
+  bottom: 26rpx;
+  z-index: 2;
+  width: 34rpx;
+  height: 34rpx;
+  opacity: 0.85;
+}
+
+/* 元信息行 */
+.ld-mc-meta {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 30rpx 28rpx;
-  margin-bottom: 20rpx;
-  background: var(--ld-bg);
-  border-radius: var(--ld-radius);
-  border: 2rpx solid var(--ld-purple-line);
+  gap: 16rpx;
+  margin-top: 18rpx;
+  padding: 0 4rpx;
 }
-.ld-course-title {
-  font-size: 30rpx;
+.ld-mc-entered {
+  flex: 1;
+  min-width: 0;
+  font-size: 24rpx;
+  color: var(--ld-content-2);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ld-mc-entered-faint {
+  color: var(--ld-purple-meta);
+}
+.ld-mc-go {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 2rpx;
+  font-size: 26rpx;
+  font-weight: 600;
+  color: var(--ld-purple-tab);
+}
+.ld-mc-go-ico {
+  width: 28rpx;
+  height: 28rpx;
+}
+
+/* 骨架占位 */
+.ld-mc-skel {
+  background: var(--ld-bg-sage);
+}
+.ld-mc-skel-line {
+  width: 240rpx;
+  height: 24rpx;
+  border-radius: 8rpx;
+  background: var(--ld-bg-sage);
+}
+
+/* —— 空态（对齐 me 页空态圈范式）—— */
+.ld-mc-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  padding: 150rpx 30rpx 0;
+}
+.ld-mc-empty-ico {
+  width: 128rpx;
+  height: 128rpx;
+  border-radius: 50%;
+  background: #f0e9ff; /* 浅丁香圆·空态图标底（局部设计色·不入 tokens） */
+  border: 2rpx solid var(--ld-purple-line);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 30rpx;
+}
+.ld-mc-empty-img {
+  width: 58rpx;
+  height: 58rpx;
+}
+.ld-mc-empty-title {
+  font-size: 32rpx;
   font-weight: 600;
   color: var(--ld-ink);
 }
-.ld-course-time {
-  margin-top: 8rpx;
-  font-size: 22rpx;
-  color: var(--ld-purple-meta);
-}
-.ld-course-go {
-  font-size: 26rpx;
-  color: var(--ld-purple-tab);
-  font-weight: 600;
-}
-.ld-mc-empty {
-  text-align: center;
-  padding: 140rpx 0;
-}
-.ld-empty-title {
-  font-size: 30rpx;
-  font-weight: 600;
-  color: var(--ld-purple-ink);
-}
-.ld-empty-hint {
-  margin-top: 10rpx;
+.ld-mc-empty-hint {
+  margin: 14rpx 0 34rpx;
   font-size: 24rpx;
-  color: var(--ld-purple-meta);
+  line-height: 1.6;
+  color: var(--ld-content-2);
+  max-width: 460rpx;
 }
-.ld-empty-btn {
-  display: inline-block;
-  margin-top: 28rpx;
-  padding: 18rpx 64rpx;
+.ld-mc-empty-btn {
+  display: inline-flex;
+  align-items: center;
+  padding: 22rpx 66rpx;
   border-radius: var(--ld-radius-pill);
   background: var(--ld-purple-ink);
   color: #ffffff;
   font-size: 28rpx;
+  font-weight: 600;
+  letter-spacing: 1rpx;
+  box-shadow: 0 12rpx 30rpx rgba(36, 23, 51, 0.22);
+}
+.ld-mc-empty-btn-h {
+  opacity: 0.9;
 }
