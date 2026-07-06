@@ -1,24 +1,71 @@
+/* 「我」页重设计·大字问候版式（editorial header）。设计 402px 画板 → rpx（×1.87）。
+   token 见 styles/tokens.wxss；图标 <image> 引 static/icons/*.svg（色已烘进 svg）。 */
 .ld-me {
   min-height: 100vh;
   background: var(--ld-bg-lilac);
-  padding: 32rpx 24rpx 200rpx;
 }
-.ld-me-profile {
+
+/* —— 头部·大字问候 —— */
+.ld-me-header {
+  padding: 32rpx 36rpx 38rpx;
+  background: #dbccff; /* 浅丁香·大字问候头部专用底（局部设计色·不入 tokens） */
+  border-bottom: 4rpx dashed var(--ld-purple);
+}
+.ld-me-brandrow {
   display: flex;
   align-items: center;
-  gap: 24rpx;
-  padding: 32rpx 28rpx;
-  margin-bottom: 24rpx;
-  background: var(--ld-bg);
-  border-radius: var(--ld-radius);
-  border: 2rpx solid var(--ld-purple-line);
+}
+.ld-me-logo {
+  height: 56rpx;
+  width: auto;
+  filter: drop-shadow(0 2rpx 3rpx rgba(0, 0, 0, 0.12));
+}
+.ld-me-greet {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 22rpx;
+  margin-top: 26rpx;
+}
+.ld-me-greet-text {
+  flex: 1;
+  min-width: 0;
+}
+.ld-me-eyebrow {
+  font-size: 21rpx;
+  font-weight: 600;
+  letter-spacing: 3rpx;
+  color: var(--ld-purple-meta);
+  text-transform: uppercase;
+}
+.ld-me-greet-name {
+  margin-top: 14rpx;
+  font-size: 56rpx;
+  font-weight: 700;
+  line-height: 1.08;
+  letter-spacing: -1rpx;
+  color: var(--ld-ink);
+  word-break: break-word;
+}
+.ld-me-greet-bio {
+  margin-top: 16rpx;
+  font-size: 24rpx;
+  line-height: 1.55;
+  color: var(--ld-content);
+  max-width: 520rpx;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
 }
 .ld-me-avatar {
-  width: 108rpx;
-  height: 108rpx;
+  flex: 0 0 auto;
+  width: 106rpx;
+  height: 106rpx;
   border-radius: 50%;
   background: var(--ld-bg-sage);
-  flex-shrink: 0;
+  box-shadow: 0 0 0 6rpx #fff, 0 6rpx 16rpx rgba(54, 58, 80, 0.16);
 }
 .ld-me-avatar-empty {
   display: flex;
@@ -26,59 +73,265 @@
   justify-content: center;
   font-size: 52rpx;
 }
-.ld-me-info {
-  flex: 1;
-  min-width: 0;
-}
-.ld-me-name {
-  font-size: 34rpx;
-  font-weight: 700;
-  color: var(--ld-purple-ink);
-}
-.ld-me-bio {
-  margin-top: 8rpx;
+.ld-me-edit {
+  display: inline-flex;
+  align-items: center;
+  margin-top: 20rpx;
+  padding: 8rpx 4rpx;
   font-size: 24rpx;
+  font-weight: 500;
   color: var(--ld-purple-meta);
+}
+.ld-me-edit-h {
+  opacity: 0.6;
+  color: var(--ld-purple);
+}
+
+/* —— 卡片堆 —— */
+.ld-me-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 30rpx;
+  padding: 30rpx 36rpx 0;
+}
+.ld-me-card {
+  background: #fff;
+  border: 2rpx solid var(--ld-line);
+  border-radius: var(--ld-radius-md);
+}
+.ld-me-card-pad {
+  padding: 30rpx;
+}
+
+/* 区块头 */
+.ld-me-sec-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 26rpx;
+}
+.ld-me-sec-title {
+  display: flex;
+  align-items: center;
+  gap: 12rpx;
+  font-size: 32rpx;
+  font-weight: 500;
+  color: var(--ld-ink);
+}
+.ld-me-sec-ico {
+  width: 36rpx;
+  height: 36rpx;
+}
+.ld-me-sec-more {
+  display: flex;
+  align-items: center;
+  gap: 2rpx;
+  font-size: 24rpx;
+  color: var(--ld-content-2);
+}
+.ld-me-sec-more-ico {
+  width: 26rpx;
+  height: 26rpx;
+}
+
+/* 继续学习视频卡（无真实缩略图→品牌紫占位·不显假进度/时长） */
+.ld-me-video {
+  position: relative;
+  width: 100%;
+  padding-top: 56.25%; /* 16:9·padding-top 百分比法（避 aspect-ratio 旧 WebView 不支持） */
+  border-radius: var(--ld-radius-md);
+  overflow: hidden;
+  background: linear-gradient(135deg, #b79bea 0%, #8c6fd0 58%, #7b5caf 100%); /* 无缩略图·品牌紫占位 */
+}
+.ld-me-video::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(to top, rgba(20, 14, 30, 0.62) 0%, rgba(20, 14, 30, 0.12) 42%, rgba(20, 14, 30, 0) 70%);
+}
+.ld-me-video-h {
+  opacity: 0.94;
+}
+.ld-me-play {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 2;
+  width: 98rpx;
+  height: 98rpx;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.92);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 8rpx 26rpx rgba(0, 0, 0, 0.25);
+}
+.ld-me-play-ico {
+  width: 42rpx;
+  height: 42rpx;
+  margin-left: 4rpx;
+}
+.ld-me-video-cap {
+  position: absolute;
+  left: 24rpx;
+  right: 24rpx;
+  bottom: 24rpx;
+  z-index: 2;
+  color: #fff;
+}
+.ld-me-video-ep {
+  font-size: 21rpx;
+  font-weight: 500;
+  letter-spacing: 1rpx;
+  opacity: 0.88;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.ld-me-continue {
-  padding: 30rpx 28rpx;
-  margin-bottom: 24rpx;
-  background: linear-gradient(160deg, #f3e9ff 0%, var(--ld-bg) 90%);
-  border-radius: var(--ld-radius);
-  border: 2rpx solid var(--ld-purple-line);
-}
-.ld-me-ct-label {
-  font-size: 22rpx;
-  color: var(--ld-purple-tab);
-  letter-spacing: 2rpx;
-}
-.ld-me-ct-title {
-  margin-top: 10rpx;
-  font-size: 32rpx;
-  font-weight: 700;
-  color: var(--ld-purple-ink);
-}
-.ld-me-ct-lesson {
+.ld-me-video-name {
   margin-top: 6rpx;
-  font-size: 24rpx;
-  color: var(--ld-purple-meta);
+  font-size: 30rpx;
+  font-weight: 500;
+  line-height: 1.25;
 }
-.ld-me-entry {
+
+/* 继续观看行 */
+.ld-me-resume {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  margin-top: 24rpx;
+}
+.ld-me-resume-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 10rpx;
+  padding: 18rpx 38rpx;
+  background: var(--ld-purple-ink);
+  color: #fff;
+  font-size: 26rpx;
+  font-weight: 600;
+  border-radius: var(--ld-radius-pill);
+}
+.ld-me-resume-btn-h {
+  opacity: 0.9;
+}
+
+/* 空态 */
+.ld-me-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  padding: 18rpx 22rpx 8rpx;
+}
+.ld-me-empty-ico {
+  width: 112rpx;
+  height: 112rpx;
+  border-radius: 50%;
+  background: #f0e9ff; /* 浅丁香圆·空态图标底（局部设计色·不入 tokens） */
+  border: 2rpx solid var(--ld-purple-line);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 24rpx;
+}
+.ld-me-empty-img {
+  width: 52rpx;
+  height: 52rpx;
+}
+.ld-me-empty-title {
+  font-size: 30rpx;
+  font-weight: 500;
+  color: var(--ld-ink);
+}
+.ld-me-empty-sub {
+  margin: 16rpx 0 30rpx;
+  font-size: 24rpx;
+  line-height: 1.6;
+  color: var(--ld-content-2);
+  max-width: 470rpx;
+}
+
+/* 我的订单四格 */
+.ld-me-orders {
   display: flex;
   justify-content: space-between;
+}
+.ld-me-order {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
   align-items: center;
-  padding: 30rpx 28rpx;
-  margin-bottom: 20rpx;
-  background: var(--ld-bg);
-  border-radius: var(--ld-radius);
-  border: 2rpx solid var(--ld-purple-line);
+  gap: 14rpx;
+  padding: 8rpx 0;
+}
+.ld-me-order-h {
+  opacity: 0.6;
+}
+.ld-me-order-ico {
+  width: 48rpx;
+  height: 48rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.ld-me-order-img {
+  width: 46rpx;
+  height: 46rpx;
+}
+.ld-me-order-label {
+  font-size: 22rpx;
+  color: var(--ld-content);
+}
+
+/* 常用入口列 */
+.ld-me-list {
+  overflow: hidden;
+}
+.ld-me-row {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 24rpx;
+  padding: 28rpx 30rpx;
+}
+.ld-me-row-h {
+  background: var(--ld-bg-lilac);
+}
+.ld-me-row + .ld-me-row::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 84rpx;
+  right: 0;
+  height: 1rpx;
+  background: var(--ld-line);
+}
+.ld-me-row-ico {
+  flex: 0 0 auto;
+  width: 44rpx;
+  height: 44rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.ld-me-row-img {
+  width: 40rpx;
+  height: 40rpx;
+}
+.ld-me-row-label {
+  flex: 1;
   font-size: 28rpx;
   color: var(--ld-ink);
 }
-.ld-me-arrow {
-  color: var(--ld-purple-meta);
-  font-size: 32rpx;
+.ld-me-row-chev {
+  flex: 0 0 auto;
+  width: 34rpx;
+  height: 34rpx;
+}
+
+.ld-me-pad-bottom {
+  height: 200rpx;
 }

@@ -1,96 +1,167 @@
+/* 购物车「购物袋」设计校准。设计稿 402px 画板 → rpx（×1.87 保比例）。
+   token 见 styles/tokens.wxss；标题头 + 单列卡片行 + 圆角步进器 + 信任小字 + 悬浮结算 bar。
+   业务逻辑（勾选/加减/删除/全选/合计/结算/空态）由 wxml handler + lib/cart 承接，本文件只管视觉。 */
 .ld-cart {
   min-height: 100vh;
   background: var(--ld-bg-lilac);
-  padding: 24rpx 24rpx 0;
+  padding: 24rpx 0 0;
 }
-.ld-row {
+
+/* 标题头 */
+.ld-cart-head {
+  padding: 12rpx 36rpx 0;
+}
+.ld-cart-title {
+  font-size: 52rpx;
+  font-weight: 500;
+  line-height: 1.2;
+  color: var(--ld-ink);
+  letter-spacing: -0.5rpx;
+}
+.ld-cart-sub {
+  margin-top: 12rpx;
+  font-size: 24rpx;
+  color: var(--ld-content-2);
+}
+
+/* 单列卡片行 */
+.ld-cart-list {
+  margin-top: 20rpx;
+  padding: 0 36rpx;
+}
+.ld-cart-row {
   display: flex;
   align-items: center;
-  gap: 20rpx;
-  padding: 24rpx;
-  margin-bottom: 20rpx;
-  background: var(--ld-bg);
-  border-radius: var(--ld-radius);
-  border: 2rpx solid var(--ld-purple-line);
+  gap: 26rpx;
+  padding: 26rpx 0;
+  border-bottom: 1rpx solid var(--ld-line-soft);
 }
+.ld-cart-row:last-child {
+  border-bottom: none;
+}
+
+/* 勾选（真实购物袋多选·设计无此原语，沿用圆形勾选融入设计语言） */
 .ld-check {
   width: 40rpx;
   height: 40rpx;
   border-radius: 50%;
   border: 3rpx solid var(--ld-purple-line);
-  flex-shrink: 0;
+  flex: 0 0 auto;
 }
 .ld-check.on {
   background: var(--ld-purple-tab);
   border-color: var(--ld-purple-tab);
 }
-.ld-row-media {
-  width: 140rpx;
-  height: 140rpx;
-  border-radius: 16rpx;
+
+/* 媒体 88px→164rpx 方图·圆角·灰底占位 */
+.ld-cart-row-img {
+  width: 164rpx;
+  height: 164rpx;
+  flex: 0 0 auto;
+  border-radius: var(--ld-radius-md);
   background: var(--ld-bg-sage);
-  flex-shrink: 0;
+  overflow: hidden;
 }
-.ld-row-main {
-  flex: 1;
+
+/* 中段：名称 / 规格 / 价格竖排 */
+.ld-cart-row-mid {
+  flex: 1 1 auto;
   min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8rpx;
 }
-.ld-row-name {
+.ld-cart-row-name {
   font-size: 28rpx;
+  line-height: 1.35;
   color: var(--ld-ink);
+  letter-spacing: -0.3rpx;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.ld-row-sku {
-  margin-top: 6rpx;
+.ld-cart-row-tag {
   font-size: 22rpx;
-  color: var(--ld-purple-meta);
+  color: var(--ld-content-2);
 }
-.ld-row-bottom {
-  margin-top: 14rpx;
+.ld-cart-row-price {
   display: flex;
-  align-items: center;
-  justify-content: space-between;
+  align-items: baseline;
+  gap: 12rpx;
+  margin-top: 2rpx;
 }
-.ld-row-price {
-  font-size: 30rpx;
-  font-weight: 700;
-  color: var(--ld-purple-ink);
+.ld-cart-was {
+  font-size: 20rpx;
+  color: var(--ld-content-2);
+  text-decoration: line-through;
 }
+.ld-cart-now {
+  font-size: 34rpx;
+  font-weight: 600;
+  color: #222222;
+  letter-spacing: 0.4rpx;
+}
+
+/* 右侧动作列：步进器 + 删除 */
+.ld-cart-row-act {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 14rpx;
+}
+
+/* 圆角药丸步进器（设计 line-strong 描边·白底·−/qty/+） */
 .ld-stepper {
   display: flex;
   align-items: center;
-  gap: 4rpx;
+  border: 2rpx solid var(--ld-purple-line);
+  border-radius: var(--ld-radius-pill);
+  overflow: hidden;
 }
 .ld-step {
   width: 52rpx;
   height: 52rpx;
   line-height: 48rpx;
   text-align: center;
-  border-radius: 12rpx;
-  border: 2rpx solid var(--ld-purple-line);
-  color: var(--ld-purple-tab);
+  background: #ffffff;
+  color: var(--ld-ink);
   font-size: 32rpx;
 }
 .ld-step.dim {
-  opacity: 0.35;
+  color: var(--ld-purple-line);
 }
 .ld-step-qty {
-  min-width: 64rpx;
+  min-width: 56rpx;
+  height: 52rpx;
+  line-height: 52rpx;
   text-align: center;
-  font-size: 28rpx;
+  font-size: 26rpx;
+  color: var(--ld-ink);
+  background: #ffffff;
 }
-.ld-row-del {
-  flex-shrink: 0;
-  font-size: 24rpx;
-  color: var(--ld-purple-meta);
-  padding: 12rpx;
+.ld-cart-row-del {
+  font-size: 22rpx;
+  color: var(--ld-content-2);
+  padding: 4rpx 8rpx;
 }
-.ld-checkoutbar-space {
-  height: 220rpx;
+
+/* 信任小字 */
+.ld-cart-trust {
+  margin: 24rpx 36rpx 0;
+  padding-top: 26rpx;
+  border-top: 1rpx solid var(--ld-line-soft);
+  font-size: 22rpx;
+  color: var(--ld-content-2);
+  text-align: center;
+  letter-spacing: 0.6rpx;
 }
-.ld-checkoutbar {
+
+/* 悬浮结算 bar（TabBar 上方一点·白底大圆角） */
+.ld-checkbar-space {
+  height: 320rpx;
+}
+.ld-checkbar {
   position: fixed;
   left: 0;
   right: 0;
@@ -99,64 +170,77 @@
   align-items: center;
   gap: 20rpx;
   margin: 0 24rpx;
-  padding: 20rpx 24rpx;
-  background: var(--ld-bg);
-  border-radius: var(--ld-radius);
-  box-shadow: 0 8rpx 32rpx rgba(36, 23, 51, 0.12);
+  padding: 18rpx 20rpx 18rpx 28rpx;
+  background: #ffffff;
+  border-radius: 40rpx;
+  box-shadow: 0 12rpx 44rpx rgba(28, 28, 32, 0.16), 0 2rpx 8rpx rgba(28, 28, 32, 0.1);
 }
 .ld-selectall {
   display: flex;
   align-items: center;
   gap: 10rpx;
   font-size: 24rpx;
-  color: var(--ld-purple-meta);
+  color: var(--ld-content-2);
 }
-.ld-total {
-  flex: 1;
-  text-align: right;
+.ld-checkbar-total {
+  margin-left: auto;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  line-height: 1.1;
 }
-.ld-total-label {
-  font-size: 24rpx;
-  color: var(--ld-purple-meta);
-  margin-right: 8rpx;
+.ld-checkbar-label {
+  font-size: 20rpx;
+  color: var(--ld-content-2);
 }
-.ld-total-num {
-  font-size: 34rpx;
+.ld-checkbar-num {
+  font-size: 36rpx;
   font-weight: 700;
   color: var(--ld-purple-ink);
+  letter-spacing: 0.4rpx;
 }
-.ld-gobtn {
-  padding: 20rpx 40rpx;
+.ld-checkbar.empty .ld-checkbar-num {
+  color: #bdbdbd;
+}
+.ld-checkout-btn {
+  flex: 0 0 auto;
+  padding: 22rpx 40rpx;
   border-radius: var(--ld-radius-pill);
-  background: var(--ld-purple-ink);
+  background: var(--ld-purple);
   color: #ffffff;
   font-size: 28rpx;
   font-weight: 600;
 }
-.ld-gobtn.dim {
-  opacity: 0.4;
+.ld-checkout-btn.dim {
+  background: var(--ld-purple-line);
 }
+
+/* 空态 */
 .ld-cart-empty {
   min-height: 100vh;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 16rpx;
+  gap: 14rpx;
   background: var(--ld-bg-lilac);
 }
+.ld-empty-emoji {
+  font-size: 96rpx;
+  margin-bottom: 8rpx;
+}
 .ld-empty-title {
-  font-size: 32rpx;
+  font-size: 34rpx;
   font-weight: 600;
   color: var(--ld-purple-ink);
 }
 .ld-empty-hint {
   font-size: 24rpx;
-  color: var(--ld-purple-meta);
+  color: var(--ld-content-2);
 }
 .ld-empty-btn {
-  margin-top: 24rpx;
-  padding: 18rpx 64rpx;
+  margin-top: 28rpx;
+  padding: 20rpx 64rpx;
   border-radius: var(--ld-radius-pill);
   background: var(--ld-purple-ink);
   color: #ffffff;

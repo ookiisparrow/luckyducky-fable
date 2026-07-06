@@ -1,32 +1,124 @@
 <view class="ld-me">
-  <view class="ld-me-profile" bind:tap="onEditProfile">
-    <image wx:if="{{avatar}}" class="ld-me-avatar" src="{{avatar}}" mode="aspectFill" />
-    <view wx:else class="ld-me-avatar ld-me-avatar-empty">🦆</view>
-    <view class="ld-me-info">
-      <view class="ld-me-name">{{nickname}}</view>
-      <view class="ld-me-bio">{{bio || '点这里编辑资料'}}</view>
+  <!-- 头部·大字问候（editorial）：品牌 logo + 欢迎回来大字 + 安静的编辑链接 -->
+  <view class="ld-me-header">
+    <view class="ld-me-brandrow">
+      <image class="ld-me-logo" src="/static/logo-wordmark.svg" mode="heightFix" />
     </view>
-    <text class="ld-me-arrow">›</text>
+    <view class="ld-me-greet">
+      <view class="ld-me-greet-text">
+        <view class="ld-me-eyebrow">欢迎回来</view>
+        <view class="ld-me-greet-name">{{nickname}}</view>
+        <view wx:if="{{bio}}" class="ld-me-greet-bio">{{bio}}</view>
+      </view>
+      <image wx:if="{{avatar}}" class="ld-me-avatar" src="{{avatar}}" mode="aspectFill" />
+      <view wx:else class="ld-me-avatar ld-me-avatar-empty">🦆</view>
+    </view>
+    <view class="ld-me-edit" bind:tap="onEditProfile" hover-class="ld-me-edit-h">
+      <text>编辑资料</text>
+    </view>
   </view>
 
-  <view class="ld-me-continue" bind:tap="onContinue">
-    <block wx:if="{{cont}}">
-      <view class="ld-me-ct-label">继续学习</view>
-      <view class="ld-me-ct-title">{{cont.courseTitle}}</view>
-      <view class="ld-me-ct-lesson">{{cont.lessonName}}</view>
-    </block>
-    <block wx:else>
-      <view class="ld-me-ct-label">开始你的第一针</view>
-      <view class="ld-me-ct-title">挑一个材料包开课吧</view>
-    </block>
+  <view class="ld-me-stack">
+    <!-- 继续学习 / 学习记录 -->
+    <view class="ld-me-card ld-me-card-pad">
+      <view class="ld-me-sec-head">
+        <view class="ld-me-sec-title">
+          <image class="ld-me-sec-ico" src="/static/icons/graduation-cap.svg" mode="aspectFit" />
+          <text>{{cont ? '继续学习' : '学习记录'}}</text>
+        </view>
+        <view wx:if="{{cont}}" class="ld-me-sec-more" bind:tap="onCourses">
+          <text>全部教程</text>
+          <image class="ld-me-sec-more-ico" src="/static/icons/chevron-right.svg" mode="aspectFit" />
+        </view>
+      </view>
+
+      <block wx:if="{{cont}}">
+        <view class="ld-me-video" bind:tap="onContinue" hover-class="ld-me-video-h">
+          <view class="ld-me-play">
+            <image class="ld-me-play-ico" src="/static/icons/play.svg" mode="aspectFit" />
+          </view>
+          <view class="ld-me-video-cap">
+            <view class="ld-me-video-ep">{{cont.courseTitle}}</view>
+            <view class="ld-me-video-name">{{cont.lessonName}}</view>
+          </view>
+        </view>
+        <view class="ld-me-resume">
+          <view class="ld-me-resume-btn" bind:tap="onContinue" hover-class="ld-me-resume-btn-h">
+            <text>继续观看</text>
+          </view>
+        </view>
+      </block>
+
+      <view wx:else class="ld-me-empty">
+        <view class="ld-me-empty-ico">
+          <image class="ld-me-empty-img" src="/static/icons/play-circle.svg" mode="aspectFit" />
+        </view>
+        <view class="ld-me-empty-title">还没有学习记录</view>
+        <view class="ld-me-empty-sub">看过的钩织教程会出现在这里。先挑一只喜欢的小棉鸭，开箱就能跟着视频一步步钩。</view>
+        <view class="ld-me-resume-btn" bind:tap="onContinue" hover-class="ld-me-resume-btn-h">
+          <text>去首页挑套装</text>
+        </view>
+      </view>
+    </view>
+
+    <!-- 我的订单四格 -->
+    <view class="ld-me-card ld-me-card-pad">
+      <view class="ld-me-sec-head">
+        <view class="ld-me-sec-title"><text>我的订单</text></view>
+        <view class="ld-me-sec-more" bind:tap="onOrders">
+          <text>全部订单</text>
+          <image class="ld-me-sec-more-ico" src="/static/icons/chevron-right.svg" mode="aspectFit" />
+        </view>
+      </view>
+      <view class="ld-me-orders">
+        <view class="ld-me-order" bind:tap="onOrders" hover-class="ld-me-order-h">
+          <view class="ld-me-order-ico"><image class="ld-me-order-img" src="/static/icons/wallet.svg" mode="aspectFit" /></view>
+          <text class="ld-me-order-label">待付款</text>
+        </view>
+        <view class="ld-me-order" bind:tap="onOrders" hover-class="ld-me-order-h">
+          <view class="ld-me-order-ico"><image class="ld-me-order-img" src="/static/icons/package.svg" mode="aspectFit" /></view>
+          <text class="ld-me-order-label">待发货</text>
+        </view>
+        <view class="ld-me-order" bind:tap="onOrders" hover-class="ld-me-order-h">
+          <view class="ld-me-order-ico"><image class="ld-me-order-img" src="/static/icons/truck.svg" mode="aspectFit" /></view>
+          <text class="ld-me-order-label">待收货</text>
+        </view>
+        <view class="ld-me-order" bind:tap="onAfterSales" hover-class="ld-me-order-h">
+          <view class="ld-me-order-ico"><image class="ld-me-order-img" src="/static/icons/rotate-ccw.svg" mode="aspectFit" /></view>
+          <text class="ld-me-order-label">售后</text>
+        </view>
+      </view>
+    </view>
+
+    <!-- 常用入口列 -->
+    <view class="ld-me-card ld-me-list">
+      <view class="ld-me-row" bind:tap="onAddress" hover-class="ld-me-row-h">
+        <view class="ld-me-row-ico"><image class="ld-me-row-img" src="/static/icons/map-pin.svg" mode="aspectFit" /></view>
+        <text class="ld-me-row-label">收货地址</text>
+        <image class="ld-me-row-chev" src="/static/icons/chevron-right.svg" mode="aspectFit" />
+      </view>
+      <view class="ld-me-row" bind:tap="onActivate" hover-class="ld-me-row-h">
+        <view class="ld-me-row-ico"><image class="ld-me-row-img" src="/static/icons/ticket.svg" mode="aspectFit" /></view>
+        <text class="ld-me-row-label">输入激活码</text>
+        <image class="ld-me-row-chev" src="/static/icons/chevron-right.svg" mode="aspectFit" />
+      </view>
+      <view class="ld-me-row" bind:tap="onFeedback" hover-class="ld-me-row-h">
+        <view class="ld-me-row-ico"><image class="ld-me-row-img" src="/static/icons/message-circle.svg" mode="aspectFit" /></view>
+        <text class="ld-me-row-label">意见反馈</text>
+        <image class="ld-me-row-chev" src="/static/icons/chevron-right.svg" mode="aspectFit" />
+      </view>
+      <view class="ld-me-row" bind:tap="onConsent" hover-class="ld-me-row-h">
+        <view class="ld-me-row-ico"><image class="ld-me-row-img" src="/static/icons/shield-check.svg" mode="aspectFit" /></view>
+        <text class="ld-me-row-label">数据共享授权</text>
+        <image class="ld-me-row-chev" src="/static/icons/chevron-right.svg" mode="aspectFit" />
+      </view>
+      <view class="ld-me-row" bind:tap="onAbout" hover-class="ld-me-row-h">
+        <view class="ld-me-row-ico"><image class="ld-me-row-img" src="/static/icons/info.svg" mode="aspectFit" /></view>
+        <text class="ld-me-row-label">关于我们</text>
+        <image class="ld-me-row-chev" src="/static/icons/chevron-right.svg" mode="aspectFit" />
+      </view>
+    </view>
   </view>
 
-  <view class="ld-me-entry" bind:tap="onCourses"><text>我的课程</text><text class="ld-me-arrow">›</text></view>
-  <view class="ld-me-entry" bind:tap="onActivate"><text>输入激活码</text><text class="ld-me-arrow">›</text></view>
-  <view class="ld-me-entry" bind:tap="onOrders"><text>我的订单</text><text class="ld-me-arrow">›</text></view>
-  <view class="ld-me-entry" bind:tap="onAfterSales"><text>售后/退款</text><text class="ld-me-arrow">›</text></view>
-  <view class="ld-me-entry" bind:tap="onAddress"><text>收货地址</text><text class="ld-me-arrow">›</text></view>
-  <view class="ld-me-entry" bind:tap="onFeedback"><text>意见反馈</text><text class="ld-me-arrow">›</text></view>
-  <view class="ld-me-entry" bind:tap="onConsent"><text>数据共享授权</text><text class="ld-me-arrow">›</text></view>
-  <view class="ld-me-entry" bind:tap="onAbout"><text>关于我们</text><text class="ld-me-arrow">›</text></view>
+  <view class="ld-me-pad-bottom"></view>
 </view>

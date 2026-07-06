@@ -1,39 +1,54 @@
+<!-- 购物车（设计「购物袋」语言校准）：标题头 + 卡片行(勾选/媒体/名规格价/圆角步进器/删除) + 信任小字 + 悬浮结算 bar。
+     业务逻辑全保留：勾选/加减/删除/全选/合计/结算跳转/空态。设计源 CartScreen·402px 画板 ×1.87→rpx。 -->
 <view class="ld-cart" wx:if="{{items.length}}">
-  <view class="ld-row" wx:for="{{items}}" wx:key="index">
-    <view class="ld-check {{item.selected ? 'on' : ''}}" data-id="{{item.id}}" data-sku="{{item.sku}}" bind:tap="onToggle"></view>
-    <image wx:if="{{item.cover}}" class="ld-row-media" src="{{item.cover}}" mode="aspectFill" />
-    <view wx:else class="ld-row-media"></view>
-    <view class="ld-row-main">
-      <view class="ld-row-name">{{item.name}}</view>
-      <view class="ld-row-sku" wx:if="{{item.sku}}">{{item.sku}}</view>
-      <view class="ld-row-bottom">
-        <text class="ld-row-price">¥{{item.price}}</text>
+  <view class="ld-cart-head">
+    <view class="ld-cart-title">购物袋</view>
+    <view class="ld-cart-sub">挑好的小伙伴都在这儿，随时结算带走</view>
+  </view>
+
+  <view class="ld-cart-list">
+    <view class="ld-cart-row" wx:for="{{items}}" wx:key="index">
+      <view class="ld-check {{item.selected ? 'on' : ''}}" data-id="{{item.id}}" data-sku="{{item.sku}}" bind:tap="onToggle"></view>
+      <image wx:if="{{item.cover}}" class="ld-cart-row-img" src="{{item.cover}}" mode="aspectFill" />
+      <view wx:else class="ld-cart-row-img"></view>
+      <view class="ld-cart-row-mid">
+        <view class="ld-cart-row-name">{{item.name}}</view>
+        <view class="ld-cart-row-tag" wx:if="{{item.sku}}">{{item.sku}}</view>
+        <view class="ld-cart-row-price">
+          <text class="ld-cart-was" wx:if="{{item.was}}">¥{{item.was}}</text>
+          <text class="ld-cart-now">¥{{item.price}}</text>
+        </view>
+      </view>
+      <view class="ld-cart-row-act">
         <view class="ld-stepper">
           <view class="ld-step {{item.qty <= 1 ? 'dim' : ''}}" data-id="{{item.id}}" data-sku="{{item.sku}}" data-qty="{{item.qty}}" bind:tap="onDec">−</view>
           <text class="ld-step-qty">{{item.qty}}</text>
           <view class="ld-step" data-id="{{item.id}}" data-sku="{{item.sku}}" data-qty="{{item.qty}}" bind:tap="onInc">+</view>
         </view>
+        <view class="ld-cart-row-del" data-id="{{item.id}}" data-sku="{{item.sku}}" bind:tap="onRemove">删除</view>
       </view>
     </view>
-    <view class="ld-row-del" data-id="{{item.id}}" data-sku="{{item.sku}}" bind:tap="onRemove">删</view>
   </view>
 
-  <view class="ld-checkoutbar-space"></view>
-  <view class="ld-checkoutbar">
+  <view class="ld-cart-trust">包邮到家 · 七天无理由退货 · 官方正品保障</view>
+
+  <view class="ld-checkbar-space"></view>
+  <view class="ld-checkbar {{selectedCount ? '' : 'empty'}}">
     <view class="ld-selectall" bind:tap="onToggleAll">
       <view class="ld-check {{allSelected ? 'on' : ''}}"></view>
       <text>全选</text>
     </view>
-    <view class="ld-total">
-      <text class="ld-total-label">合计</text>
-      <text class="ld-total-num">{{totalLabel}}</text>
+    <view class="ld-checkbar-total">
+      <text class="ld-checkbar-label">合计</text>
+      <text class="ld-checkbar-num">{{totalLabel}}</text>
     </view>
-    <view class="ld-gobtn {{selectedCount ? '' : 'dim'}}" bind:tap="onCheckout">结算({{selectedCount}})</view>
+    <view class="ld-checkout-btn {{selectedCount ? '' : 'dim'}}" bind:tap="onCheckout">去结算({{selectedCount}})</view>
   </view>
 </view>
 
 <view class="ld-cart-empty" wx:else>
-  <view class="ld-empty-title">小车还空着</view>
+  <view class="ld-empty-emoji">🦆</view>
+  <view class="ld-empty-title">购物袋还空着</view>
   <view class="ld-empty-hint">去挑一只喜欢的小鸭吧</view>
   <view class="ld-empty-btn" bind:tap="onGoHome">去逛逛</view>
 </view>
