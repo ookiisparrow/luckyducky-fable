@@ -64,7 +64,7 @@
 .ld-hero-copy {
   position: relative;
   z-index: 2;
-  padding: 0 36rpx 210rpx;
+  padding: 0 36rpx 248rpx; /* 设计 bottom:132px≈246rpx·抬高文案让开悬浮 TabBar+安全区 */
   text-align: center;
 }
 .ld-hero-tag {
