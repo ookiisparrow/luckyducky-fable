@@ -83,9 +83,9 @@ async function reload() {
       tplGuard = true
       template.value = { commonLines: t.commonLines || [], yarnSlots: t.yarnSlots || [] }
       void nextTick(() => (tplGuard = false))
+      bomLoaded = true // 仅在「真实模板回灌进内存」时才放开保存——若因 tplDirty 跳过回灌，template 仍是初次失败后的空/残缺值，此时置真会重开覆盖 singleton 的洞（P2 补·batch11 原置于块外的漏）
     }
     profiles.value = (b.profiles as Record<string, any>[]) || []
-    bomLoaded = true // 模板载入成功·放开保存模板
   }
   mats.value = m.ok ? (m.list as Record<string, any>[]) : []
   assemblies.value = a.ok ? (a.list as Record<string, any>[]) : []

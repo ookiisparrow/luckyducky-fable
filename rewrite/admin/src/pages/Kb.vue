@@ -22,6 +22,9 @@ const rows = ref<KbRow[]>([])
 const message = ref('')
 const busy = ref(false)
 const confirmKey = ref('')
+// 载入成功才放开「保存整册」——saveKb 是整册覆盖同步（提交外的旧 doc 逐个 remove），载入失败 rows=[] 时一保存就把
+// 真实整份 FAQ 删光（KB 是客服 bot 答案 + 坐席快捷回复单源·不可逆）。同 HelpVideos/Settings/ScmBom 载入失败门·P1。
+let loaded = false
 
 // 预设 FAQ（换皮删了·键按「分类:主题」＝客服菜单叶子 id 口径填好·owner 按实际菜单微调）
 const PRESET: Omit<KbRow, 'order'>[] = [
@@ -32,9 +35,11 @@ const PRESET: Omit<KbRow, 'order'>[] = [
 ]
 
 async function reload() {
+  loaded = false // 载入/刷新期间禁保存（含 save 后刷新失败 rows=[] 的窗口·防拿空表覆盖删光·同 HelpVideos）
   const r = await listKb()
   rows.value = r.ok ? normalizeKb(r.list) : []
   message.value = r.ok ? '' : '加载失败：' + String(r.error || '')
+  loaded = r.ok // 成功（含合法空库 list=[]）才放开·失败恒关
   return r.ok
 }
 
@@ -64,6 +69,11 @@ function delRow(i: number) {
 
 async function save() {
   if (busy.value) return
+  if (!loaded) {
+    // 未成功载入即保存 = 拿空/残缺 rows 整册覆盖·把真实 FAQ 全删光（P1）——拒绝并提示刷新
+    message.value = '知识库未成功载入，暂不能保存（避免覆盖并删光已有 FAQ·请刷新重试）'
+    return
+  }
   // 键校验（B3·bot 命中命脉·换皮删了这层）：非空 + 唯一（重复会互相覆盖）
   const keys = rows.value.map((r) => r.key.trim())
   if (keys.some((k) => !k)) {
