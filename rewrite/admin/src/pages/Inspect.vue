@@ -3,9 +3,13 @@
 // 红绿灯）+ 立即巡检（手动触发一轮）+ 未处理异常入口。数据走 adminApi getInspectStatus/runInspect 真值·不编数。
 import { ref, onMounted, computed } from 'vue'
 import { useRouter } from 'vue-router'
-import { PlayCircle, TriangleAlert } from 'lucide-vue-next'
+import { PlayCircle, TriangleAlert, ShieldCheck } from 'lucide-vue-next'
 import { getInspectStatus, runInspect } from '../api/ops'
 import UiButton from '../components/ui/Button.vue'
+import PageHeader from '../components/ui/PageHeader.vue'
+import Card from '../components/ui/Card.vue'
+import Badge from '../components/ui/Badge.vue'
+import EmptyState from '../components/ui/EmptyState.vue'
 
 const router = useRouter()
 const latest = ref<any>(null)
@@ -51,19 +55,18 @@ onMounted(load)
 </script>
 
 <template>
-  <div class="page">
-    <header class="page-head">
-      <div>
-        <h1>系统巡检</h1>
-        <p class="sub">定时/手动核对基础运行 · 主动探出静默失败（付了钱没发货 / 多退钱 / 待退款死信…）· 不依赖 AI</p>
-      </div>
+  <div class="ld-page">
+    <PageHeader
+      title="系统巡检"
+      sub="定时/手动核对基础运行 · 主动探出静默失败（付了钱没发货 / 多退钱 / 待退款死信…）· 不依赖 AI"
+    >
       <UiButton :disabled="running" @click="runNow">
         <PlayCircle :size="16" :stroke-width="1.8" :class="{ spin: running }" />
         <span>{{ running ? '巡检中…' : '立即巡检' }}</span>
       </UiButton>
-    </header>
+    </PageHeader>
 
-    <p v-if="message" class="status">{{ message }}</p>
+    <p v-if="message" class="ld-status">{{ message }}</p>
 
     <div v-if="openAnomalies" class="alert" @click="router.push('/anomalies')">
       <div class="alert-ico"><TriangleAlert :size="20" :stroke-width="1.8" /></div>
@@ -75,54 +78,39 @@ onMounted(load)
 
     <template v-if="latest">
       <div class="summary">
-        <span class="pill green">{{ latest.summary.green }} 正常</span>
-        <span v-if="latest.summary.yellow" class="pill amber">{{ latest.summary.yellow }} 可疑</span>
-        <span class="pill" :class="latest.summary.red ? 'red' : 'green'">{{ latest.summary.red }} 异常</span>
+        <Badge tone="green">{{ latest.summary.green }} 正常</Badge>
+        <Badge v-if="latest.summary.yellow" tone="amber">{{ latest.summary.yellow }} 可疑</Badge>
+        <Badge :tone="latest.summary.red ? 'red' : 'green'">{{ latest.summary.red }} 异常</Badge>
         <span class="run-meta">{{ latest.trigger === 'manual' ? '手动' : '定时' }} · {{ fmt(latest.startedAt) }}</span>
       </div>
 
-      <section v-for="g in groups" :key="g.key" class="group">
-        <h2 class="group-head">{{ g.label }}</h2>
-        <div v-for="c in g.items" :key="c.id" class="check" :class="c.status">
-          <span class="dot" :class="c.status" />
-          <div class="check-body">
-            <div class="check-title">{{ c.title }}</div>
-            <div class="check-detail">{{ c.detail }}</div>
-            <div v-if="c.status === 'red' && c.samples && c.samples.length" class="samples">
-              <code v-for="s in c.samples" :key="s">{{ s }}</code>
-              <span v-if="c.count && c.count > c.samples.length" class="more">等 {{ c.count }} 条</span>
+      <Card v-for="g in groups" :key="g.key" :title="g.label" flush>
+        <div class="checks">
+          <div v-for="c in g.items" :key="c.id" class="check" :class="c.status">
+            <div class="check-status">
+              <Badge :tone="c.status === 'green' ? 'green' : c.status === 'red' ? 'red' : 'amber'" dot>
+                {{ c.status === 'green' ? '通过' : c.status === 'red' ? '异常' : '可疑' }}
+              </Badge>
             </div>
+            <div class="check-body">
+              <div class="check-title">{{ c.title }}</div>
+              <div class="check-detail">{{ c.detail }}</div>
+              <div v-if="c.status === 'red' && c.samples && c.samples.length" class="samples">
+                <code v-for="s in c.samples" :key="s">{{ s }}</code>
+                <span v-if="c.count && c.count > c.samples.length" class="more">等 {{ c.count }} 条</span>
+              </div>
+            </div>
+            <span v-if="c.severity === 'high'" class="sev">高危</span>
           </div>
-          <span class="sev" :class="c.severity">{{ c.severity === 'high' ? '高危' : '' }}</span>
         </div>
-      </section>
+      </Card>
     </template>
-    <p v-else-if="!message" class="empty">还没跑过巡检 · 点右上「立即巡检」跑一轮</p>
+    <EmptyState v-else-if="!message" :icon="ShieldCheck" text="还没跑过巡检 · 点右上「立即巡检」跑一轮" />
   </div>
 </template>
 
 <style scoped>
-.page {
-  max-width: 1000px;
-}
-.page-head {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 16px;
-  margin-bottom: 20px;
-}
-h1 {
-  margin: 0;
-  font-size: 22px;
-  font-weight: 700;
-  color: var(--ld-ink);
-}
-.sub {
-  margin: 4px 0 0;
-  font-size: 12.5px;
-  color: var(--ld-content-2);
-}
+/* 立即巡检按钮内 loading 图标转圈（本页独有） */
 .spin {
   animation: spin 0.9s linear infinite;
 }
@@ -131,22 +119,20 @@ h1 {
     transform: rotate(360deg);
   }
 }
-.status {
-  font-size: 13px;
-  color: var(--ld-content-2);
-}
+
+/* 未处理异常告警条（红底可点入口·本页独有语义块·无 kit alert 原语） */
 .alert {
   display: flex;
   align-items: center;
   gap: 14px;
   padding: 14px 18px;
-  margin-bottom: 18px;
   background: var(--ld-bg-red-soft);
   border: 1px solid var(--ld-red-line);
-  border-radius: var(--ld-radius-l);
+  border-radius: var(--ld-radius);
   cursor: pointer;
 }
 .alert-ico {
+  display: flex;
   color: var(--ld-red);
   flex: none;
 }
@@ -160,29 +146,13 @@ h1 {
   font-size: 12.5px;
   color: var(--ld-content);
 }
+
+/* 汇总胶囊行：green/yellow/red 徽章走 Badge·此处只排布 + 右侧运行 meta */
 .summary {
   display: flex;
   align-items: center;
   gap: 10px;
-  margin-bottom: 18px;
-}
-.pill {
-  padding: 4px 12px;
-  border-radius: 999px;
-  font-size: 12.5px;
-  font-weight: 700;
-}
-.pill.green {
-  background: var(--ld-bg-green-soft);
-  color: var(--ld-green);
-}
-.pill.red {
-  background: var(--ld-bg-red-soft);
-  color: var(--ld-red);
-}
-.pill.amber {
-  background: var(--ld-bg-lilac);
-  color: var(--ld-amber);
+  flex-wrap: wrap;
 }
 .run-meta {
   margin-left: auto;
@@ -190,44 +160,27 @@ h1 {
   color: var(--ld-content-2);
   font-family: var(--ld-font-mono);
 }
-.group {
-  margin-bottom: 20px;
-}
-.group-head {
-  margin: 0 0 10px;
-  font-size: 13px;
-  font-weight: 700;
-  color: var(--ld-content-2);
+
+/* 分组巡检结果：外壳走 flush Card·内部逐条守卫行（本页独有） */
+.checks {
+  border-top: 1px solid var(--ld-line);
 }
 .check {
   display: flex;
   align-items: flex-start;
   gap: 12px;
-  padding: 14px 16px;
-  background: var(--ld-bg);
-  border: 1px solid var(--ld-line);
-  border-radius: var(--ld-radius-l);
-  margin-bottom: 8px;
+  padding: 14px 18px;
+  border-bottom: 1px solid var(--ld-line);
+}
+.check:last-child {
+  border-bottom: none;
 }
 .check.red {
   background: var(--ld-bg-red-soft);
-  border-color: var(--ld-red-line);
 }
-.dot {
-  width: 10px;
-  height: 10px;
-  border-radius: 999px;
+.check-status {
   flex: none;
-  margin-top: 4px;
-}
-.dot.green {
-  background: var(--ld-green);
-}
-.dot.red {
-  background: var(--ld-red);
-}
-.dot.yellow {
-  background: var(--ld-amber);
+  margin-top: 1px;
 }
 .check-body {
   flex: 1;
@@ -254,7 +207,7 @@ h1 {
   padding: 2px 8px;
   background: var(--ld-bg);
   border: 1px solid var(--ld-red-line);
-  border-radius: 6px;
+  border-radius: var(--ld-radius-sm);
   font-family: var(--ld-font-mono);
   font-size: 11.5px;
   color: var(--ld-red);
@@ -265,16 +218,9 @@ h1 {
 }
 .sev {
   flex: none;
+  margin-top: 2px;
   font-size: 11px;
   font-weight: 700;
-}
-.sev.high {
   color: var(--ld-red);
-}
-.empty {
-  font-size: 13px;
-  color: var(--ld-content-2);
-  padding: 40px 0;
-  text-align: center;
 }
 </style>

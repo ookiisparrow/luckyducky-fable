@@ -4,6 +4,8 @@ import { ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { client } from '../api'
 import UiButton from '../components/ui/Button.vue'
+import Card from '../components/ui/Card.vue'
+import { KeyRound } from 'lucide-vue-next'
 
 const router = useRouter()
 const password = ref('')
@@ -35,52 +37,114 @@ async function submit() {
 
 <template>
   <div class="login">
-    <div class="card">
-      <h1>小棉鸭 · 管理控制台</h1>
-      <p class="hint">输入管理口令登录（登录后凭会话令牌工作，口令不会被保存）</p>
-      <input v-model="password" type="password" placeholder="管理口令" @keyup.enter="submit" />
-      <UiButton block :disabled="busy" @click="submit">{{ busy ? '登录中…' : '登录' }}</UiButton>
-      <p v-if="message" class="error">{{ message }}</p>
-      <p class="agent-note">外包坐席请用<b>坐席工作台</b>登录（不是这个管理后台）——口令登不进这里是正常的。</p>
+    <div class="login-box">
+      <Card>
+        <div class="brand">
+          <span class="brand-mark">🦆</span>
+          <div class="brand-lockup">
+            <span class="brand-name">Lucky Ducky</span>
+            <span class="brand-role">运营控制台</span>
+          </div>
+        </div>
+        <p class="hint">输入管理口令登录（登录后凭会话令牌工作，口令不会被保存）</p>
+        <div class="field">
+          <KeyRound :size="16" :stroke-width="1.8" class="field-icon" />
+          <input
+            v-model="password"
+            type="password"
+            placeholder="管理口令"
+            @keyup.enter="submit"
+          />
+        </div>
+        <UiButton block :disabled="busy" @click="submit">{{ busy ? '登录中…' : '登录' }}</UiButton>
+        <p v-if="message" class="error">{{ message }}</p>
+        <p class="agent-note">外包坐席请用<b>坐席工作台</b>登录（不是这个管理后台）——口令登不进这里是正常的。</p>
+      </Card>
     </div>
   </div>
 </template>
 
 <style scoped>
+/* 登录页在 Shell 外·居中卡（白卡/圆角/幸运紫语言复用 Card 原语）——以下仅本页独有。 */
 .login {
   min-height: 100vh;
   display: flex;
   align-items: center;
   justify-content: center;
+  padding: 24px;
+  background: var(--ld-bg-lilac);
 }
-.card {
+.login-box {
   width: 360px;
-  padding: 32px;
-  background: var(--ld-bg);
-  border: 1px solid var(--ld-purple-line);
-  border-radius: var(--ld-radius);
+  max-width: 100%;
 }
-h1 {
-  margin: 0 0 8px;
-  font-size: 20px;
+.brand {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  text-align: center;
+}
+.brand-mark {
+  font-size: 34px;
+  line-height: 1;
+}
+.brand-lockup {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.brand-name {
+  font-size: 19px;
+  font-weight: 700;
+  letter-spacing: 0.3px;
   color: var(--ld-purple-ink);
 }
-.hint {
-  font-size: 12px;
+.brand-role {
+  font-size: 12.5px;
   color: var(--ld-purple-meta);
-  margin: 0 0 20px;
 }
-input {
-  width: 100%;
+.hint {
+  margin: 16px 0 20px;
+  font-size: 12px;
+  line-height: 1.5;
+  text-align: center;
+  color: var(--ld-purple-meta);
+}
+.field {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
   padding: 10px 12px;
   border: 1px solid var(--ld-purple-line);
-  border-radius: 8px;
+  border-radius: var(--ld-radius-sm);
+  background: var(--ld-bg);
+}
+.field:focus-within {
+  border-color: var(--ld-brand);
+}
+.field-icon {
+  flex: none;
+  color: var(--ld-purple-meta);
+}
+.field input {
+  flex: 1;
+  min-width: 0;
+  border: none;
+  outline: none;
+  background: none;
+  font: inherit;
   font-size: 14px;
-  margin-bottom: 12px;
+  color: var(--ld-content);
+}
+.field input::placeholder {
+  color: var(--ld-content-2);
 }
 .error {
-  margin-top: 12px;
+  margin: 12px 0 0;
   font-size: 12px;
+  text-align: center;
   color: var(--ld-red);
 }
 .agent-note {
@@ -88,7 +152,7 @@ input {
   padding-top: 14px;
   border-top: 1px solid var(--ld-line);
   font-size: 11.5px;
-  color: var(--ld-content-2);
   line-height: 1.5;
+  color: var(--ld-content-2);
 }
 </style>

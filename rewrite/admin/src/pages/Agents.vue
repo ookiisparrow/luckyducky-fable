@@ -5,6 +5,11 @@ import { ref, onMounted } from 'vue'
 import { listAgents, createAgent, disableAgent, setAgentWecomUserId } from '../api/system'
 import { mapAgents, type AgentRow } from '../lib/mapSystem'
 import UiButton from '../components/ui/Button.vue'
+import PageHeader from '../components/ui/PageHeader.vue'
+import Card from '../components/ui/Card.vue'
+import Badge from '../components/ui/Badge.vue'
+import EmptyState from '../components/ui/EmptyState.vue'
+import { Headset } from 'lucide-vue-next'
 
 const rows = ref<AgentRow[]>([])
 const message = ref('')
@@ -74,151 +79,126 @@ onMounted(reload)
 </script>
 
 <template>
-  <div class="page">
-    <header class="page-head">
-      <h1>外包账号</h1>
-      <p class="sub">外包坐席只有「接待」最小权限：能接会话、按已认领会话看客户资料（需客户同意），碰不到钱和商品。</p>
-    </header>
+  <div class="ld-page">
+    <PageHeader
+      title="外包账号"
+      sub="外包坐席只有「接待」最小权限：能接会话、按已认领会话看客户资料（需客户同意），碰不到钱和商品。"
+    />
 
-    <p v-if="message" class="status">{{ message }}</p>
+    <p v-if="message" class="ld-status is-err">{{ message }}</p>
 
-    <div class="form-card">
-      <input v-model="form.name" placeholder="名字（如 外包一号）" maxlength="40" />
-      <input v-model="form.key" type="password" placeholder="登录口令（≥6 位）" />
-      <input v-model="form.wecomUserId" placeholder="企微 userid（选填·免登用）" maxlength="64" />
-      <UiButton size="sm" :disabled="busy" @click="doCreate">建号</UiButton>
-    </div>
-
-    <div v-if="lastCreated" class="created-card">
-      <div>已建号 <b>{{ lastCreated.name }}</b> · 登录口令（<b>只显示这一次</b>，抄给对方后关闭）：<code>{{ lastCreated.key }}</code></div>
-      <UiButton size="sm" @click="lastCreated = null">已抄下·关闭</UiButton>
-    </div>
-
-    <div v-if="rows.length" class="table">
-      <div class="thead">
-        <span>名字</span><span>账号</span><span>企微绑定</span><span>建号时间</span><span>状态</span><span class="r">操作</span>
+    <Card title="建外包账号" sub="登录口令只在建号这一次用到（系统只存哈希·超管拿不到明文）">
+      <div class="form-grid">
+        <input v-model="form.name" class="field" placeholder="名字（如 外包一号）" maxlength="40" />
+        <input v-model="form.key" class="field" type="password" placeholder="登录口令（≥6 位）" />
+        <input v-model="form.wecomUserId" class="field" placeholder="企微 userid（选填·免登用）" maxlength="64" />
+        <UiButton size="sm" :disabled="busy" @click="doCreate">建号</UiButton>
       </div>
-      <div v-for="row in rows" :key="row.id" class="trow" :class="{ off: row.disabled }">
-        <span class="name">{{ row.name }}</span>
-        <span class="mono">{{ row.id }}</span>
-        <div class="bind">
-          <template v-if="editingId === row.id">
-            <input v-model="editingVal" class="inline" placeholder="userid（空=解绑）" />
-            <UiButton size="sm" @click="bindWecom(row)">存</UiButton>
-          </template>
-          <template v-else>
-            <span class="bind-val">{{ row.wecomUserId || '—' }}</span>
-            <button class="act ghost small" @click="bindWecom(row)">改绑</button>
-          </template>
-        </div>
-        <span class="time">{{ row.createdAt }}</span>
-        <span><span class="state" :class="row.disabled ? 'off' : 'on'">{{ row.disabled ? '已停用' : '正常' }}</span></span>
-        <div class="r">
-          <button class="act" :class="row.disabled ? 'ghost' : 'warn'" @click="toggle(row)">
-            {{ row.disabled ? '恢复' : confirmId === row.id ? '确认停用？即时生效' : '停用' }}
-          </button>
+    </Card>
+
+    <div v-if="lastCreated" class="secret">
+      <div class="secret-body">
+        已建号 <b>{{ lastCreated.name }}</b> · 登录口令（<b>只显示这一次</b>，抄给对方后关闭）：<code>{{ lastCreated.key }}</code>
+      </div>
+      <UiButton variant="ghost" size="sm" @click="lastCreated = null">已抄下 · 关闭</UiButton>
+    </div>
+
+    <div v-if="rows.length" class="ld-table">
+      <div class="ld-thead">
+        <div class="ld-th grow">名字</div>
+        <div class="ld-th" :style="{ width: '190px' }">账号</div>
+        <div class="ld-th" :style="{ width: '240px' }">企微绑定</div>
+        <div class="ld-th" :style="{ width: '160px' }">建号时间</div>
+        <div class="ld-th" :style="{ width: '96px' }">状态</div>
+        <div class="ld-th ops-cell" :style="{ width: '180px' }">操作</div>
+      </div>
+      <div class="ld-tbody">
+        <div v-for="row in rows" :key="row.id" class="ld-tr" :class="{ off: row.disabled }">
+          <div class="ld-td grow"><span class="name">{{ row.name }}</span></div>
+          <div class="ld-td" :style="{ width: '190px' }"><span class="mono">{{ row.id }}</span></div>
+          <div class="ld-td bind" :style="{ width: '240px' }">
+            <template v-if="editingId === row.id">
+              <input v-model="editingVal" class="inline-in" placeholder="userid（空=解绑）" />
+              <UiButton size="sm" @click="bindWecom(row)">存</UiButton>
+            </template>
+            <template v-else>
+              <span class="bind-val">{{ row.wecomUserId || '—' }}</span>
+              <UiButton variant="ghost" size="sm" @click="bindWecom(row)">改绑</UiButton>
+            </template>
+          </div>
+          <div class="ld-td muted mono" :style="{ width: '160px' }">{{ row.createdAt }}</div>
+          <div class="ld-td" :style="{ width: '96px' }">
+            <Badge :tone="row.disabled ? 'neutral' : 'green'" dot>{{ row.disabled ? '已停用' : '正常' }}</Badge>
+          </div>
+          <div class="ld-td ops-cell" :style="{ width: '180px' }">
+            <UiButton :variant="row.disabled ? 'ghost' : 'danger'" size="sm" @click="toggle(row)">
+              {{ row.disabled ? '恢复' : confirmId === row.id ? '确认停用？即时生效' : '停用' }}
+            </UiButton>
+          </div>
         </div>
       </div>
     </div>
-    <p v-else-if="!message" class="status-soft">还没有外包账号</p>
+    <EmptyState v-else-if="!message" :icon="Headset" text="还没有外包账号" />
   </div>
 </template>
 
 <style scoped>
-.page {
-  max-width: 1080px;
-}
-.page-head {
-  margin-bottom: 16px;
-}
-h1 {
-  margin: 0;
-  font-size: 22px;
-  font-weight: 700;
-  color: var(--ld-ink);
-}
-.sub {
-  margin: 4px 0 0;
-  font-size: 12.5px;
-  color: var(--ld-content-2);
-}
-.status {
-  font-size: 13px;
+/* 本页独有：建号表单栅格 · 一次性口令回显卡（绿·抄后关闭）· 企微绑定内联编辑输入 · 表格单元辅助。
+ * 页头/卡/徽章/空态/按钮/表格骨架/状态行已交共享原语（PageHeader/Card/Badge/EmptyState/UiButton/.ld-table/.ld-status）。 */
+.is-err {
   color: var(--ld-red);
-  margin-bottom: 10px;
 }
-.status-soft {
-  font-size: 13px;
-  color: var(--ld-content-2);
-}
-.form-card {
+
+/* 建号表单：三字段 + 建号按钮一行（窄屏交由栅格自然换行·kit 无表单原语） */
+.form-grid {
   display: grid;
   grid-template-columns: 1fr 1fr 1fr auto;
-  gap: 8px;
-  padding: 16px;
-  margin-bottom: 16px;
-  background: var(--ld-bg);
-  border: 1px solid var(--ld-line);
-  border-radius: var(--ld-radius-l);
-  max-width: 820px;
+  gap: 10px;
+  align-items: center;
 }
-.created-card {
+.field {
+  padding: 8px 12px;
+  border: 1px solid var(--ld-line);
+  border-radius: var(--ld-radius-sm);
+  font-family: inherit;
+  font-size: 13px;
+  color: var(--ld-content);
+  background: var(--ld-bg);
+}
+@media (max-width: 720px) {
+  .form-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* 一次性口令回显（绿·成功语气·抄给对方后关闭·系统只存哈希） */
+.secret {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 12px;
   padding: 12px 16px;
-  margin-bottom: 16px;
-  max-width: 820px;
   background: var(--ld-bg-green-soft);
   border: 1px solid var(--ld-green);
-  border-radius: var(--ld-radius-l);
+  border-radius: var(--ld-radius);
   font-size: 12.5px;
   color: var(--ld-content);
 }
-.created-card code {
+.secret-body {
+  min-width: 0;
+}
+.secret code {
   font-family: var(--ld-font-mono);
   font-weight: 700;
   color: var(--ld-ink);
   background: var(--ld-bg);
   padding: 2px 8px;
-  border-radius: 6px;
+  border-radius: var(--ld-radius-sm);
 }
-.form-card input {
-  padding: 8px 12px;
-  border: 1px solid var(--ld-line);
-  border-radius: 8px;
-  font-size: 13px;
-}
-.table {
-  background: var(--ld-bg);
-  border: 1px solid var(--ld-line);
-  border-radius: var(--ld-radius-l);
-  overflow: hidden;
-}
-.thead,
-.trow {
-  display: grid;
-  grid-template-columns: 1.2fr 1.4fr 1.6fr 1.2fr 0.9fr 1.4fr;
-  align-items: center;
-  gap: 12px;
-  padding: 12px 20px;
-}
-.thead {
-  background: var(--ld-bg-lilac);
-  font-size: 12px;
-  color: var(--ld-content-2);
-}
-.trow {
-  border-top: 1px solid var(--ld-line);
-  font-size: 13px;
-}
-.trow.off {
+
+/* 表格单元辅助 */
+.ld-tr.off {
   opacity: 0.55;
-}
-.r {
-  text-align: right;
-  justify-self: end;
 }
 .name {
   font-weight: 600;
@@ -229,66 +209,33 @@ h1 {
   font-size: 12px;
   color: var(--ld-content-2);
 }
+.muted {
+  color: var(--ld-content-2);
+  font-size: 12.5px;
+}
 .bind {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  min-width: 0;
+  gap: 8px;
 }
 .bind-val {
+  flex: 1;
   color: var(--ld-content);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.inline {
+.inline-in {
   width: 150px;
   padding: 6px 10px;
   border: 1px solid var(--ld-line);
-  border-radius: 8px;
+  border-radius: var(--ld-radius-sm);
+  font-family: inherit;
   font-size: 12.5px;
-}
-.time {
-  color: var(--ld-content-2);
-  font-size: 12.5px;
-}
-.state {
-  padding: 3px 11px;
-  border-radius: 999px;
-  font-size: 11.5px;
-  white-space: nowrap;
-}
-.state.on {
-  background: var(--ld-bg-green-soft);
-  color: var(--ld-green);
-}
-.state.off {
-  background: var(--ld-bg-faint);
-  color: var(--ld-content-2);
-}
-/* .act 基类仅留次级按钮（ghost/warn/small）共享布局；填充主按钮已收进 UiButton */
-.act {
-  padding: 6px 13px;
-  border: none;
-  border-radius: 999px;
-  font-size: 12px;
-  font-weight: 600;
-  cursor: pointer;
-}
-.act.ghost {
+  color: var(--ld-content);
   background: var(--ld-bg);
-  color: var(--ld-content-2);
-  border: 1px solid var(--ld-line);
 }
-.act.warn {
-  background: var(--ld-red);
-  color: #fff;
-}
-.act.small {
-  padding: 4px 10px;
-  font-size: 11px;
-}
-.act:disabled {
-  opacity: 0.5;
+.ops-cell {
+  justify-content: flex-end;
+  gap: 6px;
+  flex-wrap: wrap;
 }
 </style>

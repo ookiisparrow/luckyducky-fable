@@ -2,10 +2,15 @@
 // 异常监测·bug 账本（design 语言一致·批3·治病根#14）：四路来源（服务端异常/不变量违反/关键流程失败/
 // 客户端错误）统一账本·指纹去重（count 累加）·可筛未处理/已处理·标记已处理。数据走 adminApi listAnomalies/
 // resolveAnomaly 真值。
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
-import { RefreshCw, Check } from 'lucide-vue-next'
+import { RefreshCw, Check, ClipboardList, AlertCircle, AlertTriangle, Activity, ShieldCheck } from 'lucide-vue-next'
 import { listAnomalies, resolveAnomaly } from '../api/ops'
+import PageHeader from '../components/ui/PageHeader.vue'
+import KpiCard from '../components/ui/KpiCard.vue'
+import Badge from '../components/ui/Badge.vue'
+import EmptyState from '../components/ui/EmptyState.vue'
+import UiButton from '../components/ui/Button.vue'
 
 const router = useRouter()
 const list = ref<any[]>([])
@@ -41,6 +46,11 @@ function ctxPairs(ctx: any): string {
     .join(' · ')
 }
 
+// KPI（纯展示·由当前加载的 list 真派生·不造无源指标）：本视图条数 / 未处理 / 高危 / 累计触发次数。
+const openCount = computed(() => list.value.filter((a) => !a.resolved).length)
+const highCount = computed(() => list.value.filter((a) => a.severity === 'high').length)
+const totalHits = computed(() => list.value.reduce((s, a) => s + (Number(a.count) || 0), 0))
+
 async function load() {
   busy.value = true
   const opts: { resolved?: boolean } = {}
@@ -74,85 +84,128 @@ onMounted(load)
 </script>
 
 <template>
-  <div class="page">
-    <header class="page-head">
-      <div>
-        <h1>异常监测</h1>
-        <p class="sub">运行中不符合预期的行为统一账本 · 同类去重（次数累加）· 高危已实时推企微</p>
-      </div>
-      <button class="btn-refresh" :disabled="busy" @click="load">
-        <RefreshCw :size="15" :stroke-width="1.8" :class="{ spin: busy }" />
+  <div class="ld-page">
+    <PageHeader title="异常监测" sub="运行期异常与告警账本 · 同类去重（次数累加）· 高危 [LD_ALERT] 单出口实时推企微">
+      <UiButton variant="ghost" size="sm" :disabled="busy" @click="load">
+        <RefreshCw :size="14" :stroke-width="1.8" :class="{ spin: busy }" />
         <span>{{ busy ? '刷新中…' : '刷新' }}</span>
-      </button>
-    </header>
+      </UiButton>
+    </PageHeader>
 
-    <div class="chips">
-      <button v-for="f in FILTERS" :key="f.key" class="chip" :class="{ on: filter === f.key }" @click="setFilter(f.key)">
+    <!-- 级别/状态筛选（沿用 FILTERS open/resolved/all·服务端筛选） -->
+    <div class="ld-toolbar">
+      <button v-for="f in FILTERS" :key="f.key" class="ld-chip" :class="{ on: filter === f.key }" @click="setFilter(f.key)">
         {{ f.label }}
       </button>
     </div>
 
-    <p v-if="message" class="status">{{ message }}</p>
-    <p v-else-if="!list.length" class="empty">{{ filter === 'open' ? '没有未处理异常 ✓' : '暂无记录' }}</p>
+    <p v-if="message" class="ld-status">{{ message }}</p>
 
-    <div v-for="a in list" :key="a._id" class="row" :class="{ done: a.resolved }">
-      <span class="sev-bar" :class="a.severity" />
-      <div class="row-body">
-        <div class="row-top">
-          <span class="kind" :class="a.kind">{{ KIND_LABEL[a.kind] || a.kind }}</span>
-          <code class="code">{{ a.code }}</code>
-          <span v-if="a.severity === 'high'" class="badge-high">高危</span>
-          <span v-if="a.count > 1" class="count">×{{ a.count }}</span>
-        </div>
-        <div v-if="ctxPairs(a.ctx)" class="ctx">{{ ctxPairs(a.ctx) }}</div>
-        <div class="meta">最近 {{ fmt(a.lastSeen) }}<span v-if="a.resolved"> · 已处理 {{ a.resolvedBy || '' }}</span></div>
+    <template v-if="list.length">
+      <!-- KPI×4：全部为当前视图 list 真派生的 count（不造 今日新增/平均处理 等无源指标） -->
+      <div class="ld-kpi-grid">
+        <KpiCard label="本视图条数" :value="list.length" :icon="ClipboardList" />
+        <KpiCard label="未处理" :value="openCount" :icon="AlertCircle" :tone="openCount > 0 ? 'red' : 'neutral'" />
+        <KpiCard label="高危" :value="highCount" :icon="AlertTriangle" :tone="highCount > 0 ? 'red' : 'neutral'" />
+        <KpiCard label="累计触发" :value="totalHits" :icon="Activity" />
       </div>
-      <button v-if="!a.resolved" class="btn-resolve" :class="{ confirming: confirmId === a._id }" @click="markResolved(a)">
-        <Check :size="14" :stroke-width="2" />
-        <span>{{ confirmId === a._id ? '确认已处理？' : '标记已处理' }}</span>
-      </button>
-    </div>
+
+      <!-- 异常账本（行卡·级别条 + kind/code/高危/次数 徽章 + ctx + meta + 两步确认标记已处理） -->
+      <div class="ledger">
+        <article v-for="a in list" :key="a._id" class="row" :class="{ done: a.resolved }">
+          <span class="sev" :class="{ high: a.severity === 'high' }" />
+          <div class="body">
+            <div class="row-top">
+              <Badge tone="brand">{{ KIND_LABEL[a.kind] || a.kind }}</Badge>
+              <code class="code">{{ a.code }}</code>
+              <Badge v-if="a.severity === 'high'" tone="red">高危</Badge>
+              <Badge v-if="a.count > 1" tone="amber">×{{ a.count }}</Badge>
+            </div>
+            <div v-if="ctxPairs(a.ctx)" class="ctx">{{ ctxPairs(a.ctx) }}</div>
+            <div class="meta">最近 {{ fmt(a.lastSeen) }}<span v-if="a.resolved && a.resolvedBy"> · 处理人 {{ a.resolvedBy }}</span></div>
+          </div>
+          <div class="row-act">
+            <UiButton
+              v-if="!a.resolved"
+              :variant="confirmId === a._id ? 'primary' : 'ghost'"
+              size="sm"
+              @click="markResolved(a)"
+            >
+              <Check :size="14" :stroke-width="2" />
+              <span>{{ confirmId === a._id ? '确认已处理？' : '标记已处理' }}</span>
+            </UiButton>
+            <Badge v-else tone="green" dot>已处理</Badge>
+          </div>
+        </article>
+      </div>
+    </template>
+
+    <EmptyState v-else-if="!message" :icon="ShieldCheck" :text="filter === 'open' ? '没有未处理异常' : '暂无记录'" />
   </div>
 </template>
 
 <style scoped>
-.page {
-  max-width: 1000px;
-}
-.page-head {
+/* 异常账本行卡（本页独有·容器/工具条/KPI/徽章/按钮走 kit 与 console.css） */
+.ledger {
   display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 16px;
-  margin-bottom: 18px;
+  flex-direction: column;
+  gap: 10px;
 }
-h1 {
-  margin: 0;
-  font-size: 22px;
+.row {
+  display: flex;
+  align-items: stretch;
+  gap: 14px;
+  padding: 14px 16px;
+  background: var(--ld-bg);
+  border: 1px solid var(--ld-line);
+  border-radius: var(--ld-radius);
+}
+.row.done {
+  opacity: 0.6;
+}
+.sev {
+  width: 4px;
+  border-radius: 999px;
+  flex: none;
+  background: var(--ld-line-strong);
+}
+.sev.high {
+  background: var(--ld-red);
+}
+.body {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.row-top {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.code {
+  font-family: var(--ld-font-mono);
+  font-size: 12.5px;
   font-weight: 700;
   color: var(--ld-ink);
 }
-.sub {
-  margin: 4px 0 0;
-  font-size: 12.5px;
+.ctx {
+  font-size: 12px;
+  color: var(--ld-content);
+  font-family: var(--ld-font-mono);
+  word-break: break-all;
+}
+.meta {
+  font-size: 11.5px;
   color: var(--ld-content-2);
 }
-.btn-refresh {
+.row-act {
+  flex: none;
+  align-self: center;
   display: flex;
   align-items: center;
-  gap: 6px;
-  padding: 8px 14px;
-  border: 1px solid var(--ld-line);
-  border-radius: 999px;
-  background: var(--ld-bg);
-  color: var(--ld-content);
-  font-size: 13px;
-  cursor: pointer;
-  flex: none;
-}
-.btn-refresh:disabled {
-  opacity: 0.6;
-  cursor: default;
 }
 .spin {
   animation: spin 0.9s linear infinite;
@@ -161,123 +214,5 @@ h1 {
   to {
     transform: rotate(360deg);
   }
-}
-.chips {
-  display: flex;
-  gap: 8px;
-  margin-bottom: 16px;
-}
-.chip {
-  padding: 6px 16px;
-  border: 1px solid var(--ld-line);
-  border-radius: 999px;
-  background: var(--ld-bg);
-  color: var(--ld-content-2);
-  font-size: 12.5px;
-  cursor: pointer;
-}
-.chip.on {
-  background: var(--ld-ink);
-  border-color: var(--ld-ink);
-  color: #fff;
-}
-.status,
-.empty {
-  font-size: 13px;
-  color: var(--ld-content-2);
-  padding: 24px 0;
-}
-.empty {
-  text-align: center;
-  color: var(--ld-green);
-}
-.row {
-  display: flex;
-  align-items: stretch;
-  gap: 12px;
-  padding: 14px 16px;
-  background: var(--ld-bg);
-  border: 1px solid var(--ld-line);
-  border-radius: var(--ld-radius-l);
-  margin-bottom: 8px;
-}
-.row.done {
-  opacity: 0.62;
-}
-.sev-bar {
-  width: 4px;
-  border-radius: 999px;
-  flex: none;
-  background: var(--ld-content-2);
-}
-.sev-bar.high {
-  background: var(--ld-red);
-}
-.row-body {
-  flex: 1;
-  min-width: 0;
-}
-.row-top {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-wrap: wrap;
-}
-.kind {
-  padding: 2px 10px;
-  border-radius: 999px;
-  font-size: 11.5px;
-  font-weight: 600;
-  background: var(--ld-bg-lilac);
-  color: var(--ld-brand);
-}
-.code {
-  font-family: var(--ld-font-mono);
-  font-size: 12.5px;
-  font-weight: 700;
-  color: var(--ld-ink);
-}
-.badge-high {
-  padding: 1px 8px;
-  border-radius: 999px;
-  background: var(--ld-bg-red-soft);
-  color: var(--ld-red);
-  font-size: 11px;
-  font-weight: 700;
-}
-.count {
-  font-size: 12px;
-  font-weight: 700;
-  color: var(--ld-amber);
-}
-.ctx {
-  margin-top: 5px;
-  font-size: 12px;
-  color: var(--ld-content);
-  font-family: var(--ld-font-mono);
-  word-break: break-all;
-}
-.meta {
-  margin-top: 4px;
-  font-size: 11px;
-  color: var(--ld-content-2);
-}
-.btn-resolve {
-  flex: none;
-  align-self: center;
-  display: flex;
-  align-items: center;
-  gap: 5px;
-  padding: 7px 14px;
-  border: 1px solid var(--ld-line);
-  border-radius: 999px;
-  background: var(--ld-bg);
-  color: var(--ld-content);
-  font-size: 12.5px;
-  cursor: pointer;
-}
-.btn-resolve:hover {
-  border-color: var(--ld-green);
-  color: var(--ld-green);
 }
 </style>

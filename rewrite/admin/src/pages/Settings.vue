@@ -5,6 +5,10 @@ import { ref, computed, onMounted } from 'vue'
 import { getSettings, saveSettings } from '../api/system'
 import { webhookOk } from '../lib/mapSystem'
 import UiButton from '../components/ui/Button.vue'
+import PageHeader from '../components/ui/PageHeader.vue'
+import Card from '../components/ui/Card.vue'
+import Badge from '../components/ui/Badge.vue'
+import { ChevronRight } from 'lucide-vue-next'
 
 // 钱链告警事件开关（换皮把 webhook 迁进 Settings 但删了 5+ 事件粒度开关·alertEvents 后端字段悬空·B6 证伪 saveSettings 合并保存不抹）
 const EVENTS = [
@@ -58,163 +62,209 @@ async function save() {
 </script>
 
 <template>
-  <div class="page">
-    <header class="page-head">
-      <h1>系统设置</h1>
-      <p class="sub">钱链告警推送与激活码链接前缀。改动保存后立即生效。</p>
-    </header>
+  <div class="ld-page">
+    <PageHeader title="系统设置" sub="钱链告警推送与激活码链接前缀 · 改动保存后立即生效">
+      <UiButton :disabled="busy" @click="save">{{ busy ? '保存中…' : '保存' }}</UiButton>
+    </PageHeader>
 
     <p v-if="message" class="status" :class="{ ok }">{{ message }}</p>
 
-    <section class="card">
-      <h2>钱链告警推送</h2>
-      <div class="field">
-        <label>企业微信群机器人 webhook（留空 = 只记日志、不推送）
-          <span class="push-chip" :class="pushing ? 'on' : 'off'">{{ pushing ? '已开启推送' : '未推送·仅记日志' }}</span>
-        </label>
-        <input v-model="alertWebhook" placeholder="https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=…" />
-      </div>
-
-      <div class="field">
-        <label>推送哪些事件（关掉的事件只记日志不推群；无 webhook 时开关不生效）</label>
-        <div class="events" :class="{ muted: !pushing }">
-          <label v-for="e in EVENTS" :key="e.code" class="ev">
-            <input type="checkbox" :checked="enabled(e.code)" :disabled="!pushing" @change="toggleEvent(e.code)" />
-            <span>{{ e.label }}</span>
-          </label>
+    <div class="ld-cols-2">
+      <Card title="激活码">
+        <div class="field">
+          <label class="field-label">链接前缀（印刷二维码用）</label>
+          <input v-model="urlPrefix" placeholder="https://…" />
+          <p class="field-note">激活卡双面设计器（印刷排版）随印刷批补齐。</p>
         </div>
-        <p v-if="!pushing" class="ev-note">先填 webhook 才能逐事件开关（无 webhook 时只记日志、开关不生效）</p>
-      </div>
+      </Card>
 
-      <!-- 规划中·未接入（换皮删了这段诚实披露·as-is 标注不做假开关） -->
-      <div class="field roadmap">
-        <label>规划中（未接入·不做假开关）</label>
-        <p>更多企微告警维度（库存预警日报 / 会话堆积）· 面向买家的微信订阅消息（发货 / 物流 / 激活 / 完课 / 复购）——需通知偏好后端字段，后端就绪后再逐项接入，当前不占位假开关。</p>
-      </div>
+      <Card title="钱链告警推送">
+        <template #head>
+          <Badge :tone="pushing ? 'green' : 'neutral'" dot>{{ pushing ? '已开启推送' : '未推送·仅记日志' }}</Badge>
+        </template>
+        <div class="field">
+          <label class="field-label">企业微信群机器人 webhook</label>
+          <input v-model="alertWebhook" placeholder="https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=…" />
+          <p class="field-note">留空 = 只记日志、不推送。</p>
+        </div>
+      </Card>
+    </div>
 
-      <div class="field">
-        <label>激活码链接前缀（印刷二维码用）</label>
-        <input v-model="urlPrefix" placeholder="https://…" />
+    <Card title="推送事件" sub="关掉的事件只记日志不推群 · 无 webhook 时开关不生效">
+      <div class="events" :class="{ muted: !pushing }">
+        <div v-for="e in EVENTS" :key="e.code" class="ev">
+          <span class="ev-label">{{ e.label }}</span>
+          <button
+            class="switch"
+            :class="{ on: enabled(e.code) }"
+            :disabled="!pushing"
+            @click="toggleEvent(e.code)"
+          >
+            <span class="knob"></span>
+          </button>
+        </div>
       </div>
-      <UiButton :disabled="busy" @click="save">{{ busy ? '保存中…' : '保存' }}</UiButton>
-      <p class="hint">激活卡双面设计器（印刷排版）随印刷批补齐。事件开关存 `alertEvents`（后端合并保存·不抹已设 webhook）。</p>
-    </section>
+      <p v-if="!pushing" class="field-note ev-note">
+        先填 webhook 才能逐事件开关（无 webhook 时只记日志、开关不生效）。
+      </p>
+    </Card>
+
+    <!-- 规划中·未接入（诚实披露·不做假开关；native details 折叠·无需额外状态） -->
+    <details class="roadmap">
+      <summary><ChevronRight class="chev" :size="14" />规划中（未接入 · 不做假开关）</summary>
+      <p>更多企微告警维度（库存预警日报 / 会话堆积）· 面向买家的微信订阅消息（发货 / 物流 / 激活 / 完课 / 复购）——需通知偏好后端字段，后端就绪后再逐项接入，当前不占位假开关。</p>
+    </details>
+
+    <p class="hint">事件开关存 <code>alertEvents</code>（后端合并保存 · 不抹已设 webhook）。</p>
   </div>
 </template>
 
 <style scoped>
-.page {
-  max-width: 700px;
-}
-.page-head {
-  margin-bottom: 16px;
-}
-h1 {
-  margin: 0;
-  font-size: 22px;
-  font-weight: 700;
-  color: var(--ld-ink);
-}
-.sub {
-  margin: 4px 0 0;
-  font-size: 12.5px;
-  color: var(--ld-content-2);
-}
 .status {
   font-size: 13px;
   color: var(--ld-red);
-  margin-bottom: 12px;
 }
 .status.ok {
   color: var(--ld-green);
 }
-.card {
-  padding: 18px 20px;
-  background: var(--ld-bg);
-  border: 1px solid var(--ld-line);
-  border-radius: var(--ld-radius-l);
-}
-h2 {
-  margin: 0 0 14px;
-  font-size: 14px;
-  font-weight: 700;
-  color: var(--ld-ink);
-}
+
+/* 表单字段（design Box：label 12/600 + 输入框圆角8·描边） */
 .field {
-  margin-bottom: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
 }
-.field label {
-  display: block;
+.field-label {
   font-size: 12px;
-  color: var(--ld-content-2);
-  margin-bottom: 5px;
-}
-input {
-  display: block;
-  width: 100%;
-  padding: 9px 12px;
-  border: 1px solid var(--ld-line);
-  border-radius: 8px;
-  font-size: 13px;
-  box-sizing: border-box;
-}
-.hint {
-  margin: 12px 0 0;
-  font-size: 12px;
-  color: var(--ld-content-2);
-}
-.push-chip {
-  margin-left: 8px;
-  padding: 1px 9px;
-  border-radius: 999px;
-  font-size: 10.5px;
   font-weight: 600;
-}
-.push-chip.on {
-  background: var(--ld-bg-green-soft);
-  color: var(--ld-green);
-}
-.push-chip.off {
-  background: var(--ld-bg-faint);
   color: var(--ld-content-2);
 }
+.field input {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid var(--ld-line);
+  border-radius: var(--ld-radius-sm);
+  background: var(--ld-bg);
+  font: inherit;
+  font-size: 13px;
+  color: var(--ld-content);
+}
+.field input::placeholder {
+  color: var(--ld-content-2);
+}
+.field input:focus {
+  outline: none;
+  border-color: var(--ld-purple-line);
+}
+.field-note {
+  margin: 2px 0 0;
+  font-size: 11.5px;
+  line-height: 1.5;
+  color: var(--ld-content-2);
+}
+
+/* 事件推送开关（逐事件·gated on webhook·行底分线） */
 .events {
   display: flex;
   flex-direction: column;
-  gap: 7px;
-  padding: 12px 14px;
-  border: 1px solid var(--ld-line);
-  border-radius: 10px;
-  background: var(--ld-bg-lilac);
 }
 .events.muted {
   opacity: 0.55;
 }
+.ev {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 11px 0;
+  border-bottom: 1px solid var(--ld-line);
+}
+.ev:last-child {
+  border-bottom: none;
+}
+.ev-label {
+  font-size: 13px;
+  color: var(--ld-content);
+}
 .ev-note {
-  margin: 6px 0 0;
-  font-size: 11px;
+  margin-top: 12px;
+}
+
+/* 开关（沿用控制台开关语言：off 灰轨·on brand·白钮） */
+.switch {
+  width: 36px;
+  height: 20px;
+  border-radius: 99px;
+  border: none;
+  background: var(--ld-line-strong);
+  position: relative;
+  cursor: pointer;
+  flex: 0 0 auto;
+  transition: background 0.15s;
+}
+.switch.on {
+  background: var(--ld-brand);
+}
+.switch:disabled {
+  cursor: not-allowed;
+}
+.knob {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--ld-bg);
+  transition: left 0.15s;
+}
+.switch.on .knob {
+  left: 18px;
+}
+
+/* 规划中折叠（未接入·诚实披露） */
+.roadmap {
+  border: 1px dashed var(--ld-line-strong);
+  border-radius: var(--ld-radius-sm);
+  padding: 12px 14px;
+  background: var(--ld-bg-lilac);
+}
+.roadmap summary {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12.5px;
+  font-weight: 600;
   color: var(--ld-content-2);
+  cursor: pointer;
+  list-style: none;
+}
+.roadmap summary::-webkit-details-marker {
+  display: none;
+}
+.chev {
+  color: var(--ld-content-2);
+  transition: transform 0.15s;
+}
+.roadmap[open] .chev {
+  transform: rotate(90deg);
 }
 .roadmap p {
-  margin: 0;
-  padding: 10px 12px;
-  border: 1px dashed var(--ld-line-strong);
-  border-radius: 8px;
+  margin: 10px 0 0;
   font-size: 11.5px;
   line-height: 1.6;
   color: var(--ld-content-2);
 }
-.ev {
-  display: flex;
-  align-items: center;
-  gap: 9px;
-  font-size: 12.5px;
-  color: var(--ld-content);
-  cursor: pointer;
+
+.hint {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--ld-content-2);
 }
-.ev input {
-  width: 16px;
-  height: 16px;
-  accent-color: var(--ld-brand);
+.hint code {
+  font-family: var(--ld-font-mono);
+  font-size: 11.5px;
+  color: var(--ld-content);
 }
 </style>

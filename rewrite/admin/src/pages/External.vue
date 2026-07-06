@@ -5,6 +5,9 @@
 // 但仍**不伪造动态信息**（如「套餐续费日期」）——续费/用量文案只说「登录后查看」，动态数字交官方后台。
 import { computed } from 'vue'
 import { Database, Gauge, Activity, BadgeCheck, Wallet, MonitorSmartphone, Headset, ExternalLink } from 'lucide-vue-next'
+import PageHeader from '../components/ui/PageHeader.vue'
+import Card from '../components/ui/Card.vue'
+import Badge from '../components/ui/Badge.vue'
 
 // 生产 env id 从后端端点派生（不新增硬编码单源·VITE_ADMIN_API 已含：https://<envId>-<num>.<region>.app.tcloudbase.com/adminv2）
 const envId = (String(import.meta.env.VITE_ADMIN_API || '').match(/\/\/(cloudbase-[a-z0-9]+)-\d+/) || [])[1] || ''
@@ -26,158 +29,140 @@ const LINKS = computed(() => RAW_LINKS.map((l) => ({ ...l, href: l.deepEnv ? wit
 </script>
 
 <template>
-  <div class="page">
-    <header class="page-head">
-      <h1>外部后台</h1>
-      <p class="sub">需要技术或运维操作时，从这里直达对应官方后台（均在新窗口打开）</p>
-    </header>
+  <div class="ld-page">
+    <PageHeader title="外部后台" sub="需要技术或运维操作时，从这里直达对应官方后台（均在新窗口打开）" />
 
     <div class="banner">
-      <span class="dot">ⓘ</span>
+      <span class="banner-mark">ⓘ</span>
       <span>运营日常（订单 / 退款 / 上新 / 批次 / 看板）在本控制台完成；下面是需要技术或运维时才去的官方后台。</span>
     </div>
 
-    <div class="grid">
-      <a v-for="l in LINKS" :key="l.title" class="card" :href="l.href" target="_blank" rel="noopener noreferrer">
-        <div class="card-top">
-          <div class="ico" :class="l.tone"><component :is="l.icon" :size="20" :stroke-width="1.8" /></div>
-          <ExternalLink :size="16" :stroke-width="1.8" class="arrow" />
+    <div class="ext-grid">
+      <Card v-for="l in LINKS" :key="l.title" class="ext-card">
+        <div class="ext-top">
+          <div class="ext-id">
+            <div class="ext-ico" :class="l.tone"><component :is="l.icon" :size="20" :stroke-width="1.8" /></div>
+            <span class="ext-title">{{ l.title }}</span>
+          </div>
+          <Badge v-if="l.deepEnv && envId" tone="brand">预选本环境</Badge>
         </div>
-        <div class="card-title">{{ l.title }}</div>
-        <p class="card-desc">{{ l.desc }}</p>
-        <div class="card-foot">
-          <span class="host">{{ l.host }}<span v-if="l.deepEnv && envId" class="env-chip">预选本环境</span></span>
-          <span class="open">打开 <ExternalLink :size="12" :stroke-width="2" /></span>
+        <p class="ext-desc">{{ l.desc }}</p>
+        <div class="ext-foot">
+          <a class="ext-open" :href="l.href" target="_blank" rel="noopener noreferrer">
+            打开后台 <ExternalLink :size="14" :stroke-width="1.8" />
+          </a>
+          <span class="ext-host">{{ l.host }}</span>
         </div>
-      </a>
+      </Card>
     </div>
   </div>
 </template>
 
 <style scoped>
-.page {
-  max-width: 1160px;
-}
-.page-head {
-  margin-bottom: 18px;
-}
-h1 {
-  margin: 0;
-  font-size: 22px;
-  font-weight: 700;
-  color: var(--ld-ink);
-}
-.sub {
-  margin: 4px 0 0;
-  font-size: 12.5px;
-  color: var(--ld-content-2);
-}
+/* 信息横幅（本页独有·淡紫底提示条） */
 .banner {
   display: flex;
   align-items: center;
   gap: 10px;
   padding: 13px 18px;
-  margin-bottom: 20px;
   background: var(--ld-bg-lilac);
   border: 1px solid var(--ld-purple-line);
   border-radius: var(--ld-radius);
   font-size: 12.5px;
   color: var(--ld-content);
 }
-.dot {
+.banner-mark {
   color: var(--ld-brand);
   flex: none;
 }
-.grid {
+
+/* 平台直达卡片网格（2×3 意向·窄屏自适应） */
+.ext-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
   gap: 16px;
 }
-.card {
-  display: block;
-  padding: 20px;
-  background: var(--ld-bg);
-  border: 1px solid var(--ld-line);
-  border-radius: var(--ld-radius-l);
-  text-decoration: none;
-  transition: border-color 0.15s, transform 0.15s;
+.ext-card {
+  transition: border-color 0.15s;
 }
-.card:hover {
+.ext-card:hover {
   border-color: var(--ld-purple-line);
-  transform: translateY(-2px);
 }
-.card-top {
+.ext-top {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   justify-content: space-between;
+  gap: 10px;
 }
-.ico {
+.ext-id {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+.ext-ico {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 44px;
-  height: 44px;
-  border-radius: 12px;
+  flex: none;
+  width: 40px;
+  height: 40px;
+  border-radius: var(--ld-radius-sm);
 }
-.ico.purple {
+.ext-ico.purple {
   background: var(--ld-bg-lilac);
   color: var(--ld-brand);
 }
-.ico.blue {
+.ext-ico.blue {
   background: var(--ld-bg-faint);
   color: var(--ld-brand-active);
 }
-.ico.green {
+.ext-ico.green {
   background: var(--ld-bg-green-soft);
   color: var(--ld-green);
 }
-.ico.amber {
-  background: var(--ld-bg-lilac);
+.ext-ico.amber {
+  background: var(--ld-bg-amber-soft);
   color: var(--ld-amber);
 }
-.arrow {
-  color: var(--ld-content-2);
-}
-.card-title {
-  margin-top: 16px;
-  font-size: 15px;
+.ext-title {
+  font-size: 14.5px;
   font-weight: 700;
   color: var(--ld-ink);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
-.card-desc {
-  margin: 8px 0 0;
+.ext-desc {
+  margin: 14px 0 0;
   font-size: 12.5px;
-  line-height: 1.6;
+  line-height: 1.5;
   color: var(--ld-content-2);
 }
-.card-foot {
+.ext-foot {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-top: 18px;
+  gap: 10px;
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid var(--ld-line);
 }
-.host {
+.ext-open {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: 5px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ld-brand);
+  text-decoration: none;
+}
+.ext-host {
   font-size: 11.5px;
   color: var(--ld-content-2);
   font-family: var(--ld-font-mono);
-}
-.env-chip {
-  padding: 1px 7px;
-  border-radius: 999px;
-  background: var(--ld-bg-lilac);
-  color: var(--ld-brand-active);
-  font-size: 10px;
-  font-family: var(--ld-font);
-}
-.open {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  font-size: 12.5px;
-  font-weight: 600;
-  color: var(--ld-brand);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 </style>
