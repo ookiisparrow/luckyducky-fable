@@ -2,10 +2,13 @@
 // 知识库（设计语言一致性·M3 UI 批14）：FAQ 整册编辑（客服 bot 与坐席快捷回复读同一份·整体覆盖式保存——删行即真删）。
 // 逻辑未动，仅套设计语言（页头/FAQ 行卡/分类 select/启用勾选/token）。
 import { ref, onMounted } from 'vue'
-import { Trash2, Plus } from 'lucide-vue-next'
+import { Trash2, Plus, BookOpen } from 'lucide-vue-next'
 import { listKb, saveKb } from '../api/cs'
 import { normalizeKb, type KbRow } from '../lib/mapCs'
 import UiButton from '../components/ui/Button.vue'
+import PageHeader from '../components/ui/PageHeader.vue'
+import Card from '../components/ui/Card.vue'
+import EmptyState from '../components/ui/EmptyState.vue'
 
 const CATS = [
   { key: 'logistics', label: '物流' },
@@ -84,124 +87,97 @@ onMounted(reload)
 </script>
 
 <template>
-  <div class="page">
-    <header class="page-head">
-      <div>
-        <h1>知识库（FAQ）</h1>
-        <p class="sub">客服机器人和坐席快捷回复读的是同一份；「键」须＝客服菜单叶子 id（如 logistics:eta），bot 据此命中。保存整册覆盖。</p>
-      </div>
-      <div class="head-ops">
-        <button class="act ghost" @click="loadPreset">载入预设 FAQ</button>
-        <UiButton :disabled="busy" @click="save">{{ busy ? '保存中…' : '保存整册' }}</UiButton>
-      </div>
-    </header>
+  <div class="ld-page kb">
+    <PageHeader title="知识库（FAQ）" sub="客服机器人和坐席快捷回复读的是同一份；「键」须＝客服菜单叶子 id（如 logistics:eta），bot 据此命中。保存整册覆盖。">
+      <UiButton variant="ghost" @click="loadPreset">载入预设 FAQ</UiButton>
+      <UiButton :disabled="busy" @click="save">{{ busy ? '保存中…' : '保存整册' }}</UiButton>
+    </PageHeader>
 
-    <p v-if="message" class="status">{{ message }}</p>
+    <p v-if="message" class="ld-status">{{ message }}</p>
 
-    <div v-for="(row, i) in rows" :key="row.key" class="kb-card">
-      <div class="kb-head">
-        <input v-model="row.key" placeholder="键 logistics:eta" class="kbkey" title="＝客服菜单叶子 id·bot 据此命中" />
-        <select v-model="row.category" class="cat">
-          <option v-for="c in CATS" :key="c.key" :value="c.key">{{ c.label }}</option>
-        </select>
-        <input v-model="row.question" placeholder="问题（≤200 字）" maxlength="200" class="q" />
-        <label class="en"><input v-model="row.enabled" type="checkbox" /><span>启用</span></label>
-        <button class="icon-btn" :class="{ warn: confirmKey === 'd:' + i }" :title="confirmKey === 'd:' + i ? '再点确认删除' : '删行'" @click="delRow(i)"><Trash2 :size="14" :stroke-width="1.8" /></button>
+    <Card title="FAQ 条目" :sub="`共 ${rows.length} 条 · 整册覆盖式保存·删行即真删`">
+      <template #head>
+        <UiButton variant="ghost" size="sm" @click="addRow"><Plus :size="14" :stroke-width="2" />新增一条</UiButton>
+      </template>
+
+      <EmptyState v-if="!rows.length" :icon="BookOpen" text="暂无 FAQ，点「新增一条」或「载入预设 FAQ」开始" />
+
+      <div v-else class="kb-list">
+        <div v-for="(row, i) in rows" :key="i" class="kb-row">
+          <div class="kb-row-head">
+            <input v-model="row.key" placeholder="键 logistics:eta" class="kb-key" title="＝客服菜单叶子 id·bot 据此命中" />
+            <select v-model="row.category" class="kb-cat">
+              <option v-for="c in CATS" :key="c.key" :value="c.key">{{ c.label }}</option>
+            </select>
+            <input v-model="row.question" placeholder="问题（≤200 字）" maxlength="200" class="kb-q" />
+            <label class="kb-en"><input v-model="row.enabled" type="checkbox" /><span>启用</span></label>
+            <button
+              class="kb-del"
+              :class="{ warn: confirmKey === 'd:' + i }"
+              :title="confirmKey === 'd:' + i ? '再点确认删除' : '删行'"
+              @click="delRow(i)"
+            >
+              <Trash2 :size="14" :stroke-width="1.8" />
+            </button>
+          </div>
+          <textarea v-model="row.answer" placeholder="答案（≤2000 字·bot 原样发给顾客）" maxlength="2000" class="kb-ans" />
+        </div>
       </div>
-      <textarea v-model="row.answer" placeholder="答案（≤2000 字·bot 原样发给顾客）" maxlength="2000" />
-    </div>
-
-    <button class="add-btn" @click="addRow"><Plus :size="14" :stroke-width="2" /><span>加一条 FAQ</span></button>
+    </Card>
   </div>
 </template>
 
 <style scoped>
-.page {
-  max-width: 900px;
-}
-.page-head {
+/* FAQ 整册编辑器·本页独有（共享原语管页头/卡/按钮/空态；这里只留内联编辑行的私有样式） */
+.kb-list {
   display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 16px;
-  margin-bottom: 16px;
+  flex-direction: column;
+  gap: 10px;
 }
-h1 {
-  margin: 0;
-  font-size: 22px;
-  font-weight: 700;
-  color: var(--ld-ink);
-}
-.sub {
-  margin: 4px 0 0;
-  font-size: 12.5px;
-  color: var(--ld-content-2);
-}
-.head-ops {
-  display: flex;
-  gap: 8px;
-  flex: none;
-}
-.act.ghost {
-  padding: 10px 16px;
+.kb-row {
+  padding: 12px 14px;
   border: 1px solid var(--ld-line);
-  border-radius: 999px;
-  background: var(--ld-bg);
-  color: var(--ld-content);
-  font-size: 13px;
-  font-weight: 600;
-  cursor: pointer;
-}
-.kbkey {
-  flex: none;
-  width: 130px;
-  padding: 7px 10px;
-  border: 1px solid var(--ld-line-strong);
-  border-radius: 8px;
-  font-size: 12px;
-  font-family: var(--ld-font-mono);
+  border-radius: var(--ld-radius-sm);
   background: var(--ld-bg);
 }
-.icon-btn.warn {
-  color: var(--ld-red);
-  border-color: var(--ld-red-line);
-  background: var(--ld-bg-red-soft);
-}
-.status {
-  font-size: 13px;
-  color: var(--ld-red);
-}
-.kb-card {
-  padding: 14px 16px;
-  margin-bottom: 10px;
-  background: var(--ld-bg);
-  border: 1px solid var(--ld-line);
-  border-radius: var(--ld-radius-l);
-}
-.kb-head {
+.kb-row-head {
   display: flex;
   align-items: center;
   gap: 8px;
   margin-bottom: 8px;
 }
-.cat {
+.kb-key {
   flex: none;
-  width: 90px;
+  width: 132px;
   padding: 7px 10px;
-  border: 1px solid var(--ld-line);
-  border-radius: 8px;
-  font-size: 13px;
+  border: 1px solid var(--ld-line-strong);
+  border-radius: var(--ld-radius-sm);
+  font-size: 12px;
+  font-family: var(--ld-font-mono);
+  color: var(--ld-content);
   background: var(--ld-bg);
 }
-.q {
+.kb-cat {
+  flex: none;
+  width: 92px;
+  padding: 7px 10px;
+  border: 1px solid var(--ld-line);
+  border-radius: var(--ld-radius-sm);
+  font-size: 13px;
+  color: var(--ld-content);
+  background: var(--ld-bg);
+}
+.kb-q {
   flex: 1;
   min-width: 0;
   padding: 8px 12px;
   border: 1px solid var(--ld-line);
-  border-radius: 8px;
+  border-radius: var(--ld-radius-sm);
   font-size: 13px;
+  color: var(--ld-content);
+  background: var(--ld-bg);
 }
-.en {
+.kb-en {
   display: inline-flex;
   align-items: center;
   gap: 6px;
@@ -210,12 +186,12 @@ h1 {
   color: var(--ld-content-2);
   cursor: pointer;
 }
-.en input {
+.kb-en input {
   width: 15px;
   height: 15px;
   accent-color: var(--ld-brand);
 }
-.icon-btn {
+.kb-del {
   display: flex;
   align-items: center;
   justify-content: center;
@@ -223,37 +199,31 @@ h1 {
   height: 30px;
   flex: none;
   border: 1px solid var(--ld-line);
-  border-radius: 8px;
+  border-radius: var(--ld-radius-sm);
   background: var(--ld-bg);
   color: var(--ld-content-2);
   cursor: pointer;
 }
-.icon-btn:hover {
+.kb-del:hover {
   color: var(--ld-red);
   border-color: var(--ld-red-line);
 }
-textarea {
+.kb-del.warn {
+  color: var(--ld-red);
+  border-color: var(--ld-red-line);
+  background: var(--ld-bg-red-soft);
+}
+.kb-ans {
   width: 100%;
   min-height: 48px;
   padding: 8px 12px;
   border: 1px solid var(--ld-line);
-  border-radius: 8px;
+  border-radius: var(--ld-radius-sm);
   font-size: 13px;
   font-family: var(--ld-font);
+  color: var(--ld-content);
+  background: var(--ld-bg);
   box-sizing: border-box;
   resize: vertical;
-}
-.add-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 9px 18px;
-  border: 1px dashed var(--ld-purple-line);
-  border-radius: 999px;
-  background: var(--ld-bg-lilac);
-  color: var(--ld-brand-active);
-  font-size: 13px;
-  font-weight: 600;
-  cursor: pointer;
 }
 </style>

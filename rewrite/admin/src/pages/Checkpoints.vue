@@ -2,9 +2,13 @@
 // 节点诊断策展（设计语言一致性·M3 UI 批15）：为某门课维护「关键节点 + 挽回办法」（学员卡壳时坐席据此精准指导）。
 // 整课覆盖式保存——只动定义、绝不碰学员拍照提交（云端保证）。逻辑未动，仅套设计语言。
 import { ref, onMounted } from 'vue'
-import { RotateCcw, Trash2, Plus } from 'lucide-vue-next'
+import { RotateCcw, Trash2, Plus, ListChecks, BookOpen } from 'lucide-vue-next'
 import { listCheckpoints, saveCheckpoints } from '../api/cs'
 import UiButton from '../components/ui/Button.vue'
+import PageHeader from '../components/ui/PageHeader.vue'
+import Card from '../components/ui/Card.vue'
+import Badge from '../components/ui/Badge.vue'
+import EmptyState from '../components/ui/EmptyState.vue'
 
 interface NodeRow {
   nodeId: string
@@ -64,91 +68,44 @@ onMounted(load) // 默认旗舰课自动载入
 </script>
 
 <template>
-  <div class="page">
-    <header class="page-head">
-      <div>
-        <h1>节点诊断（关键节点策展）</h1>
-        <p class="sub">为某门课维护「关键节点 + 挽回办法」，学员卡壳时坐席照此精准指导。整课覆盖保存，不碰学员提交。</p>
-      </div>
+  <div class="ld-page">
+    <PageHeader title="节点诊断（关键节点策展）" sub="为某门课维护「关键节点 + 挽回办法」，学员卡壳时坐席照此精准指导。整课覆盖保存，不碰学员提交。">
       <UiButton v-if="loaded" :disabled="busy" @click="save">{{ busy ? '保存中…' : '保存整课' }}</UiButton>
-    </header>
+    </PageHeader>
 
-    <div class="toolbar">
-      <input v-model="courseId" placeholder="course-xxx" class="cid" @keyup.enter="load" />
-      <button class="act ghost" @click="load"><RotateCcw :size="14" :stroke-width="1.8" /><span>载入</span></button>
+    <div class="ld-toolbar">
+      <label class="ld-search">
+        <BookOpen :size="15" :stroke-width="1.8" />
+        <input v-model="courseId" placeholder="course-xxx" @keyup.enter="load" />
+      </label>
+      <UiButton variant="ghost" size="sm" @click="load"><RotateCcw :size="14" :stroke-width="1.8" /><span>载入</span></UiButton>
     </div>
-    <p v-if="message" class="status">{{ message }}</p>
+    <p v-if="message" class="ld-status">{{ message }}</p>
 
     <template v-if="loaded">
-      <div v-for="(n, i) in nodes" :key="i" class="node-card">
+      <Card v-for="(n, i) in nodes" :key="i">
         <div class="node-head">
-          <span class="nrank">{{ i + 1 }}</span>
+          <Badge tone="brand">{{ i + 1 }}</Badge>
           <input v-model="n.nodeId" placeholder="节点 id（如 n1）" class="nid" />
           <input v-model="n.title" placeholder="节点名（如 第二段收口）" maxlength="100" class="ntitle" />
           <button class="icon-btn" title="上移" :disabled="i === 0" @click="move(i, -1)">↑</button>
           <button class="icon-btn" title="下移" :disabled="i === nodes.length - 1" @click="move(i, 1)">↓</button>
-          <button class="icon-btn" :class="{ warn: confirmKey === 'd:' + i }" :title="confirmKey === 'd:' + i ? '再点确认删除' : '删节点'" @click="delNode(i)"><Trash2 :size="14" :stroke-width="1.8" /></button>
+          <button class="icon-btn del" :class="{ warn: confirmKey === 'd:' + i }" :title="confirmKey === 'd:' + i ? '再点确认删除' : '删节点'" @click="delNode(i)"><Trash2 :size="14" :stroke-width="1.8" /></button>
         </div>
         <textarea v-model="n.remedy" placeholder="挽回办法（学员卡这里时坐席照此指导·≤2000 字）" maxlength="2000" />
-      </div>
-      <button class="add-btn" @click="addNode"><Plus :size="14" :stroke-width="2" /><span>加节点</span></button>
+      </Card>
+      <UiButton variant="ghost" @click="addNode"><Plus :size="14" :stroke-width="2" /><span>加节点</span></UiButton>
     </template>
-    <p v-else-if="!message" class="status-soft">输入课程编号（course-xxx）载入其关键节点</p>
+    <EmptyState v-else-if="!message" :icon="ListChecks" text="输入课程编号（course-xxx）载入其关键节点" />
   </div>
 </template>
 
 <style scoped>
-.page {
-  max-width: 900px;
-}
-.page-head {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 16px;
-  margin-bottom: 16px;
-}
-h1 {
-  margin: 0;
-  font-size: 22px;
-  font-weight: 700;
-  color: var(--ld-ink);
-}
-.sub {
-  margin: 4px 0 0;
-  font-size: 12.5px;
-  color: var(--ld-content-2);
-}
-.toolbar {
-  display: flex;
-  gap: 8px;
-  margin-bottom: 12px;
-  max-width: 420px;
-}
-.cid {
-  flex: 1;
-  padding: 8px 12px;
-  border: 1px solid var(--ld-line);
-  border-radius: 999px;
-  font-size: 13px;
-}
-.status {
-  font-size: 13px;
-  color: var(--ld-content-2);
-}
-.status-soft {
-  font-size: 13px;
-  color: var(--ld-content-2);
-}
-.node-card {
-  padding: 14px 16px;
-  margin-bottom: 10px;
-  background: var(--ld-bg);
-  border: 1px solid var(--ld-line);
-  border-radius: var(--ld-radius-l);
-}
+/* 本页独有：节点行内编辑（id/名/上下移/删除的一行控件 + 补救话术 textarea）。
+ * 页头/卡/徽章/空态/按钮/工具条/搜索/状态行已交共享原语与 .ld-* 全局类。 */
 .node-head {
   display: flex;
+  align-items: center;
   gap: 8px;
   margin-bottom: 8px;
 }
@@ -157,7 +114,7 @@ h1 {
   width: 120px;
   padding: 8px 12px;
   border: 1px solid var(--ld-line);
-  border-radius: 8px;
+  border-radius: var(--ld-radius-sm);
   font-size: 13px;
   font-family: var(--ld-font-mono);
 }
@@ -166,7 +123,7 @@ h1 {
   min-width: 0;
   padding: 8px 12px;
   border: 1px solid var(--ld-line);
-  border-radius: 8px;
+  border-radius: var(--ld-radius-sm);
   font-size: 13px;
 }
 .icon-btn {
@@ -177,12 +134,20 @@ h1 {
   height: 30px;
   flex: none;
   border: 1px solid var(--ld-line);
-  border-radius: 8px;
+  border-radius: var(--ld-radius-sm);
   background: var(--ld-bg);
   color: var(--ld-content-2);
   cursor: pointer;
 }
-.icon-btn:hover {
+.icon-btn:hover:not(:disabled) {
+  color: var(--ld-content);
+  border-color: var(--ld-purple-line);
+}
+.icon-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+.icon-btn.del:hover:not(:disabled) {
   color: var(--ld-red);
   border-color: var(--ld-red-line);
 }
@@ -191,41 +156,15 @@ h1 {
   border-color: var(--ld-red-line);
   background: var(--ld-bg-red-soft);
 }
-.nrank {
-  flex: none;
-  width: 22px;
-  height: 22px;
-  border-radius: 6px;
-  background: var(--ld-bg-lilac);
-  color: var(--ld-content-2);
-  font-size: 11px;
-  font-weight: 700;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
 textarea {
   width: 100%;
   min-height: 48px;
   padding: 8px 12px;
   border: 1px solid var(--ld-line);
-  border-radius: 8px;
+  border-radius: var(--ld-radius-sm);
   font-size: 13px;
   font-family: var(--ld-font);
   box-sizing: border-box;
   resize: vertical;
-}
-.add-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 9px 18px;
-  border: 1px dashed var(--ld-purple-line);
-  border-radius: 999px;
-  background: var(--ld-bg-lilac);
-  color: var(--ld-brand-active);
-  font-size: 13px;
-  font-weight: 600;
-  cursor: pointer;
 }
 </style>

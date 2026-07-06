@@ -2,10 +2,15 @@
 // 客服会话（设计语言一致性·M3 UI 批13）：按客户检索时间轴 + 质检报表（样本口径诚实标注）。
 // 逻辑未动，仅套设计语言（页头/统计卡/检索卡/消息气泡时间轴/token）。
 import { ref, onMounted } from 'vue'
-import { Search, RotateCcw } from 'lucide-vue-next'
+import { Search, RotateCcw, Inbox } from 'lucide-vue-next'
 import { searchConversations, conversationsReport } from '../api/cs'
 import { mapMessages, mapReport, type MsgVM, type ReportVM } from '../lib/mapCs'
 import UiButton from '../components/ui/Button.vue'
+import PageHeader from '../components/ui/PageHeader.vue'
+import Card from '../components/ui/Card.vue'
+import KpiCard from '../components/ui/KpiCard.vue'
+import Badge from '../components/ui/Badge.vue'
+import EmptyState from '../components/ui/EmptyState.vue'
 
 const openid = ref('')
 const externalUserId = ref('')
@@ -49,201 +54,65 @@ onMounted(loadReport)
 </script>
 
 <template>
-  <div class="page">
-    <header class="page-head">
-      <h1>客服会话</h1>
-      <p class="sub">按客户检索会话时间轴 + 质检报表（样本口径如实标注，不夸大覆盖）。</p>
-    </header>
+  <div class="ld-page">
+    <PageHeader title="客服会话" sub="按客户检索会话时间轴 + 质检报表（样本口径如实标注，不夸大覆盖）" />
 
-    <div v-if="report" class="report">
-      <div class="report-head">
-        <h2>质检报表</h2>
-        <span class="note">{{ report.sampleNote }}</span>
-        <span class="flex"></span>
+    <!-- 质检报表：mapReport 真值（volume/response/sla），未答复/超时 >0 标红（bad→tone red） -->
+    <Card v-if="report" title="质检报表" :sub="report.sampleNote">
+      <template #head>
         <label class="sla-in">首响 SLA <input v-model.number="slaMin" type="number" min="1" max="1440" /> 分钟</label>
-        <button class="sla-btn" :disabled="reportBusy" @click="loadReport"><RotateCcw :size="13" :stroke-width="1.8" />{{ reportBusy ? '算中…' : '重算' }}</button>
+        <UiButton size="sm" variant="ghost" :disabled="reportBusy" @click="loadReport">
+          <RotateCcw :size="14" :stroke-width="1.8" /><span>{{ reportBusy ? '算中…' : '重算' }}</span>
+        </UiButton>
+      </template>
+      <div class="ld-kpi-grid">
+        <KpiCard
+          v-for="s in [...report.volume, ...report.response, ...report.sla]"
+          :key="s.label"
+          :label="s.label"
+          :value="s.value"
+          :tone="s.bad ? 'red' : 'neutral'"
+        />
       </div>
-      <div class="stat-grid">
-        <div v-for="s in [...report.volume, ...report.response, ...report.sla]" :key="s.label" class="stat-card" :class="{ bad: s.bad }">
-          <div class="stat-label">{{ s.label }}</div>
-          <div class="stat-value">{{ s.value }}</div>
-        </div>
-      </div>
-      <!-- 首响口径诚实告知（换皮丢·防把机器人秒回误读成人工绩效） -->
+      <!-- 首响口径诚实告知（防把机器人秒回误读成人工绩效） -->
       <p class="report-note">首次响应含机器人自动应答；人工接待时长待落档后单列，届时更真实反映坐席绩效。</p>
-    </div>
+    </Card>
 
-    <section class="card">
-      <h2>会话检索（按客户）</h2>
-      <div class="searchrow">
-        <input v-model="openid" placeholder="openid" @keyup.enter="search" />
-        <input v-model="externalUserId" placeholder="或 外部用户号（未绑定时）" @keyup.enter="search" />
-        <input v-model="keyword" placeholder="关键词（页内过滤）" @keyup.enter="search" />
+    <!-- 会话检索（按客户）：本页无「会话列表/客户上下文」数据源，不建三栏实时收件箱，保持检索→时间轴 -->
+    <Card title="会话检索（按客户）" sub="按 openid / 外部用户号 / 关键词 检索消息时间轴">
+      <div class="ld-toolbar">
+        <label class="ld-search"><input v-model="openid" placeholder="openid" @keyup.enter="search" /></label>
+        <label class="ld-search"><input v-model="externalUserId" placeholder="或 外部用户号（未绑定时）" @keyup.enter="search" /></label>
+        <label class="ld-search"><input v-model="keyword" placeholder="关键词（页内过滤）" @keyup.enter="search" /></label>
         <UiButton @click="search"><Search :size="14" :stroke-width="1.8" /><span>检索</span></UiButton>
       </div>
-      <p v-if="message" class="status">{{ message }}</p>
 
       <div v-if="msgs.length" class="timeline">
         <div v-for="m in msgs" :key="m.id" class="msg" :class="{ out: m.who === '客服' }">
           <div class="bubble">
             <div class="msg-head">
               <span class="who">{{ m.who }}</span>
-              <span v-if="m.kind" class="kind-chip">{{ m.kind }}</span>
-              <span v-if="m.channel" class="ch-chip">{{ m.channel }}</span>
+              <Badge v-if="m.kind" tone="brand">{{ m.kind }}</Badge>
+              <Badge v-if="m.channel" tone="neutral">{{ m.channel }}</Badge>
               <span class="flex"></span>
               <span class="time">{{ m.timeLabel }}</span>
             </div>
             <div v-if="m.text" class="text">{{ m.text }}</div>
           </div>
         </div>
-        <button v-if="hasMore" class="more" @click="more">更早的消息</button>
-        <p v-else class="end-mark">— 已到最早 —</p>
+        <div class="more-wrap">
+          <UiButton v-if="hasMore" size="sm" variant="ghost" @click="more">更早的消息</UiButton>
+          <p v-else class="end-mark">— 已到最早 —</p>
+        </div>
       </div>
-    </section>
+      <EmptyState v-else-if="message" :icon="Inbox" :text="message" />
+      <EmptyState v-else :icon="Search" text="输入 openid / 外部用户号 / 关键词后检索会话时间轴" />
+    </Card>
   </div>
 </template>
 
 <style scoped>
-.page {
-  max-width: 920px;
-}
-.page-head {
-  margin-bottom: 16px;
-}
-h1 {
-  margin: 0;
-  font-size: 22px;
-  font-weight: 700;
-  color: var(--ld-ink);
-}
-.sub {
-  margin: 4px 0 0;
-  font-size: 12.5px;
-  color: var(--ld-content-2);
-}
-.report {
-  padding: 18px 20px;
-  margin-bottom: 14px;
-  background: var(--ld-bg);
-  border: 1px solid var(--ld-line);
-  border-radius: var(--ld-radius-l);
-}
-.report-head {
-  display: flex;
-  align-items: baseline;
-  gap: 10px;
-  margin-bottom: 14px;
-}
-h2 {
-  margin: 0;
-  font-size: 14px;
-  font-weight: 700;
-  color: var(--ld-ink);
-}
-.note {
-  font-size: 11px;
-  color: var(--ld-content-2);
-}
-.stat-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
-  gap: 12px;
-}
-.stat-card {
-  padding: 12px 14px;
-  background: var(--ld-bg-lilac);
-  border-radius: 10px;
-}
-.stat-label {
-  font-size: 11px;
-  color: var(--ld-content-2);
-}
-.stat-value {
-  margin-top: 4px;
-  font-size: 19px;
-  font-weight: 700;
-  color: var(--ld-ink);
-}
-.stat-card.bad {
-  background: var(--ld-bg-red-soft);
-}
-.stat-card.bad .stat-value {
-  color: var(--ld-red);
-}
-.report-note {
-  margin: 12px 0 0;
-  font-size: 11px;
-  color: var(--ld-content-2);
-}
-.kind-chip {
-  padding: 1px 7px;
-  border-radius: 999px;
-  background: var(--ld-bg-lilac);
-  color: var(--ld-brand-active);
-  font-size: 10px;
-  font-weight: 600;
-}
-.card {
-  padding: 18px 20px;
-  background: var(--ld-bg);
-  border: 1px solid var(--ld-line);
-  border-radius: var(--ld-radius-l);
-}
-.card h2 {
-  margin-bottom: 12px;
-}
-.searchrow {
-  display: grid;
-  grid-template-columns: 1fr 1fr 1fr auto;
-  gap: 8px;
-  margin-bottom: 10px;
-}
-input {
-  padding: 8px 12px;
-  border: 1px solid var(--ld-line);
-  border-radius: 8px;
-  font-size: 13px;
-}
-.status {
-  font-size: 13px;
-  color: var(--ld-content-2);
-}
-.timeline {
-  margin-top: 6px;
-}
-.msg {
-  display: flex;
-  margin-bottom: 8px;
-}
-.msg.out {
-  justify-content: flex-end;
-}
-.bubble {
-  max-width: 72%;
-  padding: 9px 13px;
-  border-radius: 12px;
-  background: var(--ld-bg-lilac);
-}
-.msg.out .bubble {
-  background: var(--ld-bg-green-soft);
-}
-.msg-head {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-bottom: 3px;
-}
-.flex {
-  flex: 1;
-}
-.ch-chip {
-  padding: 1px 7px;
-  border-radius: 999px;
-  background: var(--ld-bg-faint);
-  color: var(--ld-content-2);
-  font-size: 10px;
-  font-weight: 600;
-}
+/* 质检报表卡头：SLA 阈值输入（重算按 slaMin 换算 ms 传 conversationsReport） */
 .sla-in {
   font-size: 11.5px;
   color: var(--ld-content-2);
@@ -251,40 +120,67 @@ input {
 }
 .sla-in input {
   width: 54px;
-  padding: 4px 8px;
-  font-size: 12px;
-  margin: 0 3px;
-}
-.sla-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  padding: 5px 12px;
+  margin: 0 4px;
+  padding: 5px 8px;
   border: 1px solid var(--ld-line);
-  border-radius: 999px;
-  background: var(--ld-bg);
-  color: var(--ld-content);
+  border-radius: var(--ld-radius-sm);
+  font-family: inherit;
   font-size: 12px;
-  cursor: pointer;
+  color: var(--ld-content);
 }
-.end-mark {
-  text-align: center;
+.report-note {
+  margin: 14px 0 0;
   font-size: 11px;
   color: var(--ld-content-2);
-  margin: 12px 0 0;
+}
+
+/* 消息时间轴气泡（本页独有·收 bg-grey 左对齐 · 发 brand 白字右对齐） */
+.timeline {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 14px;
+}
+.msg {
+  display: flex;
+}
+.msg.out {
+  justify-content: flex-end;
+}
+.bubble {
+  max-width: 72%;
+  padding: 10px 13px;
+  border-radius: var(--ld-radius);
+  background: var(--ld-bg-grey);
+}
+.msg.out .bubble {
+  background: var(--ld-brand);
+}
+.msg-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+.flex {
+  flex: 1;
 }
 .who {
   font-size: 11.5px;
   font-weight: 600;
-  color: var(--ld-brand-active);
+  color: var(--ld-content-2);
 }
 .msg.out .who {
-  color: var(--ld-green);
+  color: #fff;
 }
 .time {
   font-size: 10.5px;
   color: var(--ld-content-2);
   font-family: var(--ld-font-mono);
+}
+.msg.out .time {
+  color: #fff;
+  opacity: 0.85;
 }
 .text {
   font-size: 13px;
@@ -292,15 +188,19 @@ input {
   line-height: 1.5;
   word-break: break-word;
 }
-.more {
-  display: block;
-  margin: 10px auto 0;
-  padding: 7px 18px;
-  border: 1px solid var(--ld-line);
-  border-radius: 999px;
-  background: var(--ld-bg);
-  color: var(--ld-content);
-  font-size: 12.5px;
-  cursor: pointer;
+.msg.out .text {
+  color: #fff;
+}
+.more-wrap {
+  display: flex;
+  justify-content: center;
+  margin-top: 6px;
+}
+.end-mark {
+  width: 100%;
+  margin: 6px 0 0;
+  text-align: center;
+  font-size: 11px;
+  color: var(--ld-content-2);
 }
 </style>
