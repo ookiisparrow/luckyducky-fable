@@ -2,13 +2,17 @@
 // 配方与组装（设计语言一致性·M3 UI 批17）：全局模板（共用料+毛线槽）+ 每产品差异位（三色+专属件）→
 // 预演（只读看短缺）→ 执行组装（快照冻结·同单不双扣）。逻辑未动，仅套设计语言。
 import { ref, onMounted, watch, computed } from 'vue'
-import { Plus } from 'lucide-vue-next'
+import { Plus, X, ClipboardList } from 'lucide-vue-next'
 import { getBomSetup, saveBomTemplate, saveBomProfile, previewAssembly, runAssembly, listAssemblies, listMaterials } from '../api/scm'
 import { listDrafts } from '../api/products'
 import { materialHuman, scmErrorText, unprofiledProducts, productNameOf } from '../lib/mapScm'
 import { dateTime } from '../lib/format'
 import ScmFlowTabs from '../components/ScmFlowTabs.vue'
 import UiButton from '../components/ui/Button.vue'
+import PageHeader from '../components/ui/PageHeader.vue'
+import Card from '../components/ui/Card.vue'
+import Badge from '../components/ui/Badge.vue'
+import EmptyState from '../components/ui/EmptyState.vue'
 
 const template = ref<{ commonLines: Array<{ materialId: string; qtyPerSet: number }>; yarnSlots: Array<{ tier: string; form: string; qtyPerSet: number }> }>({ commonLines: [], yarnSlots: [] })
 const profiles = ref<Array<Record<string, any>>>([])
@@ -127,83 +131,95 @@ onMounted(reload)
 </script>
 
 <template>
-  <div class="page">
-    <header class="page-head">
-      <h1>配方与组装</h1>
-      <p class="sub">全局模板（共用料 + 毛线槽）+ 产品差异位（三色 + 专属件）→ 预演看短缺 → 执行组装（快照冻结·同单不双扣）。</p>
-    </header>
+  <div class="ld-page">
+    <PageHeader
+      title="配方与组装"
+      sub="全局模板（共用料 + 毛线槽）+ 产品差异位（三色 + 专属件）→ 预演看短缺 → 执行组装（快照冻结·同单不双扣）。"
+    />
 
     <ScmFlowTabs />
-    <p v-if="message" class="status" :class="{ ok: msgOk }">{{ message }}</p>
+    <p v-if="message" class="ld-status msg" :class="{ ok: msgOk }">{{ message }}</p>
 
-    <div class="cols">
-      <section class="card">
-        <h2>全局模板（所有产品共用）</h2>
-        <h3>共用料（每套用量）</h3>
+    <div class="bom-cols">
+      <Card title="全局模板" sub="所有产品共用">
+        <h3 class="grp-title">共用料（每套用量）</h3>
         <div v-for="(l, i) in template.commonLines" :key="i" class="linerow">
           <select v-model="l.materialId">
             <option value="">选料号…</option>
             <option v-for="m in commonCandidates" :key="m._id" :value="m._id">{{ materialHuman(m._id) }}</option>
           </select>
           <input v-model.number="l.qtyPerSet" type="number" min="1" />
-          <button class="icon-x" @click="template.commonLines.splice(i, 1)">×</button>
+          <button class="icon-btn" title="移除" @click="template.commonLines.splice(i, 1)"><X :size="14" :stroke-width="1.8" /></button>
         </div>
-        <button class="add-btn" @click="template.commonLines.push({ materialId: '', qtyPerSet: 1 })"><Plus :size="12" :stroke-width="2" /><span>加料</span></button>
-        <h3>毛线槽（颜色按产品填）</h3>
-        <div v-for="(s, i) in template.yarnSlots" :key="i" class="linerow">
+        <UiButton variant="ghost" size="sm" class="add-row" @click="template.commonLines.push({ materialId: '', qtyPerSet: 1 })">
+          <Plus :size="14" :stroke-width="2" /><span>加料</span>
+        </UiButton>
+
+        <h3 class="grp-title mt">毛线槽（颜色按产品填）</h3>
+        <div v-for="(s, i) in template.yarnSlots" :key="i" class="linerow yarn">
           <select v-model="s.tier"><option value="L">大团</option><option value="M">中团</option><option value="S">小团</option></select>
           <select v-model="s.form"><option value="raw">原团</option><option value="knotted">带结（仅大团）</option></select>
           <input v-model.number="s.qtyPerSet" type="number" min="1" />
-          <button class="icon-x" @click="template.yarnSlots.splice(i, 1)">×</button>
+          <button class="icon-btn" title="移除" @click="template.yarnSlots.splice(i, 1)"><X :size="14" :stroke-width="1.8" /></button>
         </div>
-        <button class="add-btn" @click="template.yarnSlots.push({ tier: 'L', form: 'knotted', qtyPerSet: 1 })"><Plus :size="12" :stroke-width="2" /><span>加槽</span></button>
-        <div class="ops"><UiButton @click="doSaveTemplate">保存模板</UiButton></div>
-      </section>
+        <UiButton variant="ghost" size="sm" class="add-row" @click="template.yarnSlots.push({ tier: 'L', form: 'knotted', qtyPerSet: 1 })">
+          <Plus :size="14" :stroke-width="2" /><span>加槽</span>
+        </UiButton>
 
-      <section class="card">
-        <h2>产品差异位（三色 + 专属件）</h2>
-        <input v-model="prof.productId" list="bom-prof-ids" placeholder="产品 id（选既有或输新）" />
-        <datalist id="bom-prof-ids"><option v-for="pid in allProductIds" :key="pid" :value="pid">{{ productName(pid) }}</option></datalist>
-        <input v-model="prof.L" placeholder="大团颜色（如 pink）" />
-        <input v-model="prof.M" placeholder="中团颜色" />
-        <input v-model="prof.S" placeholder="小团颜色" />
-        <select v-model="prof.packagingMaterialId">
-          <option value="">选包装料号（pkg:产品id）…</option>
-          <option v-for="m in packagingList" :key="m._id" :value="m._id">{{ materialHuman(m._id) }}（{{ m._id }}）</option>
-        </select>
-        <select v-model="prof.cardMaterialId">
-          <option value="">选卡片料号（card:产品id）…</option>
-          <option v-for="m in cardList" :key="m._id" :value="m._id">{{ materialHuman(m._id) }}（{{ m._id }}）</option>
-        </select>
-        <UiButton @click="doSaveProfile">{{ profileIds.includes(prof.productId.trim()) ? '更新差异位' : '保存差异位' }}</UiButton>
+        <div class="card-foot"><UiButton @click="doSaveTemplate">保存模板</UiButton></div>
+      </Card>
+
+      <Card title="产品差异位" sub="三色 + 专属件">
+        <div class="prof-form">
+          <input v-model="prof.productId" list="bom-prof-ids" placeholder="产品 id（选既有或输新）" />
+          <datalist id="bom-prof-ids"><option v-for="pid in allProductIds" :key="pid" :value="pid">{{ productName(pid) }}</option></datalist>
+          <input v-model="prof.L" placeholder="大团颜色（如 pink）" />
+          <input v-model="prof.M" placeholder="中团颜色" />
+          <input v-model="prof.S" placeholder="小团颜色" />
+          <select v-model="prof.packagingMaterialId">
+            <option value="">选包装料号（pkg:产品id）…</option>
+            <option v-for="m in packagingList" :key="m._id" :value="m._id">{{ materialHuman(m._id) }}（{{ m._id }}）</option>
+          </select>
+          <select v-model="prof.cardMaterialId">
+            <option value="">选卡片料号（card:产品id）…</option>
+            <option v-for="m in cardList" :key="m._id" :value="m._id">{{ materialHuman(m._id) }}（{{ m._id }}）</option>
+          </select>
+          <UiButton block @click="doSaveProfile">{{ profileIds.includes(prof.productId.trim()) ? '更新差异位' : '保存差异位' }}</UiButton>
+        </div>
+
         <div class="prof-list">
           <div v-for="p in profiles" :key="p._id" class="prof-line" :class="{ on: prof.productId === p._id }" title="点击编辑" @click="editProfile(p)">
-            <span>{{ productName(p._id) }}：L={{ p.yarnColors?.L || '—' }} M={{ p.yarnColors?.M || '—' }} S={{ p.yarnColors?.S || '—' }}</span>
-            <span v-if="!p.packagingMaterialId || !p.cardMaterialId" class="prof-warn">缺专属件</span>
+            <span class="prof-txt">{{ productName(p._id) }}：L={{ p.yarnColors?.L || '—' }} M={{ p.yarnColors?.M || '—' }} S={{ p.yarnColors?.S || '—' }}</span>
+            <Badge v-if="!p.packagingMaterialId || !p.cardMaterialId" tone="red">缺专属件</Badge>
           </div>
-          <p v-if="!profiles.length" class="prof-empty">还没有差异位——填上面表单保存</p>
+          <p v-if="!profiles.length" class="hint">还没有差异位——填上面表单保存</p>
         </div>
+
         <!-- 未填差异位总览（换皮丢·没建过差异位的在售产品完全不出现·组装前会被拒却发现不了·接回 listDrafts 全目录） -->
         <div v-if="unprofiled.length" class="unprof">
-          <h3>未填差异位（打包前必填·{{ unprofiled.length }}）</h3>
-          <button v-for="u in unprofiled" :key="u.id" class="unprof-chip" :title="'去建 ' + u.id + ' 的差异位'" @click="prof.productId = u.id">{{ productName(u.id) }} +</button>
+          <h3 class="grp-title warn">未填差异位（打包前必填·{{ unprofiled.length }}）</h3>
+          <div class="chip-wrap">
+            <button v-for="u in unprofiled" :key="u.id" class="unprof-chip" :title="'去建 ' + u.id + ' 的差异位'" @click="prof.productId = u.id">{{ productName(u.id) }} +</button>
+          </div>
         </div>
-      </section>
+      </Card>
 
-      <section class="card">
-        <h2>组装执行（扣原料·入成品）</h2>
-        <select v-model="run.productId">
-          <option value="">选产品（须有差异位）…</option>
-          <option v-for="pid in profileIds" :key="pid" :value="pid">{{ productName(pid) }}</option>
-        </select>
-        <!-- 组装规格：有 SKU 走下拉（换皮退成裸文本框·易与商品实际 SKU 不一致·拼错成品入错 spec）·无 SKU 退文本 -->
-        <select v-if="runSkus.length" v-model="run.spec"><option value="">规格（可空）…</option><option v-for="s in runSkus" :key="s" :value="s">{{ s }}</option></select>
-        <input v-else v-model="run.spec" placeholder="规格（可空）" />
-        <input v-model.number="run.sets" type="number" min="1" placeholder="套数" />
-        <div class="ops">
-          <button class="btn-ghost" @click="doPreview">预演（只看不扣）</button>
-          <button class="btn-warn" @click="doRun">{{ runConfirm ? (shortCount ? `有 ${shortCount} 项缺料·仍执行？` : '确认扣料入成品？') : '执行组装' }}</button>
+      <Card title="组装执行" sub="扣原料 · 入成品">
+        <div class="run-form">
+          <select v-model="run.productId">
+            <option value="">选产品（须有差异位）…</option>
+            <option v-for="pid in profileIds" :key="pid" :value="pid">{{ productName(pid) }}</option>
+          </select>
+          <!-- 组装规格：有 SKU 走下拉（换皮退成裸文本框·易与商品实际 SKU 不一致·拼错成品入错 spec）·无 SKU 退文本 -->
+          <select v-if="runSkus.length" v-model="run.spec"><option value="">规格（可空）…</option><option v-for="s in runSkus" :key="s" :value="s">{{ s }}</option></select>
+          <input v-else v-model="run.spec" placeholder="规格（可空）" />
+          <input v-model.number="run.sets" type="number" min="1" placeholder="套数" />
+          <div class="run-ops">
+            <UiButton variant="ghost" @click="doPreview">预演（只看不扣）</UiButton>
+            <UiButton variant="danger" @click="doRun">{{ runConfirm ? (shortCount ? `有 ${shortCount} 项缺料·仍执行？` : '确认扣料入成品？') : '执行组装' }}</UiButton>
+          </div>
         </div>
+
         <div v-if="preview.length" class="preview">
           <div class="pv-head"><span>料</span><span class="r">需</span><span class="r">存</span><span class="r">缺</span></div>
           <div v-for="l in preview" :key="l.materialId" class="pv-row" :class="{ short: l.short > 0 || l.missing }">
@@ -211,232 +227,218 @@ onMounted(reload)
             <span class="r">{{ l.need }}</span><span class="r">{{ l.stock }}</span><span class="r">{{ l.short }}</span>
           </div>
         </div>
-      </section>
+      </Card>
     </div>
 
-    <section class="table-card">
-      <h2>组装记录</h2>
-      <div class="table">
-        <div class="thead"><span>单号</span><span>产品</span><span class="r">套数</span><span>操作者</span><span>时间</span><span>用料</span></div>
-        <template v-for="a in assemblies" :key="a._id">
-          <div class="trow">
-            <span class="mono">{{ a._id }}</span>
-            <span>{{ productName(a.productId) }}{{ a.spec ? '（' + a.spec + '）' : '' }}</span>
-            <span class="r">{{ a.sets }}</span>
-            <span class="muted">{{ a.operator }}</span>
-            <span class="muted mono">{{ dateTime(a.at) }}</span>
-            <span><button class="expand-btn" @click="expanded = expanded === a._id ? '' : a._id">{{ expanded === a._id ? '收起' : '展开' }}</button></span>
-          </div>
-          <div v-if="expanded === a._id" class="trow sub-row">
-            <span class="consumed" :style="{ gridColumn: '1 / -1' }">扣料快照：{{ (a.consumedLines || []).map((l) => materialHuman(l.materialId) + '×' + l.qty).join(' · ') || '（无快照）' }}</span>
-          </div>
-        </template>
-      </div>
-    </section>
+    <Card title="组装记录" flush>
+      <template v-if="assemblies.length">
+        <div class="ld-thead">
+          <div class="ld-th grow">单号</div>
+          <div class="ld-th" :style="{ width: '180px' }">产品</div>
+          <div class="ld-th r" :style="{ width: '80px' }">套数</div>
+          <div class="ld-th" :style="{ width: '120px' }">操作者</div>
+          <div class="ld-th" :style="{ width: '160px' }">时间</div>
+          <div class="ld-th r" :style="{ width: '100px' }">用料</div>
+        </div>
+        <div class="ld-tbody">
+          <template v-for="a in assemblies" :key="a._id">
+            <div class="ld-tr">
+              <div class="ld-td grow mono">{{ a._id }}</div>
+              <div class="ld-td" :style="{ width: '180px' }">{{ productName(a.productId) }}{{ a.spec ? '（' + a.spec + '）' : '' }}</div>
+              <div class="ld-td r" :style="{ width: '80px' }">{{ a.sets }}</div>
+              <div class="ld-td muted" :style="{ width: '120px' }">{{ a.operator }}</div>
+              <div class="ld-td muted mono" :style="{ width: '160px' }">{{ dateTime(a.at) }}</div>
+              <div class="ld-td r" :style="{ width: '100px' }">
+                <UiButton variant="ghost" size="sm" @click="expanded = expanded === a._id ? '' : a._id">{{ expanded === a._id ? '收起' : '展开' }}</UiButton>
+              </div>
+            </div>
+            <div v-if="expanded === a._id" class="ld-tr sub-row">
+              <div class="consumed">扣料快照：{{ (a.consumedLines || []).map((l) => materialHuman(l.materialId) + '×' + l.qty).join(' · ') || '（无快照）' }}</div>
+            </div>
+          </template>
+        </div>
+      </template>
+      <EmptyState v-else :icon="ClipboardList" text="还没有组装记录" />
+    </Card>
   </div>
 </template>
 
 <style scoped>
-.page {
-  max-width: 1160px;
-}
-.page-head {
-  margin-bottom: 16px;
-}
-h1 {
-  margin: 0;
-  font-size: 22px;
-  font-weight: 700;
-  color: var(--ld-ink);
-}
-.sub {
-  margin: 4px 0 0;
-  font-size: 12.5px;
-  color: var(--ld-content-2);
-}
-.status {
-  font-size: 13px;
+/* 本页独有：三列配方卡的行内表单（共用料/毛线槽多列行·差异位表单·组装预演缺口块）+ 组装记录展开子行。
+ * 页头/卡/徽章/空态/按钮/表格已交共享原语与 .ld-* 全局类。 */
+
+/* 提示行：本页 message 双态（成功绿 / 失败红）·覆盖 .ld-status 灰底 */
+.msg {
   color: var(--ld-red);
-  margin-bottom: 10px;
 }
-.status.ok {
+.msg.ok {
   color: var(--ld-green);
 }
-.cols {
+
+/* 三列配方卡（窄屏堆叠·顶对齐不等高拉伸） */
+.bom-cols {
   display: grid;
   grid-template-columns: 1fr 1fr 1fr;
-  gap: 14px;
-  margin-bottom: 16px;
+  gap: 16px;
+  align-items: start;
 }
-@media (max-width: 940px) {
-  .cols {
+@media (max-width: 1100px) {
+  .bom-cols {
     grid-template-columns: 1fr;
   }
 }
-.card,
-.table-card {
-  padding: 16px 18px;
-  background: var(--ld-bg);
+
+/* 卡内表单控件（页面级·非组件·descendant tag 选择器合法） */
+.bom-cols input,
+.bom-cols select {
+  width: 100%;
+  padding: 8px 12px;
   border: 1px solid var(--ld-line);
-  border-radius: var(--ld-radius-l);
+  border-radius: var(--ld-radius-sm);
+  font-size: 13px;
+  font-family: inherit;
+  color: var(--ld-content);
+  background: var(--ld-bg);
+  box-sizing: border-box;
 }
-h2 {
-  margin: 0 0 12px;
-  font-size: 14px;
-  font-weight: 700;
-  color: var(--ld-ink);
-}
-h3 {
-  margin: 12px 0 7px;
+
+/* 分组小标题 */
+.grp-title {
+  margin: 0 0 8px;
   font-size: 12px;
+  font-weight: 600;
   color: var(--ld-purple-meta);
 }
-.card input,
-.card select {
-  padding: 8px 10px;
-  border: 1px solid var(--ld-line);
-  border-radius: 8px;
-  font-size: 13px;
-  width: 100%;
-  box-sizing: border-box;
-  margin-bottom: 7px;
-  background: var(--ld-bg);
+.grp-title.mt {
+  margin-top: 16px;
 }
+.grp-title.warn {
+  color: var(--ld-red);
+}
+
+/* 料/槽多列行 + 移除按钮 */
 .linerow {
   display: grid;
-  grid-template-columns: 2fr 68px auto;
+  grid-template-columns: 1fr 64px 30px;
   gap: 6px;
   align-items: center;
+  margin-bottom: 6px;
 }
-.linerow input,
-.linerow select {
-  margin-bottom: 0;
+.linerow.yarn {
+  grid-template-columns: 1fr 1fr 56px 30px;
 }
-.icon-x {
-  width: 28px;
+.icon-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
   height: 30px;
+  flex: none;
   border: 1px solid var(--ld-line);
-  border-radius: 8px;
+  border-radius: var(--ld-radius-sm);
   background: var(--ld-bg);
   color: var(--ld-content-2);
-  font-size: 15px;
   cursor: pointer;
 }
-.icon-x:hover {
+.icon-btn:hover {
   color: var(--ld-red);
   border-color: var(--ld-red-line);
 }
-.add-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  margin: 6px 0 2px;
-  padding: 5px 12px;
-  border: 1px dashed var(--ld-purple-line);
-  border-radius: 999px;
-  background: transparent;
-  color: var(--ld-brand-active);
-  font-size: 11.5px;
-  font-weight: 600;
-  cursor: pointer;
+.add-row {
+  margin-top: 2px;
 }
-.ops {
+.card-foot {
+  margin-top: 16px;
+}
+
+/* 差异位表单（纵向堆叠） */
+.prof-form,
+.run-form {
   display: flex;
+  flex-direction: column;
   gap: 8px;
-  margin-top: 10px;
 }
-.btn-ghost {
-  padding: 8px 14px;
-  border: 1px solid var(--ld-line);
-  border-radius: 999px;
-  background: var(--ld-bg);
-  color: var(--ld-content-2);
-  font-size: 12.5px;
-  font-weight: 600;
-  cursor: pointer;
-}
-.btn-warn {
-  padding: 8px 16px;
-  border: none;
-  border-radius: 999px;
-  background: var(--ld-red);
-  color: #fff;
-  font-size: 12.5px;
-  font-weight: 600;
-  cursor: pointer;
-}
+
+/* 已建差异位列表（点击回填编辑） */
 .prof-list {
-  margin-top: 10px;
+  margin-top: 14px;
 }
 .prof-line {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  padding: 6px 8px;
+  padding: 7px 8px;
   border-top: 1px solid var(--ld-line);
-  font-size: 11.5px;
-  font-family: var(--ld-font-mono);
-  color: var(--ld-content-2);
   cursor: pointer;
-  border-radius: 6px;
+  border-radius: var(--ld-radius-sm);
 }
 .prof-line:hover {
   background: var(--ld-bg-lilac);
 }
 .prof-line.on {
   background: var(--ld-bg-lilac);
+}
+.prof-txt {
+  min-width: 0;
+  font-size: 11.5px;
+  font-family: var(--ld-font-mono);
+  color: var(--ld-content-2);
+}
+.prof-line.on .prof-txt {
   color: var(--ld-brand-active);
 }
-.prof-warn {
-  flex: none;
-  padding: 1px 7px;
-  border-radius: 999px;
-  background: var(--ld-bg-red-soft);
-  color: var(--ld-red);
-  font-size: 10.5px;
-  font-family: var(--ld-font);
-}
-.prof-empty {
+.hint {
   margin: 8px 0 0;
   font-size: 12px;
   color: var(--ld-content-2);
 }
+
+/* 缺口块：未填差异位快速建档 chip 群 */
 .unprof {
-  margin-top: 12px;
-  padding-top: 10px;
+  margin-top: 14px;
+  padding-top: 12px;
   border-top: 1px dashed var(--ld-line);
 }
-.unprof h3 {
-  margin: 0 0 7px;
-  color: var(--ld-red);
+.chip-wrap {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
 }
 .unprof-chip {
-  display: inline-block;
-  margin: 0 6px 6px 0;
-  padding: 4px 11px;
+  padding: 5px 11px;
   border: 1px solid var(--ld-red-line);
   border-radius: 999px;
   background: var(--ld-bg-red-soft);
   color: var(--ld-red);
   font-size: 11.5px;
+  font-family: inherit;
   cursor: pointer;
 }
+.unprof-chip:hover {
+  background: var(--ld-bg);
+}
+
+/* 组装执行操作 + 预演缺口块 */
+.run-ops {
+  display: flex;
+  gap: 8px;
+}
 .preview {
-  margin-top: 12px;
+  margin-top: 14px;
   border: 1px solid var(--ld-line);
-  border-radius: 8px;
+  border-radius: var(--ld-radius-sm);
   overflow: hidden;
 }
 .pv-head,
 .pv-row {
   display: grid;
-  grid-template-columns: 2fr 0.7fr 0.7fr 0.7fr;
+  grid-template-columns: 1fr 0.7fr 0.7fr 0.7fr;
   gap: 8px;
   padding: 7px 12px;
 }
 .pv-head {
-  background: var(--ld-bg-lilac);
+  background: var(--ld-bg-grey);
   font-size: 11.5px;
   color: var(--ld-content-2);
 }
@@ -448,22 +450,15 @@ h3 {
 .pv-row.short {
   color: var(--ld-red);
 }
-.table {
-  border: 1px solid var(--ld-line);
-  border-radius: 10px;
-  overflow: hidden;
+
+/* 组装记录表：展开子行 + 单元语气 */
+.ld-td.r,
+.ld-th.r {
+  justify-content: flex-end;
 }
-.thead,
-.trow {
-  display: grid;
-  grid-template-columns: 1.6fr 1.6fr 0.7fr 1.1fr 1.4fr auto;
-  align-items: center;
-  gap: 12px;
-  padding: 10px 14px;
-}
-.trow.sub-row {
+.ld-tbody .ld-tr.sub-row {
   display: block;
-  padding: 8px 14px 10px;
+  padding: 8px 16px 10px;
   background: var(--ld-bg-lilac);
 }
 .consumed {
@@ -472,38 +467,14 @@ h3 {
   font-family: var(--ld-font-mono);
   line-height: 1.5;
 }
-.expand-btn {
-  padding: 3px 10px;
-  border: 1px solid var(--ld-line);
-  border-radius: 999px;
-  background: var(--ld-bg);
-  color: var(--ld-content-2);
-  font-size: 11.5px;
-  cursor: pointer;
-}
-.expand-btn:hover {
-  border-color: var(--ld-purple-line);
-  color: var(--ld-brand-active);
-}
-.thead {
-  background: var(--ld-bg-lilac);
-  font-size: 12px;
-  color: var(--ld-content-2);
-}
-.trow {
-  border-top: 1px solid var(--ld-line);
-  font-size: 13px;
-  color: var(--ld-content);
-}
-.r {
-  text-align: right;
-  justify-self: end;
-}
 .mono {
   font-family: var(--ld-font-mono);
   font-size: 11.5px;
 }
 .muted {
   color: var(--ld-content-2);
+}
+.r {
+  text-align: right;
 }
 </style>

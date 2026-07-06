@@ -2,13 +2,17 @@
 // 采购单（设计语言一致性·M3 UI 批16）：草稿→已下单→已收货（收货首次流转入库·重复收货不双入）；总价服务端算。
 // 逻辑未动，仅套设计语言（页头/草稿表单卡/grid 表/token）。
 import { ref, onMounted, computed } from 'vue'
-import { Plus } from 'lucide-vue-next'
+import { Plus, Trash2, ClipboardList, ChevronDown, ChevronUp } from 'lucide-vue-next'
 import { listPurchases, savePurchase, markOrdered, receivePurchase, cancelPurchase, listMaterials, listSuppliers } from '../api/scm'
 import { materialHuman, purchaseStatusLabel, yuanToFen, fenLabel, scmErrorText } from '../lib/mapScm'
 import { dateTime } from '../lib/format'
 import { consumePurchaseHandoff } from '../lib/scmHandoff'
 import ScmFlowTabs from '../components/ScmFlowTabs.vue'
 import UiButton from '../components/ui/Button.vue'
+import PageHeader from '../components/ui/PageHeader.vue'
+import Card from '../components/ui/Card.vue'
+import Badge from '../components/ui/Badge.vue'
+import EmptyState from '../components/ui/EmptyState.vue'
 
 const orders = ref<Array<Record<string, any>>>([])
 const mats = ref<Array<Record<string, any>>>([])
@@ -117,19 +121,16 @@ onMounted(async () => {
 </script>
 
 <template>
-  <div class="page">
-    <header class="page-head">
-      <div>
-        <h1>采购单（向厂家）</h1>
-        <p class="sub">草稿 → 已下单 → 已收货；收货首次流转才入库（重复收货不双入），总价服务端核算。</p>
-      </div>
+  <div class="ld-page">
+    <PageHeader title="采购单（向厂家）" sub="草稿 → 已下单 → 已收货；收货首次流转才入库（重复收货不双入），总价服务端核算。">
       <UiButton @click="newOrder"><Plus :size="15" :stroke-width="2" /><span>新建采购单</span></UiButton>
-    </header>
+    </PageHeader>
 
     <ScmFlowTabs />
-    <p v-if="message" class="status" :class="{ ok: msgOk }">{{ message }}</p>
+    <p v-if="message" class="msg" :class="{ ok: msgOk }">{{ message }}</p>
 
-    <section v-if="form" class="draft">
+    <!-- 草稿编辑器（本页独有·多行采购明细 + 合计预览） -->
+    <Card v-if="form" :title="form.purchaseId ? '编辑采购草稿' : '新建采购草稿'" sub="选厂家 → 逐行填料/数量/单价 → 保存（服务端权威核算总价）" class="draft-card">
       <select v-model="form.supplierId" class="sup-sel">
         <option value="">选厂家…</option>
         <option v-for="s in sups" :key="s._id" :value="s._id">{{ s.name }}</option>
@@ -142,131 +143,107 @@ onMounted(async () => {
         <input v-model.number="l.qty" type="number" min="1" placeholder="数量" />
         <input v-model="l.priceYuan" placeholder="单价（元）" />
         <span class="line-sub">{{ lineFen(l) === null ? '—' : fenLabel(lineFen(l)) }}</span>
-        <button class="act ghost" @click="form.lines.splice(i, 1)">删行</button>
+        <UiButton variant="ghost" size="sm" @click="form.lines.splice(i, 1)"><Trash2 :size="13" :stroke-width="1.8" /></UiButton>
       </div>
       <div class="draft-total">
         合计预览：<strong>{{ draftTotalFen === null ? '填全单价后显示' : fenLabel(draftTotalFen) }}</strong>
         <span class="total-hint">（保存时以服务端核算为准）</span>
       </div>
       <div class="ops">
-        <button class="act ghost" @click="form.lines.push({ materialId: '', qty: 1, priceYuan: '' })"><Plus :size="13" :stroke-width="2" /><span>加行</span></button>
-        <button class="act primary" @click="doSave">保存草稿</button>
-        <button class="act ghost" @click="form = null">取消</button>
+        <UiButton variant="ghost" @click="form.lines.push({ materialId: '', qty: 1, priceYuan: '' })"><Plus :size="14" :stroke-width="2" /><span>加行</span></UiButton>
+        <UiButton @click="doSave">保存草稿</UiButton>
+        <UiButton variant="ghost" @click="form = null">取消</UiButton>
       </div>
-    </section>
+    </Card>
 
-    <div class="filters">
-      <button v-for="f in FILTERS" :key="f.key" class="fchip" :class="{ on: filter === f.key }" @click="pickFilter(f.key)">{{ f.label }}</button>
+    <div class="ld-toolbar">
+      <button v-for="f in FILTERS" :key="f.key" class="ld-chip" :class="{ on: filter === f.key }" @click="pickFilter(f.key)">{{ f.label }}</button>
     </div>
 
-    <div v-if="orders.length" class="table">
-      <div class="thead"><span>单号</span><span>供应商</span><span class="r">行数</span><span class="r">总价</span><span>状态</span><span>时间</span><span class="r">操作</span></div>
-      <template v-for="o in orders" :key="o._id">
-        <div class="trow">
-          <span class="mono">{{ o._id }}</span>
-          <span>{{ supplierName(o.supplierId) }}</span>
-          <span class="r"><button class="lines-btn" :title="'看这单买了啥'" @click="expanded = expanded === o._id ? '' : o._id">{{ (o.lines || []).length }} 行 {{ expanded === o._id ? '▴' : '▾' }}</button></span>
-          <span class="r strong">{{ fenLabel(o.totalFen) }}</span>
-          <span><span class="state" :class="o.status">{{ purchaseStatusLabel(o.status) }}</span></span>
-          <span class="muted">{{ dateTime(o.createdAt) }}</span>
-          <div class="c-ops r">
-            <button v-if="o.status === 'draft'" class="act ghost" @click="editDraft(o)">编辑</button>
-            <button v-if="o.status === 'draft'" class="act primary" @click="step(markOrdered, o._id, 'ord:' + o._id)">
-              {{ confirmKey === 'ord:' + o._id ? `向「${supplierName(o.supplierId)}」下单 ${fenLabel(o.totalFen)}？` : '标记已下单' }}
-            </button>
-            <button v-if="o.status === 'ordered'" class="act primary" @click="step(receivePurchase, o._id, 'recv:' + o._id)">
-              {{ confirmKey === 'recv:' + o._id ? '确认到货入库？' : '收货入库' }}
-            </button>
-            <button v-if="o.status === 'draft' || o.status === 'ordered'" class="act warn" @click="step(cancelPurchase, o._id, 'cancel:' + o._id)">
-              {{ confirmKey === 'cancel:' + o._id ? '确认取消？' : '取消' }}
-            </button>
+    <div v-if="orders.length" class="ld-table">
+      <div class="ld-thead">
+        <div class="ld-th grow">单号</div>
+        <div class="ld-th" :style="{ width: '150px' }">供应商</div>
+        <div class="ld-th" :style="{ width: '112px' }">行数</div>
+        <div class="ld-th r" :style="{ width: '110px' }">总价</div>
+        <div class="ld-th" :style="{ width: '100px' }">状态</div>
+        <div class="ld-th" :style="{ width: '140px' }">时间</div>
+        <div class="ld-th r" :style="{ width: '210px' }">操作</div>
+      </div>
+      <div class="ld-tbody">
+        <template v-for="o in orders" :key="o._id">
+          <div class="ld-tr">
+            <div class="ld-td grow oid">{{ o._id }}</div>
+            <div class="ld-td" :style="{ width: '150px' }">{{ supplierName(o.supplierId) }}</div>
+            <div class="ld-td" :style="{ width: '112px' }">
+              <UiButton variant="ghost" size="sm" title="看这单买了啥" @click="expanded = expanded === o._id ? '' : o._id">
+                <span>{{ (o.lines || []).length }} 行</span>
+                <ChevronUp v-if="expanded === o._id" :size="13" :stroke-width="1.8" />
+                <ChevronDown v-else :size="13" :stroke-width="1.8" />
+              </UiButton>
+            </div>
+            <div class="ld-td r total" :style="{ width: '110px' }">{{ fenLabel(o.totalFen) }}</div>
+            <div class="ld-td" :style="{ width: '100px' }">
+              <Badge :tone="o.status === 'received' ? 'green' : o.status === 'ordered' ? 'amber' : o.status === 'draft' ? 'brand' : 'neutral'">{{ purchaseStatusLabel(o.status) }}</Badge>
+            </div>
+            <div class="ld-td muted" :style="{ width: '140px' }">{{ dateTime(o.createdAt) }}</div>
+            <div class="ld-td r ops" :style="{ width: '210px' }">
+              <UiButton v-if="o.status === 'draft'" variant="ghost" size="sm" @click="editDraft(o)">编辑</UiButton>
+              <UiButton v-if="o.status === 'draft'" variant="primary" size="sm" @click="step(markOrdered, o._id, 'ord:' + o._id)">
+                {{ confirmKey === 'ord:' + o._id ? `向「${supplierName(o.supplierId)}」下单 ${fenLabel(o.totalFen)}？` : '标记已下单' }}
+              </UiButton>
+              <UiButton v-if="o.status === 'ordered'" variant="primary" size="sm" @click="step(receivePurchase, o._id, 'recv:' + o._id)">
+                {{ confirmKey === 'recv:' + o._id ? '确认到货入库？' : '收货入库' }}
+              </UiButton>
+              <UiButton v-if="o.status === 'draft' || o.status === 'ordered'" variant="danger" size="sm" @click="step(cancelPurchase, o._id, 'cancel:' + o._id)">
+                {{ confirmKey === 'cancel:' + o._id ? '确认取消？' : '取消' }}
+              </UiButton>
+            </div>
           </div>
-        </div>
-        <!-- 采购行项（换皮丢·非草稿单看不到买了啥）：物料名 ×数量（所有状态可查） -->
-        <div v-if="expanded === o._id" class="trow sub-row">
-          <span class="lines-detail">{{ (o.lines || []).map((l) => materialHuman(l.materialId) + ' ×' + (Number(l.qty) || 0) + (l.unitPriceFen != null ? '（' + fenLabel(l.unitPriceFen) + '）' : '')).join(' · ') || '（无行项）' }}</span>
-        </div>
-      </template>
+          <!-- 采购行项（本页独有·非草稿单看不到买了啥）：物料名 ×数量（所有状态可查） -->
+          <div v-if="expanded === o._id" class="ld-tr detail-row">
+            <div class="ld-td grow detail-cell">{{ (o.lines || []).map((l) => materialHuman(l.materialId) + ' ×' + (Number(l.qty) || 0) + (l.unitPriceFen != null ? '（' + fenLabel(l.unitPriceFen) + '）' : '')).join(' · ') || '（无行项）' }}</div>
+          </div>
+        </template>
+      </div>
     </div>
-    <p v-else-if="!form" class="status-soft">{{ filter ? '这个状态下没有采购单' : '还没有采购单' }}</p>
+    <EmptyState v-else-if="!form" :icon="ClipboardList" :text="filter ? '这个状态下没有采购单' : '还没有采购单'" />
   </div>
 </template>
 
 <style scoped>
-.page {
-  max-width: 1120px;
-}
-.page-head {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 16px;
-  margin-bottom: 16px;
-}
-h1 {
-  margin: 0;
-  font-size: 22px;
-  font-weight: 700;
-  color: var(--ld-ink);
-}
-.sub {
-  margin: 4px 0 0;
-  font-size: 12.5px;
-  color: var(--ld-content-2);
-}
-.status {
+/* 本页独有：msgOk 双态提示行 / 草稿多行明细表单 / 采购单表右对齐列 + 可展开行项明细。
+ * 页头/卡/徽章/空态/按钮/表格/工具条已交共享原语与 .ld-* 全局类。 */
+
+/* msgOk 双态提示（成功绿·失败红·换皮恒红 bug 的修复保留） */
+.msg {
   font-size: 13px;
   color: var(--ld-red);
-  margin-bottom: 10px;
 }
-.status.ok {
+.msg.ok {
   color: var(--ld-green);
 }
-.status-soft {
+
+/* 草稿编辑器：供应商选择 + 逐行明细 + 合计预览 */
+.draft-card select,
+.draft-card input {
+  padding: 8px 10px;
+  border: 1px solid var(--ld-line);
+  border-radius: var(--ld-radius-sm);
   font-size: 13px;
-  color: var(--ld-content-2);
-}
-.filters {
-  display: flex;
-  gap: 8px;
-  margin-bottom: 12px;
-  flex-wrap: wrap;
-}
-.fchip {
-  padding: 6px 14px;
-  border: 1px solid var(--ld-line);
-  border-radius: 999px;
+  font-family: inherit;
   background: var(--ld-bg);
-  color: var(--ld-content-2);
-  font-size: 12.5px;
-  cursor: pointer;
-}
-.fchip.on {
-  background: var(--ld-purple-ink);
-  border-color: var(--ld-purple-ink);
-  color: #fff;
-}
-.draft {
-  padding: 16px 18px;
-  margin-bottom: 14px;
-  background: var(--ld-bg);
-  border: 1px solid var(--ld-line);
-  border-radius: var(--ld-radius-l);
-  max-width: 760px;
+  color: var(--ld-ink);
+  box-sizing: border-box;
 }
 .sup-sel {
   display: block;
   width: 100%;
-  padding: 8px 12px;
-  margin-bottom: 10px;
-  border: 1px solid var(--ld-line);
-  border-radius: 8px;
-  font-size: 13px;
-  box-sizing: border-box;
+  margin-bottom: 12px;
 }
 .linerow {
   display: grid;
-  grid-template-columns: 2fr 90px 120px 90px auto;
+  grid-template-columns: 2fr 84px 120px 88px auto;
   align-items: center;
   gap: 8px;
   margin-bottom: 8px;
@@ -279,7 +256,7 @@ h1 {
   font-family: var(--ld-font-mono);
 }
 .draft-total {
-  margin: 4px 0 12px;
+  margin: 6px 0 14px;
   font-size: 13px;
   color: var(--ld-content);
 }
@@ -291,72 +268,27 @@ h1 {
   font-size: 11px;
   color: var(--ld-content-2);
 }
-.linerow select,
-.linerow input {
-  padding: 8px 10px;
-  border: 1px solid var(--ld-line);
-  border-radius: 8px;
-  font-size: 13px;
-}
 .ops {
   display: flex;
   gap: 8px;
-  margin-top: 4px;
 }
-.table {
-  background: var(--ld-bg);
-  border: 1px solid var(--ld-line);
-  border-radius: var(--ld-radius-l);
-  overflow: hidden;
+
+/* 采购单表：右对齐列 + 单号等宽 + 可展开行项明细 */
+.ld-th.r,
+.ld-td.r {
+  justify-content: flex-end;
 }
-.thead,
-.trow {
-  display: grid;
-  grid-template-columns: 1.4fr 1.4fr 0.6fr 0.9fr 0.9fr 1.1fr 1.6fr;
-  align-items: center;
-  gap: 12px;
-  padding: 11px 18px;
+.ops.ld-td {
+  gap: 6px;
+  flex-wrap: wrap;
 }
-.thead {
-  background: var(--ld-bg-lilac);
-  font-size: 12px;
-  color: var(--ld-content-2);
-}
-.trow {
-  border-top: 1px solid var(--ld-line);
-  font-size: 13px;
-  color: var(--ld-content);
-}
-.trow.sub-row {
-  display: block;
-  padding: 8px 18px 10px;
-  background: var(--ld-bg-lilac);
-}
-.lines-detail {
-  font-size: 12px;
-  color: var(--ld-content);
-  font-family: var(--ld-font-mono);
-  line-height: 1.5;
-}
-.lines-btn {
-  padding: 2px 9px;
-  border: 1px solid var(--ld-line);
-  border-radius: 999px;
-  background: var(--ld-bg);
-  color: var(--ld-brand-active);
-  font-size: 11px;
-  cursor: pointer;
-}
-.r {
-  text-align: right;
-  justify-self: end;
-}
-.mono {
+.oid {
   font-family: var(--ld-font-mono);
   font-size: 11.5px;
   color: var(--ld-ink);
+  word-break: break-all;
 }
-.strong {
+.total {
   font-weight: 700;
   color: var(--ld-ink);
 }
@@ -364,53 +296,13 @@ h1 {
   color: var(--ld-content-2);
   font-size: 12.5px;
 }
-.state {
-  padding: 3px 11px;
-  border-radius: 999px;
-  font-size: 11.5px;
-  white-space: nowrap;
-  background: var(--ld-bg-faint);
-  color: var(--ld-content-2);
-}
-.state.draft {
+.detail-row {
   background: var(--ld-bg-lilac);
-  color: var(--ld-brand-active);
 }
-.state.ordered {
-  background: var(--ld-bg-lilac);
-  color: var(--ld-amber);
-}
-.state.received {
-  background: var(--ld-bg-green-soft);
-  color: var(--ld-green);
-}
-.c-ops {
-  display: flex;
-  gap: 6px;
-  flex-wrap: wrap;
-}
-.act {
-  padding: 5px 12px;
-  border: none;
-  border-radius: 999px;
+.detail-cell {
+  font-family: var(--ld-font-mono);
   font-size: 12px;
-  font-weight: 600;
-  cursor: pointer;
-}
-.act.primary {
-  background: var(--ld-purple-ink);
-  color: #fff;
-}
-.act.ghost {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  background: var(--ld-bg);
-  color: var(--ld-content-2);
-  border: 1px solid var(--ld-line);
-}
-.act.warn {
-  background: var(--ld-red);
-  color: #fff;
+  color: var(--ld-content);
+  line-height: 1.5;
 }
 </style>

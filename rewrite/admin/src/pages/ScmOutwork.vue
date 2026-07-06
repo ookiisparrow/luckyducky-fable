@@ -2,13 +2,17 @@
 // 外协单（设计语言一致性·M3 UI 批17）：发织女大团原团 → 收同色带结团 → 应付=收×计件价·损耗=发−收 → 结算销账。
 // 逻辑未动，仅套设计语言（页头/草稿卡/grid 表/状态 chip/收货卡/token）。
 import { ref, onMounted, computed } from 'vue'
-import { Plus } from 'lucide-vue-next'
+import { Plus, ClipboardList } from 'lucide-vue-next'
 import { listOutworks, saveOutwork, issueOutwork, receiveOutwork, settleOutwork, cancelOutwork, listMaterials, listSuppliers } from '../api/scm'
 import { materialHuman, outworkStatusLabel, yuanToFen, fenLabel, scmErrorText } from '../lib/mapScm'
 import { dateTime } from '../lib/format'
 import { consumeOutworkHandoff } from '../lib/scmHandoff'
 import ScmFlowTabs from '../components/ScmFlowTabs.vue'
 import UiButton from '../components/ui/Button.vue'
+import PageHeader from '../components/ui/PageHeader.vue'
+import Card from '../components/ui/Card.vue'
+import Badge from '../components/ui/Badge.vue'
+import EmptyState from '../components/ui/EmptyState.vue'
 
 const orders = ref<Array<Record<string, any>>>([])
 const rawL = ref<Array<Record<string, any>>>([]) // 大团原团（可发）
@@ -135,76 +139,86 @@ onMounted(async () => {
 </script>
 
 <template>
-  <div class="page">
-    <header class="page-head">
-      <div>
-        <h1>外协单（发织女织带结）</h1>
-        <p class="sub">发大团原团 → 收同色带结团 → 应付=收×计件价、损耗=发−收（收货一刻定格）→ 结算销账。</p>
-      </div>
+  <div class="ld-page">
+    <PageHeader title="外协单" sub="发大团原团 → 收同色带结团 → 应付=收×计件价、损耗=发−收（收货一刻定格）→ 结算销账。">
       <UiButton @click="newOrder"><Plus :size="15" :stroke-width="2" /><span>新建外协单</span></UiButton>
-    </header>
+    </PageHeader>
 
     <ScmFlowTabs />
-    <p v-if="message" class="status" :class="{ ok: msgOk }">{{ message }}</p>
+    <p v-if="message" class="ld-status" :class="msgOk ? 'is-ok' : 'is-err'">{{ message }}</p>
 
-    <section v-if="form" class="draft">
-      <select v-model="form.workerId" class="full">
+    <Card v-if="form" :title="form.outworkId ? '编辑外协草稿' : '新建外协草稿'">
+      <select v-model="form.workerId" class="field">
         <option value="">选织女…</option>
         <option v-for="w in workers" :key="w._id" :value="w._id">{{ w.name }}</option>
       </select>
-      <input v-model="form.rateYuan" placeholder="计件单价（元/团·可 0）" class="full" />
+      <input v-model="form.rateYuan" placeholder="计件单价（元/团·可 0）" class="field" />
       <div v-for="(l, i) in form.lines" :key="i" class="linerow">
         <select v-model="l.materialId">
           <option value="">选大团原团…</option>
           <option v-for="m in rawL" :key="m._id" :value="m._id">{{ materialHuman(m._id) }}（存 {{ m.stock }}）</option>
         </select>
         <input v-model.number="l.qty" type="number" min="1" placeholder="团数" />
-        <button class="act ghost" @click="form.lines.splice(i, 1)">删行</button>
+        <UiButton variant="ghost" size="sm" @click="form.lines.splice(i, 1)">删行</UiButton>
       </div>
       <div class="ops">
-        <button class="act ghost" @click="form.lines.push({ materialId: '', qty: 1 })"><Plus :size="13" :stroke-width="2" /><span>加色</span></button>
-        <button class="act primary" @click="doSave">保存草稿</button>
-        <button class="act ghost" @click="form = null">取消</button>
+        <UiButton variant="ghost" size="sm" @click="form.lines.push({ materialId: '', qty: 1 })"><Plus :size="13" :stroke-width="2" /><span>加色</span></UiButton>
+        <UiButton size="sm" @click="doSave">保存草稿</UiButton>
+        <UiButton variant="ghost" size="sm" @click="form = null">取消</UiButton>
       </div>
-    </section>
+    </Card>
 
-    <div v-if="orders.length" class="table">
-      <div class="thead"><span>单号</span><span>织女</span><span>发料</span><span class="r">计件价</span><span>应付/损耗</span><span>状态</span><span>建单时间</span><span class="r">操作</span></div>
-      <div v-for="o in orders" :key="o._id" class="trow">
-        <span class="mono">{{ o._id }}</span>
-        <span>{{ (workers.find((w) => w._id === o.workerId) || {}).name || o.workerId }}</span>
-        <div class="issue"><div v-for="l in o.issueLines || []" :key="l.materialId">{{ materialHuman(l.materialId) }} ×{{ l.qty }}</div></div>
-        <span class="r">{{ fenLabel(o.pieceRateFen) }}/团</span>
-        <span class="muted">{{ o.payableFen != null ? fenLabel(o.payableFen) + ' / 损 ' + (o.lossQty || 0) : '—' }}</span>
-        <span><span class="state" :class="o.status">{{ outworkStatusLabel(o.status) }}</span></span>
-        <span class="muted mono">{{ dateTime(o.createdAt) }}</span>
-        <div class="c-ops r">
-          <button v-if="o.status === 'draft'" class="act ghost" @click="editDraft(o)">编辑</button>
-          <button v-if="o.status === 'draft'" class="act primary" @click="step(issueOutwork, o._id, 'iss:' + o._id)">
-            {{ confirmKey === 'iss:' + o._id ? '确认发料出库？' : '发料' }}
-          </button>
-          <button v-if="o.status === 'issued'" class="act primary" @click="startRecv(o)">收货</button>
-          <button v-if="o.status === 'delivered'" class="act primary" @click="step(settleOutwork, o._id, 'set:' + o._id)">
-            {{ confirmKey === 'set:' + o._id ? '确认工钱已付？' : '结算销账' }}
-          </button>
-          <button v-if="o.status === 'draft'" class="act warn" @click="step(cancelOutwork, o._id, 'can:' + o._id)">
-            {{ confirmKey === 'can:' + o._id ? '确认取消？' : '取消' }}
-          </button>
+    <div v-if="orders.length" class="ld-table">
+      <div class="ld-thead">
+        <div class="ld-th grow">单号</div>
+        <div class="ld-th" :style="{ width: '120px' }">织女</div>
+        <div class="ld-th" :style="{ width: '190px' }">发料</div>
+        <div class="ld-th cell-r" :style="{ width: '92px' }">计件价</div>
+        <div class="ld-th" :style="{ width: '150px' }">应付/损耗</div>
+        <div class="ld-th" :style="{ width: '92px' }">状态</div>
+        <div class="ld-th" :style="{ width: '150px' }">建单时间</div>
+        <div class="ld-th ops-cell" :style="{ width: '220px' }">操作</div>
+      </div>
+      <div class="ld-tbody">
+        <div v-for="o in orders" :key="o._id" class="ld-tr">
+          <div class="ld-td grow"><span class="mono">{{ o._id }}</span></div>
+          <div class="ld-td" :style="{ width: '120px' }">{{ (workers.find((w) => w._id === o.workerId) || {}).name || o.workerId }}</div>
+          <div class="ld-td" :style="{ width: '190px' }">
+            <div class="issue"><span v-for="l in o.issueLines || []" :key="l.materialId">{{ materialHuman(l.materialId) }} ×{{ l.qty }}</span></div>
+          </div>
+          <div class="ld-td cell-r" :style="{ width: '92px' }">{{ fenLabel(o.pieceRateFen) }}/团</div>
+          <div class="ld-td muted" :style="{ width: '150px' }">{{ o.payableFen != null ? fenLabel(o.payableFen) + ' / 损 ' + (o.lossQty || 0) : '—' }}</div>
+          <div class="ld-td" :style="{ width: '92px' }">
+            <Badge :tone="o.status === 'settled' ? 'green' : o.status === 'issued' ? 'amber' : 'brand'">{{ outworkStatusLabel(o.status) }}</Badge>
+          </div>
+          <div class="ld-td muted mono" :style="{ width: '150px' }">{{ dateTime(o.createdAt) }}</div>
+          <div class="ld-td ops-cell" :style="{ width: '220px' }">
+            <UiButton v-if="o.status === 'draft'" variant="ghost" size="sm" @click="editDraft(o)">编辑</UiButton>
+            <UiButton v-if="o.status === 'draft'" size="sm" @click="step(issueOutwork, o._id, 'iss:' + o._id)">
+              {{ confirmKey === 'iss:' + o._id ? '确认发料出库？' : '发料' }}
+            </UiButton>
+            <UiButton v-if="o.status === 'issued'" size="sm" @click="startRecv(o)">收货</UiButton>
+            <UiButton v-if="o.status === 'delivered'" size="sm" @click="step(settleOutwork, o._id, 'set:' + o._id)">
+              {{ confirmKey === 'set:' + o._id ? '确认工钱已付？' : '结算销账' }}
+            </UiButton>
+            <UiButton v-if="o.status === 'draft'" variant="danger" size="sm" @click="step(cancelOutwork, o._id, 'can:' + o._id)">
+              {{ confirmKey === 'can:' + o._id ? '确认取消？' : '取消' }}
+            </UiButton>
+          </div>
         </div>
       </div>
     </div>
-    <p v-else-if="!form" class="status-soft">还没有外协单</p>
+    <EmptyState v-else-if="!form" :icon="ClipboardList" text="还没有外协单" />
 
-    <section v-if="recvFor" class="draft recv">
-      <h2>收货 · <span class="mono">{{ recvFor }}</span>（已按发料色预填·收 ≤ 发）</h2>
-      <div v-for="(l, i) in recvLines" :key="i" class="linerow recv-row" :class="{ over: lineOver(l) }">
+    <Card v-if="recvFor" title="收货登记" :sub="recvFor + ' · 已按发料色预填 · 收 ≤ 发'">
+      <div v-for="(l, i) in recvLines" :key="i" class="recv-row" :class="{ over: lineOver(l) }">
         <select v-model="l.materialId">
           <option value="">选带结团…</option>
           <option v-for="m in knottedL" :key="m._id" :value="m._id">{{ materialHuman(m._id) }}</option>
         </select>
         <input v-model.number="l.qty" type="number" min="1" placeholder="团数" />
         <span class="cap">上限 {{ issuedByKnotted[l.materialId] ?? 0 }}{{ lineOver(l) ? ' · 超发！' : '' }}</span>
-        <button class="act ghost" @click="recvLines.splice(i, 1)">删行</button>
+        <UiButton variant="ghost" size="sm" @click="recvLines.splice(i, 1)">删行</UiButton>
       </div>
       <div class="recv-preview">
         <span>发出 <strong>{{ issuedTotal }}</strong> 团</span>
@@ -213,88 +227,70 @@ onMounted(async () => {
         <span>损耗 <strong :class="{ loss: previewLoss > 0 }">{{ previewLoss }}</strong> 团</span>
       </div>
       <div class="ops">
-        <button class="act ghost" @click="recvLines.push({ materialId: '', qty: 1 })"><Plus :size="13" :stroke-width="2" /><span>加色</span></button>
-        <button class="act primary" :disabled="anyOver" @click="doRecv">确认收货（定格应付与损耗）</button>
-        <button class="act ghost" @click="cancelRecv">取消</button>
+        <UiButton variant="ghost" size="sm" @click="recvLines.push({ materialId: '', qty: 1 })"><Plus :size="13" :stroke-width="2" /><span>加色</span></UiButton>
+        <UiButton size="sm" :disabled="anyOver" @click="doRecv">确认收货（定格应付与损耗）</UiButton>
+        <UiButton variant="ghost" size="sm" @click="cancelRecv">取消</UiButton>
       </div>
-      <p class="hint">带结团要先在物料页建档；应付/损耗按实际收货数一刻定格，结算不重算（上方为预览）。</p>
-    </section>
+      <p class="recv-hint">带结团要先在物料页建档；应付/损耗按实际收货数一刻定格，结算不重算（上方为预览）。</p>
+    </Card>
   </div>
 </template>
 
 <style scoped>
-.page {
-  max-width: 1140px;
-}
-.page-head {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 16px;
-  margin-bottom: 16px;
-}
-h1 {
-  margin: 0;
-  font-size: 22px;
-  font-weight: 700;
-  color: var(--ld-ink);
-}
-.sub {
-  margin: 4px 0 0;
-  font-size: 12.5px;
-  color: var(--ld-content-2);
-}
-.status {
-  font-size: 13px;
-  color: var(--ld-red);
-  margin-bottom: 10px;
-}
-.status.ok {
+/* 状态提示行（成功绿/失败红·覆盖 .ld-status 的灰） */
+.is-ok {
   color: var(--ld-green);
 }
-.status-soft {
-  font-size: 13px;
-  color: var(--ld-content-2);
+.is-err {
+  color: var(--ld-red);
 }
-.draft {
-  padding: 16px 18px;
-  margin-bottom: 14px;
-  background: var(--ld-bg);
-  border: 1px solid var(--ld-line);
-  border-radius: var(--ld-radius-l);
-  max-width: 760px;
-}
-.recv h2 {
-  margin: 0 0 12px;
-  font-size: 13.5px;
-  font-weight: 700;
-  color: var(--ld-ink);
-}
-.full {
+
+/* 草稿/收货表单：整宽字段 + 多列料行（本页独有的表单语言·kit 无表单原语） */
+.field {
   display: block;
   width: 100%;
   padding: 8px 12px;
   margin-bottom: 10px;
   border: 1px solid var(--ld-line);
-  border-radius: 8px;
+  border-radius: var(--ld-radius-sm);
+  font-family: inherit;
   font-size: 13px;
+  color: var(--ld-content);
+  background: var(--ld-bg);
   box-sizing: border-box;
 }
 .linerow {
   display: grid;
-  grid-template-columns: 2fr 90px auto;
+  grid-template-columns: 2fr 100px auto;
   gap: 8px;
   margin-bottom: 8px;
+  align-items: center;
 }
 .linerow select,
-.linerow input {
+.linerow input,
+.recv-row select,
+.recv-row input {
   padding: 8px 10px;
   border: 1px solid var(--ld-line);
-  border-radius: 8px;
+  border-radius: var(--ld-radius-sm);
+  font-family: inherit;
   font-size: 13px;
+  color: var(--ld-content);
+  background: var(--ld-bg);
 }
+.ops {
+  display: flex;
+  gap: 8px;
+  margin-top: 4px;
+  flex-wrap: wrap;
+}
+
+/* 收货逐色行 + 超发防护（收 > 该色发出上限即红框/红字·anyOver 拦确认） */
 .recv-row {
-  grid-template-columns: 2fr 90px auto auto;
+  display: grid;
+  grid-template-columns: 2fr 100px auto auto;
+  gap: 8px;
+  margin-bottom: 8px;
   align-items: center;
 }
 .cap {
@@ -314,10 +310,10 @@ h1 {
   display: flex;
   flex-wrap: wrap;
   gap: 16px;
-  margin: 6px 0 10px;
+  margin: 10px 0;
   padding: 10px 12px;
   background: var(--ld-bg-lilac);
-  border-radius: 10px;
+  border-radius: var(--ld-radius-sm);
   font-size: 12.5px;
   color: var(--ld-content-2);
 }
@@ -331,112 +327,36 @@ h1 {
 .recv-preview .loss {
   color: var(--ld-amber);
 }
-.ops {
-  display: flex;
-  gap: 8px;
-  margin-top: 4px;
-}
-.act:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-.hint {
+.recv-hint {
   margin: 10px 0 0;
   font-size: 11.5px;
   color: var(--ld-content-2);
 }
-.table {
-  background: var(--ld-bg);
-  border: 1px solid var(--ld-line);
-  border-radius: var(--ld-radius-l);
-  overflow: hidden;
-}
-.thead,
-.trow {
-  display: grid;
-  grid-template-columns: 1.2fr 1fr 1.3fr 0.8fr 1.1fr 0.8fr 1fr 1.3fr;
-  align-items: center;
-  gap: 12px;
-  padding: 11px 18px;
-}
-.thead {
-  background: var(--ld-bg-lilac);
+
+/* 表格单元辅助（发料多色竖排 / 单号等宽字 / 右对齐列 / 操作区靠右换行） */
+.issue {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
   font-size: 12px;
-  color: var(--ld-content-2);
-}
-.trow {
-  border-top: 1px solid var(--ld-line);
-  font-size: 13px;
   color: var(--ld-content);
-}
-.r {
-  text-align: right;
-  justify-self: end;
 }
 .mono {
   font-family: var(--ld-font-mono);
   font-size: 11.5px;
   color: var(--ld-ink);
 }
-.issue {
-  font-size: 12px;
-  color: var(--ld-content);
-}
 .muted {
   color: var(--ld-content-2);
   font-size: 12.5px;
 }
-.state {
-  padding: 3px 11px;
-  border-radius: 999px;
-  font-size: 11.5px;
-  white-space: nowrap;
-  background: var(--ld-bg-faint);
-  color: var(--ld-content-2);
+.cell-r {
+  justify-content: flex-end;
+  text-align: right;
 }
-.state.draft {
-  background: var(--ld-bg-lilac);
-  color: var(--ld-brand-active);
-}
-.state.issued {
-  background: var(--ld-bg-lilac);
-  color: var(--ld-amber);
-}
-.state.delivered {
-  background: var(--ld-bg-lilac);
-  color: var(--ld-brand-active);
-}
-.state.settled {
-  background: var(--ld-bg-green-soft);
-  color: var(--ld-green);
-}
-.c-ops {
-  display: flex;
+.ops-cell {
+  justify-content: flex-end;
   gap: 6px;
   flex-wrap: wrap;
-}
-.act {
-  padding: 5px 12px;
-  border: none;
-  border-radius: 999px;
-  font-size: 12px;
-  font-weight: 600;
-  cursor: pointer;
-}
-.act.primary {
-  background: var(--ld-purple-ink);
-  color: #fff;
-}
-.act.ghost {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  background: var(--ld-bg);
-  color: var(--ld-content-2);
-  border: 1px solid var(--ld-line);
-}
-.act.warn {
-  background: var(--ld-red);
-  color: #fff;
 }
 </style>

@@ -8,9 +8,15 @@ const route = useRoute()
 </script>
 
 <template>
-  <nav class="scm-flow-tabs">
-    <RouterLink v-for="(s, i) in SCM_FLOW" :key="s.to" :to="s.to" class="tab" :class="{ on: route.path === s.to }">
-      <span class="n">{{ i + 1 }}</span>
+  <nav class="ld-toolbar scm-flow-tabs">
+    <RouterLink
+      v-for="(s, i) in SCM_FLOW"
+      :key="s.to"
+      :to="s.to"
+      class="ld-chip"
+      :class="{ on: route.path === s.to }"
+    >
+      <span class="step-n">{{ i + 1 }}</span>
       <component :is="s.icon" :size="14" :stroke-width="1.8" />
       <span>{{ s.label }}</span>
     </RouterLink>
@@ -18,39 +24,11 @@ const route = useRoute()
 </template>
 
 <style scoped>
-.scm-flow-tabs {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  padding: 6px;
-  margin-bottom: 18px;
-  background: var(--ld-bg);
-  border: 1px solid var(--ld-line);
-  border-radius: 13px;
-  overflow-x: auto;
-}
-.tab {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  flex: 1;
-  justify-content: center;
-  padding: 8px 10px;
-  border-radius: 9px;
-  font-size: 12.5px;
-  font-weight: 600;
-  color: var(--ld-content-2);
+/* flow-specific：给流程胶囊加序号徽标（.ld-toolbar/.ld-chip.on 走全局 kit） */
+.scm-flow-tabs .ld-chip {
   text-decoration: none;
-  white-space: nowrap;
 }
-.tab:hover {
-  background: var(--ld-bg-lilac);
-}
-.tab.on {
-  background: var(--ld-purple-ink);
-  color: #fff;
-}
-.n {
+.step-n {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -60,9 +38,10 @@ const route = useRoute()
   background: var(--ld-bg-lilac);
   color: var(--ld-content-2);
   font-size: 10px;
+  font-weight: 600;
 }
-.tab.on .n {
-  background: rgba(255, 255, 255, 0.22);
-  color: #fff;
+.ld-chip.on .step-n {
+  background: var(--ld-purple-line);
+  color: var(--ld-purple-ink);
 }
 </style>

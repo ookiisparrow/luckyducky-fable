@@ -2,7 +2,7 @@
 // 备货计算 + 产销统计（设计语言一致性·M3 UI 批18·只读）：目标套数 → 外协缺口（带结不外购）+ 采购缺口按供应商分列；
 // 产销 = 打包累计 vs 发货累计。逻辑未动，仅套设计语言。
 import { ref, onMounted, computed } from 'vue'
-import { Plus, ArrowRight } from 'lucide-vue-next'
+import { Plus, ArrowRight, Boxes } from 'lucide-vue-next'
 import { useRouter } from 'vue-router'
 import { getRestockPlan, getFgSummary } from '../api/scm'
 import { listInventory } from '../api/system'
@@ -10,6 +10,10 @@ import { listDrafts } from '../api/products'
 import { materialHuman, scmErrorText, productNameOf } from '../lib/mapScm'
 import { setPurchaseHandoff, setOutworkHandoff } from '../lib/scmHandoff'
 import ScmFlowTabs from '../components/ScmFlowTabs.vue'
+import PageHeader from '../components/ui/PageHeader.vue'
+import Card from '../components/ui/Card.vue'
+import EmptyState from '../components/ui/EmptyState.vue'
+import UiButton from '../components/ui/Button.vue'
 
 const router = useRouter()
 // 去开单联动（换皮丢·算完缺口只能手抄颜色/料号/数量去另一页开单·流程割裂）：带数据跳转·目标页 consume 预填
@@ -83,26 +87,25 @@ onMounted(async () => {
 </script>
 
 <template>
-  <div class="page">
-    <header class="page-head">
-      <h1>备货计算 & 产销</h1>
-      <p class="sub">目标套数 → 外协缺口（带结不外购）+ 采购缺口按供应商分列；产销 = 打包累计 vs 发货累计。只读、不动账。</p>
-    </header>
+  <div class="ld-page">
+    <PageHeader
+      title="备货计算 & 产销"
+      sub="目标套数 → 外协缺口（带结不外购）+ 采购缺口按供应商分列；产销 = 打包累计 vs 发货累计。只读、不动账。"
+    />
 
     <ScmFlowTabs />
-    <p v-if="message" class="status">{{ message }}</p>
+    <p v-if="message" class="ld-status err">{{ message }}</p>
 
-    <section class="card">
-      <h2>备货计算器（只读·不动账）</h2>
+    <Card title="备货计算器" sub="只读 · 不动账">
       <div v-for="(t, i) in targets" :key="i" class="linerow">
         <input v-model="t.productId" list="planner-pids" placeholder="产品（选或输 id）" />
         <input v-model.number="t.sets" type="number" min="1" placeholder="目标套数" />
-        <button class="icon-x" @click="targets.splice(i, 1)">×</button>
+        <button class="icon-x" title="删除这行" @click="targets.splice(i, 1)">×</button>
       </div>
       <datalist id="planner-pids"><option v-for="pid in allProductIds" :key="pid" :value="pid">{{ productName(pid) }}</option></datalist>
       <div class="ops">
-        <button class="act ghost" @click="targets.push({ productId: '', sets: 10 })"><Plus :size="13" :stroke-width="2" /><span>加产品</span></button>
-        <button class="act primary" @click="calc">算缺口</button>
+        <UiButton variant="ghost" size="sm" @click="targets.push({ productId: '', sets: 10 })"><Plus :size="13" :stroke-width="2" /><span>加产品</span></UiButton>
+        <UiButton size="sm" @click="calc">算缺口</UiButton>
       </div>
 
       <template v-if="plan">
@@ -113,7 +116,7 @@ onMounted(async () => {
             <span class="gap-name">{{ g.color }}</span>
             <span>带结需 {{ g.knottedNeed }} · 存 {{ g.knottedStock }} · <strong class="short">缺 {{ g.gap }}（应发原团 {{ g.rawToIssue }}）</strong></span>
           </div>
-          <button v-if="(plan.outworkGaps || []).length" class="handoff-btn" @click="goOutworkOrder">照这个去外协开单发料<ArrowRight :size="13" :stroke-width="2" /></button>
+          <UiButton v-if="(plan.outworkGaps || []).length" size="sm" class="gap-cta" @click="goOutworkOrder">照这个去外协开单发料<ArrowRight :size="13" :stroke-width="2" /></UiButton>
         </div>
         <div class="gap-block">
           <h3>采购缺口（按供应商）</h3>
@@ -121,7 +124,7 @@ onMounted(async () => {
           <div v-for="g in plan.purchaseGroups" :key="g.supplierId" class="sup-group">
             <div class="sup-name-row">
               <span class="sup-name">{{ g.supplierName }}</span>
-              <button v-if="g.supplierId" class="handoff-btn sm" @click="goPurchaseOrder(g)">去这家开采购单<ArrowRight :size="12" :stroke-width="2" /></button>
+              <UiButton v-if="g.supplierId" variant="ghost" size="sm" @click="goPurchaseOrder(g)">去这家开采购单<ArrowRight :size="12" :stroke-width="2" /></UiButton>
             </div>
             <div v-for="l in g.lines" :key="l.materialId" class="gap-line">
               <span class="gap-name">{{ materialHuman(l.materialId) }}{{ l.missing ? '（未建档·按需全采）' : '' }}</span>
@@ -131,66 +134,37 @@ onMounted(async () => {
           <p v-if="(plan.missingMaterials || []).length" class="warn-note">未建档料：{{ plan.missingMaterials.join('、') }}——先去物料页建档</p>
         </div>
       </template>
-    </section>
+    </Card>
 
-    <section v-if="fg" class="card">
-      <h2>产销统计（打包 · 发货 · 现存库存）</h2>
-      <div class="pt">
-        <div class="pt-head"><span>产品 / 规格</span><span class="r">打包累计</span><span class="r">发货核销</span><span class="r">现存库存</span></div>
-        <div v-for="r in produceRows" :key="r.key" class="pt-row">
-          <span class="pt-name">{{ r.name }}</span>
-          <span class="r">{{ r.packed }} 套</span>
-          <span class="r">{{ r.shipped }} 件</span>
-          <span class="r strong">{{ r.stock == null ? '—' : r.stock }}</span>
+    <Card v-if="fg" title="产销统计" sub="打包 · 发货 · 现存库存">
+      <div v-if="produceRows.length" class="ld-table">
+        <div class="ld-thead">
+          <div class="ld-th grow">产品 / 规格</div>
+          <div class="ld-th num" :style="{ width: '110px' }">打包累计</div>
+          <div class="ld-th num" :style="{ width: '110px' }">发货核销</div>
+          <div class="ld-th num" :style="{ width: '110px' }">现存库存</div>
         </div>
-        <p v-if="!produceRows.length" class="empty">还没有产销记录</p>
+        <div class="ld-tbody">
+          <div v-for="r in produceRows" :key="r.key" class="ld-tr">
+            <div class="ld-td grow pt-name">{{ r.name }}</div>
+            <div class="ld-td num" :style="{ width: '110px' }">{{ r.packed }} 套</div>
+            <div class="ld-td num" :style="{ width: '110px' }">{{ r.shipped }} 件</div>
+            <div class="ld-td num strong" :style="{ width: '110px' }">{{ r.stock == null ? '—' : r.stock }}</div>
+          </div>
+        </div>
       </div>
-    </section>
+      <EmptyState v-else :icon="Boxes" text="还没有产销记录" />
+    </Card>
   </div>
 </template>
 
 <style scoped>
-.page {
-  max-width: 880px;
-}
-.page-head {
-  margin-bottom: 16px;
-}
-h1 {
-  margin: 0;
-  font-size: 22px;
-  font-weight: 700;
-  color: var(--ld-ink);
-}
-.sub {
-  margin: 4px 0 0;
-  font-size: 12.5px;
-  color: var(--ld-content-2);
-}
-.status {
-  font-size: 13px;
+/* 状态提示（本页 message 仅报错·红） */
+.err {
   color: var(--ld-red);
-  margin-bottom: 10px;
 }
-.card {
-  padding: 18px 20px;
-  margin-bottom: 14px;
-  background: var(--ld-bg);
-  border: 1px solid var(--ld-line);
-  border-radius: var(--ld-radius-l);
-}
-h2 {
-  margin: 0 0 12px;
-  font-size: 14px;
-  font-weight: 700;
-  color: var(--ld-ink);
-}
-h3 {
-  margin: 0 0 8px;
-  font-size: 12.5px;
-  font-weight: 600;
-  color: var(--ld-purple-meta);
-}
+
+/* 备货计算器：目标产品 × 套数行（本页独有多列表单） */
 .linerow {
   display: grid;
   grid-template-columns: 2fr 120px auto;
@@ -198,17 +172,18 @@ h3 {
   margin-bottom: 7px;
   align-items: center;
 }
-input {
+.linerow input {
   padding: 8px 12px;
   border: 1px solid var(--ld-line);
-  border-radius: 8px;
+  border-radius: var(--ld-radius-sm);
   font-size: 13px;
+  background: var(--ld-bg);
 }
 .icon-x {
   width: 30px;
   height: 34px;
   border: 1px solid var(--ld-line);
-  border-radius: 8px;
+  border-radius: var(--ld-radius-sm);
   background: var(--ld-bg);
   color: var(--ld-content-2);
   font-size: 15px;
@@ -221,32 +196,20 @@ input {
 .ops {
   display: flex;
   gap: 8px;
-  margin: 10px 0;
+  margin-top: 10px;
 }
-.act {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  padding: 8px 16px;
-  border: none;
-  border-radius: 999px;
-  font-size: 12.5px;
-  font-weight: 600;
-  cursor: pointer;
-}
-.act.primary {
-  background: var(--ld-purple-ink);
-  color: #fff;
-}
-.act.ghost {
-  background: var(--ld-bg);
-  color: var(--ld-content-2);
-  border: 1px solid var(--ld-line);
-}
+
+/* 缺口块（本页独有：外协缺口 / 采购缺口按供应商分列） */
 .gap-block {
   padding-top: 14px;
-  margin-top: 12px;
+  margin-top: 14px;
   border-top: 1px solid var(--ld-line);
+}
+.gap-block h3 {
+  margin: 0 0 8px;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--ld-purple-meta);
 }
 .ok-line {
   margin: 4px 0;
@@ -269,6 +232,9 @@ input {
 .short {
   color: var(--ld-red);
 }
+.gap-cta {
+  margin-top: 8px;
+}
 .sup-group {
   margin-bottom: 10px;
 }
@@ -284,96 +250,23 @@ input {
   font-weight: 700;
   color: var(--ld-brand-active);
 }
-.handoff-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  margin-top: 8px;
-  padding: 6px 14px;
-  border: 1px solid var(--ld-purple-line);
-  border-radius: 999px;
-  background: var(--ld-bg-lilac);
-  color: var(--ld-brand-active);
-  font-size: 12px;
-  font-weight: 600;
-  cursor: pointer;
-}
-.handoff-btn:hover {
-  background: var(--ld-purple-ink);
-  color: #fff;
-}
-.handoff-btn.sm {
-  margin-top: 0;
-  padding: 4px 10px;
-  font-size: 11px;
-}
 .warn-note {
   margin-top: 8px;
   font-size: 12px;
   color: var(--ld-amber);
 }
-.pt {
-  border: 1px solid var(--ld-line);
-  border-radius: 10px;
-  overflow: hidden;
-}
-.pt-head,
-.pt-row {
-  display: grid;
-  grid-template-columns: 2fr 1fr 1fr 1fr;
-  gap: 10px;
-  padding: 9px 14px;
-  font-size: 12.5px;
-  align-items: center;
-}
-.pt-head {
-  background: var(--ld-bg-lilac);
-  font-size: 11.5px;
-  font-weight: 600;
-  color: var(--ld-content-2);
-}
-.pt-row {
-  border-top: 1px solid var(--ld-line);
-}
-.pt-name {
-  font-family: var(--ld-font-mono);
-  color: var(--ld-content);
-}
-.pt .r {
+
+/* 产销统计表：右对齐定宽数值列（ld-table 首列 grow） */
+.num {
+  justify-content: flex-end;
   text-align: right;
 }
-.pt .strong {
+.pt-name {
+  color: var(--ld-ink);
+  font-weight: 500;
+}
+.strong {
   font-weight: 700;
   color: var(--ld-ink);
-}
-.cols {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 16px;
-}
-@media (max-width: 720px) {
-  .cols {
-    grid-template-columns: 1fr;
-  }
-}
-.fg-line {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 6px 0;
-  border-top: 1px solid var(--ld-line);
-  font-size: 12.5px;
-  color: var(--ld-content);
-}
-.fg-line:first-of-type {
-  border-top: none;
-}
-.fg-line strong {
-  color: var(--ld-ink);
-}
-.empty {
-  font-size: 12.5px;
-  color: var(--ld-content-2);
 }
 </style>
