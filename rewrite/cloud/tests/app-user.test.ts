@@ -100,7 +100,8 @@ describe('updateProfile（黄金：白名单+截断+归属·不信前端）', ()
     expect(control.dump('users')[0].phone).toBe('13800000000') // 归一化纯数字（与地址电话规则对齐·≥7 位）
     expect(((await call('updateProfile', { phone: 'abc123' })) as any).error).toBe('EMPTY_PATCH') // 字母被剔·纯数字过短
     expect(((await call('updateProfile', { phone: '12' })) as any).error).toBe('EMPTY_PATCH') // 过短剔除
-    expect(control.dump('users')[0].phone).toBe('13800000000') // 非法值不覆盖旧号
+    expect(((await call('updateProfile', { phone: 'abc' })) as any).error).toBe('EMPTY_PATCH') // 纯非数字归一化为空≠用户清空·剔除不覆盖（契约·别把它当清空）
+    expect(control.dump('users')[0].phone).toBe('13800000000') // 非法值（含纯字母）一律不覆盖旧号
     const r2: any = await call('updateProfile', { phone: '' }) // 空串清空放行
     expect(r2.ok).toBe(true)
     expect(control.dump('users')[0].phone).toBe('')

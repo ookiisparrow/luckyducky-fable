@@ -23,12 +23,15 @@ function locate(course: any, lessonId: string, segmentId: string) {
   return { chapterTitle: '', lessonName: '', segmentName: '' }
 }
 
-// 一门课总段数（完成度分母）
-function totalSegments(course: any): number {
-  let n = 0
+// 一门课全部段 id 集（完成度分母 = size；分子与之取交集）。
+// 防 stale：trackEvent 只往 done 加键、后台删段/改名后旧键不清，直接数 done 键会 doneCount>total 使 percent>100；
+// 与 C 端 mapMyCourses 同口径——分子必须 ∩ 段集（否则坐席见「200% 完成」而 C 端封顶 100·两端分叉）。
+function segmentIds(course: any): Set<string> {
+  const ids = new Set<string>()
   for (const ch of (course && course.chapters) || [])
-    for (const ls of ch.lessons || []) n += (ls.segments || []).length
-  return n
+    for (const ls of ch.lessons || [])
+      for (const s of ls.segments || []) if (s && s.id) ids.add(String(s.id))
+  return ids
 }
 
 export const learningProvider: CustomerPanelProvider = {
@@ -53,8 +56,12 @@ export const learningProvider: CustomerPanelProvider = {
       const course = courseById[p.courseId] || null
       const last = p.last || {}
       const where = locate(course, last.lessonId, last.segmentId)
-      const total = course ? totalSegments(course) : 0
-      const doneCount = p.done ? Object.values(p.done).filter(Boolean).length : 0
+      const segIds = course ? segmentIds(course) : new Set<string>()
+      const total = segIds.size
+      // 分子 ∩ 段集（防 stale done 键顶爆·与 C 端 mapMyCourses 同口径·percent 恒 ≤100）
+      const done = p.done && typeof p.done === 'object' ? p.done : {}
+      let doneCount = 0
+      for (const k of Object.keys(done)) if (done[k] && segIds.has(k)) doneCount++
       return {
         courseId: p.courseId,
         courseTitle: (course && course.title) || p.courseId,

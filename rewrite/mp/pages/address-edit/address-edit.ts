@@ -13,6 +13,7 @@ Page({
     detail: '',
     isDefault: false,
     valid: false, // 派生：四要素齐→保存按钮亮（弱校验·onSave 内仍做强校验含电话位数）
+    saving: false, // 提交锁·防双击（新增态不回写 id·navigateBack 异步·连点会 push 两条重复地址）
   },
   onLoad(query: Record<string, string | undefined>) {
     const id = query.id ? Number(query.id) : null
@@ -50,6 +51,7 @@ Page({
     if (valid !== this.data.valid) this.setData({ valid })
   },
   onSave() {
+    if (this.data.saving) return // 提交在途·丢弃二次点击（navigateBack 前页面未销毁·新增态双击会落两条重复地址）
     const { id, name, phone, region, detail, isDefault } = this.data
     if (!name.trim() || !phone.trim() || !region.trim() || !detail.trim()) {
       wx.showToast({ title: '四项都要填哦', icon: 'none' })
@@ -59,6 +61,7 @@ Page({
       wx.showToast({ title: '电话号码不太对', icon: 'none' })
       return
     }
+    this.setData({ saving: true }) // 校验过关·锁定后再落库+返回（锁贯穿到页面销毁）
     addr.saveAddress({ id: id ?? undefined, name: name.trim(), phone: phone.trim(), region: region.trim(), detail: detail.trim(), isDefault })
     wx.navigateBack()
   },

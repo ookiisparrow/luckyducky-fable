@@ -10,6 +10,7 @@ Page({
     avatar: '', // cloud:// 或空
     avatarTemp: '', // 本次新选的临时路径（待上传）
     busy: false,
+    loaded: false, // 资料是否成功载入（login 成功）·未载入不允许保存（防读故障→空字段→破坏性覆盖清空已存 phone/bio）
   },
   backTimer: null as ReturnType<typeof setTimeout> | null,
   onUnload() {
@@ -18,7 +19,7 @@ Page({
   async onLoad() {
     const u = await login()
     const user = (u.ok ? u.user : null) as Record<string, any> | null
-    if (user) this.setData({ nickname: String(user.nickname || ''), bio: String(user.bio || ''), phone: String(user.phone || ''), avatar: String(user.avatar || '') })
+    if (user) this.setData({ nickname: String(user.nickname || ''), bio: String(user.bio || ''), phone: String(user.phone || ''), avatar: String(user.avatar || ''), loaded: true })
   },
   onChooseAvatar(e: WechatMiniprogram.CustomEvent<{ avatarUrl: string }>) {
     this.setData({ avatarTemp: e.detail.avatarUrl })
@@ -34,6 +35,11 @@ Page({
   },
   async onSave() {
     if (this.data.busy) return
+    // fail-closed：资料没载入成功（login 失败→字段空）时禁存——否则空 phone/bio 会把云端已存值静默覆盖清空（读故障不该触发破坏性写）
+    if (!this.data.loaded) {
+      wx.showToast({ title: '资料没加载好，返回重进一下', icon: 'none' })
+      return
+    }
     if (!this.data.nickname.trim()) {
       wx.showToast({ title: '起个昵称吧', icon: 'none' })
       return
