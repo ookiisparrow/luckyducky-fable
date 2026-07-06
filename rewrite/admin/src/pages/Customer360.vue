@@ -6,6 +6,7 @@ import { Search, ChevronLeft, RotateCcw, User } from 'lucide-vue-next'
 import { searchCustomer, getCustomer360, getUser } from '../api/cs'
 import { matchLabel, mapPanels, type PanelVM } from '../lib/mapCs'
 import { maskPhone } from '../lib/mapMoney'
+import { useLatest } from '../lib/latest'
 import { dateTime } from '../lib/format'
 import UiButton from '../components/ui/Button.vue'
 import PageHeader from '../components/ui/PageHeader.vue'
@@ -39,11 +40,15 @@ async function search() {
   message.value = r.ok ? (hits.value.length ? '' : '没找到匹配的客户') : '搜索失败：' + String(r.error || '')
 }
 
+const panoGen = useLatest() // 全景乱序守卫（P1·FORCE_AUDIT 页·A 的私域全景别落到标 B 的头下·根因#8）
 async function open(openid: string) {
   current.value = openid
   message.value = '加载全景…'
   user.value = null
+  panels.value = [] // 起始清旧全景（防刷新在途时旧 A 面板残留·再切人错配）
+  const my = panoGen.begin()
   const [r, u] = await Promise.all([getCustomer360(openid), getUser(openid)])
+  if (panoGen.isStale(my) || current.value !== openid) return // 已切别人/别页·丢弃过期全景（防跨人隐私错配）
   panels.value = r.ok ? mapPanels(r) : []
   if (u.ok) {
     const d = ((u as any).user || u) as Record<string, any>

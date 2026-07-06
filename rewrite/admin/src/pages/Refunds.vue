@@ -7,6 +7,7 @@ import { RefreshCw, Search, X, CircleCheck, Ticket, GraduationCap, Check } from 
 import { listRefunds, refundCounts, approveRefund, rejectRefund, getRefundDetail } from '../api/money'
 import UiButton from '../components/ui/Button.vue'
 import { mapRefundRows, refundVerdict, type RefundRowVM, type RefundVerdictVM } from '../lib/mapMoney'
+import { useLatest } from '../lib/latest'
 import PageHeader from '../components/ui/PageHeader.vue'
 import Card from '../components/ui/Card.vue'
 import Badge from '../components/ui/Badge.vue'
@@ -100,6 +101,7 @@ function clearSearch() {
   void reload()
 }
 
+const detailGen = useLatest() // 退货权判据乱序守卫（P1·A 单在途详情别盖到 B 单抽屉·根因#8）
 async function openDecide(row: RefundRowVM) {
   decideRow.value = row
   checkPkg.value = false
@@ -108,7 +110,9 @@ async function openDecide(row: RefundRowVM) {
   rejectReason.value = ''
   decideErr.value = ''
   verdict.value = { loading: true, activated: false, entered: false, code: '', courseId: '', lineRefundable: true, refundableQty: null, lineFound: false }
+  const my = detailGen.begin()
   const r = await getRefundDetail(row.id)
+  if (detailGen.isStale(my) || decideRow.value?.id !== row.id) return // 抽屉已切别单·丢弃过期详情（防判据错配）
   const a = (r as any)?.activation || {}
   verdict.value = {
     loading: false,

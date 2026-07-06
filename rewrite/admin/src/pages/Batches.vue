@@ -12,6 +12,7 @@ import { listBatches, createBatch, listBatchCodes, getSettings } from '../api/sy
 import { getCard } from '../api/products'
 import { buildFrontSvg, buildBackSvg } from '../lib/cardSvg'
 import { mapBatches, type BatchRow } from '../lib/mapSystem'
+import { useLatest } from '../lib/latest'
 import UiButton from '../components/ui/Button.vue'
 import PageHeader from '../components/ui/PageHeader.vue'
 import Card from '../components/ui/Card.vue'
@@ -102,19 +103,24 @@ async function doCreate() {
     return
   }
   busy.value = true
-  const r = await createBatch(courseId.value.trim(), count.value)
+  // 用已载入的课程(loadedCourse)生成·非可编辑的 courseId（P1·改了选择器没重载会为错课量产激活卡）
+  const target = loadedCourse.value || courseId.value.trim()
+  const r = await createBatch(target, count.value)
   busy.value = false
   message.value = r.ok ? `已生成批次 ${String(r.batchId)}（${(r.codes as string[]).length} 张码）` : '生成失败：' + String(r.error || '')
   creating.value = false
   void load()
 }
 
+const codesGen = useLatest() // 码表乱序守卫（P1·A 的码别配到 B 的批次头·防印错卡·根因#8）
 async function openDetail(b: BatchRow) {
   detail.value = b
   codes.value = []
   testQr.value = ''
   codesLoading.value = true
+  const my = codesGen.begin()
   const r = await listBatchCodes(b.batchId)
+  if (codesGen.isStale(my) || detail.value?.batchId !== b.batchId) return // 已切别批次·丢弃过期码表（防码/头错配印错卡）
   codes.value = r.ok ? (r.codes as string[]) : []
   codesLoading.value = false
 }
