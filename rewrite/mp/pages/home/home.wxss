@@ -195,7 +195,7 @@
 }
 .ld-prod-media {
   width: 100%;
-  height: 400rpx; /* 卡宽 400rpx → 方形 */
+  height: 300rpx; /* 4:3 缩略（卡宽 400rpx）·压低卡片高度 */
   background: var(--ld-bg-sage);
 }
 .ld-prod-media-img {
@@ -405,7 +405,7 @@
 }
 .ld-review-media {
   width: 100%;
-  height: 534rpx; /* 卡宽 400rpx × 4/3（3:4 竖图） */
+  height: 300rpx; /* 4:3 缩略（卡宽 400rpx）·由 3:4 竖图压低卡片高度 */
   background: var(--ld-bg-sage);
 }
 .ld-review-media-img {
