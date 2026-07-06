@@ -30,20 +30,34 @@ export async function saveHomeContent({ db, data }: Ctx) {
     }
     if (Object.keys(entry).length) activationBgByCourse[str(k, 40)] = entry
   }
+  // 首页九板块内容白名单净化（键限长、数组封顶防滥用；空态照存＝小程序读侧回退设计默认文案·防误清空）：
+  const arrOf = (v: any, cap: number) => (Array.isArray(v) ? v : []).slice(0, cap)
   const doc = {
-    hero: { title: str(c.hero?.title, 20), tagline: str(c.hero?.tagline, 40) },
+    // Hero：主标题/副标语 + 搜索框占位文案 + 顶部背景图 fileID（空→小程序回退渐变占位）
+    hero: { title: str(c.hero?.title, 20), tagline: str(c.hero?.tagline, 40), search: str(c.hero?.search, 40), img: str(c.hero?.img, 200) },
+    // 品牌自述 / 特写方案（title+body+图）/ 「把门槛拆掉」放心区（heading+lead+至多 6 条 icon/标题/正文/图）
+    brand: { name: str(c.brand?.name, 20), lead: str(c.brand?.lead, 60) },
+    feature: { title: str(c.feature?.title, 30), body: str(c.feature?.body, 80), img: str(c.feature?.img, 200) },
+    reassure: {
+      heading: str(c.reassure?.heading, 20),
+      lead: str(c.reassure?.lead, 60),
+      items: arrOf(c.reassure?.items, 6).map((it: any) => ({ icon: str(it?.icon, 20), title: str(it?.title, 20), body: str(it?.body, 120), img: str(it?.img, 200) })),
+    },
+    // 真实买家秀（heading + 至多 12 条 quote/user/图）/ 收尾 CTA / 页脚（至多 6 链接 + 版权）
+    reviews: {
+      heading: str(c.reviews?.heading, 20),
+      items: arrOf(c.reviews?.items, 12).map((it: any) => ({ quote: str(it?.quote, 120), user: str(it?.user, 20), img: str(it?.img, 200) })),
+    },
+    closing: { title: str(c.closing?.title, 20), cta: str(c.closing?.cta, 40), img: str(c.closing?.img, 200) },
+    footer: { links: arrOf(c.footer?.links, 6).map((s: any) => str(s, 20)).filter(Boolean), copy: str(c.footer?.copy, 120) },
     // 激活页背景图（welcome）：存云存储 fileID（cloud://…，≤200）；空＝小程序回退 /static/hero-full.jpg
     activationBg: str(c.activationBg, 200),
     // 全局·正在激活(loading)图：loading 时还拿不到 courseId 故全局（橱窗管）；空＝回退 activationBg→static
     loadingBg: str(c.loadingBg, 200),
     // 按课程·按状态激活欢迎图（welcome 按屏取·回退 activationBg→static）
     activationBgByCourse,
-    trust: (Array.isArray(c.trust) ? c.trust : [])
-      .slice(0, 4)
-      .map((t: any) => ({ icon: str(t?.icon, 20), label: str(t?.label, 12) })),
-    faq: (Array.isArray(c.faq) ? c.faq : [])
-      .slice(0, 8)
-      .map((f: any) => ({ title: str(f?.title, 40), body: str(f?.body, 150) })),
+    trust: arrOf(c.trust, 4).map((t: any) => ({ icon: str(t?.icon, 20), label: str(t?.label, 12) })),
+    faq: arrOf(c.faq, 8).map((f: any) => ({ title: str(f?.title, 40), body: str(f?.body, 150) })),
     updatedAt: Date.now(),
   }
   await ensure(db, 'content')

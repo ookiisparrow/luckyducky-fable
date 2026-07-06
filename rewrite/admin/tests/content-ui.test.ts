@@ -19,6 +19,56 @@ describe('首页模型往返', () => {
     expect(payload.activationBgByCourse['course-b']).toEqual({ welcome: 'cloud://w.jpg', taken: 'cloud://t.jpg' }) // 空态不进
     expect(normalizeHome(null).heroTitle).toBe('') // 缺档全默认
   })
+
+  it('大白话：首页九板块文案/图往返——hero搜索+图、品牌、特写、放心、买家秀、收尾、页脚都进档；空块/空态/空链剔除', () => {
+    const m = normalizeHome({
+      hero: { title: '创造幸运', tagline: 't', search: '入门钩织的妙趣方式', img: 'cloud://hero.jpg' },
+      brand: { name: '易织™小棉鸭®', lead: '亲手创造随身幸运物' },
+      feature: { title: '妙趣方案', body: '精心设计', img: 'cloud://feat.jpg' },
+      reassure: {
+        heading: '把门槛拆掉',
+        lead: '门槛一一拆掉',
+        items: [
+          { icon: 'heart-handshake', title: '放心开始', body: '全材料包', img: 'cloud://r1.jpg' },
+          { icon: 'shield-check', title: '难以失败', body: '可回看' },
+        ],
+      },
+      reviews: { heading: '真实买家秀', items: [{ quote: '第一次就成功', user: '小满', img: 'cloud://rv1.jpg' }] },
+      closing: { title: '创造幸运', cta: 'Get ducky get lucky', img: 'cloud://close.jpg' },
+      footer: { links: ['关于我们', 'Lucky 鸭'], copy: 'Copyright © 2026' },
+    })
+    // 往：档 → 编辑模型逐字段落位
+    expect(m.heroSearch).toBe('入门钩织的妙趣方式')
+    expect(m.heroImg).toBe('cloud://hero.jpg')
+    expect(m.brandName).toBe('易织™小棉鸭®')
+    expect(m.brandLead).toBe('亲手创造随身幸运物')
+    expect(m.featureTitle).toBe('妙趣方案')
+    expect(m.featureImg).toBe('cloud://feat.jpg')
+    expect(m.reassureHeading).toBe('把门槛拆掉')
+    expect(m.reassureItems).toEqual([
+      { icon: 'heart-handshake', title: '放心开始', body: '全材料包', img: 'cloud://r1.jpg' },
+      { icon: 'shield-check', title: '难以失败', body: '可回看', img: '' },
+    ])
+    expect(m.reviewsItems).toEqual([{ quote: '第一次就成功', user: '小满', img: 'cloud://rv1.jpg' }])
+    expect(m.closingCta).toBe('Get ducky get lucky')
+    expect(m.footerLinks).toEqual(['关于我们', 'Lucky 鸭'])
+    expect(m.footerCopy).toBe('Copyright © 2026')
+
+    // 返：编辑模型 → 载荷（空块/空态/空链剔除·与云端白名单同构）
+    m.reassureItems.push({ icon: '', title: '', body: '', img: '' }) // 空块
+    m.reviewsItems.push({ quote: '  ', user: '匿名', img: '' }) // 空评价
+    m.footerLinks.push('   ') // 空链
+    const p = homePayload(m) as Record<string, any>
+    expect(p.hero).toEqual({ title: '创造幸运', tagline: 't', search: '入门钩织的妙趣方式', img: 'cloud://hero.jpg' })
+    expect(p.brand).toEqual({ name: '易织™小棉鸭®', lead: '亲手创造随身幸运物' })
+    expect(p.reassure.items).toHaveLength(2) // 空块剔除
+    expect(p.reviews.items).toHaveLength(1) // 空评价剔除（quote 全空白）
+    expect(p.closing).toEqual({ title: '创造幸运', cta: 'Get ducky get lucky', img: 'cloud://close.jpg' })
+    expect(p.footer.links).toEqual(['关于我们', 'Lucky 鸭']) // 空链剔除
+    // 缺档：新板块字段全默认空串（编辑器显占位提示·小程序读侧回退设计文案）
+    expect(normalizeHome(null).brandName).toBe('')
+    expect(normalizeHome(null).reassureItems).toEqual([])
+  })
 })
 
 describe('直传表单字段（调试日志 G：错一个字段云存储 403）', () => {

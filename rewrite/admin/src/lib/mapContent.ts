@@ -4,6 +4,23 @@
 export interface HomeModel {
   heroTitle: string
   heroTagline: string
+  heroSearch: string
+  heroImg: string
+  brandName: string
+  brandLead: string
+  featureTitle: string
+  featureBody: string
+  featureImg: string
+  reassureHeading: string
+  reassureLead: string
+  reassureItems: Array<{ icon: string; title: string; body: string; img: string }>
+  reviewsHeading: string
+  reviewsItems: Array<{ quote: string; user: string; img: string }>
+  closingTitle: string
+  closingCta: string
+  closingImg: string
+  footerLinks: string[]
+  footerCopy: string
   activationBg: string
   loadingBg: string
   byCourse: Array<{ courseId: string; welcome: string; welcomeBack: string; taken: string }>
@@ -11,10 +28,18 @@ export interface HomeModel {
   faq: Array<{ title: string; body: string }>
 }
 
-/** 云端 home 档 → 编辑模型（缺档全默认·byCourse 映射转行·旧单串值归一 welcome）。 */
+/** 云端 home 档 → 编辑模型（缺档全默认空串·byCourse 映射转行·旧单串值归一 welcome）。
+ *  新板块（品牌/特写/放心/买家秀/收尾/页脚）缺失→空串/空数组：编辑器显占位提示，小程序读侧回退设计文案。 */
 export function normalizeHome(raw: unknown): HomeModel {
   const h = (raw && typeof raw === 'object' ? raw : {}) as Record<string, any>
-  const hero = h.hero && typeof h.hero === 'object' ? h.hero : {}
+  const o = (v: any) => (v && typeof v === 'object' ? v : {})
+  const hero = o(h.hero)
+  const brand = o(h.brand)
+  const feature = o(h.feature)
+  const reassure = o(h.reassure)
+  const reviews = o(h.reviews)
+  const closing = o(h.closing)
+  const footer = o(h.footer)
   const byCourseRaw = h.activationBgByCourse && typeof h.activationBgByCourse === 'object' ? h.activationBgByCourse : {}
   const byCourse: HomeModel['byCourse'] = []
   for (const k of Object.keys(byCourseRaw)) {
@@ -25,6 +50,23 @@ export function normalizeHome(raw: unknown): HomeModel {
   return {
     heroTitle: String(hero.title || ''),
     heroTagline: String(hero.tagline || ''),
+    heroSearch: String(hero.search || ''),
+    heroImg: String(hero.img || ''),
+    brandName: String(brand.name || ''),
+    brandLead: String(brand.lead || ''),
+    featureTitle: String(feature.title || ''),
+    featureBody: String(feature.body || ''),
+    featureImg: String(feature.img || ''),
+    reassureHeading: String(reassure.heading || ''),
+    reassureLead: String(reassure.lead || ''),
+    reassureItems: (Array.isArray(reassure.items) ? reassure.items : []).map((it: any) => ({ icon: String(it?.icon || ''), title: String(it?.title || ''), body: String(it?.body || ''), img: String(it?.img || '') })),
+    reviewsHeading: String(reviews.heading || ''),
+    reviewsItems: (Array.isArray(reviews.items) ? reviews.items : []).map((it: any) => ({ quote: String(it?.quote || ''), user: String(it?.user || ''), img: String(it?.img || '') })),
+    closingTitle: String(closing.title || ''),
+    closingCta: String(closing.cta || ''),
+    closingImg: String(closing.img || ''),
+    footerLinks: (Array.isArray(footer.links) ? footer.links : []).map((s: any) => String(s || '')),
+    footerCopy: String(footer.copy || ''),
     activationBg: String(h.activationBg || ''),
     loadingBg: String(h.loadingBg || ''),
     byCourse,
@@ -33,7 +75,8 @@ export function normalizeHome(raw: unknown): HomeModel {
   }
 }
 
-/** 编辑模型 → saveHomeContent 载荷（空课行剔除·行转映射·与云端白名单同构）。 */
+/** 编辑模型 → saveHomeContent 载荷（空课行/空块/空评价/空链剔除·与云端白名单同构）。
+ *  空串字段照发（云端存空、小程序读侧回退设计默认＝防误清空半空板块·黄金 §九）。 */
 export function homePayload(m: HomeModel): Record<string, unknown> {
   const activationBgByCourse: Record<string, Record<string, string>> = {}
   for (const row of m.byCourse) {
@@ -46,7 +89,20 @@ export function homePayload(m: HomeModel): Record<string, unknown> {
     if (Object.keys(entry).length) activationBgByCourse[cid] = entry
   }
   return {
-    hero: { title: m.heroTitle, tagline: m.heroTagline },
+    hero: { title: m.heroTitle, tagline: m.heroTagline, search: m.heroSearch, img: m.heroImg },
+    brand: { name: m.brandName, lead: m.brandLead },
+    feature: { title: m.featureTitle, body: m.featureBody, img: m.featureImg },
+    reassure: {
+      heading: m.reassureHeading,
+      lead: m.reassureLead,
+      items: m.reassureItems.filter((it) => it.title.trim() || it.body.trim()).map((it) => ({ icon: it.icon, title: it.title, body: it.body, img: it.img })), // 空块剔除
+    },
+    reviews: {
+      heading: m.reviewsHeading,
+      items: m.reviewsItems.filter((it) => it.quote.trim()).map((it) => ({ quote: it.quote, user: it.user, img: it.img })), // 空评价剔除
+    },
+    closing: { title: m.closingTitle, cta: m.closingCta, img: m.closingImg },
+    footer: { links: m.footerLinks.map((s) => s.trim()).filter(Boolean), copy: m.footerCopy }, // 空链剔除
     activationBg: m.activationBg,
     loadingBg: m.loadingBg,
     activationBgByCourse,
