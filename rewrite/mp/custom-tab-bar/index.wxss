@@ -1,40 +1,41 @@
-/* 悬浮药丸 TabBar（打样视觉·沿旧线设计语言：白底药丸悬浮 + 紫选中；UI 重设计拍板后随 token 调） */
+/* 全宽圆角悬浮 TabBar（重设计·Chrome.jsx/首页.html：白底圆角条·三等分 tab·图标+文字横排·选中丁香紫药丸）。
+   官方 custom-tab-bar 机制不变（setActive/角标/switchTab 在 index.ts）；此文件只管视觉。 */
 .ld-tabbar {
   position: fixed;
-  left: 50%;
-  transform: translateX(-50%);
-  bottom: calc(24rpx + env(safe-area-inset-bottom));
+  left: 52rpx;
+  right: 52rpx;
+  bottom: calc(15rpx + env(safe-area-inset-bottom));
   display: flex;
-  align-items: center;
   gap: 8rpx;
-  padding: 12rpx 20rpx;
+  padding: 15rpx;
   background: var(--ld-bg);
-  border-radius: var(--ld-radius-pill);
-  box-shadow: 0 8rpx 32rpx rgba(36, 23, 51, 0.16);
+  border-radius: 52rpx;
+  box-shadow: 0 15rpx 56rpx rgba(28, 28, 32, 0.22), 0 4rpx 15rpx rgba(28, 28, 32, 0.12);
 }
 .ld-tab {
+  flex: 1;
   display: flex;
-  flex-direction: column;
   align-items: center;
-  gap: 4rpx;
-  padding: 8rpx 28rpx;
-  border-radius: var(--ld-radius-pill);
+  justify-content: center;
+  gap: 12rpx;
+  padding: 20rpx 0;
+  border-radius: 37rpx;
 }
 .ld-tab-iconwrap {
   position: relative;
 }
 .ld-tab-icon {
-  width: 40rpx;
-  height: 40rpx;
+  width: 38rpx;
+  height: 38rpx;
   display: block;
 }
 .ld-tab-badge {
   position: absolute;
-  top: -10rpx;
-  right: -18rpx;
+  top: -12rpx;
+  right: -16rpx;
   min-width: 28rpx;
-  padding: 0 8rpx;
   height: 28rpx;
+  padding: 0 8rpx;
   line-height: 28rpx;
   text-align: center;
   border-radius: var(--ld-radius-pill);
@@ -43,11 +44,12 @@
   font-size: 18rpx;
 }
 .ld-tab-label {
-  font-size: 20rpx;
-  color: var(--ld-purple-meta);
+  font-size: 24rpx;
+  font-weight: 500;
+  color: rgba(0, 0, 0, 0.55);
 }
 .ld-tab.active {
-  background: var(--ld-bg-lilac);
+  background: #f2ebfc; /* 选中丁香紫药丸（设计 #F2EBFC） */
 }
 .ld-tab.active .ld-tab-label {
   color: var(--ld-purple-tab);
