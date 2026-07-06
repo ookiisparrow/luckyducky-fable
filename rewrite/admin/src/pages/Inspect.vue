@@ -47,7 +47,13 @@ async function runNow() {
   const r: any = await runInspect()
   running.value = false
   if (r.error === 'SESSION_LOST') return // 会话失效集中导登录（client.onSessionLost·单源·根因#5）
-  if (r.ok) latest.value = r.run
+  if (!r.ok) {
+    // 巡检本身失败（超时/限频/网络）留原文·不再 load()——否则紧随的 getInspectStatus 成功会把 message 抹成 ''，
+    // 操作员误以为「巡检跑过·没新异常」，恰在这块「探静默失败」的面板上制造新的静默失败（病根#14）
+    message.value = '巡检失败：' + String(r.error || '')
+    return
+  }
+  latest.value = r.run
   await load()
 }
 

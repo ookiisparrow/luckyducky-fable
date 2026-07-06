@@ -75,7 +75,12 @@ async function markResolved(a: any) {
   confirmId.value = ''
   const r: any = await resolveAnomaly(a._id)
   if (r.error === 'SESSION_LOST') return // 会话失效集中导登录（client.onSessionLost·单源·根因#5）
-  if (r.ok) await load()
+  if (r.ok) {
+    await load()
+    return
+  }
+  // 破坏性动作失败（网络/未生效）必须显——否则两步确认按钮悄悄复位、异常仍未处理、操作员以为已办（病根#14）
+  message.value = '标记失败：' + String(r.error || '未生效，请重试') // 不 reload（reload 成功会把此错抹掉）
 }
 
 function setFilter(f: 'open' | 'resolved' | 'all') {

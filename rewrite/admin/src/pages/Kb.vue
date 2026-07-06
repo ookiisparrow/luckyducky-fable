@@ -79,8 +79,14 @@ async function save() {
   busy.value = true
   const r = await saveKb(cleaned)
   busy.value = false
-  message.value = r.ok ? `已保存 ${Number(r.count) || 0} 条（整册覆盖·被删的行已真删）` : '保存失败：' + String(r.error || '')
-  void reload()
+  if (!r.ok) {
+    // 保存失败留原文·绝不 reload——否则 listKb 成功会把编辑器换回旧数据（丢未存的 FAQ 编辑）并抹掉本条错（病根#14）
+    message.value = '保存失败：' + String(r.error || '')
+    return
+  }
+  const n = Number(r.count) || 0
+  await reload() // 成功才刷（拉回落库后的整册）
+  message.value = `已保存 ${n} 条（整册覆盖·被删的行已真删）` // 刷完再显·不被 reload 的 '' 抹掉
 }
 
 onMounted(reload)
