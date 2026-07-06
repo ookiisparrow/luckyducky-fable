@@ -52,8 +52,9 @@ async function reloadProduct() {
   loadError.value = false
   const r: any = await listDrafts()
   if (!r.ok) {
-    // 载入失败 ≠ 商品不存在：product 保持原值、置 loadError 显可重试态（否则 product=null 会渲成「商品不存在」误导·且失败 banner 在 product 分支内够不到·P3）
-    loadError.value = true
+    // 载入失败：仅在「还没载到商品」（初次深链·product 仍 null）时显全屏可重试态区别于「商品不存在」；
+    // 已载入后的刷新失败（@saved autosave 回刷 / 切步回刷）只降级为 message banner、不撕掉正在编辑的向导+内嵌编辑器（P2 回归修·reloadProduct 是共享回刷路径）
+    if (!product.value) loadError.value = true
     message.value = '加载失败：' + String(r.error || '')
     loading.value = false
     return

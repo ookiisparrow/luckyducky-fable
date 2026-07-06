@@ -53,8 +53,11 @@ function readDuration(file: File): Promise<string> {
 const saveState = ref<'' | 'saving' | 'saved' | 'error'>('')
 let loaded = false
 let saveTimer: ReturnType<typeof setTimeout> | null = null
-// 串行化实际保存（防慢网下两次自动保存乱序覆盖·P2·根因#8）：run 现读 items.value·补存即最新
+// 串行化实际保存（防慢网下两次自动保存乱序覆盖·P2·根因#8）：run 现读 items.value·补存即最新。
+// P1 兜底单点：载入失败或 reload 清空后 loaded=false，任何在途 timer / 离页补存 / 手动保存路径进到这里都直接 no-op——
+// 杜绝拿空/残缺 items 整档覆盖 + 孤儿 GC 删光云端帮助视频（gate loaded 已挡 watch 与 save 入口·此处收口所有写者）。
 const flushSave = serialSave(async () => {
+  if (!loaded) return
   const r = await saveHelpVideos(items.value)
   saveState.value = r.ok ? 'saved' : 'error'
 })
@@ -131,6 +134,10 @@ async function save() {
     // 未成功载入即手动保存 = 拿空/残缺 items 整档覆盖 + 孤儿 GC 删光云端视频文件（P1）——拒绝并提示刷新（gate loaded 已挡 autosave·此挡手动路径）
     message.value = '内容未成功载入，暂不能保存（避免覆盖并误删已有帮助视频·请刷新重试）'
     return
+  }
+  if (saveTimer) {
+    clearTimeout(saveTimer) // 清在途防抖 timer·防其在随后 reload 清空 items+loaded=false 后再触发（P1·同 Courses/HomeContent·flushSave run 已 gate loaded 兜底）
+    saveTimer = null
   }
   busy.value = true
   await flushSave() // 先排空在途/待发自动保存·防旧快照 POST 落在手动保存之后覆盖新编辑（P2·同 HomeContent/Products.closeEditor）
