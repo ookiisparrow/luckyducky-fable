@@ -84,6 +84,11 @@ Page({
   },
   onTapRec(e: WechatMiniprogram.TouchEvent) {
     const id = String(e.currentTarget.dataset.id || '')
-    if (id) wx.navigateTo({ url: '/pages/detail/detail?id=' + id })
+    if (!id) return
+    // detail→详情 会叠栈：连点推荐卡逼近微信 10 层上限后 navigateTo 静默失败、卡片变哑。
+    // 逼近上限（留 headroom）改 redirectTo 替换本页不叠栈；否则 navigateTo 并补 fail 降级 redirectTo（不静默）。
+    const url = '/pages/detail/detail?id=' + id
+    if (getCurrentPages().length >= 8) wx.redirectTo({ url })
+    else wx.navigateTo({ url, fail: () => wx.redirectTo({ url }) })
   },
 })

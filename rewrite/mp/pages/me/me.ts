@@ -28,8 +28,11 @@ Page({
   },
   onContinue() {
     const c = this.data.cont
-    if (c) wx.navigateTo({ url: '/pages/player/player?courseId=' + c.courseId })
-    else wx.switchTab({ url: '/pages/home/home' }) // 无课兜底：去逛逛
+    if (c) {
+      // 带上次段位回到那一段（卡片显的是该课时·不带则播放器落首段·卡片承诺≠行为）；段位空则不拼（播放器挑首个可播段）
+      const seg = c.segmentId ? '&segmentId=' + encodeURIComponent(c.segmentId) : ''
+      wx.navigateTo({ url: '/pages/player/player?courseId=' + c.courseId + seg })
+    } else wx.switchTab({ url: '/pages/home/home' }) // 无课兜底：去逛逛
   },
   onEditProfile() {
     wx.navigateTo({ url: '/pages/profile-edit/profile-edit' })

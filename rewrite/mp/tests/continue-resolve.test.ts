@@ -16,6 +16,15 @@ describe('继续学习定位（黄金 §四）', () => {
     expect(stale).toMatchObject({ courseId: 'c1', lessonId: 'l1' }) // 脏课时退回第一课时·仍是本课
   })
 
+  it('大白话：命中原课时→带上次看的段位 segmentId 一路给播放器（回到那一段）；退回首课时/无记录→不带段位（播放器挑首个可播段）', () => {
+    const hit = continueResolve([{ courseId: 'c1', last: { lessonId: 'l2', segmentId: 's5' }, updatedAt: 200 }], [], COURSES)!
+    expect(hit).toMatchObject({ courseId: 'c1', lessonId: 'l2', segmentId: 's5' }) // 段位一路带到播放器
+    const stale = continueResolve([{ courseId: 'c1', last: { lessonId: 'ghost', segmentId: 's9' }, updatedAt: 200 }], [], COURSES)!
+    expect(stale).toMatchObject({ courseId: 'c1', lessonId: 'l1', segmentId: '' }) // 脏课时退回首课时·段位失效不带
+    const fresh = continueResolve([], [{ courseId: 'c1', enteredAt: 900 }], COURSES)!
+    expect(fresh.segmentId).toBe('') // 没看过从头开始·不带段位
+  })
+
   it('大白话：多条记录取最近的；记录指向查不到的课就看下一条，不假装', () => {
     const r = continueResolve(
       [

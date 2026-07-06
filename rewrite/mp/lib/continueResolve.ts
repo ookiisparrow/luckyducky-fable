@@ -9,6 +9,7 @@ export interface ContinueTarget {
   courseTitle: string
   lessonId: string
   lessonName: string
+  segmentId: string // 上次看到的段位（命中原课时才带·一路给播放器回到那一段）；退回首课时/无记录为空，播放器挑首个可播段
 }
 
 interface ProgressDoc {
@@ -47,8 +48,13 @@ export function continueResolve(progress: unknown, myCourses: unknown, courses: 
   for (const p of plist) {
     const course = courseOf(String(p.courseId))
     if (!course) continue // 课程查不到：不假装、看下一条
-    const lesson = lessonIn(course, String((p.last && p.last.lessonId) || '')) || firstLesson(course) // 脏课时退回第一课时
-    if (lesson) return { courseId: course.id, courseTitle: String(course.title || ''), lessonId: lesson.id, lessonName: lesson.name }
+    const exact = lessonIn(course, String((p.last && p.last.lessonId) || ''))
+    const lesson = exact || firstLesson(course) // 脏课时退回第一课时
+    if (lesson) {
+      // 命中原课时才带上次段位（回到那一段）；退回首课时时原段位也失效，置空让播放器挑首个可播段
+      const segmentId = exact ? String((p.last && p.last.segmentId) || '') : ''
+      return { courseId: course.id, courseTitle: String(course.title || ''), lessonId: lesson.id, lessonName: lesson.name, segmentId }
+    }
   }
 
   // ② 无记录 → 最近解锁课的第一课时（开始学，而非演示）
@@ -59,7 +65,7 @@ export function continueResolve(progress: unknown, myCourses: unknown, courses: 
     const course = courseOf(String(m.courseId))
     if (!course) continue
     const lesson = firstLesson(course)
-    if (lesson) return { courseId: course.id, courseTitle: String(course.title || ''), lessonId: lesson.id, lessonName: lesson.name }
+    if (lesson) return { courseId: course.id, courseTitle: String(course.title || ''), lessonId: lesson.id, lessonName: lesson.name, segmentId: '' }
   }
 
   return null // 不假装有课
