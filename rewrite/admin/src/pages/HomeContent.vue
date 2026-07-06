@@ -50,8 +50,13 @@ onBeforeUnmount(() => {
 onMounted(async () => {
   const r = await getHomeContent()
   model.value = normalizeHome(r.ok ? r.home : null)
-  if (!r.ok) message.value = '加载失败：' + String(r.error || '')
-  void nextTick(() => (loaded = true)) // 载入落定后放开自动保存
+  if (!r.ok) {
+    // 载入失败不放开自动保存、也不允许手动保存（loaded 恒 false）——否则一次编辑就 saveHomeContent(空档) 整块覆盖
+    // 首页配置 + 抹掉所有背景图 fileID（P2·后端 .set 全档替换非合并·同 Courses.load 早退范式）
+    message.value = '加载失败：' + String(r.error || '')
+    return
+  }
+  void nextTick(() => (loaded = true)) // 载入成功落定后才放开自动保存
 })
 
 async function uploadTo(assign: (_fileID: string) => void, ev: Event) {
@@ -137,6 +142,11 @@ function delFooterLink(i: number) {
 
 async function save() {
   if (!model.value || busy.value) return
+  if (!loaded) {
+    // 未成功载入即手动保存 = 拿空档整块覆盖首页配置 + 抹背景图（P2）——拒绝并提示刷新（autosave 已因 loaded=false 不触发·此挡手动路径）
+    message.value = '内容未成功载入，暂不能保存（避免覆盖已有首页配置·请刷新重试）'
+    return
+  }
   if (saveTimer) {
     clearTimeout(saveTimer)
     saveTimer = null

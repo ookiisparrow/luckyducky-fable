@@ -20,6 +20,18 @@ describe('首页模型往返', () => {
     expect(normalizeHome(null).heroTitle).toBe('') // 缺档全默认
   })
 
+  it('大白话：同 courseId 两行按状态位合并、不末行胜丢图（防重复键静默覆盖·同 Kb/Checkpoints 危险）', () => {
+    const m = normalizeHome(null)
+    m.byCourse = [
+      { courseId: 'course-duck', welcome: 'cloud://welcome.jpg', welcomeBack: '', taken: '' },
+      { courseId: 'course-duck', welcome: '', welcomeBack: 'cloud://back.jpg', taken: '' }, // 同课·另一态
+    ]
+    const payload = homePayload(m) as Record<string, any>
+    // 合并：欢迎图(前行) + 回访图(后行)都在——旧「整块替换」会只剩回访图、欢迎图丢失
+    expect(payload.activationBgByCourse['course-duck']).toEqual({ welcome: 'cloud://welcome.jpg', welcomeBack: 'cloud://back.jpg' })
+    expect(Object.keys(payload.activationBgByCourse)).toEqual(['course-duck']) // 合成一课
+  })
+
   it('大白话：首页九板块文案/图往返——hero搜索+图、品牌、特写、放心、买家秀、收尾、页脚都进档；空块/空态/空链剔除', () => {
     const m = normalizeHome({
       hero: { title: '创造幸运', tagline: 't', search: '入门钩织的妙趣方式', img: 'cloud://hero.jpg' },

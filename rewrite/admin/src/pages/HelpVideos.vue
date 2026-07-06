@@ -24,7 +24,9 @@ async function reload() {
   items.value = r.ok ? normalizeHelpItems(r.items) : []
   message.value = r.ok ? '' : '加载失败：' + String(r.error || '')
   saveState.value = ''
-  void nextTick(() => (loaded = true)) // 载入后的用户编辑才自动保存
+  // 只有载入成功才放开自动保存——载入失败(items=[]) 绝不 arm autosave，否则一次编辑就 saveHelpVideos([]) 触发后端整档覆盖 +
+  // 孤儿 GC 永久删光所有帮助视频文件（P1 不可逆·同 Courses.load 早退范式）。载入失败时 loaded 恒 false，autosave 与手动 save 都拒。
+  if (r.ok) void nextTick(() => (loaded = true))
   return r.ok
 }
 
@@ -125,6 +127,11 @@ async function pickVideo(t: HelpItem, i: number, ev: Event) {
 
 async function save() {
   if (busy.value) return
+  if (!loaded) {
+    // 未成功载入即手动保存 = 拿空/残缺 items 整档覆盖 + 孤儿 GC 删光云端视频文件（P1）——拒绝并提示刷新（gate loaded 已挡 autosave·此挡手动路径）
+    message.value = '内容未成功载入，暂不能保存（避免覆盖并误删已有帮助视频·请刷新重试）'
+    return
+  }
   busy.value = true
   await flushSave() // 先排空在途/待发自动保存·防旧快照 POST 落在手动保存之后覆盖新编辑（P2·同 HomeContent/Products.closeEditor）
   const r = await saveHelpVideos(items.value)

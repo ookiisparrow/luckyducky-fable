@@ -86,7 +86,8 @@ export function homePayload(m: HomeModel): Record<string, unknown> {
     if (row.welcome) entry.welcome = row.welcome
     if (row.welcomeBack) entry.welcomeBack = row.welcomeBack
     if (row.taken) entry.taken = row.taken
-    if (Object.keys(entry).length) activationBgByCourse[cid] = entry
+    // 同 courseId 多行按状态位合并、不整块替换——否则末行胜、前行已上传的图（如欢迎图）静默丢失（P3·同 Kb/Checkpoints 的「重复键静默覆盖」危险·此处以合并根治而非拦截）
+    if (Object.keys(entry).length) activationBgByCourse[cid] = { ...(activationBgByCourse[cid] || {}), ...entry }
   }
   return {
     hero: { title: m.heroTitle, tagline: m.heroTagline, search: m.heroSearch, img: m.heroImg },
