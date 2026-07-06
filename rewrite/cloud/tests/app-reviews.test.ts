@@ -158,4 +158,30 @@ describe('submitReview（多重闸门·一单一行一评·黄金 §七）', () 
     expect((await call('submitReview', { orderId: 'o2', productId: 'p9', rating: 5 })).ok).toBe(true)
     expect(control.dump('reviews')[0].lineId).toBe('p9')
   })
+
+  it('大白话：买家秀晒图入库前逐张过内容安全——过则存 fileID；任一张违规/校不了→整条拒不落库（fail-closed·根因#3）', async () => {
+    seedOrder()
+    // 两张图过内容安全 → 落库存 fileID（≤9·去空）
+    expect((await call('submitReview', { orderId: 'o1', lineId: 'p1__红', rating: 5, photos: ['cloud://a.jpg', '', 'cloud://b.jpg'] })).ok).toBe(true)
+    expect(control.dump('reviews').find((r: any) => r.lineId === 'p1__红').photos).toEqual(['cloud://a.jpg', 'cloud://b.jpg'])
+    // 违规图（平台判 87014）→ 整条拒、一条不落（换一行避开一单一行一评撞主键）
+    control.setOpenapiFail(true, 87014)
+    expect((await call('submitReview', { orderId: 'o1', lineId: 'p1__蓝', rating: 5, photos: ['cloud://ok.jpg', 'cloud://bad.jpg'] })).error).toBe('IMG_RISKY')
+    expect(control.dump('reviews').find((r: any) => r.lineId === 'p1__蓝')).toBeUndefined()
+    // 校不了（能力未开/网络·非违规码）→ 同样拒（证明安全才放行）
+    control.setOpenapiFail(true)
+    expect((await call('submitReview', { orderId: 'o1', lineId: 'p1__蓝', rating: 5, photos: ['cloud://x.jpg'] })).error).toBe('SEC_CHECK_FAIL')
+    expect(control.dump('reviews').find((r: any) => r.lineId === 'p1__蓝')).toBeUndefined()
+  })
+
+  it('大白话：列表回图把 fileID 换成短时地址下发（不出裸 fileID）；无图评价 photos 空数组', async () => {
+    control.seed('reviews', [
+      { _id: 'r1', productId: 'p1', rating: 5, photos: ['cloud://a.jpg', 'cloud://b.jpg'], createdAt: 20 },
+      { _id: 'r2', productId: 'p1', rating: 4, createdAt: 10 },
+    ])
+    const rv = await call('getReviews', { productId: 'p1' })
+    const first = rv.list.find((r: any) => r.createdAt === 20)
+    expect(first.photos).toEqual(['https://tmp/cloud://a.jpg', 'https://tmp/cloud://b.jpg']) // 短时址·非裸 fileID
+    expect(rv.list.find((r: any) => r.createdAt === 10).photos).toEqual([]) // 无图 → 空数组
+  })
 })

@@ -81,7 +81,9 @@ export const RW_GOLDEN_REGISTRY = [
   { id: 'rw-mp-reviews-golden', roots: ['#8'], test: 'rewrite/mp/tests/reviews-map.test.ts' },
   { id: 'rw-mp-me-golden', roots: ['#6', '#8'], test: 'rewrite/mp/tests/continue-resolve.test.ts' },
   { id: 'rw-mp-privacy-golden', roots: ['R27', '#8'], test: 'rewrite/mp/tests/privacy-gate.test.ts' },
-  { id: 'rw-admin-money-ui-golden', roots: ['#4', '#8'], test: 'rewrite/admin/tests/money-ui.test.ts' },
+  { id: 'rw-admin-money-ui-golden', roots: ['#4', '#8', '#14'], test: 'rewrite/admin/tests/money-ui.test.ts' },
+  { id: 'rw-admin-client-golden', roots: ['#3', '#5', '#14'], test: 'rewrite/admin/tests/client.test.ts' },
+  { id: 'rw-admin-load-status-golden', roots: ['#14'], test: 'rewrite/admin/tests/status.test.ts' },
   { id: 'rw-admin-fulfill-golden', roots: ['#8'], test: 'rewrite/admin/tests/fulfill.test.ts' },
   { id: 'rw-admin-videobatch-golden', roots: ['#8'], test: 'rewrite/admin/tests/videobatch.test.ts' },
   { id: 'rw-admin-products-ui-golden', roots: ['#8'], test: 'rewrite/admin/tests/products-ui.test.ts' },
@@ -1350,7 +1352,7 @@ export const repoChecks = [
     // 的 UGC 上传函数 submitCheckpointPhoto 须调 imgSecCheck 接缝（入库前·校不过不存）。真机验图真能拦属根因#8 靠人。
     id: 'ugc-imgsecchecked',
     roots: ['#3'],
-    desc: 'UGC 图片入库前必过内容安全（根因#3 fail-closed）：kit/contentsec.ts 接缝须真调 cloud.openapi.security.imgSecCheck；写 checkpoints 的 submitCheckpointPhoto 须调 imgSecCheck 接缝校验后才入库——防违规图直接入库（节点诊断拍照·后台360工作站 B2.2）',
+    desc: 'UGC 图片入库前必过内容安全（根因#3 fail-closed）：kit/contentsec.ts 接缝（老线+重写线）须真调 cloud.openapi.security.imgSecCheck；写 UGC 图的函数——老线 submitCheckpointPhoto 写 checkpoints、重写线 checkpoint.ts 写 checkpoints / reviews.ts 存买家秀 photos——须调 imgSecCheck 校验后才入库，防违规图直接入库（节点诊断拍照 B2.2 + 买家秀晒图）',
     run() {
       const bad = []
       const sec = 'packages/cloud/src/kit/contentsec.ts'
@@ -1366,6 +1368,27 @@ export const repoChecks = [
         const writesCheckpoints = /COLLECTIONS\.checkpoints|['"]checkpoints['"]/.test(fsrc)
         if (writesCheckpoints && !/imgSecCheck\s*\(/.test(fsrc))
           bad.push(`${fn} 写 checkpoints 但未调 imgSecCheck——UGC 图片未过内容安全即入库（根因#3·fail-closed）`)
+      }
+      // —— 活跃重写线（rewrite/·与冻结 packages 老线并列守；UGC 写面在 app/actions 下）——
+      // 接缝须真调 imgSecCheck；每个「写 UGC 图字段」的函数（写 checkpoints / 存 photos）漏调即红。
+      const rwSec = 'rewrite/cloud/src/kit/contentsec.ts'
+      const absRwSec = join(ROOT, rwSec)
+      if (!existsSync(absRwSec)) bad.push(`${rwSec} 缺失——重写线内容安全接缝（根因#3·UGC 入库前校验）`)
+      else if (!/\.openapi\.security\.imgSecCheck/.test(readFileSync(absRwSec, 'utf8')))
+        bad.push(`${rwSec} 未真调 cloud.openapi.security.imgSecCheck——内容安全接缝是摆设（根因#3·扫真实调用非注释）`)
+      const rwUgcWriters = [
+        { fn: 'rewrite/cloud/src/functions/app/actions/checkpoint.ts', ugc: /COLLECTIONS\.checkpoints|['"]checkpoints['"]/, what: '节点拍照 checkpoints' },
+        { fn: 'rewrite/cloud/src/functions/app/actions/reviews.ts', ugc: /\bphotos\b/, what: '买家秀晒图 photos' },
+      ]
+      for (const { fn: rf, ugc, what } of rwUgcWriters) {
+        const abs = join(ROOT, rf)
+        if (!existsSync(abs)) {
+          bad.push(`${rf} 缺失——重写线 UGC 图片写入口（${what}）`)
+          continue
+        }
+        const src = readFileSync(abs, 'utf8')
+        if (ugc.test(src) && !/imgSecCheck\s*\(/.test(src))
+          bad.push(`${rf} 写 UGC 图（${what}）但未调 imgSecCheck——图片未过内容安全即入库（根因#3·fail-closed）`)
       }
       return bad
     },

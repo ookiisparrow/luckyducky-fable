@@ -1,3 +1,6 @@
 {
-  "navigationBarTitleText": "写评价"
+  "navigationBarTitleText": "写评价",
+  "usingComponents": {
+    "privacy-sheet": "/components/privacy-sheet/privacy-sheet"
+  }
 }

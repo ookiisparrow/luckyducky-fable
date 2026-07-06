@@ -1,7 +1,6 @@
 <!-- 评价晒单·重设计对齐 Checkout.jsx ReviewSubmit（corev-* 版式·设计 402px→rpx ×1.87）。
-     业务逻辑一字不动：星级(onStar·data-n)/标签多选(onTag·data-i)/文字(onText)/匿名(onAnon)/
-     提交(onSubmit·busy 闸)全承接 review.ts；submitReview 云端签名无 photos 参数，
-     故设计「买家秀晒图」无后端落点、按诚实原则不臆造上传（见 deferred）。本文件只重排结构与视觉。 -->
+     业务逻辑承接 review.ts：星级(onStar)/标签多选(onTag)/文字(onText)/匿名(onAnon)/提交(onSubmit·busy 闸)。
+     买家秀晒图：选图传云存储 cloud://（picker 直接 <image src=cloud://> 显缩略），内容安全在云端提交时逐张校（fail-closed）。 -->
 <view class="corev">
   <view class="corev-body">
 
@@ -54,6 +53,28 @@
       <view class="corev-count">{{text.length}}/500</view>
     </view>
 
+    <!-- 买家秀晒图（corev-sec 卡·选图传云存储·内容安全云端逐张校） -->
+    <view class="corev-card corev-sec">
+      <view class="corev-sec-title">晒图（选填·最多 {{maxPhotos}} 张）</view>
+      <view class="corev-photos">
+        <view class="corev-photo" wx:for="{{photos}}" wx:key="*this">
+          <image class="corev-photo-img" src="{{item}}" mode="aspectFill" data-url="{{item}}" bind:tap="onPreviewPhoto" />
+          <view class="corev-photo-del" data-i="{{index}}" catch:tap="onDelPhoto">
+            <image class="corev-photo-del-ico" src="/static/icons/x.svg" mode="aspectFit" />
+          </view>
+        </view>
+        <view class="corev-photo-add" wx:if="{{photos.length < maxPhotos}}" bind:tap="onAddPhotos">
+          <block wx:if="{{uploading}}">
+            <view class="corev-photo-spin"></view>
+          </block>
+          <block wx:else>
+            <image class="corev-photo-add-ico" src="/static/icons/camera-add.svg" mode="aspectFit" />
+            <text class="corev-photo-add-txt">添加</text>
+          </block>
+        </view>
+      </view>
+    </view>
+
     <!-- 匿名开关（corev-anon 卡） -->
     <view class="corev-card corev-anon {{anon ? 'on' : ''}}" bind:tap="onAnon">
       <text class="corev-anon-text">匿名评价</text>
@@ -72,4 +93,7 @@
       <view class="corev-publish {{busy ? 'dim' : ''}}" bind:tap="onSubmit">发布评价</view>
     </view>
   </view>
+
+  <!-- 隐私授权弹窗（晒图走 wx.chooseMedia 属隐私接口·守卫 rw-mp-privacy-gated） -->
+  <privacy-sheet />
 </view>

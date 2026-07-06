@@ -18,14 +18,17 @@ describe('星级拼装（黄金 §四：实心+空心拼满 5 颗）', () => {
 describe('列表映射（脏行剔除）', () => {
   it('大白话：正常评价全字段映射；评分非法的行整行剔除不渲染假评；非数组安全', () => {
     const vm = mapReviews([
-      { name: '鸭友', rating: 5, tags: ['教程清晰'], text: '好评', spec: '鹅黄', createdAt: 1783046400000 },
+      { name: '鸭友', rating: 5, tags: ['教程清晰'], text: '好评', spec: '鹅黄', photos: ['https://tmp/a.jpg', '', 'https://tmp/b.jpg'], createdAt: 1783046400000 },
+      { name: '无图', rating: 4, createdAt: 1783046400000 },
       { name: '脏行', rating: 0 },
       { name: '脏行2', rating: 'abc' },
       null,
     ])
-    expect(vm).toHaveLength(1)
+    expect(vm).toHaveLength(2)
     expect(vm[0].stars).toBe('★★★★★')
     expect(vm[0].timeLabel).toMatch(/^\d{4}-/)
+    expect(vm[0].photos).toEqual(['https://tmp/a.jpg', 'https://tmp/b.jpg']) // 买家秀晒图·空址剔除
+    expect(vm[1].photos).toEqual([]) // 无图 → 空数组（非 undefined·模板 wx:if 稳）
     expect(mapReviews(undefined)).toEqual([])
   })
 })

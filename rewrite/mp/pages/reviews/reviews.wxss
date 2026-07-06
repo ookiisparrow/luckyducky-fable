@@ -137,6 +137,18 @@
   line-height: 1.6;
   color: var(--ld-content);
 }
+/* 买家秀晒图（评价卡内九宫格·点开大图） */
+.ld-rv-photos {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10rpx;
+}
+.ld-rv-photo {
+  width: 200rpx;
+  height: 200rpx;
+  border-radius: var(--ld-radius-sm);
+  background: var(--ld-bg-sage);
+}
 .ld-rv-tagrow {
   display: flex;
   flex-wrap: wrap;

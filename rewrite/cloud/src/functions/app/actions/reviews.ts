@@ -1,5 +1,5 @@
 import { ERR, COLLECTIONS } from '@ldrw/shared'
-import { withOpenId, ok, err, getDb, pageQuery, getTempUrls } from '../../../kit'
+import { withOpenId, ok, err, getDb, pageQuery, getTempUrls, imgSecCheck } from '../../../kit'
 
 /**
  * 求助面板辅助视频（黄金 §九）：两级（主题→小段）白名单下发；fileID 留服务端，
@@ -117,6 +117,9 @@ export const getReviews = async (event: any = {}) => {
   const db = getDb()
 
   const paged = await pageQuery(db, COLLECTIONS.reviews, { productId }, 'createdAt', event, 20)
+  // 买家秀晒图：受保护云存储 fileID 只在服务端，鉴权后批量换短时地址下发（不漏裸 fileID·黄金 §九同 helpVideos）。
+  const photoIds = paged.list.flatMap((r: any) => (Array.isArray(r.photos) ? r.photos : []).filter(Boolean).map(String))
+  const urlMap = await getTempUrls(photoIds)
   const list = paged.list.map((r: any) => ({
     name: r.name,
     rating: r.rating,
@@ -124,6 +127,7 @@ export const getReviews = async (event: any = {}) => {
     text: r.text || '',
     spec: r.spec || '',
     createdAt: r.createdAt,
+    photos: (Array.isArray(r.photos) ? r.photos : []).map((id: string) => urlMap[String(id)]).filter(Boolean), // 换不到的丢（占位）
   }))
 
   const isFirstPage = !(event && (event.cursor ?? null))
@@ -162,6 +166,11 @@ export const submitReview = withOpenId(async ({ db, OPENID, event }) => {
     .filter((t: any) => typeof t === 'string' && t.trim())
     .slice(0, 6)
     .map((t: string) => t.trim().slice(0, 10))
+  // 买家秀晒图（UGC·白名单收 cloud:// fileID·≤9 去空）；内容安全在闸门后校（见下）。
+  const photos = (Array.isArray(e.photos) ? e.photos : [])
+    .filter((p: any) => typeof p === 'string' && p)
+    .slice(0, 9)
+    .map((p: string) => p.slice(0, 256))
 
   const got = await db
     .collection(COLLECTIONS.orders)
@@ -174,6 +183,13 @@ export const submitReview = withOpenId(async ({ db, OPENID, event }) => {
   if (!item) return err(ERR.NOT_IN_ORDER)
   const lineId = item.lineId || item.productId
   const productId = item.productId
+
+  // UGC 晒图内容安全（fail-closed·根因#3·守卫 ugc-imgsecchecked）：闸门后逐张校，任一张违规/校不了
+  // 一律拒、整条不落库——「证明安全」才放行（与 submitCheckpointPhoto 同闸）。
+  for (const fid of photos) {
+    const sec = await imgSecCheck(fid)
+    if (!sec.ok) return err(sec.error === 'IMG_RISKY' ? 'IMG_RISKY' : 'SEC_CHECK_FAIL')
+  }
 
   try {
     await db.createCollection(COLLECTIONS.reviews)
@@ -200,6 +216,7 @@ export const submitReview = withOpenId(async ({ db, OPENID, event }) => {
         rating,
         tags,
         text,
+        photos, // 已逐张过内容安全的 cloud:// fileID（读侧换短时址下发）
         spec: String(item.spec || ''),
         createdAt: Date.now(),
       },

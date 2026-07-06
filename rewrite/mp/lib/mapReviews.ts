@@ -8,6 +8,7 @@ export interface ReviewVM {
   tags: string[]
   text: string
   spec: string
+  photos: string[]
   timeLabel: string
 }
 
@@ -32,6 +33,7 @@ export function mapReviews(list: unknown): ReviewVM[] {
       tags: Array.isArray(r.tags) ? r.tags.map(String) : [],
       text: String(r.text || ''),
       spec: String(r.spec || ''),
+      photos: Array.isArray(r.photos) ? r.photos.map(String).filter(Boolean) : [], // 云端已换短时址·空址剔除
       timeLabel: dateTime(r.createdAt),
     })
   }

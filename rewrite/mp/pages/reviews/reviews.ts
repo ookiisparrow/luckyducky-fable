@@ -31,4 +31,10 @@ Page({
     if (!r.ok) return // 翻页失败不覆盖已有
     this.setData({ list: [...this.data.list, ...mapReviews(r.list)], cursor: r.nextCursor, hasMore: !!r.hasMore })
   },
+  // 买家秀晒图·点开大图（当前图为焦点·同条评价全部图为轮播集）
+  onPreviewPhoto(e: WechatMiniprogram.TouchEvent) {
+    const url = String(e.currentTarget.dataset.url || '')
+    const urls = (e.currentTarget.dataset.urls as string[]) || []
+    if (url && urls.length) wx.previewImage({ current: url, urls })
+  },
 })

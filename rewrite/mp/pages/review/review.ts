@@ -15,6 +15,9 @@ Page({
     anon: false,
     busy: false,
     starIdx: [1, 2, 3, 4, 5],
+    photos: [] as string[], // 已上传云存储 cloud:// fileID（picker 直接以 <image src=cloud://> 显缩略）
+    uploading: false,
+    maxPhotos: 9,
   },
   orderId: '',
   lineId: '',
@@ -38,8 +41,47 @@ Page({
   onAnon() {
     this.setData({ anon: !this.data.anon })
   },
+  // 选图 + 传云存储：拿临时路径逐张传 cloud://（内容安全在云端提交时逐张校·fail-closed）；单张失败跳过不阻塞。
+  async onAddPhotos() {
+    if (this.data.uploading) return
+    const left = this.data.maxPhotos - this.data.photos.length
+    if (left <= 0) return
+    let res: WechatMiniprogram.ChooseMediaSuccessCallbackResult
+    try {
+      res = await wx.chooseMedia({ count: left, mediaType: ['image'], sizeType: ['compressed'] })
+    } catch {
+      return // 用户取消
+    }
+    this.setData({ uploading: true })
+    const ups: string[] = []
+    for (const f of res.tempFiles) {
+      try {
+        const up = await wx.cloud.uploadFile({
+          cloudPath: `reviews/${Date.now()}-${Math.floor(Math.random() * 1e6)}.jpg`,
+          filePath: f.tempFilePath,
+        })
+        if (up.fileID) ups.push(up.fileID)
+      } catch {
+        /* 单张失败跳过 */
+      }
+    }
+    this.setData({ photos: [...this.data.photos, ...ups].slice(0, this.data.maxPhotos), uploading: false })
+    if (ups.length < res.tempFiles.length) wx.showToast({ title: '部分图片没传上', icon: 'none' })
+  },
+  onDelPhoto(e: WechatMiniprogram.TouchEvent) {
+    const i = Number(e.currentTarget.dataset.i)
+    this.setData({ photos: this.data.photos.filter((_, idx) => idx !== i) })
+  },
+  onPreviewPhoto(e: WechatMiniprogram.TouchEvent) {
+    const url = String(e.currentTarget.dataset.url || '')
+    if (url) wx.previewImage({ current: url, urls: this.data.photos })
+  },
   async onSubmit() {
     if (this.data.busy) return
+    if (this.data.uploading) {
+      wx.showToast({ title: '图片还在上传，稍等一下', icon: 'none' })
+      return
+    }
     if (!this.data.rating) {
       wx.showToast({ title: '先点星评个分', icon: 'none' })
       return
@@ -51,7 +93,8 @@ Page({
       this.data.rating,
       this.data.text.trim(),
       this.data.tags.filter((x) => x.on).map((x) => x.t),
-      this.data.anon
+      this.data.anon,
+      this.data.photos
     )
     this.setData({ busy: false })
     if (r.ok) {
@@ -60,7 +103,16 @@ Page({
       return
     }
     const e = String(r.error || '')
-    const msg = e === 'REVIEWED' ? '这条已经评过了' : e === 'NOT_DONE' ? '订单完成后才能评价' : '提交没成功，稍后再试'
+    const msg =
+      e === 'REVIEWED'
+        ? '这条已经评过了'
+        : e === 'NOT_DONE'
+          ? '订单完成后才能评价'
+          : e === 'IMG_RISKY'
+            ? '图片没通过审核，换一张再试'
+            : e === 'SEC_CHECK_FAIL'
+              ? '图片没检查成功，稍后再试'
+              : '提交没成功，稍后再试'
     wx.showToast({ title: msg, icon: 'none' })
   },
 })
