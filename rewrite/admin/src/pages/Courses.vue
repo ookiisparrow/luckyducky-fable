@@ -25,7 +25,8 @@ const message = ref('')
 const busy = ref(false)
 const progress = ref('')
 const publishConfirm = ref(false)
-const stats = ref({ total: 0, done: 0 })
+// 视频进度＝computed 自动随课程树更新（迭代E 逮出：原 imperative ref 在 delChapter/delLesson/addSegment 后不刷新致漂移）
+const stats = computed(() => courseVideoStats(course.value))
 const confirmKey = ref('') // no-alert 两步删除确认（换皮改直接 splice·误删即丢）
 
 const pct = computed(() => (stats.value.total ? Math.round((stats.value.done / stats.value.total) * 100) : 0))
@@ -90,7 +91,7 @@ async function load() {
 }
 
 function refreshStats() {
-  stats.value = courseVideoStats(course.value)
+  /* stats 已改 computed·自动随 course 更新；保留空函数免改各调用点（无副作用） */
 }
 
 // 视频时长自动读取（换皮丢·选完视频读元数据填 dur·mm:ss）

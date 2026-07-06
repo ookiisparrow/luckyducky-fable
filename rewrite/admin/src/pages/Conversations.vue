@@ -51,9 +51,9 @@ async function search() {
 
 async function more() {
   if (!hasMore.value || cursor.value == null) return
-  const my = pageGen.begin()
-  const r = await searchConversations({ ...searchFilter, cursor: cursor.value }) // 复用检索快照·不现读输入框（防串档）
-  if (pageGen.isStale(my)) return // 翻页在途时又检索/翻页·丢弃过期页（防混排）
+  const snap = searchFilter // 发起时的检索快照·不占 pageGen（避免翻页取号误杀在途 search·迭代E 逮出）
+  const r = await searchConversations({ ...snap, cursor: cursor.value }) // 复用快照·不现读输入框（防串档）
+  if (searchFilter !== snap) return // 期间又检索（searchFilter 换了新对象）·放弃本页（防混排）
   if (!r.ok) {
     message.value = '加载更多失败：' + String(r.error || '') // 别静默吞·反复点无反应（病根#14）
     return

@@ -114,16 +114,21 @@ function markLoaded() {
   autoState.value = ''
   void nextTick(() => (editorLoaded = true)) // 赋值落定后再放开自动保存
 }
-async function closeEditor() {
+function closeEditor() {
   if (saveTimer) {
     clearTimeout(saveTimer)
     saveTimer = null
   }
-  // 等补存链彻底排空(含在途 + 尾随最新快照)再置空 edit——否则在途保存期间关闭会让尾随补存读到已 null 的
-  // edit.value 而早退、最后一次编辑静默丢失（batch 4b serialSave 化引入的回归·迭代D 逮出）。
-  if (autoState.value === 'saving') await flushSave().catch(() => {})
+  // 同步抓快照 + 立即关闭（杜绝关闭期手输）：有未落盘编辑就排空在途后存**快照**（不读实时 ref、不被置空击穿）。
+  // 修两回归：批4b「在途保存期关闭丢最后编辑」(迭代D) + 批5「await 期间手输丢失/孤儿计时器」(迭代E)。
+  const snap = autoState.value === 'saving' && edit.value ? (JSON.parse(JSON.stringify(edit.value)) as Record<string, any>) : null
   editorLoaded = false
   edit.value = null
+  if (snap)
+    void flushSave() // 先排空任何在途 autosave（其 run 读已 null 的 edit→no-op·仅用于等排空）
+      .then(() => saveDraft(snap)) // 排空后存快照·成为最后一次写（不被旧在途覆盖）
+      .then(() => void silentRefresh())
+      .catch(() => {})
 }
 onBeforeUnmount(() => {
   if (saveTimer) {

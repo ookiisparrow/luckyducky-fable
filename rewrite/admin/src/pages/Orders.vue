@@ -66,9 +66,10 @@ async function reload() {
 
 async function more() {
   if (!hasMore.value || cursor.value == null) return
-  const my = listGen.begin()
-  const r = await listOrders(tab.value, cursor.value, 20, activeQ.value)
-  if (listGen.isStale(my)) return // 翻页在途时切标签/搜索·丢弃过期页（防跨标签混排 + 游标错乱）
+  const snapTab = tab.value,
+    snapQ = activeQ.value // 发起时快照·不占 listGen（避免翻页取号误杀在途 reload·迭代E 逮出）
+  const r = await listOrders(snapTab, cursor.value, 20, snapQ)
+  if (tab.value !== snapTab || activeQ.value !== snapQ) return // 期间切了标签/搜索·放弃本页（防跨标签混排 + 游标污染）
   if (!r.ok) return // 翻页失败不覆盖已有
   const seen = new Set(rows.value.map((x) => x.id))
   rows.value = [...rows.value, ...mapOrderRows((r as any).list).filter((x) => !seen.has(x.id))]
