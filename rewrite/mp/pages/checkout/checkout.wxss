@@ -1,166 +1,417 @@
-.ld-checkout {
+/* 结算·重设计对齐 Checkout.jsx co-* 版式。设计 402px 画板→rpx（×1.87）。
+   页浅灰底、白卡以圆角+浅影分隔；token 见 styles/tokens.wxss。co- 前缀沿设计。 */
+.co {
   min-height: 100vh;
-  background: var(--ld-bg-lilac);
-  padding: 24rpx 24rpx 0;
+  background: #f4f4f5; /* 设计 co 页底浅灰（与 detail 同调·tokens 无对应中性灰） */
+  color: var(--ld-content);
 }
-.ld-addr {
-  padding: 28rpx;
-  background: var(--ld-bg);
-  border-radius: var(--ld-radius);
-  border: 2rpx solid var(--ld-purple-line);
+.co image {
+  display: block;
 }
-.ld-addr-line1 {
+.co-ico {
+  width: 34rpx;
+  height: 34rpx;
+}
+.co-ico-lg {
+  width: 44rpx;
+  height: 44rpx;
+}
+
+/* ---------- 内容容器 ---------- */
+.co-body {
+  padding: 22rpx 26rpx 8rpx;
   display: flex;
-  gap: 20rpx;
-  align-items: baseline;
+  flex-direction: column;
+  gap: 22rpx;
 }
-.ld-addr-name {
+
+/* ---------- 收货地址卡（含彩色针脚底边·设计签名件） ---------- */
+.co-addr {
+  position: relative;
+  background: var(--ld-bg);
+  border-radius: var(--ld-radius-md);
+  box-shadow: 0 2rpx 4rpx rgba(54, 58, 80, 0.05);
+  overflow: hidden;
+}
+.co-addr-main {
+  display: flex;
+  align-items: center;
+  gap: 24rpx;
+  padding: 34rpx 26rpx 38rpx;
+}
+.co-addr-pin {
+  width: 48rpx;
+  height: 48rpx;
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.co-addr-text {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+.co-addr-line1 {
+  display: flex;
+  align-items: baseline;
+  gap: 20rpx;
+}
+.co-addr-name {
+  font-size: 32rpx;
+  font-weight: 600;
+  color: var(--ld-ink);
+  letter-spacing: -0.3rpx;
+}
+.co-addr-phone {
+  font-size: 26rpx;
+  color: var(--ld-content);
+  letter-spacing: 0.4rpx;
+}
+.co-addr-line2 {
+  margin-top: 12rpx;
+  font-size: 25rpx;
+  color: var(--ld-content-2);
+  line-height: 1.5;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+.co-addr-tag {
+  display: inline-block;
+  font-size: 20rpx;
+  color: var(--ld-purple-tab);
+  background: var(--ld-bg-lilac);
+  border: 1rpx solid var(--ld-purple-line);
+  border-radius: 8rpx;
+  padding: 1rpx 11rpx;
+  margin-right: 12rpx;
+}
+.co-addr-chev {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+}
+/* 空地址状态 */
+.co-addr-empty-title {
   font-size: 30rpx;
   font-weight: 600;
   color: var(--ld-ink);
+  letter-spacing: -0.3rpx;
 }
-.ld-addr-phone {
-  font-size: 26rpx;
-  color: var(--ld-purple-meta);
-}
-.ld-addr-line2 {
+.co-addr-empty-sub {
   margin-top: 10rpx;
-  font-size: 26rpx;
-  color: var(--ld-ink);
+  font-size: 24rpx;
+  color: var(--ld-content-2);
   line-height: 1.5;
 }
-.ld-addr-empty {
-  font-size: 28rpx;
-  color: var(--ld-purple-tab);
-  padding: 8rpx 0;
+/* 彩色针脚底边（小鸭橙 + 幸运紫的手作针脚·设计特有意象） */
+.co-stitch {
+  height: 8rpx;
+  background-image: repeating-linear-gradient(
+    72deg,
+    var(--ld-duck-deep) 0 11rpx,
+    transparent 11rpx 13rpx,
+    var(--ld-purple) 13rpx 24rpx,
+    transparent 24rpx 26rpx
+  );
 }
-.ld-panel {
-  margin-top: 24rpx;
-  padding: 24rpx 28rpx;
+
+/* ---------- 通用白卡 ---------- */
+.co-card {
   background: var(--ld-bg);
-  border-radius: var(--ld-radius);
-  border: 2rpx solid var(--ld-purple-line);
+  border-radius: var(--ld-radius-md);
+  box-shadow: 0 2rpx 4rpx rgba(54, 58, 80, 0.05);
+  overflow: hidden;
 }
-.ld-panel-title {
+
+/* 店铺行 */
+.co-shop {
+  display: flex;
+  align-items: center;
+  gap: 13rpx;
+  padding: 26rpx 30rpx 8rpx;
+}
+.co-shop-ico {
+  width: 32rpx;
+  height: 32rpx;
+  flex: 0 0 auto;
+}
+.co-shop-name {
   font-size: 28rpx;
   font-weight: 600;
   color: var(--ld-ink);
-  margin-bottom: 12rpx;
 }
-.ld-line {
+.co-shop-chev {
+  margin-left: auto;
   display: flex;
   align-items: center;
-  gap: 20rpx;
-  padding: 14rpx 0;
+  opacity: 0.6;
 }
-.ld-line-media {
-  width: 110rpx;
-  height: 110rpx;
-  border-radius: 14rpx;
+.co-shop-chev .co-ico {
+  width: 30rpx;
+  height: 30rpx;
+}
+
+/* 订单商品行 */
+.co-item {
+  display: flex;
+  gap: 22rpx;
+  padding: 26rpx 30rpx;
+}
+.co-item-img {
+  width: 150rpx;
+  height: 150rpx;
+  flex: 0 0 auto;
+  border-radius: var(--ld-radius-sm);
   background: var(--ld-bg-sage);
-  flex-shrink: 0;
 }
-.ld-line-main {
-  flex: 1;
+.co-item-mid {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+.co-item-name {
+  font-size: 28rpx;
+  color: var(--ld-ink);
+  line-height: 1.35;
+  letter-spacing: -0.3rpx;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+.co-item-spec {
+  align-self: flex-start;
+  margin-top: 13rpx;
+  font-size: 22rpx;
+  color: var(--ld-content-2);
+  background: var(--ld-bg-grey);
+  border-radius: 8rpx;
+  padding: 6rpx 15rpx;
+}
+.co-item-foot {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  margin-top: auto;
+  padding-top: 18rpx;
+}
+.co-price {
+  font-weight: 600;
+  color: var(--ld-ink);
+  letter-spacing: 0.4rpx;
+}
+.co-price .cny {
+  font-size: 25rpx;
+  font-weight: 600;
+  margin-right: 2rpx;
+}
+.co-item-price {
+  font-size: 36rpx;
+}
+.co-item-qty {
+  font-size: 25rpx;
+  color: var(--ld-content-2);
+  letter-spacing: 0.4rpx;
+}
+
+/* ---------- 搭配购买 ---------- */
+.co-addon-head {
+  display: flex;
+  align-items: baseline;
+  gap: 15rpx;
+  padding: 26rpx 30rpx 4rpx;
+}
+.co-addon-title {
+  font-size: 28rpx;
+  font-weight: 600;
+  color: var(--ld-ink);
+}
+.co-addon-sub {
+  font-size: 22rpx;
+  color: var(--ld-duck-deep);
+}
+.co-addon {
+  display: flex;
+  align-items: center;
+  gap: 22rpx;
+  padding: 22rpx 30rpx;
+}
+.co-addon + .co-addon {
+  border-top: 1rpx solid var(--ld-line-soft);
+}
+.co-radio {
+  width: 38rpx;
+  height: 38rpx;
+  flex: 0 0 auto;
+  border-radius: 50%;
+  border: 3rpx solid var(--ld-purple-line);
+  background: var(--ld-bg);
+  box-sizing: border-box;
+}
+.co-radio.on {
+  background: var(--ld-purple-tab);
+  border-color: var(--ld-purple-tab);
+}
+.co-addon-img {
+  width: 105rpx;
+  height: 105rpx;
+  flex: 0 0 auto;
+  border-radius: var(--ld-radius-sm);
+  background: var(--ld-bg-sage);
+}
+.co-addon-mid {
+  flex: 1 1 auto;
   min-width: 0;
 }
-.ld-line-name {
+.co-addon-name {
+  font-size: 26rpx;
+  color: var(--ld-ink);
+  line-height: 1.3;
+  letter-spacing: -0.3rpx;
+}
+.co-addon-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 17rpx;
+}
+.co-addon-price {
   font-size: 28rpx;
+}
+
+/* ---------- 配送信息行 ---------- */
+.co-rows {
+  padding: 4rpx 0;
+}
+.co-row {
+  display: flex;
+  align-items: center;
+  gap: 18rpx;
+  padding: 28rpx 30rpx;
+}
+.co-row-key {
+  flex: 0 0 auto;
+  font-size: 27rpx;
+  color: var(--ld-content);
+}
+.co-row-val {
+  flex: 1 1 auto;
+  text-align: right;
+  font-size: 26rpx;
   color: var(--ld-ink);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.ld-line-sku {
-  margin-top: 6rpx;
-  font-size: 22rpx;
-  color: var(--ld-purple-meta);
+
+/* ---------- 金额明细（灰色内嵌盒） ---------- */
+.co-summary {
+  margin: 8rpx 22rpx 26rpx;
+  background: #f7f7f8; /* 设计明细盒浅灰底·tokens 无对应 */
+  border-radius: var(--ld-radius-md);
+  padding: 26rpx 30rpx;
 }
-.ld-line-right {
-  text-align: right;
-}
-.ld-line-price {
-  font-size: 28rpx;
-  font-weight: 600;
-  color: var(--ld-purple-ink);
-}
-.ld-line-qty {
-  margin-top: 6rpx;
-  font-size: 22rpx;
-  color: var(--ld-purple-meta);
-}
-.ld-addon {
+.co-sum-row {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 14rpx 0;
-}
-.ld-addon-name {
-  font-size: 26rpx;
-  color: var(--ld-ink);
-}
-.ld-addon-price {
-  margin-top: 6rpx;
-  font-size: 24rpx;
-  color: var(--ld-purple-meta);
-}
-.ld-addon-btn {
-  padding: 10rpx 24rpx;
-  border-radius: var(--ld-radius-pill);
-  border: 2rpx solid var(--ld-purple-line);
-  font-size: 24rpx;
-  color: var(--ld-purple-tab);
-}
-.ld-addon-btn.on {
-  background: var(--ld-bg-lilac);
-  border-color: var(--ld-purple-tab);
-  font-weight: 600;
-}
-.ld-sum-row {
-  display: flex;
-  justify-content: space-between;
   padding: 10rpx 0;
+}
+.co-sum-row text {
+  font-size: 25rpx;
+  color: var(--ld-content-2);
+}
+.co-sum-v {
+  font-weight: 500;
+  color: var(--ld-content) !important;
+  letter-spacing: 0.4rpx;
+}
+.co-sum-row.discount .co-sum-v {
+  color: var(--ld-purple) !important; /* 券抵扣沿 cart 用幸运紫强调（mp 无 red token） */
+}
+.co-sum-div {
+  height: 1rpx;
+  background: var(--ld-line);
+  margin: 13rpx 0;
+}
+.co-sum-row.total text {
   font-size: 26rpx;
   color: var(--ld-ink);
 }
-.ld-sum-coupon {
-  color: var(--ld-purple);
+.co-sum-row.total .co-sum-v {
+  font-size: 34rpx;
+  font-weight: 700;
+  color: var(--ld-ink) !important;
 }
-.ld-submitbar-space {
-  height: 160rpx;
+.co-sum-row.total .cny {
+  font-size: 25rpx;
 }
-.ld-submitbar {
+
+/* ---------- 底部提交坞 ---------- */
+.co-dock-space {
+  height: 170rpx;
+}
+.co-dock {
   position: fixed;
   left: 0;
   right: 0;
   bottom: 0;
+  background: var(--ld-bg);
+  box-shadow: 0 -2rpx 0 var(--ld-line), 0 -8rpx 24rpx rgba(54, 58, 80, 0.06);
+}
+.co-dockbar {
   display: flex;
   align-items: center;
-  padding: 20rpx 32rpx calc(20rpx + env(safe-area-inset-bottom));
-  background: var(--ld-bg);
-  box-shadow: 0 -4rpx 24rpx rgba(36, 23, 51, 0.08);
+  gap: 26rpx;
+  padding: 18rpx 30rpx calc(18rpx + env(safe-area-inset-bottom)) 34rpx;
 }
-.ld-sub-total {
-  flex: 1;
+.co-dock-total {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.15;
 }
-.ld-sub-label {
-  font-size: 24rpx;
-  color: var(--ld-purple-meta);
-  margin-right: 10rpx;
+.co-dock-small {
+  font-size: 20rpx;
+  color: var(--ld-content-2);
 }
-.ld-sub-num {
-  font-size: 40rpx;
+.co-dock-amount {
+  display: flex;
+  align-items: baseline;
+  gap: 14rpx;
+}
+.co-dock-num {
+  font-size: 46rpx;
   font-weight: 700;
   color: var(--ld-purple-ink);
+  letter-spacing: 0.2rpx;
+  line-height: 1;
 }
-.ld-sub-btn {
-  padding: 22rpx 56rpx;
+.co-dock-num .cny {
+  font-size: 28rpx;
+  font-weight: 600;
+  margin-right: 2rpx;
+}
+.co-dock-count {
+  font-size: 22rpx;
+  color: var(--ld-content-2);
+}
+.co-submit {
+  margin-left: auto;
+  flex: 0 0 auto;
+  padding: 26rpx 64rpx;
   border-radius: var(--ld-radius-pill);
-  background: var(--ld-purple-ink);
+  background: var(--ld-purple);
   color: #ffffff;
   font-size: 30rpx;
   font-weight: 600;
 }
-.ld-sub-btn.dim {
+.co-submit.dim {
   opacity: 0.5;
 }

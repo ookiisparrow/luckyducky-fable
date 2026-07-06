@@ -1,10 +1,42 @@
+<!-- 支付成功页 · 设计 PaySuccess（cosuc）语言：大对勾 + 实付金额 + 订单信息 + 双动作 + 幸运小尾巴。
+     金额来自 checkout 拉起支付时透传的实付分（?amount=fen），无则隐去金额行不写死。
+     业务逻辑（回首页 switchTab / 看订单 redirectTo·paysuccess.ts）由 handler 承接，本文件只管视觉。 -->
 <view class="ld-paysuccess">
-  <view class="ld-ps-badge">✓</view>
-  <view class="ld-ps-title">支付成功</view>
-  <view class="ld-ps-hint" wx:if="{{orderId}}">订单号 {{orderId}}</view>
-  <view class="ld-ps-hint">我们会尽快为你备货发货</view>
+  <!-- 成功英雄区：紫圆大对勾 + 支付成功 + 实付金额 + 副标 -->
+  <view class="ld-ps-hero">
+    <view class="ld-ps-check">
+      <image class="ld-ps-check-ico" src="/static/icons/check.svg" mode="aspectFit" />
+    </view>
+    <view class="ld-ps-title">支付成功</view>
+    <view class="ld-ps-amount" wx:if="{{hasAmount}}"><text class="ld-ps-cny">¥</text>{{amountYuan}}</view>
+    <view class="ld-ps-sub">幸运已下单 · 我们会尽快为你打包发出</view>
+  </view>
+
+  <!-- 订单信息（灰底内嵌盒） -->
+  <view class="ld-ps-info">
+    <view class="ld-ps-info-row" wx:if="{{orderId}}">
+      <text class="ld-ps-info-k">订单编号</text>
+      <text class="ld-ps-info-v mono">{{orderId}}</text>
+    </view>
+    <view class="ld-ps-info-row">
+      <text class="ld-ps-info-k">配送方式</text>
+      <text class="ld-ps-info-v">顺丰速运 · 包邮</text>
+    </view>
+    <view class="ld-ps-info-row">
+      <text class="ld-ps-info-k">预计送达</text>
+      <text class="ld-ps-info-v">48 小时内发出 · 次日达</text>
+    </view>
+  </view>
+
+  <!-- 双动作：查看订单（幽灵）/ 返回首页（实心） -->
   <view class="ld-ps-actions">
-    <view class="ld-ps-btn ghost" bind:tap="onViewOrder">查看订单</view>
-    <view class="ld-ps-btn" bind:tap="onGoHome">回首页</view>
+    <view class="ld-ps-btn ghost" hover-class="ld-ps-btn-hover" bind:tap="onViewOrder">查看订单</view>
+    <view class="ld-ps-btn solid" hover-class="ld-ps-btn-hover" bind:tap="onGoHome">返回首页</view>
+  </view>
+
+  <!-- 幸运小尾巴 -->
+  <view class="ld-ps-tip">
+    <image class="ld-ps-tip-ico" src="/static/icons/sparkles.svg" mode="aspectFit" />
+    <text>开盒就能跟着视频钩出第一只小鸭，Get Ducky Get Lucky</text>
   </view>
 </view>

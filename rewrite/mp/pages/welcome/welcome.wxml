@@ -1,36 +1,64 @@
+<!-- 激活欢迎页·对齐设计 Welcome.jsx 变体A「沉浸全屏」：全屏照片 + 双段暗渐 scrim +
+     顶部品牌字标 + 底部锚定 eyebrow/大字/lead/胶囊 CTA。业务四态（激活/欢迎回来/已被使用/废码）
+     与输入态各占一屏，套同一沉浸壳。数据流与 handler 全保留（activate/onEnter/onRetry/onGoHome）。 -->
 <view class="ld-welcome">
-  <image wx:if="{{bg}}" class="ld-w-bg" src="{{bg}}" mode="aspectFill" />
-  <view class="ld-w-body" style="padding-top: {{statusBarHeight + 40}}px">
+  <image wx:if="{{bg}}" class="ld-w-photo" src="{{bg}}" mode="aspectFill" />
+  <view wx:else class="ld-w-photo ld-w-photo-empty"></view>
+  <view class="ld-w-scrim"></view>
+
+  <image class="ld-w-logo" src="/static/logo-wordmark.svg" mode="heightFix" style="top: {{statusBarHeight + 40}}px" />
+
+  <view class="ld-w-body">
     <block wx:if="{{phase === 'input'}}">
-      <view class="ld-w-title">激活你的课程</view>
-      <view class="ld-w-sub">输入材料包里激活卡上的激活码</view>
-      <input class="ld-w-input" value="{{code}}" bind:input="onInput" placeholder="LD 开头的激活码" />
-      <view class="ld-w-btn {{busy ? 'dim' : ''}}" bind:tap="onActivate">激活</view>
+      <view class="ld-w-eyebrow">ACTIVATION · 激活课程</view>
+      <view class="ld-w-display">激活你的课程</view>
+      <view class="ld-w-lead">输入材料包里激活卡上的激活码，一针一线开启你的钩织之旅。</view>
+      <input class="ld-w-input" value="{{code}}" bind:input="onInput" placeholder="LD 开头的激活码" placeholder-class="ld-w-ph" confirm-type="done" bind:confirm="onActivate" />
+      <view class="ld-w-cta {{busy ? 'dim' : ''}}" bind:tap="onActivate">
+        <text>激活</text>
+        <image class="ld-w-cta-ico" src="/static/icons/arrow-right.svg" mode="aspectFit" />
+      </view>
     </block>
 
     <block wx:elif="{{kind === 'activated'}}">
-      <view class="ld-w-title">激活成功 🎉</view>
-      <view class="ld-w-sub">点下面开始学习。注意：确认进课后，这份材料包将不可退货</view>
-      <view class="ld-w-btn {{busy ? 'dim' : ''}}" bind:tap="onEnter">确认进课 · 开始学习</view>
+      <view class="ld-w-eyebrow">WELCOME · 开始学习</view>
+      <view class="ld-w-display">激活成功</view>
+      <view class="ld-w-lead">点下面开始学习。注意：确认进课后，这份材料包将不可退货。</view>
+      <view class="ld-w-cta {{busy ? 'dim' : ''}}" bind:tap="onEnter">
+        <text>确认进课 · 开始学习</text>
+        <image class="ld-w-cta-ico" src="/static/icons/arrow-right.svg" mode="aspectFit" />
+      </view>
       <view class="ld-w-link" bind:tap="onGoHome">先逛逛，稍后再进课</view>
     </block>
 
     <block wx:elif="{{kind === 'mine'}}">
-      <view class="ld-w-title">欢迎回来</view>
-      <view class="ld-w-sub">这个码已经是你的了，继续学习吧</view>
-      <view class="ld-w-btn" bind:tap="onEnter">继续学习</view>
+      <view class="ld-w-eyebrow">WELCOME BACK · 欢迎回来</view>
+      <view class="ld-w-display">欢迎回来</view>
+      <view class="ld-w-lead">这个码已经是你的了，接着上次继续钩就好，慢慢来。</view>
+      <view class="ld-w-cta" bind:tap="onEnter">
+        <text>继续学习</text>
+        <image class="ld-w-cta-ico" src="/static/icons/arrow-right.svg" mode="aspectFit" />
+      </view>
     </block>
 
     <block wx:elif="{{kind === 'taken'}}">
-      <view class="ld-w-title">这个码已被使用</view>
-      <view class="ld-w-sub">它已经被别的账号激活了。如果是你的家人朋友，让 TA 用自己的手机继续学；买过材料包想自己学，用包里你自己的码</view>
-      <view class="ld-w-btn ghost" bind:tap="onRetry">换一个码试试</view>
+      <view class="ld-w-eyebrow">NOTICE · 已被使用</view>
+      <view class="ld-w-display">这个码已被使用</view>
+      <view class="ld-w-lead">它已经被别的账号激活了。如果是家人朋友，让 TA 用自己的手机继续学；买过材料包想自己学，用包里你自己的码。</view>
+      <view class="ld-w-cta ghost" bind:tap="onRetry">
+        <text>换一个码试试</text>
+        <image class="ld-w-cta-ico" src="/static/icons/rotate-ccw-on.svg" mode="aspectFit" />
+      </view>
     </block>
 
     <block wx:else>
-      <view class="ld-w-title">激活码不对哦</view>
-      <view class="ld-w-sub">检查一下大小写和有没有抄漏——找不到码可以联系客服</view>
-      <view class="ld-w-btn ghost" bind:tap="onRetry">重新输入</view>
+      <view class="ld-w-eyebrow">OOPS · 激活码有误</view>
+      <view class="ld-w-display">激活码不对哦</view>
+      <view class="ld-w-lead">检查一下大小写和有没有抄漏——找不到码可以联系客服帮你确认。</view>
+      <view class="ld-w-cta ghost" bind:tap="onRetry">
+        <text>重新输入</text>
+        <image class="ld-w-cta-ico" src="/static/icons/rotate-ccw-on.svg" mode="aspectFit" />
+      </view>
     </block>
   </view>
 </view>

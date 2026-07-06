@@ -1,53 +1,113 @@
-<view class="ld-checkout">
-  <view class="ld-addr" bind:tap="onPickAddress">
-    <block wx:if="{{address}}">
-      <view class="ld-addr-line1">
-        <text class="ld-addr-name">{{address.name}}</text>
-        <text class="ld-addr-phone">{{address.phone}}</text>
-      </view>
-      <view class="ld-addr-line2">{{address.region}} {{address.detail}}</view>
-    </block>
-    <view class="ld-addr-empty" wx:else>请先添加收货地址 ›</view>
-  </view>
+<!-- 结算·重设计对齐 Checkout.jsx co-* 版式（设计 402px 画板→rpx ×1.87）。
+     业务逻辑不动：地址(onPickAddress)/搭配购(onToggleAddon·data-id)/提交(onSubmit)/金额明细(*Label)
+     全部承接 checkout.ts；本文件只重排结构与视觉，token 见 styles/tokens.wxss。
+     商品/搭配购数量为只读（草稿单源·无 qty 改写 handler，遵设计只读 co-item-qty 变体）。 -->
+<view class="co">
+  <view class="co-body">
 
-  <view class="ld-panel">
-    <view class="ld-line" wx:for="{{items}}" wx:key="index">
-      <image wx:if="{{item.cover}}" class="ld-line-media" src="{{item.cover}}" mode="aspectFill" />
-      <view wx:else class="ld-line-media"></view>
-      <view class="ld-line-main">
-        <view class="ld-line-name">{{item.name}}</view>
-        <view class="ld-line-sku" wx:if="{{item.sku}}">{{item.sku}}</view>
+    <!-- 收货地址卡（含彩色针脚底边） -->
+    <view class="co-addr">
+      <view class="co-addr-main" bind:tap="onPickAddress">
+        <view class="co-addr-pin">
+          <image class="co-ico co-ico-lg" src="/static/icons/map-pin.svg" mode="aspectFit" />
+        </view>
+        <view class="co-addr-text" wx:if="{{address}}">
+          <view class="co-addr-line1">
+            <text class="co-addr-name">{{address.name}}</text>
+            <text class="co-addr-phone">{{address.phone}}</text>
+          </view>
+          <view class="co-addr-line2">
+            <text class="co-addr-tag" wx:if="{{address.isDefault}}">默认</text>{{address.region}} {{address.detail}}
+          </view>
+        </view>
+        <view class="co-addr-text co-addr-empty" wx:else>
+          <text class="co-addr-empty-title">添加收货地址</text>
+          <text class="co-addr-empty-sub">请先填写收货人、手机号与详细地址</text>
+        </view>
+        <view class="co-addr-chev">
+          <image class="co-ico" src="/static/icons/chevron-right.svg" mode="aspectFit" />
+        </view>
       </view>
-      <view class="ld-line-right">
-        <view class="ld-line-price">¥{{item.price}}</view>
-        <view class="ld-line-qty">×{{item.qty}}</view>
+      <view class="co-stitch"></view>
+    </view>
+
+    <!-- 订单商品 -->
+    <view class="co-card">
+      <view class="co-shop">
+        <image class="co-shop-ico" src="/static/icons/store.svg" mode="aspectFit" />
+        <text class="co-shop-name">易织™小棉鸭® 官方旗舰店</text>
+        <view class="co-shop-chev">
+          <image class="co-ico" src="/static/icons/chevron-right.svg" mode="aspectFit" />
+        </view>
+      </view>
+      <view class="co-item" wx:for="{{items}}" wx:key="index">
+        <image wx:if="{{item.cover}}" class="co-item-img" src="{{item.cover}}" mode="aspectFill" />
+        <view wx:else class="co-item-img"></view>
+        <view class="co-item-mid">
+          <text class="co-item-name">{{item.name}}</text>
+          <text class="co-item-spec" wx:if="{{item.sku || item.tag}}">{{item.sku || item.tag}}</text>
+          <view class="co-item-foot">
+            <text class="co-item-price co-price"><text class="cny">¥</text>{{item.priceNum}}</text>
+            <text class="co-item-qty">×{{item.qty}}</text>
+          </view>
+        </view>
       </view>
     </view>
-  </view>
 
-  <view class="ld-panel">
-    <view class="ld-panel-title">搭配购</view>
-    <view class="ld-addon" wx:for="{{addons}}" wx:key="id" data-id="{{item.id}}" bind:tap="onToggleAddon">
-      <view class="ld-addon-main">
-        <view class="ld-addon-name">{{item.name}}</view>
-        <view class="ld-addon-price">¥{{item.price}}</view>
+    <!-- 搭配购买 -->
+    <view class="co-card">
+      <view class="co-addon-head">
+        <text class="co-addon-title">搭配购买</text>
+        <text class="co-addon-sub">一起买更划算</text>
       </view>
-      <view class="ld-addon-btn {{item.added ? 'on' : ''}}">{{item.added ? '已加' : '+ 加一件'}}</view>
+      <view class="co-addon" wx:for="{{addons}}" wx:key="id" data-id="{{item.id}}" bind:tap="onToggleAddon">
+        <view class="co-radio {{item.added ? 'on' : ''}}"></view>
+        <view class="co-addon-img"></view>
+        <view class="co-addon-mid">
+          <text class="co-addon-name">{{item.name}}</text>
+          <view class="co-addon-foot">
+            <text class="co-addon-price co-price"><text class="cny">¥</text>{{item.priceNum}}</text>
+          </view>
+        </view>
+      </view>
     </view>
+
+    <!-- 配送方式 -->
+    <view class="co-card co-rows">
+      <view class="co-row">
+        <text class="co-row-key">配送方式</text>
+        <text class="co-row-val">顺丰速运 · {{shipLabel}}</text>
+      </view>
+    </view>
+
+    <!-- 金额明细 -->
+    <view class="co-card">
+      <view class="co-summary">
+        <view class="co-sum-row"><text>商品金额</text><text class="co-sum-v">{{goodsLabel}}</text></view>
+        <view class="co-sum-row"><text>运费</text><text class="co-sum-v">{{shipLabel}}</text></view>
+        <view class="co-sum-row discount"><text>优惠券</text><text class="co-sum-v">{{couponLabel}}</text></view>
+        <view class="co-sum-div"></view>
+        <view class="co-sum-row total">
+          <text>实付款</text>
+          <text class="co-sum-v"><text class="cny">¥</text>{{amountNum}}</text>
+        </view>
+      </view>
+    </view>
+
   </view>
 
-  <view class="ld-panel">
-    <view class="ld-sum-row"><text>商品合计</text><text>{{goodsLabel}}</text></view>
-    <view class="ld-sum-row"><text>运费</text><text>{{shipLabel}}</text></view>
-    <view class="ld-sum-row"><text>优惠券</text><text class="ld-sum-coupon">{{couponLabel}}</text></view>
-  </view>
-
-  <view class="ld-submitbar-space"></view>
-  <view class="ld-submitbar">
-    <view class="ld-sub-total">
-      <text class="ld-sub-label">应付</text>
-      <text class="ld-sub-num">{{amountLabel}}</text>
+  <!-- 底部提交坞 -->
+  <view class="co-dock-space"></view>
+  <view class="co-dock">
+    <view class="co-dockbar">
+      <view class="co-dock-total">
+        <text class="co-dock-small">合计</text>
+        <view class="co-dock-amount">
+          <text class="co-dock-num"><text class="cny">¥</text>{{amountNum}}</text>
+          <text class="co-dock-count">共 {{count}} 件</text>
+        </view>
+      </view>
+      <view class="co-submit {{submitting ? 'dim' : ''}}" bind:tap="onSubmit">提交订单</view>
     </view>
-    <view class="ld-sub-btn {{submitting ? 'dim' : ''}}" bind:tap="onSubmit">提交订单</view>
   </view>
 </view>

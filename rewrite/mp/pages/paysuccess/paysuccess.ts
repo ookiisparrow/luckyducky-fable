@@ -1,8 +1,21 @@
-// 支付成功页（M2 批6）：轻确认 + 双出口（回首页 / 看订单——订单列表随下一批开通）。
+// 支付成功页（M2 批6·换皮到设计 cosuc）：英雄对勾 + 实付金额 + 订单信息 + 双出口。
+// 实付金额来自 checkout 拉起支付时透传的实付分（?amount=fen·钱链单源在云端/checkout·此处仅展示）；
+// 缺 amount（旧链路/异常）则隐去金额行、绝不写死。出口逻辑（回首页/看订单）保持不变。
 Page({
-  data: { orderId: '' },
+  data: { orderId: '', amountYuan: '', hasAmount: false },
   onLoad(query: Record<string, string | undefined>) {
-    this.setData({ orderId: String(query.id || '') })
+    const orderId = String(query.id || '')
+    let amountYuan = ''
+    let hasAmount = false
+    const raw = query.amount
+    if (raw != null && raw !== '') {
+      const fen = Number(raw)
+      if (Number.isFinite(fen) && fen >= 0) {
+        amountYuan = (fen / 100).toFixed(2)
+        hasAmount = true
+      }
+    }
+    this.setData({ orderId, amountYuan, hasAmount })
   },
   onGoHome() {
     wx.switchTab({ url: '/pages/home/home' })

@@ -9,12 +9,13 @@ import { mapPayResult } from '../../lib/payFlow'
 Page({
   data: {
     address: null as ReturnType<typeof addr.defaultAddress>,
-    items: [] as checkout.DraftLine[],
-    addons: CHECKOUT_ADDONS.map((a) => ({ ...a, added: false })),
+    items: [] as Array<checkout.DraftLine & { priceNum: string }>,
+    addons: CHECKOUT_ADDONS.map((a) => ({ ...a, added: false, priceNum: a.price.toFixed(2) })),
     goodsLabel: '',
     shipLabel: '',
     couponLabel: '',
-    amountLabel: '',
+    amountNum: '', // 实付金额数字（无符号·底坞/明细大字用；金额单源仍在云端/summaryFen）
+    count: 0, // 合计件数（草稿含已勾搭配购·底坞展示）
     submitting: false,
   },
   onShow() {
@@ -31,12 +32,13 @@ Page({
     const s = checkout.summaryFen()
     this.setData({
       address: addr.defaultAddress(),
-      items: draft.items,
-      addons: CHECKOUT_ADDONS.map((a) => ({ ...a, added: draft.items.some((l) => l.id === a.id) })),
+      items: draft.items.map((l) => ({ ...l, priceNum: l.price.toFixed(2) })), // 结算页两位小数（财务口径）
+      addons: CHECKOUT_ADDONS.map((a) => ({ ...a, added: draft.items.some((l) => l.id === a.id), priceNum: a.price.toFixed(2) })),
       goodsLabel: checkout.fenLabel(s.goodsFen),
       shipLabel: s.shipFen ? checkout.fenLabel(s.shipFen) : '包邮',
       couponLabel: '-' + checkout.fenLabel(s.couponFen),
-      amountLabel: checkout.fenLabel(s.amountFen),
+      amountNum: (s.amountFen / 100).toFixed(2),
+      count: draft.items.reduce((n, l) => n + l.qty, 0),
     })
   },
   onPickAddress() {
@@ -66,25 +68,26 @@ Page({
       wx.showToast({ title: msg.startsWith('OUT_OF_STOCK') ? '有商品库存不足' : '下单没成功，稍后再试', icon: 'none' })
       return
     }
+    const amountFen = checkout.summaryFen().amountFen // 捕获实付分（finishSubmitted 消费草稿前）·透传成功页展示用
     checkout.finishSubmitted() // 购物车按实际提交数量精确扣
     const order = (r.order || {}) as Record<string, any>
     if (order.status === 'paid') {
       // mock 模式建单即付（开发环境）——直接进成功页
-      wx.redirectTo({ url: '/pages/paysuccess/paysuccess?id=' + order.id })
+      wx.redirectTo({ url: '/pages/paysuccess/paysuccess?id=' + order.id + '&amount=' + amountFen })
       return
     }
-    await this.startPay(String(order.id || ''))
+    await this.startPay(String(order.id || ''), amountFen)
   },
-  async startPay(orderId: string) {
+  async startPay(orderId: string, amountFen: number) {
     const outcome = mapPayResult(await pay(orderId))
     if (outcome.kind === 'paid') {
-      wx.redirectTo({ url: '/pages/paysuccess/paysuccess?id=' + orderId })
+      wx.redirectTo({ url: '/pages/paysuccess/paysuccess?id=' + orderId + '&amount=' + amountFen })
       return
     }
     if (outcome.kind === 'request') {
       wx.requestPayment({
         ...outcome.payment,
-        success: () => wx.redirectTo({ url: '/pages/paysuccess/paysuccess?id=' + orderId }),
+        success: () => wx.redirectTo({ url: '/pages/paysuccess/paysuccess?id=' + orderId + '&amount=' + amountFen }),
         fail: (res) => {
           // 取消/失败：订单保留待支付（支付窗口内可续付·订单列表随下一批开通）
           const cancelled = String(res.errMsg || '').includes('cancel')
