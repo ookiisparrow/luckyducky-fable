@@ -19,6 +19,9 @@ const KIT_ICONS = ['circle', 'pen-tool', 'cloud', 'eye', 'book-open', 'sparkles-
 // 嵌入模式（上新向导步 1-3 复用本编辑器·向后兼容·独立 /products 路由用法不传 props 行为不变）：
 // embed=true 隐列表壳只留编辑器·wizardProductId 指定要编辑的商品档（向导载入后自动打开）。
 const props = defineProps<{ embed?: boolean; wizardProductId?: string }>()
+// 编辑器持久化成功即通知父级（上新向导嵌本编辑器·步1-3）——让 Wizard 顶部「上架闸/进度圆点/缺项徽章」随
+// 内嵌编辑器 autosave 重算真值（P2·否则补齐必备项后向导头仍锁死、与编辑器自身预检自相矛盾·根因#8）。
+const emit = defineEmits<{ saved: [] }>()
 
 const router = useRouter()
 // 商品→课程深链（换皮丢了入口·Courses 页占位文案承诺「商品页会带入」但没按钮）：courseId=商品档 courseId 或 course-<id>
@@ -106,7 +109,10 @@ async function autosave() {
   if (!edit.value) return
   const r = await saveDraft(edit.value)
   autoState.value = r.ok ? 'saved' : 'error'
-  if (r.ok) void silentRefresh()
+  if (r.ok) {
+    void silentRefresh()
+    emit('saved') // 通知向导重算上架闸/进度（步1-3 内嵌编辑器 autosave 落库后）
+  }
 }
 const flushSave = serialSave(autosave) // 串行化·防慢网下两次自动保存乱序覆盖（P2·根因#8）
 function markLoaded() {
@@ -127,7 +133,10 @@ function closeEditor() {
   if (snap)
     void flushSave() // 先排空任何在途 autosave（其 run 读已 null 的 edit→no-op·仅用于等排空）
       .then(() => saveDraft(snap)) // 排空后存快照·成为最后一次写（不被旧在途覆盖）
-      .then(() => void silentRefresh())
+      .then(() => {
+        void silentRefresh()
+        emit('saved')
+      })
       .catch(() => {})
 }
 onBeforeUnmount(() => {
@@ -221,6 +230,7 @@ async function doSave() {
     editorLoaded = false
     edit.value = null
     void reload()
+    emit('saved')
   }
 }
 

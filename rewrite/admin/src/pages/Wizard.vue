@@ -143,7 +143,8 @@ onMounted(reloadProduct)
 
         <div class="step-body">
           <!-- 步 1-3：商品图片/信息/SKU 同属商品编辑器（旧线 StepImages/StepInfo/StepSkus·新线合并为一编辑器） -->
-          <Products v-if="step <= 3" embed :wizard-product-id="id" />
+          <!-- @saved：内嵌编辑器 autosave 落库后重算顶部上架闸/进度圆点/缺项徽章（P2·否则补齐必备项后向导头仍锁死） -->
+          <Products v-if="step <= 3" embed :wizard-product-id="id" @saved="reloadProduct" />
           <Courses v-else-if="step === 4" embed :wizard-course-id="courseId" />
           <Cards v-else-if="step === 5" embed :wizard-product-id="id" />
           <Batches v-else-if="step === 6" embed :wizard-course-id="courseId" />
