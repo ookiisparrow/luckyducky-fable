@@ -51,6 +51,11 @@
   color: var(--ld-ink);
   line-height: 1.5;
 }
+/* 省市区 picker（占据输入位·点整行弹原生级联；空态套 coaddr-ph 置灰） */
+.coaddr-picker {
+  flex: 1 1 auto;
+  min-width: 0;
+}
 .coaddr-ph {
   color: var(--ld-content-2);
 }

@@ -4495,6 +4495,21 @@ export const repoChecks = [
     },
   },
   {
+    id: 'rw-mp-address-region-picker',
+    roots: ['#8'],
+    desc: 'mp 地址地区用原生省市区级联 picker（非自由文本·根因#8·C 类竖切）：rewrite/mp/pages/address-edit/address-edit.wxml 的「所在地区」须用 <picker mode="region">、不得回退自由文本 <input data-field="region">——自由文本丢省市区级联约束、易入脏地址（真机才暴露收货问题）',
+    run() {
+      const f = 'rewrite/mp/pages/address-edit/address-edit.wxml'
+      const abs = join(ROOT, f)
+      if (!existsSync(abs)) return []
+      const src = readFileSync(abs, 'utf8')
+      const bad = []
+      if (!/mode="region"/.test(src)) bad.push(`${f} 未用 <picker mode="region">——地区选择器回退自由文本（丢省市区级联·根因#8）`)
+      if (/data-field="region"/.test(src)) bad.push(`${f}「所在地区」仍是自由文本 <input data-field="region">——须换原生省市区 picker`)
+      return bad
+    },
+  },
+  {
     id: 'rw-m5-runbook-synced',
     roots: ['正册'],
     desc: 'M5 切换 runbook 与部署面同步：rewrite/M5-切换runbook.md 须存在，且 rewrite/cloud 每个函数单元名与并行期定名 adminApiV2 都出现在 runbook 内——函数增删改名 runbook 必跟，防切换日拿陈账操刀',

@@ -1,7 +1,7 @@
 <!-- 编辑收货地址·重设计对齐 Checkout.jsx AddressEdit + checkout.css coaddr-* 版式（设计 402px→rpx ×1.87）。
      业务逻辑不动：字段绑定(value/data-field/bind:input)/默认开关(onToggleDefault)/保存(onSave) 一字未改；
      顶部标题走原生导航栏（navigationBarTitleText），故不渲染设计的 co-header/co-nav。
-     省市区级联选择器为纯前端设计件、无现有数据源，本次保留「所在地区」为可输入行（见 deferred）。 -->
+     所在地区＝微信内置 <picker mode="region"> 省市区级联（全国数据运行时自带·region 空格拼接为真相源·守卫 rw-mp-address-region-picker）。 -->
 <view class="coaddr">
   <view class="co-body">
 
@@ -19,8 +19,9 @@
       </view>
       <view class="coaddr-field">
         <text class="coaddr-label">所在地区</text>
-        <input class="coaddr-input" value="{{region}}" data-field="region" bind:input="onInput"
-          placeholder="省 / 市 / 区" placeholder-class="coaddr-ph" />
+        <picker class="coaddr-picker" mode="region" value="{{regionArr}}" bind:change="onRegionChange">
+          <view class="coaddr-input {{region ? '' : 'coaddr-ph'}}">{{region || '省 / 市 / 区'}}</view>
+        </picker>
       </view>
       <view class="coaddr-field">
         <text class="coaddr-label">详细地址</text>

@@ -8,7 +8,8 @@ Page({
     id: null as number | null,
     name: '',
     phone: '',
-    region: '',
+    region: '', // 真相源：空格拼接「省 市 区」（与下游 {{region}} {{detail}} 展示同分隔·后端 60 字上限内）
+    regionArr: [] as string[], // 仅供 picker 打开时高亮初值（非真相源）
     detail: '',
     isDefault: false,
     valid: false, // 派生：四要素齐→保存按钮亮（弱校验·onSave 内仍做强校验含电话位数）
@@ -17,13 +18,27 @@ Page({
     const id = query.id ? Number(query.id) : null
     if (id != null) {
       const a = addr.getById(id)
-      if (a) this.setData({ id, name: a.name, phone: a.phone, region: a.region, detail: a.detail, isDefault: a.isDefault })
+      if (a)
+        this.setData({
+          id,
+          name: a.name,
+          phone: a.phone,
+          region: a.region,
+          regionArr: a.region ? a.region.split(' ') : [], // 回填 picker 初值（旧自由文本无空格→单元素·不重选不覆盖）
+          detail: a.detail,
+          isDefault: a.isDefault,
+        })
     }
     this._syncValid()
   },
   onInput(e: WechatMiniprogram.Input) {
     const field = String(e.currentTarget.dataset.field)
     this.setData({ [field]: e.detail.value }, () => this._syncValid())
+  },
+  // 省市区级联选择（微信内置 region picker·全国省市区数据运行时自带·无需数据/API/密钥）
+  onRegionChange(e: WechatMiniprogram.PickerChange) {
+    const arr = (e.detail.value as string[]) || []
+    this.setData({ region: arr.join(' '), regionArr: arr }, () => this._syncValid())
   },
   onToggleDefault() {
     this.setData({ isDefault: !this.data.isDefault })
