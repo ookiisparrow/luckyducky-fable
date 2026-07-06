@@ -69,6 +69,10 @@ watch(() => prof.value.productId, (id) => {
 })
 // B1 幂等键：每次组装意图生成一次·重试复用·成功才换新（换皮在 api 内每次现生成→双击/慢网双扣料双入库）
 const pendingAsmId = ref('')
+// 全局模板载入成功才放开「保存模板」——载入失败时 template 为空 {commonLines:[],yarnSlots:[]}，加一槽即通过 cleanTemplate，
+// 保存就整块 .set 覆盖 singleton 配方模板、抹掉真实 commonLines/其余 yarnSlots；resolveBom 读此单例，后续 runAssembly 全按残缺
+// 配方扣料→产销/库存错乱（P2·同 Settings 载入失败门·首次成功后恒 true·template 保住已载入值不再置回 false）
+let bomLoaded = false
 
 async function reload() {
   const [b, m, a, d] = await Promise.all([getBomSetup(), listMaterials(), listAssemblies(), listDrafts()])
@@ -81,6 +85,7 @@ async function reload() {
       void nextTick(() => (tplGuard = false))
     }
     profiles.value = (b.profiles as Record<string, any>[]) || []
+    bomLoaded = true // 模板载入成功·放开保存模板
   }
   mats.value = m.ok ? (m.list as Record<string, any>[]) : []
   assemblies.value = a.ok ? (a.list as Record<string, any>[]) : []
@@ -89,6 +94,11 @@ async function reload() {
 }
 
 async function doSaveTemplate() {
+  if (!bomLoaded) {
+    // 模板未成功载入即保存 = 拿空模板整块覆盖 singleton 配方、后续扣料错乱（P2）——拒绝并提示刷新
+    note(false, '', '模板未成功载入，暂不能保存（避免覆盖已有配方模板·请刷新重试）')
+    return
+  }
   const r = await saveBomTemplate(template.value)
   note(r.ok, '模板已保存（历史组装单的快照不受影响）', scmErrorText(r.error))
   if (r.ok) tplDirty.value = false // 已落库·允许后续 reload 回灌最新

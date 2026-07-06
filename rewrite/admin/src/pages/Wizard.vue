@@ -27,6 +27,7 @@ const extras = ref<{ hasVideo?: Record<string, boolean>; cardFinal?: Record<stri
 const listed = ref<Record<string, boolean>>({})
 const loading = ref(true)
 const loadError = ref(false) // 载入失败（网络波动）≠ 商品不存在——分开显「重试」态而非误报「商品不存在」死胡同（P3）
+let msgLoadFail = false // 当前 banner 是否为「加载失败」——回刷成功只清它、不误清上架等动作反馈（P3）
 const message = ref('')
 const busy = ref(false)
 const pubConfirm = ref(false)
@@ -56,8 +57,13 @@ async function reloadProduct() {
     // 已载入后的刷新失败（@saved autosave 回刷 / 切步回刷）只降级为 message banner、不撕掉正在编辑的向导+内嵌编辑器（P2 回归修·reloadProduct 是共享回刷路径）
     if (!product.value) loadError.value = true
     message.value = '加载失败：' + String(r.error || '')
+    msgLoadFail = true
     loading.value = false
     return
+  }
+  if (msgLoadFail) {
+    message.value = '' // 回刷成功只清上次残留的「加载失败」banner（批10 让回刷失败保编辑器不撕后·否则常驻工作中的编辑器上·P3）
+    msgLoadFail = false
   }
   product.value = (r.list as Record<string, any>[]).find((p) => String(p.id || p._id) === id) || null
   listed.value = r.listed || {}
@@ -92,10 +98,12 @@ async function shelve() {
   busy.value = false
   if (r.ok) {
     message.value = '已上架，打开小程序即可看到该商品'
+    msgLoadFail = false // 这是动作反馈·非加载失败——随后的 reloadProduct 成功不得把它当 stale banner 清掉（病根#14）
     void reloadProduct()
   } else {
     // publishErrorText 四道门人话在列表页·此处后端已过前置预检，直报原文错误码
     message.value = '上架没成功：' + String(r.error || '')
+    msgLoadFail = false
   }
 }
 
