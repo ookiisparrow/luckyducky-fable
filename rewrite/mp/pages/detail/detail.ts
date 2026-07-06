@@ -3,7 +3,9 @@ import * as cart from '../../lib/cart'
 import { prepareBuyNow } from '../../lib/checkout'
 import { getProductById } from '../../lib/catalog'
 import { getProducts } from '../../api/catalog'
+import { getRatingSummary } from '../../api/reviews'
 import { mapDetail, priceForSelection, type DetailVM } from '../../lib/mapDetail'
+import { mapSummary, type SummaryVM } from '../../lib/mapReviews'
 import { mapProducts, type ProductVM } from '../../lib/mapHome'
 
 Page({
@@ -16,6 +18,7 @@ Page({
     currentPriceNum: 0, // 数字部分（¥ 小、数字大）
     galleryIndex: 0,
     recs: [] as ProductVM[],
+    rating: null as SummaryVM | null, // 评分摘要（旁挂·异步·count=0 或失败→null 回退静态入口）
   },
   async onLoad(query: Record<string, string | undefined>) {
     const id = String(query.id || '')
@@ -33,12 +36,18 @@ Page({
       currentPriceNum: i >= 0 && vm.skus[i] ? vm.skus[i].price : vm.price,
     })
     void this.loadRecs(id)
+    void this.loadRating(id)
   },
   async loadRecs(id: string) {
     const r = await getProducts()
     if (r.ok && Array.isArray(r.list)) {
       this.setData({ recs: mapProducts(r.list).filter((p) => p.id !== id).slice(0, 4) }) // 排除本商品·取 4 个
     }
+  },
+  // 评分摘要（云端聚合下发·不用列表页缓存自算·云为唯一真相）：count=0 或失败→mapSummary 返 null→回退静态入口
+  async loadRating(id: string) {
+    const r = await getRatingSummary(id)
+    this.setData({ rating: r.ok ? mapSummary(r) : null })
   },
   onGallery(e: { detail: { current: number } }) {
     this.setData({ galleryIndex: e.detail.current })

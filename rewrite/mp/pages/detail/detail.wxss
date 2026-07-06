@@ -162,6 +162,27 @@
   font-size: 28rpx;
   color: var(--ld-ink);
 }
+/* 评分摘要（真评分星级+条数·星色沿用评价页鸭黄星专色） */
+.pdp-rating {
+  flex: 1;
+  display: flex;
+  align-items: baseline;
+  gap: 12rpx;
+}
+.pdp-rating-score {
+  font-size: 30rpx;
+  font-weight: 700;
+  color: var(--ld-ink);
+}
+.pdp-rating-stars {
+  font-size: 24rpx;
+  color: var(--ld-duck-deep);
+  letter-spacing: 3rpx;
+}
+.pdp-rating-count {
+  font-size: 24rpx;
+  color: var(--ld-content-2);
+}
 .pdp-chev {
   color: #c4c4c4;
   font-size: 36rpx;

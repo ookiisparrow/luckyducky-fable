@@ -41,10 +41,15 @@
     </view>
   </view>
 
-  <!-- 用户评价入口 -->
+  <!-- 用户评价入口（有评价显真评分星级+条数·无评价/加载中回退静态文案·不渲染 0 星假评） -->
   <view class="pdp-card pdp-row-link" bind:tap="onViewReviews">
     <text class="pdp-row-key">评价</text>
-    <text class="pdp-row-val">看看钩友们怎么说</text>
+    <view class="pdp-rating" wx:if="{{rating}}">
+      <text class="pdp-rating-score">{{rating.scoreLabel}}</text>
+      <text class="pdp-rating-stars">{{rating.scoreStars}}</text>
+      <text class="pdp-rating-count">{{rating.count}} 条评价</text>
+    </view>
+    <text class="pdp-row-val" wx:else>看看钩友们怎么说</text>
     <text class="pdp-chev">›</text>
   </view>
 

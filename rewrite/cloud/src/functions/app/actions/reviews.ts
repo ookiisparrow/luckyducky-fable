@@ -151,6 +151,30 @@ export const getReviews = async (event: any = {}) => {
 }
 
 /**
+ * 详情页评分摘要（公开只读·slim·C 类竖切）：热路径只跑 count + aggregate 求和 → {score,count}，
+ * **不拉列表/晒图/标签**（详情页为一个分数拉 20 条评价+换临时图址是过度取数）。口径对齐 buildSummaryExact
+ * 的精确均分（sum/count 保留一位）。只回聚合数、绝不带 _openid/评价明细（公开只读·隐私）。
+ * 聚合异常/集合未建 → {score:'0',count:0}（前端 mapSummary count=0 → 不渲染假评·fail-closed）。
+ */
+export const getRatingSummary = async (event: any = {}) => {
+  const productId = String(event.productId || '')
+  if (!productId) return err(ERR.NO_PRODUCT)
+  const db = getDb()
+  const $ = db.command.aggregate
+  try {
+    const [cRes, sumRes] = await Promise.all([
+      db.collection(COLLECTIONS.reviews).where({ productId }).count(),
+      db.collection(COLLECTIONS.reviews).aggregate().match({ productId }).group({ _id: null, s: $.sum('$rating') }).end(),
+    ])
+    const count = cRes.total || 0
+    const sum = (sumRes && sumRes.list && sumRes.list[0] && sumRes.list[0].s) || 0
+    return ok({ score: count ? (sum / count).toFixed(1) : '0', count })
+  } catch {
+    return ok({ score: '0', count: 0 })
+  }
+}
+
+/**
  * 提交评价（黄金 §七）：多重闸门（身份/评分 1–5/订单归属/已完成/商品在单内）；
  * 一单一行一评（确定性 _id=orderId__lineId 库级唯一·同商品多 SKU 各自可评）；匿名/昵称云端快照。
  */

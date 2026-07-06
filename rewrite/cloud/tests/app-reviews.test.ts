@@ -105,6 +105,28 @@ describe('getReviews（游标分页+全量精确汇总·黄金 §七）', () => 
   })
 })
 
+describe('getRatingSummary（详情页评分摘要·slim·公开只读·C 类竖切）', () => {
+  it('大白话：缺商品标识拒；空集合 count=0 score=0（前端据此不渲染假评）', async () => {
+    expect((await call('getRatingSummary')).error).toBe('NO_PRODUCT')
+    const r = await call('getRatingSummary', { productId: 'p1' })
+    expect(r.count).toBe(0)
+    expect(r.score).toBe('0')
+  })
+  it('大白话：有评价时 score=均分保留一位、count=本商品评价数；他商品不混入；slim 不下发列表/图/标签', async () => {
+    control.seed('reviews', [
+      { _id: 'a', productId: 'p1', rating: 5, tags: ['棒'], photos: ['cloud://a.jpg'], createdAt: 1 },
+      { _id: 'b', productId: 'p1', rating: 4, createdAt: 2 },
+      { _id: 'c', productId: 'p1', rating: 3, createdAt: 3 },
+      { _id: 'z', productId: 'p2', rating: 1, createdAt: 4 },
+    ])
+    const r = await call('getRatingSummary', { productId: 'p1' })
+    expect(r.count).toBe(3) // p2 不混入
+    expect(r.score).toBe('4.0') // (5+4+3)/3
+    expect(r.list).toBeUndefined() // slim·不下发列表
+    expect(JSON.stringify(r)).not.toContain('cloud://') // 不带图/裸 fileID·公开只读只回聚合数
+  })
+})
+
 describe('submitReview（多重闸门·一单一行一评·黄金 §七）', () => {
   const seedOrder = (id = 'o1', status = 'done') =>
     control.seed('orders', [
