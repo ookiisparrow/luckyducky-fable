@@ -9,11 +9,22 @@ page {
   --ld-purple-ink: #241733; /* 深紫黑：主 CTA */
   /* 中性 */
   --ld-ink: #222222;
+  --ld-content: #3d3d42; /* 正文墨（重设计中性文字·非暖棕） */
+  --ld-content-2: #6e6e76; /* 次要文字：划线价、用户名、说明 */
   --ld-bg: #ffffff;
   --ld-bg-lilac: #fcfaff;
-  --ld-bg-sage: #edeee8;
+  --ld-bg-sage: #edeee8; /* 媒体/占位底 */
+  --ld-bg-grey: #f3f3f3; /* 买家秀条带底 */
   --ld-bg-faint: #fafafa;
+  --ld-line: #e7e7e7; /* 中性发丝线：折叠组/分隔 */
+  --ld-line-soft: #eeeeee;
+  --ld-surface-cream: #e8e2d6; /* 商品卡暖描边 */
+  /* 鸭黄暖点（评分/意象） */
+  --ld-duck: #f9bf63;
+  --ld-duck-deep: #f2ac3c; /* 买家秀星标 */
   /* 几何 */
   --ld-radius: 24rpx;
+  --ld-radius-sm: 10rpx; /* 商品/买家秀卡（设计 5px）*/
+  --ld-radius-md: 18rpx; /* 折叠组/特写图（设计 9px）*/
   --ld-radius-pill: 999rpx;
 }

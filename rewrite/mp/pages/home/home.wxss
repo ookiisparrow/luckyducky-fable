@@ -1,103 +1,613 @@
+/* 首页重设计 9 板块。设计稿 402px 画板 → rpx（750/402≈1.87 换算·保比例）。
+   token 见 styles/tokens.wxss；图标 <image> 引 static/icons/*.svg（色已烘进 svg）。 */
 .ld-home {
-  min-height: 100vh;
-  background: var(--ld-bg-lilac);
-  padding-bottom: 200rpx; /* 让开悬浮 TabBar */
-}
-.ld-hero {
-  padding: 40rpx 40rpx 56rpx;
-  background: linear-gradient(160deg, #f3e9ff 0%, var(--ld-bg-lilac) 78%);
-}
-.ld-hero-brand {
-  font-size: 26rpx;
-  color: var(--ld-purple-tab);
-  letter-spacing: 2rpx;
-}
-.ld-hero-title {
-  margin-top: 20rpx;
-  font-size: 52rpx;
-  font-weight: 700;
-  color: var(--ld-purple-ink);
-  line-height: 1.25;
-}
-.ld-hero-sub {
-  margin-top: 16rpx;
-  font-size: 26rpx;
-  color: var(--ld-purple-meta);
-}
-.ld-section {
-  padding: 24rpx 32rpx;
-}
-.ld-section-title {
-  font-size: 30rpx;
-  font-weight: 600;
-  color: var(--ld-ink);
-  margin-bottom: 20rpx;
-}
-.ld-grid {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 24rpx;
-}
-.ld-card {
-  width: calc((100% - 24rpx) / 2);
   background: var(--ld-bg);
-  border: 2rpx solid var(--ld-purple-line);
-  border-radius: var(--ld-radius);
   overflow: hidden;
 }
-.ld-card-media {
-  height: 320rpx;
+
+/* 通用排版 */
+.ld-display {
+  font-size: 90rpx;
+  font-weight: 700;
+  line-height: 1;
+  color: #000;
+  letter-spacing: -1rpx;
+}
+.ld-h1 {
+  font-size: 60rpx;
+  font-weight: 500;
+  line-height: 1.2;
+  color: #000;
+}
+.ld-h2 {
+  font-size: 52rpx;
+  font-weight: 700;
+  line-height: 1.2;
+  color: #000;
+}
+.ld-center {
+  text-align: center;
+}
+
+/* ① HERO */
+.ld-hero {
+  position: relative;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  background: var(--ld-bg-sage);
+  overflow: hidden;
+}
+.ld-hero-photo {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+.ld-glogo {
+  position: absolute;
+  left: 36rpx;
+  height: 56rpx;
+  width: auto;
+  z-index: 3;
+  filter: drop-shadow(0 1rpx 3rpx rgba(255, 255, 255, 0.9));
+}
+.ld-hero-scrim {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 780rpx;
+  background: linear-gradient(to bottom, rgba(255, 255, 255, 0), rgba(255, 255, 255, 0.55) 55%, rgba(255, 255, 255, 0.92));
+}
+.ld-hero-copy {
+  position: relative;
+  z-index: 2;
+  padding: 0 36rpx 210rpx;
+  text-align: center;
+}
+.ld-hero-tag {
+  display: block;
+  margin-top: 16rpx;
+  font-size: 32rpx;
+  font-weight: 500;
+  color: #000;
+  letter-spacing: 1rpx;
+}
+.ld-hero-cta {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 18rpx;
+  margin-top: 44rpx;
+}
+.ld-search {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #fff;
+  border: 2rpx solid var(--ld-purple);
+  border-radius: var(--ld-radius-pill);
+  padding: 22rpx 40rpx;
+  min-width: 0;
+}
+.ld-search-h {
+  background: #f7f8ff;
+}
+.ld-search-text {
+  font-size: 28rpx;
+  font-weight: 500;
+  color: var(--ld-purple);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.ld-btn-buy {
+  flex: 0 0 auto;
+  height: 90rpx;
+  padding: 0 48rpx;
+  display: flex;
+  align-items: center;
+  background: var(--ld-purple-ink);
+  color: #fff;
+  font-size: 30rpx;
+  font-weight: 500;
+  border-radius: var(--ld-radius-pill);
+}
+.ld-btn-buy-h {
+  opacity: 0.86;
+}
+
+/* ② 品牌介绍 */
+.ld-intro {
+  padding: 142rpx 36rpx 16rpx;
+}
+.ld-intro-logo {
+  display: block;
+  width: 366rpx;
+  margin: 0 auto 26rpx;
+}
+.ld-intro-name {
+  font-size: 37rpx;
+  font-weight: 500;
+  color: var(--ld-content);
+  text-align: center;
+  letter-spacing: 1rpx;
+}
+.ld-intro-lead {
+  max-width: 616rpx;
+  margin: 56rpx auto 0;
+  font-size: 34rpx;
+  line-height: 1.55;
+  color: var(--ld-content);
+  text-align: center;
+}
+
+/* ③ 特写 + 商品轨 */
+.ld-friends {
+  padding: 45rpx 36rpx 68rpx;
+}
+.ld-feature-display {
+  position: relative;
+  width: 100%;
+  padding-top: 100%; /* 方形·padding-top 百分比法（避 aspect-ratio 旧 WebView 不支持） */
+  border-radius: var(--ld-radius-md);
+  background: var(--ld-bg-sage);
+  overflow: hidden;
+}
+.ld-feature-img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+.ld-feature-copy {
+  margin-top: 118rpx;
+}
+.ld-feature-title {
+  font-size: 52rpx;
+  font-weight: 700;
+  line-height: 1.25;
+  color: #000;
+}
+.ld-feature-body {
+  max-width: 75%;
+  margin-top: 22rpx;
+  font-size: 28rpx;
+  line-height: 1.65;
+  color: var(--ld-content);
+}
+.ld-prod-rail {
+  display: flex;
+  margin-top: 24rpx;
+  white-space: nowrap;
+}
+.ld-prod-card {
+  flex: 0 0 400rpx;
+  display: flex;
+  flex-direction: column;
+  margin-right: 22rpx;
+  background: #fff;
+  border: 2rpx solid var(--ld-surface-cream);
+  border-radius: var(--ld-radius-sm);
+  overflow: hidden;
+}
+.ld-prod-media {
+  width: 100%;
+  height: 400rpx; /* 卡宽 400rpx → 方形 */
   background: var(--ld-bg-sage);
 }
-.ld-card-name {
-  padding: 16rpx 20rpx 4rpx;
-  font-size: 26rpx;
+.ld-prod-media-img {
+  width: 100%;
+  height: 100%;
+}
+.ld-prod-body {
+  padding: 20rpx 26rpx 26rpx;
+}
+.ld-prod-name {
+  font-size: 30rpx;
+  line-height: 1.35;
   color: var(--ld-ink);
 }
-.ld-card-tag {
-  padding: 0 20rpx;
-  font-size: 22rpx;
-  color: var(--ld-purple-meta);
+.ld-prod-tag {
+  margin-top: 8rpx;
+  font-size: 26rpx;
+  color: var(--ld-content-2);
 }
-.ld-card-pricerow {
+.ld-prod-foot {
   display: flex;
-  align-items: baseline;
-  gap: 12rpx;
-  padding: 8rpx 20rpx 20rpx;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 20rpx;
 }
-.ld-card-price {
-  font-size: 30rpx;
-  font-weight: 700;
-  color: var(--ld-purple-ink);
+.ld-price-group {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.1;
 }
-.ld-card-was {
-  font-size: 22rpx;
-  color: var(--ld-purple-meta);
+.ld-price-was {
+  font-size: 24rpx;
+  color: var(--ld-content-2);
   text-decoration: line-through;
+}
+.ld-price {
+  font-size: 40rpx;
+  font-weight: 600;
+  color: #222;
+  letter-spacing: 0.5rpx;
+}
+.ld-add {
+  flex: 0 0 auto;
+  width: 60rpx;
+  height: 60rpx;
+  border-radius: 50%;
+  background: var(--ld-purple);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.ld-add-h {
+  opacity: 0.82;
+}
+.ld-add-ico {
+  width: 34rpx;
+  height: 34rpx;
+}
+.ld-prod-empty {
+  padding: 60rpx 0;
+  text-align: center;
+  font-size: 26rpx;
+  color: var(--ld-content-2);
 }
 .ld-skeleton {
   background: linear-gradient(90deg, var(--ld-bg-sage) 25%, var(--ld-bg-faint) 50%, var(--ld-bg-sage) 75%);
 }
 .ld-skeleton-text {
   height: 28rpx;
-  margin: 16rpx 20rpx;
+  margin: 16rpx 26rpx;
   border-radius: 8rpx;
   background: var(--ld-bg-sage);
 }
 .ld-skeleton-text.short {
-  width: 120rpx;
+  width: 140rpx;
 }
-.ld-empty {
-  padding: 96rpx 0;
+
+/* ④ 信任条 */
+.ld-trust {
+  display: flex;
+  justify-content: center;
+  gap: 64rpx;
+  padding: 56rpx 20rpx;
+  background: var(--ld-bg-lilac);
+  border-top: 1rpx solid #efe9f4;
+  border-bottom: 1rpx solid #efe9f4;
+}
+.ld-trust-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 18rpx;
+}
+.ld-trust-ico {
+  width: 44rpx;
+  height: 44rpx;
+}
+.ld-trust-label {
+  font-size: 22rpx;
+  color: var(--ld-purple-meta);
+}
+
+/* ⑤ 拆门槛 + ⑦ FAQ 共用折叠组 */
+.ld-reassure {
+  padding: 118rpx 36rpx 75rpx;
+}
+.ld-reassure-head {
+  margin-bottom: 38rpx;
+}
+.ld-h2-left {
+  text-align: left;
+}
+.ld-reassure-lead {
+  margin-top: 20rpx;
+  font-size: 28rpx;
+  line-height: 1.6;
+  color: var(--ld-content);
+}
+.ld-collapse {
+  border: 2rpx solid var(--ld-line);
+  border-radius: var(--ld-radius-md);
+  overflow: hidden;
+}
+.ld-panel {
+  background: #fff;
+  border-bottom: 2rpx solid var(--ld-line);
+}
+.ld-panel:last-child {
+  border-bottom: none;
+}
+.ld-panel-head {
+  display: flex;
+  align-items: center;
+  gap: 20rpx;
+  padding: 30rpx;
+}
+.ld-panel-ico {
+  flex: 0 0 auto;
+  width: 44rpx;
+  height: 44rpx;
+}
+.ld-panel-title {
+  flex: 1;
+  text-align: left;
+  font-size: 37rpx;
+  font-weight: 500;
+  color: rgba(0, 0, 0, 0.9);
+}
+.ld-panel-action {
+  flex: 0 0 auto;
+  font-size: 28rpx;
+  color: var(--ld-content-2);
+}
+.ld-chev {
+  flex: 0 0 auto;
+  width: 38rpx;
+  height: 38rpx;
+  transition: transform 0.25s;
+}
+.ld-panel.open .ld-chev {
+  transform: rotate(180deg);
+}
+.ld-panel-body {
+  padding-bottom: 6rpx;
+}
+.ld-panel-text {
+  padding: 0 30rpx 34rpx 94rpx;
+  font-size: 28rpx;
+  line-height: 1.6;
+  color: var(--ld-content);
+}
+.ld-panel-media {
+  margin: 0 30rpx 34rpx;
+  height: 460rpx;
+  border-radius: var(--ld-radius-md);
+  background: var(--ld-bg-sage);
+  overflow: hidden;
+}
+.ld-panel-media-img {
+  width: 100%;
+  height: 100%;
+}
+
+/* ⑥ 买家秀 */
+.ld-reviews {
+  padding: 56rpx 0;
+  background: var(--ld-bg-grey);
+}
+.ld-reviews-head {
+  padding: 0 36rpx 36rpx;
+}
+.ld-review-rail {
+  display: flex;
+  padding: 8rpx 36rpx;
+  white-space: nowrap;
+}
+.ld-review-card {
+  flex: 0 0 400rpx;
+  display: flex;
+  flex-direction: column;
+  margin-right: 26rpx;
+  background: var(--ld-bg-lilac);
+  border: 2rpx solid var(--ld-purple-line);
+  border-radius: var(--ld-radius-sm);
+  overflow: hidden;
+  box-shadow: 0 6rpx 8rpx rgba(0, 0, 0, 0.12);
+}
+.ld-review-media {
+  width: 100%;
+  height: 534rpx; /* 卡宽 400rpx × 4/3（3:4 竖图） */
+  background: var(--ld-bg-sage);
+}
+.ld-review-media-img {
+  width: 100%;
+  height: 100%;
+}
+.ld-review-body {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  padding: 22rpx 26rpx 26rpx;
+}
+.ld-stars {
+  font-size: 26rpx;
+  letter-spacing: 4rpx;
+  color: var(--ld-duck-deep);
+}
+.ld-review-quote {
+  margin: 15rpx 0 22rpx;
+  font-size: 25rpx;
+  line-height: 1.6;
+  color: var(--ld-ink);
+  white-space: normal;
+}
+.ld-review-meta {
+  display: flex;
+  align-items: center;
+  gap: 12rpx;
+  margin-top: auto;
+}
+.ld-review-dot {
+  flex: 0 0 auto;
+  width: 30rpx;
+  height: 30rpx;
+  border-radius: 50%;
+  background: var(--ld-purple);
+}
+.ld-review-user {
+  font-size: 21rpx;
+  color: var(--ld-content-2);
+}
+.ld-verified {
+  display: flex;
+  align-items: center;
+  gap: 5rpx;
+  margin-left: auto;
+  font-size: 22rpx;
+  color: var(--ld-purple);
+  white-space: nowrap;
+}
+.ld-verified-ico {
+  width: 24rpx;
+  height: 24rpx;
+}
+
+/* ⑦ FAQ（折叠组·浅紫底无框变体） */
+.ld-faq {
+  padding: 72rpx 26rpx 82rpx;
+  background: var(--ld-bg-lilac);
+}
+.ld-collapse-faq {
+  margin-top: 42rpx;
+  border: none;
+  background: var(--ld-bg-lilac);
+}
+.ld-collapse-faq .ld-panel {
+  background: var(--ld-bg-lilac);
+  border-bottom: 2rpx solid #ece6f2;
+}
+.ld-collapse-faq .ld-panel-title {
+  font-size: 32rpx;
+}
+.ld-collapse-faq .ld-panel-text {
+  padding-left: 30rpx;
+}
+
+/* ⑧ 收尾 CTA */
+.ld-closing {
+  position: relative;
+  width: 100%;
+  padding-top: 61.8%; /* 黄金比 1 : 0.618·避 aspect-ratio */
+  background: #fff;
+  overflow: hidden;
+}
+.ld-closing-img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 1;
+}
+.ld-closing-copy {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
   text-align: center;
 }
-.ld-empty-title {
-  font-size: 30rpx;
-  font-weight: 600;
-  color: var(--ld-purple-ink);
+.ld-closing-title {
+  font-size: 75rpx;
+  letter-spacing: -1rpx;
 }
-.ld-empty-hint {
-  margin-top: 12rpx;
+.ld-btn-dark {
+  display: inline-flex;
+  align-items: center;
+  padding: 28rpx 60rpx;
+  background: var(--ld-purple-ink);
+  color: #fff;
+  font-size: 32rpx;
+  font-weight: 500;
+  border-radius: var(--ld-radius-pill);
+}
+.ld-btn-dark-h {
+  opacity: 0.9;
+}
+.ld-closing-btn {
+  margin-top: 42rpx;
+  box-shadow: 0 12rpx 40rpx rgba(123, 92, 175, 0.22);
+}
+
+/* ⑨ 页脚 */
+.ld-footer {
+  padding: 68rpx 36rpx calc(210rpx + env(safe-area-inset-bottom));
+  background: var(--ld-purple-tab);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+}
+.ld-footer-logo {
+  height: 75rpx;
+  width: auto;
+  margin-bottom: 34rpx;
+  filter: brightness(0) invert(1);
+  opacity: 0.95;
+}
+.ld-footer-links {
+  display: flex;
+  align-items: center;
+  gap: 18rpx;
   font-size: 24rpx;
+}
+.ld-footer-link {
+  color: #fff;
+}
+.ld-footer-dot {
+  color: rgba(255, 255, 255, 0.6);
+}
+.ld-footer-copy {
+  max-width: 490rpx;
+  margin-top: 22rpx;
+  font-size: 21rpx;
+  line-height: 1.6;
+  color: rgba(255, 255, 255, 0.75);
+}
+
+/* 回到顶部 */
+.ld-backtop {
+  position: fixed;
+  right: 34rpx;
+  bottom: calc(210rpx + env(safe-area-inset-bottom));
+  width: 90rpx;
+  height: 90rpx;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 12rpx 40rpx rgba(123, 92, 175, 0.28);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  z-index: 25;
+}
+.ld-backtop-ico {
+  width: 34rpx;
+  height: 34rpx;
+}
+.ld-backtop-label {
+  font-size: 18rpx;
   color: var(--ld-purple-meta);
+}
+
+/* 轻提示 toast */
+.ld-toast {
+  position: fixed;
+  left: 50%;
+  top: 46%;
+  transform: translate(-50%, -50%) scale(0.9);
+  max-width: 70%;
+  padding: 26rpx 38rpx;
+  background: rgba(0, 0, 0, 0.82);
+  color: #fff;
+  font-size: 26rpx;
+  border-radius: 22rpx;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.2s, transform 0.2s;
+  z-index: 60;
+}
+.ld-toast.show {
+  opacity: 1;
+  transform: translate(-50%, -50%) scale(1);
 }

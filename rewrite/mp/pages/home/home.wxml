@@ -1,37 +1,176 @@
 <view class="ld-home">
-  <view class="ld-hero" style="padding-top: {{statusBarHeight + 20}}px">
-    <view class="ld-hero-brand">小棉鸭 Lucky Ducky</view>
-    <view class="ld-hero-title">{{hero.title}}</view>
-    <view class="ld-hero-sub">{{hero.tagline}}</view>
-  </view>
 
-  <view class="ld-section">
-    <view class="ld-section-title">材料包</view>
-
-    <view class="ld-grid" wx:if="{{loading}}">
-      <view class="ld-card" wx:for="{{[1, 2, 3, 4]}}" wx:key="*this">
-        <view class="ld-card-media ld-skeleton"></view>
-        <view class="ld-card-name ld-skeleton-text"></view>
-        <view class="ld-card-price ld-skeleton-text short"></view>
+  <!-- ① HERO：全屏图 + 底部白色渐隐 + 居中文案 + 搜索胶囊/购买 -->
+  <view class="ld-hero" style="padding-top: {{statusBarHeight}}px">
+    <image wx:if="{{content.hero.img}}" class="ld-hero-photo" src="{{content.hero.img}}" mode="aspectFill" />
+    <image class="ld-glogo" src="/static/logo-wordmark.svg" mode="heightFix" style="top: {{statusBarHeight + 14}}px" />
+    <view class="ld-hero-scrim"></view>
+    <view class="ld-hero-copy">
+      <view class="ld-display">{{content.hero.title}}</view>
+      <view class="ld-hero-tag">{{content.hero.tagline}}</view>
+      <view class="ld-hero-cta">
+        <view class="ld-search" hover-class="ld-search-h" bind:tap="toIntro">
+          <text class="ld-search-text">{{content.hero.search}}</text>
+        </view>
+        <view class="ld-btn-buy" hover-class="ld-btn-buy-h" bind:tap="toProducts">购买</view>
       </view>
     </view>
+  </view>
 
-    <view class="ld-grid" wx:elif="{{products.length}}">
-      <view class="ld-card" wx:for="{{products}}" wx:key="id" data-id="{{item.id}}" bind:tap="onTapProduct">
-        <image wx:if="{{item.cover}}" class="ld-card-media" src="{{item.cover}}" mode="aspectFill" />
-        <view wx:else class="ld-card-media"></view>
-        <view class="ld-card-name">{{item.name}}</view>
-        <view class="ld-card-tag" wx:if="{{item.tag}}">{{item.tag}}</view>
-        <view class="ld-card-pricerow">
-          <text class="ld-card-price">{{item.priceLabel}}</text>
-          <text class="ld-card-was" wx:if="{{item.wasLabel}}">{{item.wasLabel}}</text>
+  <!-- ② 品牌介绍 -->
+  <view class="ld-intro" id="intro">
+    <image class="ld-intro-logo" src="/static/logo-wordmark.svg" mode="widthFix" />
+    <view class="ld-intro-name">{{content.brand.name}}</view>
+    <view class="ld-intro-lead">{{content.brand.lead}}</view>
+  </view>
+
+  <!-- ③ 特写 + 商品横向轨 -->
+  <view class="ld-friends" id="friends">
+    <view class="ld-feature-display">
+      <image wx:if="{{content.feature.img}}" class="ld-feature-img" src="{{content.feature.img}}" mode="aspectFill" />
+    </view>
+    <view class="ld-feature-copy">
+      <view class="ld-feature-title">{{content.feature.title}}</view>
+      <view class="ld-feature-body">{{content.feature.body}}</view>
+    </view>
+
+    <scroll-view wx:if="{{products.length}}" class="ld-prod-rail" scroll-x enable-flex enhanced show-scrollbar="{{false}}">
+      <view class="ld-prod-card" wx:for="{{products}}" wx:key="id" data-id="{{item.id}}" bind:tap="onTapProduct">
+        <view class="ld-prod-media">
+          <image wx:if="{{item.cover}}" class="ld-prod-media-img" src="{{item.cover}}" mode="aspectFill" />
+        </view>
+        <view class="ld-prod-body">
+          <view class="ld-prod-name">{{item.name}}</view>
+          <view class="ld-prod-tag" wx:if="{{item.tag}}">{{item.tag}}</view>
+          <view class="ld-prod-foot">
+            <view class="ld-price-group">
+              <text class="ld-price-was" wx:if="{{item.wasLabel}}">{{item.wasLabel}}</text>
+              <text class="ld-price">{{item.priceLabel}}</text>
+            </view>
+            <view class="ld-add" hover-class="ld-add-h" catch:tap="onAddProduct" data-name="{{item.name}}">
+              <image class="ld-add-ico" src="/static/icons/plus.svg" mode="aspectFit" />
+            </view>
+          </view>
+        </view>
+      </view>
+    </scroll-view>
+
+    <view wx:elif="{{loading}}" class="ld-prod-rail">
+      <view class="ld-prod-card" wx:for="{{[1, 2]}}" wx:key="*this">
+        <view class="ld-prod-media ld-skeleton"></view>
+        <view class="ld-prod-body">
+          <view class="ld-skeleton-text"></view>
+          <view class="ld-skeleton-text short"></view>
         </view>
       </view>
     </view>
 
-    <view class="ld-empty" wx:else>
-      <view class="ld-empty-title">{{loadFailed ? '暂时没连上云端' : '货架整理中'}}</view>
-      <view class="ld-empty-hint">{{loadFailed ? '下拉可以重试' : '上新在路上，先逛逛别处吧'}}</view>
+    <view wx:else class="ld-prod-empty">{{loadFailed ? '货架暂时没连上云端，下拉重试' : '上新在路上，先逛逛别处吧'}}</view>
+  </view>
+
+  <!-- ④ 信任条 -->
+  <view class="ld-trust">
+    <view class="ld-trust-item" wx:for="{{content.trust}}" wx:key="label">
+      <image wx:if="{{item.icon}}" class="ld-trust-ico" src="/static/icons/{{item.icon}}.svg" mode="aspectFit" />
+      <text class="ld-trust-label">{{item.label}}</text>
     </view>
   </view>
+
+  <!-- ⑤ 拆门槛（折叠组·首条默认展开） -->
+  <view class="ld-reassure">
+    <view class="ld-reassure-head">
+      <view class="ld-h2 ld-h2-left">{{content.reassure.heading}}</view>
+      <view class="ld-reassure-lead">{{content.reassure.lead}}</view>
+    </view>
+    <view class="ld-collapse">
+      <view class="ld-panel {{openReassure === index ? 'open' : ''}}" wx:for="{{content.reassure.items}}" wx:key="title"
+        data-index="{{index}}" bind:tap="toggleReassure">
+        <view class="ld-panel-head">
+          <image wx:if="{{item.icon}}" class="ld-panel-ico" src="/static/icons/{{item.icon}}.svg" mode="aspectFit" />
+          <text class="ld-panel-title">{{item.title}}</text>
+          <text class="ld-panel-action">{{openReassure === index ? '收起' : '展开'}}</text>
+          <image class="ld-chev" src="/static/icons/chevron-down.svg" mode="aspectFit" />
+        </view>
+        <view class="ld-panel-body" wx:if="{{openReassure === index}}">
+          <view class="ld-panel-text">{{item.body}}</view>
+          <view wx:if="{{item.img}}" class="ld-panel-media">
+            <image class="ld-panel-media-img" src="{{item.img}}" mode="aspectFill" />
+          </view>
+        </view>
+      </view>
+    </view>
+  </view>
+
+  <!-- ⑥ 真实买家秀 -->
+  <view class="ld-reviews">
+    <view class="ld-reviews-head"><view class="ld-h2">{{content.reviews.heading}}</view></view>
+    <scroll-view class="ld-review-rail" scroll-x enable-flex enhanced show-scrollbar="{{false}}">
+      <view class="ld-review-card" wx:for="{{content.reviews.items}}" wx:key="user">
+        <view class="ld-review-media">
+          <image wx:if="{{item.img}}" class="ld-review-media-img" src="{{item.img}}" mode="aspectFill" />
+        </view>
+        <view class="ld-review-body">
+          <text class="ld-stars">★★★★★</text>
+          <view class="ld-review-quote">{{item.quote}}</view>
+          <view class="ld-review-meta">
+            <view class="ld-review-dot"></view>
+            <text class="ld-review-user">{{item.user}}</text>
+            <view class="ld-verified">
+              <image class="ld-verified-ico" src="/static/icons/badge-check.svg" mode="aspectFit" />
+              <text>已验证买家</text>
+            </view>
+          </view>
+        </view>
+      </view>
+    </scroll-view>
+  </view>
+
+  <!-- ⑦ FAQ（折叠组·首条默认展开） -->
+  <view class="ld-faq">
+    <view class="ld-h1 ld-center">大家都在问</view>
+    <view class="ld-collapse ld-collapse-faq">
+      <view class="ld-panel {{openFaq === index ? 'open' : ''}}" wx:for="{{content.faq}}" wx:key="title"
+        data-index="{{index}}" bind:tap="toggleFaq">
+        <view class="ld-panel-head">
+          <text class="ld-panel-title">{{item.title}}</text>
+          <text class="ld-panel-action">{{openFaq === index ? '收起' : '展开'}}</text>
+          <image class="ld-chev" src="/static/icons/chevron-down.svg" mode="aspectFit" />
+        </view>
+        <view class="ld-panel-body" wx:if="{{openFaq === index}}">
+          <view class="ld-panel-text">{{item.body}}</view>
+        </view>
+      </view>
+    </view>
+  </view>
+
+  <!-- ⑧ 收尾 CTA -->
+  <view class="ld-closing">
+    <image wx:if="{{content.closing.img}}" class="ld-closing-img" src="{{content.closing.img}}" mode="aspectFill" />
+    <view class="ld-closing-copy">
+      <view class="ld-display ld-closing-title">{{content.closing.title}}</view>
+      <view class="ld-btn-dark ld-closing-btn" hover-class="ld-btn-dark-h" bind:tap="toProducts">{{content.closing.cta}}</view>
+    </view>
+  </view>
+
+  <!-- ⑨ 页脚 -->
+  <view class="ld-footer">
+    <image class="ld-footer-logo" src="/static/logo-wordmark.svg" mode="heightFix" />
+    <view class="ld-footer-links">
+      <block wx:for="{{content.footer.links}}" wx:key="*this">
+        <text wx:if="{{index > 0}}" class="ld-footer-dot">·</text>
+        <text class="ld-footer-link" data-label="{{item}}" bind:tap="onTapFooterLink">{{item}}</text>
+      </block>
+    </view>
+    <view class="ld-footer-copy">{{content.footer.copy}}</view>
+  </view>
+
 </view>
+
+<!-- 回到顶部（滚过一屏半浮现） -->
+<view wx:if="{{showTop}}" class="ld-backtop" bind:tap="backTop">
+  <image class="ld-backtop-ico" src="/static/icons/chevron-up.svg" mode="aspectFit" />
+  <text class="ld-backtop-label">顶部</text>
+</view>
+
+<!-- 轻提示 -->
+<view class="ld-toast {{toast.show ? 'show' : ''}}"><text>{{toast.text}}</text></view>
