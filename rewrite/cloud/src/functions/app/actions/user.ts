@@ -1,7 +1,7 @@
 import { ERR, COLLECTIONS } from '@ldrw/shared'
 import { withOpenId, withRateLimit, ok, err, str, ensureDoc, currentUnionId } from '../../../kit'
 
-const CAPS = { nickname: 20, bio: 60, avatar: 256 }
+const CAPS = { nickname: 20, bio: 60, avatar: 256, phone: 11 }
 
 /**
  * 微信登录（静默）：用可信 openid upsert users，返回用户（黄金 admin-misc §五）。
@@ -52,6 +52,13 @@ export const updateProfile = withOpenId(
     if (typeof e.bio === 'string') patch.bio = str(e.bio.trim(), CAPS.bio)
     if (typeof e.avatar === 'string' && (e.avatar === '' || e.avatar.startsWith('cloud://'))) {
       patch.avatar = str(e.avatar, CAPS.avatar)
+    }
+    // 手机号（账户联系电话·供客服 360 检索·与地址电话独立）：归一化纯数字·合法（空清空 / 7–11 位·与地址电话
+    // ≥7 位对齐）才入白名单，非法（含字母/过短/超长）静默剔除。隐私铁律（CLAUDE §7）：手机号敏感——本 action
+    // 与任何 observe/alert/日志路径都不得记录 phone（anomaly SENSITIVE 已兜一层·源头也别递进 ctx）。
+    if (typeof e.phone === 'string') {
+      const d = e.phone.replace(/\D/g, '')
+      if (d === '' || (d.length >= 7 && d.length <= CAPS.phone)) patch.phone = d
     }
     if (!Object.keys(patch).length) return err(ERR.EMPTY_PATCH)
     patch.updatedAt = Date.now()

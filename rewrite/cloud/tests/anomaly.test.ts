@@ -45,13 +45,14 @@ describe('recordAnomaly（bug 收集器地基·防治静默 bug）', () => {
     await recordAnomaly(
       'server-exception',
       'BOOM',
-      { openid: 'oSENSITIVE123', key: 'topsecret', orderId: 'A', note: 'x'.repeat(500) },
+      { openid: 'oSENSITIVE123', key: 'topsecret', phone: '13800000000', orderId: 'A', note: 'x'.repeat(500) },
       'low',
     )
     const doc = control.dump(COLLECTIONS.anomalies)[0]
     const blob = JSON.stringify(doc)
     expect(blob).not.toContain('oSENSITIVE123')
     expect(blob).not.toContain('topsecret')
+    expect(blob).not.toContain('13800000000') // 手机号敏感·绝不进异常账本 ctx（资料手机号竖切隐私回归）
     expect(doc.ctx.orderId).toBe('A')
     expect(String(doc.ctx.note).length).toBeLessThanOrEqual(120)
   })

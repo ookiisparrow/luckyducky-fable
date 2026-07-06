@@ -1,7 +1,7 @@
 <!-- 编辑资料·重设计对齐 Checkout.jsx ProfileEdit + checkout.css coprof/coaddr-* 版式（设计 402px 画板→rpx ×1.87）。
      业务逻辑一字不动：头像选择走 button open-type=chooseAvatar→onChooseAvatar（隐私能力·privacy-sheet 保命）；
-     昵称 type=nickname→onNickname、签名→onBio、保存→onSave 全承接 profile-edit.ts。
-     字段只留数据流真有的（昵称/签名/头像）——设计的手机号无 api 字段与 handler，不臆造（见 risks）。token 见 styles/tokens.wxss。 -->
+     昵称 type=nickname→onNickname、签名→onBio、手机号→onPhone、保存→onSave 全承接 profile-edit.ts。
+     手机号＝账户联系电话（手动输入·云端 updateProfile 白名单归一化校验·与地址电话独立·供客服 360 检索）。token 见 styles/tokens.wxss。 -->
 <view class="co coprof">
   <view class="co-body">
 
@@ -24,6 +24,12 @@
       <view class="coaddr-field">
         <text class="coaddr-label">昵称</text>
         <input class="coaddr-input" type="nickname" value="{{nickname}}" bind:input="onNickname" maxlength="20" placeholder="给自己起个名字" placeholder-class="coaddr-ph" />
+      </view>
+
+      <!-- 手机号（账户联系电话·手动输入·纯数字键盘·云端白名单归一化校验·供客服 360 检索） -->
+      <view class="coaddr-field">
+        <text class="coaddr-label">手机号</text>
+        <input class="coaddr-input" type="number" value="{{phone}}" bind:input="onPhone" maxlength="11" placeholder="选填·便于联系与售后" placeholder-class="coaddr-ph" />
       </view>
 
       <!-- 个性签名（多行·设计 coaddr-area） -->

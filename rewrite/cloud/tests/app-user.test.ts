@@ -93,6 +93,19 @@ describe('updateProfile（黄金：白名单+截断+归属·不信前端）', ()
     expect(control.dump('users')[0].avatar).toBe('cloud://env.x/a.png')
   })
 
+  it('大白话：手机号白名单——合法号归一化纯数字入库；含字母/过短剔除（单字段→EMPTY_PATCH·不覆盖旧值）；空串清空放行', async () => {
+    control.setOpenId('oME')
+    const r1: any = await call('updateProfile', { phone: '138 0000 0000' }) // 带空格
+    expect(r1.ok).toBe(true)
+    expect(control.dump('users')[0].phone).toBe('13800000000') // 归一化纯数字（与地址电话规则对齐·≥7 位）
+    expect(((await call('updateProfile', { phone: 'abc123' })) as any).error).toBe('EMPTY_PATCH') // 字母被剔·纯数字过短
+    expect(((await call('updateProfile', { phone: '12' })) as any).error).toBe('EMPTY_PATCH') // 过短剔除
+    expect(control.dump('users')[0].phone).toBe('13800000000') // 非法值不覆盖旧号
+    const r2: any = await call('updateProfile', { phone: '' }) // 空串清空放行
+    expect(r2.ok).toBe(true)
+    expect(control.dump('users')[0].phone).toBe('')
+  })
+
   it('大白话：空 patch 拒；首次保存即建档（确定性主键）', async () => {
     control.setOpenId('oME')
     expect(((await call('updateProfile', {})) as any).error).toBe('EMPTY_PATCH')

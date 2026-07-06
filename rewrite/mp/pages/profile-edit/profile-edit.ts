@@ -6,6 +6,7 @@ Page({
   data: {
     nickname: '',
     bio: '',
+    phone: '', // 账户联系电话（手动输入·供客服 360 检索·与地址电话独立）
     avatar: '', // cloud:// 或空
     avatarTemp: '', // 本次新选的临时路径（待上传）
     busy: false,
@@ -17,13 +18,16 @@ Page({
   async onLoad() {
     const u = await login()
     const user = (u.ok ? u.user : null) as Record<string, any> | null
-    if (user) this.setData({ nickname: String(user.nickname || ''), bio: String(user.bio || ''), avatar: String(user.avatar || '') })
+    if (user) this.setData({ nickname: String(user.nickname || ''), bio: String(user.bio || ''), phone: String(user.phone || ''), avatar: String(user.avatar || '') })
   },
   onChooseAvatar(e: WechatMiniprogram.CustomEvent<{ avatarUrl: string }>) {
     this.setData({ avatarTemp: e.detail.avatarUrl })
   },
   onNickname(e: WechatMiniprogram.Input) {
     this.setData({ nickname: e.detail.value })
+  },
+  onPhone(e: WechatMiniprogram.Input) {
+    this.setData({ phone: e.detail.value })
   },
   onBio(e: WechatMiniprogram.Input) {
     this.setData({ bio: e.detail.value })
@@ -35,7 +39,8 @@ Page({
       return
     }
     this.setData({ busy: true })
-    const patch: { nickname: string; bio: string; avatar?: string } = { nickname: this.data.nickname.trim(), bio: this.data.bio.trim() }
+    // phone 一并同步（空串=清空·非法号云端白名单会静默剔除·不覆盖旧号）
+    const patch: { nickname: string; bio: string; phone: string; avatar?: string } = { nickname: this.data.nickname.trim(), bio: this.data.bio.trim(), phone: this.data.phone.trim() }
     let avatarFailed = false
     if (this.data.avatarTemp) {
       try {
