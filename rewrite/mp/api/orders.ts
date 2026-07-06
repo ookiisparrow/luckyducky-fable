@@ -12,7 +12,7 @@ export const createOrder = (items: OrderLine[], address: { name: string; phone: 
 
 export const pay = (id: string): Promise<ApiResult> => callApp('pay', { id })
 
-export const getMyOrders = (cursor?: unknown, limit = 20): Promise<ApiResult> => callApp('getMyOrders', { cursor, limit })
+export const getMyOrders = (cursor?: unknown, limit = 20, status = ''): Promise<ApiResult> => callApp('getMyOrders', { cursor, limit, status })
 export const getOrderById = (id: string): Promise<ApiResult> => callApp('getOrderById', { id })
 export const confirmReceive = (id: string): Promise<ApiResult> => callApp('confirmReceive', { id })
 

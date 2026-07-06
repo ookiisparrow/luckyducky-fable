@@ -206,3 +206,19 @@ describe('closeExpiredOrders（黄金：服务端专用·超时窗·回补幂等
     expect(control.dump('inventory')[0].stock).toBe(5)
   })
 })
+
+describe('getMyOrders 状态筛选（服务端·分页与过滤同源·修 order-list 短过滤 tab 拉不动死提示）', () => {
+  it('大白话：传 status 只回本人该状态的单（他人不混入）；非法/空 status 回本人全部', async () => {
+    control.setOpenId('oME')
+    control.seed('orders', [
+      { _id: 'o1', _openid: 'oME', status: 'done', createdAt: 10 },
+      { _id: 'o2', _openid: 'oME', status: 'pending', createdAt: 20 },
+      { _id: 'o3', _openid: 'oME', status: 'done', createdAt: 30 },
+      { _id: 'o4', _openid: 'oOTHER', status: 'done', createdAt: 40 },
+    ])
+    const done: any = await call('getMyOrders', { status: 'done' })
+    expect(done.list.map((o: any) => o._id).sort()).toEqual(['o1', 'o3']) // 只本人 done·他人 o4 不混入
+    expect(((await call('getMyOrders', { status: 'not-a-status' })) as any).list.length).toBe(3) // 非法 status 忽略·回本人全部
+    expect(((await call('getMyOrders', {})) as any).list.length).toBe(3) // 空 status 回全部
+  })
+})

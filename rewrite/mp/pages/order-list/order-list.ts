@@ -53,30 +53,28 @@ Page({
     void this.reload()
   },
   async reload() {
+    // 状态筛选下推服务端（分页与过滤同源）：tabKey 作 status 传下去·从该 tab 重新分页。
+    // 修原「客户端过滤 + 服务端全量分页」：短过滤 tab 内容短于视口→不可滚→onReachBottom 不触发→深页匹配单看不到、
+    // 且并存「上拉加载更多」死提示与「暂无订单」假空态（审计 P2）。
     this.setData({ loading: true })
-    const r = await getMyOrders()
+    const r = await getMyOrders(undefined, 20, this.data.tabKey)
     const all = r.ok ? mapOrders(r.list) : []
-    this.setData({ loading: false, all, cursor: r.ok ? r.nextCursor : null, hasMore: !!(r.ok && r.hasMore) })
-    this.applyTab()
+    this.setData({ loading: false, all, shown: all.map(decorate), cursor: r.ok ? r.nextCursor : null, hasMore: !!(r.ok && r.hasMore) })
   },
   async onReachBottom() {
     if (!this.data.hasMore || this.data.cursor == null) return
-    const r = await getMyOrders(this.data.cursor)
+    const r = await getMyOrders(this.data.cursor, 20, this.data.tabKey)
     if (!r.ok) return // 翻页失败不覆盖已有数据（黄金 §八口径）
     const merged = [...this.data.all]
     const seen = new Set(merged.map((o) => o.id))
     for (const o of mapOrders(r.list)) if (!seen.has(o.id)) merged.push(o) // 追加去重
-    this.setData({ all: merged, cursor: r.nextCursor, hasMore: !!r.hasMore })
-    this.applyTab()
-  },
-  applyTab() {
-    const k = this.data.tabKey
-    const filtered = k ? this.data.all.filter((o) => o.status === k) : this.data.all
-    this.setData({ shown: filtered.map(decorate) })
+    this.setData({ all: merged, shown: merged.map(decorate), cursor: r.nextCursor, hasMore: !!r.hasMore })
   },
   onTab(e: WechatMiniprogram.TouchEvent) {
-    this.setData({ tabKey: String(e.currentTarget.dataset.key) })
-    this.applyTab()
+    const k = String(e.currentTarget.dataset.key)
+    if (k === this.data.tabKey) return
+    this.setData({ tabKey: k, all: [], shown: [], cursor: null, hasMore: false })
+    void this.reload() // 切 tab 从服务端按该状态重新分页（过滤与分页同源）
   },
   onTapOrder(e: WechatMiniprogram.TouchEvent) {
     wx.navigateTo({ url: '/pages/order/order?id=' + String(e.currentTarget.dataset.id) })

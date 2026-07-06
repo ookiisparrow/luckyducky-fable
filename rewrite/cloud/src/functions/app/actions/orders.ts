@@ -12,6 +12,7 @@ import {
   CHECKOUT_ADDONS,
   COUPON,
   SHIP,
+  ORDER_STATUS,
 } from '@ldrw/shared'
 import {
   withOpenId,
@@ -369,7 +370,12 @@ export const confirmReceive = withOpenId(async ({ db, OPENID, event }) => {
 
 /** 本人订单列表（游标分页·属主隔离）。 */
 export const getMyOrders = withOpenId(async ({ db, OPENID, event }) => {
-  const paged = await pageQuery(db, COLLECTIONS.orders, { _openid: OPENID }, 'createdAt', event as any, 100)
+  // 状态筛选下推服务端（与游标分页同源·修 order-list 短过滤 tab 内容短于视口拉不动、深页匹配单看不到）：
+  // status 须是合法订单状态（ORDER_STATUS 全集·不信前端）·空/非法忽略回全部。
+  const raw = String((event as any)?.status || '')
+  const status = (Object.values(ORDER_STATUS) as string[]).includes(raw) ? raw : ''
+  const where = status ? { _openid: OPENID, status } : { _openid: OPENID }
+  const paged = await pageQuery(db, COLLECTIONS.orders, where, 'createdAt', event as any, 100)
   return ok({ ...paged })
 })
 
