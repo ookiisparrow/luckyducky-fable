@@ -27,6 +27,7 @@ Page({
     this.refresh()
   },
   refresh() {
+    if (this.data.submitting) return // 提交在途不刷：草稿已被 finishSubmitted 清空·支付中后台返回触发 onShow→refresh 会误报「购物车空」+ navigateBack 弹掉支付中的本页（第3轮审计·与 onPickAddress/onToggleAddon 同闸）
     const draft = checkout.getDraft()
     if (!draft.items.length) {
       wx.showToast({ title: '还没有要结算的商品', icon: 'none' })
