@@ -35,7 +35,10 @@ const flushSave = serialSave(async () => {
 function persist() {
   saveState.value = 'saving'
   if (timer) clearTimeout(timer)
-  timer = setTimeout(() => void flushSave(), 700)
+  timer = setTimeout(() => {
+    timer = null // 触发后清空·让 timer 真实反映「有未落盘的待发编辑」（供 onBeforeUnmount 判据）
+    void flushSave()
+  }, 700)
 }
 function toggle(r: ShowcaseRowVM) {
   r.featured = !r.featured
@@ -69,10 +72,15 @@ function drop(r: ShowcaseRowVM) {
 const isOver = (r: ShowcaseRowVM) => over.value === idxOf(r) && drag.value >= 0 && drag.value !== idxOf(r)
 const isDrag = (r: ShowcaseRowVM) => drag.value === idxOf(r)
 
-// 离页补存：还在防抖窗口内未落盘的改动立即补发（保存幂等·多发无副作用）
+// 离页补存：还在防抖窗口内未落盘的改动立即补发（保存幂等·多发无副作用）。
+// 判据用 pending timer 而非 saveState==='saving'：先发的自动保存完成会把 saveState 复位成 'saved'，
+// 而后一次编辑只活在待触发的 timer 里——按 saveState 判会漏补、离页丢这次编辑（P2·同 HomeContent 的 if(saveTimer)）
 onBeforeUnmount(() => {
-  if (timer) clearTimeout(timer)
-  if (saveState.value === 'saving') void flushSave()
+  if (timer) {
+    clearTimeout(timer)
+    timer = null
+    void flushSave()
+  }
 })
 
 onMounted(reload)

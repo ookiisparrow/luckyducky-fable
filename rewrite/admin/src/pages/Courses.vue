@@ -202,6 +202,18 @@ async function publish() {
   }
   publishConfirm.value = false
   busy.value = true
+  // 发布前先排空在途/待发的草稿自动保存落库：publishCourse 只传 courseId、后端读 DB 草稿去发布——
+  // 若最后一次编辑还在 900ms 防抖里没落库就发布，发的是改前旧内容却提示「已发布新版」（伪成功·病根#14）
+  if (saveTimer) {
+    clearTimeout(saveTimer)
+    saveTimer = null
+  }
+  await flushSave()
+  if (saveState.value === 'error') {
+    busy.value = false
+    message.value = '草稿未保存成功，请先重试保存再发布'
+    return
+  }
   const r = await publishCourse(String(course.value.id))
   busy.value = false
   message.value = r.ok ? '已发布，学员立即看到新版' : '发布失败：' + String(r.error || '')

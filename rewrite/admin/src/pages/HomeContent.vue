@@ -142,6 +142,7 @@ async function save() {
     saveTimer = null
   }
   busy.value = true
+  await flushSave() // 先排空在途/待发的自动保存链（防旧快照 autosave POST 落在手动保存之后·覆盖新编辑·P2·同 Products.closeEditor）
   const r = await saveHomeContent(homePayload(model.value))
   busy.value = false
   autoState.value = ''

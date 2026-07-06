@@ -58,12 +58,20 @@ const flushSave = serialSave(async () => {
 function autosave() {
   saveState.value = 'saving'
   if (saveTimer) clearTimeout(saveTimer)
-  saveTimer = setTimeout(() => void flushSave(), 900)
+  saveTimer = setTimeout(() => {
+    saveTimer = null // 触发后清空·让 saveTimer 真实反映「有未落盘的待发编辑」
+    void flushSave()
+  }, 900)
 }
 watch(items, () => { if (loaded) autosave() }, { deep: true })
+// 离页补存判据用 pending saveTimer 而非 saveState==='saving'：先发的自动保存完成会把 saveState 复位成 'saved'，
+// 后一次编辑只活在待触发的 timer 里——按 saveState 判会漏补、离页丢这次编辑（P2·同 Showcase/HomeContent）
 onBeforeUnmount(() => {
-  if (saveTimer) clearTimeout(saveTimer)
-  if (saveState.value === 'saving') void flushSave()
+  if (saveTimer) {
+    clearTimeout(saveTimer)
+    saveTimer = null
+    void flushSave()
+  }
 })
 
 function twoStep(key: string, run: () => void) {
@@ -117,10 +125,16 @@ async function pickVideo(t: HelpItem, i: number, ev: Event) {
 async function save() {
   if (busy.value) return
   busy.value = true
+  await flushSave() // 先排空在途/待发自动保存·防旧快照 POST 落在手动保存之后覆盖新编辑（P2·同 HomeContent/Products.closeEditor）
   const r = await saveHelpVideos(items.value)
   busy.value = false
-  message.value = r.ok ? '已保存（无视频的小段会被云端剔除）' : '保存失败：' + String(r.error || '')
-  void reload()
+  if (!r.ok) {
+    // 失败留原文·不 reload——否则 listHelpVideos 会把编辑器换回旧数据（丢未存编辑）并抹掉本条错（病根#14·同 Kb）
+    message.value = '保存失败：' + String(r.error || '')
+    return
+  }
+  await reload() // 成功才刷（反映云端剔除无视频的小段）
+  message.value = '已保存（无视频的小段会被云端剔除）' // 刷完再显·不被 reload 的 '' 抹
 }
 
 onMounted(reload)
