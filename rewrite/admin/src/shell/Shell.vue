@@ -1,132 +1,123 @@
 <script setup lang="ts">
-// 壳布局（M3 信息架构：按运营动作六组重排）。视觉按 design/console.pen Component/Sidebar 规格：
-// 232px 白底右分线、鸭徽 logo、分组小标题、图标导航项（active=淡紫底+紫描边）、底部管理员条。
-// 设计稿侧栏只画了重设计屏子集；六组全量 IA 是 M3「运营动作零缺失」要求，保留不裁（刻意偏离，见重构日志）。
+// 壳布局（照 design/控制台.pen 侧栏 nsvaZ 重写·M-adminImpl 批F）：248px 白侧栏（右 $line 分线）、
+// 鸭徽 logo「运营控制台」、「导航」小标题 + 编辑排序 chip、6 顶层（数据看板=独立项·其余=可展开组）、
+// 底部管理员条。进上新向导路由切「按步直达」聚焦步导航（决策§27②·lib/nav）。
+//
+// IA 归置说明（交付时待用户确认）：设计把「商品与上新 / 进销存」画成单项工作流入口，但现实现各有
+// 6 / 5 个子页——为让 30 页全可达（守卫 rw-admin-nav-route-synced 要求 nav↔route 双向同步）且不丢功能，
+// 此二者暂做成可展开组；IA 收尾定稿后可收成纯工作流入口。NAV 每个 path 都内联在此（守卫扫本文件）。
 import { ref, computed, type Component } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import {
-  ChevronDown,
   ChartColumn,
+  Tag,
   Package,
-  GraduationCap,
-  CreditCard,
-  Store,
-  LayoutGrid,
-  Clapperboard,
-  Truck,
-  PackageCheck,
-  RotateCcw,
-  Receipt,
-  Boxes,
-  MessagesSquare,
-  UserSearch,
-  BookOpen,
-  Smile,
-  Activity,
-  Warehouse,
-  ClipboardList,
-  Handshake,
-  Blocks,
-  CalendarRange,
-  Users,
-  QrCode,
+  Headset,
+  Factory,
   Settings,
-  ExternalLink,
-  ShieldCheck,
-  Siren,
+  ChevronRight,
+  Pencil,
   LogOut,
   Image,
   FileText,
   Tags,
+  Clapperboard,
+  QrCode,
   Printer,
 } from 'lucide-vue-next'
 import { client } from '../api'
 import { isWizardPath, WIZARD_STEPS, wizardStepFromQuery } from '../lib/nav'
 
 const router = useRouter()
-const who = client.who() // 真实登录身份（换皮硬编码「管理员」·多账号无法辨认当前是谁）
+const who = client.who() // 真实登录身份
 
-const NAV = [
-  { group: '总览', items: [{ label: '数据看板', path: '/', icon: ChartColumn }] },
+// 顶层 6 组（数据看板=独立项 solo；其余=可展开组）。每项 path 内联在此=守卫扫描面。
+const NAV: Array<{ group: string; icon: Component; solo?: boolean; items: Array<{ label: string; path: string }> }> = [
+  { group: '数据看板', icon: ChartColumn, solo: true, items: [{ label: '数据看板', path: '/' }] },
   {
-    group: '商品与内容',
+    group: '商品与上新',
+    icon: Tag,
     items: [
-      { label: '商品管理', path: '/products', icon: Package },
-      { label: '课程管理', path: '/courses', icon: GraduationCap },
-      { label: '卡片设计', path: '/cards', icon: CreditCard },
-      { label: '小程序橱窗', path: '/showcase', icon: Store },
-      { label: '首页内容', path: '/home-content', icon: LayoutGrid },
-      { label: '帮助视频', path: '/help-videos', icon: Clapperboard },
+      { label: '商品管理', path: '/products' },
+      { label: '课程管理', path: '/courses' },
+      { label: '卡片设计', path: '/cards' },
+      { label: '小程序橱窗', path: '/showcase' },
+      { label: '首页内容', path: '/home-content' },
+      { label: '帮助视频', path: '/help-videos' },
     ],
   },
   {
-    group: '订单与钱',
+    group: '订单履约',
+    icon: Package,
     items: [
-      { label: '订单发货', path: '/orders', icon: Truck },
-      { label: '发货工作台', path: '/fulfill', icon: PackageCheck },
-      { label: '售后退款', path: '/refunds', icon: RotateCcw },
-      { label: '财务对账', path: '/reconciliation', icon: Receipt },
-      { label: '实物库存', path: '/inventory', icon: Boxes },
+      { label: '订单发货', path: '/orders' },
+      { label: '发货工作台', path: '/fulfill' },
+      { label: '售后退款', path: '/refunds' },
+      { label: '财务对账', path: '/reconciliation' },
+      { label: '实物库存', path: '/inventory' },
     ],
   },
   {
-    group: '客服',
+    group: '客服 360',
+    icon: Headset,
     items: [
-      { label: '客服会话', path: '/conversations', icon: MessagesSquare },
-      { label: '客户 360', path: '/customer360', icon: UserSearch },
-      { label: '知识库', path: '/kb', icon: BookOpen },
-      { label: '满意度', path: '/csat', icon: Smile },
-      { label: '节点诊断', path: '/checkpoints', icon: Activity },
+      { label: '客服会话', path: '/conversations' },
+      { label: '客户 360', path: '/customer360' },
+      { label: '知识库', path: '/kb' },
+      { label: '满意度', path: '/csat' },
+      { label: '节点诊断', path: '/checkpoints' },
     ],
   },
   {
     group: '进销存',
+    icon: Factory,
     items: [
-      { label: '物料与供应商', path: '/scm-materials', icon: Warehouse },
-      { label: '采购单', path: '/scm-purchase', icon: ClipboardList },
-      { label: '外协单', path: '/scm-outwork', icon: Handshake },
-      { label: '配方与组装', path: '/scm-bom', icon: Blocks },
-      { label: '备货与产销', path: '/scm-planner', icon: CalendarRange },
+      { label: '物料与供应商', path: '/scm-materials' },
+      { label: '采购单', path: '/scm-purchase' },
+      { label: '外协单', path: '/scm-outwork' },
+      { label: '配方与组装', path: '/scm-bom' },
+      { label: '备货与产销', path: '/scm-planner' },
     ],
   },
   {
     group: '系统',
+    icon: Settings,
     items: [
-      { label: '系统巡检', path: '/inspect', icon: ShieldCheck },
-      { label: '异常监测', path: '/anomalies', icon: Siren },
-      { label: '外包账号', path: '/agents', icon: Users },
-      { label: '激活码批次', path: '/batches', icon: QrCode },
-      { label: '外部后台', path: '/external', icon: ExternalLink },
-      { label: '系统设置', path: '/settings', icon: Settings },
+      { label: '系统巡检', path: '/inspect' },
+      { label: '异常监测', path: '/anomalies' },
+      { label: '外包账号', path: '/agents' },
+      { label: '激活码批次', path: '/batches' },
+      { label: '外部后台', path: '/external' },
+      { label: '系统设置', path: '/settings' },
     ],
   },
 ]
 
-// 侧栏分组折叠（换皮丢了折叠/持久·24 项平铺偏长）：localStorage 记忆 + 进组自动展开
 const route = useRoute()
-// 上下文侧栏（决策§27②·设计 kz2uD）：进上新向导路由切「按步直达」聚焦步导航，否则六组运营 nav
+// 上下文侧栏（决策§27②）：进上新向导路由切「按步直达」聚焦步导航，否则六组运营 nav
 const wizardMode = computed(() => isWizardPath(route.path))
 const curStep = computed(() => wizardStepFromQuery(route.query.step))
 const STEP_ICONS: Record<string, Component> = { image: Image, 'file-text': FileText, tags: Tags, clapperboard: Clapperboard, 'qr-code': QrCode, printer: Printer }
-const COLLAPSE_KEY = 'ldrw-admin-nav-collapsed'
-function loadCollapsed(): Set<string> {
+
+// 分组默认收起（照设计·chevron-right）；当前路由所在组自动展开；用户手动展开记 localStorage
+const EXPAND_KEY = 'ldrw-admin-nav-expanded'
+function loadExpanded(): Set<string> {
   try {
-    const v = JSON.parse(localStorage.getItem(COLLAPSE_KEY) || '[]')
+    const v = JSON.parse(localStorage.getItem(EXPAND_KEY) || '[]')
     return new Set(Array.isArray(v) ? (v as string[]) : [])
   } catch {
     return new Set()
   }
 }
-const collapsed = ref<Set<string>>(loadCollapsed())
+const expanded = ref<Set<string>>(loadExpanded())
 function toggleGroup(g: string) {
-  const s = new Set(collapsed.value)
+  const s = new Set(expanded.value)
   s.has(g) ? s.delete(g) : s.add(g)
-  collapsed.value = s
-  localStorage.setItem(COLLAPSE_KEY, JSON.stringify([...s]))
+  expanded.value = s
+  localStorage.setItem(EXPAND_KEY, JSON.stringify([...s]))
 }
-// 当前路由所在组强制展开（进组自动展开·不受折叠影响）；否则看用户折叠态
 const isOpen = (g: { group: string; items: Array<{ path: string }> }) =>
-  g.items.some((it) => it.path === route.path) || !collapsed.value.has(g.group)
+  g.items.some((it) => it.path === route.path) || expanded.value.has(g.group)
 
 function logout() {
   client.logout()
@@ -141,16 +132,17 @@ function logout() {
         <div class="logo-badge">🦆</div>
         <div class="logo-text">
           <div class="logo-title">Lucky Ducky</div>
-          <div class="logo-sub">小棉鸭 · 管理控制台</div>
+          <div class="logo-sub">运营控制台</div>
         </div>
       </div>
-      <!-- 上下文侧栏（决策§27②）：向导路由=按步直达聚焦；否则=六组运营 nav -->
-      <nav v-if="wizardMode" class="wiz-nav">
+
+      <!-- 向导路由=按步直达聚焦；否则=六组运营 nav -->
+      <nav v-if="wizardMode" class="nav">
         <router-link to="/products" class="wiz-head">
-          <Package class="item-icon" :size="17" :stroke-width="1.8" />
+          <Tag class="item-icon" :size="17" :stroke-width="1.8" />
           <span>商品与上新</span>
         </router-link>
-        <div class="wiz-caption">按步骤直达</div>
+        <div class="nav-cap"><span>按步骤直达</span></div>
         <router-link
           v-for="s in WIZARD_STEPS"
           :key="s.n"
@@ -161,21 +153,38 @@ function logout() {
           <component :is="STEP_ICONS[s.icon]" class="item-icon" :size="17" :stroke-width="1.8" />
           <span>{{ s.n }} · {{ s.label }}</span>
         </router-link>
+        <div class="spacer" />
       </nav>
-      <nav v-else>
-        <div v-for="g in NAV" :key="g.group" class="group">
-          <button class="group-title" @click="toggleGroup(g.group)">
-            <span>{{ g.group }}</span>
-            <ChevronDown class="grp-caret" :class="{ closed: !isOpen(g) }" :size="13" :stroke-width="2" />
-          </button>
-          <template v-if="isOpen(g)">
-            <router-link v-for="it in g.items" :key="it.path" :to="it.path" class="item">
-              <component :is="it.icon" class="item-icon" :size="17" :stroke-width="1.8" />
-              <span>{{ it.label }}</span>
-            </router-link>
-          </template>
+
+      <nav v-else class="nav">
+        <div class="nav-cap">
+          <span>导航</span>
+          <span class="reorder" title="侧栏拖拽排序即将支持"><Pencil :size="12" :stroke-width="1.8" /> 编辑排序</span>
         </div>
+        <template v-for="n in NAV" :key="n.group">
+          <!-- 独立项（数据看板） -->
+          <router-link v-if="n.solo" :to="n.items[0].path" class="item">
+            <component :is="n.icon" class="item-icon" :size="17" :stroke-width="1.8" />
+            <span>{{ n.items[0].label }}</span>
+          </router-link>
+          <!-- 可展开组 -->
+          <div v-else class="group">
+            <button class="group-head" @click="toggleGroup(n.group)">
+              <ChevronRight class="grp-caret" :class="{ open: isOpen(n) }" :size="15" :stroke-width="2" />
+              <component :is="n.icon" class="grp-icon" :size="17" :stroke-width="1.8" />
+              <span class="grp-label">{{ n.group }}</span>
+            </button>
+            <template v-if="isOpen(n)">
+              <router-link v-for="it in n.items" :key="it.path" :to="it.path" class="child">
+                <i class="child-dot" />
+                <span>{{ it.label }}</span>
+              </router-link>
+            </template>
+          </div>
+        </template>
+        <div class="spacer" />
       </nav>
+
       <div class="admin">
         <div class="admin-avatar">{{ (who || '管')[0] }}</div>
         <div class="admin-text">
@@ -200,14 +209,14 @@ function logout() {
   min-height: 100vh;
 }
 aside {
-  width: 232px;
+  width: 248px;
   flex: none;
-  padding: 20px 16px;
+  padding: 20px 14px;
   background: var(--ld-bg);
   border-right: 1px solid var(--ld-line);
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 3px;
   position: sticky;
   top: 0;
   height: 100vh;
@@ -217,7 +226,7 @@ aside {
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 8px 8px 20px;
+  padding: 8px 8px 16px;
 }
 .logo-badge {
   width: 34px;
@@ -241,33 +250,38 @@ aside {
   color: var(--ld-purple-meta);
   margin-top: 2px;
 }
-.group-title {
+.nav {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  flex: 1;
+}
+.nav-cap {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  width: 100%;
-  font-size: 11px;
+  padding: 8px 10px 6px 12px;
+  font-size: 10.5px;
   letter-spacing: 0.5px;
   color: var(--ld-purple-meta);
-  padding: 14px 12px 4px;
-  border: none;
-  background: none;
-  cursor: pointer;
-  text-align: left;
 }
-.grp-caret {
-  color: var(--ld-content-2);
-  transition: transform 0.15s;
+.reorder {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 8px;
+  border: 1px solid var(--ld-purple-line);
+  border-radius: 999px;
+  font-size: 10.5px;
+  color: var(--ld-purple-meta);
+  cursor: default;
 }
-.grp-caret.closed {
-  transform: rotate(-90deg);
-}
+/* 项（独立项 + 向导步） */
 .item {
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 9px 12px;
-  margin-bottom: 2px;
+  padding: 9px 10px 9px 12px;
   border: 1px solid transparent;
   border-radius: var(--ld-radius-item);
   font-size: 13.5px;
@@ -291,6 +305,73 @@ aside {
 .item.router-link-exact-active .item-icon {
   color: var(--ld-brand);
 }
+/* 组头 */
+.group-head {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  width: 100%;
+  padding: 9px 10px;
+  border: none;
+  background: none;
+  border-radius: var(--ld-radius-item);
+  cursor: pointer;
+  text-align: left;
+}
+.group-head:hover {
+  background: var(--ld-bg-faint);
+}
+.grp-caret {
+  color: var(--ld-content-2);
+  flex: none;
+  transition: transform 0.15s;
+}
+.grp-caret.open {
+  transform: rotate(90deg);
+}
+.grp-icon {
+  color: var(--ld-content-2);
+  flex: none;
+}
+.grp-label {
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--ld-ink);
+}
+/* 组内子项：缩进 + 圆点 */
+.child {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 12px 7px 42px;
+  border: 1px solid transparent;
+  border-radius: var(--ld-radius-item);
+  font-size: 13px;
+  color: var(--ld-content-2);
+  text-decoration: none;
+  line-height: 1.3;
+}
+.child-dot {
+  width: 5px;
+  height: 5px;
+  flex: none;
+  border-radius: 999px;
+  background: currentColor;
+}
+.child:hover {
+  background: var(--ld-bg-faint);
+  color: var(--ld-content);
+}
+.child.router-link-exact-active {
+  background: var(--ld-bg-lilac);
+  border-color: var(--ld-purple-line);
+  color: var(--ld-purple-ink);
+  font-weight: 600;
+}
+.child.router-link-exact-active .child-dot {
+  background: var(--ld-brand);
+}
+/* 向导头 + 步 */
 .wiz-head {
   display: flex;
   align-items: center;
@@ -307,12 +388,6 @@ aside {
 .wiz-head .item-icon {
   color: var(--ld-brand);
 }
-.wiz-caption {
-  font-size: 10.5px;
-  letter-spacing: 0.5px;
-  color: var(--ld-purple-meta);
-  padding: 14px 12px 4px;
-}
 .wiz-step.wiz-on {
   background: var(--ld-bg-lilac);
   border-color: var(--ld-purple-line);
@@ -322,12 +397,14 @@ aside {
 .wiz-step.wiz-on .item-icon {
   color: var(--ld-brand);
 }
+.spacer {
+  flex: 1;
+}
 .admin {
-  margin-top: auto;
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 12px 8px 4px;
+  padding: 10px 8px 4px;
   border-top: 1px solid var(--ld-line);
 }
 .admin-avatar {
@@ -376,6 +453,7 @@ aside {
 main {
   flex: 1;
   min-width: 0;
-  padding: 28px 36px;
+  padding: 26px 32px;
+  background: var(--ld-bg-grey);
 }
 </style>

@@ -1,4 +1,7 @@
-/* 控制台全局基础（design/console.pen 设计语言）——token 见 tokens.css，页面差异写页面 scoped */
+/* 控制台全局基础 + 共享布局/表格/工具条类（design/控制台.pen 设计语言）。
+ * token 见 tokens.css；自成组件的部件（按钮/卡/KPI/徽章/空态）在 components/ui/*.vue；
+ * 这里放「包裹页面自有 markup」的布局配方类（ld- 前缀·页面 opt-in·防 30 页各写各的表格/工具条漂移·病根#5）。
+ * 页面差异仍写页面 scoped。 */
 @import './tokens.css';
 
 * {
@@ -9,4 +12,127 @@ body {
   font-family: var(--ld-font);
   background: var(--ld-bg-lilac);
   color: var(--ld-ink);
+}
+
+/* 页面纵向节奏：Main 内各区块间距（design Main gap 20） */
+.ld-page {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+/* 状态/提示行 */
+.ld-status {
+  font-size: 13px;
+  color: var(--ld-content-2);
+}
+
+/* KPI 行（design：等宽 N 卡·gap 16·窄屏自动换行） */
+.ld-kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 16px;
+}
+/* 双列区块（漏斗+最近动态 / 段位分析·窄屏堆叠） */
+.ld-cols-2 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+@media (max-width: 920px) {
+  .ld-cols-2 {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* 工具条：筛选 chip + 搜索（design：白底描边圆角8·激活淡紫） */
+.ld-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.ld-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 12px;
+  border: 1px solid var(--ld-line);
+  border-radius: var(--ld-radius-sm);
+  background: var(--ld-bg);
+  color: var(--ld-content);
+  font-size: 12.5px;
+  line-height: 1.2;
+  cursor: pointer;
+}
+.ld-chip:hover {
+  border-color: var(--ld-purple-line);
+}
+.ld-chip.on {
+  background: var(--ld-bg-lilac);
+  border-color: var(--ld-purple-line);
+  color: var(--ld-purple-ink);
+  font-weight: 600;
+}
+.ld-search {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 12px;
+  border: 1px solid var(--ld-line);
+  border-radius: var(--ld-radius-sm);
+  background: var(--ld-bg);
+}
+.ld-search input {
+  border: none;
+  outline: none;
+  background: none;
+  font: inherit;
+  font-size: 12.5px;
+  color: var(--ld-content);
+  min-width: 160px;
+}
+.ld-search input::placeholder {
+  color: var(--ld-content-2);
+}
+
+/* 表格：白卡包裹·表头 bg-grey·cell padding[13,16]·行底分线（design 热销表语言）。
+ * flex 表：.ld-table > .ld-thead/.ld-tr > .ld-th/.ld-td；首列加 .grow 撑开·余列页面定宽。 */
+.ld-table {
+  background: var(--ld-bg);
+  border: 1px solid var(--ld-line);
+  border-radius: var(--ld-radius);
+  overflow: hidden;
+}
+.ld-thead {
+  display: flex;
+  background: var(--ld-bg-grey);
+  border-bottom: 1px solid var(--ld-line);
+}
+.ld-tr {
+  display: flex;
+  border-bottom: 1px solid var(--ld-line);
+}
+.ld-tbody .ld-tr:last-child {
+  border-bottom: none;
+}
+.ld-th,
+.ld-td {
+  display: flex;
+  align-items: center;
+  padding: 13px 16px;
+  min-width: 0;
+}
+.ld-th {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ld-content-2);
+}
+.ld-td {
+  font-size: 13px;
+  color: var(--ld-content);
+}
+.ld-th.grow,
+.ld-td.grow {
+  flex: 1;
 }

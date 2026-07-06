@@ -31,6 +31,7 @@
   --ld-amber: #b9770e;
   --ld-bg-green-soft: #eefbf1; /* 成功底 */
   --ld-bg-red-soft: #fff6f5; /* 危险底 */
+  --ld-bg-amber-soft: #fbf1e2; /* 预警/进行中底（3 态状态补 amber·呼应改主题只改 token） */
   --ld-red-line: #f0c0ba; /* 危险描边 */
 
   /* 旧名别名（24 页存量在用；单源仍是上面的值） */
@@ -38,8 +39,9 @@
   --ld-purple-tab: var(--ld-brand-active);
 
   /* 形状与字体 */
-  --ld-radius: 12px;
+  --ld-radius: 12px; /* 卡片/面板（design 控制台.pen 卡角） */
   --ld-radius-l: 16px;
+  --ld-radius-sm: 8px; /* 按钮/chip/图标位（design 控制台.pen 小件角） */
   --ld-radius-item: 9px; /* 侧栏项/小件 */
   --ld-font:
     'Noto Sans SC', -apple-system, 'PingFang SC', 'Microsoft YaHei', sans-serif;

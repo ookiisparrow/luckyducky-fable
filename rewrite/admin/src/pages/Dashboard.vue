@@ -1,15 +1,21 @@
 <script setup lang="ts">
-// 数据看板（design/console.pen S12 视觉·M3 UI 批2）：交易异常横幅（有则必显）+ 经营统计卡（真数据）
-// + 转化漏斗 + 最近订单。设计稿的趋势%/迷你柱/热点卡点段位分析当前后端无数据源——不编数，
-// 留待独立学习分析 action（记 docs/待办与债.md），本页只渲染 getDashboard/listOrders 真值。
+// 数据看板（照 design/控制台.pen PxuIO 视觉语言重写·M-adminImpl 批1）：套新卡片/KPI/表格语言，
+// 数据仍全绑云端真值。设计的「成交额趋势柱图 / 热销商品 Top5」当前后端无数据源——不编数（根因#8·T3），
+// 保留真实的 KPI/转化漏斗/段位分析/最近动态 + owner 待处理行动条 + 交易异常告警（换皮曾删·复原不再丢）。
+// 待接学习分析 action 后再补趋势/热销卡位（记 docs/待办与债.md）。
 import { ref, onMounted, computed } from 'vue'
 import { useRouter } from 'vue-router'
-import { Users, ShoppingBag, Wallet, QrCode, GraduationCap, RefreshCw, TriangleAlert, Truck, RotateCcw, Boxes, Flame, PauseCircle, PackagePlus } from 'lucide-vue-next'
+import { Users, ShoppingBag, Wallet, QrCode, GraduationCap, RefreshCw, TriangleAlert, Truck, RotateCcw, Boxes, Flame, PauseCircle, PackagePlus, Inbox } from 'lucide-vue-next'
 import { getDashboard, orderCounts, refundCounts } from '../api/money'
 import { listInventory } from '../api/system'
 import { listDrafts } from '../api/products'
 import { mapDashboard } from '../lib/mapMoney'
 import { mapDraftRows } from '../lib/mapProducts'
+import PageHeader from '../components/ui/PageHeader.vue'
+import Card from '../components/ui/Card.vue'
+import KpiCard from '../components/ui/KpiCard.vue'
+import EmptyState from '../components/ui/EmptyState.vue'
+import UiButton from '../components/ui/Button.vue'
 
 const LOW = 10 // 低库存阈值（与 Inventory 同口径·前端预警线）
 const router = useRouter()
@@ -22,7 +28,7 @@ const alertCount = computed(() => (vm.value?.alerts || []).reduce((n, a) => n + 
 const TODOS = computed(() => [
   { key: 'ship', label: '待发货', n: todo.value.ship, to: '/orders', icon: Truck, tone: 'warn' },
   { key: 'refund', label: '待审退款', n: todo.value.refund, to: '/refunds', icon: RotateCcw, tone: 'warn' },
-  { key: 'prep', label: '上新未完成', n: todo.value.prep, to: '/products', icon: PackagePlus, tone: 'warn' }, // 换皮删了这卡（owner 少一个「有商品还在筹备未上架」的行动入口）
+  { key: 'prep', label: '上新未完成', n: todo.value.prep, to: '/products', icon: PackagePlus, tone: 'warn' },
   { key: 'low', label: '低库存 / 售罄', n: todo.value.lowStock, to: '/inventory', icon: Boxes, tone: 'red' },
   { key: 'money', label: '钱链告警', n: alertCount.value, to: '/orders', icon: TriangleAlert, tone: 'red' },
 ])
@@ -68,7 +74,7 @@ async function load() {
   const ocC = (oc as any)?.counts || {}
   const rcC = (rc as any)?.counts || {}
   const invList = Array.isArray((inv as any)?.list) ? (inv as any).list : []
-  // 上新未完成＝筹备中（未上架）商品数（换皮丢·复用 productState 三态口径）
+  // 上新未完成＝筹备中（未上架）商品数（复用 productState 三态口径）
   const drafts = (dr as any)?.ok ? mapDraftRows((dr as any).list, (dr as any).urls, (dr as any).listed) : []
   todo.value = {
     ship: Number(ocC.paid) || 0,
@@ -83,33 +89,29 @@ onMounted(load)
 </script>
 
 <template>
-  <div class="page">
-    <header class="page-head">
-      <div>
-        <h1>数据看板</h1>
-        <p class="sub">经营与学习数据一屏总览 · 数字来自云端真实记录</p>
-      </div>
-      <button class="btn-refresh" :disabled="busy" @click="load">
-        <RefreshCw :size="15" :stroke-width="1.8" :class="{ spin: busy }" />
+  <div class="ld-page">
+    <PageHeader title="数据看板" sub="经营与学习数据一屏总览 · 数字来自云端真实记录">
+      <UiButton variant="ghost" size="sm" :disabled="busy" @click="load">
+        <RefreshCw :size="14" :stroke-width="1.8" :class="{ spin: busy }" />
         <span>{{ busy ? '刷新中…' : '刷新' }}</span>
-      </button>
-    </header>
+      </UiButton>
+    </PageHeader>
 
-    <p v-if="message" class="status">{{ message }}</p>
+    <p v-if="message" class="ld-status">{{ message }}</p>
 
     <template v-if="vm">
-      <!-- 待处理行动条（换皮删了这块·看板核心价值「owner 行动入口」）：数字直接点进对应页 -->
-      <section v-if="todoTotal" class="todobar">
-        <div class="todobar-head">待处理 · 共 {{ todoTotal }} 项</div>
+      <!-- 待处理行动条（owner 行动入口·真值）：数字直接点进对应页 -->
+      <Card v-if="todoTotal" title="待处理" :sub="`共 ${todoTotal} 项`">
         <div class="todos">
           <button v-for="t in TODOS" :key="t.key" class="todo" :class="[t.tone, { zero: !t.n }]" @click="router.push(t.to)">
-            <component :is="t.icon" :size="17" :stroke-width="1.8" class="todo-ico" />
+            <component :is="t.icon" :size="18" :stroke-width="1.8" class="todo-ico" />
             <div class="todo-txt"><span class="todo-n">{{ t.n }}</span><span class="todo-l">{{ t.label }}</span></div>
           </button>
         </div>
-      </section>
+      </Card>
       <p v-else class="ok-line">今日无待处理事项 ✓</p>
 
+      <!-- 交易异常告警（有则必显） -->
       <div v-if="vm.alerts.length" class="alert">
         <div class="alert-ico"><TriangleAlert :size="20" :stroke-width="1.8" /></div>
         <div class="alert-body">
@@ -120,45 +122,40 @@ onMounted(load)
             </span>
           </div>
         </div>
-        <button class="btn-danger" @click="router.push('/orders')">去处理</button>
+        <UiButton variant="danger" size="sm" @click="router.push('/orders')">去处理</UiButton>
       </div>
 
-      <div class="stat-grid">
-        <div v-for="c in vm.cards" :key="c.label" class="stat-card">
-          <div class="stat-head">
-            <span class="stat-label">{{ c.label }}</span>
-            <component :is="iconFor(c.label)" class="stat-ico" :size="18" :stroke-width="1.8" />
-          </div>
-          <div class="stat-value">{{ c.value }}</div>
-          <!-- 激活率进度条 + 百分比（换皮退成纯「已激活/总」文本·丢了进度条与激活率） -->
+      <!-- KPI 行（真数据·无环比数据源不编，激活率进度条走 KPI 尾槽） -->
+      <div class="ld-kpi-grid">
+        <KpiCard v-for="c in vm.cards" :key="c.label" :label="c.label" :value="c.value" :icon="iconFor(c.label)">
           <div v-if="c.pct != null" class="pbar"><i :style="{ width: c.pct + '%' }" /></div>
-          <div v-if="c.sub" class="stat-note">{{ c.sub }}</div>
-          <div v-if="c.note" class="stat-note">{{ c.note }}</div>
-        </div>
+          <div v-if="c.sub" class="kpi-note">{{ c.sub }}</div>
+          <div v-if="c.note" class="kpi-note">{{ c.note }}</div>
+        </KpiCard>
       </div>
 
-      <!-- 热点 / 卡点段位分析（B5·后端 hot/stuck 仍返回·换皮误当「无数据源」删掉） -->
-      <div v-if="vm.hot.length || vm.stuck.length" class="panels">
-        <section class="panel">
-          <div class="panel-head"><h2>最多人看完的段</h2><Flame :size="16" :stroke-width="1.8" class="seg-ico hot" /></div>
+      <!-- 热点 / 卡点段位分析（后端 hot/stuck 真值） -->
+      <div v-if="vm.hot.length || vm.stuck.length" class="ld-cols-2">
+        <Card title="最多人看完的段">
+          <template #head><Flame :size="16" :stroke-width="1.8" class="seg-ico hot" /></template>
           <p v-if="!vm.hot.length" class="empty">暂无</p>
           <div v-for="(s, i) in vm.hot" :key="'h' + i" class="seg-row">
             <span class="seg-rank">{{ i + 1 }}</span><span class="seg-name">{{ s.name }}</span><b class="seg-count">{{ s.count }}</b>
           </div>
-        </section>
-        <section class="panel">
-          <div class="panel-head"><h2>最多人停留的段（卡点）</h2><PauseCircle :size="16" :stroke-width="1.8" class="seg-ico stuck" /></div>
+        </Card>
+        <Card title="最多人停留的段（卡点）">
+          <template #head><PauseCircle :size="16" :stroke-width="1.8" class="seg-ico stuck" /></template>
           <p v-if="!vm.stuck.length" class="empty">暂无</p>
           <div v-for="(s, i) in vm.stuck" :key="'s' + i" class="seg-row">
             <span class="seg-rank">{{ i + 1 }}</span><span class="seg-name">{{ s.name }}</span><b class="seg-count">{{ s.count }}</b>
           </div>
-        </section>
+        </Card>
       </div>
       <p v-if="vm.approxSeg" class="approx-note">热点/卡点为抽样估算（学员多时按样本近似·诚实标注）</p>
 
-      <div class="panels">
-        <section class="panel">
-          <div class="panel-head"><h2>转化漏斗</h2><span class="panel-sub">下单 → 支付 → 激活</span></div>
+      <!-- 转化漏斗 + 最近动态（真数据） -->
+      <div class="ld-cols-2">
+        <Card title="转化漏斗" sub="下单 → 支付 → 激活">
           <div v-for="f in vm.funnel" :key="f.label" class="funnel-row">
             <span class="funnel-label">{{ f.label }}</span>
             <div class="funnel-track">
@@ -167,60 +164,22 @@ onMounted(load)
             <span class="funnel-value">{{ f.value }}</span>
             <span class="funnel-conv">{{ f.sub || '—' }}</span>
           </div>
-        </section>
+        </Card>
 
-        <section class="panel">
-          <div class="panel-head"><h2>最近动态</h2><span class="panel-sub">订单 · 激活 · 进课 · 退款</span></div>
-          <p v-if="!vm.recent.length" class="empty">暂无动态</p>
+        <Card title="最近动态" sub="订单 · 激活 · 进课 · 退款">
+          <EmptyState v-if="!vm.recent.length" :icon="Inbox" text="暂无动态" />
           <div v-for="(e, i) in vm.recent" :key="i" class="act-row">
             <span class="act-type" :class="e.type">{{ ACT_LABEL[e.type] || e.type }}</span>
             <span class="act-text">{{ e.text }}</span>
             <span class="act-time">{{ fmtClock(e.at) }}</span>
           </div>
-        </section>
+        </Card>
       </div>
     </template>
   </div>
 </template>
 
 <style scoped>
-.page {
-  max-width: 1160px;
-}
-.page-head {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 16px;
-  margin-bottom: 20px;
-}
-h1 {
-  margin: 0;
-  font-size: 22px;
-  font-weight: 700;
-  color: var(--ld-ink);
-}
-.sub {
-  margin: 4px 0 0;
-  font-size: 12.5px;
-  color: var(--ld-content-2);
-}
-.btn-refresh {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 8px 14px;
-  border: 1px solid var(--ld-line);
-  border-radius: 999px;
-  background: var(--ld-bg);
-  color: var(--ld-content);
-  font-size: 13px;
-  cursor: pointer;
-}
-.btn-refresh:disabled {
-  opacity: 0.6;
-  cursor: default;
-}
 .spin {
   animation: spin 0.9s linear infinite;
 }
@@ -229,19 +188,20 @@ h1 {
     transform: rotate(360deg);
   }
 }
-.status {
+.ok-line {
+  margin: 0;
   font-size: 13px;
-  color: var(--ld-content-2);
+  color: var(--ld-green);
 }
+/* 交易异常告警条 */
 .alert {
   display: flex;
   align-items: center;
   gap: 14px;
   padding: 16px 20px;
-  margin-bottom: 18px;
   background: var(--ld-bg-red-soft);
   border: 1px solid var(--ld-red-line);
-  border-radius: var(--ld-radius-l);
+  border-radius: var(--ld-radius);
 }
 .alert-ico {
   color: var(--ld-red);
@@ -269,60 +229,63 @@ h1 {
   font-family: var(--ld-font-mono);
   font-size: 11.5px;
 }
-.btn-danger {
-  flex: none;
-  padding: 8px 16px;
-  border: none;
-  border-radius: 999px;
-  background: var(--ld-red);
-  color: #fff;
-  font-size: 13px;
-  font-weight: 600;
-  cursor: pointer;
-}
-.ok-line {
-  margin: 0 0 18px;
-  font-size: 13px;
-  color: var(--ld-green);
-}
-.stat-grid {
+/* 待处理行动条 tiles */
+.todos {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
-  gap: 16px;
-  margin-bottom: 18px;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 12px;
 }
-.stat-card {
-  padding: 18px 20px;
-  background: var(--ld-bg);
-  border: 1px solid var(--ld-line);
-  border-radius: var(--ld-radius-l);
-}
-.stat-head {
+.todo {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 16px;
+  border: 1px solid var(--ld-line);
+  border-radius: var(--ld-radius-sm);
+  background: var(--ld-bg);
+  cursor: pointer;
+  text-align: left;
 }
-.stat-label {
-  font-size: 12.5px;
+.todo-ico {
   color: var(--ld-content-2);
+  flex: none;
 }
-.stat-ico {
-  color: var(--ld-brand);
+.todo-txt {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
 }
-.stat-value {
-  margin-top: 10px;
-  font-size: 28px;
-  font-weight: 700;
-  color: var(--ld-ink);
+.todo-n {
+  font-size: 22px;
+  font-weight: 800;
   line-height: 1.1;
+  color: var(--ld-ink);
 }
-.stat-note {
-  margin-top: 6px;
+.todo-l {
   font-size: 11.5px;
   color: var(--ld-content-2);
 }
+.todo.warn:not(.zero) {
+  border-color: var(--ld-amber);
+  background: var(--ld-bg-amber-soft);
+}
+.todo.warn:not(.zero) .todo-n,
+.todo.warn:not(.zero) .todo-ico {
+  color: var(--ld-amber);
+}
+.todo.red:not(.zero) {
+  border-color: var(--ld-red-line);
+  background: var(--ld-bg-red-soft);
+}
+.todo.red:not(.zero) .todo-n,
+.todo.red:not(.zero) .todo-ico {
+  color: var(--ld-red);
+}
+.todo.zero {
+  opacity: 0.6;
+}
+/* KPI 尾槽：激活率进度条 + 说明 */
 .pbar {
-  margin-top: 10px;
   height: 8px;
   background: var(--ld-bg-lilac);
   border-radius: 999px;
@@ -334,43 +297,63 @@ h1 {
   background: var(--ld-brand);
   border-radius: 999px;
 }
-.panels {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 16px;
-}
-@media (max-width: 900px) {
-  .panels {
-    grid-template-columns: 1fr;
-  }
-}
-.panel {
-  padding: 18px 20px;
-  background: var(--ld-bg);
-  border: 1px solid var(--ld-line);
-  border-radius: var(--ld-radius-l);
-}
-.panel-head {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  margin-bottom: 14px;
-}
-.panel-head h2 {
-  margin: 0;
-  font-size: 14px;
-  font-weight: 700;
-  color: var(--ld-ink);
-}
-.panel-sub {
-  font-size: 12px;
+.kpi-note {
+  font-size: 11.5px;
   color: var(--ld-content-2);
 }
-.panel-sub.link {
-  cursor: pointer;
-  color: var(--ld-brand);
-  font-weight: 600;
+/* 段位分析 */
+.seg-ico.hot {
+  color: var(--ld-red);
 }
+.seg-ico.stuck {
+  color: var(--ld-amber);
+}
+.empty {
+  font-size: 13px;
+  color: var(--ld-content-2);
+}
+.seg-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 0;
+  border-top: 1px solid var(--ld-line);
+  font-size: 13px;
+}
+.seg-row:first-of-type {
+  border-top: none;
+}
+.seg-rank {
+  flex: none;
+  width: 20px;
+  height: 20px;
+  border-radius: 6px;
+  background: var(--ld-bg-lilac);
+  color: var(--ld-content-2);
+  font-size: 11px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.seg-name {
+  flex: 1;
+  min-width: 0;
+  color: var(--ld-content);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.seg-count {
+  flex: none;
+  color: var(--ld-ink);
+}
+.approx-note {
+  margin: 0;
+  font-size: 11px;
+  color: var(--ld-amber);
+}
+/* 转化漏斗 */
 .funnel-row {
   display: flex;
   align-items: center;
@@ -410,169 +393,6 @@ h1 {
   text-align: right;
   font-size: 11px;
   color: var(--ld-content-2);
-}
-.empty {
-  font-size: 13px;
-  color: var(--ld-content-2);
-}
-.order-row {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 10px 0;
-  border-top: 1px solid var(--ld-line);
-}
-.order-row:first-of-type {
-  border-top: none;
-}
-.order-main {
-  flex: 1;
-  min-width: 0;
-}
-.order-summary {
-  font-size: 13px;
-  color: var(--ld-content);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-.order-meta {
-  margin-top: 2px;
-  font-size: 11px;
-  color: var(--ld-content-2);
-  font-family: var(--ld-font-mono);
-}
-.order-status {
-  flex: none;
-  font-size: 11.5px;
-  color: var(--ld-content-2);
-}
-.order-status.warn {
-  color: var(--ld-red);
-}
-.order-amount {
-  flex: none;
-  width: 84px;
-  text-align: right;
-  font-size: 13px;
-  font-weight: 700;
-  color: var(--ld-ink);
-}
-/* 待处理行动条 */
-.todobar {
-  padding: 16px 20px;
-  margin-bottom: 18px;
-  background: var(--ld-bg);
-  border: 1px solid var(--ld-line);
-  border-radius: var(--ld-radius-l);
-}
-.todobar-head {
-  font-size: 12.5px;
-  font-weight: 600;
-  color: var(--ld-content-2);
-  margin-bottom: 12px;
-}
-.todos {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-  gap: 12px;
-}
-.todo {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 12px 16px;
-  border: 1px solid var(--ld-line);
-  border-radius: 12px;
-  background: var(--ld-bg);
-  cursor: pointer;
-  text-align: left;
-}
-.todo-ico {
-  color: var(--ld-content-2);
-  flex: none;
-}
-.todo-txt {
-  display: flex;
-  flex-direction: column;
-  min-width: 0;
-}
-.todo-n {
-  font-size: 22px;
-  font-weight: 800;
-  line-height: 1.1;
-  color: var(--ld-ink);
-}
-.todo-l {
-  font-size: 11.5px;
-  color: var(--ld-content-2);
-}
-.todo.warn:not(.zero) {
-  border-color: var(--ld-amber);
-  background: var(--ld-bg-lilac);
-}
-.todo.warn:not(.zero) .todo-n,
-.todo.warn:not(.zero) .todo-ico {
-  color: var(--ld-amber);
-}
-.todo.red:not(.zero) {
-  border-color: var(--ld-red-line);
-  background: var(--ld-bg-red-soft);
-}
-.todo.red:not(.zero) .todo-n,
-.todo.red:not(.zero) .todo-ico {
-  color: var(--ld-red);
-}
-.todo.zero {
-  opacity: 0.6;
-}
-/* 段位分析 */
-.seg-ico.hot {
-  color: var(--ld-red);
-}
-.seg-ico.stuck {
-  color: var(--ld-amber);
-}
-.seg-row {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 8px 0;
-  border-top: 1px solid var(--ld-line);
-  font-size: 13px;
-}
-.seg-row:first-of-type {
-  border-top: none;
-}
-.seg-rank {
-  flex: none;
-  width: 20px;
-  height: 20px;
-  border-radius: 6px;
-  background: var(--ld-bg-lilac);
-  color: var(--ld-content-2);
-  font-size: 11px;
-  font-weight: 700;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-.seg-name {
-  flex: 1;
-  min-width: 0;
-  color: var(--ld-content);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-.seg-count {
-  flex: none;
-  color: var(--ld-ink);
-}
-.approx-note {
-  margin: 0 0 18px;
-  font-size: 11px;
-  color: var(--ld-amber);
 }
 /* 最近动态 */
 .act-row {
