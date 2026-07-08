@@ -86,6 +86,28 @@ describe('activateCourse（一码一用·黄金 §一）', () => {
     expect(r.state).toBe('mine')
     expect(control.dump('activations').filter((a: any) => a.code === 'OLD').length).toBe(1)
   })
+
+  it('大白话：并发抢占——两个不同 openid 同时扫同一码，恰一人成功、败者 CODE_TAKEN、qrcodes.activatedBy 只属胜者（一码一用不因并发失守）', async () => {
+    // OPENID 在 withOpenId 内于 handler 调用瞬间同步读取（早于任何 await）——control.setOpenId 在两次
+    // call() 之间切换，各自捕获自己的身份，不会被后一次 setOpenId 污染（同 confirmEnter 并发测试范式）。
+    control.setOpenId('oA')
+    const p1 = call('activateCourse', { code: 'CODE1' })
+    control.setOpenId('oB')
+    const p2 = call('activateCourse', { code: 'CODE1' })
+    const [r1, r2] = await Promise.all([p1, p2])
+
+    const oks = [r1, r2].filter((r) => r.ok)
+    const fails = [r1, r2].filter((r) => !r.ok)
+    expect(oks.length).toBe(1) // 恰一人成功
+    expect(fails.length).toBe(1)
+    expect(fails[0].error).toBe('CODE_TAKEN') // 败者拒
+    expect(fails[0].courseId).toBe('c1')
+
+    const winnerOpenid = r1.ok ? 'oA' : 'oB'
+    const qr = control.dump('qrcodes').find((q: any) => q._id === 'CODE1')
+    expect(qr.activatedBy).toBe(winnerOpenid) // activatedBy 只属胜者，不被败者覆盖
+    expect(control.dump('activations').filter((a: any) => a.code === 'CODE1').length).toBe(1) // 仅胜者建激活记录
+  })
 })
 
 describe('confirmEnter（退货权法律节点·黄金 §二）', () => {

@@ -3,6 +3,7 @@
 import { login, getMyProgress } from '../../api/user'
 import { getCourses, getMyCourses } from '../../api/learning'
 import { continueResolve, type ContinueTarget } from '../../lib/continueResolve'
+import { openCustomerService } from '../../utils/customerService'
 
 Page({
   data: {
@@ -54,6 +55,9 @@ Page({
   },
   onFeedback() {
     wx.navigateTo({ url: '/pages/feedback/feedback' })
+  },
+  onKefu() {
+    openCustomerService()
   },
   onAbout() {
     wx.navigateTo({ url: '/pages/about/about' })

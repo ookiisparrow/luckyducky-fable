@@ -39,6 +39,7 @@ const codes = ref<string[]>([])
 const codesLoading = ref(false)
 const urlPrefix = ref('') // 激活码落地网址前缀（换皮 CSV 只导码不导网址·印刷厂拿不到落地地址）
 const testQr = ref('') // 测试二维码 dataURL（量产前扫码验落地页·换皮丢了这个·根因#8）
+const exportBlockedMsg = ref('') // 导出 fail-closed 提示（未配网址前缀时挡导出·印刷交付物必须是完整网址）
 const packing = ref(false)
 const codeUrl = (code: string) => urlPrefix.value + code
 
@@ -128,6 +129,7 @@ async function openDetail(b: BatchRow) {
   detail.value = b
   codes.value = []
   testQr.value = ''
+  exportBlockedMsg.value = ''
   codesLoading.value = true
   const my = codesGen.begin()
   const r = await listBatchCodes(b.batchId)
@@ -149,6 +151,13 @@ async function makeTestQr() {
 // 卡面正面.svg + 卡面反面.svg（取该课产品的卡片设计·课程编号 course-<productId> 反推 productId）+ 地址清单.csv + 说明.txt。
 async function downloadPack() {
   if (!detail.value || !codes.value.length || packing.value) return
+  // fail-closed（用户拍板 2026-07-08）：印刷交付物必须是完整网址，未配置网址前缀不许导出——
+  // 印错「仅码无址」的包给印刷厂等于交付物废掉，宁可挡下不让走、也不悄悄降级成单列码。
+  if (!urlPrefix.value.trim()) {
+    exportBlockedMsg.value = '先在「设置」配置扫码网址前缀，印刷交付物必须是完整网址'
+    return
+  }
+  exportBlockedMsg.value = ''
   packing.value = true
   try {
     const productId = loadedCourse.value.replace(/^course-/, '')
@@ -183,6 +192,12 @@ async function downloadPack() {
 // CSV 导出：换皮只导「激活码」单列·印刷厂拿不到落地地址；补「网址」列（激活码,完整URL·Excel BOM）
 function exportCsv() {
   if (!detail.value || !codes.value.length) return
+  // fail-closed（同 downloadPack）：未配网址前缀不许导出，防印刷厂拿到「仅码无址」的废交付物
+  if (!urlPrefix.value.trim()) {
+    exportBlockedMsg.value = '先在「设置」配置扫码网址前缀，印刷交付物必须是完整网址'
+    return
+  }
+  exportBlockedMsg.value = ''
   const head = urlPrefix.value ? '激活码,网址' : '激活码'
   const lines = codes.value.map((c) => (urlPrefix.value ? `${c},${codeUrl(c)}` : c))
   const csv = [head, ...lines].join('\n')
@@ -302,6 +317,7 @@ function exportCsv() {
             <button class="export" :disabled="!codes.length || packing" @click="downloadPack"><Package :size="13" :stroke-width="1.8" /><span>{{ packing ? '打包中…' : '印刷包 ZIP' }}</span></button>
           </div>
         </div>
+        <p v-if="exportBlockedMsg" class="export-blocked">{{ exportBlockedMsg }}</p>
         <div v-if="testQr" class="testqr">
           <img :src="testQr" alt="测试二维码" />
           <p>手机微信扫这个码，量产前验证激活落地页正常（首码 <b>{{ codes[0] }}</b>）<br /><code>{{ codeUrl(codes[0]) }}</code></p>
@@ -589,6 +605,15 @@ function exportCsv() {
   margin: 0;
   font-size: 11px;
   color: var(--ld-content-2);
+}
+.export-blocked {
+  margin: 0;
+  padding: 8px 10px;
+  border-radius: var(--ld-radius-sm);
+  background: var(--ld-bg-red-soft);
+  border: 1px solid var(--ld-red-line);
+  font-size: 12px;
+  color: var(--ld-red);
 }
 .code-list {
   border: 1px solid var(--ld-line);

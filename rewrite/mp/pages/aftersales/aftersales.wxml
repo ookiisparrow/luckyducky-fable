@@ -42,7 +42,7 @@
       </view>
     </view>
 
-    <text class="coas-note" wx:if="{{list.length}}">支持七天无理由退货 · 来回运费由商家承担，放心买</text>
+    <text class="coas-note" wx:if="{{list.length}}" bind:tap="onKefu">需要帮助？联系客服</text>
     <view class="ldas-more" wx:if="{{hasMore}}">上拉加载更多</view>
 
     <!-- 空态 -->
@@ -52,6 +52,7 @@
       </view>
       <text class="coas-empty-title">还没有售后记录</text>
       <text class="coas-empty-hint">需要退款时，从订单详情发起申请</text>
+      <text class="coas-note" bind:tap="onKefu">需要帮助？联系客服</text>
     </view>
   </view>
 </view>

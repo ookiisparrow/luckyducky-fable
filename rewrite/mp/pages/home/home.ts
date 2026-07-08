@@ -2,8 +2,10 @@
 // 数据经 api/catalog → app 网关；内容拿不到（网络/未部署）逐块回退设计默认文案（mapHomeContent），不空屏。
 // 页只编排：把原始返回交给纯函数 mapHomeContent/mapProducts，再 setData（house style·同 detail/me）。
 import { getContent, getProducts } from '../../api/catalog'
-import { primeProducts } from '../../lib/catalog'
+import { primeProducts, getProductById } from '../../lib/catalog'
 import { mapHomeContent, mapProducts, type HomeContentVM, type ProductVM } from '../../lib/mapHome'
+import { decideQuickAdd } from '../../lib/quickAdd'
+import * as cart from '../../lib/cart'
 
 let toastTimer: ReturnType<typeof setTimeout> | null = null
 
@@ -57,9 +59,21 @@ Page({
     const id = String(e.currentTarget.dataset.id || '')
     if (id) wx.navigateTo({ url: '/pages/detail/detail?id=' + id })
   },
-  onAddProduct(e: WechatMiniprogram.TouchEvent) {
-    const name = String(e.currentTarget.dataset.name || '')
-    this.ping('已收藏 ' + name)
+  // 首页「+」快速加购（2026-07-08 用户拍板：旧假占位反馈改真加购）：单规格直加购物车、
+  // 多规格跳详情选规格、原始记录取不到（缓存 miss 且网络失败）温和失败反馈——决策纯函数见 lib/quickAdd。
+  async onAddProduct(e: WechatMiniprogram.TouchEvent) {
+    const id = String(e.currentTarget.dataset.id || '')
+    if (!id) return
+    const raw = await getProductById(id)
+    const decision = decideQuickAdd(raw)
+    if (decision.kind === 'add') {
+      cart.add(decision.payload)
+      this.ping('已加入购物车')
+    } else if (decision.kind === 'navigate') {
+      wx.navigateTo({ url: '/pages/detail/detail?id=' + decision.id })
+    } else {
+      this.ping('商品信息获取失败，请稍后重试')
+    }
   },
   toProducts() {
     wx.pageScrollTo({ selector: '#friends', duration: 320 }) // 「购买」滚到商品轨（设计 scrollToProduct）

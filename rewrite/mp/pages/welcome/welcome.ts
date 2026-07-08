@@ -57,7 +57,8 @@ Page({
       wx.showToast({ title: '进课没成功，稍后再试', icon: 'none' })
       return
     }
-    wx.redirectTo({ url: '/pages/my-courses/my-courses' })
+    // 定位：带上刚激活的 courseId，我的课程页高亮该课卡（用户扫码激活后要一眼找到刚拿到的课）；空值不带参（onEnter 前置 courseId 缺失兜底）
+    wx.redirectTo({ url: '/pages/my-courses/my-courses' + (this.data.courseId ? '?courseId=' + this.data.courseId : '') })
   },
   onRetry() {
     this.setData({ phase: 'input', code: '', kind: 'invalid', bg: '' })

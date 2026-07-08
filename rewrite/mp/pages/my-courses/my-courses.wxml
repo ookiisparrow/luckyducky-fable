@@ -17,7 +17,7 @@
 
   <!-- 课程卡列表 -->
   <view class="ld-mc-list" wx:if="{{!loading && list.length}}">
-    <view class="ld-mc-card" wx:for="{{list}}" wx:key="courseId" data-id="{{item.courseId}}" bind:tap="onTapCourse" hover-class="ld-mc-card-h" hover-stay-time="80">
+    <view class="ld-mc-card {{item.courseId === highlightId && highlightId ? 'ld-mc-card-on' : ''}}" wx:for="{{list}}" wx:key="courseId" data-id="{{item.courseId}}" bind:tap="onTapCourse" hover-class="ld-mc-card-h" hover-stay-time="80">
       <view class="ld-mc-cover">
         <view class="ld-mc-cover-scrim"></view>
         <view class="ld-mc-play">

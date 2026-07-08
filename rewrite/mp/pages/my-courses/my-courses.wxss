@@ -38,6 +38,11 @@
 .ld-mc-card-h {
   transform: scale(0.99);
 }
+/* 扫码激活定位高亮（welcome.ts onEnter 带 courseId 跳回本页·刚拿到的课卡描边一眼可寻） */
+.ld-mc-card-on .ld-mc-cover {
+  outline: 4rpx solid var(--ld-purple-tab);
+  outline-offset: 4rpx;
+}
 
 /* 封面（16:9.6·padding-top 百分比法，避 aspect-ratio 旧 WebView 不支持；同 me 页范式） */
 .ld-mc-cover {

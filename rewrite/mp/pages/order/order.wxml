@@ -16,7 +16,7 @@
       </view>
     </view>
 
-    <!-- 物流（有运单号时·真实数据仅运单号+公司，不伪造轨迹·实时轨迹需外部快递 API 见待办） -->
+    <!-- 物流（有运单号时·真实数据仅运单号+公司，实时轨迹经快递100插件；插件打不开回退复制运单号） -->
     <view class="co-card coord-logi" wx:if="{{vm.trackingNo}}">
       <view class="coord-logi-ico">
         <image class="coord-logi-img" src="/static/icons/truck.svg" mode="aspectFit" />
@@ -25,6 +25,7 @@
         <view class="coord-logi-line"><text wx:if="{{vm.shipCompany}}">{{vm.shipCompany}} · </text>运单号 {{vm.trackingNo}}</view>
         <view class="coord-logi-time">物流状态以承运方为准</view>
       </view>
+      <view class="coord-logi-btn" catch:tap="onViewLogistics">查看物流</view>
       <view class="coord-copy" catch:tap="onCopyTracking">
         <image class="coord-copy-img" src="/static/icons/copy.svg" mode="aspectFit" />
       </view>

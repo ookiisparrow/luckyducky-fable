@@ -113,6 +113,18 @@
   color: var(--ld-content-2);
   letter-spacing: 0.4rpx;
 }
+.coord-logi-btn {
+  flex: 0 0 auto;
+  height: 52rpx;
+  padding: 0 20rpx;
+  border-radius: var(--ld-radius-pill);
+  border: 1rpx solid var(--ld-purple-line);
+  background: var(--ld-bg-lilac);
+  font-size: 22rpx;
+  color: var(--ld-purple-ink);
+  display: flex;
+  align-items: center;
+}
 
 /* ---------- 收货地址卡（含彩色针脚底边·设计签名件） ---------- */
 .co-addr {

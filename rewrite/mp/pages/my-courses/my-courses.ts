@@ -7,8 +7,13 @@ Page({
   data: {
     list: [] as MyCourseVM[],
     loading: true,
+    highlightId: '', // 扫码激活定位：welcome.ts onEnter 带 courseId 跳回本页，高亮刚拿到的那张课卡
   },
   _seq: 0, // onShow 代次·丢弃过期回包（同 player playToken）
+  onLoad(query: Record<string, string | undefined>) {
+    // query 只在 onLoad 拿得到（onShow 无参）；先存起来供 onShow 渲染时读
+    this.setData({ highlightId: String(query.courseId || '') })
+  },
   async onShow() {
     // 三 action 并发组合（云为唯一真相·纯前端 join 段数与 done map·不新增聚合 action）
     const seq = ++this._seq

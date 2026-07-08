@@ -107,6 +107,11 @@
         <text class="ld-me-row-label">意见反馈</text>
         <image class="ld-me-row-chev" src="/static/icons/chevron-right.svg" mode="aspectFit" />
       </view>
+      <view class="ld-me-row" bind:tap="onKefu" hover-class="ld-me-row-h">
+        <view class="ld-me-row-ico"><image class="ld-me-row-img" src="/static/icons/headphones.svg" mode="aspectFit" /></view>
+        <text class="ld-me-row-label">联系客服</text>
+        <image class="ld-me-row-chev" src="/static/icons/chevron-right.svg" mode="aspectFit" />
+      </view>
       <view class="ld-me-row" bind:tap="onConsent" hover-class="ld-me-row-h">
         <view class="ld-me-row-ico"><image class="ld-me-row-img" src="/static/icons/shield-check.svg" mode="aspectFit" /></view>
         <text class="ld-me-row-label">数据共享授权</text>

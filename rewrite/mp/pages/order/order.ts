@@ -3,6 +3,7 @@ import { getOrderById, pay, confirmReceive, cancelOrder, applyRefund, getMyAfter
 import { mapPayResult } from '../../lib/payFlow'
 import { mapOrder, type OrderVM } from '../../lib/mapOrders'
 import { applicableLines, mapAfterSales } from '../../lib/mapAftersales'
+import { expressCode } from '../../lib/express'
 
 // 状态横幅配置（纯展示派生·icon/tint/文案随订单态·不含业务判定）。
 interface BannerVM {
@@ -62,6 +63,19 @@ Page({
     wx.setClipboardData({
       data: no,
       success: () => wx.showToast({ title: '已复制运单号', icon: 'none' }),
+    })
+  },
+  // 查看物流：快递100 插件结果页（同 AppID 已授权·app.json 声明即用）。插件打不开（未安装/版本不匹配等）
+  // 不静默——回退复制运单号语义，用户仍能拿到号码自行查（根因#14 可观测·fail-soft 不裸吞）。
+  onViewLogistics() {
+    const vm = this.data.vm
+    const no = vm && vm.trackingNo
+    if (!no) return
+    const com = expressCode(vm!.shipCompany)
+    const url = 'plugin://kuaidi100/index?num=' + no + '&appName=' + encodeURIComponent('小棉鸭') + (com ? '&com=' + com : '')
+    wx.navigateTo({
+      url,
+      fail: () => this.onCopyTracking(),
     })
   },
   // 取消待支付单（破坏性·二次确认；仅 pending 出此入口·最终裁决在云端）

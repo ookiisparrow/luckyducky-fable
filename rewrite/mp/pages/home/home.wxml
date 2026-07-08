@@ -47,7 +47,7 @@
               <text class="ld-price-was" wx:if="{{item.wasLabel}}">{{item.wasLabel}}</text>
               <text class="ld-price">{{item.priceLabel}}</text>
             </view>
-            <view class="ld-add" hover-class="ld-add-h" catch:tap="onAddProduct" data-name="{{item.name}}">
+            <view class="ld-add" hover-class="ld-add-h" catch:tap="onAddProduct" data-id="{{item.id}}">
               <image class="ld-add-ico" src="/static/icons/plus.svg" mode="aspectFit" />
             </view>
           </view>
