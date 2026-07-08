@@ -7,6 +7,7 @@ import { getRatingSummary } from '../../api/reviews'
 import { mapDetail, priceForSelection, type DetailVM } from '../../lib/mapDetail'
 import { mapSummary, type SummaryVM } from '../../lib/mapReviews'
 import { mapProducts, type ProductVM } from '../../lib/mapHome'
+import { openCustomerService } from '../../utils/customerService'
 
 Page({
   data: {
@@ -78,7 +79,7 @@ Page({
     wx.showToast({ title: '已加入购物车', icon: 'success' })
   },
   onService() {
-    wx.showToast({ title: '正在接入客服…', icon: 'none' })
+    openCustomerService()
   },
   onViewReviews() {
     const vm = this.data.vm

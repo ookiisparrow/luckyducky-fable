@@ -4581,6 +4581,60 @@ export const repoChecks = [
     },
   },
   {
+    // 客服触点真实化（重写线 rewrite/mp·承旧线 customer-service-wired 所标病根 R18）：批A 建了
+    // utils/customerService.ts 单源 helper，但 detail.ts 的 onService() 当场仍是假占位
+    // wx.showToast('正在接入客服…')——旧线守卫早已判定这句假 Toast 绝迹，新线却原样重现（复制漂移同源）。
+    // 触点表驱动（一张表+一条守卫范式，防新增触点各自为政）：当前收口 detail/onService + player/onHelp
+    // 两点；me/售后页新设计暂无客服元素，是否加回待产品决策（见 docs/待办与债.md），故不在表内。
+    id: 'rw-mp-customer-service-wired',
+    roots: ['R18'],
+    desc: '客服触点真实化（rewrite/mp）：① 全目录禁「正在接入客服」假 Toast 绝迹（同旧线 customer-service-wired 判定的假占位家族）② 触点表驱动——detail.ts 的 onService()、player.ts 的 onHelp() 方法体须真调 openCustomerService()，防触点各自散接/漏接（me/售后待产品决策后加行，见表旁注释）',
+    run() {
+      const base = join(ROOT, 'rewrite/mp')
+      if (!existsSync(base)) return []
+      const bad = []
+      // 断言A：全目录假 Toast 绝迹
+      const walkAll = (d) => {
+        const out = []
+        for (const e of readdirSync(d)) {
+          const p = join(d, e)
+          if (statSync(p).isDirectory()) out.push(...walkAll(p))
+          else out.push(p)
+        }
+        return out
+      }
+      for (const f of walkAll(base)) {
+        if (!/\.(ts|wxml)$/.test(f)) continue
+        if (readFileSync(f, 'utf8').includes('正在接入客服'))
+          bad.push(`${relative(base, f)} 仍有「正在接入客服」假 Toast——客服触点未真接通（R18 复制漂移同源）`)
+      }
+      // 断言B：触点表驱动——每个触点方法体内须真调 openCustomerService()
+      // me/售后页新设计暂无客服元素，是否加回待产品决策（见 docs/待办与债.md），故不入表。
+      const TOUCHPOINTS = [
+        { file: 'pages/detail/detail.ts', method: 'onService' },
+        { file: 'pages/player/player.ts', method: 'onHelp' },
+      ]
+      for (const tp of TOUCHPOINTS) {
+        const abs = join(base, tp.file)
+        if (!existsSync(abs)) {
+          bad.push(`${tp.file} 缺失（客服触点·R18）`)
+          continue
+        }
+        const src = readFileSync(abs, 'utf8')
+        const m = src.match(new RegExp(`${tp.method}\\s*\\(\\)\\s*\\{([\\s\\S]*?)\\n {2}\\},`))
+        if (!m) {
+          bad.push(`${tp.file} 找不到 ${tp.method}() 方法体——客服触点单点丢失（R18）`)
+          continue
+        }
+        // 剥离注释再测试（防「真调用换成注释引用+假 Toast」假咬合——同本文件其它「非注释」守卫防御写法，如 1151 行）
+        const bodyNoComments = m[1].replace(/\/\/[^\n]*/g, '').replace(/\/\*[\s\S]*?\*\//g, '')
+        if (!/openCustomerService\s*\(/.test(bodyNoComments))
+          bad.push(`${tp.file} 的 ${tp.method}() 未调 openCustomerService()——客服触点未真接通（R18）`)
+      }
+      return bad
+    },
+  },
+  {
     id: 'rw-m5-runbook-synced',
     roots: ['正册'],
     desc: 'M5 切换 runbook 与部署面同步：rewrite/M5-切换runbook.md 须存在，且 rewrite/cloud 每个函数单元名与并行期定名 adminApiV2 都出现在 runbook 内——函数增删改名 runbook 必跟，防切换日拿陈账操刀',
