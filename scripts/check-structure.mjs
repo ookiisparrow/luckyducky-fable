@@ -4510,6 +4510,77 @@ export const repoChecks = [
     },
   },
   {
+    // 播放页竖屏沉浸全屏 + 一键投屏 + 帮助(客服)入口（M2 批·根因#8 真机能力面 + 病根#5 样板复制即漂移）：
+    // 竖屏沉浸播放器须自绘导航（原生标题栏与自绘黑条控制条会重叠打架）；关闭原生 controls 才不会跟自绘
+    // 底条打架；投屏主路径(原生按钮)+状态回报事件须都在，否则用户点了投屏不知道发生了什么；进度条 slider
+    // 须两段式绑定（changing=拖动中只改显示不 seek·change=松手才真 seek），否则 timeupdate 会在拖动中把
+    // 手指顶回去；备路径投屏须特性检测再调用（低版本微信直接报错崩交互）；客服入口须单源、不许在别处内联。
+    id: 'rw-mp-player-immersive-casting',
+    roots: ['#8', '#5'],
+    desc: '播放页竖屏沉浸全屏 + 一键投屏 + 帮助(客服)入口：player.json 须 navigationStyle:custom；player.wxml 的 <video> 须 controls="{{false}}" + show-casting-button + castingstatechange 事件绑定 + 帮助按钮节点 + slider 的 changing/change 两段式绑定；player.ts 须对备路径投屏 startCasting 做特性检测(typeof===\'function\')；客服入口须单源在 rewrite/mp/utils/customerService.ts（rewrite/mp 内 wx.openCustomerServiceChat 只此一处）',
+    run() {
+      const base = join(ROOT, 'rewrite/mp')
+      if (!existsSync(base)) return []
+      const jsonPath = join(base, 'pages/player/player.json')
+      if (!existsSync(jsonPath)) return [] // 播放页未建时不红（早期批次）
+      const bad = []
+      const json = JSON.parse(readFileSync(jsonPath, 'utf8'))
+      if (json.navigationStyle !== 'custom')
+        bad.push('rewrite/mp/pages/player/player.json 缺 navigationStyle:custom——竖屏沉浸播放页须自绘导航栏，留原生标题栏会跟自绘黑条控制条重叠打架（设计定案）')
+
+      const wxmlPath = join(base, 'pages/player/player.wxml')
+      const wxml = existsSync(wxmlPath) ? readFileSync(wxmlPath, 'utf8') : ''
+      if (!wxml) bad.push('rewrite/mp/pages/player/player.wxml 缺失')
+      if (wxml && !/controls\s*=\s*"\{\{\s*false\s*\}\}"/.test(wxml))
+        bad.push('player.wxml 的 <video> 未关闭原生 controls="{{false}}"——自绘控制条会跟原生控件重叠打架（设计定案）')
+      if (wxml && !/show-casting-button/.test(wxml)) bad.push('player.wxml 缺 show-casting-button——投屏主路径（原生按钮）未开启')
+      if (wxml && !/bind:?castingstatechange/.test(wxml))
+        bad.push('player.wxml 缺 castingstatechange 事件绑定——投屏状态（连接/中断）无回报，用户点了投屏不知道发生了什么（根因#14 呼应：动作类失败/状态变化不可静默）')
+      if (wxml && !/帮助/.test(wxml)) bad.push('player.wxml 找不到「帮助」按钮节点——客服入口占底条播放键位缺失（设计定案）')
+      if (wxml && !(/bind:?changing/.test(wxml) && /bind:?change\b/.test(wxml)))
+        bad.push('player.wxml 的 slider 未见两段式 changing+change 绑定——拖动中会被 timeupdate 把进度顶回去、或松手不 seek')
+
+      const tsPath = join(base, 'pages/player/player.ts')
+      const ts = existsSync(tsPath) ? readFileSync(tsPath, 'utf8') : ''
+      if (wxml && ts) {
+        // catchtouchmove="X" 引用的处理函数必须在 .ts 里真实存在——否则锁背景滚动的声称落空（wxml 抄了半边、
+        // ts 忘了另半边：曾经的漏洞，抽屉遮罩/抽屉本体两处 catchtouchmove="noop" 而 player.ts 无 noop 方法）。
+        const handlers = new Set([...wxml.matchAll(/catch:?touchmove\s*=\s*"([\w$]+)"/g)].map((m) => m[1]))
+        for (const h of handlers) {
+          if (!new RegExp(`\\b${h}\\s*\\(`).test(ts))
+            bad.push(`player.wxml 的 catchtouchmove="${h}" 在 player.ts 里找不到对应方法——锁背景滚动的处理函数缺失（真机会报 handler 不存在告警）`)
+        }
+      }
+      if (ts) {
+        // 只在 onCast 方法体内断言，不许整文件全文匹配——否则一句字面提及 startCasting 的注释就能让守卫误绿
+        // （曾经的漏洞：文件头注释写了 typeof ctx.startCasting==='function' 描述思路，正则全文匹配就被这句注释
+        // 顶包过关，即便真实检测代码被删、注释没动，守卫也测不出来）。
+        const onCastBody = (ts.match(/onCast\s*\(\)\s*\{[\s\S]*?\n {2}\},/) || [''])[0]
+        if (!onCastBody) bad.push('player.ts 找不到 onCast 方法体——备路径投屏单点丢失')
+        else if (!/typeof\s+[\w.]+\.startCasting\s*[!=]==\s*['"]function['"]/.test(onCastBody))
+          bad.push('player.ts 的 onCast 方法体内未见 startCasting 特性检测（typeof ...===/!==\'function\'）——备路径投屏未按基础库能力探测就调用，低版本微信直接报错崩交互')
+      }
+
+      const csPath = join(base, 'utils/customerService.ts')
+      if (!existsSync(csPath)) bad.push('rewrite/mp/utils/customerService.ts 缺失——客服入口无单源（病根#5 样板复制即漂移）')
+      else {
+        const offenders = []
+        const pagesDir = join(base, 'pages')
+        const walkForCS = (d) => {
+          for (const e of readdirSync(d)) {
+            const p = join(d, e)
+            if (statSync(p).isDirectory()) walkForCS(p)
+            else if (/\.(ts|wxml)$/.test(e) && /openCustomerServiceChat/.test(readFileSync(p, 'utf8'))) offenders.push(relative(base, p))
+          }
+        }
+        if (existsSync(pagesDir)) walkForCS(pagesDir)
+        if (offenders.length)
+          bad.push(`rewrite/mp 内 wx.openCustomerServiceChat 不该在 pages 下内联调用（${offenders.join(', ')}）——客服入口须收口 utils/customerService.ts 单源（病根#5）`)
+      }
+      return bad
+    },
+  },
+  {
     id: 'rw-m5-runbook-synced',
     roots: ['正册'],
     desc: 'M5 切换 runbook 与部署面同步：rewrite/M5-切换runbook.md 须存在，且 rewrite/cloud 每个函数单元名与并行期定名 adminApiV2 都出现在 runbook 内——函数增删改名 runbook 必跟，防切换日拿陈账操刀',

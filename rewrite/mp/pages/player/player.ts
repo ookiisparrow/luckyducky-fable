@@ -1,8 +1,14 @@
-// 课程播放页（M2 批11）：video + 分段列表 + 上/下一段 + 进度上报 + 首帧埋点。
-// 鉴权 fail-closed 在云端（getPlaybackUrl 须本人已进课）；素材未剪 url:null → 空态不裂播放器；
-// 未授权 → 导流激活页。地址经 TTL 缓存（切段回看零重复取址）。
+// 课程播放页（M2 批11·竖屏沉浸全屏重设计批新增一键投屏+帮助入口）：video + 分段列表 + 上/下一段 +
+// 进度上报 + 首帧埋点。鉴权 fail-closed 在云端（getPlaybackUrl 须本人已进课）；素材未剪 url:null → 空态不裂
+// 播放器；未授权 → 导流激活页。地址经 TTL 缓存（切段回看零重复取址）。
+// 投屏双保险（真机走查后收敛，见 docs/待办与债.md）：主路径=原生 show-casting-button（官方文档未言明
+// 依赖 controls，社区有 controls=false 下可用实例）；备路径=底条自绘投屏按钮，wx.createVideoContext 后
+// 特性检测 typeof ctx.startCasting==='function'（基础库 2.32.0·仅 tap 回调内调用），不支持则提示微信版本过低。
 import { getCourses, getPlaybackUrl, trackEvent } from '../../api/learning'
-import { flattenSegments, navSegment, createPlaybackCache, type CoursePub, type FlatSegment } from '../../lib/player'
+import { flattenSegments, navSegment, createPlaybackCache, formatClock, clampSeek, type CoursePub, type FlatSegment } from '../../lib/player'
+import { openCustomerService } from '../../utils/customerService'
+
+const TIME_UPDATE_THROTTLE_MS = 250
 
 const cache = createPlaybackCache({
   fetcher: async (courseId, segmentId) => {
@@ -14,6 +20,7 @@ const cache = createPlaybackCache({
 
 Page({
   data: {
+    statusBarHeight: 0,
     title: '',
     segments: [] as FlatSegment[],
     current: null as FlatSegment | null,
@@ -22,6 +29,12 @@ Page({
     canNext: false,
     state: 'loading' as 'loading' | 'playing' | 'empty' | 'denied' | 'missing' | 'error',
     listOpen: false,
+    paused: false, // 真实播放/暂停态·只认 bind:play/bind:pause 回报，不在 tap 里直接翻转当真相
+    curSec: 0,
+    durSec: 0,
+    curClock: '0:00',
+    durClock: '0:00',
+    seeking: false, // 拖动进度条中：阻断 timeupdate 覆盖显示值
   },
   courseId: '',
   course: null as CoursePub | null,
@@ -32,8 +45,11 @@ Page({
   errSeg: '', // 上次因视频加载失败重试过的段
   errRetried: false, // 该段是否已重试过一次（防不可恢复媒体无限重取死循环）
   watchReported: false, // 本段 watch_at 是否已上报（一次性·防 onHide+onUnload 双报）
+  lastTimeUpdateAt: 0, // bindtimeupdate 节流时间戳（250ms·减频 setData）
 
   async onLoad(query: Record<string, string | undefined>) {
+    const info = wx.getWindowInfo()
+    this.setData({ statusBarHeight: info.statusBarHeight })
     this.courseId = String(query.courseId || '')
     const r = await getCourses()
     const course = r.ok && Array.isArray(r.list) ? ((r.list as CoursePub[]).find((c) => c.id === this.courseId) || null) : null
@@ -62,9 +78,11 @@ Page({
     const token = ++this.playToken // 本次切段令牌·await 后复核，防慢回旧段覆盖新段
     this.firstFrameScene = scene
     this.firstFrameReported = false
+    this.lastTimeUpdateAt = 0
     // src 清空：换段加载态回到「正在加载首帧」骨架，且卸载上一段/坏地址的 <video>——否则旧视频在新段标签下继续播放、
     // 骨架永不显，且坏 src 重挂到新段会瞬时 bind:error 白吃掉新段的一次重试预算（审计②）。
-    this.setData({ state: 'loading', current: seg, src: '', listOpen: false })
+    // 进度/暂停态一并归零：新段是新的播放单元，旧段的进度条/暂停指示不该带过来。
+    this.setData({ state: 'loading', current: seg, src: '', listOpen: false, paused: false, curSec: 0, durSec: 0, curClock: '0:00', durClock: '0:00', seeking: false })
     let url = ''
     try {
       url = await cache.get(this.courseId, seg.segmentId)
@@ -98,6 +116,15 @@ Page({
     })
   },
 
+  // video 播放/暂停回报（真相源·不在 onTapVideo 里直接翻转 data.paused）。
+  onVideoPlay() {
+    this.onFirstPlay()
+    this.setData({ paused: false })
+  },
+  onVideoPause() {
+    this.setData({ paused: true })
+  },
+
   onEnded() {
     const cur = this.data.current
     if (!cur) return
@@ -125,6 +152,82 @@ Page({
     void this.playSegment(cur, 'retry')
   },
 
+  // 全屏单击播放/暂停：只调用视频上下文 play()/pause()，真实态由 bind:play/bind:pause 回报（不臆断本地态）。
+  onTapVideo() {
+    if (this.data.state !== 'playing' || !this.data.src) return
+    const ctx = wx.createVideoContext('lp-video', this)
+    if (this.data.paused) ctx.play()
+    else ctx.pause()
+  },
+
+  // 进度上报（250ms 节流·seeking 时不覆盖显示值·秒取整减频 setData）。
+  onTimeUpdate(e: WechatMiniprogram.CustomEvent<{ currentTime: number; duration: number }>) {
+    if (this.data.seeking) return
+    const now = Date.now()
+    if (now - this.lastTimeUpdateAt < TIME_UPDATE_THROTTLE_MS) return
+    this.lastTimeUpdateAt = now
+    const curSec = Math.floor(e.detail.currentTime || 0)
+    const durSec = Math.floor(e.detail.duration || 0)
+    if (curSec === this.data.curSec && durSec === this.data.durSec) return
+    this.setData({ curSec, durSec, curClock: formatClock(curSec), durClock: formatClock(durSec) })
+  },
+  // 拖动中：只更新显示值（阻断 timeupdate 覆盖），不 seek。
+  onSliderChanging(e: WechatMiniprogram.CustomEvent<{ value: number }>) {
+    const curSec = clampSeek(e.detail.value, this.data.durSec)
+    this.setData({ seeking: true, curSec, curClock: formatClock(curSec) })
+  },
+  // 松手：真正 seek（单位秒·video seek 接口以秒计）。
+  onSliderChange(e: WechatMiniprogram.CustomEvent<{ value: number }>) {
+    const curSec = clampSeek(e.detail.value, this.data.durSec)
+    const ctx = wx.createVideoContext('lp-video', this)
+    ctx.seek(curSec)
+    this.setData({ seeking: false, curSec, curClock: formatClock(curSec) })
+  },
+
+  // 一键投屏——主路径 show-casting-button 已在 wxml 开启；本函数是底条自绘备路径。
+  onCast() {
+    if (this.data.state !== 'playing' || !this.data.src) return
+    const ctx = wx.createVideoContext('lp-video', this) as unknown as { startCasting?: (opt: { success?: () => void; fail?: () => void }) => void }
+    // 特性检测（miniprogram-api-typings 未收录 startCasting·基础库 2.32.0 起才有）：
+    // 低版本微信不支持时直接调用会抛错崩交互，先探测再调用。
+    if (typeof ctx.startCasting !== 'function') {
+      wx.showToast({ title: '当前微信版本过低，暂不支持投屏，请更新微信后重试', icon: 'none' })
+      return
+    }
+    ctx.startCasting({
+      fail: () => {
+        wx.showToast({ title: '投屏失败，请确认电视与手机同一 Wi-Fi', icon: 'none' })
+      },
+    })
+  },
+  // 用户在系统投屏选择框选中设备：真实连接结果以 bindcastingstatechange 为准，这里不下结论——
+  // 但选中动作本身（不依赖 detail 形状）值得一个中性即时反馈，否则用户点了没反应会以为没生效。
+  onCastingUserSelect() {
+    wx.showToast({ title: '正在连接投屏设备…', icon: 'none' })
+  },
+  // 投屏状态变化：real device 上 detail 形状待真机校验（见 docs/待办与债.md），
+  // 保守只在明确看到「连接成功」关键词时才提示，避免误报。
+  onCastingStateChange(e: WechatMiniprogram.CustomEvent<{ state?: string }>) {
+    const state = String((e.detail && e.detail.state) || '').toLowerCase()
+    if (state.includes('connect') || state.includes('project')) {
+      wx.showToast({ title: '已连接电视', icon: 'none' })
+    }
+  },
+  onCastingInterrupt() {
+    wx.showToast({ title: '投屏已断开', icon: 'none' })
+  },
+
+  // 帮助＝客服入口（占常规播放键位·取代播放键，设计定案）。
+  onHelp() {
+    openCustomerService()
+  },
+
+  onBack() {
+    const pages = getCurrentPages()
+    if (pages.length > 1) wx.navigateBack()
+    else wx.reLaunch({ url: '/pages/home/home' }) // 深链直接进入播放页（无上级页可退）时兜底回首页
+  },
+
   onPrev() {
     const cur = this.data.current
     const prev = cur && navSegment(this.course, cur.segmentId, -1)
@@ -144,6 +247,9 @@ Page({
   onToggleList() {
     this.setData({ listOpen: !this.data.listOpen })
   },
+  // 目录抽屉遮罩/抽屉本体 catchtouchmove 挂点（锁背景滚动·同 privacy-sheet 组件既有写法）：空实现即可，
+  // catch: 前缀本身负责挡冒泡，这里只需存在同名方法供小程序事件系统解析，避免 handler 缺失告警。
+  noop() {},
   onGoActivate() {
     wx.redirectTo({ url: '/pages/welcome/welcome' })
   },

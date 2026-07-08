@@ -1,7 +1,7 @@
 // 黄金 learning-content §六（分段导航跨课时/跳过不可播/端点置灰 + 播放地址缓存 TTL/空不缓存/
 // 跨课隔离/在途去重/定向失效/预取）（守卫 rw-mp-player-golden）。
 import { describe, it, expect } from 'vitest'
-import { flattenSegments, navSegment, createPlaybackCache } from '../lib/player'
+import { flattenSegments, navSegment, createPlaybackCache, formatClock, clampSeek } from '../lib/player'
 
 const COURSE = {
   id: 'c1',
@@ -96,5 +96,25 @@ describe('播放地址缓存（黄金 §六）', () => {
     await cache.prefetch('c1', 's1') // 已新鲜·空操作
     expect(calls.filter((c) => c === 'c1/s1')).toHaveLength(1)
     await cache.prefetch('c1', '') // 不崩
+  })
+})
+
+describe('竖屏沉浸播放页·进度条纯函数（批：一键投屏 + 帮助入口）', () => {
+  it('大白话：formatClock 秒转 m:ss，负数/非数字/超一分钟都算对', () => {
+    expect(formatClock(0)).toBe('0:00')
+    expect(formatClock(5)).toBe('0:05')
+    expect(formatClock(65)).toBe('1:05')
+    expect(formatClock(600)).toBe('10:00')
+    expect(formatClock(-3)).toBe('0:00') // 脏值不裂显示
+    expect(formatClock(NaN)).toBe('0:00')
+  })
+
+  it('大白话：clampSeek 把拖动/脏值夹进 [0, durSec]，不跳出可播范围', () => {
+    expect(clampSeek(30, 120)).toBe(30)
+    expect(clampSeek(-5, 120)).toBe(0) // 下界
+    expect(clampSeek(200, 120)).toBe(120) // 上界
+    expect(clampSeek(30.9, 120)).toBe(30) // 取整
+    expect(clampSeek(30, 0)).toBe(30) // 总时长未知(0)时不误夹为 0
+    expect(clampSeek(NaN, 120)).toBe(0)
   })
 })

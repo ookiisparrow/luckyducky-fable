@@ -72,6 +72,23 @@ export function navSegment(course: unknown, currentSegId: string, step: number):
   return null
 }
 
+/** 秒→"m:ss" 时钟文案（竖屏沉浸播放页进度条）：负数/非数字归 0，不裂显示。 */
+export function formatClock(totalSec: number): string {
+  const s = Math.max(0, Math.floor(Number(totalSec) || 0))
+  const m = Math.floor(s / 60)
+  const r = s % 60
+  return `${m}:${String(r).padStart(2, '0')}`
+}
+
+/** seek 目标秒数夹取到 [0, durSec]（拖动条松手/边界脏值不越界跳出可播范围）。 */
+export function clampSeek(value: number, durSec: number): number {
+  const v = Math.floor(Number(value) || 0)
+  const max = Math.max(0, Math.floor(Number(durSec) || 0))
+  if (v < 0) return 0
+  if (max > 0 && v > max) return max
+  return v
+}
+
 export type UrlFetcher = (courseId: string, segmentId: string) => Promise<string>
 
 /** 播放地址缓存（黄金 §六）：TTL 内命中不重取（默认 25min·远小于服务端临时 URL 过期）；

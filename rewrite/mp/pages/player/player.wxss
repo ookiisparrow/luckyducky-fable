@@ -1,49 +1,101 @@
-/* 课程播放页·对齐设计 VideoCatalog.jsx「vp-」沉浸式深色播放器 chrome。
-   设计 402px 画板 → rpx（×1.87）。深色播放器专用面（#17141d/#1e1a26）为局部 chrome 色·不入 tokens；
-   强调色用 --ld-duck / --ld-purple。<video> 与全部事件绑定原样不动·只重排结构与视觉。
-   诚实数据：无 bindtimeupdate 数据源，故不造假进度条/时间轴，播放进度交给 <video> 原生控件。 */
+/* 课程播放页·竖屏沉浸全屏重设计（M2 批：一键投屏 + 帮助入口）。
+   整页纯黑铺满；视频 1:1.68（宽:高）·padding-top 百分比法（避 aspect-ratio·旧 WebView 不支持），
+   垂直居中；上下 UI 是黑条覆盖层（绝对定位 + z-index 盖在 video 上·同层渲染官方已允许，不必 cover-view）。
+   <video> 与全部既有回归事件绑定语义不变，本文件重排结构与视觉 + 新增投屏/进度条/帮助/抽屉目录。 */
 .ld-player {
-  min-height: 100vh;
-  background: #17141d; /* 深茄黑·播放器 chrome 底（局部深色·不入 tokens） */
-  display: flex;
-  flex-direction: column;
+  position: relative;
+  width: 100vw;
+  height: 100vh;
+  overflow: hidden;
+  background: #000000; /* 整页纯黑（设计定案：全屏沉浸） */
 }
 
-/* —— 头部 —— */
-.lp-head {
-  padding: 28rpx 34rpx 22rpx;
+/* —— 顶条（覆盖层·避让状态栏·右上刻意留白给原生投屏按钮） —— */
+.lp-topbar {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 120rpx; /* 不铺满右上角——video 组件自带投屏图标可能渲染在那，我方元素不去抢占/遮挡 */
+  z-index: 4;
+  display: flex;
+  align-items: center;
+  gap: 14rpx;
+  padding: 12rpx 16rpx 20rpx 8rpx;
+  background: linear-gradient(180deg, rgba(0, 0, 0, 0.55) 0%, rgba(0, 0, 0, 0) 100%);
+  box-sizing: content-box;
 }
-.lp-eyebrow {
-  font-size: 21rpx;
+.lp-back {
+  flex: 0 0 auto;
+  width: 64rpx;
+  height: 64rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.lp-back-ico {
+  width: 32rpx;
+  height: 32rpx;
+  transform: rotate(180deg); /* chevron-right 转向作返回箭头（复用现有图标资产，不新增素材） */
+  filter: brightness(0) invert(1); /* 图标颜色写死在 svg 内·此处仅播放器局部反白，不入 tokens */
+}
+.lp-topbar-title {
+  flex: 1;
+  min-width: 0;
+  font-size: 28rpx;
   font-weight: 600;
-  letter-spacing: 3rpx;
-  color: rgba(255, 255, 255, 0.56);
+  color: #ffffff;
+  text-shadow: 0 2rpx 12rpx rgba(0, 0, 0, 0.4);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.lp-course {
-  margin-top: 10rpx;
-  font-size: 34rpx;
-  font-weight: 600;
-  line-height: 1.3;
-  color: #ffffff;
-  text-shadow: 0 2rpx 12rpx rgba(0, 0, 0, 0.35);
-}
 
-/* —— 视频舞台（16:9） —— */
+/* —— 视频舞台 —— */
 .lp-stage {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  width: 100%;
+  height: 100%;
+}
+.lp-video-box {
   position: relative;
   width: 100%;
-  padding-top: 56.25%; /* 16:9·padding-top 百分比法（避 aspect-ratio 旧 WebView 不支持） */
-  background: #000000;
-  overflow: hidden;
+  padding-top: 168%; /* 1:1.68（宽:高）·padding-top 百分比法 */
 }
 .lp-video {
   position: absolute;
   inset: 0;
   width: 100%;
   height: 100%;
+  /* object-fit 用默认 contain：旧 16:9 素材自动上下留黑居中，不裁切（设计定案，不显式覆盖） */
+}
+
+/* 全屏单击点击层（透明·playing 才挂） */
+.lp-tapzone {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+/* 暂停指示（非按钮·整屏单击即恢复·仅视觉提示·点它也走冒泡命中父层 tapzone） */
+.lp-pause-badge {
+  width: 112rpx;
+  height: 112rpx;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.36);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.lp-pause-ico {
+  width: 60rpx;
+  height: 60rpx;
+  filter: brightness(0) invert(1);
 }
 
 /* 首帧前骨架（loading·首帧到达前不裂播放器） */
@@ -53,7 +105,7 @@
   align-items: center;
   justify-content: center;
   gap: 20rpx;
-  background: #1a1620; /* 近黑丁香·骨架底（局部深色） */
+  background: #0a0a0d;
 }
 .lp-skeleton-spin {
   width: 56rpx;
@@ -73,14 +125,15 @@
   color: rgba(255, 255, 255, 0.62);
 }
 
-/* 状态占位（empty/denied/missing） */
+/* 非播放态占位（empty/denied/missing/error·全屏黑底居中·顶条返回始终可用） */
 .lp-state {
+  position: absolute;
+  inset: 0;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
   gap: 16rpx;
-  background: #1a1620;
   padding: 0 40rpx;
 }
 .lp-state-title {
@@ -92,6 +145,7 @@
 .lp-state-hint {
   font-size: 24rpx;
   color: rgba(255, 255, 255, 0.56);
+  text-align: center;
 }
 .lp-state-btn {
   margin-top: 10rpx;
@@ -103,103 +157,51 @@
   font-weight: 600;
 }
 
-/* —— 控制面板 —— */
-.lp-panel {
-  flex: 1 1 auto;
-  background: #1e1a26; /* 深灰紫·控制面板底（局部深色·不入 tokens） */
-  padding: 28rpx 34rpx 60rpx;
+/* —— 底条（覆盖层·仅播放中显示） —— */
+.lp-bottombar {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 4;
+  padding: 40rpx 30rpx calc(28rpx + env(safe-area-inset-bottom));
+  background: linear-gradient(0deg, rgba(0, 0, 0, 0.62) 0%, rgba(0, 0, 0, 0) 100%);
 }
 
-/* 当前段落主题行 */
-.lp-now {
+/* 进度行：时间 + slider + 时间 */
+.lp-progress-row {
   display: flex;
   align-items: center;
-  gap: 18rpx;
-  padding: 18rpx 22rpx;
-  border-radius: var(--ld-radius-md);
-  background: rgba(255, 255, 255, 0.05);
-  border: 2rpx solid rgba(255, 255, 255, 0.08);
+  gap: 14rpx;
 }
-.lp-now-text {
+.lp-time {
+  flex: 0 0 auto;
+  font-size: 21rpx;
+  color: rgba(255, 255, 255, 0.8);
+  min-width: 64rpx;
+  text-align: center;
+}
+.lp-slider {
   flex: 1;
-  min-width: 0;
-}
-.lp-now-lesson {
-  font-size: 28rpx;
-  font-weight: 600;
-  color: #ffffff;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.lp-now-seg {
-  margin-top: 6rpx;
-  font-size: 23rpx;
-  color: rgba(255, 255, 255, 0.6);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.lp-now-dot {
-  flex: 0 0 auto;
-  width: 16rpx;
-  height: 16rpx;
-  border-radius: 50%;
-  background: rgba(255, 255, 255, 0.28);
+  margin: 0 6rpx;
 }
 
-/* 均衡器动画（正在播放·纯 CSS·诚实反映 state=playing） */
-.lp-eq {
-  flex: 0 0 auto;
-  display: flex;
-  align-items: flex-end;
-  gap: 4rpx;
-  height: 30rpx;
-}
-.lp-eq-bar {
-  width: 5rpx;
-  border-radius: 3rpx;
-  background: var(--ld-duck);
-  animation: lp-eq 1s ease-in-out infinite;
-}
-.lp-eq-bar:nth-child(1) {
-  height: 45%;
-  animation-delay: -0.2s;
-}
-.lp-eq-bar:nth-child(2) {
-  height: 100%;
-  animation-delay: -0.5s;
-}
-.lp-eq-bar:nth-child(3) {
-  height: 68%;
-  animation-delay: 0s;
-}
-@keyframes lp-eq {
-  0%,
-  100% {
-    transform: scaleY(0.4);
-  }
-  50% {
-    transform: scaleY(1);
-  }
-}
-
-/* 控制按钮行 */
+/* 控制按钮行：帮助 | 上一段 | 目录 | 下一段 | 投屏 */
 .lp-controls {
   display: flex;
-  gap: 16rpx;
-  margin-top: 24rpx;
+  gap: 12rpx;
+  margin-top: 18rpx;
 }
 .lp-ctl {
   flex: 1;
   text-align: center;
-  padding: 20rpx 0;
+  padding: 18rpx 0;
   border-radius: var(--ld-radius-pill);
-  font-size: 26rpx;
+  font-size: 23rpx;
   font-weight: 600;
   color: rgba(255, 255, 255, 0.9);
-  background: rgba(255, 255, 255, 0.08);
-  border: 2rpx solid rgba(255, 255, 255, 0.14);
+  background: rgba(255, 255, 255, 0.1);
+  border: 2rpx solid rgba(255, 255, 255, 0.16);
 }
 .lp-ctl.solid {
   color: #4a3408; /* 深棕·鸭黄底文字 */
@@ -213,27 +215,56 @@
   opacity: 0.36;
 }
 
-/* —— 段落目录 —— */
-.lp-list {
-  margin-top: 24rpx;
-  border-radius: var(--ld-radius-md);
-  background: rgba(255, 255, 255, 0.04);
-  border: 2rpx solid rgba(255, 255, 255, 0.08);
-  overflow: hidden;
+/* —— 段落目录：底部抽屉浮层 —— */
+.lp-drawer-mask {
+  position: fixed;
+  inset: 0;
+  z-index: 5;
+  background: rgba(0, 0, 0, 0.5);
 }
+.lp-drawer {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 6;
+  max-height: 70vh;
+  background: #17141d;
+  border-radius: 28rpx 28rpx 0 0;
+  padding: 12rpx 0 calc(16rpx + env(safe-area-inset-bottom));
+  transform: translateY(100%);
+  transition: transform 0.24s ease;
+  box-shadow: 0 -8rpx 32rpx rgba(0, 0, 0, 0.4);
+}
+.lp-drawer.open {
+  transform: translateY(0);
+}
+.lp-drawer-handle {
+  width: 72rpx;
+  height: 8rpx;
+  border-radius: 4rpx;
+  background: rgba(255, 255, 255, 0.24);
+  margin: 8rpx auto 16rpx;
+}
+.lp-drawer-scroll {
+  max-height: calc(70vh - 60rpx);
+  padding: 0 24rpx;
+  box-sizing: border-box;
+}
+
 .lp-seg {
   position: relative;
   display: flex;
   align-items: center;
   gap: 20rpx;
-  padding: 22rpx 24rpx;
+  padding: 22rpx 8rpx;
 }
 .lp-seg + .lp-seg::before {
   content: '';
   position: absolute;
   top: 0;
   left: 68rpx;
-  right: 24rpx;
+  right: 0;
   height: 1rpx;
   background: rgba(255, 255, 255, 0.08);
 }
@@ -308,4 +339,40 @@
 .lp-seg-flag.hot {
   color: #4a3408;
   background: var(--ld-duck);
+}
+
+/* 均衡器动画（正在播放且未暂停·纯 CSS·诚实反映播放态） */
+.lp-eq {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: flex-end;
+  gap: 4rpx;
+  height: 30rpx;
+}
+.lp-eq-bar {
+  width: 5rpx;
+  border-radius: 3rpx;
+  background: var(--ld-duck);
+  animation: lp-eq 1s ease-in-out infinite;
+}
+.lp-eq-bar:nth-child(1) {
+  height: 45%;
+  animation-delay: -0.2s;
+}
+.lp-eq-bar:nth-child(2) {
+  height: 100%;
+  animation-delay: -0.5s;
+}
+.lp-eq-bar:nth-child(3) {
+  height: 68%;
+  animation-delay: 0s;
+}
+@keyframes lp-eq {
+  0%,
+  100% {
+    transform: scaleY(0.4);
+  }
+  50% {
+    transform: scaleY(1);
+  }
 }
