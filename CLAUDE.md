@@ -128,6 +128,7 @@ src/
 反复出现的多步工作流已固化成可直调 skill；调试/审核/验收别从头来，走对应 skill：
 
 - **改一批（genesis）** `/refactor-batch`：根因 → 先守卫(红) → 改到绿 → `npm run check` → 反向自检 → squash + 记账。本仓任何改动都走它。
+- **并行编排（genesis·规模档）** `/workflow-fanout`：几十个同构单元的活用 Workflow 多 agent 并行——批量重写/迁移（一单元一 agent＋保管道亲验）或两维 sweep 自修循环（逐页 lane＋对抗验证滤假阳＋正交 concern 维度＋round 零确认闭环）；并行产出、串行亲核，落地仍逐批走 `/refactor-batch`。
 - **防过度工程（guardrail）** `/anti-overengineering-check`：喂规模/寿命/用途 → 先具体跑主路径 → 真实脏样本/characterization test 钉行为 → 抽象前查「当前痛点/第三次重复/业务预留来源」→ 小批次改 → `npm run check`。
 - **调 bug（intake）** `/systematic-debugging`：复现 → 根因 → 修复带守卫 → 归因病根（不命中现有病根则立新病根 + 配守卫）。
 - **体检（health）** `/deep-audit`：P0→P3 逐层验、核每病根有守卫（跑 `guard-coverage`）、分级标状态。
