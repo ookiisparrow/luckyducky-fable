@@ -1148,7 +1148,7 @@ export const repoChecks = [
           else if (e.name.endsWith('.ts')) {
             const s = readFileSync(p, 'utf8')
             // 查真实标识符（import/调用都算——有 import 就有被调风险；注释里带括号的调用样式不匹配裸词）
-            if (/\btransferToServicer\b/.test(s.replace(/\/\/[^\n]*/g, '').replace(/\/\*[\s\S]*?\*\//g, '')))
+            if (/\btransferToServicer\b/.test(stripComments(s)))
               bad.push(`${relative(ROOT, p)} 引用 transferToServicer——转人工把平台会话转 3=自建坐席 send_msg 全被 95018 拒（承面C·根因#12·调试日志 AC）`)
           }
         }
@@ -1267,8 +1267,8 @@ export const repoChecks = [
       if (existsSync(deskFile)) {
         const src = readFileSync(deskFile, 'utf8')
         const perSession = /\b(getThread|sendAgentMessage|releaseConversation|escalateToMerchant|closeConversation|getSessionCustomer360)\b/.test(src)
-        // 查真实调用 assertOwnedByAgent( 而非裸 token（防注释里提一句就假绿·反向自检逼出·根因#8）
-        if (perSession && !/assertOwnedByAgent\s*\(/.test(src))
+        // 查真实调用 assertOwnedByAgent( 而非裸 token（防注释里提一句就假绿·反向自检逼出·根因#8·剥注释再测·批E加固）
+        if (perSession && !/assertOwnedByAgent\s*\(/.test(stripComments(src)))
           bad.push(`${relative(ROOT, deskFile)} per-session 读/操作 action 未真调 assertOwnedByAgent() 校验会话归属——外包可越 scope 读他人会话/批量导出（§1 定稿·B6·根因#3）`)
       }
       return bad
@@ -1360,7 +1360,7 @@ export const repoChecks = [
       const sec = 'packages/cloud/src/kit/contentsec.ts'
       const absSec = join(ROOT, sec)
       if (!existsSync(absSec)) bad.push(`${sec} 缺失——内容安全接缝（根因#3·UGC 入库前校验）`)
-      else if (!/\.openapi\.security\.imgSecCheck/.test(readFileSync(absSec, 'utf8')))
+      else if (!/\.openapi\.security\.imgSecCheck/.test(stripComments(readFileSync(absSec, 'utf8'))))
         bad.push(`${sec} 未真调 cloud.openapi.security.imgSecCheck——内容安全接缝是摆设（根因#3·扫真实调用非注释）`)
       const fn = 'packages/cloud/src/functions/learning/submitCheckpointPhoto.ts'
       const absFn = join(ROOT, fn)
@@ -1368,7 +1368,7 @@ export const repoChecks = [
       else {
         const fsrc = readFileSync(absFn, 'utf8')
         const writesCheckpoints = /COLLECTIONS\.checkpoints|['"]checkpoints['"]/.test(fsrc)
-        if (writesCheckpoints && !/imgSecCheck\s*\(/.test(fsrc))
+        if (writesCheckpoints && !/imgSecCheck\s*\(/.test(stripComments(fsrc)))
           bad.push(`${fn} 写 checkpoints 但未调 imgSecCheck——UGC 图片未过内容安全即入库（根因#3·fail-closed）`)
       }
       // —— 活跃重写线（rewrite/·与冻结 packages 老线并列守；UGC 写面在 app/actions 下）——
@@ -1376,7 +1376,7 @@ export const repoChecks = [
       const rwSec = 'rewrite/cloud/src/kit/contentsec.ts'
       const absRwSec = join(ROOT, rwSec)
       if (!existsSync(absRwSec)) bad.push(`${rwSec} 缺失——重写线内容安全接缝（根因#3·UGC 入库前校验）`)
-      else if (!/\.openapi\.security\.imgSecCheck/.test(readFileSync(absRwSec, 'utf8')))
+      else if (!/\.openapi\.security\.imgSecCheck/.test(stripComments(readFileSync(absRwSec, 'utf8'))))
         bad.push(`${rwSec} 未真调 cloud.openapi.security.imgSecCheck——内容安全接缝是摆设（根因#3·扫真实调用非注释）`)
       const rwUgcWriters = [
         { fn: 'rewrite/cloud/src/functions/app/actions/checkpoint.ts', ugc: /COLLECTIONS\.checkpoints|['"]checkpoints['"]/, what: '节点拍照 checkpoints' },
@@ -1389,7 +1389,7 @@ export const repoChecks = [
           continue
         }
         const src = readFileSync(abs, 'utf8')
-        if (ugc.test(src) && !/imgSecCheck\s*\(/.test(src))
+        if (ugc.test(src) && !/imgSecCheck\s*\(/.test(stripComments(src)))
           bad.push(`${rf} 写 UGC 图（${what}）但未调 imgSecCheck——图片未过内容安全即入库（根因#3·fail-closed）`)
       }
       return bad
@@ -1792,9 +1792,9 @@ export const repoChecks = [
         }
         // P2.14 扩（无界增长·债#9 同治）：频控窗口 + 客服去重痕也须 TTL 清理。断言实清代码（collection(...).remove），
         // 非仅 token——防注释含 rateLimit/kfState 字样却没真清（守卫够不到「码 vs 注释」·见 stock-cas 同坑）。
-        if (!/collection\(['"]rateLimit['"]\)[\s\S]{0,120}\.remove/.test(src))
+        if (!/collection\(['"]rateLimit['"]\)[\s\S]{0,120}\.remove/.test(stripComments(src)))
           bad.push(`${f} 未清 rateLimit 过期窗口——频控集合无界增长（外审 P2.14·债#9）`)
-        if (!/collection\(['"]kfState['"]\)[\s\S]{0,120}\.remove/.test(src))
+        if (!/collection\(['"]kfState['"]\)[\s\S]{0,120}\.remove/.test(stripComments(src)))
           bad.push(`${f} 未清 kfState seen:* 去重痕——客服去重集合无界增长（外审 P2.14·债#9）`)
       }
       const rc = join(ROOT, 'cloudbaserc.json')
@@ -3539,6 +3539,50 @@ export const repoChecks = [
     },
   },
   {
+    // 剥注释/方法体截取单源守卫（病根#5 样板复制即漂移·执行者错题本 E1 坑史：方法体正则咬注释假绿——
+    // 2026-07-08 播放页批/客服批连栽两次）：stripComments/methodBody 是原三处/四处重复正则字面量收敛后
+    // 的单源 helper（scripts/check-structure.mjs 工具函数区·isCommentLine 之后）。本守卫钉住「不许绕开
+    // helper 再裸写一遍同款字面量」——两个 needle 只许出现在各自 helper 定义 span 内，出现在别处即漂移
+    // 复辟。自指手法：needle 用字符串拼接构造，防本守卫自身源码里出现完整字面量、自己咬自己。
+    id: 'guard-strip-single-source',
+    roots: ['#5'],
+    desc: '剥注释/方法体截取单源（病根#5 样板复制即漂移·防裸写正则绕开 helper 再咬注释）：剥注释正则字面量只许出现在 stripComments 定义内、方法体截取边界字面量只许出现在 methodBody 定义内——出现在别处即视为绕开单源 helper 裸写复辟（错题本 E1）',
+    run() {
+      const bad = []
+      const self = join(ROOT, 'scripts/check-structure.mjs')
+      const src = readFileSync(self, 'utf8')
+      // 两个 needle 字符串拼接构造（防本守卫自身源码含完整字面量、自己把自己咬红）
+      const stripNeedle = 'replace(/\\/\\/' + "[^\\n]*/g, '').replace(/\\/\\*" + "[\\s\\S]*?\\*\\//g, '')"
+      const boundaryNeedle = '\\n {2}' + '\\},'
+      // 容忍 export 前缀（helper 已 export 供单测）——起点/下一函数边界都放宽匹配。边界只认「function」
+      // 关键字会漏防：const/let/var 写的箭头函数裸写同款字面量、插在两个 helper 定义之间（或其后到下一个
+      // function 关键字之前），会被误判「落在 span 内」而放行——2026-07-09 反向自检咬出，见错题本。
+      // 边界关键字集扩到 function/const/let/var，堵住这一类顶层声明绕过。
+      const findSpan = (fnName) => {
+        const startMatch = src.match(new RegExp('(?:export\\s+)?function\\s+' + fnName + '\\b'))
+        if (!startMatch) return null
+        const start = startMatch.index
+        const nextMatch = src.slice(start + 1).match(/\n(?:export\s+)?(?:function|const|let|var)\s/)
+        return [start, nextMatch ? start + 1 + nextMatch.index : src.length]
+      }
+      const stripSpan = findSpan('stripComments')
+      const bodySpan = findSpan('methodBody')
+      if (!stripSpan) return ['scripts/check-structure.mjs 找不到 stripComments 定义——单源 helper 缺失（错题本 E1）']
+      if (!bodySpan) return ['scripts/check-structure.mjs 找不到 methodBody 定义——单源 helper 缺失（错题本 E1）']
+      const inAnySpan = (idx) =>
+        (idx >= stripSpan[0] && idx < stripSpan[1]) || (idx >= bodySpan[0] && idx < bodySpan[1])
+      const lineOf = (idx) => src.slice(0, idx).split('\n').length
+      for (const needle of [stripNeedle, boundaryNeedle]) {
+        let i = -1
+        while ((i = src.indexOf(needle, i + 1)) !== -1) {
+          if (!inAnySpan(i))
+            bad.push(`scripts/check-structure.mjs:${lineOf(i)} 裸写正则字面量绕开单源 helper（stripComments/methodBody·病根#5 样板复制即漂移·错题本 E1）`)
+        }
+      }
+      return bad
+    },
+  },
+  {
     // 错误码只用已登记的（债#29·根因#3）：kit `err()` 返回的码是**前端按精确字符串分支的契约**；
     // shared/errors.ts 的 ERR 是错误码权威册。校验全库 `err('字面量')` 的码都在册内——打错码即红、
     // 新码须先登记（前端才能对得上）。动态码 `err('X:'+v)` 非纯字面量、不校验。
@@ -4458,9 +4502,8 @@ export const repoChecks = [
       const abs = join(ROOT, rel)
       if (!existsSync(abs)) return [] // 重写线未建时不红
       const src = readFileSync(abs, 'utf8')
-      const m = src.match(/async playSegment\b[\s\S]*?\n {2}\},/)
-      if (!m) return [`${rel} 找不到 playSegment 方法——切段取址单点丢失（根因#8）`]
-      const body = m[0]
+      const body = methodBody(src, 'playSegment')
+      if (!body) return [`${rel} 找不到 playSegment 方法——切段取址单点丢失（根因#8）`]
       const awaitAt = body.indexOf('await')
       const recheckAt = body.indexOf('!== this.playToken')
       if (awaitAt < 0 || recheckAt < 0 || recheckAt < awaitAt)
@@ -4555,9 +4598,9 @@ export const repoChecks = [
         // 只在 onCast 方法体内断言，不许整文件全文匹配——否则一句字面提及 startCasting 的注释就能让守卫误绿
         // （曾经的漏洞：文件头注释写了 typeof ctx.startCasting==='function' 描述思路，正则全文匹配就被这句注释
         // 顶包过关，即便真实检测代码被删、注释没动，守卫也测不出来）。
-        const onCastBody = (ts.match(/onCast\s*\(\)\s*\{[\s\S]*?\n {2}\},/) || [''])[0]
+        const onCastBody = methodBody(ts, 'onCast')
         if (!onCastBody) bad.push('player.ts 找不到 onCast 方法体——备路径投屏单点丢失')
-        else if (!/typeof\s+[\w.]+\.startCasting\s*[!=]==\s*['"]function['"]/.test(onCastBody))
+        else if (!/typeof\s+[\w.]+\.startCasting\s*[!=]==\s*['"]function['"]/.test(stripComments(onCastBody)))
           bad.push('player.ts 的 onCast 方法体内未见 startCasting 特性检测（typeof ...===/!==\'function\'）——备路径投屏未按基础库能力探测就调用，低版本微信直接报错崩交互')
       }
 
@@ -4622,14 +4665,13 @@ export const repoChecks = [
           continue
         }
         const src = readFileSync(abs, 'utf8')
-        const m = src.match(new RegExp(`${tp.method}\\s*\\(\\)\\s*\\{([\\s\\S]*?)\\n {2}\\},`))
-        if (!m) {
+        const body = methodBody(src, tp.method)
+        if (!body) {
           bad.push(`${tp.file} 找不到 ${tp.method}() 方法体——客服触点单点丢失（R18）`)
           continue
         }
         // 剥离注释再测试（防「真调用换成注释引用+假 Toast」假咬合——同本文件其它「非注释」守卫防御写法，如 1151 行）
-        const bodyNoComments = m[1].replace(/\/\/[^\n]*/g, '').replace(/\/\*[\s\S]*?\*\//g, '')
-        if (!/openCustomerService\s*\(/.test(bodyNoComments))
+        if (!/openCustomerService\s*\(/.test(stripComments(body)))
           bad.push(`${tp.file} 的 ${tp.method}() 未调 openCustomerService()——客服触点未真接通（R18）`)
       }
       return bad
@@ -4667,13 +4709,13 @@ export const repoChecks = [
         return bad
       }
       const src = readFileSync(abs, 'utf8')
-      const m = src.match(/onAddProduct\s*\([^)]*\)\s*\{([\s\S]*?)\n {2}\},/)
-      if (!m) {
+      const body = methodBody(src, 'onAddProduct')
+      if (!body) {
         bad.push('pages/home/home.ts 找不到 onAddProduct() 方法体——首页加购触点单点丢失（R29）')
         return bad
       }
       // 剥离注释再测试（防「真调用换成注释引用+假 Toast」假咬合——同 rw-mp-customer-service-wired 写法）
-      const bodyNoComments = m[1].replace(/\/\/[^\n]*/g, '').replace(/\/\*[\s\S]*?\*\//g, '')
+      const bodyNoComments = stripComments(body)
       if (!/decideQuickAdd\s*\(/.test(bodyNoComments))
         bad.push('pages/home/home.ts 的 onAddProduct() 未调 decideQuickAdd()——加购决策未走单源纯函数（R29）')
       if (!/cart\.add\s*\(/.test(bodyNoComments))
@@ -5048,6 +5090,26 @@ export function* walk(dir) {
   }
 }
 const isCommentLine = (line) => /^(\/\/|\/\*|\*|<!--|#)/.test(line.trim())
+
+// 剥注释单源 helper（执行者错题本 E1·坑史：方法体正则咬注释假绿——2026-07-08 播放页批/客服批连栽两次）：
+// 剥 // 行注释与 /* */ 块注释，供守卫「查真实调用」前先清场——防真调用挪进注释、假实现留在正文，正则仍误判命中。
+// 原三处（1151/客服触点/首页加购）重复裸写的字面量单源化到这里；元守卫 guard-strip-single-source 焊死不许再裸写绕开。
+export function stripComments(src) {
+  return src.replace(/\/\/[^\n]*/g, '').replace(/\/\*[\s\S]*?\*\//g, '')
+}
+
+// 方法体截取单源 helper（同错题本 E1·配 stripComments 使用）：截取形如 `name(...) {\n  ...\n  },`
+// 的对象方法/类方法整段文本（含签名），兼容可选 async 前缀、任意参数段（含空参）；收尾沿用两空格缩进
+// 逗号收尾 `\n {2}\},` 启发式（仓内页面对象方法书写惯例，未改行为）。找不到该方法名或收尾边界返回 ''。
+export function methodBody(src, name) {
+  const sigRe = new RegExp('(?:async\\s+)?\\b' + name + '\\b\\s*\\([^)]*\\)\\s*\\{')
+  const sigMatch = src.match(sigRe)
+  if (!sigMatch) return ''
+  const rest = src.slice(sigMatch.index)
+  const endMatch = rest.match(/\n {2}\},/)
+  if (!endMatch) return ''
+  return rest.slice(0, endMatch.index + endMatch[0].length)
+}
 
 // —— 隐私挂载可达性（守卫 privacy-authorize-wired 用·债#25/根因#8）——
 // 微信「涉隐私接口」登记：调用前会触发 onNeedPrivacyAuthorization（全局闸经弹窗放行）。新接口扩补此册。
