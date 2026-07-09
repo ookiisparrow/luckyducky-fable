@@ -81,6 +81,7 @@ describe('getReviews（游标分页+全量精确汇总·黄金 §七）', () => 
     control.seed('reviews', [...many, ...lowStars, { _id: 'other', productId: 'p2', rating: 3, createdAt: 991 }])
     const r = await call('getReviews', { productId: 'p1' })
     expect(r.summary.count).toBe(280) // 250+30 一星·p2 不混入
+    expect(r.summary.score).toBe('4.1') // (125*5+125*4+30*1)/280=4.125→toFixed(1)（钉住批C 汇总数值正确性，非仅样本近似）
     expect(r.summary.approx).toBe(false)
     const dist = Object.fromEntries(r.summary.dist)
     expect(dist['2 星']).toBeGreaterThan(0) // 1 星并入 2 星档

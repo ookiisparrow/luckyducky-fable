@@ -11,15 +11,22 @@ export async function getTempUrl(fileId: string): Promise<string | null> {
 
 /**
  * 批量换临时 URL：去重后分批 ≤50/次（真 sdk 单次上限 50）；换不到给显式 null（调用方回退占位）。
+ * 批间并发（批C）：各批相互独立、互不依赖对方结果，串行 await 纯属浪费网关往返——改批间
+ * Promise.all 并发发起，逐批结果落回同一个 map（写不同 key，无共享可变状态竞争）。等价性：
+ * ≤50 常态路径只有一批，循环体只跑一次、行为与串行版完全一致（不并发也不改变现状）；单批失败
+ * 仍走既有 fail-soft 口径——该批 catch 到 null 后同样把该批全部 id 落 null，不影响其余批次。
  */
 export async function getTempUrls(fileIds: string[]): Promise<Record<string, string | null>> {
   const ids = [...new Set(fileIds.filter(Boolean))]
+  const batches: string[][] = []
+  for (let i = 0; i < ids.length; i += 50) batches.push(ids.slice(i, i + 50))
   const out: Record<string, string | null> = {}
-  for (let i = 0; i < ids.length; i += 50) {
-    const batch = ids.slice(i, i + 50)
-    const r = await cloud.getTempFileURL({ fileList: batch }).catch(() => null)
-    for (const f of (r && r.fileList) || []) out[f.fileID] = f.tempFileURL || null
-    for (const id of batch) if (!(id in out)) out[id] = null
-  }
+  await Promise.all(
+    batches.map(async (batch) => {
+      const r = await cloud.getTempFileURL({ fileList: batch }).catch(() => null)
+      for (const f of (r && r.fileList) || []) out[f.fileID] = f.tempFileURL || null
+      for (const id of batch) if (!(id in out)) out[id] = null
+    })
+  )
   return out
 }

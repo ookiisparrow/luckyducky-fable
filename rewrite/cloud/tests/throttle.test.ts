@@ -1,11 +1,23 @@
 // 黄金 kit-security §F：频控与锁定（防爆破·并发正确性·两系列独立）（守卫 rw-kit-golden）。
-import { describe, it, expect, beforeEach } from 'vitest'
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import { control } from 'wx-server-sdk'
-import { throttleFail, throttleLocked, throttleReset, throttleHit, withRateLimit } from '../src/kit'
+import { throttleFail, throttleLocked, throttleReset, throttleHit, withRateLimit, getDb } from '../src/kit'
 
 const OPTS = { max: 5, windowMs: 60_000, lockMs: 600_000 }
 
 beforeEach(() => control.reset())
+afterEach(() => vi.restoreAllMocks())
+
+// 计数探针（批C·限频热路径先红）：spy 挂在共享原型上（Query/DocRef 每次 new 实例但方法在
+// prototype 上，spyOn 一次即拦所有后续调用）——用来数「同窗未超限」这条热路径实际发了几次库操作。
+// getSpy 数 doc(id).get()（DocRef.prototype.get）；updateSpy 数 where(cond).update()（Query.prototype.update，
+// 与 doc(id).update() 不同原型，不会误数 throttleReset 等走 doc().update 的调用）。
+function spyDbCalls() {
+  const db = getDb()
+  const docProto = Object.getPrototypeOf(db.collection('__probe__').doc('x'))
+  const queryProto = Object.getPrototypeOf(db.collection('__probe__'))
+  return { getSpy: vi.spyOn(docProto, 'get'), updateSpy: vi.spyOn(queryProto, 'update') }
+}
 
 describe('失败计数与锁定（黄金 F）', () => {
   it('大白话：连续 N 次失败后锁定——锁定窗口内即便口令正确（调用方查锁）也拒', async () => {
@@ -55,6 +67,42 @@ describe('调用频控（黄金 F）', () => {
     await throttleFail('mix', OPTS)
     expect(await throttleLocked('mix')).toBe(0) // 2 次未达阈——没被 hits 系列污染成误锁
     expect(await throttleHit('mix', o)).toBe(false) // hits=2，未超 3——没被 fails 系列清掉
+  })
+})
+
+describe('限频热路径库调用次数（批C·盲发条件更新——先红，锁定行为等价）', () => {
+  it('大白话：同窗口内非首次调用（未超限）应 1 次库操作打完——盲发条件更新命中即放行，不再多一次读', async () => {
+    const o = { max: 5, windowMs: 60_000 }
+    await throttleHit('fastpath', o) // 首次：建档（现状路径，不计入本次断言）
+    const { getSpy, updateSpy } = spyDbCalls()
+    const over = await throttleHit('fastpath', o) // 同窗第二次：目标实现应盲发 1 次条件更新直接命中
+    expect(over).toBe(false)
+    expect(updateSpy).toHaveBeenCalledTimes(1) // 目标：恰 1 次条件更新
+    expect(getSpy).not.toHaveBeenCalled() // 目标：热路径不读；当前实现会先 get 一次 → 本行现在应为红
+  })
+
+  it('大白话：命中上限后——盲发条件更新条件不满足（已到上限）→ 回落读+判定路径，仍正确拒绝', async () => {
+    const o = { max: 2, windowMs: 60_000 }
+    expect(await throttleHit('overlimit', o)).toBe(false) // 第 1 次
+    expect(await throttleHit('overlimit', o)).toBe(false) // 第 2 次 == max，未超
+    expect(await throttleHit('overlimit', o)).toBe(true) // 第 3 次 > max，盲发不中 → 回落判定超限、正确拒绝
+  })
+
+  it('大白话：换窗（窗口过期）与首写——与现状行为一致：新窗口重新计数、旧计数不残留', async () => {
+    vi.useFakeTimers()
+    try {
+      const o = { max: 2, windowMs: 1000 }
+      vi.setSystemTime(0)
+      expect(await throttleHit('window-switch', o)).toBe(false) // 首写：count=1
+      vi.setSystemTime(2000) // 超过 windowMs=1000，换窗
+      expect(await throttleHit('window-switch', o)).toBe(false) // 新窗口第 1 次，未超限（旧窗计数不残留）
+      vi.setSystemTime(2100)
+      expect(await throttleHit('window-switch', o)).toBe(false) // 新窗口第 2 次 == max
+      vi.setSystemTime(2200)
+      expect(await throttleHit('window-switch', o)).toBe(true) // 新窗口第 3 次 > max，超限
+    } finally {
+      vi.useRealTimers()
+    }
   })
 })
 

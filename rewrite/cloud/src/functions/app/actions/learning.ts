@@ -14,15 +14,20 @@ async function ensureActivation(db: any, code: string, courseId: string, OPENID:
   const doc = { _openid: OPENID, courseId, qrcodeId: code, code, enteredAt: null, createdAt: now }
   try {
     await db.collection(COLLECTIONS.activations).add({ data: { _id: code, ...doc } })
+    // 批C·省常态读回：add 成功＝刚落地的这份 doc 就是库内现值（enteredAt 恒 null），调用方
+    // activateCourse 只读 act.enteredAt——原地返回与读回等价，省一次网关往返；不影响后续 confirmEnter
+    // 的抢占语义（enteredAt 仍是 null，转移仍走那边的条件更新）。
+    return { _id: code, ...doc }
   } catch {
-    /* 已存在（并发/重试/半步失败重入）→ 幂等 */
+    // 撞号（并发/重试/半步失败重入）→ 幂等；但此路径库内现值不确定（可能是并发者已推进 enteredAt），
+    // 不能沿用本地 doc 猜测，必须读回真实当前值。
+    const got = await db
+      .collection(COLLECTIONS.activations)
+      .doc(code)
+      .get()
+      .catch(() => null)
+    return (got && got.data) || { _id: code, ...doc }
   }
-  const got = await db
-    .collection(COLLECTIONS.activations)
-    .doc(code)
-    .get()
-    .catch(() => null)
-  return (got && got.data) || { _id: code, ...doc }
 }
 
 /**
@@ -157,11 +162,22 @@ export const getPlaybackUrl = withOpenId(async ({ db, OPENID, event }) => {
   const segmentId = String(e.segmentId || '')
   if (!courseId || !segmentId) return err(ERR.BAD_ARGS)
 
-  const got = await db
-    .collection(COLLECTIONS.courses)
-    .doc(courseId)
-    .get()
-    .catch(() => null)
+  // 批C·并行取回（零依赖只读）：课程文档读与鉴权读的入参只来自 courseId/segmentId/OPENID（已核对
+  // 课程文档零依赖），互不依赖对方结果——并行发起省一次网关往返；判定顺序原样保持
+  // NO_COURSE→NO_SEGMENT→NOT_ENTITLED。素材未剪（url:null）分支下 acts 结果单纯丢弃——纯读零副作用，
+  // 等价原「未剪视频不查鉴权」语义，代价仅是该分支多付一次本可省的读（权衡：省掉常态有视频路径的
+  // 一次串行往返，换未剪视频这一冷分支多一次并行读，净为正）。
+  const [got, acts] = await Promise.all([
+    db
+      .collection(COLLECTIONS.courses)
+      .doc(courseId)
+      .get()
+      .catch(() => null),
+    db
+      .collection(COLLECTIONS.activations)
+      .where({ _openid: OPENID, courseId, enteredAt: db.command.neq(null) })
+      .get(),
+  ])
   if (!got || !got.data) return err(ERR.NO_COURSE)
 
   let seg: any = null
@@ -178,11 +194,6 @@ export const getPlaybackUrl = withOpenId(async ({ db, OPENID, event }) => {
   if (!seg) return err(ERR.NO_SEGMENT)
   if (!seg.videoFileId) return ok({ url: null })
 
-  const _ = db.command
-  const acts = await db
-    .collection(COLLECTIONS.activations)
-    .where({ _openid: OPENID, courseId, enteredAt: _.neq(null) })
-    .get()
   if (!acts.data.length) return err(ERR.NOT_ENTITLED)
 
   return ok({ url: await getTempUrl(String(seg.videoFileId)) })

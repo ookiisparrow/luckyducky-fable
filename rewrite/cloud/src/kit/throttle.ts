@@ -25,11 +25,39 @@ async function bumpWindowed(
   countField: string,
   windowField: string,
   windowMs: number,
-  onPatch?: (count: number, patch: Record<string, unknown>, now: number) => void
+  onPatch?: (count: number, patch: Record<string, unknown>, now: number) => void,
+  fastPathMax?: number
 ): Promise<number | null> {
   const db = getDb()
   const _ = db.command
   const id = rid(key)
+  // 盲快路径（批C·等价性论证，仅调用频控 throttleHit 传 fastPathMax 时启用，throttleFail 的锁定
+  // 判定分毫不碰）：不读，直接盲发一次条件更新——命中条件「窗口未过期（windowField 在 windowMs
+  // 内）且 countField < fastPathMax」才把 countField 原子 +1（_.inc，非读改写的绝对赋值）。
+  // 等价性：条件保证「更新前 count < max」，更新后 count ≤ max，天然落在完整路径「count > max 才算
+  // 超限」判定的「未超限」区间——不会多放行一个本该拒的请求。并发下：条件更新在真实云数据库是对单
+  // 文档的原子读判即写（同一 doc 的多次更新在存储层天然串行化），任何会让 count 越过 max 的那次增
+  // 量，其应用时点的 count 已 ≥ max，条件天然不匹配，不会成功；一旦不匹配（含窗口已过期 / 文档尚
+  // 未建档两种情况）即回落下方既有「读+判定+CAS」完整路径，超限拒绝 / 换窗重置 / 首写建档三条既有
+  // 语义原样触发、不改一行判定顺序。命中时无需精确返回值（外层只做 count>max 比较），fastPathMax
+  // 本身就是满足「未超限」的合法哨兵值。
+  if (fastPathMax !== undefined) {
+    const now0 = Date.now()
+    const patch: Record<string, unknown> = { [countField]: _.inc(1) }
+    if (onPatch) onPatch(0, patch, now0) // 仅 throttleHit 走此参，其 onPatch 只写 hitAt、不依赖 count 值
+    patch.updatedAt = now0
+    const cond: Record<string, unknown> = {
+      _id: id,
+      [windowField]: _.gt(now0 - windowMs),
+      [countField]: _.lt(fastPathMax),
+    }
+    const r = await db
+      .collection(COLL)
+      .where(cond)
+      .update({ data: patch })
+      .catch(() => null)
+    if (r && r.stats && r.stats.updated === 1) return fastPathMax
+  }
   for (let attempt = 0; attempt < CAS_RETRIES; attempt++) {
     const now = Date.now()
     const got = await db
@@ -117,9 +145,16 @@ export async function throttleReset(key: string): Promise<void> {
 
 /** 调用频控：每次调用计一次（CAS 原子），滚动窗口内 > max → true（超限，调用方拒）。 */
 export async function throttleHit(key: string, opts: { max: number; windowMs: number }): Promise<boolean> {
-  const n = await bumpWindowed(key, 'hits', 'hitWindowStart', opts.windowMs, (_c, patch, now) => {
-    patch.hitAt = now
-  })
+  const n = await bumpWindowed(
+    key,
+    'hits',
+    'hitWindowStart',
+    opts.windowMs,
+    (_c, patch, now) => {
+      patch.hitAt = now
+    },
+    opts.max // 启用盲快路径（仅此调用点——throttleFail 的锁定判定不传，语义零改）
+  )
   return n !== null && n > opts.max
 }
 

@@ -26,6 +26,7 @@ import {
   refundNoFor,
   alert,
   pageQuery,
+  getTempUrls,
 } from '../../../kit'
 
 // 创建订单（黄金 orders-money·createOrder 节全量）：价格一律云端现算不信前端；服务端不变量
@@ -37,6 +38,25 @@ const ADDONS: Record<string, { name: string; price: number }> = Object.fromEntri
 
 // 订单行稳定身份：同商品多 SKU 同单需稳定行键（售后/评价按此定位）；旧单读路径回退 productId。
 const lineIdOf = (productId: string, spec: string) => `${productId}__${spec || ''}`
+
+// 批C·订单读时换址（根因#15 图片面·同 catalog.ts getProducts/getContent 换址口径的订单面延伸）：
+// 订单行 items[].cover 下单时从 products.cover 快照进订单（见 createOrder 注释），库内快照本身
+// 不改写（订单=历史快照单源·T3，不回读/不改写 catalog）；只在 getMyOrders/getOrderById 下发响应前
+// 批量换 https 短时址，换不到（fail-soft）回退原 fileID，不吞整单/整个响应。getMyAfterSales 无
+// cover 字段（已核消费面 mapAftersales.ts），不在此列。
+const isCloudCover = (v: unknown): v is string => typeof v === 'string' && v.startsWith('cloud://')
+const swapCover = (v: unknown, urlMap: Record<string, string | null>): unknown =>
+  isCloudCover(v) ? urlMap[v] ?? v : v
+async function swapOrdersCover(orders: any[]): Promise<any[]> {
+  const ids = new Set<string>()
+  for (const o of orders) for (const it of o.items || []) if (isCloudCover(it.cover)) ids.add(it.cover)
+  if (!ids.size) return orders
+  const urlMap = await getTempUrls([...ids])
+  return orders.map((o) => ({
+    ...o,
+    items: (o.items || []).map((it: any) => ('cover' in it ? { ...it, cover: swapCover(it.cover, urlMap) } : it)),
+  }))
+}
 
 // 订单号：yyyyMMddHHmm + 4 位随机（北京时间）
 function orderNo(now: number): string {
@@ -205,11 +225,21 @@ export const pay = withOpenId(async ({ db, OPENID, event }) => {
   const id = String((event as any).id || '')
   if (!id) return err(ERR.NO_ID)
 
-  const got = await db
-    .collection(COLLECTIONS.orders)
-    .doc(id)
-    .get()
-    .catch(() => null)
+  // 批C·并行取回（零依赖只读·各自 .catch(()=>null) 已核）：订单读与支付配置读互不依赖对方结果，
+  // 并行发起省一次网关往返；校验顺序与错误分支原样不变——订单校验（NOT_FOUND/BAD_STATUS/超时关单）
+  // 失败时 cfg 结果原样丢弃（纯读零副作用，等价原「先订单后 config」串行语义）。
+  const [got, cfg] = await Promise.all([
+    db
+      .collection(COLLECTIONS.orders)
+      .doc(id)
+      .get()
+      .catch(() => null),
+    db
+      .collection(COLLECTIONS.config)
+      .doc('pay')
+      .get()
+      .catch(() => null),
+  ])
   if (!got || !got.data || got.data._openid !== OPENID) return err(ERR.NOT_FOUND)
   const order = got.data
   if (order.status !== 'pending') return err('BAD_STATUS:' + order.status)
@@ -221,11 +251,6 @@ export const pay = withOpenId(async ({ db, OPENID, event }) => {
     return err(ERR.ORDER_CLOSED)
   }
 
-  const cfg = await db
-    .collection(COLLECTIONS.config)
-    .doc('pay')
-    .get()
-    .catch(() => null)
   const payCfg = (cfg && cfg.data) || {}
   if (payCfg.mode !== 'real' || !payCfg.flowId) return err(ERR.PAY_NOT_ENABLED)
 
@@ -412,7 +437,7 @@ export const getMyOrders = withOpenId(async ({ db, OPENID, event }) => {
   const status = (Object.values(ORDER_STATUS) as string[]).includes(raw) ? raw : ''
   const where = status ? { _openid: OPENID, status } : { _openid: OPENID }
   const paged = await pageQuery(db, COLLECTIONS.orders, where, 'createdAt', event as any, 100)
-  return ok({ ...paged })
+  return ok({ ...paged, list: await swapOrdersCover(paged.list) })
 })
 
 /** 按单号取本人订单（他人/不存在一律 NOT_FOUND·不泄露存在性）。 */
@@ -425,7 +450,8 @@ export const getOrderById = withOpenId(async ({ db, OPENID, event }) => {
     .get()
     .catch(() => null)
   if (!got || !got.data || got.data._openid !== OPENID) return err(ERR.NOT_FOUND)
-  return ok({ order: got.data })
+  const [order] = await swapOrdersCover([got.data])
+  return ok({ order })
 })
 
 /** 本人售后单（游标分页·按申请时间倒序）。 */

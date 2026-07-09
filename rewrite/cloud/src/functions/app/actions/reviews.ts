@@ -33,17 +33,30 @@ export const getHelpVideos = withOpenId(async ({ db }) => {
 
 const SUMMARY_SAMPLE = 200
 
-/** 精确汇总（黄金 §七：全量精确、永不近似）：星级桶 count + aggregate 求和，不受样本截断。 */
+/**
+ * 精确汇总（黄金 §七：全量精确、永不近似）：星级桶 count + aggregate 求和，不受样本截断。
+ * 六路互不依赖并行（批C·云端加载链微优化）：原为「五路 Promise.all 后再串行拉一次 tags 样本」，
+ * tags 样本与前五路同样只依赖 productId、彼此零数据依赖，并入同一 Promise.all 省一轮网关往返；
+ * 样本查询加 .field({tags:true}) 投影——只取 tags 字段，不再连 text（≤500字）/photos 一并拉整文档
+ * （真 sdk 支持字段投影；桩 field() 是 no-op，测试断言的汇总数值不受影响，等价性见下方字段使用范围）。
+ */
 async function buildSummaryExact(db: any, productId: string) {
   const $ = db.command.aggregate
   const _ = db.command
   const coll = () => db.collection(COLLECTIONS.reviews)
-  const [c5, c4, c3, c21, sumRes] = await Promise.all([
+  const [c5, c4, c3, c21, sumRes, tres] = await Promise.all([
     coll().where({ productId, rating: 5 }).count(),
     coll().where({ productId, rating: 4 }).count(),
     coll().where({ productId, rating: 3 }).count(),
     coll().where({ productId, rating: _.in([1, 2]) }).count(), // 1 星并入 2 星档（与展示折叠一致）
     coll().aggregate().match({ productId }).group({ _id: null, s: $.sum('$rating') }).end(),
+    coll()
+      .where({ productId })
+      .orderBy('createdAt', 'desc')
+      .limit(SUMMARY_SAMPLE)
+      .field({ tags: true }) // 只用 tags 分桶计数，其余字段（text/photos 等）不需要、投影裁掉
+      .get()
+      .catch(() => null),
   ])
   const b5 = c5.total || 0
   const b4 = c4.total || 0
@@ -52,12 +65,6 @@ async function buildSummaryExact(db: any, productId: string) {
   const count = b5 + b4 + b3 + b2
   const sum = (sumRes && sumRes.list && sumRes.list[0] && sumRes.list[0].s) || 0
   const pct = (n: number) => (count ? Math.round((n / count) * 100) : 0)
-  const tres = await coll()
-    .where({ productId })
-    .orderBy('createdAt', 'desc')
-    .limit(SUMMARY_SAMPLE)
-    .get()
-    .catch(() => null)
   const tagCount: Record<string, number> = {}
   for (const r of tres ? tres.data : []) for (const t of r.tags || []) tagCount[t] = (tagCount[t] || 0) + 1
   return {
@@ -116,6 +123,22 @@ export const getReviews = async (event: any = {}) => {
   if (!productId) return err(ERR.NO_PRODUCT)
   const db = getDb()
 
+  // isFirstPage 只依赖 event.cursor，与列表分页查询结果零数据依赖（已核·批C）——起汇总链与列表链
+  // 并行跑，最后统一 await，省一轮网关往返；fallback 语义与原 try/catch 完全等价（仅改成 promise 链）。
+  const isFirstPage = !(event && (event.cursor ?? null))
+  const summaryP = isFirstPage
+    ? buildSummaryExact(db, productId).catch(async () => {
+        const sres = await db
+          .collection(COLLECTIONS.reviews)
+          .where({ productId })
+          .orderBy('createdAt', 'desc')
+          .limit(SUMMARY_SAMPLE)
+          .get()
+          .catch(() => null)
+        return buildSummary(sres ? sres.data : [])
+      })
+    : null
+
   const paged = await pageQuery(db, COLLECTIONS.reviews, { productId }, 'createdAt', event, 20)
   // 买家秀晒图：受保护云存储 fileID 只在服务端，鉴权后批量换短时地址下发（不漏裸 fileID·黄金 §九同 helpVideos）。
   const photoIds = paged.list.flatMap((r: any) => (Array.isArray(r.photos) ? r.photos : []).filter(Boolean).map(String))
@@ -130,22 +153,7 @@ export const getReviews = async (event: any = {}) => {
     photos: (Array.isArray(r.photos) ? r.photos : []).map((id: string) => urlMap[String(id)]).filter(Boolean), // 换不到的丢（占位）
   }))
 
-  const isFirstPage = !(event && (event.cursor ?? null))
-  let summary
-  if (isFirstPage) {
-    try {
-      summary = await buildSummaryExact(db, productId)
-    } catch {
-      const sres = await db
-        .collection(COLLECTIONS.reviews)
-        .where({ productId })
-        .orderBy('createdAt', 'desc')
-        .limit(SUMMARY_SAMPLE)
-        .get()
-        .catch(() => null)
-      summary = buildSummary(sres ? sres.data : [])
-    }
-  }
+  const summary = summaryP ? await summaryP : undefined
 
   return ok({ list, nextCursor: paged.nextCursor, hasMore: paged.hasMore, summary })
 }

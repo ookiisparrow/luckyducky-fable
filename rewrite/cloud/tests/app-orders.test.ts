@@ -1,6 +1,6 @@
 // 黄金 orders-money（createOrder/关单）+ inventory-scm §A/§B/§C（守卫 rw-money1-golden）。
-import { describe, it, expect, beforeEach, afterEach } from 'vitest'
-import { control } from 'wx-server-sdk'
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
+import cloud, { control } from 'wx-server-sdk'
 import { main as app } from '../src/functions/app/index'
 import { main as closeExpired } from '../src/functions/timers/closeExpiredOrders'
 import { setStock } from '../src/kit'
@@ -32,6 +32,7 @@ beforeEach(() => {
 })
 afterEach(() => {
   delete process.env.ALLOW_MOCK_PAY
+  vi.restoreAllMocks() // 换址失败测试会 spyOn cloud.getTempFileURL·收尾必还原不漏到下个用例
 })
 
 describe('createOrder · 契约与定价（黄金 orders-money）', () => {
@@ -278,5 +279,69 @@ describe('getMyOrders 状态筛选（服务端·分页与过滤同源·修 order
     expect(done.list.map((o: any) => o._id).sort()).toEqual(['o1', 'o3']) // 只本人 done·他人 o4 不混入
     expect(((await call('getMyOrders', { status: 'not-a-status' })) as any).list.length).toBe(3) // 非法 status 忽略·回本人全部
     expect(((await call('getMyOrders', {})) as any).list.length).toBe(3) // 空 status 回全部
+  })
+})
+
+// ── 批C·订单读时换址（根因#15 图片面·批B getProducts/getContent 换址同口径的订单面延伸）：
+// 订单行 items[].cover 库内存 cloud:// 裸 fileID（下单时从 products.cover 快照进订单，见 orders.ts
+// createOrder 注释），getMyOrders/getOrderById 下发前应同 catalog.ts 口径批量换 https 短时址——
+// 库内快照本身不动（订单=历史快照单源·T3，不回读/不改写 catalog），只在下发响应前转换，换址失败
+// 该行回退原 fileID（fail-soft，不吞整单/整个响应）。消费面见 rewrite/mp/lib/mapOrders.ts 的
+// OrderLineVM.cover（itemsOf() 直接读 it.cover）。以下为先立的红测试（现状未转换·预期先红）。
+//
+// getMyAfterSales 消费面见 rewrite/mp/lib/mapAftersales.ts 的 AfterSaleVM：已核过全部字段
+// （id/orderId/lineId/name/spec/qty/refundAmount/status/appliedAt/reason），无任何图/封面字段；
+// 云端 applyRefund 落库的 rec（orders.ts:324-342）本身也不含 cover。故本批不为 getMyAfterSales
+// 写换址测试——消费面确认无图字段，不是漏写。
+describe('getMyOrders / getOrderById（订单行 cover 换临时地址·批C 图片提速延伸·预期先红）', () => {
+  const seedOrder = (id: string, items: any[]) =>
+    control.seed('orders', [{ _id: id, id, _openid: 'oME', status: 'paid', createdAt: 10, items }])
+
+  it('大白话：cloud:// 封面换成 https 短时址（getMyOrders 列表与 getOrderById 详情同口径）', async () => {
+    seedOrder('o1', [
+      { productId: 'p1', lineId: 'p1__', name: '小鸭礼盒', spec: '', price: 198, qty: 1, cover: 'cloud://o1-cover.jpg' },
+    ])
+    const list: any = await call('getMyOrders')
+    expect(list.list[0].items[0].cover).toBe('https://tmp/cloud://o1-cover.jpg')
+
+    const one: any = await call('getOrderById', { id: 'o1' })
+    expect(one.order.items[0].cover).toBe('https://tmp/cloud://o1-cover.jpg')
+  })
+
+  it('大白话：已是 https / 空串（搭配购无封面）原样透传，不炸也不误加前缀', async () => {
+    seedOrder('o2', [
+      { productId: 'p1', lineId: 'p1__', name: 'A', spec: '', price: 10, qty: 1, cover: 'https://cdn.example.com/x.jpg' },
+      { productId: 'hook', lineId: 'hook__', name: '钩针', spec: '', price: 5, qty: 1, cover: '' },
+    ])
+    const list: any = await call('getMyOrders')
+    const items = list.list[0].items
+    expect(items[0].cover).toBe('https://cdn.example.com/x.jpg') // 已是 https → 原样，不叠加 tmp 前缀
+    expect(items[1].cover).toBe('') // 空串原样透传，不炸
+
+    const one: any = await call('getOrderById', { id: 'o2' })
+    expect(one.order.items[0].cover).toBe('https://cdn.example.com/x.jpg')
+    expect(one.order.items[1].cover).toBe('')
+  })
+
+  it('大白话：换址失败（storage 桩返回缺项）该行回退原 fileID，不吞整单/整个响应（fail-soft 读路径）', async () => {
+    vi.spyOn(cloud, 'getTempFileURL').mockImplementation(async ({ fileList }: any) => ({
+      fileList: fileList
+        .filter((id: string) => id !== 'cloud://bad.jpg')
+        .map((id: string) => ({ fileID: id, tempFileURL: 'https://tmp/' + id })),
+    }))
+    seedOrder('o3', [
+      { productId: 'p1', lineId: 'p1__', name: 'A', spec: '', price: 10, qty: 1, cover: 'cloud://bad.jpg' },
+      { productId: 'p2', lineId: 'p2__', name: 'B', spec: '', price: 10, qty: 1, cover: 'cloud://good.jpg' },
+    ])
+
+    const list: any = await call('getMyOrders')
+    expect(list.ok).toBe(true) // 整个响应不因单项换址失败而炸
+    expect(list.list[0].items[0].cover).toBe('cloud://bad.jpg') // 换不到 → 回退原 fileID（不是空串/null）
+    expect(list.list[0].items[1].cover).toBe('https://tmp/cloud://good.jpg') // 正常换到的项不受影响
+
+    const one: any = await call('getOrderById', { id: 'o3' })
+    expect(one.ok).toBe(true)
+    expect(one.order.items[0].cover).toBe('cloud://bad.jpg')
+    expect(one.order.items[1].cover).toBe('https://tmp/cloud://good.jpg')
   })
 })
