@@ -1,18 +1,19 @@
-# Lucky Ducky（小棉鸭）— 重构线仓（fable）
+# Lucky Ducky（小棉鸭）— 生产源仓（fable）
 
-> ## 本仓身份：重构线（自 2026-07-03 起）
+> ## 本仓身份：生产源（2026-07-09 切换转正·前身重构线自 2026-07-03）
 >
-> 本仓 = Lucky Ducky 的**重构线**，2026-07-03 从生产源仓 `luckyducky-next`（GitHub `ookiisparrow/luckyducky-next`，HEAD `ff02afb`）完整复制而来（git 历史保留）。**云环境与 next 共用同一个 `cloudbase-d4gcssqbv06865479`**——不新建、不隔离，沿用上一次「luckyducky-miniprogram → luckyducky-next」切换验证过的路数（见 `docs/archive/切换runbook.md`）；因此本仓对该环境的部署/建表/删表等改动是**真实生效**的，不是隔离沙盒，操作前务必想清楚。
+> 本仓 = Lucky Ducky 的**生产源**。2026-07-03 从 `luckyducky-next`（GitHub `ookiisparrow/luckyducky-next`，HEAD `ff02afb`）完整复制为重构线；**2026-07-09 M5 切换执行完毕、本仓转正**（无真实用户前提下用户拍板压缩 runbook 前置闸·经过见 `docs/重构日志.md` 同日切换条）。云环境 `cloudbase-d4gcssqbv06865479` 唯一版本＝本仓 `rewrite/` 重写线：**15 云函数 + `/admin` `/agent` 新后台 + 根路径内容站**，旧线 26 函数与 `/admin2` `/agent2` 并行路径已清退。本仓对该环境的部署/建表/删表等改动**真实生效**，不是隔离沙盒，操作前务必想清楚。
 >
-> - **next 仓冻结**：`/Users/sparrow/luckyducky-next`（GitHub `ookiisparrow/luckyducky-next`）自本仓建立起**只做紧急止血修复，不再迭代新功能/新批次**，部署权转到本仓，直到重构完成、用户拍板切换那天（届时 next 转为回滚基线，本仓转正为生产源——复刻当年 next 自己被扶正的路数）。
-> - **重构目标已定义（2026-07-03·ADR §23）＝整体重写**：微信端弃 uni-app 改原生 TS+glass-easel（默认 WebView·按页 Skyline·UI 可重设计）；后端留云开发、函数全部重写（数据零迁移）；新增 Astro 内容站（GEO）；admin/agent 一并重写（Vue3+Vite）；线上 v0.9.4 冻结、新版同 AppID 整体替换。分期 M0–M5 见 `docs/现状与路线.md`。下面 §2 起的工程约定继承自 next、**仅对旧产物（冻结待替换）有效**，新工程约定随 M0 起逐段改写——**改动前先确认哪条约定因重写而失效，不要凭旧文字办事**。
-> - **接管 tcb·部署闸**：机制与 next 相同（`scripts/guard-deploy.mjs`），因共用同一个云环境，规则原样适用——见下方 §3。
-> - **8 件控制台正册资产**：与 next 共用同一套（微信支付连接器 `wxpay_33nb7su` 等），git 外、勿动，副本正册在本仓 `console-assets/`（复制自 next，需与 next 保持一致，不要各自漂移）。
-> - **治理脊柱**：`docs/元模式.md` / `docs/根因账本.md` 原样继承（治理方法论与病根史不因重构失效）；`docs/现状与路线.md` / `docs/重构日志.md` / `docs/调试日志.md` / `docs/待办与债.md` 已重新起页（本仓自己的进度，分叉前的 next 全史见 `docs/archive/现状与路线-next基线-至20260703.md` / `docs/archive/重构日志-next基线-至20260703.md` / `docs/archive/调试日志-next基线-至20260703.md` / `docs/archive/待办与债-next基线-至20260703.md`）。
+> - **next 仓＝封存回滚基线**：`/Users/sparrow/luckyducky-next` 不再迭代、不再止血（生产源已是本仓）；保留价值＝旧线函数/旧后台可分钟级重建（`build:cloud` + 逐函数 deploy）。除封存标注外不要动它。
+> - **活代码在 `rewrite/`**：微信端原生 TS+glass-easel（全 WebView 首发）、后端云开发 15 函数（`rewrite/cloud`）、admin/agent（Vue3+Vite）、Astro 内容站（`rewrite/site`）。本仓 `packages/` 为旧线字节级冻结参照（守卫 `oldline-frozen`·处置留后续拍板）；**§2/§5 起的旧线工程约定仅对 `packages/` 参照物有效**，新线约定散在 `rewrite/*/README.md` 与各批记账——改动前先确认约定对哪条线生效，不要凭旧文字办事。
+> - **小程序发布面**：AppID `wxcbd2fb68b81bcfb1`；新 mp（`rewrite/mp`）上传/提审/发布为微信后台人工动作——未发布期间线上旧版 v0.9.4 调用的旧函数已删（无真实用户·用户拍板接受）。
+> - **接管 tcb·部署闸**：`scripts/guard-deploy.mjs` 机制不变，规则原样适用——见下方 §3。
+> - **8 件控制台正册资产**：微信支付连接器 `wxpay_33nb7su` 等，git 外、勿动，副本正册在本仓 `console-assets/`（本仓即权威源，随变更先 repo 后控制台）。
+> - **治理脊柱**：`docs/元模式.md` / `docs/根因账本.md` 延续；进度/账本类见 `docs/现状与路线.md` 等；分叉前 next 全史在 `docs/archive/现状与路线-next基线-至20260703.md` / `docs/archive/重构日志-next基线-至20260703.md` / `docs/archive/调试日志-next基线-至20260703.md` / `docs/archive/待办与债-next基线-至20260703.md`。
 >
-> 以下为工程约定，继承自 next、随批次演进（有效性待复核，见上）。
+> 以下为工程约定：§2/§5 为旧线（`packages/` 冻结参照）约定原文保留，其余治理/git/质量条目对全仓有效。
 
-Lucky Ducky（小棉鸭）：钩织材料包电商 App。现产物为 uni-app 微信小程序（冻结待替换，重写目标栈见身份段）；后端微信云开发（环境 `cloudbase-d4gcssqbv06865479`、AppID `wxcbd2fb68b81bcfb1`）。
+Lucky Ducky（小棉鸭）：钩织材料包电商 App。现产物为原生 TS 微信小程序（`rewrite/mp`·待微信后台发布）+ 云开发后端（环境 `cloudbase-d4gcssqbv06865479`、AppID `wxcbd2fb68b81bcfb1`）+ admin/agent 后台 + Astro 内容站。
 
 **本文件 = 全部工程约定（代码怎么写、git 怎么走、质量怎么把），按元模式组织：每条约束尽量配机器守卫。当前完成度与下一步只看 `docs/现状与路线.md`，本文件不放进度。**
 
