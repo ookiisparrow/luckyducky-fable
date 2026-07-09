@@ -53,6 +53,7 @@ const batch = ref<{
 const listGen = useLatest() // 列表乱序守卫（P2·快切标签/搜索时旧结果别覆盖新标签·根因#8）
 const reloading = ref(false) // reload 专属在途标志（迭代G：more 的加载闸原用多写者 message 文案·脆弱·改此单写布尔）
 async function reload() {
+  clearConfirmId.value = '' // 换标签/搜索/翻页/发货成功后自动刷新即复位危险态（P1·防旧武装的「去核对」残留、重进同一行一击直发·批3 规格）
   message.value = '加载中…'
   reloading.value = true
   const my = listGen.begin()

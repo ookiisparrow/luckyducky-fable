@@ -75,6 +75,7 @@ const pendingAsmId = ref('')
 let bomLoaded = false
 
 async function reload() {
+  runConfirm.value = false // 刷新即复位危险态（P1·防旧武装的「执行组装」确认残留、重进一击直扣料·批3 规格）
   const [b, m, a, d] = await Promise.all([getBomSetup(), listMaterials(), listAssemblies(), listDrafts()])
   if (b.ok) {
     const t = (b.template as Record<string, any>) || {}

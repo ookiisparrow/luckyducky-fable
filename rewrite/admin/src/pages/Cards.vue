@@ -98,9 +98,15 @@ watch(
   },
   { deep: true }
 )
+// pendingStatus（P1 复审补漏·根因#8）：finalize() 定稿写并入本队列而非旁路直发——旁路会与随后触发的
+// 新 autosave 并发在途，谁的响应后到就把谁的 status 落库，慢网下刚定的 final 可能被晚到的旧 draft
+// autosave 盖回去（settled()-only 方案只排空「点击那一刻已在途」的链，堵不住这条）。pendingStatus 让
+// 队列里「当前及尾随补跑」的每一轮 run() 都携带 next 状态，直到 finalize 收尾才清空。
+let pendingStatus: CardModel['status'] | null = null
 async function autosave() {
   if (!card.value) return
-  const r = await saveCard(card.value as unknown as Record<string, unknown>)
+  const payload = pendingStatus ? { ...card.value, status: pendingStatus } : card.value
+  const r = await saveCard(payload as unknown as Record<string, unknown>)
   autoState.value = (r as any).ok ? 'saved' : 'error'
 }
 const flushSave = serialSave(autosave) // 串行化·防慢网下两次自动保存乱序覆盖（P2·根因#8）
@@ -160,17 +166,24 @@ async function finalize() {
   // 先落库、成功才翻定稿态（审核补漏·病根#14 伪成功）：不乐观翻——防前端显「已定稿」而后端仍 draft，
   // 第 6 步码批次依赖 cardFinal 落库·否则生成失败且排障无线索。
   if (saveTimer) {
-    clearTimeout(saveTimer) // 取消在途防抖 autosave·防它带旧 status 并发写把定稿盖回 draft（同 Products/HomeContent 约定）
+    clearTimeout(saveTimer) // 取消未触发的防抖定时器（只挡得住这半·同 Products/HomeContent 约定）
     saveTimer = null
   }
   const next = card.value.status === 'final' ? 'draft' : 'final'
-  const r = await saveCard({ ...card.value, status: next } as unknown as Record<string, unknown>)
-  if ((r as any).ok) {
+  // 定稿写并入同一条 serialSave 队列（P1 复审补漏·根因#8）：不再旁路直发 saveCard，改走 flushSave()
+  // 本尊（非 .settled()）——trigger() 对「已在途」的链只标脏、不并发再发一次 POST，会等其跑完再补跑
+  // 一轮；期间若又有新 autosave 触发（watch 的 900ms 计时器到点），一样标脏排进同一条链，不会跟本次
+  // 定稿写并发在途。pendingStatus 保证链上「当前轮 + 尾随补跑轮」发出的都是 next 状态，不被旧 draft
+  // 覆盖；flushSave() 收尾即整条链跑空，autoState 反映的是链上最后一轮（即本次定稿）的真实结果。
+  pendingStatus = next
+  await flushSave()
+  pendingStatus = null
+  if (!card.value) return // 排空期间页面被卸载（embed 模式随向导切步）——card 已置空则不再往下写
+  if (autoState.value === 'saved') {
     card.value.status = next
     loadErr.value = ''
-    autoState.value = 'saved'
   } else {
-    loadErr.value = (next === 'final' ? '定稿' : '取消定稿') + '保存失败：' + String((r as any).error || '') + '（请重试）'
+    loadErr.value = (next === 'final' ? '定稿' : '取消定稿') + '保存失败：请重试'
   }
 }
 

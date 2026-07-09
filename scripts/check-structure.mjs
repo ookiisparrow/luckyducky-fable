@@ -4879,6 +4879,50 @@ export const repoChecks = [
     },
   },
   {
+    // 危险 armed 态随数据刷新必须复位（批3 规格 bug sweep Round1·根因#8「构建过≠真能用」）：两步确认/
+    // 危险动作的「已武装」态（confirmKey/confirmId/clearConfirmId/publishConfirm/runConfirm/pubConfirm…）
+    // 若在 load()/reload() 类刷新函数里不复位，切标签/切课/切单/翻页/动作后自动刷新会让旧武装态残留在
+    // 新数据上——重进同一行位/同一按钮位一击直发，不经二次确认（迭代I 曾出同款 P1 误删/误发）。本守卫钉
+    // 住：文件内每个顶层 `const <名> = ref(...)` 声明（<名> 匹配 /confirm/i）的 armed ref，都必须被本
+    // 文件内每个顶层 load*/reload* 函数体重置赋值 `<名>.value =`（=== / !== 比较不算复位）。方法体截取
+    // 走 setupFnBody（花括号配对计数·不复用 methodBody——其逗号收尾启发式对 <script setup> 裸函数错抓，
+    // 预审已证伪）；无 armed ref 的文件不检查（如 Fulfill.loadPrinted/ScmMaterials.loadLedger）。
+    id: 'rw-admin-armed-reset-on-load',
+    roots: ['#8'],
+    desc: '危险 armed 态随数据刷新必须复位（批3 规格·根因#8）：rewrite/admin/src/pages/*.vue 内每个 armed ref（顶层 const <名>=ref(...)·名匹配 /confirm/i）须被本文件内每个顶层 load*/reload* 函数体重置赋值 <名>.value=（=== / !== 比较不算复位）——防切课/切单/切筛选/翻页后旧武装态残留、重进同一行位一击直发（迭代I 曾出同款 P1 误删/误发）',
+    run() {
+      const bad = []
+      const dir = join(ROOT, 'rewrite/admin/src/pages')
+      if (!existsSync(dir)) return bad
+      for (const f of readdirSync(dir)) {
+        if (!f.endsWith('.vue')) continue
+        const src = stripComments(readFileSync(join(dir, f), 'utf8'))
+        const scriptMatch = src.match(/<script setup[^>]*>([\s\S]*?)<\/script>/)
+        if (!scriptMatch) continue
+        const script = scriptMatch[1]
+        const armedNames = [...script.matchAll(/^(?:export\s+)?const\s+(\w+)\s*=\s*ref(?:<[^>]*>)?\(/gm)]
+          .map((m) => m[1])
+          .filter((n) => /confirm/i.test(n))
+        if (!armedNames.length) continue // 无 armed ref 的文件不检查
+        const fnNames = [...script.matchAll(/^(?:export\s+)?(?:async\s+)?function\s+((?:load|reload)\w*)\s*\(/gm)].map((m) => m[1])
+        for (const fn of fnNames) {
+          const body = setupFnBody(script, fn)
+          if (!body) {
+            bad.push(`rewrite/admin/src/pages/${f} 刷新函数 ${fn}() 花括号配对失败（setupFnBody 取不到函数体，源码可能损坏或声明形态超出识别范围）`)
+            continue
+          }
+          for (const name of armedNames) {
+            const resetRe = new RegExp('\\b' + name + '\\.value\\s*=(?!=)')
+            if (!resetRe.test(body)) {
+              bad.push(`rewrite/admin/src/pages/${f} 刷新函数 ${fn}() 未复位 armed ref「${name}」——切课/切单/切筛选/翻页后旧武装态残留、重进同一行位一击直发（P1·批3 规格）`)
+            }
+          }
+        }
+      }
+      return bad
+    },
+  },
+  {
     // 冒烟层接线（批次D·根因#8「构建过≠真机能用」的机器半边）：scripts/mp-smoke.cjs 存在且照抄
     // visual-check.cjs 已验证过的坑（connect→systemInfo 探活、disconnect 收尾而非 close）；
     // package.json 接线 smoke:mp；rewrite/mp/app.ts 有 onError/onUnhandledRejection 探针
@@ -5247,6 +5291,70 @@ export function methodBody(src, name) {
   const endMatch = rest.match(/\n {2}\},/)
   if (!endMatch) return ''
   return rest.slice(0, endMatch.index + endMatch[0].length)
+}
+
+// setup 顶层函数体截取单源 helper（配 methodBody 并列·批3 规格新写）：methodBody 的收尾启发式只适配
+// mp Options-API 对象方法书写（逗号收尾、固定两空格缩进），对 `<script setup>` 里裸写的顶层函数（无
+// 逗号收尾、非固定缩进）实测错抓——预审已证伪，故不复用。本 helper 改走确定性花括号配对计数：从
+// `function <名>(` 签名起数开合花括号直到配平，取完整签名+函数体整段。调用前须先 stripComments()
+// （同 methodBody 约定），防注释里的花括号打乱配对计数；计数本身走 maskStringLiterals() 掩蔽后的副本
+// （防字面量里的花括号字符打乱配平·复审补漏·P2 潜在假阴性——定义见本函数之后），但返回值仍切片自
+// 原始 src（拿到真实源码，非掩蔽后的占位符）。找不到签名或花括号不配平（源码损坏）返回 ''。
+export function setupFnBody(src, name) {
+  const sigRe = new RegExp('(?:export\\s+)?(?:async\\s+)?\\bfunction\\s+' + name + '\\s*\\([^)]*\\)\\s*\\{')
+  const sigMatch = src.match(sigRe)
+  if (!sigMatch) return ''
+  const masked = maskStringLiterals(src)
+  const braceStart = sigMatch.index + sigMatch[0].length - 1 // 匹配串以 '{' 收尾
+  let depth = 0
+  for (let i = braceStart; i < src.length; i++) {
+    if (masked[i] === '{') depth++
+    else if (masked[i] === '}') {
+      depth--
+      if (depth === 0) return src.slice(sigMatch.index, i + 1)
+    }
+  }
+  return ''
+}
+
+// 字符串/模板字面量掩蔽（配 setupFnBody 花括号配对计数用·复审补漏·P2 潜在假阴性）：花括号配对计数
+// 不认字符串边界，含奇数个字面量花括号字符（如一个值为「incomplete: {」的字符串）的函数体会打乱配平、
+// 把边界算到别处函数头上（假阴性——漏报真缺失、错报别处）。逐字符扫单引号/双引号/反引号包裹段，段内
+// 非引号字符替换成 'x'（换行符原样保留，不影响后续按行定位），引号本身与段外代码字符不变——保持与原
+// src 等长，setupFnBody 返回值仍按原 src 切片取真实源码。反斜杠转义按「\+下一字符」两字一并替换，防
+// 转义引号被误判成边界。模板字面量的插值整段一并掩蔽（不单独复原花括号）——插值内必是合法完整表达式，
+// 不可能横跨一个真实的顶层函数/块边界，掩蔽换计数简单换来的假阳性风险可忽略。放在 setupFnBody 之后
+// （而非之前）定义——防插在 methodBody/setupFnBody 之间破坏 guard-strip-single-source 的 span 判定
+// （错题本 E8：新插入的顶层 function 声明会把前一 span 的终点提前截断，让 span 内原有的合法引用文本
+// 露到 span 外被误判成裸写复辟）。
+function maskStringLiterals(src) {
+  let out = ''
+  let i = 0
+  const n = src.length
+  while (i < n) {
+    const c = src[i]
+    if (c === "'" || c === '"' || c === '`') {
+      out += c
+      i++
+      while (i < n && src[i] !== c) {
+        if (src[i] === '\\' && i + 1 < n) {
+          out += 'xx'
+          i += 2
+          continue
+        }
+        out += src[i] === '\n' ? '\n' : 'x'
+        i++
+      }
+      if (i < n) {
+        out += src[i]
+        i++
+      }
+      continue
+    }
+    out += c
+    i++
+  }
+  return out
 }
 
 // —— 隐私挂载可达性（守卫 privacy-authorize-wired 用·债#25/根因#8）——

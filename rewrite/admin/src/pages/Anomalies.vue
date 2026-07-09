@@ -53,6 +53,7 @@ const totalHits = computed(() => list.value.reduce((s, a) => s + (Number(a.count
 
 const listGen = useLatest() // 异常账本乱序守卫（P2·快切筛选时旧结果别覆盖当前 chip·根因#8）
 async function load() {
+  confirmId.value = '' // 换筛选/刷新即复位危险态（P1·防旧武装的「标记已处理」残留、重进同一位一击直发·批3 规格）
   busy.value = true
   const opts: { resolved?: boolean } = {}
   if (filter.value === 'open') opts.resolved = false

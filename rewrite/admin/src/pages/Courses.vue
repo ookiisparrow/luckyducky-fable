@@ -28,6 +28,7 @@ const publishConfirm = ref(false)
 // 视频进度＝computed 自动随课程树更新（迭代E 逮出：原 imperative ref 在 delChapter/delLesson/addSegment 后不刷新致漂移）
 const stats = computed(() => courseVideoStats(course.value))
 const confirmKey = ref('') // no-alert 两步删除确认（换皮改直接 splice·误删即丢）
+const batchUploading = ref(false) // 课时级批量传视频在途（P1·根因#8）：期间锁重排/删除交互入口，防结构错位与稳定标识失配（批3 规格）
 
 const pct = computed(() => (stats.value.total ? Math.round((stats.value.done / stats.value.total) * 100) : 0))
 
@@ -41,6 +42,7 @@ function twoStep(key: string, run: () => void) {
 }
 // ↑↓ 重排（换皮丢·章/课时/段顺序＝内容语义·嵌套 ↑↓ 比拖拽稳）
 function move<T>(arr: T[], i: number, dir: number) {
+  if (batchUploading.value) return // 批量传视频在途锁重排（交互面·P1·同 delChapter/delLesson/delSegment）
   const j = i + dir
   if (j < 0 || j >= arr.length) return
   const t = arr[i]
@@ -49,12 +51,15 @@ function move<T>(arr: T[], i: number, dir: number) {
   confirmKey.value = '' // 重排后清「已武装删除」·防下标编码的 confirmKey 落到换位后的另一元素→删错（P2）
 }
 function delChapter(ci: number) {
+  if (batchUploading.value) return // 批量传视频在途锁删除（交互面·P1·防结构变动使稳定引用失配）
   twoStep('ch:' + ci, () => course.value!.chapters.splice(ci, 1))
 }
 function delLesson(ch: Record<string, any>, ci: number, li: number) {
+  if (batchUploading.value) return
   twoStep('l:' + ci + ':' + li, () => ch.lessons.splice(li, 1))
 }
 function delSegment(l: Record<string, any>, ci: number, li: number, si: number) {
+  if (batchUploading.value) return
   twoStep('s:' + ci + ':' + li + ':' + si, () => {
     l.segments.splice(si, 1)
     refreshStats()
@@ -75,6 +80,15 @@ const publishIssues = computed(() => {
 
 async function load() {
   if (!courseId.value.trim()) return
+  if (batchUploading.value) {
+    // 批量传视频在途时拦截切课（P1 复审补漏·根因#8）：load() 会把 course.value 整体换成另一门课，
+    // 而 batchUpload 循环持有的是旧课时对象的裸引用——一旦断链，仍在跑的上传会把 videoFileId 写回
+    // 一棵不可达的树，永久丢失且无报错（云存储留孤儿文件）。交互面已锁重排/删除按钮，切课入口同锁。
+    message.value = '有批量上传在进行中，请等其完成再切课'
+    return
+  }
+  confirmKey.value = '' // 换课即复位危险态（P1·防旧武装的删章/删课时/删段残留、重进同一位一击直删·批3 规格）
+  publishConfirm.value = false // 换课即复位危险态（P1·防旧武装的发布确认残留、重进一击直发·批3 规格）
   message.value = '加载中…'
   const r = await getCourseDraft(courseId.value.trim())
   if (!r.ok) {
@@ -168,20 +182,39 @@ async function pickVideo(sg: Record<string, any>, ev: Event) {
   } else message.value = '视频上传失败：' + String(r.error || '')
 }
 
-// 课时级批量传视频（换皮丢·多选按文件名 numeric 顺序灌入/自动新建段·串行 fail-soft·课时级进度）
+// 课时级批量传视频（换皮丢·多选按文件名 numeric 顺序灌入/自动新建段·串行 fail-soft·课时级进度）：
+// plan 时用当前 l.segments 下标算出的 segIndex 只是「计划那一刻」的位置——循环是逐段 await 的异步过程，
+// 期间若发生重排/删段，下标会漂移到别的段（错配/越界，P1·根因#8）。修：plan 后立即深捕获目标段的
+// 对象引用（existing 段直接引用当时的数组元素·JS 对象身份不随数组重排改变），每次上传前按引用重定位
+// （`l.segments.includes(sg)`），引用已不在数组里（被删）即跳过并如实报告；同时上传期间锁重排/删除 UI
+// （数据面按稳定引用兜底、交互面靠 batchUploading 锁入口，两层都做）。
 async function batchUpload(l: Record<string, any>, ev: Event) {
   const input = ev.target as HTMLInputElement
   const files = Array.from(input.files || [])
-  if (!files.length || !course.value) return
+  if (!files.length || !course.value || batchUploading.value) return
   const plan = planLessonBatch(files, (l.segments as any[]).length)
-  for (const item of plan) {
-    if (item.isNew) l.segments.push({ id: '', name: item.segName, dur: '', videoFileId: '' })
-    const sg = l.segments[item.segIndex]
-    if (!sg.name) sg.name = item.segName
-    if (!sg.dur) sg.dur = await readDuration(item.file) // 时长自动读取（未填才读）
-    const r = await uploadVideo(String(course.value.id), sg.name || 'seg', item.file, (p) => (progress.value = `课时批量传 ${item.segIndex + 1}/${plan.length} · ${Math.round(p * 100)}%`))
-    if (r.ok) sg.videoFileId = r.fileId || ''
-    else message.value = '有视频上传失败：' + String(r.error || '') // fail-soft·一段失败不拖累其余
+  // plan 时就地深捕获——existing 段捕获当时的对象引用；new 段等真正 push 那一刻才有引用可捕获（先占位 null）
+  const targets: Array<Record<string, any> | null> = plan.map((item) => (item.isNew ? null : (l.segments[item.segIndex] as Record<string, any>) ?? null))
+  batchUploading.value = true
+  try {
+    for (let i = 0; i < plan.length; i++) {
+      const item = plan[i]
+      let sg = targets[i]
+      if (item.isNew) {
+        sg = { id: '', name: item.segName, dur: '', videoFileId: '' }
+        l.segments.push(sg)
+      } else if (!sg || !(l.segments as any[]).includes(sg)) {
+        message.value = `「${item.segName}」这份对应的段已被删除/移出，已跳过（原位置发生了重排/删段）`
+        continue // 稳定引用重定位失败（段已被删）——如实跳过报告（P1）
+      }
+      if (!sg.name) sg.name = item.segName
+      if (!sg.dur) sg.dur = await readDuration(item.file) // 时长自动读取（未填才读）
+      const r = await uploadVideo(String(course.value.id), sg.name || 'seg', item.file, (p) => (progress.value = `课时批量传 ${i + 1}/${plan.length} · ${Math.round(p * 100)}%`))
+      if (r.ok) sg.videoFileId = r.fileId || ''
+      else message.value = '有视频上传失败：' + String(r.error || '') // fail-soft·一段失败不拖累其余
+    }
+  } finally {
+    batchUploading.value = false
   }
   progress.value = ''
   refreshStats()
@@ -248,9 +281,9 @@ onMounted(load)
     <!-- courseId 载入条（embed 隐·向导用 wizardCourseId 直接带入） -->
     <div v-if="!embed" class="ld-toolbar">
       <div class="ld-search cid-box">
-        <input v-model="courseId" placeholder="course-xxx（商品页「编辑课程」会带入）" @keyup.enter="load" />
+        <input v-model="courseId" :disabled="batchUploading" placeholder="course-xxx（商品页「编辑课程」会带入）" @keyup.enter="load" />
       </div>
-      <UiButton variant="ghost" @click="load"><RotateCcw :size="14" :stroke-width="1.8" /><span>载入</span></UiButton>
+      <UiButton variant="ghost" :disabled="batchUploading" @click="load"><RotateCcw :size="14" :stroke-width="1.8" /><span>载入</span></UiButton>
     </div>
 
     <p v-if="message" class="status">{{ message }}</p>
@@ -280,18 +313,18 @@ onMounted(load)
         <div class="ch-head">
           <Badge tone="brand">第 {{ ci + 1 }} 章</Badge>
           <input v-model="ch.title" placeholder="章标题" maxlength="60" class="ch-title" />
-          <button class="icon-btn" title="上移" :disabled="ci === 0" @click="move(course.chapters, ci, -1)">↑</button>
-          <button class="icon-btn" title="下移" :disabled="ci === course.chapters.length - 1" @click="move(course.chapters, ci, 1)">↓</button>
-          <button class="icon-btn" :class="{ warn: confirmKey === 'ch:' + ci }" :title="confirmKey === 'ch:' + ci ? '再点确认删章' : '删章'" @click="delChapter(ci)"><Trash2 :size="14" :stroke-width="1.8" /></button>
+          <button class="icon-btn" title="上移" :disabled="ci === 0 || batchUploading" @click="move(course.chapters, ci, -1)">↑</button>
+          <button class="icon-btn" title="下移" :disabled="ci === course.chapters.length - 1 || batchUploading" @click="move(course.chapters, ci, 1)">↓</button>
+          <button class="icon-btn" :disabled="batchUploading" :class="{ warn: confirmKey === 'ch:' + ci }" :title="confirmKey === 'ch:' + ci ? '再点确认删章' : '删章'" @click="delChapter(ci)"><Trash2 :size="14" :stroke-width="1.8" /></button>
         </div>
 
         <div v-for="(l, li) in ch.lessons" :key="li" class="lesson">
           <div class="l-head">
             <input v-model="l.name" placeholder="课时名" maxlength="60" class="l-name" />
             <input v-model="l.dur" placeholder="时长" class="dur" maxlength="10" />
-            <button class="icon-btn" title="上移" :disabled="li === 0" @click="move(ch.lessons, li, -1)">↑</button>
-            <button class="icon-btn" title="下移" :disabled="li === ch.lessons.length - 1" @click="move(ch.lessons, li, 1)">↓</button>
-            <button class="icon-btn" :class="{ warn: confirmKey === 'l:' + ci + ':' + li }" :title="confirmKey === 'l:' + ci + ':' + li ? '再点确认删课时' : '删课时'" @click="delLesson(ch, ci, li)"><Trash2 :size="14" :stroke-width="1.8" /></button>
+            <button class="icon-btn" title="上移" :disabled="li === 0 || batchUploading" @click="move(ch.lessons, li, -1)">↑</button>
+            <button class="icon-btn" title="下移" :disabled="li === ch.lessons.length - 1 || batchUploading" @click="move(ch.lessons, li, 1)">↓</button>
+            <button class="icon-btn" :disabled="batchUploading" :class="{ warn: confirmKey === 'l:' + ci + ':' + li }" :title="confirmKey === 'l:' + ci + ':' + li ? '再点确认删课时' : '删课时'" @click="delLesson(ch, ci, li)"><Trash2 :size="14" :stroke-width="1.8" /></button>
           </div>
           <div v-for="(sg, si) in l.segments" :key="si" class="seg">
             <input v-model="sg.name" placeholder="段名" maxlength="60" class="seg-name" />
@@ -301,9 +334,9 @@ onMounted(load)
               <span>{{ sg.videoFileId ? '已传 · 替换' : '选视频' }}</span>
               <input type="file" accept="video/mp4,video/quicktime" hidden @change="(e) => pickVideo(sg, e)" />
             </label>
-            <button class="icon-btn" title="上移" :disabled="si === 0" @click="move(l.segments, si, -1)">↑</button>
-            <button class="icon-btn" title="下移" :disabled="si === l.segments.length - 1" @click="move(l.segments, si, 1)">↓</button>
-            <button class="icon-btn" :class="{ warn: confirmKey === 's:' + ci + ':' + li + ':' + si }" title="删段" @click="delSegment(l, ci, li, si)"><Trash2 :size="14" :stroke-width="1.8" /></button>
+            <button class="icon-btn" title="上移" :disabled="si === 0 || batchUploading" @click="move(l.segments, si, -1)">↑</button>
+            <button class="icon-btn" title="下移" :disabled="si === l.segments.length - 1 || batchUploading" @click="move(l.segments, si, 1)">↓</button>
+            <button class="icon-btn" :disabled="batchUploading" :class="{ warn: confirmKey === 's:' + ci + ':' + li + ':' + si }" title="删段" @click="delSegment(l, ci, li, si)"><Trash2 :size="14" :stroke-width="1.8" /></button>
           </div>
           <div class="seg-adds">
             <button class="add-btn" @click="addSegment(l)"><Plus :size="13" :stroke-width="2" /><span>加段</span></button>

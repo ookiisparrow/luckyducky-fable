@@ -19,6 +19,7 @@ const confirmId = ref('')
 const lastCreated = ref<{ name: string; key: string } | null>(null) // 建号后回显口令（换皮不回显·超管拿不到明文转交坐席）
 
 async function reload() {
+  confirmId.value = '' // 刷新即复位危险态（P1·防旧武装的停用确认残留、重进同一行一击直发·批3 规格）
   const r = await listAgents()
   rows.value = r.ok ? mapAgents(r.agents) : []
   message.value = r.ok ? '' : '加载失败：' + String(r.error || '')

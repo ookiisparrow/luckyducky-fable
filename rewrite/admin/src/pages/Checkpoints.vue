@@ -31,6 +31,7 @@ const courseDrifted = computed(() => loaded.value && courseId.value.trim() !== l
 
 async function load() {
   if (!courseId.value.trim()) return
+  confirmKey.value = '' // 换课即复位危险态（P1·「保存整课」全量覆盖·残留误删会被永久上云·批3 规格）
   const c = courseId.value.trim()
   const r = await listCheckpoints(c)
   nodes.value = r.ok

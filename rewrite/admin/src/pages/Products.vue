@@ -30,6 +30,9 @@ async function editCourse(row: DraftRowVM) {
   const cid = existing || 'course-' + row.id
   // courseId 落库（换皮只算不存·商品与课程/批次关联要人工输易错）：首次深链即写回商品档
   if (!existing) {
+    // 编辑器若正开着同一件商品·先同步快照 courseId（P3·根因#8）：防 closeEditor/onBeforeUnmount 补存时
+    // 用编辑器里的旧值（空）整档覆盖，把这里刚写的 courseId 抹掉——后写不抹先写。
+    if (edit.value && String(edit.value.id) === row.id) edit.value.courseId = cid
     await saveDraft({ ...(row.raw as Record<string, unknown>), courseId: cid })
     void silentRefresh()
   }
@@ -74,6 +77,7 @@ const sessionUrls = ref<Record<string, string>>({})
 const imgUrl = (fileID: string) => sessionUrls.value[fileID] || urlMap.value[fileID] || ''
 
 async function reload() {
+  confirmKey.value = '' // 刷新即复位危险态（P1·防旧武装的上架/下架/删除按钮跨刷新残留一击直发·批3 规格）
   message.value = '加载中…'
   const r = await listDrafts()
   urlMap.value = r.ok && (r as any).urls ? (r as any).urls : {}
@@ -219,14 +223,40 @@ async function compress(file: File): Promise<string> {
 async function doSave() {
   if (!edit.value || busy.value) return
   if (saveTimer) {
-    clearTimeout(saveTimer)
+    clearTimeout(saveTimer) // 只挡得住未触发的防抖定时器（同 Cards.finalize 约定）
     saveTimer = null
   }
   busy.value = true
+  // 排空已发出、仍在等回包的在途 autosave（P2·根因#8）：不排空则「保存草稿」这次写可能被晚到的旧快照
+  // autosave 回包乱序盖掉，编辑丢失——settled() 只等在途链、idle 时不额外多发一次 POST。
+  await flushSave.settled()
+  if (!edit.value) {
+    busy.value = false // 排空期间编辑器被关闭（如快速切换）——不再对已置空的 edit 发送
+    return
+  }
   const r = await saveDraft(edit.value)
   busy.value = false
   message.value = r.ok ? '' : '保存失败：' + String(r.error || '')
   if (r.ok) {
+    // doSave 自身网络等待期间可能又有新编辑触发防抖（P2 复审补漏·根因#8）：saveDraft 在途时 watch(edit)
+    // 一样会照常排一枚 900ms saveTimer；若直接置空 edit.value，该计时器到点后 autosave() 里
+    // `if (!edit.value) return` 会静默 no-op——这次编辑从未被发送到服务端、也没有任何报错提示。
+    // 关闭前照 closeEditor() 已有模式：仍排着的计时器说明有未落盘编辑，抓一份快照单独补存再关闭。
+    if (saveTimer) {
+      clearTimeout(saveTimer)
+      saveTimer = null
+      const snap = JSON.parse(JSON.stringify(edit.value)) as Record<string, any>
+      editorLoaded = false
+      edit.value = null
+      void saveDraft(snap)
+        .then(() => {
+          void silentRefresh()
+          emit('saved')
+        })
+        .catch(() => {})
+      void reload()
+      return
+    }
     editorLoaded = false
     edit.value = null
     void reload()

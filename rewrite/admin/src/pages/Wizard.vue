@@ -50,6 +50,7 @@ const nextTodo = computed(() => {
 
 // 载入商品档 + 6 步派生真值（listDrafts 一次给 list/listed/urls + hasVideo/cardFinal/hasBatch）
 async function reloadProduct() {
+  pubConfirm.value = false // 刷新即复位危险态（P1·防旧武装的「确认上架」残留、重进一击直发·批3 规格）
   loadError.value = false
   const r: any = await listDrafts()
   if (!r.ok) {

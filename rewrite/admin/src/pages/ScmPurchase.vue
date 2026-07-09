@@ -57,6 +57,7 @@ const draftTotalFen = computed(() => {
 const listGen = useLatest() // 采购单乱序守卫（P2·快切 chip 时旧结果别覆盖当前筛选·根因#8）
 const saving = ref(false) // 建单在途锁（P2·防双击建两张重复草稿·后端建单无 id 幂等）
 async function reload() {
+  confirmKey.value = '' // 换筛选/刷新即复位危险态（P1·防旧武装的下单/收货/取消按钮跨上下文残留一击直发·批3 规格）
   const my = listGen.begin()
   const [p, m, s] = await Promise.all([listPurchases(filter.value || undefined), listMaterials(), listSuppliers()])
   if (listGen.isStale(my)) return // 已切别 chip·丢弃过期采购单

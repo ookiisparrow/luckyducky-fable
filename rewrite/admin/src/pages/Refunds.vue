@@ -141,16 +141,19 @@ function closeDecide() {
 async function doApprove() {
   const row = decideRow.value
   if (!row || !canApprove.value || busy.value) return // 在途禁再发·防双击重复触发退款（同 doReject）
+  const targetId = row.id // 请求发起时捕获目标单号（P2·根因#8）：回包迟到时抽屉可能已被管理员切到别单
   busy.value = true
   decideErr.value = ''
   const r = await approveRefund(row.id)
   busy.value = false
+  const stillHere = decideRow.value?.id === targetId // 回包只在「当前抽屉仍是该单」时才动它——避免关掉管理员已另开的抽屉、把错误挂错单
   if (r.ok) {
     actionMsg.value = `✓ 已受理退款 ${row.orderId}，等微信回调确认到账`
-    closeDecide()
-    void reload()
-  } else {
-    // 失败：不关抽屉、不刷新——真实原因留在眼前（P2·根因#14 admin 侧·别被 reload 的"加载中…"盖掉）
+    if (stillHere) closeDecide()
+    void reload() // 列表真值刷新与抽屉是否仍是该单无关·恒执行
+  } else if (stillHere) {
+    // 失败：不关抽屉、不刷新——真实原因留在眼前（P2·根因#14 admin 侧·别被 reload 的"加载中…"盖掉）；
+    // 若抽屉已切别单则不挂错误（P2·根因#8）
     decideErr.value = `退款触发失败：${String(r.error || '未知错误')}`
   }
 }
@@ -162,16 +165,18 @@ async function doReject() {
     decideErr.value = '拒绝必须写原因（会展示给买家）'
     return
   }
+  const targetId = row.id // 请求发起时捕获目标单号（P2·根因#8）：回包迟到时抽屉可能已被管理员切到别单
   busy.value = true
   decideErr.value = ''
   const r = await rejectRefund(row.id, rejectReason.value.trim())
   busy.value = false
+  const stillHere = decideRow.value?.id === targetId
   if (r.ok) {
     actionMsg.value = `已拒绝退款 ${row.orderId}`
-    closeDecide()
+    if (stillHere) closeDecide()
     void reload()
-  } else {
-    // 失败：留抽屉 + 红条（同 doApprove·不被刷新吞）
+  } else if (stillHere) {
+    // 失败：留抽屉 + 红条（同 doApprove·不被刷新吞）；若抽屉已切别单则不挂错误
     decideErr.value = '拒绝没成功：' + String(r.error || '')
   }
 }

@@ -19,12 +19,18 @@ export function serialSave(run: () => Promise<unknown>) {
       running = null
     }
   }
-  return function trigger(): Promise<void> {
+  const trigger = (function (): Promise<void> {
     if (running) {
       dirty = true // 在途·标脏（不并发发第二个 POST）·返回在途链供调用方 await 排空
       return running
     }
     running = loop()
     return running
-  }
+  }) as { (): Promise<void>; settled(): Promise<void> }
+  // .settled()（批3 规格新增·只加不改既有语义）：只等**已经在途**的链，idle 时不强制多跑一轮 run()——
+  // trigger() 本身的 do-while 恒至少跑一次，idle 时调它也会多发一次 POST，不适合"危险动作发起前先确认
+  // 没有旧快照的请求还在路上"这类场景（Cards.finalize/Products.doSave 都踩过：clearTimeout 只挡得住
+  // 未触发的防抖定时器，挡不住已经发出、正在等回包的请求，晚到的旧快照 autosave 会把新写盖回去）。
+  trigger.settled = () => running ?? Promise.resolve()
+  return trigger
 }

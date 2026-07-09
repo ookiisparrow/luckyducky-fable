@@ -20,6 +20,7 @@ const confirmKey = ref('') // no-alert 两步删除确认（换皮改直接 spli
 
 async function reload() {
   const r = await listHelpVideos()
+  confirmKey.value = '' // 刷新即复位危险态（P1·防旧武装的删主题/删段残留、重进同一位一击直删·批3 规格）
   loaded = false // 载入期不触发自动保存
   items.value = r.ok ? normalizeHelpItems(r.items) : []
   message.value = r.ok ? '' : '加载失败：' + String(r.error || '')

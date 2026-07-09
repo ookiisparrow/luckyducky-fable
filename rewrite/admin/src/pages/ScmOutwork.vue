@@ -48,6 +48,7 @@ function lineOver(l: { materialId: string; qty: number }): boolean {
 const anyOver = computed(() => recvLines.value.some(lineOver)) // 任一色收超发→拦确认（后端也会拒·前端先防呆）
 
 async function reload() {
+  confirmKey.value = '' // 刷新即复位危险态（P1·防旧武装的发料/结算/取消按钮跨刷新残留一击直发·批3 规格）
   const [o, m, s] = await Promise.all([listOutworks(), listMaterials(), listSuppliers()])
   orders.value = o.ok ? (o.list as Record<string, any>[]) : []
   const all = m.ok ? (m.list as Record<string, any>[]) : []

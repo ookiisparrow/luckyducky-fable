@@ -35,6 +35,7 @@ const PRESET: Omit<KbRow, 'order'>[] = [
 ]
 
 async function reload() {
+  confirmKey.value = '' // 刷新即复位危险态（P1·防旧武装的删行残留、重进同一位一击直删·批3 规格）
   loaded = false // 载入/刷新期间禁保存（含 save 后刷新失败 rows=[] 的窗口·防拿空表覆盖删光·同 HelpVideos）
   const r = await listKb()
   rows.value = r.ok ? normalizeKb(r.list) : []
@@ -48,6 +49,7 @@ function addRow() {
   rows.value.push({ key: '', question: '', answer: '', category: 'other', enabled: true, order: rows.value.length })
 }
 function loadPreset() {
+  confirmKey.value = '' // 载入预设即复位危险态（P1·同 reload 约定·批3 规格同类扩面）
   const existing = new Set(rows.value.map((r) => r.key))
   let added = 0
   PRESET.forEach((p) => {
