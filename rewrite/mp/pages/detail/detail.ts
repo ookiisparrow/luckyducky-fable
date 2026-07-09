@@ -8,6 +8,17 @@ import { mapSummary, type SummaryVM } from '../../lib/mapReviews'
 import { mapProducts, type ProductVM } from '../../lib/mapHome'
 import { openCustomerService } from '../../utils/customerService'
 
+// 图册窗口（病根#15 图片面·批B）：current±1 才渲染，circular 时首尾邻接也算窗口内——
+// swiper 内 lazy-load 真机不生效，全量 swiper-item 会让画廊全部图并发下载抢首屏带宽。
+function computeGalleryWindow(len: number, current: number): boolean[] {
+  const circular = len > 1 // 与 wxml `circular="{{vm.gallery.length > 1}}"` 同源判断
+  return Array.from({ length: len }, (_, i) => {
+    if (i === current || i === current - 1 || i === current + 1) return true
+    if (circular && ((current === 0 && i === len - 1) || (current === len - 1 && i === 0))) return true
+    return false
+  })
+}
+
 Page({
   data: {
     loading: true,
@@ -17,6 +28,7 @@ Page({
     currentPrice: '', // 展示标签「¥198」
     currentPriceNum: 0, // 数字部分（¥ 小、数字大）
     galleryIndex: 0,
+    galleryWindow: [] as boolean[], // 随 galleryIndex 同步重算，详见 computeGalleryWindow
     recs: [] as ProductVM[],
     rating: null as SummaryVM | null, // 评分摘要（旁挂·异步·count=0 或失败→null 回退静态入口）
   },
@@ -34,6 +46,7 @@ Page({
       skuIndex: i,
       currentPrice: priceForSelection(vm, i),
       currentPriceNum: i >= 0 && vm.skus[i] ? vm.skus[i].price : vm.price,
+      galleryWindow: computeGalleryWindow(vm.gallery.length, 0),
     })
     void this.loadRecs(id)
     void this.loadRating(id)
@@ -50,7 +63,11 @@ Page({
     this.setData({ rating: r.ok ? mapSummary(r) : null })
   },
   onGallery(e: { detail: { current: number } }) {
-    this.setData({ galleryIndex: e.detail.current })
+    const vm = this.data.vm
+    this.setData({
+      galleryIndex: e.detail.current,
+      galleryWindow: vm ? computeGalleryWindow(vm.gallery.length, e.detail.current) : [],
+    })
   },
   onSelectSku(e: WechatMiniprogram.TouchEvent) {
     const idx = Number(e.currentTarget.dataset.index)

@@ -38,6 +38,7 @@
           class="ld-rv-photo"
           src="{{ph}}"
           mode="aspectFill"
+          lazy-load
           data-url="{{ph}}"
           data-urls="{{item.photos}}"
           bind:tap="onPreviewPhoto"

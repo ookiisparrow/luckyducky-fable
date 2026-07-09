@@ -25,7 +25,9 @@ Page({
     this.refresh()
   },
   refresh() {
-    const items = cart.getItems()
+    // 展示 cover 用 allRaw 最新值覆盖（批B 图片链提速回归：持久化 cover 是 2h 时效临时址，隔天过期挂图）；
+    // 存量 cart.getItems() 仍是持久化真值，只在这层视图组装时覆盖展示字段，不改 storage 契约。
+    const items = cart.getItems().map((it) => ({ ...it, cover: cart.freshCover(it, allRaw) }))
     const inCart = new Set(items.map((it) => it.id))
     this.setData({
       items,

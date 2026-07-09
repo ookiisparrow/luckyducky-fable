@@ -37,7 +37,7 @@
 
       <!-- 商品行（每单可多行） -->
       <view class="coolist-item" wx:for="{{item.items}}" wx:for-item="line" wx:key="lineId">
-        <image wx:if="{{line.cover}}" class="coolist-img" src="{{line.cover}}" mode="aspectFill" />
+        <image wx:if="{{line.cover}}" class="coolist-img" src="{{line.cover}}" mode="aspectFill" lazy-load />
         <view wx:else class="coolist-img"></view>
         <view class="coolist-mid">
           <text class="coolist-name">{{line.name}}</text>

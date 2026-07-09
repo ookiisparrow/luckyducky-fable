@@ -145,3 +145,13 @@ export function clear(): void {
 export function __resetForTest(): void {
   items = null
 }
+
+/** 展示层覆盖（批B 图片链提速回归修复）：云端 getProducts 下发的 cover 已从持久 cloud:// fileID
+ *  换成约 2h 时效的 https 临时址（rewrite/cloud/.../catalog.ts），而购物车行的 cover 会持久化进
+ *  wx.storage——隔天回灌旧址早已过期，缩略图会挂。按行 id 从「当前商品原档」（页面已拉取的全量列表）
+ *  查最新 cover 展示；查不到（商品已删/停售/原档未加载）回退行内持久 cover，不改持久化契约本身。 */
+export function freshCover(line: { id: string; cover: string }, allRaw: Record<string, unknown>[]): string {
+  const p = allRaw.find((x) => String(x.id || x._id || '') === line.id)
+  const fresh = p && typeof p.cover === 'string' ? p.cover.trim() : ''
+  return fresh || line.cover
+}

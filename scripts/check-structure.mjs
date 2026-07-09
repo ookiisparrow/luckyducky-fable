@@ -4957,6 +4957,65 @@ export const repoChecks = [
       return bad
     },
   },
+  {
+    // 加载提速·内容图 lazy-load 接线（批B·病根#15 图片面·2026-07-09）：全仓 wxml 零 lazy-load，
+    // 折叠线以下/列表内的内容图（CMS 图、买家秀晒图、推荐位、订单缩略图）进页即与首屏抢并发下载带宽。
+    // 接线表驱动（同 rw-mp-customer-service-wired 范式）：逐点位钉「class 定位的 <image> 标签」必须
+    // 同时带 lazy-load 且仍绑定期望的 src 表达式——点位消失（被删/改名）与 src 漂移（换绑别的字段而
+    // 表未同步）都判红，防「删图/改绑」假绿；lazy-load 缺席（未接线）判红。
+    // 刻意排除（不进表，各有明确理由）：① 首屏 hero（home.wxml:5 ld-hero-photo）——首屏图不该延迟；
+    // ② 横向 scroll-view 内的图（home.wxml 商品轨 ld-prod-media-img / 买家秀轨 ld-review-media-img；
+    // detail.wxml swiper 画廊）——lazy-load 在 scroll-x 容器内不生效（真机验证过的坑）；
+    // ③ 图标/静态资源（/static/icons/*.svg、logo）——非内容图，不吃带宽大头；
+    // ④ detail 图册 swiper-item（detail.wxml:7 pdp-hero）——另立 current±1 窗口渲染收口，不与本守卫重叠。
+    id: 'rw-mp-image-lazy-wired',
+    roots: ['#15'],
+    desc: '内容图 lazy-load 接线（rewrite/mp·病根#15 图片面）：接线表列出的每个内容图点位（home 特写图/拆门槛图/收尾图、reviews 晒图、detail 推荐位、order/order-list 缩略图）须带 lazy-load 且仍绑定期望 src 表达式，防未接线/被删改假绿',
+    run() {
+      const base = join(ROOT, 'rewrite/mp')
+      if (!existsSync(base)) return []
+      const bad = []
+      // 定位形如 <image ... class="cls" ... /> 的完整标签文本（从 class 属性向前找最近 <image、
+      // 向后找最近 />，兼容属性任意顺序与多行书写——同 methodBody 的「找边界」精神，未引入新范式）。
+      const findImageTagByClass = (src, cls) => {
+        const clsIdx = src.indexOf(`class="${cls}"`)
+        if (clsIdx === -1) return null
+        const tagStart = src.lastIndexOf('<image', clsIdx)
+        const tagEnd = src.indexOf('/>', clsIdx)
+        if (tagStart === -1 || tagEnd === -1) return null
+        return src.slice(tagStart, tagEnd + 2)
+      }
+      const POINTS = [
+        { file: 'pages/home/home.wxml', cls: 'ld-feature-img', srcExpr: '{{content.feature.img}}', label: '首页特写图' },
+        { file: 'pages/home/home.wxml', cls: 'ld-panel-media-img', srcExpr: '{{item.img}}', label: '首页拆门槛图' },
+        { file: 'pages/home/home.wxml', cls: 'ld-closing-img', srcExpr: '{{content.closing.img}}', label: '首页收尾图' },
+        { file: 'pages/reviews/reviews.wxml', cls: 'ld-rv-photo', srcExpr: '{{ph}}', label: '评价页晒图' },
+        { file: 'pages/detail/detail.wxml', cls: 'pdp-rec-img', srcExpr: '{{item.cover}}', label: '详情页推荐位图' },
+        { file: 'pages/order/order.wxml', cls: 'co-item-img', srcExpr: '{{item.cover}}', label: '订单详情缩略图' },
+        { file: 'pages/order-list/order-list.wxml', cls: 'coolist-img', srcExpr: '{{line.cover}}', label: '订单列表缩略图' },
+      ]
+      for (const pt of POINTS) {
+        const abs = join(base, pt.file)
+        if (!existsSync(abs)) {
+          bad.push(`${pt.file} 缺失——${pt.label}点位无处可查（病根#15）`)
+          continue
+        }
+        const src = readFileSync(abs, 'utf8')
+        const tag = findImageTagByClass(src, pt.cls)
+        if (!tag) {
+          bad.push(`${pt.file} 找不到 class="${pt.cls}" 的 <image> 标签——${pt.label}点位消失（被删/改名，表未同步，病根#15）`)
+          continue
+        }
+        if (!tag.includes(`src="${pt.srcExpr}"`)) {
+          bad.push(`${pt.file} 的 ${pt.cls} 图不再绑定 ${pt.srcExpr}——${pt.label}点位漂移（表未同步，病根#15）`)
+          continue
+        }
+        if (!/\blazy-load\b/.test(tag))
+          bad.push(`${pt.file} 的 ${pt.cls}（${pt.label}）未接 lazy-load——折叠线以下内容图与首屏抢并发下载带宽（病根#15）`)
+      }
+      return bad
+    },
+  },
 ]
 
 // ============== 逐文件规则（fileRules）==============

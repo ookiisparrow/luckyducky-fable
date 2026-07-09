@@ -58,7 +58,7 @@
         </view>
       </view>
       <view class="co-item" wx:for="{{vm.items}}" wx:key="lineId">
-        <image wx:if="{{item.cover}}" class="co-item-img" src="{{item.cover}}" mode="aspectFill" />
+        <image wx:if="{{item.cover}}" class="co-item-img" src="{{item.cover}}" mode="aspectFill" lazy-load />
         <view wx:else class="co-item-img"></view>
         <view class="co-item-mid">
           <text class="co-item-name">{{item.name}}</text>

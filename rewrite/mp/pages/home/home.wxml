@@ -27,7 +27,7 @@
   <!-- ③ 特写 + 商品横向轨 -->
   <view class="ld-friends" id="friends">
     <view class="ld-feature-display">
-      <image wx:if="{{content.feature.img}}" class="ld-feature-img" src="{{content.feature.img}}" mode="aspectFill" />
+      <image wx:if="{{content.feature.img}}" class="ld-feature-img" src="{{content.feature.img}}" mode="aspectFill" lazy-load />
     </view>
     <view class="ld-feature-copy">
       <view class="ld-feature-title">{{content.feature.title}}</view>
@@ -94,7 +94,7 @@
         <view class="ld-panel-body" wx:if="{{openReassure === index}}">
           <view class="ld-panel-text">{{item.body}}</view>
           <view wx:if="{{item.img}}" class="ld-panel-media">
-            <image class="ld-panel-media-img" src="{{item.img}}" mode="aspectFill" />
+            <image class="ld-panel-media-img" src="{{item.img}}" mode="aspectFill" lazy-load />
           </view>
         </view>
       </view>
@@ -145,7 +145,7 @@
 
   <!-- ⑧ 收尾 CTA -->
   <view class="ld-closing">
-    <image wx:if="{{content.closing.img}}" class="ld-closing-img" src="{{content.closing.img}}" mode="aspectFill" />
+    <image wx:if="{{content.closing.img}}" class="ld-closing-img" src="{{content.closing.img}}" mode="aspectFill" lazy-load />
     <view class="ld-closing-copy">
       <view class="ld-display ld-closing-title">{{content.closing.title}}</view>
       <view class="ld-btn-dark ld-closing-btn" hover-class="ld-btn-dark-h" bind:tap="toProducts">{{content.closing.cta}}</view>

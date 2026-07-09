@@ -4,7 +4,9 @@
   <view class="pdp-gallery">
     <swiper wx:if="{{vm.gallery.length}}" class="pdp-swiper" circular="{{vm.gallery.length > 1}}" bindchange="onGallery">
       <swiper-item wx:for="{{vm.gallery}}" wx:key="*this">
-        <image class="pdp-hero" src="{{item}}" mode="aspectFill" />
+        <!-- 窗口渲染（current±1·circular 首尾邻接算窗口内）：swiper 内 lazy-load 不生效（真机验证过），
+             全量 swiper-item 会让画廊全部图并发下载；galleryWindow 由 detail.ts 随 galleryIndex 同步维护。 -->
+        <image wx:if="{{galleryWindow[index]}}" class="pdp-hero" src="{{item}}" mode="aspectFill" />
       </swiper-item>
     </swiper>
     <view wx:else class="pdp-hero pdp-hero-empty"></view>
@@ -87,7 +89,7 @@
     <view class="pdp-recs">
       <view class="pdp-rec" wx:for="{{recs}}" wx:key="id" data-id="{{item.id}}" bind:tap="onTapRec">
         <view class="pdp-rec-media">
-          <image wx:if="{{item.cover}}" class="pdp-rec-img" src="{{item.cover}}" mode="aspectFill" />
+          <image wx:if="{{item.cover}}" class="pdp-rec-img" src="{{item.cover}}" mode="aspectFill" lazy-load />
         </view>
         <view class="pdp-rec-body">
           <view class="pdp-rec-name">{{item.name}}</view>

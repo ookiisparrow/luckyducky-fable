@@ -111,3 +111,13 @@ describe('持久化回灌（黄金 §二：脏数据闸）', () => {
     expect(cart.getItems().find((i) => i.sku === '')!.qty).toBe(1)
   })
 })
+
+describe('展示 cover 覆盖（批B 图片链提速回归：持久 cover 过期挂图）', () => {
+  it('大白话：allRaw 里查得到该商品且 cover 非空 → 用最新 cover 覆盖展示；查不到/该商品 cover 为空 → 回退存量持久 cover', () => {
+    const line = { id: 'p1', cover: 'https://stale.example/expired.jpg' }
+    expect(cart.freshCover(line, [{ id: 'p1', cover: 'https://fresh.example/new.jpg' }])).toBe('https://fresh.example/new.jpg')
+    expect(cart.freshCover(line, [{ id: 'p1', cover: '' }])).toBe(line.cover) // 原档 cover 空→回退存量
+    expect(cart.freshCover(line, [{ id: 'other', cover: 'https://fresh.example/x.jpg' }])).toBe(line.cover) // 商品已删/不在原档→回退存量
+    expect(cart.freshCover(line, [])).toBe(line.cover) // 原档未加载（空数组）→回退存量
+  })
+})
