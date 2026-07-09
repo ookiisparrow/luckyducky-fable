@@ -33,7 +33,11 @@ Page({
     this.setData({ list: mergeAfterSales(this.data.list, mapAfterSales(r.list)), cursor: r.nextCursor, hasMore: !!r.hasMore })
   },
   onTapOrder(e: WechatMiniprogram.TouchEvent) {
-    wx.navigateTo({ url: '/pages/order/order?id=' + String(e.currentTarget.dataset.id) })
+    // order↔aftersales 互跳环无叠栈守卫（P3·bug sweep Round2 item6·同 detail.ts onTapRec 范式）：
+    // 反复「我的售后→订单详情→回售后→再点单」会持续叠栈，逼近上限改 redirectTo 替换本页。
+    const url = '/pages/order/order?id=' + String(e.currentTarget.dataset.id)
+    if (getCurrentPages().length >= 8) wx.redirectTo({ url })
+    else wx.navigateTo({ url, fail: () => wx.redirectTo({ url }) })
   },
   onKefu() {
     openCustomerService()

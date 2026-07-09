@@ -26,6 +26,7 @@ const searchGen = useLatest() // 搜索乱序守卫（P2·照同页 open() 的 p
 async function search() {
   if (!q.value.trim()) return
   message.value = '搜索中…'
+  hits.value = [] // 起始清旧命中列表（P2·bug sweep Round2 item13）：旧命中在途仍可点开，同 open() 起始清残留纪律一致
   panels.value = []
   current.value = ''
   user.value = null // 新一轮搜索即清上一客户身份头残留（P1·回归修复：身份头移出 panels 连坐 v-if 后单独有此残留窗口——
@@ -41,8 +42,11 @@ async function search() {
         matched: matchLabel(c.matchedBy),
         createdAt: dateTime(c.createdAt),
       }))
-    : []
-  message.value = r.ok ? (hits.value.length ? '' : '没找到匹配的客户') : '搜索失败：' + String(r.error || '')
+    : [] // hits 照常 latest-wins 更新：用户在看客户时命中列表被 v-if="!current" 隐藏、落地无害
+  // message 只在未打开客户面板时更新（P2·bug sweep Round2 item13·AND 语义非 OR）：isStale 早退之后「本代际仍
+  // 最新」在此恒真——若把它也纳入这里的判定条件（OR）等于恒真，起不到「迟到搜索回包覆盖已打开客户状态文案」
+  // 的防护；只认 !current 才是真实闸门。
+  if (!current.value) message.value = r.ok ? (hits.value.length ? '' : '没找到匹配的客户') : '搜索失败：' + String(r.error || '')
 }
 
 const panoGen = useLatest() // 全景乱序守卫（P1·FORCE_AUDIT 页·A 的私域全景别落到标 B 的头下·根因#8）

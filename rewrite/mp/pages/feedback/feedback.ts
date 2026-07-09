@@ -16,7 +16,9 @@ Page({
     busy: false,
   },
   backTimer: null as ReturnType<typeof setTimeout> | null,
+  unloaded: false, // 提交在途页面已退出标记（同 review.ts 范式·P2·bug sweep Round2 item3）：迟到回包别再对下一页 navigateBack+toast
   onUnload() {
+    this.unloaded = true
     if (this.backTimer) clearTimeout(this.backTimer) // 延时返回坞清理·防手动返回后孤儿定时器多弹页（守卫 rw-mp-navback-timer-cleaned）
   },
   onCat(e: WechatMiniprogram.TouchEvent) {
@@ -36,6 +38,7 @@ Page({
     }
     this.setData({ busy: true })
     const r = await submitFeedback(this.data.content.trim(), this.data.cat, this.data.contact.trim())
+    if (this.unloaded) return // 迟到回包：已退页（onUnload 已清 backTimer）——不弹 toast、不 navigateBack
     if (r.ok) {
       // 成功不复位 busy——锁到返回·防延时窗口内二次提交；toast 加 mask 挡点；定时器存实例待 onUnload 清
       wx.showToast({ title: '收到，谢谢你', icon: 'success', mask: true })

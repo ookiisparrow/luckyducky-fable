@@ -2,6 +2,7 @@
 // 总览 / 商品与内容 / 订单与钱 / 客服 / 进销存 / 系统 六组——页面随批次逐组填充。
 import { createRouter, createWebHashHistory } from 'vue-router'
 import { client } from './api'
+import { isUploadLocked } from './lib/uploadLock'
 
 const Login = () => import('./pages/Login.vue')
 const Shell = () => import('./shell/Shell.vue')
@@ -78,9 +79,20 @@ export const router = createRouter({
 })
 
 // 会话闸：无令牌一律回登录页（fail-closed·令牌真伪由云端裁决）
-router.beforeEach((to) => {
+// 批量上传在途闸（P1 收口·同日案 M 记债后当批修复）：Wizard.go() 与 Courses.vue 的 onBeforeRouteLeave
+// 两处消费 isUploadLocked() 均只挡各自的窄路径——Shell 侧栏「按步骤直达」是裸 router-link 改 query.step
+// （仅 query 变化＝路由 update 非 leave，onBeforeRouteLeave 不触发；也不经过 go()）、浏览器前进/后退同样绕开
+// 两点式拦截。全局 beforeEach 对任何导航（含仅 query 变化的 update）必过，一次性收口两条旁路 + 未来新增
+// 入口，不逐点打补丁。会话分支优先（登录态丢失/手动登出跳 /login 不可被上传锁卡死）：仅当 to.path 不是
+// /login 且已通过上方会话检查（代表这是「已登录状态下的页面间导航」）才判上传锁；且只挡真会改变当前路由的
+// 导航（fullPath 含 query，同址无效导航放行，无需拦）。
+router.beforeEach((to, from) => {
   if (to.path !== '/login' && !client.hasSession()) return '/login'
   if (to.path === '/login' && client.hasSession()) return '/'
+  if (to.path !== '/login' && isUploadLocked() && to.fullPath !== from.fullPath) {
+    window.alert('批量上传进行中，完成前请勿离开当前步骤')
+    return false
+  }
   return true
 })
 

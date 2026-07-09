@@ -45,6 +45,9 @@ async function doCreate() {
   }
 }
 
+// 失败提示不再紧随 reload()（P2·bug sweep Round2 item9·同第 8 条 Products.vue 范式）：reload() 内部
+// await listAgents() 落地后会把 message.value 重写成 ''（成功）或「加载失败：…」（失败），迟于本函数
+// 设的操作结果文案落地，把「操作失败：X」这条真实原因悄悄覆盖没了。失败分支直接 return、不 reload。
 async function toggle(row: AgentRow) {
   if (!row.disabled && confirmId.value !== row.id) {
     confirmId.value = row.id // 停用两步确认（即时生效·对方连登录都不行）
@@ -52,7 +55,11 @@ async function toggle(row: AgentRow) {
   }
   confirmId.value = ''
   const r = await disableAgent(row.id, !row.disabled)
-  message.value = r.ok ? (row.disabled ? `已恢复 ${row.name}` : `已停用 ${row.name}（对方即刻登不了）`) : '操作失败：' + String(r.error || '')
+  if (!r.ok) {
+    message.value = '操作失败：' + String(r.error || '')
+    return
+  }
+  message.value = row.disabled ? `已恢复 ${row.name}` : `已停用 ${row.name}（对方即刻登不了）`
   void reload()
 }
 
@@ -60,7 +67,11 @@ async function bindWecom(row: AgentRow) {
   const v = prompt2(row)
   if (v === null) return
   const r = await setAgentWecomUserId(row.id, v)
-  message.value = r.ok ? '' : String(r.error) === 'WECOM_ID_TAKEN' ? '这个 userid 已绑在别的账号' : '绑定失败：' + String(r.error || '')
+  if (!r.ok) {
+    message.value = String(r.error) === 'WECOM_ID_TAKEN' ? '这个 userid 已绑在别的账号' : '绑定失败：' + String(r.error || '')
+    return
+  }
+  message.value = ''
   void reload()
 }
 // 简易输入（no-alert 纪律下用内联输入更好·此处低频操作用行内编辑）

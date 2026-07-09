@@ -75,12 +75,17 @@ const courseOf = (r: DraftRowVM) => String((r.raw as any).courseId || '')
 const urlMap = ref<Record<string, string>>({})
 const sessionUrls = ref<Record<string, string>>({})
 const imgUrl = (fileID: string) => sessionUrls.value[fileID] || urlMap.value[fileID] || ''
+// urlMap 取数时刻（P3·bug sweep Round2 item10）：云存储临时址约 2h 时效，长会话挂着不关闭列表页时
+// urlMap 只在写操作后才刷新——openEdit 入口若超龄，编辑器一打开图就已经挂了。阈值 90 分钟（留 30 分钟余量）。
+let urlMapAt = 0
+const URL_MAP_STALE_MS = 90 * 60 * 1000
 
 async function reload() {
   confirmKey.value = '' // 刷新即复位危险态（P1·防旧武装的上架/下架/删除按钮跨刷新残留一击直发·批3 规格）
   message.value = '加载中…'
   const r = await listDrafts()
   urlMap.value = r.ok && (r as any).urls ? (r as any).urls : {}
+  urlMapAt = Date.now()
   rows.value = r.ok ? mapDraftRows(r.list, r.urls, r.listed, stepExtras(r)) : []
   message.value = r.ok ? '' : '加载失败：' + String(r.error || '')
 }
@@ -91,6 +96,7 @@ async function silentRefresh() {
   const r = await listDrafts()
   if (r.ok) {
     urlMap.value = (r as any).urls || {}
+    urlMapAt = Date.now()
     rows.value = mapDraftRows(r.list, r.urls, r.listed, stepExtras(r))
   }
 }
@@ -105,7 +111,10 @@ watch(
     if (!edit.value || !editorLoaded) return
     autoState.value = 'saving'
     if (saveTimer) clearTimeout(saveTimer)
-    saveTimer = setTimeout(() => void flushSave(), 900)
+    saveTimer = setTimeout(() => {
+      saveTimer = null // 触发后清空·让 saveTimer 真实反映「有未落盘的待发编辑」（照 Courses.vue:146 写法·P1·bug sweep Round2 item7）
+      void flushSave()
+    }, 900)
   },
   { deep: true }
 )
@@ -125,6 +134,7 @@ function markLoaded() {
   void nextTick(() => (editorLoaded = true)) // 赋值落定后再放开自动保存
 }
 function closeEditor() {
+  openEditGen++ // 使任何仍在等 silentRefresh 回包的 openEdit 调用作废——不得在关闭后悄悄把编辑器重新弹开（同上代际守卫）
   if (saveTimer) {
     clearTimeout(saveTimer)
     saveTimer = null
@@ -151,14 +161,27 @@ onBeforeUnmount(() => {
 })
 
 function newProduct() {
+  openEditGen++ // 使任何仍在等 silentRefresh 回包的 openEdit 调用作废——不得晚落地覆盖这次新建（同上代际守卫）
   edit.value = { id: 'p' + Date.now().toString(36), name: '', tag: '', brief: '', price: '', was: '', cover: '', images: [], skus: [], params: [], detailSections: [], kit: [], courseId: '' }
   coverPreview.value = ''
   markLoaded()
 }
 
-function openEdit(row: DraftRowVM) {
-  edit.value = JSON.parse(JSON.stringify(row.raw)) // 整档拷贝·round-trip 防抹字段
-  coverPreview.value = row.coverUrl
+// urlMap 超龄（≥90 分钟未刷新）先静默刷一次再开编辑器（P3·bug sweep Round2 item10）：只在这一个入口挂钩子，
+// 列表渲染路径（模板求值）不挂副作用、也不做定时轮询（防过度工程）。row 可能是刷新前的旧快照，刷新后按 id 重找。
+// 代际守卫（P1·bug sweep Round2 复审补漏·同 me.ts/order-list.ts 的 _seq 范式）：urlMap 超龄期间连续快点
+// 打开两件不同商品，若网络乱序（先点的那次 silentRefresh 回包更晚落地），过期调用不得覆盖后来者正在看/编辑的编辑器。
+let openEditGen = 0
+async function openEdit(row: DraftRowVM) {
+  const my = ++openEditGen
+  let r = row
+  if (Date.now() - urlMapAt > URL_MAP_STALE_MS) {
+    await silentRefresh()
+    if (my !== openEditGen) return // 过期调用（期间又打开了另一件商品/新建/关闭）——丢弃，不覆盖后来者
+    r = rows.value.find((x) => x.id === row.id) || row // 兜底：刷新期间该商品被删——退回旧快照，整档拷贝仍能打开（后续保存时云端会如实报错）
+  }
+  edit.value = JSON.parse(JSON.stringify(r.raw)) // 整档拷贝·round-trip 防抹字段
+  coverPreview.value = r.coverUrl
   markLoaded()
 }
 
@@ -222,41 +245,31 @@ async function compress(file: File): Promise<string> {
 
 async function doSave() {
   if (!edit.value || busy.value) return
-  if (saveTimer) {
-    clearTimeout(saveTimer) // 只挡得住未触发的防抖定时器（同 Cards.finalize 约定）
-    saveTimer = null
-  }
   busy.value = true
-  // 排空已发出、仍在等回包的在途 autosave（P2·根因#8）：不排空则「保存草稿」这次写可能被晚到的旧快照
-  // autosave 回包乱序盖掉，编辑丢失——settled() 只等在途链、idle 时不额外多发一次 POST。
-  await flushSave.settled()
-  if (!edit.value) {
-    busy.value = false // 排空期间编辑器被关闭（如快速切换）——不再对已置空的 edit 发送
-    return
-  }
-  const r = await saveDraft(edit.value)
-  busy.value = false
-  message.value = r.ok ? '' : '保存失败：' + String(r.error || '')
-  if (r.ok) {
-    // doSave 自身网络等待期间可能又有新编辑触发防抖（P2 复审补漏·根因#8）：saveDraft 在途时 watch(edit)
-    // 一样会照常排一枚 900ms saveTimer；若直接置空 edit.value，该计时器到点后 autosave() 里
-    // `if (!edit.value) return` 会静默 no-op——这次编辑从未被发送到服务端、也没有任何报错提示。
-    // 关闭前照 closeEditor() 已有模式：仍排着的计时器说明有未落盘编辑，抓一份快照单独补存再关闭。
+  // 并入同一条 serialSave 队列而非旁路直发（P1·bug sweep Round2 item7·批3 修复不彻底：原「settled() 排空后
+  // 再裸调 saveDraft」——这次写发出到回包落地期间，若又有新编辑触发 watch→再排一枚 saveTimer→到点 flushSave()
+  // 会并发发出第二条 POST，乱序回包时晚到的旧快照覆盖新写。改走 flushSave()（trigger 本尊，非 .settled()）：
+  // 已在途只标脏、不并发再发；run() 现读 edit.value 最新值，latest-wins，全程只有一条链在跑。
+  //
+  // 反复排空直到干净（P1·bug sweep Round2 复审补漏）：flushSave() 挂起期间若又有新编辑，watch(edit) 会
+  // 另起一枚**独立**的 900ms 防抖计时器（不经过 trigger()，不会让本轮 serialSave 的 dirty=true）——若这次
+  // 网络往返快于 900ms（常见），该计时器仍孤悬未触发时 flushSave() 已经 resolve；同时这次新编辑已把 autoState
+  // 同步置回 'saving'，随后落地的旧回包又把它覆盖误报成 'saved'。用「saveTimer 是否仍孤悬」判断「还有未落库
+  // 的新编辑」，清掉它、再次调用 flushSave()（run() 现读 edit.value 最新值·天然 latest-wins）直到没有为止。
+  for (;;) {
     if (saveTimer) {
-      clearTimeout(saveTimer)
+      clearTimeout(saveTimer) // 只挡得住未触发的防抖定时器（同 Cards.finalize 约定）
       saveTimer = null
-      const snap = JSON.parse(JSON.stringify(edit.value)) as Record<string, any>
-      editorLoaded = false
-      edit.value = null
-      void saveDraft(snap)
-        .then(() => {
-          void silentRefresh()
-          emit('saved')
-        })
-        .catch(() => {})
-      void reload()
-      return
     }
+    await flushSave()
+    if (!edit.value) break // 排空期间编辑器被关闭（如快速切换）——不再对已置空的 edit 收尾
+    if (!saveTimer) break // 期间没有新的孤悬防抖计时器＝真正排空干净
+  }
+  busy.value = false
+  if (!edit.value) return
+  const ok = autoState.value === 'saved'
+  message.value = ok ? '' : '保存失败：请重试'
+  if (ok) {
     editorLoaded = false
     edit.value = null
     void reload()
@@ -265,12 +278,20 @@ async function doSave() {
 }
 
 // 上架两步确认（换皮直接上架无确认·上架即对小程序可见·应有一道）
+// 四动作失败提示不再紧随 reload()（P1·bug sweep Round2 item8）：reload() 起手同步 `message.value='加载中…'`，
+// void reload() 的 fire-and-forget 调用会在当前同步代码段里立即跑到那一行、把刚设的失败原因同步清掉——
+// 操作员只看见一闪而过的「加载中」，真实失败原因（如四道门人话）从未被看见。照 Anomalies/Inspect 已有规避
+// 范式：失败分支直接 return、不 reload；只有成功才清空 message 再 reload。
 const doPublish = (id: string) =>
   twoStep('pub:' + id, async () => {
     busy.value = true
     const r = await publishProduct(id)
     busy.value = false
-    message.value = r.ok ? '' : publishErrorText(r.error) // 四道门人话
+    if (!r.ok) {
+      message.value = publishErrorText(r.error) // 四道门人话
+      return
+    }
+    message.value = ''
     void reload()
   })
 
@@ -286,7 +307,11 @@ async function twoStep(key: string, run: () => Promise<void>) {
 const doUnpublish = (id: string) =>
   twoStep('off:' + id, async () => {
     const r = await unpublishProduct(id)
-    message.value = r.ok ? '' : '下架失败：' + String(r.error || '')
+    if (!r.ok) {
+      message.value = '下架失败：' + String(r.error || '')
+      return
+    }
+    message.value = ''
     void reload()
   })
 
@@ -294,14 +319,22 @@ const doUnpublish = (id: string) =>
 const doRepublish = (id: string) =>
   twoStep('re:' + id, async () => {
     const r = await republishProduct(id)
-    message.value = r.ok ? '' : '恢复失败：' + String(r.error || '')
+    if (!r.ok) {
+      message.value = '恢复失败：' + String(r.error || '')
+      return
+    }
+    message.value = ''
     void reload()
   })
 
 const doDelete = (id: string) =>
   twoStep('del:' + id, async () => {
     const r = await deleteDraft(id)
-    message.value = r.ok ? '' : '删除失败：' + String(r.error || '')
+    if (!r.ok) {
+      message.value = '删除失败：' + String(r.error || '')
+      return
+    }
+    message.value = ''
     void reload()
   })
 
@@ -369,7 +402,7 @@ onMounted(async () => {
   // 嵌入向导：载入后自动打开目标商品的编辑器（步 1-3 面板即本编辑器）
   if (props.embed && props.wizardProductId) {
     const row = rows.value.find((r) => r.id === props.wizardProductId)
-    if (row) openEdit(row)
+    if (row) void openEdit(row)
   }
 })
 </script>

@@ -2,12 +2,13 @@
 // 课程管理（design/console.pen S2 课程编排视觉·M3 UI 批10）：章→课时→段 树编辑 + 每段视频直传 + 发布
 // （引用模型·老学员自动生效；孤儿视频云端 GC）。逻辑批10 未动，仅套设计语言（页头/视频进度条/章节卡/段上传 chip）。
 import { ref, computed, onMounted, onBeforeUnmount, watch, nextTick } from 'vue'
-import { useRoute } from 'vue-router'
+import { useRoute, onBeforeRouteLeave } from 'vue-router'
 import { RotateCcw, Plus, Trash2, Upload, Check, BookOpen } from 'lucide-vue-next'
 import { getCourseDraft, saveCourseDraft, publishCourse, uploadVideo } from '../api/content'
 import { courseVideoStats } from '../lib/mapContent'
 import { planLessonBatch } from '../lib/videoBatch'
 import { serialSave } from '../lib/serialSave'
+import { setUploadLock, clearUploadLock, isUploadLocked } from '../lib/uploadLock'
 import PageHeader from '../components/ui/PageHeader.vue'
 import Card from '../components/ui/Card.vue'
 import Badge from '../components/ui/Badge.vue'
@@ -196,6 +197,7 @@ async function batchUpload(l: Record<string, any>, ev: Event) {
   // plan 时就地深捕获——existing 段捕获当时的对象引用；new 段等真正 push 那一刻才有引用可捕获（先占位 null）
   const targets: Array<Record<string, any> | null> = plan.map((item) => (item.isNew ? null : (l.segments[item.segIndex] as Record<string, any>) ?? null))
   batchUploading.value = true
+  setUploadLock() // 批量上传在途锁（P1·bug sweep Round2 item12）：本组件 onBeforeRouteLeave + Wizard.go() 两处消费，拦截离页/切步致孤儿上传
   try {
     for (let i = 0; i < plan.length; i++) {
       const item = plan[i]
@@ -215,11 +217,21 @@ async function batchUpload(l: Record<string, any>, ev: Event) {
     }
   } finally {
     batchUploading.value = false
+    clearUploadLock()
   }
   progress.value = ''
   refreshStats()
   input.value = ''
 }
+
+// 离页拦截（P1·bug sweep Round2 item12）：覆盖独立路由页离开 + 整个 Wizard 页离开（如中途点「回商品列表」）。
+// Wizard 内部切步（query 变化）是路由 update 非 leave，此钩子不触发——那半由 Wizard.vue go() 前置拦截负责（c 点）。
+onBeforeRouteLeave(() => {
+  if (isUploadLocked()) {
+    message.value = '批量上传进行中，请等其完成再离开（切走会丢失还没落库的视频关联）'
+    return false
+  }
+})
 
 async function save() {
   if (!course.value || busy.value) return

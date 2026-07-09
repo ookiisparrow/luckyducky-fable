@@ -32,6 +32,7 @@ const step = ref(1)
 const orders = ref<FulfillOrder[]>([])
 const loading = ref(true)
 const loadErr = ref('')
+const truncNote = ref('') // 25 页保险丝触顶提示（P2·bug sweep Round2 item11·同 getInventory truncated 惯例：触顶不静默）
 // 本次发货流水（会话态·跳步不丢·刷新页面即清）
 interface LogEntry {
   id: string
@@ -48,6 +49,7 @@ const sessionLog = ref<LogEntry[]>([])
 async function reload() {
   loading.value = true
   loadErr.value = ''
+  truncNote.value = ''
   try {
     // 游标循环拉全量 paid（每页服务端上限·25 页保险丝防异常数据无限翻页）
     const acc: FulfillOrder[] = []
@@ -77,6 +79,9 @@ async function reload() {
       hasMore = !!(r as any).hasMore && cursor != null
       pages++
     }
+    // 触顶（25 页仍有下一页）不静默（P2·bug sweep Round2 item11·同 getInventory truncated 惯例）：
+    // 备货汇总/标签清单/扫码核对都基于 orders.value，触顶后本队列不完整却不吭声，操作员会漏单不自知。
+    if (hasMore && pages >= 25) truncNote.value = '订单量超出一次装载上限，列表不完整——请分批处理或联系技术缩小范围'
     orders.value = acc
   } catch (e) {
     loadErr.value = '加载失败：' + (e instanceof Error ? e.message : String(e))
@@ -300,6 +305,7 @@ const railState = (n: number) => (n === step.value ? 'current' : n < step.value 
 
     <p v-if="loadErr" class="status-err">{{ loadErr }}</p>
     <p v-else-if="loading" class="ld-status">加载待发货队列中…</p>
+    <p v-else-if="truncNote" class="warn-line">{{ truncNote }}</p>
 
     <template v-else>
       <!-- 步1 拣货备货 -->

@@ -4516,23 +4516,65 @@ export const repoChecks = [
     // 这段坞复制来复制去，漏了清理——用户在延时窗口内手动返回（原生返回箭头/手势），页已出栈但 mp 的 setTimeout 绑 JS VM 不随
     // navigateBack 取消，孤儿定时器到点再 navigateBack 多弹一层。守此不变量：凡 .ts 既有 setTimeout 又有 navigateBack（＝延时返回坞），
     // 必有 onUnload + clearTimeout 清定时器。伴生纪律「成功导航分支不复位 busy（防延时窗口内二次提交）」机器难判，靠人（见 CLAUDE §6 副作用）。
+    // 扩面（2026-07-09 批5·bug sweep Round2）：同类坑第二刀——onUnload 清了定时器，但「赋值定时器那次调用」的回包
+    // 若在退页之后才落地（如 review/profile-edit/feedback/checkout 的提交/保存 await 期间用户手动退页），迟到回包仍会
+    // 对已经退出的页面弹 toast/再 navigateBack（多弹一层的兄弟问题·同根因#8）。统一不变量扩到全部 backTimer 具名坞页：
+    // ① onUnload 须置 this.unloaded = true（与既有 clearTimeout 同处）；② 每个 `backTimer = setTimeout` 赋值点所在
+    // 方法体内、赋值之前须有 this.unloaded 早退检查。不做「是否在 await 之后」的复杂静态分析——统一简单不变量。
     id: 'rw-mp-navback-timer-cleaned',
     roots: ['#5', '#8'],
-    desc: 'mp 延时自动返回坞生命周期清理（病根#5 样板漂移·根因#8）：凡 rewrite/mp 页 .ts 既 setTimeout 又 navigateBack（延时自动返回）须 onUnload + clearTimeout 清定时器，否则用户在延时窗口内手动返回→孤儿定时器再 navigateBack 多弹页（工具端不暴露·真机才炸）',
+    desc: 'mp 延时自动返回坞生命周期清理（病根#5 样板漂移·根因#8）：凡 rewrite/mp 页 .ts 既 setTimeout 又 navigateBack（延时自动返回）须 onUnload + clearTimeout 清定时器；具名 backTimer 坞另须 onUnload 置 this.unloaded=true + 每处 backTimer=setTimeout 赋值前有 this.unloaded 早退检查——否则用户在延时窗口内手动返回/退页→孤儿定时器再 navigateBack 多弹页，或迟到回包对已退页再 toast/navigateBack（工具端不暴露·真机才炸）',
     run() {
       const base = join(ROOT, 'rewrite/mp')
       if (!existsSync(base)) return []
       const bad = []
       const pagesDir = join(base, 'pages')
       if (!existsSync(pagesDir)) return []
+      // 枚举源码里全部 2 空格缩进的顶层方法名（Page({...}) 对象方法书写惯例·`^\s{2}` 锚定行首恰好两空格，
+      // 更深缩进的嵌套回调（如 success: async (res) => {}）不会误命中）——配 methodBody 取各方法体范围，
+      // 定位某个 backTimer 赋值点具体落在哪个方法体内。
+      const topLevelMethodNames = (src) => {
+        const names = []
+        const re = /^ {2}(?:async\s+)?([a-zA-Z_$][\w$]*)\s*\([^)]*\)\s*\{/gm
+        let mm
+        while ((mm = re.exec(src))) names.push(mm[1])
+        return names
+      }
       for (const p of readdirSync(pagesDir)) {
         const tsPath = join(pagesDir, p, `${p}.ts`)
         if (!existsSync(tsPath)) continue
-        const src = readFileSync(tsPath, 'utf8')
+        const src = stripComments(readFileSync(tsPath, 'utf8')) // 剥注释单源 helper（错题本 E1）：防注释文本假触发/假放行
         // 延时返回坞：既 setTimeout 又 navigateBack（延时自动返回·同步 navigateBack 或纯定时器不算）
         if (!/setTimeout\s*\(/.test(src) || !/navigateBack/.test(src)) continue
-        if (!/onUnload\s*\(/.test(src) || !/clearTimeout\s*\(/.test(src))
+        if (!/onUnload\s*\(/.test(src) || !/clearTimeout\s*\(/.test(src)) {
           bad.push(`pages/${p}/${p}.ts 有 setTimeout+navigateBack 延时返回但缺 onUnload+clearTimeout——延时窗口内手动返回→孤儿定时器再 navigateBack 多弹页（病根#5·根因#8）`)
+          continue
+        }
+        if (!/backTimer\s*=\s*setTimeout\s*\(/.test(src)) continue // 无具名 backTimer 坞（如仅裸 setTimeout）：扩面不变量不适用，上面第一半已够
+        const onUnloadBody = methodBody(src, 'onUnload')
+        if (!/this\.unloaded\s*=\s*true/.test(onUnloadBody))
+          bad.push(`pages/${p}/${p}.ts 的 onUnload 未置 this.unloaded=true——backTimer 坞迟到回包判退失据（病根#5 扩面·根因#8）`)
+        const names = topLevelMethodNames(src)
+        const asgnRe = /backTimer\s*=\s*setTimeout\s*\(/g
+        let am
+        while ((am = asgnRe.exec(src))) {
+          const asgnAt = am.index
+          let owner = null
+          for (const name of names) {
+            const body = methodBody(src, name)
+            if (!body) continue
+            const bodyStart = src.indexOf(body)
+            if (bodyStart >= 0 && asgnAt >= bodyStart && asgnAt < bodyStart + body.length) {
+              owner = { name, body, bodyStart }
+              break
+            }
+          }
+          if (!owner) continue // 找不到所属方法体（收尾启发式失配）——不误报，交由上面 onUnload 检查兜底
+          const checkMatch = owner.body.match(/this\.unloaded\s*\)\s*return/)
+          const relAsgnAt = asgnAt - owner.bodyStart
+          if (!checkMatch || checkMatch.index >= relAsgnAt)
+            bad.push(`pages/${p}/${p}.ts 方法 ${owner.name} 里 backTimer=setTimeout 赋值前缺 this.unloaded 早退检查——迟到回包会对已退页误 navigateBack/toast（病根#5 扩面·根因#8）`)
+        }
       }
       return bad
     },

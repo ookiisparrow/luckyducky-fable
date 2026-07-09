@@ -25,6 +25,7 @@ const TABS = [
 
 const tab = ref('paid')
 const counts = ref<Record<string, number>>({})
+const countsPartial = ref(false) // P2·bug sweep Round2 item14：某状态 .count() 失败时角标别把占位 0 当真值显示（同 Dashboard todoPartial 风格）
 const rows = ref<OrderRowVM[]>([])
 const cursor = ref<unknown>(null)
 const hasMore = ref(false)
@@ -65,6 +66,7 @@ async function reload() {
   cursor.value = r.ok ? (r as any).nextCursor : null
   hasMore.value = !!(r.ok && (r as any).hasMore)
   if (c.ok && (c as any).counts) counts.value = (c as any).counts as Record<string, number>
+  countsPartial.value = c.ok ? !!(c as any).partial : true // 计数请求本身失败也按不可信处理（不误显陈旧/占位数字）
   message.value = r.ok ? '' : '加载失败：' + String(r.error || '')
 }
 
@@ -238,7 +240,8 @@ onMounted(reload)
     <!-- 状态 tab（云端实时计数徽章·切换走服务端筛选） -->
     <div class="ld-toolbar">
       <button v-for="t in TABS" :key="t.key" class="ld-chip" :class="{ on: tab === t.key && !activeQ }" @click="pickTab(t.key)">
-        {{ t.label }}<span v-if="counts[t.key || 'all'] != null" class="chip-n">{{ counts[t.key || 'all'] }}</span>
+        {{ t.label }}<span v-if="countsPartial" class="chip-n warn" title="计数不可用（部分统计加载失败·数字可能不实）">?</span>
+        <span v-else-if="counts[t.key || 'all'] != null" class="chip-n">{{ counts[t.key || 'all'] }}</span>
       </button>
     </div>
     <p class="note">状态计数为云端实时总数、切换状态走服务端筛选、搜索按单号跨全部状态精确命中——都不受当前分页影响。</p>
@@ -486,6 +489,10 @@ onMounted(reload)
 .ld-chip.on .chip-n {
   background: var(--ld-brand);
   color: #fff;
+}
+.chip-n.warn {
+  background: var(--ld-bg-red-soft);
+  color: var(--ld-red);
 }
 .note {
   margin: -8px 0 0;

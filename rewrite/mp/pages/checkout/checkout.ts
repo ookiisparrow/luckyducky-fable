@@ -5,6 +5,8 @@ import * as checkout from '../../lib/checkout'
 import { CHECKOUT_ADDONS } from '../../lib/checkoutConst'
 import { createOrder, pay } from '../../api/orders'
 import { mapPayResult } from '../../lib/payFlow'
+import { freshCover } from '../../lib/cart'
+import { getAllProducts } from '../../lib/catalog'
 
 Page({
   data: {
@@ -19,26 +21,37 @@ Page({
     submitting: false,
   },
   backTimer: null as ReturnType<typeof setTimeout> | null,
+  unloaded: false, // 页面已退出标记（守卫扩面统一不变量·同 review/profile-edit/feedback 范式）：本页 backTimer 现为同步设置、
+  // 风险低（无 await 隔在赋值与之间），但统一装上防将来改动悄悄引入异步而漏防护，守卫规则保持简单不做「是否在 await 之后」的静态分析。
   onUnload() {
+    this.unloaded = true
     if (this.backTimer) clearTimeout(this.backTimer) // 空车延时返回坞清理（守卫 rw-mp-navback-timer-cleaned）
   },
   onShow() {
     // onShow 而非 onLoad：从地址列表/编辑页返回时刷新选中地址
-    this.refresh()
+    void this.refresh()
   },
-  refresh() {
+  async refresh() {
     if (this.data.submitting) return // 提交在途不刷：草稿已被 finishSubmitted 清空·支付中后台返回触发 onShow→refresh 会误报「购物车空」+ navigateBack 弹掉支付中的本页（第3轮审计·与 onPickAddress/onToggleAddon 同闸）
-    const draft = checkout.getDraft()
-    if (!draft.items.length) {
+    if (!checkout.getDraft().items.length) {
+      if (this.unloaded) return // 页面已退出（守卫扩面统一不变量）：不再对下一页 navigateBack
       wx.showToast({ title: '还没有要结算的商品', icon: 'none' })
       if (this.backTimer) clearTimeout(this.backTimer)
       this.backTimer = setTimeout(() => wx.navigateBack(), 600)
       return
     }
+    // 封面时效兜底（P2·bug sweep Round2 item5·同 cart.ts freshCover 已修根因病根#15 兄弟路径）：草稿里的 cover 可能是
+    // 结算前很久（购物车页/详情页）快照下的持久化临时址（约 2h 时效），到本页展示时可能已过期挂图；
+    // allRaw 命中会话缓存零云调用（miss 兜底重拉一次，同 cart.ts onLoad 写法）。
+    const allRaw = (await getAllProducts()) || []
+    // draft 挪到 await 之后再读（P2·bug sweep Round2 复审补漏）：与 summaryFen() 取同一时刻的快照——
+    // 若挪前面读、await 期间又触发 onToggleAddon（改了 draftItems），items/addons 用旧 draft 渲染却和用
+    // 当下 draftItems 算出的 s（总价/搭配购总额）拼进同一次 setData，画面出现「未勾选却已计入总价」的错位。
+    const draft = checkout.getDraft()
     const s = checkout.summaryFen()
     this.setData({
       address: addr.defaultAddress(),
-      items: draft.items.map((l) => ({ ...l, priceNum: l.price.toFixed(2) })), // 结算页两位小数（财务口径）
+      items: draft.items.map((l) => ({ ...l, cover: freshCover(l, allRaw), priceNum: l.price.toFixed(2) })), // 结算页两位小数（财务口径）
       addons: CHECKOUT_ADDONS.map((a) => ({ ...a, added: draft.items.some((l) => l.id === a.id), priceNum: a.price.toFixed(2) })),
       goodsLabel: checkout.fenLabel(s.goodsFen),
       shipLabel: s.shipFen ? checkout.fenLabel(s.shipFen) : '包邮',
@@ -54,7 +67,7 @@ Page({
   onToggleAddon(e: WechatMiniprogram.TouchEvent) {
     if (this.data.submitting) return // 提交在途禁止改搭配购：否则下单用 await 前草稿快照·成功页金额 await 后重算，二者分叉展示不一致
     checkout.toggleAddon(String(e.currentTarget.dataset.id))
-    this.refresh()
+    void this.refresh()
   },
   async onSubmit() {
     if (this.data.submitting) return

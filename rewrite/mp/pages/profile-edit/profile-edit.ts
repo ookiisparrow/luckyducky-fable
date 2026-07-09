@@ -13,7 +13,9 @@ Page({
     loaded: false, // 资料是否成功载入（login 成功）·未载入不允许保存（防读故障→空字段→破坏性覆盖清空已存 phone/bio）
   },
   backTimer: null as ReturnType<typeof setTimeout> | null,
+  unloaded: false, // 保存在途页面已退出标记（同 review.ts 范式·P2·bug sweep Round2 item2）：迟到回包别再对下一页 navigateBack+toast
   onUnload() {
+    this.unloaded = true
     if (this.backTimer) clearTimeout(this.backTimer) // 延时返回坞清理（守卫 rw-mp-navback-timer-cleaned）
   },
   async onLoad() {
@@ -61,6 +63,7 @@ Page({
       }
     }
     const r = await updateProfile(patch)
+    if (this.unloaded) return // 迟到回包：已退页（onUnload 已清 backTimer）——不弹 toast、不 navigateBack
     if (r.ok && !avatarFailed) {
       // 成功且无需停留：清临时头像（防二次上传孤儿文件）+ 保持 busy 锁定到返回·toast 加 mask 挡点·定时器存实例待清
       this.setData({ avatarTemp: '' })

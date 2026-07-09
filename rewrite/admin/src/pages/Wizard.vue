@@ -9,6 +9,7 @@ import { Store, ArrowLeft, ChevronLeft, ChevronRight, Check } from 'lucide-vue-n
 import { listDrafts, publishProduct } from '../api/products'
 import { productSteps, productState, basicsMissing, wizardCanPublish, type StepDot } from '../lib/mapProducts'
 import { wizardStepFromQuery } from '../lib/nav'
+import { isUploadLocked } from '../lib/uploadLock'
 import Products from './Products.vue'
 import Courses from './Courses.vue'
 import Cards from './Cards.vue'
@@ -78,6 +79,13 @@ function retryLoad() {
 
 function go(n: number) {
   if (n < 1 || n > 6 || n === step.value) return
+  // 批量上传在途拦截（P1·bug sweep Round2 item12c）：Wizard 切步＝仅 query 变化＝路由 update 非 leave，
+  // Courses.vue 内嵌的 onBeforeRouteLeave 不会触发——这是 batchUpload 孤儿化的主触发路径，须在这里前置拦。
+  if (isUploadLocked()) {
+    message.value = '批量上传进行中，切步将丢失未落库的视频关联，请等其完成再切步'
+    msgLoadFail = false
+    return
+  }
   // 步写进 URL（单源）→ step 重算 → watch 触发刷新；Shell 侧栏点步走 router-link 同径同步
   void router.push({ path: route.path, query: { ...route.query, step: String(n) } })
 }

@@ -17,10 +17,14 @@ Page({
     if (typeof this.getTabBar === 'function') (this.getTabBar() as unknown as LdTabBar).setActive('me')
     void this.refresh()
   },
+  _seq: 0, // refresh 代次（同 order-list/aftersales 范式）：onShow 多触发点（tab 切回/其他页返回）四路并发 Promise.all，
+  // 慢回包迟到落地会覆盖更晚一次 refresh 已落的新结果（P2·bug sweep Round2 item1）。
   async refresh() {
     // login/getMyProgress/getMyCourses 保持实时（login 兼具服务端记账语义，进度/我的课不缓存）；
     // 课程目录本会话内不变，走 lib/courses 会话缓存（根因账本#15）——命中零云调用。
+    const seq = ++this._seq
     const [u, progress, mine, courses] = await Promise.all([login(), getMyProgress(), getMyCourses(), getAllCourses()])
+    if (seq !== this._seq) return // 过期回包（被更晚 refresh 取代）：丢弃
     const user = (u.ok ? u.user : null) as Record<string, any> | null
     this.setData({
       // 云端资料回灌：非空覆盖默认、空不显示假名（黄金 §九）

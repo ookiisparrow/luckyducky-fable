@@ -156,7 +156,11 @@ Page({
             const r = await applyRefund(vm.id, line.lineId, String(m.content || ''))
             if (r.ok) {
               wx.showToast({ title: '已提交申请', icon: 'success' })
-              wx.navigateTo({ url: '/pages/aftersales/aftersales' })
+              // order↔aftersales 互跳环无叠栈守卫（P3·bug sweep Round2 item6·同 detail.ts onTapRec 范式）：
+              // 反复「订单详情→申请售后→我的售后→回订单→再申请」会持续叠栈，逼近上限改 redirectTo 替换本页。
+              const url = '/pages/aftersales/aftersales'
+              if (getCurrentPages().length >= 8) wx.redirectTo({ url })
+              else wx.navigateTo({ url, fail: () => wx.redirectTo({ url }) })
             } else {
               const e = String(r.error || '')
               const msg = e === 'ALREADY_APPLIED' ? '这条已申请过了' : e === 'NOT_REFUNDABLE' ? '该条目不可退（已开课）' : e === 'NOTHING_LEFT' ? '本单可退额度已用完' : '申请没成功，稍后再试'

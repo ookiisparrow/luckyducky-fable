@@ -1,5 +1,6 @@
 import { isValidPriceYuan } from '@ldrw/shared'
 import { reply, cleanProduct, storeImage, type Ctx } from '../lib'
+import { notifyAlert } from '../../../kit'
 
 export async function listDrafts({ cloud, db, drafts }: Ctx) {
   const res = await drafts.orderBy('createdAt', 'desc').limit(100).get()
@@ -193,13 +194,25 @@ export async function saveShowcase({ db, data }: Ctx) {
   const items = Array.isArray(data.items) ? data.items.slice(0, 100) : []
   if (!items.length) return reply(400, { ok: false, error: 'NO_ITEMS' })
   const productsColl = db.collection('products')
+  let failed = 0 // 逐条失败计数（P2·bug sweep Round2 item16·根因#14）：原 .catch(()=>{}) 静默吞错，无论成败前端
+  // 永远收到 ok:true——「已保存」是假象。改计数后任一失败即回 ok:false，不再误导消费方（admin Showcase.vue
+  // 已按 r.ok 通用判断成败，无需改消费方）。
   for (const it of items) {
     const id = String(it?.id || '')
     if (!id) continue
     await productsColl
       .doc(id)
       .update({ data: { sort: Number(it.sort) || 0, featured: !!it.featured } })
-      .catch(() => {})
+      .catch(() => {
+        failed++
+      })
+  }
+  if (failed) {
+    // 真留痕（P2·bug sweep Round2 复审补漏）：裸 alert() 只打 console.error 一行，不落 anomalies 账本、
+    // admin listAnomalies 查不到、企微群也收不到——不满足「留痕」二字（同 learning.ts ensureActivation
+    // 注释 / orders.ts shipOne 既有写法）。改 notifyAlert：①同样打日志 ②落 anomalies 账本 ③按配置推企微。
+    await notifyAlert('anomaly', 'saveShowcase', 'PARTIAL_WRITE', { failed, total: items.length })
+    return reply(400, { ok: false, error: 'PARTIAL_WRITE:' + failed })
   }
   return reply(200, { ok: true })
 }

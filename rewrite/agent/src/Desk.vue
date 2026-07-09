@@ -84,14 +84,20 @@ async function act(action: string) {
 }
 
 let statusSeq = 0 // 代际守卫（P2·回归修复：连续切状态时先发后到的失败请求不得用旧 prev 覆盖已被后一次成功请求确认的新状态——ABA 竞态，同 pollThread/open 的 sid 快照代际治法）
+let confirmedStatus: 'online' | 'busy' | 'offline' = status.value // 服务端最后一次确认过的真值（P2·bug sweep Round2 item15·批4 修复不彻底：
+// 回滚锚原取 prev（当次调用前的 UI 乐观值，可能也从未被服务端确认过）——连续两次都失败时会回滚到一个同样没被确认过的中间态，
+// 与服务端实际状态脱节。改锚定"最后一次 r.ok 时的目标值"，回滚落到已知的服务端真值上。
 async function setStatus(s: 'online' | 'busy' | 'offline') {
-  const prev = status.value // P2·item9：失败要能回滚，先存旧值
   const my = ++statusSeq // 本次操作的代际号
   status.value = s // 乐观更新（下拉选中即时反映）
   const r = await post('setAgentStatus', { status: s })
-  if (my !== statusSeq) return // 期间又发起了更新的 setStatus（已确认更新状态）·丢弃本次过期回滚
+  // 过期调用的成功也要更新锚（P1·bug sweep Round2 复审补漏）：先判 my!==statusSeq 就早退会连成功一起丢弃——
+  // 三连快切+穿插成败序列下 confirmedStatus 可能永远锚不到服务端最新真值（连续两次都失败时回滚目标本身就错了）。
+  // 只丢弃过期调用的**失败**回滚（那会用旧锚去覆盖更晚一次乐观更新的 UI）；过期调用的**成功**仍如实刷新锚。
+  if (r.ok) confirmedStatus = s // 服务端已接受·无论是否被更晚一次调用取代都刷新确认锚
+  if (my !== statusSeq) return // 期间又发起了更新的 setStatus——UI 展示交给更晚那次收尾，本次到此为止
   if (!r.ok) {
-    status.value = prev // 服务端没接受·别让下拉显示了个没生效的状态
+    status.value = confirmedStatus // 服务端没接受·回滚到最后一次真被确认过的状态（非未必被确认过的 prev）
     message.value = deskErrorText(r.error) // 照本文件既有错误提示范式（同 claim/act）
   }
 }
