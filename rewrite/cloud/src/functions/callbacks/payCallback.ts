@@ -1,5 +1,5 @@
 import { toFen, COLLECTIONS } from '@ldrw/shared'
-import { defineNotifyCallback, transition, alert, notifyAlert, reserveStock, restoreStock } from '../../kit'
+import { defineNotifyCallback, transition, alert, notifyAlert, reserveStock, restoreStock, getDb } from '../../kit'
 
 // 支付结果回调（黄金 orders-money·payCallback 节全量）。防伪/ACK/id 提取由 defineNotifyCallback 强制。
 // pending→paid 直接翻单（库存自下单持有）；closed→paid 复活前必须重抢库存——抢不到进 refund_required
@@ -54,9 +54,22 @@ export const main = defineNotifyCallback<any>({
     const p = await transition(COLLECTIONS.orders, id, ['pending'], 'paid', payPatch)
     if (p.moved) return
     if (!p.doc) return void (await notifyAlert('money', 'payCallback', 'UNKNOWN_ORDER', { id })) // 收钱无单
-    if (p.doc.status !== 'closed') return // 已 paid/shipped/done：重复通知幂等 no-op
 
-    // 关单后晚到的成功回调：库存已回补，须重抢回 reserved 才可复活（带竞态缓冲）
+    // 关单复活漏窗（P1·根因#1 修复）：p.doc 是条件更新**前**的读。若读到的仍是 'pending' 但 moved=false，
+    // 说明读后被并发推进（关单定时器抢先转 closed）——不能拿「读时值」当「现在值」，须重读一次现值再分发。
+    let status = String(p.doc.status || '')
+    if (status === 'pending') {
+      const fresh = await getDb().collection(COLLECTIONS.orders).doc(id).get().catch(() => null)
+      if (!fresh || !fresh.data) return void (await notifyAlert('money', 'payCallback', 'REREAD_FAIL', { id }))
+      status = String(fresh.data.status || '')
+    }
+    if (status === 'paid' || status === 'shipped' || status === 'done') return // 幂等 no-op
+    if (status === 'refund_required') return // 幂等 no-op：另一路并发回调已处理并已告警，不重复告警
+    if (status !== 'closed') return void (await notifyAlert('money', 'payCallback', 'UNEXPECTED_STATUS', { id, status }))
+
+    // 关单后晚到的成功回调：库存已回补，须重抢回 reserved 才可复活（带竞态缓冲）。reserved 字段不受
+    // 「关单」这次状态转移影响（closeExpiredOrders 只 patch status/closedAt），沿用 p.doc（条件更新前
+    // 的读）里的 reserved 值仍是现值，无需为它单独再读一次。
     const reserved = Array.isArray(p.doc.reserved) ? p.doc.reserved : []
     const re = await reserveWithRetry(() => reserveStock(reserved))
     if (re.ok) {

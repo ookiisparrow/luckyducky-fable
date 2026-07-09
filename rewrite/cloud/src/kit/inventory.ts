@@ -152,19 +152,20 @@ export async function produceStock(productId: string, spec: string, qty: number)
 // 少显示像没记录。分页取齐（100/页）、封顶防无界；到顶如实报 truncated（调用方提示、不装全量）。
 export const INVENTORY_SCAN_CAP = 1000
 
-/** 读库存（管理端列表/看板低库存）。productIds 为空＝全量（分页取齐·封顶）。 */
+/**
+ * 读库存（管理端列表/看板低库存）。productIds 为空＝全量（分页取齐·封顶）。
+ * 页查失败 fail-loud（P1·根因#7 修复）：单页 .get() 失败必须与「真扫到底」可区分——原先 `.catch(()=>[])`
+ * 把失败页当空页处理，命中 `rows.length < PAGE` 的到底判据，静默返回不完整列表且 truncated:false（Dashboard
+ * 低库存待办漏报/库存页少显示）。改为不吞：失败直接抛出，交给唯一调用方 adminApi listInventory 的域出口
+ * 统一 try/catch 兜底 500（域内既定惯例·不再局部加一层重复保护，见 §7 防过度工程）。
+ */
 export async function getInventory(productIds?: string[]): Promise<{ list: any[]; truncated: boolean }> {
   const coll = getDb().collection(COLLECTIONS.inventory)
   const base = productIds && productIds.length ? coll.where({ productId: getDb().command.in(productIds) }) : coll
   const PAGE = 100
   const list: any[] = []
   for (let skip = 0; skip < INVENTORY_SCAN_CAP; skip += PAGE) {
-    const r = await base
-      .orderBy('productId', 'asc')
-      .skip(skip)
-      .limit(PAGE)
-      .get()
-      .catch(() => ({ data: [] }))
+    const r = await base.orderBy('productId', 'asc').skip(skip).limit(PAGE).get()
     const rows: any[] = (r && r.data) || []
     list.push(...rows)
     if (rows.length < PAGE) return { list, truncated: false }

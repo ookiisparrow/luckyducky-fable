@@ -236,6 +236,35 @@ describe('外包账号管理（黄金 §十：口令哈希·停用即时·白名
     expect((await post('setAgentWecomUserId', SUPER, { id: 'agent-1', wecomUserId: 'w1' })).ok).toBe(true)
     expect((await post('setAgentWecomUserId', SUPER, { id: 'auth', wecomUserId: 'wboss' })).ok).toBe(true)
   })
+
+  it('大白话：先查后写竞态（P2·根因#1）——createAgent 建号窗口内被并发方撞同一 keyHash，写后复核揪出、回滚自己那份并回 409（不留串号双凭证）', async () => {
+    control.setBeforeUpdate(async ({ coll, data }: any) => {
+      if (coll === 'adminConfig' && data && data.keyHash === sha('race-key')) {
+        // 「先查」时并发方尚未落库（预检通过）；在本次真正写入前，并发方抢先建号——模拟先查后写窗口
+        control.seed('adminConfig', [{ _id: 'agent-race', role: 'outsourced', keyHash: sha('race-key'), createdAt: 1 }])
+      }
+    })
+    const r = await post('createAgent', SUPER, { name: '并发号', key: 'race-key' })
+    control.setBeforeUpdate(null as never)
+    expect(r.status).toBe(409)
+    expect(r.error).toBe('KEY_TAKEN')
+    // 自己刚建的那份已回滚删除，只剩并发方那一份——绝不留两账号共享同一 keyHash
+    expect(control.dump('adminConfig').filter((a: any) => a.keyHash === sha('race-key')).length).toBe(1)
+  })
+
+  it('大白话：先查后写竞态（P2·根因#1）——setAgentWecomUserId 改绑窗口内被并发方撞同一 wecomUserId，写后复核回滚字段并回 409', async () => {
+    control.setBeforeUpdate(async ({ coll, data }: any) => {
+      if (coll === 'adminConfig' && data && data.wecomUserId === 'w-race') {
+        control.seed('adminConfig', [{ _id: 'agent-race', role: 'outsourced', keyHash: sha('other-key'), wecomUserId: 'w-race' }])
+      }
+    })
+    const r = await post('setAgentWecomUserId', SUPER, { id: 'agent-2', wecomUserId: 'w-race' })
+    control.setBeforeUpdate(null as never)
+    expect(r.status).toBe(409)
+    expect(r.error).toBe('WECOM_ID_TAKEN')
+    // 刚写的字段已回滚复原（agent-2 种子无 wecomUserId，回滚后应是空）——绝不留两账号共享同一企微 userid
+    expect(control.dump('adminConfig').find((a: any) => a._id === 'agent-2').wecomUserId).toBe('')
+  })
 })
 
 describe('企微免登（黄金 §十：code 换身份→签发令牌·fail-closed 全链）', () => {

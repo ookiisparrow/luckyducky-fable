@@ -48,7 +48,8 @@ describe('pageQuery（游标翻页·属主隔离·黄金 G）', () => {
     expect(p.list.length).toBe(10)
     expect(p.hasMore).toBe(true)
     expect(p.list[0].createdAt).toBe(1024)
-    expect(p.nextCursor).toBe(p.list[9].createdAt)
+    // P2·根因#7 复合游标 tiebreaker 修复：nextCursor 从裸排序值改为 {v,id} 复合形状（打破同值平局）
+    expect(p.nextCursor).toEqual({ v: p.list[9].createdAt, id: p.list[9]._id })
   })
 
   it('大白话：拿游标续页只返回其后剩余记录、不重不漏，取空判无更多', async () => {
@@ -73,5 +74,41 @@ describe('pageQuery（游标翻页·属主隔离·黄金 G）', () => {
     const p = await pageQuery(getDb(), 'orders', { _openid: 'oME' }, 'createdAt', undefined)
     expect(p.list.every((r: { _openid: string }) => r._openid === 'oME')).toBe(true)
     expect(p.list.some((r: { _id: string }) => r._id === 'other')).toBe(false)
+  })
+
+  it('大白话：复合游标 tiebreaker（P2·根因#7）——跨页边界同一 cursorField 值的多条记录不丢不重', async () => {
+    control.reset()
+    control.seed('orders', [
+      { _id: 'tA', _openid: 'oME', createdAt: 1000 },
+      { _id: 'tB', _openid: 'oME', createdAt: 1000 },
+      { _id: 'tC', _openid: 'oME', createdAt: 1000 },
+    ])
+    const seen = new Set<string>()
+    let cursor: unknown = undefined
+    for (let round = 0; round < 5; round++) {
+      const p = await pageQuery(getDb(), 'orders', { _openid: 'oME' }, 'createdAt', { limit: 1, cursor })
+      for (const row of p.list) {
+        expect(seen.has(row._id)).toBe(false) // 旧 bug（单一 lt(cursor)）：同值记录会被跳过或漏
+        seen.add(row._id)
+      }
+      if (!p.hasMore) {
+        expect(p.nextCursor).toBe(null)
+        break
+      }
+      cursor = p.nextCursor
+    }
+    expect(seen.size).toBe(3) // 三条全部取到、不重
+  })
+
+  it('大白话：nextCursor 是复合形状 {v,id}；旧纯值游标（在途翻页会话）仍按旧语义可续页（向后兼容）', async () => {
+    const p1 = await pageQuery(getDb(), 'orders', { _openid: 'oME' }, 'createdAt', { limit: 5 })
+    expect(p1.nextCursor).toEqual({ v: (p1.nextCursor as any).v, id: (p1.nextCursor as any).id })
+    expect(typeof (p1.nextCursor as any).v).toBe('number')
+
+    // 模拟旧协议客户端：翻页会话里直接传裸值游标（不是 {v,id} 对象）
+    const legacyCursor = 1015
+    const p2 = await pageQuery(getDb(), 'orders', { _openid: 'oME' }, 'createdAt', { cursor: legacyCursor, limit: 5 })
+    expect(p2.list.length).toBe(5)
+    expect(p2.list.every((r: any) => r.createdAt < legacyCursor)).toBe(true)
   })
 })

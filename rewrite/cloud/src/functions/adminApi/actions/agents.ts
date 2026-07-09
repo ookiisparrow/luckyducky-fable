@@ -46,6 +46,23 @@ export async function createAgent({ db, data }: Ctx) {
   const doc: any = { name, role: AGENT_ROLE, keyHash, disabled: false, createdAt: Date.now() }
   if (wecomUserId) doc.wecomUserId = wecomUserId
   await db.collection('adminConfig').doc(id).set({ data: doc })
+
+  // 写后复核（P2·根因#1 先查后写竞态修复）：上面的 dup/wecomUserIdTaken 都是「先查」，先查后写窗口内
+  // 并发双方可能都通过检查各自建号、撞出两账号共享同一 keyHash/wecomUserId（登录串号/免登歧义）。
+  // 写完立即重查计数，>1 说明确实撞了——回滚自己刚建的这份、回 409（两侧同时回滚也安全：都失败重试即可，
+  // 绝不留双凭证）。管理端低频操作，多一次读的代价可接受。
+  const keyDup = await db.collection('adminConfig').where({ keyHash }).get().catch(() => ({ data: [] }))
+  if ((keyDup.data || []).length > 1) {
+    await db.collection('adminConfig').doc(id).remove().catch(() => {})
+    return reply(409, { ok: false, error: 'KEY_TAKEN' })
+  }
+  if (wecomUserId) {
+    const wDup = await db.collection('adminConfig').where({ wecomUserId }).get().catch(() => ({ data: [] }))
+    if ((wDup.data || []).length > 1) {
+      await db.collection('adminConfig').doc(id).remove().catch(() => {})
+      return reply(409, { ok: false, error: 'WECOM_ID_TAKEN' })
+    }
+  }
   return reply(200, { ok: true, agent: { id, name, role: AGENT_ROLE, disabled: false, wecomUserId } })
 }
 
@@ -64,7 +81,22 @@ export async function setAgentWecomUserId({ db, data }: Ctx) {
   // 只作用于真实账号（超管 auth 或 outsourced agent）——防往任意 doc 塞字段
   if (!acct || !(id === 'auth' || acct.role === AGENT_ROLE)) return reply(404, { ok: false, error: 'AGENT_NOT_FOUND' })
   if (await wecomUserIdTaken(db, wecomUserId, id)) return reply(409, { ok: false, error: 'WECOM_ID_TAKEN' })
+  const prevWecomUserId = acct.wecomUserId || ''
   await db.collection('adminConfig').doc(id).update({ data: { wecomUserId, updatedAt: Date.now() } })
+
+  // 写后复核（P2·根因#1 先查后写竞态修复，同 createAgent）：写完重查该 wecomUserId 计数，>1 说明
+  // 先查后写窗口内被并发改绑撞号——回滚刚写的这份字段（恢复旧值），绝不留两账号共享同一企微 userid。
+  if (wecomUserId) {
+    const dup = await db.collection('adminConfig').where({ wecomUserId }).get().catch(() => ({ data: [] }))
+    if ((dup.data || []).length > 1) {
+      await db
+        .collection('adminConfig')
+        .doc(id)
+        .update({ data: { wecomUserId: prevWecomUserId, updatedAt: Date.now() } })
+        .catch(() => {})
+      return reply(409, { ok: false, error: 'WECOM_ID_TAKEN' })
+    }
+  }
   return reply(200, { ok: true, id, wecomUserId })
 }
 

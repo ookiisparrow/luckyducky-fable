@@ -87,6 +87,34 @@ describe('activateCourse（一码一用·黄金 §一）', () => {
     expect(control.dump('activations').filter((a: any) => a.code === 'OLD').length).toBe(1)
   })
 
+  it('大白话：双失败（add 抛错 + 读回也失败）——不伪造激活记录，回错误码而非假装 activated（P2·根因#14）', async () => {
+    control.markUncreated('activations') // add() 抛错；随后读回 doc(code) 因集合空同样查无
+    const r = await call('activateCourse', { code: 'CODE1' })
+    // 旧 bug：会伪造本地 doc 回「activated」，前端以为成功，但库里其实什么都没有。
+    expect(r.ok).toBe(false)
+    expect(r.error).toBe('NOT_ACTIVATED')
+    expect(control.dump('activations').length).toBe(0) // 确实没写入，未伪造
+    // qrcodes 一码一用抢占本身仍成功（那不是本 bug 范围），只是激活记录持久化未验证成功
+    expect(control.dump('qrcodes').find((q: any) => q._id === 'CODE1').activatedBy).toBe('oME')
+    // P2 复核：真留痕——走 recordAnomaly 而非裸 alert()，须落 anomalies 账本（运营后台 listAnomalies 可查）
+    const anomalies = control.dump('anomalies')
+    expect(anomalies.some((a: any) => a.code === 'ACT_PERSIST_UNVERIFIED')).toBe(true)
+  })
+
+  it('大白话：add 撞键（并发方已写）——读回命中即返回库内现值，既有行为不回归（P2·根因#14 修复不破坏正常并发路径）', async () => {
+    control.setBeforeAdd(async ({ coll, data }: any) => {
+      if (coll === 'activations' && data && data._id === 'CODE1') {
+        // 模拟并发方（同用户重复点击/半步重入）已抢先落库
+        control.seed('activations', [{ _id: 'CODE1', _openid: 'oME', courseId: 'c1', qrcodeId: 'CODE1', code: 'CODE1', enteredAt: null, createdAt: 1 }])
+      }
+    })
+    const r = await call('activateCourse', { code: 'CODE1' })
+    control.setBeforeAdd(null as never)
+    expect(r.ok).toBe(true)
+    expect(r.state).toBe('activated') // 读回库内现值（enteredAt:null）——非伪造，是真实并发方写入的记录
+    expect(control.dump('activations').filter((a: any) => a._id === 'CODE1').length).toBe(1) // 未重复建档
+  })
+
   it('大白话：并发抢占——两个不同 openid 同时扫同一码，恰一人成功、败者 CODE_TAKEN、qrcodes.activatedBy 只属胜者（一码一用不因并发失守）', async () => {
     // OPENID 在 withOpenId 内于 handler 调用瞬间同步读取（早于任何 await）——control.setOpenId 在两次
     // call() 之间切换，各自捕获自己的身份，不会被后一次 setOpenId 污染（同 confirmEnter 并发测试范式）。

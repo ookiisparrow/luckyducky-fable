@@ -35,6 +35,10 @@ const command = {
   exists: (val) => ({ __op: 'exists', val }), // 字段存在/缺失（CAS 初始化窗口前置条件，债#21）
   inc: (val) => ({ __op: 'inc', val }), // 原子自增（recordAnomaly 去重计数·真 sdk 服务端原子加，避免读-改-写并发窗）
   aggregate: { sum: (expr) => ({ __aggOp: 'sum', expr }) }, // 聚合算子（GMV 求和·债#18续）
+  // 注：pageQuery 复合游标 tiebreaker（批1 bug sweep）**不用** _.and()/_.or()——P2 复核发现这会是全仓
+  // 首次用该组合、只被本桩验证过、从未打过真实云数据库；改用桩里已验证过的单字段 lt/eq 拆两条查询
+  // 内存合并（见 kit/paging.ts 注释），因此这里刻意不补 and/or 语义，避免留一套没有生产用途、也没有
+  // 真机验证过的桩能力躺在这里给后人误当「已验证」参照抄用。
 }
 
 // 写入一个叶子值：inc 算子作原子自增（对齐真 sdk _.inc），否则直接赋值。
@@ -99,6 +103,8 @@ class DocRef {
     // 桩对齐此约束——否则「get().data(含_id) 原样 set 回」的 bug 在桩里假绿、真机 500（根因#8·saveSettings 实测踩中）。
     if (data && Object.prototype.hasOwnProperty.call(data, '_id'))
       throw new Error('INVALID_PARAM: set data 不能含 _id（真 sdk 约束）')
+    // 写前注入（测试并发：doc().set() 是 createAgent 等「先查后写」路径的落库点，复用 update 同一钩子名）。默认无。
+    if (typeof G.beforeUpdate === 'function') await G.beforeUpdate({ coll: this.coll, data, id: this.id })
     const arr = rows(this.coll)
     const i = arr.findIndex((d) => d._id === this.id)
     const doc = { ...clone(data), _id: this.id }
@@ -136,7 +142,10 @@ class Query {
     return this
   }
   orderBy(field, dir = 'asc') {
-    this._order = { field, dir }
+    // 链式多列排序（批1 bug sweep·pageQuery 复合游标 tiebreaker）：累积多次 .orderBy() 调用，
+    // 先到先比、平局看下一列——单次调用行为不变（零改既有用法）。
+    this._order = this._order || []
+    this._order.push({ field, dir })
     return this
   }
   limit(n) {
@@ -155,13 +164,16 @@ class Query {
   }
   _rows() {
     let out = rows(this.coll).filter((d) => matchDoc(d, this._filter))
-    if (this._order) {
-      const { field, dir } = this._order
+    if (this._order && this._order.length) {
+      const order = this._order
       out = [...out].sort((a, b) => {
-        const av = a[field],
-          bv = b[field]
-        const c = av < bv ? -1 : av > bv ? 1 : 0
-        return dir === 'desc' ? -c : c
+        for (const { field, dir } of order) {
+          const av = a[field],
+            bv = b[field]
+          const c = av < bv ? -1 : av > bv ? 1 : 0
+          if (c !== 0) return dir === 'desc' ? -c : c
+        }
+        return 0
       })
     }
     if (this._skip != null) out = out.slice(this._skip)
@@ -169,6 +181,9 @@ class Query {
     return out
   }
   async get() {
+    // 写前注入同款读侧钩子（批1 bug sweep·kit/inventory getInventory 分页扫描单页失败测试）：
+    // 可在具体页（按 coll/skip 判断）注入抛错，模拟真机分页扫描中单页 .get() 失败（非到底）。默认无。
+    if (typeof G.beforeGet === 'function') await G.beforeGet({ coll: this.coll, filter: this._filter, skip: this._skip })
     return { data: this._rows().map(clone) }
   }
   async count() {
@@ -189,6 +204,8 @@ class Query {
   }
   async add({ data }) {
     ensureColl(this.coll)
+    // 写前注入（测试并发：add() 撞键/真写失败场景，同 beforeUpdate 范式）。默认无。
+    if (typeof G.beforeAdd === 'function') await G.beforeAdd({ coll: this.coll, data })
     const arr = rows(this.coll)
     const doc = clone(data)
     if (doc._id != null) {
@@ -348,6 +365,8 @@ const control = {
     G.openapiFail = false
     G.openapiErrCode = null
     G.beforeUpdate = null
+    G.beforeAdd = null
+    G.beforeGet = null
     G.uncreated = new Set()
     G.deletedFiles = []
     G.tempUrlCalls = []
@@ -386,6 +405,14 @@ const control = {
   // 注入「写库前」副作用（测试并发：读-改-写/条件更新窗口里模拟并发方抢先改库·验 CAS/moved 校验真在咬）
   setBeforeUpdate(fn) {
     G.beforeUpdate = fn
+  },
+  // 注入「add() 前」副作用（测试并发：撞键/真写失败场景，同 beforeUpdate 范式）
+  setBeforeAdd(fn) {
+    G.beforeAdd = fn
+  },
+  // 注入「get() 前」副作用（测试：分页扫描单页失败场景，可按 coll/skip 判断选择性抛错）
+  setBeforeGet(fn) {
+    G.beforeGet = fn
   },
   // 逼真机「集合未建」（根因#8）：标记集合未 createCollection·其 add/update 抛错·验代码有 createCollection 兜底
   markUncreated(name) {

@@ -62,11 +62,15 @@ export const PAID_STATUSES = ['paid', 'shipped', 'done']
 // 钱链内部异常（txAlerts·债#23 单源）：金额不符单 / 退款金额不符 / 审批超 1h 未到回调的卡单。
 // 看板（dashboard）与财务对账（reconciliation·S16）共用此单源——同 activationFor 范式，防两处漂移
 // （钱链异常是 money 正确性判据，散两份易一处改漏）。各项走定向 where 精确（稀少·小集合·不从样本 filter）。
+// P2→修（批1 bug sweep）：三路裸 .get() 命中服务端默认 100 条截断，与「精确不漏老单」的注释矛盾——
+// 显式 .limit(1000)（云函数端上限）。钱链异常超 1000 条属灾难态，看板计数意义已失真，如实 cap 不强求无界。
 export async function getTxAlerts(db: any): Promise<{ feeMismatch: string[]; refundMismatch: string[]; stuckRefunds: string[] }> {
   const _ = db.command
   const HOUR = 3600_000
+  const CAP = 1000
   const rows = (q: any) =>
     q
+      .limit(CAP)
       .get()
       .then((r: any) => r.data)
       .catch(() => [])

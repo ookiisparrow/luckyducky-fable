@@ -1,5 +1,5 @@
 import { ERR, COLLECTIONS, QRCODE_STATUS_SPEC } from '@ldrw/shared'
-import { withOpenId, withRateLimit, ok, err, str, transition, ensureDoc, getTempUrl, getDb, alert } from '../../../kit'
+import { withOpenId, withRateLimit, ok, err, str, transition, ensureDoc, getTempUrl, getDb, alert, recordAnomaly } from '../../../kit'
 
 const QR = QRCODE_STATUS_SPEC.transitions[0] // unused→activated（声明单源，不散写状态串）
 
@@ -26,7 +26,16 @@ async function ensureActivation(db: any, code: string, courseId: string, OPENID:
       .doc(code)
       .get()
       .catch(() => null)
-    return (got && got.data) || { _id: code, ...doc }
+    if (got && got.data) return got.data
+    // 双失败（add 抛错 + 读回也失败·P2·根因#14 修复，P2 复核补真留痕）：不伪造激活记录——库里其实没有，
+    // 假装成功会让 activateCourse 回「activated」但用户看不到课。留痕告警，调用方对 null 走失败反馈
+    // （用户重扫走 qr.activatedBy===OPENID 幂等自愈）。走 recordAnomaly 而非裸 alert()：裸 alert() 只打
+    // console.error 一行，不落 anomalies 账本、运营后台 listAnomalies 查不到、企微群也收不到——不满足
+    // 「留痕」二字；recordAnomaly(severity:'high') 首见即桥接 alert + 持久化 + （若配了 webhook）推送，
+    // 三头都占（kit/anomaly.ts 单源）。kind 用 'invariant-violation'（激活写入未验证成功＝不变量违反，
+    // 非直接钱链/安全事件）。
+    await recordAnomaly('invariant-violation', 'ACT_PERSIST_UNVERIFIED', { fn: 'activateCourse', code }, 'high')
+    return null
   }
 }
 
@@ -47,7 +56,10 @@ export const activateCourse = withOpenId(async ({ db, OPENID, event }) => {
   if (!qr) return err(ERR.INVALID_CODE)
   if (moved || qr.activatedBy === OPENID) {
     const act = await ensureActivation(db, code, qr.courseId, OPENID, now)
-    return ok({ state: act && act.enteredAt ? 'mine' : 'activated', courseId: qr.courseId })
+    // 双失败未持久化（P2·根因#14）：库里其实没写成功，别回「activated」——回错误码走客户端已有失败反馈路径；
+    // 用户重扫时 qr.activatedBy===OPENID 命中本分支再试一次 ensureActivation，天然幂等自愈。
+    if (!act) return err(ERR.NOT_ACTIVATED, { courseId: qr.courseId })
+    return ok({ state: act.enteredAt ? 'mine' : 'activated', courseId: qr.courseId })
   }
   return err(ERR.CODE_TAKEN, { courseId: qr.courseId })
 })

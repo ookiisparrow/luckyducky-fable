@@ -3,6 +3,7 @@ import { describe, it, expect, beforeEach } from 'vitest'
 import { control } from 'wx-server-sdk'
 import { main as app } from '../src/functions/app/index'
 import { main as payCallback, reserveWithRetry } from '../src/functions/callbacks/payCallback'
+import { getDb } from '../src/kit'
 
 const call = (action: string, data: Record<string, unknown> = {}) => app({ action, data }) as Promise<any>
 const cb = (e: Record<string, unknown>) => payCallback(e) as Promise<any>
@@ -153,6 +154,29 @@ describe('payCallback（支付回调·黄金）', () => {
     expect(o9.feeReceivedAt).toBeGreaterThan(0)
     expect(o9.paidFee).toBe(17800)
   }, 15_000)
+
+  it('大白话：读后被并发关单抢先（关单定时器与回调竞态）——重读现值仍走复活路径，不误判静默 no-op（P1·根因#1）', async () => {
+    control.setOpenId('')
+    seedOrder({ reserved: [{ productId: 'p1', spec: '', qty: 1 }] }) // status 默认 pending
+    control.seed('inventory', [{ _id: 'p1__', productId: 'p1', spec: '', stock: 1 }])
+    let armed = true
+    control.setBeforeUpdate(async ({ coll, data }: any) => {
+      // transition() 的条件更新真正落库前：模拟关单定时器抢先把订单转 closed（此刻库里仍是 pending，
+      // 定时器的 where(status:pending) 条件更新能命中成功）——制造「读时 pending、真现值已是 closed」的窗口。
+      if (armed && coll === 'orders' && data && data.status === 'paid') {
+        armed = false
+        await getDb().collection('orders').where({ _id: 'o1', status: 'pending' }).update({ data: { status: 'closed', closedAt: Date.now() } })
+      }
+    })
+    await cb({ out_trade_no: 'o1', trade_state: 'SUCCESS', amount: { total: 17800 }, transaction_id: 'wx-race' })
+    control.setBeforeUpdate(null as never)
+    const o1 = control.dump('orders')[0]
+    // 旧 bug：p.doc.status（读时值）仍是 'pending' → 命中「已 paid：幂等 no-op」误判分支静默返回——
+    // 钱已收、单卡死 closed、无告警。新逻辑：重读现值发现真是 closed，走复活路径。
+    expect(o1.status).toBe('paid')
+    expect(o1.revivedAt).toBeGreaterThan(0)
+    expect(control.dump('inventory')[0].stock).toBe(0) // 重抢扣回
+  })
 
   it('大白话：竞态缓冲——首抢失败若是回补瞬时窗，重试即成功不误判售罄；真售罄重试耗尽仍失败', async () => {
     // 直接验证重试语义（回补瞬时窗＝第二次尝试即成功；真售罄＝次次失败直至耗尽）

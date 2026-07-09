@@ -27,27 +27,45 @@ export async function overrideRefund({ db, data }: Ctx) {
   const lineId = line.lineId || line.productId
 
   // 越过资格：不看 refundable/enteredQty/既有售后（含 rejected），按整行件数算分摊上限。
-  // 钱守恒保留：refundShareFen 封顶「该行实付分摊」再减「全单已提交退款额」（used＝applied/approved/refunded 之和）。
+  // 钱守恒保留（P1·根因#1 行级不封顶修复）：旧版 used 只算全单已退，同一行重复调用时「本行分摊份额」
+  // 每次都按 itemFen 重新算出、只被「全单已退」减——只要兄弟行还有余量，同一行能被反复越规退到把
+  // 整单余额退光。现按行/单双口径分别封顶再取小：usedLine=同 orderId+lineId 的已提交额度（该行自己已拿走
+  // 多少）、usedOrder=全单已提交额度（既有口径，防超实付总额）；lineShare 用 used=0 算出「该行理论分摊上限
+  // （不看用量）」，减去 usedLine 得该行剩余，再与 orderCap（usedOrder 封顶后的全单剩余）取小。
   const amountFen = toFen(Number(order.amount))
   const goodsFen = toFen(Number(order.goods))
   const itemFen = asFen(toFen(line.price) * (line.qty || 1))
   const exist = await db.collection('afterSales').where({ orderId }).get().catch(() => ({ data: [] }))
-  const used = asFen(
+  const settled = (a: any) => ['applied', 'approved', 'refunded'].includes(a.status)
+  const usedOrder = asFen(exist.data.filter(settled).reduce((s: number, a: any) => s + toFen(Number(a.refundAmount)), 0))
+  const usedLine = asFen(
     exist.data
-      .filter((a: any) => ['applied', 'approved', 'refunded'].includes(a.status))
+      .filter((a: any) => settled(a) && (a.lineId || a.productId) === lineId)
       .reduce((s: number, a: any) => s + toFen(Number(a.refundAmount)), 0)
   )
-  const refundFen = refundShareFen(amountFen, goodsFen, itemFen, used)
+  const lineShare = refundShareFen(amountFen, goodsFen, itemFen, asFen(0))
+  const orderCap = refundShareFen(amountFen, goodsFen, itemFen, usedOrder)
+  const refundFen = asFen(Math.min(Math.max(0, lineShare - usedLine), orderCap))
   if (refundFen <= 0) return reply(400, { ok: false, error: 'NOTHING_LEFT' })
 
-  // 越规单独立 _id（客户 orderId__lineId 可能被 rejected 单占用）：加操作时戳后缀·管理员单点低并发
-  const asId = orderId + '__' + lineId + '__ovr' + Date.now()
+  // 确定性 _id（P1·根因#1 无幂等修复 + P0 复核·跨函数 TOCTOU 修复）：首个记录与客户 applyRefund
+  // 共用同一 _id 命名空间 `orderId__lineId`（app/actions/orders.ts:348 单源同款），不是各自另起一套——
+  // 两条路径「读 exist（都读到空）→ 算金额 → 写」并发时会在同一个 _id 上物理相撞，输家 add() 必炸：
+  // overrideRefund 侧走下方 catch 读回判 409 CONCURRENT，applyRefund 侧走它自己的撞键分支判 ALREADY_APPLIED
+  // （两侧早已各自具备"撞键=对方已写、天然幂等"的收尾逻辑，只是此前各占一个 _id、永不相撞）。一旦该行
+  // 曾经落过任何记录（无论是客户 applied 还是本函数写的，含 rejected——越规不看资格锁），基础位已占用，
+  // 后续再越规只能退到编号位 `__ovrN`（N=该行既有 __ovr 前缀售后单数量，查 exist 时顺带数，不加查询）；
+  // 编号位之间仍靠原有「并发双调算得同一 N → 撞键→输家中止」互斥，逻辑不变。
+  const bareId = orderId + '__' + lineId
+  const ovrPrefix = bareId + '__ovr'
+  const bareTaken = exist.data.some((a: any) => a._id === bareId)
+  const ovrCount = exist.data.filter((a: any) => typeof a._id === 'string' && a._id.startsWith(ovrPrefix)).length
+  const asId = bareTaken ? ovrPrefix + ovrCount : bareId
   const outRefundNo = refundNoFor(asId) // 微信合规退款单号（asId 含中文 SKU/spec·根因#12·案 A）
   await ensure(db, 'afterSales')
   const now = Date.now()
-  await db
-    .collection('afterSales')
-    .add({
+  try {
+    await db.collection('afterSales').add({
       data: {
         _id: asId,
         orderId,
@@ -67,7 +85,15 @@ export async function overrideRefund({ db, data }: Ctx) {
         overridden: true, // 留痕：越规发起（对账/客诉可溯）
       },
     })
-    .catch(() => {})
+  } catch (e) {
+    // add 失败必须中止、绝不接着触发真退款（P1·根因#14 修复：旧版 .catch(()=>{}) 写失败后仍 callFlow，
+    // 退款回调按 outRefundNo 反查将无单）。撞键判定不靠错误类型嗅探（仓内惯例不区分 add 错误类型）：
+    // 读回 doc(asId)——存在＝并发方已写（天然幂等，非故障）；不存在＝真写失败，留痕告警。
+    const reread = await db.collection('afterSales').doc(asId).get().catch(() => null)
+    if (reread && reread.data) return reply(409, { ok: false, error: 'CONCURRENT' })
+    console.error('overrideRefund add 写失败', asId, e)
+    return reply(500, { ok: false, error: 'WRITE_FAIL' })
+  }
 
   const r = await callFlow(String(flowId), {
     out_trade_no: orderId,
