@@ -303,9 +303,10 @@ const railState = (n: number) => (n === step.value ? 'current' : n < step.value 
       </template>
     </div>
 
+    <p v-if="truncNote" class="warn-line">{{ truncNote }}</p>
+
     <p v-if="loadErr" class="status-err">{{ loadErr }}</p>
     <p v-else-if="loading" class="ld-status">加载待发货队列中…</p>
-    <p v-else-if="truncNote" class="warn-line">{{ truncNote }}</p>
 
     <template v-else>
       <!-- 步1 拣货备货 -->

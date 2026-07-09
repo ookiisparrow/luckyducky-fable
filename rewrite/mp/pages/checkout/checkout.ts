@@ -21,8 +21,11 @@ Page({
     submitting: false,
   },
   backTimer: null as ReturnType<typeof setTimeout> | null,
-  unloaded: false, // 页面已退出标记（守卫扩面统一不变量·同 review/profile-edit/feedback 范式）：本页 backTimer 现为同步设置、
-  // 风险低（无 await 隔在赋值与之间），但统一装上防将来改动悄悄引入异步而漏防护，守卫规则保持简单不做「是否在 await 之后」的静态分析。
+  unloaded: false, // 页面已退出标记（守卫扩面统一不变量·同 review/profile-edit/feedback 范式）：本页 backTimer 赋值（refresh
+  // 里的空车分支，见下方第40行）本身在该方法唯一的 await（getAllProducts，第46行）之前，文本序无前置 await 可定位区间，
+  // 守卫按「无 await 同步路径」判——落在其前的 this.unloaded 检查（第37行）即满足。装它仍防将来改动把这条赋值挪到 await
+  // 之后而漏防护。注：守卫现（Round3 item4 扩面）已对「赋值前有 await」的情形做「必须落在该 await 之后」的静态分析，不再是
+  // 「赋值前任意位置皆可」的旧口径——那只是本例恰好落入无 await 的同步分支，不代表守卫整体不做这层分析。
   onUnload() {
     this.unloaded = true
     if (this.backTimer) clearTimeout(this.backTimer) // 空车延时返回坞清理（守卫 rw-mp-navback-timer-cleaned）
@@ -44,6 +47,7 @@ Page({
     // 结算前很久（购物车页/详情页）快照下的持久化临时址（约 2h 时效），到本页展示时可能已过期挂图；
     // allRaw 命中会话缓存零云调用（miss 兜底重拉一次，同 cart.ts onLoad 写法）。
     const allRaw = (await getAllProducts()) || []
+    if (this.data.submitting || this.unloaded) return // 恢复点复核（Round3 item2）：await 期间用户提交（finishSubmitted 清空草稿）或页面已退出，禁止用陈旧/空草稿渲染
     // draft 挪到 await 之后再读（P2·bug sweep Round2 复审补漏）：与 summaryFen() 取同一时刻的快照——
     // 若挪前面读、await 期间又触发 onToggleAddon（改了 draftItems），items/addons 用旧 draft 渲染却和用
     // 当下 draftItems 算出的 s（总价/搭配购总额）拼进同一次 setData，画面出现「未勾选却已计入总价」的错位。

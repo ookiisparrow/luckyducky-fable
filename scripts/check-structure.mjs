@@ -4523,7 +4523,7 @@ export const repoChecks = [
     // 方法体内、赋值之前须有 this.unloaded 早退检查。不做「是否在 await 之后」的复杂静态分析——统一简单不变量。
     id: 'rw-mp-navback-timer-cleaned',
     roots: ['#5', '#8'],
-    desc: 'mp 延时自动返回坞生命周期清理（病根#5 样板漂移·根因#8）：凡 rewrite/mp 页 .ts 既 setTimeout 又 navigateBack（延时自动返回）须 onUnload + clearTimeout 清定时器；具名 backTimer 坞另须 onUnload 置 this.unloaded=true + 每处 backTimer=setTimeout 赋值前有 this.unloaded 早退检查——否则用户在延时窗口内手动返回/退页→孤儿定时器再 navigateBack 多弹页，或迟到回包对已退页再 toast/navigateBack（工具端不暴露·真机才炸）',
+    desc: 'mp 延时自动返回坞生命周期清理（病根#5 样板漂移·根因#8）：凡 rewrite/mp 页 .ts 既 setTimeout 又 navigateBack（延时自动返回）须 onUnload + clearTimeout 清定时器；具名 backTimer 坞另须 onUnload 置 this.unloaded=true + 每处 backTimer=setTimeout 赋值须有 this.unloaded 早退检查且位于「赋值点前最后一个 await 之后、赋值之前」（无前置 await 的同步路径为赋值前任意位置·批6 收紧：检查早于 await＝迟到回包窗口失守）——否则用户在延时窗口内手动返回/退页→孤儿定时器再 navigateBack 多弹页，或迟到回包对已退页再 toast/navigateBack（工具端不暴露·真机才炸）',
     run() {
       const base = join(ROOT, 'rewrite/mp')
       if (!existsSync(base)) return []
@@ -4570,10 +4570,30 @@ export const repoChecks = [
             }
           }
           if (!owner) continue // 找不到所属方法体（收尾启发式失配）——不误报，交由上面 onUnload 检查兜底
-          const checkMatch = owner.body.match(/this\.unloaded\s*\)\s*return/)
           const relAsgnAt = asgnAt - owner.bodyStart
-          if (!checkMatch || checkMatch.index >= relAsgnAt)
-            bad.push(`pages/${p}/${p}.ts 方法 ${owner.name} 里 backTimer=setTimeout 赋值前缺 this.unloaded 早退检查——迟到回包会对已退页误 navigateBack/toast（病根#5 扩面·根因#8）`)
+          // 判据文本位置须≠控制流位置（Round3 item4·猎手构造样例证实假阴）：检查写在「赋值前任意位置」不够——若赋值点前
+          // 有 await，迟到回包的判退检查必须落在「该 await 之后、赋值之前」才对控制流真正生效（写在 await 之前的检查，
+          // 在 await 恢复执行时早已跑过，拦不住迟到回包）。取赋值点前文最后一个 await 的位置作区间起点；无 await（同步路径，
+          // 如 checkout 空车分支）保持原判据（赋值前任意位置皆可，因赋值前无异步让出点、检查天然生效）。
+          let lastAwaitAt = -1
+          const awaitRe = /\bawait\b/g
+          let awm
+          while ((awm = awaitRe.exec(owner.body))) {
+            if (awm.index >= relAsgnAt) break
+            lastAwaitAt = awm.index
+          }
+          const checkRe = /this\.unloaded\s*\)\s*return/g
+          let checkOk = false
+          let cm
+          while ((cm = checkRe.exec(owner.body))) {
+            if (cm.index >= relAsgnAt) break
+            if (cm.index > lastAwaitAt) {
+              checkOk = true
+              break
+            }
+          }
+          if (!checkOk)
+            bad.push(`pages/${p}/${p}.ts 方法 ${owner.name} 里 backTimer=setTimeout 赋值前缺 this.unloaded 早退检查（须落在最后一个 await 之后、赋值之前）——迟到回包会对已退页误 navigateBack/toast（病根#5 扩面·根因#8）`)
         }
       }
       return bad
