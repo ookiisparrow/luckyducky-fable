@@ -4878,6 +4878,44 @@ export const repoChecks = [
       return bad
     },
   },
+  {
+    // 冒烟层接线（批次D·根因#8「构建过≠真机能用」的机器半边）：scripts/mp-smoke.cjs 存在且照抄
+    // visual-check.cjs 已验证过的坑（connect→systemInfo 探活、disconnect 收尾而非 close）；
+    // package.json 接线 smoke:mp；rewrite/mp/app.ts 有 onError/onUnhandledRejection 探针
+    // （冒烟脚本 evaluate 读取取证「无新增未捕获异常」）。方法体检查走 methodBody/stripComments
+    // 单源 helper，不裸写正则（执行者错题本 E1：裸写正则会咬到注释假绿）。
+    id: 'mp-smoke-wired',
+    roots: ['#8'],
+    desc: '冒烟层接线（批次D·根因#8）：scripts/mp-smoke.cjs 存在且含 connect→systemInfo 探活与 disconnect 收尾模式；package.json scripts.smoke:mp 接线；rewrite/mp/app.ts 的 App({}) 含 onError 与 onUnhandledRejection 方法体（探针取证 + 真机排查·根因#14）——方法体检查须走 methodBody/stripComments 单源 helper（错题本 E1）',
+    run() {
+      const bad = []
+      const smokePath = join(ROOT, 'scripts/mp-smoke.cjs')
+      if (!existsSync(smokePath)) {
+        bad.push('scripts/mp-smoke.cjs 缺失——冒烟层未接线（批次D·根因#8）')
+      } else {
+        const src = stripComments(readFileSync(smokePath, 'utf8'))
+        if (!/\bconnect\s*\(/.test(src) || !/systemInfo\s*\(/.test(src))
+          bad.push('scripts/mp-smoke.cjs 未见 connect→systemInfo 探活模式——照抄 visual-check.cjs 已验证过的僵尸端口坑防护（靠人:#10）')
+        if (!/disconnect\s*\(/.test(src))
+          bad.push('scripts/mp-smoke.cjs 未见 disconnect 收尾——close 会留 9420 僵尸监听（照抄 visual-check.cjs 坑史）')
+      }
+      const pkgPath = join(ROOT, 'package.json')
+      const pkg = existsSync(pkgPath) ? JSON.parse(readFileSync(pkgPath, 'utf8')) : {}
+      if (pkg.scripts?.['smoke:mp'] !== 'node scripts/mp-smoke.cjs')
+        bad.push('package.json scripts["smoke:mp"] 未接线到 node scripts/mp-smoke.cjs')
+      const appTsPath = join(ROOT, 'rewrite/mp/app.ts')
+      if (!existsSync(appTsPath)) {
+        bad.push('rewrite/mp/app.ts 缺失——冒烟层错误探针无处挂（批次D）')
+      } else {
+        const appTs = readFileSync(appTsPath, 'utf8')
+        if (!methodBody(appTs, 'onError'))
+          bad.push('rewrite/mp/app.ts 的 App({}) 找不到 onError 方法体——冒烟层错误探针缺失（批次D·根因#8/#14）')
+        if (!methodBody(appTs, 'onUnhandledRejection'))
+          bad.push('rewrite/mp/app.ts 的 App({}) 找不到 onUnhandledRejection 方法体——冒烟层错误探针缺失（批次D·根因#8/#14）')
+      }
+      return bad
+    },
+  },
 ]
 
 // ============== 逐文件规则（fileRules）==============
