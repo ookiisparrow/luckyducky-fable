@@ -39,12 +39,19 @@ export async function listOrders({ db, data }: Ctx) {
 
 // 按状态服务端精确计数（根因#7 计数失真）：每状态 + 全部走 .count()（精确·不封顶·不受分页影响），
 // 状态枚举绑订单域单源 ORDER_STATUS（新增状态自动覆盖·根因#2）。前端标签计数只读此结果、不数已加载页。
+// partial（P1·bug sweep Round1 item7·病根#14）：某路 .count() 失败原先静默兜成 0，混进精确计数里
+// front 端无从分辨「真为 0」还是「没查到」——现在任一路失败即整体标 partial:true（不逐路置 null，
+// 保持返回形状简单：前端已按「整体不可信」处理待办卡，无需精确到哪个状态失败）。
 export async function orderCounts({ db }: Ctx) {
+  let partial = false
   const cnt = (query: any) =>
     query
       .count()
       .then((r: any) => r.total || 0)
-      .catch(() => 0)
+      .catch(() => {
+        partial = true
+        return 0
+      })
   const statuses = Object.values(ORDER_STATUS) as string[]
   const [all, ...nums] = await Promise.all([
     cnt(db.collection('orders')),
@@ -52,7 +59,7 @@ export async function orderCounts({ db }: Ctx) {
   ])
   const counts: Record<string, number> = { all }
   statuses.forEach((s, i) => (counts[s] = nums[i]))
-  return reply(200, { ok: true, counts })
+  return reply(200, { ok: true, counts, partial })
 }
 
 // 单单发货核心（shipOrder 与 shipOrders 批量共用·DRY 单源）：状态闸 paid/shipped + feeMismatch 挡单

@@ -62,6 +62,7 @@ async function more() {
     message.value = '加载更多失败：' + String(r.error || '') // 别静默吞·反复点无反应（病根#14）
     return
   }
+  message.value = '' // 翻页成功清旧错（P2·item5：上次失败留的「加载更多失败」提示别一直挂在成功之后）
   const seen = new Set(msgs.value.map((m) => m.id)) // 去重·防双击「更早」重复追加同一页（迭代F·对齐 Orders/Refunds）
   msgs.value = [...msgs.value, ...mapMessages(r.messages).filter((m) => !seen.has(m.id))]
   cursor.value = r.nextCursor

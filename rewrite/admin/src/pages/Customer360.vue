@@ -22,12 +22,17 @@ const message = ref('')
 // 身份头（换皮丢·getUser 没导出·坐席查客户只剩 openid 看不到姓名/手机/画像）
 const user = ref<{ nickname: string; phone: string; avatar: string; bio: string } | null>(null)
 
+const searchGen = useLatest() // 搜索乱序守卫（P2·照同页 open() 的 panoGen 范式·item4：快速改词连搜·旧回包别覆盖新搜索结果）
 async function search() {
   if (!q.value.trim()) return
   message.value = '搜索中…'
   panels.value = []
   current.value = ''
+  user.value = null // 新一轮搜索即清上一客户身份头残留（P1·回归修复：身份头移出 panels 连坐 v-if 后单独有此残留窗口——
+  // 未点「返回结果」直接改词重搜，若不清会与新命中列表并排显示旧客户 PII，同 open() 起始处清法一致）
+  const my = searchGen.begin()
   const r = await searchCustomer(q.value.trim())
+  if (searchGen.isStale(my)) return // 已发起更新的搜索·丢弃过期结果
   hits.value = r.ok
     ? ((r.customers as Record<string, any>[]) || []).map((c) => ({
         openid: String(c.openid || ''),
@@ -113,21 +118,22 @@ async function open(openid: string) {
       <code class="cur mono">{{ current }}</code>
     </div>
 
-    <!-- 全景（真值：身份卡 + mapPanels 面板）·取数成功才有 -->
-    <template v-if="panels.length">
-      <!-- 身份头（真值·换皮丢·getUser 未导出）：头像/昵称/手机(掩码)/openid/bio -->
-      <Card v-if="user">
-        <div class="profile">
-          <img v-if="user.avatar" :src="user.avatar" class="avatar" alt="" />
-          <div v-else class="avatar ph"><User :size="26" :stroke-width="1.6" /></div>
-          <div class="p-info">
-            <div class="p-name">{{ user.nickname }}</div>
-            <div class="p-meta">{{ maskPhone(user.phone) || '（无手机）' }} · <span class="mono">{{ current }}</span></div>
-            <div v-if="user.bio" class="p-bio">{{ user.bio }}</div>
-          </div>
+    <!-- 身份头（真值·换皮丢·getUser 未导出）：头像/昵称/手机(掩码)/openid/bio——P2·item3：与下方 360
+         面板区解耦，getUser 独立成功即显，不因 panels 取数失败（mapPanels 空）被 v-if="panels.length" 连坐隐藏 -->
+    <Card v-if="user">
+      <div class="profile">
+        <img v-if="user.avatar" :src="user.avatar" class="avatar" alt="" />
+        <div v-else class="avatar ph"><User :size="26" :stroke-width="1.6" /></div>
+        <div class="p-info">
+          <div class="p-name">{{ user.nickname }}</div>
+          <div class="p-meta">{{ maskPhone(user.phone) || '（无手机）' }} · <span class="mono">{{ current }}</span></div>
+          <div v-if="user.bio" class="p-bio">{{ user.bio }}</div>
         </div>
-      </Card>
+      </div>
+    </Card>
 
+    <!-- 360 面板（真值：mapPanels 面板）·取数成功才有；失败态已由上方 message 提示，身份头仍照显 -->
+    <template v-if="panels.length">
       <!-- mapPanels 面板（真值·单面板失败隔离·嵌套数组逐行明细·取证价值） -->
       <div class="ld-cols-2">
         <Card v-for="p in panels" :key="p.key" :title="p.label">

@@ -68,7 +68,7 @@ describe('首页模型往返', () => {
 
     // 返：编辑模型 → 载荷（空块/空态/空链剔除·与云端白名单同构）
     m.reassureItems.push({ icon: '', title: '', body: '', img: '' }) // 空块
-    m.reviewsItems.push({ quote: '  ', user: '匿名', img: '' }) // 空评价
+    m.reviewsItems.push({ quote: '  ', user: '', img: '' }) // 空评价（quote/user/img 三者皆空白）
     m.footerLinks.push('   ') // 空链
     const p = homePayload(m) as Record<string, any>
     expect(p.hero).toEqual({ title: '创造幸运', tagline: 't', search: '入门钩织的妙趣方式', img: 'cloud://hero.jpg' })
@@ -80,6 +80,27 @@ describe('首页模型往返', () => {
     // 缺档：新板块字段全默认空串（编辑器显占位提示·小程序读侧回退设计文案）
     expect(normalizeHome(null).brandName).toBe('')
     expect(normalizeHome(null).reassureItems).toEqual([])
+  })
+})
+
+describe('放心区/买家秀条目非空判据含 img/user（P2·bug sweep Round1 item1/2：先传图后补文案被静默丢）', () => {
+  it('大白话：放心区条目只填了图、标题正文还没补，也算非空条目、不被剔除', () => {
+    const m = normalizeHome(null)
+    m.reassureItems = [{ icon: '', title: '', body: '', img: 'cloud://only-img.jpg' }]
+    const p = homePayload(m) as Record<string, any>
+    expect(p.reassure.items).toHaveLength(1) // 只有图也保留（先传图后补文案的中间态·非「空块」）
+    expect(p.reassure.items[0].img).toBe('cloud://only-img.jpg')
+  })
+
+  it('大白话：买家秀条目只填了图、或只填了 user、quote 还没补，都算非空条目、不被剔除', () => {
+    const m = normalizeHome(null)
+    m.reviewsItems = [
+      { quote: '', user: '', img: 'cloud://only-img.jpg' }, // 只有图
+      { quote: '', user: '小满', img: '' }, // 只有 user
+      { quote: '  ', user: '  ', img: '' }, // 三者皆空白·仍算空评价·该剔除
+    ]
+    const p = homePayload(m) as Record<string, any>
+    expect(p.reviews.items).toHaveLength(2) // 只有图/只有 user 保留；三者皆空白剔除
   })
 })
 

@@ -6,6 +6,7 @@ import { listMaterials, saveMaterial, listSuppliers, saveSupplier, adjustStock, 
 import { materialHuman, materialCategoryLabel, uomLabel, scmErrorText, mapLedger, type LedgerRow } from '../lib/mapScm'
 import { dateTime } from '../lib/format'
 import { useLoadStatus } from '../lib/status'
+import { useLatest } from '../lib/latest'
 import ScmFlowTabs from '../components/ScmFlowTabs.vue'
 import UiButton from '../components/ui/Button.vue'
 import PageHeader from '../components/ui/PageHeader.vue'
@@ -23,8 +24,11 @@ const ledgerMat = ref('') // 当前流水按哪个料号过滤（空=全部·换
 const { message, ok: msgOk, note, load } = useLoadStatus()
 
 // 行内按料号查流水（换皮只有全局最近流水·listLedger 支持 materialId 过滤）
+const ledgerGen = useLatest() // 流水乱序守卫（P2·item6：照 latest.ts 范式·快速切料号连查·旧回包别盖新查询结果）
 async function loadLedger(materialId?: string) {
+  const my = ledgerGen.begin()
   const l = await listLedger(materialId)
+  if (ledgerGen.isStale(my)) return // 已发起更新的查询·丢弃过期流水
   ledger.value = l.ok ? mapLedger(l.list) : []
   ledgerMat.value = materialId || ''
 }

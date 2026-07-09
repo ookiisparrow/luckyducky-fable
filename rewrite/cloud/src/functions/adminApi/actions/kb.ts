@@ -44,7 +44,7 @@ export async function saveKb({ db, data }: Ctx) {
           answer: str(e.answer, 2000),
           category: CATS.includes(e.category) ? e.category : 'other',
           enabled: e.enabled !== false,
-          order: Number(e.order) || i,
+          order: Number.isFinite(Number(e.order)) ? Number(e.order) : i, // order:0 是合法首位·不被 ||i 的 falsy 吞掉（P3·item10）
           updatedAt: Date.now(),
         },
       })

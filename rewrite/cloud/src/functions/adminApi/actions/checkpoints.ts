@@ -28,8 +28,16 @@ export async function listCheckpoints({ db, data }: Ctx) {
 export async function saveCheckpoints({ db, data }: Ctx) {
   const courseId = str(data && data.courseId, 64)
   if (!courseId) return reply(400, { ok: false, error: 'BAD_ARGS' })
-  await ensure(db, 'checkpoints')
+  // 冒号入参拒（P3·item11）：_id 拼接 'def:'+courseId+':'+nodeId，courseId/nodeId 含 ':' 会打乱段界、
+  // 跨课/跨节点撞出同一个 _id 互相覆盖。fail-closed：先整体校验完（不写任何一条）再落库，避免半途拒绝
+  // 留下部分节点已写、部分未写的半份数据。错误码沿用仓内既有「冒号后缀带因」形状（同 BAD_STATUS:/UNKNOWN_SKU: 先例）。
+  if (courseId.includes(':')) return reply(400, { ok: false, error: 'BAD_ARGS:COLON_IN_ID' })
   const nodes = (Array.isArray(data && data.nodes) ? data.nodes : []).slice(0, NODE_LIMIT)
+  for (const n of nodes) {
+    const nodeId = str(n && n.nodeId, 64)
+    if (nodeId.includes(':')) return reply(400, { ok: false, error: 'BAD_ARGS:COLON_IN_ID' })
+  }
+  await ensure(db, 'checkpoints')
   const keepIds = new Set<string>()
   let i = 0
   for (const n of nodes) {

@@ -150,13 +150,19 @@ export async function listRefunds({ db, data }: Ctx) {
 
 // 按状态服务端精确计数（根因#7 计数失真）：每状态 + 全部走 .count()（精确·不封顶·不受分页影响），
 // 状态枚举绑售后域单源 AFTERSALE_STATUS（新增状态自动覆盖·根因#2）。前端标签计数只读此结果。
+// partial（P1·bug sweep Round1 item7·病根#14，同 orderCounts 治法）：某路 .count() 失败原先静默兜
+// 成 0——现在任一路失败即整体标 partial:true，前端待办卡据此别显绿色「无待办」。
 export async function refundCounts({ db }: Ctx) {
   await ensure(db, 'afterSales')
+  let partial = false
   const cnt = (query: any) =>
     query
       .count()
       .then((r: any) => r.total || 0)
-      .catch(() => 0)
+      .catch(() => {
+        partial = true
+        return 0
+      })
   const statuses = Object.values(AFTERSALE_STATUS) as string[]
   const [all, ...nums] = await Promise.all([
     cnt(db.collection('afterSales')),
@@ -164,7 +170,7 @@ export async function refundCounts({ db }: Ctx) {
   ])
   const counts: Record<string, number> = { all }
   statuses.forEach((s, i) => (counts[s] = nums[i]))
-  return reply(200, { ok: true, counts })
+  return reply(200, { ok: true, counts, partial })
 }
 
 // 退款决策判据（激活码状态数据链·闭 S10「自动判据」洞·根因#8：不伪造徽章→补真数据）。读类·不写库。

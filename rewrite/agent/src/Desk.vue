@@ -30,7 +30,9 @@ async function refreshLists() {
 
 async function pollThread() {
   if (!currentId.value) return
-  const r = await post('getThread', { sessionId: currentId.value, cursor: cursor.value || undefined })
+  const sid = currentId.value // 会话粒度快照（P1·item8：防切会话后旧轮询回包串号——await 期间用户可能已切会话）
+  const r = await post('getThread', { sessionId: sid, cursor: cursor.value || undefined })
+  if (sid !== currentId.value) return // 期间已切别的会话·丢弃过期回包（不写进新会话的 msgs/cursor）
   if (!r.ok) return // 轮询失败静默重试（不打断输入）
   msgs.value = mergeThread(msgs.value, r.messages) // 去重合并·不重气泡
   cursor.value = advanceCursor(cursor.value, r.nextCursor) // 只进不退
@@ -51,6 +53,7 @@ async function open(sessionId: string) {
   panelNote.value = ''
   await pollThread()
   const p = await post('getSessionCustomer360', { sessionId })
+  if (currentId.value !== sessionId) return // 期间又切了别的会话·丢弃过期 360 回包（P1·item8·同 pollThread 治法）
   if (p.ok) panels.value = (p.panels as Record<string, any>[]) || []
   else panelNote.value = deskErrorText(p.error) // NO_BRIDGE/NO_CONSENT 如实显示
 }
@@ -80,9 +83,17 @@ async function act(action: string) {
   void refreshLists()
 }
 
+let statusSeq = 0 // 代际守卫（P2·回归修复：连续切状态时先发后到的失败请求不得用旧 prev 覆盖已被后一次成功请求确认的新状态——ABA 竞态，同 pollThread/open 的 sid 快照代际治法）
 async function setStatus(s: 'online' | 'busy' | 'offline') {
-  status.value = s
-  await post('setAgentStatus', { status: s })
+  const prev = status.value // P2·item9：失败要能回滚，先存旧值
+  const my = ++statusSeq // 本次操作的代际号
+  status.value = s // 乐观更新（下拉选中即时反映）
+  const r = await post('setAgentStatus', { status: s })
+  if (my !== statusSeq) return // 期间又发起了更新的 setStatus（已确认更新状态）·丢弃本次过期回滚
+  if (!r.ok) {
+    status.value = prev // 服务端没接受·别让下拉显示了个没生效的状态
+    message.value = deskErrorText(r.error) // 照本文件既有错误提示范式（同 claim/act）
+  }
 }
 
 function doLogout() {

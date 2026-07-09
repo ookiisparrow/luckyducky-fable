@@ -96,11 +96,11 @@ export function homePayload(m: HomeModel): Record<string, unknown> {
     reassure: {
       heading: m.reassureHeading,
       lead: m.reassureLead,
-      items: m.reassureItems.filter((it) => it.title.trim() || it.body.trim()).map((it) => ({ icon: it.icon, title: it.title, body: it.body, img: it.img })), // 空块剔除
+      items: m.reassureItems.filter((it) => it.title.trim() || it.body.trim() || it.img.trim()).map((it) => ({ icon: it.icon, title: it.title, body: it.body, img: it.img })), // 空块剔除（非空判据含 img：先传图后补文案的中间态不算空块·item1）
     },
     reviews: {
       heading: m.reviewsHeading,
-      items: m.reviewsItems.filter((it) => it.quote.trim()).map((it) => ({ quote: it.quote, user: it.user, img: it.img })), // 空评价剔除
+      items: m.reviewsItems.filter((it) => it.quote.trim() || it.img.trim() || it.user.trim()).map((it) => ({ quote: it.quote, user: it.user, img: it.img })), // 空评价剔除（非空判据含 img/user·item2）
     },
     closing: { title: m.closingTitle, cta: m.closingCta, img: m.closingImg },
     footer: { links: m.footerLinks.map((s) => s.trim()).filter(Boolean), copy: m.footerCopy }, // 空链剔除
