@@ -37,9 +37,12 @@ Page({
     const show = e.scrollTop > 900 // 滚过约一屏半露出「回到顶部」
     if (show !== this.data.showTop) this.setData({ showTop: show })
   },
+  _seq: 0, // reload 代次（同 order-list 范式）：onLoad + 下拉刷新可能并发触发·丢弃被更晚 reload 取代的过期回包
   async reload() {
+    const seq = ++this._seq
     // 强刷（force:true）：下拉刷新/首屏仍要最新数据，同时回填缓存供详情/购物车复用（省它们的云调用）。
     const [content, products] = await Promise.all([getContent(), getAllProducts({ force: true })])
+    if (seq !== this._seq) return // 过期回包（被更晚 reload 取代）：丢弃·不覆盖较新结果
     this.setData({
       loading: false,
       content: mapHomeContent(content.ok ? content.home : null), // 逐块回退默认（不空屏·不半空）
@@ -68,6 +71,7 @@ Page({
     const decision = decideQuickAdd(raw)
     if (decision.kind === 'add') {
       cart.add(decision.payload)
+      if (typeof this.getTabBar === 'function') (this.getTabBar() as unknown as LdTabBar).setActive('home') // 角标随动（同 cart.ts:24 范式）
       this.ping('已加入购物车')
     } else if (decision.kind === 'navigate') {
       wx.navigateTo({ url: '/pages/detail/detail?id=' + decision.id })

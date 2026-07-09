@@ -22,12 +22,14 @@ Page({
   orderId: '',
   lineId: '',
   backTimer: null as ReturnType<typeof setTimeout> | null,
+  unloaded: false, // 提交在途页面已退出标记（P2·bug sweep R1 #9）：提交本身已达服务端，退页后回包只是迟到副作用，不补偿
   onUnload() {
+    this.unloaded = true
     if (this.backTimer) clearTimeout(this.backTimer) // 延时返回坞清理（守卫 rw-mp-navback-timer-cleaned）
   },
   onLoad(query: Record<string, string | undefined>) {
     this.orderId = String(query.orderId || '')
-    this.lineId = String(query.lineId || '')
+    this.lineId = decodeURIComponent(String(query.lineId || '')) // 与 order.ts onWriteReview 的 encodeURIComponent 成对（同 name 往返约定）
     this.setData({ name: decodeURIComponent(String(query.name || '')) })
   },
   onStar(e: WechatMiniprogram.TouchEvent) {
@@ -100,6 +102,7 @@ Page({
       this.data.anon,
       this.data.photos
     )
+    if (this.unloaded) return // 迟到回包：已退页（onUnload 已清 backTimer）——不弹 toast、不 navigateBack
     if (r.ok) {
       // 成功不复位 busy——锁到返回·防延时窗口内二次提交（撞主键回 REVIEWED 的矛盾 toast）；toast 加 mask·定时器存实例待清
       wx.showToast({ title: '感谢你的评价', icon: 'success', mask: true })

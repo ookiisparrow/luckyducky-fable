@@ -29,6 +29,8 @@ Page({
           detail: a.detail,
           isDefault: a.isDefault,
         })
+    } else {
+      wx.setNavigationBarTitle({ title: '新增收货地址' }) // 新增态标题不误显「编辑」（P3·bug sweep R1 #12）
     }
     this._syncValid()
   },

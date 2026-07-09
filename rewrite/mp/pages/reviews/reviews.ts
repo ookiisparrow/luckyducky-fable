@@ -11,6 +11,7 @@ Page({
     cursor: null as unknown,
   },
   productId: '',
+  loadingMore: false, // 触底翻页在途标记（P2·bug sweep R1 #10）：防快速多次触底并发请求各自 append 造成重复行
   onLoad(query: Record<string, string | undefined>) {
     this.productId = String(query.productId || '')
     void this.reload()
@@ -27,7 +28,10 @@ Page({
   },
   async onReachBottom() {
     if (!this.data.hasMore || this.data.cursor == null) return
+    if (this.loadingMore) return // 在途重复触底：直接丢弃（防重复 append）
+    this.loadingMore = true
     const r = await getReviews(this.productId, this.data.cursor)
+    this.loadingMore = false
     if (!r.ok) return // 翻页失败不覆盖已有
     this.setData({ list: [...this.data.list, ...mapReviews(r.list)], cursor: r.nextCursor, hasMore: !!r.hasMore })
   },

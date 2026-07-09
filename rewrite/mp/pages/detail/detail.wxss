@@ -398,3 +398,12 @@
   font-size: 24rpx;
   color: var(--ld-purple-meta);
 }
+.pdp-empty-btn {
+  margin-top: 10rpx;
+  padding: 16rpx 46rpx;
+  border-radius: var(--ld-radius-pill);
+  background: var(--ld-purple);
+  color: #fff;
+  font-size: 26rpx;
+  font-weight: 600;
+}

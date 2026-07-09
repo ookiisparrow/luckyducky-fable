@@ -22,6 +22,7 @@ Page({
     if (user) this.setData({ nickname: String(user.nickname || ''), bio: String(user.bio || ''), phone: String(user.phone || ''), avatar: String(user.avatar || ''), loaded: true })
   },
   onChooseAvatar(e: WechatMiniprogram.CustomEvent<{ avatarUrl: string }>) {
+    if (this.data.busy) return // 保存在途禁止重选头像：否则 onSave 已捕获的 avatarTemp 与此刻新选的分叉、上传的是旧图（P2·bug sweep R1 #8）
     this.setData({ avatarTemp: e.detail.avatarUrl })
   },
   onNickname(e: WechatMiniprogram.Input) {

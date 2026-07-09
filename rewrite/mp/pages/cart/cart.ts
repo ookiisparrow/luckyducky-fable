@@ -16,11 +16,15 @@ Page({
     totalLabel: '¥0.00',
     recs: [] as ProductVM[], // 未在袋中的推荐（设计「下方选品」）
   },
+  ready: false, // 首建实例 onLoad 首拉完成前的 onShow 抢跑标记（P3·bug sweep R1 #11）：微信 onLoad→onShow 相邻触发，
+  // onLoad 的 await 未落地时 onShow 已跑，allRaw 还是空数组、二者并发各自 setData 互相踩踏。
   async onLoad() {
     allRaw = (await getAllProducts()) || [] // 复用首页缓存·热路径零云调用（miss 则兜底重拉一次）
-    this.refresh()
+    this.refresh() // 首拉落地（refresh 内部含 setActive('cart')）
+    this.ready = true
   },
   onShow() {
+    if (!this.ready) return // 首建实例抢跑：onLoad 首拉还没完成，交给它自己的 refresh 收尾，这次 onShow 不重复刷新
     if (typeof this.getTabBar === 'function') (this.getTabBar() as unknown as LdTabBar).setActive('cart')
     this.refresh()
   },

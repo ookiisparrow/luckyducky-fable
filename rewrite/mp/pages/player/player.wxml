@@ -63,6 +63,10 @@
     <view class="lp-video-box lp-state" wx:elif="{{state === 'error'}}">
       <view class="lp-state-title">这段视频暂时播放不了</view>
       <view class="lp-state-hint">可能是网络或格式问题，换一段或稍后再试</view>
+      <view class="lp-state-actions">
+        <view class="lp-state-btn" bind:tap="onRetryError">重试本段</view>
+        <view class="lp-state-btn ghost" bind:tap="onToggleList">选其他段</view>
+      </view>
     </view>
   </view>
 

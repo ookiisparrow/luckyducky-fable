@@ -1,7 +1,7 @@
 // 商品详情（M2·重设计对齐 ProductDetail.jsx 方案A）：图册 swiper + 计数 + SKU 价格联动 + 加购/直买 + 客服 + 为你推荐。
 import * as cart from '../../lib/cart'
 import { prepareBuyNow } from '../../lib/checkout'
-import { getProductById, getAllProducts } from '../../lib/catalog'
+import { getAllProducts } from '../../lib/catalog'
 import { getRatingSummary } from '../../api/reviews'
 import { mapDetail, priceForSelection, type DetailVM } from '../../lib/mapDetail'
 import { mapSummary, type SummaryVM } from '../../lib/mapReviews'
@@ -22,7 +22,8 @@ function computeGalleryWindow(len: number, current: number): boolean[] {
 Page({
   data: {
     loading: true,
-    missing: false,
+    missing: false, // 网络成功、id 未命中——真下架/无效链接
+    loadFailed: false, // 网络/取数失败——不伪装成已下架，给重试（P2·bug sweep R1 #3）
     vm: null as DetailVM | null,
     skuIndex: -1,
     currentPrice: '', // 展示标签「¥198」
@@ -32,9 +33,26 @@ Page({
     recs: [] as ProductVM[],
     rating: null as SummaryVM | null, // 评分摘要（旁挂·异步·count=0 或失败→null 回退静态入口）
   },
-  async onLoad(query: Record<string, string | undefined>) {
-    const id = String(query.id || '')
-    const vm = mapDetail(await getProductById(id))
+  productId: '',
+  _seq: 0, // loadProduct 代次（同 order-list/home 范式）：连点「重试」可并发在途·丢弃被更晚一次取代的过期回包
+  onLoad(query: Record<string, string | undefined>) {
+    this.productId = String(query.id || '')
+    void this.loadProduct()
+  },
+  // 加载失败重试入口（onLoad 与 onRetryLoad 共用）：先拿全量表判两态——
+  // all===null（网络/取数失败）→ loadFailed 给重试；all 有值但 id 未命中 → missing（真下架）。
+  async loadProduct() {
+    const id = this.productId
+    const seq = ++this._seq
+    this.setData({ loading: true, missing: false, loadFailed: false })
+    const all = await getAllProducts()
+    if (seq !== this._seq) return // 过期回包（被更晚一次 loadProduct 取代）：丢弃·不覆盖较新结果
+    if (all === null) {
+      this.setData({ loading: false, loadFailed: true })
+      return
+    }
+    const raw = all.find((p) => String(p.id || p._id || '') === id) || null
+    const vm = mapDetail(raw)
     if (!vm) {
       this.setData({ loading: false, missing: true })
       return
@@ -50,6 +68,9 @@ Page({
     })
     void this.loadRecs(id)
     void this.loadRating(id)
+  },
+  onRetryLoad() {
+    void this.loadProduct()
   },
   async loadRecs(id: string) {
     const list = await getAllProducts() // 复用首页缓存·热路径零云调用（miss 则兜底重拉一次）

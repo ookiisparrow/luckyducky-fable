@@ -95,3 +95,24 @@ describe('结算草稿（快照语义·直买不动车·提交精确扣车）', 
     expect(checkout.getDraft().items).toEqual([]) // 草稿清空·不残留
   })
 })
+
+describe('建单成功页金额取权威回包值（bug sweep R1 #1）', () => {
+  it('大白话：回包 order.amount（元）才是权威值——换算分与前端自算值不一致时以回包为准', () => {
+    expect(checkout.resolveOrderAmountFen({ amount: 198 }, 999)).toBe(19800)
+    expect(checkout.resolveOrderAmountFen({ amount: 0 }, 999)).toBe(0) // 0 元单：合法值不误判缺失
+  })
+  it('大白话：回包缺 amount / 非法数字才回退调用方传入的前端自算值（防御分支）', () => {
+    expect(checkout.resolveOrderAmountFen({}, 555)).toBe(555)
+    expect(checkout.resolveOrderAmountFen(null, 555)).toBe(555)
+    expect(checkout.resolveOrderAmountFen({ amount: 'nan' }, 555)).toBe(555)
+  })
+})
+
+describe('建单失败错误码 → 人话文案（bug sweep R1 #2·不吞成通用失败）', () => {
+  it('大白话：COUPON_EXCEEDS_GOODS 有专属文案（不是网络问题、重试无用），库存不足/未知错误码各自分诊', () => {
+    expect(checkout.mapCreateOrderError('COUPON_EXCEEDS_GOODS')).toBe('优惠券暂不支持抵扣这单，请调整商品数量')
+    expect(checkout.mapCreateOrderError('OUT_OF_STOCK:p1')).toBe('有商品库存不足')
+    expect(checkout.mapCreateOrderError('WEIRD_CODE')).toBe('下单没成功，稍后再试')
+    expect(checkout.mapCreateOrderError('')).toBe('下单没成功，稍后再试')
+  })
+})

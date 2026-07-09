@@ -128,7 +128,9 @@ Page({
   },
   onWriteReview(e: WechatMiniprogram.TouchEvent) {
     const { lineid, name } = e.currentTarget.dataset as { lineid: string; name: string }
-    wx.navigateTo({ url: `/pages/review/review?orderId=${this.orderId}&lineId=${lineid}&name=${encodeURIComponent(name || '')}` })
+    // lineId 与 name 同一往返约定：编码/解码成对（review.ts onLoad 对应 decodeURIComponent）——
+    // lineId 未编码时若含 URL 保留字符（如 productId 里的 &/#）会截断查询串（P3·bug sweep R1 #6）。
+    wx.navigateTo({ url: `/pages/review/review?orderId=${this.orderId}&lineId=${encodeURIComponent(lineid || '')}&name=${encodeURIComponent(name || '')}` })
   },
   async onAfterSale() {
     const vm = this.data.vm

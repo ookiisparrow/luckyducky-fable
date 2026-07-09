@@ -60,6 +60,22 @@ export function finishSubmitted(): void {
   fromCart = false
 }
 
+/** 建单成功页展示金额（分）：优先取 createOrder 回包权威值（order.amount 为元）；
+ * 回包缺失/非数字才回退调用方传入的前端自算值（防御分支，正常必有 amount）（bug sweep R1 #1）。 */
+export function resolveOrderAmountFen(order: unknown, fallbackFen: number): number {
+  const o = (order && typeof order === 'object' ? order : {}) as Record<string, unknown>
+  const n = Number(o.amount)
+  return Number.isFinite(n) ? Math.round(n * 100) : fallbackFen
+}
+
+/** 建单失败错误码 → 人话文案（云端拒单原样透传·前端只做展示映射，不吞成通用失败）（bug sweep R1 #2）。 */
+export function mapCreateOrderError(msg: string): string {
+  const m = String(msg || '')
+  if (m.startsWith('OUT_OF_STOCK')) return '有商品库存不足'
+  if (m === 'COUPON_EXCEEDS_GOODS') return '优惠券暂不支持抵扣这单，请调整商品数量'
+  return '下单没成功，稍后再试'
+}
+
 /** 仅测试：清草稿。 */
 export function __resetForTest(): void {
   draftItems = []

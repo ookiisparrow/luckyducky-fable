@@ -47,8 +47,10 @@ Page({
   onActivate() {
     wx.navigateTo({ url: '/pages/welcome/welcome' })
   },
-  onOrders() {
-    wx.navigateTo({ url: '/pages/order-list/order-list' })
+  // 三格（待付款/待发货/待收货）带 data-tab 直落对应分栏；「全部订单」无 dataset 不带 tab（order-list.ts query.tab 契约）。
+  onOrders(e?: WechatMiniprogram.TouchEvent) {
+    const tab = (e && e.currentTarget && e.currentTarget.dataset && String(e.currentTarget.dataset.tab || '')) || ''
+    wx.navigateTo({ url: '/pages/order-list/order-list' + (tab ? '?tab=' + tab : '') })
   },
   onAfterSales() {
     wx.navigateTo({ url: '/pages/aftersales/aftersales' })

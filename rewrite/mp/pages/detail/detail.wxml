@@ -117,6 +117,11 @@
 
 </view>
 
+<view class="pdp-empty" wx:elif="{{!loading && loadFailed}}">
+  <view class="pdp-empty-title">网络开小差</view>
+  <view class="pdp-empty-hint">商品加载失败，请重试</view>
+  <view class="pdp-empty-btn" bind:tap="onRetryLoad" hover-class="pdp-btn-h">重试</view>
+</view>
 <view class="pdp-empty" wx:elif="{{!loading}}">
   <view class="pdp-empty-title">商品不存在或已下架</view>
   <view class="pdp-empty-hint">回首页看看别的吧</view>

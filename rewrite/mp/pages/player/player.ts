@@ -47,6 +47,8 @@ Page({
   errRetried: false, // 该段是否已重试过一次（防不可恢复媒体无限重取死循环）
   watchReported: false, // 本段 watch_at 是否已上报（一次性·防 onHide+onUnload 双报）
   lastTimeUpdateAt: 0, // bindtimeupdate 节流时间戳（250ms·减频 setData）
+  _at: 0, // 最近一次 timeupdate 的播放位置（秒·每次事件都更新·不受 setData 节流影响）——watch_at/segment_done 埋点用
+  _dur: 0, // 最近一次 timeupdate 的总时长（秒·同上）
 
   async onLoad(query: Record<string, string | undefined>) {
     const info = wx.getWindowInfo()
@@ -81,6 +83,11 @@ Page({
     this.firstFrameScene = scene
     this.firstFrameReported = false
     this.lastTimeUpdateAt = 0
+    // 旧段的播放位置/时长一并清零：换段起点到新段首个 timeupdate 之间有真实空窗（url 落定即 state='playing'，
+    // 早于视频真正开播）；若此时触发 onHide/onUnload，reportWatchAt 会把这两个字段当真相上报——不清零会把上一段
+    // 的 at/dur 错记到新段 segmentId 头上（P2 bug sweep R2 复查）。
+    this._at = 0
+    this._dur = 0
     // src 清空：换段加载态回到「正在加载首帧」骨架，且卸载上一段/坏地址的 <video>——否则旧视频在新段标签下继续播放、
     // 骨架永不显，且坏 src 重挂到新段会瞬时 bind:error 白吃掉新段的一次重试预算（审计②）。
     // 进度/暂停态一并归零：新段是新的播放单元，旧段的进度条/暂停指示不该带过来。
@@ -130,9 +137,19 @@ Page({
   onEnded() {
     const cur = this.data.current
     if (!cur) return
-    trackEvent('segment_done', 'player', cur.segmentId, { courseId: this.courseId, lessonId: cur.lessonId, segmentId: cur.segmentId })
+    trackEvent('segment_done', 'player', cur.segmentId, { courseId: this.courseId, lessonId: cur.lessonId, segmentId: cur.segmentId, at: this._at, dur: this._dur })
     const next = navSegment(this.course, cur.segmentId, 1)
     if (next) void this.playSegment(next, 'seg')
+  },
+
+  // error 态手动重试（P3·bug sweep R1 #7）：复用现有段加载方法，重置重试计数放行 onVideoError 再给一次自动重试预算。
+  onRetryError() {
+    const cur = this.data.current
+    if (!cur) return
+    this.errSeg = ''
+    this.errRetried = false
+    cache.invalidate(this.courseId, cur.segmentId)
+    void this.playSegment(cur, 'retry')
   },
 
   onVideoError() {
@@ -164,6 +181,9 @@ Page({
 
   // 进度上报（250ms 节流·seeking 时不覆盖显示值·秒取整减频 setData）。
   onTimeUpdate(e: WechatMiniprogram.CustomEvent<{ currentTime: number; duration: number }>) {
+    // 每次事件都更新（不 setData·不节流）：watch_at/segment_done 埋点要最新播放位置，UI 节流不该拖累它（P2·bug sweep R1 #14）。
+    this._at = Math.floor(e.detail.currentTime || 0)
+    this._dur = Math.floor(e.detail.duration || 0)
     if (this.data.seeking) return
     const now = Date.now()
     if (now - this.lastTimeUpdateAt < TIME_UPDATE_THROTTLE_MS) return
@@ -261,7 +281,7 @@ Page({
     const cur = this.data.current
     if (!cur || this.data.state !== 'playing' || this.watchReported) return
     this.watchReported = true
-    trackEvent('watch_at', 'player', cur.segmentId, { courseId: this.courseId, lessonId: cur.lessonId, segmentId: cur.segmentId })
+    trackEvent('watch_at', 'player', cur.segmentId, { courseId: this.courseId, lessonId: cur.lessonId, segmentId: cur.segmentId, at: this._at, dur: this._dur })
   },
   onHide() {
     this.reportWatchAt()

@@ -72,13 +72,15 @@ Page({
     if (!r.ok) {
       // 云端拒单如实反馈（缺货/停售/配置缺失等·不吞错）——唯一留在本页的路径·此处才解锁重试
       this.setData({ submitting: false })
-      const msg = String(r.error || '')
-      wx.showToast({ title: msg.startsWith('OUT_OF_STOCK') ? '有商品库存不足' : '下单没成功，稍后再试', icon: 'none' })
+      wx.showToast({ title: checkout.mapCreateOrderError(String(r.error || '')), icon: 'none' })
       return
     }
     // 建单成功后每条后续路径都会离开结算页（redirectTo 成功页 / startPay 内 requestPayment 成功→成功页、取消/失败→switchTab 首页），
     // submitting 保持锁定不复位——防「支付发起期间草稿已被 finishSubmitted 清空、第二次点击绕过守卫再 createOrder」（病根#1 双提交）。
-    const amountFen = checkout.summaryFen().amountFen // 捕获实付分（finishSubmitted 消费草稿前）·透传成功页展示用
+    // 成功页金额用回包权威值（order.amount）：前端 summaryFen 是本地估算，缺货重试/搭配购变化等场景可能与云端现算分叉；
+    // 回包缺失才回退前端自算值（防御，正常必有）——透传成功页展示用（bug sweep R1 #1）。
+    const fallbackFen = checkout.summaryFen().amountFen // 捕获前端估算分（finishSubmitted 消费草稿前）·仅作回退兜底
+    const amountFen = checkout.resolveOrderAmountFen(r.order, fallbackFen)
     checkout.finishSubmitted() // 购物车按实际提交数量精确扣
     const order = (r.order || {}) as Record<string, any>
     if (order.status === 'paid') {

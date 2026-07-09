@@ -71,15 +71,15 @@
         </view>
       </view>
       <view class="ld-me-orders">
-        <view class="ld-me-order" bind:tap="onOrders" hover-class="ld-me-order-h">
+        <view class="ld-me-order" data-tab="pending" bind:tap="onOrders" hover-class="ld-me-order-h">
           <view class="ld-me-order-ico"><image class="ld-me-order-img" src="/static/icons/wallet.svg" mode="aspectFit" /></view>
           <text class="ld-me-order-label">待付款</text>
         </view>
-        <view class="ld-me-order" bind:tap="onOrders" hover-class="ld-me-order-h">
+        <view class="ld-me-order" data-tab="paid" bind:tap="onOrders" hover-class="ld-me-order-h">
           <view class="ld-me-order-ico"><image class="ld-me-order-img" src="/static/icons/package.svg" mode="aspectFit" /></view>
           <text class="ld-me-order-label">待发货</text>
         </view>
-        <view class="ld-me-order" bind:tap="onOrders" hover-class="ld-me-order-h">
+        <view class="ld-me-order" data-tab="shipped" bind:tap="onOrders" hover-class="ld-me-order-h">
           <view class="ld-me-order-ico"><image class="ld-me-order-img" src="/static/icons/truck.svg" mode="aspectFit" /></view>
           <text class="ld-me-order-label">待收货</text>
         </view>

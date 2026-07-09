@@ -156,6 +156,19 @@
   font-size: 26rpx;
   font-weight: 600;
 }
+.lp-state-actions {
+  display: flex;
+  gap: 20rpx;
+  margin-top: 10rpx;
+}
+.lp-state-actions .lp-state-btn {
+  margin-top: 0;
+}
+.lp-state-btn.ghost {
+  background: rgba(255, 255, 255, 0.14);
+  color: #ffffff;
+  border: 2rpx solid rgba(255, 255, 255, 0.3);
+}
 
 /* —— 底条（覆盖层·仅播放中显示） —— */
 .lp-bottombar {
