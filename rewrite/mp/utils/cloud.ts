@@ -6,7 +6,18 @@ export interface ApiResult {
   [k: string]: unknown
 }
 
+// 调用取证探针（镜像 app.ts __ldSmokeErrors 范式·根因#14 可观测）：封顶数组挂 globalThis，
+// 记录每次 callApp 的发起时刻——供冒烟脚本 / 今后性能巡逻核实「并行发起」而非「串行等待」，不改返回语义。
+const CALL_LOG_CAP = 100
+function pushCallLog(action: string) {
+  const g = globalThis as unknown as { __ldCallLog?: { action: string; t: number }[] }
+  if (!g.__ldCallLog) g.__ldCallLog = []
+  g.__ldCallLog.push({ action, t: Date.now() })
+  if (g.__ldCallLog.length > CALL_LOG_CAP) g.__ldCallLog.shift()
+}
+
 export function callApp(action: string, data: Record<string, unknown> = {}): Promise<ApiResult> {
+  pushCallLog(action)
   return new Promise((resolve) => {
     wx.cloud.callFunction({
       name: 'app',

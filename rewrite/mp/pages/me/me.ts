@@ -1,7 +1,8 @@
 // 「我」页（M2 批13 真化）：静默登录回灌资料 + 继续学习卡 + 入口列。
 // 登录零资料采集（黄金 §九）；继续学习定位纯函数（不假装有课·无课卡片走「去逛逛」兜底）。
 import { login, getMyProgress } from '../../api/user'
-import { getCourses, getMyCourses } from '../../api/learning'
+import { getMyCourses } from '../../api/learning'
+import { getAllCourses } from '../../lib/courses'
 import { continueResolve, type ContinueTarget } from '../../lib/continueResolve'
 import { openCustomerService } from '../../utils/customerService'
 
@@ -17,14 +18,16 @@ Page({
     void this.refresh()
   },
   async refresh() {
-    const [u, progress, mine, courses] = await Promise.all([login(), getMyProgress(), getMyCourses(), getCourses()])
+    // login/getMyProgress/getMyCourses 保持实时（login 兼具服务端记账语义，进度/我的课不缓存）；
+    // 课程目录本会话内不变，走 lib/courses 会话缓存（根因账本#15）——命中零云调用。
+    const [u, progress, mine, courses] = await Promise.all([login(), getMyProgress(), getMyCourses(), getAllCourses()])
     const user = (u.ok ? u.user : null) as Record<string, any> | null
     this.setData({
       // 云端资料回灌：非空覆盖默认、空不显示假名（黄金 §九）
       nickname: (user && String(user.nickname || '')) || '钩织新手',
       avatar: (user && String(user.avatar || '')) || '',
       bio: (user && String(user.bio || '')) || '',
-      cont: continueResolve(progress.ok ? progress.list : [], mine.ok ? mine.list : [], courses.ok ? courses.list : []),
+      cont: continueResolve(progress.ok ? progress.list : [], mine.ok ? mine.list : [], courses || []),
     })
   },
   onContinue() {

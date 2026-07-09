@@ -1,8 +1,8 @@
 // 首页（重设计 9 板块·M2）：Hero/品牌/特写+商品轨/信任条/拆门槛折叠/买家秀/FAQ/收尾CTA/页脚。
 // 数据经 api/catalog → app 网关；内容拿不到（网络/未部署）逐块回退设计默认文案（mapHomeContent），不空屏。
 // 页只编排：把原始返回交给纯函数 mapHomeContent/mapProducts，再 setData（house style·同 detail/me）。
-import { getContent, getProducts } from '../../api/catalog'
-import { primeProducts, getProductById } from '../../lib/catalog'
+import { getContent } from '../../api/catalog'
+import { getAllProducts, getProductById } from '../../lib/catalog'
 import { mapHomeContent, mapProducts, type HomeContentVM, type ProductVM } from '../../lib/mapHome'
 import { decideQuickAdd } from '../../lib/quickAdd'
 import * as cart from '../../lib/cart'
@@ -38,13 +38,13 @@ Page({
     if (show !== this.data.showTop) this.setData({ showTop: show })
   },
   async reload() {
-    const [content, products] = await Promise.all([getContent(), getProducts()])
-    if (products.ok && Array.isArray(products.list)) primeProducts(products.list as Record<string, unknown>[]) // 详情页复用·免重拉
+    // 强刷（force:true）：下拉刷新/首屏仍要最新数据，同时回填缓存供详情/购物车复用（省它们的云调用）。
+    const [content, products] = await Promise.all([getContent(), getAllProducts({ force: true })])
     this.setData({
       loading: false,
       content: mapHomeContent(content.ok ? content.home : null), // 逐块回退默认（不空屏·不半空）
-      products: products.ok ? mapProducts(products.list) : [],
-      loadFailed: !products.ok,
+      products: mapProducts(products),
+      loadFailed: products === null,
     })
   },
   toggleReassure(e: WechatMiniprogram.TouchEvent) {

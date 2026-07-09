@@ -3,6 +3,7 @@
 import { activateCourse, confirmEnter } from '../../api/learning'
 import { getContent } from '../../api/catalog'
 import { activationView, bgFor, type ActivationKind } from '../../lib/mapLearning'
+import type { ApiResult } from '../../utils/cloud'
 
 Page({
   data: {
@@ -15,11 +16,13 @@ Page({
     busy: false,
   },
   home: null as unknown,
-  async onLoad(query: Record<string, string | undefined>) {
+  // getContent（背景图）与 activateCourse（兑课）互不依赖：并行发起省一次云调用往返（0.7-1.4s/次）。
+  // 页实例持有而非模块级——同 home 一样跟着本次 onLoad 走，避免跨实例复用陈旧 promise。
+  homeReady: null as Promise<ApiResult> | null,
+  onLoad(query: Record<string, string | undefined>) {
     const info = wx.getWindowInfo()
     this.setData({ statusBarHeight: info.statusBarHeight })
-    const content = await getContent()
-    this.home = content.ok ? content.home : null
+    this.homeReady = getContent() // 不 await：activate() 里再取，跟 activateCourse 并行
     const code = String(query.code || '').trim()
     if (code) {
       this.setData({ code })
@@ -39,7 +42,10 @@ Page({
   async activate(code: string) {
     if (this.data.busy) return
     this.setData({ busy: true })
-    const view = activationView(await activateCourse(code))
+    const contentReady = this.homeReady ?? Promise.resolve({ ok: false } as ApiResult)
+    const [result, content] = await Promise.all([activateCourse(code), contentReady])
+    this.home = content.ok ? content.home : null // bgFor null-safe：取不到就走回退链，不阻塞结果屏
+    const view = activationView(result)
     this.setData({
       busy: false,
       phase: 'result',

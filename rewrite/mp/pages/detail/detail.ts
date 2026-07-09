@@ -1,8 +1,7 @@
 // 商品详情（M2·重设计对齐 ProductDetail.jsx 方案A）：图册 swiper + 计数 + SKU 价格联动 + 加购/直买 + 客服 + 为你推荐。
 import * as cart from '../../lib/cart'
 import { prepareBuyNow } from '../../lib/checkout'
-import { getProductById } from '../../lib/catalog'
-import { getProducts } from '../../api/catalog'
+import { getProductById, getAllProducts } from '../../lib/catalog'
 import { getRatingSummary } from '../../api/reviews'
 import { mapDetail, priceForSelection, type DetailVM } from '../../lib/mapDetail'
 import { mapSummary, type SummaryVM } from '../../lib/mapReviews'
@@ -40,9 +39,9 @@ Page({
     void this.loadRating(id)
   },
   async loadRecs(id: string) {
-    const r = await getProducts()
-    if (r.ok && Array.isArray(r.list)) {
-      this.setData({ recs: mapProducts(r.list).filter((p) => p.id !== id).slice(0, 4) }) // 排除本商品·取 4 个
+    const list = await getAllProducts() // 复用首页缓存·热路径零云调用（miss 则兜底重拉一次）
+    if (list) {
+      this.setData({ recs: mapProducts(list).filter((p) => p.id !== id).slice(0, 4) }) // 排除本商品·取 4 个
     }
   },
   // 评分摘要（云端聚合下发·不用列表页缓存自算·云为唯一真相）：count=0 或失败→mapSummary 返 null→回退静态入口

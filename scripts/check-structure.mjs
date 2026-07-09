@@ -4916,6 +4916,47 @@ export const repoChecks = [
       return bad
     },
   },
+  {
+    // 加载提速·目录缓存单源（批A·病根#15 加载链路冗余云调用·2026-07-09 加载审计+实测）：单次
+    // wx.cloud.callFunction 往返实测 0.7-1.4s，跨页共享的静态目录数据（商品/课程）本该像 lib/catalog.ts
+    // 已立的缓存范式（模块级 let cache + prime + miss 兜底重拉）那样单源收口，此前 detail.ts/cart.ts 绕过
+    // lib/catalog.ts 直调 api/catalog 的 getProducts，player.ts/me.ts/my-courses.ts 各自重拉 api/learning
+    // 的 getCourses 无缓存——每处冗余调用多付一次真实往返。同批已改到绿：lib/courses.ts 新立（同款缓存
+    // 范式），home/detail/cart/player/me/my-courses 六页接入缓存、不再直连 api 层；本守卫钉「页面层不得
+    // 绕过 lib 缓存直取」这一不变量（三种绕过手法都咬：具名 import / callApp 字面量）防止复发；
+    // stripComments 先剥注释防「同款字符串只是注释提及」误咬（防假红，非错题本 E1 场景但同精神）。
+    id: 'rw-mp-catalog-cache-single-source',
+    roots: ['#15'],
+    desc: '目录数据会话缓存单源（rewrite/mp·病根#15）：页面层禁绕过 lib 缓存直取商品/课程列表——禁 import 语句从 api/catalog 引入 getProducts、从 api/learning 引入 getCourses，禁 callApp(\'getProducts\')/callApp(\'getCourses\') 字面量出现在 api 层以外；商品缓存单源 lib/catalog.ts、课程缓存单源 lib/courses.ts（及 api/**、tests/** 本体豁免）',
+    run() {
+      const base = join(ROOT, 'rewrite/mp')
+      if (!existsSync(base)) return []
+      const bad = []
+      const EXCLUDE_FILES = new Set(['lib/catalog.ts', 'lib/courses.ts'])
+      const walk = (d, relDir) => {
+        const out = []
+        for (const e of readdirSync(d)) {
+          if (relDir === '' && (e === 'api' || e === 'tests')) continue
+          const p = join(d, e)
+          if (statSync(p).isDirectory()) out.push(...walk(p, relDir + e + '/'))
+          else out.push(p)
+        }
+        return out
+      }
+      for (const f of walk(base, '')) {
+        if (!f.endsWith('.ts')) continue
+        const rel = relative(base, f)
+        if (EXCLUDE_FILES.has(rel)) continue
+        const src = stripComments(readFileSync(f, 'utf8'))
+        const importsProducts = /import\s*\{[^}]*\bgetProducts\b[^}]*\}\s*from\s*['"][^'"]*api\/catalog['"]/.test(src)
+        const importsCourses = /import\s*\{[^}]*\bgetCourses\b[^}]*\}\s*from\s*['"][^'"]*api\/learning['"]/.test(src)
+        const rawCall = /callApp\s*\(\s*['"](?:getProducts|getCourses)['"]\s*\)/.test(src)
+        if (importsProducts || importsCourses || rawCall)
+          bad.push(`${rel} 绕过缓存直取商品/课程列表——目录数据会话缓存单源（病根#15，商品走 lib/catalog.ts、课程走 lib/courses.ts）`)
+      }
+      return bad
+    },
+  },
 ]
 
 // ============== 逐文件规则（fileRules）==============

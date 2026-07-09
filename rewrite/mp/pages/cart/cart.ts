@@ -3,7 +3,7 @@
 //   核心逻辑（lib/cart 单源·结算走选中项）零改；本批只加「推荐加购/开详情」两个读侧 handler。
 import * as cart from '../../lib/cart'
 import { prepareFromCart } from '../../lib/checkout'
-import { getProducts } from '../../api/catalog'
+import { getAllProducts } from '../../lib/catalog'
 import { mapProducts, type ProductVM } from '../../lib/mapHome'
 
 let allRaw: Record<string, any>[] = [] // 全商品原档（算推荐+加购取价·onLoad 拉一次）
@@ -17,8 +17,7 @@ Page({
     recs: [] as ProductVM[], // 未在袋中的推荐（设计「下方选品」）
   },
   async onLoad() {
-    const r = await getProducts()
-    if (r.ok && Array.isArray(r.list)) allRaw = r.list as Record<string, any>[]
+    allRaw = (await getAllProducts()) || [] // 复用首页缓存·热路径零云调用（miss 则兜底重拉一次）
     this.refresh()
   },
   onShow() {

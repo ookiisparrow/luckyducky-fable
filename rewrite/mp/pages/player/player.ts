@@ -4,8 +4,9 @@
 // 投屏双保险（真机走查后收敛，见 docs/待办与债.md）：主路径=原生 show-casting-button（官方文档未言明
 // 依赖 controls，社区有 controls=false 下可用实例）；备路径=底条自绘投屏按钮，wx.createVideoContext 后
 // 特性检测 typeof ctx.startCasting==='function'（基础库 2.32.0·仅 tap 回调内调用），不支持则提示微信版本过低。
-import { getCourses, getPlaybackUrl, trackEvent } from '../../api/learning'
+import { getPlaybackUrl, trackEvent } from '../../api/learning'
 import { flattenSegments, navSegment, createPlaybackCache, formatClock, clampSeek, type CoursePub, type FlatSegment } from '../../lib/player'
+import { getCourseById } from '../../lib/courses'
 import { openCustomerService } from '../../utils/customerService'
 
 const TIME_UPDATE_THROTTLE_MS = 250
@@ -51,8 +52,9 @@ Page({
     const info = wx.getWindowInfo()
     this.setData({ statusBarHeight: info.statusBarHeight })
     this.courseId = String(query.courseId || '')
-    const r = await getCourses()
-    const course = r.ok && Array.isArray(r.list) ? ((r.list as CoursePub[]).find((c) => c.id === this.courseId) || null) : null
+    // 来源页（me/my-courses）已把课程目录热进 lib/courses 缓存→这里零云调用；深链冷启动（分享链直进播放页）
+    // 缓存未热→内部兜底重拉一次目录，行为不回退，只是不再每次都重拉（根因账本#15）。
+    const course = (await getCourseById(this.courseId)) as CoursePub | null
     if (!course) {
       this.setData({ state: 'missing' })
       return
