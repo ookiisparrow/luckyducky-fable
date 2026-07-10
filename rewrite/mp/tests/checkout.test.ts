@@ -65,6 +65,20 @@ describe('结算草稿（快照语义·直买不动车·提交精确扣车）', 
     expect(cart.getItems()).toHaveLength(2) // 直买不动购物车
   })
 
+  it('大白话：草稿行 lineId（wx:key 用·批5）随行透传——购物车来源同 cart.lineIdOf 口径，直买/搭配购各自合成不撞', () => {
+    cart.add({ id: 'p1', name: '小鸭', price: 128 })
+    cart.add({ id: 'p1', sku: '云朵白', name: '小鸭', price: 138 })
+    checkout.prepareFromCart()
+    const lineIds = checkout.getDraft().items.map((l) => l.lineId)
+    expect(new Set(lineIds).size).toBe(2) // 同 id 异 sku 草稿行不撞 key
+    expect(checkout.getDraft().items.find((l) => l.sku === '')!.lineId).toBe(cart.lineIdOf('p1', ''))
+    expect(checkout.getDraft().items.find((l) => l.sku === '云朵白')!.lineId).toBe(cart.lineIdOf('p1', '云朵白'))
+    checkout.prepareBuyNow({ id: 'p9', name: '直买鸭', price: 98 })
+    expect(checkout.getDraft().items[0].lineId).toBe(cart.lineIdOf('p9', ''))
+    checkout.toggleAddon('hook')
+    expect(checkout.getDraft().items.find((l) => l.id === 'hook')!.lineId).toBe(cart.lineIdOf('hook', ''))
+  })
+
   it('大白话：搭配购加/减幂等切换；金额=商品+运费−券且不为负（与云端同式·分整数）；提交成功只扣购物车来源行、搭配购不碰车', () => {
     cart.add({ id: 'p1', name: '小鸭', price: 128 })
     cart.setQty('p1', 3)

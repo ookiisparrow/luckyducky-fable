@@ -8,7 +8,7 @@
 
   <!-- 待选区：虚线暂存·已加购商品 -->
   <view wx:if="{{items.length}}" class="ld-cart-hold ld-cart-hold-list">
-    <view class="ld-cart-row" wx:for="{{items}}" wx:key="index">
+    <view class="ld-cart-row" wx:for="{{items}}" wx:key="lineId">
       <view class="ld-check {{item.selected ? 'on' : ''}}" data-id="{{item.id}}" data-sku="{{item.sku}}" catch:tap="onToggle"></view>
       <view class="ld-cart-row-img" data-id="{{item.id}}" catch:tap="onOpen">
         <image wx:if="{{item.cover}}" class="ld-cart-row-photo" src="{{item.cover}}" mode="aspectFill" />

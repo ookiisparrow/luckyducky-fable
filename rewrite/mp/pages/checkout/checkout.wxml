@@ -40,7 +40,7 @@
           <image class="co-ico" src="/static/icons/chevron-right.svg" mode="aspectFit" />
         </view>
       </view>
-      <view class="co-item" wx:for="{{items}}" wx:key="index">
+      <view class="co-item" wx:for="{{items}}" wx:key="lineId">
         <image wx:if="{{item.cover}}" class="co-item-img" src="{{item.cover}}" mode="aspectFill" />
         <view wx:else class="co-item-img"></view>
         <view class="co-item-mid">

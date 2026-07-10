@@ -8,6 +8,7 @@
 
   <!-- 信息卡·发丝线分隔的三段自述 -->
   <view class="ld-ab-card">
+    <!-- wx:key 刻意用 index（批5 预审已核）：静态列表不重排·index 刻意 -->
     <view class="ld-ab-block" wx:for="{{sections}}" wx:key="index">
       <view class="ld-ab-h">{{item[0]}}</view>
       <view class="ld-ab-p">{{item[1]}}</view>

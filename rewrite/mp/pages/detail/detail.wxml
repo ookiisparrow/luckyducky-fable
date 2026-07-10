@@ -117,6 +117,15 @@
 
 </view>
 
+<!-- 加载骨架（批5·网络慢时白屏观感）：头图块 + 两行文字骨架，参照 home ld-skeleton 手法本页自足 -->
+<view class="pdp-skeleton" wx:elif="{{loading}}">
+  <view class="pdp-skeleton-hero"></view>
+  <view class="pdp-skeleton-card">
+    <view class="pdp-skeleton-text"></view>
+    <view class="pdp-skeleton-text short"></view>
+  </view>
+</view>
+
 <view class="pdp-empty" wx:elif="{{!loading && loadFailed}}">
   <view class="pdp-empty-title">网络开小差</view>
   <view class="pdp-empty-hint">商品加载失败，请重试</view>
