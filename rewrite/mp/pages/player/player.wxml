@@ -52,6 +52,9 @@
     <view class="lp-video-box lp-state" wx:elif="{{state === 'empty'}}">
       <view class="lp-state-title">这段视频还在整理中</view>
       <view class="lp-state-hint">先看看别的段落吧</view>
+      <view class="lp-state-actions">
+        <view class="lp-state-btn ghost" bind:tap="onToggleList">选其他段</view>
+      </view>
     </view>
     <view class="lp-video-box lp-state" wx:elif="{{state === 'denied'}}">
       <view class="lp-state-title">先激活课程才能观看</view>

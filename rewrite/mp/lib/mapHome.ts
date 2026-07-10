@@ -120,12 +120,13 @@ const str = (v: unknown, def: string): string => {
   const s = (v == null ? '' : String(v)).trim()
   return s || def
 }
-/** 数组块：非空数组 → 逐项净化（脏项剔除）；空/缺/整组全脏 → 默认整组（黄金 §九·防误清空）。 */
-function arr<T>(raw: unknown, mapItem: (x: Dict) => T | null, def: T[]): T[] {
+/** 数组块：非空数组 → 逐项净化（脏项剔除）；空/缺/整组全脏 → 默认整组（黄金 §九·防误清空）。
+ *  mapItem 拿原始元素（取对象与否的职责下沉给各 mapper 自己决定——footerLink 就要拒收对象，不能被 arr 先 obj() 成 {}）。 */
+function arr<T>(raw: unknown, mapItem: (x: unknown) => T | null, def: T[]): T[] {
   if (!Array.isArray(raw) || raw.length === 0) return def
   const out: T[] = []
   for (const it of raw) {
-    const m = mapItem(obj(it))
+    const m = mapItem(it)
     if (m) out.push(m)
   }
   return out.length ? out : def
@@ -169,24 +170,31 @@ export function mapHero(home: unknown): HeroVM {
   }
 }
 
-const trustItem = (x: Dict): TrustVM | null => {
+const trustItem = (raw: unknown): TrustVM | null => {
+  const x = obj(raw)
   const label = str(x.label, '')
   return label ? { icon: str(x.icon, ''), label } : null // 无标签整条剔除
 }
-const reassureItem = (x: Dict): ReassureItemVM | null => {
+const reassureItem = (raw: unknown): ReassureItemVM | null => {
+  const x = obj(raw)
   const title = str(x.title, '')
   return title ? { icon: str(x.icon, ''), title, body: str(x.body, ''), img: str(x.img, '') } : null
 }
-const reviewItem = (x: Dict): ReviewVM | null => {
+const reviewItem = (raw: unknown): ReviewVM | null => {
+  const x = obj(raw)
   const quote = str(x.quote, '')
   return quote ? { quote, user: str(x.user, ''), img: str(x.img, '') } : null
 }
-const faqItem = (x: Dict): FaqVM | null => {
+const faqItem = (raw: unknown): FaqVM | null => {
+  const x = obj(raw)
   const title = str(x.title, '')
   return title ? { title, body: str(x.body, '') } : null
 }
-const footerLink = (x: Dict): string | null => {
-  const s = (x == null ? '' : String(x)).trim()
+/** footer.links 是纯字符串数组（admin 存法·cloud content.ts）——只收 string/number，
+ *  其余类型（对象/数组/null/undefined/boolean）一律剔除，防 String({})='[object Object]' 塌缩值混入。 */
+const footerLink = (x: unknown): string | null => {
+  if (typeof x !== 'string' && typeof x !== 'number') return null
+  const s = String(x).trim()
   return s || null
 }
 

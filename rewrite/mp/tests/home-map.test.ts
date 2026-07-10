@@ -103,4 +103,21 @@ describe('首页全板块映射 mapHomeContent（缺档/空块逐块回退设计
     expect(() => mapHomeContent(42)).not.toThrow()
     expect(mapHomeContent([]).hero.title).toBeTruthy() // 数组入参也回退默认
   })
+
+  it('大白话：footer.links 是纯字符串数组（admin 存法）→ 原样透传，不塌成 [object Object]', () => {
+    const d = mapHomeContent({ footer: { links: ['关于我们', '联系方式'] } })
+    expect(d.footer.links).toEqual(['关于我们', '联系方式'])
+    expect(JSON.stringify(d)).not.toContain('[object Object]')
+  })
+
+  it('大白话：footer.links 混脏（空串/null/对象）→ 只留干净的字符串项', () => {
+    const d = mapHomeContent({ footer: { links: ['好链', '', null, {}] } })
+    expect(d.footer.links).toEqual(['好链'])
+  })
+
+  it('大白话：footer.links 全脏 → 回退默认链接组', () => {
+    const def = mapHomeContent(null)
+    const d = mapHomeContent({ footer: { links: ['', null, {}] } })
+    expect(d.footer.links).toEqual(def.footer.links)
+  })
 })
