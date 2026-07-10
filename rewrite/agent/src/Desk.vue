@@ -150,6 +150,10 @@ async function act(action: string) {
     if (r.ok && (action === 'releaseConversation' || action === 'closeConversation' || action === 'escalateToMerchant')) {
       currentId.value = ''
       msgs.value = []
+      // K1（bug sweep II·PII 残留）：右栏「顾客 360」无 v-if="currentId" 门控，不随会话清空——放回队列/结束/升级后
+      // 该客户可能已被别的坐席接手，panels/panelNote 若留着上一客户资料即跨会话 PII 残留。与 currentId/msgs 并列清空。
+      panels.value = []
+      panelNote.value = ''
     }
   }
   void refreshLists()

@@ -1,5 +1,6 @@
 import { COLLECTIONS } from '@ldrw/shared'
 import { getDb } from './db'
+import { notifyAlert } from './observe'
 
 // 实物库存原子原语（设计约束#1「下单即预留+乐观 CAS 防超卖」·黄金 inventory-scm §A/§B/§C）。
 // SKU 库存独立集合 inventory，确定性 _id=`${productId}__${spec}`（与 order.items[].spec 同键，回补一致）。
@@ -35,21 +36,44 @@ async function casDecrement(coll: any, _id: string, qty: number): Promise<boolea
   return false // 重试耗尽按不足处理·宁缺勿超卖
 }
 
-async function casIncrement(coll: any, _id: string, qty: number): Promise<void> {
+// 「无档」的判据（真 sdk：doc(id).get() 缺失即 reject）——与其他读失败（网络/瞬时故障）区分开：
+// 前者是合法状态（无档=不限量），后者不该被静默吞成合法。
+// 复核（bug sweep II 复审）：真 sdk 拒因文案不是固定字面量，实测/社区报错形如
+// 「...cannot find document with _id [ID号]...」（errCode -1），与本仓测试桩自造的 'DOCUMENT_NOT_FOUND'
+// 不是同一字符串——原判据 `message === 'DOCUMENT_NOT_FOUND'` 只在测试桩下命中，真机会全部落进 else
+// 分支被当「读失败」重试 5 次再误报 GIVEBACK_LOST（无档是高频合法态，会把可观测机制拖成告警疲劳）。
+// 改为兼容双源：测试桩字面量 精确匹配 + 真 sdk 文案子串匹配，任一命中即判定「无档」。
+// 导出仅供测试直打（真 sdk 报错文案没有内存桩可复现，只能对纯函数单测）。
+export const isDocMissing = (e: unknown): boolean => {
+  const msg = String((e as any)?.message ?? (e as any)?.errMsg ?? '')
+  return msg === 'DOCUMENT_NOT_FOUND' || /cannot find document/i.test(msg)
+}
+
+// 单条 CAS 回补：true=已扣回/无档或不限量（合法不处理）；false=重试耗尽仍未确认写入（回补丢失，调用方需知道）。
+// K3（bug sweep II）：原返回 void 把「读失败」「无档/不限量」「CAS 重试耗尽」三种迥异语义折叠成同一句静默 return——
+// restoreStock 的调用方（closeExpiredOrders/orders×3/payCallback/refundCallback）全部 await void，回补丢失
+// 永久无信号（方向偏少卖）。改为区分：无档/不限量→true（合法不处理，不算丢失）；读失败→当一次尝试失败继续重试
+// （不再与「无档」折叠，防真实读失败被误吞成合法不限量）；重试耗尽→false，交回补丢失信号给调用方。
+async function casIncrement(coll: any, _id: string, qty: number): Promise<boolean> {
   for (let i = 0; i < CAS_RETRY; i++) {
-    const got = await coll
-      .doc(_id)
-      .get()
-      .catch(() => null)
-    if (!got || !got.data) return
+    let got: any
+    try {
+      got = await coll.doc(_id).get()
+    } catch (e) {
+      if (isDocMissing(e)) return true // 无档＝不限量·合法不处理
+      continue // 读失败（非「无档」）：当一次尝试失败，进入下一轮重试——持续性读失败下该行 get 最多放大到
+      // CAS_RETRY 次（原实现 1 次即静默放弃）：刻意权衡（评审 P3 要求注明），回补只走关单/退款等低频补偿路径，可接受
+    }
+    if (!got || !got.data) return true // 防御：正常返回但无数据
     const stock = got.data.stock
-    if (stock == null) return
+    if (stock == null) return true // 不限量：合法不处理
     const r = await coll
       .where({ _id, stock })
       .update({ data: { stock: stock + qty, updatedAt: Date.now() } })
       .catch(() => ({ stats: { updated: 0 } }))
-    if (r.stats && r.stats.updated === 1) return
+    if (r.stats && r.stats.updated === 1) return true
   }
+  return false // 重试耗尽（持续读失败或 CAS 持续被抢）——回补真丢失
 }
 
 /**
@@ -74,13 +98,23 @@ export async function reserveStock(
   return { ok: true, reserved }
 }
 
-/** 回补库存（超时关单/退款/建单失败回滚）。幂等由调用方绑状态转移保证（只在抢占成功后调一次）。 */
+/**
+ * 回补库存（超时关单/退款/建单失败回滚）。幂等由调用方绑状态转移保证（只在抢占成功后调一次）。
+ * K3（bug sweep II·钱链可观测）：返回语义不变（fail-soft·调用点零改动）——只加信号：任一行回补丢失
+ * （casIncrement 重试耗尽）经 kit observe 单出口留痕告警，供人工对账回补；不因回补丢失让关单/退款失败。
+ * 漂移方向仅偏少卖（永不超卖·与防超卖偏置同向）。
+ */
 export async function restoreStock(lines: StockLine[]): Promise<void> {
   if (!lines || !lines.length) return
   const coll = getDb().collection(COLLECTIONS.inventory)
+  const lost: StockLine[] = []
   for (const l of lines) {
-    if (l && l.productId && l.qty > 0) await casIncrement(coll, idOf(l.productId, l.spec), l.qty)
+    if (l && l.productId && l.qty > 0) {
+      const ok = await casIncrement(coll, idOf(l.productId, l.spec), l.qty)
+      if (!ok) lost.push(l)
+    }
   }
+  if (lost.length) await notifyAlert('money', 'restoreStock', 'GIVEBACK_LOST', { lines: lost })
 }
 
 /**

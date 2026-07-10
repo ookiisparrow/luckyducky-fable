@@ -133,11 +133,11 @@ Page({
         ...outcome.payment,
         success: () => wx.redirectTo({ url: '/pages/paysuccess/paysuccess?id=' + orderId + '&amount=' + amountFen }),
         fail: (res) => {
-          // 取消/失败：订单保留待支付（支付窗口内可续付·订单列表随下一批开通）
+          // 取消/失败：订单保留待支付（支付窗口内可续付·订单列表/详情页已上线，见 me.ts:57 入口）
           const cancelled = String(res.errMsg || '').includes('cancel')
           wx.showModal({
             title: cancelled ? '支付已取消' : '支付没成功',
-            content: '订单已保留，超时前都可以继续支付。订单页随下一批开通。',
+            content: '订单已保留，超时前都可以继续支付。可到「我的-我的订单」继续支付。',
             showCancel: false,
             success: () => wx.switchTab({ url: '/pages/home/home' }),
           })
