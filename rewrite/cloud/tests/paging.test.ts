@@ -112,3 +112,60 @@ describe('pageQuery（游标翻页·属主隔离·黄金 G）', () => {
     expect(p2.list.every((r: any) => r.createdAt < legacyCursor)).toBe(true)
   })
 })
+
+describe('pageQuery order 参数（Round8·根因#7 收口·order 可选 asc/desc·默认 desc 零漂移）', () => {
+  it('大白话：不传 order 仍是既有 desc 行为（默认参数零漂移）', async () => {
+    const p = await pageQuery(getDb(), 'orders', { _openid: 'oME' }, 'createdAt', { limit: 10 })
+    expect(p.list[0].createdAt).toBe(1024)
+    expect(p.list[9].createdAt).toBe(1015)
+  })
+
+  it('大白话：order=asc 首页按排序键升序取 limit 条，续页游标续取剩余、不丢不重', async () => {
+    const p1 = await pageQuery(getDb(), 'orders', { _openid: 'oME' }, 'createdAt', { limit: 10 }, 20, 'asc')
+    expect(p1.list.length).toBe(10)
+    expect(p1.list[0].createdAt).toBe(1000)
+    expect(p1.list[9].createdAt).toBe(1009)
+    expect(p1.hasMore).toBe(true)
+    expect(p1.nextCursor).toEqual({ v: p1.list[9].createdAt, id: p1.list[9]._id })
+
+    const seen = new Set<string>()
+    let cursor: unknown = undefined
+    for (let round = 0; round < 5; round++) {
+      const p = await pageQuery(getDb(), 'orders', { _openid: 'oME' }, 'createdAt', { limit: 10, cursor }, 20, 'asc')
+      for (const row of p.list) {
+        expect(seen.has(row._id)).toBe(false)
+        seen.add(row._id)
+      }
+      if (!p.hasMore) {
+        expect(p.nextCursor).toBe(null)
+        break
+      }
+      cursor = p.nextCursor
+    }
+    expect(seen.size).toBe(25)
+  })
+
+  it('大白话：order=asc 复合游标 tiebreaker——同值撞分页边界不丢不重（镜像 desc 用例）', async () => {
+    control.reset()
+    control.seed('orders', [
+      { _id: 'tA', _openid: 'oME', createdAt: 1000 },
+      { _id: 'tB', _openid: 'oME', createdAt: 1000 },
+      { _id: 'tC', _openid: 'oME', createdAt: 1000 },
+    ])
+    const seen = new Set<string>()
+    let cursor: unknown = undefined
+    for (let round = 0; round < 5; round++) {
+      const p = await pageQuery(getDb(), 'orders', { _openid: 'oME' }, 'createdAt', { limit: 1, cursor }, 20, 'asc')
+      for (const row of p.list) {
+        expect(seen.has(row._id)).toBe(false)
+        seen.add(row._id)
+      }
+      if (!p.hasMore) {
+        expect(p.nextCursor).toBe(null)
+        break
+      }
+      cursor = p.nextCursor
+    }
+    expect(seen.size).toBe(3)
+  })
+})

@@ -1,5 +1,5 @@
 import { reply, str, type Ctx } from '../lib'
-import { transition, pageParams, assertOwnedByAgent, assertDataShareConsent, sendAgentCard, AGENT_DESK_URL, notifyAlert } from '../../../kit'
+import { transition, pageParams, pageQuery, assertOwnedByAgent, assertDataShareConsent, sendAgentCard, AGENT_DESK_URL, notifyAlert } from '../../../kit'
 import { COLLECTIONS } from '@ldrw/shared'
 import { assembleCustomer360 } from '../customer360/orchestrator'
 
@@ -108,24 +108,17 @@ async function loadSession(db: any, sessionId: string): Promise<any | null> {
 // ── ① listQueue：待接队列（pending 会话·FIFO createdAt 升序·bounded cursor/limit·根因#7）──
 // 待接队列对所有坐席可见（pending 会话无归属·可被任一坐席认领）；分配 scope 只在认领后的读/操作侧生效。
 // 超管队列另含 escalated（外包甩单只有商户能看见/重接——否则 escalateToMerchant 是黑洞·接真接口批补）。
+// 分页接 kit `pageQuery(..., 'asc')`（Round8·根因#7 收口最后一处）：原手写 `createdAt: _.gt(cursor)` 单字段
+// 游标同值多条会被 gt 严格条件永久跳过（撞分页边界即单次翻页 pass 内丢失），换成复合游标 + `_id` tiebreaker
+// 与全仓其余 6 处分页同一实现（黄金 §G 已覆盖）。当前前端 Desk.vue 不带 cursor 调用（整刷第一页），线上不
+// 可触达——这里修的是 API 契约层，回包形状 items/nextCursor/hasMore 对前端零变化。
 export async function listQueue(ctx: Ctx): Promise<any> {
   const { db, data } = ctx
   const p = principal(ctx)
   const _ = db.command
-  const { limit, cursor } = pageParams(data, LIST_LIMIT)
   const filter: Record<string, any> = { status: p.isSuper ? _.in(['pending', 'escalated']) : 'pending' }
-  if (cursor != null) filter.createdAt = _.gt(cursor) // 游标＝上一页末条 createdAt·取其后（FIFO 续页）
-  const res = await db
-    .collection(COLLECTIONS.csSession)
-    .where(filter)
-    .orderBy('createdAt', 'asc')
-    .limit(limit + 1) // 多查一条判 hasMore（bounded·capacity-reads-bounded）
-    .get()
-    .catch(() => ({ data: [] }))
-  const rows: any[] = (res && res.data) || []
-  const hasMore = rows.length > limit
-  const list = hasMore ? rows.slice(0, limit) : rows
-  const items = list.map((s) => ({
+  const paged = await pageQuery(db, COLLECTIONS.csSession, filter, 'createdAt', data, LIST_LIMIT, 'asc')
+  const items = paged.list.map((s) => ({
     sessionId: s._id,
     externalUserId: s.externalUserId || '',
     openKfId: s.openKfId || '',
@@ -133,7 +126,7 @@ export async function listQueue(ctx: Ctx): Promise<any> {
     createdAt: Number(s.createdAt) || 0,
     updatedAt: Number(s.updatedAt) || 0,
   }))
-  const nextCursor = hasMore && list.length ? list[list.length - 1].createdAt : undefined
+  const nextCursor = paged.hasMore ? paged.nextCursor : undefined
   return reply(200, { ok: true, items, nextCursor })
 }
 

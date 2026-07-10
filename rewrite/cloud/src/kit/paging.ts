@@ -50,22 +50,26 @@ export async function pageQuery(
   filter: Record<string, unknown>,
   cursorField: string,
   req: PageReq | undefined,
-  defaultLimit = 20
+  defaultLimit = 20,
+  order: 'asc' | 'desc' = 'desc' // P2·根因#7 Round8：可选排序方向，默认 desc＝既有 5 处调用方零改动零行为变化；
+  // 'asc' 供 FIFO 队列（listQueue）复用——比较方向随之整体翻转，镜像 desc 分支写（见下）。
 ): Promise<Paged> {
   const { limit, cursor } = pageParams(req, defaultLimit)
+  const asc = order === 'asc'
   const _ = db.command
+  const beyond = (v: unknown) => (asc ? _.gt(v) : _.lt(v)) // asc 续页取「更大」、desc 续页取「更小」——同一比较方向套用在 tie 段（_id）与 span 段（cursorField）
   let rows: any[]
   if (isCompoundCursor(cursor)) {
-    const [tieRes, ltRes] = await Promise.all([
-      db.collection(collName).where({ ...filter, [cursorField]: cursor.v, _id: _.lt(cursor.id) }).orderBy('_id', 'desc').limit(limit + 1).get(),
-      db.collection(collName).where({ ...filter, [cursorField]: _.lt(cursor.v) }).orderBy(cursorField, 'desc').orderBy('_id', 'desc').limit(limit + 1).get(),
+    const [tieRes, spanRes] = await Promise.all([
+      db.collection(collName).where({ ...filter, [cursorField]: cursor.v, _id: beyond(cursor.id) }).orderBy('_id', order).limit(limit + 1).get(),
+      db.collection(collName).where({ ...filter, [cursorField]: beyond(cursor.v) }).orderBy(cursorField, order).orderBy('_id', order).limit(limit + 1).get(),
     ])
-    rows = [...((tieRes && tieRes.data) || []), ...((ltRes && ltRes.data) || [])].slice(0, limit + 1)
+    rows = [...((tieRes && tieRes.data) || []), ...((spanRes && spanRes.data) || [])].slice(0, limit + 1)
   } else if (cursor != null) {
-    const res = await db.collection(collName).where({ ...filter, [cursorField]: _.lt(cursor) }).orderBy(cursorField, 'desc').orderBy('_id', 'desc').limit(limit + 1).get() // 向后兼容：旧纯值游标
+    const res = await db.collection(collName).where({ ...filter, [cursorField]: beyond(cursor) }).orderBy(cursorField, order).orderBy('_id', order).limit(limit + 1).get() // 向后兼容：旧纯值游标
     rows = (res && res.data) || []
   } else {
-    const res = await db.collection(collName).where({ ...filter }).orderBy(cursorField, 'desc').orderBy('_id', 'desc').limit(limit + 1).get()
+    const res = await db.collection(collName).where({ ...filter }).orderBy(cursorField, order).orderBy('_id', order).limit(limit + 1).get()
     rows = (res && res.data) || []
   }
   const hasMore = rows.length > limit
