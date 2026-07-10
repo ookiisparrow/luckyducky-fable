@@ -11,7 +11,7 @@
 > - **8 件控制台正册资产**：微信支付连接器 `wxpay_33nb7su` 等，git 外、勿动，副本正册在本仓 `console-assets/`（本仓即权威源，随变更先 repo 后控制台）。
 > - **治理脊柱**：`docs/元模式.md` / `docs/根因账本.md` 延续；进度/账本类见 `docs/现状与路线.md` 等；分叉前 next 全史在 `docs/archive/现状与路线-next基线-至20260703.md` / `docs/archive/重构日志-next基线-至20260703.md` / `docs/archive/调试日志-next基线-至20260703.md` / `docs/archive/待办与债-next基线-至20260703.md`。
 >
-> 以下为工程约定：§2/§5 为旧线（`packages/` 冻结参照）约定原文保留，其余治理/git/质量条目对全仓有效。
+> 以下为工程约定：§2/§5 为旧线（`packages/` 冻结参照）约定原文保留（§4「多端样式」⚙ 条目的机器扫描面亦仅旧线，见该节注），其余治理/git/质量条目对全仓有效。
 
 Lucky Ducky（小棉鸭）：钩织材料包电商 App。现产物为原生 TS 微信小程序（`rewrite/mp`·待微信后台发布）+ 云开发后端（环境 `cloudbase-d4gcssqbv06865479`、AppID `wxcbd2fb68b81bcfb1`）+ admin/agent 后台 + Astro 内容站。
 
@@ -72,6 +72,7 @@ npm run build:h5 / build:mp-weixin / build:cloud
 - **文档防膨胀（政策变更 2026-07-05，决策§25）**：CLAUDE 行数/活文档份数/记录类行数预算取消（原 `docs-budget` 守卫退役），卷档机制待重新设计；「条目 ≤8 行、溢出沉记录类」保留为写作纪律（靠人自律，无机器守卫）。
 
 **多端样式（标 ⚙ 的由 conventions 机器拦）**
+（作用面注：本节 ⚙ 守卫的扫描面＝旧线 `packages/miniapp`——conventions 扫描器只扫旧线；新线 `rewrite/mp` 为原生小程序、样式约定已随线重议（如 rpx 回归为平台正解），见 `rewrite/mp/README.md` 与其 rw-mp 守卫族。）
 - ⚙ 单位 px 不用 rpx `[机器守: rpx]`；⚙ 不写死主题色（与色票同值 hex 被拦）`[机器守: theme-hex]`；⚙ 不内联 `<svg>`、图标用 `<image>` 引 static/icons `[机器守: inline-svg]`；⚙ 交互用 `<view>`+`@tap` 不用 `<button>`（微信能力按钮 open-type 例外）`[机器守: button]`；⚙ 避 `backdrop-filter`/`color-mix()` `[机器守: css-compat]`；⚙ 本地图不走 `background-image:url()` 用 `<image>`、占位用 `MediaSlot` `[机器守: bg-image-local]`；⚙ `<scroll-view>` 内不写 sticky 吸顶（mp-weixin 不生效·H5 假绿·改随内容流参 home/me）`[机器守: sticky-in-scroll-view]`；⚙ 全屏遮罩（`*-mask`/`*-backdrop`）根 `<view>` 须 `@touchmove.stop.prevent` 锁背景滚动（mp 不锁则 touchmove 透传滚背景·H5 假绿）`[机器守: overlay-scroll-lock]`；⚙ 组件（`/components/` 下 .vue）样式禁标签选择器（`.cls text{}` 页面合法·自定义组件 wxss 不允许·真机可能静默不生效，加 class 再选）`[机器守: tag-selector-in-component]`。
 - 无独立守卫（靠 review / 条件编译纪律）：只用 `uni.xxx` 跨端 API、端私有能力 `// #ifdef MP-WEIXIN` 隔离；安全区/胶囊避让用 `utils/systemBar.js` 动态算、不硬编码 `env()`；scoped 拿不到 JS 值时经 `:style` 注入 CSS 变量、样式里 `var()` 取。
 

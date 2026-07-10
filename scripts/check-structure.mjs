@@ -3342,6 +3342,76 @@ export const repoChecks = [
     },
   },
   {
+    // admin action 计数单源（规则⑥·病根#11·客观计数机器维护）：系统事实「admin action」行长期手抄
+    // （94＝91+3），巡检抓到真值已是 97+3=100——两个真值都动态解析、不许硬编码（硬编码=再造手抄计数，
+    // 恰是本守卫要治的病）：①ACTIONS 键数＝rewrite/cloud/src/functions/adminApi/index.ts `const ACTIONS`
+    // 花括号块（配平取块防 `}` 提前截断，同 collection-count-synced 手法）内 `键:` 行数；②pre-auth 判支数＝
+    // main() 分发处「先于 checkKey(db,key,false) 校验」的 `action === '字面量'` if 链个数（当前实现＝字面量
+    // 比对：ping/login/loginByWecomCode，非集合，故按此构造动态数）。任一解析为 0 视为解析失败即红（防
+    // 结构改动后假绿·同 rw-agent-tokens-synced 交集<5 手法）。
+    id: 'admin-action-count-synced',
+    roots: ['#11'],
+    desc: 'admin action 计数单源（规则⑥·病根#11·客观计数机器维护）：rewrite/cloud/src/functions/adminApi/index.ts 的 ACTIONS 键数 + main() 分发处 checkKey(db,key,false) 之前的 pre-auth `action===字面量` 判支数为真值；系统事实「admin action」行「ACTIONS（N）」与总数须报同一数——防手抄漂移（任一解析为 0 视为解析失败即红）',
+    run() {
+      const bad = []
+      const idx = join(ROOT, 'rewrite/cloud/src/functions/adminApi/index.ts')
+      if (!existsSync(idx)) return []
+      const src = readFileSync(idx, 'utf8')
+      // ① ACTIONS 键数：花括号配平取块（防 `}` 提前截断）
+      const actionsStart = src.indexOf('const ACTIONS')
+      let keyCount = 0
+      if (actionsStart >= 0) {
+        const braceStart = src.indexOf('{', actionsStart)
+        let depth = 0
+        let braceEnd = -1
+        for (let i = braceStart; i < src.length; i++) {
+          if (src[i] === '{') depth++
+          else if (src[i] === '}') {
+            depth--
+            if (depth === 0) {
+              braceEnd = i
+              break
+            }
+          }
+        }
+        const actionsBlock = braceEnd > braceStart ? src.slice(braceStart + 1, braceEnd) : ''
+        keyCount = (actionsBlock.match(/^\s{2}\w+:/gm) || []).length
+      }
+      // ② pre-auth 判支数：main() 分发处、checkKey(db, key, false) 之前的 `action === '字面量'` 个数
+      const mainStart = src.indexOf('export const main')
+      const authIdx = mainStart >= 0 ? src.indexOf("checkKey(db, key, false)", mainStart) : -1
+      const preauthSlice = mainStart >= 0 && authIdx > mainStart ? src.slice(mainStart, authIdx) : ''
+      const preauthCount = (preauthSlice.match(/action === '\w+'/g) || []).length
+      if (!keyCount || !preauthCount) {
+        bad.push(
+          `admin-action-count-synced：解析失败（ACTIONS 键数=${keyCount}、pre-auth 判支数=${preauthCount}，任一为 0 视为解析失败，防结构改动假绿）`,
+        )
+        return bad
+      }
+      const total = keyCount + preauthCount
+      const sys = join(ROOT, 'docs/系统事实.md')
+      if (existsSync(sys)) {
+        const text = readFileSync(sys, 'utf8')
+        const row = text.split('\n').find((l) => l.trimStart().startsWith('| admin action |'))
+        if (!row) {
+          bad.push('系统事实.md 未找到「| admin action |」行——admin-action-count-synced 无法比对')
+          return bad
+        }
+        const totalCell = (row.split('|')[2] || '').trim()
+        if (totalCell !== String(total))
+          bad.push(
+            `系统事实「admin action」总数为「${totalCell}」≠ 真值 ${total}（ACTIONS ${keyCount} + pre-auth ${preauthCount}·客观计数单源·规则⑥·别手抄）`,
+          )
+        const actionsMatch = row.match(/ACTIONS`?\s*[（(](\d+)[）)]/)
+        if (!actionsMatch || Number(actionsMatch[1]) !== keyCount)
+          bad.push(
+            `系统事实「admin action」行「ACTIONS（${actionsMatch ? actionsMatch[1] : '缺'}）」≠ ACTIONS 键数真值 ${keyCount}（客观计数单源·规则⑥·别手抄）`,
+          )
+      }
+      return bad
+    },
+  },
+  {
     id: 'archive-index-synced',
     roots: ['#11'],
     desc: '退役-唤起闭环（根因#11·文档生命周期）：docs/archive/ 每份归档须在 archive/README.md 索引登记（防退役了查不到=唤起失效）+ 活文档（CLAUDE/docs 顶层）引用的 archive/* 路径须真实存在（防悬空退役指针）。索引本身被守＝不会自己 stale',
