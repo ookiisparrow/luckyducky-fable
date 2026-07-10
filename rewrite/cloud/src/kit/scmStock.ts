@@ -1,4 +1,5 @@
 import { getDb } from './db'
+import { notifyAlert } from './observe'
 import { COLLECTIONS } from '@ldrw/shared'
 
 // 原料账原子原语（进销存 SCM-0 门1·根因#1/#2·镜像 kit/inventory.ts 范式）。
@@ -8,7 +9,8 @@ import { COLLECTIONS } from '@ldrw/shared'
 // 幂等（守卫 scm-ledger-idempotent）：每笔流水确定性 _id=`<docType>:<docId>:<itemKey>`——同一单据对同一
 // 物料重放时 add 撞 DUPLICATE_ID＝并发方/上次已写，跳过不双记账（同 deterministic-id 范式）。
 // 并发：库存变更走乐观 CAS（读 stock → where({_id, stock:读值}).update 绝对值·updated===1 才算改到），
-// 与 kit/inventory 同款；不足/争用耗尽即失败并**回滚本次已应用行**（宁不动账勿错账）。
+// 与 kit/inventory 同款；不足/争用耗尽即失败并**尽力回滚本次已应用行**（宁不动账勿错账；反向 CAS 若也
+// 失败——并发抢占——保留该行流水作审计迹 + 打 ROLLBACK_FAIL 告警，不删流水掩盖差额，需人工对账回补）。
 // 计量：delta 一律非零整数（克或件·单位随主档 uom·validate fail-closed）；余额不允许为负。
 
 export type MoveDocType =
@@ -40,8 +42,10 @@ export type ApplyResult =
   | { ok: false; error: 'BAD_MOVE' | 'NO_MATERIAL' | 'INSUFFICIENT' | 'CONTENTION'; materialId?: string }
 
 /**
- * 对一张单据应用一组库存变动：写确定性流水 + CAS 改 materials.stock。全有或全无——任一行失败即
- * 回滚本次已应用行（删其流水 + 反向 CAS），返回失败原因；重放同一单据（同 docType+docId）天然幂等。
+ * 对一张单据应用一组库存变动：写确定性流水 + CAS 改 materials.stock。全有或全无（尽力回滚）——任一行
+ * 失败即回滚已应用行（删其流水 + 反向 CAS），返回失败原因；反向 CAS 若也失败（并发抢占），该行库存
+ * 保持已扣、流水保留作审计迹并打 ROLLBACK_FAIL 告警，需人工对账回补（K4）。重放同一单据（同
+ * docType+docId）天然幂等。
  */
 export async function applyStockMoves(moves: StockMove[], doc: MoveDoc): Promise<ApplyResult> {
   // fail-closed 入参校验（根因#8 假数据不入账）：整数、非零、料号非空、单据号非空
@@ -57,10 +61,25 @@ export async function applyStockMoves(moves: StockMove[], doc: MoveDoc): Promise
   const mats = db.collection(COLLECTIONS.materials)
   const done: StockMove[] = [] // 本次真正应用（拿到流水 claim 且改了库存）的行，失败时回滚
 
+  // K4（bug sweep II·P2·钱链审计迹）：原版丢弃 casChange 反向结果、紧接无条件删流水——反向若因
+  // INSUFFICIENT/CONTENTION/NO_MATERIAL 失败，库存留错账、唯一能解释差额的流水却被删掉，违反本模块
+  // 自述「宁不动账勿错账」与病根14「fail-soft 不抹可观测性」。改为消费返回值：反向成功才删流水；
+  // 反向失败＝保留该行 ledger 作审计迹 + 经 kit observe 告警，继续处理其余行（applyStockMoves 返回语义不变）。
   const rollback = async () => {
     for (const m of done) {
-      await casChange(mats, m.materialId, -m.delta) // 反向恢复（刚改过·冲突概率低·尽力恢复）
-      await ledger.doc(ledgerIdOf(doc.docType, doc.docId, m.materialId)).remove().catch(() => undefined)
+      const isFg = m.materialId.startsWith('fg:') // 成品行正向就不动 materials（流水行只留痕），反向同样不动
+      const result = isFg ? 'ok' : await casChange(mats, m.materialId, -m.delta) // 反向恢复（刚改过·冲突概率低·尽力恢复）
+      const ledgerId = ledgerIdOf(doc.docType, doc.docId, m.materialId)
+      if (result === 'ok') {
+        await ledger.doc(ledgerId).remove().catch(() => undefined)
+      } else {
+        await notifyAlert('money', 'scmStock.rollback', 'ROLLBACK_FAIL', {
+          materialId: m.materialId,
+          delta: m.delta,
+          docType: doc.docType,
+          docId: doc.docId,
+        })
+      }
     }
   }
 

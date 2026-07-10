@@ -99,6 +99,7 @@ function startEdit(row: Row) {
 }
 
 async function doSave(row: Row) {
+  const key = editKey.value // 快照发起时的编辑目标（G4·P2）：回包后若已切到别行编辑，不清新行正开着的 editKey
   const v = editVal.value.trim()
   const stock = v === '' ? null : Number(v)
   if (stock !== null && (!Number.isInteger(stock) || stock < 0)) {
@@ -113,10 +114,10 @@ async function doSave(row: Row) {
   }
   const r = await saveStock(row.productId, row.spec, stock, row.updatedAt, threshold) // 带版本·被人先改过会 409
   if (r.ok) {
-    editKey.value = ''
+    if (editKey.value === key) editKey.value = '' // 仍是发起时那行才收起编辑态，别顶掉新打开的行内编辑（G4）
     message.value = ''
   } else {
-    message.value = stockErrorText(r.error, r.status)
+    message.value = stockErrorText(r.error, r.status) // 失败提示不受目标切换影响，全局可见（同既有行为）
   }
   void reload()
 }

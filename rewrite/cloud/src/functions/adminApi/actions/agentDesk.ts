@@ -1,5 +1,5 @@
 import { reply, str, type Ctx } from '../lib'
-import { transition, pageParams, assertOwnedByAgent, assertDataShareConsent, sendAgentCard, AGENT_DESK_URL } from '../../../kit'
+import { transition, pageParams, pageQuery, assertOwnedByAgent, assertDataShareConsent, sendAgentCard, AGENT_DESK_URL, notifyAlert } from '../../../kit'
 import { COLLECTIONS } from '@ldrw/shared'
 import { assembleCustomer360 } from '../customer360/orchestrator'
 
@@ -89,6 +89,16 @@ async function activeCountFor(db: any, agentId: string): Promise<number> {
   return (r && r.total) || 0
 }
 
+// 入站消息全局唯一 id（bug sweep II L1）：conversations 无独立 msgid 字段，入站客户消息的 msgid 编码在
+// 确定性 _id='wxkf:in:<msgid>'（见 cs/kfCallback/archive.ts archiveInbound）——从 _id 剥前缀取回，不新增
+// 落库字段（archive.ts 幂等 _id 设计已够用，改它不在本次改动范围）。出站坐席消息 _id 自动生成、不含
+// msgid 语义，原样返回 undefined（desk.ts keyOf 按规格回退到 at|direction|msgtype|text 旧键）。
+const INBOUND_ID_PREFIX = 'wxkf:in:'
+function inboundMsgid(id: unknown): string | undefined {
+  const s = String(id || '')
+  return s.startsWith(INBOUND_ID_PREFIX) ? s.slice(INBOUND_ID_PREFIX.length) : undefined
+}
+
 // 读一条会话（缺失返 null·同 doc().get() reject 兜底）。
 async function loadSession(db: any, sessionId: string): Promise<any | null> {
   const got = await db.collection(COLLECTIONS.csSession).doc(sessionId).get().catch(() => null)
@@ -98,24 +108,17 @@ async function loadSession(db: any, sessionId: string): Promise<any | null> {
 // ── ① listQueue：待接队列（pending 会话·FIFO createdAt 升序·bounded cursor/limit·根因#7）──
 // 待接队列对所有坐席可见（pending 会话无归属·可被任一坐席认领）；分配 scope 只在认领后的读/操作侧生效。
 // 超管队列另含 escalated（外包甩单只有商户能看见/重接——否则 escalateToMerchant 是黑洞·接真接口批补）。
+// 分页接 kit `pageQuery(..., 'asc')`（Round8·根因#7 收口最后一处）：原手写 `createdAt: _.gt(cursor)` 单字段
+// 游标同值多条会被 gt 严格条件永久跳过（撞分页边界即单次翻页 pass 内丢失），换成复合游标 + `_id` tiebreaker
+// 与全仓其余 6 处分页同一实现（黄金 §G 已覆盖）。当前前端 Desk.vue 不带 cursor 调用（整刷第一页），线上不
+// 可触达——这里修的是 API 契约层，回包形状 items/nextCursor/hasMore 对前端零变化。
 export async function listQueue(ctx: Ctx): Promise<any> {
   const { db, data } = ctx
   const p = principal(ctx)
   const _ = db.command
-  const { limit, cursor } = pageParams(data, LIST_LIMIT)
   const filter: Record<string, any> = { status: p.isSuper ? _.in(['pending', 'escalated']) : 'pending' }
-  if (cursor != null) filter.createdAt = _.gt(cursor) // 游标＝上一页末条 createdAt·取其后（FIFO 续页）
-  const res = await db
-    .collection(COLLECTIONS.csSession)
-    .where(filter)
-    .orderBy('createdAt', 'asc')
-    .limit(limit + 1) // 多查一条判 hasMore（bounded·capacity-reads-bounded）
-    .get()
-    .catch(() => ({ data: [] }))
-  const rows: any[] = (res && res.data) || []
-  const hasMore = rows.length > limit
-  const list = hasMore ? rows.slice(0, limit) : rows
-  const items = list.map((s) => ({
+  const paged = await pageQuery(db, COLLECTIONS.csSession, filter, 'createdAt', data, LIST_LIMIT, 'asc')
+  const items = paged.list.map((s) => ({
     sessionId: s._id,
     externalUserId: s.externalUserId || '',
     openKfId: s.openKfId || '',
@@ -123,7 +126,7 @@ export async function listQueue(ctx: Ctx): Promise<any> {
     createdAt: Number(s.createdAt) || 0,
     updatedAt: Number(s.updatedAt) || 0,
   }))
-  const nextCursor = hasMore && list.length ? list[list.length - 1].createdAt : undefined
+  const nextCursor = paged.hasMore ? paged.nextCursor : undefined
   return reply(200, { ok: true, items, nextCursor })
 }
 
@@ -192,7 +195,9 @@ export async function sendAgentMessage(ctx: Ctx): Promise<any> {
     .catch(() => null)
   const out = (res && res.result) || {}
   const errcode = Number(out.errcode) || 0
-  const sent = out.ok !== false && !errcode
+  // callFunction reject（res=null）或回包无 result（out={}）都不等于送达成功——
+  // 必须先确认真有 result 才看 ok/errcode，否则 undefined!==false 会把整体失败误判为发出（B1·95018 同病根另一路径）。
+  const sent = !!(res && res.result) && out.ok !== false && !errcode
   if (sent) {
     // 出站落 conversations（坐席回复归档·与 kfCallback archiveOutbound 同形·内联避跨域 import·铁律二）
     const openid = await resolveOpenid(db, s)
@@ -250,6 +255,7 @@ export async function getThread(ctx: Ctx): Promise<any> {
       msgtype: m.msgtype || '',
       text: m.text || '',
       at: Number(m.at) || 0,
+      msgid: inboundMsgid(m._id), // bug sweep II L1：入站客户消息全局唯一 id（无则不带此字段·出站/历史档回退旧键去重）
     }))
   const nextCursor = list.length ? list[list.length - 1].at : Number(data && data.cursor) || undefined
   const openid = await resolveOpenid(db, s)
@@ -265,11 +271,18 @@ export async function setAgentStatus(ctx: Ctx): Promise<any> {
   if (!status) return reply(400, { ok: false, error: 'BAD_ARGS' })
   const limit = await agentLimit(db, p.agentId) // 保留已配上限（首次建 doc 用默认）
   // doc(agentId).set({data}) 的 data 不含 _id（_id 由 doc 指定·真 sdk 约束·根因#8）
-  await db
+  // 写失败不再吞（P1·bug 清除战役II F2）：原 .catch(()=>{}) 后恒 ok:true——前端 Desk 的 confirmedStatus
+  // 锚完全信任 r.ok，若写实际失败却回 ok:true，坐席在线状态与数据库脱节（排队分配据此、悄悄错误）。
+  const err = await db
     .collection(COLLECTIONS.agentState)
     .doc(p.agentId)
     .set({ data: { status, limit, updatedAt: Date.now() } })
-    .catch(() => {})
+    .then(() => null)
+    .catch((e: any) => e || new Error('WRITE_FAIL'))
+  if (err) {
+    await notifyAlert('anomaly', 'setAgentStatus', 'WRITE_FAIL', { agentId: p.agentId })
+    return reply(200, { ok: false, error: 'WRITE_FAIL' })
+  }
   return reply(200, { ok: true })
 }
 

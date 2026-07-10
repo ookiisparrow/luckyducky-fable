@@ -26,8 +26,15 @@ Page({
     this.setData({ statusBarHeight: info.statusBarHeight })
     void this.reload()
   },
+  hidden: false, // 已切走本 tab 标记（H·完备性扫描新增）：home 是 tabBar 页，切 tab/navigateTo 只触发 onHide、
+  // 实例常驻不销毁（不适用 checkout 那套 onUnload→this.unloaded 家族）——quick-add 的 await 恢复点据此判断
+  // 是否还站在本页，不把迟到回包的导航/角标同步/toast 打到用户已经切走之后的当前页面上。
   onShow() {
+    this.hidden = false
     if (typeof this.getTabBar === 'function') (this.getTabBar() as unknown as LdTabBar).setActive('home')
+  },
+  onHide() {
+    this.hidden = true
   },
   async onPullDownRefresh() {
     await this.reload()
@@ -62,20 +69,28 @@ Page({
     const id = String(e.currentTarget.dataset.id || '')
     if (id) wx.navigateTo({ url: '/pages/detail/detail?id=' + id })
   },
+  _addSeq: 0, // onAddProduct 代次（H3·完备性扫描新增·同 reload._seq 范式）：本页是 tabBar 页（onUnload 正常导航
+  // 基本不触发，不适用 checkout 那套 this.unloaded 家族），连点不同商品「+」可并发在途——不设代际复核则更晚一次
+  // 点击的结果可能被更早一次的迟到回包盖掉。切走本 tab（onHide）而非退出本页那条路见上面 hidden 字段（Round4 复审补漏）。
   // 首页「+」快速加购（2026-07-08 用户拍板：旧假占位反馈改真加购）：单规格直加购物车、
   // 多规格跳详情选规格、原始记录取不到（缓存 miss 且网络失败）温和失败反馈——决策纯函数见 lib/quickAdd。
   async onAddProduct(e: WechatMiniprogram.TouchEvent) {
     const id = String(e.currentTarget.dataset.id || '')
     if (!id) return
+    const seq = ++this._addSeq
     const raw = await getProductById(id)
+    if (seq !== this._addSeq) return // 过期回包（被更晚一次 onAddProduct 取代）：丢弃·不导航/不提示
     const decision = decideQuickAdd(raw)
     if (decision.kind === 'add') {
-      cart.add(decision.payload)
+      cart.add(decision.payload) // 数据侧动作照做（用户确实点了「+」）：即便已切走本 tab 也不该丢单
+      if (this.hidden) return // 已切走 home tab（H·完备性扫描新增）：角标同步/toast 是本页 UI 副作用，用户已看不到，静默跳过
       if (typeof this.getTabBar === 'function') (this.getTabBar() as unknown as LdTabBar).setActive('home') // 角标随动（同 cart.ts:24 范式）
       this.ping('已加入购物车')
     } else if (decision.kind === 'navigate') {
+      if (this.hidden) return // 已切走 home tab：不把 navigateTo 打到用户已经切走之后的当前页面上
       wx.navigateTo({ url: '/pages/detail/detail?id=' + decision.id })
     } else {
+      if (this.hidden) return
       this.ping('商品信息获取失败，请稍后重试')
     }
   },
@@ -88,8 +103,15 @@ Page({
   backTop() {
     wx.pageScrollTo({ scrollTop: 0, duration: 320 })
   },
+  // bug sweep II L3：页脚链接架构无 href 字段（admin 只存纯文本 label），本无法通用跳转——「关于我们」
+  // 是唯一已上线且默认安装态必现的 label（/pages/about/about 已注册·me 页也有正常入口），单独映射修复
+  // 默认误报「敬请期待」；其余 label 无对应页仍是合法占位（不加配置面/不引 href 机制，运营真需要再配跳转）。
   onTapFooterLink(e: WechatMiniprogram.TouchEvent) {
     const label = String(e.currentTarget.dataset.label || '')
+    if (label === '关于我们') {
+      wx.navigateTo({ url: '/pages/about/about' })
+      return
+    }
     this.ping(label + ' · 敬请期待')
   },
   ping(text: string) {

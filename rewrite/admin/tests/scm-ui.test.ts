@@ -2,6 +2,7 @@
 // 状态中文/错误码人话原文兜底/流水类型中文。
 import { describe, it, expect } from 'vitest'
 import shellRaw from '../src/shell/Shell.vue?raw'
+import scmMaterialsSrc from '../src/pages/ScmMaterials.vue?raw'
 import { materialHuman, materialCategoryLabel, uomLabel, purchaseStatusLabel, outworkStatusLabel, yuanToFen, fenLabel, scmErrorText, docTypeLabel, mapLedger, unprofiledProducts } from '../src/lib/mapScm'
 import { SCM_FLOW } from '../src/lib/scmFlow'
 import { setPurchaseHandoff, consumePurchaseHandoff, setOutworkHandoff, consumeOutworkHandoff } from '../src/lib/scmHandoff'
@@ -93,6 +94,20 @@ describe('SCM 流程条单源同步（防死链/防漂移）', () => {
 
 // 备货→采购/外协去开单中转（旧线 store/scmHandoff 移植·换皮丢·流程割裂手抄）：
 // 存一份→目标页读一次即清（consume），返回页不重复预填；两条通道互不串。
+// 档位从大团切走后重置残留 'knotted'（D2·bug 清除批D·取真源法：v-model 重置逻辑内联在组件里，无法单元测试
+// 行为，钉源码模式防回归——tier 切非 L 后 form 原会残留 'knotted'，select 显示空白且提交被云端 KNOT_ONLY_L 拒绝）。
+describe('物料主档 tier 切换清残留 form', () => {
+  it('大白话：源码含 watch(matForm.value.tier)，非 L 且当前 form 为 knotted 时重置为 raw', () => {
+    expect(scmMaterialsSrc).toMatch(/watch\(\s*\(\)\s*=>\s*matForm\.value\.tier/)
+    const idx = scmMaterialsSrc.indexOf('watch(() => matForm.value.tier')
+    expect(idx).toBeGreaterThan(-1)
+    const body = scmMaterialsSrc.slice(idx, idx + 200)
+    expect(body).toContain("t !== 'L'")
+    expect(body).toContain("matForm.value.form === 'knotted'")
+    expect(body).toContain("matForm.value.form = 'raw'")
+  })
+})
+
 describe('SCM 去开单 handoff（读一次即清）', () => {
   it('大白话：set 后 consume 拿到；再 consume 得 null（不重复预填）；采购/外协两通道独立', () => {
     setPurchaseHandoff({ supplierId: 'sup1', lines: [{ materialId: 'yarn:pink:L:raw', qty: 3 }] })

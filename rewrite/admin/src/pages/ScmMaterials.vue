@@ -55,6 +55,12 @@ watch(adj, () => (adjustId.value = ''), { deep: true })
 watch(() => matForm.value.category, (c) => {
   if (c === 'yarn') matForm.value.uom = 'count'
 })
+// 档位从大团切走后重置残留 'knotted'（D2·bug 清除批D）：模板 v-if（139-150 行）只隐藏「带结」option 不重置
+// v-model，tier 切非 L 后 form 仍持 'knotted'，select 显示空白且提交被云端 KNOT_ONLY_L 拒绝、报错与界面所见对不上。
+// 同仓先例：ScmBom.vue「切主键清残留下级字段」纪律。
+watch(() => matForm.value.tier, (t) => {
+  if (t !== 'L' && matForm.value.form === 'knotted') matForm.value.form = 'raw'
+})
 // 编辑既有供应商（换皮丢·填完只能新建·后端 saveSupplier 收 supplierId 支持改+note）：点列表回填
 function editSupplier(s: Record<string, any>) {
   supForm.value = { supplierId: String(s._id || ''), name: String(s.name || ''), type: String(s.type || 'factory'), contact: String(s.contact || ''), note: String(s.note || '') }
@@ -79,12 +85,16 @@ async function doSaveMaterial() {
 
 async function doSaveSupplier() {
   if (supBusy.value) return // 在途禁再发·防双击建两个重复供应商（后端建档无 id 幂等）
+  const snap = supForm.value // 快照本次编辑目标（H1·同批G G3/G4 范式）：editSupplier 无 supBusy 门控，await 期间若已切到
+  // 另一供应商/新建（resetSupForm 也会换新对象），回包收尾效果（note 会按新表单误报）不该打过去
   supBusy.value = true
   const r = await saveSupplier({ ...supForm.value })
   supBusy.value = false
-  note(r.ok, supForm.value.supplierId ? '供应商已更新' : '供应商已保存', scmErrorText(r.error))
-  if (r.ok) resetSupForm()
-  void reload()
+  if (supForm.value === snap) {
+    note(r.ok, snap.supplierId ? '供应商已更新' : '供应商已保存', scmErrorText(r.error))
+    if (r.ok) resetSupForm()
+  }
+  void reload() // 列表刷新与目标是否已切无关·恒执行
 }
 
 async function doAdjust() {

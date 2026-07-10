@@ -21,6 +21,9 @@ const current = ref('')
 const message = ref('')
 // 身份头（换皮丢·getUser 没导出·坐席查客户只剩 openid 看不到姓名/手机/画像）
 const user = ref<{ nickname: string; phone: string; avatar: string; bio: string } | null>(null)
+// getUser 与 getCustomer360 并行、各自独立成败（P2·bug sweep II D 补：区分「u.ok=false 取数失败」与「真无档」——
+// 二者若合并成同一句「暂无用户档案」文案，会把一次网络抖动误报成「查无此档」这一更强结论，与病根14「失败必可观测」相悖）
+const userLoadFailed = ref(false)
 
 const searchGen = useLatest() // 搜索乱序守卫（P2·照同页 open() 的 panoGen 范式·item4：快速改词连搜·旧回包别覆盖新搜索结果）
 async function search() {
@@ -31,6 +34,7 @@ async function search() {
   current.value = ''
   user.value = null // 新一轮搜索即清上一客户身份头残留（P1·回归修复：身份头移出 panels 连坐 v-if 后单独有此残留窗口——
   // 未点「返回结果」直接改词重搜，若不清会与新命中列表并排显示旧客户 PII，同 open() 起始处清法一致）
+  userLoadFailed.value = false
   const my = searchGen.begin()
   const r = await searchCustomer(q.value.trim())
   if (searchGen.isStale(my)) return // 已发起更新的搜索·丢弃过期结果
@@ -54,14 +58,22 @@ async function open(openid: string) {
   current.value = openid
   message.value = '加载全景…'
   user.value = null
+  userLoadFailed.value = false
   panels.value = [] // 起始清旧全景（防刷新在途时旧 A 面板残留·再切人错配）
   const my = panoGen.begin()
   const [r, u] = await Promise.all([getCustomer360(openid), getUser(openid)])
   if (panoGen.isStale(my) || current.value !== openid) return // 已切别人/别页·丢弃过期全景（防跨人隐私错配）
   panels.value = r.ok ? mapPanels(r) : []
-  if (u.ok) {
-    const d = ((u as any).user || u) as Record<string, any>
+  // 无档客户回 {ok:true,user:null}（D4·bug 清除批D）：去掉 `|| u` 兜底——原写法在 falsy user 时把整个响应对象
+  // 当数据源，渲染出全空「（无昵称）」身份卡，与「查无此档」语义混淆。只有真拿到 user 才组身份头，
+  // 无档保持 user.value=null（模板 v-else 提示「暂无用户档案」）。
+  // u.ok===false（取数失败，如网络抖动/超时）与「真无档」是两种不同语义（P2·bug sweep II D 补）——
+  // 前者不能被误标成后者，否则坐席会把「这次没查到」误当成「该客户确实没档案」的结论去用。
+  if (u.ok && (u as any).user) {
+    const d = (u as any).user as Record<string, any>
     user.value = { nickname: String(d.nickname || '（无昵称）'), phone: String(d.phone || ''), avatar: String(d.avatar || ''), bio: String(d.bio || '') }
+  } else if (!u.ok) {
+    userLoadFailed.value = true
   }
   message.value = r.ok ? '' : '加载失败：' + String(r.error || '')
 }
@@ -113,7 +125,7 @@ async function open(openid: string) {
     <!-- 返回/刷新 + 当前 openid（current 一旦选中即显·含加载失败/加载中——给「回结果」与「重试」入口·防死胡同 P2·根因#8：
          旧版返回/刷新裹在 v-if="panels.length" 里，取数失败 panels 为空即连同返回按钮整段不渲染、命中表又因 current 有值被藏，页面成死胡同） -->
     <div v-if="current" class="ld-toolbar back-row">
-      <UiButton size="sm" variant="ghost" @click="panels = []; current = ''; user = null; message = ''">
+      <UiButton size="sm" variant="ghost" @click="panels = []; current = ''; user = null; userLoadFailed = false; message = ''">
         <ChevronLeft :size="15" :stroke-width="2" /><span>返回结果</span>
       </UiButton>
       <UiButton size="sm" variant="ghost" title="刷新全景" @click="open(current)">
@@ -135,6 +147,10 @@ async function open(openid: string) {
         </div>
       </div>
     </Card>
+    <!-- getUser 取数失败（与「真无档」区分·P2·bug sweep II D 补）：网络抖动/超时不误标成「暂无档案」这一更强结论 -->
+    <p v-else-if="userLoadFailed" class="ld-status">用户档案加载失败，请刷新重试</p>
+    <!-- 无档客户（D4·与「查无此档」区分·不再渲染幽灵全空身份卡）：!message 避开加载中/加载失败态的闪现 -->
+    <p v-else-if="current && !message" class="ld-status">该客户暂无用户档案（可能仅有订单/会话记录）</p>
 
     <!-- 360 面板（真值：mapPanels 面板）·取数成功才有；失败态已由上方 message 提示，身份头仍照显 -->
     <template v-if="panels.length">

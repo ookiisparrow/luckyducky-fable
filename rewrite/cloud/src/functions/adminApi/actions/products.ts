@@ -73,11 +73,36 @@ export async function saveDraft({ drafts, data }: Ctx) {
 
 // 删除：草稿 + 已上架商品一并删（外部体检 P2：原只删草稿，已上架仍被买＝「不可撤销」失真）。
 // 历史订单存快照、不回读 products，故删上架不伤订单历史；临时下架属另一功能（院外债#12）。
+//
+// 顺序反转 + 失败可见（P0·bug 清除战役II F1）：原两条 remove 各自 .catch(()=>{}) 全吞、恒 ok:true——
+// products 删失败时后台列表已消失、小程序端仍在售可购买，管理员却被告知「已删除」。
+// 改：**先删 products（发布面）再删 drafts**——若 products 删失败，drafts 还在、商品仍在后台草稿列表
+// 可重试删除；危险方向永远是「后台不见了、前台还在卖」，反转顺序后不再可能发生。任一步失败即
+// ok:false，不再继续下一步、不再无条件回 ok:true；动作类失败（病根14）经 notifyAlert 留痕。
 export async function deleteDraft({ db, drafts, data }: Ctx) {
   const id = String(data.id || '')
   if (!id) return reply(400, { ok: false, error: 'NO_ID' })
-  await drafts.doc(id).remove().catch(() => {})
-  await db.collection('products').doc(id).remove().catch(() => {})
+  const prodErr = await db
+    .collection('products')
+    .doc(id)
+    .remove()
+    .then(() => null)
+    .catch((e: any) => e || new Error('REMOVE_FAIL'))
+  if (prodErr) {
+    // products 删失败：发布面未下、drafts 保留不动——不继续删 drafts，管理员可在草稿列表重试删除
+    await notifyAlert('anomaly', 'deleteDraft', 'REMOVE_FAIL', { id, stage: 'products' })
+    return reply(200, { ok: false, error: 'REMOVE_FAIL' })
+  }
+  const draftErr = await drafts
+    .doc(id)
+    .remove()
+    .then(() => null)
+    .catch((e: any) => e || new Error('REMOVE_FAIL'))
+  if (draftErr) {
+    // products 已删成功（发布面已下）、drafts 残留：如实报失败并留痕，注明状态——重试删除即可收敛
+    await notifyAlert('anomaly', 'deleteDraft', 'REMOVE_FAIL', { id, stage: 'drafts', note: 'products already removed' })
+    return reply(200, { ok: false, error: 'REMOVE_FAIL' })
+  }
   return reply(200, { ok: true })
 }
 

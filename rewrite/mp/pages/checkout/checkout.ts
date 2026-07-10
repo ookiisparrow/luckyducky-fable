@@ -86,6 +86,15 @@ Page({
       draft.items.map((l) => ({ id: l.id, sku: l.sku, qty: l.qty })),
       { name: a.name, phone: a.phone, region: a.region, detail: a.detail }
     )
+    // 建单请求在途用户手动退出结算页（同 refresh() unloaded 范式）：不再对无关页面 setData/toast/redirectTo/
+    // requestPayment（真实支付授权框）/switchTab——建单失败且已退页直接收尾；建单成功则订单已真实生成，
+    // 草稿必须消费、购物车必须扣（不因页面退出而漏账），只留轻提示、不再导航。
+    if (this.unloaded) {
+      if (!r.ok) return
+      checkout.finishSubmitted() // 已退页不进成功页·金额无消费方不再算（评审 P3：不留丢弃返回值的死调用）
+      wx.showToast({ title: '订单已生成，可到订单列表继续支付', icon: 'none' })
+      return
+    }
     if (!r.ok) {
       // 云端拒单如实反馈（缺货/停售/配置缺失等·不吞错）——唯一留在本页的路径·此处才解锁重试
       this.setData({ submitting: false })
@@ -109,6 +118,12 @@ Page({
   },
   async startPay(orderId: string, amountFen: number) {
     const outcome = mapPayResult(await pay(orderId))
+    // 拉起支付请求在途用户手动退出结算页：不再对无关页面 redirectTo/requestPayment（真实支付授权框）/showModal
+    // （同 onSubmit 建单分支范式）——订单已建，轻提示即可，导航/授权框留给用户主动回到订单列表时发起。
+    if (this.unloaded) {
+      wx.showToast({ title: '订单已生成，可到订单列表继续支付', icon: 'none' })
+      return
+    }
     if (outcome.kind === 'paid') {
       wx.redirectTo({ url: '/pages/paysuccess/paysuccess?id=' + orderId + '&amount=' + amountFen })
       return
@@ -118,11 +133,11 @@ Page({
         ...outcome.payment,
         success: () => wx.redirectTo({ url: '/pages/paysuccess/paysuccess?id=' + orderId + '&amount=' + amountFen }),
         fail: (res) => {
-          // 取消/失败：订单保留待支付（支付窗口内可续付·订单列表随下一批开通）
+          // 取消/失败：订单保留待支付（支付窗口内可续付·订单列表/详情页已上线，见 me.ts:57 入口）
           const cancelled = String(res.errMsg || '').includes('cancel')
           wx.showModal({
             title: cancelled ? '支付已取消' : '支付没成功',
-            content: '订单已保留，超时前都可以继续支付。订单页随下一批开通。',
+            content: '订单已保留，超时前都可以继续支付。可到「我的-我的订单」继续支付。',
             showCancel: false,
             success: () => wx.switchTab({ url: '/pages/home/home' }),
           })

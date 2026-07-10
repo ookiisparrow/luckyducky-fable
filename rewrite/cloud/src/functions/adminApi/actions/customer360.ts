@@ -70,6 +70,9 @@ export async function searchCustomer({ db, data }: Ctx) {
 
 // 单客户画像（B1.2）：读 users 一条（建档 _id=openid·老档随机 _id → 统一按 _openid 查兼容两者·bounded limit 1）。
 // 白名单字段回（不回原始档全字段）；无档（未登录过/老数据）回 user:null 不报错。
+// DB 异常与「真无档」分离（P1·bug 清除战役II F5）：原 .catch(() => ({data:[]})) 把查询异常与查无结果
+// 折叠成同一个 {ok:true,user:null}——批D 的 userLoadFailed 前端分支因此永远命中不到最常见的失败（DB 异常）。
+// 改：查询异常回 null（≠真查无结果的 {data:[]}）→ 单独识别为 ok:false；「真查无结果」保持 ok:true+user:null 不变。
 export async function getUser({ db, data }: Ctx) {
   const openid = String((data && data.openid) || '').trim()
   if (!openid) return reply(400, { ok: false, error: 'BAD_ARGS' })
@@ -78,9 +81,10 @@ export async function getUser({ db, data }: Ctx) {
     .where({ _openid: openid })
     .limit(1)
     .get()
-    .catch(() => ({ data: [] }))
-  const u = (r && r.data && r.data[0]) || null
-  if (!u) return reply(200, { ok: true, user: null })
+    .catch(() => null)
+  if (!r) return reply(200, { ok: false, error: 'USER_LOOKUP_FAIL' })
+  const u = (r.data && r.data[0]) || null
+  if (!u) return reply(200, { ok: true, user: null }) // 真查无结果——如实回 null，不算失败
   return reply(200, {
     ok: true,
     user: {

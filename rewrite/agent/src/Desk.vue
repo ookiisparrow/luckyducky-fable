@@ -93,13 +93,21 @@ async function pollThread() {
 }
 
 async function claim(sessionId: string) {
+  // 快照点击时所在会话（bug sweep II R5）：本文件五个会话敏感异步动作（pollThread/open/act/send/claim）里
+  // 最后一个补快照的——claim 在途期间坐席可能已主动打开另一会话并打字，慢回包若无条件 open(sessionId)
+  // 会把视图拽回来、且 open 的切会话清草稿把人家正在打的字清掉（同 send/act 治法·item8 家族收口）。
+  const before = currentId.value
   const r = await post('claimConversation', { sessionId })
-  message.value = r.ok ? '' : deskErrorText(r.error)
-  if (r.ok) void open(sessionId)
-  void refreshLists()
+  if (currentId.value === before) {
+    message.value = r.ok ? '' : deskErrorText(r.error)
+    if (r.ok) void open(sessionId)
+  }
+  void refreshLists() // 认领已在服务端生效——列表刷新无条件（会话会出现在「我在接」，坐席可自行点开）
 }
 
 async function open(sessionId: string) {
+  // 切会话前清未发草稿（B2·item8 输入侧同源：草稿留在输入框会随下一次 Ctrl+Enter 以新会话 sessionId 误发）
+  if (sessionId !== currentId.value) draft.value = ''
   currentId.value = sessionId
   msgs.value = []
   cursor.value = 0
@@ -115,24 +123,38 @@ async function open(sessionId: string) {
 async function send() {
   const text = draft.value.trim()
   if (!text || !currentId.value || busy.value) return
+  const sid = currentId.value // 会话粒度快照（F4·同 act()/open() 治法：await 期间用户可能已切会话——若不快照，
+  // A 发送在途时切到 B 并打新草稿，A 的回包落地会用 currentId.value（此刻已是 B）误清掉 B 正在打的字）
   busy.value = true
-  const r = await post('sendAgentMessage', { sessionId: currentId.value, text })
-  busy.value = false
-  if (r.ok) {
-    draft.value = '' // 只有发成功才清输入框（旧线 95018 教训：失败清框=顾客话丢了）
-    void pollThread()
-  } else {
-    message.value = deskErrorText(r.error)
+  const r = await post('sendAgentMessage', { sessionId: sid, text })
+  busy.value = false // 无条件复位（不受 sid 复核约束）：否则切会话后发送按钮永久卡死不可用
+  if (currentId.value === sid) {
+    // 期间已切别的会话——以下 UI 效果不落地：不清掉新会话正在打的字（open() 切会话时已清过旧草稿，
+    // 框里现在是新会话的新字，这里「不清」正是期望行为，不是遗漏）、不把旧会话的失败提示标到新会话上
+    if (r.ok) {
+      draft.value = '' // 只有发成功才清输入框（旧线 95018 教训：失败清框=顾客话丢了）
+      void pollThread()
+    } else {
+      message.value = deskErrorText(r.error)
+    }
   }
 }
 
 async function act(action: string) {
   if (!currentId.value) return
-  const r = await post(action, { sessionId: currentId.value })
-  message.value = r.ok ? '' : deskErrorText(r.error)
-  if (r.ok && (action === 'releaseConversation' || action === 'closeConversation' || action === 'escalateToMerchant')) {
-    currentId.value = ''
-    msgs.value = []
+  const sid = currentId.value // 会话粒度快照（B3·同 pollThread/open 治法·item8：await 期间用户可能已切会话）
+  const r = await post(action, { sessionId: sid })
+  if (currentId.value === sid) {
+    // 期间已切别的会话·丢弃过期回包的 UI 效果（不把 A 的报错标到 B 上、不清掉正在看的 B 会话）
+    message.value = r.ok ? '' : deskErrorText(r.error)
+    if (r.ok && (action === 'releaseConversation' || action === 'closeConversation' || action === 'escalateToMerchant')) {
+      currentId.value = ''
+      msgs.value = []
+      // K1（bug sweep II·PII 残留）：右栏「顾客 360」无 v-if="currentId" 门控，不随会话清空——放回队列/结束/升级后
+      // 该客户可能已被别的坐席接手，panels/panelNote 若留着上一客户资料即跨会话 PII 残留。与 currentId/msgs 并列清空。
+      panels.value = []
+      panelNote.value = ''
+    }
   }
   void refreshLists()
 }

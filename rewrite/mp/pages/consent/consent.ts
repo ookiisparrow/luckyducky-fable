@@ -10,14 +10,19 @@ Page({
     stateLabel: consentLabel(null),
     busy: false,
   },
+  unloaded: false, // 页面已退出标记（H3·守卫 rw-mp-await-side-effect-unloaded-recheck 点名·同 checkout/order-list 范式）
   onLoad() {
     const s = readConsentHint()
     this.setData({ state: s, stateLabel: consentLabel(s) })
+  },
+  onUnload() {
+    this.unloaded = true
   },
   async submit(agree: boolean) {
     if (this.data.busy) return
     this.setData({ busy: true })
     const r = await setDataShareConsent(agree)
+    if (this.unloaded) return // 页面已退出：不再对已退页 setData/toast（静默，无钱副作用，本页无需像 checkout 那样补提示）
     this.setData({ busy: false })
     if (r.ok) {
       writeConsentHint(agree)

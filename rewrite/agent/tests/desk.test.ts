@@ -33,6 +33,88 @@ async function loadStatusController(): Promise<{
   return import(/* @vite-ignore */ dataUrl)
 }
 
+// B2/B3 源码断言用：从 <script setup> 原文里抠出指定函数的完整函数体（花括号配平·跳过注释/字符串内的花括号，
+// 避免 E1 同类坑——裸括号计数会被注释里的 { } 或字符串里的 { } 带偏）。只服务本文件的静态断言，不是 check-structure.mjs
+// 的守卫 helper，不复用/不冒充 methodBody()+stripComments() 共享实现。
+function extractFunctionBody(src: string, signature: string): string {
+  const start = src.indexOf(signature)
+  if (start === -1) throw new Error('函数签名未找到：' + signature)
+  // signature 若自带结尾 '{'（调用方传参写法），起点就是它自身，不再往后找——否则会跳过函数体第一个 '{'
+  // 命中函数体内更靠后的对象字面量花括号（B2/B3 现场踩过：`{ sessionId }` 解构把起点带偏）。
+  const braceStart = signature.trimEnd().endsWith('{') ? start + signature.length - 1 : src.indexOf('{', start + signature.length)
+  if (braceStart === -1) throw new Error('函数体起始 { 未找到：' + signature)
+  let depth = 0
+  let inLineComment = false
+  let inBlockComment = false
+  let inString: string | null = null
+  // I2（防线·执行者错题本 E1 在测试层的翻版）：返回值须是剥去注释后的函数体，不是原始切片——原始切片里
+  // 若「保护代码被注释掉」，注释文本本身仍会命中 toMatch/indexOf 正则，断言假绿。逐字符扫描时同步攒 out，
+  // 跳过注释段（行注释/块注释不写入 out），字符串字面量内容原样保留（断言认代码 token，不认字符串内容）。
+  let out = ''
+  for (let j = braceStart; j < src.length; j++) {
+    const c = src[j]
+    const c2 = src[j + 1]
+    if (inLineComment) {
+      if (c === '\n') {
+        inLineComment = false
+        out += c
+      }
+      continue
+    }
+    if (inBlockComment) {
+      if (c === '*' && c2 === '/') {
+        inBlockComment = false
+        j++
+      } else if (c === '\n') {
+        out += c
+      }
+      continue
+    }
+    if (inString) {
+      out += c
+      if (c === '\\') {
+        j++
+        out += src[j] ?? ''
+        continue
+      }
+      if (c === inString) inString = null
+      continue
+    }
+    if (c === '/' && c2 === '/') {
+      inLineComment = true
+      j++
+      continue
+    }
+    if (c === '/' && c2 === '*') {
+      inBlockComment = true
+      j++
+      continue
+    }
+    if (c === '"' || c === "'" || c === '`') {
+      inString = c
+      out += c
+      continue
+    }
+    if (c === '{') {
+      depth++
+      out += c
+    } else if (c === '}') {
+      depth--
+      out += c
+      if (depth === 0) return out
+    } else {
+      out += c
+    }
+  }
+  throw new Error('函数体未闭合：' + signature)
+}
+
+function scriptSetupSrc(): string {
+  const { descriptor } = parse(deskSrc)
+  if (!descriptor.scriptSetup?.content) throw new Error('Desk.vue 缺少 <script setup> 块——测试抽不到真代码')
+  return descriptor.scriptSetup.content
+}
+
 // 手控 resolve 顺序的 post 桩：每次调用发一个可外部 resolve 的 promise，调用方按测试场景指定的顺序 settle。
 function deferredPost() {
   const resolvers: Array<(v: StatusRes) => void> = []
@@ -70,6 +152,20 @@ describe('会话流增量合并（黄金：不重气泡·升序）', () => {
     expect(advanceCursor(2000, 1500)).toBe(2000) // 不倒退
     expect(advanceCursor(2000, undefined)).toBe(2000) // 空批不动
     expect(advanceCursor(0, 100)).toBe(100)
+  })
+
+  it('大白话：同秒两条非文本消息（图片，text 恒为占位）靠 msgid 分清，不再被旧键误杀（bug sweep II L1）', () => {
+    const merged = mergeThread([], [
+      { at: 5000, direction: 'in', msgtype: 'image', text: '[image]', msgid: 'wx-a' },
+      { at: 5000, direction: 'in', msgtype: 'image', text: '[image]', msgid: 'wx-b' }, // 同 at/方向/占位文，不同 msgid——都留
+    ])
+    expect(merged).toHaveLength(2)
+    // 同 msgid 重投递（轮询边界重复拉到同一条）仍按 msgid 去重，不重气泡
+    const redelivered = mergeThread(merged, [{ at: 5000, direction: 'in', msgtype: 'image', text: '[image]', msgid: 'wx-a' }])
+    expect(redelivered).toHaveLength(2)
+    // 无 msgid（出站/历史档）回退旧键行为不变：同秒同方向同类同文视为同条
+    const noId = mergeThread([m(6000, 'out', '收到')], [{ at: 6000, direction: 'out', text: '收到' }])
+    expect(noId).toHaveLength(1)
   })
 })
 
@@ -153,5 +249,100 @@ describe('坐席状态并发收敛（setStatus·Round3 item3 三场景，钉住 
       expect(last(applied)).toBe('online') // 回滚到锚（初始 online，从未被确认过更新目标）
       expect(messages).toEqual(['操作没成功（NOPE）'])
     }
+  })
+})
+
+describe('open() 切会话清未发草稿（B2·源码断言：钉住 Desk.vue 真代码，不是另抄影子实现）', () => {
+  it('大白话：切到别的会话前必须先清 draft——防跨会话误发；且清草稿判断须在改 currentId 之前，不能顺序颠倒', () => {
+    const body = extractFunctionBody(scriptSetupSrc(), 'async function open(sessionId: string) {')
+    const draftClearRe = /if\s*\(\s*sessionId\s*!==\s*currentId\.value\s*\)\s*draft\.value\s*=\s*['"]{2}/
+    expect(body).toMatch(draftClearRe)
+    const draftClearIdx = body.search(draftClearRe)
+    const assignCurrentIdx = body.indexOf('currentId.value = sessionId')
+    expect(assignCurrentIdx).toBeGreaterThan(-1)
+    // 顺序铁律：draft 清理必须读到「切换前」的 currentId.value，因此判断句必须出现在赋值之前
+    expect(draftClearIdx).toBeLessThan(assignCurrentIdx)
+  })
+})
+
+describe('send() 会话代际快照（F4·同 act()/open() 治法·源码断言）', () => {
+  it('大白话：send() 必须先快照 sid 再用 sid 发消息，回包后清 draft/message/pollThread 须用 currentId===sid 复核落地——过期回包不得清掉用户正在新会话打的字', () => {
+    const body = extractFunctionBody(scriptSetupSrc(), 'async function send() {')
+    expect(body).toMatch(/const sid = currentId\.value/)
+    // post 携带的是快照 sid，不是随时会变的 currentId.value
+    expect(body).toMatch(/post\(\s*'sendAgentMessage'\s*,\s*\{\s*sessionId:\s*sid\s*,\s*text\s*\}\s*\)/)
+    expect(body).not.toMatch(/sessionId:\s*currentId\.value\s*,\s*text/)
+    const guardRe = /if\s*\(\s*currentId\.value === sid\s*\)\s*\{/
+    expect(body).toMatch(guardRe)
+    const guardIdx = body.search(guardRe)
+    expect(guardIdx).toBeGreaterThan(-1)
+    // 三处 UI 落地效果须落在复核 if 之内
+    const draftClearIdx = body.indexOf("draft.value = ''")
+    const pollIdx = body.indexOf('void pollThread()')
+    const messageAssignIdx = body.indexOf('message.value = deskErrorText(r.error)')
+    expect(draftClearIdx).toBeGreaterThan(guardIdx)
+    expect(pollIdx).toBeGreaterThan(guardIdx)
+    expect(messageAssignIdx).toBeGreaterThan(guardIdx)
+    // busy 复位须无条件执行（不受 sid 复核约束）：否则切会话后发送按钮永久卡死不可用——须落在 guard 起点之前
+    const busyResetIdx = body.indexOf('busy.value = false')
+    expect(busyResetIdx).toBeGreaterThan(-1)
+    expect(busyResetIdx).toBeLessThan(guardIdx)
+  })
+})
+
+describe('act() 会话代际快照（B3·同 pollThread/open 治法·源码断言）', () => {
+  it('大白话：act() 必须先快照 sid 再用 sid 请求，回包后的 UI 效果须用 currentId===sid 复核才落地——过期回包不得清掉/标错正在看的新会话', () => {
+    const body = extractFunctionBody(scriptSetupSrc(), 'async function act(action: string) {')
+    expect(body).toMatch(/const sid = currentId\.value/)
+    // post 携带的是快照 sid，不是随时会变的 currentId.value
+    expect(body).toMatch(/post\(\s*action\s*,\s*\{\s*sessionId:\s*sid\s*\}\s*\)/)
+    expect(body).not.toMatch(/post\(\s*action\s*,\s*\{\s*sessionId:\s*currentId\.value\s*\}\s*\)/)
+    // UI 落地效果（message 赋值 + 三 action 的清 currentId/msgs）须被 currentId.value === sid 复核包住
+    const guardRe = /if\s*\(\s*currentId\.value === sid\s*\)\s*\{/
+    expect(body).toMatch(guardRe)
+    const guardIdx = body.search(guardRe)
+    expect(guardIdx).toBeGreaterThan(-1)
+    const messageAssignIdx = body.indexOf("message.value = r.ok ? '' : deskErrorText(r.error)")
+    const clearCurrentIdx = body.indexOf("currentId.value = ''")
+    expect(messageAssignIdx).toBeGreaterThan(guardIdx) // message 赋值须落在复核 if 之内（在 guard 起点之后）
+    expect(clearCurrentIdx).toBeGreaterThan(guardIdx) // 清 currentId/msgs 也须落在复核 if 之内
+    // refreshLists 必须无条件执行（不受 sid 复核约束）：出现在函数体末尾、且不早于两处 UI 效果
+    const refreshIdx = body.indexOf('void refreshLists()')
+    expect(refreshIdx).toBeGreaterThan(clearCurrentIdx)
+  })
+
+  it('大白话：三个收会话动作（放回队列/结束会话/升级商户）成功后须同批清 panels/panelNote——右栏顾客360无 currentId 门控，不清会残留上一客户资料给下一个接手的坐席看见（K1·PII 残留）', () => {
+    const body = extractFunctionBody(scriptSetupSrc(), 'async function act(action: string) {')
+    const clearCurrentIdx = body.indexOf("currentId.value = ''")
+    const clearMsgsIdx = body.indexOf('msgs.value = []')
+    const clearPanelsIdx = body.indexOf('panels.value = []')
+    const clearPanelNoteIdx = body.indexOf("panelNote.value = ''")
+    expect(clearPanelsIdx).toBeGreaterThan(-1)
+    expect(clearPanelNoteIdx).toBeGreaterThan(-1)
+    // 与 currentId/msgs 并列在同一成功分支内清空（都在三 action 判断的花括号内，晚于两者出现）
+    expect(clearPanelsIdx).toBeGreaterThan(clearCurrentIdx)
+    expect(clearPanelsIdx).toBeGreaterThan(clearMsgsIdx)
+    expect(clearPanelNoteIdx).toBeGreaterThan(clearPanelsIdx)
+    // 仍须落在 sid 复核 if 之内、refreshLists 之前
+    const guardIdx = body.search(/if\s*\(\s*currentId\.value === sid\s*\)\s*\{/)
+    const refreshIdx = body.indexOf('void refreshLists()')
+    expect(clearPanelsIdx).toBeGreaterThan(guardIdx)
+    expect(refreshIdx).toBeGreaterThan(clearPanelNoteIdx)
+  })
+})
+
+describe('claim() 会话代际快照（bug sweep II R5·五个会话敏感异步动作的最后收口·源码断言）', () => {
+  it('大白话：claim() 须快照点击时的 currentId，回包后 message/open 须复核未切走才落地——慢回包不得把视图拽回、不得经 open 清掉坐席在新会话打的字；refreshLists 无条件', () => {
+    const body = extractFunctionBody(scriptSetupSrc(), 'async function claim(sessionId: string) {')
+    expect(body).toMatch(/const before = currentId\.value/)
+    const guardRe = /if\s*\(\s*currentId\.value === before\s*\)\s*\{/
+    expect(body).toMatch(guardRe)
+    const guardIdx = body.search(guardRe)
+    const messageIdx = body.indexOf("message.value = r.ok ? '' : deskErrorText(r.error)")
+    const openIdx = body.indexOf('void open(sessionId)')
+    expect(messageIdx).toBeGreaterThan(guardIdx) // message 赋值落在复核内
+    expect(openIdx).toBeGreaterThan(guardIdx) // open（会拽视图+清草稿）落在复核内
+    const refreshIdx = body.indexOf('void refreshLists()')
+    expect(refreshIdx).toBeGreaterThan(openIdx) // 列表刷新无条件、居末
   })
 })

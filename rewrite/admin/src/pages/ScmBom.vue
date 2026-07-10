@@ -8,6 +8,7 @@ import { listDrafts } from '../api/products'
 import { materialHuman, scmErrorText, unprofiledProducts, productNameOf } from '../lib/mapScm'
 import { dateTime } from '../lib/format'
 import { useLoadStatus } from '../lib/status'
+import { useLatest } from '../lib/latest'
 import ScmFlowTabs from '../components/ScmFlowTabs.vue'
 import UiButton from '../components/ui/Button.vue'
 import PageHeader from '../components/ui/PageHeader.vue'
@@ -107,16 +108,21 @@ async function doSaveTemplate() {
 
 async function doSaveProfile() {
   const p = prof.value
-  const r = await saveBomProfile({ productId: p.productId, yarnColors: { L: p.L, M: p.M, S: p.S }, packagingMaterialId: p.packagingMaterialId, cardMaterialId: p.cardMaterialId })
+  // trim productId（D1·双保险：前端管体验后端管闸）——按钮文案 213 行已用 trim 比对，提交理应同口径，
+  // 否则尾随空格能在此处混过、落成与文案判断不一致的幽灵 _id。
+  const r = await saveBomProfile({ productId: p.productId.trim(), yarnColors: { L: p.L, M: p.M, S: p.S }, packagingMaterialId: p.packagingMaterialId, cardMaterialId: p.cardMaterialId })
   note(r.ok, '差异位已保存', scmErrorText(r.error))
   void reload()
 }
 
+const previewGen = useLatest() // 乱序守卫（G5·P2）：旧预演回包别把已被 watch(run) 深清的预演表重新灌回
 async function doPreview() {
   // 新预演＝新组装意图·换新幂等键（防拿旧 id 组装改过的产品/套数）
   pendingAsmId.value = ''
   runConfirm.value = false
+  const my = previewGen.begin()
   const r = await previewAssembly(run.value.productId, Number(run.value.sets))
+  if (previewGen.isStale(my)) return // 已发起更新的预演·整包丢弃（preview/note 均不写）
   preview.value = r.ok ? (r.lines as Record<string, any>[]) : []
   note(r.ok, '', scmErrorText(r.error))
 }
@@ -145,6 +151,8 @@ watch(run, () => {
   pendingAsmId.value = ''
   runConfirm.value = false
   preview.value = [] // 改产品/规格/套数即清旧预演·防显 A 的缺料表 + 「有 N 项缺料」警告落到 B（P2·误导执行决策）
+  previewGen.begin() // 同步作废在途旧预演请求（复审 G5 补漏）：不这样做，watch 只清了 preview，旧回包稍后到达时
+  // previewGen 的代际号未变·isStale 判「不过期」·把已被这里清空的 preview 重新灌回，正是上一行注释要挡的场景
 }, { deep: true })
 // 切产品后清残留的旧规格（P2·根因#8）：run.spec 不在新产品 SKU 里时，规格 <select> 只显空白却仍持旧值 '红'，
 // doRun 原样发给后端生成 fg:<新产品>__红 这个不存在的幻影成品 SKU（扣料对、成品入错规格·产销/库存出假行）。

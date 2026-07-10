@@ -14,6 +14,9 @@ export const submitCheckpointPhoto = withOpenId(
     const nodeId = str(e.nodeId, 64)
     const fileId = str(e.fileId, 256)
     if (!courseId || !nodeId || !fileId) return err('BAD_ARGS')
+    // 冒号入参拒（fail-closed·同 adminApi/saveCheckpoints 先例）：_id 拼接 'sub:'+OPENID+':'+courseId+':'+nodeId，
+    // courseId/nodeId 含 ':' 会打乱段界，跨课/跨节点撞出同一个 _id 互相覆盖（openid 来自云端身份、不受此影响）。
+    if (courseId.includes(':') || nodeId.includes(':')) return err('BAD_ARGS:COLON_IN_ID')
 
     // 须本人已确认进课（enteredAt 非空）——与 trackEvent/getPlaybackUrl 同闸，防未购/未进课用户造数
     const _ = db.command

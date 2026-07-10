@@ -245,7 +245,11 @@ function mapShipErr(msg: string) {
   return `发货失败：${msg}`
 }
 async function doShip(order: FulfillOrder, trackingNo: string) {
-  if (shipping.value) return
+  if (shipping.value) {
+    // 在途期第二枪静默丢弃（P1·bug 清除战役 II C1）：扫码枪连扫两箱时不吭声会让操作员误以为已处理、漏发货
+    say('上一单发货还在处理中——这一枪没有生效，等出结果再重扫这张面单', true)
+    return
+  }
   shipping.value = true
   const time = Date.now()
   const code = shortCode(order.id)

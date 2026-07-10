@@ -1,6 +1,6 @@
 // 用户协议 / 隐私政策（M2 批13）：?type=user|privacy 切换。条款正文逐字承接旧线（2026-06-27
 // 经营者评估拍板上线的已过审文案·勿随意改动——改动须用户拍板并同步 mp 后台《用户隐私保护指引》）。
-// 「管理数据共享授权」入口随客服批接 dataConsent（本批占位有反馈）。
+// 「管理数据共享授权」入口已接真实 consent 页（同 me.ts 入口，见 onConsent）。
 import { BRAND_NAME } from '../../lib/brand'
 
 const BRAND = BRAND_NAME
@@ -52,6 +52,6 @@ Page({
     wx.setNavigationBarTitle({ title: isPrivacy ? PRIVACY.title : USER.title })
   },
   onConsent() {
-    wx.showToast({ title: '授权管理随客服批开通', icon: 'none' })
+    wx.navigateTo({ url: '/pages/consent/consent' })
   },
 })

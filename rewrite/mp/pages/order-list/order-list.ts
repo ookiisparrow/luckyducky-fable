@@ -47,8 +47,12 @@ Page({
     cursor: null as unknown,
   },
   _seq: 0, // reload 代次·同 tab 内多触发点（onShow/取消后 reload）并发时丢弃过期回包（tab-token 只挡切 tab·挡不住同 tab 乱序）
+  unloaded: false, // 页面已退出标记（同 checkout/review 范式·bug sweep II 批E）：onPay 支付回包在途用户退出列表页，迟到回包不再对已退页 toast/reload
   onLoad(query: Record<string, string | undefined>) {
     if (query.tab && TABS.some((t) => t.key === query.tab)) this.setData({ tabKey: query.tab })
+  },
+  onUnload() {
+    this.unloaded = true
   },
   onShow() {
     void this.reload()
@@ -89,6 +93,13 @@ Page({
   async onPay(e: WechatMiniprogram.TouchEvent) {
     const id = String(e.currentTarget.dataset.id)
     const outcome = mapPayResult(await pay(id))
+    // await 恢复点复核（同 checkout startPay 范式·bug sweep II 批E）：用户在支付发起在途退出列表页，迟到回包
+    // 不再对已退页 toast/reload/拉起支付授权框——订单已在云端，用户下次进详情页续付即可。requestPayment 的
+    // success/fail 回调内不加同款复核：授权框是模态、卸载窗口小，无需评估。
+    if (this.unloaded) {
+      wx.showToast({ title: '可到订单详情继续支付', icon: 'none' })
+      return
+    }
     if (outcome.kind === 'paid') {
       wx.showToast({ title: '已支付', icon: 'success' })
       void this.reload()
@@ -116,6 +127,7 @@ Page({
       success: async (res) => {
         if (!res.confirm) return
         const r = await confirmReceive(id)
+        if (this.unloaded) return // await 恢复点复核（bug sweep II 批E round2）：用户已退出列表页——非钱副作用，静默收尾即可
         wx.showToast({ title: r.ok ? '已确认收货' : '操作没成功，稍后再试', icon: r.ok ? 'success' : 'none' })
         void this.reload()
       },
@@ -130,6 +142,7 @@ Page({
       success: async (res) => {
         if (!res.confirm) return
         const r = await cancelOrder(id)
+        if (this.unloaded) return // await 恢复点复核（bug sweep II 批E round2）：用户已退出列表页——非钱副作用，静默收尾即可
         wx.showToast({ title: r.ok ? '订单已取消' : '取消没成功，稍后再试', icon: r.ok ? 'success' : 'none' })
         void this.reload()
       },

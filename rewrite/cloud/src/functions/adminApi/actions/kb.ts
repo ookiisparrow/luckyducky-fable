@@ -1,4 +1,5 @@
 import { reply, ensure, str, type Ctx } from '../lib'
+import { notifyAlert } from '../../../kit'
 
 // 知识库维护（后台360工作站 B4.1·admin 侧）：管理端维护 FAQ/知识条目（问题 + 答案 + 分类 + 启用 + 顺序），
 // 客服 bot（cs/kfCallback/dispatch.ts）按 _id（=FAQ 键·同分流菜单叶子 id）读 kb 发答案——FAQ 答案单源（守卫
@@ -51,9 +52,25 @@ export async function saveKb({ db, data }: Ctx) {
     i++
   }
   // 删本册不在新列表里的旧条目（整体覆盖式同步·admin 删一条即真删）
+  // GC 删除失败不再吞（H2·同批F F1 判例）：原 .catch(()=>{}) 全吞、恒 ok:true——旧条目删不掉时前端仍显「已保存」，
+  // 残留条目继续被 bot/坐席读到（可能是已改名/合并进别条的旧答案，误导话术）。upsert 已成功的部分保留（数据是
+  // 新的、只是旧条目残留，重存一次即可收敛）；GC 失败经 notifyAlert 留痕 + 如实回 ok:false，别静默过关。
   const old = await db.collection('kb').limit(SCAN).get().catch(() => ({ data: [] }))
+  const failedIds: string[] = []
   for (const d of (old && old.data) || []) {
-    if (!keep.has(d._id)) await db.collection('kb').doc(d._id).remove().catch(() => {})
+    if (!keep.has(d._id)) {
+      const err = await db
+        .collection('kb')
+        .doc(d._id)
+        .remove()
+        .then(() => null)
+        .catch((e: any) => e || new Error('REMOVE_FAIL'))
+      if (err) failedIds.push(d._id)
+    }
+  }
+  if (failedIds.length) {
+    await notifyAlert('anomaly', 'saveKb', 'GC_REMOVE_FAIL', { failedIds })
+    return reply(200, { ok: false, error: 'GC_REMOVE_FAIL', failedIds })
   }
   return reply(200, { ok: true, count: keep.size })
 }

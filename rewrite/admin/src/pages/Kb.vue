@@ -94,7 +94,8 @@ async function save() {
   busy.value = false
   if (!r.ok) {
     // 保存失败留原文·绝不 reload——否则 listKb 成功会把编辑器换回旧数据（丢未存的 FAQ 编辑）并抹掉本条错（病根#14）
-    message.value = '保存失败：' + String(r.error || '')
+    // GC_REMOVE_FAIL（H2）：新内容已 upsert 成功，只是旧条目 GC 删除失败残留——友好文案区分于「整体没存上」
+    message.value = r.error === 'GC_REMOVE_FAIL' ? '已保存新内容，但有旧条目未删净（重存一次即可收敛）' : '保存失败：' + String(r.error || '')
     return
   }
   const n = Number(r.count) || 0

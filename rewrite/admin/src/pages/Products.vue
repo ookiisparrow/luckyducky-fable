@@ -26,14 +26,24 @@ const emit = defineEmits<{ saved: [] }>()
 const router = useRouter()
 // 商品→课程深链（换皮丢了入口·Courses 页占位文案承诺「商品页会带入」但没按钮）：courseId=商品档 courseId 或 course-<id>
 async function editCourse(row: DraftRowVM) {
-  const existing = String((row.raw as any).courseId || '')
+  // existing 优先读活编辑器（评审 P3 同批收口）：row.raw 是旧快照——编辑器里刚手输、还在防抖窗口内
+  // 未落盘的关联课程号，不该被自动生成的 course-<id> 盖掉。
+  const live = edit.value && String(edit.value.id) === row.id ? String(edit.value.courseId || '') : ''
+  const existing = live || String((row.raw as any).courseId || '')
   const cid = existing || 'course-' + row.id
   // courseId 落库（换皮只算不存·商品与课程/批次关联要人工输易错）：首次深链即写回商品档
   if (!existing) {
-    // 编辑器若正开着同一件商品·先同步快照 courseId（P3·根因#8）：防 closeEditor/onBeforeUnmount 补存时
-    // 用编辑器里的旧值（空）整档覆盖，把这里刚写的 courseId 抹掉——后写不抹先写。
-    if (edit.value && String(edit.value.id) === row.id) edit.value.courseId = cid
-    await saveDraft({ ...(row.raw as Record<string, unknown>), courseId: cid })
+    if (edit.value && String(edit.value.id) === row.id) {
+      // 编辑器正开着同一件商品：row.raw 是不含防抖窗口内未落盘编辑的旧快照，旁路直发会与在途/即将触发的
+      // autosave 乱序覆盖（P1·bug 清除战役 II C3·同 doSave 已修的乱序覆盖同模式）。并入同一条 serialSave
+      // 队列——flushSave() 的 run() 现读 edit.value（含这里刚写的 courseId + 用户未落盘编辑），latest-wins。
+      // flushSave 失败（autoState≠saved）不挡下面的 router.push：cid 是确定性 course-<id>，下次再点会重试写回。
+      edit.value.courseId = cid
+      await flushSave()
+    } else {
+      // 编辑器没开本品·该商品无并发写者·直发安全
+      await saveDraft({ ...(row.raw as Record<string, unknown>), courseId: cid })
+    }
     void silentRefresh()
   }
   void router.push({ path: '/courses', query: { courseId: cid } })
@@ -147,9 +157,15 @@ function closeEditor() {
   if (snap)
     void flushSave() // 先排空任何在途 autosave（其 run 读已 null 的 edit→no-op·仅用于等排空）
       .then(() => saveDraft(snap)) // 排空后存快照·成为最后一次写（不被旧在途覆盖）
-      .then(() => {
-        void silentRefresh()
-        emit('saved')
+      .then((r) => {
+        // 消费返回值（F3·P1）：client.post 从不 reject、业务失败以 {ok:false} resolve——原 .catch(()=>{})
+        // 只兜网络异常，业务失败被静默吞掉、无提示且仍 emit('saved') 给上新向导假的「已保存」信号。
+        if (r.ok) {
+          void silentRefresh()
+          emit('saved') // 只在真保存成功时才通知父级
+        } else {
+          message.value = '关闭前有编辑未保存成功：' + String(r.error || '') + '，请重新打开该商品检查'
+        }
       })
       .catch(() => {})
 }
@@ -201,20 +217,25 @@ function delSku(i: number) {
 async function pickCover(ev: Event) {
   const file = (ev.target as HTMLInputElement).files?.[0]
   if (!file || !edit.value) return
+  // 快照本次上传目标（H·完备性扫描新增·同 doSave 范式）：openEdit/列表「编辑」按钮无 busy 门控，
+  // 压缩/上传两段 await 期间都可能已切到另一件商品的编辑器——回包不该打到已切换的新编辑器上。
+  const snap = edit.value
   const b64 = await compress(file)
   if (!b64SizeOk(b64)) {
-    message.value = '图片压缩后仍超限，换小一点的图'
+    if (edit.value === snap) message.value = '图片压缩后仍超限，换小一点的图'
     return
   }
   busy.value = true
-  const r = await uploadImage(b64, String(edit.value.id), 'jpg')
+  const r = await uploadImage(b64, String(snap.id), 'jpg')
   busy.value = false
-  if (r.ok) {
-    edit.value.cover = String(r.fileID || '')
-    coverPreview.value = String(r.url || '')
-    message.value = ''
-  } else {
-    message.value = '图片上传失败：' + String(r.error || '')
+  if (edit.value === snap) {
+    if (r.ok) {
+      edit.value.cover = String(r.fileID || '')
+      coverPreview.value = String(r.url || '')
+      message.value = ''
+    } else {
+      message.value = '图片上传失败：' + String(r.error || '')
+    }
   }
 }
 
@@ -245,6 +266,8 @@ async function compress(file: File): Promise<string> {
 
 async function doSave() {
   if (!edit.value || busy.value) return
+  const snap = edit.value // 快照本次保存目标（H1·完备性扫描新增·同批G G3/G4 范式）：openEdit/newProduct 无 busy 门控
+  // （列表「编辑」按钮 & 编辑器均非遮罩、不挡点击），await 期间若已切到另一件商品的编辑器，收尾效果不该打过去
   busy.value = true
   // 并入同一条 serialSave 队列而非旁路直发（P1·bug sweep Round2 item7·批3 修复不彻底：原「settled() 排空后
   // 再裸调 saveDraft」——这次写发出到回包落地期间，若又有新编辑触发 watch→再排一枚 saveTimer→到点 flushSave()
@@ -268,13 +291,15 @@ async function doSave() {
   busy.value = false
   if (!edit.value) return
   const ok = autoState.value === 'saved'
-  message.value = ok ? '' : '保存失败：请重试'
-  if (ok) {
-    editorLoaded = false
-    edit.value = null
-    void reload()
-    emit('saved')
+  if (edit.value === snap) {
+    message.value = ok ? '' : '保存失败：请重试'
+    if (ok) {
+      editorLoaded = false
+      edit.value = null
+      emit('saved')
+    }
   }
+  if (ok) void reload() // 列表真值刷新与目标是否已切无关·恒执行
 }
 
 // 上架两步确认（换皮直接上架无确认·上架即对小程序可见·应有一道）
@@ -343,19 +368,24 @@ async function addImages(ev: Event) {
   const input = ev.target as HTMLInputElement
   const files = input.files
   if (!files || !edit.value) return
+  // 快照本次上传目标（H·完备性扫描新增·同 pickCover/doSave 范式）：循环内每次 await 期间
+  // 都可能已切到另一件商品的编辑器——回包不该打到已切换的新编辑器上。
+  const snap = edit.value
   busy.value = true
   for (const file of Array.from(files)) {
     const b64 = await compress(file)
     if (!b64SizeOk(b64)) {
-      message.value = '有图压缩后仍超限，已跳过'
+      if (edit.value === snap) message.value = '有图压缩后仍超限，已跳过'
       continue
     }
-    const r = await uploadImage(b64, String(edit.value.id), 'jpg')
-    if (r.ok && r.fileID) {
-      ;(edit.value.images as string[]).push(String(r.fileID))
-      sessionUrls.value[String(r.fileID)] = String(r.url || '')
-    } else {
-      message.value = '有图上传失败：' + String(r.error || '')
+    const r = await uploadImage(b64, String(snap.id), 'jpg')
+    if (edit.value === snap) {
+      if (r.ok && r.fileID) {
+        ;(edit.value.images as string[]).push(String(r.fileID))
+        sessionUrls.value[String(r.fileID)] = String(r.url || '')
+      } else {
+        message.value = '有图上传失败：' + String(r.error || '')
+      }
     }
   }
   busy.value = false

@@ -169,18 +169,33 @@ function addSegment(l: Record<string, any>) {
   l.segments.push({ id: '', name: '', dur: '', videoFileId: '' })
 }
 
-async function pickVideo(sg: Record<string, any>, ev: Event) {
+// 单段上传纳入批量传视频同一套防护（G2·P1）：换皮丢了这层——单段上传无锁，切课后仍在跑的上传把 videoFileId
+// 写回一棵不可达的树，静默丢失（同 batchUpload 顶部注释的病根）。补：借用 batchUploading 共享标志（上传期间
+// load() 已会拦截切课、重排/删除按钮已按此标志 disable），并在写回前按对象引用重定位——段已被删除/移出则如实
+// 报告、不写回幽灵对象。
+async function pickVideo(l: Record<string, any>, sg: Record<string, any>, ev: Event) {
   const file = (ev.target as HTMLInputElement).files?.[0]
-  if (!file || !course.value) return
-  progress.value = '上传中 0%'
-  if (!sg.dur) sg.dur = await readDuration(file) // 时长自动读取（未填才读·不覆盖手填）
-  const r = await uploadVideo(String(course.value.id), String(sg.name || 'seg'), file, (p) => (progress.value = `上传中 ${Math.round(p * 100)}%`))
-  progress.value = ''
-  if (r.ok) {
-    sg.videoFileId = r.fileId || ''
-    refreshStats()
-    message.value = ''
-  } else message.value = '视频上传失败：' + String(r.error || '')
+  if (!file || !course.value || batchUploading.value) return
+  batchUploading.value = true
+  setUploadLock() // 同 batchUpload：拦截离页/切步致孤儿上传
+  try {
+    progress.value = '上传中 0%'
+    if (!sg.dur) sg.dur = await readDuration(file) // 时长自动读取（未填才读·不覆盖手填）
+    const r = await uploadVideo(String(course.value.id), String(sg.name || 'seg'), file, (p) => (progress.value = `上传中 ${Math.round(p * 100)}%`))
+    if (!l.segments.includes(sg)) {
+      message.value = '这段已被移除，上传未关联' // 稳定引用重定位失败（段已被删）——如实跳过报告（同 batchUpload）
+      return
+    }
+    if (r.ok) {
+      sg.videoFileId = r.fileId || ''
+      refreshStats()
+      message.value = ''
+    } else message.value = '视频上传失败：' + String(r.error || '')
+  } finally {
+    progress.value = ''
+    batchUploading.value = false
+    clearUploadLock()
+  }
 }
 
 // 课时级批量传视频（换皮丢·多选按文件名 numeric 顺序灌入/自动新建段·串行 fail-soft·课时级进度）：
@@ -341,10 +356,10 @@ onMounted(load)
           <div v-for="(sg, si) in l.segments" :key="si" class="seg">
             <input v-model="sg.name" placeholder="段名" maxlength="60" class="seg-name" />
             <input v-model="sg.dur" placeholder="时长" class="dur" maxlength="10" />
-            <label class="upload" :class="{ done: sg.videoFileId }">
+            <label class="upload" :class="{ done: sg.videoFileId, disabled: batchUploading }">
               <component :is="sg.videoFileId ? Check : Upload" :size="13" :stroke-width="2" />
               <span>{{ sg.videoFileId ? '已传 · 替换' : '选视频' }}</span>
-              <input type="file" accept="video/mp4,video/quicktime" hidden @change="(e) => pickVideo(sg, e)" />
+              <input type="file" accept="video/mp4,video/quicktime" hidden :disabled="batchUploading" @change="(e) => pickVideo(l, sg, e)" />
             </label>
             <button class="icon-btn" title="上移" :disabled="si === 0 || batchUploading" @click="move(l.segments, si, -1)">↑</button>
             <button class="icon-btn" title="下移" :disabled="si === l.segments.length - 1 || batchUploading" @click="move(l.segments, si, 1)">↓</button>
@@ -352,7 +367,7 @@ onMounted(load)
           </div>
           <div class="seg-adds">
             <button class="add-btn" @click="addSegment(l)"><Plus :size="13" :stroke-width="2" /><span>加段</span></button>
-            <label class="add-btn batch-up" title="多选视频·按文件名顺序自动灌入/新建小段"><Upload :size="13" :stroke-width="2" /><span>批量传视频</span><input type="file" accept="video/mp4,video/quicktime" multiple hidden @change="(e) => batchUpload(l, e)" /></label>
+            <label class="add-btn batch-up" :class="{ disabled: batchUploading }" title="多选视频·按文件名顺序自动灌入/新建小段"><Upload :size="13" :stroke-width="2" /><span>批量传视频</span><input type="file" accept="video/mp4,video/quicktime" multiple hidden :disabled="batchUploading" @change="(e) => batchUpload(l, e)" /></label>
           </div>
         </div>
         <button class="add-btn" @click="addLesson(ch)"><Plus :size="13" :stroke-width="2" /><span>加课时</span></button>
@@ -533,6 +548,13 @@ onMounted(load)
   border-color: var(--ld-green);
   color: var(--ld-green);
   background: var(--ld-bg-green-soft);
+}
+/* 上传中禁用态（G2 复审补：批量传视频在途时和其余受锁控件一致给可感知反馈，防用户选完文件误以为失灵） */
+.upload.disabled,
+.batch-up.disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  pointer-events: none;
 }
 /* 树内 ↑ ↓ 删 图标按钮（危态转红） */
 .icon-btn {
