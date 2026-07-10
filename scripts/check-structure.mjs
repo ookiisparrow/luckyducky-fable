@@ -4607,7 +4607,7 @@ export const repoChecks = [
     // 同批规格纪律，精细版见 rw-mp-navback-timer-cleaned 的 backTimer 专项）。
     id: 'rw-mp-await-side-effect-unloaded-recheck',
     roots: ['#5', '#8'],
-    desc: 'mp await 恢复点后导航/支付副作用须先复核 this.unloaded（病根#5 样板复制即漂移·根因#8 真机才炸）：点名清单——checkout.ts{onSubmit,startPay}、order-list.ts{onPay,onConfirm,onCancel}、order.ts{onPay,onAfterSale,onConfirm,onCancel}、welcome.ts{onEnter,activate}、consent.ts{submit}——各方法体内首个 await 之后须出现 this.unloaded 复核（indexOf(\'await\') < indexOf(\'this.unloaded\')，多 await 方法只要求存在复核即可不做逐 await 精细判），否则用户在 await 期间退出页面，迟到回包仍对已退页 toast/reload/redirectTo/拉起支付授权框（真机才炸，工具端不暴露）',
+    desc: 'mp await 恢复点后导航/支付副作用须先复核 this.unloaded（病根#5 样板复制即漂移·根因#8 真机才炸）：点名清单——checkout.ts{onSubmit,startPay}、order-list.ts{onPay,onConfirm,onCancel}、order.ts{onPay,onAfterSale,onConfirm,onCancel}、welcome.ts{onEnter,activate}、consent.ts{submit}——各方法体内首个 await 之后须出现 this.unloaded 复核（indexOf(\'await\') < search(/this\\?\\.unloaded/)，判据认 this.unloaded 与 this?.unloaded 两种等价写法·I4 健壮化，多 await 方法只要求存在复核即可不做逐 await 精细判），否则用户在 await 期间退出页面，迟到回包仍对已退页 toast/reload/redirectTo/拉起支付授权框（真机才炸，工具端不暴露）',
     run() {
       const targets = [
         { file: 'rewrite/mp/pages/checkout/checkout.ts', methods: ['onSubmit', 'startPay'] },
@@ -4628,7 +4628,7 @@ export const repoChecks = [
             continue
           }
           const awaitAt = body.indexOf('await')
-          const checkAt = body.indexOf('this.unloaded')
+          const checkAt = body.search(/this\??\.unloaded/) // I4：健壮化——`this?.unloaded` 等可选链写法语义等价，纯字面量 indexOf 会假红
           if (awaitAt < 0 || checkAt < 0 || checkAt < awaitAt)
             bad.push(`${t.file} 方法 ${name} 里 await 恢复点后缺 this.unloaded 复核——用户退页后迟到回包仍对已退页导航/toast/拉起支付（病根#5·根因#8）`)
         }

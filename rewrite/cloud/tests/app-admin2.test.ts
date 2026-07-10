@@ -85,8 +85,14 @@ describe('商品草稿与上架（黄金：白名单/四道门/软下架不隐�
     // 注入 products 那一步 remove 失败（模拟真机偶发写失败）——spy 挂在共享 DocRef 原型上（同 throttle.test.ts 范式）
     const docProto = Object.getPrototypeOf(getDb().collection('products').doc('p1'))
     const spy = vi.spyOn(docProto, 'remove').mockImplementationOnce(() => Promise.reject(new Error('MOCK_REMOVE_FAIL')))
-    const r = await post('deleteDraft', { id: 'p1' })
-    spy.mockRestore()
+    // try/finally（I3·防线）：post 若抛异常，finally 仍保证 spy.mockRestore()——spy 挂在共享 DocRef 原型上，
+    // 裸写「await post()→mockRestore()」中途一抛就残留，污染后续用例。
+    let r: any
+    try {
+      r = await post('deleteDraft', { id: 'p1' })
+    } finally {
+      spy.mockRestore()
+    }
     expect(r.ok).toBe(false) // 原代码两处 .catch(()=>{}) 全吞会恒回 ok:true——前端误显「已删除」
     expect(r.error).toBe('REMOVE_FAIL')
     expect(control.dump('products').length).toBe(1) // products 真失败·未被静默吞成「已删」

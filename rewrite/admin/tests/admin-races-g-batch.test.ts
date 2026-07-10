@@ -22,23 +22,34 @@ function extractFunctionBody(src: string, signature: string): string {
   let inLineComment = false
   let inBlockComment = false
   let inString: string | null = null
+  // I2（防线·执行者错题本 E1 在测试层的翻版）：返回值须是剥去注释后的函数体，不是原始切片——原始切片里
+  // 若「保护代码被注释掉」，注释文本本身仍会命中 toMatch/indexOf 正则，断言假绿。逐字符扫描时同步攒 out，
+  // 跳过注释段（行注释/块注释不写入 out），字符串字面量内容原样保留（断言认代码 token，不认字符串内容）。
+  let out = ''
   for (let j = braceStart; j < src.length; j++) {
     const c = src[j]
     const c2 = src[j + 1]
     if (inLineComment) {
-      if (c === '\n') inLineComment = false
+      if (c === '\n') {
+        inLineComment = false
+        out += c
+      }
       continue
     }
     if (inBlockComment) {
       if (c === '*' && c2 === '/') {
         inBlockComment = false
         j++
+      } else if (c === '\n') {
+        out += c
       }
       continue
     }
     if (inString) {
+      out += c
       if (c === '\\') {
         j++
+        out += src[j] ?? ''
         continue
       }
       if (c === inString) inString = null
@@ -56,12 +67,18 @@ function extractFunctionBody(src: string, signature: string): string {
     }
     if (c === '"' || c === "'" || c === '`') {
       inString = c
+      out += c
       continue
     }
-    if (c === '{') depth++
-    else if (c === '}') {
+    if (c === '{') {
+      depth++
+      out += c
+    } else if (c === '}') {
       depth--
-      if (depth === 0) return src.slice(braceStart, j + 1)
+      out += c
+      if (depth === 0) return out
+    } else {
+      out += c
     }
   }
   throw new Error('函数体未闭合：' + signature)

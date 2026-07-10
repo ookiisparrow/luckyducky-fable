@@ -132,6 +132,16 @@ describe('节点拍照上传（黄金 §八：进课闸·内容安全 fail-close
     expect((await submit({ courseId: 'c1', nodeId: 'n3', fileId: 'f4' })).error).toBe('SEC_CHECK_FAIL')
     expect(control.dump('checkpoints').length).toBe(1) // n2/n3 一条没进
   })
+
+  it('大白话：courseId/nodeId 含冒号一律拒（fail-closed·同 saveCheckpoints 先例：防 sub:openid:courseId:nodeId 拼接跨课/跨节点撞键覆盖）', async () => {
+    control.setOpenId('oU1')
+    seedEntered()
+    const r1 = await submit({ courseId: 'c1:evil', nodeId: 'n1', fileId: 'f1' })
+    expect(r1.error).toBe('BAD_ARGS:COLON_IN_ID')
+    const r2 = await submit({ courseId: 'c1', nodeId: 'n1:evil', fileId: 'f1' })
+    expect(r2.error).toBe('BAD_ARGS:COLON_IN_ID')
+    expect(control.dump('checkpoints').length).toBe(0)
+  })
 })
 
 describe('事件流水定时清理（黄金 admin-misc：只删过期·服务端专用）', () => {
