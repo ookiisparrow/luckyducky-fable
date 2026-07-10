@@ -33,6 +33,71 @@ async function loadStatusController(): Promise<{
   return import(/* @vite-ignore */ dataUrl)
 }
 
+// B2/B3 源码断言用：从 <script setup> 原文里抠出指定函数的完整函数体（花括号配平·跳过注释/字符串内的花括号，
+// 避免 E1 同类坑——裸括号计数会被注释里的 { } 或字符串里的 { } 带偏）。只服务本文件的静态断言，不是 check-structure.mjs
+// 的守卫 helper，不复用/不冒充 methodBody()+stripComments() 共享实现。
+function extractFunctionBody(src: string, signature: string): string {
+  const start = src.indexOf(signature)
+  if (start === -1) throw new Error('函数签名未找到：' + signature)
+  // signature 若自带结尾 '{'（调用方传参写法），起点就是它自身，不再往后找——否则会跳过函数体第一个 '{'
+  // 命中函数体内更靠后的对象字面量花括号（B2/B3 现场踩过：`{ sessionId }` 解构把起点带偏）。
+  const braceStart = signature.trimEnd().endsWith('{') ? start + signature.length - 1 : src.indexOf('{', start + signature.length)
+  if (braceStart === -1) throw new Error('函数体起始 { 未找到：' + signature)
+  let depth = 0
+  let inLineComment = false
+  let inBlockComment = false
+  let inString: string | null = null
+  for (let j = braceStart; j < src.length; j++) {
+    const c = src[j]
+    const c2 = src[j + 1]
+    if (inLineComment) {
+      if (c === '\n') inLineComment = false
+      continue
+    }
+    if (inBlockComment) {
+      if (c === '*' && c2 === '/') {
+        inBlockComment = false
+        j++
+      }
+      continue
+    }
+    if (inString) {
+      if (c === '\\') {
+        j++
+        continue
+      }
+      if (c === inString) inString = null
+      continue
+    }
+    if (c === '/' && c2 === '/') {
+      inLineComment = true
+      j++
+      continue
+    }
+    if (c === '/' && c2 === '*') {
+      inBlockComment = true
+      j++
+      continue
+    }
+    if (c === '"' || c === "'" || c === '`') {
+      inString = c
+      continue
+    }
+    if (c === '{') depth++
+    else if (c === '}') {
+      depth--
+      if (depth === 0) return src.slice(braceStart, j + 1)
+    }
+  }
+  throw new Error('函数体未闭合：' + signature)
+}
+
+function scriptSetupSrc(): string {
+  const { descriptor } = parse(deskSrc)
+  if (!descriptor.scriptSetup?.content) throw new Error('Desk.vue 缺少 <script setup> 块——测试抽不到真代码')
+  return descriptor.scriptSetup.content
+}
+
 // 手控 resolve 顺序的 post 桩：每次调用发一个可外部 resolve 的 promise，调用方按测试场景指定的顺序 settle。
 function deferredPost() {
   const resolvers: Array<(v: StatusRes) => void> = []
@@ -153,5 +218,40 @@ describe('坐席状态并发收敛（setStatus·Round3 item3 三场景，钉住 
       expect(last(applied)).toBe('online') // 回滚到锚（初始 online，从未被确认过更新目标）
       expect(messages).toEqual(['操作没成功（NOPE）'])
     }
+  })
+})
+
+describe('open() 切会话清未发草稿（B2·源码断言：钉住 Desk.vue 真代码，不是另抄影子实现）', () => {
+  it('大白话：切到别的会话前必须先清 draft——防跨会话误发；且清草稿判断须在改 currentId 之前，不能顺序颠倒', () => {
+    const body = extractFunctionBody(scriptSetupSrc(), 'async function open(sessionId: string) {')
+    const draftClearRe = /if\s*\(\s*sessionId\s*!==\s*currentId\.value\s*\)\s*draft\.value\s*=\s*['"]{2}/
+    expect(body).toMatch(draftClearRe)
+    const draftClearIdx = body.search(draftClearRe)
+    const assignCurrentIdx = body.indexOf('currentId.value = sessionId')
+    expect(assignCurrentIdx).toBeGreaterThan(-1)
+    // 顺序铁律：draft 清理必须读到「切换前」的 currentId.value，因此判断句必须出现在赋值之前
+    expect(draftClearIdx).toBeLessThan(assignCurrentIdx)
+  })
+})
+
+describe('act() 会话代际快照（B3·同 pollThread/open 治法·源码断言）', () => {
+  it('大白话：act() 必须先快照 sid 再用 sid 请求，回包后的 UI 效果须用 currentId===sid 复核才落地——过期回包不得清掉/标错正在看的新会话', () => {
+    const body = extractFunctionBody(scriptSetupSrc(), 'async function act(action: string) {')
+    expect(body).toMatch(/const sid = currentId\.value/)
+    // post 携带的是快照 sid，不是随时会变的 currentId.value
+    expect(body).toMatch(/post\(\s*action\s*,\s*\{\s*sessionId:\s*sid\s*\}\s*\)/)
+    expect(body).not.toMatch(/post\(\s*action\s*,\s*\{\s*sessionId:\s*currentId\.value\s*\}\s*\)/)
+    // UI 落地效果（message 赋值 + 三 action 的清 currentId/msgs）须被 currentId.value === sid 复核包住
+    const guardRe = /if\s*\(\s*currentId\.value === sid\s*\)\s*\{/
+    expect(body).toMatch(guardRe)
+    const guardIdx = body.search(guardRe)
+    expect(guardIdx).toBeGreaterThan(-1)
+    const messageAssignIdx = body.indexOf("message.value = r.ok ? '' : deskErrorText(r.error)")
+    const clearCurrentIdx = body.indexOf("currentId.value = ''")
+    expect(messageAssignIdx).toBeGreaterThan(guardIdx) // message 赋值须落在复核 if 之内（在 guard 起点之后）
+    expect(clearCurrentIdx).toBeGreaterThan(guardIdx) // 清 currentId/msgs 也须落在复核 if 之内
+    // refreshLists 必须无条件执行（不受 sid 复核约束）：出现在函数体末尾、且不早于两处 UI 效果
+    const refreshIdx = body.indexOf('void refreshLists()')
+    expect(refreshIdx).toBeGreaterThan(clearCurrentIdx)
   })
 })

@@ -147,6 +147,15 @@ describe('坐席回复与会话流（黄金 §四：接缝发送·归档·失败
     expect(control.dump('conversations').length).toBe(countBefore) // 失败消息不归档
   })
 
+  it('大白话：callFunction 整体失败（reject/网络异常）不能被误判为发送成功——绝不假成功归档（B1）', async () => {
+    control.setCallFunctionFail(true) // callFunction 抛错 → sendAgentMessage 内 .catch(() => null)：res=null
+    const countBefore = control.dump('conversations').length
+    const r = await post('sendAgentMessage', A1, { sessionId: 's1', text: '这条也发不出去' })
+    expect(r.ok).toBe(false)
+    expect(r.error).toBe('SEND_FAIL')
+    expect(control.dump('conversations').length).toBe(countBefore) // res=null 不得假成功归档
+  })
+
   it('大白话：非所属外包发消息被拒且无副作用；对非服务中会话不发（接待窗口）', async () => {
     const r = await post('sendAgentMessage', A2, { sessionId: 's1', text: '越权' })
     expect(r.status).toBe(403)

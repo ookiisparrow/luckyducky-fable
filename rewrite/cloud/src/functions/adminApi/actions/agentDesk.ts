@@ -192,7 +192,9 @@ export async function sendAgentMessage(ctx: Ctx): Promise<any> {
     .catch(() => null)
   const out = (res && res.result) || {}
   const errcode = Number(out.errcode) || 0
-  const sent = out.ok !== false && !errcode
+  // callFunction reject（res=null）或回包无 result（out={}）都不等于送达成功——
+  // 必须先确认真有 result 才看 ok/errcode，否则 undefined!==false 会把整体失败误判为发出（B1·95018 同病根另一路径）。
+  const sent = !!(res && res.result) && out.ok !== false && !errcode
   if (sent) {
     // 出站落 conversations（坐席回复归档·与 kfCallback archiveOutbound 同形·内联避跨域 import·铁律二）
     const openid = await resolveOpenid(db, s)

@@ -100,6 +100,8 @@ async function claim(sessionId: string) {
 }
 
 async function open(sessionId: string) {
+  // 切会话前清未发草稿（B2·item8 输入侧同源：草稿留在输入框会随下一次 Ctrl+Enter 以新会话 sessionId 误发）
+  if (sessionId !== currentId.value) draft.value = ''
   currentId.value = sessionId
   msgs.value = []
   cursor.value = 0
@@ -128,11 +130,15 @@ async function send() {
 
 async function act(action: string) {
   if (!currentId.value) return
-  const r = await post(action, { sessionId: currentId.value })
-  message.value = r.ok ? '' : deskErrorText(r.error)
-  if (r.ok && (action === 'releaseConversation' || action === 'closeConversation' || action === 'escalateToMerchant')) {
-    currentId.value = ''
-    msgs.value = []
+  const sid = currentId.value // 会话粒度快照（B3·同 pollThread/open 治法·item8：await 期间用户可能已切会话）
+  const r = await post(action, { sessionId: sid })
+  if (currentId.value === sid) {
+    // 期间已切别的会话·丢弃过期回包的 UI 效果（不把 A 的报错标到 B 上、不清掉正在看的 B 会话）
+    message.value = r.ok ? '' : deskErrorText(r.error)
+    if (r.ok && (action === 'releaseConversation' || action === 'closeConversation' || action === 'escalateToMerchant')) {
+      currentId.value = ''
+      msgs.value = []
+    }
   }
   void refreshLists()
 }
