@@ -1,9 +1,10 @@
 // 黄金 cs-agent §一（会话状态机与认领互斥）/§二（scoped 360 双闸）/§四（坐席发送与归档）/§七（关单触 CSAT）
 // /§十（企微免登与外包账号管理）（守卫 rw-admin6-golden）。
-import { describe, it, expect, beforeEach } from 'vitest'
+import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { control } from 'wx-server-sdk'
 import { main as adminApi } from '../src/functions/adminApi/index'
 import { sha } from '../src/functions/adminApi/lib'
+import { getDb } from '../src/kit'
 
 const SUPER = 'super-secret-key'
 const A1 = 'outsourced-key-1'
@@ -325,6 +326,52 @@ describe('外包账号管理（黄金 §十：口令哈希·停用即时·白名
     expect(r.error).toBe('WECOM_ID_TAKEN')
     // 刚写的字段已回滚复原（agent-2 种子无 wecomUserId，回滚后应是空）——绝不留两账号共享同一企微 userid
     expect(control.dump('adminConfig').find((a: any) => a._id === 'agent-2').wecomUserId).toBe('')
+  })
+
+  it('大白话（N3·bug 清除战役II 遗留·病根14）：keyHash 竞态回滚若也失败——双凭证残留是身份安全面，必须留痕；409 回复不变', async () => {
+    control.setBeforeUpdate(async ({ coll, data }: any) => {
+      if (coll === 'adminConfig' && data && data.keyHash === sha('race-key-2')) {
+        control.seed('adminConfig', [{ _id: 'agent-race-2', role: 'outsourced', keyHash: sha('race-key-2'), createdAt: 1 }])
+      }
+    })
+    // spy 挂在共享 DocRef 原型上（同 app-admin2.test.ts REMOVE_FAIL 范式·任意已存在 doc 取原型即可）
+    const docProto = Object.getPrototypeOf(getDb().collection('adminConfig').doc('auth'))
+    const spy = vi.spyOn(docProto, 'remove').mockImplementationOnce(() => Promise.reject(new Error('MOCK_REMOVE_FAIL')))
+    let r: any
+    try {
+      r = await post('createAgent', SUPER, { name: '并发号二', key: 'race-key-2' })
+    } finally {
+      spy.mockRestore()
+      control.setBeforeUpdate(null as never)
+    }
+    expect(r.status).toBe(409) // 回滚失败不改变返回语义
+    expect(r.error).toBe('KEY_TAKEN')
+    // 双凭证真残留了（回滚没能撤掉自己那份）——正是要留痕的场景
+    expect(control.dump('adminConfig').filter((a: any) => a.keyHash === sha('race-key-2')).length).toBe(2)
+    const anomalies = control.dump('anomalies')
+    expect(anomalies.some((a: any) => a.code === 'ROLLBACK_FAIL' && a.ctx && a.ctx.which === 'keyHash')).toBe(true)
+  })
+
+  it('大白话（N3）：wecomUserId 竞态回滚若也失败——双凭证残留同样留痕；409 回复不变', async () => {
+    control.setBeforeUpdate(async ({ coll, data }: any) => {
+      if (coll === 'adminConfig' && data && data.wecomUserId === 'w-race-2') {
+        control.seed('adminConfig', [{ _id: 'agent-race-3', role: 'outsourced', keyHash: sha('other-key-2'), wecomUserId: 'w-race-2' }])
+      }
+    })
+    const docProto = Object.getPrototypeOf(getDb().collection('adminConfig').doc('auth'))
+    const spy = vi.spyOn(docProto, 'remove').mockImplementationOnce(() => Promise.reject(new Error('MOCK_REMOVE_FAIL')))
+    let r: any
+    try {
+      r = await post('createAgent', SUPER, { name: '并发号三', key: 'brand-new-key-4', wecomUserId: 'w-race-2' })
+    } finally {
+      spy.mockRestore()
+      control.setBeforeUpdate(null as never)
+    }
+    expect(r.status).toBe(409)
+    expect(r.error).toBe('WECOM_ID_TAKEN')
+    expect(control.dump('adminConfig').filter((a: any) => a.wecomUserId === 'w-race-2').length).toBe(2)
+    const anomalies = control.dump('anomalies')
+    expect(anomalies.some((a: any) => a.code === 'ROLLBACK_FAIL' && a.ctx && a.ctx.which === 'wecomUserId')).toBe(true)
   })
 })
 

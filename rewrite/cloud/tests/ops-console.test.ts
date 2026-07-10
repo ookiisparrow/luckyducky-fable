@@ -49,6 +49,42 @@ describe('运行期观测控制台数据层（批3·rw-ops-console-golden）', (
     expect(capped.limit).toBeLessThanOrEqual(200) // 有界·不封顶静默挤出
   })
 
+  it('大白话：异常列表补总数 total（N2）——同 filter .count()，与 list.length 不同步暴露「视图未覆盖账本全部」', async () => {
+    control.seed(
+      COLLECTIONS.anomalies,
+      Array.from({ length: 3 }, (_, i) => ({ _id: 'b' + i, kind: 'invariant-violation', resolved: false, lastSeen: i }))
+    )
+    const r = body(await listAnomalies(ctx({ resolved: false, limit: 2 })))
+    expect(r.list.length).toBe(2) // 分页语义不变：仍按 limit 截断
+    expect(r.total).toBe(3) // total 是同 filter 下的真实总数，不受 limit 影响
+  })
+
+  it('大白话：total 的 count() 失败——回 total:null，不砸主查询（list 仍照常返回）', async () => {
+    control.seed(COLLECTIONS.anomalies, [{ _id: 'c1', resolved: false, lastSeen: 1 }])
+    const fakeDb: any = {
+      collection: (name: string) => {
+        const q: any = {
+          _filter: null,
+          where(cond: any) {
+            q._filter = cond
+            return q
+          },
+          orderBy: () => q,
+          limit: () => q,
+          get: async () => ({ data: control.dump(name).filter((d: any) => !q._filter || d.resolved === q._filter.resolved) }),
+          count: async () => {
+            throw new Error('MOCK_COUNT_FAIL')
+          },
+        }
+        return q
+      },
+    }
+    const r = body(await listAnomalies({ db: fakeDb, data: { resolved: false } } as any))
+    expect(r.ok).toBe(true)
+    expect(r.list.length).toBe(1) // 主查询不受 count 失败牵连
+    expect(r.total).toBe(null)
+  })
+
   it('大白话：标记已处理→写 resolved/resolvedBy(真实操作者)·无 id 拒·业务数据不碰', async () => {
     control.seed(COLLECTIONS.anomalies, [{ _id: 'a1', resolved: false }])
     control.seed(COLLECTIONS.orders, [{ _id: 'O', status: 'paid' }])

@@ -30,7 +30,9 @@ export async function getInspectStatus({ db }: Ctx) {
   return reply(200, { ok: true, latest, openAnomalies })
 }
 
-/** 异常账本列表（按 lastSeen 倒序·可筛 resolved/kind·有界分页·不封顶静默挤出）。 */
+/** 异常账本列表（按 lastSeen 倒序·可筛 resolved/kind·有界分页·不封顶静默挤出）。
+ *  total（N2·bug 清除战役 II 遗留）：同一 filter 上补 .count() 拿账本真实总数——不改分页语义
+ *  （不封顶仍锁定，list 仍 ≤200），纯增量字段；.catch(()=>null) 读失败不砸主查询。 */
 export async function listAnomalies({ db, data }: Ctx) {
   const d = data || {}
   const filter: any = {}
@@ -45,7 +47,13 @@ export async function listAnomalies({ db, data }: Ctx) {
     .get()
     .then((r: any) => r.data)
     .catch(() => [])
-  return reply(200, { ok: true, list, limit })
+  const total = await db
+    .collection(COLLECTIONS.anomalies)
+    .where(filter)
+    .count()
+    .then((r: any) => (typeof r.total === 'number' ? r.total : null))
+    .catch(() => null)
+  return reply(200, { ok: true, list, limit, total })
 }
 
 /** 标记异常已处理（写·自动审计·resolvedBy 记真实操作者）。 */

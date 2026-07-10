@@ -150,3 +150,27 @@ describe('Products.vue closeEditor 补存失败不静默（F3·P1·bug 清除战
     expect(body).not.toMatch(/\.then\(\(\)\s*=>\s*\{\s*void silentRefresh/)
   })
 })
+
+describe('Products.vue closeEditor 失败提示补 openEditGen 代际锚（N1·P3·bug 清除战役II 遗留）', () => {
+  it('大白话：openEditGen++ 之后要快照 myGen，异步补存失败时只有仍是本代才写 message，不得晚落地误标到期间新开的编辑器屏上', () => {
+    const body = extractFunctionBody(scriptSetupSrc(productsSrc), 'function closeEditor() {')
+    // openEditGen++ 之后紧接着快照 myGen（同文件 openEdit 既有代际模式）
+    const bumpIdx = body.indexOf('openEditGen++')
+    expect(bumpIdx).toBeGreaterThanOrEqual(0)
+    const snapRe = /const myGen = openEditGen/
+    expect(body).toMatch(snapRe)
+    const snapIdx = body.search(snapRe)
+    expect(snapIdx).toBeGreaterThan(bumpIdx) // 快照落在自增之后，取到的是本次关闭这一代
+    // 失败分支的 message.value 赋值必须被 openEditGen === myGen 复核包住
+    const okBranchIdx = body.search(/if\s*\(\s*r\.ok\s*\)\s*\{/)
+    const elseIdx = body.indexOf('} else {', okBranchIdx)
+    const guardRe = /if\s*\(\s*openEditGen === myGen\s*\)\s*message\.value = /
+    expect(body).toMatch(guardRe)
+    const guardIdx = body.search(guardRe)
+    expect(guardIdx).toBeGreaterThan(elseIdx) // 复核闸落在失败分支内
+    // 成功分支的 silentRefresh/emit 保持无条件（幂等刷新 + emit 语义与编辑器代际无关，读现场判断保留）
+    const emitIdx = body.indexOf("emit('saved')", okBranchIdx)
+    expect(emitIdx).toBeGreaterThan(okBranchIdx)
+    expect(emitIdx).toBeLessThan(elseIdx) // emit 落在成功分支内、在 else（失败分支）之前——不被代际闸包住
+  })
+})
