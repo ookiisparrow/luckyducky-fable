@@ -85,12 +85,16 @@ async function doSaveMaterial() {
 
 async function doSaveSupplier() {
   if (supBusy.value) return // 在途禁再发·防双击建两个重复供应商（后端建档无 id 幂等）
+  const snap = supForm.value // 快照本次编辑目标（H1·同批G G3/G4 范式）：editSupplier 无 supBusy 门控，await 期间若已切到
+  // 另一供应商/新建（resetSupForm 也会换新对象），回包收尾效果（note 会按新表单误报）不该打过去
   supBusy.value = true
   const r = await saveSupplier({ ...supForm.value })
   supBusy.value = false
-  note(r.ok, supForm.value.supplierId ? '供应商已更新' : '供应商已保存', scmErrorText(r.error))
-  if (r.ok) resetSupForm()
-  void reload()
+  if (supForm.value === snap) {
+    note(r.ok, snap.supplierId ? '供应商已更新' : '供应商已保存', scmErrorText(r.error))
+    if (r.ok) resetSupForm()
+  }
+  void reload() // 列表刷新与目标是否已切无关·恒执行
 }
 
 async function doAdjust() {

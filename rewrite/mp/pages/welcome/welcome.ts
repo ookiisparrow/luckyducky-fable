@@ -48,6 +48,7 @@ Page({
     this.setData({ busy: true })
     const contentReady = this.homeReady ?? Promise.resolve({ ok: false } as ApiResult)
     const [result, content] = await Promise.all([activateCourse(code), contentReady])
+    if (this.unloaded) return // await 恢复点复核（H·完备性扫描新增·同 onEnter 范式）：用户已退出本页——不再 setData
     this.home = content.ok ? content.home : null // bgFor null-safe：取不到就走回退链，不阻塞结果屏
     const view = activationView(result)
     this.setData({

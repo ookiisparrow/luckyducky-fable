@@ -83,7 +83,12 @@ async function save() {
   // 写「已载入的课」loadedCourseId·不是可编辑输入框（P1·改了课号没重载不会把本课节点整册覆盖到别课）
   const r = await saveCheckpoints(loadedCourseId.value, payload)
   busy.value = false
-  message.value = r.ok ? `已保存 ${Number(r.count) || 0} 个节点到 ${loadedCourseId.value}（整课覆盖·学员提交不受影响）` : '保存失败：' + String(r.error || '')
+  // GC_REMOVE_FAIL（H2）：新节点已 upsert 成功，只是旧节点 GC 删除失败残留——友好文案区分于「整体没存上」
+  message.value = r.ok
+    ? `已保存 ${Number(r.count) || 0} 个节点到 ${loadedCourseId.value}（整课覆盖·学员提交不受影响）`
+    : r.error === 'GC_REMOVE_FAIL'
+      ? '已保存新节点，但有旧节点未删净（重存一次即可收敛）'
+      : '保存失败：' + String(r.error || '')
 }
 
 onMounted(load) // 默认旗舰课自动载入

@@ -4607,13 +4607,14 @@ export const repoChecks = [
     // 同批规格纪律，精细版见 rw-mp-navback-timer-cleaned 的 backTimer 专项）。
     id: 'rw-mp-await-side-effect-unloaded-recheck',
     roots: ['#5', '#8'],
-    desc: 'mp await 恢复点后导航/支付副作用须先复核 this.unloaded（病根#5 样板复制即漂移·根因#8 真机才炸）：点名清单——checkout.ts{onSubmit,startPay}、order-list.ts{onPay,onConfirm,onCancel}、order.ts{onPay,onAfterSale,onConfirm,onCancel}、welcome.ts{onEnter}——各方法体内首个 await 之后须出现 this.unloaded 复核（indexOf(\'await\') < indexOf(\'this.unloaded\')，多 await 方法只要求存在复核即可不做逐 await 精细判），否则用户在 await 期间退出页面，迟到回包仍对已退页 toast/reload/redirectTo/拉起支付授权框（真机才炸，工具端不暴露）',
+    desc: 'mp await 恢复点后导航/支付副作用须先复核 this.unloaded（病根#5 样板复制即漂移·根因#8 真机才炸）：点名清单——checkout.ts{onSubmit,startPay}、order-list.ts{onPay,onConfirm,onCancel}、order.ts{onPay,onAfterSale,onConfirm,onCancel}、welcome.ts{onEnter,activate}、consent.ts{submit}——各方法体内首个 await 之后须出现 this.unloaded 复核（indexOf(\'await\') < indexOf(\'this.unloaded\')，多 await 方法只要求存在复核即可不做逐 await 精细判），否则用户在 await 期间退出页面，迟到回包仍对已退页 toast/reload/redirectTo/拉起支付授权框（真机才炸，工具端不暴露）',
     run() {
       const targets = [
         { file: 'rewrite/mp/pages/checkout/checkout.ts', methods: ['onSubmit', 'startPay'] },
         { file: 'rewrite/mp/pages/order-list/order-list.ts', methods: ['onPay', 'onConfirm', 'onCancel'] },
         { file: 'rewrite/mp/pages/order/order.ts', methods: ['onPay', 'onAfterSale', 'onConfirm', 'onCancel'] },
-        { file: 'rewrite/mp/pages/welcome/welcome.ts', methods: ['onEnter'] },
+        { file: 'rewrite/mp/pages/welcome/welcome.ts', methods: ['onEnter', 'activate'] },
+        { file: 'rewrite/mp/pages/consent/consent.ts', methods: ['submit'] },
       ]
       const bad = []
       for (const t of targets) {

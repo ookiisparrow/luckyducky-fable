@@ -83,6 +83,7 @@ function editDraft(o: Record<string, any>) {
 async function doSave() {
   const f = form.value
   if (!f || saving.value) return // 在途禁再发·防双击建重复草稿
+  const snap = f // 快照本次编辑目标（H1·同批G G3/G4 范式）：editDraft 无 saving 门控，await 期间若已切到另一张草稿/新建，回包收尾效果不该打过去
   const lines: Array<{ materialId: string; qty: number; unitPriceFen: number }> = []
   for (const l of f.lines) {
     const fen = yuanToFen(l.priceYuan)
@@ -95,9 +96,11 @@ async function doSave() {
   saving.value = true
   const r = await savePurchase(f.supplierId, lines, f.purchaseId || undefined) // 传 purchaseId＝改草稿·空＝新建
   saving.value = false
-  note(r.ok, `草稿已${f.purchaseId ? '更新' : '建'}（总价 ${fenLabel(r.totalFen)}·服务端核算）`, scmErrorText(r.error))
-  if (r.ok) form.value = null
-  void reload()
+  if (form.value === snap) {
+    note(r.ok, `草稿已${f.purchaseId ? '更新' : '建'}（总价 ${fenLabel(r.totalFen)}·服务端核算）`, scmErrorText(r.error))
+    if (r.ok) form.value = null
+  }
+  void reload() // 列表刷新与目标是否已切无关·恒执行
 }
 
 async function step(fn: (_id: string) => Promise<Record<string, unknown>>, id: string, key: string) {

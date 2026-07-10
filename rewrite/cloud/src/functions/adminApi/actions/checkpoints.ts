@@ -1,4 +1,5 @@
 import { reply, ensure, str, type Ctx } from '../lib'
+import { notifyAlert } from '../../../kit'
 
 // 节点诊断·关键节点定义策展（后台360工作站 B2.2·admin 侧）：管理端为某门课维护「关键节点 + 挽回办法」内容，
 // 学员在节点拍照、坐席据此 + 节点定义精准指导。一集合两形状：def 节点定义（本文件写）/ sub 用户拍照提交
@@ -65,14 +66,30 @@ export async function saveCheckpoints({ db, data }: Ctx) {
     i++
   }
   // 删本课不在新列表里的旧节点定义（策展集同步·只删 type:'def'·用户 sub 拍照提交不受影响）
+  // GC 删除失败不再吞（H2·同批F F1 判例）：原 .catch(()=>{}) 全吞、恒 ok:true——旧节点删不掉时坐席仍按「已整课覆盖」
+  // 的错觉工作，残留的旧节点定义继续被读到（可能已改名/合并，误导挽回话术）。upsert 已成功的部分保留（数据是新
+  // 的、只是旧条目残留，重存一次即可收敛）；GC 失败经 notifyAlert 留痕 + 如实回 ok:false，别静默过关。
   const old = await db
     .collection('checkpoints')
     .where({ type: 'def', courseId })
     .limit(DEF_SCAN)
     .get()
     .catch(() => ({ data: [] }))
+  const failedIds: string[] = []
   for (const d of (old && old.data) || []) {
-    if (!keepIds.has(d._id)) await db.collection('checkpoints').doc(d._id).remove().catch(() => {})
+    if (!keepIds.has(d._id)) {
+      const err = await db
+        .collection('checkpoints')
+        .doc(d._id)
+        .remove()
+        .then(() => null)
+        .catch((e: any) => e || new Error('REMOVE_FAIL'))
+      if (err) failedIds.push(d._id)
+    }
+  }
+  if (failedIds.length) {
+    await notifyAlert('anomaly', 'saveCheckpoints', 'GC_REMOVE_FAIL', { failedIds, courseId })
+    return reply(200, { ok: false, error: 'GC_REMOVE_FAIL', failedIds })
   }
   return reply(200, { ok: true, count: keepIds.size })
 }
