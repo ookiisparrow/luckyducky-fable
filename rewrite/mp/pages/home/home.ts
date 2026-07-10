@@ -103,8 +103,15 @@ Page({
   backTop() {
     wx.pageScrollTo({ scrollTop: 0, duration: 320 })
   },
+  // bug sweep II L3：页脚链接架构无 href 字段（admin 只存纯文本 label），本无法通用跳转——「关于我们」
+  // 是唯一已上线且默认安装态必现的 label（/pages/about/about 已注册·me 页也有正常入口），单独映射修复
+  // 默认误报「敬请期待」；其余 label 无对应页仍是合法占位（不加配置面/不引 href 机制，运营真需要再配跳转）。
   onTapFooterLink(e: WechatMiniprogram.TouchEvent) {
     const label = String(e.currentTarget.dataset.label || '')
+    if (label === '关于我们') {
+      wx.navigateTo({ url: '/pages/about/about' })
+      return
+    }
     this.ping(label + ' · 敬请期待')
   },
   ping(text: string) {

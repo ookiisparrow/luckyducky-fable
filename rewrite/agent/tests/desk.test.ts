@@ -153,6 +153,20 @@ describe('会话流增量合并（黄金：不重气泡·升序）', () => {
     expect(advanceCursor(2000, undefined)).toBe(2000) // 空批不动
     expect(advanceCursor(0, 100)).toBe(100)
   })
+
+  it('大白话：同秒两条非文本消息（图片，text 恒为占位）靠 msgid 分清，不再被旧键误杀（bug sweep II L1）', () => {
+    const merged = mergeThread([], [
+      { at: 5000, direction: 'in', msgtype: 'image', text: '[image]', msgid: 'wx-a' },
+      { at: 5000, direction: 'in', msgtype: 'image', text: '[image]', msgid: 'wx-b' }, // 同 at/方向/占位文，不同 msgid——都留
+    ])
+    expect(merged).toHaveLength(2)
+    // 同 msgid 重投递（轮询边界重复拉到同一条）仍按 msgid 去重，不重气泡
+    const redelivered = mergeThread(merged, [{ at: 5000, direction: 'in', msgtype: 'image', text: '[image]', msgid: 'wx-a' }])
+    expect(redelivered).toHaveLength(2)
+    // 无 msgid（出站/历史档）回退旧键行为不变：同秒同方向同类同文视为同条
+    const noId = mergeThread([m(6000, 'out', '收到')], [{ at: 6000, direction: 'out', text: '收到' }])
+    expect(noId).toHaveLength(1)
+  })
 })
 
 describe('队列与错误人话', () => {

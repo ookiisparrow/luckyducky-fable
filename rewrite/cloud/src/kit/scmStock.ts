@@ -9,7 +9,8 @@ import { COLLECTIONS } from '@ldrw/shared'
 // 幂等（守卫 scm-ledger-idempotent）：每笔流水确定性 _id=`<docType>:<docId>:<itemKey>`——同一单据对同一
 // 物料重放时 add 撞 DUPLICATE_ID＝并发方/上次已写，跳过不双记账（同 deterministic-id 范式）。
 // 并发：库存变更走乐观 CAS（读 stock → where({_id, stock:读值}).update 绝对值·updated===1 才算改到），
-// 与 kit/inventory 同款；不足/争用耗尽即失败并**回滚本次已应用行**（宁不动账勿错账）。
+// 与 kit/inventory 同款；不足/争用耗尽即失败并**尽力回滚本次已应用行**（宁不动账勿错账；反向 CAS 若也
+// 失败——并发抢占——保留该行流水作审计迹 + 打 ROLLBACK_FAIL 告警，不删流水掩盖差额，需人工对账回补）。
 // 计量：delta 一律非零整数（克或件·单位随主档 uom·validate fail-closed）；余额不允许为负。
 
 export type MoveDocType =
@@ -41,8 +42,10 @@ export type ApplyResult =
   | { ok: false; error: 'BAD_MOVE' | 'NO_MATERIAL' | 'INSUFFICIENT' | 'CONTENTION'; materialId?: string }
 
 /**
- * 对一张单据应用一组库存变动：写确定性流水 + CAS 改 materials.stock。全有或全无——任一行失败即
- * 回滚本次已应用行（删其流水 + 反向 CAS），返回失败原因；重放同一单据（同 docType+docId）天然幂等。
+ * 对一张单据应用一组库存变动：写确定性流水 + CAS 改 materials.stock。全有或全无（尽力回滚）——任一行
+ * 失败即回滚已应用行（删其流水 + 反向 CAS），返回失败原因；反向 CAS 若也失败（并发抢占），该行库存
+ * 保持已扣、流水保留作审计迹并打 ROLLBACK_FAIL 告警，需人工对账回补（K4）。重放同一单据（同
+ * docType+docId）天然幂等。
  */
 export async function applyStockMoves(moves: StockMove[], doc: MoveDoc): Promise<ApplyResult> {
   // fail-closed 入参校验（根因#8 假数据不入账）：整数、非零、料号非空、单据号非空

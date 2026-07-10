@@ -195,6 +195,19 @@ describe('坐席回复与会话流（黄金 §四：接缝发送·归档·失败
     expect(mine.sessions.map((s: any) => s.sessionId)).toEqual(['s1'])
     expect((await post('listMyActive', A2, {})).sessions).toEqual([])
   })
+
+  it('大白话：入站消息投影带 msgid（从确定性 _id 剥出，供坐席台去重·bug sweep II L1）；出站消息无 msgid', async () => {
+    control.seed('conversations', [
+      { _id: 'wxkf:in:msg-a', direction: 'in', externalUserId: 'eu-s1', openKfId: 'kf1', msgtype: 'image', text: '[image]', at: 2000 },
+      { _id: 'wxkf:in:msg-b', direction: 'in', externalUserId: 'eu-s1', openKfId: 'kf1', msgtype: 'image', text: '[image]', at: 2000 }, // 同秒同占位文·不同 msgid
+      { _id: 'out-auto-1', direction: 'out', externalUserId: 'eu-s1', openKfId: 'kf1', msgtype: 'text', text: '收到', at: 2500 },
+    ])
+    const r = await post('getThread', A1, { sessionId: 's1' })
+    const [a, b, c] = r.messages
+    expect(a.msgid).toBe('msg-a')
+    expect(b.msgid).toBe('msg-b') // 同秒不同 msgid·各自可辨，不被坐席台去重键误杀
+    expect(c.msgid).toBeUndefined() // 出站消息无 msgid 语义·原样回空
+  })
 })
 
 describe('scoped 360 双闸（黄金 §二：归属 + 数据共享同意·超管数据控制者）', () => {

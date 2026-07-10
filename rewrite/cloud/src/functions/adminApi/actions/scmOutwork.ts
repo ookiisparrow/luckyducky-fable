@@ -115,7 +115,9 @@ export async function issueOutwork({ db, data, agentId }: Ctx) {
   const moves = (r.doc.issueLines || []).map((l: any) => ({ materialId: l.materialId, delta: -l.qty }))
   const ar = await applyStockMoves(moves, { docType: 'outwork_issue', docId: outworkId, operator: agentId || 'admin' })
   if (!ar.ok) {
-    // 补偿回滚（宁不动账勿错账）：库存不足/主档缺/争用时 applyStockMoves 已内部回滚全部行（全有或全无·账没动），
+    // 补偿回滚（宁不动账勿错账）：库存不足/主档缺/争用时 applyStockMoves 已内部尽力回滚全部行（全有或全无·
+    // 通常账没动；例外——反向 CAS 若也失败/并发抢占，该行库存保持已扣、流水保留作审计迹并打 ROLLBACK_FAIL
+    // 告警，此时账实确有偏差，需人工对账回补，非本函数可自愈·K4），
     // 但状态已被上面 transition 抢占成 issued——须复原 draft,否则单据「已发料」而库存一件没出（账实必偏且无法重试）。
     // 用条件更新而非 transition()：issued→draft 是本次未完成发料的技术性复原,不是业务逆向流转（蓝图定稿 MVP
     // 不做逆向流转,scm.spec 故意不声明这条边——声明了就开放成业务动作了）；条件绑 status:'issued' 防覆盖并发方

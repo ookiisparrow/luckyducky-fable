@@ -89,6 +89,16 @@ async function activeCountFor(db: any, agentId: string): Promise<number> {
   return (r && r.total) || 0
 }
 
+// 入站消息全局唯一 id（bug sweep II L1）：conversations 无独立 msgid 字段，入站客户消息的 msgid 编码在
+// 确定性 _id='wxkf:in:<msgid>'（见 cs/kfCallback/archive.ts archiveInbound）——从 _id 剥前缀取回，不新增
+// 落库字段（archive.ts 幂等 _id 设计已够用，改它不在本次改动范围）。出站坐席消息 _id 自动生成、不含
+// msgid 语义，原样返回 undefined（desk.ts keyOf 按规格回退到 at|direction|msgtype|text 旧键）。
+const INBOUND_ID_PREFIX = 'wxkf:in:'
+function inboundMsgid(id: unknown): string | undefined {
+  const s = String(id || '')
+  return s.startsWith(INBOUND_ID_PREFIX) ? s.slice(INBOUND_ID_PREFIX.length) : undefined
+}
+
 // 读一条会话（缺失返 null·同 doc().get() reject 兜底）。
 async function loadSession(db: any, sessionId: string): Promise<any | null> {
   const got = await db.collection(COLLECTIONS.csSession).doc(sessionId).get().catch(() => null)
@@ -252,6 +262,7 @@ export async function getThread(ctx: Ctx): Promise<any> {
       msgtype: m.msgtype || '',
       text: m.text || '',
       at: Number(m.at) || 0,
+      msgid: inboundMsgid(m._id), // bug sweep II L1：入站客户消息全局唯一 id（无则不带此字段·出站/历史档回退旧键去重）
     }))
   const nextCursor = list.length ? list[list.length - 1].at : Number(data && data.cursor) || undefined
   const openid = await resolveOpenid(db, s)
