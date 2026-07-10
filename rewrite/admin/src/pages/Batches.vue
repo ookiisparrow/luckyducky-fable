@@ -87,11 +87,15 @@ const shown = computed(() => {
 })
 const pct = (b: BatchRow) => (b.total ? Math.min(100, Math.round((b.activated / b.total) * 100)) : 0)
 
+const loadGen = useLatest() // 乱序守卫（G1·P1）：切课/连点「载入课程」时旧回包别把新课的 loadedCourse 污染成旧课——
+// 是「错课量产激活码」防线的地基，doCreate 用 loadedCourse 当目标（见下 doCreate 注释）。
 async function load() {
   const c = courseId.value.trim()
   if (!c) return
   message.value = '加载中…'
+  const my = loadGen.begin()
   const r = await listBatches(c)
+  if (loadGen.isStale(my)) return // 已发起更新的 load()·整包丢弃（rows/loadedCourse/message 全不写）
   rows.value = r.ok ? mapBatches(r.list) : []
   loadedCourse.value = r.ok ? c : ''
   message.value = r.ok ? (rows.value.length ? '' : '这门课还没有批次') : '加载失败：' + String(r.error || '')

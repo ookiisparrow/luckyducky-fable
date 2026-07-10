@@ -111,10 +111,14 @@ async function doRecv() {
     note(false, '', '有颜色收货数超过发出数（收 ≤ 发）——请核对')
     return
   }
+  const forId = recvFor.value // 快照发起时的收货目标（G3·P2）：await 期间若已切到另一张收货表单，回包的
+  // 反馈/清理不该打到新表单上（同 Desk act() 治法）
   const r = await receiveOutwork(recvFor.value, recvLines.value.map((l) => ({ materialId: l.materialId, qty: Number(l.qty) })))
-  note(r.ok, `已收货入库：应付 ${fenLabel(r.payableFen)} · 损耗 ${Number(r.lossQty) || 0} 团（已定格）`, scmErrorText(r.error))
-  if (r.ok) cancelRecv()
-  void reload()
+  if (recvFor.value === forId) {
+    note(r.ok, `已收货入库：应付 ${fenLabel(r.payableFen)} · 损耗 ${Number(r.lossQty) || 0} 团（已定格）`, scmErrorText(r.error))
+    if (r.ok) cancelRecv()
+  }
+  void reload() // 列表刷新无条件执行，不受目标是否过期影响
 }
 
 async function step(fn: (_id: string) => Promise<Record<string, unknown>>, id: string, key: string) {

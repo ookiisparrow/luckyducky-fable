@@ -9,6 +9,7 @@ import { listInventory } from '../api/system'
 import { listDrafts } from '../api/products'
 import { materialHuman, scmErrorText, productNameOf } from '../lib/mapScm'
 import { setPurchaseHandoff, setOutworkHandoff } from '../lib/scmHandoff'
+import { useLatest } from '../lib/latest'
 import ScmFlowTabs from '../components/ScmFlowTabs.vue'
 import PageHeader from '../components/ui/PageHeader.vue'
 import Card from '../components/ui/Card.vue'
@@ -59,13 +60,16 @@ const produceRows = computed(() => {
   return [...keys].map((k) => ({ key: k, name: label[k] || k, packed: packed[k] || 0, shipped: shipped[k] || 0, stock: inv.value[k] ?? null })).sort((a, b) => a.name.localeCompare(b.name))
 })
 
+const calcGen = useLatest() // 乱序守卫（G6·P2）：连点/改目标后连点「算缺口」，旧回包别覆盖新请求的 plan
 async function calc() {
   const ts = targets.value.filter((t) => t.productId.trim())
   if (!ts.length) {
     message.value = '先填至少一个产品'
     return
   }
+  const my = calcGen.begin()
   const r = await getRestockPlan(ts.map((t) => ({ productId: t.productId.trim(), sets: Number(t.sets) })))
+  if (calcGen.isStale(my)) return // 已发起更新的计算·丢弃过期回包
   plan.value = r.ok ? (r as Record<string, any>) : null
   message.value = r.ok ? '' : scmErrorText(r.error)
 }
