@@ -93,10 +93,16 @@ async function pollThread() {
 }
 
 async function claim(sessionId: string) {
+  // 快照点击时所在会话（bug sweep II R5）：本文件五个会话敏感异步动作（pollThread/open/act/send/claim）里
+  // 最后一个补快照的——claim 在途期间坐席可能已主动打开另一会话并打字，慢回包若无条件 open(sessionId)
+  // 会把视图拽回来、且 open 的切会话清草稿把人家正在打的字清掉（同 send/act 治法·item8 家族收口）。
+  const before = currentId.value
   const r = await post('claimConversation', { sessionId })
-  message.value = r.ok ? '' : deskErrorText(r.error)
-  if (r.ok) void open(sessionId)
-  void refreshLists()
+  if (currentId.value === before) {
+    message.value = r.ok ? '' : deskErrorText(r.error)
+    if (r.ok) void open(sessionId)
+  }
+  void refreshLists() // 认领已在服务端生效——列表刷新无条件（会话会出现在「我在接」，坐席可自行点开）
 }
 
 async function open(sessionId: string) {
