@@ -64,7 +64,7 @@ async function buildSummaryExact(db: any, productId: string) {
   const b2 = c21.total || 0
   const count = b5 + b4 + b3 + b2
   const sum = (sumRes && sumRes.list && sumRes.list[0] && sumRes.list[0].s) || 0
-  const pct = (n: number) => (count ? Math.round((n / count) * 100) : 0)
+  const pct = (n: number) => (count ? Math.round((n / count) * 100) : 0) // structure-ok：星级占比百分比，非金额换算（根因#4 fileRule 不误咬）
   const tagCount: Record<string, number> = {}
   for (const r of tres ? tres.data : []) for (const t of r.tags || []) tagCount[t] = (tagCount[t] || 0) + 1
   return {
@@ -98,7 +98,7 @@ function buildSummary(sample: any[]) {
     }
     score = (sum / count).toFixed(1)
   }
-  const pct = (n: number) => (count ? Math.round((n / count) * 100) : 0)
+  const pct = (n: number) => (count ? Math.round((n / count) * 100) : 0) // structure-ok：星级占比百分比，非金额换算（根因#4 fileRule 不误咬）
   return {
     score,
     count,

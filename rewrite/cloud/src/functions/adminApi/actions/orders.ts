@@ -99,7 +99,7 @@ async function shipOne(db: any, idRaw: any, companyRaw: any, trackingRaw: any, o
     if (moves.length) {
       // operator＝认证账号身份（B5.4 同款·与 SCM 各线 agentId 口径一致）：多账号后流水可溯「谁发的货」
       const led = await applyStockMoves(moves, { docType: 'ship', docId: id, operator }).catch(() => ({ ok: false as const }))
-      if (!led.ok) console.error('[SCM] ship ledger fail', id)
+      if (!led.ok) await notifyAlert('anomaly', 'shipOrder', 'SCM_LEDGER_FAIL', { id })
     }
   }
   // 合规债#26（根因#12）：本地发货成功后向微信上传发货信息——实物+微信支付不上传则订单资金冻结/无法结算。

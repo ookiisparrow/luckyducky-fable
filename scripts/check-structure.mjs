@@ -3552,7 +3552,10 @@ export const repoChecks = [
       const self = join(ROOT, 'scripts/check-structure.mjs')
       const src = readFileSync(self, 'utf8')
       // 两个 needle 字符串拼接构造（防本守卫自身源码含完整字面量、自己把自己咬红）
-      const stripNeedle = 'replace(/\\/\\/' + "[^\\n]*/g, '').replace(/\\/\\*" + "[\\s\\S]*?\\*\\//g, '')"
+      // stripComments 块注释替换回调用换行占位（保留行号，P2 复审）——needle 同步跟着实现改，
+      // 否则本守卫会因实现文本变了而永远搜不到自己、静默失去防漂移作用（不是「不咬」，是「咬不到」）。
+      const stripNeedle =
+        'replace(/\\/\\/' + "[^\\n]*/g, '').replace(/\\/\\*" + "[\\s\\S]*?\\*\\//g, (m) => m.replace(/[^\\n]/g, ''))"
       const boundaryNeedle = '\\n {2}' + '\\},'
       // 容忍 export 前缀（helper 已 export 供单测）——起点/下一函数边界都放宽匹配。边界只认「function」
       // 关键字会漏防：const/let/var 写的箭头函数裸写同款字面量、插在两个 helper 定义之间（或其后到下一个
@@ -5159,6 +5162,93 @@ export const repoChecks = [
       return bad
     },
   },
+  // —— 以下 3 条为旧线（packages/）repoCheck 的 rewrite/ 镜像（批1·治理重心搬到活代码线）——
+  {
+    id: 'rw-flow-seam-single',
+    roots: ['#12'],
+    desc: '平台接缝单点（根因#12 平台规则外部风险）镜像：cloudbase_module 工作流调用 rewrite/cloud/src 内仅 kit/flow.ts 一处（callFlow），平台规则变化改动面最小',
+    run() {
+      const root = join(ROOT, 'rewrite/cloud/src')
+      if (!existsSync(root)) return []
+      const allowed = 'rewrite/cloud/src/kit/flow.ts'
+      const hits = []
+      const walkDir = (d) => {
+        for (const e of readdirSync(d)) {
+          const p = join(d, e)
+          if (e === 'node_modules' || e === 'dist') continue
+          if (statSync(p).isDirectory()) walkDir(p)
+          else if (e.endsWith('.ts') && readFileSync(p, 'utf8').includes("'cloudbase_module'")) hits.push(relative(ROOT, p))
+        }
+      }
+      walkDir(root)
+      const out = []
+      for (const h of hits) if (h !== allowed) out.push(`${h} 直调 cloudbase_module——接缝须收口 kit callFlow 单点（根因#12·rewrite 镜像）`)
+      if (!hits.includes(allowed)) out.push(`${allowed} 应为 cloudbase_module 唯一调用点（callFlow），未见——接缝单点缺失（rewrite 镜像）`)
+      return out
+    },
+  },
+  {
+    id: 'rw-cloud-domain-grouped',
+    roots: ['T2'],
+    desc: 'T2 域分组镜像：rewrite/cloud/src/functions 顶层不得有裸 .ts（函数须放进域子目录 adminApi/app/callbacks/cs/ops/timers）',
+    run() {
+      const dir = join(ROOT, 'rewrite/cloud/src/functions')
+      if (!existsSync(dir)) return []
+      const bad = []
+      for (const entry of readdirSync(dir)) {
+        if (statSync(join(dir, entry)).isFile() && entry.endsWith('.ts')) {
+          bad.push(`rewrite/cloud/src/functions/${entry} 在顶层——函数须放进域子目录（adminApi/app/callbacks/cs/ops/timers，T2·rewrite 镜像）`)
+        }
+      }
+      return bad
+    },
+  },
+  {
+    // 钱链可观测告警接入（根因#14/#4）镜像：rewrite 钱链/SCM 动作类失败禁静默 console.error，
+    // 一律经 kit/observe 的 alert()/notifyAlert() 单出口留痕（控制台 [LD_ALERT] 抓取）。
+    // 剥注释单源（错题本 E1/E10）：console.error 检测须对 stripComments() 剥注释后的正文匹配，
+    // 防真调用挪进注释仍误判命中、或护栏代码被注释掉断言仍绿。
+    id: 'rw-moneychain-alert-wired',
+    roots: ['#14', '#4'],
+    desc: '钱链可观测告警接入（rewrite 镜像·病根#14/#4）：payCallback/refundCallback 须经 alert()/notifyAlert() 打 [LD_ALERT] 标记；钱链/SCM 动作类文件（refunds/orders/scmAssembly/scmPurchase/scmOutwork/scmMaterials + 两回调）剥注释后禁裸 console.error(——失败留痕走 kit observe 单出口，刻意静默须行内注明；kit/observe.ts 须导出 alert',
+    run() {
+      const bad = []
+      const cbDir = 'rewrite/cloud/src/functions/callbacks'
+      for (const f of ['payCallback.ts', 'refundCallback.ts']) {
+        const rel = `${cbDir}/${f}`
+        const abs = join(ROOT, rel)
+        if (!existsSync(abs)) {
+          bad.push(`${rel} 缺失（钱链回调，根因#14）`)
+          continue
+        }
+        if (!/\b(notifyAlert|alert)\(/.test(stripComments(readFileSync(abs, 'utf8'))))
+          bad.push(`${rel} 未用 alert()/notifyAlert() 打钱链告警标记——静默语义失败无信号（根因#14 可观测·rewrite 镜像）`)
+      }
+      const moneyChainFiles = [
+        'rewrite/cloud/src/functions/adminApi/actions/refunds.ts',
+        'rewrite/cloud/src/functions/adminApi/actions/orders.ts',
+        'rewrite/cloud/src/functions/adminApi/actions/scmAssembly.ts',
+        'rewrite/cloud/src/functions/adminApi/actions/scmPurchase.ts',
+        'rewrite/cloud/src/functions/adminApi/actions/scmOutwork.ts',
+        'rewrite/cloud/src/functions/adminApi/actions/scmMaterials.ts',
+        `${cbDir}/payCallback.ts`,
+        `${cbDir}/refundCallback.ts`,
+      ]
+      for (const rel of moneyChainFiles) {
+        const abs = join(ROOT, rel)
+        if (!existsSync(abs)) continue // 部分 SCM 动作文件可能尚未落地，存在才查
+        const strippedLines = stripComments(readFileSync(abs, 'utf8')).split('\n')
+        strippedLines.forEach((line, i) => {
+          if (/\bconsole\.error\s*\(/.test(line))
+            bad.push(`${rel}:${i + 1} 剥注释后仍裸用 console.error(——动作类失败须经 kit observe.alert/notifyAlert 单出口留痕，禁静默吞（根因#14·rewrite 镜像）`)
+        })
+      }
+      const obs = join(ROOT, 'rewrite/cloud/src/kit/observe.ts')
+      if (!existsSync(obs) || !/export function alert/.test(readFileSync(obs, 'utf8')))
+        bad.push('rewrite/cloud/src/kit/observe.ts 未导出 alert——钱链告警标记缺失（根因#14·rewrite 镜像）')
+      return bad
+    },
+  },
 ]
 
 // ============== 逐文件规则（fileRules）==============
@@ -5238,6 +5328,51 @@ export const fileRules = [
         ? `依赖方向反转：${layer} 层禁 import @/${m[1]}/（pages→store/api→utils，data/utils 是叶；CLAUDE §8/T4）`
         : null
     },
+  },
+  // —— 以下 4 条为旧线（packages/）5 条守卫的 rewrite/ 镜像（批1·治理重心搬到活代码线）——
+  // 旧线守卫扫描面锁死 packages/ 路径，对唯一在迭代的 rewrite/ 空转；本批不改旧条（继续守 packages/
+  // 冻结基线），另立新条落地到 rewrite/。SRC_DIRS 已扩到含 'rewrite'（见下方 A.0），否则新条也是装饰。
+  {
+    // T2 域分组（根因账本 #5）镜像：rewrite/cloud 云函数业务代码禁裸用 cloud.init()/getWXContext()。
+    id: 'rw-kit-only-cloud-primitives',
+    roots: ['T2', '#5'],
+    inScope: (abs) => abs.includes('/rewrite/cloud/src/functions/') && abs.endsWith('.ts'),
+    test: (line) =>
+      /\bcloud\.init\s*\(/.test(line) || /\bgetWXContext\s*\(/.test(line)
+        ? '云函数业务代码禁裸用 cloud.init()/getWXContext()——经 kit（withOpenId/getDb/isServerCall）收编样板，防样板重生（T2/根因5·rewrite 镜像）'
+        : null,
+  },
+  {
+    // 平台接缝收口（根因账本 #12）镜像：触发工作流禁裸用 cloudbase_module——经 kit.callFlow 单点。
+    id: 'rw-flow-seam-via-kit',
+    roots: ['#12'],
+    inScope: (abs) => abs.includes('/rewrite/cloud/src/functions/') && abs.endsWith('.ts'),
+    test: (line) =>
+      /cloudbase_module/.test(line)
+        ? '触发工作流禁裸用 cloudbase_module——经 kit.callFlow 单点收口（根因#12 平台接缝最小化·rewrite 镜像）'
+        : null,
+  },
+  {
+    // 金额接 Fen 轨（根因账本 #4）镜像：云函数里「元↔分」换算禁裸 *100 / /100。非金额百分比/毫秒
+    // 换算行内加 structure-ok（如 reviews.ts 星级占比 pct()）。
+    id: 'rw-money-via-fen',
+    roots: ['#4'],
+    inScope: (abs) => abs.includes('/rewrite/cloud/src/functions/') && abs.endsWith('.ts'),
+    test: (line) =>
+      /(\*|\/)\s*100\b/.test(line)
+        ? '金额「元↔分」换算禁裸 *100 / /100——经 shared toFen/asFen/fenToYuan（根因#4 Fen 接钱链·rewrite 镜像）；非金额换算行内加 structure-ok'
+        : null,
+  },
+  {
+    // T1 微信原生单源（根因账本 #6）镜像：mp 端禁裸 wx.request——核心交易流程只走云函数
+    // （callCloud），不再造第二条 HTTP 直连路径。wx.requestPayment 是微信支付原生能力，不误中。
+    id: 'rw-mp-cloud-only',
+    roots: ['T1'],
+    inScope: (abs) => abs.includes('/rewrite/mp/') && !abs.includes('/rewrite/mp/tests/') && abs.endsWith('.ts'),
+    test: (line) =>
+      /\bwx\.request\s*\(/.test(line)
+        ? 'mp 端禁裸 wx.request()——H5/App 不连核心交易流程，微信原生单源经云函数 callCloud（T1·rewrite 镜像）'
+        : null,
   },
 ]
 
@@ -5359,7 +5494,9 @@ export const typeAndTestGuards = [
 ]
 
 // export：供 check-report 体检面板复用同一套遍历/判定（面板=派生视图，禁自建第二套语义）
-export const SRC_DIRS = ['packages', 'cloudfunctions', 'scripts']
+// 'rewrite' 加入扫描面（批1·2026-07-10）：唯一在迭代的活代码线，此前 fileRules 全量扫描扫不到，
+// rw- 前缀的新守卫不动这条即是装饰。旧 fileRules（5 条）inScope 全部锁死 packages 路径，扩面不误咬。
+export const SRC_DIRS = ['packages', 'cloudfunctions', 'scripts', 'rewrite']
 export function* walk(dir) {
   if (!existsSync(dir)) return
   for (const name of readdirSync(dir)) {
@@ -5375,8 +5512,11 @@ const isCommentLine = (line) => /^(\/\/|\/\*|\*|<!--|#)/.test(line.trim())
 // 剥注释单源 helper（执行者错题本 E1·坑史：方法体正则咬注释假绿——2026-07-08 播放页批/客服批连栽两次）：
 // 剥 // 行注释与 /* */ 块注释，供守卫「查真实调用」前先清场——防真调用挪进注释、假实现留在正文，正则仍误判命中。
 // 原三处（1151/客服触点/首页加购）重复裸写的字面量单源化到这里；元守卫 guard-strip-single-source 焊死不许再裸写绕开。
+// 块注释用「逐字符替换成空串再保留原有换行数」而非整段替换成空串——保证剥注释后行数与原文件严格一一对应，
+// 供按下标转行号的调用方（如 rw-moneychain-alert-wired）报出真实行号；纯布尔 .test() 调用方语义不受影响
+// （P2 复审：整段替换成空串会吃掉块注释内部换行，跨行块注释之后的行号会比真实行号小）。
 export function stripComments(src) {
-  return src.replace(/\/\/[^\n]*/g, '').replace(/\/\*[\s\S]*?\*\//g, '')
+  return src.replace(/\/\/[^\n]*/g, '').replace(/\/\*[\s\S]*?\*\//g, (m) => m.replace(/[^\n]/g, ''))
 }
 
 // 方法体截取单源 helper（同错题本 E1·配 stripComments 使用）：截取形如 `name(...) {\n  ...\n  },`
