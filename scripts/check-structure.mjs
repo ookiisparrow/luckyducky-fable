@@ -5288,6 +5288,57 @@ export const repoChecks = [
       return bad
     },
   },
+  {
+    // agent 是 admin client 的「同构小副本」（批3 规格·根因#5 同款坏味道在副本复发）：调色板/形状 token
+    // 若字面量各抄一份，后续改主题只改 admin 侧的 tokens.css 会漏改 agent 侧的 App.vue :root，两处悄悄漂移
+    // 没人发现。本守卫钉住同名 --ld-* 必须同值——admin tokens.css 里的纯别名（如 `--ld-purple: var(--ld-brand)`）
+    // 解一层再比（agent 侧写的是字面量，不是 var() 引用，直接比较别名字符串必假红）。agent 允许只声明 admin 的
+    // 子集（agent 用不到 admin 全部 token），但交集内每一个都必须同值；交集 <5 视为解析失败即红（防 :root 块
+    // 结构改动后正则悄悄匹配不到、返回空 bad 假绿）。
+    id: 'rw-agent-tokens-synced',
+    roots: ['#5'],
+    desc: 'agent/admin 同构副本 token 同步（批3 规格·病根#5）：rewrite/agent/src/App.vue `:root` 块内全部 `--ld-*` 与 rewrite/admin/src/styles/tokens.css 同名变量比对（admin 侧纯 var(--x) 别名解一层再比），同名必同值；同名交集 <5 视为解析失败即红（防结构改动假绿）',
+    run() {
+      const bad = []
+      const parseRootVars = (src) => {
+        const m = src.match(/:root\s*\{([\s\S]*?)\}/)
+        if (!m) return null
+        const map = {}
+        for (const vm of m[1].matchAll(/--([\w-]+)\s*:\s*([^;]+);/g)) map[vm[1]] = vm[2].trim()
+        return map
+      }
+      const resolveVal = (map, name, depth = 0) => {
+        const raw = map[name]
+        if (raw === undefined || depth > 5) return raw
+        const am = raw.match(/^var\(\s*--([\w-]+)\s*(?:,[^)]*)?\)$/)
+        return am && map[am[1]] !== undefined ? resolveVal(map, am[1], depth + 1) : raw
+      }
+      const agentPath = join(ROOT, 'rewrite/agent/src/App.vue')
+      const adminPath = join(ROOT, 'rewrite/admin/src/styles/tokens.css')
+      if (!existsSync(agentPath) || !existsSync(adminPath)) {
+        bad.push('rw-agent-tokens-synced：rewrite/agent/src/App.vue 或 rewrite/admin/src/styles/tokens.css 缺失——同步比对无法进行')
+        return bad
+      }
+      const agentMap = parseRootVars(readFileSync(agentPath, 'utf8'))
+      const adminMap = parseRootVars(readFileSync(adminPath, 'utf8'))
+      if (!agentMap || !adminMap) {
+        bad.push('rw-agent-tokens-synced：`:root { }` 块解析失败（App.vue 或 tokens.css 结构改动导致正则匹配不到，防假绿即红）')
+        return bad
+      }
+      const sharedNames = Object.keys(agentMap).filter((n) => adminMap[n] !== undefined)
+      if (sharedNames.length < 5) {
+        bad.push(`rw-agent-tokens-synced：同名 --ld-* 交集仅 ${sharedNames.length} 个（<5 视为解析失败，防结构改动假绿）`)
+        return bad
+      }
+      for (const name of sharedNames) {
+        const agentVal = agentMap[name]
+        const adminVal = resolveVal(adminMap, name)
+        if (agentVal !== adminVal)
+          bad.push(`rw-agent-tokens-synced：--${name} agent=${agentVal} ≠ admin=${adminVal}（同构副本同名须同值·病根#5，以 admin tokens.css 为准改 agent 侧）`)
+      }
+      return bad
+    },
+  },
 ]
 
 // ============== 逐文件规则（fileRules）==============

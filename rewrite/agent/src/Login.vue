@@ -20,7 +20,14 @@ async function submit() {
     return
   }
   const e = String(r.error || '')
-  message.value = e === 'TOO_MANY_ATTEMPTS' ? `试错太多，歇 ${Number(r.retryAfter) || '几'} 秒` : '登录被拒（' + e + '）'
+  message.value =
+    e === 'TOO_MANY_ATTEMPTS'
+      ? `试错太多，歇 ${Number(r.retryAfter) || '几'} 秒`
+      : e === 'NO_ENDPOINT'
+        ? '后端地址未配置（VITE_AGENT_API）'
+        : e.startsWith('NETWORK')
+          ? '网络不通：' + e
+          : '登录被拒（' + e + '）'
 }
 </script>
 

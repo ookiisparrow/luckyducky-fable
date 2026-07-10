@@ -1,12 +1,20 @@
 <script setup lang="ts">
 // 坐席台单屏应用：登录（口令/企微 ?code= 免登）→ 工作台。
 import { ref, onMounted } from 'vue'
-import { hasSession, loginByWecomCode } from './api/client'
+import { hasSession, loginByWecomCode, logout, onSessionLost } from './api/client'
 import Login from './Login.vue'
 import Desk from './Desk.vue'
 
 const ready = ref(false)
 const authed = ref(false)
+
+// 会话失效集中导登录（单源·根因#5·对照 admin router.ts 同构移植）：client.post 遇无令牌/401 触发此回调，
+// 壳层统一登出回登录视图——Desk.vue 内各会话敏感动作（pollThread/send/act/claim/setStatus）不再需要
+// 各自显式判 SESSION_LOST 才能导登录（原先只有 refreshLists 有此判断，其余散点会卡在失效态）。
+onSessionLost(() => {
+  logout()
+  authed.value = false
+})
 
 onMounted(async () => {
   // 企微内打开带 ?code=：免登换令牌（失败落口令登录·不卡死）
@@ -25,7 +33,7 @@ onMounted(async () => {
 <style>
 :root {
   --ld-purple: #a371ea;
-  --ld-purple-tab: #7b5caf;
+  --ld-purple-tab: #865dc0; /* 同步 admin tokens.css --ld-brand-active（守卫 rw-agent-tokens-synced 补捉的漂移：原 #7b5caf 与 admin 真值不符） */
   --ld-purple-meta: #7e6e96;
   --ld-purple-line: #c9bbe0;
   --ld-purple-ink: #241733;
