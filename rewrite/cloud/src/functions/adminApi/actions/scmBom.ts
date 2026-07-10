@@ -55,7 +55,9 @@ export async function saveBomTemplate({ db, data }: Ctx) {
 /** 保存产品差异位（_id=productId·三色 + 专属包装/卡片料号，全部必填）。 */
 export async function saveBomProfile({ db, data }: Ctx) {
   const p = data.profile
-  const productId = String((p && p.productId) || '').slice(0, 40)
+  // trim 尾随/前导空格（D1·bug 清除批D）：不 trim 会把 'abc123 ' 落成幽灵 _id，真实产品 'abc123' 持续
+  // 「未填差异位」、组装时 NO_PROFILE 拒绝，前端却已提示保存成功——契约不一致的静默数据错位。
+  const productId = String((p && p.productId) || '').trim().slice(0, 40)
   if (!productId) return reply(400, { ok: false, error: 'NO_PRODUCT' })
   const colors = (p && p.yarnColors) || {}
   for (const tier of ['L', 'M', 'S']) {

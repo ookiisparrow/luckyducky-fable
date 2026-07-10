@@ -36,13 +36,16 @@ export async function saveCheckpoints({ db, data }: Ctx) {
   for (const n of nodes) {
     const nodeId = str(n && n.nodeId, 64)
     if (nodeId.includes(':')) return reply(400, { ok: false, error: 'BAD_ARGS:COLON_IN_ID' })
+    // 空 nodeId 整批拒（D3·bug 清除批D·fail-closed）：主循环原先对空 nodeId 静默 continue，该行不进
+    // keepIds，随后「删不在 keepIds 的旧 def」会把原有节点当「已移除」真删——整课覆盖时误删旧节点且前端
+    // 只报成功。宁拒不删：任何空 nodeId 都到不了删除步骤（同预检位置·不写半份数据）。
+    if (!nodeId) return reply(400, { ok: false, error: 'BAD_ARGS:EMPTY_NODE_ID' })
   }
   await ensure(db, 'checkpoints')
   const keepIds = new Set<string>()
   let i = 0
   for (const n of nodes) {
     const nodeId = str(n && n.nodeId, 64)
-    if (!nodeId) continue
     const id = 'def:' + courseId + ':' + nodeId
     keepIds.add(id)
     await db

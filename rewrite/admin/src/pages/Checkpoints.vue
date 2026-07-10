@@ -73,6 +73,12 @@ async function save() {
     message.value = `节点 id 重复（${dup.join('、')}），请改成唯一后再保存`
     return
   }
+  // 空「节点 id」友好拦截（D3·bug 清除批D·对照 Kb.vue 先例）：云端已 fail-closed 拒绝整批，这里提前拦下
+  // 给出具体原因——防「无节点 id」被误当「已移除」在云端整课覆盖时误删旧节点。
+  if (payload.some((n) => !n.nodeId.trim())) {
+    message.value = '有节点未填「节点 id」——为防误删旧节点已拦下，请补齐后再保存'
+    return
+  }
   busy.value = true
   // 写「已载入的课」loadedCourseId·不是可编辑输入框（P1·改了课号没重载不会把本课节点整册覆盖到别课）
   const r = await saveCheckpoints(loadedCourseId.value, payload)

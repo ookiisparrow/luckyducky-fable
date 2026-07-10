@@ -55,6 +55,12 @@ watch(adj, () => (adjustId.value = ''), { deep: true })
 watch(() => matForm.value.category, (c) => {
   if (c === 'yarn') matForm.value.uom = 'count'
 })
+// 档位从大团切走后重置残留 'knotted'（D2·bug 清除批D）：模板 v-if（139-150 行）只隐藏「带结」option 不重置
+// v-model，tier 切非 L 后 form 仍持 'knotted'，select 显示空白且提交被云端 KNOT_ONLY_L 拒绝、报错与界面所见对不上。
+// 同仓先例：ScmBom.vue「切主键清残留下级字段」纪律。
+watch(() => matForm.value.tier, (t) => {
+  if (t !== 'L' && matForm.value.form === 'knotted') matForm.value.form = 'raw'
+})
 // 编辑既有供应商（换皮丢·填完只能新建·后端 saveSupplier 收 supplierId 支持改+note）：点列表回填
 function editSupplier(s: Record<string, any>) {
   supForm.value = { supplierId: String(s._id || ''), name: String(s.name || ''), type: String(s.type || 'factory'), contact: String(s.contact || ''), note: String(s.note || '') }

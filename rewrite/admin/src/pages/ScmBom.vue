@@ -107,7 +107,9 @@ async function doSaveTemplate() {
 
 async function doSaveProfile() {
   const p = prof.value
-  const r = await saveBomProfile({ productId: p.productId, yarnColors: { L: p.L, M: p.M, S: p.S }, packagingMaterialId: p.packagingMaterialId, cardMaterialId: p.cardMaterialId })
+  // trim productId（D1·双保险：前端管体验后端管闸）——按钮文案 213 行已用 trim 比对，提交理应同口径，
+  // 否则尾随空格能在此处混过、落成与文案判断不一致的幽灵 _id。
+  const r = await saveBomProfile({ productId: p.productId.trim(), yarnColors: { L: p.L, M: p.M, S: p.S }, packagingMaterialId: p.packagingMaterialId, cardMaterialId: p.cardMaterialId })
   note(r.ok, '差异位已保存', scmErrorText(r.error))
   void reload()
 }
