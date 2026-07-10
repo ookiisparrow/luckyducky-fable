@@ -43,7 +43,12 @@ async function reload() {
   if ((r as any).error === 'SESSION_LOST' || (m as any).error === 'SESSION_LOST') return
   recon.value = mapRecon(r)
   match.value = mapBillMatch(m)
-  message.value = recon.value || match.value ? '' : '加载失败：' + String((r as any).error || (m as any).error || '')
+  // 分路报错（P1·bug 清除战役 II C2）：单路失败别被另一路成功吞掉——mapRecon/mapBillMatch 只在 ok!==true
+  // 或响应体缺 cumulative/summary 容器时才回 null（合法空数据容器仍在、只是内部数组/数值为空，不会误判成失败）。
+  const bad: string[] = []
+  if (!recon.value) bad.push('内部对账加载失败：' + String((r as any).error || ''))
+  if (!match.value) bad.push('外部账单勾对加载失败：' + String((m as any).error || ''))
+  message.value = bad.join('；')
 }
 
 // 自定义对账区间（后端 from/to 就绪·换皮丢了这个·只能看死 30 天窗）
