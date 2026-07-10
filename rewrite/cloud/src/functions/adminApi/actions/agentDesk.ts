@@ -1,5 +1,5 @@
 import { reply, str, type Ctx } from '../lib'
-import { transition, pageParams, assertOwnedByAgent, assertDataShareConsent, sendAgentCard, AGENT_DESK_URL } from '../../../kit'
+import { transition, pageParams, assertOwnedByAgent, assertDataShareConsent, sendAgentCard, AGENT_DESK_URL, notifyAlert } from '../../../kit'
 import { COLLECTIONS } from '@ldrw/shared'
 import { assembleCustomer360 } from '../customer360/orchestrator'
 
@@ -267,11 +267,18 @@ export async function setAgentStatus(ctx: Ctx): Promise<any> {
   if (!status) return reply(400, { ok: false, error: 'BAD_ARGS' })
   const limit = await agentLimit(db, p.agentId) // 保留已配上限（首次建 doc 用默认）
   // doc(agentId).set({data}) 的 data 不含 _id（_id 由 doc 指定·真 sdk 约束·根因#8）
-  await db
+  // 写失败不再吞（P1·bug 清除战役II F2）：原 .catch(()=>{}) 后恒 ok:true——前端 Desk 的 confirmedStatus
+  // 锚完全信任 r.ok，若写实际失败却回 ok:true，坐席在线状态与数据库脱节（排队分配据此、悄悄错误）。
+  const err = await db
     .collection(COLLECTIONS.agentState)
     .doc(p.agentId)
     .set({ data: { status, limit, updatedAt: Date.now() } })
-    .catch(() => {})
+    .then(() => null)
+    .catch((e: any) => e || new Error('WRITE_FAIL'))
+  if (err) {
+    await notifyAlert('anomaly', 'setAgentStatus', 'WRITE_FAIL', { agentId: p.agentId })
+    return reply(200, { ok: false, error: 'WRITE_FAIL' })
+  }
   return reply(200, { ok: true })
 }
 

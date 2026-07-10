@@ -117,6 +117,20 @@ describe('客户检索与画像（黄金 §十三）', () => {
     expect(JSON.stringify(r.user)).not.toContain('内部字段')
     expect((await post('getUser', SUPER, { openid: 'oNobody' })).user).toBeNull()
   })
+
+  it('大白话：DB 查询异常不再被并入「真无档」——单独回 ok:false USER_LOOKUP_FAIL；真查无结果仍 ok:true+user:null 不变', async () => {
+    control.setBeforeGet(({ coll }: any) => {
+      if (coll === 'users') throw new Error('MOCK_DB_FAIL')
+    })
+    const r = await post('getUser', SUPER, { openid: 'oA' })
+    control.setBeforeGet(null as never)
+    expect(r.ok).toBe(false) // 原代码 .catch(() => ({data:[]})) 把异常也回成 {ok:true,user:null}——批D 的
+    // userLoadFailed 前端分支因此永远命中不到——改后 DB 异常单独识别
+    expect(r.error).toBe('USER_LOOKUP_FAIL')
+    // 真查无结果（无异常注入）：保持 ok:true+user:null 不变
+    expect((await post('getUser', SUPER, { openid: 'oNobody' })).ok).toBe(true)
+    expect((await post('getUser', SUPER, { openid: 'oNobody' })).user).toBeNull()
+  })
 })
 
 describe('质检报表与会话检索（黄金 §六）', () => {

@@ -91,6 +91,7 @@ export function deskErrorText(e: unknown): string {
     NO_CONSENT: '顾客未同意数据共享——按规定不能看 TA 的资料',
     ALREADY_CLOSED: '会话已经结束了',
     SESSION_LOST: '登录已失效，请重新登录',
+    WRITE_FAIL: '状态没保存成功，稍后再试', // setAgentStatus 写失败不再吞（F2）
   }
   return MAP[code] || MAP[code.split(':')[0]] || '操作没成功（' + code + '）'
 }

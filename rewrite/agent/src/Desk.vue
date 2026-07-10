@@ -117,14 +117,20 @@ async function open(sessionId: string) {
 async function send() {
   const text = draft.value.trim()
   if (!text || !currentId.value || busy.value) return
+  const sid = currentId.value // 会话粒度快照（F4·同 act()/open() 治法：await 期间用户可能已切会话——若不快照，
+  // A 发送在途时切到 B 并打新草稿，A 的回包落地会用 currentId.value（此刻已是 B）误清掉 B 正在打的字）
   busy.value = true
-  const r = await post('sendAgentMessage', { sessionId: currentId.value, text })
-  busy.value = false
-  if (r.ok) {
-    draft.value = '' // 只有发成功才清输入框（旧线 95018 教训：失败清框=顾客话丢了）
-    void pollThread()
-  } else {
-    message.value = deskErrorText(r.error)
+  const r = await post('sendAgentMessage', { sessionId: sid, text })
+  busy.value = false // 无条件复位（不受 sid 复核约束）：否则切会话后发送按钮永久卡死不可用
+  if (currentId.value === sid) {
+    // 期间已切别的会话——以下 UI 效果不落地：不清掉新会话正在打的字（open() 切会话时已清过旧草稿，
+    // 框里现在是新会话的新字，这里「不清」正是期望行为，不是遗漏）、不把旧会话的失败提示标到新会话上
+    if (r.ok) {
+      draft.value = '' // 只有发成功才清输入框（旧线 95018 教训：失败清框=顾客话丢了）
+      void pollThread()
+    } else {
+      message.value = deskErrorText(r.error)
+    }
   }
 }
 

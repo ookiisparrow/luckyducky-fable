@@ -157,9 +157,15 @@ function closeEditor() {
   if (snap)
     void flushSave() // 先排空任何在途 autosave（其 run 读已 null 的 edit→no-op·仅用于等排空）
       .then(() => saveDraft(snap)) // 排空后存快照·成为最后一次写（不被旧在途覆盖）
-      .then(() => {
-        void silentRefresh()
-        emit('saved')
+      .then((r) => {
+        // 消费返回值（F3·P1）：client.post 从不 reject、业务失败以 {ok:false} resolve——原 .catch(()=>{})
+        // 只兜网络异常，业务失败被静默吞掉、无提示且仍 emit('saved') 给上新向导假的「已保存」信号。
+        if (r.ok) {
+          void silentRefresh()
+          emit('saved') // 只在真保存成功时才通知父级
+        } else {
+          message.value = '关闭前有编辑未保存成功：' + String(r.error || '') + '，请重新打开该商品检查'
+        }
       })
       .catch(() => {})
 }

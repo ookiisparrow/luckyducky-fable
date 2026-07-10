@@ -234,6 +234,31 @@ describe('open() 切会话清未发草稿（B2·源码断言：钉住 Desk.vue �
   })
 })
 
+describe('send() 会话代际快照（F4·同 act()/open() 治法·源码断言）', () => {
+  it('大白话：send() 必须先快照 sid 再用 sid 发消息，回包后清 draft/message/pollThread 须用 currentId===sid 复核落地——过期回包不得清掉用户正在新会话打的字', () => {
+    const body = extractFunctionBody(scriptSetupSrc(), 'async function send() {')
+    expect(body).toMatch(/const sid = currentId\.value/)
+    // post 携带的是快照 sid，不是随时会变的 currentId.value
+    expect(body).toMatch(/post\(\s*'sendAgentMessage'\s*,\s*\{\s*sessionId:\s*sid\s*,\s*text\s*\}\s*\)/)
+    expect(body).not.toMatch(/sessionId:\s*currentId\.value\s*,\s*text/)
+    const guardRe = /if\s*\(\s*currentId\.value === sid\s*\)\s*\{/
+    expect(body).toMatch(guardRe)
+    const guardIdx = body.search(guardRe)
+    expect(guardIdx).toBeGreaterThan(-1)
+    // 三处 UI 落地效果须落在复核 if 之内
+    const draftClearIdx = body.indexOf("draft.value = ''")
+    const pollIdx = body.indexOf('void pollThread()')
+    const messageAssignIdx = body.indexOf('message.value = deskErrorText(r.error)')
+    expect(draftClearIdx).toBeGreaterThan(guardIdx)
+    expect(pollIdx).toBeGreaterThan(guardIdx)
+    expect(messageAssignIdx).toBeGreaterThan(guardIdx)
+    // busy 复位须无条件执行（不受 sid 复核约束）：否则切会话后发送按钮永久卡死不可用——须落在 guard 起点之前
+    const busyResetIdx = body.indexOf('busy.value = false')
+    expect(busyResetIdx).toBeGreaterThan(-1)
+    expect(busyResetIdx).toBeLessThan(guardIdx)
+  })
+})
+
 describe('act() 会话代际快照（B3·同 pollThread/open 治法·源码断言）', () => {
   it('大白话：act() 必须先快照 sid 再用 sid 请求，回包后的 UI 效果须用 currentId===sid 复核才落地——过期回包不得清掉/标错正在看的新会话', () => {
     const body = extractFunctionBody(scriptSetupSrc(), 'async function act(action: string) {')

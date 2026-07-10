@@ -110,3 +110,26 @@ describe('Products.vue editCourse 并入 serialSave 队列（C3·P1）', () => {
     expect(body).toMatch(/edit\.value\.courseId = cid/) // 既有行为保留：先同步快照 courseId
   })
 })
+
+describe('Products.vue closeEditor 补存失败不静默（F3·P1·bug 清除战役II）', () => {
+  it('大白话：关闭前的最后快照补存必须消费返回值——失败给提示且不 emit(saved)；只有真保存成功才 emit(saved)', () => {
+    const body = extractFunctionBody(scriptSetupSrc(productsSrc), 'function closeEditor() {')
+    // then 回调须带上 r（消费返回值，不是原来那种不带参数、无条件 emit 的写法）
+    const thenRe = /\.then\(\(r\)\s*=>\s*\{/
+    expect(body).toMatch(thenRe)
+    const thenIdx = body.search(thenRe)
+    const okBranchRe = /if\s*\(\s*r\.ok\s*\)\s*\{/
+    expect(body).toMatch(okBranchRe)
+    const okBranchIdx = body.search(okBranchRe)
+    expect(okBranchIdx).toBeGreaterThan(thenIdx)
+    const elseIdx = body.indexOf('} else {', okBranchIdx)
+    expect(elseIdx).toBeGreaterThan(okBranchIdx)
+    const emitIdx = body.indexOf("emit('saved')", okBranchIdx)
+    expect(emitIdx).toBeGreaterThan(okBranchIdx)
+    expect(emitIdx).toBeLessThan(elseIdx) // emit 只落在成功分支内
+    const messageIdx = body.indexOf('message.value =', elseIdx)
+    expect(messageIdx).toBeGreaterThan(elseIdx) // 失败分支给出提示，不静默
+    // 旧写法（.then 不带参数、无条件 emit）不再存在
+    expect(body).not.toMatch(/\.then\(\(\)\s*=>\s*\{\s*void silentRefresh/)
+  })
+})
