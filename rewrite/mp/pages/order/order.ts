@@ -35,6 +35,10 @@ Page({
   },
   orderId: '',
   _seq: 0, // reload 代次·丢弃过期回包（onShow/取消/支付/确认收货多触发点并发·慢回包别把横幅盖回过期态）
+  unloaded: false, // 页面已退出标记（同 checkout/review 范式·bug sweep II 批E）：onPay/onAfterSale 回包在途用户退出详情页，迟到回包不再对已退页 toast/reload/导航
+  onUnload() {
+    this.unloaded = true
+  },
   onShow() {
     void this.reload()
   },
@@ -88,6 +92,7 @@ Page({
       success: async (res) => {
         if (!res.confirm) return
         const r = await cancelOrder(this.orderId)
+        if (this.unloaded) return // await 恢复点复核（bug sweep II 批E round2）：用户已退出详情页——非钱副作用，静默收尾即可
         wx.showToast({ title: r.ok ? '订单已取消' : '取消没成功，稍后再试', icon: r.ok ? 'success' : 'none' })
         void this.reload() // 横幅按映射自动翻 closed
       },
@@ -95,6 +100,13 @@ Page({
   },
   async onPay() {
     const outcome = mapPayResult(await pay(this.orderId))
+    // await 恢复点复核（同 checkout startPay 范式·bug sweep II 批E）：用户在支付发起在途退出详情页，迟到回包
+    // 不再对已退页 toast/reload/拉起支付授权框——订单已在云端，用户下次重新打开详情页续付即可。requestPayment 的
+    // success/fail 回调内不加同款复核：授权框是模态、卸载窗口小，无需评估。
+    if (this.unloaded) {
+      wx.showToast({ title: '订单已保留，可到订单列表继续支付', icon: 'none' })
+      return
+    }
     if (outcome.kind === 'paid') {
       wx.showToast({ title: '已支付', icon: 'success' })
       void this.reload()
@@ -121,6 +133,7 @@ Page({
       success: async (res) => {
         if (!res.confirm) return
         const r = await confirmReceive(this.orderId)
+        if (this.unloaded) return // await 恢复点复核（bug sweep II 批E round2）：用户已退出详情页——非钱副作用，静默收尾即可
         wx.showToast({ title: r.ok ? '已确认收货' : '操作没成功，稍后再试', icon: r.ok ? 'success' : 'none' })
         void this.reload()
       },
@@ -137,6 +150,7 @@ Page({
     if (!vm) return
     // 该单已申请过的行（入口收窄·最终裁决在云端）：从我的售后里筛本单
     const asRes = await getMyAfterSales()
+    if (this.unloaded) return // await 恢复点复核（bug sweep II 批E）：用户已退出详情页——非钱副作用，静默收尾即可
     const appliedIds = asRes.ok ? mapAfterSales(asRes.list).filter((a) => a.orderId === vm.id).map((a) => a.lineId) : []
     const eligible = applicableLines(vm.status, vm.items, appliedIds)
     if (!eligible.length) {
@@ -154,6 +168,7 @@ Page({
           success: async (m) => {
             if (!m.confirm) return
             const r = await applyRefund(vm.id, line.lineId, String(m.content || ''))
+            if (this.unloaded) return // await 恢复点复核（bug sweep II 批E）：用户已退出详情页——申请已真实提交，非钱副作用，静默收尾即可（不再对已退页 toast/导航）
             if (r.ok) {
               wx.showToast({ title: '已提交申请', icon: 'success' })
               // order↔aftersales 互跳环无叠栈守卫（P3·bug sweep Round2 item6·同 detail.ts onTapRec 范式）：

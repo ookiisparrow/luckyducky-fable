@@ -4600,6 +4600,42 @@ export const repoChecks = [
     },
   },
   {
+    // await 恢复点后执行导航/支付副作用却无 this.unloaded 复核（病根#5 样板复制即漂移·根因#8 真机才炸）：本战役
+    // 第 5+ 次同类（checkout 批A 已修 onSubmit/startPay·本批 order-list/order/welcome 再修 4 处）——按元模式满三条
+    // 同类须收敛成机器守卫。点名制清单（非 span 推断·错题本 E8 提醒的边界绕过风险在此不适用）：某方法体内首个
+    // await 之后须出现 this.unloaded 复核；不做精细逐 await 静态分析，多 await 方法只要求存在复核即可（勿过度精细，
+    // 同批规格纪律，精细版见 rw-mp-navback-timer-cleaned 的 backTimer 专项）。
+    id: 'rw-mp-await-side-effect-unloaded-recheck',
+    roots: ['#5', '#8'],
+    desc: 'mp await 恢复点后导航/支付副作用须先复核 this.unloaded（病根#5 样板复制即漂移·根因#8 真机才炸）：点名清单——checkout.ts{onSubmit,startPay}、order-list.ts{onPay,onConfirm,onCancel}、order.ts{onPay,onAfterSale,onConfirm,onCancel}、welcome.ts{onEnter}——各方法体内首个 await 之后须出现 this.unloaded 复核（indexOf(\'await\') < indexOf(\'this.unloaded\')，多 await 方法只要求存在复核即可不做逐 await 精细判），否则用户在 await 期间退出页面，迟到回包仍对已退页 toast/reload/redirectTo/拉起支付授权框（真机才炸，工具端不暴露）',
+    run() {
+      const targets = [
+        { file: 'rewrite/mp/pages/checkout/checkout.ts', methods: ['onSubmit', 'startPay'] },
+        { file: 'rewrite/mp/pages/order-list/order-list.ts', methods: ['onPay', 'onConfirm', 'onCancel'] },
+        { file: 'rewrite/mp/pages/order/order.ts', methods: ['onPay', 'onAfterSale', 'onConfirm', 'onCancel'] },
+        { file: 'rewrite/mp/pages/welcome/welcome.ts', methods: ['onEnter'] },
+      ]
+      const bad = []
+      for (const t of targets) {
+        const abs = join(ROOT, t.file)
+        if (!existsSync(abs)) continue // 重写线未建时不红
+        const src = stripComments(readFileSync(abs, 'utf8')) // 剥注释单源 helper（错题本 E1）：防注释文本假触发/假放行
+        for (const name of t.methods) {
+          const body = methodBody(src, name)
+          if (!body) {
+            bad.push(`${t.file} 找不到 ${name} 方法——await 恢复点复核点名清单点名方法丢失（根因#8）`)
+            continue
+          }
+          const awaitAt = body.indexOf('await')
+          const checkAt = body.indexOf('this.unloaded')
+          if (awaitAt < 0 || checkAt < 0 || checkAt < awaitAt)
+            bad.push(`${t.file} 方法 ${name} 里 await 恢复点后缺 this.unloaded 复核——用户退页后迟到回包仍对已退页导航/toast/拉起支付（病根#5·根因#8）`)
+        }
+      }
+      return bad
+    },
+  },
+  {
     id: 'rw-mp-address-region-picker',
     roots: ['#8'],
     desc: 'mp 地址地区用原生省市区级联 picker（非自由文本·根因#8·C 类竖切）：rewrite/mp/pages/address-edit/address-edit.wxml 的「所在地区」须用 <picker mode="region">、不得回退自由文本 <input data-field="region">——自由文本丢省市区级联约束、易入脏地址（真机才暴露收货问题）',
