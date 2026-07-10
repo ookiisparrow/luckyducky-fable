@@ -1,4 +1,5 @@
 import { reply, sha, ensure, str, type Ctx } from '../lib'
+import { notifyAlert } from '../../../kit'
 
 // 外包账号管理（后台360工作站 §1.5·B5.2·承面C 车道 C·根因#3）：商户超管建/停/列外包坐席账号
 // （adminConfig 多账号·role=outsourced 最小权·checkKey 据 keyHash 认账号 + disabled 停用·骨架已在 lib.ts）。
@@ -53,13 +54,28 @@ export async function createAgent({ db, data }: Ctx) {
   // 绝不留双凭证）。管理端低频操作，多一次读的代价可接受。
   const keyDup = await db.collection('adminConfig').where({ keyHash }).get().catch(() => ({ data: [] }))
   if ((keyDup.data || []).length > 1) {
-    await db.collection('adminConfig').doc(id).remove().catch(() => {})
+    // 回滚失败留痕（N3·bug 清除战役 II 遗留·病根14）：双凭证残留属身份安全面（两账号共享同一 keyHash 能登录串号）
+    // ——只加信号，返回语义/控制流零变化（原 409 回复不变）。
+    await db
+      .collection('adminConfig')
+      .doc(id)
+      .remove()
+      .catch(async () => {
+        await notifyAlert('security', 'createAgent', 'ROLLBACK_FAIL', { id, which: 'keyHash' })
+      })
     return reply(409, { ok: false, error: 'KEY_TAKEN' })
   }
   if (wecomUserId) {
     const wDup = await db.collection('adminConfig').where({ wecomUserId }).get().catch(() => ({ data: [] }))
     if ((wDup.data || []).length > 1) {
-      await db.collection('adminConfig').doc(id).remove().catch(() => {})
+      // 回滚失败留痕（N3）：双凭证残留（两账号共享同一企微 userid→免登歧义）属身份安全面。
+      await db
+        .collection('adminConfig')
+        .doc(id)
+        .remove()
+        .catch(async () => {
+          await notifyAlert('security', 'createAgent', 'ROLLBACK_FAIL', { id, which: 'wecomUserId' })
+        })
       return reply(409, { ok: false, error: 'WECOM_ID_TAKEN' })
     }
   }

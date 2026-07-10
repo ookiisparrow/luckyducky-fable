@@ -14,6 +14,7 @@ import UiButton from '../components/ui/Button.vue'
 
 // 会话失效导登录由 client.onSessionLost 集中处理（单源·根因#5）——本页不再自持 router
 const list = ref<any[]>([])
+const total = ref<number | null>(null) // 账本真实总数（N2·bug 清除战役 II 遗留）：与 list.length 分开——list 受 limit 截断，total 是同 filter 全量
 const message = ref('加载中…')
 const busy = ref(false)
 const filter = ref<'open' | 'resolved' | 'all'>('open')
@@ -64,6 +65,7 @@ async function load() {
   if (listGen.isStale(my)) return // 已切别 chip·丢弃过期异常账本
   if (r.error === 'SESSION_LOST') return // 会话失效集中导登录（client.onSessionLost·单源·根因#5）
   list.value = r.list || []
+  total.value = typeof r.total === 'number' ? r.total : null
   message.value = r.ok ? '' : '加载失败：' + String(r.error || '')
 }
 
@@ -118,6 +120,11 @@ onMounted(load)
         <KpiCard label="高危" :value="highCount" :icon="AlertTriangle" :tone="highCount > 0 ? 'red' : 'neutral'" />
         <KpiCard label="累计触发" :value="totalHits" :icon="Activity" />
       </div>
+
+      <!-- 账本总数提示（N2·仅当总数超出本视图截断条数时显示，不动既有 4 张 KPI 卡布局） -->
+      <p v-if="total != null && total > list.length" class="ld-status">
+        账本共 {{ total }} 条 · 本视图按 lastSeen 前 {{ list.length }} 条（处理后重载会顶上更早的）
+      </p>
 
       <!-- 异常账本（行卡·级别条 + kind/code/高危/次数 徽章 + ctx + meta + 两步确认标记已处理） -->
       <div class="ledger">

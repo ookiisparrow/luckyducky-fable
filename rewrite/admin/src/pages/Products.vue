@@ -145,6 +145,8 @@ function markLoaded() {
 }
 function closeEditor() {
   openEditGen++ // 使任何仍在等 silentRefresh 回包的 openEdit 调用作废——不得在关闭后悄悄把编辑器重新弹开（同上代际守卫）
+  const myGen = openEditGen // 快照本次关闭的代际（N1·bug 清除战役 II 遗留）：异步链 resolve 前用户可能已 openEdit 打开另一件商品，
+  // 失败提示不得晚落地误标到新开的编辑器屏上——照 openEdit/silentRefresh 既有代际模式。
   if (saveTimer) {
     clearTimeout(saveTimer)
     saveTimer = null
@@ -164,7 +166,8 @@ function closeEditor() {
           void silentRefresh()
           emit('saved') // 只在真保存成功时才通知父级
         } else {
-          message.value = '关闭前有编辑未保存成功：' + String(r.error || '') + '，请重新打开该商品检查'
+          // 代际锚（N1）：只在仍是本次关闭发起的这一代时才写失败提示——期间若已 openEdit(B)，A 的失败文案不得标到 B 屏上。
+          if (openEditGen === myGen) message.value = '关闭前有编辑未保存成功：' + String(r.error || '') + '，请重新打开该商品检查'
         }
       })
       .catch(() => {})

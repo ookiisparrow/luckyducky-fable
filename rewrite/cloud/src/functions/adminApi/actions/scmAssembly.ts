@@ -1,5 +1,5 @@
 import { reply, str, type Ctx } from '../lib'
-import { applyStockMoves, produceStock, listMaterialDocs } from '../../../kit'
+import { applyStockMoves, produceStock, listMaterialDocs, notifyAlert } from '../../../kit'
 import { COLLECTIONS } from '@ldrw/shared'
 import { resolveBom } from '@ldrw/shared'
 
@@ -61,7 +61,14 @@ export async function runAssembly({ db, data, agentId }: Ctx) {
     { docType: 'assembly_out', docId: assemblyId, operator }
   )
   if (!out.ok) {
-    await coll.doc(assemblyId).remove().catch(() => undefined)
+    // 撤 claim 失败留痕（N3·bug 清除战役 II 遗留·病根14）：失败会留孤 claim 文档，重试永远撞 DUPLICATE
+    // （库存没扣却被判已执行）——只加信号，返回语义/控制流零变化（原 409/400 回复不变）。
+    await coll
+      .doc(assemblyId)
+      .remove()
+      .catch(async () => {
+        await notifyAlert('anomaly', 'runAssembly', 'CLAIM_ROLLBACK_FAIL', { assemblyId })
+      })
     return reply(out.error === 'INSUFFICIENT' ? 409 : 400, { ok: false, error: out.error, materialId: out.materialId })
   }
 
