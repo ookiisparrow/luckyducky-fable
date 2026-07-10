@@ -4981,6 +4981,45 @@ export const repoChecks = [
     },
   },
   {
+    // 抽屉壳层 CSS 单源（批2 refactor·病根#5 样板复制即漂移）：Orders/Batches/Refunds 三页抽屉段
+    // 并非整段一致（.drawer 本体宽度 420/400px、.drawer-oid/.drawer-bid 各页专属字段、.drawer-close
+    // 圆角/disabled 态仅 Orders 有，均刻意保留页内），但 .drawer-mask / .drawer-head / .drawer-title /
+    // @keyframes slidein 四块三页逐字节一致——同 .ld-thead 全局先例收敛进 styles/console.css 单源，
+    // 三页删除这四块定义。本守卫逐块钉住不许再在页面 <style> 裸写这四块任一选择器/规则定义（防复辟，
+    // 病根#5「样板复制即漂移」——只守其中一块会漏另外三块被裸写回页面的回归），同时
+    // 反向核 console.css 必须四块齐全（防两头皆无假绿）。
+    id: 'rw-admin-drawer-single-source',
+    roots: ['#5'],
+    desc: '抽屉壳层 CSS 单源（批2 refactor·病根#5）：rewrite/admin/src/pages/*.vue 不得出现 `.drawer-mask`/`.drawer-head`/`.drawer-title`/`@keyframes slidein` 任一选择器/规则定义（公共段单源 styles/console.css，各页 .drawer 尺寸差异等页面特有段仍留页内不动）；且 styles/console.css 须四块齐全（防两头皆无假绿）',
+    run() {
+      const bad = []
+      const patterns = [
+        [/\.drawer-mask\s*\{/, '.drawer-mask'],
+        [/\.drawer-head\s*\{/, '.drawer-head'],
+        [/\.drawer-title\s*\{/, '.drawer-title'],
+        [/@keyframes\s+slidein\s*\{/, '@keyframes slidein'],
+      ]
+      const dir = join(ROOT, 'rewrite/admin/src/pages')
+      if (existsSync(dir)) {
+        for (const f of readdirSync(dir)) {
+          if (!f.endsWith('.vue')) continue
+          const src = readFileSync(join(dir, f), 'utf8')
+          for (const [re, label] of patterns) {
+            if (re.test(src))
+              bad.push(`rewrite/admin/src/pages/${f} 仍裸写 ${label} 选择器/规则定义——抽屉壳层公共段单源在 styles/console.css（病根#5）`)
+          }
+        }
+      }
+      const cssPath = join(ROOT, 'rewrite/admin/src/styles/console.css')
+      const css = existsSync(cssPath) ? readFileSync(cssPath, 'utf8') : ''
+      for (const [re, label] of patterns) {
+        if (!re.test(css))
+          bad.push(`rewrite/admin/src/styles/console.css 缺 ${label} 定义——抽屉壳层公共段单源应在此（防两头皆无假绿）`)
+      }
+      return bad
+    },
+  },
+  {
     // 危险 armed 态随数据刷新必须复位（批3 规格 bug sweep Round1·根因#8「构建过≠真能用」）：两步确认/
     // 危险动作的「已武装」态（confirmKey/confirmId/clearConfirmId/publishConfirm/runConfirm/pubConfirm…）
     // 若在 load()/reload() 类刷新函数里不复位，切标签/切课/切单/翻页/动作后自动刷新会让旧武装态残留在

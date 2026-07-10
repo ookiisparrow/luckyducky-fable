@@ -477,15 +477,7 @@ onMounted(reload)
   color: var(--ld-content-2);
 }
 
-/* 决策抽屉（本页独有浮层·web 端无需 touchmove 锁） */
-.drawer-mask {
-  position: fixed;
-  inset: 0;
-  background: rgba(20, 15, 30, 0.28);
-  display: flex;
-  justify-content: flex-end;
-  z-index: 40;
-}
+/* 决策抽屉（本页独有浮层·web 端无需 touchmove 锁；壳层公共段单源在 styles/console.css·病根#5） */
 .drawer {
   width: 420px;
   max-width: 94vw;
@@ -498,26 +490,6 @@ onMounted(reload)
   gap: 14px;
   overflow-y: auto;
   animation: slidein 0.18s ease;
-}
-@keyframes slidein {
-  from {
-    transform: translateX(24px);
-    opacity: 0.6;
-  }
-  to {
-    transform: translateX(0);
-    opacity: 1;
-  }
-}
-.drawer-head {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-}
-.drawer-title {
-  font-size: 18px;
-  font-weight: 700;
-  color: var(--ld-ink);
 }
 .drawer-oid {
   margin-top: 4px;

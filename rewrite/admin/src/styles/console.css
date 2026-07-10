@@ -136,3 +136,34 @@ body {
 .ld-td.grow {
   flex: 1;
 }
+
+/* 抽屉壳层公共段单源（Orders/Batches/Refunds 三页逐字节一致的子集·批2 refactor·病根#5）：
+ * .drawer 本体宽度/gap 等尺寸差异是各页刻意保留、留在页内不动，这里只收敛真一致的四块。 */
+.drawer-mask {
+  position: fixed;
+  inset: 0;
+  background: rgba(20, 15, 30, 0.28);
+  display: flex;
+  justify-content: flex-end;
+  z-index: 40;
+}
+@keyframes slidein {
+  from {
+    transform: translateX(24px);
+    opacity: 0.6;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+.drawer-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+}
+.drawer-title {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--ld-ink);
+}
