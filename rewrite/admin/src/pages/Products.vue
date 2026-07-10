@@ -426,6 +426,13 @@ function delKit(i: number) {
   if (edit.value) (edit.value.kit as unknown[]).splice(i, 1)
 }
 
+// 模板内 `as { a: string; b: string }[]` 型断言会让 vue 模板表达式解析器把内部分号误读——
+// 收进 script 的 typed computed 访问器（返回同一数组引用，v-model 直改元素属性不受影响·行为零变化，批4）。
+type DetailSection = { lead: string; body: string }
+type KitItem = { icon: string; name: string; qty: string }
+const detailSections = computed(() => (edit.value?.detailSections ?? []) as DetailSection[])
+const kitItems = computed(() => (edit.value?.kit ?? []) as KitItem[])
+
 // 上架前缺项预检（1:1 旧 Wizard missing·换皮退成事后报错）：封面/名称/价格/有效规格四项必备。
 // basicsMissing 单源（向导上架闸与本页预检同口径·守卫 rw-admin-products-ui-golden）。
 const missing = computed(() => (edit.value ? basicsMissing(edit.value) : []))
@@ -576,17 +583,17 @@ onMounted(async () => {
       <UiButton variant="ghost" size="sm" :disabled="(edit.params as unknown[]).length >= 8" @click="addParam">＋ 加参数</UiButton>
 
       <h4>详情段落（≤4）</h4>
-      <div v-for="(d, i) in (edit.detailSections as { lead: string; body: string }[])" :key="i" class="secrow">
+      <div v-for="(d, i) in detailSections" :key="i" class="secrow">
         <div class="secrow-head">
           <input v-model="d.lead" placeholder="小标题" maxlength="30" />
           <button class="icon-btn" title="删除该段落" @click="delSection(i)"><Trash2 :size="14" :stroke-width="1.8" /></button>
         </div>
         <textarea v-model="d.body" placeholder="段落正文" maxlength="200" rows="2" />
       </div>
-      <UiButton variant="ghost" size="sm" :disabled="(edit.detailSections as unknown[]).length >= 4" @click="addSection">＋ 加段落</UiButton>
+      <UiButton variant="ghost" size="sm" :disabled="detailSections.length >= 4" @click="addSection">＋ 加段落</UiButton>
 
       <h4>材料清单（≤8）</h4>
-      <div v-for="(k, i) in (edit.kit as { icon: string; name: string; qty: string }[])" :key="i" class="kvrow">
+      <div v-for="(k, i) in kitItems" :key="i" class="kvrow">
         <select v-model="k.icon" class="kit-icon" title="图标">
           <option v-for="ic in KIT_ICONS" :key="ic" :value="ic">{{ ic }}</option>
         </select>
@@ -594,7 +601,7 @@ onMounted(async () => {
         <input v-model="k.qty" placeholder="数量（如 1 包 50g）" maxlength="14" />
         <button class="icon-btn" title="删除该材料" @click="delKit(i)"><Trash2 :size="14" :stroke-width="1.8" /></button>
       </div>
-      <UiButton variant="ghost" size="sm" :disabled="(edit.kit as unknown[]).length >= 8" @click="addKit">＋ 加材料</UiButton>
+      <UiButton variant="ghost" size="sm" :disabled="kitItems.length >= 8" @click="addKit">＋ 加材料</UiButton>
 
       <!-- 上架前缺项预检（换皮退成事后报错·1:1 旧 Wizard missing） -->
       <p v-if="missing.length" class="preflight">上架还差：<b>{{ missing.join('、') }}</b>（补齐保存后到列表点「上架」）</p>

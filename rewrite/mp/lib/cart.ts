@@ -62,6 +62,12 @@ function save(): void {
 
 const keyOf = (id: string, sku: string) => (it: CartItem) => it.id === id && it.sku === (sku || '')
 
+/** 行唯一键（wx:key 用·批5）：id+sku 双键合成——单用 id 会撞 key（同商品不同规格各成独立行，见文件头行身份注释）。
+ *  仅在视图层派生（getItems 返回值），不进持久化 schema。 */
+export function lineIdOf(id: string, sku: string): string {
+  return id + '__' + (sku || '')
+}
+
 /** 加购：同 id+sku 合并 +1，否则新建一行（数量 1·默认选中）。 */
 export function add(p: { id: string; sku?: string; name: string; tag?: string; price: number; was?: number; cover?: string }): void {
   const list = load()
@@ -103,8 +109,8 @@ export function toggleAll(): void {
   save()
 }
 
-export function getItems(): CartItem[] {
-  return load().map((it) => ({ ...it }))
+export function getItems(): Array<CartItem & { lineId: string }> {
+  return load().map((it) => ({ ...it, lineId: lineIdOf(it.id, it.sku) }))
 }
 
 export const isEmpty = (): boolean => load().length === 0

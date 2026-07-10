@@ -12,6 +12,7 @@ export interface DraftLine {
   price: number // 元
   qty: number
   cover: string
+  lineId: string // 行唯一键（wx:key 用·批5）：id+sku 双键合成，同 cart.lineIdOf 口径
 }
 
 let draftItems: DraftLine[] = []
@@ -21,12 +22,13 @@ export function prepareFromCart(): void {
   draftItems = cart
     .getItems()
     .filter((it) => it.selected)
-    .map((it) => ({ id: it.id, sku: it.sku, name: it.name, tag: it.tag, price: it.price, qty: it.qty, cover: it.cover }))
+    .map((it) => ({ id: it.id, sku: it.sku, name: it.name, tag: it.tag, price: it.price, qty: it.qty, cover: it.cover, lineId: it.lineId }))
   fromCart = true
 }
 
 export function prepareBuyNow(p: { id: string; sku?: string; name: string; tag?: string; price: number; cover?: string }): void {
-  draftItems = [{ id: p.id, sku: p.sku || '', name: p.name, tag: p.tag || '', price: p.price, qty: 1, cover: p.cover || '' }]
+  const sku = p.sku || ''
+  draftItems = [{ id: p.id, sku, name: p.name, tag: p.tag || '', price: p.price, qty: 1, cover: p.cover || '', lineId: cart.lineIdOf(p.id, sku) }]
   fromCart = false
 }
 
@@ -40,7 +42,7 @@ export function toggleAddon(addonId: string): void {
   if (!a) return
   const i = draftItems.findIndex((l) => l.id === addonId)
   if (i >= 0) draftItems.splice(i, 1)
-  else draftItems.push({ id: a.id, sku: '', name: a.name, tag: '搭配购', price: a.price, qty: 1, cover: '' })
+  else draftItems.push({ id: a.id, sku: '', name: a.name, tag: '搭配购', price: a.price, qty: 1, cover: '', lineId: cart.lineIdOf(a.id, '') })
 }
 
 /** 金额汇总（分整数·与云端 createOrder 同式：应付 = max(0, 商品 + 运费 − 券)）。 */

@@ -2,7 +2,7 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest'
 import { control } from 'wx-server-sdk'
 import { main as adminApi, registries } from '../src/functions/adminApi/index'
-import { sha } from '../src/functions/adminApi/lib'
+import { sha, kdf, keyMatches } from '../src/functions/adminApi/lib'
 import { shouldAudit, recordAudit } from '../src/kit'
 
 const post = (payload: Record<string, unknown>, ip = '1.1.1.1') =>
@@ -61,6 +61,57 @@ describe('首登引导与口令闸（黄金 admin-misc §三·关抢占窗口）
     expect(JSON.stringify(doc)).not.toContain(token) // 明文不落盘
     expect(doc.sessions[0].hash).toBe(sha(token))
   })
+})
+
+describe('口令加盐 KDF（批6·admin 口令 sha256 无盐 → scrypt·带 legacy 无缝迁移·根因#13/#3）', () => {
+  it('大白话①：legacy sha 账号（存量·无 keySalt）正确口令登录成功，且就地升级为带盐——升级后裸 sha 值不再是当前 keyHash', async () => {
+    seedSuper() // legacy 预置：keyHash = sha(key)，无 keySalt
+    const r = await post({ action: 'login', key: 'super-secret-key' })
+    expect(r.statusCode).toBe(200)
+    const doc = control.dump('adminConfig').find((a: any) => a._id === 'auth')
+    expect(doc.keySalt).toBeTruthy() // 首次登录后就地升级为带盐
+    expect(keyMatches(doc, 'super-secret-key')).toBe(true) // 盐感知比对认得出真口令
+    expect(doc.keyHash).not.toBe(sha('super-secret-key')) // 旧 sha 值不再等于升级后的 keyHash
+    // 升级后仍能用同一口令再次登录（新 keyHash 路径通·不锁死账号）
+    expect((await post({ action: 'login', key: 'super-secret-key' })).statusCode).toBe(200)
+  })
+
+  it('大白话②：带盐账号（已升级/新建）正确口令过、错口令拒', async () => {
+    const salt = 'preset-salt-1'
+    control.seed('adminConfig', [{ _id: 'auth', keySalt: salt, keyHash: kdf('salted-key-1', salt), role: 'superadmin' }])
+    expect((await post({ action: 'login', key: 'salted-key-1' })).statusCode).toBe(200)
+    expect((await post({ action: 'login', key: 'wrong-salted-key' })).statusCode).toBe(401)
+  })
+
+  it('大白话③：bootstrap 首登建号即带盐（非无盐 sha256）', async () => {
+    process.env.ADMIN_BOOTSTRAP_KEY = 'deploy-secret-kdf'
+    const ok = await post({ action: 'login', key: 'deploy-secret-kdf' }, '6.6.6.6')
+    expect(ok.statusCode).toBe(200)
+    const doc = control.dump('adminConfig').find((a: any) => a._id === 'auth')
+    expect(doc.keySalt).toBeTruthy()
+    expect(doc.keyHash).not.toBe(sha('deploy-secret-kdf'))
+    expect(keyMatches(doc, 'deploy-secret-kdf')).toBe(true)
+  })
+
+  it('大白话④：多账号场景——非超管账号 legacy 与带盐各一档，查找路径都通（有界扫描盐感知比对单源）', async () => {
+    const salt = 'preset-salt-2'
+    control.seed('adminConfig', [
+      { _id: 'auth', keyHash: sha('boss-key'), role: 'superadmin' },
+      { _id: 'agent-legacy', keyHash: sha('legacy-agent-key'), role: 'outsourced', name: '旧号' },
+      { _id: 'agent-salted', keySalt: salt, keyHash: kdf('salted-agent-key', salt), role: 'outsourced', name: '新号' },
+    ])
+    const legacyLogin = await post({ action: 'login', key: 'legacy-agent-key' })
+    expect(legacyLogin.statusCode).toBe(200)
+    expect(bodyOf(legacyLogin).agentId).toBe('agent-legacy')
+    const saltedLogin = await post({ action: 'login', key: 'salted-agent-key' })
+    expect(saltedLogin.statusCode).toBe(200)
+    expect(bodyOf(saltedLogin).agentId).toBe('agent-salted')
+    // legacy 命中同样就地升级
+    expect(control.dump('adminConfig').find((a: any) => a._id === 'agent-legacy').keySalt).toBeTruthy()
+  })
+
+  // ⑤ 会话令牌路径不受影响：见上方「会话令牌（黄金 kit-security §C）」既有用例（未弱化·未改动）——
+  // 令牌 sha(token) 与口令加盐是两条独立链路（§设计钉死：会话令牌非口令，不接入 kdf）。
 })
 
 describe('认证频控（黄金 kit-security §F·per-IP + 全局兜底）', () => {

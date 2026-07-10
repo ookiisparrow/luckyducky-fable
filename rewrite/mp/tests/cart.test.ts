@@ -36,6 +36,17 @@ describe('行身份与加购（黄金 §一）', () => {
     expect(cart.getItems()[0].qty).toBe(1) // 数量钳位 ≥1
   })
 
+  it('大白话：lineId（wx:key 用·批5）＝id+sku 双键合成——同 id 异 sku 不撞、同 id+sku 唯一稳定', () => {
+    cart.add(DUCK)
+    cart.add({ ...DUCK, sku: '云朵白', price: 138 })
+    const items = cart.getItems()
+    const ids = items.map((i) => i.lineId)
+    expect(new Set(ids).size).toBe(2) // 同 id 异 sku 不撞 key
+    expect(items.find((i) => i.sku === '')!.lineId).toBe('p1__')
+    expect(items.find((i) => i.sku === '云朵白')!.lineId).toBe('p1__云朵白')
+    expect(cart.lineIdOf('p1', '')).toBe('p1__')
+  })
+
   it('大白话：选中计数/合计只算选中项；合计分累加不漂且恒两位小数', () => {
     cart.add({ id: 'a', name: '甲', price: 19.99 }) // 19.99×100 浮点=1998.9999999999998
     cart.add({ id: 'b', name: '乙', price: 0.07 }) // 0.07×100 浮点=7.000000000000001

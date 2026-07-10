@@ -1,6 +1,19 @@
 import crypto from 'crypto'
-import { str } from '../../kit'
+import { str, notifyAlert } from '../../kit'
 export { str } // 供 action 模块复用（saveCard / saveHomeContent 等截断）
+
+// 账号有界扫描命中上限告警（P2 评审·根因#7 分页协议纪律的账号扫描版）：keyHash 加盐后多账号查找从
+// 「等值精确查询」退化为「limit(N) 有界扫描 + 客户端逐条比对」（checkKey 多账号分支、createAgent 撞口令
+// 预检①/写后复核②，见 keyMatches 单源三处调用点）——一旦 adminConfig 带 keyHash 的账号总数超过扫描上限，
+// 候选窗口可能装不下目标账号，导致合法口令静默登录失败 / 撞口令回滚安全网形同虚设，且此前无任何信号。
+// fail-soft：只在命中上限时留痕告警，不改变扫描本身的返回值/控制流。
+export function alertIfScanAtCap(rows: any[], limit: number, fn: string): void {
+  if (Array.isArray(rows) && rows.length >= limit) {
+    // fp:fn 细分去重键（recordAnomaly 契约·见 kit/anomaly.ts）——三处调用点各自留痕，不被同 kind+code
+    // 的指纹去重合并成一条（否则只看得到「某处顶到上限」，看不出是哪个扫描点）。
+    notifyAlert('security', fn, 'ACCOUNT_SCAN_AT_CAP', { limit, fp: fn }).catch(() => {})
+  }
+}
 
 // adminApi 共享件（HTTP 响应 / 口令 / 白名单清洗 / 云存储 / manager-node）。
 // 各 action 收 Ctx（db/cloud/data/drafts），不各自 init——db 由 index.ts 经 kit.getDb 提供。
@@ -22,6 +35,20 @@ export const CORS = {
 }
 export const reply = (statusCode: number, data: any) => ({ statusCode, headers: CORS, body: JSON.stringify(data) })
 export const sha = (s: any) => crypto.createHash('sha256').update(String(s)).digest('hex')
+
+// 口令加盐 KDF（批6·根因：sha 无盐口令可离线彩虹表还原·钱/权限承重批）：新写入口令一律 salt+scrypt；
+// 存量 sha 账号 legacy 校验通过后 best-effort 就地升级（见 checkKey/createAgent）。scrypt 默认参数
+// N=16384（~16MB/数十 ms）：登录端点已有频控、建号为管理端低频操作，最坏扫描 ≤50 行也在可接受范围。
+export const newSalt = () => crypto.randomBytes(16).toString('hex')
+export const kdf = (key: string, salt: string) => crypto.scryptSync(String(key), salt, 32).toString('hex')
+
+// 盐感知口令比对单源（根因#5·防漂移）：有 keySalt 走 scrypt 比对（新写入/已升级口令）；无则 legacy
+// sha 比对（存量未升级账号）。checkKey 的多账号扫描、createAgent 的撞口令预检①与写后复核②全部改走
+// 它——一份比对逻辑，杜绝三处各写一份、盐语义漂移（预审咬中项）。
+export function keyMatches(row: any, key: string): boolean {
+  if (!row) return false
+  return row.keySalt ? kdf(key, row.keySalt) === row.keyHash : sha(key) === row.keyHash
+}
 
 export async function ensure(db: any, coll: string) {
   try {
@@ -155,26 +182,41 @@ async function resolveSession(db: any, hash: string) {
 export async function checkKey(db: any, key: any, bootstrap: boolean) {
   if (!key || String(key).length < 6) return { ok: false, error: 'KEY_TOO_SHORT' }
   await ensure(db, 'adminConfig')
-  const hash = sha(key)
+  const keyStr = String(key)
   const got = await db.collection('adminConfig').doc('auth').get().catch(() => null)
   if (!got || !got.data) {
     // 首登 bootstrap（债#15 关抢占）：无超管 doc 时·须 bootstrap + 部署密钥 ADMIN_BOOTSTRAP_KEY → 建首个超管。
+    // 批6：bootstrap 建号即带盐（新写入一律 salt+scrypt·不再落无盐 sha）。
     const secret = process.env.ADMIN_BOOTSTRAP_KEY || ''
-    if (!bootstrap || !secret || String(key) !== secret) return { ok: false, error: 'BAD_KEY' }
-    await db.collection('adminConfig').add({ data: { _id: 'auth', keyHash: hash, role: 'superadmin', caps: ['*'], createdAt: Date.now() } })
+    if (!bootstrap || !secret || keyStr !== secret) return { ok: false, error: 'BAD_KEY' }
+    const salt = newSalt()
+    await db.collection('adminConfig').add({ data: { _id: 'auth', keySalt: salt, keyHash: kdf(keyStr, salt), role: 'superadmin', caps: ['*'], createdAt: Date.now() } })
     return { ok: true, bootstrapped: true, caps: ['*'] as string[], operator: 'admin', agentId: 'admin' }
   }
-  // ① 超管 'auth' doc 命中（向后兼容：无 role 取 caps 字段·旧 ['*']）
-  if (got.data.keyHash === hash) {
+  // ① 超管 'auth' doc 命中（盐感知比对·keyMatches 单源：有 keySalt 走 scrypt，legacy 无盐走 sha·
+  // 向后兼容：无 role 取 caps 字段·旧 ['*']）。legacy 命中即 best-effort 就地升级为带盐（批6·存量账号
+  // 无感迁移·升级失败 `.catch` 吞掉、不反噬本次登录——下次登录 legacy 分支仍能兜底）。
+  if (keyMatches(got.data, keyStr)) {
     if (got.data.disabled) return { ok: false, error: 'ACCOUNT_DISABLED' }
+    if (!got.data.keySalt) {
+      const salt = newSalt()
+      await db.collection('adminConfig').doc('auth').update({ data: { keySalt: salt, keyHash: kdf(keyStr, salt) } }).catch(() => {})
+    }
     // 超管 agentId 固定 'admin'（商户本人·承面C 可 claim/setAgentStatus·稳定可读·§1.5）
     return { ok: true, operator: got.data.name || 'admin', agentId: 'admin', caps: got.data.role ? capsForRole(got.data.role) : Array.isArray(got.data.caps) ? got.data.caps : ['*'] }
   }
-  // ② B5.2 多账号：非超管·按 keyHash 查 agent/外包 账号 doc（均有 role；disabled 即停）
-  const hit = await db.collection('adminConfig').where({ keyHash: hash }).limit(1).get().catch(() => ({ data: [] }))
-  const acct = (hit && hit.data && hit.data[0]) || null
-  if (!acct) return resolveSession(db, hash) // 口令全未命中 → fallback 会话令牌（口令登录/企微免登共用·深审 P1）
+  // ② B5.2 多账号：非超管·有界扫描（手法同 resolveSession）按盐感知比对查 agent/外包 账号 doc
+  // （均有 role；disabled 即停）。最坏 ≤50 行 scrypt 比对，登录端点已有频控、可接受。
+  const _ = db.command
+  const scan = await db.collection('adminConfig').where({ keyHash: _.exists(true) }).limit(50).get().catch(() => ({ data: [] }))
+  alertIfScanAtCap((scan && scan.data) || [], 50, 'checkKey')
+  const acct = ((scan && scan.data) || []).find((r: any) => r._id !== 'auth' && keyMatches(r, keyStr)) || null
+  if (!acct) return resolveSession(db, sha(keyStr)) // 口令全未命中 → fallback 会话令牌（口令登录/企微免登共用·深审 P1）
   if (acct.disabled) return { ok: false, error: 'ACCOUNT_DISABLED' }
+  if (!acct.keySalt) {
+    const salt = newSalt()
+    await db.collection('adminConfig').doc(acct._id).update({ data: { keySalt: salt, keyHash: kdf(keyStr, salt) } }).catch(() => {})
+  }
   // 外包/坐席 agentId＝账号 _id（承面C claim 绑定/分配 scope/agentState 键·§1.5·根因#3 取认证主体非前端）
   return { ok: true, operator: acct.name || acct._id, agentId: acct._id, caps: acct.role ? capsForRole(acct.role) : Array.isArray(acct.caps) ? acct.caps : [] }
 }

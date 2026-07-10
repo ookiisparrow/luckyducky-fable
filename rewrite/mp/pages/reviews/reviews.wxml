@@ -20,6 +20,8 @@
   </view>
 
   <!-- 评价列表（游标分页·onReachBottom 追加·守卫 reviews-list-paged） -->
+  <!-- wx:key 刻意用 index（批5 预审已核）：ReviewVM 无任何唯一字段，云端 getReviews 刻意不透传 _id
+       （orderId__lineId 组合会向其他用户泄露订单信息）；该列表为追加式只读（无删除/重排），index 安全。 -->
   <view class="ld-rv-list" wx:if="{{list.length}}">
     <view class="ld-rv-item" wx:for="{{list}}" wx:key="index">
       <view class="ld-rv-item-top">

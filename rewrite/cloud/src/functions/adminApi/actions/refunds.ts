@@ -1,5 +1,5 @@
 import { toFen, asFen, fenToYuan, refundShareFen, AFTERSALE_STATUS } from '@ldrw/shared'
-import { callFlow, refundNoFor, pageQuery } from '../../../kit'
+import { callFlow, refundNoFor, pageQuery, notifyAlert } from '../../../kit'
 import { reply, ensure, activationFor, type Ctx } from '../lib'
 
 // —— 管理员越规退款（决策§26·客服端退货管理权限 refund:manage·净新增·超出旧线 92 parity）——
@@ -85,13 +85,13 @@ export async function overrideRefund({ db, data }: Ctx) {
         overridden: true, // 留痕：越规发起（对账/客诉可溯）
       },
     })
-  } catch (e) {
+  } catch (_e) {
     // add 失败必须中止、绝不接着触发真退款（P1·根因#14 修复：旧版 .catch(()=>{}) 写失败后仍 callFlow，
     // 退款回调按 outRefundNo 反查将无单）。撞键判定不靠错误类型嗅探（仓内惯例不区分 add 错误类型）：
     // 读回 doc(asId)——存在＝并发方已写（天然幂等，非故障）；不存在＝真写失败，留痕告警。
     const reread = await db.collection('afterSales').doc(asId).get().catch(() => null)
     if (reread && reread.data) return reply(409, { ok: false, error: 'CONCURRENT' })
-    console.error('overrideRefund add 写失败', asId, e)
+    await notifyAlert('money', 'overrideRefund', 'AFTERSALE_WRITE_FAIL', { id: asId })
     return reply(500, { ok: false, error: 'WRITE_FAIL' })
   }
 
@@ -102,7 +102,7 @@ export async function overrideRefund({ db, data }: Ctx) {
     amount: { refund: refundFen, total: toFen(order.amount), currency: 'CNY' },
   })
   if (!r || !(r.status || r.refund_id || r.out_refund_no)) {
-    console.error('overrideRefund 工作流未受理', asId)
+    await notifyAlert('money', 'overrideRefund', 'REFUND_TRIGGER_FAIL', { id: asId })
     // 条件回滚（同 approveRefund·仅 approved 才回 applied·防退款回调抢先 refunded 被打回二次退款）
     await db
       .collection('afterSales')
@@ -277,7 +277,7 @@ export async function approveRefund({ db, data }: Ctx) {
     },
   })
   if (!r || !(r.status || r.refund_id || r.out_refund_no)) {
-    console.error('approveRefund 工作流未受理', id)
+    await notifyAlert('money', 'approveRefund', 'REFUND_TRIGGER_FAIL', { id })
     // 条件回滚（审计 P1·防二次退款）：仅当仍是 approved 才退回 applied。callFlow 超时返 null 时微信可能已真退款，
     // 退款回调会抢先 approved→refunded；无条件 .doc().update 会把 refunded 打回 applied→可二次审批重复退款。
     // where(status:approved) 保证只回滚未被回调推进的那一笔。

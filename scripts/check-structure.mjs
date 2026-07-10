@@ -3342,6 +3342,76 @@ export const repoChecks = [
     },
   },
   {
+    // admin action 计数单源（规则⑥·病根#11·客观计数机器维护）：系统事实「admin action」行长期手抄
+    // （94＝91+3），巡检抓到真值已是 97+3=100——两个真值都动态解析、不许硬编码（硬编码=再造手抄计数，
+    // 恰是本守卫要治的病）：①ACTIONS 键数＝rewrite/cloud/src/functions/adminApi/index.ts `const ACTIONS`
+    // 花括号块（配平取块防 `}` 提前截断，同 collection-count-synced 手法）内 `键:` 行数；②pre-auth 判支数＝
+    // main() 分发处「先于 checkKey(db,key,false) 校验」的 `action === '字面量'` if 链个数（当前实现＝字面量
+    // 比对：ping/login/loginByWecomCode，非集合，故按此构造动态数）。任一解析为 0 视为解析失败即红（防
+    // 结构改动后假绿·同 rw-agent-tokens-synced 交集<5 手法）。
+    id: 'admin-action-count-synced',
+    roots: ['#11'],
+    desc: 'admin action 计数单源（规则⑥·病根#11·客观计数机器维护）：rewrite/cloud/src/functions/adminApi/index.ts 的 ACTIONS 键数 + main() 分发处 checkKey(db,key,false) 之前的 pre-auth `action===字面量` 判支数为真值；系统事实「admin action」行「ACTIONS（N）」与总数须报同一数——防手抄漂移（任一解析为 0 视为解析失败即红）',
+    run() {
+      const bad = []
+      const idx = join(ROOT, 'rewrite/cloud/src/functions/adminApi/index.ts')
+      if (!existsSync(idx)) return []
+      const src = readFileSync(idx, 'utf8')
+      // ① ACTIONS 键数：花括号配平取块（防 `}` 提前截断）
+      const actionsStart = src.indexOf('const ACTIONS')
+      let keyCount = 0
+      if (actionsStart >= 0) {
+        const braceStart = src.indexOf('{', actionsStart)
+        let depth = 0
+        let braceEnd = -1
+        for (let i = braceStart; i < src.length; i++) {
+          if (src[i] === '{') depth++
+          else if (src[i] === '}') {
+            depth--
+            if (depth === 0) {
+              braceEnd = i
+              break
+            }
+          }
+        }
+        const actionsBlock = braceEnd > braceStart ? src.slice(braceStart + 1, braceEnd) : ''
+        keyCount = (actionsBlock.match(/^\s{2}\w+:/gm) || []).length
+      }
+      // ② pre-auth 判支数：main() 分发处、checkKey(db, key, false) 之前的 `action === '字面量'` 个数
+      const mainStart = src.indexOf('export const main')
+      const authIdx = mainStart >= 0 ? src.indexOf("checkKey(db, key, false)", mainStart) : -1
+      const preauthSlice = mainStart >= 0 && authIdx > mainStart ? src.slice(mainStart, authIdx) : ''
+      const preauthCount = (preauthSlice.match(/action === '\w+'/g) || []).length
+      if (!keyCount || !preauthCount) {
+        bad.push(
+          `admin-action-count-synced：解析失败（ACTIONS 键数=${keyCount}、pre-auth 判支数=${preauthCount}，任一为 0 视为解析失败，防结构改动假绿）`,
+        )
+        return bad
+      }
+      const total = keyCount + preauthCount
+      const sys = join(ROOT, 'docs/系统事实.md')
+      if (existsSync(sys)) {
+        const text = readFileSync(sys, 'utf8')
+        const row = text.split('\n').find((l) => l.trimStart().startsWith('| admin action |'))
+        if (!row) {
+          bad.push('系统事实.md 未找到「| admin action |」行——admin-action-count-synced 无法比对')
+          return bad
+        }
+        const totalCell = (row.split('|')[2] || '').trim()
+        if (totalCell !== String(total))
+          bad.push(
+            `系统事实「admin action」总数为「${totalCell}」≠ 真值 ${total}（ACTIONS ${keyCount} + pre-auth ${preauthCount}·客观计数单源·规则⑥·别手抄）`,
+          )
+        const actionsMatch = row.match(/ACTIONS`?\s*[（(](\d+)[）)]/)
+        if (!actionsMatch || Number(actionsMatch[1]) !== keyCount)
+          bad.push(
+            `系统事实「admin action」行「ACTIONS（${actionsMatch ? actionsMatch[1] : '缺'}）」≠ ACTIONS 键数真值 ${keyCount}（客观计数单源·规则⑥·别手抄）`,
+          )
+      }
+      return bad
+    },
+  },
+  {
     id: 'archive-index-synced',
     roots: ['#11'],
     desc: '退役-唤起闭环（根因#11·文档生命周期）：docs/archive/ 每份归档须在 archive/README.md 索引登记（防退役了查不到=唤起失效）+ 活文档（CLAUDE/docs 顶层）引用的 archive/* 路径须真实存在（防悬空退役指针）。索引本身被守＝不会自己 stale',
@@ -3552,7 +3622,10 @@ export const repoChecks = [
       const self = join(ROOT, 'scripts/check-structure.mjs')
       const src = readFileSync(self, 'utf8')
       // 两个 needle 字符串拼接构造（防本守卫自身源码含完整字面量、自己把自己咬红）
-      const stripNeedle = 'replace(/\\/\\/' + "[^\\n]*/g, '').replace(/\\/\\*" + "[\\s\\S]*?\\*\\//g, '')"
+      // stripComments 块注释替换回调用换行占位（保留行号，P2 复审）——needle 同步跟着实现改，
+      // 否则本守卫会因实现文本变了而永远搜不到自己、静默失去防漂移作用（不是「不咬」，是「咬不到」）。
+      const stripNeedle =
+        'replace(/\\/\\/' + "[^\\n]*/g, '').replace(/\\/\\*" + "[\\s\\S]*?\\*\\//g, (m) => m.replace(/[^\\n]/g, ''))"
       const boundaryNeedle = '\\n {2}' + '\\},'
       // 容忍 export 前缀（helper 已 export 供单测）——起点/下一函数边界都放宽匹配。边界只认「function」
       // 关键字会漏防：const/let/var 写的箭头函数裸写同款字面量、插在两个 helper 定义之间（或其后到下一个
@@ -4978,6 +5051,45 @@ export const repoChecks = [
     },
   },
   {
+    // 抽屉壳层 CSS 单源（批2 refactor·病根#5 样板复制即漂移）：Orders/Batches/Refunds 三页抽屉段
+    // 并非整段一致（.drawer 本体宽度 420/400px、.drawer-oid/.drawer-bid 各页专属字段、.drawer-close
+    // 圆角/disabled 态仅 Orders 有，均刻意保留页内），但 .drawer-mask / .drawer-head / .drawer-title /
+    // @keyframes slidein 四块三页逐字节一致——同 .ld-thead 全局先例收敛进 styles/console.css 单源，
+    // 三页删除这四块定义。本守卫逐块钉住不许再在页面 <style> 裸写这四块任一选择器/规则定义（防复辟，
+    // 病根#5「样板复制即漂移」——只守其中一块会漏另外三块被裸写回页面的回归），同时
+    // 反向核 console.css 必须四块齐全（防两头皆无假绿）。
+    id: 'rw-admin-drawer-single-source',
+    roots: ['#5'],
+    desc: '抽屉壳层 CSS 单源（批2 refactor·病根#5）：rewrite/admin/src/pages/*.vue 不得出现 `.drawer-mask`/`.drawer-head`/`.drawer-title`/`@keyframes slidein` 任一选择器/规则定义（公共段单源 styles/console.css，各页 .drawer 尺寸差异等页面特有段仍留页内不动）；且 styles/console.css 须四块齐全（防两头皆无假绿）',
+    run() {
+      const bad = []
+      const patterns = [
+        [/\.drawer-mask\s*\{/, '.drawer-mask'],
+        [/\.drawer-head\s*\{/, '.drawer-head'],
+        [/\.drawer-title\s*\{/, '.drawer-title'],
+        [/@keyframes\s+slidein\s*\{/, '@keyframes slidein'],
+      ]
+      const dir = join(ROOT, 'rewrite/admin/src/pages')
+      if (existsSync(dir)) {
+        for (const f of readdirSync(dir)) {
+          if (!f.endsWith('.vue')) continue
+          const src = readFileSync(join(dir, f), 'utf8')
+          for (const [re, label] of patterns) {
+            if (re.test(src))
+              bad.push(`rewrite/admin/src/pages/${f} 仍裸写 ${label} 选择器/规则定义——抽屉壳层公共段单源在 styles/console.css（病根#5）`)
+          }
+        }
+      }
+      const cssPath = join(ROOT, 'rewrite/admin/src/styles/console.css')
+      const css = existsSync(cssPath) ? readFileSync(cssPath, 'utf8') : ''
+      for (const [re, label] of patterns) {
+        if (!re.test(css))
+          bad.push(`rewrite/admin/src/styles/console.css 缺 ${label} 定义——抽屉壳层公共段单源应在此（防两头皆无假绿）`)
+      }
+      return bad
+    },
+  },
+  {
     // 危险 armed 态随数据刷新必须复位（批3 规格 bug sweep Round1·根因#8「构建过≠真能用」）：两步确认/
     // 危险动作的「已武装」态（confirmKey/confirmId/clearConfirmId/publishConfirm/runConfirm/pubConfirm…）
     // 若在 load()/reload() 类刷新函数里不复位，切标签/切课/切单/翻页/动作后自动刷新会让旧武装态残留在
@@ -5159,6 +5271,163 @@ export const repoChecks = [
       return bad
     },
   },
+  // —— 以下 3 条为旧线（packages/）repoCheck 的 rewrite/ 镜像（批1·治理重心搬到活代码线）——
+  {
+    id: 'rw-flow-seam-single',
+    roots: ['#12'],
+    desc: '平台接缝单点（根因#12 平台规则外部风险）镜像：cloudbase_module 工作流调用 rewrite/cloud/src 内仅 kit/flow.ts 一处（callFlow），平台规则变化改动面最小',
+    run() {
+      const root = join(ROOT, 'rewrite/cloud/src')
+      if (!existsSync(root)) return []
+      const allowed = 'rewrite/cloud/src/kit/flow.ts'
+      const hits = []
+      const walkDir = (d) => {
+        for (const e of readdirSync(d)) {
+          const p = join(d, e)
+          if (e === 'node_modules' || e === 'dist') continue
+          if (statSync(p).isDirectory()) walkDir(p)
+          else if (e.endsWith('.ts') && readFileSync(p, 'utf8').includes("'cloudbase_module'")) hits.push(relative(ROOT, p))
+        }
+      }
+      walkDir(root)
+      const out = []
+      for (const h of hits) if (h !== allowed) out.push(`${h} 直调 cloudbase_module——接缝须收口 kit callFlow 单点（根因#12·rewrite 镜像）`)
+      if (!hits.includes(allowed)) out.push(`${allowed} 应为 cloudbase_module 唯一调用点（callFlow），未见——接缝单点缺失（rewrite 镜像）`)
+      return out
+    },
+  },
+  {
+    id: 'rw-cloud-domain-grouped',
+    roots: ['T2'],
+    desc: 'T2 域分组镜像：rewrite/cloud/src/functions 顶层不得有裸 .ts（函数须放进域子目录 adminApi/app/callbacks/cs/ops/timers）',
+    run() {
+      const dir = join(ROOT, 'rewrite/cloud/src/functions')
+      if (!existsSync(dir)) return []
+      const bad = []
+      for (const entry of readdirSync(dir)) {
+        if (statSync(join(dir, entry)).isFile() && entry.endsWith('.ts')) {
+          bad.push(`rewrite/cloud/src/functions/${entry} 在顶层——函数须放进域子目录（adminApi/app/callbacks/cs/ops/timers，T2·rewrite 镜像）`)
+        }
+      }
+      return bad
+    },
+  },
+  {
+    // 钱链可观测告警接入（根因#14/#4）镜像：rewrite 钱链/SCM 动作类失败禁静默 console.error，
+    // 一律经 kit/observe 的 alert()/notifyAlert() 单出口留痕（控制台 [LD_ALERT] 抓取）。
+    // 剥注释单源（错题本 E1/E10）：console.error 检测须对 stripComments() 剥注释后的正文匹配，
+    // 防真调用挪进注释仍误判命中、或护栏代码被注释掉断言仍绿。
+    id: 'rw-moneychain-alert-wired',
+    roots: ['#14', '#4'],
+    desc: '钱链可观测告警接入（rewrite 镜像·病根#14/#4）：payCallback/refundCallback 须经 alert()/notifyAlert() 打 [LD_ALERT] 标记；钱链/SCM 动作类文件（refunds/orders/scmAssembly/scmPurchase/scmOutwork/scmMaterials + 两回调）剥注释后禁裸 console.error(——失败留痕走 kit observe 单出口，刻意静默须行内注明；kit/observe.ts 须导出 alert',
+    run() {
+      const bad = []
+      const cbDir = 'rewrite/cloud/src/functions/callbacks'
+      for (const f of ['payCallback.ts', 'refundCallback.ts']) {
+        const rel = `${cbDir}/${f}`
+        const abs = join(ROOT, rel)
+        if (!existsSync(abs)) {
+          bad.push(`${rel} 缺失（钱链回调，根因#14）`)
+          continue
+        }
+        if (!/\b(notifyAlert|alert)\(/.test(stripComments(readFileSync(abs, 'utf8'))))
+          bad.push(`${rel} 未用 alert()/notifyAlert() 打钱链告警标记——静默语义失败无信号（根因#14 可观测·rewrite 镜像）`)
+      }
+      const moneyChainFiles = [
+        'rewrite/cloud/src/functions/adminApi/actions/refunds.ts',
+        'rewrite/cloud/src/functions/adminApi/actions/orders.ts',
+        'rewrite/cloud/src/functions/adminApi/actions/scmAssembly.ts',
+        'rewrite/cloud/src/functions/adminApi/actions/scmPurchase.ts',
+        'rewrite/cloud/src/functions/adminApi/actions/scmOutwork.ts',
+        'rewrite/cloud/src/functions/adminApi/actions/scmMaterials.ts',
+        `${cbDir}/payCallback.ts`,
+        `${cbDir}/refundCallback.ts`,
+      ]
+      for (const rel of moneyChainFiles) {
+        const abs = join(ROOT, rel)
+        if (!existsSync(abs)) continue // 部分 SCM 动作文件可能尚未落地，存在才查
+        const strippedLines = stripComments(readFileSync(abs, 'utf8')).split('\n')
+        strippedLines.forEach((line, i) => {
+          if (/\bconsole\.error\s*\(/.test(line))
+            bad.push(`${rel}:${i + 1} 剥注释后仍裸用 console.error(——动作类失败须经 kit observe.alert/notifyAlert 单出口留痕，禁静默吞（根因#14·rewrite 镜像）`)
+        })
+      }
+      const obs = join(ROOT, 'rewrite/cloud/src/kit/observe.ts')
+      if (!existsSync(obs) || !/export function alert/.test(readFileSync(obs, 'utf8')))
+        bad.push('rewrite/cloud/src/kit/observe.ts 未导出 alert——钱链告警标记缺失（根因#14·rewrite 镜像）')
+      return bad
+    },
+  },
+  {
+    // agent 是 admin client 的「同构小副本」（批3 规格·根因#5 同款坏味道在副本复发）：调色板/形状 token
+    // 若字面量各抄一份，后续改主题只改 admin 侧的 tokens.css 会漏改 agent 侧的 App.vue :root，两处悄悄漂移
+    // 没人发现。本守卫钉住同名 --ld-* 必须同值——admin tokens.css 里的纯别名（如 `--ld-purple: var(--ld-brand)`）
+    // 解一层再比（agent 侧写的是字面量，不是 var() 引用，直接比较别名字符串必假红）。agent 允许只声明 admin 的
+    // 子集（agent 用不到 admin 全部 token），但交集内每一个都必须同值；交集 <5 视为解析失败即红（防 :root 块
+    // 结构改动后正则悄悄匹配不到、返回空 bad 假绿）。
+    id: 'rw-agent-tokens-synced',
+    roots: ['#5'],
+    desc: 'agent/admin 同构副本 token 同步（批3 规格·病根#5）：rewrite/agent/src/App.vue `:root` 块内全部 `--ld-*` 与 rewrite/admin/src/styles/tokens.css 同名变量比对（admin 侧纯 var(--x) 别名解一层再比），同名必同值；同名交集 <5 视为解析失败即红（防结构改动假绿）',
+    run() {
+      const bad = []
+      const parseRootVars = (src) => {
+        const m = src.match(/:root\s*\{([\s\S]*?)\}/)
+        if (!m) return null
+        const map = {}
+        for (const vm of m[1].matchAll(/--([\w-]+)\s*:\s*([^;]+);/g)) map[vm[1]] = vm[2].trim()
+        return map
+      }
+      const resolveVal = (map, name, depth = 0) => {
+        const raw = map[name]
+        if (raw === undefined || depth > 5) return raw
+        const am = raw.match(/^var\(\s*--([\w-]+)\s*(?:,[^)]*)?\)$/)
+        return am && map[am[1]] !== undefined ? resolveVal(map, am[1], depth + 1) : raw
+      }
+      const agentPath = join(ROOT, 'rewrite/agent/src/App.vue')
+      const adminPath = join(ROOT, 'rewrite/admin/src/styles/tokens.css')
+      if (!existsSync(agentPath) || !existsSync(adminPath)) {
+        bad.push('rw-agent-tokens-synced：rewrite/agent/src/App.vue 或 rewrite/admin/src/styles/tokens.css 缺失——同步比对无法进行')
+        return bad
+      }
+      const agentMap = parseRootVars(readFileSync(agentPath, 'utf8'))
+      const adminMap = parseRootVars(readFileSync(adminPath, 'utf8'))
+      if (!agentMap || !adminMap) {
+        bad.push('rw-agent-tokens-synced：`:root { }` 块解析失败（App.vue 或 tokens.css 结构改动导致正则匹配不到，防假绿即红）')
+        return bad
+      }
+      const sharedNames = Object.keys(agentMap).filter((n) => adminMap[n] !== undefined)
+      if (sharedNames.length < 5) {
+        bad.push(`rw-agent-tokens-synced：同名 --ld-* 交集仅 ${sharedNames.length} 个（<5 视为解析失败，防结构改动假绿）`)
+        return bad
+      }
+      for (const name of sharedNames) {
+        const agentVal = agentMap[name]
+        const adminVal = resolveVal(adminMap, name)
+        if (agentVal !== adminVal)
+          bad.push(`rw-agent-tokens-synced：--${name} agent=${agentVal} ≠ admin=${adminVal}（同构副本同名须同值·病根#5，以 admin tokens.css 为准改 agent 侧）`)
+      }
+      return bad
+    },
+  },
+  {
+    // 批6（承重批·钱/权限）：admin 口令哈希从「sha256 无盐」升级为「salt+scrypt」，防库泄露离线彩虹表
+    // 还原（根因#3 信任边界·根因#13 认证端点防爆破——频控只挡在线爆破，挡不住离线还原）。本守卫钉住
+    // lib.ts 剥注释后（stripComments·E1/E10）确实含 scryptSync 与 keySalt 字样——纯字符串在场性检查，
+    // 行为语义（legacy 无缝迁移/盐感知比对单源 keyMatches）由 app-admin1/app-admin6 测试锁。
+    id: 'rw-admin-key-kdf',
+    roots: ['#13', '#3'],
+    desc: 'admin 口令加盐 KDF（批6·根因#13 认证端点防爆破/根因#3 信任边界）：adminApi/lib.ts 剥注释后须含 scryptSync（口令 KDF）与 keySalt（每账号随机盐字段），防 sha256 无盐口令库泄露被离线彩虹表还原；legacy 存量账号无感迁移语义由测试锁',
+    run() {
+      const bad = []
+      const rel = 'rewrite/cloud/src/functions/adminApi/lib.ts'
+      const abs = join(ROOT, rel)
+      if (!existsSync(abs)) return [`${rel} 缺失`]
+      const src = stripComments(readFileSync(abs, 'utf8'))
+      if (!/scryptSync\s*\(/.test(src)) bad.push(`${rel} 未见 scryptSync(——口令哈希仍可能是无盐 sha256（根因#13 离线彩虹表风险）`)
+      if (!/keySalt/.test(src)) bad.push(`${rel} 未见 keySalt 字段——口令未加盐（根因#13）`)
+      return bad
+    },
+  },
 ]
 
 // ============== 逐文件规则（fileRules）==============
@@ -5238,6 +5507,51 @@ export const fileRules = [
         ? `依赖方向反转：${layer} 层禁 import @/${m[1]}/（pages→store/api→utils，data/utils 是叶；CLAUDE §8/T4）`
         : null
     },
+  },
+  // —— 以下 4 条为旧线（packages/）5 条守卫的 rewrite/ 镜像（批1·治理重心搬到活代码线）——
+  // 旧线守卫扫描面锁死 packages/ 路径，对唯一在迭代的 rewrite/ 空转；本批不改旧条（继续守 packages/
+  // 冻结基线），另立新条落地到 rewrite/。SRC_DIRS 已扩到含 'rewrite'（见下方 A.0），否则新条也是装饰。
+  {
+    // T2 域分组（根因账本 #5）镜像：rewrite/cloud 云函数业务代码禁裸用 cloud.init()/getWXContext()。
+    id: 'rw-kit-only-cloud-primitives',
+    roots: ['T2', '#5'],
+    inScope: (abs) => abs.includes('/rewrite/cloud/src/functions/') && abs.endsWith('.ts'),
+    test: (line) =>
+      /\bcloud\.init\s*\(/.test(line) || /\bgetWXContext\s*\(/.test(line)
+        ? '云函数业务代码禁裸用 cloud.init()/getWXContext()——经 kit（withOpenId/getDb/isServerCall）收编样板，防样板重生（T2/根因5·rewrite 镜像）'
+        : null,
+  },
+  {
+    // 平台接缝收口（根因账本 #12）镜像：触发工作流禁裸用 cloudbase_module——经 kit.callFlow 单点。
+    id: 'rw-flow-seam-via-kit',
+    roots: ['#12'],
+    inScope: (abs) => abs.includes('/rewrite/cloud/src/functions/') && abs.endsWith('.ts'),
+    test: (line) =>
+      /cloudbase_module/.test(line)
+        ? '触发工作流禁裸用 cloudbase_module——经 kit.callFlow 单点收口（根因#12 平台接缝最小化·rewrite 镜像）'
+        : null,
+  },
+  {
+    // 金额接 Fen 轨（根因账本 #4）镜像：云函数里「元↔分」换算禁裸 *100 / /100。非金额百分比/毫秒
+    // 换算行内加 structure-ok（如 reviews.ts 星级占比 pct()）。
+    id: 'rw-money-via-fen',
+    roots: ['#4'],
+    inScope: (abs) => abs.includes('/rewrite/cloud/src/functions/') && abs.endsWith('.ts'),
+    test: (line) =>
+      /(\*|\/)\s*100\b/.test(line)
+        ? '金额「元↔分」换算禁裸 *100 / /100——经 shared toFen/asFen/fenToYuan（根因#4 Fen 接钱链·rewrite 镜像）；非金额换算行内加 structure-ok'
+        : null,
+  },
+  {
+    // T1 微信原生单源（根因账本 #6）镜像：mp 端禁裸 wx.request——核心交易流程只走云函数
+    // （callCloud），不再造第二条 HTTP 直连路径。wx.requestPayment 是微信支付原生能力，不误中。
+    id: 'rw-mp-cloud-only',
+    roots: ['T1'],
+    inScope: (abs) => abs.includes('/rewrite/mp/') && !abs.includes('/rewrite/mp/tests/') && abs.endsWith('.ts'),
+    test: (line) =>
+      /\bwx\.request\s*\(/.test(line)
+        ? 'mp 端禁裸 wx.request()——H5/App 不连核心交易流程，微信原生单源经云函数 callCloud（T1·rewrite 镜像）'
+        : null,
   },
 ]
 
@@ -5359,7 +5673,9 @@ export const typeAndTestGuards = [
 ]
 
 // export：供 check-report 体检面板复用同一套遍历/判定（面板=派生视图，禁自建第二套语义）
-export const SRC_DIRS = ['packages', 'cloudfunctions', 'scripts']
+// 'rewrite' 加入扫描面（批1·2026-07-10）：唯一在迭代的活代码线，此前 fileRules 全量扫描扫不到，
+// rw- 前缀的新守卫不动这条即是装饰。旧 fileRules（5 条）inScope 全部锁死 packages 路径，扩面不误咬。
+export const SRC_DIRS = ['packages', 'cloudfunctions', 'scripts', 'rewrite']
 export function* walk(dir) {
   if (!existsSync(dir)) return
   for (const name of readdirSync(dir)) {
@@ -5375,8 +5691,11 @@ const isCommentLine = (line) => /^(\/\/|\/\*|\*|<!--|#)/.test(line.trim())
 // 剥注释单源 helper（执行者错题本 E1·坑史：方法体正则咬注释假绿——2026-07-08 播放页批/客服批连栽两次）：
 // 剥 // 行注释与 /* */ 块注释，供守卫「查真实调用」前先清场——防真调用挪进注释、假实现留在正文，正则仍误判命中。
 // 原三处（1151/客服触点/首页加购）重复裸写的字面量单源化到这里；元守卫 guard-strip-single-source 焊死不许再裸写绕开。
+// 块注释用「逐字符替换成空串再保留原有换行数」而非整段替换成空串——保证剥注释后行数与原文件严格一一对应，
+// 供按下标转行号的调用方（如 rw-moneychain-alert-wired）报出真实行号；纯布尔 .test() 调用方语义不受影响
+// （P2 复审：整段替换成空串会吃掉块注释内部换行，跨行块注释之后的行号会比真实行号小）。
 export function stripComments(src) {
-  return src.replace(/\/\/[^\n]*/g, '').replace(/\/\*[\s\S]*?\*\//g, '')
+  return src.replace(/\/\/[^\n]*/g, '').replace(/\/\*[\s\S]*?\*\//g, (m) => m.replace(/[^\n]/g, ''))
 }
 
 // 方法体截取单源 helper（同错题本 E1·配 stripComments 使用）：截取形如 `name(...) {\n  ...\n  },`

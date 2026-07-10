@@ -210,7 +210,7 @@ onMounted(async () => {
           </div>
           <!-- 采购行项（本页独有·非草稿单看不到买了啥）：物料名 ×数量（所有状态可查） -->
           <div v-if="expanded === o._id" class="ld-tr detail-row">
-            <div class="ld-td grow detail-cell">{{ (o.lines || []).map((l) => materialHuman(l.materialId) + ' ×' + (Number(l.qty) || 0) + (l.unitPriceFen != null ? '（' + fenLabel(l.unitPriceFen) + '）' : '')).join(' · ') || '（无行项）' }}</div>
+            <div class="ld-td grow detail-cell">{{ ((o.lines as Record<string, any>[]) || []).map((l) => materialHuman(l.materialId) + ' ×' + (Number(l.qty) || 0) + (l.unitPriceFen != null ? '（' + fenLabel(l.unitPriceFen) + '）' : '')).join(' · ') || '（无行项）' }}</div>
           </div>
         </template>
       </div>
