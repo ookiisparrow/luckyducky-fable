@@ -19,11 +19,11 @@ import UiButton from '../components/ui/Button.vue'
 const router = useRouter()
 // 去开单联动（换皮丢·算完缺口只能手抄颜色/料号/数量去另一页开单·流程割裂）：带数据跳转·目标页 consume 预填
 function goOutworkOrder() {
-  setOutworkHandoff({ lines: (plan.value?.outworkGaps || []).map((g: Record<string, any>) => ({ materialId: `yarn:${g.color}:L:raw`, qty: Number(g.rawToIssue) || 0 })).filter((l) => l.qty > 0) })
+  setOutworkHandoff({ lines: (plan.value?.outworkGaps || []).map((g: Record<string, any>) => ({ materialId: `yarn:${g.color}:L:raw`, qty: Number(g.rawToIssue) || 0 })).filter((l: { qty: number }) => l.qty > 0) })
   void router.push('/scm-outwork')
 }
 function goPurchaseOrder(g: Record<string, any>) {
-  setPurchaseHandoff({ supplierId: String(g.supplierId || ''), lines: (g.lines || []).map((l: Record<string, any>) => ({ materialId: String(l.materialId), qty: Number(l.gap) || 0 })).filter((l) => l.qty > 0) })
+  setPurchaseHandoff({ supplierId: String(g.supplierId || ''), lines: (g.lines || []).map((l: Record<string, any>) => ({ materialId: String(l.materialId), qty: Number(l.gap) || 0 })).filter((l: { qty: number }) => l.qty > 0) })
   void router.push('/scm-purchase')
 }
 

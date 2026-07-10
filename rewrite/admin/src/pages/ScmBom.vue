@@ -287,7 +287,7 @@ onMounted(reload)
               </div>
             </div>
             <div v-if="expanded === a._id" class="ld-tr sub-row">
-              <div class="consumed">扣料快照：{{ (a.consumedLines || []).map((l) => materialHuman(l.materialId) + '×' + l.qty).join(' · ') || '（无快照）' }}</div>
+              <div class="consumed">扣料快照：{{ ((a.consumedLines as Record<string, any>[]) || []).map((l) => materialHuman(l.materialId) + '×' + l.qty).join(' · ') || '（无快照）' }}</div>
             </div>
           </template>
         </div>
