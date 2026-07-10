@@ -3,7 +3,7 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { control } from 'wx-server-sdk'
 import { main as adminApi } from '../src/functions/adminApi/index'
-import { sha } from '../src/functions/adminApi/lib'
+import { sha, kdf, keyMatches } from '../src/functions/adminApi/lib'
 import { getDb } from '../src/kit'
 
 const SUPER = 'super-secret-key'
@@ -269,18 +269,21 @@ describe('scoped 360 双闸（黄金 §二：归属 + 数据共享同意·超管
 })
 
 describe('外包账号管理（黄金 §十：口令哈希·停用即时·白名单·企微 userid 唯一）', () => {
-  it('大白话：建号口令只存哈希；新号立即能登录并派生最小权；短口令/撞口令拒；外包自己不能建号', async () => {
+  it('大白话：建号口令加盐存哈希（批6·scrypt，非裸 sha）；新号立即能登录并派生最小权；短口令/撞口令（legacy 存量与带盐新号两种在场形态）拒；外包自己不能建号', async () => {
     const r = await post('createAgent', SUPER, { name: '外包三号', key: 'brand-new-key-3' })
     expect(r.ok).toBe(true)
     const doc = control.dump('adminConfig').find((a: any) => a._id === r.agent.id)
-    expect(doc.keyHash).toBe(sha('brand-new-key-3'))
+    expect(doc.keySalt).toBeTruthy() // 批6：新建账号带盐
+    expect(keyMatches(doc, 'brand-new-key-3')).toBe(true) // 盐感知比对认得出真口令
+    expect(doc.keyHash).not.toBe(sha('brand-new-key-3')) // 裸 sha 值不再等于 keyHash（已加盐·非无盐 sha256）
     expect(JSON.stringify(doc)).not.toContain('brand-new-key-3') // 明文不落盘
     const login = await post('login', 'brand-new-key-3')
     expect(login.status).toBe(200)
     expect(login.caps).toEqual(['agent:handle']) // 角色派生最小权
     expect((await post('listQueue', 'brand-new-key-3')).ok).toBe(true) // 新号可干活
     expect((await post('createAgent', SUPER, { name: 'x', key: 'abc' })).error).toBe('KEY_TOO_SHORT')
-    expect((await post('createAgent', SUPER, { name: 'x', key: A1 })).status).toBe(409) // 撞口令登录会串号·拒
+    expect((await post('createAgent', SUPER, { name: 'x', key: A1 })).status).toBe(409) // 撞 legacy 存量口令（无 keySalt）登录会串号·拒
+    expect((await post('createAgent', SUPER, { name: 'y', key: 'brand-new-key-3' })).status).toBe(409) // 撞已带盐新账号口令同样拒（盐感知比对两形态都认得出）
     expect((await post('createAgent', A1, { name: 'x', key: 'whatever-key' })).status).toBe(403) // 外包不能自扩权
   })
 
@@ -299,10 +302,13 @@ describe('外包账号管理（黄金 §十：口令哈希·停用即时·白名
     expect((await post('setAgentWecomUserId', SUPER, { id: 'auth', wecomUserId: 'wboss' })).ok).toBe(true)
   })
 
-  it('大白话：先查后写竞态（P2·根因#1）——createAgent 建号窗口内被并发方撞同一 keyHash，写后复核揪出、回滚自己那份并回 409（不留串号双凭证）', async () => {
+  it('大白话：先查后写竞态（P2·根因#1）——createAgent 建号窗口内被并发方撞同一口令（legacy 存量形态），写后复核揪出、回滚自己那份并回 409（不留串号双凭证）', async () => {
     control.setBeforeUpdate(async ({ coll, data }: any) => {
-      if (coll === 'adminConfig' && data && data.keyHash === sha('race-key')) {
+      // 触发标记改用与哈希算法无关的确定性字段（批6·name）——本批把 keyHash 从裸 sha 换成加盐 scrypt 后，
+      // 写入的 data.keyHash 不再等于 sha('race-key')，原「按哈希值触发」的写法会失真、mock 永不触发（假绿）。
+      if (coll === 'adminConfig' && data && data.name === '并发号') {
         // 「先查」时并发方尚未落库（预检通过）；在本次真正写入前，并发方抢先建号——模拟先查后写窗口
+        // （并发方是 legacy 存量账号形态：无 keySalt，keyHash 是裸 sha——keyMatches 单源两种形态都认得出）
         control.seed('adminConfig', [{ _id: 'agent-race', role: 'outsourced', keyHash: sha('race-key'), createdAt: 1 }])
       }
     })
@@ -310,8 +316,9 @@ describe('外包账号管理（黄金 §十：口令哈希·停用即时·白名
     control.setBeforeUpdate(null as never)
     expect(r.status).toBe(409)
     expect(r.error).toBe('KEY_TAKEN')
-    // 自己刚建的那份已回滚删除，只剩并发方那一份——绝不留两账号共享同一 keyHash
-    expect(control.dump('adminConfig').filter((a: any) => a.keyHash === sha('race-key')).length).toBe(1)
+    // 自己刚建的那份已回滚删除，只剩并发方那一份——绝不留两账号共享同一口令（用 keyMatches 而非裸 keyHash
+    // 字符串比对，因为自己那份原会是加盐 kdf 值、并发方是裸 sha 值，两者字面不等但代表同一口令）
+    expect(control.dump('adminConfig').filter((a: any) => keyMatches(a, 'race-key')).length).toBe(1)
   })
 
   it('大白话：先查后写竞态（P2·根因#1）——setAgentWecomUserId 改绑窗口内被并发方撞同一 wecomUserId，写后复核回滚字段并回 409', async () => {
@@ -328,10 +335,12 @@ describe('外包账号管理（黄金 §十：口令哈希·停用即时·白名
     expect(control.dump('adminConfig').find((a: any) => a._id === 'agent-2').wecomUserId).toBe('')
   })
 
-  it('大白话（N3·bug 清除战役II 遗留·病根14）：keyHash 竞态回滚若也失败——双凭证残留是身份安全面，必须留痕；409 回复不变', async () => {
+  it('大白话（N3·bug 清除战役II 遗留·病根14）：口令竞态回滚若也失败（撞的是带盐新账号形态）——双凭证残留是身份安全面，必须留痕；409 回复不变', async () => {
     control.setBeforeUpdate(async ({ coll, data }: any) => {
-      if (coll === 'adminConfig' && data && data.keyHash === sha('race-key-2')) {
-        control.seed('adminConfig', [{ _id: 'agent-race-2', role: 'outsourced', keyHash: sha('race-key-2'), createdAt: 1 }])
+      // 触发标记改用与哈希算法无关的确定性字段（批6·name，同上一用例）
+      if (coll === 'adminConfig' && data && data.name === '并发号二') {
+        // 撞口令用例覆盖两种在场形态：上一用例是 legacy（无 keySalt），本用例并发方是已带盐新账号形态。
+        control.seed('adminConfig', [{ _id: 'agent-race-2', role: 'outsourced', keySalt: 'race-salt-2', keyHash: kdf('race-key-2', 'race-salt-2'), createdAt: 1 }])
       }
     })
     // spy 挂在共享 DocRef 原型上（同 app-admin2.test.ts REMOVE_FAIL 范式·任意已存在 doc 取原型即可）
@@ -346,8 +355,9 @@ describe('外包账号管理（黄金 §十：口令哈希·停用即时·白名
     }
     expect(r.status).toBe(409) // 回滚失败不改变返回语义
     expect(r.error).toBe('KEY_TAKEN')
-    // 双凭证真残留了（回滚没能撤掉自己那份）——正是要留痕的场景
-    expect(control.dump('adminConfig').filter((a: any) => a.keyHash === sha('race-key-2')).length).toBe(2)
+    // 双凭证真残留了（回滚没能撤掉自己那份）——正是要留痕的场景（用 keyMatches 而非裸 keyHash 字符串比对，
+    // 因为自己那份是加盐 kdf 值、并发方也是带盐值但盐不同，两者字面不等但都代表同一口令）
+    expect(control.dump('adminConfig').filter((a: any) => keyMatches(a, 'race-key-2')).length).toBe(2)
     const anomalies = control.dump('anomalies')
     expect(anomalies.some((a: any) => a.code === 'ROLLBACK_FAIL' && a.ctx && a.ctx.which === 'keyHash')).toBe(true)
   })
@@ -372,6 +382,34 @@ describe('外包账号管理（黄金 §十：口令哈希·停用即时·白名
     expect(control.dump('adminConfig').filter((a: any) => a.wecomUserId === 'w-race-2').length).toBe(2)
     const anomalies = control.dump('anomalies')
     expect(anomalies.some((a: any) => a.code === 'ROLLBACK_FAIL' && a.ctx && a.ctx.which === 'wecomUserId')).toBe(true)
+  })
+})
+
+describe('账号扫描上限告警（P2 评审·keyHash 加盐后有界扫描退化为有界候选窗口的可观测性兜底）', () => {
+  // adminConfig 带 keyHash 的账号超过扫描上限时，checkKey/createAgent 的有界扫描候选窗口可能装不下
+  // 目标账号（合法口令静默登录失败/撞口令回滚安全网形同虚设）——本组只验「命中上限时留痕告警」，
+  // 不验「真的漏掉某账号」（后者需要构造超过 50 条+特定顺序才能稳定复现，超出本条留痕修复的范围）。
+  const seedManyAccounts = (n: number) => {
+    const rows = []
+    for (let i = 0; i < n; i++) rows.push({ _id: 'bulk-' + i, role: 'outsourced', keyHash: sha('bulk-key-' + i), createdAt: i })
+    control.seed('adminConfig', rows)
+  }
+
+  it('大白话：checkKey 多账号扫描命中上限时留痕告警；登录返回语义不变', async () => {
+    seedManyAccounts(50) // + beforeEach 的 auth/agent-1/agent-2 共 53 行带 keyHash，必过扫描上限
+    const r = await post('login', 'no-such-key')
+    expect(r.status).toBe(401) // 未命中口令仍如实拒——告警不改变控制流
+    const anomalies = control.dump('anomalies')
+    expect(anomalies.some((a: any) => a.code === 'ACCOUNT_SCAN_AT_CAP' && a.ctx && a.ctx.fn === 'checkKey')).toBe(true)
+  })
+
+  it('大白话：createAgent 撞口令预检/写后复核扫描命中上限时同样留痕告警；建号本身不受影响', async () => {
+    seedManyAccounts(50)
+    const r = await post('createAgent', SUPER, { name: '批量后建号', key: 'brand-new-bulk-key' })
+    expect(r.ok).toBe(true)
+    const anomalies = control.dump('anomalies')
+    expect(anomalies.some((a: any) => a.code === 'ACCOUNT_SCAN_AT_CAP' && a.ctx && a.ctx.fn === 'createAgent.dupScan')).toBe(true)
+    expect(anomalies.some((a: any) => a.code === 'ACCOUNT_SCAN_AT_CAP' && a.ctx && a.ctx.fn === 'createAgent.keyDupScan')).toBe(true)
   })
 })
 

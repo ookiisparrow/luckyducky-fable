@@ -5339,6 +5339,25 @@ export const repoChecks = [
       return bad
     },
   },
+  {
+    // 批6（承重批·钱/权限）：admin 口令哈希从「sha256 无盐」升级为「salt+scrypt」，防库泄露离线彩虹表
+    // 还原（根因#3 信任边界·根因#13 认证端点防爆破——频控只挡在线爆破，挡不住离线还原）。本守卫钉住
+    // lib.ts 剥注释后（stripComments·E1/E10）确实含 scryptSync 与 keySalt 字样——纯字符串在场性检查，
+    // 行为语义（legacy 无缝迁移/盐感知比对单源 keyMatches）由 app-admin1/app-admin6 测试锁。
+    id: 'rw-admin-key-kdf',
+    roots: ['#13', '#3'],
+    desc: 'admin 口令加盐 KDF（批6·根因#13 认证端点防爆破/根因#3 信任边界）：adminApi/lib.ts 剥注释后须含 scryptSync（口令 KDF）与 keySalt（每账号随机盐字段），防 sha256 无盐口令库泄露被离线彩虹表还原；legacy 存量账号无感迁移语义由测试锁',
+    run() {
+      const bad = []
+      const rel = 'rewrite/cloud/src/functions/adminApi/lib.ts'
+      const abs = join(ROOT, rel)
+      if (!existsSync(abs)) return [`${rel} 缺失`]
+      const src = stripComments(readFileSync(abs, 'utf8'))
+      if (!/scryptSync\s*\(/.test(src)) bad.push(`${rel} 未见 scryptSync(——口令哈希仍可能是无盐 sha256（根因#13 离线彩虹表风险）`)
+      if (!/keySalt/.test(src)) bad.push(`${rel} 未见 keySalt 字段——口令未加盐（根因#13）`)
+      return bad
+    },
+  },
 ]
 
 // ============== 逐文件规则（fileRules）==============

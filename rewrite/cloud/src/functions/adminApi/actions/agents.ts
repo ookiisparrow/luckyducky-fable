@@ -1,4 +1,4 @@
-import { reply, sha, ensure, str, type Ctx } from '../lib'
+import { reply, ensure, str, newSalt, kdf, keyMatches, alertIfScanAtCap, type Ctx } from '../lib'
 import { notifyAlert } from '../../../kit'
 
 // 外包账号管理（后台360工作站 §1.5·B5.2·承面C 车道 C·根因#3）：商户超管建/停/列外包坐席账号
@@ -24,8 +24,9 @@ async function wecomUserIdTaken(db: any, wecomUserId: string, exceptId: string):
   return (r.data || []).some((a: any) => a._id !== exceptId)
 }
 
-// 建外包账号：{ name, key(登录口令), wecomUserId?(企微 userid·可空·免登用) }。keyHash 入库（不存明文·同超管 doc）；
-// _id=确定性 agent:<rand>。口令须 ≥6（同 checkKey 下限）且不与既有账号/超管撞（撞 keyHash 登录会串号）。
+// 建外包账号：{ name, key(登录口令), wecomUserId?(企微 userid·可空·免登用) }。keySalt+keyHash 入库（不存明文·
+// 批6 加盐 scrypt·同超管 doc）；_id=确定性 agent:<rand>。口令须 ≥6（同 checkKey 下限）且不与既有账号/超管撞
+// （撞口令登录会串号）——撞口令判定经 keyMatches 单源（根因#5·同时认得住 legacy sha 存量与带盐新账号两种形态）。
 export async function createAgent({ db, data }: Ctx) {
   const name = str((data && data.name) || '', 40).trim()
   const key = String((data && data.key) || '')
@@ -33,27 +34,29 @@ export async function createAgent({ db, data }: Ctx) {
   if (!name) return reply(400, { ok: false, error: 'BAD_NAME' })
   if (key.length < 6) return reply(400, { ok: false, error: 'KEY_TOO_SHORT' })
   await ensure(db, 'adminConfig')
-  const keyHash = sha(key)
-  const dup = await db
-    .collection('adminConfig')
-    .where({ keyHash })
-    .limit(1)
-    .get()
-    .catch(() => ({ data: [] }))
-  if (dup.data && dup.data.length) return reply(409, { ok: false, error: 'KEY_TAKEN' })
+  const _ = db.command
+  // ① 撞口令预检：有界扫描（同 checkKey 手法·最坏 ≤50 行 scrypt 比对，管理端低频操作可接受）+ keyMatches
+  // 单源比对——认得住 legacy sha 存量账号与已带盐新账号两种在场形态，不漏判。
+  const dupScan = await db.collection('adminConfig').where({ keyHash: _.exists(true) }).limit(50).get().catch(() => ({ data: [] }))
+  alertIfScanAtCap(dupScan.data || [], 50, 'createAgent.dupScan')
+  if ((dupScan.data || []).some((r: any) => keyMatches(r, key))) return reply(409, { ok: false, error: 'KEY_TAKEN' })
   if (await wecomUserIdTaken(db, wecomUserId, '')) return reply(409, { ok: false, error: 'WECOM_ID_TAKEN' })
   const id = 'agent:' + Date.now().toString(36) + Math.random().toString(36).slice(2, 8)
+  const keySalt = newSalt()
+  const keyHash = kdf(key, keySalt)
   // _id 由 doc(id) 指定·data 不带 _id（真 sdk set data 含 _id 即 reject·根因#8·no-id-in-set-data）
-  const doc: any = { name, role: AGENT_ROLE, keyHash, disabled: false, createdAt: Date.now() }
+  const doc: any = { name, role: AGENT_ROLE, keySalt, keyHash, disabled: false, createdAt: Date.now() }
   if (wecomUserId) doc.wecomUserId = wecomUserId
   await db.collection('adminConfig').doc(id).set({ data: doc })
 
   // 写后复核（P2·根因#1 先查后写竞态修复）：上面的 dup/wecomUserIdTaken 都是「先查」，先查后写窗口内
-  // 并发双方可能都通过检查各自建号、撞出两账号共享同一 keyHash/wecomUserId（登录串号/免登歧义）。
-  // 写完立即重查计数，>1 说明确实撞了——回滚自己刚建的这份、回 409（两侧同时回滚也安全：都失败重试即可，
-  // 绝不留双凭证）。管理端低频操作，多一次读的代价可接受。
-  const keyDup = await db.collection('adminConfig').where({ keyHash }).get().catch(() => ({ data: [] }))
-  if ((keyDup.data || []).length > 1) {
+  // 并发双方可能都通过检查各自建号、撞出两账号共享同一口令/wecomUserId（登录串号/免登歧义）。
+  // 写完立即重扫描重比对，keyMatches 命中 >1 说明确实撞了——回滚自己刚建的这份、回 409（两侧同时回滚也
+  // 安全：都失败重试即可，绝不留双凭证）。管理端低频操作，多一次读的代价可接受。
+  const keyDupScan = await db.collection('adminConfig').where({ keyHash: _.exists(true) }).limit(50).get().catch(() => ({ data: [] }))
+  alertIfScanAtCap(keyDupScan.data || [], 50, 'createAgent.keyDupScan')
+  const keyDupCount = ((keyDupScan.data || []) as any[]).filter((r: any) => keyMatches(r, key)).length
+  if (keyDupCount > 1) {
     // 回滚失败留痕（N3·bug 清除战役 II 遗留·病根14）：双凭证残留属身份安全面（两账号共享同一 keyHash 能登录串号）
     // ——只加信号，返回语义/控制流零变化（原 409 回复不变）。
     await db
