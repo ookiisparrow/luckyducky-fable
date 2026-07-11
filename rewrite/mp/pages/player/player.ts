@@ -36,8 +36,9 @@ const MARK_SNAP_SEC = 3
 // 像素值再传 px 内联样式——WXSS clamp() 是本仓首次出现的用法（无既有先例，真机支持度未经验证，CLAUDE.md
 // §4 对同类兼容性存疑的 CSS 函数已有专门规避先例 backdrop-filter/color-mix()），JS 算值零风险等价替代。
 const PREVIEW_EDGE_RPX = 64
-// 返回二次确认窗口（ms·P5 设计拍板②）：每次返回都出现「再按一次返回退出」，非仅首次；侧滑/系统手势
-// 返回无法拦截（WebView 页无 onBackPress——平台限制），仅本页自绘返回箭头点击经此判定。
+// 返回二次确认窗口（ms·P5 设计拍板②·批5 升级覆盖手势）：每次返回都出现确认提示，非仅首次；WebView 页
+// 无 onBackPress，侧滑/系统返回经 page-container 垫层拦入同一条 onBack 决策链（onGuardLeave·垫层法真机复验中），
+// 自绘返回箭头直接调 onBack——两条返回路径共用本窗口判定。
 const BACK_CONFIRM_MS = 2500
 // 首次成功退出加桌引导 storage key（storage key 收敛·CLAUDE §7）：仅展示一次（P5b 设计拍板④）。
 const DESK_GUIDE_KEY = 'ld_player_desk_guide_shown'
@@ -98,6 +99,9 @@ Page({
     castDevice: '', // 投屏设备名（detail 拿不到就空串，UI 兜底文案「电视」）
     castTip: false, // 顶栏投屏钮首次气泡（T1·仅展示一次，见 CAST_TIP_KEY）
     landscape: false, // 手机横屏播放（R41·批3）：pageOrientation:auto 下 onResize 按窗口宽高比翻转，驱动 .land 覆写族
+    castPadRight: 0, // 顶栏右内边距（px·批5 真机走查修）：胶囊矩形动态算（CLAUDE §4 胶囊避让不硬编码）——静态留白在真机被胶囊压住投屏钮
+    overlayTop: 0, // 顶部浮层（segstrip/单击提示）锚点（px·批5）：锚顶栏实测底边——顶栏高度随状态栏/标题两行浮动，静态 rpx 锚真机必压状态栏
+    backGuard: false, // 侧滑返回垫层（P5 升级·批5）：page-container 在导航栈垫一层，手势/系统返回先消耗它（onGuardLeave）而非直接退页
   },
   courseId: '',
   course: null as CoursePub | null,
@@ -122,6 +126,8 @@ Page({
   lastTick: 0, // 拖动阻尼「嗒」时间戳（配方单源 lib/haptics·照抄 pages/flip-demo）
   lastVibe: 0, // 事件震（vibe()）时间戳（同上·两类震共用时间地板防叠震）
   _backAt: 0, // 返回二次确认判定锚点（P5·BACK_CONFIRM_MS 窗口内二次按返回才真退，见 onBack）
+  _guardTimer: 0, // 返回垫层重装定时器 id（onGuardLeave 落 false 后延时拉回 true·onUnload 必 clearTimeout）
+  _guardExiting: false, // 真退中标志：exitPlayer 置位后重装定时器不得再拉起垫层（否则 navigateBack 被自己的垫层吃掉）
 
   async onLoad(query: Record<string, string | undefined>) {
     const info = wx.getWindowInfo()
@@ -131,7 +137,10 @@ Page({
     // 假设撑到下一次真实旋转，.land 覆写族与后续 playSegment 的取址 mode 都会算错。此处与 onResize 用
     // 同一套宽高比判据，随首次 setData 一并落地（早于下方 playSegment 调用，故首次取址即已对齐）。
     const landscape = (info.windowWidth || 0) > (info.windowHeight || 0)
-    this.setData({ statusBarHeight: info.statusBarHeight, landscape })
+    // overlayTop 先落保守兜底（状态栏+58px≈顶栏两行标题高度），applyChromeMetrics 实测顶栏底边后精化——
+    // 不落兜底则首帧 segstrip/单击提示仍压状态栏一闪（批5 真机走查修）。
+    this.setData({ statusBarHeight: info.statusBarHeight, landscape, overlayTop: (info.statusBarHeight || 0) + 58 })
+    this.applyChromeMetrics(info.windowWidth || 0)
     this.courseId = String(query.courseId || '')
     // 来源页（me/my-courses）已把课程目录热进 lib/courses 缓存→这里零云调用；深链冷启动（分享链直进播放页）
     // 缓存未热→内部兜底重拉一次目录，行为不回退，只是不再每次都重拉（根因账本#15）。
@@ -168,6 +177,12 @@ Page({
     await this.playSegment(start, 'enter')
   },
 
+  // 侧滑返回垫层武装（P5 升级·批5）：page-container 需页面就绪后再 show（onLoad 同步 setData 有平台时序坑）。
+  // 一律武装（含 missing/denied 等态）——返回行为全页统一走 onBack 决策链，不按状态分叉出第二套。
+  onReady() {
+    this.setData({ backGuard: true })
+  },
+
   // 手机横屏播放（R41·批3）：pageOrientation:auto 下页面尺寸变化回调（基础库 2.4.0）。旋转是本批灵魂
   // 触发点——_seekRect 必须失效重测：旋转后 seek 条几何全变（横屏布局 .lp-seek 的 left/width 与竖屏
   // 完全不同），不清缓存则拖动定位全错（secAt 用旧 rect 算出的秒数落在错误位置）。windowWidthPx 同步
@@ -180,6 +195,7 @@ Page({
     if (landscape === this.data.landscape) return
     this._seekRect = null
     this.setData({ landscape }, () => this.measureSeekRect())
+    this.applyChromeMetrics(sz.windowWidth || this.windowWidthPx) // 旋转后胶囊矩形/顶栏高度全变，避让与浮层锚点随之重算（批5）
     // 换源方案（casting connected 时电视持有源，旋转手机不换源；swapSource 对同 url 自动 no-op，故回
     // 竖屏时无横屏源的段不产生动作，见 rotateSwapPlan）。
     const plan = rotateSwapPlan(this.data.current, landscape, this.data.casting === 'connected')
@@ -421,6 +437,29 @@ Page({
         if (r && r.width > 0) this._seekRect = { left: r.left, width: r.width }
       })
   },
+  // 顶栏胶囊避让 + 顶部浮层锚点（批5 真机走查修·根因#8「构建过≠真机能用」实锤：真机胶囊压住投屏钮、
+  // segstrip/单击提示压状态栏）：胶囊矩形与顶栏实测底边动态算（CLAUDE §4 胶囊避让用动态算、不硬编码）。
+  applyChromeMetrics(windowWidth: number) {
+    let castPadRight = 100 // 取不到胶囊矩形（个别机型/横屏下 API 异常）时的保守留白
+    try {
+      const menu = wx.getMenuButtonBoundingClientRect()
+      if (menu && menu.left > 0 && windowWidth > 0) castPadRight = Math.max(0, windowWidth - menu.left) + 8
+    } catch {
+      // 保守留白已就位
+    }
+    this.setData({ castPadRight }, () => this.measureTopbar())
+  },
+  // 顶部浮层锚点＝顶栏实测底边 + 6px：量不到（rect 缺席/高度 0 的已知时序坑）保留兜底值不覆盖。
+  measureTopbar() {
+    wx.createSelectorQuery()
+      .in(this)
+      .select('.lp-topbar')
+      .boundingClientRect()
+      .exec((res: { bottom: number }[]) => {
+        const r = res && res[0]
+        if (r && r.bottom > 0) this.setData({ overlayTop: Math.round(r.bottom) + 6 })
+      })
+  },
   // 拖动预览浮层 left 像素值（seekPct→px·夹在 [PREVIEW_EDGE_RPX, 轨道宽-PREVIEW_EDGE_RPX] 内防出屏）：
   // 用测得的 _seekRect.width（px，与 boundingClientRect 同坐标系）算原始落点，再用 windowWidthPx 把
   // PREVIEW_EDGE_RPX 换算成同一 px 坐标系夹取——JS 定值替代 WXSS clamp()（见 PREVIEW_EDGE_RPX 注）。
@@ -565,6 +604,7 @@ Page({
     wx.showToast({ title: '正在连接投屏设备…', icon: 'none' })
     const detail = (e && e.detail) || {}
     const castDevice = String(detail.deviceName || detail.name || '')
+    this.castTelemetry('select', '', detail) // detail 真实形状回传（真机校准判定用·批5）
     this.setData({ casting: 'connecting', castDevice })
   },
   // 投屏状态变化：real device 上 detail.state 真实取值待真机（见 docs/待办与债.md），保守只在明确看到
@@ -575,6 +615,7 @@ Page({
   // 断连/失败关键词必须先判，未命中再判连接关键词。
   onCastingStateChange(e: WechatMiniprogram.CustomEvent<{ state?: string }>) {
     const state = String((e.detail && e.detail.state) || '').toLowerCase()
+    this.castTelemetry('state', state, (e && e.detail) || {}) // detail.state 真实取值回传（真机校准保守判定·批5）
     if (state.includes('disconnect') || state.includes('exit') || state.includes('fail')) {
       this.stopCastingCleanup()
     } else if (state.includes('connect') || state.includes('project')) {
@@ -582,9 +623,18 @@ Page({
       this.setData({ casting: 'connected' })
     }
   },
-  onCastingInterrupt() {
+  onCastingInterrupt(e?: WechatMiniprogram.CustomEvent<Record<string, unknown>>) {
+    this.castTelemetry('interrupt', '', (e && e.detail) || {})
     wx.showToast({ title: '投屏已断开', icon: 'none' })
     this.stopCastingCleanup()
+  },
+  // 投屏事件回传单出口（批5·根因#8）：castingstatechange/interrupt 的 detail 真实形状官方未文档化、
+  // 代码只能保守子串判定——把真机看到的原始值经既有 trackEvent（events 集合）带回来，读到真值后收敛
+  // 判定条件；fire-and-forget 不影响交互，低频事件不惧限频。
+  castTelemetry(evt: string, state: string, detail: Record<string, unknown>) {
+    const cur = this.data.current
+    if (!cur) return
+    trackEvent('cast_state', 'player', cur.segmentId, { evt, state, keys: Object.keys(detail).join(',') })
   },
   // 断连/退出投屏共用单出口：回本机学习模式（R38 复归·连播自动关闭因 casting 已清，onEnded 的 casting
   // 门天然生效）；换回目标不是无条件写死 portrait——手机此刻若本身仍物理横屏（R41），断投屏后仍应留在
@@ -706,7 +756,7 @@ Page({
     const now = Date.now()
     if (now - this._backAt > BACK_CONFIRM_MS) {
       this._backAt = now
-      wx.showToast({ title: '再按一次返回退出', icon: 'none' })
+      wx.showToast({ title: '再返回一次退出', icon: 'none' }) // 文案兼容箭头点击与侧滑手势两条路径（批5 措辞微调）
       return
     }
     // 窗口内第二按：已展示过加桌引导直接真退；否则弹一次引导、不退（storage 读失败 fail-open 视同
@@ -734,11 +784,31 @@ Page({
     }
     this.exitPlayer()
   },
+  // 侧滑/系统返回被 page-container 垫层消耗（bind:leave·批5）：先重新武装（平台要求先落 false 再延时拉回
+  // true——同 tick 重复 show 不生效），再走与自绘返回箭头完全同一条 onBack 决策链（面板逐层收口/二次确认/
+  // 加桌引导）；真退路径由 exitPlayer 置 _guardExiting 阻断重装。定时器 onUnload 必清（孤儿定时器会对已退
+  // 页 setData）。
+  onGuardLeave() {
+    if (this._guardExiting) return // 真退中：撤垫层的 setData 若在某些机型反触发 leave，不得再进 onBack 链（防双重 navigateBack）
+    this.setData({ backGuard: false })
+    if (this._guardTimer) clearTimeout(this._guardTimer)
+    this._guardTimer = setTimeout(() => {
+      if (!this._guardExiting) this.setData({ backGuard: true })
+    }, 80) as unknown as number
+    this.onBack()
+  },
   // 真退单出口：原生返回栈优先，深链无上级页兜底回首页（既有兜底逻辑原样保留）。
+  // 批5：垫层还在场时（自绘箭头路径）navigateBack 会先被自己的垫层吃掉一层——先撤垫层再退；
+  // _guardExiting 置位让 onGuardLeave 的重装定时器失效，防「撤了又被装回去」死循环。
   exitPlayer() {
-    const pages = getCurrentPages()
-    if (pages.length > 1) wx.navigateBack()
-    else wx.reLaunch({ url: '/pages/home/home' }) // 深链直接进入播放页（无上级页可退）时兜底回首页
+    this._guardExiting = true
+    const go = () => {
+      const pages = getCurrentPages()
+      if (pages.length > 1) wx.navigateBack()
+      else wx.reLaunch({ url: '/pages/home/home' }) // 深链直接进入播放页（无上级页可退）时兜底回首页
+    }
+    if (this.data.backGuard) this.setData({ backGuard: false }, go)
+    else go()
   },
   // 加桌引导（P5b）：继续学习＝关弹窗留下（不退）；先退出＝执行真退。
   onDeskGuideStay() {
@@ -780,6 +850,7 @@ Page({
     this.reportWatchAt()
   },
   onUnload() {
+    if (this._guardTimer) clearTimeout(this._guardTimer) // 垫层重装定时器必清：孤儿定时器会对已退页 setData（批5）
     this.reportWatchAt()
   },
 })

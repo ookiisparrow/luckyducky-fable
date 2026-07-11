@@ -70,13 +70,8 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.lp-topbar-spacer {
-  flex: 0 0 auto;
-  width: 64rpx;
-  height: 64rpx;
-}
-
-/* 投屏钮（T1 终态·标题组与 spacer 之间）+ 首次气泡（弱化胶囊·CAST_TIP_KEY 仅展示一次） */
+/* 投屏钮（T1 终态·紧贴胶囊左侧·胶囊避让走 topbar 动态 padding-right，spacer 已退役——批5）
+   + 首次气泡（弱化胶囊·CAST_TIP_KEY 仅展示一次） */
 .lp-cast {
   flex: 0 0 auto;
   width: 64rpx;
@@ -91,7 +86,7 @@
 }
 .lp-cast-tip {
   position: absolute;
-  top: 96rpx;
+  top: calc(100% + 6rpx); /* 锚顶栏底边（批5：顶栏高度随状态栏/标题行浮动，静态 96rpx 真机会压进标题区）；right 走 wxml 内联 castPadRight */
   right: 56rpx;
   z-index: 22;
   padding: 12rpx 22rpx;
@@ -917,15 +912,10 @@
   padding: 12rpx 96rpx 20rpx 40rpx;
   background: linear-gradient(180deg, rgba(14, 11, 20, 0.85) 0%, rgba(14, 11, 20, 0) 100%);
 }
-/* 单击提示条随顶条内边距上移少许，避免紧贴放大后的顶条 */
-.land .lp-tap-hint {
-  top: 16rpx;
-}
-
 /* 分段进度条浮层：横屏纵向空间不足，顶部偏移收窄 + 内边距压扁 + 段格减薄；图例文字行隐藏（决策：
    纵向空间金贵，保留分段格本体即可，文字图例竖屏已充分说明含义，见重构日志本批 decisions）。 */
 .land .lp-segstrip {
-  top: 12rpx;
+  /* top 由 wxml 内联 overlayTop 统一锚定（批5·横竖同源），此处只留横屏压扁差异 */
   padding: 14rpx 26rpx 12rpx;
   gap: 10rpx;
 }

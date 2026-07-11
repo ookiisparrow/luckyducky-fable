@@ -12,13 +12,14 @@
      求助面板（P3·批D）：中央求助钮拉起底部 sheet（menu/videos/faq 三态，见 player.ts helpPanel），播放
      不阻断，唯一暂停例外＝帮助视频内嵌播放（P3b-play，简化决策：原生 <video controls>，不做自绘控制条
      ——辅助内容非主路径，防过度工程）。返回二次确认（P5）+ 首次成功退出加桌引导（P5b·仅一次·分端文案，
-     动画降级为静态示意区+文案）：手势/系统返回无法拦截（WebView 页无 onBackPress），仅自绘返回箭头经此。 -->
+     动画降级为静态示意区+文案）：返回二次确认覆盖两条路径——自绘返回箭头直调 onBack；侧滑/系统返回经
+     page-container 垫层拦入同一链（页尾节点·WebView 页无 onBackPress 的唯一可拦面·批5·真机复验中）。 -->
 <view class="ld-player {{landscape ? 'land' : ''}}">
 
   <!-- 顶条：返回 + 两行标题（数据源=批A lib/player 的 lessonStrip：主行 chapterTitle/副行 lessonNo·lessonName，
-       chapterTitle 空则只显 lessonName 脏档回退）+ 投屏钮（T1 终态·标题组与 spacer 之间）+ 右侧留白 spacer
-       （真机右上是原生胶囊，继续保持留白纪律，不放任何自绘元素） -->
-  <view class="lp-topbar" style="padding-top: {{statusBarHeight}}px">
+       chapterTitle 空则只显 lessonName 脏档回退）+ 投屏钮（T1 终态·紧贴胶囊左侧）。胶囊避让＝动态右内边距
+       castPadRight（getMenuButtonBoundingClientRect 实测·批5——静态 spacer 在真机被胶囊压住投屏钮，已退役）。 -->
+  <view class="lp-topbar" style="padding-top: {{statusBarHeight}}px; padding-right: {{castPadRight}}px">
     <view class="lp-back" bind:tap="onBack">
       <image class="lp-back-ico" src="/static/icons/chevron-right.svg" mode="aspectFit" />
     </view>
@@ -32,8 +33,7 @@
     <view class="lp-cast" bind:tap="onCast">
       <image class="lp-cast-ico" src="/static/icons/cast.svg" mode="aspectFit" />
     </view>
-    <view class="lp-cast-tip" wx:if="{{castTip}}" bind:tap="onCastTipClose">投屏到电视 · 满屏更清楚</view>
-    <view class="lp-topbar-spacer"></view>
+    <view class="lp-cast-tip" wx:if="{{castTip}}" style="right: {{castPadRight}}px" bind:tap="onCastTipClose">投屏到电视 · 满屏更清楚</view>
   </view>
 
   <!-- 视频舞台（1:1.68·padding-top 百分比法·避 aspect-ratio·旧 WebView 不支持·垂直居中） -->
@@ -71,11 +71,12 @@
         </view>
       </view>
 
-      <!-- 单击提示条：仅播放中且未被首次 tap 关闭过（页面实例级·不持久化） -->
-      <view class="lp-tap-hint" wx:if="{{state === 'playing' && src && !hintDismissed}}">单击画面 播放 / 暂停</view>
+      <!-- 单击提示条：仅播放中且未被首次 tap 关闭过（页面实例级·不持久化）。锚点 overlayTop＝顶栏实测
+           底边（批5：静态 rpx 锚在真机压状态栏，segstrip 同锚·内联 style 覆过 .land 静态 top）。 -->
+      <view class="lp-tap-hint" style="top: {{overlayTop + 46}}px" wx:if="{{state === 'playing' && src && !hintDismissed}}">单击画面 播放 / 暂停</view>
 
-      <!-- 分段进度条浮层：段落层级只活在这里（目录页只到课时层，批D 再落） -->
-      <view class="lp-segstrip" wx:if="{{strip}}">
+      <!-- 分段进度条浮层：段落层级只活在这里（目录页只到课时层，批D 再落）——锚 overlayTop 同上（批5） -->
+      <view class="lp-segstrip" style="top: {{overlayTop}}px" wx:if="{{strip}}">
         <view class="lp-segs">
           <view class="lp-seg-cell {{item}}" wx:for="{{strip.cells}}" wx:key="*this"></view>
         </view>
@@ -311,4 +312,9 @@
       <view class="lp-dg-quit" bind:tap="onDeskGuideExit">先退出，下次继续</view>
     </view>
   </view>
+
+  <!-- 侧滑/系统返回垫层（P5 升级·批5）：page-container 在导航栈垫一层，返回手势先消耗它（bind:leave→
+       onGuardLeave 走与返回箭头同一条 onBack 决策链），而非直接退页；overlay=false + duration=0 视觉无感；
+       真退时 exitPlayer 先撤垫层再 navigateBack（详见 player.ts onGuardLeave/exitPlayer 注释·真机复验中）。 -->
+  <page-container show="{{backGuard}}" overlay="{{false}}" duration="{{0}}" bind:leave="onGuardLeave"></page-container>
 </view>

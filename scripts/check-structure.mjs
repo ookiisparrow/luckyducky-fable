@@ -4807,6 +4807,11 @@ export const repoChecks = [
         bad.push('player.wxml 找不到退出投屏钮（bind:tap="onCastExit"）——T2 控制器态退出投屏入口缺失')
       if (wxml && /lp-help-cast/.test(wxml))
         bad.push('player.wxml 仍含 lp-help-cast——求助面板过渡投屏入口应已退役（T1 终态顶栏接管，两路并存会误导用户）')
+      // 侧滑/系统返回二次确认（P5 升级·批5 真机走查修）：WebView 页无 onBackPress，唯一可拦面＝
+      // page-container 垫层（返回手势先消耗容器一层·bind:leave 回调再走确认链），垫层节点缺失＝
+      // 手势返回绕过二次确认直接退页。
+      if (wxml && !/bind:?leave\s*=\s*"onGuardLeave"/.test(wxml))
+        bad.push('player.wxml 找不到返回垫层（page-container bind:leave="onGuardLeave"）——侧滑/系统返回将绕过二次确认直接退页（P5 手势覆盖缺失）')
       if (wxml && !/bind:?touchstart\s*=\s*"onSeekStart"/.test(wxml))
         bad.push('player.wxml 的自绘 seek 条未见 bind:touchstart="onSeekStart"——两段式拖动交互缺起点绑定')
       if (wxml && !/catch:?touchmove\s*=\s*"onSeekMove"/.test(wxml))
@@ -4860,6 +4865,12 @@ export const repoChecks = [
           if (!/measureSeekRect\s*\(/.test(onResizeStripped))
             bad.push('player.ts 的 onResize 方法体内未见 measureSeekRect(——旋转后未重新量取 seek 条几何，_seekRect 失效后不会自动补测')
         }
+        // 返回垫层回调必须委托 onBack 同一条决策链（面板逐层收口/二次确认/加桌引导）——另起一条＝
+        // 双源漂移（病根#5），箭头与手势两条返回路径行为迟早分叉。
+        const guardLeaveBody = methodBody(ts, 'onGuardLeave')
+        if (!guardLeaveBody) bad.push('player.ts 找不到 onGuardLeave 方法体——返回垫层回调缺失（侧滑返回二次确认失守）')
+        else if (!/this\.onBack\s*\(/.test(stripComments(guardLeaveBody)))
+          bad.push('player.ts 的 onGuardLeave 方法体内未见 this.onBack(——垫层回调须走与自绘返回箭头同一条决策链，另起一条＝双源漂移（病根#5）')
       }
 
       const csPath = join(base, 'utils/customerService.ts')
