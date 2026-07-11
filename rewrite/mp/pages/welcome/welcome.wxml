@@ -1,7 +1,11 @@
-<!-- 激活欢迎页·对齐设计 Welcome.jsx 变体A「沉浸全屏」：全屏照片 + 双段暗渐 scrim +
-     顶部品牌字标 + 底部锚定 eyebrow/大字/lead/胶囊 CTA。业务四态（激活/欢迎回来/已被使用/废码）
-     与输入态各占一屏，套同一沉浸壳。数据流与 handler 全保留（activate/onEnter/onRetry/onGoHome）。 -->
-<view class="ld-welcome">
+<!-- 激活欢迎页·对齐设计 Welcome.jsx 变体A「沉浸全屏」+ 播放器重设计战役批E 新增 W1/W2 lilac 壳。
+     业务态：phase 'input'（输入激活码）/ 'result'（兑课结果）/ 'w2'（W2 三件事屏·仅新激活可达）。
+     kind==='mine'/'taken'/'invalid' 三态与输入态一律走沉浸全屏照片壳（第一个 view，一字不动）；
+     唯独 kind==='activated' 改走 W1（恭喜屏）→ W2（三件事屏）两屏 lilac 壳（第二/三个 view，本批新增）。
+     数据流与 handler 全保留（activate/onEnter/onRetry/onGoHome），新增 onNextWelcome（W1→W2 纯前端翻屏）。 -->
+
+<!-- 沉浸全屏照片壳：input 态 + result 态里 kind !== 'activated'（mine/欢迎回来·taken/已被使用·invalid/废码） -->
+<view class="ld-welcome" wx:if="{{phase === 'input' || (phase === 'result' && kind !== 'activated')}}">
   <image wx:if="{{bg}}" class="ld-w-photo" src="{{bg}}" mode="aspectFill" />
   <view wx:else class="ld-w-photo ld-w-photo-empty"></view>
   <view class="ld-w-scrim"></view>
@@ -18,17 +22,6 @@
         <text>激活</text>
         <image class="ld-w-cta-ico" src="/static/icons/arrow-right.svg" mode="aspectFit" />
       </view>
-    </block>
-
-    <block wx:elif="{{kind === 'activated'}}">
-      <view class="ld-w-eyebrow">WELCOME · 开始学习</view>
-      <view class="ld-w-display">激活成功</view>
-      <view class="ld-w-lead">点下面开始学习。注意：确认进课后，这份材料包将不可退货。</view>
-      <view class="ld-w-cta {{busy ? 'dim' : ''}}" bind:tap="onEnter">
-        <text>确认进课 · 开始学习</text>
-        <image class="ld-w-cta-ico" src="/static/icons/arrow-right.svg" mode="aspectFit" />
-      </view>
-      <view class="ld-w-link" bind:tap="onGoHome">先逛逛，稍后再进课</view>
     </block>
 
     <block wx:elif="{{kind === 'mine'}}">
@@ -60,5 +53,73 @@
         <image class="ld-w-cta-ico" src="/static/icons/rotate-ccw-on.svg" mode="aspectFit" />
       </view>
     </block>
+  </view>
+</view>
+
+<!-- W1 恭喜屏（kind==='activated' 的 result 屏）：lilac 底·产品主图卡·课程名·「下一步」纯前端翻屏 -->
+<view class="ld-wl" wx:elif="{{phase === 'result' && kind === 'activated'}}">
+  <view class="ld-wl-body" style="padding-top: {{statusBarHeight + 24}}px">
+    <view class="ld-wl-brand">LUCKY DUCKY · 小棉鸭课堂</view>
+    <image wx:if="{{bg}}" class="ld-wl-hero" src="{{bg}}" mode="aspectFill" />
+    <view wx:else class="ld-wl-hero ld-wl-hero-empty"></view>
+    <view class="ld-wl-copy">
+      <view class="ld-wl-title">恭喜你，开启新课程</view>
+      <view class="ld-wl-course" wx:if="{{courseTitle}}">{{courseTitle}}</view>
+      <view class="ld-wl-lead">接下来的几个小时里，一团棉线会在你手上变成一只随身的幸运小鸭。</view>
+    </view>
+    <view class="ld-wl-foot">
+      <view class="ld-wl-dots">
+        <view class="ld-wl-dot on"></view>
+        <view class="ld-wl-dot"></view>
+      </view>
+      <view class="ld-wl-cta" bind:tap="onNextWelcome">
+        <text>下一步</text>
+        <image class="ld-wl-cta-ico" src="/static/icons/arrow-right.svg" mode="aspectFit" />
+      </view>
+    </view>
+  </view>
+</view>
+
+<!-- W2 三件事屏：lilac 底·三点卡·不可退货警示·「进入课程」走既有 onEnter -->
+<view class="ld-wl" wx:elif="{{phase === 'w2'}}">
+  <view class="ld-wl-body" style="padding-top: {{statusBarHeight + 24}}px">
+    <view class="ld-wl-brand">LUCKY DUCKY · 小棉鸭课堂</view>
+    <view class="ld-wl-points">
+      <view class="ld-wl-points-title">开始前，想让你知道三件事</view>
+      <view class="ld-wl-point">
+        <image class="ld-wl-point-ico" src="/static/icons/clapperboard.svg" mode="aspectFit" />
+        <view class="ld-wl-point-tx">
+          <view class="ld-wl-point-h">跟着分段视频，一步一步来</view>
+          <view class="ld-wl-point-p">每节课拆成了很短的小段落，看一段钩一段，不用倒来倒去找位置。</view>
+        </view>
+      </view>
+      <view class="ld-wl-point">
+        <image class="ld-wl-point-ico" src="/static/icons/life-buoy.svg" mode="aspectFit" />
+        <view class="ld-wl-point-tx">
+          <view class="ld-wl-point-h">卡住了，随时按「求助」</view>
+          <view class="ld-wl-point-p">播放页中间那颗按钮永远在——联系客服、帮助视频、常见问题都在里面。</view>
+        </view>
+      </view>
+      <view class="ld-wl-point">
+        <image class="ld-wl-point-ico" src="/static/icons/bookmark-check.svg" mode="aspectFit" />
+        <view class="ld-wl-point-tx">
+          <view class="ld-wl-point-h">进度自动保存</view>
+          <view class="ld-wl-point-p">随时离开随时回来，下次打开直接接着上次的位置继续。</view>
+        </view>
+      </view>
+    </view>
+    <view class="ld-wl-foot">
+      <view class="ld-wl-dots">
+        <view class="ld-wl-dot"></view>
+        <view class="ld-wl-dot on"></view>
+      </view>
+      <!-- 不可退货警示（业务告知义务·README 走查表第12项明确要求，不省） -->
+      <view class="ld-wl-warn">确认进课后，这份材料包将不可退货</view>
+      <view class="ld-wl-cta {{busy ? 'dim' : ''}}" bind:tap="onEnter">
+        <text>进入课程</text>
+        <image class="ld-wl-cta-ico" src="/static/icons/arrow-right.svg" mode="aspectFit" />
+      </view>
+      <view class="ld-wl-link" bind:tap="onGoHome">先逛逛，稍后再进课</view>
+    </view>
   </view>
 </view>

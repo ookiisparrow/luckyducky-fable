@@ -7,6 +7,7 @@ export interface SegmentPub {
   name?: string
   dur?: number
   hasVideo: boolean
+  marks?: { at: number; name?: string }[] // 关键动作节点（后台 admin 标注，尚未投产·设计拍板⑤·前端宽松读）
 }
 export interface LessonPub {
   id: string
@@ -32,6 +33,21 @@ export interface FlatSegment {
   segmentId: string
   segName: string
   hasVideo: boolean
+  marks: { at: number; name: string }[]
+}
+
+/** marks 清洗：非数组→[]；元素非对象/at 非有限数/at<0 剔除；at 取整、name 字符串化；按 at 升序输出。 */
+function cleanMarks(marks: unknown): { at: number; name: string }[] {
+  if (!Array.isArray(marks)) return []
+  const out: { at: number; name: string }[] = []
+  for (const m of marks) {
+    if (!m || typeof m !== 'object') continue
+    const at = Number((m as any).at)
+    if (!Number.isFinite(at) || at < 0) continue
+    out.push({ at: Math.floor(at), name: String((m as any).name || '') })
+  }
+  out.sort((a, b) => a.at - b.at)
+  return out
 }
 
 /** 三层展平为有序段列表（结构脏档安全：缺层归空·不崩）。 */
@@ -51,6 +67,7 @@ export function flattenSegments(course: unknown): FlatSegment[] {
           segmentId: String(s.id),
           segName: String(s.name || ''),
           hasVideo: !!s.hasVideo,
+          marks: cleanMarks(s.marks),
         })
       }
     }
@@ -134,4 +151,73 @@ export function createPlaybackCache(o: { fetcher: UrlFetcher; now?: () => number
       cache.delete(keyOf(courseId, segmentId))
     },
   }
+}
+
+export interface LessonStrip {
+  chapterTitle: string
+  lessonName: string
+  lessonNo: string // 课时跨章连续序号，1-based，padStart(2,'0')，如 '04'
+  segIndex: number // 当前段在本课时内的 1-based 序
+  segTotal: number // 本课时段数
+  cells: ('done' | 'cur' | 'todo')[] // 长度 = segTotal
+}
+
+/** 课时内分段条映射（P1/P4 segstrip 数据源）：在 course 中定位 currentSegId 所在课时，
+ *  按位置序给出播放中/播完两态的分段格状态（播放页无 progress 数据，这是诚实近似）。
+ *  播放中（completed 缺省/false）：当前段之前 done、当前段 cur、之后 todo。
+ *  播完态（completed===true）：当前段也转 done、紧随其后一段（若有）转 cur，其余不变（承播放中基线）——
+ *  规格原文「其余 'todo'」字面有两种读法（之前段维持 done vs 全部非当前/非下一段强制 todo）；
+ *  已按设计靶 播放器重设计.html 核实消歧（P1 board「done done cur . . . . .」→ P4 board 同一课时
+ *  「done done done cur . . . .」，之前已完成段在播完态后仍是 done、未被打回 todo），确认取「之前段维持 done」读法。
+ *  找不到当前段所在课时 → null；脏结构安全（缺层归空、字段 String 化）。 */
+export function lessonStrip(course: unknown, currentSegId: string, completed?: boolean): LessonStrip | null {
+  const c = (course && typeof course === 'object' ? course : {}) as Record<string, any>
+  let lessonNo = 0
+  for (const ch of Array.isArray(c.chapters) ? c.chapters : []) {
+    if (!ch) continue
+    for (const l of Array.isArray(ch.lessons) ? ch.lessons : []) {
+      if (!l || !l.id) continue
+      lessonNo++
+      const segs = (Array.isArray(l.segments) ? l.segments : []).filter((s: any) => s && s.id)
+      const idx = segs.findIndex((s: any) => String(s.id) === currentSegId)
+      if (idx < 0) continue
+      const cells: ('done' | 'cur' | 'todo')[] = segs.map((_: any, i: number) => {
+        if (i < idx) return 'done' // 之前：播放中/播完两态均已看完
+        if (i === idx) return completed === true ? 'done' : 'cur' // 当前：播完态转 done
+        if (completed === true && i === idx + 1) return 'cur' // 紧随其后一段：播完态高亮下一段
+        return 'todo'
+      })
+      return {
+        chapterTitle: String(ch.title || ''),
+        lessonName: String(l.name || ''),
+        lessonNo: String(lessonNo).padStart(2, '0'),
+        segIndex: idx + 1,
+        segTotal: segs.length,
+        cells,
+      }
+    }
+  }
+  return null
+}
+
+/** 磁吸判定（P2 拖动·纯函数）：窗口内取距离最近的关键动作节点，等距取 at 较小者；
+ *  marks 非数组/空、窗口内无候选、windowSec 非正数 → null。 */
+export function nearestMark(
+  sec: number,
+  marks: { at: number; name: string }[],
+  windowSec: number
+): { at: number; name: string } | null {
+  if (!Array.isArray(marks) || marks.length === 0) return null
+  if (!(windowSec > 0)) return null
+  let best: { at: number; name: string } | null = null
+  let bestDist = Infinity
+  for (const m of marks) {
+    const dist = Math.abs(m.at - sec)
+    if (dist > windowSec) continue
+    if (dist < bestDist || (dist === bestDist && best !== null && m.at < best.at)) {
+      best = m
+      bestDist = dist
+    }
+  }
+  return best
 }

@@ -29,7 +29,8 @@ Page({
     })
   },
   onTapCourse(e: WechatMiniprogram.TouchEvent) {
-    wx.navigateTo({ url: '/pages/player/player?courseId=' + String(e.currentTarget.dataset.id) })
+    // 课卡进目录（章>课时两层浏览），目录再进播放——播放器重设计战役批E 接线，highlightId 高亮逻辑不变。
+    wx.navigateTo({ url: '/pages/catalog/catalog?courseId=' + String(e.currentTarget.dataset.id) })
   },
   onActivate() {
     wx.navigateTo({ url: '/pages/welcome/welcome' })

@@ -4585,6 +4585,42 @@ export const repoChecks = [
     },
   },
   {
+    // 段落播完不自动切换（P4 通栏重播·播放器重设计战役 批B·设计拍板）：旧行为 onEnded 里自动
+    // playSegment(next) 切下一段——新设计要求段落播完停在完成态，给用户看「重播本段」通栏按钮自己选，
+    // 不替用户做主。守此不变量：onEnded 不许再出现 playSegment( 调用（自动切段回潮即红）且须落 segDone；
+    // onReplay 须真 seek(0) 从头重来；wxml 须有重播长条的 tap 绑定，否则 ts 有功能界面点不到。
+    // 模式分叉声明（批D·2026-07-11）：本守卫钉的是本机学习模式语义；投屏观看模式连续播为已拍板的模式
+    // 分叉（见需求清单 R40），届时守卫判据随投屏落地批改写，勿把两者当矛盾互相修掉。
+    id: 'rw-mp-player-no-autonext',
+    roots: ['R38'],
+    desc: '播放器重设计战役批B：段落播完不自动切换（P4 通栏重播·设计拍板 2026-07-11）——player.ts 的 onEnded 方法体不得含 playSegment( 调用（自动切段回潮即红）且须含 segDone；onReplay 方法体须存在且含 seek(0；player.wxml 须有 bind:tap="onReplay"（重播长条入口）',
+    run() {
+      const base = join(ROOT, 'rewrite/mp')
+      const tsPath = join(base, 'pages/player/player.ts')
+      if (!existsSync(tsPath)) return [] // 播放页未建时不红
+      const bad = []
+      const src = stripComments(readFileSync(tsPath, 'utf8')) // 剥注释单源 helper（错题本 E1）：防注释文本假触发/假放行
+      const endedBody = methodBody(src, 'onEnded')
+      if (!endedBody) {
+        bad.push('player.ts 找不到 onEnded 方法体——段落播完检测单点丢失')
+      } else {
+        if (/playSegment\s*\(/.test(endedBody))
+          bad.push('player.ts 的 onEnded 方法体内仍含 playSegment( 调用——自动切段回潮（设计拍板：段落播完不自动切换，须停在完成态给用户自己选）')
+        if (!/segDone/.test(endedBody)) bad.push('player.ts 的 onEnded 方法体内未见 segDone——播完完成态未落地')
+      }
+      const replayBody = methodBody(src, 'onReplay')
+      if (!replayBody) bad.push('player.ts 找不到 onReplay 方法体——重播入口单点丢失')
+      else if (!/seek\s*\(\s*0/.test(replayBody)) bad.push('player.ts 的 onReplay 方法体内未见 seek(0——重播未真正跳回段首')
+      const wxmlPath = join(base, 'pages/player/player.wxml')
+      if (existsSync(wxmlPath)) {
+        const wxml = readFileSync(wxmlPath, 'utf8')
+        if (!/bind:tap\s*=\s*"onReplay"/.test(wxml))
+          bad.push('player.wxml 找不到 bind:tap="onReplay"——重播长条按钮入口缺失（ts 有方法但界面点不到）')
+      }
+      return bad
+    },
+  },
+  {
     // 延时自动返回坞的生命周期清理（病根#5 样板复制即漂移·根因#8 真机才炸）：多页把「提交成功 toast + setTimeout(navigateBack)」
     // 这段坞复制来复制去，漏了清理——用户在延时窗口内手动返回（原生返回箭头/手势），页已出栈但 mp 的 setTimeout 绑 JS VM 不随
     // navigateBack 取消，孤儿定时器到点再 navigateBack 多弹一层。守此不变量：凡 .ts 既有 setTimeout 又有 navigateBack（＝延时返回坞），
@@ -4727,12 +4763,13 @@ export const repoChecks = [
   {
     // 播放页竖屏沉浸全屏 + 一键投屏 + 帮助(客服)入口（M2 批·根因#8 真机能力面 + 病根#5 样板复制即漂移）：
     // 竖屏沉浸播放器须自绘导航（原生标题栏与自绘黑条控制条会重叠打架）；关闭原生 controls 才不会跟自绘
-    // 底条打架；投屏主路径(原生按钮)+状态回报事件须都在，否则用户点了投屏不知道发生了什么；进度条 slider
-    // 须两段式绑定（changing=拖动中只改显示不 seek·change=松手才真 seek），否则 timeupdate 会在拖动中把
-    // 手指顶回去；备路径投屏须特性检测再调用（低版本微信直接报错崩交互）；客服入口须单源、不许在别处内联。
+    // 底条打架；投屏主路径(原生按钮)+状态回报事件须都在，否则用户点了投屏不知道发生了什么；进度条为自绘
+    // seek 条，须两段式绑定（onSeekStart/onSeekMove 拖动中只改显示不 seek·onSeekEnd 松手才真 seek，见播放器
+    // 重设计战役批C），否则 timeupdate 会在拖动中把手指顶回去；备路径投屏须特性检测再调用（低版本微信直接
+    // 报错崩交互）；客服入口须单源、不许在别处内联。
     id: 'rw-mp-player-immersive-casting',
     roots: ['#8', '#5'],
-    desc: '播放页竖屏沉浸全屏 + 一键投屏 + 帮助(客服)入口：player.json 须 navigationStyle:custom；player.wxml 的 <video> 须 controls="{{false}}" + show-casting-button + castingstatechange 事件绑定 + 帮助按钮节点 + slider 的 changing/change 两段式绑定；player.ts 须对备路径投屏 startCasting 做特性检测(typeof===\'function\')；客服入口须单源在 rewrite/mp/utils/customerService.ts（rewrite/mp 内 wx.openCustomerServiceChat 只此一处）',
+    desc: '播放页竖屏沉浸全屏 + 一键投屏 + 帮助(客服)入口：player.json 须 navigationStyle:custom；player.wxml 的 <video> 须 controls="{{false}}" + show-casting-button + castingstatechange 事件绑定 + 求助入口节点（bind:tap=onHelp）+ 自绘 seek 条两段式绑定（touchstart=onSeekStart/touchmove=onSeekMove/touchend=onSeekEnd）；player.ts 须对备路径投屏 startCasting 做特性检测(typeof===\'function\')，onSeekMove 方法体内不得出现 .seek(（两段式语义：拖动中只改显示）、onSeekEnd 方法体内须出现 .seek(（松手才真 seek）；客服入口须单源在 rewrite/mp/utils/customerService.ts（rewrite/mp 内 wx.openCustomerServiceChat 只此一处）',
     run() {
       const base = join(ROOT, 'rewrite/mp')
       if (!existsSync(base)) return []
@@ -4751,9 +4788,13 @@ export const repoChecks = [
       if (wxml && !/show-casting-button/.test(wxml)) bad.push('player.wxml 缺 show-casting-button——投屏主路径（原生按钮）未开启')
       if (wxml && !/bind:?castingstatechange/.test(wxml))
         bad.push('player.wxml 缺 castingstatechange 事件绑定——投屏状态（连接/中断）无回报，用户点了投屏不知道发生了什么（根因#14 呼应：动作类失败/状态变化不可静默）')
-      if (wxml && !/帮助/.test(wxml)) bad.push('player.wxml 找不到「帮助」按钮节点——客服入口占底条播放键位缺失（设计定案）')
-      if (wxml && !(/bind:?changing/.test(wxml) && /bind:?change\b/.test(wxml)))
-        bad.push('player.wxml 的 slider 未见两段式 changing+change 绑定——拖动中会被 timeupdate 把进度顶回去、或松手不 seek')
+      if (wxml && !/bind:?tap\s*=\s*"onHelp"/.test(wxml)) bad.push('player.wxml 找不到求助入口节点（bind:tap=onHelp）——客服入口占中央求助钮位缺失（设计定案）')
+      if (wxml && !/bind:?touchstart\s*=\s*"onSeekStart"/.test(wxml))
+        bad.push('player.wxml 的自绘 seek 条未见 bind:touchstart="onSeekStart"——两段式拖动交互缺起点绑定')
+      if (wxml && !/catch:?touchmove\s*=\s*"onSeekMove"/.test(wxml))
+        bad.push('player.wxml 的自绘 seek 条未见 catch:touchmove="onSeekMove"——拖动中显示更新缺失，且未 catch 会让 touchmove 透传（真机滚动/穿透风险）')
+      if (wxml && !/bind:?touchend\s*=\s*"onSeekEnd"/.test(wxml))
+        bad.push('player.wxml 的自绘 seek 条未见 bind:touchend="onSeekEnd"——松手真 seek 绑定缺失')
 
       const tsPath = join(base, 'pages/player/player.ts')
       const ts = existsSync(tsPath) ? readFileSync(tsPath, 'utf8') : ''
@@ -4774,6 +4815,16 @@ export const repoChecks = [
         if (!onCastBody) bad.push('player.ts 找不到 onCast 方法体——备路径投屏单点丢失')
         else if (!/typeof\s+[\w.]+\.startCasting\s*[!=]==\s*['"]function['"]/.test(stripComments(onCastBody)))
           bad.push('player.ts 的 onCast 方法体内未见 startCasting 特性检测（typeof ...===/!==\'function\'）——备路径投屏未按基础库能力探测就调用，低版本微信直接报错崩交互')
+        // 自绘 seek 两段式语义（播放器重设计战役批C）：拖动中绝不真 seek（否则被 timeupdate/卡顿顶回去），
+        // 只在松手时真 seek——各断在各自方法体内、剥注释后判定（错题本 E10：取真源须对剥注释后的函数体匹配）。
+        const seekMoveBody = methodBody(ts, 'onSeekMove')
+        if (!seekMoveBody) bad.push('player.ts 找不到 onSeekMove 方法体——自绘 seek 拖动中显示更新缺失')
+        else if (/\.seek\s*\(/.test(stripComments(seekMoveBody)))
+          bad.push('player.ts 的 onSeekMove 方法体内出现 .seek(——两段式语义破坏：拖动中真 seek 会被 timeupdate/卡顿顶回去')
+        const seekEndBody = methodBody(ts, 'onSeekEnd')
+        if (!seekEndBody) bad.push('player.ts 找不到 onSeekEnd 方法体——松手真 seek 缺失')
+        else if (!/\.seek\s*\(/.test(stripComments(seekEndBody)))
+          bad.push('player.ts 的 onSeekEnd 方法体内未见 .seek(——松手应真正 seek 到位')
       }
 
       const csPath = join(base, 'utils/customerService.ts')
@@ -4801,9 +4852,12 @@ export const repoChecks = [
     // wx.showToast('正在接入客服…')——旧线守卫早已判定这句假 Toast 绝迹，新线却原样重现（复制漂移同源）。
     // 触点表驱动（一张表+一条守卫范式，防新增触点各自为政）：批次C 触点扩面 2→4，收口 detail/onService、
     // player/onHelp、me/onKefu、aftersales/onKefu 四点（2026-07-08 用户拍板）。
+    // 播放器重设计战役批D（2026-07-11）：player.ts 求助钮改拉起求助面板（onHelp 不再直连客服），真客服
+    // 调用移入面板卡1 onHelpContact——触点表同批改写（onHelp→onHelpContact），wxml 上 bind:tap="onHelp"
+    // 节点原样保留（rw-mp-player-immersive-casting 钉的是节点存在，与方法体内调用什么无关）。
     id: 'rw-mp-customer-service-wired',
     roots: ['R18'],
-    desc: '客服触点真实化（rewrite/mp）：① 全目录禁「正在接入客服」假 Toast 绝迹（同旧线 customer-service-wired 判定的假占位家族）② 触点表驱动——detail.ts 的 onService()、player.ts 的 onHelp()、me.ts 的 onKefu()、aftersales.ts 的 onKefu() 方法体须真调 openCustomerService()，防触点各自散接/漏接',
+    desc: '客服触点真实化（rewrite/mp）：① 全目录禁「正在接入客服」假 Toast 绝迹（同旧线 customer-service-wired 判定的假占位家族）② 触点表驱动——detail.ts 的 onService()、player.ts 的 onHelpContact()、me.ts 的 onKefu()、aftersales.ts 的 onKefu() 方法体须真调 openCustomerService()，防触点各自散接/漏接',
     run() {
       const base = join(ROOT, 'rewrite/mp')
       if (!existsSync(base)) return []
@@ -4826,7 +4880,7 @@ export const repoChecks = [
       // 断言B：触点表驱动——每个触点方法体内须真调 openCustomerService()
       const TOUCHPOINTS = [
         { file: 'pages/detail/detail.ts', method: 'onService' },
-        { file: 'pages/player/player.ts', method: 'onHelp' },
+        { file: 'pages/player/player.ts', method: 'onHelpContact' },
         { file: 'pages/me/me.ts', method: 'onKefu' },
         { file: 'pages/aftersales/aftersales.ts', method: 'onKefu' },
       ]
@@ -5425,6 +5479,97 @@ export const repoChecks = [
       const src = stripComments(readFileSync(abs, 'utf8'))
       if (!/scryptSync\s*\(/.test(src)) bad.push(`${rel} 未见 scryptSync(——口令哈希仍可能是无盐 sha256（根因#13 离线彩虹表风险）`)
       if (!/keySalt/.test(src)) bad.push(`${rel} 未见 keySalt 字段——口令未加盐（根因#13）`)
+      return bad
+    },
+  },
+  {
+    // 播放器重设计战役批B 实录（2026-07-11）：helpbtn <view 开标签漏写 >，conventions/structure/typecheck/lint/test
+    // 五道机器网全绿放行——WXML 语法损坏连微信编译器都过不了，但本仓机器闸对「标签配平」完全免疫（此前从未有
+    // 守卫盯过 wxml 的标签语法本身，只盯属性/事件绑定字面量）。人工评审逮到后，批C 把这类缺陷机器化：轻量
+    // 配平扫描（非完整 XML parser，够咬住「漏写 >／漏闭合标签」这族缺陷即可，勿过度工程——真实 XML 边角情形
+    // 如 CDATA/命名空间/DOCTYPE 一律不认，wxml 语料里也不会出现）。
+    id: 'rw-mp-wxml-well-formed',
+    roots: ['#8'],
+    desc: 'wxml 标签配平（播放器重设计战役批B 痛史：helpbtn <view 漏 > 五道机器网全绿放行，人工评审逮到）：扫 rewrite/mp/**/*.wxml（含 components/custom-tab-bar），剥 <!-- --> 注释后逐标签扫（属性引号内的 </> 字符跳过，防 wx:if="{{a<b}}" 类表达式误判），栈式配平开/闭标签（自闭合 /> 不入栈）——标签未找到终止的 >（漏写 > 或被下一个标签打断）、闭合标签与栈顶不符、文件末尾栈非空，均视为损坏即红；轻量配平非完整 XML parser，够咬住这族缺陷即可',
+    run() {
+      const bad = []
+      const base = join(ROOT, 'rewrite/mp')
+      if (!existsSync(base)) return bad
+      const files = []
+      const walk = (d) => {
+        for (const e of readdirSync(d)) {
+          const p = join(d, e)
+          if (statSync(p).isDirectory()) walk(p)
+          else if (e.endsWith('.wxml')) files.push(p)
+        }
+      }
+      walk(base)
+      for (const abs of files) {
+        const rel = relative(ROOT, abs)
+        const raw = readFileSync(abs, 'utf8')
+        // 剥注释（保留换行数，行号仍对应原文件）：同 stripComments 的块注释处理手法（错题本 E1 同源思路）
+        const src = raw.replace(/<!--[\s\S]*?-->/g, (m) => m.replace(/[^\n]/g, ' '))
+        const lineAt = (pos) => src.slice(0, pos).split('\n').length
+        const stack = [] // { name, line }
+        const n = src.length
+        let i = 0
+        while (i < n) {
+          const lt = src.indexOf('<', i)
+          if (lt < 0) break
+          let j = lt + 1
+          const closing = src[j] === '/'
+          if (closing) j++
+          const nameStart = j
+          while (j < n && /[\w-]/.test(src[j])) j++
+          const tagName = src.slice(nameStart, j)
+          if (!tagName) {
+            i = lt + 1 // 非标签的裸 '<'（如未加空格的表达式字面量），跳过一个字符继续扫
+            continue
+          }
+          // 引号感知地扫到该标签自己的终止 '>'；扫描途中若遇到新的非引号内 '<'，说明当前标签根本没写 >
+          let k = j
+          let quote = null
+          let selfClose = false
+          let brokenAt = -1
+          while (k < n) {
+            const ch = src[k]
+            if (quote) {
+              if (ch === quote) quote = null
+              k++
+              continue
+            }
+            if (ch === '"' || ch === "'") {
+              quote = ch
+              k++
+              continue
+            }
+            if (ch === '<') {
+              brokenAt = k
+              break
+            }
+            if (ch === '>') {
+              selfClose = src[k - 1] === '/'
+              break
+            }
+            k++
+          }
+          if (brokenAt >= 0 || k >= n) {
+            bad.push(`${rel}:${lineAt(lt)} <${closing ? '/' : ''}${tagName}...> 未找到闭合 >（漏写 > 或标签被打断）——WXML 损坏，微信编译器过不了`)
+            i = brokenAt >= 0 ? brokenAt : n // 从打断处继续扫，不吞掉后续真实标签；EOF 情形直接结束本文件
+            continue
+          }
+          if (closing) {
+            const top = stack[stack.length - 1]
+            if (!top || top.name !== tagName)
+              bad.push(`${rel}:${lineAt(lt)} 闭合标签 </${tagName}> 与栈顶${top ? `<${top.name}>（第 ${top.line} 行）` : '（空栈）'}不符——标签未正确闭合`)
+            else stack.pop()
+          } else if (!selfClose) {
+            stack.push({ name: tagName, line: lineAt(lt) })
+          }
+          i = k + 1
+        }
+        for (const s of stack) bad.push(`${rel}:${s.line} <${s.name}> 未闭合（文件末尾栈非空）`)
+      }
       return bad
     },
   },

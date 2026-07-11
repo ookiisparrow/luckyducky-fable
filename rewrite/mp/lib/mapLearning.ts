@@ -93,3 +93,188 @@ export function mapMyCourses(mine: unknown, courses: unknown, progress?: unknown
   }
   return out
 }
+
+export interface CatalogLessonVM {
+  lessonId: string
+  no: string // 跨章连续 1-based padStart(2,'0')（与 lessonStrip.lessonNo 同口径）
+  name: string
+  segCount: number
+  minutes: number // Math.round(sum(seg.dur||0)/60)；无 dur 数据 = 0（页面隐藏时长）
+  status: 'done' | 'current' | 'todo'
+  lastLabel: string // 仅 current 且 last.segmentId 在本课时内：'上次学到 段落 N'（N=段 1-based 序）；否则 ''
+  firstPlayableSegId: string // 点行起播段 id：current 课时=续播段（续播段须 hasVideo，否则回退课时内首个 hasVideo 段）；其余=课时内首个 hasVideo 段；无可播=''
+}
+export interface CatalogChapterVM {
+  title: string
+  lessonCount: number
+  lessons: CatalogLessonVM[]
+}
+
+interface CatalogSeg {
+  id: string
+  hasVideo: boolean
+  dur: number
+}
+interface CatalogLessonRaw {
+  lessonId: string
+  lessonName: string
+  no: string
+  segments: CatalogSeg[]
+}
+
+/**
+ * 目录页数据源（C1·教学播放重设计批A·2026-07-11 预审裁决消歧优先级）：
+ * 课时状态判定优先级——① 全课全 done（每个段数>0 的课时都 done 且至少有一个课时）→ 全部 done、无 current（覆盖一切）；
+ * ② 否则 last.lessonId 命中的课时标 current（即使自身已 done——回看中）；③ 否则首个非 done 且含 hasVideo 段的课时标 current；
+ * 其余课时按「done=段数>0 且全部段 ∈ done 集合」/ todo 判。continueTarget 与 current 解耦独立判定（见下）。
+ * firstPlayableSegId / continueTarget 的「last 命中」分支须额外校验命中段 hasVideo（progress 记录可能滞后于
+ * admin 撤下/替换视频的编辑），不可播则视同未命中、落入课时内/全课首个 hasVideo 段兜底——对外承诺「非空即可播放」不因此松动。
+ * 脏结构安全同 segmentIdsOf 风格。
+ */
+export function mapCatalog(
+  course: unknown,
+  progressList: unknown,
+  courseId: string
+): { chapters: CatalogChapterVM[]; continueTarget: { segmentId: string; lessonId: string; lessonName: string } | null } {
+  const c = (course && typeof course === 'object' ? course : {}) as Record<string, any>
+  const lessons: CatalogLessonRaw[] = []
+  const chapterGroups: { title: string; lessonIdxs: number[] }[] = []
+  let no = 0
+  for (const ch of Array.isArray(c.chapters) ? c.chapters : []) {
+    if (!ch) continue
+    const idxs: number[] = []
+    for (const l of Array.isArray(ch.lessons) ? ch.lessons : []) {
+      if (!l || !l.id) continue
+      no++
+      const segments: CatalogSeg[] = (Array.isArray(l.segments) ? l.segments : [])
+        .filter((s: any) => s && s.id)
+        .map((s: any) => ({ id: String(s.id), hasVideo: !!s.hasVideo, dur: Number(s.dur) || 0 }))
+      idxs.push(lessons.length)
+      lessons.push({ lessonId: String(l.id), lessonName: String(l.name || ''), no: String(no).padStart(2, '0'), segments })
+    }
+    chapterGroups.push({ title: String(ch.title || ''), lessonIdxs: idxs })
+  }
+
+  // 命中进度条目：courseId 匹配 + 多条取 updatedAt 最大者
+  let prog: Record<string, any> | null = null
+  if (Array.isArray(progressList)) {
+    for (const p of progressList as Record<string, any>[]) {
+      if (!p || String(p.courseId || '') !== courseId) continue
+      if (!prog || Number(p.updatedAt || 0) > Number(prog.updatedAt || 0)) prog = p
+    }
+  }
+  const allSegIds = new Set<string>()
+  for (const l of lessons) for (const s of l.segments) allSegIds.add(s.id)
+  const doneSet = new Set<string>()
+  if (prog && prog.done && typeof prog.done === 'object') {
+    for (const k of Object.keys(prog.done)) if (prog.done[k] && allSegIds.has(k)) doneSet.add(k) // 交集·防 stale 顶爆
+  }
+  const last = prog && prog.last && typeof prog.last === 'object' ? (prog.last as Record<string, any>) : null
+
+  const lessonDone = (l: CatalogLessonRaw) => l.segments.length > 0 && l.segments.every((s) => doneSet.has(s.id))
+  const firstHasVideo = (l: CatalogLessonRaw) => l.segments.find((s) => s.hasVideo) || null
+
+  const substantive = lessons.filter((l) => l.segments.length > 0)
+  const allDone = substantive.length > 0 && substantive.every(lessonDone)
+
+  const lastLessonIdx = last && last.lessonId ? lessons.findIndex((l) => l.lessonId === String(last.lessonId)) : -1
+  let currentIdx = -1
+  if (!allDone) {
+    currentIdx = lastLessonIdx >= 0 ? lastLessonIdx : lessons.findIndex((l) => !lessonDone(l) && l.segments.some((s) => s.hasVideo))
+  }
+
+  const lessonVMs: CatalogLessonVM[] = lessons.map((l, i) => {
+    const isCurrent = i === currentIdx
+    const status: CatalogLessonVM['status'] = allDone ? 'done' : isCurrent ? 'current' : lessonDone(l) ? 'done' : 'todo'
+
+    let lastLabel = ''
+    let firstPlayableSegId = ''
+    if (isCurrent && i === lastLessonIdx && last && last.segmentId) {
+      const segIdx = l.segments.findIndex((s) => s.id === String(last.segmentId))
+      if (segIdx >= 0) {
+        lastLabel = `上次学到 段落 ${segIdx + 1}` // 上次学到哪段是历史事实，与该段现在是否仍可播无关
+        if (l.segments[segIdx].hasVideo) firstPlayableSegId = l.segments[segIdx].id // 续播段须可播，否则落入下方兜底
+      }
+    }
+    if (!firstPlayableSegId) {
+      const fv = firstHasVideo(l)
+      firstPlayableSegId = fv ? fv.id : ''
+    }
+
+    const minutes = Math.round(l.segments.reduce((sum, s) => sum + s.dur, 0) / 60)
+    return { lessonId: l.lessonId, no: l.no, name: l.lessonName, segCount: l.segments.length, minutes, status, lastLabel, firstPlayableSegId }
+  })
+
+  const chapters: CatalogChapterVM[] = chapterGroups.map((g) => ({
+    title: g.title,
+    lessonCount: g.lessonIdxs.length,
+    lessons: g.lessonIdxs.map((i) => lessonVMs[i]),
+  }))
+
+  // continueTarget：与 current 解耦——last 命中（课时+段都在本课、且该段仍 hasVideo）优先（全完成态重温也回上次位置）；
+  // last 命中段已不可播（如 admin 撤下视频）→ 视同未命中，落入下方兜底；
+  // 否则 current 课时首个可播段；否则全课首个可播段；全课无可播段 → null。
+  let continueTarget: { segmentId: string; lessonId: string; lessonName: string } | null = null
+  if (lastLessonIdx >= 0 && last && last.segmentId) {
+    const l = lessons[lastLessonIdx]
+    const segHit = l.segments.find((s) => s.id === String(last.segmentId))
+    if (segHit && segHit.hasVideo) continueTarget = { segmentId: segHit.id, lessonId: l.lessonId, lessonName: l.lessonName }
+  }
+  if (!continueTarget && currentIdx >= 0) {
+    const l = lessons[currentIdx]
+    const fv = firstHasVideo(l)
+    if (fv) continueTarget = { segmentId: fv.id, lessonId: l.lessonId, lessonName: l.lessonName }
+  }
+  if (!continueTarget) {
+    for (const l of lessons) {
+      const fv = firstHasVideo(l)
+      if (fv) {
+        continueTarget = { segmentId: fv.id, lessonId: l.lessonId, lessonName: l.lessonName }
+        break
+      }
+    }
+  }
+
+  return { chapters, continueTarget }
+}
+
+// 播放页求助面板·帮助视频（P3b·播放器重设计战役批D）：云端 getHelpVideos 返回两级主题→小段
+// （rewrite/cloud/src/functions/app/actions/reviews.ts，本批零改动）。清洗脏结构：非数组归空、
+// id/title/sub/desc/dur String 化（dur 原样字符串，不重新格式化）、url 非串归 null（短时地址过期/未剪辑）；
+// 无 title 且无 segments 的主题剔除（脏档不占一个空分组位）。
+export interface HelpVideoSegVM {
+  id: string
+  name: string
+  dur: string
+  url: string | null
+}
+export interface HelpTopicVM {
+  id: string
+  title: string
+  sub: string
+  desc: string
+  segments: HelpVideoSegVM[]
+}
+
+export function mapHelpVideos(r: unknown): HelpTopicVM[] {
+  const res = (r && typeof r === 'object' ? r : {}) as Record<string, any>
+  const items = Array.isArray(res.items) ? res.items : []
+  const out: HelpTopicVM[] = []
+  for (const raw of items) {
+    const it = (raw && typeof raw === 'object' ? raw : {}) as Record<string, any>
+    const rawSegs = Array.isArray(it.segments) ? it.segments : []
+    const segments: HelpVideoSegVM[] = rawSegs.map((sgRaw: unknown) => {
+      const sg = (sgRaw && typeof sgRaw === 'object' ? sgRaw : {}) as Record<string, any>
+      return {
+        id: String(sg.id || ''),
+        name: String(sg.name || ''),
+        dur: String(sg.dur || ''),
+        url: typeof sg.url === 'string' && sg.url ? sg.url : null,
+      }
+    })
+    const title = String(it.title || '')
+    if (!title && segments.length === 0) continue // 无题无段的脏主题剔除
+    out.push({ id: String(it.id || ''), title, sub: String(it.sub || ''), desc: String(it.desc || ''), segments })
+  }
+  return out
+}

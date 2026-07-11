@@ -1,17 +1,21 @@
-// 激活页（M2 批10）：扫激活卡二维码带 ?code= 进入（或手动输码）→ 兑课三态屏 → 确认进课。
-// 一码一用/幂等/退货权失效节点全在云端；本页只编排三态视图与背景回退链。
+// 激活页（M2 批10·播放器重设计战役批E 扩 W1/W2 恭喜/学习方式两屏）：扫激活卡二维码带 ?code= 进入
+// （或手动输码）→ 兑课三态屏 → （新激活）W1 恭喜屏 → W2 三件事屏 → 确认进课。
+// 一码一用/幂等/退货权失效节点全在云端；本页只编排各态视图与背景回退链。kind==='mine'/'taken'/'invalid'
+// 三态沉浸壳与文案一字不动；仅 kind==='activated' 的结果屏改走 W1/W2 lilac 壳（见 wxml 头注）。
 import { activateCourse, confirmEnter } from '../../api/learning'
 import { getContent } from '../../api/catalog'
+import { getCourseById } from '../../lib/courses'
 import { activationView, bgFor, type ActivationKind } from '../../lib/mapLearning'
 import type { ApiResult } from '../../utils/cloud'
 
 Page({
   data: {
     statusBarHeight: 0,
-    phase: 'input' as 'input' | 'result',
+    phase: 'input' as 'input' | 'result' | 'w2',
     kind: 'invalid' as ActivationKind,
     code: '',
     courseId: '',
+    courseTitle: '', // W1 课程名行数据源（取不到/空则不渲染该行·诚实回退，见 activate()）
     bg: '',
     busy: false,
   },
@@ -56,8 +60,20 @@ Page({
       phase: 'result',
       kind: view.kind,
       courseId: view.courseId,
+      courseTitle: '',
       bg: bgFor(this.home, view.courseId, view.kind),
     })
+    if (view.kind === 'activated' && view.courseId) {
+      // W1 课程名行（fail-soft）：新激活才取，mine/taken/invalid 三态沉浸壳不显课程名、不必取。
+      const course = await getCourseById(view.courseId)
+      if (this.unloaded) return // await 恢复点复核（新增 await 点同守 rw-mp-await-side-effect-unloaded-recheck 纪律）
+      const title = course ? String((course as Record<string, unknown>).title || '') : ''
+      if (title) this.setData({ courseTitle: title })
+    }
+  },
+  // W1 → W2（纯前端翻屏，不发请求）。
+  onNextWelcome() {
+    this.setData({ phase: 'w2' })
   },
   async onEnter() {
     if (this.data.busy) return
@@ -69,8 +85,9 @@ Page({
       wx.showToast({ title: '进课没成功，稍后再试', icon: 'none' })
       return
     }
-    // 定位：带上刚激活的 courseId，我的课程页高亮该课卡（用户扫码激活后要一眼找到刚拿到的课）；空值不带参（onEnter 前置 courseId 缺失兜底）
-    wx.redirectTo({ url: '/pages/my-courses/my-courses' + (this.data.courseId ? '?courseId=' + this.data.courseId : '') })
+    // 进课直达该课目录（W2「进入课程」/mine 屏「继续学习」共用本方法）；courseId 前置缺失兜底回我的课程列表（无参）。
+    const courseId = this.data.courseId
+    wx.redirectTo({ url: courseId ? '/pages/catalog/catalog?courseId=' + courseId : '/pages/my-courses/my-courses' })
   },
   onRetry() {
     this.setData({ phase: 'input', code: '', kind: 'invalid', bg: '' })

@@ -107,10 +107,10 @@ if (violations.length > 0) {
 
 phase('评审')
 const lensThunks = (A.lenses || []).map((l) => () =>
-  agent('你是只读评审员（镜头：' + l.key + '）。仓库 ' + REPO + '，先读批次规格 ' + A.specPath + '，再用 git status / git diff（working tree 未提交部分）+ 读文件核实。' + l.prompt + '\n执行者自述（对照用，不可轻信）：' + JSON.stringify({ files: exec.filesChanged, decisions: exec.decisions }) + '\n只报确证问题（P0-P3）带 file:line 证据；无问题返回空 findings，不为凑数硬找。', { label: 'review:' + l.key, phase: '评审', model: 'sonnet', schema: REVIEW_SCHEMA })
+  agent('你是只读评审员——铁律：绝不执行任何写/还原命令（git checkout/restore/stash/clean、覆盖写文件一律禁止），验证性篡改也不许（工作区与其他并行评审共享，你的还原会清掉本批全部未提交改动并污染其他评审）；需要验证守卫咬合时只读推演或复制文件到 /tmp 沙盘做。（镜头：' + l.key + '）。仓库 ' + REPO + '，先读批次规格 ' + A.specPath + '，再用 git status / git diff（working tree 未提交部分）+ 读文件核实。' + l.prompt + '\n执行者自述（对照用，不可轻信）：' + JSON.stringify({ files: exec.filesChanged, decisions: exec.decisions }) + '\n只报确证问题（P0-P3）带 file:line 证据；无问题返回空 findings，不为凑数硬找。', { label: 'review:' + l.key, phase: '评审', model: 'sonnet', schema: REVIEW_SCHEMA })
 )
 const unprimedThunk = () =>
-  agent('你是独立评审员。仓库 ' + REPO + ' 的 working tree 有一批未提交改动。除仓规 CLAUDE.md 外不给你任何背景提示：先用 git status / git diff 自行读懂这批改动想干什么，再以挑剔眼光找出任何你认为真实存在的问题（正确性/约定/安全/回归/账实不符），每条带 file:line 证据与严重度 P0-P3。发现不了就返回空 findings——不为凑数硬找。', { label: 'review:无镜头', phase: '评审', model: 'sonnet', schema: REVIEW_SCHEMA })
+  agent('你是独立评审员——铁律：绝不执行任何写/还原命令（git checkout/restore/stash/clean、覆盖写文件一律禁止），验证性篡改也不许（工作区与其他并行评审共享）；需要验证时只读推演或复制文件到 /tmp 沙盘做。仓库 ' + REPO + ' 的 working tree 有一批未提交改动。除仓规 CLAUDE.md 外不给你任何背景提示：先用 git status / git diff 自行读懂这批改动想干什么，再以挑剔眼光找出任何你认为真实存在的问题（正确性/约定/安全/回归/账实不符），每条带 file:line 证据与严重度 P0-P3。发现不了就返回空 findings——不为凑数硬找。', { label: 'review:无镜头', phase: '评审', model: 'sonnet', schema: REVIEW_SCHEMA })
 const reviews = await parallel([...lensThunks, unprimedThunk])
 
 const allFindings = reviews.filter(Boolean).flatMap((r) => r.findings || [])

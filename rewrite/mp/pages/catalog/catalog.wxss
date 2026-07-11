@@ -1,0 +1,178 @@
+/* 课程目录主页·对齐设计 C1。设计 402px 画板 → rpx（×1.866 取偶，同既有页换算口径）。
+   token 见 styles/tokens.wxss；hero 渐变占位与卡片圆角/描边引 token，chip 底色（--chip #f2ebfc）
+   tokens 缺此值——就地定义并注明设计来源，不改 tokens（单页局部值不入全局单一来源）。 */
+.ld-cat {
+  min-height: 100vh;
+  background: var(--ld-bg-lilac);
+}
+
+/* —— hero：产品主图 + 底部锚定「开始学习」CTA —— */
+.ld-cat-hero {
+  position: relative;
+  height: 750rpx;
+  overflow: hidden;
+  display: flex;
+  align-items: flex-end;
+}
+.ld-cat-hero-img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+.ld-cat-hero-empty {
+  background: linear-gradient(160deg, #efe9dc, #e8ddce 50%, #e4d9ea); /* 设计 C1 hero 渐变占位·局部专属·非 token */
+}
+.ld-cat-cta {
+  position: relative;
+  z-index: 1;
+  margin: 0 38rpx 38rpx;
+  width: calc(100% - 76rpx);
+  height: 100rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 16rpx;
+  border-radius: var(--ld-radius-pill);
+  background: var(--ld-purple-ink);
+  color: #fff;
+  font-size: 30rpx;
+  font-weight: 600;
+  letter-spacing: 1rpx;
+  box-shadow: 0 18rpx 46rpx rgba(0, 0, 0, 0.28);
+}
+.ld-cat-cta-h {
+  opacity: 0.9;
+}
+.ld-cat-cta.disabled {
+  background: var(--ld-content-2);
+  box-shadow: none;
+}
+.ld-cat-cta-ico {
+  width: 34rpx;
+  height: 34rpx;
+  filter: brightness(0) invert(1); /* 底色白化（同 welcome.wxss ld-w-logo 手法）：图标原色不论，统一白 */
+}
+
+/* —— 目录区 —— */
+.ld-cat-list {
+  padding: 18rpx 38rpx 52rpx;
+  display: flex;
+  flex-direction: column;
+  gap: 16rpx;
+}
+.ld-cat-ch {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 32rpx 4rpx 12rpx;
+}
+.ld-cat-ch-title {
+  font-size: 30rpx;
+  font-weight: 700;
+  color: var(--ld-ink);
+}
+.ld-cat-ch-count {
+  font-size: 22rpx;
+  color: var(--ld-content-2);
+}
+
+.ld-cat-lesson {
+  display: flex;
+  align-items: center;
+  gap: 26rpx;
+  background: #fff;
+  border: 2rpx solid var(--ld-line);
+  border-radius: var(--ld-radius-md);
+  padding: 26rpx 30rpx;
+}
+.ld-cat-lesson-h {
+  transform: scale(0.99);
+}
+.ld-cat-lesson-num {
+  flex: 0 0 auto;
+  width: 74rpx;
+  height: 74rpx;
+  border-radius: 50%;
+  background: #f2ebfc; /* 设计 chip 底（--chip）·tokens 未收录·局部定义 */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 28rpx;
+  font-weight: 600;
+  color: var(--ld-purple-tab);
+}
+.ld-cat-lesson-tx {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8rpx;
+}
+.ld-cat-lesson-name {
+  font-size: 28rpx;
+  font-weight: 500;
+  color: var(--ld-ink);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ld-cat-lesson-sub {
+  font-size: 22rpx;
+  color: var(--ld-content-2);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ld-cat-lesson-st {
+  flex: 0 0 auto;
+}
+.ld-cat-lesson-st-ico {
+  width: 40rpx;
+  height: 40rpx;
+}
+
+/* current：淡紫高亮描边 + 卡片底、课时名转紫强调 */
+.ld-cat-lesson.cur {
+  background: var(--ld-bg-lilac);
+  border-color: var(--ld-purple-line);
+}
+.ld-cat-lesson.cur .ld-cat-lesson-name {
+  color: var(--ld-purple-tab);
+  font-weight: 700;
+}
+/* todo：序号圈转灰调，与 done/current 视觉降级 */
+.ld-cat-lesson.todo .ld-cat-lesson-num {
+  background: var(--ld-bg-sage);
+  color: var(--ld-content-2);
+}
+
+/* 骨架占位（加载中） */
+.ld-cat-skel-num {
+  background: var(--ld-bg-sage);
+}
+.ld-cat-skel-line {
+  width: 320rpx;
+  height: 26rpx;
+  border-radius: 8rpx;
+  background: var(--ld-bg-sage);
+}
+
+/* —— 空态（课程不存在，对齐 my-courses 空态圈范式的精简版）—— */
+.ld-cat-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  padding: 220rpx 38rpx 0;
+}
+.ld-cat-empty-title {
+  font-size: 32rpx;
+  font-weight: 600;
+  color: var(--ld-ink);
+}
+.ld-cat-empty-hint {
+  margin-top: 14rpx;
+  font-size: 24rpx;
+  color: var(--ld-content-2);
+}
