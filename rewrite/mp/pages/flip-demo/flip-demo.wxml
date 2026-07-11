@@ -1,35 +1,67 @@
-<!-- 首页定格动画模块（三档拨杆·状态切换器）隔离验证副本（2026-07-11 用户拍板：真机看效果，
-     效果好再入首页）。不入 tabBar、无任何页面跳入本页——开发者工具「自定义编译条件」设本页为启动页，
-     点「预览」扫码即真机直达。 -->
+<!-- 首页定格动画模块隔离验证副本（2026-07-11 用户拍板：真机看效果，效果好再入首页）。
+     设计稿特写位为两个模块上下并排：方案一「拟物凹槽」（相对拨动·松手钟摆回中）+
+     方案二「三档拨杆」（左中右三稳态·顺拖动方向咔哒入档）。
+     不入 tabBar、无任何页面跳入本页——开发者工具「自定义编译条件」设本页为启动页，预览扫码真机直达。 -->
 <view class="fd-page">
   <view class="fd-head">
-    <view class="fd-title">三档拨杆 · 状态切换器</view>
-    <view class="fd-sub">首页定格动画模块 · 隔离验证副本（不入首页）</view>
+    <view class="fd-title">定格动画 · 两方案对比</view>
+    <view class="fd-sub">首页特写位模块 · 隔离验证副本（不入首页）</view>
   </view>
 
-  <!-- 画面舞台：36 帧占位画面，hidden 切换当前帧；画面本身不可拖，交互只走下方拨杆 -->
+  <!-- ================= 方案一 · 拟物凹槽（松手回中） ================= -->
+  <view class="fd-sec-label">方案一 · 拟物凹槽（左右拨动 · 松手钟摆回中）</view>
   <view class="fd-stage">
     <view
       wx:for="{{frames}}"
       wx:key="label"
       class="fd-cell"
-      hidden="{{index !== frame}}"
+      hidden="{{index !== frameA}}"
       style="background: {{item.bg}};"
     >
       <view class="fd-num">{{item.label}}</view>
       <view class="fd-dot" style="left: {{item.x}}%; top: {{item.y}}%;"></view>
     </view>
     <view class="fd-tag">定格动画 · 占位帧</view>
-    <view class="fd-counter">{{frames[frame].label}} · 36帧</view>
+    <view class="fd-counter">{{frames[frameA].label}} · 36帧</view>
   </view>
-
-  <!-- 拨杆滑轨：catch 系列锁页面滚动，拖动只翻帧 -->
   <view
-    class="fd-rail {{dragging ? 'dragging' : ''}}"
-    catchtouchstart="onRailStart"
-    catchtouchmove="onRailMove"
-    catchtouchend="onRailEnd"
-    catchtouchcancel="onRailEnd"
+    class="fd-rail fd-rail-jog {{dragA ? 'dragging' : ''}}"
+    catchtouchstart="onJogStart"
+    catchtouchmove="onJogMove"
+    catchtouchend="onJogEnd"
+    catchtouchcancel="onJogEnd"
+  >
+    <view class="fd-groove"></view>
+    <view class="fd-fader" style="transform: translateX({{jogA}}px);">
+      <view class="fd-fader-bar"></view>
+      <view class="fd-fader-bar"></view>
+      <view class="fd-fader-bar"></view>
+    </view>
+  </view>
+  <view class="fd-hint">左右拨动推钮翻帧，松手自动回中</view>
+
+  <!-- ================= 方案二 · 三档拨杆（状态切换器） ================= -->
+  <view class="fd-sec-label fd-sec-gap">方案二 · 三档拨杆（状态切换器 · 咔哒入档）</view>
+  <view class="fd-stage">
+    <view
+      wx:for="{{frames}}"
+      wx:key="label"
+      class="fd-cell"
+      hidden="{{index !== frameB}}"
+      style="background: {{item.bg}};"
+    >
+      <view class="fd-num">{{item.label}}</view>
+      <view class="fd-dot" style="left: {{item.x}}%; top: {{item.y}}%;"></view>
+    </view>
+    <view class="fd-tag">定格动画 · 占位帧</view>
+    <view class="fd-counter">{{frames[frameB].label}} · 36帧</view>
+  </view>
+  <view
+    class="fd-rail fd-rail-lever {{dragB ? 'dragging' : ''}}"
+    catchtouchstart="onLeverStart"
+    catchtouchmove="onLeverMove"
+    catchtouchend="onLeverEnd"
+    catchtouchcancel="onLeverEnd"
   >
     <view class="fd-slot"></view>
     <view class="fd-detents">
@@ -37,7 +69,7 @@
       <view class="fd-detent fd-detent-c"></view>
       <view class="fd-detent fd-detent-r"></view>
     </view>
-    <view class="fd-lever" style="transform: translateX({{jog}}px) rotate({{leverDeg}}deg);">
+    <view class="fd-lever" style="transform: translateX({{jogB}}px) rotate({{leverDeg}}deg);">
       <view class="fd-lever-bar"></view>
     </view>
   </view>
@@ -45,10 +77,11 @@
 
   <!-- 真机走查要点（工具端不震动，手感只有真机证得了·根因#8） -->
   <view class="fd-check">
-    <view class="fd-check-title">真机看三点</view>
-    <view class="fd-check-item">① 跟手性：拖动中帧号与画面即时跟指、不拖影不卡顿</view>
-    <view class="fd-check-item">② 入档手感：松手咔哒冲进档位、硬停无回弹，震动与视觉同步</view>
-    <view class="fd-check-item">③ 跨区提示：拖过档区边界有一下轻震；到行程尽头有轻震</view>
+    <view class="fd-check-title">真机看四点</view>
+    <view class="fd-check-item">① 跟手性（两方案）：拖动中帧号与画面即时跟指、不拖影不卡顿</view>
+    <view class="fd-check-item">② 方案一回中：松手后左右摆动逐渐收小、最终稳稳停回 00 帧；每次摆过中点有一下轻震</view>
+    <view class="fd-check-item">③ 方案二入档：松手咔哒冲进档位、硬停无回弹，震动与视觉同步；拖过档区边界有轻震</view>
+    <view class="fd-check-item">④ 到行程尽头（两方案）有一下轻震</view>
     <view class="fd-check-note">注：开发者工具不震动；iOS 关闭「系统触感」时震动静默失效</view>
   </view>
 </view>

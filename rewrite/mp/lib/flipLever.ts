@@ -1,6 +1,7 @@
-// 首页定格动画模块（三档拨杆·状态切换器）纯逻辑单源。语义移植自设计稿 主版本/Sections.jsx
-// FlipFrame（2026-07-11 用户拍板定性「状态切换器」·先在 pages/flip-demo 隔离真机验证）。
-// 页面层只做 touch 采集与 setData，入档决策/帧映射/占位帧数据全在这（可测、入首页时零改动搬走）。
+// 首页定格动画模块两方案纯逻辑单源：方案一「拟物凹槽」（松手钟摆回中 pendulumAt）+
+// 方案二「三档拨杆·状态切换器」（入档决策 leverTarget）。语义移植自设计稿 主版本/Sections.jsx
+// FlipFrame（2026-07-11 用户拍板：两方案先在 pages/flip-demo 隔离真机对比验证）。
+// 页面层只做 touch 采集与 setData，入档/钟摆/帧映射/占位帧数据全在这（可测、入首页时零改动搬走）。
 
 export const FLIP_N = 36
 export const FLIP_ZERO = 17 // 索引 17 ↔ 编号 00（左 -17 … 右 +18）
@@ -24,6 +25,18 @@ export function frameForRatio(ratio: number): number {
 /** 当前位移所在档区（震动跨区提示用）：±半行程一半为界。 */
 export function zoneOf(x: number, maxJ: number): -1 | 0 | 1 {
   return x < -maxJ / 2 ? -1 : x > maxJ / 2 ? 1 : 0
+}
+
+/* ---------- 拟物凹槽（方案一）：相对拨动 + 松手阻尼钟摆回中 ---------- */
+export const PENDULUM_T = 520 // 摆动周期 ms（承设计稿）
+export const PENDULUM_TAU = 320 // 衰减常数 ms
+
+/** 松手后 t 毫秒时的手柄位移：x0·e^(-t/τ)·cos(2πt/T)；摆幅 <2% 即归位结束。 */
+export function pendulumAt(x0: number, tMs: number): { x: number; done: boolean } {
+  if (!x0) return { x: 0, done: true }
+  const amp = Math.exp(-tMs / PENDULUM_TAU)
+  if (amp < 0.02) return { x: 0, done: true }
+  return { x: x0 * amp * Math.cos((2 * Math.PI * tMs) / PENDULUM_T), done: false }
 }
 
 export interface FlipFrame {

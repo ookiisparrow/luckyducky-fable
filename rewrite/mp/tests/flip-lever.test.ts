@@ -3,7 +3,7 @@
 // 拨杆三稳态（左 -17 / 中 00 / 右 +18），松手「顺拖动方向入档」——微动回起始档，成势则按方向进档，
 // 大幅拖拽可跨区直达；帧号由手柄位移比例绝对映射。
 import { describe, it, expect } from 'vitest'
-import { leverTarget, frameForRatio, zoneOf, flipFrames, FLIP_N, FLIP_ZERO } from '../lib/flipLever'
+import { leverTarget, frameForRatio, zoneOf, flipFrames, pendulumAt, FLIP_N, FLIP_ZERO, PENDULUM_T, PENDULUM_TAU } from '../lib/flipLever'
 
 const MAX = 100 // 半行程 px（测试用整数便于口算）
 
@@ -60,6 +60,29 @@ describe('zoneOf（当前位移所在档区·震动跨区提示用）', () => {
     expect(zoneOf(49, MAX)).toBe(0)
     expect(zoneOf(51, MAX)).toBe(1)
     expect(zoneOf(-51, MAX)).toBe(-1)
+  })
+})
+
+describe('pendulumAt（拟物凹槽松手·阻尼钟摆回中：x0·e^(-t/τ)·cos(2πt/T)）', () => {
+  it('大白话：t=0 在松手点、未结束；半个周期后摆到反侧（符号翻转）且振幅已衰减', () => {
+    const r0 = pendulumAt(80, 0)
+    expect(r0.x).toBeCloseTo(80, 5)
+    expect(r0.done).toBe(false)
+    const half = pendulumAt(80, PENDULUM_T / 2)
+    expect(half.x).toBeLessThan(0) // cos(π) = -1：摆到另一侧
+    expect(Math.abs(half.x)).toBeLessThan(80) // 振幅在衰减
+    expect(Math.abs(half.x)).toBeCloseTo(80 * Math.exp(-(PENDULUM_T / 2) / PENDULUM_TAU), 5)
+  })
+
+  it('大白话：摆幅衰到 2% 以下即归位结束（x=0·done）；松手点本就居中则立即结束', () => {
+    const late = pendulumAt(80, PENDULUM_TAU * 4) // e^-4 ≈ 1.8% < 2%
+    expect(late).toEqual({ x: 0, done: true })
+    expect(pendulumAt(0, 0)).toEqual({ x: 0, done: true })
+  })
+
+  it('大白话：包络单调衰减——整周期采样一圈比一圈小（最终收敛回中，不发散）', () => {
+    const peaks = [0, 1, 2, 3].map((n) => Math.abs(pendulumAt(80, n * PENDULUM_T).x))
+    for (let i = 1; i < peaks.length; i++) expect(peaks[i]).toBeLessThan(peaks[i - 1])
   })
 })
 
