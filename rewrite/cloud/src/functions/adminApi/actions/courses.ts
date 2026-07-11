@@ -49,12 +49,16 @@ export async function saveCourseDraft({ db, data }: Ctx) {
   return reply(200, { ok: true })
 }
 
-// 收集课程文档引用的全部 videoFileId（发布时孤儿视频 GC 用）
+// 收集课程文档引用的全部 videoFileId（发布时孤儿视频 GC 用）——竖屏 videoFileId + 横屏 videoFileIdLandscape
+// 双字段都收集：漏收横屏字段＝发布 GC 把仍在用的横屏视频当孤儿删光（不可逆删档，R39 灵魂之二）。
 function collectVideoIds(course: any): string[] {
   const out: string[] = []
   for (const ch of course?.chapters || [])
     for (const l of ch.lessons || [])
-      for (const sg of l.segments || []) if (sg && sg.videoFileId) out.push(String(sg.videoFileId))
+      for (const sg of l.segments || []) {
+        if (sg && sg.videoFileId) out.push(String(sg.videoFileId))
+        if (sg && sg.videoFileIdLandscape) out.push(String(sg.videoFileIdLandscape))
+      }
   return out
 }
 

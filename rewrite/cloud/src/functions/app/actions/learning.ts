@@ -147,7 +147,7 @@ export const confirmEnter = withOpenId(async ({ db, OPENID, event }) => {
 
 /** 公开课程目录（黄金 §三）：逐层显式白名单，绝不下发视频源；段只暴露 hasVideo 布尔。 */
 function publicSegment(s: any) {
-  return { id: s.id, name: s.name, dur: s.dur, hasVideo: !!s.videoFileId }
+  return { id: s.id, name: s.name, dur: s.dur, hasVideo: !!s.videoFileId, hasLandscape: !!s.videoFileIdLandscape }
 }
 function publicLesson(l: any) {
   return { id: l.id, name: l.name, dur: l.dur, segments: (l.segments || []).map(publicSegment) }
@@ -172,6 +172,7 @@ export const getPlaybackUrl = withOpenId(async ({ db, OPENID, event }) => {
   const e: any = event
   const courseId = String(e.courseId || '')
   const segmentId = String(e.segmentId || '')
+  const mode = e.mode === 'landscape' ? 'landscape' : 'portrait' // 白名单式：缺省/垃圾值一律竖屏，不加新错误码（契约 R39 §1）
   if (!courseId || !segmentId) return err(ERR.BAD_ARGS)
 
   // 批C·并行取回（零依赖只读）：课程文档读与鉴权读的入参只来自 courseId/segmentId/OPENID（已核对
@@ -208,7 +209,10 @@ export const getPlaybackUrl = withOpenId(async ({ db, OPENID, event }) => {
 
   if (!acts.data.length) return err(ERR.NOT_ENTITLED)
 
-  return ok({ url: await getTempUrl(String(seg.videoFileId)) })
+  // 诚实降级（契约 R39 §1）：请求横屏但该段无横屏源 → 供给竖屏并如实回 mode:'portrait'
+  const useLand = mode === 'landscape' && !!seg.videoFileIdLandscape
+  const fid = useLand ? seg.videoFileIdLandscape : seg.videoFileId
+  return ok({ url: await getTempUrl(String(fid)), mode: useLand ? 'landscape' : 'portrait' })
 })
 
 /** 本人已解锁课程（黄金 §五）：只认已确认进课；同课多码去重取最早。 */

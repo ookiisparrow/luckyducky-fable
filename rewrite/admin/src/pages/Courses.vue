@@ -166,7 +166,7 @@ function addLesson(ch: Record<string, any>) {
   ch.lessons.push({ id: '', name: '', dur: '', segments: [] })
 }
 function addSegment(l: Record<string, any>) {
-  l.segments.push({ id: '', name: '', dur: '', videoFileId: '' })
+  l.segments.push({ id: '', name: '', dur: '', videoFileId: '', videoFileIdLandscape: '' })
 }
 
 // 单段上传纳入批量传视频同一套防护（G2·P1）：换皮丢了这层——单段上传无锁，切课后仍在跑的上传把 videoFileId
@@ -191,6 +191,32 @@ async function pickVideo(l: Record<string, any>, sg: Record<string, any>, ev: Ev
       refreshStats()
       message.value = ''
     } else message.value = '视频上传失败：' + String(r.error || '')
+  } finally {
+    progress.value = ''
+    batchUploading.value = false
+    clearUploadLock()
+  }
+}
+
+// 横屏成片上传（R39·镜像 pickVideo）：三包两不包——包 uploadVideo 调用/写 videoFileIdLandscape/稳定引用重定位检查（P1 防幽灵写入，
+// 漏抄即复发）；不包 readDuration 自动填 dur（dur 归竖屏主成片定义，方案A 对齐假设下同值无需重填）与其余额外逻辑。
+async function pickVideoLandscape(l: Record<string, any>, sg: Record<string, any>, ev: Event) {
+  const file = (ev.target as HTMLInputElement).files?.[0]
+  if (!file || !course.value || batchUploading.value) return
+  batchUploading.value = true
+  setUploadLock() // 同 pickVideo：拦截离页/切步致孤儿上传
+  try {
+    progress.value = '上传中 0%'
+    const r = await uploadVideo(String(course.value.id), String(sg.name || 'seg') + '-land', file, (p) => (progress.value = `上传中 ${Math.round(p * 100)}%`))
+    if (!l.segments.includes(sg)) {
+      message.value = '这段已被移除，上传未关联' // 稳定引用重定位失败（段已被删）——如实跳过报告（同 pickVideo）
+      return
+    }
+    if (r.ok) {
+      sg.videoFileIdLandscape = r.fileId || ''
+      refreshStats()
+      message.value = ''
+    } else message.value = '横屏视频上传失败：' + String(r.error || '')
   } finally {
     progress.value = ''
     batchUploading.value = false
@@ -360,6 +386,11 @@ onMounted(load)
               <component :is="sg.videoFileId ? Check : Upload" :size="13" :stroke-width="2" />
               <span>{{ sg.videoFileId ? '已传 · 替换' : '选视频' }}</span>
               <input type="file" accept="video/mp4,video/quicktime" hidden :disabled="batchUploading" @change="(e) => pickVideo(l, sg, e)" />
+            </label>
+            <label class="upload" :class="{ done: sg.videoFileIdLandscape, disabled: batchUploading }">
+              <component :is="sg.videoFileIdLandscape ? Check : Upload" :size="13" :stroke-width="2" />
+              <span>{{ sg.videoFileIdLandscape ? '横屏 · 替换' : '横屏' }}</span>
+              <input type="file" accept="video/mp4,video/quicktime" hidden :disabled="batchUploading" @change="(e) => pickVideoLandscape(l, sg, e)" />
             </label>
             <button class="icon-btn" title="上移" :disabled="si === 0 || batchUploading" @click="move(l.segments, si, -1)">↑</button>
             <button class="icon-btn" title="下移" :disabled="si === l.segments.length - 1 || batchUploading" @click="move(l.segments, si, 1)">↓</button>

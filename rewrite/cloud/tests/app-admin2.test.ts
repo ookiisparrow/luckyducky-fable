@@ -192,6 +192,57 @@ describe('课程发布与孤儿视频回收（黄金）', () => {
     expect(deleted).not.toContain('cloud://v/keep.mp4') // 仍在用不误删
     expect(deleted).not.toContain('cloud://v/new.mp4')
   })
+
+  it('大白话：cleanCourse 往返——草稿带 videoFileIdLandscape，saveCourseDraft 存后 getCourseDraft 读回字段仍在（R39）', async () => {
+    await post('saveCourseDraft', {
+      course: {
+        id: 'c1',
+        title: '课',
+        chapters: [
+          { id: 'ch1', title: '章', lessons: [{ id: 'l1', name: '节', segments: [
+            { id: 's1', name: '段', videoFileId: 'cloud://v/s1.mp4', videoFileIdLandscape: 'cloud://v/s1-land.mp4' },
+          ] }] },
+        ],
+      },
+    })
+    const r = await post('getCourseDraft', { courseId: 'c1' })
+    expect(r.course.chapters[0].lessons[0].segments[0].videoFileIdLandscape).toBe('cloud://v/s1-land.mp4')
+  })
+
+  it('大白话：发布 GC 双字段——新旧发布都引用的横屏 id 不删；旧发布引用、新发布已移除的横屏 id 进 GC 删除清单（R39）', async () => {
+    control.seed('courses', [
+      {
+        _id: 'c1',
+        id: 'c1',
+        title: '旧版',
+        chapters: [
+          { id: 'ch1', title: '章', lessons: [{ id: 'l1', name: '节', segments: [
+            { id: 's1', name: '换掉横屏的段', videoFileId: 'cloud://v/keep.mp4', videoFileIdLandscape: 'cloud://v/old-land.mp4' },
+            { id: 's2', name: '横屏保留的段', videoFileId: 'cloud://v/keep2.mp4', videoFileIdLandscape: 'cloud://v/keep-land.mp4' },
+          ] }] },
+        ],
+      },
+    ])
+    control.seed('coursesDraft', [
+      {
+        _id: 'c1',
+        id: 'c1',
+        title: '新版',
+        chapters: [
+          { id: 'ch1', title: '章', lessons: [{ id: 'l1', name: '节', dur: '', segments: [
+            { id: 's1', name: '换掉横屏的段', dur: '', videoFileId: 'cloud://v/keep.mp4', videoFileIdLandscape: 'cloud://v/new-land.mp4' },
+            { id: 's2', name: '横屏保留的段', dur: '', videoFileId: 'cloud://v/keep2.mp4', videoFileIdLandscape: 'cloud://v/keep-land.mp4' },
+          ] }] },
+        ],
+      },
+    ])
+    expect((await post('publishCourse', { courseId: 'c1' })).ok).toBe(true)
+    const deleted = control.deletedFiles()
+    expect(deleted).toContain('cloud://v/old-land.mp4') // 旧发布引用、新发布已移除的横屏 id → GC
+    expect(deleted).not.toContain('cloud://v/keep-land.mp4') // 新旧发布都引用的横屏 id 不删
+    expect(deleted).not.toContain('cloud://v/keep.mp4')
+    expect(deleted).not.toContain('cloud://v/keep2.mp4')
+  })
 })
 
 describe('分片上传（黄金：缺号拒·重组等字节·清理）', () => {

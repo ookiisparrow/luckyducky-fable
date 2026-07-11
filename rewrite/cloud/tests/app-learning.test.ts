@@ -22,6 +22,7 @@ const COURSE = {
           segments: [
             { id: 's1', name: '起针', dur: '5:00', videoFileId: 'cloud://v/s1.mp4', free: true },
             { id: 's2', name: '长针', dur: '5:00', videoFileId: '' },
+            { id: 's3', name: '短针', dur: '5:00', videoFileId: 'cloud://v/s3.mp4', videoFileIdLandscape: 'cloud://v/s3-land.mp4' },
           ],
         },
       ],
@@ -248,6 +249,50 @@ describe('getCourses / getPlaybackUrl（目录不漏源·鉴权 fail-closed·黄
     expect((await call('getPlaybackUrl', { courseId: 'c1', segmentId: 's2' })).url).toBe(null)
     expect((await call('getPlaybackUrl', { courseId: 'nope', segmentId: 's1' })).error).toBe('NO_COURSE')
     expect((await call('getPlaybackUrl', { courseId: 'c1', segmentId: 'nope' })).error).toBe('NO_SEGMENT')
+  })
+
+  describe('横屏成片（R39·getPlaybackUrl mode + getCourses hasLandscape）', () => {
+    beforeEach(async () => {
+      await call('activateCourse', { code: 'CODE1' })
+      await call('confirmEnter', { code: 'CODE1' })
+    })
+
+    it('大白话：有横屏源的段 + mode:landscape → 回横屏 url 与 mode:landscape', async () => {
+      const r = await call('getPlaybackUrl', { courseId: 'c1', segmentId: 's3', mode: 'landscape' })
+      expect(r.url).toBe('https://tmp/cloud://v/s3-land.mp4')
+      expect(r.mode).toBe('landscape')
+    })
+
+    it('大白话：只有竖屏没有横屏的段 + mode:landscape → 诚实降级，回竖屏 url 与 mode:portrait', async () => {
+      const r = await call('getPlaybackUrl', { courseId: 'c1', segmentId: 's1', mode: 'landscape' })
+      expect(r.url).toBe('https://tmp/cloud://v/s1.mp4')
+      expect(r.mode).toBe('portrait')
+    })
+
+    it('大白话：mode 垃圾值 / 缺省 → 一律竖屏，不加新错误码', async () => {
+      const r1 = await call('getPlaybackUrl', { courseId: 'c1', segmentId: 's3', mode: 'xxx' })
+      expect(r1.url).toBe('https://tmp/cloud://v/s3.mp4')
+      expect(r1.mode).toBe('portrait')
+      const r2 = await call('getPlaybackUrl', { courseId: 'c1', segmentId: 's3' })
+      expect(r2.url).toBe('https://tmp/cloud://v/s3.mp4')
+      expect(r2.mode).toBe('portrait')
+    })
+
+    it('大白话：未剪语义不变——未剪段即使带 mode:landscape 仍回 {url:null}，不带 mode 字段', async () => {
+      const r = await call('getPlaybackUrl', { courseId: 'c1', segmentId: 's2', mode: 'landscape' })
+      expect(r.url).toBe(null)
+      expect(r.mode).toBeUndefined()
+    })
+
+    it('大白话：公开目录 hasLandscape 布尔——有横屏源的段为 true、无的为 false，绝不下发 fileId', async () => {
+      const r = await call('getCourses')
+      const raw = JSON.stringify(r)
+      expect(raw.includes('videoFileIdLandscape')).toBe(false)
+      expect(raw.includes('cloud://')).toBe(false)
+      const segs = r.list[0].chapters[0].lessons[0].segments
+      expect(segs[2].hasLandscape).toBe(true)
+      expect(segs[0].hasLandscape).toBe(false)
+    })
   })
 })
 
