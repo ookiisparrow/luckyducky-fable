@@ -4,6 +4,10 @@
 // 投屏双保险（真机走查后收敛，见 docs/待办与债.md）：主路径=原生 show-casting-button（官方文档未言明
 // 依赖 controls，社区有 controls=false 下可用实例）；备路径=底条自绘投屏按钮，wx.createVideoContext 后
 // 特性检测 typeof ctx.startCasting==='function'（基础库 2.32.0·仅 tap 回调内调用），不支持则提示微信版本过低。
+// 自绘 seek 条（播放器重设计战役批C，取代原生 <slider>）：两段式语义——拖动中只改显示（onSeekStart/
+// onSeekMove），松手才真 seek（onSeekEnd）；关键动作节点磁吸（nearestMark）+ 拖动阻尼震感配方照抄
+// pages/flip-demo 已验真机参考实现（lib/haptics 单源 shouldTick/VIBE_GAP_MS/DRAG_TICK_GAP_MS）。
+// 拖动浮层原设计有雪碧图缩略图窗（R36 后端未建），诚实降级为时间浮窗 + 命中节点时的鸭黄气泡。
 import { getPlaybackUrl, trackEvent } from '../../api/learning'
 import {
   flattenSegments,
@@ -12,14 +16,22 @@ import {
   formatClock,
   clampSeek,
   lessonStrip,
+  nearestMark,
   type CoursePub,
   type FlatSegment,
   type LessonStrip,
 } from '../../lib/player'
 import { getCourseById } from '../../lib/courses'
 import { openCustomerService } from '../../utils/customerService'
+import { shouldTick, VIBE_GAP_MS, DRAG_TICK_GAP_MS } from '../../lib/haptics'
 
 const TIME_UPDATE_THROTTLE_MS = 250
+// 磁吸窗口（秒）：拖动秒数落在关键动作节点前后 3 秒内即吸附（批C 规格默认值·真机手感待调参 flag）。
+const MARK_SNAP_SEC = 3
+// 拖动预览浮层防出屏边距（rpx）：规格原定 CSS clamp(64rpx, ..., calc(100% - 64rpx)) 夹取，改在 JS 侧算好
+// 像素值再传 px 内联样式——WXSS clamp() 是本仓首次出现的用法（无既有先例，真机支持度未经验证，CLAUDE.md
+// §4 对同类兼容性存疑的 CSS 函数已有专门规避先例 backdrop-filter/color-mix()），JS 算值零风险等价替代。
+const PREVIEW_EDGE_RPX = 64
 
 // segcap 文案三态（P4·播放器重设计战役批B §2c）：播放中报「段落 x/y」；播完且课时内有下一段报「x 完成·接下来 x+1」；
 // 播完且课时末段——查 navSegment 是否有跨课时下一段，有则报下一课时名，无则「本课程已全部学完」。
@@ -60,10 +72,15 @@ Page({
     strip: null as LessonStrip | null, // 顶条两行标题 + 分段进度条浮层数据源（批A lib/player lessonStrip）
     capText: '', // segstrip 左侧文案（三态，见 buildCapText）
     hintDismissed: false, // 单击提示条是否已被首次 tap 关闭（页面实例级·不持久化·无定时器）
+    seekPct: 0, // 自绘 seek 条填充百分比（0–100·onTimeUpdate/onSeekMove/onSeekEnd 三处维护）
+    snapName: '', // 拖动磁吸命中的关键动作节点名（seeking 时气泡文案，未命中为空串）
+    markVMs: [] as { at: number; pct: number; name: string }[], // 关键动作节点位图（onTimeUpdate 首次拿到非零 durSec 时算一次，durSec 已有值后不重算）
+    previewLeft: 0, // 拖动预览浮层 left 像素值（JS 算好夹取值·px 单位·见 updateSeekDisplay，避免 WXSS clamp() 兼容性风险）
   },
   courseId: '',
   course: null as CoursePub | null,
   srcSetAt: 0,
+  windowWidthPx: 0, // rpx→px 换算基准（onLoad 存·750rpx = windowWidthPx px）
   firstFrameScene: 'enter' as 'enter' | 'seg' | 'retry',
   firstFrameReported: false,
   playToken: 0, // 切段请求令牌（防乱序回包覆盖·守卫 rw-mp-player-stale-guarded）
@@ -73,9 +90,15 @@ Page({
   lastTimeUpdateAt: 0, // bindtimeupdate 节流时间戳（250ms·减频 setData）
   _at: 0, // 最近一次 timeupdate 的播放位置（秒·每次事件都更新·不受 setData 节流影响）——watch_at/segment_done 埋点用
   _dur: 0, // 最近一次 timeupdate 的总时长（秒·同上）
+  _seekRect: null as { left: number; width: number } | null, // 自绘 seek 条量轨缓存（首次播放成功后量一次·换段不重量，见 playSegment）
+  _seekPrevSec: 0, // 拖动逐秒轻嗒判重锚点（onSeekStart 时置为当前 curSec）
+  _lastSnapAt: -1, // 拖动进节点重嗒判重（onSeekStart 时重置为 -1·新命中/换节点才震）
+  lastTick: 0, // 拖动阻尼「嗒」时间戳（配方单源 lib/haptics·照抄 pages/flip-demo）
+  lastVibe: 0, // 事件震（vibe()）时间戳（同上·两类震共用时间地板防叠震）
 
   async onLoad(query: Record<string, string | undefined>) {
     const info = wx.getWindowInfo()
+    this.windowWidthPx = info.windowWidth || 0 // rpx→px 换算基准（750rpx = 本机 windowWidth px），供拖动预览浮层防出屏边距用
     this.setData({ statusBarHeight: info.statusBarHeight })
     this.courseId = String(query.courseId || '')
     // 来源页（me/my-courses）已把课程目录热进 lib/courses 缓存→这里零云调用；深链冷启动（分享链直进播放页）
@@ -116,6 +139,7 @@ Page({
     // 骨架永不显，且坏 src 重挂到新段会瞬时 bind:error 白吃掉新段的一次重试预算（审计②）。
     // 进度/暂停态一并归零：新段是新的播放单元，旧段的进度条/暂停指示不该带过来。
     // segDone/strip/capText 一并重算（completed=false）：新段是新的播放单元，旧段的播完通栏不该带过来（P4）。
+    // seekPct/markVMs/snapName 一并归零：自绘 seek 条填充/节点位图/磁吸气泡都属旧段，不带过来（批C）。
     const strip = lessonStrip(this.course, seg.segmentId, false)
     this.setData({
       state: 'loading',
@@ -130,6 +154,10 @@ Page({
       segDone: false,
       strip,
       capText: buildCapText(strip, false, this.course, seg.segmentId),
+      seekPct: 0,
+      markVMs: [],
+      snapName: '',
+      previewLeft: 0,
     })
     let url = ''
     try {
@@ -145,12 +173,18 @@ Page({
       return
     }
     this.srcSetAt = Date.now()
-    this.setData({
-      state: 'playing',
-      src: url,
-      canPrev: !!navSegment(this.course, seg.segmentId, -1),
-      canNext: !!navSegment(this.course, seg.segmentId, 1),
-    })
+    this.setData(
+      {
+        state: 'playing',
+        src: url,
+        canPrev: !!navSegment(this.course, seg.segmentId, -1),
+        canNext: !!navSegment(this.course, seg.segmentId, 1),
+      },
+      () => {
+        // 首次量取 seek 条布局；换段重入该回调时已有值即跳过——底条布局不随段变化，无需重量。
+        if (!this._seekRect) this.measureSeekRect()
+      }
+    )
   },
 
   onFirstPlay() {
@@ -170,11 +204,15 @@ Page({
     this.setData({ paused: false })
     // 用户经系统手势/重播外路径恢复播放时，完成态不该残留（P4）：常规路径已由 onReplay/playSegment 复位，
     // 这里兜底任何其他恢复播放的入口（如原生投屏面板暂停后又本机继续播）。
-    if (this.data.segDone) {
-      const cur = this.data.current
-      const strip = cur ? lessonStrip(this.course, cur.segmentId, false) : null
-      this.setData({ segDone: false, strip, capText: buildCapText(strip, false, this.course, cur ? cur.segmentId : '') })
-    }
+    if (this.data.segDone) this.exitSegDone()
+  },
+
+  // 退出播完完成态（P4）单出口：恢复播放的三条路径（onVideoPlay 兜底/onReplay/onSeekEnd）共用——
+  // 重算 strip/capText（completed=false）+ 复位 segDone；extra 并入同一次 setData（onSeekEnd 要一并收口拖动态）。
+  exitSegDone(extra: Partial<{ seeking: boolean; snapName: string }> = {}) {
+    const cur = this.data.current
+    const strip = cur ? lessonStrip(this.course, cur.segmentId, false) : null
+    this.setData({ ...extra, segDone: false, strip, capText: buildCapText(strip, false, this.course, cur ? cur.segmentId : '') })
   },
   onVideoPause() {
     this.setData({ paused: true })
@@ -197,8 +235,7 @@ Page({
     const ctx = wx.createVideoContext('lp-video', this)
     ctx.seek(0)
     ctx.play()
-    const strip = lessonStrip(this.course, cur.segmentId, false)
-    this.setData({ segDone: false, strip, capText: buildCapText(strip, false, this.course, cur.segmentId) })
+    this.exitSegDone()
   },
 
   // error 态手动重试（P3·bug sweep R1 #7）：复用现有段加载方法，重置重试计数放行 onVideoError 再给一次自动重试预算。
@@ -240,7 +277,8 @@ Page({
     else ctx.pause()
   },
 
-  // 进度上报（250ms 节流·seeking 时不覆盖显示值·秒取整减频 setData）。
+  // 进度上报（250ms 节流·seeking 时不覆盖显示值·秒取整减频 setData）；同步补自绘 seek 条填充百分比 seekPct；
+  // 首次拿到非零 durSec 时顺带算一次关键动作节点位图 markVMs（durSec 已有值后不重算——布局不随后续 timeupdate 变）。
   onTimeUpdate(e: WechatMiniprogram.CustomEvent<{ currentTime: number; duration: number }>) {
     // 每次事件都更新（不 setData·不节流）：watch_at/segment_done 埋点要最新播放位置，UI 节流不该拖累它（P2·bug sweep R1 #14）。
     this._at = Math.floor(e.detail.currentTime || 0)
@@ -252,19 +290,117 @@ Page({
     const curSec = Math.floor(e.detail.currentTime || 0)
     const durSec = Math.floor(e.detail.duration || 0)
     if (curSec === this.data.curSec && durSec === this.data.durSec) return
-    this.setData({ curSec, durSec, curClock: formatClock(curSec), durClock: formatClock(durSec) })
+    const seekPct = durSec ? Math.min(100, Math.round((curSec / durSec) * 10000) / 100) : 0
+    const patch: Record<string, unknown> = { curSec, durSec, curClock: formatClock(curSec), durClock: formatClock(durSec), seekPct }
+    if (durSec && !this.data.durSec) {
+      const cur = this.data.current
+      const marks = cur ? cur.marks : []
+      patch.markVMs = marks
+        .filter((m) => m.at <= durSec)
+        .map((m) => ({ at: m.at, pct: Math.min(100, Math.round((m.at / durSec) * 10000) / 100), name: m.name }))
+    }
+    this.setData(patch)
   },
-  // 拖动中：只更新显示值（阻断 timeupdate 覆盖），不 seek。
-  onSliderChanging(e: WechatMiniprogram.CustomEvent<{ value: number }>) {
-    const curSec = clampSeek(e.detail.value, this.data.durSec)
-    this.setData({ seeking: true, curSec, curClock: formatClock(curSec) })
+
+  // 自绘 seek 条量轨：首次播放成功后量一次（playSegment 的 state:'playing' 回调守卫 !_seekRect），换段不重量。
+  // width>0 才落缓存：若这次 setData 回调触发时 .lp-seek 尚未真正上屏（布局未提交的已知小程序时序坑），
+  // boundingClientRect 会回一个非空但 width:0 的节点——写入 _seekRect 会被 onSeekStart 的 !this._seekRect
+  // 守卫误判为「已测过」、永不再触发重测，secAt() 从此恒因 !rect.width 返回 0（整条自绘 seek 交互失效）。
+  measureSeekRect() {
+    wx.createSelectorQuery()
+      .in(this)
+      .select('.lp-seek')
+      .boundingClientRect()
+      .exec((res: { left: number; width: number }[]) => {
+        const r = res && res[0]
+        if (r && r.width > 0) this._seekRect = { left: r.left, width: r.width }
+      })
   },
-  // 松手：真正 seek（单位秒·video seek 接口以秒计）。
-  onSliderChange(e: WechatMiniprogram.CustomEvent<{ value: number }>) {
-    const curSec = clampSeek(e.detail.value, this.data.durSec)
+  // 拖动预览浮层 left 像素值（seekPct→px·夹在 [PREVIEW_EDGE_RPX, 轨道宽-PREVIEW_EDGE_RPX] 内防出屏）：
+  // 用测得的 _seekRect.width（px，与 boundingClientRect 同坐标系）算原始落点，再用 windowWidthPx 把
+  // PREVIEW_EDGE_RPX 换算成同一 px 坐标系夹取——JS 定值替代 WXSS clamp()（见 PREVIEW_EDGE_RPX 注）。
+  // 轨道过窄（宽度不足两倍边距，理论上不会发生·seek 条横跨屏宽）时不夹取，退化为居中挂在落点上。
+  previewLeftPx(seekPct: number): number {
+    const trackWidth = this._seekRect ? this._seekRect.width : 0
+    if (!trackWidth) return 0
+    const raw = (seekPct / 100) * trackWidth
+    const edgePx = (PREVIEW_EDGE_RPX / 750) * (this.windowWidthPx || 0)
+    if (trackWidth <= edgePx * 2) return raw
+    return Math.min(Math.max(raw, edgePx), trackWidth - edgePx)
+  },
+  // 拖动秒定位（clientX→秒）：量轨未就绪/durSec=0 返回 0（不除零），clampSeek 兜越界。
+  secAt(clientX: number): number {
+    const rect = this._seekRect
+    const durSec = this.data.durSec
+    if (!rect || !rect.width || !durSec) return 0
+    const raw = Math.round(((clientX - rect.left) / rect.width) * durSec)
+    return clampSeek(raw, durSec)
+  },
+  // 拖动显示态共享更新（onSeekStart 落点/onSeekMove 逐帧共用一份实现，勿复制两份——病根#5）：
+  // 磁吸命中关键动作节点则显示秒钉在节点上；震感配方（用户真机拍板定版，照抄 pages/flip-demo onJogMove
+  // 结构）——逐秒轻嗒（shouldTick·40ms 钳制快扫跳齿）+ 进节点重嗒（vibe('medium')·≥80ms 节流，两类震
+  // 共用 lastTick/lastVibe 时间地板防叠震）。本方法与 onSeekMove 均绝不调用 .seek(——两段式语义。
+  updateSeekDisplay(clientX: number) {
+    const raw = this.secAt(clientX)
+    const durSec = this.data.durSec
+    const cur = this.data.current
+    // marks 未按 durSec 过滤（与 onTimeUpdate 的 markVMs 不同源）：磁吸命中的 mark.at 可能落在 (durSec, durSec+窗口]
+    // 之外（如标注时长与实际编码时长有出入），命中后必须再经 clampSeek 兜一次，不能让磁吸结果绕过边界钳制
+    // （不在 marks 源头过滤——放最终落点收口更省一次遍历，效果等价）。
+    const marks = cur ? cur.marks : []
+    const hit = nearestMark(raw, marks, MARK_SNAP_SEC)
+    const sec = clampSeek(hit ? hit.at : raw, durSec)
+    const seekPct = durSec ? Math.min(100, Math.round((sec / durSec) * 10000) / 100) : 0
+    this.setData({ curSec: sec, curClock: formatClock(sec), seekPct, snapName: hit ? hit.name : '', previewLeft: this.previewLeftPx(seekPct) })
+    const now = Date.now()
+    if (shouldTick(this._seekPrevSec, sec, now - Math.max(this.lastTick, this.lastVibe), DRAG_TICK_GAP_MS)) {
+      this.lastTick = now
+      this._seekPrevSec = sec
+      wx.vibrateShort({ type: 'light' })
+    }
+    if (hit && hit.at !== this._lastSnapAt) {
+      this._lastSnapAt = hit.at
+      this.vibe('medium')
+    }
+  },
+  // 拖动起点：量轨未就绪先补量、本次不响应（同 pages/flip-demo !maxJ 先例）；segDone 完成态下 state 仍是
+  // 'playing'（onEnded 不改 state·现场核实），天然放行——完成态下用户仍可拖 seek 条回看（见 onSeekEnd）。
+  onSeekStart(e: WechatMiniprogram.TouchEvent) {
+    if (!this.data.durSec || this.data.state !== 'playing') return
+    if (!this._seekRect) {
+      this.measureSeekRect()
+      return
+    }
+    this._seekPrevSec = this.data.curSec
+    this._lastSnapAt = -1
+    this.setData({ seeking: true })
+    this.updateSeekDisplay(e.touches[0].clientX)
+  },
+  // 拖动中：两段式语义——只改显示，绝不 seek（真 seek 会被 timeupdate/卡顿顶回去，两段式即破坏）。
+  onSeekMove(e: WechatMiniprogram.TouchEvent) {
+    if (!this.data.seeking) return
+    this.updateSeekDisplay(e.touches[0].clientX)
+  },
+  // 松手：真正 seek 到显示秒；完成态下拖动＝用户想回看，恢复播放并退出完成遮罩（同 onReplay 语义，
+  // completed=false——不留播完遮罩挡住刚拖到的画面）。
+  onSeekEnd() {
+    if (!this.data.seeking) return
     const ctx = wx.createVideoContext('lp-video', this)
-    ctx.seek(curSec)
-    this.setData({ seeking: false, curSec, curClock: formatClock(curSec) })
+    ctx.seek(this.data.curSec)
+    if (this.data.segDone) {
+      ctx.play()
+      this.exitSegDone({ seeking: false, snapName: '' })
+      return
+    }
+    this.setData({ seeking: false, snapName: '' })
+  },
+  // 事件震（进节点重嗒）单出口：≥VIBE_GAP_MS 节流，与拖动阻尼「嗒」共用 lastVibe/lastTick 时间地板防叠震
+  // （配方单源 lib/haptics·数值为用户真机拍板定版，照抄 pages/flip-demo 已验实现，改动需用户重新拍板）。
+  vibe(type: 'light' | 'medium') {
+    const now = Date.now()
+    if (now - this.lastVibe < VIBE_GAP_MS) return
+    this.lastVibe = now
+    wx.vibrateShort({ type })
   },
 
   // 一键投屏——主路径 show-casting-button 已在 wxml 开启；本函数是底条自绘备路径（M2 批曾有底条自绘投屏

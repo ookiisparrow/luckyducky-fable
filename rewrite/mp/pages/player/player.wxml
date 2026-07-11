@@ -1,9 +1,12 @@
-<!-- 课程播放页·竖屏沉浸全屏重设计（播放器重设计战役 批B：P1 常态结构重排 + P4 段落播完不自动切换）。
+<!-- 课程播放页·竖屏沉浸全屏重设计（播放器重设计战役 批B：P1 常态结构重排 + P4 段落播完不自动切换；
+     批C：P2 自绘 seek 条 + 阻尼震感 + 关键节点磁吸 + 拖动预览）。
      整页纯黑铺满（player.json navigationStyle:custom）；视频 1:1.68（宽:高）居中，
      上下 UI 是黑条覆盖层（普通 view 绝对定位 z-index 盖在 video 上·同层渲染官方已允许，不必 cover-view）。
      业务逻辑与既有回归红线（playToken 乱序防护/首帧埋点/segment_done/watch_at/25min 地址缓存）一字不动；
      唯一刻意行为变更＝段落播完不再自动切下一段（onEnded 停在完成态，重播/切段交由用户，见 player.ts）。
-     P2 拖动态（自绘 seek/节点磁吸/震感）、P3 求助面板是后续批：本批保留原生 <slider>，求助钮仍直连客服。 -->
+     自绘 seek 条两段式语义（拖动中只改显示 onSeekMove·松手才真 seek onSeekEnd）+ 关键动作节点磁吸/震感
+     配方（照抄 pages/flip-demo 真机验证参考实现，见 player.ts）；缩略图窗未做（雪碧图=R36 后端未建，
+     诚实降级为时间浮窗+关键节点气泡）。P3 求助面板是后续批：求助钮仍直连客服。 -->
 <view class="ld-player">
 
   <!-- 顶条：返回 + 两行标题（数据源=批A lib/player 的 lessonStrip：主行 chapterTitle/副行 lessonNo·lessonName，
@@ -108,18 +111,18 @@
     </view>
 
     <view class="lp-progress-row">
-      <text class="lp-time">{{curClock}}</text>
-      <slider
-        class="lp-slider"
-        min="0"
-        max="{{durSec || 1}}"
-        value="{{curSec}}"
-        block-size="28"
-        activeColor="#a371ea"
-        backgroundColor="rgba(255,255,255,0.24)"
-        bind:changing="onSliderChanging"
-        bind:change="onSliderChange"
-      />
+      <text class="lp-time {{seeking ? 'cur-strong' : ''}}">{{curClock}}</text>
+      <view class="lp-seek" bind:touchstart="onSeekStart" catch:touchmove="onSeekMove" bind:touchend="onSeekEnd" bind:touchcancel="onSeekEnd">
+        <!-- 拖动浮层：seeking 时时间预览胶囊；再命中关键动作节点则叠鸭黄气泡（缩略图窗降级——雪碧图=R36 后端未建，见 player.ts 头注） -->
+        <view wx:if="{{seeking}}" class="lp-seek-preview" style="left: {{previewLeft}}px">
+          <view class="lp-seek-preview-time">{{curClock}}</view>
+          <view wx:if="{{snapName}}" class="lp-seek-preview-bubble">✦ 关键动作 · {{snapName}}</view>
+        </view>
+        <view class="lp-seek-track"></view>
+        <view class="lp-seek-fill" style="width: {{seekPct}}%"></view>
+        <view class="lp-seek-node" wx:for="{{markVMs}}" wx:key="at" style="left: {{item.pct}}%"></view>
+        <view class="lp-seek-handle {{seeking ? 'big' : ''}}" style="left: {{seekPct}}%"></view>
+      </view>
       <text class="lp-time">{{durClock}}</text>
     </view>
 

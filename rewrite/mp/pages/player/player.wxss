@@ -1,4 +1,5 @@
-/* 课程播放页·竖屏沉浸全屏重设计（播放器重设计战役 批B：P1 常态结构重排 + P4 段落播完不自动切换）。
+/* 课程播放页·竖屏沉浸全屏重设计（播放器重设计战役 批B：P1 常态结构重排 + P4 段落播完不自动切换；
+   批C：P2 自绘 seek 条 + 阻尼震感 + 关键节点磁吸 + 拖动预览）。
    整页纯黑铺满；视频 1:1.68（宽:高）·padding-top 百分比法（避 aspect-ratio·旧 WebView 不支持），
    垂直居中；上下 UI 是黑条覆盖层（绝对定位 + z-index 盖在 video 上·同层渲染官方已允许，不必 cover-view）。
    <video> 与全部既有回归事件绑定语义不变，本文件重排结构与视觉 + 段落进度条浮层 + 播完通栏重播。
@@ -312,9 +313,96 @@
   min-width: 64rpx;
   text-align: center;
 }
-.lp-slider {
+.lp-time.cur-strong {
+  color: #ffffff;
+  font-weight: 700;
+}
+
+/* 自绘 seek 条（设计 .seek·画布 402px×1.866 换算，节点/触摸热区数值按批C 规格显式给定）：
+   .lp-seek 是拖动触摸容器（≥72rpx 热区，扩大真机可点中率），内部视觉轨道保持设计原细身。 */
+.lp-seek {
+  position: relative;
   flex: 1;
-  margin: 0 6rpx;
+  height: 72rpx;
+  display: flex;
+  align-items: center;
+}
+.lp-seek-track {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  height: 8rpx;
+  border-radius: 4rpx;
+  background: rgba(255, 255, 255, 0.24);
+}
+.lp-seek-fill {
+  position: absolute;
+  left: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  height: 8rpx;
+  border-radius: 4rpx;
+  background: var(--ld-purple);
+}
+.lp-seek-node {
+  position: absolute;
+  top: 50%;
+  width: 14rpx;
+  height: 14rpx;
+  transform: translate(-50%, -50%) rotate(45deg);
+  background: var(--ld-duck);
+}
+.lp-seek-handle {
+  position: absolute;
+  top: 50%;
+  width: 26rpx;
+  height: 26rpx;
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+  background: #ffffff;
+  border: 4rpx solid var(--ld-purple);
+}
+.lp-seek-handle.big {
+  width: 38rpx;
+  height: 38rpx;
+}
+
+/* 拖动浮层（seeking 时显示·seek 条上方 absolute）：时间预览胶囊 + 命中关键动作节点再叠气泡。
+   left 值不用 WXSS clamp()（本仓无先例·真机支持度未经验证）——player.ts previewLeftPx() 在 JS 侧算好
+   夹在 [PREVIEW_EDGE_RPX, 轨道宽-PREVIEW_EDGE_RPX] 内的 px 落点，wxml 直接内联 px（MARK_SNAP_SEC
+   磁吸窗口同批·真机再调参）。 */
+.lp-seek-preview {
+  position: absolute;
+  bottom: 100%;
+  margin-bottom: 14rpx;
+  transform: translateX(-50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10rpx;
+  pointer-events: none;
+}
+.lp-seek-preview-time {
+  padding: 10rpx 24rpx;
+  border-radius: var(--ld-radius-pill);
+  background: rgba(20, 15, 30, 0.88);
+  border: 1rpx solid rgba(255, 255, 255, 0.24);
+  font-size: 30rpx;
+  font-weight: 700;
+  color: #ffffff;
+  white-space: nowrap;
+}
+.lp-seek-preview-bubble {
+  padding: 15rpx 26rpx;
+  border-radius: 34rpx;
+  background: var(--ld-duck);
+  color: var(--ld-purple-ink);
+  font-size: 22rpx;
+  font-weight: 700;
+  white-space: nowrap;
+  box-shadow: 0 7rpx 26rpx rgba(242, 172, 60, 0.4);
 }
 
 /* 控制行：上一段 chevron · 中央求助大圆钮 · 下一段 chevron（设计 .crow） */
