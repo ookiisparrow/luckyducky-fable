@@ -5,11 +5,10 @@
 // 震动（2026-07-11 用户需求两则）：① 事件震——入档 medium、跨档区/到行程尽头/摆过中点 light，≥80ms 节流；
 // ② 方案一拖动持续阻尼震感——翻过一帧即「嗒」（shouldTick·40ms 最小间隔钳制，快扫自动跳齿防安卓马达糊嗡）。
 // 工具端不震、真机才有（根因#8）。
-import { leverTarget, frameForRatio, zoneOf, flipFrames, pendulumAt, shouldTick, FLIP_ZERO } from '../../lib/flipLever'
+import { leverTarget, frameForRatio, zoneOf, flipFrames, pendulumAt, FLIP_ZERO } from '../../lib/flipLever'
+import { shouldTick, VIBE_GAP_MS, DRAG_TICK_GAP_MS } from '../../lib/haptics'
 
 const TICK_MS = 16 // 动画步进（≈60fps 定时器）
-const VIBE_GAP_MS = 80 // 事件震节流
-const DRAG_TICK_GAP_MS = 40 // 拖动阻尼「嗒」最小间隔
 
 interface RailState {
   jog: number // 手柄位移 px

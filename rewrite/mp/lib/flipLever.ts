@@ -39,12 +39,6 @@ export function pendulumAt(x0: number, tMs: number): { x: number; done: boolean 
   return { x: x0 * amp * Math.cos((2 * Math.PI * tMs) / PENDULUM_T), done: false }
 }
 
-/** 拖动持续阻尼震感（2026-07-11 用户需求）：翻过一帧即「嗒」一下——拖得快嗒得密、天然像拨过带齿滑槽；
- *  最小间隔钳制让快扫自动跳齿（安卓马达连震过密会糊成嗡，钳住即物理「阻尼上限」）。 */
-export function shouldTick(prevFrame: number, frame: number, sinceLastMs: number, minGapMs: number): boolean {
-  return frame !== prevFrame && sinceLastMs >= minGapMs
-}
-
 export interface FlipFrame {
   label: string
   bg: string // linear-gradient(155deg, hex, hex)
