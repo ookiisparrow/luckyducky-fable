@@ -4589,11 +4589,12 @@ export const repoChecks = [
     // playSegment(next) 切下一段——新设计要求段落播完停在完成态，给用户看「重播本段」通栏按钮自己选，
     // 不替用户做主。守此不变量：onEnded 不许再出现 playSegment( 调用（自动切段回潮即红）且须落 segDone；
     // onReplay 须真 seek(0) 从头重来；wxml 须有重播长条的 tap 绑定，否则 ts 有功能界面点不到。
-    // 模式分叉声明（批D·2026-07-11）：本守卫钉的是本机学习模式语义；投屏观看模式连续播为已拍板的模式
-    // 分叉（见需求清单 R40），届时守卫判据随投屏落地批改写，勿把两者当矛盾互相修掉。
+    // 模式分叉已落地（批2·2026-07-11 投屏终态批）：本机学习模式不自动切段（停完成态给用户自己选）；
+    // 投屏 connected 态委托 castAutoNext 做真正连续播（R40）——模式门在 castAutoNext 内判、不在 onEnded
+    // 内直接切段，onEnded 只做委托，两个模式的行为互不覆盖（R38/R40 并存，勿把两者当矛盾互相修掉）。
     id: 'rw-mp-player-no-autonext',
-    roots: ['R38'],
-    desc: '播放器重设计战役批B：段落播完不自动切换（P4 通栏重播·设计拍板 2026-07-11）——player.ts 的 onEnded 方法体不得含 playSegment( 调用（自动切段回潮即红）且须含 segDone；onReplay 方法体须存在且含 seek(0；player.wxml 须有 bind:tap="onReplay"（重播长条入口）',
+    roots: ['R38', 'R40'],
+    desc: '模式分叉已落地：本机不自动切段 + 投屏 connected 经 castAutoNext 连播（R38/R40 并存）——player.ts 的 onEnded 方法体不得含 playSegment( 调用（自动切段回潮即红）且须含 segDone、且须含 castAutoNext（分叉委托在场）；castAutoNext 方法体须含 casting 与 \'connected\'（模式门在场，允许含 playSegment(）；onReplay 方法体须存在且含 seek(0；player.wxml 须有 bind:tap="onReplay"（重播长条入口）',
     run() {
       const base = join(ROOT, 'rewrite/mp')
       const tsPath = join(base, 'pages/player/player.ts')
@@ -4605,9 +4606,14 @@ export const repoChecks = [
         bad.push('player.ts 找不到 onEnded 方法体——段落播完检测单点丢失')
       } else {
         if (/playSegment\s*\(/.test(endedBody))
-          bad.push('player.ts 的 onEnded 方法体内仍含 playSegment( 调用——自动切段回潮（设计拍板：段落播完不自动切换，须停在完成态给用户自己选）')
+          bad.push('player.ts 的 onEnded 方法体内仍含 playSegment( 调用——自动切段回潮（本机学习模式不自动切段，须停在完成态或委托 castAutoNext）')
         if (!/segDone/.test(endedBody)) bad.push('player.ts 的 onEnded 方法体内未见 segDone——播完完成态未落地')
+        if (!/castAutoNext/.test(endedBody)) bad.push('player.ts 的 onEnded 方法体内未见 castAutoNext——投屏 connected 连续播分叉委托缺失（R40）')
       }
+      const autoNextBody = methodBody(src, 'castAutoNext')
+      if (!autoNextBody) bad.push('player.ts 找不到 castAutoNext 方法体——投屏连续播单点丢失（R40）')
+      else if (!/casting/.test(autoNextBody) || !/'connected'/.test(autoNextBody))
+        bad.push("player.ts 的 castAutoNext 方法体内未见 casting/'connected' 模式门——脱离投屏态仍可能被误触发连续播（R38/R40 混线）")
       const replayBody = methodBody(src, 'onReplay')
       if (!replayBody) bad.push('player.ts 找不到 onReplay 方法体——重播入口单点丢失')
       else if (!/seek\s*\(\s*0/.test(replayBody)) bad.push('player.ts 的 onReplay 方法体内未见 seek(0——重播未真正跳回段首')
@@ -4789,6 +4795,14 @@ export const repoChecks = [
       if (wxml && !/bind:?castingstatechange/.test(wxml))
         bad.push('player.wxml 缺 castingstatechange 事件绑定——投屏状态（连接/中断）无回报，用户点了投屏不知道发生了什么（根因#14 呼应：动作类失败/状态变化不可静默）')
       if (wxml && !/bind:?tap\s*=\s*"onHelp"/.test(wxml)) bad.push('player.wxml 找不到求助入口节点（bind:tap=onHelp）——客服入口占中央求助钮位缺失（设计定案）')
+      // 投屏终态（批2·T1 顶栏入口 + T2 控制器态）：顶栏投屏钮回归（批B 曾摘除到求助面板过渡入口，
+      // T1 终态收回顶栏）；控制器态须有退出投屏钮；过渡入口须已退役，防复辟两路并存。
+      if (wxml && !/bind:?tap\s*=\s*"onCast"/.test(wxml))
+        bad.push('player.wxml 找不到顶栏投屏入口（bind:tap="onCast"）——T1 终态顶栏投屏钮缺失')
+      if (wxml && !/bind:?tap\s*=\s*"onCastExit"/.test(wxml))
+        bad.push('player.wxml 找不到退出投屏钮（bind:tap="onCastExit"）——T2 控制器态退出投屏入口缺失')
+      if (wxml && /lp-help-cast/.test(wxml))
+        bad.push('player.wxml 仍含 lp-help-cast——求助面板过渡投屏入口应已退役（T1 终态顶栏接管，两路并存会误导用户）')
       if (wxml && !/bind:?touchstart\s*=\s*"onSeekStart"/.test(wxml))
         bad.push('player.wxml 的自绘 seek 条未见 bind:touchstart="onSeekStart"——两段式拖动交互缺起点绑定')
       if (wxml && !/catch:?touchmove\s*=\s*"onSeekMove"/.test(wxml))
@@ -4825,6 +4839,12 @@ export const repoChecks = [
         if (!seekEndBody) bad.push('player.ts 找不到 onSeekEnd 方法体——松手真 seek 缺失')
         else if (!/\.seek\s*\(/.test(stripComments(seekEndBody)))
           bad.push('player.ts 的 onSeekEnd 方法体内未见 .seek(——松手应真正 seek 到位')
+        // 退出投屏须特性检测（与备路径投屏 startCasting 同惯例）：exitCasting 同样是基础库高版本能力，
+        // 低版本直接调用会报错崩交互。
+        const onCastExitBody = methodBody(ts, 'onCastExit')
+        if (!onCastExitBody) bad.push('player.ts 找不到 onCastExit 方法体——退出投屏单点丢失')
+        else if (!/typeof\s+[\w.]+\.exitCasting\s*[!=]==\s*['"]function['"]/.test(stripComments(onCastExitBody)))
+          bad.push("player.ts 的 onCastExit 方法体内未见 exitCasting 特性检测（typeof ...===/!=='function'）——退出投屏未按基础库能力探测就调用，低版本微信直接报错崩交互")
       }
 
       const csPath = join(base, 'utils/customerService.ts')

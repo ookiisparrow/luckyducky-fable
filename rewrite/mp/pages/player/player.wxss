@@ -76,6 +76,34 @@
   height: 64rpx;
 }
 
+/* 投屏钮（T1 终态·标题组与 spacer 之间）+ 首次气泡（弱化胶囊·CAST_TIP_KEY 仅展示一次） */
+.lp-cast {
+  flex: 0 0 auto;
+  width: 64rpx;
+  height: 64rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.lp-cast-ico {
+  width: 34rpx;
+  height: 34rpx;
+}
+.lp-cast-tip {
+  position: absolute;
+  top: 96rpx;
+  right: 56rpx;
+  z-index: 22;
+  padding: 12rpx 22rpx;
+  border-radius: var(--ld-radius-pill);
+  background: var(--ld-duck);
+  color: var(--ld-purple-ink);
+  font-size: 22rpx;
+  font-weight: 600;
+  white-space: nowrap;
+  box-shadow: 0 8rpx 26rpx rgba(0, 0, 0, 0.3);
+}
+
 /* —— 视频舞台 —— */
 .lp-stage {
   position: absolute;
@@ -195,6 +223,117 @@
 .lp-legend-text {
   font-size: 20rpx;
   color: rgba(255, 255, 255, 0.6);
+}
+
+/* —— T2 控制器态（casting==='connected'）：盖满舞台的电视遥控面板 —— */
+.lp-castctl {
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 30rpx;
+  padding: 0 40rpx;
+  background: rgba(10, 8, 14, 0.92);
+}
+.lp-castctl-card {
+  width: 100%;
+  background: #1c1626;
+  border-radius: 20rpx;
+  padding: 40rpx 34rpx;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10rpx;
+}
+.lp-castctl-tv-sub {
+  font-size: 22rpx;
+  color: rgba(255, 255, 255, 0.56);
+}
+.lp-castctl-tv-name {
+  font-size: 36rpx;
+  font-weight: 700;
+  color: #ffffff;
+}
+.lp-castctl-tv-dot {
+  display: flex;
+  align-items: center;
+  gap: 8rpx;
+  font-size: 22rpx;
+  color: #6bd88a;
+  margin-top: 4rpx;
+}
+.lp-castctl-tv-dot-mark {
+  width: 12rpx;
+  height: 12rpx;
+  border-radius: 50%;
+  background: #6bd88a;
+}
+.lp-castctl-tv-row {
+  display: flex;
+  gap: 20rpx;
+  margin-top: 24rpx;
+  width: 100%;
+}
+.lp-castctl-pill {
+  flex: 1;
+  height: 76rpx;
+  border-radius: var(--ld-radius-pill);
+  background: var(--ld-duck);
+  color: #4a3408;
+  font-size: 26rpx;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.lp-castctl-pill.ghost {
+  background: transparent;
+  color: var(--ld-duck);
+  border: 2rpx solid var(--ld-duck);
+}
+.lp-castctl-seg {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14rpx;
+}
+.lp-castctl-seg-text {
+  font-size: 26rpx;
+  font-weight: 600;
+  color: #ffffff;
+  text-align: center;
+}
+.lp-castctl-chip {
+  padding: 8rpx 22rpx;
+  border-radius: var(--ld-radius-pill);
+  background: var(--ld-duck);
+  color: var(--ld-purple-ink);
+  font-size: 20rpx;
+  font-weight: 700;
+}
+.lp-castctl-hint {
+  font-size: 20rpx;
+  color: rgba(255, 255, 255, 0.44);
+  text-align: center;
+}
+/* 遥控行播放/暂停大钮内的自绘暂停条（paused 时改显 play-circle.svg，见 wxml） */
+.lp-castctl-pausebars {
+  display: flex;
+  gap: 10rpx;
+}
+.lp-castctl-pausebar {
+  width: 9rpx;
+  height: 34rpx;
+  border-radius: 4rpx;
+  background: #ffffff;
+}
+/* 快进 15 钮：复用 rotate-ccw 图标水平镜像（回看 15 用原方向），不新增素材 */
+.lp-chev-fwd {
+  transform: scaleX(-1);
 }
 
 /* 首帧前骨架（loading·首帧到达前不裂播放器） */
@@ -539,15 +678,6 @@
   width: 28rpx;
   height: 28rpx;
 }
-/* 投屏过渡最小入口（弱化样式·非卡片·终态待投屏设计稿单开批次） */
-.lp-help-cast {
-  flex: 0 0 auto;
-  margin: 4rpx 37rpx 28rpx;
-  text-align: center;
-  font-size: 26rpx;
-  color: var(--ld-content-2);
-}
-
 /* 子层（videos/faq）顶部导航：左返回箭头 + 居中标题（内嵌播放视图复用同一条导航条） */
 .lp-help-nav {
   flex: 0 0 auto;

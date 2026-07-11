@@ -17,9 +17,11 @@ import {
   clampSeek,
   lessonStrip,
   nearestMark,
+  playbackModeFor,
   type CoursePub,
   type FlatSegment,
   type LessonStrip,
+  type PlaybackMode,
 } from '../../lib/player'
 import { getCourseById } from '../../lib/courses'
 import { openCustomerService } from '../../utils/customerService'
@@ -38,6 +40,8 @@ const PREVIEW_EDGE_RPX = 64
 const BACK_CONFIRM_MS = 2500
 // 首次成功退出加桌引导 storage key（storage key 收敛·CLAUDE §7）：仅展示一次（P5b 设计拍板④）。
 const DESK_GUIDE_KEY = 'ld_player_desk_guide_shown'
+// 投屏顶栏首次气泡 storage key（storage key 收敛·CLAUDE §7）：仅展示一次（T1 终态·批2 投屏落地批）。
+const CAST_TIP_KEY = 'ld_player_cast_tip_shown'
 
 // segcap 文案三态（P4·播放器重设计战役批B §2c）：播放中报「段落 x/y」；播完且课时内有下一段报「x 完成·接下来 x+1」；
 // 播完且课时末段——查 navSegment 是否有跨课时下一段，有则报下一课时名，无则「本课程已全部学完」。
@@ -51,8 +55,8 @@ function buildCapText(strip: LessonStrip | null, segDone: boolean, course: Cours
 }
 
 const cache = createPlaybackCache({
-  fetcher: async (courseId, segmentId) => {
-    const r = await getPlaybackUrl(courseId, segmentId)
+  fetcher: async (courseId, segmentId, mode) => {
+    const r = await getPlaybackUrl(courseId, segmentId, mode)
     if (!r.ok && String(r.error || '') === 'NOT_ENTITLED') throw new Error('NOT_ENTITLED')
     return r.ok ? String(r.url || '') : ''
   },
@@ -89,10 +93,14 @@ Page({
     helpSegName: '', // 内嵌播放视图顶部标题（=命中小段 name）
     deskGuide: false, // 首次成功退出加桌引导弹窗可见态（P5b·仅展示一次）
     deskGuideIOS: false, // 加桌引导分端文案（true=iOS「添加到我的小程序」·false=其余平台「添加到桌面」）
+    casting: '' as '' | 'connecting' | 'connected', // 投屏控制器态开关（T1/T2·R40）：''=本机学习模式·connecting=选中设备等待回报·connected=已连接控制器态
+    castDevice: '', // 投屏设备名（detail 拿不到就空串，UI 兜底文案「电视」）
+    castTip: false, // 顶栏投屏钮首次气泡（T1·仅展示一次，见 CAST_TIP_KEY）
   },
   courseId: '',
   course: null as CoursePub | null,
   srcSetAt: 0,
+  _resumeAt: 0, // 换源续位秒（swapSource 写入·onVideoPlay 消费后归零，见方案A 时间轴对齐假设）
   windowWidthPx: 0, // rpx→px 换算基准（onLoad 存·750rpx = windowWidthPx px）
   firstFrameScene: 'enter' as 'enter' | 'seg' | 'retry',
   firstFrameReported: false,
@@ -134,6 +142,22 @@ Page({
       this.setData({ state: 'empty' }) // 全课无可播段（半上线）
       return
     }
+    // 投屏顶栏首次气泡（T1）：storage 读失败视同已展示（fail-open，抄 DESK_GUIDE_KEY 三 try/catch 手法）——
+    // 宁可少弹一次不可反复打扰。
+    let castTipShown = true
+    try {
+      castTipShown = !!wx.getStorageSync(CAST_TIP_KEY)
+    } catch {
+      castTipShown = true
+    }
+    if (!castTipShown) {
+      this.setData({ castTip: true })
+      try {
+        wx.setStorageSync(CAST_TIP_KEY, 1)
+      } catch {
+        // 存不上只影响下次是否重复弹，不影响本次展示
+      }
+    }
     await this.playSegment(start, 'enter')
   },
 
@@ -144,6 +168,8 @@ Page({
     }
     this.watchReported = false // 新段（含重试重入）＝新观看单元·允许再上报一次 watch_at
     const token = ++this.playToken // 本次切段令牌·await 后复核，防慢回旧段覆盖新段
+    this._resumeAt = 0 // 换段作废未消费的续位秒（防跨段泄漏 P1）：否则新段首个 onVideoPlay 会把旧段的
+    // 续位秒 seek 进新段——换源已 setData 新 src 但 play 事件未发时用户切段即触发。
     this.firstFrameScene = scene
     this.firstFrameReported = false
     this.lastTimeUpdateAt = 0
@@ -178,7 +204,15 @@ Page({
     })
     let url = ''
     try {
-      url = await cache.get(this.courseId, seg.segmentId)
+      // 模式感知取址（R40）：投屏 connected 态自动用横屏源（无横屏成片的段自然降级回 portrait，见 playbackModeFor）。
+      const mode = playbackModeFor(seg, this.data.casting === 'connected')
+      url = await cache.get(this.courseId, seg.segmentId, mode)
+      // 投屏可能在取址期间断开（stopCastingCleanup 因此刻 state 仍是 'loading' 而非 'playing'，其
+      // swapSource('portrait') 兜底会静默 no-op——见 swapSource 守卫）：这里补一次漂移复核，断连后
+      // 不落地横屏源，改取竖屏（评审 finding 复核，P1）。
+      if (mode === 'landscape' && this.data.casting !== 'connected') {
+        url = await cache.get(this.courseId, seg.segmentId, 'portrait')
+      }
     } catch {
       if (token !== this.playToken) return // 已被更晚的切段接管·本次作废
       this.setData({ state: 'denied' }) // 未进课：导流激活
@@ -222,6 +256,13 @@ Page({
     // 用户经系统手势/重播外路径恢复播放时，完成态不该残留（P4）：常规路径已由 onReplay/playSegment 复位，
     // 这里兜底任何其他恢复播放的入口（如原生投屏面板暂停后又本机继续播）。
     if (this.data.segDone) this.exitSegDone()
+    // 换源续位（R40 swapSource 单出口）：续位按方案A 横竖时间轴对齐假设（同一秒数跨版本等义·待用户拍板，
+    // 见 docs/待办与债.md）——换源后新 src 首次真正开播时把播放位置续到换源前的秒数，不从头重看。
+    if (this._resumeAt > 0) {
+      const s = this._resumeAt
+      this._resumeAt = 0
+      wx.createVideoContext('lp-video', this).seek(s)
+    }
   },
 
   // 退出播完完成态（P4）单出口：恢复播放的三条路径（onVideoPlay 兜底/onReplay/onSeekEnd）共用——
@@ -237,12 +278,31 @@ Page({
 
   // 段落播完（P4·设计拍板 2026-07-11）：不再自动切下一段——停在完成态，通栏「重播本段」+ segstrip
   // 文案三态（见 buildCapText）由用户自己选重播/上一段/下一段（守卫 rw-mp-player-no-autonext）。
+  // 模式分叉（R40·批2）：投屏 connected 态是连续播观看模式（电视前不方便手动切段），委托 castAutoNext
+  // 真正自动连播；本机学习模式（casting !== 'connected'）行为不变。
   onEnded() {
     const cur = this.data.current
     if (!cur) return
     trackEvent('segment_done', 'player', cur.segmentId, { courseId: this.courseId, lessonId: cur.lessonId, segmentId: cur.segmentId, at: this._at, dur: this._dur })
+    if (this.data.casting === 'connected') {
+      this.castAutoNext()
+      return
+    }
     const strip = lessonStrip(this.course, cur.segmentId, true)
     this.setData({ segDone: true, paused: true, strip, capText: buildCapText(strip, true, this.course, cur.segmentId) })
+  },
+  // 投屏连续播（R40③）：connected 态自动切下一段；全课末段也停完成态（三态 capText 已含「本课程已全部
+  // 学完」分支）。casting 门在此判——onEnded 只做委托，脱离投屏态后本方法即便被误调用也是 no-op。
+  castAutoNext() {
+    if (this.data.casting !== 'connected') return
+    const cur = this.data.current
+    const next = cur && navSegment(this.course, cur.segmentId, 1)
+    if (next) {
+      void this.playSegment(next, 'seg')
+      return
+    }
+    const strip = cur ? lessonStrip(this.course, cur.segmentId, true) : null
+    this.setData({ segDone: true, paused: true, strip, capText: buildCapText(strip, true, this.course, cur ? cur.segmentId : '') })
   },
 
   // 通栏重播（P4 新增）：从头重来一遍，退出完成态。
@@ -420,12 +480,33 @@ Page({
     wx.vibrateShort({ type })
   },
 
-  // 一键投屏——主路径 show-casting-button 已在 wxml 开启；本函数是底条自绘备路径（M2 批曾有底条自绘投屏
-  // 按钮节点，播放器重设计战役批B 结构重排已把该按钮节点从 wxml 删除——投屏备路径入口位待拍板（/btw 结论未达）·
-  // 批D 落位·方法保留勿删，见 docs/重构日志.md 本批（2026-07-11 播放器重设计战役 批B）条目②「删除项」，
-  // 该条记录了 UI 入口摘除后的现状；docs/待办与债.md 该主题条目仍是摘除前「两路并存」的旧描述，待批D 落位时一并改写）。
-  onCast() {
+  // 换源衔接单出口（R40·批3 横屏复用，勿写成投屏专用）：同一段内切清晰度版本——只换 src，不改 state/
+  // marks/strip。await 取址期间可能已换段/已退出播放态，token 复核 + state 复核双保险，url 与现 src
+  // 相同（云端降级回同源）也不重复 setData。
+  async swapSource(mode: PlaybackMode) {
+    const cur = this.data.current
+    if (!cur || this.data.state !== 'playing') return
+    const token = ++this.playToken
+    const at = this._at
+    let url = ''
+    try {
+      url = await cache.get(this.courseId, cur.segmentId, mode)
+    } catch {
+      return
+    }
+    if (token !== this.playToken || !url || url === this.data.src) return
+    this._resumeAt = at
+    this.setData({ src: url })
+  },
+
+  // 一键投屏（T1 顶栏钮·主路径 show-casting-button 已在 wxml 开启，本函数是自绘入口）：拉起系统选择器前
+  // 先按 hasLandscape 换源到横屏（云端未上线/该段无横屏成片则 playbackModeFor 安全降级、不换源）。
+  // 已知平台盲区（决策已定·不加投机守护）：用户在系统投屏选择器里直接取消——无任何回调/事件，本机会
+  // 继续播放已换好的横屏源（contain 显示，方案A 时间轴对齐内容零损，可接受）；用户再点投屏钮或切段会
+  // 自然恢复（见 onCast 重入/onEnded 换段路径）。真机走查 flag 见 docs/待办与债.md（本批不改 docs）。
+  async onCast() {
     if (this.data.state !== 'playing' || !this.data.src) return
+    if (this.data.castTip) this.setData({ castTip: false })
     const ctx = wx.createVideoContext('lp-video', this) as unknown as { startCasting?: (opt: { success?: () => void; fail?: () => void }) => void }
     // 特性检测（miniprogram-api-typings 未收录 startCasting·基础库 2.32.0 起才有）：
     // 低版本微信不支持时直接调用会抛错崩交互，先探测再调用。
@@ -433,27 +514,88 @@ Page({
       wx.showToast({ title: '当前微信版本过低，暂不支持投屏，请更新微信后重试', icon: 'none' })
       return
     }
+    const mode = playbackModeFor(this.data.current, true)
+    if (mode === 'landscape' && this.data.src) await this.swapSource('landscape')
+    if (this.data.state !== 'playing') return // await 期间可能已离开播放态（换段/出错/退出）
     ctx.startCasting({
+      success: () => {
+        this.setData({ casting: 'connecting' })
+      },
       fail: () => {
         wx.showToast({ title: '投屏失败，请确认电视与手机同一 Wi-Fi', icon: 'none' })
+        // 投屏没成不滞留横屏源：换回竖屏（该段确有横屏源才需要换回，否则本就没换过）。
+        if (this.data.current && this.data.current.hasLandscape) void this.swapSource('portrait')
       },
     })
   },
   // 用户在系统投屏选择框选中设备：真实连接结果以 bindcastingstatechange 为准，这里不下结论——
   // 但选中动作本身（不依赖 detail 形状）值得一个中性即时反馈，否则用户点了没反应会以为没生效。
-  onCastingUserSelect() {
+  // 顺手记下设备名（拿不到就空串，UI 兜底文案「电视」，见 T2 控制器态电视状态卡）。
+  onCastingUserSelect(e: WechatMiniprogram.CustomEvent<{ deviceName?: string; name?: string }>) {
     wx.showToast({ title: '正在连接投屏设备…', icon: 'none' })
+    const detail = (e && e.detail) || {}
+    const castDevice = String(detail.deviceName || detail.name || '')
+    this.setData({ casting: 'connecting', castDevice })
   },
-  // 投屏状态变化：real device 上 detail 形状待真机校验（见 docs/待办与债.md），
-  // 保守只在明确看到「连接成功」关键词时才提示，避免误报。
+  // 投屏状态变化：real device 上 detail.state 真实取值待真机（见 docs/待办与债.md），保守只在明确看到
+  // 关键词时才下结论。本批语义：connect/project→控制器态 connected；disconnect/exit/fail→统一走
+  // stopCastingCleanup 断连清理（回本机学习模式，R38 复归）。
+  // 判序不能反：JS 字符串 'disconnect'/'disconnected' 本身含子串 'connect'（'dis'+'connect'），若先判
+  // connect/project 会把断连事件误吞成「已连接」、断连清理分支永远死代码（评审 finding 复核）——
+  // 断连/失败关键词必须先判，未命中再判连接关键词。
   onCastingStateChange(e: WechatMiniprogram.CustomEvent<{ state?: string }>) {
     const state = String((e.detail && e.detail.state) || '').toLowerCase()
-    if (state.includes('connect') || state.includes('project')) {
+    if (state.includes('disconnect') || state.includes('exit') || state.includes('fail')) {
+      this.stopCastingCleanup()
+    } else if (state.includes('connect') || state.includes('project')) {
       wx.showToast({ title: '已连接电视', icon: 'none' })
+      this.setData({ casting: 'connected' })
     }
   },
   onCastingInterrupt() {
     wx.showToast({ title: '投屏已断开', icon: 'none' })
+    this.stopCastingCleanup()
+  },
+  // 断连/退出投屏共用单出口：回本机学习模式（R38 复归·连播自动关闭因 casting 已清，onEnded 的 casting
+  // 门天然生效）；该段确有横屏源才需要换回竖屏（无横屏源本就一直在 portrait，换回是 no-op 但避免误取址）。
+  stopCastingCleanup() {
+    if (!this.data.casting) return
+    this.setData({ casting: '', castDevice: '' })
+    if (this.data.current && this.data.current.hasLandscape) void this.swapSource('portrait')
+  },
+  // T2 控制器态「退出投屏」钮：exitCasting 特性检测（同 startCasting 惯例，低版本微信直接调用会报错）。
+  onCastExit() {
+    const ctx = wx.createVideoContext('lp-video', this) as unknown as { exitCasting?: (opt: { complete?: () => void }) => void }
+    if (typeof ctx.exitCasting === 'function') {
+      ctx.exitCasting({ complete: () => this.stopCastingCleanup() })
+    } else {
+      this.stopCastingCleanup()
+    }
+  },
+  // T2 控制器态「换设备」钮：直接复用 onCast 重新拉起系统选择器（switchCasting 存在性待真机，不用）。
+  onCastSwitch() {
+    void this.onCast()
+  },
+  // T2 控制器态播放/暂停大钮：与 onTapVideo 同语义（state/src 判定 + ctx.play/pause，paused 以回报为准），
+  // 但跳过单击提示条 hintDismissed 逻辑（控制器态无需该提示），故独立写不复用 onTapVideo。
+  onCastToggle() {
+    if (this.data.state !== 'playing' || !this.data.src) return
+    const ctx = wx.createVideoContext('lp-video', this)
+    if (this.data.paused) ctx.play()
+    else ctx.pause()
+  },
+  // T2 控制器态回看/快进 15 秒钮。
+  onCastBack15() {
+    const ctx = wx.createVideoContext('lp-video', this)
+    ctx.seek(clampSeek(this._at - 15, this._dur))
+  },
+  onCastFwd15() {
+    const ctx = wx.createVideoContext('lp-video', this)
+    ctx.seek(clampSeek(this._at + 15, this._dur))
+  },
+  // 顶栏投屏首次气泡关闭（T1·手动关或点投屏钮时顺手关，见 onCast 开头）。
+  onCastTipClose() {
+    this.setData({ castTip: false })
   },
 
   // 求助面板入口（P3·播放器重设计战役批D）：占常规播放键位的求助钮不再直连客服，改拉起底部 sheet——

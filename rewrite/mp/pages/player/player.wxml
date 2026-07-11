@@ -1,6 +1,7 @@
 <!-- 课程播放页·竖屏沉浸全屏重设计（播放器重设计战役 批B：P1 常态结构重排 + P4 段落播完不自动切换；
      批C：P2 自绘 seek 条 + 阻尼震感 + 关键节点磁吸 + 拖动预览；批D：P3 求助面板 + P5 返回二次确认 +
-     P5b 首次退出加桌引导 + 投屏过渡最小入口）。
+     P5b 首次退出加桌引导 + 投屏过渡最小入口；投屏批2（R40 T1 终态）：顶栏投屏钮回归 + T2 控制器态 +
+     连续播分叉 + 换源衔接——求助面板过渡投屏入口已退役，顶栏接管）。
      整页纯黑铺满（player.json navigationStyle:custom）；视频 1:1.68（宽:高）居中，
      上下 UI 是黑条覆盖层（普通 view 绝对定位 z-index 盖在 video 上·同层渲染官方已允许，不必 cover-view）。
      业务逻辑与既有回归红线（playToken 乱序防护/首帧埋点/segment_done/watch_at/25min 地址缓存）一字不动；
@@ -15,8 +16,8 @@
 <view class="ld-player">
 
   <!-- 顶条：返回 + 两行标题（数据源=批A lib/player 的 lessonStrip：主行 chapterTitle/副行 lessonNo·lessonName，
-       chapterTitle 空则只显 lessonName 脏档回退）+ 右侧留白 spacer（真机右上是原生胶囊+原生投屏按钮，
-       继续保持右上留白纪律，不放任何自绘元素） -->
+       chapterTitle 空则只显 lessonName 脏档回退）+ 投屏钮（T1 终态·标题组与 spacer 之间）+ 右侧留白 spacer
+       （真机右上是原生胶囊，继续保持留白纪律，不放任何自绘元素） -->
   <view class="lp-topbar" style="padding-top: {{statusBarHeight}}px">
     <view class="lp-back" bind:tap="onBack">
       <image class="lp-back-ico" src="/static/icons/chevron-right.svg" mode="aspectFit" />
@@ -28,6 +29,10 @@
       </block>
       <view class="lp-title-main" wx:else>{{(strip && strip.lessonName) || title || '正在学习'}}</view>
     </view>
+    <view class="lp-cast" bind:tap="onCast">
+      <image class="lp-cast-ico" src="/static/icons/cast.svg" mode="aspectFit" />
+    </view>
+    <view class="lp-cast-tip" wx:if="{{castTip}}" bind:tap="onCastTipClose">投屏到电视 · 满屏更清楚</view>
     <view class="lp-topbar-spacer"></view>
   </view>
 
@@ -82,6 +87,25 @@
           </view>
         </view>
       </view>
+
+      <!-- T2 控制器态（casting==='connected'）：盖满舞台的电视遥控面板——video 保持挂载（=控制通道，
+           被面板盖住不可见），本机手指仅操控电视，不再看竖屏画面。 -->
+      <view class="lp-castctl" wx:if="{{casting === 'connected'}}" catch:tap="noop">
+        <view class="lp-castctl-card">
+          <view class="lp-castctl-tv-sub">正在投屏到</view>
+          <view class="lp-castctl-tv-name">{{castDevice || '电视'}}</view>
+          <view class="lp-castctl-tv-dot"><text class="lp-castctl-tv-dot-mark"></text>已连接</view>
+          <view class="lp-castctl-tv-row">
+            <view class="lp-castctl-pill" bind:tap="onCastSwitch">换设备</view>
+            <view class="lp-castctl-pill ghost" bind:tap="onCastExit">退出投屏</view>
+          </view>
+        </view>
+        <view class="lp-castctl-seg" wx:if="{{strip}}">
+          <text class="lp-castctl-seg-text">{{strip.lessonNo}} · {{strip.lessonName}}</text>
+          <view class="lp-castctl-chip">投屏中 · 段落自动连播</view>
+        </view>
+        <view class="lp-castctl-hint">音量大小请用电视遥控器调节</view>
+      </view>
     </block>
 
     <view class="lp-video-box lp-state" wx:elif="{{state === 'empty'}}">
@@ -131,7 +155,29 @@
       <text class="lp-time">{{durClock}}</text>
     </view>
 
-    <view class="lp-controls">
+    <!-- 遥控行：T2 控制器态换成回看15/上一段/播放暂停大钮/下一段/快进15 五钮；本机学习模式沿用既有三钮。 -->
+    <view class="lp-controls" wx:if="{{casting === 'connected'}}">
+      <view class="lp-chev" bind:tap="onCastBack15">
+        <image class="lp-chev-ico" src="/static/icons/rotate-ccw.svg" mode="aspectFit" />
+      </view>
+      <view class="lp-chev {{canPrev ? '' : 'dim'}}" bind:tap="onPrev">
+        <image class="lp-chev-ico lp-chev-prev" src="/static/icons/chevron-right.svg" mode="aspectFit" />
+      </view>
+      <view class="lp-helpbtn" bind:tap="onCastToggle">
+        <image wx:if="{{paused}}" class="lp-helpbtn-ico" src="/static/icons/play-circle.svg" mode="aspectFit" />
+        <view wx:else class="lp-castctl-pausebars">
+          <view class="lp-castctl-pausebar"></view>
+          <view class="lp-castctl-pausebar"></view>
+        </view>
+      </view>
+      <view class="lp-chev {{canNext ? '' : 'dim'}}" bind:tap="onNext">
+        <image class="lp-chev-ico" src="/static/icons/chevron-right.svg" mode="aspectFit" />
+      </view>
+      <view class="lp-chev" bind:tap="onCastFwd15">
+        <image class="lp-chev-ico lp-chev-fwd" src="/static/icons/rotate-ccw.svg" mode="aspectFit" />
+      </view>
+    </view>
+    <view class="lp-controls" wx:else>
       <view class="lp-chev {{canPrev ? '' : 'dim'}}" bind:tap="onPrev">
         <image class="lp-chev-ico lp-chev-prev" src="/static/icons/chevron-right.svg" mode="aspectFit" />
       </view>
@@ -181,9 +227,6 @@
           </view>
           <image class="lp-help-card-chev" src="/static/icons/chevron-right.svg" mode="aspectFit" />
         </view>
-        <!-- 投屏过渡最小入口（用户拍板 2026-07-11 四点·终态待投屏设计稿单开批次）：既有 onCast 方法
-             与特性检测一字不动；弱化样式非卡片。 -->
-        <view class="lp-help-cast" bind:tap="onCast">投屏到电视</view>
       </block>
 
       <!-- videos 子层（P3b）：helpSrc 非空切到内嵌播放视图，否则主题列表 -->

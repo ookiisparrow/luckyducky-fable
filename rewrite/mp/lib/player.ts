@@ -7,6 +7,7 @@ export interface SegmentPub {
   name?: string
   dur?: number
   hasVideo: boolean
+  hasLandscape?: boolean // 是否有横屏成片（R40 投屏·云端未上线前恒缺席→前端宽松读 !!s.hasLandscape 安全降级）
   marks?: { at: number; name?: string }[] // 关键动作节点（后台 admin 标注，尚未投产·设计拍板⑤·前端宽松读）
 }
 export interface LessonPub {
@@ -33,6 +34,7 @@ export interface FlatSegment {
   segmentId: string
   segName: string
   hasVideo: boolean
+  hasLandscape: boolean // 透传为必备布尔字段（宽松读 !!s.hasLandscape，见 SegmentPub）
   marks: { at: number; name: string }[]
 }
 
@@ -67,6 +69,7 @@ export function flattenSegments(course: unknown): FlatSegment[] {
           segmentId: String(s.id),
           segName: String(s.name || ''),
           hasVideo: !!s.hasVideo,
+          hasLandscape: !!s.hasLandscape,
           marks: cleanMarks(s.marks),
         })
       }
@@ -106,27 +109,29 @@ export function clampSeek(value: number, durSec: number): number {
   return v
 }
 
-export type UrlFetcher = (courseId: string, segmentId: string) => Promise<string>
+export type PlaybackMode = 'portrait' | 'landscape'
+export type UrlFetcher = (courseId: string, segmentId: string, mode: PlaybackMode) => Promise<string>
 
-/** 播放地址缓存（黄金 §六）：TTL 内命中不重取（默认 25min·远小于服务端临时 URL 过期）；
- *  空结果不缓存（素材未剪/未授权下次仍重试）；键含课程标识跨课隔离；在途去重；可定向失效。 */
+/** 播放地址缓存（黄金 §六 + R40 投屏批2 扩 mode 维）：TTL 内命中不重取（默认 25min·远小于服务端临时
+ *  URL 过期）；空结果不缓存（素材未剪/未授权下次仍重试）；键含课程标识跨课隔离；在途去重；可定向失效。
+ *  mode 维（portrait/landscape）各自独立缓存互不污染——投屏换源/退回本机学习模式各取各的地址。 */
 export function createPlaybackCache(o: { fetcher: UrlFetcher; now?: () => number; ttlMs?: number }) {
   const now = o.now || (() => Date.now())
   const ttlMs = o.ttlMs ?? 25 * 60 * 1000
   const cache = new Map<string, { url: string; at: number }>()
   const inflight = new Map<string, Promise<string>>()
-  const keyOf = (c: string, s: string) => c + '||' + s
+  const keyOf = (c: string, s: string, mode: PlaybackMode) => c + '||' + s + '||' + mode
 
-  async function get(courseId: string, segmentId: string): Promise<string> {
+  async function get(courseId: string, segmentId: string, mode: PlaybackMode = 'portrait'): Promise<string> {
     if (!courseId || !segmentId) return '' // 空段不取址
-    const key = keyOf(courseId, segmentId)
+    const key = keyOf(courseId, segmentId, mode)
     const hit = cache.get(key)
     if (hit && now() - hit.at < ttlMs) return hit.url
     const going = inflight.get(key)
-    if (going) return going // 在途去重：并发取同段只真取一次
+    if (going) return going // 在途去重：并发取同段同 mode 只真取一次
     const p = (async () => {
       try {
-        const url = String((await o.fetcher(courseId, segmentId)) || '')
+        const url = String((await o.fetcher(courseId, segmentId, mode)) || '')
         if (url) cache.set(key, { url, at: now() }) // 空不缓存·下次重试
         return url
       } finally {
@@ -139,18 +144,25 @@ export function createPlaybackCache(o: { fetcher: UrlFetcher; now?: () => number
 
   return {
     get,
-    /** 预热：已有新鲜缓存时空操作；空段不取址不崩。 */
+    /** 预热：已有新鲜缓存时空操作；空段不取址不崩。（预热恒 portrait——投屏换源走 swapSource 单独 get） */
     async prefetch(courseId: string, segmentId: string): Promise<void> {
       if (!courseId || !segmentId) return
-      const hit = cache.get(keyOf(courseId, segmentId))
+      const hit = cache.get(keyOf(courseId, segmentId, 'portrait'))
       if (hit && now() - hit.at < ttlMs) return
       await get(courseId, segmentId).catch(() => undefined)
     },
-    /** 定向失效：只清本（课,段），不误伤别课同名段。 */
+    /** 定向失效：一次删 portrait+landscape 两个键（调用点签名不变），只清本（课,段），不误伤别课同名段。 */
     invalidate(courseId: string, segmentId: string): void {
-      cache.delete(keyOf(courseId, segmentId))
+      cache.delete(keyOf(courseId, segmentId, 'portrait'))
+      cache.delete(keyOf(courseId, segmentId, 'landscape'))
     },
   }
+}
+
+/** 投屏播放模式判定（R40·纯函数）：只有「想要横屏」且该段确有横屏成片才返回 'landscape'，
+ *  否则一律 'portrait'——云端 hasLandscape 未上线前恒 undefined，安全降级为一直请求竖屏。 */
+export function playbackModeFor(seg: { hasLandscape?: boolean } | null, wantLandscape: boolean): PlaybackMode {
+  return wantLandscape && !!(seg && seg.hasLandscape) ? 'landscape' : 'portrait'
 }
 
 export interface LessonStrip {
