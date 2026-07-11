@@ -1,12 +1,17 @@
 <!-- 课程播放页·竖屏沉浸全屏重设计（播放器重设计战役 批B：P1 常态结构重排 + P4 段落播完不自动切换；
-     批C：P2 自绘 seek 条 + 阻尼震感 + 关键节点磁吸 + 拖动预览）。
+     批C：P2 自绘 seek 条 + 阻尼震感 + 关键节点磁吸 + 拖动预览；批D：P3 求助面板 + P5 返回二次确认 +
+     P5b 首次退出加桌引导 + 投屏过渡最小入口）。
      整页纯黑铺满（player.json navigationStyle:custom）；视频 1:1.68（宽:高）居中，
      上下 UI 是黑条覆盖层（普通 view 绝对定位 z-index 盖在 video 上·同层渲染官方已允许，不必 cover-view）。
      业务逻辑与既有回归红线（playToken 乱序防护/首帧埋点/segment_done/watch_at/25min 地址缓存）一字不动；
      唯一刻意行为变更＝段落播完不再自动切下一段（onEnded 停在完成态，重播/切段交由用户，见 player.ts）。
      自绘 seek 条两段式语义（拖动中只改显示 onSeekMove·松手才真 seek onSeekEnd）+ 关键动作节点磁吸/震感
      配方（照抄 pages/flip-demo 真机验证参考实现，见 player.ts）；缩略图窗未做（雪碧图=R36 后端未建，
-     诚实降级为时间浮窗+关键节点气泡）。P3 求助面板是后续批：求助钮仍直连客服。 -->
+     诚实降级为时间浮窗+关键节点气泡）。
+     求助面板（P3·批D）：中央求助钮拉起底部 sheet（menu/videos/faq 三态，见 player.ts helpPanel），播放
+     不阻断，唯一暂停例外＝帮助视频内嵌播放（P3b-play，简化决策：原生 <video controls>，不做自绘控制条
+     ——辅助内容非主路径，防过度工程）。返回二次确认（P5）+ 首次成功退出加桌引导（P5b·仅一次·分端文案，
+     动画降级为静态示意区+文案）：手势/系统返回无法拦截（WebView 页无 onBackPress），仅自绘返回箭头经此。 -->
 <view class="ld-player">
 
   <!-- 顶条：返回 + 两行标题（数据源=批A lib/player 的 lessonStrip：主行 chapterTitle/副行 lessonNo·lessonName，
@@ -136,6 +141,131 @@
       <view class="lp-chev {{canNext ? '' : 'dim'}}" bind:tap="onNext">
         <image class="lp-chev-ico" src="/static/icons/chevron-right.svg" mode="aspectFit" />
       </view>
+    </view>
+  </view>
+
+  <!-- 求助面板（P3·播放器重设计战役批D）：底部 sheet，menu/videos/faq 三态，见 player.ts helpPanel。
+       scrim 与 sheet 均锁背景滚动（catch:touchmove="noop"）；videos 子层内部主题列表用 scroll-view
+       scroll-y 自滚（内嵌播放视图无需滚动，不放进 scroll-view）。 -->
+  <view class="lp-help-mask" wx:if="{{helpPanel}}" bind:tap="onHelpClose" catch:touchmove="noop">
+    <view class="lp-help-sheet" catch:tap="noop" catch:touchmove="noop">
+      <view class="lp-help-grab" bind:tap="onHelpClose"></view>
+
+      <!-- menu 层 -->
+      <block wx:if="{{helpPanel === 'menu'}}">
+        <view class="lp-help-head">
+          <view class="lp-help-title">需要帮忙吗？</view>
+          <view class="lp-help-sub">别急，大多数卡点都有现成的答案</view>
+        </view>
+        <view class="lp-help-card" bind:tap="onHelpContact">
+          <view class="lp-help-card-pic"><image class="lp-help-card-ico" src="/static/icons/headset.svg" mode="aspectFit" /></view>
+          <view class="lp-help-card-tx">
+            <text class="lp-help-card-title">联系客服</text>
+            <text class="lp-help-card-sub">真人答疑</text>
+          </view>
+          <image class="lp-help-card-chev" src="/static/icons/chevron-right.svg" mode="aspectFit" />
+        </view>
+        <view class="lp-help-card" bind:tap="onHelpVideos">
+          <view class="lp-help-card-pic"><image class="lp-help-card-ico" src="/static/icons/video.svg" mode="aspectFit" /></view>
+          <view class="lp-help-card-tx">
+            <text class="lp-help-card-title">帮助视频</text>
+            <text class="lp-help-card-sub">小段讲解都在这里</text>
+          </view>
+          <image class="lp-help-card-chev" src="/static/icons/chevron-right.svg" mode="aspectFit" />
+        </view>
+        <view class="lp-help-card" bind:tap="onHelpFaq">
+          <view class="lp-help-card-pic"><image class="lp-help-card-ico" src="/static/icons/help-circle.svg" mode="aspectFit" /></view>
+          <view class="lp-help-card-tx">
+            <text class="lp-help-card-title">常见问题</text>
+            <text class="lp-help-card-sub">高频问题都在这里</text>
+          </view>
+          <image class="lp-help-card-chev" src="/static/icons/chevron-right.svg" mode="aspectFit" />
+        </view>
+        <!-- 投屏过渡最小入口（用户拍板 2026-07-11 四点·终态待投屏设计稿单开批次）：既有 onCast 方法
+             与特性检测一字不动；弱化样式非卡片。 -->
+        <view class="lp-help-cast" bind:tap="onCast">投屏到电视</view>
+      </block>
+
+      <!-- videos 子层（P3b）：helpSrc 非空切到内嵌播放视图，否则主题列表 -->
+      <block wx:if="{{helpPanel === 'videos'}}">
+        <block wx:if="{{helpSrc}}">
+          <view class="lp-help-nav">
+            <view class="lp-help-back" bind:tap="onHelpVideoBack">
+              <image class="lp-help-back-ico" src="/static/icons/chevron-right.svg" mode="aspectFit" />
+            </view>
+            <text class="lp-help-nav-title">{{helpSegName || '正在播放'}}</text>
+          </view>
+          <view class="lp-help-play">
+            <video class="lp-help-play-video" src="{{helpSrc}}" controls autoplay bind:error="onHelpVideoError"></video>
+          </view>
+        </block>
+        <block wx:else>
+          <view class="lp-help-nav">
+            <view class="lp-help-back" bind:tap="onHelpBackMenu">
+              <image class="lp-help-back-ico" src="/static/icons/chevron-right.svg" mode="aspectFit" />
+            </view>
+            <text class="lp-help-nav-title">帮助视频</text>
+          </view>
+          <scroll-view class="lp-help-scroll" scroll-y>
+            <block wx:if="{{helpVideosState === 'ok'}}">
+              <view class="lp-help-group-title">全部课程通用</view>
+              <view class="lp-help-topic" wx:for="{{helpTopics}}" wx:key="id">
+                <view class="lp-help-topic-title">{{item.title}}</view>
+                <view class="lp-help-topic-sub" wx:if="{{item.sub}}">{{item.sub}}</view>
+                <view
+                  class="lp-help-seg {{seg.url ? '' : 'dim'}}"
+                  wx:for="{{item.segments}}"
+                  wx:for-item="seg"
+                  wx:key="id"
+                  data-url="{{seg.url}}"
+                  data-name="{{seg.name}}"
+                  bind:tap="onHelpPlaySegment"
+                >
+                  <view class="lp-help-seg-thumb"><image class="lp-help-seg-ico" src="/static/icons/play-circle.svg" mode="aspectFit" /></view>
+                  <view class="lp-help-seg-tx">
+                    <text class="lp-help-seg-name">{{seg.name}}</text>
+                    <text class="lp-help-seg-dur">{{seg.url ? seg.dur : '整理中'}}</text>
+                  </view>
+                </view>
+              </view>
+            </block>
+            <view class="lp-help-empty" wx:elif="{{helpVideosState === 'loading'}}">
+              <text>正在加载…</text>
+            </view>
+            <view class="lp-help-empty" wx:else>
+              <text>帮助视频整理中，先问客服吧</text>
+              <view class="lp-help-empty-btn" bind:tap="onHelpContact">联系客服</view>
+            </view>
+          </scroll-view>
+        </block>
+      </block>
+
+      <!-- faq 子层（P3c·诚实空态：云端无公开下发接口，R37b 已立需求，不造假 Q&A） -->
+      <block wx:if="{{helpPanel === 'faq'}}">
+        <view class="lp-help-nav">
+          <view class="lp-help-back" bind:tap="onHelpBackMenu">
+            <image class="lp-help-back-ico" src="/static/icons/chevron-right.svg" mode="aspectFit" />
+          </view>
+          <text class="lp-help-nav-title">常见问题</text>
+        </view>
+        <view class="lp-help-empty">
+          <text>常见问题还在整理中，先问客服吧</text>
+          <view class="lp-help-empty-btn" bind:tap="onHelpContact">联系客服</view>
+        </view>
+      </block>
+    </view>
+  </view>
+
+  <!-- 首次成功退出加桌引导（P5b·仅展示一次·分端文案·矢量循环动画降级为静态示意区+文案） -->
+  <view class="lp-dg-mask" wx:if="{{deskGuide}}" catch:touchmove="noop">
+    <view class="lp-dg-dlg">
+      <view class="lp-dg-title">放书签在桌面，下次点开就继续。</view>
+      <view class="lp-dg-guide">
+        <view class="lp-dg-guide-pic"><image class="lp-dg-guide-ico" src="/static/icons/info.svg" mode="aspectFit" /></view>
+        <text class="lp-dg-guide-text">{{deskGuideIOS ? '点右上角 ··· 菜单，选『添加到我的小程序』' : '点右上角 ··· 菜单，选『添加到桌面』'}}</text>
+      </view>
+      <view class="lp-dg-stay" bind:tap="onDeskGuideStay">继续学习</view>
+      <view class="lp-dg-quit" bind:tap="onDeskGuideExit">先退出，下次继续</view>
     </view>
   </view>
 </view>

@@ -8,7 +8,7 @@
 // onSeekMove），松手才真 seek（onSeekEnd）；关键动作节点磁吸（nearestMark）+ 拖动阻尼震感配方照抄
 // pages/flip-demo 已验真机参考实现（lib/haptics 单源 shouldTick/VIBE_GAP_MS/DRAG_TICK_GAP_MS）。
 // 拖动浮层原设计有雪碧图缩略图窗（R36 后端未建），诚实降级为时间浮窗 + 命中节点时的鸭黄气泡。
-import { getPlaybackUrl, trackEvent } from '../../api/learning'
+import { getPlaybackUrl, trackEvent, getHelpVideos } from '../../api/learning'
 import {
   flattenSegments,
   navSegment,
@@ -24,6 +24,7 @@ import {
 import { getCourseById } from '../../lib/courses'
 import { openCustomerService } from '../../utils/customerService'
 import { shouldTick, VIBE_GAP_MS, DRAG_TICK_GAP_MS } from '../../lib/haptics'
+import { mapHelpVideos, type HelpTopicVM } from '../../lib/mapLearning'
 
 const TIME_UPDATE_THROTTLE_MS = 250
 // 磁吸窗口（秒）：拖动秒数落在关键动作节点前后 3 秒内即吸附（批C 规格默认值·真机手感待调参 flag）。
@@ -32,6 +33,11 @@ const MARK_SNAP_SEC = 3
 // 像素值再传 px 内联样式——WXSS clamp() 是本仓首次出现的用法（无既有先例，真机支持度未经验证，CLAUDE.md
 // §4 对同类兼容性存疑的 CSS 函数已有专门规避先例 backdrop-filter/color-mix()），JS 算值零风险等价替代。
 const PREVIEW_EDGE_RPX = 64
+// 返回二次确认窗口（ms·P5 设计拍板②）：每次返回都出现「再按一次返回退出」，非仅首次；侧滑/系统手势
+// 返回无法拦截（WebView 页无 onBackPress——平台限制），仅本页自绘返回箭头点击经此判定。
+const BACK_CONFIRM_MS = 2500
+// 首次成功退出加桌引导 storage key（storage key 收敛·CLAUDE §7）：仅展示一次（P5b 设计拍板④）。
+const DESK_GUIDE_KEY = 'ld_player_desk_guide_shown'
 
 // segcap 文案三态（P4·播放器重设计战役批B §2c）：播放中报「段落 x/y」；播完且课时内有下一段报「x 完成·接下来 x+1」；
 // 播完且课时末段——查 navSegment 是否有跨课时下一段，有则报下一课时名，无则「本课程已全部学完」。
@@ -76,6 +82,13 @@ Page({
     snapName: '', // 拖动磁吸命中的关键动作节点名（seeking 时气泡文案，未命中为空串）
     markVMs: [] as { at: number; pct: number; name: string }[], // 关键动作节点位图（onTimeUpdate 首次拿到非零 durSec 时算一次，durSec 已有值后不重算）
     previewLeft: 0, // 拖动预览浮层 left 像素值（JS 算好夹取值·px 单位·见 updateSeekDisplay，避免 WXSS clamp() 兼容性风险）
+    helpPanel: '' as '' | 'menu' | 'videos' | 'faq', // 求助面板状态机（P3·播放器重设计战役批D）：''=关闭·不阻断主视频播放
+    helpVideosState: 'loading' as 'loading' | 'ok' | 'empty', // 帮助视频子层拉取态（每次进入 videos 层重拉·短时 URL 过期特性）
+    helpTopics: [] as HelpTopicVM[], // 帮助视频主题分组 VM（mapHelpVideos 产出）
+    helpSrc: '', // 内嵌播放（P3b-play）地址：非空=切到播放视图；关面板/返回列表/退出播放视图清空
+    helpSegName: '', // 内嵌播放视图顶部标题（=命中小段 name）
+    deskGuide: false, // 首次成功退出加桌引导弹窗可见态（P5b·仅展示一次）
+    deskGuideIOS: false, // 加桌引导分端文案（true=iOS「添加到我的小程序」·false=其余平台「添加到桌面」）
   },
   courseId: '',
   course: null as CoursePub | null,
@@ -84,6 +97,9 @@ Page({
   firstFrameScene: 'enter' as 'enter' | 'seg' | 'retry',
   firstFrameReported: false,
   playToken: 0, // 切段请求令牌（防乱序回包覆盖·守卫 rw-mp-player-stale-guarded）
+  helpVideosToken: 0, // 帮助视频子层请求令牌（防乱序回包覆盖·同 playToken 惯用法·评审 finding 复核 2026-07-11
+  // 批D 补丁：粗粒度 helpPanel==='videos' 判定无法区分「快速退出再进入」产生的新旧两次请求，慢的旧请求
+  // 若晚于新请求回包，会用旧数据把刚渲染好的新列表覆盖回去——必须用自增代次精确丢弃过期回包）。
   errSeg: '', // 上次因视频加载失败重试过的段
   errRetried: false, // 该段是否已重试过一次（防不可恢复媒体无限重取死循环）
   watchReported: false, // 本段 watch_at 是否已上报（一次性·防 onHide+onUnload 双报）
@@ -95,6 +111,7 @@ Page({
   _lastSnapAt: -1, // 拖动进节点重嗒判重（onSeekStart 时重置为 -1·新命中/换节点才震）
   lastTick: 0, // 拖动阻尼「嗒」时间戳（配方单源 lib/haptics·照抄 pages/flip-demo）
   lastVibe: 0, // 事件震（vibe()）时间戳（同上·两类震共用时间地板防叠震）
+  _backAt: 0, // 返回二次确认判定锚点（P5·BACK_CONFIRM_MS 窗口内二次按返回才真退，见 onBack）
 
   async onLoad(query: Record<string, string | undefined>) {
     const info = wx.getWindowInfo()
@@ -439,15 +456,123 @@ Page({
     wx.showToast({ title: '投屏已断开', icon: 'none' })
   },
 
-  // 帮助＝客服入口（占常规播放键位·取代播放键，设计定案）。
+  // 求助面板入口（P3·播放器重设计战役批D）：占常规播放键位的求助钮不再直连客服，改拉起底部 sheet——
+  // 客服真调用移入面板卡1（onHelpContact，守卫 rw-mp-customer-service-wired 触点表钉这里）；播放不阻断
+  // （唯一暂停例外＝内嵌视频播放，见 onHelpPlaySegment）。wxml 上 bind:tap="onHelp" 绑定原样保留（守卫
+  // rw-mp-player-immersive-casting 钉的是这个节点，与本方法体内调用什么无关）。
   onHelp() {
+    this.setData({ helpPanel: 'menu' })
+  },
+  // 卡1 联系客服。
+  onHelpContact() {
     openCustomerService()
   },
+  // 卡2 帮助视频：进子层 + 每次重拉（短时 URL 过期特性·辅助内容低频不缓存，与主播放地址缓存策略不同）。
+  onHelpVideos() {
+    this.setData({ helpPanel: 'videos', helpVideosState: 'loading', helpTopics: [] })
+    void this.loadHelpVideos()
+  },
+  async loadHelpVideos() {
+    const token = ++this.helpVideosToken // 本次进入子层的请求令牌·await 后复核，防慢回旧请求覆盖新请求
+    const r = await getHelpVideos()
+    // 令牌不匹配＝更晚的一次 onHelpVideos 已接管（含「退出再重进 videos 层」这种 helpPanel 状态不变但
+    // 请求已过期的场景，光判 helpPanel==='videos' 拦不住）：丢弃本次回包，不覆盖新数据。
+    if (token !== this.helpVideosToken) return
+    if (this.data.helpPanel !== 'videos') return // 用户已退出 videos 层（返回/关面板）：同样丢弃，不写脏 state
+    const topics = mapHelpVideos(r)
+    this.setData(topics.length ? { helpVideosState: 'ok', helpTopics: topics } : { helpVideosState: 'empty', helpTopics: [] })
+  },
+  // 卡3 常见问题：诚实空态（云端 FAQ 单源=客服知识库 KB，无面向小程序的公开下发接口，R37b 已立需求——不造假 Q&A）。
+  onHelpFaq() {
+    this.setData({ helpPanel: 'faq' })
+  },
+  // 子层顶部返回箭头：回 menu（videos/faq 共用同一个方法）。
+  onHelpBackMenu() {
+    this.setData({ helpPanel: 'menu' })
+  },
+  // 关面板：scrim 点击 / grab 区关闭钮共用——helpSrc 一并清（卸载内嵌 <video>，防后台仍在解码占用流量）。
+  onHelpClose() {
+    this.setData({ helpPanel: '', helpSrc: '', helpSegName: '' })
+  },
+  // 点可播段（url 非 null）→ 同一 sheet 内切到内嵌播放视图；先暂停主视频防双声（P3b-play 简化决策：
+  // 辅助内容用原生 <video controls>，不做自绘控制条，见 wxml 头注）。
+  onHelpPlaySegment(e: WechatMiniprogram.TouchEvent) {
+    const ds = e.currentTarget.dataset as { url?: string; name?: string }
+    const url = String(ds.url || '')
+    if (!url) return // 无地址段（url:null）置灰不可点——理论到不了这里，双保险
+    wx.createVideoContext('lp-video', this).pause()
+    this.setData({ helpSrc: url, helpSegName: String(ds.name || '') })
+  },
+  // 内嵌播放视图返回箭头：回列表（helpPanel 保持 'videos'）——不自动恢复主视频，用户自己点单击画面。
+  onHelpVideoBack() {
+    this.setData({ helpSrc: '', helpSegName: '' })
+  },
+  onHelpVideoError() {
+    wx.showToast({ title: '这段视频暂时播放不了', icon: 'none' })
+  },
+  // 求助面板遮罩/壳体锁背景滚动的占位 handler（catch:touchmove 绑定必须真实存在，抄写错题本 E2：
+  // wxml 事件绑定与 ts 方法定义是一对，抄一半＝真机报错）。
+  noop() {},
 
+  // 返回（P5·设计拍板③每次返回都出现二次确认；P5b④首次成功退出加桌引导）：求助面板开着时先逐层
+  // 收口（四级链：内嵌播放→videos/faq 列表→menu→关面板），不计入退出确认；面板已关时才走二次确认。
   onBack() {
+    if (this.data.helpSrc) {
+      this.setData({ helpSrc: '', helpSegName: '' })
+      return
+    }
+    if (this.data.helpPanel === 'videos' || this.data.helpPanel === 'faq') {
+      this.setData({ helpPanel: 'menu' })
+      return
+    }
+    if (this.data.helpPanel === 'menu') {
+      this.setData({ helpPanel: '' })
+      return
+    }
+    const now = Date.now()
+    if (now - this._backAt > BACK_CONFIRM_MS) {
+      this._backAt = now
+      wx.showToast({ title: '再按一次返回退出', icon: 'none' })
+      return
+    }
+    // 窗口内第二按：已展示过加桌引导直接真退；否则弹一次引导、不退（storage 读失败 fail-open 视同
+    // 已展示——宁可少弹一次不可卡住用户退出）。
+    let shown = true
+    try {
+      shown = !!wx.getStorageSync(DESK_GUIDE_KEY)
+    } catch {
+      shown = true
+    }
+    if (!shown) {
+      try {
+        wx.setStorageSync(DESK_GUIDE_KEY, 1)
+      } catch {
+        // 存不上只影响下次是否重复弹，不影响本次展示——宁可多弹一次不可读写失败卡退出
+      }
+      let ios = false
+      try {
+        ios = wx.getDeviceInfo().platform === 'ios'
+      } catch {
+        ios = false
+      }
+      this.setData({ deskGuide: true, deskGuideIOS: ios })
+      return
+    }
+    this.exitPlayer()
+  },
+  // 真退单出口：原生返回栈优先，深链无上级页兜底回首页（既有兜底逻辑原样保留）。
+  exitPlayer() {
     const pages = getCurrentPages()
     if (pages.length > 1) wx.navigateBack()
     else wx.reLaunch({ url: '/pages/home/home' }) // 深链直接进入播放页（无上级页可退）时兜底回首页
+  },
+  // 加桌引导（P5b）：继续学习＝关弹窗留下（不退）；先退出＝执行真退。
+  onDeskGuideStay() {
+    this.setData({ deskGuide: false })
+  },
+  onDeskGuideExit() {
+    this.setData({ deskGuide: false })
+    this.exitPlayer()
   },
 
   onPrev() {

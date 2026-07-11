@@ -237,3 +237,44 @@ export function mapCatalog(
 
   return { chapters, continueTarget }
 }
+
+// 播放页求助面板·帮助视频（P3b·播放器重设计战役批D）：云端 getHelpVideos 返回两级主题→小段
+// （rewrite/cloud/src/functions/app/actions/reviews.ts，本批零改动）。清洗脏结构：非数组归空、
+// id/title/sub/desc/dur String 化（dur 原样字符串，不重新格式化）、url 非串归 null（短时地址过期/未剪辑）；
+// 无 title 且无 segments 的主题剔除（脏档不占一个空分组位）。
+export interface HelpVideoSegVM {
+  id: string
+  name: string
+  dur: string
+  url: string | null
+}
+export interface HelpTopicVM {
+  id: string
+  title: string
+  sub: string
+  desc: string
+  segments: HelpVideoSegVM[]
+}
+
+export function mapHelpVideos(r: unknown): HelpTopicVM[] {
+  const res = (r && typeof r === 'object' ? r : {}) as Record<string, any>
+  const items = Array.isArray(res.items) ? res.items : []
+  const out: HelpTopicVM[] = []
+  for (const raw of items) {
+    const it = (raw && typeof raw === 'object' ? raw : {}) as Record<string, any>
+    const rawSegs = Array.isArray(it.segments) ? it.segments : []
+    const segments: HelpVideoSegVM[] = rawSegs.map((sgRaw: unknown) => {
+      const sg = (sgRaw && typeof sgRaw === 'object' ? sgRaw : {}) as Record<string, any>
+      return {
+        id: String(sg.id || ''),
+        name: String(sg.name || ''),
+        dur: String(sg.dur || ''),
+        url: typeof sg.url === 'string' && sg.url ? sg.url : null,
+      }
+    })
+    const title = String(it.title || '')
+    if (!title && segments.length === 0) continue // 无题无段的脏主题剔除
+    out.push({ id: String(it.id || ''), title, sub: String(it.sub || ''), desc: String(it.desc || ''), segments })
+  }
+  return out
+}

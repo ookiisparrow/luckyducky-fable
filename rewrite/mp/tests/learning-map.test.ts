@@ -1,7 +1,7 @@
 // 黄金 learning-content §一（激活三态：新激活/本人回访/他人码/废码）+ §九（背景回退链）
 // （守卫 rw-mp-learning-golden）。
 import { describe, it, expect } from 'vitest'
-import { activationView, bgFor, mapMyCourses, mapCatalog } from '../lib/mapLearning'
+import { activationView, bgFor, mapMyCourses, mapCatalog, mapHelpVideos } from '../lib/mapLearning'
 
 describe('激活结果三态 + 废码兜底（黄金 §一）', () => {
   it('大白话：新激活/本人已进课各归各屏；他人码带课程号（按课取图）；废码与未知错误一律「码不对」不冒充激活', () => {
@@ -206,5 +206,68 @@ describe('mapCatalog（目录页数据源·课时状态/续播/磁贴 VM）', ()
     expect(() => mapCatalog({ chapters: [{ lessons: null }, null] }, [], 'c1')).not.toThrow()
     const r = mapCatalog(COURSE, '坏值', 'c1')
     expect(r.chapters[0].lessons[0].status).toBe('current') // 脏 progressList 等同无进度
+  })
+})
+
+// 求助面板·帮助视频（P3b·播放器重设计战役批D·getHelpVideos 两级主题→小段清洗）。
+describe('mapHelpVideos（帮助视频清洗·脏结构安全）', () => {
+  it('大白话：正常两级——主题 title/sub/desc 与小段 name/dur/url 原样带过；url 非串归 null', () => {
+    const vm = mapHelpVideos({
+      items: [
+        {
+          id: 't1',
+          title: '钩针与线材选购',
+          sub: '开工前先备好家伙事',
+          desc: '',
+          segments: [
+            { id: 's1', name: '钩针怎么选', dur: '5:40', url: 'cloud://a.mp4' },
+            { id: 's2', name: '线材怎么选', dur: '3:12', url: null }, // 未剪辑段
+          ],
+        },
+      ],
+    })
+    expect(vm).toHaveLength(1)
+    expect(vm[0]).toEqual({
+      id: 't1',
+      title: '钩针与线材选购',
+      sub: '开工前先备好家伙事',
+      desc: '',
+      segments: [
+        { id: 's1', name: '钩针怎么选', dur: '5:40', url: 'cloud://a.mp4' },
+        { id: 's2', name: '线材怎么选', dur: '3:12', url: null },
+      ],
+    })
+  })
+
+  it('大白话：脏结构安全——非数组 items/segments 归空、字段类型不对强转字符串、url 非串（数字/对象/空串）一律归 null，不崩', () => {
+    expect(mapHelpVideos(null)).toEqual([])
+    expect(mapHelpVideos({})).toEqual([])
+    expect(mapHelpVideos({ items: '坏值' })).toEqual([])
+    const vm = mapHelpVideos({
+      items: [
+        { id: 9, title: 88, sub: null, desc: undefined, segments: '不是数组' },
+        { id: 't2', title: '主题2', segments: [{ id: 's3', name: 77, dur: 12, url: 999 }, null, '坏行'] },
+      ],
+    })
+    // 第一条 segments 非数组归空、但仍有 title=88→'88'，不被剔除
+    expect(vm[0]).toEqual({ id: '9', title: '88', sub: '', desc: '', segments: [] })
+    // 第二条：脏行安全跳过/兜底，url 非串（999）归 null，name/dur 强转字符串
+    expect(vm[1].segments).toEqual([
+      { id: 's3', name: '77', dur: '12', url: null },
+      { id: '', name: '', dur: '', url: null },
+      { id: '', name: '', dur: '', url: null },
+    ])
+  })
+
+  it('大白话：空——items 缺失/空数组回空数组；无 title 且无 segments 的脏主题剔除（不占空分组位）', () => {
+    expect(mapHelpVideos({ items: [] })).toEqual([])
+    const vm = mapHelpVideos({
+      items: [
+        { id: 't-ghost', title: '', segments: [] }, // 无题无段·剔除
+        { id: 't-ok', title: '', segments: [{ id: 's1', name: '有段就不剔', dur: '1:00', url: 'x' }] }, // 无题但有段·保留
+      ],
+    })
+    expect(vm).toHaveLength(1)
+    expect(vm[0].id).toBe('t-ok')
   })
 })

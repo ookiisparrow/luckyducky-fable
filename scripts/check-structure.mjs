@@ -4589,6 +4589,8 @@ export const repoChecks = [
     // playSegment(next) 切下一段——新设计要求段落播完停在完成态，给用户看「重播本段」通栏按钮自己选，
     // 不替用户做主。守此不变量：onEnded 不许再出现 playSegment( 调用（自动切段回潮即红）且须落 segDone；
     // onReplay 须真 seek(0) 从头重来；wxml 须有重播长条的 tap 绑定，否则 ts 有功能界面点不到。
+    // 模式分叉声明（批D·2026-07-11）：本守卫钉的是本机学习模式语义；投屏观看模式连续播为已拍板的模式
+    // 分叉（见需求清单 R40），届时守卫判据随投屏落地批改写，勿把两者当矛盾互相修掉。
     id: 'rw-mp-player-no-autonext',
     roots: ['R38'],
     desc: '播放器重设计战役批B：段落播完不自动切换（P4 通栏重播·设计拍板 2026-07-11）——player.ts 的 onEnded 方法体不得含 playSegment( 调用（自动切段回潮即红）且须含 segDone；onReplay 方法体须存在且含 seek(0；player.wxml 须有 bind:tap="onReplay"（重播长条入口）',
@@ -4850,9 +4852,12 @@ export const repoChecks = [
     // wx.showToast('正在接入客服…')——旧线守卫早已判定这句假 Toast 绝迹，新线却原样重现（复制漂移同源）。
     // 触点表驱动（一张表+一条守卫范式，防新增触点各自为政）：批次C 触点扩面 2→4，收口 detail/onService、
     // player/onHelp、me/onKefu、aftersales/onKefu 四点（2026-07-08 用户拍板）。
+    // 播放器重设计战役批D（2026-07-11）：player.ts 求助钮改拉起求助面板（onHelp 不再直连客服），真客服
+    // 调用移入面板卡1 onHelpContact——触点表同批改写（onHelp→onHelpContact），wxml 上 bind:tap="onHelp"
+    // 节点原样保留（rw-mp-player-immersive-casting 钉的是节点存在，与方法体内调用什么无关）。
     id: 'rw-mp-customer-service-wired',
     roots: ['R18'],
-    desc: '客服触点真实化（rewrite/mp）：① 全目录禁「正在接入客服」假 Toast 绝迹（同旧线 customer-service-wired 判定的假占位家族）② 触点表驱动——detail.ts 的 onService()、player.ts 的 onHelp()、me.ts 的 onKefu()、aftersales.ts 的 onKefu() 方法体须真调 openCustomerService()，防触点各自散接/漏接',
+    desc: '客服触点真实化（rewrite/mp）：① 全目录禁「正在接入客服」假 Toast 绝迹（同旧线 customer-service-wired 判定的假占位家族）② 触点表驱动——detail.ts 的 onService()、player.ts 的 onHelpContact()、me.ts 的 onKefu()、aftersales.ts 的 onKefu() 方法体须真调 openCustomerService()，防触点各自散接/漏接',
     run() {
       const base = join(ROOT, 'rewrite/mp')
       if (!existsSync(base)) return []
@@ -4875,7 +4880,7 @@ export const repoChecks = [
       // 断言B：触点表驱动——每个触点方法体内须真调 openCustomerService()
       const TOUCHPOINTS = [
         { file: 'pages/detail/detail.ts', method: 'onService' },
-        { file: 'pages/player/player.ts', method: 'onHelp' },
+        { file: 'pages/player/player.ts', method: 'onHelpContact' },
         { file: 'pages/me/me.ts', method: 'onKefu' },
         { file: 'pages/aftersales/aftersales.ts', method: 'onKefu' },
       ]
