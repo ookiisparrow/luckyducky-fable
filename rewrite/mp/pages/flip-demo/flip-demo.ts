@@ -2,12 +2,14 @@
 // 方案一「拟物凹槽」：相对拨动翻帧，松手阻尼钟摆回中（pendulumAt 逐帧驱动·摆过中点轻震）。
 // 方案二「三档拨杆」：三稳态，松手顺拖动方向咔哒入档（leverTarget 决策 + easeIn 立方冲档硬停）。
 // 交互：touch 相对拖动 + setData 跟手（同 player 进度条先例）；动画均定时器驱动（页面 JS 无 rAF）。
-// 震动（2026-07-11 用户需求）：入档 medium、跨档区/到行程尽头/摆过中点 light，全程 ≥80ms 节流——
-// 禁逐帧震（安卓马达糊成嗡）；工具端不震、真机才有（根因#8）。
-import { leverTarget, frameForRatio, zoneOf, flipFrames, pendulumAt, FLIP_ZERO } from '../../lib/flipLever'
+// 震动（2026-07-11 用户需求两则）：① 事件震——入档 medium、跨档区/到行程尽头/摆过中点 light，≥80ms 节流；
+// ② 方案一拖动持续阻尼震感——翻过一帧即「嗒」（shouldTick·40ms 最小间隔钳制，快扫自动跳齿防安卓马达糊嗡）。
+// 工具端不震、真机才有（根因#8）。
+import { leverTarget, frameForRatio, zoneOf, flipFrames, pendulumAt, shouldTick, FLIP_ZERO } from '../../lib/flipLever'
 
 const TICK_MS = 16 // 动画步进（≈60fps 定时器）
-const VIBE_GAP_MS = 80
+const VIBE_GAP_MS = 80 // 事件震节流
+const DRAG_TICK_GAP_MS = 40 // 拖动阻尼「嗒」最小间隔
 
 interface RailState {
   jog: number // 手柄位移 px
@@ -18,8 +20,9 @@ interface RailState {
   lastZone: -1 | 0 | 1
   atEnd: boolean
   timer: ReturnType<typeof setInterval> | 0
+  lastTickFrame: number // 上次「嗒」时的帧（拖动阻尼震感·只在真嗒时更新＝快扫跳齿后可补嗒）
 }
-const railState = (): RailState => ({ jog: 0, maxJ: 0, down: false, startX: 0, startJog: 0, lastZone: 0, atEnd: false, timer: 0 })
+const railState = (): RailState => ({ jog: 0, maxJ: 0, down: false, startX: 0, startJog: 0, lastZone: 0, atEnd: false, timer: 0, lastTickFrame: FLIP_ZERO })
 
 Page({
   data: {
@@ -36,7 +39,8 @@ Page({
   // 非渲染态（不进 data：不触发 setData）
   A: railState(), // 方案一 · 拟物凹槽
   B: railState(), // 方案二 · 三档拨杆
-  lastVibe: 0,
+  lastVibe: 0, // 事件震时间戳
+  lastTick: 0, // 拖动阻尼「嗒」时间戳
 
   onLoad() {
     this.A = railState()
@@ -96,12 +100,20 @@ Page({
   onJogStart(e: WechatMiniprogram.TouchEvent) {
     if (!this.A.maxJ) return // 量宽未回来（极早触摸）：本次不响应，下次即好
     this.railDown(this.A, e)
+    this.A.lastTickFrame = this.data.frameA
     this.setData({ dragA: true })
   },
 
   onJogMove(e: WechatMiniprogram.TouchEvent) {
     if (!this.A.down) return
-    this.applyA(this.railDrag(this.A, e))
+    const f = this.applyA(this.railDrag(this.A, e))
+    // 持续阻尼震感：翻帧即嗒（拖得快嗒得密·40ms 钳制快扫跳齿）；与事件震共用时间地板防叠震
+    const now = Date.now()
+    if (shouldTick(this.A.lastTickFrame, f, now - Math.max(this.lastTick, this.lastVibe), DRAG_TICK_GAP_MS)) {
+      this.lastTick = now
+      this.A.lastTickFrame = f
+      wx.vibrateShort({ type: 'light' })
+    }
   },
 
   onJogEnd() {
@@ -129,12 +141,11 @@ Page({
     }, TICK_MS)
   },
 
-  applyA(x: number) {
+  applyA(x: number): number {
     this.A.jog = x
-    this.setData({
-      jogA: Math.round(x * 10) / 10,
-      frameA: frameForRatio(this.A.maxJ > 0 ? x / this.A.maxJ : 0),
-    })
+    const frame = frameForRatio(this.A.maxJ > 0 ? x / this.A.maxJ : 0)
+    this.setData({ jogA: Math.round(x * 10) / 10, frameA: frame })
+    return frame
   },
 
   /* ================= 方案二 · 三档拨杆 ================= */

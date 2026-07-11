@@ -3,7 +3,7 @@
 // 拨杆三稳态（左 -17 / 中 00 / 右 +18），松手「顺拖动方向入档」——微动回起始档，成势则按方向进档，
 // 大幅拖拽可跨区直达；帧号由手柄位移比例绝对映射。
 import { describe, it, expect } from 'vitest'
-import { leverTarget, frameForRatio, zoneOf, flipFrames, pendulumAt, FLIP_N, FLIP_ZERO, PENDULUM_T, PENDULUM_TAU } from '../lib/flipLever'
+import { leverTarget, frameForRatio, zoneOf, flipFrames, pendulumAt, shouldTick, FLIP_N, FLIP_ZERO, PENDULUM_T, PENDULUM_TAU } from '../lib/flipLever'
 
 const MAX = 100 // 半行程 px（测试用整数便于口算）
 
@@ -83,6 +83,15 @@ describe('pendulumAt（拟物凹槽松手·阻尼钟摆回中：x0·e^(-t/τ)·c
   it('大白话：包络单调衰减——整周期采样一圈比一圈小（最终收敛回中，不发散）', () => {
     const peaks = [0, 1, 2, 3].map((n) => Math.abs(pendulumAt(80, n * PENDULUM_T).x))
     for (let i = 1; i < peaks.length; i++) expect(peaks[i]).toBeLessThan(peaks[i - 1])
+  })
+})
+
+describe('shouldTick（拖动持续阻尼震感：翻帧即嗒·最小间隔钳制）', () => {
+  it('大白话：翻过一帧且距上次震动 ≥ 最小间隔才嗒；帧没变不嗒；间隔不足不嗒（快扫跳齿防糊嗡）', () => {
+    expect(shouldTick(17, 18, 40, 40)).toBe(true) // 翻帧 + 间隔够 → 嗒
+    expect(shouldTick(17, 17, 200, 40)).toBe(false) // 帧没变 → 不嗒
+    expect(shouldTick(17, 18, 39, 40)).toBe(false) // 间隔不足 → 跳齿
+    expect(shouldTick(20, 15, 40, 40)).toBe(true) // 反向翻帧同样嗒
   })
 })
 

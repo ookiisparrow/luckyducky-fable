@@ -38,7 +38,7 @@
       <view class="fd-fader-bar"></view>
     </view>
   </view>
-  <view class="fd-hint">左右拨动推钮翻帧，松手自动回中</view>
+  <view class="fd-hint">左右拨动推钮翻帧（逐格「嗒嗒」阻尼震感），松手自动回中</view>
 
   <!-- ================= 方案二 · 三档拨杆（状态切换器） ================= -->
   <view class="fd-sec-label fd-sec-gap">方案二 · 三档拨杆（状态切换器 · 咔哒入档）</view>
@@ -79,7 +79,7 @@
   <view class="fd-check">
     <view class="fd-check-title">真机看四点</view>
     <view class="fd-check-item">① 跟手性（两方案）：拖动中帧号与画面即时跟指、不拖影不卡顿</view>
-    <view class="fd-check-item">② 方案一回中：松手后左右摆动逐渐收小、最终稳稳停回 00 帧；每次摆过中点有一下轻震</view>
+    <view class="fd-check-item">② 方案一阻尼感：拖动中每翻一帧「嗒」一下，快拖嗒得密、慢拖嗒得疏，像拨过带齿滑槽；松手后左右摆动逐渐收小、最终停回 00 帧，摆过中点有轻震</view>
     <view class="fd-check-item">③ 方案二入档：松手咔哒冲进档位、硬停无回弹，震动与视觉同步；拖过档区边界有轻震</view>
     <view class="fd-check-item">④ 到行程尽头（两方案）有一下轻震</view>
     <view class="fd-check-note">注：开发者工具不震动；iOS 关闭「系统触感」时震动静默失效</view>
