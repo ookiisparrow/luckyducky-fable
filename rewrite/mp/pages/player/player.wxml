@@ -1,7 +1,8 @@
 <!-- 课程播放页·竖屏沉浸全屏重设计（播放器重设计战役 批B：P1 常态结构重排 + P4 段落播完不自动切换；
      批C：P2 自绘 seek 条 + 阻尼震感 + 关键节点磁吸 + 拖动预览；批D：P3 求助面板 + P5 返回二次确认 +
-     P5b 首次退出加桌引导 + 投屏过渡最小入口；投屏批2（R40 T1 终态）：顶栏投屏钮回归 + T2 控制器态 +
-     连续播分叉 + 换源衔接——求助面板过渡投屏入口已退役，顶栏接管）。
+     P5b 首次退出加桌引导 + 投屏过渡最小入口；投屏批2（R40 T1 终态）：顶栏投屏钮回归——求助面板过渡投屏
+     入口已退役，顶栏接管；批6 T2 全自绘控制器推翻改与原生共存；批7 连续播分叉平台裁决退役→单段一次性
+     投放（换 src 电视不跟随/播完无回报/exitCasting 无回调，见 player.ts 头注与重构日志批7 条）。
      整页纯黑铺满（player.json navigationStyle:custom）；视频 1:1.68（宽:高）居中，
      上下 UI 是黑条覆盖层（普通 view 绝对定位 z-index 盖在 video 上·同层渲染官方已允许，不必 cover-view）。
      业务逻辑与既有回归红线（playToken 乱序防护/首帧埋点/segment_done/watch_at/25min 地址缓存）一字不动；
@@ -121,14 +122,16 @@
     </view>
   </view>
 
-  <!-- 底条：仅播放中显示。投屏共存态（批6）走 lp-castbar——只放原生投屏做不到的「段落导航 + 自动连播状态
-       + 退出投屏」；本机学习态沿用「(段落播完)重播长条 + 进度条 + 求助|上一段|下一段」。 -->
+  <!-- 底条：仅播放中显示。投屏共存态（批6·批7 承诺改单段投放）走 lp-castbar——「段落导航（切段=回手机
+       播，ts 层先退投屏收口）+ 退出投屏」；本机学习态沿用「(段落播完)重播长条 + 进度条 + 求助|上一段|下一段」。
+       批7 文案对齐平台现实：电视播完该段无回报事件、自动连播不可实现（castAutoNext 已退役），不再承诺
+       「播完自动接着放」。 -->
   <view class="lp-bottombar" wx:if="{{state === 'playing'}}">
     <block wx:if="{{casting === 'connected'}}">
       <view class="lp-castbar">
         <view class="lp-castbar-status">
           <text class="lp-castbar-dot"></text>
-          <text class="lp-castbar-status-tx">投屏中 · 段落播完自动接着放</text>
+          <text class="lp-castbar-status-tx">投屏中 · 电视播完这段后，回手机接着看</text>
         </view>
         <view class="lp-castbar-row">
           <view class="lp-castbar-nav {{canPrev ? '' : 'dim'}}" bind:tap="onPrev">

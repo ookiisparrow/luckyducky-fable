@@ -165,6 +165,18 @@ export function playbackModeFor(seg: { hasLandscape?: boolean } | null, wantLand
   return wantLandscape && !!(seg && seg.hasLandscape) ? 'landscape' : 'portrait'
 }
 
+/** 投屏回本机兜底时间窗（ms·批7）：connected 置位后满窗才认本机 play 事件为「播放已回手机」——
+ *  投屏建立瞬间本机可能补发 play/pause 事件抖动，窗内忽略防误踢正常投屏。 */
+export const CAST_RECLAIM_MS = 2000
+
+/** 投屏回本机兜底判定（批7·纯函数）：投屏断开/结束时平台事件不可靠（castinginterrupt 播完不触发、
+ *  castingstatechange 只报一次性 success/fail——官方文档+社区实证，见重构日志批7 条），唯一兜底信号＝
+ *  本机 video 重新开播（投屏中本机不播）。connected 态、有置位时间戳、且距置位满 CAST_RECLAIM_MS 才
+ *  判定「该回收了」；时间戳缺席（异常路径）保守 false——宁可留投屏 UI 也不误踢正常投屏。 */
+export function castReclaimDue(casting: string, connectedAtMs: number, nowMs: number): boolean {
+  return casting === 'connected' && connectedAtMs > 0 && nowMs - connectedAtMs >= CAST_RECLAIM_MS
+}
+
 /** 手机横屏播放换源方案判定（R41·纯函数，批3）：投屏 connected 态电视持有源，旋转手机不换源（返回
  *  null）；否则委托 playbackModeFor 复用同一套「有横屏成片才切」的安全降级语义——回竖屏时若该段无
  *  横屏源，swapSource 对同 url 天然 no-op，不产生多余动作。 */

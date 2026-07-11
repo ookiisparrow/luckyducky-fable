@@ -4589,12 +4589,14 @@ export const repoChecks = [
     // playSegment(next) 切下一段——新设计要求段落播完停在完成态，给用户看「重播本段」通栏按钮自己选，
     // 不替用户做主。守此不变量：onEnded 不许再出现 playSegment( 调用（自动切段回潮即红）且须落 segDone；
     // onReplay 须真 seek(0) 从头重来；wxml 须有重播长条的 tap 绑定，否则 ts 有功能界面点不到。
-    // 模式分叉已落地（批2·2026-07-11 投屏终态批）：本机学习模式不自动切段（停完成态给用户自己选）；
-    // 投屏 connected 态委托 castAutoNext 做真正连续播（R40）——模式门在 castAutoNext 内判、不在 onEnded
-    // 内直接切段，onEnded 只做委托，两个模式的行为互不覆盖（R38/R40 并存，勿把两者当矛盾互相修掉）。
+    // 投屏连续播分叉已退役（批7·2026-07-11 平台三重否决）：DLNA 投屏电视播完无任何回报事件（ended/
+    // castinginterrupt 均不触发·社区两帖互证）、无「给电视换内容」接口（4 个投屏方法均无 src 参）、投屏
+    // API 仅限 tap 回调内调用——castAutoNext（批2 引入·由 onEnded 投屏分叉委托）永远没有触发时机＝死代码，
+    // 批7 连方法带分叉一并删除；投屏终态语义＝单段一次性投放（R40 降级改写）。本判据同时防连播复辟：
+    // castAutoNext 全文绝迹——想恢复连续播先推翻平台查证（证据链在重构日志批7 条）。
     id: 'rw-mp-player-no-autonext',
     roots: ['R38', 'R40'],
-    desc: '模式分叉已落地：本机不自动切段 + 投屏 connected 经 castAutoNext 连播（R38/R40 并存）——player.ts 的 onEnded 方法体不得含 playSegment( 调用（自动切段回潮即红）且须含 segDone、且须含 castAutoNext（分叉委托在场）；castAutoNext 方法体须含 casting 与 \'connected\'（模式门在场，允许含 playSegment(）；onReplay 方法体须存在且含 seek(0；player.wxml 须有 bind:tap="onReplay"（重播长条入口）',
+    desc: '段落播完不自动切换（R38 全局统一·R40 投屏连播已平台裁决退役）——player.ts 的 onEnded 方法体不得含 playSegment( 调用（自动切段回潮即红）且须含 segDone；castAutoNext 须全文绝迹（批7 平台三重否决：电视播完无回报事件/无换内容接口/投屏 API 仅 tap 回调——连播死代码防复辟）；onReplay 方法体须存在且含 seek(0；player.wxml 须有 bind:tap="onReplay"（重播长条入口）',
     run() {
       const base = join(ROOT, 'rewrite/mp')
       const tsPath = join(base, 'pages/player/player.ts')
@@ -4606,14 +4608,11 @@ export const repoChecks = [
         bad.push('player.ts 找不到 onEnded 方法体——段落播完检测单点丢失')
       } else {
         if (/playSegment\s*\(/.test(endedBody))
-          bad.push('player.ts 的 onEnded 方法体内仍含 playSegment( 调用——自动切段回潮（本机学习模式不自动切段，须停在完成态或委托 castAutoNext）')
+          bad.push('player.ts 的 onEnded 方法体内仍含 playSegment( 调用——自动切段回潮（段落播完须停在完成态给用户自己选，R38）')
         if (!/segDone/.test(endedBody)) bad.push('player.ts 的 onEnded 方法体内未见 segDone——播完完成态未落地')
-        if (!/castAutoNext/.test(endedBody)) bad.push('player.ts 的 onEnded 方法体内未见 castAutoNext——投屏 connected 连续播分叉委托缺失（R40）')
       }
-      const autoNextBody = methodBody(src, 'castAutoNext')
-      if (!autoNextBody) bad.push('player.ts 找不到 castAutoNext 方法体——投屏连续播单点丢失（R40）')
-      else if (!/casting/.test(autoNextBody) || !/'connected'/.test(autoNextBody))
-        bad.push("player.ts 的 castAutoNext 方法体内未见 casting/'connected' 模式门——脱离投屏态仍可能被误触发连续播（R38/R40 混线）")
+      if (/castAutoNext/.test(src))
+        bad.push('player.ts 出现 castAutoNext——投屏连续播已批7 平台裁决退役（电视播完无回报事件/无换内容接口/投屏 API 仅 tap 回调，三重否决＝死代码），连播复辟须先推翻平台查证（重构日志批7 条）')
       const replayBody = methodBody(src, 'onReplay')
       if (!replayBody) bad.push('player.ts 找不到 onReplay 方法体——重播入口单点丢失')
       else if (!/seek\s*\(\s*0/.test(replayBody)) bad.push('player.ts 的 onReplay 方法体内未见 seek(0——重播未真正跳回段首')
@@ -4849,11 +4848,46 @@ export const repoChecks = [
         else if (!/\.seek\s*\(/.test(stripComments(seekEndBody)))
           bad.push('player.ts 的 onSeekEnd 方法体内未见 .seek(——松手应真正 seek 到位')
         // 退出投屏须特性检测（与备路径投屏 startCasting 同惯例）：exitCasting 同样是基础库高版本能力，
-        // 低版本直接调用会报错崩交互。
+        // 低版本直接调用会报错崩交互。批7 追加两判据（真机第三轮实锤·根因#8）：① video 版 exitCasting
+        // 官方签名是 exitCasting(): void——无 success/fail/complete 回调（api-typings 逐字·有回调的是
+        // LivePlayerContext 版），把清态挂在 complete 回调里＝清态永不执行、投屏 UI 卡死（真机症状：退出
+        // 投屏钮点了没反应）——onCastExit 体内禁现 complete，须直接同步调 stopCastingCleanup(。
         const onCastExitBody = methodBody(ts, 'onCastExit')
         if (!onCastExitBody) bad.push('player.ts 找不到 onCastExit 方法体——退出投屏单点丢失')
-        else if (!/typeof\s+[\w.]+\.exitCasting\s*[!=]==\s*['"]function['"]/.test(stripComments(onCastExitBody)))
-          bad.push("player.ts 的 onCastExit 方法体内未见 exitCasting 特性检测（typeof ...===/!=='function'）——退出投屏未按基础库能力探测就调用，低版本微信直接报错崩交互")
+        else {
+          const stripped = stripComments(onCastExitBody)
+          if (!/typeof\s+[\w.]+\.exitCasting\s*[!=]==\s*['"]function['"]/.test(stripped))
+            bad.push("player.ts 的 onCastExit 方法体内未见 exitCasting 特性检测（typeof ...===/!=='function'）——退出投屏未按基础库能力探测就调用，低版本微信直接报错崩交互")
+          if (/complete/.test(stripped))
+            bad.push('player.ts 的 onCastExit 方法体内出现 complete——video 版 exitCasting(): void 无任何回调（官方 api-typings），清态挂回调＝永不执行、投屏 UI 卡死（批7 真机实锤），须同步清态')
+          if (!/stopCastingCleanup\s*\(/.test(stripped))
+            bad.push('player.ts 的 onCastExit 方法体内未见 stopCastingCleanup( 同步调用——退出投屏必须无条件立即清本地态（fail-safe），不得依赖平台回调/事件（批7：exitCasting 无回调、断连事件不可靠）')
+        }
+        // 回本机兜底（批7·真机第三轮）：投屏断开/结束时平台事件不可靠（castinginterrupt 播完不触发·社区
+        // 实证），唯一可靠信号＝本机 video 重新开播（投屏中本机不播）——onVideoPlay 须挂 reclaimFromCasting
+        // 兜底（内部按 castReclaimDue 时间窗防投屏建立瞬间的事件抖动误杀），否则任何未知路径断投屏后
+        // casting UI 永久卡死（真机症状：换段回手机播但 UI 仍投屏态）。
+        const onVideoPlayBody = methodBody(ts, 'onVideoPlay')
+        if (!onVideoPlayBody) bad.push('player.ts 找不到 onVideoPlay 方法体——播放回报单点丢失')
+        else if (!/reclaimFromCasting\s*\(/.test(stripComments(onVideoPlayBody)))
+          bad.push('player.ts 的 onVideoPlay 方法体内未见 reclaimFromCasting(——回本机兜底缺失：投屏断开无可靠平台事件（批7 查证），本机重新开播是唯一兜底信号，缺它则断投屏后 casting UI 永久卡死')
+        const reclaimBody = methodBody(ts, 'reclaimFromCasting')
+        if (!reclaimBody) bad.push('player.ts 找不到 reclaimFromCasting 方法体——回本机兜底单出口丢失（批7）')
+        else if (!/stopCastingCleanup\s*\(/.test(stripComments(reclaimBody)))
+          bad.push('player.ts 的 reclaimFromCasting 方法体内未见 stopCastingCleanup(——兜底命中后未走清态单出口（双写清态＝迟早漂移，病根#5）')
+        // 投屏态切段先退投屏（批7）：DLNA 换 src 只改本机组件源、电视端不跟随（无换内容接口），投屏态直接
+        // playSegment＝播放回手机但投屏态残留（真机症状：点下一段回手机播、UI 仍投屏）——onPrev/onNext 须
+        // 先经 endCastingForSwitch 收口（tap 同步链内尽力 exitCasting + 清态 + toast 如实），行为与真实结果一致。
+        for (const nav of ['onPrev', 'onNext']) {
+          const navBody = methodBody(ts, nav)
+          if (!navBody) bad.push(`player.ts 找不到 ${nav} 方法体——段落导航单点丢失`)
+          else if (!/endCastingForSwitch\s*\(/.test(stripComments(navBody)))
+            bad.push(`player.ts 的 ${nav} 方法体内未见 endCastingForSwitch(——投屏态切段未先退投屏（批7：换 src 电视不跟随、播放必回手机），UI 会与真实播放位置分叉`)
+        }
+        const endSwitchBody = methodBody(ts, 'endCastingForSwitch')
+        if (!endSwitchBody) bad.push('player.ts 找不到 endCastingForSwitch 方法体——投屏态切段收口单出口丢失（批7）')
+        else if (!/stopCastingCleanup\s*\(/.test(stripComments(endSwitchBody)))
+          bad.push('player.ts 的 endCastingForSwitch 方法体内未见 stopCastingCleanup(——切段收口未走清态单出口（双写清态＝迟早漂移，病根#5）')
         // 手机横屏播放（R41·批3）：onResize 必须使 _seekRect 失效重测——旋转后 seek 条几何全变
         // （量轨 left/width 随横竖屏切换而变），不清缓存则拖动定位全错（secAt 用旧 rect 算出错误秒数）。
         const onResizeBody = methodBody(ts, 'onResize')

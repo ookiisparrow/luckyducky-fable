@@ -4,6 +4,10 @@
 // 投屏双保险（真机走查后收敛，见 docs/待办与债.md）：主路径=原生 show-casting-button（官方文档未言明
 // 依赖 controls，社区有 controls=false 下可用实例）；备路径=底条自绘投屏按钮，wx.createVideoContext 后
 // 特性检测 typeof ctx.startCasting==='function'（基础库 2.32.0·仅 tap 回调内调用），不支持则提示微信版本过低。
+// 投屏＝单段一次性投放（批7 平台裁决·R40 降级改写·证据链在重构日志批7 条）：DLNA 是把地址推给电视、电视
+// 自拉流，小程序对电视端无控制无感知——换内容无接口（4 个投屏方法均无 src 参）、电视播完无回报事件
+// （ended/castinginterrupt 不触发）、投屏 API 仅限 tap 回调内调用。故：换 src 必回本机（电视不跟随）、
+// 自动连播不可实现（castAutoNext 已退役）、断连检测只能靠「本机重新开播」兜底（reclaimFromCasting）。
 // 自绘 seek 条（播放器重设计战役批C，取代原生 <slider>）：两段式语义——拖动中只改显示（onSeekStart/
 // onSeekMove），松手才真 seek（onSeekEnd）；关键动作节点磁吸（nearestMark）+ 拖动阻尼震感配方照抄
 // pages/flip-demo 已验真机参考实现（lib/haptics 单源 shouldTick/VIBE_GAP_MS/DRAG_TICK_GAP_MS）。
@@ -19,6 +23,7 @@ import {
   nearestMark,
   playbackModeFor,
   rotateSwapPlan,
+  castReclaimDue,
   type CoursePub,
   type FlatSegment,
   type LessonStrip,
@@ -95,7 +100,7 @@ Page({
     helpSegName: '', // 内嵌播放视图顶部标题（=命中小段 name）
     deskGuide: false, // 首次成功退出加桌引导弹窗可见态（P5b·仅展示一次）
     deskGuideIOS: false, // 加桌引导分端文案（true=iOS「添加到我的小程序」·false=其余平台「添加到桌面」）
-    casting: '' as '' | 'connecting' | 'connected', // 投屏控制器态开关（T1/T2·R40）：''=本机学习模式·connecting=选中设备等待回报·connected=已连接控制器态
+    casting: '' as '' | 'connecting' | 'connected', // 投屏态开关（T1·R40 批7 单段投放）：''=本机学习模式·connecting=拉起设备框等待选中·connected=投屏共存态（底栏共存条+原生控件）
     castDevice: '', // 投屏设备名（detail 拿不到就空串，UI 兜底文案「电视」）
     castTip: false, // 顶栏投屏钮首次气泡（T1·仅展示一次，见 CAST_TIP_KEY）
     landscape: false, // 手机横屏播放（R41·批3）：pageOrientation:auto 下 onResize 按窗口宽高比翻转，驱动 .land 覆写族
@@ -126,6 +131,7 @@ Page({
   lastTick: 0, // 拖动阻尼「嗒」时间戳（配方单源 lib/haptics·照抄 pages/flip-demo）
   lastVibe: 0, // 事件震（vibe()）时间戳（同上·两类震共用时间地板防叠震）
   _backAt: 0, // 返回二次确认判定锚点（P5·BACK_CONFIRM_MS 窗口内二次按返回才真退，见 onBack）
+  _castConnectedAt: 0, // 投屏 connected 置位时间戳（批7·castReclaimDue 时间窗锚点）：投屏建立瞬间本机可能补发 play 抖动，满窗后的本机 play 才认「播放已回手机」
   _guardTimer: 0, // 返回垫层重装定时器 id（onGuardLeave 落 false 后延时拉回 true·onUnload 必 clearTimeout）
   _guardExiting: false, // 真退中标志：exitPlayer 置位后重装定时器不得再拉起垫层（否则 navigateBack 被自己的垫层吃掉）
 
@@ -245,16 +251,14 @@ Page({
     })
     let url = ''
     try {
-      // 模式感知取址（R40 投屏 + R41 手机横屏）：投屏 connected 态或手机本身已横屏都自动用横屏源
-      // （无横屏成片的段自然降级回 portrait，见 playbackModeFor）。
-      const mode = playbackModeFor(seg, this.data.casting === 'connected' || this.data.landscape)
+      // 模式感知取址（R41 手机横屏）：手机已横屏用横屏源（无横屏成片的段自然降级回 portrait，见
+      // playbackModeFor）。批7 起判据不再含 casting——投屏＝单段一次性投放，切段永远发生在退出投屏之后
+      // （onPrev/onNext 先经 endCastingForSwitch 收口），投屏专属的横屏源由 onCast 拉起前置换（swapSource），
+      // 本方法无需再感知投屏态。
+      const mode = playbackModeFor(seg, this.data.landscape)
       url = await cache.get(this.courseId, seg.segmentId, mode)
-      // 取址期间可能漂移——两个诱因均可能变化：投屏断开（stopCastingCleanup 因此刻 state 仍是 'loading'
-      // 而非 'playing'，其 swapSource 兜底会静默 no-op）／手机转回竖屏。这里补一次复核，但必须按「两个
-      // 诱因是否都已失效」判断，不能只看 casting——否则手机本身横屏（未投屏）时，取址期间 casting 恒
-      // 不等于 'connected'，会把刚取到的横屏源无条件撤销、静默降级回竖屏（评审 finding 复核，P1）。
-      // 只在「投屏未连 且 手机也已不再横屏」时才真回退取竖屏源。
-      if (mode === 'landscape' && this.data.casting !== 'connected' && !this.data.landscape) {
+      // 取址期间可能漂移：手机转回竖屏——补一次复核，只在「手机已不再横屏」时才真回退取竖屏源。
+      if (mode === 'landscape' && !this.data.landscape) {
         url = await cache.get(this.courseId, seg.segmentId, 'portrait')
       }
     } catch {
@@ -295,6 +299,10 @@ Page({
 
   // video 播放/暂停回报（真相源·不在 onTapVideo 里直接翻转 data.paused）。
   onVideoPlay() {
+    // 投屏回本机兜底（批7·守卫 rw-mp-player-immersive-casting）：投屏中本机不播，本机重新开播＝投屏已
+    // 不在（原生控件退出/电视关机断连/任何未知路径）——平台断连事件不可靠（castinginterrupt 播完不触发），
+    // 这是唯一兜底信号；castReclaimDue 时间窗挡投屏建立瞬间的事件抖动。
+    if (castReclaimDue(this.data.casting, this._castConnectedAt, Date.now())) this.reclaimFromCasting()
     this.onFirstPlay()
     this.setData({ paused: false })
     // 用户经系统手势/重播外路径恢复播放时，完成态不该残留（P4）：常规路径已由 onReplay/playSegment 复位，
@@ -322,31 +330,14 @@ Page({
 
   // 段落播完（P4·设计拍板 2026-07-11）：不再自动切下一段——停在完成态，通栏「重播本段」+ segstrip
   // 文案三态（见 buildCapText）由用户自己选重播/上一段/下一段（守卫 rw-mp-player-no-autonext）。
-  // 模式分叉（R40·批2）：投屏 connected 态是连续播观看模式（电视前不方便手动切段），委托 castAutoNext
-  // 真正自动连播；本机学习模式（casting !== 'connected'）行为不变。
+  // 投屏连续播分叉已退役（批7）：电视播完无任何回报事件（本机 ended 不触发·平台感知盲区），投屏中本机
+  // 也不在播——本回调在投屏期间实际不会响，无需分叉；全局统一停完成态。
   onEnded() {
     const cur = this.data.current
     if (!cur) return
     trackEvent('segment_done', 'player', cur.segmentId, { courseId: this.courseId, lessonId: cur.lessonId, segmentId: cur.segmentId, at: this._at, dur: this._dur })
-    if (this.data.casting === 'connected') {
-      this.castAutoNext()
-      return
-    }
     const strip = lessonStrip(this.course, cur.segmentId, true)
     this.setData({ segDone: true, paused: true, strip, capText: buildCapText(strip, true, this.course, cur.segmentId) })
-  },
-  // 投屏连续播（R40③）：connected 态自动切下一段；全课末段也停完成态（三态 capText 已含「本课程已全部
-  // 学完」分支）。casting 门在此判——onEnded 只做委托，脱离投屏态后本方法即便被误调用也是 no-op。
-  castAutoNext() {
-    if (this.data.casting !== 'connected') return
-    const cur = this.data.current
-    const next = cur && navSegment(this.course, cur.segmentId, 1)
-    if (next) {
-      void this.playSegment(next, 'seg')
-      return
-    }
-    const strip = cur ? lessonStrip(this.course, cur.segmentId, true) : null
-    this.setData({ segDone: true, paused: true, strip, capText: buildCapText(strip, true, this.course, cur ? cur.segmentId : '') })
   },
 
   // 通栏重播（P4 新增）：从头重来一遍，退出完成态。
@@ -569,8 +560,10 @@ Page({
   // 一键投屏（T1 顶栏钮·主路径 show-casting-button 已在 wxml 开启，本函数是自绘入口）：拉起系统选择器前
   // 先按 hasLandscape 换源到横屏（云端未上线/该段无横屏成片则 playbackModeFor 安全降级、不换源）。
   // 已知平台盲区（决策已定·不加投机守护）：用户在系统投屏选择器里直接取消——无任何回调/事件，本机会
-  // 继续播放已换好的横屏源（contain 显示，方案A 时间轴对齐内容零损，可接受）；用户再点投屏钮或切段会
-  // 自然恢复（见 onCast 重入/onEnded 换段路径）。真机走查 flag 见 docs/待办与债.md（本批不改 docs）。
+  // 继续播放已换好的横屏源（contain 显示，方案A 时间轴对齐内容零损，可接受）；用户再点投屏钮或手动切段
+  // 会自然恢复。平台约束记录（批7 查证·排查线索）：四个投屏方法官方均标「仅支持在 tap 事件回调内调用」，
+  // 本方法 await swapSource（冷取址走网络）后才调 startCasting，可能已脱离 tap 同步上下文——真机现状能
+  // 投上（缓存命中时 await 纯 microtask），若下轮真机出现「首次投屏（冷取址）设备框不弹」，第一嫌疑在此。
   async onCast() {
     if (this.data.state !== 'playing' || !this.data.src) return
     if (this.data.castTip) this.setData({ castTip: false })
@@ -598,18 +591,22 @@ Page({
     })
   },
   // 用户在系统投屏选择框选中设备（批6 真机修·根因#8）：这是「已开始投屏」最可靠的信号——直接判 connected，
-  // 不再赌 castingstatechange 的 detail.state 字符串（真机首测证实：卡在 connecting，state 关键词对不上，
-  // 导致连续播/共存条全不触发）。选中即接管：casting=connected 让 onEnded→castAutoNext 连续播与共存底栏立即
-  // 生效；连接若随后失败，castinginterrupt/castingstatechange(fail) 会走 stopCastingCleanup 回退。
+  // 不再赌 castingstatechange 的 detail.state 字符串（真机首测证实：卡在 connecting，state 关键词对不上）。
+  // 选中即接管：casting=connected 让底栏共存条立即生效（连续播已批7 退役——电视播完该段无回报事件，回手机
+  // 接着看）；连接若随后失败，castinginterrupt/castingstatechange(fail) 会走 stopCastingCleanup 回退。
   onCastingUserSelect(e: WechatMiniprogram.CustomEvent<{ deviceName?: string; name?: string }>) {
     const detail = (e && e.detail) || {}
     const castDevice = String(detail.deviceName || detail.name || '')
     this.castTelemetry('select', '', detail) // detail 真实形状回传（可观测·真机校准判定用）
-    wx.showToast({ title: '已投屏 · 段落播完自动接着放', icon: 'none' })
+    // 承诺文案与平台现实对齐（批7）：电视播完该段不会自动接下一段（无回报事件·连播已裁决退役），如实说。
+    wx.showToast({ title: '已投屏 · 电视播完这段后回手机接着看', icon: 'none' })
+    this._castConnectedAt = Date.now() // 回本机兜底时间窗锚点（castReclaimDue·挡建立瞬间事件抖动）
     this.setData({ casting: 'connected', castDevice })
   },
   // 投屏状态变化（批6：connected 主信号已移到 onCastingUserSelect，本回调只兜断连 + 兜个别不发 userselect
-  // 的机型）：detail.state 真实取值官方未文档化，castTelemetry 回传真值以便日后收敛。
+  // 的机型）：官方文档 detail = { type, state: "success"/"fail" }（一次性结果事件、非状态机·批7 查证），
+  // success 补入 connected 兜底关键词；disconnect/exit/connect/project 宽匹配保留（官方 type 字段取值
+  // 未文档化，埋点 castTelemetry 继续回传真值收敛）。
   // 判序不能反：JS 字符串 'disconnect'/'disconnected' 本身含子串 'connect'（'dis'+'connect'），若先判
   // connect/project 会把断连事件误吞成「已连接」、断连清理分支永远死代码（评审 finding 复核）——
   // 断连/失败关键词必须先判，未命中再判连接关键词（兜底补 connected，不重复 toast·userselect 已提示）。
@@ -618,13 +615,16 @@ Page({
     this.castTelemetry('state', state, (e && e.detail) || {}) // detail.state 真实取值回传（真机校准·可观测）
     if (state.includes('disconnect') || state.includes('exit') || state.includes('fail')) {
       this.stopCastingCleanup()
-    } else if ((state.includes('connect') || state.includes('project')) && this.data.casting !== 'connected') {
+    } else if ((state.includes('success') || state.includes('connect') || state.includes('project')) && this.data.casting !== 'connected') {
+      this._castConnectedAt = Date.now() // 与 userselect 同源置锚（兜底路径也要有时间窗，否则 castReclaimDue 恒 false 兜底失效）
       this.setData({ casting: 'connected' }) // 兜底：个别机型可能不发 castinguserselect，凭状态补齐 connected
     }
   },
   onCastingInterrupt(e?: WechatMiniprogram.CustomEvent<Record<string, unknown>>) {
     this.castTelemetry('interrupt', '', (e && e.detail) || {})
-    wx.showToast({ title: '投屏已断开', icon: 'none' })
+    // toast 过 casting 门（评审 P3）：真断连时若 reclaimFromCasting 已先兜底清态（本机先开播），平台迟到的
+    // interrupt 不该再叠一条「已断开」——埋点照打（观测保留），提示只在投屏态还在时弹。
+    if (this.data.casting) wx.showToast({ title: '投屏已断开', icon: 'none' })
     this.stopCastingCleanup()
   },
   // 投屏事件回传单出口（批5·根因#8）：castingstatechange/interrupt 的 detail 真实形状官方未文档化、
@@ -635,25 +635,56 @@ Page({
     if (!cur) return
     trackEvent('cast_state', 'player', cur.segmentId, { evt, state, keys: Object.keys(detail).join(',') })
   },
-  // 断连/退出投屏共用单出口：回本机学习模式（R38 复归·连播自动关闭因 casting 已清，onEnded 的 casting
-  // 门天然生效）；换回目标不是无条件写死 portrait——手机此刻若本身仍物理横屏（R41），断投屏后仍应留在
-  // landscape，playbackModeFor 按 this.data.landscape 重新判定（该段确有横屏源才需要换，无横屏源本就
-  // 一直在 portrait、换回是 no-op 但避免误取址；评审 finding 复核，P2）。
+  // 断连/退出投屏共用单出口：回本机学习模式（R38 复归·casting 已清）；换回目标不是无条件写死
+  // portrait——手机此刻若本身仍物理横屏（R41），断投屏后仍应留在 landscape，playbackModeFor 按
+  // this.data.landscape 重新判定（该段确有横屏源才需要换，无横屏源本就一直在 portrait、换回是 no-op
+  // 但避免误取址；评审 finding 复核，P2）。
   stopCastingCleanup() {
     if (!this.data.casting) return
+    this._castConnectedAt = 0 // 时间窗锚点一并清（下次投屏重新置锚·防旧锚让 castReclaimDue 立即真）
     this.setData({ casting: '', castDevice: '' })
     if (this.data.current && this.data.current.hasLandscape) void this.swapSource(playbackModeFor(this.data.current, this.data.landscape))
   },
-  // 投屏共存态「退出投屏」钮（批6·与原生投屏共存）：exitCasting 特性检测（同 startCasting 惯例，低版本微信
-  // 直接调用会报错）。播放/暂停/换设备交给微信原生投屏控件（平台约束：原生投屏 UI 无法隐藏、投屏能力依赖
-  // show-casting-button——见 docs/待办与债.md 批6 平台约束条），我方只保留原生做不到的段落导航 + 自动连播。
-  onCastExit() {
-    const ctx = wx.createVideoContext('lp-video', this) as unknown as { exitCasting?: (opt: { complete?: () => void }) => void }
+  // 回本机兜底单出口（批7·onVideoPlay 挂载·守卫钉）：castReclaimDue 满窗命中＝投屏已不在（原生控件退出/
+  // 电视关机断连/换源踢断等一切未知路径）而本机已重新开播——清态让 UI 跟上现实；埋点回传（可观测：真机
+  // 若出现误杀「电视还在播却被回收」，events 里能看到 reclaim 频次校准时间窗）。
+  reclaimFromCasting() {
+    this.castTelemetry('reclaim', '', {})
+    wx.showToast({ title: '投屏已结束 · 回手机继续播', icon: 'none' })
+    this.stopCastingCleanup()
+  },
+  // 投屏态切段收口单出口（批7·onPrev/onNext 开头挂载·守卫钉）：DLNA 换 src 电视不跟随（无换内容接口），
+  // 切段的真实结果就是回手机播新段——先退投屏（tap 同步链内调 exitCasting，满足「仅 tap 回调内调用」平台
+  // 约束）+ 清态 + 如实提示，让 UI 与行为一致；非投屏态零动作。
+  endCastingForSwitch() {
+    if (!this.data.casting) return
+    this.castTelemetry('switch-exit', '', {})
+    const ctx = wx.createVideoContext('lp-video', this) as unknown as { exitCasting?: () => void }
     if (typeof ctx.exitCasting === 'function') {
-      ctx.exitCasting({ complete: () => this.stopCastingCleanup() })
-    } else {
-      this.stopCastingCleanup()
+      try {
+        ctx.exitCasting()
+      } catch {
+        // 投屏可能早已断开（换源踢断/电视关机），此时退出调用失败无碍——本地清态才是目的
+      }
     }
+    wx.showToast({ title: '已回到手机继续播 · 可再点投屏', icon: 'none' })
+    this.stopCastingCleanup()
+  },
+  // 投屏共存态「退出投屏」钮（批6·与原生投屏共存；批7 改 fail-safe）：exitCasting 特性检测（同 startCasting
+  // 惯例，低版本微信直接调用会报错）。video 版 exitCasting 官方签名 (): void——无 success/fail/complete
+  // 回调（api-typings 逐字·有回调的是 LivePlayerContext 版），批6 把清态挂在 complete 里＝永不执行、投屏
+  // UI 卡死（真机第三轮实锤）——清态必须同步无条件执行，不赌任何平台回调；exitCasting 尽力通知平台即可。
+  onCastExit() {
+    const ctx = wx.createVideoContext('lp-video', this) as unknown as { exitCasting?: () => void }
+    if (typeof ctx.exitCasting === 'function') {
+      try {
+        ctx.exitCasting()
+      } catch {
+        // 投屏可能早已断开，退出调用失败无碍——本地清态才是目的
+      }
+    }
+    wx.showToast({ title: '已退出投屏', icon: 'none' })
+    this.stopCastingCleanup()
   },
   // 顶栏投屏首次气泡关闭（T1·手动关或点投屏钮时顺手关，见 onCast 开头）。
   onCastTipClose() {
@@ -799,12 +830,18 @@ Page({
     this.exitPlayer()
   },
 
+  // 段落导航（批7：投屏态先经 endCastingForSwitch 收口——换 src 电视不跟随，切段真实结果=回手机播新段，
+  // UI 必须先跟上；非投屏态该收口零动作）。收口放在 navSegment 判定之前：到边界段（无上/下一段）时切段
+  // 不会发生，但用户点了按钮＝表达了「要在手机上操作」的意图，投屏态同样该收口回本机（否则边界段上点
+  // 切段钮毫无反馈、投屏态还挂着）。
   onPrev() {
+    this.endCastingForSwitch()
     const cur = this.data.current
     const prev = cur && navSegment(this.course, cur.segmentId, -1)
     if (prev) void this.playSegment(prev, 'seg')
   },
   onNext() {
+    this.endCastingForSwitch()
     const cur = this.data.current
     const next = cur && navSegment(this.course, cur.segmentId, 1)
     if (next) void this.playSegment(next, 'seg')
