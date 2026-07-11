@@ -13,7 +13,7 @@
      不阻断，唯一暂停例外＝帮助视频内嵌播放（P3b-play，简化决策：原生 <video controls>，不做自绘控制条
      ——辅助内容非主路径，防过度工程）。返回二次确认（P5）+ 首次成功退出加桌引导（P5b·仅一次·分端文案，
      动画降级为静态示意区+文案）：手势/系统返回无法拦截（WebView 页无 onBackPress），仅自绘返回箭头经此。 -->
-<view class="ld-player">
+<view class="ld-player {{landscape ? 'land' : ''}}">
 
   <!-- 顶条：返回 + 两行标题（数据源=批A lib/player 的 lessonStrip：主行 chapterTitle/副行 lessonNo·lessonName，
        chapterTitle 空则只显 lessonName 脏档回退）+ 投屏钮（T1 终态·标题组与 spacer 之间）+ 右侧留白 spacer

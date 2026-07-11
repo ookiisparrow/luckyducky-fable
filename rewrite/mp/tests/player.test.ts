@@ -1,7 +1,7 @@
 // 黄金 learning-content §六（分段导航跨课时/跳过不可播/端点置灰 + 播放地址缓存 TTL/空不缓存/
 // 跨课隔离/在途去重/定向失效/预取）（守卫 rw-mp-player-golden）。
 import { describe, it, expect } from 'vitest'
-import { flattenSegments, navSegment, createPlaybackCache, formatClock, clampSeek, lessonStrip, nearestMark, playbackModeFor } from '../lib/player'
+import { flattenSegments, navSegment, createPlaybackCache, formatClock, clampSeek, lessonStrip, nearestMark, playbackModeFor, rotateSwapPlan } from '../lib/player'
 
 const COURSE = {
   id: 'c1',
@@ -147,6 +147,21 @@ describe('playbackModeFor（投屏播放模式判定·R40 纯函数）', () => {
     expect(playbackModeFor({ hasLandscape: false }, true)).toBe('portrait') // 无 hasLandscape
     expect(playbackModeFor({ hasLandscape: true }, false)).toBe('portrait') // 不想要横屏
     expect(playbackModeFor({ hasLandscape: true }, true)).toBe('landscape') // 齐备
+  })
+})
+
+describe('rotateSwapPlan（手机横屏播放换源方案判定·R41 纯函数，批3）', () => {
+  it('大白话：投屏 connected 态电视持有源，旋转手机不换源', () => {
+    expect(rotateSwapPlan({ hasLandscape: true }, true, true)).toBeNull()
+  })
+  it('大白话：无当前段（尚未进入播放）不产生换源动作', () => {
+    expect(rotateSwapPlan(null, true, false)).toBeNull()
+  })
+  it('大白话：转横屏且该段确有横屏源→landscape', () => {
+    expect(rotateSwapPlan({ hasLandscape: true }, true, false)).toBe('landscape')
+  })
+  it('大白话：转横屏但该段无横屏源→安全降级 portrait（swapSource 对同 url 天然 no-op）', () => {
+    expect(rotateSwapPlan({ hasLandscape: false }, true, false)).toBe('portrait')
   })
 })
 

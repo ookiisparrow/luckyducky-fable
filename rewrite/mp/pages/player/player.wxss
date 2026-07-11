@@ -901,3 +901,57 @@
   color: var(--ld-content-2);
   padding: 11rpx 0 4rpx;
 }
+
+/* —— 手机横屏播放（R41·批3·设计靶 T3）：.land 覆写族 —— 节点树不复制（wxml 唯一改动＝根节点加 land
+   类，见 player.wxml 头注），横屏差异全走这里的选择器覆写。触发＝onResize 判 windowWidth>windowHeight
+   （player.ts）。视频 16:9 由 <video> 组件默认 objectFit contain 居中，两侧自然黑带（同竖屏设计定案，
+   不显式覆盖 object-fit）。 */
+.land .lp-video-box {
+  padding-top: 0;
+  height: 100%;
+}
+
+/* 顶条：更深色渐变底（横屏下视频内容更贴近顶部，需更强遮罩才盖得住胶囊区）；横向内边距放大避让胶囊
+   （横屏下系统胶囊/状态栏挪到侧边，两侧都需留够，参照本页既有渐变写法 linear-gradient(180deg, ...)）。 */
+.land .lp-topbar {
+  padding: 12rpx 96rpx 20rpx 40rpx;
+  background: linear-gradient(180deg, rgba(14, 11, 20, 0.85) 0%, rgba(14, 11, 20, 0) 100%);
+}
+/* 单击提示条随顶条内边距上移少许，避免紧贴放大后的顶条 */
+.land .lp-tap-hint {
+  top: 16rpx;
+}
+
+/* 分段进度条浮层：横屏纵向空间不足，顶部偏移收窄 + 内边距压扁 + 段格减薄；图例文字行隐藏（决策：
+   纵向空间金贵，保留分段格本体即可，文字图例竖屏已充分说明含义，见重构日志本批 decisions）。 */
+.land .lp-segstrip {
+  top: 12rpx;
+  padding: 14rpx 26rpx 12rpx;
+  gap: 10rpx;
+}
+.land .lp-seg-cell {
+  height: 8rpx;
+}
+.land .lp-legend {
+  display: none;
+}
+
+/* 底条：渐变方向沿用竖屏既有写法（透明→深，见 .lp-bottombar 基础规则 linear-gradient(0deg, ...)）；
+   横屏纵向空间金贵，内边距/间距压扁。 */
+.land .lp-bottombar {
+  padding: 20rpx 40rpx calc(16rpx + env(safe-area-inset-bottom));
+  padding-bottom: calc(16rpx + constant(safe-area-inset-bottom)); /* 旧内核双写兜底 */
+  padding-bottom: calc(16rpx + env(safe-area-inset-bottom));
+  gap: 10rpx;
+}
+
+/* 投屏控制器（T2·casting==='connected'）横屏铺排：最小处理——卡片最大宽度约束居中，不横向拉满
+   （防过度工程：横屏下不专门重排控制器内部布局，见 decisions）。 */
+.land .lp-castctl-card,
+.land .lp-castctl-seg {
+  width: 100%;
+  max-width: 640rpx;
+}
+
+/* 求助面板 sheet / 加桌引导弹窗横屏可用即可，不专门重排——sheet 高度用 vh 基准（75vh）随横屏视口自动
+   变矮，弹窗本身 max-width 已按 rpx 定宽居中，两者横屏下均可用（防过度工程，见 decisions）。 */

@@ -4785,6 +4785,10 @@ export const repoChecks = [
       const json = JSON.parse(readFileSync(jsonPath, 'utf8'))
       if (json.navigationStyle !== 'custom')
         bad.push('rewrite/mp/pages/player/player.json 缺 navigationStyle:custom——竖屏沉浸播放页须自绘导航栏，留原生标题栏会跟自绘黑条控制条重叠打架（设计定案）')
+      // 手机横屏播放（R41·批3）：pageOrientation:auto 让系统按重力感应自动横竖切换（用 JSON.parse 后的
+      // key 判定，不裸写正则扫文本——json 已在上方解析过，字面量/引号变体天然免疫）。
+      if (json.pageOrientation !== 'auto')
+        bad.push('rewrite/mp/pages/player/player.json 缺 pageOrientation:auto——手机横屏播放（R41）依赖该配置项让系统自动切横竖屏，缺失则 onResize 永不触发')
 
       const wxmlPath = join(base, 'pages/player/player.wxml')
       const wxml = existsSync(wxmlPath) ? readFileSync(wxmlPath, 'utf8') : ''
@@ -4845,6 +4849,17 @@ export const repoChecks = [
         if (!onCastExitBody) bad.push('player.ts 找不到 onCastExit 方法体——退出投屏单点丢失')
         else if (!/typeof\s+[\w.]+\.exitCasting\s*[!=]==\s*['"]function['"]/.test(stripComments(onCastExitBody)))
           bad.push("player.ts 的 onCastExit 方法体内未见 exitCasting 特性检测（typeof ...===/!=='function'）——退出投屏未按基础库能力探测就调用，低版本微信直接报错崩交互")
+        // 手机横屏播放（R41·批3）：onResize 必须使 _seekRect 失效重测——旋转后 seek 条几何全变
+        // （量轨 left/width 随横竖屏切换而变），不清缓存则拖动定位全错（secAt 用旧 rect 算出错误秒数）。
+        const onResizeBody = methodBody(ts, 'onResize')
+        if (!onResizeBody) bad.push('player.ts 找不到 onResize 方法体——手机横屏播放（R41）缺旋转回调，页面尺寸变化时布局/换源/量轨全部不会响应')
+        else {
+          const onResizeStripped = stripComments(onResizeBody)
+          if (!/_seekRect\s*=\s*null/.test(onResizeStripped))
+            bad.push('player.ts 的 onResize 方法体内未见 _seekRect = null——旋转后未使量轨缓存失效，拖动 seek 条会用旧竖屏几何算出错误秒数')
+          if (!/measureSeekRect\s*\(/.test(onResizeStripped))
+            bad.push('player.ts 的 onResize 方法体内未见 measureSeekRect(——旋转后未重新量取 seek 条几何，_seekRect 失效后不会自动补测')
+        }
       }
 
       const csPath = join(base, 'utils/customerService.ts')

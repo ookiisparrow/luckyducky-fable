@@ -165,6 +165,19 @@ export function playbackModeFor(seg: { hasLandscape?: boolean } | null, wantLand
   return wantLandscape && !!(seg && seg.hasLandscape) ? 'landscape' : 'portrait'
 }
 
+/** 手机横屏播放换源方案判定（R41·纯函数，批3）：投屏 connected 态电视持有源，旋转手机不换源（返回
+ *  null）；否则委托 playbackModeFor 复用同一套「有横屏成片才切」的安全降级语义——回竖屏时若该段无
+ *  横屏源，swapSource 对同 url 天然 no-op，不产生多余动作。 */
+export function rotateSwapPlan(
+  seg: { hasLandscape?: boolean } | null,
+  toLandscape: boolean,
+  castingConnected: boolean
+): 'portrait' | 'landscape' | null {
+  if (castingConnected) return null
+  if (!seg) return null
+  return playbackModeFor(seg, toLandscape)
+}
+
 export interface LessonStrip {
   chapterTitle: string
   lessonName: string

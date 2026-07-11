@@ -18,6 +18,7 @@ import {
   lessonStrip,
   nearestMark,
   playbackModeFor,
+  rotateSwapPlan,
   type CoursePub,
   type FlatSegment,
   type LessonStrip,
@@ -96,6 +97,7 @@ Page({
     casting: '' as '' | 'connecting' | 'connected', // 投屏控制器态开关（T1/T2·R40）：''=本机学习模式·connecting=选中设备等待回报·connected=已连接控制器态
     castDevice: '', // 投屏设备名（detail 拿不到就空串，UI 兜底文案「电视」）
     castTip: false, // 顶栏投屏钮首次气泡（T1·仅展示一次，见 CAST_TIP_KEY）
+    landscape: false, // 手机横屏播放（R41·批3）：pageOrientation:auto 下 onResize 按窗口宽高比翻转，驱动 .land 覆写族
   },
   courseId: '',
   course: null as CoursePub | null,
@@ -124,7 +126,12 @@ Page({
   async onLoad(query: Record<string, string | undefined>) {
     const info = wx.getWindowInfo()
     this.windowWidthPx = info.windowWidth || 0 // rpx→px 换算基准（750rpx = 本机 windowWidth px），供拖动预览浮层防出屏边距用
-    this.setData({ statusBarHeight: info.statusBarHeight })
+    // 入口态横屏对齐（评审 finding 复核，P2）：手机进页面那一刻若已physical横置（分享链外部唤起/上一页
+    // 已横置未转回等），onResize 只在「已在页面上再次旋转」时触发——不补这一手，landscape 会带着 false
+    // 假设撑到下一次真实旋转，.land 覆写族与后续 playSegment 的取址 mode 都会算错。此处与 onResize 用
+    // 同一套宽高比判据，随首次 setData 一并落地（早于下方 playSegment 调用，故首次取址即已对齐）。
+    const landscape = (info.windowWidth || 0) > (info.windowHeight || 0)
+    this.setData({ statusBarHeight: info.statusBarHeight, landscape })
     this.courseId = String(query.courseId || '')
     // 来源页（me/my-courses）已把课程目录热进 lib/courses 缓存→这里零云调用；深链冷启动（分享链直进播放页）
     // 缓存未热→内部兜底重拉一次目录，行为不回退，只是不再每次都重拉（根因账本#15）。
@@ -159,6 +166,24 @@ Page({
       }
     }
     await this.playSegment(start, 'enter')
+  },
+
+  // 手机横屏播放（R41·批3）：pageOrientation:auto 下页面尺寸变化回调（基础库 2.4.0）。旋转是本批灵魂
+  // 触发点——_seekRect 必须失效重测：旋转后 seek 条几何全变（横屏布局 .lp-seek 的 left/width 与竖屏
+  // 完全不同），不清缓存则拖动定位全错（secAt 用旧 rect 算出的秒数落在错误位置）。windowWidthPx 同步
+  // 刷新——previewLeftPx 的 rpx→px 换算基准随窗口宽度变，横屏下若不更新会用竖屏宽度换算防出屏边距。
+  onResize(res: WechatMiniprogram.Page.IResizeOption) {
+    const sz = res && res.size
+    if (!sz) return
+    const landscape = sz.windowWidth > sz.windowHeight
+    this.windowWidthPx = sz.windowWidth || this.windowWidthPx
+    if (landscape === this.data.landscape) return
+    this._seekRect = null
+    this.setData({ landscape }, () => this.measureSeekRect())
+    // 换源方案（casting connected 时电视持有源，旋转手机不换源；swapSource 对同 url 自动 no-op，故回
+    // 竖屏时无横屏源的段不产生动作，见 rotateSwapPlan）。
+    const plan = rotateSwapPlan(this.data.current, landscape, this.data.casting === 'connected')
+    if (plan) void this.swapSource(plan)
   },
 
   async playSegment(seg: FlatSegment, scene: 'enter' | 'seg' | 'retry') {
@@ -204,13 +229,16 @@ Page({
     })
     let url = ''
     try {
-      // 模式感知取址（R40）：投屏 connected 态自动用横屏源（无横屏成片的段自然降级回 portrait，见 playbackModeFor）。
-      const mode = playbackModeFor(seg, this.data.casting === 'connected')
+      // 模式感知取址（R40 投屏 + R41 手机横屏）：投屏 connected 态或手机本身已横屏都自动用横屏源
+      // （无横屏成片的段自然降级回 portrait，见 playbackModeFor）。
+      const mode = playbackModeFor(seg, this.data.casting === 'connected' || this.data.landscape)
       url = await cache.get(this.courseId, seg.segmentId, mode)
-      // 投屏可能在取址期间断开（stopCastingCleanup 因此刻 state 仍是 'loading' 而非 'playing'，其
-      // swapSource('portrait') 兜底会静默 no-op——见 swapSource 守卫）：这里补一次漂移复核，断连后
-      // 不落地横屏源，改取竖屏（评审 finding 复核，P1）。
-      if (mode === 'landscape' && this.data.casting !== 'connected') {
+      // 取址期间可能漂移——两个诱因均可能变化：投屏断开（stopCastingCleanup 因此刻 state 仍是 'loading'
+      // 而非 'playing'，其 swapSource 兜底会静默 no-op）／手机转回竖屏。这里补一次复核，但必须按「两个
+      // 诱因是否都已失效」判断，不能只看 casting——否则手机本身横屏（未投屏）时，取址期间 casting 恒
+      // 不等于 'connected'，会把刚取到的横屏源无条件撤销、静默降级回竖屏（评审 finding 复核，P1）。
+      // 只在「投屏未连 且 手机也已不再横屏」时才真回退取竖屏源。
+      if (mode === 'landscape' && this.data.casting !== 'connected' && !this.data.landscape) {
         url = await cache.get(this.courseId, seg.segmentId, 'portrait')
       }
     } catch {
@@ -523,8 +551,10 @@ Page({
       },
       fail: () => {
         wx.showToast({ title: '投屏失败，请确认电视与手机同一 Wi-Fi', icon: 'none' })
-        // 投屏没成不滞留横屏源：换回竖屏（该段确有横屏源才需要换回，否则本就没换过）。
-        if (this.data.current && this.data.current.hasLandscape) void this.swapSource('portrait')
+        // 投屏没成不滞留投屏专属的横屏源：换回「非投屏态该有的模式」——不是无条件写死 portrait，手机
+        // 此刻若本身仍物理横屏（R41），目标仍应是 landscape，playbackModeFor 按 this.data.landscape
+        // 重新判定（该段确有横屏源才需要换，否则本就没换过，见 hasLandscape 门；评审 finding 复核，P2）。
+        if (this.data.current && this.data.current.hasLandscape) void this.swapSource(playbackModeFor(this.data.current, this.data.landscape))
       },
     })
   },
@@ -557,11 +587,13 @@ Page({
     this.stopCastingCleanup()
   },
   // 断连/退出投屏共用单出口：回本机学习模式（R38 复归·连播自动关闭因 casting 已清，onEnded 的 casting
-  // 门天然生效）；该段确有横屏源才需要换回竖屏（无横屏源本就一直在 portrait，换回是 no-op 但避免误取址）。
+  // 门天然生效）；换回目标不是无条件写死 portrait——手机此刻若本身仍物理横屏（R41），断投屏后仍应留在
+  // landscape，playbackModeFor 按 this.data.landscape 重新判定（该段确有横屏源才需要换，无横屏源本就
+  // 一直在 portrait、换回是 no-op 但避免误取址；评审 finding 复核，P2）。
   stopCastingCleanup() {
     if (!this.data.casting) return
     this.setData({ casting: '', castDevice: '' })
-    if (this.data.current && this.data.current.hasLandscape) void this.swapSource('portrait')
+    if (this.data.current && this.data.current.hasLandscape) void this.swapSource(playbackModeFor(this.data.current, this.data.landscape))
   },
   // T2 控制器态「退出投屏」钮：exitCasting 特性检测（同 startCasting 惯例，低版本微信直接调用会报错）。
   onCastExit() {
