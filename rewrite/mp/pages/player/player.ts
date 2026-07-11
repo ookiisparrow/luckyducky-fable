@@ -597,30 +597,29 @@ Page({
       },
     })
   },
-  // 用户在系统投屏选择框选中设备：真实连接结果以 bindcastingstatechange 为准，这里不下结论——
-  // 但选中动作本身（不依赖 detail 形状）值得一个中性即时反馈，否则用户点了没反应会以为没生效。
-  // 顺手记下设备名（拿不到就空串，UI 兜底文案「电视」，见 T2 控制器态电视状态卡）。
+  // 用户在系统投屏选择框选中设备（批6 真机修·根因#8）：这是「已开始投屏」最可靠的信号——直接判 connected，
+  // 不再赌 castingstatechange 的 detail.state 字符串（真机首测证实：卡在 connecting，state 关键词对不上，
+  // 导致连续播/共存条全不触发）。选中即接管：casting=connected 让 onEnded→castAutoNext 连续播与共存底栏立即
+  // 生效；连接若随后失败，castinginterrupt/castingstatechange(fail) 会走 stopCastingCleanup 回退。
   onCastingUserSelect(e: WechatMiniprogram.CustomEvent<{ deviceName?: string; name?: string }>) {
-    wx.showToast({ title: '正在连接投屏设备…', icon: 'none' })
     const detail = (e && e.detail) || {}
     const castDevice = String(detail.deviceName || detail.name || '')
-    this.castTelemetry('select', '', detail) // detail 真实形状回传（真机校准判定用·批5）
-    this.setData({ casting: 'connecting', castDevice })
+    this.castTelemetry('select', '', detail) // detail 真实形状回传（可观测·真机校准判定用）
+    wx.showToast({ title: '已投屏 · 段落播完自动接着放', icon: 'none' })
+    this.setData({ casting: 'connected', castDevice })
   },
-  // 投屏状态变化：real device 上 detail.state 真实取值待真机（见 docs/待办与债.md），保守只在明确看到
-  // 关键词时才下结论。本批语义：connect/project→控制器态 connected；disconnect/exit/fail→统一走
-  // stopCastingCleanup 断连清理（回本机学习模式，R38 复归）。
+  // 投屏状态变化（批6：connected 主信号已移到 onCastingUserSelect，本回调只兜断连 + 兜个别不发 userselect
+  // 的机型）：detail.state 真实取值官方未文档化，castTelemetry 回传真值以便日后收敛。
   // 判序不能反：JS 字符串 'disconnect'/'disconnected' 本身含子串 'connect'（'dis'+'connect'），若先判
   // connect/project 会把断连事件误吞成「已连接」、断连清理分支永远死代码（评审 finding 复核）——
-  // 断连/失败关键词必须先判，未命中再判连接关键词。
+  // 断连/失败关键词必须先判，未命中再判连接关键词（兜底补 connected，不重复 toast·userselect 已提示）。
   onCastingStateChange(e: WechatMiniprogram.CustomEvent<{ state?: string }>) {
     const state = String((e.detail && e.detail.state) || '').toLowerCase()
-    this.castTelemetry('state', state, (e && e.detail) || {}) // detail.state 真实取值回传（真机校准保守判定·批5）
+    this.castTelemetry('state', state, (e && e.detail) || {}) // detail.state 真实取值回传（真机校准·可观测）
     if (state.includes('disconnect') || state.includes('exit') || state.includes('fail')) {
       this.stopCastingCleanup()
-    } else if (state.includes('connect') || state.includes('project')) {
-      wx.showToast({ title: '已连接电视', icon: 'none' })
-      this.setData({ casting: 'connected' })
+    } else if ((state.includes('connect') || state.includes('project')) && this.data.casting !== 'connected') {
+      this.setData({ casting: 'connected' }) // 兜底：个别机型可能不发 castinguserselect，凭状态补齐 connected
     }
   },
   onCastingInterrupt(e?: WechatMiniprogram.CustomEvent<Record<string, unknown>>) {
@@ -645,7 +644,9 @@ Page({
     this.setData({ casting: '', castDevice: '' })
     if (this.data.current && this.data.current.hasLandscape) void this.swapSource(playbackModeFor(this.data.current, this.data.landscape))
   },
-  // T2 控制器态「退出投屏」钮：exitCasting 特性检测（同 startCasting 惯例，低版本微信直接调用会报错）。
+  // 投屏共存态「退出投屏」钮（批6·与原生投屏共存）：exitCasting 特性检测（同 startCasting 惯例，低版本微信
+  // 直接调用会报错）。播放/暂停/换设备交给微信原生投屏控件（平台约束：原生投屏 UI 无法隐藏、投屏能力依赖
+  // show-casting-button——见 docs/待办与债.md 批6 平台约束条），我方只保留原生做不到的段落导航 + 自动连播。
   onCastExit() {
     const ctx = wx.createVideoContext('lp-video', this) as unknown as { exitCasting?: (opt: { complete?: () => void }) => void }
     if (typeof ctx.exitCasting === 'function') {
@@ -653,27 +654,6 @@ Page({
     } else {
       this.stopCastingCleanup()
     }
-  },
-  // T2 控制器态「换设备」钮：直接复用 onCast 重新拉起系统选择器（switchCasting 存在性待真机，不用）。
-  onCastSwitch() {
-    void this.onCast()
-  },
-  // T2 控制器态播放/暂停大钮：与 onTapVideo 同语义（state/src 判定 + ctx.play/pause，paused 以回报为准），
-  // 但跳过单击提示条 hintDismissed 逻辑（控制器态无需该提示），故独立写不复用 onTapVideo。
-  onCastToggle() {
-    if (this.data.state !== 'playing' || !this.data.src) return
-    const ctx = wx.createVideoContext('lp-video', this)
-    if (this.data.paused) ctx.play()
-    else ctx.pause()
-  },
-  // T2 控制器态回看/快进 15 秒钮。
-  onCastBack15() {
-    const ctx = wx.createVideoContext('lp-video', this)
-    ctx.seek(clampSeek(this._at - 15, this._dur))
-  },
-  onCastFwd15() {
-    const ctx = wx.createVideoContext('lp-video', this)
-    ctx.seek(clampSeek(this._at + 15, this._dur))
   },
   // 顶栏投屏首次气泡关闭（T1·手动关或点投屏钮时顺手关，见 onCast 开头）。
   onCastTipClose() {

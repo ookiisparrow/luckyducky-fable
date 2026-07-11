@@ -220,115 +220,68 @@
   color: rgba(255, 255, 255, 0.6);
 }
 
-/* —— T2 控制器态（casting==='connected'）：盖满舞台的电视遥控面板 —— */
-.lp-castctl {
+/* —— 投屏共存态（casting==='connected'·批6）：不盖 video（原生投屏控件落视频区·平台约束不可隐藏）——
+   视频区上方一条轻提示指向原生控件；段落导航/自动连播状态/退出投屏走底栏 lp-castbar。 —— */
+.lp-cast-coexist-hint {
   position: absolute;
-  inset: 0;
-  z-index: 5;
+  left: 40rpx;
+  right: 40rpx;
+  bottom: 40rpx;
+  z-index: 4;
+  text-align: center;
+  font-size: 22rpx;
+  color: rgba(255, 255, 255, 0.5);
+}
+/* 底栏投屏共存条：状态行 + 段落导航行（上一段 / 退出投屏 / 下一段） */
+.lp-castbar {
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: center;
-  gap: 30rpx;
-  padding: 0 40rpx;
-  background: rgba(10, 8, 14, 0.92);
+  gap: 20rpx;
+  padding: 6rpx 0 2rpx;
 }
-.lp-castctl-card {
-  width: 100%;
-  background: #1c1626;
-  border-radius: 20rpx;
-  padding: 40rpx 34rpx;
+.lp-castbar-status {
   display: flex;
-  flex-direction: column;
   align-items: center;
   gap: 10rpx;
+  font-size: 24rpx;
+  color: rgba(255, 255, 255, 0.82);
 }
-.lp-castctl-tv-sub {
-  font-size: 22rpx;
-  color: rgba(255, 255, 255, 0.56);
-}
-.lp-castctl-tv-name {
-  font-size: 36rpx;
-  font-weight: 700;
-  color: #ffffff;
-}
-.lp-castctl-tv-dot {
-  display: flex;
-  align-items: center;
-  gap: 8rpx;
-  font-size: 22rpx;
-  color: #6bd88a;
-  margin-top: 4rpx;
-}
-.lp-castctl-tv-dot-mark {
+.lp-castbar-dot {
   width: 12rpx;
   height: 12rpx;
   border-radius: 50%;
   background: #6bd88a;
 }
-.lp-castctl-tv-row {
-  display: flex;
-  gap: 20rpx;
-  margin-top: 24rpx;
-  width: 100%;
-}
-.lp-castctl-pill {
-  flex: 1;
-  height: 76rpx;
-  border-radius: var(--ld-radius-pill);
-  background: var(--ld-duck);
-  color: #4a3408;
-  font-size: 26rpx;
-  font-weight: 600;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-.lp-castctl-pill.ghost {
-  background: transparent;
-  color: var(--ld-duck);
-  border: 2rpx solid var(--ld-duck);
-}
-.lp-castctl-seg {
+.lp-castbar-row {
   width: 100%;
   display: flex;
-  flex-direction: column;
   align-items: center;
-  gap: 14rpx;
+  justify-content: space-between;
 }
-.lp-castctl-seg-text {
-  font-size: 26rpx;
+.lp-castbar-nav {
+  display: flex;
+  align-items: center;
+  gap: 8rpx;
+  padding: 12rpx 20rpx;
+  font-size: 28rpx;
   font-weight: 600;
   color: #ffffff;
-  text-align: center;
 }
-.lp-castctl-chip {
-  padding: 8rpx 22rpx;
-  border-radius: var(--ld-radius-pill);
-  background: var(--ld-duck);
-  color: var(--ld-purple-ink);
-  font-size: 20rpx;
-  font-weight: 700;
+.lp-castbar-nav.dim {
+  opacity: 0.32;
 }
-.lp-castctl-hint {
-  font-size: 20rpx;
-  color: rgba(255, 255, 255, 0.44);
-  text-align: center;
-}
-/* 遥控行播放/暂停大钮内的自绘暂停条（paused 时改显 play-circle.svg，见 wxml） */
-.lp-castctl-pausebars {
-  display: flex;
-  gap: 10rpx;
-}
-.lp-castctl-pausebar {
-  width: 9rpx;
+.lp-castbar-ico {
+  width: 34rpx;
   height: 34rpx;
-  border-radius: 4rpx;
-  background: #ffffff;
 }
-/* 快进 15 钮：复用 rotate-ccw 图标水平镜像（回看 15 用原方向），不新增素材 */
-.lp-chev-fwd {
-  transform: scaleX(-1);
+.lp-castbar-exit {
+  padding: 12rpx 34rpx;
+  border-radius: var(--ld-radius-pill);
+  border: 2rpx solid var(--ld-duck);
+  color: var(--ld-duck);
+  font-size: 26rpx;
+  font-weight: 600;
 }
 
 /* 首帧前骨架（loading·首帧到达前不裂播放器） */
@@ -933,14 +886,6 @@
   padding-bottom: calc(16rpx + constant(safe-area-inset-bottom)); /* 旧内核双写兜底 */
   padding-bottom: calc(16rpx + env(safe-area-inset-bottom));
   gap: 10rpx;
-}
-
-/* 投屏控制器（T2·casting==='connected'）横屏铺排：最小处理——卡片最大宽度约束居中，不横向拉满
-   （防过度工程：横屏下不专门重排控制器内部布局，见 decisions）。 */
-.land .lp-castctl-card,
-.land .lp-castctl-seg {
-  width: 100%;
-  max-width: 640rpx;
 }
 
 /* 求助面板 sheet / 加桌引导弹窗横屏可用即可，不专门重排——sheet 高度用 vh 基准（75vh）随横屏视口自动
