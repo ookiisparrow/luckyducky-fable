@@ -20,7 +20,8 @@
     "pages/feedback/feedback",
     "pages/about/about",
     "pages/agreement/agreement",
-    "pages/consent/consent"
+    "pages/consent/consent",
+    "pages/flip-demo/flip-demo"
   ],
   "__usePrivacyCheck__": true,
   "window": {
