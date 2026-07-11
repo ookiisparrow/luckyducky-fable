@@ -135,3 +135,158 @@
   color: rgba(255, 255, 255, 0.82);
   text-decoration: underline;
 }
+
+/* ============ W1/W2 lilac 壳（播放器重设计战役批E·对齐设计 W1/W2） ============
+   设计 402px 画板 → rpx（×1.866 取偶，同 catalog.wxss 换算口径）。非沉浸照片壳——浅紫底、
+   顶部品牌眉标、无 scrim。token 见 styles/tokens.wxss。 */
+.ld-wl {
+  min-height: 100vh;
+  background: var(--ld-bg-lilac);
+  display: flex;
+  flex-direction: column;
+}
+.ld-wl-body {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 0 44rpx 48rpx;
+}
+.ld-wl-brand {
+  font-size: 28rpx;
+  font-weight: 700;
+  letter-spacing: 4rpx;
+  color: var(--ld-purple-meta);
+}
+
+/* —— W1：产品主图卡 + 恭喜文案 —— */
+.ld-wl-hero {
+  width: 100%;
+  height: 660rpx;
+  border-radius: 44rpx;
+  margin-top: 28rpx;
+}
+.ld-wl-hero-empty {
+  background: linear-gradient(155deg, #e9efe4, #dfe5dc 55%, #e8e2f0); /* 设计 W1 hero 渐变占位·局部专属·非 token */
+}
+.ld-wl-copy {
+  text-align: center;
+  margin-top: 68rpx;
+}
+.ld-wl-title {
+  font-size: 52rpx;
+  font-weight: 700;
+  color: var(--ld-ink);
+}
+.ld-wl-course {
+  margin-top: 22rpx;
+  font-size: 32rpx;
+  font-weight: 500;
+  color: var(--ld-purple-tab);
+}
+.ld-wl-lead {
+  margin-top: 22rpx;
+  font-size: 26rpx;
+  line-height: 1.7;
+  color: var(--ld-content-2);
+}
+
+/* —— W2：三件事要点卡 —— */
+.ld-wl-points {
+  width: 100%;
+  margin-top: 30rpx;
+  display: flex;
+  flex-direction: column;
+  gap: 26rpx;
+}
+.ld-wl-points-title {
+  font-size: 44rpx;
+  font-weight: 700;
+  color: var(--ld-ink);
+  margin-bottom: 12rpx;
+}
+.ld-wl-point {
+  display: flex;
+  gap: 26rpx;
+  align-items: flex-start;
+}
+.ld-wl-point-ico {
+  flex: 0 0 auto;
+  width: 40rpx;
+  height: 40rpx;
+  margin-top: 4rpx;
+}
+.ld-wl-point-tx {
+  flex: 1;
+  min-width: 0;
+}
+.ld-wl-point-h {
+  font-size: 28rpx;
+  font-weight: 600;
+  color: var(--ld-ink);
+}
+.ld-wl-point-p {
+  margin-top: 10rpx;
+  font-size: 24rpx;
+  line-height: 1.65;
+  color: var(--ld-content-2);
+}
+
+/* —— W1/W2 共用底部：双点指示 + CTA + 警示/链接 —— */
+.ld-wl-foot {
+  margin-top: auto;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 18rpx;
+}
+.ld-wl-dots {
+  display: flex;
+  gap: 14rpx;
+  justify-content: center;
+  align-items: center;
+}
+.ld-wl-dot {
+  width: 14rpx;
+  height: 14rpx;
+  border-radius: 8rpx;
+  background: var(--ld-purple-line);
+}
+.ld-wl-dot.on {
+  width: 38rpx;
+  background: var(--ld-purple);
+}
+.ld-wl-warn {
+  text-align: center;
+  font-size: 22rpx;
+  color: var(--ld-content-2);
+}
+.ld-wl-cta {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 16rpx;
+  width: 100%;
+  height: 100rpx;
+  border-radius: var(--ld-radius-pill);
+  background: var(--ld-purple-ink);
+  color: #fff;
+  font-size: 32rpx;
+  font-weight: 600;
+  letter-spacing: 1rpx;
+  box-shadow: 0 12rpx 34rpx rgba(28, 28, 32, 0.2);
+}
+.ld-wl-cta.dim {
+  opacity: 0.5;
+}
+.ld-wl-cta-ico {
+  width: 34rpx;
+  height: 34rpx;
+  filter: brightness(0) invert(1); /* 白化（同 catalog.wxss 手法）：图标原色不论，统一白 */
+}
+.ld-wl-link {
+  text-align: center;
+  font-size: 25rpx;
+  color: var(--ld-purple-tab);
+  text-decoration: underline;
+}

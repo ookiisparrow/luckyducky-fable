@@ -1,0 +1,65 @@
+<!-- 课程目录主页·对齐设计 C1（两层：大章节 > 小课时，段落层级只活在播放页 segstrip）。
+     hero：产品主图（复用激活背景回退链 bgFor(home, courseId, 'activated')，取不到落渐变占位）+ 底部锚定
+     「开始学习」CTA（continueTarget 为空时换灰样式，点按诚实提示，不留死跳转）。
+     目录区：整页自然流滚动（不包 scroll-view，避 sticky/scroll-view 族坑），章头行 + 课时行卡
+     （序号圈/名称/副行「N 个段落 · M 分钟 · 上次学到…」+ 右侧状态图标 done/current/todo 三态）。 -->
+<view class="ld-cat">
+
+  <view wx:if="{{state !== 'missing'}}" class="ld-cat-hero" style="padding-top: {{statusBarHeight}}px">
+    <image wx:if="{{bg}}" class="ld-cat-hero-img" src="{{bg}}" mode="aspectFill" />
+    <view wx:else class="ld-cat-hero-img ld-cat-hero-empty"></view>
+    <view class="ld-cat-cta {{continueTarget ? '' : 'disabled'}}" bind:tap="onStart" hover-class="ld-cat-cta-h" hover-stay-time="80">
+      <image class="ld-cat-cta-ico" src="/static/icons/play-circle.svg" mode="aspectFit" />
+      <text>开始学习</text>
+    </view>
+  </view>
+
+  <!-- 骨架占位（加载中，不写死假章节） -->
+  <view class="ld-cat-list" wx:if="{{state === 'loading'}}">
+    <view class="ld-cat-lesson ld-cat-skel" wx:for="{{[1, 2, 3]}}" wx:key="*this">
+      <view class="ld-cat-lesson-num ld-cat-skel-num"></view>
+      <view class="ld-cat-lesson-tx">
+        <view class="ld-cat-skel-line"></view>
+      </view>
+    </view>
+  </view>
+
+  <!-- 目录区：章头行 + 课时行卡（两层嵌套 wx:for，段落层级不出现） -->
+  <view class="ld-cat-list" wx:if="{{state === 'ok'}}">
+    <block wx:for="{{chapters}}" wx:key="title" wx:for-item="ch">
+      <view class="ld-cat-ch">
+        <text class="ld-cat-ch-title">{{ch.title}}</text>
+        <text class="ld-cat-ch-count">{{ch.lessonCount}} 课时</text>
+      </view>
+      <view
+        class="ld-cat-lesson {{lesson.status === 'current' ? 'cur' : ''}} {{lesson.status === 'todo' ? 'todo' : ''}}"
+        wx:for="{{ch.lessons}}"
+        wx:key="lessonId"
+        wx:for-item="lesson"
+        data-seg="{{lesson.firstPlayableSegId}}"
+        bind:tap="onTapLesson"
+        hover-class="ld-cat-lesson-h"
+        hover-stay-time="80"
+      >
+        <view class="ld-cat-lesson-num">{{lesson.no}}</view>
+        <view class="ld-cat-lesson-tx">
+          <text class="ld-cat-lesson-name">{{lesson.name}}</text>
+          <text class="ld-cat-lesson-sub">{{lesson.segCount}} 个段落{{lesson.minutes ? ' · ' + lesson.minutes + ' 分钟' : ''}}{{lesson.lastLabel ? ' · ' + lesson.lastLabel : ''}}</text>
+        </view>
+        <view class="ld-cat-lesson-st">
+          <image wx:if="{{lesson.status === 'done'}}" class="ld-cat-lesson-st-ico" src="/static/icons/badge-check.svg" mode="aspectFit" />
+          <image wx:elif="{{lesson.status === 'current'}}" class="ld-cat-lesson-st-ico" src="/static/icons/play-circle-on.svg" mode="aspectFit" />
+          <image wx:else class="ld-cat-lesson-st-ico" src="/static/icons/circle.svg" mode="aspectFit" />
+        </view>
+      </view>
+    </block>
+  </view>
+
+  <!-- 空态：课程不存在（courseId 缺失或云端查无此课）。hero 在此态不渲染（本页 navigationStyle:custom
+       无原生导航条，空态需自补状态栏避让，同 welcome.wxml ld-wl-body 口径） -->
+  <view class="ld-cat-empty" wx:if="{{state === 'missing'}}" style="padding-top: calc({{statusBarHeight}}px + 220rpx)">
+    <view class="ld-cat-empty-title">课程不存在</view>
+    <view class="ld-cat-empty-hint">检查一下入口，或稍后再试</view>
+  </view>
+
+</view>
