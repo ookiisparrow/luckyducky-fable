@@ -4585,6 +4585,40 @@ export const repoChecks = [
     },
   },
   {
+    // 段落播完不自动切换（P4 通栏重播·播放器重设计战役 批B·设计拍板）：旧行为 onEnded 里自动
+    // playSegment(next) 切下一段——新设计要求段落播完停在完成态，给用户看「重播本段」通栏按钮自己选，
+    // 不替用户做主。守此不变量：onEnded 不许再出现 playSegment( 调用（自动切段回潮即红）且须落 segDone；
+    // onReplay 须真 seek(0) 从头重来；wxml 须有重播长条的 tap 绑定，否则 ts 有功能界面点不到。
+    id: 'rw-mp-player-no-autonext',
+    roots: ['R38'],
+    desc: '播放器重设计战役批B：段落播完不自动切换（P4 通栏重播·设计拍板 2026-07-11）——player.ts 的 onEnded 方法体不得含 playSegment( 调用（自动切段回潮即红）且须含 segDone；onReplay 方法体须存在且含 seek(0；player.wxml 须有 bind:tap="onReplay"（重播长条入口）',
+    run() {
+      const base = join(ROOT, 'rewrite/mp')
+      const tsPath = join(base, 'pages/player/player.ts')
+      if (!existsSync(tsPath)) return [] // 播放页未建时不红
+      const bad = []
+      const src = stripComments(readFileSync(tsPath, 'utf8')) // 剥注释单源 helper（错题本 E1）：防注释文本假触发/假放行
+      const endedBody = methodBody(src, 'onEnded')
+      if (!endedBody) {
+        bad.push('player.ts 找不到 onEnded 方法体——段落播完检测单点丢失')
+      } else {
+        if (/playSegment\s*\(/.test(endedBody))
+          bad.push('player.ts 的 onEnded 方法体内仍含 playSegment( 调用——自动切段回潮（设计拍板：段落播完不自动切换，须停在完成态给用户自己选）')
+        if (!/segDone/.test(endedBody)) bad.push('player.ts 的 onEnded 方法体内未见 segDone——播完完成态未落地')
+      }
+      const replayBody = methodBody(src, 'onReplay')
+      if (!replayBody) bad.push('player.ts 找不到 onReplay 方法体——重播入口单点丢失')
+      else if (!/seek\s*\(\s*0/.test(replayBody)) bad.push('player.ts 的 onReplay 方法体内未见 seek(0——重播未真正跳回段首')
+      const wxmlPath = join(base, 'pages/player/player.wxml')
+      if (existsSync(wxmlPath)) {
+        const wxml = readFileSync(wxmlPath, 'utf8')
+        if (!/bind:tap\s*=\s*"onReplay"/.test(wxml))
+          bad.push('player.wxml 找不到 bind:tap="onReplay"——重播长条按钮入口缺失（ts 有方法但界面点不到）')
+      }
+      return bad
+    },
+  },
+  {
     // 延时自动返回坞的生命周期清理（病根#5 样板复制即漂移·根因#8 真机才炸）：多页把「提交成功 toast + setTimeout(navigateBack)」
     // 这段坞复制来复制去，漏了清理——用户在延时窗口内手动返回（原生返回箭头/手势），页已出栈但 mp 的 setTimeout 绑 JS VM 不随
     // navigateBack 取消，孤儿定时器到点再 navigateBack 多弹一层。守此不变量：凡 .ts 既有 setTimeout 又有 navigateBack（＝延时返回坞），
@@ -4732,7 +4766,7 @@ export const repoChecks = [
     // 手指顶回去；备路径投屏须特性检测再调用（低版本微信直接报错崩交互）；客服入口须单源、不许在别处内联。
     id: 'rw-mp-player-immersive-casting',
     roots: ['#8', '#5'],
-    desc: '播放页竖屏沉浸全屏 + 一键投屏 + 帮助(客服)入口：player.json 须 navigationStyle:custom；player.wxml 的 <video> 须 controls="{{false}}" + show-casting-button + castingstatechange 事件绑定 + 帮助按钮节点 + slider 的 changing/change 两段式绑定；player.ts 须对备路径投屏 startCasting 做特性检测(typeof===\'function\')；客服入口须单源在 rewrite/mp/utils/customerService.ts（rewrite/mp 内 wx.openCustomerServiceChat 只此一处）',
+    desc: '播放页竖屏沉浸全屏 + 一键投屏 + 帮助(客服)入口：player.json 须 navigationStyle:custom；player.wxml 的 <video> 须 controls="{{false}}" + show-casting-button + castingstatechange 事件绑定 + 求助入口节点（bind:tap=onHelp）+ slider 的 changing/change 两段式绑定；player.ts 须对备路径投屏 startCasting 做特性检测(typeof===\'function\')；客服入口须单源在 rewrite/mp/utils/customerService.ts（rewrite/mp 内 wx.openCustomerServiceChat 只此一处）',
     run() {
       const base = join(ROOT, 'rewrite/mp')
       if (!existsSync(base)) return []
@@ -4751,7 +4785,7 @@ export const repoChecks = [
       if (wxml && !/show-casting-button/.test(wxml)) bad.push('player.wxml 缺 show-casting-button——投屏主路径（原生按钮）未开启')
       if (wxml && !/bind:?castingstatechange/.test(wxml))
         bad.push('player.wxml 缺 castingstatechange 事件绑定——投屏状态（连接/中断）无回报，用户点了投屏不知道发生了什么（根因#14 呼应：动作类失败/状态变化不可静默）')
-      if (wxml && !/帮助/.test(wxml)) bad.push('player.wxml 找不到「帮助」按钮节点——客服入口占底条播放键位缺失（设计定案）')
+      if (wxml && !/bind:?tap\s*=\s*"onHelp"/.test(wxml)) bad.push('player.wxml 找不到求助入口节点（bind:tap=onHelp）——客服入口占中央求助钮位缺失（设计定案）')
       if (wxml && !(/bind:?changing/.test(wxml) && /bind:?change\b/.test(wxml)))
         bad.push('player.wxml 的 slider 未见两段式 changing+change 绑定——拖动中会被 timeupdate 把进度顶回去、或松手不 seek')
 

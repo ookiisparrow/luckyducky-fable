@@ -5,11 +5,32 @@
 // 依赖 controls，社区有 controls=false 下可用实例）；备路径=底条自绘投屏按钮，wx.createVideoContext 后
 // 特性检测 typeof ctx.startCasting==='function'（基础库 2.32.0·仅 tap 回调内调用），不支持则提示微信版本过低。
 import { getPlaybackUrl, trackEvent } from '../../api/learning'
-import { flattenSegments, navSegment, createPlaybackCache, formatClock, clampSeek, type CoursePub, type FlatSegment } from '../../lib/player'
+import {
+  flattenSegments,
+  navSegment,
+  createPlaybackCache,
+  formatClock,
+  clampSeek,
+  lessonStrip,
+  type CoursePub,
+  type FlatSegment,
+  type LessonStrip,
+} from '../../lib/player'
 import { getCourseById } from '../../lib/courses'
 import { openCustomerService } from '../../utils/customerService'
 
 const TIME_UPDATE_THROTTLE_MS = 250
+
+// segcap 文案三态（P4·播放器重设计战役批B §2c）：播放中报「段落 x/y」；播完且课时内有下一段报「x 完成·接下来 x+1」；
+// 播完且课时末段——查 navSegment 是否有跨课时下一段，有则报下一课时名，无则「本课程已全部学完」。
+// 放纯函数（非方法）：与 strip 一起在多个 setData 点重算，避免同一逻辑在 playSegment/onEnded/onReplay/onVideoPlay 四处各自重写。
+function buildCapText(strip: LessonStrip | null, segDone: boolean, course: CoursePub | null, segId: string): string {
+  if (!strip) return ''
+  if (!segDone) return `段落 ${strip.segIndex} / ${strip.segTotal}`
+  if (strip.segIndex < strip.segTotal) return `段落 ${strip.segIndex} 完成 · 接下来 段落 ${strip.segIndex + 1}`
+  const next = navSegment(course, segId, 1)
+  return next ? `本课时完成 · 接下来 ${next.lessonName}` : '本课程已全部学完'
+}
 
 const cache = createPlaybackCache({
   fetcher: async (courseId, segmentId) => {
@@ -29,13 +50,16 @@ Page({
     canPrev: false,
     canNext: false,
     state: 'loading' as 'loading' | 'playing' | 'empty' | 'denied' | 'missing' | 'error',
-    listOpen: false,
     paused: false, // 真实播放/暂停态·只认 bind:play/bind:pause 回报，不在 tap 里直接翻转当真相
     curSec: 0,
     durSec: 0,
     curClock: '0:00',
     durClock: '0:00',
     seeking: false, // 拖动进度条中：阻断 timeupdate 覆盖显示值
+    segDone: false, // 段落播完（P4）：不再自动切下一段，停在完成态给用户看通栏重播/自己切段
+    strip: null as LessonStrip | null, // 顶条两行标题 + 分段进度条浮层数据源（批A lib/player lessonStrip）
+    capText: '', // segstrip 左侧文案（三态，见 buildCapText）
+    hintDismissed: false, // 单击提示条是否已被首次 tap 关闭（页面实例级·不持久化·无定时器）
   },
   courseId: '',
   course: null as CoursePub | null,
@@ -91,7 +115,22 @@ Page({
     // src 清空：换段加载态回到「正在加载首帧」骨架，且卸载上一段/坏地址的 <video>——否则旧视频在新段标签下继续播放、
     // 骨架永不显，且坏 src 重挂到新段会瞬时 bind:error 白吃掉新段的一次重试预算（审计②）。
     // 进度/暂停态一并归零：新段是新的播放单元，旧段的进度条/暂停指示不该带过来。
-    this.setData({ state: 'loading', current: seg, src: '', listOpen: false, paused: false, curSec: 0, durSec: 0, curClock: '0:00', durClock: '0:00', seeking: false })
+    // segDone/strip/capText 一并重算（completed=false）：新段是新的播放单元，旧段的播完通栏不该带过来（P4）。
+    const strip = lessonStrip(this.course, seg.segmentId, false)
+    this.setData({
+      state: 'loading',
+      current: seg,
+      src: '',
+      paused: false,
+      curSec: 0,
+      durSec: 0,
+      curClock: '0:00',
+      durClock: '0:00',
+      seeking: false,
+      segDone: false,
+      strip,
+      capText: buildCapText(strip, false, this.course, seg.segmentId),
+    })
     let url = ''
     try {
       url = await cache.get(this.courseId, seg.segmentId)
@@ -129,17 +168,37 @@ Page({
   onVideoPlay() {
     this.onFirstPlay()
     this.setData({ paused: false })
+    // 用户经系统手势/重播外路径恢复播放时，完成态不该残留（P4）：常规路径已由 onReplay/playSegment 复位，
+    // 这里兜底任何其他恢复播放的入口（如原生投屏面板暂停后又本机继续播）。
+    if (this.data.segDone) {
+      const cur = this.data.current
+      const strip = cur ? lessonStrip(this.course, cur.segmentId, false) : null
+      this.setData({ segDone: false, strip, capText: buildCapText(strip, false, this.course, cur ? cur.segmentId : '') })
+    }
   },
   onVideoPause() {
     this.setData({ paused: true })
   },
 
+  // 段落播完（P4·设计拍板 2026-07-11）：不再自动切下一段——停在完成态，通栏「重播本段」+ segstrip
+  // 文案三态（见 buildCapText）由用户自己选重播/上一段/下一段（守卫 rw-mp-player-no-autonext）。
   onEnded() {
     const cur = this.data.current
     if (!cur) return
     trackEvent('segment_done', 'player', cur.segmentId, { courseId: this.courseId, lessonId: cur.lessonId, segmentId: cur.segmentId, at: this._at, dur: this._dur })
-    const next = navSegment(this.course, cur.segmentId, 1)
-    if (next) void this.playSegment(next, 'seg')
+    const strip = lessonStrip(this.course, cur.segmentId, true)
+    this.setData({ segDone: true, paused: true, strip, capText: buildCapText(strip, true, this.course, cur.segmentId) })
+  },
+
+  // 通栏重播（P4 新增）：从头重来一遍，退出完成态。
+  onReplay() {
+    const cur = this.data.current
+    if (!cur) return
+    const ctx = wx.createVideoContext('lp-video', this)
+    ctx.seek(0)
+    ctx.play()
+    const strip = lessonStrip(this.course, cur.segmentId, false)
+    this.setData({ segDone: false, strip, capText: buildCapText(strip, false, this.course, cur.segmentId) })
   },
 
   // error 态手动重试（P3·bug sweep R1 #7）：复用现有段加载方法，重置重试计数放行 onVideoError 再给一次自动重试预算。
@@ -172,8 +231,10 @@ Page({
   },
 
   // 全屏单击播放/暂停：只调用视频上下文 play()/pause()，真实态由 bind:play/bind:pause 回报（不臆断本地态）。
+  // 首次 tap 永久关闭单击提示条（页面实例级 data.hintDismissed·不持久化·无定时器）。
   onTapVideo() {
     if (this.data.state !== 'playing' || !this.data.src) return
+    if (!this.data.hintDismissed) this.setData({ hintDismissed: true })
     const ctx = wx.createVideoContext('lp-video', this)
     if (this.data.paused) ctx.play()
     else ctx.pause()
@@ -206,7 +267,10 @@ Page({
     this.setData({ seeking: false, curSec, curClock: formatClock(curSec) })
   },
 
-  // 一键投屏——主路径 show-casting-button 已在 wxml 开启；本函数是底条自绘备路径。
+  // 一键投屏——主路径 show-casting-button 已在 wxml 开启；本函数是底条自绘备路径（M2 批曾有底条自绘投屏
+  // 按钮节点，播放器重设计战役批B 结构重排已把该按钮节点从 wxml 删除——投屏备路径入口位待拍板（/btw 结论未达）·
+  // 批D 落位·方法保留勿删，见 docs/重构日志.md 本批（2026-07-11 播放器重设计战役 批B）条目②「删除项」，
+  // 该条记录了 UI 入口摘除后的现状；docs/待办与债.md 该主题条目仍是摘除前「两路并存」的旧描述，待批D 落位时一并改写）。
   onCast() {
     if (this.data.state !== 'playing' || !this.data.src) return
     const ctx = wx.createVideoContext('lp-video', this) as unknown as { startCasting?: (opt: { success?: () => void; fail?: () => void }) => void }
@@ -260,18 +324,6 @@ Page({
     const next = cur && navSegment(this.course, cur.segmentId, 1)
     if (next) void this.playSegment(next, 'seg')
   },
-  onPickSegment(e: WechatMiniprogram.TouchEvent) {
-    const id = String(e.currentTarget.dataset.id)
-    const seg = this.data.segments.find((s) => s.segmentId === id)
-    if (seg && seg.hasVideo) void this.playSegment(seg, 'seg')
-    else wx.showToast({ title: '这段视频还在整理中', icon: 'none' })
-  },
-  onToggleList() {
-    this.setData({ listOpen: !this.data.listOpen })
-  },
-  // 目录抽屉遮罩/抽屉本体 catchtouchmove 挂点（锁背景滚动·同 privacy-sheet 组件既有写法）：空实现即可，
-  // catch: 前缀本身负责挡冒泡，这里只需存在同名方法供小程序事件系统解析，避免 handler 缺失告警。
-  noop() {},
   onGoActivate() {
     wx.redirectTo({ url: '/pages/welcome/welcome' })
   },

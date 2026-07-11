@@ -1,16 +1,26 @@
-<!-- 课程播放页·竖屏沉浸全屏重设计（M2 批：一键投屏 + 帮助入口）。
+<!-- 课程播放页·竖屏沉浸全屏重设计（播放器重设计战役 批B：P1 常态结构重排 + P4 段落播完不自动切换）。
      整页纯黑铺满（player.json navigationStyle:custom）；视频 1:1.68（宽:高）居中，
      上下 UI 是黑条覆盖层（普通 view 绝对定位 z-index 盖在 video 上·同层渲染官方已允许，不必 cover-view）。
-     业务逻辑与既有回归红线（playToken 乱序防护/首帧埋点/segment_done/watch_at/25min 地址缓存）一字不动，
-     本文件只重排结构与视觉 + 新增投屏/进度条/帮助。 -->
+     业务逻辑与既有回归红线（playToken 乱序防护/首帧埋点/segment_done/watch_at/25min 地址缓存）一字不动；
+     唯一刻意行为变更＝段落播完不再自动切下一段（onEnded 停在完成态，重播/切段交由用户，见 player.ts）。
+     P2 拖动态（自绘 seek/节点磁吸/震感）、P3 求助面板是后续批：本批保留原生 <slider>，求助钮仍直连客服。 -->
 <view class="ld-player">
 
-  <!-- 顶条：返回 + 当前段落标题（避让状态栏；右上刻意留白——原生投屏按钮渲染在视频区右上角，勿遮挡） -->
+  <!-- 顶条：返回 + 两行标题（数据源=批A lib/player 的 lessonStrip：主行 chapterTitle/副行 lessonNo·lessonName，
+       chapterTitle 空则只显 lessonName 脏档回退）+ 右侧留白 spacer（真机右上是原生胶囊+原生投屏按钮，
+       继续保持右上留白纪律，不放任何自绘元素） -->
   <view class="lp-topbar" style="padding-top: {{statusBarHeight}}px">
     <view class="lp-back" bind:tap="onBack">
       <image class="lp-back-ico" src="/static/icons/chevron-right.svg" mode="aspectFit" />
     </view>
-    <view class="lp-topbar-title">{{current.lessonName || title || '正在学习'}}</view>
+    <view class="lp-topbar-title">
+      <block wx:if="{{strip && strip.chapterTitle}}">
+        <view class="lp-title-main">{{strip.chapterTitle}}</view>
+        <view class="lp-title-sub">{{strip.lessonNo}} · {{strip.lessonName}}</view>
+      </block>
+      <view class="lp-title-main" wx:else>{{(strip && strip.lessonName) || title || '正在学习'}}</view>
+    </view>
+    <view class="lp-topbar-spacer"></view>
   </view>
 
   <!-- 视频舞台（1:1.68·padding-top 百分比法·避 aspect-ratio·旧 WebView 不支持·垂直居中） -->
@@ -47,13 +57,30 @@
           </view>
         </view>
       </view>
+
+      <!-- 单击提示条：仅播放中且未被首次 tap 关闭过（页面实例级·不持久化） -->
+      <view class="lp-tap-hint" wx:if="{{state === 'playing' && src && !hintDismissed}}">单击画面 播放 / 暂停</view>
+
+      <!-- 分段进度条浮层：段落层级只活在这里（目录页只到课时层，批D 再落） -->
+      <view class="lp-segstrip" wx:if="{{strip}}">
+        <view class="lp-segs">
+          <view class="lp-seg-cell {{item}}" wx:for="{{strip.cells}}" wx:key="*this"></view>
+        </view>
+        <view class="lp-segcap">
+          <text class="lp-segcap-text">{{capText}}</text>
+          <view class="lp-legend" wx:if="{{current && current.marks && current.marks.length > 0}}">
+            <text class="lp-legend-dot">◆</text>
+            <text class="lp-legend-text">关键动作节点</text>
+          </view>
+        </view>
+      </view>
     </block>
 
     <view class="lp-video-box lp-state" wx:elif="{{state === 'empty'}}">
       <view class="lp-state-title">这段视频还在整理中</view>
       <view class="lp-state-hint">先看看别的段落吧</view>
       <view class="lp-state-actions">
-        <view class="lp-state-btn ghost" bind:tap="onToggleList">选其他段</view>
+        <view class="lp-state-btn ghost" wx:if="{{canNext}}" bind:tap="onNext">跳到下一段</view>
       </view>
     </view>
     <view class="lp-video-box lp-state" wx:elif="{{state === 'denied'}}">
@@ -68,13 +95,18 @@
       <view class="lp-state-hint">可能是网络或格式问题，换一段或稍后再试</view>
       <view class="lp-state-actions">
         <view class="lp-state-btn" bind:tap="onRetryError">重试本段</view>
-        <view class="lp-state-btn ghost" bind:tap="onToggleList">选其他段</view>
+        <view class="lp-state-btn ghost" wx:if="{{canNext}}" bind:tap="onNext">跳到下一段</view>
       </view>
     </view>
   </view>
 
-  <!-- 底条：仅播放中显示——第一行进度(时间+slider+时长)，第二行 帮助|上一段|目录|下一段|投屏 -->
+  <!-- 底条：仅播放中显示——段落播完(segDone) 顶部通栏重播长条 + 进度(时间+slider+时长) + 求助|上一段|下一段 -->
   <view class="lp-bottombar" wx:if="{{state === 'playing'}}">
+    <view class="lp-replay" wx:if="{{segDone}}" bind:tap="onReplay">
+      <image class="lp-replay-ico" src="/static/icons/rotate-ccw.svg" mode="aspectFit" />
+      <text>重播本段</text>
+    </view>
+
     <view class="lp-progress-row">
       <text class="lp-time">{{curClock}}</text>
       <slider
@@ -82,9 +114,9 @@
         min="0"
         max="{{durSec || 1}}"
         value="{{curSec}}"
-        block-size="12"
-        activeColor="#f9bf63"
-        backgroundColor="rgba(255,255,255,0.28)"
+        block-size="28"
+        activeColor="#a371ea"
+        backgroundColor="rgba(255,255,255,0.24)"
         bind:changing="onSliderChanging"
         bind:change="onSliderChange"
       />
@@ -92,44 +124,15 @@
     </view>
 
     <view class="lp-controls">
-      <view class="lp-ctl" bind:tap="onHelp">帮助</view>
-      <view class="lp-ctl {{canPrev ? '' : 'dim'}}" bind:tap="onPrev">上一段</view>
-      <view class="lp-ctl solid {{listOpen ? 'on' : ''}}" bind:tap="onToggleList">目录</view>
-      <view class="lp-ctl {{canNext ? '' : 'dim'}}" bind:tap="onNext">下一段</view>
-      <view class="lp-ctl" bind:tap="onCast">投屏</view>
-    </view>
-  </view>
-
-  <!-- 段落目录：底部抽屉浮层（半透明遮罩 + catchtouchmove 锁滚动 + 点遮罩关闭） -->
-  <view class="lp-drawer-mask" wx:if="{{listOpen}}" bind:tap="onToggleList" catchtouchmove="noop"></view>
-  <view class="lp-drawer {{listOpen ? 'open' : ''}}" catchtouchmove="noop">
-    <view class="lp-drawer-handle"></view>
-    <scroll-view class="lp-drawer-scroll" scroll-y="{{true}}">
-      <view
-        class="lp-seg {{item.segmentId === current.segmentId ? 'on' : ''}} {{item.hasVideo ? '' : 'off'}}"
-        wx:for="{{segments}}"
-        wx:key="segmentId"
-        data-id="{{item.segmentId}}"
-        bind:tap="onPickSegment"
-      >
-        <view class="lp-seg-ico">
-          <view class="lp-eq" wx:if="{{item.segmentId === current.segmentId && state === 'playing' && !paused}}">
-            <view class="lp-eq-bar"></view>
-            <view class="lp-eq-bar"></view>
-            <view class="lp-eq-bar"></view>
-          </view>
-          <view class="lp-seg-play" wx:elif="{{item.hasVideo}}">
-            <image class="lp-seg-play-img" src="/static/icons/play.svg" mode="aspectFit" />
-          </view>
-          <view class="lp-seg-dot" wx:else></view>
-        </view>
-        <view class="lp-seg-mid">
-          <view class="lp-seg-name">{{item.lessonName || '本节'}}</view>
-          <view class="lp-seg-sub">{{item.segName || '片段'}}</view>
-        </view>
-        <text class="lp-seg-flag" wx:if="{{!item.hasVideo}}">整理中</text>
-        <text class="lp-seg-flag hot" wx:elif="{{item.segmentId === current.segmentId}}">播放中</text>
+      <view class="lp-chev {{canPrev ? '' : 'dim'}}" bind:tap="onPrev">
+        <image class="lp-chev-ico lp-chev-prev" src="/static/icons/chevron-right.svg" mode="aspectFit" />
       </view>
-    </scroll-view>
+      <view class="lp-helpbtn" bind:tap="onHelp">
+        <image class="lp-helpbtn-ico" src="/static/icons/headset.svg" mode="aspectFit" />
+      </view>
+      <view class="lp-chev {{canNext ? '' : 'dim'}}" bind:tap="onNext">
+        <image class="lp-chev-ico" src="/static/icons/chevron-right.svg" mode="aspectFit" />
+      </view>
+    </view>
   </view>
 </view>
