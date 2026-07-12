@@ -102,11 +102,14 @@ export const main = defineNotifyCallback<any>({
       if (ord && ord.data && ord.data.status === 'paid') {
         await restoreStock([{ productId: as.productId, spec: as.spec || '', qty: as.qty }])
       }
-      // 订单留对账痕（失败不阻塞 ACK：售后单是退款状态单一来源）
+      // 订单留对账痕（失败不阻塞 ACK：售后单是退款状态单一来源）。key 用 lineId（回退 productId，
+      // 兼容无 lineId 的旧售后单）而非裸 productId：同一 productId 可能有多条不同 spec 的订单行
+      // （见 orders.ts lineIdOf），裸 productId 会让两条行的退款回调互相覆盖对账痕。
+      const refundedKey = String(as.lineId || as.productId)
       await db
         .collection(COLLECTIONS.orders)
         .doc(as.orderId)
-        .update({ data: { ['refunded.' + as.productId]: as.refundAmount } })
+        .update({ data: { ['refunded.' + refundedKey]: as.refundAmount } })
         .catch(() => {})
     }
   },

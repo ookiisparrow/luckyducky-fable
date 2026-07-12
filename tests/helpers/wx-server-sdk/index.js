@@ -35,15 +35,22 @@ const command = {
   exists: (val) => ({ __op: 'exists', val }), // 字段存在/缺失（CAS 初始化窗口前置条件，债#21）
   inc: (val) => ({ __op: 'inc', val }), // 原子自增（recordAnomaly 去重计数·真 sdk 服务端原子加，避免读-改-写并发窗）
   aggregate: { sum: (expr) => ({ __aggOp: 'sum', expr }) }, // 聚合算子（GMV 求和·债#18续）
+  // 字段级删除（真 sdk 标准写路径算子，对齐 MongoDB $unset·与下方注释警告的「未验证查询组合子」范畴不同——
+  // 这是常规写操作，非查询条件组合）：patch 成 `null` ≠ 字段不存在——CAS 条件 `_.exists(false)` 只认「字段
+  // 真缺失」，值为 null 仍算「存在」（批R 修复：csSession 重开清质检标记若 patch 成 null，saveQcMark/
+  // listQcSampled 的 exists(false) 永远判定「已评过」，质检评分永久 409）。真删字段才是正确表达「清空」的写法。
+  remove: () => ({ __op: 'remove' }),
   // 注：pageQuery 复合游标 tiebreaker（批1 bug sweep）**不用** _.and()/_.or()——P2 复核发现这会是全仓
   // 首次用该组合、只被本桩验证过、从未打过真实云数据库；改用桩里已验证过的单字段 lt/eq 拆两条查询
   // 内存合并（见 kit/paging.ts 注释），因此这里刻意不补 and/or 语义，避免留一套没有生产用途、也没有
   // 真机验证过的桩能力躺在这里给后人误当「已验证」参照抄用。
 }
 
-// 写入一个叶子值：inc 算子作原子自增（对齐真 sdk _.inc），否则直接赋值。
+// 写入一个叶子值：inc 算子作原子自增（对齐真 sdk _.inc）；remove 算子真删该键（对齐真 sdk _.remove()·
+// $unset 语义——不是赋 undefined/null，是键从对象上消失，配合 exists(false) 才能判「真缺失」）；否则直接赋值。
 function writeLeaf(obj, key, v) {
   if (v && typeof v === 'object' && v.__op === 'inc') obj[key] = (Number(obj[key]) || 0) + v.val
+  else if (v && typeof v === 'object' && v.__op === 'remove') delete obj[key]
   else obj[key] = v
 }
 

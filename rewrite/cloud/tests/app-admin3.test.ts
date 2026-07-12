@@ -65,6 +65,33 @@ describe('发货（黄金：状态闸/金额异常挡/核销流水/合规上传 
     expect(control.dump('stockLedger').length).toBe(1) // 不重复留痕
   })
 
+  // P2 修复（批P·shipOne 并发/重复调用缺互斥闸）：两个几乎同时到达的并发调用此前都可能读到 cur=paid、
+  // 都通过状态闸，各自独立触发一次微信发货上传，后写入的 wxShipUploaded/wxShipError 无条件覆盖前一次
+  // 结果。shipUploadLock（busy/idle 二态 CAS，随状态转移同一次写抢占）只放行一次真正上传，另一次安全
+  // 识别为「正在处理」（SHIP_IN_PROGRESS），不是状态错、也不重复外呼微信、不重复落核销流水。
+  it('大白话：并发互斥闸——同一订单几乎同时两次 shipOne，微信上传只真正执行一次，另一次安全识别为进行中；闸随后释放不挡合法改单号', async () => {
+    seedOrder()
+    const [a, b] = await Promise.all([
+      post('shipOrder', { id: 'o1', company: '顺丰', trackingNo: 'SF-A' }),
+      post('shipOrder', { id: 'o1', company: '顺丰', trackingNo: 'SF-B' }),
+    ])
+    const oks = [a, b].filter((r: any) => r.ok)
+    const losers = [a, b].filter((r: any) => !r.ok)
+    expect(oks.length).toBe(1) // 只一次真正走完发货+上传
+    expect(losers.length).toBe(1)
+    expect(losers[0].error).toBe('SHIP_IN_PROGRESS') // 另一次安全识别为「进行中」，不是状态错
+    expect(control.openapiCalls().length).toBe(1) // 微信发货上传只真正外呼一次（不重复）
+    const o = control.dump('orders')[0]
+    expect(o.status).toBe('shipped')
+    expect(o.shipUploadLock).toBe('idle') // 闸已释放——不是永久锁
+    expect(control.dump('stockLedger').length).toBe(1) // 核销流水也只落一次（不因并发重复留痕）
+
+    // 闸释放后的后续调用（改单号场景）仍正常放行——证明本闸只挡「同时进行中」的窗口，不误伤既有场景
+    const again = await post('shipOrder', { id: 'o1', company: '中通', trackingNo: 'ZT-C' })
+    expect(again.ok).toBe(true)
+    expect(control.dump('orders')[0].shipping.trackingNo).toBe('ZT-C')
+  })
+
   it('大白话：微信合规上传失败绝不回滚本地发货——留痕告警靠人补录', async () => {
     seedOrder()
     control.setOpenapiFail(true)

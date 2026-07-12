@@ -117,16 +117,32 @@ async function shipOne(db: any, idRaw: any, companyRaw: any, trackingRaw: any, o
     const lines = heldLines.data.map((a: any) => String(a.lineId || a.productId || ''))
     return { ok: false, error: 'REFUND_HOLD', lines }
   }
-  // 条件更新（审核批次A-6）：仍是 paid/shipped 才写——防与确认收货并发把 done 回滚
+  // 条件更新（审核批次A-6 + 批P 并发互斥闸续）：仍是 paid/shipped 才写——防与确认收货并发把 done 回滚；
+  // 同一次写里叠加抢占 shipUploadLock（CAS neq 'busy'，非「一次性 exists」范式——本闸是「进行中」busy/idle
+  // 二态、可反复抢占，不是只能成功一次的既有 exists(false) 惯用法，因为「改单号」场景要求同单可合法地
+  // 再次触发上传）。根因：两个几乎同时到达的并发 shipOne 调用可能都读到 cur=paid、都通过上方状态闸——
+  // 若只闸 status（'shipped'→'shipped' 对二次调用天然放行，不是能拦并发的 CAS），两次调用会各自独立
+  // 触发一次微信发货上传，后写入的 wxShipUploaded/wxShipError 无条件覆盖前一次结果（可能把合规上传成功
+  // 覆盖成误报失败，或反过来盖掉真实失败）。shipUploadLock 抢占失败不代表状态真的不合法，故失败后二次读判：
+  // 状态仍在 paid/shipped 内即认定「另一次调用正在处理本单上传」，回 SHIP_IN_PROGRESS 而非 BAD_STATUS
+  // （不是分布式锁：只挡同单同时进行中的窗口，上传结束即释放，不影响之后合法的改单号再次调用）。
+  const _ = db.command
   const upd = await db
     .collection('orders')
-    .where({ _id: id, status: db.command.in(['paid', 'shipped']) })
+    .where({ _id: id, status: _.in(['paid', 'shipped']), shipUploadLock: _.neq('busy') })
     .update({
-      data: { status: 'shipped', shipping: { company, trackingNo }, shippedAt: got.data.shippedAt || Date.now() },
+      data: {
+        status: 'shipped',
+        shipping: { company, trackingNo },
+        shippedAt: got.data.shippedAt || Date.now(),
+        shipUploadLock: 'busy',
+      },
     })
   if (!upd.stats || upd.stats.updated !== 1) {
     const fresh = await db.collection('orders').doc(id).get().catch(() => null)
-    return { ok: false, error: 'BAD_STATUS:' + ((fresh && fresh.data && fresh.data.status) || 'unknown') }
+    const freshStatus = (fresh && fresh.data && fresh.data.status) || 'unknown'
+    if (freshStatus === 'paid' || freshStatus === 'shipped') return { ok: false, error: 'SHIP_IN_PROGRESS' }
+    return { ok: false, error: 'BAD_STATUS:' + freshStatus }
   }
   // SCM-D 核销留痕（守卫 ship-verify-ledger·根因#2·「如实核销」蓝图定稿）：**首次** paid→shipped 逐行落
   // ship 流水（fg 行只留痕不动账——成品扣账在下单预留 reserveStock；确定性 _id=ship:<orderId>:fg:<pid>__<spec>
@@ -151,13 +167,16 @@ async function shipOne(db: any, idRaw: any, companyRaw: any, trackingRaw: any, o
     company,
     trackingNo,
   })
+  // 释放互斥闸（shipUploadLock: busy → idle）随结果同一次写落地——无论上传成败都要释放，否则该单
+  // 之后任何合法再调用（含改单号）会被永久误判 SHIP_IN_PROGRESS。uploadShippingToWx 自身「绝不抛错」
+  // （见 kit/shipping.ts 契约），故本次写与上方状态转移写一样不需要 try/finally 兜底异常路径。
   await db
     .collection('orders')
     .doc(id)
     .update({
       data: ship.ok
-        ? { wxShipUploaded: true, wxShipError: '', wxShipAt: Date.now() }
-        : { wxShipUploaded: false, wxShipError: ship.error || 'WX_SHIP_FAIL' },
+        ? { wxShipUploaded: true, wxShipError: '', wxShipAt: Date.now(), shipUploadLock: 'idle' }
+        : { wxShipUploaded: false, wxShipError: ship.error || 'WX_SHIP_FAIL', shipUploadLock: 'idle' },
     })
     .catch(() => null)
   if (!ship.ok) await notifyAlert('money', 'shipOrder', 'WX_SHIP_UPLOAD_FAIL', { orderId: id, error: ship.error })

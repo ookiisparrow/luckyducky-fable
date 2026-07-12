@@ -135,7 +135,10 @@ export const confirmEnter = withOpenId(async ({ db, OPENID, event }) => {
             .get()
             .catch(() => null)
           cur = fresh && fresh.data
-          if (attempt === 2) alert('money', 'confirmEnter', 'REVOKE_RACE', { orderId: order.id })
+          // 放弃即告警：耗尽 3 次重试（attempt===2）与「重读本身失败」（cur 变 null，下一轮 for
+          // 条件 `attempt<3 && cur` 直接为假、提前退出）是两条不同的放弃路径，缺一都会让这单退货权
+          // 撤销悄悄没了却无人知道——收敛到同一告警出口，不让控制流的巧合替某条失败路径顶案。
+          if (attempt === 2 || !cur) alert('money', 'confirmEnter', 'REVOKE_RACE', { orderId: order.id })
         }
         if (revoked) break
       }

@@ -4365,9 +4365,18 @@ export const repoChecks = [
     // 另写一套 rewrite/shared/src/scm.ts 的 TS 解析器）。edges/writeRe/casRe 扫描逻辑镜像
     // rw-order-transitions-declared（已验证适配新线代码形态），只收窄 COLLS 到 SCM 两集合、避免与其重复报
     // orders/afterSales。
+    //
+    // 批S 修复（P1·根因#2）：①的原正则只认字面量 `[...]` 第三参数——但 scmPurchase.ts/scmOutwork.ts 全部 7 处
+    // transition() 调用实际写法是 `transition(coll, id, fromFor('X'), 'Y', ...)`（fromFor 是这两个文件内的
+    // helper，按目标态从 PURCHASE_ORDER_TRANSITIONS/OUTWORK_ORDER_TRANSITIONS 反查 from 集合，见文件内注释），
+    // 对这两个文件原正则匹配 0 次、①对全部 7 处真实流转提供的保护为零（静默假绿）。新增 fromFor(...) 形态分支：
+    // 语义上 fromFor(X) 永远等于声明表里 to=X 那条的 from 集合（fromFor 找不到 to=X 会直接 throw，运行时已经
+    // fail-fast），故静态守卫要抓的不是「fromFor(X) 算出的 from 对不对」，而是「调用点传给 fromFor 的 X 是否
+    // 就是这次 transition() 真正写入的 to」——两者不一致＝拿错状态的 from 集合去校验另一状态的流转，越流转会
+    // 被静默放行（写库时 transition() 内部仍会用实际 from 数组核对当前文档状态，但那份 from 数组已经是错的）。
     id: 'rw-scm-transitions-declared',
     roots: ['#2'],
-    desc: '新线 SCM 域（购/外协单）状态写入只走声明流转（根因#2·批K·移植 order-transitions-declared 的 scm 前缀纳管，同 rw-order-transitions-declared 精神：旧守卫只扫冻结线，scmPurchase.ts/scmOutwork.ts 头注承诺的保护对生产代码此前是假的）：rewrite/cloud/src/functions/adminApi/actions/scm*.ts 里 transition(purchaseOrders/outworkOrders) 的边、裸条件 CAS 的边须在 order-domain.generated.json 声明流转表内（该 JSON 由 gen-order-domain-synced 守卫保证与 packages/+rewrite 两份 scm.spec.ts 逐集合一致，对新线同样权威）；写这两集合 status 的字面量须是声明状态——越流转/打错状态名即红',
+    desc: '新线 SCM 域（购/外协单）状态写入只走声明流转（根因#2·批K 引入·批S 修复①对 fromFor(X) 调用形态的假绿：新增分支核对 fromFor 参数 X 与 transition() 第四参数 to 一致，不一致＝越流转被静默放行）：rewrite/cloud/src/functions/adminApi/actions/scm*.ts 里 transition(purchaseOrders/outworkOrders) 的边（字面量数组或 fromFor(X) 两种形态）、裸条件 CAS 的边须在 order-domain.generated.json 声明流转表内（该 JSON 由 gen-order-domain-synced 守卫保证与 packages/+rewrite 两份 scm.spec.ts 逐集合一致，对新线同样权威）；写这两集合 status 的字面量须是声明状态——越流转/打错状态名即红',
     run() {
       const jsonPath = join(ROOT, 'scripts/order-domain.generated.json')
       if (!existsSync(jsonPath)) return ['scripts/order-domain.generated.json 缺失——跑 `node scripts/gen-order-domain.mjs`（SCM 域声明派生物）']
@@ -4399,16 +4408,26 @@ export const repoChecks = [
       for (const p of files) {
         const src = readFileSync(p, 'utf8')
         const rel = relative(ROOT, p)
-        // ① transition(<coll>, id, [from...], 'to')：整条边对账（union 语义每个 from 元素都须有声明原子边）
-        const transRe = /transition\(\s*(?:['"](\w+)['"]|COLLECTIONS\.(\w+))\s*,[^,]+,\s*\[([^\]]*)\]\s*,\s*['"]([a-z_]+)['"]/g
+        // ① transition(<coll>, id, [from...]|fromFor('X'), 'to')：整条边对账（union 语义每个 from 元素都须
+        // 有声明原子边；fromFor(X) 形态见批S 修复注——核对 X 与实际写入的 to 一致，见上方文件头长注）
+        const transRe = /transition\(\s*(?:['"](\w+)['"]|COLLECTIONS\.(\w+))\s*,[^,]+,\s*(?:\[([^\]]*)\]|fromFor\(\s*['"]([a-z_]+)['"]\s*\))\s*,\s*['"]([a-z_]+)['"]/g
         let tm
         while ((tm = transRe.exec(src))) {
           const coll = tm[1] || tm[2]
           if (!COLLS.has(coll)) continue
+          const to = tm[5]
+          if (tm[4] !== undefined) {
+            // fromFor(X) 形态：fromFor 永远返回声明表里 to=X 那条的 from 集合（找不到会 throw，已 fail-fast）——
+            // 静态守卫要抓的不是这个恒真关系，而是调用点的 X 是否就是本次真正写入的 to（不一致＝拿错状态的
+            // from 集合去校验另一状态的流转，越流转会被静默放行）。
+            if (tm[4] !== to)
+              bad.push(`${rel}：transition('${coll}', …, fromFor('${tm[4]}'), '${to}') 参数不一致——fromFor 求的是 '${tm[4]}' 状态的合法 from 集合，但实际写入 to='${to}'，两者应相同，否则越流转会被静默放行（根因#2·批S）`)
+            continue
+          }
           const from = [...tm[3].matchAll(/['"]([a-z_]+)['"]/g)].map((x) => x[1])
-          const undeclared = from.filter((f) => !declaredEdges[coll].has(f + '=>' + tm[4]))
+          const undeclared = from.filter((f) => !declaredEdges[coll].has(f + '=>' + to))
           if (undeclared.length)
-            bad.push(`${rel}：transition('${coll}', …, [${from.join(',')}] → '${tm[4]}') 含未声明边 ${undeclared.map((f) => f + '→' + tm[4]).join('、')}——order-domain.generated.json 流转表里没有，越流转或先改声明（根因#2）`)
+            bad.push(`${rel}：transition('${coll}', …, [${from.join(',')}] → '${to}') 含未声明边 ${undeclared.map((f) => f + '→' + to).join('、')}——order-domain.generated.json 流转表里没有，越流转或先改声明（根因#2）`)
         }
         // ①' 裸条件 CAS：where({…status:'X'|_.in([..])…}).update({data:{…status:'Y'…}}) 的边对账。
         // 例外：技术性失败补偿回滚（applyStockMoves 失败后把已被 transition 抢占的状态复原，非业务逆向
@@ -4485,20 +4504,58 @@ export const repoChecks = [
     // 匹配 0 次，即该守卫的「_id 是否带确定性构造」检查从未真正跑过、静默假绿。新守卫改按 data 对象内是否
     // 含 `itemKey:`（流水行的标志字段，物料主档 add 没有这个字段）定位真正的流水 add 调用，不依赖变量名/
     // 字符距离；并新增「一个流水 add 都没找到」本身也报红——防止代码形态再变一次时守卫又悄悄测不到东西。
+    //
+    // 批S 修复（P3·根因#2）：原「确定性 _id 构造」检查与「流水 add 带 _id」检查是两条独立正则各自宽松匹配
+    // ——只证明「文件里某处有三段模板」+「add 里某处有 _id 字样」同时为真，从不核对 add 里那个 _id 是不是
+    // 真的来自该模板函数的调用（例如手写 `docType+':'+docId+':'+itemKey` 绕开函数、或干脆用别的变量，两条
+    // 独立检查都仍然各自绿）。改为：①按模板结构（不硬编码函数名，函数改名不失效）定位确定性 id 生成函数并
+    // 取其名；②对每处流水 add 提取 _id 字段实际绑定的表达式——简写 `{_id,...}`、显式变量 `_id: x`、或内联
+    // 直调 `_id: fn(...)` 三种形态都认；③简写/显式变量形态下，在该 add 调用所在函数体内（粗粒度以最近的
+    // `function` 关键字为作用域起点，避免跨函数误配同名变量）核对是否存在 `const/let <var> = <fn>(...)` 赋值
+    // ——找不到就说明 add 用的 _id 不是那次调用产生的确定性值，幂等绑定关系并未真正成立。
     id: 'rw-scm-ledger-idempotent',
     roots: ['#2'],
-    desc: '新线原料流水确定性幂等（SCM·根因#2·批K·移植 scm-ledger-idempotent，同 rw-order-transitions-declared 精神：旧守卫只扫冻结线；本守卫另修正旧正则「按字符距离定位」在当前代码形态下匹配 0 次的静默假绿，改按 data 内 itemKey: 字段定位流水 add）：rewrite/cloud/src/kit/scmStock.ts 写 stockLedger 必构造确定性 _id=`docType:docId:itemKey`（撞 id=并发方已写）·禁自动 id 双记账',
+    desc: '新线原料流水确定性幂等（SCM·根因#2·批K 引入·批S 修复两条独立正则拼出的假绑定：新增「_id 字段实际来自确定性生成函数调用」的绑定核验，不再只各自宽松匹配「有模板」+「有 _id 字样」）：rewrite/cloud/src/kit/scmStock.ts 写 stockLedger 必构造确定性 _id=`docType:docId:itemKey`（撞 id=并发方已写）·禁自动 id 双记账·禁绕开生成函数手写等价 _id',
     run() {
       const seam = 'rewrite/cloud/src/kit/scmStock.ts'
       if (!existsSync(join(ROOT, seam))) return []
       const bad = []
       const src = readFileSync(join(ROOT, seam), 'utf8')
-      if (!/\$\{[^}]*docType[^}]*\}:\$\{[^}]*docId[^}]*\}:\$\{/.test(src))
-        bad.push(`${seam} 未见确定性流水 _id 构造（\`\${docType}:\${docId}:\${itemKey}\` 三段模板）——流水失幂等（根因#2）`)
+      // 定位确定性 _id 生成函数并取其名（按「docType:docId:itemKey 三段模板」结构识别，不硬编码 ledgerIdOf——
+      // 函数改名不失效；`const NAME = (…) => \`…\`` 或 `function NAME(…) {…}` 两种写法都认）
+      const fnDeclM = src.match(/(?:const|function)\s+(\w+)\s*=?\s*\([^)]*\)\s*(?:=>\s*)?[{`][\s\S]{0,120}?\$\{[^}]*docType[^}]*\}:\$\{[^}]*docId[^}]*\}:\$\{/)
+      if (!fnDeclM)
+        bad.push(`${seam} 未见确定性流水 _id 构造函数（\`\${docType}:\${docId}:\${itemKey}\` 三段模板）——流水失幂等（根因#2）`)
+      const fnName = fnDeclM ? fnDeclM[1] : null
       // 按 data 对象内是否含 itemKey: 字段识别真正的流水 add（不依赖变量名/字符距离——防 regex 假绿，见上注）
-      const adds = [...src.matchAll(/\.add\(\s*\{\s*data:\s*\{([\s\S]{0,300}?)\}\s*\}\s*\)/g)].filter((m) => /itemKey\s*:/.test(m[1]))
+      const addRe = /\.add\(\s*\{\s*data:\s*\{([\s\S]{0,300}?)\}\s*\}\s*\)/g
+      const adds = [...src.matchAll(addRe)].filter((m) => /itemKey\s*:/.test(m[1]))
       if (!adds.length) bad.push(`${seam} 未找到 stockLedger 流水 add({data:{itemKey:...}}) 调用——流水写入点代码形态已变、本守卫需同步（根因#2）`)
-      for (const m of adds) if (!/\b_id\b/.test(m[1])) bad.push(`${seam} stockLedger add 未带确定性 _id（含简写 {_id,...}）——自动 id=重放双记账（根因#2）`)
+      // 粗粒度函数作用域边界：add 调用所在函数体起点＝其前最近一个 `function` 关键字位置——把「_id 绑定
+      // 赋值」核验限定在同一函数内，不误配到别的函数里恰好同名的变量
+      const funcBoundaryBefore = (index) => {
+        const funcRe = /\bfunction\s+\w+/g
+        let last = 0
+        let fm
+        while ((fm = funcRe.exec(src)) && fm.index < index) last = fm.index
+        return last
+      }
+      for (const m of adds) {
+        const inlineCall = fnName && new RegExp(`_id\\s*:\\s*${fnName}\\s*\\(`).test(m[1])
+        if (inlineCall) continue // 内联直调确定性生成函数——绑定关系天然成立
+        const shorthand = /(?:^|[,{])\s*_id\s*(?=[,}])/.test(m[1])
+        const varMatch = m[1].match(/_id\s*:\s*([A-Za-z_$][\w$]*)\s*(?=[,}])/)
+        if (!shorthand && !varMatch) {
+          bad.push(`${seam} stockLedger add 未带 _id 字段——自动 id=重放双记账（根因#2）`)
+          continue
+        }
+        if (!fnName) continue // 上面已报「未见确定性 _id 构造函数」，此处不重复噪音
+        const idVarName = shorthand ? '_id' : varMatch[1]
+        const scoped = src.slice(funcBoundaryBefore(m.index), m.index)
+        const boundRe = new RegExp(`(?:const|let)\\s+${idVarName}\\s*=\\s*${fnName}\\s*\\(`)
+        if (!boundRe.test(scoped))
+          bad.push(`${seam} stockLedger add 的 _id（变量 ${idVarName}）未见来自确定性生成函数 ${fnName}() 的同作用域赋值——_id 可能绕开确定性构造手写等价值，幂等绑定关系未真正成立（根因#2）`)
+      }
       return bad
     },
   },
