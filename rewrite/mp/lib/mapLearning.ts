@@ -1,8 +1,10 @@
 // 学习域映射（纯函数·黄金 learning-content §一激活三态 + §九内容回退）（守卫 rw-mp-learning-golden）。
 import { dateTime } from './mapOrders'
 
-/** 激活结果四态：activated 新激活（恭喜屏）/ mine 本人已进课（欢迎回来屏）/ taken 他人码（已被使用屏）/ invalid 废码。 */
-export type ActivationKind = 'activated' | 'mine' | 'taken' | 'invalid'
+/** 激活结果五态：activated 新激活（恭喜屏）/ mine 本人已进课（欢迎回来屏）/ taken 他人码（已被使用屏）/
+ *  invalid 废码 / error 网络失败（深审20260712 P3：CALL_FAIL/BAD_RESULT≠废码——扫真码遇网络抖动不误告
+ *  「激活码不对」，给「再试一次」；fail-closed 方向不变，仍不授权不冒充激活）。 */
+export type ActivationKind = 'activated' | 'mine' | 'taken' | 'invalid' | 'error'
 
 export interface ActivationView {
   kind: ActivationKind
@@ -13,7 +15,9 @@ export function activationView(r: unknown): ActivationView {
   const res = (r && typeof r === 'object' ? r : {}) as Record<string, any>
   const courseId = String(res.courseId || '')
   if (res.ok === true && (res.state === 'activated' || res.state === 'mine')) return { kind: res.state, courseId }
-  if (res.ok === false && String(res.error || '') === 'CODE_TAKEN') return { kind: 'taken', courseId } // 带 courseId·按课取图
+  const err = String(res.error || '')
+  if (res.ok === false && err === 'CODE_TAKEN') return { kind: 'taken', courseId } // 带 courseId·按课取图
+  if (res.ok === false && (err === 'CALL_FAIL' || err === 'BAD_RESULT')) return { kind: 'error', courseId: '' } // 网络/回包失败≠废码：文案分治可重试，仍 fail-closed 不冒充激活
   return { kind: 'invalid', courseId: '' } // INVALID_CODE/未知错误一律废码态（fail-closed 不冒充激活）
 }
 

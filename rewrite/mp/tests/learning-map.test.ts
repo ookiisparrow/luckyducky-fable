@@ -3,15 +3,18 @@
 import { describe, it, expect } from 'vitest'
 import { activationView, bgFor, mapMyCourses, mapCatalog, mapHelpVideos } from '../lib/mapLearning'
 
-describe('激活结果三态 + 废码兜底（黄金 §一）', () => {
+describe('激活结果三态 + 废码/网络失败分治（黄金 §一）', () => {
   it('大白话：新激活/本人已进课各归各屏；他人码带课程号（按课取图）；废码与未知错误一律「码不对」不冒充激活', () => {
     expect(activationView({ ok: true, state: 'activated', courseId: 'c1' })).toEqual({ kind: 'activated', courseId: 'c1' })
     expect(activationView({ ok: true, state: 'mine', courseId: 'c1' })).toEqual({ kind: 'mine', courseId: 'c1' })
     expect(activationView({ ok: false, error: 'CODE_TAKEN', courseId: 'c9' })).toEqual({ kind: 'taken', courseId: 'c9' })
     expect(activationView({ ok: false, error: 'INVALID_CODE' }).kind).toBe('invalid')
-    expect(activationView({ ok: false, error: 'CALL_FAIL' }).kind).toBe('invalid') // 网络失败不冒充
     expect(activationView({ ok: true, state: 'weird' }).kind).toBe('invalid') // 未知态 fail-closed
     expect(activationView(null).kind).toBe('invalid')
+  })
+  it('大白话：网络失败（CALL_FAIL/BAD_RESULT）≠废码——扫真码遇网络抖动不误告「激活码不对」，归 error 态可重试；仍 fail-closed 不冒充激活（深审20260712 P3）', () => {
+    expect(activationView({ ok: false, error: 'CALL_FAIL' })).toEqual({ kind: 'error', courseId: '' })
+    expect(activationView({ ok: false, error: 'BAD_RESULT' })).toEqual({ kind: 'error', courseId: '' })
   })
 })
 

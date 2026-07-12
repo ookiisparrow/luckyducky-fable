@@ -22,7 +22,10 @@ const C_QRTEXT = '#b9b9c0' // structure-ok 二维码占位说明
 const C_HINT = '#3d3d42' // structure-ok 扫码引导
 const C_WARN = '#9a9aa2' // structure-ok 退货小字提醒
 
-const esc = (s: unknown): string => String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+// 引号也转（深审20260712 P3·对齐 fulfill.ts esc）：SVG 文本全部内插在双引号属性/元素里，只转 &<> 时
+// 含引号脏档（文案/颜色值）可越出属性边界注入任意属性。
+const esc = (s: unknown): string =>
+  String(s || '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c] as string)
 const head = (w: number, h: number): string =>
   `<?xml version="1.0" encoding="UTF-8"?>\n<svg xmlns="http://www.w3.org/2000/svg" width="${w}mm" height="${h}mm" viewBox="0 0 ${w} ${h}" font-family="'PingFang SC','Microsoft YaHei',sans-serif">`
 
@@ -34,7 +37,7 @@ export function buildFrontSvg(card: CardModel, artHref?: string): string {
   const chipH = fs * 0.115
   const chipW = fs * 0.62
   return `${head(w, h)}
-  <rect width="${w}" height="${h}" fill="${f.bg}"/>
+  <rect width="${w}" height="${h}" fill="${esc(f.bg)}"/>
   ${artHref ? `<image href="${esc(artHref)}" x="0" y="0" width="${w}" height="${h}" preserveAspectRatio="xMidYMid slice"/>` : ''}
   ${
     f.showBrand
@@ -62,7 +65,7 @@ export function buildBackSvg(card: CardModel): string {
   const hintY = qrY + qrSide + fs * 0.07
   const warnY = h - barH - fs * 0.05
   return `${head(w, h)}
-  <rect width="${w}" height="${h}" fill="${b.bg}"/>
+  <rect width="${w}" height="${h}" fill="${esc(b.bg)}"/>
   <text x="${w / 2}" y="${titleY}" text-anchor="middle" font-size="${fs * 0.062}" font-weight="700" fill="${C_TITLE}">${esc(t.title)}</text>
   <text x="${w / 2}" y="${subY}" text-anchor="middle" font-size="${fs * 0.04}" fill="${C_SUB}">${esc(t.sub)}</text>
   <rect x="${qrX}" y="${qrY}" width="${qrSide}" height="${qrSide}" fill="none" stroke="${C_QRLINE}" stroke-width="0.4" rx="1.5"/>

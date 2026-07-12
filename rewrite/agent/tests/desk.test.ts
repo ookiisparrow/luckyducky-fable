@@ -1,7 +1,7 @@
 // 坐席台轮询合并（守卫 rw-agent-ui-golden·黄金 cs-agent「会话流轮询增量合并」永恒语义）：
 // 游标边界重复不重气泡/升序/同刻不同方向不同文是不同条/无时间戳不进流/游标只进不退空批不倒退。
 import { describe, it, expect } from 'vitest'
-import { mergeThread, advanceCursor, normalizeMsgs, mapQueue, waitLabel, deskErrorText, type Msg } from '../src/lib/desk'
+import { mergeThread, advanceCursor, normalizeMsgs, mapQueue, waitLabel, deskErrorText, keyOf, type Msg } from '../src/lib/desk'
 import { parse } from '@vue/compiler-sfc'
 import { transform } from 'esbuild'
 // Desk.vue 原文按 Vite 内建 ?raw 取纯文本（vite/client.d.ts 声明了 `*?raw` 环境模块类型，rewrite/agent/tsconfig.json
@@ -166,6 +166,21 @@ describe('会话流增量合并（黄金：不重气泡·升序）', () => {
     // 无 msgid（出站/历史档）回退旧键行为不变：同秒同方向同类同文视为同条
     const noId = mergeThread([m(6000, 'out', '收到')], [{ at: 6000, direction: 'out', text: '收到' }])
     expect(noId).toHaveLength(1)
+  })
+})
+
+describe('气泡 :key 与去重键 keyOf 同源（深审20260712 P2·防再漂移）', () => {
+  it('大白话：同秒同向两张图（msgid 不同、text 恒为占位）keyOf 不同——去重能留两条、Vue key 也不撞；无 msgid 回退键含 msgtype 且稳定', () => {
+    const a: Msg = { at: 5000, direction: 'in', text: '[image]', msgtype: 'image', msgid: 'wx-a' }
+    const b: Msg = { ...a, msgid: 'wx-b' }
+    expect(keyOf(a)).toBe('id:wx-a')
+    expect(keyOf(a)).not.toBe(keyOf(b))
+    expect(keyOf({ at: 1000, direction: 'out', text: '好', msgtype: 'text' })).toBe('1000|out|text|好')
+    expect(keyOf({ at: 1000, direction: 'out', text: '好' })).toBe('1000|out||好') // msgtype 缺省稳定
+  })
+  it('大白话：Desk.vue 模板 :key 用导出的 keyOf（同源单点）——旧 at+direction+text 拼接键不再存在', () => {
+    expect(deskSrc).toMatch(/:key="keyOf\(m\)"/)
+    expect(deskSrc).not.toMatch(/:key="m\.at \+ m\.direction \+ m\.text"/)
   })
 })
 

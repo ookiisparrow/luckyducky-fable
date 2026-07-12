@@ -124,6 +124,13 @@ async function openDecide(row: RefundRowVM) {
   const my = detailGen.begin()
   const r = await getRefundDetail(row.id)
   if (detailGen.isStale(my) || decideRow.value?.id !== row.id) return // 抽屉已切别单·丢弃过期详情（防判据错配）
+  if (!r.ok) {
+    // 判据加载失败（网络/服务端）：r.ok=false 时无 activation/lineRefundable 字段，若照组 verdict 会渲成
+    // 确定的绿色「未使用·可退」误导审核放行（P2·根因#14 失败必可观测/#8 不失真）。红条同 doApprove/doReject 范式。
+    verdict.value = null // 判据区留空（模板据此显示「重新加载判据」重试入口）
+    decideErr.value = '判据加载失败：' + String((r as any).error || '')
+    return
+  }
   const a = (r as any)?.activation || {}
   verdict.value = {
     loading: false,
@@ -325,6 +332,8 @@ onMounted(reload)
             <span class="crit-chip" :class="verdict.entered ? 'note' : 'good'">{{ verdict.entered ? '已进课' : '未进课' }}</span>
           </div>
         </div>
+        <!-- 判据加载失败（verdict=null·仅 openDecide 失败会置）：不渲判据、给重试入口（原因在下方 decideErr 红条） -->
+        <button v-else-if="!verdict" class="link" @click="openDecide(decideRow)">重新加载判据</button>
 
         <!-- 同意/拒绝失败原因（P2·不被刷新的"加载中"吞·留在眼前直到重试或关抽屉） -->
         <p v-if="decideErr" class="decide-err">{{ decideErr }}</p>

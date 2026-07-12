@@ -13,7 +13,9 @@ export interface Msg {
   msgid?: string
 }
 
-const keyOf = (m: Msg) => (m.msgid ? `id:${m.msgid}` : `${m.at}|${m.direction}|${m.msgtype || ''}|${m.text}`)
+// 导出供 Desk.vue 模板 :key 复用（深审20260712 P2）：气泡 key 与去重键同源单点——去重键升级（msgid）而
+// 模板 key 仍用旧 at+direction+text 时，同秒同向两张图（msgid 不同）会进 msgs 却撞 Vue 重复 key。
+export const keyOf = (m: Msg) => (m.msgid ? `id:${m.msgid}` : `${m.at}|${m.direction}|${m.msgtype || ''}|${m.text}`)
 
 /** 归一进流：无时间戳/脏形状不进（防脏消息撑乱时间轴）。 */
 export function normalizeMsgs(raw: unknown): Msg[] {

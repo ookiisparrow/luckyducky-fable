@@ -46,3 +46,27 @@ describe('卡面反面（二维码面）', () => {
     expect(tall).toContain('width="105mm" height="148mm"')
   })
 })
+
+// 深审20260712 P3：esc 原只转 &<> 不转引号，且 bg 颜色值完全不经 esc 裸内插——含引号脏档可越出
+// SVG 双引号属性注入任意属性（如 onload）。修法对齐 fulfill.ts esc（&<>"' 五件套）+ bg 走 esc。
+describe('属性注入防御（esc 转引号 + bg 不裸内插）', () => {
+  const dirty: CardModel = {
+    ...card,
+    front: { ...card.front, bg: '#fff" onload="evil()' },
+    back: { ...card.back, bg: "#fff' x=\"1", texts: { ...card.back.texts, title: '他说"你好"和\'单引号\'' } },
+  }
+  it('大白话：文案里的双/单引号被转义——不越出 SVG 属性边界', () => {
+    const back = buildBackSvg(dirty)
+    expect(back).toContain('他说&quot;你好&quot;和&#39;单引号&#39;')
+    expect(back).not.toContain('他说"你好"')
+  })
+  it('大白话：bg 颜色值经 esc 内插——带引号的注入串不裸插成新属性', () => {
+    const front = buildFrontSvg(dirty, 'https://tmp/a"onload="x.jpg')
+    expect(front).not.toContain('" onload="') // 旧裸内插会产出 fill="#fff" onload="evil()"
+    expect(front).toContain('fill="#fff&quot; onload=&quot;evil()"')
+    expect(front).toContain('href="https://tmp/a&quot;onload=&quot;x.jpg"') // artHref 引号同样收口
+    const back = buildBackSvg(dirty)
+    expect(back).not.toContain(`' x="1`) // 旧裸内插会产出 fill="#fff' x="1"（注意别只查 x="1——rx="1.5" 会误命中）
+    expect(back).toContain('fill="#fff&#39; x=&quot;1"')
+  })
+})

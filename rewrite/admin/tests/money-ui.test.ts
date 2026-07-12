@@ -3,6 +3,7 @@
 import { describe, it, expect } from 'vitest'
 import { mapDashboard, mapOrderRows, mapRefundRows, maskPhone, refundVerdict, deriveDashboardTodos } from '../src/lib/mapMoney'
 import ordersSrc from '../src/pages/Orders.vue?raw'
+import refundsSrc from '../src/pages/Refunds.vue?raw'
 
 describe('deriveDashboardTodos（待处理计数：加载失败别伪装成 0/全清·病根#14）', () => {
   it('大白话：某路计数加载失败时 partial=true——上层据此不把「加载失败」显示成绿色「今日无待处理」', () => {
@@ -207,6 +208,23 @@ describe('退款判据文案（绑本单订单行·非课程级·根因#8 判据
 // Orders.vue 抽屉商品行 :key 行身份（深审20260712·P3 撞键·取真源法）：旧 key 裸用 productId，
 // 同一 productId 多规格（多 lineId）同单必撞 Vue key；行身份契约是 lineId=productId__spec
 // （cloud app/actions/orders.ts lineIdOf 单源），VM 未透传 lineId 故模板按契约就地重建。
+// Refunds.vue openDecide 判据加载失败不得渲绿（深审20260712·P2·根因#14/#8·取真源法同上）：getRefundDetail
+// 网络失败时 r.ok=false、无 activation/lineRefundable 字段，旧代码不检查 r.ok 直接组 verdict →
+// activated:false + lineRefundable 默认 true 渲成确定的绿色「激活码未使用·可退」误导审核员同意退款。
+describe('Refunds.vue openDecide 判据失败分支（失败不渲绿判据·decideErr 红条亮）', () => {
+  const body = refundsSrc.slice(refundsSrc.indexOf('async function openDecide'), refundsSrc.indexOf('function closeDecide'))
+  it('大白话：r.ok=false → verdict 置 null（判据区不渲绿）+ decideErr 给原因 + return——绝不落入组判据；成功组装必在失败检查之后', () => {
+    expect(body).toMatch(/if\s*\(!r\.ok\)\s*\{[\s\S]*?verdict\.value = null[\s\S]*?decideErr\.value = '判据加载失败：'[\s\S]*?return[\s\S]*?\}/)
+    expect(body.search(/if\s*\(!r\.ok\)/)).toBeGreaterThan(-1)
+    expect(body.search(/if\s*\(!r\.ok\)/)).toBeLessThan(body.indexOf('loading: false')) // 组 verdict（loading:false）只在 ok 检查通过后可达
+    expect(body.indexOf('loading: false')).toBeGreaterThan(-1)
+  })
+  it('大白话：判据失败时模板给「重新加载判据」重试入口（verdict=null 才显）', () => {
+    expect(refundsSrc).toMatch(/v-else-if="!verdict"[^>]*@click="openDecide\(decideRow\)"/)
+    expect(refundsSrc).toContain('重新加载判据')
+  })
+})
+
 describe('Orders.vue 抽屉商品行 :key 用行身份 productId__spec', () => {
   it('大白话：key 带 spec（=后端 lineId 契约）——同品多规格同单不撞键；旧裸 productId 写法不再存在', () => {
     expect(ordersSrc).toMatch(/v-for="it in drawer\.row\.items" :key="\(it\.productId \|\| it\.name\) \+ '__' \+ it\.spec"/)

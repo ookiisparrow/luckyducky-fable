@@ -56,7 +56,7 @@ export function createStatusController(
 // 工作台单屏（M3 批8）：左=待接队列+我在接；中=会话窗（3s 轮询·卸载清理·合并去重）；右=360 侧栏（双闸）。
 import { ref, onMounted, onBeforeUnmount } from 'vue'
 import { post, logout } from './api/client'
-import { mergeThread, advanceCursor, mapQueue, deskErrorText, type Msg, type QueueItem } from './lib/desk'
+import { mergeThread, advanceCursor, mapQueue, deskErrorText, keyOf, type Msg, type QueueItem } from './lib/desk'
 
 const emit = defineEmits<{ logout: [] }>()
 
@@ -214,7 +214,9 @@ onBeforeUnmount(() => {
       <p v-if="message" class="status">{{ message }}</p>
       <template v-if="currentId">
         <div class="thread">
-          <div v-for="m in msgs" :key="m.at + m.direction + m.text" class="bubble" :class="m.direction">
+          <!-- :key 与 lib/desk.ts 去重键 keyOf 同源（深审20260712 P2）：旧 at+direction+text 键在同秒同向
+               两张图（msgid 不同、text 恒为占位）时撞 Vue 重复 key——去重键已认 msgid，key 必须同源防再漂移 -->
+          <div v-for="m in msgs" :key="keyOf(m)" class="bubble" :class="m.direction">
             <span class="text">{{ m.text || '[' + (m.msgtype || '非文本') + ']' }}</span>
           </div>
         </div>
