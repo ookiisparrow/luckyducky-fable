@@ -1,5 +1,5 @@
-import { COLLECTIONS } from '@ldrw/shared'
-import { getDb, ok, getTempUrls } from '../../../kit'
+import { COLLECTIONS, ERR } from '@ldrw/shared'
+import { getDb, ok, err, getTempUrls } from '../../../kit'
 
 /** cloud:// 裸 fileID 判定（区分「需服务端换址」vs 已是 https / 空串——两者原样透传）。 */
 const isCloudId = (v: unknown): v is string => typeof v === 'string' && v.startsWith('cloud://')
@@ -78,5 +78,30 @@ export const getContent = async () => {
     return ok({ home })
   } catch {
     return ok({ home: null })
+  }
+}
+
+/**
+ * 页面内容 CMS 公开只读（批A·5 页可编辑内容·写侧样板 adminApi/content.savePageContent）：
+ * content 集合每页一 doc（_id=page 键名），未知 page fail-closed 拒（同白名单·根因#3 不信前端·守卫
+ * rw-cloud-page-content-sanitized）。catalogPlayer.catalog.heroImage 若为 cloud:// fileID，服务端换临时
+ * URL 再下发（fileID 不出口·同 swapHomeImages/getProducts 换址口径与 fail-soft 权衡）；无文档返回 null。
+ */
+const PAGE_KEYS = ['welcome', 'catalogPlayer', 'mePage', 'about', 'agreement']
+export const getPageContent = async (data: any) => {
+  const page = String((data && data.page) || '')
+  if (!PAGE_KEYS.includes(page)) return err(ERR.BAD_ARGS, { page }) // 未知 page fail-closed（同 adminApi 白名单·根因#3）
+  const db = getDb()
+  try {
+    const got = await db.collection(COLLECTIONS.content).doc(page).get()
+    const content: any = got.data || null
+    // catalogPlayer.catalog.heroImage：cloud:// 换临时 URL（fileID 不出口·fail-soft 换不到回退原 fileID）
+    if (content && page === 'catalogPlayer' && content.catalog && isCloudId(content.catalog.heroImage)) {
+      const urlMap = await getTempUrls([content.catalog.heroImage])
+      content.catalog.heroImage = swapUrl(content.catalog.heroImage, urlMap)
+    }
+    return ok({ page, content })
+  } catch {
+    return ok({ page, content: null })
   }
 }

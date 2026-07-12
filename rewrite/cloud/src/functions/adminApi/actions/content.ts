@@ -71,6 +71,114 @@ export async function saveHomeContent({ db, data }: Ctx) {
   return reply(200, { ok: true })
 }
 
+// —— 页面内容 CMS（批A·5 页可编辑：欢迎流/目录+播放页求助/我的/关于/协议）——
+// 承 saveHomeContent 样板（白名单净化·str 限长·数组封顶·.doc().set 带 .add 回退）；每页一独立净化函数，
+// 未知字段丢弃、未知 page fail-closed 拒（信任边界·根因#3 不信前端·守卫 rw-cloud-page-content-sanitized）。
+// content 集合每页一 doc（_id=page 键名）；小程序公开读经 app/catalog.getPageContent（catalogPlayer.catalog.heroImage
+// 若 cloud:// 换临时 URL，fileID 不出口·照 swapHomeImages 模式）。
+const PAGES = ['welcome', 'catalogPlayer', 'mePage', 'about', 'agreement'] as const
+const arrOf = (v: any, cap: number) => (Array.isArray(v) ? v : []).slice(0, cap)
+
+// 欢迎流（W1 恭喜屏 + W2 三件事）：w1 单屏文案 + w2 至多 3 条清单。
+function sanitizeWelcome(d: any) {
+  return {
+    w1: { title: str(d?.w1?.title, 60), sub: str(d?.w1?.sub, 120), warning: str(d?.w1?.warning, 120) },
+    w2: { items: arrOf(d?.w2?.items, 3).map((it: any) => ({ title: str(it?.title, 60), desc: str(it?.desc, 2000) })) },
+  }
+}
+
+// 课程目录页 hero/续播/空态 + 播放页求助面板三栏标题 + FAQ（至多 20 条）。heroImage 存云存储 fileID。
+function sanitizeCatalogPlayer(d: any) {
+  return {
+    catalog: {
+      heroImage: str(d?.catalog?.heroImage, 200),
+      resumeCta: str(d?.catalog?.resumeCta, 40),
+      emptyLesson: str(d?.catalog?.emptyLesson, 40),
+    },
+    help: {
+      contactTitle: str(d?.help?.contactTitle, 60),
+      videosTitle: str(d?.help?.videosTitle, 60),
+      faqTitle: str(d?.help?.faqTitle, 60),
+      faq: arrOf(d?.help?.faq, 20).map((f: any) => ({ q: str(f?.q, 120), a: str(f?.a, 1000) })),
+    },
+  }
+}
+
+// 「我」页默认昵称 + 入口列（至多 12 条）。key 只认固定集（以 rewrite/mp/pages/me 实际入口为准·侦察结论修正）：
+// courses（全部教程）/orders（我的订单）/aftersales（售后）/address（收货地址）/activate（输入激活码）/
+// feedback（意见反馈）/kefu（联系客服）/consent（数据共享授权）/about（关于我们）——不认集外键（丢弃）。
+const ME_ENTRY_KEYS = ['courses', 'orders', 'aftersales', 'address', 'activate', 'feedback', 'kefu', 'consent', 'about']
+function sanitizeMePage(d: any) {
+  return {
+    defaultNickname: str(d?.defaultNickname, 20),
+    entries: arrOf(d?.entries, 12)
+      .map((e: any) => ({ key: str(e?.key, 40), label: str(e?.label, 60), visible: e?.visible !== false }))
+      .filter((e: any) => ME_ENTRY_KEYS.includes(e.key)), // 集外 key 丢弃（fail-closed·根因#3）
+  }
+}
+
+// 关于我们：引言 + 至多 10 段。
+function sanitizeAbout(d: any) {
+  return {
+    lead: str(d?.lead, 200),
+    sections: arrOf(d?.sections, 10).map((s: any) => ({ title: str(s?.title, 60), body: str(s?.body, 2000) })),
+  }
+}
+
+// 协议页（用户协议 user + 隐私政策 privacy 两份·各至多 30 段）。history 由服务端追加、客户端传的忽略（见 savePageContent）。
+function sanitizeAgreementDoc(d: any) {
+  const clause = (c: any) => ({
+    version: str(c?.version, 20),
+    effectiveDate: str(c?.effectiveDate, 20),
+    sections: arrOf(c?.sections, 30).map((s: any) => ({ title: str(s?.title, 60), body: str(s?.body, 2000) })),
+  })
+  return { user: clause(d?.user), privacy: clause(d?.privacy) }
+}
+
+const PAGE_SANITIZERS: Record<string, (d: any) => any> = {
+  welcome: sanitizeWelcome,
+  catalogPlayer: sanitizeCatalogPlayer,
+  mePage: sanitizeMePage,
+  about: sanitizeAbout,
+  agreement: sanitizeAgreementDoc,
+}
+
+export async function savePageContent({ db, data }: Ctx) {
+  const page = str(data.page, 40)
+  if (!PAGES.includes(page as any)) return reply(400, { ok: false, error: 'UNKNOWN_PAGE' }) // 未知 page fail-closed（根因#3）
+  const clean: any = PAGE_SANITIZERS[page](data.data || {})
+  await ensure(db, 'content')
+  const coll = db.collection('content')
+  if (page === 'agreement') {
+    // history 服务端权威追加（客户端传的一律忽略·防伪造版本史）：读旧份逐 part 比对 version，非空且变更即追
+    // {part,version,at:ISO}，封顶 10（保留末 10 条·同 issueSession 剪最旧手法）。
+    const prev = await coll.doc('agreement').get().catch(() => null)
+    const prevData: any = (prev && prev.data) || {}
+    const prevHist = Array.isArray(prevData.history) ? prevData.history : []
+    const additions: any[] = []
+    for (const part of ['user', 'privacy'] as const) {
+      const v = clean[part]?.version
+      if (v && v !== prevData[part]?.version) additions.push({ part, version: v, at: new Date().toISOString() })
+    }
+    clean.history = [...prevHist, ...additions].slice(-10)
+  }
+  const doc = { ...clean, updatedAt: Date.now() }
+  await coll
+    .doc(page)
+    .set({ data: doc })
+    .catch(async () => {
+      await coll.add({ data: { ...doc, _id: page } })
+    })
+  return reply(200, { ok: true })
+}
+
+export async function getPageContent({ db, data }: Ctx) {
+  const page = str(data.page, 40)
+  if (!PAGES.includes(page as any)) return reply(400, { ok: false, error: 'UNKNOWN_PAGE' }) // 未知 page fail-closed（根因#3）
+  const got = await db.collection('content').doc(page).get().catch(() => null)
+  return reply(200, { ok: true, page, content: (got && got.data) || null })
+}
+
 // —— 求助面板「辅助视频」（全局共用·所有课程同一份；存 content 集合 doc 'helpVideos'）——
 // 小程序播放页求助面板「遇到问题了」列表即此；控制台「帮助视频」增删改 + 上传视频（复用 getVideoUploadMeta 直传）。
 // 管理端读回原始 videoFileId（已过口令闸）便于显「已传」/保存；小程序公开读经 catalog/getHelpVideos 换临时 URL（fileID 不出口）。

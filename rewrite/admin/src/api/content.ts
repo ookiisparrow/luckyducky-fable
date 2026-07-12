@@ -6,6 +6,9 @@ import { uploadFormFields } from '../lib/mapContent'
 
 export const getHomeContent = () => client.post('getHomeContent')
 export const saveHomeContent = (home: Record<string, unknown>) => client.post('saveHomeContent', { home })
+// 页面内容 CMS（批C·五页签，云端 adminApi/content.ts）：page ∈ welcome|catalogPlayer|mePage|about|agreement
+export const getPageContent = (page: string) => client.post('getPageContent', { page })
+export const savePageContent = (page: string, data: Record<string, unknown>) => client.post('savePageContent', { page, data })
 export const listHelpVideos = () => client.post('listHelpVideos')
 export const saveHelpVideos = (items: unknown[]) => client.post('saveHelpVideos', { items })
 export const getCourseDraft = (courseId: string) => client.post('getCourseDraft', { courseId })

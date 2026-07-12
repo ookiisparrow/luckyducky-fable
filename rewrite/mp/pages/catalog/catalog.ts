@@ -3,9 +3,11 @@
 // 课程结构走 lib/courses 会话缓存（本会话内不变·根因账本#15）；学习进度每次实时（onShow 重拉，同
 // my-courses.ts 注释口径）；hero 背景图与目录/进度拉取并行发起，互不阻塞（同 welcome.ts homeReady 范式）。
 import { getContent } from '../../api/catalog'
+import { getPageContent } from '../../lib/pageContent'
 import { getCourseById } from '../../lib/courses'
 import { getMyProgress } from '../../api/user'
 import { mapCatalog, bgFor, type CatalogChapterVM } from '../../lib/mapLearning'
+import { mapCatalogPlayer } from '../../lib/mapPages'
 import type { ApiResult } from '../../utils/cloud'
 
 Page({
@@ -16,8 +18,15 @@ Page({
     bg: '',
     chapters: [] as CatalogChapterVM[],
     continueTarget: null as { segmentId: string; lessonId: string; lessonName: string } | null,
+    resumeCta: mapCatalogPlayer(null).catalog.resumeCta, // 「开始学习」CTA 文案·首帧默认（CMS 到达覆盖）
   },
   home: null as unknown,
+  cmsHero: undefined as string | undefined, // CMS hero 图（优先于 bgFor 回退链·空则走既有链，见 applyHero）
+  emptyLessonText: mapCatalogPlayer(null).catalog.emptyLesson, // 课时空态 toast 文案（onTapLesson·CMS 到达覆盖）
+  unloaded: false, // 已退页标记（await 恢复点复核·同 welcome 范式）
+  onUnload() {
+    this.unloaded = true
+  },
   // hero 背景图请求（与 onShow 的目录+进度请求并行，互不依赖，省一次串行往返；页实例持有——同 welcome.ts
   // homeReady 注释：跟着本次 onLoad 走，避免跨实例复用陈旧 promise）。
   homeReady: null as Promise<ApiResult> | null,
@@ -34,8 +43,26 @@ Page({
     void this.homeReady.then((content) => {
       // fail-soft：拿不到内容→home 置空，bgFor 走回退链落空串，hero 渲染渐变占位，不阻塞目录本体。
       this.home = content.ok ? content.home : null
-      this.setData({ bg: bgFor(this.home, courseId, 'activated') })
+      this.applyHero()
     })
+    void this.loadPageContent() // CMS 续播 CTA/空态文案/hero 图·与目录本体互不依赖，并行发起
+  },
+  // CMS 目录页文案（fail-soft·拉不到维持默认）：resumeCta setData 覆盖 CTA；heroImage 优先于 bgFor（applyHero）；
+  // emptyLesson 存实例字段供 onTapLesson 取。await 恢复点复核 unloaded（守卫纪律）。
+  async loadPageContent() {
+    const content = await getPageContent('catalogPlayer')
+    if (this.unloaded) return
+    const vm = mapCatalogPlayer(content)
+    this.cmsHero = vm.catalog.heroImage
+    this.emptyLessonText = vm.catalog.emptyLesson
+    this.setData({ resumeCta: vm.catalog.resumeCta })
+    this.applyHero()
+  },
+  // hero 背景：CMS heroImage 优先，空则走既有 bgFor 回退链（只加一层优先·不改回退链本身）。
+  applyHero() {
+    const courseId = this.data.courseId
+    if (!courseId) return
+    this.setData({ bg: this.cmsHero || bgFor(this.home, courseId, 'activated') })
   },
   async onShow() {
     const courseId = this.data.courseId
@@ -63,7 +90,7 @@ Page({
   onTapLesson(e: WechatMiniprogram.TouchEvent) {
     const segId = String(e.currentTarget.dataset.seg || '')
     if (!segId) {
-      wx.showToast({ title: '这节课还在整理中', icon: 'none' })
+      wx.showToast({ title: this.emptyLessonText, icon: 'none' }) // CMS 空态文案·回退默认「这节课还在整理中」
       return
     }
     wx.navigateTo({ url: '/pages/player/player?courseId=' + this.data.courseId + '&segmentId=' + segId })

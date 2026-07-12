@@ -13,7 +13,7 @@ const Refunds = () => import('./pages/Refunds.vue')
 const Products = () => import('./pages/Products.vue')
 const Wizard = () => import('./pages/Wizard.vue')
 const Showcase = () => import('./pages/Showcase.vue')
-const HomeContent = () => import('./pages/HomeContent.vue')
+const PageContent = () => import('./pages/PageContent.vue')
 const HelpVideos = () => import('./pages/HelpVideos.vue')
 const Courses = () => import('./pages/Courses.vue')
 const Cards = () => import('./pages/Cards.vue')
@@ -40,6 +40,8 @@ export const router = createRouter({
   history: createWebHashHistory(),
   routes: [
     { path: '/login', component: Login },
+    // 旧「首页内容」入口重定向到统一的「页面内容」工作台（批C·顶层绝对 path＝导航同步守卫不当孤儿页核）
+    { path: '/home-content', redirect: '/page-content' },
     {
       path: '/',
       component: Shell,
@@ -51,7 +53,7 @@ export const router = createRouter({
         { path: 'products', component: Products },
         { path: 'products/:id/wizard', component: Wizard }, // 上新分步向导（带参·nav-route 守卫豁免孤儿页检查）
         { path: 'showcase', component: Showcase },
-        { path: 'home-content', component: HomeContent },
+        { path: 'page-content', component: PageContent }, // 页面内容五页签工作台（批C·首页内容并入）
         { path: 'help-videos', component: HelpVideos },
         { path: 'courses', component: Courses },
         { path: 'cards', component: Cards },

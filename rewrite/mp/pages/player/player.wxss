@@ -660,6 +660,28 @@
   color: var(--ld-content-2);
 }
 
+/* 常见问题问答列表（批B·CMS help.faq 非空时渲染·白卡逐条·空态见 lp-help-empty） */
+.lp-help-faq {
+  display: flex;
+  flex-direction: column;
+  gap: 11rpx;
+  background: #ffffff;
+  border: 1rpx solid var(--ld-line);
+  border-radius: 30rpx;
+  padding: 26rpx;
+  margin-bottom: 22rpx;
+}
+.lp-help-faq-q {
+  font-size: 28rpx;
+  font-weight: 700;
+  color: var(--ld-ink);
+}
+.lp-help-faq-a {
+  font-size: 26rpx;
+  line-height: 1.6;
+  color: var(--ld-content-2);
+}
+
 /* 帮助视频/常见问题空态（loading/empty 共用容器，文案由 wxml 分支） */
 .lp-help-empty {
   flex: 1;

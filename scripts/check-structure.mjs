@@ -4508,6 +4508,122 @@ export const repoChecks = [
     },
   },
   {
+    // 页面内容 CMS 白名单净化（批A·5 页可编辑内容云读写链）——信任边界 fail-closed（根因#3 不信前端）：
+    // adminApi 写侧每页独立净化 + 未知 page 拒；app 读侧同白名单 fail-closed。承 saveHomeContent/getContent 样板。
+    // 函数体断言走 setupFnBody（顶层 export async function·非对象方法·methodBody 收尾启发式不适配）+ stripComments
+    // 单源 helper（错题本 E1/E10：取真源须对剥注释后函数体匹配，防注释文本假触发/假放行）。
+    id: 'rw-cloud-page-content-sanitized',
+    roots: ['#3'],
+    desc: '页面内容 CMS 白名单净化（批A·信任边界 fail-closed·根因#3 不信前端）：① adminApi actions/content.ts 有 savePageContent，其函数体（剥注释后·setupFnBody 单源 helper）经 PAGES 白名单 gate 未知 page → fail-closed（UNKNOWN_PAGE），且 5 页各有独立净化函数（sanitizeWelcome/sanitizeCatalogPlayer/sanitizeMePage/sanitizeAbout/sanitizeAgreementDoc 均须定义）；getPageContent 同 fail-closed ② app actions/catalog.ts getPageContent 有同 5 键白名单且未知 page fail-closed（BAD_ARGS）。反向自检：删 content.ts PAGES 任一键 / 删 catalog.ts 白名单键 / 抹 UNKNOWN_PAGE 拒 → 本守卫红',
+    run() {
+      const bad = []
+      const PAGES = ['welcome', 'catalogPlayer', 'mePage', 'about', 'agreement']
+      const adminPath = join(ROOT, 'rewrite/cloud/src/functions/adminApi/actions/content.ts')
+      const appPath = join(ROOT, 'rewrite/cloud/src/functions/app/actions/catalog.ts')
+      if (!existsSync(adminPath)) {
+        bad.push('rewrite/cloud/src/functions/adminApi/actions/content.ts 缺失——页面内容 CMS 写侧无处（正册 P1）')
+        return bad
+      }
+      const adminSrc = stripComments(readFileSync(adminPath, 'utf8')) // 剥注释单源 helper（错题本 E1/E10）：防注释假触发
+      // ① 5 页独立净化函数须定义（每页白名单一函数·根因#3）
+      for (const s of ['sanitizeWelcome', 'sanitizeCatalogPlayer', 'sanitizeMePage', 'sanitizeAbout', 'sanitizeAgreementDoc'])
+        if (!new RegExp(`function\\s+${s}\\b`).test(adminSrc))
+          bad.push(`content.ts 缺每页净化函数 ${s}——未净化即入库（根因#3 不信前端）`)
+      // ② PAGES 白名单数组字面量含全部 5 键（对 const PAGES = [...] 内断言·不全文匹配·防 welcome 等键与无关字符串串味假绿）
+      const pagesLit = (adminSrc.match(/const PAGES\s*=\s*\[([^\]]*)\]/) || [])[1] || ''
+      if (!pagesLit) bad.push('content.ts 找不到 const PAGES 白名单数组——未知 page 无处 fail-closed（根因#3）')
+      for (const p of PAGES)
+        if (!new RegExp(`['"]${p}['"]`).test(pagesLit)) bad.push(`content.ts PAGES 白名单缺键「${p}」——该页无法保存或漏净化`)
+      // ③ savePageContent 函数体经 PAGES gate + UNKNOWN_PAGE fail-closed
+      const saveBody = setupFnBody(adminSrc, 'savePageContent')
+      if (!saveBody) bad.push('content.ts 找不到 savePageContent 函数体——CMS 写侧缺失')
+      else {
+        if (!/PAGES\b/.test(saveBody)) bad.push('savePageContent 未经 PAGES 白名单 gate——未知 page 会被放行（信任边界·根因#3）')
+        if (!/UNKNOWN_PAGE/.test(saveBody)) bad.push('savePageContent 缺 UNKNOWN_PAGE fail-closed 拒——未知 page 未 fail-closed（根因#3）')
+      }
+      const getBody = setupFnBody(adminSrc, 'getPageContent')
+      if (!getBody) bad.push('content.ts 找不到 getPageContent 函数体——CMS 读回侧缺失')
+      else if (!/UNKNOWN_PAGE/.test(getBody))
+        bad.push('content.ts getPageContent 缺 UNKNOWN_PAGE fail-closed 拒未知 page（根因#3）')
+      // ④ app 公开读侧同白名单 fail-closed（catalog.ts getPageContent）
+      if (!existsSync(appPath)) {
+        bad.push('rewrite/cloud/src/functions/app/actions/catalog.ts 缺失——公开读侧无处')
+        return bad
+      }
+      const appSrc = stripComments(readFileSync(appPath, 'utf8'))
+      if (!/getPageContent/.test(appSrc)) bad.push('app/catalog.ts 缺 getPageContent——公开读链未接（批A）')
+      const appPagesLit = (appSrc.match(/const PAGE_KEYS\s*=\s*\[([^\]]*)\]/) || [])[1] || ''
+      if (!appPagesLit) bad.push('app/catalog.ts 找不到 const PAGE_KEYS 白名单数组——公开读侧未知 page 无处 fail-closed（根因#3）')
+      for (const p of PAGES)
+        if (!new RegExp(`['"]${p}['"]`).test(appPagesLit))
+          bad.push(`app/catalog.ts 白名单缺键「${p}」——公开读侧 fail-closed 白名单不全（根因#3）`)
+      if (!/BAD_ARGS|UNKNOWN_PAGE/.test(appSrc)) bad.push('app/catalog.ts getPageContent 未 fail-closed 拒未知 page（根因#3）')
+      return bad
+    },
+  },
+  {
+    // 五页 CMS 内容映射接线（批B·mp 五页文案 CMS 优先·硬编码降级为默认回退·守卫先红后绿）：把「硬编码文案
+    // 变 mapper 默认值、CMS 拉不到/字段空→默认」这条不变量焊死——① golden 测试覆盖五 mapper 整档 null→默认
+    // 回退（防误清空/空屏·黄金 §九 mp 侧）；② 五页面 ts 经 lib/mapPages 映射层 + lib/pageContent 会话缓存层
+    // 取内容（不各自散拉、不绕 mapper 直写硬编码）。取内容方法体断言走 methodBody + stripComments 单源 helper
+    // （错题本 E1/E10：对剥注释后的函数体匹配，防注释文本假触发/假放行）。roots 照 rw-mp-home-golden（#8 展示面
+    // fail-soft·「构建过≠真机不空屏」那半边）。反向自检：删 golden 用例 / 某页绕过 mapper 直写文案 / 删缓存层
+    // import → 本守卫红。
+    id: 'rw-mp-page-content-golden',
+    roots: ['#8'],
+    desc: '五页 CMS 内容映射接线（rewrite/mp·批B·根因#8 展示面 fail-soft）：① golden 测试 rewrite/mp/tests/pages-map.test.ts 存在且覆盖五 mapper（mapWelcome/mapCatalogPlayer/mapMe/mapAbout/mapAgreement）整档 null→默认回退 ② 五页面（welcome/catalog/player/me/about/agreement）各经 lib/pageContent 缓存层 getPageContent + lib/mapPages 映射层取内容——对剥注释后的取内容方法体断言（methodBody+stripComments 单源 helper·E1/E10），防绕过 mapper 直写硬编码/删缓存层/删 golden 用例',
+    run() {
+      const bad = []
+      const base = join(ROOT, 'rewrite/mp')
+      if (!existsSync(base)) return []
+      const MAPPERS = ['mapWelcome', 'mapCatalogPlayer', 'mapMe', 'mapAbout', 'mapAgreement']
+      // ① golden 测试存在且覆盖五 mapper 整档 null→默认回退
+      const testRel = 'rewrite/mp/tests/pages-map.test.ts'
+      const testAbs = join(ROOT, testRel)
+      if (!existsSync(testAbs)) {
+        bad.push(`${testRel} 缺失——五 mapper 默认回退无 golden 钉行为（批B·根因#8）`)
+      } else {
+        const testSrc = readFileSync(testAbs, 'utf8')
+        for (const m of MAPPERS) {
+          if (!testSrc.includes(m)) bad.push(`${testRel} 未覆盖 ${m}——五 mapper 黄金不全（批B）`)
+          if (!new RegExp(`${m}\\s*\\(\\s*null\\s*\\)`).test(testSrc))
+            bad.push(`${testRel} 缺 ${m}(null) 整档回退用例——默认回退未钉（黄金 §九·防空屏）`)
+        }
+      }
+      // ② 五页面经 mapPages 映射层 + pageContent 缓存层取内容（对剥注释函数体断言·E1/E10）
+      const WIRES = [
+        { file: 'pages/welcome/welcome.ts', method: 'loadPageContent', mapper: 'mapWelcome' },
+        { file: 'pages/catalog/catalog.ts', method: 'loadPageContent', mapper: 'mapCatalogPlayer' },
+        { file: 'pages/player/player.ts', method: 'loadPageContent', mapper: 'mapCatalogPlayer' },
+        { file: 'pages/me/me.ts', method: 'refresh', mapper: 'mapMe' },
+        { file: 'pages/about/about.ts', method: 'loadPageContent', mapper: 'mapAbout' },
+        { file: 'pages/agreement/agreement.ts', method: 'loadPageContent', mapper: 'mapAgreement' },
+      ]
+      for (const w of WIRES) {
+        const abs = join(base, w.file)
+        if (!existsSync(abs)) {
+          bad.push(`rewrite/mp/${w.file} 缺失——CMS 内容接线点位丢失（批B）`)
+          continue
+        }
+        const src = stripComments(readFileSync(abs, 'utf8')) // 剥注释单源 helper（错题本 E1/E10）：防注释假触发/假放行
+        if (!/from\s*['"][^'"]*lib\/mapPages['"]/.test(src))
+          bad.push(`rewrite/mp/${w.file} 未从 lib/mapPages 引入映射层——文案未经 mapper 回退（批B·根因#8）`)
+        if (!/from\s*['"][^'"]*lib\/pageContent['"]/.test(src))
+          bad.push(`rewrite/mp/${w.file} 未从 lib/pageContent 引入会话缓存层——CMS 内容各自散拉（病根#15 精神·批B）`)
+        const body = methodBody(src, w.method)
+        if (!body) {
+          bad.push(`rewrite/mp/${w.file} 找不到取内容方法 ${w.method}——CMS 接线缺失（批B）`)
+          continue
+        }
+        if (!new RegExp(`${w.mapper}\\s*\\(`).test(body))
+          bad.push(`rewrite/mp/${w.file} 方法 ${w.method} 未调用 ${w.mapper}(——绕过 mapper 直写硬编码（批B·根因#8 展示面 fail-soft）`)
+        if (!/getPageContent\s*\(/.test(body))
+          bad.push(`rewrite/mp/${w.file} 方法 ${w.method} 未经 getPageContent 缓存层取内容（批B·单源收口）`)
+      }
+      return bad
+    },
+  },
+  {
     // 新线镜像 privacy-authorize-wired（R27㉒）+ consent 页（cs-data-share-consented 的 C 端半边）。
     // 原生形态：app.json __usePrivacyCheck__ + lib/privacyGate 挂 onNeedPrivacyAuthorization + app.ts 启动注册
     // + privacy-sheet 组件（agreePrivacyAuthorization 能力按钮）；涉隐私接口页扫描制——哪页调隐私接口哪页必挂

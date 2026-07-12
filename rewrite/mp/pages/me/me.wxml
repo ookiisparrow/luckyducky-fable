@@ -26,8 +26,8 @@
           <image class="ld-me-sec-ico" src="/static/icons/graduation-cap.svg" mode="aspectFit" />
           <text>{{cont ? '继续学习' : '学习记录'}}</text>
         </view>
-        <view wx:if="{{cont}}" class="ld-me-sec-more" bind:tap="onCourses">
-          <text>全部教程</text>
+        <view wx:if="{{cont && entries.courses.visible}}" class="ld-me-sec-more" bind:tap="onCourses">
+          <text>{{entries.courses.label}}</text>
           <image class="ld-me-sec-more-ico" src="/static/icons/chevron-right.svg" mode="aspectFit" />
         </view>
       </view>
@@ -65,8 +65,8 @@
     <view class="ld-me-card ld-me-card-pad">
       <view class="ld-me-sec-head">
         <view class="ld-me-sec-title"><text>我的订单</text></view>
-        <view class="ld-me-sec-more" bind:tap="onOrders">
-          <text>全部订单</text>
+        <view wx:if="{{entries.orders.visible}}" class="ld-me-sec-more" bind:tap="onOrders">
+          <text>{{entries.orders.label}}</text>
           <image class="ld-me-sec-more-ico" src="/static/icons/chevron-right.svg" mode="aspectFit" />
         </view>
       </view>
@@ -83,43 +83,43 @@
           <view class="ld-me-order-ico"><image class="ld-me-order-img" src="/static/icons/truck.svg" mode="aspectFit" /></view>
           <text class="ld-me-order-label">待收货</text>
         </view>
-        <view class="ld-me-order" bind:tap="onAfterSales" hover-class="ld-me-order-h">
+        <view wx:if="{{entries.aftersales.visible}}" class="ld-me-order" bind:tap="onAfterSales" hover-class="ld-me-order-h">
           <view class="ld-me-order-ico"><image class="ld-me-order-img" src="/static/icons/rotate-ccw.svg" mode="aspectFit" /></view>
-          <text class="ld-me-order-label">售后</text>
+          <text class="ld-me-order-label">{{entries.aftersales.label}}</text>
         </view>
       </view>
     </view>
 
     <!-- 常用入口列 -->
     <view class="ld-me-card ld-me-list">
-      <view class="ld-me-row" bind:tap="onAddress" hover-class="ld-me-row-h">
+      <view wx:if="{{entries.address.visible}}" class="ld-me-row" bind:tap="onAddress" hover-class="ld-me-row-h">
         <view class="ld-me-row-ico"><image class="ld-me-row-img" src="/static/icons/map-pin.svg" mode="aspectFit" /></view>
-        <text class="ld-me-row-label">收货地址</text>
+        <text class="ld-me-row-label">{{entries.address.label}}</text>
         <image class="ld-me-row-chev" src="/static/icons/chevron-right.svg" mode="aspectFit" />
       </view>
-      <view class="ld-me-row" bind:tap="onActivate" hover-class="ld-me-row-h">
+      <view wx:if="{{entries.activate.visible}}" class="ld-me-row" bind:tap="onActivate" hover-class="ld-me-row-h">
         <view class="ld-me-row-ico"><image class="ld-me-row-img" src="/static/icons/ticket.svg" mode="aspectFit" /></view>
-        <text class="ld-me-row-label">输入激活码</text>
+        <text class="ld-me-row-label">{{entries.activate.label}}</text>
         <image class="ld-me-row-chev" src="/static/icons/chevron-right.svg" mode="aspectFit" />
       </view>
-      <view class="ld-me-row" bind:tap="onFeedback" hover-class="ld-me-row-h">
+      <view wx:if="{{entries.feedback.visible}}" class="ld-me-row" bind:tap="onFeedback" hover-class="ld-me-row-h">
         <view class="ld-me-row-ico"><image class="ld-me-row-img" src="/static/icons/message-circle.svg" mode="aspectFit" /></view>
-        <text class="ld-me-row-label">意见反馈</text>
+        <text class="ld-me-row-label">{{entries.feedback.label}}</text>
         <image class="ld-me-row-chev" src="/static/icons/chevron-right.svg" mode="aspectFit" />
       </view>
-      <view class="ld-me-row" bind:tap="onKefu" hover-class="ld-me-row-h">
+      <view wx:if="{{entries.kefu.visible}}" class="ld-me-row" bind:tap="onKefu" hover-class="ld-me-row-h">
         <view class="ld-me-row-ico"><image class="ld-me-row-img" src="/static/icons/headphones.svg" mode="aspectFit" /></view>
-        <text class="ld-me-row-label">联系客服</text>
+        <text class="ld-me-row-label">{{entries.kefu.label}}</text>
         <image class="ld-me-row-chev" src="/static/icons/chevron-right.svg" mode="aspectFit" />
       </view>
-      <view class="ld-me-row" bind:tap="onConsent" hover-class="ld-me-row-h">
+      <view wx:if="{{entries.consent.visible}}" class="ld-me-row" bind:tap="onConsent" hover-class="ld-me-row-h">
         <view class="ld-me-row-ico"><image class="ld-me-row-img" src="/static/icons/shield-check.svg" mode="aspectFit" /></view>
-        <text class="ld-me-row-label">数据共享授权</text>
+        <text class="ld-me-row-label">{{entries.consent.label}}</text>
         <image class="ld-me-row-chev" src="/static/icons/chevron-right.svg" mode="aspectFit" />
       </view>
-      <view class="ld-me-row" bind:tap="onAbout" hover-class="ld-me-row-h">
+      <view wx:if="{{entries.about.visible}}" class="ld-me-row" bind:tap="onAbout" hover-class="ld-me-row-h">
         <view class="ld-me-row-ico"><image class="ld-me-row-img" src="/static/icons/info.svg" mode="aspectFit" /></view>
-        <text class="ld-me-row-label">关于我们</text>
+        <text class="ld-me-row-label">{{entries.about.label}}</text>
         <image class="ld-me-row-chev" src="/static/icons/chevron-right.svg" mode="aspectFit" />
       </view>
     </view>
