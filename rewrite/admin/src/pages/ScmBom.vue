@@ -25,6 +25,8 @@ watch(template, () => { if (!tplGuard) tplDirty.value = true }, { deep: true })
 const profiles = ref<Array<Record<string, any>>>([])
 const mats = ref<Array<Record<string, any>>>([])
 const assemblies = ref<Array<Record<string, any>>>([])
+const asmCursor = ref<unknown>(null) // B1（根因#7）：组装记录列表翻页游标
+const asmHasMore = ref(false)
 const products = ref<Array<Record<string, any>>>([]) // 全产品目录（换皮 SCM 域整体没接·致只显 id/无 SKU 下拉/看不到未填差异位）
 // 产品名解析 + 未填差异位总览 + 组装规格 SKU 下拉（接回 listDrafts 一并复原）
 const productName = (id: unknown) => productNameOf(products.value, id)
@@ -91,8 +93,24 @@ async function reload() {
   }
   mats.value = m.ok ? (m.list as Record<string, any>[]) : []
   assemblies.value = a.ok ? (a.list as Record<string, any>[]) : []
+  asmCursor.value = a.ok ? a.nextCursor : null
+  asmHasMore.value = !!(a.ok && a.hasMore)
   products.value = d.ok ? ((d as any).list as Record<string, any>[]) : []
   load(b.ok, '加载失败：' + String(b.error || '')) // 只在加载失败时写·成功静默不抹动作反馈
+}
+
+// 组装记录「加载更多」（B1·根因#7）：续游标追加·去重防双击重复追加同一页
+async function moreAssemblies() {
+  if (!asmHasMore.value || asmCursor.value == null) return
+  const r = await listAssemblies({ cursor: asmCursor.value })
+  if (!r.ok) {
+    note(false, '', '加载更多组装记录失败：' + scmErrorText(r.error))
+    return
+  }
+  const seen = new Set(assemblies.value.map((x) => x._id))
+  assemblies.value = [...assemblies.value, ...(((r.list as Record<string, any>[]) || []).filter((x) => !seen.has(x._id)))]
+  asmCursor.value = r.nextCursor
+  asmHasMore.value = !!r.hasMore
 }
 
 async function doSaveTemplate() {
@@ -290,6 +308,10 @@ onMounted(reload)
               <div class="consumed">扣料快照：{{ ((a.consumedLines as Record<string, any>[]) || []).map((l) => materialHuman(l.materialId) + '×' + l.qty).join(' · ') || '（无快照）' }}</div>
             </div>
           </template>
+        </div>
+        <div v-if="asmHasMore" class="tbl-foot">
+          <span>已加载 {{ assemblies.length }} 单</span>
+          <UiButton variant="ghost" size="sm" @click="moreAssemblies">加载更多</UiButton>
         </div>
       </template>
       <EmptyState v-else :icon="ClipboardList" text="还没有组装记录" />
@@ -510,5 +532,16 @@ onMounted(reload)
 }
 .r {
   text-align: right;
+}
+
+/* 翻页页脚（B1·根因#7·同 Orders.vue 范式） */
+.tbl-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  border-top: 1px solid var(--ld-line);
+  font-size: 12px;
+  color: var(--ld-content-2);
 }
 </style>

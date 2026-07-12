@@ -20,6 +20,11 @@ const mats = ref<Array<Record<string, any>>>([])
 const sups = ref<Array<Record<string, any>>>([])
 const ledger = ref<LedgerRow[]>([])
 const ledgerMat = ref('') // 当前流水按哪个料号过滤（空=全部·换皮丢了行内按料查流水）
+// B1（根因#7）：供应商列表 + 流水列表两处翻页态（照 Orders.vue/Conversations.vue 模式）。
+const supCursor = ref<unknown>(null)
+const supHasMore = ref(false)
+const ledgerCursor = ref<unknown>(null)
+const ledgerHasMore = ref(false)
 // 动作反馈(note)/加载态(load) 收口（病根#14）：reload 成功不再抹掉动作刚设的成功/失败原文。
 const { message, ok: msgOk, note, load } = useLoadStatus()
 
@@ -28,9 +33,41 @@ const ledgerGen = useLatest() // 流水乱序守卫（P2·item6：照 latest.ts 
 async function loadLedger(materialId?: string) {
   const my = ledgerGen.begin()
   const l = await listLedger(materialId)
-  if (ledgerGen.isStale(my)) return // 已发起更新的查询·丢弃过期流水
+  if (ledgerGen.isStale(my)) return // 已发起更新的查询·丢弃过期流水（切料号即换新首页游标）
   ledger.value = l.ok ? mapLedger(l.list) : []
+  ledgerCursor.value = l.ok ? l.nextCursor : null
+  ledgerHasMore.value = !!(l.ok && l.hasMore)
   ledgerMat.value = materialId || ''
+}
+
+// 流水「加载更多」（B1）：复用当前料号筛选·续游标追加·去重防双击重复追加同一页（同 Conversations more() 范式）
+async function moreLedger() {
+  if (!ledgerHasMore.value || ledgerCursor.value == null) return
+  const gen = ledgerGen.peek() // 绑定当前查询代际·不递增（新查询会作废本页·防混排）
+  const l = await listLedger(ledgerMat.value || undefined, { cursor: ledgerCursor.value })
+  if (ledgerGen.isStale(gen)) return
+  if (!l.ok) {
+    note(false, '', '加载更多流水失败：' + scmErrorText(l.error))
+    return
+  }
+  const seen = new Set(ledger.value.map((x) => x.id))
+  ledger.value = [...ledger.value, ...mapLedger(l.list).filter((x) => !seen.has(x.id))]
+  ledgerCursor.value = l.nextCursor
+  ledgerHasMore.value = !!l.hasMore
+}
+
+// 供应商「加载更多」（B1）：现行上限 200 内首屏零变化，翻页可续查曾被永久挤出的超上限旧档
+async function moreSuppliers() {
+  if (!supHasMore.value || supCursor.value == null) return
+  const s = await listSuppliers({ cursor: supCursor.value })
+  if (!s.ok) {
+    note(false, '', '加载更多供应商失败：' + scmErrorText(s.error))
+    return
+  }
+  const seen = new Set(sups.value.map((x) => x._id))
+  sups.value = [...sups.value, ...(((s.list as Record<string, any>[]) || []).filter((x) => !seen.has(x._id)))]
+  supCursor.value = s.nextCursor
+  supHasMore.value = !!s.hasMore
 }
 
 const matForm = ref({ category: 'yarn', name: '', uom: 'count', color: '', tier: 'L', form: 'raw', productId: '', slug: '', supplierId: '', threshold: 0 })
@@ -73,6 +110,8 @@ async function reload() {
   const [m, s] = await Promise.all([listMaterials(), listSuppliers()])
   mats.value = m.ok ? (m.list as Record<string, any>[]) : []
   sups.value = s.ok ? (s.list as Record<string, any>[]) : []
+  supCursor.value = s.ok ? s.nextCursor : null
+  supHasMore.value = !!(s.ok && s.hasMore)
   await loadLedger(ledgerMat.value || undefined) // 保持当前料号筛选
   load(m.ok, '加载失败：' + String(m.error || '')) // 只在加载失败时写·成功静默不抹动作反馈
 }
@@ -193,6 +232,10 @@ onMounted(reload)
             <span class="sup-name">{{ s.name }}<span v-if="s.note" class="sup-note"> · {{ s.note }}</span></span>
             <Badge tone="brand">{{ s.type === 'factory' ? '厂家' : '织女' }}</Badge>
           </div>
+          <div v-if="supHasMore" class="tbl-foot">
+            <span>已加载 {{ sups.length }}</span>
+            <UiButton variant="ghost" size="sm" @click="moreSuppliers">加载更多</UiButton>
+          </div>
         </div>
       </Card>
 
@@ -269,6 +312,10 @@ onMounted(reload)
             <div class="ld-td muted" :style="{ width: '120px' }">{{ l.operator }}</div>
             <div class="ld-td muted" :style="{ width: '200px' }">{{ l.reason || '—' }}</div>
           </div>
+        </div>
+        <div v-if="ledgerHasMore" class="tbl-foot">
+          <span>已加载 {{ ledger.length }} 条</span>
+          <UiButton variant="ghost" size="sm" @click="moreLedger">加载更多</UiButton>
         </div>
       </template>
       <EmptyState v-else :icon="ScrollText" :text="ledgerMat ? '这个料还没有流水记录' : '还没有库存流水'" />
@@ -413,5 +460,16 @@ onMounted(reload)
 .neg {
   color: var(--ld-red);
   font-weight: 600;
+}
+
+/* 翻页页脚（B1·根因#7·供应商列表 + 流水列表两处·同 Orders.vue 范式） */
+.tbl-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  border-top: 1px solid var(--ld-line);
+  font-size: 12px;
+  color: var(--ld-content-2);
 }
 </style>

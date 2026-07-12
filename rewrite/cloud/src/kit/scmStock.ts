@@ -1,5 +1,6 @@
 import { getDb } from './db'
 import { notifyAlert } from './observe'
+import { pageQuery, type PageReq, type Paged } from './paging'
 import { COLLECTIONS } from '@ldrw/shared'
 
 // 原料账原子原语（进销存 SCM-0 门1·根因#1/#2·镜像 kit/inventory.ts 范式）。
@@ -133,14 +134,13 @@ async function casChange(coll: any, materialId: string, delta: number): Promise<
   return 'CONTENTION' // 争用耗尽（管理端低频·几乎不至）——宁不动账勿错账
 }
 
-/** 读流水（管理端查账·bounded）：可按料号过滤，按时间倒序，limit 封顶。 */
-export async function listStockLedger(materialId?: string, limit = 50): Promise<any[]> {
+/** 读流水（管理端查账·cursor 分页）：可按料号过滤，按时间倒序。B1（根因#7）：改走 kit pageQuery——
+ *  旧 limit 直取封顶 200 会让超上限旧流水永久不可查；defaultLimit 沿用旧默认值 50，无参调用首页条数零变化。 */
+export async function listStockLedger(materialId?: string, req?: PageReq, defaultLimit = 50): Promise<Paged> {
   const db = getDb()
-  const cap = Math.min(Math.max(1, limit | 0), 200)
-  let q: any = db.collection(COLLECTIONS.stockLedger)
-  if (materialId) q = q.where({ itemKey: String(materialId) })
-  const r = await q.orderBy('at', 'desc').limit(cap).get().catch(() => ({ data: [] }))
-  return r.data || []
+  const filter: Record<string, unknown> = {}
+  if (materialId) filter.itemKey = String(materialId)
+  return pageQuery(db, COLLECTIONS.stockLedger, filter, 'at', req, defaultLimit)
 }
 
 /** 某类流水按 itemKey 分组求和（管理端只读汇总·产销统计用·DB aggregate 不封顶精确不近似）。 */

@@ -19,6 +19,8 @@ const orders = ref<Array<Record<string, any>>>([])
 const rawL = ref<Array<Record<string, any>>>([]) // 大团原团（可发）
 const knottedL = ref<Array<Record<string, any>>>([]) // 大团带结（可收）
 const workers = ref<Array<Record<string, any>>>([])
+const cursor = ref<unknown>(null) // B1（根因#7）：外协单列表翻页游标
+const hasMore = ref(false)
 // 动作反馈(note)/加载态(load) 收口（病根#14）：reload 成功不再抹掉动作刚设的成功/失败原文。
 const { message, ok: msgOk, note, load } = useLoadStatus()
 const form = ref<{ outworkId?: string; workerId: string; rateYuan: string; lines: Array<{ materialId: string; qty: number }> } | null>(null)
@@ -51,11 +53,27 @@ async function reload() {
   confirmKey.value = '' // 刷新即复位危险态（P1·防旧武装的发料/结算/取消按钮跨刷新残留一击直发·批3 规格）
   const [o, m, s] = await Promise.all([listOutworks(), listMaterials(), listSuppliers()])
   orders.value = o.ok ? (o.list as Record<string, any>[]) : []
+  cursor.value = o.ok ? o.nextCursor : null
+  hasMore.value = !!(o.ok && o.hasMore)
   const all = m.ok ? (m.list as Record<string, any>[]) : []
   rawL.value = all.filter((x) => /^yarn:[a-z0-9-]+:L:raw$/.test(String(x._id)))
   knottedL.value = all.filter((x) => /^yarn:[a-z0-9-]+:L:knotted$/.test(String(x._id)))
   workers.value = s.ok ? ((s.list as Record<string, any>[]) || []).filter((x) => x.type === 'outworker') : []
   load(o.ok, '加载失败：' + String(o.error || '')) // 只在加载失败时写·成功静默不抹动作反馈
+}
+
+// 加载更多（B1·根因#7）：续游标追加·去重防双击重复追加同一页
+async function more() {
+  if (!hasMore.value || cursor.value == null) return
+  const r = await listOutworks(undefined, { cursor: cursor.value })
+  if (!r.ok) {
+    note(false, '', '加载更多失败：' + scmErrorText(r.error))
+    return
+  }
+  const seen = new Set(orders.value.map((o) => o._id))
+  orders.value = [...orders.value, ...(((r.list as Record<string, any>[]) || []).filter((o) => !seen.has(o._id)))]
+  cursor.value = r.nextCursor
+  hasMore.value = !!r.hasMore
 }
 
 function newOrder() {
@@ -216,6 +234,10 @@ onMounted(async () => {
           </div>
         </div>
       </div>
+      <div v-if="hasMore" class="tbl-foot">
+        <span>已加载 {{ orders.length }} 单</span>
+        <UiButton variant="ghost" size="sm" @click="more">加载更多</UiButton>
+      </div>
     </div>
     <EmptyState v-else-if="!form" :icon="ClipboardList" text="还没有外协单" />
 
@@ -367,5 +389,16 @@ onMounted(async () => {
   justify-content: flex-end;
   gap: 6px;
   flex-wrap: wrap;
+}
+
+/* 翻页页脚（B1·根因#7·同 Orders.vue 范式） */
+.tbl-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  border-top: 1px solid var(--ld-line);
+  font-size: 12px;
+  color: var(--ld-content-2);
 }
 </style>

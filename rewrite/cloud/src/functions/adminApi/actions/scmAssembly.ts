@@ -1,5 +1,5 @@
 import { reply, str, type Ctx } from '../lib'
-import { applyStockMoves, produceStock, listMaterialDocs, notifyAlert } from '../../../kit'
+import { applyStockMoves, produceStock, listMaterialDocs, notifyAlert, pageQuery } from '../../../kit'
 import { COLLECTIONS } from '@ldrw/shared'
 import { resolveBom } from '@ldrw/shared'
 
@@ -107,9 +107,9 @@ export async function previewAssembly({ db, data }: Ctx) {
   return reply(200, { ok: true, lines })
 }
 
-/** 组装单列表（管理端查账·bounded·倒序）。 */
+/** 组装单列表（管理端查账·cursor 分页·倒序）。B1（根因#7）：改走 kit pageQuery——旧 limit 直取封顶
+ *  会让超上限历史单永久不可查；defaultLimit 沿用旧默认值 50，无参调用首页条数零变化。 */
 export async function listAssemblies({ db, data }: Ctx) {
-  const cap = Math.min(Math.max(1, (data && Number.isInteger(data.limit) ? data.limit : 50) | 0), 100)
-  const r = await db.collection(COLLECTIONS.assemblyOrders).orderBy('at', 'desc').limit(cap).get().catch(() => ({ data: [] }))
-  return reply(200, { ok: true, list: r.data || [] })
+  const paged = await pageQuery(db, COLLECTIONS.assemblyOrders, {}, 'at', data, 50)
+  return reply(200, { ok: true, list: paged.list, nextCursor: paged.nextCursor, hasMore: paged.hasMore })
 }

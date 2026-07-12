@@ -1,5 +1,5 @@
 import { reply, type Ctx } from '../lib'
-import { transition, applyStockMoves, listMaterialDocs } from '../../../kit'
+import { transition, applyStockMoves, listMaterialDocs, pageQuery } from '../../../kit'
 import { COLLECTIONS } from '@ldrw/shared'
 import { asFen } from '@ldrw/shared'
 
@@ -44,14 +44,17 @@ async function validateLines(raw: any): Promise<{ ok: true; lines: PurchaseLine[
   return { ok: true, lines, totalFen: asFen(totalFen) }
 }
 
-// ── 列表（只读·bounded ≤200·可按 status 过滤·createdAt 倒序）──
+// ── 列表（只读·cursor 分页·可按 status 过滤·createdAt 倒序）──
+// B1（根因#7）：改走 kit pageQuery——旧 limit 直取封顶 200 会让超上限旧单永久不可查；defaultLimit
+// 沿用旧默认值 100，无参调用首页条数零变化，翻页可续查历史全量。
+
+const LIST_LIMIT = 100
 
 export async function listPurchases({ db, data }: Ctx) {
-  const cap = Math.min(Math.max(1, (data && Number.isInteger(data.limit) ? data.limit : 100) | 0), 200)
-  let q: any = db.collection('purchaseOrders')
-  if (data && data.status) q = q.where({ status: String(data.status) })
-  const r = await q.orderBy('createdAt', 'desc').limit(cap).get().catch(() => ({ data: [] }))
-  return reply(200, { ok: true, list: r.data || [] })
+  const filter: Record<string, unknown> = {}
+  if (data && data.status) filter.status = String(data.status)
+  const paged = await pageQuery(db, 'purchaseOrders', filter, 'createdAt', data, LIST_LIMIT)
+  return reply(200, { ok: true, list: paged.list, nextCursor: paged.nextCursor, hasMore: paged.hasMore })
 }
 
 // ── 建/改草稿（仅 status=draft 可改·totalFen 服务端算·不信前端）──
