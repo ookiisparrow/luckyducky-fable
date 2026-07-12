@@ -4878,6 +4878,39 @@ export const repoChecks = [
     },
   },
   {
+    // mp 分发前置（SEO/GEO·决策§29·R29 rewrite 线承接）：旧线 detail-share-wired 只扫 packages/，
+    // rewrite/mp 曾整线零转发钩子（README 记账债）。守三件：① 公开页 home/detail 双钩子
+    // （onShareAppMessage+onShareTimeline）在——没有钩子的页微信默认禁转发，公开页禁转发=分发面自断；
+    // ② detail 分享路径必须带 ?id=（否则收到的人打开空详情）；③ sitemap.json 不得整站 disallow *
+    // 兜头关（须至少 allow home）——搜一搜收录是分发面的机器半边。私有页（交易/学习/隐私）刻意不加
+    // 钩子＝默认不可转发，正是想要的行为，不在守卫面内。
+    id: 'rw-mp-share-wired',
+    roots: ['R29'],
+    desc: 'mp 分发前置（决策§29）：home.ts/detail.ts 须有 onShareAppMessage+onShareTimeline；detail 分享路径须带 pages/detail/detail?id=；sitemap.json 须至少 allow pages/home/home（不得整站 disallow 兜头关）',
+    run() {
+      const base = join(ROOT, 'rewrite/mp')
+      if (!existsSync(base)) return []
+      const bad = []
+      for (const p of ['home', 'detail']) {
+        const f = join(base, `pages/${p}/${p}.ts`)
+        if (!existsSync(f)) continue
+        const src = stripComments(readFileSync(f, 'utf8'))
+        for (const hook of ['onShareAppMessage', 'onShareTimeline']) {
+          if (!new RegExp(`${hook}\\s*\\(`).test(src)) bad.push(`pages/${p}/${p}.ts 缺 ${hook}——公开页无转发钩子＝微信默认禁转发（分发面自断·决策§29）`)
+        }
+        if (p === 'detail' && !/pages\/detail\/detail\?id=/.test(src))
+          bad.push('detail.ts 分享路径未带 pages/detail/detail?id=——收到分享的人打开的是空详情')
+      }
+      const smPath = join(base, 'sitemap.json')
+      if (existsSync(smPath)) {
+        const rules = (JSON.parse(readFileSync(smPath, 'utf8')).rules || [])
+        const allowsHome = rules.some((r) => r.action === 'allow' && r.page === 'pages/home/home')
+        if (!allowsHome) bad.push('sitemap.json 未 allow pages/home/home——搜一搜收录兜头关（决策§29 已放开公开页，回关须先改决策）')
+      }
+      return bad
+    },
+  },
+  {
     // 客服触点真实化（重写线 rewrite/mp·承旧线 customer-service-wired 所标病根 R18）：批A 建了
     // utils/customerService.ts 单源 helper，但 detail.ts 的 onService() 当场仍是假占位
     // wx.showToast('正在接入客服…')——旧线守卫早已判定这句假 Toast 绝迹，新线却原样重现（复制漂移同源）。
