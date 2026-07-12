@@ -271,6 +271,21 @@ describe('getMyCourses / getMyProgress / trackEvent（黄金 §四/§五）', ()
     expect(control.dump('progress').length).toBe(0)
   })
 
+  it('大白话：client_error 埋点桥接进 anomalies 账本（kind=client-error）——运营后台 Anomalies 页可查，非只留在 events 流水（根因#14 工业级完善批8）', async () => {
+    await call('trackEvent', { type: 'client_error', page: 'player', meta: { msg: 'TypeError: x is not a function' } })
+    expect(control.dump('events').length).toBe(1) // 仍照常记流水（不改既有分析用途）
+    const anomalies = control.dump('anomalies')
+    expect(anomalies.length).toBe(1)
+    expect(anomalies[0].kind).toBe('client-error')
+    expect(anomalies[0].severity).toBe('low') // 单条客户端报错不该主动告警刷屏，仅落账
+    expect(anomalies[0].ctx.msg).toContain('TypeError')
+    expect(anomalies[0].ctx.page).toBe('player')
+    // 同一错误重复上报：指纹去重累加 count，不刷屏成多条（同 anomaly.test.ts 既有契约）
+    await call('trackEvent', { type: 'client_error', page: 'player', meta: { msg: 'TypeError: x is not a function' } })
+    expect(control.dump('anomalies').length).toBe(1)
+    expect(control.dump('anomalies')[0].count).toBe(2)
+  })
+
   it('大白话：看完一段折叠进「每人每课一条」；同课第二段折叠同一条；进度只回本人', async () => {
     await call('activateCourse', { code: 'CODE1' })
     await call('confirmEnter', { code: 'CODE1' })
