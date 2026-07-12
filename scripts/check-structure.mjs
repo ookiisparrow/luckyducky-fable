@@ -1559,6 +1559,7 @@ export const repoChecks = [
         'console-assets/README.md',
         'console-assets/01-支付退款工作流.md',
         'console-assets/02-库权限期望表.md',
+        'console-assets/03-复合索引期望表.md',
         'console-assets/forward-node.js',
       ]) {
         if (!existsSync(join(ROOT, f))) bad.push(`${f} 缺失（控制台资产正册不可删，根因#9）`)
@@ -4535,7 +4536,7 @@ export const repoChecks = [
   {
     id: 'rw-site-in-gates',
     roots: ['铁律'],
-    desc: '内容站三件套在位（M4·GEO 基建=可爬可收录的机器面）：astro.config 配 site 域名 + sitemap 集成；public/robots.txt 在；教程内容 frontmatter 带 reviewed 标记（AI 起草未审稿不冒充定稿——写真机器可核）',
+    desc: '内容站 SEO/GEO 基线在位（M4·GEO 基建=可爬可收录+AI 引擎可摘要的机器面）：astro.config 配 site 域名 + sitemap 集成；robots.txt 在且显式放行 AI 爬虫（GPTBot 等）；Base.astro 齐 og 三件+og:image/og:locale/twitter:card+WebSite 结构化卡；llms.txt 与 rss.xml 端点在；404 页 noindex；favicon.svg 与 og-cover.png 分享素材在；根 typecheck 覆盖 rewrite/site；教程 frontmatter 带 reviewed 标记（AI 起草未审稿不冒充定稿——写真机器可核）',
     run() {
       const base = join(ROOT, 'rewrite/site')
       if (!existsSync(base)) return []
@@ -4547,14 +4548,29 @@ export const repoChecks = [
         if (!/site:\s*'https:\/\/www\.luckyducky\.cn'/.test(c)) bad.push('astro.config 未配 site 域名——sitemap/canonical 出不了绝对地址（收录基建缺）')
         if (!/sitemap\(\)/.test(c)) bad.push('astro.config 未挂 sitemap 集成——搜索引擎无地图可爬')
       }
-      if (!existsSync(join(base, 'public/robots.txt'))) bad.push('public/robots.txt 缺失——爬虫策略未声明')
+      const robotsPath = join(base, 'public/robots.txt')
+      if (!existsSync(robotsPath)) bad.push('public/robots.txt 缺失——爬虫策略未声明')
+      else if (!/GPTBot/.test(readFileSync(robotsPath, 'utf8')))
+        bad.push('robots.txt 未显式放行 AI 引擎爬虫（GPTBot 等）——GEO 语料源定位要求对 AI 爬虫态度显式声明，不靠通配默许')
       const layout = join(base, 'src/layouts/Base.astro')
       if (existsSync(layout)) {
         const l = readFileSync(layout, 'utf8')
-        for (const og of ['og:title', 'og:description', 'og:url']) {
+        for (const og of ['og:title', 'og:description', 'og:url', 'og:image', 'og:locale', 'twitter:card']) {
           if (!l.includes(og)) bad.push(`Base.astro 缺 ${og}——社交分享/引擎摘要卡不全（GEO 面）`)
         }
+        if (!/websiteSchema/.test(l)) bad.push('Base.astro 未注入 WebSite 结构化卡（websiteSchema）——站点实体锚点缺失（GEO 面）')
       }
+      // GEO 双端点：llms.txt（AI 引擎抓取入口·教程清单随内容集合同步）+ rss.xml（内容分发/收录信号）——
+      // 都做成 Astro 端点而非静态文件，防新增教程后清单 stale。
+      if (!existsSync(join(base, 'src/pages/llms.txt.ts'))) bad.push('src/pages/llms.txt.ts 缺失——GEO llms.txt 端点未建（AI 引擎抓取入口）')
+      if (!existsSync(join(base, 'src/pages/rss.xml.ts'))) bad.push('src/pages/rss.xml.ts 缺失——RSS 端点未建（内容分发/收录信号）')
+      const nf = join(base, 'src/pages/404.astro')
+      if (existsSync(nf) && !/noindex/.test(readFileSync(nf, 'utf8'))) bad.push('404.astro 未标 noindex——错误页进索引稀释收录质量')
+      if (!existsSync(join(base, 'public/favicon.svg'))) bad.push('public/favicon.svg 缺失——浏览器标签/收录结果无品牌图标')
+      if (!existsSync(join(base, 'public/og-cover.png'))) bad.push('public/og-cover.png 缺失——og:image 指向不存在的分享图（分享卡开天窗）')
+      const pkg = JSON.parse(readFileSync(join(ROOT, 'package.json'), 'utf8'))
+      if (!/rewrite\/site/.test((pkg.scripts && pkg.scripts.typecheck) || ''))
+        bad.push('package.json scripts.typecheck 未覆盖 rewrite/site——站点 TS（schema.ts 等 GEO 承重层）类型不过闸')
       const contentDir = join(base, 'src/content/tutorials')
       if (existsSync(contentDir)) {
         for (const f of readdirSync(contentDir)) {
@@ -4898,8 +4914,7 @@ export const repoChecks = [
     // playSegment(next) 切下一段——新设计要求段落播完停在完成态，给用户看「重播本段」通栏按钮自己选，
     // 不替用户做主。守此不变量：onEnded 不许再出现 playSegment( 调用（自动切段回潮即红）且须落 segDone；
     // onReplay 须真 seek(0) 从头重来；wxml 须有重播长条的 tap 绑定，否则 ts 有功能界面点不到。
-    // 模式分叉声明（批D·2026-07-11）：本守卫钉的是本机学习模式语义；投屏观看模式连续播为已拍板的模式
-    // 分叉（见需求清单 R40），届时守卫判据随投屏落地批改写，勿把两者当矛盾互相修掉。
+    // （原「投屏观看模式连续播」模式分叉声明已删——投屏 2026-07-12 全线取缔·R40 退役·决策§28。）
     id: 'rw-mp-player-no-autonext',
     roots: ['R38'],
     desc: '播放器重设计战役批B：段落播完不自动切换（P4 通栏重播·设计拍板 2026-07-11）——player.ts 的 onEnded 方法体不得含 playSegment( 调用（自动切段回潮即红）且须含 segDone；onReplay 方法体须存在且含 seek(0；player.wxml 须有 bind:tap="onReplay"（重播长条入口）',
@@ -5070,15 +5085,15 @@ export const repoChecks = [
     },
   },
   {
-    // 播放页竖屏沉浸全屏 + 一键投屏 + 帮助(客服)入口（M2 批·根因#8 真机能力面 + 病根#5 样板复制即漂移）：
+    // 播放页竖屏沉浸全屏 + 帮助(客服)入口（M2 批·根因#8 真机能力面 + 病根#5 样板复制即漂移）：
     // 竖屏沉浸播放器须自绘导航（原生标题栏与自绘黑条控制条会重叠打架）；关闭原生 controls 才不会跟自绘
-    // 底条打架；投屏主路径(原生按钮)+状态回报事件须都在，否则用户点了投屏不知道发生了什么；进度条为自绘
-    // seek 条，须两段式绑定（onSeekStart/onSeekMove 拖动中只改显示不 seek·onSeekEnd 松手才真 seek，见播放器
-    // 重设计战役批C），否则 timeupdate 会在拖动中把手指顶回去；备路径投屏须特性检测再调用（低版本微信直接
-    // 报错崩交互）；客服入口须单源、不许在别处内联。
-    id: 'rw-mp-player-immersive-casting',
+    // 底条打架；进度条为自绘 seek 条，须两段式绑定（onSeekStart/onSeekMove 拖动中只改显示不 seek·
+    // onSeekEnd 松手才真 seek，见播放器重设计战役批C），否则 timeupdate 会在拖动中把手指顶回去；
+    // 客服入口须单源、不许在别处内联。（原 id rw-mp-player-immersive-casting；投屏断言随投屏全线取缔
+    // 删除——2026-07-12 拍板·决策§28，防回潮见 rw-mp-no-casting。）
+    id: 'rw-mp-player-immersive',
     roots: ['#8', '#5'],
-    desc: '播放页竖屏沉浸全屏 + 一键投屏 + 帮助(客服)入口：player.json 须 navigationStyle:custom；player.wxml 的 <video> 须 controls="{{false}}" + show-casting-button + castingstatechange 事件绑定 + 求助入口节点（bind:tap=onHelp）+ 自绘 seek 条两段式绑定（touchstart=onSeekStart/touchmove=onSeekMove/touchend=onSeekEnd）；player.ts 须对备路径投屏 startCasting 做特性检测(typeof===\'function\')，onSeekMove 方法体内不得出现 .seek(（两段式语义：拖动中只改显示）、onSeekEnd 方法体内须出现 .seek(（松手才真 seek）；客服入口须单源在 rewrite/mp/utils/customerService.ts（rewrite/mp 内 wx.openCustomerServiceChat 只此一处）',
+    desc: '播放页竖屏沉浸全屏 + 帮助(客服)入口：player.json 须 navigationStyle:custom；player.wxml 的 <video> 须 controls="{{false}}" + 求助入口节点（bind:tap=onHelp）+ 自绘 seek 条两段式绑定（touchstart=onSeekStart/touchmove=onSeekMove/touchend=onSeekEnd）；player.ts 的 onSeekMove 方法体内不得出现 .seek(（两段式语义：拖动中只改显示）、onSeekEnd 方法体内须出现 .seek(（松手才真 seek）；客服入口须单源在 rewrite/mp/utils/customerService.ts（rewrite/mp 内 wx.openCustomerServiceChat 只此一处）',
     run() {
       const base = join(ROOT, 'rewrite/mp')
       if (!existsSync(base)) return []
@@ -5094,9 +5109,6 @@ export const repoChecks = [
       if (!wxml) bad.push('rewrite/mp/pages/player/player.wxml 缺失')
       if (wxml && !/controls\s*=\s*"\{\{\s*false\s*\}\}"/.test(wxml))
         bad.push('player.wxml 的 <video> 未关闭原生 controls="{{false}}"——自绘控制条会跟原生控件重叠打架（设计定案）')
-      if (wxml && !/show-casting-button/.test(wxml)) bad.push('player.wxml 缺 show-casting-button——投屏主路径（原生按钮）未开启')
-      if (wxml && !/bind:?castingstatechange/.test(wxml))
-        bad.push('player.wxml 缺 castingstatechange 事件绑定——投屏状态（连接/中断）无回报，用户点了投屏不知道发生了什么（根因#14 呼应：动作类失败/状态变化不可静默）')
       if (wxml && !/bind:?tap\s*=\s*"onHelp"/.test(wxml)) bad.push('player.wxml 找不到求助入口节点（bind:tap=onHelp）——客服入口占中央求助钮位缺失（设计定案）')
       if (wxml && !/bind:?touchstart\s*=\s*"onSeekStart"/.test(wxml))
         bad.push('player.wxml 的自绘 seek 条未见 bind:touchstart="onSeekStart"——两段式拖动交互缺起点绑定')
@@ -5117,13 +5129,6 @@ export const repoChecks = [
         }
       }
       if (ts) {
-        // 只在 onCast 方法体内断言，不许整文件全文匹配——否则一句字面提及 startCasting 的注释就能让守卫误绿
-        // （曾经的漏洞：文件头注释写了 typeof ctx.startCasting==='function' 描述思路，正则全文匹配就被这句注释
-        // 顶包过关，即便真实检测代码被删、注释没动，守卫也测不出来）。
-        const onCastBody = methodBody(ts, 'onCast')
-        if (!onCastBody) bad.push('player.ts 找不到 onCast 方法体——备路径投屏单点丢失')
-        else if (!/typeof\s+[\w.]+\.startCasting\s*[!=]==\s*['"]function['"]/.test(stripComments(onCastBody)))
-          bad.push('player.ts 的 onCast 方法体内未见 startCasting 特性检测（typeof ...===/!==\'function\'）——备路径投屏未按基础库能力探测就调用，低版本微信直接报错崩交互')
         // 自绘 seek 两段式语义（播放器重设计战役批C）：拖动中绝不真 seek（否则被 timeupdate/卡顿顶回去），
         // 只在松手时真 seek——各断在各自方法体内、剥注释后判定（错题本 E10：取真源须对剥注释后的函数体匹配）。
         const seekMoveBody = methodBody(ts, 'onSeekMove')
@@ -5156,6 +5161,140 @@ export const repoChecks = [
     },
   },
   {
+    // 投屏全线取缔·防回潮（用户拍板 2026-07-12·决策§28·R39/R40 随之退役）：播放页投屏主路径
+    // （show-casting-button + casting 事件）与备路径（onCast/startCasting 特性检测）及全部入口/样式/文案
+    // 已整体拆除。回潮通道真实存在——未合并的投屏终态分支（PR #7 worktree-cast-landscape）或旧样板复制
+    // 都可能把投屏带回来，故守「rewrite/mp 源内投屏 token 零出现」。日后若用户重启投屏需求：先改需求清单
+    // 再退役本守卫（删与加对等，见 refactor-batch step 4），不许绕。
+    id: 'rw-mp-no-casting',
+    roots: ['R34'],
+    desc: '投屏全线取缔防回潮（2026-07-12 拍板·决策§28）：rewrite/mp 全部源文件（ts/wxml/wxss/json/md）不得出现 投屏/casting 任一 token（含 startCasting/show-casting-button/casting 事件绑定）——旧分支合并或样板复制把投屏带回来当场红；重启投屏须先改需求清单并退役本守卫',
+    run() {
+      const base = join(ROOT, 'rewrite/mp')
+      if (!existsSync(base)) return []
+      const bad = []
+      const re = /投屏|casting/i
+      const walk = (d) => {
+        for (const e of readdirSync(d)) {
+          if (e === 'node_modules') continue
+          const p = join(d, e)
+          if (statSync(p).isDirectory()) walk(p)
+          else if (/\.(ts|wxml|wxss|json|md)$/.test(e) && re.test(readFileSync(p, 'utf8')))
+            bad.push(`${relative(ROOT, p)} 含投屏 token（投屏/casting）——投屏已全线取缔（决策§28），不得回潮`)
+        }
+      }
+      walk(base)
+      return bad
+    },
+  },
+  {
+    // 公开目录读上界（病根#7 规模·容量审计 2026-07-12）：getProducts/getCourses 是全站最热公开读
+    // （每个新会话必调），裸 .get() 命中云开发服务端默认 100 条**静默截断**——商品/课程破百后排序靠后
+    // 的整批消失且无报错无告警（仓内自证：adminApi/lib.ts:92、kit/inventory.ts 注释同一病根）。守此
+    // 不变量：两条查询链必须带显式 .limit(（口径同 learning.ts 已有 .limit(200) 先例）。
+    id: 'rw-app-catalog-reads-bounded',
+    roots: ['#7'],
+    desc: '公开目录读上界（病根#7）：app/actions/catalog.ts 的 getProducts 与 learning.ts 的 getCourses 查询链（collection→…→get）须含显式 .limit(——裸 .get() 服务端默认 100 条静默截断，目录破百即无声丢货',
+    run() {
+      const bad = []
+      const chains = [
+        { file: 'rewrite/cloud/src/functions/app/actions/catalog.ts', head: '.collection(COLLECTIONS.products)', what: 'getProducts 商品目录' },
+        { file: 'rewrite/cloud/src/functions/app/actions/learning.ts', head: '.collection(COLLECTIONS.courses)', what: 'getCourses 课程目录' },
+      ]
+      for (const c of chains) {
+        const p = join(ROOT, c.file)
+        if (!existsSync(p)) continue
+        const src = stripComments(readFileSync(p, 'utf8'))
+        let idx = src.indexOf(c.head)
+        let found = false
+        while (idx !== -1) {
+          const end = src.indexOf('.get()', idx)
+          if (end === -1) break
+          const chain = src.slice(idx, end)
+          // 只核带 orderBy 的列表读（doc()/count() 等单读形态不在此列）
+          if (/\.orderBy\(/.test(chain)) {
+            found = true
+            if (!/\.limit\(/.test(chain)) bad.push(`${c.file} 的 ${c.what}查询链无显式 .limit(——服务端默认 100 条静默截断（病根#7）`)
+          }
+          idx = src.indexOf(c.head, end)
+        }
+        if (!found) bad.push(`${c.file} 找不到 ${c.what}查询链（${c.head}→orderBy→get）——守卫定位失效，代码形态变了须同步改判据`)
+      }
+      return bad
+    },
+  },
+  {
+    // mp「失败伪装成空态」家族收口（根因#14 失败静默化·韧性审计+深审台账 2026-07-12 同源命中）：
+    // 列表/详情页网络失败若与「真的没有数据」渲染同一空态（暂无订单/还没有评价/输入激活码/订单不存在），
+    // 弱网用户会把网络抖动误读成数据消失（付费用户看到课程清空被引导输码=客诉级）。detail.ts 的
+    // loadFailed/missing 分治是仓内已验范式（bug sweep R1 #3），本守卫把范式钉到全部同类页：
+    // ① 五页（order-list/reviews/my-courses/aftersales/order）ts+wxml 须有 loadFailed 态与 onRetryLoad 重试入口；
+    // ② catalog 走 state 机，须有 'failed' 态（getCourseByIdDetailed 区分网络失败/查无）；
+    // ③ player 取址 fetcher 须区分 FETCH_FAIL（网络/服务失败→error 态可重试）与素材未剪（空串→empty 态）。
+    id: 'rw-mp-list-loadfailed-state',
+    roots: ['#14'],
+    desc: 'mp 失败≠空态（根因#14）：order-list/reviews/my-courses/aftersales/order 五页 ts+wxml 须有 loadFailed+onRetryLoad；catalog.ts 须有 failed 态且 lib/courses 有 getCourseByIdDetailed；player.ts 取址须分流 FETCH_FAIL——网络失败伪装成「暂无/不存在/整理中」即红',
+    run() {
+      const base = join(ROOT, 'rewrite/mp')
+      if (!existsSync(base)) return []
+      const bad = []
+      for (const p of ['order-list', 'reviews', 'my-courses', 'aftersales', 'order']) {
+        const ts = join(base, `pages/${p}/${p}.ts`)
+        const wxml = join(base, `pages/${p}/${p}.wxml`)
+        if (!existsSync(ts)) continue
+        if (!/loadFailed/.test(stripComments(readFileSync(ts, 'utf8')))) bad.push(`pages/${p}/${p}.ts 无 loadFailed 态——网络失败与真空态混同（根因#14·detail.ts 范式未铺开）`)
+        if (existsSync(wxml)) {
+          const w = readFileSync(wxml, 'utf8')
+          if (!/loadFailed/.test(w)) bad.push(`pages/${p}/${p}.wxml 无 loadFailed 节点——失败态没有界面出口`)
+          if (!/bind:?tap\s*=\s*"onRetryLoad"/.test(w)) bad.push(`pages/${p}/${p}.wxml 无 onRetryLoad 重试入口——失败态成死胡同`)
+        }
+      }
+      const cat = join(base, 'pages/catalog/catalog.ts')
+      if (existsSync(cat) && !/'failed'/.test(stripComments(readFileSync(cat, 'utf8'))))
+        bad.push("pages/catalog/catalog.ts 无 'failed' 态——课程目录网络失败仍伪装成「课程不存在」")
+      const lib = join(base, 'lib/courses.ts')
+      if (existsSync(lib) && !/getCourseByIdDetailed/.test(readFileSync(lib, 'utf8')))
+        bad.push('lib/courses.ts 无 getCourseByIdDetailed——课程读取「网络失败」与「查无此课」在 lib 层就丢失区分度')
+      const player = join(base, 'pages/player/player.ts')
+      if (existsSync(player) && !/FETCH_FAIL/.test(stripComments(readFileSync(player, 'utf8'))))
+        bad.push('pages/player/player.ts 取址链无 FETCH_FAIL 分流——取址网络失败仍伪装成「视频还在整理中」且无重试')
+      return bad
+    },
+  },
+  {
+    // mp 分发前置（SEO/GEO·决策§29·R29 rewrite 线承接）：旧线 detail-share-wired 只扫 packages/，
+    // rewrite/mp 曾整线零转发钩子（README 记账债）。守三件：① 公开页 home/detail 双钩子
+    // （onShareAppMessage+onShareTimeline）在——没有钩子的页微信默认禁转发，公开页禁转发=分发面自断；
+    // ② detail 分享路径必须带 ?id=（否则收到的人打开空详情）；③ sitemap.json 不得整站 disallow *
+    // 兜头关（须至少 allow home）——搜一搜收录是分发面的机器半边。私有页（交易/学习/隐私）刻意不加
+    // 钩子＝默认不可转发，正是想要的行为，不在守卫面内。
+    id: 'rw-mp-share-wired',
+    roots: ['R29'],
+    desc: 'mp 分发前置（决策§29）：home.ts/detail.ts 须有 onShareAppMessage+onShareTimeline；detail 分享路径须带 pages/detail/detail?id=；sitemap.json 须至少 allow pages/home/home（不得整站 disallow 兜头关）',
+    run() {
+      const base = join(ROOT, 'rewrite/mp')
+      if (!existsSync(base)) return []
+      const bad = []
+      for (const p of ['home', 'detail']) {
+        const f = join(base, `pages/${p}/${p}.ts`)
+        if (!existsSync(f)) continue
+        const src = stripComments(readFileSync(f, 'utf8'))
+        for (const hook of ['onShareAppMessage', 'onShareTimeline']) {
+          if (!new RegExp(`${hook}\\s*\\(`).test(src)) bad.push(`pages/${p}/${p}.ts 缺 ${hook}——公开页无转发钩子＝微信默认禁转发（分发面自断·决策§29）`)
+        }
+        if (p === 'detail' && !/pages\/detail\/detail\?id=/.test(src))
+          bad.push('detail.ts 分享路径未带 pages/detail/detail?id=——收到分享的人打开的是空详情')
+      }
+      const smPath = join(base, 'sitemap.json')
+      if (existsSync(smPath)) {
+        const rules = (JSON.parse(readFileSync(smPath, 'utf8')).rules || [])
+        const allowsHome = rules.some((r) => r.action === 'allow' && r.page === 'pages/home/home')
+        if (!allowsHome) bad.push('sitemap.json 未 allow pages/home/home——搜一搜收录兜头关（决策§29 已放开公开页，回关须先改决策）')
+      }
+      return bad
+    },
+  },
+  {
     // 客服触点真实化（重写线 rewrite/mp·承旧线 customer-service-wired 所标病根 R18）：批A 建了
     // utils/customerService.ts 单源 helper，但 detail.ts 的 onService() 当场仍是假占位
     // wx.showToast('正在接入客服…')——旧线守卫早已判定这句假 Toast 绝迹，新线却原样重现（复制漂移同源）。
@@ -5163,7 +5302,7 @@ export const repoChecks = [
     // player/onHelp、me/onKefu、aftersales/onKefu 四点（2026-07-08 用户拍板）。
     // 播放器重设计战役批D（2026-07-11）：player.ts 求助钮改拉起求助面板（onHelp 不再直连客服），真客服
     // 调用移入面板卡1 onHelpContact——触点表同批改写（onHelp→onHelpContact），wxml 上 bind:tap="onHelp"
-    // 节点原样保留（rw-mp-player-immersive-casting 钉的是节点存在，与方法体内调用什么无关）。
+    // 节点原样保留（rw-mp-player-immersive 钉的是节点存在，与方法体内调用什么无关）。
     id: 'rw-mp-customer-service-wired',
     roots: ['R18'],
     desc: '客服触点真实化（rewrite/mp）：① 全目录禁「正在接入客服」假 Toast 绝迹（同旧线 customer-service-wired 判定的假占位家族）② 触点表驱动——detail.ts 的 onService()、player.ts 的 onHelpContact()、me.ts 的 onKefu()、aftersales.ts 的 onKefu() 方法体须真调 openCustomerService()，防触点各自散接/漏接',
@@ -5495,10 +5634,19 @@ export const repoChecks = [
         bad.push('rewrite/mp/app.ts 缺失——冒烟层错误探针无处挂（批次D）')
       } else {
         const appTs = readFileSync(appTsPath, 'utf8')
-        if (!methodBody(appTs, 'onError'))
-          bad.push('rewrite/mp/app.ts 的 App({}) 找不到 onError 方法体——冒烟层错误探针缺失（批次D·根因#8/#14）')
-        if (!methodBody(appTs, 'onUnhandledRejection'))
-          bad.push('rewrite/mp/app.ts 的 App({}) 找不到 onUnhandledRejection 方法体——冒烟层错误探针缺失（批次D·根因#8/#14）')
+        for (const m of ['onError', 'onUnhandledRejection']) {
+          const body = methodBody(appTs, m)
+          if (!body) {
+            bad.push(`rewrite/mp/app.ts 的 App({}) 找不到 ${m} 方法体——冒烟层错误探针缺失（批次D·根因#8/#14）`)
+            continue
+          }
+          // 生产可观测半边（工业级完善批6·根因#14）：探针只进内存数组是开发期取证，真实用户设备上
+          // 无人读取——全局兜底必须同时经 reportClientError（trackEvent 落云端 events）让线上崩溃可见。
+          if (!/reportClientError\s*\(/.test(stripComments(body)))
+            bad.push(`rewrite/mp/app.ts 的 ${m} 未调 reportClientError——全局错误只进内存数组，生产端不可观测（根因#14）`)
+        }
+        if (!/trackEvent\s*\(\s*'client_error'/.test(stripComments(appTs)))
+          bad.push("rewrite/mp/app.ts 无 trackEvent('client_error') 上报出口——reportClientError 名存实亡（根因#14）")
       }
       return bad
     },

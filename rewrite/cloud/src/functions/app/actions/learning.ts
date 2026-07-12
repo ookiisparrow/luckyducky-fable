@@ -204,9 +204,9 @@ function publicChapter(ch: any) {
 
 export const getCourses = async () => {
   const db = getDb()
-  // 显式上界（深审 P2·病根#7·同 catalog.ts getProducts 口径）：裸 .get() 服务端默认 100 条静默截断，
-  // 课程目录破百后第 101 门起从用户课程页无声消失。
-  const res = await db.collection(COLLECTIONS.courses).orderBy('sort', 'asc').limit(500).get()
+  // 显式上界（病根#7·守卫 rw-app-catalog-reads-bounded·深审 P2 同处独立发现取并）：同 getProducts 口径，
+  // 防默认 100 条静默截断——课程目录破百后第 101 门起从用户课程页无声消失。
+  const res = await db.collection(COLLECTIONS.courses).orderBy('sort', 'asc').limit(1000).get()
   return ok({
     list: res.data.map((c: any) => ({
       id: c.id,
@@ -335,6 +335,15 @@ export const trackEvent = withOpenId(
       meta,
       createdAt: now,
     })
+
+    // 客户端崩溃桥接进 bug 账本（工业级完善批8·根因#14）：events 流水人不会主动翻，anomalies 账本运营后台
+    // Anomalies 页天天看——同一条崩溃信号必须落两处才算「记回总部账本、店主翻后台能看」。severity:'low'
+    // （单条客户端报错不主动推告警刷屏，仅留痕待人巡查）；fp 取 msg 前缀做去重细分（同一报错聚成一条累加
+    // count，不同报错各自成条，不撞成一坨）。recordAnomaly 本身 fail-soft，不反噬 trackEvent 主流程。
+    if (type === 'client_error') {
+      const msg = str(meta.msg, 500)
+      await recordAnomaly('client-error', 'MP_JS_ERROR', { fp: msg.slice(0, 60), page, msg }, 'low')
+    }
 
     const courseId = str(meta.courseId, 64)
     if ((type === 'segment_done' || type === 'watch_at') && courseId) {

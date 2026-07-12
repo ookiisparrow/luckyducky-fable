@@ -1,7 +1,7 @@
 // JSON-LD 构造（守卫 rw-site-schema-golden·GEO 核心）：缺必填回 null 不产半空卡/
 // 脏步骤剔除/日期格式闸/相对路径转绝对/面包屑单级无意义。
 import { describe, it, expect } from 'vitest'
-import { articleSchema, howToSchema, faqSchema, breadcrumbSchema, orgSchema, SITE } from '../src/lib/schema'
+import { articleSchema, howToSchema, faqSchema, breadcrumbSchema, orgSchema, websiteSchema, jsonLd, SITE } from '../src/lib/schema'
 
 describe('Article 卡', () => {
   it('大白话：字段齐全出卡（相对路径转绝对·未给修改日回落发布日）；缺标题/坏日期回 null 不产半空卡', () => {
@@ -44,5 +44,27 @@ describe('面包屑与组织卡', () => {
     expect(items[1]).toMatchObject({ position: 2, item: SITE + '/tutorials/' })
     expect(breadcrumbSchema([{ name: '首页', path: '/' }])).toBeNull() // 单级无意义
     expect(orgSchema().name).toContain('小棉鸭')
+  })
+})
+
+describe('站点卡', () => {
+  it('大白话：WebSite 卡带品牌名/别名/绝对地址/中文声明——AI 引擎认站的第一信号', () => {
+    const w = websiteSchema()
+    expect(w['@type']).toBe('WebSite')
+    expect(w.url).toBe(SITE)
+    expect(String(w.name)).toContain('小棉鸭')
+    expect(w.alternateName).toBe('LuckyDucky小棉鸭')
+    expect(w.inLanguage).toBe('zh-CN')
+  })
+})
+
+describe('JSON-LD 安全序列化', () => {
+  it('大白话：内容里藏 </script> 也不会截断脚本块（< 全部转义）；null 出空串', () => {
+    const faq = faqSchema([{ q: '会截断吗？', a: '</script><script>alert(1)</script> 不会' }])!
+    const out = jsonLd(faq)
+    expect(out).not.toContain('</script>')
+    expect(out).toContain('\\u003c')
+    expect(JSON.parse(out).mainEntity[0].acceptedAnswer.text).toContain('</script>') // 解析回来内容无损
+    expect(jsonLd(null)).toBe('')
   })
 })

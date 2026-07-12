@@ -5,6 +5,10 @@ export const BRAND_NAME = 'Lucky Ducky 小棉鸭'
 
 const abs = (path: string): string => (path.startsWith('http') ? path : SITE + (path.startsWith('/') ? path : '/' + path))
 
+/** JSON-LD 安全序列化单源（深审 2026-07-12 P3）：裸 JSON.stringify 进 set:html 时，内容含 `</script>`
+ *  会提前截断脚本块（HTML 解析不认字符串语义）——统一把 `<` 转 <，全站注入点只走这一个出口。 */
+export const jsonLd = (obj: Record<string, unknown> | null): string => (obj ? JSON.stringify(obj).replace(/</g, '\\u003c') : '')
+
 /** 组织卡（全站页脚注入·品牌实体锚点）。 */
 export function orgSchema(): Record<string, unknown> {
   return {
@@ -13,6 +17,19 @@ export function orgSchema(): Record<string, unknown> {
     name: BRAND_NAME,
     url: SITE,
     description: '专注钩织的材料包品牌：毛线、配件、工具与分步教学视频打包成材料包，零基础也能亲手钩出随身幸运物。',
+  }
+}
+
+/** 站点卡（WebSite·站点实体锚点，与 Organization 配对全站注入——AI 引擎认站的第一信号）。 */
+export function websiteSchema(): Record<string, unknown> {
+  return {
+    '@context': 'https://schema.org',
+    '@type': 'WebSite',
+    name: BRAND_NAME,
+    alternateName: 'LuckyDucky小棉鸭',
+    url: SITE,
+    inLanguage: 'zh-CN',
+    publisher: { '@type': 'Organization', name: BRAND_NAME, url: SITE },
   }
 }
 

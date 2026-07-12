@@ -25,6 +25,7 @@ Page({
   data: {
     loading: true,
     missing: false,
+    loadFailed: false, // 失败≠不存在（根因#14·守卫 rw-mp-list-loadfailed-state）：刚付款用户弱网打开不该看到「订单不存在」
     vm: null as OrderVM | null,
     banner: null as BannerVM | null,
     amountNum: '',
@@ -48,11 +49,22 @@ Page({
     const seq = ++this._seq
     const r = await getOrderById(this.orderId)
     if (seq !== this._seq) return
-    const vm = r.ok ? mapOrder(r.order) : null
+    // 失败≠不存在（根因#14）：请求失败落 loadFailed 给重试（已有 vm 时保留不覆盖）；
+    // 只有请求成功且查无此单才是 missing「订单不存在」。
+    if (!r.ok) {
+      this.setData({ loading: false, loadFailed: !this.data.vm })
+      if (this.data.vm) wx.showToast({ title: '刷新失败，请稍后重试', icon: 'none' })
+      return
+    }
+    const vm = mapOrder(r.order)
     const banner = vm ? BANNER[vm.status] || { icon: 'info', tint: 'muted', head: vm.statusLabel, sub: '' } : null
     const amountNum = vm ? (vm.amountLabel || '').replace(/[^0-9.]/g, '') : ''
     const canAfterSale = !!vm && ['paid', 'shipped', 'done'].includes(vm.status)
-    this.setData({ loading: false, missing: !vm, vm, banner, amountNum, canAfterSale })
+    this.setData({ loading: false, loadFailed: false, missing: !vm, vm, banner, amountNum, canAfterSale })
+  },
+  onRetryLoad() {
+    this.setData({ loading: true, loadFailed: false })
+    void this.reload()
   },
   onCopyOrderNo() {
     if (!this.orderId) return

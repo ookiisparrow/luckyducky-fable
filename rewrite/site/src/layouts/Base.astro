@@ -1,13 +1,22 @@
 ---
-// 基础布局：meta/canonical/组织卡全站注入（GEO 基建）。
-import { orgSchema, BRAND_NAME } from '../lib/schema'
+// 基础布局：meta/canonical/分享卡/组织+站点卡全站注入（GEO 基建）。
+// og:type 按页分流（默认 website·教程页传 article）；noindex 供 404 等不该进索引的页；
+// og:image 缺省用品牌分享图 /og-cover.png（真实存在，守卫 rw-site-in-gates 核）。
+import { orgSchema, websiteSchema, jsonLd, BRAND_NAME } from '../lib/schema'
 
 interface Props {
   title: string
   description: string
+  type?: 'website' | 'article'
+  noindex?: boolean
+  image?: string
+  publishedTime?: string
+  modifiedTime?: string
 }
-const { title, description } = Astro.props
+const { title, description, type = 'website', noindex = false, image, publishedTime, modifiedTime } = Astro.props
 const canonical = new URL(Astro.url.pathname, Astro.site)
+const ogImage = new URL(image || '/og-cover.png', Astro.site)
+const fullTitle = `${title} · ${BRAND_NAME}`
 ---
 
 <!doctype html>
@@ -15,15 +24,28 @@ const canonical = new URL(Astro.url.pathname, Astro.site)
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>{title} · {BRAND_NAME}</title>
+    <title>{fullTitle}</title>
     <meta name="description" content={description} />
     <link rel="canonical" href={canonical} />
-    <meta property="og:title" content={`${title} · ${BRAND_NAME}`} />
+    {noindex && <meta name="robots" content="noindex, nofollow" />}
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <link rel="alternate" type="application/rss+xml" title={`${BRAND_NAME} · 钩织教程`} href="/rss.xml" />
+    <meta property="og:title" content={fullTitle} />
     <meta property="og:description" content={description} />
-    <meta property="og:type" content="article" />
+    <meta property="og:type" content={type} />
     <meta property="og:url" content={canonical} />
     <meta property="og:site_name" content={BRAND_NAME} />
-    <script type="application/ld+json" set:html={JSON.stringify(orgSchema())} />
+    <meta property="og:locale" content="zh_CN" />
+    <meta property="og:image" content={ogImage} />
+    {publishedTime && <meta property="article:published_time" content={publishedTime} />}
+    {modifiedTime && <meta property="article:modified_time" content={modifiedTime} />}
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content={fullTitle} />
+    <meta name="twitter:description" content={description} />
+    <meta name="twitter:image" content={ogImage} />
+    <script type="application/ld+json" set:html={jsonLd(orgSchema())} />
+    <script type="application/ld+json" set:html={jsonLd(websiteSchema())} />
   </head>
   <body>
     <header>
