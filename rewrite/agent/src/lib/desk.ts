@@ -14,8 +14,8 @@ export interface Msg {
   hasMedia?: boolean // B5：顾客发图坐席可见——true 时 Desk.vue 渲染图片气泡而非纯文本占位
 }
 
-// export：diffNewInbound（B4）复用同一条身份键规则去重计数，不再另写一份易漂移的判同逻辑。
-export const keyOf = (m: Msg) => (m.msgid ? `id:${m.msgid}` : `${m.at}|${m.direction}|${m.msgtype || ''}|${m.text}`)
+// diffNewInbound（B4）复用同一条身份键规则去重计数，不再另写一份易漂移的判同逻辑（仅本文件内用，不导出）。
+const keyOf = (m: Msg) => (m.msgid ? `id:${m.msgid}` : `${m.at}|${m.direction}|${m.msgtype || ''}|${m.text}`)
 
 /** 归一进流：无时间戳/脏形状不进（防脏消息撑乱时间轴）。 */
 export function normalizeMsgs(raw: unknown): Msg[] {

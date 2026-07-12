@@ -2824,13 +2824,31 @@ export const repoChecks = [
         }
       }
       // ③ 用户可见的静态品牌页（.html 不被 walk 扫·反向自检逮出的假绿·根因#8）——逐个显式钉死
-      //    /q 扫码落地页 + site/ 公网官网落地页（www.luckyducky.cn 根）
+      //    /q 扫码落地页 + site/index.html（历史遗留单页落地页·根路径自 2026-07-09 M5 起由 rewrite/site 提供·处置待拍板）
       for (const page of ['packages/admin/public/q/index.html', 'site/index.html']) {
         const absP = join(ROOT, page)
         if (existsSync(absP))
           for (const ban of BANNED)
             if (readFileSync(absP, 'utf8').includes(ban))
               bad.push(`${page} 仍含品牌名漂移变体「${ban}…」——用户可见品牌页，须替为「小棉鸭」（病根#5）`)
+      }
+      // ④ 重写线内容站（根路径在线版本＝rewrite/site 构建产物·2026-07-09 M5 切换）：.astro/.md 不在
+      //    walk 扩展名内（同 ③ 假绿病根·根因#8），单独递归扫 pages+content，防品牌名漂移变体上生产官网
+      const siteRoot = join(ROOT, 'rewrite/site/src')
+      if (existsSync(siteRoot)) {
+        const walkSite = (d) => {
+          for (const e of readdirSync(d)) {
+            const p = join(d, e)
+            if (statSync(p).isDirectory()) walkSite(p)
+            else if (/\.(astro|md|ts)$/.test(e)) {
+              const s = readFileSync(p, 'utf8')
+              for (const ban of BANNED)
+                if (s.includes(ban))
+                  bad.push(`${relative(ROOT, p)} 仍含品牌名漂移变体「${ban}…」——根路径在线内容站页面，须替为「小棉鸭」（病根#5）`)
+            }
+          }
+        }
+        walkSite(siteRoot)
       }
       return bad
     },
@@ -5074,37 +5092,6 @@ export const repoChecks = [
         bad.push('pages/home/home.ts 的 onAddProduct() 未调 decideQuickAdd()——加购决策未走单源纯函数（R29）')
       if (!/cart\.add\s*\(/.test(bodyNoComments))
         bad.push('pages/home/home.ts 的 onAddProduct() 未调 cart.add()——加购按钮没真加购物车（R29·病根#6）')
-      return bad
-    },
-  },
-  {
-    id: 'rw-m5-runbook-synced',
-    roots: ['正册'],
-    desc: 'M5 切换 runbook 与部署面同步：rewrite/M5-切换runbook.md 须存在，且 rewrite/cloud 每个函数单元名与并行期定名 adminApiV2 都出现在 runbook 内——函数增删改名 runbook 必跟，防切换日拿陈账操刀',
-    run() {
-      const base = join(ROOT, 'rewrite/cloud/src/functions')
-      if (!existsSync(base)) return []
-      const rbPath = join(ROOT, 'rewrite/M5-切换runbook.md')
-      if (!existsSync(rbPath)) return ['rewrite/M5-切换runbook.md 缺失——M5 切换脚本未成文（切换日无脚本可循）']
-      const rb = readFileSync(rbPath, 'utf8')
-      const bad = []
-      const isFn = (p) => readFileSync(p, 'utf8').includes('export const main')
-      const need = ['adminApiV2']
-      for (const e of readdirSync(base)) {
-        const p = join(base, e)
-        if (!statSync(p).isDirectory()) continue
-        if (existsSync(join(p, 'index.ts')) && isFn(join(p, 'index.ts'))) {
-          need.push(e)
-          continue
-        }
-        for (const c of readdirSync(p)) {
-          const cp = join(p, c)
-          if (statSync(cp).isDirectory()) {
-            if (existsSync(join(cp, 'index.ts')) && isFn(join(cp, 'index.ts'))) need.push(c)
-          } else if (c.endsWith('.ts') && isFn(cp)) need.push(c.slice(0, -3))
-        }
-      }
-      for (const n of need) if (!rb.includes('`' + n + '`')) bad.push(`M5 runbook 缺函数 ${n}——部署面与脚本漂移（切换日会漏部署/漏核）`)
       return bad
     },
   },

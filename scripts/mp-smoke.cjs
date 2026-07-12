@@ -11,7 +11,7 @@
  * 不是全量 UI/交互验证（那层仍是人工真机走查，见 rewrite/mp/README.md）。
  *
  * 不进 pre-commit/CI 三道闸（gate-single-source 单源＝npm run check；本脚本需真实 devtools 实例，
- * 机器闸对它无感，属靠人起环境的按需层，同 visual-check.cjs/p3-verify.cjs）。
+ * 机器闸对它无感，属靠人起环境的按需层，同 visual-check.cjs）。
  *
  * 容忍清单（明示于此，防误判为红——均不含下方致命模式字样，天然不会被抓）：
  * - 云调用失败态 / {ok:false} 空态渲染（无云数据/未登录环境下的正常降级 UI）
