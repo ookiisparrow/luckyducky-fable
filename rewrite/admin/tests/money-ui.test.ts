@@ -2,6 +2,7 @@
 // 订单行金额不符禁发入口收窄/售后行只待审核可裁决/脏档安全（与 mp 同口径）。
 import { describe, it, expect } from 'vitest'
 import { mapDashboard, mapOrderRows, mapRefundRows, maskPhone, refundVerdict, deriveDashboardTodos } from '../src/lib/mapMoney'
+import ordersSrc from '../src/pages/Orders.vue?raw'
 
 describe('deriveDashboardTodos（待处理计数：加载失败别伪装成 0/全清·病根#14）', () => {
   it('大白话：某路计数加载失败时 partial=true——上层据此不把「加载失败」显示成绿色「今日无待处理」', () => {
@@ -200,5 +201,15 @@ describe('退款判据文案（绑本单订单行·非课程级·根因#8 判据
     const lost = refundVerdict({ lineRefundable: false, entered: true, refundableQty: 0 })
     expect(lost.tone).toBe('lost')
     expect(lost.sub).toContain('ENTERED_NOT_REFUNDABLE')
+  })
+})
+
+// Orders.vue 抽屉商品行 :key 行身份（深审20260712·P3 撞键·取真源法）：旧 key 裸用 productId，
+// 同一 productId 多规格（多 lineId）同单必撞 Vue key；行身份契约是 lineId=productId__spec
+// （cloud app/actions/orders.ts lineIdOf 单源），VM 未透传 lineId 故模板按契约就地重建。
+describe('Orders.vue 抽屉商品行 :key 用行身份 productId__spec', () => {
+  it('大白话：key 带 spec（=后端 lineId 契约）——同品多规格同单不撞键；旧裸 productId 写法不再存在', () => {
+    expect(ordersSrc).toMatch(/v-for="it in drawer\.row\.items" :key="\(it\.productId \|\| it\.name\) \+ '__' \+ it\.spec"/)
+    expect(ordersSrc).not.toMatch(/:key="it\.productId \|\| it\.name"/)
   })
 })

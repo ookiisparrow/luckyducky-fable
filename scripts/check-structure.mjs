@@ -1830,6 +1830,114 @@ export const repoChecks = [
     },
   },
   {
+    id: 'rw-material-stock-single-seam',
+    roots: ['#1', '#2'],
+    desc: '原料账单点收口·生产线（SCM 门1·根因#1/#2·深审 P2 补：material-stock-single-seam 只焊冻结旧线是假绿）：生产线 materials.stock/stockLedger 仅 rewrite/cloud/src/kit/scmStock.ts 读写（applyStockMoves 唯一入口·乐观 CAS）；其余 rewrite/cloud/src 直碰即红（防绕 CAS/绕流水改账）',
+    run() {
+      const seam = 'rewrite/cloud/src/kit/scmStock.ts'
+      if (!existsSync(join(ROOT, seam))) return [`${seam} 缺失——生产线原料账原语（SCM 门1）`]
+      const bad = []
+      const src = readFileSync(join(ROOT, seam), 'utf8')
+      if (!/export\s+async\s+function\s+applyStockMoves/.test(src)) bad.push(`${seam} 未导出 applyStockMoves——门1 空壳`)
+      if (!/\.where\(\{[^}]*stock/.test(src)) bad.push(`${seam} 库存变更未用条件 where(stock) 乐观 CAS——有并发互覆盖风险（根因#1）`)
+      const allow = new Set([seam])
+      const srcRoot = join(ROOT, 'rewrite/cloud/src')
+      const walk = (d) => {
+        for (const e of readdirSync(d)) {
+          const p = join(d, e)
+          if (statSync(p).isDirectory()) walk(p)
+          else if (e.endsWith('.ts')) {
+            const rel = relative(ROOT, p).replace(/\\/g, '/')
+            if (allow.has(rel)) continue
+            if (/COLLECTIONS\.(materials|stockLedger)\b|\.collection\(\s*['"](materials|stockLedger)['"]\s*\)/.test(readFileSync(p, 'utf8')))
+              bad.push(`${rel} 直碰 materials/stockLedger 集合——原料账读写须经 kit/scmStock（SCM 门1·防绕 CAS/绕流水）`)
+          }
+        }
+      }
+      if (existsSync(srcRoot)) walk(srcRoot)
+      return bad
+    },
+  },
+  {
+    id: 'rw-scm-ledger-idempotent',
+    roots: ['#2'],
+    desc: '原料流水确定性幂等·生产线（SCM·根因#2·深审 P2 补：scm-ledger-idempotent 只焊冻结旧线是假绿）：生产线 rewrite/cloud/src/kit/scmStock.ts 写 stockLedger 必构造确定性 _id=`docType:docId:itemKey`（撞 id=并发方已写）·禁自动 id 双记账',
+    run() {
+      const seam = 'rewrite/cloud/src/kit/scmStock.ts'
+      if (!existsSync(join(ROOT, seam))) return [`${seam} 缺失——生产线流水写入点（SCM 门1）`]
+      const bad = []
+      const src = readFileSync(join(ROOT, seam), 'utf8')
+      if (!/\$\{[^}]*docType[^}]*\}:\$\{[^}]*docId[^}]*\}:\$\{/.test(src))
+        bad.push(`${seam} 未见确定性流水 _id 构造（\`\${docType}:\${docId}:\${itemKey}\` 三段模板）——流水失幂等（根因#2）`)
+      const ledgerAdds = [...src.matchAll(/stockLedger[\s\S]{0,200}?\.add\(\s*\{\s*data:\s*\{([\s\S]{0,120}?)\}/g)]
+      for (const m of ledgerAdds) if (!/_id\s*:/.test(m[1])) bad.push(`${seam} stockLedger add 未带确定性 _id——自动 id=重放双记账（根因#2）`)
+      return bad
+    },
+  },
+  {
+    id: 'rw-cs-360-read-audited',
+    roots: ['#3'],
+    desc: '360 读他人全貌破例留痕·生产线（§1.5·根因#3·深审 P2 补：cs-360-read-audited 只焊冻结旧线是假绿）：生产线 rewrite/cloud/src/kit/audit.ts 须有 FORCE_AUDIT 名单含 getCustomer360/getUser/searchCustomer/getSessionCustomer360 强制留痕（防 PII 访问 0 痕）',
+    run() {
+      const audit = 'rewrite/cloud/src/kit/audit.ts'
+      if (!existsSync(join(ROOT, audit))) return [`${audit} 缺失——生产线审计原语`]
+      const src = readFileSync(join(ROOT, audit), 'utf8')
+      const bad = []
+      const set = src.match(/FORCE_AUDIT\s*=\s*new Set\(\[([\s\S]*?)\]\)/)
+      if (!set) bad.push(`${audit} 无 FORCE_AUDIT 名单——360 读越权面无法破例留痕（§1.5·根因#3）`)
+      else
+        for (const a of ['getCustomer360', 'getUser', 'searchCustomer', 'getSessionCustomer360'])
+          if (!new RegExp(`['"]${a}['"]`).test(set[1]))
+            bad.push(`${audit} FORCE_AUDIT 未含 ${a}——读他人全貌/检索 0 留痕（§1.5·根因#3）`)
+      return bad
+    },
+  },
+  {
+    id: 'rw-cs-360-rbac-gated',
+    roots: ['#3'],
+    desc: '360 读须能力闸·生产线（§1.5·根因#3·深审 P2 补：cs-360-rbac-gated 只焊冻结旧线是假绿）：生产线 rewrite/cloud/src/functions/adminApi/index.ts 须有 ACTION_CAPS 含 getCustomer360/getUser/searchCustomer→customer:view，且按 caps 校验拒绝',
+    run() {
+      const idx = 'rewrite/cloud/src/functions/adminApi/index.ts'
+      if (!existsSync(join(ROOT, idx))) return [`${idx} 缺失`]
+      const src = readFileSync(join(ROOT, idx), 'utf8')
+      const bad = []
+      const caps = src.match(/const ACTION_CAPS[^{]*\{([\s\S]*?)\}/)
+      if (!caps) bad.push(`${idx} 无 ACTION_CAPS 能力闸——360 读无 RBAC（§1.5·根因#3）`)
+      else
+        for (const a of ['getCustomer360', 'getUser', 'searchCustomer'])
+          if (!new RegExp(`\\b${a}\\s*:`).test(caps[1]))
+            bad.push(`ACTION_CAPS 未含 ${a}——任何登录即可读他人全貌/检索客户（§1.5·根因#3）`)
+      if (!/\bcaps\b/.test(src)) bad.push(`${idx} 未按 caps 校验——能力闸空转（§1.5）`)
+      return bad
+    },
+  },
+  {
+    id: 'rw-conversations-archived',
+    roots: ['#3'],
+    desc: '客服会话归档挂载 + 隐私声明·生产线（B5.1·根因#3·深审 P2 补：conversations-archived 只焊冻结旧线是假绿）：生产线 archive.ts 须真写 conversations 集合；kfCallback/index.ts 须真调 archiveInbound + archiveOutbound；会话含 PII·协议页须声明「客服会话记录」被收集',
+    run() {
+      const bad = []
+      const arch = 'rewrite/cloud/src/functions/cs/kfCallback/archive.ts'
+      const absArch = join(ROOT, arch)
+      if (!existsSync(absArch)) bad.push(`${arch} 缺失——生产线会话归档接缝（B5.1）`)
+      else if (!/COLLECTIONS\.conversations|['"]conversations['"]/.test(readFileSync(absArch, 'utf8')))
+        bad.push(`${arch} 未写 conversations 集合——归档接缝是摆设（B5.1·扫真实写入·非注释）`)
+      const idx = 'rewrite/cloud/src/functions/cs/kfCallback/index.ts'
+      const absIdx = join(ROOT, idx)
+      if (!existsSync(absIdx)) bad.push(`${idx} 缺失——微信客服回调（归档挂点）`)
+      else {
+        const s = readFileSync(absIdx, 'utf8')
+        if (!/archiveInbound\s*\(/.test(s)) bad.push(`${idx} 未调 archiveInbound——入站客户消息未落档（B5.1·防摘归档）`)
+        if (!/archiveOutbound\s*\(/.test(s)) bad.push(`${idx} 未调 archiveOutbound——出站回复未落档（B5.1·防摘归档）`)
+      }
+      const agr = 'rewrite/mp/pages/agreement/agreement.ts'
+      const absAgr = join(ROOT, agr)
+      if (existsSync(absAgr) && !/客服.{0,8}会话|会话记录/.test(readFileSync(absAgr, 'utf8')))
+        bad.push(`${agr} 未声明「客服会话记录」被收集留存——会话含 PII·隐私声明漏（B5.1·根因#3）`)
+      return bad
+    },
+  },
+  {
     id: 'events-cleanup-wired',
     roots: ['债#9'],
     desc: 'events/rateLimit/kfSeen 定时清理（待办债#9 无界增长·外审 P2.14）：system/cleanupEvents 存在且删 events + 清过期 rateLimit 窗口 + kfState seen:* 去重痕 + cloudbaserc 配 timer，防回归成只增不删',

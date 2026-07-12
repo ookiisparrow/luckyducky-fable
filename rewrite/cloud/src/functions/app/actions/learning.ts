@@ -132,6 +132,7 @@ export const confirmEnter = withOpenId(
       const prods = await db
         .collection(COLLECTIONS.products)
         .where({ courseId: act.courseId })
+        .limit(500) // 显式上界（深审 P2·病根#7）：裸 .get() 默认 100 截断会让本课部分商品的退货权撤销漏判
         .get()
       const prodIds = prods.data.map((p: any) => p.id)
       if (prodIds.length) {
@@ -203,7 +204,9 @@ function publicChapter(ch: any) {
 
 export const getCourses = async () => {
   const db = getDb()
-  const res = await db.collection(COLLECTIONS.courses).orderBy('sort', 'asc').get()
+  // 显式上界（深审 P2·病根#7·同 catalog.ts getProducts 口径）：裸 .get() 服务端默认 100 条静默截断，
+  // 课程目录破百后第 101 门起从用户课程页无声消失。
+  const res = await db.collection(COLLECTIONS.courses).orderBy('sort', 'asc').limit(500).get()
   return ok({
     list: res.data.map((c: any) => ({
       id: c.id,
@@ -217,48 +220,52 @@ export const getCourses = async () => {
  * 取分段播放地址（黄金 §三·fail-closed）：一律须本人已确认进课；旧库残留预览标记不构成授权
  * （免费预览通道已整条撤除）；素材未剪 → url:null；鉴权过才换短时临时 URL。
  */
-export const getPlaybackUrl = withOpenId(async ({ db, OPENID, event }) => {
-  const e: any = event
-  const courseId = String(e.courseId || '')
-  const segmentId = String(e.segmentId || '')
-  if (!courseId || !segmentId) return err(ERR.BAD_ARGS)
+// 频控（深审 P3·病根#13）：签发付费视频临时地址的端点，按 openid 限速防无限铸签名地址/刷成本；
+// 上限宽松（正常观看切段+预取每分钟远低于此·客户端已缓存 prefetch·不误伤连续播放）。
+export const getPlaybackUrl = withOpenId(
+  withRateLimit('getPlaybackUrl', { max: 60, windowMs: 60_000 }, async ({ db, OPENID, event }) => {
+    const e: any = event
+    const courseId = String(e.courseId || '')
+    const segmentId = String(e.segmentId || '')
+    if (!courseId || !segmentId) return err(ERR.BAD_ARGS)
 
-  // 批C·并行取回（零依赖只读）：课程文档读与鉴权读的入参只来自 courseId/segmentId/OPENID（已核对
-  // 课程文档零依赖），互不依赖对方结果——并行发起省一次网关往返；判定顺序原样保持
-  // NO_COURSE→NO_SEGMENT→NOT_ENTITLED。素材未剪（url:null）分支下 acts 结果单纯丢弃——纯读零副作用，
-  // 等价原「未剪视频不查鉴权」语义，代价仅是该分支多付一次本可省的读（权衡：省掉常态有视频路径的
-  // 一次串行往返，换未剪视频这一冷分支多一次并行读，净为正）。
-  const [got, acts] = await Promise.all([
-    db
-      .collection(COLLECTIONS.courses)
-      .doc(courseId)
-      .get()
-      .catch(() => null),
-    db
-      .collection(COLLECTIONS.activations)
-      .where({ _openid: OPENID, courseId, enteredAt: db.command.neq(null) })
-      .get(),
-  ])
-  if (!got || !got.data) return err(ERR.NO_COURSE)
+    // 批C·并行取回（零依赖只读）：课程文档读与鉴权读的入参只来自 courseId/segmentId/OPENID（已核对
+    // 课程文档零依赖），互不依赖对方结果——并行发起省一次网关往返；判定顺序原样保持
+    // NO_COURSE→NO_SEGMENT→NOT_ENTITLED。素材未剪（url:null）分支下 acts 结果单纯丢弃——纯读零副作用，
+    // 等价原「未剪视频不查鉴权」语义，代价仅是该分支多付一次本可省的读（权衡：省掉常态有视频路径的
+    // 一次串行往返，换未剪视频这一冷分支多一次并行读，净为正）。
+    const [got, acts] = await Promise.all([
+      db
+        .collection(COLLECTIONS.courses)
+        .doc(courseId)
+        .get()
+        .catch(() => null),
+      db
+        .collection(COLLECTIONS.activations)
+        .where({ _openid: OPENID, courseId, enteredAt: db.command.neq(null) })
+        .get(),
+    ])
+    if (!got || !got.data) return err(ERR.NO_COURSE)
 
-  let seg: any = null
-  for (const ch of got.data.chapters || []) {
-    for (const l of ch.lessons || []) {
-      const f = (l.segments || []).find((s: any) => s.id === segmentId)
-      if (f) {
-        seg = f
-        break
+    let seg: any = null
+    for (const ch of got.data.chapters || []) {
+      for (const l of ch.lessons || []) {
+        const f = (l.segments || []).find((s: any) => s.id === segmentId)
+        if (f) {
+          seg = f
+          break
+        }
       }
+      if (seg) break
     }
-    if (seg) break
-  }
-  if (!seg) return err(ERR.NO_SEGMENT)
-  if (!seg.videoFileId) return ok({ url: null })
+    if (!seg) return err(ERR.NO_SEGMENT)
+    if (!seg.videoFileId) return ok({ url: null })
 
-  if (!acts.data.length) return err(ERR.NOT_ENTITLED)
+    if (!acts.data.length) return err(ERR.NOT_ENTITLED)
 
-  return ok({ url: await getTempUrl(String(seg.videoFileId)) })
-})
+    return ok({ url: await getTempUrl(String(seg.videoFileId)) })
+  })
+)
 
 /** 本人已解锁课程（黄金 §五）：只认已确认进课；同课多码去重取最早。 */
 export const getMyCourses = withOpenId(async ({ db, OPENID }) => {

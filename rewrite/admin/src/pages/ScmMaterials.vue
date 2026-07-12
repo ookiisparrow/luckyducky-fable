@@ -20,6 +20,9 @@ const mats = ref<Array<Record<string, any>>>([])
 const sups = ref<Array<Record<string, any>>>([])
 const ledger = ref<LedgerRow[]>([])
 const ledgerMat = ref('') // 当前流水按哪个料号过滤（空=全部·换皮丢了行内按料查流水）
+// 流水加载失败独立记账（P2·深审20260712 失败伪装空账本）：不复用 message——reload 收尾 load(m.ok…)
+// 会覆盖它；失败时 ledger=[] 若无此标记，EmptyState「还没有流水」＝把查询失败伪装成空账。
+const ledgerError = ref('')
 // 动作反馈(note)/加载态(load) 收口（病根#14）：reload 成功不再抹掉动作刚设的成功/失败原文。
 const { message, ok: msgOk, note, load } = useLoadStatus()
 
@@ -30,6 +33,7 @@ async function loadLedger(materialId?: string) {
   const l = await listLedger(materialId)
   if (ledgerGen.isStale(my)) return // 已发起更新的查询·丢弃过期流水
   ledger.value = l.ok ? mapLedger(l.list) : []
+  ledgerError.value = l.ok ? '' : '流水加载失败：' + String(l.error || '') // 独立 ref·不被 reload 的 load() 抹掉
   ledgerMat.value = materialId || ''
 }
 
@@ -249,7 +253,9 @@ onMounted(reload)
       <template v-if="ledgerMat" #head>
         <UiButton variant="ghost" size="sm" @click="loadLedger()">← 看全部</UiButton>
       </template>
-      <template v-if="ledger.length">
+      <!-- 失败提示优先于表格/空态：查询挂掉别显「还没有流水」假空账（P2·深审20260712） -->
+      <p v-if="ledgerError" class="ledger-err">{{ ledgerError }}</p>
+      <template v-else-if="ledger.length">
         <div class="ld-thead">
           <div class="ld-th grow">时间</div>
           <div class="ld-th" :style="{ width: '90px' }">类型</div>
@@ -282,6 +288,14 @@ onMounted(reload)
   color: var(--ld-green);
 }
 .msg-err {
+  color: var(--ld-red);
+}
+
+/* 流水卡内失败提示（flush 卡无内边距·自带 padding；独立于顶部 message 双态行） */
+.ledger-err {
+  margin: 0;
+  padding: 14px 16px;
+  font-size: 12.5px;
   color: var(--ld-red);
 }
 

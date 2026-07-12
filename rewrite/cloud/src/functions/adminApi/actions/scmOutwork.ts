@@ -1,5 +1,5 @@
 import { reply, type Ctx } from '../lib'
-import { applyStockMoves, listMaterialDocs, transition } from '../../../kit'
+import { applyStockMoves, listMaterialDocs, transition, notifyAlert } from '../../../kit'
 import { COLLECTIONS } from '@ldrw/shared'
 import { asFen, OUTWORK_ORDER_STATUS } from '@ldrw/shared'
 
@@ -45,14 +45,19 @@ export async function listOutworks({ db, data }: Ctx) {
   const where: Record<string, string> = {}
   const status = String((data && data.status) || '')
   if (status) {
-    if (!(Object.values(OUTWORK_ORDER_STATUS) as string[]).includes(status)) return reply(400, { ok: false, error: 'BAD_STATUS' })
+    if (!(Object.values(OUTWORK_ORDER_STATUS) as string[]).includes(status))
+      return reply(400, { ok: false, error: 'BAD_STATUS' })
     where.status = status
   }
   const workerId = String((data && data.workerId) || '')
   if (workerId) where.workerId = workerId
   let q: any = db.collection('outworkOrders')
   if (Object.keys(where).length) q = q.where(where)
-  const r = await q.orderBy('createdAt', 'desc').limit(cap).get().catch(() => ({ data: [] }))
+  const r = await q
+    .orderBy('createdAt', 'desc')
+    .limit(cap)
+    .get()
+    .catch(() => ({ data: [] }))
   return reply(200, { ok: true, list: r.data || [] })
 }
 
@@ -64,21 +69,28 @@ export async function saveOutwork({ db, data, agentId }: Ctx) {
   if (!workerId) return reply(400, { ok: false, error: 'NO_WORKER' })
   // 计件单价：非负整数「分」（0 允许=义务工/试做；元→分转换在 admin 边界一次·这里只收整数分）
   const pieceRateFen = data.pieceRateFen
-  if (!Number.isInteger(pieceRateFen) || pieceRateFen < 0) return reply(400, { ok: false, error: 'BAD_RATE' })
+  if (!Number.isInteger(pieceRateFen) || pieceRateFen < 0)
+    return reply(400, { ok: false, error: 'BAD_RATE' })
 
   // 发料行：仅最大团原团（业务定稿只有最大团做起手结）+ qty 正整数 + 主档在册（fail-closed 不发无档料）
   const lines = cleanLines(data.issueLines)
   if (!lines) return reply(400, { ok: false, error: 'BAD_LINES' })
   for (const l of lines) {
-    if (!L_RAW.test(l.materialId)) return reply(400, { ok: false, error: 'ISSUE_L_RAW_ONLY', materialId: l.materialId })
+    if (!L_RAW.test(l.materialId))
+      return reply(400, { ok: false, error: 'ISSUE_L_RAW_ONLY', materialId: l.materialId })
   }
   const known = await knownMaterialIds()
   for (const l of lines) {
-    if (!known.has(l.materialId)) return reply(400, { ok: false, error: 'NO_MATERIAL', materialId: l.materialId })
+    if (!known.has(l.materialId))
+      return reply(400, { ok: false, error: 'NO_MATERIAL', materialId: l.materialId })
   }
 
   // 织女档校验：workerId 须在 suppliers 且 type=outworker（发料对象是人·不是厂家）
-  const worker = await db.collection(COLLECTIONS.suppliers).doc(workerId).get().catch(() => null)
+  const worker = await db
+    .collection(COLLECTIONS.suppliers)
+    .doc(workerId)
+    .get()
+    .catch(() => null)
   if (!worker || !worker.data) return reply(404, { ok: false, error: 'NO_WORKER' })
   if (worker.data.type !== 'outworker') return reply(400, { ok: false, error: 'NOT_OUTWORKER' })
 
@@ -91,14 +103,24 @@ export async function saveOutwork({ db, data, agentId }: Ctx) {
   const coll = db.collection('outworkOrders')
   if (outworkId) {
     // 仅 draft 可改：条件更新绑 status（发料后单据是账目依据·改行=改已出库事实,不允许）
-    const r = await coll.where({ _id: outworkId, status: 'draft' }).update({ data: fields }).catch(() => ({ stats: { updated: 0 } }))
+    const r = await coll
+      .where({ _id: outworkId, status: 'draft' })
+      .update({ data: fields })
+      .catch(() => ({ stats: { updated: 0 } }))
     if (!r.stats || r.stats.updated !== 1) {
-      const got = await coll.doc(outworkId).get().catch(() => null)
-      return got && got.data ? reply(409, { ok: false, error: 'NOT_DRAFT' }) : reply(404, { ok: false, error: 'NO_OUTWORK' })
+      const got = await coll
+        .doc(outworkId)
+        .get()
+        .catch(() => null)
+      return got && got.data
+        ? reply(409, { ok: false, error: 'NOT_DRAFT' })
+        : reply(404, { ok: false, error: 'NO_OUTWORK' })
     }
     return reply(200, { ok: true, outworkId })
   }
-  const added = await coll.add({ data: { ...fields, status: 'draft', createdAt: Date.now(), createdBy: agentId || 'admin' } })
+  const added = await coll.add({
+    data: { ...fields, status: 'draft', createdAt: Date.now(), createdBy: agentId || 'admin' },
+  })
   return reply(200, { ok: true, outworkId: added.id || added._id || '' })
 }
 
@@ -107,13 +129,22 @@ export async function saveOutwork({ db, data, agentId }: Ctx) {
 export async function issueOutwork({ db, data, agentId }: Ctx) {
   const outworkId = String(data.outworkId || '')
   if (!outworkId) return reply(400, { ok: false, error: 'NO_OUTWORK' })
-  const r = await transition('outworkOrders', outworkId, ['draft'], 'issued', { issuedAt: Date.now() })
+  const r = await transition('outworkOrders', outworkId, ['draft'], 'issued', {
+    issuedAt: Date.now(),
+  })
   if (!r.doc) return reply(404, { ok: false, error: 'NO_OUTWORK' })
   if (!r.moved) return reply(409, { ok: false, error: 'NOT_DRAFT' }) // 重放/并发方已流转——无副作用（幂等）
 
   // 首次流转赢家执行出库（每行负 delta·流水 _id=outwork_issue:<单据>:<料号> 确定性幂等）
-  const moves = (r.doc.issueLines || []).map((l: any) => ({ materialId: l.materialId, delta: -l.qty }))
-  const ar = await applyStockMoves(moves, { docType: 'outwork_issue', docId: outworkId, operator: agentId || 'admin' })
+  const moves = (r.doc.issueLines || []).map((l: any) => ({
+    materialId: l.materialId,
+    delta: -l.qty,
+  }))
+  const ar = await applyStockMoves(moves, {
+    docType: 'outwork_issue',
+    docId: outworkId,
+    operator: agentId || 'admin',
+  })
   if (!ar.ok) {
     // 补偿回滚（宁不动账勿错账）：库存不足/主档缺/争用时 applyStockMoves 已内部尽力回滚全部行（全有或全无·
     // 通常账没动；例外——反向 CAS 若也失败/并发抢占，该行库存保持已扣、流水保留作审计迹并打 ROLLBACK_FAIL
@@ -122,12 +153,29 @@ export async function issueOutwork({ db, data, agentId }: Ctx) {
     // 用条件更新而非 transition()：issued→draft 是本次未完成发料的技术性复原,不是业务逆向流转（蓝图定稿 MVP
     // 不做逆向流转,scm.spec 故意不声明这条边——声明了就开放成业务动作了）；条件绑 status:'issued' 防覆盖并发方
     // （若有人已 receiveOutwork 翻 delivered,此处 no-op,错误照返、人工经调整单对账）。
-    await db
+    const rb = await db
       .collection('outworkOrders')
       .where({ _id: outworkId, status: 'issued' })
       .update({ data: { status: 'draft', issuedAt: null } })
-      .catch(() => undefined)
-    return reply(ar.error === 'INSUFFICIENT' ? 409 : 400, { ok: false, error: ar.error, materialId: ar.materialId })
+      .catch(() => null)
+    // 复原失败辨别（深审 P2·病根#14 不静默吞·同 scmAssembly 告警口径）：updated!==1 有两因——① 已被
+    // receiveOutwork 翻 delivered（并发·no-op·正常）；② 复原 update 本身失败（单据卡死 issued 但库存没出·
+    // 账实偏且无法重试）。后者须告警人工对账，不能像旧版 .catch(()=>undefined) 静默吞。读回辨别：仍 issued＝②。
+    if (!rb || !rb.stats || rb.stats.updated !== 1) {
+      const fresh = await db
+        .collection('outworkOrders')
+        .doc(outworkId)
+        .get()
+        .catch(() => null)
+      if (fresh && fresh.data && fresh.data.status === 'issued') {
+        await notifyAlert('anomaly', 'issueOutwork', 'STATUS_ROLLBACK_FAIL', { outworkId })
+      }
+    }
+    return reply(ar.error === 'INSUFFICIENT' ? 409 : 400, {
+      ok: false,
+      error: ar.error,
+      materialId: ar.materialId,
+    })
   }
   return reply(200, { ok: true, applied: ar.applied })
 }
@@ -137,7 +185,11 @@ export async function issueOutwork({ db, data, agentId }: Ctx) {
 export async function receiveOutwork({ db, data, agentId }: Ctx) {
   const outworkId = String(data.outworkId || '')
   if (!outworkId) return reply(400, { ok: false, error: 'NO_OUTWORK' })
-  const got = await db.collection('outworkOrders').doc(outworkId).get().catch(() => null)
+  const got = await db
+    .collection('outworkOrders')
+    .doc(outworkId)
+    .get()
+    .catch(() => null)
   if (!got || !got.data) return reply(404, { ok: false, error: 'NO_OUTWORK' })
   const order = got.data
   if (order.status !== 'issued') return reply(409, { ok: false, error: 'NOT_ISSUED' }) // 含重放（已 delivered）——无副作用
@@ -153,17 +205,25 @@ export async function receiveOutwork({ db, data, agentId }: Ctx) {
   }
   for (const l of lines) {
     const m = L_KNOTTED.exec(l.materialId)
-    if (!m) return reply(400, { ok: false, error: 'RECEIVE_L_KNOTTED_ONLY', materialId: l.materialId }) // 收回的只能是带结最大团
+    if (!m)
+      return reply(400, { ok: false, error: 'RECEIVE_L_KNOTTED_ONLY', materialId: l.materialId }) // 收回的只能是带结最大团
     const issued = issuedByColor.get(m[1])
-    if (!issued) return reply(400, { ok: false, error: 'COLOR_NOT_ISSUED', materialId: l.materialId }) // 颜色 ⊆ 发料颜色
-    if (l.qty > issued) return reply(400, { ok: false, error: 'RECEIVE_EXCEEDS_ISSUE', materialId: l.materialId })
+    if (!issued)
+      return reply(400, { ok: false, error: 'COLOR_NOT_ISSUED', materialId: l.materialId }) // 颜色 ⊆ 发料颜色
+    if (l.qty > issued)
+      return reply(400, { ok: false, error: 'RECEIVE_EXCEEDS_ISSUE', materialId: l.materialId })
   }
   // 带结料号主档预检（fail-closed·不静默建档）：带结团往往在收第一批货前还没建档——缺档在**流转前**拒，
   // 否则 transition 赢了再发现缺档就得走补偿；uom/供应商等主档语义该在物料页人工定,不由收货动作偷偷替定。
   const known = await knownMaterialIds()
   for (const l of lines) {
     if (!known.has(l.materialId))
-      return reply(400, { ok: false, error: 'NO_MATERIAL', materialId: l.materialId, hint: '带结团料号未建档——先在物料页建带结团档再收货' })
+      return reply(400, {
+        ok: false,
+        error: 'NO_MATERIAL',
+        materialId: l.materialId,
+        hint: '带结团料号未建档——先在物料页建带结团档再收货',
+      })
   }
 
   // 定格应付与损耗（整数分/整数团·收货时点即锁死,结算/对账不重算）：payable=Σ收×计件单价；loss=Σ发−Σ收
@@ -193,9 +253,21 @@ export async function receiveOutwork({ db, data, agentId }: Ctx) {
     await db
       .collection('outworkOrders')
       .where({ _id: outworkId, status: 'delivered' })
-      .update({ data: { status: 'issued', receiveLines: null, payableFen: null, lossQty: null, deliveredAt: null } })
+      .update({
+        data: {
+          status: 'issued',
+          receiveLines: null,
+          payableFen: null,
+          lossQty: null,
+          deliveredAt: null,
+        },
+      })
       .catch(() => undefined)
-    return reply(ar.error === 'CONTENTION' ? 409 : 400, { ok: false, error: ar.error, materialId: ar.materialId })
+    return reply(ar.error === 'CONTENTION' ? 409 : 400, {
+      ok: false,
+      error: ar.error,
+      materialId: ar.materialId,
+    })
   }
   return reply(200, { ok: true, payableFen, lossQty, applied: ar.applied })
 }
@@ -205,7 +277,9 @@ export async function receiveOutwork({ db, data, agentId }: Ctx) {
 export async function settleOutwork({ data }: Ctx) {
   const outworkId = String(data.outworkId || '')
   if (!outworkId) return reply(400, { ok: false, error: 'NO_OUTWORK' })
-  const r = await transition('outworkOrders', outworkId, ['delivered'], 'settled', { settledAt: Date.now() })
+  const r = await transition('outworkOrders', outworkId, ['delivered'], 'settled', {
+    settledAt: Date.now(),
+  })
   if (!r.doc) return reply(404, { ok: false, error: 'NO_OUTWORK' })
   if (!r.moved) return reply(409, { ok: false, error: 'NOT_DELIVERED' })
   return reply(200, { ok: true })
@@ -216,7 +290,9 @@ export async function settleOutwork({ data }: Ctx) {
 export async function cancelOutwork({ data }: Ctx) {
   const outworkId = String(data.outworkId || '')
   if (!outworkId) return reply(400, { ok: false, error: 'NO_OUTWORK' })
-  const r = await transition('outworkOrders', outworkId, ['draft'], 'cancelled', { cancelledAt: Date.now() })
+  const r = await transition('outworkOrders', outworkId, ['draft'], 'cancelled', {
+    cancelledAt: Date.now(),
+  })
   if (!r.doc) return reply(404, { ok: false, error: 'NO_OUTWORK' })
   if (!r.moved) return reply(409, { ok: false, error: 'NOT_DRAFT' })
   return reply(200, { ok: true })

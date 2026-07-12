@@ -49,6 +49,18 @@
         </view>
       </block>
 
+      <!-- 取数失败态（同 aftersales/order-list loadFailed 分治）：失败≠没进度，不显「还没有学习记录」假空态 -->
+      <view wx:elif="{{contFailed}}" class="ld-me-empty">
+        <view class="ld-me-empty-ico">
+          <image class="ld-me-empty-img" src="/static/icons/play-circle.svg" mode="aspectFit" />
+        </view>
+        <view class="ld-me-empty-title">没连上网络</view>
+        <view class="ld-me-empty-sub">学习记录暂时没拉下来，检查网络后再试一次。</view>
+        <view class="ld-me-resume-btn" bind:tap="onRetryCont" hover-class="ld-me-resume-btn-h">
+          <text>重新加载</text>
+        </view>
+      </view>
+
       <view wx:else class="ld-me-empty">
         <view class="ld-me-empty-ico">
           <image class="ld-me-empty-img" src="/static/icons/play-circle.svg" mode="aspectFit" />

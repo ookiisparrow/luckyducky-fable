@@ -47,15 +47,18 @@ const lineIdOf = (productId: string, spec: string) => `${productId}__${spec || '
 // cover 字段（已核消费面 mapAftersales.ts），不在此列。
 const isCloudCover = (v: unknown): v is string => typeof v === 'string' && v.startsWith('cloud://')
 const swapCover = (v: unknown, urlMap: Record<string, string | null>): unknown =>
-  isCloudCover(v) ? urlMap[v] ?? v : v
+  isCloudCover(v) ? (urlMap[v] ?? v) : v
 async function swapOrdersCover(orders: any[]): Promise<any[]> {
   const ids = new Set<string>()
-  for (const o of orders) for (const it of o.items || []) if (isCloudCover(it.cover)) ids.add(it.cover)
+  for (const o of orders)
+    for (const it of o.items || []) if (isCloudCover(it.cover)) ids.add(it.cover)
   if (!ids.size) return orders
   const urlMap = await getTempUrls([...ids])
   return orders.map((o) => ({
     ...o,
-    items: (o.items || []).map((it: any) => ('cover' in it ? { ...it, cover: swapCover(it.cover, urlMap) } : it)),
+    items: (o.items || []).map((it: any) =>
+      'cover' in it ? { ...it, cover: swapCover(it.cover, urlMap) } : it
+    ),
   }))
 }
 
@@ -65,7 +68,12 @@ function orderNo(now: number): string {
   const p = (n: number, w = 2) => String(n).padStart(w, '0')
   const rand = String(Math.floor(Math.random() * 9000) + 1000)
   return (
-    d.getUTCFullYear() + p(d.getUTCMonth() + 1) + p(d.getUTCDate()) + p(d.getUTCHours()) + p(d.getUTCMinutes()) + rand
+    d.getUTCFullYear() +
+    p(d.getUTCMonth() + 1) +
+    p(d.getUTCDate()) +
+    p(d.getUTCHours()) +
+    p(d.getUTCMinutes()) +
+    rand
   )
 }
 
@@ -168,7 +176,8 @@ export const createOrder = withOpenId(
         .trim()
         .slice(0, 120),
     }
-    if (!address.name || !address.phone || !address.region || !address.detail) return err(ERR.BAD_ADDRESS)
+    if (!address.name || !address.phone || !address.region || !address.detail)
+      return err(ERR.BAD_ADDRESS)
     if (address.phone.replace(/\D/g, '').length < 7) return err(ERR.BAD_ADDRESS)
 
     // 支付配置 fail-closed：只认环境级开关——mock 仅显式 ALLOW_MOCK_PAY=1 放行（生产永不设），
@@ -186,7 +195,10 @@ export const createOrder = withOpenId(
       .filter((it) => !ADDONS[it.productId])
       .map((it) => ({ productId: it.productId, spec: it.spec, qty: it.qty }))
     const rsv = await reserveStock(stockLines)
-    if (!rsv.ok) return err('OUT_OF_STOCK' + (rsv.short ? ':' + rsv.short.productId + ':' + rsv.short.spec : ''))
+    if (!rsv.ok)
+      return err(
+        'OUT_OF_STOCK' + (rsv.short ? ':' + rsv.short.productId + ':' + rsv.short.spec : '')
+      )
 
     const now = Date.now()
     const order: any = {
@@ -214,8 +226,13 @@ export const createOrder = withOpenId(
         // SDK 返回超时/网络错」——后者若换号重试会落两张共享同一 reserved 的单（各自关单/取消时 restoreStock
         // 双记＝库存虚增/超卖）。先读回本次 _id：存在且属本人＝本次写其实成功，直接返回该单（幂等）；确不存在
         // 才是真撞号/真失败，换号重试（同 overrideRefund refunds.ts 的读回判定范式，不靠错误类型嗅探）。
-        const back = await db.collection(COLLECTIONS.orders).doc(id).get().catch(() => null)
-        if (back && back.data && back.data._openid === OPENID) return ok({ order: { ...order, _id: id, id } })
+        const back = await db
+          .collection(COLLECTIONS.orders)
+          .doc(id)
+          .get()
+          .catch(() => null)
+        if (back && back.data && back.data._openid === OPENID)
+          return ok({ order: { ...order, _id: id, id } })
       }
     }
     await restoreStock(rsv.reserved) // 建单彻底失败：预留还回去（不锁死库存）
@@ -227,78 +244,85 @@ export const createOrder = withOpenId(
  * 发起支付（黄金 orders-money·pay 节）：金额一律取库内订单换分，不信前端；三道闸（身份/本人/待支付）
  * + 惰性超时关单（抢占成功才回补·幂等）+ 0 元单直付并发校验（没抢到不谎报成功）+ 工作流接缝单点。
  */
-export const pay = withOpenId(async ({ db, OPENID, event }) => {
-  const id = String((event as any).id || '')
-  if (!id) return err(ERR.NO_ID)
+// 频控（深审 P2·病根#13）：pay 触发外部微信支付下单 API（callFlow 接缝）——无频控可被任意频率触发外呼。
+// 按 openid 限速（同 createOrder 口径·正常下单支付远低于此）。金额安全另有云端换分兜底，此为成本/外呼防刷。
+export const pay = withOpenId(
+  withRateLimit('pay', { max: 20, windowMs: 60_000 }, async ({ db, OPENID, event }) => {
+    const id = String((event as any).id || '')
+    if (!id) return err(ERR.NO_ID)
 
-  // 批C·并行取回（零依赖只读·各自 .catch(()=>null) 已核）：订单读与支付配置读互不依赖对方结果，
-  // 并行发起省一次网关往返；校验顺序与错误分支原样不变——订单校验（NOT_FOUND/BAD_STATUS/超时关单）
-  // 失败时 cfg 结果原样丢弃（纯读零副作用，等价原「先订单后 config」串行语义）。
-  const [got, cfg] = await Promise.all([
-    db
-      .collection(COLLECTIONS.orders)
-      .doc(id)
-      .get()
-      .catch(() => null),
-    db
-      .collection(COLLECTIONS.config)
-      .doc('pay')
-      .get()
-      .catch(() => null),
-  ])
-  if (!got || !got.data || got.data._openid !== OPENID) return err(ERR.NOT_FOUND)
-  const order = got.data
-  if (order.status !== 'pending') return err('BAD_STATUS:' + order.status)
+    // 批C·并行取回（零依赖只读·各自 .catch(()=>null) 已核）：订单读与支付配置读互不依赖对方结果，
+    // 并行发起省一次网关往返；校验顺序与错误分支原样不变——订单校验（NOT_FOUND/BAD_STATUS/超时关单）
+    // 失败时 cfg 结果原样丢弃（纯读零副作用，等价原「先订单后 config」串行语义）。
+    const [got, cfg] = await Promise.all([
+      db
+        .collection(COLLECTIONS.orders)
+        .doc(id)
+        .get()
+        .catch(() => null),
+      db
+        .collection(COLLECTIONS.config)
+        .doc('pay')
+        .get()
+        .catch(() => null),
+    ])
+    if (!got || !got.data || got.data._openid !== OPENID) return err(ERR.NOT_FOUND)
+    const order = got.data
+    if (order.status !== 'pending') return err('BAD_STATUS:' + order.status)
 
-  // 惰性超时：到点的 pending 当场关闭（定时器只是兜底）；抢占成功才回补预留（幂等绑转移）
-  if (Date.now() - order.createdAt > PAY_WINDOW_MS) {
-    const { moved } = await transition(COLLECTIONS.orders, id, ['pending'], 'closed', { closedAt: Date.now() })
-    if (moved && Array.isArray(order.reserved) && order.reserved.length) await restoreStock(order.reserved)
-    return err(ERR.ORDER_CLOSED)
-  }
+    // 惰性超时：到点的 pending 当场关闭（定时器只是兜底）；抢占成功才回补预留（幂等绑转移）
+    if (Date.now() - order.createdAt > PAY_WINDOW_MS) {
+      const { moved } = await transition(COLLECTIONS.orders, id, ['pending'], 'closed', {
+        closedAt: Date.now(),
+      })
+      if (moved && Array.isArray(order.reserved) && order.reserved.length)
+        await restoreStock(order.reserved)
+      return err(ERR.ORDER_CLOSED)
+    }
 
-  const payCfg = (cfg && cfg.data) || {}
-  if (payCfg.mode !== 'real' || !payCfg.flowId) return err(ERR.PAY_NOT_ENABLED)
+    const payCfg = (cfg && cfg.data) || {}
+    if (payCfg.mode !== 'real' || !payCfg.flowId) return err(ERR.PAY_NOT_ENABLED)
 
-  const totalFee = toFen(order.amount)
-  if (totalFee <= 0) {
-    // 0 元单（券抵扣到 0）：直接置已付；没抢到（并发关单/并发支付）绝不谎报成功
-    const paidAt = Date.now()
-    const { moved } = await transition(COLLECTIONS.orders, id, ['pending'], 'paid', { paidAt })
-    if (moved) return ok({ paid: true, paidAt })
-    const fresh = await db
-      .collection(COLLECTIONS.orders)
-      .doc(id)
-      .get()
-      .catch(() => null)
-    const st = (fresh && fresh.data && fresh.data.status) || 'unknown'
-    if (st === 'paid') return ok({ paid: true, paidAt: fresh!.data.paidAt || paidAt }) // 并发已付：幂等成功
-    return err('BAD_STATUS:' + st)
-  }
+    const totalFee = toFen(order.amount)
+    if (totalFee <= 0) {
+      // 0 元单（券抵扣到 0）：直接置已付；没抢到（并发关单/并发支付）绝不谎报成功
+      const paidAt = Date.now()
+      const { moved } = await transition(COLLECTIONS.orders, id, ['pending'], 'paid', { paidAt })
+      if (moved) return ok({ paid: true, paidAt })
+      const fresh = await db
+        .collection(COLLECTIONS.orders)
+        .doc(id)
+        .get()
+        .catch(() => null)
+      const st = (fresh && fresh.data && fresh.data.status) || 'unknown'
+      if (st === 'paid') return ok({ paid: true, paidAt: fresh!.data.paidAt || paidAt }) // 并发已付：幂等成功
+      return err('BAD_STATUS:' + st)
+    }
 
-  // 触发支付工作流（JSAPI 下单）：openid 显式传入，金额/单号均来自库内订单
-  const firstName = order.items && order.items[0] ? String(order.items[0].name) : '钩织材料包'
-  const p = await callFlow(String(payCfg.flowId), {
-    description: ('小棉鸭 · ' + firstName).slice(0, 40),
-    out_trade_no: order.id,
-    amount: { total: totalFee, currency: 'CNY' },
-    payer: { openid: OPENID },
+    // 触发支付工作流（JSAPI 下单）：openid 显式传入，金额/单号均来自库内订单
+    const firstName = order.items && order.items[0] ? String(order.items[0].name) : '钩织材料包'
+    const p = await callFlow(String(payCfg.flowId), {
+      description: ('小棉鸭 · ' + firstName).slice(0, 40),
+      out_trade_no: order.id,
+      amount: { total: totalFee, currency: 'CNY' },
+      payer: { openid: OPENID },
+    })
+    if (!p || !p.paySign) {
+      alert('money', 'pay', 'NO_PREPAY', { orderId: order.id }) // 用户付不了款＝漏单，必须可告警
+      return err(ERR.UNIFIED_ORDER_FAIL)
+    }
+    // 对齐 wx.requestPayment 参数名（工作流回传 packageVal）
+    return ok({
+      payment: {
+        timeStamp: String(p.timeStamp),
+        nonceStr: String(p.nonceStr),
+        package: String(p.packageVal || p.package || ''),
+        signType: String(p.signType || 'RSA'),
+        paySign: String(p.paySign),
+      },
+    })
   })
-  if (!p || !p.paySign) {
-    alert('money', 'pay', 'NO_PREPAY', { orderId: order.id }) // 用户付不了款＝漏单，必须可告警
-    return err(ERR.UNIFIED_ORDER_FAIL)
-  }
-  // 对齐 wx.requestPayment 参数名（工作流回传 packageVal）
-  return ok({
-    payment: {
-      timeStamp: String(p.timeStamp),
-      nonceStr: String(p.nonceStr),
-      package: String(p.packageVal || p.package || ''),
-      signType: String(p.signType || 'RSA'),
-      paySign: String(p.paySign),
-    },
-  })
-})
+)
 
 /**
  * 申请售后退款（黄金 orders-money·applyRefund 节）：退款额一律云端分摊算定（refundShareFen 单源）；
@@ -349,7 +373,8 @@ export const applyRefund = withOpenId(async ({ db, OPENID, event }) => {
     alert('money', 'applyRefund', 'AFTERSALE_SCAN_CAP', { orderId })
     return err('REFUND_SCAN_CAP')
   }
-  if (exist.data.some((a: any) => (a.lineId || a.productId) === lineId)) return err(ERR.ALREADY_APPLIED)
+  if (exist.data.some((a: any) => (a.lineId || a.productId) === lineId))
+    return err(ERR.ALREADY_APPLIED)
   const used = asFen(
     exist.data
       .filter((a: any) => ['applied', 'approved', 'refunded'].includes(a.status))
@@ -470,6 +495,13 @@ export const getOrderById = withOpenId(async ({ db, OPENID, event }) => {
 
 /** 本人售后单（游标分页·按申请时间倒序）。 */
 export const getMyAfterSales = withOpenId(async ({ db, OPENID, event }) => {
-  const paged = await pageQuery(db, COLLECTIONS.afterSales, { _openid: OPENID }, 'appliedAt', event as any, 100)
+  const paged = await pageQuery(
+    db,
+    COLLECTIONS.afterSales,
+    { _openid: OPENID },
+    'appliedAt',
+    event as any,
+    100
+  )
   return ok({ ...paged })
 })

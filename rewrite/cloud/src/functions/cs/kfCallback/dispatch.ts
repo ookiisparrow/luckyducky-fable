@@ -27,7 +27,11 @@ export async function firstSeen(db: any, msgid: string): Promise<ClaimResult> {
     await db.collection(COLLECTIONS.kfState).add({ data: { _id: 'seen:' + msgid, at: Date.now() } })
     return 'first'
   } catch {
-    const got = await db.collection(COLLECTIONS.kfState).doc('seen:' + msgid).get().catch(() => null)
+    const got = await db
+      .collection(COLLECTIONS.kfState)
+      .doc('seen:' + msgid)
+      .get()
+      .catch(() => null)
     return got && got.data ? 'duplicate' : 'error'
   }
 }
@@ -64,7 +68,12 @@ export async function processKfBatch(
       console.error('[kf] handle threw', { msgid }, String(e))
       alert('security', 'kfCallback', 'HANDLE_FAILED', {})
       // 撤回认领 → 不永久吞单（配合调用方保留旧游标重试）
-      if (msgid) await db.collection(COLLECTIONS.kfState).doc('seen:' + msgid).remove().catch(() => {})
+      if (msgid)
+        await db
+          .collection(COLLECTIONS.kfState)
+          .doc('seen:' + msgid)
+          .remove()
+          .catch(() => {})
       anyFailed = true
     }
   }
@@ -75,7 +84,10 @@ export async function processKfBatch(
 const KEYWORDS: { cat: Category; words: string[] }[] = [
   { cat: 'logistics', words: ['物流', '快递', '发货', '没到', '到货', '运单', '单号', '收货'] },
   { cat: 'activation', words: ['激活码', '激活', '课程', '视频', '兑换', '观看', '看不了'] },
-  { cat: 'aftersale', words: ['退款', '退货', '换货', '售后', '漏发', '坏了', '少了', '质量', '退', '换'] },
+  {
+    cat: 'aftersale',
+    words: ['退款', '退货', '换货', '售后', '漏发', '坏了', '少了', '质量', '退', '换'],
+  },
   { cat: 'tutorial', words: ['教程', '钩织', '针法', '图解', '怎么钩', '教学'] },
 ]
 export type Category = 'logistics' | 'activation' | 'aftersale' | 'tutorial'
@@ -113,7 +125,10 @@ export interface MsgMenuContent {
 function menu(head: string, items: MenuItem[], tail = '或直接打字告诉我～'): MsgMenuContent {
   return {
     head_content: head,
-    list: items.map((it) => ({ type: 'click' as const, click: { id: it.id, content: it.content } })),
+    list: items.map((it) => ({
+      type: 'click' as const,
+      click: { id: it.id, content: it.content },
+    })),
     tail_content: tail,
   }
 }
@@ -233,7 +248,8 @@ export function route(menuId: string): Route {
       type: 'miniprogram',
       page: 'pkg-video/courses/index', // 课程页在 pkg-video 分包（外审 P2.11·守卫锁须为已注册路由）
       title: '我的课程',
-      fallbackText: '在小程序「我的 → 课程」即可观看已激活的课程。激活码相关点上方菜单，或点「转人工」。',
+      fallbackText:
+        '在小程序「我的 → 课程」即可观看已激活的课程。激活码相关点上方菜单，或点「转人工」。',
     }
   if (menuId.startsWith('cat:')) {
     const cat = menuId.slice(4) as Category
@@ -260,7 +276,11 @@ export function route(menuId: string): Route {
  */
 export async function faqAnswer(db: any, faqKey: string): Promise<string | null> {
   if (!faqKey) return null
-  const got = await db.collection(COLLECTIONS.kb).doc(faqKey).get().catch(() => null)
+  const got = await db
+    .collection(COLLECTIONS.kb)
+    .doc(faqKey)
+    .get()
+    .catch(() => null)
   const d = got && got.data
   if (!d || d.enabled === false) return null
   return d.answer ? String(d.answer) : null
@@ -285,6 +305,10 @@ export async function recordCsat(db: any, input: CsatInput): Promise<string | nu
   if (!euid) return null
   const createdAt = Date.now()
   const id = 'csat:' + euid + ':' + createdAt
+  // 评分写库失败不静默吞、不谎报成功（深审 P2·病根#14）：旧版两次 .set().catch(()=>{}) 后恒返回 id——写没成功
+  // 也回 csatId＝假成功（getCsatReport 会漏这条·且调用方以为记上了）。改：评分主写失败→告警 + 返回 null
+  // （调用方据 null 可知没记上）；指针（csatlast·仅供 attachCsatNote 找最近记录）写失败非致命，告警但评分已落。
+  let wrote = true
   await db
     .collection(COLLECTIONS.csat)
     .doc(id)
@@ -297,12 +321,20 @@ export async function recordCsat(db: any, input: CsatInput): Promise<string | nu
         createdAt,
       },
     })
-    .catch(() => {})
+    .catch(() => {
+      wrote = false
+    })
+  if (!wrote) {
+    alert('anomaly', 'recordCsat', 'CSAT_WRITE_FAIL', { euid })
+    return null
+  }
   await db
     .collection(COLLECTIONS.kfState)
     .doc('csatlast:' + euid)
     .set({ data: { csatId: id, at: createdAt } })
-    .catch(() => {})
+    .catch(() => {
+      alert('anomaly', 'recordCsat', 'CSAT_POINTER_FAIL', { euid }) // 评分已落·仅备注指针失败·非致命
+    })
   return id
 }
 
@@ -310,18 +342,34 @@ export async function recordCsat(db: any, input: CsatInput): Promise<string | nu
 export async function attachCsatNote(db: any, externalUserId: string, note: string): Promise<void> {
   const euid = String(externalUserId || '')
   if (!euid || !note) return
-  const got = await db.collection(COLLECTIONS.kfState).doc('csatlast:' + euid).get().catch(() => null)
+  const got = await db
+    .collection(COLLECTIONS.kfState)
+    .doc('csatlast:' + euid)
+    .get()
+    .catch(() => null)
   const csatId = got && got.data && got.data.csatId
   if (!csatId) return
-  await db.collection(COLLECTIONS.csat).doc(csatId).update({ data: { note: String(note).slice(0, 200) } }).catch(() => {})
-  await db.collection(COLLECTIONS.kfState).doc('csatlast:' + euid).remove().catch(() => {})
+  await db
+    .collection(COLLECTIONS.csat)
+    .doc(csatId)
+    .update({ data: { note: String(note).slice(0, 200) } })
+    .catch(() => {})
+  await db
+    .collection(COLLECTIONS.kfState)
+    .doc('csatlast:' + euid)
+    .remove()
+    .catch(() => {})
 }
 
 // ── 身份桥接（external_userid → openid）+ 订单摘要 ──
 /** 查映射表得 openid（不信前端·根因#3：映射由 kfBind 在小程序侧建）。未绑定返 null。 */
 export async function resolveOpenid(db: any, externalUserId: string): Promise<string | null> {
   if (!externalUserId) return null
-  const got = await db.collection(COLLECTIONS.kfIdentity).doc('ext:' + externalUserId).get().catch(() => null)
+  const got = await db
+    .collection(COLLECTIONS.kfIdentity)
+    .doc('ext:' + externalUserId)
+    .get()
+    .catch(() => null)
   return got && got.data && got.data.openid ? String(got.data.openid) : null
 }
 
@@ -336,7 +384,13 @@ export async function summarizeOrders(db: any, openid: string): Promise<string> 
     .catch(() => ({ data: [] }))
   const list = (r && r.data) || []
   if (!list.length) return '没查到你名下的订单。如果刚下单可稍后再试，或点「转人工」。'
-  const STAT: Record<string, string> = { pending: '待支付', paid: '已支付/待发货', shipped: '已发货', done: '已完成', closed: '已关闭' }
+  const STAT: Record<string, string> = {
+    pending: '待支付',
+    paid: '已支付/待发货',
+    shipped: '已发货',
+    done: '已完成',
+    closed: '已关闭',
+  }
   // 运单号在 shipping 子对象（发货时 adminApi 写 shipping:{company,trackingNo}）——曾错取顶层 o.trackingNo→永远显示不出（外审 P2.19·根因#8）
   const lines = list.map((o: any) => {
     const tracking = o.shipping && o.shipping.trackingNo
@@ -359,7 +413,11 @@ export async function summarizeOrders(db: any, openid: string): Promise<string> 
  * 曾把任何 add 异常都当撞号吞掉，DB 故障时会话没入队、顾客却收到「已为你转接」＝假转接无人接。
  * 调用方（transfer 分支）据 'failed' 改话术如实提示重试。
  */
-export async function enqueueSession(db: any, openKfId: string, externalUserId: string): Promise<'queued' | 'already' | 'failed'> {
+export async function enqueueSession(
+  db: any,
+  openKfId: string,
+  externalUserId: string
+): Promise<'queued' | 'already' | 'failed'> {
   const euid = String(externalUserId || '')
   if (!euid || !openKfId) return 'failed' // 不造无主会话
   const now = Date.now()
@@ -367,12 +425,23 @@ export async function enqueueSession(db: any, openKfId: string, externalUserId: 
   let queued = false // 真正新入队（首建 or closed 重开）才推送——已在 pending/active 的不重复骚扰坐席
   try {
     await db.collection(COLLECTIONS.csSession).add({
-      data: { _id: id, status: 'pending', externalUserId: euid, openKfId, createdAt: now, updatedAt: now },
+      data: {
+        _id: id,
+        status: 'pending',
+        externalUserId: euid,
+        openKfId,
+        createdAt: now,
+        updatedAt: now,
+      },
     })
     queued = true
   } catch {
     // add 失败先回查：doc 真存在＝撞确定性 _id（正常幂等路径）；不存在＝基建错（DB 权限/瞬时）→ 'failed' 如实上报
-    const got = await db.collection(COLLECTIONS.csSession).doc(id).get().catch(() => null)
+    const got = await db
+      .collection(COLLECTIONS.csSession)
+      .doc(id)
+      .get()
+      .catch(() => null)
     if (!got || !got.data) {
       console.error('[kf] enqueue failed (infra)', { id })
       alert('security', 'kfCallback', 'ENQUEUE_FAILED', {})
@@ -399,7 +468,11 @@ export async function enqueueSession(db: any, openKfId: string, externalUserId: 
 // 全程 fail-soft（sendAgentCard 内吞错·此处 try/catch 兜查询）：推送失败绝不反噬顾客转人工入队（守卫 enqueue-push-fail-soft）。
 async function notifyOnlineAgents(db: any, sessionId: string): Promise<void> {
   try {
-    const st = await db.collection(COLLECTIONS.agentState).where({ status: 'online' }).get().catch(() => ({ data: [] }))
+    const st = await db
+      .collection(COLLECTIONS.agentState)
+      .where({ status: 'online' })
+      .get()
+      .catch(() => ({ data: [] }))
     const ids = (st.data || []).map((a: any) => a._id).filter(Boolean)
     if (!ids.length) return
     const touser: string[] = []
@@ -407,7 +480,11 @@ async function notifyOnlineAgents(db: any, sessionId: string): Promise<void> {
       // 键映射（深审 F1）：超管坐席身份是 'admin'（checkKey 固定），但其账号 doc 是 'auth'——不映射则超管
       // 在线也查不到 wecomUserId＝只有超管值班时推送恒为空（escalate 推送读 'auth' 同口径）。
       const docId = id === 'admin' ? 'auth' : id
-      const g = await db.collection('adminConfig').doc(docId).get().catch(() => null)
+      const g = await db
+        .collection('adminConfig')
+        .doc(docId)
+        .get()
+        .catch(() => null)
       const uid = g && g.data && g.data.wecomUserId
       if (uid) touser.push(String(uid))
     }
@@ -464,8 +541,16 @@ export interface DispatchCtx {
  * （enter_session）都过它——曾只有 handleMessage 查、enter_session 直发欢迎菜单＝排队中顾客重开聊天窗被
  * bot 抢话（且点菜单又被本闸静默＝发了菜单点了没反应的自相矛盾）。
  */
-export async function heldStatus(db: any, openKfId: string, externalUserId: string): Promise<string | null> {
-  const held = await db.collection(COLLECTIONS.csSession).doc('wxkf:' + openKfId + ':' + externalUserId).get().catch(() => null)
+export async function heldStatus(
+  db: any,
+  openKfId: string,
+  externalUserId: string
+): Promise<string | null> {
+  const held = await db
+    .collection(COLLECTIONS.csSession)
+    .doc('wxkf:' + openKfId + ':' + externalUserId)
+    .get()
+    .catch(() => null)
   const hs = held && held.data && held.data.status
   return hs === 'pending' || hs === 'active' || hs === 'escalated' ? hs : null
 }
@@ -504,10 +589,18 @@ export async function handleMessage(ctx: DispatchCtx, incoming: Incoming): Promi
   if (!incoming.menuId) {
     const m = /^\s*([1-5])\s*$/.exec(incoming.text)
     if (m) {
-      const ask = await db.collection(COLLECTIONS.kfState).doc('csatask:' + to).get().catch(() => null)
+      const ask = await db
+        .collection(COLLECTIONS.kfState)
+        .doc('csatask:' + to)
+        .get()
+        .catch(() => null)
       const askAt = ask && ask.data && Number(ask.data.at)
       if (askAt && Date.now() - askAt < CSAT_ASK_TTL_MS) {
-        await db.collection(COLLECTIONS.kfState).doc('csatask:' + to).remove().catch(() => {})
+        await db
+          .collection(COLLECTIONS.kfState)
+          .doc('csatask:' + to)
+          .remove()
+          .catch(() => {})
         const openid = await resolveOpenid(db, to)
         await recordCsat(db, { externalUserId: to, openid, score: Number(m[1]) })
         await send(buildMsgMenu(to, openKfId, csatReasonMenu()))
@@ -520,7 +613,9 @@ export async function handleMessage(ctx: DispatchCtx, incoming: Incoming): Promi
     ? route(incoming.menuId)
     : (() => {
         const hit = recognize(incoming.text)
-        return hit ? ({ type: 'menu', content: menuFor(hit.cat, hit.word) } as Route) : ({ type: 'menu', content: rootMenu() } as Route)
+        return hit
+          ? ({ type: 'menu', content: menuFor(hit.cat, hit.word) } as Route)
+          : ({ type: 'menu', content: rootMenu() } as Route)
       })()
 
   switch (r.type) {
@@ -554,13 +649,20 @@ export async function handleMessage(ctx: DispatchCtx, incoming: Incoming): Promi
       return
     case 'miniprogram':
       // 卡片需 appid + 封面素材都齐才发；缺任一即降级文字（防 thumb 空致 send_msg 40058）
-      if (cfg.appid && cfg.thumbMediaId) await send(buildMiniprogram(to, openKfId, cfg, r.page, r.title))
+      if (cfg.appid && cfg.thumbMediaId)
+        await send(buildMiniprogram(to, openKfId, cfg, r.page, r.title))
       else await send(buildText(to, openKfId, r.fallbackText))
       return
     case 'order_query': {
       const openid = await resolveOpenid(db, to)
       if (!openid) {
-        await send(buildText(to, openKfId, '还没识别到你的小程序账号～请先在小程序里登录一次，之后我就能在这里帮你查订单。也可点「转人工」。'))
+        await send(
+          buildText(
+            to,
+            openKfId,
+            '还没识别到你的小程序账号～请先在小程序里登录一次，之后我就能在这里帮你查订单。也可点「转人工」。'
+          )
+        )
         return
       }
       await send(buildText(to, openKfId, await summarizeOrders(db, openid)))
@@ -576,7 +678,12 @@ export async function handleMessage(ctx: DispatchCtx, incoming: Incoming): Promi
     case 'csat_note': {
       // 备注预设标签回写最近一条；选「不补充」则清最近标记。一律谢一句收尾。
       if (r.note) await attachCsatNote(db, to, r.note)
-      else await db.collection(COLLECTIONS.kfState).doc('csatlast:' + to).remove().catch(() => {})
+      else
+        await db
+          .collection(COLLECTIONS.kfState)
+          .doc('csatlast:' + to)
+          .remove()
+          .catch(() => {})
       await send(buildText(to, openKfId, '谢谢你的反馈，我们会继续改进 🙏'))
       return
     }

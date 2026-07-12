@@ -25,6 +25,9 @@ watch(template, () => { if (!tplGuard) tplDirty.value = true }, { deep: true })
 const profiles = ref<Array<Record<string, any>>>([])
 const mats = ref<Array<Record<string, any>>>([])
 const assemblies = ref<Array<Record<string, any>>>([])
+// 组装记录加载失败标记（P2·深审20260712 失败伪装空态）：listAssemblies 单独失败时 assemblies=[]，
+// EmptyState 若仍显「还没有组装记录」＝把查询失败伪装成空账——文案按此标记分流。
+const asmFailed = ref(false)
 const products = ref<Array<Record<string, any>>>([]) // 全产品目录（换皮 SCM 域整体没接·致只显 id/无 SKU 下拉/看不到未填差异位）
 // 产品名解析 + 未填差异位总览 + 组装规格 SKU 下拉（接回 listDrafts 一并复原）
 const productName = (id: unknown) => productNameOf(products.value, id)
@@ -91,8 +94,16 @@ async function reload() {
   }
   mats.value = m.ok ? (m.list as Record<string, any>[]) : []
   assemblies.value = a.ok ? (a.list as Record<string, any>[]) : []
+  asmFailed.value = !a.ok
   products.value = d.ok ? ((d as any).list as Record<string, any>[]) : []
-  load(b.ok, '加载失败：' + String(b.error || '')) // 只在加载失败时写·成功静默不抹动作反馈
+  // 分路报错（P2·深审20260712）：原先只校验 getBomSetup 一路，listMaterials/listAssemblies/listDrafts
+  // 单独失败被吞成空数组、页面显假空态——照 Reconciliation.vue reload 范式，任一路失败都点名报出。
+  const bad: string[] = []
+  if (!b.ok) bad.push('配方模板加载失败：' + String(b.error || ''))
+  if (!m.ok) bad.push('物料主档加载失败：' + String(m.error || ''))
+  if (!a.ok) bad.push('组装记录加载失败：' + String(a.error || ''))
+  if (!d.ok) bad.push('产品目录加载失败：' + String(d.error || ''))
+  load(bad.length === 0, bad.join('；')) // 只在加载失败时写·成功静默不抹动作反馈
 }
 
 async function doSaveTemplate() {
@@ -292,7 +303,7 @@ onMounted(reload)
           </template>
         </div>
       </template>
-      <EmptyState v-else :icon="ClipboardList" text="还没有组装记录" />
+      <EmptyState v-else :icon="ClipboardList" :text="asmFailed ? '组装记录加载失败，请刷新重试' : '还没有组装记录'" />
     </Card>
   </div>
 </template>

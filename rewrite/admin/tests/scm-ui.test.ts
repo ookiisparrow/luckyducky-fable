@@ -3,6 +3,7 @@
 import { describe, it, expect } from 'vitest'
 import shellRaw from '../src/shell/Shell.vue?raw'
 import scmMaterialsSrc from '../src/pages/ScmMaterials.vue?raw'
+import scmBomSrc from '../src/pages/ScmBom.vue?raw'
 import { materialHuman, materialCategoryLabel, uomLabel, purchaseStatusLabel, outworkStatusLabel, yuanToFen, fenLabel, scmErrorText, docTypeLabel, mapLedger, unprofiledProducts } from '../src/lib/mapScm'
 import { SCM_FLOW } from '../src/lib/scmFlow'
 import { setPurchaseHandoff, consumePurchaseHandoff, setOutworkHandoff, consumeOutworkHandoff } from '../src/lib/scmHandoff'
@@ -121,5 +122,39 @@ describe('SCM 去开单 handoff（读一次即清）', () => {
     const o1 = consumeOutworkHandoff()
     expect(o1?.lines[0].qty).toBe(5)
     expect(consumeOutworkHandoff()).toBeNull()
+  })
+})
+
+// ScmBom.vue reload 分路报错（深审20260712·P2 失败伪装空态·取真源法同 D2）：原先四路并行只校验
+// getBomSetup 的 b.ok，listAssemblies 单独失败时 assemblies=[]、「组装记录」卡显「还没有组装记录」
+// 假空态——照 Reconciliation.vue reload 分路范式，任一路失败点名报出 + EmptyState 文案分流。
+describe('ScmBom.vue reload 分路报错（失败不伪装空态）', () => {
+  it('大白话：四路各自判失败点名报，不被 b.ok 一路成功吞掉；组装记录空态文案区分「没记录」vs「加载失败」', () => {
+    expect(scmBomSrc).toMatch(/if \(!b\.ok\) bad\.push\('配方模板加载失败：'/)
+    expect(scmBomSrc).toMatch(/if \(!m\.ok\) bad\.push\('物料主档加载失败：'/)
+    expect(scmBomSrc).toMatch(/if \(!a\.ok\) bad\.push\('组装记录加载失败：'/)
+    expect(scmBomSrc).toMatch(/if \(!d\.ok\) bad\.push\('产品目录加载失败：'/)
+    expect(scmBomSrc).toMatch(/load\(bad\.length === 0, bad\.join\(/)
+    // 旧「只看 b.ok」收尾写法不再存在
+    expect(scmBomSrc).not.toMatch(/load\(b\.ok/)
+    // 组装记录失败标记：reload 落标 + EmptyState 文案按标记分流
+    expect(scmBomSrc).toMatch(/asmFailed\.value = !a\.ok/)
+    expect(scmBomSrc).toMatch(/:text="asmFailed \? '组装记录加载失败，请刷新重试' : '还没有组装记录'"/)
+  })
+})
+
+// ScmMaterials.vue 流水加载失败不伪装空账本（深审20260712·P2）：loadLedger 失败原先 ledger=[] 且
+// 不留痕，EmptyState「还没有流水」把查询失败伪装成空账；且不可复用 message——reload 收尾 load(m.ok…)
+// 会覆盖它，须独立 ledgerError。
+describe('ScmMaterials.vue 流水加载失败独立记账（不伪装空账本）', () => {
+  it('大白话：listLedger 挂掉写独立 ledgerError；模板失败提示先于表格/空态（v-if 链头），EmptyState 只在真空账时出现', () => {
+    expect(scmMaterialsSrc).toMatch(/const ledgerError = ref\(''\)/)
+    expect(scmMaterialsSrc).toMatch(/ledgerError\.value = l\.ok \? '' : '流水加载失败：'/)
+    // 模板 v-if 链：失败提示 → 表格 → 空态（EmptyState 在链尾 v-else·失败时不渲染假空态）
+    expect(scmMaterialsSrc).toMatch(/<p v-if="ledgerError" class="ledger-err">\{\{ ledgerError \}\}<\/p>\s*<template v-else-if="ledger\.length">/)
+    const errIdx = scmMaterialsSrc.indexOf('v-if="ledgerError"')
+    const emptyIdx = scmMaterialsSrc.indexOf(':icon="ScrollText"')
+    expect(errIdx).toBeGreaterThan(-1)
+    expect(emptyIdx).toBeGreaterThan(errIdx) // 流水 EmptyState 落在失败提示同链之后
   })
 })
