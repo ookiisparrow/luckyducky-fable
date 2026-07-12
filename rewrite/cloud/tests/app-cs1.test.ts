@@ -76,9 +76,7 @@ describe('验签与解密（黄金 §十一·全场最关键）', () => {
   it('大白话：回调外壳——验签不过绝不进业务处理；跨企业（receiveId≠本 corp）合法签名也拒；合法回调解出 Token/OpenKfId', async () => {
     const events: any[] = []
     const cb = defineKfCallback({
-      token: () => 'tok',
-      aesKey: () => AES_KEY,
-      corpid: () => 'corp-1',
+      creds: () => ({ token: 'tok', aesKey: AES_KEY, corpid: 'corp-1' }),
       onEvent: async (e) => void events.push(e),
     })
     const xml = '<xml><Token>sync-t</Token><OpenKfId>kf-1</OpenKfId></xml>'
@@ -103,7 +101,7 @@ describe('验签与解密（黄金 §十一·全场最关键）', () => {
   })
 
   it('大白话：GET 验 URL——签名对回明文回显；签名错回空', async () => {
-    const cb = defineKfCallback({ token: () => 'tok', aesKey: () => AES_KEY, onEvent: async () => {} })
+    const cb = defineKfCallback({ creds: () => ({ token: 'tok', aesKey: AES_KEY }), onEvent: async () => {} })
     const echostr = encryptKf(AES_KEY, 'PLAIN-ECHO', 'corp-1')
     const ok1 = await cb({
       httpMethod: 'GET',

@@ -15,6 +15,8 @@ const ENV_FALLBACK: Record<string, string> = {
   'wxkf.token': 'WXKF_TOKEN',
   'wxkf.aesKey': 'WXKF_AESKEY',
   'wxkf.agentId': 'WXKF_AGENTID',
+  'wxkf.miniappAppId': 'WXKF_MINIAPP_APPID',
+  'wxkf.thumbMediaId': 'WXKF_THUMB_MEDIA_ID',
   'wxpay.mchPrivateKey': 'WXPAY_MCH_PRIVATE_KEY',
   'wxpay.mchSerial': 'WXPAY_MCH_SERIAL',
 }

@@ -7,10 +7,11 @@ import { normalizePem } from '../../../kit'
 // （kit/secureConfig.ts 单源读取）。零回显铁律延伸到写入口：只接收、绝不回显；且 payload 一律嵌套在
 // `fields`（saveSecureConfig）之下——adminApi/index.ts 分发处的 recordAudit 会把 `data` 顶层非敏感字段
 // 摘要写入 auditLog（见 kit/audit.ts::summarize），嵌套对象会被折叠成 '{…}'、不递归——这是本文件把敏感
-// 字段全塞进嵌套 `fields` 而不摊平到顶层的原因（守卫 secure-config-audit-shielded 焊死此形状不被拍平）。
+// 字段全塞进嵌套 `fields` 而不摊平到顶层的原因（守卫＝tests/secure-config-save.test.ts「审计日志零泄露」
+// 哨兵用例焊死此形状：拍平成顶层即红）。
 // 留空提交＝不改动该字段（防误清空既有配置，同 saveSettings 合并保存范式）。
 
-const WXKF_FIELDS = ['corpId', 'secret', 'token', 'aesKey', 'agentId'] as const
+const WXKF_FIELDS = ['corpId', 'secret', 'token', 'aesKey', 'agentId', 'miniappAppId', 'thumbMediaId'] as const
 const WXPAY_FIELDS = ['mchPrivateKey', 'mchSerial'] as const
 const DOC_FIELDS: Record<string, readonly string[]> = { wxkf: WXKF_FIELDS, wxpay: WXPAY_FIELDS }
 const MAX_LEN: Record<string, number> = {
@@ -19,6 +20,8 @@ const MAX_LEN: Record<string, number> = {
   token: 64,
   aesKey: 64,
   agentId: 32,
+  miniappAppId: 32,
+  thumbMediaId: 128,
   mchPrivateKey: 4000,
   mchSerial: 80,
 }
