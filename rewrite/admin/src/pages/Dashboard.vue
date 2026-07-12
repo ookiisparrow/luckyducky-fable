@@ -11,13 +11,14 @@ import { listInventory } from '../api/system'
 import { listDrafts } from '../api/products'
 import { mapDashboard, deriveDashboardTodos } from '../lib/mapMoney'
 import { mapDraftRows } from '../lib/mapProducts'
+import { LOW_STOCK_THRESHOLD } from '../lib/thresholds'
 import PageHeader from '../components/ui/PageHeader.vue'
 import Card from '../components/ui/Card.vue'
 import KpiCard from '../components/ui/KpiCard.vue'
 import EmptyState from '../components/ui/EmptyState.vue'
 import UiButton from '../components/ui/Button.vue'
 
-const LOW = 10 // 低库存阈值（与 Inventory 同口径·前端预警线）
+const LOW = LOW_STOCK_THRESHOLD // 低库存阈值（与 Inventory 同口径·单源见 lib/thresholds.ts）
 const router = useRouter()
 const vm = ref<ReturnType<typeof mapDashboard>>(null)
 const todo = ref({ ship: 0, refund: 0, lowStock: 0, prep: 0 })

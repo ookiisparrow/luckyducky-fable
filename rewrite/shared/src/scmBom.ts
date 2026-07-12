@@ -36,6 +36,33 @@ export type ResolveBomResult =
   | { ok: false; error: 'BAD_SETS' | 'BAD_TEMPLATE' | 'BAD_PROFILE' }
 
 /**
+ * 模板白名单清洗（存取层用·门3 校验口径单源）：非法即拒 null（fail-closed 不静默修，防脏模板入库
+ * 后组装才炸）——校验规则与 resolveBom() 里对 template 的校验同一套业务口径，此前 cloud 层
+ * （adminApi/actions/scmBom.ts）手写复刻过一份、未导入复用，是根因#8「单源」的反例，本函数补齐
+ * 单源。与 resolveBom() 各自独立（不是同一函数）：本函数只管「清洗 + 落库前收窄字段」，入参只有
+ * template（不需要 profile/sets）；resolveBom() 要 template×profile×sets 三者才能算出用料清单，
+ * 两者输出形状也不同（清洗后的模板 vs 解析出的用料行）——校验*规则*同源，函数职责不同源，故不强合。
+ */
+export function cleanBomTemplate(t: any): BomTemplate | null {
+  if (!t || !Array.isArray(t.commonLines) || !Array.isArray(t.yarnSlots) || !t.yarnSlots.length) return null
+  const commonLines: Array<{ materialId: string; qtyPerSet: number }> = []
+  for (const l of t.commonLines) {
+    if (!l || !l.materialId || typeof l.materialId !== 'string') return null
+    if (!Number.isInteger(l.qtyPerSet) || l.qtyPerSet <= 0) return null
+    commonLines.push({ materialId: String(l.materialId).slice(0, 80), qtyPerSet: l.qtyPerSet }) // 80＝落库前存储安全截断
+  }
+  const yarnSlots: Array<{ tier: YarnTier; form: YarnForm; qtyPerSet: number }> = []
+  for (const s of t.yarnSlots) {
+    if (!s || !Number.isInteger(s.qtyPerSet) || s.qtyPerSet <= 0) return null
+    if (s.tier !== 'L' && s.tier !== 'M' && s.tier !== 'S') return null
+    if (s.form !== 'raw' && s.form !== 'knotted') return null
+    if (s.form === 'knotted' && s.tier !== 'L') return null // 带结仅最大团（用户拍板）
+    yarnSlots.push({ tier: s.tier, form: s.form, qtyPerSet: s.qtyPerSet })
+  }
+  return { commonLines, yarnSlots }
+}
+
+/**
  * 模板 × 差异位 × 套数 → 用料清单（同料号合并累加）。纯函数：入参非法即 fail-closed，
  * 不静默补默认（根因#8 假数据不入账）。
  */

@@ -57,11 +57,13 @@ let saveTimer: ReturnType<typeof setTimeout> | null = null
 // 串行化实际保存（防慢网下两次自动保存乱序覆盖·P2·根因#8）：run 现读 items.value·补存即最新。
 // P1 兜底单点：载入失败或 reload 清空后 loaded=false，任何在途 timer / 离页补存 / 手动保存路径进到这里都直接 no-op——
 // 杜绝拿空/残缺 items 整档覆盖 + 孤儿 GC 删光云端帮助视频（gate loaded 已挡 watch 与 save 入口·此处收口所有写者）。
+// key='help-videos'（批D·P1）：改走模块级共享槽位，快速切走再切回本页重建组件实例时，新实例接管旧实例
+// 仍在途的补存链，防旧快照晚到覆盖新实例已存的编辑（全课程共用一份·本就是单一资源，泛 key 恰好对应）。
 const flushSave = serialSave(async () => {
   if (!loaded) return
   const r = await saveHelpVideos(items.value)
   saveState.value = r.ok ? 'saved' : 'error'
-})
+}, 'help-videos')
 function autosave() {
   saveState.value = 'saving'
   if (saveTimer) clearTimeout(saveTimer)

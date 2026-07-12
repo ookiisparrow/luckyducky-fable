@@ -1,7 +1,7 @@
 import { reply, type Ctx } from '../lib'
 import { applyStockMoves, listMaterialDocs, transition, pageQuery } from '../../../kit'
 import { COLLECTIONS } from '@ldrw/shared'
-import { asFen, OUTWORK_ORDER_STATUS } from '@ldrw/shared'
+import { asFen, OUTWORK_ORDER_STATUS, OUTWORK_ORDER_TRANSITIONS } from '@ldrw/shared'
 
 // 进销存车道 B·外协线（蓝图 docs/进销存ERP/施工蓝图.md §4B·门5 文件级隔离：本文件=车道 B 全部 action）。
 // 业务定稿（README 需求）：织女把起手结做在**最大团**毛线上——发最大团原团（按色）→ 收同色带结团入库 →
@@ -36,6 +36,15 @@ function cleanLines(raw: any): Array<{ materialId: string; qty: number }> | null
 /** 物料主档在册集合（主档量小·bounded 500·同 saveMaterial 口径经门1 只读出口）。 */
 async function knownMaterialIds(): Promise<Set<string>> {
   return new Set((await listMaterialDocs(500)).map((m: any) => String(m._id)))
+}
+
+/** 从声明流转表（scm.spec.ts→scm.ts 生成物）按目标态取合法 from 集合——该表内每个 to 只出现一次
+ *  （见 shared/scm.spec.ts 头注），故按 to 反查唯一。改流转边只改 scm.spec.ts 再跑生成器，
+ *  本函数自动跟着变——不再像此前那样在各 transition() 调用点手写字面量、与生成物各背各的。 */
+function fromFor(to: string): string[] {
+  const t = OUTWORK_ORDER_TRANSITIONS.find((x) => x.to === to)
+  if (!t) throw new Error(`OUTWORK_ORDER_TRANSITIONS 未声明 to='${to}'（scm.spec.ts 与 scmOutwork.ts 不同步）`)
+  return [...t.from]
 }
 
 // ── 列表（cursor 分页·可按 status/workerId 过滤·倒序）──
@@ -108,7 +117,7 @@ export async function saveOutwork({ db, data, agentId }: Ctx) {
 export async function issueOutwork({ db, data, agentId }: Ctx) {
   const outworkId = String(data.outworkId || '')
   if (!outworkId) return reply(400, { ok: false, error: 'NO_OUTWORK' })
-  const r = await transition('outworkOrders', outworkId, ['draft'], 'issued', { issuedAt: Date.now() })
+  const r = await transition('outworkOrders', outworkId, fromFor('issued'), 'issued', { issuedAt: Date.now() })
   if (!r.doc) return reply(404, { ok: false, error: 'NO_OUTWORK' })
   if (!r.moved) return reply(409, { ok: false, error: 'NOT_DRAFT' }) // 重放/并发方已流转——无副作用（幂等）
 
@@ -176,7 +185,7 @@ export async function receiveOutwork({ db, data, agentId }: Ctx) {
   const lossQty = issuedQty - receivedQty // 每色收≤发 ⇒ 恒 ≥0
 
   // 流转 + 定格同一次条件更新（不可分两步：分开则「翻了状态没定格金额」的窗口会让结算读到空应付）
-  const r = await transition('outworkOrders', outworkId, ['issued'], 'delivered', {
+  const r = await transition('outworkOrders', outworkId, fromFor('delivered'), 'delivered', {
     receiveLines: lines,
     payableFen,
     lossQty,
@@ -206,7 +215,7 @@ export async function receiveOutwork({ db, data, agentId }: Ctx) {
 export async function settleOutwork({ data }: Ctx) {
   const outworkId = String(data.outworkId || '')
   if (!outworkId) return reply(400, { ok: false, error: 'NO_OUTWORK' })
-  const r = await transition('outworkOrders', outworkId, ['delivered'], 'settled', { settledAt: Date.now() })
+  const r = await transition('outworkOrders', outworkId, fromFor('settled'), 'settled', { settledAt: Date.now() })
   if (!r.doc) return reply(404, { ok: false, error: 'NO_OUTWORK' })
   if (!r.moved) return reply(409, { ok: false, error: 'NOT_DELIVERED' })
   return reply(200, { ok: true })
@@ -217,7 +226,7 @@ export async function settleOutwork({ data }: Ctx) {
 export async function cancelOutwork({ data }: Ctx) {
   const outworkId = String(data.outworkId || '')
   if (!outworkId) return reply(400, { ok: false, error: 'NO_OUTWORK' })
-  const r = await transition('outworkOrders', outworkId, ['draft'], 'cancelled', { cancelledAt: Date.now() })
+  const r = await transition('outworkOrders', outworkId, fromFor('cancelled'), 'cancelled', { cancelledAt: Date.now() })
   if (!r.doc) return reply(404, { ok: false, error: 'NO_OUTWORK' })
   if (!r.moved) return reply(409, { ok: false, error: 'NOT_DRAFT' })
   return reply(200, { ok: true })

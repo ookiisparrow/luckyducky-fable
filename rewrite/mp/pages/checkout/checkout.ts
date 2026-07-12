@@ -84,7 +84,8 @@ Page({
     this.setData({ submitting: true })
     const r = await createOrder(
       draft.items.map((l) => ({ id: l.id, sku: l.sku, qty: l.qty })),
-      { name: a.name, phone: a.phone, region: a.region, detail: a.detail }
+      { name: a.name, phone: a.phone, region: a.region, detail: a.detail },
+      checkout.getIdemKey() // 同一草稿的重试复用同一个键（网络超时重试不重复建单·批E）
     )
     // 建单请求在途用户手动退出结算页（同 refresh() unloaded 范式）：不再对无关页面 setData/toast/redirectTo/
     // requestPayment（真实支付授权框）/switchTab——建单失败且已退页直接收尾；建单成功则订单已真实生成，

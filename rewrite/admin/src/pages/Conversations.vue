@@ -26,15 +26,26 @@ const hasMore = ref(false)
 const searched = ref(false)
 const report = ref<ReportVM | null>(null)
 const message = ref('')
-const slaMin = ref(30) // 首响 SLA 阈值（分钟·换皮丢了可调·报表按此算超 SLA）
+// 首响 SLA 阈值（分钟）：初值 5 与后端 conversations.ts DEFAULT_SLA_MS 同口径（P2 顺手改批——此前前端默认 30
+// 分钟，首次挂载即把它当参数传给后端，用「猜的默认值」悄悄覆盖了后端实际生效口径，两个数字互相打架）。
+// 首次加载不传该值（见 loadReport slaMinInited 分支），让后端用它自己的 DEFAULT_SLA_MS 计算，回包后用后端
+// 权威 slaMs 回填本地显示——今后改后端默认值不用两处同步改，前端自动跟上。
+const slaMin = ref(5)
+let slaMinInited = false // true＝已有一次成功回填（此后「重算」才带用户当前输入值，不再吞后端权威口径）
 const reportBusy = ref(false)
 
 async function loadReport() {
   reportBusy.value = true
-  const r = await conversationsReport(slaMin.value > 0 ? slaMin.value * 60000 : undefined)
+  const r = await conversationsReport(slaMinInited ? slaMin.value * 60000 : undefined)
   reportBusy.value = false
   report.value = mapReport(r) // 出错/空档都为 null（卡隐）——出错时另透传原文，别让「加载失败」被读成「暂无数据」
-  if (!r.ok) message.value = '质检报表加载失败：' + String((r as any).error || '') // 报错带原文（病根#14·对齐 search）
+  if (r.ok) {
+    const backendSlaMs = Number((r as any).slaMs) // 后端回传的本次实际生效阈值（权威·见 conversationsReport 回包 slaMs 字段）
+    if (Number.isFinite(backendSlaMs) && backendSlaMs > 0) slaMin.value = Math.round(backendSlaMs / 60000) || slaMin.value
+    slaMinInited = true
+  } else {
+    message.value = '质检报表加载失败：' + String((r as any).error || '') // 报错带原文（病根#14·对齐 search）
+  }
 }
 
 // 发起检索时的筛选快照（翻页复用·防用户改输入框后点「更早」用新筛选+旧 cursor 串档·P2）

@@ -113,7 +113,7 @@ export async function conversationsReport({ db, data }: Ctx) {
     ok: true,
     sampleSize: rows.length,
     approx: rows.length >= REPORT_SAMPLE, // 触顶＝近似（只算样本·同 dashboard）
-    slaMs,
+    slaMs, // 本次实际生效阈值（前端未传 slaMs 时＝DEFAULT_SLA_MS·权威口径回传，前端据此初始化输入框，不各自硬编默认值·P2 顺手改批）
     volume: { messages: rows.length, inbound, outbound, customers: byCustomer.size },
     // 答复率＝有出站回复的入站占比（解决率近似·MVP·承面C 人工接入后更准）
     response: { avgResponseMs, maxResponseMs, answered, unanswered, answeredRate: inbound ? pct(answered / inbound) : 0 },

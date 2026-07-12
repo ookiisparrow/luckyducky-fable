@@ -218,6 +218,45 @@ describe('坐席回复与会话流（黄金 §四：接缝发送·归档·失败
     expect((await post('listMyActive', A2, {})).sessions).toEqual([])
   })
 
+  it('大白话（P1 bug sweep 批B）：同一秒多条消息撞在分页截断边界——原手写单字段 gt(cursor) 会把撞点值的尾部永久漏掉，改后整组延后到下一轮整批捞回，两轮拉全不丢不重', async () => {
+    // THREAD_LIMIT=50（getThread 页大小）：49 条互不相同 at 的消息 + 3 条共享同一 at=5000 的消息（共 52 条），
+    // 让「查 51 条判 hasMore」的截断点恰好切在这 3 条同值消息中间（前 2 条进页、第 3 条被截）。
+    const distinct = Array.from({ length: 49 }, (_, i) => ({
+      _id: 'm-distinct-' + i,
+      direction: 'in',
+      externalUserId: 'eu-s1',
+      openKfId: 'kf1',
+      msgtype: 'text',
+      text: 'd' + i,
+      at: 1000 + i,
+    }))
+    const tied = ['a', 'b', 'c'].map((k) => ({
+      _id: 'm-tied-' + k,
+      direction: 'in',
+      externalUserId: 'eu-s1',
+      openKfId: 'kf1',
+      msgtype: 'text',
+      text: 'tied-' + k,
+      at: 5000, // 三条同 at——真机同秒多条消息的常态（send_time 精度秒）
+    }))
+    control.seed('conversations', [...distinct, ...tied])
+
+    const seen: string[] = []
+    let cursor: unknown
+    for (let round = 0; round < 5; round++) {
+      const r = await post('getThread', A1, cursor === undefined ? { sessionId: 's1' } : { sessionId: 's1', cursor })
+      for (const m of r.messages) {
+        expect(seen.includes(m.text)).toBe(false) // 旧手写 gt(at) bug：撞点值的尾部会被永久跳过，绝不会在后续轮次补回
+        seen.push(m.text)
+      }
+      if (r.nextCursor === cursor) break // 无新增·游标不再推进
+      cursor = r.nextCursor
+    }
+    expect(seen.length).toBe(52) // 49 条互异 + 3 条同值·全部拿到，不丢不重
+    expect(seen.filter((t) => t.startsWith('tied-')).sort()).toEqual(['tied-a', 'tied-b', 'tied-c'])
+    expect(seen.slice(0, 49)).toEqual(distinct.map((d) => d.text)) // 首轮先吐 49 条互异消息（同值组整批延后）
+  })
+
   it('大白话：入站消息投影带 msgid（从确定性 _id 剥出，供坐席台去重·bug sweep II L1）；出站消息无 msgid', async () => {
     control.seed('conversations', [
       { _id: 'wxkf:in:msg-a', direction: 'in', externalUserId: 'eu-s1', openKfId: 'kf1', msgtype: 'image', text: '[image]', mediaId: 'media-a', at: 2000 },

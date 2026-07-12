@@ -14,7 +14,8 @@ const REFUND_NO_RE = /^[0-9a-zA-Z_|*@-]{1,64}$/
 export const isValidRefundNo = (no: unknown): boolean => typeof no === 'string' && REFUND_NO_RE.test(no)
 
 // cyrb53：确定性 53-bit 非加密哈希（无 node 依赖·可入任意包）→ base36（[0-9a-z] ⊂ 微信许可集）。
-function hash53(s: string): string {
+// 导出复用（批E·createOrder 幂等键派生 claim _id，同 refundNoFor 这条「任意串→确定性短 id」需求·第二处用法）。
+export function hash53(s: string): string {
   let h1 = 0xdeadbeef
   let h2 = 0x41c6ce57
   for (let i = 0; i < s.length; i++) {

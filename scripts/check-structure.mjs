@@ -3727,14 +3727,19 @@ export const repoChecks = [
     // 订单域派生物与声明同步（P3「安全处生成」spike·北极星 A）：order.spec.ts 是订单/售后状态机的
     // 声明单源；order.ts（类型/常量/流转表）与 scripts/order-domain.generated.json 是其生成物。
     // 改声明须跑 `node scripts/gen-order-domain.mjs` 同步生成物——漂移即红，杜绝「改了声明忘重生成」。
+    // 覆盖面＝gen-order-domain.mjs 的 DOMAINS 数组全量（跑一次 --check 全域一起验，不逐域列举——新增域
+    // 只用改 DOMAINS，本守卫零改动自动纳管）：packages/ 侧 order+learning+cs+scm 四域；rewrite/ 侧目前
+    // 仅 scm 一域镜像声明（scm.ts 头部曾错误自称「由本脚本生成」实为手工镜像，本项补齐覆盖后横幅才不撒谎）。
     id: 'gen-order-domain-synced',
     roots: ['#2', 'P3'],
-    desc: '订单+learning 域派生物与声明同步（P3 安全处生成·扩 learning）：order.ts/learning.ts/order-domain.generated.json 由 order.spec.ts+learning.spec.ts 经 scripts/gen-order-domain.mjs 生成；漂移（改声明未重生成）即红——跑 `node scripts/gen-order-domain.mjs` 修复',
+    desc: '声明域派生物与声明同步（P3 安全处生成，覆盖面见 gen-order-domain.mjs DOMAINS：packages/ order+learning+cs+scm 四域、rewrite/ scm 一域镜像）：各域 .ts + order-domain.generated.json 由对应 .spec.ts 经 scripts/gen-order-domain.mjs 生成；漂移（改声明未重生成，含 rewrite/shared/src/scm.ts）即红——跑 `node scripts/gen-order-domain.mjs` 修复',
     run() {
       const spec = join(ROOT, 'packages/shared/src/order.spec.ts')
       const learnSpec = join(ROOT, 'packages/shared/src/learning.spec.ts')
+      const rwScmSpec = join(ROOT, 'rewrite/shared/src/scm.spec.ts')
       if (!existsSync(spec)) return ['packages/shared/src/order.spec.ts 缺失（订单域声明单源·P3）']
       if (!existsSync(learnSpec)) return ['packages/shared/src/learning.spec.ts 缺失（learning 域声明单源·P3 扩）']
+      if (!existsSync(rwScmSpec)) return ['rewrite/shared/src/scm.spec.ts 缺失（新线 SCM 域声明单源·P3 扩）']
       try {
         execSync(`node ${join(ROOT, 'scripts/gen-order-domain.mjs')} --check`, { encoding: 'utf8', stdio: 'pipe' })
         return []
@@ -4372,6 +4377,41 @@ export const repoChecks = [
       if (mp.coupon !== sh.coupon) bad.push(`结算常量漂移：COUPON mp=${mp.coupon} ≠ shared=${sh.coupon}（结算页展示价与云端定价不一致·下单必对不上账）`)
       if (mp.ship !== sh.ship) bad.push(`结算常量漂移：SHIP mp=${mp.ship} ≠ shared=${sh.ship}`)
       if (mp.addons !== sh.addons) bad.push('结算常量漂移：CHECKOUT_ADDONS mp 与 shared 不一致（搭配购展示与云端定价漂移）')
+      return bad
+    },
+  },
+  {
+    id: 'rw-mp-order-labels-synced',
+    roots: ['#5'],
+    desc: '订单/售后状态标签码集合同步（根因#5·同 rw-mp-checkout-consts-synced 精神：mp 包进不了 @ldrw/shared，' +
+      'mp 落客户向文案副本，本守卫只焊「状态码集合」不焊文案——admin/mp 措辞刻意不同是 UX 针对性、不是漂移，见 ' +
+      'rewrite/shared/src/statusLabels.ts 头注）：rewrite/mp/lib/mapOrders.ts 的 STATUS_LABELS 与 ' +
+      'rewrite/mp/lib/mapAftersales.ts 的 STATUS_LABELS 键集合必须分别与 shared ORDER_STATUS_LABEL_CUSTOMER / ' +
+      'AFTERSALE_STATUS_LABEL_CUSTOMER 键集合一致——状态机新增状态若 mp 忘配标签，页面会悄悄显示原始状态码',
+    run() {
+      const shPath = join(ROOT, 'rewrite/shared/src/statusLabels.ts')
+      const mpOrdersPath = join(ROOT, 'rewrite/mp/lib/mapOrders.ts')
+      const mpAftersalesPath = join(ROOT, 'rewrite/mp/lib/mapAftersales.ts')
+      if (!existsSync(shPath)) return []
+      const bad = []
+      const keysOf = (src, exportName) => {
+        const m = src.match(new RegExp(`export const ${exportName}[^{]*{([^}]*)}`, 's'))
+        if (!m) return null
+        return [...m[1].matchAll(/^\s*([a-zA-Z_][a-zA-Z0-9_]*):/gm)].map((x) => x[1]).sort()
+      }
+      const sh = readFileSync(shPath, 'utf8')
+      const shOrderKeys = keysOf(sh, 'ORDER_STATUS_LABEL_CUSTOMER')
+      const shAsKeys = keysOf(sh, 'AFTERSALE_STATUS_LABEL_CUSTOMER')
+      if (existsSync(mpOrdersPath) && shOrderKeys) {
+        const mpKeys = keysOf(readFileSync(mpOrdersPath, 'utf8'), 'STATUS_LABELS')
+        if (mpKeys && mpKeys.join(',') !== shOrderKeys.join(','))
+          bad.push(`订单状态标签码集合漂移：mp mapOrders.ts STATUS_LABELS=[${mpKeys.join(',')}] ≠ shared ORDER_STATUS_LABEL_CUSTOMER=[${shOrderKeys.join(',')}]（状态机新增/改名状态未同步到 mp）`)
+      }
+      if (existsSync(mpAftersalesPath) && shAsKeys) {
+        const mpKeys = keysOf(readFileSync(mpAftersalesPath, 'utf8'), 'STATUS_LABELS')
+        if (mpKeys && mpKeys.join(',') !== shAsKeys.join(','))
+          bad.push(`售后状态标签码集合漂移：mp mapAftersales.ts STATUS_LABELS=[${mpKeys.join(',')}] ≠ shared AFTERSALE_STATUS_LABEL_CUSTOMER=[${shAsKeys.join(',')}]（状态机新增/改名状态未同步到 mp）`)
+      }
       return bad
     },
   },

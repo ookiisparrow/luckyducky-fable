@@ -235,6 +235,23 @@ export async function sendAgentMessage(ctx: Ctx): Promise<any> {
 }
 
 // ── ⑤ getThread：拉会话消息流·cursor 增量（前端轮询·分配 scope：外包只读自己 claim 的会话·根因#3/#7）──
+//
+// 边界 tie-breaker（P1 bug sweep 批B·同一秒多条消息永久漏读）：kfCallback/archive.ts 的 `at` 精度只到秒
+// （`send_time*1000`），单会话内同秒多条消息是常态。原实现只按单字段 `at: _.gt(since)` 判定增量，若某次
+// 轮询恰好把分页截断点切在「同 at 值」的中间（如 3 条同 at 消息只查到前 2 条），`nextCursor` 会取到这个被
+// 撞点的 at 值，下一轮 `at > nextCursor`（严格大于）会把同值的剩余消息永久排除在外——不是"暂时看不到"，
+// 是再也不会被任何一次轮询命中。
+//
+// 不直接复用 kit `pageQuery` 的复合游标 `{v,id}` 方案：pageQuery 的 nextCursor 是对象形状，而 getThread
+// 的 wire 契约（`data.cursor` / 回包 `nextCursor`）是纯数字——前端 `rewrite/agent/src/lib/desk.ts`
+// `advanceCursor(current:number, next)` 对非数字 next 直接判 NaN 丢弃、cursor 冻结不前进（golden 契约
+// rw-agent-ui-golden 锁死此数字语义）。把 nextCursor 换成对象会在没有配套改前端的情况下让轮询整体卡死
+// （比原 bug 更坏：原 bug 只丢同值尾部，改坏后连后续所有消息都拉不到），代价远大于收益，故不硬套。
+// 改用等价但契约不变的手写方案——「整组 tie 要么整批进本页、要么整批留到下一轮」：轮询语义天然容许
+// "下一轮把上一轮没发的整批重新查一遍再发全"（不像分页 UI 必须精确衔接下一页、少一条都不行），
+// 所以不需要 id 级别的游标去分辨"组内哪些已发过"——只要保证 cursor 永远只推进到"已完整交付"的
+// 最后一个 at 值，被延后的整组下一轮 `at > cursor` 必然完整落在查询范围内，不丢不重。
+// 查询另加 `orderBy('_id')` 兜底同值内的稳定次序（避免同一批读因排序不确定而使边界判定在不同轮询间漂移）。
 export async function getThread(ctx: Ctx): Promise<any> {
   const { db, data } = ctx
   const p = principal(ctx)
@@ -252,12 +269,22 @@ export async function getThread(ctx: Ctx): Promise<any> {
     .collection(COLLECTIONS.conversations)
     .where({ externalUserId: s.externalUserId || '', openKfId: s.openKfId || '', at: _.gt(since) })
     .orderBy('at', 'asc')
+    .orderBy('_id', 'asc') // 同 at 值内稳定次序（tie-breaker 边界判定跨轮询一致，不靠底层默认序）
     .limit(THREAD_LIMIT + 1) // 多查一条判 hasMore（bounded·capacity-reads-bounded）
     .get()
     .catch(() => ({ data: [] }))
   const raw: any[] = (res && res.data) || []
   const hasMore = raw.length > THREAD_LIMIT
-  const list = hasMore ? raw.slice(0, THREAD_LIMIT) : raw
+  let list = hasMore ? raw.slice(0, THREAD_LIMIT) : raw
+  if (hasMore) {
+    // 撞点保护：第一条被截掉的记录（raw[THREAD_LIMIT]）若与本页末条同 at 值，说明截断点切在同值组中间——
+    // 把本页末尾属于该 at 值的记录整批退回（不发），留给下一轮 `at > cursor` 整批捞回。
+    const boundaryAt = raw[THREAD_LIMIT].at
+    while (list.length && list[list.length - 1].at === boundaryAt) list.pop()
+    // 退化保护：整页 51 条全同一 at 值（单会话单秒消息数超页大小的极端突发，远超真实客服场景量级）——
+    // 退回会把 list 清空、cursor 卡死永不前进，两害相权退回吐出原始截断页（有限退化，不做无界拉取）。
+    if (!list.length) list = raw.slice(0, THREAD_LIMIT)
+  }
   const messages = list
     .filter((m) => (m.msgtype || '') !== 'event') // 平台事件非会话内容·存量档也不进坐席消息流（新档已在 archive 侧跳过）
     .map((m) => ({

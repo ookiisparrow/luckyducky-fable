@@ -34,7 +34,26 @@ export async function listOrders({ db, data }: Ctx) {
       ? { status }
       : {}
   const paged = await pageQuery(db, 'orders', filter, 'createdAt', data, 200)
-  return reply(200, { ok: true, ...paged })
+  // 退款↔履约状态同步（P0 修复同源标记·根因见下方 shipOne 闸子注释）：批量 join 本页订单是否存在
+  // 已批准/已退款的 afterSales 记录，供前端「待发货」列表标「已退款·勿发货」（真正的拦截闸在 shipOne
+  // 服务端裁决，这里只是入口视觉提示——最小改动：不重新设计整表接口，只加一个轻量标记字段）。
+  // 有界批量 _.in 查（同 listRefunds join 订单地址手法·capacity-reads-bounded），不逐单 doc.get。
+  const list: any[] = Array.isArray(paged.list) ? paged.list : []
+  const orderIds = [...new Set(list.map((o) => String(o.id || o._id || '')).filter(Boolean))]
+  const heldIds = new Set<string>()
+  if (orderIds.length) {
+    const _ = db.command
+    const held = await db
+      .collection('afterSales')
+      .where({ orderId: _.in(orderIds), status: _.in(['approved', 'refunded']) })
+      .field({ orderId: true })
+      .limit(1000) // 钱链异常账本同款上限（getTxAlerts CAP）：本页订单最多几百单，一单多行售后仍远够
+      .get()
+      .catch(() => ({ data: [] }))
+    for (const a of (held && held.data) || []) heldIds.add(String(a.orderId || ''))
+  }
+  const enriched = list.map((o) => ({ ...o, refundHold: heldIds.has(String(o.id || o._id || '')) }))
+  return reply(200, { ok: true, ...paged, list: enriched })
 }
 
 // 按状态服务端精确计数（根因#7 计数失真）：每状态 + 全部走 .count()（精确·不封顶·不受分页影响），
@@ -77,6 +96,21 @@ async function shipOne(db: any, idRaw: any, companyRaw: any, trackingRaw: any, o
   if (cur !== 'paid' && cur !== 'shipped') return { ok: false, error: 'BAD_STATUS:' + cur }
   // 金额异常单（feeMismatch 留痕）须先「解除」后才能发货（审核批次A 折中）
   if (got.data.feeMismatch) return { ok: false, error: 'FEE_MISMATCH_HOLD' }
+  // 退款↔履约状态同步闸（P0·根因：afterSales 与 orders 是两套各自实现的状态机，互不知晓对方——
+  // approveRefund/overrideRefund 只改 afterSales，从不碰 orders；此前 shipOne 唯一放行条件是
+  // cur∈{paid,shipped}+非 feeMismatch，完全不查该单是否已有行被批准/已退款。已批准退款的单一旦照发，
+  // 就是钱货两空的资损洞。现场直读 afterSales（不走派生/缓存字段，钱链闸子必须读最新态）：该订单
+  // 存在 status∈{approved,refunded} 的记录即挡，返回命中的 lineId 供前端定位展示，不笼统吞错。
+  const heldLines = await db
+    .collection('afterSales')
+    .where({ orderId: id, status: db.command.in(['approved', 'refunded']) })
+    .field({ lineId: true, productId: true, status: true })
+    .get()
+    .catch(() => ({ data: [] }))
+  if (heldLines.data && heldLines.data.length) {
+    const lines = heldLines.data.map((a: any) => String(a.lineId || a.productId || ''))
+    return { ok: false, error: 'REFUND_HOLD', lines }
+  }
   // 条件更新（审核批次A-6）：仍是 paid/shipped 才写——防与确认收货并发把 done 回滚
   const upd = await db
     .collection('orders')

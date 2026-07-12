@@ -3,6 +3,7 @@
 import { createRouter, createWebHashHistory } from 'vue-router'
 import { client } from './api'
 import { isUploadLocked } from './lib/uploadLock'
+import { hasPendingSaves } from './lib/serialSave'
 
 const Login = () => import('./pages/Login.vue')
 const Shell = () => import('./shell/Shell.vue')
@@ -104,6 +105,13 @@ router.beforeEach((to, from) => {
 
 // 会话失效集中导登录（单源·根因#5）：任一业务调用遇 401 → client 清令牌后回调此处导登录，
 // 各页只需早退不再各写各的跳转（治「卡死加载中/裸显 SESSION_LOST」的页间漂移）。
+// 未保存编辑提示（批D·P2·根因2）：会话过期即时跳登录页，此前未落盘的表单编辑会随组件卸载静默丢失、
+// 零提示。hasPendingSaves() 复用 serialSave 共享槽位的在途/待补存状态（各页 autosave 走 key 版 serialSave
+// 后天然登记在同一处，不需要各页各自维护一份 dirty ref）——命中即说明这次过期可能正好打断了一次未落盘的
+// 编辑，跳转前用 alert 提一句（非阻断式弹窗留给以后·这里先不做到悄无声息，见批D任务单）。
 client.onSessionLost(() => {
-  if (router.currentRoute.value.path !== '/login') void router.push('/login')
+  if (router.currentRoute.value.path !== '/login') {
+    if (hasPendingSaves()) window.alert('登录已过期，本次未保存的编辑可能丢失，请重新登录后检查')
+    void router.push('/login')
+  }
 })

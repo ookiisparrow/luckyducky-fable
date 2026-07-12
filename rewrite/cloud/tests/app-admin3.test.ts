@@ -93,6 +93,55 @@ describe('发货（黄金：状态闸/金额异常挡/核销流水/合规上传 
     expect(r.results.find((x: any) => x.id === 'oBad').error).toContain('BAD_STATUS')
     expect(control.dump('orders').find((x: any) => x._id === 'o3').status).toBe('shipped')
   })
+
+  // P0 修复（退款↔履约状态同步·根因：approveRefund/overrideRefund 只改 afterSales 集合自身状态，从不碰
+  // orders；旧版 shipOne 唯一放行条件是 cur∈{paid,shipped}+非 feeMismatch，完全不查该单是否已有行被批准/
+  // 已退款——已批准退款的单能照发＝钱货两空的资损洞）：shipOne 现场查 afterSales，挡发货并标出命中行。
+  it('大白话：该单已有行退款 approved/refunded——挡发货并标出命中行；rejected（未受理）不挡', async () => {
+    seedOrder() // o1: paid，行 lineId=p1__红
+    control.seed('afterSales', [{ _id: 'as1', orderId: 'o1', lineId: 'p1__红', productId: 'p1', status: 'approved', refundAmount: 178, appliedAt: 1 }])
+    const r = await post('shipOrder', { id: 'o1', company: '顺丰', trackingNo: 'SF1' })
+    expect(r.error).toBe('REFUND_HOLD')
+    expect(r.lines).toEqual(['p1__红'])
+    expect(control.dump('orders')[0].status).toBe('paid') // 未被误发
+
+    // refunded（退款回调已跑完）同样挡——更不该照发
+    seedOrder({ _id: 'o6', id: 'o6' } as any)
+    control.seed('afterSales', [{ _id: 'as6', orderId: 'o6', lineId: 'p1__红', productId: 'p1', status: 'refunded', refundAmount: 178, appliedAt: 1 }])
+    expect((await post('shipOrder', { id: 'o6', company: '顺丰', trackingNo: 'SF6' })).error).toBe('REFUND_HOLD')
+
+    // rejected（客服拒绝、未受理、无钱路径）不挡——正常放行
+    seedOrder({ _id: 'o7', id: 'o7' } as any)
+    control.seed('afterSales', [{ _id: 'as7', orderId: 'o7', lineId: 'p1__红', productId: 'p1', status: 'rejected', appliedAt: 1 }])
+    expect((await post('shipOrder', { id: 'o7', company: '顺丰', trackingNo: 'SF7' })).ok).toBe(true)
+  })
+
+  it('大白话：批量发货里某单已退款——该单独立失败挡、不拖累其余', async () => {
+    seedOrder() // o1
+    seedOrder({ _id: 'o3', id: 'o3' } as any) // o3 正常
+    control.seed('afterSales', [{ _id: 'as1', orderId: 'o1', lineId: 'p1__红', productId: 'p1', status: 'approved', appliedAt: 1 }])
+    const r = await post('shipOrders', {
+      company: '顺丰',
+      items: [
+        { id: 'o1', trackingNo: 'SF1' },
+        { id: 'o3', trackingNo: 'SF3' },
+      ],
+    })
+    expect(r.okCount).toBe(1)
+    expect(r.results.find((x: any) => x.id === 'o1').error).toBe('REFUND_HOLD')
+    expect(control.dump('orders').find((x: any) => x._id === 'o3').status).toBe('shipped')
+  })
+
+  it('大白话：listOrders join afterSales——已批准/已退款的单标 refundHold，供前端入口收窄挡（真正裁决仍在 shipOne）', async () => {
+    seedOrder() // o1
+    seedOrder({ _id: 'o3', id: 'o3' } as any) // o3 无退款
+    control.seed('afterSales', [{ _id: 'as1', orderId: 'o1', lineId: 'p1__红', productId: 'p1', status: 'approved', appliedAt: 1 }])
+    const r = await post('listOrders', {})
+    const o1 = r.list.find((x: any) => x._id === 'o1')
+    const o3 = r.list.find((x: any) => x._id === 'o3')
+    expect(o1.refundHold).toBe(true)
+    expect(o3.refundHold).toBe(false)
+  })
 })
 
 describe('退款审批（黄金：原子抢占/回滚条件化/进课重算封顶）', () => {
