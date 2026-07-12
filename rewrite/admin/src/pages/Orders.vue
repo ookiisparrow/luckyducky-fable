@@ -408,7 +408,8 @@ onMounted(reload)
         <!-- 商品 + 逐商品激活态 -->
         <div class="items-card">
           <div class="addr-label">商品 · 激活状态</div>
-          <div v-for="it in drawer.row.items" :key="it.productId || it.name" class="ditem">
+          <!-- :key 带 spec＝行身份 productId__spec（后端 lineId 契约·VM 未透传 lineId 故就地重建）：同品多规格同单不撞键（P3·深审20260712） -->
+          <div v-for="it in drawer.row.items" :key="(it.productId || it.name) + '__' + it.spec" class="ditem">
             <b>{{ it.name }}{{ it.spec ? `（${it.spec}）` : '' }} ×{{ it.qty }}</b>
             <em v-if="actOf(it.productId)" class="act-tag" :class="actOf(it.productId)!.activated ? 'used' : 'fresh'">{{ actLabel(actOf(it.productId)!) }}</em>
           </div>

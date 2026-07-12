@@ -1,5 +1,5 @@
 import { reply, type Ctx } from '../lib'
-import { listMaterialDocs } from '../../../kit'
+import { listMaterialDocs, listStockLedger } from '../../../kit'
 import { COLLECTIONS } from '@ldrw/shared'
 import { OUTWORK_ORDER_STATUS, PURCHASE_ORDER_STATUS } from '@ldrw/shared'
 
@@ -24,7 +24,7 @@ export async function getScmOverview({ db }: Ctx) {
     db.collection('outworkOrders').where({ status: OUTWORK_ORDER_STATUS.DELIVERED }).count(),
     db.collection('purchaseOrders').where({ status: PURCHASE_ORDER_STATUS.ORDERED }).count(),
     db.collection('outworkOrders').where({ status: OUTWORK_ORDER_STATUS.ISSUED }).count(),
-    db.collection(COLLECTIONS.stockLedger).orderBy('at', 'desc').limit(RECENT_LEDGER_N).get(),
+    listStockLedger(undefined, undefined, RECENT_LEDGER_N), // 门1 kit 只读出口（倒序·有界）——防绕缝直碰 stockLedger
     db.collection(COLLECTIONS.suppliers).limit(PAYABLE_SCAN_CAP).get(),
   ])
 
@@ -58,7 +58,7 @@ export async function getScmOverview({ db }: Ctx) {
   const payableTotalFen = payables.reduce((s, g) => s + g.payableFen, 0)
   const truncated = (payCountRes.total || 0) > PAYABLE_SCAN_CAP
 
-  const recentLedger = ((ledgerRes.data || []) as any[]).map((l) => ({
+  const recentLedger = ((ledgerRes.list || []) as any[]).map((l) => ({
     _id: String(l._id || ''),
     itemKey: String(l.itemKey || ''),
     delta: Number(l.delta) || 0,

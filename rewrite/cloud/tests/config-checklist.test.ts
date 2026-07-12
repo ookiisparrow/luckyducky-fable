@@ -42,7 +42,9 @@ describe('源码扫描：configChecklist.ts 零回显（process.env 只在布尔
     expect(idxs.length).toBeGreaterThan(0)
     const chains = idxs.map((start, i) => body.slice(start, i + 1 < idxs.length ? idxs[i + 1] : body.length))
     const whereChains = chains.filter((c) => /\.where\(/.test(c))
-    expect(whereChains.length).toBeGreaterThan(0)
+    // 存量 where 探针链已收口 kit probeStockSetup（rw-material-stock-single-seam 合流改造）——本文件可以零 where 链，
+    // 但探针必须在场；未来再添 where 链仍逐条受下方有界断言约束。
+    expect(body).toMatch(/probeStockSetup\(/)
     for (const c of whereChains) {
       if (/\.get\(\)/.test(c)) expect(c).toMatch(/\.limit\(/)
     }

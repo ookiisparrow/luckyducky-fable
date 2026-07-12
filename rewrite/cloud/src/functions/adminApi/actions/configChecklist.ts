@@ -1,4 +1,5 @@
 import { reply, type Ctx } from '../lib'
+import { probeStockSetup } from '../../../kit'
 import { COLLECTIONS } from '@ldrw/shared'
 
 // 人工配置清单（批 B9·蓝图设计契约·docs/进销存ERP/ 与 docs/后台360工作站/ 之外的「配了没」总览）：
@@ -50,13 +51,10 @@ export async function getConfigChecklist({ db }: Ctx) {
   const bomDoc = await db.collection(COLLECTIONS.config).doc('scmBomTemplate').get().catch(() => null)
   const bomOk = !!(bomDoc && bomDoc.data)
 
-  const _ = db.command
-  const [ledgerRes, materialRes] = await Promise.all([
-    db.collection(COLLECTIONS.stockLedger).where({ docType: 'adjust' }).limit(1).get().catch(() => ({ data: [] })),
-    db.collection(COLLECTIONS.materials).where({ threshold: _.gt(0) }).limit(1).get().catch(() => ({ data: [] })),
-  ])
   // 期初盘点（有 adjust 流水）+ 物料安全线（有 threshold>0 物料）合并一行两条件（选简单者·两者皆备才算 ok）
-  const stockInitOk = (ledgerRes.data || []).length > 0 && (materialRes.data || []).length > 0
+  // ——经门1 kit probeStockSetup 探针（rw-material-stock-single-seam：materials/stockLedger 只许 kit/scmStock 碰）
+  const probe = await probeStockSetup()
+  const stockInitOk = probe.adjustUsed && probe.thresholdSet
 
   const groups: ChecklistGroup[] = [
     {

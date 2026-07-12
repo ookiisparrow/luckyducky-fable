@@ -77,12 +77,32 @@ async function shipOne(db: any, idRaw: any, companyRaw: any, trackingRaw: any, o
   if (cur !== 'paid' && cur !== 'shipped') return { ok: false, error: 'BAD_STATUS:' + cur }
   // 金额异常单（feeMismatch 留痕）须先「解除」后才能发货（审核批次A 折中）
   if (got.data.feeMismatch) return { ok: false, error: 'FEE_MISMATCH_HOLD' }
-  // 条件更新（审核批次A-6）：仍是 paid/shipped 才写——防与确认收货并发把 done 回滚
+  // 退款联动闸（深审 P1·根因#2 状态双源）：refundCallback 退款成功只翻 afterSales→refunded、回补库存、
+  // 在订单留 refunded.* 对账痕，**从不改 order.status**——整单退款后订单仍是 paid，照常出现在待发货标签，
+  // 钱退了货还能发（资损＝货值）＋refundCallback 已回补的库存又被实物出库抵消（账实双偏）。发货前查该单
+  // afterSales：任一行处于 applied/approved/refunded（申请中/已批/已退款）即挡 REFUND_HOLD，人工核实后
+  // 处置（同 feeMismatch 的 hold 语义）；退款被拒（→rejected 出结算集）后自然解闸。bounded 只需知有无一条。
+  const activeRefund = await db
+    .collection('afterSales')
+    .where({ orderId: id, status: db.command.in(['applied', 'approved', 'refunded']) })
+    .limit(1)
+    .get()
+    .catch(() => ({ data: [] as any[] }))
+  if (activeRefund.data && activeRefund.data.length) return { ok: false, error: 'REFUND_HOLD' }
+  // 条件更新（审核批次A-6）：仍是 paid/shipped 才写——防与确认收货并发把 done 回滚。
+  // shipUpdatedAt 恒变（深审 P3·根因#8）：改单号重发货（shipped→shipped）提交相同 company/trackingNo 时
+  // patch 值与库内全同，真库 modifiedCount 语义下 updated 可能为 0 → 误判并发失败回 BAD_STATUS:shipped；
+  // 补一个每次必变的时间戳保证更新非空（shippedAt 首发时刻仍保留、不被覆盖）。
   const upd = await db
     .collection('orders')
     .where({ _id: id, status: db.command.in(['paid', 'shipped']) })
     .update({
-      data: { status: 'shipped', shipping: { company, trackingNo }, shippedAt: got.data.shippedAt || Date.now() },
+      data: {
+        status: 'shipped',
+        shipping: { company, trackingNo },
+        shippedAt: got.data.shippedAt || Date.now(),
+        shipUpdatedAt: Date.now(),
+      },
     })
   if (!upd.stats || upd.stats.updated !== 1) {
     const fresh = await db.collection('orders').doc(id).get().catch(() => null)

@@ -247,11 +247,20 @@ export async function getThread(ctx: Ctx): Promise<any> {
   // 增量游标：首拉（无 cursor）从会话建立**前 10 分钟**起（深审 F5——顾客点「转人工」之前打的字往往是真正的
   // 问题描述，坐席须看得到；10 分钟窗兼顾「不整段回溯该顾客历史会话」的 AD 语义）；cursor 有则取其后（轮询取新消息）。
   const PRE_CONTEXT_MS = 10 * 60_000
-  const since = Math.max(Number(data && data.cursor) || 0, (Number(s.createdAt) || 0) - PRE_CONTEXT_MS - 1)
+  // 增量游标回退窗（深审 P2·病根#7）：入站归档 at=send_time*1000 是秒级截断（毫秒恒 0），出站用 Date.now() 毫秒级——
+  // 坐席回复(at=S.400)把 cursor 推到 S.400 后，顾客同一秒发的消息归档为 at=S.000（<cursor）会被 at gt(cursor) 永久跳过
+  // （同秒多条入站 at 相等也撞严格 gt 边界）。单字段 at 游标无解（排序键本身与到达序不单调）：cursor 回退 1 秒重查窗
+  // + 客户端按 msgid 去重兜住（getThread 已下发 msgid·Desk 端 keyOf 去重）；at 加 _id tiebreaker 保分页稳定不漏不重。
+  const GRACE_MS = 1000
+  const cursor = Number(data && data.cursor) || 0
+  const since = cursor
+    ? Math.max(0, cursor - GRACE_MS - 1) // 轮询：回退一秒重查（gt 严格·-1 令边界含入·重复交客户端 msgid 去重）
+    : Math.max(0, (Number(s.createdAt) || 0) - PRE_CONTEXT_MS - 1) // 首拉：会话建立前 10 分钟
   const res = await db
     .collection(COLLECTIONS.conversations)
     .where({ externalUserId: s.externalUserId || '', openKfId: s.openKfId || '', at: _.gt(since) })
     .orderBy('at', 'asc')
+    .orderBy('_id', 'asc') // tiebreaker：同 at 多条按 _id 稳定排序，翻页不漏不重（同 pageQuery 复合游标口径）
     .limit(THREAD_LIMIT + 1) // 多查一条判 hasMore（bounded·capacity-reads-bounded）
     .get()
     .catch(() => ({ data: [] }))

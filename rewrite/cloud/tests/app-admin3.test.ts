@@ -47,6 +47,24 @@ describe('发货（黄金：状态闸/金额异常挡/核销流水/合规上传 
     expect((await post('shipOrder', { id: 'o2', company: '顺丰', trackingNo: 'SF1' })).ok).toBe(true)
   })
 
+  it('大白话：退款在途/已退款的单挡发货（REFUND_HOLD·钱退了货不能再发）；退款被拒后自然解闸', async () => {
+    // refundCallback 退款成功只翻 afterSales→refunded、从不改 order.status，整单退款后订单仍 paid、
+    // 照常出现在待发货——若能发货即钱退了货又发（资损）。发货前查该单 afterSales 活跃退款行即挡。
+    // 每状态用不同 orderId（control.seed 追加不替换）：同单退款行只见自己那条。
+    const mkOrder = (oid: string) =>
+      control.seed('orders', [{ _id: oid, id: oid, _openid: 'oBUYER', status: 'paid', amount: 178, goods: 198, createdAt: 1000, items: [{ productId: 'p1', lineId: 'p1__红', spec: '红', name: '鸭', price: 198, qty: 1, refundable: true }] }])
+    for (const st of ['applied', 'approved', 'refunded']) {
+      const oid = 'oR_' + st
+      mkOrder(oid)
+      control.seed('afterSales', [{ _id: oid + '__p1__红', orderId: oid, lineId: 'p1__红', productId: 'p1', status: st, refundAmount: 178 }])
+      expect((await post('shipOrder', { id: oid, company: '顺丰', trackingNo: 'SF1' })).error).toBe('REFUND_HOLD')
+    }
+    // 退款被拒（rejected 出结算集）→ 不再挡，可正常发货
+    mkOrder('oR_rej')
+    control.seed('afterSales', [{ _id: 'oR_rej__p1__红', orderId: 'oR_rej', lineId: 'p1__红', productId: 'p1', status: 'rejected', refundAmount: 178 }])
+    expect((await post('shipOrder', { id: 'oR_rej', company: '顺丰', trackingNo: 'SF1' })).ok).toBe(true)
+  })
+
   it('大白话：首次发货翻已发货+写物流快照+逐行落核销流水（只留痕不动账·记操作者）；改单号不重复留痕', async () => {
     seedOrder()
     const r = await post('shipOrder', { id: 'o1', company: '顺丰', trackingNo: 'SF001' })

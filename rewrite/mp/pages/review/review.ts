@@ -71,6 +71,7 @@ Page({
         /* 单张失败跳过 */
       }
     }
+    if (this.unloaded) return // await 恢复点复核（同 onSubmit 范式·深审20260712 P3）：上传在途已退页——迟到回包不再 setData/toast
     this.setData({ photos: [...this.data.photos, ...ups].slice(0, this.data.maxPhotos), uploading: false })
     if (ups.length < res.tempFiles.length) wx.showToast({ title: '部分图片没传上', icon: 'none' })
   },

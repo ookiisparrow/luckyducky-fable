@@ -296,6 +296,23 @@ describe('顾客发图坐席可见（B5·图片消息下载延迟到坐席首次
     control.seed('conversations', [{ _id: 'wxkf:in:txt-1', direction: 'in', externalUserId: 'eu-s1', openKfId: 'kf1', msgtype: 'text', text: '在吗', at: 900 }])
     expect((await post('getMediaUrl', A1, { sessionId: 's1', msgId: 'txt-1' })).error).toBe('NO_MEDIA') // 文本消息无 mediaId
   })
+
+  it('大白话：增量轮询回退一秒重查——坐席回复后同秒（秒级截断）晚到的顾客消息不被 gt 游标永久跳过（深审 P2）', async () => {
+    // 出站回复 ms 级 at=3400 把 cursor 推到 3400；顾客同秒消息归档 at=3000（send_time*1000 秒级截断·<cursor）
+    control.seed('conversations', [
+      { _id: 'wxkf:in:early', direction: 'in', externalUserId: 'eu-s1', openKfId: 'kf1', msgtype: 'text', text: '问题', at: 3000 },
+      { _id: 'out-reply', direction: 'out', externalUserId: 'eu-s1', openKfId: 'kf1', msgtype: 'text', text: '在的', at: 3400 },
+    ])
+    const first = await post('getThread', A1, { sessionId: 's1' })
+    expect(first.nextCursor).toBe(3400) // 游标推到出站 ms 级 at
+    // 顾客在同一秒又发一条（晚到·秒级截断 at=3000·< cursor 3400）
+    control.seed('conversations', [
+      { _id: 'wxkf:in:late', direction: 'in', externalUserId: 'eu-s1', openKfId: 'kf1', msgtype: 'text', text: '补充', at: 3000 },
+    ])
+    const second = await post('getThread', A1, { sessionId: 's1', cursor: first.nextCursor })
+    // 回退一秒重查窗命中晚到消息（旧 gt(3400) 会永久跳过它·坐席看漏顾客消息）；重复项交客户端 msgid 去重
+    expect(second.messages.some((m: any) => m.msgid === 'late')).toBe(true)
+  })
 })
 
 describe('scoped 360 双闸（黄金 §二：归属 + 数据共享同意·超管数据控制者）', () => {

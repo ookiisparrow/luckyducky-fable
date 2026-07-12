@@ -143,6 +143,7 @@ export async function listStockLedger(materialId?: string, req?: PageReq, defaul
   return pageQuery(db, COLLECTIONS.stockLedger, filter, 'at', req, defaultLimit)
 }
 
+
 /** 某类流水按 itemKey 分组求和（管理端只读汇总·产销统计用·DB aggregate 不封顶精确不近似）。 */
 export async function sumLedgerByItemKey(docType: MoveDocType): Promise<{ itemKey: string; total: number }[]> {
   const db = getDb()
@@ -201,4 +202,15 @@ export async function listMaterialDocs(limit = 500): Promise<any[]> {
   const cap = Math.min(Math.max(1, limit | 0), 500)
   const r = await db.collection(COLLECTIONS.materials).limit(cap).get().catch(() => ({ data: [] }))
   return r.data || []
+}
+/** 存在性探针（B9 配置清单·只读 limit(1)×2）：期初盘点做过没（有 adjust 流水）/ 物料安全线设过没
+ *  （有 threshold>0 主档）——清单页只问「用过没有」不拉数据；收口本文件防绕门1 直碰 materials/stockLedger。 */
+export async function probeStockSetup(): Promise<{ adjustUsed: boolean; thresholdSet: boolean }> {
+  const db = getDb()
+  const _ = db.command
+  const [ledgerRes, materialRes] = await Promise.all([
+    db.collection(COLLECTIONS.stockLedger).where({ docType: 'adjust' }).limit(1).get().catch(() => ({ data: [] })),
+    db.collection(COLLECTIONS.materials).where({ threshold: _.gt(0) }).limit(1).get().catch(() => ({ data: [] })),
+  ])
+  return { adjustUsed: ((ledgerRes as any).data || []).length > 0, thresholdSet: ((materialRes as any).data || []).length > 0 }
 }

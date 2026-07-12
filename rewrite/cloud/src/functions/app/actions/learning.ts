@@ -1,10 +1,28 @@
 import { ERR, COLLECTIONS, QRCODE_STATUS_SPEC } from '@ldrw/shared'
-import { withOpenId, withRateLimit, ok, err, str, transition, ensureDoc, getTempUrl, getDb, alert, recordAnomaly } from '../../../kit'
+import {
+  withOpenId,
+  withRateLimit,
+  ok,
+  err,
+  str,
+  transition,
+  ensureDoc,
+  getTempUrl,
+  getDb,
+  alert,
+  recordAnomaly,
+} from '../../../kit'
 
 const QR = QRCODE_STATUS_SPEC.transitions[0] // unused→activated（声明单源，不散写状态串）
 
 /** 确保本人激活记录存在（幂等自愈·黄金 §一）：老随机 _id 命中即用；否则确定性 _id=code 原子创建。 */
-async function ensureActivation(db: any, code: string, courseId: string, OPENID: string, now: number) {
+async function ensureActivation(
+  db: any,
+  code: string,
+  courseId: string,
+  OPENID: string,
+  now: number
+) {
   const legacy = await db
     .collection(COLLECTIONS.activations)
     .where({ code, _openid: OPENID })
@@ -34,7 +52,12 @@ async function ensureActivation(db: any, code: string, courseId: string, OPENID:
     // 「留痕」二字；recordAnomaly(severity:'high') 首见即桥接 alert + 持久化 + （若配了 webhook）推送，
     // 三头都占（kit/anomaly.ts 单源）。kind 用 'invariant-violation'（激活写入未验证成功＝不变量违反，
     // 非直接钱链/安全事件）。
-    await recordAnomaly('invariant-violation', 'ACT_PERSIST_UNVERIFIED', { fn: 'activateCourse', code }, 'high')
+    await recordAnomaly(
+      'invariant-violation',
+      'ACT_PERSIST_UNVERIFIED',
+      { fn: 'activateCourse', code },
+      'high'
+    )
     return null
   }
 }
@@ -43,107 +66,130 @@ async function ensureActivation(db: any, code: string, courseId: string, OPENID:
  * 扫码激活（黄金 §一）：一码一用抢占（transition 条件更新·翻成功者赢）；
  * 抢到/本人重扫一律幂等自愈激活记录；他人码拒且带回 courseId（「已被激活」屏按课程取图）。
  */
-export const activateCourse = withOpenId(async ({ db, OPENID, event }) => {
-  const code = String((event as any).code || '').trim()
-  if (!code) return err(ERR.INVALID_CODE)
-  const now = Date.now()
+// 频控（深审 P2·根因#13 认证/兑换端点防爆破）：激活码兑换是「猜有效未用码」的典型爆破面（每次调用一读一条件写），
+// 码空间 32^10≈1e15 使盲猜不现实，但仍须按 openid 限速拖慢定向枚举 + 挡刷库成本（同 trackEvent/login 口径）。
+export const activateCourse = withOpenId(
+  withRateLimit('activateCourse', { max: 10, windowMs: 60_000 }, async ({ db, OPENID, event }) => {
+    const code = String((event as any).code || '').trim()
+    if (!code) return err(ERR.INVALID_CODE)
+    const now = Date.now()
 
-  const { moved, doc: qr } = await transition(COLLECTIONS.qrcodes, code, [...QR.from], QR.to, {
-    activatedBy: OPENID,
-    activatedAt: now,
+    const { moved, doc: qr } = await transition(COLLECTIONS.qrcodes, code, [...QR.from], QR.to, {
+      activatedBy: OPENID,
+      activatedAt: now,
+    })
+
+    if (!qr) return err(ERR.INVALID_CODE)
+    if (moved || qr.activatedBy === OPENID) {
+      const act = await ensureActivation(db, code, qr.courseId, OPENID, now)
+      // 双失败未持久化（P2·根因#14）：库里其实没写成功，别回「activated」——回错误码走客户端已有失败反馈路径；
+      // 用户重扫时 qr.activatedBy===OPENID 命中本分支再试一次 ensureActivation，天然幂等自愈。
+      if (!act) return err(ERR.NOT_ACTIVATED, { courseId: qr.courseId })
+      return ok({ state: act.enteredAt ? 'mine' : 'activated', courseId: qr.courseId })
+    }
+    return err(ERR.CODE_TAKEN, { courseId: qr.courseId })
   })
-
-  if (!qr) return err(ERR.INVALID_CODE)
-  if (moved || qr.activatedBy === OPENID) {
-    const act = await ensureActivation(db, code, qr.courseId, OPENID, now)
-    // 双失败未持久化（P2·根因#14）：库里其实没写成功，别回「activated」——回错误码走客户端已有失败反馈路径；
-    // 用户重扫时 qr.activatedBy===OPENID 命中本分支再试一次 ensureActivation，天然幂等自愈。
-    if (!act) return err(ERR.NOT_ACTIVATED, { courseId: qr.courseId })
-    return ok({ state: act.enteredAt ? 'mine' : 'activated', courseId: qr.courseId })
-  }
-  return err(ERR.CODE_TAKEN, { courseId: qr.courseId })
-})
+)
 
 /**
  * 确认进课（黄金 §二）：退货权法律节点。enteredAt null→时间戳原子抢占（只一次）；
  * 首次进课按件失效退货权（enteredQty++·entVer CAS 防并发少记）；送礼无单不报错。
  */
-export const confirmEnter = withOpenId(async ({ db, OPENID, event }) => {
-  const _ = db.command
-  const code = String((event as any).code || '').trim()
-  if (!code) return err(ERR.BAD_ARGS)
+// 频控（深审 P2·根因#13）：确认进课是退货权失效的法律节点写，按 openid 限速挡刷（正常人一次进课远低于此）。
+export const confirmEnter = withOpenId(
+  withRateLimit('confirmEnter', { max: 10, windowMs: 60_000 }, async ({ db, OPENID, event }) => {
+    const _ = db.command
+    const code = String((event as any).code || '').trim()
+    if (!code) return err(ERR.BAD_ARGS)
 
-  const acts = await db.collection(COLLECTIONS.activations).where({ code, _openid: OPENID }).get()
-  if (!acts.data.length) return err(ERR.NOT_ACTIVATED)
-  const act = acts.data[0]
+    const acts = await db.collection(COLLECTIONS.activations).where({ code, _openid: OPENID }).get()
+    if (!acts.data.length) return err(ERR.NOT_ACTIVATED)
+    const act = acts.data[0]
 
-  const now = Date.now()
-  let enteredAt = act.enteredAt
-  let revoked: { orderId: string; lineId: string; productId: string } | null = null
+    const now = Date.now()
+    let enteredAt = act.enteredAt
+    let revoked: { orderId: string; lineId: string; productId: string } | null = null
 
-  if (!enteredAt) {
-    const grab = await db
-      .collection(COLLECTIONS.activations)
-      .where({ _id: act._id, enteredAt: null })
-      .update({ data: { enteredAt: now } })
-    if (!grab.stats || grab.stats.updated !== 1) {
-      const fresh = await db
+    if (!enteredAt) {
+      const grab = await db
         .collection(COLLECTIONS.activations)
-        .doc(act._id)
-        .get()
-        .catch(() => null)
-      return ok({ enteredAt: (fresh && fresh.data && fresh.data.enteredAt) || now, revoked: null })
-    }
-    enteredAt = now
+        .where({ _id: act._id, enteredAt: null })
+        .update({ data: { enteredAt: now } })
+      if (!grab.stats || grab.stats.updated !== 1) {
+        const fresh = await db
+          .collection(COLLECTIONS.activations)
+          .doc(act._id)
+          .get()
+          .catch(() => null)
+        return ok({
+          enteredAt: (fresh && fresh.data && fresh.data.enteredAt) || now,
+          revoked: null,
+        })
+      }
+      enteredAt = now
 
-    // 启发式失效：本人 paid/shipped/done 订单里最早一条仍可退的本课程行，进一件账
-    const prods = await db.collection(COLLECTIONS.products).where({ courseId: act.courseId }).get()
-    const prodIds = prods.data.map((p: any) => p.id)
-    if (prodIds.length) {
-      const orders = await db
-        .collection(COLLECTIONS.orders)
-        .where({ _openid: OPENID, status: _.in(['paid', 'shipped', 'done']) })
-        .orderBy('createdAt', 'asc')
-        .limit(200) // 显式上界：防默认 100 截断漏到要撤退货权的订单
+      // 启发式失效：本人 paid/shipped/done 订单里最早一条仍可退的本课程行，进一件账
+      const prods = await db
+        .collection(COLLECTIONS.products)
+        .where({ courseId: act.courseId })
+        .limit(500) // 显式上界（深审 P2·病根#7）：裸 .get() 默认 100 截断会让本课部分商品的退货权撤销漏判
         .get()
-      for (const order of orders.data) {
-        let cur: any = order
-        for (let attempt = 0; attempt < 3 && cur; attempt++) {
-          const idx = (cur.items || []).findIndex(
-            (it: any) =>
-              prodIds.includes(it.productId) && it.refundable !== false && (it.enteredQty || 0) < (it.qty || 1)
-          )
-          if (idx < 0) break
-          const items = cur.items.map((it: any, i: number) => {
-            if (i !== idx) return it
-            const entered = (it.enteredQty || 0) + 1
-            const qty = it.qty || 1
-            return { ...it, enteredQty: entered, refundable: entered < qty }
-          })
-          const upd = await db
-            .collection(COLLECTIONS.orders)
-            .where({ _id: cur._id, entVer: typeof cur.entVer === 'number' ? cur.entVer : _.exists(false) })
-            .update({ data: { items, entVer: (cur.entVer || 0) + 1 } })
-          if (upd.stats && upd.stats.updated === 1) {
-            const ri = cur.items[idx]
-            revoked = { orderId: cur.id, lineId: ri.lineId || ri.productId, productId: ri.productId }
-            break
+      const prodIds = prods.data.map((p: any) => p.id)
+      if (prodIds.length) {
+        const orders = await db
+          .collection(COLLECTIONS.orders)
+          .where({ _openid: OPENID, status: _.in(['paid', 'shipped', 'done']) })
+          .orderBy('createdAt', 'asc')
+          .limit(200) // 显式上界：防默认 100 截断漏到要撤退货权的订单
+          .get()
+        for (const order of orders.data) {
+          let cur: any = order
+          for (let attempt = 0; attempt < 3 && cur; attempt++) {
+            const idx = (cur.items || []).findIndex(
+              (it: any) =>
+                prodIds.includes(it.productId) &&
+                it.refundable !== false &&
+                (it.enteredQty || 0) < (it.qty || 1)
+            )
+            if (idx < 0) break
+            const items = cur.items.map((it: any, i: number) => {
+              if (i !== idx) return it
+              const entered = (it.enteredQty || 0) + 1
+              const qty = it.qty || 1
+              return { ...it, enteredQty: entered, refundable: entered < qty }
+            })
+            const upd = await db
+              .collection(COLLECTIONS.orders)
+              .where({
+                _id: cur._id,
+                entVer: typeof cur.entVer === 'number' ? cur.entVer : _.exists(false),
+              })
+              .update({ data: { items, entVer: (cur.entVer || 0) + 1 } })
+            if (upd.stats && upd.stats.updated === 1) {
+              const ri = cur.items[idx]
+              revoked = {
+                orderId: cur.id,
+                lineId: ri.lineId || ri.productId,
+                productId: ri.productId,
+              }
+              break
+            }
+            const fresh = await db
+              .collection(COLLECTIONS.orders)
+              .doc(cur._id)
+              .get()
+              .catch(() => null)
+            cur = fresh && fresh.data
+            if (attempt === 2) alert('money', 'confirmEnter', 'REVOKE_RACE', { orderId: order.id })
           }
-          const fresh = await db
-            .collection(COLLECTIONS.orders)
-            .doc(cur._id)
-            .get()
-            .catch(() => null)
-          cur = fresh && fresh.data
-          if (attempt === 2) alert('money', 'confirmEnter', 'REVOKE_RACE', { orderId: order.id })
+          if (revoked) break
         }
-        if (revoked) break
       }
     }
-  }
 
-  return ok({ enteredAt, revoked })
-})
+    return ok({ enteredAt, revoked })
+  })
+)
 
 /** 公开课程目录（黄金 §三）：逐层显式白名单，绝不下发视频源；段只暴露 hasVideo 布尔。 */
 function publicSegment(s: any) {
@@ -158,9 +204,15 @@ function publicChapter(ch: any) {
 
 export const getCourses = async () => {
   const db = getDb()
-  const res = await db.collection(COLLECTIONS.courses).orderBy('sort', 'asc').get()
+  // 显式上界（深审 P2·病根#7·同 catalog.ts getProducts 口径）：裸 .get() 服务端默认 100 条静默截断，
+  // 课程目录破百后第 101 门起从用户课程页无声消失。
+  const res = await db.collection(COLLECTIONS.courses).orderBy('sort', 'asc').limit(500).get()
   return ok({
-    list: res.data.map((c: any) => ({ id: c.id, title: c.title, chapters: (c.chapters || []).map(publicChapter) })),
+    list: res.data.map((c: any) => ({
+      id: c.id,
+      title: c.title,
+      chapters: (c.chapters || []).map(publicChapter),
+    })),
   })
 }
 
@@ -168,48 +220,52 @@ export const getCourses = async () => {
  * 取分段播放地址（黄金 §三·fail-closed）：一律须本人已确认进课；旧库残留预览标记不构成授权
  * （免费预览通道已整条撤除）；素材未剪 → url:null；鉴权过才换短时临时 URL。
  */
-export const getPlaybackUrl = withOpenId(async ({ db, OPENID, event }) => {
-  const e: any = event
-  const courseId = String(e.courseId || '')
-  const segmentId = String(e.segmentId || '')
-  if (!courseId || !segmentId) return err(ERR.BAD_ARGS)
+// 频控（深审 P3·病根#13）：签发付费视频临时地址的端点，按 openid 限速防无限铸签名地址/刷成本；
+// 上限宽松（正常观看切段+预取每分钟远低于此·客户端已缓存 prefetch·不误伤连续播放）。
+export const getPlaybackUrl = withOpenId(
+  withRateLimit('getPlaybackUrl', { max: 60, windowMs: 60_000 }, async ({ db, OPENID, event }) => {
+    const e: any = event
+    const courseId = String(e.courseId || '')
+    const segmentId = String(e.segmentId || '')
+    if (!courseId || !segmentId) return err(ERR.BAD_ARGS)
 
-  // 批C·并行取回（零依赖只读）：课程文档读与鉴权读的入参只来自 courseId/segmentId/OPENID（已核对
-  // 课程文档零依赖），互不依赖对方结果——并行发起省一次网关往返；判定顺序原样保持
-  // NO_COURSE→NO_SEGMENT→NOT_ENTITLED。素材未剪（url:null）分支下 acts 结果单纯丢弃——纯读零副作用，
-  // 等价原「未剪视频不查鉴权」语义，代价仅是该分支多付一次本可省的读（权衡：省掉常态有视频路径的
-  // 一次串行往返，换未剪视频这一冷分支多一次并行读，净为正）。
-  const [got, acts] = await Promise.all([
-    db
-      .collection(COLLECTIONS.courses)
-      .doc(courseId)
-      .get()
-      .catch(() => null),
-    db
-      .collection(COLLECTIONS.activations)
-      .where({ _openid: OPENID, courseId, enteredAt: db.command.neq(null) })
-      .get(),
-  ])
-  if (!got || !got.data) return err(ERR.NO_COURSE)
+    // 批C·并行取回（零依赖只读）：课程文档读与鉴权读的入参只来自 courseId/segmentId/OPENID（已核对
+    // 课程文档零依赖），互不依赖对方结果——并行发起省一次网关往返；判定顺序原样保持
+    // NO_COURSE→NO_SEGMENT→NOT_ENTITLED。素材未剪（url:null）分支下 acts 结果单纯丢弃——纯读零副作用，
+    // 等价原「未剪视频不查鉴权」语义，代价仅是该分支多付一次本可省的读（权衡：省掉常态有视频路径的
+    // 一次串行往返，换未剪视频这一冷分支多一次并行读，净为正）。
+    const [got, acts] = await Promise.all([
+      db
+        .collection(COLLECTIONS.courses)
+        .doc(courseId)
+        .get()
+        .catch(() => null),
+      db
+        .collection(COLLECTIONS.activations)
+        .where({ _openid: OPENID, courseId, enteredAt: db.command.neq(null) })
+        .get(),
+    ])
+    if (!got || !got.data) return err(ERR.NO_COURSE)
 
-  let seg: any = null
-  for (const ch of got.data.chapters || []) {
-    for (const l of ch.lessons || []) {
-      const f = (l.segments || []).find((s: any) => s.id === segmentId)
-      if (f) {
-        seg = f
-        break
+    let seg: any = null
+    for (const ch of got.data.chapters || []) {
+      for (const l of ch.lessons || []) {
+        const f = (l.segments || []).find((s: any) => s.id === segmentId)
+        if (f) {
+          seg = f
+          break
+        }
       }
+      if (seg) break
     }
-    if (seg) break
-  }
-  if (!seg) return err(ERR.NO_SEGMENT)
-  if (!seg.videoFileId) return ok({ url: null })
+    if (!seg) return err(ERR.NO_SEGMENT)
+    if (!seg.videoFileId) return ok({ url: null })
 
-  if (!acts.data.length) return err(ERR.NOT_ENTITLED)
+    if (!acts.data.length) return err(ERR.NOT_ENTITLED)
 
-  return ok({ url: await getTempUrl(String(seg.videoFileId)) })
-})
+    return ok({ url: await getTempUrl(String(seg.videoFileId)) })
+  })
+)
 
 /** 本人已解锁课程（黄金 §五）：只认已确认进课；同课多码去重取最早。 */
 export const getMyCourses = withOpenId(async ({ db, OPENID }) => {
@@ -231,7 +287,11 @@ export const getMyCourses = withOpenId(async ({ db, OPENID }) => {
 /** 我的学习进度（只本人·集合未建=空）。 */
 export const getMyProgress = withOpenId(async ({ db, OPENID }) => {
   try {
-    const res = await db.collection(COLLECTIONS.progress).where({ _openid: OPENID }).limit(200).get()
+    const res = await db
+      .collection(COLLECTIONS.progress)
+      .where({ _openid: OPENID })
+      .limit(200)
+      .get()
     return ok({ list: res.data })
   } catch {
     return ok({ list: [] })
@@ -267,7 +327,14 @@ export const trackEvent = withOpenId(
     if (JSON.stringify(meta).length > 1024) return err(ERR.META_TOO_BIG)
 
     const now = Date.now()
-    await addTo(db, COLLECTIONS.events, { _openid: OPENID, type, page, targetId, meta, createdAt: now })
+    await addTo(db, COLLECTIONS.events, {
+      _openid: OPENID,
+      type,
+      page,
+      targetId,
+      meta,
+      createdAt: now,
+    })
 
     const courseId = str(meta.courseId, 64)
     if ((type === 'segment_done' || type === 'watch_at') && courseId) {
@@ -297,7 +364,13 @@ export const trackEvent = withOpenId(
         await progress.doc(found.data[0]._id).update({ data: patch })
       } else {
         const pid = OPENID + '__' + courseId
-        await ensureDoc(COLLECTIONS.progress, pid, { _openid: OPENID, courseId, done: {}, last, createdAt: now })
+        await ensureDoc(COLLECTIONS.progress, pid, {
+          _openid: OPENID,
+          courseId,
+          done: {},
+          last,
+          createdAt: now,
+        })
         await progress.doc(pid).update({ data: patch })
       }
     }

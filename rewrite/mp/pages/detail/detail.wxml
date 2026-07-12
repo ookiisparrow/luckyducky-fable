@@ -65,7 +65,8 @@
           <text class="pdp-param-v">{{item.v}}</text>
         </view>
       </view>
-      <block wx:for="{{vm.sections}}" wx:key="lead">
+      <!-- wx:key 刻意用 index（同 about/reviews 判例）：段落无 id 字段，lead 作 key 多段空标题必撞键；列表随 vm 整体替换、不重排，index 稳定 -->
+      <block wx:for="{{vm.sections}}" wx:key="index">
         <view class="pdp-detail-lead" wx:if="{{item.lead}}">{{item.lead}}</view>
         <view class="pdp-detail-p" wx:if="{{item.body}}">{{item.body}}</view>
       </block>
@@ -76,7 +77,8 @@
   <view class="pdp-sec" wx:if="{{vm.kit.length}}">
     <view class="pdp-sec-head"><text class="pdp-sec-title">套装包含</text></view>
     <view class="pdp-kit-grid">
-      <view class="pdp-kit-cell" wx:for="{{vm.kit}}" wx:key="name">
+      <!-- wx:key 刻意用 index（同 about/reviews 判例）：材料无 id 字段，name 作 key 同名不同规格必撞键；列表随 vm 整体替换、不重排，index 稳定 -->
+      <view class="pdp-kit-cell" wx:for="{{vm.kit}}" wx:key="index">
         <view class="pdp-kit-name">{{item.name}}</view>
         <view class="pdp-kit-qty" wx:if="{{item.qty}}">{{item.qty}}</view>
       </view>
