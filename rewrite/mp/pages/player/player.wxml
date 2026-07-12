@@ -94,11 +94,13 @@
     <view class="lp-video-box lp-state" wx:elif="{{state === 'missing'}}">
       <view class="lp-state-title">课程不存在</view>
     </view>
+    <!-- error 态双语义（评审修复）：current 有值=段级失败（取址/媒体）；current 空=课程目录都没拉到
+         （initCourse 失败·深链冷启动弱网），文案与按钮随态分流，重试都走 onRetryError（内部自分流）。 -->
     <view class="lp-video-box lp-state" wx:elif="{{state === 'error'}}">
-      <view class="lp-state-title">这段视频暂时播放不了</view>
-      <view class="lp-state-hint">可能是网络或格式问题，换一段或稍后再试</view>
+      <view class="lp-state-title">{{current ? '这段视频暂时播放不了' : '课程内容没加载出来'}}</view>
+      <view class="lp-state-hint">{{current ? '可能是网络或格式问题，换一段或稍后再试' : '网络开小差了，稍后再试'}}</view>
       <view class="lp-state-actions">
-        <view class="lp-state-btn" bind:tap="onRetryError">重试本段</view>
+        <view class="lp-state-btn" bind:tap="onRetryError">{{current ? '重试本段' : '重新加载'}}</view>
         <view class="lp-state-btn ghost" wx:if="{{canNext}}" bind:tap="onNext">跳到下一段</view>
       </view>
     </view>

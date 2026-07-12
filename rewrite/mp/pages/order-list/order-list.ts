@@ -85,11 +85,11 @@ Page({
     const tab = this.data.tabKey
     const seq = this._seq // 捕获当前代次（翻页不 bump）：期间若发生 reload（_seq 递增）则本次 append 作废，不并入被替换的列表
     const r = await getMyOrders(this.data.cursor, 20, tab)
+    if (seq !== this._seq || tab !== this.data.tabKey) return // reload 已取代当前列表 / 跨 tab 过期回包：丢弃·不错配游标（失败的过期回包也在此静默丢弃，不该对已离开的 tab 弹 toast——评审修复）
     if (!r.ok) {
       wx.showToast({ title: '加载失败，上拉重试', icon: 'none' }) // 翻页失败不静默（根因#14）
       return // 不覆盖已有数据（黄金 §八口径）
     }
-    if (seq !== this._seq || tab !== this.data.tabKey) return // reload 已取代当前列表 / 跨 tab 过期回包：丢弃·不错配游标
     const merged = [...this.data.all]
     const seen = new Set(merged.map((o) => o.id))
     for (const o of mapOrders(r.list)) if (!seen.has(o.id)) merged.push(o) // 追加去重
