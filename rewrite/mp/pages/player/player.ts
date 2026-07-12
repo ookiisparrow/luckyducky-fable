@@ -1,9 +1,6 @@
-// 课程播放页（M2 批11·竖屏沉浸全屏重设计批新增一键投屏+帮助入口）：video + 分段列表 + 上/下一段 +
+// 课程播放页（M2 批11·竖屏沉浸全屏重设计批新增帮助入口）：video + 分段列表 + 上/下一段 +
 // 进度上报 + 首帧埋点。鉴权 fail-closed 在云端（getPlaybackUrl 须本人已进课）；素材未剪 url:null → 空态不裂
 // 播放器；未授权 → 导流激活页。地址经 TTL 缓存（切段回看零重复取址）。
-// 投屏双保险（真机走查后收敛，见 docs/待办与债.md）：主路径=原生 show-casting-button（官方文档未言明
-// 依赖 controls，社区有 controls=false 下可用实例）；备路径=底条自绘投屏按钮，wx.createVideoContext 后
-// 特性检测 typeof ctx.startCasting==='function'（基础库 2.32.0·仅 tap 回调内调用），不支持则提示微信版本过低。
 // 自绘 seek 条（播放器重设计战役批C，取代原生 <slider>）：两段式语义——拖动中只改显示（onSeekStart/
 // onSeekMove），松手才真 seek（onSeekEnd）；关键动作节点磁吸（nearestMark）+ 拖动阻尼震感配方照抄
 // pages/flip-demo 已验真机参考实现（lib/haptics 单源 shouldTick/VIBE_GAP_MS/DRAG_TICK_GAP_MS）。
@@ -220,7 +217,7 @@ Page({
     this.onFirstPlay()
     this.setData({ paused: false })
     // 用户经系统手势/重播外路径恢复播放时，完成态不该残留（P4）：常规路径已由 onReplay/playSegment 复位，
-    // 这里兜底任何其他恢复播放的入口（如原生投屏面板暂停后又本机继续播）。
+    // 这里兜底任何其他恢复播放的入口。
     if (this.data.segDone) this.exitSegDone()
   },
 
@@ -420,46 +417,10 @@ Page({
     wx.vibrateShort({ type })
   },
 
-  // 一键投屏——主路径 show-casting-button 已在 wxml 开启；本函数是底条自绘备路径（M2 批曾有底条自绘投屏
-  // 按钮节点，播放器重设计战役批B 结构重排已把该按钮节点从 wxml 删除——投屏备路径入口位待拍板（/btw 结论未达）·
-  // 批D 落位·方法保留勿删，见 docs/重构日志.md 本批（2026-07-11 播放器重设计战役 批B）条目②「删除项」，
-  // 该条记录了 UI 入口摘除后的现状；docs/待办与债.md 该主题条目仍是摘除前「两路并存」的旧描述，待批D 落位时一并改写）。
-  onCast() {
-    if (this.data.state !== 'playing' || !this.data.src) return
-    const ctx = wx.createVideoContext('lp-video', this) as unknown as { startCasting?: (opt: { success?: () => void; fail?: () => void }) => void }
-    // 特性检测（miniprogram-api-typings 未收录 startCasting·基础库 2.32.0 起才有）：
-    // 低版本微信不支持时直接调用会抛错崩交互，先探测再调用。
-    if (typeof ctx.startCasting !== 'function') {
-      wx.showToast({ title: '当前微信版本过低，暂不支持投屏，请更新微信后重试', icon: 'none' })
-      return
-    }
-    ctx.startCasting({
-      fail: () => {
-        wx.showToast({ title: '投屏失败，请确认电视与手机同一 Wi-Fi', icon: 'none' })
-      },
-    })
-  },
-  // 用户在系统投屏选择框选中设备：真实连接结果以 bindcastingstatechange 为准，这里不下结论——
-  // 但选中动作本身（不依赖 detail 形状）值得一个中性即时反馈，否则用户点了没反应会以为没生效。
-  onCastingUserSelect() {
-    wx.showToast({ title: '正在连接投屏设备…', icon: 'none' })
-  },
-  // 投屏状态变化：real device 上 detail 形状待真机校验（见 docs/待办与债.md），
-  // 保守只在明确看到「连接成功」关键词时才提示，避免误报。
-  onCastingStateChange(e: WechatMiniprogram.CustomEvent<{ state?: string }>) {
-    const state = String((e.detail && e.detail.state) || '').toLowerCase()
-    if (state.includes('connect') || state.includes('project')) {
-      wx.showToast({ title: '已连接电视', icon: 'none' })
-    }
-  },
-  onCastingInterrupt() {
-    wx.showToast({ title: '投屏已断开', icon: 'none' })
-  },
-
   // 求助面板入口（P3·播放器重设计战役批D）：占常规播放键位的求助钮不再直连客服，改拉起底部 sheet——
   // 客服真调用移入面板卡1（onHelpContact，守卫 rw-mp-customer-service-wired 触点表钉这里）；播放不阻断
   // （唯一暂停例外＝内嵌视频播放，见 onHelpPlaySegment）。wxml 上 bind:tap="onHelp" 绑定原样保留（守卫
-  // rw-mp-player-immersive-casting 钉的是这个节点，与本方法体内调用什么无关）。
+  // rw-mp-player-immersive 钉的是这个节点，与本方法体内调用什么无关）。
   onHelp() {
     this.setData({ helpPanel: 'menu' })
   },

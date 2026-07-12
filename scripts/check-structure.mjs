@@ -4589,8 +4589,7 @@ export const repoChecks = [
     // playSegment(next) 切下一段——新设计要求段落播完停在完成态，给用户看「重播本段」通栏按钮自己选，
     // 不替用户做主。守此不变量：onEnded 不许再出现 playSegment( 调用（自动切段回潮即红）且须落 segDone；
     // onReplay 须真 seek(0) 从头重来；wxml 须有重播长条的 tap 绑定，否则 ts 有功能界面点不到。
-    // 模式分叉声明（批D·2026-07-11）：本守卫钉的是本机学习模式语义；投屏观看模式连续播为已拍板的模式
-    // 分叉（见需求清单 R40），届时守卫判据随投屏落地批改写，勿把两者当矛盾互相修掉。
+    // （原「投屏观看模式连续播」模式分叉声明已删——投屏 2026-07-12 全线取缔·R40 退役·决策§28。）
     id: 'rw-mp-player-no-autonext',
     roots: ['R38'],
     desc: '播放器重设计战役批B：段落播完不自动切换（P4 通栏重播·设计拍板 2026-07-11）——player.ts 的 onEnded 方法体不得含 playSegment( 调用（自动切段回潮即红）且须含 segDone；onReplay 方法体须存在且含 seek(0；player.wxml 须有 bind:tap="onReplay"（重播长条入口）',
@@ -4761,15 +4760,15 @@ export const repoChecks = [
     },
   },
   {
-    // 播放页竖屏沉浸全屏 + 一键投屏 + 帮助(客服)入口（M2 批·根因#8 真机能力面 + 病根#5 样板复制即漂移）：
+    // 播放页竖屏沉浸全屏 + 帮助(客服)入口（M2 批·根因#8 真机能力面 + 病根#5 样板复制即漂移）：
     // 竖屏沉浸播放器须自绘导航（原生标题栏与自绘黑条控制条会重叠打架）；关闭原生 controls 才不会跟自绘
-    // 底条打架；投屏主路径(原生按钮)+状态回报事件须都在，否则用户点了投屏不知道发生了什么；进度条为自绘
-    // seek 条，须两段式绑定（onSeekStart/onSeekMove 拖动中只改显示不 seek·onSeekEnd 松手才真 seek，见播放器
-    // 重设计战役批C），否则 timeupdate 会在拖动中把手指顶回去；备路径投屏须特性检测再调用（低版本微信直接
-    // 报错崩交互）；客服入口须单源、不许在别处内联。
-    id: 'rw-mp-player-immersive-casting',
+    // 底条打架；进度条为自绘 seek 条，须两段式绑定（onSeekStart/onSeekMove 拖动中只改显示不 seek·
+    // onSeekEnd 松手才真 seek，见播放器重设计战役批C），否则 timeupdate 会在拖动中把手指顶回去；
+    // 客服入口须单源、不许在别处内联。（原 id rw-mp-player-immersive-casting；投屏断言随投屏全线取缔
+    // 删除——2026-07-12 拍板·决策§28，防回潮见 rw-mp-no-casting。）
+    id: 'rw-mp-player-immersive',
     roots: ['#8', '#5'],
-    desc: '播放页竖屏沉浸全屏 + 一键投屏 + 帮助(客服)入口：player.json 须 navigationStyle:custom；player.wxml 的 <video> 须 controls="{{false}}" + show-casting-button + castingstatechange 事件绑定 + 求助入口节点（bind:tap=onHelp）+ 自绘 seek 条两段式绑定（touchstart=onSeekStart/touchmove=onSeekMove/touchend=onSeekEnd）；player.ts 须对备路径投屏 startCasting 做特性检测(typeof===\'function\')，onSeekMove 方法体内不得出现 .seek(（两段式语义：拖动中只改显示）、onSeekEnd 方法体内须出现 .seek(（松手才真 seek）；客服入口须单源在 rewrite/mp/utils/customerService.ts（rewrite/mp 内 wx.openCustomerServiceChat 只此一处）',
+    desc: '播放页竖屏沉浸全屏 + 帮助(客服)入口：player.json 须 navigationStyle:custom；player.wxml 的 <video> 须 controls="{{false}}" + 求助入口节点（bind:tap=onHelp）+ 自绘 seek 条两段式绑定（touchstart=onSeekStart/touchmove=onSeekMove/touchend=onSeekEnd）；player.ts 的 onSeekMove 方法体内不得出现 .seek(（两段式语义：拖动中只改显示）、onSeekEnd 方法体内须出现 .seek(（松手才真 seek）；客服入口须单源在 rewrite/mp/utils/customerService.ts（rewrite/mp 内 wx.openCustomerServiceChat 只此一处）',
     run() {
       const base = join(ROOT, 'rewrite/mp')
       if (!existsSync(base)) return []
@@ -4785,9 +4784,6 @@ export const repoChecks = [
       if (!wxml) bad.push('rewrite/mp/pages/player/player.wxml 缺失')
       if (wxml && !/controls\s*=\s*"\{\{\s*false\s*\}\}"/.test(wxml))
         bad.push('player.wxml 的 <video> 未关闭原生 controls="{{false}}"——自绘控制条会跟原生控件重叠打架（设计定案）')
-      if (wxml && !/show-casting-button/.test(wxml)) bad.push('player.wxml 缺 show-casting-button——投屏主路径（原生按钮）未开启')
-      if (wxml && !/bind:?castingstatechange/.test(wxml))
-        bad.push('player.wxml 缺 castingstatechange 事件绑定——投屏状态（连接/中断）无回报，用户点了投屏不知道发生了什么（根因#14 呼应：动作类失败/状态变化不可静默）')
       if (wxml && !/bind:?tap\s*=\s*"onHelp"/.test(wxml)) bad.push('player.wxml 找不到求助入口节点（bind:tap=onHelp）——客服入口占中央求助钮位缺失（设计定案）')
       if (wxml && !/bind:?touchstart\s*=\s*"onSeekStart"/.test(wxml))
         bad.push('player.wxml 的自绘 seek 条未见 bind:touchstart="onSeekStart"——两段式拖动交互缺起点绑定')
@@ -4808,13 +4804,6 @@ export const repoChecks = [
         }
       }
       if (ts) {
-        // 只在 onCast 方法体内断言，不许整文件全文匹配——否则一句字面提及 startCasting 的注释就能让守卫误绿
-        // （曾经的漏洞：文件头注释写了 typeof ctx.startCasting==='function' 描述思路，正则全文匹配就被这句注释
-        // 顶包过关，即便真实检测代码被删、注释没动，守卫也测不出来）。
-        const onCastBody = methodBody(ts, 'onCast')
-        if (!onCastBody) bad.push('player.ts 找不到 onCast 方法体——备路径投屏单点丢失')
-        else if (!/typeof\s+[\w.]+\.startCasting\s*[!=]==\s*['"]function['"]/.test(stripComments(onCastBody)))
-          bad.push('player.ts 的 onCast 方法体内未见 startCasting 特性检测（typeof ...===/!==\'function\'）——备路径投屏未按基础库能力探测就调用，低版本微信直接报错崩交互')
         // 自绘 seek 两段式语义（播放器重设计战役批C）：拖动中绝不真 seek（否则被 timeupdate/卡顿顶回去），
         // 只在松手时真 seek——各断在各自方法体内、剥注释后判定（错题本 E10：取真源须对剥注释后的函数体匹配）。
         const seekMoveBody = methodBody(ts, 'onSeekMove')
@@ -4847,6 +4836,33 @@ export const repoChecks = [
     },
   },
   {
+    // 投屏全线取缔·防回潮（用户拍板 2026-07-12·决策§28·R39/R40 随之退役）：播放页投屏主路径
+    // （show-casting-button + casting 事件）与备路径（onCast/startCasting 特性检测）及全部入口/样式/文案
+    // 已整体拆除。回潮通道真实存在——未合并的投屏终态分支（PR #7 worktree-cast-landscape）或旧样板复制
+    // 都可能把投屏带回来，故守「rewrite/mp 源内投屏 token 零出现」。日后若用户重启投屏需求：先改需求清单
+    // 再退役本守卫（删与加对等，见 refactor-batch step 4），不许绕。
+    id: 'rw-mp-no-casting',
+    roots: ['R34'],
+    desc: '投屏全线取缔防回潮（2026-07-12 拍板·决策§28）：rewrite/mp 全部源文件（ts/wxml/wxss/json/md）不得出现 投屏/casting 任一 token（含 startCasting/show-casting-button/casting 事件绑定）——旧分支合并或样板复制把投屏带回来当场红；重启投屏须先改需求清单并退役本守卫',
+    run() {
+      const base = join(ROOT, 'rewrite/mp')
+      if (!existsSync(base)) return []
+      const bad = []
+      const re = /投屏|casting/i
+      const walk = (d) => {
+        for (const e of readdirSync(d)) {
+          if (e === 'node_modules') continue
+          const p = join(d, e)
+          if (statSync(p).isDirectory()) walk(p)
+          else if (/\.(ts|wxml|wxss|json|md)$/.test(e) && re.test(readFileSync(p, 'utf8')))
+            bad.push(`${relative(ROOT, p)} 含投屏 token（投屏/casting）——投屏已全线取缔（决策§28），不得回潮`)
+        }
+      }
+      walk(base)
+      return bad
+    },
+  },
+  {
     // 客服触点真实化（重写线 rewrite/mp·承旧线 customer-service-wired 所标病根 R18）：批A 建了
     // utils/customerService.ts 单源 helper，但 detail.ts 的 onService() 当场仍是假占位
     // wx.showToast('正在接入客服…')——旧线守卫早已判定这句假 Toast 绝迹，新线却原样重现（复制漂移同源）。
@@ -4854,7 +4870,7 @@ export const repoChecks = [
     // player/onHelp、me/onKefu、aftersales/onKefu 四点（2026-07-08 用户拍板）。
     // 播放器重设计战役批D（2026-07-11）：player.ts 求助钮改拉起求助面板（onHelp 不再直连客服），真客服
     // 调用移入面板卡1 onHelpContact——触点表同批改写（onHelp→onHelpContact），wxml 上 bind:tap="onHelp"
-    // 节点原样保留（rw-mp-player-immersive-casting 钉的是节点存在，与方法体内调用什么无关）。
+    // 节点原样保留（rw-mp-player-immersive 钉的是节点存在，与方法体内调用什么无关）。
     id: 'rw-mp-customer-service-wired',
     roots: ['R18'],
     desc: '客服触点真实化（rewrite/mp）：① 全目录禁「正在接入客服」假 Toast 绝迹（同旧线 customer-service-wired 判定的假占位家族）② 触点表驱动——detail.ts 的 onService()、player.ts 的 onHelpContact()、me.ts 的 onKefu()、aftersales.ts 的 onKefu() 方法体须真调 openCustomerService()，防触点各自散接/漏接',

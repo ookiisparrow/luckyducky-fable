@@ -1,6 +1,6 @@
 <!-- 课程播放页·竖屏沉浸全屏重设计（播放器重设计战役 批B：P1 常态结构重排 + P4 段落播完不自动切换；
      批C：P2 自绘 seek 条 + 阻尼震感 + 关键节点磁吸 + 拖动预览；批D：P3 求助面板 + P5 返回二次确认 +
-     P5b 首次退出加桌引导 + 投屏过渡最小入口）。
+     P5b 首次退出加桌引导）。
      整页纯黑铺满（player.json navigationStyle:custom）；视频 1:1.68（宽:高）居中，
      上下 UI 是黑条覆盖层（普通 view 绝对定位 z-index 盖在 video 上·同层渲染官方已允许，不必 cover-view）。
      业务逻辑与既有回归红线（playToken 乱序防护/首帧埋点/segment_done/watch_at/25min 地址缓存）一字不动；
@@ -15,7 +15,7 @@
 <view class="ld-player">
 
   <!-- 顶条：返回 + 两行标题（数据源=批A lib/player 的 lessonStrip：主行 chapterTitle/副行 lessonNo·lessonName，
-       chapterTitle 空则只显 lessonName 脏档回退）+ 右侧留白 spacer（真机右上是原生胶囊+原生投屏按钮，
+       chapterTitle 空则只显 lessonName 脏档回退）+ 右侧留白 spacer（真机右上是原生胶囊，
        继续保持右上留白纪律，不放任何自绘元素） -->
   <view class="lp-topbar" style="padding-top: {{statusBarHeight}}px">
     <view class="lp-back" bind:tap="onBack">
@@ -42,15 +42,11 @@
           src="{{src}}"
           autoplay
           controls="{{false}}"
-          show-casting-button="{{true}}"
           bind:play="onVideoPlay"
           bind:pause="onVideoPause"
           bind:ended="onEnded"
           bind:error="onVideoError"
           bind:timeupdate="onTimeUpdate"
-          bind:castinguserselect="onCastingUserSelect"
-          bind:castingstatechange="onCastingStateChange"
-          bind:castinginterrupt="onCastingInterrupt"
         ></video>
         <view wx:else class="lp-video lp-skeleton">
           <view class="lp-skeleton-spin"></view>
@@ -181,9 +177,6 @@
           </view>
           <image class="lp-help-card-chev" src="/static/icons/chevron-right.svg" mode="aspectFit" />
         </view>
-        <!-- 投屏过渡最小入口（用户拍板 2026-07-11 四点·终态待投屏设计稿单开批次）：既有 onCast 方法
-             与特性检测一字不动；弱化样式非卡片。 -->
-        <view class="lp-help-cast" bind:tap="onCast">投屏到电视</view>
       </block>
 
       <!-- videos 子层（P3b）：helpSrc 非空切到内嵌播放视图，否则主题列表 -->
