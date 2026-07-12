@@ -482,6 +482,18 @@ export const repoChecks = [
         bad.push(`${f} 未读 kb 集合——FAQ 答案须从 kb 单源取（B4.1·根因#5·防写死漂移）`)
       if (/TEXT_ANSWERS/.test(src))
         bad.push(`${f} 残留写死 FAQ 答案 map（TEXT_ANSWERS）——FAQ 答案须只在 kb 单源（B4.1·根因#5）`)
+      // 扩面（批 B8·R37b）：新线公开读 getPublicFaq 同守此单源——须真读 kb 集合，且不得内联 FAQ 数据
+      // （title/content 挂字符串字面量＝写死答案，admin 改不动、与 kb 两处漂移）。
+      const rf = 'rewrite/cloud/src/functions/app/actions/faq.ts'
+      if (!existsSync(join(ROOT, rf))) {
+        bad.push(`${rf} 缺失（R37b 公开 FAQ 读·批 B8）`)
+      } else {
+        const rsrc = readFileSync(join(ROOT, rf), 'utf8')
+        if (!/COLLECTIONS\.kb|\.collection\(\s*['"]kb['"]\s*\)/.test(rsrc))
+          bad.push(`${rf} 未读 kb 集合——公开 FAQ 须从 kb 单源取（R37b·根因#5）`)
+        if (/(title|content)\s*:\s*['"`][^'"`]{2,}/.test(rsrc))
+          bad.push(`${rf} 疑似内联写死 FAQ 数据（title/content 字符串字面量）——FAQ 数据须只在 kb 单源、经真实查询映射（R37b·根因#5）`)
+      }
       return bad
     },
   },

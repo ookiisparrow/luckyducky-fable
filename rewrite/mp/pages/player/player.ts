@@ -8,7 +8,7 @@
 // onSeekMove），松手才真 seek（onSeekEnd）；关键动作节点磁吸（nearestMark）+ 拖动阻尼震感配方照抄
 // pages/flip-demo 已验真机参考实现（lib/haptics 单源 shouldTick/VIBE_GAP_MS/DRAG_TICK_GAP_MS）。
 // 拖动浮层原设计有雪碧图缩略图窗（R36 后端未建），诚实降级为时间浮窗 + 命中节点时的鸭黄气泡。
-import { getPlaybackUrl, trackEvent, getHelpVideos } from '../../api/learning'
+import { getPlaybackUrl, trackEvent, getHelpVideos, getPublicFaq } from '../../api/learning'
 import {
   flattenSegments,
   navSegment,
@@ -24,7 +24,7 @@ import {
 import { getCourseById } from '../../lib/courses'
 import { openCustomerService } from '../../utils/customerService'
 import { shouldTick, VIBE_GAP_MS, DRAG_TICK_GAP_MS } from '../../lib/haptics'
-import { mapHelpVideos, type HelpTopicVM } from '../../lib/mapLearning'
+import { mapHelpVideos, mapPublicFaq, type HelpTopicVM, type FaqItemVM } from '../../lib/mapLearning'
 
 const TIME_UPDATE_THROTTLE_MS = 250
 // 磁吸窗口（秒）：拖动秒数落在关键动作节点前后 3 秒内即吸附（批C 规格默认值·真机手感待调参 flag）。
@@ -85,6 +85,8 @@ Page({
     helpPanel: '' as '' | 'menu' | 'videos' | 'faq', // 求助面板状态机（P3·播放器重设计战役批D）：''=关闭·不阻断主视频播放
     helpVideosState: 'loading' as 'loading' | 'ok' | 'empty', // 帮助视频子层拉取态（每次进入 videos 层重拉·短时 URL 过期特性）
     helpTopics: [] as HelpTopicVM[], // 帮助视频主题分组 VM（mapHelpVideos 产出）
+    helpFaqState: 'loading' as 'loading' | 'ok' | 'empty', // 常见问题子层拉取态（R37b·KB 精选 FAQ 公开读·同 videos 每次重拉口径）
+    helpFaqList: [] as FaqItemVM[], // 精选 FAQ VM（mapPublicFaq 产出）
     helpSrc: '', // 内嵌播放（P3b-play）地址：非空=切到播放视图；关面板/返回列表/退出播放视图清空
     helpSegName: '', // 内嵌播放视图顶部标题（=命中小段 name）
     deskGuide: false, // 首次成功退出加桌引导弹窗可见态（P5b·仅展示一次）
@@ -100,6 +102,7 @@ Page({
   helpVideosToken: 0, // 帮助视频子层请求令牌（防乱序回包覆盖·同 playToken 惯用法·评审 finding 复核 2026-07-11
   // 批D 补丁：粗粒度 helpPanel==='videos' 判定无法区分「快速退出再进入」产生的新旧两次请求，慢的旧请求
   // 若晚于新请求回包，会用旧数据把刚渲染好的新列表覆盖回去——必须用自增代次精确丢弃过期回包）。
+  helpFaqToken: 0, // 常见问题子层请求令牌（R37b·同 helpVideosToken 惯用法·防「快速退出再进入」乱序回包覆盖）
   errSeg: '', // 上次因视频加载失败重试过的段
   errRetried: false, // 该段是否已重试过一次（防不可恢复媒体无限重取死循环）
   watchReported: false, // 本段 watch_at 是否已上报（一次性·防 onHide+onUnload 双报）
@@ -482,9 +485,19 @@ Page({
     const topics = mapHelpVideos(r)
     this.setData(topics.length ? { helpVideosState: 'ok', helpTopics: topics } : { helpVideosState: 'empty', helpTopics: [] })
   },
-  // 卡3 常见问题：诚实空态（云端 FAQ 单源=客服知识库 KB，无面向小程序的公开下发接口，R37b 已立需求——不造假 Q&A）。
+  // 卡3 常见问题（R37b 已接线：云端 FAQ 单源=客服知识库 KB，getPublicFaq 只回精选条目）：进子层 + 每次重拉
+  // （同 onHelpVideos 口径·辅助内容低频不缓存）；载入失败/空仍诚实空态导流客服，不造假 Q&A。
   onHelpFaq() {
-    this.setData({ helpPanel: 'faq' })
+    this.setData({ helpPanel: 'faq', helpFaqState: 'loading', helpFaqList: [] })
+    void this.loadHelpFaq()
+  },
+  async loadHelpFaq() {
+    const token = ++this.helpFaqToken // 本次进入子层的请求令牌·await 后复核，防慢回旧请求覆盖新请求
+    const r = await getPublicFaq()
+    if (token !== this.helpFaqToken) return // 更晚的一次 onHelpFaq 已接管，丢弃本次回包
+    if (this.data.helpPanel !== 'faq') return // 用户已退出 faq 层：同样丢弃，不写脏 state
+    const list = mapPublicFaq(r)
+    this.setData(list.length ? { helpFaqState: 'ok', helpFaqList: list } : { helpFaqState: 'empty', helpFaqList: [] })
   },
   // 子层顶部返回箭头：回 menu（videos/faq 共用同一个方法）。
   onHelpBackMenu() {

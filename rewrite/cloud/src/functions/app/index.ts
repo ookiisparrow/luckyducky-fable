@@ -12,6 +12,7 @@ import {
   trackEvent,
 } from './actions/learning'
 import { getHelpVideos, getReviews, getRatingSummary, submitReview } from './actions/reviews'
+import { getPublicFaq } from './actions/faq'
 import {
   createOrder,
   pay,
@@ -44,6 +45,7 @@ const ACTIONS: Record<string, (event: unknown) => Promise<unknown>> = {
   getMyProgress,
   trackEvent,
   getHelpVideos,
+  getPublicFaq,
   getReviews,
   getRatingSummary,
   submitReview,

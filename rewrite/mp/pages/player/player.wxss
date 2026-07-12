@@ -683,6 +683,26 @@
   font-weight: 600;
 }
 
+/* 常见问题条目（R37b·KB 精选 FAQ 公开读·播放器重设计战役批B8）：卡片式 Q&A，同 lp-help-seg 卡片语言 */
+.lp-help-faq-item {
+  background: #ffffff;
+  border: 1rpx solid var(--ld-line);
+  border-radius: 30rpx;
+  padding: 22rpx;
+  margin-bottom: 22rpx;
+}
+.lp-help-faq-q {
+  font-size: 27rpx;
+  font-weight: 700;
+  color: var(--ld-ink);
+  margin-bottom: 10rpx;
+}
+.lp-help-faq-a {
+  font-size: 25rpx;
+  color: var(--ld-content-2);
+  line-height: 1.6;
+}
+
 /* 内嵌播放视图（P3b-play 简化决策：原生 <video controls>，不做自绘控制条——辅助内容非主路径） */
 .lp-help-play {
   flex: 1;

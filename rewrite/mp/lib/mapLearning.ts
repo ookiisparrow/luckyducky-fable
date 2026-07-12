@@ -278,3 +278,26 @@ export function mapHelpVideos(r: unknown): HelpTopicVM[] {
   }
   return out
 }
+
+// 播放页求助面板·常见问题（R37b·KB 精选 FAQ 公开读接线·播放器重设计战役批B8）：云端 getPublicFaq
+// 只回 admin 勾选「精选」的 kb 条目（本批零改动·rewrite/cloud/src/functions/app/actions/faq.ts），
+// 字段瘦身 {key,title,content}（title←question/content←answer）。清洗脏结构同 mapHelpVideos 先例
+// （null 防御）：非数组归空、字段 String 化、无标题剔除（脏档不占位）。空/失败仍由 player.ts 落诚实空态。
+export interface FaqItemVM {
+  key: string
+  title: string
+  content: string
+}
+
+export function mapPublicFaq(r: unknown): FaqItemVM[] {
+  const res = (r && typeof r === 'object' ? r : {}) as Record<string, any>
+  const items = Array.isArray(res.items) ? res.items : []
+  const out: FaqItemVM[] = []
+  for (const raw of items) {
+    const it = (raw && typeof raw === 'object' ? raw : {}) as Record<string, any>
+    const title = String(it.title || '')
+    if (!title) continue // 无标题的脏条目剔除（同 mapHelpVideos 剔脏档口径）
+    out.push({ key: String(it.key || ''), title, content: String(it.content || '') })
+  }
+  return out
+}

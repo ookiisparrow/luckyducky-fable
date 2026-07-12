@@ -1,7 +1,7 @@
 // 订单与钱组映射（守卫 rw-admin-money-ui-golden）：看板近似诚实标注/警报有则必显无则不吓人/
 // 订单行金额不符禁发入口收窄/售后行只待审核可裁决/脏档安全（与 mp 同口径）。
 import { describe, it, expect } from 'vitest'
-import { mapDashboard, mapOrderRows, mapRefundRows, maskPhone, refundVerdict, deriveDashboardTodos } from '../src/lib/mapMoney'
+import { mapDashboard, mapOrderRows, mapRefundRows, maskPhone, refundVerdict, deriveDashboardTodos, canOverrideRefund, mapOverrideOrder } from '../src/lib/mapMoney'
 
 describe('deriveDashboardTodos（待处理计数：加载失败别伪装成 0/全清·病根#14）', () => {
   it('大白话：某路计数加载失败时 partial=true——上层据此不把「加载失败」显示成绿色「今日无待处理」', () => {
@@ -200,5 +200,47 @@ describe('退款判据文案（绑本单订单行·非课程级·根因#8 判据
     const lost = refundVerdict({ lineRefundable: false, entered: true, refundableQty: 0 })
     expect(lost.tone).toBe('lost')
     expect(lost.sub).toContain('ENTERED_NOT_REFUNDABLE')
+  })
+})
+
+describe('越规退款入口（决策§26·批 B8·钱链后端零改动）', () => {
+  it('大白话：提交按钮门控——找到订单+选中行+原因非空(trim)+已勾知晓+非在途，四项齐才放行；差一项都不放行', () => {
+    const base = { orderFound: true, lineId: 'l1', reason: '客服特批', ack: true, busy: false }
+    expect(canOverrideRefund(base)).toBe(true)
+    expect(canOverrideRefund({ ...base, orderFound: false })).toBe(false) // 未查到订单
+    expect(canOverrideRefund({ ...base, lineId: '' })).toBe(false) // 未选行
+    expect(canOverrideRefund({ ...base, reason: '' })).toBe(false) // 原因空
+    expect(canOverrideRefund({ ...base, reason: '   ' })).toBe(false) // 原因全空白（trim 后判空·不许纯空格绕过必填）
+    expect(canOverrideRefund({ ...base, ack: false })).toBe(false) // 未勾知晓
+    expect(canOverrideRefund({ ...base, busy: true })).toBe(false) // 在途禁重复提交
+  })
+
+  it('大白话：mapOverrideOrder 按订单号从 listOrders 回包挑目标单+映射只读展示字段——不发明金额、行标签只是辨认用（非退款额）', () => {
+    const list = [
+      {
+        _id: 'o1',
+        status: 'paid',
+        amount: 178,
+        goods: 198,
+        address: { name: '张三', phone: '13800000000' },
+        items: [
+          { lineId: 'p1__基础款', productId: 'p1', name: '小鸭', spec: '基础款', qty: 1, price: 198 },
+          { productId: 'p2', name: '毛线', qty: 2, price: 20 }, // 旧单无 lineId 回退 productId
+        ],
+      },
+    ]
+    const vm = mapOverrideOrder(list, 'o1')!
+    expect(vm.id).toBe('o1')
+    expect(vm.buyerName).toBe('张三')
+    expect(vm.amountLabel).toBe('¥178.00')
+    expect(vm.goodsLabel).toBe('¥198.00')
+    expect(vm.lines).toEqual([
+      { lineId: 'p1__基础款', label: '小鸭（基础款） ×1 · ¥198.00' },
+      { lineId: 'p2', label: '毛线 ×2 · ¥20.00' },
+    ])
+    // 未命中订单号 / 坏响应 → null（不渲染假数据）
+    expect(mapOverrideOrder(list, 'o-nope')).toBeNull()
+    expect(mapOverrideOrder('garbage', 'o1')).toBeNull()
+    expect(mapOverrideOrder(null, 'o1')).toBeNull()
   })
 })

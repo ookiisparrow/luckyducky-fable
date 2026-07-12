@@ -179,6 +179,7 @@ export interface KbRow {
   category: string
   enabled: boolean
   order: number
+  featured: boolean // 精选（R37b·公开读 getPublicFaq 只回此=true 的条目·默认不精选）
 }
 
 export function normalizeKb(list: unknown): KbRow[] {
@@ -190,6 +191,7 @@ export function normalizeKb(list: unknown): KbRow[] {
     category: String(e.category || 'other'),
     enabled: e.enabled !== false,
     order: Number(e.order) || 0,
+    featured: e.featured === true,
   }))
 }
 

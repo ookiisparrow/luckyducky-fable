@@ -1,7 +1,7 @@
 // 黄金 learning-content §一（激活三态：新激活/本人回访/他人码/废码）+ §九（背景回退链）
 // （守卫 rw-mp-learning-golden）。
 import { describe, it, expect } from 'vitest'
-import { activationView, bgFor, mapMyCourses, mapCatalog, mapHelpVideos } from '../lib/mapLearning'
+import { activationView, bgFor, mapMyCourses, mapCatalog, mapHelpVideos, mapPublicFaq } from '../lib/mapLearning'
 
 describe('激活结果三态 + 废码兜底（黄金 §一）', () => {
   it('大白话：新激活/本人已进课各归各屏；他人码带课程号（按课取图）；废码与未知错误一律「码不对」不冒充激活', () => {
@@ -269,5 +269,31 @@ describe('mapHelpVideos（帮助视频清洗·脏结构安全）', () => {
     })
     expect(vm).toHaveLength(1)
     expect(vm[0].id).toBe('t-ok')
+  })
+})
+
+describe('mapPublicFaq（R37b·KB 精选 FAQ 公开读清洗·脏结构安全）', () => {
+  it('大白话：正常——title/content 原样带过（title←question/content←answer 由云端已映射好，前端只清洗类型）', () => {
+    const vm = mapPublicFaq({ items: [{ key: 'logistics:eta', title: '什么时候发货？', content: '付款后 48 小时内发货。' }] })
+    expect(vm).toEqual([{ key: 'logistics:eta', title: '什么时候发货？', content: '付款后 48 小时内发货。' }])
+  })
+
+  it('大白话：脏结构安全——非数组/坏值归空、字段强转字符串、无标题的脏条目剔除（同 mapHelpVideos 剔脏档口径）', () => {
+    expect(mapPublicFaq(null)).toEqual([])
+    expect(mapPublicFaq({})).toEqual([])
+    expect(mapPublicFaq({ items: '坏值' })).toEqual([])
+    const vm = mapPublicFaq({
+      items: [
+        { key: 9, title: 88, content: null }, // 类型不对强转字符串，仍保留（有标题）
+        { key: 'k2', title: '', content: '有内容但无标题·剔除' }, // 无标题剔除
+        null,
+        '坏行',
+      ],
+    })
+    expect(vm).toEqual([{ key: '9', title: '88', content: '' }])
+  })
+
+  it('大白话：空——items 缺失/空数组回空数组', () => {
+    expect(mapPublicFaq({ items: [] })).toEqual([])
   })
 })

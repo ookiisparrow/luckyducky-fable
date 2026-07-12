@@ -240,7 +240,7 @@
         </block>
       </block>
 
-      <!-- faq 子层（P3c·诚实空态：云端无公开下发接口，R37b 已立需求，不造假 Q&A） -->
+      <!-- faq 子层（P3c·R37b 已接线：云端 getPublicFaq 只回 KB 精选条目·载入失败/空仍诚实空态导流客服） -->
       <block wx:if="{{helpPanel === 'faq'}}">
         <view class="lp-help-nav">
           <view class="lp-help-back" bind:tap="onHelpBackMenu">
@@ -248,10 +248,21 @@
           </view>
           <text class="lp-help-nav-title">常见问题</text>
         </view>
-        <view class="lp-help-empty">
-          <text>常见问题还在整理中，先问客服吧</text>
-          <view class="lp-help-empty-btn" bind:tap="onHelpContact">联系客服</view>
-        </view>
+        <scroll-view class="lp-help-scroll" scroll-y>
+          <block wx:if="{{helpFaqState === 'ok'}}">
+            <view class="lp-help-faq-item" wx:for="{{helpFaqList}}" wx:key="key">
+              <view class="lp-help-faq-q">{{item.title}}</view>
+              <view class="lp-help-faq-a">{{item.content}}</view>
+            </view>
+          </block>
+          <view class="lp-help-empty" wx:elif="{{helpFaqState === 'loading'}}">
+            <text>加载中…</text>
+          </view>
+          <view class="lp-help-empty" wx:else>
+            <text>常见问题还在整理中，先问客服吧</text>
+            <view class="lp-help-empty-btn" bind:tap="onHelpContact">联系客服</view>
+          </view>
+        </scroll-view>
       </block>
     </view>
   </view>

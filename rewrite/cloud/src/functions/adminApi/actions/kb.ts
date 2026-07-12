@@ -1,10 +1,12 @@
 import { reply, ensure, str, type Ctx } from '../lib'
 import { notifyAlert } from '../../../kit'
 
-// 知识库维护（后台360工作站 B4.1·admin 侧）：管理端维护 FAQ/知识条目（问题 + 答案 + 分类 + 启用 + 顺序），
+// 知识库维护（后台360工作站 B4.1·admin 侧）：管理端维护 FAQ/知识条目（问题 + 答案 + 分类 + 启用 + 顺序 + 精选），
 // 客服 bot（cs/kfCallback/dispatch.ts）按 _id（=FAQ 键·同分流菜单叶子 id）读 kb 发答案——FAQ 答案单源（守卫
 // faq-via-kb-single-source·根因#5）。整体覆盖式保存（同 saveCheckpoints 范式）：admin 提交整份条目列表，
 // 后端 upsert 全部 + 删除不在列表里的旧条目，一个 action 兼「增删改」。确定性 _id=key（doc(key).set·data 不带 _id）。
+// featured（R37b·公开读接线）：管理员勾选「精选」的条目才会被 app action getPublicFaq 公开下发给小程序求助
+// 面板 FAQ 区（同一 kb 单源分裂两个消费面：bot 答案全量按 key 命中/mp 公开读只挑 featured，互不冲突）。
 
 const ENTRY_LIMIT = 100 // 单次保存条目上限（防一次塞爆·FAQ 量级远低于此）
 const SCAN = 500 // 列表/清理扫描上界（bounded·capacity-reads-bounded）
@@ -21,6 +23,7 @@ export async function listKb({ db }: Ctx) {
       category: CATS.includes(d.category) ? d.category : 'other',
       enabled: d.enabled !== false, // 旧条目无字段时默认启用
       order: Number(d.order) || 0,
+      featured: d.featured === true, // 精选（R37b·公开读 getPublicFaq 只回此=true 的条目；旧条目无字段默认不精选）
     }))
     .sort((a: any, b: any) => a.category.localeCompare(b.category) || a.order - b.order)
   return reply(200, { ok: true, list })
@@ -46,6 +49,7 @@ export async function saveKb({ db, data }: Ctx) {
           category: CATS.includes(e.category) ? e.category : 'other',
           enabled: e.enabled !== false,
           order: Number.isFinite(Number(e.order)) ? Number(e.order) : i, // order:0 是合法首位·不被 ||i 的 falsy 吞掉（P3·item10）
+          featured: e.featured === true, // 精选（R37b·白名单字段·默认 false）：mp 求助面板 FAQ 公开读只取此=true 的条目
           updatedAt: Date.now(),
         },
       })

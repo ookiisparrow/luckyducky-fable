@@ -7,6 +7,8 @@ export const getCourses = (): Promise<ApiResult> => callApp('getCourses')
 export const getMyCourses = (): Promise<ApiResult> => callApp('getMyCourses')
 export const getPlaybackUrl = (courseId: string, segmentId: string): Promise<ApiResult> => callApp('getPlaybackUrl', { courseId, segmentId })
 export const getHelpVideos = (): Promise<ApiResult> => callApp('getHelpVideos')
+// 求助面板·精选 FAQ 公开读（R37b·KB 单源·无鉴权只读，同 getProducts/getContent 口径）
+export const getPublicFaq = (): Promise<ApiResult> => callApp('getPublicFaq')
 export const trackEvent = (type: string, page: string, targetId: string, meta: Record<string, unknown> = {}): void => {
   // 发了就不管（黄金 §四埋点出口：fire-and-forget·失败不反噬播放）
   void callApp('trackEvent', { type, page, targetId, meta }).catch(() => undefined)

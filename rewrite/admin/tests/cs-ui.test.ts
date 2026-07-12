@@ -75,7 +75,10 @@ describe('360 面板（单面板失败隔离 + 嵌套数组逐行明细真复原
 describe('kb/满意度/消息归一', () => {
   it('大白话：kb 行缺字段归默认（enabled 默认真·分类默认 other）；满意度五档倒序；消息方向中文·非文本给类型占位', () => {
     const kb = normalizeKb([{ key: 'f1', question: 'q', answer: 'a' }, null])
-    expect(kb).toEqual([{ key: 'f1', question: 'q', answer: 'a', category: 'other', enabled: true, order: 0 }])
+    expect(kb).toEqual([{ key: 'f1', question: 'q', answer: 'a', category: 'other', enabled: true, order: 0, featured: false }])
+    // 精选（R37b·公开读 getPublicFaq 只回 featured=true）：非 true 值一律归 false（不信前端真伪值以外的杂值）
+    expect(normalizeKb([{ key: 'f2', question: 'q', answer: 'a', featured: true }])[0].featured).toBe(true)
+    expect(normalizeKb([{ key: 'f3', question: 'q', answer: 'a', featured: 'yes' }])[0].featured).toBe(false)
     const csat = mapCsat({ ok: true, total: 3, avg: 4.67, dist: { 5: 2, 4: 1 }, withNote: 1, approx: false })!
     expect(csat.dist[0]).toEqual({ star: '5 星', n: 2 })
     expect(csat.dist[4]).toEqual({ star: '1 星', n: 0 })
