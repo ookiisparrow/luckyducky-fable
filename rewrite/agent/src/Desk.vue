@@ -54,9 +54,21 @@ export function createStatusController(
 
 <script setup lang="ts">
 // 工作台单屏（M3 批8）：左=待接队列+我在接；中=会话窗（3s 轮询·卸载清理·合并去重）；右=360 侧栏（双闸）。
-import { ref, onMounted, onBeforeUnmount } from 'vue'
-import { post, logout } from './api/client'
-import { mergeThread, advanceCursor, mapQueue, deskErrorText, type Msg, type QueueItem } from './lib/desk'
+import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
+import { post, logout, listKb } from './api/client'
+import {
+  mergeThread,
+  advanceCursor,
+  mapQueue,
+  deskErrorText,
+  filterQuickReplies,
+  diffNewSessions,
+  diffNewInbound,
+  titleWithBadge,
+  type Msg,
+  type QueueItem,
+  type KbEntry,
+} from './lib/desk'
 
 const emit = defineEmits<{ logout: [] }>()
 
@@ -72,6 +84,26 @@ const panelNote = ref('')
 const message = ref('')
 const busy = ref(false)
 
+// 快捷回复 + 页内提醒（批 B4·预审裁决：listKb 后端零改动直接复用，不新建 listQuickReplies）。
+const NOTIFY_KEY = 'ldrw_agent_notify_enabled'
+const baseTitle = document.title // 还原基准单源＝index.html 定的标题，不复制字面量、避免漂移
+
+const kbList = ref<KbEntry[]>([])
+const availableReplies = computed(() => filterQuickReplies(kbList.value)) // 过滤后全部（供 FAQ 面板/判断整行显隐）
+const quickReplies = computed(() => availableReplies.value.slice(0, 4)) // chips 只取前 4 条
+const faqOpen = ref(false)
+const faqQuery = ref('')
+const faqFiltered = computed(() => {
+  const q = faqQuery.value.trim().toLowerCase()
+  if (!q) return availableReplies.value
+  return availableReplies.value.filter((e) => e.question.toLowerCase().includes(q) || e.answer.toLowerCase().includes(q))
+})
+
+const notifyEnabled = ref(localStorage.getItem(NOTIFY_KEY) !== '0') // 缺省开
+const badgeCount = ref(0)
+let blurQueueIds: string[] | null = null // 窗口失焦时刻的队列会话 id 快照（null＝当前未失焦/已聚焦复位）
+let blurMsgs: Msg[] | null = null // 窗口失焦时刻当前会话消息快照（无选中会话时为 null）
+
 let pollTimer: ReturnType<typeof setInterval> | null = null
 let listTimer: ReturnType<typeof setInterval> | null = null
 
@@ -80,6 +112,7 @@ async function refreshLists() {
   if (q.error === 'SESSION_LOST' || m.error === 'SESSION_LOST') return doLogout()
   queue.value = q.ok ? mapQueue(q.items, Date.now()) : queue.value // 失败不清已有
   mine.value = m.ok ? ((m.sessions as Record<string, any>[]) || []) : mine.value
+  recomputeAlert() // 队列增量是提醒聚合公式一半（改动契约 3）
 }
 
 async function pollThread() {
@@ -90,6 +123,88 @@ async function pollThread() {
   if (!r.ok) return // 轮询失败静默重试（不打断输入）
   msgs.value = mergeThread(msgs.value, r.messages) // 去重合并·不重气泡
   cursor.value = advanceCursor(cursor.value, r.nextCursor) // 只进不退
+  recomputeAlert() // 当前会话新入站是提醒聚合公式另一半（改动契约 3）
+}
+
+/** 快捷回复读知识库（进入 Desk 拉一次·不轮询）：失败/空→过滤后自然为空，整行诚实隐藏。 */
+async function loadKb() {
+  const r = await listKb()
+  kbList.value = r.ok ? ((r.list as KbEntry[]) || []) : []
+}
+
+/** 把答案追加进输入框（不自动发送）；无选中会话时无输入框可写，no-op。 */
+function insertReply(answer: string) {
+  if (!currentId.value) return
+  draft.value = draft.value ? draft.value + '\n' + answer : answer
+}
+
+function openFaq() {
+  if (!currentId.value) return
+  faqOpen.value = true
+}
+
+function pickFaq(entry: KbEntry) {
+  insertReply(entry.answer)
+  faqOpen.value = false
+}
+
+/** 消息提醒开关（localStorage 持久·默认开）：关＝零副作用——立即清角标、还原标题，不再改 title/不再发声。 */
+function toggleNotify() {
+  notifyEnabled.value = !notifyEnabled.value
+  localStorage.setItem(NOTIFY_KEY, notifyEnabled.value ? '1' : '0')
+  if (!notifyEnabled.value) {
+    badgeCount.value = 0
+    document.title = baseTitle
+  }
+}
+
+/** 提醒短音（Web Audio oscillator）：自动播放策略/无音频设备等环境限制下静默降级——非关键 UX 提示音，
+ *  不是动钱/动状态的接缝失败，不接 observe.alert。 */
+function playAlertSound() {
+  try {
+    const AudioCtxCls = window.AudioContext || (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext
+    if (!AudioCtxCls) return
+    const ctx = new AudioCtxCls()
+    const osc = ctx.createOscillator()
+    const gain = ctx.createGain()
+    osc.frequency.value = 880
+    gain.gain.value = 0.15
+    osc.connect(gain)
+    gain.connect(ctx.destination)
+    osc.start()
+    osc.stop(ctx.currentTime + 0.15)
+    osc.onended = () => void ctx.close()
+  } catch {
+    // 见上方函数注释：非关键 UX 提示音，静默降级
+  }
+}
+
+/** 提醒聚合（改动契约 3·公式见批规格）：N = 队列新增会话数 + 失焦期间当前会话新入站消息数。
+ *  未失焦（blurQueueIds 为 null）或提醒已关＝不计，保持零副作用。 */
+function recomputeAlert() {
+  if (!notifyEnabled.value || blurQueueIds === null) return
+  const n =
+    diffNewSessions(
+      blurQueueIds,
+      queue.value.map((q) => q.sessionId),
+    ) + diffNewInbound(blurMsgs, msgs.value)
+  if (n === badgeCount.value) return
+  const grew = n > badgeCount.value
+  badgeCount.value = n
+  document.title = titleWithBadge(baseTitle, n)
+  if (grew) playAlertSound()
+}
+
+function onWindowBlur() {
+  blurQueueIds = queue.value.map((q) => q.sessionId)
+  blurMsgs = currentId.value ? msgs.value.slice() : null
+}
+
+function onWindowFocus() {
+  badgeCount.value = 0
+  blurQueueIds = null
+  blurMsgs = null
+  document.title = baseTitle
 }
 
 async function claim(sessionId: string) {
@@ -173,13 +288,22 @@ function doLogout() {
 
 onMounted(() => {
   void refreshLists()
+  void loadKb() // KB 拉一次·不轮询（改动契约 1）
   listTimer = setInterval(refreshLists, 10_000)
   pollTimer = setInterval(pollThread, 3_000)
+  window.addEventListener('blur', onWindowBlur)
+  window.addEventListener('focus', onWindowFocus)
 })
 onBeforeUnmount(() => {
   // 轮询必清理（守卫 agent-poll-cleanup 的教训承接）
   if (pollTimer) clearInterval(pollTimer)
   if (listTimer) clearInterval(listTimer)
+  window.removeEventListener('blur', onWindowBlur)
+  window.removeEventListener('focus', onWindowFocus)
+  // 卸载必还原标题（P2 修复）：失焦期间登出（如轮询收到 SESSION_LOST）会带着角标态卸载——不还原则标题
+  // 永久停留在带角标字符串上；且下次重登 mount 时 line 89 会把这个已污染的标题当新 baseTitle 捕获，
+  // 跨多次「失焦掉线-重登」循环叠加复合（与 toggleNotify/onWindowFocus 的还原语义保持一致）。
+  document.title = baseTitle
 })
 </script>
 
@@ -192,6 +316,7 @@ onBeforeUnmount(() => {
           <option value="busy">🟡 忙碌</option>
           <option value="offline">⚪ 离线</option>
         </select>
+        <button class="pill" :class="{ off: !notifyEnabled }" @click="toggleNotify">消息提醒 · {{ notifyEnabled ? '开' : '关' }}</button>
         <button class="ghost" @click="doLogout">退出</button>
       </div>
       <h3>待接（{{ queue.length }}）</h3>
@@ -212,6 +337,17 @@ onBeforeUnmount(() => {
 
     <main>
       <p v-if="message" class="status">{{ message }}</p>
+      <div v-if="availableReplies.length" class="quickbar">
+        <button
+          v-for="qr in quickReplies"
+          :key="qr.key"
+          class="chip"
+          :disabled="!currentId"
+          :title="qr.question"
+          @click="insertReply(qr.answer)"
+        >{{ qr.question.length > 12 ? qr.question.slice(0, 12) + '…' : qr.question }}</button>
+        <button class="chip faq" :disabled="!currentId" @click="openFaq">FAQ 面板</button>
+      </div>
       <template v-if="currentId">
         <div class="thread">
           <div v-for="m in msgs" :key="m.at + m.direction + m.text" class="bubble" :class="m.direction">
@@ -243,6 +379,23 @@ onBeforeUnmount(() => {
         <p v-else-if="Array.isArray(p.data)" class="kv">{{ p.data.length }} 条</p>
       </div>
     </aside>
+
+    <div v-if="faqOpen" class="faq-overlay" @click.self="faqOpen = false">
+      <div class="faq-panel">
+        <div class="faq-head">
+          <input v-model="faqQuery" class="faq-search" placeholder="搜关键字…" />
+          <button class="ghost" @click="loadKb">刷新</button>
+          <button class="ghost" @click="faqOpen = false">关闭</button>
+        </div>
+        <div class="faq-list">
+          <div v-for="e in faqFiltered" :key="e.key" class="faq-item" @click="pickFaq(e)">
+            <strong>{{ e.question }}</strong>
+            <p>{{ e.answer }}</p>
+          </div>
+          <p v-if="!faqFiltered.length" class="empty">没有匹配的条目</p>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -391,6 +544,95 @@ textarea {
 .ghost.warn {
   color: #c0392b;
   border-color: #f0c0ba;
+}
+.pill {
+  padding: 6px 14px;
+  border: 1px solid var(--ld-purple-tab);
+  border-radius: 999px;
+  background: var(--ld-bg-lilac);
+  color: var(--ld-purple-ink);
+  font-size: 12px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.pill.off {
+  border-color: var(--ld-purple-line);
+  background: transparent;
+  color: var(--ld-purple-meta);
+}
+.quickbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+.chip {
+  padding: 6px 12px;
+  border: 1px solid var(--ld-purple-line);
+  border-radius: 999px;
+  background: var(--ld-bg-lilac);
+  color: var(--ld-purple-ink);
+  font-size: 12px;
+  cursor: pointer;
+  max-width: 200px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.chip.faq {
+  background: transparent;
+  border-color: var(--ld-purple-tab);
+}
+.chip:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.faq-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.25);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 20;
+}
+.faq-panel {
+  width: min(480px, 90vw);
+  max-height: 70vh;
+  display: flex;
+  flex-direction: column;
+  background: var(--ld-bg);
+  border-radius: var(--ld-radius);
+  border: 1px solid var(--ld-purple-line);
+  padding: 14px;
+}
+.faq-head {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+.faq-search {
+  flex: 1;
+  padding: 6px 10px;
+  border: 1px solid var(--ld-purple-line);
+  border-radius: 8px;
+  font-size: 13px;
+}
+.faq-list {
+  overflow-y: auto;
+}
+.faq-item {
+  padding: 8px 10px;
+  margin-bottom: 6px;
+  background: var(--ld-bg-lilac);
+  border-radius: 8px;
+  font-size: 13px;
+  cursor: pointer;
+}
+.faq-item p {
+  margin: 4px 0 0;
+  color: var(--ld-purple-meta);
+  font-size: 12px;
 }
 .panel {
   padding: 10px 12px;

@@ -73,3 +73,7 @@ export async function post(action: string, data: Record<string, unknown> = {}): 
   }
   return r
 }
+
+// 快捷回复读知识库（批 B4·预审裁决：cap agent:handle 已挂，直接复用 admin 侧同一 action，不新建 listQuickReplies）。
+// action 名与 admin 侧 rewrite/admin/src/api/cs.ts 的 listKb 一致（同一后端 action，前端各自薄封装）。
+export const listKb = () => post('listKb')
