@@ -94,6 +94,7 @@ const NAV: Array<{ group: string; icon: Component; solo?: boolean; items: Array<
       { label: '激活码批次', path: '/batches' },
       { label: '外部后台', path: '/external' },
       { label: '系统设置', path: '/settings' },
+      { label: '人工配置清单', path: '/config-checklist' }, // 批 B9·只探测状态·不改六组结构，系统组内追加一项
     ],
   },
 ]

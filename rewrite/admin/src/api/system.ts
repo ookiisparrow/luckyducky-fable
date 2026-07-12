@@ -13,6 +13,9 @@ export const listBatchCodes = (batchId: string) => client.post('listBatchCodes',
 export const getSettings = () => client.post('getSettings')
 export const saveSettings = (patch: Record<string, unknown>) => client.post('saveSettings', patch)
 
+// 人工配置清单（批 B9·只探测状态·零回显）：12 项散落配置一屏拼「配了没」
+export const getConfigChecklist = () => client.post('getConfigChecklist')
+
 // from/to='YYYY-MM-DD' 自定义对账区间（后端支持·不传=近 30 天默认窗·根因#7）
 export const getReconciliation = (from?: string, to?: string) => client.post('getReconciliation', { from: from || undefined, to: to || undefined })
 export const getBillMatch = (from?: string, to?: string) => client.post('getBillMatch', { from: from || undefined, to: to || undefined })

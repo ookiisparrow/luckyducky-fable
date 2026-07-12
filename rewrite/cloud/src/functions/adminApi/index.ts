@@ -28,6 +28,7 @@ import * as scmAssembly from './actions/scmAssembly'
 import * as scmPlanner from './actions/scmPlanner'
 import * as scmOverview from './actions/scmOverview'
 import * as ops from './actions/ops'
+import * as configChecklist from './actions/configChecklist'
 
 // 管理控制台后端 v2（HTTP 访问服务触发·鉴权外壳逐字承接旧线 index.ts·批11 只挂 ping/login，
 // 业务 action 后续批逐域挂进 ACTIONS/ACTION_CAPS——挂载时与旧线注册表逐行核对）。
@@ -166,6 +167,8 @@ const ACTIONS: Record<string, (ctx: Ctx) => Promise<any>> = {
   getInspectStatus: ops.getInspectStatus,
   listAnomalies: ops.listAnomalies,
   resolveAnomaly: ops.resolveAnomaly,
+  // 人工配置清单（批 B9·只探测状态·零回显）：未登记 ACTION_CAPS→默认拒 admin:write＝仅超管
+  getConfigChecklist: configChecklist.getConfigChecklist,
 }
 
 // 能力闸（RBAC·别让单超管裸奔）：受限 action 须 principal 具备对应能力（'*'=全能力）。
