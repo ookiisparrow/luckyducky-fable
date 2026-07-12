@@ -43,6 +43,9 @@ export const COLLECTIONS = {
   // —— 新线新增（观测·旧线无·走 parity 显式登记名单）——
   anomalies: 'anomalies', // bug 收集器账本（防治静默 bug·指纹去重·仅管理端·recordAnomaly 单口写入）
   inspectRuns: 'inspectRuns', // 巡检机体检报告（每次运行 A/B 检查红绿灯·仅管理端·runInspection 单口写入）
+  // 敏感凭证入库单源（2026-07-12 决策·config-checklist 本页填写自动生效）：doc('wxkf')/doc('wxpay')，
+  // 云函数运行时读库优先、env 兜底迁移期——见 kit/secureConfig.ts。仅 saveSecureConfig 单口写入。
+  secureConfig: 'secureConfig',
 } as const
 
 export type CollectionName = (typeof COLLECTIONS)[keyof typeof COLLECTIONS]

@@ -1,9 +1,10 @@
 import { reply, ensure, type Ctx } from '../lib'
 import { COLLECTIONS } from '@ldrw/shared'
-import { fetchTradeBill, normalizePem, type BillRow } from '../../../kit'
+import { fetchTradeBill, normalizePem, getSecureConfig, type BillRow } from '../../../kit'
 
 // —— S16 外部对账 Batch 2：拉微信交易账单落 wxBills（供 Batch 3 逐笔比对）——
-// 凭证（敏感·非 git/DB·根因#9）：商户私钥/证书序列号读云开发环境变量；mchid 取 config.pay.subMchId（1113881793）。
+// 凭证（根因#9）：商户私钥/证书序列号经 kit/secureConfig 读库（决策 2026-07-12·/admin 人工配置清单页
+// 填写自动生效），DB 无值时回退云开发环境变量（迁移期兼容）；mchid 取 config.pay.subMchId（1113881793）。
 // fail-soft：缺凭证 / 拉取失败 → ok:false（不抛·不落库）。出站签名/解析收口 kit/wxpay（守卫 wxpay-seam-single）。
 
 const isDate = (s: any) => typeof s === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(s)
@@ -32,9 +33,10 @@ export async function upsertBills(db: any, date: string, rows: BillRow[]): Promi
 export async function downloadBill({ db, data }: Ctx) {
   const date = isDate(data?.date) ? data.date : ''
   if (!date) return reply(400, { ok: false, error: 'BAD_DATE' })
-  const serial = process.env.WXPAY_MCH_SERIAL || ''
-  // 私钥换行常被控制台塌成空格/字面 \n（→ OpenSSL DECODER 报错）→ 稳健重建规范 PEM
-  const privateKey = normalizePem(process.env.WXPAY_MCH_PRIVATE_KEY || '')
+  const serial = await getSecureConfig(db, 'wxpay', 'mchSerial')
+  // 私钥换行常被控制台塌成空格/字面 \n（→ OpenSSL DECODER 报错）→ 稳健重建规范 PEM（DB 存的已规整过，
+  // 这里对 env 兜底路径的原始值仍需要——双跑一遍 normalizePem 对已规整值是幂等的，无害）
+  const privateKey = normalizePem(await getSecureConfig(db, 'wxpay', 'mchPrivateKey'))
   if (!serial || !privateKey) return reply(200, { ok: false, error: 'NO_WXPAY_CREDS' })
   const cfg = await db.collection(COLLECTIONS.config).doc('pay').get().catch(() => null)
   const mchid = (cfg && cfg.data && cfg.data.subMchId) || ''

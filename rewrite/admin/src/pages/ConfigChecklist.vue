@@ -1,10 +1,13 @@
 <script setup lang="ts">
-// 人工配置清单（批 B9·设计契约：TopBar chip + 说明 banner + 单卡分组表）：把散落在云函数环境变量 /
-// admin 页内 DB 字段 / 纯人工外部后台项 / 资产正册的 12 项配置拼一屏「配了没」——**只探测状态，
-// 从不回显任何密钥/配置值**（后端 getConfigChecklist 铁律·守卫 rewrite/cloud/tests/config-checklist.test.ts）。
+// 人工配置清单（批 B9·设计契约：TopBar chip + 说明 banner + 单卡分组表；批 B10 升级：可填写保存）：
+// 把散落在云函数环境变量 / admin 页内 DB 字段 / 纯人工外部后台项 / 资产正册的 20 项配置拼一屏「配了没」。
+// 只读探测铁律不变（getConfigChecklist 响应从不回显任何已存密钥/配置真实值·只回 status 布尔态）；
+// 后端新增 saveSecureConfig / savePayConfig 后，带 fill 元数据的项可直接在本页填写保存、免重新部署
+// （守卫 rewrite/cloud/tests/config-checklist.test.ts）。前端按 item.fill 通用驱动渲染/提交，
+// 不硬编码具体字段名——以后端 fill 有无 / inputType 决定怎么画、怎么交。
 import { ref, onMounted } from 'vue'
 import { ShieldCheck, RefreshCw } from 'lucide-vue-next'
-import { getConfigChecklist } from '../api/system'
+import { getConfigChecklist, saveSecureConfig, savePayConfig } from '../api/system'
 import PageHeader from '../components/ui/PageHeader.vue'
 import Card from '../components/ui/Card.vue'
 import Badge from '../components/ui/Badge.vue'
@@ -12,6 +15,13 @@ import UiButton from '../components/ui/Button.vue'
 import EmptyState from '../components/ui/EmptyState.vue'
 
 type Status = 'ok' | 'missing' | 'check'
+interface FillMeta {
+  action: 'saveSecureConfig' | 'savePayConfig'
+  docId?: 'wxkf' | 'wxpay'
+  field: string
+  inputType: 'text' | 'password' | 'textarea' | 'select'
+  options?: { value: string; label: string }[]
+}
 interface Item {
   key: string
   name: string
@@ -21,15 +31,22 @@ interface Item {
   howTo: string
   url: string
   noteExtra?: string
+  fill?: FillMeta
 }
 interface Group {
   group: string
   items: Item[]
 }
+interface FillState {
+  value: string // 永远从空白起（零回显铁律·从不用已存值预填）
+  busy: boolean
+  error: string
+}
 
 const groups = ref<Group[]>([])
 const message = ref('加载中…')
 const loading = ref(false)
+const fillState = ref<Record<string, FillState>>({})
 
 const toneOf = (s: Status) => (s === 'ok' ? 'green' : s === 'missing' ? 'red' : 'amber')
 const labelOf = (s: Status) => (s === 'ok' ? '已配' : s === 'missing' ? '未配' : '需人工核对')
@@ -44,7 +61,38 @@ async function load() {
     return
   }
   groups.value = (r.groups || []) as Group[]
+  // 每次载入（含保存成功后的整页刷新）都重建填写态：所有可填项恒空白起——响应从不带回真实值，
+  // 这里也绝不该拿旧输入去预填，避免误以为"已回显"。
+  const nextFill: Record<string, FillState> = {}
+  for (const g of groups.value) {
+    for (const it of g.items) {
+      if (it.fill) nextFill[it.key] = { value: '', busy: false, error: '' }
+    }
+  }
+  fillState.value = nextFill
   message.value = ''
+}
+
+function canSubmit(it: Item): boolean {
+  const s = fillState.value[it.key]
+  return !!s && !s.busy && s.value.trim().length > 0
+}
+
+async function submitFill(it: Item) {
+  const f = it.fill
+  if (!f) return
+  const s = fillState.value[it.key]
+  const value = s ? s.value.trim() : ''
+  if (!value) return
+  fillState.value[it.key] = { value: s.value, busy: true, error: '' }
+  const r: any = f.action === 'saveSecureConfig' ? await saveSecureConfig(f.docId || '', { [f.field]: value }) : await savePayConfig({ [f.field]: value })
+  if (r.error === 'SESSION_LOST') return // 集中导登录（同上）
+  if (r.ok) {
+    await load() // 整页刷新：拿到最新 status + 全部填写态清空（更简单可靠，优先选它）
+    message.value = '已保存'
+  } else {
+    fillState.value[it.key] = { value: s.value, busy: false, error: String(r.error || '保存失败') }
+  }
 }
 
 onMounted(load)
@@ -52,8 +100,8 @@ onMounted(load)
 
 <template>
   <div class="ld-page">
-    <PageHeader title="人工配置清单" sub="12 项散落配置一屏「配了没」 · 探不到的（企微/微信客服/小程序后台）恒需人工核对">
-      <Badge tone="neutral" dot>只探测状态 · 不回显密钥</Badge>
+    <PageHeader title="人工配置清单" sub="20 项散落配置一屏「配了没」 · 探不到的（企微/微信客服/小程序后台）恒需人工核对">
+      <Badge tone="neutral" dot>零回显 · 只回状态不回密钥</Badge>
       <UiButton variant="ghost" :disabled="loading" @click="load">
         <RefreshCw :size="14" :stroke-width="1.8" :class="{ spin: loading }" />
         <span>{{ loading ? '探测中…' : '重新探测' }}</span>
@@ -63,7 +111,10 @@ onMounted(load)
     <div class="banner">
       每次点开或点「重新探测」都会重新查一遍云函数环境变量 / admin 数据库字段的存在与否——绿=已配、
       红=未配、琥珀=代码探不到（cs 函数环境变量各自独立配置 / 企业微信·微信客服·小程序后台纯人工项），
-      需要人工去对应后台核实一遍。
+      需要人工去对应后台核实一遍。带填写框的项（微信客服凭证 / 支付对账凭证 / 支付接缝配置）可以直接
+      在本页填好点「保存」，写入数据库后云函数运行时优先读库、立即生效、不用再去控制台改环境变量重新
+      部署；填写框永远空白起——响应从不回显任何已存密钥/配置真实值，每次要改都得整值重新填一遍。
+      其余项目仍是纯只读人工核对，不会出现输入框。
     </div>
 
     <p v-if="message" class="ld-status">{{ message }}</p>
@@ -85,6 +136,38 @@ onMounted(load)
               <div class="howto-text">{{ it.howTo }}</div>
               <div v-if="it.url" class="howto-url">{{ it.url }}</div>
               <div v-if="it.noteExtra" class="howto-note">{{ it.noteExtra }}</div>
+            </div>
+            <div v-if="it.fill && fillState[it.key]" class="row-fill">
+              <select
+                v-if="it.fill.inputType === 'select'"
+                v-model="fillState[it.key].value"
+                :disabled="fillState[it.key].busy"
+                class="fill-select"
+              >
+                <option value="">不改动</option>
+                <option v-for="opt in it.fill.options || []" :key="opt.value" :value="opt.value">{{ opt.label }}</option>
+              </select>
+              <textarea
+                v-else-if="it.fill.inputType === 'textarea'"
+                v-model="fillState[it.key].value"
+                :disabled="fillState[it.key].busy"
+                class="fill-textarea"
+                rows="8"
+                placeholder="粘贴完整内容后点保存…"
+              />
+              <input
+                v-else
+                v-model="fillState[it.key].value"
+                :disabled="fillState[it.key].busy"
+                :type="it.fill.inputType"
+                class="fill-input"
+                placeholder="填入后点保存生效…"
+                autocomplete="off"
+              />
+              <UiButton size="sm" variant="ghost" :disabled="!canSubmit(it)" @click="submitFill(it)">
+                {{ fillState[it.key].busy ? '保存中…' : '保存' }}
+              </UiButton>
+              <span v-if="fillState[it.key].error" class="fill-error">{{ fillState[it.key].error }}</span>
             </div>
           </div>
         </template>
@@ -177,6 +260,58 @@ onMounted(load)
   font-size: 11px;
   line-height: 1.6;
   color: var(--ld-amber);
+}
+
+/* 填写区（批 B10：带 fill 元数据的项才出现）——占满整行、居下方，输入框永远空白起 */
+.row-fill {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 8px;
+  margin-top: 4px;
+  padding-top: 10px;
+  border-top: 1px dashed var(--ld-line);
+}
+.fill-input,
+.fill-select {
+  flex: 1 1 240px;
+  min-width: 0;
+  padding: 8px 10px;
+  border: 1px solid var(--ld-line);
+  border-radius: var(--ld-radius-sm);
+  background: var(--ld-bg);
+  font: inherit;
+  font-size: 12.5px;
+  color: var(--ld-content);
+}
+.fill-textarea {
+  flex: 1 1 100%;
+  min-width: 0;
+  padding: 8px 10px;
+  border: 1px solid var(--ld-line);
+  border-radius: var(--ld-radius-sm);
+  background: var(--ld-bg);
+  font-family: var(--ld-font-mono);
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--ld-content);
+  resize: vertical;
+}
+.fill-input:focus,
+.fill-select:focus,
+.fill-textarea:focus {
+  outline: none;
+  border-color: var(--ld-purple-line);
+}
+.fill-input::placeholder,
+.fill-textarea::placeholder {
+  color: var(--ld-content-2);
+}
+.fill-error {
+  flex: 1 1 100%;
+  font-size: 11.5px;
+  color: var(--ld-red);
 }
 
 @media (max-width: 900px) {

@@ -8,15 +8,19 @@ import {
   getDb,
   alert,
   kfCustomerBatchget,
+  getSecureConfig,
 } from '../../../kit'
 import { handleMessage, rootMenu, buildMsgMenu, extUserId, processKfBatch, heldStatus, type Incoming } from './dispatch'
 import { archiveInbound, archiveOutbound } from './archive' // 会话归档（B5.1·入站/出站落档·守卫 conversations-archived）
 
 // 微信客服 in-chat 智能客服回调（HTTP 访问服务·类比 adminApi 的 /adminapi）。
 // 验签 + AES 解密 + fail-closed 由 kit.defineKfCallback 强制（根因#3）；本函数只做「收到事件 → 拉消息
-// → 分流回消息」。密钥全走云环境变量（前置由用户在微信客服「开发配置」与企业微信认证后配齐）。
+// → 分流回消息」。corpid/secret/token/aesKey 经 kit/secureConfig 读库（决策 2026-07-12·/admin
+// 人工配置清单页填写自动生效，无需再改环境变量+重新部署）；MINIAPP_APPID/THUMB_MEDIA_ID 未入本次
+// 迁移范围（不在 checklist 列表内），仍走环境变量。
 const env = (k: string) => process.env[k] || ''
-const cfg = () => ({ corpid: env('WXKF_CORPID'), secret: env('WXKF_SECRET') })
+const db = getDb()
+const cfg = async () => ({ corpid: await getSecureConfig(db, 'wxkf', 'corpId'), secret: await getSecureConfig(db, 'wxkf', 'secret') })
 const cardCfg = () => ({ appid: env('WXKF_MINIAPP_APPID'), thumbMediaId: env('WXKF_THUMB_MEDIA_ID') })
 
 const SEEN_TTL_NOTE = 'seen:<msgid> 去重痕只增（量级=客服消息数·远低于 events）；如需回收随 cleanupEvents 扩展'
@@ -59,16 +63,15 @@ function normalize(msg: any): Incoming | null {
 }
 
 export const main = defineKfCallback({
-  token: () => env('WXKF_TOKEN'),
-  aesKey: () => env('WXKF_AESKEY'),
-  corpid: () => env('WXKF_CORPID'), // 企业内部单 corp：解密 receiveId 须等于它，拒跨 corp 伪造（审计 P1）
+  token: () => getSecureConfig(db, 'wxkf', 'token'),
+  aesKey: () => getSecureConfig(db, 'wxkf', 'aesKey'),
+  corpid: () => getSecureConfig(db, 'wxkf', 'corpId'), // 企业内部单 corp：解密 receiveId 须等于它，拒跨 corp 伪造（审计 P1）
   onEvent: async ({ syncToken, openKfId }) => {
-    const db = getDb()
     // 观测（根因#8：整条 onEvent 链路可见，非敏感字段——不打 token/openid 内容）
     console.log('[kf] onEvent', { openKfId, hasSyncToken: !!syncToken })
     let token: string
     try {
-      token = await getAccessToken(cfg())
+      token = await getAccessToken(await cfg())
     } catch (e) {
       console.error('[kf] getAccessToken threw', String(e)) // fetch 抛错（网络/IP）——kit errcode 路径另有告警
       return

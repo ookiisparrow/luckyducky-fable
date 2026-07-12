@@ -1,7 +1,5 @@
 import { ERR, COLLECTIONS } from '@ldrw/shared'
-import { withOpenId, withRateLimit, ok, err, getAccessToken, unionidToExternalUserid } from '../../../kit'
-
-const env = (k: string) => process.env[k] || ''
+import { withOpenId, withRateLimit, ok, err, getAccessToken, unionidToExternalUserid, getSecureConfig } from '../../../kit'
 
 /**
  * 身份桥接·写侧（黄金 cs-agent §九）：可信 openid + unionid 经企微转换 API 得 external_userid，
@@ -14,8 +12,8 @@ export const kfBind = withOpenId(
     const unionid = String(e?.unionid || '')
     if (!unionid) return err(ERR.NO_UNIONID)
 
-    const corpid = env('WXKF_CORPID')
-    const secret = env('WXKF_SECRET')
+    const corpid = await getSecureConfig(db, 'wxkf', 'corpId')
+    const secret = await getSecureConfig(db, 'wxkf', 'secret')
     if (!corpid || !secret) return err(ERR.KF_NOT_CONFIGURED)
 
     let token: string
