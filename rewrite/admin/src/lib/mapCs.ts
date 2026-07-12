@@ -217,6 +217,31 @@ export function duplicateNodeIds(ids: string[]): string[] {
   return [...dup]
 }
 
+export interface CsatEntryVM {
+  id: string // 行级唯一键（后端 listCsatEntries 回传·确定性 _id）——供翻页按 id 去重，同 Orders/Refunds/Conversations 范式
+  timeLabel: string
+  score: number
+  note: string
+  sessionKey: string
+  bad: boolean // 差评（≤3 星）——用于「查会话」按钮与行高亮，同 listCsatEntries maxScore=3 的口径
+}
+
+/** 满意度明细行（批 B6·listCsatEntries）：时间人话化，note/sessionKey 无则回 '—'/''。 */
+export function mapCsatEntries(list: unknown): CsatEntryVM[] {
+  if (!Array.isArray(list)) return []
+  return (list as Record<string, any>[]).filter(Boolean).map((e) => {
+    const score = Number(e.score) || 0
+    return {
+      id: String(e.id || ''),
+      timeLabel: dateTime(e.at),
+      score,
+      note: String(e.note || '') || '—',
+      sessionKey: String(e.sessionKey || ''),
+      bad: score > 0 && score <= 3,
+    }
+  })
+}
+
 export function mapCsat(r: unknown): { total: number; avg: string; dist: Array<{ star: string; n: number }>; withNote: number; approxNote: string } | null {
   const d = (r && typeof r === 'object' ? r : {}) as Record<string, any>
   if (d.ok !== true) return null

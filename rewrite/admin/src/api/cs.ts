@@ -10,5 +10,7 @@ export const searchCustomer = (q: string) => client.post('searchCustomer', { q }
 export const listKb = () => client.post('listKb')
 export const saveKb = (entries: unknown[]) => client.post('saveKb', { entries })
 export const getCsatReport = () => client.post('getCsatReport')
+export const listCsatEntries = (filter: { cursor?: unknown; limit?: number; from?: number; to?: number; maxScore?: number }) =>
+  client.post('listCsatEntries', filter as Record<string, unknown>)
 export const listCheckpoints = (courseId?: string) => client.post('listCheckpoints', courseId ? { courseId } : {})
 export const saveCheckpoints = (courseId: string, nodes: unknown[]) => client.post('saveCheckpoints', { courseId, nodes })

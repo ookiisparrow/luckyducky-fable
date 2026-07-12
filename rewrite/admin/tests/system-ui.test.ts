@@ -14,6 +14,26 @@ describe('外包账号与批次', () => {
     expect(rows[1].rateLabel).toBe('—') // 不除零
   })
 
+  it('大白话（批 B6）：坐席状态归一为中文徽章语气（在线绿/忙碌琥珀/离线灰）；未知/缺失状态兜底离线；活跃数/今日结束数透传', () => {
+    const rows = mapAgents([
+      { id: 'a1', status: 'online', activeCount: 2, todayClosed: 3 },
+      { id: 'a2', status: 'busy', activeCount: 1, todayClosed: 0 },
+      { id: 'a3', status: 'offline' },
+      { id: 'a4' }, // 无 status 字段（agentState 无档）·兜底离线
+      { id: 'a5', status: '未知态' }, // 非法值兜底离线（防未知枚举渲崩）
+    ])
+    expect(rows.map((r) => [r.status, r.statusLabel, r.statusTone])).toEqual([
+      ['online', '在线', 'green'],
+      ['busy', '忙碌', 'amber'],
+      ['offline', '离线', 'neutral'],
+      ['offline', '离线', 'neutral'],
+      ['offline', '离线', 'neutral'],
+    ])
+    expect(rows[0].activeCount).toBe(2)
+    expect(rows[0].todayClosed).toBe(3)
+    expect(rows[3].activeCount).toBe(0) // 缺字段不崩、回 0
+  })
+
   it('大白话：webhook 只认企微群机器人地址；空=清除合法；野地址拒', () => {
     expect(webhookOk('')).toBe(true)
     expect(webhookOk('https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=abc-123')).toBe(true)

@@ -199,6 +199,59 @@ describe('CSAT 报表（黄金 §七）', () => {
   })
 })
 
+describe('CSAT 明细钻取（批 B6·cursor 分页·[from,to) 含界·maxScore 过滤）', () => {
+  it('大白话：[from,to) 含起不含止——起点那条在窗内、止点那条被剔除，窗外记录不进列表；sessionKey 回 externalUserId', async () => {
+    control.seed('csat', [
+      { _id: 'e-out-low', score: 3, note: '', externalUserId: 'euF', createdAt: 500 }, // <from·窗外
+      { _id: 'e1', score: 1, note: '差评理由', externalUserId: 'euD', createdAt: 1000 }, // =from·含界
+      { _id: 'e2', score: 4, externalUserId: 'euC', createdAt: 3000 },
+      { _id: 'e3', score: 5, externalUserId: 'euE', createdAt: 5000 }, // =to·被剔除（不含止）
+    ])
+    const r = await post('listCsatEntries', SUPER, { from: 1000, to: 5000 })
+    expect(r.ok).toBe(true)
+    expect(r.entries.map((e: any) => e.at)).toEqual([3000, 1000]) // 倒序·窗内两条
+    expect(r.hasMore).toBe(false)
+    expect(r.entries[1].score).toBe(1)
+    expect(r.entries[1].note).toBe('差评理由')
+    expect(r.entries[1].sessionKey).toBe('euD') // 回 externalUserId 供「查会话」定位
+    expect(r.entries.map((e: any) => e.id)).toEqual(['e2', 'e1']) // 行级唯一键回传（确定性 _id）·供前端翻页按 id 去重
+  })
+
+  it('大白话：翻页途中撞到 from 下界——那一页只取窗内前缀、当场收口不再续页（不把窗外记录误判成「还有更多」）', async () => {
+    control.seed('csat', [
+      { _id: 'r1', score: 5, externalUserId: 'eu1', createdAt: 6000 },
+      { _id: 'r2', score: 4, externalUserId: 'eu2', createdAt: 5000 },
+      { _id: 'r3', score: 3, externalUserId: 'eu3', createdAt: 4000 }, // from 边界前最后一条（在窗内）
+      { _id: 'r4', score: 2, externalUserId: 'eu4', createdAt: 3000 }, // < from·窗外
+      { _id: 'r5', score: 1, externalUserId: 'eu5', createdAt: 2000 }, // < from·窗外
+    ])
+    const p1 = await post('listCsatEntries', SUPER, { from: 3500, limit: 2 })
+    expect(p1.entries.map((e: any) => e.at)).toEqual([6000, 5000])
+    expect(p1.hasMore).toBe(true) // 本页未触边界·仍有更多
+    const p2 = await post('listCsatEntries', SUPER, { from: 3500, limit: 2, cursor: p1.nextCursor })
+    expect(p2.entries.map((e: any) => e.at)).toEqual([4000]) // 本页原生多拉一条(3000)被 from 砍掉
+    expect(p2.hasMore).toBe(false) // 撞边界·当场收口
+    expect(p2.nextCursor).toBe(null)
+  })
+
+  it('大白话：maxScore 过滤（score 是 1-5 整数·≤N 语义，如「仅差评 ≤3」）——超过阈值的分不进列表', async () => {
+    control.seed('csat', [
+      { _id: 'm1', score: 5, externalUserId: 'euA', createdAt: 3000 },
+      { _id: 'm2', score: 3, externalUserId: 'euB', createdAt: 2000 },
+      { _id: 'm3', score: 1, externalUserId: 'euC', createdAt: 1000 },
+    ])
+    const r = await post('listCsatEntries', SUPER, { maxScore: 3 })
+    expect(r.entries.map((e: any) => e.score)).toEqual([3, 1]) // 5 分被剔除
+  })
+
+  it('大白话：无参数=全量倒序首页；空集不崩', async () => {
+    const zero = await post('listCsatEntries', SUPER, {})
+    expect(zero.ok).toBe(true)
+    expect(zero.entries).toEqual([])
+    expect(zero.hasMore).toBe(false)
+  })
+})
+
 describe('知识库与节点策展（kb=公司 FAQ·checkpoints=课程节点定义）', () => {
   it('大白话：外包可读 FAQ（快捷回复要用）但不能改；超管整体覆盖保存——删掉的条目真删', async () => {
     control.seed('kb', [{ _id: 'faq0', question: '旧条目', answer: '将被删', category: 'other' }])

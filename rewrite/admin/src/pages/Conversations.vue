@@ -1,7 +1,10 @@
 <script setup lang="ts">
-// 客服会话（设计语言一致性·M3 UI 批13）：按客户检索时间轴 + 质检报表（样本口径诚实标注）。
-// 逻辑未动，仅套设计语言（页头/统计卡/检索卡/消息气泡时间轴/token）。
+// 客服会话（设计语言一致性·M3 UI 批13 + 批 B6 深链预填）：按客户检索时间轴 + 质检报表（样本口径诚实标注）。
+// 深链预填（批 B6·本页原无 route.query 读取能力·新增最小实现）：Csat.vue 差评行「查会话」
+// router.push({path:'/conversations', query:{externalUserId}}) 跳转过来——挂载时读 route.query.externalUserId/
+// openid 预填输入框并自动检索一次（同 Batches.vue/Cards.vue 既有「props(嵌入) || route.query(深链) || 空」范式）。
 import { ref, onMounted } from 'vue'
+import { useRoute } from 'vue-router'
 import { Search, RotateCcw } from 'lucide-vue-next'
 import { searchConversations, conversationsReport } from '../api/cs'
 import { mapMessages, mapReport, type MsgVM, type ReportVM } from '../lib/mapCs'
@@ -13,8 +16,9 @@ import KpiCard from '../components/ui/KpiCard.vue'
 import Badge from '../components/ui/Badge.vue'
 import EmptyState from '../components/ui/EmptyState.vue'
 
-const openid = ref('')
-const externalUserId = ref('')
+const route = useRoute()
+const openid = ref(String(route.query.openid || ''))
+const externalUserId = ref(String(route.query.externalUserId || ''))
 const keyword = ref('')
 const msgs = ref<MsgVM[]>([])
 const cursor = ref<unknown>(null)
@@ -69,7 +73,10 @@ async function more() {
   hasMore.value = !!r.hasMore
 }
 
-onMounted(loadReport)
+onMounted(() => {
+  void loadReport()
+  if (openid.value || externalUserId.value) void search() // 深链预填带值即自动检索一次（省一次手点）
+})
 </script>
 
 <template>

@@ -8,17 +8,34 @@ export interface AgentRow {
   disabled: boolean
   wecomUserId: string
   createdAt: string
+  status: 'online' | 'busy' | 'offline'
+  statusLabel: string
+  statusTone: 'green' | 'amber' | 'neutral'
+  activeCount: number
+  todayClosed: number
 }
+
+const AGENT_STATUS_LABEL: Record<string, string> = { online: '在线', busy: '忙碌', offline: '离线' }
+const AGENT_STATUS_TONE: Record<string, 'green' | 'amber' | 'neutral'> = { online: 'green', busy: 'amber', offline: 'neutral' }
 
 export function mapAgents(list: unknown): AgentRow[] {
   if (!Array.isArray(list)) return []
-  return (list as Record<string, any>[]).filter((a) => a && a.id).map((a) => ({
-    id: String(a.id),
-    name: String(a.name || ''),
-    disabled: a.disabled === true,
-    wecomUserId: String(a.wecomUserId || ''),
-    createdAt: dateTime(a.createdAt),
-  }))
+  return (list as Record<string, any>[]).filter((a) => a && a.id).map((a) => {
+    // status 兜底 offline（后端无 agentState 档时已回退·这里再兜一层防未知值）
+    const status: AgentRow['status'] = a.status === 'online' || a.status === 'busy' ? a.status : 'offline'
+    return {
+      id: String(a.id),
+      name: String(a.name || ''),
+      disabled: a.disabled === true,
+      wecomUserId: String(a.wecomUserId || ''),
+      createdAt: dateTime(a.createdAt),
+      status,
+      statusLabel: AGENT_STATUS_LABEL[status],
+      statusTone: AGENT_STATUS_TONE[status],
+      activeCount: Number(a.activeCount) || 0,
+      todayClosed: Number(a.todayClosed) || 0,
+    }
+  })
 }
 
 export interface BatchRow {

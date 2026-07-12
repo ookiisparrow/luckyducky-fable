@@ -102,8 +102,9 @@ const ACTIONS: Record<string, (ctx: Ctx) => Promise<any>> = {
   // 知识库（批15·FAQ 单源·admin 维护、客服 bot dispatch 读同一份）
   listKb: kb.listKb,
   saveKb: kb.saveKb,
-  // 客服满意度报表（批15·只读·均分/分布·bounded）
+  // 客服满意度报表（批15·只读·均分/分布·bounded）+ 明细钻取（批 B6·cursor 分页·未登记 cap→默认仅超管，同 getCsatReport）
   getCsatReport: csat.getCsatReport,
+  listCsatEntries: csat.listCsatEntries,
   // 坐席台 10 action（批15·cap agent:handle·分配 scope 经 assertOwnedByAgent）
   listQueue: agentDesk.listQueue,
   claimConversation: agentDesk.claimConversation,

@@ -1,7 +1,7 @@
 // 客服组映射（守卫 rw-admin-cs-ui-golden）：时长人话/报表 approx 诚实透传/360 单面板失败隔离/
 // 命中依据中文/kb 行归一/满意度分布。
 import { describe, it, expect } from 'vitest'
-import { msHuman, mapReport, mapPanels, matchLabel, normalizeKb, mapCsat, mapMessages, nextNodeId, duplicateNodeIds } from '../src/lib/mapCs'
+import { msHuman, mapReport, mapPanels, matchLabel, normalizeKb, mapCsat, mapCsatEntries, mapMessages, nextNodeId, duplicateNodeIds } from '../src/lib/mapCs'
 import customer360Src from '../src/pages/Customer360.vue?raw'
 
 describe('时长人话与报表', () => {
@@ -93,6 +93,25 @@ describe('kb/满意度/消息归一', () => {
     expect(msgs[1].text).toBe('')
     expect(msgs[2].kind).toBe('voice') // 非文本 + 文字说明并存（chip 与文本都在）
     expect(msgs[2].text).toBe('语音转写：你好')
+  })
+})
+
+describe('满意度明细行（批 B6·mapCsatEntries）', () => {
+  it('大白话：无备注显 —；bad=差评 ≤3 星（供「查会话」按钮/行高亮判据）；非数组回空', () => {
+    const rows = mapCsatEntries([
+      { id: 'csat:euA:1783046400000', at: 1783046400000, score: 5, note: '很棒', sessionKey: 'euA' },
+      { id: 'csat:euB:1783046400000', at: 1783046400000, score: 3, note: '', sessionKey: 'euB' },
+      { at: 1783046400000, score: 1, sessionKey: '' },
+    ])
+    expect(rows[0].id).toBe('csat:euA:1783046400000') // 行级唯一键透传（供翻页去重）
+    expect(rows[0].note).toBe('很棒')
+    expect(rows[0].bad).toBe(false)
+    expect(rows[1].note).toBe('—') // 无备注兜底
+    expect(rows[1].bad).toBe(true) // 3 分算差评
+    expect(rows[2].bad).toBe(true)
+    expect(rows[2].sessionKey).toBe('')
+    expect(rows[2].id).toBe('') // 无 id 兜底空串（不崩）
+    expect(mapCsatEntries(null)).toEqual([])
   })
 })
 

@@ -428,6 +428,31 @@ describe('外包账号管理（黄金 §十：口令哈希·停用即时·白名
     expect(anomalies.some((a: any) => a.code === 'ROLLBACK_FAIL' && a.ctx && a.ctx.which === 'keyHash')).toBe(true)
   })
 
+  it('大白话（批 B6）：listAgents 看板扩展字段——status/stateUpdatedAt 取 agentState（无档兜底 offline/null）；activeCount/todayClosed 分坐席各算；[今日零点,明天零点) 含起——今日零点整那条算今日、昨天最后一刻的不算', async () => {
+    const CST = 8 * 3600_000
+    const todayStart = Date.parse(new Date(Date.now() + CST).toISOString().slice(0, 10) + 'T00:00:00+08:00')
+    control.seed('agentState', [{ _id: 'agent-1', status: 'online', updatedAt: 999 }]) // agent-2 无档
+    control.seed('csSession', [
+      { _id: 'act1', agentId: 'agent-1', status: 'active', createdAt: 1, updatedAt: 1 },
+      { _id: 'act2', agentId: 'agent-1', status: 'active', createdAt: 1, updatedAt: 1 },
+      { _id: 'act3', agentId: 'agent-2', status: 'active', createdAt: 1, updatedAt: 1 },
+      { _id: 'clA', agentId: 'agent-1', status: 'closed', createdAt: 1, updatedAt: todayStart + 1000 }, // 今日内
+      { _id: 'clB', agentId: 'agent-1', status: 'closed', createdAt: 1, updatedAt: todayStart - 1 }, // 昨天最后一刻·不算
+      { _id: 'clC', agentId: 'agent-2', status: 'closed', createdAt: 1, updatedAt: todayStart }, // 今日零点整·含界
+    ])
+    const r = await post('listAgents', SUPER, {})
+    const a1 = r.agents.find((a: any) => a.id === 'agent-1')
+    const a2 = r.agents.find((a: any) => a.id === 'agent-2')
+    expect(a1.status).toBe('online')
+    expect(a1.stateUpdatedAt).toBe(999)
+    expect(a1.activeCount).toBe(2)
+    expect(a1.todayClosed).toBe(1) // clA 算·clB（昨天）不算
+    expect(a2.status).toBe('offline') // 无 agentState 档兜底
+    expect(a2.stateUpdatedAt).toBeNull()
+    expect(a2.activeCount).toBe(1)
+    expect(a2.todayClosed).toBe(1) // clC 今日零点整含界
+  })
+
   it('大白话（N3）：wecomUserId 竞态回滚若也失败——双凭证残留同样留痕；409 回复不变', async () => {
     control.setBeforeUpdate(async ({ coll, data }: any) => {
       if (coll === 'adminConfig' && data && data.wecomUserId === 'w-race-2') {

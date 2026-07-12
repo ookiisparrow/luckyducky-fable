@@ -1,15 +1,20 @@
 <script setup lang="ts">
-// 外包账号（设计语言一致性·M3 UI 批11）：建号（口令只在建号请求用一次·库存哈希）/停启/企微 userid 绑定
-// （免登用·全局唯一）。逻辑未动，仅套设计语言（页头/建号卡/grid 表/状态 chip/token）。
-import { ref, onMounted } from 'vue'
+// 外包账号（设计语言一致性·M3 UI 批11 + 看板化批 B6）：建号（口令只在建号请求用一次·库存哈希）/停启/企微 userid
+// 绑定（免登用·全局唯一）。看板 KPI 行：在线坐席数/接待中总数/今日结束总数由 listAgents 扩展字段聚合（真·非造）；
+// 整体均分并行调 getCsatReport（csat 集合结构性无 agentId·见 csat.ts listCsatEntries 注释——故坐席表不设
+// 「满意度」列，恒 null 的列是摆设，不编数不摆设；flag 记 docs/待办与债.md：落 agentId 维度后再补逐坐席满意度）。
+import { ref, onMounted, computed } from 'vue'
 import { listAgents, createAgent, disableAgent, setAgentWecomUserId } from '../api/system'
+import { getCsatReport } from '../api/cs'
 import { mapAgents, type AgentRow } from '../lib/mapSystem'
+import { mapCsat } from '../lib/mapCs'
 import UiButton from '../components/ui/Button.vue'
 import PageHeader from '../components/ui/PageHeader.vue'
 import Card from '../components/ui/Card.vue'
+import KpiCard from '../components/ui/KpiCard.vue'
 import Badge from '../components/ui/Badge.vue'
 import EmptyState from '../components/ui/EmptyState.vue'
-import { Headset } from 'lucide-vue-next'
+import { Headset, Users, MessagesSquare, CircleCheck, Star } from 'lucide-vue-next'
 
 const rows = ref<AgentRow[]>([])
 const message = ref('')
@@ -17,12 +22,20 @@ const busy = ref(false)
 const form = ref({ name: '', key: '', wecomUserId: '' })
 const confirmId = ref('')
 const lastCreated = ref<{ name: string; key: string } | null>(null) // 建号后回显口令（换皮不回显·超管拿不到明文转交坐席）
+const csatAvg = ref<string | null>(null) // 整体均分（并行调 getCsatReport·与坐席表无关联维度）
+
+// KPI（真·从 rows 聚合，非另造）：在线坐席数 / 接待中总数 / 今日结束总数
+const onlineCount = computed(() => rows.value.filter((r) => r.status === 'online').length)
+const activeTotal = computed(() => rows.value.reduce((s, r) => s + r.activeCount, 0))
+const closedTotal = computed(() => rows.value.reduce((s, r) => s + r.todayClosed, 0))
 
 async function reload() {
   confirmId.value = '' // 刷新即复位危险态（P1·防旧武装的停用确认残留、重进同一行一击直发·批3 规格）
-  const r = await listAgents()
+  const [r, csat] = await Promise.all([listAgents(), getCsatReport()])
   rows.value = r.ok ? mapAgents(r.agents) : []
   message.value = r.ok ? '' : '加载失败：' + String(r.error || '')
+  const csatVm = mapCsat(csat)
+  csatAvg.value = csatVm && csatVm.total ? csatVm.avg : null // 无有效评分不编数字·显 —
 }
 
 async function doCreate() {
@@ -99,6 +112,15 @@ onMounted(reload)
 
     <p v-if="message" class="ld-status is-err">{{ message }}</p>
 
+    <div v-if="rows.length" class="ld-kpi-grid">
+      <KpiCard label="在线坐席" :value="onlineCount" :icon="Users" />
+      <KpiCard label="接待中" :value="activeTotal" :icon="MessagesSquare" />
+      <KpiCard label="今日结束" :value="closedTotal" :icon="CircleCheck" />
+      <KpiCard label="整体满意度均分" :value="csatAvg ?? '—'" :icon="Star">
+        <span class="kpi-note">来自客服满意度报表（全局·非按坐席）</span>
+      </KpiCard>
+    </div>
+
     <Card title="建外包账号" sub="登录口令只在建号这一次用到（系统只存哈希·超管拿不到明文）">
       <div class="form-grid">
         <input v-model="form.name" class="field" placeholder="名字（如 外包一号）" maxlength="40" />
@@ -118,17 +140,25 @@ onMounted(reload)
     <div v-if="rows.length" class="ld-table">
       <div class="ld-thead">
         <div class="ld-th grow">名字</div>
-        <div class="ld-th" :style="{ width: '190px' }">账号</div>
-        <div class="ld-th" :style="{ width: '240px' }">企微绑定</div>
-        <div class="ld-th" :style="{ width: '160px' }">建号时间</div>
-        <div class="ld-th" :style="{ width: '96px' }">状态</div>
+        <div class="ld-th" :style="{ width: '150px' }">账号</div>
+        <div class="ld-th" :style="{ width: '92px' }">接待状态</div>
+        <div class="ld-th" :style="{ width: '76px' }">接待中</div>
+        <div class="ld-th" :style="{ width: '76px' }">今日结束</div>
+        <div class="ld-th" :style="{ width: '210px' }">企微绑定</div>
+        <div class="ld-th" :style="{ width: '150px' }">建号时间</div>
+        <div class="ld-th" :style="{ width: '84px' }">账号状态</div>
         <div class="ld-th ops-cell" :style="{ width: '180px' }">操作</div>
       </div>
       <div class="ld-tbody">
         <div v-for="row in rows" :key="row.id" class="ld-tr" :class="{ off: row.disabled }">
           <div class="ld-td grow"><span class="name">{{ row.name }}</span></div>
-          <div class="ld-td" :style="{ width: '190px' }"><span class="mono">{{ row.id }}</span></div>
-          <div class="ld-td bind" :style="{ width: '240px' }">
+          <div class="ld-td" :style="{ width: '150px' }"><span class="mono">{{ row.id }}</span></div>
+          <div class="ld-td" :style="{ width: '92px' }">
+            <Badge :tone="row.statusTone" dot>{{ row.statusLabel }}</Badge>
+          </div>
+          <div class="ld-td num" :style="{ width: '76px' }">{{ row.activeCount }}</div>
+          <div class="ld-td num" :style="{ width: '76px' }">{{ row.todayClosed }}</div>
+          <div class="ld-td bind" :style="{ width: '210px' }">
             <template v-if="editingId === row.id">
               <input v-model="editingVal" class="inline-in" placeholder="userid（空=解绑）" />
               <UiButton size="sm" @click="bindWecom(row)">存</UiButton>
@@ -138,8 +168,8 @@ onMounted(reload)
               <UiButton variant="ghost" size="sm" @click="bindWecom(row)">改绑</UiButton>
             </template>
           </div>
-          <div class="ld-td muted mono" :style="{ width: '160px' }">{{ row.createdAt }}</div>
-          <div class="ld-td" :style="{ width: '96px' }">
+          <div class="ld-td muted mono" :style="{ width: '150px' }">{{ row.createdAt }}</div>
+          <div class="ld-td" :style="{ width: '84px' }">
             <Badge :tone="row.disabled ? 'neutral' : 'green'" dot>{{ row.disabled ? '已停用' : '正常' }}</Badge>
           </div>
           <div class="ld-td ops-cell" :style="{ width: '180px' }">
@@ -208,9 +238,19 @@ onMounted(reload)
   border-radius: var(--ld-radius-sm);
 }
 
+/* KPI 行小字注（批 B6·同 Csat.vue kpi-note 各自定义·scoped 边界不共享） */
+.kpi-note {
+  font-size: 11.5px;
+  color: var(--ld-content-2);
+}
+
 /* 表格单元辅助 */
 .ld-tr.off {
   opacity: 0.55;
+}
+.num {
+  font-variant-numeric: tabular-nums;
+  color: var(--ld-content);
 }
 .name {
   font-weight: 600;
