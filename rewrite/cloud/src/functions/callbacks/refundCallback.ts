@@ -81,11 +81,15 @@ export const main = defineNotifyCallback<any>({
         if (ord && ord.data && ord.data.status === 'paid') {
           await restoreStock([{ productId: as.productId, spec: as.spec || '', qty: as.qty }])
         }
-        // 订单留对账痕（失败不阻塞 ACK：售后单是退款状态单一来源）
+        // 订单留对账痕（失败不阻塞 ACK：售后单是退款状态单一来源）。键用 lineId（深审 P3）：同商品多 SKU 行
+        // （lineId 不同、productId 相同）分别退款时，旧版按 productId 键控会后写覆盖先写、订单侧只剩一行痕；
+        // 改按 lineId（回退 productId 兼容旧售后单）各占一键。lineId 含 spec 里的 '.' 会被 TCB 当嵌套路径分层，
+        // 洗成 '_' 保持扁平一键。
+        const traceKey = String(as.lineId || as.productId).replace(/\./g, '_')
         await db
           .collection(COLLECTIONS.orders)
           .doc(as.orderId)
-          .update({ data: { ['refunded.' + as.productId]: as.refundAmount } })
+          .update({ data: { ['refunded.' + traceKey]: as.refundAmount } })
           .catch(() => {})
       }
     }

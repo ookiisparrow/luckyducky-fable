@@ -3,6 +3,7 @@ import {
   COLLECTIONS,
   MAX_QTY,
   MAX_ORDER_LINES,
+  AFTERSALE_SCAN_CAP,
   PAY_WINDOW_MS,
   toFen,
   asFen,
@@ -209,7 +210,12 @@ export const createOrder = withOpenId(
         await db.collection(COLLECTIONS.orders).add({ data: { ...order, _id: id, id } })
         return ok({ order: { ...order, _id: id, id } })
       } catch {
-        /* 撞号换号重试 */
+        // 写失败区分（深审 P2·根因#3 幂等）：add 抛错既可能是 _id 撞号（换号重试），也可能是「写已持久化但
+        // SDK 返回超时/网络错」——后者若换号重试会落两张共享同一 reserved 的单（各自关单/取消时 restoreStock
+        // 双记＝库存虚增/超卖）。先读回本次 _id：存在且属本人＝本次写其实成功，直接返回该单（幂等）；确不存在
+        // 才是真撞号/真失败，换号重试（同 overrideRefund refunds.ts 的读回判定范式，不靠错误类型嗅探）。
+        const back = await db.collection(COLLECTIONS.orders).doc(id).get().catch(() => null)
+        if (back && back.data && back.data._openid === OPENID) return ok({ order: { ...order, _id: id, id } })
       }
     }
     await restoreStock(rsv.reserved) // 建单彻底失败：预留还回去（不锁死库存）
@@ -330,11 +336,19 @@ export const applyRefund = withOpenId(async ({ db, OPENID, event }) => {
   const itemFen = asFen(toFen(item.price) * refundableQty)
 
   await db.createCollection(COLLECTIONS.afterSales).catch(() => {})
+  // 同单售后须读齐才能算准 used 封顶（深审 P2·根因#7）：裸 .get() 服务端默认 100 条静默截断会少算 used、
+  // 令行/单级退款封顶失效。显式取到 AFTERSALE_SCAN_CAP；命中上限＝记录数异常，fail-closed 拒退 + 告警，
+  // 绝不按截断值算钱（钱守恒 > 可用性）。
   const exist = await db
     .collection(COLLECTIONS.afterSales)
     .where({ orderId })
+    .limit(AFTERSALE_SCAN_CAP)
     .get()
     .catch(() => ({ data: [] }))
+  if (exist.data.length >= AFTERSALE_SCAN_CAP) {
+    alert('money', 'applyRefund', 'AFTERSALE_SCAN_CAP', { orderId })
+    return err('REFUND_SCAN_CAP')
+  }
   if (exist.data.some((a: any) => (a.lineId || a.productId) === lineId)) return err(ERR.ALREADY_APPLIED)
   const used = asFen(
     exist.data

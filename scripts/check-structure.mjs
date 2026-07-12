@@ -1599,6 +1599,11 @@ export const repoChecks = [
         ['tcb fn invoke getProducts', 'allow'], // 读类 → 放行
         ['git commit -m chore-tcb-deploy-fns', 'allow'], // 提交信息提字样 → 不拦
         ['DEPLOY_ALLOWED=1 node scripts/deploy-fns.mjs', 'ask'], // 批量部署 → 确认
+        // 深审 P1 绕过实录（防回归）：三种自然命令形态过去全放行，现须一律 ask
+        ['npx tcb fn deploy adminApi', 'ask'], // runner 前缀（tcb not found 时最自然的改写）
+        ['npx @cloudbase/cli fn deploy payCallback', 'ask'], // runner + 包名（bin=tcb）
+        ['env DEPLOY_ALLOWED=1 node scripts/deploy-fns.mjs', 'ask'], // env 前缀不进 envPrefix
+        ['export DEPLOY_ALLOWED=1; node scripts/deploy-fns.mjs', 'ask'], // export 被 ';' 拆段
       ]
       const bad = []
       for (const [cmd, want] of cases) {
@@ -1671,7 +1676,7 @@ export const repoChecks = [
   {
     id: 'requirement-trace',
     roots: ['元'],
-    desc: '需求→守卫闭环（仿 guard-coverage 泛化「病根→守卫」为「需求→功能→守卫」）：需求清单「需求→实现映射」每条 ✅ 实现需求(L1)须有映射行，且行内 函数(见系统事实)/测试(tests/cloud)/守卫(注册表) 真实存在——改需求或改码断链当场红；`npm run trace R#` 查爆炸半径',
+    desc: '需求→守卫闭环（仿 guard-coverage 泛化「病根→守卫」为「需求→功能→守卫」）：需求清单「需求→实现映射」每条 ✅ 实现需求(L1)须有映射行，且行内 函数(见系统事实)/测试(tests/cloud)/守卫(注册表) 真实存在——改需求或改码断链当场红；`npm run trace R#` 查爆炸半径。⚠️ 深审 P3：映射表函数/测试(tests/cloud)全锚**冻结旧线**，旧线冻结⇒对唯一在迭代的 rewrite 实现该守卫的「改码断链当场红」永不触发——是旧线参照链；新线需求追溯（R34/R38 等 rewrite 已实现）走各 rw- golden 守卫、未纳入本表（未闭合债·docs/待办与债）',
     run() {
       const reqPath = join(ROOT, 'docs/需求清单.md')
       if (!existsSync(reqPath)) return ['docs/需求清单.md 缺失（需求源）']
@@ -1742,7 +1747,7 @@ export const repoChecks = [
   {
     id: 'admin-login-throttled',
     roots: ['#13'],
-    desc: '认证端点防爆破（根因#13）：adminApi 口令校验路径必经频控闸（throttleLocked + 失败 throttleFail），杜绝公网口令无限重试爆破',
+    desc: '认证端点防爆破（根因#13·**旧线冻结参照**·生产线由 rw-admin-login-throttled 守）：adminApi 口令校验路径必经频控闸（throttleLocked + 失败 throttleFail），杜绝公网口令无限重试爆破',
     run() {
       const f = 'packages/cloud/src/functions/admin/adminApi/index.ts'
       const abs = join(ROOT, f)
@@ -1757,7 +1762,7 @@ export const repoChecks = [
   {
     id: 'user-writes-throttled',
     roots: ['#13'],
-    desc: '用户端可滥用写函数防刷（根因#13）：高频/造数写函数（trackEvent/createOrder/login/updateProfile）必经 withRateLimit（按 openid 限频），防无限刷库/堆垃圾/成本',
+    desc: '用户端可滥用写函数防刷（根因#13·**旧线冻结参照**·生产线由 rw-user-writes-throttled 守）：高频/造数写函数（trackEvent/createOrder/login/updateProfile）必经 withRateLimit（按 openid 限频），防无限刷库/堆垃圾/成本',
     run() {
       const targets = ['learning/trackEvent', 'orders/createOrder', 'user/login', 'user/updateProfile']
       const bad = []
@@ -1770,6 +1775,55 @@ export const repoChecks = [
         }
         if (!/withRateLimit\s*\(/.test(readFileSync(abs, 'utf8'))) {
           bad.push(`${f} 未经 withRateLimit——可滥用写函数无频控、可被刷（根因#13）`)
+        }
+      }
+      return bad
+    },
+  },
+  {
+    id: 'rw-admin-login-throttled',
+    roots: ['#13'],
+    desc: '认证端点防爆破·生产线（根因#13·深审 P2 补：admin-login-throttled 只扫冻结旧线 packages/ 是假绿）：生产线 adminApi（rewrite/cloud）口令校验路径必经频控闸（throttleLocked + 失败 throttleFail），删掉即公网口令可无限爆破',
+    run() {
+      const f = 'rewrite/cloud/src/functions/adminApi/index.ts'
+      const abs = join(ROOT, f)
+      if (!existsSync(abs)) return [`${f} 缺失（生产线 adminApi 应在此）`]
+      const src = readFileSync(abs, 'utf8')
+      const bad = []
+      if (!/throttleLocked\s*\(/.test(src)) bad.push(`${f} 未经 throttleLocked 闸——认证端点无锁定、公网口令可被爆破（根因#13）`)
+      if (!/throttleFail\s*\(/.test(src)) bad.push(`${f} 失败未 throttleFail 计数——频控空转（根因#13）`)
+      return bad
+    },
+  },
+  {
+    id: 'rw-user-writes-throttled',
+    roots: ['#13'],
+    desc: '用户端可滥用写函数防刷·生产线（根因#13·深审 P2 补：user-writes-throttled 只扫冻结旧线是假绿·深审「activateCourse/confirmEnter 无频控」同批修）：生产线 app 域用户可调写 action 必经 withRateLimit——尤其激活码兑换类（activateCourse/confirmEnter）是猜码爆破面',
+    run() {
+      // export 名 → 所在 action 文件（rewrite 按域聚合·一文件多 action，故按 withRateLimit('<name>' 精确核到具体导出）
+      const targets = [
+        ['createOrder', 'orders'],
+        ['trackEvent', 'learning'],
+        ['activateCourse', 'learning'],
+        ['confirmEnter', 'learning'],
+        ['login', 'user'],
+        ['updateProfile', 'user'],
+        ['submitFeedback', 'feedback'],
+        ['submitCheckpointPhoto', 'checkpoint'],
+        ['kfBind', 'cs'],
+        ['dataConsent', 'cs'],
+      ]
+      const bad = []
+      for (const [name, file] of targets) {
+        const f = `rewrite/cloud/src/functions/app/actions/${file}.ts`
+        const abs = join(ROOT, f)
+        if (!existsSync(abs)) {
+          bad.push(`${f} 缺失`)
+          continue
+        }
+        const src = readFileSync(abs, 'utf8')
+        if (!new RegExp(`withRateLimit\\(\\s*['"]${name}['"]`).test(src)) {
+          bad.push(`${f} 的 ${name} 未经 withRateLimit——用户可调写函数无频控可被刷/爆破（根因#13）`)
         }
       }
       return bad

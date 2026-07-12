@@ -1,4 +1,4 @@
-import { toFen, asFen, fenToYuan, refundShareFen, AFTERSALE_STATUS } from '@ldrw/shared'
+import { toFen, asFen, fenToYuan, refundShareFen, AFTERSALE_STATUS, AFTERSALE_SCAN_CAP } from '@ldrw/shared'
 import { callFlow, refundNoFor, pageQuery, notifyAlert } from '../../../kit'
 import { reply, ensure, activationFor, type Ctx } from '../lib'
 
@@ -35,7 +35,13 @@ export async function overrideRefund({ db, data }: Ctx) {
   const amountFen = toFen(Number(order.amount))
   const goodsFen = toFen(Number(order.goods))
   const itemFen = asFen(toFen(line.price) * (line.qty || 1))
-  const exist = await db.collection('afterSales').where({ orderId }).get().catch(() => ({ data: [] }))
+  // 同单售后须读齐才能算准 usedOrder/usedLine 封顶（深审 P2·根因#7）：裸 .get() 默认 100 条截断会少算
+  // used → 越规退超该行/该单实付分摊。显式取到 AFTERSALE_SCAN_CAP；命中上限＝异常，fail-closed 拒退 + 告警。
+  const exist = await db.collection('afterSales').where({ orderId }).limit(AFTERSALE_SCAN_CAP).get().catch(() => ({ data: [] }))
+  if (exist.data.length >= AFTERSALE_SCAN_CAP) {
+    await notifyAlert('money', 'overrideRefund', 'AFTERSALE_SCAN_CAP', { orderId })
+    return reply(400, { ok: false, error: 'REFUND_SCAN_CAP' })
+  }
   const settled = (a: any) => ['applied', 'approved', 'refunded'].includes(a.status)
   const usedOrder = asFen(exist.data.filter(settled).reduce((s: number, a: any) => s + toFen(Number(a.refundAmount)), 0))
   const usedLine = asFen(
@@ -233,7 +239,17 @@ export async function approveRefund({ db, data }: Ctx) {
       const amountFen = toFen(Number(order.data.amount))
       const goodsFen = toFen(Number(order.data.goods))
       const itemFen = asFen(toFen(line.price) * refundableQtyNow)
-      const exist = await db.collection('afterSales').where({ orderId: got.data.orderId }).get().catch(() => ({ data: [] }))
+      // 读齐同单售后算 used 封顶（深审 P2·根因#7）：显式取到上限，命中即 fail-closed 拒退 + 告警。
+      const exist = await db
+        .collection('afterSales')
+        .where({ orderId: got.data.orderId })
+        .limit(AFTERSALE_SCAN_CAP)
+        .get()
+        .catch(() => ({ data: [] }))
+      if (exist.data.length >= AFTERSALE_SCAN_CAP) {
+        await notifyAlert('money', 'approveRefund', 'AFTERSALE_SCAN_CAP', { orderId: got.data.orderId })
+        return reply(400, { ok: false, error: 'REFUND_SCAN_CAP' })
+      }
       const used = asFen(
         exist.data
           .filter((a: any) => a._id !== id && ['applied', 'approved', 'refunded'].includes(a.status))
