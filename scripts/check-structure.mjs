@@ -5356,10 +5356,19 @@ export const repoChecks = [
         bad.push('rewrite/mp/app.ts 缺失——冒烟层错误探针无处挂（批次D）')
       } else {
         const appTs = readFileSync(appTsPath, 'utf8')
-        if (!methodBody(appTs, 'onError'))
-          bad.push('rewrite/mp/app.ts 的 App({}) 找不到 onError 方法体——冒烟层错误探针缺失（批次D·根因#8/#14）')
-        if (!methodBody(appTs, 'onUnhandledRejection'))
-          bad.push('rewrite/mp/app.ts 的 App({}) 找不到 onUnhandledRejection 方法体——冒烟层错误探针缺失（批次D·根因#8/#14）')
+        for (const m of ['onError', 'onUnhandledRejection']) {
+          const body = methodBody(appTs, m)
+          if (!body) {
+            bad.push(`rewrite/mp/app.ts 的 App({}) 找不到 ${m} 方法体——冒烟层错误探针缺失（批次D·根因#8/#14）`)
+            continue
+          }
+          // 生产可观测半边（工业级完善批6·根因#14）：探针只进内存数组是开发期取证，真实用户设备上
+          // 无人读取——全局兜底必须同时经 reportClientError（trackEvent 落云端 events）让线上崩溃可见。
+          if (!/reportClientError\s*\(/.test(stripComments(body)))
+            bad.push(`rewrite/mp/app.ts 的 ${m} 未调 reportClientError——全局错误只进内存数组，生产端不可观测（根因#14）`)
+        }
+        if (!/trackEvent\s*\(\s*'client_error'/.test(stripComments(appTs)))
+          bad.push("rewrite/mp/app.ts 无 trackEvent('client_error') 上报出口——reportClientError 名存实亡（根因#14）")
       }
       return bad
     },
