@@ -160,7 +160,7 @@
         <view class="lp-help-card" bind:tap="onHelpContact">
           <view class="lp-help-card-pic"><image class="lp-help-card-ico" src="/static/icons/headset.svg" mode="aspectFit" /></view>
           <view class="lp-help-card-tx">
-            <text class="lp-help-card-title">联系客服</text>
+            <text class="lp-help-card-title">{{help.contactTitle}}</text>
             <text class="lp-help-card-sub">真人答疑</text>
           </view>
           <image class="lp-help-card-chev" src="/static/icons/chevron-right.svg" mode="aspectFit" />
@@ -168,7 +168,7 @@
         <view class="lp-help-card" bind:tap="onHelpVideos">
           <view class="lp-help-card-pic"><image class="lp-help-card-ico" src="/static/icons/video.svg" mode="aspectFit" /></view>
           <view class="lp-help-card-tx">
-            <text class="lp-help-card-title">帮助视频</text>
+            <text class="lp-help-card-title">{{help.videosTitle}}</text>
             <text class="lp-help-card-sub">小段讲解都在这里</text>
           </view>
           <image class="lp-help-card-chev" src="/static/icons/chevron-right.svg" mode="aspectFit" />
@@ -176,7 +176,7 @@
         <view class="lp-help-card" bind:tap="onHelpFaq">
           <view class="lp-help-card-pic"><image class="lp-help-card-ico" src="/static/icons/help-circle.svg" mode="aspectFit" /></view>
           <view class="lp-help-card-tx">
-            <text class="lp-help-card-title">常见问题</text>
+            <text class="lp-help-card-title">{{help.faqTitle}}</text>
             <text class="lp-help-card-sub">高频问题都在这里</text>
           </view>
           <image class="lp-help-card-chev" src="/static/icons/chevron-right.svg" mode="aspectFit" />
@@ -204,7 +204,7 @@
             <view class="lp-help-back" bind:tap="onHelpBackMenu">
               <image class="lp-help-back-ico" src="/static/icons/chevron-right.svg" mode="aspectFit" />
             </view>
-            <text class="lp-help-nav-title">帮助视频</text>
+            <text class="lp-help-nav-title">{{help.videosTitle}}</text>
           </view>
           <scroll-view class="lp-help-scroll" scroll-y>
             <block wx:if="{{helpVideosState === 'ok'}}">
@@ -240,15 +240,21 @@
         </block>
       </block>
 
-      <!-- faq 子层（P3c·诚实空态：云端无公开下发接口，R37b 已立需求，不造假 Q&A） -->
+      <!-- faq 子层（批B·CMS 优先：help.faq 非空则渲染问答列表；空 → 维持诚实空态导流客服，不造假 Q&A·R37b） -->
       <block wx:if="{{helpPanel === 'faq'}}">
         <view class="lp-help-nav">
           <view class="lp-help-back" bind:tap="onHelpBackMenu">
             <image class="lp-help-back-ico" src="/static/icons/chevron-right.svg" mode="aspectFit" />
           </view>
-          <text class="lp-help-nav-title">常见问题</text>
+          <text class="lp-help-nav-title">{{help.faqTitle}}</text>
         </view>
-        <view class="lp-help-empty">
+        <scroll-view class="lp-help-scroll" scroll-y wx:if="{{help.faq.length > 0}}">
+          <view class="lp-help-faq" wx:for="{{help.faq}}" wx:key="q">
+            <view class="lp-help-faq-q">{{item.q}}</view>
+            <view class="lp-help-faq-a">{{item.a}}</view>
+          </view>
+        </scroll-view>
+        <view class="lp-help-empty" wx:else>
           <text>常见问题还在整理中，先问客服吧</text>
           <view class="lp-help-empty-btn" bind:tap="onHelpContact">联系客服</view>
         </view>

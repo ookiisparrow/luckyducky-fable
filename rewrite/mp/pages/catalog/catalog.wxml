@@ -10,7 +10,7 @@
     <view wx:else class="ld-cat-hero-img ld-cat-hero-empty"></view>
     <view class="ld-cat-cta {{continueTarget ? '' : 'disabled'}}" bind:tap="onStart" hover-class="ld-cat-cta-h" hover-stay-time="80">
       <image class="ld-cat-cta-ico" src="/static/icons/play-circle.svg" mode="aspectFit" />
-      <text>开始学习</text>
+      <text>{{resumeCta}}</text>
     </view>
   </view>
 

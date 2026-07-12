@@ -4562,6 +4562,68 @@ export const repoChecks = [
     },
   },
   {
+    // 五页 CMS 内容映射接线（批B·mp 五页文案 CMS 优先·硬编码降级为默认回退·守卫先红后绿）：把「硬编码文案
+    // 变 mapper 默认值、CMS 拉不到/字段空→默认」这条不变量焊死——① golden 测试覆盖五 mapper 整档 null→默认
+    // 回退（防误清空/空屏·黄金 §九 mp 侧）；② 五页面 ts 经 lib/mapPages 映射层 + lib/pageContent 会话缓存层
+    // 取内容（不各自散拉、不绕 mapper 直写硬编码）。取内容方法体断言走 methodBody + stripComments 单源 helper
+    // （错题本 E1/E10：对剥注释后的函数体匹配，防注释文本假触发/假放行）。roots 照 rw-mp-home-golden（#8 展示面
+    // fail-soft·「构建过≠真机不空屏」那半边）。反向自检：删 golden 用例 / 某页绕过 mapper 直写文案 / 删缓存层
+    // import → 本守卫红。
+    id: 'rw-mp-page-content-golden',
+    roots: ['#8'],
+    desc: '五页 CMS 内容映射接线（rewrite/mp·批B·根因#8 展示面 fail-soft）：① golden 测试 rewrite/mp/tests/pages-map.test.ts 存在且覆盖五 mapper（mapWelcome/mapCatalogPlayer/mapMe/mapAbout/mapAgreement）整档 null→默认回退 ② 五页面（welcome/catalog/player/me/about/agreement）各经 lib/pageContent 缓存层 getPageContent + lib/mapPages 映射层取内容——对剥注释后的取内容方法体断言（methodBody+stripComments 单源 helper·E1/E10），防绕过 mapper 直写硬编码/删缓存层/删 golden 用例',
+    run() {
+      const bad = []
+      const base = join(ROOT, 'rewrite/mp')
+      if (!existsSync(base)) return []
+      const MAPPERS = ['mapWelcome', 'mapCatalogPlayer', 'mapMe', 'mapAbout', 'mapAgreement']
+      // ① golden 测试存在且覆盖五 mapper 整档 null→默认回退
+      const testRel = 'rewrite/mp/tests/pages-map.test.ts'
+      const testAbs = join(ROOT, testRel)
+      if (!existsSync(testAbs)) {
+        bad.push(`${testRel} 缺失——五 mapper 默认回退无 golden 钉行为（批B·根因#8）`)
+      } else {
+        const testSrc = readFileSync(testAbs, 'utf8')
+        for (const m of MAPPERS) {
+          if (!testSrc.includes(m)) bad.push(`${testRel} 未覆盖 ${m}——五 mapper 黄金不全（批B）`)
+          if (!new RegExp(`${m}\\s*\\(\\s*null\\s*\\)`).test(testSrc))
+            bad.push(`${testRel} 缺 ${m}(null) 整档回退用例——默认回退未钉（黄金 §九·防空屏）`)
+        }
+      }
+      // ② 五页面经 mapPages 映射层 + pageContent 缓存层取内容（对剥注释函数体断言·E1/E10）
+      const WIRES = [
+        { file: 'pages/welcome/welcome.ts', method: 'loadPageContent', mapper: 'mapWelcome' },
+        { file: 'pages/catalog/catalog.ts', method: 'loadPageContent', mapper: 'mapCatalogPlayer' },
+        { file: 'pages/player/player.ts', method: 'loadPageContent', mapper: 'mapCatalogPlayer' },
+        { file: 'pages/me/me.ts', method: 'refresh', mapper: 'mapMe' },
+        { file: 'pages/about/about.ts', method: 'loadPageContent', mapper: 'mapAbout' },
+        { file: 'pages/agreement/agreement.ts', method: 'loadPageContent', mapper: 'mapAgreement' },
+      ]
+      for (const w of WIRES) {
+        const abs = join(base, w.file)
+        if (!existsSync(abs)) {
+          bad.push(`rewrite/mp/${w.file} 缺失——CMS 内容接线点位丢失（批B）`)
+          continue
+        }
+        const src = stripComments(readFileSync(abs, 'utf8')) // 剥注释单源 helper（错题本 E1/E10）：防注释假触发/假放行
+        if (!/from\s*['"][^'"]*lib\/mapPages['"]/.test(src))
+          bad.push(`rewrite/mp/${w.file} 未从 lib/mapPages 引入映射层——文案未经 mapper 回退（批B·根因#8）`)
+        if (!/from\s*['"][^'"]*lib\/pageContent['"]/.test(src))
+          bad.push(`rewrite/mp/${w.file} 未从 lib/pageContent 引入会话缓存层——CMS 内容各自散拉（病根#15 精神·批B）`)
+        const body = methodBody(src, w.method)
+        if (!body) {
+          bad.push(`rewrite/mp/${w.file} 找不到取内容方法 ${w.method}——CMS 接线缺失（批B）`)
+          continue
+        }
+        if (!new RegExp(`${w.mapper}\\s*\\(`).test(body))
+          bad.push(`rewrite/mp/${w.file} 方法 ${w.method} 未调用 ${w.mapper}(——绕过 mapper 直写硬编码（批B·根因#8 展示面 fail-soft）`)
+        if (!/getPageContent\s*\(/.test(body))
+          bad.push(`rewrite/mp/${w.file} 方法 ${w.method} 未经 getPageContent 缓存层取内容（批B·单源收口）`)
+      }
+      return bad
+    },
+  },
+  {
     // 新线镜像 privacy-authorize-wired（R27㉒）+ consent 页（cs-data-share-consented 的 C 端半边）。
     // 原生形态：app.json __usePrivacyCheck__ + lib/privacyGate 挂 onNeedPrivacyAuthorization + app.ts 启动注册
     // + privacy-sheet 组件（agreePrivacyAuthorization 能力按钮）；涉隐私接口页扫描制——哪页调隐私接口哪页必挂
