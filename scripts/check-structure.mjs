@@ -1547,6 +1547,7 @@ export const repoChecks = [
         'console-assets/README.md',
         'console-assets/01-支付退款工作流.md',
         'console-assets/02-库权限期望表.md',
+        'console-assets/03-复合索引期望表.md',
         'console-assets/forward-node.js',
       ]) {
         if (!existsSync(join(ROOT, f))) bad.push(`${f} 缺失（控制台资产正册不可删，根因#9）`)
@@ -4874,6 +4875,42 @@ export const repoChecks = [
         }
       }
       walk(base)
+      return bad
+    },
+  },
+  {
+    // 公开目录读上界（病根#7 规模·容量审计 2026-07-12）：getProducts/getCourses 是全站最热公开读
+    // （每个新会话必调），裸 .get() 命中云开发服务端默认 100 条**静默截断**——商品/课程破百后排序靠后
+    // 的整批消失且无报错无告警（仓内自证：adminApi/lib.ts:92、kit/inventory.ts 注释同一病根）。守此
+    // 不变量：两条查询链必须带显式 .limit(（口径同 learning.ts 已有 .limit(200) 先例）。
+    id: 'rw-app-catalog-reads-bounded',
+    roots: ['#7'],
+    desc: '公开目录读上界（病根#7）：app/actions/catalog.ts 的 getProducts 与 learning.ts 的 getCourses 查询链（collection→…→get）须含显式 .limit(——裸 .get() 服务端默认 100 条静默截断，目录破百即无声丢货',
+    run() {
+      const bad = []
+      const chains = [
+        { file: 'rewrite/cloud/src/functions/app/actions/catalog.ts', head: '.collection(COLLECTIONS.products)', what: 'getProducts 商品目录' },
+        { file: 'rewrite/cloud/src/functions/app/actions/learning.ts', head: '.collection(COLLECTIONS.courses)', what: 'getCourses 课程目录' },
+      ]
+      for (const c of chains) {
+        const p = join(ROOT, c.file)
+        if (!existsSync(p)) continue
+        const src = stripComments(readFileSync(p, 'utf8'))
+        let idx = src.indexOf(c.head)
+        let found = false
+        while (idx !== -1) {
+          const end = src.indexOf('.get()', idx)
+          if (end === -1) break
+          const chain = src.slice(idx, end)
+          // 只核带 orderBy 的列表读（doc()/count() 等单读形态不在此列）
+          if (/\.orderBy\(/.test(chain)) {
+            found = true
+            if (!/\.limit\(/.test(chain)) bad.push(`${c.file} 的 ${c.what}查询链无显式 .limit(——服务端默认 100 条静默截断（病根#7）`)
+          }
+          idx = src.indexOf(c.head, end)
+        }
+        if (!found) bad.push(`${c.file} 找不到 ${c.what}查询链（${c.head}→orderBy→get）——守卫定位失效，代码形态变了须同步改判据`)
+      }
       return bad
     },
   },

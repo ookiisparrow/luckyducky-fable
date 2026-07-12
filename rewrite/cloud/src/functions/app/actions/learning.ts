@@ -158,7 +158,8 @@ function publicChapter(ch: any) {
 
 export const getCourses = async () => {
   const db = getDb()
-  const res = await db.collection(COLLECTIONS.courses).orderBy('sort', 'asc').get()
+  // 显式上界（病根#7·守卫 rw-app-catalog-reads-bounded）：同 getProducts 口径，防默认 100 条静默截断。
+  const res = await db.collection(COLLECTIONS.courses).orderBy('sort', 'asc').limit(1000).get()
   return ok({
     list: res.data.map((c: any) => ({ id: c.id, title: c.title, chapters: (c.chapters || []).map(publicChapter) })),
   })
