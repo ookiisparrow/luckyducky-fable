@@ -2,29 +2,34 @@ import { reply, type Ctx } from '../lib'
 import { probeStockSetup } from '../../../kit'
 import { COLLECTIONS } from '@ldrw/shared'
 
-// 人工配置清单（批 B9·蓝图设计契约·docs/进销存ERP/ 与 docs/后台360工作站/ 之外的「配了没」总览）：
-// 12 项散落配置（云函数环境变量 / admin 页内 DB 字段 / 纯人工外部后台项 / 资产正册）拼一屏，
-// 只探测「配了没」，**绝不回显任何密钥/配置值**（铁律·守卫 rewrite/cloud/tests/config-checklist.test.ts）。
+// 人工配置清单（批 B9→2026-07-12 补口可填写化·docs/进销存ERP/ 与 docs/后台360工作站/ 之外的「配了没」总览）：
+// 20 项散落配置（云函数环境变量→本页填写自动生效 / admin 页内 DB 字段 / 纯人工外部后台项 / 资产正册）拼一屏。
+// 探测「配了没」；**可填写的字段绝不回显既有值**（前端 fill.inputType 恒渲染空输入框，留空提交＝不改动，
+// 见 adminApi/actions/secureConfig.ts）——零回显铁律延伸到写入口，本文件仍只做只读探测。
 //
-// 探测规则五种（预审后主脑裁决·2026-07-12）：
-// ① adminApi 进程 env 布尔 `!!process.env.X`——仅当该变量确实被 adminApi 进程内代码路径读取
-//    （现场核对：WXKF_AGENTID 由 kit/wecom.ts::sendAgentCard 直读，adminApi/actions/agentDesk.ts 会调用它，
-//    故 adminApi 进程内可信探测）。
-// ② 仅 cs 函数链路引用的 env（本 adminApi 进程读不到该函数的真实配置态，即便同名 process.env 在此进程
-//    存在值也不可信——两个云函数各自独立配置环境变量）→ 恒 'check' + 固定 note。
-// ③ DB 配置字段 → 只读查一条判存在（doc().get() 天然有界·单文档）。
+// 探测规则五种（预审后主脑裁决·2026-07-12·敏感凭证入库决策后修订）：
+// ① secureConfig / config DB 文档字段存在性——决策 2026-07-12：WXKF_*/WXPAY_MCH_* 凭证与 config/pay 接缝
+//    字段全部收口进库（kit/secureConfig.ts 单源读取），本页可直接填写（fill 字段非空的 item）；DB 无值时
+//    云函数运行时会回退同名环境变量（迁移期兼容），但本页状态只看库（鼓励迁移，不谎报「未配」实为「仍在
+//    旧环境变量层」的暧昧态——note 里说明）。
+// ② adminApi 进程 env 布尔 `!!process.env.X`兜底：WXPAY_MCH_* 是 adminApi 自身环境变量（wxbill.ts 同进程读取，
+//    可信探测），DB 未填但环境变量仍生效时不误报 missing。
+// ③ DB 配置字段（非本页填写的既有 admin 页内配置）→ 只读查一条判存在（doc().get() 天然有界·单文档）。
 // ④ 业务初始化态 → 有界只读查询（`.limit(1)`·只判「有没有」不取值）。
 // ⑤ 纯人工外部后台项（企业微信/微信客服/小程序后台配置项，代码侧无法探测）→ 恒 'check'。
 //
-// 零回显纪律：本文件的 process.env 引用只出现在 `!!` 布尔语境；DB 查询只取「存在与否」的布尔判定，
-// 从不把查到的字段值放进响应体（守卫用哨兵值断言：见测试文件）。RBAC：不登记 ACTION_CAPS → 默认拒
-// admin:write＝仅超管（人工配置清单本身不算越权面，但沿用「未登记默认高权」纪律，不特事特办）。
-
-// cs 函数（kfCallback/kfSend/kfMedia·现场核对 2026-07-12）各自独立环境变量配置，adminApi 进程读不到
-// 它们的真实配置态——即便同名变量在 adminApi 进程也能读到值，也不代表 cs 函数那边配了。
-const CS_ENV_NOTE = '配置于 cs 函数（kfCallback/kfSend/kfMedia）环境·此处无法探测'
+// 零回显纪律：本文件的 process.env / DB 字段读取只出现在 `!!`/布尔语境，从不把查到的字段值放进响应体
+// （守卫用哨兵值断言：见测试文件）。RBAC：不登记 ACTION_CAPS → 默认拒 admin:write＝仅超管。
 
 type Status = 'ok' | 'missing' | 'check'
+type FillAction = 'saveSecureConfig' | 'savePayConfig'
+interface FillMeta {
+  action: FillAction
+  docId?: 'wxkf' | 'wxpay' // 仅 saveSecureConfig 用；savePayConfig 固定写 config/pay，无需 docId
+  field: string
+  inputType: 'text' | 'password' | 'textarea' | 'select'
+  options?: { value: string; label: string }[] // 仅 select（mode）用
+}
 interface ChecklistItem {
   key: string
   name: string
@@ -34,17 +39,33 @@ interface ChecklistItem {
   howTo: string
   url: string
   noteExtra?: string
+  fill?: FillMeta
 }
 interface ChecklistGroup {
   group: string
   items: ChecklistItem[]
 }
 
-export async function getConfigChecklist({ db }: Ctx) {
-  // ── 组① 云函数环境变量：仅 WXKF_AGENTID 在 adminApi 进程内可信探测（规则①）──
-  const agentIdOk = !!process.env.WXKF_AGENTID
+const MIGRATE_NOTE = '若此前配置在云函数环境变量层（迁移前遗留）、功能仍照常运行，只是本页检测不到——建议在此重新填一遍，统一到库管理、云函数优先读库'
 
-  // ── 组② admin 页内配置：DB 字段/初始化态（规则③④·全部有界·只判存在）──
+export async function getConfigChecklist({ db }: Ctx) {
+  // ── 组① 微信客服凭证：secureConfig/wxkf 字段存在性（决策 2026-07-12 入库·本页可填写）──
+  const wxkfDoc = await db.collection(COLLECTIONS.secureConfig).doc('wxkf').get().catch(() => null)
+  const wxkf = (wxkfDoc && wxkfDoc.data) || {}
+  const wxkfOk = (f: string) => !!(wxkf as Record<string, unknown>)[f]
+
+  // ── 组② 微信支付对账凭证：secureConfig/wxpay 字段存在性 OR adminApi 自身环境变量（规则②·可信兜底）──
+  const wxpayDoc = await db.collection(COLLECTIONS.secureConfig).doc('wxpay').get().catch(() => null)
+  const wxpay = (wxpayDoc && wxpayDoc.data) || {}
+  const privKeyOk = !!(wxpay as Record<string, unknown>).mchPrivateKey || !!process.env.WXPAY_MCH_PRIVATE_KEY
+  const serialOk = !!(wxpay as Record<string, unknown>).mchSerial || !!process.env.WXPAY_MCH_SERIAL
+
+  // ── 组③ 支付/退款接缝配置：config/pay 字段存在性 ──
+  const payDoc = await db.collection(COLLECTIONS.config).doc('pay').get().catch(() => null)
+  const pay = (payDoc && payDoc.data) || {}
+  const payOk = (f: string) => !!(pay as Record<string, unknown>)[f]
+
+  // ── 组④ admin 页内配置：DB 字段/初始化态（规则③④·全部有界·只判存在）──
   const settingsDoc = await db.collection(COLLECTIONS.adminConfig).doc('settings').get().catch(() => null)
   const webhookOk = !!(settingsDoc && settingsDoc.data && settingsDoc.data.alertWebhook)
 
@@ -58,36 +79,140 @@ export async function getConfigChecklist({ db }: Ctx) {
 
   const groups: ChecklistGroup[] = [
     {
-      group: '云函数环境变量（云开发控制台→云函数→配置→环境变量）',
+      group: '微信客服凭证（本页填写 → 云函数读库自动生效，无需再改环境变量）',
       items: [
         {
           key: 'WXKF_AGENTID',
           name: '企微应用推送 AgentId',
-          location: 'adminApi + cs 函数环境变量',
+          location: 'DB secureConfig/wxkf.agentId',
           purpose: '新会话/升级推送到坐席企微',
-          status: agentIdOk ? 'ok' : 'missing',
-          howTo: '企微后台→应用管理→自建应用→AgentId',
+          status: wxkfOk('agentId') ? 'ok' : 'missing',
+          howTo: '企微后台→应用管理→自建应用→AgentId，复制粘到右侧输入框保存',
           url: 'https://work.weixin.qq.com',
+          noteExtra: MIGRATE_NOTE,
+          fill: { action: 'saveSecureConfig', docId: 'wxkf', field: 'agentId', inputType: 'text' },
         },
         {
-          key: 'WXKF_CORPID / WXKF_SECRET',
-          name: '企微 API 凭证',
-          location: 'cs 函数环境变量（kfCallback/kfSend/kfMedia 共用）',
-          purpose: '客服消息收发 + 主动推送用的企微 access_token',
-          status: 'check',
-          howTo: '企微后台→我的企业→企业ID / 应用详情→Secret',
+          key: 'WXKF_CORPID',
+          name: '企微企业 ID',
+          location: 'DB secureConfig/wxkf.corpId',
+          purpose: '客服消息收发 + 主动推送用的企微 access_token（凭证之一）',
+          status: wxkfOk('corpId') ? 'ok' : 'missing',
+          howTo: '企微后台→我的企业→企业ID',
           url: 'https://work.weixin.qq.com',
-          noteExtra: CS_ENV_NOTE,
+          noteExtra: MIGRATE_NOTE,
+          fill: { action: 'saveSecureConfig', docId: 'wxkf', field: 'corpId', inputType: 'text' },
         },
         {
-          key: 'WXKF_TOKEN / WXKF_AESKEY',
-          name: '微信客服回调验签解密',
-          location: 'cs 函数环境变量（仅 kfCallback）',
-          purpose: '客服消息回调防伪与解密',
-          status: 'check',
+          key: 'WXKF_SECRET',
+          name: '企微自建应用 Secret',
+          location: 'DB secureConfig/wxkf.secret',
+          purpose: '客服消息收发 + 主动推送用的企微 access_token（凭证之一）',
+          status: wxkfOk('secret') ? 'ok' : 'missing',
+          howTo: '企微后台→应用管理→自建应用→Secret',
+          url: 'https://work.weixin.qq.com',
+          noteExtra: MIGRATE_NOTE,
+          fill: { action: 'saveSecureConfig', docId: 'wxkf', field: 'secret', inputType: 'password' },
+        },
+        {
+          key: 'WXKF_TOKEN',
+          name: '微信客服回调 Token',
+          location: 'DB secureConfig/wxkf.token',
+          purpose: '客服消息回调验签防伪',
+          status: wxkfOk('token') ? 'ok' : 'missing',
           howTo: '微信客服后台→开发配置',
           url: 'https://kf.weixin.qq.com',
-          noteExtra: CS_ENV_NOTE,
+          noteExtra: MIGRATE_NOTE,
+          fill: { action: 'saveSecureConfig', docId: 'wxkf', field: 'token', inputType: 'password' },
+        },
+        {
+          key: 'WXKF_AESKEY',
+          name: '微信客服回调 EncodingAESKey',
+          location: 'DB secureConfig/wxkf.aesKey',
+          purpose: '客服消息回调解密（固定 43 位）',
+          status: wxkfOk('aesKey') ? 'ok' : 'missing',
+          howTo: '微信客服后台→开发配置（固定 43 字符，抄错长度保存会被拒）',
+          url: 'https://kf.weixin.qq.com',
+          noteExtra: MIGRATE_NOTE,
+          fill: { action: 'saveSecureConfig', docId: 'wxkf', field: 'aesKey', inputType: 'password' },
+        },
+      ],
+    },
+    {
+      group: '微信支付对账凭证（本页填写 → 云函数读库自动生效）',
+      items: [
+        {
+          key: 'WXPAY_MCH_PRIVATE_KEY',
+          name: '商户 API 私钥',
+          location: 'DB secureConfig/wxpay.mchPrivateKey',
+          purpose: '拉取微信交易账单（对账）用 APIv3 商户私钥签名',
+          status: privKeyOk ? 'ok' : 'missing',
+          howTo: '微信支付商户平台→账户中心→API 安全→申请 API 证书（下载的 apiclient_key.pem 全文粘贴）',
+          url: 'https://pay.weixin.qq.com',
+          fill: { action: 'saveSecureConfig', docId: 'wxpay', field: 'mchPrivateKey', inputType: 'textarea' },
+        },
+        {
+          key: 'WXPAY_MCH_SERIAL',
+          name: '商户证书序列号',
+          location: 'DB secureConfig/wxpay.mchSerial',
+          purpose: '与商户私钥配对，APIv3 签名头必填',
+          status: serialOk ? 'ok' : 'missing',
+          howTo: '微信支付商户平台→账户中心→API 安全→查看证书序列号',
+          url: 'https://pay.weixin.qq.com',
+          fill: { action: 'saveSecureConfig', docId: 'wxpay', field: 'mchSerial', inputType: 'text' },
+        },
+      ],
+    },
+    {
+      group: '支付/退款接缝配置（本页填写 → 云函数读库自动生效）',
+      items: [
+        {
+          key: 'pay.mode',
+          name: '支付模式',
+          location: 'DB config/pay.mode',
+          purpose: 'real=真实支付工作流；mock=仅测试环境（生产必须 real）',
+          status: payOk('mode') ? 'ok' : 'missing',
+          howTo: '确认支付工作流已在云开发控制台配好后选择 real',
+          url: '',
+          fill: {
+            action: 'savePayConfig',
+            field: 'mode',
+            inputType: 'select',
+            options: [
+              { value: 'real', label: 'real（生产真实支付）' },
+              { value: 'mock', label: 'mock（仅测试）' },
+            ],
+          },
+        },
+        {
+          key: 'pay.subMchId',
+          name: '商户号',
+          location: 'DB config/pay.subMchId',
+          purpose: '账单查询 mchid（对照 console-assets/ 正册商户号）',
+          status: payOk('subMchId') ? 'ok' : 'missing',
+          howTo: '微信支付商户平台→账户中心→商户号',
+          url: 'https://pay.weixin.qq.com',
+          fill: { action: 'savePayConfig', field: 'subMchId', inputType: 'text' },
+        },
+        {
+          key: 'pay.flowId',
+          name: '支付工作流 ID',
+          location: 'DB config/pay.flowId',
+          purpose: '发起支付经 callFlow 触发的云开发工作流标识',
+          status: payOk('flowId') ? 'ok' : 'missing',
+          howTo: '云开发控制台→工作流→复制支付工作流 ID（console-assets/01-支付退款工作流.md 正册对照）',
+          url: 'https://tcb.cloud.tencent.com',
+          fill: { action: 'savePayConfig', field: 'flowId', inputType: 'text' },
+        },
+        {
+          key: 'pay.refundFlowId',
+          name: '退款工作流 ID',
+          location: 'DB config/pay.refundFlowId',
+          purpose: '发起退款经 callFlow 触发的云开发工作流标识',
+          status: payOk('refundFlowId') ? 'ok' : 'missing',
+          howTo: '云开发控制台→工作流→复制退款工作流 ID（console-assets/01-支付退款工作流.md 正册对照）',
+          url: 'https://tcb.cloud.tencent.com',
+          fill: { action: 'savePayConfig', field: 'refundFlowId', inputType: 'text' },
         },
       ],
     },
@@ -181,10 +306,11 @@ export async function getConfigChecklist({ db }: Ctx) {
           key: 'consoleAssets',
           name: 'console-assets/ 8 件控制台资产核对',
           location: '云开发控制台',
-          purpose: '支付连接器等 8 件正册与控制台核对一致',
+          purpose: '支付连接器/工作流开通状态等控制台原生资产与正册核对一致',
           status: 'check',
           howTo: '对照仓内 console-assets/ 正册核对云开发控制台·变更先 repo 后控制台',
           url: 'https://tcb.cloud.tencent.com',
+          noteExtra: 'config/pay 里的 mode/subMchId/flowId/refundFlowId 已拆到「支付/退款接缝配置」单独可填，本行只核对其余控制台原生资产（连接器/工作流本身是否已开通）',
         },
       ],
     },

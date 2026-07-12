@@ -1,4 +1,4 @@
-// 人工配置清单守卫（批 B9·铁律：只探测状态·零回显任何密钥/配置值）。
+// 人工配置清单守卫（批 B9→2026-07-12 补口可填写化·铁律：只探测状态·零回显任何密钥/配置值）。
 //
 // 两类守卫：
 // ① 源码扫描——configChecklist.ts 里 `process.env` 只允许出现在 `!!`/`Boolean(` 布尔语境（防裸读值），
@@ -7,9 +7,9 @@
 // ② 行为哨兵——mock env + seed DB 塞入 SENTINEL_ 前缀哨兵串，断言 getConfigChecklist 响应体
 //    JSON.stringify 后不含任一哨兵串（探测规则只判「配了没」、绝不把探到的值吐回前端）。
 //
-// 反向自检：① 把 `!!process.env.WXKF_AGENTID` 手工改回裸 `process.env.WXKF_AGENTID`（去掉 `!!`）→
-// 源码扫描用例立即红；改回即绿。② 让某一状态判定直接拼回哨兵值（如 `webhookOk` 改成把 alertWebhook
-// 原文塞进某 item 字段）→ 哨兵用例立即红；改回即绿。
+// 反向自检：① 把 `!!process.env.WXPAY_MCH_PRIVATE_KEY` 手工改回裸 `process.env.WXPAY_MCH_PRIVATE_KEY`
+// （去掉 `!!`）→ 源码扫描用例立即红；改回即绿。② 让某一状态判定直接拼回哨兵值（如 `wxkfOk` 改成把
+// secureConfig 原文塞进某 item 字段）→ 哨兵用例立即红；改回即绿。
 import { describe, it, expect, beforeEach, afterEach } from 'vitest'
 import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
@@ -61,7 +61,7 @@ const post = (action: string, key: string, data: Record<string, unknown> = {}) =
     body: JSON.stringify({ action, key, data }),
   }).then((r: any) => ({ status: r.statusCode, ...JSON.parse(r.body) }))
 
-const ENV_KEYS = ['WXKF_AGENTID', 'WXKF_CORPID', 'WXKF_SECRET', 'WXKF_TOKEN', 'WXKF_AESKEY']
+const ENV_KEYS = ['WXKF_AGENTID', 'WXKF_CORPID', 'WXKF_SECRET', 'WXKF_TOKEN', 'WXKF_AESKEY', 'WXPAY_MCH_PRIVATE_KEY', 'WXPAY_MCH_SERIAL']
 
 beforeEach(() => {
   control.reset()
@@ -79,28 +79,40 @@ afterEach(() => {
 const groupOf = (groups: any[], name: string) => groups.find((g: any) => g.group === name)
 const itemOf = (groups: any[], groupName: string, key: string) => groupOf(groups, groupName)?.items.find((i: any) => i.key === key)
 
+const WXKF_GROUP = '微信客服凭证（本页填写 → 云函数读库自动生效，无需再改环境变量）'
+const WXPAY_GROUP = '微信支付对账凭证（本页填写 → 云函数读库自动生效）'
+const PAY_GROUP = '支付/退款接缝配置（本页填写 → 云函数读库自动生效）'
+const ADMIN_GROUP = 'admin 页内配置（/admin 直达）'
+
 describe('RBAC 默认拒：外包访问 getConfigChecklist 403（未登记 ACTION_CAPS→仅超管）', () => {
   it('大白话：外包 key 调用一律 403', async () => {
     expect((await post('getConfigChecklist', A1, {})).status).toBe(403)
   })
 })
 
-describe('探测规则各态：ok / missing / check（超管可读·数据契约 4 组 12 条全在）', () => {
-  it('大白话：全部未配置时——env/DB 三项 missing，纯人工 8 项恒 check', async () => {
+describe('探测规则各态：ok / missing / check（超管可读·数据契约 6 组 20 条全在）', () => {
+  it('大白话：全部未配置时——凭证/DB 项 missing，纯人工 5 项 + 资产 1 项恒 check', async () => {
     const r = await post('getConfigChecklist', SUPER, {})
     expect(r.status).toBe(200)
     const groups = r.groups
-    expect(groups.length).toBe(4)
+    expect(groups.length).toBe(6)
     const totalItems = groups.reduce((n: number, g: any) => n + g.items.length, 0)
-    expect(totalItems).toBe(12) // 12 条全在（铁律）
+    expect(totalItems).toBe(20) // 20 条全在（铁律）
 
-    expect(itemOf(groups, '云函数环境变量（云开发控制台→云函数→配置→环境变量）', 'WXKF_AGENTID').status).toBe('missing')
-    expect(itemOf(groups, '云函数环境变量（云开发控制台→云函数→配置→环境变量）', 'WXKF_CORPID / WXKF_SECRET').status).toBe('check')
-    expect(itemOf(groups, '云函数环境变量（云开发控制台→云函数→配置→环境变量）', 'WXKF_TOKEN / WXKF_AESKEY').status).toBe('check')
+    for (const key of ['WXKF_AGENTID', 'WXKF_CORPID', 'WXKF_SECRET', 'WXKF_TOKEN', 'WXKF_AESKEY']) {
+      expect(itemOf(groups, WXKF_GROUP, key).status).toBe('missing')
+      expect(itemOf(groups, WXKF_GROUP, key).fill).toBeTruthy() // 可填写元数据必在
+    }
+    for (const key of ['WXPAY_MCH_PRIVATE_KEY', 'WXPAY_MCH_SERIAL']) {
+      expect(itemOf(groups, WXPAY_GROUP, key).status).toBe('missing')
+    }
+    for (const key of ['pay.mode', 'pay.subMchId', 'pay.flowId', 'pay.refundFlowId']) {
+      expect(itemOf(groups, PAY_GROUP, key).status).toBe('missing')
+    }
 
-    expect(itemOf(groups, 'admin 页内配置（/admin 直达）', 'alertWebhook').status).toBe('missing')
-    expect(itemOf(groups, 'admin 页内配置（/admin 直达）', 'scmBomTemplate').status).toBe('missing')
-    expect(itemOf(groups, 'admin 页内配置（/admin 直达）', 'stockInit').status).toBe('missing')
+    expect(itemOf(groups, ADMIN_GROUP, 'alertWebhook').status).toBe('missing')
+    expect(itemOf(groups, ADMIN_GROUP, 'scmBomTemplate').status).toBe('missing')
+    expect(itemOf(groups, ADMIN_GROUP, 'stockInit').status).toBe('missing')
 
     const humanGroup = groupOf(groups, '企业微信/微信客服/小程序后台（纯人工）')
     expect(humanGroup.items.length).toBe(5)
@@ -110,8 +122,38 @@ describe('探测规则各态：ok / missing / check（超管可读·数据契约
     expect(assetGroup.items[0].status).toBe('check')
   })
 
-  it('大白话：全部配置齐全时——env/DB 三项转 ok，纯人工恒 check 不受影响', async () => {
-    process.env.WXKF_AGENTID = '1000001'
+  it('大白话：secureConfig/wxkf 与 wxpay 入库齐全 → 对应 7 项转 ok', async () => {
+    control.seed('secureConfig', [
+      { _id: 'wxkf', corpId: 'ww123', secret: 's1', token: 't1', aesKey: 'a'.repeat(43), agentId: '1000001' },
+      { _id: 'wxpay', mchPrivateKey: '-----BEGIN PRIVATE KEY-----\nabc\n-----END PRIVATE KEY-----\n', mchSerial: 'ABCDEF' },
+    ])
+    const r = await post('getConfigChecklist', SUPER, {})
+    const groups = r.groups
+    for (const key of ['WXKF_AGENTID', 'WXKF_CORPID', 'WXKF_SECRET', 'WXKF_TOKEN', 'WXKF_AESKEY']) {
+      expect(itemOf(groups, WXKF_GROUP, key).status).toBe('ok')
+    }
+    for (const key of ['WXPAY_MCH_PRIVATE_KEY', 'WXPAY_MCH_SERIAL']) {
+      expect(itemOf(groups, WXPAY_GROUP, key).status).toBe('ok')
+    }
+  })
+
+  it('大白话：WXPAY_MCH_* 未入库但 adminApi 自身环境变量已配 → 不误报 missing（规则②兜底）', async () => {
+    process.env.WXPAY_MCH_PRIVATE_KEY = 'legacy-env-key'
+    process.env.WXPAY_MCH_SERIAL = 'legacy-serial'
+    const r = await post('getConfigChecklist', SUPER, {})
+    expect(itemOf(r.groups, WXPAY_GROUP, 'WXPAY_MCH_PRIVATE_KEY').status).toBe('ok')
+    expect(itemOf(r.groups, WXPAY_GROUP, 'WXPAY_MCH_SERIAL').status).toBe('ok')
+  })
+
+  it('大白话：config/pay 齐全 → 支付接缝 4 项转 ok', async () => {
+    control.seed('config', [{ _id: 'pay', mode: 'real', subMchId: '1113881793', flowId: 'flow1', refundFlowId: 'rflow1' }])
+    const r = await post('getConfigChecklist', SUPER, {})
+    for (const key of ['pay.mode', 'pay.subMchId', 'pay.flowId', 'pay.refundFlowId']) {
+      expect(itemOf(r.groups, PAY_GROUP, key).status).toBe('ok')
+    }
+  })
+
+  it('大白话：admin 页内配置齐全时——3 项转 ok，纯人工恒 check 不受影响', async () => {
     control.seed('adminConfig', [{ _id: 'settings', alertWebhook: 'https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=x' }])
     control.seed('config', [{ _id: 'scmBomTemplate', commonLines: [], yarnSlots: [{ tier: 'L', form: 'raw', qtyPerSet: 1 }] }])
     control.seed('stockLedger', [{ _id: 'l1', docType: 'adjust', itemKey: 'm1', delta: 5, operator: '', reason: '期初', at: Date.now() }])
@@ -119,23 +161,26 @@ describe('探测规则各态：ok / missing / check（超管可读·数据契约
 
     const r = await post('getConfigChecklist', SUPER, {})
     const groups = r.groups
-    expect(itemOf(groups, '云函数环境变量（云开发控制台→云函数→配置→环境变量）', 'WXKF_AGENTID').status).toBe('ok')
-    expect(itemOf(groups, 'admin 页内配置（/admin 直达）', 'alertWebhook').status).toBe('ok')
-    expect(itemOf(groups, 'admin 页内配置（/admin 直达）', 'scmBomTemplate').status).toBe('ok')
-    expect(itemOf(groups, 'admin 页内配置（/admin 直达）', 'stockInit').status).toBe('ok')
+    expect(itemOf(groups, ADMIN_GROUP, 'alertWebhook').status).toBe('ok')
+    expect(itemOf(groups, ADMIN_GROUP, 'scmBomTemplate').status).toBe('ok')
+    expect(itemOf(groups, ADMIN_GROUP, 'stockInit').status).toBe('ok')
   })
 
   it('大白话：期初盘点+物料安全线合并一行——只有 adjust 流水没有 threshold 物料仍判 missing（两条件都要满足）', async () => {
     control.seed('stockLedger', [{ _id: 'l1', docType: 'adjust', itemKey: 'm1', delta: 5, operator: '', reason: '期初', at: Date.now() }])
     // 不 seed materials threshold>0
     const r = await post('getConfigChecklist', SUPER, {})
-    expect(itemOf(r.groups, 'admin 页内配置（/admin 直达）', 'stockInit').status).toBe('missing')
+    expect(itemOf(r.groups, ADMIN_GROUP, 'stockInit').status).toBe('missing')
   })
 })
 
 describe('哨兵行为测试：密钥/配置值零回显（铁律）', () => {
   it('大白话：env + DB 塞哨兵串后，响应体 JSON.stringify 一律不含任一哨兵串', async () => {
-    process.env.WXKF_AGENTID = 'SENTINEL_AGENTID_9f3a'
+    process.env.WXPAY_MCH_PRIVATE_KEY = 'SENTINEL_WXPAY_KEY_9f3a'
+    control.seed('secureConfig', [
+      { _id: 'wxkf', corpId: 'SENTINEL_CORPID_9f3a', secret: 'SENTINEL_SECRET_9f3a', token: 'SENTINEL_TOKEN_9f3a', aesKey: 'SENTINEL_AESKEY_9f3a', agentId: 'SENTINEL_AGENTID_9f3a' },
+    ])
+    control.seed('config', [{ _id: 'pay', mode: 'real', subMchId: 'SENTINEL_MCHID_9f3a', flowId: 'SENTINEL_FLOWID_9f3a', refundFlowId: 'SENTINEL_RFLOWID_9f3a' }])
     control.seed('adminConfig', [{ _id: 'settings', alertWebhook: 'SENTINEL_WEBHOOK_9f3a' }])
     control.seed('config', [{ _id: 'scmBomTemplate', commonLines: [], yarnSlots: [{ tier: 'L', form: 'raw', qtyPerSet: 1 }], sentinelNote: 'SENTINEL_BOM_9f3a' }])
     control.seed('stockLedger', [{ _id: 'l1', docType: 'adjust', itemKey: 'm1', delta: 5, operator: '', reason: 'SENTINEL_REASON_9f3a', at: Date.now() }])
@@ -144,7 +189,15 @@ describe('哨兵行为测试：密钥/配置值零回显（铁律）', () => {
     const r = await post('getConfigChecklist', SUPER, {})
     const stringified = JSON.stringify(r)
     for (const sentinel of [
+      'SENTINEL_WXPAY_KEY_9f3a',
+      'SENTINEL_CORPID_9f3a',
+      'SENTINEL_SECRET_9f3a',
+      'SENTINEL_TOKEN_9f3a',
+      'SENTINEL_AESKEY_9f3a',
       'SENTINEL_AGENTID_9f3a',
+      'SENTINEL_MCHID_9f3a',
+      'SENTINEL_FLOWID_9f3a',
+      'SENTINEL_RFLOWID_9f3a',
       'SENTINEL_WEBHOOK_9f3a',
       'SENTINEL_BOM_9f3a',
       'SENTINEL_REASON_9f3a',
