@@ -7,6 +7,7 @@ Page({
   data: {
     list: [] as AfterSaleVM[],
     loading: true,
+    loadFailed: false, // 失败≠空态（根因#14·守卫 rw-mp-list-loadfailed-state）：与「还没有售后记录」分治
     hasMore: false,
     cursor: null as unknown,
   },
@@ -19,16 +20,25 @@ Page({
     const r = await getMyAfterSales()
     if (seq !== this._seq) return // 过期回包（被更晚 reload 取代）：丢弃
     if (!r.ok) {
-      this.setData({ loading: false }) // 拉取失败不覆盖已有数据
+      // 失败不覆盖已有数据；首载一无所有时落 loadFailed 给重试，不与「还没有售后记录」混同（根因#14）。
+      this.setData({ loading: false, loadFailed: !this.data.list.length })
+      if (this.data.list.length) wx.showToast({ title: '刷新失败，请稍后重试', icon: 'none' })
       return
     }
-    this.setData({ loading: false, list: mapAfterSales(r.list), cursor: r.nextCursor, hasMore: !!r.hasMore })
+    this.setData({ loading: false, loadFailed: false, list: mapAfterSales(r.list), cursor: r.nextCursor, hasMore: !!r.hasMore })
+  },
+  onRetryLoad() {
+    this.setData({ loading: true, loadFailed: false })
+    void this.reload()
   },
   async onReachBottom() {
     if (!this.data.hasMore || this.data.cursor == null) return
     const seq = this._seq // 捕获当前代次（翻页不 bump）：期间若发生 reload（_seq 递增）则本次 append 作废
     const r = await getMyAfterSales(this.data.cursor)
-    if (!r.ok) return
+    if (!r.ok) {
+      wx.showToast({ title: '加载失败，上拉重试', icon: 'none' }) // 翻页失败不静默（根因#14）
+      return
+    }
     if (seq !== this._seq) return // reload 已取代当前列表：丢弃·不错配游标
     this.setData({ list: mergeAfterSales(this.data.list, mapAfterSales(r.list)), cursor: r.nextCursor, hasMore: !!r.hasMore })
   },

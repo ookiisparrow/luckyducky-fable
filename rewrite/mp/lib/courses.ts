@@ -20,3 +20,13 @@ export async function getCourseById(id: string): Promise<Record<string, unknown>
   if (!list) return null
   return list.find((c) => String(c.id || c._id || '') === id) || null
 }
+
+// 区分度版（根因#14·守卫 rw-mp-list-loadfailed-state）：getCourseById 的 null 混同了「网络失败」与
+// 「查无此课」，页面据此渲染「课程不存在」会把弱网抖动误报成课程消失。failed=目录拉取失败（可重试）；
+// failed=false 且 course=null 才是真查无。catalog/player 用本函数，welcome 等 fail-soft 场景仍用上面的简版。
+export async function getCourseByIdDetailed(id: string): Promise<{ failed: boolean; course: Record<string, unknown> | null }> {
+  if (!id) return { failed: false, course: null }
+  const list = await getAllCourses()
+  if (!list) return { failed: true, course: null }
+  return { failed: false, course: list.find((c) => String(c.id || c._id || '') === id) || null }
+}

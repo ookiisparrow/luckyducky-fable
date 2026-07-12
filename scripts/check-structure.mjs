@@ -4915,6 +4915,44 @@ export const repoChecks = [
     },
   },
   {
+    // mp「失败伪装成空态」家族收口（根因#14 失败静默化·韧性审计+深审台账 2026-07-12 同源命中）：
+    // 列表/详情页网络失败若与「真的没有数据」渲染同一空态（暂无订单/还没有评价/输入激活码/订单不存在），
+    // 弱网用户会把网络抖动误读成数据消失（付费用户看到课程清空被引导输码=客诉级）。detail.ts 的
+    // loadFailed/missing 分治是仓内已验范式（bug sweep R1 #3），本守卫把范式钉到全部同类页：
+    // ① 五页（order-list/reviews/my-courses/aftersales/order）ts+wxml 须有 loadFailed 态与 onRetryLoad 重试入口；
+    // ② catalog 走 state 机，须有 'failed' 态（getCourseByIdDetailed 区分网络失败/查无）；
+    // ③ player 取址 fetcher 须区分 FETCH_FAIL（网络/服务失败→error 态可重试）与素材未剪（空串→empty 态）。
+    id: 'rw-mp-list-loadfailed-state',
+    roots: ['#14'],
+    desc: 'mp 失败≠空态（根因#14）：order-list/reviews/my-courses/aftersales/order 五页 ts+wxml 须有 loadFailed+onRetryLoad；catalog.ts 须有 failed 态且 lib/courses 有 getCourseByIdDetailed；player.ts 取址须分流 FETCH_FAIL——网络失败伪装成「暂无/不存在/整理中」即红',
+    run() {
+      const base = join(ROOT, 'rewrite/mp')
+      if (!existsSync(base)) return []
+      const bad = []
+      for (const p of ['order-list', 'reviews', 'my-courses', 'aftersales', 'order']) {
+        const ts = join(base, `pages/${p}/${p}.ts`)
+        const wxml = join(base, `pages/${p}/${p}.wxml`)
+        if (!existsSync(ts)) continue
+        if (!/loadFailed/.test(stripComments(readFileSync(ts, 'utf8')))) bad.push(`pages/${p}/${p}.ts 无 loadFailed 态——网络失败与真空态混同（根因#14·detail.ts 范式未铺开）`)
+        if (existsSync(wxml)) {
+          const w = readFileSync(wxml, 'utf8')
+          if (!/loadFailed/.test(w)) bad.push(`pages/${p}/${p}.wxml 无 loadFailed 节点——失败态没有界面出口`)
+          if (!/bind:?tap\s*=\s*"onRetryLoad"/.test(w)) bad.push(`pages/${p}/${p}.wxml 无 onRetryLoad 重试入口——失败态成死胡同`)
+        }
+      }
+      const cat = join(base, 'pages/catalog/catalog.ts')
+      if (existsSync(cat) && !/'failed'/.test(stripComments(readFileSync(cat, 'utf8'))))
+        bad.push("pages/catalog/catalog.ts 无 'failed' 态——课程目录网络失败仍伪装成「课程不存在」")
+      const lib = join(base, 'lib/courses.ts')
+      if (existsSync(lib) && !/getCourseByIdDetailed/.test(readFileSync(lib, 'utf8')))
+        bad.push('lib/courses.ts 无 getCourseByIdDetailed——课程读取「网络失败」与「查无此课」在 lib 层就丢失区分度')
+      const player = join(base, 'pages/player/player.ts')
+      if (existsSync(player) && !/FETCH_FAIL/.test(stripComments(readFileSync(player, 'utf8'))))
+        bad.push('pages/player/player.ts 取址链无 FETCH_FAIL 分流——取址网络失败仍伪装成「视频还在整理中」且无重试')
+      return bad
+    },
+  },
+  {
     // mp 分发前置（SEO/GEO·决策§29·R29 rewrite 线承接）：旧线 detail-share-wired 只扫 packages/，
     // rewrite/mp 曾整线零转发钩子（README 记账债）。守三件：① 公开页 home/detail 双钩子
     // （onShareAppMessage+onShareTimeline）在——没有钩子的页微信默认禁转发，公开页禁转发=分发面自断；

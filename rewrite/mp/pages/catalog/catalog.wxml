@@ -5,7 +5,7 @@
      （序号圈/名称/副行「N 个段落 · M 分钟 · 上次学到…」+ 右侧状态图标 done/current/todo 三态）。 -->
 <view class="ld-cat">
 
-  <view wx:if="{{state !== 'missing'}}" class="ld-cat-hero" style="padding-top: {{statusBarHeight}}px">
+  <view wx:if="{{state !== 'missing' && state !== 'failed'}}" class="ld-cat-hero" style="padding-top: {{statusBarHeight}}px">
     <image wx:if="{{bg}}" class="ld-cat-hero-img" src="{{bg}}" mode="aspectFill" />
     <view wx:else class="ld-cat-hero-img ld-cat-hero-empty"></view>
     <view class="ld-cat-cta {{continueTarget ? '' : 'disabled'}}" bind:tap="onStart" hover-class="ld-cat-cta-h" hover-stay-time="80">
@@ -53,6 +53,13 @@
         </view>
       </view>
     </block>
+  </view>
+
+  <!-- 失败态：目录拉取网络失败（根因#14·守卫 rw-mp-list-loadfailed-state）——与「课程不存在」分治，给重试 -->
+  <view class="ld-cat-empty" wx:if="{{state === 'failed'}}" style="padding-top: calc({{statusBarHeight}}px + 220rpx)">
+    <view class="ld-cat-empty-title">网络开小差</view>
+    <view class="ld-cat-empty-hint">目录没加载出来，请重试</view>
+    <view class="ld-cat-retry" bind:tap="onRetryLoad">重试</view>
   </view>
 
   <!-- 空态：课程不存在（courseId 缺失或云端查无此课）。hero 在此态不渲染（本页 navigationStyle:custom

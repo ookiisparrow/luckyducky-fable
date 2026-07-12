@@ -18,7 +18,7 @@ import {
   type FlatSegment,
   type LessonStrip,
 } from '../../lib/player'
-import { getCourseById } from '../../lib/courses'
+import { getCourseByIdDetailed } from '../../lib/courses'
 import { openCustomerService } from '../../utils/customerService'
 import { shouldTick, VIBE_GAP_MS, DRAG_TICK_GAP_MS } from '../../lib/haptics'
 import { mapHelpVideos, type HelpTopicVM } from '../../lib/mapLearning'
@@ -51,7 +51,10 @@ const cache = createPlaybackCache({
   fetcher: async (courseId, segmentId) => {
     const r = await getPlaybackUrl(courseId, segmentId)
     if (!r.ok && String(r.error || '') === 'NOT_ENTITLED') throw new Error('NOT_ENTITLED')
-    return r.ok ? String(r.url || '') : ''
+    // 取址失败分流（根因#14·守卫 rw-mp-list-loadfailed-state）：网络/服务失败抛 FETCH_FAIL 落 error 态
+    // （有重试入口），不再折进空串——空串专属「素材未剪 url:null」的诚实空态，两者不可混同。
+    if (!r.ok) throw new Error('FETCH_FAIL')
+    return String(r.url || '')
   },
 })
 
@@ -109,15 +112,27 @@ Page({
   lastTick: 0, // 拖动阻尼「嗒」时间戳（配方单源 lib/haptics·照抄 pages/flip-demo）
   lastVibe: 0, // 事件震（vibe()）时间戳（同上·两类震共用时间地板防叠震）
   _backAt: 0, // 返回二次确认判定锚点（P5·BACK_CONFIRM_MS 窗口内二次按返回才真退，见 onBack）
+  _wantSeg: '', // onLoad 期望起播段（存实例供 initCourse 课程级失败重试后仍定位到原目标段）
 
   async onLoad(query: Record<string, string | undefined>) {
     const info = wx.getWindowInfo()
     this.windowWidthPx = info.windowWidth || 0 // rpx→px 换算基准（750rpx = 本机 windowWidth px），供拖动预览浮层防出屏边距用
     this.setData({ statusBarHeight: info.statusBarHeight })
     this.courseId = String(query.courseId || '')
-    // 来源页（me/my-courses）已把课程目录热进 lib/courses 缓存→这里零云调用；深链冷启动（分享链直进播放页）
-    // 缓存未热→内部兜底重拉一次目录，行为不回退，只是不再每次都重拉（根因账本#15）。
-    const course = (await getCourseById(this.courseId)) as CoursePub | null
+    this._wantSeg = String(query.segmentId || '')
+    await this.initCourse()
+  },
+  // 课程目录装载（onLoad 与 onRetryError 课程级重试共用）：来源页（me/my-courses）已把课程目录热进
+  // lib/courses 缓存→这里零云调用；深链冷启动（分享链直进播放页）缓存未热→内部兜底重拉一次目录（根因账本#15）。
+  // 失败≠不存在（根因#14·守卫 rw-mp-list-loadfailed-state）：目录拉取失败落 error 态给重试，
+  // 只有拉取成功且查无此课才是 missing「课程不存在」。
+  async initCourse() {
+    const d = await getCourseByIdDetailed(this.courseId)
+    if (d.failed) {
+      this.setData({ state: 'error' })
+      return
+    }
+    const course = d.course as CoursePub | null
     if (!course) {
       this.setData({ state: 'missing' })
       return
@@ -125,7 +140,7 @@ Page({
     this.course = course
     const segments = flattenSegments(course)
     this.setData({ title: String(course.title || ''), segments })
-    const want = String(query.segmentId || '')
+    const want = this._wantSeg
     const start = segments.find((s) => s.segmentId === want && s.hasVideo) || segments.find((s) => s.hasVideo) || null
     if (!start) {
       this.setData({ state: 'empty' }) // 全课无可播段（半上线）
@@ -176,9 +191,15 @@ Page({
     let url = ''
     try {
       url = await cache.get(this.courseId, seg.segmentId)
-    } catch {
+    } catch (e) {
       if (token !== this.playToken) return // 已被更晚的切段接管·本次作废
-      this.setData({ state: 'denied' }) // 未进课：导流激活
+      // NOT_ENTITLED→denied 导流激活；FETCH_FAIL（网络/服务失败）→error 态给重试（根因#14：
+      // 不再伪装成「素材整理中」的 empty 死态）。
+      if ((e as Error).message === 'NOT_ENTITLED') {
+        this.setData({ state: 'denied' })
+        return
+      }
+      this.setData({ state: 'error', canPrev: !!navSegment(this.course, seg.segmentId, -1), canNext: !!navSegment(this.course, seg.segmentId, 1) })
       return
     }
     if (token !== this.playToken) return // 乱序回包：更晚的 playSegment 已接管·丢弃本次结果（不覆盖新段）
@@ -253,9 +274,14 @@ Page({
   },
 
   // error 态手动重试（P3·bug sweep R1 #7）：复用现有段加载方法，重置重试计数放行 onVideoError 再给一次自动重试预算。
+  // 课程级失败（initCourse 目录都没拉到·current 尚无）走 initCourse 重试——error 态不留死按钮（根因#14）。
   onRetryError() {
     const cur = this.data.current
-    if (!cur) return
+    if (!cur) {
+      this.setData({ state: 'loading' })
+      void this.initCourse()
+      return
+    }
     this.errSeg = ''
     this.errRetried = false
     cache.invalidate(this.courseId, cur.segmentId)

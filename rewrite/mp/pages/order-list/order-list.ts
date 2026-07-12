@@ -43,6 +43,7 @@ Page({
     all: [] as OrderVM[],
     shown: [] as OrderRow[],
     loading: true,
+    loadFailed: false, // 失败≠空态（根因#14·守卫 rw-mp-list-loadfailed-state）：一无所有时的网络失败态，与「暂无订单」分治
     hasMore: false,
     cursor: null as unknown,
   },
@@ -66,15 +67,28 @@ Page({
     this.setData({ loading: true })
     const r = await getMyOrders(undefined, 20, tab)
     if (seq !== this._seq || tab !== this.data.tabKey) return // 过期回包（被更晚 reload 取代）或已切 tab：丢弃·不覆盖较新结果
-    const all = r.ok ? mapOrders(r.list) : []
-    this.setData({ loading: false, all, shown: all.map(decorate), cursor: r.ok ? r.nextCursor : null, hasMore: !!(r.ok && r.hasMore) })
+    // 失败≠空态（根因#14）：失败不覆盖已有列表（onShow 返回抖动一次不该把待支付订单清空）；
+    // 一无所有时落 loadFailed 给重试，不与「暂无订单」混同。
+    if (!r.ok) {
+      this.setData({ loading: false, loadFailed: !this.data.all.length })
+      if (this.data.all.length) wx.showToast({ title: '刷新失败，请稍后重试', icon: 'none' })
+      return
+    }
+    const all = mapOrders(r.list)
+    this.setData({ loading: false, loadFailed: false, all, shown: all.map(decorate), cursor: r.nextCursor, hasMore: !!r.hasMore })
+  },
+  onRetryLoad() {
+    void this.reload()
   },
   async onReachBottom() {
     if (!this.data.hasMore || this.data.cursor == null) return
     const tab = this.data.tabKey
     const seq = this._seq // 捕获当前代次（翻页不 bump）：期间若发生 reload（_seq 递增）则本次 append 作废，不并入被替换的列表
     const r = await getMyOrders(this.data.cursor, 20, tab)
-    if (!r.ok) return // 翻页失败不覆盖已有数据（黄金 §八口径）
+    if (!r.ok) {
+      wx.showToast({ title: '加载失败，上拉重试', icon: 'none' }) // 翻页失败不静默（根因#14）
+      return // 不覆盖已有数据（黄金 §八口径）
+    }
     if (seq !== this._seq || tab !== this.data.tabKey) return // reload 已取代当前列表 / 跨 tab 过期回包：丢弃·不错配游标
     const merged = [...this.data.all]
     const seen = new Set(merged.map((o) => o.id))

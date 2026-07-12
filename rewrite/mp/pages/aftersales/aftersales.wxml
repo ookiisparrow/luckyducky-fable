@@ -45,8 +45,15 @@
     <text class="coas-note" wx:if="{{list.length}}" bind:tap="onKefu">需要帮助？联系客服</text>
     <view class="ldas-more" wx:if="{{hasMore}}">上拉加载更多</view>
 
+    <!-- 失败态与空态分治（根因#14·守卫 rw-mp-list-loadfailed-state） -->
+    <view class="coas-empty" wx:if="{{!loading && loadFailed}}">
+      <text class="coas-empty-title">网络开小差</text>
+      <text class="coas-empty-hint">售后记录没加载出来，请重试</text>
+      <text class="coas-note" bind:tap="onRetryLoad">重试</text>
+    </view>
+
     <!-- 空态 -->
-    <view class="coas-empty" wx:if="{{!loading && !list.length}}">
+    <view class="coas-empty" wx:elif="{{!loading && !list.length}}">
       <view class="coas-empty-ico">
         <image class="coas-empty-img" src="/static/icons/package.svg" mode="aspectFit" />
       </view>

@@ -7,6 +7,7 @@ Page({
     list: [] as ReviewVM[],
     summary: null as SummaryVM | null,
     loading: true,
+    loadFailed: false, // 失败≠空态（根因#14·守卫 rw-mp-list-loadfailed-state）：与「还没有评价」分治
     hasMore: false,
     cursor: null as unknown,
   },
@@ -18,13 +19,24 @@ Page({
   },
   async reload() {
     const r = await getReviews(this.productId)
+    // 失败≠空态（根因#14）：失败不覆盖已有列表；一无所有时落 loadFailed 给重试，不与「还没有评价」混同。
+    if (!r.ok) {
+      this.setData({ loading: false, loadFailed: !this.data.list.length })
+      if (this.data.list.length) wx.showToast({ title: '刷新失败，请稍后重试', icon: 'none' })
+      return
+    }
     this.setData({
       loading: false,
-      list: r.ok ? mapReviews(r.list) : [],
-      summary: r.ok ? mapSummary(r.summary) : null, // 首页汇总·翻页不重算（前端缓存）
-      cursor: r.ok ? r.nextCursor : null,
-      hasMore: !!(r.ok && r.hasMore),
+      loadFailed: false,
+      list: mapReviews(r.list),
+      summary: mapSummary(r.summary), // 首页汇总·翻页不重算（前端缓存）
+      cursor: r.nextCursor,
+      hasMore: !!r.hasMore,
     })
+  },
+  onRetryLoad() {
+    this.setData({ loading: true, loadFailed: false })
+    void this.reload()
   },
   async onReachBottom() {
     if (!this.data.hasMore || this.data.cursor == null) return
@@ -32,7 +44,10 @@ Page({
     this.loadingMore = true
     const r = await getReviews(this.productId, this.data.cursor)
     this.loadingMore = false
-    if (!r.ok) return // 翻页失败不覆盖已有
+    if (!r.ok) {
+      wx.showToast({ title: '加载失败，上拉重试', icon: 'none' }) // 翻页失败不静默（根因#14）
+      return // 不覆盖已有
+    }
     this.setData({ list: [...this.data.list, ...mapReviews(r.list)], cursor: r.nextCursor, hasMore: !!r.hasMore })
   },
   // 买家秀晒图·点开大图（当前图为焦点·同条评价全部图为轮播集）
