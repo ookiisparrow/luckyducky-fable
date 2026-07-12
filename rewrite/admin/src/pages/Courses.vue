@@ -177,7 +177,9 @@ function addSegment(l: Record<string, any>) {
 // load() 已会拦截切课、重排/删除按钮已按此标志 disable），并在写回前按对象引用重定位——段已被删除/移出则如实
 // 报告、不写回幽灵对象。
 async function pickVideo(l: Record<string, any>, sg: Record<string, any>, ev: Event) {
-  const file = (ev.target as HTMLInputElement).files?.[0]
+  const input = ev.target as HTMLInputElement
+  const file = input.files?.[0]
+  input.value = '' // 重置 value：允许上传失败后重选同一文件重试（同 batchUpload/pickArt，否则浏览器不再触发 change）
   if (!file || !course.value || batchUploading.value) return
   batchUploading.value = true
   setUploadLock() // 同 batchUpload：拦截离页/切步致孤儿上传

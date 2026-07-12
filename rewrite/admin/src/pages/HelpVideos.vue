@@ -115,7 +115,9 @@ function delSeg(t: HelpItem, ti: number, i: number) {
 }
 
 async function pickVideo(t: HelpItem, i: number, ev: Event) {
-  const file = (ev.target as HTMLInputElement).files?.[0]
+  const input = ev.target as HTMLInputElement
+  const file = input.files?.[0]
+  input.value = '' // 重置 value：允许上传失败后重选同一文件重试（否则浏览器不再触发 change）
   if (!file) return
   // 上传前捕获段「对象引用」而非下标（P1·根因#8）：秒级上传窗口内若重排/删段，按下标回写会落到换位后的
   // 另一段（静默错位·随 autosave 落库）或越界崩溃；写对象引用则始终落到本段、删段后写孤儿也不崩。

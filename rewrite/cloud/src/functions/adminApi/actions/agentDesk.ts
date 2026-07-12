@@ -150,6 +150,12 @@ export async function claimConversation(ctx: Ctx): Promise<any> {
   if (!sessionId) return reply(400, { ok: false, error: 'BAD_ARGS' })
   const s = await loadSession(db, sessionId)
   if (!s) return reply(404, { ok: false, error: 'NOT_FOUND' })
+  // escalated 会话仅超管可认领（listQueue/escalateToMerchant 头注设计意图：外包最小权"只能升不能拍板"，
+  // 甩给商户超管的会话"只有商户能看见/重接"）。escalateToMerchant 转态刻意保留原 agentId，
+  // 外包坐席在 escalated 态下仍 agentId===自己——若只靠 listQueue 过滤（不含 escalated）当"权限"，
+  // 发起升级的坐席（或重放其令牌者）可直接带 sessionId 重放 claimConversation 把会话抢回，绕开商户复核。
+  // 服务端强制：非超管遇 escalated 直接拒（不进 transition），不信"UI 看不见=真拿不到"。
+  if (s.status === 'escalated' && !p.isSuper) return reply(403, { ok: false, error: 'ESCALATED_SUPER_ONLY' })
   // 接待上限（派生 activeCount<limit·B6.3）：满额拒（先查后转·TOCTOU 罕见·派生计数自愈）
   // 超管豁免（P2·escalateToMerchant 头注设计意图：外包甩单靠超管兜底——若超管本人也受同一上限
   // 约束、又没有调高 limit 的入口，外包升级上来的会话在超管已达默认上限时会永久无人能接，

@@ -27,12 +27,21 @@ const message = ref('加载中…')
 const busy = ref(false)
 
 const alertCount = computed(() => (vm.value?.alerts || []).reduce((n, a) => n + a.ids.length, 0))
+// 钱链告警按类型定位（P2 修复·根因：getTxAlerts 三类 id 形状不同——feeMismatch 是订单 _id（Orders 页
+// 搜索精确匹配 _id 能找到），refundMismatch/stuckRefunds 是 afterSales 复合 _id（`orderId__lineId[__ovrN]`，
+// Orders/Refunds 两页搜索都搜不到这种复合 id）。金额不符单唯一对应 Orders 页；其余两类只能去 Refunds 页
+// （虽然 Refunds 搜索也不认复合 id，但至少落在能看到售后记录的正确页面——不去 /orders 那种连页面都错的死路）。
+const isFeeMismatch = (label: string) => label === '金额不符单'
+const alertPath = (label: string) => (isFeeMismatch(label) ? '/orders' : '/refunds')
+// 待处理瓦片聚合多个类型、只能给一个落点：混有退款类（stuckRefunds 是需要及时人工介入的死信）就默认去
+// /refunds（更紧急）；全是金额不符单（或无告警）保持原 /orders，不引入更复杂的选择菜单（量力而行）。
+const alertsHaveRefundType = computed(() => (vm.value?.alerts || []).some((a) => !isFeeMismatch(a.label)))
 const TODOS = computed(() => [
   { key: 'ship', label: '待发货', n: todo.value.ship, to: '/orders', icon: Truck, tone: 'warn' },
   { key: 'refund', label: '待审退款', n: todo.value.refund, to: '/refunds', icon: RotateCcw, tone: 'warn' },
   { key: 'prep', label: '上新未完成', n: todo.value.prep, to: '/products', icon: PackagePlus, tone: 'warn' },
   { key: 'low', label: '低库存 / 售罄', n: todo.value.lowStock, to: '/inventory', icon: Boxes, tone: 'red' },
-  { key: 'money', label: '钱链告警', n: alertCount.value, to: '/orders', icon: TriangleAlert, tone: 'red' },
+  { key: 'money', label: '钱链告警', n: alertCount.value, to: alertsHaveRefundType.value ? '/refunds' : '/orders', icon: TriangleAlert, tone: 'red' },
 ])
 const todoTotal = computed(() => TODOS.value.reduce((s, t) => s + t.n, 0))
 const fmtClock = (ts: number) => {
@@ -112,18 +121,16 @@ onMounted(load)
       <!-- 副请求加载失败：不显绿色全清（病根#14 别把「没加载到」当「无待办」→ 漏发货）·提示刷新 -->
       <p v-if="todoPartial" class="ld-status">部分待处理计数没能加载，显示的数字可能不全，请刷新看真实待办</p>
 
-      <!-- 交易异常告警（有则必显） -->
+      <!-- 交易异常告警（有则必显）：每类各带自己的「去处理」——三类 id 形状不同，落点不能共用一个按钮 -->
       <div v-if="vm.alerts.length" class="alert">
         <div class="alert-ico"><TriangleAlert :size="20" :stroke-width="1.8" /></div>
         <div class="alert-body">
           <div class="alert-title">交易异常待处理 · {{ vm.alerts.reduce((n, a) => n + a.ids.length, 0) }} 笔</div>
-          <div class="alert-detail">
-            <span v-for="a in vm.alerts" :key="a.label" class="alert-item">
-              {{ a.label }}：<code v-for="id in a.ids" :key="id">{{ id }}</code>
-            </span>
+          <div v-for="a in vm.alerts" :key="a.label" class="alert-row">
+            <span class="alert-item">{{ a.label }}：<code v-for="id in a.ids" :key="id">{{ id }}</code></span>
+            <UiButton variant="danger" size="sm" @click="router.push(alertPath(a.label))">去处理</UiButton>
           </div>
         </div>
-        <UiButton variant="danger" size="sm" @click="router.push('/orders')">去处理</UiButton>
       </div>
 
       <!-- KPI 行（真数据·无环比数据源不编，激活率进度条走 KPI 尾槽） -->
@@ -197,7 +204,7 @@ onMounted(load)
 /* 交易异常告警条 */
 .alert {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: 14px;
   padding: 16px 20px;
   background: var(--ld-bg-red-soft);
@@ -207,6 +214,7 @@ onMounted(load)
 .alert-ico {
   color: var(--ld-red);
   flex: none;
+  margin-top: 2px;
 }
 .alert-body {
   flex: 1;
@@ -217,13 +225,20 @@ onMounted(load)
   font-weight: 700;
   color: var(--ld-red);
 }
-.alert-detail {
-  margin-top: 4px;
+/* 每类各一行、各带自己的「去处理」（三类 id 形状不同，落点不能共用一个按钮） */
+.alert-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 6px 16px;
+  margin-top: 8px;
+}
+.alert-item {
   font-size: 12.5px;
   color: var(--ld-content);
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px 16px;
+  flex: 1;
+  min-width: 0;
 }
 .alert-item code {
   margin-left: 4px;

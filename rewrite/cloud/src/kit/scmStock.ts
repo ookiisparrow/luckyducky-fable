@@ -40,7 +40,7 @@ const ledgerIdOf = (docType: string, docId: string, itemKey: string) => `${docTy
 
 export type ApplyResult =
   | { ok: true; applied: number }
-  | { ok: false; error: 'BAD_MOVE' | 'NO_MATERIAL' | 'INSUFFICIENT' | 'CONTENTION'; materialId?: string }
+  | { ok: false; error: 'BAD_MOVE' | 'NO_MATERIAL' | 'INSUFFICIENT' | 'CONTENTION' | 'LEDGER_WRITE_FAILED'; materialId?: string }
 
 /**
  * 对一张单据应用一组库存变动：写确定性流水 + CAS 改 materials.stock。全有或全无（尽力回滚）——任一行
@@ -88,11 +88,31 @@ export async function applyStockMoves(moves: StockMove[], doc: MoveDoc): Promise
   for (const m of moves) {
     const _id = ledgerIdOf(doc.docType, doc.docId, m.materialId)
     // ① 流水 claim（确定性 _id·撞 id=已应用过·幂等跳过）
+    // P1 修复（评审）：add() 抛错原因不明——真正的确定性 _id 撞号（重放/并发方已写，合法幂等跳过）
+    // 与其它任何原因（网络瞬断/限流/配额超限/字段非法……）导致的写入失败长得一模一样。原实现无条件
+    // 把两者都当「已应用过」跳过（continue，不改库存、不告警）——后者情况下这行既没真正入账也没
+    // CAS 改库存，却被当成功处理，applied 悄悄比 moves.length 小、无调用方检查这个差值，违反本模块
+    // 自述「宁不动账勿错账」与病根14「失败必可观测」。
+    // 判据：跟随 kit/ids.ts ensureDoc 已确立的读回范式，不猜错误码/文案（真 sdk 撞号报错文案未经
+    // 验证、不像 isDocMissing 那样有查证过的社区报错文案可比对）——读回该 _id：读到＝真撞号（该行
+    // 确已被写入过，跳过合法、不告警）；读不到＝写真没落地，是需要观测的失败，不当「已应用过」
+    // 处理，回滚已应用行、整单按此行失败收尾。
     let claimed = true
     try {
       await ledger.add({ data: { _id, itemKey: m.materialId, delta: m.delta, docType: doc.docType, docId: doc.docId, operator: doc.operator || '', reason: doc.reason || '', at: Date.now() } })
     } catch {
-      claimed = false // DUPLICATE_ID：该行已入账（重放/并发方），跳过库存变更
+      const check = await ledger.doc(_id).get().catch(() => null)
+      if (check && check.data) {
+        claimed = false // 真撞号（DUPLICATE_ID）：该行已入账（重放/并发方），跳过库存变更，不告警
+      } else {
+        await notifyAlert('money', 'scmStock.applyStockMoves', 'LEDGER_WRITE_FAILED', {
+          materialId: m.materialId,
+          docType: doc.docType,
+          docId: doc.docId,
+        })
+        await rollback()
+        return { ok: false, error: 'LEDGER_WRITE_FAILED', materialId: m.materialId }
+      }
     }
     if (!claimed) continue
     // ② CAS 改余额（fg: 成品行不动 materials——成品账在 kit/inventory，流水行只留痕）
@@ -198,7 +218,7 @@ export interface MaterialDoc {
   spec?: Record<string, string> // 毛线的 color/tier/form 快照（列表展示用·真相在 _id）
 }
 
-export async function saveMaterialDoc(m: MaterialDoc): Promise<'ok' | 'UOM_LOCKED'> {
+export async function saveMaterialDoc(m: MaterialDoc): Promise<'ok' | 'UOM_LOCKED' | 'DUPLICATE'> {
   const db = getDb()
   const coll = db.collection(COLLECTIONS.materials)
   const fields: Record<string, unknown> = {
@@ -216,7 +236,16 @@ export async function saveMaterialDoc(m: MaterialDoc): Promise<'ok' | 'UOM_LOCKE
     if (got.data.uom && got.data.uom !== m.uom) return 'UOM_LOCKED' // 计量方式建档锁死（改了=两本单位混账）
     await coll.doc(m._id).update({ data: fields }) // 不含 stock——库存只经 applyStockMoves
   } else {
-    await coll.add({ data: { _id: m._id, ...fields, stock: 0 } }) // 建档初始化 stock:0（casChange 依赖整数余额）
+    // 先查后写竞态（两个并发首建请求都读到「无档」、都落到这里）：确定性 _id 撞号——与同域
+    // scmAssembly.ts runAssembly（try/catch add() → 409 DUPLICATE）/ scmBom.ts saveBomTemplate/
+    // saveBomProfile（.set().catch(...add())）对同类竞态的处理口径看齐，不再是模块内「确定性 _id
+    // + 无异常处理」的孤例——原实现的异常会一路裸抛，靠 adminApi 路由层兜成笼统 500，丢失「其实是
+    // 并发首建撞车」这个更精确的语义。
+    try {
+      await coll.add({ data: { _id: m._id, ...fields, stock: 0 } }) // 建档初始化 stock:0（casChange 依赖整数余额）
+    } catch {
+      return 'DUPLICATE' // 撞确定性 _id：并发首建同一物料，另一方已建档
+    }
   }
   return 'ok'
 }

@@ -81,6 +81,14 @@ export async function orderCounts({ db }: Ctx) {
   return reply(200, { ok: true, counts, partial })
 }
 
+// 发货上传互斥闸陈旧判据（批Y·shipUploadLock 无解锁机制修复）：闸释放写在函数体最后一步（微信上传
+// 完成之后）——若云函数在「写完 busy、写回 idle」这个窗口被平台强杀（超时/OOM/平台重启，非 JS 异常，
+// try/catch 挡不住），busy 会永久卡住，且全仓没有其它 action 会重置它，该订单从此再也发不出货（含合法
+// 改单号重试），只能人工进库改字段。微信发货上传云调用正常应秒级完成，给远超正常耗时的安全边际——
+// 超过此阈值仍是 busy 就视为「持锁方已经不在了」，允许抢占继续。量级参考 PAY_WINDOW_MS（15 分钟）：
+// 发货上传比支付回调窗口短得多，5 分钟已是远超正常耗时的宽松边际，不做成分布式锁/TTL 索引那类重型机制。
+const SHIP_LOCK_STALE_MS = 5 * 60 * 1000
+
 // 单单发货核心（shipOrder 与 shipOrders 批量共用·DRY 单源）：状态闸 paid/shipped + feeMismatch 挡单
 // + 条件转移防并发回滚 done + 微信 upload_shipping_info 合规上报（fail-soft·债#26·根因#12）。
 // 返回纯结果对象（不含 HTTP 包装），调用方各自 reply / 汇总。
@@ -127,6 +135,7 @@ async function shipOne(db: any, idRaw: any, companyRaw: any, trackingRaw: any, o
   // 状态仍在 paid/shipped 内即认定「另一次调用正在处理本单上传」，回 SHIP_IN_PROGRESS 而非 BAD_STATUS
   // （不是分布式锁：只挡同单同时进行中的窗口，上传结束即释放，不影响之后合法的改单号再次调用）。
   const _ = db.command
+  const lockNow = Date.now()
   const upd = await db
     .collection('orders')
     .where({ _id: id, status: _.in(['paid', 'shipped']), shipUploadLock: _.neq('busy') })
@@ -136,13 +145,35 @@ async function shipOne(db: any, idRaw: any, companyRaw: any, trackingRaw: any, o
         shipping: { company, trackingNo },
         shippedAt: got.data.shippedAt || Date.now(),
         shipUploadLock: 'busy',
+        shipUploadLockAt: lockNow,
       },
     })
   if (!upd.stats || upd.stats.updated !== 1) {
     const fresh = await db.collection('orders').doc(id).get().catch(() => null)
-    const freshStatus = (fresh && fresh.data && fresh.data.status) || 'unknown'
-    if (freshStatus === 'paid' || freshStatus === 'shipped') return { ok: false, error: 'SHIP_IN_PROGRESS' }
-    return { ok: false, error: 'BAD_STATUS:' + freshStatus }
+    const freshData = fresh && fresh.data
+    const freshStatus = (freshData && freshData.status) || 'unknown'
+    if (freshStatus !== 'paid' && freshStatus !== 'shipped') return { ok: false, error: 'BAD_STATUS:' + freshStatus }
+    // 陈旧锁抢占（SHIP_LOCK_STALE_MS 见上方注释）：只有「仍是 busy」且「按时间戳判定已过期」才抢占；
+    // 未过期＝真的在处理中，照旧拒绝 SHIP_IN_PROGRESS。CAS 精确带上读到的 shipUploadLockAt 值，
+    // 防止本次重读之后、抢占写之前又有别的合法调用已经拿到了新的 busy（那种情况精确匹配天然落空，
+    // 回落到「拒绝」而不会误抢一把并不陈旧的新锁——不用 _.and()/_.or() 组合子，桩未验证过、避免误用）。
+    const lockAt = Number((freshData && freshData.shipUploadLockAt) || 0)
+    const stale = freshData && freshData.shipUploadLock === 'busy' && lockNow - lockAt > SHIP_LOCK_STALE_MS
+    if (!stale) return { ok: false, error: 'SHIP_IN_PROGRESS' }
+    const preempt = await db
+      .collection('orders')
+      .where({ _id: id, status: _.in(['paid', 'shipped']), shipUploadLock: 'busy', shipUploadLockAt: lockAt })
+      .update({
+        data: {
+          status: 'shipped',
+          shipping: { company, trackingNo },
+          shippedAt: freshData.shippedAt || Date.now(),
+          shipUploadLock: 'busy',
+          shipUploadLockAt: lockNow,
+        },
+      })
+    if (!preempt.stats || preempt.stats.updated !== 1) return { ok: false, error: 'SHIP_IN_PROGRESS' }
+    await notifyAlert('anomaly', 'shipOne', 'SHIP_LOCK_STALE_PREEMPTED', { id, staleForMs: lockNow - lockAt })
   }
   // SCM-D 核销留痕（守卫 ship-verify-ledger·根因#2·「如实核销」蓝图定稿）：**首次** paid→shipped 逐行落
   // ship 流水（fg 行只留痕不动账——成品扣账在下单预留 reserveStock；确定性 _id=ship:<orderId>:fg:<pid>__<spec>

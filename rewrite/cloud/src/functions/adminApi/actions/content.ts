@@ -167,7 +167,8 @@ export async function savePageContent({ db, data }: Ctx) {
       const prev = await coll.doc('agreement').get().catch(() => null)
       const prevData: any = (prev && prev.data) || {}
       const prevHist = Array.isArray(prevData.history) ? prevData.history : []
-      const prevV = typeof prevData._v === 'number' ? prevData._v : 0
+      const hasV = typeof prevData._v === 'number'
+      const prevV = hasV ? prevData._v : 0
       const additions: any[] = []
       for (const part of ['user', 'privacy'] as const) {
         const v = clean[part]?.version
@@ -182,8 +183,12 @@ export async function savePageContent({ db, data }: Ctx) {
         if (created) return reply(200, { ok: true })
         continue // DUPLICATE_ID：并发方已建档，重读重试
       }
+      // _v 字段可能缺失（本 CAS 改造前就存在的旧文档，从未写过 _v）——用字面量 0 精确匹配会因「字段真缺失
+      // ≠ 值为0」而永远命中不了这类旧文档，CONTENTION 重试 5 次全败、协议页永久保存失败（同 learning.ts
+      // confirmEnter 的 entVer CAS 已踩过并修过的同一个坑：exists(false)-or-eq(prevV)，而非裸字面量相等）。
+      const _ = db.command
       const r = await coll
-        .where({ _id: 'agreement', _v: prevV })
+        .where({ _id: 'agreement', _v: hasV ? prevV : _.exists(false) })
         .update({ data: doc })
         .catch(() => ({ stats: { updated: 0 } }))
       if (r.stats && r.stats.updated === 1) return reply(200, { ok: true })

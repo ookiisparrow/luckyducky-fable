@@ -239,8 +239,13 @@ export async function settleOutwork({ data }: Ctx) {
   if (!outworkId) return reply(400, { ok: false, error: 'NO_OUTWORK' })
   const r = await transition('outworkOrders', outworkId, fromFor('settled'), 'settled', { settledAt: Date.now() })
   if (!r.doc) return reply(404, { ok: false, error: 'NO_OUTWORK' })
-  if (!r.moved) return reply(409, { ok: false, error: 'NOT_DELIVERED' })
-  return reply(200, { ok: true })
+  if (!r.moved) {
+    // 重放天然幂等（同 scmPurchase.markOrdered/cancelPurchase 口径）：已 settled 直接返回成功，
+    // 不让客户端重试拿到与「单据状态不对、根本不能操作」相同的 409——只有真正非法流转（未到 delivered）才拒。
+    if (r.doc.status === 'settled') return reply(200, { ok: true, moved: false })
+    return reply(409, { ok: false, error: 'NOT_DELIVERED' })
+  }
+  return reply(200, { ok: true, moved: true })
 }
 
 // ── 取消（仅 draft·已发料不可取消,异常走物料页调整单·蓝图定稿）──
@@ -250,6 +255,11 @@ export async function cancelOutwork({ data }: Ctx) {
   if (!outworkId) return reply(400, { ok: false, error: 'NO_OUTWORK' })
   const r = await transition('outworkOrders', outworkId, fromFor('cancelled'), 'cancelled', { cancelledAt: Date.now() })
   if (!r.doc) return reply(404, { ok: false, error: 'NO_OUTWORK' })
-  if (!r.moved) return reply(409, { ok: false, error: 'NOT_DRAFT' })
-  return reply(200, { ok: true })
+  if (!r.moved) {
+    // 重放天然幂等（同 scmPurchase.markOrdered/cancelPurchase 口径）：已 cancelled 直接返回成功，
+    // 不让客户端重试拿到与「单据状态不对、根本不能操作」相同的 409——只有真正非法流转（非 draft）才拒。
+    if (r.doc.status === 'cancelled') return reply(200, { ok: true, moved: false })
+    return reply(409, { ok: false, error: 'NOT_DRAFT' })
+  }
+  return reply(200, { ok: true, moved: true })
 }

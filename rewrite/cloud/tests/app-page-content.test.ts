@@ -160,6 +160,23 @@ describe('agreement（协议·history 服务端追加与 cap·客户端伪造忽
     expect(c.history.filter((h: any) => h.part === 'privacy' && h.version === '2.0').length).toBe(1)
     expect(c.privacy.version).toBe('2.0') // 内容本身仍是「后写覆盖」语义（本次只修历史追加的原子性，非内容合并）
   })
+
+  it('大白话：_v CAS 上线前就存在的旧文档（无 _v 字段）保存不永久 CONTENTION（回归·字面量0误判修复）', async () => {
+    // 直接建一份「_v 改造前」形态的旧文档：无 _v 字段，模拟本 CAS 机制上线时线上已有的真实存量数据。
+    await db().collection('content').doc('agreement').set({
+      data: { user: { version: '1.0', sections: [] }, privacy: { version: '1.0', sections: [] }, history: [], updatedAt: 1 },
+    })
+    const r = await save('agreement', { user: { version: '1.0', sections: [] }, privacy: { version: '2.0', sections: [] } })
+    expect(r.statusCode).toBe(200) // 旧实现：where(_v:0) 精确匹配缺失字段恒 updated:0，5 次重试耗尽 409 CONTENTION
+    const c = bodyOf(await getAdmin('agreement')).content
+    expect(c._v).toBe(1) // 首次经过 CAS 分支成功写入，_v 从此落地
+    expect(c.history.filter((h: any) => h.part === 'privacy' && h.version === '2.0').length).toBe(1)
+    // 再存一次，确认 _v 字段落地后正常的「有版本号」CAS 分支同样工作正常，不是只对无字段这一次侥幸成功
+    const r2 = await save('agreement', { user: { version: '1.0', sections: [] }, privacy: { version: '3.0', sections: [] } })
+    expect(r2.statusCode).toBe(200)
+    const c2 = bodyOf(await getAdmin('agreement')).content
+    expect(c2._v).toBe(2)
+  })
 })
 
 describe('未知 page 一律拒绝（fail-closed·信任边界·根因#3）', () => {

@@ -92,6 +92,23 @@ describe('发货（黄金：状态闸/金额异常挡/核销流水/合规上传 
     expect(control.dump('orders')[0].shipping.trackingNo).toBe('ZT-C')
   })
 
+  // P2 修复（批Y·shipUploadLock 无解锁机制）：锁释放写在函数体最后一步（微信上传之后）——若云函数
+  // 在「写完 busy、写回 idle」窗口被平台强杀（超时/OOM/平台重启，非 JS 异常，try/catch 挡不住），busy
+  // 会永久卡死、没有任何机制会重置它，该订单包括合法改单号在内的后续 shipOne 全部被永久误判
+  // SHIP_IN_PROGRESS，只能人工进库改字段。修复：陈旧锁（shipUploadLockAt 距今超过 SHIP_LOCK_STALE_MS）
+  // 允许被后续调用抢占继续，不再永久卡死；抢占发生时留 notifyAlert 告警供人工知情（不阻断）。
+  it('大白话：陈旧锁（被强杀留下的 busy，超过陈旧阈值）——后续调用能抢占继续、不永久卡死，且留告警', async () => {
+    seedOrder({ shipUploadLock: 'busy', shipUploadLockAt: Date.now() - 6 * 60 * 1000 } as any) // 6 分钟前，超过 5 分钟阈值
+    const r = await post('shipOrder', { id: 'o1', company: '顺丰', trackingNo: 'SF-STALE' })
+    expect(r.ok).toBe(true) // 抢占成功，不被 SHIP_IN_PROGRESS 卡死
+    const o = control.dump('orders')[0]
+    expect(o.status).toBe('shipped')
+    expect(o.shipping.trackingNo).toBe('SF-STALE')
+    expect(o.shipUploadLock).toBe('idle') // 上传完照常释放
+    const anomalies = control.dump('anomalies')
+    expect(anomalies.some((a: any) => a.code === 'SHIP_LOCK_STALE_PREEMPTED')).toBe(true) // 留痕供人工知情
+  })
+
   it('大白话：微信合规上传失败绝不回滚本地发货——留痕告警靠人补录', async () => {
     seedOrder()
     control.setOpenapiFail(true)
