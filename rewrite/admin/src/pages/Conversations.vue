@@ -1,10 +1,13 @@
 <script setup lang="ts">
-// 客服会话（设计语言一致性·M3 UI 批13）：按客户检索时间轴 + 质检报表（样本口径诚实标注）。
-// 逻辑未动，仅套设计语言（页头/统计卡/检索卡/消息气泡时间轴/token）。
+// 客服会话（设计语言一致性·M3 UI 批13 + 批 B6 深链预填）：按客户检索时间轴 + 质检报表（样本口径诚实标注）。
+// 深链预填（批 B6·本页原无 route.query 读取能力·新增最小实现）：Csat.vue 差评行「查会话」
+// router.push({path:'/conversations', query:{externalUserId}}) 跳转过来——挂载时读 route.query.externalUserId/
+// openid 预填输入框并自动检索一次（同 Batches.vue/Cards.vue 既有「props(嵌入) || route.query(深链) || 空」范式）。
 import { ref, onMounted } from 'vue'
-import { Search, RotateCcw } from 'lucide-vue-next'
-import { searchConversations, conversationsReport } from '../api/cs'
-import { mapMessages, mapReport, type MsgVM, type ReportVM } from '../lib/mapCs'
+import { useRoute } from 'vue-router'
+import { Search, RotateCcw, ClipboardCheck } from 'lucide-vue-next'
+import { searchConversations, conversationsReport, sampleQc, saveQcMark, listQcSampled } from '../api/cs'
+import { mapMessages, mapReport, mapQcRows, type MsgVM, type ReportVM, type QcRowVM } from '../lib/mapCs'
 import { useLatest } from '../lib/latest'
 import UiButton from '../components/ui/Button.vue'
 import PageHeader from '../components/ui/PageHeader.vue'
@@ -13,8 +16,9 @@ import KpiCard from '../components/ui/KpiCard.vue'
 import Badge from '../components/ui/Badge.vue'
 import EmptyState from '../components/ui/EmptyState.vue'
 
-const openid = ref('')
-const externalUserId = ref('')
+const route = useRoute()
+const openid = ref(String(route.query.openid || ''))
+const externalUserId = ref(String(route.query.externalUserId || ''))
 const keyword = ref('')
 const msgs = ref<MsgVM[]>([])
 const cursor = ref<unknown>(null)
@@ -69,7 +73,115 @@ async function more() {
   hasMore.value = !!r.hasMore
 }
 
-onMounted(loadReport)
+// —— 质检抽检（批 B7）——
+// sessionKey＝csSession._id（非 externalUserId·与「会话检索」上方 openid/externalUserId 输入框语义不同）。
+// 编辑态附在纯映射 QcRowVM 之外（draftScore/draftNote/busy/err 只在本组件用·mapCs.ts 保持纯映射不掺 UI 态）。
+interface QcRow extends QcRowVM {
+  draftScore: number // 0=未选（下拉留空态）
+  draftNote: string
+  busy: boolean
+  err: string
+}
+function toQcRow(v: QcRowVM): QcRow {
+  return { ...v, draftScore: v.scored ? v.score : 0, draftNote: v.scored ? v.note : '', busy: false, err: '' }
+}
+const qcRows = ref<QcRow[]>([])
+const qcCursor = ref<unknown>(null)
+const qcHasMore = ref(false)
+const qcMsg = ref('')
+const qcSampling = ref(false)
+const qcGen = useLatest() // 乱序守卫（同 search/loadEntries 范式·防在途请求互相覆盖）
+
+// 池内已抽/已评（由已加载的行现算·不编未加载部分的数——诚实反映「当前看到多少」而非库内总数）
+function qcStat(): string {
+  if (!qcRows.value.length) return ''
+  const scored = qcRows.value.filter((r) => r.scored).length
+  return `已加载 ${qcRows.value.length} 条抽样 · 已评 ${scored} 条`
+}
+
+function mergeQcRows(list: QcRowVM[]) {
+  const seen = new Set(qcRows.value.map((r) => r.sessionKey))
+  const fresh = list.filter((r) => !seen.has(r.sessionKey)).map(toQcRow)
+  qcRows.value = [...qcRows.value, ...fresh]
+}
+
+async function loadQcSampled() {
+  qcMsg.value = qcRows.value.length ? qcMsg.value : '加载中…'
+  const my = qcGen.begin()
+  const r = await listQcSampled({})
+  if (qcGen.isStale(my)) return
+  if (!r.ok) {
+    qcMsg.value = '加载失败：' + String(r.error || '')
+    return
+  }
+  qcRows.value = mapQcRows(r.list).map(toQcRow)
+  qcCursor.value = r.nextCursor
+  qcHasMore.value = !!r.hasMore
+  qcMsg.value = qcRows.value.length ? '' : '暂无抽样记录，点「随机抽取」开始质检'
+}
+
+async function moreQc() {
+  if (!qcHasMore.value || qcCursor.value == null) return
+  const gen = qcGen.peek()
+  const r = await listQcSampled({ cursor: qcCursor.value })
+  if (qcGen.isStale(gen)) return
+  if (!r.ok) {
+    qcMsg.value = '加载更多失败：' + String(r.error || '')
+    return
+  }
+  qcMsg.value = ''
+  mergeQcRows(mapQcRows(r.list)) // dedup-by-id（同 Conversations 消息翻页/Csat 明细范式）
+  qcCursor.value = r.nextCursor
+  qcHasMore.value = !!r.hasMore
+}
+
+async function doSampleQc() {
+  qcSampling.value = true
+  qcMsg.value = ''
+  const r = await sampleQc(10)
+  qcSampling.value = false
+  if (!r.ok) {
+    qcMsg.value = '抽样失败：' + String(r.error || '')
+    return
+  }
+  const fresh = mapQcRows(r.sampled).map(toQcRow)
+  if (!fresh.length) {
+    qcMsg.value = '候选池已抽完（所有已结束会话都已抽样或已评分）'
+    return
+  }
+  const freshKeys = new Set(fresh.map((row) => row.sessionKey))
+  qcRows.value = [...fresh, ...qcRows.value.filter((row) => !freshKeys.has(row.sessionKey))] // 新抽的置顶·dedup 防重复点击
+}
+
+async function saveQc(row: QcRow) {
+  if (row.draftScore < 1 || row.draftScore > 5) {
+    row.err = '请先选择评分'
+    return
+  }
+  row.busy = true
+  row.err = ''
+  const r = await saveQcMark(row.sessionKey, row.draftScore, row.draftNote.trim())
+  row.busy = false
+  if (!r.ok) {
+    row.err = r.error === 'ALREADY_MARKED' ? '已被评过分（可能是并发保存）' : '保存失败：' + String(r.error || '')
+    return
+  }
+  row.scored = true
+  row.score = row.draftScore
+  row.note = row.draftNote.trim()
+}
+
+function viewQcSession(row: QcRow) {
+  if (!row.externalUserId) return
+  externalUserId.value = row.externalUserId
+  void search()
+}
+
+onMounted(() => {
+  void loadReport()
+  void loadQcSampled()
+  if (openid.value || externalUserId.value) void search() // 深链预填带值即自动检索一次（省一次手点）
+})
 </script>
 
 <template>
@@ -127,6 +239,69 @@ onMounted(loadReport)
         </div>
       </div>
       <EmptyState v-else-if="!message" :icon="Search" text="输入 openid / 外部用户号 / 关键词后检索会话时间轴" />
+    </Card>
+
+    <!-- 质检抽检（批 B7）：closed 会话随机抽样 → 人工评分 1-5 + 备注·粒度=会话档级（非轮次，csSession 无轮次实体） -->
+    <Card title="质检抽检" sub="从已结束会话里随机抽样，人工评分 1-5 + 备注留痕">
+      <template #head>
+        <UiButton size="sm" :disabled="qcSampling" @click="doSampleQc">
+          <ClipboardCheck :size="14" :stroke-width="1.8" /><span>{{ qcSampling ? '抽取中…' : '随机抽取 10 条' }}</span>
+        </UiButton>
+      </template>
+
+      <p v-if="qcStat()" class="ld-status qc-stat">{{ qcStat() }}</p>
+      <p v-if="qcMsg" class="ld-status">{{ qcMsg }}</p>
+      <!-- 口径告知（同上方「会话检索」report-note 精神）：消息数/首响是按该客户近期消息聚合算的，
+           不是本次抽中的这条 closed 会话独有——该客户若还有其他历史/并行会话，数字会混入那些会话 -->
+      <p class="report-note qc-agg-note">消息数 / 首响按该客户近期消息聚合计算，非本次抽中会话独有——仅供参考，评分请以时间轴内容为准。</p>
+
+      <div v-if="qcRows.length" class="ld-table">
+        <div class="ld-thead">
+          <div class="ld-th" :style="{ width: '110px' }">客户尾号</div>
+          <div class="ld-th" :style="{ width: '150px' }">抽样时间</div>
+          <div class="ld-th" :style="{ width: '80px' }">消息数</div>
+          <div class="ld-th" :style="{ width: '90px' }">首响</div>
+          <div class="ld-th" :style="{ width: '90px' }">评分</div>
+          <div class="ld-th grow">备注</div>
+          <div class="ld-th ops-cell" :style="{ width: '130px' }">操作</div>
+        </div>
+        <div class="ld-tbody">
+          <div v-for="row in qcRows" :key="row.sessionKey" class="ld-tr">
+            <div class="ld-td mono" :style="{ width: '110px' }">{{ row.tailId }}</div>
+            <div class="ld-td muted" :style="{ width: '150px' }">{{ row.sampledLabel }}</div>
+            <div class="ld-td" :style="{ width: '80px' }">{{ row.messageCount == null ? '—' : row.messageCount }}</div>
+            <div class="ld-td muted" :style="{ width: '90px' }">{{ row.avgResponseLabel }}</div>
+            <!-- 已评行只读显示 qc（不可覆盖·后端 409 ALREADY_MARKED 拒二次保存也在此兜底不再露编辑控件） -->
+            <template v-if="row.scored">
+              <div class="ld-td" :style="{ width: '90px' }"><Badge :tone="row.score <= 3 ? 'red' : 'green'">{{ row.score }} 分</Badge></div>
+              <div class="ld-td grow">{{ row.note || '—' }}</div>
+              <div class="ld-td ops-cell" :style="{ width: '130px' }">
+                <UiButton variant="ghost" size="sm" @click="viewQcSession(row)">
+                  <Search :size="13" :stroke-width="1.8" /><span>查会话</span>
+                </UiButton>
+              </div>
+            </template>
+            <template v-else>
+              <div class="ld-td" :style="{ width: '90px' }">
+                <select v-model.number="row.draftScore" class="qc-score-sel">
+                  <option :value="0">请选择</option>
+                  <option v-for="n in [5, 4, 3, 2, 1]" :key="n" :value="n">{{ n }} 分</option>
+                </select>
+              </div>
+              <div class="ld-td grow"><input v-model="row.draftNote" placeholder="质检备注（可留空）" maxlength="500" class="qc-note-in" /></div>
+              <div class="ld-td ops-cell" :style="{ width: '130px' }">
+                <UiButton size="sm" :disabled="row.busy" @click="saveQc(row)">{{ row.busy ? '保存中…' : '保存' }}</UiButton>
+              </div>
+            </template>
+          </div>
+        </div>
+        <p v-for="row in qcRows.filter((r) => r.err)" :key="'err:' + row.sessionKey" class="ld-status qc-row-err">{{ row.tailId }}：{{ row.err }}</p>
+        <div class="more-wrap">
+          <UiButton v-if="qcHasMore" size="sm" variant="ghost" @click="moreQc">加载更多</UiButton>
+          <p v-else-if="qcRows.length" class="end-mark">— 已到最早 —</p>
+        </div>
+      </div>
+      <EmptyState v-else-if="!qcMsg" :icon="ClipboardCheck" text="点「随机抽取 10 条」从已结束会话里抽样质检" />
     </Card>
   </div>
 </template>
@@ -225,5 +400,46 @@ onMounted(loadReport)
   text-align: center;
   font-size: 11px;
   color: var(--ld-content-2);
+}
+
+/* 质检抽检（批 B7）：表格辅助类（scoped 边界铁律·各页各自定义、不共享全局，同 Csat.vue 既有范式） */
+.mono {
+  font-family: var(--ld-font-mono);
+  font-size: 12px;
+  color: var(--ld-content-2);
+}
+.muted {
+  color: var(--ld-content-2);
+  font-size: 12.5px;
+}
+.ops-cell {
+  justify-content: flex-end;
+}
+.qc-stat {
+  margin-bottom: 6px;
+}
+.qc-score-sel {
+  width: 100%;
+  padding: 5px 6px;
+  border: 1px solid var(--ld-line);
+  border-radius: var(--ld-radius-sm);
+  font-family: inherit;
+  font-size: 12.5px;
+  color: var(--ld-content);
+  background: var(--ld-bg);
+}
+.qc-note-in {
+  width: 100%;
+  padding: 6px 9px;
+  border: 1px solid var(--ld-line);
+  border-radius: var(--ld-radius-sm);
+  font-family: inherit;
+  font-size: 12.5px;
+  color: var(--ld-content);
+  background: var(--ld-bg);
+}
+.qc-row-err {
+  color: var(--ld-red);
+  font-size: 11.5px;
 }
 </style>

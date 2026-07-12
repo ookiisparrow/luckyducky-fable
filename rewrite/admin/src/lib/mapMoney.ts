@@ -271,3 +271,54 @@ export function refundVerdict(v: { lineRefundable: boolean; entered: boolean; re
     sub: '本单此行已被撤退货权（进课）——同意退款服务端会拦（ENTERED_NOT_REFUNDABLE）',
   }
 }
+
+// —— 越规退款入口（决策§26·钱链后端零改动·cap refund:manage）——
+// 后端 overrideRefund 只收 { orderId, lineId, reason }，金额/退货资格一律云端裁决（不越权在前端伪造金额）；
+// 这里只提供「按订单号查订单→选行」的查找态 VM + 提交按钮门控纯函数，售后行选择走 listOrders(q=orderId)。
+
+export interface OverrideLineVM {
+  lineId: string
+  label: string // 商品名（规格）×数量 · 单价，供选择时辨认——不是退款额（退款额=服务端分摊结果，前端不算）
+}
+export interface OverrideOrderVM {
+  id: string
+  statusLabel: string
+  buyerName: string
+  buyerPhone: string
+  amountLabel: string // 实付（分转元只读展示）
+  goodsLabel: string // 商品价（分转元只读展示）
+  lines: OverrideLineVM[]
+}
+
+// 按订单号从 listOrders(q=orderId) 回包里挑出目标单，映射成越规退款查找态展示 VM（脏档/未命中回 null）。
+export function mapOverrideOrder(list: unknown, orderId: string): OverrideOrderVM | null {
+  if (!Array.isArray(list)) return null
+  const o = (list as Record<string, any>[]).find((x) => x && typeof x === 'object' && String(x._id || x.id || '') === orderId)
+  if (!o) return null
+  const a = o.address && typeof o.address === 'object' ? o.address : {}
+  const rawItems = Array.isArray(o.items) ? o.items : []
+  const lines: OverrideLineVM[] = rawItems
+    .filter((it: any) => it && typeof it === 'object')
+    .map((it: any) => {
+      const lineId = String(it.lineId || it.productId || '')
+      const qty = Number.isInteger(it.qty) && it.qty > 0 ? it.qty : 1
+      const spec = it.spec ? '（' + String(it.spec) + '）' : ''
+      return { lineId, label: `${String(it.name || '')}${spec} ×${qty} · ${yuan(it.price) || '¥0.00'}` }
+    })
+    .filter((l) => l.lineId)
+  return {
+    id: String(o._id || o.id || ''),
+    statusLabel: orderStatusLabel(o.status),
+    buyerName: String(a.name || ''),
+    buyerPhone: String(a.phone || ''),
+    amountLabel: yuan(o.amount) || '¥0.00',
+    goodsLabel: yuan(o.goods) || '',
+    lines,
+  }
+}
+
+// 提交按钮门控（勾选+原因非空才可点·批 B8 规格）：找到订单 + 选中一行 + 原因 trim 非空 + 已勾「知晓越过常规
+// 售后流程」+ 不在提交中，四项齐才放行——纯函数，供 UI 与单测共用同一判据（防页面另写一份判定漂移）。
+export function canOverrideRefund(v: { orderFound: boolean; lineId: string; reason: string; ack: boolean; busy: boolean }): boolean {
+  return v.orderFound && !!v.lineId && v.reason.trim().length > 0 && v.ack && !v.busy
+}

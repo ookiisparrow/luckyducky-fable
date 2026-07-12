@@ -1,5 +1,5 @@
 import { reply, str, type Ctx } from '../lib'
-import { applyStockMoves, listStockLedger, saveMaterialDoc, listMaterialDocs } from '../../../kit'
+import { applyStockMoves, listStockLedger, saveMaterialDoc, listMaterialDocs, pageQuery } from '../../../kit'
 import { COLLECTIONS } from '@ldrw/shared'
 import { yarnMaterialId } from '@ldrw/shared'
 
@@ -66,9 +66,29 @@ export async function saveMaterial({ data }: Ctx) {
 
 // ── 供应商/织女主档 ──
 
-export async function listSuppliers({ db }: Ctx) {
-  const r = await db.collection(COLLECTIONS.suppliers).limit(200).get().catch(() => ({ data: [] }))
-  return reply(200, { ok: true, list: r.data || [] })
+// B1（根因#7）：改走 kit pageQuery——旧 .limit(200) 裸封顶超上限旧档永久不可查；defaultLimit=200
+// 沿用旧上限，无参调用（多处 picker 下拉全量消费点）行为零变化。
+//
+// cursorField 用 `_id`（供应商表无自然排序字段·蓝图 B1 主脑裁决）：kit pageQuery 复合游标的 tie/span
+// 双分支设计假定 cursorField≠_id（tie 分支靠「同 cursorField 值·不同 _id」区分同值记录打破平局）；当
+// cursorField===_id 时 v===id 恒成立，`{ [cursorField]: cursor.v, _id: beyond(cursor.id) }` 这一对象
+// 字面量里两个键都叫 `_id`、后者覆盖前者，tie 分支的查询条件坍缩成与 span 分支完全相同的条件——两个
+// 分支各自把剩余行整批取回、拼接后不去重直接 slice。剩余行数 R 较小时（R ≤ limit/2）只产生页内重复、
+// 靠去重能清干净；但 R 较大时（limit/2 < R ≤ limit，即将进入尾页前一页）拼接体在 slice(limit+1) 处被
+// 截断在「原序列中段」而非真正尾部，页内去重清得干净，但 pageQuery 内部据此算出的 hasMore/nextCursor
+// 本身就是错的（hasMore 误报 true、nextCursor 指向一条已经交付过的记录）——只做页内去重堵不住这层，
+// 会造成跨页重复交付（P1 复核实测：350 条供应商、limit 200 时命中）。kit/paging.ts 判定本批不许改
+// （铁律），故不去修 pageQuery 内部，而是从根上避开这条坏分支：cursorField===_id 时 v===id 恒成立，
+// 在调用前把客户端回传的复合游标 {v,id} 拆成纯值 id 再传给 pageQuery——pageQuery 收到非 {v,id} 形状
+// 的游标会落进「向后兼容纯值游标」分支（单一查询，无 tie/span 拼接），该分支的 hasMore/nextCursor 本
+// 身即正确，无需再在此兜底去重。首页（无 cursor）不受影响，「无参调用行为零变化」契约不受影响。
+const SUPPLIER_LIST_LIMIT = 200
+
+export async function listSuppliers({ db, data }: Ctx) {
+  const rawCursor = data && (data as any).cursor
+  const cursor = rawCursor && typeof rawCursor === 'object' && 'id' in rawCursor ? (rawCursor as any).id : rawCursor
+  const paged = await pageQuery(db, COLLECTIONS.suppliers, {}, '_id', { ...data, cursor }, SUPPLIER_LIST_LIMIT)
+  return reply(200, { ok: true, list: paged.list, nextCursor: paged.nextCursor, hasMore: paged.hasMore })
 }
 
 export async function saveSupplier({ db, data }: Ctx) {
@@ -110,10 +130,11 @@ export async function adjustStock({ data, agentId }: Ctx) {
   return reply(200, { ok: true, applied: r.applied })
 }
 
-// ── 流水查账（只读·bounded）──
+// ── 流水查账（只读·cursor 分页）──
+// B1（根因#7）：真实现改在 kit/scmStock.ts listStockLedger（走 pageQuery），本 action 只透传 {cursor,limit}。
 
 export async function listLedger({ data }: Ctx) {
   const materialId = data.materialId ? String(data.materialId) : undefined
-  const limit = data && Number.isInteger(data.limit) ? data.limit : 50
-  return reply(200, { ok: true, list: await listStockLedger(materialId, limit) })
+  const paged = await listStockLedger(materialId, data)
+  return reply(200, { ok: true, list: paged.list, nextCursor: paged.nextCursor, hasMore: paged.hasMore })
 }

@@ -3,6 +3,9 @@
 import { describe, it, expect } from 'vitest'
 import shellRaw from '../src/shell/Shell.vue?raw'
 import scmMaterialsSrc from '../src/pages/ScmMaterials.vue?raw'
+import scmPurchaseSrc from '../src/pages/ScmPurchase.vue?raw'
+import scmOutworkSrc from '../src/pages/ScmOutwork.vue?raw'
+import scmBomSrc from '../src/pages/ScmBom.vue?raw'
 import { materialHuman, materialCategoryLabel, uomLabel, purchaseStatusLabel, outworkStatusLabel, yuanToFen, fenLabel, scmErrorText, docTypeLabel, mapLedger, unprofiledProducts } from '../src/lib/mapScm'
 import { SCM_FLOW } from '../src/lib/scmFlow'
 import { setPurchaseHandoff, consumePurchaseHandoff, setOutworkHandoff, consumeOutworkHandoff } from '../src/lib/scmHandoff'
@@ -80,14 +83,19 @@ describe('未填差异位总览（全产品 − 已建 profile）', () => {
   })
 })
 
-// ScmFlowTabs 顶部流程条来源（旧线还原·换皮丢）：SCM_FLOW 顺序单源 path 集合必须 === Shell 侧栏「供应链」组，
-// 否则流程条会链到死路由 / 与侧栏漂移。Shell↔router 由 rw-admin-nav-route-synced 兜，故 ===Shell ⇒ ⊆router。
+// ScmFlowTabs 顶部流程条来源（旧线还原·换皮丢）：SCM_FLOW 顺序单源 path 集合必须 === Shell 侧栏「供应链」组
+// 的「流程步骤」子集，否则流程条会链到死路由 / 与侧栏漂移。Shell↔router 由 rw-admin-nav-route-synced 兜，
+// 故 ⊆Shell ⇒ ⊆router。批 B2 新增 /scm-overview：着陆页在流程之上（卡片直达 5 步中的某一步），
+// 不是流程步骤本身——只挂侧栏顶部、不进 ScmFlowTabs 5 步单源（lib/scmFlow.ts 不因此改动）。守卫收紧为
+// 「SCM_FLOW ⊆ Shell 供应链组」+「Shell 供应链组 = SCM_FLOW ∪ {总览}」，而非放宽成两边随便漂移。
 describe('SCM 流程条单源同步（防死链/防漂移）', () => {
-  it('大白话：SCM_FLOW 的路由集合与 Shell 侧栏供应链组一字不差', () => {
+  it('大白话：SCM_FLOW（5 步流程）⊆ Shell 侧栏供应链组；供应链组 = 流程 5 步 + 总览这一个额外着陆页，不多不少', () => {
     const shellScmPaths = new Set((shellRaw.match(/\/scm-[a-z]+/g) || []))
     const flowPaths = new Set(SCM_FLOW.map((s) => s.to))
     expect(flowPaths.size).toBe(5)
-    expect([...flowPaths].sort()).toEqual([...shellScmPaths].sort()) // 集合相等（顺序各自可不同·内容不许漂移）
+    expect([...flowPaths].every((p) => shellScmPaths.has(p))).toBe(true) // 流程 5 步全部在侧栏（防漏挂）
+    const extra = [...shellScmPaths].filter((p) => !flowPaths.has(p))
+    expect(extra).toEqual(['/scm-overview']) // 侧栏比流程只多这一项——总览着陆页，非流程步骤
     expect(SCM_FLOW.every((s) => s.label && s.icon)).toBe(true) // 每步有中文标签+图标
   })
 })
@@ -121,5 +129,37 @@ describe('SCM 去开单 handoff（读一次即清）', () => {
     const o1 = consumeOutworkHandoff()
     expect(o1?.lines[0].qty).toBe(5)
     expect(consumeOutworkHandoff()).toBeNull()
+  })
+})
+
+// SCM 四页翻页收口（B1·根因#7）：ScmMaterials（供应商列表+流水列表两处）/ScmPurchase/ScmOutwork/ScmBom（组装记录）
+// 各自接了 cursor 续页——源码扫描钉行为（同上方 tier 切换用例范式）：真实交互逻辑跑在浏览器 DOM 事件里，
+// 单测测不到点击，只钉「该有的翻页函数与 hasMore/cursor 绑定确实在源码里」防回归被换皮/重构悄悄丢掉。
+describe('SCM 四页「加载更多」翻页收口（B1·照抄 Conversations.vue/Orders.vue cursor 续页模式）', () => {
+  it('大白话：ScmMaterials 供应商列表 + 流水列表都有独立的 more 函数、都绑 hasMore 判空游标、都续传 cursor', () => {
+    expect(scmMaterialsSrc).toMatch(/async function moreSuppliers\s*\(/)
+    expect(scmMaterialsSrc).toMatch(/async function moreLedger\s*\(/)
+    expect(scmMaterialsSrc).toMatch(/listSuppliers\(\{\s*cursor:\s*supCursor\.value\s*\}\)/)
+    expect(scmMaterialsSrc).toMatch(/listLedger\([^)]*\{\s*cursor:\s*ledgerCursor\.value\s*\}\)/)
+    expect(scmMaterialsSrc).toMatch(/v-if="supHasMore"/)
+    expect(scmMaterialsSrc).toMatch(/v-if="ledgerHasMore"/)
+  })
+
+  it('大白话：ScmPurchase 采购单列表 more() 续传当前状态筛选 + cursor', () => {
+    expect(scmPurchaseSrc).toMatch(/async function more\s*\(/)
+    expect(scmPurchaseSrc).toMatch(/listPurchases\(filter\.value \|\| undefined, \{ cursor: cursor\.value \}\)/)
+    expect(scmPurchaseSrc).toMatch(/v-if="hasMore"/)
+  })
+
+  it('大白话：ScmOutwork 外协单列表 more() 续传 cursor', () => {
+    expect(scmOutworkSrc).toMatch(/async function more\s*\(/)
+    expect(scmOutworkSrc).toMatch(/listOutworks\(undefined, \{ cursor: cursor\.value \}\)/)
+    expect(scmOutworkSrc).toMatch(/v-if="hasMore"/)
+  })
+
+  it('大白话：ScmBom 组装记录 moreAssemblies() 续传 cursor', () => {
+    expect(scmBomSrc).toMatch(/async function moreAssemblies\s*\(/)
+    expect(scmBomSrc).toMatch(/listAssemblies\(\{ cursor: asmCursor\.value \}\)/)
+    expect(scmBomSrc).toMatch(/v-if="asmHasMore"/)
   })
 })

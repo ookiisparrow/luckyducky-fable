@@ -2,6 +2,7 @@
 // 系统设置（设计语言一致性·M3 UI 批13）：告警推送 webhook（企微群机器人·空=清除退回纯日志）+ 激活码 urlPrefix。
 // 逻辑未动，仅套设计语言。激活卡双面设计器（印刷用）随印刷批补——记待办。
 import { ref, computed, onMounted } from 'vue'
+import { useRouter } from 'vue-router'
 import { getSettings, saveSettings } from '../api/system'
 import { webhookOk } from '../lib/mapSystem'
 import UiButton from '../components/ui/Button.vue'
@@ -9,6 +10,8 @@ import PageHeader from '../components/ui/PageHeader.vue'
 import Card from '../components/ui/Card.vue'
 import Badge from '../components/ui/Badge.vue'
 import { ChevronRight } from 'lucide-vue-next'
+
+const router = useRouter()
 
 // 钱链告警事件开关（换皮把 webhook 迁进 Settings 但删了 5+ 事件粒度开关·alertEvents 后端字段悬空·B6 证伪 saveSettings 合并保存不抹）
 const EVENTS = [
@@ -99,6 +102,13 @@ async function save() {
       </Card>
     </div>
 
+    <Card title="人工配置清单" sub="12 项散落配置一屏「配了没」 · 环境变量/DB字段/纯人工外部后台项一次核对">
+      <button class="entry" @click="router.push('/config-checklist')">
+        <span>去查看</span>
+        <ChevronRight :size="16" :stroke-width="1.8" />
+      </button>
+    </Card>
+
     <Card title="推送事件" sub="关掉的事件只记日志不推群 · 无 webhook 时开关不生效">
       <div class="events" :class="{ muted: !pushing }">
         <div v-for="e in EVENTS" :key="e.code" class="ev">
@@ -170,6 +180,24 @@ async function save() {
   font-size: 11.5px;
   line-height: 1.5;
   color: var(--ld-content-2);
+}
+
+/* 人工配置清单入口卡（同 Inspect.vue 未处理异常告警条的可点入语言·换成中性色） */
+.entry {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0;
+  border: none;
+  background: none;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ld-purple-ink);
+  cursor: pointer;
+}
+.entry:hover {
+  opacity: 0.85;
 }
 
 /* 事件推送开关（逐事件·gated on webhook·行底分线） */

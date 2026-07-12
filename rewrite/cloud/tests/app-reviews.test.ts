@@ -1,4 +1,4 @@
-// 黄金 learning-content §七（评价）/§九（辅助视频）（守卫 rw-reviews-golden）。
+// 黄金 learning-content §七（评价）/§九（辅助视频）+ R37b（KB 精选 FAQ 公开读）（守卫 rw-reviews-golden）。
 import { describe, it, expect, beforeEach } from 'vitest'
 import { control } from 'wx-server-sdk'
 import { main as app } from '../src/functions/app/index'
@@ -206,5 +206,45 @@ describe('submitReview（多重闸门·一单一行一评·黄金 §七）', () 
     const first = rv.list.find((r: any) => r.createdAt === 20)
     expect(first.photos).toEqual(['https://tmp/cloud://a.jpg', 'https://tmp/cloud://b.jpg']) // 短时址·非裸 fileID
     expect(rv.list.find((r: any) => r.createdAt === 10).photos).toEqual([]) // 无图 → 空数组
+  })
+})
+
+describe('getPublicFaq（R37b·KB 精选 FAQ 公开读·守卫 faq-via-kb-single-source 扩面）', () => {
+  it('大白话：只回 featured=true 的条目，字段瘦身 {key,title,content}——不带 category/order/enabled 等 kb 管理元数据', async () => {
+    control.seed('kb', [
+      { _id: 'logistics:eta', question: '什么时候发货？', answer: '付款后 48 小时内发货。', category: 'logistics', order: 1, enabled: true, featured: true },
+      { _id: 'activation:howto', question: '激活码怎么用？', answer: '扫码激活。', category: 'activation', order: 0, enabled: true, featured: false }, // 非精选·不下发
+    ])
+    const r = await call('getPublicFaq')
+    expect(r.items).toEqual([{ key: 'logistics:eta', title: '什么时候发货？', content: '付款后 48 小时内发货。' }])
+    const raw = JSON.stringify(r)
+    expect(raw.includes('category')).toBe(false) // 不带管理元数据
+    expect(raw.includes('enabled')).toBe(false)
+    expect(raw.includes('activation:howto')).toBe(false) // 非精选条目不下发
+  })
+
+  it('大白话：精选但被禁用(enabled:false)的条目同样不下发；无精选条目时回空列表；无鉴权（未设 openid 也能读）', async () => {
+    control.reset() // 清空登录态·验证公开读无需 openid（同 getProducts/getContent 口径）
+    control.seed('kb', [{ _id: 'x', question: 'q', answer: 'a', featured: true, enabled: false }])
+    expect((await call('getPublicFaq')).items).toEqual([])
+  })
+
+  it('大白话：bounded 上限 20——精选条目多于上限时只回前 20 条，不无界下发', async () => {
+    control.seed(
+      'kb',
+      Array.from({ length: 25 }, (_, i) => ({ _id: 'k' + i, question: 'q' + i, answer: 'a' + i, featured: true }))
+    )
+    const r = await call('getPublicFaq')
+    expect(r.items.length).toBe(20)
+  })
+
+  it('大白话：按 admin 策展的 order 字段升序下发（同 listKb order 口径），不是数据库任意返回序', async () => {
+    control.seed('kb', [
+      { _id: 'c', question: 'q-c', answer: 'a-c', featured: true, order: 2 },
+      { _id: 'a', question: 'q-a', answer: 'a-a', featured: true, order: 0 },
+      { _id: 'b', question: 'q-b', answer: 'a-b', featured: true, order: 1 },
+    ])
+    const r = await call('getPublicFaq')
+    expect(r.items.map((x: any) => x.key)).toEqual(['a', 'b', 'c'])
   })
 })

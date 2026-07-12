@@ -26,7 +26,9 @@ import * as scmOutwork from './actions/scmOutwork'
 import * as scmBom from './actions/scmBom'
 import * as scmAssembly from './actions/scmAssembly'
 import * as scmPlanner from './actions/scmPlanner'
+import * as scmOverview from './actions/scmOverview'
 import * as ops from './actions/ops'
+import * as configChecklist from './actions/configChecklist'
 
 // 管理控制台后端 v2（HTTP 访问服务触发·鉴权外壳逐字承接旧线 index.ts·批11 只挂 ping/login，
 // 业务 action 后续批逐域挂进 ACTIONS/ACTION_CAPS——挂载时与旧线注册表逐行核对）。
@@ -101,17 +103,23 @@ const ACTIONS: Record<string, (ctx: Ctx) => Promise<any>> = {
   // 客服会话检索 + 质检报表（批15·检索过 customer:view 闸·报表 bounded 无逐人 PII 不设 cap）
   searchConversations: conversations.searchConversations,
   conversationsReport: conversations.conversationsReport,
+  // 质检抽检（批 B7·未登记 ACTION_CAPS→默认拒 admin:write＝仅超管·坐席不可达·sampleQc/saveQcMark 写类自动审计）
+  sampleQc: conversations.sampleQc,
+  saveQcMark: conversations.saveQcMark,
+  listQcSampled: conversations.listQcSampled,
   // 知识库（批15·FAQ 单源·admin 维护、客服 bot dispatch 读同一份）
   listKb: kb.listKb,
   saveKb: kb.saveKb,
-  // 客服满意度报表（批15·只读·均分/分布·bounded）
+  // 客服满意度报表（批15·只读·均分/分布·bounded）+ 明细钻取（批 B6·cursor 分页·未登记 cap→默认仅超管，同 getCsatReport）
   getCsatReport: csat.getCsatReport,
+  listCsatEntries: csat.listCsatEntries,
   // 坐席台 10 action（批15·cap agent:handle·分配 scope 经 assertOwnedByAgent）
   listQueue: agentDesk.listQueue,
   claimConversation: agentDesk.claimConversation,
   releaseConversation: agentDesk.releaseConversation,
   sendAgentMessage: agentDesk.sendAgentMessage,
   getThread: agentDesk.getThread,
+  getMediaUrl: agentDesk.getMediaUrl,
   setAgentStatus: agentDesk.setAgentStatus,
   escalateToMerchant: agentDesk.escalateToMerchant,
   closeConversation: agentDesk.closeConversation,
@@ -154,12 +162,16 @@ const ACTIONS: Record<string, (ctx: Ctx) => Promise<any>> = {
   getRestockPlan: scmPlanner.getRestockPlan,
   // 产销统计（只读·同车道 D）：stockLedger fg 流水按 itemKey 汇总——打包累计 + 发货/销售累计，不动账
   getFgSummary: scmPlanner.getFgSummary,
+  // 总览（批 B2）：低库存预警 + 应付未结按织女分组 + 在途采购/外协计数 + 最近流水——只读聚合着陆页
+  getScmOverview: scmOverview.getScmOverview,
   // 运行期观测（批3·体检面板 + 异常账本·治病根#14 告警进人眼）：未登记 ACTION_CAPS→默认仅超管·
   // runInspect/resolveAnomaly 写类自动审计（不以 list/get 开头）·只读业务数据（只碰 inspectRuns/anomalies）
   runInspect: ops.runInspect,
   getInspectStatus: ops.getInspectStatus,
   listAnomalies: ops.listAnomalies,
   resolveAnomaly: ops.resolveAnomaly,
+  // 人工配置清单（批 B9·只探测状态·零回显）：未登记 ACTION_CAPS→默认拒 admin:write＝仅超管
+  getConfigChecklist: configChecklist.getConfigChecklist,
 }
 
 // 能力闸（RBAC·别让单超管裸奔）：受限 action 须 principal 具备对应能力（'*'=全能力）。
@@ -175,6 +187,7 @@ const ACTION_CAPS: Record<string, string> = {
   releaseConversation: 'agent:handle',
   sendAgentMessage: 'agent:handle',
   getThread: 'agent:handle',
+  getMediaUrl: 'agent:handle',
   setAgentStatus: 'agent:handle',
   escalateToMerchant: 'agent:handle',
   closeConversation: 'agent:handle',

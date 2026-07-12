@@ -19,6 +19,8 @@ import EmptyState from '../components/ui/EmptyState.vue'
 const orders = ref<Array<Record<string, any>>>([])
 const mats = ref<Array<Record<string, any>>>([])
 const sups = ref<Array<Record<string, any>>>([])
+const cursor = ref<unknown>(null) // B1（根因#7）：采购单列表翻页游标
+const hasMore = ref(false)
 // 动作反馈(note)/加载态(load) 收口（病根#14）：reload 成功不再抹掉动作刚设的成功/失败原文。
 const { message, ok: msgOk, note, load } = useLoadStatus()
 const form = ref<{ purchaseId?: string; supplierId: string; lines: Array<{ materialId: string; qty: number; priceYuan: string }> } | null>(null)
@@ -62,9 +64,27 @@ async function reload() {
   const [p, m, s] = await Promise.all([listPurchases(filter.value || undefined), listMaterials(), listSuppliers()])
   if (listGen.isStale(my)) return // 已切别 chip·丢弃过期采购单
   orders.value = p.ok ? (p.list as Record<string, any>[]) : []
+  cursor.value = p.ok ? p.nextCursor : null // 换筛选/刷新恒重置游标（新首页·不接续旧筛选下的位置）
+  hasMore.value = !!(p.ok && p.hasMore)
   mats.value = m.ok ? (m.list as Record<string, any>[]) : []
   sups.value = s.ok ? ((s.list as Record<string, any>[]) || []).filter((x) => x.type === 'factory') : []
   load(p.ok, '加载失败：' + String(p.error || '')) // 只在加载失败时写·成功静默不抹动作反馈
+}
+
+// 加载更多（B1·根因#7）：复用当前状态筛选·续游标追加·去重防双击重复追加同一页（同 Conversations more() 范式）
+async function more() {
+  if (!hasMore.value || cursor.value == null) return
+  const gen = listGen.peek() // 绑定当前 reload 代际·不递增（新 reload 会作废本页·防混排）
+  const r = await listPurchases(filter.value || undefined, { cursor: cursor.value })
+  if (listGen.isStale(gen)) return
+  if (!r.ok) {
+    note(false, '', '加载更多失败：' + scmErrorText(r.error))
+    return
+  }
+  const seen = new Set(orders.value.map((o) => o._id))
+  orders.value = [...orders.value, ...(((r.list as Record<string, any>[]) || []).filter((o) => !seen.has(o._id)))]
+  cursor.value = r.nextCursor
+  hasMore.value = !!r.hasMore
 }
 
 function newOrder() {
@@ -214,6 +234,10 @@ onMounted(async () => {
           </div>
         </template>
       </div>
+      <div v-if="hasMore" class="tbl-foot">
+        <span>已加载 {{ orders.length }} 单</span>
+        <UiButton variant="ghost" size="sm" @click="more">加载更多</UiButton>
+      </div>
     </div>
     <EmptyState v-else-if="!form" :icon="ClipboardList" :text="filter ? '这个状态下没有采购单' : '还没有采购单'" />
   </div>
@@ -312,5 +336,16 @@ onMounted(async () => {
   font-size: 12px;
   color: var(--ld-content);
   line-height: 1.5;
+}
+
+/* 翻页页脚（B1·根因#7·同 Orders.vue 范式） */
+.tbl-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  border-top: 1px solid var(--ld-line);
+  font-size: 12px;
+  color: var(--ld-content-2);
 }
 </style>

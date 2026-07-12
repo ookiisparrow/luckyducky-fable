@@ -1,5 +1,5 @@
 import { reply, type Ctx } from '../lib'
-import { applyStockMoves, listMaterialDocs, transition } from '../../../kit'
+import { applyStockMoves, listMaterialDocs, transition, pageQuery } from '../../../kit'
 import { COLLECTIONS } from '@ldrw/shared'
 import { asFen, OUTWORK_ORDER_STATUS } from '@ldrw/shared'
 
@@ -38,22 +38,23 @@ async function knownMaterialIds(): Promise<Set<string>> {
   return new Set((await listMaterialDocs(500)).map((m: any) => String(m._id)))
 }
 
-// ── 列表（bounded ≤200·可按 status/workerId 过滤·倒序）──
+// ── 列表（cursor 分页·可按 status/workerId 过滤·倒序）──
+// B1（根因#7）：改走 kit pageQuery——旧 limit 直取封顶 200 会让超上限旧单永久不可查；defaultLimit
+// 沿用旧默认值 100，无参调用首页条数零变化，翻页可续查历史全量。
+
+const LIST_LIMIT = 100
 
 export async function listOutworks({ db, data }: Ctx) {
-  const cap = Math.min(Math.max(1, Number.isInteger(data && data.limit) ? data.limit : 100), 200)
-  const where: Record<string, string> = {}
+  const filter: Record<string, string> = {}
   const status = String((data && data.status) || '')
   if (status) {
     if (!(Object.values(OUTWORK_ORDER_STATUS) as string[]).includes(status)) return reply(400, { ok: false, error: 'BAD_STATUS' })
-    where.status = status
+    filter.status = status
   }
   const workerId = String((data && data.workerId) || '')
-  if (workerId) where.workerId = workerId
-  let q: any = db.collection('outworkOrders')
-  if (Object.keys(where).length) q = q.where(where)
-  const r = await q.orderBy('createdAt', 'desc').limit(cap).get().catch(() => ({ data: [] }))
-  return reply(200, { ok: true, list: r.data || [] })
+  if (workerId) filter.workerId = workerId
+  const paged = await pageQuery(db, 'outworkOrders', filter, 'createdAt', data, LIST_LIMIT)
+  return reply(200, { ok: true, list: paged.list, nextCursor: paged.nextCursor, hasMore: paged.hasMore })
 }
 
 // ── 建/改草稿（仅 draft 可改）──

@@ -220,8 +220,8 @@ describe('坐席回复与会话流（黄金 §四：接缝发送·归档·失败
 
   it('大白话：入站消息投影带 msgid（从确定性 _id 剥出，供坐席台去重·bug sweep II L1）；出站消息无 msgid', async () => {
     control.seed('conversations', [
-      { _id: 'wxkf:in:msg-a', direction: 'in', externalUserId: 'eu-s1', openKfId: 'kf1', msgtype: 'image', text: '[image]', at: 2000 },
-      { _id: 'wxkf:in:msg-b', direction: 'in', externalUserId: 'eu-s1', openKfId: 'kf1', msgtype: 'image', text: '[image]', at: 2000 }, // 同秒同占位文·不同 msgid
+      { _id: 'wxkf:in:msg-a', direction: 'in', externalUserId: 'eu-s1', openKfId: 'kf1', msgtype: 'image', text: '[image]', mediaId: 'media-a', at: 2000 },
+      { _id: 'wxkf:in:msg-b', direction: 'in', externalUserId: 'eu-s1', openKfId: 'kf1', msgtype: 'image', text: '[image]', at: 2000 }, // 同秒同占位文·不同 msgid·无 mediaId
       { _id: 'out-auto-1', direction: 'out', externalUserId: 'eu-s1', openKfId: 'kf1', msgtype: 'text', text: '收到', at: 2500 },
     ])
     const r = await post('getThread', A1, { sessionId: 's1' })
@@ -229,6 +229,72 @@ describe('坐席回复与会话流（黄金 §四：接缝发送·归档·失败
     expect(a.msgid).toBe('msg-a')
     expect(b.msgid).toBe('msg-b') // 同秒不同 msgid·各自可辨，不被坐席台去重键误杀
     expect(c.msgid).toBeUndefined() // 出站消息无 msgid 语义·原样回空
+    expect(a.hasMedia).toBe(true) // B5：有 mediaId → 坐席台渲染图片气泡
+    expect(b.hasMedia).toBe(false) // 无 mediaId/fileId → 不渲染
+  })
+})
+
+describe('顾客发图坐席可见（B5·图片消息下载延迟到坐席首次请求·平台接缝单点#12）', () => {
+  beforeEach(() => {
+    control.seed('csSession', [S('s1', 'active', { agentId: 'agent-1' }), S('s9', 'active', { agentId: 'agent-2' })])
+    control.seed('conversations', [
+      // s1 自己会话内的图（未下载·只有 mediaId）
+      { _id: 'wxkf:in:img-1', direction: 'in', externalUserId: 'eu-s1', openKfId: 'kf1', msgtype: 'image', text: '[image]', mediaId: 'media-1', at: 1000 },
+      // s1 自己会话内已下载过的图（有 fileId 缓存）
+      { _id: 'wxkf:in:img-2', direction: 'in', externalUserId: 'eu-s1', openKfId: 'kf1', msgtype: 'image', text: '[image]', mediaId: 'media-2', fileId: 'cloud://test/cs-media/img-2', at: 1100 },
+      // s9（agent-2 的会话）里的图——用来验证「借自己会话号偷看别会话的图」被拒
+      { _id: 'wxkf:in:img-9', direction: 'in', externalUserId: 'eu-s9', openKfId: 'kf1', msgtype: 'image', text: '[image]', mediaId: 'media-9', at: 1200 },
+    ])
+  })
+
+  it('大白话：缓存命中直接换临时 URL，不再触发下载接缝', async () => {
+    const r = await post('getMediaUrl', A1, { sessionId: 's1', msgId: 'img-2' })
+    expect(r.ok).toBe(true)
+    expect(r.cached).toBe(true)
+    expect(r.url).toContain('cs-media/img-2')
+    expect(control.callFunctionCalls().length).toBe(0) // 缓存命中不碰下载接缝
+  })
+
+  it('大白话：未下载过的图经 cs/kfMedia 接缝下载并落云存储缓存，回写 fileId 供下次命中缓存', async () => {
+    control.setCallFunctionResult({ result: { ok: true, base64: Buffer.from('fake-image-bytes').toString('base64') } })
+    const r = await post('getMediaUrl', A1, { sessionId: 's1', msgId: 'img-1' })
+    expect(r.ok).toBe(true)
+    expect(r.cached).toBe(false)
+    expect(control.callFunctionCalls()[0].name).toBe('kfMedia') // 经服务端接缝、非直连微信 API（平台接缝单点#12）
+    expect(control.callFunctionCalls()[0].data.mediaId).toBe('media-1')
+    const row = control.dump('conversations').find((m: any) => m._id === 'wxkf:in:img-1')
+    expect(row.fileId).toBeTruthy() // 回写缓存·下次命中缓存分支
+  })
+
+  it('大白话：media_id 过期（3 天有效）如实回 EXPIRED，不当成普通下载失败', async () => {
+    control.setCallFunctionResult({ result: { ok: false, expired: true, errcode: 40007 } })
+    const r = await post('getMediaUrl', A1, { sessionId: 's1', msgId: 'img-1' })
+    expect(r.ok).toBe(false)
+    expect(r.error).toBe('EXPIRED')
+  })
+
+  it('大白话：下载/上传失败留痕告警且如实返错——不重试风暴（前端手动重试）', async () => {
+    control.setCallFunctionResult({ result: { ok: false, expired: false, errcode: 40014 } })
+    const r = await post('getMediaUrl', A1, { sessionId: 's1', msgId: 'img-1' })
+    expect(r.ok).toBe(false)
+    expect(r.error).toBe('DOWNLOAD_FAILED')
+    expect(control.dump('anomalies').some((a: any) => a.code === 'MEDIA_DOWNLOAD_FAILED')).toBe(true) // 动作类失败禁静默（根因#14）
+  })
+
+  it('大白话：非所属会话一律拒（分配 scope）；非本会话的消息即便自己会话号也拒（防跨会话拉图）', async () => {
+    expect((await post('getMediaUrl', A1, { sessionId: 's9', msgId: 'img-9' })).status).toBe(403) // 非所属会话·scope 闸拒
+    // 借自己在接的 s1 号，但传别会话（s9）的 msgId——消息归属校验须拒，即便 scope 闸对 s1 本身放行
+    const cross = await post('getMediaUrl', A1, { sessionId: 's1', msgId: 'img-9' })
+    expect(cross.ok).toBe(false)
+    expect(cross.error).toBe('NOT_IN_SESSION')
+    expect(control.callFunctionCalls().length).toBe(0) // 无副作用·没碰下载接缝
+  })
+
+  it('大白话：消息不存在/非图片消息如实回；参数缺失拒', async () => {
+    expect((await post('getMediaUrl', A1, { sessionId: 's1', msgId: 'nope' })).error).toBe('MSG_NOT_FOUND')
+    expect((await post('getMediaUrl', A1, { sessionId: 's1' })).error).toBe('BAD_ARGS')
+    control.seed('conversations', [{ _id: 'wxkf:in:txt-1', direction: 'in', externalUserId: 'eu-s1', openKfId: 'kf1', msgtype: 'text', text: '在吗', at: 900 }])
+    expect((await post('getMediaUrl', A1, { sessionId: 's1', msgId: 'txt-1' })).error).toBe('NO_MEDIA') // 文本消息无 mediaId
   })
 })
 
@@ -360,6 +426,31 @@ describe('外包账号管理（黄金 §十：口令哈希·停用即时·白名
     expect(control.dump('adminConfig').filter((a: any) => keyMatches(a, 'race-key-2')).length).toBe(2)
     const anomalies = control.dump('anomalies')
     expect(anomalies.some((a: any) => a.code === 'ROLLBACK_FAIL' && a.ctx && a.ctx.which === 'keyHash')).toBe(true)
+  })
+
+  it('大白话（批 B6）：listAgents 看板扩展字段——status/stateUpdatedAt 取 agentState（无档兜底 offline/null）；activeCount/todayClosed 分坐席各算；[今日零点,明天零点) 含起——今日零点整那条算今日、昨天最后一刻的不算', async () => {
+    const CST = 8 * 3600_000
+    const todayStart = Date.parse(new Date(Date.now() + CST).toISOString().slice(0, 10) + 'T00:00:00+08:00')
+    control.seed('agentState', [{ _id: 'agent-1', status: 'online', updatedAt: 999 }]) // agent-2 无档
+    control.seed('csSession', [
+      { _id: 'act1', agentId: 'agent-1', status: 'active', createdAt: 1, updatedAt: 1 },
+      { _id: 'act2', agentId: 'agent-1', status: 'active', createdAt: 1, updatedAt: 1 },
+      { _id: 'act3', agentId: 'agent-2', status: 'active', createdAt: 1, updatedAt: 1 },
+      { _id: 'clA', agentId: 'agent-1', status: 'closed', createdAt: 1, updatedAt: todayStart + 1000 }, // 今日内
+      { _id: 'clB', agentId: 'agent-1', status: 'closed', createdAt: 1, updatedAt: todayStart - 1 }, // 昨天最后一刻·不算
+      { _id: 'clC', agentId: 'agent-2', status: 'closed', createdAt: 1, updatedAt: todayStart }, // 今日零点整·含界
+    ])
+    const r = await post('listAgents', SUPER, {})
+    const a1 = r.agents.find((a: any) => a.id === 'agent-1')
+    const a2 = r.agents.find((a: any) => a.id === 'agent-2')
+    expect(a1.status).toBe('online')
+    expect(a1.stateUpdatedAt).toBe(999)
+    expect(a1.activeCount).toBe(2)
+    expect(a1.todayClosed).toBe(1) // clA 算·clB（昨天）不算
+    expect(a2.status).toBe('offline') // 无 agentState 档兜底
+    expect(a2.stateUpdatedAt).toBeNull()
+    expect(a2.activeCount).toBe(1)
+    expect(a2.todayClosed).toBe(1) // clC 今日零点整含界
   })
 
   it('大白话（N3）：wecomUserId 竞态回滚若也失败——双凭证残留同样留痕；409 回复不变', async () => {

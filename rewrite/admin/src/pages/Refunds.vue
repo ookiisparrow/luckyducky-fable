@@ -3,10 +3,10 @@
 // grid 列表、右滑决策抽屉——把「退货权判据」摆到决策位（激活码/进课状态取 getRefundDetail 真判据·
 // 根因#8 不伪造徽章）。同意由「人工验收」勾选闸放行，服务端 approveRefund 仍权威复核（进课即拒/降级）。
 import { ref, computed, onMounted } from 'vue'
-import { RefreshCw, Search, X, CircleCheck, Ticket, GraduationCap, Check } from 'lucide-vue-next'
-import { listRefunds, refundCounts, approveRefund, rejectRefund, getRefundDetail } from '../api/money'
+import { RefreshCw, Search, X, CircleCheck, Ticket, GraduationCap, Check, ShieldAlert } from 'lucide-vue-next'
+import { listRefunds, refundCounts, approveRefund, rejectRefund, getRefundDetail, listOrders, overrideRefund } from '../api/money'
 import UiButton from '../components/ui/Button.vue'
-import { mapRefundRows, refundVerdict, type RefundRowVM, type RefundVerdictVM } from '../lib/mapMoney'
+import { mapRefundRows, refundVerdict, mapOverrideOrder, canOverrideRefund, type RefundRowVM, type RefundVerdictVM, type OverrideOrderVM } from '../lib/mapMoney'
 import { useLatest } from '../lib/latest'
 import PageHeader from '../components/ui/PageHeader.vue'
 import Card from '../components/ui/Card.vue'
@@ -183,12 +183,85 @@ async function doReject() {
   }
 }
 
+// —— 越规退款入口（决策§26·钱链后端零改动·cap refund:manage）——
+// 后台工具区独立入口：按订单号查找 → 选行 → 必填原因 + 勾选知晓 → 提交 overrideRefund。
+// 退货资格/退款金额一律服务端裁决（overrideRefund 只收 orderId/lineId/reason·前端不发明金额参数）。
+const showOverride = ref(false)
+const overrideOrderId = ref('') // 查找框输入
+const overrideOrder = ref<OverrideOrderVM | null>(null) // 查到的目标订单（含可选行）
+const overrideLineId = ref('') // 选中的商品行
+const overrideReason = ref('') // 越规原因（必填·买家可见同 rejectRefund 口径）
+const overrideAck = ref(false) // 「我已知晓此操作越过常规售后流程」勾选
+const overrideBusy = ref(false)
+const overrideFindMsg = ref('') // 查找态提示（查找中/未找到/查找失败）
+const overrideResultMsg = ref('') // 提交结果（成功/失败）
+
+// 按钮门控纯函数复用（mapMoney.canOverrideRefund）：与单测同一判据，不在页面另写一份易漂移的条件
+const overrideReady = computed(() =>
+  canOverrideRefund({ orderFound: !!overrideOrder.value, lineId: overrideLineId.value, reason: overrideReason.value, ack: overrideAck.value, busy: overrideBusy.value })
+)
+
+function openOverride() {
+  showOverride.value = true
+  overrideOrderId.value = ''
+  overrideOrder.value = null
+  overrideLineId.value = ''
+  overrideReason.value = ''
+  overrideAck.value = false
+  overrideFindMsg.value = ''
+  overrideResultMsg.value = ''
+}
+function closeOverride() {
+  showOverride.value = false
+}
+async function findOverrideOrder() {
+  const id = overrideOrderId.value.trim()
+  if (!id) return
+  overrideOrder.value = null
+  overrideLineId.value = ''
+  overrideResultMsg.value = ''
+  overrideFindMsg.value = '查找中…'
+  const r = await listOrders(undefined, undefined, 1, id)
+  if (!r.ok) {
+    overrideFindMsg.value = '查找失败：' + String(r.error || '')
+    return
+  }
+  const vm = mapOverrideOrder((r as any).list, id)
+  if (!vm) {
+    overrideFindMsg.value = '没有找到该订单号'
+    return
+  }
+  overrideOrder.value = vm
+  overrideFindMsg.value = ''
+}
+async function submitOverride() {
+  if (!overrideReady.value || !overrideOrder.value) return
+  overrideBusy.value = true
+  overrideResultMsg.value = ''
+  const r = await overrideRefund(overrideOrder.value.id, overrideLineId.value, overrideReason.value.trim())
+  overrideBusy.value = false
+  if (r.ok) {
+    overrideResultMsg.value = `✓ 已发起越规退款（售后单 ${String((r as any).id || '')}），等微信回调确认到账`
+    void reload() // 列表/计数刷新——本单可能已出现在「退款处理中」栏
+    // 提交成功后复位选择态（防误再次对同一行重复提交），保留结果横幅可见
+    overrideOrder.value = null
+    overrideLineId.value = ''
+    overrideReason.value = ''
+    overrideAck.value = false
+  } else {
+    overrideResultMsg.value = '越规退款触发失败：' + String(r.error || '未知错误')
+  }
+}
+
 onMounted(reload)
 </script>
 
 <template>
   <div class="ld-page">
     <PageHeader title="售后退款" sub="先收到寄回包装并验收（激活卡未拆用）再同意 · 同意后原路退回微信支付">
+      <UiButton variant="ghost" size="sm" title="越过常规售后资格规则直接发起退款——仅限特殊情况" @click="openOverride">
+        <ShieldAlert :size="14" :stroke-width="1.8" /><span>越规退款</span>
+      </UiButton>
       <UiButton variant="ghost" size="sm" :disabled="message === '加载中…'" @click="reload">
         <RefreshCw :size="14" :stroke-width="1.8" /><span>刷新</span>
       </UiButton>
@@ -350,6 +423,52 @@ onMounted(reload)
           </div>
         </template>
       </aside>
+    </div>
+
+    <!-- 越规退款入口（决策§26·工具区独立弹层·非依附某条售后单）：查订单→选行→必填原因+勾选→提交 -->
+    <div v-if="showOverride" class="drawer-mask ov-center" @click.self="closeOverride">
+      <div class="ov-dialog">
+        <div class="drawer-head">
+          <div class="drawer-title">越规退款</div>
+          <button class="drawer-close" @click="closeOverride"><X :size="16" :stroke-width="1.8" /></button>
+        </div>
+        <p class="ov-warn">越过常规售后资格规则（一行一售后锁 / 已拒 / 已进课不可退）直接发起退款——仅限特殊情况人工核实。退款金额与是否可退仍由服务端按钱守恒规则裁定，前端不可指定金额。</p>
+
+        <div class="ov-find">
+          <input v-model="overrideOrderId" placeholder="输入订单号" @keyup.enter="findOverrideOrder" />
+          <UiButton size="sm" @click="findOverrideOrder">查找</UiButton>
+        </div>
+        <p v-if="overrideFindMsg" class="ov-msg">{{ overrideFindMsg }}</p>
+
+        <template v-if="overrideOrder">
+          <div class="summary">
+            <div class="srow"><span>订单号</span><strong>{{ overrideOrder.id }}</strong></div>
+            <div class="srow"><span>状态</span><span class="sval">{{ overrideOrder.statusLabel }}</span></div>
+            <div class="srow"><span>买家</span><span class="sval">{{ overrideOrder.buyerName || '—' }} · {{ overrideOrder.buyerPhone || '（无电话）' }}</span></div>
+            <div class="srow"><span>实付 / 商品价（只读）</span><span class="sval">{{ overrideOrder.amountLabel }} / {{ overrideOrder.goodsLabel || '—' }}</span></div>
+          </div>
+
+          <div class="crit-label">选择要退款的商品行</div>
+          <label v-for="l in overrideOrder.lines" :key="l.lineId" class="ov-line">
+            <input v-model="overrideLineId" type="radio" name="ov-line" :value="l.lineId" />
+            <span>{{ l.label }}</span>
+          </label>
+          <p v-if="!overrideOrder.lines.length" class="ov-msg">这单没有可选商品行</p>
+
+          <div class="crit-label">越规原因（必填·会记入售后单）</div>
+          <textarea v-model="overrideReason" maxlength="100" rows="3" placeholder="如：客服特批 / 特殊情况人工核实" />
+
+          <label class="ck"><input v-model="overrideAck" type="checkbox" /><span>我已知晓此操作越过常规售后流程</span></label>
+
+          <div class="drawer-foot">
+            <UiButton variant="danger" size="lg" block :disabled="!overrideReady" @click="submitOverride">
+              <ShieldAlert :size="16" :stroke-width="1.8" /><span>{{ overrideBusy ? '发起中…' : '发起越规退款' }}</span>
+            </UiButton>
+          </div>
+        </template>
+
+        <p v-if="overrideResultMsg" class="ov-msg" :class="{ err: overrideResultMsg.includes('失败') }">{{ overrideResultMsg }}</p>
+      </div>
     </div>
   </div>
 </template>
@@ -682,5 +801,67 @@ textarea {
   font-family: var(--ld-font);
   resize: vertical;
   color: var(--ld-ink);
+}
+
+/* 越规退款弹层（决策§26·独立入口·非依附售后行的居中弹窗——沿用 drawer-mask 遮罩但覆盖 justify/align 为居中） */
+.ov-center {
+  justify-content: center;
+  align-items: center;
+}
+.ov-dialog {
+  width: 460px;
+  max-width: 92vw;
+  max-height: 88vh;
+  overflow-y: auto;
+  background: var(--ld-bg);
+  border-radius: var(--ld-radius);
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  animation: slidein 0.18s ease;
+}
+.ov-warn {
+  margin: 0;
+  padding: 11px 14px;
+  border-radius: var(--ld-radius);
+  background: var(--ld-bg-red-soft);
+  color: var(--ld-red);
+  font-size: 12px;
+  line-height: 1.5;
+}
+.ov-find {
+  display: flex;
+  gap: 8px;
+}
+.ov-find input {
+  flex: 1;
+  min-width: 0;
+  padding: 8px 12px;
+  border: 1px solid var(--ld-line-strong);
+  border-radius: var(--ld-radius-sm);
+  font-size: 13px;
+  color: var(--ld-ink);
+  background: var(--ld-bg);
+}
+.ov-msg {
+  margin: 0;
+  font-size: 12.5px;
+  color: var(--ld-content-2);
+}
+.ov-msg.err {
+  color: var(--ld-red);
+  font-weight: 600;
+}
+.ov-line {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 10px 12px;
+  border: 1px solid var(--ld-line);
+  border-radius: var(--ld-radius-sm);
+  font-size: 12.5px;
+  color: var(--ld-content);
+  cursor: pointer;
 }
 </style>

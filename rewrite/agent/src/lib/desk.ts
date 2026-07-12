@@ -11,9 +11,11 @@ export interface Msg {
   at: number
   msgtype?: string
   msgid?: string
+  hasMedia?: boolean // B5：顾客发图坐席可见——true 时 Desk.vue 渲染图片气泡而非纯文本占位
 }
 
-const keyOf = (m: Msg) => (m.msgid ? `id:${m.msgid}` : `${m.at}|${m.direction}|${m.msgtype || ''}|${m.text}`)
+// export：diffNewInbound（B4）复用同一条身份键规则去重计数，不再另写一份易漂移的判同逻辑。
+export const keyOf = (m: Msg) => (m.msgid ? `id:${m.msgid}` : `${m.at}|${m.direction}|${m.msgtype || ''}|${m.text}`)
 
 /** 归一进流：无时间戳/脏形状不进（防脏消息撑乱时间轴）。 */
 export function normalizeMsgs(raw: unknown): Msg[] {
@@ -24,7 +26,14 @@ export function normalizeMsgs(raw: unknown): Msg[] {
     const at = Number(m.at)
     if (!Number.isFinite(at) || at <= 0) continue // 无时间戳不进流
     const msgid = m.msgid ? String(m.msgid) : undefined
-    out.push({ direction: m.direction === 'out' ? 'out' : 'in', text: String(m.text || ''), at, msgtype: String(m.msgtype || ''), msgid })
+    out.push({
+      direction: m.direction === 'out' ? 'out' : 'in',
+      text: String(m.text || ''),
+      at,
+      msgtype: String(m.msgtype || ''),
+      msgid,
+      hasMedia: !!m.hasMedia,
+    })
   }
   return out
 }
@@ -80,6 +89,63 @@ export function mapQueue(list: unknown, now: number): QueueItem[] {
     })
   }
   return out
+}
+
+// 快捷回复 + 页内提醒（批 B4·预审裁决：listKb 后端零改动直接复用，不新建 listQuickReplies）。
+export interface KbEntry {
+  key: string
+  question: string
+  answer: string
+  category: string
+  enabled: boolean
+  order: number
+}
+
+/** 快捷回复过滤：剔除 enabled===false / 空 question 或 answer 的条目（与 dispatch.ts bot 侧「未启用跳过」语义
+ *  对齐）；保留 listKb 现行返回序（category→order），不额外排序。 */
+export function filterQuickReplies(list: unknown): KbEntry[] {
+  if (!Array.isArray(list)) return []
+  const out: KbEntry[] = []
+  for (const e of list as Record<string, any>[]) {
+    if (!e || typeof e !== 'object') continue
+    if (e.enabled === false) continue
+    const question = String(e.question || '').trim()
+    const answer = String(e.answer || '').trim()
+    if (!question || !answer) continue
+    out.push({
+      key: String(e.key || ''),
+      question,
+      answer,
+      category: String(e.category || ''),
+      enabled: true,
+      order: Number(e.order) || 0,
+    })
+  }
+  return out
+}
+
+/** 提醒聚合公式一半——队列新增会话数：首拉（prevIds 为 null）不算新增，只数 nextIds 里没见过的 id。 */
+export function diffNewSessions(prevIds: string[] | null, nextIds: string[]): number {
+  if (!prevIds) return 0
+  const seen = new Set(prevIds)
+  let n = 0
+  for (const id of nextIds) if (!seen.has(id)) n++
+  return n
+}
+
+/** 提醒聚合公式另一半——失焦期间当前打开会话的新入站消息数：首拉（prevMsgs 为 null）不算新增；出站消息不计；
+ *  身份判同复用 mergeThread 同一套 keyOf（游标边界重复不重计）。 */
+export function diffNewInbound(prevMsgs: Msg[] | null, nextMsgs: Msg[]): number {
+  if (!prevMsgs) return 0
+  const seen = new Set(prevMsgs.map(keyOf))
+  let n = 0
+  for (const m of nextMsgs) if (m.direction === 'in' && !seen.has(keyOf(m))) n++
+  return n
+}
+
+/** 标题角标（恒幂等）：n>0 前缀 `(n) `，n=0 原样返回 base——反复以 n=0 调用不叠加/不残留前缀。 */
+export function titleWithBadge(base: string, n: number): string {
+  return n > 0 ? `(${n}) ${base}` : base
 }
 
 /** 坐席动作错误人话（原文兜底）。 */

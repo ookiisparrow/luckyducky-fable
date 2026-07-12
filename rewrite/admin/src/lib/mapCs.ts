@@ -179,6 +179,7 @@ export interface KbRow {
   category: string
   enabled: boolean
   order: number
+  featured: boolean // 精选（R37b·公开读 getPublicFaq 只回此=true 的条目·默认不精选）
 }
 
 export function normalizeKb(list: unknown): KbRow[] {
@@ -190,6 +191,7 @@ export function normalizeKb(list: unknown): KbRow[] {
     category: String(e.category || 'other'),
     enabled: e.enabled !== false,
     order: Number(e.order) || 0,
+    featured: e.featured === true,
   }))
 }
 
@@ -215,6 +217,77 @@ export function duplicateNodeIds(ids: string[]): string[] {
     else seen.add(id)
   }
   return [...dup]
+}
+
+export interface CsatEntryVM {
+  id: string // 行级唯一键（后端 listCsatEntries 回传·确定性 _id）——供翻页按 id 去重，同 Orders/Refunds/Conversations 范式
+  timeLabel: string
+  score: number
+  note: string
+  sessionKey: string
+  bad: boolean // 差评（≤3 星）——用于「查会话」按钮与行高亮，同 listCsatEntries maxScore=3 的口径
+}
+
+/** 满意度明细行（批 B6·listCsatEntries）：时间人话化，note/sessionKey 无则回 '—'/''。 */
+export function mapCsatEntries(list: unknown): CsatEntryVM[] {
+  if (!Array.isArray(list)) return []
+  return (list as Record<string, any>[]).filter(Boolean).map((e) => {
+    const score = Number(e.score) || 0
+    return {
+      id: String(e.id || ''),
+      timeLabel: dateTime(e.at),
+      score,
+      note: String(e.note || '') || '—',
+      sessionKey: String(e.sessionKey || ''),
+      bad: score > 0 && score <= 3,
+    }
+  })
+}
+
+// —— 质检抽检（批 B7）——
+// sessionKey＝csSession._id（形如 `wxkf:<openKfId>:<externalUserId>`）——**不是** externalUserId，与上面
+// CsatEntryVM.sessionKey（直接回 externalUserId）语义不同：本页「查会话」跳检索仍须用 externalUserId 字段
+// （见 QcRowVM.externalUserId），别把 sessionKey 当 externalUserId 传给 searchConversations。
+export interface QcRowVM {
+  sessionKey: string
+  externalUserId: string
+  tailId: string // 客户尾号（脱敏展示）
+  sampledLabel: string
+  messageCount: number | null // null=聚合失败/无数据源（诚实省略，非 0）
+  avgResponseLabel: string // 首响人话；无聚合数据回 '—'
+  scored: boolean
+  score: number
+  note: string
+}
+
+// 客户标识脱敏展示（同 mapMoney.ts maskPhone 精神：短号原样、不假掩）
+function tailId(v: unknown): string {
+  const s = String(v || '')
+  return s.length > 6 ? '…' + s.slice(-6) : s || '—'
+}
+
+export function mapQcRow(r: unknown): QcRowVM | null {
+  const d = (r && typeof r === 'object' ? r : {}) as Record<string, any>
+  const sessionKey = String(d.sessionKey || '')
+  if (!sessionKey) return null
+  const hasAgg = typeof d.messageCount === 'number'
+  const qc = d.qc && typeof d.qc === 'object' ? d.qc : null
+  return {
+    sessionKey,
+    externalUserId: String(d.externalUserId || ''),
+    tailId: tailId(d.externalUserId),
+    sampledLabel: dateTime(d.qcSampledAt),
+    messageCount: hasAgg ? Number(d.messageCount) : null,
+    avgResponseLabel: hasAgg ? msHuman(d.avgResponseMs) : '—',
+    scored: !!qc,
+    score: qc ? Number(qc.score) || 0 : 0,
+    note: qc ? String(qc.note || '') : '',
+  }
+}
+
+export function mapQcRows(list: unknown): QcRowVM[] {
+  if (!Array.isArray(list)) return []
+  return (list as unknown[]).map(mapQcRow).filter((x): x is QcRowVM => x !== null)
 }
 
 export function mapCsat(r: unknown): { total: number; avg: string; dist: Array<{ star: string; n: number }>; withNote: number; approxNote: string } | null {

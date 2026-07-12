@@ -17,6 +17,7 @@ const PageContent = () => import('./pages/PageContent.vue')
 const HelpVideos = () => import('./pages/HelpVideos.vue')
 const Courses = () => import('./pages/Courses.vue')
 const Cards = () => import('./pages/Cards.vue')
+const ScmOverview = () => import('./pages/ScmOverview.vue')
 const ScmMaterials = () => import('./pages/ScmMaterials.vue')
 const ScmPurchase = () => import('./pages/ScmPurchase.vue')
 const ScmOutwork = () => import('./pages/ScmOutwork.vue')
@@ -35,6 +36,7 @@ const Csat = () => import('./pages/Csat.vue')
 const Checkpoints = () => import('./pages/Checkpoints.vue')
 const Inspect = () => import('./pages/Inspect.vue')
 const Anomalies = () => import('./pages/Anomalies.vue')
+const ConfigChecklist = () => import('./pages/ConfigChecklist.vue')
 
 export const router = createRouter({
   history: createWebHashHistory(),
@@ -62,6 +64,7 @@ export const router = createRouter({
         { path: 'kb', component: Kb },
         { path: 'csat', component: Csat },
         { path: 'checkpoints', component: Checkpoints },
+        { path: 'scm-overview', component: ScmOverview },
         { path: 'scm-materials', component: ScmMaterials },
         { path: 'scm-purchase', component: ScmPurchase },
         { path: 'scm-outwork', component: ScmOutwork },
@@ -75,6 +78,7 @@ export const router = createRouter({
         { path: 'external', component: External },
         { path: 'inspect', component: Inspect },
         { path: 'anomalies', component: Anomalies },
+        { path: 'config-checklist', component: ConfigChecklist },
       ],
     },
   ],

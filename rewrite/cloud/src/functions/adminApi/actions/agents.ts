@@ -1,5 +1,6 @@
 import { reply, ensure, str, newSalt, kdf, keyMatches, alertIfScanAtCap, type Ctx } from '../lib'
 import { notifyAlert } from '../../../kit'
+import { COLLECTIONS } from '@ldrw/shared'
 
 // 外包账号管理（后台360工作站 §1.5·B5.2·承面C 车道 C·根因#3）：商户超管建/停/列外包坐席账号
 // （adminConfig 多账号·role=outsourced 最小权·checkKey 据 keyHash 认账号 + disabled 停用·骨架已在 lib.ts）。
@@ -136,19 +137,52 @@ export async function disableAgent({ db, data }: Ctx) {
 }
 
 // 列外包账号（白名单字段·不回 keyHash·回 wecomUserId 供超管看绑没绑）：id/name/role/disabled/createdAt/wecomUserId。
+// B6 看板扩展（坐席个位量级·per-agent 三次有界读/count，无翻页需求）：
+//   status/stateUpdatedAt ← agentState 文档（agentDesk.ts setAgentStatus 写；无档兜底 'offline'/null）。
+//   activeCount ← csSession {agentId,status:'active'} count（查询写法照 agentDesk.ts activeCountFor 同构
+//     内联——文件级隔离先例，不 import 该私有 helper）。
+//   todayClosed ← csSession {agentId,status:'closed', updatedAt≥今日零点} count——现场核实：closeConversation
+//     转 closed 时 transition() 的 patch 只写 `{ updatedAt: now }`，没有独立 closedAt 字段（见 agentDesk.ts
+//     closeConversation），故这里的时间字段就是 updatedAt，不是 closedAt。
+//   零写路径：本 action 只读 adminConfig/agentState/csSession 三个集合，原 CRUD 四个 action 零改动。
 export async function listAgents({ db }: Ctx) {
   const r = await db
     .collection('adminConfig')
     .where({ role: AGENT_ROLE })
     .get()
     .catch(() => ({ data: [] }))
-  const agents = (r.data || []).map((a: any) => ({
-    id: a._id,
-    name: a.name || '',
-    role: a.role,
-    disabled: !!a.disabled,
-    createdAt: a.createdAt || null,
-    wecomUserId: a.wecomUserId || '',
-  }))
+  const rows = (r.data || []) as any[]
+  const _ = db.command
+  // 今日零点（CST +08:00）：沿用 reconciliation.ts dayStartMs 的口径同构内联（预审拍板点 3）。
+  const CST = 8 * 3600_000
+  const todayKey = new Date(Date.now() + CST).toISOString().slice(0, 10)
+  const todayStartMs = Date.parse(todayKey + 'T00:00:00+08:00')
+  const agents = await Promise.all(
+    rows.map(async (a: any) => {
+      const [stateGot, activeR, closedR] = await Promise.all([
+        db.collection(COLLECTIONS.agentState).doc(a._id).get().catch(() => null),
+        db.collection(COLLECTIONS.csSession).where({ agentId: a._id, status: 'active' }).count().catch(() => ({ total: 0 })),
+        // todayStartMs 恒整数 ms：gt(todayStartMs-1) 等价 gte(todayStartMs)（桩/真 sdk 均无 gte 算子）。
+        db
+          .collection(COLLECTIONS.csSession)
+          .where({ agentId: a._id, status: 'closed', updatedAt: _.gt(todayStartMs - 1) })
+          .count()
+          .catch(() => ({ total: 0 })),
+      ])
+      const st = stateGot && stateGot.data
+      return {
+        id: a._id,
+        name: a.name || '',
+        role: a.role,
+        disabled: !!a.disabled,
+        createdAt: a.createdAt || null,
+        wecomUserId: a.wecomUserId || '',
+        status: (st && st.status) || 'offline',
+        stateUpdatedAt: (st && st.updatedAt) || null,
+        activeCount: (activeR && activeR.total) || 0,
+        todayClosed: (closedR && closedR.total) || 0,
+      }
+    })
+  )
   return reply(200, { ok: true, agents })
 }

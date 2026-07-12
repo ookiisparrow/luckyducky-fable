@@ -28,10 +28,10 @@ let loaded = false
 
 // 预设 FAQ（换皮删了·键按「分类:主题」＝客服菜单叶子 id 口径填好·owner 按实际菜单微调）
 const PRESET: Omit<KbRow, 'order'>[] = [
-  { key: 'logistics:eta', question: '什么时候发货 / 多久到？', answer: '付款后 48 小时内发货，快递一般 3-5 天到；物流单号在「我的订单」可查。', category: 'logistics', enabled: true },
-  { key: 'activation:howto', question: '激活码怎么用？', answer: '收到材料包后扫卡片上的二维码，输入激活码即可进入课程。', category: 'activation', enabled: true },
-  { key: 'aftersale:refund', question: '可以退货退款吗？', answer: '激活卡未拆封可 7 天无理由退；已激活进课不支持退款。', category: 'aftersale', enabled: true },
-  { key: 'tutorial:start', question: '零基础能学会吗？', answer: '可以，套装配分步视频，跟着做就能完成第一只小棉鸭。', category: 'tutorial', enabled: true },
+  { key: 'logistics:eta', question: '什么时候发货 / 多久到？', answer: '付款后 48 小时内发货，快递一般 3-5 天到；物流单号在「我的订单」可查。', category: 'logistics', enabled: true, featured: false },
+  { key: 'activation:howto', question: '激活码怎么用？', answer: '收到材料包后扫卡片上的二维码，输入激活码即可进入课程。', category: 'activation', enabled: true, featured: false },
+  { key: 'aftersale:refund', question: '可以退货退款吗？', answer: '激活卡未拆封可 7 天无理由退；已激活进课不支持退款。', category: 'aftersale', enabled: true, featured: false },
+  { key: 'tutorial:start', question: '零基础能学会吗？', answer: '可以，套装配分步视频，跟着做就能完成第一只小棉鸭。', category: 'tutorial', enabled: true, featured: false },
 ]
 
 async function reload() {
@@ -46,7 +46,7 @@ async function reload() {
 
 // B3：新建 FAQ 键留空由人填（换皮自动生成随机 faq-<ts>·永不匹配菜单叶子·bot 命不中）
 function addRow() {
-  rows.value.push({ key: '', question: '', answer: '', category: 'other', enabled: true, order: rows.value.length })
+  rows.value.push({ key: '', question: '', answer: '', category: 'other', enabled: true, order: rows.value.length, featured: false })
 }
 function loadPreset() {
   confirmKey.value = '' // 载入预设即复位危险态（P1·同 reload 约定·批3 规格同类扩面）
@@ -109,7 +109,7 @@ onMounted(reload)
 
 <template>
   <div class="ld-page kb">
-    <PageHeader title="知识库（FAQ）" sub="客服机器人和坐席快捷回复读的是同一份；「键」须＝客服菜单叶子 id（如 logistics:eta），bot 据此命中。保存整册覆盖。">
+    <PageHeader title="知识库（FAQ）" sub="客服机器人和坐席快捷回复读的是同一份；「键」须＝客服菜单叶子 id（如 logistics:eta），bot 据此命中。勾「精选」的条目会公开下发到小程序播放页求助面板常见问题区（R37b）。保存整册覆盖。">
       <UiButton variant="ghost" @click="loadPreset">载入预设 FAQ</UiButton>
       <UiButton :disabled="busy" @click="save">{{ busy ? '保存中…' : '保存整册' }}</UiButton>
     </PageHeader>
@@ -132,6 +132,7 @@ onMounted(reload)
             </select>
             <input v-model="row.question" placeholder="问题（≤200 字）" maxlength="200" class="kb-q" />
             <label class="kb-en"><input v-model="row.enabled" type="checkbox" /><span>启用</span></label>
+            <label class="kb-en" title="勾选后公开下发到小程序播放页求助面板常见问题区（R37b）"><input v-model="row.featured" type="checkbox" /><span>精选</span></label>
             <button
               class="kb-del"
               :class="{ warn: confirmKey === 'd:' + i }"
