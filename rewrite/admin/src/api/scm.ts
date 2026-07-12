@@ -41,3 +41,6 @@ export const listAssemblies = (page?: Page) => client.post('listAssemblies', pag
 
 export const getRestockPlan = (targets: Array<{ productId: string; sets: number }>) => client.post('getRestockPlan', { targets })
 export const getFgSummary = () => client.post('getFgSummary')
+
+// 总览（批 B2）：低库存预警 + 应付未结按织女分组 + 在途采购/外协计数 + 最近流水，只读聚合着陆页
+export const getScmOverview = () => client.post('getScmOverview')

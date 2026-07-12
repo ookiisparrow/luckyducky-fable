@@ -72,6 +72,11 @@ const NAV: Array<{ group: string; icon: Component; solo?: boolean; items: Array<
     group: '进销存',
     icon: Factory,
     items: [
+      // 总览（批 B2）：着陆页，供应链组顶部——不进 ScmFlowTabs 5 步流程条单源（lib/scmFlow.ts
+      // SCM_FLOW 焊死=5，见 scm-ui.test.ts「SCM 流程条单源同步」golden：总览是流程之上的聚合入口，
+      // 不是流程步骤，故只挂侧栏、不挂流程条——该 golden 断言已同批改写以显式放行这一条额外项，
+      // 而非放宽成「随便漂移」（仍锁「flow 5 步 ⊆ Shell 供应链组」不变量,见该测试）。
+      { label: '总览', path: '/scm-overview' },
       { label: '物料与供应商', path: '/scm-materials' },
       { label: '采购单', path: '/scm-purchase' },
       { label: '外协单', path: '/scm-outwork' },

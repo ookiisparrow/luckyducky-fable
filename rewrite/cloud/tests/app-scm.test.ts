@@ -1,5 +1,6 @@
 // 黄金 inventory-scm §D（门1 唯一入出账口）/§E（物料主档）/§F（采购幂等）/§G（外协发收结算）
-// /§H（配方解析与快照冻结）/§I（组装扣料入成品）/§K（备货计算器与产销统计）/§N（RBAC 默认拒）（守卫 rw-scm-golden）。
+// /§H（配方解析与快照冻结）/§I（组装扣料入成品）/§K（备货计算器与产销统计）/§L（总览聚合·批 B2）
+// /§N（RBAC 默认拒）（守卫 rw-scm-golden）。
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { control } from 'wx-server-sdk'
 import { main as adminApi } from '../src/functions/adminApi/index'
@@ -478,5 +479,85 @@ describe('列表分页行为（B1·根因#7·债 #159）：listPurchases 首/次
     const l2 = await post('listLedger', SUPER, { materialId: 'stuffing', limit: 2, cursor: l1.nextCursor })
     expect(l2.list.length).toBe(1)
     expect(l2.hasMore).toBe(false)
+  })
+})
+
+describe('总览（黄金 §L：批 B2 聚合着陆页——只读、不动账）', () => {
+  it('大白话：RBAC 默认拒——外包访问 getScmOverview 403（未登记 ACTION_CAPS→仅超管）', async () => {
+    expect((await post('getScmOverview', A1, {})).status).toBe(403)
+  })
+
+  it('大白话：缺料预警＝stock<threshold 才出行，gap=threshold-qty 降序；带结料建议外协、其余建议采购；够量的不出行', async () => {
+    control.seed('materials', [
+      mat('yarn:pink:L:knotted', 2, { threshold: 10 }), // 缺 8（带结→建议外协）
+      mat('yarn:blue:M:raw', 5, { threshold: 8 }), // 缺 3（非带结→建议采购）
+      mat('stuffing', 9, { threshold: 3 }), // 够量，不出行
+      mat('card:p1', 0, { threshold: 0 }), // threshold=0 且 stock=0：0<0 为假，不出行
+    ])
+    const r = await post('getScmOverview', SUPER, {})
+    expect(r.ok).toBe(true)
+    expect(r.lowStock).toEqual([
+      { materialId: 'yarn:pink:L:knotted', name: 'yarn:pink:L:knotted', uomLabel: '件', qty: 2, threshold: 10, gap: 8, suggest: 'outwork' },
+      { materialId: 'yarn:blue:M:raw', name: 'yarn:blue:M:raw', uomLabel: '件', qty: 5, threshold: 8, gap: 3, suggest: 'purchase' },
+    ])
+  })
+
+  it('大白话：应付未结＝外协单 delivered（未 settled）按织女分组求和 payableFen（分整数）+ 计单据数；issued/settled/draft 不计入；合计=各组之和', async () => {
+    control.seed('suppliers', [
+      { _id: 'w1', name: '织女一号', type: 'outworker' },
+      { _id: 'w2', name: '织女二号', type: 'outworker' },
+    ])
+    control.seed('outworkOrders', [
+      { _id: 'o1', workerId: 'w1', status: 'delivered', payableFen: 900, issueLines: [] },
+      { _id: 'o2', workerId: 'w1', status: 'delivered', payableFen: 300, issueLines: [] },
+      { _id: 'o3', workerId: 'w2', status: 'delivered', payableFen: 500, issueLines: [] },
+      { _id: 'o4', workerId: 'w2', status: 'settled', payableFen: 999, issueLines: [] }, // 已结算不计入未结应付
+      { _id: 'o5', workerId: 'w1', status: 'issued', issueLines: [] }, // 未收货尚无定格应付，不计入
+    ])
+    const r = await post('getScmOverview', SUPER, {})
+    expect(r.payables).toEqual([
+      { supplierId: 'w1', name: '织女一号', payableFen: 1200, orderCount: 2 },
+      { supplierId: 'w2', name: '织女二号', payableFen: 500, orderCount: 1 },
+    ])
+    expect(r.payableTotalFen).toBe(1700)
+    expect(r.truncated).toBeUndefined() // 未超 200 单扫描上限，不标 truncated
+  })
+
+  it('大白话：在途＝采购 status=ordered 计数 + 外协 status=issued（已发未全收）计数，走精确 count 不受 limit 影响', async () => {
+    control.seed('suppliers', [{ _id: 's1', name: '毛线厂', type: 'factory' }, { _id: 'w1', name: '织女一号', type: 'outworker' }])
+    control.seed('purchaseOrders', [
+      { _id: 'p1', supplierId: 's1', status: 'ordered', lines: [], totalFen: 0, createdAt: 1 },
+      { _id: 'p2', supplierId: 's1', status: 'ordered', lines: [], totalFen: 0, createdAt: 2 },
+      { _id: 'p3', supplierId: 's1', status: 'draft', lines: [], totalFen: 0, createdAt: 3 }, // 草稿不算在途
+      { _id: 'p4', supplierId: 's1', status: 'received', lines: [], totalFen: 0, createdAt: 4 }, // 已收货不算在途
+    ])
+    control.seed('outworkOrders', [
+      { _id: 'o1', workerId: 'w1', status: 'issued', issueLines: [] },
+      { _id: 'o2', workerId: 'w1', status: 'draft', issueLines: [] }, // 未发料不算在途
+      { _id: 'o3', workerId: 'w1', status: 'delivered', issueLines: [] }, // 已全收不算在途
+    ])
+    const r = await post('getScmOverview', SUPER, {})
+    expect(r.inTransit).toEqual({ purchaseCount: 2, outworkCount: 1 })
+  })
+
+  it('大白话：最近流水取全库最新 8 条（按 at 倒序）——不管流水总量多大', async () => {
+    control.seed('materials', [mat('stuffing', 0)])
+    control.seed(
+      'stockLedger',
+      Array.from({ length: 12 }, (_, i) => ({ _id: 'adjust:l' + i + ':stuffing', itemKey: 'stuffing', delta: 1, docType: 'adjust', operator: 'admin', reason: 'x', at: 1000 + i }))
+    )
+    const r = await post('getScmOverview', SUPER, {})
+    expect(r.recentLedger.length).toBe(8)
+    expect(r.recentLedger[0]._id).toBe('adjust:l11:stuffing') // 最新一条在前
+    expect(r.recentLedger.map((l: any) => l.at)).toEqual([1011, 1010, 1009, 1008, 1007, 1006, 1005, 1004])
+  })
+
+  it('大白话：全部干净时三块皆空、不编数——不虚构缺口/应付/流水', async () => {
+    const r = await post('getScmOverview', SUPER, {})
+    expect(r.lowStock).toEqual([])
+    expect(r.payables).toEqual([])
+    expect(r.payableTotalFen).toBe(0)
+    expect(r.inTransit).toEqual({ purchaseCount: 0, outworkCount: 0 })
+    expect(r.recentLedger).toEqual([])
   })
 })

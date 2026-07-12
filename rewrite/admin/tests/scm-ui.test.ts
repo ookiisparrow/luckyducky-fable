@@ -83,14 +83,19 @@ describe('未填差异位总览（全产品 − 已建 profile）', () => {
   })
 })
 
-// ScmFlowTabs 顶部流程条来源（旧线还原·换皮丢）：SCM_FLOW 顺序单源 path 集合必须 === Shell 侧栏「供应链」组，
-// 否则流程条会链到死路由 / 与侧栏漂移。Shell↔router 由 rw-admin-nav-route-synced 兜，故 ===Shell ⇒ ⊆router。
+// ScmFlowTabs 顶部流程条来源（旧线还原·换皮丢）：SCM_FLOW 顺序单源 path 集合必须 === Shell 侧栏「供应链」组
+// 的「流程步骤」子集，否则流程条会链到死路由 / 与侧栏漂移。Shell↔router 由 rw-admin-nav-route-synced 兜，
+// 故 ⊆Shell ⇒ ⊆router。批 B2 新增 /scm-overview：着陆页在流程之上（卡片直达 5 步中的某一步），
+// 不是流程步骤本身——只挂侧栏顶部、不进 ScmFlowTabs 5 步单源（lib/scmFlow.ts 不因此改动）。守卫收紧为
+// 「SCM_FLOW ⊆ Shell 供应链组」+「Shell 供应链组 = SCM_FLOW ∪ {总览}」，而非放宽成两边随便漂移。
 describe('SCM 流程条单源同步（防死链/防漂移）', () => {
-  it('大白话：SCM_FLOW 的路由集合与 Shell 侧栏供应链组一字不差', () => {
+  it('大白话：SCM_FLOW（5 步流程）⊆ Shell 侧栏供应链组；供应链组 = 流程 5 步 + 总览这一个额外着陆页，不多不少', () => {
     const shellScmPaths = new Set((shellRaw.match(/\/scm-[a-z]+/g) || []))
     const flowPaths = new Set(SCM_FLOW.map((s) => s.to))
     expect(flowPaths.size).toBe(5)
-    expect([...flowPaths].sort()).toEqual([...shellScmPaths].sort()) // 集合相等（顺序各自可不同·内容不许漂移）
+    expect([...flowPaths].every((p) => shellScmPaths.has(p))).toBe(true) // 流程 5 步全部在侧栏（防漏挂）
+    const extra = [...shellScmPaths].filter((p) => !flowPaths.has(p))
+    expect(extra).toEqual(['/scm-overview']) // 侧栏比流程只多这一项——总览着陆页，非流程步骤
     expect(SCM_FLOW.every((s) => s.label && s.icon)).toBe(true) // 每步有中文标签+图标
   })
 })
