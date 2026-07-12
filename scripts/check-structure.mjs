@@ -2988,8 +2988,8 @@ export const repoChecks = [
         }
       }
       // ③ 用户可见的静态品牌页（.html 不被 walk 扫·反向自检逮出的假绿·根因#8）——逐个显式钉死
-      //    /q 扫码落地页 + site/index.html（历史遗留单页落地页·根路径自 2026-07-09 M5 起由 rewrite/site 提供·处置待拍板）
-      for (const page of ['packages/admin/public/q/index.html', 'site/index.html']) {
+      //    /q 扫码落地页（旧 site/ 单页落地页已删——用户拍板 2026-07-12·根路径由 rewrite/site 提供、④段扫）
+      for (const page of ['packages/admin/public/q/index.html']) {
         const absP = join(ROOT, page)
         if (existsSync(absP))
           for (const ban of BANNED)

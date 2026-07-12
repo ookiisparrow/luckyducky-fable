@@ -8,7 +8,7 @@
 | 包 | 里程碑 | 内容 | 状态 |
 |---|---|---|---|
 | `rewrite/golden/` | M0 | 黄金用例册：旧线 1033 测试（123 文件）的行为断言提炼成栈无关验收基准，约 650 条·七册（orders-money / kit-security / learning-content / cs-agent / inventory-scm / frontend-store / admin-misc），123 文件全认领无静默丢弃 | ✅ 2026-07-04 |
-| `rewrite/spike-skyline/` | M0 | Skyline 真机 spike——已验（2026-07-04）：三存疑全过、T4 过、T5 吸顶双引擎未吸（增益未证实；后 M2 全线拍板首发全 WebView，目录页刻意绕开 sticky/scroll-view 族、原「纯结构复验后即删」的复验未发生） | ✅ 已验·工程去留待拍板 |
+| `rewrite/spike-skyline/` | M0 | Skyline 真机 spike——已验（2026-07-04）：三存疑全过、T4 过、T5 吸顶双引擎未吸（增益未证实；后 M2 全线拍板首发全 WebView，目录页刻意绕开 sticky/scroll-view 族、原「纯结构复验后即删」的复验未发生） | ✅ 已验·用户拍板保留（2026-07-12） |
 | `rewrite/mp/` | M2 | 微信原生小程序（TypeScript + glass-easel·首发全 WebView 拍板）——21 页 | ✅ 代码面收齐（2026-07-07）·待微信后台上传/提审/发布 |
 | `rewrite/shared/` | M1 | 新线契约 `@ldrw/shared`（Fen 品牌类型/状态机声明类型级派生/集合册/错误码册·与旧线 parity 焊死） | ✅ |
 | `rewrite/cloud/` | M1 | 云函数重写 `@ldrw/cloud`（kit 八件横切原语 + 6 域 16 函数） | ✅ 2026-07-09 M5 同名替换上线·云端唯一版本 |
