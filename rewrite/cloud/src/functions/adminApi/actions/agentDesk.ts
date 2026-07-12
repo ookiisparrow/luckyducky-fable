@@ -1,5 +1,15 @@
 import { reply, str, type Ctx } from '../lib'
-import { transition, pageParams, pageQuery, assertOwnedByAgent, assertDataShareConsent, sendAgentCard, AGENT_DESK_URL, notifyAlert } from '../../../kit'
+import {
+  transition,
+  pageParams,
+  pageQuery,
+  assertOwnedByAgent,
+  assertDataShareConsent,
+  sendAgentCard,
+  AGENT_DESK_URL,
+  notifyAlert,
+  getTempUrl,
+} from '../../../kit'
 import { COLLECTIONS } from '@ldrw/shared'
 import { assembleCustomer360 } from '../customer360/orchestrator'
 
@@ -256,10 +266,70 @@ export async function getThread(ctx: Ctx): Promise<any> {
       text: m.text || '',
       at: Number(m.at) || 0,
       msgid: inboundMsgid(m._id), // bug sweep II L1：入站客户消息全局唯一 id（无则不带此字段·出站/历史档回退旧键去重）
+      hasMedia: !!(m.mediaId || m.fileId), // B5：坐席台据此渲染图片气泡（未加载=mediaId·已加载过=fileId）
     }))
   const nextCursor = list.length ? list[list.length - 1].at : Number(data && data.cursor) || undefined
   const openid = await resolveOpenid(db, s)
   return reply(200, { ok: true, session: toView(s, openid), messages, nextCursor })
+}
+
+// ── ⑤.5 getMediaUrl：顾客发图坐席可见（B5·图片消息下载延迟到坐席首次请求·平台接缝单点#12）──
+// 双闸：① 分配 scope（scopedLoad→assertOwnedByAgent·外包只能拉自己在接会话的图）；② 消息真属于本会话
+// （防跨会话拉图——scope 闸只护「会话本身」，这里再核「消息-会话」对应关系：msgId 对应消息行须与本会话
+// 同一 externalUserId+openKfId，不能借自己名下会话号偷看别会话的图）。
+// 缓存命中（消息行已有 fileId·云存储缓存）直接换临时 URL，不重新下载；否则经 cs/kfMedia 服务端接缝
+// （token/secret 只在 cs 域·跨函数模式同 sendAgentMessage 调 kfSend）下载 media_id（3 天有效·过期如实
+// 回 EXPIRED）→ uploadFile 落 cs-media/<msgId>（幂等：固定云路径，重复下载覆盖同路径无害）→ 回写
+// fileId → 换临时 URL。下载/上传失败经 notifyAlert 留痕（动作类失败禁静默·根因#14）；不重试风暴（前端手动重试）。
+export async function getMediaUrl(ctx: Ctx): Promise<any> {
+  const { db, cloud, data } = ctx
+  const p = principal(ctx)
+  const sessionId = str(data && data.sessionId, 200)
+  const msgId = str(data && data.msgId, 200)
+  if (!sessionId || !msgId) return reply(400, { ok: false, error: 'BAD_ARGS' })
+  const sl = await scopedLoad(db, p, sessionId)
+  if (sl.code) return reply(sl.code, { ok: false, error: sl.code === 404 ? 'NOT_FOUND' : 'FORBIDDEN' }) // 分配 scope
+  const s = sl.s
+  const docId = INBOUND_ID_PREFIX + msgId
+  const got = await db.collection(COLLECTIONS.conversations).doc(docId).get().catch(() => null)
+  const row = got && got.data
+  if (!row) return reply(404, { ok: false, error: 'MSG_NOT_FOUND' })
+  // 消息归属会话校验（防跨会话拉图）：非本会话的消息一律拒，即便调用者确实拥有 sessionId 本身
+  if (String(row.externalUserId || '') !== String(s.externalUserId || '') || String(row.openKfId || '') !== String(s.openKfId || '')) {
+    return reply(403, { ok: false, error: 'NOT_IN_SESSION' })
+  }
+  // 缓存命中：已落云存储 → 直接换临时 URL，不再触发下载
+  if (row.fileId) {
+    const url = await getTempUrl(row.fileId)
+    if (url) return reply(200, { ok: true, url, cached: true })
+    await notifyAlert('anomaly', 'getMediaUrl', 'CACHED_URL_FAILED', { sessionId, msgId }) // 罕见：fileId 在但换不到 URL（云存储侧异常）
+  }
+  const mediaId = String(row.mediaId || '')
+  if (!mediaId) return reply(200, { ok: false, error: 'NO_MEDIA' }) // 非图片消息/未落 mediaId
+  // 经 cs/kfMedia 服务端接缝下载（跨函数调用·平台接缝单点#12）
+  const res = await cloud.callFunction({ name: 'kfMedia', data: { mediaId } }).catch(() => null)
+  if (!res || !res.result) {
+    await notifyAlert('anomaly', 'getMediaUrl', 'MEDIA_CALL_FAILED', { sessionId, msgId })
+    return reply(200, { ok: false, error: 'DOWNLOAD_FAILED' })
+  }
+  const out = res.result
+  if (!out.ok) {
+    if (out.expired) return reply(200, { ok: false, error: 'EXPIRED' }) // media_id 3 天有效·如实语义
+    await notifyAlert('anomaly', 'getMediaUrl', 'MEDIA_DOWNLOAD_FAILED', { sessionId, msgId, errcode: out.errcode || 0 })
+    return reply(200, { ok: false, error: 'DOWNLOAD_FAILED' })
+  }
+  let fileId: string
+  try {
+    const up = await cloud.uploadFile({ cloudPath: `cs-media/${msgId}`, fileContent: Buffer.from(String(out.base64 || ''), 'base64') })
+    fileId = up.fileID
+  } catch {
+    await notifyAlert('anomaly', 'getMediaUrl', 'UPLOAD_FAILED', { sessionId, msgId })
+    return reply(200, { ok: false, error: 'UPLOAD_FAILED' })
+  }
+  await db.collection(COLLECTIONS.conversations).doc(docId).update({ data: { fileId } }).catch(() => {}) // fail-soft：回写失败不反噬本次返回，下次重下载兜底
+  const url = await getTempUrl(fileId)
+  if (!url) return reply(200, { ok: false, error: 'URL_FAILED' })
+  return reply(200, { ok: true, url, cached: false })
 }
 
 // ── ⑥ setAgentStatus：坐席切在线/示忙/离线（写 agentState·排队分配据此·B6.3）──

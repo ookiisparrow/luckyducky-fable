@@ -454,3 +454,61 @@ export async function kfCustomerBatchget(accessToken: string, externalUserId: st
   const c = j.customer_list && j.customer_list[0]
   return c && c.unionid ? String(c.unionid) : ''
 }
+
+// ───────────────────────── 媒体下载（kf/media/get·B5 顾客发图坐席可见·平台接缝单点#12） ─────────────────────────
+
+// media/get 成功回二进制文件流（content-type 按文件类型）、失败回 JSON {errcode,errmsg}——与上面
+// 全 JSON 的 FetchFn 形状不同，故另立一个二进制形态的 fetch 抽象（fetchImpl 可注入便于单测打桩）。
+type BinFetchFn = (url: string) => Promise<{
+  headers: { get(name: string): string | null }
+  json: () => Promise<any>
+  arrayBuffer: () => Promise<ArrayBuffer>
+}>
+
+// 内置 https 兜底（同上 httpsFetch 范式·补 content-type 头 + 二进制读取，JSON shim 不够用）。
+const httpsFetchBin: BinFetchFn = (url) =>
+  new Promise((resolve, reject) => {
+    const u = new URL(url)
+    const req = https.request({ method: 'GET', hostname: u.hostname, path: u.pathname + u.search }, (res) => {
+      const chunks: Buffer[] = []
+      res.on('data', (c) => chunks.push(c))
+      res.on('end', () => {
+        const buf = Buffer.concat(chunks)
+        const ct = String(res.headers['content-type'] || '')
+        resolve({
+          headers: { get: (name: string) => (name.toLowerCase() === 'content-type' ? ct : null) },
+          json: async () => JSON.parse(buf.toString('utf8') || '{}'),
+          // Buffer 可能是 node Buffer 池的切片视图，slice 出精确 range 的独立副本（不可直接拿 buf.buffer 整段）
+          arrayBuffer: async () => buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength),
+        })
+      })
+    })
+    req.on('error', reject)
+    req.end()
+  })
+
+const defaultBinFetch: BinFetchFn = (url) =>
+  typeof (globalThis as any).fetch === 'function' ? (globalThis as any).fetch(url) : httpsFetchBin(url)
+
+/**
+ * 下载顾客发图的临时素材（`kf/media/get`·media_id 3 天有效）：由 content-type 判定成功/失败——
+ * 二进制（非 application/json）＝下载成功；JSON（含 errcode）＝失败，统一按「过期/失效」语义回传
+ * （media_id 3 天有效是本场景压倒性的失败成因；真机 errcode 具体取值待接入真环境后校验，本期不做
+ * 更细分支——过度细分一个尚未验证过的平台错误码表属投机抽象）。
+ */
+export async function getKfMedia(
+  accessToken: string,
+  mediaId: string,
+  fetchImpl: BinFetchFn = defaultBinFetch
+): Promise<{ ok: true; buffer: Buffer } | { ok: false; expired: boolean; errcode?: number }> {
+  const url = `${QY}/kf/media/get?access_token=${encodeURIComponent(accessToken)}&media_id=${encodeURIComponent(mediaId)}`
+  const r = await fetchImpl(url)
+  const ct = (r.headers.get('content-type') || '').toLowerCase()
+  if (ct.includes('application/json')) {
+    const j = await r.json()
+    alert('security', 'wecom', 'KF_MEDIA_GET_FAILED', { errcode: j.errcode })
+    return { ok: false, expired: true, errcode: j.errcode }
+  }
+  const buffer = Buffer.from(await r.arrayBuffer())
+  return { ok: true, buffer }
+}

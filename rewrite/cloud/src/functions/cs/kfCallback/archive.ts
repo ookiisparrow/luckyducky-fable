@@ -37,6 +37,15 @@ export function incomingText(msg: any): string {
   return '[' + String((msg && msg.msgtype) || 'unknown') + ']'
 }
 
+/**
+ * 图片消息的 media_id（B5·企业微信客服 image 消息体：`image.media_id`）。回调不下载媒体（回调要快、
+ * fail-soft）——只落 mediaId，下载延迟到坐席台首次请求（adminApi getMediaUrl 经 cs/kfMedia 接缝拉取）。
+ * 非 image 消息返 ''（无媒体·getThread hasMedia 据此判定）。
+ */
+function msgMediaId(msg: any): string {
+  return String((msg && msg.msgtype === 'image' && msg.image && msg.image.media_id) || '')
+}
+
 /** 出站回复负载的可检索文本（text/msgmenu/miniprogram 各取人话·供质检与关键词检索）。 */
 export function payloadText(payload: any): string {
   if (!payload) return ''
@@ -72,6 +81,7 @@ export async function archiveInbound(db: any, msg: any, openKfId: string): Promi
         openid,
         msgtype: String((msg && msg.msgtype) || ''),
         text: incomingText(msg),
+        mediaId: msgMediaId(msg), // B5：image 消息落 media_id（非 image 为''）·getMediaUrl 据此下载
         // send_time 单位秒（真机·根因#8）→ 毫秒；缺则用入库时刻（出站在其后·时间轴顺序正确）
         at: Number(msg && msg.send_time) ? Number(msg.send_time) * 1000 : Date.now(),
       },

@@ -54,7 +54,7 @@ export function createStatusController(
 
 <script setup lang="ts">
 // 工作台单屏（M3 批8）：左=待接队列+我在接；中=会话窗（3s 轮询·卸载清理·合并去重）；右=360 侧栏（双闸）。
-import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
+import { ref, reactive, computed, onMounted, onBeforeUnmount } from 'vue'
 import { post, logout, listKb } from './api/client'
 import {
   mergeThread,
@@ -83,6 +83,43 @@ const panels = ref<Array<Record<string, any>>>([])
 const panelNote = ref('')
 const message = ref('')
 const busy = ref(false)
+
+// 顾客发图坐席可见（B5·图片气泡）：组件内缓存，键＝msgid（只有入站客户消息带 hasMedia/msgid，出站/无媒体不入这张表）。
+// 未点开＝表里没有该 key（视同 idle，占位卡「图片 · 点击加载」）；点击才触发 getMediaUrl 下载——回调侧不预下载，坐席按需拉取。
+type MediaState = { state: 'idle' | 'loading' | 'loaded' | 'expired' | 'error'; url?: string }
+const IDLE_MEDIA: MediaState = { state: 'idle' }
+const mediaCache = reactive<Record<string, MediaState>>({})
+
+function mediaOf(m: Msg): MediaState {
+  return (m.msgid && mediaCache[m.msgid]) || IDLE_MEDIA
+}
+
+/** 点开图片占位卡：已加载/加载中不重复触发；否则经 getMediaUrl 下载——按会话归属+消息归属双闸走既有后端校验，
+ *  前端只管展示三态（EXPIRED 显“已过期”不可重试；其余失败显“加载失败”可点重试；成功落 URL 供 <img> 显示）。 */
+async function loadMedia(m: Msg) {
+  if (!m.msgid || !currentId.value) return
+  const key = m.msgid
+  const existing = mediaCache[key]
+  if (existing && (existing.state === 'loaded' || existing.state === 'loading')) return
+  const sid = currentId.value // 快照归属会话（同 send/act/claim 治法：await 期间坐席可能已切会话，但该消息始终归 sid 所有）
+  mediaCache[key] = { state: 'loading' }
+  const r = await post('getMediaUrl', { sessionId: sid, msgId: key })
+  if (r.ok) mediaCache[key] = { state: 'loaded', url: String(r.url || '') }
+  else if (r.error === 'EXPIRED') mediaCache[key] = { state: 'expired' } // media_id 3 天有效·过期不提供重试（重试也无用）
+  else mediaCache[key] = { state: 'error' } // 其余失败（下载/上传异常）：显示重试
+}
+
+/** 图片占位卡点击：idle/失败态才触发下载，加载中/已加载/已过期忽略（已过期无重试路径）。 */
+function onMediaClick(m: Msg) {
+  const s = mediaOf(m).state
+  if (s === 'idle' || s === 'error') void loadMedia(m)
+}
+
+/** 查看大图：临时 URL 新标签页打开（组件内缓存的 URL，非持久链接）。 */
+function openMedia(m: Msg) {
+  const c = mediaOf(m)
+  if (c.state === 'loaded' && c.url) window.open(c.url, '_blank')
+}
 
 // 快捷回复 + 页内提醒（批 B4·预审裁决：listKb 后端零改动直接复用，不新建 listQuickReplies）。
 const NOTIFY_KEY = 'ldrw_agent_notify_enabled'
@@ -351,7 +388,17 @@ onBeforeUnmount(() => {
       <template v-if="currentId">
         <div class="thread">
           <div v-for="m in msgs" :key="m.at + m.direction + m.text" class="bubble" :class="m.direction">
-            <span class="text">{{ m.text || '[' + (m.msgtype || '非文本') + ']' }}</span>
+            <template v-if="m.msgtype === 'image' && m.hasMedia">
+              <div class="media" :class="mediaOf(m).state" @click="onMediaClick(m)">
+                <img v-if="mediaOf(m).state === 'loaded'" :src="mediaOf(m).url" class="media-img" @click.stop="openMedia(m)" />
+                <span v-else-if="mediaOf(m).state === 'loading'">加载中…</span>
+                <span v-else-if="mediaOf(m).state === 'expired'">图片已过期（超 3 天）</span>
+                <span v-else-if="mediaOf(m).state === 'error'">加载失败，点击重试</span>
+                <span v-else>图片 · 点击加载</span>
+              </div>
+              <button v-if="mediaOf(m).state === 'loaded'" class="ghost media-view" @click="openMedia(m)">查看大图</button>
+            </template>
+            <span v-else class="text">{{ m.text || '[' + (m.msgtype || '非文本') + ']' }}</span>
           </div>
         </div>
         <div class="composer">
@@ -500,6 +547,24 @@ main {
   margin-left: auto;
   background: var(--ld-bg-lilac);
   border-color: var(--ld-purple-tab);
+}
+.media {
+  cursor: pointer;
+  font-size: 13px;
+  color: var(--ld-purple-meta);
+}
+.media.error {
+  color: #c0392b;
+}
+.media-img {
+  max-width: 100%;
+  max-height: 220px;
+  border-radius: 8px;
+  display: block;
+  cursor: pointer;
+}
+.media-view {
+  margin-top: 6px;
 }
 .composer {
   display: flex;

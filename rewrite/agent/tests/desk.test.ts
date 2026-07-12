@@ -407,3 +407,53 @@ describe('claim() 会话代际快照（bug sweep II R5·五个会话敏感异步
     expect(refreshIdx).toBeGreaterThan(openIdx) // 列表刷新无条件、居末
   })
 })
+
+describe('hasMedia 透传（B5·顾客发图坐席可见·纯函数半边）', () => {
+  it('大白话：normalizeMsgs 把服务端 hasMedia 标记原样带过来（缺省视 false，脏值转布尔）；mergeThread 合并后保留', () => {
+    const withMedia = normalizeMsgs([{ at: 1000, direction: 'in', text: '[image]', msgtype: 'image', msgid: 'img-1', hasMedia: true }])
+    expect(withMedia[0].hasMedia).toBe(true)
+    const noMedia = normalizeMsgs([{ at: 1000, direction: 'in', text: '在吗', msgtype: 'text', msgid: 'txt-1' }])
+    expect(noMedia[0].hasMedia).toBe(false) // 缺省当 false（不渲染图片气泡·回退纯文本）
+    const merged = mergeThread([], [{ at: 2000, direction: 'in', text: '[image]', msgtype: 'image', msgid: 'img-2', hasMedia: true }])
+    expect(merged[0].hasMedia).toBe(true) // 合并进流后仍保留标记
+  })
+})
+
+describe('Desk.vue 图片气泡（B5·顾客发图坐席可见·源码断言：钉住真代码，不抄影子实现）', () => {
+  it('大白话：loadMedia 须快照点击时的会话 sid（同 send/act/claim 治法），已加载/加载中直接跳过不重复触发下载，EXPIRED 与其余失败分两态（前者不可重试、后者可重试）', () => {
+    const body = extractFunctionBody(scriptSetupSrc(), 'async function loadMedia(m: Msg) {')
+    expect(body).toMatch(/const sid = currentId\.value/) // 归属会话快照，不用随时会变的 currentId.value 直接发请求
+    expect(body).toMatch(/post\(\s*'getMediaUrl'\s*,\s*\{\s*sessionId:\s*sid\s*,\s*msgId:\s*key\s*\}\s*\)/)
+    // 已加载/加载中提前 return，不重复触发下载（幂等点击）
+    const guardIdx = body.search(/if\s*\(\s*existing\s*&&\s*\(\s*existing\.state === 'loaded' \|\| existing\.state === 'loading'\s*\)\s*\)\s*return/)
+    expect(guardIdx).toBeGreaterThan(-1)
+    // EXPIRED 与其余失败必须分两个不同分支落两个不同 state（不能把 EXPIRED 并进通用失败态）
+    const expiredIdx = body.indexOf("mediaCache[key] = { state: 'expired' }")
+    const errorIdx = body.indexOf("mediaCache[key] = { state: 'error' }")
+    expect(expiredIdx).toBeGreaterThan(-1)
+    expect(errorIdx).toBeGreaterThan(-1)
+    expect(expiredIdx).not.toBe(errorIdx)
+    expect(body).toMatch(/r\.error === 'EXPIRED'/) // EXPIRED 判定须读服务端语义码，不是猜的
+  })
+
+  it('大白话：占位卡点击只在 idle/失败态触发下载——加载中/已加载/已过期点击一律 no-op（已过期没有重试路径）', () => {
+    const body = extractFunctionBody(scriptSetupSrc(), 'function onMediaClick(m: Msg) {')
+    expect(body).toMatch(/if\s*\(\s*s === 'idle' \|\| s === 'error'\s*\)\s*void loadMedia\(m\)/)
+    expect(body).not.toMatch(/s === 'expired'/) // 已过期不应出现在触发下载的条件里
+  })
+
+  it('大白话：查看大图只在已加载态才 window.open，防止对占位/加载中/失败态误开空 URL', () => {
+    const body = extractFunctionBody(scriptSetupSrc(), 'function openMedia(m: Msg) {')
+    expect(body).toMatch(/if\s*\(\s*c\.state === 'loaded' && c\.url\s*\)\s*window\.open\(c\.url, '_blank'\)/)
+  })
+
+  it('大白话：消息气泡模板须按 msgtype===image && hasMedia 分流到图片气泡，其余（含 image 但无 mediaId 的历史档）回退纯文本', () => {
+    const { descriptor } = parse(deskSrc)
+    const tpl = descriptor.template?.content || ''
+    expect(tpl).toMatch(/v-if="m\.msgtype === 'image' && m\.hasMedia"/)
+    expect(tpl).toMatch(/@click="onMediaClick\(m\)"/)
+    expect(tpl).toMatch(/@click="openMedia\(m\)"/)
+    expect(tpl).toMatch(/图片已过期（超 3 天）/)
+    expect(tpl).toMatch(/加载失败，点击重试/)
+  })
+})

@@ -4,6 +4,7 @@ import crypto from 'node:crypto'
 import { control } from 'wx-server-sdk'
 import { main as app } from '../src/functions/app/index'
 import { main as kfSend } from '../src/functions/cs/kfSend'
+import { main as kfMedia } from '../src/functions/cs/kfMedia'
 import { main as kfHealthProbe } from '../src/functions/timers/kfHealthProbe'
 import { main as recallScan } from '../src/functions/timers/recallScan'
 import { recallCandidates } from '../src/functions/timers/recallRules'
@@ -14,6 +15,7 @@ import {
   defineKfCallback,
   ensureSmartAssistant,
   getAccessToken,
+  getKfMedia,
   assertDataShareConsent,
   assertOwnedByAgent,
 } from '../src/kit'
@@ -269,6 +271,78 @@ describe('kfSend / kfHealthProbe（黄金 §四/§十一·服务端专用）', (
       return {}
     })
     expect(((await kfHealthProbe()) as any).healthy).toBe(true)
+  })
+})
+
+// stubFetch 只支持纯 JSON 响应（无 headers()）；kf/media/get 成功回二进制、失败回 JSON——需要一个
+// 能同时喂两种形状的桩（getAccessToken 走同一 globalThis.fetch，故 gettoken 也须过这个统一路由）。
+const stubFetchMedia = (router: (url: string) => { json?: any; binary?: Buffer }) => {
+  ;(globalThis as any).fetch = async (url: string) => {
+    const r = router(url)
+    if (r.binary) {
+      const buf = r.binary
+      return {
+        headers: { get: (n: string) => (n.toLowerCase() === 'content-type' ? 'image/jpeg' : null) },
+        json: async () => ({}),
+        arrayBuffer: async () => buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength),
+      }
+    }
+    return {
+      headers: { get: (n: string) => (n.toLowerCase() === 'content-type' ? 'application/json' : null) },
+      json: async () => r.json ?? {},
+      arrayBuffer: async () => new ArrayBuffer(0),
+    }
+  }
+}
+
+describe('kf/media/get 下载 + kfMedia（B5·顾客发图坐席可见·平台接缝单点#12）', () => {
+  it('大白话：二进制响应→拿到原样字节；JSON 错误响应（media_id 过期/失效）→统一按过期语义回传', async () => {
+    stubFetchMedia((url) => {
+      expect(url).toContain('kf/media/get')
+      expect(url).toContain('media_id=m1')
+      return { binary: Buffer.from('raw-image-bytes') }
+    })
+    const ok: any = await getKfMedia('T', 'm1')
+    expect(ok.ok).toBe(true)
+    expect(ok.buffer.toString()).toBe('raw-image-bytes') // 字节原样、非篡改（真实尺寸·根因#8）
+
+    stubFetchMedia(() => ({ json: { errcode: 40007, errmsg: 'invalid media_id' } }))
+    const bad: any = await getKfMedia('T', 'm1')
+    expect(bad.ok).toBe(false)
+    expect(bad.expired).toBe(true)
+    expect(bad.errcode).toBe(40007)
+  })
+
+  it('大白话：kfMedia 服务端专用闸——带身份客户端调用拒；缺参拒；未配置拒；配齐后经服务端接缝下载并回 base64', async () => {
+    control.setOpenId('oHACK')
+    expect(((await kfMedia({ mediaId: 'm1' })) as any).error).toBe('SERVER_ONLY')
+    control.setOpenId('')
+    expect(((await kfMedia({ mediaId: '' })) as any).error).toBe('BAD_ARGS')
+    expect(((await kfMedia({ mediaId: 'm1' })) as any).error).toBe('KF_NOT_CONFIGURED')
+
+    process.env.WXKF_CORPID = 'c'
+    process.env.WXKF_SECRET = 's'
+    stubFetchMedia((url) => {
+      if (url.includes('gettoken')) return { json: { access_token: 'T', expires_in: 7200 } }
+      return { binary: Buffer.from('img-bytes') }
+    })
+    const r: any = await kfMedia({ mediaId: 'm1' })
+    expect(r.ok).toBe(true)
+    expect(Buffer.from(r.base64, 'base64').toString()).toBe('img-bytes')
+  })
+
+  it('大白话：kfMedia 下载失败（过期/其余错误码）原样透出 ok:false + expired 标记，不抛错', async () => {
+    control.setOpenId('') // 默认 beforeEach 是 'oME'（客户端身份）——服务端专用函数须先清空 openid 才过 isServerCall 闸
+    process.env.WXKF_CORPID = 'c'
+    process.env.WXKF_SECRET = 's'
+    stubFetchMedia((url) => {
+      if (url.includes('gettoken')) return { json: { access_token: 'T', expires_in: 7200 } }
+      return { json: { errcode: 40014 } }
+    })
+    const r: any = await kfMedia({ mediaId: 'm1' })
+    expect(r.ok).toBe(false)
+    expect(r.expired).toBe(true)
+    expect(r.errcode).toBe(40014)
   })
 })
 

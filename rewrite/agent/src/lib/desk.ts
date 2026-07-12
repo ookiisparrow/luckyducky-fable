@@ -11,6 +11,7 @@ export interface Msg {
   at: number
   msgtype?: string
   msgid?: string
+  hasMedia?: boolean // B5：顾客发图坐席可见——true 时 Desk.vue 渲染图片气泡而非纯文本占位
 }
 
 // export：diffNewInbound（B4）复用同一条身份键规则去重计数，不再另写一份易漂移的判同逻辑。
@@ -25,7 +26,14 @@ export function normalizeMsgs(raw: unknown): Msg[] {
     const at = Number(m.at)
     if (!Number.isFinite(at) || at <= 0) continue // 无时间戳不进流
     const msgid = m.msgid ? String(m.msgid) : undefined
-    out.push({ direction: m.direction === 'out' ? 'out' : 'in', text: String(m.text || ''), at, msgtype: String(m.msgtype || ''), msgid })
+    out.push({
+      direction: m.direction === 'out' ? 'out' : 'in',
+      text: String(m.text || ''),
+      at,
+      msgtype: String(m.msgtype || ''),
+      msgid,
+      hasMedia: !!m.hasMedia,
+    })
   }
   return out
 }
