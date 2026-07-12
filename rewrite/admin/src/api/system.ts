@@ -13,8 +13,10 @@ export const listBatchCodes = (batchId: string) => client.post('listBatchCodes',
 export const getSettings = () => client.post('getSettings')
 export const saveSettings = (patch: Record<string, unknown>) => client.post('saveSettings', patch)
 
-// 人工配置清单（批 B9·只探测状态·零回显）：12 项散落配置一屏拼「配了没」
+// 人工配置清单（批 B9→可填写升级）：20 项散落配置一屏拼「配了没」；带 fill 元数据的项可在本页直接填写保存
 export const getConfigChecklist = () => client.post('getConfigChecklist')
+export const saveSecureConfig = (docId: string, fields: Record<string, string>) => client.post('saveSecureConfig', { docId, fields })
+export const savePayConfig = (patch: Record<string, string>) => client.post('savePayConfig', patch)
 
 // from/to='YYYY-MM-DD' 自定义对账区间（后端支持·不传=近 30 天默认窗·根因#7）
 export const getReconciliation = (from?: string, to?: string) => client.post('getReconciliation', { from: from || undefined, to: to || undefined })

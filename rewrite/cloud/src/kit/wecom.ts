@@ -3,6 +3,7 @@ import https from 'https'
 import { getDb } from './db'
 import { COLLECTIONS } from '@ldrw/shared'
 import { alert } from './observe'
+import { getSecureConfig } from './secureConfig'
 
 /**
  * 企业微信「微信客服」平台接缝（根因#12 平台规则外部风险：与企业微信的接缝收口一处）。
@@ -12,7 +13,8 @@ import { alert } from './observe'
  *
  * 出网用全局 fetch（node18+ 自带），运行时低于 18 回退内置 https（杜绝「Node<18 下 fetch undefined」——
  * 验签只做加密会照样过、真消息进来调 access_token 才崩的根因#8 隐患）；fetchImpl 可注入便于单测打桩。
- * 密钥一律走云函数环境变量（corpid/secret/token/aeskey），不入库不入日志（CLAUDE §7 敏感信息不进日志）。
+ * 密钥（corpid/secret/token/aeskey）单源经 kit/secureConfig 读取（DB secureConfig/wxkf 优先·env 兜底迁移期·
+ * 决策 2026-07-12：config-checklist 页填写自动生效），绝不进日志（CLAUDE §7 敏感信息不进日志）。
  */
 
 const QY = 'https://qyapi.weixin.qq.com/cgi-bin'
@@ -125,24 +127,25 @@ function readBody(event: any): string {
  * 客服回调外壳（根因#3 fail-closed by construction·类比 defineNotifyCallback）：
  * GET 验 URL（验签 → 解密 echostr → 回明文）；POST 收事件（验签 → 解密 → 解析 → onEvent）。
  * 验签不过 = 不可信：GET 回空、POST 回空 + 告警，**绝不调 onEvent**（防伪不给处理通道）。
- * 任何客服回调经此外壳才写得出业务，杜绝「忘记验签」。token/aesKey 由调用方从 env 注入（懒读便于测试）。
+ * 任何客服回调经此外壳才写得出业务，杜绝「忘记验签」。token/aesKey/corpid 由调用方懒读注入（异步——
+ * 决策 2026-07-12 起走 kit/secureConfig 读库，故取值本身是异步 IO；懒读便于测试注入固定值）。
  */
 export function defineKfCallback(opts: {
-  token: () => string
-  aesKey: () => string
+  token: () => Promise<string> | string
+  aesKey: () => Promise<string> | string
   /** 自己的 corpid（企业内部单 corp）：解密后 receiveId 须等于它，否则拒（WXBizMsgCrypt 验签三要素之一·
    * 防跨 corp 共享 key 的合法签名消息被本应用处理）。未配置（空）时跳过校验，配齐即 fail-closed。 */
-  corpid?: () => string
+  corpid?: () => Promise<string> | string
   onEvent: (e: KfTrustedEvent) => Promise<void>
 }) {
   // receiveId 绑定校验：配了 corpid 才生效（配置就绪即 fail-closed·未配不阻断现网）
-  const receiveIdOk = (receiveId: string): boolean => {
-    const want = opts.corpid ? opts.corpid() : ''
+  const receiveIdOk = async (receiveId: string): Promise<boolean> => {
+    const want = opts.corpid ? await opts.corpid() : ''
     return !want || receiveId === want
   }
   return async (event: any) => {
-    const token = opts.token()
-    const aesKey = opts.aesKey()
+    const token = await opts.token()
+    const aesKey = await opts.aesKey()
     const q = readQuery(event)
     const method = String(event.httpMethod || 'POST').toUpperCase()
 
@@ -154,7 +157,7 @@ export function defineKfCallback(opts: {
       }
       try {
         const dec = decryptKfMessage(aesKey, echostr)
-        if (!receiveIdOk(dec.receiveId)) return httpReply(200, '') // receiveId 非本 corp：验 URL 失败
+        if (!(await receiveIdOk(dec.receiveId))) return httpReply(200, '') // receiveId 非本 corp：验 URL 失败
         return httpReply(200, dec.message)
       } catch {
         return httpReply(200, '')
@@ -178,7 +181,7 @@ export function defineKfCallback(opts: {
       return httpReply(200, '')
     }
     // receiveId 须本 corp（验签三要素之三）：跨 corp 合法签名消息也拒，不进 onEvent（审计 P1·根因#3）
-    if (!receiveIdOk(dec.receiveId)) {
+    if (!(await receiveIdOk(dec.receiveId))) {
       alert('security', 'kfCallback', 'RECEIVEID_MISMATCH', {})
       return httpReply(200, '')
     }
@@ -325,9 +328,9 @@ export async function sendAppMessage(
 }
 
 /**
- * 主动卡片推给若干坐席（fail-soft·**绝不抛错**）：内部取缓存令牌 + agentid（env WXKF_AGENTID），
- * 未配 / 无令牌 / 无收件人一律静默跳过——推送是增益，失败不得反噬转人工入队 / 升级等主流程
- * （守卫 enqueue-push-fail-soft）。touser = 企微成员 userid 列表（坐席账号 wecomUserId）。
+ * 主动卡片推给若干坐席（fail-soft·**绝不抛错**）：内部取缓存令牌 + agentid（secureConfig wxkf.agentId，
+ * env WXKF_AGENTID 兜底迁移期），未配 / 无令牌 / 无收件人一律静默跳过——推送是增益，失败不得反噬转人工
+ * 入队 / 升级等主流程（守卫 enqueue-push-fail-soft）。touser = 企微成员 userid 列表（坐席账号 wecomUserId）。
  */
 export async function sendAgentCard(
   db: any,
@@ -338,7 +341,7 @@ export async function sendAgentCard(
   try {
     const to = (touser || []).filter(Boolean)
     if (!to.length) return
-    const agentid = process.env.WXKF_AGENTID || ''
+    const agentid = await getSecureConfig(db, 'wxkf', 'agentId')
     if (!agentid) return
     const token = await getCachedKfToken(db)
     if (!token) return
