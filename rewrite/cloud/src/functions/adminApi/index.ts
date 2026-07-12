@@ -99,6 +99,10 @@ const ACTIONS: Record<string, (ctx: Ctx) => Promise<any>> = {
   // 客服会话检索 + 质检报表（批15·检索过 customer:view 闸·报表 bounded 无逐人 PII 不设 cap）
   searchConversations: conversations.searchConversations,
   conversationsReport: conversations.conversationsReport,
+  // 质检抽检（批 B7·未登记 ACTION_CAPS→默认拒 admin:write＝仅超管·坐席不可达·sampleQc/saveQcMark 写类自动审计）
+  sampleQc: conversations.sampleQc,
+  saveQcMark: conversations.saveQcMark,
+  listQcSampled: conversations.listQcSampled,
   // 知识库（批15·FAQ 单源·admin 维护、客服 bot dispatch 读同一份）
   listKb: kb.listKb,
   saveKb: kb.saveKb,

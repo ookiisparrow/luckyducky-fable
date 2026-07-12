@@ -1,4 +1,4 @@
-import { reply, type Ctx } from '../lib'
+import { reply, str, type Ctx } from '../lib'
 import { pageQuery } from '../../../kit'
 import { COLLECTIONS } from '@ldrw/shared'
 
@@ -120,4 +120,164 @@ export async function conversationsReport({ db, data }: Ctx) {
     // SLA：首次响应超 slaMs 的占比（已答复中）+ 未答复数（也算违约信号）
     sla: { slaMs, breaches, breachRate: answered ? pct(breaches / answered) : 0, unanswered },
   })
+}
+
+// ── 质检抽检（B7·板块#11 续）──
+// 粒度＝客户会话档级（csSession 文档，非「轮次」——csSession 跨轮复用重开、消息无 sessionId，轮次实体不存在，
+// 见 docs/待办与债.md flag）。sessionKey＝csSession._id（形如 `wxkf:<openKfId>:<externalUserId>`——**不是**
+// externalUserId：与 csat.ts 的 sessionKey 语义不同，那边 sessionKey 直接回 externalUserId，这里前端跳「查会话」
+// 时仍须解出 externalUserId 传给 searchConversations，别把 csSession._id 当 externalUserId 传错接口）。
+// 鉴权：均走 adminApi 现行机制——本文件三个 action 都不登记 ACTION_CAPS（见 index.ts），默认高权
+// ADMIN_DEFAULT_CAP='admin:write'，坐席（cap 仅 agent:handle）一律 403 不可达；审计走 shouldAudit 现行装置
+// （sampleQc/saveQcMark 不以 list/get/upload 起首、非 ping/login → 自动留痕；listQcSampled 以 list 起首、
+// 同其余只读列表 action 一样不强制审计）。
+const QC_POOL_LIMIT = 200 // 候选池有界（根因#7）：只看最近 200 条 closed 会话，不全量扫描
+const QC_SAMPLE_MAX = 50 // 单次抽样条数上限（防误传超大 count 一次性抽空候选池）
+const QC_CUSTOMER_READ_LIMIT = 200 // 单客户聚合的有界读（同 conversationsReport 口径的按客户配对，规模缩到单客户）
+const QC_LIST_DEFAULT_LIMIT = 20
+const QC_NOTE_MAX = 500
+
+// 按客户聚合消息数 + 首次响应均值（复用 conversationsReport 的配对口径：入站找其后首个出站算 delta）——
+// 范围＝该客户「近期」消息（有界读 QC_CUSTOMER_READ_LIMIT 条，非该次 closed 会话独有的消息，跨会话累计；
+// 不发明轮次切片，UI 需诚实标注「按该客户近期消息聚合」）。查询失败/无客户标识 → null（调用方据此省略字段）。
+async function computeCustomerAgg(db: any, externalUserId: string): Promise<{ messageCount: number; avgResponseMs: number } | null> {
+  const euid = String(externalUserId || '')
+  if (!euid) return null
+  const res = await db
+    .collection(COLLECTIONS.conversations)
+    .where({ externalUserId: euid })
+    .orderBy('at', 'desc')
+    .limit(QC_CUSTOMER_READ_LIMIT)
+    .get()
+    .catch(() => null)
+  if (!res) return null
+  const rows: any[] = (res && res.data) || []
+  const sorted = rows.slice().sort((a, b) => (Number(a.at) || 0) - (Number(b.at) || 0))
+  const deltas: number[] = []
+  for (let i = 0; i < sorted.length; i++) {
+    if (sorted[i].direction !== 'in') continue
+    const inAt = Number(sorted[i].at) || 0
+    let replyAt = 0
+    for (let j = i + 1; j < sorted.length; j++) {
+      if (sorted[j].direction === 'out') {
+        replyAt = Number(sorted[j].at) || 0
+        break
+      }
+    }
+    if (replyAt && replyAt >= inAt) deltas.push(replyAt - inAt)
+  }
+  const avgResponseMs = deltas.length ? Math.round(deltas.reduce((s, x) => s + x, 0) / deltas.length) : 0
+  return { messageCount: rows.length, avgResponseMs }
+}
+
+/**
+ * sampleQc {count=10}：候选＝csSession where status='closed' 的有界池（≤200·orderBy updatedAt desc）——
+ * **内存过滤**掉已有 `qc`（已评）或 `qcSampledAt`（已抽过）的（不放进 db where，query 只按 status 取池，
+ * 「未质检」判定在内存做，见规格）。从剩余候选随机抽 count 条，逐条写 `qcSampledAt: now`——
+ * 单条写失败跳过不炸整批（该条不计入返回结果，视为未真正抽中）。返回列表带按客户聚合的消息数/首响
+ * （聚合失败该字段省略，不编数）。
+ */
+export async function sampleQc({ db, data }: Ctx): Promise<any> {
+  const d = data || {}
+  const count = Math.max(1, Math.min(QC_SAMPLE_MAX, Number(d.count) || 10))
+  const res = await db
+    .collection(COLLECTIONS.csSession)
+    .where({ status: 'closed' })
+    .orderBy('updatedAt', 'desc')
+    .limit(QC_POOL_LIMIT)
+    .get()
+    .catch(() => ({ data: [] }))
+  const rows: any[] = (res && res.data) || []
+  // 已知限制（docs/待办与债.md flag）：qc/qcSampledAt 挂在可被重开复用的 csSession 文档上——顾客二次
+  // 「找人工」时 cs/kfCallback/dispatch.ts enqueueSession 把同一 _id 的 doc closed→pending 重开，只刷新
+  // agentId/claimedAt/createdAt/updatedAt 四个字段，不清 qc/qcSampledAt；该文档此后再次 closed，本次 filter
+  // 仍会因旧 qc/qcSampledAt 非空把它排除出候选池——同一客户被评过一次后，其后全新的会话永远进不了这里的
+  // 候选池，listQcSampled 也会一直展示那份过期评分。根治须改 dispatch.ts 重开分支（本批白名单不含该文件，
+  // 未做）；本批仅记账，不在此臆造轮次实体或时间戳启发式去猜「是否重开过」。
+  const candidates = rows.filter((s: any) => !s.qc && !s.qcSampledAt)
+  // Fisher-Yates 部分洗牌（池已有界·简单实现足够）
+  const pool = candidates.slice()
+  for (let i = pool.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1))
+    ;[pool[i], pool[j]] = [pool[j], pool[i]]
+  }
+  const picked = pool.slice(0, count)
+  const now = Date.now()
+  const sampled: any[] = []
+  for (const s of picked) {
+    try {
+      await db.collection(COLLECTIONS.csSession).doc(s._id).update({ data: { qcSampledAt: now } })
+    } catch {
+      continue // 单条写失败跳过不炸整批——该条未真正抽中，不进入返回列表
+    }
+    const agg = await computeCustomerAgg(db, String(s.externalUserId || ''))
+    sampled.push({
+      sessionKey: s._id,
+      externalUserId: s.externalUserId || '',
+      updatedAt: Number(s.updatedAt) || 0,
+      qcSampledAt: now,
+      ...(agg ? { messageCount: agg.messageCount, avgResponseMs: agg.avgResponseMs } : {}),
+    })
+  }
+  return reply(200, { ok: true, sampled, count: sampled.length })
+}
+
+/**
+ * saveQcMark {sessionKey, score, note}：score 服务端校验 1-5 整数（越界/非整拒）；note trim 后截断
+ * （同全仓 `str()` 截断惯例，不整条拒绝）；目标 csSession 不存在→404；已有 `qc`（已评）→409 ALREADY_MARKED
+ * 拒覆盖（防误触二次评分覆盖前一评审员的结论）；写 `qc:{score,note,by,at}`——by 取 ctx.agentId（现行审计
+ * 操作者身份口径：超管固定 'admin'、外包＝账号 _id，同 index.ts 分发处 operator/agentId 贯入同一套认证主体）。
+ *
+ * 原子抢占（同 approveRefund 既有 CAS 范式·根治读-判-写三步 TOCTOU）：「已有 qc→409」不是先 get() 读检查、
+ * 再单独 update() 写——那样两个并发评审员的保存请求都可能读到 qc 为空、都通过检查、都写入，后写方悄悄覆盖
+ * 前一评审员的结论而不触发 409。改用 `where({_id, qc: exists(false)}).update()` 条件写，抢不到（updated!==1）
+ * 即 409——与「已有 qc」和「并发写丢了这一抢」两种情况合并同一 409 语义，均不覆盖既有评分。
+ */
+export async function saveQcMark({ db, data, agentId }: Ctx): Promise<any> {
+  const d = data || {}
+  const sessionKey = String(d.sessionKey || '').trim()
+  if (!sessionKey) return reply(400, { ok: false, error: 'BAD_ARGS' })
+  const score = Number(d.score)
+  if (!Number.isInteger(score) || score < 1 || score > 5) return reply(400, { ok: false, error: 'BAD_ARGS:SCORE_RANGE' })
+  const note = str(d.note, QC_NOTE_MAX).trim()
+  const got = await db.collection(COLLECTIONS.csSession).doc(sessionKey).get().catch(() => null)
+  const s = got && got.data ? got.data : null
+  if (!s) return reply(404, { ok: false, error: 'NOT_FOUND' })
+  const now = Date.now()
+  const _ = db.command
+  const r = await db
+    .collection(COLLECTIONS.csSession)
+    .where({ _id: sessionKey, qc: _.exists(false) })
+    .update({ data: { qc: { score, note, by: String(agentId || 'admin'), at: now } } })
+  if (!r || !r.stats || r.stats.updated !== 1) return reply(409, { ok: false, error: 'ALREADY_MARKED' })
+  return reply(200, { ok: true })
+}
+
+/**
+ * listQcSampled {cursor,limit,onlyPending}：cursor 分页取「已抽样」的会话（where qcSampledAt exists·
+ * cursorField=qcSampledAt·kit pageQuery 复合游标）；onlyPending=true 时叠加 qc 不存在（只看未评的）。
+ * 行内聚合字段（消息数/首响）与 sampleQc 同口径同源——「加载更多」翻出的行与初次抽样行列齐全一致
+ * （聚合失败该字段省略，不编数）。
+ */
+export async function listQcSampled({ db, data }: Ctx): Promise<any> {
+  const d = data || {}
+  const onlyPending = !!d.onlyPending
+  const _ = db.command
+  const filter: Record<string, any> = { qcSampledAt: _.exists(true) }
+  if (onlyPending) filter.qc = _.exists(false)
+  const paged = await pageQuery(db, COLLECTIONS.csSession, filter, 'qcSampledAt', d, QC_LIST_DEFAULT_LIMIT)
+  const list = await Promise.all(
+    paged.list.map(async (s: any) => {
+      const agg = await computeCustomerAgg(db, String(s.externalUserId || ''))
+      return {
+        sessionKey: s._id,
+        externalUserId: s.externalUserId || '',
+        updatedAt: Number(s.updatedAt) || 0,
+        qcSampledAt: Number(s.qcSampledAt) || 0,
+        qc: s.qc || null,
+        ...(agg ? { messageCount: agg.messageCount, avgResponseMs: agg.avgResponseMs } : {}),
+      }
+    }),
+  )
+  return reply(200, { ok: true, list, nextCursor: paged.nextCursor, hasMore: paged.hasMore })
 }

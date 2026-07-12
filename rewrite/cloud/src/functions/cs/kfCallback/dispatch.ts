@@ -382,11 +382,15 @@ export async function enqueueSession(db: any, openKfId: string, externalUserId: 
     // **closed 则重开**（closed→pending·声明流转 cs.spec.ts·原子：非 closed 时 moved=false 天然不 clobber）——
     // 老客二次点「找人工」曾被此撞 id 静默吞、永进不了队列（2026-07-02 真机逼出·调试日志 AD）。
     // createdAt 刷新＝重新排队（FIFO 队尾）+ getThread 消息流从重开起算（不翻旧会话历史）。
+    // qc/qcSampledAt 一并清空（批 B7 评审 P1）：质检标记锚定「上一段 pending→closed 生命周期」，
+    // 文档按客户确定性 _id 复用，不清则回头客永远抽不进质检池、旧评分被误当现役会话的评价。
     const r = await transition('csSession', id, ['closed'], 'pending', {
       agentId: null,
       claimedAt: null,
       createdAt: now,
       updatedAt: now,
+      qc: null,
+      qcSampledAt: null,
     }).catch(() => ({ moved: false })) /* best-effort：不反噬顾客回复 */
     queued = !!(r && (r as any).moved)
   }
