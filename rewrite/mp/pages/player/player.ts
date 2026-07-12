@@ -22,9 +22,11 @@ import {
   type LessonStrip,
 } from '../../lib/player'
 import { getCourseById } from '../../lib/courses'
+import { getPageContent } from '../../lib/pageContent'
 import { openCustomerService } from '../../utils/customerService'
 import { shouldTick, VIBE_GAP_MS, DRAG_TICK_GAP_MS } from '../../lib/haptics'
 import { mapHelpVideos, mapPublicFaq, type HelpTopicVM, type FaqItemVM } from '../../lib/mapLearning'
+import { mapCatalogPlayer, type CatalogPlayerVM } from '../../lib/mapPages'
 
 const TIME_UPDATE_THROTTLE_MS = 250
 // 磁吸窗口（秒）：拖动秒数落在关键动作节点前后 3 秒内即吸附（批C 规格默认值·真机手感待调参 flag）。
@@ -91,8 +93,10 @@ Page({
     helpSegName: '', // 内嵌播放视图顶部标题（=命中小段 name）
     deskGuide: false, // 首次成功退出加桌引导弹窗可见态（P5b·仅展示一次）
     deskGuideIOS: false, // 加桌引导分端文案（true=iOS「添加到我的小程序」·false=其余平台「添加到桌面」）
+    help: mapCatalogPlayer(null).help as CatalogPlayerVM['help'], // 求助面板三卡标题 + FAQ（CMS·首帧默认·到达覆盖·批B）
   },
   courseId: '',
+  unloaded: false, // 已退页标记（await 恢复点复核·同 welcome/catalog 范式·onUnload 置真）
   course: null as CoursePub | null,
   srcSetAt: 0,
   windowWidthPx: 0, // rpx→px 换算基准（onLoad 存·750rpx = windowWidthPx px）
@@ -121,6 +125,7 @@ Page({
     this.windowWidthPx = info.windowWidth || 0 // rpx→px 换算基准（750rpx = 本机 windowWidth px），供拖动预览浮层防出屏边距用
     this.setData({ statusBarHeight: info.statusBarHeight })
     this.courseId = String(query.courseId || '')
+    void this.loadPageContent() // 求助面板文案/FAQ·与取课/取址互不依赖，并行发起（不阻塞首帧·默认已在 data）
     // 来源页（me/my-courses）已把课程目录热进 lib/courses 缓存→这里零云调用；深链冷启动（分享链直进播放页）
     // 缓存未热→内部兜底重拉一次目录，行为不回退，只是不再每次都重拉（根因账本#15）。
     const course = (await getCourseById(this.courseId)) as CoursePub | null
@@ -459,6 +464,14 @@ Page({
     wx.showToast({ title: '投屏已断开', icon: 'none' })
   },
 
+  // CMS 求助面板文案 + FAQ（批B·fail-soft·拉不到维持默认）：三卡标题回退默认；FAQ 空 → 维持诚实空态导流客服
+  // （不造假 Q&A·见 wxml faq 子层）。await 恢复点复核 unloaded（守卫 rw-mp-await-side-effect-unloaded-recheck 纪律）。
+  async loadPageContent() {
+    const content = await getPageContent('catalogPlayer')
+    if (this.unloaded) return
+    this.setData({ help: mapCatalogPlayer(content).help })
+  },
+
   // 求助面板入口（P3·播放器重设计战役批D）：占常规播放键位的求助钮不再直连客服，改拉起底部 sheet——
   // 客服真调用移入面板卡1（onHelpContact，守卫 rw-mp-customer-service-wired 触点表钉这里）；播放不阻断
   // （唯一暂停例外＝内嵌视频播放，见 onHelpPlaySegment）。wxml 上 bind:tap="onHelp" 绑定原样保留（守卫
@@ -487,8 +500,11 @@ Page({
   },
   // 卡3 常见问题（R37b 已接线：云端 FAQ 单源=客服知识库 KB，getPublicFaq 只回精选条目）：进子层 + 每次重拉
   // （同 onHelpVideos 口径·辅助内容低频不缓存）；载入失败/空仍诚实空态导流客服，不造假 Q&A。
+  // help.faq（CMS 自由文本·并行战役新增·wxml 级联优先）非空时该子层直接渲染 CMS 内容，不必再打 KB 请求
+  // ——两套编辑面并存是待用户裁决的 flag（docs/待办与债.md），此处只做最小的「CMS 已覆盖就不浪费一次请求」。
   onHelpFaq() {
     this.setData({ helpPanel: 'faq', helpFaqState: 'loading', helpFaqList: [] })
+    if ((this.data.help.faq || []).length > 0) return // CMS 自由文本已覆盖，wxml 走 help.faq 分支，跳过 KB 拉取
     void this.loadHelpFaq()
   },
   async loadHelpFaq() {
@@ -619,6 +635,7 @@ Page({
     this.reportWatchAt()
   },
   onUnload() {
+    this.unloaded = true
     this.reportWatchAt()
   },
 })

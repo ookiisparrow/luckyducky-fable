@@ -160,7 +160,7 @@
         <view class="lp-help-card" bind:tap="onHelpContact">
           <view class="lp-help-card-pic"><image class="lp-help-card-ico" src="/static/icons/headset.svg" mode="aspectFit" /></view>
           <view class="lp-help-card-tx">
-            <text class="lp-help-card-title">联系客服</text>
+            <text class="lp-help-card-title">{{help.contactTitle}}</text>
             <text class="lp-help-card-sub">真人答疑</text>
           </view>
           <image class="lp-help-card-chev" src="/static/icons/chevron-right.svg" mode="aspectFit" />
@@ -168,7 +168,7 @@
         <view class="lp-help-card" bind:tap="onHelpVideos">
           <view class="lp-help-card-pic"><image class="lp-help-card-ico" src="/static/icons/video.svg" mode="aspectFit" /></view>
           <view class="lp-help-card-tx">
-            <text class="lp-help-card-title">帮助视频</text>
+            <text class="lp-help-card-title">{{help.videosTitle}}</text>
             <text class="lp-help-card-sub">小段讲解都在这里</text>
           </view>
           <image class="lp-help-card-chev" src="/static/icons/chevron-right.svg" mode="aspectFit" />
@@ -176,7 +176,7 @@
         <view class="lp-help-card" bind:tap="onHelpFaq">
           <view class="lp-help-card-pic"><image class="lp-help-card-ico" src="/static/icons/help-circle.svg" mode="aspectFit" /></view>
           <view class="lp-help-card-tx">
-            <text class="lp-help-card-title">常见问题</text>
+            <text class="lp-help-card-title">{{help.faqTitle}}</text>
             <text class="lp-help-card-sub">高频问题都在这里</text>
           </view>
           <image class="lp-help-card-chev" src="/static/icons/chevron-right.svg" mode="aspectFit" />
@@ -204,7 +204,7 @@
             <view class="lp-help-back" bind:tap="onHelpBackMenu">
               <image class="lp-help-back-ico" src="/static/icons/chevron-right.svg" mode="aspectFit" />
             </view>
-            <text class="lp-help-nav-title">帮助视频</text>
+            <text class="lp-help-nav-title">{{help.videosTitle}}</text>
           </view>
           <scroll-view class="lp-help-scroll" scroll-y>
             <block wx:if="{{helpVideosState === 'ok'}}">
@@ -240,29 +240,43 @@
         </block>
       </block>
 
-      <!-- faq 子层（P3c·R37b 已接线：云端 getPublicFaq 只回 KB 精选条目·载入失败/空仍诚实空态导流客服） -->
+      <!-- faq 子层（合并 2026-07-12 两条并行战役·级联兼容非终态·flag 待用户裁去留）：
+           CMS 自由文本（批B page-content 编辑器 help.faq）非空则优先渲染；CMS 空则回退 KB 精选单源
+           （批 B8 R37b getPublicFaq·helpFaqList 状态机）；两者都空才是诚实空态导流客服。
+           两套编辑面并存＝FAQ 内容有两处可改入口，与 faq-via-kb-single-source 单源治理精神冲突，
+           留给用户拍板长期只留一套（见 docs/待办与债.md 本条 flag）。 -->
       <block wx:if="{{helpPanel === 'faq'}}">
         <view class="lp-help-nav">
           <view class="lp-help-back" bind:tap="onHelpBackMenu">
             <image class="lp-help-back-ico" src="/static/icons/chevron-right.svg" mode="aspectFit" />
           </view>
-          <text class="lp-help-nav-title">常见问题</text>
+          <text class="lp-help-nav-title">{{help.faqTitle}}</text>
         </view>
-        <scroll-view class="lp-help-scroll" scroll-y>
-          <block wx:if="{{helpFaqState === 'ok'}}">
-            <view class="lp-help-faq-item" wx:for="{{helpFaqList}}" wx:key="key">
-              <view class="lp-help-faq-q">{{item.title}}</view>
-              <view class="lp-help-faq-a">{{item.content}}</view>
+        <block wx:if="{{help.faq.length > 0}}">
+          <scroll-view class="lp-help-scroll" scroll-y>
+            <view class="lp-help-faq" wx:for="{{help.faq}}" wx:key="q">
+              <view class="lp-help-faq-q">{{item.q}}</view>
+              <view class="lp-help-faq-a">{{item.a}}</view>
             </view>
-          </block>
-          <view class="lp-help-empty" wx:elif="{{helpFaqState === 'loading'}}">
-            <text>加载中…</text>
-          </view>
-          <view class="lp-help-empty" wx:else>
-            <text>常见问题还在整理中，先问客服吧</text>
-            <view class="lp-help-empty-btn" bind:tap="onHelpContact">联系客服</view>
-          </view>
-        </scroll-view>
+          </scroll-view>
+        </block>
+        <block wx:else>
+          <scroll-view class="lp-help-scroll" scroll-y>
+            <block wx:if="{{helpFaqState === 'ok'}}">
+              <view class="lp-help-faq-item" wx:for="{{helpFaqList}}" wx:key="key">
+                <view class="lp-help-faq-q">{{item.title}}</view>
+                <view class="lp-help-faq-a">{{item.content}}</view>
+              </view>
+            </block>
+            <view class="lp-help-empty" wx:elif="{{helpFaqState === 'loading'}}">
+              <text>加载中…</text>
+            </view>
+            <view class="lp-help-empty" wx:else>
+              <text>常见问题还在整理中，先问客服吧</text>
+              <view class="lp-help-empty-btn" bind:tap="onHelpContact">联系客服</view>
+            </view>
+          </scroll-view>
+        </block>
       </block>
     </view>
   </view>

@@ -167,3 +167,214 @@ body {
   font-weight: 700;
   color: var(--ld-ink);
 }
+
+/* —— 页面内容 CMS 五页签共享配方（批C·PageContent + 5 tab 组件同源·防 5 份表单样式漂移·病根#5）——
+ * 页签自有的差异（预览内部结构等）仍写各组件 scoped；这里收敛真一致的布局/表单/工具条/手机 mock 壳。 */
+.pc-tabs {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  border-bottom: 1px solid var(--ld-line);
+  padding-bottom: 12px;
+}
+.pc-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 14px;
+  border: 1px solid var(--ld-line);
+  border-radius: var(--ld-radius-item);
+  background: var(--ld-bg);
+  color: var(--ld-content-2);
+  font-size: 13px;
+  font-family: var(--ld-font);
+  cursor: pointer;
+  line-height: 1.3;
+}
+.pc-tab:hover {
+  background: var(--ld-bg-faint);
+  color: var(--ld-content);
+}
+.pc-tab.on {
+  background: var(--ld-bg-lilac);
+  border-color: var(--ld-purple-line);
+  color: var(--ld-purple-ink);
+  font-weight: 600;
+}
+/* 两栏：左表单 + 右手机预览（sticky 跟随） */
+.pc-split {
+  display: flex;
+  gap: 24px;
+  align-items: flex-start;
+}
+.pc-forms {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.pc-phone-wrap {
+  flex: none;
+  width: 375px;
+  position: sticky;
+  top: 16px;
+}
+.pc-phone-cap {
+  display: block;
+  text-align: center;
+  margin-top: 8px;
+  font-size: 11px;
+  color: var(--ld-content-2);
+}
+/* 手机 mock 壳（375 宽·圆角·淡渐变底） */
+.pc-phone {
+  width: 375px;
+  border: 1px solid var(--ld-line);
+  border-radius: 26px;
+  background: linear-gradient(170deg, var(--ld-bg-lilac), var(--ld-bg-sage));
+  padding: 20px 16px;
+  min-height: 360px;
+  overflow: hidden;
+}
+.pc-ph {
+  color: var(--ld-line-strong);
+}
+/* 工具条：自动保存徽章 + 保存按钮（页签顶部右对齐） */
+.pc-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+}
+/* 表单基线 */
+.pc-field {
+  margin-bottom: 12px;
+}
+.pc-field:last-child {
+  margin-bottom: 0;
+}
+.pc-field > label {
+  display: block;
+  font-size: 12px;
+  color: var(--ld-content-2);
+  margin-bottom: 5px;
+}
+.pc-input,
+.pc-textarea {
+  width: 100%;
+  padding: 8px 12px;
+  border: 1px solid var(--ld-line);
+  border-radius: var(--ld-radius-sm);
+  font-size: 13px;
+  font-family: var(--ld-font);
+  color: var(--ld-content);
+  background: var(--ld-bg);
+}
+.pc-input:focus,
+.pc-textarea:focus {
+  outline: none;
+  border-color: var(--ld-purple-line);
+}
+.pc-textarea {
+  min-height: 54px;
+  resize: vertical;
+}
+/* 琥珀描边输入（警示语·保留原意勿清空） */
+.pc-input.pc-amber-edge {
+  border-color: #c47d1e;
+  background: var(--ld-bg-amber-soft);
+}
+/* 琥珀警示横幅（协议页顶部·已过审文案提醒） */
+.pc-amber-banner {
+  display: flex;
+  gap: 8px;
+  padding: 10px 14px;
+  border: 1px solid #c47d1e;
+  border-radius: var(--ld-radius-sm);
+  background: var(--ld-bg-amber-soft);
+  color: var(--ld-amber);
+  font-size: 12.5px;
+  line-height: 1.5;
+}
+/* 条目块（段落/FAQ/入口等可增删条目） */
+.pc-item {
+  border: 1px solid var(--ld-line);
+  border-radius: var(--ld-radius-sm);
+  padding: 12px;
+  background: var(--ld-bg);
+  margin-bottom: 10px;
+}
+.pc-item:last-child {
+  margin-bottom: 0;
+}
+.pc-item-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+.pc-item-idx {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ld-purple-meta);
+}
+.pc-iconbtn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  flex: none;
+  border: 1px solid var(--ld-line);
+  border-radius: var(--ld-radius-sm);
+  background: var(--ld-bg);
+  color: var(--ld-content-2);
+  cursor: pointer;
+}
+.pc-iconbtn:hover {
+  color: var(--ld-red);
+  border-color: var(--ld-red-line);
+}
+.pc-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.pc-hint {
+  font-size: 12px;
+  color: var(--ld-content-2);
+  line-height: 1.5;
+}
+.pc-row-add {
+  margin-top: 4px;
+}
+/* 上传位缩略 */
+.pc-thumb {
+  width: 40px;
+  height: 40px;
+  object-fit: cover;
+  border-radius: var(--ld-radius-sm);
+  border: 1px solid var(--ld-line);
+}
+.pc-filetag {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  color: var(--ld-green);
+  font-family: var(--ld-font-mono);
+}
+.pc-clr {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  background: transparent;
+  color: var(--ld-content-2);
+  cursor: pointer;
+  padding: 2px 4px;
+}
+.pc-clr:hover {
+  color: var(--ld-red);
+}

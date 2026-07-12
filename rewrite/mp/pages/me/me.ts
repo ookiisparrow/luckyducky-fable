@@ -3,7 +3,9 @@
 import { login, getMyProgress } from '../../api/user'
 import { getMyCourses } from '../../api/learning'
 import { getAllCourses } from '../../lib/courses'
+import { getPageContent } from '../../lib/pageContent'
 import { continueResolve, type ContinueTarget } from '../../lib/continueResolve'
+import { mapMe, type MeVM } from '../../lib/mapPages'
 import { openCustomerService } from '../../utils/customerService'
 
 Page({
@@ -12,6 +14,7 @@ Page({
     avatar: '',
     bio: '',
     cont: null as ContinueTarget | null,
+    entries: mapMe(null).entries as MeVM['entries'], // 九入口标题/可见性·首帧默认（CMS 到达覆盖）
   },
   onShow() {
     if (typeof this.getTabBar === 'function') (this.getTabBar() as unknown as LdTabBar).setActive('me')
@@ -23,15 +26,25 @@ Page({
     // login/getMyProgress/getMyCourses 保持实时（login 兼具服务端记账语义，进度/我的课不缓存）；
     // 课程目录本会话内不变，走 lib/courses 会话缓存（根因账本#15）——命中零云调用。
     const seq = ++this._seq
-    const [u, progress, mine, courses] = await Promise.all([login(), getMyProgress(), getMyCourses(), getAllCourses()])
+    // mePage 内容（默认昵称 + 九入口标题/可见性）并入 Promise.all——本会话内经 lib/pageContent 缓存命中零重拉，
+    // 且随 _seq 一并做过期回包复核（慢回包不覆盖更晚一次 refresh 的落地）。
+    const [u, progress, mine, courses, meContent] = await Promise.all([
+      login(),
+      getMyProgress(),
+      getMyCourses(),
+      getAllCourses(),
+      getPageContent('mePage'),
+    ])
     if (seq !== this._seq) return // 过期回包（被更晚 refresh 取代）：丢弃
     const user = (u.ok ? u.user : null) as Record<string, any> | null
+    const me = mapMe(meContent)
     this.setData({
-      // 云端资料回灌：非空覆盖默认、空不显示假名（黄金 §九）
-      nickname: (user && String(user.nickname || '')) || '钩织新手',
+      // 云端资料回灌：非空覆盖默认、空回退 CMS 默认昵称（黄金 §九·不显示假名）
+      nickname: (user && String(user.nickname || '')) || me.defaultNickname,
       avatar: (user && String(user.avatar || '')) || '',
       bio: (user && String(user.bio || '')) || '',
       cont: continueResolve(progress.ok ? progress.list : [], mine.ok ? mine.list : [], courses || []),
+      entries: me.entries,
     })
   },
   onContinue() {

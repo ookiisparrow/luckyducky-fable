@@ -69,6 +69,9 @@ const ACTIONS: Record<string, (ctx: Ctx) => Promise<any>> = {
   saveHomeContent: content.saveHomeContent,
   listHelpVideos: content.listHelpVideos,
   saveHelpVideos: content.saveHelpVideos,
+  // 页面内容 CMS（批A·5 页可编辑：welcome/catalogPlayer/mePage/about/agreement）·默认 admin:write·save 非 get 前缀自动审计
+  savePageContent: content.savePageContent,
+  getPageContent: content.getPageContent,
   // 订单发货（批13）
   listOrders: ordersA.listOrders,
   orderCounts: ordersA.orderCounts,

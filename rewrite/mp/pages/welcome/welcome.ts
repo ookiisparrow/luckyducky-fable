@@ -4,8 +4,10 @@
 // 三态沉浸壳与文案一字不动；仅 kind==='activated' 的结果屏改走 W1/W2 lilac 壳（见 wxml 头注）。
 import { activateCourse, confirmEnter } from '../../api/learning'
 import { getContent } from '../../api/catalog'
+import { getPageContent } from '../../lib/pageContent'
 import { getCourseById } from '../../lib/courses'
 import { activationView, bgFor, type ActivationKind } from '../../lib/mapLearning'
+import { mapWelcome, type WelcomeVM } from '../../lib/mapPages'
 import type { ApiResult } from '../../utils/cloud'
 
 Page({
@@ -18,6 +20,7 @@ Page({
     courseTitle: '', // W1 课程名行数据源（取不到/空则不渲染该行·诚实回退，见 activate()）
     bg: '',
     busy: false,
+    welcome: mapWelcome(null) as WelcomeVM, // W1/W2 文案·首帧即默认（CMS 到达后覆盖·不空屏）
   },
   home: null as unknown,
   // getContent（背景图）与 activateCourse（兑课）互不依赖：并行发起省一次云调用往返（0.7-1.4s/次）。
@@ -31,11 +34,18 @@ Page({
     const info = wx.getWindowInfo()
     this.setData({ statusBarHeight: info.statusBarHeight })
     this.homeReady = getContent() // 不 await：activate() 里再取，跟 activateCourse 并行
+    void this.loadPageContent() // W1/W2 文案·与激活流程互不依赖，并行发起（不阻塞首帧·默认已在 data）
     const code = String(query.code || '').trim()
     if (code) {
       this.setData({ code })
       void this.activate(code)
     }
+  },
+  // CMS W1/W2 文案（fail-soft·拉不到维持默认）：await 恢复点复核 unloaded（守卫 rw-mp-await-side-effect-unloaded-recheck 纪律）。
+  async loadPageContent() {
+    const content = await getPageContent('welcome')
+    if (this.unloaded) return
+    this.setData({ welcome: mapWelcome(content) })
   },
   onInput(e: WechatMiniprogram.Input) {
     this.setData({ code: e.detail.value.trim().toUpperCase() })
