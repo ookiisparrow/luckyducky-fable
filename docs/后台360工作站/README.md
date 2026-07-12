@@ -64,6 +64,7 @@
 | 5 | M③ 承面 A 内部 VIP(企微侧栏·与外包线独立可并行) | 链②·48002 | ⬜ |
 | 6 | M④ 知识库 + CSAT + 主动召回 | M① | 🟢 已部署(车道D·控台锁✅) |
 | 7 | **M⑦ 承面C 增强：企微自建应用坐席台（推送+免登+移动化）** | M⑥✅·企微应用✅ | 🟢 **代码全落（地基+A+B+C）**（`承面推送免登工单.md`·2026-07-02·用户拍板企微线）：✅ 地基＝`wecomUserId` 字段全链；✅ **A 推送线**＝应用消息单接缝 + enqueue 推在线坐席 + escalate 推商户；✅ **B 免登线**＝`loginByWecomCode`（OAuth→签发 session 令牌·fail-closed）+ checkKey 令牌分支 + Login.vue 三态（守卫 `wecom-login-gated`）；✅ **C 移动化**＝Desk.vue 响应式单栏+抽屉 + `?session` 直达（deepLink 纯决策·移动顺手靠人#8）。**不新增函数/集合**·守卫 120+2 test guard·测试 898。**剩靠人**：env WXKF_AGENTID（推送）+ VITE_WXWORK_CORPID/AGENTID（免登·填后 CC 重部署 /agent）+ 企微应用主页/OAuth 可信域名 + 真机验（推送到手机/免登/移动接待） |
+| 7.5 | **工业化批 B4-B9**（2026-07-12 战役「ERP+客服完善至工业级」·设计先行 `控制台.pen` D2/D3/D4 屏） | M⑥ | ✅ 代码完成（worktree `erp-cs-industrial` 分支·各批一 commit·待 PR 合并+部署[含新函数 kfMedia]）：**B4 坐席台增强**＝快捷回复（复用批15 预留 listKb·chips+FAQ 面板插入）+ 页内提醒（队列新增+失焦新入站·title 角标+短音·开关持久）；**B5 富媒体收图**＝归档落 mediaId+新函数 `kfMedia`（token 接缝同 kfSend 单点）+getMediaUrl 双闸（scope+消息归属·NOT_IN_SESSION）→云存储缓存→Desk 图片气泡五态（**发图后置 flag**）；**B6 CSAT 钻取+坐席看板**＝listCsatEntries 明细分页/差评跳会话 + listAgents 扩在线态/接待中/今日结束（csat 无 agentId 维度→坐席满意度列不做·记 flag）；**B7 质检抽检**＝sampleQc/saveQcMark（原子条件写拒覆盖）/listQcSampled+Conversations 第三 Card·质检粒度=客户会话档级（轮次实体不存在·记 flag）·重开清 qc 根修+守卫；**B8**＝越规退款前端入口（后端零改动）+R37b getPublicFaq 公开读+mp 求助面板接真；**B9**＝人工配置清单页（12 项探测·密钥零回显哨兵焊死·用户追加令）。测试 1701→1763 段内 |
 | 8 | 合规补全 + 其余 G(支付投诉/换货/风控/跨openid/SOP) | 按需 | ⬜ |
 | 押后 | AI(Hunyuan) | — | ⬜ |
 | 方案外 | 直播教学(企微群直播·单独立项) | — | ⬜ |
