@@ -4342,7 +4342,7 @@ export const repoChecks = [
   {
     id: 'rw-site-in-gates',
     roots: ['铁律'],
-    desc: '内容站三件套在位（M4·GEO 基建=可爬可收录的机器面）：astro.config 配 site 域名 + sitemap 集成；public/robots.txt 在；教程内容 frontmatter 带 reviewed 标记（AI 起草未审稿不冒充定稿——写真机器可核）',
+    desc: '内容站 SEO/GEO 基线在位（M4·GEO 基建=可爬可收录+AI 引擎可摘要的机器面）：astro.config 配 site 域名 + sitemap 集成；robots.txt 在且显式放行 AI 爬虫（GPTBot 等）；Base.astro 齐 og 三件+og:image/og:locale/twitter:card+WebSite 结构化卡；llms.txt 与 rss.xml 端点在；404 页 noindex；favicon.svg 与 og-cover.png 分享素材在；根 typecheck 覆盖 rewrite/site；教程 frontmatter 带 reviewed 标记（AI 起草未审稿不冒充定稿——写真机器可核）',
     run() {
       const base = join(ROOT, 'rewrite/site')
       if (!existsSync(base)) return []
@@ -4354,14 +4354,29 @@ export const repoChecks = [
         if (!/site:\s*'https:\/\/www\.luckyducky\.cn'/.test(c)) bad.push('astro.config 未配 site 域名——sitemap/canonical 出不了绝对地址（收录基建缺）')
         if (!/sitemap\(\)/.test(c)) bad.push('astro.config 未挂 sitemap 集成——搜索引擎无地图可爬')
       }
-      if (!existsSync(join(base, 'public/robots.txt'))) bad.push('public/robots.txt 缺失——爬虫策略未声明')
+      const robotsPath = join(base, 'public/robots.txt')
+      if (!existsSync(robotsPath)) bad.push('public/robots.txt 缺失——爬虫策略未声明')
+      else if (!/GPTBot/.test(readFileSync(robotsPath, 'utf8')))
+        bad.push('robots.txt 未显式放行 AI 引擎爬虫（GPTBot 等）——GEO 语料源定位要求对 AI 爬虫态度显式声明，不靠通配默许')
       const layout = join(base, 'src/layouts/Base.astro')
       if (existsSync(layout)) {
         const l = readFileSync(layout, 'utf8')
-        for (const og of ['og:title', 'og:description', 'og:url']) {
+        for (const og of ['og:title', 'og:description', 'og:url', 'og:image', 'og:locale', 'twitter:card']) {
           if (!l.includes(og)) bad.push(`Base.astro 缺 ${og}——社交分享/引擎摘要卡不全（GEO 面）`)
         }
+        if (!/websiteSchema/.test(l)) bad.push('Base.astro 未注入 WebSite 结构化卡（websiteSchema）——站点实体锚点缺失（GEO 面）')
       }
+      // GEO 双端点：llms.txt（AI 引擎抓取入口·教程清单随内容集合同步）+ rss.xml（内容分发/收录信号）——
+      // 都做成 Astro 端点而非静态文件，防新增教程后清单 stale。
+      if (!existsSync(join(base, 'src/pages/llms.txt.ts'))) bad.push('src/pages/llms.txt.ts 缺失——GEO llms.txt 端点未建（AI 引擎抓取入口）')
+      if (!existsSync(join(base, 'src/pages/rss.xml.ts'))) bad.push('src/pages/rss.xml.ts 缺失——RSS 端点未建（内容分发/收录信号）')
+      const nf = join(base, 'src/pages/404.astro')
+      if (existsSync(nf) && !/noindex/.test(readFileSync(nf, 'utf8'))) bad.push('404.astro 未标 noindex——错误页进索引稀释收录质量')
+      if (!existsSync(join(base, 'public/favicon.svg'))) bad.push('public/favicon.svg 缺失——浏览器标签/收录结果无品牌图标')
+      if (!existsSync(join(base, 'public/og-cover.png'))) bad.push('public/og-cover.png 缺失——og:image 指向不存在的分享图（分享卡开天窗）')
+      const pkg = JSON.parse(readFileSync(join(ROOT, 'package.json'), 'utf8'))
+      if (!/rewrite\/site/.test((pkg.scripts && pkg.scripts.typecheck) || ''))
+        bad.push('package.json scripts.typecheck 未覆盖 rewrite/site——站点 TS（schema.ts 等 GEO 承重层）类型不过闸')
       const contentDir = join(base, 'src/content/tutorials')
       if (existsSync(contentDir)) {
         for (const f of readdirSync(contentDir)) {

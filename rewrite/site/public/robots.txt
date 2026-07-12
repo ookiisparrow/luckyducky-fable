@@ -1,5 +1,24 @@
-# Lucky Ducky 小棉鸭 · 内容站（欢迎收录·含 AI 引擎爬虫）
+# Lucky Ducky 小棉鸭 · 内容站（欢迎收录·GEO 语料源——对 AI 引擎爬虫显式放行，不靠通配默许）
 User-agent: *
+Allow: /
+
+# 生成式引擎爬虫（显式声明态度）
+User-agent: GPTBot
+Allow: /
+
+User-agent: ClaudeBot
+Allow: /
+
+User-agent: Claude-User
+Allow: /
+
+User-agent: PerplexityBot
+Allow: /
+
+User-agent: Google-Extended
+Allow: /
+
+User-agent: Bytespider
 Allow: /
 
 Sitemap: https://www.luckyducky.cn/sitemap-index.xml
