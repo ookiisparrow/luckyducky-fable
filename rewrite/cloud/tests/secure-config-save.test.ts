@@ -93,6 +93,14 @@ describe('saveSecureConfig 合并保存行为', () => {
     expect(doc.secret).toBe('new-secret')
   })
 
+  it('大白话：小程序卡片两字段（miniappAppId/thumbMediaId·审查批随迁入库）在 wxkf 白名单内可保存', async () => {
+    const r = await post('saveSecureConfig', SUPER, { docId: 'wxkf', fields: { miniappAppId: 'wx0000000000000000', thumbMediaId: 'media-abc' } })
+    expect(r.ok).toBe(true)
+    const doc = control.dump('secureConfig').find((d: any) => d._id === 'wxkf')
+    expect(doc.miniappAppId).toBe('wx0000000000000000')
+    expect(doc.thumbMediaId).toBe('media-abc')
+  })
+
   it('大白话：mchPrivateKey 保存前经 normalizePem 规整（塌行的 \\n 字面量重建成规范 PEM）', async () => {
     const raw = '-----BEGIN PRIVATE KEY-----\\nMIIBVQIBADANBgkqhkiG\\n-----END PRIVATE KEY-----'
     const r = await post('saveSecureConfig', SUPER, { docId: 'wxpay', fields: { mchPrivateKey: raw } })

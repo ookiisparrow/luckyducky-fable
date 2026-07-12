@@ -3325,6 +3325,30 @@ export const repoChecks = [
     },
   },
   {
+    // 新线集合逐名登记库权限期望表（2026-07-12 配置清单可填写化审查批）：secureConfig（企微 Secret/商户
+    // 私钥承重）动态建默认 private 是已知真洞（rateLimit/wxBills 前科·期望表自注），漏出期望表＝逃出
+    // 「上线前逐项锁 adminonly」的人工核对面。collection-count-synced 只核旧线 packages/cloud 计数，
+    // 新线净新增集合（anomalies/inspectRuns/secureConfig…）对它结构性不可见——本守卫按名补上。
+    id: 'rw-collection-perm-registered',
+    roots: ['#9', '#3'],
+    desc: '新线集合逐名登记库权限期望表：rewrite/shared/src/collections.ts 每个集合名须在 console-assets/02-库权限期望表.md 有期望档位行——动态建默认 private=真洞，漏登记即逃出锁权限人工核对（配置清单审查批·secureConfig 首踩）',
+    run() {
+      const home = join(ROOT, 'rewrite/shared/src/collections.ts')
+      const perm = join(ROOT, 'console-assets/02-库权限期望表.md')
+      if (!existsSync(home) || !existsSync(perm)) return []
+      const m = stripComments(readFileSync(home, 'utf8')).match(/COLLECTIONS\s*=\s*\{([\s\S]*?)\}/)
+      if (!m) return ['rewrite/shared/src/collections.ts 未解析到 COLLECTIONS 块（守卫失效·先修解析）']
+      const names = new Set([...m[1].matchAll(/:\s*['"]([a-zA-Z_]+)['"]/g)].map((x) => x[1]))
+      if (!names.size) return ['rewrite/shared COLLECTIONS 解析为空（守卫失效·先修解析）']
+      const table = readFileSync(perm, 'utf8')
+      const bad = []
+      for (const n of names)
+        if (!table.includes('`' + n + '`'))
+          bad.push(`新线集合 ${n} 未登记 console-assets/02-库权限期望表.md（动态建默认 private·须有期望档位行并于控制台锁 adminonly）`)
+      return bad
+    },
+  },
+  {
     id: 'function-count-synced',
     roots: ['#11'],
     desc: '云函数计数单源（规则⑥·客观计数机器维护）：cloudbaserc.json 的 functions 数为真值；系统事实「云函数」计数行须报同一数——防 28/32/33 手抄漂移（doc-audit 首审命中：部署后没回写状态文档）',

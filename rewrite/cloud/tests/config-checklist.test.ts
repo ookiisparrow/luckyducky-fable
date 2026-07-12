@@ -59,7 +59,7 @@ const post = (action: string, key: string, data: Record<string, unknown> = {}) =
     body: JSON.stringify({ action, key, data }),
   }).then((r: any) => ({ status: r.statusCode, ...JSON.parse(r.body) }))
 
-const ENV_KEYS = ['WXKF_AGENTID', 'WXKF_CORPID', 'WXKF_SECRET', 'WXKF_TOKEN', 'WXKF_AESKEY', 'WXPAY_MCH_PRIVATE_KEY', 'WXPAY_MCH_SERIAL']
+const ENV_KEYS = ['WXKF_AGENTID', 'WXKF_CORPID', 'WXKF_SECRET', 'WXKF_TOKEN', 'WXKF_AESKEY', 'WXKF_MINIAPP_APPID', 'WXKF_THUMB_MEDIA_ID', 'WXPAY_MCH_PRIVATE_KEY', 'WXPAY_MCH_SERIAL']
 
 beforeEach(() => {
   control.reset()
@@ -88,16 +88,16 @@ describe('RBAC 默认拒：外包访问 getConfigChecklist 403（未登记 ACTIO
   })
 })
 
-describe('探测规则各态：ok / missing / check（超管可读·数据契约 6 组 20 条全在）', () => {
+describe('探测规则各态：ok / missing / check（超管可读·数据契约 6 组 22 条全在）', () => {
   it('大白话：全部未配置时——凭证/DB 项 missing，纯人工 5 项 + 资产 1 项恒 check', async () => {
     const r = await post('getConfigChecklist', SUPER, {})
     expect(r.status).toBe(200)
     const groups = r.groups
     expect(groups.length).toBe(6)
     const totalItems = groups.reduce((n: number, g: any) => n + g.items.length, 0)
-    expect(totalItems).toBe(20) // 20 条全在（铁律）
+    expect(totalItems).toBe(22) // 22 条全在（铁律·配置清单审查批 +2：小程序卡片 appid/thumbMediaId 随迁入库）
 
-    for (const key of ['WXKF_AGENTID', 'WXKF_CORPID', 'WXKF_SECRET', 'WXKF_TOKEN', 'WXKF_AESKEY']) {
+    for (const key of ['WXKF_AGENTID', 'WXKF_CORPID', 'WXKF_SECRET', 'WXKF_TOKEN', 'WXKF_AESKEY', 'WXKF_MINIAPP_APPID', 'WXKF_THUMB_MEDIA_ID']) {
       expect(itemOf(groups, WXKF_GROUP, key).status).toBe('missing')
       expect(itemOf(groups, WXKF_GROUP, key).fill).toBeTruthy() // 可填写元数据必在
     }
@@ -120,14 +120,14 @@ describe('探测规则各态：ok / missing / check（超管可读·数据契约
     expect(assetGroup.items[0].status).toBe('check')
   })
 
-  it('大白话：secureConfig/wxkf 与 wxpay 入库齐全 → 对应 7 项转 ok', async () => {
+  it('大白话：secureConfig/wxkf 与 wxpay 入库齐全 → 对应 9 项转 ok', async () => {
     control.seed('secureConfig', [
-      { _id: 'wxkf', corpId: 'ww123', secret: 's1', token: 't1', aesKey: 'a'.repeat(43), agentId: '1000001' },
+      { _id: 'wxkf', corpId: 'ww123', secret: 's1', token: 't1', aesKey: 'a'.repeat(43), agentId: '1000001', miniappAppId: 'wx0000000000000000', thumbMediaId: 'media-1' },
       { _id: 'wxpay', mchPrivateKey: '-----BEGIN PRIVATE KEY-----\nabc\n-----END PRIVATE KEY-----\n', mchSerial: 'ABCDEF' },
     ])
     const r = await post('getConfigChecklist', SUPER, {})
     const groups = r.groups
-    for (const key of ['WXKF_AGENTID', 'WXKF_CORPID', 'WXKF_SECRET', 'WXKF_TOKEN', 'WXKF_AESKEY']) {
+    for (const key of ['WXKF_AGENTID', 'WXKF_CORPID', 'WXKF_SECRET', 'WXKF_TOKEN', 'WXKF_AESKEY', 'WXKF_MINIAPP_APPID', 'WXKF_THUMB_MEDIA_ID']) {
       expect(itemOf(groups, WXKF_GROUP, key).status).toBe('ok')
     }
     for (const key of ['WXPAY_MCH_PRIVATE_KEY', 'WXPAY_MCH_SERIAL']) {
@@ -176,7 +176,7 @@ describe('哨兵行为测试：密钥/配置值零回显（铁律）', () => {
   it('大白话：env + DB 塞哨兵串后，响应体 JSON.stringify 一律不含任一哨兵串', async () => {
     process.env.WXPAY_MCH_PRIVATE_KEY = 'SENTINEL_WXPAY_KEY_9f3a'
     control.seed('secureConfig', [
-      { _id: 'wxkf', corpId: 'SENTINEL_CORPID_9f3a', secret: 'SENTINEL_SECRET_9f3a', token: 'SENTINEL_TOKEN_9f3a', aesKey: 'SENTINEL_AESKEY_9f3a', agentId: 'SENTINEL_AGENTID_9f3a' },
+      { _id: 'wxkf', corpId: 'SENTINEL_CORPID_9f3a', secret: 'SENTINEL_SECRET_9f3a', token: 'SENTINEL_TOKEN_9f3a', aesKey: 'SENTINEL_AESKEY_9f3a', agentId: 'SENTINEL_AGENTID_9f3a', miniappAppId: 'SENTINEL_MINIAPP_9f3a', thumbMediaId: 'SENTINEL_THUMB_9f3a' },
     ])
     control.seed('config', [{ _id: 'pay', mode: 'real', subMchId: 'SENTINEL_MCHID_9f3a', flowId: 'SENTINEL_FLOWID_9f3a', refundFlowId: 'SENTINEL_RFLOWID_9f3a' }])
     control.seed('adminConfig', [{ _id: 'settings', alertWebhook: 'SENTINEL_WEBHOOK_9f3a' }])
@@ -193,6 +193,8 @@ describe('哨兵行为测试：密钥/配置值零回显（铁律）', () => {
       'SENTINEL_TOKEN_9f3a',
       'SENTINEL_AESKEY_9f3a',
       'SENTINEL_AGENTID_9f3a',
+      'SENTINEL_MINIAPP_9f3a',
+      'SENTINEL_THUMB_9f3a',
       'SENTINEL_MCHID_9f3a',
       'SENTINEL_FLOWID_9f3a',
       'SENTINEL_RFLOWID_9f3a',
