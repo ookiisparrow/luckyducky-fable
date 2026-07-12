@@ -42,7 +42,7 @@ const NAV: Array<{ group: string; icon: Component; solo?: boolean; items: Array<
       { label: '课程管理', path: '/courses' },
       { label: '卡片设计', path: '/cards' },
       { label: '小程序橱窗', path: '/showcase' },
-      { label: '首页内容', path: '/home-content' },
+      { label: '页面内容', path: '/page-content' },
       { label: '帮助视频', path: '/help-videos' },
     ],
   },
