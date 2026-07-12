@@ -21,6 +21,7 @@ export async function overrideRefund({ db, data }: Ctx) {
   if (!got || !got.data) return reply(400, { ok: false, error: 'NO_ORDER' })
   const order = got.data
   if (!['paid', 'shipped', 'done'].includes(order.status)) return reply(400, { ok: false, error: 'BAD_STATUS:' + order.status })
+  const orderStatusAtStart = order.status // 竞态可观测闸用（见下方 SHIP_REFUND_RACE 注释）
 
   const line = (order.items || []).find((it: any) => (it.lineId || it.productId) === reqLine)
   if (!line) return reply(400, { ok: false, error: 'UNKNOWN_ITEM' })
@@ -110,6 +111,17 @@ export async function overrideRefund({ db, data }: Ctx) {
       .update({ data: { status: 'applied' } })
       .catch(() => {})
     return reply(500, { ok: false, error: 'REFUND_TRIGGER_FAIL' })
+  }
+  // 并发窗口可观测（P2·根因#14·与 shipOne 侧 REFUND_HOLD 闸对称）：shipOne 与本函数各自读订单/售后当前
+  // 状态、中间没有互斥（重型锁/事务模拟不是本仓既有模式，收窄+可观测已是合理止损——见 shipOne 同款注释）。
+  // 若批准退款前订单还不是 shipped，批准落库后订单却已是 shipped——说明恰好在本次批准执行期间被并发
+  // 发货，构成钱货两空风险。钱已经该退，不能因为货发了就不退，但必须留一条高危信号让人工去核实是否需要
+  // 拦截物流/联系客户。shipOne 侧挡「先退款后发货」，这里补「先发货后退款」方向的兜底信号，两个方向对称。
+  if (orderStatusAtStart !== 'shipped') {
+    const fresh = await db.collection('orders').doc(orderId).get().catch(() => null)
+    if (fresh && fresh.data && fresh.data.status === 'shipped') {
+      await notifyAlert('money', 'overrideRefund', 'SHIP_REFUND_RACE', { id: asId, orderId })
+    }
   }
   return reply(200, { ok: true, id: asId })
 }
@@ -212,6 +224,7 @@ export async function approveRefund({ db, data }: Ctx) {
   if (!flowId) return reply(400, { ok: false, error: 'REFUND_FLOW_NOT_CONFIGURED' })
   const order = await db.collection('orders').doc(got.data.orderId).get().catch(() => null)
   if (!order || !order.data) return reply(400, { ok: false, error: 'NO_ORDER' })
+  const orderStatusAtStart = order.data.status // 竞态可观测闸用（见下方 SHIP_REFUND_RACE 注释）
 
   // 复核进课退货权（外审 R1-R4·P1.2 + 深审① 2026-07-02·根因#1 副作用绑状态机）：用户先申请退款（applied）
   // 后再确认进课时，confirmEnter 按件递增 enteredQty（全进才翻 refundable=false）。同意退款前必须按**此刻**
@@ -287,6 +300,15 @@ export async function approveRefund({ db, data }: Ctx) {
       .update({ data: { status: 'applied' } })
       .catch(() => {})
     return reply(500, { ok: false, error: 'REFUND_TRIGGER_FAIL' })
+  }
+  // 并发窗口可观测（P2·根因#14·与 overrideRefund 侧同款、与 shipOne 侧 REFUND_HOLD 闸对称）：见
+  // overrideRefund 内 SHIP_REFUND_RACE 注释——批准前订单不是 shipped、批准落库后却已是 shipped，说明
+  // 恰好在本次批准执行期间被并发发货。钱照退，只留高危信号供人工核实是否需要拦截物流。
+  if (orderStatusAtStart !== 'shipped') {
+    const fresh = await db.collection('orders').doc(got.data.orderId).get().catch(() => null)
+    if (fresh && fresh.data && fresh.data.status === 'shipped') {
+      await notifyAlert('money', 'approveRefund', 'SHIP_REFUND_RACE', { id, orderId: got.data.orderId })
+    }
   }
   return reply(200, { ok: true })
 }

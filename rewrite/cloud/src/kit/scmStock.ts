@@ -157,6 +157,32 @@ export async function sumLedgerByItemKey(docType: MoveDocType): Promise<{ itemKe
   return (r.list || []).map((x: any) => ({ itemKey: x._id, total: x.total }))
 }
 
+/** 最近 N 条流水（管理端总览卡片用·bounded·按时间倒序）。经门1 唯一出口，不许调用方直碰 stockLedger 集合
+ *  （守卫 rw-material-stock-single-seam·批K：scmOverview 原直接 `db.collection(COLLECTIONS.stockLedger)`
+ *  绕过本门，改走这里）。 */
+export async function recentStockLedger(n: number): Promise<any[]> {
+  const db = getDb()
+  const cap = Math.min(Math.max(1, n | 0), 50)
+  const r = await db.collection(COLLECTIONS.stockLedger).orderBy('at', 'desc').limit(cap).get().catch(() => ({ data: [] }))
+  return r.data || []
+}
+
+/** 是否存在过任意 adjust 类流水（配置清单「期初盘点完成」探测用·bounded limit(1)·只判存在不取值）。
+ *  经门1 唯一出口（同上·configChecklist 原直碰 stockLedger，批K 改走这里）。 */
+export async function hasAdjustLedgerEntry(): Promise<boolean> {
+  const db = getDb()
+  const r = await db.collection(COLLECTIONS.stockLedger).where({ docType: 'adjust' }).limit(1).get().catch(() => ({ data: [] }))
+  return (r.data || []).length > 0
+}
+
+/** 是否存在任意已设安全库存线（threshold>0）的物料主档（配置清单「物料安全线已配」探测用·bounded limit(1)）。
+ *  经门1 唯一出口（同上·configChecklist 原直碰 materials，批K 改走这里）。 */
+export async function hasThresholdMaterial(): Promise<boolean> {
+  const db = getDb()
+  const r = await db.collection(COLLECTIONS.materials).where({ threshold: db.command.gt(0) }).limit(1).get().catch(() => ({ data: [] }))
+  return (r.data || []).length > 0
+}
+
 // ── 物料主档持久化（同在门1：materials 集合全库仅本文件读写·守卫 material-stock-single-seam）──
 // 主档字段与库存字段分治：saveMaterialDoc 只写主档字段（name/category/uom/…），**绝不碰 stock**
 // （建档初始化 stock:0 除外）；库存只经 applyStockMoves。uom 建档锁死（守卫 scm-uom-integer 行为锁）。

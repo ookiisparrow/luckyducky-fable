@@ -287,7 +287,7 @@ onMounted(() => {
               <div class="ld-td" :style="{ width: '90px' }"><Badge :tone="row.score <= 3 ? 'red' : 'green'">{{ row.score }} 分</Badge></div>
               <div class="ld-td grow">{{ row.note || '—' }}</div>
               <div class="ld-td ops-cell" :style="{ width: '130px' }">
-                <UiButton variant="ghost" size="sm" @click="viewQcSession(row)">
+                <UiButton v-if="row.externalUserId" variant="ghost" size="sm" @click="viewQcSession(row)">
                   <Search :size="13" :stroke-width="1.8" /><span>查会话</span>
                 </UiButton>
               </div>

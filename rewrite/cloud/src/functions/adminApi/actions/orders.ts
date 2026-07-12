@@ -101,6 +101,12 @@ async function shipOne(db: any, idRaw: any, companyRaw: any, trackingRaw: any, o
   // cur∈{paid,shipped}+非 feeMismatch，完全不查该单是否已有行被批准/已退款。已批准退款的单一旦照发，
   // 就是钱货两空的资损洞。现场直读 afterSales（不走派生/缓存字段，钱链闸子必须读最新态）：该订单
   // 存在 status∈{approved,refunded} 的记录即挡，返回命中的 lineId 供前端定位展示，不笼统吞错。
+  // 残余竞态窗口（P2·已收窄+对称可观测，非重型锁）：这段读到下方条件更新之间仍有一个物理上无法用
+  // 简单闸子消除的窗口——若 approveRefund/overrideRefund 恰好在这两步之间才把 afterSales 抢占成
+  // approved，本次 heldLines 读不到、会照常放行发货。分布式锁/事务模拟不是本仓既有模式、过度工程，
+  // 故不在此引入；对称收口在 refunds.ts 的 approveRefund/overrideRefund：退款批准落库后回读一次订单，
+  // 若发现订单在批准执行期间已变 shipped（即本窗口被命中），触发 notifyAlert('money', …, 'SHIP_REFUND_RACE', …)
+  // 留高危信号供人工核实——钱货两空的窗口从「完全不可见」变成「可观测、可人工介入」。
   const heldLines = await db
     .collection('afterSales')
     .where({ orderId: id, status: db.command.in(['approved', 'refunded']) })

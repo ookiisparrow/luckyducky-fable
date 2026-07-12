@@ -94,6 +94,10 @@ class DocRef {
     this.id = id
   }
   async get() {
+    // 写前注入同款读侧钩子（批H：casDecrement 瞬时读故障测试）：可对 doc(id).get() 单点注入抛错
+    // （非「无档」的真读失败，如网络/DB 瞬时故障），与下方「无档」reject 区分——回调收到 {coll,id}
+    // （Query.get() 的 beforeGet 收到 {coll,filter,skip}，字段不同，测试按需解构，互不干扰）。默认无。
+    if (typeof G.beforeGet === 'function') await G.beforeGet({ coll: this.coll, id: this.id })
     const found = rows(this.coll).find((d) => d._id === this.id)
     if (!found) throw new Error('DOCUMENT_NOT_FOUND') // 真 sdk：缺失即 reject
     return { data: clone(found) }
@@ -187,6 +191,8 @@ class Query {
     return { data: this._rows().map(clone) }
   }
   async count() {
+    // 写前注入同款钩子（测试：精确聚合异常→兜底近样本口径场景，逼真机 count() 失败·默认无）
+    if (typeof G.beforeCount === 'function') await G.beforeCount({ coll: this.coll, filter: this._filter })
     return { total: rows(this.coll).filter((d) => matchDoc(d, this._filter)).length }
   }
   async update({ data }) {
@@ -367,6 +373,7 @@ const control = {
     G.beforeUpdate = null
     G.beforeAdd = null
     G.beforeGet = null
+    G.beforeCount = null
     G.uncreated = new Set()
     G.deletedFiles = []
     G.tempUrlCalls = []
@@ -413,6 +420,10 @@ const control = {
   // 注入「get() 前」副作用（测试：分页扫描单页失败场景，可按 coll/skip 判断选择性抛错）
   setBeforeGet(fn) {
     G.beforeGet = fn
+  },
+  // 注入「count() 前」副作用（测试：精确聚合异常→兜底近样本口径场景，可按 coll 判断选择性抛错）
+  setBeforeCount(fn) {
+    G.beforeCount = fn
   },
   // 逼真机「集合未建」（根因#8）：标记集合未 createCollection·其 add/update 抛错·验代码有 createCollection 兜底
   markUncreated(name) {

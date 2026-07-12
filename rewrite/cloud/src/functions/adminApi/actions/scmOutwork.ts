@@ -1,5 +1,5 @@
 import { reply, type Ctx } from '../lib'
-import { applyStockMoves, listMaterialDocs, transition, pageQuery } from '../../../kit'
+import { applyStockMoves, listMaterialDocs, transition, pageQuery, notifyAlert } from '../../../kit'
 import { COLLECTIONS } from '@ldrw/shared'
 import { asFen, OUTWORK_ORDER_STATUS, OUTWORK_ORDER_TRANSITIONS } from '@ldrw/shared'
 
@@ -132,11 +132,22 @@ export async function issueOutwork({ db, data, agentId }: Ctx) {
     // 用条件更新而非 transition()：issued→draft 是本次未完成发料的技术性复原,不是业务逆向流转（蓝图定稿 MVP
     // 不做逆向流转,scm.spec 故意不声明这条边——声明了就开放成业务动作了）；条件绑 status:'issued' 防覆盖并发方
     // （若有人已 receiveOutwork 翻 delivered,此处 no-op,错误照返、人工经调整单对账）。
-    await db
+    // 复原本身若不成功（异常/条件不匹配即 updated≠1）须告警——否则单据永久卡在假「已发料」而库存实际未出，
+    // 后续可能被继续走完流程甚至结算工钱,账实不符且无信号可查（同 scmStock.rollback 的 ROLLBACK_FAIL 口径）。
+    // structure-ok（rw-scm-transitions-declared）：技术性失败补偿,非业务逆向流转,理由见上。
+    const rollback = await db
       .collection('outworkOrders')
       .where({ _id: outworkId, status: 'issued' })
       .update({ data: { status: 'draft', issuedAt: null } })
-      .catch(() => undefined)
+      .catch(() => ({ stats: { updated: 0 } }))
+    if (!rollback.stats || rollback.stats.updated !== 1) {
+      await notifyAlert('money', 'scmOutwork.issueOutwork', 'STATUS_ROLLBACK_FAIL', {
+        outworkId,
+        attemptedFrom: 'issued',
+        attemptedTo: 'draft',
+        stockError: ar.error,
+      })
+    }
     return reply(ar.error === 'INSUFFICIENT' ? 409 : 400, { ok: false, error: ar.error, materialId: ar.materialId })
   }
   return reply(200, { ok: true, applied: ar.applied })
@@ -200,11 +211,22 @@ export async function receiveOutwork({ db, data, agentId }: Ctx) {
   if (!ar.ok) {
     // 补偿回滚（对称 issueOutwork·理由同上）：入库失败（主档并发被删/CAS 争用耗尽·预检后几乎不至）时
     // 复原 issued 并清掉本次定格,否则单据「已收货有应付」而带结一团没入账、重放又被 NOT_ISSUED 挡死。
-    await db
+    // 复原本身若不成功须告警（同 issueOutwork 口径）——否则单据卡在假「已收货」（payableFen 已定格但
+    // 库存未入账），可能被继续走到结算付工钱，账实不符且无信号可查。
+    // structure-ok（rw-scm-transitions-declared）：技术性失败补偿,非业务逆向流转,理由同 issueOutwork。
+    const rollback = await db
       .collection('outworkOrders')
       .where({ _id: outworkId, status: 'delivered' })
       .update({ data: { status: 'issued', receiveLines: null, payableFen: null, lossQty: null, deliveredAt: null } })
-      .catch(() => undefined)
+      .catch(() => ({ stats: { updated: 0 } }))
+    if (!rollback.stats || rollback.stats.updated !== 1) {
+      await notifyAlert('money', 'scmOutwork.receiveOutwork', 'STATUS_ROLLBACK_FAIL', {
+        outworkId,
+        attemptedFrom: 'delivered',
+        attemptedTo: 'issued',
+        stockError: ar.error,
+      })
+    }
     return reply(ar.error === 'CONTENTION' ? 409 : 400, { ok: false, error: ar.error, materialId: ar.materialId })
   }
   return reply(200, { ok: true, payableFen, lossQty, applied: ar.applied })

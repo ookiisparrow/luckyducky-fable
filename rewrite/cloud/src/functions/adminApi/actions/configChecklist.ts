@@ -1,4 +1,5 @@
 import { reply, type Ctx } from '../lib'
+import { hasAdjustLedgerEntry, hasThresholdMaterial } from '../../../kit'
 import { COLLECTIONS } from '@ldrw/shared'
 
 // 人工配置清单（批 B9→2026-07-12 补口可填写化·docs/进销存ERP/ 与 docs/后台360工作站/ 之外的「配了没」总览）：
@@ -72,13 +73,10 @@ export async function getConfigChecklist({ db }: Ctx) {
   const bomDoc = await db.collection(COLLECTIONS.config).doc('scmBomTemplate').get().catch(() => null)
   const bomOk = !!(bomDoc && bomDoc.data)
 
-  const _ = db.command
-  const [ledgerRes, materialRes] = await Promise.all([
-    db.collection(COLLECTIONS.stockLedger).where({ docType: 'adjust' }).limit(1).get().catch(() => ({ data: [] })),
-    db.collection(COLLECTIONS.materials).where({ threshold: _.gt(0) }).limit(1).get().catch(() => ({ data: [] })),
-  ])
   // 期初盘点（有 adjust 流水）+ 物料安全线（有 threshold>0 物料）合并一行两条件（选简单者·两者皆备才算 ok）
-  const stockInitOk = (ledgerRes.data || []).length > 0 && (materialRes.data || []).length > 0
+  // 门1 只读出口（批K：原直碰 stockLedger/materials 集合，绕过 SCM 门1·kit/scmStock.ts）
+  const [hasLedger, hasThreshold] = await Promise.all([hasAdjustLedgerEntry(), hasThresholdMaterial()])
+  const stockInitOk = hasLedger && hasThreshold
 
   const groups: ChecklistGroup[] = [
     {

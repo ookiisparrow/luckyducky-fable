@@ -4355,6 +4355,154 @@ export const repoChecks = [
     },
   },
   {
+    // SCM 域（购/外协单）状态写入只走声明流转——新线扫描面（批K·根因#2·移植 order-transitions-declared 的
+    // scm* 前缀纳管，同 rw-order-transitions-declared 精神：旧守卫（line 3758）只扫 packages/cloud，
+    // rewrite/cloud/src/functions/adminApi/actions/scmPurchase.ts、scmOutwork.ts 头注承诺「受
+    // order-transitions-declared 守卫保护」对生产代码是假的——这两个文件的 transition('purchaseOrders'/
+    // 'outworkOrders', …) 从未被任何守卫对账过。COLLS 直接复用 scripts/order-domain.generated.json 里的
+    // purchaseOrders/outworkOrders 声明（不是「借用旧线数据」：gen-order-domain.mjs 强制 packages/scm.spec.ts
+    // 与 rewrite/scm.spec.ts 两份声明逐集合比对一致、不一致直接生成失败，故该 JSON 对新线同样权威——不用
+    // 另写一套 rewrite/shared/src/scm.ts 的 TS 解析器）。edges/writeRe/casRe 扫描逻辑镜像
+    // rw-order-transitions-declared（已验证适配新线代码形态），只收窄 COLLS 到 SCM 两集合、避免与其重复报
+    // orders/afterSales。
+    id: 'rw-scm-transitions-declared',
+    roots: ['#2'],
+    desc: '新线 SCM 域（购/外协单）状态写入只走声明流转（根因#2·批K·移植 order-transitions-declared 的 scm 前缀纳管，同 rw-order-transitions-declared 精神：旧守卫只扫冻结线，scmPurchase.ts/scmOutwork.ts 头注承诺的保护对生产代码此前是假的）：rewrite/cloud/src/functions/adminApi/actions/scm*.ts 里 transition(purchaseOrders/outworkOrders) 的边、裸条件 CAS 的边须在 order-domain.generated.json 声明流转表内（该 JSON 由 gen-order-domain-synced 守卫保证与 packages/+rewrite 两份 scm.spec.ts 逐集合一致，对新线同样权威）；写这两集合 status 的字面量须是声明状态——越流转/打错状态名即红',
+    run() {
+      const jsonPath = join(ROOT, 'scripts/order-domain.generated.json')
+      if (!existsSync(jsonPath)) return ['scripts/order-domain.generated.json 缺失——跑 `node scripts/gen-order-domain.mjs`（SCM 域声明派生物）']
+      let spec
+      try {
+        spec = JSON.parse(readFileSync(jsonPath, 'utf8'))
+      } catch {
+        return ['scripts/order-domain.generated.json 解析失败——重生成']
+      }
+      const COLLS = new Set(['purchaseOrders', 'outworkOrders'].filter((c) => spec[c]))
+      if (!COLLS.size) return [] // JSON 未含 SCM 集合（生成物尚未覆盖）——不报，避免误挡未落地阶段
+      const declaredEdges = {} // coll -> Set('from=>to')
+      const declaredStates = {} // coll -> Set(state)
+      for (const coll of COLLS) {
+        declaredStates[coll] = new Set(spec[coll].states)
+        const edges = new Set()
+        for (const t of spec[coll].transitions) for (const f of t.from) edges.add(f + '=>' + t.to)
+        declaredEdges[coll] = edges
+      }
+
+      const actionsDir = join(ROOT, 'rewrite/cloud/src/functions/adminApi/actions')
+      if (!existsSync(actionsDir)) return []
+      const files = readdirSync(actionsDir).filter((e) => /^scm\w*\.ts$/.test(e)).map((e) => join(actionsDir, e))
+      const collOf = (head) => {
+        const ms = [...head.matchAll(/(?:\.collection\(|transition\()\s*(?:['"](\w+)['"]|COLLECTIONS\.(\w+))/g)]
+        return ms.length ? ms[ms.length - 1][1] || ms[ms.length - 1][2] : null
+      }
+      const bad = []
+      for (const p of files) {
+        const src = readFileSync(p, 'utf8')
+        const rel = relative(ROOT, p)
+        // ① transition(<coll>, id, [from...], 'to')：整条边对账（union 语义每个 from 元素都须有声明原子边）
+        const transRe = /transition\(\s*(?:['"](\w+)['"]|COLLECTIONS\.(\w+))\s*,[^,]+,\s*\[([^\]]*)\]\s*,\s*['"]([a-z_]+)['"]/g
+        let tm
+        while ((tm = transRe.exec(src))) {
+          const coll = tm[1] || tm[2]
+          if (!COLLS.has(coll)) continue
+          const from = [...tm[3].matchAll(/['"]([a-z_]+)['"]/g)].map((x) => x[1])
+          const undeclared = from.filter((f) => !declaredEdges[coll].has(f + '=>' + tm[4]))
+          if (undeclared.length)
+            bad.push(`${rel}：transition('${coll}', …, [${from.join(',')}] → '${tm[4]}') 含未声明边 ${undeclared.map((f) => f + '→' + tm[4]).join('、')}——order-domain.generated.json 流转表里没有，越流转或先改声明（根因#2）`)
+        }
+        // ①' 裸条件 CAS：where({…status:'X'|_.in([..])…}).update({data:{…status:'Y'…}}) 的边对账。
+        // 例外：技术性失败补偿回滚（applyStockMoves 失败后把已被 transition 抢占的状态复原，非业务逆向
+        // 流转、scm.spec 刻意不声明——声明了就等于开放成业务动作，见 scmOutwork.ts/scmPurchase.ts 行内长
+        // 注释）——紧邻代码块（往前 800 字符窗口内）写明 structure-ok 即放行，同本文件其它守卫的既定豁免写法。
+        const casRe = /\.where\(\s*\{[^{}]*?status:\s*(?:['"]([a-z_]+)['"]|(?:db\.command|_)\.in\(\[([^\]]*)\]\))[^{}]*?\}\s*\)[\s\S]{0,60}?\.update\(\s*\{\s*data:\s*\{[\s\S]{0,160}?\bstatus:\s*['"]([a-z_]+)['"]/g
+        let cm
+        while ((cm = casRe.exec(src))) {
+          const coll = collOf(src.slice(0, cm.index))
+          if (!coll || !COLLS.has(coll)) continue
+          const from = cm[1] ? [cm[1]] : [...cm[2].matchAll(/['"]([a-z_]+)['"]/g)].map((x) => x[1])
+          const to = cm[3]
+          const undeclared = from.filter((f) => !declaredEdges[coll].has(f + '=>' + to))
+          if (!undeclared.length) continue
+          const context = src.slice(Math.max(0, cm.index - 800), cm.index)
+          if (context.includes('structure-ok')) continue
+          bad.push(`${rel}：条件 CAS ${coll} [${from.join(',')}] → '${to}' 含未声明边 ${undeclared.map((f) => f + '→' + to).join('、')}——order-domain.generated.json 流转表里没有（根因#2）`)
+        }
+        // ② 写侧 status 字面量须是声明状态（add/update 的 data 内·where 过滤侧跳过——打错状态名即红）
+        const writeRe = /\bstatus:\s*['"]([a-z_]+)['"]/g
+        let wm
+        while ((wm = writeRe.exec(src))) {
+          const before = src.slice(Math.max(0, wm.index - 160), wm.index)
+          if (/\.where\(\s*\{[^}]*$/.test(before)) continue
+          const coll = collOf(src.slice(0, wm.index))
+          if (!coll || !COLLS.has(coll)) continue
+          if (!declaredStates[coll].has(wm[1]))
+            bad.push(`${rel}：写 ${coll}.status='${wm[1]}' 不是 order-domain.generated.json 声明状态（${[...declaredStates[coll]].join('/')}）——打错状态名或先改声明（根因#2）`)
+        }
+      }
+      return bad
+    },
+  },
+  {
+    // 原料账单点收口——新线扫描面（批K·SCM 门1·根因#1/#2·移植 material-stock-single-seam，同
+    // rw-order-transitions-declared 精神：旧守卫（line 822）只扫 packages/cloud/src，rewrite/cloud/src/
+    // kit/scmStock.ts 头注承诺「全库唯一 materials.stock/stockLedger 读写处（守卫 material-stock-single-seam）」
+    // 对生产代码此前是假的——rewrite/cloud 下任何文件直碰这两个集合从未被拦过。逻辑镜像旧守卫（同一套判定，
+    // 不弱化）：applyStockMoves 须导出、CAS 须用条件 where(stock)、除 seam 本身外全仓禁直碰。
+    id: 'rw-material-stock-single-seam',
+    roots: ['#1', '#2'],
+    desc: '新线原料账单点收口（SCM 门1·根因#1/#2·批K·移植 material-stock-single-seam，同 rw-order-transitions-declared 精神：旧守卫只扫冻结线，kit/scmStock.ts 头注承诺的保护对生产代码此前是假的）：materials.stock/stockLedger 仅 rewrite/cloud/src/kit/scmStock.ts 读写（applyStockMoves 唯一入口·乐观 CAS）；rewrite/cloud/src 其余文件直碰即红（防绕 CAS/绕流水改账）',
+    run() {
+      const seam = 'rewrite/cloud/src/kit/scmStock.ts'
+      const seamAbs = join(ROOT, seam)
+      if (!existsSync(seamAbs)) return []
+      const bad = []
+      const src = readFileSync(seamAbs, 'utf8')
+      if (!/export\s+async\s+function\s+applyStockMoves/.test(src)) bad.push(`${seam} 未导出 applyStockMoves——门1 空壳`)
+      if (!/\.where\(\{[^}]*stock/.test(src)) bad.push(`${seam} 库存变更未用条件 where(stock) 乐观 CAS——有并发互覆盖风险（根因#1）`)
+      const allow = new Set([seam])
+      const srcRoot = join(ROOT, 'rewrite/cloud/src')
+      const walk = (d) => {
+        for (const e of readdirSync(d)) {
+          const p = join(d, e)
+          if (statSync(p).isDirectory()) walk(p)
+          else if (e.endsWith('.ts')) {
+            const rel = relative(ROOT, p).replace(/\\/g, '/')
+            if (allow.has(rel)) continue
+            if (/COLLECTIONS\.(materials|stockLedger)\b|\.collection\(\s*['"](materials|stockLedger)['"]\s*\)/.test(readFileSync(p, 'utf8')))
+              bad.push(`${rel} 直碰 materials/stockLedger 集合——原料账读写须经 kit/scmStock（SCM 门1·防绕 CAS/绕流水）`)
+          }
+        }
+      }
+      if (existsSync(srcRoot)) walk(srcRoot)
+      return bad
+    },
+  },
+  {
+    // 原料流水确定性幂等——新线扫描面（批K·根因#2·移植 scm-ledger-idempotent，同上精神）。
+    // 顺手修正旧守卫（line 854）本体带的潜伏 bug（不改旧守卫本身、只是不在新守卫里复制同一个洞）：旧正则
+    // 用「'stockLedger' 与 '.add(' 相距 ≤200 字符」定位流水写入点，但实际代码里两者靠变量名（`ledger`）
+    // 间接关联、源码相距 >200 字符——`node -e` 实测旧正则对 packages/cloud/src/kit/scmStock.ts 当前内容
+    // 匹配 0 次，即该守卫的「_id 是否带确定性构造」检查从未真正跑过、静默假绿。新守卫改按 data 对象内是否
+    // 含 `itemKey:`（流水行的标志字段，物料主档 add 没有这个字段）定位真正的流水 add 调用，不依赖变量名/
+    // 字符距离；并新增「一个流水 add 都没找到」本身也报红——防止代码形态再变一次时守卫又悄悄测不到东西。
+    id: 'rw-scm-ledger-idempotent',
+    roots: ['#2'],
+    desc: '新线原料流水确定性幂等（SCM·根因#2·批K·移植 scm-ledger-idempotent，同 rw-order-transitions-declared 精神：旧守卫只扫冻结线；本守卫另修正旧正则「按字符距离定位」在当前代码形态下匹配 0 次的静默假绿，改按 data 内 itemKey: 字段定位流水 add）：rewrite/cloud/src/kit/scmStock.ts 写 stockLedger 必构造确定性 _id=`docType:docId:itemKey`（撞 id=并发方已写）·禁自动 id 双记账',
+    run() {
+      const seam = 'rewrite/cloud/src/kit/scmStock.ts'
+      if (!existsSync(join(ROOT, seam))) return []
+      const bad = []
+      const src = readFileSync(join(ROOT, seam), 'utf8')
+      if (!/\$\{[^}]*docType[^}]*\}:\$\{[^}]*docId[^}]*\}:\$\{/.test(src))
+        bad.push(`${seam} 未见确定性流水 _id 构造（\`\${docType}:\${docId}:\${itemKey}\` 三段模板）——流水失幂等（根因#2）`)
+      // 按 data 对象内是否含 itemKey: 字段识别真正的流水 add（不依赖变量名/字符距离——防 regex 假绿，见上注）
+      const adds = [...src.matchAll(/\.add\(\s*\{\s*data:\s*\{([\s\S]{0,300}?)\}\s*\}\s*\)/g)].filter((m) => /itemKey\s*:/.test(m[1]))
+      if (!adds.length) bad.push(`${seam} 未找到 stockLedger 流水 add({data:{itemKey:...}}) 调用——流水写入点代码形态已变、本守卫需同步（根因#2）`)
+      for (const m of adds) if (!/\b_id\b/.test(m[1])) bad.push(`${seam} stockLedger add 未带确定性 _id（含简写 {_id,...}）——自动 id=重放双记账（根因#2）`)
+      return bad
+    },
+  },
+  {
     id: 'rw-mp-checkout-consts-synced',
     roots: ['#5'],
     desc: '结算常量镜像同步（根因#5·mp 包进不了 @ldrw/shared——开发者工具编译不出仓外引用，故 mp 落副本 + 本守卫焊死）：rewrite/mp/lib/checkoutConst.ts 的 COUPON/SHIP/CHECKOUT_ADDONS 必须与 rewrite/shared/src/checkout.ts 逐值一致',

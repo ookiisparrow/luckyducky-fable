@@ -31,6 +31,7 @@ import { assembleCustomer360 } from '../customer360/orchestrator'
 
 const LIST_LIMIT = 20 // 待接队列默认页大小（bounded）
 const THREAD_LIMIT = 50 // 会话消息流默认页大小（bounded）
+const TIE_GROUP_CAP = 500 // 整页同值退化时的补查上限（纵深防御·真实客服单秒消息数远小于此·超过即真异常）
 const MAX_TEXT = 2000 // 坐席回复文本上限（防超长入库/发送）
 const DEFAULT_AGENT_LIMIT = 5 // 默认接待上限（agentState.limit 未配时）
 const CHANNEL = 'wxkf' // 出站归档 channel（与 kfCallback archiveOutbound 同口径·多承面区分位）
@@ -150,8 +151,13 @@ export async function claimConversation(ctx: Ctx): Promise<any> {
   const s = await loadSession(db, sessionId)
   if (!s) return reply(404, { ok: false, error: 'NOT_FOUND' })
   // 接待上限（派生 activeCount<limit·B6.3）：满额拒（先查后转·TOCTOU 罕见·派生计数自愈）
-  const [count, limit] = await Promise.all([activeCountFor(db, p.agentId), agentLimit(db, p.agentId)])
-  if (count >= limit) return reply(200, { ok: false, error: 'AT_CAPACITY', limit })
+  // 超管豁免（P2·escalateToMerchant 头注设计意图：外包甩单靠超管兜底——若超管本人也受同一上限
+  // 约束、又没有调高 limit 的入口，外包升级上来的会话在超管已达默认上限时会永久无人能接，
+  // 跟"甩给超管兜底"的设计意图矛盾）：isSuper 直接放行，不查 activeCountFor/agentLimit。
+  if (!p.isSuper) {
+    const [count, limit] = await Promise.all([activeCountFor(db, p.agentId), agentLimit(db, p.agentId)])
+    if (count >= limit) return reply(200, { ok: false, error: 'AT_CAPACITY', limit })
+  }
   const now = Date.now()
   // pending/escalated → active（声明流转·原子幂等：并发已被接走则 moved=false）
   const r = await transition('csSession', sessionId, ['pending', 'escalated'], 'active', {
@@ -282,8 +288,30 @@ export async function getThread(ctx: Ctx): Promise<any> {
     const boundaryAt = raw[THREAD_LIMIT].at
     while (list.length && list[list.length - 1].at === boundaryAt) list.pop()
     // 退化保护：整页 51 条全同一 at 值（单会话单秒消息数超页大小的极端突发，远超真实客服场景量级）——
-    // 退回会把 list 清空、cursor 卡死永不前进，两害相权退回吐出原始截断页（有限退化，不做无界拉取）。
-    if (!list.length) list = raw.slice(0, THREAD_LIMIT)
+    // 常规 tie-breaker 会把 list 清空、cursor 卡死永不前进。不能就此吐出原始截断页：那样第 51 条
+    // 及后续同值消息会落在 `at > cursor`（cursor=boundaryAt）的排除范围外，永久漏读、且零信号
+    // ——跟本函数本要根治的丢消息是同一种病，只是触发条件收窄成了"整页恰好同值"（评审 P2）。
+    // 补救：单独窄查这个 at 值（sessionId 精确匹配·不受 THREAD_LIMIT 限制），把完整同值组拼回本页，
+    // cursor 才能安全推进过 boundaryAt。补查加 TIE_GROUP_CAP 上限做纵深防御（不是无界读——真实
+    // 客服场景单秒消息数远小于此，命中上限本身就是需要人工核实的异常）。
+    if (!list.length) {
+      const tieRes = await db
+        .collection(COLLECTIONS.conversations)
+        .where({ externalUserId: s.externalUserId || '', openKfId: s.openKfId || '', at: boundaryAt })
+        .orderBy('_id', 'asc')
+        .limit(TIE_GROUP_CAP)
+        .get()
+        .catch(() => ({ data: [] }))
+      const tieRaw: any[] = (tieRes && tieRes.data) || []
+      if (tieRaw.length && tieRaw.length < TIE_GROUP_CAP) {
+        list = tieRaw // 补查拿全了该 at 值全部消息——整组拼进本次返回，cursor 可安全越过 boundaryAt
+      } else {
+        // 补查也拿不到，或该 at 值消息数达到/超过补查上限（理论上不该发生）——补查同样可能不完整，
+        // 不能假装拿全了。留痕告警（动作类失败禁静默·根因#14）+ 退回原始截断页兜底（有限退化，不做无界拉取）。
+        await notifyAlert('anomaly', 'getThread', 'TIE_GROUP_DEGRADED', { sessionId, at: boundaryAt, tieCount: tieRaw.length })
+        list = raw.slice(0, THREAD_LIMIT)
+      }
+    }
   }
   const messages = list
     .filter((m) => (m.msgtype || '') !== 'event') // 平台事件非会话内容·存量档也不进坐席消息流（新档已在 archive 侧跳过）

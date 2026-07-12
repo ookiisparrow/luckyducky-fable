@@ -249,6 +249,16 @@ describe('getCourses / getPlaybackUrl（目录不漏源·鉴权 fail-closed·黄
     expect((await call('getPlaybackUrl', { courseId: 'nope', segmentId: 's1' })).error).toBe('NO_COURSE')
     expect((await call('getPlaybackUrl', { courseId: 'c1', segmentId: 'nope' })).error).toBe('NO_SEGMENT')
   })
+
+  it('大白话：未剪段（videoFileId 空）+ 并行鉴权读瞬时失败——仍优雅回 url:null，不让整个调用未捕获抛错（P2·根因#14 修复）', async () => {
+    control.setBeforeGet(({ coll }: any) => {
+      if (coll === 'activations') throw new Error('MOCK_ACTS_FAIL') // 模拟集合未建/瞬时抖动
+    })
+    const r = await call('getPlaybackUrl', { courseId: 'c1', segmentId: 's2' }) // s2 videoFileId 空
+    control.setBeforeGet(null as never)
+    expect(r.ok).toBe(true)
+    expect(r.url).toBe(null)
+  })
 })
 
 describe('getMyCourses / getMyProgress / trackEvent（黄金 §四/§五）', () => {

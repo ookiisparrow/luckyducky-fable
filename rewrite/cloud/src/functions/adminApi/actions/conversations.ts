@@ -188,12 +188,9 @@ export async function sampleQc({ db, data }: Ctx): Promise<any> {
     .get()
     .catch(() => ({ data: [] }))
   const rows: any[] = (res && res.data) || []
-  // 已知限制（docs/待办与债.md flag）：qc/qcSampledAt 挂在可被重开复用的 csSession 文档上——顾客二次
-  // 「找人工」时 cs/kfCallback/dispatch.ts enqueueSession 把同一 _id 的 doc closed→pending 重开，只刷新
-  // agentId/claimedAt/createdAt/updatedAt 四个字段，不清 qc/qcSampledAt；该文档此后再次 closed，本次 filter
-  // 仍会因旧 qc/qcSampledAt 非空把它排除出候选池——同一客户被评过一次后，其后全新的会话永远进不了这里的
-  // 候选池，listQcSampled 也会一直展示那份过期评分。根治须改 dispatch.ts 重开分支（本批白名单不含该文件，
-  // 未做）；本批仅记账，不在此臆造轮次实体或时间戳启发式去猜「是否重开过」。
+  // qc/qcSampledAt 挂在可被重开复用的 csSession 文档上——顾客二次「找人工」时
+  // cs/kfCallback/dispatch.ts enqueueSession 的 closed→pending 重开分支已一并清空 qc/qcSampledAt（批 B7 修复），
+  // 故这里按 !qc && !qcSampledAt 过滤即可筛出未评过的候选，不会漏收重开后的新一轮会话。
   const candidates = rows.filter((s: any) => !s.qc && !s.qcSampledAt)
   // Fisher-Yates 部分洗牌（池已有界·简单实现足够）
   const pool = candidates.slice()
