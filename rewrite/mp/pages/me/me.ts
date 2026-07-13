@@ -9,6 +9,7 @@ import { continueResolve, type ContinueTarget } from '../../lib/continueResolve'
 import { mapMe, type MeVM } from '../../lib/mapPages'
 import { openCustomerService } from '../../utils/customerService'
 import { goHomeTab } from '../../lib/homeIntent'
+import { armExitAlert } from '../../utils/exitGuard'
 
 Page({
   data: {
@@ -20,6 +21,7 @@ Page({
     contFailed: false, // 继续学习区取数失败标记（同 aftersales/order-list loadFailed 分治：失败≠没进度）
   },
   onShow() {
+    armExitAlert() // tabBar 根页误触退出提醒（返回二次确认·2026-07-13 用户反馈·覆盖边界见 utils/exitGuard）
     if (typeof this.getTabBar === 'function') (this.getTabBar() as unknown as LdTabBar).setActive('me')
     void this.refresh()
   },
