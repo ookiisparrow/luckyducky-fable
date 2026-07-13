@@ -1,4 +1,5 @@
 // 商品评价列表（M2 批12）：首页汇总头（均分/分布/标签 Top5·首页返回后前端缓存）+ 游标分页。
+import { tapHaptic } from '../../lib/haptics'
 import { getReviews } from '../../api/reviews'
 import { mapReviews, mapSummary, type ReviewVM, type SummaryVM } from '../../lib/mapReviews'
 
@@ -35,6 +36,7 @@ Page({
     })
   },
   onRetryLoad() {
+    tapHaptic()
     this.setData({ loading: true, loadFailed: false })
     void this.reload()
   },

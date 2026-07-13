@@ -1,5 +1,6 @@
 // 「我」页（M2 批13 真化）：静默登录回灌资料 + 继续学习卡 + 入口列。
 // 登录零资料采集（黄金 §九）；继续学习定位纯函数（不假装有课·无课卡片走「去逛逛」兜底）。
+import { tapHaptic } from '../../lib/haptics'
 import { login, getMyProgress } from '../../api/user'
 import { getMyCourses } from '../../api/learning'
 import { getAllCourses } from '../../lib/courses'
@@ -58,9 +59,11 @@ Page({
     })
   },
   onRetryCont() {
+    tapHaptic()
     void this.refresh() // 继续学习区失败态重试入口（me 页未开下拉刷新·按钮重试同 detail onRetryLoad 范式）
   },
   onContinue() {
+    tapHaptic()
     const c = this.data.cont
     if (c) {
       // 带上次段位回到那一段（卡片显的是该课时·不带则播放器落首段·卡片承诺≠行为）；段位空则不拼（播放器挑首个可播段）

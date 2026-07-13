@@ -1,4 +1,5 @@
 // 我的课程（M2 批10·C 类补学习进度）：已进课课程列表（join 课程标题 + 段粒度学习进度）。
+import { tapHaptic } from '../../lib/haptics'
 import { getMyCourses } from '../../api/learning'
 import { getMyProgress } from '../../api/user'
 import { getAllCourses } from '../../lib/courses'
@@ -40,6 +41,7 @@ Page({
     })
   },
   onRetryLoad() {
+    tapHaptic()
     this.setData({ loading: true, loadFailed: false })
     void this.reload()
   },
@@ -48,6 +50,7 @@ Page({
     wx.navigateTo({ url: '/pages/catalog/catalog?courseId=' + String(e.currentTarget.dataset.id) })
   },
   onActivate() {
+    tapHaptic()
     wx.navigateTo({ url: '/pages/welcome/welcome' })
   },
 })

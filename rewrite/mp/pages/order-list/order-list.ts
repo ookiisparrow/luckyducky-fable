@@ -1,4 +1,5 @@
 // 我的订单（M2 批7）：状态分栏 + 游标分页 + 待支付续付 + 确认收货。列表从云端拉取、无本地回退单。
+import { tapHaptic } from '../../lib/haptics'
 import { getMyOrders, pay, confirmReceive, cancelOrder } from '../../api/orders'
 import { mapPayResult } from '../../lib/payFlow'
 import { mapOrders, type OrderVM, type OrderLineVM } from '../../lib/mapOrders'
@@ -87,6 +88,7 @@ Page({
     this.setData({ loading: false, loadFailed: false, all, shown: all.map(decorate), cursor: r.nextCursor, hasMore: !!r.hasMore, anim })
   },
   onRetryLoad() {
+    tapHaptic()
     void this.reload()
   },
   async onReachBottom() {
@@ -140,6 +142,7 @@ Page({
   },
   async onPay(e: WechatMiniprogram.TouchEvent) {
     const id = String(e.currentTarget.dataset.id)
+    tapHaptic()
     const outcome = mapPayResult(await pay(id))
     // await 恢复点复核（同 checkout startPay 范式·bug sweep II 批E）：用户在支付发起在途退出列表页，迟到回包
     // 不再对已退页 toast/reload/拉起支付授权框——订单已在云端，用户下次进详情页续付即可。requestPayment 的

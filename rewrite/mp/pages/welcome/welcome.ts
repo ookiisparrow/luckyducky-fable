@@ -2,6 +2,7 @@
 // （或手动输码）→ 兑课三态屏 → （新激活）W1 恭喜屏 → W2 三件事屏 → 确认进课。
 // 一码一用/幂等/退货权失效节点全在云端；本页只编排各态视图与背景回退链。kind==='mine'/'taken'/'invalid'
 // 三态沉浸壳与文案一字不动；仅 kind==='activated' 的结果屏改走 W1/W2 lilac 壳（见 wxml 头注）。
+import { tapHaptic } from '../../lib/haptics'
 import { activateCourse, confirmEnter } from '../../api/learning'
 import { getContent } from '../../api/catalog'
 import { getPageContent } from '../../lib/pageContent'
@@ -56,6 +57,8 @@ Page({
       wx.showToast({ title: '先输入激活码', icon: 'none' })
       return
     }
+    if (this.data.busy) return // 兑课在途（按钮 dim）：不重复触发、不震
+    tapHaptic()
     void this.activate(this.data.code)
   },
   async activate(code: string) {
@@ -84,10 +87,12 @@ Page({
   },
   // W1 → W2（纯前端翻屏，不发请求）。
   onNextWelcome() {
+    tapHaptic()
     this.setData({ phase: 'w2' })
   },
   async onEnter() {
     if (this.data.busy) return
+    tapHaptic()
     this.setData({ busy: true })
     const r = await confirmEnter(this.data.code)
     if (this.unloaded) return // await 恢复点复核（bug sweep II 批E）：用户已退出本页——不再 setData/toast/redirectTo

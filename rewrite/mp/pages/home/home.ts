@@ -1,6 +1,7 @@
 // 首页（重设计 9 板块·M2）：Hero/品牌/特写+商品轨/信任条/拆门槛折叠/买家秀/FAQ/收尾CTA/页脚。
 // 数据经 api/catalog → app 网关；内容拿不到（网络/未部署）逐块回退设计默认文案（mapHomeContent），不空屏。
 // 页只编排：把原始返回交给纯函数 mapHomeContent/mapProducts，再 setData（house style·同 detail/me）。
+import { tapHaptic } from '../../lib/haptics'
 import { getContent } from '../../api/catalog'
 import { getAllProducts, getProductById } from '../../lib/catalog'
 import { mapHomeContent, mapProducts, type HomeContentVM, type ProductVM } from '../../lib/mapHome'
@@ -100,6 +101,7 @@ Page({
     }
   },
   toProducts() {
+    tapHaptic()
     wx.pageScrollTo({ selector: '#friends', duration: 320 }) // 「购买」滚到商品轨（设计 scrollToProduct）
   },
   toIntro() {

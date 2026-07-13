@@ -1,6 +1,7 @@
 // 地址编辑（M2 批5）：新增/编辑一体（?id= 编辑）。四要素必填（与云端 createOrder 地址闸同口径）。
 // 重设计对齐 checkout.css coaddr-* 版式：结构/视觉重排在 wxml/wxss，本文件仅补 valid 派生态（保存按钮亮/暗）
 // 与 onDelete（编辑既有地址时删除·复用 lib/address.removeAddress），既有 handler 名与 data 字段一字未改。
+import { tapHaptic } from '../../lib/haptics'
 import * as addr from '../../lib/address'
 
 Page({
@@ -63,6 +64,7 @@ Page({
       wx.showToast({ title: '电话号码不太对', icon: 'none' })
       return
     }
+    tapHaptic()
     this.setData({ saving: true }) // 校验过关·锁定后再落库+返回（锁贯穿到页面销毁）
     addr.saveAddress({ id: id ?? undefined, name: name.trim(), phone: phone.trim(), region: region.trim(), detail: detail.trim(), isDefault })
     wx.navigateBack()

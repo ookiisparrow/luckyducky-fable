@@ -1,5 +1,6 @@
 // 结算页（M2 批5·批6 接收银）：地址 + 条目预览 + 搭配购 + 金额明细 + 提交订单 + 拉起支付。
 // 提交经 app 网关 createOrder（云端定价/校验/预留库存·不信前端）；支付参数经 mapPayResult fail-closed。
+import { tapHaptic } from '../../lib/haptics'
 import * as addr from '../../lib/address'
 import * as checkout from '../../lib/checkout'
 import { CHECKOUT_ADDONS } from '../../lib/checkoutConst'
@@ -81,6 +82,7 @@ Page({
       wx.showToast({ title: '请先添加收货地址', icon: 'none' })
       return
     }
+    tapHaptic()
     const draft = checkout.getDraft()
     this.setData({ submitting: true })
     const r = await createOrder(
