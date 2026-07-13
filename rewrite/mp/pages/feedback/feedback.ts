@@ -1,4 +1,5 @@
 // 意见反馈（M2 批13）：submitFeedback 接 UI（分类/内容/联系方式·云端白名单+限频）。
+import { tapHaptic } from '../../lib/haptics'
 import { submitFeedback } from '../../api/user'
 
 const CATS = [
@@ -36,6 +37,7 @@ Page({
       wx.showToast({ title: '说点什么吧', icon: 'none' })
       return
     }
+    tapHaptic()
     this.setData({ busy: true })
     const r = await submitFeedback(this.data.content.trim(), this.data.cat, this.data.contact.trim())
     if (this.unloaded) return // 迟到回包：已退页（onUnload 已清 backTimer）——不弹 toast、不 navigateBack

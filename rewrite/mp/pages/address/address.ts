@@ -1,5 +1,6 @@
 // 地址列表（M2 批5·重设计对齐 coam-*）：管理 + 选择两用（?pick=1 时选中即设默认回结算页——
 // 结算页 onShow 读默认地址，无跨页传参耦合）。视觉重排见 wxml/wxss，数据流与 lib/address 逻辑不变。
+import { tapHaptic } from '../../lib/haptics'
 import * as addr from '../../lib/address'
 
 Page({
@@ -54,6 +55,7 @@ Page({
     })
   },
   onAdd() {
+    tapHaptic()
     wx.navigateTo({ url: '/pages/address-edit/address-edit' })
   },
 })

@@ -1,5 +1,6 @@
 // 编辑资料（M2 批13）：微信头像昵称填写能力（button open-type=chooseAvatar——能力按钮属 button 例外）。
 // 头像临时路径先传云存储换 cloud:// 再同步（云端只收 cloud:// 或空·黄金 §九）；上传失败昵称照常同步不带头像字段。
+import { tapHaptic } from '../../lib/haptics'
 import { login, updateProfile } from '../../api/user'
 
 Page({
@@ -47,6 +48,7 @@ Page({
       wx.showToast({ title: '起个昵称吧', icon: 'none' })
       return
     }
+    tapHaptic()
     this.setData({ busy: true })
     // phone 一并同步（空串=清空·非法号云端白名单会静默剔除·不覆盖旧号）
     const patch: { nickname: string; bio: string; phone: string; avatar?: string } = { nickname: this.data.nickname.trim(), bio: this.data.bio.trim(), phone: this.data.phone.trim() }

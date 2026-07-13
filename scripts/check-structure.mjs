@@ -2648,6 +2648,45 @@ export const repoChecks = [
     },
   },
   {
+    // 主按钮点按触觉反馈单源（病根#5 样板复制即漂移）：2026-07-14 用户「深色主要按钮都增加震动反馈」——深色/紫墨
+    // 填充主 CTA 点按「震一下」的能力收口 lib/haptics.ts 的 tapHaptic（轻档 impact + VIBE_GAP_MS 节流·单源），
+    // 页面处理器一律调 tapHaptic()、禁散写裸 wx.vibrateShort（否则强度/节流各写各的、复制即漂移·同 flipLever→
+    // haptics 收编前科）。例外三处：lib/haptics.ts（单源定义本身）+ pages/flip-demo、pages/player（拖动逐格「嗒」/
+    // seek 拖动阻尼，用各自实例节流的 vibe()·非离散点按·不并入 tapHaptic）。本守卫为预防性（当前即绿·锁未来不散
+    // 写）——反向自检靠篡改（页面塞裸 wx.vibrateShort→红）。覆盖面（哪些按钮该震）是判断题·靠约定+评审，不建脆弱
+    // 的枚举式覆盖守卫（§7 防摆设·同 #8/#10 靠人）。
+    id: 'rw-mp-tap-haptic-single-source',
+    roots: ['#5'],
+    desc: '主按钮点按触觉反馈单源（病根#5 复制漂移）：rewrite/mp 离散点按震感一律走 lib/haptics.ts 的 tapHaptic（须导出）·页面 .ts 禁散写裸 wx.vibrateShort；例外仅 lib/haptics.ts（单源）+ pages/flip-demo/player（拖动/seek 阻尼各自实例节流 vibe·非点按）——防强度/节流复制各写各的漂移',
+    run() {
+      const base = join(ROOT, 'rewrite/mp')
+      if (!existsSync(base)) return [] // 重写线未建时不红
+      const bad = []
+      const lib = 'rewrite/mp/lib/haptics.ts'
+      if (!existsSync(join(ROOT, lib))) bad.push(`${lib} 缺失——点按震感单源丢失（病根#5）`)
+      else if (!/export\s+function\s+tapHaptic\b/.test(readFileSync(join(ROOT, lib), 'utf8')))
+        bad.push(`${lib} 未导出 tapHaptic——离散点按震感须有单源 helper（病根#5）`)
+      // 例外白名单：单源本身 + 拖动/seek 阻尼两处（各自实例节流 vibe·非离散点按）
+      const allow = new Set([lib, 'rewrite/mp/pages/flip-demo/flip-demo.ts', 'rewrite/mp/pages/player/player.ts'])
+      const walk = (d) => {
+        for (const e of readdirSync(d)) {
+          const p = join(d, e)
+          if (statSync(p).isDirectory()) {
+            if (e === 'node_modules' || e === 'dist' || e === 'miniprogram_npm') continue
+            walk(p)
+          } else if (e.endsWith('.ts') && !e.endsWith('.test.ts')) {
+            const rel = relative(ROOT, p).replace(/\\/g, '/')
+            if (allow.has(rel)) continue
+            if (/wx\.vibrateShort\s*\(/.test(readFileSync(p, 'utf8')))
+              bad.push(`${rel} 散写裸 wx.vibrateShort——离散点按震感须走 lib/haptics.ts 的 tapHaptic（防强度/节流复制漂移·病根#5；拖动/seek 阻尼例外仅 flip-demo/player）`)
+          }
+        }
+      }
+      walk(base)
+      return bad
+    },
+  },
+  {
     // 课程身份显式流转、不寄生全局可变态（审计 #1+#3·根因#8 单课样本掩盖）。痛：① 取址缓存键原只用 segId，
     // 而种子段 id 课内局部命名（`${lessonId}-s${i}`·不带 courseId）跨课不唯一 → 上第二门课撞同段 id → 命中别课
     // 临时 URL 真机播错课；② 播放页身份原寄生全局 store.currentId（入口只传 lessonId）→ 任何改 currentId 处都让

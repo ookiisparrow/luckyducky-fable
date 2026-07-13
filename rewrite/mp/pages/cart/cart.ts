@@ -1,6 +1,7 @@
 // 购物车页（M2 批4·批5 接结算·重设计对齐设计「待选区」）：
 //   待选区＝已加购行（勾选/加减/删除/合计），下方＝推荐商品圆加号加购（设计 options 语义·真数据）。
 //   核心逻辑（lib/cart 单源·结算走选中项）零改；本批只加「推荐加购/开详情」两个读侧 handler。
+import { tapHaptic } from '../../lib/haptics'
 import * as cart from '../../lib/cart'
 import { prepareFromCart } from '../../lib/checkout'
 import { getAllProducts } from '../../lib/catalog'
@@ -83,6 +84,7 @@ Page({
       wx.showToast({ title: '先勾选要买的宝贝', icon: 'none' })
       return
     }
+    tapHaptic()
     prepareFromCart() // 选中项快照进草稿（fromCart·提交成功按实际数量扣车）
     wx.navigateTo({ url: '/pages/checkout/checkout' })
   },

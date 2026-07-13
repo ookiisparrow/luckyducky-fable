@@ -2,6 +2,7 @@
 // segstrip，不在此出现）。数据源＝批A 落地的 lib/mapLearning mapCatalog（课时状态判定/续播段解耦，见其头注）。
 // 课程结构走 lib/courses 会话缓存（本会话内不变·根因账本#15）；学习进度每次实时（onShow 重拉，同
 // my-courses.ts 注释口径）；hero 背景图与目录/进度拉取并行发起，互不阻塞（同 welcome.ts homeReady 范式）。
+import { tapHaptic } from '../../lib/haptics'
 import { getContent } from '../../api/catalog'
 import { getPageContent } from '../../lib/pageContent'
 import { getCourseByIdDetailed } from '../../lib/courses'
@@ -84,6 +85,7 @@ Page({
     this.setData({ state: 'ok', chapters, continueTarget })
   },
   onRetryLoad() {
+    tapHaptic()
     this.setData({ state: 'loading' })
     void this.onShow()
   },
@@ -94,6 +96,7 @@ Page({
       wx.showToast({ title: '课程视频整理中', icon: 'none' })
       return
     }
+    tapHaptic()
     wx.navigateTo({ url: '/pages/player/player?courseId=' + this.data.courseId + '&segmentId=' + t.segmentId })
   },
   // 课时行点击：firstPlayableSegId 非空跳该段；空＝本课时无可播视频（半上线），诚实提示。
