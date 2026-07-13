@@ -47,12 +47,14 @@ Page({
     loadFailed: false, // 失败≠空态（根因#14·守卫 rw-mp-list-loadfailed-state）：一无所有时的网络失败态，与「暂无订单」分治
     hasMore: false,
     cursor: null as unknown,
+    anim: '', // 切 tab 滑入动画类（anim-next/anim-prev）：由 switchTab 置向、reload 落新数据时应用一次；onShow/翻页不带
   },
   _seq: 0, // reload 代次·同 tab 内多触发点（onShow/取消后 reload）并发时丢弃过期回包（tab-token 只挡切 tab·挡不住同 tab 乱序）
   unloaded: false, // 页面已退出标记（同 checkout/review 范式·bug sweep II 批E）：onPay 支付回包在途用户退出列表页，迟到回包不再对已退页 toast/reload
   _swX: 0, // 手势起点 clientX（非渲染态直挂·仿 _seq 写法）
   _swY: 0, // 手势起点 clientY
   _swT: 0, // 手势起点 timeStamp（ms）——一律用事件 timeStamp，不引 Date.now
+  _animDir: '', // 待应用的滑入方向类（非渲染态）：switchTab 置、reload 成功落数据时消费一次；onShow/翻页 reload 读到空＝不动画
   onLoad(query: Record<string, string | undefined>) {
     if (query.tab && TABS.some((t) => t.key === query.tab)) this.setData({ tabKey: query.tab })
   },
@@ -74,12 +76,15 @@ Page({
     // 失败≠空态（根因#14）：失败不覆盖已有列表（onShow 返回抖动一次不该把待支付订单清空）；
     // 一无所有时落 loadFailed 给重试，不与「暂无订单」混同。
     if (!r.ok) {
+      this._animDir = '' // 切 tab 失败无新内容·丢弃待应用方向（下次成功 reload 才动画，不留陈旧向）
       this.setData({ loading: false, loadFailed: !this.data.all.length })
       if (this.data.all.length) wx.showToast({ title: '刷新失败，请稍后重试', icon: 'none' })
       return
     }
     const all = mapOrders(r.list)
-    this.setData({ loading: false, loadFailed: false, all, shown: all.map(decorate), cursor: r.nextCursor, hasMore: !!r.hasMore })
+    const anim = this._animDir // 消费一次：仅切 tab 触发的 reload 带方向动画；onShow/翻页 _animDir 为空＝不动画
+    this._animDir = ''
+    this.setData({ loading: false, loadFailed: false, all, shown: all.map(decorate), cursor: r.nextCursor, hasMore: !!r.hasMore, anim })
   },
   onRetryLoad() {
     void this.reload()
@@ -105,7 +110,11 @@ Page({
   // 切换到目标 tab（同 key 早退 + 清空重拉）：onTab 与手势滑动共用此私有方法。
   switchTab(key: string) {
     if (key === this.data.tabKey) return
-    this.setData({ tabKey: key, all: [], shown: [], cursor: null, hasMore: false })
+    const from = TABS.findIndex((t) => t.key === this.data.tabKey)
+    const to = TABS.findIndex((t) => t.key === key)
+    this._animDir = to > from ? 'anim-next' : 'anim-prev' // 目标 tab 在右→新内容自右滑入；在左→自左滑入（reload 落数据时应用）
+    // 先清 anim 类：reload 落新数据时才把方向类应用上去→动画重新触发（连续同向切换也重播，不是「类没变不重放」）
+    this.setData({ tabKey: key, all: [], shown: [], cursor: null, hasMore: false, anim: '' })
     void this.reload() // 切 tab 从服务端按该状态重新分页（过滤与分页同源）
   },
   // 手势滑动换 tab（bind 不 catch，不影响纵向滚动/上拉翻页）：抬指判定，不做跟手动画（需求未要求）。

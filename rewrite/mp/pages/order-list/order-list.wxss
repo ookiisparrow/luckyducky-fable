@@ -48,6 +48,34 @@
 .coolist-body {
   padding: 22rpx 26rpx 40rpx;
 }
+/* 切 tab 方向性滑入动画（switchTab 置 anim-next/anim-prev·播一次）：轻量 CSS keyframe，
+   不上 <swiper> 跟手（那要拆五份独立 tab 状态·与游标分页/_seq 冲突·防过度工程同 lib/orderSwipe 头注）。 */
+.coolist-body.anim-next {
+  animation: coolistSlideNext 0.24s ease-out;
+}
+.coolist-body.anim-prev {
+  animation: coolistSlidePrev 0.24s ease-out;
+}
+@keyframes coolistSlideNext {
+  from {
+    opacity: 0.35;
+    transform: translateX(48rpx);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+@keyframes coolistSlidePrev {
+  from {
+    opacity: 0.35;
+    transform: translateX(-48rpx);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
 
 /* ---------- 订单卡 ---------- */
 .coolist-card {

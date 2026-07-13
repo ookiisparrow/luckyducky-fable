@@ -3,7 +3,10 @@
      游标分页(onReachBottom) 全部承接 order-list.ts；本文件只重排结构与视觉。
      原生标题栏承担返回/标题（navigationBarTitleText），故不渲染设计的 co-nav 返回条，只保留下沉筛选 tab。
      设计卡内商品缩略图订单数据无来源 → 灰底占位（不裂图·见 risks/deferred）。 -->
-<view class="coolist">
+<!-- 手势滑动换 tab 绑在全高根容器 .coolist（min-height:100vh）上，不绑内层 .coolist-body：
+     body 高度只到内容底部，订单少时下半屏落在 body 外→下半屏滑动无效（真机 2026-07-13 逮出）。
+     bind 不 catch，不影响纵向滚动/上拉翻页与卡片点按；判定见 order-list.ts onSwipeStart/onSwipeEnd。 -->
+<view class="coolist" bind:touchstart="onSwipeStart" bind:touchend="onSwipeEnd">
 
   <!-- 状态筛选（下划线指示器·设计签名 tab） -->
   <view class="coolist-tabs">
@@ -16,8 +19,8 @@
     >{{item.label}}</view>
   </view>
 
-  <!-- 手势滑动换 tab（bind 不 catch，不影响纵向滚动/上拉翻页）：抬指判定，见 order-list.ts onSwipeStart/onSwipeEnd -->
-  <view class="coolist-body" bind:touchstart="onSwipeStart" bind:touchend="onSwipeEnd">
+  <!-- {{anim}}：切 tab 时按方向（anim-next 自右入 / anim-prev 自左入）播一次滑入动画，见 order-list.ts switchTab -->
+  <view class="coolist-body {{anim}}">
 
     <!-- 失败态与空态分治（根因#14·守卫 rw-mp-list-loadfailed-state）：网络失败≠真没有订单 -->
     <view class="coolist-empty" wx:if="{{!loading && loadFailed}}">
