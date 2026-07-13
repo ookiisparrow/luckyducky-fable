@@ -2610,43 +2610,40 @@ export const repoChecks = [
     },
   },
   {
-    // 分段视频地址「缓存 + 预取」（根因#8 真机才暴露的段间转场卡顿，dev/模拟器快网掩盖）。痛：原 player
-    // 只在「段 id 真变了」那一刻才云调用 getPlaybackUrl 换临时 URL（watch 触发），当前段播放期间下一段
-    // 地址闲着没取、回看过的段也重新现取 → 切段要等一个云往返才起播。改＝纯函数解析器 playbackCache.js
-    // （createPlaybackResolver：按 segId+TTL 缓存 + in-flight 去重）收口于 store（playbackUrl 缓存优先 +
-    // prefetchPlaybackUrl），player 当前段就绪即预取下一段。本守卫防回退成「每次切段都现取、无缓存无预取」。
-    id: 'player-playback-prefetch-cache',
+    // 段间地址预取 + autoplay 停摆兜底 + 未起播 tap 恢复（根因#8 真机段间卡顿/首帧停摆·dev 快网掩盖·活线 rewrite/mp）。
+    // 退役 换防：老 player-playback-prefetch-cache 只守冻结 packages/miniapp 字节（oldline-frozen 已焊·永绿·从未守活线），
+    // 新线重写了 createPlaybackCache（lib/player.ts·含 prefetch 方法·已单测）却漏把 prefetch 接进播放页——每次切段现取
+    // 地址一个云往返（实测 0.7-1.4s）压在关键路径上，且 <video autoplay> 停摆时 onTapVideo 因 paused 恒 false 走反向
+    // pause、原地救不回只能切段重建 <video> 才逃（正是用户「视频加载慢+有时要切下一集才能加载」）。守此不变量（均在
+    // 方法体内·剥注释后匹配·错题本 E1/E10）：playSegment 体内 ① 真调 cache.prefetch（不止定义）② 预取目标绑
+    // navSegment(...,1) 下一段 ③ 有 createVideoContext('lp-video').play 显式兜底 autoplay 停摆；onTapVideo 体内
+    // ④ 起播判据含 firstFrameReported（未起播 tap 一律 play·防回退成纯 this.data.paused 判定使停摆首帧原地救不回）。
+    id: 'rw-mp-player-prefetch-cache',
     roots: ['#8'],
-    desc: '分段视频地址缓存+预取（根因#8 真机段间卡顿）：utils/playbackCache.js 导出 createPlaybackResolver + store/courses.js 经它收口 playbackUrl(缓存优先) 且有 prefetchPlaybackUrl + player/index.vue 当前段就绪即 prefetch 下一段——防回退成「每次切段都现取地址、无缓存无预取」',
+    desc: '重写线播放页段间提速+停摆恢复（根因#8·承退役老线 player-playback-prefetch-cache 迁到活线 rewrite/mp）：pages/player/player.ts 的 playSegment 体内须真调 cache.prefetch 预热 navSegment(...,1) 下一段（防回退成每次切段现取地址一个云往返·段间卡顿）+ 须有 createVideoContext(lp-video).play 显式兜底 autoplay 停摆；onTapVideo 体内起播判据须含 firstFrameReported（未起播 tap 一律 play·防回退成纯 paused 判定使停摆首帧原地救不回、只能切段才逃）',
     run() {
+      const rel = 'rewrite/mp/pages/player/player.ts'
+      const abs = join(ROOT, rel)
+      if (!existsSync(abs)) return [] // 重写线未建时不红
+      const src = stripComments(readFileSync(abs, 'utf8')) // 剥注释单源 helper（错题本 E1/E10）：防注释文本假触发/假放行
       const bad = []
-      // 解析器在主包 utils（非分包 pkg-video）：store 在主包·主包不能 require 分包模块（mp-weixin 白屏·根因#8）
-      const cacheRel = 'packages/miniapp/src/utils/playbackCache.js'
-      const storeRel = 'packages/miniapp/src/store/courses.js'
-      const playerRel = 'packages/miniapp/src/pkg-video/player/index.vue'
-      const cacheAbs = join(ROOT, cacheRel)
-      if (!existsSync(cacheAbs)) bad.push(`${cacheRel} 缺失（分段地址缓存/预取纯函数·根因#8）`)
-      else if (!/export\s+function\s+createPlaybackResolver\b/.test(readFileSync(cacheAbs, 'utf8')))
-        bad.push(`${cacheRel} 未导出 createPlaybackResolver——缓存/去重/预取逻辑须在纯函数工厂里（单测锁·根因#8）`)
-      const storeAbs = join(ROOT, storeRel)
-      if (!existsSync(storeAbs)) bad.push(`${storeRel} 缺失`)
-      else {
-        const s = readFileSync(storeAbs, 'utf8')
-        if (!/createPlaybackResolver\s*\(/.test(s))
-          bad.push(`${storeRel} 未经 createPlaybackResolver 收口取址——playbackUrl 须走缓存优先解析器（防每次现取·根因#8）`)
-        if (!/\bprefetchPlaybackUrl\b/.test(s))
-          bad.push(`${storeRel} 无 prefetchPlaybackUrl——下一段地址须可预取（防切段等云往返·根因#8）`)
+      const ps = methodBody(src, 'playSegment')
+      if (!ps) {
+        bad.push(`${rel} 找不到 playSegment 方法体——段间预取/停摆兜底单点丢失（根因#8）`)
+      } else {
+        if (!/cache\.prefetch\s*\(/.test(ps))
+          bad.push(`${rel} playSegment 未调 cache.prefetch——切段每次现取地址一个云往返压关键路径（段间卡顿·根因#8）`)
+        else if (!/navSegment\(this\.course,[^)]*,\s*1\)[\s\S]{0,160}?cache\.prefetch\s*\(/.test(ps))
+          bad.push(`${rel} playSegment 预取未绑定 navSegment(...,1) 下一段——预取目标须是下一段（防退化成预取当前段/空转·根因#8）`)
+        if (!/createVideoContext\(\s*['"]lp-video['"][\s\S]{0,60}?\.play\s*\(\)/.test(ps))
+          bad.push(`${rel} playSegment 无 createVideoContext('lp-video').play 显式兜底——<video autoplay> 停摆时无自动补播（真机首帧不起·根因#8）`)
       }
-      const playerAbs = join(ROOT, playerRel)
-      if (!existsSync(playerAbs)) bad.push(`${playerRel} 缺失`)
-      else if (!/\bprefetchPlaybackUrl\b/.test(readFileSync(playerAbs, 'utf8')))
-        bad.push(`${playerRel} 未预取下一段——当前段就绪时须 prefetch 下一段地址（防切段卡一下·根因#8）`)
-      // 列表页提前预热：还在课时列表时就把第一段地址换好进缓存 → 点进播放页免取址往返（首屏提速）
-      const catRel = 'packages/miniapp/src/pages/catalog/index.vue'
-      const catAbs = join(ROOT, catRel)
-      if (!existsSync(catAbs)) bad.push(`${catRel} 缺失`)
-      else if (!/\bprefetchPlaybackUrl\b/.test(readFileSync(catAbs, 'utf8')))
-        bad.push(`${catRel} 列表页未预热第一段地址——进课时列表即应 prefetchPlaybackUrl 暖缓存（防回退成进播放页才取址·根因#8）`)
+      const tap = methodBody(src, 'onTapVideo')
+      if (!tap) {
+        bad.push(`${rel} 找不到 onTapVideo 方法体——单击起播/暂停单点丢失（根因#8）`)
+      } else if (!/firstFrameReported/.test(tap)) {
+        bad.push(`${rel} onTapVideo 起播判据不含 firstFrameReported——回退成纯 this.data.paused 判定：autoplay 停摆时点击反向 pause、首帧原地救不回只能切段才逃（根因#8）`)
+      }
       return bad
     },
   },

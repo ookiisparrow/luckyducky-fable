@@ -226,6 +226,16 @@ Page({
       () => {
         // 首次量取 seek 条布局；换段重入该回调时已有值即跳过——底条布局不随段变化，无需重量。
         if (!this._seekRect) this.measureSeekRect()
+        // autoplay 停摆兜底（根因#8·真机 <video autoplay> 首帧常静默不起播·尤 iOS/弱网/上下文冷启）：src 落定即显式
+        // play 一次，与 wxml 的 autoplay 属性叠加（已在播则 play 为 no-op·幂等·不会双播）；停摆时给它第二次触发。
+        // 注：此调用在异步 setData 回调里、不在用户手势栈内，iOS WebKit autoplay 限制可能仍拒——iOS 的可靠恢复靠
+        // onTapVideo（tap 是真手势），两者互补不冗余。
+        wx.createVideoContext('lp-video', this).play()
+        // 段间提速（根因#8·段间转场卡顿·承退役老线 prefetch 语义，新线重写缓存却漏接线）：当前段就绪即预热下一段
+        // 地址，用户点「下一段」时命中缓存零云往返。纯 cache 暖（不 setData·不改 this.data），故不复核 playToken——
+        // 慢回调预热了用户不会到的段也无害；cache.prefetch 对新鲜命中 no-op、在途去重（见 lib/player.ts）。
+        const next = navSegment(this.course, seg.segmentId, 1)
+        if (next) void cache.prefetch(this.courseId, next.segmentId)
       }
     )
   },
@@ -321,7 +331,12 @@ Page({
     if (this.data.state !== 'playing' || !this.data.src) return
     if (!this.data.hintDismissed) this.setData({ hintDismissed: true })
     const ctx = wx.createVideoContext('lp-video', this)
-    if (this.data.paused) ctx.play()
+    // paused 只认 bind:play/pause 真回报（初始 false）：autoplay 停摆时无 bind:play → paused 恒 false，原
+    // 「if paused play else pause」会把用户「点画面想起播」错判成 pause（反向）→ 原地永远救不回、只能切段重建
+    // <video> 才逃出（正是「有时要切下一集才能加载」根因）。补 !firstFrameReported：本段尚未起播过时点击一律 play。
+    // tap 是 iOS 真用户手势、能绕过 WebKit autoplay 限制——这条也是 iOS 停摆的可靠恢复路径（与 playSegment 里的
+    // 显式 play 兜底互补）。firstFrameReported 由 onFirstPlay（bind:play）置真、playSegment 换段时复位。
+    if (this.data.paused || !this.firstFrameReported) ctx.play()
     else ctx.pause()
   },
 
