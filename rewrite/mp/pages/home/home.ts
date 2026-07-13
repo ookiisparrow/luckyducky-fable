@@ -6,6 +6,7 @@ import { getAllProducts, getProductById } from '../../lib/catalog'
 import { mapHomeContent, mapProducts, type HomeContentVM, type ProductVM } from '../../lib/mapHome'
 import { decideQuickAdd } from '../../lib/quickAdd'
 import * as cart from '../../lib/cart'
+import { consumeHomeTop } from '../../lib/homeIntent'
 
 let toastTimer: ReturnType<typeof setTimeout> | null = null
 
@@ -32,6 +33,8 @@ Page({
   onShow() {
     this.hidden = false
     if (typeof this.getTabBar === 'function') (this.getTabBar() as unknown as LdTabBar).setActive('home')
+    // 兜底意图落地（我页无课/welcome先逛逛）回到顶部；正常切 tab 未置位则保留上次滚动位置（行为不变）
+    if (consumeHomeTop()) wx.pageScrollTo({ scrollTop: 0, duration: 0 })
   },
   onHide() {
     this.hidden = true

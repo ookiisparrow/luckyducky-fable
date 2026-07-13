@@ -15,7 +15,7 @@
  */
 import { readFileSync, writeFileSync, existsSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
-import { dirname, join } from 'node:path'
+import { dirname, join, relative } from 'node:path'
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..')
 const JSON_OUT = join(ROOT, 'scripts/order-domain.generated.json')
@@ -42,6 +42,15 @@ const DOMAINS = [
   {
     spec: join(ROOT, 'packages/shared/src/scm.spec.ts'),
     ts: join(ROOT, 'packages/shared/src/scm.ts'),
+    label: 'scm.spec.ts',
+    header: `/**\n * SCM 进销存域（采购/外协单）类型/常量/流转表——**生成物**（单源 scm.spec.ts·勿手改生成段）。\n * 见 scm.spec.ts 头注；改流转改声明再跑 scripts/gen-order-domain.mjs。\n */\n`,
+  },
+  {
+    // 新线镜像（同名域·两条线各自的声明单源，暂各自独立——不是迁移替换 packages 那份，
+    // packages/ 为 oldline-frozen 冻结参照、rewrite/ 才是活代码；scm.ts 头部曾错误自称由本脚本生成、
+    // 实为手工镜像，本项补齐后头部横幅才不撒谎）。
+    spec: join(ROOT, 'rewrite/shared/src/scm.spec.ts'),
+    ts: join(ROOT, 'rewrite/shared/src/scm.ts'),
     label: 'scm.spec.ts',
     header: `/**\n * SCM 进销存域（采购/外协单）类型/常量/流转表——**生成物**（单源 scm.spec.ts·勿手改生成段）。\n * 见 scm.spec.ts 头注；改流转改声明再跑 scripts/gen-order-domain.mjs。\n */\n`,
   },
@@ -138,13 +147,18 @@ function genDomainTs(machines, header, specLabel) {
 function genJson(machines) {
   const out = {}
   for (const mc of machines) {
-    out[mc.collection] = {
+    const entry = {
       states: statesOf(mc),
       initial: mc.initial,
       terminal: mc.terminal,
       // 守卫对账用：每条 from[]→to（trigger 仅供人读）
       transitions: mc.transitions.map((t) => ({ from: t.from, to: t.to, trigger: t.trigger })),
     }
+    // 同集合名跨域声明（如 packages/scm.spec.ts 与 rewrite/scm.spec.ts 各自的 purchaseOrders/outworkOrders）
+    // 须逐字一致——不一致就是两条线悄悄分叉，谁覆盖谁不可控，宁可炸生成器也不要静默丢一条线的声明。
+    if (out[mc.collection] && JSON.stringify(out[mc.collection]) !== JSON.stringify(entry))
+      throw new Error(`集合 ${mc.collection} 在多个声明源里定义且不一致（跨域/跨线分叉）——人工核对后再跑生成器（gen-order-domain.mjs DOMAINS）`)
+    out[mc.collection] = entry
   }
   return JSON.stringify(out, null, 2) + '\n'
 }
@@ -164,7 +178,7 @@ function main() {
   if (check) {
     const drift = []
     for (const { ts, content } of tsOut) {
-      if (!existsSync(ts) || readFileSync(ts, 'utf8') !== content) drift.push('packages/shared/src/' + ts.split('/').pop())
+      if (!existsSync(ts) || readFileSync(ts, 'utf8') !== content) drift.push(relative(ROOT, ts))
     }
     let curJson = ''
     try {

@@ -1,7 +1,7 @@
 import { reply, type Ctx } from '../lib'
 import { applyStockMoves, listMaterialDocs, transition, pageQuery, notifyAlert } from '../../../kit'
 import { COLLECTIONS } from '@ldrw/shared'
-import { asFen, OUTWORK_ORDER_STATUS } from '@ldrw/shared'
+import { asFen, OUTWORK_ORDER_STATUS, OUTWORK_ORDER_TRANSITIONS } from '@ldrw/shared'
 
 // 进销存车道 B·外协线（蓝图 docs/进销存ERP/施工蓝图.md §4B·门5 文件级隔离：本文件=车道 B 全部 action）。
 // 业务定稿（README 需求）：织女把起手结做在**最大团**毛线上——发最大团原团（按色）→ 收同色带结团入库 →
@@ -36,6 +36,15 @@ function cleanLines(raw: any): Array<{ materialId: string; qty: number }> | null
 /** 物料主档在册集合（主档量小·bounded 500·同 saveMaterial 口径经门1 只读出口）。 */
 async function knownMaterialIds(): Promise<Set<string>> {
   return new Set((await listMaterialDocs(500)).map((m: any) => String(m._id)))
+}
+
+/** 从声明流转表（scm.spec.ts→scm.ts 生成物）按目标态取合法 from 集合——该表内每个 to 只出现一次
+ *  （见 shared/scm.spec.ts 头注），故按 to 反查唯一。改流转边只改 scm.spec.ts 再跑生成器，
+ *  本函数自动跟着变——不再像此前那样在各 transition() 调用点手写字面量、与生成物各背各的。 */
+function fromFor(to: string): string[] {
+  const t = OUTWORK_ORDER_TRANSITIONS.find((x) => x.to === to)
+  if (!t) throw new Error(`OUTWORK_ORDER_TRANSITIONS 未声明 to='${to}'（scm.spec.ts 与 scmOutwork.ts 不同步）`)
+  return [...t.from]
 }
 
 // ── 列表（cursor 分页·可按 status/workerId 过滤·倒序）──
@@ -125,9 +134,7 @@ export async function saveOutwork({ db, data, agentId }: Ctx) {
 export async function issueOutwork({ db, data, agentId }: Ctx) {
   const outworkId = String(data.outworkId || '')
   if (!outworkId) return reply(400, { ok: false, error: 'NO_OUTWORK' })
-  const r = await transition('outworkOrders', outworkId, ['draft'], 'issued', {
-    issuedAt: Date.now(),
-  })
+  const r = await transition('outworkOrders', outworkId, fromFor('issued'), 'issued', { issuedAt: Date.now() })
   if (!r.doc) return reply(404, { ok: false, error: 'NO_OUTWORK' })
   if (!r.moved) return reply(409, { ok: false, error: 'NOT_DRAFT' }) // 重放/并发方已流转——无副作用（幂等）
 
@@ -149,29 +156,23 @@ export async function issueOutwork({ db, data, agentId }: Ctx) {
     // 用条件更新而非 transition()：issued→draft 是本次未完成发料的技术性复原,不是业务逆向流转（蓝图定稿 MVP
     // 不做逆向流转,scm.spec 故意不声明这条边——声明了就开放成业务动作了）；条件绑 status:'issued' 防覆盖并发方
     // （若有人已 receiveOutwork 翻 delivered,此处 no-op,错误照返、人工经调整单对账）。
-    const rb = await db
+    // 复原本身若不成功（异常/条件不匹配即 updated≠1）须告警——否则单据永久卡在假「已发料」而库存实际未出，
+    // 后续可能被继续走完流程甚至结算工钱,账实不符且无信号可查（同 scmStock.rollback 的 ROLLBACK_FAIL 口径）。
+    // structure-ok（rw-scm-transitions-declared）：技术性失败补偿,非业务逆向流转,理由见上。
+    const rollback = await db
       .collection('outworkOrders')
       .where({ _id: outworkId, status: 'issued' })
       .update({ data: { status: 'draft', issuedAt: null } })
-      .catch(() => null)
-    // 复原失败辨别（深审 P2·病根#14 不静默吞·同 scmAssembly 告警口径）：updated!==1 有两因——① 已被
-    // receiveOutwork 翻 delivered（并发·no-op·正常）；② 复原 update 本身失败（单据卡死 issued 但库存没出·
-    // 账实偏且无法重试）。后者须告警人工对账，不能像旧版 .catch(()=>undefined) 静默吞。读回辨别：仍 issued＝②。
-    if (!rb || !rb.stats || rb.stats.updated !== 1) {
-      const fresh = await db
-        .collection('outworkOrders')
-        .doc(outworkId)
-        .get()
-        .catch(() => null)
-      if (fresh && fresh.data && fresh.data.status === 'issued') {
-        await notifyAlert('anomaly', 'issueOutwork', 'STATUS_ROLLBACK_FAIL', { outworkId })
-      }
+      .catch(() => ({ stats: { updated: 0 } }))
+    if (!rollback.stats || rollback.stats.updated !== 1) {
+      await notifyAlert('money', 'scmOutwork.issueOutwork', 'STATUS_ROLLBACK_FAIL', {
+        outworkId,
+        attemptedFrom: 'issued',
+        attemptedTo: 'draft',
+        stockError: ar.error,
+      })
     }
-    return reply(ar.error === 'INSUFFICIENT' ? 409 : 400, {
-      ok: false,
-      error: ar.error,
-      materialId: ar.materialId,
-    })
+    return reply(ar.error === 'INSUFFICIENT' ? 409 : 400, { ok: false, error: ar.error, materialId: ar.materialId })
   }
   return reply(200, { ok: true, applied: ar.applied })
 }
@@ -231,7 +232,7 @@ export async function receiveOutwork({ db, data, agentId }: Ctx) {
   const lossQty = issuedQty - receivedQty // 每色收≤发 ⇒ 恒 ≥0
 
   // 流转 + 定格同一次条件更新（不可分两步：分开则「翻了状态没定格金额」的窗口会让结算读到空应付）
-  const r = await transition('outworkOrders', outworkId, ['issued'], 'delivered', {
+  const r = await transition('outworkOrders', outworkId, fromFor('delivered'), 'delivered', {
     receiveLines: lines,
     payableFen,
     lossQty,
@@ -246,24 +247,23 @@ export async function receiveOutwork({ db, data, agentId }: Ctx) {
   if (!ar.ok) {
     // 补偿回滚（对称 issueOutwork·理由同上）：入库失败（主档并发被删/CAS 争用耗尽·预检后几乎不至）时
     // 复原 issued 并清掉本次定格,否则单据「已收货有应付」而带结一团没入账、重放又被 NOT_ISSUED 挡死。
-    await db
+    // 复原本身若不成功须告警（同 issueOutwork 口径）——否则单据卡在假「已收货」（payableFen 已定格但
+    // 库存未入账），可能被继续走到结算付工钱，账实不符且无信号可查。
+    // structure-ok（rw-scm-transitions-declared）：技术性失败补偿,非业务逆向流转,理由同 issueOutwork。
+    const rollback = await db
       .collection('outworkOrders')
       .where({ _id: outworkId, status: 'delivered' })
-      .update({
-        data: {
-          status: 'issued',
-          receiveLines: null,
-          payableFen: null,
-          lossQty: null,
-          deliveredAt: null,
-        },
+      .update({ data: { status: 'issued', receiveLines: null, payableFen: null, lossQty: null, deliveredAt: null } })
+      .catch(() => ({ stats: { updated: 0 } }))
+    if (!rollback.stats || rollback.stats.updated !== 1) {
+      await notifyAlert('money', 'scmOutwork.receiveOutwork', 'STATUS_ROLLBACK_FAIL', {
+        outworkId,
+        attemptedFrom: 'delivered',
+        attemptedTo: 'issued',
+        stockError: ar.error,
       })
-      .catch(() => undefined)
-    return reply(ar.error === 'CONTENTION' ? 409 : 400, {
-      ok: false,
-      error: ar.error,
-      materialId: ar.materialId,
-    })
+    }
+    return reply(ar.error === 'CONTENTION' ? 409 : 400, { ok: false, error: ar.error, materialId: ar.materialId })
   }
   return reply(200, { ok: true, payableFen, lossQty, applied: ar.applied })
 }
@@ -273,12 +273,15 @@ export async function receiveOutwork({ db, data, agentId }: Ctx) {
 export async function settleOutwork({ data }: Ctx) {
   const outworkId = String(data.outworkId || '')
   if (!outworkId) return reply(400, { ok: false, error: 'NO_OUTWORK' })
-  const r = await transition('outworkOrders', outworkId, ['delivered'], 'settled', {
-    settledAt: Date.now(),
-  })
+  const r = await transition('outworkOrders', outworkId, fromFor('settled'), 'settled', { settledAt: Date.now() })
   if (!r.doc) return reply(404, { ok: false, error: 'NO_OUTWORK' })
-  if (!r.moved) return reply(409, { ok: false, error: 'NOT_DELIVERED' })
-  return reply(200, { ok: true })
+  if (!r.moved) {
+    // 重放天然幂等（同 scmPurchase.markOrdered/cancelPurchase 口径）：已 settled 直接返回成功，
+    // 不让客户端重试拿到与「单据状态不对、根本不能操作」相同的 409——只有真正非法流转（未到 delivered）才拒。
+    if (r.doc.status === 'settled') return reply(200, { ok: true, moved: false })
+    return reply(409, { ok: false, error: 'NOT_DELIVERED' })
+  }
+  return reply(200, { ok: true, moved: true })
 }
 
 // ── 取消（仅 draft·已发料不可取消,异常走物料页调整单·蓝图定稿）──
@@ -286,10 +289,13 @@ export async function settleOutwork({ data }: Ctx) {
 export async function cancelOutwork({ data }: Ctx) {
   const outworkId = String(data.outworkId || '')
   if (!outworkId) return reply(400, { ok: false, error: 'NO_OUTWORK' })
-  const r = await transition('outworkOrders', outworkId, ['draft'], 'cancelled', {
-    cancelledAt: Date.now(),
-  })
+  const r = await transition('outworkOrders', outworkId, fromFor('cancelled'), 'cancelled', { cancelledAt: Date.now() })
   if (!r.doc) return reply(404, { ok: false, error: 'NO_OUTWORK' })
-  if (!r.moved) return reply(409, { ok: false, error: 'NOT_DRAFT' })
-  return reply(200, { ok: true })
+  if (!r.moved) {
+    // 重放天然幂等（同 scmPurchase.markOrdered/cancelPurchase 口径）：已 cancelled 直接返回成功，
+    // 不让客户端重试拿到与「单据状态不对、根本不能操作」相同的 409——只有真正非法流转（非 draft）才拒。
+    if (r.doc.status === 'cancelled') return reply(200, { ok: true, moved: false })
+    return reply(409, { ok: false, error: 'NOT_DRAFT' })
+  }
+  return reply(200, { ok: true, moved: true })
 }

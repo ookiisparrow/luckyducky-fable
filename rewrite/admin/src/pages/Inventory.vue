@@ -1,20 +1,22 @@
 <script setup lang="ts">
 // 库存管理（design/console.pen S14 视觉·M3 UI 批7）：统计卡 + 状态 chip + SKU 表（商品名/价格 join listDrafts
 // 真数据·当前库存/低库存预警/售罄/不限量派生）+ 行内调整（保留版本校验 409 并发逻辑）。
-// 诚实边界：低库存阈值 10 为显示常量（后端无 per-SKU 阈值）；「批量导入/盘点」无后端 action——省略不加假钮（记待办）。
+// 诚实边界：低库存阈值为显示常量（后端无 per-SKU 阈值·单源 lib/thresholds.ts，与 Dashboard.vue 同口径）；
+// 「批量导入/盘点」无后端 action——省略不加假钮（记待办）。
 import { ref, computed, onMounted } from 'vue'
 import { Search, Boxes, CircleCheck, TriangleAlert, XCircle, Infinity as InfinityIcon, RefreshCw } from 'lucide-vue-next'
 import { listInventory, saveStock } from '../api/system'
 import { listDrafts } from '../api/products'
 import { mapStock, stockErrorText, type StockRow } from '../lib/mapSystem'
 import { useLoadStatus } from '../lib/status'
+import { LOW_STOCK_THRESHOLD } from '../lib/thresholds'
 import UiButton from '../components/ui/Button.vue'
 import PageHeader from '../components/ui/PageHeader.vue'
 import KpiCard from '../components/ui/KpiCard.vue'
 import Badge from '../components/ui/Badge.vue'
 import EmptyState from '../components/ui/EmptyState.vue'
 
-const LOW_STOCK = 10 // 默认阈值（per-SKU 未设时退此·仅前端预警线）
+const LOW_STOCK = LOW_STOCK_THRESHOLD // 默认阈值（per-SKU 未设时退此·仅前端预警线·与 Dashboard.vue 同口径单源见 lib/thresholds.ts）
 
 interface Row extends StockRow {
   name: string

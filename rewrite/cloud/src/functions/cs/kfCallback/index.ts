@@ -8,20 +8,19 @@ import {
   getDb,
   alert,
   kfCustomerBatchget,
-  getSecureConfig,
+  getSecureConfigFields,
 } from '../../../kit'
 import { handleMessage, rootMenu, buildMsgMenu, extUserId, processKfBatch, heldStatus, type Incoming } from './dispatch'
 import { archiveInbound, archiveOutbound } from './archive' // 会话归档（B5.1·入站/出站落档·守卫 conversations-archived）
 
 // 微信客服 in-chat 智能客服回调（HTTP 访问服务·类比 adminApi 的 /adminapi）。
 // 验签 + AES 解密 + fail-closed 由 kit.defineKfCallback 强制（根因#3）；本函数只做「收到事件 → 拉消息
-// → 分流回消息」。corpid/secret/token/aesKey 经 kit/secureConfig 读库（决策 2026-07-12·/admin
-// 人工配置清单页填写自动生效，无需再改环境变量+重新部署）；MINIAPP_APPID/THUMB_MEDIA_ID 未入本次
-// 迁移范围（不在 checklist 列表内），仍走环境变量。
-const env = (k: string) => process.env[k] || ''
+// → 分流回消息」。corpid/secret/token/aesKey + 小程序卡片 miniappAppId/thumbMediaId（配置清单审查批随迁）
+// 经 kit/secureConfig 读库（决策 2026-07-12·/admin 人工配置清单页填写自动生效，无需再改环境变量+重新
+// 部署·env 兜底迁移期不变）。读取合并为「外壳 creds 1 次 + onEvent 1 次」（原逐字段 5 次同文档 get·
+// 配置清单审查批收敛），每事件仍取最新值——填写即生效语义不变。
 const db = getDb()
-const cfg = async () => ({ corpid: await getSecureConfig(db, 'wxkf', 'corpId'), secret: await getSecureConfig(db, 'wxkf', 'secret') })
-const cardCfg = () => ({ appid: env('WXKF_MINIAPP_APPID'), thumbMediaId: env('WXKF_THUMB_MEDIA_ID') })
+const wxkfCfg = () => getSecureConfigFields(db, 'wxkf', ['corpId', 'secret', 'miniappAppId', 'thumbMediaId'])
 
 const SEEN_TTL_NOTE = 'seen:<msgid> 去重痕只增（量级=客服消息数·远低于 events）；如需回收随 cleanupEvents 扩展'
 
@@ -63,15 +62,18 @@ function normalize(msg: any): Incoming | null {
 }
 
 export const main = defineKfCallback({
-  token: () => getSecureConfig(db, 'wxkf', 'token'),
-  aesKey: () => getSecureConfig(db, 'wxkf', 'aesKey'),
-  corpid: () => getSecureConfig(db, 'wxkf', 'corpId'), // 企业内部单 corp：解密 receiveId 须等于它，拒跨 corp 伪造（审计 P1）
+  // 单次合并读注入三凭证（corpid：企业内部单 corp——解密 receiveId 须等于它，拒跨 corp 伪造·审计 P1）
+  creds: async () => {
+    const f = await getSecureConfigFields(db, 'wxkf', ['token', 'aesKey', 'corpId'])
+    return { token: f.token, aesKey: f.aesKey, corpid: f.corpId }
+  },
   onEvent: async ({ syncToken, openKfId }) => {
     // 观测（根因#8：整条 onEvent 链路可见，非敏感字段——不打 token/openid 内容）
     console.log('[kf] onEvent', { openKfId, hasSyncToken: !!syncToken })
+    const f = await wxkfCfg()
     let token: string
     try {
-      token = await getAccessToken(await cfg())
+      token = await getAccessToken({ corpid: f.corpId, secret: f.secret })
     } catch (e) {
       console.error('[kf] getAccessToken threw', String(e)) // fetch 抛错（网络/IP）——kit errcode 路径另有告警
       return
@@ -88,7 +90,7 @@ export const main = defineKfCallback({
     }
     // 转人工不再调平台 service_state 转接（守卫 agent-channel-stays-assistant·根因#12·调试日志 AC）：
     // 平台会话恒智能助手态(1)，人工由承面C 自建工作台（csSession 队列）承接——转 3 会让坐席 send_msg 全被 95018 拒。
-    const ctx = { db, openKfId, cfg: cardCfg(), send }
+    const ctx = { db, openKfId, cfg: { appid: f.miniappAppId, thumbMediaId: f.thumbMediaId }, send }
 
     // cursor 持久化：从上次游标增量拉，处理完回写
     const cursorId = 'cursor:' + openKfId

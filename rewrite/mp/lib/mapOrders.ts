@@ -28,14 +28,18 @@ export interface OrderVM {
   couponLabel: string
 }
 
-// 状态中文（shared ORDER_STATUS 全集·未知状态回原串不冒充）
+// 状态中文·客户向措辞（shared ORDER_STATUS 全集·未知状态回原串不冒充）。canonical 单源在
+// rewrite/shared/src/statusLabels.ts 的 ORDER_STATUS_LABEL_CUSTOMER——mp 包进不了 @ldrw/shared（微信开发者
+// 工具编译不出仓外引用，同 lib/checkoutConst.ts 头注），故手落此副本；措辞与 admin 运营向（同源
+// ORDER_STATUS_LABEL_OPS，见 admin/src/lib/format.ts）刻意不同（如 shipped 这里「待收货」、admin「已发货」——
+// 客户视角 vs 商家视角），不是漂移；状态码集合须与 shared 一致，由守卫 rw-mp-order-labels-synced 焊死。
 const STATUS_LABELS: Record<string, string> = {
   pending: '待支付',
   paid: '待发货',
   shipped: '待收货',
   done: '已完成',
   closed: '已关闭',
-  refund_required: '退款处理中',
+  refund_required: '待退款', // PAID_BUT_OOS 死信（已付但缺货·待人工退款）·非「退款处理中」（与 admin 同口径，见 admin/src/lib/format.ts）
 }
 export const statusLabel = (s: unknown): string => STATUS_LABELS[String(s)] || String(s || '')
 

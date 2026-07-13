@@ -132,12 +132,15 @@ function readDuration(file: File): Promise<string> {
 const saveState = ref<'' | 'saving' | 'saved' | 'error'>('')
 let loaded = false
 let saveTimer: ReturnType<typeof setTimeout> | null = null
-// 串行化实际保存（防慢网下两次自动保存乱序覆盖·P2·根因#8）：run 现读 course.value·补存即最新
+// 串行化实际保存（防慢网下两次自动保存乱序覆盖·P2·根因#8）：run 现读 course.value·补存即最新。
+// key='courses:'+courseId（批D·P1，取组件构造那一刻的 courseId·同实例内后续 load() 换课不改 key——仍在
+// 同一条队列里天然串行，只是槽位标签不再精确对应「当前」课程号，不影响写入正确性)：改走模块级共享槽位，
+// 快速切走再切回本页重建组件实例时，新实例接管旧实例仍在途的补存链，防旧快照晚到覆盖新实例已存的编辑。
 const flushSave = serialSave(async () => {
   if (!course.value) return
   const r = await saveCourseDraft(course.value)
   saveState.value = r.ok ? 'saved' : 'error'
-})
+}, 'courses:' + courseId.value)
 function autosave() {
   if (!course.value) return
   saveState.value = 'saving'
@@ -174,7 +177,9 @@ function addSegment(l: Record<string, any>) {
 // load() 已会拦截切课、重排/删除按钮已按此标志 disable），并在写回前按对象引用重定位——段已被删除/移出则如实
 // 报告、不写回幽灵对象。
 async function pickVideo(l: Record<string, any>, sg: Record<string, any>, ev: Event) {
-  const file = (ev.target as HTMLInputElement).files?.[0]
+  const input = ev.target as HTMLInputElement
+  const file = input.files?.[0]
+  input.value = '' // 重置 value：允许上传失败后重选同一文件重试（同 batchUpload/pickArt，否则浏览器不再触发 change）
   if (!file || !course.value || batchUploading.value) return
   batchUploading.value = true
   setUploadLock() // 同 batchUpload：拦截离页/切步致孤儿上传
@@ -190,7 +195,8 @@ async function pickVideo(l: Record<string, any>, sg: Record<string, any>, ev: Ev
       sg.videoFileId = r.fileId || ''
       refreshStats()
       message.value = ''
-    } else message.value = '视频上传失败：' + String(r.error || '')
+    } else if (r.error === 'SESSION_LOST') message.value = '登录已过期，这段视频未上传成功，请重新登录后重试' // 同 batchUpload 措辞（批D·根因2）
+    else message.value = '视频上传失败：' + String(r.error || '')
   } finally {
     progress.value = ''
     batchUploading.value = false
@@ -213,6 +219,7 @@ async function batchUpload(l: Record<string, any>, ev: Event) {
   const targets: Array<Record<string, any> | null> = plan.map((item) => (item.isNew ? null : (l.segments[item.segIndex] as Record<string, any>) ?? null))
   batchUploading.value = true
   setUploadLock() // 批量上传在途锁（P1·bug sweep Round2 item12）：本组件 onBeforeRouteLeave + Wizard.go() 两处消费，拦截离页/切步致孤儿上传
+  let uploaded = 0
   try {
     for (let i = 0; i < plan.length; i++) {
       const item = plan[i]
@@ -227,8 +234,16 @@ async function batchUpload(l: Record<string, any>, ev: Event) {
       if (!sg.name) sg.name = item.segName
       if (!sg.dur) sg.dur = await readDuration(item.file) // 时长自动读取（未填才读）
       const r = await uploadVideo(String(course.value.id), sg.name || 'seg', item.file, (p) => (progress.value = `课时批量传 ${i + 1}/${plan.length} · ${Math.round(p * 100)}%`))
-      if (r.ok) sg.videoFileId = r.fileId || ''
-      else message.value = '有视频上传失败：' + String(r.error || '') // fail-soft·一段失败不拖累其余
+      if (r.ok) {
+        sg.videoFileId = r.fileId || ''
+        uploaded++
+      } else if (r.error === 'SESSION_LOST') {
+        // 会话失效清晰中止（批D·根因2）：不继续逐文件循环——令牌已被 client 清空，剩余每个文件必然同样
+        // 401，逐个静默失败会把这份汇总原因冲没、用户只看到最后一条「上传失败：SESSION_LOST」摸不着头脑。
+        // client.onSessionLost 已集中导登录（见 router.ts），这里只负责把「传到哪、剩多少」说清楚。
+        message.value = `登录已过期，已上传 ${uploaded}/${plan.length} 个，剩余 ${plan.length - uploaded} 个未上传，请重新登录后继续`
+        break
+      } else message.value = '有视频上传失败：' + String(r.error || '') // fail-soft·一段失败不拖累其余
     }
   } finally {
     batchUploading.value = false

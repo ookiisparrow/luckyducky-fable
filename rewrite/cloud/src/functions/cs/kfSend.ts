@@ -1,5 +1,5 @@
 import { ERR } from '@ldrw/shared'
-import { isServerCall, ok, err, getAccessToken, sendMsg, getDb, getSecureConfig } from '../../kit'
+import { isServerCall, ok, err, getAccessToken, sendMsg, getDb, getSecureConfigFields } from '../../kit'
 
 // 客服主动发消息（黄金 cs-agent §四·服务端专用闸）：48h 接待窗口内经 send_msg 主动发出。
 // 带 openid 的客户端调用一律拒——防任意登录用户借此向顾客发任意消息（越权发送面 fail-closed）。
@@ -13,8 +13,7 @@ export const main = async (event: any) => {
   const text = String(event?.text || '')
   if (!externalUserId || !openKfId || !text) return err(ERR.BAD_ARGS)
 
-  const corpid = await getSecureConfig(db, 'wxkf', 'corpId')
-  const secret = await getSecureConfig(db, 'wxkf', 'secret')
+  const { corpId: corpid, secret } = await getSecureConfigFields(db, 'wxkf', ['corpId', 'secret'])
   if (!corpid || !secret) return err(ERR.KF_NOT_CONFIGURED)
 
   let token: string

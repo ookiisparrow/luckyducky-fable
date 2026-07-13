@@ -88,6 +88,26 @@ describe('getReviews（游标分页+全量精确汇总·黄金 §七）', () => 
     expect(r.summary.tags[0][0]).toBe('好评')
   })
 
+  it('大白话：精确聚合异常时落回兜底近样本口径——恰好 200 条（=SUMMARY_SAMPLE）其实是全量，不该误标近似（差一修复·P3）；201 条才真被截断标近似且只统计前 200 条', async () => {
+    control.setBeforeCount(({ coll }: any) => {
+      if (coll === 'reviews') throw new Error('MOCK_COUNT_FAIL') // 逼精确聚合六路 Promise.all 任一路失败→落回兜底
+    })
+    control.seed(
+      'reviews',
+      Array.from({ length: 200 }, (_, i) => ({ _id: 'r' + i, productId: 'p1', rating: 5, createdAt: i }))
+    )
+    const r200 = await call('getReviews', { productId: 'p1' })
+    expect(r200.summary.count).toBe(200)
+    expect(r200.summary.approx).toBe(false) // 恰好占满上限＝全量，不是被截断，不该标近似
+
+    control.seed('reviews', [{ _id: 'r200', productId: 'p1', rating: 5, createdAt: 200 }]) // 第 201 条
+    const r201 = await call('getReviews', { productId: 'p1' })
+    expect(r201.summary.count).toBe(200) // 真被截断只统计前 200（多取的那条只用于探测截断，不参与聚合）
+    expect(r201.summary.approx).toBe(true)
+
+    control.setBeforeCount(null as never)
+  })
+
   it('大白话：首页倒序+游标续页不重不漏；续页不重算汇总；到底无更多', async () => {
     control.seed(
       'reviews',

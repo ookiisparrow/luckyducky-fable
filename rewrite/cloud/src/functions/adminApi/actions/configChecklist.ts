@@ -1,9 +1,10 @@
 import { reply, type Ctx } from '../lib'
-import { probeStockSetup } from '../../../kit'
+import { hasAdjustLedgerEntry, hasThresholdMaterial } from '../../../kit'
 import { COLLECTIONS } from '@ldrw/shared'
 
 // 人工配置清单（批 B9→2026-07-12 补口可填写化·docs/进销存ERP/ 与 docs/后台360工作站/ 之外的「配了没」总览）：
-// 20 项散落配置（云函数环境变量→本页填写自动生效 / admin 页内 DB 字段 / 纯人工外部后台项 / 资产正册）拼一屏。
+// 22 项散落配置（云函数环境变量→本页填写自动生效 / admin 页内 DB 字段 / 纯人工外部后台项 / 资产正册）拼一屏
+// （审查批 +2：客服小程序卡片 miniappAppId/thumbMediaId 随迁入库，cs 函数环境变量配置项就此清零）。
 // 探测「配了没」；**可填写的字段绝不回显既有值**（前端 fill.inputType 恒渲染空输入框，留空提交＝不改动，
 // 见 adminApi/actions/secureConfig.ts）——零回显铁律延伸到写入口，本文件仍只做只读探测。
 //
@@ -73,9 +74,9 @@ export async function getConfigChecklist({ db }: Ctx) {
   const bomOk = !!(bomDoc && bomDoc.data)
 
   // 期初盘点（有 adjust 流水）+ 物料安全线（有 threshold>0 物料）合并一行两条件（选简单者·两者皆备才算 ok）
-  // ——经门1 kit probeStockSetup 探针（rw-material-stock-single-seam：materials/stockLedger 只许 kit/scmStock 碰）
-  const probe = await probeStockSetup()
-  const stockInitOk = probe.adjustUsed && probe.thresholdSet
+  // 门1 只读出口（批K：原直碰 stockLedger/materials 集合，绕过 SCM 门1·kit/scmStock.ts）
+  const [hasLedger, hasThreshold] = await Promise.all([hasAdjustLedgerEntry(), hasThresholdMaterial()])
+  const stockInitOk = hasLedger && hasThreshold
 
   const groups: ChecklistGroup[] = [
     {
@@ -135,6 +136,28 @@ export async function getConfigChecklist({ db }: Ctx) {
           url: 'https://kf.weixin.qq.com',
           noteExtra: MIGRATE_NOTE,
           fill: { action: 'saveSecureConfig', docId: 'wxkf', field: 'aesKey', inputType: 'password' },
+        },
+        {
+          key: 'WXKF_MINIAPP_APPID',
+          name: '客服卡片小程序 AppID（审查批随迁·原 cs 函数环境变量）',
+          location: 'DB secureConfig/wxkf.miniappAppId',
+          purpose: '客服会话里发的小程序卡片（查订单/进店）跳转目标小程序',
+          status: wxkfOk('miniappAppId') ? 'ok' : 'missing',
+          howTo: '填本店小程序 AppID（mp 后台→设置→账号信息，与发布用 AppID 一致）',
+          url: 'https://mp.weixin.qq.com',
+          noteExtra: MIGRATE_NOTE,
+          fill: { action: 'saveSecureConfig', docId: 'wxkf', field: 'miniappAppId', inputType: 'text' },
+        },
+        {
+          key: 'WXKF_THUMB_MEDIA_ID',
+          name: '客服卡片封面素材 ID（审查批随迁·原 cs 函数环境变量）',
+          location: 'DB secureConfig/wxkf.thumbMediaId',
+          purpose: '小程序卡片封面图 thumb_media_id（缺任一项则卡片消息静默不发、只发文字）',
+          status: wxkfOk('thumbMediaId') ? 'ok' : 'missing',
+          howTo: '经企微素材上传接口上传封面图取得 media_id（流程见 docs/微信客服配置手册.md）',
+          url: 'https://kf.weixin.qq.com',
+          noteExtra: MIGRATE_NOTE,
+          fill: { action: 'saveSecureConfig', docId: 'wxkf', field: 'thumbMediaId', inputType: 'text' },
         },
       ],
     },

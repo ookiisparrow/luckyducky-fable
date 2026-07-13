@@ -2,6 +2,7 @@
 // 云环境与旧线同一个（数据零迁移·ADR §23）；M2 期间壳只初始化不调用，业务调用随页面批接 app 网关。
 import { registerPrivacyGate } from './lib/privacyGate'
 import { trackEvent } from './api/learning'
+import { loadBrandFonts } from './utils/brandFont'
 
 // 错误探针（批次D·守卫 mp-smoke-wired）：封顶数组挂 globalThis，冒烟脚本 evaluate 取证 + 真机排查线索（根因#14）。
 const SMOKE_ERROR_CAP = 50
@@ -27,6 +28,7 @@ App({
       wx.cloud.init({ env: 'cloudbase-d4gcssqbv06865479', traceUser: true })
     }
     registerPrivacyGate() // 隐私授权闸（R27㉒·配 privacy-sheet 弹窗·守卫 rw-mp-privacy-gated）
+    loadBrandFonts() // 品牌字体远程加载（downloadFile→base64 绕 CORS·见函数注释·根因#8）
   },
   onError(err) {
     pushSmokeError(err)

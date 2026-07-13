@@ -22,7 +22,10 @@ export function usePageContent<M>(page: string, normalize: (_raw: unknown) => M,
     const r = await savePageContent(page, payload(model.value))
     autoState.value = r.ok ? 'saved' : 'error'
   }
-  const flushSave = serialSave(autosave) // 串行·防慢网两次自动保存乱序覆盖（根因#8）
+  // 串行·防慢网两次自动保存乱序覆盖（根因#8）；key='page-content:'+page（批D·P1）：改走模块级共享槽位，
+  // 快速切签再切回本签（PageContent.vue 用 v-if+:key 强制重建组件实例）时，新实例接管旧实例仍在途的补存
+  // 链，防旧快照晚到覆盖新实例已存的编辑；按 page 分槽——不同页签互不干扰。
+  const flushSave = serialSave(autosave, 'page-content:' + page)
 
   watch(
     model,

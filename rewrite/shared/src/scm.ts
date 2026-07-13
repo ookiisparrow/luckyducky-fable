@@ -15,8 +15,7 @@ export const PURCHASE_ORDER_STATUS = {
   RECEIVED: 'received',
 } as const satisfies Record<string, PurchaseOrderStatus>
 
-/** purchaseOrders 合法流转表（机读声明·用户拍板 2026-07-12 保留：ERP R31 活线的状态机单源预留；
- *  注：order-transitions-declared 守卫现只扫旧线，重写线对账接线为待办债——接线前本表暂无机器消费者）。 */
+/** purchaseOrders 合法流转表（机读·守卫 order-transitions-declared 对账散落实现）。 */
 export const PURCHASE_ORDER_TRANSITIONS: ReadonlyArray<{ from: readonly PurchaseOrderStatus[]; to: PurchaseOrderStatus }> = [
   { from: ['draft'], to: 'ordered' }, // markOrdered 向厂家下单（车道 A）
   { from: ['ordered'], to: 'received' }, // receivePurchase 到货入库（首次流转绑 applyStockMoves purchase_in·幂等）
@@ -34,7 +33,7 @@ export const OUTWORK_ORDER_STATUS = {
   SETTLED: 'settled',
 } as const satisfies Record<string, OutworkOrderStatus>
 
-/** outworkOrders 合法流转表（机读声明·保留理由同上 PURCHASE_ORDER_TRANSITIONS）。 */
+/** outworkOrders 合法流转表（机读·守卫 order-transitions-declared 对账散落实现）。 */
 export const OUTWORK_ORDER_TRANSITIONS: ReadonlyArray<{ from: readonly OutworkOrderStatus[]; to: OutworkOrderStatus }> = [
   { from: ['draft'], to: 'issued' }, // issueOutwork 发料（最大团原团按色出库·applyStockMoves outwork_issue）
   { from: ['issued'], to: 'delivered' }, // receiveOutwork 交付（带结团入库 outwork_receive + 定格损耗与 payableFen）

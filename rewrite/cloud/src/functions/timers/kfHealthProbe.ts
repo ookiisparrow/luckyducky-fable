@@ -1,5 +1,5 @@
 import { ERR } from '@ldrw/shared'
-import { isServerCall, ok, err, getAccessToken, listKfAccounts, notifyAlert, getDb, getSecureConfig } from '../../kit'
+import { isServerCall, ok, err, getAccessToken, listKfAccounts, notifyAlert, getDb, getSecureConfigFields } from '../../kit'
 
 // 微信客服活体探针（黄金 cs-agent §十一·「配过一次≠一直通」）：定时探「令牌能取 + API 能真调」，
 // 静默故障（Secret 漂/可信 IP 变/权限丢）推告警。服务端专用；客户端调用拒（防刷告警）。
@@ -8,8 +8,7 @@ const db = getDb()
 
 export const main = async () => {
   if (!isServerCall()) return err(ERR.SERVER_ONLY)
-  const corpid = await getSecureConfig(db, 'wxkf', 'corpId')
-  const secret = await getSecureConfig(db, 'wxkf', 'secret')
+  const { corpId: corpid, secret } = await getSecureConfigFields(db, 'wxkf', ['corpId', 'secret'])
   if (!corpid || !secret) {
     await notifyAlert('security', 'kfHealthProbe', 'KF_NOT_CONFIGURED', {})
     return ok({ healthy: false, reason: 'NOT_CONFIGURED' })

@@ -27,4 +27,9 @@ page {
   --ld-radius-sm: 10rpx; /* 商品/买家秀卡（设计 5px）*/
   --ld-radius-md: 18rpx; /* 折叠组/特写图（设计 9px）*/
   --ld-radius-pill: 999rpx;
+  /* 品牌字体（文源圆体 WenYuan Rounded SC）：子集 WebFont 远程加载（loadBrandFonts·utils/brandFont.ts）
+     到达前/失败时回退系统圆体栈（FOUT 可接受）。回退栈照抄旧线 uni.scss $font-display（逐项核对）。
+     应用范围＝全局 page（战役 flag·主脑拍板，非老线「仅标题」先例）。 */
+  --ld-font-brand: 'WenYuan Rounded SC', 'PingFang SC', 'SF Pro Rounded', ui-rounded, 'Hiragino Sans GB',
+    system-ui, sans-serif;
 }

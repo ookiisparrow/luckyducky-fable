@@ -186,6 +186,54 @@ describe('createOrder · 库存预留（黄金 inventory-scm §A/§B）', () => 
   })
 })
 
+describe('createOrder · 幂等键（批E·P1 防网络超时重试双建单·claim 范式抄 scmAssembly）', () => {
+  it('大白话：同一幂等键提交两次——只产生一笔订单、库存只扣一次；第二次原样返回第一次那笔（不是报错也不是新单）', async () => {
+    control.seed('inventory', [{ _id: 'p1__基础款', productId: 'p1', spec: '基础款', stock: 1 }])
+    const r1 = await call('createOrder', { items: [{ id: 'p1', qty: 1 }], address: ADDR, idempotencyKey: 'ck-abc' })
+    expect(r1.ok).toBe(true)
+    expect(control.dump('orders').length).toBe(1)
+    expect(control.dump('inventory')[0].stock).toBe(0) // 库存只扣一次
+
+    const r2 = await call('createOrder', { items: [{ id: 'p1', qty: 1 }], address: ADDR, idempotencyKey: 'ck-abc' })
+    expect(r2.ok).toBe(true)
+    expect(r2.order.id).toBe(r1.order.id) // 第二次拿到同一笔单据，不是新单
+    expect(control.dump('orders').length).toBe(1) // 未建二单
+    expect(control.dump('inventory')[0].stock).toBe(0) // 未重复扣库存（若重复扣会因库存不足报 OUT_OF_STOCK，而非 ok）
+  })
+
+  it('大白话：不同幂等键各自独立建单——不会被误当同一次提交拦下', async () => {
+    control.seed('inventory', [{ _id: 'p1__基础款', productId: 'p1', spec: '基础款', stock: 5 }])
+    const r1 = await call('createOrder', { items: [{ id: 'p1', qty: 1 }], address: ADDR, idempotencyKey: 'ck-1' })
+    const r2 = await call('createOrder', { items: [{ id: 'p1', qty: 1 }], address: ADDR, idempotencyKey: 'ck-2' })
+    expect(r1.ok).toBe(true)
+    expect(r2.ok).toBe(true)
+    expect(r1.order.id).not.toBe(r2.order.id)
+    expect(control.dump('orders').length).toBe(2)
+  })
+
+  it('大白话：拒单（缺货）不占幂等键——同键换个能成的请求仍可正常建单，不会被卡死', async () => {
+    control.seed('inventory', [{ _id: 'p1__基础款', productId: 'p1', spec: '基础款', stock: 0 }])
+    const bad = await call('createOrder', { items: [{ id: 'p1', qty: 1 }], address: ADDR, idempotencyKey: 'ck-retry' })
+    expect(bad.error).toContain('OUT_OF_STOCK')
+    expect(control.dump('orders').length).toBe(0)
+
+    control.seed('inventory', [{ _id: 'p2__', productId: 'p2', spec: '', stock: 3 }]) // 换个不缺货的条目·同键重试
+    const good = await call('createOrder', { items: [{ id: 'p2', qty: 1, sku: '雾霭蓝' }], address: ADDR, idempotencyKey: 'ck-retry' })
+    expect(good.ok).toBe(true)
+    expect(control.dump('orders').length).toBe(1)
+  })
+
+  it('大白话：不传幂等键——行为与批E改动前完全一致（可重复建单，旧路径零回归）', async () => {
+    control.seed('inventory', [{ _id: 'p1__基础款', productId: 'p1', spec: '基础款', stock: 5 }])
+    const r1 = await order([{ id: 'p1', qty: 1 }])
+    const r2 = await order([{ id: 'p1', qty: 1 }])
+    expect(r1.ok).toBe(true)
+    expect(r2.ok).toBe(true)
+    expect(r1.order.id).not.toBe(r2.order.id)
+    expect(control.dump('orders').length).toBe(2)
+  })
+})
+
 describe('setStock 管理端版本校验写（黄金 inventory-scm §A）', () => {
   it('大白话：期望版本不符（期间有并发预留）→ 冲突拒写不覆盖；相符落库；首设无条件写', async () => {
     // 确定性构造版本戳（真场景=管理员开旧页面期间发生并发预留；毫秒时钟在内存桩下会撞车，故直接铺数据）

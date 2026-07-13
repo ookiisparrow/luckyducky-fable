@@ -1,6 +1,9 @@
 // 进销存映射（纯函数·守卫 rw-admin-scm-ui-golden）：料号人话/计量中文/状态中文/
 // 元→分整数闸（超两位小数拒——分整数纪律的输入侧半边）/SCM 错误码人话（原文兜底）。
 import { yuan } from './format'
+// 采购/外协状态标签单源收口（P2 顺手改批）：此前本文件手抄 PURCHASE_CN/OUTWORK_CN，与 shared 状态机声明
+// 零绑定——改从 @ldrw/shared 取（见 shared/src/statusLabels.ts 头注）。
+import { PURCHASE_ORDER_STATUS_LABEL, OUTWORK_ORDER_STATUS_LABEL } from '@ldrw/shared'
 
 const TIER_CN: Record<string, string> = { L: '大团', M: '中团', S: '小团' }
 const FORM_CN: Record<string, string> = { raw: '原团', knotted: '带结' }
@@ -23,11 +26,11 @@ export const uomLabel = (u: unknown): string => (String(u) === 'gram' ? '克' : 
 const CATEGORY_CN: Record<string, string> = { yarn: '毛线', packaging: '外包装', card: '激活卡片', accessory: '辅料' }
 export const materialCategoryLabel = (c: unknown): string => CATEGORY_CN[String(c)] || String(c || '')
 
-const PURCHASE_CN: Record<string, string> = { draft: '草稿', ordered: '已下单', received: '已收货', cancelled: '已取消' }
-export const purchaseStatusLabel = (s: unknown): string => PURCHASE_CN[String(s)] || String(s || '')
+export const purchaseStatusLabel = (s: unknown): string =>
+  (PURCHASE_ORDER_STATUS_LABEL as Record<string, string>)[String(s)] || String(s || '')
 
-const OUTWORK_CN: Record<string, string> = { draft: '草稿', issued: '已发料', delivered: '已收货', settled: '已结算', cancelled: '已取消' }
-export const outworkStatusLabel = (s: unknown): string => OUTWORK_CN[String(s)] || String(s || '')
+export const outworkStatusLabel = (s: unknown): string =>
+  (OUTWORK_ORDER_STATUS_LABEL as Record<string, string>)[String(s)] || String(s || '')
 
 /** 元输入 → 分整数（输入侧钱闸）：非负、最多两位小数；空串/超两位/非数/负 → null（拒·不静默取整）。
  *  空串显式拒：Number('')===0 会把「没填」静默当 0 元——必须让用户明确填 0 才算 0。 */

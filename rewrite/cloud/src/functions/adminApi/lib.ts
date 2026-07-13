@@ -1,5 +1,6 @@
 import crypto from 'crypto'
 import { str, notifyAlert } from '../../kit'
+import { PAID_ORDER_STATUSES } from '@ldrw/shared'
 export { str } // 供 action 模块复用（saveCard / saveHomeContent 等截断）
 
 // 账号有界扫描命中上限告警（P2 评审·根因#7 分页协议纪律的账号扫描版）：keyHash 加盐后多账号查找从
@@ -11,7 +12,11 @@ export function alertIfScanAtCap(rows: any[], limit: number, fn: string): void {
   if (Array.isArray(rows) && rows.length >= limit) {
     // fp:fn 细分去重键（recordAnomaly 契约·见 kit/anomaly.ts）——三处调用点各自留痕，不被同 kind+code
     // 的指纹去重合并成一条（否则只看得到「某处顶到上限」，看不出是哪个扫描点）。
-    notifyAlert('security', fn, 'ACCOUNT_SCAN_AT_CAP', { limit, fp: fn }).catch(() => {})
+    // 兜底（根因#14）：notifyAlert 本身走 try/catch 已经很难失败，但一旦失败（如 recordAnomaly/db 抛出
+    // 未被内部吞掉的异常）绝不能悄悄丢——告警系统自己失效却没人知道，比原始异常本身更危险。
+    notifyAlert('security', fn, 'ACCOUNT_SCAN_AT_CAP', { limit, fp: fn }).catch((e) => {
+      console.error(`[LD_ALERT_FAIL] alertIfScanAtCap 告警发送失败 fn=${fn} err=${String(e)}`)
+    })
   }
 }
 
@@ -93,7 +98,10 @@ export async function activationFor(db: any, openid: string, productId: string) 
 }
 
 // 已付营收口径（GMV / 财务对账单源·债#32）：pending/closed 未付不计。看板与 S16 对账共用·防口径漂移。
-export const PAID_STATUSES = ['paid', 'shipped', 'done']
+// 真正单源在 @ldrw/shared order.ts 的 PAID_ORDER_STATUSES（与订单状态机声明同处·P2 顺手改批收口——此前本文件
+// /dashboard.ts /reconciliation.ts /customer360 profile.ts 各自手抄同一份数组，这里保留 PAID_STATUSES 这个
+// 名字只做转发，dashboard.ts/reconciliation.ts 既有 `import { PAID_STATUSES } from '../lib'` 不用改）。
+export const PAID_STATUSES: readonly string[] = PAID_ORDER_STATUSES
 
 // 钱链内部异常（txAlerts·债#23 单源）：金额不符单 / 退款金额不符 / 审批超 1h 未到回调的卡单。
 // 看板（dashboard）与财务对账（reconciliation·S16）共用此单源——同 activationFor 范式，防两处漂移

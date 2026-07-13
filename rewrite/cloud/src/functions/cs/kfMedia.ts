@@ -1,5 +1,5 @@
 import { ERR } from '@ldrw/shared'
-import { isServerCall, ok, err, getAccessToken, getKfMedia, getDb, getSecureConfig } from '../../kit'
+import { isServerCall, ok, err, getAccessToken, getKfMedia, getDb, getSecureConfigFields } from '../../kit'
 
 // 顾客发图下载（B5·后台360工作站承面C 图片气泡·平台接缝单点#12：media/get 只在此调用，
 // 与 kfCallback/kfSend 共用同一 getAccessToken 缓存·不新开第二条 token 路径）。服务端专用闸——
@@ -12,8 +12,7 @@ export const main = async (event: any) => {
   const mediaId = String(event?.mediaId || '')
   if (!mediaId) return err(ERR.BAD_ARGS)
 
-  const corpid = await getSecureConfig(db, 'wxkf', 'corpId')
-  const secret = await getSecureConfig(db, 'wxkf', 'secret')
+  const { corpId: corpid, secret } = await getSecureConfigFields(db, 'wxkf', ['corpId', 'secret'])
   if (!corpid || !secret) return err(ERR.KF_NOT_CONFIGURED)
 
   let token: string

@@ -145,16 +145,6 @@
   font-weight: 600;
   color: var(--ld-ink);
 }
-.co-shop-chev {
-  margin-left: auto;
-  display: flex;
-  align-items: center;
-  opacity: 0.6;
-}
-.co-shop-chev .co-ico {
-  width: 30rpx;
-  height: 30rpx;
-}
 
 /* 订单商品行 */
 .co-item {

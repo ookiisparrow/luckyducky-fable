@@ -115,6 +115,18 @@ describe('订单行映射（发货入口收窄）', () => {
     expect(rq.canShip).toBe(false)
     expect(mapOrderRows('garbage')).toEqual([])
   })
+
+  // P0 修复（退款↔履约状态同步·根因：approveRefund/overrideRefund 只改 afterSales 不碰 orders，
+  // 旧版 shipOne 唯一放行条件是 paid+非金额异常，完全不查退款态——已批准退款的单能被照发＝钱货两空）：
+  // 后端 listOrders join afterSales 后端把 refundHold 标记贴在订单行上，前端入口收窄同步挡（真正拦截闸在 shipOne）。
+  it('大白话：已有行退款 approved/refunded（refundHold）即使 paid 且金额相符也禁发货', () => {
+    const [r] = mapOrderRows([{ id: 'or', status: 'paid', amount: 2, items: [], refundHold: true }])
+    expect(r.canShip).toBe(false)
+    expect(r.refundHold).toBe(true)
+    const [ok] = mapOrderRows([{ id: 'ok', status: 'paid', amount: 2, items: [], refundHold: false }])
+    expect(ok.canShip).toBe(true)
+    expect(ok.refundHold).toBe(false)
+  })
 })
 
 describe('手机号掩码（PII·还原批 Orders）', () => {

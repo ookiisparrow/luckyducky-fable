@@ -7,6 +7,7 @@ import { createOrder, pay } from '../../api/orders'
 import { mapPayResult } from '../../lib/payFlow'
 import { freshCover } from '../../lib/cart'
 import { getAllProducts } from '../../lib/catalog'
+import { goHomeTab } from '../../lib/homeIntent'
 
 Page({
   data: {
@@ -84,7 +85,8 @@ Page({
     this.setData({ submitting: true })
     const r = await createOrder(
       draft.items.map((l) => ({ id: l.id, sku: l.sku, qty: l.qty })),
-      { name: a.name, phone: a.phone, region: a.region, detail: a.detail }
+      { name: a.name, phone: a.phone, region: a.region, detail: a.detail },
+      checkout.getIdemKey() // 同一草稿的重试复用同一个键（网络超时重试不重复建单·批E）
     )
     // 建单请求在途用户手动退出结算页（同 refresh() unloaded 范式）：不再对无关页面 setData/toast/redirectTo/
     // requestPayment（真实支付授权框）/switchTab——建单失败且已退页直接收尾；建单成功则订单已真实生成，
@@ -139,7 +141,8 @@ Page({
             title: cancelled ? '支付已取消' : '支付没成功',
             content: '订单已保留，超时前都可以继续支付。可到「我的-我的订单」继续支付。',
             showCancel: false,
-            success: () => wx.switchTab({ url: '/pages/home/home' }),
+            // 回首页从头逛起：防 tab 实例旧滚动位置残留（收敛见 lib/homeIntent.ts）
+            success: () => goHomeTab(),
           })
         },
       })
@@ -149,7 +152,8 @@ Page({
       title: outcome.kind === 'closed' ? '订单已关闭' : '支付没成功',
       content: outcome.message,
       showCancel: false,
-      success: () => wx.switchTab({ url: '/pages/home/home' }),
+      // 回首页从头逛起：防 tab 实例旧滚动位置残留（收敛见 lib/homeIntent.ts）
+      success: () => goHomeTab(),
     })
   },
 })

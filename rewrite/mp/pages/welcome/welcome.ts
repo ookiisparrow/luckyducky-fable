@@ -9,6 +9,7 @@ import { getCourseById } from '../../lib/courses'
 import { activationView, bgFor, type ActivationKind } from '../../lib/mapLearning'
 import { mapWelcome, type WelcomeVM } from '../../lib/mapPages'
 import type { ApiResult } from '../../utils/cloud'
+import { goHomeTab } from '../../lib/homeIntent'
 
 Page({
   data: {
@@ -105,6 +106,7 @@ Page({
     this.setData({ phase: 'input', code: '', kind: 'invalid', bg: '' })
   },
   onGoHome() {
-    wx.switchTab({ url: '/pages/home/home' })
+    // 「先逛逛，稍后再进课」→ 首页应从头逛起：防上次恰好滚到 FAQ 板块的旧滚动位置残留，造成错位观感
+    goHomeTab()
   },
 })
