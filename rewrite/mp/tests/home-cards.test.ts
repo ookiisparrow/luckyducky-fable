@@ -60,6 +60,25 @@ describe('两卡型外框等高（.ld-prod-card 与 .ld-review-card 固定同一
   })
 })
 
+describe('两卡型图片 1:1 方形（2026-07-13 用户指令「商品卡图片应是一比一」·padding-top:100% 撑方·避 aspect-ratio 旧 WebView 不支持）', () => {
+  it('大白话：.ld-prod-media 用 padding-top:100% 撑成正方形（不再写死非等宽 height）', () => {
+    const body = ruleBody(wxss, '.ld-prod-media')
+    expect(body).toMatch(/padding-top:\s*100%/)
+    expect(body).not.toMatch(/(?<!min-|max-|line-)height:\s*[\d.]+rpx/) // 不再写死 300rpx 之类非等宽高
+  })
+  it('大白话：.ld-review-media 同步 1:1 方形（等高守卫联动·两卡内部算式一致不留空隙）', () => {
+    const body = ruleBody(wxss, '.ld-review-media')
+    expect(body).toMatch(/padding-top:\s*100%/)
+    expect(body).not.toMatch(/(?<!min-|max-|line-)height:\s*[\d.]+rpx/)
+  })
+  it('大白话：两卡图片子节点绝对定位铺满方形容器（padding-top 撑高后子图须 absolute inset 填满）', () => {
+    const prodImg = ruleBody(wxss, '.ld-prod-media-img')
+    const reviewImg = ruleBody(wxss, '.ld-review-media-img')
+    expect(prodImg).toMatch(/position:\s*absolute/)
+    expect(reviewImg).toMatch(/position:\s*absolute/)
+  })
+})
+
 describe('文字区多行裁剪三件套（-webkit-box/box-orient/line-clamp + overflow:hidden 齐全）', () => {
   it('大白话：.ld-prod-name（商品名）2 行裁剪三件套齐全', () => {
     const body = ruleBody(wxss, '.ld-prod-name')

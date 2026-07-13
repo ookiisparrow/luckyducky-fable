@@ -3,6 +3,8 @@
 // 钉行为：失败 → contFailed 亮（给重试）·不覆盖已有 cont；全成功无课 → 真空态引导保留（contFailed 灭）。
 // Page 以全局桩捕获 options（node 环境无小程序运行时·同 cart/catalog 测试 wx 桩家风）。
 import { describe, it, expect, vi, beforeEach } from 'vitest'
+// wxml 门控断言用（同 home-cards.test.ts 的 ?raw 原文导入范式·类型见 raw-imports.d.ts）
+import meWxmlRaw from '../pages/me/me.wxml?raw'
 
 const { loginMock, getMyProgressMock, getMyCoursesMock, getAllCoursesMock, getPageContentMock } = vi.hoisted(() => ({
   loginMock: vi.fn(),
@@ -85,5 +87,33 @@ describe('继续学习区失败分治（失败≠没进度·同 aftersales/order
     await page.refresh()
     expect(page.data.cont).toMatchObject({ courseId: 'c1', lessonId: 'l1' }) // 失败不覆盖已有数据（黄金 §八）
     expect(page.data.contFailed).toBe(false) // 还有旧卡可看·不亮失败态
+  })
+})
+
+// Bug C（2026-07-13 用户反馈「继续学习卡先显示无课程、再变历史记录」·闪空态）：缺「加载中」中间态——
+// cont=null 同时表示「尚未加载」和「确认无课」，首帧落到空态；须加 contLoaded，空态只在加载完且真无课才现。
+describe('继续学习区加载中态分治（加载中≠没课·消首帧假空态闪烁·根因#8/#14）', () => {
+  it('大白话：初始 data 里 contLoaded 为 false（首帧未加载完·不许渲染「还没有学习记录」空态）', async () => {
+    const page = await mountMe() // mountMe 返回 refresh 前的初始 data 副本
+    expect(page.data.contLoaded).toBe(false)
+  })
+  it('大白话：refresh 完成后 contLoaded 置 true（成功/失败任一路都置·空态从此才可能出现）', async () => {
+    const page = await mountMe()
+    await page.refresh()
+    expect(page.data.contLoaded).toBe(true)
+    // 失败路也须置 true（否则失败时也卡在骨架）
+    getMyProgressMock.mockResolvedValue({ ok: false, error: 'NETWORK' })
+    const page2 = await mountMe()
+    await page2.refresh()
+    expect(page2.data.contLoaded).toBe(true)
+  })
+  it('大白话：me.wxml 的「还没有学习记录」空态不再挂裸 wx:else，须门控在 contLoaded 后，且有加载中骨架兜底', () => {
+    const wxml = meWxmlRaw.replace(/<!--[\s\S]*?-->/g, '')
+    // 空态文案存在
+    expect(wxml).toContain('还没有学习记录')
+    // 引入了 contLoaded 门控（空态挂在 contLoaded 分支上·不在数据未回来时渲染）
+    expect(wxml).toMatch(/wx:elif="\{\{\s*contLoaded\s*\}\}"/)
+    // 有加载中骨架兜底节点（wx:else 落骨架而非空态）
+    expect(wxml).toMatch(/ld-me-cont-skeleton/)
   })
 })

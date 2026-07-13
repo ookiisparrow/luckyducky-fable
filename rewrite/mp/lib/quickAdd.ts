@@ -1,7 +1,7 @@
-// 首页「+」快速加购决策（M2 批次C·2026-07-08 用户拍板：旧假占位反馈改真加购）：
-// 单规格商品直加购物车（不用户择规格是省一步）；多规格商品无处代选，跳详情页选（Rule of Three——
-// 不为一个决策分支新建规格弹层组件，详情页早已是规格选择唯一的家）；raw 缺失/脏形→fail（调用方温和反馈，不静默）。
-// 抽纯函数进 lib：分支判定与副作用（cart.add/navigateTo）分离，vitest 钉行为不用桩 wx。
+// 首页「+」快速加购决策（M2 批次C·2026-07-08 用户拍板改真加购；2026-07-13 用户拍板：「+」统一＝加入购物车，
+// 多规格不再跳详情、默认加首个规格·用户可在购物车改规格）：单规格直加购（sku 空·用商品价）；多规格取首个 sku
+// （sku 名 + 首规格价·记一个确定规格与正确价，不留「未选规格」歧义行）；raw 缺失/脏形→fail（调用方温和反馈，不静默）。
+// 抽纯函数进 lib：分支判定与副作用（cart.add）分离，vitest 钉行为不用桩 wx。
 import { mapDetail } from './mapDetail'
 
 export interface QuickAddPayload {
@@ -14,14 +14,23 @@ export interface QuickAddPayload {
   cover: string
 }
 
-export type QuickAddDecision = { kind: 'add'; payload: QuickAddPayload } | { kind: 'navigate'; id: string } | { kind: 'fail' }
+export type QuickAddDecision = { kind: 'add'; payload: QuickAddPayload } | { kind: 'fail' }
 
 export function decideQuickAdd(raw: unknown): QuickAddDecision {
   const vm = mapDetail(raw)
   if (!vm) return { kind: 'fail' }
-  if (vm.skus.length > 0) return { kind: 'navigate', id: vm.id }
+  // 多规格默认加首个规格（有名有价的净化后首行）：记确定规格与该规格价；无规格用商品价、sku 空。
+  const first = vm.skus[0]
   return {
     kind: 'add',
-    payload: { id: vm.id, sku: '', name: vm.name, tag: vm.tag, price: vm.price, was: vm.was, cover: vm.gallery[0] || '' },
+    payload: {
+      id: vm.id,
+      sku: first ? first.name : '',
+      name: vm.name,
+      tag: vm.tag,
+      price: first ? first.price : vm.price,
+      was: vm.was,
+      cover: vm.gallery[0] || '',
+    },
   }
 }

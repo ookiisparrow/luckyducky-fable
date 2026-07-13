@@ -17,6 +17,9 @@ Page({
     cont: null as ContinueTarget | null,
     entries: mapMe(null).entries as MeVM['entries'], // 九入口标题/可见性·首帧默认（CMS 到达覆盖）
     contFailed: false, // 继续学习区取数失败标记（同 aftersales/order-list loadFailed 分治：失败≠没进度）
+    contLoaded: false, // 继续学习区首次取数是否落地（加载中≠没课·根因#8/#14）：首帧 cont=null 同时表示「尚未加载」
+    // 和「确认无课」，无 loading 位会让空态在数据未回来时就渲染成假空态（先空后有闪烁·2026-07-13 反馈）；
+    // 置 true 前空态不显、改显骨架；首次 refresh 落地后恒 true（成功/失败任一路都置）。
   },
   onShow() {
     if (typeof this.getTabBar === 'function') (this.getTabBar() as unknown as LdTabBar).setActive('me')
@@ -50,6 +53,7 @@ Page({
       avatar: (user && String(user.avatar || '')) || '',
       bio: (user && String(user.bio || '')) || '',
       entries: me.entries,
+      contLoaded: true, // 首次取数已落地（放展开之外·成功/失败任一路都置 true）：空态从此才可能出现，之前显骨架不显假空态
       ...(contFetchFailed
         ? { contFailed: !this.data.cont }
         : { cont: continueResolve(progress.list, mine.list, courses), contFailed: false }),

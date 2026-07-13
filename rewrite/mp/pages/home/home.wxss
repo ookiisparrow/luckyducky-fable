@@ -188,10 +188,10 @@
   flex-direction: column;
   vertical-align: top;
   width: 400rpx;
-  /* 与 .ld-review-card 等高（见该规则同款算式注释）：border4+媒体300+padding46(20+26)+name81+tag47(8+39)+foot余量97≈575rpx */
-  /* box-sizing:border-box：上方算式把 border4 计入总高，content-box 下 border 会加在 height 之外、实际渲染变 579rpx，须锁 border-box 让声明高度=最终渲染高度 */
+  /* 与 .ld-review-card 等高（见该规则同款算式注释）：border4+媒体396(1:1方形·卡内容宽396)+padding46(20+26)+name81+tag47(8+39)+foot余量97≈671rpx */
+  /* box-sizing:border-box：上方算式把 border4 计入总高，content-box 下 border 会加在 height 之外、实际渲染变 675rpx，须锁 border-box 让声明高度=最终渲染高度 */
   box-sizing: border-box;
-  height: 575rpx;
+  height: 671rpx;
   white-space: normal;
   margin-right: 22rpx;
   background: #fff;
@@ -200,12 +200,15 @@
   overflow: hidden;
 }
 .ld-prod-media {
+  position: relative;
   width: 100%;
-  height: 300rpx; /* 4:3 缩略（卡宽 400rpx）·压低卡片高度 */
+  padding-top: 100%; /* 1:1 方形（2026-07-13 用户指令·padding-top 百分比法撑方·避 aspect-ratio 旧 WebView 不支持·同 .ld-feature-display） */
   flex-shrink: 0; /* 锁定高度·媒体不被挤扁（同 .ld-review-media） */
   background: var(--ld-bg-sage);
 }
 .ld-prod-media-img {
+  position: absolute; /* padding-top 撑高后子图须绝对铺满方形容器（同 .ld-feature-img） */
+  inset: 0;
   width: 100%;
   height: 100%;
 }
@@ -421,10 +424,10 @@
   flex-direction: column;
   vertical-align: top;
   width: 400rpx;
-  /* 与 .ld-prod-card 等高：border4+媒体300+padding48(22+26)+星行36+quote上距15+quote120+quote下距22+meta约30＝575rpx */
-  /* box-sizing:border-box：让 border4 真被计入 575（.ld-prod-card 同款注释） */
+  /* 与 .ld-prod-card 等高：border4+媒体396(1:1方形)+padding48(22+26)+星行36+quote上距15+quote120+quote下距22+meta约30＝671rpx */
+  /* box-sizing:border-box：让 border4 真被计入 671（.ld-prod-card 同款注释·两卡同步 1:1 方形后内部算式一致不留空隙） */
   box-sizing: border-box;
-  height: 575rpx;
+  height: 671rpx;
   white-space: normal;
   margin-right: 26rpx;
   background: var(--ld-bg-lilac);
@@ -434,12 +437,15 @@
   box-shadow: 0 6rpx 8rpx rgba(0, 0, 0, 0.12);
 }
 .ld-review-media {
+  position: relative;
   width: 100%;
-  height: 300rpx; /* 4:3 缩略（卡宽 400rpx）·由 3:4 竖图压低卡片高度 */
+  padding-top: 100%; /* 1:1 方形（与商品卡同步·2026-07-13·等高守卫联动两卡内部算式一致不留空隙） */
   flex-shrink: 0; /* 锁定高度·媒体不被挤扁 */
   background: var(--ld-bg-sage);
 }
 .ld-review-media-img {
+  position: absolute; /* padding-top 撑高后子图须绝对铺满方形容器（同 .ld-prod-media-img） */
+  inset: 0;
   width: 100%;
   height: 100%;
 }
