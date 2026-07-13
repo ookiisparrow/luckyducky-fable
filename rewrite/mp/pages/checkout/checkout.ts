@@ -7,6 +7,7 @@ import { createOrder, pay } from '../../api/orders'
 import { mapPayResult } from '../../lib/payFlow'
 import { freshCover } from '../../lib/cart'
 import { getAllProducts } from '../../lib/catalog'
+import { goHomeTab } from '../../lib/homeIntent'
 
 Page({
   data: {
@@ -139,7 +140,8 @@ Page({
             title: cancelled ? '支付已取消' : '支付没成功',
             content: '订单已保留，超时前都可以继续支付。可到「我的-我的订单」继续支付。',
             showCancel: false,
-            success: () => wx.switchTab({ url: '/pages/home/home' }),
+            // 回首页从头逛起：防 tab 实例旧滚动位置残留（收敛见 lib/homeIntent.ts）
+            success: () => goHomeTab(),
           })
         },
       })
@@ -149,7 +151,8 @@ Page({
       title: outcome.kind === 'closed' ? '订单已关闭' : '支付没成功',
       content: outcome.message,
       showCancel: false,
-      success: () => wx.switchTab({ url: '/pages/home/home' }),
+      // 回首页从头逛起：防 tab 实例旧滚动位置残留（收敛见 lib/homeIntent.ts）
+      success: () => goHomeTab(),
     })
   },
 })
