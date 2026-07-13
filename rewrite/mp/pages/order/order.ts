@@ -1,4 +1,5 @@
 // 订单详情（M2 批7·批8 接售后）：状态横幅/条目/地址/金额明细/操作（续付·确认收货·申请售后）。
+import { tapHaptic } from '../../lib/haptics'
 import { getOrderById, pay, confirmReceive, cancelOrder, applyRefund, getMyAfterSales } from '../../api/orders'
 import { mapPayResult } from '../../lib/payFlow'
 import { mapOrder, type OrderVM } from '../../lib/mapOrders'
@@ -65,6 +66,7 @@ Page({
     this.setData({ loading: false, loadFailed: false, missing: !vm, vm, banner, amountNum, canAfterSale })
   },
   onRetryLoad() {
+    tapHaptic()
     this.setData({ loading: true, loadFailed: false })
     void this.reload()
   },
@@ -113,6 +115,7 @@ Page({
     })
   },
   async onPay() {
+    tapHaptic()
     const outcome = mapPayResult(await pay(this.orderId))
     // await 恢复点复核（同 checkout startPay 范式·bug sweep II 批E）：用户在支付发起在途退出详情页，迟到回包
     // 不再对已退页 toast/reload/拉起支付授权框——订单已在云端，用户下次重新打开详情页续付即可。requestPayment 的
@@ -141,6 +144,7 @@ Page({
     void this.reload()
   },
   onConfirm() {
+    tapHaptic()
     wx.showModal({
       title: '确认收货',
       content: '确认已收到宝贝了吗？',

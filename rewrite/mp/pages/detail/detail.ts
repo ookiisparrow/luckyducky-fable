@@ -1,4 +1,5 @@
 // 商品详情（M2·重设计对齐 ProductDetail.jsx 方案A）：图册 swiper + 计数 + SKU 价格联动 + 加购/直买 + 客服 + 为你推荐。
+import { tapHaptic } from '../../lib/haptics'
 import * as cart from '../../lib/cart'
 import { prepareBuyNow } from '../../lib/checkout'
 import { getAllProducts } from '../../lib/catalog'
@@ -70,6 +71,7 @@ Page({
     void this.loadRating(id)
   },
   onRetryLoad() {
+    tapHaptic()
     void this.loadProduct()
   },
   async loadRecs(id: string) {
@@ -103,6 +105,7 @@ Page({
   onAddCart() {
     const vm = this.data.vm
     if (!vm) return
+    tapHaptic()
     const sku = vm.skus[this.data.skuIndex] // 选中规格随行入车（价用规格价·双键行身份）
     cart.add({
       id: vm.id,
@@ -125,6 +128,7 @@ Page({
   onBuyNow() {
     const vm = this.data.vm
     if (!vm) return
+    tapHaptic()
     const sku = vm.skus[this.data.skuIndex]
     prepareBuyNow({ id: vm.id, sku: sku ? sku.name : '', name: vm.name, tag: vm.tag, price: sku ? sku.price : vm.price, cover: vm.gallery[0] || '' }) // 直买不动购物车
     wx.navigateTo({ url: '/pages/checkout/checkout' })
