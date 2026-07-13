@@ -7,6 +7,7 @@ import { mapHomeContent, mapProducts, type HomeContentVM, type ProductVM } from 
 import { decideQuickAdd } from '../../lib/quickAdd'
 import * as cart from '../../lib/cart'
 import { consumeHomeTop } from '../../lib/homeIntent'
+import { armExitAlert } from '../../utils/exitGuard'
 
 let toastTimer: ReturnType<typeof setTimeout> | null = null
 
@@ -32,6 +33,7 @@ Page({
   // 是否还站在本页，不把迟到回包的导航/角标同步/toast 打到用户已经切走之后的当前页面上。
   onShow() {
     this.hidden = false
+    armExitAlert() // tabBar 根页误触退出提醒（返回二次确认·2026-07-13 用户反馈·覆盖边界见 utils/exitGuard）
     if (typeof this.getTabBar === 'function') (this.getTabBar() as unknown as LdTabBar).setActive('home')
     // 兜底意图落地（我页无课/welcome先逛逛）回到顶部；正常切 tab 未置位则保留上次滚动位置（行为不变）
     if (consumeHomeTop()) wx.pageScrollTo({ scrollTop: 0, duration: 0 })

@@ -5,6 +5,7 @@ import * as cart from '../../lib/cart'
 import { prepareFromCart } from '../../lib/checkout'
 import { getAllProducts } from '../../lib/catalog'
 import { mapProducts, type ProductVM } from '../../lib/mapHome'
+import { armExitAlert } from '../../utils/exitGuard'
 
 let allRaw: Record<string, any>[] = [] // 全商品原档（算推荐+加购取价·onLoad 拉一次）
 
@@ -24,6 +25,7 @@ Page({
     this.ready = true
   },
   onShow() {
+    armExitAlert() // tabBar 根页误触退出提醒（放 ready 早返回之前·首建实例也需武装·2026-07-13 用户反馈·见 utils/exitGuard）
     if (!this.ready) return // 首建实例抢跑：onLoad 首拉还没完成，交给它自己的 refresh 收尾，这次 onShow 不重复刷新
     if (typeof this.getTabBar === 'function') (this.getTabBar() as unknown as LdTabBar).setActive('cart')
     this.refresh()
