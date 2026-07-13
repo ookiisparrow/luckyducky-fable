@@ -83,15 +83,24 @@ async function buildSummaryExact(db: any, productId: string) {
   }
 }
 
-/** 兜底汇总（聚合异常时的近样本口径·如实标 approx）。 */
+/**
+ * 兜底汇总（聚合异常时的近样本口径·如实标 approx）。
+ * sample 由调用方多取一条（limit SUMMARY_SAMPLE+1）传入，仅用来判断是否被截断——真被截断
+ * （length > SUMMARY_SAMPLE）才标 approx；恰好 SUMMARY_SAMPLE 条时其实是全量、不该误标近似
+ * （差一：原先用 count>=SUMMARY_SAMPLE 判定，采样查询本身就 limit(SUMMARY_SAMPLE)，「恰好占满上限」
+ * 与「被截断」在 length 上不可区分，P3 复核修）。参与统计计算只取前 SUMMARY_SAMPLE 条，多取的
+ * 那一条只用于探测截断、不参与聚合，避免引入统计偏差。
+ */
 function buildSummary(sample: any[]) {
-  const count = sample.length
+  const approx = sample.length > SUMMARY_SAMPLE
+  const rows = approx ? sample.slice(0, SUMMARY_SAMPLE) : sample
+  const count = rows.length
   let score = '0'
   const starCount: Record<number, number> = { 5: 0, 4: 0, 3: 0, 2: 0 }
   const tagCount: Record<string, number> = {}
   if (count) {
     let sum = 0
-    for (const r of sample) {
+    for (const r of rows) {
       sum += r.rating
       starCount[Math.max(2, r.rating)]++
       for (const t of r.tags || []) tagCount[t] = (tagCount[t] || 0) + 1
@@ -102,7 +111,7 @@ function buildSummary(sample: any[]) {
   return {
     score,
     count,
-    approx: count >= SUMMARY_SAMPLE,
+    approx,
     dist: [
       ['5 星', pct(starCount[5])],
       ['4 星', pct(starCount[4])],
@@ -128,11 +137,13 @@ export const getReviews = async (event: any = {}) => {
   const isFirstPage = !(event && (event.cursor ?? null))
   const summaryP = isFirstPage
     ? buildSummaryExact(db, productId).catch(async () => {
+        // limit SUMMARY_SAMPLE+1：多取一条只为让 buildSummary 探测「是否被截断」（差一修复，见其注释），
+        // 不改变精确口径优先、此仅兜底口径的语义。
         const sres = await db
           .collection(COLLECTIONS.reviews)
           .where({ productId })
           .orderBy('createdAt', 'desc')
-          .limit(SUMMARY_SAMPLE)
+          .limit(SUMMARY_SAMPLE + 1)
           .get()
           .catch(() => null)
         return buildSummary(sres ? sres.data : [])

@@ -143,6 +143,9 @@ const PAGE_SANITIZERS: Record<string, (d: any) => any> = {
   agreement: sanitizeAgreementDoc,
 }
 
+// history 追加重试上限（同 kit/inventory.ts CAS_RETRY 手法·乐观 CAS 非分布式锁）。
+const HISTORY_CAS_RETRY = 5
+
 export async function savePageContent({ db, data }: Ctx) {
   const page = str(data.page, 40)
   if (!PAGES.includes(page as any)) return reply(400, { ok: false, error: 'UNKNOWN_PAGE' }) // 未知 page fail-closed（根因#3）
@@ -152,15 +155,46 @@ export async function savePageContent({ db, data }: Ctx) {
   if (page === 'agreement') {
     // history 服务端权威追加（客户端传的一律忽略·防伪造版本史）：读旧份逐 part 比对 version，非空且变更即追
     // {part,version,at:ISO}，封顶 10（保留末 10 条·同 issueSession 剪最旧手法）。
-    const prev = await coll.doc('agreement').get().catch(() => null)
-    const prevData: any = (prev && prev.data) || {}
-    const prevHist = Array.isArray(prevData.history) ? prevData.history : []
-    const additions: any[] = []
-    for (const part of ['user', 'privacy'] as const) {
-      const v = clean[part]?.version
-      if (v && v !== prevData[part]?.version) additions.push({ part, version: v, at: new Date().toISOString() })
+    //
+    // 并发保存 fail-closed（P3 复核：原「读 history → 内存追加 → 整体写回」非原子——两次并发保存读到同一份
+    // 旧 history，各自追加后写回，后写覆盖先写、丢一条历史记录）。改用乐观 CAS 重试（同 kit/inventory.ts
+    // produceStock 手法）：条件带上读到时的版本号 _v（单调计数器，非 updatedAt 时间戳——毫秒级 Date.now()
+    // 在同一毫秒内两次写入会撞出同一个值，CAS 条件误判「无冲突」直接覆盖、静默丢一条并发追加，
+    // 曾在本地高频重试下实测复现），写前该文档被并发改过则 updated:0、重读重算 additions 再重试
+    // （读到的 prevData 已含并发方的新版本，本轮 diff 不会对已存在的版本重复追加，天然去重）；
+    // 首次建档走 add() 撞 DUPLICATE_ID 即并发方已建，同样重读重试。非钱链路径，用不到分布式锁。
+    for (let i = 0; i < HISTORY_CAS_RETRY; i++) {
+      const prev = await coll.doc('agreement').get().catch(() => null)
+      const prevData: any = (prev && prev.data) || {}
+      const prevHist = Array.isArray(prevData.history) ? prevData.history : []
+      const hasV = typeof prevData._v === 'number'
+      const prevV = hasV ? prevData._v : 0
+      const additions: any[] = []
+      for (const part of ['user', 'privacy'] as const) {
+        const v = clean[part]?.version
+        if (v && v !== prevData[part]?.version) additions.push({ part, version: v, at: new Date().toISOString() })
+      }
+      const doc = { ...clean, history: [...prevHist, ...additions].slice(-10), _v: prevV + 1, updatedAt: Date.now() }
+      if (!prev || !prev.data) {
+        const created = await coll
+          .add({ data: { ...doc, _id: 'agreement' } })
+          .then(() => true)
+          .catch(() => false)
+        if (created) return reply(200, { ok: true })
+        continue // DUPLICATE_ID：并发方已建档，重读重试
+      }
+      // _v 字段可能缺失（本 CAS 改造前就存在的旧文档，从未写过 _v）——用字面量 0 精确匹配会因「字段真缺失
+      // ≠ 值为0」而永远命中不了这类旧文档，CONTENTION 重试 5 次全败、协议页永久保存失败（同 learning.ts
+      // confirmEnter 的 entVer CAS 已踩过并修过的同一个坑：exists(false)-or-eq(prevV)，而非裸字面量相等）。
+      const _ = db.command
+      const r = await coll
+        .where({ _id: 'agreement', _v: hasV ? prevV : _.exists(false) })
+        .update({ data: doc })
+        .catch(() => ({ stats: { updated: 0 } }))
+      if (r.stats && r.stats.updated === 1) return reply(200, { ok: true })
+      // updated:0＝写前被并发改动抢先，重读重试
     }
-    clean.history = [...prevHist, ...additions].slice(-10)
+    return reply(409, { ok: false, error: 'CONTENTION' }) // 争用耗尽（管理端低频操作·几乎不至）
   }
   const doc = { ...clean, updatedAt: Date.now() }
   await coll

@@ -117,6 +117,23 @@ export function aboutPayload(m: AboutModel): Record<string, unknown> {
   }
 }
 
+// ———————————————————————————— 「我」+关于两档保存结果聚合（纯函数·批N P1 修复）————————————————————————————
+// MeAboutTab 同页管两份独立 content 档（mePage/about），各自一条 usePageContent 生命周期、各自 save() 完成后
+// 都会把自己的 message 设成非空（成功固定文案 / 失败带话术），点一次「保存」两档都存。原实现用
+// `me.message || about.message` 短路合并展示：先完成、总是非空的一方（几乎总是 me）会把另一方的结果——哪怕
+// 是失败——整个遮蔽掉，用户只看到成功提示、实际另一档保存失败且毫不知情（根因#14 失败必可观测）。
+// 改成显式判断两者是否等于成功文案，都成功才显示成功；任一失败就把失败的那个/两个原样话术带上，不丢信息。
+export const SAVE_OK_MESSAGE = '已保存，小程序立即生效' // 与 usePageContent.ts save() 里的成功文案字面量同源
+export function combineSaveMessages(meMessage: string, aboutMessage: string): { error: boolean; message: string } {
+  const meFailed = meMessage !== '' && meMessage !== SAVE_OK_MESSAGE
+  const aboutFailed = aboutMessage !== '' && aboutMessage !== SAVE_OK_MESSAGE
+  if (!meFailed && !aboutFailed) return { error: false, message: SAVE_OK_MESSAGE }
+  const parts: string[] = []
+  if (meFailed) parts.push('「我」页：' + meMessage)
+  if (aboutFailed) parts.push('「关于我们」：' + aboutMessage)
+  return { error: true, message: parts.join('；') }
+}
+
 // ———————————————————————————— agreement（协议文案）————————————————————————————
 // 用户协议 user + 隐私政策 privacy 两份（各至多 30 段）；history 服务端维护、只读展示、不进 payload。
 export interface AgreementClause {

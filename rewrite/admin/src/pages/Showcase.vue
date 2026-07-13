@@ -27,11 +27,13 @@ async function reload() {
 
 // 防抖自动保存（700ms·换皮退成手动按钮·忘点即丢编辑）：拖动/开关都走它
 let timer: ReturnType<typeof setTimeout> | null = null
-// 串行化实际保存（防慢网下多次拖拽/开关的保存乱序覆盖·P2·根因#8）：run 现读 rows·补存即最新排序
+// 串行化实际保存（防慢网下多次拖拽/开关的保存乱序覆盖·P2·根因#8）：run 现读 rows·补存即最新排序。
+// key='showcase'（批D·P1）：改走模块级共享槽位，快速切走再切回本页重建组件实例时，新实例接管旧实例仍
+// 在途的补存链，防旧快照晚到覆盖新实例已存的排序/推荐编辑。
 const flushSave = serialSave(async () => {
   const r = await saveShowcase(rows.value.map((x, i) => ({ id: x.id, sort: i + 1, featured: x.featured })))
   saveState.value = r.ok ? 'saved' : 'error'
-})
+}, 'showcase')
 function persist() {
   saveState.value = 'saving'
   if (timer) clearTimeout(timer)

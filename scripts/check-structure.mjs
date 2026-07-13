@@ -3727,14 +3727,19 @@ export const repoChecks = [
     // 订单域派生物与声明同步（P3「安全处生成」spike·北极星 A）：order.spec.ts 是订单/售后状态机的
     // 声明单源；order.ts（类型/常量/流转表）与 scripts/order-domain.generated.json 是其生成物。
     // 改声明须跑 `node scripts/gen-order-domain.mjs` 同步生成物——漂移即红，杜绝「改了声明忘重生成」。
+    // 覆盖面＝gen-order-domain.mjs 的 DOMAINS 数组全量（跑一次 --check 全域一起验，不逐域列举——新增域
+    // 只用改 DOMAINS，本守卫零改动自动纳管）：packages/ 侧 order+learning+cs+scm 四域；rewrite/ 侧目前
+    // 仅 scm 一域镜像声明（scm.ts 头部曾错误自称「由本脚本生成」实为手工镜像，本项补齐覆盖后横幅才不撒谎）。
     id: 'gen-order-domain-synced',
     roots: ['#2', 'P3'],
-    desc: '订单+learning 域派生物与声明同步（P3 安全处生成·扩 learning）：order.ts/learning.ts/order-domain.generated.json 由 order.spec.ts+learning.spec.ts 经 scripts/gen-order-domain.mjs 生成；漂移（改声明未重生成）即红——跑 `node scripts/gen-order-domain.mjs` 修复',
+    desc: '声明域派生物与声明同步（P3 安全处生成，覆盖面见 gen-order-domain.mjs DOMAINS：packages/ order+learning+cs+scm 四域、rewrite/ scm 一域镜像）：各域 .ts + order-domain.generated.json 由对应 .spec.ts 经 scripts/gen-order-domain.mjs 生成；漂移（改声明未重生成，含 rewrite/shared/src/scm.ts）即红——跑 `node scripts/gen-order-domain.mjs` 修复',
     run() {
       const spec = join(ROOT, 'packages/shared/src/order.spec.ts')
       const learnSpec = join(ROOT, 'packages/shared/src/learning.spec.ts')
+      const rwScmSpec = join(ROOT, 'rewrite/shared/src/scm.spec.ts')
       if (!existsSync(spec)) return ['packages/shared/src/order.spec.ts 缺失（订单域声明单源·P3）']
       if (!existsSync(learnSpec)) return ['packages/shared/src/learning.spec.ts 缺失（learning 域声明单源·P3 扩）']
+      if (!existsSync(rwScmSpec)) return ['rewrite/shared/src/scm.spec.ts 缺失（新线 SCM 域声明单源·P3 扩）']
       try {
         execSync(`node ${join(ROOT, 'scripts/gen-order-domain.mjs')} --check`, { encoding: 'utf8', stdio: 'pipe' })
         return []
@@ -4350,6 +4355,211 @@ export const repoChecks = [
     },
   },
   {
+    // SCM 域（购/外协单）状态写入只走声明流转——新线扫描面（批K·根因#2·移植 order-transitions-declared 的
+    // scm* 前缀纳管，同 rw-order-transitions-declared 精神：旧守卫（line 3758）只扫 packages/cloud，
+    // rewrite/cloud/src/functions/adminApi/actions/scmPurchase.ts、scmOutwork.ts 头注承诺「受
+    // order-transitions-declared 守卫保护」对生产代码是假的——这两个文件的 transition('purchaseOrders'/
+    // 'outworkOrders', …) 从未被任何守卫对账过。COLLS 直接复用 scripts/order-domain.generated.json 里的
+    // purchaseOrders/outworkOrders 声明（不是「借用旧线数据」：gen-order-domain.mjs 强制 packages/scm.spec.ts
+    // 与 rewrite/scm.spec.ts 两份声明逐集合比对一致、不一致直接生成失败，故该 JSON 对新线同样权威——不用
+    // 另写一套 rewrite/shared/src/scm.ts 的 TS 解析器）。edges/writeRe/casRe 扫描逻辑镜像
+    // rw-order-transitions-declared（已验证适配新线代码形态），只收窄 COLLS 到 SCM 两集合、避免与其重复报
+    // orders/afterSales。
+    //
+    // 批S 修复（P1·根因#2）：①的原正则只认字面量 `[...]` 第三参数——但 scmPurchase.ts/scmOutwork.ts 全部 7 处
+    // transition() 调用实际写法是 `transition(coll, id, fromFor('X'), 'Y', ...)`（fromFor 是这两个文件内的
+    // helper，按目标态从 PURCHASE_ORDER_TRANSITIONS/OUTWORK_ORDER_TRANSITIONS 反查 from 集合，见文件内注释），
+    // 对这两个文件原正则匹配 0 次、①对全部 7 处真实流转提供的保护为零（静默假绿）。新增 fromFor(...) 形态分支：
+    // 语义上 fromFor(X) 永远等于声明表里 to=X 那条的 from 集合（fromFor 找不到 to=X 会直接 throw，运行时已经
+    // fail-fast），故静态守卫要抓的不是「fromFor(X) 算出的 from 对不对」，而是「调用点传给 fromFor 的 X 是否
+    // 就是这次 transition() 真正写入的 to」——两者不一致＝拿错状态的 from 集合去校验另一状态的流转，越流转会
+    // 被静默放行（写库时 transition() 内部仍会用实际 from 数组核对当前文档状态，但那份 from 数组已经是错的）。
+    id: 'rw-scm-transitions-declared',
+    roots: ['#2'],
+    desc: '新线 SCM 域（购/外协单）状态写入只走声明流转（根因#2·批K 引入·批S 修复①对 fromFor(X) 调用形态的假绿：新增分支核对 fromFor 参数 X 与 transition() 第四参数 to 一致，不一致＝越流转被静默放行）：rewrite/cloud/src/functions/adminApi/actions/scm*.ts 里 transition(purchaseOrders/outworkOrders) 的边（字面量数组或 fromFor(X) 两种形态）、裸条件 CAS 的边须在 order-domain.generated.json 声明流转表内（该 JSON 由 gen-order-domain-synced 守卫保证与 packages/+rewrite 两份 scm.spec.ts 逐集合一致，对新线同样权威）；写这两集合 status 的字面量须是声明状态——越流转/打错状态名即红',
+    run() {
+      const jsonPath = join(ROOT, 'scripts/order-domain.generated.json')
+      if (!existsSync(jsonPath)) return ['scripts/order-domain.generated.json 缺失——跑 `node scripts/gen-order-domain.mjs`（SCM 域声明派生物）']
+      let spec
+      try {
+        spec = JSON.parse(readFileSync(jsonPath, 'utf8'))
+      } catch {
+        return ['scripts/order-domain.generated.json 解析失败——重生成']
+      }
+      const COLLS = new Set(['purchaseOrders', 'outworkOrders'].filter((c) => spec[c]))
+      if (!COLLS.size) return [] // JSON 未含 SCM 集合（生成物尚未覆盖）——不报，避免误挡未落地阶段
+      const declaredEdges = {} // coll -> Set('from=>to')
+      const declaredStates = {} // coll -> Set(state)
+      for (const coll of COLLS) {
+        declaredStates[coll] = new Set(spec[coll].states)
+        const edges = new Set()
+        for (const t of spec[coll].transitions) for (const f of t.from) edges.add(f + '=>' + t.to)
+        declaredEdges[coll] = edges
+      }
+
+      const actionsDir = join(ROOT, 'rewrite/cloud/src/functions/adminApi/actions')
+      if (!existsSync(actionsDir)) return []
+      const files = readdirSync(actionsDir).filter((e) => /^scm\w*\.ts$/.test(e)).map((e) => join(actionsDir, e))
+      const collOf = (head) => {
+        const ms = [...head.matchAll(/(?:\.collection\(|transition\()\s*(?:['"](\w+)['"]|COLLECTIONS\.(\w+))/g)]
+        return ms.length ? ms[ms.length - 1][1] || ms[ms.length - 1][2] : null
+      }
+      const bad = []
+      for (const p of files) {
+        const src = readFileSync(p, 'utf8')
+        const rel = relative(ROOT, p)
+        // ① transition(<coll>, id, [from...]|fromFor('X'), 'to')：整条边对账（union 语义每个 from 元素都须
+        // 有声明原子边；fromFor(X) 形态见批S 修复注——核对 X 与实际写入的 to 一致，见上方文件头长注）
+        const transRe = /transition\(\s*(?:['"](\w+)['"]|COLLECTIONS\.(\w+))\s*,[^,]+,\s*(?:\[([^\]]*)\]|fromFor\(\s*['"]([a-z_]+)['"]\s*\))\s*,\s*['"]([a-z_]+)['"]/g
+        let tm
+        while ((tm = transRe.exec(src))) {
+          const coll = tm[1] || tm[2]
+          if (!COLLS.has(coll)) continue
+          const to = tm[5]
+          if (tm[4] !== undefined) {
+            // fromFor(X) 形态：fromFor 永远返回声明表里 to=X 那条的 from 集合（找不到会 throw，已 fail-fast）——
+            // 静态守卫要抓的不是这个恒真关系，而是调用点的 X 是否就是本次真正写入的 to（不一致＝拿错状态的
+            // from 集合去校验另一状态的流转，越流转会被静默放行）。
+            if (tm[4] !== to)
+              bad.push(`${rel}：transition('${coll}', …, fromFor('${tm[4]}'), '${to}') 参数不一致——fromFor 求的是 '${tm[4]}' 状态的合法 from 集合，但实际写入 to='${to}'，两者应相同，否则越流转会被静默放行（根因#2·批S）`)
+            continue
+          }
+          const from = [...tm[3].matchAll(/['"]([a-z_]+)['"]/g)].map((x) => x[1])
+          const undeclared = from.filter((f) => !declaredEdges[coll].has(f + '=>' + to))
+          if (undeclared.length)
+            bad.push(`${rel}：transition('${coll}', …, [${from.join(',')}] → '${to}') 含未声明边 ${undeclared.map((f) => f + '→' + to).join('、')}——order-domain.generated.json 流转表里没有，越流转或先改声明（根因#2）`)
+        }
+        // ①' 裸条件 CAS：where({…status:'X'|_.in([..])…}).update({data:{…status:'Y'…}}) 的边对账。
+        // 例外：技术性失败补偿回滚（applyStockMoves 失败后把已被 transition 抢占的状态复原，非业务逆向
+        // 流转、scm.spec 刻意不声明——声明了就等于开放成业务动作，见 scmOutwork.ts/scmPurchase.ts 行内长
+        // 注释）——紧邻代码块（往前 800 字符窗口内）写明 structure-ok 即放行，同本文件其它守卫的既定豁免写法。
+        const casRe = /\.where\(\s*\{[^{}]*?status:\s*(?:['"]([a-z_]+)['"]|(?:db\.command|_)\.in\(\[([^\]]*)\]\))[^{}]*?\}\s*\)[\s\S]{0,60}?\.update\(\s*\{\s*data:\s*\{[\s\S]{0,160}?\bstatus:\s*['"]([a-z_]+)['"]/g
+        let cm
+        while ((cm = casRe.exec(src))) {
+          const coll = collOf(src.slice(0, cm.index))
+          if (!coll || !COLLS.has(coll)) continue
+          const from = cm[1] ? [cm[1]] : [...cm[2].matchAll(/['"]([a-z_]+)['"]/g)].map((x) => x[1])
+          const to = cm[3]
+          const undeclared = from.filter((f) => !declaredEdges[coll].has(f + '=>' + to))
+          if (!undeclared.length) continue
+          const context = src.slice(Math.max(0, cm.index - 800), cm.index)
+          if (context.includes('structure-ok')) continue
+          bad.push(`${rel}：条件 CAS ${coll} [${from.join(',')}] → '${to}' 含未声明边 ${undeclared.map((f) => f + '→' + to).join('、')}——order-domain.generated.json 流转表里没有（根因#2）`)
+        }
+        // ② 写侧 status 字面量须是声明状态（add/update 的 data 内·where 过滤侧跳过——打错状态名即红）
+        const writeRe = /\bstatus:\s*['"]([a-z_]+)['"]/g
+        let wm
+        while ((wm = writeRe.exec(src))) {
+          const before = src.slice(Math.max(0, wm.index - 160), wm.index)
+          if (/\.where\(\s*\{[^}]*$/.test(before)) continue
+          const coll = collOf(src.slice(0, wm.index))
+          if (!coll || !COLLS.has(coll)) continue
+          if (!declaredStates[coll].has(wm[1]))
+            bad.push(`${rel}：写 ${coll}.status='${wm[1]}' 不是 order-domain.generated.json 声明状态（${[...declaredStates[coll]].join('/')}）——打错状态名或先改声明（根因#2）`)
+        }
+      }
+      return bad
+    },
+  },
+  {
+    // 原料账单点收口——新线扫描面（批K·SCM 门1·根因#1/#2·移植 material-stock-single-seam，同
+    // rw-order-transitions-declared 精神：旧守卫（line 822）只扫 packages/cloud/src，rewrite/cloud/src/
+    // kit/scmStock.ts 头注承诺「全库唯一 materials.stock/stockLedger 读写处（守卫 material-stock-single-seam）」
+    // 对生产代码此前是假的——rewrite/cloud 下任何文件直碰这两个集合从未被拦过。逻辑镜像旧守卫（同一套判定，
+    // 不弱化）：applyStockMoves 须导出、CAS 须用条件 where(stock)、除 seam 本身外全仓禁直碰。
+    id: 'rw-material-stock-single-seam',
+    roots: ['#1', '#2'],
+    desc: '新线原料账单点收口（SCM 门1·根因#1/#2·批K·移植 material-stock-single-seam，同 rw-order-transitions-declared 精神：旧守卫只扫冻结线，kit/scmStock.ts 头注承诺的保护对生产代码此前是假的）：materials.stock/stockLedger 仅 rewrite/cloud/src/kit/scmStock.ts 读写（applyStockMoves 唯一入口·乐观 CAS）；rewrite/cloud/src 其余文件直碰即红（防绕 CAS/绕流水改账）',
+    run() {
+      const seam = 'rewrite/cloud/src/kit/scmStock.ts'
+      const seamAbs = join(ROOT, seam)
+      if (!existsSync(seamAbs)) return []
+      const bad = []
+      const src = readFileSync(seamAbs, 'utf8')
+      if (!/export\s+async\s+function\s+applyStockMoves/.test(src)) bad.push(`${seam} 未导出 applyStockMoves——门1 空壳`)
+      if (!/\.where\(\{[^}]*stock/.test(src)) bad.push(`${seam} 库存变更未用条件 where(stock) 乐观 CAS——有并发互覆盖风险（根因#1）`)
+      const allow = new Set([seam])
+      const srcRoot = join(ROOT, 'rewrite/cloud/src')
+      const walk = (d) => {
+        for (const e of readdirSync(d)) {
+          const p = join(d, e)
+          if (statSync(p).isDirectory()) walk(p)
+          else if (e.endsWith('.ts')) {
+            const rel = relative(ROOT, p).replace(/\\/g, '/')
+            if (allow.has(rel)) continue
+            if (/COLLECTIONS\.(materials|stockLedger)\b|\.collection\(\s*['"](materials|stockLedger)['"]\s*\)/.test(readFileSync(p, 'utf8')))
+              bad.push(`${rel} 直碰 materials/stockLedger 集合——原料账读写须经 kit/scmStock（SCM 门1·防绕 CAS/绕流水）`)
+          }
+        }
+      }
+      if (existsSync(srcRoot)) walk(srcRoot)
+      return bad
+    },
+  },
+  {
+    // 原料流水确定性幂等——新线扫描面（批K·根因#2·移植 scm-ledger-idempotent，同上精神）。
+    // 顺手修正旧守卫（line 854）本体带的潜伏 bug（不改旧守卫本身、只是不在新守卫里复制同一个洞）：旧正则
+    // 用「'stockLedger' 与 '.add(' 相距 ≤200 字符」定位流水写入点，但实际代码里两者靠变量名（`ledger`）
+    // 间接关联、源码相距 >200 字符——`node -e` 实测旧正则对 packages/cloud/src/kit/scmStock.ts 当前内容
+    // 匹配 0 次，即该守卫的「_id 是否带确定性构造」检查从未真正跑过、静默假绿。新守卫改按 data 对象内是否
+    // 含 `itemKey:`（流水行的标志字段，物料主档 add 没有这个字段）定位真正的流水 add 调用，不依赖变量名/
+    // 字符距离；并新增「一个流水 add 都没找到」本身也报红——防止代码形态再变一次时守卫又悄悄测不到东西。
+    //
+    // 批S 修复（P3·根因#2）：原「确定性 _id 构造」检查与「流水 add 带 _id」检查是两条独立正则各自宽松匹配
+    // ——只证明「文件里某处有三段模板」+「add 里某处有 _id 字样」同时为真，从不核对 add 里那个 _id 是不是
+    // 真的来自该模板函数的调用（例如手写 `docType+':'+docId+':'+itemKey` 绕开函数、或干脆用别的变量，两条
+    // 独立检查都仍然各自绿）。改为：①按模板结构（不硬编码函数名，函数改名不失效）定位确定性 id 生成函数并
+    // 取其名；②对每处流水 add 提取 _id 字段实际绑定的表达式——简写 `{_id,...}`、显式变量 `_id: x`、或内联
+    // 直调 `_id: fn(...)` 三种形态都认；③简写/显式变量形态下，在该 add 调用所在函数体内（粗粒度以最近的
+    // `function` 关键字为作用域起点，避免跨函数误配同名变量）核对是否存在 `const/let <var> = <fn>(...)` 赋值
+    // ——找不到就说明 add 用的 _id 不是那次调用产生的确定性值，幂等绑定关系并未真正成立。
+    id: 'rw-scm-ledger-idempotent',
+    roots: ['#2'],
+    desc: '新线原料流水确定性幂等（SCM·根因#2·批K 引入·批S 修复两条独立正则拼出的假绑定：新增「_id 字段实际来自确定性生成函数调用」的绑定核验，不再只各自宽松匹配「有模板」+「有 _id 字样」）：rewrite/cloud/src/kit/scmStock.ts 写 stockLedger 必构造确定性 _id=`docType:docId:itemKey`（撞 id=并发方已写）·禁自动 id 双记账·禁绕开生成函数手写等价 _id',
+    run() {
+      const seam = 'rewrite/cloud/src/kit/scmStock.ts'
+      if (!existsSync(join(ROOT, seam))) return []
+      const bad = []
+      const src = readFileSync(join(ROOT, seam), 'utf8')
+      // 定位确定性 _id 生成函数并取其名（按「docType:docId:itemKey 三段模板」结构识别，不硬编码 ledgerIdOf——
+      // 函数改名不失效；`const NAME = (…) => \`…\`` 或 `function NAME(…) {…}` 两种写法都认）
+      const fnDeclM = src.match(/(?:const|function)\s+(\w+)\s*=?\s*\([^)]*\)\s*(?:=>\s*)?[{`][\s\S]{0,120}?\$\{[^}]*docType[^}]*\}:\$\{[^}]*docId[^}]*\}:\$\{/)
+      if (!fnDeclM)
+        bad.push(`${seam} 未见确定性流水 _id 构造函数（\`\${docType}:\${docId}:\${itemKey}\` 三段模板）——流水失幂等（根因#2）`)
+      const fnName = fnDeclM ? fnDeclM[1] : null
+      // 按 data 对象内是否含 itemKey: 字段识别真正的流水 add（不依赖变量名/字符距离——防 regex 假绿，见上注）
+      const addRe = /\.add\(\s*\{\s*data:\s*\{([\s\S]{0,300}?)\}\s*\}\s*\)/g
+      const adds = [...src.matchAll(addRe)].filter((m) => /itemKey\s*:/.test(m[1]))
+      if (!adds.length) bad.push(`${seam} 未找到 stockLedger 流水 add({data:{itemKey:...}}) 调用——流水写入点代码形态已变、本守卫需同步（根因#2）`)
+      // 粗粒度函数作用域边界：add 调用所在函数体起点＝其前最近一个 `function` 关键字位置——把「_id 绑定
+      // 赋值」核验限定在同一函数内，不误配到别的函数里恰好同名的变量
+      const funcBoundaryBefore = (index) => {
+        const funcRe = /\bfunction\s+\w+/g
+        let last = 0
+        let fm
+        while ((fm = funcRe.exec(src)) && fm.index < index) last = fm.index
+        return last
+      }
+      for (const m of adds) {
+        const inlineCall = fnName && new RegExp(`_id\\s*:\\s*${fnName}\\s*\\(`).test(m[1])
+        if (inlineCall) continue // 内联直调确定性生成函数——绑定关系天然成立
+        const shorthand = /(?:^|[,{])\s*_id\s*(?=[,}])/.test(m[1])
+        const varMatch = m[1].match(/_id\s*:\s*([A-Za-z_$][\w$]*)\s*(?=[,}])/)
+        if (!shorthand && !varMatch) {
+          bad.push(`${seam} stockLedger add 未带 _id 字段——自动 id=重放双记账（根因#2）`)
+          continue
+        }
+        if (!fnName) continue // 上面已报「未见确定性 _id 构造函数」，此处不重复噪音
+        const idVarName = shorthand ? '_id' : varMatch[1]
+        const scoped = src.slice(funcBoundaryBefore(m.index), m.index)
+        const boundRe = new RegExp(`(?:const|let)\\s+${idVarName}\\s*=\\s*${fnName}\\s*\\(`)
+        if (!boundRe.test(scoped))
+          bad.push(`${seam} stockLedger add 的 _id（变量 ${idVarName}）未见来自确定性生成函数 ${fnName}() 的同作用域赋值——_id 可能绕开确定性构造手写等价值，幂等绑定关系未真正成立（根因#2）`)
+      }
+      return bad
+    },
+  },
+  {
     id: 'rw-mp-checkout-consts-synced',
     roots: ['#5'],
     desc: '结算常量镜像同步（根因#5·mp 包进不了 @ldrw/shared——开发者工具编译不出仓外引用，故 mp 落副本 + 本守卫焊死）：rewrite/mp/lib/checkoutConst.ts 的 COUPON/SHIP/CHECKOUT_ADDONS 必须与 rewrite/shared/src/checkout.ts 逐值一致',
@@ -4372,6 +4582,41 @@ export const repoChecks = [
       if (mp.coupon !== sh.coupon) bad.push(`结算常量漂移：COUPON mp=${mp.coupon} ≠ shared=${sh.coupon}（结算页展示价与云端定价不一致·下单必对不上账）`)
       if (mp.ship !== sh.ship) bad.push(`结算常量漂移：SHIP mp=${mp.ship} ≠ shared=${sh.ship}`)
       if (mp.addons !== sh.addons) bad.push('结算常量漂移：CHECKOUT_ADDONS mp 与 shared 不一致（搭配购展示与云端定价漂移）')
+      return bad
+    },
+  },
+  {
+    id: 'rw-mp-order-labels-synced',
+    roots: ['#5'],
+    desc: '订单/售后状态标签码集合同步（根因#5·同 rw-mp-checkout-consts-synced 精神：mp 包进不了 @ldrw/shared，' +
+      'mp 落客户向文案副本，本守卫只焊「状态码集合」不焊文案——admin/mp 措辞刻意不同是 UX 针对性、不是漂移，见 ' +
+      'rewrite/shared/src/statusLabels.ts 头注）：rewrite/mp/lib/mapOrders.ts 的 STATUS_LABELS 与 ' +
+      'rewrite/mp/lib/mapAftersales.ts 的 STATUS_LABELS 键集合必须分别与 shared ORDER_STATUS_LABEL_CUSTOMER / ' +
+      'AFTERSALE_STATUS_LABEL_CUSTOMER 键集合一致——状态机新增状态若 mp 忘配标签，页面会悄悄显示原始状态码',
+    run() {
+      const shPath = join(ROOT, 'rewrite/shared/src/statusLabels.ts')
+      const mpOrdersPath = join(ROOT, 'rewrite/mp/lib/mapOrders.ts')
+      const mpAftersalesPath = join(ROOT, 'rewrite/mp/lib/mapAftersales.ts')
+      if (!existsSync(shPath)) return []
+      const bad = []
+      const keysOf = (src, exportName) => {
+        const m = src.match(new RegExp(`export const ${exportName}[^{]*{([^}]*)}`, 's'))
+        if (!m) return null
+        return [...m[1].matchAll(/^\s*([a-zA-Z_][a-zA-Z0-9_]*):/gm)].map((x) => x[1]).sort()
+      }
+      const sh = readFileSync(shPath, 'utf8')
+      const shOrderKeys = keysOf(sh, 'ORDER_STATUS_LABEL_CUSTOMER')
+      const shAsKeys = keysOf(sh, 'AFTERSALE_STATUS_LABEL_CUSTOMER')
+      if (existsSync(mpOrdersPath) && shOrderKeys) {
+        const mpKeys = keysOf(readFileSync(mpOrdersPath, 'utf8'), 'STATUS_LABELS')
+        if (mpKeys && mpKeys.join(',') !== shOrderKeys.join(','))
+          bad.push(`订单状态标签码集合漂移：mp mapOrders.ts STATUS_LABELS=[${mpKeys.join(',')}] ≠ shared ORDER_STATUS_LABEL_CUSTOMER=[${shOrderKeys.join(',')}]（状态机新增/改名状态未同步到 mp）`)
+      }
+      if (existsSync(mpAftersalesPath) && shAsKeys) {
+        const mpKeys = keysOf(readFileSync(mpAftersalesPath, 'utf8'), 'STATUS_LABELS')
+        if (mpKeys && mpKeys.join(',') !== shAsKeys.join(','))
+          bad.push(`售后状态标签码集合漂移：mp mapAftersales.ts STATUS_LABELS=[${mpKeys.join(',')}] ≠ shared AFTERSALE_STATUS_LABEL_CUSTOMER=[${shAsKeys.join(',')}]（状态机新增/改名状态未同步到 mp）`)
+      }
       return bad
     },
   },

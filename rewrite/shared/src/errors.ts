@@ -28,6 +28,7 @@ export const ERR = {
   PAY_CONFIG_MISSING: 'PAY_CONFIG_MISSING',
   UNIFIED_ORDER_FAIL: 'UNIFIED_ORDER_FAIL',
   COUPON_EXCEEDS_GOODS: 'COUPON_EXCEEDS_GOODS', // 占位券抵扣≥货款即拒单（深审 2026-07-05·真券系统前的白送闸·新线新增码见 parity 登记名单）
+  ORDER_CLAIM_PENDING: 'ORDER_CLAIM_PENDING', // 批E：同幂等键的原请求仍在处理中（极端并发窗口）——不建二单，前端稍候按原键重试
   // 售后 / 退款
   ALREADY_APPLIED: 'ALREADY_APPLIED',
   NOT_REFUNDABLE: 'NOT_REFUNDABLE',

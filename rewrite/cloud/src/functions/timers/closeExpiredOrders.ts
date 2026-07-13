@@ -4,7 +4,8 @@ import { getDb, ok, isServerCall, restoreStock } from '../../kit'
 // 超时关单（定时触发器·黄金 orders-money 关单节）：pending 超支付窗 → closed，抢占成功那次才回补
 // 预留库存（绑状态转移＝天然幂等，已 closed 不在查询内）。bounded ≤200/次。
 // 先 closed 后回补（此序错向安全：宁可晚到回调误判售罄[可退款]，不冒先回补被并发买走的超卖）。
-// 部署命名与触发器随 M5 切换批定（并行期不部署新 timer，旧线 timer 继续服役）。
+// M5 已于 2026-07-09 切换完毕：本 timer 是当前唯一版本（rewrite/ 15 云函数）部署的一部分，
+// 旧线 timer 已随切换清退，不再并行服役。
 export const main = async () => {
   if (!isServerCall()) return ok({ closed: 0 }) // 仅定时器/服务端；客户端带身份调用一律拒
   const db = getDb()

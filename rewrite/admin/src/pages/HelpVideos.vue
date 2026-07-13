@@ -57,11 +57,13 @@ let saveTimer: ReturnType<typeof setTimeout> | null = null
 // 串行化实际保存（防慢网下两次自动保存乱序覆盖·P2·根因#8）：run 现读 items.value·补存即最新。
 // P1 兜底单点：载入失败或 reload 清空后 loaded=false，任何在途 timer / 离页补存 / 手动保存路径进到这里都直接 no-op——
 // 杜绝拿空/残缺 items 整档覆盖 + 孤儿 GC 删光云端帮助视频（gate loaded 已挡 watch 与 save 入口·此处收口所有写者）。
+// key='help-videos'（批D·P1）：改走模块级共享槽位，快速切走再切回本页重建组件实例时，新实例接管旧实例
+// 仍在途的补存链，防旧快照晚到覆盖新实例已存的编辑（全课程共用一份·本就是单一资源，泛 key 恰好对应）。
 const flushSave = serialSave(async () => {
   if (!loaded) return
   const r = await saveHelpVideos(items.value)
   saveState.value = r.ok ? 'saved' : 'error'
-})
+}, 'help-videos')
 function autosave() {
   saveState.value = 'saving'
   if (saveTimer) clearTimeout(saveTimer)
@@ -113,7 +115,9 @@ function delSeg(t: HelpItem, ti: number, i: number) {
 }
 
 async function pickVideo(t: HelpItem, i: number, ev: Event) {
-  const file = (ev.target as HTMLInputElement).files?.[0]
+  const input = ev.target as HTMLInputElement
+  const file = input.files?.[0]
+  input.value = '' // 重置 value：允许上传失败后重选同一文件重试（否则浏览器不再触发 change）
   if (!file) return
   // 上传前捕获段「对象引用」而非下标（P1·根因#8）：秒级上传窗口内若重排/删段，按下标回写会落到换位后的
   // 另一段（静默错位·随 autosave 落库）或越界崩溃；写对象引用则始终落到本段、删段后写孤儿也不崩。

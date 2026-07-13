@@ -27,6 +27,7 @@ import {
   alert,
   pageQuery,
   getTempUrls,
+  hash53,
 } from '../../../kit'
 
 // 创建订单（黄金 orders-money·createOrder 节全量）：价格一律云端现算不信前端；服务端不变量
@@ -180,12 +181,45 @@ export const createOrder = withOpenId(
     const payMode = cfg && cfg.data && cfg.data.mode === 'real' ? 'real' : 'mock'
     if (payMode === 'mock' && process.env.ALLOW_MOCK_PAY !== '1') return err(ERR.PAY_CONFIG_MISSING)
 
+    // 幂等键（批E·P1 防网络超时重试双建单）：前端结算草稿创建时生成一次、失败重试复用同一个键；
+    // claim _id=(openid+键) 确定性哈希——撞号＝同一次提交的重试/并发，绝不建二单、不重复扣库存
+    // （范式抄 scmAssembly runAssembly 的「确定性 _id claim + 失败回滚」）。订单自身 _id/id 仍走
+    // orderNo() 可读格式不变——发货扫码（admin/src/lib/fulfill.ts ORDER_ID_RE）与微信支付 out_trade_no
+    // 都认这个形状，故幂等 claim 落独立小集合，只记 claim→orderId 指针，不改订单主键形状。
+    const idemKey = (typeof e.idempotencyKey === 'string' ? e.idempotencyKey.trim() : '').slice(0, 200)
+    const claimId = idemKey ? 'oi_' + hash53(OPENID + '|' + idemKey) : ''
+    if (claimId) {
+      await db.createCollection(COLLECTIONS.orderIdempotency).catch(() => {})
+      try {
+        await db
+          .collection(COLLECTIONS.orderIdempotency)
+          .add({ data: { _id: claimId, openid: OPENID, orderId: null, createdAt: Date.now() } })
+      } catch {
+        // 撞号：同一幂等键已提交过（重试/并发）——短轮询等原请求把订单号落定，落定即原样返回同一笔
+        // （不重复扣库存/不建二单）；轮询超时仍未落定极罕见（原请求同一时刻仍在处理中）才报 PENDING。
+        for (let i = 0; i < 5; i++) {
+          const c = await db.collection(COLLECTIONS.orderIdempotency).doc(claimId).get().catch(() => null)
+          const existingId = c && c.data && c.data.orderId
+          if (existingId) {
+            const got = await db.collection(COLLECTIONS.orders).doc(String(existingId)).get().catch(() => null)
+            if (got && got.data) return ok({ order: got.data })
+            break // 登记了订单号却读不到订单——不应发生，跳出按未落定处理（下方报 PENDING）
+          }
+          await new Promise((r) => setTimeout(r, 150))
+        }
+        return err(ERR.ORDER_CLAIM_PENDING)
+      }
+    }
+
     // 下单即预留（乐观 CAS 防超卖）：任一不足整单拒（已扣回滚在 reserveStock 内）
     const stockLines = items
       .filter((it) => !ADDONS[it.productId])
       .map((it) => ({ productId: it.productId, spec: it.spec, qty: it.qty }))
     const rsv = await reserveStock(stockLines)
-    if (!rsv.ok) return err('OUT_OF_STOCK' + (rsv.short ? ':' + rsv.short.productId + ':' + rsv.short.spec : ''))
+    if (!rsv.ok) {
+      if (claimId) await db.collection(COLLECTIONS.orderIdempotency).doc(claimId).remove().catch(() => {}) // 拒单不占幂等键·放行同键重试
+      return err('OUT_OF_STOCK' + (rsv.short ? ':' + rsv.short.productId + ':' + rsv.short.spec : ''))
+    }
 
     const now = Date.now()
     const order: any = {
@@ -207,12 +241,23 @@ export const createOrder = withOpenId(
       const id = orderNo(now)
       try {
         await db.collection(COLLECTIONS.orders).add({ data: { ...order, _id: id, id } })
+        if (claimId) {
+          // 幂等键回填订单号（fail-soft 但不静默·病根14）：订单已真实建成，这一步只是让「同键重试」
+          // 未来能查到它；写失败不影响本次返回，但会让本键的下一次重试落进轮询超时→误判 PENDING，
+          // 必须留痕供人工核（同 scmAssembly ASSEMBLY_LEDGER_FAIL 口径）。
+          await db
+            .collection(COLLECTIONS.orderIdempotency)
+            .doc(claimId)
+            .update({ data: { orderId: id } })
+            .catch(() => alert('money', 'createOrder', 'CLAIM_UPDATE_FAIL', { orderId: id, claimId }))
+        }
         return ok({ order: { ...order, _id: id, id } })
       } catch {
         /* 撞号换号重试 */
       }
     }
     await restoreStock(rsv.reserved) // 建单彻底失败：预留还回去（不锁死库存）
+    if (claimId) await db.collection(COLLECTIONS.orderIdempotency).doc(claimId).remove().catch(() => {}) // 拒单不占幂等键·放行同键重试
     return err(ERR.ORDER_ID_BUSY)
   })
 )

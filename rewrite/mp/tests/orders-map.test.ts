@@ -49,7 +49,9 @@ describe('订单映射（黄金 §七：脏单归一·纵深防御）', () => {
   it('大白话：状态计数无假计数；未知状态回原串不冒充；非法时间戳回空串', () => {
     const vms = mapOrders([GOOD, { ...GOOD, id: 'b', status: 'pending' }, { ...GOOD, id: 'c', status: 'pending' }])
     expect(countByStatus(vms)).toEqual({ paid: 1, pending: 2 }) // 无 shipped 键·不出假 0 计数
-    expect(statusLabel('refund_required')).toBe('退款处理中')
+    // 待退款（PAID_BUT_OOS 死信·已付但缺货·待人工退款）·非「退款处理中」——与 admin 同口径
+    // （admin/src/lib/format.ts）；客户没申请过退款、商家也没在自动处理，别编造行为描述。
+    expect(statusLabel('refund_required')).toBe('待退款')
     expect(statusLabel('weird_status')).toBe('weird_status')
     expect(dateTime('abc')).toBe('')
     expect(dateTime(-5)).toBe('')

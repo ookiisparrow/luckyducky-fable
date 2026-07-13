@@ -1,7 +1,7 @@
 import { reply, type Ctx } from '../lib'
-import { transition, applyStockMoves, listMaterialDocs, pageQuery } from '../../../kit'
+import { transition, applyStockMoves, listMaterialDocs, pageQuery, notifyAlert } from '../../../kit'
 import { COLLECTIONS } from '@ldrw/shared'
-import { asFen } from '@ldrw/shared'
+import { asFen, PURCHASE_ORDER_TRANSITIONS } from '@ldrw/shared'
 
 // 进销存车道 A·采购线（蓝图 docs/进销存ERP/ §4·门5 文件级隔离：本文件=车道 A）。
 // 状态机 draft→ordered→received（+draft/ordered→cancelled·声明表 shared/scm.spec.ts·门2 transition 收口·
@@ -12,6 +12,15 @@ import { asFen } from '@ldrw/shared'
 // 集合名用字面量 'purchaseOrders'（known-collections-only 在册）——order-transitions-declared 靠字面量归属 status 写入点。
 
 const MAX_LINES = 50 // 单据行数上限（bounded·一张采购单不至于超·防垃圾大单）
+
+/** 从声明流转表（scm.spec.ts→scm.ts 生成物）按目标态取合法 from 集合——该表内每个 to 只出现一次
+ *  （见 shared/scm.spec.ts 头注），故按 to 反查唯一。改流转边只改 scm.spec.ts 再跑生成器，
+ *  本函数自动跟着变——不再像此前那样在各 transition() 调用点手写字面量、与生成物各背各的。 */
+function fromFor(to: string): string[] {
+  const t = PURCHASE_ORDER_TRANSITIONS.find((x) => x.to === to)
+  if (!t) throw new Error(`PURCHASE_ORDER_TRANSITIONS 未声明 to='${to}'（scm.spec.ts 与 scmPurchase.ts 不同步）`)
+  return [...t.from]
+}
 
 interface PurchaseLine {
   materialId: string
@@ -92,16 +101,16 @@ export async function savePurchase({ db, data, agentId }: Ctx) {
 export async function markOrdered({ data }: Ctx) {
   const id = String(data.purchaseId || '')
   if (!id) return reply(400, { ok: false, error: 'BAD_ID' })
-  const r = await transition('purchaseOrders', id, ['draft'], 'ordered', { orderedAt: Date.now(), updatedAt: Date.now() })
+  const r = await transition('purchaseOrders', id, fromFor('ordered'), 'ordered', { orderedAt: Date.now(), updatedAt: Date.now() })
   if (!r.doc) return reply(404, { ok: false, error: 'NO_PURCHASE' })
   if (!r.moved && r.doc.status !== 'ordered') return reply(409, { ok: false, error: 'BAD_STATUS', current: r.doc.status })
   return reply(200, { ok: true, moved: r.moved })
 }
 
-export async function receivePurchase({ data, agentId }: Ctx) {
+export async function receivePurchase({ db, data, agentId }: Ctx) {
   const id = String(data.purchaseId || '')
   if (!id) return reply(400, { ok: false, error: 'BAD_ID' })
-  const r = await transition('purchaseOrders', id, ['ordered'], 'received', { receivedAt: Date.now(), updatedAt: Date.now() })
+  const r = await transition('purchaseOrders', id, fromFor('received'), 'received', { receivedAt: Date.now(), updatedAt: Date.now() })
   if (!r.doc) return reply(404, { ok: false, error: 'NO_PURCHASE' })
   if (!r.moved) {
     // 重放天然幂等：已 received 直接返回（入库副作用绑首次流转·不双入库）；draft 直收/已取消＝非法流转拒
@@ -115,8 +124,27 @@ export async function receivePurchase({ data, agentId }: Ctx) {
     { docType: 'purchase_in', docId: id, operator: agentId || 'admin' }
   )
   if (!applied.ok) {
-    // 几乎不可达（正数入库无 INSUFFICIENT·主档无删除路径无 NO_MATERIAL·CAS 重试 5 次）——万一到此：
-    // 状态已 received 而账未动，诚实报错留审计（shouldAudit 记 ok:false），人工经 adjustStock 补账（流水可查）
+    // 几乎不可达（正数入库无 INSUFFICIENT·主档无删除路径无 NO_MATERIAL·CAS 重试 5 次）——万一到此：状态已
+    // received 而账未动。放着不管会让「已完整入库」和「入库失败过、从未真正入库」在数据里表现成同一个
+    // status='received'——重放会命中上面「已 received」幂等分支直接报 200 成功，把后者伪装成前者、掩盖
+    // 真实欠账。技术性复原（非业务逆向流转，同 scmOutwork 口径·scm.spec 未声明 received→ordered 边、
+    // 声明了就开放成业务动作了）：条件 CAS 复原 ordered，让下次 receivePurchase 重新走一次真实入库
+    // （门1 幂等：已应用行撞确定性流水 _id 跳过、未应用行补齐，见 scmStock.applyStockMoves）；
+    // 复原本身若不成功须告警，否则单据卡死在假 received、无信号可查。
+    // structure-ok（rw-scm-transitions-declared）：技术性失败补偿,非业务逆向流转,理由见上。
+    const rollback = await db
+      .collection('purchaseOrders')
+      .where({ _id: id, status: 'received' })
+      .update({ data: { status: 'ordered', receivedAt: null, updatedAt: Date.now() } })
+      .catch(() => ({ stats: { updated: 0 } }))
+    if (!rollback.stats || rollback.stats.updated !== 1) {
+      await notifyAlert('money', 'scmPurchase.receivePurchase', 'STATUS_ROLLBACK_FAIL', {
+        purchaseId: id,
+        attemptedFrom: 'received',
+        attemptedTo: 'ordered',
+        stockError: applied.error,
+      })
+    }
     return reply(500, { ok: false, error: 'STOCK_APPLY_FAIL', detail: applied.error, materialId: applied.materialId })
   }
   return reply(200, { ok: true, moved: true, applied: applied.applied })
@@ -125,7 +153,7 @@ export async function receivePurchase({ data, agentId }: Ctx) {
 export async function cancelPurchase({ data }: Ctx) {
   const id = String(data.purchaseId || '')
   if (!id) return reply(400, { ok: false, error: 'BAD_ID' })
-  const r = await transition('purchaseOrders', id, ['draft', 'ordered'], 'cancelled', { cancelledAt: Date.now(), updatedAt: Date.now() })
+  const r = await transition('purchaseOrders', id, fromFor('cancelled'), 'cancelled', { cancelledAt: Date.now(), updatedAt: Date.now() })
   if (!r.doc) return reply(404, { ok: false, error: 'NO_PURCHASE' })
   // received 后不可取消（状态机声明表无 received→cancelled 边·天然拒）——入库后的账走调整单
   if (!r.moved && r.doc.status !== 'cancelled') return reply(409, { ok: false, error: 'BAD_STATUS', current: r.doc.status })
