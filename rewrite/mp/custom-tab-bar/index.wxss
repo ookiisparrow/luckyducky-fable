@@ -1,16 +1,20 @@
-/* 全宽圆角悬浮 TabBar（重设计·Chrome.jsx/首页.html：白底圆角条·三等分 tab·图标+文字横排·选中丁香紫药丸）。
-   官方 custom-tab-bar 机制不变（setActive/角标/switchTab 在 index.ts）；此文件只管视觉。 */
+/* 贴边通栏不透明 TabBar（2026-07-13 mp-7fixes 战役：覆盖 2026-07-06 悬浮药丸设计，
+   用户反馈「tabbar 不要透明」——悬浮药丸四周露内容+安全区悬空造成透明感，改整条贴底通栏不透明，
+   内部选中丁香紫药丸样式不动）。官方 custom-tab-bar 机制不变（setActive/角标/switchTab 在 index.ts）；此文件只管视觉。 */
 .ld-tabbar {
   position: fixed;
-  left: 52rpx;
-  right: 52rpx;
-  bottom: calc(15rpx + env(safe-area-inset-bottom));
+  left: 0;
+  right: 0;
+  bottom: 0;
   display: flex;
   gap: 8rpx;
-  padding: 15rpx;
-  background: var(--ld-bg);
-  border-radius: 52rpx;
-  box-shadow: 0 15rpx 56rpx rgba(28, 28, 32, 0.22), 0 4rpx 15rpx rgba(28, 28, 32, 0.12);
+  /* 安全区从「外距」改「内衬」：iPhone 小黑条区域也是实底不露内容 */
+  padding: 15rpx 15rpx calc(15rpx + env(safe-area-inset-bottom));
+  background: var(--ld-bg, #ffffff);
+  border-radius: 0;
+  border-top: 1rpx solid var(--ld-line, #e7e7e7);
+  /* 通栏贴边不再需要四周投影，改极轻向上淡投影做内容分隔即可 */
+  box-shadow: 0 -4rpx 16rpx rgba(0, 0, 0, 0.06);
 }
 .ld-tab {
   flex: 1;
@@ -38,8 +42,8 @@
   padding: 0 8rpx;
   line-height: 28rpx;
   text-align: center;
-  border-radius: var(--ld-radius-pill);
-  background: var(--ld-purple);
+  border-radius: var(--ld-radius-pill, 999rpx);
+  background: var(--ld-purple, #a371ea);
   color: #ffffff;
   font-size: 18rpx;
 }
@@ -49,9 +53,9 @@
   color: rgba(0, 0, 0, 0.55);
 }
 .ld-tab.active {
-  background: #f2ebfc; /* 选中丁香紫药丸（设计 #F2EBFC） */
+  background: #f2ebfc; /* 选中丁香紫药丸（设计 #F2EBFC）——本批不改 */
 }
 .ld-tab.active .ld-tab-label {
-  color: var(--ld-purple-tab);
+  color: var(--ld-purple-tab, #7b5caf);
   font-weight: 600;
 }
