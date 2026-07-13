@@ -132,6 +132,51 @@ describe('agreement（协议·history 服务端追加与 cap·客户端伪造忽
     expect(c.history.length).toBe(10) // 13 次追加（首存 privacy p0 + user v1..v12）→ 保留末 10
     expect(c.history[c.history.length - 1]).toMatchObject({ part: 'user', version: 'v12' })
   })
+
+  it('大白话：并发两次保存同改一份（privacy 各升不同版本），两条历史都保留不丢失（P3 修复：原读-改-写非原子会丢一条）', async () => {
+    // 首建：user 1.0 + privacy 1.0 → 2 条 history。两次并发都只改 privacy（user 全程不动，避免 CAS
+    // 重试重读时把「别人动过的字段」误判成本轮意图变更——这条边界不是本次修复范围，测试刻意避开）。
+    await save('agreement', { user: { version: '1.0', sections: [] }, privacy: { version: '1.0', sections: [] } })
+
+    // 用 beforeUpdate 钩子模拟并发：本轮写库前，另一会话已抢先把 privacy 从 1.0 直接推到 1.5 并落库
+    // （原读-改-写非原子实现下：本轮仍攥着旧 history 整体覆盖，1.5 这条追加会被无声吞掉）。
+    let injected = false
+    control.setBeforeUpdate(async ({ coll }: any) => {
+      if (coll === 'content' && !injected) {
+        injected = true
+        await save('agreement', { user: { version: '1.0', sections: [] }, privacy: { version: '1.5', sections: [] } })
+      }
+    })
+    // 本轮意图把 privacy 推到 2.0（发起时并不知道并发方已经推过 1.5）
+    const r = await save('agreement', { user: { version: '1.0', sections: [] }, privacy: { version: '2.0', sections: [] } })
+    control.setBeforeUpdate(null as never)
+
+    expect(r.statusCode).toBe(200) // CAS 重试后成功，不因并发抢先而报错
+    const c = bodyOf(await getAdmin('agreement')).content
+    // 首建 2 条 + 并发方 privacy→1.5 一条 + 本轮 privacy→2.0 一条 = 4 条，一条不少
+    // （旧实现：本轮整体覆盖旧 history，1.5 那条会丢，只剩 3 条）
+    expect(c.history.length).toBe(4)
+    expect(c.history.filter((h: any) => h.part === 'privacy' && h.version === '1.5').length).toBe(1)
+    expect(c.history.filter((h: any) => h.part === 'privacy' && h.version === '2.0').length).toBe(1)
+    expect(c.privacy.version).toBe('2.0') // 内容本身仍是「后写覆盖」语义（本次只修历史追加的原子性，非内容合并）
+  })
+
+  it('大白话：_v CAS 上线前就存在的旧文档（无 _v 字段）保存不永久 CONTENTION（回归·字面量0误判修复）', async () => {
+    // 直接建一份「_v 改造前」形态的旧文档：无 _v 字段，模拟本 CAS 机制上线时线上已有的真实存量数据。
+    await db().collection('content').doc('agreement').set({
+      data: { user: { version: '1.0', sections: [] }, privacy: { version: '1.0', sections: [] }, history: [], updatedAt: 1 },
+    })
+    const r = await save('agreement', { user: { version: '1.0', sections: [] }, privacy: { version: '2.0', sections: [] } })
+    expect(r.statusCode).toBe(200) // 旧实现：where(_v:0) 精确匹配缺失字段恒 updated:0，5 次重试耗尽 409 CONTENTION
+    const c = bodyOf(await getAdmin('agreement')).content
+    expect(c._v).toBe(1) // 首次经过 CAS 分支成功写入，_v 从此落地
+    expect(c.history.filter((h: any) => h.part === 'privacy' && h.version === '2.0').length).toBe(1)
+    // 再存一次，确认 _v 字段落地后正常的「有版本号」CAS 分支同样工作正常，不是只对无字段这一次侥幸成功
+    const r2 = await save('agreement', { user: { version: '1.0', sections: [] }, privacy: { version: '3.0', sections: [] } })
+    expect(r2.statusCode).toBe(200)
+    const c2 = bodyOf(await getAdmin('agreement')).content
+    expect(c2._v).toBe(2)
+  })
 })
 
 describe('未知 page 一律拒绝（fail-closed·信任边界·根因#3）', () => {

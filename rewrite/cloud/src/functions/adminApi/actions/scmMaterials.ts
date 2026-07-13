@@ -61,6 +61,7 @@ export async function saveMaterial({ data }: Ctx) {
     spec,
   })
   if (r === 'UOM_LOCKED') return reply(400, { ok: false, error: 'UOM_LOCKED' }) // 建档后不可改计量（混账）
+  if (r === 'DUPLICATE') return reply(409, { ok: false, error: 'DUPLICATE' }) // 并发首建同一物料（同 runAssembly 409 口径）
   return reply(200, { ok: true, materialId: _id })
 }
 

@@ -382,15 +382,20 @@ export async function enqueueSession(db: any, openKfId: string, externalUserId: 
     // **closed 则重开**（closed→pending·声明流转 cs.spec.ts·原子：非 closed 时 moved=false 天然不 clobber）——
     // 老客二次点「找人工」曾被此撞 id 静默吞、永进不了队列（2026-07-02 真机逼出·调试日志 AD）。
     // createdAt 刷新＝重新排队（FIFO 队尾）+ getThread 消息流从重开起算（不翻旧会话历史）。
-    // qc/qcSampledAt 一并清空（批 B7 评审 P1）：质检标记锚定「上一段 pending→closed 生命周期」，
-    // 文档按客户确定性 _id 复用，不清则回头客永远抽不进质检池、旧评分被误当现役会话的评价。
+    // qc/qcSampledAt 一并**真删字段**（批R 修复·原批 B7 patch 成 `qc: null` 有语义 bug）：conversations.ts 的
+    // saveQcMark/listQcSampled 用 DB 层 CAS `_.exists(false)` 判「未评过」——该条件要求字段真缺失，patch 成
+    // null 只是把值改成 null、字段仍「存在」，_.exists(false) 永远判「已评过」→ 重开后 saveQcMark 永远 409
+    // ALREADY_MARKED、listQcSampled(onlyPending) 也漏收（sampleQc 的内存 `!s.qc` 判断与此不一致：!null 为
+    // true，能选中候选，DB CAS 却写不进——两套判断对同一字段的「清空」语义打架）。改用 `_.remove()`（真删
+    // 键·对齐 $unset）才能让内存真值判断与 DB exists(false) 判断同一套语义。
+    const _ = db.command
     const r = await transition('csSession', id, ['closed'], 'pending', {
       agentId: null,
       claimedAt: null,
       createdAt: now,
       updatedAt: now,
-      qc: null,
-      qcSampledAt: null,
+      qc: _.remove(),
+      qcSampledAt: _.remove(),
     }).catch(() => ({ moved: false })) /* best-effort：不反噬顾客回复 */
     queued = !!(r && (r as any).moved)
   }

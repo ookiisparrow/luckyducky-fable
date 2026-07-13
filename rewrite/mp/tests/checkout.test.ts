@@ -110,6 +110,26 @@ describe('结算草稿（快照语义·直买不动车·提交精确扣车）', 
   })
 })
 
+describe('结算幂等键（批E·P1 防网络超时重试双建单）', () => {
+  it('大白话：同一草稿的键在提交/重试期间不变；换一次结算（重新 prepare）才换新键；草稿清空后键失效', () => {
+    cart.add({ id: 'p1', name: '小鸭', price: 128 })
+    checkout.prepareFromCart()
+    const k1 = checkout.getIdemKey()
+    expect(k1).toBeTruthy()
+    expect(checkout.getIdemKey()).toBe(k1) // 同一草稿多次取键不变（重试复用）
+    checkout.toggleAddon('hook') // 草稿内容变化（勾搭配购）不影响键——仍是同一次结算
+    expect(checkout.getIdemKey()).toBe(k1)
+
+    checkout.prepareBuyNow({ id: 'p9', name: '直买鸭', price: 98 }) // 新开一次结算 → 换新键
+    const k2 = checkout.getIdemKey()
+    expect(k2).toBeTruthy()
+    expect(k2).not.toBe(k1)
+
+    checkout.finishSubmitted() // 提交成功清草稿 → 键随之失效
+    expect(checkout.getIdemKey()).toBe('')
+  })
+})
+
 describe('建单成功页金额取权威回包值（bug sweep R1 #1）', () => {
   it('大白话：回包 order.amount（元）才是权威值——换算分与前端自算值不一致时以回包为准', () => {
     expect(checkout.resolveOrderAmountFen({ amount: 198 }, 999)).toBe(19800)

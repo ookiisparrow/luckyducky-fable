@@ -39,10 +39,12 @@ describe('源码扫描：configChecklist.ts 零回显（process.env 只在布尔
 
   it('大白话：任何 db.collection(...).where(...) 起的查询链只要含 .get() 就必须同链带 .limit(', () => {
     const idxs = [...body.matchAll(/db\.collection\(/g)].map((m) => m.index as number)
-    expect(idxs.length).toBeGreaterThan(0)
+    expect(idxs.length).toBeGreaterThan(0) // 门①各 .doc(id).get() 单文档读仍在，断言本身没扫空（防切片逻辑失效假绿）
     const chains = idxs.map((start, i) => body.slice(start, i + 1 < idxs.length ? idxs[i + 1] : body.length))
     const whereChains = chains.filter((c) => /\.where\(/.test(c))
-    expect(whereChains.length).toBeGreaterThan(0)
+    // 批K：stockLedger/materials 两条 where 链已挪进 kit/scmStock.ts 门1 收口（rw-material-stock-single-seam·
+    // boundedness 由该 kit 函数内部 limit(1) 兜底），本文件现在合法地没有裸 where 链——不再断言必有，
+    // 只保留「万一将来又加回来必须带 limit」的前向防护。
     for (const c of whereChains) {
       if (/\.get\(\)/.test(c)) expect(c).toMatch(/\.limit\(/)
     }

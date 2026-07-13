@@ -76,7 +76,12 @@ export async function recordAnomaly(
           .then(() => {
             isNew = true
           })
-          .catch(() => {})
+          .catch(() => {
+            // 兜底 add 仍失败＝去重计数真丢（既未新建也未命中自增）——非「集合缺失」时 update 失败多是瞬时抖动，
+            // 这是唯一会真正丢信号的分支。用 alert（非 notifyAlert）留痕：只打一行结构化日志，不回调
+            // recordAnomaly，避免观测自身递归。
+            alert('anomaly', 'recordAnomaly', 'countIncrementLost', { kind, code })
+          })
       }
     }
     // 高危去重感知告警：仅首见推送、重复不刷（防告警疲劳）。经 alert 直发（不走 notifyAlert·防桥接递归）；

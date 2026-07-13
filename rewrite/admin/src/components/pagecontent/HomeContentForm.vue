@@ -39,7 +39,10 @@ async function autosave() {
   const r = await saveHomeContent(homePayload(model.value))
   autoState.value = r.ok ? 'saved' : 'error'
 }
-const flushSave = serialSave(autosave) // 串行化·防慢网下两次自动保存乱序覆盖（P2·根因#8）
+// 串行化·防慢网下两次自动保存乱序覆盖（P2·根因#8）；key='page-content:home'（批D·P1，与 usePageContent.ts
+// 其余四签用同一 key 命名法·本组件独立存 content/home 档不复用该 composable，见文件头注）：改走模块级
+// 共享槽位，快速切签再切回首页签重建组件实例时，新实例接管旧实例仍在途的补存链，防旧快照覆盖新编辑。
+const flushSave = serialSave(autosave, 'page-content:home')
 onBeforeUnmount(() => {
   if (saveTimer) {
     clearTimeout(saveTimer)
@@ -59,7 +62,9 @@ onMounted(async () => {
 })
 
 async function uploadTo(assign: (_fileID: string) => void, ev: Event) {
-  const file = (ev.target as HTMLInputElement).files?.[0]
+  const input = ev.target as HTMLInputElement
+  const file = input.files?.[0]
+  input.value = '' // 重置 value：允许上传失败后重选同一文件重试（否则浏览器不再触发 change）
   if (!file) return
   const b64 = await compress(file)
   if (!b64SizeOk(b64)) {

@@ -135,7 +135,10 @@ export const confirmEnter = withOpenId(async ({ db, OPENID, event }) => {
             .get()
             .catch(() => null)
           cur = fresh && fresh.data
-          if (attempt === 2) alert('money', 'confirmEnter', 'REVOKE_RACE', { orderId: order.id })
+          // 放弃即告警：耗尽 3 次重试（attempt===2）与「重读本身失败」（cur 变 null，下一轮 for
+          // 条件 `attempt<3 && cur` 直接为假、提前退出）是两条不同的放弃路径，缺一都会让这单退货权
+          // 撤销悄悄没了却无人知道——收敛到同一告警出口，不让控制流的巧合替某条失败路径顶案。
+          if (attempt === 2 || !cur) alert('money', 'confirmEnter', 'REVOKE_RACE', { orderId: order.id })
         }
         if (revoked) break
       }
@@ -179,6 +182,9 @@ export const getPlaybackUrl = withOpenId(async ({ db, OPENID, event }) => {
   // NO_COURSE→NO_SEGMENT→NOT_ENTITLED。素材未剪（url:null）分支下 acts 结果单纯丢弃——纯读零副作用，
   // 等价原「未剪视频不查鉴权」语义，代价仅是该分支多付一次本可省的读（权衡：省掉常态有视频路径的
   // 一次串行往返，换未剪视频这一冷分支多一次并行读，净为正）。
+  // .catch(()=>({data:[]}))（P2 复核·根因#14）：未剪段场景本不该查鉴权，此查询若瞬时失败/集合未建
+  // 不该让整个云函数调用未捕获抛错——同文件其它鉴权读一律 catch 兜底空数组，失败即视为「查无本人已确认
+  // 记录」，fail-closed 走 NOT_ENTITLED 拒绝而非放行（不是伪造通过）；未剪段分支本就丢弃 acts，兜底不影响该分支。
   const [got, acts] = await Promise.all([
     db
       .collection(COLLECTIONS.courses)
@@ -188,7 +194,8 @@ export const getPlaybackUrl = withOpenId(async ({ db, OPENID, event }) => {
     db
       .collection(COLLECTIONS.activations)
       .where({ _openid: OPENID, courseId, enteredAt: db.command.neq(null) })
-      .get(),
+      .get()
+      .catch(() => ({ data: [] })),
   ])
   if (!got || !got.data) return err(ERR.NO_COURSE)
 
