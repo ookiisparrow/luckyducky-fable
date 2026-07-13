@@ -2,11 +2,14 @@ import { reply, type Ctx } from '../lib'
 
 // 分页全取（债#22：避免单次拉取封顶截断——批次/码增长后旧码被挤出工作台）。
 // 按页 skip 取尽（每页 200），不足一页即止。makeQuery 每页重建，避免复用查询对象。
+// 最大页数封顶（深审 P3·根因#7）：无上限 skip 循环在码量暴涨（一课累计数万码）时要跑上百次串行 DB 往返、
+// 逼近云函数超时——封顶 SCAN_PAGES 页（=1 万条·管理端量级远不触）；真触顶属灾难态、靠人扩容而非静默无限跑。
+const SCAN_PAGES = 50
 async function fetchAll(makeQuery: () => any, pageSize = 200): Promise<any[]> {
   const out: any[] = []
-  for (let skip = 0; ; skip += pageSize) {
+  for (let page = 0; page < SCAN_PAGES; page++) {
     const r = await makeQuery()
-      .skip(skip)
+      .skip(page * pageSize)
       .limit(pageSize)
       .get()
       .catch(() => ({ data: [] }))

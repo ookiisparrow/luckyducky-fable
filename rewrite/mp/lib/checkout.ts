@@ -17,6 +17,12 @@ export interface DraftLine {
 
 let draftItems: DraftLine[] = []
 let fromCart = false
+// 幂等键（批E·P1 防网络超时重试双建单）：结算草稿创建时生成一次、随草稿存活；提交失败重试（同一
+// 草稿未变）复用同一个键——云端 createOrder 据此把「同一次提交的重试」CAS 折叠成同一笔订单，
+// 网络超时后用户点第二次不会重复扣库存/建二单。草稿清空（finishSubmitted/__resetForTest）即失效，
+// 下次结算重新生成，不会跨草稿误粘。
+let idemKey = ''
+const newIdemKey = (): string => Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 10)
 
 export function prepareFromCart(): void {
   draftItems = cart
@@ -24,16 +30,23 @@ export function prepareFromCart(): void {
     .filter((it) => it.selected)
     .map((it) => ({ id: it.id, sku: it.sku, name: it.name, tag: it.tag, price: it.price, qty: it.qty, cover: it.cover, lineId: it.lineId }))
   fromCart = true
+  idemKey = newIdemKey()
 }
 
 export function prepareBuyNow(p: { id: string; sku?: string; name: string; tag?: string; price: number; cover?: string }): void {
   const sku = p.sku || ''
   draftItems = [{ id: p.id, sku, name: p.name, tag: p.tag || '', price: p.price, qty: 1, cover: p.cover || '', lineId: cart.lineIdOf(p.id, sku) }]
   fromCart = false
+  idemKey = newIdemKey()
 }
 
 export function getDraft(): { items: DraftLine[]; fromCart: boolean } {
   return { items: draftItems.map((l) => ({ ...l })), fromCart }
+}
+
+/** 本次结算草稿的幂等键（提交/重试传给 createOrder；草稿为空时返回空串——没有可提交的草稿）。 */
+export function getIdemKey(): string {
+  return draftItems.length ? idemKey : ''
 }
 
 /** 搭配购增删（id ∈ CHECKOUT_ADDONS·qty 恒 1·重复添加幂等）。 */
@@ -60,6 +73,7 @@ export function finishSubmitted(): void {
   if (fromCart) cart.consume(draftItems.filter((l) => !CHECKOUT_ADDONS.some((a) => a.id === l.id)).map((l) => ({ id: l.id, sku: l.sku, qty: l.qty })))
   draftItems = []
   fromCart = false
+  idemKey = ''
 }
 
 /** 建单成功页展示金额（分）：优先取 createOrder 回包权威值（order.amount 为元）；
@@ -85,4 +99,5 @@ export function mapCreateOrderError(msg: string): string {
 export function __resetForTest(): void {
   draftItems = []
   fromCart = false
+  idemKey = ''
 }

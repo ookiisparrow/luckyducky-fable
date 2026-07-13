@@ -9,6 +9,7 @@ import { getCourseById } from '../../lib/courses'
 import { activationView, bgFor, type ActivationKind } from '../../lib/mapLearning'
 import { mapWelcome, type WelcomeVM } from '../../lib/mapPages'
 import type { ApiResult } from '../../utils/cloud'
+import { goHomeTab } from '../../lib/homeIntent'
 
 Page({
   data: {
@@ -90,8 +91,10 @@ Page({
     this.setData({ busy: true })
     const r = await confirmEnter(this.data.code)
     if (this.unloaded) return // await 恢复点复核（bug sweep II 批E）：用户已退出本页——不再 setData/toast/redirectTo
-    this.setData({ busy: false })
     if (!r.ok) {
+      // 仅失败复位 busy（深审20260712 P3·同 review/feedback onSubmit 范式）：成功路径保持锁定直至 redirectTo——
+      // 提前解锁则导航完成前双击可再次 confirmEnter+redirectTo
+      this.setData({ busy: false })
       wx.showToast({ title: '进课没成功，稍后再试', icon: 'none' })
       return
     }
@@ -103,6 +106,7 @@ Page({
     this.setData({ phase: 'input', code: '', kind: 'invalid', bg: '' })
   },
   onGoHome() {
-    wx.switchTab({ url: '/pages/home/home' })
+    // 「先逛逛，稍后再进课」→ 首页应从头逛起：防上次恰好滚到 FAQ 板块的旧滚动位置残留，造成错位观感
+    goHomeTab()
   },
 })

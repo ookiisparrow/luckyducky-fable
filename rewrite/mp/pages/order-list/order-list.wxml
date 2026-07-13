@@ -16,10 +16,15 @@
     >{{item.label}}</view>
   </view>
 
-  <view class="coolist-body">
+  <!-- 手势滑动换 tab（bind 不 catch，不影响纵向滚动/上拉翻页）：抬指判定，见 order-list.ts onSwipeStart/onSwipeEnd -->
+  <view class="coolist-body" bind:touchstart="onSwipeStart" bind:touchend="onSwipeEnd">
 
-    <!-- 空态 -->
-    <view class="coolist-empty" wx:if="{{!loading && !shown.length}}">该分类下暂无订单</view>
+    <!-- 失败态与空态分治（根因#14·守卫 rw-mp-list-loadfailed-state）：网络失败≠真没有订单 -->
+    <view class="coolist-empty" wx:if="{{!loading && loadFailed}}">
+      <view>网络开小差，订单没加载出来</view>
+      <view class="coolist-retry" bind:tap="onRetryLoad">重试</view>
+    </view>
+    <view class="coolist-empty" wx:elif="{{!loading && !shown.length}}">该分类下暂无订单</view>
 
     <!-- 订单卡 -->
     <view

@@ -12,7 +12,7 @@
   background: #000000; /* 整页纯黑（设计定案：全屏沉浸） */
 }
 
-/* —— 顶条（覆盖层·避让状态栏·标题居中·右侧空 spacer 与返回钮等宽·右上刻意留白给原生投屏按钮） ——
+/* —— 顶条（覆盖层·避让状态栏·标题居中·右侧空 spacer 与返回钮等宽·右上刻意留白给原生胶囊） ——
    右侧安全缓冲＝spacer(64rpx) + 本行右 padding(56rpx) = 120rpx，与本页改版前的既有留白量（原 `right:120rpx`
    整体偏移）对齐（评审复核：改版初版把右 padding 收到 16rpx、缓冲缩到约 80rpx，未经真机核实即收窄，
    已按原留白量补回；spacer 仍与返回钮等宽以保标题视觉居中，真机走查后如需再调此处一并改）。 */
@@ -539,15 +539,6 @@
   width: 28rpx;
   height: 28rpx;
 }
-/* 投屏过渡最小入口（弱化样式·非卡片·终态待投屏设计稿单开批次） */
-.lp-help-cast {
-  flex: 0 0 auto;
-  margin: 4rpx 37rpx 28rpx;
-  text-align: center;
-  font-size: 26rpx;
-  color: var(--ld-content-2);
-}
-
 /* 子层（videos/faq）顶部导航：左返回箭头 + 居中标题（内嵌播放视图复用同一条导航条） */
 .lp-help-nav {
   flex: 0 0 auto;

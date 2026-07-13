@@ -18,6 +18,10 @@ export interface AfterSaleVM {
   reason: string
 }
 
+// 状态中文·客户向措辞。canonical 单源在 rewrite/shared/src/statusLabels.ts 的 AFTERSALE_STATUS_LABEL_CUSTOMER
+// ——mp 包进不了 @ldrw/shared（同 mapOrders.ts 头注），故手落此副本；措辞与 admin 运营向（同源
+// AFTERSALE_STATUS_LABEL_OPS，见 admin/src/lib/format.ts）刻意不同（客户视角安抚语气 vs 商家视角简洁流程词），
+// 不是漂移；状态码集合须与 shared 一致，由守卫 rw-mp-order-labels-synced 焊死。
 const STATUS_LABELS: Record<string, string> = {
   applied: '申请中',
   approved: '已同意 · 退款处理中',

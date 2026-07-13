@@ -109,7 +109,10 @@ async function autosave() {
   const r = await saveCard(payload as unknown as Record<string, unknown>)
   autoState.value = (r as any).ok ? 'saved' : 'error'
 }
-const flushSave = serialSave(autosave) // 串行化·防慢网下两次自动保存乱序覆盖（P2·根因#8）
+// 串行化·防慢网下两次自动保存乱序覆盖（P2·根因#8）；key='cards:'+productId（批D·P1）：改走模块级共享
+// 槽位，快速切走再切回本页（或向导内切步再切回）重建组件实例时，新实例接管旧实例仍在途的补存链，防旧
+// 快照晚到覆盖新实例已存的编辑；按 productId 分槽——不同商品的卡面互不干扰。
+const flushSave = serialSave(autosave, 'cards:' + productId)
 onBeforeUnmount(() => {
   if (saveTimer) {
     clearTimeout(saveTimer)

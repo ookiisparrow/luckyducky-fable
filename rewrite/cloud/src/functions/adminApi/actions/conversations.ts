@@ -113,7 +113,7 @@ export async function conversationsReport({ db, data }: Ctx) {
     ok: true,
     sampleSize: rows.length,
     approx: rows.length >= REPORT_SAMPLE, // 触顶＝近似（只算样本·同 dashboard）
-    slaMs,
+    slaMs, // 本次实际生效阈值（前端未传 slaMs 时＝DEFAULT_SLA_MS·权威口径回传，前端据此初始化输入框，不各自硬编默认值·P2 顺手改批）
     volume: { messages: rows.length, inbound, outbound, customers: byCustomer.size },
     // 答复率＝有出站回复的入站占比（解决率近似·MVP·承面C 人工接入后更准）
     response: { avgResponseMs, maxResponseMs, answered, unanswered, answeredRate: inbound ? pct(answered / inbound) : 0 },
@@ -188,12 +188,9 @@ export async function sampleQc({ db, data }: Ctx): Promise<any> {
     .get()
     .catch(() => ({ data: [] }))
   const rows: any[] = (res && res.data) || []
-  // 已知限制（docs/待办与债.md flag）：qc/qcSampledAt 挂在可被重开复用的 csSession 文档上——顾客二次
-  // 「找人工」时 cs/kfCallback/dispatch.ts enqueueSession 把同一 _id 的 doc closed→pending 重开，只刷新
-  // agentId/claimedAt/createdAt/updatedAt 四个字段，不清 qc/qcSampledAt；该文档此后再次 closed，本次 filter
-  // 仍会因旧 qc/qcSampledAt 非空把它排除出候选池——同一客户被评过一次后，其后全新的会话永远进不了这里的
-  // 候选池，listQcSampled 也会一直展示那份过期评分。根治须改 dispatch.ts 重开分支（本批白名单不含该文件，
-  // 未做）；本批仅记账，不在此臆造轮次实体或时间戳启发式去猜「是否重开过」。
+  // qc/qcSampledAt 挂在可被重开复用的 csSession 文档上——顾客二次「找人工」时
+  // cs/kfCallback/dispatch.ts enqueueSession 的 closed→pending 重开分支已一并清空 qc/qcSampledAt（批 B7 修复），
+  // 故这里按 !qc && !qcSampledAt 过滤即可筛出未评过的候选，不会漏收重开后的新一轮会话。
   const candidates = rows.filter((s: any) => !s.qc && !s.qcSampledAt)
   // Fisher-Yates 部分洗牌（池已有界·简单实现足够）
   const pool = candidates.slice()

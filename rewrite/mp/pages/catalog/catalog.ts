@@ -4,7 +4,7 @@
 // my-courses.ts 注释口径）；hero 背景图与目录/进度拉取并行发起，互不阻塞（同 welcome.ts homeReady 范式）。
 import { getContent } from '../../api/catalog'
 import { getPageContent } from '../../lib/pageContent'
-import { getCourseById } from '../../lib/courses'
+import { getCourseByIdDetailed } from '../../lib/courses'
 import { getMyProgress } from '../../api/user'
 import { mapCatalog, bgFor, type CatalogChapterVM } from '../../lib/mapLearning'
 import { mapCatalogPlayer } from '../../lib/mapPages'
@@ -14,7 +14,7 @@ Page({
   data: {
     statusBarHeight: 0,
     courseId: '',
-    state: 'loading' as 'loading' | 'ok' | 'missing',
+    state: 'loading' as 'loading' | 'ok' | 'missing' | 'failed', // failed=目录拉取网络失败（可重试·根因#14），与 missing「课程不存在」分治
     bg: '',
     chapters: [] as CatalogChapterVM[],
     continueTarget: null as { segmentId: string; lessonId: string; lessonName: string } | null,
@@ -68,14 +68,24 @@ Page({
     const courseId = this.data.courseId
     if (!courseId) return // onLoad 已落 missing 态（courseId 缺失），onShow 不重复处理
     const seq = ++this._seq
-    const [course, progress] = await Promise.all([getCourseById(courseId), getMyProgress()])
+    const [d, progress] = await Promise.all([getCourseByIdDetailed(courseId), getMyProgress()])
     if (seq !== this._seq) return // 慢回包已被更晚一次 onShow 接管，丢弃（同 my-courses.ts）
-    if (!course) {
+    // 失败≠不存在（根因#14）：目录拉取失败落 failed 给重试；只有拉取成功且查无此课才是 missing。
+    // 已在 ok 态（返回页触发的 onShow 刷新失败）不降级覆盖，保留已展示目录。
+    if (d.failed) {
+      if (this.data.state !== 'ok') this.setData({ state: 'failed' })
+      return
+    }
+    if (!d.course) {
       this.setData({ state: 'missing' })
       return
     }
-    const { chapters, continueTarget } = mapCatalog(course, progress.ok ? progress.list : [], courseId)
+    const { chapters, continueTarget } = mapCatalog(d.course, progress.ok ? progress.list : [], courseId)
     this.setData({ state: 'ok', chapters, continueTarget })
+  },
+  onRetryLoad() {
+    this.setData({ state: 'loading' })
+    void this.onShow()
   },
   // 「开始学习」CTA：continueTarget 非空跳播放页续播；为空（全课无可播段）诚实提示，不留死跳转。
   onStart() {

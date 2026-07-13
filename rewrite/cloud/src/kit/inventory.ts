@@ -16,16 +16,34 @@ export interface StockLine {
 const CAS_RETRY = 5
 const idOf = (productId: string, spec: string) => `${productId}__${spec || ''}`
 
-// 单条 CAS 扣减：true=已扣 / false=库存不足 / null=不限量（不扣不计）
+// 单条 CAS 扣减：true=已扣 / false=库存不足（含持续读失败重试耗尽·宁缺勿超卖）/ null=不限量（无档·不扣不计）
+// P1 修复（批H）：原实现 `.get().catch(() => null)` 把「文档真的不存在」（无档＝合法不限量）与
+// 「网络/DB 瞬时读失败」混为一谈，且第一次 get() 失败就立即 return null——调用方 reserveStock 把
+// null 解释为「不限量，跳过预留」，真实读失败被静默当成合法不限量放行，直接开超卖口子。
+// 改为跟随 casIncrement 已确立的 isDocMissing 判据：只有真无档才判不限量（返回 null）；其它读失败
+// 视为一次尝试失败、进入下一轮 CAS_RETRY 重试（不再第一次失败即弃）；重试耗尽仍读不到，返回 false
+// （与「库存不足」同一 fail-closed 出口，绝不落回 null——不让读失败伪装成合法不限量）。
+//
+// 批Q 修复（P3·告警误报）：hadReadFailure 原实现整个重试循环粘滞——只要任意一轮读失败过就
+// 一直为 true，即便后续轮次 get() 全部读成功、只是 CAS 更新（where+update）持续被别的并发方
+// 抢先而耗尽，也会在重试耗尽时误打 RESERVE_READ_FAILED（把「最后其实是正常并发争抢耗尽」诬成
+// 「持续读失败」）。改为每轮开头重置：只保留「决定本轮是否继续/耗尽」那一轮的读失败标记，耗尽后
+// 只看最后一轮是否读失败——读失败与纯 CAS 争抢耗尽的告警语义才名副其实。
 async function casDecrement(coll: any, _id: string, qty: number): Promise<boolean | null> {
+  let lastRoundReadFailed = false
   for (let i = 0; i < CAS_RETRY; i++) {
-    const got = await coll
-      .doc(_id)
-      .get()
-      .catch(() => null)
-    if (!got || !got.data) return null
+    lastRoundReadFailed = false
+    let got: any
+    try {
+      got = await coll.doc(_id).get()
+    } catch (e) {
+      if (isDocMissing(e)) return null // 无档＝不限量·合法不处理
+      lastRoundReadFailed = true
+      continue // 读失败（非「无档」）：当一次尝试失败，进入下一轮重试，不静默判不限量
+    }
+    if (!got || !got.data) return null // 防御：正常返回但无数据
     const stock = got.data.stock
-    if (stock == null) return null
+    if (stock == null) return null // 不限量：合法不处理
     if (stock < qty) return false
     const r = await coll
       .where({ _id, stock })
@@ -33,6 +51,10 @@ async function casDecrement(coll: any, _id: string, qty: number): Promise<boolea
       .catch(() => ({ stats: { updated: 0 } }))
     if (r.stats && r.stats.updated === 1) return true
   }
+  // 重试耗尽：持续读失败会把本应正常成交的订单误判 OUT_OF_STOCK（fail-closed·不超卖但阻断真实可售订单）——
+  // 与「纯 CAS 并发争抢耗尽」区分开单独告警，供人工对账/排障（后者高并发下属正常现象，不值得告警噪音）。
+  // 只看最后一轮：中途读失败过、但最终是被 CAS 更新持续抢先耗尽的，不算「持续读失败」，不告警。
+  if (lastRoundReadFailed) await notifyAlert('money', 'reserveStock', 'RESERVE_READ_FAILED', { _id })
   return false // 重试耗尽按不足处理·宁缺勿超卖
 }
 
@@ -199,7 +221,10 @@ export async function getInventory(productIds?: string[]): Promise<{ list: any[]
   const PAGE = 100
   const list: any[] = []
   for (let skip = 0; skip < INVENTORY_SCAN_CAP; skip += PAGE) {
-    const r = await base.orderBy('productId', 'asc').skip(skip).limit(PAGE).get()
+    // 排序加唯一 tiebreaker _id（深审 P2·根因#7）：productId 非唯一（inventory 一 SKU 一档·_id=productId__spec·
+    // 同 productId 多 spec 共键），只按 productId 排序时同值行的相对次序在真 TCB 上无保证——skip 翻页跨页边界
+    // 会漏/重同 productId 的 SKU（JS 桩 sort 稳定掩盖此坑）。补 _id 使排序成全序，skip 分页确定不漏不重。
+    const r = await base.orderBy('productId', 'asc').orderBy('_id', 'asc').skip(skip).limit(PAGE).get()
     const rows: any[] = (r && r.data) || []
     list.push(...rows)
     if (rows.length < PAGE) return { list, truncated: false }

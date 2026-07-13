@@ -133,9 +133,11 @@ function timeline(row: OrderRowVM) {
     },
   ]
 }
-// 状态徽章 tone（批2 refactor·同文件字面重复 ×2 去重）：两输入——feeMismatch 优先分支 + status 分支。
-function badgeTone(row: { feeMismatch: boolean; status: string }): 'neutral' | 'brand' | 'green' | 'red' | 'amber' {
+// 状态徽章 tone（批2 refactor·同文件字面重复 ×2 去重）：三输入——feeMismatch/refundHold 优先分支 + status 分支。
+// refundHold（P0 修复·退款↔履约状态同步）：已有行退款 approved/refunded，绝不能让「待发货」绿标误导操作员点发货。
+function badgeTone(row: { feeMismatch: boolean; refundHold?: boolean; status: string }): 'neutral' | 'brand' | 'green' | 'red' | 'amber' {
   if (row.feeMismatch) return 'red'
+  if (row.refundHold) return 'red'
   if (row.status === 'done') return 'green'
   if (row.status === 'shipped') return 'brand'
   if (row.status === 'paid' || row.status === 'refund_required') return 'amber'
@@ -285,7 +287,7 @@ onMounted(reload)
           <div class="ld-th r" :style="{ width: '150px' }">操作</div>
         </div>
         <div class="ld-tbody">
-          <div v-for="row in rows" :key="row.id" class="ld-tr" :class="{ mismatch: row.feeMismatch, sel: canBatch && isSel(row.id) }">
+          <div v-for="row in rows" :key="row.id" class="ld-tr" :class="{ mismatch: row.feeMismatch || row.refundHold, sel: canBatch && isSel(row.id) }">
             <div v-if="canBatch" class="ld-td col-ck">
               <input
                 type="checkbox"
@@ -307,12 +309,14 @@ onMounted(reload)
             <div class="ld-td time" :style="{ width: '150px' }">{{ row.timeLabel }}</div>
             <div class="ld-td r amount" :style="{ width: '110px' }">{{ row.amountLabel }}</div>
             <div class="ld-td" :style="{ width: '110px' }">
-              <Badge :tone="badgeTone(row)">{{ row.feeMismatch ? '待复核' : row.statusLabel }}</Badge>
+              <Badge :tone="badgeTone(row)">{{ row.feeMismatch ? '待复核' : row.refundHold ? '已退款·勿发货' : row.statusLabel }}</Badge>
             </div>
             <div class="ld-td r ops" :style="{ width: '150px' }">
               <UiButton v-if="row.feeMismatch" variant="danger" size="sm" @click="doClearMismatch(row.id)">
                 <TriangleAlert :size="14" :stroke-width="1.8" /><span>{{ clearConfirmId === row.id ? '确认已核对流水？' : '去核对' }}</span>
               </UiButton>
+              <!-- refundHold（P0）：已有行退款 approved/refunded，禁止发货入口——真正裁决在服务端 shipOne，这里只挡入口不给点 -->
+              <span v-else-if="row.refundHold" class="hint-refund-hold">该单退款处理中，请到「退款」页核对后再决定后续</span>
               <UiButton v-else-if="row.canShip" variant="primary" size="sm" @click="openDrawer(row, 'ship')">
                 <Package :size="14" :stroke-width="1.8" /><span>发货</span>
               </UiButton>
@@ -408,7 +412,8 @@ onMounted(reload)
         <!-- 商品 + 逐商品激活态 -->
         <div class="items-card">
           <div class="addr-label">商品 · 激活状态</div>
-          <div v-for="it in drawer.row.items" :key="it.productId || it.name" class="ditem">
+          <!-- :key 带 spec＝行身份 productId__spec（后端 lineId 契约·VM 未透传 lineId 故就地重建）：同品多规格同单不撞键（P3·深审20260712） -->
+          <div v-for="it in drawer.row.items" :key="(it.productId || it.name) + '__' + it.spec" class="ditem">
             <b>{{ it.name }}{{ it.spec ? `（${it.spec}）` : '' }} ×{{ it.qty }}</b>
             <em v-if="actOf(it.productId)" class="act-tag" :class="actOf(it.productId)!.activated ? 'used' : 'fresh'">{{ actLabel(actOf(it.productId)!) }}</em>
           </div>
@@ -585,6 +590,12 @@ onMounted(reload)
 }
 .ops {
   gap: 6px;
+}
+.hint-refund-hold {
+  font-size: 12px;
+  color: var(--ld-red);
+  text-align: right;
+  line-height: 1.4;
 }
 .tbl-foot {
   display: flex;

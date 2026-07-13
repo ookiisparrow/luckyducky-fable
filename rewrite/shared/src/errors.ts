@@ -30,6 +30,7 @@ export const ERR = {
   COUPON_EXCEEDS_GOODS: 'COUPON_EXCEEDS_GOODS', // 占位券抵扣≥货款即拒单（深审 2026-07-05·真券系统前的白送闸·新线新增码见 parity 登记名单）
   OUT_OF_STOCK: 'OUT_OF_STOCK', // 库存不足（cloud-order 域·跨系统一致性批次追加登记）
   TOO_MANY_PENDING: 'TOO_MANY_PENDING', // 在途未支付单超上限（收尾硬化批·防单账号零成本预留锁死热销 SKU）
+  ORDER_CLAIM_PENDING: 'ORDER_CLAIM_PENDING', // 批E：同幂等键的原请求仍在处理中（极端并发窗口）——不建二单，前端稍候按原键重试
   // 售后 / 退款
   ALREADY_APPLIED: 'ALREADY_APPLIED',
   NOT_REFUNDABLE: 'NOT_REFUNDABLE',

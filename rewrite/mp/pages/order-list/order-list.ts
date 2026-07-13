@@ -2,6 +2,7 @@
 import { getMyOrders, pay, confirmReceive, cancelOrder } from '../../api/orders'
 import { mapPayResult } from '../../lib/payFlow'
 import { mapOrders, type OrderVM, type OrderLineVM } from '../../lib/mapOrders'
+import { swipeDir, nextTabKey } from '../../lib/orderSwipe'
 
 const TABS = [
   { key: '', label: '全部' },
@@ -43,11 +44,15 @@ Page({
     all: [] as OrderVM[],
     shown: [] as OrderRow[],
     loading: true,
+    loadFailed: false, // 失败≠空态（根因#14·守卫 rw-mp-list-loadfailed-state）：一无所有时的网络失败态，与「暂无订单」分治
     hasMore: false,
     cursor: null as unknown,
   },
   _seq: 0, // reload 代次·同 tab 内多触发点（onShow/取消后 reload）并发时丢弃过期回包（tab-token 只挡切 tab·挡不住同 tab 乱序）
   unloaded: false, // 页面已退出标记（同 checkout/review 范式·bug sweep II 批E）：onPay 支付回包在途用户退出列表页，迟到回包不再对已退页 toast/reload
+  _swX: 0, // 手势起点 clientX（非渲染态直挂·仿 _seq 写法）
+  _swY: 0, // 手势起点 clientY
+  _swT: 0, // 手势起点 timeStamp（ms）——一律用事件 timeStamp，不引 Date.now
   onLoad(query: Record<string, string | undefined>) {
     if (query.tab && TABS.some((t) => t.key === query.tab)) this.setData({ tabKey: query.tab })
   },
@@ -66,26 +71,60 @@ Page({
     this.setData({ loading: true })
     const r = await getMyOrders(undefined, 20, tab)
     if (seq !== this._seq || tab !== this.data.tabKey) return // 过期回包（被更晚 reload 取代）或已切 tab：丢弃·不覆盖较新结果
-    const all = r.ok ? mapOrders(r.list) : []
-    this.setData({ loading: false, all, shown: all.map(decorate), cursor: r.ok ? r.nextCursor : null, hasMore: !!(r.ok && r.hasMore) })
+    // 失败≠空态（根因#14）：失败不覆盖已有列表（onShow 返回抖动一次不该把待支付订单清空）；
+    // 一无所有时落 loadFailed 给重试，不与「暂无订单」混同。
+    if (!r.ok) {
+      this.setData({ loading: false, loadFailed: !this.data.all.length })
+      if (this.data.all.length) wx.showToast({ title: '刷新失败，请稍后重试', icon: 'none' })
+      return
+    }
+    const all = mapOrders(r.list)
+    this.setData({ loading: false, loadFailed: false, all, shown: all.map(decorate), cursor: r.nextCursor, hasMore: !!r.hasMore })
+  },
+  onRetryLoad() {
+    void this.reload()
   },
   async onReachBottom() {
     if (!this.data.hasMore || this.data.cursor == null) return
     const tab = this.data.tabKey
     const seq = this._seq // 捕获当前代次（翻页不 bump）：期间若发生 reload（_seq 递增）则本次 append 作废，不并入被替换的列表
     const r = await getMyOrders(this.data.cursor, 20, tab)
-    if (!r.ok) return // 翻页失败不覆盖已有数据（黄金 §八口径）
-    if (seq !== this._seq || tab !== this.data.tabKey) return // reload 已取代当前列表 / 跨 tab 过期回包：丢弃·不错配游标
+    if (seq !== this._seq || tab !== this.data.tabKey) return // reload 已取代当前列表 / 跨 tab 过期回包：丢弃·不错配游标（失败的过期回包也在此静默丢弃，不该对已离开的 tab 弹 toast——评审修复）
+    if (!r.ok) {
+      wx.showToast({ title: '加载失败，上拉重试', icon: 'none' }) // 翻页失败不静默（根因#14）
+      return // 不覆盖已有数据（黄金 §八口径）
+    }
     const merged = [...this.data.all]
     const seen = new Set(merged.map((o) => o.id))
     for (const o of mapOrders(r.list)) if (!seen.has(o.id)) merged.push(o) // 追加去重
     this.setData({ all: merged, shown: merged.map(decorate), cursor: r.nextCursor, hasMore: !!r.hasMore })
   },
   onTab(e: WechatMiniprogram.TouchEvent) {
-    const k = String(e.currentTarget.dataset.key)
-    if (k === this.data.tabKey) return
-    this.setData({ tabKey: k, all: [], shown: [], cursor: null, hasMore: false })
+    this.switchTab(String(e.currentTarget.dataset.key))
+  },
+  // 切换到目标 tab（同 key 早退 + 清空重拉）：onTab 与手势滑动共用此私有方法。
+  switchTab(key: string) {
+    if (key === this.data.tabKey) return
+    this.setData({ tabKey: key, all: [], shown: [], cursor: null, hasMore: false })
     void this.reload() // 切 tab 从服务端按该状态重新分页（过滤与分页同源）
+  },
+  // 手势滑动换 tab（bind 不 catch，不影响纵向滚动/上拉翻页）：抬指判定，不做跟手动画（需求未要求）。
+  onSwipeStart(e: WechatMiniprogram.TouchEvent) {
+    const t = e.touches[0]
+    this._swX = t.clientX
+    this._swY = t.clientY
+    this._swT = e.timeStamp
+  },
+  onSwipeEnd(e: WechatMiniprogram.TouchEvent) {
+    const t = e.changedTouches[0]
+    const dx = t.clientX - this._swX
+    const dy = t.clientY - this._swY
+    const dt = e.timeStamp - this._swT
+    const dir = swipeDir(dx, dy, dt)
+    if (dir === 0) return
+    const k = nextTabKey(this.data.tabs, this.data.tabKey, dir)
+    if (k === null) return
+    this.switchTab(k)
   },
   onTapOrder(e: WechatMiniprogram.TouchEvent) {
     wx.navigateTo({ url: '/pages/order/order?id=' + String(e.currentTarget.dataset.id) })

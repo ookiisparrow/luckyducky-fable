@@ -51,7 +51,7 @@ run('build:cloud 产物 ≡ cloudbaserc 函数清单', () => {
     )
   }
 })
-run('钱链函数无未部署漂移（已提交≠已部署·根因#8）', () => {
+run('钱链函数无未部署漂移（旧线冻结参照·生产线 rewrite 未纳入·深审 P2·根因#8）', () => {
   // 上一项已 build:cloud → dist 是当前源。比钱链函数 dist hash vs manifest 已部署 hash，
   // 不符＝代码改了未部署。2026-06-16 实测漏洞：钱链 [LD_ALERT]/支付窗口 改了 4 天没部署，
   // 而 preflight 原只验 dist≡cloudbaserc 结构、不验「部署时效」——本项补这洞。manifest 由

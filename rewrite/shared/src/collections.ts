@@ -46,4 +46,7 @@ export const COLLECTIONS = {
   // 敏感凭证入库单源（2026-07-12 决策·config-checklist 本页填写自动生效）：doc('wxkf')/doc('wxpay')，
   // 云函数运行时读库优先、env 兜底迁移期——见 kit/secureConfig.ts。仅 saveSecureConfig 单口写入。
   secureConfig: 'secureConfig',
+  // createOrder 幂等键（批E·P1 防网络超时重试双建单）：_id=(openid+客户端幂等键) 确定性哈希，
+  // 存 { openid, orderId, createdAt }；建单前 claim、建单后回填 orderId——见 orders.ts createOrder。
+  orderIdempotency: 'orderIdempotency',
 } as const

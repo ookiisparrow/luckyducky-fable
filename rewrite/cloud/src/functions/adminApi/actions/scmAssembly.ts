@@ -27,6 +27,9 @@ export async function runAssembly({ db, data, agentId }: Ctx) {
   const productId = String(data.productId || '')
   const spec = str(data.spec, 40) // 成品 SKU 规格（与 inventory/order.items[].spec 同键·可空）
   if (!assemblyId || !productId) return reply(400, { ok: false, error: 'BAD_ARGS' })
+  // spec 禁含复合键分隔符 __（深审 P3·同 checkpoint 拒 ':' 先例）：spec 会拼进 fg:${productId}__${spec} 与
+  // inventory idOf productId__spec——含 __ 会让 `pA` 的 `x__y` 撞进 `pA__x` 的 `y`，写错真实客户库存文档。
+  if (spec.includes('__')) return reply(400, { ok: false, error: 'BAD_SPEC' })
   const sets = data.sets
   if (!Number.isInteger(sets) || sets <= 0) return reply(400, { ok: false, error: ERR.BAD_SETS })
   const loaded = await loadBom(db, productId)

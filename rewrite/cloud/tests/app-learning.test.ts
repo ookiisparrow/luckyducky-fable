@@ -1,6 +1,6 @@
 // 黄金 learning-content §一–§五（守卫 rw-learning-golden）。
-import { describe, it, expect, beforeEach } from 'vitest'
-import { control } from 'wx-server-sdk'
+import { describe, it, expect, beforeEach, vi } from 'vitest'
+import cloud, { control } from 'wx-server-sdk'
 import { main as app } from '../src/functions/app/index'
 
 const call = (action: string, data: Record<string, unknown> = {}) => app({ action, data }) as Promise<any>
@@ -215,6 +215,58 @@ describe('confirmEnter（退货权法律节点·黄金 §二）', () => {
     expect(it0.refundable).toBe(false)
   })
 
+  it('大白话：重试中途重读订单也失败（非耗尽 3 次而是读故障提前跳出循环）——退货权撤销仍须告警，不能因 cur 变 null 悄悄绕过 attempt===2 检查（P2·根因#14）', async () => {
+    control.seed('products', [{ _id: 'p1', id: 'p1', courseId: 'c1' }])
+    control.seed('orders', [
+      {
+        _id: 'o1',
+        id: 'o1',
+        _openid: 'oME',
+        status: 'paid',
+        createdAt: 100,
+        items: [{ productId: 'p1', qty: 1, refundable: true }],
+      },
+    ])
+
+    // 模拟并发方抢先一步：本次 CAS 更新（where entVer:exists(false)）执行前，entVer 已被拨动，
+    // 首次 attempt 的条件更新必然落空（updated:0），逼出「重新 get() 读回」这条重试分支。
+    let bumped = false
+    function bumpEntVerOnce({ coll }: { coll: string }) {
+      if (coll === 'orders' && !bumped) {
+        bumped = true
+        control.setBeforeUpdate(null as never) // 避免下面这次内部写入递归触发自身
+        return cloud
+          .database()
+          .collection('orders')
+          .doc('o1')
+          .update({ data: { entVer: 1 } })
+          .then(() => control.setBeforeUpdate(bumpEntVerOnce as never))
+      }
+    }
+    control.setBeforeUpdate(bumpEntVerOnce as never)
+    // 重试读回本身也失败（网络抖动/瞬时故障，非「无档」）——for 循环条件 `attempt<3 && cur` 因
+    // cur 变 null 提前判假退出，不会走到 attempt===2 分支；这正是要覆盖的巧合绕过场景。
+    control.setBeforeGet(({ coll, id }: any) => {
+      if (coll === 'orders' && id) throw new Error('MOCK_ORDER_REGET_FAIL')
+    })
+    const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+
+    const r = await call('confirmEnter', { code: 'CODE1' })
+
+    control.setBeforeUpdate(null as never)
+    control.setBeforeGet(null as never)
+
+    expect(r.ok).toBe(true)
+    expect(r.revoked).toBe(null) // 撤销确实没做成——读故障提前放弃，这单退货权行原样留可退
+    expect(control.dump('orders')[0].items[0].refundable).toBe(true) // 未被误撤销
+    // 核心断言：即便提前跳出循环（未到 attempt===2），也必须留痕告警，不能悄悄放弃
+    expect(
+      errSpy.mock.calls.some((c) => String(c[0]).includes('REVOKE_RACE') && String(c[0]).includes('confirmEnter'))
+    ).toBe(true)
+
+    errSpy.mockRestore()
+  })
+
   it('大白话：送礼场景——确认者名下无相关订单，正常确认、不失效任何退货权、不报错', async () => {
     const r = await call('confirmEnter', { code: 'CODE1' })
     expect(r.enteredAt).toBeGreaterThan(0)
@@ -249,6 +301,16 @@ describe('getCourses / getPlaybackUrl（目录不漏源·鉴权 fail-closed·黄
     expect((await call('getPlaybackUrl', { courseId: 'nope', segmentId: 's1' })).error).toBe('NO_COURSE')
     expect((await call('getPlaybackUrl', { courseId: 'c1', segmentId: 'nope' })).error).toBe('NO_SEGMENT')
   })
+
+  it('大白话：未剪段（videoFileId 空）+ 并行鉴权读瞬时失败——仍优雅回 url:null，不让整个调用未捕获抛错（P2·根因#14 修复）', async () => {
+    control.setBeforeGet(({ coll }: any) => {
+      if (coll === 'activations') throw new Error('MOCK_ACTS_FAIL') // 模拟集合未建/瞬时抖动
+    })
+    const r = await call('getPlaybackUrl', { courseId: 'c1', segmentId: 's2' }) // s2 videoFileId 空
+    control.setBeforeGet(null as never)
+    expect(r.ok).toBe(true)
+    expect(r.url).toBe(null)
+  })
 })
 
 describe('getMyCourses / getMyProgress / trackEvent（黄金 §四/§五）', () => {
@@ -269,6 +331,21 @@ describe('getMyCourses / getMyProgress / trackEvent（黄金 §四/§五）', ()
     await call('trackEvent', { type: 'page_view', page: 'home' })
     expect(control.dump('events').length).toBe(1)
     expect(control.dump('progress').length).toBe(0)
+  })
+
+  it('大白话：client_error 埋点桥接进 anomalies 账本（kind=client-error）——运营后台 Anomalies 页可查，非只留在 events 流水（根因#14 工业级完善批8）', async () => {
+    await call('trackEvent', { type: 'client_error', page: 'player', meta: { msg: 'TypeError: x is not a function' } })
+    expect(control.dump('events').length).toBe(1) // 仍照常记流水（不改既有分析用途）
+    const anomalies = control.dump('anomalies')
+    expect(anomalies.length).toBe(1)
+    expect(anomalies[0].kind).toBe('client-error')
+    expect(anomalies[0].severity).toBe('low') // 单条客户端报错不该主动告警刷屏，仅落账
+    expect(anomalies[0].ctx.msg).toContain('TypeError')
+    expect(anomalies[0].ctx.page).toBe('player')
+    // 同一错误重复上报：指纹去重累加 count，不刷屏成多条（同 anomaly.test.ts 既有契约）
+    await call('trackEvent', { type: 'client_error', page: 'player', meta: { msg: 'TypeError: x is not a function' } })
+    expect(control.dump('anomalies').length).toBe(1)
+    expect(control.dump('anomalies')[0].count).toBe(2)
   })
 
   it('大白话：看完一段折叠进「每人每课一条」；同课第二段折叠同一条；进度只回本人', async () => {

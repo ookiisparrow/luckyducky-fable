@@ -49,7 +49,7 @@ const RANGE_CHIPS = [
 ] as const
 type RangeKey = (typeof RANGE_CHIPS)[number]['key']
 const range = ref<RangeKey>('7d')
-const badOnly = ref(false) // 仅差评 ≤3
+const badOnly = ref(false) // 仅差评 ≤2（P2 顺手改批：统一到 badCount/KPI 卡同口径——1~2 星差评/3 星中评/4~5 星好评，此前筛选按钮按 ≤3 与 KPI 卡 ≤2 打架）
 
 const entries = ref<CsatEntryVM[]>([])
 const entriesCursor = ref<unknown>(null)
@@ -71,7 +71,7 @@ async function loadEntries() {
   entriesMsg.value = '加载中…'
   entriesBusy.value = true
   const { from, to } = currentRangeArgs()
-  entriesFilter = { from, to, maxScore: badOnly.value ? 3 : undefined }
+  entriesFilter = { from, to, maxScore: badOnly.value ? 2 : undefined }
   const my = entriesGen.begin()
   const r = await listCsatEntries(entriesFilter)
   if (entriesGen.isStale(my)) return // 期间又切区间/开关·丢弃过期结果
@@ -170,7 +170,7 @@ onMounted(() => {
             :variant="range === c.key ? 'primary' : 'ghost'"
             @click="pickRange(c.key)"
           >{{ c.label }}</UiButton>
-          <UiButton size="sm" :variant="badOnly ? 'primary' : 'ghost'" @click="toggleBadOnly">仅差评 ≤3</UiButton>
+          <UiButton size="sm" :variant="badOnly ? 'primary' : 'ghost'" @click="toggleBadOnly">仅差评 ≤2</UiButton>
         </div>
         <UiButton variant="ghost" size="sm" :disabled="entriesBusy" @click="loadEntries">
           <RotateCcw :size="14" :stroke-width="1.8" /><span>{{ entriesBusy ? '刷新中…' : '刷新' }}</span>

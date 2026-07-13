@@ -24,7 +24,7 @@ const props = defineProps<{ embed?: boolean; wizardProductId?: string }>()
 const emit = defineEmits<{ saved: [] }>()
 
 const router = useRouter()
-// 商品→课程深链（换皮丢了入口·Courses 页占位文案承诺「商品页会带入」但没按钮）：courseId=商品档 courseId 或 course-<id>
+// 商品→课程深链（换皮丢了入口，本按钮已补·下方「编辑课程」+ Courses 页占位文案均已对齐现状）：courseId=商品档 courseId 或 course-<id>
 async function editCourse(row: DraftRowVM) {
   // existing 优先读活编辑器（评审 P3 同批收口）：row.raw 是旧快照——编辑器里刚手输、还在防抖窗口内
   // 未落盘的关联课程号，不该被自动生成的 course-<id> 盖掉。
@@ -137,7 +137,10 @@ async function autosave() {
     emit('saved') // 通知向导重算上架闸/进度（步1-3 内嵌编辑器 autosave 落库后）
   }
 }
-const flushSave = serialSave(autosave) // 串行化·防慢网下两次自动保存乱序覆盖（P2·根因#8）
+// 串行化·防慢网下两次自动保存乱序覆盖（P2·根因#8）；key='products'（批D·P1）：改走模块级共享槽位，
+// 快速切走再切回本页重建组件实例时，新实例接管旧实例仍在途的补存链，防旧快照晚到覆盖新实例已存的编辑
+// （每次 saveDraft 都带自身 id 落自己的档，用同一泛 key 不会串到别的商品档上）。
+const flushSave = serialSave(autosave, 'products')
 function markLoaded() {
   editorLoaded = false
   autoState.value = ''

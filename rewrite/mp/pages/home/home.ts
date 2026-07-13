@@ -6,6 +6,7 @@ import { getAllProducts, getProductById } from '../../lib/catalog'
 import { mapHomeContent, mapProducts, type HomeContentVM, type ProductVM } from '../../lib/mapHome'
 import { decideQuickAdd } from '../../lib/quickAdd'
 import * as cart from '../../lib/cart'
+import { consumeHomeTop } from '../../lib/homeIntent'
 
 let toastTimer: ReturnType<typeof setTimeout> | null = null
 
@@ -32,6 +33,8 @@ Page({
   onShow() {
     this.hidden = false
     if (typeof this.getTabBar === 'function') (this.getTabBar() as unknown as LdTabBar).setActive('home')
+    // 兜底意图落地（我页无课/welcome先逛逛）回到顶部；正常切 tab 未置位则保留上次滚动位置（行为不变）
+    if (consumeHomeTop()) wx.pageScrollTo({ scrollTop: 0, duration: 0 })
   },
   onHide() {
     this.hidden = true
@@ -118,5 +121,14 @@ Page({
     if (toastTimer) clearTimeout(toastTimer)
     this.setData({ toast: { show: true, text } })
     toastTimer = setTimeout(() => this.setData({ 'toast.show': false }), 1600)
+  },
+
+  // 转发/朋友圈钩子（分发前置·决策§29·守卫 rw-mp-share-wired）：公开页开转发，私有页（交易/学习/隐私）
+  // 刻意不加钩子＝默认不可转发。不配 imageUrl——微信默认截页面顶部真身，不造假分享图。
+  onShareAppMessage() {
+    return { title: '小棉鸭钩织材料包｜一针一线，钩出随身幸运物', path: '/pages/home/home' }
+  },
+  onShareTimeline() {
+    return { title: '小棉鸭钩织材料包｜一针一线，钩出随身幸运物' }
   },
 })

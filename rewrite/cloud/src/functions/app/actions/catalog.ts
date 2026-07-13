@@ -24,6 +24,7 @@ export const getProducts = async () => {
     .collection(COLLECTIONS.products)
     .where({ listed: db.command.neq(false) })
     .orderBy('sort', 'asc')
+    .limit(1000) // 显式上界（病根#7·守卫 rw-app-catalog-reads-bounded）：裸 .get() 服务端默认 100 条静默截断，目录破百无声丢货
     .get()
   const products = res.data as any[]
 

@@ -1,5 +1,5 @@
 import { reply, type Ctx } from '../lib'
-import { listMaterialDocs } from '../../../kit'
+import { listMaterialDocs, recentStockLedger } from '../../../kit'
 import { COLLECTIONS } from '@ldrw/shared'
 import { OUTWORK_ORDER_STATUS, PURCHASE_ORDER_STATUS } from '@ldrw/shared'
 
@@ -18,13 +18,13 @@ const PAYABLE_SCAN_CAP = 200 // 未结外协单内存分组上限（超界不误
 const RECENT_LEDGER_N = 8
 
 export async function getScmOverview({ db }: Ctx) {
-  const [materials, payRes, payCountRes, orderedCountRes, issuedCountRes, ledgerRes, supRes] = await Promise.all([
+  const [materials, payRes, payCountRes, orderedCountRes, issuedCountRes, recentLedgerRows, supRes] = await Promise.all([
     listMaterialDocs(), // 门1 只读出口·主档量小·内部已 bounded 500
     db.collection('outworkOrders').where({ status: OUTWORK_ORDER_STATUS.DELIVERED }).limit(PAYABLE_SCAN_CAP).get(),
     db.collection('outworkOrders').where({ status: OUTWORK_ORDER_STATUS.DELIVERED }).count(),
     db.collection('purchaseOrders').where({ status: PURCHASE_ORDER_STATUS.ORDERED }).count(),
     db.collection('outworkOrders').where({ status: OUTWORK_ORDER_STATUS.ISSUED }).count(),
-    db.collection(COLLECTIONS.stockLedger).orderBy('at', 'desc').limit(RECENT_LEDGER_N).get(),
+    recentStockLedger(RECENT_LEDGER_N), // 门1 只读出口（批K：原直碰 stockLedger 集合，绕过 SCM 门1）
     db.collection(COLLECTIONS.suppliers).limit(PAYABLE_SCAN_CAP).get(),
   ])
 
@@ -58,7 +58,7 @@ export async function getScmOverview({ db }: Ctx) {
   const payableTotalFen = payables.reduce((s, g) => s + g.payableFen, 0)
   const truncated = (payCountRes.total || 0) > PAYABLE_SCAN_CAP
 
-  const recentLedger = ((ledgerRes.data || []) as any[]).map((l) => ({
+  const recentLedger = (recentLedgerRows as any[]).map((l) => ({
     _id: String(l._id || ''),
     itemKey: String(l.itemKey || ''),
     delta: Number(l.delta) || 0,

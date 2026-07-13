@@ -15,7 +15,8 @@ describe('与旧线契约逐键 parity', () => {
     // （collections.ts 头注「新集合先登记并去控制台锁权限再用」，同错误码册的新增机制）——
     // 巡检机 + bug 收集器地基（防治静默 bug）：anomalies（异常账本·指纹去重·仅管理端·recordAnomaly 单口写入）
     // secureConfig（决策 2026-07-12·人工配置清单可填写化）：wxkf/wxpay 敏感凭证入库单源·仅 saveSecureConfig 单口写入
-    const RW_NEW_COLLECTIONS = { anomalies: 'anomalies', inspectRuns: 'inspectRuns', secureConfig: 'secureConfig' }
+    // orderIdempotency（批E·P1 防网络超时重试双建单）：createOrder 幂等键 claim·见 orders.ts
+    const RW_NEW_COLLECTIONS = { anomalies: 'anomalies', inspectRuns: 'inspectRuns', secureConfig: 'secureConfig', orderIdempotency: 'orderIdempotency' }
     expect(COLLECTIONS).toEqual({ ...OLD_COLLECTIONS, ...RW_NEW_COLLECTIONS })
     expect(Object.keys(COLLECTIONS).length).toBe(37 + Object.keys(RW_NEW_COLLECTIONS).length)
   })
@@ -23,6 +24,7 @@ describe('与旧线契约逐键 parity', () => {
     // 旧码逐字不动（前端分支契约）；新线只追加的新码在此点名登记（errors.ts 头注「新增只追加」）——
     // 深审 2026-07-05：COUPON_EXCEEDS_GOODS（占位券白送闸·旧线无此不变量）
     // 跨系统一致性收敛批（客服/ERP 域错误码接入 ERR 字典单源·此前散落字面量、旧线本就没有对应登记）
+    // 批E：ORDER_CLAIM_PENDING（幂等键并发窗口内原请求未落定·前端稍候重试）
     const RW_NEW_ERR = {
       COUPON_EXCEEDS_GOODS: 'COUPON_EXCEEDS_GOODS',
       // 客服/坐席域
@@ -90,6 +92,7 @@ describe('与旧线契约逐键 parity', () => {
       // 订单/支付域
       OUT_OF_STOCK: 'OUT_OF_STOCK',
       TOO_MANY_PENDING: 'TOO_MANY_PENDING',
+      ORDER_CLAIM_PENDING: 'ORDER_CLAIM_PENDING',
     }
     expect(ERR).toEqual({ ...OLD_ERR, ...RW_NEW_ERR })
   })

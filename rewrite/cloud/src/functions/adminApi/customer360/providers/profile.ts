@@ -1,14 +1,15 @@
-import { toFen, fenToYuan, asFen } from '@ldrw/shared'
+import { toFen, fenToYuan, asFen, PAID_ORDER_STATUSES } from '@ldrw/shared'
 import type { CustomerPanelProvider } from '../types'
-import { PAID_STATUSES } from '../../lib'
 
 // 画像 rollup 板块（B1.3·铁律三）：坐席看某客人的总消费/单数/激活与进课/最近活跃——从 orders/activations/events
 // 派生（各查 bounded·capacity-reads-bounded·防大客户拖垮）。与看板 getDashboard 的全站聚合是不同切口
 // （这里按单个 openid·小集合），单源各表、不抽公共件（Rule of Three 未到·CLAUDE §7）。
 const ORDER_LIMIT = 200
 const ACT_LIMIT = 100
-// 已付口径（与 lib.PAID_STATUSES / 看板 GMV 同义·营收只计已付）。orders.amount 存「元」
-//（createOrder 经 fenToYuan 入库·与看板 GMV 同口径），故 totalSpent 单位＝元（展示层直接 ￥，不再 /100）。
+// 已付口径（与 shared PAID_ORDER_STATUSES / 看板 GMV 同义·营收只计已付·P2 顺手改批收口，此前本文件另手抄
+// 一份同值数组）。orders.amount 存「元」（createOrder 经 fenToYuan 入库·与看板 GMV 同口径），故 totalSpent
+// 单位＝元（展示层直接 ￥，不再 /100）。
+const PAID = PAID_ORDER_STATUSES
 
 export const profileProvider: CustomerPanelProvider = {
   key: 'profile',
@@ -26,7 +27,7 @@ export const profileProvider: CustomerPanelProvider = {
       rows(db.collection('activations').where({ _openid: openid }).limit(ACT_LIMIT)),
       rows(db.collection('events').where({ _openid: openid }).orderBy('createdAt', 'desc').limit(1)),
     ])
-    const paid = orders.filter((o: any) => PAID_STATUSES.includes(o.status))
+    const paid = orders.filter((o: any) => PAID.includes(o.status))
     // 分累加再回元（深审 P3·钱链口径）：元浮点直加会漂（0.1+0.2 类），逐单 toFen 求和后 fenToYuan 一次
     const totalSpent = fenToYuan(asFen(paid.reduce((n: number, o: any) => n + toFen(Number(o.amount) || 0), 0)))
     const entered = acts.filter((a: any) => !!a.enteredAt).length

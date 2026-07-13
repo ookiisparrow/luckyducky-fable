@@ -1,8 +1,12 @@
 ---
 // 材料包介绍（静态导流·不做交易·不造具体价格/规格声称——货架真相在小程序）。
 import Base from '../layouts/Base.astro'
-import { faqSchema } from '../lib/schema'
+import { faqSchema, breadcrumbSchema, jsonLd } from '../lib/schema'
 
+const crumbs = breadcrumbSchema([
+  { name: '首页', path: '/' },
+  { name: '钩织材料包', path: '/kits/' },
+])
 const faq = faqSchema([
   { q: '材料包里都有什么？', a: '毛线、钩针、填充棉、安全眼、说明卡与配套视频课程的激活卡，开盒即可开始，不用另外买工具。' },
   { q: '零基础能钩完吗？', a: '可以。每份材料包配分步教学视频，从起针到收尾逐段演示；网站教程区还有图文版基本功讲解。' },
@@ -11,7 +15,8 @@ const faq = faqSchema([
 ---
 
 <Base title="钩织材料包" description="小棉鸭钩织材料包：毛线、钩针、填充棉、配件与分步视频课程一盒配齐，零基础从第一针到完成一只小鸭。购买在微信小程序。">
-  {faq && <script type="application/ld+json" set:html={JSON.stringify(faq)} />}
+  {crumbs && <script type="application/ld+json" set:html={jsonLd(crumbs)} />}
+  {faq && <script type="application/ld+json" set:html={jsonLd(faq)} />}
   <h1>一盒配齐，从第一针到一只小鸭</h1>
   <p>
     每份小棉鸭材料包把<strong>毛线、钩针、填充棉、安全眼、说明卡</strong>与<strong>配套视频课程</strong>配齐——

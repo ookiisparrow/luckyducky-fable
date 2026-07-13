@@ -33,12 +33,10 @@
 
     <!-- 订单商品 -->
     <view class="co-card">
+      <!-- 纯展示行·无店铺详情页可跳（仅一家官方旗舰店）：不放 chevron 暗示可点，防误导用户 -->
       <view class="co-shop">
         <image class="co-shop-ico" src="/static/icons/store.svg" mode="aspectFit" />
         <text class="co-shop-name">易织™小棉鸭® 官方旗舰店</text>
-        <view class="co-shop-chev">
-          <image class="co-ico" src="/static/icons/chevron-right.svg" mode="aspectFit" />
-        </view>
       </view>
       <view class="co-item" wx:for="{{items}}" wx:key="lineId">
         <image wx:if="{{item.cover}}" class="co-item-img" src="{{item.cover}}" mode="aspectFill" />
@@ -107,7 +105,9 @@
           <text class="co-dock-count">共 {{count}} 件</text>
         </view>
       </view>
-      <view class="co-submit {{submitting ? 'dim' : ''}}" bind:tap="onSubmit">提交订单</view>
+      <!-- 在途反馈（工业级完善批6）：dim 只是变暗、弱网像卡死——文案切「提交中…」给明确进行时信号。
+           刻意不用 wx.showLoading：本链两段网络请求多分支 return，hideLoading 配对易漏→锁屏，文案方案零此风险。 -->
+      <view class="co-submit {{submitting ? 'dim' : ''}}" bind:tap="onSubmit">{{submitting ? '提交中…' : '提交订单'}}</view>
     </view>
   </view>
 </view>
