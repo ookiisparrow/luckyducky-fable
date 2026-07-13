@@ -17,9 +17,9 @@ export interface CartItem {
 const KEY = 'ld:cart'
 let items: CartItem[] | null = null // 惰性加载（测试可先桩 wx 再触发）
 
-/** 回灌契约（导出供测试·单一来源）：有 id、price 是数字、有 name、qty 正整数才有效；
+/** 回灌契约（单一来源）：有 id、price 是数字、有 name、qty 正整数才有效；
  *  小数数量直接丢弃不 floor；selected 归一布尔；sku 缺失归一空串（历史无规格数据兼容双键定位）。 */
-export function sanitizeCart(raw: unknown): CartItem[] {
+function sanitizeCart(raw: unknown): CartItem[] {
   const list = raw && typeof raw === 'object' && Array.isArray((raw as Record<string, unknown>).items) ? ((raw as Record<string, unknown>).items as unknown[]) : []
   const out: CartItem[] = []
   for (const it of list as Record<string, any>[]) {
@@ -113,7 +113,6 @@ export function getItems(): Array<CartItem & { lineId: string }> {
   return load().map((it) => ({ ...it, lineId: lineIdOf(it.id, it.sku) }))
 }
 
-export const isEmpty = (): boolean => load().length === 0
 export const count = (): number => load().reduce((n, it) => n + it.qty, 0)
 export const selectedCount = (): number => load().reduce((n, it) => (it.selected ? n + it.qty : n), 0)
 export const allSelected = (): boolean => load().length > 0 && load().every((it) => it.selected)

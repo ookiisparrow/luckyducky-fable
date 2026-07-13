@@ -10,21 +10,6 @@ export type AnomalyKind = 'server-exception' | 'invariant-violation' | 'flow-fai
 /** 严重度（用户拍板「记录 + 高危主动告警」）：high 首次出现即推告警、low 只落库。 */
 export type AnomalySeverity = 'low' | 'high'
 
-/** bug 账本一条（确定性 _id=指纹·同一 bug 反复发只累加 count 不刷屏）。ctx 已剥敏感、只留非敏感标识。 */
-export interface AnomalyRecord {
-  _id: string // 指纹（anomalyFingerprint 产出）
-  kind: AnomalyKind
-  code: string // 定型码/短标识（如 MONEY_NOT_CONSERVED / STUCK_ORDER）
-  severity: AnomalySeverity
-  ctx: Record<string, unknown> // 非敏感上下文（sanitizeCtx 剥 openid/口令/凭证后）
-  count: number // 出现次数（去重累加）
-  firstSeen: number // 首次出现 ms
-  lastSeen: number // 最近出现 ms
-  resolved: boolean // 是否已在控制台标记处理
-  resolvedAt?: number
-  resolvedBy?: string
-}
-
 /**
  * 指纹＝去重键（确定性 _id·根因#1 撞键即幂等）。默认按 kind+code 归类；
  * 传 scope（如 orderId）则按受影响实体细分——「知道是哪些订单卡了」而非只知有卡单。

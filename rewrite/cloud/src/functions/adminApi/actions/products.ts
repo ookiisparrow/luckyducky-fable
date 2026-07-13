@@ -72,7 +72,7 @@ export async function saveDraft({ drafts, data }: Ctx) {
 }
 
 // 删除：草稿 + 已上架商品一并删（外部体检 P2：原只删草稿，已上架仍被买＝「不可撤销」失真）。
-// 历史订单存快照、不回读 products，故删上架不伤订单历史；临时下架属另一功能（院外债#12）。
+// 历史订单存快照、不回读 products，故删上架不伤订单历史；停售/软下架已实现（见本文件 unpublishProduct·债#12 已清）。
 //
 // 顺序反转 + 失败可见（P0·bug 清除战役II F1）：原两条 remove 各自 .catch(()=>{}) 全吞、恒 ok:true——
 // products 删失败时后台列表已消失、小程序端仍在售可购买，管理员却被告知「已删除」。

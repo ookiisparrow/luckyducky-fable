@@ -1,5 +1,15 @@
 import { ERR, COLLECTIONS } from '@ldrw/shared'
-import { withOpenId, ok, err, getDb, pageQuery, getTempUrls, imgSecCheck } from '../../../kit'
+import {
+  withOpenId,
+  withRateLimit,
+  ok,
+  err,
+  getDb,
+  pageQuery,
+  getTempUrls,
+  imgSecCheck,
+  msgSecCheck,
+} from '../../../kit'
 
 /**
  * 求助面板辅助视频（黄金 §九）：两级（主题→小段）白名单下发；fileID 留服务端，
@@ -48,8 +58,14 @@ async function buildSummaryExact(db: any, productId: string) {
     coll().where({ productId, rating: 5 }).count(),
     coll().where({ productId, rating: 4 }).count(),
     coll().where({ productId, rating: 3 }).count(),
-    coll().where({ productId, rating: _.in([1, 2]) }).count(), // 1 星并入 2 星档（与展示折叠一致）
-    coll().aggregate().match({ productId }).group({ _id: null, s: $.sum('$rating') }).end(),
+    coll()
+      .where({ productId, rating: _.in([1, 2]) })
+      .count(), // 1 星并入 2 星档（与展示折叠一致）
+    coll()
+      .aggregate()
+      .match({ productId })
+      .group({ _id: null, s: $.sum('$rating') })
+      .end(),
     coll()
       .where({ productId })
       .orderBy('createdAt', 'desc')
@@ -66,7 +82,8 @@ async function buildSummaryExact(db: any, productId: string) {
   const sum = (sumRes && sumRes.list && sumRes.list[0] && sumRes.list[0].s) || 0
   const pct = (n: number) => (count ? Math.round((n / count) * 100) : 0) // structure-ok：星级占比百分比，非金额换算（根因#4 fileRule 不误咬）
   const tagCount: Record<string, number> = {}
-  for (const r of tres ? tres.data : []) for (const t of r.tags || []) tagCount[t] = (tagCount[t] || 0) + 1
+  for (const r of tres ? tres.data : [])
+    for (const t of r.tags || []) tagCount[t] = (tagCount[t] || 0) + 1
   return {
     score: count ? (sum / count).toFixed(1) : '0',
     count,
@@ -141,7 +158,9 @@ export const getReviews = async (event: any = {}) => {
 
   const paged = await pageQuery(db, COLLECTIONS.reviews, { productId }, 'createdAt', event, 20)
   // 买家秀晒图：受保护云存储 fileID 只在服务端，鉴权后批量换短时地址下发（不漏裸 fileID·黄金 §九同 helpVideos）。
-  const photoIds = paged.list.flatMap((r: any) => (Array.isArray(r.photos) ? r.photos : []).filter(Boolean).map(String))
+  const photoIds = paged.list.flatMap((r: any) =>
+    (Array.isArray(r.photos) ? r.photos : []).filter(Boolean).map(String)
+  )
   const urlMap = await getTempUrls(photoIds)
   const list = paged.list.map((r: any) => ({
     name: r.name,
@@ -150,7 +169,9 @@ export const getReviews = async (event: any = {}) => {
     text: r.text || '',
     spec: r.spec || '',
     createdAt: r.createdAt,
-    photos: (Array.isArray(r.photos) ? r.photos : []).map((id: string) => urlMap[String(id)]).filter(Boolean), // 换不到的丢（占位）
+    photos: (Array.isArray(r.photos) ? r.photos : [])
+      .map((id: string) => urlMap[String(id)])
+      .filter(Boolean), // 换不到的丢（占位）
   }))
 
   const summary = summaryP ? await summaryP : undefined
@@ -172,7 +193,12 @@ export const getRatingSummary = async (event: any = {}) => {
   try {
     const [cRes, sumRes] = await Promise.all([
       db.collection(COLLECTIONS.reviews).where({ productId }).count(),
-      db.collection(COLLECTIONS.reviews).aggregate().match({ productId }).group({ _id: null, s: $.sum('$rating') }).end(),
+      db
+        .collection(COLLECTIONS.reviews)
+        .aggregate()
+        .match({ productId })
+        .group({ _id: null, s: $.sum('$rating') })
+        .end(),
     ])
     const count = cRes.total || 0
     const sum = (sumRes && sumRes.list && sumRes.list[0] && sumRes.list[0].s) || 0
@@ -185,76 +211,95 @@ export const getRatingSummary = async (event: any = {}) => {
 /**
  * 提交评价（黄金 §七）：多重闸门（身份/评分 1–5/订单归属/已完成/商品在单内）；
  * 一单一行一评（确定性 _id=orderId__lineId 库级唯一·同商品多 SKU 各自可评）；匿名/昵称云端快照。
+ * 按 openid 限频（根因#13·防刷库堆垃圾）；内容安全外呼（图 imgSecCheck ≤9 张 + 文本 msgSecCheck）跑在
+ * 幂等存在性预检之后——已评过直接返 REVIEWED，不再逐张/逐文本外呼放大计费（根因#4 幂等 + 成本）。
  */
-export const submitReview = withOpenId(async ({ db, OPENID, event }) => {
-  const e: any = event
-  const orderId = String(e.orderId || '')
-  const reqLine = String(e.lineId || e.productId || '')
-  const rating = Number(e.rating)
-  if (!orderId || !reqLine) return err(ERR.BAD_ARGS)
-  if (!Number.isInteger(rating) || rating < 1 || rating > 5) return err(ERR.BAD_RATING)
-  const text = typeof e.text === 'string' ? e.text.trim().slice(0, 500) : ''
-  const tags = (Array.isArray(e.tags) ? e.tags : [])
-    .filter((t: any) => typeof t === 'string' && t.trim())
-    .slice(0, 6)
-    .map((t: string) => t.trim().slice(0, 10))
-  // 买家秀晒图（UGC·白名单收 cloud:// fileID·≤9 去空）；内容安全在闸门后校（见下）。
-  const photos = (Array.isArray(e.photos) ? e.photos : [])
-    .filter((p: any) => typeof p === 'string' && p)
-    .slice(0, 9)
-    .map((p: string) => p.slice(0, 256))
+export const submitReview = withOpenId(
+  withRateLimit('submitReview', { max: 10, windowMs: 60_000 }, async ({ db, OPENID, event }) => {
+    const e: any = event
+    const orderId = String(e.orderId || '')
+    const reqLine = String(e.lineId || e.productId || '')
+    const rating = Number(e.rating)
+    if (!orderId || !reqLine) return err(ERR.BAD_ARGS)
+    if (!Number.isInteger(rating) || rating < 1 || rating > 5) return err(ERR.BAD_RATING)
+    const text = typeof e.text === 'string' ? e.text.trim().slice(0, 500) : ''
+    const tags = (Array.isArray(e.tags) ? e.tags : [])
+      .filter((t: any) => typeof t === 'string' && t.trim())
+      .slice(0, 6)
+      .map((t: string) => t.trim().slice(0, 10))
+    // 买家秀晒图（UGC·白名单收 cloud:// fileID·≤9 去空）；内容安全在幂等预检后校（见下）。
+    const photos = (Array.isArray(e.photos) ? e.photos : [])
+      .filter((p: any) => typeof p === 'string' && p)
+      .slice(0, 9)
+      .map((p: string) => p.slice(0, 256))
 
-  const got = await db
-    .collection(COLLECTIONS.orders)
-    .doc(orderId)
-    .get()
-    .catch(() => null)
-  if (!got || !got.data || got.data._openid !== OPENID) return err(ERR.NOT_FOUND)
-  if (got.data.status !== 'done') return err(ERR.NOT_DONE)
-  const item = (got.data.items || []).find((it: any) => (it.lineId || it.productId) === reqLine)
-  if (!item) return err(ERR.NOT_IN_ORDER)
-  const lineId = item.lineId || item.productId
-  const productId = item.productId
+    const got = await db
+      .collection(COLLECTIONS.orders)
+      .doc(orderId)
+      .get()
+      .catch(() => null)
+    if (!got || !got.data || got.data._openid !== OPENID) return err(ERR.NOT_FOUND)
+    if (got.data.status !== 'done') return err(ERR.NOT_DONE)
+    const item = (got.data.items || []).find((it: any) => (it.lineId || it.productId) === reqLine)
+    if (!item) return err(ERR.NOT_IN_ORDER)
+    const lineId = item.lineId || item.productId
+    const productId = item.productId
+    const _id = `${orderId}__${lineId}`.slice(0, 128)
 
-  // UGC 晒图内容安全（fail-closed·根因#3·守卫 ugc-imgsecchecked）：闸门后逐张校，任一张违规/校不了
-  // 一律拒、整条不落库——「证明安全」才放行（与 submitCheckpointPhoto 同闸）。
-  for (const fid of photos) {
-    const sec = await imgSecCheck(fid)
-    if (!sec.ok) return err(sec.error === 'IMG_RISKY' ? 'IMG_RISKY' : 'SEC_CHECK_FAIL')
-  }
+    // 幂等存在性预检（前置到内容安全外呼之前·根因#4 + 成本）：已评过直接 REVIEWED，不再逐张 imgSecCheck
+    // （≤9 张计费外呼）/逐条 msgSecCheck——自有 done 单反复触发会放大 9×N 次内容安全外呼。最终幂等仍由 add 撞主键兜底。
+    const dup = await db
+      .collection(COLLECTIONS.reviews)
+      .doc(_id)
+      .get()
+      .catch(() => null)
+    if (dup && dup.data) return err(ERR.REVIEWED)
 
-  try {
-    await db.createCollection(COLLECTIONS.reviews)
-  } catch {
-    /* 已存在 */
-  }
-  const _id = `${orderId}__${lineId}`.slice(0, 128)
+    // UGC 文本内容安全（fail-closed·根因#3·守卫 ugc-imgsecchecked）：评价文本 + 标签（用户可填自由文本）
+    // 合并一次 msgSecCheck 外呼，违规/校不了一律拒、整条不落库——「证明安全」才放行。
+    const textUgc = [text, ...tags].filter(Boolean).join(' ')
+    if (textUgc) {
+      const tsec = await msgSecCheck(textUgc, OPENID)
+      if (!tsec.ok) return err(ERR.SEC_CHECK_FAIL)
+    }
+    // UGC 晒图内容安全（fail-closed·同闸）：逐张校，任一张违规/校不了一律拒、整条不落库（与 submitCheckpointPhoto 同闸）。
+    for (const fid of photos) {
+      const sec = await imgSecCheck(fid)
+      if (!sec.ok) return err(sec.error === 'IMG_RISKY' ? ERR.IMG_RISKY : ERR.SEC_CHECK_FAIL)
+    }
 
-  let name = '匿名钩友'
-  if (!e.anon) {
-    const u = await db.collection(COLLECTIONS.users).where({ _openid: OPENID }).get()
-    name = (u.data[0] && u.data[0].nickname) || '鸭友'
-  }
+    try {
+      await db.createCollection(COLLECTIONS.reviews)
+    } catch {
+      /* 已存在 */
+    }
 
-  try {
-    await db.collection(COLLECTIONS.reviews).add({
-      data: {
-        _id,
-        _openid: OPENID,
-        orderId,
-        lineId,
-        productId,
-        name,
-        rating,
-        tags,
-        text,
-        photos, // 已逐张过内容安全的 cloud:// fileID（读侧换短时址下发）
-        spec: String(item.spec || ''),
-        createdAt: Date.now(),
-      },
-    })
-  } catch {
-    return err(ERR.REVIEWED) // 撞主键 = 这单这行评过了（并发双发也只落一条）
-  }
-  return ok()
-})
+    let name = '匿名钩友'
+    if (!e.anon) {
+      const u = await db.collection(COLLECTIONS.users).where({ _openid: OPENID }).get()
+      name = (u.data[0] && u.data[0].nickname) || '鸭友'
+    }
+
+    try {
+      await db.collection(COLLECTIONS.reviews).add({
+        data: {
+          _id,
+          _openid: OPENID,
+          orderId,
+          lineId,
+          productId,
+          name,
+          rating,
+          tags,
+          text,
+          photos, // 已逐张过内容安全的 cloud:// fileID（读侧换短时址下发）
+          spec: String(item.spec || ''),
+          createdAt: Date.now(),
+        },
+      })
+    } catch {
+      return err(ERR.REVIEWED) // 撞主键 = 这单这行评过了（并发双发也只落一条）
+    }
+    return ok()
+  })
+)

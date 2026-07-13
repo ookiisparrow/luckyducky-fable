@@ -47,5 +47,3 @@ export const COLLECTIONS = {
   // 云函数运行时读库优先、env 兜底迁移期——见 kit/secureConfig.ts。仅 saveSecureConfig 单口写入。
   secureConfig: 'secureConfig',
 } as const
-
-export type CollectionName = (typeof COLLECTIONS)[keyof typeof COLLECTIONS]

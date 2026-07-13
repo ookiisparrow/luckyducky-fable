@@ -31,8 +31,8 @@ import * as ops from './actions/ops'
 import * as configChecklist from './actions/configChecklist'
 import * as secureConfig from './actions/secureConfig'
 
-// 管理控制台后端 v2（HTTP 访问服务触发·鉴权外壳逐字承接旧线 index.ts·批11 只挂 ping/login，
-// 业务 action 后续批逐域挂进 ACTIONS/ACTION_CAPS——挂载时与旧线注册表逐行核对）。
+// 管理控制台后端 v2（HTTP 访问服务触发·鉴权外壳逐字承接旧线 index.ts·业务 action 已全域挂载
+// 进 ACTIONS/ACTION_CAPS——与旧线注册表逐行核对过）。
 // 鉴权：口令（adminConfig sha256·首登 bootstrap 须部署密钥）→ 会话令牌 fallback；RBAC 能力位默认拒；
 // 认证频控 per-IP + 全局兜底。M5 切换日以新名部署、admin 前端切 endpoint。
 const db = getDb()

@@ -98,5 +98,3 @@ export function createClient(deps: ClientDeps) {
     },
   }
 }
-
-export type AdminClient = ReturnType<typeof createClient>

@@ -132,7 +132,7 @@ export function rootMenu(): MsgMenuContent {
 
 // ── 满意度评分（CSAT·B4.3·会话后评分 1-5 + 可选备注·确定性菜单不靠生成）──
 /** 评分气泡：5 档星级（点一下即评分·rate:1..5）。 */
-export function rateMenu(): MsgMenuContent {
+function rateMenu(): MsgMenuContent {
   return menu(
     '给本次服务打个分吧（点一下）👇',
     [
@@ -428,7 +428,7 @@ async function notifyOnlineAgents(db: any, sessionId: string): Promise<void> {
 
 // ── 发送负载构造（touser + open_kfid + msgtype） ──
 const base = (touser: string, openKfId: string) => ({ touser, open_kfid: openKfId })
-export const buildText = (touser: string, openKfId: string, content: string) => ({
+const buildText = (touser: string, openKfId: string, content: string) => ({
   ...base(touser, openKfId),
   msgtype: 'text',
   text: { content },
@@ -438,7 +438,7 @@ export const buildMsgMenu = (touser: string, openKfId: string, content: MsgMenuC
   msgtype: 'msgmenu',
   msgmenu: content,
 })
-export const buildMiniprogram = (
+const buildMiniprogram = (
   touser: string,
   openKfId: string,
   cfg: { appid: string; thumbMediaId: string },

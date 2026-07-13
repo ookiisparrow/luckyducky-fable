@@ -31,4 +31,3 @@ export const CS_SESSION_STATUS = dictOf<CsSessionStatus>(statesOf(CS_SESSION_STA
 
 /** 坐席在线态枚举（agentDesk.ts setAgentStatus 校验用·非状态机，无流转规则）。 */
 export const AGENT_STATUS = ['online', 'busy', 'offline'] as const
-export type AgentStatus = (typeof AGENT_STATUS)[number]

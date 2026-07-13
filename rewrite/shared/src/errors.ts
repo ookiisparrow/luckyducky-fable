@@ -119,5 +119,3 @@ export const ERR = {
   BAD_TARGETS: 'BAD_TARGETS',
   STOCK_APPLY_FAIL: 'STOCK_APPLY_FAIL',
 } as const
-
-export type ErrCode = (typeof ERR)[keyof typeof ERR]
