@@ -6,6 +6,7 @@ import { control } from 'wx-server-sdk'
 import { getDb } from '../src/kit/db'
 import { main as adminApi } from '../src/functions/adminApi/index'
 import { sha } from '../src/functions/adminApi/lib'
+import { enqueueSession } from '../src/functions/cs/kfCallback/dispatch'
 
 const SUPER = 'super-secret-key'
 const A1 = 'outsourced-key-1'
@@ -214,17 +215,61 @@ describe('坐席不可达（cap 仅 agent:handle·三 action 均未登记 ACTION
   })
 })
 
-// 跨文件不变量守卫（批 B7 评审 P1·源码扫描型·先例同 scm-paging-bounded）：csSession 按客户确定性 _id
-// 复用，closed→pending 重开若不清 qc/qcSampledAt，回头客永远进不了质检候选池、旧评分被误当现役评价。
-describe('重开清质检标记（dispatch.ts closed→pending patch 必含 qc/qcSampledAt 置空）', () => {
-  it('大白话：老客重新转人工时，上一轮的质检标记必须被清掉', async () => {
-    const src = require('node:fs').readFileSync(
-      require('node:path').join(__dirname, '../src/functions/cs/kfCallback/dispatch.ts'),
-      'utf8'
-    )
-    const m = src.match(/transition\('csSession', id, \['closed'\], 'pending', \{[\s\S]*?\}\)/)
-    expect(m, '重开 transition 调用应存在').toBeTruthy()
-    expect(m![0]).toMatch(/qc:\s*null/)
-    expect(m![0]).toMatch(/qcSampledAt:\s*null/)
+// 端到端行为守卫（批R 修复·先例同 scm-paging-bounded 的「跨文件不变量」定位，但改走真实调用而非源码
+// 正则匹配——原正则只断言 patch 字面量含 `qc: null`，而 `qc: null` 本身正是批R 揪出的 bug（patch 成 null
+// ≠ 字段真删除，DB 层 CAS `_.exists(false)` 只认「真缺失」，null 值仍判「存在」）：那条正则测试对着 bug
+// 代码原样断言通过，测不出问题。改为真正跑一遍「重开→重新抽样→保存评分」全链路，钉住语义不再漂移。
+describe('重开清质检标记端到端（closed→pending 重开必须真删 qc/qcSampledAt·而非 patch 成 null）', () => {
+  it('大白话：上一轮已评过分的会话被老客重新点「找人工」重开后，新一轮走完仍能被抽样、评分能保存成功、onlyPending 能选中', async () => {
+    const openKfId = 'kf1'
+    const euid = 'eu1'
+    const sessionId = `wxkf:${openKfId}:${euid}`
+    // 上一轮已评过分、已关闭的会话（旧评分挂在同一个确定性 _id 文档上）
+    control.seed('csSession', [
+      {
+        _id: sessionId,
+        status: 'closed',
+        externalUserId: euid,
+        openKfId,
+        updatedAt: 1000,
+        qcSampledAt: 900,
+        qc: { score: 5, note: '上一轮评价', by: 'admin', at: 950 },
+      },
+    ])
+
+    // 老客二次「找人工」→ closed→pending 重开（真实调用 enqueueSession，非源码文本匹配）
+    const q = await enqueueSession(getDb(), openKfId, euid)
+    expect(q).toBe('queued')
+    const reopened = control.dump('csSession').find((d: any) => d._id === sessionId)
+    expect(reopened.status).toBe('pending')
+    // 核心断言：字段必须真删除（'in' 判不存在），不是 patch 成 null（那样 'qc' in reopened 仍为 true）
+    expect('qc' in reopened).toBe(false)
+    expect('qcSampledAt' in reopened).toBe(false)
+
+    // 新一轮服务走完 → 会话再次关闭（坐席台流程之外的最小模拟：直接推回 closed）
+    await getDb().collection('csSession').doc(sessionId).update({ data: { status: 'closed', updatedAt: 2000 } })
+
+    // 质检重新抽样：该会话应能再次被选中——旧 bug 下 qc/qcSampledAt 残留 null 值，sampleQc 的内存判断
+    // `!s.qc && !s.qcSampledAt`（!null 为 true）本可选中，但下面 saveQcMark 的 DB CAS 会打不进（语义打架）
+    const sampleRes = await post('sampleQc', SUPER, { count: 10 })
+    expect(sampleRes.sampled.map((s: any) => s.sessionKey)).toContain(sessionId)
+
+    // 抽样后、评分前：listQcSampled(onlyPending) 应能选中它——旧 bug 下 qc 字段残留（值为 null）会被
+    // DB 层 `qc: _.exists(false)` 误判「已评过」而漏收，即使这是新一轮周期从未评过分
+    const pendingBefore = await post('listQcSampled', SUPER, { onlyPending: true })
+    expect(pendingBefore.list.map((x: any) => x.sessionKey)).toContain(sessionId)
+
+    // 保存评分：旧 bug 下 saveQcMark 的 DB 层 CAS `qc: _.exists(false)` 因为字段曾被 patch 成 null（而非
+    // 真删）永远匹配不到该文档 → 永久 409 ALREADY_MARKED，即便这是新一轮周期第一次评分
+    const saveRes = await post('saveQcMark', SUPER, { sessionKey: sessionId, score: 4, note: '新一轮评价' })
+    expect(saveRes.status).toBe(200)
+    expect(saveRes.ok).toBe(true)
+    const savedDoc = control.dump('csSession').find((d: any) => d._id === sessionId)
+    expect(savedDoc.qc.score).toBe(4)
+    expect(savedDoc.qc.note).toBe('新一轮评价')
+
+    // 评分已保存后，onlyPending 应不再选中它
+    const pendingAfter = await post('listQcSampled', SUPER, { onlyPending: true })
+    expect(pendingAfter.list.map((x: any) => x.sessionKey)).not.toContain(sessionId)
   })
 })

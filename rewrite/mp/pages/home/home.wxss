@@ -184,9 +184,14 @@
   white-space: nowrap;
 }
 .ld-prod-card {
-  display: inline-block;
+  display: inline-flex;
+  flex-direction: column;
   vertical-align: top;
   width: 400rpx;
+  /* 与 .ld-review-card 等高（见该规则同款算式注释）：border4+媒体300+padding46(20+26)+name81+tag47(8+39)+foot余量97≈575rpx */
+  /* box-sizing:border-box：上方算式把 border4 计入总高，content-box 下 border 会加在 height 之外、实际渲染变 579rpx，须锁 border-box 让声明高度=最终渲染高度 */
+  box-sizing: border-box;
+  height: 575rpx;
   white-space: normal;
   margin-right: 22rpx;
   background: #fff;
@@ -197,6 +202,7 @@
 .ld-prod-media {
   width: 100%;
   height: 300rpx; /* 4:3 缩略（卡宽 400rpx）·压低卡片高度 */
+  flex-shrink: 0; /* 锁定高度·媒体不被挤扁（同 .ld-review-media） */
   background: var(--ld-bg-sage);
 }
 .ld-prod-media-img {
@@ -205,22 +211,39 @@
 }
 .ld-prod-body {
   padding: 20rpx 26rpx 26rpx;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
 }
 .ld-prod-name {
   font-size: 30rpx;
   line-height: 1.35;
   color: var(--ld-ink);
+  /* 2 行裁剪钉高：30rpx×1.35×2行＝81rpx（等高不变量：与买家秀卡对齐） */
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+  height: 81rpx;
 }
 .ld-prod-tag {
   margin-top: 8rpx;
   font-size: 26rpx;
+  line-height: 39rpx; /* 26rpx×1.5＝39rpx，钉死占位高度 */
   color: var(--ld-content-2);
+  /* 单行截断：占位高按单行钉死，长文案（后台 tag 最长20字）换行会撑爆 body 挤扁媒体，需强制不换行 */
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.ld-prod-tag-empty {
+  visibility: hidden; /* 无 tag 时仍占位，消掉「有无 tag」的高度分叉 */
 }
 .ld-prod-foot {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-top: 20rpx;
+  margin-top: auto; /* 价格行贴底，body 内余量被吸收（配合 .ld-prod-body 的 flex 列布局） */
 }
 .ld-price-group {
   display: flex;
@@ -398,6 +421,10 @@
   flex-direction: column;
   vertical-align: top;
   width: 400rpx;
+  /* 与 .ld-prod-card 等高：border4+媒体300+padding48(22+26)+星行36+quote上距15+quote120+quote下距22+meta约30＝575rpx */
+  /* box-sizing:border-box：让 border4 真被计入 575（.ld-prod-card 同款注释） */
+  box-sizing: border-box;
+  height: 575rpx;
   white-space: normal;
   margin-right: 26rpx;
   background: var(--ld-bg-lilac);
@@ -424,6 +451,7 @@
 }
 .ld-stars {
   font-size: 26rpx;
+  line-height: 36rpx; /* 钉死星行高度，纳入卡内容高算式 */
   letter-spacing: 4rpx;
   color: var(--ld-duck-deep);
 }
@@ -433,6 +461,12 @@
   line-height: 1.6;
   color: var(--ld-ink);
   white-space: normal;
+  /* 3 行裁剪钉高：25rpx×1.6×3行＝120rpx */
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  overflow: hidden;
+  height: 120rpx;
 }
 .ld-review-meta {
   display: flex;

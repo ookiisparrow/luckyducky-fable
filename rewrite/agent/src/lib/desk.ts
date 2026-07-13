@@ -14,7 +14,9 @@ export interface Msg {
   hasMedia?: boolean // B5：顾客发图坐席可见——true 时 Desk.vue 渲染图片气泡而非纯文本占位
 }
 
-// export：diffNewInbound（B4）复用同一条身份键规则去重计数，不再另写一份易漂移的判同逻辑。
+// 导出供 Desk.vue 模板 :key 复用（深审20260712 P2）：气泡 key 与去重键同源单点——去重键升级（msgid）而
+// 模板 key 仍用旧 at+direction+text 时，同秒同向两张图（msgid 不同）会进 msgs 却撞 Vue 重复 key。
+// （diffNewInbound B4 同样复用此键——身份判同单源。）
 export const keyOf = (m: Msg) => (m.msgid ? `id:${m.msgid}` : `${m.at}|${m.direction}|${m.msgtype || ''}|${m.text}`)
 
 /** 归一进流：无时间戳/脏形状不进（防脏消息撑乱时间轴）。 */

@@ -52,7 +52,13 @@
     </view>
   </view>
 
-  <view class="ld-rv-empty" wx:if="{{!loading && !list.length}}">
+  <!-- 失败态与空态分治（根因#14·守卫 rw-mp-list-loadfailed-state） -->
+  <view class="ld-rv-empty" wx:if="{{!loading && loadFailed}}">
+    <view class="ld-empty-title">网络开小差</view>
+    <view class="ld-empty-hint">评价没加载出来，请重试</view>
+    <view class="ld-rv-retry" bind:tap="onRetryLoad">重试</view>
+  </view>
+  <view class="ld-rv-empty" wx:elif="{{!loading && !list.length}}">
     <view class="ld-empty-title">还没有评价</view>
     <view class="ld-empty-hint">买过的钩友完成订单后可以来写第一条</view>
   </view>

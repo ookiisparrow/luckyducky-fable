@@ -1559,6 +1559,7 @@ export const repoChecks = [
         'console-assets/README.md',
         'console-assets/01-支付退款工作流.md',
         'console-assets/02-库权限期望表.md',
+        'console-assets/03-复合索引期望表.md',
         'console-assets/forward-node.js',
       ]) {
         if (!existsSync(join(ROOT, f))) bad.push(`${f} 缺失（控制台资产正册不可删，根因#9）`)
@@ -1611,6 +1612,11 @@ export const repoChecks = [
         ['tcb fn invoke getProducts', 'allow'], // 读类 → 放行
         ['git commit -m chore-tcb-deploy-fns', 'allow'], // 提交信息提字样 → 不拦
         ['DEPLOY_ALLOWED=1 node scripts/deploy-fns.mjs', 'ask'], // 批量部署 → 确认
+        // 深审 P1 绕过实录（防回归）：三种自然命令形态过去全放行，现须一律 ask
+        ['npx tcb fn deploy adminApi', 'ask'], // runner 前缀（tcb not found 时最自然的改写）
+        ['npx @cloudbase/cli fn deploy payCallback', 'ask'], // runner + 包名（bin=tcb）
+        ['env DEPLOY_ALLOWED=1 node scripts/deploy-fns.mjs', 'ask'], // env 前缀不进 envPrefix
+        ['export DEPLOY_ALLOWED=1; node scripts/deploy-fns.mjs', 'ask'], // export 被 ';' 拆段
       ]
       const bad = []
       for (const [cmd, want] of cases) {
@@ -1683,7 +1689,7 @@ export const repoChecks = [
   {
     id: 'requirement-trace',
     roots: ['元'],
-    desc: '需求→守卫闭环（仿 guard-coverage 泛化「病根→守卫」为「需求→功能→守卫」）：需求清单「需求→实现映射」每条 ✅ 实现需求(L1)须有映射行，且行内 函数(见系统事实)/测试(tests/cloud)/守卫(注册表) 真实存在——改需求或改码断链当场红；`npm run trace R#` 查爆炸半径',
+    desc: '需求→守卫闭环（仿 guard-coverage 泛化「病根→守卫」为「需求→功能→守卫」）：需求清单「需求→实现映射」每条 ✅ 实现需求(L1)须有映射行，且行内 函数(见系统事实)/测试(tests/cloud)/守卫(注册表) 真实存在——改需求或改码断链当场红；`npm run trace R#` 查爆炸半径。⚠️ 深审 P3：映射表函数/测试(tests/cloud)全锚**冻结旧线**，旧线冻结⇒对唯一在迭代的 rewrite 实现该守卫的「改码断链当场红」永不触发——是旧线参照链；新线需求追溯（R34/R38 等 rewrite 已实现）走各 rw- golden 守卫、未纳入本表（未闭合债·docs/待办与债）',
     run() {
       const reqPath = join(ROOT, 'docs/需求清单.md')
       if (!existsSync(reqPath)) return ['docs/需求清单.md 缺失（需求源）']
@@ -1754,7 +1760,7 @@ export const repoChecks = [
   {
     id: 'admin-login-throttled',
     roots: ['#13'],
-    desc: '认证端点防爆破（根因#13）：adminApi 口令校验路径必经频控闸（throttleLocked + 失败 throttleFail），杜绝公网口令无限重试爆破',
+    desc: '认证端点防爆破（根因#13·**旧线冻结参照**·生产线由 rw-admin-login-throttled 守）：adminApi 口令校验路径必经频控闸（throttleLocked + 失败 throttleFail），杜绝公网口令无限重试爆破',
     run() {
       const f = 'packages/cloud/src/functions/admin/adminApi/index.ts'
       const abs = join(ROOT, f)
@@ -1769,7 +1775,7 @@ export const repoChecks = [
   {
     id: 'user-writes-throttled',
     roots: ['#13'],
-    desc: '用户端可滥用写函数防刷（根因#13）：高频/造数写函数（trackEvent/createOrder/login/updateProfile）必经 withRateLimit（按 openid 限频），防无限刷库/堆垃圾/成本',
+    desc: '用户端可滥用写函数防刷（根因#13·**旧线冻结参照**·生产线由 rw-user-writes-throttled 守）：高频/造数写函数（trackEvent/createOrder/login/updateProfile）必经 withRateLimit（按 openid 限频），防无限刷库/堆垃圾/成本',
     run() {
       const targets = ['learning/trackEvent', 'orders/createOrder', 'user/login', 'user/updateProfile']
       const bad = []
@@ -1784,6 +1790,164 @@ export const repoChecks = [
           bad.push(`${f} 未经 withRateLimit——可滥用写函数无频控、可被刷（根因#13）`)
         }
       }
+      return bad
+    },
+  },
+  {
+    id: 'rw-admin-login-throttled',
+    roots: ['#13'],
+    desc: '认证端点防爆破·生产线（根因#13·深审 P2 补：admin-login-throttled 只扫冻结旧线 packages/ 是假绿）：生产线 adminApi（rewrite/cloud）口令校验路径必经频控闸（throttleLocked + 失败 throttleFail），删掉即公网口令可无限爆破',
+    run() {
+      const f = 'rewrite/cloud/src/functions/adminApi/index.ts'
+      const abs = join(ROOT, f)
+      if (!existsSync(abs)) return [`${f} 缺失（生产线 adminApi 应在此）`]
+      const src = readFileSync(abs, 'utf8')
+      const bad = []
+      if (!/throttleLocked\s*\(/.test(src)) bad.push(`${f} 未经 throttleLocked 闸——认证端点无锁定、公网口令可被爆破（根因#13）`)
+      if (!/throttleFail\s*\(/.test(src)) bad.push(`${f} 失败未 throttleFail 计数——频控空转（根因#13）`)
+      return bad
+    },
+  },
+  {
+    id: 'rw-user-writes-throttled',
+    roots: ['#13'],
+    desc: '用户端可滥用写函数防刷·生产线（根因#13·深审 P2 补：user-writes-throttled 只扫冻结旧线是假绿·深审「activateCourse/confirmEnter 无频控」同批修）：生产线 app 域用户可调写 action 必经 withRateLimit——尤其激活码兑换类（activateCourse/confirmEnter）是猜码爆破面',
+    run() {
+      // export 名 → 所在 action 文件（rewrite 按域聚合·一文件多 action，故按 withRateLimit('<name>' 精确核到具体导出）
+      const targets = [
+        ['createOrder', 'orders'],
+        ['trackEvent', 'learning'],
+        ['activateCourse', 'learning'],
+        ['confirmEnter', 'learning'],
+        ['login', 'user'],
+        ['updateProfile', 'user'],
+        ['submitFeedback', 'feedback'],
+        ['submitCheckpointPhoto', 'checkpoint'],
+        ['kfBind', 'cs'],
+        ['dataConsent', 'cs'],
+      ]
+      const bad = []
+      for (const [name, file] of targets) {
+        const f = `rewrite/cloud/src/functions/app/actions/${file}.ts`
+        const abs = join(ROOT, f)
+        if (!existsSync(abs)) {
+          bad.push(`${f} 缺失`)
+          continue
+        }
+        const src = readFileSync(abs, 'utf8')
+        if (!new RegExp(`withRateLimit\\(\\s*['"]${name}['"]`).test(src)) {
+          bad.push(`${f} 的 ${name} 未经 withRateLimit——用户可调写函数无频控可被刷/爆破（根因#13）`)
+        }
+      }
+      return bad
+    },
+  },
+  {
+    id: 'rw-material-stock-single-seam',
+    roots: ['#1', '#2'],
+    desc: '原料账单点收口·生产线（SCM 门1·根因#1/#2·深审 P2 补：material-stock-single-seam 只焊冻结旧线是假绿）：生产线 materials.stock/stockLedger 仅 rewrite/cloud/src/kit/scmStock.ts 读写（applyStockMoves 唯一入口·乐观 CAS）；其余 rewrite/cloud/src 直碰即红（防绕 CAS/绕流水改账）',
+    run() {
+      const seam = 'rewrite/cloud/src/kit/scmStock.ts'
+      if (!existsSync(join(ROOT, seam))) return [`${seam} 缺失——生产线原料账原语（SCM 门1）`]
+      const bad = []
+      const src = readFileSync(join(ROOT, seam), 'utf8')
+      if (!/export\s+async\s+function\s+applyStockMoves/.test(src)) bad.push(`${seam} 未导出 applyStockMoves——门1 空壳`)
+      if (!/\.where\(\{[^}]*stock/.test(src)) bad.push(`${seam} 库存变更未用条件 where(stock) 乐观 CAS——有并发互覆盖风险（根因#1）`)
+      const allow = new Set([seam])
+      const srcRoot = join(ROOT, 'rewrite/cloud/src')
+      const walk = (d) => {
+        for (const e of readdirSync(d)) {
+          const p = join(d, e)
+          if (statSync(p).isDirectory()) walk(p)
+          else if (e.endsWith('.ts')) {
+            const rel = relative(ROOT, p).replace(/\\/g, '/')
+            if (allow.has(rel)) continue
+            if (/COLLECTIONS\.(materials|stockLedger)\b|\.collection\(\s*['"](materials|stockLedger)['"]\s*\)/.test(readFileSync(p, 'utf8')))
+              bad.push(`${rel} 直碰 materials/stockLedger 集合——原料账读写须经 kit/scmStock（SCM 门1·防绕 CAS/绕流水）`)
+          }
+        }
+      }
+      if (existsSync(srcRoot)) walk(srcRoot)
+      return bad
+    },
+  },
+  {
+    id: 'rw-scm-ledger-idempotent',
+    roots: ['#2'],
+    desc: '原料流水确定性幂等·生产线（SCM·根因#2·深审 P2 补：scm-ledger-idempotent 只焊冻结旧线是假绿）：生产线 rewrite/cloud/src/kit/scmStock.ts 写 stockLedger 必构造确定性 _id=`docType:docId:itemKey`（撞 id=并发方已写）·禁自动 id 双记账',
+    run() {
+      const seam = 'rewrite/cloud/src/kit/scmStock.ts'
+      if (!existsSync(join(ROOT, seam))) return [`${seam} 缺失——生产线流水写入点（SCM 门1）`]
+      const bad = []
+      const src = readFileSync(join(ROOT, seam), 'utf8')
+      if (!/\$\{[^}]*docType[^}]*\}:\$\{[^}]*docId[^}]*\}:\$\{/.test(src))
+        bad.push(`${seam} 未见确定性流水 _id 构造（\`\${docType}:\${docId}:\${itemKey}\` 三段模板）——流水失幂等（根因#2）`)
+      const ledgerAdds = [...src.matchAll(/stockLedger[\s\S]{0,200}?\.add\(\s*\{\s*data:\s*\{([\s\S]{0,120}?)\}/g)]
+      for (const m of ledgerAdds) if (!/_id\s*:/.test(m[1])) bad.push(`${seam} stockLedger add 未带确定性 _id——自动 id=重放双记账（根因#2）`)
+      return bad
+    },
+  },
+  {
+    id: 'rw-cs-360-read-audited',
+    roots: ['#3'],
+    desc: '360 读他人全貌破例留痕·生产线（§1.5·根因#3·深审 P2 补：cs-360-read-audited 只焊冻结旧线是假绿）：生产线 rewrite/cloud/src/kit/audit.ts 须有 FORCE_AUDIT 名单含 getCustomer360/getUser/searchCustomer/getSessionCustomer360 强制留痕（防 PII 访问 0 痕）',
+    run() {
+      const audit = 'rewrite/cloud/src/kit/audit.ts'
+      if (!existsSync(join(ROOT, audit))) return [`${audit} 缺失——生产线审计原语`]
+      const src = readFileSync(join(ROOT, audit), 'utf8')
+      const bad = []
+      const set = src.match(/FORCE_AUDIT\s*=\s*new Set\(\[([\s\S]*?)\]\)/)
+      if (!set) bad.push(`${audit} 无 FORCE_AUDIT 名单——360 读越权面无法破例留痕（§1.5·根因#3）`)
+      else
+        for (const a of ['getCustomer360', 'getUser', 'searchCustomer', 'getSessionCustomer360'])
+          if (!new RegExp(`['"]${a}['"]`).test(set[1]))
+            bad.push(`${audit} FORCE_AUDIT 未含 ${a}——读他人全貌/检索 0 留痕（§1.5·根因#3）`)
+      return bad
+    },
+  },
+  {
+    id: 'rw-cs-360-rbac-gated',
+    roots: ['#3'],
+    desc: '360 读须能力闸·生产线（§1.5·根因#3·深审 P2 补：cs-360-rbac-gated 只焊冻结旧线是假绿）：生产线 rewrite/cloud/src/functions/adminApi/index.ts 须有 ACTION_CAPS 含 getCustomer360/getUser/searchCustomer→customer:view，且按 caps 校验拒绝',
+    run() {
+      const idx = 'rewrite/cloud/src/functions/adminApi/index.ts'
+      if (!existsSync(join(ROOT, idx))) return [`${idx} 缺失`]
+      const src = readFileSync(join(ROOT, idx), 'utf8')
+      const bad = []
+      const caps = src.match(/const ACTION_CAPS[^{]*\{([\s\S]*?)\}/)
+      if (!caps) bad.push(`${idx} 无 ACTION_CAPS 能力闸——360 读无 RBAC（§1.5·根因#3）`)
+      else
+        for (const a of ['getCustomer360', 'getUser', 'searchCustomer'])
+          if (!new RegExp(`\\b${a}\\s*:`).test(caps[1]))
+            bad.push(`ACTION_CAPS 未含 ${a}——任何登录即可读他人全貌/检索客户（§1.5·根因#3）`)
+      if (!/\bcaps\b/.test(src)) bad.push(`${idx} 未按 caps 校验——能力闸空转（§1.5）`)
+      return bad
+    },
+  },
+  {
+    id: 'rw-conversations-archived',
+    roots: ['#3'],
+    desc: '客服会话归档挂载 + 隐私声明·生产线（B5.1·根因#3·深审 P2 补：conversations-archived 只焊冻结旧线是假绿）：生产线 archive.ts 须真写 conversations 集合；kfCallback/index.ts 须真调 archiveInbound + archiveOutbound；会话含 PII·协议页须声明「客服会话记录」被收集',
+    run() {
+      const bad = []
+      const arch = 'rewrite/cloud/src/functions/cs/kfCallback/archive.ts'
+      const absArch = join(ROOT, arch)
+      if (!existsSync(absArch)) bad.push(`${arch} 缺失——生产线会话归档接缝（B5.1）`)
+      else if (!/COLLECTIONS\.conversations|['"]conversations['"]/.test(readFileSync(absArch, 'utf8')))
+        bad.push(`${arch} 未写 conversations 集合——归档接缝是摆设（B5.1·扫真实写入·非注释）`)
+      const idx = 'rewrite/cloud/src/functions/cs/kfCallback/index.ts'
+      const absIdx = join(ROOT, idx)
+      if (!existsSync(absIdx)) bad.push(`${idx} 缺失——微信客服回调（归档挂点）`)
+      else {
+        const s = readFileSync(absIdx, 'utf8')
+        if (!/archiveInbound\s*\(/.test(s)) bad.push(`${idx} 未调 archiveInbound——入站客户消息未落档（B5.1·防摘归档）`)
+        if (!/archiveOutbound\s*\(/.test(s)) bad.push(`${idx} 未调 archiveOutbound——出站回复未落档（B5.1·防摘归档）`)
+      }
+      // 隐私文案单源已随页面内容 CMS 战役迁 lib/mapPages.ts（agreement.ts 只渲染·文案默认值在 mapPages）——守卫锚随迁
+      const agr = 'rewrite/mp/lib/mapPages.ts'
+      const absAgr = join(ROOT, agr)
+      if (existsSync(absAgr) && !/客服.{0,8}会话|会话记录/.test(readFileSync(absAgr, 'utf8')))
+        bad.push(`${agr} 未声明「客服会话记录」被收集留存——会话含 PII·隐私声明漏（B5.1·根因#3）`)
       return bad
     },
   },
@@ -2257,13 +2421,13 @@ export const repoChecks = [
     // 子集产物正本在仓根 assets/brand-fonts/（不在 src·不进包，仅作部署到托管的真相源 + OFL 授权随附）。
     id: 'font-not-in-package',
     roots: ['基建'],
-    desc: '品牌字体远程加载不进包：packages/miniapp/src 下无字体二进制(.otf/.ttf/.woff/.woff2/.eot) + mp 可达源码无字面内嵌字体 blob（base64 长串·非运行时 downloadFile→base64 模板）——防 ~14MB 字重撑爆包体积（主包 2MB），字体须远程拉取（正本在 assets/brand-fonts/·远程托管·mp 端 downloadFile→base64 绕 CORS 见 App.vue）',
+    desc: '品牌字体远程加载不进包：packages/miniapp/src + rewrite/mp 下无字体二进制(.otf/.ttf/.woff/.woff2/.eot) + mp 可达源码无字面内嵌字体 blob（base64 长串·非运行时 downloadFile→base64 模板）——防 ~14MB 字重撑爆包体积（主包 2MB），字体须远程拉取（正本在 assets/brand-fonts/·远程托管·mp 端 downloadFile→base64 绕 CORS 见 App.vue / rewrite/mp/utils/brandFont.ts）',
     run() {
       const bad = []
-      const srcDir = join(ROOT, 'packages/miniapp/src')
+      const srcDirs = [join(ROOT, 'packages/miniapp/src'), join(ROOT, 'rewrite/mp')]
       const FONT_BIN = /\.(otf|ttf|woff2?|eot)$/i
       // 只拦「字面内嵌的字体 blob」（base64, 后跟一长串 base64=真把字体打进包），不拦运行时拼的 data URI
-      // 模板（如 `data:font/woff;base64,${data}`·downloadFile 后运行时构造·字体不在包里·见 App.vue 绕 CORS）。
+      // 模板（如 `data:font/woff;base64,${data}`·downloadFile 后运行时构造·字体不在包里·见 App.vue / brandFont.ts 绕 CORS）。
       const FONT_DATAURI =
         /data:(?:font\/[a-z0-9.+-]+|application\/(?:x-)?font[a-z0-9.+-]*|application\/vnd\.ms-fontobject)[^"')]*?base64,[A-Za-z0-9+/]{200,}/i
       const scan = (dir) => {
@@ -2279,7 +2443,7 @@ export const repoChecks = [
             bad.push(
               `${relative(ROOT, p)} 是字体二进制——会被构建打进小程序包（~MB 级撑爆包体积）。品牌字体放仓根 assets/brand-fonts/ 并走 wx.loadFontFace 远程加载`
             )
-          } else if (/\.(vue|scss|css|js|mjs|ts)$/.test(name)) {
+          } else if (/\.(vue|scss|css|js|mjs|ts|wxss)$/.test(name)) {
             if (FONT_DATAURI.test(mpReachableText(readFileSync(p, 'utf8')))) {
               bad.push(
                 `${relative(ROOT, p)} 在 mp 可达处内嵌字体 data-URI（base64）——会编进 wxss 撑爆包体积。字体走 wx.loadFontFace 远程加载、勿 base64 内嵌`
@@ -2288,7 +2452,7 @@ export const repoChecks = [
           }
         }
       }
-      scan(srcDir)
+      srcDirs.forEach(scan)
       return bad
     },
   },
@@ -2824,13 +2988,31 @@ export const repoChecks = [
         }
       }
       // ③ 用户可见的静态品牌页（.html 不被 walk 扫·反向自检逮出的假绿·根因#8）——逐个显式钉死
-      //    /q 扫码落地页 + site/ 公网官网落地页（www.luckyducky.cn 根）
-      for (const page of ['packages/admin/public/q/index.html', 'site/index.html']) {
+      //    /q 扫码落地页（旧 site/ 单页落地页已删——用户拍板 2026-07-12·根路径由 rewrite/site 提供、④段扫）
+      for (const page of ['packages/admin/public/q/index.html']) {
         const absP = join(ROOT, page)
         if (existsSync(absP))
           for (const ban of BANNED)
             if (readFileSync(absP, 'utf8').includes(ban))
               bad.push(`${page} 仍含品牌名漂移变体「${ban}…」——用户可见品牌页，须替为「小棉鸭」（病根#5）`)
+      }
+      // ④ 重写线内容站（根路径在线版本＝rewrite/site 构建产物·2026-07-09 M5 切换）：.astro/.md 不在
+      //    walk 扩展名内（同 ③ 假绿病根·根因#8），单独递归扫 pages+content，防品牌名漂移变体上生产官网
+      const siteRoot = join(ROOT, 'rewrite/site/src')
+      if (existsSync(siteRoot)) {
+        const walkSite = (d) => {
+          for (const e of readdirSync(d)) {
+            const p = join(d, e)
+            if (statSync(p).isDirectory()) walkSite(p)
+            else if (/\.(astro|md|ts)$/.test(e)) {
+              const s = readFileSync(p, 'utf8')
+              for (const ban of BANNED)
+                if (s.includes(ban))
+                  bad.push(`${relative(ROOT, p)} 仍含品牌名漂移变体「${ban}…」——根路径在线内容站页面，须替为「小棉鸭」（病根#5）`)
+            }
+          }
+        }
+        walkSite(siteRoot)
       }
       return bad
     },
@@ -3727,14 +3909,19 @@ export const repoChecks = [
     // 订单域派生物与声明同步（P3「安全处生成」spike·北极星 A）：order.spec.ts 是订单/售后状态机的
     // 声明单源；order.ts（类型/常量/流转表）与 scripts/order-domain.generated.json 是其生成物。
     // 改声明须跑 `node scripts/gen-order-domain.mjs` 同步生成物——漂移即红，杜绝「改了声明忘重生成」。
+    // 覆盖面＝gen-order-domain.mjs 的 DOMAINS 数组全量（跑一次 --check 全域一起验，不逐域列举——新增域
+    // 只用改 DOMAINS，本守卫零改动自动纳管）：packages/ 侧 order+learning+cs+scm 四域；rewrite/ 侧目前
+    // 仅 scm 一域镜像声明（scm.ts 头部曾错误自称「由本脚本生成」实为手工镜像，本项补齐覆盖后横幅才不撒谎）。
     id: 'gen-order-domain-synced',
     roots: ['#2', 'P3'],
-    desc: '订单+learning 域派生物与声明同步（P3 安全处生成·扩 learning）：order.ts/learning.ts/order-domain.generated.json 由 order.spec.ts+learning.spec.ts 经 scripts/gen-order-domain.mjs 生成；漂移（改声明未重生成）即红——跑 `node scripts/gen-order-domain.mjs` 修复',
+    desc: '声明域派生物与声明同步（P3 安全处生成，覆盖面见 gen-order-domain.mjs DOMAINS：packages/ order+learning+cs+scm 四域、rewrite/ scm 一域镜像）：各域 .ts + order-domain.generated.json 由对应 .spec.ts 经 scripts/gen-order-domain.mjs 生成；漂移（改声明未重生成，含 rewrite/shared/src/scm.ts）即红——跑 `node scripts/gen-order-domain.mjs` 修复',
     run() {
       const spec = join(ROOT, 'packages/shared/src/order.spec.ts')
       const learnSpec = join(ROOT, 'packages/shared/src/learning.spec.ts')
+      const rwScmSpec = join(ROOT, 'rewrite/shared/src/scm.spec.ts')
       if (!existsSync(spec)) return ['packages/shared/src/order.spec.ts 缺失（订单域声明单源·P3）']
       if (!existsSync(learnSpec)) return ['packages/shared/src/learning.spec.ts 缺失（learning 域声明单源·P3 扩）']
+      if (!existsSync(rwScmSpec)) return ['rewrite/shared/src/scm.spec.ts 缺失（新线 SCM 域声明单源·P3 扩）']
       try {
         execSync(`node ${join(ROOT, 'scripts/gen-order-domain.mjs')} --check`, { encoding: 'utf8', stdio: 'pipe' })
         return []
@@ -4350,6 +4537,211 @@ export const repoChecks = [
     },
   },
   {
+    // SCM 域（购/外协单）状态写入只走声明流转——新线扫描面（批K·根因#2·移植 order-transitions-declared 的
+    // scm* 前缀纳管，同 rw-order-transitions-declared 精神：旧守卫（line 3758）只扫 packages/cloud，
+    // rewrite/cloud/src/functions/adminApi/actions/scmPurchase.ts、scmOutwork.ts 头注承诺「受
+    // order-transitions-declared 守卫保护」对生产代码是假的——这两个文件的 transition('purchaseOrders'/
+    // 'outworkOrders', …) 从未被任何守卫对账过。COLLS 直接复用 scripts/order-domain.generated.json 里的
+    // purchaseOrders/outworkOrders 声明（不是「借用旧线数据」：gen-order-domain.mjs 强制 packages/scm.spec.ts
+    // 与 rewrite/scm.spec.ts 两份声明逐集合比对一致、不一致直接生成失败，故该 JSON 对新线同样权威——不用
+    // 另写一套 rewrite/shared/src/scm.ts 的 TS 解析器）。edges/writeRe/casRe 扫描逻辑镜像
+    // rw-order-transitions-declared（已验证适配新线代码形态），只收窄 COLLS 到 SCM 两集合、避免与其重复报
+    // orders/afterSales。
+    //
+    // 批S 修复（P1·根因#2）：①的原正则只认字面量 `[...]` 第三参数——但 scmPurchase.ts/scmOutwork.ts 全部 7 处
+    // transition() 调用实际写法是 `transition(coll, id, fromFor('X'), 'Y', ...)`（fromFor 是这两个文件内的
+    // helper，按目标态从 PURCHASE_ORDER_TRANSITIONS/OUTWORK_ORDER_TRANSITIONS 反查 from 集合，见文件内注释），
+    // 对这两个文件原正则匹配 0 次、①对全部 7 处真实流转提供的保护为零（静默假绿）。新增 fromFor(...) 形态分支：
+    // 语义上 fromFor(X) 永远等于声明表里 to=X 那条的 from 集合（fromFor 找不到 to=X 会直接 throw，运行时已经
+    // fail-fast），故静态守卫要抓的不是「fromFor(X) 算出的 from 对不对」，而是「调用点传给 fromFor 的 X 是否
+    // 就是这次 transition() 真正写入的 to」——两者不一致＝拿错状态的 from 集合去校验另一状态的流转，越流转会
+    // 被静默放行（写库时 transition() 内部仍会用实际 from 数组核对当前文档状态，但那份 from 数组已经是错的）。
+    id: 'rw-scm-transitions-declared',
+    roots: ['#2'],
+    desc: '新线 SCM 域（购/外协单）状态写入只走声明流转（根因#2·批K 引入·批S 修复①对 fromFor(X) 调用形态的假绿：新增分支核对 fromFor 参数 X 与 transition() 第四参数 to 一致，不一致＝越流转被静默放行）：rewrite/cloud/src/functions/adminApi/actions/scm*.ts 里 transition(purchaseOrders/outworkOrders) 的边（字面量数组或 fromFor(X) 两种形态）、裸条件 CAS 的边须在 order-domain.generated.json 声明流转表内（该 JSON 由 gen-order-domain-synced 守卫保证与 packages/+rewrite 两份 scm.spec.ts 逐集合一致，对新线同样权威）；写这两集合 status 的字面量须是声明状态——越流转/打错状态名即红',
+    run() {
+      const jsonPath = join(ROOT, 'scripts/order-domain.generated.json')
+      if (!existsSync(jsonPath)) return ['scripts/order-domain.generated.json 缺失——跑 `node scripts/gen-order-domain.mjs`（SCM 域声明派生物）']
+      let spec
+      try {
+        spec = JSON.parse(readFileSync(jsonPath, 'utf8'))
+      } catch {
+        return ['scripts/order-domain.generated.json 解析失败——重生成']
+      }
+      const COLLS = new Set(['purchaseOrders', 'outworkOrders'].filter((c) => spec[c]))
+      if (!COLLS.size) return [] // JSON 未含 SCM 集合（生成物尚未覆盖）——不报，避免误挡未落地阶段
+      const declaredEdges = {} // coll -> Set('from=>to')
+      const declaredStates = {} // coll -> Set(state)
+      for (const coll of COLLS) {
+        declaredStates[coll] = new Set(spec[coll].states)
+        const edges = new Set()
+        for (const t of spec[coll].transitions) for (const f of t.from) edges.add(f + '=>' + t.to)
+        declaredEdges[coll] = edges
+      }
+
+      const actionsDir = join(ROOT, 'rewrite/cloud/src/functions/adminApi/actions')
+      if (!existsSync(actionsDir)) return []
+      const files = readdirSync(actionsDir).filter((e) => /^scm\w*\.ts$/.test(e)).map((e) => join(actionsDir, e))
+      const collOf = (head) => {
+        const ms = [...head.matchAll(/(?:\.collection\(|transition\()\s*(?:['"](\w+)['"]|COLLECTIONS\.(\w+))/g)]
+        return ms.length ? ms[ms.length - 1][1] || ms[ms.length - 1][2] : null
+      }
+      const bad = []
+      for (const p of files) {
+        const src = readFileSync(p, 'utf8')
+        const rel = relative(ROOT, p)
+        // ① transition(<coll>, id, [from...]|fromFor('X'), 'to')：整条边对账（union 语义每个 from 元素都须
+        // 有声明原子边；fromFor(X) 形态见批S 修复注——核对 X 与实际写入的 to 一致，见上方文件头长注）
+        const transRe = /transition\(\s*(?:['"](\w+)['"]|COLLECTIONS\.(\w+))\s*,[^,]+,\s*(?:\[([^\]]*)\]|fromFor\(\s*['"]([a-z_]+)['"]\s*\))\s*,\s*['"]([a-z_]+)['"]/g
+        let tm
+        while ((tm = transRe.exec(src))) {
+          const coll = tm[1] || tm[2]
+          if (!COLLS.has(coll)) continue
+          const to = tm[5]
+          if (tm[4] !== undefined) {
+            // fromFor(X) 形态：fromFor 永远返回声明表里 to=X 那条的 from 集合（找不到会 throw，已 fail-fast）——
+            // 静态守卫要抓的不是这个恒真关系，而是调用点的 X 是否就是本次真正写入的 to（不一致＝拿错状态的
+            // from 集合去校验另一状态的流转，越流转会被静默放行）。
+            if (tm[4] !== to)
+              bad.push(`${rel}：transition('${coll}', …, fromFor('${tm[4]}'), '${to}') 参数不一致——fromFor 求的是 '${tm[4]}' 状态的合法 from 集合，但实际写入 to='${to}'，两者应相同，否则越流转会被静默放行（根因#2·批S）`)
+            continue
+          }
+          const from = [...tm[3].matchAll(/['"]([a-z_]+)['"]/g)].map((x) => x[1])
+          const undeclared = from.filter((f) => !declaredEdges[coll].has(f + '=>' + to))
+          if (undeclared.length)
+            bad.push(`${rel}：transition('${coll}', …, [${from.join(',')}] → '${to}') 含未声明边 ${undeclared.map((f) => f + '→' + to).join('、')}——order-domain.generated.json 流转表里没有，越流转或先改声明（根因#2）`)
+        }
+        // ①' 裸条件 CAS：where({…status:'X'|_.in([..])…}).update({data:{…status:'Y'…}}) 的边对账。
+        // 例外：技术性失败补偿回滚（applyStockMoves 失败后把已被 transition 抢占的状态复原，非业务逆向
+        // 流转、scm.spec 刻意不声明——声明了就等于开放成业务动作，见 scmOutwork.ts/scmPurchase.ts 行内长
+        // 注释）——紧邻代码块（往前 800 字符窗口内）写明 structure-ok 即放行，同本文件其它守卫的既定豁免写法。
+        const casRe = /\.where\(\s*\{[^{}]*?status:\s*(?:['"]([a-z_]+)['"]|(?:db\.command|_)\.in\(\[([^\]]*)\]\))[^{}]*?\}\s*\)[\s\S]{0,60}?\.update\(\s*\{\s*data:\s*\{[\s\S]{0,160}?\bstatus:\s*['"]([a-z_]+)['"]/g
+        let cm
+        while ((cm = casRe.exec(src))) {
+          const coll = collOf(src.slice(0, cm.index))
+          if (!coll || !COLLS.has(coll)) continue
+          const from = cm[1] ? [cm[1]] : [...cm[2].matchAll(/['"]([a-z_]+)['"]/g)].map((x) => x[1])
+          const to = cm[3]
+          const undeclared = from.filter((f) => !declaredEdges[coll].has(f + '=>' + to))
+          if (!undeclared.length) continue
+          const context = src.slice(Math.max(0, cm.index - 800), cm.index)
+          if (context.includes('structure-ok')) continue
+          bad.push(`${rel}：条件 CAS ${coll} [${from.join(',')}] → '${to}' 含未声明边 ${undeclared.map((f) => f + '→' + to).join('、')}——order-domain.generated.json 流转表里没有（根因#2）`)
+        }
+        // ② 写侧 status 字面量须是声明状态（add/update 的 data 内·where 过滤侧跳过——打错状态名即红）
+        const writeRe = /\bstatus:\s*['"]([a-z_]+)['"]/g
+        let wm
+        while ((wm = writeRe.exec(src))) {
+          const before = src.slice(Math.max(0, wm.index - 160), wm.index)
+          if (/\.where\(\s*\{[^}]*$/.test(before)) continue
+          const coll = collOf(src.slice(0, wm.index))
+          if (!coll || !COLLS.has(coll)) continue
+          if (!declaredStates[coll].has(wm[1]))
+            bad.push(`${rel}：写 ${coll}.status='${wm[1]}' 不是 order-domain.generated.json 声明状态（${[...declaredStates[coll]].join('/')}）——打错状态名或先改声明（根因#2）`)
+        }
+      }
+      return bad
+    },
+  },
+  {
+    // 原料账单点收口——新线扫描面（批K·SCM 门1·根因#1/#2·移植 material-stock-single-seam，同
+    // rw-order-transitions-declared 精神：旧守卫（line 822）只扫 packages/cloud/src，rewrite/cloud/src/
+    // kit/scmStock.ts 头注承诺「全库唯一 materials.stock/stockLedger 读写处（守卫 material-stock-single-seam）」
+    // 对生产代码此前是假的——rewrite/cloud 下任何文件直碰这两个集合从未被拦过。逻辑镜像旧守卫（同一套判定，
+    // 不弱化）：applyStockMoves 须导出、CAS 须用条件 where(stock)、除 seam 本身外全仓禁直碰。
+    id: 'rw-material-stock-single-seam',
+    roots: ['#1', '#2'],
+    desc: '新线原料账单点收口（SCM 门1·根因#1/#2·批K·移植 material-stock-single-seam，同 rw-order-transitions-declared 精神：旧守卫只扫冻结线，kit/scmStock.ts 头注承诺的保护对生产代码此前是假的）：materials.stock/stockLedger 仅 rewrite/cloud/src/kit/scmStock.ts 读写（applyStockMoves 唯一入口·乐观 CAS）；rewrite/cloud/src 其余文件直碰即红（防绕 CAS/绕流水改账）',
+    run() {
+      const seam = 'rewrite/cloud/src/kit/scmStock.ts'
+      const seamAbs = join(ROOT, seam)
+      if (!existsSync(seamAbs)) return []
+      const bad = []
+      const src = readFileSync(seamAbs, 'utf8')
+      if (!/export\s+async\s+function\s+applyStockMoves/.test(src)) bad.push(`${seam} 未导出 applyStockMoves——门1 空壳`)
+      if (!/\.where\(\{[^}]*stock/.test(src)) bad.push(`${seam} 库存变更未用条件 where(stock) 乐观 CAS——有并发互覆盖风险（根因#1）`)
+      const allow = new Set([seam])
+      const srcRoot = join(ROOT, 'rewrite/cloud/src')
+      const walk = (d) => {
+        for (const e of readdirSync(d)) {
+          const p = join(d, e)
+          if (statSync(p).isDirectory()) walk(p)
+          else if (e.endsWith('.ts')) {
+            const rel = relative(ROOT, p).replace(/\\/g, '/')
+            if (allow.has(rel)) continue
+            if (/COLLECTIONS\.(materials|stockLedger)\b|\.collection\(\s*['"](materials|stockLedger)['"]\s*\)/.test(readFileSync(p, 'utf8')))
+              bad.push(`${rel} 直碰 materials/stockLedger 集合——原料账读写须经 kit/scmStock（SCM 门1·防绕 CAS/绕流水）`)
+          }
+        }
+      }
+      if (existsSync(srcRoot)) walk(srcRoot)
+      return bad
+    },
+  },
+  {
+    // 原料流水确定性幂等——新线扫描面（批K·根因#2·移植 scm-ledger-idempotent，同上精神）。
+    // 顺手修正旧守卫（line 854）本体带的潜伏 bug（不改旧守卫本身、只是不在新守卫里复制同一个洞）：旧正则
+    // 用「'stockLedger' 与 '.add(' 相距 ≤200 字符」定位流水写入点，但实际代码里两者靠变量名（`ledger`）
+    // 间接关联、源码相距 >200 字符——`node -e` 实测旧正则对 packages/cloud/src/kit/scmStock.ts 当前内容
+    // 匹配 0 次，即该守卫的「_id 是否带确定性构造」检查从未真正跑过、静默假绿。新守卫改按 data 对象内是否
+    // 含 `itemKey:`（流水行的标志字段，物料主档 add 没有这个字段）定位真正的流水 add 调用，不依赖变量名/
+    // 字符距离；并新增「一个流水 add 都没找到」本身也报红——防止代码形态再变一次时守卫又悄悄测不到东西。
+    //
+    // 批S 修复（P3·根因#2）：原「确定性 _id 构造」检查与「流水 add 带 _id」检查是两条独立正则各自宽松匹配
+    // ——只证明「文件里某处有三段模板」+「add 里某处有 _id 字样」同时为真，从不核对 add 里那个 _id 是不是
+    // 真的来自该模板函数的调用（例如手写 `docType+':'+docId+':'+itemKey` 绕开函数、或干脆用别的变量，两条
+    // 独立检查都仍然各自绿）。改为：①按模板结构（不硬编码函数名，函数改名不失效）定位确定性 id 生成函数并
+    // 取其名；②对每处流水 add 提取 _id 字段实际绑定的表达式——简写 `{_id,...}`、显式变量 `_id: x`、或内联
+    // 直调 `_id: fn(...)` 三种形态都认；③简写/显式变量形态下，在该 add 调用所在函数体内（粗粒度以最近的
+    // `function` 关键字为作用域起点，避免跨函数误配同名变量）核对是否存在 `const/let <var> = <fn>(...)` 赋值
+    // ——找不到就说明 add 用的 _id 不是那次调用产生的确定性值，幂等绑定关系并未真正成立。
+    id: 'rw-scm-ledger-idempotent',
+    roots: ['#2'],
+    desc: '新线原料流水确定性幂等（SCM·根因#2·批K 引入·批S 修复两条独立正则拼出的假绑定：新增「_id 字段实际来自确定性生成函数调用」的绑定核验，不再只各自宽松匹配「有模板」+「有 _id 字样」）：rewrite/cloud/src/kit/scmStock.ts 写 stockLedger 必构造确定性 _id=`docType:docId:itemKey`（撞 id=并发方已写）·禁自动 id 双记账·禁绕开生成函数手写等价 _id',
+    run() {
+      const seam = 'rewrite/cloud/src/kit/scmStock.ts'
+      if (!existsSync(join(ROOT, seam))) return []
+      const bad = []
+      const src = readFileSync(join(ROOT, seam), 'utf8')
+      // 定位确定性 _id 生成函数并取其名（按「docType:docId:itemKey 三段模板」结构识别，不硬编码 ledgerIdOf——
+      // 函数改名不失效；`const NAME = (…) => \`…\`` 或 `function NAME(…) {…}` 两种写法都认）
+      const fnDeclM = src.match(/(?:const|function)\s+(\w+)\s*=?\s*\([^)]*\)\s*(?:=>\s*)?[{`][\s\S]{0,120}?\$\{[^}]*docType[^}]*\}:\$\{[^}]*docId[^}]*\}:\$\{/)
+      if (!fnDeclM)
+        bad.push(`${seam} 未见确定性流水 _id 构造函数（\`\${docType}:\${docId}:\${itemKey}\` 三段模板）——流水失幂等（根因#2）`)
+      const fnName = fnDeclM ? fnDeclM[1] : null
+      // 按 data 对象内是否含 itemKey: 字段识别真正的流水 add（不依赖变量名/字符距离——防 regex 假绿，见上注）
+      const addRe = /\.add\(\s*\{\s*data:\s*\{([\s\S]{0,300}?)\}\s*\}\s*\)/g
+      const adds = [...src.matchAll(addRe)].filter((m) => /itemKey\s*:/.test(m[1]))
+      if (!adds.length) bad.push(`${seam} 未找到 stockLedger 流水 add({data:{itemKey:...}}) 调用——流水写入点代码形态已变、本守卫需同步（根因#2）`)
+      // 粗粒度函数作用域边界：add 调用所在函数体起点＝其前最近一个 `function` 关键字位置——把「_id 绑定
+      // 赋值」核验限定在同一函数内，不误配到别的函数里恰好同名的变量
+      const funcBoundaryBefore = (index) => {
+        const funcRe = /\bfunction\s+\w+/g
+        let last = 0
+        let fm
+        while ((fm = funcRe.exec(src)) && fm.index < index) last = fm.index
+        return last
+      }
+      for (const m of adds) {
+        const inlineCall = fnName && new RegExp(`_id\\s*:\\s*${fnName}\\s*\\(`).test(m[1])
+        if (inlineCall) continue // 内联直调确定性生成函数——绑定关系天然成立
+        const shorthand = /(?:^|[,{])\s*_id\s*(?=[,}])/.test(m[1])
+        const varMatch = m[1].match(/_id\s*:\s*([A-Za-z_$][\w$]*)\s*(?=[,}])/)
+        if (!shorthand && !varMatch) {
+          bad.push(`${seam} stockLedger add 未带 _id 字段——自动 id=重放双记账（根因#2）`)
+          continue
+        }
+        if (!fnName) continue // 上面已报「未见确定性 _id 构造函数」，此处不重复噪音
+        const idVarName = shorthand ? '_id' : varMatch[1]
+        const scoped = src.slice(funcBoundaryBefore(m.index), m.index)
+        const boundRe = new RegExp(`(?:const|let)\\s+${idVarName}\\s*=\\s*${fnName}\\s*\\(`)
+        if (!boundRe.test(scoped))
+          bad.push(`${seam} stockLedger add 的 _id（变量 ${idVarName}）未见来自确定性生成函数 ${fnName}() 的同作用域赋值——_id 可能绕开确定性构造手写等价值，幂等绑定关系未真正成立（根因#2）`)
+      }
+      return bad
+    },
+  },
+  {
     id: 'rw-mp-checkout-consts-synced',
     roots: ['#5'],
     desc: '结算常量镜像同步（根因#5·mp 包进不了 @ldrw/shared——开发者工具编译不出仓外引用，故 mp 落副本 + 本守卫焊死）：rewrite/mp/lib/checkoutConst.ts 的 COUPON/SHIP/CHECKOUT_ADDONS 必须与 rewrite/shared/src/checkout.ts 逐值一致',
@@ -4376,9 +4768,44 @@ export const repoChecks = [
     },
   },
   {
+    id: 'rw-mp-order-labels-synced',
+    roots: ['#5'],
+    desc: '订单/售后状态标签码集合同步（根因#5·同 rw-mp-checkout-consts-synced 精神：mp 包进不了 @ldrw/shared，' +
+      'mp 落客户向文案副本，本守卫只焊「状态码集合」不焊文案——admin/mp 措辞刻意不同是 UX 针对性、不是漂移，见 ' +
+      'rewrite/shared/src/statusLabels.ts 头注）：rewrite/mp/lib/mapOrders.ts 的 STATUS_LABELS 与 ' +
+      'rewrite/mp/lib/mapAftersales.ts 的 STATUS_LABELS 键集合必须分别与 shared ORDER_STATUS_LABEL_CUSTOMER / ' +
+      'AFTERSALE_STATUS_LABEL_CUSTOMER 键集合一致——状态机新增状态若 mp 忘配标签，页面会悄悄显示原始状态码',
+    run() {
+      const shPath = join(ROOT, 'rewrite/shared/src/statusLabels.ts')
+      const mpOrdersPath = join(ROOT, 'rewrite/mp/lib/mapOrders.ts')
+      const mpAftersalesPath = join(ROOT, 'rewrite/mp/lib/mapAftersales.ts')
+      if (!existsSync(shPath)) return []
+      const bad = []
+      const keysOf = (src, exportName) => {
+        const m = src.match(new RegExp(`export const ${exportName}[^{]*{([^}]*)}`, 's'))
+        if (!m) return null
+        return [...m[1].matchAll(/^\s*([a-zA-Z_][a-zA-Z0-9_]*):/gm)].map((x) => x[1]).sort()
+      }
+      const sh = readFileSync(shPath, 'utf8')
+      const shOrderKeys = keysOf(sh, 'ORDER_STATUS_LABEL_CUSTOMER')
+      const shAsKeys = keysOf(sh, 'AFTERSALE_STATUS_LABEL_CUSTOMER')
+      if (existsSync(mpOrdersPath) && shOrderKeys) {
+        const mpKeys = keysOf(readFileSync(mpOrdersPath, 'utf8'), 'STATUS_LABELS')
+        if (mpKeys && mpKeys.join(',') !== shOrderKeys.join(','))
+          bad.push(`订单状态标签码集合漂移：mp mapOrders.ts STATUS_LABELS=[${mpKeys.join(',')}] ≠ shared ORDER_STATUS_LABEL_CUSTOMER=[${shOrderKeys.join(',')}]（状态机新增/改名状态未同步到 mp）`)
+      }
+      if (existsSync(mpAftersalesPath) && shAsKeys) {
+        const mpKeys = keysOf(readFileSync(mpAftersalesPath, 'utf8'), 'STATUS_LABELS')
+        if (mpKeys && mpKeys.join(',') !== shAsKeys.join(','))
+          bad.push(`售后状态标签码集合漂移：mp mapAftersales.ts STATUS_LABELS=[${mpKeys.join(',')}] ≠ shared AFTERSALE_STATUS_LABEL_CUSTOMER=[${shAsKeys.join(',')}]（状态机新增/改名状态未同步到 mp）`)
+      }
+      return bad
+    },
+  },
+  {
     id: 'rw-site-in-gates',
     roots: ['铁律'],
-    desc: '内容站三件套在位（M4·GEO 基建=可爬可收录的机器面）：astro.config 配 site 域名 + sitemap 集成；public/robots.txt 在；教程内容 frontmatter 带 reviewed 标记（AI 起草未审稿不冒充定稿——写真机器可核）',
+    desc: '内容站 SEO/GEO 基线在位（M4·GEO 基建=可爬可收录+AI 引擎可摘要的机器面）：astro.config 配 site 域名 + sitemap 集成；robots.txt 在且显式放行 AI 爬虫（GPTBot 等）；Base.astro 齐 og 三件+og:image/og:locale/twitter:card+WebSite 结构化卡；llms.txt 与 rss.xml 端点在；404 页 noindex；favicon.svg 与 og-cover.png 分享素材在；根 typecheck 覆盖 rewrite/site；教程 frontmatter 带 reviewed 标记（AI 起草未审稿不冒充定稿——写真机器可核）',
     run() {
       const base = join(ROOT, 'rewrite/site')
       if (!existsSync(base)) return []
@@ -4390,14 +4817,29 @@ export const repoChecks = [
         if (!/site:\s*'https:\/\/www\.luckyducky\.cn'/.test(c)) bad.push('astro.config 未配 site 域名——sitemap/canonical 出不了绝对地址（收录基建缺）')
         if (!/sitemap\(\)/.test(c)) bad.push('astro.config 未挂 sitemap 集成——搜索引擎无地图可爬')
       }
-      if (!existsSync(join(base, 'public/robots.txt'))) bad.push('public/robots.txt 缺失——爬虫策略未声明')
+      const robotsPath = join(base, 'public/robots.txt')
+      if (!existsSync(robotsPath)) bad.push('public/robots.txt 缺失——爬虫策略未声明')
+      else if (!/GPTBot/.test(readFileSync(robotsPath, 'utf8')))
+        bad.push('robots.txt 未显式放行 AI 引擎爬虫（GPTBot 等）——GEO 语料源定位要求对 AI 爬虫态度显式声明，不靠通配默许')
       const layout = join(base, 'src/layouts/Base.astro')
       if (existsSync(layout)) {
         const l = readFileSync(layout, 'utf8')
-        for (const og of ['og:title', 'og:description', 'og:url']) {
+        for (const og of ['og:title', 'og:description', 'og:url', 'og:image', 'og:locale', 'twitter:card']) {
           if (!l.includes(og)) bad.push(`Base.astro 缺 ${og}——社交分享/引擎摘要卡不全（GEO 面）`)
         }
+        if (!/websiteSchema/.test(l)) bad.push('Base.astro 未注入 WebSite 结构化卡（websiteSchema）——站点实体锚点缺失（GEO 面）')
       }
+      // GEO 双端点：llms.txt（AI 引擎抓取入口·教程清单随内容集合同步）+ rss.xml（内容分发/收录信号）——
+      // 都做成 Astro 端点而非静态文件，防新增教程后清单 stale。
+      if (!existsSync(join(base, 'src/pages/llms.txt.ts'))) bad.push('src/pages/llms.txt.ts 缺失——GEO llms.txt 端点未建（AI 引擎抓取入口）')
+      if (!existsSync(join(base, 'src/pages/rss.xml.ts'))) bad.push('src/pages/rss.xml.ts 缺失——RSS 端点未建（内容分发/收录信号）')
+      const nf = join(base, 'src/pages/404.astro')
+      if (existsSync(nf) && !/noindex/.test(readFileSync(nf, 'utf8'))) bad.push('404.astro 未标 noindex——错误页进索引稀释收录质量')
+      if (!existsSync(join(base, 'public/favicon.svg'))) bad.push('public/favicon.svg 缺失——浏览器标签/收录结果无品牌图标')
+      if (!existsSync(join(base, 'public/og-cover.png'))) bad.push('public/og-cover.png 缺失——og:image 指向不存在的分享图（分享卡开天窗）')
+      const pkg = JSON.parse(readFileSync(join(ROOT, 'package.json'), 'utf8'))
+      if (!/rewrite\/site/.test((pkg.scripts && pkg.scripts.typecheck) || ''))
+        bad.push('package.json scripts.typecheck 未覆盖 rewrite/site——站点 TS（schema.ts 等 GEO 承重层）类型不过闸')
       const contentDir = join(base, 'src/content/tutorials')
       if (existsSync(contentDir)) {
         for (const f of readdirSync(contentDir)) {
@@ -4741,8 +5183,7 @@ export const repoChecks = [
     // playSegment(next) 切下一段——新设计要求段落播完停在完成态，给用户看「重播本段」通栏按钮自己选，
     // 不替用户做主。守此不变量：onEnded 不许再出现 playSegment( 调用（自动切段回潮即红）且须落 segDone；
     // onReplay 须真 seek(0) 从头重来；wxml 须有重播长条的 tap 绑定，否则 ts 有功能界面点不到。
-    // 模式分叉声明（批D·2026-07-11）：本守卫钉的是本机学习模式语义；投屏观看模式连续播为已拍板的模式
-    // 分叉（见需求清单 R40），届时守卫判据随投屏落地批改写，勿把两者当矛盾互相修掉。
+    // （原「投屏观看模式连续播」模式分叉声明已删——投屏 2026-07-12 全线取缔·R40 退役·决策§28。）
     id: 'rw-mp-player-no-autonext',
     roots: ['R38'],
     desc: '播放器重设计战役批B：段落播完不自动切换（P4 通栏重播·设计拍板 2026-07-11）——player.ts 的 onEnded 方法体不得含 playSegment( 调用（自动切段回潮即红）且须含 segDone；onReplay 方法体须存在且含 seek(0；player.wxml 须有 bind:tap="onReplay"（重播长条入口）',
@@ -4913,15 +5354,15 @@ export const repoChecks = [
     },
   },
   {
-    // 播放页竖屏沉浸全屏 + 一键投屏 + 帮助(客服)入口（M2 批·根因#8 真机能力面 + 病根#5 样板复制即漂移）：
+    // 播放页竖屏沉浸全屏 + 帮助(客服)入口（M2 批·根因#8 真机能力面 + 病根#5 样板复制即漂移）：
     // 竖屏沉浸播放器须自绘导航（原生标题栏与自绘黑条控制条会重叠打架）；关闭原生 controls 才不会跟自绘
-    // 底条打架；投屏主路径(原生按钮)+状态回报事件须都在，否则用户点了投屏不知道发生了什么；进度条为自绘
-    // seek 条，须两段式绑定（onSeekStart/onSeekMove 拖动中只改显示不 seek·onSeekEnd 松手才真 seek，见播放器
-    // 重设计战役批C），否则 timeupdate 会在拖动中把手指顶回去；备路径投屏须特性检测再调用（低版本微信直接
-    // 报错崩交互）；客服入口须单源、不许在别处内联。
-    id: 'rw-mp-player-immersive-casting',
+    // 底条打架；进度条为自绘 seek 条，须两段式绑定（onSeekStart/onSeekMove 拖动中只改显示不 seek·
+    // onSeekEnd 松手才真 seek，见播放器重设计战役批C），否则 timeupdate 会在拖动中把手指顶回去；
+    // 客服入口须单源、不许在别处内联。（原 id rw-mp-player-immersive-casting；投屏断言随投屏全线取缔
+    // 删除——2026-07-12 拍板·决策§28，防回潮见 rw-mp-no-casting。）
+    id: 'rw-mp-player-immersive',
     roots: ['#8', '#5'],
-    desc: '播放页竖屏沉浸全屏 + 一键投屏 + 帮助(客服)入口：player.json 须 navigationStyle:custom；player.wxml 的 <video> 须 controls="{{false}}" + show-casting-button + castingstatechange 事件绑定 + 求助入口节点（bind:tap=onHelp）+ 自绘 seek 条两段式绑定（touchstart=onSeekStart/touchmove=onSeekMove/touchend=onSeekEnd）；player.ts 须对备路径投屏 startCasting 做特性检测(typeof===\'function\')，onSeekMove 方法体内不得出现 .seek(（两段式语义：拖动中只改显示）、onSeekEnd 方法体内须出现 .seek(（松手才真 seek）；客服入口须单源在 rewrite/mp/utils/customerService.ts（rewrite/mp 内 wx.openCustomerServiceChat 只此一处）',
+    desc: '播放页竖屏沉浸全屏 + 帮助(客服)入口：player.json 须 navigationStyle:custom；player.wxml 的 <video> 须 controls="{{false}}" + 求助入口节点（bind:tap=onHelp）+ 自绘 seek 条两段式绑定（touchstart=onSeekStart/touchmove=onSeekMove/touchend=onSeekEnd）；player.ts 的 onSeekMove 方法体内不得出现 .seek(（两段式语义：拖动中只改显示）、onSeekEnd 方法体内须出现 .seek(（松手才真 seek）；客服入口须单源在 rewrite/mp/utils/customerService.ts（rewrite/mp 内 wx.openCustomerServiceChat 只此一处）',
     run() {
       const base = join(ROOT, 'rewrite/mp')
       if (!existsSync(base)) return []
@@ -4937,9 +5378,6 @@ export const repoChecks = [
       if (!wxml) bad.push('rewrite/mp/pages/player/player.wxml 缺失')
       if (wxml && !/controls\s*=\s*"\{\{\s*false\s*\}\}"/.test(wxml))
         bad.push('player.wxml 的 <video> 未关闭原生 controls="{{false}}"——自绘控制条会跟原生控件重叠打架（设计定案）')
-      if (wxml && !/show-casting-button/.test(wxml)) bad.push('player.wxml 缺 show-casting-button——投屏主路径（原生按钮）未开启')
-      if (wxml && !/bind:?castingstatechange/.test(wxml))
-        bad.push('player.wxml 缺 castingstatechange 事件绑定——投屏状态（连接/中断）无回报，用户点了投屏不知道发生了什么（根因#14 呼应：动作类失败/状态变化不可静默）')
       if (wxml && !/bind:?tap\s*=\s*"onHelp"/.test(wxml)) bad.push('player.wxml 找不到求助入口节点（bind:tap=onHelp）——客服入口占中央求助钮位缺失（设计定案）')
       if (wxml && !/bind:?touchstart\s*=\s*"onSeekStart"/.test(wxml))
         bad.push('player.wxml 的自绘 seek 条未见 bind:touchstart="onSeekStart"——两段式拖动交互缺起点绑定')
@@ -4960,13 +5398,6 @@ export const repoChecks = [
         }
       }
       if (ts) {
-        // 只在 onCast 方法体内断言，不许整文件全文匹配——否则一句字面提及 startCasting 的注释就能让守卫误绿
-        // （曾经的漏洞：文件头注释写了 typeof ctx.startCasting==='function' 描述思路，正则全文匹配就被这句注释
-        // 顶包过关，即便真实检测代码被删、注释没动，守卫也测不出来）。
-        const onCastBody = methodBody(ts, 'onCast')
-        if (!onCastBody) bad.push('player.ts 找不到 onCast 方法体——备路径投屏单点丢失')
-        else if (!/typeof\s+[\w.]+\.startCasting\s*[!=]==\s*['"]function['"]/.test(stripComments(onCastBody)))
-          bad.push('player.ts 的 onCast 方法体内未见 startCasting 特性检测（typeof ...===/!==\'function\'）——备路径投屏未按基础库能力探测就调用，低版本微信直接报错崩交互')
         // 自绘 seek 两段式语义（播放器重设计战役批C）：拖动中绝不真 seek（否则被 timeupdate/卡顿顶回去），
         // 只在松手时真 seek——各断在各自方法体内、剥注释后判定（错题本 E10：取真源须对剥注释后的函数体匹配）。
         const seekMoveBody = methodBody(ts, 'onSeekMove')
@@ -4999,6 +5430,140 @@ export const repoChecks = [
     },
   },
   {
+    // 投屏全线取缔·防回潮（用户拍板 2026-07-12·决策§28·R39/R40 随之退役）：播放页投屏主路径
+    // （show-casting-button + casting 事件）与备路径（onCast/startCasting 特性检测）及全部入口/样式/文案
+    // 已整体拆除。回潮通道真实存在——未合并的投屏终态分支（PR #7 worktree-cast-landscape）或旧样板复制
+    // 都可能把投屏带回来，故守「rewrite/mp 源内投屏 token 零出现」。日后若用户重启投屏需求：先改需求清单
+    // 再退役本守卫（删与加对等，见 refactor-batch step 4），不许绕。
+    id: 'rw-mp-no-casting',
+    roots: ['R34'],
+    desc: '投屏全线取缔防回潮（2026-07-12 拍板·决策§28）：rewrite/mp 全部源文件（ts/wxml/wxss/json/md）不得出现 投屏/casting 任一 token（含 startCasting/show-casting-button/casting 事件绑定）——旧分支合并或样板复制把投屏带回来当场红；重启投屏须先改需求清单并退役本守卫',
+    run() {
+      const base = join(ROOT, 'rewrite/mp')
+      if (!existsSync(base)) return []
+      const bad = []
+      const re = /投屏|casting/i
+      const walk = (d) => {
+        for (const e of readdirSync(d)) {
+          if (e === 'node_modules') continue
+          const p = join(d, e)
+          if (statSync(p).isDirectory()) walk(p)
+          else if (/\.(ts|wxml|wxss|json|md)$/.test(e) && re.test(readFileSync(p, 'utf8')))
+            bad.push(`${relative(ROOT, p)} 含投屏 token（投屏/casting）——投屏已全线取缔（决策§28），不得回潮`)
+        }
+      }
+      walk(base)
+      return bad
+    },
+  },
+  {
+    // 公开目录读上界（病根#7 规模·容量审计 2026-07-12）：getProducts/getCourses 是全站最热公开读
+    // （每个新会话必调），裸 .get() 命中云开发服务端默认 100 条**静默截断**——商品/课程破百后排序靠后
+    // 的整批消失且无报错无告警（仓内自证：adminApi/lib.ts:92、kit/inventory.ts 注释同一病根）。守此
+    // 不变量：两条查询链必须带显式 .limit(（口径同 learning.ts 已有 .limit(200) 先例）。
+    id: 'rw-app-catalog-reads-bounded',
+    roots: ['#7'],
+    desc: '公开目录读上界（病根#7）：app/actions/catalog.ts 的 getProducts 与 learning.ts 的 getCourses 查询链（collection→…→get）须含显式 .limit(——裸 .get() 服务端默认 100 条静默截断，目录破百即无声丢货',
+    run() {
+      const bad = []
+      const chains = [
+        { file: 'rewrite/cloud/src/functions/app/actions/catalog.ts', head: '.collection(COLLECTIONS.products)', what: 'getProducts 商品目录' },
+        { file: 'rewrite/cloud/src/functions/app/actions/learning.ts', head: '.collection(COLLECTIONS.courses)', what: 'getCourses 课程目录' },
+      ]
+      for (const c of chains) {
+        const p = join(ROOT, c.file)
+        if (!existsSync(p)) continue
+        const src = stripComments(readFileSync(p, 'utf8'))
+        let idx = src.indexOf(c.head)
+        let found = false
+        while (idx !== -1) {
+          const end = src.indexOf('.get()', idx)
+          if (end === -1) break
+          const chain = src.slice(idx, end)
+          // 只核带 orderBy 的列表读（doc()/count() 等单读形态不在此列）
+          if (/\.orderBy\(/.test(chain)) {
+            found = true
+            if (!/\.limit\(/.test(chain)) bad.push(`${c.file} 的 ${c.what}查询链无显式 .limit(——服务端默认 100 条静默截断（病根#7）`)
+          }
+          idx = src.indexOf(c.head, end)
+        }
+        if (!found) bad.push(`${c.file} 找不到 ${c.what}查询链（${c.head}→orderBy→get）——守卫定位失效，代码形态变了须同步改判据`)
+      }
+      return bad
+    },
+  },
+  {
+    // mp「失败伪装成空态」家族收口（根因#14 失败静默化·韧性审计+深审台账 2026-07-12 同源命中）：
+    // 列表/详情页网络失败若与「真的没有数据」渲染同一空态（暂无订单/还没有评价/输入激活码/订单不存在），
+    // 弱网用户会把网络抖动误读成数据消失（付费用户看到课程清空被引导输码=客诉级）。detail.ts 的
+    // loadFailed/missing 分治是仓内已验范式（bug sweep R1 #3），本守卫把范式钉到全部同类页：
+    // ① 五页（order-list/reviews/my-courses/aftersales/order）ts+wxml 须有 loadFailed 态与 onRetryLoad 重试入口；
+    // ② catalog 走 state 机，须有 'failed' 态（getCourseByIdDetailed 区分网络失败/查无）；
+    // ③ player 取址 fetcher 须区分 FETCH_FAIL（网络/服务失败→error 态可重试）与素材未剪（空串→empty 态）。
+    id: 'rw-mp-list-loadfailed-state',
+    roots: ['#14'],
+    desc: 'mp 失败≠空态（根因#14）：order-list/reviews/my-courses/aftersales/order 五页 ts+wxml 须有 loadFailed+onRetryLoad；catalog.ts 须有 failed 态且 lib/courses 有 getCourseByIdDetailed；player.ts 取址须分流 FETCH_FAIL——网络失败伪装成「暂无/不存在/整理中」即红',
+    run() {
+      const base = join(ROOT, 'rewrite/mp')
+      if (!existsSync(base)) return []
+      const bad = []
+      for (const p of ['order-list', 'reviews', 'my-courses', 'aftersales', 'order']) {
+        const ts = join(base, `pages/${p}/${p}.ts`)
+        const wxml = join(base, `pages/${p}/${p}.wxml`)
+        if (!existsSync(ts)) continue
+        if (!/loadFailed/.test(stripComments(readFileSync(ts, 'utf8')))) bad.push(`pages/${p}/${p}.ts 无 loadFailed 态——网络失败与真空态混同（根因#14·detail.ts 范式未铺开）`)
+        if (existsSync(wxml)) {
+          const w = readFileSync(wxml, 'utf8')
+          if (!/loadFailed/.test(w)) bad.push(`pages/${p}/${p}.wxml 无 loadFailed 节点——失败态没有界面出口`)
+          if (!/bind:?tap\s*=\s*"onRetryLoad"/.test(w)) bad.push(`pages/${p}/${p}.wxml 无 onRetryLoad 重试入口——失败态成死胡同`)
+        }
+      }
+      const cat = join(base, 'pages/catalog/catalog.ts')
+      if (existsSync(cat) && !/'failed'/.test(stripComments(readFileSync(cat, 'utf8'))))
+        bad.push("pages/catalog/catalog.ts 无 'failed' 态——课程目录网络失败仍伪装成「课程不存在」")
+      const lib = join(base, 'lib/courses.ts')
+      if (existsSync(lib) && !/getCourseByIdDetailed/.test(readFileSync(lib, 'utf8')))
+        bad.push('lib/courses.ts 无 getCourseByIdDetailed——课程读取「网络失败」与「查无此课」在 lib 层就丢失区分度')
+      const player = join(base, 'pages/player/player.ts')
+      if (existsSync(player) && !/FETCH_FAIL/.test(stripComments(readFileSync(player, 'utf8'))))
+        bad.push('pages/player/player.ts 取址链无 FETCH_FAIL 分流——取址网络失败仍伪装成「视频还在整理中」且无重试')
+      return bad
+    },
+  },
+  {
+    // mp 分发前置（SEO/GEO·决策§29·R29 rewrite 线承接）：旧线 detail-share-wired 只扫 packages/，
+    // rewrite/mp 曾整线零转发钩子（README 记账债）。守三件：① 公开页 home/detail 双钩子
+    // （onShareAppMessage+onShareTimeline）在——没有钩子的页微信默认禁转发，公开页禁转发=分发面自断；
+    // ② detail 分享路径必须带 ?id=（否则收到的人打开空详情）；③ sitemap.json 不得整站 disallow *
+    // 兜头关（须至少 allow home）——搜一搜收录是分发面的机器半边。私有页（交易/学习/隐私）刻意不加
+    // 钩子＝默认不可转发，正是想要的行为，不在守卫面内。
+    id: 'rw-mp-share-wired',
+    roots: ['R29'],
+    desc: 'mp 分发前置（决策§29）：home.ts/detail.ts 须有 onShareAppMessage+onShareTimeline；detail 分享路径须带 pages/detail/detail?id=；sitemap.json 须至少 allow pages/home/home（不得整站 disallow 兜头关）',
+    run() {
+      const base = join(ROOT, 'rewrite/mp')
+      if (!existsSync(base)) return []
+      const bad = []
+      for (const p of ['home', 'detail']) {
+        const f = join(base, `pages/${p}/${p}.ts`)
+        if (!existsSync(f)) continue
+        const src = stripComments(readFileSync(f, 'utf8'))
+        for (const hook of ['onShareAppMessage', 'onShareTimeline']) {
+          if (!new RegExp(`${hook}\\s*\\(`).test(src)) bad.push(`pages/${p}/${p}.ts 缺 ${hook}——公开页无转发钩子＝微信默认禁转发（分发面自断·决策§29）`)
+        }
+        if (p === 'detail' && !/pages\/detail\/detail\?id=/.test(src))
+          bad.push('detail.ts 分享路径未带 pages/detail/detail?id=——收到分享的人打开的是空详情')
+      }
+      const smPath = join(base, 'sitemap.json')
+      if (existsSync(smPath)) {
+        const rules = (JSON.parse(readFileSync(smPath, 'utf8')).rules || [])
+        const allowsHome = rules.some((r) => r.action === 'allow' && r.page === 'pages/home/home')
+        if (!allowsHome) bad.push('sitemap.json 未 allow pages/home/home——搜一搜收录兜头关（决策§29 已放开公开页，回关须先改决策）')
+      }
+      return bad
+    },
+  },
+  {
     // 客服触点真实化（重写线 rewrite/mp·承旧线 customer-service-wired 所标病根 R18）：批A 建了
     // utils/customerService.ts 单源 helper，但 detail.ts 的 onService() 当场仍是假占位
     // wx.showToast('正在接入客服…')——旧线守卫早已判定这句假 Toast 绝迹，新线却原样重现（复制漂移同源）。
@@ -5006,7 +5571,7 @@ export const repoChecks = [
     // player/onHelp、me/onKefu、aftersales/onKefu 四点（2026-07-08 用户拍板）。
     // 播放器重设计战役批D（2026-07-11）：player.ts 求助钮改拉起求助面板（onHelp 不再直连客服），真客服
     // 调用移入面板卡1 onHelpContact——触点表同批改写（onHelp→onHelpContact），wxml 上 bind:tap="onHelp"
-    // 节点原样保留（rw-mp-player-immersive-casting 钉的是节点存在，与方法体内调用什么无关）。
+    // 节点原样保留（rw-mp-player-immersive 钉的是节点存在，与方法体内调用什么无关）。
     id: 'rw-mp-customer-service-wired',
     roots: ['R18'],
     desc: '客服触点真实化（rewrite/mp）：① 全目录禁「正在接入客服」假 Toast 绝迹（同旧线 customer-service-wired 判定的假占位家族）② 触点表驱动——detail.ts 的 onService()、player.ts 的 onHelpContact()、me.ts 的 onKefu()、aftersales.ts 的 onKefu() 方法体须真调 openCustomerService()，防触点各自散接/漏接',
@@ -5098,37 +5663,6 @@ export const repoChecks = [
         bad.push('pages/home/home.ts 的 onAddProduct() 未调 decideQuickAdd()——加购决策未走单源纯函数（R29）')
       if (!/cart\.add\s*\(/.test(bodyNoComments))
         bad.push('pages/home/home.ts 的 onAddProduct() 未调 cart.add()——加购按钮没真加购物车（R29·病根#6）')
-      return bad
-    },
-  },
-  {
-    id: 'rw-m5-runbook-synced',
-    roots: ['正册'],
-    desc: 'M5 切换 runbook 与部署面同步：rewrite/M5-切换runbook.md 须存在，且 rewrite/cloud 每个函数单元名与并行期定名 adminApiV2 都出现在 runbook 内——函数增删改名 runbook 必跟，防切换日拿陈账操刀',
-    run() {
-      const base = join(ROOT, 'rewrite/cloud/src/functions')
-      if (!existsSync(base)) return []
-      const rbPath = join(ROOT, 'rewrite/M5-切换runbook.md')
-      if (!existsSync(rbPath)) return ['rewrite/M5-切换runbook.md 缺失——M5 切换脚本未成文（切换日无脚本可循）']
-      const rb = readFileSync(rbPath, 'utf8')
-      const bad = []
-      const isFn = (p) => readFileSync(p, 'utf8').includes('export const main')
-      const need = ['adminApiV2']
-      for (const e of readdirSync(base)) {
-        const p = join(base, e)
-        if (!statSync(p).isDirectory()) continue
-        if (existsSync(join(p, 'index.ts')) && isFn(join(p, 'index.ts'))) {
-          need.push(e)
-          continue
-        }
-        for (const c of readdirSync(p)) {
-          const cp = join(p, c)
-          if (statSync(cp).isDirectory()) {
-            if (existsSync(join(cp, 'index.ts')) && isFn(join(cp, 'index.ts'))) need.push(c)
-          } else if (c.endsWith('.ts') && isFn(cp)) need.push(c.slice(0, -3))
-        }
-      }
-      for (const n of need) if (!rb.includes('`' + n + '`')) bad.push(`M5 runbook 缺函数 ${n}——部署面与脚本漂移（切换日会漏部署/漏核）`)
       return bad
     },
   },
@@ -5369,10 +5903,19 @@ export const repoChecks = [
         bad.push('rewrite/mp/app.ts 缺失——冒烟层错误探针无处挂（批次D）')
       } else {
         const appTs = readFileSync(appTsPath, 'utf8')
-        if (!methodBody(appTs, 'onError'))
-          bad.push('rewrite/mp/app.ts 的 App({}) 找不到 onError 方法体——冒烟层错误探针缺失（批次D·根因#8/#14）')
-        if (!methodBody(appTs, 'onUnhandledRejection'))
-          bad.push('rewrite/mp/app.ts 的 App({}) 找不到 onUnhandledRejection 方法体——冒烟层错误探针缺失（批次D·根因#8/#14）')
+        for (const m of ['onError', 'onUnhandledRejection']) {
+          const body = methodBody(appTs, m)
+          if (!body) {
+            bad.push(`rewrite/mp/app.ts 的 App({}) 找不到 ${m} 方法体——冒烟层错误探针缺失（批次D·根因#8/#14）`)
+            continue
+          }
+          // 生产可观测半边（工业级完善批6·根因#14）：探针只进内存数组是开发期取证，真实用户设备上
+          // 无人读取——全局兜底必须同时经 reportClientError（trackEvent 落云端 events）让线上崩溃可见。
+          if (!/reportClientError\s*\(/.test(stripComments(body)))
+            bad.push(`rewrite/mp/app.ts 的 ${m} 未调 reportClientError——全局错误只进内存数组，生产端不可观测（根因#14）`)
+        }
+        if (!/trackEvent\s*\(\s*'client_error'/.test(stripComments(appTs)))
+          bad.push("rewrite/mp/app.ts 无 trackEvent('client_error') 上报出口——reportClientError 名存实亡（根因#14）")
       }
       return bad
     },

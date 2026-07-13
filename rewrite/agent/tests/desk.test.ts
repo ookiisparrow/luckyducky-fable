@@ -3,6 +3,7 @@
 import { describe, it, expect } from 'vitest'
 import {
   mergeThread,
+  keyOf,
   advanceCursor,
   normalizeMsgs,
   mapQueue,
@@ -215,6 +216,21 @@ describe('快捷回复过滤 + 页内提醒聚合（B4·纯函数）', () => {
     expect(titleWithBadge('小棉鸭 · 坐席台', 3)).toBe('(3) 小棉鸭 · 坐席台')
     expect(titleWithBadge('小棉鸭 · 坐席台', 0)).toBe('小棉鸭 · 坐席台')
     expect(titleWithBadge(titleWithBadge('小棉鸭 · 坐席台', 0), 0)).toBe('小棉鸭 · 坐席台') // 反复套 n=0 不叠加
+  })
+})
+
+describe('气泡 :key 与去重键 keyOf 同源（深审20260712 P2·防再漂移）', () => {
+  it('大白话：同秒同向两张图（msgid 不同、text 恒为占位）keyOf 不同——去重能留两条、Vue key 也不撞；无 msgid 回退键含 msgtype 且稳定', () => {
+    const a: Msg = { at: 5000, direction: 'in', text: '[image]', msgtype: 'image', msgid: 'wx-a' }
+    const b: Msg = { ...a, msgid: 'wx-b' }
+    expect(keyOf(a)).toBe('id:wx-a')
+    expect(keyOf(a)).not.toBe(keyOf(b))
+    expect(keyOf({ at: 1000, direction: 'out', text: '好', msgtype: 'text' })).toBe('1000|out|text|好')
+    expect(keyOf({ at: 1000, direction: 'out', text: '好' })).toBe('1000|out||好') // msgtype 缺省稳定
+  })
+  it('大白话：Desk.vue 模板 :key 用导出的 keyOf（同源单点）——旧 at+direction+text 拼接键不再存在', () => {
+    expect(deskSrc).toMatch(/:key="keyOf\(m\)"/)
+    expect(deskSrc).not.toMatch(/:key="m\.at \+ m\.direction \+ m\.text"/)
   })
 })
 

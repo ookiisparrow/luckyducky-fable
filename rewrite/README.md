@@ -1,19 +1,19 @@
 # rewrite/ — 重写线新代码根目录（M0 骨架·2026-07-04）
 
 > 定标依据：`docs/关键决策记录.md §23` + `docs/现状与路线.md §路线图 M0–M5`。
-> 边界铁律：**新代码只进本目录；`packages/` 旧线字节级冻结**（守卫 `oldline-frozen`，止血走 next 仓）；M5 切换完成后旧线清退、本目录转正。
+> 边界铁律：**新代码只进本目录；`packages/` 旧线字节级冻结**（守卫 `oldline-frozen`，处置待拍板）；**M5 已于 2026-07-09 执行完毕——云端旧线已清退、本目录已转正为生产源**（进度权威看 `docs/现状与路线.md`，下表状态列只记里程碑终态）。
 
 ## 布局（按里程碑立包，不预建空目录）
 
 | 包 | 里程碑 | 内容 | 状态 |
 |---|---|---|---|
 | `rewrite/golden/` | M0 | 黄金用例册：旧线 1033 测试（123 文件）的行为断言提炼成栈无关验收基准，约 650 条·七册（orders-money / kit-security / learning-content / cs-agent / inventory-scm / frontend-store / admin-misc），123 文件全认领无静默丢弃 | ✅ 2026-07-04 |
-| `rewrite/spike-skyline/` | M0 | Skyline 真机 spike——已验（2026-07-04）：三存疑全过、T4 过、T5 吸顶双引擎未吸（增益未证实·M2 纯结构复验后即删本工程） | ✅ 已验·留作复验台 |
-| `rewrite/mp/` | M2 | 微信原生小程序（TypeScript + glass-easel，默认 WebView、按页 Skyline）——工程骨架已立（devtools 直导 rewrite/mp·TS 经编译插件·守卫 rw-mp-line-in-gates） | 🚧 批13 我页完善·M2 页面面收齐 |
-| `rewrite/shared/` | M1 | 新线契约 `@ldrw/shared`（Fen 品牌类型/状态机声明类型级派生/37 集合册/42 错误码册·与旧线 parity 焊死） | 🟢 批1 已立（2026-07-04） |
-| `rewrite/cloud/` | M1 | 云函数重写 `@ldrw/cloud`（kit 八件横切原语 ✅ 批2·函数域逐批立·新命名空间与旧函数并行；回调点位 M5 切换日同名替换） | 🟢 kit 已立（2026-07-04） |
-| `rewrite/admin/` `rewrite/agent/` | M3 | 后台重写（Vue3+Vite+TS；坐席台新旧并行零断档）——admin 骨架已立（登录/会话/壳布局六组 IA·守卫 rw-admin-ui-in-gates） | ✅ admin 24 页全满 · 🚧 agent 批8 坐席台 |
-| `rewrite/site/` | M4 | Astro SSG 内容站+官网（GEO 语料源·成交留小程序）——骨架已立·四类结构化数据·首批 2 篇 AI 起草待审 | 🚧 批2 十页·5 篇待审 |
+| `rewrite/spike-skyline/` | M0 | Skyline 真机 spike——已验（2026-07-04）：三存疑全过、T4 过、T5 吸顶双引擎未吸（增益未证实；后 M2 全线拍板首发全 WebView，目录页刻意绕开 sticky/scroll-view 族、原「纯结构复验后即删」的复验未发生） | ✅ 已验·用户拍板保留（2026-07-12） |
+| `rewrite/mp/` | M2 | 微信原生小程序（TypeScript + glass-easel·首发全 WebView 拍板）——21 页 | ✅ 代码面收齐（2026-07-07）·待微信后台上传/提审/发布 |
+| `rewrite/shared/` | M1 | 新线契约 `@ldrw/shared`（Fen 品牌类型/状态机声明类型级派生/集合册/错误码册·与旧线 parity 焊死） | ✅ |
+| `rewrite/cloud/` | M1 | 云函数重写 `@ldrw/cloud`（kit 八件横切原语 + 6 域 16 函数） | ✅ 2026-07-09 M5 同名替换上线·云端唯一版本 |
+| `rewrite/admin/` `rewrite/agent/` | M3 | 后台重写（Vue3+Vite+TS）——admin 30 页六组 IA + agent 坐席台 | ✅ 已上正式路径 `/admin` `/agent`（2026-07-09）·待用户演练 |
+| `rewrite/site/` | M4 | Astro SSG 内容站+官网（GEO 语料源·成交留小程序）·10 页+教程 5 篇 | ✅ 已上托管根路径（2026-07-09）·5 篇审稿待用户 |
 
 ## 治理地基（新线开局即有）
 

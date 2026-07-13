@@ -18,13 +18,16 @@ const BANNER: Record<string, BannerVM> = {
   shipped: { icon: 'truck', tint: 'lilac', head: '商家已发货，包裹运送中', sub: '请注意查收，确认收货前请先验货' },
   done: { icon: 'badge-check', tint: 'sage', head: '交易已完成', sub: '期待你钩出的小鸭，欢迎来晒图~' },
   closed: { icon: 'info', tint: 'muted', head: '订单已关闭', sub: '订单已取消或超时未支付' },
-  refund_required: { icon: 'wallet', tint: 'lilac', head: '退款处理中', sub: '商家正在处理你的退款申请，请耐心等待' },
+  // PAID_BUT_OOS 死信（已付但缺货·待人工退款）：客户没申请过退款、商家也没在自动处理——诚实描述需人工介入，
+  // 不承诺不存在的自动化流程（与 admin 标签「待退款」同口径，见 admin/src/lib/format.ts）。
+  refund_required: { icon: 'wallet', tint: 'lilac', head: '待退款', sub: '该订单需人工处理退款，请联系客服协助处理' },
 }
 
 Page({
   data: {
     loading: true,
     missing: false,
+    loadFailed: false, // 失败≠不存在（根因#14·守卫 rw-mp-list-loadfailed-state）：刚付款用户弱网打开不该看到「订单不存在」
     vm: null as OrderVM | null,
     banner: null as BannerVM | null,
     amountNum: '',
@@ -48,11 +51,22 @@ Page({
     const seq = ++this._seq
     const r = await getOrderById(this.orderId)
     if (seq !== this._seq) return
-    const vm = r.ok ? mapOrder(r.order) : null
+    // 失败≠不存在（根因#14）：请求失败落 loadFailed 给重试（已有 vm 时保留不覆盖）；
+    // 只有请求成功且查无此单才是 missing「订单不存在」。
+    if (!r.ok) {
+      this.setData({ loading: false, loadFailed: !this.data.vm })
+      if (this.data.vm) wx.showToast({ title: '刷新失败，请稍后重试', icon: 'none' })
+      return
+    }
+    const vm = mapOrder(r.order)
     const banner = vm ? BANNER[vm.status] || { icon: 'info', tint: 'muted', head: vm.statusLabel, sub: '' } : null
     const amountNum = vm ? (vm.amountLabel || '').replace(/[^0-9.]/g, '') : ''
     const canAfterSale = !!vm && ['paid', 'shipped', 'done'].includes(vm.status)
-    this.setData({ loading: false, missing: !vm, vm, banner, amountNum, canAfterSale })
+    this.setData({ loading: false, loadFailed: false, missing: !vm, vm, banner, amountNum, canAfterSale })
+  },
+  onRetryLoad() {
+    this.setData({ loading: true, loadFailed: false })
+    void this.reload()
   },
   onCopyOrderNo() {
     if (!this.orderId) return

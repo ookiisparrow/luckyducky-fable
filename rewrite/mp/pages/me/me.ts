@@ -7,6 +7,7 @@ import { getPageContent } from '../../lib/pageContent'
 import { continueResolve, type ContinueTarget } from '../../lib/continueResolve'
 import { mapMe, type MeVM } from '../../lib/mapPages'
 import { openCustomerService } from '../../utils/customerService'
+import { goHomeTab } from '../../lib/homeIntent'
 
 Page({
   data: {
@@ -15,6 +16,7 @@ Page({
     bio: '',
     cont: null as ContinueTarget | null,
     entries: mapMe(null).entries as MeVM['entries'], // 九入口标题/可见性·首帧默认（CMS 到达覆盖）
+    contFailed: false, // 继续学习区取数失败标记（同 aftersales/order-list loadFailed 分治：失败≠没进度）
   },
   onShow() {
     if (typeof this.getTabBar === 'function') (this.getTabBar() as unknown as LdTabBar).setActive('me')
@@ -38,14 +40,23 @@ Page({
     if (seq !== this._seq) return // 过期回包（被更晚 refresh 取代）：丢弃
     const user = (u.ok ? u.user : null) as Record<string, any> | null
     const me = mapMe(meContent)
+    // 失败≠没进度（同 aftersales/order-list loadFailed 分治·失败伪装空态 P2）：progress/mine/courses
+    // 任一取数失败时，空列表与「真没进度/没买课」数据形状等价，喂 continueResolve 会渲染成假空态。
+    // 失败不覆盖已有 cont（旧卡仍可点）；一无所有才亮 contFailed 给重试；真空态（全成功无课）仍走引导。
+    const contFetchFailed = !progress.ok || !mine.ok || courses === null
     this.setData({
       // 云端资料回灌：非空覆盖默认、空回退 CMS 默认昵称（黄金 §九·不显示假名）
       nickname: (user && String(user.nickname || '')) || me.defaultNickname,
       avatar: (user && String(user.avatar || '')) || '',
       bio: (user && String(user.bio || '')) || '',
-      cont: continueResolve(progress.ok ? progress.list : [], mine.ok ? mine.list : [], courses || []),
       entries: me.entries,
+      ...(contFetchFailed
+        ? { contFailed: !this.data.cont }
+        : { cont: continueResolve(progress.list, mine.list, courses), contFailed: false }),
     })
+  },
+  onRetryCont() {
+    void this.refresh() // 继续学习区失败态重试入口（me 页未开下拉刷新·按钮重试同 detail onRetryLoad 范式）
   },
   onContinue() {
     const c = this.data.cont
@@ -53,7 +64,10 @@ Page({
       // 带上次段位回到那一段（卡片显的是该课时·不带则播放器落首段·卡片承诺≠行为）；段位空则不拼（播放器挑首个可播段）
       const seg = c.segmentId ? '&segmentId=' + encodeURIComponent(c.segmentId) : ''
       wx.navigateTo({ url: '/pages/player/player?courseId=' + c.courseId + seg })
-    } else wx.switchTab({ url: '/pages/home/home' }) // 无课兜底：去逛逛
+    } else {
+      // 兜底去逛逛→首页应从头逛起：防首页上次恰好滚到 FAQ 板块的旧滚动位置残留，造成「弹出大家都在问」错位观感
+      goHomeTab()
+    }
   },
   onEditProfile() {
     wx.navigateTo({ url: '/pages/profile-edit/profile-edit' })

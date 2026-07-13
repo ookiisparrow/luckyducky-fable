@@ -1,9 +1,16 @@
 ---
-// 关于我们（品牌故事承 mp 初稿——同一份待定稿文案·两处同源人工对齐·定稿时一起改）。
+// 关于我们（品牌故事文案定稿：与 mp 端 lib/mapPages.ts ABOUT_LEAD_DEFAULT/ABOUT_SECTIONS_DEFAULT 同源——两处逐字对齐，改一处需同步改另一处）。
 import Base from '../layouts/Base.astro'
+import { breadcrumbSchema, jsonLd } from '../lib/schema'
+
+const crumbs = breadcrumbSchema([
+  { name: '首页', path: '/' },
+  { name: '关于我们', path: '/about/' },
+])
 ---
 
 <Base title="关于我们" description="Lucky Ducky 小棉鸭是一家专注钩织的材料包品牌：把毛线、配件、工具与配套教学打包，让没有基础的人也能从第一针开始，亲手钩出属于自己的随身幸运物。">
+  {crumbs && <script type="application/ld+json" set:html={jsonLd(crumbs)} />}
   <h1>我们希望每个人都能亲手创造自己的随身幸运物</h1>
 
   <h2>我们是谁</h2>
@@ -15,7 +22,8 @@ import Base from '../layouts/Base.astro'
   <h2>我们做什么</h2>
   <p>
     每一份材料包都配有分步教学视频：扫码开课，跟着视频一针一线，把一团毛线变成可以随身携带的幸运物。
-    从选材到教学，我们只想让「开始」这件事变得足够简单。
+    从选材到教学，我们只想让「开始」这件事变得足够简单。想直接上手，可以先看看<a href="/kits/">材料包里都有什么</a>，
+    或从<a href="/tutorials/">入门教程</a>的第一针开始。
   </p>
 
   <h2>我们相信</h2>
@@ -35,6 +43,9 @@ import Base from '../layouts/Base.astro'
   h2 {
     color: #241733;
     margin-top: 28px;
+  }
+  a {
+    color: #7b5caf;
   }
   .cta {
     margin-top: 32px;

@@ -8,6 +8,7 @@ const tutorials = defineCollection({
     title: z.string().max(60),
     description: z.string().max(160), // meta description 长度纪律
     datePublished: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+    dateModified: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(), // 改稿日（可选·出 Article dateModified 与 og article:modified_time）
     reviewed: z.boolean(), // AI 起草稿必须显式标记·不冒充定稿
     steps: z.array(z.object({ name: z.string(), text: z.string() })).default([]),
     faq: z.array(z.object({ q: z.string(), a: z.string() })).default([]),

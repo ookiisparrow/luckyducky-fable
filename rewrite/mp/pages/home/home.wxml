@@ -41,7 +41,7 @@
         </view>
         <view class="ld-prod-body">
           <view class="ld-prod-name">{{item.name}}</view>
-          <view class="ld-prod-tag" wx:if="{{item.tag}}">{{item.tag}}</view>
+          <view class="ld-prod-tag {{item.tag ? '' : 'ld-prod-tag-empty'}}">{{item.tag}}</view>
           <view class="ld-prod-foot">
             <view class="ld-price-group">
               <text class="ld-price-was" wx:if="{{item.wasLabel}}">{{item.wasLabel}}</text>

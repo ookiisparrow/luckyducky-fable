@@ -176,3 +176,15 @@
   font-size: 24rpx;
   color: var(--ld-content-2);
 }
+
+/* 失败态重试钮（根因#14·守卫 rw-mp-list-loadfailed-state·形制同 detail pdp-empty-btn） */
+.ld-cat-retry {
+  display: inline-block;
+  margin-top: 18rpx;
+  padding: 14rpx 46rpx;
+  border-radius: var(--ld-radius-pill);
+  background: var(--ld-purple);
+  color: #fff;
+  font-size: 26rpx;
+  font-weight: 600;
+}

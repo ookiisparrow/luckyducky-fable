@@ -4,10 +4,12 @@ import { statesOf } from '../src/status'
 import { ORDER_STATUS_SPEC, AFTERSALE_STATUS_SPEC, ORDER_STATUS, AFTERSALE_STATUS } from '../src/order'
 import { ORDER_STATUS as OLD_OS, AFTERSALE_STATUS as OLD_AS_DICT } from '../../../packages/shared/src/order'
 import { QRCODE_STATUS_SPEC } from '../src/learning'
+import { PURCHASE_ORDER_STATUS_SPEC, OUTWORK_ORDER_STATUS_SPEC } from '../src/scm.spec'
 import { ORDER_STATUS_SPEC as OLD_ORDER, AFTERSALE_STATUS_SPEC as OLD_AS } from '../../../packages/shared/src/order.spec'
 import { QRCODE_STATUS_SPEC as OLD_QR } from '../../../packages/shared/src/learning.spec'
+import { PURCHASE_ORDER_STATUS_SPEC as OLD_PO, OUTWORK_ORDER_STATUS_SPEC as OLD_OW } from '../../../packages/shared/src/scm.spec'
 
-const SPECS = [ORDER_STATUS_SPEC, AFTERSALE_STATUS_SPEC, QRCODE_STATUS_SPEC]
+const SPECS = [ORDER_STATUS_SPEC, AFTERSALE_STATUS_SPEC, QRCODE_STATUS_SPEC, PURCHASE_ORDER_STATUS_SPEC, OUTWORK_ORDER_STATUS_SPEC]
 
 describe('声明结构健全性', () => {
   it.each(SPECS.map((s) => [s.collection, s] as const))('%s：初始/终态非空，流转两端都是已声明状态', (_c, spec) => {
@@ -53,6 +55,20 @@ describe('与旧线声明逐字 parity（并存期铁律）', () => {
     )
     expect(QRCODE_STATUS_SPEC.transitions.map((t) => `${[...t.from].join(',')}→${t.to}`)).toEqual(
       OLD_QR.transitions.map((t) => `${[...t.from].join(',')}→${t.to}`)
+    )
+  })
+
+  // purchaseOrders / outworkOrders（SCM 域·批C）：两条线各有一份 scm.spec.ts，目前手工保持逐字一致
+  // （scm.ts 的生成器覆盖面见 gen-order-domain.mjs DOMAINS·守卫 gen-order-domain-synced 焊派生物同步，
+  // 但两条线各自的 *声明源* scm.spec.ts 之间没有机器焊接——这条 parity 测试补上「声明源不分叉」这一环）。
+  it('purchaseOrders / outworkOrders：状态全集与流转逐字一致', () => {
+    expect(statesOf(PURCHASE_ORDER_STATUS_SPEC)).toEqual(statesOf(OLD_PO as never))
+    expect(statesOf(OUTWORK_ORDER_STATUS_SPEC)).toEqual(statesOf(OLD_OW as never))
+    expect(PURCHASE_ORDER_STATUS_SPEC.transitions.map((t) => `${[...t.from].join(',')}→${t.to}`)).toEqual(
+      OLD_PO.transitions.map((t) => `${[...t.from].join(',')}→${t.to}`)
+    )
+    expect(OUTWORK_ORDER_STATUS_SPEC.transitions.map((t) => `${[...t.from].join(',')}→${t.to}`)).toEqual(
+      OLD_OW.transitions.map((t) => `${[...t.from].join(',')}→${t.to}`)
     )
   })
 })

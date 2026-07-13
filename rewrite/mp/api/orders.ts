@@ -7,8 +7,13 @@ export interface OrderLine {
   qty: number
 }
 
-export const createOrder = (items: OrderLine[], address: { name: string; phone: string; region: string; detail: string }): Promise<ApiResult> =>
-  callApp('createOrder', { items, address })
+// idempotencyKey：结算草稿创建时生成一次、重试复用同一个键（见 lib/checkout.ts getIdemKey）——
+// 云端据此把网络超时后的重复提交折叠成同一笔订单，不重复扣库存/建二单。
+export const createOrder = (
+  items: OrderLine[],
+  address: { name: string; phone: string; region: string; detail: string },
+  idempotencyKey?: string
+): Promise<ApiResult> => callApp('createOrder', { items, address, idempotencyKey })
 
 export const pay = (id: string): Promise<ApiResult> => callApp('pay', { id })
 

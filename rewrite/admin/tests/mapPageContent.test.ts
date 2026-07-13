@@ -13,6 +13,8 @@ import {
   normalizeAgreement,
   agreementPayload,
   ME_ENTRIES,
+  combineSaveMessages,
+  SAVE_OK_MESSAGE,
 } from '../src/lib/mapPageContent'
 
 describe('welcome 欢迎与激活往返', () => {
@@ -90,6 +92,37 @@ describe('about 关于我们往返', () => {
     expect(Object.keys(p).sort()).toEqual(['lead', 'sections'])
     expect(Object.keys(p.sections[0]).sort()).toEqual(['body', 'title'])
     expect(p.sections).toHaveLength(10)
+  })
+})
+
+describe('MeAboutTab 两档保存结果聚合（P1 修复·批N：me/about 各自独立 save() 不能互相遮蔽失败信号）', () => {
+  it('大白话：me 保存成功、about 保存失败——用户必须能看到失败信号，不能只看到成功提示（原 || 短路会把这条吃掉）', () => {
+    const r = combineSaveMessages(SAVE_OK_MESSAGE, '保存失败：STOCK_CONFLICT')
+    expect(r.error).toBe(true)
+    expect(r.message).not.toBe(SAVE_OK_MESSAGE) // 不能被 me 的成功文案整个遮蔽
+    expect(r.message).toContain('关于我们') // 点名是哪一档失败
+    expect(r.message).toContain('保存失败：STOCK_CONFLICT') // 具体原因原样带出
+    expect(r.message).not.toContain('「我」页') // 成功的一档不误报失败
+  })
+
+  it('大白话：about 成功、me 失败——同理必须暴露 me 的失败，不因 about 先/后完成而丢信息', () => {
+    const r = combineSaveMessages('内容未成功载入，暂不能保存（避免覆盖已有配置·请刷新重试）', SAVE_OK_MESSAGE)
+    expect(r.error).toBe(true)
+    expect(r.message).toContain('「我」页')
+    expect(r.message).toContain('内容未成功载入')
+    expect(r.message).not.toContain('关于我们')
+  })
+
+  it('大白话：两档都失败——两条失败话术都要在、不能只留一条', () => {
+    const r = combineSaveMessages('保存失败：网络错误', '保存失败：服务器错误')
+    expect(r.error).toBe(true)
+    expect(r.message).toContain('「我」页：保存失败：网络错误')
+    expect(r.message).toContain('「关于我们」：保存失败：服务器错误')
+  })
+
+  it('大白话：两档都成功才显示统一成功提示；两边都还没存过（空 message）也不误报失败', () => {
+    expect(combineSaveMessages(SAVE_OK_MESSAGE, SAVE_OK_MESSAGE)).toEqual({ error: false, message: SAVE_OK_MESSAGE })
+    expect(combineSaveMessages('', '')).toEqual({ error: false, message: SAVE_OK_MESSAGE })
   })
 })
 

@@ -61,6 +61,7 @@ export async function saveMaterial({ data }: Ctx) {
     spec,
   })
   if (r === 'UOM_LOCKED') return reply(400, { ok: false, error: 'UOM_LOCKED' }) // 建档后不可改计量（混账）
+  if (r === 'DUPLICATE') return reply(409, { ok: false, error: 'DUPLICATE' }) // 并发首建同一物料（同 runAssembly 409 口径）
   return reply(200, { ok: true, materialId: _id })
 }
 
@@ -122,6 +123,10 @@ export async function adjustStock({ data, agentId }: Ctx) {
   const adjustId = String(data.adjustId || '') // 前端每次提交生成一次·重试复用＝幂等键成分
   const reason = str(data.reason, 200)
   if (!materialId || !adjustId) return reply(400, { ok: false, error: 'BAD_ADJUST' })
+  // 拒成品 fg: 调整（深审 P2·假成功账实分叉）：applyStockMoves 对 fg: 行跳过 casChange（成品账在 kit/inventory·
+  // 流水行只留痕），adjust 走这里会收 ok:true/applied:1 但 materials/inventory 纹丝不动＝假成功、留一条 stray fg
+  // adjust 流水破坏对账公式。成品期初/人工调整须走 inventory.saveStock，不走原料调整口。
+  if (materialId.startsWith('fg:')) return reply(400, { ok: false, error: 'FG_NOT_ADJUSTABLE' })
   if (!reason) return reply(400, { ok: false, error: 'NO_REASON' }) // 调整必留因（审计可读）
   const delta = data.delta
   if (!Number.isInteger(delta) || delta === 0) return reply(400, { ok: false, error: 'BAD_DELTA' }) // 克/件整数（守卫 scm-uom-integer）

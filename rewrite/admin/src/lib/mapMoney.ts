@@ -131,9 +131,10 @@ export interface OrderRowVM {
   amountLabel: string
   timeLabel: string
   feeMismatch: boolean
+  refundHold: boolean // 已有行退款 approved/refunded（后端 listOrders join afterSales·真正拦截闸在 shipOne 服务端）→ 禁发货
   trackingNo: string
   address: string // 列表用·手机号已掩码（PII）
-  canShip: boolean // paid & 非金额异常 → 首次发货
+  canShip: boolean // paid & 非金额异常 & 非退款保留 → 首次发货
   canModify: boolean // shipped → 改单号
   company: string // 当前物流公司（改单号预填）
   // —— 详情抽屉数据链（时间线/逐商品/交易号/微信合规·VMlhp）——
@@ -180,9 +181,11 @@ export function mapOrderRows(list: unknown): OrderRowVM[] {
       amountLabel: yuan(o.amount) || '¥0.00',
       timeLabel: dateTime(o.createdAt),
       feeMismatch: o.feeMismatch === true,
+      refundHold: o.refundHold === true,
       trackingNo: String((o.shipping && o.shipping.trackingNo) || o.trackingNo || ''),
       address: [a.name, maskPhone(a.phone), a.region, a.detail].filter(Boolean).join(' '), // 列表掩码
-      canShip: status === 'paid' && o.feeMismatch !== true, // 金额不符单禁发货（云端也挡·这里只是入口收窄）
+      // 金额不符单/已退款单禁发货（云端 shipOne 也挡·这里只是入口收窄，防越权点了才发现被拒）
+      canShip: status === 'paid' && o.feeMismatch !== true && o.refundHold !== true,
       canModify: status === 'shipped', // 已发货可改单号
       company: String((o.shipping && o.shipping.company) || ''),
       items,

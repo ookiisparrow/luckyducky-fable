@@ -99,7 +99,7 @@ describe('播放地址缓存（黄金 §六）', () => {
   })
 })
 
-describe('竖屏沉浸播放页·进度条纯函数（批：一键投屏 + 帮助入口）', () => {
+describe('竖屏沉浸播放页·进度条纯函数（批：帮助入口）', () => {
   it('大白话：formatClock 秒转 m:ss，负数/非数字/超一分钟都算对', () => {
     expect(formatClock(0)).toBe('0:00')
     expect(formatClock(5)).toBe('0:05')
