@@ -69,6 +69,11 @@ function orderNo(now: number): string {
   )
 }
 
+// 每 openid 在途未支付单上限（收尾硬化批 2026-07-13·防滥用面）：real 模式下单即 reserveStock 持库存至支付窗
+// 过后才回补，无此上限时单账号可零成本建单把热销 SKU 库存全额预留 15min 锁死真买家。5 单给正常用户（弃单重下）
+// 留足余量，又把单账号可同时锁的 SKU 数封顶——绕过需大量真微信号，成本陡增（用户拍板取此低风险方案·非改钱链热路径）。
+const MAX_PENDING_ORDERS = 5
+
 export const createOrder = withOpenId(
   withRateLimit('createOrder', { max: 20, windowMs: 60_000 }, async ({ db, OPENID, event }) => {
     const _ = db.command
@@ -180,6 +185,19 @@ export const createOrder = withOpenId(
       .catch(() => null)
     const payMode = cfg && cfg.data && cfg.data.mode === 'real' ? 'real' : 'mock'
     if (payMode === 'mock' && process.env.ALLOW_MOCK_PAY !== '1') return err(ERR.PAY_CONFIG_MISSING)
+
+    // 在途未支付单上限闸（防滥用·见 MAX_PENDING_ORDERS 注释）：real 模式建 pending 单会持库存锁，
+    // 预留前先数本人未过支付窗的 pending 单，超上限即拒——不占库存不建单。mock 单即 paid、不占锁，不查。
+    // 查询口径同 closeExpiredOrders（status:'pending' + createdAt 在支付窗内）。
+    if (payMode === 'real') {
+      const pendingCutoff = Date.now() - PAY_WINDOW_MS
+      const mine = await db
+        .collection(COLLECTIONS.orders)
+        .where({ _openid: OPENID, status: 'pending', createdAt: _.gt(pendingCutoff) })
+        .count()
+        .catch(() => ({ total: 0 }))
+      if ((mine.total || 0) >= MAX_PENDING_ORDERS) return err(ERR.TOO_MANY_PENDING)
+    }
 
     // 下单即预留（乐观 CAS 防超卖）：任一不足整单拒（已扣回滚在 reserveStock 内）
     const stockLines = items

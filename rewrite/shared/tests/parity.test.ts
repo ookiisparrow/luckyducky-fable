@@ -89,6 +89,7 @@ describe('与旧线契约逐键 parity', () => {
       RECEIVE_L_KNOTTED_ONLY: 'RECEIVE_L_KNOTTED_ONLY',
       // 订单/支付域
       OUT_OF_STOCK: 'OUT_OF_STOCK',
+      TOO_MANY_PENDING: 'TOO_MANY_PENDING',
     }
     expect(ERR).toEqual({ ...OLD_ERR, ...RW_NEW_ERR })
   })
