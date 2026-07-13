@@ -9,8 +9,9 @@
  *   （无 main 的文件如 timers/recallRules.ts 是库·被内联、不独立成函数）。
  * @ldrw/shared 经 esbuild alias 直接从 TS 源打包（无需先 build shared dist——区别旧线两步构建）。
  *
- * 用法：npm run build:rw-cloud。部署：本仓禁部署（guard-deploy 全拦）——产物形态供 M5 切换日用；
- * 并行期同名函数（回调/定时器/ops）只 build 不部署，防覆盖线上（云环境与 next 共用·真生产）。
+ * 用法：npm run build:rw-cloud。部署（M5 切换后事实·深审 P3 纠错）：本仓＝生产源，rewrite/cloud/dist 是
+ * 真实部署产物、部署真实生效于云环境 cloudbase-d4gcssqbv06865479；部署经 guard-deploy 闸（读类/单个非敏感
+ * 放行·敏感/批量 ask 二次确认——非「全拦」）+ 人工确认。旧注释「本仓禁部署·并行期防覆盖」是切换前状态，已废。
  */
 import { build } from 'esbuild'
 import { readdirSync, readFileSync, statSync, mkdirSync, writeFileSync, rmSync, existsSync } from 'node:fs'

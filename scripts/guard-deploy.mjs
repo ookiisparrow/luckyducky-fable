@@ -12,6 +12,8 @@
  *     **提到** "tcb"/"deploy" 字样不算，杜绝误拦 git commit。人在自己终端的命令不经本 hook。
  *
  * 自测：echo '{"tool_input":{"command":"tcb fn deploy createOrder"}}' | node scripts/guard-deploy.mjs  # → ask
+ *       echo '{"tool_input":{"command":"npx tcb fn deploy adminApi"}}' | node scripts/guard-deploy.mjs  # → ask（runner 前缀绕过·深审 P1）
+ *       echo '{"tool_input":{"command":"export DEPLOY_ALLOWED=1; node scripts/deploy-fns.mjs"}}' | node scripts/guard-deploy.mjs  # → ask（export 分段绕过·深审 P1）
  *       echo '{"tool_input":{"command":"git commit -m \"tcb deploy 记账\""}}' | node scripts/guard-deploy.mjs  # → 放行（无输出）
  */
 
@@ -48,15 +50,24 @@ for (const raw of command.split(/&&|\|\||;|\n|\|/)) {
   const envPrefix = (seg.match(/^(?:\w+=\S+\s+)*/) || [''])[0]
   const cmd = seg.slice(envPrefix.length) // 去掉前导 ENV=val 后的真命令
 
-  // ① 批量部署脚本：DEPLOY_ALLOWED=1 … deploy-fns（部署全量、含敏感）→ 确认
-  if (/\bDEPLOY_ALLOWED=1\b/.test(envPrefix) && /deploy-fns/.test(cmd)) needConfirm = true
+  // ① 批量部署脚本：任何「真跑 deploy-fns.mjs」都确认（深审 P1·env/export 绕过）。deploy-fns 无 DEPLOY_ALLOWED=1
+  //    即 exit(1) 拒跑，故对无害的 --dry-run/未授权跑一并 ask 不误伤（确认后照样只报告）；而 `env DEPLOY_ALLOWED=1 …`
+  //    的 env 不进 envPrefix、`export DEPLOY_ALLOWED=1; …` 又被 ';' 拆成两段——旧版只认 envPrefix 里的 DEPLOY_ALLOWED
+  //    会双双漏网。改判「被执行的程序是不是 deploy-fns.mjs」：剥掉 env/前导赋值取真正的程序，锚在程序位判定
+  //    （node/路径/裸跑皆认；提交信息里提字样处于参数位、锚不住 → 不误拦）。
+  const prog = seg.replace(/^(?:env\s+)?(?:\w+=\S+\s+)*/, '')
+  if (/^(?:node\s+)?(?:\S*\/)?deploy-fns\.mjs\b/.test(prog)) needConfirm = true
 
-  // ② 直接 tcb 命令：仅段首真为 tcb 才算（提交信息 / echo 里的字样不算）
-  if (!/^(?:\S*\/)?tcb[\s:]/.test(cmd)) continue
-  const isWrite = /\b(deploy|publish|delete|create)\b/.test(cmd) || /\bframework\b/.test(cmd)
+  // ② 直接 tcb 命令：段首真为 tcb 才算（提交信息 / echo 里的字样不算）。深审 P1：runner 前缀（npx/pnpm dlx/
+  //    yarn dlx/bunx）+ tcb 或 @cloudbase/cli（其 bin=tcb）是「command not found: tcb」时最自然的改写形态，
+  //    旧版段首正则认不出而全放行——先剥 runner 前缀、把 @cloudbase/cli 归一成 tcb，再走原判定。
+  const runnerStripped = cmd.replace(/^(?:npx|pnpm\s+dlx|pnpm\s+exec|yarn\s+dlx|bunx)\s+/, '')
+  const asTcb = runnerStripped.replace(/^@cloudbase\/cli\b/, 'tcb')
+  if (!/^(?:\S*\/)?tcb[\s:]/.test(asTcb)) continue
+  const isWrite = /\b(deploy|publish|delete|create)\b/.test(asTcb) || /\bframework\b/.test(asTcb)
   if (!isWrite) continue // 读类 tcb（invoke/log/list/detail…）→ 放行
-  const sensitive = SENSITIVE_FNS.some((fn) => word(fn).test(cmd))
-  const readonlyOnly = !sensitive && READONLY_FNS.some((fn) => word(fn).test(cmd))
+  const sensitive = SENSITIVE_FNS.some((fn) => word(fn).test(asTcb))
+  const readonlyOnly = !sensitive && READONLY_FNS.some((fn) => word(fn).test(asTcb))
   if (sensitive || !readonlyOnly) needConfirm = true // 敏感 / 批量 / 认不出非敏感 → 确认
 }
 

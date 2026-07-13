@@ -44,6 +44,17 @@
       </view>
     </block>
 
+    <!-- 网络失败态（深审20260712 P3·与废码分治）：码可能没问题，只是没连上——重试用原码再发，不清码不误导 -->
+    <block wx:elif="{{kind === 'error'}}">
+      <view class="ld-w-eyebrow">NETWORK · 网络开小差</view>
+      <view class="ld-w-display">网络没连上</view>
+      <view class="ld-w-lead">你的激活码可能没问题，只是刚才没连上服务器——稍等片刻，再试一次就好。</view>
+      <view class="ld-w-cta ghost {{busy ? 'dim' : ''}}" bind:tap="onActivate">
+        <text>再试一次</text>
+        <image class="ld-w-cta-ico" src="/static/icons/rotate-ccw-on.svg" mode="aspectFit" />
+      </view>
+    </block>
+
     <block wx:else>
       <view class="ld-w-eyebrow">OOPS · 激活码有误</view>
       <view class="ld-w-display">激活码不对哦</view>

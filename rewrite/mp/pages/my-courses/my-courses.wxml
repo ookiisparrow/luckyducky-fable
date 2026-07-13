@@ -42,8 +42,15 @@
     </view>
   </view>
 
+  <!-- 失败态与空态分治（根因#14·守卫 rw-mp-list-loadfailed-state）：弱网失败不引导输码 -->
+  <view class="ld-mc-empty" wx:if="{{!loading && loadFailed}}">
+    <view class="ld-mc-empty-title">网络开小差</view>
+    <view class="ld-mc-empty-hint">课程没加载出来，请重试</view>
+    <view class="ld-mc-empty-btn" bind:tap="onRetryLoad" hover-class="ld-mc-empty-btn-h" hover-stay-time="80">重试</view>
+  </view>
+
   <!-- 空态 -->
-  <view class="ld-mc-empty" wx:if="{{!loading && !list.length}}">
+  <view class="ld-mc-empty" wx:elif="{{!loading && !list.length}}">
     <view class="ld-mc-empty-ico">
       <image class="ld-mc-empty-img" src="/static/icons/graduation-cap.svg" mode="aspectFit" />
     </view>

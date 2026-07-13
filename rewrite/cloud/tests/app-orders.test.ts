@@ -166,6 +166,24 @@ describe('createOrder · 库存预留（黄金 inventory-scm §A/§B）', () => 
     expect(oks).toBe(1)
     expect(control.dump('inventory')[0].stock).toBe(0)
   })
+
+  it('大白话：add 写成功但 SDK 报错——读回本次 _id 命中即返回该单，不换号落第二张共享 reserved 的幽灵单（深审 P2 幂等）', async () => {
+    // 模拟「写已持久化但 SDK 返回超时/网络错」：beforeAdd 先把本单落库、再抛错
+    let injected = false
+    control.setBeforeAdd(async ({ coll, data }: any) => {
+      if (coll === 'orders' && !injected) {
+        injected = true
+        control.seed('orders', [data]) // 写其实成功了
+        throw new Error('SDK_TIMEOUT') // 但 SDK 抛错
+      }
+    })
+    const r = await order([{ id: 'p1', qty: 1 }])
+    control.setBeforeAdd(null as never)
+    expect(r.ok).toBe(true)
+    // 只落一张单——旧版裸 catch 换号重试会落第二张、两单共享同一 reserved（关单双回补＝库存虚增/超卖）
+    expect(control.dump('orders').length).toBe(1)
+    expect(r.order._id).toBe(control.dump('orders')[0]._id)
+  })
 })
 
 describe('createOrder · 幂等键（批E·P1 防网络超时重试双建单·claim 范式抄 scmAssembly）', () => {

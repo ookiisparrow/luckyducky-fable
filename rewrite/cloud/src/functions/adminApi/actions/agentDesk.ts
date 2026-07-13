@@ -276,6 +276,10 @@ export async function getThread(ctx: Ctx): Promise<any> {
   // 增量游标：首拉（无 cursor）从会话建立**前 10 分钟**起（深审 F5——顾客点「转人工」之前打的字往往是真正的
   // 问题描述，坐席须看得到；10 分钟窗兼顾「不整段回溯该顾客历史会话」的 AD 语义）；cursor 有则取其后（轮询取新消息）。
   const PRE_CONTEXT_MS = 10 * 60_000
+  // 合流取舍（2026-07-13·mp-7fixes 同步 PR#16→main）：本函数被 #16（深审·GRACE_MS 游标回退窗）与 main（PR#20 批B·
+  // tie-group 补查）各自独立重写、解同一「同秒消息分页丢失」根因但契约互斥（GRACE_MS 靠客户端 msgid 去重容忍重取，
+  // tie-group 契约要求服务端跨轮零重复）。承重并发代码不做行级硬拼——取 main tie-group 版为准（新、在目标分支、
+  // 测试原样通过）；#16 的「出站毫秒>入站秒截断的晚到同秒消息」修复另立批用兼容 tie-group 的方式重叠（见待办与债 flag）。
   const since = Math.max(Number(data && data.cursor) || 0, (Number(s.createdAt) || 0) - PRE_CONTEXT_MS - 1)
   const res = await db
     .collection(COLLECTIONS.conversations)

@@ -221,7 +221,10 @@ export async function getInventory(productIds?: string[]): Promise<{ list: any[]
   const PAGE = 100
   const list: any[] = []
   for (let skip = 0; skip < INVENTORY_SCAN_CAP; skip += PAGE) {
-    const r = await base.orderBy('productId', 'asc').skip(skip).limit(PAGE).get()
+    // 排序加唯一 tiebreaker _id（深审 P2·根因#7）：productId 非唯一（inventory 一 SKU 一档·_id=productId__spec·
+    // 同 productId 多 spec 共键），只按 productId 排序时同值行的相对次序在真 TCB 上无保证——skip 翻页跨页边界
+    // 会漏/重同 productId 的 SKU（JS 桩 sort 稳定掩盖此坑）。补 _id 使排序成全序，skip 分页确定不漏不重。
+    const r = await base.orderBy('productId', 'asc').orderBy('_id', 'asc').skip(skip).limit(PAGE).get()
     const rows: any[] = (r && r.data) || []
     list.push(...rows)
     if (rows.length < PAGE) return { list, truncated: false }

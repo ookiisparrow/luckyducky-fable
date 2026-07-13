@@ -392,6 +392,11 @@ describe('顾客发图坐席可见（B5·图片消息下载延迟到坐席首次
     control.seed('conversations', [{ _id: 'wxkf:in:txt-1', direction: 'in', externalUserId: 'eu-s1', openKfId: 'kf1', msgtype: 'text', text: '在吗', at: 900 }])
     expect((await post('getMediaUrl', A1, { sessionId: 's1', msgId: 'txt-1' })).error).toBe('NO_MEDIA') // 文本消息无 mediaId
   })
+
+  // 已移除（2026-07-13 mp-7fixes 同步 PR#16→main·合流取舍）：#16「增量轮询回退一秒重查·晚到同秒顾客消息不被 gt 游标
+  // 跳过（深审 P2·GRACE_MS）」用例——其被测的 GRACE_MS 回退窗与 main（PR#20 批B）的 tie-group 补查契约互斥（GRACE_MS
+  // 靠客户端 msgid 去重容忍服务端跨轮重取，tie-group 契约要求服务端零重复）。合流取 main tie-group 版为准，#16 的「出站
+  // 毫秒>入站秒截断的晚到消息」修复连同本用例另立批用兼容 tie-group 的方式重做（见 docs/待办与债.md 同日 flag）。
 })
 
 describe('scoped 360 双闸（黄金 §二：归属 + 数据共享同意·超管数据控制者）', () => {

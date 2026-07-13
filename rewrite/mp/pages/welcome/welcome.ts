@@ -91,8 +91,10 @@ Page({
     this.setData({ busy: true })
     const r = await confirmEnter(this.data.code)
     if (this.unloaded) return // await 恢复点复核（bug sweep II 批E）：用户已退出本页——不再 setData/toast/redirectTo
-    this.setData({ busy: false })
     if (!r.ok) {
+      // 仅失败复位 busy（深审20260712 P3·同 review/feedback onSubmit 范式）：成功路径保持锁定直至 redirectTo——
+      // 提前解锁则导航完成前双击可再次 confirmEnter+redirectTo
+      this.setData({ busy: false })
       wx.showToast({ title: '进课没成功，稍后再试', icon: 'none' })
       return
     }

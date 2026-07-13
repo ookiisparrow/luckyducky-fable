@@ -105,7 +105,9 @@
           <text class="co-dock-count">共 {{count}} 件</text>
         </view>
       </view>
-      <view class="co-submit {{submitting ? 'dim' : ''}}" bind:tap="onSubmit">提交订单</view>
+      <!-- 在途反馈（工业级完善批6）：dim 只是变暗、弱网像卡死——文案切「提交中…」给明确进行时信号。
+           刻意不用 wx.showLoading：本链两段网络请求多分支 return，hideLoading 配对易漏→锁屏，文案方案零此风险。 -->
+      <view class="co-submit {{submitting ? 'dim' : ''}}" bind:tap="onSubmit">{{submitting ? '提交中…' : '提交订单'}}</view>
     </view>
   </view>
 </view>

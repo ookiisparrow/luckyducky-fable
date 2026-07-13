@@ -38,14 +38,19 @@ export const CORS = {
   'Access-Control-Allow-Headers': 'Content-Type',
   'Content-Type': 'application/json',
 }
-export const reply = (statusCode: number, data: any) => ({ statusCode, headers: CORS, body: JSON.stringify(data) })
+export const reply = (statusCode: number, data: any) => ({
+  statusCode,
+  headers: CORS,
+  body: JSON.stringify(data),
+})
 export const sha = (s: any) => crypto.createHash('sha256').update(String(s)).digest('hex')
 
 // 口令加盐 KDF（批6·根因：sha 无盐口令可离线彩虹表还原·钱/权限承重批）：新写入口令一律 salt+scrypt；
 // 存量 sha 账号 legacy 校验通过后 best-effort 就地升级（见 checkKey/createAgent）。scrypt 默认参数
 // N=16384（~16MB/数十 ms）：登录端点已有频控、建号为管理端低频操作，最坏扫描 ≤50 行也在可接受范围。
 export const newSalt = () => crypto.randomBytes(16).toString('hex')
-export const kdf = (key: string, salt: string) => crypto.scryptSync(String(key), salt, 32).toString('hex')
+export const kdf = (key: string, salt: string) =>
+  crypto.scryptSync(String(key), salt, 32).toString('hex')
 
 // 盐感知口令比对单源（根因#5·防漂移）：有 keySalt 走 scrypt 比对（新写入/已升级口令）；无则 legacy
 // sha 比对（存量未升级账号）。checkKey 的多账号扫描、createAgent 的撞口令预检①与写后复核②全部改走
@@ -68,7 +73,11 @@ export async function ensure(db: any, coll: string) {
 // 查 activations（activateCourse 写的 {_openid, courseId, enteredAt}）。
 export async function activationFor(db: any, openid: string, productId: string) {
   const pid = String(productId || '')
-  const prod = await db.collection('products').doc(pid).get().catch(() => null)
+  const prod = await db
+    .collection('products')
+    .doc(pid)
+    .get()
+    .catch(() => null)
   const courseId = (prod && prod.data && prod.data.courseId) || 'course-' + pid
   const acts = openid
     ? await db
@@ -99,25 +108,46 @@ export const PAID_STATUSES: readonly string[] = PAID_ORDER_STATUSES
 // （钱链异常是 money 正确性判据，散两份易一处改漏）。各项走定向 where 精确（稀少·小集合·不从样本 filter）。
 // P2→修（批1 bug sweep）：三路裸 .get() 命中服务端默认 100 条截断，与「精确不漏老单」的注释矛盾——
 // 显式 .limit(1000)（云函数端上限）。钱链异常超 1000 条属灾难态，看板计数意义已失真，如实 cap 不强求无界。
-export async function getTxAlerts(db: any): Promise<{ feeMismatch: string[]; refundMismatch: string[]; stuckRefunds: string[] }> {
+export async function getTxAlerts(
+  db: any
+): Promise<{
+  feeMismatch: string[]
+  refundMismatch: string[]
+  stuckRefunds: string[]
+  partial: boolean
+}> {
   const _ = db.command
   const HOUR = 3600_000
   const CAP = 1000
+  // 任一路查询失败（深审 P1·病根#14）：钱链异常（金额不符/退款不符/卡单）是 money 正确性判据，
+  // 静默 .catch(()=>[]) 降级为「零异常」会让看板/对账把「没查到」当「没异常」（假 all-clear）。改：
+  // 失败置 partial + 告警，回传 partial 让消费方标注「异常数据不可信」，绝不假装全清。
+  let partial = false
   const rows = (q: any) =>
     q
       .limit(CAP)
       .get()
       .then((r: any) => r.data)
-      .catch(() => [])
+      .catch(() => {
+        partial = true
+        return []
+      })
   const [feeMismatch, refundMismatch, stuckRefunds] = await Promise.all([
     rows(db.collection('orders').where({ feeMismatch: true }).field({ id: true })),
     rows(db.collection('afterSales').where({ refundMismatch: true }).field({ _id: true })),
-    rows(db.collection('afterSales').where({ status: 'approved', approvedAt: _.lt(Date.now() - HOUR) }).field({ _id: true })),
+    rows(
+      db
+        .collection('afterSales')
+        .where({ status: 'approved', approvedAt: _.lt(Date.now() - HOUR) })
+        .field({ _id: true })
+    ),
   ])
+  if (partial) await notifyAlert('money', 'getTxAlerts', 'TXALERTS_QUERY_FAIL', {}).catch(() => {})
   return {
     feeMismatch: feeMismatch.map((o: any) => o.id),
     refundMismatch: refundMismatch.map((a: any) => a._id),
     stuckRefunds: stuckRefunds.map((a: any) => a._id),
+    partial,
   }
 }
 
@@ -147,12 +177,19 @@ const SESSION_MAX = 8 // 单账号并存会话上限（多设备够用·防 sess
 export async function issueSession(db: any, docId: string, via: 'pwd' | 'wecom'): Promise<string> {
   const token = crypto.randomBytes(32).toString('hex')
   const now = Date.now()
-  const got = await db.collection('adminConfig').doc(docId).get().catch(() => null)
+  const got = await db
+    .collection('adminConfig')
+    .doc(docId)
+    .get()
+    .catch(() => null)
   const prev: any[] = (got && got.data && Array.isArray(got.data.sessions) ? got.data.sessions : [])
     .filter((s: any) => s && typeof s.exp === 'number' && s.exp > now) // 剪过期
     .slice(-(SESSION_MAX - 1)) // 超容剪最旧（保留末 N-1 + 新签 1）
   const sessions = [...prev, { hash: sha(token), exp: now + SESSION_TTL_MS, via, at: now }]
-  await db.collection('adminConfig').doc(docId).update({ data: { sessions, updatedAt: now } })
+  await db
+    .collection('adminConfig')
+    .doc(docId)
+    .update({ data: { sessions, updatedAt: now } })
   return token
 }
 
@@ -169,11 +206,15 @@ async function resolveSession(db: any, hash: string) {
     .get()
     .catch(() => ({ data: [] }))
   const rows: any[] = (s && s.data) || []
-  const a = rows.find((acc) => Array.isArray(acc.sessions) && acc.sessions.some((x: any) => x && x.hash === hash)) || null
+  const a =
+    rows.find(
+      (acc) => Array.isArray(acc.sessions) && acc.sessions.some((x: any) => x && x.hash === hash)
+    ) || null
   if (!a) return { ok: false as const, error: 'BAD_KEY' }
   if (a.disabled) return { ok: false as const, error: 'ACCOUNT_DISABLED' }
   const hit = a.sessions.find((x: any) => x && x.hash === hash)
-  if (!hit || typeof hit.exp !== 'number' || hit.exp < Date.now()) return { ok: false as const, error: 'SESSION_EXPIRED' }
+  if (!hit || typeof hit.exp !== 'number' || hit.exp < Date.now())
+    return { ok: false as const, error: 'SESSION_EXPIRED' }
   const isSuper = a._id === 'auth'
   return {
     ok: true as const,
@@ -191,15 +232,36 @@ export async function checkKey(db: any, key: any, bootstrap: boolean) {
   if (!key || String(key).length < 6) return { ok: false, error: 'KEY_TOO_SHORT' }
   await ensure(db, 'adminConfig')
   const keyStr = String(key)
-  const got = await db.collection('adminConfig').doc('auth').get().catch(() => null)
+  const got = await db
+    .collection('adminConfig')
+    .doc('auth')
+    .get()
+    .catch(() => null)
   if (!got || !got.data) {
     // 首登 bootstrap（债#15 关抢占）：无超管 doc 时·须 bootstrap + 部署密钥 ADMIN_BOOTSTRAP_KEY → 建首个超管。
     // 批6：bootstrap 建号即带盐（新写入一律 salt+scrypt·不再落无盐 sha）。
     const secret = process.env.ADMIN_BOOTSTRAP_KEY || ''
     if (!bootstrap || !secret || keyStr !== secret) return { ok: false, error: 'BAD_KEY' }
     const salt = newSalt()
-    await db.collection('adminConfig').add({ data: { _id: 'auth', keySalt: salt, keyHash: kdf(keyStr, salt), role: 'superadmin', caps: ['*'], createdAt: Date.now() } })
-    return { ok: true, bootstrapped: true, caps: ['*'] as string[], operator: 'admin', agentId: 'admin' }
+    await db
+      .collection('adminConfig')
+      .add({
+        data: {
+          _id: 'auth',
+          keySalt: salt,
+          keyHash: kdf(keyStr, salt),
+          role: 'superadmin',
+          caps: ['*'],
+          createdAt: Date.now(),
+        },
+      })
+    return {
+      ok: true,
+      bootstrapped: true,
+      caps: ['*'] as string[],
+      operator: 'admin',
+      agentId: 'admin',
+    }
   }
   // ① 超管 'auth' doc 命中（盐感知比对·keyMatches 单源：有 keySalt 走 scrypt，legacy 无盐走 sha·
   // 向后兼容：无 role 取 caps 字段·旧 ['*']）。legacy 命中即 best-effort 就地升级为带盐（批6·存量账号
@@ -208,25 +270,53 @@ export async function checkKey(db: any, key: any, bootstrap: boolean) {
     if (got.data.disabled) return { ok: false, error: 'ACCOUNT_DISABLED' }
     if (!got.data.keySalt) {
       const salt = newSalt()
-      await db.collection('adminConfig').doc('auth').update({ data: { keySalt: salt, keyHash: kdf(keyStr, salt) } }).catch(() => {})
+      await db
+        .collection('adminConfig')
+        .doc('auth')
+        .update({ data: { keySalt: salt, keyHash: kdf(keyStr, salt) } })
+        .catch(() => {})
     }
     // 超管 agentId 固定 'admin'（商户本人·承面C 可 claim/setAgentStatus·稳定可读·§1.5）
-    return { ok: true, operator: got.data.name || 'admin', agentId: 'admin', caps: got.data.role ? capsForRole(got.data.role) : Array.isArray(got.data.caps) ? got.data.caps : ['*'] }
+    return {
+      ok: true,
+      operator: got.data.name || 'admin',
+      agentId: 'admin',
+      caps: got.data.role
+        ? capsForRole(got.data.role)
+        : Array.isArray(got.data.caps)
+          ? got.data.caps
+          : ['*'],
+    }
   }
   // ② B5.2 多账号：非超管·有界扫描（手法同 resolveSession）按盐感知比对查 agent/外包 账号 doc
   // （均有 role；disabled 即停）。最坏 ≤50 行 scrypt 比对，登录端点已有频控、可接受。
   const _ = db.command
-  const scan = await db.collection('adminConfig').where({ keyHash: _.exists(true) }).limit(50).get().catch(() => ({ data: [] }))
+  const scan = await db
+    .collection('adminConfig')
+    .where({ keyHash: _.exists(true) })
+    .limit(50)
+    .get()
+    .catch(() => ({ data: [] }))
   alertIfScanAtCap((scan && scan.data) || [], 50, 'checkKey')
-  const acct = ((scan && scan.data) || []).find((r: any) => r._id !== 'auth' && keyMatches(r, keyStr)) || null
+  const acct =
+    ((scan && scan.data) || []).find((r: any) => r._id !== 'auth' && keyMatches(r, keyStr)) || null
   if (!acct) return resolveSession(db, sha(keyStr)) // 口令全未命中 → fallback 会话令牌（口令登录/企微免登共用·深审 P1）
   if (acct.disabled) return { ok: false, error: 'ACCOUNT_DISABLED' }
   if (!acct.keySalt) {
     const salt = newSalt()
-    await db.collection('adminConfig').doc(acct._id).update({ data: { keySalt: salt, keyHash: kdf(keyStr, salt) } }).catch(() => {})
+    await db
+      .collection('adminConfig')
+      .doc(acct._id)
+      .update({ data: { keySalt: salt, keyHash: kdf(keyStr, salt) } })
+      .catch(() => {})
   }
   // 外包/坐席 agentId＝账号 _id（承面C claim 绑定/分配 scope/agentState 键·§1.5·根因#3 取认证主体非前端）
-  return { ok: true, operator: acct.name || acct._id, agentId: acct._id, caps: acct.role ? capsForRole(acct.role) : Array.isArray(acct.caps) ? acct.caps : [] }
+  return {
+    ok: true,
+    operator: acct.name || acct._id,
+    agentId: acct._id,
+    caps: acct.role ? capsForRole(acct.role) : Array.isArray(acct.caps) ? acct.caps : [],
+  }
 }
 
 // 草稿白名单字段（防杂字段入库）
@@ -296,7 +386,10 @@ export function cleanCourse(c: any) {
 export async function storeImage(cloud: any, b64: string, data: any) {
   const ext = ['png', 'jpg', 'mp4', 'mov'].includes(data.ext) ? data.ext : 'jpg'
   // 消毒（深审 P3·同 getVideoUploadMeta）：客户端串直接拼云存储对象键，'../' 类字符不入路径
-  const pid = String(data.pid || 'misc').replace(/[^\w-]/g, '').slice(0, 40) || 'misc'
+  const pid =
+    String(data.pid || 'misc')
+      .replace(/[^\w-]/g, '')
+      .slice(0, 40) || 'misc'
   const prefix = data.kind === 'video' ? 'videos' : 'products'
   const cloudPath = `${prefix}/${pid}/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`
   const up = await cloud.uploadFile({ cloudPath, fileContent: Buffer.from(b64, 'base64') })

@@ -14,7 +14,7 @@
   "scripts": {
     "prepare": "git config core.hooksPath scripts/git-hooks || exit 0",
     "build:shared": "npm run build -w @luckyducky/shared",
-    "typecheck": "npm run build:shared && tsc -p packages/cloud/tsconfig.json && tsc -p rewrite/shared/tsconfig.json --noEmit && tsc -p rewrite/cloud/tsconfig.json && tsc -p rewrite/mp/tsconfig.json && vue-tsc --noEmit -p rewrite/admin/tsconfig.json && vue-tsc --noEmit -p rewrite/agent/tsconfig.json",
+    "typecheck": "npm run build:shared && tsc -p packages/cloud/tsconfig.json && tsc -p rewrite/shared/tsconfig.json --noEmit && tsc -p rewrite/cloud/tsconfig.json && tsc -p rewrite/mp/tsconfig.json && tsc -p rewrite/site/tsconfig.json --noEmit && vue-tsc --noEmit -p rewrite/admin/tsconfig.json && vue-tsc --noEmit -p rewrite/agent/tsconfig.json",
     "dev:h5": "npm run build:shared && npm run dev:h5 -w luckyducky-miniapp",
     "dev:mp-weixin": "npm run build:shared && npm run dev:mp-weixin -w luckyducky-miniapp",
     "dev:app": "npm run build:shared && npm run dev:app -w luckyducky-miniapp",

@@ -105,7 +105,8 @@ export const main = defineNotifyCallback<any>({
       // 订单留对账痕（失败不阻塞 ACK：售后单是退款状态单一来源）。key 用 lineId（回退 productId，
       // 兼容无 lineId 的旧售后单）而非裸 productId：同一 productId 可能有多条不同 spec 的订单行
       // （见 orders.ts lineIdOf），裸 productId 会让两条行的退款回调互相覆盖对账痕。
-      const refundedKey = String(as.lineId || as.productId)
+      // 洗点号（合流保留深审 P3 修复）：lineId 含 spec 里的 '.'（如 3.5mm）会被 TCB 当嵌套路径分层，洗成 '_' 保持扁平一键。
+      const refundedKey = String(as.lineId || as.productId).replace(/\./g, '_')
       await db
         .collection(COLLECTIONS.orders)
         .doc(as.orderId)

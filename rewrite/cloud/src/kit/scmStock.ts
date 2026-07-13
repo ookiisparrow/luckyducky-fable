@@ -163,6 +163,7 @@ export async function listStockLedger(materialId?: string, req?: PageReq, defaul
   return pageQuery(db, COLLECTIONS.stockLedger, filter, 'at', req, defaultLimit)
 }
 
+
 /** 某类流水按 itemKey 分组求和（管理端只读汇总·产销统计用·DB aggregate 不封顶精确不近似）。 */
 export async function sumLedgerByItemKey(docType: MoveDocType): Promise<{ itemKey: string; total: number }[]> {
   const db = getDb()

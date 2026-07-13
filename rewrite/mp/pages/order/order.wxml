@@ -124,6 +124,13 @@
   </view>
 </view>
 
+<!-- 失败态与不存在分治（根因#14·守卫 rw-mp-list-loadfailed-state）：弱网失败给重试，不误报「订单不存在」 -->
+<view class="co coord-empty" wx:elif="{{!loading && loadFailed}}">
+  <view class="coord-empty-title">网络开小差</view>
+  <view class="coord-empty-hint">订单没加载出来，请重试</view>
+  <view class="coord-retry" bind:tap="onRetryLoad">重试</view>
+</view>
+
 <!-- 订单不存在 -->
 <view class="co coord-empty" wx:elif="{{!loading}}">
   <view class="coord-empty-title">订单不存在</view>

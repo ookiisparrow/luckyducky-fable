@@ -105,10 +105,12 @@ async function shipOne(db: any, idRaw: any, companyRaw: any, trackingRaw: any, o
   // 金额异常单（feeMismatch 留痕）须先「解除」后才能发货（审核批次A 折中）
   if (got.data.feeMismatch) return { ok: false, error: 'FEE_MISMATCH_HOLD' }
   // 退款↔履约状态同步闸（P0·根因：afterSales 与 orders 是两套各自实现的状态机，互不知晓对方——
-  // approveRefund/overrideRefund 只改 afterSales，从不碰 orders；此前 shipOne 唯一放行条件是
-  // cur∈{paid,shipped}+非 feeMismatch，完全不查该单是否已有行被批准/已退款。已批准退款的单一旦照发，
-  // 就是钱货两空的资损洞。现场直读 afterSales（不走派生/缓存字段，钱链闸子必须读最新态）：该订单
-  // 存在 status∈{approved,refunded} 的记录即挡，返回命中的 lineId 供前端定位展示，不笼统吞错。
+  // approveRefund/overrideRefund 只改 afterSales、refundCallback 退款成功只翻 afterSales→refunded，均从不碰
+  // orders；此前 shipOne 唯一放行条件是 cur∈{paid,shipped}+非 feeMismatch，完全不查该单是否已有行在退款/已退款。
+  // 已退款/退款在途的单一旦照发，就是钱货两空的资损洞。现场直读 afterSales（不走派生/缓存字段，钱链闸子必须
+  // 读最新态）：该订单存在 status∈{applied,approved,refunded}（申请中/已批/已退款——合流并集：#16 深审 P1 挡
+  // applied 在途 + main PR20 P0 挡 approved/refunded 并返回命中行）的记录即挡，返回命中的 lineId 供前端定位展示，
+  // 不笼统吞错；rejected（客服拒绝、未受理、无钱路径）不挡、自然解闸。
   // 残余竞态窗口（P2·已收窄+对称可观测，非重型锁）：这段读到下方条件更新之间仍有一个物理上无法用
   // 简单闸子消除的窗口——若 approveRefund/overrideRefund 恰好在这两步之间才把 afterSales 抢占成
   // approved，本次 heldLines 读不到、会照常放行发货。分布式锁/事务模拟不是本仓既有模式、过度工程，
@@ -117,7 +119,7 @@ async function shipOne(db: any, idRaw: any, companyRaw: any, trackingRaw: any, o
   // 留高危信号供人工核实——钱货两空的窗口从「完全不可见」变成「可观测、可人工介入」。
   const heldLines = await db
     .collection('afterSales')
-    .where({ orderId: id, status: db.command.in(['approved', 'refunded']) })
+    .where({ orderId: id, status: db.command.in(['applied', 'approved', 'refunded']) })
     .field({ lineId: true, productId: true, status: true })
     .get()
     .catch(() => ({ data: [] }))

@@ -214,6 +214,28 @@ describe('CSAT 编排（黄金 §七）', () => {
     expect(sent[1].text.content).toContain('谢谢')
   })
 
+  it('大白话：评分写库失败不谎报成功——返回 null（不回假 csatId）+ 告警（深审 P2·病根#14）', async () => {
+    // 注入 csat 主写失败（set 复用 beforeUpdate 钩子）：旧版 .catch(()=>{}) 后恒返回 id＝假成功·getCsatReport 漏这条
+    control.setBeforeUpdate(({ coll }: any) => {
+      if (coll === 'csat') throw new Error('WRITE_FAIL')
+    })
+    const seen: string[] = []
+    const orig = console.error
+    console.error = (...a: unknown[]) => {
+      seen.push(String(a[0]))
+    }
+    let ret: string | null
+    try {
+      ret = await recordCsat(db(), { externalUserId: 'euFail', openid: null, score: 5 })
+    } finally {
+      console.error = orig
+      control.setBeforeUpdate(null as never)
+    }
+    expect(ret).toBe(null) // 写失败不回 csatId
+    expect(control.dump('csat').length).toBe(0) // 没落库
+    expect(seen.filter((s) => s.includes('[LD_ALERT]') && s.includes('CSAT_WRITE_FAIL')).length).toBe(1) // 留痕告警
+  })
+
   it('大白话：关单评分标记在时窗内回纯数字才记分；无标记的纯数字不记分照常回根菜单（防随口数字误当评分）', async () => {
     const { sent, ctx } = sendCollector()
     await handleMessage(ctx, { externalUserId: 'eu2', menuId: '', text: '5' })

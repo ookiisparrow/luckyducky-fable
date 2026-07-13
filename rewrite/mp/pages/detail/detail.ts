@@ -138,4 +138,17 @@ Page({
     if (getCurrentPages().length >= 8) wx.redirectTo({ url })
     else wx.navigateTo({ url, fail: () => wx.redirectTo({ url }) })
   },
+
+  // 转发/朋友圈钩子（分发前置·决策§29·守卫 rw-mp-share-wired）：路径带 ?id= 保证收到的人打开的是
+  // 同一件商品（守卫钉此）；标题/图取当前商品真身，vm 未就绪（loading/missing）回退品牌语不造假。
+  onShareAppMessage() {
+    const vm = this.data.vm
+    return vm
+      ? { title: vm.name, path: '/pages/detail/detail?id=' + vm.id, imageUrl: vm.gallery[0] || '' }
+      : { title: '小棉鸭钩织材料包', path: '/pages/home/home' }
+  },
+  onShareTimeline() {
+    const vm = this.data.vm
+    return vm ? { title: vm.name, query: 'id=' + vm.id } : { title: '小棉鸭钩织材料包' }
+  },
 })

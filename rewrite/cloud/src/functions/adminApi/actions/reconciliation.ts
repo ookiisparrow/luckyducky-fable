@@ -1,5 +1,6 @@
 import { toFen, asFen, fenToYuan } from '@ldrw/shared'
 import { reply, getTxAlerts, PAID_STATUSES, type Ctx } from '../lib'
+import { notifyAlert } from '../../../kit'
 
 // —— S16 财务对账（内部账·Batch 1）——
 // 口径同看板 GMV（PAID_STATUSES·已付营收）。三块：① 收支汇总 ② 每日流水 ③ 内部异常（txAlerts 单源）。
@@ -37,6 +38,10 @@ export async function getReconciliation({ db, data }: Ctx) {
   const fromMs = dayStartMs(from)
   const toMs = dayStartMs(to) + DAY - 1 // 含 to 当日
 
+  // 累计金额锚点聚合失败辨别（深审 P2·病根#14）：income/refund 累计是 money 对账锚（注释「全量精确·恒可信」），
+  // 旧版 .catch(()=>0) 静默归零会把「查询失败」冒充成「累计为 0」——对账员据此以为没收入/没退款。改：失败置
+  // cumDegraded + 告警，回传让前端标注累计不可信，不当真 0。
+  let cumDegraded = false
   const sumAgg = (coll: string, status: any, field: string): Promise<number> =>
     db
       .collection(coll)
@@ -45,7 +50,10 @@ export async function getReconciliation({ db, data }: Ctx) {
       .group({ _id: null, s: $.sum('$' + field) })
       .end()
       .then((r: any) => (r.list && r.list[0] ? Number(r.list[0].s) || 0 : 0))
-      .catch(() => 0)
+      .catch(() => {
+        cumDegraded = true
+        return 0
+      })
   const rows = (q: any) =>
     q
       .get()
@@ -57,17 +65,30 @@ export async function getReconciliation({ db, data }: Ctx) {
       .then((r: any) => r.total || 0)
       .catch(() => 0)
 
-  const [incomeCum, refundCum, paidRows, refundRows, paidN, refundN, exceptions] = await Promise.all([
-    // 累计（aggregate·全量精确·不封顶·money 锚）
-    sumAgg('orders', _.in(PAID_STATUSES), 'amount'),
-    sumAgg('afterSales', 'refunded', 'refundAmount'),
-    // 每日明细有界拉取（最近 CAP 笔·按时间倒序）
-    rows(db.collection('orders').where({ status: _.in(PAID_STATUSES) }).orderBy('paidAt', 'desc').limit(CAP)),
-    rows(db.collection('afterSales').where({ status: 'refunded' }).orderBy('refundedAt', 'desc').limit(CAP)),
-    cnt(db.collection('orders').where({ status: _.in(PAID_STATUSES) })),
-    cnt(db.collection('afterSales').where({ status: 'refunded' })),
-    getTxAlerts(db),
-  ])
+  const [incomeCum, refundCum, paidRows, refundRows, paidN, refundN, exceptions] =
+    await Promise.all([
+      // 累计（aggregate·全量精确·不封顶·money 锚）
+      sumAgg('orders', _.in(PAID_STATUSES), 'amount'),
+      sumAgg('afterSales', 'refunded', 'refundAmount'),
+      // 每日明细有界拉取（最近 CAP 笔·按时间倒序）
+      rows(
+        db
+          .collection('orders')
+          .where({ status: _.in(PAID_STATUSES) })
+          .orderBy('paidAt', 'desc')
+          .limit(CAP)
+      ),
+      rows(
+        db
+          .collection('afterSales')
+          .where({ status: 'refunded' })
+          .orderBy('refundedAt', 'desc')
+          .limit(CAP)
+      ),
+      cnt(db.collection('orders').where({ status: _.in(PAID_STATUSES) })),
+      cnt(db.collection('afterSales').where({ status: 'refunded' })),
+      getTxAlerts(db),
+    ])
 
   // JS 按 CST 日分桶（窗内）：income 自 paidRows.paidAt，refund 自 refundRows.refundedAt（累加整数分）
   const buckets = new Map<string, Bucket>()
@@ -111,11 +132,23 @@ export async function getReconciliation({ db, data }: Ctx) {
     refundsN += b.refunds
   }
 
+  // 累计聚合或异常查询任一降级（深审 P2·病根#14）：告警 + 回传 partial，前端据此标注「对账数据不可信」，
+  // 不让「查询失败归零」被读成真实的收支/异常态。
+  if (cumDegraded)
+    await notifyAlert('money', 'reconciliation', 'CUMULATIVE_AGG_FAIL', { from, to }).catch(
+      () => {}
+    )
+  const partial = cumDegraded || !!(exceptions as any).partial
   return reply(200, {
     ok: true,
     range: { from, to },
+    partial, // 累计聚合/异常查询降级：数据不可信标记（前端提示重试·别当真 0/all-clear）
     // 累计（aggregate 全量·元）；net 经分相减回元避浮点
-    cumulative: { income: incomeCum, refund: refundCum, net: fenToYuan(asFen(toFen(incomeCum) - toFen(refundCum))) },
+    cumulative: {
+      income: incomeCum,
+      refund: refundCum,
+      net: fenToYuan(asFen(toFen(incomeCum) - toFen(refundCum))),
+    },
     summary: {
       income: fenToYuan(asFen(incFen)),
       refund: fenToYuan(asFen(refFen)),
@@ -147,11 +180,21 @@ export async function getBillMatch({ db, data }: Ctx) {
 
   // 取最近 CAP 条再按窗过滤；触顶＝更早的单没进比对面，老窗口里的真单会被误判 wxOnly——必须 approx 如实标注
   //（深审 P2·同 getReconciliation 口径·守卫 billmatch-approx-flag），前端见 approx 提示「窗口可能不全」而非当真差异。
-  const rawOur = await rows(db.collection('orders').where({ status: _.in(PAID_STATUSES) }).orderBy('paidAt', 'desc').limit(CAP))
+  const rawOur = await rows(
+    db
+      .collection('orders')
+      .where({ status: _.in(PAID_STATUSES) })
+      .orderBy('paidAt', 'desc')
+      .limit(CAP)
+  )
   const rawWx = await rows(db.collection('wxBills').orderBy('date', 'desc').limit(CAP))
   const approx = rawOur.length >= CAP || rawWx.length >= CAP
-  const ourOrders = rawOur.filter((o: any) => typeof o.paidAt === 'number' && o.paidAt >= fromMs && o.paidAt <= toMs)
-  const wxRows = rawWx.filter((w: any) => w.date >= from && w.date <= to && String(w.tradeState) === 'SUCCESS')
+  const ourOrders = rawOur.filter(
+    (o: any) => typeof o.paidAt === 'number' && o.paidAt >= fromMs && o.paidAt <= toMs
+  )
+  const wxRows = rawWx.filter(
+    (w: any) => w.date >= from && w.date <= to && String(w.tradeState) === 'SUCCESS'
+  )
 
   const billDays = [...new Set(wxRows.map((w: any) => w.date))].sort()
   const ourByTxn = new Map(ourOrders.map((o: any) => [String(o.transactionId || ''), o]))
@@ -165,25 +208,46 @@ export async function getBillMatch({ db, data }: Ctx) {
   const amountMismatch: any[] = []
 
   for (const w of wxRows) {
-    const our: any = ourByTxn.get(String(w.transactionId || '')) || ourById.get(String(w.outTradeNo || ''))
+    const our: any =
+      ourByTxn.get(String(w.transactionId || '')) || ourById.get(String(w.outTradeNo || ''))
     if (!our) {
-      wxOnly.push({ transactionId: w.transactionId, outTradeNo: w.outTradeNo, amount: w.orderAmount, date: w.date })
+      wxOnly.push({
+        transactionId: w.transactionId,
+        outTradeNo: w.outTradeNo,
+        amount: w.orderAmount,
+        date: w.date,
+      })
       continue
     }
     if (toFen(Number(our.amount) || 0) !== toFen(Number(w.orderAmount) || 0))
-      amountMismatch.push({ id: our.id, transactionId: w.transactionId, ourAmount: our.amount, wxAmount: w.orderAmount })
+      amountMismatch.push({
+        id: our.id,
+        transactionId: w.transactionId,
+        ourAmount: our.amount,
+        wxAmount: w.orderAmount,
+      })
     else matched.push(our.id)
   }
   for (const o of ourOrders) {
     if (!billDays.includes(dayKey(o.paidAt))) continue // 该日未拉账单·无数据·不判（防误报）
     if (!wxByTxn.get(String(o.transactionId || '')) && !wxByOut.get(String(o.id || '')))
-      oursOnly.push({ id: o.id, transactionId: o.transactionId || '', amount: o.amount, paidAt: o.paidAt })
+      oursOnly.push({
+        id: o.id,
+        transactionId: o.transactionId || '',
+        amount: o.amount,
+        paidAt: o.paidAt,
+      })
   }
 
   return reply(200, {
     ok: true,
     range: { from, to },
-    summary: { matched: matched.length, wxOnly: wxOnly.length, oursOnly: oursOnly.length, amountMismatch: amountMismatch.length },
+    summary: {
+      matched: matched.length,
+      wxOnly: wxOnly.length,
+      oursOnly: oursOnly.length,
+      amountMismatch: amountMismatch.length,
+    },
     discrepancies: { wxOnly, oursOnly, amountMismatch },
     billDays,
     approx, // 比对面触 CAP 截断（深审 P2）：true 时差异可能是截断假象、勿当真差异（前端提示）

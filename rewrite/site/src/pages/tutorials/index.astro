@@ -2,7 +2,7 @@
 // 教程列表页。
 import Base from '../../layouts/Base.astro'
 import { getCollection } from 'astro:content'
-import { breadcrumbSchema } from '../../lib/schema'
+import { breadcrumbSchema, jsonLd } from '../../lib/schema'
 
 const tutorials = (await getCollection('tutorials')).sort((a, b) => (a.data.datePublished < b.data.datePublished ? 1 : -1))
 const crumbs = breadcrumbSchema([
@@ -12,7 +12,7 @@ const crumbs = breadcrumbSchema([
 ---
 
 <Base title="钩织入门教程合集" description="零基础钩织教程：从起针、辨认针目到收尾藏线，配合小棉鸭材料包的分步图文讲解，新手也能跟着做。">
-  {crumbs && <script type="application/ld+json" set:html={JSON.stringify(crumbs)} />}
+  {crumbs && <script type="application/ld+json" set:html={jsonLd(crumbs)} />}
   <h1>钩织教程</h1>
   <ul>
     {tutorials.map((t) => (

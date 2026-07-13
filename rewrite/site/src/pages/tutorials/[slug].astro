@@ -3,7 +3,7 @@
 // reviewed=false 的 AI 起草稿带「初稿待审」横幅——不冒充定稿（写真纪律）。
 import Base from '../../layouts/Base.astro'
 import { getCollection, type CollectionEntry } from 'astro:content'
-import { articleSchema, howToSchema, faqSchema, breadcrumbSchema } from '../../lib/schema'
+import { articleSchema, howToSchema, faqSchema, breadcrumbSchema, jsonLd } from '../../lib/schema'
 
 export async function getStaticPaths() {
   const tutorials = await getCollection('tutorials')
@@ -19,7 +19,7 @@ const d = entry.data
 const path = `/tutorials/${entry.slug}/`
 
 const schemas = [
-  articleSchema({ title: d.title, description: d.description, path, datePublished: d.datePublished }),
+  articleSchema({ title: d.title, description: d.description, path, datePublished: d.datePublished, dateModified: d.dateModified }),
   howToSchema(d.title, d.description, d.steps),
   faqSchema(d.faq),
   breadcrumbSchema([
@@ -30,8 +30,8 @@ const schemas = [
 ].filter(Boolean)
 ---
 
-<Base title={d.title} description={d.description}>
-  {schemas.map((s) => <script type="application/ld+json" set:html={JSON.stringify(s)} />)}
+<Base title={d.title} description={d.description} type="article" publishedTime={d.datePublished} modifiedTime={d.dateModified || d.datePublished}>
+  {schemas.map((s) => <script type="application/ld+json" set:html={jsonLd(s)} />)}
   {!d.reviewed && <p class="draft-banner">📝 本文为 AI 起草的内容初稿，店主审核后转正——细节以材料包内教学视频为准。</p>}
   <article>
     <h1>{d.title}</h1>
@@ -48,7 +48,9 @@ const schemas = [
       ))}
     </section>
   )}
-  <p class="cta">🧶 想跟着视频一步步钩？材料包与配套课程在微信小程序：<strong>微信搜「LuckyDucky小棉鸭」</strong></p>
+  <p class="cta">
+    🧶 想跟着视频一步步钩？先看看<a href="/kits/">材料包里都有什么</a>——材料包与配套课程在微信小程序：<strong>微信搜「LuckyDucky小棉鸭」</strong>
+  </p>
 </Base>
 
 <style>
