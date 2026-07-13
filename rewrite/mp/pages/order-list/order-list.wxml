@@ -16,7 +16,8 @@
     >{{item.label}}</view>
   </view>
 
-  <view class="coolist-body">
+  <!-- 手势滑动换 tab（bind 不 catch，不影响纵向滚动/上拉翻页）：抬指判定，见 order-list.ts onSwipeStart/onSwipeEnd -->
+  <view class="coolist-body" bind:touchstart="onSwipeStart" bind:touchend="onSwipeEnd">
 
     <!-- 空态 -->
     <view class="coolist-empty" wx:if="{{!loading && !shown.length}}">该分类下暂无订单</view>

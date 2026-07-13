@@ -2,6 +2,7 @@
 import { getMyOrders, pay, confirmReceive, cancelOrder } from '../../api/orders'
 import { mapPayResult } from '../../lib/payFlow'
 import { mapOrders, type OrderVM, type OrderLineVM } from '../../lib/mapOrders'
+import { swipeDir, nextTabKey } from '../../lib/orderSwipe'
 
 const TABS = [
   { key: '', label: '全部' },
@@ -48,6 +49,9 @@ Page({
   },
   _seq: 0, // reload 代次·同 tab 内多触发点（onShow/取消后 reload）并发时丢弃过期回包（tab-token 只挡切 tab·挡不住同 tab 乱序）
   unloaded: false, // 页面已退出标记（同 checkout/review 范式·bug sweep II 批E）：onPay 支付回包在途用户退出列表页，迟到回包不再对已退页 toast/reload
+  _swX: 0, // 手势起点 clientX（非渲染态直挂·仿 _seq 写法）
+  _swY: 0, // 手势起点 clientY
+  _swT: 0, // 手势起点 timeStamp（ms）——一律用事件 timeStamp，不引 Date.now
   onLoad(query: Record<string, string | undefined>) {
     if (query.tab && TABS.some((t) => t.key === query.tab)) this.setData({ tabKey: query.tab })
   },
@@ -82,10 +86,31 @@ Page({
     this.setData({ all: merged, shown: merged.map(decorate), cursor: r.nextCursor, hasMore: !!r.hasMore })
   },
   onTab(e: WechatMiniprogram.TouchEvent) {
-    const k = String(e.currentTarget.dataset.key)
-    if (k === this.data.tabKey) return
-    this.setData({ tabKey: k, all: [], shown: [], cursor: null, hasMore: false })
+    this.switchTab(String(e.currentTarget.dataset.key))
+  },
+  // 切换到目标 tab（同 key 早退 + 清空重拉）：onTab 与手势滑动共用此私有方法。
+  switchTab(key: string) {
+    if (key === this.data.tabKey) return
+    this.setData({ tabKey: key, all: [], shown: [], cursor: null, hasMore: false })
     void this.reload() // 切 tab 从服务端按该状态重新分页（过滤与分页同源）
+  },
+  // 手势滑动换 tab（bind 不 catch，不影响纵向滚动/上拉翻页）：抬指判定，不做跟手动画（需求未要求）。
+  onSwipeStart(e: WechatMiniprogram.TouchEvent) {
+    const t = e.touches[0]
+    this._swX = t.clientX
+    this._swY = t.clientY
+    this._swT = e.timeStamp
+  },
+  onSwipeEnd(e: WechatMiniprogram.TouchEvent) {
+    const t = e.changedTouches[0]
+    const dx = t.clientX - this._swX
+    const dy = t.clientY - this._swY
+    const dt = e.timeStamp - this._swT
+    const dir = swipeDir(dx, dy, dt)
+    if (dir === 0) return
+    const k = nextTabKey(this.data.tabs, this.data.tabKey, dir)
+    if (k === null) return
+    this.switchTab(k)
   },
   onTapOrder(e: WechatMiniprogram.TouchEvent) {
     wx.navigateTo({ url: '/pages/order/order?id=' + String(e.currentTarget.dataset.id) })
