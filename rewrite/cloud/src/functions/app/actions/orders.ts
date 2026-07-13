@@ -13,6 +13,7 @@ import {
   COUPON,
   SHIP,
   ORDER_STATUS,
+  buildBadStatus,
 } from '@ldrw/shared'
 import {
   withOpenId,
@@ -185,7 +186,7 @@ export const createOrder = withOpenId(
       .filter((it) => !ADDONS[it.productId])
       .map((it) => ({ productId: it.productId, spec: it.spec, qty: it.qty }))
     const rsv = await reserveStock(stockLines)
-    if (!rsv.ok) return err('OUT_OF_STOCK' + (rsv.short ? ':' + rsv.short.productId + ':' + rsv.short.spec : ''))
+    if (!rsv.ok) return err(ERR.OUT_OF_STOCK + (rsv.short ? ':' + rsv.short.productId + ':' + rsv.short.spec : ''))
 
     const now = Date.now()
     const order: any = {
@@ -242,7 +243,7 @@ export const pay = withOpenId(async ({ db, OPENID, event }) => {
   ])
   if (!got || !got.data || got.data._openid !== OPENID) return err(ERR.NOT_FOUND)
   const order = got.data
-  if (order.status !== 'pending') return err('BAD_STATUS:' + order.status)
+  if (order.status !== 'pending') return err(buildBadStatus(order.status))
 
   // 惰性超时：到点的 pending 当场关闭（定时器只是兜底）；抢占成功才回补预留（幂等绑转移）
   if (Date.now() - order.createdAt > PAY_WINDOW_MS) {
@@ -267,7 +268,7 @@ export const pay = withOpenId(async ({ db, OPENID, event }) => {
       .catch(() => null)
     const st = (fresh && fresh.data && fresh.data.status) || 'unknown'
     if (st === 'paid') return ok({ paid: true, paidAt: fresh!.data.paidAt || paidAt }) // 并发已付：幂等成功
-    return err('BAD_STATUS:' + st)
+    return err(buildBadStatus(st))
   }
 
   // 触发支付工作流（JSAPI 下单）：openid 显式传入，金额/单号均来自库内订单
@@ -312,7 +313,7 @@ export const applyRefund = withOpenId(async ({ db, OPENID, event }) => {
     .catch(() => null)
   if (!got || !got.data || got.data._openid !== OPENID) return err(ERR.NOT_FOUND)
   const order = got.data
-  if (!['paid', 'shipped', 'done'].includes(order.status)) return err('BAD_STATUS:' + order.status)
+  if (!['paid', 'shipped', 'done'].includes(order.status)) return err(buildBadStatus(order.status))
 
   const item = (order.items || []).find((it: any) => (it.lineId || it.productId) === reqLine)
   if (!item) return err('UNKNOWN_ITEM:' + reqLine)
@@ -383,7 +384,7 @@ export const confirmReceive = withOpenId(async ({ db, OPENID, event }) => {
     .get()
     .catch(() => null)
   if (!got || !got.data || got.data._openid !== OPENID) return err(ERR.NOT_FOUND)
-  if (got.data.status !== 'shipped') return err('BAD_STATUS:' + got.data.status)
+  if (got.data.status !== 'shipped') return err(buildBadStatus(got.data.status))
   const doneAt = Date.now()
   const { moved } = await transition(COLLECTIONS.orders, id, ['shipped'], 'done', { doneAt })
   if (!moved) {
@@ -392,7 +393,7 @@ export const confirmReceive = withOpenId(async ({ db, OPENID, event }) => {
       .doc(id)
       .get()
       .catch(() => null)
-    return err('BAD_STATUS:' + ((fresh && fresh.data && fresh.data.status) || 'unknown'))
+    return err(buildBadStatus((fresh && fresh.data && fresh.data.status) || 'unknown'))
   }
   return ok({ doneAt })
 })
@@ -412,7 +413,7 @@ export const cancelOrder = withOpenId(async ({ db, OPENID, event }) => {
     .catch(() => null)
   if (!got || !got.data || got.data._openid !== OPENID) return err(ERR.NOT_FOUND) // 属主隔离·不泄存在性
   const order = got.data
-  if (order.status !== 'pending') return err('BAD_STATUS:' + order.status)
+  if (order.status !== 'pending') return err(buildBadStatus(order.status))
   const { moved } = await transition(COLLECTIONS.orders, id, ['pending'], 'closed', {
     closedAt: Date.now(),
     cancelledBy: 'user', // 台账区分手动取消 vs 超时关单
@@ -423,7 +424,7 @@ export const cancelOrder = withOpenId(async ({ db, OPENID, event }) => {
       .doc(id)
       .get()
       .catch(() => null)
-    return err('BAD_STATUS:' + ((fresh && fresh.data && fresh.data.status) || 'unknown')) // 并发已被关/已付
+    return err(buildBadStatus((fresh && fresh.data && fresh.data.status) || 'unknown')) // 并发已被关/已付
   }
   if (Array.isArray(order.reserved) && order.reserved.length) await restoreStock(order.reserved) // 回补绑 moved·只一次
   return ok({ closedAt: Date.now() })

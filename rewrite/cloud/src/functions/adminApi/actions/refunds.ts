@@ -1,4 +1,4 @@
-import { toFen, asFen, fenToYuan, refundShareFen, AFTERSALE_STATUS } from '@ldrw/shared'
+import { toFen, asFen, fenToYuan, refundShareFen, AFTERSALE_STATUS, buildBadStatus } from '@ldrw/shared'
 import { callFlow, refundNoFor, pageQuery, notifyAlert } from '../../../kit'
 import { reply, ensure, activationFor, type Ctx } from '../lib'
 
@@ -20,7 +20,7 @@ export async function overrideRefund({ db, data }: Ctx) {
   const got = await db.collection('orders').doc(orderId).get().catch(() => null)
   if (!got || !got.data) return reply(400, { ok: false, error: 'NO_ORDER' })
   const order = got.data
-  if (!['paid', 'shipped', 'done'].includes(order.status)) return reply(400, { ok: false, error: 'BAD_STATUS:' + order.status })
+  if (!['paid', 'shipped', 'done'].includes(order.status)) return reply(400, { ok: false, error: buildBadStatus(order.status) })
 
   const line = (order.items || []).find((it: any) => (it.lineId || it.productId) === reqLine)
   if (!line) return reply(400, { ok: false, error: 'UNKNOWN_ITEM' })
@@ -205,7 +205,7 @@ export async function approveRefund({ db, data }: Ctx) {
   if (!id) return reply(400, { ok: false, error: 'BAD_ARGS' })
   const got = await db.collection('afterSales').doc(id).get().catch(() => null)
   if (!got || !got.data) return reply(400, { ok: false, error: 'NO_RECORD' })
-  if (got.data.status !== 'applied') return reply(400, { ok: false, error: 'BAD_STATUS:' + got.data.status })
+  if (got.data.status !== 'applied') return reply(400, { ok: false, error: buildBadStatus(got.data.status) })
 
   const cfg = await db.collection('config').doc('pay').get().catch(() => null)
   const flowId = cfg && cfg.data && cfg.data.refundFlowId
@@ -261,7 +261,7 @@ export async function approveRefund({ db, data }: Ctx) {
     .where({ _id: id, status: 'applied' })
     .update({ data: { status: 'approved', approvedAt: Date.now(), outRefundNo: refundNo, ...(requalify || {}) } })
   if (!grab.stats || grab.stats.updated !== 1) {
-    return reply(400, { ok: false, error: 'BAD_STATUS:concurrent' })
+    return reply(400, { ok: false, error: buildBadStatus('concurrent') })
   }
 
   // 触发退款工作流（kit.callFlow 单点，根因#12）：金额取售后单分摊额（重算降级后以新额为准）+ 订单实付，不收前端
@@ -297,7 +297,7 @@ export async function rejectRefund({ db, data }: Ctx) {
   if (!id || !reason) return reply(400, { ok: false, error: 'BAD_ARGS' })
   const got = await db.collection('afterSales').doc(id).get().catch(() => null)
   if (!got || !got.data) return reply(400, { ok: false, error: 'NO_RECORD' })
-  if (got.data.status !== 'applied') return reply(400, { ok: false, error: 'BAD_STATUS:' + got.data.status })
+  if (got.data.status !== 'applied') return reply(400, { ok: false, error: buildBadStatus(got.data.status) })
   // 条件更新（深审②·原子化）：仍是 applied 才置 rejected——读检查到写入之间被同意抢先（approved·钱已进
   // 退款通道）时绝不 clobber 回 rejected（否则退款回调 from applied/approved 抢不到状态·钱退了单据却是已拒绝）。
   const grab = await db
@@ -305,7 +305,7 @@ export async function rejectRefund({ db, data }: Ctx) {
     .where({ _id: id, status: 'applied' })
     .update({ data: { status: 'rejected', rejectedAt: Date.now(), rejectReason: reason } })
   if (!grab.stats || grab.stats.updated !== 1) {
-    return reply(400, { ok: false, error: 'BAD_STATUS:concurrent' })
+    return reply(400, { ok: false, error: buildBadStatus('concurrent') })
   }
   return reply(200, { ok: true })
 }

@@ -437,6 +437,7 @@ onMounted(reload)
             <div class="ld-th r" :style="{ width: '90px' }">±</div>
             <div class="ld-th" :style="{ width: '120px' }">操作者</div>
             <div class="ld-th" :style="{ width: '200px' }">原因</div>
+            <div class="ld-th" :style="{ width: '160px' }">单据</div>
           </div>
           <div class="ld-tbody">
             <div v-for="l in ledger" :key="l.id" class="ld-tr">
@@ -448,6 +449,7 @@ onMounted(reload)
               </div>
               <div class="ld-td muted" :style="{ width: '120px' }">{{ l.operator }}</div>
               <div class="ld-td muted" :style="{ width: '200px' }">{{ l.reason || '—' }}</div>
+              <div class="ld-td mono muted" :style="{ width: '160px' }">{{ l.docId || '—' }}</div>
             </div>
           </div>
           <div v-if="ledgerHasMore" class="tbl-foot">

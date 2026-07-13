@@ -14,7 +14,7 @@ export const listCsatEntries = (filter: { cursor?: unknown; limit?: number; from
   client.post('listCsatEntries', filter as Record<string, unknown>)
 export const listCheckpoints = (courseId?: string) => client.post('listCheckpoints', courseId ? { courseId } : {})
 export const saveCheckpoints = (courseId: string, nodes: unknown[]) => client.post('saveCheckpoints', { courseId, nodes })
-// 质检抽检（批 B7）：sessionKey=csSession._id（非 externalUserId，与 listCsatEntries 的 sessionKey 语义不同）
+// 质检抽检（批 B7）：sessionKey=csSession._id（非 externalUserId——listCsatEntries 明细行已改名为 externalUserId，字段已分开不再撞名）
 export const sampleQc = (count = 10) => client.post('sampleQc', { count })
 export const saveQcMark = (sessionKey: string, score: number, note: string) => client.post('saveQcMark', { sessionKey, score, note })
 export const listQcSampled = (filter: { cursor?: unknown; limit?: number; onlyPending?: boolean } = {}) =>

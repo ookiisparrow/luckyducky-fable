@@ -10,7 +10,7 @@ import {
   notifyAlert,
   getTempUrl,
 } from '../../../kit'
-import { COLLECTIONS } from '@ldrw/shared'
+import { COLLECTIONS, ERR, AGENT_STATUS } from '@ldrw/shared'
 import { assembleCustomer360 } from '../customer360/orchestrator'
 
 // 承面 C 外包会话工作台·坐席台后端（B6.1–6.3·板块#12）。实现 shared/csAgentDesk.ts 契约的 8 个 action：
@@ -24,7 +24,7 @@ import { assembleCustomer360 } from '../customer360/orchestrator'
 // 非 data 里前端传的）——防冒名认领/发消息。分配 scope：外包只能读/操作**自己 claim 的会话**（ownsSession·
 // 超管 '*' 全量）；守卫 outsourced-reads-scoped（车道 C 定义）合并后覆盖此不变量，本文件先落最小运行时校验。
 //
-// 状态流转一律走 kit `transition('csSession', …)`（合法流转单源 shared/cs.spec.ts·守卫 order-transitions-declared
+// 状态流转一律走 kit `transition('csSession', …)`（合法流转单源 shared/cs.spec.ts·守卫 rw-cs-transitions-declared
 // 对账·私自越流转即红·根因#2）；一次性副作用绑首次转移（transition moved===true·天然幂等·根因#1）。
 // 读路径 bounded（cursor/limit·守卫 capacity-reads-bounded·根因#7）。发送经 cs/kfSend 服务端接缝（平台接缝
 // 单点·根因#12·不在 adminApi 复制 token/sendMsg 逻辑·避 WXKF env 双份）。
@@ -34,7 +34,6 @@ const THREAD_LIMIT = 50 // 会话消息流默认页大小（bounded）
 const MAX_TEXT = 2000 // 坐席回复文本上限（防超长入库/发送）
 const DEFAULT_AGENT_LIMIT = 5 // 默认接待上限（agentState.limit 未配时）
 const CHANNEL = 'wxkf' // 出站归档 channel（与 kfCallback archiveOutbound 同口径·多承面区分位）
-const AGENT_STATUS = ['online', 'busy', 'offline'] as const
 // 会话结束满意度提示（触 CSAT·契约 closeConversation「触评分气泡」）：结束时最佳努力发给顾客，
 // 顾客回复 1-5 由 cs/kfCallback dispatch recordCsat 归档（已在·B4.3）——本处只发提示、不自己写 csat。
 const CSAT_PROMPT = '感谢你的咨询～这次服务还满意吗？回复 1-5 分帮我们改进（5 分最满意）🙏'
@@ -144,14 +143,14 @@ export async function listQueue(ctx: Ctx): Promise<any> {
 export async function claimConversation(ctx: Ctx): Promise<any> {
   const { db, data } = ctx
   const p = principal(ctx)
-  if (!p.agentId) return reply(403, { ok: false, error: 'NO_AGENT' }) // 无认证坐席身份（不信前端·不认领）
+  if (!p.agentId) return reply(403, { ok: false, error: ERR.NO_AGENT }) // 无认证坐席身份（不信前端·不认领）
   const sessionId = str(data && data.sessionId, 200)
-  if (!sessionId) return reply(400, { ok: false, error: 'BAD_ARGS' })
+  if (!sessionId) return reply(400, { ok: false, error: ERR.BAD_ARGS })
   const s = await loadSession(db, sessionId)
-  if (!s) return reply(404, { ok: false, error: 'NOT_FOUND' })
+  if (!s) return reply(404, { ok: false, error: ERR.NOT_FOUND })
   // 接待上限（派生 activeCount<limit·B6.3）：满额拒（先查后转·TOCTOU 罕见·派生计数自愈）
   const [count, limit] = await Promise.all([activeCountFor(db, p.agentId), agentLimit(db, p.agentId)])
-  if (count >= limit) return reply(200, { ok: false, error: 'AT_CAPACITY', limit })
+  if (count >= limit) return reply(200, { ok: false, error: ERR.AT_CAPACITY, limit })
   const now = Date.now()
   // pending/escalated → active（声明流转·原子幂等：并发已被接走则 moved=false）
   const r = await transition('csSession', sessionId, ['pending', 'escalated'], 'active', {
@@ -159,7 +158,7 @@ export async function claimConversation(ctx: Ctx): Promise<any> {
     claimedAt: now,
     updatedAt: now,
   })
-  if (!r.moved) return reply(200, { ok: false, error: 'NOT_CLAIMABLE' }) // 非 pending/escalated（已 active/closed 或并发抢先）
+  if (!r.moved) return reply(200, { ok: false, error: ERR.NOT_CLAIMABLE }) // 非 pending/escalated（已 active/closed 或并发抢先）
   const fresh = await loadSession(db, sessionId)
   const openid = fresh ? await resolveOpenid(db, fresh) : null
   return reply(200, { ok: true, session: toView(fresh, openid) })
@@ -170,9 +169,9 @@ export async function releaseConversation(ctx: Ctx): Promise<any> {
   const { db, data } = ctx
   const p = principal(ctx)
   const sessionId = str(data && data.sessionId, 200)
-  if (!sessionId) return reply(400, { ok: false, error: 'BAD_ARGS' })
+  if (!sessionId) return reply(400, { ok: false, error: ERR.BAD_ARGS })
   const sl = await scopedLoad(db, p, sessionId)
-  if (sl.code) return reply(sl.code, { ok: false, error: sl.code === 404 ? 'NOT_FOUND' : 'FORBIDDEN' }) // 分配 scope：只放手自己 claim 的
+  if (sl.code) return reply(sl.code, { ok: false, error: sl.code === 404 ? ERR.NOT_FOUND : ERR.FORBIDDEN }) // 分配 scope：只放手自己 claim 的
   const s = sl.s
   const now = Date.now()
   const r = await transition('csSession', sessionId, ['active'], 'pending', {
@@ -180,7 +179,7 @@ export async function releaseConversation(ctx: Ctx): Promise<any> {
     claimedAt: null,
     updatedAt: now,
   })
-  if (!r.moved) return reply(200, { ok: false, error: 'NOT_ACTIVE' })
+  if (!r.moved) return reply(200, { ok: false, error: ERR.NOT_ACTIVE })
   return reply(200, { ok: true })
 }
 
@@ -193,12 +192,12 @@ export async function sendAgentMessage(ctx: Ctx): Promise<any> {
   const p = principal(ctx)
   const sessionId = str(data && data.sessionId, 200)
   const text = str(data && data.text, MAX_TEXT)
-  if (!sessionId || !text) return reply(400, { ok: false, error: 'BAD_ARGS' })
+  if (!sessionId || !text) return reply(400, { ok: false, error: ERR.BAD_ARGS })
   const sl = await scopedLoad(db, p, sessionId)
-  if (sl.code) return reply(sl.code, { ok: false, error: sl.code === 404 ? 'NOT_FOUND' : 'FORBIDDEN' }) // 分配 scope
+  if (sl.code) return reply(sl.code, { ok: false, error: sl.code === 404 ? ERR.NOT_FOUND : ERR.FORBIDDEN }) // 分配 scope
   const s = sl.s
-  if (s.status !== 'active') return reply(200, { ok: false, error: 'NOT_ACTIVE' }) // 接待窗口：仅 active 可发
-  if (!s.externalUserId || !s.openKfId) return reply(200, { ok: false, error: 'NO_CHANNEL' })
+  if (s.status !== 'active') return reply(200, { ok: false, error: ERR.NOT_ACTIVE }) // 接待窗口：仅 active 可发
+  if (!s.externalUserId || !s.openKfId) return reply(200, { ok: false, error: ERR.NO_CHANNEL })
   // 经 cs/kfSend 主动发（服务端专用·48h 窗口内经微信客服 send_msg）；errcode 原样带回便于联调（同 kfSend）
   const res = await cloud
     .callFunction({ name: 'kfSend', data: { externalUserId: s.externalUserId, openKfId: s.openKfId, text } })
@@ -231,7 +230,7 @@ export async function sendAgentMessage(ctx: Ctx): Promise<any> {
     return reply(200, { ok: true, errcode: 0 })
   }
   // 发送失败 = ok:false（前端只看 ok·曾回 ok:true+errcode 被当成功→静默吞错+清输入框·95018 真机逼出·调试日志 AC）
-  return reply(200, { ok: false, error: 'SEND_FAIL', errcode: errcode || -1 })
+  return reply(200, { ok: false, error: ERR.SEND_FAIL, errcode: errcode || -1 })
 }
 
 // ── ⑤ getThread：拉会话消息流·cursor 增量（前端轮询·分配 scope：外包只读自己 claim 的会话·根因#3/#7）──
@@ -239,9 +238,9 @@ export async function getThread(ctx: Ctx): Promise<any> {
   const { db, data } = ctx
   const p = principal(ctx)
   const sessionId = str(data && data.sessionId, 200)
-  if (!sessionId) return reply(400, { ok: false, error: 'BAD_ARGS' })
+  if (!sessionId) return reply(400, { ok: false, error: ERR.BAD_ARGS })
   const sl = await scopedLoad(db, p, sessionId)
-  if (sl.code) return reply(sl.code, { ok: false, error: sl.code === 404 ? 'NOT_FOUND' : 'FORBIDDEN' }) // 分配 scope
+  if (sl.code) return reply(sl.code, { ok: false, error: sl.code === 404 ? ERR.NOT_FOUND : ERR.FORBIDDEN }) // 分配 scope
   const s = sl.s
   const _ = db.command
   // 增量游标：首拉（无 cursor）从会话建立**前 10 分钟**起（深审 F5——顾客点「转人工」之前打的字往往是真正的
@@ -286,17 +285,17 @@ export async function getMediaUrl(ctx: Ctx): Promise<any> {
   const p = principal(ctx)
   const sessionId = str(data && data.sessionId, 200)
   const msgId = str(data && data.msgId, 200)
-  if (!sessionId || !msgId) return reply(400, { ok: false, error: 'BAD_ARGS' })
+  if (!sessionId || !msgId) return reply(400, { ok: false, error: ERR.BAD_ARGS })
   const sl = await scopedLoad(db, p, sessionId)
-  if (sl.code) return reply(sl.code, { ok: false, error: sl.code === 404 ? 'NOT_FOUND' : 'FORBIDDEN' }) // 分配 scope
+  if (sl.code) return reply(sl.code, { ok: false, error: sl.code === 404 ? ERR.NOT_FOUND : ERR.FORBIDDEN }) // 分配 scope
   const s = sl.s
   const docId = INBOUND_ID_PREFIX + msgId
   const got = await db.collection(COLLECTIONS.conversations).doc(docId).get().catch(() => null)
   const row = got && got.data
-  if (!row) return reply(404, { ok: false, error: 'MSG_NOT_FOUND' })
+  if (!row) return reply(404, { ok: false, error: ERR.MSG_NOT_FOUND })
   // 消息归属会话校验（防跨会话拉图）：非本会话的消息一律拒，即便调用者确实拥有 sessionId 本身
   if (String(row.externalUserId || '') !== String(s.externalUserId || '') || String(row.openKfId || '') !== String(s.openKfId || '')) {
-    return reply(403, { ok: false, error: 'NOT_IN_SESSION' })
+    return reply(403, { ok: false, error: ERR.NOT_IN_SESSION })
   }
   // 缓存命中：已落云存储 → 直接换临时 URL，不再触发下载
   if (row.fileId) {
@@ -305,18 +304,18 @@ export async function getMediaUrl(ctx: Ctx): Promise<any> {
     await notifyAlert('anomaly', 'getMediaUrl', 'CACHED_URL_FAILED', { sessionId, msgId }) // 罕见：fileId 在但换不到 URL（云存储侧异常）
   }
   const mediaId = String(row.mediaId || '')
-  if (!mediaId) return reply(200, { ok: false, error: 'NO_MEDIA' }) // 非图片消息/未落 mediaId
+  if (!mediaId) return reply(200, { ok: false, error: ERR.NO_MEDIA }) // 非图片消息/未落 mediaId
   // 经 cs/kfMedia 服务端接缝下载（跨函数调用·平台接缝单点#12）
   const res = await cloud.callFunction({ name: 'kfMedia', data: { mediaId } }).catch(() => null)
   if (!res || !res.result) {
     await notifyAlert('anomaly', 'getMediaUrl', 'MEDIA_CALL_FAILED', { sessionId, msgId })
-    return reply(200, { ok: false, error: 'DOWNLOAD_FAILED' })
+    return reply(200, { ok: false, error: ERR.DOWNLOAD_FAILED })
   }
   const out = res.result
   if (!out.ok) {
-    if (out.expired) return reply(200, { ok: false, error: 'EXPIRED' }) // media_id 3 天有效·如实语义
+    if (out.expired) return reply(200, { ok: false, error: ERR.EXPIRED }) // media_id 3 天有效·如实语义
     await notifyAlert('anomaly', 'getMediaUrl', 'MEDIA_DOWNLOAD_FAILED', { sessionId, msgId, errcode: out.errcode || 0 })
-    return reply(200, { ok: false, error: 'DOWNLOAD_FAILED' })
+    return reply(200, { ok: false, error: ERR.DOWNLOAD_FAILED })
   }
   let fileId: string
   try {
@@ -324,11 +323,11 @@ export async function getMediaUrl(ctx: Ctx): Promise<any> {
     fileId = up.fileID
   } catch {
     await notifyAlert('anomaly', 'getMediaUrl', 'UPLOAD_FAILED', { sessionId, msgId })
-    return reply(200, { ok: false, error: 'UPLOAD_FAILED' })
+    return reply(200, { ok: false, error: ERR.UPLOAD_FAILED })
   }
   await db.collection(COLLECTIONS.conversations).doc(docId).update({ data: { fileId } }).catch(() => {}) // fail-soft：回写失败不反噬本次返回，下次重下载兜底
   const url = await getTempUrl(fileId)
-  if (!url) return reply(200, { ok: false, error: 'URL_FAILED' })
+  if (!url) return reply(200, { ok: false, error: ERR.URL_FAILED })
   return reply(200, { ok: true, url, cached: false })
 }
 
@@ -336,9 +335,9 @@ export async function getMediaUrl(ctx: Ctx): Promise<any> {
 export async function setAgentStatus(ctx: Ctx): Promise<any> {
   const { db, data } = ctx
   const p = principal(ctx)
-  if (!p.agentId) return reply(403, { ok: false, error: 'NO_AGENT' })
+  if (!p.agentId) return reply(403, { ok: false, error: ERR.NO_AGENT })
   const status = AGENT_STATUS.includes(String(data && data.status) as any) ? String(data.status) : ''
-  if (!status) return reply(400, { ok: false, error: 'BAD_ARGS' })
+  if (!status) return reply(400, { ok: false, error: ERR.BAD_ARGS })
   const limit = await agentLimit(db, p.agentId) // 保留已配上限（首次建 doc 用默认）
   // doc(agentId).set({data}) 的 data 不含 _id（_id 由 doc 指定·真 sdk 约束·根因#8）
   // 写失败不再吞（P1·bug 清除战役II F2）：原 .catch(()=>{}) 后恒 ok:true——前端 Desk 的 confirmedStatus
@@ -351,7 +350,7 @@ export async function setAgentStatus(ctx: Ctx): Promise<any> {
     .catch((e: any) => e || new Error('WRITE_FAIL'))
   if (err) {
     await notifyAlert('anomaly', 'setAgentStatus', 'WRITE_FAIL', { agentId: p.agentId })
-    return reply(200, { ok: false, error: 'WRITE_FAIL' })
+    return reply(200, { ok: false, error: ERR.WRITE_FAIL })
   }
   return reply(200, { ok: true })
 }
@@ -361,14 +360,14 @@ export async function escalateToMerchant(ctx: Ctx): Promise<any> {
   const { db, data } = ctx
   const p = principal(ctx)
   const sessionId = str(data && data.sessionId, 200)
-  if (!sessionId) return reply(400, { ok: false, error: 'BAD_ARGS' })
+  if (!sessionId) return reply(400, { ok: false, error: ERR.BAD_ARGS })
   const sl = await scopedLoad(db, p, sessionId)
-  if (sl.code) return reply(sl.code, { ok: false, error: sl.code === 404 ? 'NOT_FOUND' : 'FORBIDDEN' }) // 分配 scope
+  if (sl.code) return reply(sl.code, { ok: false, error: sl.code === 404 ? ERR.NOT_FOUND : ERR.FORBIDDEN }) // 分配 scope
   const s = sl.s // 分配 scope：只升自己 claim 的
   const now = Date.now()
   // active → escalated（保留 agentId＝记录谁升的·activeCount 派生随 status 降·商户可 claim 重接）
   const r = await transition('csSession', sessionId, ['active'], 'escalated', { updatedAt: now })
-  if (!r.moved) return reply(200, { ok: false, error: 'NOT_ACTIVE' })
+  if (!r.moved) return reply(200, { ok: false, error: ERR.NOT_ACTIVE })
   // M⑦ 推送线·fail-soft：会话升级 → 推商户超管手机（其 wecomUserId 存 adminConfig 'auth' doc·超管在 /agent 队列可见 escalated）
   try {
     const boss = await db.collection('adminConfig').doc('auth').get().catch(() => null)
@@ -390,9 +389,9 @@ export async function closeConversation(ctx: Ctx): Promise<any> {
   const { db, cloud, data } = ctx
   const p = principal(ctx)
   const sessionId = str(data && data.sessionId, 200)
-  if (!sessionId) return reply(400, { ok: false, error: 'BAD_ARGS' })
+  if (!sessionId) return reply(400, { ok: false, error: ERR.BAD_ARGS })
   const sl = await scopedLoad(db, p, sessionId)
-  if (sl.code) return reply(sl.code, { ok: false, error: sl.code === 404 ? 'NOT_FOUND' : 'FORBIDDEN' }) // 分配 scope
+  if (sl.code) return reply(sl.code, { ok: false, error: sl.code === 404 ? ERR.NOT_FOUND : ERR.FORBIDDEN }) // 分配 scope
   const s = sl.s // 分配 scope：pending 仅超管可关（外包非 owner 拒）
   const now = Date.now()
   const wasEngaged = s.status === 'active' || s.status === 'escalated' // 真人接待过→结束时发 CSAT 提示
@@ -400,7 +399,7 @@ export async function closeConversation(ctx: Ctx): Promise<any> {
   const r = await transition('csSession', sessionId, ['pending', 'active', 'escalated'], 'closed', {
     updatedAt: now,
   })
-  if (!r.moved) return reply(200, { ok: false, error: 'ALREADY_CLOSED' })
+  if (!r.moved) return reply(200, { ok: false, error: ERR.ALREADY_CLOSED })
   // 触 CSAT（best-effort·fail-soft·仅接待过的会话·B4.3）。深审 F2/F6 闭环：
   //  - 立 `csatask:<euid>` 标记（48h·dispatch 收到纯数字 1-5 且有此标记才 recordCsat——「回复 1-5 分」的兑现·
   //    曾只发提示无人认自由文本数字＝评分链断·顾客照做收到根菜单分数丢失）；
@@ -442,7 +441,7 @@ export async function closeConversation(ctx: Ctx): Promise<any> {
 export async function listMyActive(ctx: Ctx): Promise<any> {
   const { db, data } = ctx
   const p = principal(ctx)
-  if (!p.agentId) return reply(403, { ok: false, error: 'NO_AGENT' })
+  if (!p.agentId) return reply(403, { ok: false, error: ERR.NO_AGENT })
   const { limit } = pageParams(data, LIST_LIMIT)
   const res = await db
     .collection(COLLECTIONS.csSession)
@@ -465,17 +464,17 @@ export async function getSessionCustomer360(ctx: Ctx): Promise<any> {
   const { db, data } = ctx
   const p = principal(ctx)
   const sessionId = str(data && data.sessionId, 200)
-  if (!sessionId) return reply(400, { ok: false, error: 'BAD_ARGS' })
+  if (!sessionId) return reply(400, { ok: false, error: ERR.BAD_ARGS })
   const sl = await scopedLoad(db, p, sessionId)
-  if (sl.code) return reply(sl.code, { ok: false, error: sl.code === 404 ? 'NOT_FOUND' : 'FORBIDDEN' }) // 分配 scope
+  if (sl.code) return reply(sl.code, { ok: false, error: sl.code === 404 ? ERR.NOT_FOUND : ERR.FORBIDDEN }) // 分配 scope
   const s = sl.s
   const openid = await resolveOpenid(db, s)
-  if (!openid) return reply(200, { ok: false, error: 'NO_BRIDGE' }) // 身份桥接未建（kfIdentity 无映射）·如实回·前端有提示
+  if (!openid) return reply(200, { ok: false, error: ERR.NO_BRIDGE }) // 身份桥接未建（kfIdentity 无映射）·如实回·前端有提示
   if (!p.isSuper) {
     // 数据共享同意（§1.5·B3.3·根因#3 fail-closed）：外包（第三方受托客服）看客户 360 前客户须已同意；
     // 超管＝商户本人＝数据控制者，走现有隐私政策覆盖、不经本闸（csAccess 头注口径）。
     const consent = await assertDataShareConsent(db, openid)
-    if (!consent.ok) return reply(403, { ok: false, error: 'NO_CONSENT' })
+    if (!consent.ok) return reply(403, { ok: false, error: ERR.NO_CONSENT })
   }
   const result = await assembleCustomer360(db, openid)
   return reply(200, { ok: true, ...result })

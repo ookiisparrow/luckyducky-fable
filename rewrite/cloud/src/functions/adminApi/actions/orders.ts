@@ -1,4 +1,4 @@
-import { ORDER_STATUS } from '@ldrw/shared'
+import { ORDER_STATUS, buildBadStatus } from '@ldrw/shared'
 import { pageQuery, uploadShippingToWx, notifyAlert, applyStockMoves } from '../../../kit'
 import { reply, activationFor, type Ctx } from '../lib'
 
@@ -74,7 +74,7 @@ async function shipOne(db: any, idRaw: any, companyRaw: any, trackingRaw: any, o
   if (!got || !got.data) return { ok: false, error: 'NO_ORDER' }
   const cur = got.data.status
   // paid = 首次发货；shipped = 改单号。其余状态不允许动。
-  if (cur !== 'paid' && cur !== 'shipped') return { ok: false, error: 'BAD_STATUS:' + cur }
+  if (cur !== 'paid' && cur !== 'shipped') return { ok: false, error: buildBadStatus(cur) }
   // 金额异常单（feeMismatch 留痕）须先「解除」后才能发货（审核批次A 折中）
   if (got.data.feeMismatch) return { ok: false, error: 'FEE_MISMATCH_HOLD' }
   // 条件更新（审核批次A-6）：仍是 paid/shipped 才写——防与确认收货并发把 done 回滚
@@ -86,7 +86,7 @@ async function shipOne(db: any, idRaw: any, companyRaw: any, trackingRaw: any, o
     })
   if (!upd.stats || upd.stats.updated !== 1) {
     const fresh = await db.collection('orders').doc(id).get().catch(() => null)
-    return { ok: false, error: 'BAD_STATUS:' + ((fresh && fresh.data && fresh.data.status) || 'unknown') }
+    return { ok: false, error: buildBadStatus((fresh && fresh.data && fresh.data.status) || 'unknown') }
   }
   // SCM-D 核销留痕（守卫 ship-verify-ledger·根因#2·「如实核销」蓝图定稿）：**首次** paid→shipped 逐行落
   // ship 流水（fg 行只留痕不动账——成品扣账在下单预留 reserveStock；确定性 _id=ship:<orderId>:fg:<pid>__<spec>

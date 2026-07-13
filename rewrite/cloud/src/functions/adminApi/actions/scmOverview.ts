@@ -63,6 +63,7 @@ export async function getScmOverview({ db }: Ctx) {
     itemKey: String(l.itemKey || ''),
     delta: Number(l.delta) || 0,
     docType: String(l.docType || ''),
+    docId: String(l.docId || ''),
     operator: String(l.operator || ''),
     reason: String(l.reason || ''),
     at: Number(l.at) || 0,

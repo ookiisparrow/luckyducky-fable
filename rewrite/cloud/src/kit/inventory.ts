@@ -1,4 +1,4 @@
-import { COLLECTIONS } from '@ldrw/shared'
+import { COLLECTIONS, ERR } from '@ldrw/shared'
 import { getDb } from './db'
 import { notifyAlert } from './observe'
 
@@ -114,7 +114,7 @@ export async function restoreStock(lines: StockLine[]): Promise<void> {
       if (!ok) lost.push(l)
     }
   }
-  if (lost.length) await notifyAlert('money', 'restoreStock', 'GIVEBACK_LOST', { lines: lost })
+  if (lost.length) await notifyAlert('money', 'restoreStock', ERR.GIVEBACK_LOST, { lines: lost })
 }
 
 /**
@@ -156,7 +156,7 @@ export async function setStock(
  * 不把「不限量」隐式翻成限量（改计量语义须管理员在库存页显式设置）。qty 非正整数 fail-closed。
  */
 export async function produceStock(productId: string, spec: string, qty: number): Promise<{ ok: boolean; error?: string }> {
-  if (!productId || !Number.isInteger(qty) || qty <= 0) return { ok: false, error: 'BAD_QTY' }
+  if (!productId || !Number.isInteger(qty) || qty <= 0) return { ok: false, error: ERR.BAD_QTY }
   const coll = getDb().collection(COLLECTIONS.inventory)
   const _id = idOf(productId, spec)
   for (let i = 0; i < CAS_RETRY; i++) {
@@ -179,7 +179,7 @@ export async function produceStock(productId: string, spec: string, qty: number)
     if (r.stats && r.stats.updated === 1) return { ok: true }
     // updated:0＝并发改动→重读重试
   }
-  return { ok: false, error: 'CONTENTION' } // 争用耗尽（管理端低频·几乎不至）
+  return { ok: false, error: ERR.CONTENTION } // 争用耗尽（管理端低频·几乎不至）
 }
 
 // 全量扫描上限（黄金 inventory-scm §L）：裸 .get() 服务端默认 100 条静默截断——SKU 破百后库存页

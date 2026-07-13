@@ -43,3 +43,11 @@ const dictOf = <T extends string>(states: readonly string[]) =>
   Object.fromEntries(states.map((s) => [s.toUpperCase(), s])) as Record<string, T>
 export const ORDER_STATUS = dictOf<OrderStatus>(statesOf(ORDER_STATUS_SPEC))
 export const AFTERSALE_STATUS = dictOf<AfterSaleStatus>(statesOf(AFTERSALE_STATUS_SPEC))
+
+/** 'BAD_STATUS:'+状态 复合码的构造/解析单源（cloud-order/cloud-erp 生产，mp 消费）——格式不可改，一改分隔符三处都得跟着改。 */
+export function buildBadStatus(status: string): string {
+  return 'BAD_STATUS:' + status
+}
+export function parseBadStatus(msg: string): string | null {
+  return typeof msg === 'string' && msg.startsWith('BAD_STATUS:') ? msg.slice('BAD_STATUS:'.length) : null
+}

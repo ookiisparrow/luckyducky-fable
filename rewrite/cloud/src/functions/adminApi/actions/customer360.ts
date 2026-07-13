@@ -1,4 +1,5 @@
 import { reply, type Ctx } from '../lib'
+import { ERR } from '@ldrw/shared'
 import { assembleCustomer360 } from '../customer360/orchestrator'
 
 // 客户360 只读查询（B1.1·M①）：按 openid 聚合该客人全貌（订单/激活…经 provider registry·铁律三）。
@@ -8,7 +9,7 @@ import { assembleCustomer360 } from '../customer360/orchestrator'
 // 本 action 只负责取 openid → 编排 → 回结果（读类·不写库）。
 export async function getCustomer360({ db, data }: Ctx) {
   const openid = String((data && data.openid) || '').trim()
-  if (!openid) return reply(400, { ok: false, error: 'BAD_ARGS' })
+  if (!openid) return reply(400, { ok: false, error: ERR.BAD_ARGS })
   const result = await assembleCustomer360(db, openid)
   return reply(200, { ok: true, ...result })
 }
@@ -24,7 +25,7 @@ const SEARCH_LIMIT = 20 // bounded（防一次拉爆 users·大库友好）
 // 昵称模糊（db.RegExp 子串）须真 sdk + 索引、内存桩不复现（根因#8 桩≠真），故先精确、不造不可测的模糊分支（防过度工程·留待真机验后再升级）。
 export async function searchCustomer({ db, data }: Ctx) {
   const q = String((data && data.q) || '').trim().slice(0, 64)
-  if (!q) return reply(400, { ok: false, error: 'BAD_ARGS' })
+  if (!q) return reply(400, { ok: false, error: ERR.BAD_ARGS })
   const found = new Map<string, any>() // openid → 摘要（去重·一人多键命中合并 matchedBy）
   const add = (u: any, by: string) => {
     const openid = String((u && (u._openid || u._id)) || '')
@@ -75,14 +76,14 @@ export async function searchCustomer({ db, data }: Ctx) {
 // 改：查询异常回 null（≠真查无结果的 {data:[]}）→ 单独识别为 ok:false；「真查无结果」保持 ok:true+user:null 不变。
 export async function getUser({ db, data }: Ctx) {
   const openid = String((data && data.openid) || '').trim()
-  if (!openid) return reply(400, { ok: false, error: 'BAD_ARGS' })
+  if (!openid) return reply(400, { ok: false, error: ERR.BAD_ARGS })
   const r = await db
     .collection('users')
     .where({ _openid: openid })
     .limit(1)
     .get()
     .catch(() => null)
-  if (!r) return reply(200, { ok: false, error: 'USER_LOOKUP_FAIL' })
+  if (!r) return reply(200, { ok: false, error: ERR.USER_LOOKUP_FAIL })
   const u = (r.data && r.data[0]) || null
   if (!u) return reply(200, { ok: true, user: null }) // 真查无结果——如实回 null，不算失败
   return reply(200, {

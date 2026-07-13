@@ -1,3 +1,4 @@
+import { ERR } from '@ldrw/shared'
 import { enabledProviders } from './registry'
 import type { Customer360Panel } from './types'
 
@@ -15,7 +16,7 @@ export async function assembleCustomer360(
         const data = await p.fetch(db, openid)
         return { key: p.key, label: p.label, order: p.order, data }
       } catch {
-        return { key: p.key, label: p.label, order: p.order, data: null, error: 'PANEL_FETCH_FAIL' }
+        return { key: p.key, label: p.label, order: p.order, data: null, error: ERR.PANEL_FETCH_FAIL }
       }
     })
   )

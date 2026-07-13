@@ -1,5 +1,7 @@
 # 承面 C（外包会话工作台）· 施工工单（细化任务 + 多 CC 并行执行）
 
+> **旧线批次账（2026-07-03 M5 切换前）**：本文全篇写于切换到 `rewrite/` 生产源之前，文中 `shared/cs.spec.ts`、`packages/agent`、`packages/cloud/src/functions/cs/...` 等路径指的都是**旧线**（今已冻结为参照物，见 CLAUDE.md 身份段）。M5 切换后客服/坐席台活代码在 `rewrite/cloud/src/functions/cs/`、`rewrite/cloud/src/functions/adminApi/actions/agentDesk.ts`、`rewrite/agent/`；`shared/cs.spec.ts` 这条注释所指的单源现已在新线落地为 `rewrite/shared/src/cs.spec.ts`（跨系统一致性收敛批新建·守卫 `rw-cs-transitions-declared` 核对账）。本文档其余内容按历史批次记录保留，不再随新线改动同步更新。
+>
 > **这是什么**：承面 C（L·最大块）的**可执行工单**——把 `施工蓝图.md 阶段六` 的 B6.1–6.4 细化到任务级，切成多 CC 并行车道。并行**机制**（worktree/git-tag 自动中继/master loop/5 单源纪律）在 `并行工作流.md`，本文只讲**承面 C 的活怎么切、每车道做什么**，不重抄机制。
 > **决策**：用户 2026-07-01 拍板 **自建·先 C 后 A·直接上·不评 SaaS**；4 未定点按建议值定稿（见 §1）。项目此前单 CC（memory `single-cc-restored`），本次为承面 C **重启多 CC**——你一次性开车道 CC + master 跑 loop。
 > **天花板诚实标**（施工蓝图 §95）：承面 C 是「会话+实时+排队+UI 互锁」的紧耦合单件，并行提速来自「车道 C 全程独立 + 车道 B 对 mock 与 A 重叠」，**非数量级**；且「顺手/可靠」只能真坐席真会话验（根因#8 靠人）。
