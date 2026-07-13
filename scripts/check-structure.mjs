@@ -2257,13 +2257,13 @@ export const repoChecks = [
     // 子集产物正本在仓根 assets/brand-fonts/（不在 src·不进包，仅作部署到托管的真相源 + OFL 授权随附）。
     id: 'font-not-in-package',
     roots: ['基建'],
-    desc: '品牌字体远程加载不进包：packages/miniapp/src 下无字体二进制(.otf/.ttf/.woff/.woff2/.eot) + mp 可达源码无字面内嵌字体 blob（base64 长串·非运行时 downloadFile→base64 模板）——防 ~14MB 字重撑爆包体积（主包 2MB），字体须远程拉取（正本在 assets/brand-fonts/·远程托管·mp 端 downloadFile→base64 绕 CORS 见 App.vue）',
+    desc: '品牌字体远程加载不进包：packages/miniapp/src + rewrite/mp 下无字体二进制(.otf/.ttf/.woff/.woff2/.eot) + mp 可达源码无字面内嵌字体 blob（base64 长串·非运行时 downloadFile→base64 模板）——防 ~14MB 字重撑爆包体积（主包 2MB），字体须远程拉取（正本在 assets/brand-fonts/·远程托管·mp 端 downloadFile→base64 绕 CORS 见 App.vue / rewrite/mp/utils/brandFont.ts）',
     run() {
       const bad = []
-      const srcDir = join(ROOT, 'packages/miniapp/src')
+      const srcDirs = [join(ROOT, 'packages/miniapp/src'), join(ROOT, 'rewrite/mp')]
       const FONT_BIN = /\.(otf|ttf|woff2?|eot)$/i
       // 只拦「字面内嵌的字体 blob」（base64, 后跟一长串 base64=真把字体打进包），不拦运行时拼的 data URI
-      // 模板（如 `data:font/woff;base64,${data}`·downloadFile 后运行时构造·字体不在包里·见 App.vue 绕 CORS）。
+      // 模板（如 `data:font/woff;base64,${data}`·downloadFile 后运行时构造·字体不在包里·见 App.vue / brandFont.ts 绕 CORS）。
       const FONT_DATAURI =
         /data:(?:font\/[a-z0-9.+-]+|application\/(?:x-)?font[a-z0-9.+-]*|application\/vnd\.ms-fontobject)[^"')]*?base64,[A-Za-z0-9+/]{200,}/i
       const scan = (dir) => {
@@ -2279,7 +2279,7 @@ export const repoChecks = [
             bad.push(
               `${relative(ROOT, p)} 是字体二进制——会被构建打进小程序包（~MB 级撑爆包体积）。品牌字体放仓根 assets/brand-fonts/ 并走 wx.loadFontFace 远程加载`
             )
-          } else if (/\.(vue|scss|css|js|mjs|ts)$/.test(name)) {
+          } else if (/\.(vue|scss|css|js|mjs|ts|wxss)$/.test(name)) {
             if (FONT_DATAURI.test(mpReachableText(readFileSync(p, 'utf8')))) {
               bad.push(
                 `${relative(ROOT, p)} 在 mp 可达处内嵌字体 data-URI（base64）——会编进 wxss 撑爆包体积。字体走 wx.loadFontFace 远程加载、勿 base64 内嵌`
@@ -2288,7 +2288,7 @@ export const repoChecks = [
           }
         }
       }
-      scan(srcDir)
+      srcDirs.forEach(scan)
       return bad
     },
   },

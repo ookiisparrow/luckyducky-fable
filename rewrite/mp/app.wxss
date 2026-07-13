@@ -4,5 +4,9 @@ page {
   background: var(--ld-bg);
   color: var(--ld-ink);
   font-size: 28rpx;
+  font-family: var(--ld-font-brand); /* 品牌字体全局应用（战役 flag·主脑拍板）——见 tokens.wxss 注释 */
+  font-weight: 500; /* 只注册了 500/700 两档字重（brandFont.ts BRAND_FONTS），不钉此值会落到默认 400——
+    CSS 字重匹配会就近吃 500 那档渲染（而非回退栈下一个字体族），全站正文视觉变粗且不可预期；
+    显式钉 500 使其命中已注册字重、行为确定（P2 review 修复·mp-7fixes 批4附） */
   -webkit-font-smoothing: antialiased;
 }
