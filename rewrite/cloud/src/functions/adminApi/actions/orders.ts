@@ -1,4 +1,4 @@
-import { ORDER_STATUS } from '@ldrw/shared'
+import { ORDER_STATUS, buildBadStatus } from '@ldrw/shared'
 import { pageQuery, uploadShippingToWx, notifyAlert, applyStockMoves } from '../../../kit'
 import { reply, activationFor, type Ctx } from '../lib'
 
@@ -101,7 +101,7 @@ async function shipOne(db: any, idRaw: any, companyRaw: any, trackingRaw: any, o
   if (!got || !got.data) return { ok: false, error: 'NO_ORDER' }
   const cur = got.data.status
   // paid = 首次发货；shipped = 改单号。其余状态不允许动。
-  if (cur !== 'paid' && cur !== 'shipped') return { ok: false, error: 'BAD_STATUS:' + cur }
+  if (cur !== 'paid' && cur !== 'shipped') return { ok: false, error: buildBadStatus(cur) }
   // 金额异常单（feeMismatch 留痕）须先「解除」后才能发货（审核批次A 折中）
   if (got.data.feeMismatch) return { ok: false, error: 'FEE_MISMATCH_HOLD' }
   // 退款↔履约状态同步闸（P0·根因：afterSales 与 orders 是两套各自实现的状态机，互不知晓对方——

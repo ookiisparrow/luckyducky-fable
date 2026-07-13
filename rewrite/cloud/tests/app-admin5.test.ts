@@ -200,7 +200,7 @@ describe('CSAT 报表（黄金 §七）', () => {
 })
 
 describe('CSAT 明细钻取（批 B6·cursor 分页·[from,to) 含界·maxScore 过滤）', () => {
-  it('大白话：[from,to) 含起不含止——起点那条在窗内、止点那条被剔除，窗外记录不进列表；sessionKey 回 externalUserId', async () => {
+  it('大白话：[from,to) 含起不含止——起点那条在窗内、止点那条被剔除，窗外记录不进列表；明细行回 externalUserId', async () => {
     control.seed('csat', [
       { _id: 'e-out-low', score: 3, note: '', externalUserId: 'euF', createdAt: 500 }, // <from·窗外
       { _id: 'e1', score: 1, note: '差评理由', externalUserId: 'euD', createdAt: 1000 }, // =from·含界
@@ -213,7 +213,7 @@ describe('CSAT 明细钻取（批 B6·cursor 分页·[from,to) 含界·maxScore 
     expect(r.hasMore).toBe(false)
     expect(r.entries[1].score).toBe(1)
     expect(r.entries[1].note).toBe('差评理由')
-    expect(r.entries[1].sessionKey).toBe('euD') // 回 externalUserId 供「查会话」定位
+    expect(r.entries[1].externalUserId).toBe('euD') // 回 externalUserId 供「查会话」定位
     expect(r.entries.map((e: any) => e.id)).toEqual(['e2', 'e1']) // 行级唯一键回传（确定性 _id）·供前端翻页按 id 去重
   })
 

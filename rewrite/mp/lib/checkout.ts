@@ -84,10 +84,13 @@ export function resolveOrderAmountFen(order: unknown, fallbackFen: number): numb
   return Number.isFinite(n) ? Math.round(n * 100) : fallbackFen
 }
 
+// 必须与 rewrite/shared/src/errors.ts 的 ERR.OUT_OF_STOCK 值一致——mp 进不了 @ldrw/shared（开发者工具编译限制），手动同步
+const OUT_OF_STOCK_PREFIX = 'OUT_OF_STOCK'
+
 /** 建单失败错误码 → 人话文案（云端拒单原样透传·前端只做展示映射，不吞成通用失败）（bug sweep R1 #2）。 */
 export function mapCreateOrderError(msg: string): string {
   const m = String(msg || '')
-  if (m.startsWith('OUT_OF_STOCK')) return '有商品库存不足'
+  if (m.startsWith(OUT_OF_STOCK_PREFIX)) return '有商品库存不足'
   if (m === 'COUPON_EXCEEDS_GOODS') return '优惠券暂不支持抵扣这单，请调整商品数量'
   return '下单没成功，稍后再试'
 }

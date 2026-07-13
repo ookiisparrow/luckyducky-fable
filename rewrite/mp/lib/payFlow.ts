@@ -13,6 +13,9 @@ export interface PaymentParams {
 
 const SIGN_TYPES: readonly string[] = ['MD5', 'HMAC-SHA256', 'RSA']
 
+// 必须与 rewrite/shared/src/order.ts 的 buildBadStatus('paid') 输出逐字一致——mp 进不了 @ldrw/shared（开发者工具编译限制），手动同步，改一处两处都要改
+const PAID_BAD_STATUS = 'BAD_STATUS:paid'
+
 export type PayOutcome =
   | { kind: 'paid' }
   | { kind: 'request'; payment: PaymentParams }
@@ -38,7 +41,7 @@ export function mapPayResult(r: unknown): PayOutcome {
     return { kind: 'error', message: '支付参数不完整，请稍后再试' }
   }
   const e = String(res.error || '')
-  if (e.startsWith('BAD_STATUS:paid')) return { kind: 'paid' } // 已付幂等
+  if (e.startsWith(PAID_BAD_STATUS)) return { kind: 'paid' } // 已付幂等
   if (e === 'ORDER_CLOSED') return { kind: 'closed', message: '订单已超时关闭，请重新下单' }
   if (e === 'PAY_NOT_ENABLED') return { kind: 'error', message: '支付暂未开通' }
   if (e === 'UNIFIED_ORDER_FAIL') return { kind: 'error', message: '支付通道繁忙，稍后再试' }

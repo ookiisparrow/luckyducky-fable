@@ -50,5 +50,3 @@ export const COLLECTIONS = {
   // 存 { openid, orderId, createdAt }；建单前 claim、建单后回填 orderId——见 orders.ts createOrder。
   orderIdempotency: 'orderIdempotency',
 } as const
-
-export type CollectionName = (typeof COLLECTIONS)[keyof typeof COLLECTIONS]

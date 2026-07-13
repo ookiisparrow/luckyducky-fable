@@ -8,6 +8,7 @@ import {
   pageQuery,
   getTempUrls,
   imgSecCheck,
+  msgSecCheck,
 } from '../../../kit'
 
 /**
@@ -224,9 +225,9 @@ export const getRatingSummary = async (event: any = {}) => {
 /**
  * 提交评价（黄金 §七）：多重闸门（身份/评分 1–5/订单归属/已完成/商品在单内）；
  * 一单一行一评（确定性 _id=orderId__lineId 库级唯一·同商品多 SKU 各自可评）；匿名/昵称云端快照。
+ * 按 openid 限频（根因#13·防刷库堆垃圾）；内容安全外呼（图 imgSecCheck ≤9 张 + 文本 msgSecCheck）跑在
+ * 幂等存在性预检之后——已评过直接返 REVIEWED，不再逐张/逐文本外呼放大计费（根因#4 幂等 + 成本）。
  */
-// 频控（深审 P2·病根#13）：UGC 写端点，每次触发 imgSecCheck 外部内容安全调用——无频控可被反复刷
-//（刷外部调用成本 + 造评价垃圾）。按 openid 限速（正常人评价远低于此）。
 export const submitReview = withOpenId(
   withRateLimit('submitReview', { max: 10, windowMs: 60_000 }, async ({ db, OPENID, event }) => {
     const e: any = event
@@ -240,7 +241,7 @@ export const submitReview = withOpenId(
       .filter((t: any) => typeof t === 'string' && t.trim())
       .slice(0, 6)
       .map((t: string) => t.trim().slice(0, 10))
-    // 买家秀晒图（UGC·白名单收 cloud:// fileID·≤9 去空）；内容安全在闸门后校（见下）。
+    // 买家秀晒图（UGC·白名单收 cloud:// fileID·≤9 去空）；内容安全在幂等预检后校（见下）。
     const photos = (Array.isArray(e.photos) ? e.photos : [])
       .filter((p: any) => typeof p === 'string' && p)
       .slice(0, 9)
@@ -257,12 +258,28 @@ export const submitReview = withOpenId(
     if (!item) return err(ERR.NOT_IN_ORDER)
     const lineId = item.lineId || item.productId
     const productId = item.productId
+    const _id = `${orderId}__${lineId}`.slice(0, 128)
 
-    // UGC 晒图内容安全（fail-closed·根因#3·守卫 ugc-imgsecchecked）：闸门后逐张校，任一张违规/校不了
-    // 一律拒、整条不落库——「证明安全」才放行（与 submitCheckpointPhoto 同闸）。
+    // 幂等存在性预检（前置到内容安全外呼之前·根因#4 + 成本）：已评过直接 REVIEWED，不再逐张 imgSecCheck
+    // （≤9 张计费外呼）/逐条 msgSecCheck——自有 done 单反复触发会放大 9×N 次内容安全外呼。最终幂等仍由 add 撞主键兜底。
+    const dup = await db
+      .collection(COLLECTIONS.reviews)
+      .doc(_id)
+      .get()
+      .catch(() => null)
+    if (dup && dup.data) return err(ERR.REVIEWED)
+
+    // UGC 文本内容安全（fail-closed·根因#3·守卫 ugc-imgsecchecked）：评价文本 + 标签（用户可填自由文本）
+    // 合并一次 msgSecCheck 外呼，违规/校不了一律拒、整条不落库——「证明安全」才放行。
+    const textUgc = [text, ...tags].filter(Boolean).join(' ')
+    if (textUgc) {
+      const tsec = await msgSecCheck(textUgc, OPENID)
+      if (!tsec.ok) return err(ERR.SEC_CHECK_FAIL)
+    }
+    // UGC 晒图内容安全（fail-closed·同闸）：逐张校，任一张违规/校不了一律拒、整条不落库（与 submitCheckpointPhoto 同闸）。
     for (const fid of photos) {
       const sec = await imgSecCheck(fid)
-      if (!sec.ok) return err(sec.error === 'IMG_RISKY' ? 'IMG_RISKY' : 'SEC_CHECK_FAIL')
+      if (!sec.ok) return err(sec.error === 'IMG_RISKY' ? ERR.IMG_RISKY : ERR.SEC_CHECK_FAIL)
     }
 
     try {
@@ -270,7 +287,6 @@ export const submitReview = withOpenId(
     } catch {
       /* 已存在 */
     }
-    const _id = `${orderId}__${lineId}`.slice(0, 128)
 
     let name = '匿名钩友'
     if (!e.anon) {

@@ -140,7 +140,7 @@ function ledgerBadge(l: Record<string, any>) {
                 <Badge :tone="ledgerBadge(l).tone">{{ ledgerBadge(l).label }}</Badge>
                 <div class="ledger-mid">
                   <div class="ledger-mat">{{ materialHuman(l.itemKey) }}</div>
-                  <div class="ledger-at">{{ dateTime(l.at) }}</div>
+                  <div class="ledger-at">{{ dateTime(l.at) }}<span v-if="l.docType === 'ship' && l.docId">·订单 {{ l.docId }}</span></div>
                 </div>
                 <div class="ledger-delta" :class="{ neg: l.delta < 0 }">{{ l.delta > 0 ? '+' : '' }}{{ l.delta }}</div>
               </div>

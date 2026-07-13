@@ -224,11 +224,11 @@ export interface CsatEntryVM {
   timeLabel: string
   score: number
   note: string
-  sessionKey: string
+  externalUserId: string
   bad: boolean // 差评（≤3 星）——用于「查会话」按钮与行高亮，同 listCsatEntries maxScore=3 的口径
 }
 
-/** 满意度明细行（批 B6·listCsatEntries）：时间人话化，note/sessionKey 无则回 '—'/''。 */
+/** 满意度明细行（批 B6·listCsatEntries）：时间人话化，note/externalUserId 无则回 '—'/''。 */
 export function mapCsatEntries(list: unknown): CsatEntryVM[] {
   if (!Array.isArray(list)) return []
   return (list as Record<string, any>[]).filter(Boolean).map((e) => {
@@ -238,16 +238,16 @@ export function mapCsatEntries(list: unknown): CsatEntryVM[] {
       timeLabel: dateTime(e.at),
       score,
       note: String(e.note || '') || '—',
-      sessionKey: String(e.sessionKey || ''),
+      externalUserId: String(e.externalUserId || ''),
       bad: score > 0 && score <= 3,
     }
   })
 }
 
 // —— 质检抽检（批 B7）——
-// sessionKey＝csSession._id（形如 `wxkf:<openKfId>:<externalUserId>`）——**不是** externalUserId，与上面
-// CsatEntryVM.sessionKey（直接回 externalUserId）语义不同：本页「查会话」跳检索仍须用 externalUserId 字段
-// （见 QcRowVM.externalUserId），别把 sessionKey 当 externalUserId 传给 searchConversations。
+// 下面 QcRowVM.sessionKey＝csSession._id（形如 `wxkf:<openKfId>:<externalUserId>`）——已改名消歧，此处曾经
+// 和上面 CsatEntryVM.sessionKey 撞名混淆（旧字段其实是 externalUserId，现已分开）；本页「查会话」跳检索
+// 仍须用 externalUserId 字段（见 QcRowVM.externalUserId），别把 sessionKey 当 externalUserId 传给 searchConversations。
 export interface QcRowVM {
   sessionKey: string
   externalUserId: string

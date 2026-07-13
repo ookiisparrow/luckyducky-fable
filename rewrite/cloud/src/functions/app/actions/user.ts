@@ -1,5 +1,16 @@
 import { ERR, COLLECTIONS } from '@ldrw/shared'
-import { withOpenId, withRateLimit, ok, err, str, ensureDoc, currentUnionId } from '../../../kit'
+import {
+  withOpenId,
+  withRateLimit,
+  ok,
+  err,
+  str,
+  ensureDoc,
+  currentUnionId,
+  msgSecCheck,
+  imgSecCheck,
+  SCENE_PROFILE,
+} from '../../../kit'
 
 const CAPS = { nickname: 20, bio: 60, avatar: 256, phone: 11 }
 
@@ -67,6 +78,21 @@ export const updateProfile = withOpenId(
       }
     }
     if (!Object.keys(patch).length) return err(ERR.EMPTY_PATCH)
+
+    // UGC 内容安全（fail-closed·根因#3·守卫 ugc-imgsecchecked）：昵称/签名是无鉴权公开展示文本、
+    // 头像是公开展示图，入库前必过内容安全——违规/校不了一律拒、不覆盖旧值（「证明安全」才放行）。
+    const profileText = [patch.nickname, patch.bio]
+      .filter((v) => typeof v === 'string' && v)
+      .join(' ')
+    if (profileText) {
+      const tsec = await msgSecCheck(profileText, OPENID, SCENE_PROFILE)
+      if (!tsec.ok) return err(ERR.SEC_CHECK_FAIL)
+    }
+    if (typeof patch.avatar === 'string' && patch.avatar) {
+      const isec = await imgSecCheck(patch.avatar)
+      if (!isec.ok) return err(isec.error === 'IMG_RISKY' ? ERR.IMG_RISKY : ERR.SEC_CHECK_FAIL)
+    }
+
     patch.updatedAt = Date.now()
 
     // 先查后改（不用 update 的 stats 判建档：内容未变 updated=0 会误判重复建档）

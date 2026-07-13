@@ -1,6 +1,6 @@
 import { reply, str, type Ctx } from '../lib'
 import { applyStockMoves, produceStock, listMaterialDocs, notifyAlert, pageQuery } from '../../../kit'
-import { COLLECTIONS } from '@ldrw/shared'
+import { COLLECTIONS, ERR } from '@ldrw/shared'
 import { resolveBom } from '@ldrw/shared'
 
 // 进销存 SCM-C 组装执行（蓝图 docs/进销存ERP/·门5 文件级隔离：本文件=车道 C 组装面）。
@@ -14,9 +14,9 @@ import { resolveBom } from '@ldrw/shared'
 /** 读模板+差异位（组装/预演共用·fail-closed：缺一即拒，不静默补默认）。 */
 async function loadBom(db: any, productId: string): Promise<{ template?: any; profile?: any; error?: string }> {
   const p = await db.collection(COLLECTIONS.bomProfiles).doc(productId).get().catch(() => null)
-  if (!p || !p.data) return { error: 'NO_PROFILE' }
+  if (!p || !p.data) return { error: ERR.NO_PROFILE }
   const t = await db.collection(COLLECTIONS.config).doc('scmBomTemplate').get().catch(() => null)
-  if (!t || !t.data) return { error: 'NO_TEMPLATE' }
+  if (!t || !t.data) return { error: ERR.NO_TEMPLATE }
   const { _id: _omit, updatedAt: _omit2, ...template } = t.data as Record<string, any>
   return { template, profile: p.data }
 }
@@ -31,7 +31,7 @@ export async function runAssembly({ db, data, agentId }: Ctx) {
   // inventory idOf productId__spec——含 __ 会让 `pA` 的 `x__y` 撞进 `pA__x` 的 `y`，写错真实客户库存文档。
   if (spec.includes('__')) return reply(400, { ok: false, error: 'BAD_SPEC' })
   const sets = data.sets
-  if (!Number.isInteger(sets) || sets <= 0) return reply(400, { ok: false, error: 'BAD_SETS' })
+  if (!Number.isInteger(sets) || sets <= 0) return reply(400, { ok: false, error: ERR.BAD_SETS })
   const loaded = await loadBom(db, productId)
   if (loaded.error) return reply(400, { ok: false, error: loaded.error })
   const r = resolveBom(loaded.template, loaded.profile, sets)
@@ -55,7 +55,7 @@ export async function runAssembly({ db, data, agentId }: Ctx) {
       },
     })
   } catch {
-    return reply(409, { ok: false, error: 'DUPLICATE' }) // 已执行过（重放/并发方）·不双扣
+    return reply(409, { ok: false, error: ERR.DUPLICATE }) // 已执行过（重放/并发方）·不双扣
   }
 
   // ② 门1 扣原料（all-or-nothing·任一料不足即整单回滚）；失败撤回 claim——账没动，修完库存可重试
@@ -70,9 +70,9 @@ export async function runAssembly({ db, data, agentId }: Ctx) {
       .doc(assemblyId)
       .remove()
       .catch(async () => {
-        await notifyAlert('anomaly', 'runAssembly', 'CLAIM_ROLLBACK_FAIL', { assemblyId })
+        await notifyAlert('anomaly', 'runAssembly', ERR.CLAIM_ROLLBACK_FAIL, { assemblyId })
       })
-    return reply(out.error === 'INSUFFICIENT' ? 409 : 400, { ok: false, error: out.error, materialId: out.materialId })
+    return reply(out.error === ERR.INSUFFICIENT ? 409 : 400, { ok: false, error: out.error, materialId: out.materialId })
   }
 
   // ③ 门4 入成品（kit/inventory 唯一新增出口·无文档则建·不限量保持不限量）
@@ -80,7 +80,7 @@ export async function runAssembly({ db, data, agentId }: Ctx) {
   if (!prod.ok) {
     // 争用耗尽（管理端低频·几乎不至）：原料已扣、成品未入——诚实报错不写 assembly_in 流水（不留假痕），
     // 单据保留供追查，人工经「期初盘点/调整」对平（撤销走调整单·蓝图 §1）。
-    return reply(500, { ok: false, error: 'PRODUCE_FAIL' })
+    return reply(500, { ok: false, error: ERR.PRODUCE_FAIL })
   }
   // ④ assembly_in 成品流水留痕（fg 行只留痕不动 materials·对账公式 Σ成品流水 ⇄ inventory）。
   // fail-soft 但不静默（病根#14）：库存已在③入账正确，流水缺痕只坏对账可溯性；重试会撞 assemblyId 幂等闸
@@ -88,7 +88,7 @@ export async function runAssembly({ db, data, agentId }: Ctx) {
   const fin = await applyStockMoves([{ materialId: `fg:${productId}__${spec}`, delta: sets }], { docType: 'assembly_in', docId: assemblyId, operator }).catch(
     () => ({ ok: false as const })
   )
-  if (!fin.ok) await notifyAlert('anomaly', 'runAssembly', 'ASSEMBLY_LEDGER_FAIL', { assemblyId })
+  if (!fin.ok) await notifyAlert('anomaly', 'runAssembly', ERR.ASSEMBLY_LEDGER_FAIL, { assemblyId })
   return reply(200, { ok: true, sets, consumed: r.lines })
 }
 
@@ -96,7 +96,7 @@ export async function runAssembly({ db, data, agentId }: Ctx) {
 export async function previewAssembly({ db, data }: Ctx) {
   const productId = String(data.productId || '')
   const sets = data.sets
-  if (!productId || !Number.isInteger(sets) || sets <= 0) return reply(400, { ok: false, error: 'BAD_SETS' })
+  if (!productId || !Number.isInteger(sets) || sets <= 0) return reply(400, { ok: false, error: ERR.BAD_SETS })
   const loaded = await loadBom(db, productId)
   if (loaded.error) return reply(400, { ok: false, error: loaded.error })
   const r = resolveBom(loaded.template, loaded.profile, sets)

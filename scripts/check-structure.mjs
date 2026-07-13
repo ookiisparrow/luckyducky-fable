@@ -1366,7 +1366,7 @@ export const repoChecks = [
     // 的 UGC 上传函数 submitCheckpointPhoto 须调 imgSecCheck 接缝（入库前·校不过不存）。真机验图真能拦属根因#8 靠人。
     id: 'ugc-imgsecchecked',
     roots: ['#3'],
-    desc: 'UGC 图片入库前必过内容安全（根因#3 fail-closed）：kit/contentsec.ts 接缝（老线+重写线）须真调 cloud.openapi.security.imgSecCheck；写 UGC 图的函数——老线 submitCheckpointPhoto 写 checkpoints、重写线 checkpoint.ts 写 checkpoints / reviews.ts 存买家秀 photos——须调 imgSecCheck 校验后才入库，防违规图直接入库（节点诊断拍照 B2.2 + 买家秀晒图）',
+    desc: 'UGC 内容安全入库前必校（根因#3 fail-closed）：kit/contentsec.ts 接缝（老线+重写线）须真调 cloud.openapi.security.imgSecCheck（图）+ 重写线须真调 .msgSecCheck（文本）；写 UGC 图的函数——老线 submitCheckpointPhoto 写 checkpoints、重写线 checkpoint.ts 写 checkpoints / reviews.ts 存买家秀 photos / user.ts 头像——须调 imgSecCheck；写 UGC 文本的函数——reviews.ts 评价 text/tags、user.ts 昵称/签名——须调 msgSecCheck，防违规图/文直接入库（节点诊断拍照 B2.2 + 买家秀晒图 + 昵称/签名/头像公开展示面）',
     run() {
       const bad = []
       const sec = 'packages/cloud/src/kit/contentsec.ts'
@@ -1388,13 +1388,20 @@ export const repoChecks = [
       const rwSec = 'rewrite/cloud/src/kit/contentsec.ts'
       const absRwSec = join(ROOT, rwSec)
       if (!existsSync(absRwSec)) bad.push(`${rwSec} 缺失——重写线内容安全接缝（根因#3·UGC 入库前校验）`)
-      else if (!/\.openapi\.security\.imgSecCheck/.test(stripComments(readFileSync(absRwSec, 'utf8'))))
-        bad.push(`${rwSec} 未真调 cloud.openapi.security.imgSecCheck——内容安全接缝是摆设（根因#3·扫真实调用非注释）`)
-      const rwUgcWriters = [
+      else {
+        const secSrc = stripComments(readFileSync(absRwSec, 'utf8'))
+        if (!/\.openapi\.security\.imgSecCheck/.test(secSrc))
+          bad.push(`${rwSec} 未真调 cloud.openapi.security.imgSecCheck——图片内容安全接缝是摆设（根因#3·扫真实调用非注释）`)
+        if (!/\.openapi\.security\.msgSecCheck/.test(secSrc))
+          bad.push(`${rwSec} 未真调 cloud.openapi.security.msgSecCheck——文本内容安全接缝是摆设（根因#3·扫真实调用非注释）`)
+      }
+      // UGC 图写面：写 UGC 图字段的函数须调 imgSecCheck（校后才入库）
+      const rwImgWriters = [
         { fn: 'rewrite/cloud/src/functions/app/actions/checkpoint.ts', ugc: /COLLECTIONS\.checkpoints|['"]checkpoints['"]/, what: '节点拍照 checkpoints' },
         { fn: 'rewrite/cloud/src/functions/app/actions/reviews.ts', ugc: /\bphotos\b/, what: '买家秀晒图 photos' },
+        { fn: 'rewrite/cloud/src/functions/app/actions/user.ts', ugc: /\bavatar\b/, what: '用户头像 avatar' },
       ]
-      for (const { fn: rf, ugc, what } of rwUgcWriters) {
+      for (const { fn: rf, ugc, what } of rwImgWriters) {
         const abs = join(ROOT, rf)
         if (!existsSync(abs)) {
           bad.push(`${rf} 缺失——重写线 UGC 图片写入口（${what}）`)
@@ -1403,6 +1410,20 @@ export const repoChecks = [
         const src = readFileSync(abs, 'utf8')
         if (ugc.test(src) && !/imgSecCheck\s*\(/.test(stripComments(src)))
           bad.push(`${rf} 写 UGC 图（${what}）但未调 imgSecCheck——图片未过内容安全即入库（根因#3·fail-closed）`)
+      }
+      // UGC 文本写面：写公开展示文本字段的函数须调 msgSecCheck（校后才入库）
+      const rwMsgWriters = [
+        { fn: 'rewrite/cloud/src/functions/app/actions/reviews.ts', what: '评价文本 text/tags' },
+        { fn: 'rewrite/cloud/src/functions/app/actions/user.ts', what: '昵称/签名 nickname/bio' },
+      ]
+      for (const { fn: rf, what } of rwMsgWriters) {
+        const abs = join(ROOT, rf)
+        if (!existsSync(abs)) {
+          bad.push(`${rf} 缺失——重写线 UGC 文本写入口（${what}）`)
+          continue
+        }
+        if (!/msgSecCheck\s*\(/.test(stripComments(readFileSync(abs, 'utf8'))))
+          bad.push(`${rf} 写 UGC 文本（${what}）但未调 msgSecCheck——文本未过内容安全即入库（根因#3·fail-closed·合规/下架风险）`)
       }
       return bad
     },
@@ -1762,13 +1783,22 @@ export const repoChecks = [
     roots: ['#13'],
     desc: '认证端点防爆破（根因#13·**旧线冻结参照**·生产线由 rw-admin-login-throttled 守）：adminApi 口令校验路径必经频控闸（throttleLocked + 失败 throttleFail），杜绝公网口令无限重试爆破',
     run() {
-      const f = 'packages/cloud/src/functions/admin/adminApi/index.ts'
-      const abs = join(ROOT, f)
-      if (!existsSync(abs)) return [`${f} 缺失`]
-      const src = readFileSync(abs, 'utf8')
       const bad = []
-      if (!/throttleLocked\s*\(/.test(src)) bad.push(`${f} 未经 throttleLocked 闸——认证端点无锁定、公网口令可被爆破（根因#13）`)
-      if (!/throttleFail\s*\(/.test(src)) bad.push(`${f} 失败未 throttleFail 计数——频控空转（根因#13）`)
+      // 老线（packages/cloud·字节冻结参照）+ 活线（rewrite/cloud·唯一部署版本）并守
+      const files = [
+        'packages/cloud/src/functions/admin/adminApi/index.ts',
+        'rewrite/cloud/src/functions/adminApi/index.ts',
+      ]
+      for (const f of files) {
+        const abs = join(ROOT, f)
+        if (!existsSync(abs)) {
+          bad.push(`${f} 缺失`)
+          continue
+        }
+        const src = readFileSync(abs, 'utf8')
+        if (!/throttleLocked\s*\(/.test(src)) bad.push(`${f} 未经 throttleLocked 闸——认证端点无锁定、公网口令可被爆破（根因#13）`)
+        if (!/throttleFail\s*\(/.test(src)) bad.push(`${f} 失败未 throttleFail 计数——频控空转（根因#13）`)
+      }
       return bad
     },
   },
@@ -1777,9 +1807,10 @@ export const repoChecks = [
     roots: ['#13'],
     desc: '用户端可滥用写函数防刷（根因#13·**旧线冻结参照**·生产线由 rw-user-writes-throttled 守）：高频/造数写函数（trackEvent/createOrder/login/updateProfile）必经 withRateLimit（按 openid 限频），防无限刷库/堆垃圾/成本',
     run() {
-      const targets = ['learning/trackEvent', 'orders/createOrder', 'user/login', 'user/updateProfile']
       const bad = []
-      for (const t of targets) {
+      // 老线（packages/cloud·字节冻结·一函数一文件）：文件存在即须见 withRateLimit
+      const oldTargets = ['learning/trackEvent', 'orders/createOrder', 'user/login', 'user/updateProfile']
+      for (const t of oldTargets) {
         const f = `packages/cloud/src/functions/${t}.ts`
         const abs = join(ROOT, f)
         if (!existsSync(abs)) {
@@ -1789,6 +1820,29 @@ export const repoChecks = [
         if (!/withRateLimit\s*\(/.test(readFileSync(abs, 'utf8'))) {
           bad.push(`${f} 未经 withRateLimit——可滥用写函数无频控、可被刷（根因#13）`)
         }
+      }
+      // 活线（rewrite/cloud·多 action 合于一文件）：按「文件 + withRateLimit 标签」核每个用户写 action 被包裹
+      const rwTargets = [
+        { file: 'learning.ts', label: 'trackEvent' },
+        { file: 'checkpoint.ts', label: 'submitCheckpointPhoto' },
+        { file: 'cs.ts', label: 'kfBind' },
+        { file: 'cs.ts', label: 'dataConsent' },
+        { file: 'feedback.ts', label: 'submitFeedback' },
+        { file: 'orders.ts', label: 'createOrder' },
+        { file: 'user.ts', label: 'login' },
+        { file: 'user.ts', label: 'updateProfile' },
+        { file: 'reviews.ts', label: 'submitReview' },
+      ]
+      for (const { file, label } of rwTargets) {
+        const f = `rewrite/cloud/src/functions/app/actions/${file}`
+        const abs = join(ROOT, f)
+        if (!existsSync(abs)) {
+          bad.push(`${f} 缺失——活线用户写函数（${label}）`)
+          continue
+        }
+        const src = readFileSync(abs, 'utf8')
+        if (!new RegExp(`withRateLimit\\s*\\(\\s*['"]${label}['"]`).test(src))
+          bad.push(`${f} 的 ${label} 未经 withRateLimit(${label}) 包裹——可滥用写函数无频控、可被刷（根因#13·活线唯一部署版本）`)
       }
       return bad
     },
@@ -4531,6 +4585,93 @@ export const repoChecks = [
           if (!coll || !COLLS.has(coll)) continue
           if (!declaredStates[coll].has(wm[1]))
             bad.push(`${rel}：写 ${coll}.status='${wm[1]}' 不是 rewrite/shared/src/order.ts 声明状态（${[...declaredStates[coll]].join('/')}）——打错状态名或先改声明（根因#2）`)
+        }
+      }
+      return bad
+    },
+  },
+  {
+    id: 'rw-cs-transitions-declared',
+    roots: ['#2'],
+    desc: '新线客服会话状态写入只走声明流转（根因#2·csSession 域·谱源 rewrite/shared/src/cs.spec.ts）：rewrite/cloud 里 transition(csSession) 的边、裸条件 CAS（where status→update status）的边须在 rewrite/shared/src/cs.spec.ts 声明流转表内；写该集合 status 的字面量须是声明状态——越流转/打错状态名即红（谱源直接解析 cs.spec.ts·零生成器）',
+    run() {
+      const specPath = join(ROOT, 'rewrite/shared/src/cs.spec.ts')
+      const base = join(ROOT, 'rewrite/cloud/src/functions')
+      if (!existsSync(specPath) || !existsSync(base)) return []
+      const specSrc = readFileSync(specPath, 'utf8')
+      // 谱源解析：CS_SESSION_STATUS_SPEC → 每集合 原子边集 + 状态集
+      const declaredEdges = {} // coll -> Set('from=>to')
+      const declaredStates = {} // coll -> Set(state)
+      for (const bm of specSrc.matchAll(/export const \w+_STATUS_SPEC = \{([\s\S]*?)\n\} as const/g)) {
+        const body = bm[1]
+        const coll = (body.match(/collection:\s*'(\w+)'/) || [])[1]
+        if (!coll) continue
+        const states = new Set()
+        for (const lm of body.matchAll(/(?:initial|terminal):\s*\[([^\]]*)\]/g))
+          for (const s of lm[1].matchAll(/'([a-z_]+)'/g)) states.add(s[1])
+        const edges = new Set()
+        for (const tm of body.matchAll(/\{\s*from:\s*\[([^\]]*)\]\s*,\s*to:\s*'([a-z_]+)'/g)) {
+          const to = tm[2]
+          states.add(to)
+          for (const f of tm[1].matchAll(/'([a-z_]+)'/g)) {
+            edges.add(f[1] + '=>' + to)
+            states.add(f[1])
+          }
+        }
+        declaredEdges[coll] = edges
+        declaredStates[coll] = states
+      }
+      const COLLS = new Set(Object.keys(declaredEdges))
+      const files = []
+      const collectTs = (d) => {
+        for (const e of readdirSync(d)) {
+          const p = join(d, e)
+          if (statSync(p).isDirectory()) collectTs(p)
+          else if (e.endsWith('.ts')) files.push(p)
+        }
+      }
+      collectTs(base)
+      const collOf = (head) => {
+        const ms = [...head.matchAll(/(?:\.collection\(|transition\()\s*(?:['"](\w+)['"]|COLLECTIONS\.(\w+))/g)]
+        return ms.length ? ms[ms.length - 1][1] || ms[ms.length - 1][2] : null
+      }
+      const bad = []
+      for (const p of files) {
+        const src = readFileSync(p, 'utf8')
+        const rel = relative(ROOT, p)
+        // ① transition(<coll>, id, [from...], 'to')：整条边对账（union 语义每个 from 元素都须有声明原子边）
+        const transRe = /transition\(\s*(?:['"](\w+)['"]|COLLECTIONS\.(\w+))\s*,[^,]+,\s*\[([^\]]*)\]\s*,\s*['"]([a-z_]+)['"]/g
+        let tm
+        while ((tm = transRe.exec(src))) {
+          const coll = tm[1] || tm[2]
+          if (!COLLS.has(coll)) continue
+          const from = [...tm[3].matchAll(/['"]([a-z_]+)['"]/g)].map((x) => x[1])
+          const undeclared = from.filter((f) => !declaredEdges[coll].has(f + '=>' + tm[4]))
+          if (undeclared.length)
+            bad.push(`${rel}：transition('${coll}', …, [${from.join(',')}] → '${tm[4]}') 含未声明边 ${undeclared.map((f) => f + '→' + tm[4]).join('、')}——rewrite/shared/src/cs.spec.ts 流转表里没有，越流转或先改声明（根因#2）`)
+        }
+        // ①' 裸条件 CAS：where({…status:'X'|_.in([..])…}).update({data:{…status:'Y'…}}) 的边对账
+        const casRe = /\.where\(\s*\{[^{}]*?status:\s*(?:['"]([a-z_]+)['"]|(?:db\.command|_)\.in\(\[([^\]]*)\]\))[^{}]*?\}\s*\)[\s\S]{0,60}?\.update\(\s*\{\s*data:\s*\{[\s\S]{0,160}?\bstatus:\s*['"]([a-z_]+)['"]/g
+        let cm
+        while ((cm = casRe.exec(src))) {
+          const coll = collOf(src.slice(0, cm.index))
+          if (!coll || !COLLS.has(coll)) continue
+          const from = cm[1] ? [cm[1]] : [...cm[2].matchAll(/['"]([a-z_]+)['"]/g)].map((x) => x[1])
+          const to = cm[3]
+          const undeclared = from.filter((f) => !declaredEdges[coll].has(f + '=>' + to))
+          if (undeclared.length)
+            bad.push(`${rel}：条件 CAS ${coll} [${from.join(',')}] → '${to}' 含未声明边 ${undeclared.map((f) => f + '→' + to).join('、')}——rewrite/shared/src/cs.spec.ts 流转表里没有（根因#2）`)
+        }
+        // ② 写侧 status 字面量须是声明状态（add/update 的 data 内·where 过滤侧跳过——打错状态名即红）
+        const writeRe = /\bstatus:\s*['"]([a-z_]+)['"]/g
+        let wm
+        while ((wm = writeRe.exec(src))) {
+          const before = src.slice(Math.max(0, wm.index - 160), wm.index)
+          if (/\.where\(\s*\{[^}]*$/.test(before)) continue
+          const coll = collOf(src.slice(0, wm.index))
+          if (!coll || !COLLS.has(coll)) continue
+          if (!declaredStates[coll].has(wm[1]))
+            bad.push(`${rel}：写 ${coll}.status='${wm[1]}' 不是 rewrite/shared/src/cs.spec.ts 声明状态（${[...declaredStates[coll]].join('/')}）——打错状态名或先改声明（根因#2）`)
         }
       }
       return bad

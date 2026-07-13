@@ -125,11 +125,15 @@ describe('认证频控（黄金 kit-security §F·per-IP + 全局兜底）', () 
     expect(other.statusCode).toBe(200) // IP 隔离
   })
 
-  it('大白话：轮换伪造 IP 让 per-IP 永不达阈——跨所有 IP 的全局计数达阈仍锁', async () => {
+  it('大白话：轮换伪造 IP 打满全局计数后，全局锁定不再殃及真超管——错口令仍拒（+GLOBAL_BRUTE 告警），正确口令放行（收尾硬化 2026-07-13·防自我 DoS·用户拍板）', async () => {
     seedSuper()
     for (let i = 0; i < 20; i++) await post({ action: 'login', key: 'wrong-key-abc' }, `10.0.0.${i}`)
-    const blocked = await post({ action: 'login', key: 'super-secret-key' }, '10.0.0.99')
-    expect(blocked.statusCode).toBe(429) // 全局兜底
+    // 全局锁定态下：攻击者的错误口令仍被拒（旧行为此处会把正确口令也 429·自我 DoS 锁死真超管）
+    const stillWrong = await post({ action: 'login', key: 'wrong-key-abc' }, '10.0.0.98')
+    expect(stillWrong.statusCode).toBe(401)
+    // 但持正确口令的真超管（全新 IP·per-IP 未锁）不再被全局锁误伤——先验口令再决定，口令对即放行
+    const admin = await post({ action: 'login', key: 'super-secret-key' }, '10.0.0.99')
+    expect(admin.statusCode).toBe(200)
   })
 })
 

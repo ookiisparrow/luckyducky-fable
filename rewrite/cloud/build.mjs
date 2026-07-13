@@ -14,7 +14,15 @@
  * 放行·敏感/批量 ask 二次确认——非「全拦」）+ 人工确认。旧注释「本仓禁部署·并行期防覆盖」是切换前状态，已废。
  */
 import { build } from 'esbuild'
-import { readdirSync, readFileSync, statSync, mkdirSync, writeFileSync, rmSync, existsSync } from 'node:fs'
+import {
+  readdirSync,
+  readFileSync,
+  statSync,
+  mkdirSync,
+  writeFileSync,
+  rmSync,
+  existsSync,
+} from 'node:fs'
 import { join, resolve, basename } from 'node:path'
 
 const ROOT = resolve(import.meta.dirname)
@@ -51,7 +59,8 @@ function collect() {
 // 产物用到即产 config.json 声明，否则微信拒调用。权限串 === JS 调用路径 cloud.openapi.<串>。
 const OPENAPI_PERMS = [
   'wxaSecOrder.uploadShippingInfo', // 发货信息上传（kit/shipping.ts·实物+微信支付合规）
-  'security.imgSecCheck', // 图片内容安全（kit/contentsec.ts·UGC 节点拍照入库前 fail-closed）
+  'security.imgSecCheck', // 图片内容安全（kit/contentsec.ts·UGC 节点拍照/买家秀/头像入库前 fail-closed）
+  'security.msgSecCheck', // 文本内容安全（kit/contentsec.ts·UGC 评价文本/昵称/签名入库前 fail-closed）
 ]
 
 const fns = collect()
@@ -81,7 +90,10 @@ for (const fn of fns) {
         name: fn.name,
         version: '1.0.0',
         main: 'index.js',
-        dependencies: { 'wx-server-sdk': '~2.6.3', ...(usesManager ? { '@cloudbase/manager-node': '^4.2.0' } : {}) },
+        dependencies: {
+          'wx-server-sdk': '~2.6.3',
+          ...(usesManager ? { '@cloudbase/manager-node': '^4.2.0' } : {}),
+        },
       },
       null,
       2
@@ -89,7 +101,14 @@ for (const fn of fns) {
   )
   // 云调用权限 config.json：产物真用到（属性访问串保留在 bundle 里）才声明；用不到不产（避免空权限）
   const openapi = OPENAPI_PERMS.filter((perm) => bundle.includes(perm))
-  if (openapi.length) writeFileSync(join(outdir, 'config.json'), JSON.stringify({ permissions: { openapi } }, null, 2) + '\n')
+  if (openapi.length)
+    writeFileSync(
+      join(outdir, 'config.json'),
+      JSON.stringify({ permissions: { openapi } }, null, 2) + '\n'
+    )
 }
 
-console.log(`✅ esbuild 打包 ${fns.length} 个重写线云函数 → rewrite/cloud/dist/：` + fns.map((f) => `${f.group}/${f.name}`).join(' · '))
+console.log(
+  `✅ esbuild 打包 ${fns.length} 个重写线云函数 → rewrite/cloud/dist/：` +
+    fns.map((f) => `${f.group}/${f.name}`).join(' · ')
+)

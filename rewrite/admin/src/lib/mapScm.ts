@@ -96,6 +96,7 @@ export interface LedgerRow {
   material: string
   delta: number
   docType: string
+  docId: string
   operator: string
   reason: string
   at: number
@@ -135,6 +136,7 @@ export function mapLedger(list: unknown): LedgerRow[] {
     material: materialHuman(l.itemKey),
     delta: Number(l.delta) || 0,
     docType: docTypeLabel(l.docType),
+    docId: String(l.docId || ''),
     operator: String(l.operator || ''),
     reason: String(l.reason || ''),
     at: Number(l.at) || 0,

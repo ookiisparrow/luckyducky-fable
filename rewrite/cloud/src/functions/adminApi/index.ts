@@ -1,5 +1,5 @@
 import cloud from 'wx-server-sdk'
-import { getDb, throttleLocked, throttleFail, throttleReset, recordAudit, shouldAudit } from '../../kit'
+import { getDb, throttleLocked, throttleFail, throttleReset, recordAudit, shouldAudit, alert } from '../../kit'
 import { reply, ensure, checkKey, issueSession, type Ctx } from './lib'
 import * as products from './actions/products'
 import * as courses from './actions/courses'
@@ -31,8 +31,8 @@ import * as ops from './actions/ops'
 import * as configChecklist from './actions/configChecklist'
 import * as secureConfig from './actions/secureConfig'
 
-// 管理控制台后端 v2（HTTP 访问服务触发·鉴权外壳逐字承接旧线 index.ts·批11 只挂 ping/login，
-// 业务 action 后续批逐域挂进 ACTIONS/ACTION_CAPS——挂载时与旧线注册表逐行核对）。
+// 管理控制台后端 v2（HTTP 访问服务触发·鉴权外壳逐字承接旧线 index.ts·业务 action 已全域挂载
+// 进 ACTIONS/ACTION_CAPS——与旧线注册表逐行核对过）。
 // 鉴权：口令（adminConfig sha256·首登 bootstrap 须部署密钥）→ 会话令牌 fallback；RBAC 能力位默认拒；
 // 认证频控 per-IP + 全局兜底。M5 切换日以新名部署、admin 前端切 endpoint。
 const db = getDb()
@@ -220,9 +220,13 @@ function clientKey(event: any): string {
   return 'adminlogin:' + (ip || 'global')
 }
 
-async function throttleGate(tkey: string): Promise<number> {
+// per-IP 是合法单源限速·硬预拒；全局闸只作分布式爆破的**信号**、不硬预拒（收尾硬化批 2026-07-13·用户拍板）：
+// 旧实现取 max(ip, global) 预拒——攻击者用轮换 x-forwarded-for 的错误口令把全局计数打到阈，会把持正确口令的
+// 真超管一并锁死门外 5min（发货/退款/客服全停）。改为：全局锁定不预拒，仍进 checkKey，口令对即放行；口令错才计数
+// + 告警（GLOBAL_BRUTE·人工感知分布式爆破）——攻击者拿不到口令，锁不住真超管，per-IP 硬闸仍挡住单源爆破。
+async function throttleGate(tkey: string): Promise<{ ipWait: number; globalWait: number }> {
   const [ipWait, globalWait] = await Promise.all([throttleLocked(tkey), throttleLocked(GLOBAL_KEY)])
-  return Math.max(ipWait, globalWait)
+  return { ipWait, globalWait }
 }
 async function throttleFailBoth(tkey: string): Promise<void> {
   await throttleFail(tkey, ADMIN_THROTTLE)
@@ -244,15 +248,17 @@ export const main = async (event: any) => {
 
   if (action === 'ping') return reply(200, { ok: true, ts: Date.now() })
 
-  // 认证频控闸：口令校验前先查锁定——per-IP 或全局任一到阈即拒
+  // 认证频控闸：口令校验前先查锁定。per-IP 到阈硬预拒；全局锁定**不**预拒（防轮换 IP 错误口令自我 DoS 锁死真超管），
+  // 仅作信号——见 throttleGate 注释。
   const tkey = clientKey(event)
-  const wait = await throttleGate(tkey)
-  if (wait > 0) return reply(429, { ok: false, error: 'TOO_MANY_ATTEMPTS', retryAfter: Math.ceil(wait / 1000) })
+  const { ipWait, globalWait } = await throttleGate(tkey)
+  if (ipWait > 0) return reply(429, { ok: false, error: 'TOO_MANY_ATTEMPTS', retryAfter: Math.ceil(ipWait / 1000) })
 
   if (action === 'login') {
     const res = await checkKey(db, key, true)
     if (!res.ok) {
       await throttleFailBoth(tkey)
+      if (globalWait > 0) alert('security', 'adminLogin', 'GLOBAL_BRUTE', {}) // 全局锁定态下仍有错误口令=疑似分布式爆破·告警人工
       return reply(401, res)
     }
     await throttleReset(tkey) // 成功只清 per-IP；全局计数靠滚动窗口自然衰减（防分布式爆破信号丢失）
@@ -266,7 +272,10 @@ export const main = async (event: any) => {
   if (action === 'loginByWecomCode') {
     const res = await wecomLogin.loginByWecomCode({ db, data })
     if (res.statusCode === 200) await throttleReset(tkey)
-    else await throttleFailBoth(tkey)
+    else {
+      await throttleFailBoth(tkey)
+      if (globalWait > 0) alert('security', 'adminLogin', 'GLOBAL_BRUTE', {})
+    }
     return res
   }
 

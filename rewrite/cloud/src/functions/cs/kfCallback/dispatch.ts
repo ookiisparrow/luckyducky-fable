@@ -147,7 +147,7 @@ export function rootMenu(): MsgMenuContent {
 
 // ── 满意度评分（CSAT·B4.3·会话后评分 1-5 + 可选备注·确定性菜单不靠生成）──
 /** 评分气泡：5 档星级（点一下即评分·rate:1..5）。 */
-export function rateMenu(): MsgMenuContent {
+function rateMenu(): MsgMenuContent {
   return menu(
     '给本次服务打个分吧（点一下）👇',
     [
@@ -384,13 +384,8 @@ export async function summarizeOrders(db: any, openid: string): Promise<string> 
     .catch(() => ({ data: [] }))
   const list = (r && r.data) || []
   if (!list.length) return '没查到你名下的订单。如果刚下单可稍后再试，或点「转人工」。'
-  const STAT: Record<string, string> = {
-    pending: '待支付',
-    paid: '已支付/待发货',
-    shipped: '已发货',
-    done: '已完成',
-    closed: '已关闭',
-  }
+  // refund_required 用词对齐 admin/src/lib/format.ts 的选择："待退款"而非"退款处理中"（后者与售后 approved 状态撞车，见该文件同款注释）
+  const STAT: Record<string, string> = { pending: '待支付', paid: '已支付/待发货', shipped: '已发货', refund_required: '待退款', done: '已完成', closed: '已关闭' }
   // 运单号在 shipping 子对象（发货时 adminApi 写 shipping:{company,trackingNo}）——曾错取顶层 o.trackingNo→永远显示不出（外审 P2.19·根因#8）
   const lines = list.map((o: any) => {
     const tracking = o.shipping && o.shipping.trackingNo
@@ -509,7 +504,7 @@ async function notifyOnlineAgents(db: any, sessionId: string): Promise<void> {
 
 // ── 发送负载构造（touser + open_kfid + msgtype） ──
 const base = (touser: string, openKfId: string) => ({ touser, open_kfid: openKfId })
-export const buildText = (touser: string, openKfId: string, content: string) => ({
+const buildText = (touser: string, openKfId: string, content: string) => ({
   ...base(touser, openKfId),
   msgtype: 'text',
   text: { content },
@@ -519,7 +514,7 @@ export const buildMsgMenu = (touser: string, openKfId: string, content: MsgMenuC
   msgtype: 'msgmenu',
   msgmenu: content,
 })
-export const buildMiniprogram = (
+const buildMiniprogram = (
   touser: string,
   openKfId: string,
   cfg: { appid: string; thumbMediaId: string },

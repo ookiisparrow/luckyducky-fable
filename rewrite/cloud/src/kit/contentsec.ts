@@ -18,6 +18,11 @@ export type SecResult = { ok: boolean; error?: string }
 
 const RISKY = 87014 // 微信内容安全：图片含违规信息
 
+// msgSecCheck v2 scene（文本使用场景·微信规范）：1 资料 / 2 评论 / 3 论坛 / 4 社交日志。
+// UGC 文本按面归类——昵称/签名走资料，评价文本走评论；命中风险时 result.suggest==='risky'。
+export const SCENE_PROFILE = 1
+export const SCENE_COMMENT = 2
+
 /** 校验云存储里一张图片（fileId）的内容安全。绝不抛错——失败一律收成 { ok:false }（fail-closed）。 */
 export async function imgSecCheck(fileId: string): Promise<SecResult> {
   if (!fileId) return { ok: false, error: 'NO_FILE' }
@@ -37,5 +42,37 @@ export async function imgSecCheck(fileId: string): Promise<SecResult> {
     const code = e && (e.errCode ?? e.errcode)
     // 87014=内容违规；其余异常（能力未开通/网络）一律 fail-closed 拒（UGC 越权写面·根因#3）
     return { ok: false, error: code === RISKY ? 'IMG_RISKY' : 'SEC_CHECK_FAIL' }
+  }
+}
+
+/**
+ * 校验一段用户文本（评价文本/昵称/签名等 UGC）的内容安全。**与 imgSecCheck 同款 fail-closed**：
+ * 走 cloud.openapi.security.msgSecCheck v2（需 openid + content + version:2 + scene）——违规
+ * （errCode!==0 或 result.suggest==='risky'）或校不了（能力未开/网络/异常）一律拒；「证明安全」才放行。
+ * 空串/纯空白直接通过（不外呼·省无谓计费调用）。绝不抛错——异常一律收成 { ok:false }。
+ * 守卫 ugc-imgsecchecked 焊「文本 UGC 入库前必调本接缝」（文本 UGC＝评价 text/tags、昵称、签名）。
+ */
+export async function msgSecCheck(
+  content: string,
+  openid: string,
+  scene: number = SCENE_COMMENT
+): Promise<SecResult> {
+  const text = typeof content === 'string' ? content.trim() : ''
+  if (!text) return { ok: true } // 空文本无需检测·不外呼
+  try {
+    const r = await (cloud as any).openapi.security.msgSecCheck({
+      openid,
+      content: text,
+      version: 2,
+      scene,
+    })
+    const code = r && (r.errCode ?? r.errcode)
+    const suggest = r && r.result && r.result.suggest
+    if (code != null && code !== 0) return { ok: false, error: 'SEC_CHECK_FAIL' } // 非 0 一律保守拒
+    if (suggest === 'risky') return { ok: false, error: 'SEC_CHECK_FAIL' } // 平台判风险
+    return { ok: true } // errCode:0 且非 risky（含 pass/review/无 suggest）→ 放行
+  } catch {
+    // 能力未开通/网络/权限未声明等异常一律 fail-closed 拒（UGC 越权写面·根因#3）
+    return { ok: false, error: 'SEC_CHECK_FAIL' }
   }
 }

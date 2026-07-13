@@ -1,7 +1,7 @@
 import { getDb } from './db'
 import { notifyAlert } from './observe'
 import { pageQuery, type PageReq, type Paged } from './paging'
-import { COLLECTIONS } from '@ldrw/shared'
+import { COLLECTIONS, ERR } from '@ldrw/shared'
 
 // 原料账原子原语（进销存 SCM-0 门1·根因#1/#2·镜像 kit/inventory.ts 范式）。
 // **全库唯一** materials.stock / stockLedger 读写处（守卫 material-stock-single-seam）——任何单据出入库
@@ -50,11 +50,11 @@ export type ApplyResult =
  */
 export async function applyStockMoves(moves: StockMove[], doc: MoveDoc): Promise<ApplyResult> {
   // fail-closed 入参校验（根因#8 假数据不入账）：整数、非零、料号非空、单据号非空
-  if (!doc || !doc.docType || !doc.docId) return { ok: false, error: 'BAD_MOVE' }
-  if (!Array.isArray(moves) || !moves.length) return { ok: false, error: 'BAD_MOVE' }
+  if (!doc || !doc.docType || !doc.docId) return { ok: false, error: ERR.BAD_MOVE }
+  if (!Array.isArray(moves) || !moves.length) return { ok: false, error: ERR.BAD_MOVE }
   for (const m of moves) {
-    if (!m || !m.materialId || typeof m.materialId !== 'string') return { ok: false, error: 'BAD_MOVE' }
-    if (!Number.isInteger(m.delta) || m.delta === 0) return { ok: false, error: 'BAD_MOVE', materialId: m.materialId }
+    if (!m || !m.materialId || typeof m.materialId !== 'string') return { ok: false, error: ERR.BAD_MOVE }
+    if (!Number.isInteger(m.delta) || m.delta === 0) return { ok: false, error: ERR.BAD_MOVE, materialId: m.materialId }
   }
 
   const db = getDb()
@@ -74,7 +74,7 @@ export async function applyStockMoves(moves: StockMove[], doc: MoveDoc): Promise
       if (result === 'ok') {
         await ledger.doc(ledgerId).remove().catch(() => undefined)
       } else {
-        await notifyAlert('money', 'scmStock.rollback', 'ROLLBACK_FAIL', {
+        await notifyAlert('money', 'scmStock.rollback', ERR.ROLLBACK_FAIL, {
           materialId: m.materialId,
           delta: m.delta,
           docType: doc.docType,
@@ -134,7 +134,7 @@ export async function applyStockMoves(moves: StockMove[], doc: MoveDoc): Promise
 async function casChange(coll: any, materialId: string, delta: number): Promise<'ok' | 'NO_MATERIAL' | 'INSUFFICIENT' | 'CONTENTION'> {
   for (let i = 0; i < CAS_RETRY; i++) {
     const got = await coll.doc(materialId).get().catch(() => null)
-    if (!got || !got.data) return 'NO_MATERIAL'
+    if (!got || !got.data) return ERR.NO_MATERIAL
     const cur = got.data.stock
     if (!Number.isInteger(cur)) {
       // 主档缺/坏 stock 字段（建档点恒写 0·此为历史/手工档兜底）：where 条件含 undefined 行为不可信，
@@ -143,7 +143,7 @@ async function casChange(coll: any, materialId: string, delta: number): Promise<
       continue
     }
     const next = cur + delta
-    if (next < 0) return 'INSUFFICIENT'
+    if (next < 0) return ERR.INSUFFICIENT
     const r = await coll
       .where({ _id: materialId, stock: cur })
       .update({ data: { stock: next, updatedAt: Date.now() } })
@@ -151,7 +151,7 @@ async function casChange(coll: any, materialId: string, delta: number): Promise<
     if (r.stats && r.stats.updated === 1) return 'ok'
     // updated:0＝并发改动→重读重试
   }
-  return 'CONTENTION' // 争用耗尽（管理端低频·几乎不至）——宁不动账勿错账
+  return ERR.CONTENTION // 争用耗尽（管理端低频·几乎不至）——宁不动账勿错账
 }
 
 /** 读流水（管理端查账·cursor 分页）：可按料号过滤，按时间倒序。B1（根因#7）：改走 kit pageQuery——
@@ -234,7 +234,7 @@ export async function saveMaterialDoc(m: MaterialDoc): Promise<'ok' | 'UOM_LOCKE
   if (m.spec) fields.spec = m.spec
   const got = await coll.doc(m._id).get().catch(() => null)
   if (got && got.data) {
-    if (got.data.uom && got.data.uom !== m.uom) return 'UOM_LOCKED' // 计量方式建档锁死（改了=两本单位混账）
+    if (got.data.uom && got.data.uom !== m.uom) return ERR.UOM_LOCKED // 计量方式建档锁死（改了=两本单位混账）
     await coll.doc(m._id).update({ data: fields }) // 不含 stock——库存只经 applyStockMoves
   } else {
     // 先查后写竞态（两个并发首建请求都读到「无档」、都落到这里）：确定性 _id 撞号——与同域

@@ -48,3 +48,12 @@ const dictOf = <T extends string>(states: readonly string[]) =>
   Object.fromEntries(states.map((s) => [s.toUpperCase(), s])) as Record<string, T>
 export const ORDER_STATUS = dictOf<OrderStatus>(statesOf(ORDER_STATUS_SPEC))
 export const AFTERSALE_STATUS = dictOf<AfterSaleStatus>(statesOf(AFTERSALE_STATUS_SPEC))
+
+/**
+ * 'BAD_STATUS:'+状态 复合码的构造单源：buildBadStatus 由 cloud-order/cloud-erp 生产。
+ * 解析侧 mp payFlow.ts / admin Fulfill.vue 各自按字面量手动同步（mp 进不了 @ldrw/shared）——
+ * 前缀不可改，一改三处（本文件 + mp + admin）都得跟着改。
+ */
+export function buildBadStatus(status: string): string {
+  return 'BAD_STATUS:' + status
+}

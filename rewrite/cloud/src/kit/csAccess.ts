@@ -1,4 +1,4 @@
-import { COLLECTIONS } from '@ldrw/shared'
+import { COLLECTIONS, ERR } from '@ldrw/shared'
 
 /**
  * 承面 C 外包会话访问控制闸（后台360工作站 §1.5·B3.3/B6·承面C 车道 C·根因#3 信任边界 fail-closed）。
@@ -18,7 +18,7 @@ import { COLLECTIONS } from '@ldrw/shared'
 /** 数据共享告知同意闸（C1·fail-closed）：客户须已同意第三方数据共享，否则拒。 */
 export async function assertDataShareConsent(db: any, openid: string): Promise<{ ok: boolean; error?: string }> {
   const id = String(openid || '').trim()
-  if (!id) return { ok: false, error: 'NO_CONSENT' } // 无从识别客户＝无从确认同意·fail-closed
+  if (!id) return { ok: false, error: ERR.NO_CONSENT } // 无从识别客户＝无从确认同意·fail-closed
   const r = await db
     .collection(COLLECTIONS.users)
     .where({ _openid: id })
@@ -27,7 +27,7 @@ export async function assertDataShareConsent(db: any, openid: string): Promise<{
     .catch(() => ({ data: [] }))
   const u = (r && r.data && r.data[0]) || null
   const agreed = !!(u && u.csDataShare && u.csDataShare.agreed === true)
-  return agreed ? { ok: true } : { ok: false, error: 'NO_CONSENT' }
+  return agreed ? { ok: true } : { ok: false, error: ERR.NO_CONSENT }
 }
 
 /** 外包会话归属 scope 闸（C3·fail-closed）：会话须存在且 agentId===本坐席，否则拒（防越 scope 批量导出）。 */
@@ -38,10 +38,10 @@ export async function assertOwnedByAgent(
 ): Promise<{ ok: boolean; session?: any; error?: string }> {
   const aid = String(agentId || '').trim()
   const sid = String(sessionId || '').trim()
-  if (!aid || !sid) return { ok: false, error: 'BAD_SCOPE' } // 缺坐席/会话标识·fail-closed
+  if (!aid || !sid) return { ok: false, error: ERR.BAD_SCOPE } // 缺坐席/会话标识·fail-closed
   const got = await db.collection(COLLECTIONS.csSession).doc(sid).get().catch(() => null)
   const session = (got && got.data) || null
-  if (!session) return { ok: false, error: 'NO_SESSION' } // 会话不存在·fail-closed
-  if (String(session.agentId || '') !== aid) return { ok: false, error: 'NOT_OWNER' } // 非本坐席 claim·拒
+  if (!session) return { ok: false, error: ERR.NO_SESSION } // 会话不存在·fail-closed
+  if (String(session.agentId || '') !== aid) return { ok: false, error: ERR.NOT_OWNER } // 非本坐席 claim·拒
   return { ok: true, session }
 }

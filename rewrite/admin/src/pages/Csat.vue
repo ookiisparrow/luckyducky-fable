@@ -109,8 +109,8 @@ function toggleBadOnly() {
   void loadEntries()
 }
 function viewSession(row: CsatEntryVM) {
-  if (!row.sessionKey) return
-  void router.push({ path: '/conversations', query: { externalUserId: row.sessionKey } })
+  if (!row.externalUserId) return
+  void router.push({ path: '/conversations', query: { externalUserId: row.externalUserId } })
 }
 
 onMounted(() => {
@@ -193,9 +193,9 @@ onMounted(() => {
               <Badge :tone="row.bad ? 'red' : 'green'">{{ row.score }} 分</Badge>
             </div>
             <div class="ld-td grow">{{ row.note }}</div>
-            <div class="ld-td mono" :style="{ width: '150px' }">{{ row.sessionKey || '—' }}</div>
+            <div class="ld-td mono" :style="{ width: '150px' }">{{ row.externalUserId || '—' }}</div>
             <div class="ld-td ops-cell" :style="{ width: '110px' }">
-              <UiButton v-if="row.bad && row.sessionKey" variant="ghost" size="sm" @click="viewSession(row)">
+              <UiButton v-if="row.bad && row.externalUserId" variant="ghost" size="sm" @click="viewSession(row)">
                 <Search :size="13" :stroke-width="1.8" /><span>查会话</span>
               </UiButton>
             </div>
