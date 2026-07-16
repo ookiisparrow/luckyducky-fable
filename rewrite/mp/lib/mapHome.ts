@@ -77,7 +77,12 @@ export interface HomeContentVM {
 }
 
 // ── 设计默认文案（重设计首页原稿·Sections.jsx 逐字抄录）──
-const HERO_DEFAULT: HeroVM = { title: '创造幸运', tagline: 'Get ducky get lucky', search: '入门钩织的妙趣方式', img: '' }
+const HERO_DEFAULT: HeroVM = {
+  title: '创造幸运',
+  tagline: 'Get ducky get lucky',
+  search: '入门钩织的妙趣方式',
+  img: '/static/hero-full.jpg', // 缺 CMS 图时落品牌小鸭大图（本地 static·42K）——hero 是品牌门面不留灰占位；CMS 有图仍覆盖
+}
 const BRAND_DEFAULT: BrandVM = { name: '易织™小棉鸭®', lead: '我们希望每个人都能亲手创造自己的随身幸运物。' }
 const FEATURE_DEFAULT: FeatureVM = { title: '入门钩织的妙趣方案', body: '为了让钩织入门更轻松、更有趣，我们精心设计了这些小家伙。', img: '' }
 const TRUST_DEFAULT: TrustVM[] = [
@@ -166,7 +171,7 @@ export function mapHero(home: unknown): HeroVM {
     title: str(h.title, HERO_DEFAULT.title),
     tagline: str(h.tagline, HERO_DEFAULT.tagline),
     search: str(h.search, HERO_DEFAULT.search),
-    img: str(h.img, ''), // 空→模板落 sage 占位（同商品 cover）
+    img: str(h.img, HERO_DEFAULT.img), // 缺档回退品牌小鸭大图（单源 HERO_DEFAULT.img）；CMS 配了图则用 CMS 图
   }
 }
 
