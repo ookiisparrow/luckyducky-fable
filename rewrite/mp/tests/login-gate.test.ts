@@ -44,6 +44,19 @@ describe('loginGate · 登录软门槛（半屏弹窗·R1）', () => {
     expect(seen).toEqual([true, false])
   })
 
+  it('大白话：logout 清本地 hint 使 hasAgreed 转假、ensureLogin 重新拦截（登出态）', async () => {
+    const { createLoginGate } = await import('../lib/loginGate')
+    store['ld_login_hint'] = true
+    const gate = createLoginGate()
+    expect(gate.hasAgreed()).toBe(true)
+    expect(gate.ensureLogin()).toBe(true)
+    gate.logout()
+    expect(store['ld_login_hint']).toBe(false)
+    expect(gate.hasAgreed()).toBe(false)
+    expect(gate.visible()).toBe(false)
+    expect(gate.ensureLogin()).toBe(false) // 退出后再触发软门槛又拦
+  })
+
   it('大白话：hint sanitize storage 不可信——只认字面 true', async () => {
     const { sanitizeLoginHint } = await import('../lib/loginGate')
     expect(sanitizeLoginHint(true)).toBe(true)

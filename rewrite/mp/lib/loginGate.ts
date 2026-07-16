@@ -68,6 +68,13 @@ export function createLoginGate() {
       writeLoginHint(true)
       this.close()
     },
+    // 退出登录：清本地已同意 hint（我的页据此显示登出态·默认身份）+ 收起弹窗。
+    // 注意 openid 是云开发上下文固定身份（一微信一 openid·mp 无「换账号」）——退出不删服务端 users 资料、
+    // 不清 cart/address 本地缓存（同一用户便利态·再登即回·根因#3「换账号泄露」在 mp 不成立）；只重置「显式同意登录」这一态。
+    logout(): void {
+      writeLoginHint(false)
+      this.close()
+    },
   }
 }
 
