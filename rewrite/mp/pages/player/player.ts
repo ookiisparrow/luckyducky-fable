@@ -130,8 +130,18 @@ Page({
     this.windowHeightPx = info.windowHeight || 0 // 视频框比例封顶基准（防超高素材撑破屏·见 onVideoMeta）
     // 原生胶囊 rect（屏幕左上原点·px，与 .lp-stage inset:0 同坐标系）：段落进度条 top 按胶囊底边动态避让，
     // 逐机型胶囊位不同·statusBarHeight 近似不可靠（2026-07-13 反馈·Bug D1）。
-    const cap = wx.getMenuButtonBoundingClientRect()
-    this.setData({ statusBarHeight: info.statusBarHeight, capsuleBottom: cap.bottom })
+    // 防御：PC/mac 客户端与部分安卓冷启动下该 API 可返回全 0 rect 甚至异常（社区反复确认的平台怪癖）——
+    // 裸取 .bottom 会让段条 top:8px 撞状态栏、极端态 TypeError 打断 onLoad 整页死在加载骨架。
+    // 兜底 statusBarHeight+36（常规胶囊 top≈sbh+4·高 32；sbh 自身也可为空，Number()||0 后 PC 上退化 36px）。
+    const sbh = Number(info.statusBarHeight) || 0
+    let capsuleBottom = 0
+    try {
+      const capsule = wx.getMenuButtonBoundingClientRect()
+      if (capsule && Number.isFinite(capsule.bottom) && capsule.bottom > 0) capsuleBottom = capsule.bottom
+    } catch {
+      /* 无胶囊环境（PC 等）·走兜底 */
+    }
+    this.setData({ statusBarHeight: sbh, capsuleBottom: capsuleBottom || sbh + 36 })
     this.courseId = String(query.courseId || '')
     void this.loadPageContent() // 求助面板文案/FAQ·与取课/取址互不依赖，并行发起（不阻塞首帧·默认已在 data）
     this._wantSeg = String(query.segmentId || '')
@@ -334,7 +344,8 @@ Page({
 
   // 视频框贴合素材真实比例（2026-07-13 反馈·Bug D2）：loadedmetadata 拿到真实宽高后把播放框 padding-top 设成
   // height/width——竖版素材比默认 1:1.68 框更窄，contain 会在左右留黑；框贴合素材比例后恰好铺满、不裁切、无左右黑边。
-  // 封顶到屏幕比例防超高素材撑破屏（.ld-player overflow:hidden·封顶后极端超高素材退化为上下留黑不裁切·合「不裁切」诉求）。
+  // 封顶到屏幕比例防超高素材撑破屏（.ld-player overflow:hidden·封顶后素材比框更瘦高，contain 高度顶满、
+  // 宽度不足→退化为左右留黑不裁切·「去左右黑边」性质在此极端分支保不住，合的是「不裁切」诉求）。
   onVideoMeta(e: WechatMiniprogram.CustomEvent<{ width: number; height: number; duration: number }>) {
     const w = Number(e.detail && e.detail.width)
     const h = Number(e.detail && e.detail.height)
