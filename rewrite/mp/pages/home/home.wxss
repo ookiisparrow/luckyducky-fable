@@ -64,7 +64,9 @@
 .ld-hero-copy {
   position: relative;
   z-index: 2;
-  padding: 0 36rpx 400rpx; /* 抬高文案+CTA 整块（2026-07-16 用户反馈过于下沉·由 248rpx 上提约 152rpx≈76px）·让开悬浮 TabBar+安全区 */
+  /* 文案+CTA 整块锚在悬浮 TabBar 之上恒定 220rpx（2026-07-16 用户反馈「相对 tabbar 固定」·单源 --ld-tabbar-space）。
+     220rpx = 文案底与胶囊顶的视觉间距（此值即微调旋钮·嫌高/低改这一个数）。 */
+  padding: 0 36rpx calc(var(--ld-tabbar-space) + 220rpx);
   text-align: center;
 }
 .ld-hero-tag {
@@ -569,7 +571,7 @@
 
 /* ⑨ 页脚 */
 .ld-footer {
-  padding: 68rpx 36rpx calc(210rpx + env(safe-area-inset-bottom));
+  padding: 68rpx 36rpx calc(var(--ld-tabbar-space) + 90rpx); /* 让开悬浮 TabBar（单源·= 原 210rpx+安全区，零视觉变化） */
   background: var(--ld-purple-tab);
   display: flex;
   flex-direction: column;
@@ -607,7 +609,7 @@
 .ld-backtop {
   position: fixed;
   right: 34rpx;
-  bottom: calc(210rpx + env(safe-area-inset-bottom));
+  bottom: calc(var(--ld-tabbar-space) + 90rpx); /* 悬停在悬浮 TabBar 上方（单源·= 原 210rpx+安全区，零视觉变化） */
   width: 90rpx;
   height: 90rpx;
   border-radius: 50%;
