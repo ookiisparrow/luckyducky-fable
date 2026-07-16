@@ -31,10 +31,11 @@
     <view class="lp-topbar-spacer"></view>
   </view>
 
-  <!-- 视频舞台（1:1.68·padding-top 百分比法·避 aspect-ratio·旧 WebView 不支持·垂直居中） -->
+  <!-- 视频舞台（播放框 padding-top 动态贴合素材真实比例·onVideoMeta 拿宽高后设 videoRatio·去左右黑边·垂直居中；
+       默认 168% 即 1:1.68·首帧前不裂；状态框仍走 wxss 168%·见 .lp-video-box） -->
   <view class="lp-stage">
     <block wx:if="{{state === 'playing' || state === 'loading'}}">
-      <view class="lp-video-box">
+      <view class="lp-video-box" style="padding-top: {{videoRatio}}%">
         <video
           wx:if="{{src}}"
           id="lp-video"
@@ -47,6 +48,7 @@
           bind:ended="onEnded"
           bind:error="onVideoError"
           bind:timeupdate="onTimeUpdate"
+          bind:loadedmetadata="onVideoMeta"
         ></video>
         <view wx:else class="lp-video lp-skeleton">
           <view class="lp-skeleton-spin"></view>
@@ -65,8 +67,10 @@
       <!-- 单击提示条：仅播放中且未被首次 tap 关闭过（页面实例级·不持久化） -->
       <view class="lp-tap-hint" wx:if="{{state === 'playing' && src && !hintDismissed}}">单击画面 播放 / 暂停</view>
 
-      <!-- 分段进度条浮层：段落层级只活在这里（目录页只到课时层，批D 再落） -->
-      <view class="lp-segstrip" wx:if="{{strip}}">
+      <!-- 分段进度条浮层：段落层级只活在这里（目录页只到课时层，批D 再落）。
+           top 按原生胶囊底边动态避让（capsuleBottom+8·2026-07-13 反馈）：浮层的定位祖先是全屏 .lp-stage（inset:0·顶=屏顶），
+           不动态给 top 就会贴屏顶撞状态栏/胶囊。 -->
+      <view class="lp-segstrip" wx:if="{{strip}}" style="top: {{capsuleBottom + 8}}px">
         <view class="lp-segs">
           <view class="lp-seg-cell {{item}}" wx:for="{{strip.cells}}" wx:key="*this"></view>
         </view>

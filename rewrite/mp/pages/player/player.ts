@@ -63,6 +63,8 @@ const cache = createPlaybackCache({
 Page({
   data: {
     statusBarHeight: 0,
+    capsuleBottom: 0, // 原生胶囊底边 y（px·onLoad 取 getMenuButtonBoundingClientRect().bottom）：段落进度条按此动态避让落胶囊下方（2026-07-13 反馈·Bug D1）
+    videoRatio: 168, // 播放框比例 padding-top%（默认 1:1.68·onVideoMeta 拿素材真实宽高后贴合·去左右黑边·2026-07-13 反馈·Bug D2）
     title: '',
     segments: [] as FlatSegment[],
     current: null as FlatSegment | null,
@@ -100,6 +102,7 @@ Page({
   course: null as CoursePub | null,
   srcSetAt: 0,
   windowWidthPx: 0, // rpx→px 换算基准（onLoad 存·750rpx = windowWidthPx px）
+  windowHeightPx: 0, // 视频框比例封顶基准（onLoad 存·防超高素材撑破屏·见 onVideoMeta）
   firstFrameScene: 'enter' as 'enter' | 'seg' | 'retry',
   firstFrameReported: false,
   playToken: 0, // 切段请求令牌（防乱序回包覆盖·守卫 rw-mp-player-stale-guarded）
@@ -124,7 +127,11 @@ Page({
   async onLoad(query: Record<string, string | undefined>) {
     const info = wx.getWindowInfo()
     this.windowWidthPx = info.windowWidth || 0 // rpx→px 换算基准（750rpx = 本机 windowWidth px），供拖动预览浮层防出屏边距用
-    this.setData({ statusBarHeight: info.statusBarHeight })
+    this.windowHeightPx = info.windowHeight || 0 // 视频框比例封顶基准（防超高素材撑破屏·见 onVideoMeta）
+    // 原生胶囊 rect（屏幕左上原点·px，与 .lp-stage inset:0 同坐标系）：段落进度条 top 按胶囊底边动态避让，
+    // 逐机型胶囊位不同·statusBarHeight 近似不可靠（2026-07-13 反馈·Bug D1）。
+    const cap = wx.getMenuButtonBoundingClientRect()
+    this.setData({ statusBarHeight: info.statusBarHeight, capsuleBottom: cap.bottom })
     this.courseId = String(query.courseId || '')
     void this.loadPageContent() // 求助面板文案/FAQ·与取课/取址互不依赖，并行发起（不阻塞首帧·默认已在 data）
     this._wantSeg = String(query.segmentId || '')
@@ -323,6 +330,19 @@ Page({
     this.errRetried = true
     cache.invalidate(this.courseId, cur.segmentId)
     void this.playSegment(cur, 'retry')
+  },
+
+  // 视频框贴合素材真实比例（2026-07-13 反馈·Bug D2）：loadedmetadata 拿到真实宽高后把播放框 padding-top 设成
+  // height/width——竖版素材比默认 1:1.68 框更窄，contain 会在左右留黑；框贴合素材比例后恰好铺满、不裁切、无左右黑边。
+  // 封顶到屏幕比例防超高素材撑破屏（.ld-player overflow:hidden·封顶后极端超高素材退化为上下留黑不裁切·合「不裁切」诉求）。
+  onVideoMeta(e: WechatMiniprogram.CustomEvent<{ width: number; height: number; duration: number }>) {
+    const w = Number(e.detail && e.detail.width)
+    const h = Number(e.detail && e.detail.height)
+    if (!(w > 0) || !(h > 0)) return // 脏元数据：保持默认 168%·不算比例
+    const raw = (h / w) * 100
+    const cap = this.windowWidthPx > 0 && this.windowHeightPx > 0 ? (this.windowHeightPx / this.windowWidthPx) * 100 : raw
+    const ratio = Math.min(raw, cap) // 封顶屏幕比例·不撑破屏
+    if (Math.abs(ratio - this.data.videoRatio) > 0.5) this.setData({ videoRatio: ratio }) // 有意义变化才 setData（免抖动）
   },
 
   // 全屏单击播放/暂停：只调用视频上下文 play()/pause()，真实态由 bind:play/bind:pause 回报（不臆断本地态）。
