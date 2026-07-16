@@ -139,4 +139,7 @@
   </view>
 
   <view class="ld-me-pad-bottom"></view>
+
+  <!-- 登录授权半屏（R1·软门槛）：未同意登录进「我」页弹出、可「暂不登录」关掉继续逛·经 lib/loginGate 单例驱动 -->
+  <login-sheet id="loginSheet" bind:login="onLoggedIn" />
 </view>

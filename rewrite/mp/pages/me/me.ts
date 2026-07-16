@@ -10,6 +10,10 @@ import { mapMe, type MeVM } from '../../lib/mapPages'
 import { openCustomerService } from '../../utils/customerService'
 import { goHomeTab } from '../../lib/homeIntent'
 import { armExitAlert } from '../../utils/exitGuard'
+import { loginGate } from '../../lib/loginGate'
+
+// 我的页登录软门槛本会话至多弹一次（未同意登录时·不反复打扰·R1 旧线 useAuthGate「进我调用 ensureLogin」）
+let loginPromptedThisSession = false
 
 Page({
   data: {
@@ -27,6 +31,17 @@ Page({
   onShow() {
     armExitAlert() // tabBar 根页误触退出提醒（返回二次确认·2026-07-13 用户反馈·覆盖边界见 utils/exitGuard）
     if (typeof this.getTabBar === 'function') (this.getTabBar() as unknown as LdTabBar).setActive('me')
+    this.promptLoginOnce()
+    void this.refresh()
+  },
+  // 未同意登录时进「我」页弹出登录半屏（软门槛·R1）——本会话至多一次，已同意则 ensureLogin 直接放行不弹
+  promptLoginOnce() {
+    if (loginPromptedThisSession) return
+    loginPromptedThisSession = true
+    loginGate.ensureLogin()
+  },
+  // 登录半屏「微信一键登录」成功回调：刷新资料（hint 已由组件写·此处回灌头像昵称/入口可见性）
+  onLoggedIn() {
     void this.refresh()
   },
   _seq: 0, // refresh 代次（同 order-list/aftersales 范式）：onShow 多触发点（tab 切回/其他页返回）四路并发 Promise.all，
