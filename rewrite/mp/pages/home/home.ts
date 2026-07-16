@@ -84,19 +84,20 @@ Page({
   // 点击的结果可能被更早一次的迟到回包盖掉。切走本 tab（onHide）而非退出本页那条路见上面 hidden 字段（Round4 复审补漏）。
   // 首页「+」快速加购（2026-07-08 用户拍板改真加购；2026-07-13 用户拍板：「+」统一加入购物车，多规格默认加
   // 首个规格·不再跳详情）：单规格直加、多规格加首规格、原始记录取不到（缓存 miss 且网络失败）温和失败反馈
-  // ——决策纯函数见 lib/quickAdd（navigate 分支已随本次决策删除）。
+  // ——决策纯函数见 lib/quickAdd（navigate 分支已随本次决策删除·取不到出 null）。
   async onAddProduct(e: WechatMiniprogram.TouchEvent) {
     const id = String(e.currentTarget.dataset.id || '')
     if (!id) return
     const seq = ++this._addSeq
     const raw = await getProductById(id)
     if (seq !== this._addSeq) return // 过期回包（被更晚一次 onAddProduct 取代）：丢弃·不提示
-    const decision = decideQuickAdd(raw)
-    if (decision.kind === 'add') {
-      cart.add(decision.payload) // 数据侧动作照做（用户确实点了「+」）：即便已切走本 tab 也不该丢单
+    const payload = decideQuickAdd(raw)
+    if (payload) {
+      cart.add(payload) // 数据侧动作照做（用户确实点了「+」）：即便已切走本 tab 也不该丢单
       if (this.hidden) return // 已切走 home tab（H·完备性扫描新增）：角标同步/toast 是本页 UI 副作用，用户已看不到，静默跳过
       if (typeof this.getTabBar === 'function') (this.getTabBar() as unknown as LdTabBar).setActive('home') // 角标随动（同 cart.ts:24 范式）
-      this.ping('已加入购物车')
+      // 多规格被默认加了首规格时把规格名亮给用户（自绘 ping 不受原生 toast 字数限制）——静默替选规格必须可见
+      this.ping(payload.sku ? '已加入购物车 · ' + payload.sku : '已加入购物车')
     } else {
       if (this.hidden) return
       this.ping('商品信息获取失败，请稍后重试')
