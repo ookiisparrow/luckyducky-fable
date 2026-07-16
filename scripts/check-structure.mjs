@@ -2381,22 +2381,143 @@ export const repoChecks = [
     // 前端禁裸 http(s) 视频 URL 字面量。无真实视频 → 本地占位封面（不播外链）。
     id: 'no-external-video-src',
     roots: ['#8'],
-    desc: '视频源不走外链（T-F7·合规）：packages/miniapp/src 禁裸 http(s) 视频 URL 字面量（.mp4/.m3u8/.mov/.webm 等）——视频源只经 getPlaybackUrl/store.playbackUrl 换云端临时 URL，无真视频显本地占位；防外链合规红线 + urlCheck 翻 true 后真机播不了（根因#8）',
+    desc: '视频源不走外链（T-F7·合规·双线 2026-07-16 补 rewrite/mp）：packages/miniapp/src（.js/.ts/.vue）+ rewrite/mp（.js/.ts/.wxml）禁裸 http(s) 视频 URL 字面量（.mp4/.m3u8/.mov/.webm 等）——视频源只经 getPlaybackUrl/store.playbackUrl 换云端临时 URL，无真视频显本地占位；防外链合规红线 + urlCheck 翻 true 后真机播不了（根因#8）',
     run() {
       const bad = []
       const re = /https?:\/\/[^'"`\s)]+\.(?:mp4|m3u8|mov|webm|avi|mkv)\b/i
-      for (const f of walk(join(ROOT, 'packages/miniapp/src'))) {
-        if (!/\.(js|ts|vue)$/.test(f)) continue
+      const scanFile = (f) => {
+        const rel = relative(ROOT, f)
         readFileSync(f, 'utf8')
           .split('\n')
           .forEach((line, i) => {
             if (isCommentLine(line) || line.includes('structure-ok')) return
             if (re.test(line))
               bad.push(
-                `${relative(ROOT, f)}:${i + 1} 裸 http(s) 视频 URL 字面量——视频源须经 getPlaybackUrl/云、禁外链（T-F7/合规·根因#8）`,
+                `${rel}:${i + 1} 裸 http(s) 视频 URL 字面量——视频源须经 getPlaybackUrl/云、禁外链（T-F7/合规·根因#8）`,
               )
           })
       }
+      // 旧线 packages/miniapp/src（.js/.ts/.vue·walk 默认扩名）
+      for (const f of walk(join(ROOT, 'packages/miniapp/src'))) {
+        if (/\.(js|ts|vue)$/.test(f)) scanFile(f)
+      }
+      // 新线 rewrite/mp：.js/.ts 走 walk；.wxml walk 不吐、本地遍历（2026-07-16 双线补真空·仿 font-not-in-package 单源）
+      for (const f of walk(join(ROOT, 'rewrite/mp'))) {
+        if (/\.(js|ts)$/.test(f)) scanFile(f)
+      }
+      const wxmlWalk = (d) => {
+        if (!existsSync(d)) return
+        for (const name of readdirSync(d)) {
+          if (name === 'node_modules' || name === 'dist') continue
+          const p = join(d, name)
+          if (statSync(p).isDirectory()) wxmlWalk(p)
+          else if (name.endsWith('.wxml')) scanFile(p)
+        }
+      }
+      wxmlWalk(join(ROOT, 'rewrite/mp'))
+      return bad
+    },
+  },
+  {
+    // mp 内联 <svg> 禁用（新线镜像旧线 inline-svg·2026-07-16 补 rewrite/mp 守卫真空）。旧 inline-svg 物理
+    // 锚死 packages/miniapp/src 的 .vue/.scss（check-conventions），活线原生 .wxml 扫不到（文件类型+根都不匹配）。
+    // mp 端不渲染内联 <svg>（真机静默不显·dev/H5 假绿）——图标须 <image src="/static/icons/*.svg">（色烘进 svg）。
+    id: 'rw-mp-no-inline-svg',
+    roots: ['#8'],
+    desc: 'mp 内联 svg 禁用（新线·补 inline-svg 真空）：扫 rewrite/mp/**/*.wxml，剥 <!-- --> 注释后出现 <svg 即红——mp 端不渲染内联 svg（真机静默不显·构建过≠真机能用·根因#8），图标走 <image src="/static/icons/*.svg">',
+    run() {
+      const bad = []
+      const base = join(ROOT, 'rewrite/mp')
+      if (!existsSync(base)) return bad
+      const walkW = (d) => {
+        for (const name of readdirSync(d)) {
+          if (name === 'node_modules' || name === 'dist') continue
+          const p = join(d, name)
+          if (statSync(p).isDirectory()) walkW(p)
+          else if (name.endsWith('.wxml')) {
+            // 剥 <!-- --> 注释再扫（同 rw-mp-wxml-well-formed 手法·防注释里的 <svg 假红）
+            const src = readFileSync(p, 'utf8').replace(/<!--[\s\S]*?-->/g, '')
+            if (/<svg[\s>]/i.test(src))
+              bad.push(
+                `${relative(ROOT, p)} 内联 <svg>——mp 端不渲染（真机静默不显·根因#8），图标用 <image src="/static/icons/*.svg">`,
+              )
+          }
+        }
+      }
+      walkW(base)
+      return bad
+    },
+  },
+  {
+    // 本地图不走 CSS background:url()（新线镜像旧线 bg-image-local·2026-07-16 补真空）。旧 bg-image-local 锚死
+    // packages/miniapp/src 的 .vue/.scss，活线 .wxss 扫不到。本地图 background:url() 在 mp 端不可靠（真机可能不显）；
+    // 本地图用 <image>，占位走灰底（新线方向 A·弃 MediaSlot）。放行 http(s):// 与 data:（远程/内联合法）。
+    id: 'rw-mp-no-bg-image-local',
+    roots: ['#8'],
+    desc: 'mp 本地背景图禁用（新线·补 bg-image-local 真空）：扫 rewrite/mp/**/*.wxss，background(-image):url(本地路径) 即红（放行 http(s)://、data:）——本地图 background:url() 在 mp 端不可靠，用 <image>（根因#8）',
+    run() {
+      const bad = []
+      const base = join(ROOT, 'rewrite/mp')
+      if (!existsSync(base)) return bad
+      const re = /background(?:-image)?\s*:[^;]*url\(\s*['"]?([^'")]+)/i
+      const walkS = (d) => {
+        for (const name of readdirSync(d)) {
+          if (name === 'node_modules' || name === 'dist') continue
+          const p = join(d, name)
+          if (statSync(p).isDirectory()) walkS(p)
+          else if (name.endsWith('.wxss')) {
+            readFileSync(p, 'utf8')
+              .split('\n')
+              .forEach((line, i) => {
+                if (isCommentLine(line) || line.includes('structure-ok')) return
+                const m = line.match(re)
+                if (m && !/^(https?:\/\/|data:)/.test(m[1]))
+                  bad.push(
+                    `${relative(ROOT, p)}:${i + 1} background:url() 引本地图——mp 端不可靠，本地图用 <image>（根因#8）`,
+                  )
+              })
+          }
+        }
+      }
+      walkS(base)
+      return bad
+    },
+  },
+  {
+    // 进包位图预算（新线·2026-07-16·病根#15 图片面 + 根因#8 冷启）。内容图归云存储（getTempUrl 换临时址按需拉），
+    // 进包位图只该是品牌兜底（hero-full.jpg 42K）。防大位图悄爬进主包（2MB 硬顶·含代码）拖慢冷启动——真机冷启
+    // 才感知（根因#8「构建过≠真机能用」）。与 font-not-in-package（禁字体二进制进包）同精神互补：那管字体、这管位图。
+    id: 'rw-mp-static-bitmap-budget',
+    roots: ['#8', '#15'],
+    desc: '进包位图预算（新线·病根#15+#8）：rewrite/mp 下位图（.png/.jpg/.jpeg/.gif/.webp/.bmp）单张 ≤200KB、总量 ≤400KB——内容图归云存储按需加载，进包位图只该是品牌兜底（hero-full.jpg 42K）；防大位图撑主包拖慢冷启动（主包 2MB·真机冷启才感知·根因#8）',
+    run() {
+      const bad = []
+      const base = join(ROOT, 'rewrite/mp')
+      if (!existsSync(base)) return bad
+      const BITMAP = /\.(png|jpe?g|gif|webp|bmp)$/i
+      const ONE = 200 * 1024
+      const TOTAL = 400 * 1024
+      let total = 0
+      const walkB = (d) => {
+        for (const name of readdirSync(d)) {
+          if (name === 'node_modules' || name === 'dist') continue
+          const p = join(d, name)
+          const st = statSync(p)
+          if (st.isDirectory()) walkB(p)
+          else if (BITMAP.test(name)) {
+            total += st.size
+            if (st.size > ONE)
+              bad.push(
+                `${relative(ROOT, p)} 位图 ${Math.round(st.size / 1024)}KB 超单张上限 200KB——内容图归云存储（getTempUrl），进包位图只该是品牌兜底；大图压缩或上云（根因#8 冷启）`,
+              )
+          }
+        }
+      }
+      walkB(base)
+      if (total > TOTAL)
+        bad.push(
+          `rewrite/mp 进包位图总量 ${Math.round(total / 1024)}KB 超上限 400KB——内容图别进包、走云存储按需加载（病根#15/根因#8 冷启）`,
+        )
       return bad
     },
   },
