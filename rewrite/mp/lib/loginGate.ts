@@ -31,6 +31,7 @@ type Sub = (visible: boolean) => void
 
 export function createLoginGate() {
   let shown = false
+  let promptedThisSession = false // 本会话是否已软门槛弹过（首页/我页共用一次闸·不反复打扰）
   const subs = new Set<Sub>()
   const emit = () => subs.forEach((f) => f(shown))
   return {
@@ -62,6 +63,13 @@ export function createLoginGate() {
       if (readLoginHint()) return true
       this.open()
       return false
+    },
+    // 软门槛「进 App 弹一次」：首个落地的 tabBar 页（首页/我页）onShow 调用——本会话至多弹一次，
+    // 未同意才弹（已同意直接放行不弹）。首页先落地即由首页弹，避免各页各弹一次反复打扰。
+    maybePromptOnce(): void {
+      if (promptedThisSession) return
+      promptedThisSession = true
+      this.ensureLogin()
     },
     // 用户在半屏点「微信一键登录」并成功后：记本地已同意 hint + 关闭弹窗
     markAgreed(): void {

@@ -9,6 +9,7 @@ import { decideQuickAdd } from '../../lib/quickAdd'
 import * as cart from '../../lib/cart'
 import { consumeHomeTop } from '../../lib/homeIntent'
 import { armExitAlert } from '../../utils/exitGuard'
+import { loginGate } from '../../lib/loginGate'
 
 let toastTimer: ReturnType<typeof setTimeout> | null = null
 
@@ -36,6 +37,7 @@ Page({
     this.hidden = false
     armExitAlert() // tabBar 根页误触退出提醒（返回二次确认·2026-07-13 用户反馈·覆盖边界见 utils/exitGuard）
     if (typeof this.getTabBar === 'function') (this.getTabBar() as unknown as LdTabBar).setActive('home')
+    loginGate.maybePromptOnce() // 进 App 首个落地页即软门槛弹一次登录半屏（未同意时·本会话共用一次闸·可暂不登录先逛）
     // 兜底意图落地（我页无课/welcome先逛逛）回到顶部；正常切 tab 未置位则保留上次滚动位置（行为不变）
     if (consumeHomeTop()) wx.pageScrollTo({ scrollTop: 0, duration: 0 })
   },
