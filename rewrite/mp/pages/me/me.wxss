@@ -218,6 +218,22 @@
   opacity: 0.9;
 }
 
+/* 继续学习区加载中骨架（首次取数未落地·contLoaded 前）：形状对齐真卡（16:9 视频块 + 右对齐续播按钮），
+   切真卡零高度跳变；静态渐变占位（同 home .ld-skeleton 范式·无动画免兼容风险）·不放任何「暂无」文案。 */
+.ld-me-cont-skeleton-video {
+  width: 100%;
+  padding-top: 56.25%; /* 16:9·与 .ld-me-video 等高·切换不跳变 */
+  border-radius: var(--ld-radius-md);
+  background: linear-gradient(90deg, var(--ld-bg-sage) 25%, var(--ld-bg-faint) 50%, var(--ld-bg-sage) 75%);
+}
+.ld-me-cont-skeleton-btn {
+  width: 176rpx;
+  height: 66rpx; /* 与 .ld-me-resume-btn 视觉等高（padding18*2+字行≈66rpx） */
+  margin: 24rpx 0 0 auto; /* 右对齐·同 .ld-me-resume justify-end */
+  border-radius: var(--ld-radius-pill);
+  background: var(--ld-bg-sage);
+}
+
 /* 空态 */
 .ld-me-empty {
   display: flex;
