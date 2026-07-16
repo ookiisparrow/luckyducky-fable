@@ -122,48 +122,12 @@ export function mapCatalogPlayer(content: unknown): CatalogPlayerVM {
   }
 }
 
-// ═══════════════ 「我」页 me（默认昵称 + 九入口标题/可见性）═══════════════
-export type MeEntryKey = 'courses' | 'orders' | 'aftersales' | 'address' | 'activate' | 'feedback' | 'kefu' | 'consent' | 'about'
-export interface MeEntryVM {
-  label: string
-  visible: boolean
-}
-export interface MeVM {
-  defaultNickname: string
-  entries: Record<MeEntryKey, MeEntryVM>
-}
-
-const ME_DEFAULT_NICKNAME = '钩织新手' // me.ts 登录零资料回灌兜底名
-const ME_ENTRY_LABELS: Record<MeEntryKey, string> = {
-  courses: '全部教程', // 学习卡「全部教程」跳转链
-  orders: '全部订单', // 我的订单卡「全部订单」跳转链
-  aftersales: '售后', // 订单四格「售后」
-  address: '收货地址', // 入口列各行
-  activate: '输入激活码',
-  feedback: '意见反馈',
-  kefu: '联系客服',
-  consent: '数据共享授权',
-  about: '关于我们',
-}
-const ME_KEYS = Object.keys(ME_ENTRY_LABELS) as MeEntryKey[]
-
-/** me 内容映射：defaultNickname 空回退；entries 未知 key 忽略、缺失=全默认全可见、visible===false 才隐藏。 */
-export function mapMe(content: unknown): MeVM {
-  const c = obj(content)
-  const entries = {} as Record<MeEntryKey, MeEntryVM>
-  for (const k of ME_KEYS) entries[k] = { label: ME_ENTRY_LABELS[k], visible: true } // 先铺默认（全可见）
-  const raw = Array.isArray(c.entries) ? c.entries : []
-  for (const e of raw) {
-    const x = obj(e)
-    const key = String(x.key || '') as MeEntryKey
-    if (!(key in entries)) continue // 未知 key 忽略
-    entries[key] = {
-      label: str(x.label, ME_ENTRY_LABELS[key]),
-      visible: x.visible === false ? false : true, // 仅显式 false 隐藏；缺省/true 显示
-    }
-  }
-  return { defaultNickname: str(c.defaultNickname, ME_DEFAULT_NICKNAME), entries }
-}
+// ═══════════════ 「我」页 me → 拆至 lib/mapMe.ts（原名 re-export·消费方不变）═══════════════
+// 为什么拆：me 是 tab 首屏页，其 ts import 闭包决定品牌字体 tier1（首屏子集）字符面；本文件的
+// 协议/隐私法务长文只在二级页上屏，同住会把 511 字拖进首屏子集（守卫 rw-mp-font-tier-subset-covers）。
+// me.ts 直引 lib/mapMe；这里 re-export 保住「五页 mapper 单源入口」与既有测试/守卫引用。
+export { mapMe } from './mapMe'
+export type { MeEntryKey, MeEntryVM, MeVM } from './mapMe'
 
 // ═══════════════ 关于我们 about ═══════════════
 export interface AboutSectionVM {
