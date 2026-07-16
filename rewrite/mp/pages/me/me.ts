@@ -6,7 +6,7 @@ import { getMyCourses } from '../../api/learning'
 import { getAllCourses } from '../../lib/courses'
 import { getPageContent } from '../../lib/pageContent'
 import { continueResolve, type ContinueTarget } from '../../lib/continueResolve'
-import { mapMe, type MeVM } from '../../lib/mapPages'
+import { mapMe, type MeVM } from '../../lib/mapMe' // 直引拆分模块（tab 闭包不拖 mapPages 法务长文·字体分层批）
 import { openCustomerService } from '../../utils/customerService'
 import { goHomeTab } from '../../lib/homeIntent'
 import { armExitAlert } from '../../utils/exitGuard'

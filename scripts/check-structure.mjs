@@ -24,6 +24,7 @@ import { join, resolve, relative } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { RULES as conventionRules } from './check-conventions.mjs'
 import { oldlineDigest } from './oldline-freeze-lib.mjs'
+import { deriveTierCharsets } from './lib/brand-font-charset.mjs'
 
 const ROOT = resolve(import.meta.dirname, '..')
 
@@ -5371,7 +5372,9 @@ export const repoChecks = [
         { file: 'pages/welcome/welcome.ts', method: 'loadPageContent', mapper: 'mapWelcome' },
         { file: 'pages/catalog/catalog.ts', method: 'loadPageContent', mapper: 'mapCatalogPlayer' },
         { file: 'pages/player/player.ts', method: 'loadPageContent', mapper: 'mapCatalogPlayer' },
-        { file: 'pages/me/me.ts', method: 'refresh', mapper: 'mapMe' },
+        // me 直引拆分模块 lib/mapMe（非 mapPages）：tab 首屏页闭包不拖协议/隐私法务长文进字体 tier1
+        // 子集（字体分层批·守卫 rw-mp-font-tier-subset-covers 盯闭包⊆子集），mapper 行为黄金不变。
+        { file: 'pages/me/me.ts', method: 'refresh', mapper: 'mapMe', module: 'lib/mapMe' },
         { file: 'pages/about/about.ts', method: 'loadPageContent', mapper: 'mapAbout' },
         { file: 'pages/agreement/agreement.ts', method: 'loadPageContent', mapper: 'mapAgreement' },
       ]
@@ -5382,8 +5385,9 @@ export const repoChecks = [
           continue
         }
         const src = stripComments(readFileSync(abs, 'utf8')) // 剥注释单源 helper（错题本 E1/E10）：防注释假触发/假放行
-        if (!/from\s*['"][^'"]*lib\/mapPages['"]/.test(src))
-          bad.push(`rewrite/mp/${w.file} 未从 lib/mapPages 引入映射层——文案未经 mapper 回退（批B·根因#8）`)
+        const mapperModule = w.module || 'lib/mapPages'
+        if (!new RegExp(`from\\s*['"][^'"]*${mapperModule}['"]`).test(src))
+          bad.push(`rewrite/mp/${w.file} 未从 ${mapperModule} 引入映射层——文案未经 mapper 回退（批B·根因#8）`)
         if (!/from\s*['"][^'"]*lib\/pageContent['"]/.test(src))
           bad.push(`rewrite/mp/${w.file} 未从 lib/pageContent 引入会话缓存层——CMS 内容各自散拉（病根#15 精神·批B）`)
         const body = methodBody(src, w.method)
@@ -5882,6 +5886,43 @@ export const repoChecks = [
         bad.push(`${homeWxmlRel} 未挂 <brand-splash bind:done>——splash 的 done 事件没有收口出口（根因#8）`)
       if (!/showSplash\s*:\s*false/.test(ts))
         bad.push(`${homeTsRel} done 回调未见 setData showSplash=false——splash 发了 done 也没人撤（根因#8）`)
+      return bad
+    },
+  },
+  {
+    // 品牌字体分层子集覆盖（字体分层批·根因#8「构建过≠真机能用」的文案漂移变体）：mp 上屏文案随迭代
+    // 只增不减，而字体子集是离线构建产物（源 OTF 84MB 不入仓）——新增文案若带来子集外新字，build 照常
+    // 全绿、真机该字静默掉回系统字体（单字版 FOUT 永不结束）。守两条包含关系（推导逻辑与构建脚本共用
+    // 单源 scripts/lib/brand-font-charset.mjs·病根#5 不各写各的）：
+    // ① 推导 tier1（tab 首屏闭包+seed 标题）⊆ 已提交 assets/brand-fonts/tier1.txt——顺带机器锁
+    //    「me.ts 直引 lib/mapMe、不得把 mapPages 法务长文拖回首屏闭包」（拖回即 tier1 溢出咬红）；
+    // ② 推导三层并集 ⊆ 三个 txt 并集——任何上屏字必有层，不许静默无家。
+    // 红了怎么修：BRAND_FONT_SRC=<源OTF目录> node scripts/build-brand-font.mjs 重建（txt 与 6 个 woff
+    // 一起换，脚本不允许只改 txt 不建 woff），提交产物并把 woff 重新部署到托管 /fonts/（README 部署节）。
+    id: 'rw-mp-font-tier-subset-covers',
+    roots: ['#8'],
+    desc: '品牌字体分层子集覆盖上屏字（字体分层批·根因#8）：deriveTierCharsets 推导 tier1 ⊆ assets/brand-fonts/tier1.txt 且三层并集 ⊆ 三 txt 并集——新增文案带来子集外新字即红（真机该字静默掉系统字体）；红了跑 BRAND_FONT_SRC=<源OTF> node scripts/build-brand-font.mjs 重建 + 重新部署托管 /fonts/',
+    run() {
+      const base = join(ROOT, 'rewrite/mp')
+      if (!existsSync(base)) return [] // 重写线未建时不红
+      const bad = []
+      const dir = join(ROOT, 'assets/brand-fonts')
+      const readSet = (f) => (existsSync(join(dir, f)) ? new Set([...readFileSync(join(dir, f), 'utf8')]) : null)
+      const t1 = readSet('tier1.txt')
+      const t2 = readSet('tier2.txt')
+      const t3 = readSet('tier3.txt')
+      if (!t1 || !t2 || !t3) {
+        bad.push('assets/brand-fonts/tier{1,2,3}.txt 缺失——分层子集字符集未提交（BRAND_FONT_SRC=<源OTF> node scripts/build-brand-font.mjs 重建后提交）')
+        return bad
+      }
+      const derived = deriveTierCharsets(ROOT)
+      const miss1 = [...derived.tier1].filter((c) => !t1.has(c))
+      if (miss1.length)
+        bad.push(`tab 首屏上屏字有 ${miss1.length} 个不在 tier1 子集（${miss1.slice(0, 12).join('')}${miss1.length > 12 ? '…' : ''}）——真机将掉系统字体；跑 BRAND_FONT_SRC=<源OTF> node scripts/build-brand-font.mjs 重建并重新部署 /fonts/`)
+      const union = new Set([...t1, ...t2, ...t3])
+      const missAll = [...derived.tier1, ...derived.tier2].filter((c) => !union.has(c))
+      if (missAll.length)
+        bad.push(`上屏字有 ${missAll.length} 个不在任何层子集（${missAll.slice(0, 12).join('')}${missAll.length > 12 ? '…' : ''}）——新增文案带来子集外新字；跑 BRAND_FONT_SRC=<源OTF> node scripts/build-brand-font.mjs 重建并重新部署 /fonts/`)
       return bad
     },
   },
