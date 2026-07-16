@@ -64,7 +64,7 @@
 .ld-hero-copy {
   position: relative;
   z-index: 2;
-  padding: 0 36rpx 248rpx; /* 设计 bottom:132px≈246rpx·抬高文案让开悬浮 TabBar+安全区 */
+  padding: 0 36rpx 400rpx; /* 抬高文案+CTA 整块（2026-07-16 用户反馈过于下沉·由 248rpx 上提约 152rpx≈76px）·让开悬浮 TabBar+安全区 */
   text-align: center;
 }
 .ld-hero-tag {
