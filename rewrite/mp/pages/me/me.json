@@ -1,4 +1,7 @@
 {
   "navigationStyle": "custom",
-  "navigationBarTitleText": "我"
+  "navigationBarTitleText": "我",
+  "usingComponents": {
+    "login-sheet": "/components/login-sheet/login-sheet"
+  }
 }

@@ -1,0 +1,22 @@
+<view wx:if="{{visible}}" class="ls-mask" catch:touchmove="noop" bind:tap="onClose">
+  <view class="ls-sheet" catch:tap="noop">
+    <view class="ls-grab"></view>
+    <view class="ls-close" catch:tap="onClose"><text class="ls-close-x">✕</text></view>
+
+    <view class="ls-head">
+      <image class="ls-logo" src="/static/logo-wordmark.svg" mode="heightFix" />
+      <text class="ls-sub">登录后同步你的订单 · 收藏 · 学习进度</text>
+    </view>
+
+    <view class="ls-foot">
+      <view class="ls-agree" catch:tap="onToggleAgree">
+        <view class="ls-check {{agreed ? 'on' : ''}}">
+          <image wx:if="{{agreed}}" class="ls-check-ico" src="/static/icons/check.svg" mode="aspectFit" />
+        </view>
+        <text class="ls-agree-text">我已阅读并同意<text class="ls-link" catch:tap="onUserAgreement">《用户协议》</text>和<text class="ls-link" catch:tap="onPrivacy">《隐私政策》</text></text>
+      </view>
+      <view class="ls-btn {{agreed && !submitting ? '' : 'disabled'}}" catch:tap="onLogin">{{submitting ? '登录中…' : '微信一键登录'}}</view>
+      <text class="ls-skip" catch:tap="onClose">暂不登录</text>
+    </view>
+  </view>
+</view>

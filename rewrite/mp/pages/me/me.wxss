@@ -332,6 +332,20 @@
   height: 34rpx;
 }
 
+.ld-me-logout {
+  height: 92rpx;
+  border: 2rpx solid var(--ld-line);
+  border-radius: var(--ld-radius-md);
+  background: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 28rpx;
+  color: var(--ld-content-2);
+}
+.ld-me-logout-h {
+  opacity: 0.6;
+}
 .ld-me-pad-bottom {
   height: 200rpx;
 }

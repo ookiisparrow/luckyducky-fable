@@ -1,0 +1,114 @@
+.ls-mask {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  z-index: 300;
+  background: rgba(22, 15, 32, 0.46);
+  display: flex;
+  align-items: flex-end;
+}
+.ls-sheet {
+  position: relative;
+  width: 100%;
+  background: var(--ld-bg);
+  border-radius: 44rpx 44rpx 0 0;
+  padding: 0 44rpx calc(56rpx + env(safe-area-inset-bottom));
+  box-sizing: border-box;
+}
+.ls-grab {
+  width: 72rpx;
+  height: 8rpx;
+  border-radius: 4rpx;
+  background: var(--ld-purple-line);
+  opacity: 0.6;
+  margin: 20rpx auto 0;
+}
+.ls-close {
+  position: absolute;
+  top: 24rpx;
+  right: 28rpx;
+  width: 56rpx;
+  height: 56rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.ls-close-x {
+  font-size: 34rpx;
+  line-height: 1;
+  color: var(--ld-purple-meta);
+}
+.ls-head {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  margin: 56rpx 0 44rpx;
+}
+.ls-logo {
+  height: 80rpx;
+}
+.ls-sub {
+  margin-top: 24rpx;
+  font-size: 26rpx;
+  color: var(--ld-content-2);
+}
+.ls-foot {
+  padding-top: 0;
+}
+.ls-agree {
+  display: flex;
+  align-items: center;
+  margin-bottom: 28rpx;
+}
+.ls-check {
+  flex: 0 0 auto;
+  width: 36rpx;
+  height: 36rpx;
+  margin-right: 16rpx;
+  border-radius: 50%;
+  border: 2rpx solid var(--ld-purple-line);
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.ls-check.on {
+  background: var(--ld-purple);
+  border-color: var(--ld-purple);
+}
+.ls-check-ico {
+  width: 22rpx;
+  height: 22rpx;
+}
+.ls-agree-text {
+  flex: 1 1 auto;
+  font-size: 24rpx;
+  line-height: 1.5;
+  color: var(--ld-purple-meta);
+}
+.ls-link {
+  color: var(--ld-purple);
+}
+.ls-btn {
+  height: 96rpx;
+  border-radius: var(--ld-radius-pill);
+  background: var(--ld-purple-ink);
+  color: var(--ld-bg);
+  font-size: 32rpx;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.ls-btn.disabled {
+  opacity: 0.45;
+}
+.ls-skip {
+  display: block;
+  text-align: center;
+  margin-top: 28rpx;
+  font-size: 26rpx;
+  color: var(--ld-purple-meta);
+}

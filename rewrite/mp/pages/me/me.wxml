@@ -7,15 +7,18 @@
     </view>
     <view class="ld-me-greet">
       <view class="ld-me-greet-text">
-        <view class="ld-me-eyebrow">欢迎回来</view>
+        <view class="ld-me-eyebrow">{{loggedIn ? '欢迎回来' : '欢迎来到小棉鸭'}}</view>
         <view class="ld-me-greet-name">{{nickname}}</view>
         <view wx:if="{{bio}}" class="ld-me-greet-bio">{{bio}}</view>
       </view>
       <image wx:if="{{avatar}}" class="ld-me-avatar" src="{{avatar}}" mode="aspectFill" />
       <view wx:else class="ld-me-avatar ld-me-avatar-empty">🦆</view>
     </view>
-    <view class="ld-me-edit" bind:tap="onEditProfile" hover-class="ld-me-edit-h">
+    <view wx:if="{{loggedIn}}" class="ld-me-edit" bind:tap="onEditProfile" hover-class="ld-me-edit-h">
       <text>编辑资料</text>
+    </view>
+    <view wx:else class="ld-me-edit" bind:tap="onLoginTap" hover-class="ld-me-edit-h">
+      <text>点击登录</text>
     </view>
   </view>
 
@@ -136,7 +139,15 @@
         <image class="ld-me-row-chev" src="/static/icons/chevron-right.svg" mode="aspectFit" />
       </view>
     </view>
+
+    <!-- 退出登录（登出即清本地登录 hint·转登出态·R1）：仅已登录时显示；openid 身份与服务端订单/学习不受影响 -->
+    <view wx:if="{{loggedIn}}" class="ld-me-logout" bind:tap="onLogout" hover-class="ld-me-logout-h">
+      <text>退出登录</text>
+    </view>
   </view>
 
   <view class="ld-me-pad-bottom"></view>
+
+  <!-- 登录授权半屏（R1·软门槛）：未同意登录进「我」页弹出、可「暂不登录」关掉继续逛·经 lib/loginGate 单例驱动 -->
+  <login-sheet id="loginSheet" bind:login="onLoggedIn" />
 </view>

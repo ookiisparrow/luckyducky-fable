@@ -5634,6 +5634,29 @@ export const repoChecks = [
     },
   },
   {
+    // 登录零资料采集防回潮（R1·规格§四-1·决策§3）：登录半屏 components/login-sheet 是「真·一键登录」——
+    // 微信静默 openid 直接登录、登录环节不采集头像昵称/手机号（微信 2022-10 废 getUserProfile；chooseAvatar/
+    // type=nickname 官方要求主动点击、无法自动带出；索手机号违运营规范）。资料改后续「编辑资料」页补。
+    // 守此不变量：login-sheet.wxml 须存在且不得出现 chooseAvatar / getPhoneNumber / type="nickname" 采集标记——
+    // 样板复制或「顺手把头像昵称加回登录」当场红（同 rw-mp-no-casting 决策锁范式）。
+    id: 'rw-mp-login-no-profile-collect',
+    roots: ['R1'],
+    desc: '登录零资料采集防回潮（R1·真·一键登录）：rewrite/mp/components/login-sheet/login-sheet.wxml 须存在且不得含 open-type="chooseAvatar" / open-type="getPhoneNumber" / type="nickname"——登录环节静默 openid 直登、不采头像昵称手机号（微信已废 getUserProfile·chooseAvatar/nickname 无法自动带出·索手机号违规），资料改「编辑资料」补',
+    run() {
+      const p = join(ROOT, 'rewrite/mp/components/login-sheet/login-sheet.wxml')
+      if (!existsSync(p)) return ['rewrite/mp/components/login-sheet/login-sheet.wxml 缺失——登录半屏未落地（R1）']
+      const src = readFileSync(p, 'utf8')
+      const bad = []
+      if (/open-type\s*=\s*["']chooseAvatar["']/.test(src))
+        bad.push('login-sheet.wxml 含 chooseAvatar——登录环节不采集头像（真·一键登录·资料改「编辑资料」页补）')
+      if (/open-type\s*=\s*["']getPhoneNumber["']/.test(src))
+        bad.push('login-sheet.wxml 含 getPhoneNumber——登录不采手机号（违微信运营规范·R1「不采手机号」）')
+      if (/type\s*=\s*["']nickname["']/.test(src))
+        bad.push('login-sheet.wxml 含 type="nickname"——登录环节不采集昵称（真·一键登录）')
+      return bad
+    },
+  },
+  {
     // 公开目录读上界（病根#7 规模·容量审计 2026-07-12）：getProducts/getCourses 是全站最热公开读
     // （每个新会话必调），裸 .get() 命中云开发服务端默认 100 条**静默截断**——商品/课程破百后排序靠后
     // 的整批消失且无报错无告警（仓内自证：adminApi/lib.ts:92、kit/inventory.ts 注释同一病根）。守此
