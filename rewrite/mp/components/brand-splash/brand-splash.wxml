@@ -1,0 +1,9 @@
+<!-- 冷启动品牌开屏（对齐 Claude Design 通过稿）：居中品牌字标 + 「创造幸运~」+ 脚注·leaving 时淡出。
+     全屏覆盖层（z-index 压过自定义 tabBar）——logo 走 <image> 引 static（mp 不支持内联 svg）。 -->
+<view class="ld-splash {{leaving ? 'leaving' : ''}}">
+  <view class="ld-splash-center">
+    <image class="ld-splash-logo" src="/static/logo-wordmark.svg" mode="widthFix" />
+    <view class="ld-splash-tag">创造幸运~</view>
+  </view>
+  <view class="ld-splash-foot">Get Ducky Get Lucky™</view>
+</view>

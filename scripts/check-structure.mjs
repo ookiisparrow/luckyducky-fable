@@ -5852,6 +5852,40 @@ export const repoChecks = [
     },
   },
   {
+    // 品牌启动 splash 必须有界自动消失（根因#8「构建过≠真机能用」的 UI 陷死变体）：冷启动盖在首页上的
+    // 品牌开屏，是纯计时器驱动的覆盖层（show → 淡出 → triggerEvent('done') → home 撤下），不挂钩任何数据
+    // 成功/网络回包。风险＝有人把自动消失的 setTimeout/triggerEvent 删了、或 home 侧忘了把 done 收口成
+    // showSplash=false，则 splash 永久盖死首页、用户进不去——build 全绿、真机才陷死（正是 #8）。故钉三点：
+    // ① 组件 .ts 有 setTimeout 驱动的 triggerEvent('done')（有界自撤）；② home.wxml 挂 <brand-splash bind:done>；
+    // ③ home.ts 的 done 回调把 showSplash 置 false。反向自检＝删组件里的 setTimeout（→红）。撤下 splash 请同删本守卫。
+    id: 'rw-mp-splash-auto-dismiss',
+    roots: ['#8'],
+    desc: '品牌启动 splash 有界自动消失（根因#8 build 绿·真机陷死）：components/brand-splash/brand-splash.ts 须有 setTimeout 驱动的 triggerEvent(\'done\')；home.wxml 须挂 <brand-splash bind:done>；home.ts 须在回调置 showSplash=false——防计时器/回调一断即永久盖死首页、用户进不去',
+    run() {
+      const base = join(ROOT, 'rewrite/mp')
+      if (!existsSync(base)) return [] // 重写线未建时不红
+      const bad = []
+      const compRel = 'rewrite/mp/components/brand-splash/brand-splash.ts'
+      const comp = join(ROOT, compRel)
+      if (!existsSync(comp)) {
+        bad.push(`${compRel} 缺失——品牌启动 splash 组件不在（若已撤下 splash，请同删本守卫·治「守一个不存在的东西」）`)
+        return bad
+      }
+      const src = stripComments(readFileSync(comp, 'utf8'))
+      if (!/setTimeout\s*\(/.test(src) || !/triggerEvent\(\s*['"]done['"]/.test(src))
+        bad.push(`${compRel} 未见 setTimeout 驱动的 triggerEvent('done')——splash 须计时器有界自撤，否则一断即永久盖死首页（根因#8 build 绿·真机陷死）`)
+      const homeWxmlRel = 'rewrite/mp/pages/home/home.wxml'
+      const homeTsRel = 'rewrite/mp/pages/home/home.ts'
+      const wxml = existsSync(join(ROOT, homeWxmlRel)) ? readFileSync(join(ROOT, homeWxmlRel), 'utf8') : ''
+      const ts = existsSync(join(ROOT, homeTsRel)) ? stripComments(readFileSync(join(ROOT, homeTsRel), 'utf8')) : ''
+      if (!/brand-splash/.test(wxml) || !/bind:done\s*=/.test(wxml))
+        bad.push(`${homeWxmlRel} 未挂 <brand-splash bind:done>——splash 的 done 事件没有收口出口（根因#8）`)
+      if (!/showSplash\s*:\s*false/.test(ts))
+        bad.push(`${homeTsRel} done 回调未见 setData showSplash=false——splash 发了 done 也没人撤（根因#8）`)
+      return bad
+    },
+  },
+  {
     // mp 分发前置（SEO/GEO·决策§29·R29 rewrite 线承接）：旧线 detail-share-wired 只扫 packages/，
     // rewrite/mp 曾整线零转发钩子（README 记账债）。守三件：① 公开页 home/detail 双钩子
     // （onShareAppMessage+onShareTimeline）在——没有钩子的页微信默认禁转发，公开页禁转发=分发面自断；
