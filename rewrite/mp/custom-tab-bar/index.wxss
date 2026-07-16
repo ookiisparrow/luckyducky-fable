@@ -1,20 +1,20 @@
-/* 贴边通栏不透明 TabBar（2026-07-13 mp-7fixes 战役：覆盖 2026-07-06 悬浮药丸设计，
-   用户反馈「tabbar 不要透明」——悬浮药丸四周露内容+安全区悬空造成透明感，改整条贴底通栏不透明，
-   内部选中丁香紫药丸样式不动）。官方 custom-tab-bar 机制不变（setActive/角标/switchTab 在 index.ts）；此文件只管视觉。 */
+/* 悬浮胶囊 TabBar（2026-07-16 用户需求：由 2026-07-13 贴边通栏改回悬浮形态）。
+   守住 2026-07-13「tabbar 不要透明」的约束——悬浮≠透明：胶囊本体实底不透明（白底），四周
+   加显著投影使其读作「浮在内容之上的一块实心胶囊」而非透明空洞（当初透明感来自露内容+安全区悬空，
+   靠实底+重投影+胶囊分明的形体消解）。官方 custom-tab-bar 机制不变（setActive/角标/switchTab 在 index.ts）；此文件只管视觉。 */
 .ld-tabbar {
   position: fixed;
-  left: 0;
-  right: 0;
-  bottom: 0;
+  left: 44rpx;
+  right: 44rpx;
+  bottom: calc(18rpx + env(safe-area-inset-bottom));
   display: flex;
   gap: 8rpx;
-  /* 安全区从「外距」改「内衬」：iPhone 小黑条区域也是实底不露内容 */
-  padding: 15rpx 15rpx calc(15rpx + env(safe-area-inset-bottom));
+  padding: 12rpx;
   background: var(--ld-bg, #ffffff);
-  border-radius: 0;
-  border-top: 1rpx solid var(--ld-line, #e7e7e7);
-  /* 通栏贴边不再需要四周投影，改极轻向上淡投影做内容分隔即可 */
-  box-shadow: 0 -4rpx 16rpx rgba(0, 0, 0, 0.06);
+  /* 胶囊：整体大圆角药丸 */
+  border-radius: var(--ld-radius-pill, 999rpx);
+  /* 实底不透明 + 显著落影：读作浮起的实心块，非透明空洞（守 2026-07-13「不要透明」） */
+  box-shadow: 0 12rpx 40rpx rgba(28, 28, 32, 0.2), 0 4rpx 12rpx rgba(28, 28, 32, 0.1);
 }
 .ld-tab {
   flex: 1;
@@ -23,7 +23,8 @@
   justify-content: center;
   gap: 12rpx;
   padding: 20rpx 0;
-  border-radius: 37rpx;
+  /* 内部选中态也走胶囊形，与外壳呼应 */
+  border-radius: var(--ld-radius-pill, 999rpx);
 }
 .ld-tab-iconwrap {
   position: relative;
@@ -53,7 +54,7 @@
   color: rgba(0, 0, 0, 0.55);
 }
 .ld-tab.active {
-  background: #f2ebfc; /* 选中丁香紫药丸（设计 #F2EBFC）——本批不改 */
+  background: #f2ebfc; /* 选中丁香紫药丸（设计 #F2EBFC） */
 }
 .ld-tab.active .ld-tab-label {
   color: var(--ld-purple-tab, #7b5caf);
