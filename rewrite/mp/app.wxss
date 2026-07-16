@@ -10,3 +10,14 @@ page {
     显式钉 500 使其命中已注册字重、行为确定（P2 review 修复·mp-7fixes 批4附） */
   -webkit-font-smoothing: antialiased;
 }
+
+/* 骨架屏微光（home/catalog 共用·加载态设计对齐 Claude Design 通过稿）：配 background-size:200% 的
+   渐变骨架从右向左扫过一道亮带。全局 keyframe（app.wxss 作用域全局），各页骨架 class 引用即可。 */
+@keyframes ld-shimmer {
+  0% {
+    background-position: 150% 0;
+  }
+  100% {
+    background-position: -150% 0;
+  }
+}

@@ -284,14 +284,16 @@
   font-size: 26rpx;
   color: var(--ld-content-2);
 }
-.ld-skeleton {
+.ld-skeleton,
+.ld-skeleton-text {
   background: linear-gradient(90deg, var(--ld-bg-sage) 25%, var(--ld-bg-faint) 50%, var(--ld-bg-sage) 75%);
+  background-size: 200% 100%; /* 配 @keyframes ld-shimmer 微光扫过（app.wxss·加载态设计对齐） */
+  animation: ld-shimmer 1500ms ease-in-out infinite;
 }
 .ld-skeleton-text {
   height: 28rpx;
   margin: 16rpx 26rpx;
   border-radius: 8rpx;
-  background: var(--ld-bg-sage);
 }
 .ld-skeleton-text.short {
   width: 140rpx;

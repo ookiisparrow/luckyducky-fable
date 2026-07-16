@@ -147,15 +147,17 @@
   color: var(--ld-content-2);
 }
 
-/* 骨架占位（加载中） */
-.ld-cat-skel-num {
-  background: var(--ld-bg-sage);
+/* 骨架占位（加载中）·微光扫过对齐 home（@keyframes ld-shimmer·app.wxss） */
+.ld-cat-skel-num,
+.ld-cat-skel-line {
+  background: linear-gradient(90deg, var(--ld-bg-sage) 25%, var(--ld-bg-faint) 50%, var(--ld-bg-sage) 75%);
+  background-size: 200% 100%;
+  animation: ld-shimmer 1500ms ease-in-out infinite;
 }
 .ld-cat-skel-line {
   width: 320rpx;
   height: 26rpx;
   border-radius: 8rpx;
-  background: var(--ld-bg-sage);
 }
 
 /* —— 空态（课程不存在，对齐 my-courses 空态圈范式的精简版）—— */

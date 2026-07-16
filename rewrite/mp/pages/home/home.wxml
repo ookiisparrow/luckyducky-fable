@@ -174,3 +174,6 @@
 
 <!-- 轻提示 -->
 <view class="ld-toast {{toast.show ? 'show' : ''}}"><text>{{toast.text}}</text></view>
+
+<!-- 冷启动品牌开屏（每次冷启动一次·计时器自撤后 onSplashDone 撤下）·全屏 fixed 覆盖层压过 tabBar -->
+<brand-splash wx:if="{{showSplash}}" bind:done="onSplashDone" />

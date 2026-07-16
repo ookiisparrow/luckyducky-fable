@@ -15,6 +15,8 @@ let toastTimer: ReturnType<typeof setTimeout> | null = null
 Page({
   data: {
     statusBarHeight: 0,
+    showSplash: true, // 冷启动品牌开屏：初值 true=首帧即盖上，纯计时器 splash 自撤后经 onSplashDone 置 false。
+    // 挂 onLoad（每次冷启动一次），非 onShow——切 tab 回来/热恢复不重播（brand-splash 有界自撤守卫见 rw-mp-splash-auto-dismiss）
     loading: true,
     loadFailed: false,
     content: mapHomeContent(null) as HomeContentVM, // 首帧即默认文案·不空屏
@@ -109,6 +111,10 @@ Page({
   },
   backTop() {
     wx.pageScrollTo({ scrollTop: 0, duration: 320 })
+  },
+  // 品牌开屏淡出完成（brand-splash 计时器到点 triggerEvent('done')）：撤下覆盖层露出首页。
+  onSplashDone() {
+    this.setData({ showSplash: false })
   },
   // bug sweep II L3：页脚链接架构无 href 字段（admin 只存纯文本 label），本无法通用跳转——「关于我们」
   // 是唯一已上线且默认安装态必现的 label（/pages/about/about 已注册·me 页也有正常入口），单独映射修复

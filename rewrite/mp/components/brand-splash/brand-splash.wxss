@@ -1,0 +1,67 @@
+/* 冷启动品牌开屏（对齐 Claude Design 通过稿）。设计 402px 画板 → rpx（×1.87，同 welcome 换算口径）。
+   淡紫渐变铺满 + 居中品牌字标（轻浮动）+ 「创造幸运~」+ 底部脚注。token 见 styles/tokens.wxss；
+   渐变中点为设计专属值·就地写 hex+注释·不改 tokens（同 welcome 局部 hex 手法）。
+   组件样式禁标签选择器（只用 class·mp 组件 wxss 约定）。 */
+.ld-splash {
+  position: fixed;
+  left: 0;
+  right: 0;
+  top: 0;
+  bottom: 0;
+  z-index: 10000; /* 压过自定义 tabBar（首页是 tabBar 页）·真机需验覆盖完整 */
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  background: linear-gradient(178deg, var(--ld-bg-sage) 0%, #f1ecf8 54%, var(--ld-bg-lilac) 100%);
+  /* #f1ecf8：鼠尾草→淡紫的中段过渡·设计专属渐变中点·非 token */
+}
+.ld-splash.leaving {
+  animation: ld-splash-out 500ms cubic-bezier(0.4, 0, 0.2, 1) both;
+}
+
+.ld-splash-center {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 36rpx;
+  margin-top: -56rpx; /* 视觉重心略上移·让开底部脚注 */
+}
+.ld-splash-logo {
+  width: 412rpx; /* 设计 220px ×1.87 */
+  animation: ld-splash-float 2600ms ease-in-out infinite;
+}
+.ld-splash-tag {
+  font-size: 30rpx;
+  font-weight: 500;
+  letter-spacing: 3rpx;
+  color: var(--ld-purple-meta);
+}
+.ld-splash-foot {
+  margin-bottom: calc(78rpx + env(safe-area-inset-bottom));
+  font-size: 22rpx;
+  font-weight: 500;
+  letter-spacing: 1rpx;
+  color: var(--ld-purple-meta);
+}
+
+@keyframes ld-splash-float {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-18rpx);
+  }
+}
+@keyframes ld-splash-out {
+  from {
+    opacity: 1;
+    transform: scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: scale(1.04);
+  }
+}
