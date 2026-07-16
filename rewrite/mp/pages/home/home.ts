@@ -82,23 +82,21 @@ Page({
   _addSeq: 0, // onAddProduct 代次（H3·完备性扫描新增·同 reload._seq 范式）：本页是 tabBar 页（onUnload 正常导航
   // 基本不触发，不适用 checkout 那套 this.unloaded 家族），连点不同商品「+」可并发在途——不设代际复核则更晚一次
   // 点击的结果可能被更早一次的迟到回包盖掉。切走本 tab（onHide）而非退出本页那条路见上面 hidden 字段（Round4 复审补漏）。
-  // 首页「+」快速加购（2026-07-08 用户拍板：旧假占位反馈改真加购）：单规格直加购物车、
-  // 多规格跳详情选规格、原始记录取不到（缓存 miss 且网络失败）温和失败反馈——决策纯函数见 lib/quickAdd。
+  // 首页「+」快速加购（2026-07-08 用户拍板改真加购；2026-07-13 用户拍板：「+」统一加入购物车，多规格默认加
+  // 首个规格·不再跳详情）：单规格直加、多规格加首规格、原始记录取不到（缓存 miss 且网络失败）温和失败反馈
+  // ——决策纯函数见 lib/quickAdd（navigate 分支已随本次决策删除）。
   async onAddProduct(e: WechatMiniprogram.TouchEvent) {
     const id = String(e.currentTarget.dataset.id || '')
     if (!id) return
     const seq = ++this._addSeq
     const raw = await getProductById(id)
-    if (seq !== this._addSeq) return // 过期回包（被更晚一次 onAddProduct 取代）：丢弃·不导航/不提示
+    if (seq !== this._addSeq) return // 过期回包（被更晚一次 onAddProduct 取代）：丢弃·不提示
     const decision = decideQuickAdd(raw)
     if (decision.kind === 'add') {
       cart.add(decision.payload) // 数据侧动作照做（用户确实点了「+」）：即便已切走本 tab 也不该丢单
       if (this.hidden) return // 已切走 home tab（H·完备性扫描新增）：角标同步/toast 是本页 UI 副作用，用户已看不到，静默跳过
       if (typeof this.getTabBar === 'function') (this.getTabBar() as unknown as LdTabBar).setActive('home') // 角标随动（同 cart.ts:24 范式）
       this.ping('已加入购物车')
-    } else if (decision.kind === 'navigate') {
-      if (this.hidden) return // 已切走 home tab：不把 navigateTo 打到用户已经切走之后的当前页面上
-      wx.navigateTo({ url: '/pages/detail/detail?id=' + decision.id })
     } else {
       if (this.hidden) return
       this.ping('商品信息获取失败，请稍后重试')
