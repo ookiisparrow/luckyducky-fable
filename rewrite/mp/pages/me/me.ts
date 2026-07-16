@@ -13,12 +13,16 @@ import { armExitAlert } from '../../utils/exitGuard'
 
 Page({
   data: {
+    statusBarHeight: 0, // 沉浸式自绘导航：头部让开状态栏（navigationStyle:custom·2026-07-16 用户需求）
     nickname: '',
     avatar: '',
     bio: '',
     cont: null as ContinueTarget | null,
     entries: mapMe(null).entries as MeVM['entries'], // 九入口标题/可见性·首帧默认（CMS 到达覆盖）
     contFailed: false, // 继续学习区取数失败标记（同 aftersales/order-list loadFailed 分治：失败≠没进度）
+  },
+  onLoad() {
+    this.setData({ statusBarHeight: wx.getWindowInfo().statusBarHeight }) // 沉浸式：读状态栏高度让开自绘导航（onLoad 一次即可·不随 onShow 变）
   },
   onShow() {
     armExitAlert() // tabBar 根页误触退出提醒（返回二次确认·2026-07-13 用户反馈·覆盖边界见 utils/exitGuard）

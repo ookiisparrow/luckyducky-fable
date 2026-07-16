@@ -1,6 +1,6 @@
 <!-- 购物车·设计「待选区」语言：标题头 + 虚线暂存区(已加购行·勾选/加减/删除) + 下方推荐(圆加号加购) + 信任小字 + 悬浮结算。
      真实购物袋逻辑（lib/cart 单源·结算走选中项）全保留；移出袋的已知商品重回下方推荐（设计 qty→0 落 options）。 -->
-<view class="ld-cart">
+<view class="ld-cart" style="padding-top: {{statusBarHeight}}px">
   <view class="ld-cart-head">
     <view class="ld-cart-title">购物袋</view>
     <view class="ld-cart-sub">挑好的小伙伴都在这儿，随时结算带走</view>
