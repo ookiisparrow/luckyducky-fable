@@ -50,7 +50,35 @@
 
 **记账待补（待办与债·非上线阻塞）**：✅ 分享卡已勾销（2026-07-12 批3·决策§29）——home/detail 接转发+朋友圈双钩子（detail 带 ?id= 回流·私有页刻意不开＝默认禁转发·搜一搜 sitemap 公开页同批放开·守卫 rw-mp-share-wired）；余真机验分享卡样式与朋友圈单页态。订单物流轨迹（快递100 插件）与扫码激活定位已接通（2026-07-08 批次C），剩真机验（见走查表第10项）。✅ 播放页帮助视频抽屉（HelpSheet）已勾销（2026-07-11 批D·改形态为求助面板子层，接真数据）。✅ 课程目录页（章节折叠浏览层）已补（2026-07-11 播放器重设计战役批E·新页 `pages/catalog`，章>课时两层，段落层级只活播放页 segstrip；my-courses/welcome 均已接线跳目录页，见走查表第 13/14 项）。
 
-**非缺口（设计已变·UI 方向 A 拍板覆盖）**：MediaSlot 灰占位体系（新线 cover 直渲+灰底替代）· 节点拍照页（用户确认未投产·挂起）。
+**非缺口（设计已变·UI 方向 A 拍板覆盖）**：MediaSlot 灰占位体系（新线 cover 直渲+灰底替代·见下「图片/资产加载策略」）· 节点拍照页（用户确认未投产·挂起）。
+
+## 图片/资产加载策略（canonical · 2026-07-16 成文）
+
+> 新线图片处理早已成体系，本节把隐性规则**显性化**为约定。客观事实（换址函数/存储路径/守卫扫描面）单源在 `docs/系统事实.md`，此处只引不手抄（防 stale）。
+
+**决策 5 轴**（每轴＝一个问题 → 一个策略 → 既有实现）：
+- **A 所有权/易变性 → 包内 vs 远程**：恒定 UI（图标/logo）走 `/static/*.svg` 包内即时；内容图 `cloud://` fileID 存库、读时服务端批量换临时址下发；唯一入包位图＝品牌兜底 hero（`static/hero-full.jpg`）。守：`rw-mp-static-bitmap-budget`（单张 ≤200KB·总 ≤400KB）、`font-not-in-package`。
+- **B 首屏 vs 折叠 → eager vs lazy（横向容器例外）**：首屏首图 eager（hero 不加 lazy）；折叠下方纵向内容图加 `lazy-load`；横向 scroll-view / swiper 内 `lazy-load` **真机不生效**（验证过），不加。守：`rw-mp-image-lazy-wired`（钉 7 点位）。
+- **C 单张 vs 列表 vs 大画廊 → 要否窗口化**：swiper/横向轨 lazy 失效 → 窗口化只渲 current±1（`computeGalleryWindow`·`pages/detail/detail.ts`）。
+- **D 临时址时效（~2h）→ 防过期**：持久化进 storage 的（cart/checkout）读时 `freshCover`（`lib/cart.ts`）重取；order 存 fileID 服务端 `swapOrdersCover` 换址；现取现渲（home/detail）天然新鲜。
+- **E 失败/缺席 → 占位兜底分级**：品牌门面缺→本地兜底图（永远有图·`mapHome.ts` `HERO_DEFAULT.img`）；课程 hero 缺→`bgFor` 三级回退→CSS 占位；内容图/cover 缺→`wx:if` 守空 + CSS 灰底（方向 A·弃 MediaSlot）；头像缺→🦆 emoji；换址一律 fail-soft；UGC 入库 `imgSecCheck` fail-closed（守 `ugc-imgsecchecked`）。
+
+**按位置矩阵**（来源｜加载｜防过期｜兜底）：
+
+| 类别 | 来源 | 加载 | 防过期 | 兜底 |
+|---|---|---|---|---|
+| UI 图标/logo | 包内 SVG | eager | — | 构建期缺失即红 |
+| hero 品牌门面 | CMS，缺→包内 hero | **eager** | 现取现渲 | 本地兜底图（不留灰） |
+| 课程/激活 hero | CMS `cloud://`→服务端换址 | eager | 读时换址 | `bgFor` 回退→CSS 占位 |
+| CMS 内容图（feature/拆门槛/收尾/晒图） | CMS→`swapHomeImages` 换址 | **lazy** | 现取现渲 | `wx:if`+灰底 |
+| 商品 cover（轨/列表/详情） | `cloud://`→`getProducts` 批量换址 | 横向轨 eager（lazy 失效）·纵向列表 lazy | cart/checkout `freshCover`·order 服务端换址·余现取现渲 | `wx:if`+灰底 |
+| 详情图册（swiper） | 同 cover | **窗口 current±1** | 同 cover | 空数组落占位 |
+| 头像 | UGC `cloud://` | eager·`<image>` 直解 fileID | 免（直解不过期） | 🦆 emoji |
+| UGC 晒图 | UGC `cloud://`→读时换址 | **lazy** | 读时换址 | `wx:if` 守空 |
+
+**约定守卫（防策略漂移）**：折叠内容图必 `lazy-load`（`rw-mp-image-lazy-wired`）；禁内联 `<svg>`（`rw-mp-no-inline-svg`）；禁本地 `background:url()`（`rw-mp-no-bg-image-local`）；进包位图预算（`rw-mp-static-bitmap-budget`）；视频源禁外链（`no-external-video-src`·双线）。
+
+**非目标**（看似该做其实不该）：不重建 MediaSlot（方向 A 弃）；不引缩略图/雪碧图/多尺寸/图片处理 CDN（无需求·防过度工程）；不给横向轨/swiper 硬加无效 lazy；不给 hero 改 lazy/留灰占位；不新增「存 https 临时址」的持久化面（会隔天过期裂图）。
 
 ## 走查结果记录
 
