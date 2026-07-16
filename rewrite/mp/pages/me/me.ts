@@ -12,9 +12,6 @@ import { goHomeTab } from '../../lib/homeIntent'
 import { armExitAlert } from '../../utils/exitGuard'
 import { loginGate } from '../../lib/loginGate'
 
-// 我的页登录软门槛本会话至多弹一次（未同意登录时·不反复打扰·R1 旧线 useAuthGate「进我调用 ensureLogin」）
-let loginPromptedThisSession = false
-
 Page({
   data: {
     statusBarHeight: 0, // 沉浸式自绘导航：头部让开状态栏（navigationStyle:custom·2026-07-16 用户需求）
@@ -32,14 +29,8 @@ Page({
   onShow() {
     armExitAlert() // tabBar 根页误触退出提醒（返回二次确认·2026-07-13 用户反馈·覆盖边界见 utils/exitGuard）
     if (typeof this.getTabBar === 'function') (this.getTabBar() as unknown as LdTabBar).setActive('me')
-    this.promptLoginOnce()
+    loginGate.maybePromptOnce() // 软门槛本会话至多弹一次（首页/我页共用·未同意才弹）
     void this.refresh()
-  },
-  // 未同意登录时进「我」页弹出登录半屏（软门槛·R1）——本会话至多一次，已同意则 ensureLogin 直接放行不弹
-  promptLoginOnce() {
-    if (loginPromptedThisSession) return
-    loginPromptedThisSession = true
-    loginGate.ensureLogin()
   },
   // 登录半屏「微信一键登录」成功回调：刷新资料（hint 已由组件写·此处回灌头像昵称/入口可见性）
   onLoggedIn() {
@@ -113,8 +104,7 @@ Page({
       confirmText: '退出',
       success: (r) => {
         if (!r.confirm) return
-        loginGate.logout()
-        loginPromptedThisSession = true
+        loginGate.logout() // 清本地登录 hint（会话已弹过·不会立即再自动弹·下次进 App 才软门槛）
         void this.refresh()
         wx.showToast({ title: '已退出登录', icon: 'none' })
       },

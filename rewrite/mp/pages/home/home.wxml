@@ -174,3 +174,6 @@
 
 <!-- 轻提示 -->
 <view class="ld-toast {{toast.show ? 'show' : ''}}"><text>{{toast.text}}</text></view>
+
+<!-- 登录授权半屏（R1·软门槛）：进 App 首个落地页即弹（未同意时·本会话一次）·可「暂不登录」关掉先逛·经 lib/loginGate 单例驱动 -->
+<login-sheet id="loginSheet" />
