@@ -5664,7 +5664,7 @@ export const repoChecks = [
     // 删除——2026-07-12 拍板·决策§28，防回潮见 rw-mp-no-casting。）
     id: 'rw-mp-player-immersive',
     roots: ['#8', '#5'],
-    desc: '播放页竖屏沉浸全屏 + 帮助(客服)入口：player.json 须 navigationStyle:custom；player.wxml 的 <video> 须 controls="{{false}}" + 求助入口节点（bind:tap=onHelp）+ 自绘 seek 条两段式绑定（touchstart=onSeekStart/touchmove=onSeekMove/touchend=onSeekEnd）；player.ts 的 onSeekMove 方法体内不得出现 .seek(（两段式语义：拖动中只改显示）、onSeekEnd 方法体内须出现 .seek(（松手才真 seek）；客服入口须单源在 rewrite/mp/utils/customerService.ts（rewrite/mp 内 wx.openCustomerServiceChat 只此一处）',
+    desc: '播放页竖屏沉浸全屏 + 帮助(客服)入口：player.json 须 navigationStyle:custom；player.wxml 的 <video> 须 controls="{{false}}" + 求助入口节点（bind:tap=onHelp）+ 自绘 seek 条两段式绑定（touchstart=onSeekStart/touchmove=onSeekMove/touchend=onSeekEnd）；player.ts 的 onSeekMove 方法体内不得出现 .seek(（两段式语义：拖动中只改显示）、onSeekEnd 方法体内须出现 .seek(（松手才真 seek）；客服入口须单源在 rewrite/mp/utils/customerService.ts（rewrite/mp 内 wx.openCustomerServiceChat 只此一处）。段落进度条须落胶囊下方（2026-07-13 反馈）：player.ts 须取 getMenuButtonBoundingClientRect、.lp-segstrip 须动态 top（不硬编码贴屏顶）；视频框须贴合素材比例去左右黑边（2026-07-13 反馈）：主 <video>（controls={{false}}）须 bind:loadedmetadata=onVideoMeta + player.ts 有 onVideoMeta 方法（体内真写 videoRatio）+ .lp-video-box 播放态须动态 padding-top（不写死 168%）',
     run() {
       const base = join(ROOT, 'rewrite/mp')
       if (!existsSync(base)) return []
@@ -5688,6 +5688,35 @@ export const repoChecks = [
       if (wxml && !/bind:?touchend\s*=\s*"onSeekEnd"/.test(wxml))
         bad.push('player.wxml 的自绘 seek 条未见 bind:touchend="onSeekEnd"——松手真 seek 绑定缺失')
 
+      // 段落进度条落胶囊下方（2026-07-13 反馈·Bug D1）：.lp-segstrip 节点须带动态 top（内联 style top:{{...}}），
+      // 不许回退到 wxss 硬编码 top（那会相对全屏 .lp-stage 顶贴屏顶·撞状态栏/胶囊）。
+      if (wxml) {
+        // 词边界匹配：容加修饰类（"lp-segstrip lp-segstrip--slim"），\b 防误配 lp-segstrip-foo
+        const segTag = wxml.match(/<view[^>]*class="[^"]*\blp-segstrip\b[^"]*"[^>]*>/)
+        if (!segTag) bad.push('player.wxml 找不到 .lp-segstrip 节点——段落进度条浮层缺失')
+        // top 前只许属性串起点或 ;/空白分隔——裸 [^"]*top: 会被 padding-top:/margin-top: 的插值子串假绿
+        else if (!/style="(?:[^"]*[;\s])?top:\s*\{\{/.test(segTag[0]))
+          bad.push('player.wxml 的 .lp-segstrip 未见动态 top（style="top: {{...}}"）——须按胶囊底边动态避让（getMenuButtonBoundingClientRect），硬编码贴屏顶会撞状态栏/胶囊（2026-07-13 反馈）')
+      }
+      // 视频框贴合素材比例去左右黑边（2026-07-13 反馈·Bug D2）：主 <video>（controls="{{false}}" 那只·帮助
+      // 视频走原生 controls 不带 {{false}}）须 bind:loadedmetadata="onVideoMeta" 拿真实宽高——全文级子串匹配
+      // 会在绑定错位到帮助视频时假绿，须锚在主视频开标签内测。
+      if (wxml) {
+        const mainVideo = wxml.match(/<video[^>]*controls\s*=\s*"\{\{\s*false\s*\}\}"[^>]*>/)
+        if (!mainVideo) bad.push('player.wxml 找不到主 <video>（controls="{{false}}"）——loadedmetadata 断言无法执行')
+        else if (!/bind:?loadedmetadata\s*=\s*"onVideoMeta"/.test(mainVideo[0]))
+          bad.push('player.wxml 的主 <video> 未见 bind:loadedmetadata="onVideoMeta"——播放框无法贴合素材真实比例，竖版素材会留左右黑边（2026-07-13 反馈）')
+      }
+      if (wxml) {
+        // 播放态视频框（非 lp-state 状态框）须动态 padding-top 撑比例。序鲁棒 [^>]*：class 前插属性不逃逸；
+        // 精确闭引号 class="lp-video-box" 刻意排除状态框 class="lp-video-box lp-state"（勿抄 segTag 的词边界改法）。
+        // 匹配不到必须报错（fail-closed）——静默跳过＝守卫真空，wxss 默认 168% 重新独裁而 check 全绿。
+        const playBox = wxml.match(/<view[^>]*class="lp-video-box"[^>]*>/)
+        if (!playBox) bad.push('player.wxml 找不到播放态 .lp-video-box 节点（class 恰为 "lp-video-box"）——视频框比例断言无法执行')
+        else if (!/style="(?:[^"]*[;\s])?padding-top:\s*\{\{/.test(playBox[0]))
+          bad.push('player.wxml 播放态 .lp-video-box 未见动态 padding-top（style="padding-top: {{videoRatio}}%"）——须按素材真实比例撑框去黑边（2026-07-13 反馈）')
+      }
+
       const tsPath = join(base, 'pages/player/player.ts')
       const ts = existsSync(tsPath) ? readFileSync(tsPath, 'utf8') : ''
       if (wxml && ts) {
@@ -5710,6 +5739,17 @@ export const repoChecks = [
         if (!seekEndBody) bad.push('player.ts 找不到 onSeekEnd 方法体——松手真 seek 缺失')
         else if (!/\.seek\s*\(/.test(stripComments(seekEndBody)))
           bad.push('player.ts 的 onSeekEnd 方法体内未见 .seek(——松手应真正 seek 到位')
+
+        // 段落进度条落胶囊下方（2026-07-13 反馈·Bug D1）：须取原生胶囊底边为动态 top 的可靠源。
+        if (!/getMenuButtonBoundingClientRect\s*\(/.test(stripComments(ts)))
+          bad.push('player.ts 未调用 getMenuButtonBoundingClientRect——段落进度条无法按胶囊底边动态避让（逐机型胶囊位不同·statusBarHeight 近似不可靠·2026-07-13 反馈）')
+        // 视频框贴合素材比例（2026-07-13 反馈·Bug D2）：loadedmetadata 回调须存在且真写 videoRatio——
+        // 只查存在性会被掏空的方法体假绿（与 seek 断言同款「剥注释后查方法体语义」写法）。
+        const videoMetaBody = methodBody(ts, 'onVideoMeta')
+        if (!videoMetaBody)
+          bad.push('player.ts 找不到 onVideoMeta 方法体——<video> loadedmetadata 回调缺失，播放框无法据素材真实宽高撑比例去左右黑边（2026-07-13 反馈）')
+        else if (!/videoRatio/.test(stripComments(videoMetaBody)))
+          bad.push('player.ts 的 onVideoMeta 方法体内未见 videoRatio 写入——回调存在但不撑比例（空壳），播放框贴合素材比例功能失效')
       }
 
       const csPath = join(base, 'utils/customerService.ts')

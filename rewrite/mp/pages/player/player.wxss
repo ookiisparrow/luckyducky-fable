@@ -89,14 +89,17 @@
 .lp-video-box {
   position: relative;
   width: 100%;
-  padding-top: 168%; /* 1:1.68（宽:高）·padding-top 百分比法 */
+  padding-top: 168%; /* 默认 1:1.68·padding-top 百分比法；播放态由内联 style="padding-top:{{videoRatio}}%" 覆盖，
+                        贴合素材真实比例去左右黑边（2026-07-13 反馈·Bug D2）；状态框（.lp-video-box.lp-state）无内联仍用此默认 */
 }
 .lp-video {
   position: absolute;
   inset: 0;
   width: 100%;
   height: 100%;
-  /* object-fit 用默认 contain：旧 16:9 素材自动上下留黑居中，不裁切（设计定案，不显式覆盖） */
+  /* object-fit 默认 contain：播放框已贴合素材比例（onVideoMeta 动态 padding-top），contain 下恰好铺满不裁切、无黑边；
+     极端超高素材被封顶到屏幕比例时素材比框更瘦高，contain 退化为左右留黑不裁切（此分支「去左右黑边」
+     保不住，合的是「不裁切」诉求）。 */
 }
 
 /* 全屏单击点击层（透明·playing 才挂） */
@@ -146,7 +149,8 @@
   position: absolute;
   left: 37rpx;
   right: 37rpx;
-  top: 24rpx;
+  /* top 由内联 style 动态提供（capsuleBottom+8·落胶囊下方·2026-07-13 反馈）：定位祖先是全屏 .lp-stage，
+     不动态给 top 会贴屏顶撞状态栏/胶囊，故此处不写死 top。 */
   z-index: 3;
   display: flex;
   flex-direction: column;
