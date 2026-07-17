@@ -5,6 +5,7 @@ import { tapHaptic } from '../../lib/haptics'
 import * as cart from '../../lib/cart'
 import { prepareFromCart } from '../../lib/checkout'
 import { getAllProducts } from '../../lib/catalog'
+import { decideQuickAdd } from '../../lib/quickAdd'
 import { mapProducts, type ProductVM } from '../../lib/mapHome'
 import { armExitAlert } from '../../utils/exitGuard'
 
@@ -74,8 +75,11 @@ Page({
   onAddRec(e: WechatMiniprogram.TouchEvent) {
     const id = String(e.currentTarget.dataset.id || '')
     const p = allRaw.find((x) => String(x.id || x._id || '') === id)
-    if (!p) return
-    cart.add({ id, name: String(p.name || ''), tag: String(p.tag || ''), price: Number(p.price), was: typeof p.was === 'number' ? p.was : undefined, cover: String(p.cover || '') })
+    // 与首页「+」共用 lib/quickAdd 决策（多规格默认加首规格）：此前这里手拼 payload 不带 sku、取商品级价，
+    // 同一商品在首页与推荐位各点一次「+」会各成一行（cart 行身份 id+sku 双键）且价格可能不同。
+    const payload = p ? decideQuickAdd(p) : null
+    if (!payload) return
+    cart.add(payload)
     this.refresh()
     wx.showToast({ title: '已加入购物袋', icon: 'success' })
   },
