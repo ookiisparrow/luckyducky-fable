@@ -17,10 +17,21 @@ function pushSmokeError(msg: unknown) {
 // 10 条防错误循环触发上报风暴（错误→上报→上报又抛错的自激回路）。
 const CLIENT_ERROR_REPORT_CAP = 10
 let clientErrorReportCount = 0
+// 报错带页面上下文（课程链路审计 2026-07-17）：原来 page 写死 'app'——不同页面的同前缀报错在 anomalies
+// 里折成一条、无法反推发生在哪个业务页。取栈顶页面 route 填入；异常极早期（栈还没建）回退 'app'。
+function currentPagePath(): string {
+  try {
+    const stack = getCurrentPages()
+    const top = stack && stack[stack.length - 1]
+    return (top && (top as { route?: string }).route) || 'app'
+  } catch {
+    return 'app'
+  }
+}
 function reportClientError(msg: unknown) {
   if (clientErrorReportCount >= CLIENT_ERROR_REPORT_CAP) return
   clientErrorReportCount++
-  trackEvent('client_error', 'app', '', { msg: String(msg).slice(0, 500) })
+  trackEvent('client_error', currentPagePath(), '', { msg: String(msg).slice(0, 500) })
 }
 App({
   onLaunch() {

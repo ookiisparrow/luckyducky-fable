@@ -239,14 +239,17 @@ export function route(menuId: string): Route {
   if (menuId === 'aftersale:apply')
     return {
       type: 'miniprogram',
-      page: 'pages/aftersales/index', // pages.json 注册名带 s（外审 P2.11·kf-card-page-registered 守卫锁）
+      // 新线 app.json 注册路由（课程链路审计 2026-07-17·kf-card-page-registered 守卫已扩新线面锁此处）：
+      // 原 'pages/aftersales/index' 是旧线 uni-app 路径记法，新线原生小程序注册的是 目录/同名文件
+      page: 'pages/aftersales/aftersales',
       title: '申请售后',
       fallbackText: '申请售后请在小程序「我的 → 订单 → 申请售后」操作。需要我协助可点「转人工」。',
     }
   if (menuId === 'course:open')
     return {
       type: 'miniprogram',
-      page: 'pkg-video/courses/index', // 课程页在 pkg-video 分包（外审 P2.11·守卫锁须为已注册路由）
+      // 原 'pkg-video/courses/index' 是旧线分包规划路径，新线无分包、课程列表页为 my-courses（守卫锁同上）
+      page: 'pages/my-courses/my-courses',
       title: '我的课程',
       fallbackText:
         '在小程序「我的 → 课程」即可观看已激活的课程。激活码相关点上方菜单，或点「转人工」。',

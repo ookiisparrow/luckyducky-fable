@@ -97,6 +97,11 @@ async function bumpWindowed(
       .catch(() => null)
     if (r && r.stats && r.stats.updated === 1) return count
   }
+  // CAS 重试耗尽（课程链路审计 2026-07-17·根因#13/#14）：同 key 高并发争抢下这次计数没写进去——对
+  // throttleFail 意味着这次失败尝试等于没发生（爆破者可借洪水稀释计数）。维持 best-effort 放行语义
+  // （头注刻意取舍：频控库故障不阻断主流程，口令校验仍是硬闸；改 fail-closed 属安全/可用性权衡，
+  // 待用户拍板——见 2026-07-17 课程链路审计报告），但耗尽不再静默：留痕告警可查可统计。
+  alert('security', 'throttle', 'CAS_EXHAUSTED', { key })
   return null
 }
 

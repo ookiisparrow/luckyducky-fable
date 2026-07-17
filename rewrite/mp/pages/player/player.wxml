@@ -47,6 +47,7 @@
           bind:pause="onVideoPause"
           bind:ended="onEnded"
           bind:error="onVideoError"
+          bind:waiting="onVideoWaiting"
           bind:timeupdate="onTimeUpdate"
           bind:loadedmetadata="onVideoMeta"
         ></video>
@@ -60,6 +61,11 @@
         <view wx:if="{{src}}" class="lp-tapzone" bind:tap="onTapVideo">
           <view wx:if="{{paused}}" class="lp-pause-badge">
             <image class="lp-pause-ico" src="/static/icons/play-circle.svg" mode="aspectFit" />
+          </view>
+          <!-- 缓冲失速角标（tapzone 子节点：点它冒泡到 tapzone、整屏单击播放/暂停语义不变）·见 ts onVideoWaiting -->
+          <view wx:if="{{buffering && !paused}}" class="lp-buffering">
+            <view class="lp-skeleton-spin lp-buffering-spin"></view>
+            <text>正在缓冲…</text>
           </view>
         </view>
       </view>

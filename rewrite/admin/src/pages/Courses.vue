@@ -66,7 +66,7 @@ function delSegment(l: Record<string, any>, ci: number, li: number, si: number) 
     refreshStats()
   })
 }
-// 发布前护栏（换皮退成可静默发布残课）：空结构硬拦、缺视频软提醒
+// 发布前护栏（换皮退成可静默发布残课）：空结构硬拦、缺视频/空课时软提醒
 const publishIssues = computed(() => {
   const c = course.value
   if (!c) return [] as string[]
@@ -74,7 +74,13 @@ const publishIssues = computed(() => {
   const issues: string[] = []
   if (!chs.length || !chs.some((ch) => (ch.lessons || []).length)) issues.push('课程还没有章节/课时')
   let missing = 0
-  for (const ch of chs) for (const l of ch.lessons || []) for (const s of l.segments || []) if (!s.videoFileId) missing++
+  let emptyLessons = 0 // 0 段课时（课程链路审计 2026-07-17）：内层循环不执行、missing 数不到——学员点进见空课时
+  for (const ch of chs)
+    for (const l of ch.lessons || []) {
+      if (!(l.segments || []).length) emptyLessons++
+      for (const s of l.segments || []) if (!s.videoFileId) missing++
+    }
+  if (emptyLessons) issues.push(`有 ${emptyLessons} 个课时还没加任何视频段`)
   if (missing) issues.push(`还有 ${missing} 段没传视频`)
   return issues
 })
@@ -99,6 +105,9 @@ async function load() {
   loaded = false // 载入期不触发自动保存
   fromPublished.value = r.fromPublished === true
   course.value = (r.course as Record<string, any>) || { id: courseId.value.trim(), title: '', sort: 0, chapters: [] }
+  // 乐观并发基线（课程链路审计 2026-07-17）：记下拉草稿那一刻的版本号；重新载入即解除冲突态恢复自动保存
+  draftRev.value = Number((r.course as Record<string, any>)?.rev) || 0
+  conflicted.value = false
   refreshStats()
   message.value = ''
   saveState.value = ''
@@ -130,6 +139,8 @@ function readDuration(file: File): Promise<string> {
 
 // 防抖自动保存（换皮退成手动按钮·编视频编排忘点即丢）：900ms + 离页补存·load 期不触发
 const saveState = ref<'' | 'saving' | 'saved' | 'error'>('')
+const draftRev = ref(0) // 拉草稿那一刻的版本号（乐观并发基线·课程链路审计 2026-07-17）
+const conflicted = ref(false) // 冲突态：别处已改过草稿——停自动保存防连环覆盖，「载入」解除
 let loaded = false
 let saveTimer: ReturnType<typeof setTimeout> | null = null
 // 串行化实际保存（防慢网下两次自动保存乱序覆盖·P2·根因#8）：run 现读 course.value·补存即最新。
@@ -137,12 +148,20 @@ let saveTimer: ReturnType<typeof setTimeout> | null = null
 // 同一条队列里天然串行，只是槽位标签不再精确对应「当前」课程号，不影响写入正确性)：改走模块级共享槽位，
 // 快速切走再切回本页重建组件实例时，新实例接管旧实例仍在途的补存链，防旧快照晚到覆盖新实例已存的编辑。
 const flushSave = serialSave(async () => {
-  if (!course.value) return
-  const r = await saveCourseDraft(course.value)
-  saveState.value = r.ok ? 'saved' : 'error'
+  if (!course.value || conflicted.value) return
+  const r = await saveCourseDraft(course.value, draftRev.value)
+  if (r.ok) {
+    draftRev.value = Number(r.rev) || draftRev.value + 1
+    saveState.value = 'saved'
+  } else if (r.error === 'DRAFT_CONFLICT') {
+    // 别处（另一页签/窗口/管理员）已保存过更新版本：本次拒写防互相覆盖，停自动保存等人工「载入」拿最新
+    conflicted.value = true
+    saveState.value = 'error'
+    message.value = '草稿在别处被改过（另一个页签或窗口）——本次未保存以免互相覆盖；点「载入」取最新草稿后再编辑'
+  } else saveState.value = 'error'
 }, 'courses:' + courseId.value)
 function autosave() {
-  if (!course.value) return
+  if (!course.value || conflicted.value) return
   saveState.value = 'saving'
   fromPublished.value = false
   if (saveTimer) clearTimeout(saveTimer)
@@ -152,9 +171,20 @@ function autosave() {
   }, 900)
 }
 watch(course, () => { if (loaded && course.value) autosave() }, { deep: true })
+// 浏览器级离页拦截（课程链路审计 2026-07-17·根因#14）：F5 刷新/关标签页不走 Vue 生命周期与 vue-router
+// 钩子，onBeforeUnmount 的补存也会随页面卸载被浏览器取消——有未落盘编辑（防抖待触发/保存在途）时弹
+// 浏览器原生「离开页面？」确认，给一次挽回机会（补存本身在 unload 里保证不了送达，拦住人才是可靠的）。
+function onBeforeUnload(e: BeforeUnloadEvent) {
+  if (saveTimer || saveState.value === 'saving') {
+    e.preventDefault()
+    e.returnValue = ''
+  }
+}
+onMounted(() => window.addEventListener('beforeunload', onBeforeUnload))
 // 离页补存判据用 pending saveTimer 而非 saveState==='saving'（先发保存完成会把 saveState 复位成 'saved'、
 // 后一次编辑只在待触发 timer 里→按 saveState 判会漏补、离页丢课程编辑·P2·同 HelpVideos/Showcase·迭代I 批7 回归补 Courses）
 onBeforeUnmount(() => {
+  window.removeEventListener('beforeunload', onBeforeUnload)
   if (saveTimer) {
     clearTimeout(saveTimer)
     saveTimer = null
@@ -162,14 +192,19 @@ onBeforeUnmount(() => {
   }
 })
 
+// 新建节点当场铸 id（课程链路审计 2026-07-17·根因#1 稳定标识）：原来恒传空串、由云端 cleanCourse 每次
+// 保存现生成随机 id 且从不回填——同一会话「发布→继续编辑→再保存→再发布」会让内容没变的节点 id 漂移，
+// 学员进度/checkpoint 按 segmentId 关联的记录随之失联。前端铸一次（格式对齐 cleanCourse：前缀+6位36进制），
+// cleanCourse 对非空 id 原样保留，id 自出生即稳定。
+const mintId = (p: string) => p + Math.random().toString(36).slice(2, 8)
 function addChapter() {
-  course.value?.chapters.push({ id: '', title: '', lessons: [] })
+  course.value?.chapters.push({ id: mintId('c'), title: '', lessons: [] })
 }
 function addLesson(ch: Record<string, any>) {
-  ch.lessons.push({ id: '', name: '', dur: '', segments: [] })
+  ch.lessons.push({ id: mintId('l'), name: '', dur: '', segments: [] })
 }
 function addSegment(l: Record<string, any>) {
-  l.segments.push({ id: '', name: '', dur: '', videoFileId: '' })
+  l.segments.push({ id: mintId('s'), name: '', dur: '', videoFileId: '' })
 }
 
 // 单段上传纳入批量传视频同一套防护（G2·P1）：换皮丢了这层——单段上传无锁，切课后仍在跑的上传把 videoFileId
@@ -220,15 +255,16 @@ async function batchUpload(l: Record<string, any>, ev: Event) {
   batchUploading.value = true
   setUploadLock() // 批量上传在途锁（P1·bug sweep Round2 item12）：本组件 onBeforeRouteLeave + Wizard.go() 两处消费，拦截离页/切步致孤儿上传
   let uploaded = 0
+  const fails: string[] = [] // 失败逐条累积（课程链路审计 2026-07-17）：原先互相覆盖 message，只剩最后一条——中间失败的段名/原因全丢
   try {
     for (let i = 0; i < plan.length; i++) {
       const item = plan[i]
       let sg = targets[i]
       if (item.isNew) {
-        sg = { id: '', name: item.segName, dur: '', videoFileId: '' }
+        sg = { id: mintId('s'), name: item.segName, dur: '', videoFileId: '' }
         l.segments.push(sg)
       } else if (!sg || !(l.segments as any[]).includes(sg)) {
-        message.value = `「${item.segName}」这份对应的段已被删除/移出，已跳过（原位置发生了重排/删段）`
+        fails.push(`「${item.segName}」对应的段已被删除/移出，已跳过`)
         continue // 稳定引用重定位失败（段已被删）——如实跳过报告（P1）
       }
       if (!sg.name) sg.name = item.segName
@@ -241,14 +277,15 @@ async function batchUpload(l: Record<string, any>, ev: Event) {
         // 会话失效清晰中止（批D·根因2）：不继续逐文件循环——令牌已被 client 清空，剩余每个文件必然同样
         // 401，逐个静默失败会把这份汇总原因冲没、用户只看到最后一条「上传失败：SESSION_LOST」摸不着头脑。
         // client.onSessionLost 已集中导登录（见 router.ts），这里只负责把「传到哪、剩多少」说清楚。
-        message.value = `登录已过期，已上传 ${uploaded}/${plan.length} 个，剩余 ${plan.length - uploaded} 个未上传，请重新登录后继续`
+        fails.push(`登录已过期，已上传 ${uploaded}/${plan.length} 个，剩余 ${plan.length - uploaded} 个未上传，请重新登录后继续`)
         break
-      } else message.value = '有视频上传失败：' + String(r.error || '') // fail-soft·一段失败不拖累其余
+      } else fails.push(`「${sg.name || item.segName}」上传失败：${String(r.error || '')}`) // fail-soft·一段失败不拖累其余
     }
   } finally {
     batchUploading.value = false
     clearUploadLock()
   }
+  message.value = fails.length ? `本次有 ${fails.length} 项没成功——${fails.join('；')}` : ''
   progress.value = ''
   refreshStats()
   input.value = ''
@@ -266,16 +303,20 @@ onBeforeRouteLeave(() => {
 async function save() {
   if (!course.value || busy.value) return
   busy.value = true
-  // 手动保存前排空在途/待发自动保存·成为最后一次写（防旧快照 autosave POST 后落覆盖新草稿·同 publish/HomeContent·迭代I 批7 回归补 Courses.save）
+  // 手动保存前排空在途/待发自动保存·成为最后一次写（防旧快照 autosave POST 后落覆盖新草稿·同 publish/HomeContent·迭代I 批7 回归补 Courses.save）。
+  // 单路径：只走 flushSave（serialSave 链·run 现读 course.value 即最新快照）——原先 flush 后又直发一次
+  // saveCourseDraft 属双写冗余，且直发不带 baseRev 会绕过乐观并发检查（课程链路审计 2026-07-17）。
   if (saveTimer) {
     clearTimeout(saveTimer)
     saveTimer = null
   }
   await flushSave()
-  const r = await saveCourseDraft(course.value)
   busy.value = false
-  message.value = r.ok ? '草稿已保存（学员不可见·发布后生效）' : '保存失败：' + String(r.error || '')
-  fromPublished.value = false
+  if (saveState.value === 'saved') {
+    message.value = '草稿已保存（学员不可见·发布后生效）'
+    fromPublished.value = false
+  } else if (!conflicted.value) message.value = '保存失败，请重试'
+  // 冲突态：flushSave 已写明确提示，不覆盖
 }
 
 async function publish() {

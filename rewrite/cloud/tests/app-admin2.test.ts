@@ -155,8 +155,8 @@ describe('橱窗排序保存（saveShowcase·根因#14 部分失败不静默）'
   })
 })
 
-describe('课程发布与孤儿视频回收（黄金）', () => {
-  it('大白话：无草稿拒；发布覆盖正式课程；旧发布不再引用的视频被回收、仍在用的不误删', async () => {
+describe('课程发布与孤儿视频回收（黄金·缓期 GC）', () => {
+  it('大白话：无草稿拒；发布覆盖正式课程；旧发布不再引用的视频入缓期回收队列（不立删——在播学员手里的旧地址还要用）、仍在用的不入队', async () => {
     expect((await post('publishCourse', { courseId: 'c1' })).error).toBe('NO_DRAFT')
 
     control.seed('courses', [
@@ -186,11 +186,16 @@ describe('课程发布与孤儿视频回收（黄金）', () => {
       },
     ])
     expect((await post('publishCourse', { courseId: 'c1' })).ok).toBe(true)
-    expect(control.dump('courses').find((c: any) => c._id === 'c1').title).toBe('新版')
-    const deleted = control.deletedFiles()
-    expect(deleted).toContain('cloud://v/old.mp4') // 孤儿回收
-    expect(deleted).not.toContain('cloud://v/keep.mp4') // 仍在用不误删
-    expect(deleted).not.toContain('cloud://v/new.mp4')
+    const pub = control.dump('courses').find((c: any) => c._id === 'c1')
+    expect(pub.title).toBe('新版')
+    // 缓期契约（课程链路审计 2026-07-17）：发布那刻不物理删（正在播旧段的学员持有旧文件签名 URL·立删即播放中途 404）；
+    // 孤儿进 pendingGc 队列（带 deleteAfter），到期由 cleanupEvents 定时器真删（见 course-chain-hardening.test.ts）。
+    expect(control.deletedFiles()).toEqual([]) // 发布同步零物理删除
+    const queue = (pub.pendingGc || []).map((en: any) => en.fileId)
+    expect(queue).toContain('cloud://v/old.mp4') // 孤儿入队
+    expect(queue).not.toContain('cloud://v/keep.mp4') // 仍在用不入队
+    expect(queue).not.toContain('cloud://v/new.mp4')
+    expect((pub.pendingGc || []).every((en: any) => en.deleteAfter > Date.now())).toBe(true) // 缓期在未来
   })
 })
 

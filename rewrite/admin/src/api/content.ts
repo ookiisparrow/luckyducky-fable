@@ -12,7 +12,8 @@ export const savePageContent = (page: string, data: Record<string, unknown>) => 
 export const listHelpVideos = () => client.post('listHelpVideos')
 export const saveHelpVideos = (items: unknown[]) => client.post('saveHelpVideos', { items })
 export const getCourseDraft = (courseId: string) => client.post('getCourseDraft', { courseId })
-export const saveCourseDraft = (course: Record<string, unknown>) => client.post('saveCourseDraft', { course })
+// baseRev＝拉草稿时的版本号（乐观并发·课程链路审计 2026-07-17）：不符后端回 DRAFT_CONFLICT 拒覆盖
+export const saveCourseDraft = (course: Record<string, unknown>, baseRev?: number) => client.post('saveCourseDraft', { course, baseRev })
 export const publishCourse = (courseId: string) => client.post('publishCourse', { courseId })
 
 /** 视频直传：换凭证 → POST 表单 → 返回 videoFileId（cloud://）。onProgress 0-1。 */

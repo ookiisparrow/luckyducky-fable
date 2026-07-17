@@ -16,18 +16,33 @@ function pushCallLog(action: string) {
   if (g.__ldCallLog.length > CALL_LOG_CAP) g.__ldCallLog.shift()
 }
 
+// 客户端显式超时兜底（课程链路审计 2026-07-17·根因#14）：弱网下 wx.cloud.callFunction 何时回 fail 完全
+// 由微信网络层决定（可能远超用户耐心），调用方的骨架屏/按钮 dim 会无限期挂着——超时即收敛成 ok:false，
+// 让既有失败反馈路径（toast/重试入口）在可控时限内出现。参照 utils/brandFont.ts 对 downloadFile 显式设
+// timeout 的既有先例。幂等性：写路径均有云端幂等保障（确定性 _id/orderIdempotency/transition），超时后
+// 用户重试不产生双写；迟到的真实回包被 settled 标记丢弃。
+const CALL_TIMEOUT_MS = 12_000
+
 export function callApp(action: string, data: Record<string, unknown> = {}): Promise<ApiResult> {
   pushCallLog(action)
   return new Promise((resolve) => {
+    let settled = false
+    const done = (r: ApiResult) => {
+      if (settled) return
+      settled = true
+      clearTimeout(timer)
+      resolve(r)
+    }
+    const timer = setTimeout(() => done({ ok: false, error: 'CALL_TIMEOUT' }), CALL_TIMEOUT_MS)
     wx.cloud.callFunction({
       name: 'app',
       data: { action, data },
       success: (res) => {
         const r = res.result as ApiResult | undefined
-        if (r && typeof r === 'object' && 'ok' in r) resolve(r)
-        else resolve({ ok: false, error: 'BAD_RESULT' })
+        if (r && typeof r === 'object' && 'ok' in r) done(r)
+        else done({ ok: false, error: 'BAD_RESULT' })
       },
-      fail: () => resolve({ ok: false, error: 'CALL_FAIL' }), // 含 app 未部署（并行期真机自然落空态）
+      fail: () => done({ ok: false, error: 'CALL_FAIL' }), // 含 app 未部署（并行期真机自然落空态）
     })
   })
 }
