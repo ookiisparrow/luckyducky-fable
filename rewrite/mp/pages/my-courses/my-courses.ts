@@ -29,7 +29,9 @@ Page({
     // 迟到的 setData 会把有课列表盖成空态、误显「输入激活码」——代次不符即丢弃。
     if (seq !== this._seq) return
     // 失败≠空态（根因#14）：失败不覆盖已展示课程；一无所有时落 loadFailed 给重试，不误导去输激活码。
-    if (!mine.ok) {
+    // courses===null（目录拉取失败·getAllCourses 失败语义）同判失败——否则 mapMyCourses 查不到课程标题，
+    // 课卡会显示原始 courseId、进度条整行消失，用户以为数据坏了（口径对齐 me.ts contFetchFailed）。
+    if (!mine.ok || courses === null) {
       this.setData({ loading: false, loadFailed: !this.data.list.length })
       if (this.data.list.length) wx.showToast({ title: '刷新失败，请稍后重试', icon: 'none' })
       return

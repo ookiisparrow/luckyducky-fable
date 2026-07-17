@@ -80,14 +80,22 @@ export const activateCourse = withOpenId(
     })
 
     if (!qr) return err(ERR.INVALID_CODE)
-    if (moved || qr.activatedBy === OPENID) {
-      const act = await ensureActivation(db, code, qr.courseId, OPENID, now)
+    // transition 返回的是更新前旧快照（课程链路审计 2026-07-17·根因#1）：真并发同用户双扫（网络抖动重发/
+    // 双击）时，后到方 moved=false 且快照仍是 unused（activatedBy null）——据此判「他人占用」会把本人
+    // 激活成功误报成 CODE_TAKEN。快照未见归属且没抢到时读回库内现值再判（撞在自己身上走幂等自愈分支）。
+    let qrNow = qr
+    if (!moved && !qr.activatedBy) {
+      const fresh = await db.collection(COLLECTIONS.qrcodes).doc(code).get().catch(() => null)
+      if (fresh && fresh.data) qrNow = fresh.data
+    }
+    if (moved || qrNow.activatedBy === OPENID) {
+      const act = await ensureActivation(db, code, qrNow.courseId, OPENID, now)
       // 双失败未持久化（P2·根因#14）：库里其实没写成功，别回「activated」——回错误码走客户端已有失败反馈路径；
       // 用户重扫时 qr.activatedBy===OPENID 命中本分支再试一次 ensureActivation，天然幂等自愈。
-      if (!act) return err(ERR.NOT_ACTIVATED, { courseId: qr.courseId })
-      return ok({ state: act.enteredAt ? 'mine' : 'activated', courseId: qr.courseId })
+      if (!act) return err(ERR.NOT_ACTIVATED, { courseId: qrNow.courseId })
+      return ok({ state: act.enteredAt ? 'mine' : 'activated', courseId: qrNow.courseId })
     }
-    return err(ERR.CODE_TAKEN, { courseId: qr.courseId })
+    return err(ERR.CODE_TAKEN, { courseId: qrNow.courseId })
   })
 )
 
@@ -314,7 +322,13 @@ async function addTo(db: any, coll: string, data: any) {
     } catch {
       /* 已存在 */
     }
-    await db.collection(coll).add({ data })
+    // 第二次 add 也兜底（课程链路审计 2026-07-17·根因#14）：首次失败若非「集合缺失」而是基础设施瞬时
+    // 抖动，这里大概率复现同因再失败——原来异常直接冒出 trackEvent，恰在最需要观测的时刻埋点通道先失明。
+    // 留痕告警（alert 只打结构化日志行，不回调 recordAnomaly，防观测递归），埋点丢一条可容忍、丢得无声不可容忍。
+    await db
+      .collection(coll)
+      .add({ data })
+      .catch(() => alert('anomaly', 'trackEvent', 'EVENT_WRITE_LOST', { coll }))
   }
 }
 
@@ -350,6 +364,19 @@ export const trackEvent = withOpenId(
     if (type === 'client_error') {
       const msg = str(meta.msg, 500)
       await recordAnomaly('client-error', 'MP_JS_ERROR', { fp: msg.slice(0, 60), page, msg }, 'low')
+    }
+
+    // 播放失败桥接（课程链路审计 2026-07-17·根因#14）：品牌核心价值链（视频播放）的失败率原先服务端
+    // 零记录——mp 播放器三类失败点（取址失败 fetch/媒体硬失败 media/缓冲失速 stall）现随 video_error
+    // 上报，按 课程:段 细分指纹聚合（同段反复坏聚一条累加 count，不同段各自成条），运营后台可查分布。
+    if (type === 'video_error') {
+      const vCourse = str(meta.courseId, 64)
+      await recordAnomaly(
+        'client-error',
+        'MP_VIDEO_ERROR',
+        { fp: (vCourse + ':' + targetId).slice(0, 60), page, courseId: vCourse, segmentId: targetId, phase: str(meta.phase, 16) },
+        'low'
+      )
     }
 
     const courseId = str(meta.courseId, 64)

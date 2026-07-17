@@ -49,6 +49,8 @@ export const ERR = {
   REVIEWED: 'REVIEWED',
   // 频控
   RATE_LIMITED: 'RATE_LIMITED',
+  // 网关兜底（课程链路审计 2026-07-17·根因#14）：action 未捕获异常经 app 网关顶层 catch 收敛后回此码
+  INTERNAL: 'INTERNAL',
   // 客服 / 身份桥接
   NO_UNIONID: 'NO_UNIONID',
   KF_NOT_CONFIGURED: 'KF_NOT_CONFIGURED',

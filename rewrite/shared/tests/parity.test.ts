@@ -93,6 +93,8 @@ describe('与旧线契约逐键 parity', () => {
       OUT_OF_STOCK: 'OUT_OF_STOCK',
       TOO_MANY_PENDING: 'TOO_MANY_PENDING',
       ORDER_CLAIM_PENDING: 'ORDER_CLAIM_PENDING',
+      // 网关兜底（课程链路审计 2026-07-17）：app 网关顶层 catch 收敛未捕获异常统一回此码
+      INTERNAL: 'INTERNAL',
     }
     expect(ERR).toEqual({ ...OLD_ERR, ...RW_NEW_ERR })
   })

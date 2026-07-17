@@ -381,24 +381,44 @@ export const repoChecks = [
     // pages.json 注册（主包 path + 分包 root/path），路由改名/迁分包后客服卡片当场红。
     id: 'kf-card-page-registered',
     roots: ['#8'],
-    desc: '客服卡片 pagepath 须为小程序已注册路由（根因#8·外审 P2.11）：cs/kfCallback/dispatch.ts miniprogram 的 page 须在 pages.json（主包 + 分包 root/path）登记——防卡片跳不存在页真机打不开',
+    desc: '客服卡片 pagepath 须为小程序已注册路由（根因#8·外审 P2.11）：旧线 packages/cloud dispatch.ts×pages.json + 新线 rewrite/cloud dispatch.ts×rewrite/mp/app.json（主包 pages + subPackages root/path）双面扫——防卡片跳不存在页真机打不开。课程链路审计 2026-07-17 扩新线面：原只扫旧线冻结参照，新线死链（pkg-video 分包路径从未落地）在守卫真空里假绿',
     run() {
+      const bad = []
+      // 面1：旧线冻结参照（uni-app pages.json）
       const dispatch = 'packages/cloud/src/functions/cs/kfCallback/dispatch.ts'
       const pagesJson = 'packages/miniapp/src/pages.json'
-      if (!existsSync(join(ROOT, dispatch)) || !existsSync(join(ROOT, pagesJson))) return []
-      const reg = new Set()
-      try {
-        const pj = JSON.parse(readFileSync(join(ROOT, pagesJson), 'utf8'))
-        ;(pj.pages || []).forEach((p) => reg.add(p.path))
-        ;(pj.subPackages || []).forEach((sp) => (sp.pages || []).forEach((p) => reg.add(`${sp.root}/${p.path}`)))
-      } catch {
-        return [`${pagesJson} 解析失败——无法校验客服卡片路由`]
+      if (existsSync(join(ROOT, dispatch)) && existsSync(join(ROOT, pagesJson))) {
+        const reg = new Set()
+        try {
+          const pj = JSON.parse(readFileSync(join(ROOT, pagesJson), 'utf8'))
+          ;(pj.pages || []).forEach((p) => reg.add(p.path))
+          ;(pj.subPackages || []).forEach((sp) => (sp.pages || []).forEach((p) => reg.add(`${sp.root}/${p.path}`)))
+        } catch {
+          bad.push(`${pagesJson} 解析失败——无法校验客服卡片路由`)
+        }
+        const src = readFileSync(join(ROOT, dispatch), 'utf8')
+        for (const m of src.matchAll(/page:\s*'([^']+)'/g)) {
+          if (reg.size && !reg.has(m[1]))
+            bad.push(`${dispatch} 客服卡片 page '${m[1]}' 不是 pages.json 已注册路由——真机点卡片打不开（根因#8·外审 P2.11）`)
+        }
       }
-      const bad = []
-      const src = readFileSync(join(ROOT, dispatch), 'utf8')
-      for (const m of src.matchAll(/page:\s*'([^']+)'/g)) {
-        if (!reg.has(m[1]))
-          bad.push(`${dispatch} 客服卡片 page '${m[1]}' 不是 pages.json 已注册路由——真机点卡片打不开（根因#8·外审 P2.11）`)
+      // 面2：新线（原生小程序 app.json·真正部署面）
+      const rwDispatch = 'rewrite/cloud/src/functions/cs/kfCallback/dispatch.ts'
+      const rwAppJson = 'rewrite/mp/app.json'
+      if (existsSync(join(ROOT, rwDispatch)) && existsSync(join(ROOT, rwAppJson))) {
+        const reg = new Set()
+        try {
+          const aj = JSON.parse(readFileSync(join(ROOT, rwAppJson), 'utf8'))
+          ;(aj.pages || []).forEach((p) => reg.add(p))
+          ;(aj.subPackages || []).forEach((sp) => (sp.pages || []).forEach((p) => reg.add(`${sp.root}/${p}`)))
+        } catch {
+          bad.push(`${rwAppJson} 解析失败——无法校验客服卡片路由（新线）`)
+        }
+        const src = readFileSync(join(ROOT, rwDispatch), 'utf8')
+        for (const m of src.matchAll(/page:\s*'([^']+)'/g)) {
+          if (reg.size && !reg.has(m[1]))
+            bad.push(`${rwDispatch} 客服卡片 page '${m[1]}' 不是 app.json 已注册路由——真机点卡片打不开（根因#8·课程链路审计 2026-07-17）`)
+        }
       }
       return bad
     },
@@ -5478,6 +5498,38 @@ export const repoChecks = [
       if (awaitAt < 0 || recheckAt < 0 || recheckAt < awaitAt)
         return [`${rel} playSegment await 取址后未复核 playToken 再 setData——快速切段乱序回包播错段且不自愈（根因#8·同老线 player-playurl-stale-guarded）`]
       return []
+    },
+  },
+  {
+    // 播放缓冲失速可视化 + 播放失败可观测（课程链路审计 2026-07-17·根因#8/#14）：播放中缓冲区耗尽只发
+    // bind:waiting 不发 error——不监听则用户只见画面冻结（无转圈无提示无恢复），易误判「小程序卡死」；
+    // 播放失败（取址/媒体/失速三类）不上报则核心内容链的故障率对服务端永远不可见。守三件事：
+    // ① wxml 挂 bind:waiting 且 ts 定义 onVideoWaiting（错题本 E2：事件绑定与方法定义是一对，抄一半真机报错）；
+    // ② onVideoWaiting 起升级定时器（久等未恢复转 error 给重试入口），onUnload 清理 _bufTimer（timer 必清理）；
+    // ③ player.ts 存在 video_error 上报接线（trackEvent 通道·云端桥 anomalies）。
+    id: 'rw-mp-player-buffering-wired',
+    roots: ['#8', '#14'],
+    desc: '播放缓冲失速可视化+播放失败可观测（课程链路审计 2026-07-17）：player.wxml 须挂 bind:waiting="onVideoWaiting" 且 player.ts 定义 onVideoWaiting（E2 成对）、其内起升级 setTimeout、onUnload 清 _bufTimer；player.ts 须含 video_error 上报（trackEvent）——缓冲卡死零反馈/播放失败率服务端失明即红',
+    run() {
+      const base = join(ROOT, 'rewrite/mp/pages/player')
+      const tsPath = join(base, 'player.ts')
+      const wxmlPath = join(base, 'player.wxml')
+      if (!existsSync(tsPath) || !existsSync(wxmlPath)) return [] // 播放页未建时不红
+      const bad = []
+      const wxml = readFileSync(wxmlPath, 'utf8')
+      if (!wxml.includes('bind:waiting="onVideoWaiting"'))
+        bad.push('player.wxml <video> 未挂 bind:waiting="onVideoWaiting"——缓冲卡顿零反馈（根因#8·课程链路审计 2026-07-17）')
+      const src = stripComments(readFileSync(tsPath, 'utf8')) // 剥注释单源 helper（错题本 E1/E10）
+      const waitBody = methodBody(src, 'onVideoWaiting')
+      if (!waitBody) bad.push('player.ts 找不到 onVideoWaiting 方法——wxml 绑定挂空（错题本 E2 成对纪律）')
+      else if (!waitBody.includes('setTimeout'))
+        bad.push('player.ts onVideoWaiting 未起失速升级定时器——缓冲无限期挂着无恢复出口（根因#14）')
+      const unloadBody = methodBody(src, 'onUnload')
+      if (!unloadBody || !unloadBody.includes('_bufTimer'))
+        bad.push('player.ts onUnload 未清理 _bufTimer——离页后定时器仍会醒来（timer 必清理·CLAUDE §7）')
+      if (!src.includes("'video_error'"))
+        bad.push('player.ts 无 video_error 上报接线——播放失败率对服务端不可见（根因#14·课程链路审计 2026-07-17）')
+      return bad
     },
   },
   {

@@ -73,6 +73,7 @@ Page({
     canNext: false,
     state: 'loading' as 'loading' | 'playing' | 'empty' | 'denied' | 'missing' | 'error',
     paused: false, // 真实播放/暂停态·只认 bind:play/bind:pause 回报，不在 tap 里直接翻转当真相
+    buffering: false, // 播放中缓冲失速角标（bind:waiting 起·timeupdate/play 恢复清·见 onVideoWaiting）
     curSec: 0,
     durSec: 0,
     curClock: '0:00',
@@ -111,7 +112,12 @@ Page({
   // 若晚于新请求回包，会用旧数据把刚渲染好的新列表覆盖回去——必须用自增代次精确丢弃过期回包）。
   helpFaqToken: 0, // 常见问题子层请求令牌（R37b·同 helpVideosToken 惯用法·防「快速退出再进入」乱序回包覆盖）
   errSeg: '', // 上次因视频加载失败重试过的段
-  errRetried: false, // 该段是否已重试过一次（防不可恢复媒体无限重取死循环）
+  // 本段自动重试预算（课程链路审计 2026-07-17·替代原一次性 errRetried 布尔）：原布尔跨整段播放生命周期
+  // 不复位——同段先后两次独立的瞬时网络抖动（中途正常播放数分钟）会让第二次直接跳过自动重试落硬失败态。
+  // 改计数预算 2 次：容两次独立抖动自愈；预算耗尽即硬失败（保住原设计的「防不可恢复媒体无限重取死循环」——
+  // 坏媒体每轮消耗一次预算，最多 2 轮即停，不会每 N 秒一次 getPlaybackUrl 打转）。换段/手动重试复位。
+  errCount: 0,
+  _bufTimer: null as ReturnType<typeof setTimeout> | null, // 缓冲失速升级定时器（onVideoWaiting 起·timeupdate/play 恢复即清·timer 必清理）
   watchReported: false, // 本段 watch_at 是否已上报（一次性·防 onHide+onUnload 双报）
   lastTimeUpdateAt: 0, // bindtimeupdate 节流时间戳（250ms·减频 setData）
   _at: 0, // 最近一次 timeupdate 的播放位置（秒·每次事件都更新·不受 setData 节流影响）——watch_at/segment_done 埋点用
@@ -176,9 +182,10 @@ Page({
 
   async playSegment(seg: FlatSegment, scene: 'enter' | 'seg' | 'retry') {
     if (scene !== 'retry') {
-      this.errSeg = '' // 换段（非重试）重置视频加载失败重试计数
-      this.errRetried = false
+      this.errSeg = '' // 换段（非重试）重置视频加载失败重试预算
+      this.errCount = 0
     }
+    this.clearBuffering() // 换段/重试即清缓冲失速态与升级定时器（旧段的缓冲不带进新段）
     this.watchReported = false // 新段（含重试重入）＝新观看单元·允许再上报一次 watch_at
     const token = ++this.playToken // 本次切段令牌·await 后复核，防慢回旧段覆盖新段
     this.firstFrameScene = scene
@@ -224,6 +231,9 @@ Page({
         this.setData({ state: 'denied' })
         return
       }
+      // 取址失败上报（课程链路审计 2026-07-17·根因#14）：核心内容链的失败率此前对服务端完全不可见——
+      // fire-and-forget 留痕（弱网下本次上报也可能失败，可容忍：能到达的样本已足以暴露分布）。
+      trackEvent('video_error', 'player', seg.segmentId, { courseId: this.courseId, phase: 'fetch' })
       this.setData({ state: 'error', canPrev: !!navSegment(this.course, seg.segmentId, -1), canNext: !!navSegment(this.course, seg.segmentId, 1) })
       return
     }
@@ -271,6 +281,7 @@ Page({
   // video 播放/暂停回报（真相源·不在 onTapVideo 里直接翻转 data.paused）。
   onVideoPlay() {
     this.onFirstPlay()
+    this.clearBuffering() // 恢复播放＝缓冲已过（waiting 的恢复信号之一）
     this.setData({ paused: false })
     // 用户经系统手势/重播外路径恢复播放时，完成态不该残留（P4）：常规路径已由 onReplay/playSegment 复位，
     // 这里兜底任何其他恢复播放的入口。
@@ -318,7 +329,7 @@ Page({
       return
     }
     this.errSeg = ''
-    this.errRetried = false
+    this.errCount = 0
     cache.invalidate(this.courseId, cur.segmentId)
     void this.playSegment(cur, 'retry')
   },
@@ -330,16 +341,55 @@ Page({
     if (this.data.state !== 'playing') return
     const cur = this.data.current
     if (!cur) return
-    // 地址可能过期（可恢复）→ 失效后重取一次；但同段重试后仍失败＝媒体本身坏/机型不支持（不可恢复），
-    // 不再无限重取（否则每轮一次 getPlaybackUrl 死循环），落播放失败态让用户换段/稍后再试。
-    if (this.errSeg === cur.segmentId && this.errRetried) {
+    // 地址可能过期（可恢复）→ 失效后重取；预算 2 次（见 errCount 字段注：容同段两次独立瞬时抖动自愈，
+    // 又保住「坏媒体不无限重取」）。耗尽落播放失败态让用户换段/稍后再试，并上报留痕（根因#14）。
+    if (this.errSeg === cur.segmentId && this.errCount >= 2) {
+      trackEvent('video_error', 'player', cur.segmentId, { courseId: this.courseId, phase: 'media', retries: this.errCount })
+      this.clearBuffering()
       this.setData({ state: 'error' })
       return
     }
-    this.errSeg = cur.segmentId
-    this.errRetried = true
+    if (this.errSeg !== cur.segmentId) {
+      this.errSeg = cur.segmentId
+      this.errCount = 0
+    }
+    this.errCount++
     cache.invalidate(this.courseId, cur.segmentId)
     void this.playSegment(cur, 'retry')
+  },
+
+  // 缓冲失速可视化（课程链路审计 2026-07-17·根因#8/#14·真机验证项）：播放中缓冲区耗尽触发 bind:waiting
+  // （常见于弱网/WiFi-蜂窝切换，非 error——画面冻结但无任何事件语义上的「失败」），此前零监听：用户只见
+  // 画面静止、无转圈无提示，易误判「小程序卡死」。补两层——① 轻量「正在缓冲…」角标（不占播放键位、
+  // 点击穿透逻辑不变：角标是 tapzone 子节点、tap 冒泡照常整屏播放/暂停）；② 失速升级：10s 仍无恢复信号
+  // （timeupdate/play）判为地址过期/链路断，失效缓存地址并落 error 态给「重试本段」入口（重试会重新取址）。
+  onVideoWaiting() {
+    if (this.data.state !== 'playing' || !this.data.src) return
+    if (!this.data.buffering) this.setData({ buffering: true })
+    if (this._bufTimer) clearTimeout(this._bufTimer)
+    this._bufTimer = setTimeout(() => {
+      this._bufTimer = null
+      if (this.unloaded || !this.data.buffering || this.data.state !== 'playing') return
+      if (this.data.paused) {
+        // 用户已暂停：无所谓失速，收起角标即可（暂停中不判失败）
+        this.setData({ buffering: false })
+        return
+      }
+      const cur = this.data.current
+      if (cur) {
+        trackEvent('video_error', 'player', cur.segmentId, { courseId: this.courseId, phase: 'stall' })
+        cache.invalidate(this.courseId, cur.segmentId) // 失速常因临时地址过期——重试须重新取址
+      }
+      this.setData({ buffering: false, state: 'error' })
+    }, 10_000)
+  },
+  // 缓冲态单出口清理：恢复信号（timeupdate/play）/换段/离页共用。
+  clearBuffering() {
+    if (this._bufTimer) {
+      clearTimeout(this._bufTimer)
+      this._bufTimer = null
+    }
+    if (this.data.buffering) this.setData({ buffering: false })
   },
 
   // 视频框贴合素材真实比例（2026-07-13 反馈·Bug D2）：loadedmetadata 拿到真实宽高后把播放框 padding-top 设成
@@ -377,6 +427,7 @@ Page({
     // 每次事件都更新（不 setData·不节流）：watch_at/segment_done 埋点要最新播放位置，UI 节流不该拖累它（P2·bug sweep R1 #14）。
     this._at = Math.floor(e.detail.currentTime || 0)
     this._dur = Math.floor(e.detail.duration || 0)
+    if (this.data.buffering) this.clearBuffering() // 播放位置在推进＝数据到了，缓冲已过（waiting 的恢复信号）
     if (this.data.seeking) return
     const now = Date.now()
     if (now - this.lastTimeUpdateAt < TIME_UPDATE_THROTTLE_MS) return
@@ -666,9 +717,16 @@ Page({
   },
   onHide() {
     this.reportWatchAt()
+    // 后台挂起清缓冲升级定时器（timer 必清理·CLAUDE §7）：挂起期无 timeupdate，10s 定时器醒来会把
+    // 正常的后台停留误判成失速落 error 态；回前台若真在缓冲，waiting 会再次触发重建角标与定时器。
+    this.clearBuffering()
   },
   onUnload() {
     this.unloaded = true
     this.reportWatchAt()
+    if (this._bufTimer) {
+      clearTimeout(this._bufTimer) // 离页销毁定时器（timer 必清理）；不再 setData（页面已卸载）
+      this._bufTimer = null
+    }
   },
 })
