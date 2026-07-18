@@ -1807,7 +1807,7 @@ export const repoChecks = [
     // （各带一句为什么），新脚本引用 packages/ 当场红。
     id: 'rw-toolchain-no-oldline',
     roots: ['#16'],
-    desc: '工具链禁旧线引用（病根#16 ⑤·M5 残留指针清点）：scripts/ 下 .mjs/.cjs（守卫注册表两文件除外——其内旧线路径是「守冻结参照」的守卫本体）与 .github/workflows/ 禁出现 packages/cloud、packages/miniapp、build:cloud 任一 token；旧线专属工具白名单豁免（freeze 工具/旧线产物验证/旧线视觉回归/旧线格式化域/体检面板标注/preflight+deploy-drift 自证历史遗留）——随 packages/ 处置拍板一并清退',
+    desc: '工具链禁旧线引用（病根#16 ⑤·M5 残留指针清点）：scripts/ 下 .mjs/.cjs（守卫注册表两文件除外——其内旧线路径是「守冻结参照」的守卫本体）与 .github/workflows/ 禁出现 packages/cloud、packages/miniapp、build:cloud 任一 token；旧线专属工具白名单豁免（freeze 工具/旧线产物验证/旧线视觉回归/旧线格式化域/体检面板标注）——随 packages/ 处置拍板一并清退',
     run() {
       // 白名单：声明就是旧线专属/守冻结参照的工具（值=为什么在册）。deploy-fns/deploy-test 刻意不在册。
       const OLDLINE_TOOLS = new Map([
@@ -1817,8 +1817,6 @@ export const repoChecks = [
         ['scripts/visual-check.cjs', '旧线视觉回归（扫描面=packages/miniapp dist·新线走 mp-smoke）'],
         ['scripts/format-hook.mjs', '格式化域刻意锁旧线（其头注成文·扩域是另一笔决策）'],
         ['scripts/check-report.mjs', '体检面板把 packages/miniapp 标注为「旧线」——标注非引用'],
-        ['scripts/preflight.mjs', '旧线部署体检·deploy-drift 头注自证「对生产线钱链漂移零检测」·迁活线或退役待拍板'],
-        ['scripts/lib/deploy-drift.mjs', '同上·历史遗留自证已成文'],
         ['scripts/lib/brand-font-charset.mjs', '字体字集扫描含旧线参照面（sweep 自带 dot 排除）'],
         ['scripts/build-brand-font.mjs', '品牌字体构建·扫描面含旧线参照'],
       ])

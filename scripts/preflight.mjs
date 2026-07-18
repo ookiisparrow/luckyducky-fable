@@ -1,16 +1,15 @@
 #!/usr/bin/env node
 /**
- * 切换前体检（B9 preflight）：一条命令确认样板房「可切换」。只读、不部署、不改任何东西。
- * 机器自动核：质量闸全绿 / build:cloud 产物 ≡ cloudbaserc 函数清单 / console-assets 正册齐 /
- *            .deploy-manifest 在册 / cloudbaserc 指向 packages/cloud/dist。
- * 再打印机器够不到、须人工核的清单（drift / 验收单 / CLAUDE reconcile）。
- * 详见 docs/切换runbook.md。
+ * 部署前置体检（B9 preflight）：一条命令确认「可部署」。只读、不部署、不改任何东西。
+ * 机器自动核：质量闸全绿 / 生产线（rewrite/cloud）钱链函数无未部署漂移 / console-assets 正册齐 /
+ *            .deploy-manifest 在册。
+ * 再打印机器够不到、须人工核的清单（console-assets drift / 验收单 / cloudbaserc 迁移）。
+ * 详见 docs/验收手册.md §七。
  */
 import { execSync } from 'node:child_process'
-import { readdirSync, existsSync, readFileSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
-import { createHash } from 'node:crypto'
-import { MONEY_CHAIN, detectDrift } from './lib/deploy-drift.mjs'
+import { MONEY_CHAIN, detectDrift, hashFnDist } from './lib/deploy-drift.mjs'
 
 const ROOT = resolve(import.meta.dirname, '..')
 const pass = []
@@ -27,41 +26,19 @@ const run = (label, fn) => {
 run('质量闸全绿（npm run check）', () => {
   execSync('npm run check', { cwd: ROOT, stdio: 'pipe' })
 })
-run('build:cloud 产物 ≡ cloudbaserc 函数清单', () => {
-  execSync('npm run build:cloud', { cwd: ROOT, stdio: 'pipe' })
-  const dist = join(ROOT, 'packages/cloud/dist')
-  const built = existsSync(dist)
-    ? readdirSync(dist).filter((d) => existsSync(join(dist, d, 'index.js')))
-    : []
-  // 单一真相源：cloudbaserc.json functions[]——不硬编码计数（魔法数字加函数即漂，已漂 27→28→29）。
-  // cloudbaserc≡源码 已由 check:structure 的 deploy-config-complete 钉住；这里再核「真打出来的
-  // 产物」≡ 正册，兜构建静默漏产函数（产物比源码再近一步，根因#8 真部署能用）。
-  const registered = (JSON.parse(readFileSync(join(ROOT, 'cloudbaserc.json'), 'utf8')).functions || []).map(
-    (f) => f.name
-  )
-  const builtSet = new Set(built)
-  const regSet = new Set(registered)
-  const missing = registered.filter((n) => !builtSet.has(n)) // 正册有、产物缺（构建漏产）
-  const extra = built.filter((n) => !regSet.has(n)) // 产物有、正册无（漏登记）
-  if (missing.length || extra.length) {
-    throw new Error(
-      `产物 ${built.length} 个 ≠ cloudbaserc ${registered.length} 个` +
-        (missing.length ? `；缺产物：${missing.join(',')}` : '') +
-        (extra.length ? `；未登记：${extra.join(',')}` : '')
-    )
-  }
-})
-run('钱链函数无未部署漂移（旧线冻结参照·生产线 rewrite 未纳入·深审 P2·根因#8）', () => {
-  // 上一项已 build:cloud → dist 是当前源。比钱链函数 dist hash vs manifest 已部署 hash，
-  // 不符＝代码改了未部署。2026-06-16 实测漏洞：钱链 [LD_ALERT]/支付窗口 改了 4 天没部署，
-  // 而 preflight 原只验 dist≡cloudbaserc 结构、不验「部署时效」——本项补这洞。manifest 由
-  // deploy-fns 部署时回填（算法同此：sha256(dist/<fn>/index.js) 前 12）。
-  const dist = join(ROOT, 'packages/cloud/dist')
+run('生产线（rewrite/cloud）钱链函数无未部署漂移（根因#8）', () => {
+  // 构建活线产物（原 build:cloud 结构检查块已退役——functionRoot/内存/超时等 cloudbaserc 迁移
+  // 待人工先抄回控制台真值，见 footer 提醒；这里只需要 dist 字节，故独立跑 build:rw-cloud）。
+  // 2026-06-16 实测漏洞：钱链 [LD_ALERT]/支付窗口 改了 4 天没部署，而 preflight 原只验结构、不验
+  // 「部署时效」——本项补这洞。hash 算法（index.js+config.json+package.json）与 deploy-fns.mjs
+  // 部署时逐字节一致（hashFnDist 单源，见 scripts/lib/deploy-drift.mjs 头注）。
+  execSync('npm run build:rw-cloud', { cwd: ROOT, stdio: 'pipe' })
+  const dist = join(ROOT, 'rewrite/cloud/dist')
   const deployed = JSON.parse(readFileSync(join(ROOT, '.deploy-manifest.json'), 'utf8')).functions || {}
   const cur = {}
   for (const fn of MONEY_CHAIN) {
-    const idx = join(dist, fn, 'index.js')
-    if (existsSync(idx)) cur[fn] = createHash('sha256').update(readFileSync(idx)).digest('hex').slice(0, 12)
+    const h = hashFnDist(dist, fn)
+    if (h) cur[fn] = h
   }
   const drift = detectDrift(cur, deployed, MONEY_CHAIN)
   if (drift.length) throw new Error(`钱链改了未部署：${drift.join(', ')}——先 DEPLOY_ALLOWED=1 deploy-fns`)
@@ -73,20 +50,18 @@ run('console-assets 正册齐（4 件）', () => {
 run('.deploy-manifest.json 在册', () => {
   if (!existsSync(join(ROOT, '.deploy-manifest.json'))) throw new Error('缺')
 })
-run('cloudbaserc functionRoot → packages/cloud/dist', () => {
-  const c = JSON.parse(readFileSync(join(ROOT, 'cloudbaserc.json'), 'utf8'))
-  if (c.functionRoot !== 'packages/cloud/dist') throw new Error(`现为 ${c.functionRoot}`)
-})
 
-console.log('\n===== 切换前体检（preflight）=====')
+console.log('\n===== 部署前置体检（preflight）=====')
 for (const p of pass) console.log(`  ✅ ${p}`)
 for (const f of fail) console.log(`  ❌ ${f}`)
-console.log(`\n机器体检：${fail.length ? `❌ ${fail.length} 项未过——先修，别切换` : '✅ 全过'}`)
+console.log(`\n机器体检：${fail.length ? `❌ ${fail.length} 项未过——先修，别部署` : '✅ 全过'}`)
 console.log(`
-还须人工核（机器够不到，详见 docs/切换runbook.md）：
+还须人工核（机器够不到，详见 docs/验收手册.md §七）：
   □ console-assets drift-checklist：对照线上控制台逐项核（forward-node.js / flowId / 库权限期望表）
   □ 验收单 X（16 集合权限档位）/ Y（支付黄金路径）/ Z（退款黄金路径）真机重走
-  □ CLAUDE 本体 §2/§5/§7 reconcile 到重构后架构（packages//cloud-kit/api-cloud-only/八闸）
+  □ cloudbaserc.json 迁移：functionRoot 仍指旧线冻结产物目录，迁至活线产物目录前须先
+    tcb fn detail 逐个抄回 16 函数真实内存/超时值——仓内无记录，凭空写会在下次 config 应用时降级
+    生产配置（见 docs/待办与债.md 该 flag）
   □ 数据兼容：重构 _id 方案与现网一致＝无需迁移；债#14（users/progress 确定性_id）属切换后改进
-切换动作（deploy-fns 真跑）须 DEPLOY_ALLOWED=1 + 用户拍板。本体检不触发任何部署。`)
+真部署（deploy-fns）须 DEPLOY_ALLOWED=1 + 用户拍板。本体检不触发任何部署。`)
 process.exit(fail.length ? 1 : 0)
