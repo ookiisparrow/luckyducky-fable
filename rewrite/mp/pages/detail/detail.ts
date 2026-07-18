@@ -2,7 +2,7 @@
 import { tapHaptic } from '../../lib/haptics'
 import * as cart from '../../lib/cart'
 import { prepareBuyNow } from '../../lib/checkout'
-import { getAllProducts } from '../../lib/catalog'
+import { getAllProducts, getProductDetail } from '../../lib/catalog'
 import { getRatingSummary } from '../../api/reviews'
 import { mapDetail, priceForSelection, type DetailVM } from '../../lib/mapDetail'
 import { mapSummary, type SummaryVM } from '../../lib/mapReviews'
@@ -67,8 +67,24 @@ Page({
       currentPriceNum: i >= 0 && vm.skus[i] ? vm.skus[i].price : vm.price,
       galleryWindow: computeGalleryWindow(vm.gallery.length, 0),
     })
+    void this.loadDetail(id, seq)
     void this.loadRecs(id)
     void this.loadRating(id)
+  },
+  // 图册补齐（批1·列表瘦身不下发 images·详情页按 id 拉全档补进 swiper·根因#15）：列表项首帧已渲染
+  // （gallery 仅 cover·零等待），详情回包到达把完整 gallery setData 补齐；详情失败/无更多图保持列表项降级
+  // （gallery 剩 cover·不裂不崩）。沿用 _seq 代次：连点重试/快速切商品时过期回包丢弃。
+  async loadDetail(id: string, seq: number) {
+    const raw = await getProductDetail(id)
+    if (seq !== this._seq) return // 过期回包（被更晚一次 loadProduct 取代）：丢弃·不覆盖较新结果
+    const vm = this.data.vm
+    if (!vm) return
+    const detailVm = mapDetail(raw)
+    if (!detailVm || detailVm.gallery.length <= vm.gallery.length) return // 无档/无更多图：保持列表项降级
+    this.setData({
+      'vm.gallery': detailVm.gallery,
+      galleryWindow: computeGalleryWindow(detailVm.gallery.length, this.data.galleryIndex),
+    })
   },
   onRetryLoad() {
     tapHaptic()

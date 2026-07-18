@@ -1,7 +1,7 @@
 import { ERR } from '@ldrw/shared'
 import { err, recordAnomaly } from '../../kit'
 import { login, updateProfile } from './actions/user'
-import { getProducts, getContent, getPageContent } from './actions/catalog'
+import { getProducts, getProductDetail, getContent, getPageContent } from './actions/catalog'
 import {
   activateCourse,
   confirmEnter,
@@ -36,6 +36,7 @@ const ACTIONS: Record<string, (event: unknown) => Promise<unknown>> = {
   login,
   updateProfile,
   getProducts,
+  getProductDetail,
   getContent,
   getPageContent,
   activateCourse,

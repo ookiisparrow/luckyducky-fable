@@ -2,6 +2,10 @@
 // 跨课隔离/在途去重/定向失效/预取）（守卫 rw-mp-player-golden）。
 import { describe, it, expect } from 'vitest'
 import { flattenSegments, navSegment, createPlaybackCache, formatClock, clampSeek, lessonStrip, nearestMark } from '../lib/player'
+// 源码扫描式断言（同 home-cards.test.ts 的 ?raw 范式·rewrite/mp tsconfig 无 node:fs）：续播秒/缓冲水位接线是
+// wxml 绑定⟷ts 方法成对（错题本 E2），机器守卫 rw-mp-player-prefetch-cache 咬结构，这里补文本断言逼出成对。
+import playerWxmlRaw from '../pages/player/player.wxml?raw'
+import playerTsRaw from '../pages/player/player.ts?raw'
 
 const COURSE = {
   id: 'c1',
@@ -96,6 +100,35 @@ describe('播放地址缓存（黄金 §六）', () => {
     await cache.prefetch('c1', 's1') // 已新鲜·空操作
     expect(calls.filter((c) => c === 'c1/s1')).toHaveLength(1)
     await cache.prefetch('c1', '') // 不崩
+  })
+
+  it('大白话：peek 同步读——新鲜命中回 url、过期回空、从未取过回空，绝不触发取址（消初见切段 loading 闪烁的判据源）', async () => {
+    const { cache, calls, tick } = setup(1000)
+    expect(cache.peek('c1', 's1')).toBe('') // 从未取过·空
+    expect(calls).toHaveLength(0) // peek 绝不取址
+    const u = await cache.get('c1', 's1')
+    expect(cache.peek('c1', 's1')).toBe(u) // 新鲜命中回 url
+    expect(calls).toHaveLength(1) // peek 未新增真取
+    tick(1001)
+    expect(cache.peek('c1', 's1')).toBe('') // 过期·回空（不误当新鲜直落）
+    expect(cache.peek('c1', '')).toBe('') // 空段·回空
+    expect(calls).toHaveLength(1)
+  })
+})
+
+describe('播放页续播秒 + 缓冲水位接线（源码扫描·wxml⟷ts 成对·E2）', () => {
+  const stripWxml = (s: string) => s.replace(/<!--[\s\S]*?-->/g, '')
+  const stripTs = (s: string) => s.replace(/\/\/[^\n]*/g, '').replace(/\/\*[\s\S]*?\*\//g, '')
+  it('大白话：wxml 主 video 有 initial-time 与 bind:progress；ts 定义 onVideoProgress（绑定与方法成对·抄一半真机报错）', () => {
+    const wxml = stripWxml(playerWxmlRaw)
+    expect(wxml).toMatch(/initial-time\s*=\s*"\{\{\s*initialTime\s*\}\}"/) // 续播秒首挂载读取
+    expect(wxml).toMatch(/bind:progress\s*=\s*"onVideoProgress"/) // 缓冲水位通道
+    const ts = stripTs(playerTsRaw)
+    expect(ts).toMatch(/\bonVideoProgress\s*\(/) // 方法真实定义（不止绑定）
+  })
+  it('大白话：playSegment 清态含 initialTime: 0（换段/重试不带旧段续播秒·防续秒串段）', () => {
+    const ts = stripTs(playerTsRaw)
+    expect(ts).toMatch(/initialTime:\s*0/)
   })
 })
 

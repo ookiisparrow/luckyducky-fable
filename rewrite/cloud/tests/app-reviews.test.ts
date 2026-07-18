@@ -2,11 +2,13 @@
 import { describe, it, expect, beforeEach } from 'vitest'
 import { control } from 'wx-server-sdk'
 import { main as app } from '../src/functions/app/index'
+import { __resetTempUrlCacheForTest } from '../src/kit/storage'
 
 const call = (action: string, data: Record<string, unknown> = {}) => app({ action, data }) as Promise<any>
 
 beforeEach(() => {
   control.reset()
+  __resetTempUrlCacheForTest() // 批1·清签发缓存·隔离跨 case 复用相同晒图 fileID 的污染（getReviews 买家秀走 maxAge）
   control.setOpenId('oME')
 })
 

@@ -1,11 +1,17 @@
 // 黄金 admin-misc §二（公开目录读）+ productListed（只下发在售）+ learning-content §九（守卫 rw-user-catalog-golden）。
+// 批1·列表瘦身（getProducts 只下发 cover·images[] 收窄进 getProductDetail·守卫 rw-catalog-list-cover-only）。
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import cloud, { control } from 'wx-server-sdk'
 import { main as app } from '../src/functions/app/index'
+import { __resetTempUrlCacheForTest } from '../src/kit/storage'
 
-const call = (action: string) => app({ action })
+const call = (action: string, data?: any) => app({ action, data })
+const fid = (it: any) => (typeof it === 'string' ? it : it.fileID) // 桩 fileList 项：string | {fileID,maxAge}
 
-beforeEach(() => control.reset())
+beforeEach(() => {
+  control.reset()
+  __resetTempUrlCacheForTest() // 批1·清容器级签发缓存·隔离跨 case 复用相同 fileID 的污染（getProducts 走 maxAge 会写缓存）
+})
 afterEach(() => vi.restoreAllMocks())
 
 describe('getProducts（公开只读·停售过滤）', () => {
@@ -39,10 +45,9 @@ describe('getContent（公开只读·空兜底）', () => {
   })
 })
 
-// ── 批B·图片链加载提速：cloud:// 裸 fileID 服务端批量换 https 短时址（同 reviews.ts 先例），
-// 客户端 <image> 免付一次 fileID→临时址解析（~100-300ms/文件）。以下为先立的红测试（现状未转换·预期先红）。
-describe('getProducts（cloud:// 封面/图册批量换临时地址·批B 图片提速·预期先红）', () => {
-  it('大白话：cover 与 images[] 里的 cloud:// 值换成 https 短时址（同 reviews.ts:122 换址口径）', async () => {
+// ── 批1·列表瘦身 + 签发缓存：cover cloud:// 换 https 短时址（带 maxAge·imageProc 默认关），images[] 不下发（列表用不到·图册收窄进详情页）。
+describe('getProducts（列表只签 cover·images 不下发·批1 瘦身）', () => {
+  it('大白话：cover 的 cloud:// 换 https 短时址；images[] 一律不下发（列表瘦身·图册收窄进 getProductDetail）', async () => {
     control.seed('products', [
       { _id: 'p1', name: 'A', sort: 1, cover: 'cloud://p1-cover.jpg', images: ['cloud://p1-img1.jpg', 'cloud://p1-img2.jpg'] },
     ])
@@ -50,44 +55,86 @@ describe('getProducts（cloud:// 封面/图册批量换临时地址·批B 图片
     expect(r.ok).toBe(true)
     const p1 = r.list.find((p: any) => p._id === 'p1')
     expect(p1.cover).toBe('https://tmp/cloud://p1-cover.jpg')
-    expect(p1.images).toEqual(['https://tmp/cloud://p1-img1.jpg', 'https://tmp/cloud://p1-img2.jpg'])
+    expect('images' in p1).toBe(false) // 列表瘦身：images 不下发（守卫 rw-catalog-list-cover-only）
   })
 
-  it('大白话：已是 https 的值 / 空串 / 缺字段原样透传，不炸也不误加前缀', async () => {
+  it('大白话：cover 已是 https / 缺 cover 字段原样透传·images 一律不下发', async () => {
     control.seed('products', [
-      { _id: 'p2', name: 'B', sort: 2, cover: 'https://cdn.example.com/p2.jpg' }, // 已是 https、无 images 字段
-      { _id: 'p3', name: 'C', sort: 3, images: ['', 'cloud://p3-img.jpg'] }, // 无 cover 字段、images 含空串
+      { _id: 'p2', name: 'B', sort: 2, cover: 'https://cdn.example.com/p2.jpg' }, // 已是 https
+      { _id: 'p3', name: 'C', sort: 3, images: ['', 'cloud://p3-img.jpg'] }, // 无 cover 字段·有 images
     ])
     const r: any = await call('getProducts')
     expect(r.ok).toBe(true)
     const p2 = r.list.find((p: any) => p._id === 'p2')
-    expect(p2.cover).toBe('https://cdn.example.com/p2.jpg') // 已是 https → 原样，不叠加 tmp 前缀
+    expect(p2.cover).toBe('https://cdn.example.com/p2.jpg') // 已是 https → 原样
     const p3 = r.list.find((p: any) => p._id === 'p3')
-    expect(p3.images[0]).toBe('') // 空串原样透传，不炸
-    expect(p3.images[1]).toBe('https://tmp/cloud://p3-img.jpg')
+    expect('images' in p3).toBe(false) // images 不下发
   })
 
-  it('大白话：换址失败（storage 桩返回缺项）时该图回退原 fileID，不吞整条商品/整个响应（fail-soft 读路径）', async () => {
-    // 模拟「cloud://bad.jpg」这一项换不到临时地址（存储桩缺项返回）：其余请求正常换到。
+  it('大白话：cover 换址失败（storage 桩缺项）回退原 fileID·不吞整条商品/整个响应（fail-soft）', async () => {
     vi.spyOn(cloud, 'getTempFileURL').mockImplementation(async ({ fileList }: any) => ({
       fileList: fileList
+        .map(fid)
         .filter((id: string) => id !== 'cloud://bad.jpg')
         .map((id: string) => ({ fileID: id, tempFileURL: 'https://tmp/' + id })),
     }))
-    control.seed('products', [
-      { _id: 'p1', name: 'A', sort: 1, cover: 'cloud://ok.jpg', images: ['cloud://bad.jpg', 'cloud://good2.jpg'] },
-    ])
+    control.seed('products', [{ _id: 'p1', name: 'A', sort: 1, cover: 'cloud://bad.jpg' }])
     const r: any = await call('getProducts')
     expect(r.ok).toBe(true) // 整个响应不因单项换址失败而炸
     const p1 = r.list.find((p: any) => p._id === 'p1')
     expect(p1).toBeTruthy() // 商品本身不被吞
-    expect(p1.cover).toBe('https://tmp/cloud://ok.jpg') // 正常换到的项
-    expect(p1.images[0]).toBe('cloud://bad.jpg') // 换不到 → 回退原 fileID（不是 null/空串，前端仍能兜底走原 cloud:// 或占位）
-    expect(p1.images[1]).toBe('https://tmp/cloud://good2.jpg')
+    expect(p1.cover).toBe('cloud://bad.jpg') // 换不到 → 回退原 fileID（前端仍能兜底）
   })
 })
 
-describe('getContent（home 内容图字段批量换临时地址·批B 图片提速·预期先红）', () => {
+describe('getProductDetail（公开只读·列表瘦身配套·批1）', () => {
+  it('大白话：按 id 拉本档·cover + images[] 换 https 短时址·图册补齐', async () => {
+    control.seed('products', [
+      { _id: 'p1', name: 'A', sort: 1, cover: 'cloud://p1-cover.jpg', images: ['cloud://p1-img1.jpg', 'cloud://p1-img2.jpg'] },
+    ])
+    const r: any = await call('getProductDetail', { id: 'p1' })
+    expect(r.ok).toBe(true)
+    expect(r.product.cover).toBe('https://tmp/cloud://p1-cover.jpg')
+    expect(r.product.images).toEqual(['https://tmp/cloud://p1-img1.jpg', 'https://tmp/cloud://p1-img2.jpg'])
+  })
+
+  it('大白话：未知 id → { product:null }（fail-soft·前端保持列表项降级不裂）', async () => {
+    const r: any = await call('getProductDetail', { id: 'ghost' })
+    expect(r.ok).toBe(true)
+    expect(r.product).toBe(null)
+  })
+
+  it('大白话：停售（listed:false）→ { product:null }（同 getProducts 停售口径·不下发给顾客）', async () => {
+    control.seed('products', [{ _id: 'p9', name: 'Z', sort: 9, listed: false, cover: 'cloud://p9.jpg' }])
+    const r: any = await call('getProductDetail', { id: 'p9' })
+    expect(r.ok).toBe(true)
+    expect(r.product).toBe(null)
+  })
+
+  it('大白话：空 id → err（不信前端·根因#3）', async () => {
+    const r: any = await call('getProductDetail', { id: '' })
+    expect(r.ok).toBe(false)
+  })
+
+  it('大白话：cover/images 中换不到的项回退原 fileID（fail-soft·不吞整档）', async () => {
+    vi.spyOn(cloud, 'getTempFileURL').mockImplementation(async ({ fileList }: any) => ({
+      fileList: fileList
+        .map(fid)
+        .filter((id: string) => id !== 'cloud://bad.jpg')
+        .map((id: string) => ({ fileID: id, tempFileURL: 'https://tmp/' + id })),
+    }))
+    control.seed('products', [
+      { _id: 'p1', name: 'A', sort: 1, cover: 'cloud://ok.jpg', images: ['cloud://bad.jpg', 'cloud://good.jpg'] },
+    ])
+    const r: any = await call('getProductDetail', { id: 'p1' })
+    expect(r.ok).toBe(true)
+    expect(r.product.cover).toBe('https://tmp/cloud://ok.jpg')
+    expect(r.product.images[0]).toBe('cloud://bad.jpg') // 换不到 → 回退原 fileID
+    expect(r.product.images[1]).toBe('https://tmp/cloud://good.jpg')
+  })
+})
+
+describe('getContent（home 内容图字段批量换临时地址·批B 图片提速）', () => {
   // 图字段真实消费面见 rewrite/mp/lib/mapHome.ts：hero.img / feature.img / reassure.items[].img /
   // reviews.items[].img / closing.img（trust/faq/footer 无图字段·不在此列）。
   const seedHome = (overrides: Record<string, unknown> = {}) =>
@@ -138,9 +185,9 @@ describe('getContent（home 内容图字段批量换临时地址·批B 图片提
   })
 
   it('大白话：换址失败（storage 桩返回缺项）时该图字段回退原 fileID，不吞整个 home 响应（fail-soft 读路径）', async () => {
-    // 模拟「cloud://feature.jpg」这一项换不到临时地址：其余正常换到。
     vi.spyOn(cloud, 'getTempFileURL').mockImplementation(async ({ fileList }: any) => ({
       fileList: fileList
+        .map(fid)
         .filter((id: string) => id !== 'cloud://feature.jpg')
         .map((id: string) => ({ fileID: id, tempFileURL: 'https://tmp/' + id })),
     }))

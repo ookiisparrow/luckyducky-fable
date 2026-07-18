@@ -366,6 +366,17 @@
   border-radius: 4rpx;
   background: rgba(255, 255, 255, 0.24);
 }
+/* 缓冲水位（批3·bind:progress 尽力而为）：同轨道几何，灰阶白 0.38 介于轨道底 0.24 与紫填充之间——
+   叠在轨道之上、紫填充之下（DOM 序：track→buffer→fill），显「已缓冲到哪」不抢播放进度的紫。 */
+.lp-seek-buffer {
+  position: absolute;
+  left: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  height: 8rpx;
+  border-radius: 4rpx;
+  background: rgba(255, 255, 255, 0.38);
+}
 .lp-seek-fill {
   position: absolute;
   left: 0;
@@ -402,6 +413,8 @@
    left 值不用 WXSS clamp()（本仓无先例·真机支持度未经验证）——player.ts previewLeftPx() 在 JS 侧算好
    夹在 [PREVIEW_EDGE_RPX, 轨道宽-PREVIEW_EDGE_RPX] 内的 px 落点，wxml 直接内联 px（MARK_SNAP_SEC
    磁吸窗口同批·真机再调参）。 */
+/* 批5 WXS 化：预览浮层常驻 DOM（不再 wx:if seeking）·默认隐藏·left 与显隐由 seek.wxs 渲染层控制
+   （setStyle left + addClass('on')·避免 setData 重建与 WXS setStyle 抢写 position）。 */
 .lp-seek-preview {
   position: absolute;
   bottom: 100%;
@@ -412,6 +425,12 @@
   align-items: center;
   gap: 10rpx;
   pointer-events: none;
+  opacity: 0;
+  visibility: hidden;
+}
+.lp-seek-preview.on {
+  opacity: 1;
+  visibility: visible;
 }
 .lp-seek-preview-time {
   padding: 10rpx 24rpx;

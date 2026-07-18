@@ -4,6 +4,7 @@ import cloud, { control } from 'wx-server-sdk'
 import { main as app } from '../src/functions/app/index'
 import { main as closeExpired } from '../src/functions/timers/closeExpiredOrders'
 import { setStock } from '../src/kit'
+import { __resetTempUrlCacheForTest } from '../src/kit/storage'
 
 const call = (action: string, data: Record<string, unknown> = {}) => app({ action, data }) as Promise<any>
 
@@ -12,6 +13,7 @@ const order = (items: unknown, address: unknown = ADDR) => call('createOrder', {
 
 beforeEach(() => {
   control.reset()
+  __resetTempUrlCacheForTest() // 批1·清签发缓存·隔离跨 case 复用相同 cover fileID 的污染（swapOrdersCover 走 maxAge）
   control.setOpenId('oME')
   process.env.ALLOW_MOCK_PAY = '1' // 测试环境显式放行 mock（生产永不设）
   control.seed('products', [
@@ -392,6 +394,7 @@ describe('getMyOrders / getOrderById（订单行 cover 换临时地址·批C 图
   it('大白话：换址失败（storage 桩返回缺项）该行回退原 fileID，不吞整单/整个响应（fail-soft 读路径）', async () => {
     vi.spyOn(cloud, 'getTempFileURL').mockImplementation(async ({ fileList }: any) => ({
       fileList: fileList
+        .map((it: any) => (typeof it === 'string' ? it : it.fileID)) // 批1·fileList 项 string|{fileID,maxAge}
         .filter((id: string) => id !== 'cloud://bad.jpg')
         .map((id: string) => ({ fileID: id, tempFileURL: 'https://tmp/' + id })),
     }))

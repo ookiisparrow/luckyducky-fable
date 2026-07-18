@@ -81,7 +81,9 @@ export const RW_GOLDEN_REGISTRY = [
   { id: 'rw-mp-player-golden', roots: ['#7', '#8'], test: 'rewrite/mp/tests/player.test.ts' },
   { id: 'rw-mp-reviews-golden', roots: ['#8'], test: 'rewrite/mp/tests/reviews-map.test.ts' },
   { id: 'rw-mp-me-golden', roots: ['#6', '#8'], test: 'rewrite/mp/tests/continue-resolve.test.ts' },
+  { id: 'rw-mp-list-incremental-golden', roots: ['#7', '#8'], test: 'rewrite/mp/tests/list-incremental.test.ts' },
   { id: 'rw-mp-privacy-golden', roots: ['R27', '#8'], test: 'rewrite/mp/tests/privacy-gate.test.ts' },
+  { id: 'rw-mp-seek-wxs-golden', roots: ['#5', '#8'], test: 'rewrite/mp/tests/player-seek-wxs.test.ts' },
   { id: 'rw-admin-money-ui-golden', roots: ['#4', '#8', '#14'], test: 'rewrite/admin/tests/money-ui.test.ts' },
   { id: 'rw-admin-client-golden', roots: ['#3', '#5', '#14'], test: 'rewrite/admin/tests/client.test.ts' },
   { id: 'rw-admin-load-status-golden', roots: ['#14'], test: 'rewrite/admin/tests/status.test.ts' },
@@ -2762,7 +2764,7 @@ export const repoChecks = [
     // ④ 起播判据含 firstFrameReported（未起播 tap 一律 play·防回退成纯 this.data.paused 判定使停摆首帧原地救不回）。
     id: 'rw-mp-player-prefetch-cache',
     roots: ['#8'],
-    desc: '重写线播放页段间提速+停摆恢复（根因#8·承退役老线 player-playback-prefetch-cache 迁到活线 rewrite/mp）：pages/player/player.ts 的 playSegment 体内须真调 cache.prefetch 预热 navSegment(...,1) 下一段（防回退成每次切段现取地址一个云往返·段间卡顿）+ 须有 createVideoContext(lp-video).play 显式兜底 autoplay 停摆；onTapVideo 体内起播判据须含 firstFrameReported（未起播 tap 一律 play·防回退成纯 paused 判定使停摆首帧原地救不回、只能切段才逃）',
+    desc: '重写线播放页段间提速+停摆恢复（根因#8·承退役老线 player-playback-prefetch-cache 迁到活线 rewrite/mp）：pages/player/player.ts 的 playSegment 体内须真调 cache.prefetch 预热 navSegment(...,1) 下一段（防回退成每次切段现取地址一个云往返·段间卡顿）+ 须有 createVideoContext(lp-video).play 显式兜底 autoplay 停摆；onTapVideo 体内起播判据须含 firstFrameReported（未起播 tap 一律 play·防回退成纯 paused 判定使停摆首帧原地救不回、只能切段才逃）；批3 跨页取址预热（根因#15）：lib/playbackCache.ts 须在场且 export 单例 playbackCache、player.ts 须从 lib/playbackCache import 缓存（防单例拆回页面私有断跨页预热）、catalog.ts 体内须真调 .prefetch(（目录页续播段预热接线不许静默退化）',
     run() {
       const rel = 'rewrite/mp/pages/player/player.ts'
       const abs = join(ROOT, rel)
@@ -2786,6 +2788,22 @@ export const repoChecks = [
       } else if (!/firstFrameReported/.test(tap)) {
         bad.push(`${rel} onTapVideo 起播判据不含 firstFrameReported——回退成纯 this.data.paused 判定：autoplay 停摆时点击反向 pause、首帧原地救不回只能切段才逃（根因#8）`)
       }
+      // 批3 跨页取址预热（根因#15·目录页/我页停留窗口预热·进播放器 peek 命中零云往返）：单例迁 lib/playbackCache.ts
+      // 供 catalog/me 共享，拆回页面私有即断跨页预热。守三件：① 单例文件在场且 export；② player.ts 从它 import
+      // （本地名仍叫 cache·上方 cache.prefetch 断言据此成立）；③ catalog.ts 真调 .prefetch(（接线不许静默退化）。
+      const cacheRel = 'rewrite/mp/lib/playbackCache.ts'
+      const cacheAbs = join(ROOT, cacheRel)
+      if (!existsSync(cacheAbs)) {
+        bad.push(`${cacheRel} 缺失——播放地址缓存单例未迁出页面，catalog/me 无从跨页预热（根因#15）`)
+      } else if (!/export\s+const\s+playbackCache\s*=/.test(readFileSync(cacheAbs, 'utf8'))) {
+        bad.push(`${cacheRel} 未 export const playbackCache 单例——跨页预热须共享同一缓存实例（根因#15）`)
+      }
+      if (!/from\s+['"][^'"]*lib\/playbackCache['"]/.test(src))
+        bad.push(`${rel} 未从 lib/playbackCache import 缓存单例——单例拆回页面私有会断 catalog/me 跨页预热（根因#15）`)
+      const catRel = 'rewrite/mp/pages/catalog/catalog.ts'
+      const catAbs = join(ROOT, catRel)
+      if (existsSync(catAbs) && !/\.prefetch\s*\(/.test(stripComments(readFileSync(catAbs, 'utf8'))))
+        bad.push(`${catRel} 未调 .prefetch(——目录页续播段预热接线静默退化（进课/段间卡顿回潮·根因#15）`)
       return bad
     },
   },
@@ -5820,7 +5838,7 @@ export const repoChecks = [
     // 删除——2026-07-12 拍板·决策§28，防回潮见 rw-mp-no-casting。）
     id: 'rw-mp-player-immersive',
     roots: ['#8', '#5'],
-    desc: '播放页竖屏沉浸全屏 + 帮助(客服)入口：player.json 须 navigationStyle:custom；player.wxml 的 <video> 须 controls="{{false}}" + 求助入口节点（bind:tap=onHelp）+ 自绘 seek 条两段式绑定（touchstart=onSeekStart/touchmove=onSeekMove/touchend=onSeekEnd）；player.ts 的 onSeekMove 方法体内不得出现 .seek(（两段式语义：拖动中只改显示）、onSeekEnd 方法体内须出现 .seek(（松手才真 seek）；客服入口须单源在 rewrite/mp/utils/customerService.ts（rewrite/mp 内 wx.openCustomerServiceChat 只此一处）。段落进度条须落胶囊下方（2026-07-13 反馈）：player.ts 须取 getMenuButtonBoundingClientRect、.lp-segstrip 须动态 top（不硬编码贴屏顶）；视频框须贴合素材比例去左右黑边（2026-07-13 反馈）：主 <video>（controls={{false}}）须 bind:loadedmetadata=onVideoMeta + player.ts 有 onVideoMeta 方法（体内真写 videoRatio）+ .lp-video-box 播放态须动态 padding-top（不写死 168%）',
+    desc: '播放页竖屏沉浸全屏 + 帮助(客服)入口：player.json 须 navigationStyle:custom；player.wxml 的 <video> 须 controls="{{false}}" + 求助入口节点（bind:tap=onHelp）+ 自绘 seek 条 WXS 化两段式绑定（批5·根因#15：60Hz touchmove 每帧 setData 双向过桥＝掉帧源，拖动几何移入渲染层 WXS 闭环）——外置 <wxs src="./seek.wxs" module="sk">（内联 <wxs> 里的 < 会被 wxml-well-formed 咬）+ 绑定钉 touchstart={{sk.onStart}}/touchmove={{sk.onMove}}/touchend={{sk.onEnd}} + change:cfg={{sk.onCfg}} 下发几何（rect/durSec/marks）；seek.wxs 的 onMove 函数体内不得出现 .seek(/onSeekCommit（两段式：WXS 拖动中只改显示、绝不提交·setupFnBody 取真源）、player.ts 的 onSeekCommit 方法体内须出现 .seek(（松手才由逻辑层真 seek）；客服入口须单源在 rewrite/mp/utils/customerService.ts（rewrite/mp 内 wx.openCustomerServiceChat 只此一处）。段落进度条须落胶囊下方（2026-07-13 反馈）：player.ts 须取 getMenuButtonBoundingClientRect、.lp-segstrip 须动态 top（不硬编码贴屏顶）；视频框须贴合素材比例去左右黑边（2026-07-13 反馈）：主 <video>（controls={{false}}）须 bind:loadedmetadata=onVideoMeta + player.ts 有 onVideoMeta 方法（体内真写 videoRatio）+ .lp-video-box 播放态须动态 padding-top（不写死 168%）',
     run() {
       const base = join(ROOT, 'rewrite/mp')
       if (!existsSync(base)) return []
@@ -5837,12 +5855,19 @@ export const repoChecks = [
       if (wxml && !/controls\s*=\s*"\{\{\s*false\s*\}\}"/.test(wxml))
         bad.push('player.wxml 的 <video> 未关闭原生 controls="{{false}}"——自绘控制条会跟原生控件重叠打架（设计定案）')
       if (wxml && !/bind:?tap\s*=\s*"onHelp"/.test(wxml)) bad.push('player.wxml 找不到求助入口节点（bind:tap=onHelp）——客服入口占中央求助钮位缺失（设计定案）')
-      if (wxml && !/bind:?touchstart\s*=\s*"onSeekStart"/.test(wxml))
-        bad.push('player.wxml 的自绘 seek 条未见 bind:touchstart="onSeekStart"——两段式拖动交互缺起点绑定')
-      if (wxml && !/catch:?touchmove\s*=\s*"onSeekMove"/.test(wxml))
-        bad.push('player.wxml 的自绘 seek 条未见 catch:touchmove="onSeekMove"——拖动中显示更新缺失，且未 catch 会让 touchmove 透传（真机滚动/穿透风险）')
-      if (wxml && !/bind:?touchend\s*=\s*"onSeekEnd"/.test(wxml))
-        bad.push('player.wxml 的自绘 seek 条未见 bind:touchend="onSeekEnd"——松手真 seek 绑定缺失')
+      // 自绘 seek 拖动几何 WXS 化（批5·根因#15：60Hz touchmove 每帧 5 字段 setData 双向过桥＝跟手延迟/掉帧源）——
+      // 拖动位置在渲染层 WXS 闭环，wxml 绑定改钉 {{sk.*}}；外置 <wxs src="./seek.wxs">（内联 <wxs> 里的 < 比较会被
+      // wxml-well-formed 栈式扫误咬红，必须外置文件）。旧 onSeekStart/onSeekMove/onSeekEnd 字面绑定随之退役。
+      if (wxml && !/<wxs\s+[^>]*src\s*=\s*"\.\/seek\.wxs"/.test(wxml))
+        bad.push('player.wxml 未见 <wxs src="./seek.wxs" ...>——自绘 seek 拖动几何未 WXS 化（60Hz 每帧过桥回潮·根因#15）')
+      if (wxml && !/bind:?touchstart\s*=\s*"\{\{\s*sk\.onStart\s*\}\}"/.test(wxml))
+        bad.push('player.wxml 的自绘 seek 条未见 bind:touchstart="{{sk.onStart}}"——WXS 两段式拖动缺起点绑定')
+      if (wxml && !/catch:?touchmove\s*=\s*"\{\{\s*sk\.onMove\s*\}\}"/.test(wxml))
+        bad.push('player.wxml 的自绘 seek 条未见 catch:touchmove="{{sk.onMove}}"——拖动几何未走 WXS 渲染层（60Hz 每帧过桥回潮·根因#15），且未 catch 会让 touchmove 透传（真机滚动/穿透风险）')
+      if (wxml && !/bind:?touchend\s*=\s*"\{\{\s*sk\.onEnd\s*\}\}"/.test(wxml))
+        bad.push('player.wxml 的自绘 seek 条未见 bind:touchend="{{sk.onEnd}}"——松手提交绑定缺失')
+      if (wxml && !/change:cfg\s*=\s*"\{\{\s*sk\.onCfg\s*\}\}"/.test(wxml))
+        bad.push('player.wxml 的自绘 seek 条未见 change:cfg="{{sk.onCfg}}"——逻辑层几何（rect/durSec/marks）无法下发 WXS（渲染层无数据无从算秒/磁吸）')
 
       // 段落进度条落胶囊下方（2026-07-13 反馈·Bug D1）：.lp-segstrip 节点须带动态 top（内联 style top:{{...}}），
       // 不许回退到 wxss 硬编码 top（那会相对全屏 .lp-stage 顶贴屏顶·撞状态栏/胶囊）。
@@ -5885,16 +5910,27 @@ export const repoChecks = [
         }
       }
       if (ts) {
-        // 自绘 seek 两段式语义（播放器重设计战役批C）：拖动中绝不真 seek（否则被 timeupdate/卡顿顶回去），
-        // 只在松手时真 seek——各断在各自方法体内、剥注释后判定（错题本 E10：取真源须对剥注释后的函数体匹配）。
-        const seekMoveBody = methodBody(ts, 'onSeekMove')
-        if (!seekMoveBody) bad.push('player.ts 找不到 onSeekMove 方法体——自绘 seek 拖动中显示更新缺失')
-        else if (/\.seek\s*\(/.test(stripComments(seekMoveBody)))
-          bad.push('player.ts 的 onSeekMove 方法体内出现 .seek(——两段式语义破坏：拖动中真 seek 会被 timeupdate/卡顿顶回去')
-        const seekEndBody = methodBody(ts, 'onSeekEnd')
-        if (!seekEndBody) bad.push('player.ts 找不到 onSeekEnd 方法体——松手真 seek 缺失')
-        else if (!/\.seek\s*\(/.test(stripComments(seekEndBody)))
-          bad.push('player.ts 的 onSeekEnd 方法体内未见 .seek(——松手应真正 seek 到位')
+        // 自绘 seek 两段式语义 WXS 化（批5·根因#15）：拖动几何移入 seek.wxs 渲染层闭环——WXS onMove 只改显示、
+        // 绝不提交 seek（.seek(/onSeekCommit 出现即破坏两段式），松手才由逻辑层 onSeekCommit 真 seek。seek.wxs 是 ES5
+        // 独立运行时进不了 tsc，用 setupFnBody（花括号配平·适配顶层 function 声明·methodBody 的两空格逗号收尾启发式
+        // 对 WXS 顶层函数不适用）+ stripComments 取真源（错题本 E1/E10：对剥注释后的函数体判定，防注释假触发/假放行）。
+        const wxsPath = join(base, 'pages/player/seek.wxs')
+        const wxs = existsSync(wxsPath) ? readFileSync(wxsPath, 'utf8') : ''
+        if (!wxs) bad.push('rewrite/mp/pages/player/seek.wxs 缺失——自绘 seek 拖动几何 WXS 化未落地（60Hz 过桥回潮·根因#15）')
+        else {
+          const onMoveBody = setupFnBody(stripComments(wxs), 'onMove') // 已切自剥注释后的源·下方判定无需再剥
+          if (!onMoveBody) bad.push('seek.wxs 找不到 onMove 函数体——WXS 拖动几何缺失')
+          else {
+            if (/onSeekCommit/.test(onMoveBody))
+              bad.push('seek.wxs 的 onMove 函数体内出现 onSeekCommit——两段式语义破坏：WXS 拖动中绝不许提交 seek（松手才提交）')
+            if (/\.seek\s*\(/.test(onMoveBody))
+              bad.push('seek.wxs 的 onMove 函数体内出现 .seek(——WXS 内不得直接 seek（两段式：拖动中只改显示）')
+          }
+        }
+        const seekCommitBody = methodBody(ts, 'onSeekCommit')
+        if (!seekCommitBody) bad.push('player.ts 找不到 onSeekCommit 方法体——WXS 松手提交的逻辑层落点缺失（松手真 seek）')
+        else if (!/\.seek\s*\(/.test(stripComments(seekCommitBody)))
+          bad.push('player.ts 的 onSeekCommit 方法体内未见 .seek(——松手应真正 seek 到位')
 
         // 段落进度条落胶囊下方（2026-07-13 反馈·Bug D1）：须取原生胶囊底边为动态 top 的可靠源。
         if (!/getMenuButtonBoundingClientRect\s*\(/.test(stripComments(ts)))
@@ -5935,7 +5971,7 @@ export const repoChecks = [
     // 再退役本守卫（删与加对等，见 refactor-batch step 4），不许绕。
     id: 'rw-mp-no-casting',
     roots: ['R34'],
-    desc: '投屏全线取缔防回潮（2026-07-12 拍板·决策§28）：rewrite/mp 全部源文件（ts/wxml/wxss/json/md）不得出现 投屏/casting 任一 token（含 startCasting/show-casting-button/casting 事件绑定）——旧分支合并或样板复制把投屏带回来当场红；重启投屏须先改需求清单并退役本守卫',
+    desc: '投屏全线取缔防回潮（2026-07-12 拍板·决策§28）：rewrite/mp 全部源文件（ts/wxml/wxss/json/md/wxs）不得出现 投屏/casting 任一 token（含 startCasting/show-casting-button/casting 事件绑定）——旧分支合并或样板复制把投屏带回来当场红；重启投屏须先改需求清单并退役本守卫。批5 起扩扫 .wxs（渲染层 WXS 亦是投屏回潮盲区，堵之）',
     run() {
       const base = join(ROOT, 'rewrite/mp')
       if (!existsSync(base)) return []
@@ -5946,7 +5982,7 @@ export const repoChecks = [
           if (e === 'node_modules') continue
           const p = join(d, e)
           if (statSync(p).isDirectory()) walk(p)
-          else if (/\.(ts|wxml|wxss|json|md)$/.test(e) && re.test(readFileSync(p, 'utf8')))
+          else if (/\.(ts|wxml|wxss|json|md|wxs)$/.test(e) && re.test(readFileSync(p, 'utf8')))
             bad.push(`${relative(ROOT, p)} 含投屏 token（投屏/casting）——投屏已全线取缔（决策§28），不得回潮`)
         }
       }
@@ -6014,6 +6050,77 @@ export const repoChecks = [
     },
   },
   {
+    // 列表瘦身只签 cover（批1·病根#7 规模 + #15 加载链路冗余）：列表卡片只用 cover，图册 images[] 是详情页
+    // 才需要的——列表若连 images 一起签，是 N 商品 × M 图的临时址签发（规模杀手）+ 白下发一大坨列表用不到的
+    // 字段。故 getProducts 只签 cover、瘦身删掉 images 字段（`delete out.images`·唯一放行的 images 引用），
+    // 任何 images 的签发/下发（id 收集 `p.images` / 赋值 `out.images =`）即红；图册收窄进详情页专属
+    // getProductDetail（须在场且含 images 换址补齐画廊）。函数体截取走内联箭头体花括号配对（不新增顶层 fn·防扰
+    // guard-strip-single-source span·E8）+ stripComments 单源 helper（错题本 E1）。反向自检：把 images 换址塞回
+    // getProducts（`out.images = out.images.map(...)`）→ 本守卫红。
+    id: 'rw-catalog-list-cover-only',
+    roots: ['#7', '#15'],
+    desc: '列表瘦身只签 cover（病根#7 规模 + #15 加载链路冗余）：app/actions/catalog.ts 的 getProducts 函数体（剥注释后）除 `delete out.images` 瘦身外不得出现 images——列表 N 商品×M 图签发是规模杀手，图册 images[] 收窄进详情页专属 getProductDetail（须在场且含 images 换址补齐画廊）。反向自检：把 images 换址（out.images = ...）塞回 getProducts → 红',
+    run() {
+      const p = join(ROOT, 'rewrite/cloud/src/functions/app/actions/catalog.ts')
+      if (!existsSync(p)) return ['rewrite/cloud/src/functions/app/actions/catalog.ts 缺失（getProducts 正册·批1）']
+      const src = stripComments(readFileSync(p, 'utf8')) // 剥注释单源 helper（E1）：对真源匹配·防注释假触发/放行
+      const bad = []
+      // 箭头函数体截取（内联·从声明起找首个 { 花括号配对到平衡·返回含声明整段；找不到/不配平返回 null）
+      const arrowBody = (decl) => {
+        const s = src.indexOf(decl)
+        if (s === -1) return null
+        const b = src.indexOf('{', s)
+        if (b === -1) return null
+        let depth = 0
+        for (let i = b; i < src.length; i++) {
+          if (src[i] === '{') depth++
+          else if (src[i] === '}' && --depth === 0) return src.slice(s, i + 1)
+        }
+        return null
+      }
+      const gp = arrowBody('export const getProducts')
+      if (gp === null) return ['catalog.ts 找不到/截不出 export const getProducts 函数体——守卫定位失效，重构别改这个声明形态']
+      if (!gp.includes('.collection(COLLECTIONS.products)'))
+        bad.push('getProducts 函数体丢了 .collection(COLLECTIONS.products) 链头——守卫定位失效（rw-app-catalog-reads-bounded 也靠它·别改名）')
+      // 放行瘦身用的 `delete <var>.images`（唯一允许的 images 引用），其余 images（签发/下发）即红
+      const gpClean = gp.replace(/delete\s+\w+\.images\b/g, '')
+      if (/\bimages\b/.test(gpClean))
+        bad.push('getProducts 函数体出现 images 签发/下发（delete 瘦身除外）——列表须只签 cover（病根#7 规模·图册收窄进 getProductDetail）')
+      const gd = arrowBody('export const getProductDetail')
+      if (gd === null) bad.push('catalog.ts 缺 export const getProductDetail——列表瘦身后详情页图册无处补齐（病根#15）')
+      else if (!/\bimages\b/.test(gd))
+        bad.push('getProductDetail 函数体未见 images 换址——详情页完整图册须由它补齐（病根#15）')
+      return bad
+    },
+  },
+  {
+    // 图像处理接缝单点（批1·根因#12 平台规则外部风险）：数据万象（CI）的 imageMogr2 处理参数拼接收口在
+    // kit/storage.ts withImageProc 一处——控制台开通/参数格式变化只改这里 + 环境变量 LD_IMAGE_PROC。别处出现
+    // imageMogr2 字面量即红（同 flow-seam-single 形状·参数散落=平台规则改动面失控）。
+    id: 'rw-image-proc-seam-single',
+    roots: ['#12'],
+    desc: '图像处理接缝单点（根因#12 平台规则外部风险）：数据万象 imageMogr2 处理参数拼接全库仅 rewrite/cloud/src/kit/storage.ts 一处（withImageProc）——控制台开通/参数格式变化改一处；别处出现 imageMogr2 字面量即红（同 flow-seam-single 形状）',
+    run() {
+      const root = join(ROOT, 'rewrite/cloud/src')
+      if (!existsSync(root)) return []
+      const allowed = 'rewrite/cloud/src/kit/storage.ts'
+      const hits = []
+      const walk = (d) => {
+        for (const e of readdirSync(d)) {
+          const fp = join(d, e)
+          if (statSync(fp).isDirectory()) walk(fp)
+          else if (e.endsWith('.ts') && readFileSync(fp, 'utf8').includes('imageMogr2'))
+            hits.push(relative(ROOT, fp).replace(/\\/g, '/'))
+        }
+      }
+      walk(root)
+      const out = []
+      for (const h of hits) if (h !== allowed) out.push(`${h} 出现 imageMogr2——图像处理接缝须收口 kit/storage.ts 单点（根因#12）`)
+      if (!hits.includes(allowed)) out.push(`${allowed} 应为 imageMogr2 图像处理参数唯一出现点（withImageProc），未见——接缝单点缺失`)
+      return out
+    },
+  },
+  {
     // mp「失败伪装成空态」家族收口（根因#14 失败静默化·韧性审计+深审台账 2026-07-12 同源命中）：
     // 列表/详情页网络失败若与「真的没有数据」渲染同一空态（暂无订单/还没有评价/输入激活码/订单不存在），
     // 弱网用户会把网络抖动误读成数据消失（付费用户看到课程清空被引导输码=客诉级）。detail.ts 的
@@ -6023,7 +6130,7 @@ export const repoChecks = [
     // ③ player 取址 fetcher 须区分 FETCH_FAIL（网络/服务失败→error 态可重试）与素材未剪（空串→empty 态）。
     id: 'rw-mp-list-loadfailed-state',
     roots: ['#14'],
-    desc: 'mp 失败≠空态（根因#14）：order-list/reviews/my-courses/aftersales/order 五页 ts+wxml 须有 loadFailed+onRetryLoad；catalog.ts 须有 failed 态且 lib/courses 有 getCourseByIdDetailed；player.ts 取址须分流 FETCH_FAIL——网络失败伪装成「暂无/不存在/整理中」即红',
+    desc: 'mp 失败≠空态（根因#14）：order-list/reviews/my-courses/aftersales/order 五页 ts+wxml 须有 loadFailed+onRetryLoad；catalog.ts 须有 failed 态且 lib/courses 有 getCourseByIdDetailed；取址 fetcher（lib/playbackCache.ts·批3 迁出播放页）须分流 FETCH_FAIL——网络失败伪装成「暂无/不存在/整理中」即红',
     run() {
       const base = join(ROOT, 'rewrite/mp')
       if (!existsSync(base)) return []
@@ -6045,22 +6152,27 @@ export const repoChecks = [
       const lib = join(base, 'lib/courses.ts')
       if (existsSync(lib) && !/getCourseByIdDetailed/.test(readFileSync(lib, 'utf8')))
         bad.push('lib/courses.ts 无 getCourseByIdDetailed——课程读取「网络失败」与「查无此课」在 lib 层就丢失区分度')
-      const player = join(base, 'pages/player/player.ts')
-      if (existsSync(player) && !/FETCH_FAIL/.test(stripComments(readFileSync(player, 'utf8'))))
-        bad.push('pages/player/player.ts 取址链无 FETCH_FAIL 分流——取址网络失败仍伪装成「视频还在整理中」且无重试')
+      // 取址 fetcher 已迁 lib/playbackCache.ts（批3 跨页取址预热·守卫 rw-mp-player-prefetch-cache）：FETCH_FAIL
+      // 分流随 fetcher 迁到单例文件，断言目标随之移；player.ts 消费端仍按「非 NOT_ENTITLED 即 error」分流（无需字面量）。
+      const fetcherHome = join(base, 'lib/playbackCache.ts')
+      if (existsSync(fetcherHome) && !/FETCH_FAIL/.test(stripComments(readFileSync(fetcherHome, 'utf8'))))
+        bad.push('lib/playbackCache.ts 取址 fetcher 无 FETCH_FAIL 分流——取址网络失败仍伪装成「视频还在整理中」且无重试（根因#14）')
       return bad
     },
   },
   {
     // 品牌启动 splash 必须有界自动消失（根因#8「构建过≠真机能用」的 UI 陷死变体）：冷启动盖在首页上的
-    // 品牌开屏，是纯计时器驱动的覆盖层（show → 淡出 → triggerEvent('done') → home 撤下），不挂钩任何数据
-    // 成功/网络回包。风险＝有人把自动消失的 setTimeout/triggerEvent 删了、或 home 侧忘了把 done 收口成
-    // showSplash=false，则 splash 永久盖死首页、用户进不去——build 全绿、真机才陷死（正是 #8）。故钉三点：
-    // ① 组件 .ts 有 setTimeout 驱动的 triggerEvent('done')（有界自撤）；② home.wxml 挂 <brand-splash bind:done>；
-    // ③ home.ts 的 done 回调把 showSplash 置 false。反向自检＝删组件里的 setTimeout（→红）。撤下 splash 请同删本守卫。
+    // 品牌开屏，撤场＝**min-hold 保底停留 + 数据就绪 race + 硬上限兜底**（2026-07-18 丝滑战役批2 拍板升级·
+    // 前身 PR #34「纯计时器固定停留、不挂钩数据」有意识推翻）——过 min-hold 后父级 ready 即淡出、数据永不
+    // 就绪则 HARD_CAP_MS 无条件撤场。风险＝有人把 setTimeout/triggerEvent 删了、home 侧忘把 done 收口成
+    // showSplash=false、或只留 ready-race 却砍掉硬上限（弱网/云未部署数据永不就绪→splash 永久盖死首页），
+    // 都是 build 全绿、真机才陷死（正是 #8）。故钉四点：① 组件 .ts 有 setTimeout 驱动的 triggerEvent('done')；
+    // ② home.wxml 挂 <brand-splash bind:done>；③ home.ts 的 done 回调把 showSplash 置 false；④ 组件有
+    // HARD_CAP_MS 硬上限常量并接线到 setTimeout（数据永不就绪也无条件撤场）。反向自检＝删组件里 HARD_CAP_MS
+    // 的 setTimeout 接线行（→断言④红）。撤下 splash 请同删本守卫。
     id: 'rw-mp-splash-auto-dismiss',
     roots: ['#8'],
-    desc: '品牌启动 splash 有界自动消失（根因#8 build 绿·真机陷死）：components/brand-splash/brand-splash.ts 须有 setTimeout 驱动的 triggerEvent(\'done\')；home.wxml 须挂 <brand-splash bind:done>；home.ts 须在回调置 showSplash=false——防计时器/回调一断即永久盖死首页、用户进不去',
+    desc: '品牌启动 splash 有界自动消失（根因#8 build 绿·真机陷死·撤场＝min-hold+数据就绪 race+硬上限）：brand-splash.ts 须有 setTimeout 驱动的 triggerEvent(\'done\') 且有 HARD_CAP_MS 硬上限常量接线 setTimeout（数据永不就绪也无条件撤场）；home.wxml 须挂 <brand-splash bind:done>（经 ready 传数据就绪）；home.ts 须在回调置 showSplash=false——防计时器/回调/硬上限一断即永久盖死首页',
     run() {
       const base = join(ROOT, 'rewrite/mp')
       if (!existsSync(base)) return [] // 重写线未建时不红
@@ -6074,6 +6186,13 @@ export const repoChecks = [
       const src = stripComments(readFileSync(comp, 'utf8'))
       if (!/setTimeout\s*\(/.test(src) || !/triggerEvent\(\s*['"]done['"]/.test(src))
         bad.push(`${compRel} 未见 setTimeout 驱动的 triggerEvent('done')——splash 须计时器有界自撤，否则一断即永久盖死首页（根因#8 build 绿·真机陷死）`)
+      // 断言④（批2 升级）：HARD_CAP_MS 硬上限须声明且接线到 setTimeout——只留 ready-race 的话，数据永不就绪
+      // （弱网/云未部署）时 splash 会永久盖死首页（根因#8）；硬上限＝数据不就绪也无条件撤场的兜底。
+      // HARD_CAP_MS 改名须同步本判据（组件内注释亦有此提示）。setTimeout(...,HARD_CAP_MS) 走非贪婪跨回调体匹配。
+      if (!/HARD_CAP_MS\s*=/.test(src))
+        bad.push(`${compRel} 未见 HARD_CAP_MS 常量——splash 缺「数据永不就绪」的硬上限兜底（根因#8·只留 ready-race 会永久盖死首页）`)
+      else if (!/setTimeout\([\s\S]*?,\s*HARD_CAP_MS\s*\)/.test(src))
+        bad.push(`${compRel} HARD_CAP_MS 未接线到 setTimeout——硬上限没有真正驱动撤场（根因#8·数据不就绪即永久盖死首页）`)
       const homeWxmlRel = 'rewrite/mp/pages/home/home.wxml'
       const homeTsRel = 'rewrite/mp/pages/home/home.ts'
       const wxml = existsSync(join(ROOT, homeWxmlRel)) ? readFileSync(join(ROOT, homeWxmlRel), 'utf8') : ''

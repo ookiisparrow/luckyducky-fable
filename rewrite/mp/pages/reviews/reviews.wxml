@@ -52,6 +52,22 @@
     </view>
   </view>
 
+  <!-- 骨架占位（加载中且列表空时不再整页空白·根因#8）：微光扫过对齐 home/catalog（@keyframes ld-shimmer·
+       app.wxss）。尺寸照真卡量：头像 52rpx 复用 .ld-rv-av、图 200rpx 复用 .ld-rv-photo·两行文案条 + 图格。 -->
+  <view class="ld-rv-list" wx:if="{{loading && !list.length}}">
+    <view class="ld-rv-item ld-rv-skel" wx:for="{{[1, 2, 3]}}" wx:key="*this">
+      <view class="ld-rv-item-top">
+        <view class="ld-rv-av ld-rv-skel-block"></view>
+        <view class="ld-rv-skel-bar" style="width: 160rpx"></view>
+      </view>
+      <view class="ld-rv-skel-bar" style="width: 86%"></view>
+      <view class="ld-rv-skel-bar" style="width: 58%"></view>
+      <view class="ld-rv-skel-photos">
+        <view class="ld-rv-photo ld-rv-skel-block" wx:for="{{[1, 2, 3]}}" wx:for-item="p" wx:key="*this"></view>
+      </view>
+    </view>
+  </view>
+
   <!-- 失败态与空态分治（根因#14·守卫 rw-mp-list-loadfailed-state） -->
   <view class="ld-rv-empty" wx:if="{{!loading && loadFailed}}">
     <view class="ld-empty-title">网络开小差</view>

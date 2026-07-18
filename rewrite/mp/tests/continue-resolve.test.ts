@@ -1,7 +1,7 @@
 // 黄金 learning-content §四「继续学习定位」（守卫 rw-mp-me-golden）：
 // 按观看记录定位·绝不回退默认课；无记录取最近解锁课第一课时；脏课时退回第一课时；无课回空不假装。
 import { describe, it, expect } from 'vitest'
-import { continueResolve } from '../lib/continueResolve'
+import { continueResolve, clampResumeAt } from '../lib/continueResolve'
 
 const COURSES = [
   { id: 'c1', title: '小棉鸭', chapters: [{ id: 'ch1', lessons: [{ id: 'l1', name: '起针', segments: [] }, { id: 'l2', name: '加针', segments: [] }] }] },
@@ -23,6 +23,25 @@ describe('继续学习定位（黄金 §四）', () => {
     expect(stale).toMatchObject({ courseId: 'c1', lessonId: 'l1', segmentId: '' }) // 脏课时退回首课时·段位失效不带
     const fresh = continueResolve([], [{ courseId: 'c1', enteredAt: 900 }], COURSES)!
     expect(fresh.segmentId).toBe('') // 没看过从头开始·不带段位
+  })
+
+  it('大白话：命中 last 段透出续播秒 resumeAt（clampResumeAt 夹取 last.at/dur）；退回首课时/无记录 resumeAt=0（数据已在库·接通最后一公里）', () => {
+    const hit = continueResolve([{ courseId: 'c1', last: { lessonId: 'l2', segmentId: 's5', at: 42, dur: 300 }, updatedAt: 200 }], [], COURSES)!
+    expect(hit.resumeAt).toBe(42) // 中段·原值取整一路带到播放器
+    const early = continueResolve([{ courseId: 'c1', last: { lessonId: 'l2', segmentId: 's5', at: 3, dur: 300 }, updatedAt: 200 }], [], COURSES)!
+    expect(early.resumeAt).toBe(0) // at<5 刚开头不值得续
+    const stale = continueResolve([{ courseId: 'c1', last: { lessonId: 'ghost', segmentId: 's9', at: 99, dur: 300 }, updatedAt: 200 }], [], COURSES)!
+    expect(stale.resumeAt).toBe(0) // 退回首课时·段位失效不续秒
+    const fresh = continueResolve([], [{ courseId: 'c1', enteredAt: 900 }], COURSES)!
+    expect(fresh.resumeAt).toBe(0) // 没看过·不续秒
+  })
+
+  it('大白话：clampResumeAt 四边界——at<5 归 0（刚开头）；中段原值取整；at>dur-10 归 0（快看完防起播即 ended）；dur=0 未知原值取整', () => {
+    expect(clampResumeAt(3, 100)).toBe(0) // <5
+    expect(clampResumeAt(50.7, 100)).toBe(50) // 中段·取整
+    expect(clampResumeAt(95, 100)).toBe(0) // >dur-10（90）
+    expect(clampResumeAt(50.7, 0)).toBe(50) // dur 未知·原值取整
+    expect(clampResumeAt(NaN as unknown as number, 100)).toBe(0) // 脏值安全
   })
 
   it('大白话：多条记录取最近的；记录指向查不到的课就看下一条，不假装', () => {

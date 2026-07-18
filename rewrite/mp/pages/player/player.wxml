@@ -12,6 +12,8 @@
      不阻断，唯一暂停例外＝帮助视频内嵌播放（P3b-play，简化决策：原生 <video controls>，不做自绘控制条
      ——辅助内容非主路径，防过度工程）。返回二次确认（P5）+ 首次成功退出加桌引导（P5b·仅一次·分端文案，
      动画降级为静态示意区+文案）：手势/系统返回无法拦截（WebView 页无 onBackPress），仅自绘返回箭头经此。 -->
+<!-- 自绘 seek 拖动几何·渲染层驱动（批5·根因#15）：外置 WXS 模块 sk（内联 <wxs> 里的 < 比较会被 wxml-well-formed 咬红，必须外置） -->
+<wxs src="./seek.wxs" module="sk" />
 <view class="ld-player">
 
   <!-- 顶条：返回 + 两行标题（数据源=批A lib/player 的 lessonStrip：主行 chapterTitle/副行 lessonNo·lessonName，
@@ -42,12 +44,14 @@
           class="lp-video"
           src="{{src}}"
           autoplay
+          initial-time="{{initialTime}}"
           controls="{{false}}"
           bind:play="onVideoPlay"
           bind:pause="onVideoPause"
           bind:ended="onEnded"
           bind:error="onVideoError"
           bind:waiting="onVideoWaiting"
+          bind:progress="onVideoProgress"
           bind:timeupdate="onTimeUpdate"
           bind:loadedmetadata="onVideoMeta"
         ></video>
@@ -125,16 +129,28 @@
 
     <view class="lp-progress-row">
       <text class="lp-time {{seeking ? 'cur-strong' : ''}}">{{curClock}}</text>
-      <view class="lp-seek" bind:touchstart="onSeekStart" catch:touchmove="onSeekMove" bind:touchend="onSeekEnd" bind:touchcancel="onSeekEnd">
-        <!-- 拖动浮层：seeking 时时间预览胶囊；再命中关键动作节点则叠鸭黄气泡（缩略图窗降级——雪碧图=R36 后端未建，见 player.ts 头注） -->
-        <view wx:if="{{seeking}}" class="lp-seek-preview" style="left: {{previewLeft}}px">
+      <view
+        class="lp-seek"
+        bind:touchstart="{{sk.onStart}}"
+        catch:touchmove="{{sk.onMove}}"
+        bind:touchend="{{sk.onEnd}}"
+        bind:touchcancel="{{sk.onEnd}}"
+        change:cfg="{{sk.onCfg}}"
+        cfg="{{seekCfg}}"
+      >
+        <!-- 拖动浮层（批5 WXS 化·常驻不 wx:if：显隐与 left 由 seek.wxs setStyle+addClass('on') 渲染层控——避免 setData 重建
+             与 WXS setStyle 抢写 position）；命中关键动作节点再叠鸭黄气泡（缩略图窗降级——雪碧图=R36 后端未建，见 player.ts 头注） -->
+        <view class="lp-seek-preview">
           <view class="lp-seek-preview-time">{{curClock}}</view>
           <view wx:if="{{snapName}}" class="lp-seek-preview-bubble">✦ 关键动作 · {{snapName}}</view>
         </view>
         <view class="lp-seek-track"></view>
+        <!-- 缓冲水位（批3·bind:progress 尽力而为·灰阶介于轨道与紫填充之间·换段清零 bufferPct·低频 data 驱动·WXS 不碰） -->
+        <view class="lp-seek-buffer" style="width: {{bufferPct}}%"></view>
+        <!-- fill 宽/handle left：非拖动期播放推进由 seekPct 低频 data 驱动；拖动期由 seek.wxs setStyle 接管（seeking 冻结 seekPct·不抢写·.big 亦由 WXS toggle） -->
         <view class="lp-seek-fill" style="width: {{seekPct}}%"></view>
         <view class="lp-seek-node" wx:for="{{markVMs}}" wx:key="at" style="left: {{item.pct}}%"></view>
-        <view class="lp-seek-handle {{seeking ? 'big' : ''}}" style="left: {{seekPct}}%"></view>
+        <view class="lp-seek-handle" style="left: {{seekPct}}%"></view>
       </view>
       <text class="lp-time">{{durClock}}</text>
     </view>

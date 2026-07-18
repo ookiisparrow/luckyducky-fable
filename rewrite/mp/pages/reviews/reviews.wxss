@@ -184,6 +184,24 @@
   color: var(--ld-content-2);
 }
 
+/* 骨架占位（加载中·根因#8）：微光扫过对齐 home/catalog（@keyframes ld-shimmer·app.wxss 全局）。
+   .ld-rv-skel-block 复用 .ld-rv-av（52rpx 圆）/.ld-rv-photo（200rpx）尺寸·仅覆盖背景为微光渐变。 */
+.ld-rv-skel-block,
+.ld-rv-skel-bar {
+  background: linear-gradient(90deg, var(--ld-bg-sage) 25%, var(--ld-bg-faint) 50%, var(--ld-bg-sage) 75%);
+  background-size: 200% 100%;
+  animation: ld-shimmer 1500ms ease-in-out infinite;
+}
+.ld-rv-skel-bar {
+  height: 24rpx;
+  border-radius: 8rpx;
+}
+.ld-rv-skel-photos {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10rpx;
+}
+
 /* 失败态重试钮（根因#14·守卫 rw-mp-list-loadfailed-state·形制同 detail pdp-empty-btn） */
 .ld-rv-retry {
   display: inline-block;
