@@ -43,9 +43,22 @@ async function uploadVideoVod(file: File, onProgress?: (p: number) => void): Pro
   }
 }
 
-/** 视频直传：VOD 已配置走 VOD（返回纯数字 FileId），否则走云存储老路（返回 cloud:// fileID）。onProgress 0-1。 */
-export async function uploadVideo(courseId: string, segName: string, file: File, onProgress?: (p: number) => void): Promise<{ ok: boolean; fileId?: string; error?: string }> {
-  if (await getVodSignature()) return uploadVideoVod(file, onProgress)
+/**
+ * 视频直传。**走 VOD 须显式 opt-in `allowVod`**（默认云存储老路·fail-safe·守卫 `rw-admin-help-video-stays-cos`）：
+ * 本函数为课程视频与帮助视频**共用**——课程线（Courses.vue）传 `{ allowVod: true }` 走 VOD（转码/发布闸/
+ * 播放签名整链已建）；帮助视频线（HelpVideos.vue）**恒不传**——其播放侧 `getHelpVideos` 只认云存储 fileID
+ * （getTempUrls 批量换址·无 vodUrl 字段、无转码同步、无发布闸兜底），传进 VOD 即换不到地址、求助面板视频
+ * 静默全哑（批2 自纠：原实现「VOD 配了就走 VOD」漏了调用面·机器闸与测试对跨线影响全绿）。
+ * 返回 fileId：VOD 线=纯数字 FileId，云存储线=`cloud://` fileID。onProgress 0-1。
+ */
+export async function uploadVideo(
+  courseId: string,
+  segName: string,
+  file: File,
+  onProgress?: (p: number) => void,
+  opts?: { allowVod?: boolean }
+): Promise<{ ok: boolean; fileId?: string; error?: string }> {
+  if (opts?.allowVod && (await getVodSignature())) return uploadVideoVod(file, onProgress)
   const ext = /\.mov$/i.test(file.name) ? 'mov' : 'mp4'
   const meta = await client.post('getVideoUploadMeta', { courseId, name: segName, ext })
   if (!meta.ok) return { ok: false, error: String(meta.error || 'META_UNAVAILABLE') }

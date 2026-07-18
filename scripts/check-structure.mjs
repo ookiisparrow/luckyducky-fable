@@ -5480,6 +5480,45 @@ export const repoChecks = [
     },
   },
   {
+    // 帮助视频线不得走 VOD（根因#8「构建过≠真能用」+ #14 静默失败·决策§31 批2 自纠）：admin 的
+    // uploadVideo 是**课程视频与帮助视频共用**的函数，批2 让它「VOD 配了就走 VOD」时漏了调用面——
+    // 帮助视频播放侧 getHelpVideos 只认云存储 fileID（getTempUrls 批量换址·无 vodUrl 字段、无转码
+    // 同步、无发布闸兜底），传进 VOD 拿纯数字 FileId 会换不到地址 → url:null → 求助面板视频全哑且
+    // 无任何告警。机器闸与测试对此全绿（跨线影响静态测不出），故焊此结构守卫：走 VOD 必须显式
+    // opt-in（allowVod），默认走云存储老路（fail-safe：新调用方默认安全）。
+    id: 'rw-admin-help-video-stays-cos',
+    roots: ['#8', '#14'],
+    desc: 'admin 帮助视频线恒走云存储（决策§31 批2 自纠）：api/content.ts 的 uploadVideo 走 VOD 分支须受显式 allowVod 控制；Courses.vue（课程线）两处调用须传 allowVod、HelpVideos.vue（帮助线·播放侧只认云存储 fileID）不得传——共用函数无条件走 VOD 会让求助面板视频静默全哑',
+    run() {
+      const bad = []
+      const strip = (p) => {
+        const abs = join(ROOT, p)
+        if (!existsSync(abs)) return null
+        return stripComments(readFileSync(abs, 'utf8')).replace(/<!--[\s\S]*?-->/g, '')
+      }
+      const apiRel = 'rewrite/admin/src/api/content.ts'
+      const api = strip(apiRel)
+      if (!api) return [] // admin 未建时不红
+      // 显式 span 切（不用 setupFnBody）：uploadVideo 的参数含回调 `(p: number) => void`，
+      // 该 helper 的 `\([^)]*\)` 参数正则会在回调的右括号处断掉、匹配不到签名（本批实测）。
+      // 带左括号定位（同文件另有 `uploadVideoVod`·裸前缀 indexOf 会先命中它、切错 span 假红）
+      const start = api.indexOf('function uploadVideo(')
+      const rest = start >= 0 ? api.slice(start) : ''
+      const nextExport = rest.indexOf('\nexport ', 1)
+      const body = nextExport > 0 ? rest.slice(0, nextExport) : rest
+      if (!body) bad.push(`${apiRel} 找不到 uploadVideo——视频直传单点丢失`)
+      else if (!body.includes('allowVod'))
+        bad.push(`${apiRel} uploadVideo 走 VOD 未受显式 allowVod 控制——帮助视频线会被一并传进 VOD、播放侧换不到地址静默全哑（根因#8/#14·决策§31 批2 自纠）`)
+      const help = strip('rewrite/admin/src/pages/HelpVideos.vue')
+      if (help && help.includes('allowVod'))
+        bad.push(`rewrite/admin/src/pages/HelpVideos.vue 出现 allowVod——帮助视频播放侧 getHelpVideos 只认云存储 fileID，走 VOD 即静默全哑（决策§31：帮助视频线恒不迁）`)
+      const courses = strip('rewrite/admin/src/pages/Courses.vue')
+      if (courses && !courses.includes('allowVod'))
+        bad.push(`rewrite/admin/src/pages/Courses.vue 未传 allowVod——课程视频线会静默退回云存储老路（转码管线形同未接·决策§31 批2）`)
+      return bad
+    },
+  },
+  {
     // VOD 平台接缝单点（根因#12·决策§31 转码管线批1·镜像 flow-seam-via-kit 之于支付工作流）：与腾讯云
     // 点播的平台触点（Key 防盗链签名算法/服务端 API 域名）收口 kit/vod.ts 一处，平台规则单方变化只改
     // 这一点。同时焊死 getPlaybackUrl 新旧双线前缀分流：VOD FileId（纯数字）走 signVodPlayUrl 防盗链

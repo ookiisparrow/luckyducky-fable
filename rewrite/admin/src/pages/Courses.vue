@@ -241,7 +241,9 @@ async function pickVideo(l: Record<string, any>, sg: Record<string, any>, ev: Ev
   try {
     progress.value = '上传中 0%'
     if (!sg.dur) sg.dur = await readDuration(file) // 时长自动读取（未填才读·不覆盖手填）
-    const r = await uploadVideo(String(course.value.id), String(sg.name || 'seg'), file, (p) => (progress.value = `上传中 ${Math.round(p * 100)}%`))
+    // allowVod（决策§31 批2 自纠·守卫 rw-admin-help-video-stays-cos）：课程视频线显式走 VOD——
+    // 帮助视频线共用本函数但恒不传（其播放侧只认云存储 fileID）。
+    const r = await uploadVideo(String(course.value.id), String(sg.name || 'seg'), file, (p) => (progress.value = `上传中 ${Math.round(p * 100)}%`), { allowVod: true })
     if (!l.segments.includes(sg)) {
       message.value = '这段已被移除，上传未关联' // 稳定引用重定位失败（段已被删）——如实跳过报告（同 batchUpload）
       return
@@ -289,7 +291,7 @@ async function batchUpload(l: Record<string, any>, ev: Event) {
       }
       if (!sg.name) sg.name = item.segName
       if (!sg.dur) sg.dur = await readDuration(item.file) // 时长自动读取（未填才读）
-      const r = await uploadVideo(String(course.value.id), sg.name || 'seg', item.file, (p) => (progress.value = `课时批量传 ${i + 1}/${plan.length} · ${Math.round(p * 100)}%`))
+      const r = await uploadVideo(String(course.value.id), sg.name || 'seg', item.file, (p) => (progress.value = `课时批量传 ${i + 1}/${plan.length} · ${Math.round(p * 100)}%`), { allowVod: true })
       if (r.ok) {
         sg.videoFileId = r.fileId || ''
         uploaded++
