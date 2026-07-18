@@ -29,6 +29,7 @@ import {
   alert,
   pageQuery,
   getTempUrls,
+  IMAGE_URL_MAX_AGE,
   hash53,
 } from '../../../kit'
 
@@ -55,7 +56,8 @@ async function swapOrdersCover(orders: any[]): Promise<any[]> {
   for (const o of orders)
     for (const it of o.items || []) if (isCloudCover(it.cover)) ids.add(it.cover)
   if (!ids.size) return orders
-  const urlMap = await getTempUrls([...ids])
+  // 批1·带 maxAge（容器级签发缓存·封面跨会话复用不重签）+ imageProc（图像处理·默认关）·同 catalog IMG_OPTS 口径
+  const urlMap = await getTempUrls([...ids], { maxAge: IMAGE_URL_MAX_AGE, imageProc: true })
   return orders.map((o) => ({
     ...o,
     items: (o.items || []).map((it: any) =>

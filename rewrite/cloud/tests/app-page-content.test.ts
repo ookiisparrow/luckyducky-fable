@@ -5,6 +5,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import cloud, { control } from 'wx-server-sdk'
 import { savePageContent, getPageContent } from '../src/functions/adminApi/actions/content'
 import { main as app } from '../src/functions/app/index'
+import { __resetTempUrlCacheForTest } from '../src/kit/storage'
 
 const db = () => (cloud as unknown as { database: () => any }).database()
 const save = (page: string, data: unknown) => savePageContent({ db: db(), data: { page, data } } as any)
@@ -14,6 +15,7 @@ const appCall = (action: string, data: Record<string, unknown> = {}): Promise<an
 
 beforeEach(() => {
   control.reset()
+  __resetTempUrlCacheForTest() // 批1·清签发缓存·隔离跨 case 复用相同 heroImage fileID 的污染（getPageContent 走 maxAge）
   control.setOpenId('')
 })
 afterEach(() => vi.restoreAllMocks())

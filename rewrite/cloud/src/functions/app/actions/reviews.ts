@@ -7,6 +7,7 @@ import {
   getDb,
   pageQuery,
   getTempUrls,
+  IMAGE_URL_MAX_AGE,
   imgSecCheck,
   msgSecCheck,
 } from '../../../kit'
@@ -175,7 +176,9 @@ export const getReviews = async (event: any = {}) => {
   const photoIds = paged.list.flatMap((r: any) =>
     (Array.isArray(r.photos) ? r.photos : []).filter(Boolean).map(String)
   )
-  const urlMap = await getTempUrls(photoIds)
+  // 批1·买家秀晒图带 maxAge（容器级签发缓存·热门商品晒图跨会话复用不重签）+ imageProc（图像处理·默认关）·
+  // 同 catalog IMG_OPTS 口径。求助视频（getHelpVideos·:30）不带此策略——视频址一次性、不进签发缓存。
+  const urlMap = await getTempUrls(photoIds, { maxAge: IMAGE_URL_MAX_AGE, imageProc: true })
   const list = paged.list.map((r: any) => ({
     name: r.name,
     rating: r.rating,

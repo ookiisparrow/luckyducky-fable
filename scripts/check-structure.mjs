@@ -5910,6 +5910,77 @@ export const repoChecks = [
     },
   },
   {
+    // 列表瘦身只签 cover（批1·病根#7 规模 + #15 加载链路冗余）：列表卡片只用 cover，图册 images[] 是详情页
+    // 才需要的——列表若连 images 一起签，是 N 商品 × M 图的临时址签发（规模杀手）+ 白下发一大坨列表用不到的
+    // 字段。故 getProducts 只签 cover、瘦身删掉 images 字段（`delete out.images`·唯一放行的 images 引用），
+    // 任何 images 的签发/下发（id 收集 `p.images` / 赋值 `out.images =`）即红；图册收窄进详情页专属
+    // getProductDetail（须在场且含 images 换址补齐画廊）。函数体截取走内联箭头体花括号配对（不新增顶层 fn·防扰
+    // guard-strip-single-source span·E8）+ stripComments 单源 helper（错题本 E1）。反向自检：把 images 换址塞回
+    // getProducts（`out.images = out.images.map(...)`）→ 本守卫红。
+    id: 'rw-catalog-list-cover-only',
+    roots: ['#7', '#15'],
+    desc: '列表瘦身只签 cover（病根#7 规模 + #15 加载链路冗余）：app/actions/catalog.ts 的 getProducts 函数体（剥注释后）除 `delete out.images` 瘦身外不得出现 images——列表 N 商品×M 图签发是规模杀手，图册 images[] 收窄进详情页专属 getProductDetail（须在场且含 images 换址补齐画廊）。反向自检：把 images 换址（out.images = ...）塞回 getProducts → 红',
+    run() {
+      const p = join(ROOT, 'rewrite/cloud/src/functions/app/actions/catalog.ts')
+      if (!existsSync(p)) return ['rewrite/cloud/src/functions/app/actions/catalog.ts 缺失（getProducts 正册·批1）']
+      const src = stripComments(readFileSync(p, 'utf8')) // 剥注释单源 helper（E1）：对真源匹配·防注释假触发/放行
+      const bad = []
+      // 箭头函数体截取（内联·从声明起找首个 { 花括号配对到平衡·返回含声明整段；找不到/不配平返回 null）
+      const arrowBody = (decl) => {
+        const s = src.indexOf(decl)
+        if (s === -1) return null
+        const b = src.indexOf('{', s)
+        if (b === -1) return null
+        let depth = 0
+        for (let i = b; i < src.length; i++) {
+          if (src[i] === '{') depth++
+          else if (src[i] === '}' && --depth === 0) return src.slice(s, i + 1)
+        }
+        return null
+      }
+      const gp = arrowBody('export const getProducts')
+      if (gp === null) return ['catalog.ts 找不到/截不出 export const getProducts 函数体——守卫定位失效，重构别改这个声明形态']
+      if (!gp.includes('.collection(COLLECTIONS.products)'))
+        bad.push('getProducts 函数体丢了 .collection(COLLECTIONS.products) 链头——守卫定位失效（rw-app-catalog-reads-bounded 也靠它·别改名）')
+      // 放行瘦身用的 `delete <var>.images`（唯一允许的 images 引用），其余 images（签发/下发）即红
+      const gpClean = gp.replace(/delete\s+\w+\.images\b/g, '')
+      if (/\bimages\b/.test(gpClean))
+        bad.push('getProducts 函数体出现 images 签发/下发（delete 瘦身除外）——列表须只签 cover（病根#7 规模·图册收窄进 getProductDetail）')
+      const gd = arrowBody('export const getProductDetail')
+      if (gd === null) bad.push('catalog.ts 缺 export const getProductDetail——列表瘦身后详情页图册无处补齐（病根#15）')
+      else if (!/\bimages\b/.test(gd))
+        bad.push('getProductDetail 函数体未见 images 换址——详情页完整图册须由它补齐（病根#15）')
+      return bad
+    },
+  },
+  {
+    // 图像处理接缝单点（批1·根因#12 平台规则外部风险）：数据万象（CI）的 imageMogr2 处理参数拼接收口在
+    // kit/storage.ts withImageProc 一处——控制台开通/参数格式变化只改这里 + 环境变量 LD_IMAGE_PROC。别处出现
+    // imageMogr2 字面量即红（同 flow-seam-single 形状·参数散落=平台规则改动面失控）。
+    id: 'rw-image-proc-seam-single',
+    roots: ['#12'],
+    desc: '图像处理接缝单点（根因#12 平台规则外部风险）：数据万象 imageMogr2 处理参数拼接全库仅 rewrite/cloud/src/kit/storage.ts 一处（withImageProc）——控制台开通/参数格式变化改一处；别处出现 imageMogr2 字面量即红（同 flow-seam-single 形状）',
+    run() {
+      const root = join(ROOT, 'rewrite/cloud/src')
+      if (!existsSync(root)) return []
+      const allowed = 'rewrite/cloud/src/kit/storage.ts'
+      const hits = []
+      const walk = (d) => {
+        for (const e of readdirSync(d)) {
+          const fp = join(d, e)
+          if (statSync(fp).isDirectory()) walk(fp)
+          else if (e.endsWith('.ts') && readFileSync(fp, 'utf8').includes('imageMogr2'))
+            hits.push(relative(ROOT, fp).replace(/\\/g, '/'))
+        }
+      }
+      walk(root)
+      const out = []
+      for (const h of hits) if (h !== allowed) out.push(`${h} 出现 imageMogr2——图像处理接缝须收口 kit/storage.ts 单点（根因#12）`)
+      if (!hits.includes(allowed)) out.push(`${allowed} 应为 imageMogr2 图像处理参数唯一出现点（withImageProc），未见——接缝单点缺失`)
+      return out
+    },
+  },
+  {
     // mp「失败伪装成空态」家族收口（根因#14 失败静默化·韧性审计+深审台账 2026-07-12 同源命中）：
     // 列表/详情页网络失败若与「真的没有数据」渲染同一空态（暂无订单/还没有评价/输入激活码/订单不存在），
     // 弱网用户会把网络抖动误读成数据消失（付费用户看到课程清空被引导输码=客诉级）。detail.ts 的

@@ -324,10 +324,17 @@ const cloud = {
     return { fileID: 'cloud://test/' + cloudPath }
   },
   getTempFileURL: async ({ fileList }) => {
+    const list = fileList || []
     // 记录每次调用的批大小：真 sdk 单次 fileList 上限 50，getTempUrls 分批逻辑靠此断言（桩对齐真 SDK）
-    G.tempUrlCalls.push((fileList || []).length)
-    if ((fileList || []).length > 50) throw new Error('MOCK: getTempFileURL fileList 超 50 上限（真 sdk 会拒）')
-    return { fileList: fileList.map((id) => ({ fileID: id, tempFileURL: 'https://tmp/' + id })) }
+    G.tempUrlCalls.push(list.length)
+    if (list.length > 50) throw new Error('MOCK: getTempFileURL fileList 超 50 上限（真 sdk 会拒）')
+    // 接受 string | { fileID, maxAge } 双形（批1·带 maxAge 换长效址·真 sdk 同支持）：取 fileID 作 key
+    return {
+      fileList: list.map((it) => {
+        const id = typeof it === 'string' ? it : it.fileID
+        return { fileID: id, tempFileURL: 'https://tmp/' + id }
+      }),
+    }
   },
   // 删云存储文件（孤儿视频 GC 用）：记录删除的 fileID，返回真 sdk 形状 { fileList:[{fileID,status:0}] }
   deleteFile: async ({ fileList }) => {
