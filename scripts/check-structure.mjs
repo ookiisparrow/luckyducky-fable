@@ -1652,8 +1652,8 @@ export const repoChecks = [
       }
       const cases = [
         ['tcb fn deploy createOrder', 'ask'], // 敏感函数 → 确认
-        ['tcb fn deploy getProducts', 'allow'], // 单个非敏感读函数 → 放行
-        ['tcb fn invoke getProducts', 'allow'], // 读类 → 放行
+        ['tcb fn deploy getProducts', 'ask'], // 批I 起 READONLY_FNS=[]：旧线纯读函数已清退·部署同名=新建孤儿 → 一律 ask（唯一放行洞已堵）
+        ['tcb fn invoke getProducts', 'allow'], // 读类（invoke 非写）→ 放行
         ['git commit -m chore-tcb-deploy-fns', 'allow'], // 提交信息提字样 → 不拦
         ['DEPLOY_ALLOWED=1 node scripts/deploy-fns.mjs', 'ask'], // 批量部署 → 确认
         // 深审 P1 绕过实录（防回归）：三种自然命令形态过去全放行，现须一律 ask
@@ -1920,6 +1920,11 @@ export const repoChecks = [
     },
   },
   {
+    // 原料账单点收口·生产线（SCM 门1·根因#1/#2）。批I 合并去重：本条（深审版）与批K 移植版曾并存注册两次
+    // （撞名·length 虚高），裁决保留本条（seam 缺失→红=fail-closed），删批K 版（seam 缺失 return [] 静默绿）。
+    // 并入批K 注释史：旧守卫 material-stock-single-seam 只扫冻结旧线 packages/cloud/src，而 rewrite/cloud/src/
+    // kit/scmStock.ts 头注承诺「全库唯一 materials.stock/stockLedger 读写处」对生产代码此前是假的——本条把该
+    // 保护落到 rewrite 活线（同一套判定不弱化：applyStockMoves 须导出、CAS 须用条件 where(stock)、除 seam 外全仓禁直碰）。
     id: 'rw-material-stock-single-seam',
     roots: ['#1', '#2'],
     desc: '原料账单点收口·生产线（SCM 门1·根因#1/#2·深审 P2 补：material-stock-single-seam 只焊冻结旧线是假绿）：生产线 materials.stock/stockLedger 仅 rewrite/cloud/src/kit/scmStock.ts 读写（applyStockMoves 唯一入口·乐观 CAS）；其余 rewrite/cloud/src 直碰即红（防绕 CAS/绕流水改账）',
@@ -1927,7 +1932,7 @@ export const repoChecks = [
       const seam = 'rewrite/cloud/src/kit/scmStock.ts'
       if (!existsSync(join(ROOT, seam))) return [`${seam} 缺失——生产线原料账原语（SCM 门1）`]
       const bad = []
-      const src = readFileSync(join(ROOT, seam), 'utf8')
+      const src = stripComments(readFileSync(join(ROOT, seam), 'utf8')) // 剥注释再匹配（E1/E10：注释掉保护代码不得仍绿·批I 评审加固）
       if (!/export\s+async\s+function\s+applyStockMoves/.test(src)) bad.push(`${seam} 未导出 applyStockMoves——门1 空壳`)
       if (!/\.where\(\{[^}]*stock/.test(src)) bad.push(`${seam} 库存变更未用条件 where(stock) 乐观 CAS——有并发互覆盖风险（根因#1）`)
       const allow = new Set([seam])
@@ -1939,28 +1944,12 @@ export const repoChecks = [
           else if (e.endsWith('.ts')) {
             const rel = relative(ROOT, p).replace(/\\/g, '/')
             if (allow.has(rel)) continue
-            if (/COLLECTIONS\.(materials|stockLedger)\b|\.collection\(\s*['"](materials|stockLedger)['"]\s*\)/.test(readFileSync(p, 'utf8')))
+            if (/COLLECTIONS\.(materials|stockLedger)\b|\.collection\(\s*['"](materials|stockLedger)['"]\s*\)/.test(stripComments(readFileSync(p, 'utf8'))))
               bad.push(`${rel} 直碰 materials/stockLedger 集合——原料账读写须经 kit/scmStock（SCM 门1·防绕 CAS/绕流水）`)
           }
         }
       }
       if (existsSync(srcRoot)) walk(srcRoot)
-      return bad
-    },
-  },
-  {
-    id: 'rw-scm-ledger-idempotent',
-    roots: ['#2'],
-    desc: '原料流水确定性幂等·生产线（SCM·根因#2·深审 P2 补：scm-ledger-idempotent 只焊冻结旧线是假绿）：生产线 rewrite/cloud/src/kit/scmStock.ts 写 stockLedger 必构造确定性 _id=`docType:docId:itemKey`（撞 id=并发方已写）·禁自动 id 双记账',
-    run() {
-      const seam = 'rewrite/cloud/src/kit/scmStock.ts'
-      if (!existsSync(join(ROOT, seam))) return [`${seam} 缺失——生产线流水写入点（SCM 门1）`]
-      const bad = []
-      const src = readFileSync(join(ROOT, seam), 'utf8')
-      if (!/\$\{[^}]*docType[^}]*\}:\$\{[^}]*docId[^}]*\}:\$\{/.test(src))
-        bad.push(`${seam} 未见确定性流水 _id 构造（\`\${docType}:\${docId}:\${itemKey}\` 三段模板）——流水失幂等（根因#2）`)
-      const ledgerAdds = [...src.matchAll(/stockLedger[\s\S]{0,200}?\.add\(\s*\{\s*data:\s*\{([\s\S]{0,120}?)\}/g)]
-      for (const m of ledgerAdds) if (!/_id\s*:/.test(m[1])) bad.push(`${seam} stockLedger add 未带确定性 _id——自动 id=重放双记账（根因#2）`)
       return bad
     },
   },
@@ -4981,41 +4970,6 @@ export const repoChecks = [
     },
   },
   {
-    // 原料账单点收口——新线扫描面（批K·SCM 门1·根因#1/#2·移植 material-stock-single-seam，同
-    // rw-order-transitions-declared 精神：旧守卫（line 822）只扫 packages/cloud/src，rewrite/cloud/src/
-    // kit/scmStock.ts 头注承诺「全库唯一 materials.stock/stockLedger 读写处（守卫 material-stock-single-seam）」
-    // 对生产代码此前是假的——rewrite/cloud 下任何文件直碰这两个集合从未被拦过。逻辑镜像旧守卫（同一套判定，
-    // 不弱化）：applyStockMoves 须导出、CAS 须用条件 where(stock)、除 seam 本身外全仓禁直碰。
-    id: 'rw-material-stock-single-seam',
-    roots: ['#1', '#2'],
-    desc: '新线原料账单点收口（SCM 门1·根因#1/#2·批K·移植 material-stock-single-seam，同 rw-order-transitions-declared 精神：旧守卫只扫冻结线，kit/scmStock.ts 头注承诺的保护对生产代码此前是假的）：materials.stock/stockLedger 仅 rewrite/cloud/src/kit/scmStock.ts 读写（applyStockMoves 唯一入口·乐观 CAS）；rewrite/cloud/src 其余文件直碰即红（防绕 CAS/绕流水改账）',
-    run() {
-      const seam = 'rewrite/cloud/src/kit/scmStock.ts'
-      const seamAbs = join(ROOT, seam)
-      if (!existsSync(seamAbs)) return []
-      const bad = []
-      const src = readFileSync(seamAbs, 'utf8')
-      if (!/export\s+async\s+function\s+applyStockMoves/.test(src)) bad.push(`${seam} 未导出 applyStockMoves——门1 空壳`)
-      if (!/\.where\(\{[^}]*stock/.test(src)) bad.push(`${seam} 库存变更未用条件 where(stock) 乐观 CAS——有并发互覆盖风险（根因#1）`)
-      const allow = new Set([seam])
-      const srcRoot = join(ROOT, 'rewrite/cloud/src')
-      const walk = (d) => {
-        for (const e of readdirSync(d)) {
-          const p = join(d, e)
-          if (statSync(p).isDirectory()) walk(p)
-          else if (e.endsWith('.ts')) {
-            const rel = relative(ROOT, p).replace(/\\/g, '/')
-            if (allow.has(rel)) continue
-            if (/COLLECTIONS\.(materials|stockLedger)\b|\.collection\(\s*['"](materials|stockLedger)['"]\s*\)/.test(readFileSync(p, 'utf8')))
-              bad.push(`${rel} 直碰 materials/stockLedger 集合——原料账读写须经 kit/scmStock（SCM 门1·防绕 CAS/绕流水）`)
-          }
-        }
-      }
-      if (existsSync(srcRoot)) walk(srcRoot)
-      return bad
-    },
-  },
-  {
     // 原料流水确定性幂等——新线扫描面（批K·根因#2·移植 scm-ledger-idempotent，同上精神）。
     // 顺手修正旧守卫（line 854）本体带的潜伏 bug（不改旧守卫本身、只是不在新守卫里复制同一个洞）：旧正则
     // 用「'stockLedger' 与 '.add(' 相距 ≤200 字符」定位流水写入点，但实际代码里两者靠变量名（`ledger`）
@@ -5037,9 +4991,9 @@ export const repoChecks = [
     desc: '新线原料流水确定性幂等（SCM·根因#2·批K 引入·批S 修复两条独立正则拼出的假绑定：新增「_id 字段实际来自确定性生成函数调用」的绑定核验，不再只各自宽松匹配「有模板」+「有 _id 字样」）：rewrite/cloud/src/kit/scmStock.ts 写 stockLedger 必构造确定性 _id=`docType:docId:itemKey`（撞 id=并发方已写）·禁自动 id 双记账·禁绕开生成函数手写等价 _id',
     run() {
       const seam = 'rewrite/cloud/src/kit/scmStock.ts'
-      if (!existsSync(join(ROOT, seam))) return []
+      if (!existsSync(join(ROOT, seam))) return [`${seam} 缺失——生产线流水写入点（SCM 门1·同 fail-closed 口径：seam 缺失即红）`]
       const bad = []
-      const src = readFileSync(join(ROOT, seam), 'utf8')
+      const src = stripComments(readFileSync(join(ROOT, seam), 'utf8')) // 剥注释再匹配（E1/E10·批I 评审加固·stripComments 保长置空、下方索引数学不受影响）
       // 定位确定性 _id 生成函数并取其名（按「docType:docId:itemKey 三段模板」结构识别，不硬编码 ledgerIdOf——
       // 函数改名不失效；`const NAME = (…) => \`…\`` 或 `function NAME(…) {…}` 两种写法都认）
       const fnDeclM = src.match(/(?:const|function)\s+(\w+)\s*=?\s*\([^)]*\)\s*(?:=>\s*)?[{`][\s\S]{0,120}?\$\{[^}]*docType[^}]*\}:\$\{[^}]*docId[^}]*\}:\$\{/)
@@ -7174,6 +7128,46 @@ export const fileRules = [
         ? 'mp 端禁裸 wx.request()——H5/App 不连核心交易流程，微信原生单源经云函数 callCloud（T1·rewrite 镜像）'
         : null,
   },
+  {
+    // T4 按链内聚（CLAUDE §8 依赖方向）镜像·活线版（批I 补）：旧 dep-direction（上方）只扫冻结旧线
+    // packages/miniapp、用 @/ 别名判据，对唯一在迭代的 rewrite/ 零执行=装饰。活线用相对 import，故判据按
+    // 相对路径段写（非照抄 @/ 别名版）：叶/低层不得反向依赖上层。主脑预扫现状零违例，按现状编码方向规则——
+    //   · rewrite/mp/utils（叶）禁 import ../lib/、../pages/；
+    //   · rewrite/mp/lib 禁 import ../pages/（lib 不得反向依赖页面）；
+    //   · rewrite/admin/src/lib 与 src/api 禁 import ../pages/、../shell/（数据/接口层不依赖页面/外壳）；
+    //   · rewrite/agent/src/lib 禁 import 页面级 .vue（Desk/Login/App）。
+    // E1 纪律：先剥行内注释再匹配 import 语句（注释里提到路径不算·框架已跳过整行注释，此处再剥行尾 // 注释）。
+    id: 'rw-dep-direction',
+    roots: ['T4'],
+    inScope: (abs) =>
+      (/\/rewrite\/mp\/(utils|lib)\//.test(abs) && abs.endsWith('.ts')) ||
+      (/\/rewrite\/admin\/src\/(lib|api)\//.test(abs) && abs.endsWith('.ts')) ||
+      (/\/rewrite\/agent\/src\/lib\//.test(abs) && abs.endsWith('.ts')),
+    test: (line, ctx) => {
+      const code = line.replace(/\/\/.*$/, '') // 剥行尾注释再匹配 import/require（E1：注释里提路径不算）
+      // ESM `import…from '…'`/`import '…'`/`import('…')` 与 CommonJS `require('…')` 都纳入——mp/tsconfig
+      // module=CommonJS，require 语法合法且无 ESLint 兜底，只认 import 会留下等价的绕过口（E16 翻版）。
+      // 反引号模板字面量也认（动态 import(`../lib/${x}`) 的依赖前缀在插值前已定型，按前缀判仍正确——评审 P3 堵漏）
+      const im = code.match(/(?:from|import|require)\s*\(?\s*['"`]([^'"`]+)['"`]/)
+      if (!im) return null
+      const spec = im[1]
+      const f = ctx.file.replace(/\\/g, '/')
+      if (/\/rewrite\/mp\/utils\//.test(f)) {
+        if (/\.\.\/lib\//.test(spec) || /\.\.\/pages\//.test(spec))
+          return `依赖方向反转：mp/utils（叶）禁 import ${spec}——utils 是叶不得依赖 lib/页面（../lib/、../pages/·T4/CLAUDE §8·活线镜像）`
+      } else if (/\/rewrite\/mp\/lib\//.test(f)) {
+        if (/\.\.\/pages\//.test(spec))
+          return `依赖方向反转：mp/lib 禁 import ${spec}——lib 不得反向依赖页面（../pages/·T4/CLAUDE §8·活线镜像）`
+      } else if (/\/rewrite\/admin\/src\/(lib|api)\//.test(f)) {
+        if (/\.\.\/pages\//.test(spec) || /\.\.\/shell\//.test(spec))
+          return `依赖方向反转：admin lib/api 禁 import ${spec}——数据/接口层不得依赖页面/外壳（../pages/、../shell/·T4/CLAUDE §8·活线镜像）`
+      } else if (/\/rewrite\/agent\/src\/lib\//.test(f)) {
+        if (/\.vue$/.test(spec) && /\b(Desk|Login|App)\b/.test(spec))
+          return `依赖方向反转：agent/lib 禁 import 页面级 .vue（${spec}）——lib 不得依赖页面组件（Desk/Login/App·T4/CLAUDE §8·活线镜像）`
+      }
+      return null
+    },
+  },
 ]
 
 // ============== 类型层 + 行为测试守卫（typeAndTestGuards）==============
@@ -7460,10 +7454,36 @@ function report(violations, stream) {
   stream.write(`\n结构不变量未通过：${violations.length} 处（每条对应一项重构主张守卫；刻意例外行内加 structure-ok）\n`)
 }
 
+// 引擎自检（非守卫·不进 repoChecks/fileRules 计数·与 guard-coverage 的 Set 去重逻辑正交）：注册期 id 撞名
+// 硬断言——任一守卫数组内 id 重复注册即红并使 check:structure 非零退出。批I 前 rw-material-stock-single-seam
+// / rw-scm-ledger-idempotent 各注册两次（length=200 而 distinct=198），guard-coverage 用 Set 去重反而把撞名
+// 掩盖、无任何机制测得出；合并去重后加此断言防再犯（撞名=length 虚高/distinct 漂移，计数根治的前提）。
+function assertNoDuplicateIds() {
+  const bad = []
+  for (const [name, arr] of [
+    ['repoChecks', repoChecks],
+    ['fileRules', fileRules],
+  ]) {
+    const seen = new Set()
+    for (const g of arr) {
+      if (seen.has(g.id)) bad.push({ loc: '[registry-no-dup-id]', msg: `${name} 数组 id 重复注册：${g.id}（撞名=length 虚高、distinct 漂移·合并去重后修）`, src: '注册期 id 撞名硬断言（引擎自检·不计入守卫数）' })
+      seen.add(g.id)
+    }
+  }
+  return bad
+}
+
 // CLI 入口包进 main()，只在被 node 直接运行时执行——这样测试 / guard-coverage
 // 可 import 上面三个守卫数组而不触发全量检查（isMain 守门）。
 async function main() {
   const args = process.argv.slice(2)
+
+  // 注册期 id 撞名硬断言先于一切判定（引擎自检·非守卫）：撞名会让 length 虚高、下游计数全错，先红先停。
+  const dupIds = assertNoDuplicateIds()
+  if (dupIds.length) {
+    report(dupIds, process.stdout)
+    process.exit(1)
+  }
 
   if (args[0] === '--hook') {
     // PostToolUse：stdin 是 hook JSON，只查被编辑的单文件（fileRules），违例 exit 2 反馈 Claude
