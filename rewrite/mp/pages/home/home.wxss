@@ -1,5 +1,12 @@
 /* 首页重设计 9 板块。设计稿 402px 画板 → rpx（750/402≈1.87 换算·保比例）。
    token 见 styles/tokens.wxss；图标 <image> 引 static/icons/*.svg（色已烘进 svg）。 */
+/* 滚动容器：退出提醒的 page-container 武装态冻结页面级滚动（决策§30），滚动改在 scroll-view 内发生。
+   须填满视口——height 而非 min-height（scroll-view 靠固定高度才产生内部滚动）。 */
+.ld-home-scroll {
+  height: 100vh;
+  background: var(--ld-bg);
+}
+
 .ld-home {
   background: var(--ld-bg);
   overflow: hidden;

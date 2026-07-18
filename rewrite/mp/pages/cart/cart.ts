@@ -7,7 +7,8 @@ import { prepareFromCart } from '../../lib/checkout'
 import { getAllProducts } from '../../lib/catalog'
 import { decideQuickAdd } from '../../lib/quickAdd'
 import { mapProducts, type ProductVM } from '../../lib/mapHome'
-import { armExitAlert } from '../../utils/exitGuard'
+// consumeExitGuard 别名：页面方法须叫 onExitGuardBeforeLeave（wxml bindbeforeleave 绑的就是它），同名易误读成递归
+import { armExitGuard, releaseExitGuard, onExitGuardBeforeLeave as consumeExitGuard } from '../../utils/exitGuard'
 
 let allRaw: Record<string, any>[] = [] // 全商品原档（算推荐+加购取价·onLoad 拉一次）
 
@@ -19,6 +20,7 @@ Page({
     selectedCount: 0,
     totalLabel: '¥0.00',
     recs: [] as ProductVM[], // 未在袋中的推荐（设计「下方选品」）
+    exitGuardArmed: false, // 误触退出提醒（决策§30）：驱动 <page-container show>·onShow 武装（初值 false·未上屏不拦）
   },
   ready: false, // 首建实例 onLoad 首拉完成前的 onShow 抢跑标记（P3·bug sweep R1 #11）：微信 onLoad→onShow 相邻触发，
   // onLoad 的 await 未落地时 onShow 已跑，allRaw 还是空数组、二者并发各自 setData 互相踩踏。
@@ -29,10 +31,20 @@ Page({
     this.ready = true
   },
   onShow() {
-    armExitAlert() // tabBar 根页误触退出提醒（放 ready 早返回之前·首建实例也需武装·2026-07-13 用户反馈·见 utils/exitGuard）
+    armExitGuard(this) // tabBar 栈底页误触退出提醒：放 ready 早返回之前·首建实例也需武装（决策§30·见 utils/exitGuard）
     if (!this.ready) return // 首建实例抢跑：onLoad 首拉还没完成，交给它自己的 refresh 收尾，这次 onShow 不重复刷新
     if (typeof this.getTabBar === 'function') (this.getTabBar() as unknown as LdTabBar).setActive('cart')
     this.refresh()
+  },
+  onHide() {
+    releaseExitGuard(this) // 切走本 tab：清在途重武装定时器（不回调已隐藏页的 setData）
+  },
+  onUnload() {
+    releaseExitGuard(this)
+  },
+  /** <page-container bindbeforeleave>：拦下第一次返回 →「再按一次退出」（2s 内再按放行·2s 后自动重新武装）。 */
+  onExitGuardBeforeLeave() {
+    consumeExitGuard(this)
   },
   refresh() {
     // 展示 cover 用 allRaw 最新值覆盖（批B 图片链提速回归：持久化 cover 是 2h 时效临时址，隔天过期挂图）；

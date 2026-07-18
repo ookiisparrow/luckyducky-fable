@@ -6205,6 +6205,76 @@ export const repoChecks = [
     },
   },
   {
+    // tab 栈底页误触退出提醒（决策§30·2026-07-14 16-agent 研究定论·根因#8/#10 翻烧饼变体）：tabBar 三页
+    // （home/cart/me）是页面栈底，安卓实体返回键＝直接退出小程序，误触即丢会话。唯一可行机制＝隐形
+    // <page-container> 武装拦第一次返回 →「再按一次退出」（拦返回看「本页有无武装容器」、与栈深无关）。
+    // wx.enableAlertBeforeUnload 对本用途**判废**（双死因：它是 page-return-only 语义 + 本 app
+    // navigationStyle:custom 藏掉了它要挂的原生返回按钮 → 栈底页永远不弹·仓内 2026-06-14 真机存档为证）。
+    // 仓史三次翻烧饼皆因 devtools 里 page-container 显示不工作（只真机生效·根因#10）造成假阴性，故焊死：
+    // ① 三页 wxml 各有 <page-container> 且绑 bindbeforeleave（武装态由 ts 驱动）；
+    // ② 三页 wxml 有纵向 <scroll-view scroll-y>——武装的 page-container 给 Page 注入 position:fixed 冻结
+    //    页面级滚动（overlay=false 不解此锁），内容不套 scroll-view 则真机整页滚不动（build 全绿·正是 #8）；
+    // ③ 三页 ts 接线 utils/exitGuard 三件套（arm/beforeleave/release·病根#5 单源·release 缺失即定时器泄漏）；
+    // ④ rewrite/mp 源内（tests 除外）不得回潮 enableAlertBeforeUnload——判废机制，防旧分支合并/样板复制带回；
+    // ⑤ 三页 json 不得开 enablePullDownRefresh——页面级下拉在 position:fixed 下失效，须改 scroll-view
+    //    refresher-enabled（否则真机下拉刷新静默消失·又一个 build 绿真机死的 #8）。
+    // 日后若用户要撤掉退出提醒：先改决策§30 再退役本守卫（删与加对等，见 refactor-batch step 4），不许绕。
+    id: 'rw-mp-tabbar-exit-guard',
+    roots: ['#8', '#10'],
+    desc: 'tab 栈底页误触退出提醒焊死（决策§30·根因#8/#10）：home/cart/me 三页 wxml 须各有绑 bindbeforeleave 的 <page-container> + 纵向 <scroll-view scroll-y>（武装态注入 position:fixed 冻结页面滚动·不套即真机死锁），ts 须接线 utils/exitGuard 三件套（armExitGuard/onExitGuardBeforeLeave/releaseExitGuard），json 不得开 enablePullDownRefresh（fixed 下失效·须走 refresher-enabled）；rewrite/mp 源内不得回潮已判废的 wx.enableAlertBeforeUnload',
+    run() {
+      const base = join(ROOT, 'rewrite/mp')
+      if (!existsSync(base)) return [] // 重写线未建时不红
+      const bad = []
+      for (const name of ['home', 'cart', 'me']) {
+        const wxmlRel = `rewrite/mp/pages/${name}/${name}.wxml`
+        const tsRel = `rewrite/mp/pages/${name}/${name}.ts`
+        const jsonRel = `rewrite/mp/pages/${name}/${name}.json`
+        if (!existsSync(join(ROOT, wxmlRel)) || !existsSync(join(ROOT, tsRel))) {
+          bad.push(`${wxmlRel} / ${tsRel} 缺失——tabBar 三页是退出提醒作用面（若 tabBar 结构已变，请同步本守卫）`)
+          continue
+        }
+        const wxml = readFileSync(join(ROOT, wxmlRel), 'utf8')
+        const ts = stripComments(readFileSync(join(ROOT, tsRel), 'utf8'))
+        if (!/<page-container[\s\S]*?bindbeforeleave\s*=/.test(wxml))
+          bad.push(`${wxmlRel} 未见带 bindbeforeleave 的 <page-container>——tab 栈底页误触退出提醒的唯一可行机制（决策§30·enableAlertBeforeUnload 已判废）`)
+        if (!/<scroll-view[^>]*scroll-y/.test(wxml))
+          bad.push(`${wxmlRel} 未见纵向 <scroll-view scroll-y>——武装的 page-container 注入 position:fixed 冻结页面级滚动，内容不套 scroll-view 则真机整页滚不动（根因#8 build 绿·真机死锁）`)
+        // 剥掉 import 语句再断言「调用/定义」形式：否则删了调用点、光留 import 也算绿（反向自检 2026-07-18 实测
+        // 漏过·同 E8「断言太宽松被绕过」）。三者都以 `名(` 出现：前两个是调用，onExitGuardBeforeLeave 是页面方法
+        // 定义（wxml bindbeforeleave 绑的目标·真正的消费入口，实现体内调的是 consumeExitGuard 别名）。
+        const tsBody = ts.replace(/^\s*import\s[\s\S]*?from\s*['"][^'"]+['"];?\s*$/gm, '')
+        for (const fn of ['armExitGuard', 'onExitGuardBeforeLeave', 'releaseExitGuard'])
+          if (!tsBody.includes(`${fn}(`))
+            bad.push(`${tsRel} 未接线 utils/exitGuard 的 ${fn}(——武装/消费/清理三件套缺一即提醒失效或定时器泄漏（病根#5 单源）`)
+        if (existsSync(join(ROOT, jsonRel)) && /"enablePullDownRefresh"\s*:\s*true/.test(readFileSync(join(ROOT, jsonRel), 'utf8')))
+          bad.push(`${jsonRel} 开着 enablePullDownRefresh——页面级下拉在 page-container 注入的 position:fixed 下静默失效，须改 <scroll-view refresher-enabled>（根因#8）`)
+        // 迁到 refresher 的连带闭环（pull-refresh-stops ③ 在新线的翻版·因退出提醒才被迫迁，故守在这条）：
+        // 开了 refresher-enabled 就必须绑 bindrefresherrefresh + refresher-triggered，且收起动作走 finally
+        // ——回调/受控位漏一个即下拉圈永远转下去、再也刷不动，且只有真机看得见（根因#8）。
+        if (/refresher-enabled/.test(wxml)) {
+          for (const attr of ['bindrefresherrefresh', 'refresher-triggered'])
+            if (!new RegExp(attr).test(wxml))
+              bad.push(`${wxmlRel} 用了 refresher-enabled 却未绑 ${attr}——下拉圈会转个不停、再也刷不动（根因#8 真机才暴露）`)
+          if (!/finally\s*\{[^}]*refreshing\s*:\s*false/.test(ts))
+            bad.push(`${tsRel} 下拉刷新的收起动作不在 finally 里——reload 抛异常即下拉圈永远转下去（根因#8·同 pull-refresh-stops ③）`)
+        }
+      }
+      // ④ 判废机制防回潮：扫 rewrite/mp 全部 .ts（剥注释·tests 除外——测试要按名断言「不得出现」）
+      const walk = (d) => {
+        for (const e of readdirSync(d)) {
+          if (e === 'node_modules' || e === 'tests') continue
+          const p = join(d, e)
+          if (statSync(p).isDirectory()) walk(p)
+          else if (/\.ts$/.test(e) && /enableAlertBeforeUnload/.test(stripComments(readFileSync(p, 'utf8'))))
+            bad.push(`${relative(ROOT, p)} 含 wx.enableAlertBeforeUnload——该 API 对 tab 栈底页永远不弹（决策§30 判废·双死因见守卫注释），退出提醒须走 <page-container>`)
+        }
+      }
+      walk(base)
+      return bad
+    },
+  },
+  {
     // 品牌字体分层子集覆盖（字体分层批·根因#8「构建过≠真机能用」的文案漂移变体）：mp 上屏文案随迭代
     // 只增不减，而字体子集是离线构建产物（源 OTF 84MB 不入仓）——新增文案若带来子集外新字，build 照常
     // 全绿、真机该字静默掉回系统字体（单字版 FOUT 永不结束）。守两条包含关系（推导逻辑与构建脚本共用

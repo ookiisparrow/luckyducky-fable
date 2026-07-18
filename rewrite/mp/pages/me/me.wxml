@@ -1,3 +1,6 @@
+<!-- 整页内容套 <scroll-view>：退出提醒的 page-container 武装态会冻结页面级滚动（决策§30·见 utils/exitGuard），
+     滚动须发生在 scroll-view 内部。login-sheet/page-container 留在外层当兄弟（浮层不随内容滚）。 -->
+<scroll-view class="ld-me-scroll" scroll-y="{{true}}" enhanced="{{true}}" show-scrollbar="{{false}}">
 <view class="ld-me">
   <!-- 头部·大字问候（editorial）：品牌 logo + 欢迎回来大字 + 安静的编辑链接。
        沉浸式：浅丁香头部底色上延填满状态栏区（padding-top 叠状态栏高度·2026-07-16 用户需求） -->
@@ -154,7 +157,11 @@
   </view>
 
   <view class="ld-me-pad-bottom"></view>
-
-  <!-- 登录授权半屏（R1·软门槛）：未同意登录进「我」页弹出、可「暂不登录」关掉继续逛·经 lib/loginGate 单例驱动 -->
-  <login-sheet id="loginSheet" bind:login="onLoggedIn" />
 </view>
+</scroll-view>
+
+<!-- 登录授权半屏（R1·软门槛）：未同意登录进「我」页弹出、可「暂不登录」关掉继续逛·经 lib/loginGate 单例驱动 -->
+<login-sheet id="loginSheet" bind:login="onLoggedIn" />
+
+<!-- 误触退出提醒（决策§30）：隐形容器武装拦第一次返回 →「再按一次退出」·仅安卓返回键·见 utils/exitGuard -->
+<page-container show="{{exitGuardArmed}}" overlay="{{false}}" duration="{{0}}" bindbeforeleave="onExitGuardBeforeLeave" />

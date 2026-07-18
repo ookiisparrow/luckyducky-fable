@@ -8,7 +8,8 @@ import { mapHomeContent, mapProducts, type HomeContentVM, type ProductVM } from 
 import { decideQuickAdd } from '../../lib/quickAdd'
 import * as cart from '../../lib/cart'
 import { consumeHomeTop } from '../../lib/homeIntent'
-import { armExitAlert } from '../../utils/exitGuard'
+// consumeExitGuard 别名：页面方法须叫 onExitGuardBeforeLeave（wxml bindbeforeleave 绑的就是它），同名易误读成递归
+import { armExitGuard, releaseExitGuard, onExitGuardBeforeLeave as consumeExitGuard } from '../../utils/exitGuard'
 import { loginGate } from '../../lib/loginGate'
 import { readSnapshot, writeSnapshot } from '../../lib/snapshot'
 
@@ -28,6 +29,11 @@ Page({
     openFaq: 0,
     showTop: false,
     toast: { show: false, text: '' },
+    exitGuardArmed: false, // 误触退出提醒（决策§30）：驱动 <page-container show>·onShow 武装（初值 false·未上屏不拦）
+    // 以下三项随「整页套 scroll-view」而来（page-container 武装态冻结页面级滚动·见 utils/exitGuard）：
+    refreshing: false, // <scroll-view refresher-triggered>：接管原页面级下拉刷新
+    scrollInto: '', // <scroll-view scroll-into-view>：接管原 wx.pageScrollTo({selector}) 锚点跳转
+    scrollAnim: true, // 本次 scroll-into-view 是否带动画（意图回顶要瞬时·点击跳转要平滑）
   },
   onLoad() {
     const info = wx.getWindowInfo()
@@ -51,22 +57,49 @@ Page({
   // 是否还站在本页，不把迟到回包的导航/角标同步/toast 打到用户已经切走之后的当前页面上。
   onShow() {
     this.hidden = false
-    armExitAlert() // tabBar 根页误触退出提醒（返回二次确认·2026-07-13 用户反馈·覆盖边界见 utils/exitGuard）
+    armExitGuard(this) // tabBar 栈底页误触退出提醒：武装 page-container 拦第一次返回（决策§30·见 utils/exitGuard）
     if (typeof this.getTabBar === 'function') (this.getTabBar() as unknown as LdTabBar).setActive('home')
     loginGate.maybePromptOnce() // 进 App 首个落地页即软门槛弹一次登录半屏（未同意时·本会话共用一次闸·可暂不登录先逛）
-    // 兜底意图落地（我页无课/welcome先逛逛）回到顶部；正常切 tab 未置位则保留上次滚动位置（行为不变）
-    if (consumeHomeTop()) wx.pageScrollTo({ scrollTop: 0, duration: 0 })
+    // 兜底意图落地（我页无课/welcome先逛逛）回到顶部；正常切 tab 未置位则保留上次滚动位置（行为不变）。
+    // 原 wx.pageScrollTo({scrollTop:0,duration:0}) → scroll-into-view 顶部锚点（页面级滚动已被 page-container 冻结）
+    if (consumeHomeTop()) this.scrollTo('top', false)
   },
   onHide() {
     this.hidden = true
+    releaseExitGuard(this) // 切走本 tab：清在途重武装定时器（不回调已隐藏页的 setData）
   },
-  async onPullDownRefresh() {
-    await this.reload()
-    wx.stopPullDownRefresh()
+  onUnload() {
+    releaseExitGuard(this)
   },
-  onPageScroll(e: WechatMiniprogram.Page.IPageScrollOption) {
-    const show = e.scrollTop > 900 // 滚过约一屏半露出「回到顶部」
+  /** <page-container bindbeforeleave>：拦下第一次返回 →「再按一次退出」（2s 内再按放行·2s 后自动重新武装）。 */
+  onExitGuardBeforeLeave() {
+    consumeExitGuard(this)
+  },
+  /** <scroll-view bindrefresherrefresh>：接管原 onPullDownRefresh（页面级下拉在 page-container 的 fixed 下失效）。 */
+  async onRefresher() {
+    this.setData({ refreshing: true })
+    try {
+      await this.reload()
+    } finally {
+      // 收起下拉圈（等价原 wx.stopPullDownRefresh）。必须 finally——reload 抛异常时若漏收，
+      // 下拉圈永远转下去且再也刷不动，且只有真机看得见（根因#8·同 pull-refresh-stops ③ 守的病）。
+      this.setData({ refreshing: false })
+    }
+  },
+  /** <scroll-view bindscroll>：接管原 onPageScroll（阈值逻辑不变·仍只在跨阈值时 setData）。 */
+  onScroll(e: WechatMiniprogram.ScrollViewScroll) {
+    const show = e.detail.scrollTop > 900 // 滚过约一屏半露出「回到顶部」
     if (show !== this.data.showTop) this.setData({ showTop: show })
+  },
+  /**
+   * 锚点滚动单源（接管原 wx.pageScrollTo·scroll-view 内它不生效）。
+   * scroll-into-view 是受控属性：停留在同一个 id 时再设同值不会重复触发（比如连点两次「购买」），
+   * 故先清空再设目标——清空这次 setData 落地后（回调）才设，避免同帧合并成「没变化」。
+   */
+  scrollTo(id: string, animate = true) {
+    this.setData({ scrollAnim: animate, scrollInto: '' }, () => {
+      this.setData({ scrollInto: id })
+    })
   },
   _seq: 0, // reload 代次（同 order-list 范式）：onLoad + 下拉刷新可能并发触发·丢弃被更晚 reload 取代的过期回包
   _hadSnapshot: false, // onLoad 是否已用首屏快照渲染过（批2·SWR）：为 true 时网络失败不整页翻失败态（已有真内容垫着）
@@ -129,13 +162,13 @@ Page({
   },
   toProducts() {
     tapHaptic()
-    wx.pageScrollTo({ selector: '#friends', duration: 320 }) // 「购买」滚到商品轨（设计 scrollToProduct）
+    this.scrollTo('friends') // 「购买」滚到商品轨（设计 scrollToProduct）
   },
   toIntro() {
-    wx.pageScrollTo({ selector: '#intro', duration: 320 }) // 搜索胶囊滚到品牌介绍（设计 scrollToIntro）
+    this.scrollTo('intro') // 搜索胶囊滚到品牌介绍（设计 scrollToIntro）
   },
   backTop() {
-    wx.pageScrollTo({ scrollTop: 0, duration: 320 })
+    this.scrollTo('top')
   },
   // 品牌开屏淡出结束（brand-splash 撤场后 triggerEvent('done')·撤场＝min-hold+数据就绪 race+硬上限）：撤下覆盖层露出首页。
   onSplashDone() {

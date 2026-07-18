@@ -1,6 +1,13 @@
 /* 购物车·设计「待选区」语言。设计稿 402px 画板 → rpx（×1.87）。
    token 见 styles/tokens.wxss；标题头 + 虚线暂存区(已加购行) + 下方推荐(圆加号) + 信任小字 + 悬浮结算 bar。
    业务逻辑（勾选/加减/删除/全选/合计/结算·lib/cart）由 wxml handler 承接，本文件只管视觉。 */
+/* 滚动容器：退出提醒的 page-container 武装态冻结页面级滚动（决策§30），滚动改在 scroll-view 内发生。
+   须填满视口——height 而非 min-height（scroll-view 靠固定高度才产生内部滚动）。 */
+.ld-cart-scroll {
+  height: 100vh;
+  background: var(--ld-bg-lilac);
+}
+
 .ld-cart {
   min-height: 100vh;
   background: var(--ld-bg-lilac);
