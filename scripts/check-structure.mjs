@@ -314,7 +314,9 @@ export const repoChecks = [
       if (calls.size) {
         const deployFns = join(ROOT, 'scripts/deploy-fns.mjs')
         if (!existsSync(deployFns)) bad.push('scripts/deploy-fns.mjs 缺失——无法核「config.json 改动触发重部署」（根因#8·债#26）')
-        else if (!/'config\.json'\)[\s\S]{0,160}\.update\(\s*readFileSync/.test(readFileSync(deployFns, 'utf8')))
+        // 两种等价形状都认：直连 `join(..., 'config.json')…update(readFileSync` 或批3 的数组循环
+        // `['config.json', 'package.json'] … update(readFileSync(fp)`（意图同一：config.json 参与部署 hash）
+        else if (!/'config\.json'[\s\S]{0,240}?\.update\(\s*readFileSync/.test(readFileSync(deployFns, 'utf8')))
           bad.push('scripts/deploy-fns.mjs 部署 hash 未把 config.json 喂进 hash——只改 openapi 权限（config.json）时漂移检测漏判·权限永不部署（根因#8 部署≠生效·债#26）')
       }
       return bad
@@ -1792,6 +1794,58 @@ export const repoChecks = [
         if (OLDLINE_SCOPE_OK.has(r.id)) continue
         if (!hits.get(r.id))
           bad.push(`fileRule '${r.id}' 在 rewrite/ 活线零命中且不在 OLDLINE_SCOPE_OK 白名单——扫描面空转（病根#16·dep-direction 前科：声称守 T4 实扫冻结线）`)
+      }
+      return bad
+    },
+  },
+  {
+    // 病根#16 ⑤（盲区体检批3·指针大迁移）：M5 切换（2026-07-09）搬走了生产，没有任何机制清点
+    // 「指向生产的引用」——oldline-frozen 守住旧线字节、没守指向旧线的指针。当日实况：deploy-fns.mjs
+    // 仍 build:cloud + packages/cloud/dist + 38 函数旧 manifest——hash 匹配则报「变更待部署 0 个」
+    // 假全清（app 函数落后半月无人察觉的根因），不匹配则会把冻结旧线覆盖上生产、复活已删的 26 函数；
+    // deploy-test.mjs 同病。本守卫：会动环境/验产物的工具脚本禁引用旧线，声明为旧线专属的进白名单
+    // （各带一句为什么），新脚本引用 packages/ 当场红。
+    id: 'rw-toolchain-no-oldline',
+    roots: ['#16'],
+    desc: '工具链禁旧线引用（病根#16 ⑤·M5 残留指针清点）：scripts/ 下 .mjs/.cjs（守卫注册表两文件除外——其内旧线路径是「守冻结参照」的守卫本体）与 .github/workflows/ 禁出现 packages/cloud、packages/miniapp、build:cloud 任一 token；旧线专属工具白名单豁免（freeze 工具/旧线产物验证/旧线视觉回归/旧线格式化域/体检面板标注/preflight+deploy-drift 自证历史遗留）——随 packages/ 处置拍板一并清退',
+    run() {
+      // 白名单：声明就是旧线专属/守冻结参照的工具（值=为什么在册）。deploy-fns/deploy-test 刻意不在册。
+      const OLDLINE_TOOLS = new Map([
+        ['scripts/freeze-oldline.mjs', '冻结基线工具本体'],
+        ['scripts/oldline-freeze-lib.mjs', '冻结基线 lib'],
+        ['scripts/verify-cloud-bundles.cjs', '旧线产物行为验证（自声明 B 类·活线版另有 verify-rw-cloud-bundles）'],
+        ['scripts/visual-check.cjs', '旧线视觉回归（扫描面=packages/miniapp dist·新线走 mp-smoke）'],
+        ['scripts/format-hook.mjs', '格式化域刻意锁旧线（其头注成文·扩域是另一笔决策）'],
+        ['scripts/check-report.mjs', '体检面板把 packages/miniapp 标注为「旧线」——标注非引用'],
+        ['scripts/preflight.mjs', '旧线部署体检·deploy-drift 头注自证「对生产线钱链漂移零检测」·迁活线或退役待拍板'],
+        ['scripts/lib/deploy-drift.mjs', '同上·历史遗留自证已成文'],
+        ['scripts/lib/brand-font-charset.mjs', '字体字集扫描含旧线参照面（sweep 自带 dot 排除）'],
+        ['scripts/build-brand-font.mjs', '品牌字体构建·扫描面含旧线参照'],
+      ])
+      const REGISTRY = new Set(['scripts/check-structure.mjs', 'scripts/check-conventions.mjs'])
+      const TOKEN = /packages\/(cloud|miniapp)|build:cloud\b/
+      const bad = []
+      const scanDirs = ['scripts', '.github/workflows']
+      for (const dir of scanDirs) {
+        const abs = join(ROOT, dir)
+        if (!existsSync(abs)) continue
+        const files = []
+        const collect = (d) => {
+          for (const e of lsScan(d)) {
+            const p = join(d, e)
+            if (statSync(p).isDirectory()) collect(p)
+            else if (/\.(mjs|cjs|yml|yaml)$/.test(e)) files.push(p)
+          }
+        }
+        collect(abs)
+        for (const f of files) {
+          const rel = relative(ROOT, f).replace(/\\/g, '/')
+          if (REGISTRY.has(rel) || OLDLINE_TOOLS.has(rel)) continue
+          // 剥注释再扫（E1 纪律·stripComments 单源）：迁移史/为什么的说明就该写在注释里，不算引用
+          const src = stripComments(readFileSync(f, 'utf8'))
+          if (TOKEN.test(src))
+            bad.push(`${rel} 引用旧线（packages/cloud|packages/miniapp|build:cloud）——生产线在 rewrite/，该迁未迁的指针会假全清或把冻结旧线部署上生产（病根#16 ⑤·M5 残留）；确属旧线专属工具则进 OLDLINE_TOOLS 白名单并写明为什么`)
+        }
       }
       return bad
     },
