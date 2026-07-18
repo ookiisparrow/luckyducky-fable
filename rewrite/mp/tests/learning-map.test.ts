@@ -138,6 +138,19 @@ describe('mapCatalog（目录页数据源·课时状态/续播/磁贴 VM）', ()
     expect(l1.lastLabel).toBe('')
     expect(l1.firstPlayableSegId).toBe('s1')
     expect(l3.firstPlayableSegId).toBe('s4') // s5 无视频跳过
+  })
+
+  it('大白话：段 dur 是库内真实的 "m:ss" 字符串也能算出分钟——原 Number("5:00")=NaN 会把课时时长隐藏成 0（决策§29 批2 顺修）', () => {
+    const c = {
+      chapters: [
+        {
+          id: 'ch1',
+          lessons: [{ id: 'l1', name: '起针', segments: [{ id: 's1', hasVideo: true, dur: '5:00' }, { id: 's2', hasVideo: true, dur: '1:36' }] }],
+        },
+      ],
+    }
+    const r = mapCatalog(c, [], 'c1')
+    expect(r.chapters[0].lessons[0].minutes).toBe(7) // round((300+96)/60)
     expect(r.continueTarget).toEqual({ segmentId: 's1', lessonId: 'l1', lessonName: '起针' })
   })
 

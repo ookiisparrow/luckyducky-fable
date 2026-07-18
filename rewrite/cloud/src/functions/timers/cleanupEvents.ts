@@ -1,5 +1,5 @@
 import cloud from 'wx-server-sdk'
-import { getDb, ok, isServerCall } from '../../kit'
+import { getDb, ok, isServerCall, isVodFileId, callVodApi } from '../../kit'
 
 // wx-server-sdk 类型声明缺 deleteFile（运行时存在·adminApi 侧经 Ctx any 传入故未显形），此处显式收窄
 const storageCloud = cloud as unknown as { deleteFile: (o: { fileList: string[] }) => Promise<unknown> }
@@ -59,15 +59,30 @@ export const main = async () => {
     const q = Array.isArray(c.pendingGc) ? c.pendingGc : []
     const due = q.filter((en: any) => en && en.fileId && Number(en.deleteAfter) <= now)
     if (!due.length) continue
-    const r = await storageCloud.deleteFile({ fileList: due.map((en: any) => String(en.fileId)) }).catch(() => null)
-    if (!r) continue // 删失败整批留队下轮再试（fail-soft·不反噬其余清理）
-    const remaining = q.filter((en: any) => !(en && en.fileId && Number(en.deleteAfter) <= now))
+    // 双线分流（决策§29 批2·同 getPlaybackUrl 的 isVodFileId 判据单源）：cloud:// 走云存储 deleteFile
+    // （整批），VOD FileId 走 DeleteMedia（官方单文件一调）。逐项记成功：任一线失败其项留队下轮再试
+    // （fail-soft·与原语义一致）；VOD 侧「媒资已不存在」（ResourceNotFound）视作删除成功出队——防已删
+    // 媒资把队列条目卡成永久重试。VOD 未配置时 callVodApi 回 null（已告警），VOD 项留队等配置补上。
+    const done = new Set<string>()
+    const dueCos = due.filter((en: any) => !isVodFileId(String(en.fileId)))
+    if (dueCos.length) {
+      const r = await storageCloud.deleteFile({ fileList: dueCos.map((en: any) => String(en.fileId)) }).catch(() => null)
+      if (r) for (const en of dueCos) done.add(String(en.fileId))
+    }
+    for (const en of due) {
+      const id = String(en.fileId)
+      if (!isVodFileId(id)) continue
+      const resp = await callVodApi(db, 'DeleteMedia', { FileId: id })
+      if (resp && (!resp.Error || String(resp.Error.Code || '').includes('ResourceNotFound'))) done.add(id)
+    }
+    if (!done.size) continue
+    const remaining = q.filter((en: any) => !(en && done.has(String(en.fileId)) && Number(en.deleteAfter) <= now))
     await db
       .collection('courses')
       .doc(c._id)
       .update({ data: { pendingGc: remaining } })
       .catch(() => {})
-    gcDeleted += due.length
+    gcDeleted += done.size
   }
   return ok({ removed: n(rmEvents), rateLimit: n(rmRate), kfSeen: n(rmSeen), chunks: n(rmChunks), videoGc: gcDeleted })
 }

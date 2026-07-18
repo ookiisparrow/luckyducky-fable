@@ -4,7 +4,8 @@
 import { ref, computed, onMounted, onBeforeUnmount, watch, nextTick } from 'vue'
 import { useRoute, onBeforeRouteLeave } from 'vue-router'
 import { RotateCcw, Plus, Trash2, Upload, Check, BookOpen } from 'lucide-vue-next'
-import { getCourseDraft, saveCourseDraft, publishCourse, uploadVideo } from '../api/content'
+import { getCourseDraft, saveCourseDraft, publishCourse, uploadVideo, syncVodMedia } from '../api/content'
+import { isVodFileId } from '@ldrw/shared'
 import { courseVideoStats } from '../lib/mapContent'
 import { planLessonBatch } from '../lib/videoBatch'
 import { serialSave } from '../lib/serialSave'
@@ -32,6 +33,25 @@ const confirmKey = ref('') // no-alert 两步删除确认（换皮改直接 spli
 const batchUploading = ref(false) // 课时级批量传视频在途（P1·根因#8）：期间锁重排/删除交互入口，防结构错位与稳定标识失配（批3 规格）
 
 const pct = computed(() => (stats.value.total ? Math.round((stats.value.done / stats.value.total) * 100) : 0))
+
+// VOD 转码态（决策§29 批2）：段 videoFileId 为 VOD FileId（纯数字·判据单源 @ldrw/shared 与云端播放
+// 分流同款）且 vodUrl 未回写 = 转码中——「传完 ≠ 可播」，发布被云端闸拦，先点「同步转码状态」。
+const vodPending = (sg: Record<string, any>) => isVodFileId(String(sg.videoFileId || '')) && !sg.vodUrl
+const vodPendingCount = computed(() => {
+  let n = 0
+  for (const ch of course.value?.chapters || []) for (const l of ch.lessons || []) for (const sg of l.segments || []) if (vodPending(sg)) n++
+  return n
+})
+async function syncVod() {
+  if (!course.value || busy.value || batchUploading.value) return
+  busy.value = true
+  const r = await syncVodMedia(String(course.value.id))
+  busy.value = false
+  if (r.ok) {
+    message.value = `转码状态已同步：本次就绪 ${r.ready} 段、仍在转码 ${r.processing} 段` + (Number(r.processing) ? '——短视频通常几分钟内转完，稍后再点一次' : '，可以发布了')
+    await load() // 服务端已回写 vodUrl 且 rev 递增——不重载，下次自动保存会撞 DRAFT_CONFLICT（诚实拒绝）
+  } else message.value = '同步失败：' + String(r.error || '')
+}
 
 function twoStep(key: string, run: () => void) {
   if (confirmKey.value !== key) {
@@ -346,7 +366,11 @@ async function publish() {
   }
   const r = await publishCourse(String(course.value.id))
   busy.value = false
-  message.value = r.ok ? '已发布，学员立即看到新版' : '发布失败：' + String(r.error || '')
+  message.value = r.ok
+    ? '已发布，学员立即看到新版'
+    : r.error === 'VOD_PROCESSING'
+      ? `发布未执行：还有 ${r.pending} 段视频转码中——点「同步转码状态」，全部就绪后再发布`
+      : '发布失败：' + String(r.error || '')
 }
 
 onMounted(load)
@@ -383,6 +407,7 @@ onMounted(load)
               <div class="vbar"><div class="vbar-fill" :style="{ width: pct + '%' }" /></div>
             </div>
             <span v-if="saveState" class="autosave" :class="saveState">{{ saveState === 'saving' ? '自动保存中…' : saveState === 'saved' ? '已自动存草稿' : '自动保存失败·点保存重试' }}</span>
+            <UiButton v-if="vodPendingCount" variant="ghost" size="sm" :disabled="busy || batchUploading" @click="syncVod">同步转码状态（{{ vodPendingCount }} 段转码中）</UiButton>
             <UiButton variant="ghost" size="sm" :disabled="busy" @click="save">保存草稿</UiButton>
             <UiButton size="sm" :disabled="busy" @click="publish">{{ publishConfirm ? '确认发布？老学员立即生效' : '发布上线' }}</UiButton>
           </div>
@@ -417,6 +442,7 @@ onMounted(load)
               <span>{{ sg.videoFileId ? '已传 · 替换' : '选视频' }}</span>
               <input type="file" accept="video/mp4,video/quicktime" hidden :disabled="batchUploading" @change="(e) => pickVideo(l, sg, e)" />
             </label>
+            <span v-if="vodPending(sg)" class="vod-pending" title="视频已传到点播平台，转码完成前不可发布——点上方「同步转码状态」">转码中</span>
             <button class="icon-btn" title="上移" :disabled="si === 0 || batchUploading" @click="move(l.segments, si, -1)">↑</button>
             <button class="icon-btn" title="下移" :disabled="si === l.segments.length - 1 || batchUploading" @click="move(l.segments, si, 1)">↓</button>
             <button class="icon-btn" :disabled="batchUploading" :class="{ warn: confirmKey === 's:' + ci + ':' + li + ':' + si }" title="删段" @click="delSegment(l, ci, li, si)"><Trash2 :size="14" :stroke-width="1.8" /></button>
@@ -604,6 +630,17 @@ onMounted(load)
   border-color: var(--ld-green);
   color: var(--ld-green);
   background: var(--ld-bg-green-soft);
+}
+/* VOD 转码中 chip（决策§29 批2）：已传但转码未就绪——发布被云端闸拦的可视化对应物 */
+.vod-pending {
+  padding: 4px 10px;
+  border: 1px solid var(--ld-amber);
+  border-radius: 999px;
+  color: var(--ld-amber);
+  background: var(--ld-bg-amber-soft);
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
 }
 /* 上传中禁用态（G2 复审补：批量传视频在途时和其余受锁控件一致给可感知反馈，防用户选完文件误以为失灵） */
 .upload.disabled,

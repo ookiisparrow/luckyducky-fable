@@ -126,6 +126,16 @@ interface CatalogLessonRaw {
   segments: CatalogSeg[]
 }
 
+/** dur 口径修复（决策§29 批2 顺修）：段 dur 库内是 'm:ss' 字符串（admin readDuration/VOD 转码回填同款），
+ *  原 Number('5:00')→NaN→0 把全部课时时长隐藏成 0 分钟。兼容三种历史写法：数字秒、纯数字串、'm:ss'。 */
+export function parseDurSec(v: unknown): number {
+  if (typeof v === 'number') return v > 0 ? v : 0
+  const s = String(v || '').trim()
+  const m = s.match(/^(\d+):([0-5]?\d)$/)
+  if (m) return Number(m[1]) * 60 + Number(m[2])
+  return Number(s) > 0 ? Number(s) : 0
+}
+
 /**
  * 目录页数据源（C1·教学播放重设计批A·2026-07-11 预审裁决消歧优先级）：
  * 课时状态判定优先级——① 全课全 done（每个段数>0 的课时都 done 且至少有一个课时）→ 全部 done、无 current（覆盖一切）；
@@ -152,7 +162,7 @@ export function mapCatalog(
       no++
       const segments: CatalogSeg[] = (Array.isArray(l.segments) ? l.segments : [])
         .filter((s: any) => s && s.id)
-        .map((s: any) => ({ id: String(s.id), hasVideo: !!s.hasVideo, dur: Number(s.dur) || 0 }))
+        .map((s: any) => ({ id: String(s.id), hasVideo: !!s.hasVideo, dur: parseDurSec(s.dur) }))
       idxs.push(lessons.length)
       lessons.push({ lessonId: String(l.id), lessonName: String(l.name || ''), no: String(no).padStart(2, '0'), segments })
     }

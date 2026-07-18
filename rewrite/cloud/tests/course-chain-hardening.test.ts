@@ -170,3 +170,161 @@ describe('trackEvent video_error 桥接（播放失败率可见·根因#14）', 
     expect(control.dump('anomalies').filter((x: any) => x.code === 'MP_VIDEO_ERROR')).toHaveLength(1)
   })
 })
+
+// ─── VOD 转码管线批2（决策§29）：上传签名 / 转码同步 / 发布闸 / GC 分流 ───
+describe('VOD 上传签名 + 转码同步 + 发布闸 + GC 分流（转码管线·决策§29 批2）', () => {
+  const VOD_DRAFT = {
+    _id: 'c1',
+    id: 'c1',
+    title: 'VOD 课',
+    sort: 1,
+    rev: 3,
+    chapters: [
+      {
+        id: 'ch1',
+        title: '章',
+        lessons: [
+          {
+            id: 'l1',
+            name: '课时',
+            dur: '',
+            segments: [
+              { id: 's1', name: '已转段', dur: '', videoFileId: '5285890784246869296' },
+              { id: 's2', name: '转码中段', dur: '', videoFileId: '5285890784246869297' },
+              { id: 's3', name: '老线段', dur: '1:00', videoFileId: 'cloud://v/s3.mp4' },
+            ],
+          },
+        ],
+      },
+    ],
+  }
+  const seedVodConfig = () =>
+    control.seed('secureConfig', [{ _id: 'vod', secretId: 'AKIDtest', secretKey: 'sk-test-secret', playKey: 'pk', procedure: 'LuckyDuckyVod' }])
+  // fetch 桩（同企微免登 withFetch 口径·多带 init 供断言 X-TC-Action/请求体）
+  const withFetch = async (impl: (url: string, init?: any) => any, fn: () => Promise<void>) => {
+    const saved = globalThis.fetch
+    ;(globalThis as any).fetch = async (url: any, init?: any) => ({ json: async () => impl(String(url), init) })
+    try {
+      await fn()
+    } finally {
+      globalThis.fetch = saved
+    }
+  }
+
+  it('大白话：VOD 未配置——签名端点回 VOD_NOT_CONFIGURED（admin 借此回退云存储直传老路，上传不断档）', async () => {
+    const r = await post('getVodUploadSignature')
+    expect(r.ok).toBe(false)
+    expect(r.error).toBe('VOD_NOT_CONFIGURED')
+  })
+
+  it('大白话：已配置——签发 UGC 上传签名：参数串含 secretId/procedure、HMAC-SHA1 可复算、绝不泄 secretKey', async () => {
+    seedVodConfig()
+    const r = await post('getVodUploadSignature')
+    expect(r.ok).toBe(true)
+    const raw = Buffer.from(String(r.signature), 'base64')
+    const mac = raw.subarray(0, 20)
+    const orig = raw.subarray(20).toString()
+    expect(orig).toContain('secretId=AKIDtest')
+    expect(orig).toContain('procedure=LuckyDuckyVod')
+    expect(orig.includes('sk-test-secret')).toBe(false) // 零回显：密钥绝不进签名明文
+    const { createHmac } = await import('node:crypto')
+    expect(mac.equals(createHmac('sha1', 'sk-test-secret').update(orig).digest())).toBe(true) // 官方 UGC 算法可复算
+  })
+
+  it('大白话：同步转码状态——就绪段回写 vodUrl/封面/雪碧图/时长、未就绪只计数、rev 递增防旧稿覆盖', async () => {
+    seedVodConfig()
+    control.seed('coursesDraft', [VOD_DRAFT])
+    const actions: string[] = []
+    await withFetch((_url, init) => {
+      actions.push(String(init?.headers?.['X-TC-Action']))
+      return {
+        Response: {
+          MediaInfoSet: [
+            {
+              FileId: '5285890784246869296',
+              BasicInfo: { CoverUrl: 'https://vod.example.com/cover/1.jpg' },
+              MetaData: { Duration: 95.5 },
+              TranscodeInfo: {
+                TranscodeSet: [
+                  { Definition: 0, Url: 'https://vod.example.com/125/orig.mp4' },
+                  { Definition: 100240, Url: 'https://vod.example.com/125/f100240.mp4' },
+                ],
+              },
+              ImageSpriteInfo: { ImageSpriteSet: [{ WebVttUrl: 'https://vod.example.com/125/sprite.vtt' }] },
+            },
+            { FileId: '5285890784246869297', TranscodeInfo: { TranscodeSet: [] } },
+          ],
+        },
+      }
+    }, async () => {
+      const r = await post('syncVodMedia', { courseId: 'c1' })
+      expect(r.ok).toBe(true)
+      expect(r.ready).toBe(1)
+      expect(r.processing).toBe(1)
+      expect(r.rev).toBe(4)
+    })
+    expect(actions).toEqual(['DescribeMediaInfos'])
+    const segs = control.dump('coursesDraft')[0].chapters[0].lessons[0].segments
+    expect(segs[0].vodUrl).toBe('https://vod.example.com/125/f100240.mp4') // 挑非源画质（Definition≠0）转码产物
+    expect(segs[0].vodPoster).toBe('https://vod.example.com/cover/1.jpg')
+    expect(segs[0].vodSpriteVtt).toBe('https://vod.example.com/125/sprite.vtt')
+    expect(segs[0].dur).toBe('1:36') // 95.5s → 1:36（转码元数据回填空时长·手填不覆盖）
+    expect(segs[1].vodUrl).toBeFalsy()
+    expect(control.dump('coursesDraft')[0].rev).toBe(4)
+  })
+
+  it('大白话：发布闸——还有段转码未就绪就拒发布（VOD_PROCESSING+计数），「传完 ≠ 可播」不放伪成功', async () => {
+    control.seed('coursesDraft', [VOD_DRAFT])
+    const r = await post('publishCourse', { courseId: 'c1' })
+    expect(r.ok).toBe(false)
+    expect(r.error).toBe('VOD_PROCESSING')
+    expect(r.pending).toBe(2)
+    expect(control.dump('courses')).toHaveLength(0) // 未发布——学员端零影响
+  })
+
+  it('大白话：全部就绪后发布放行——vodUrl 随发布进正式课程文档，cloud:// 老段不受影响', async () => {
+    const ready = JSON.parse(JSON.stringify(VOD_DRAFT))
+    for (const sg of ready.chapters[0].lessons[0].segments)
+      if (/^\d{8,}$/.test(sg.videoFileId)) sg.vodUrl = 'https://vod.example.com/x/f0.mp4'
+    control.seed('coursesDraft', [ready])
+    const r = await post('publishCourse', { courseId: 'c1' })
+    expect(r.ok).toBe(true)
+    const pub = control.dump('courses')[0]
+    expect(pub.chapters[0].lessons[0].segments[0].vodUrl).toBe('https://vod.example.com/x/f0.mp4')
+    expect(pub.chapters[0].lessons[0].segments[2].videoFileId).toBe('cloud://v/s3.mp4')
+  })
+
+  it('大白话：GC 分流——到期孤儿 cloud:// 走 deleteFile、VOD FileId 走 DeleteMedia；删失败留队下轮重试', async () => {
+    control.setOpenId('')
+    seedVodConfig()
+    const past = Date.now() - 1000
+    control.seed('courses', [
+      {
+        _id: 'c1',
+        id: 'c1',
+        chapters: [],
+        pendingGc: [
+          { fileId: 'cloud://v/old.mp4', deleteAfter: past },
+          { fileId: '52858907842468611', deleteAfter: past },
+          { fileId: '52858907842468612', deleteAfter: past },
+          { fileId: '52858907842468613', deleteAfter: Date.now() + 3600_000 },
+        ],
+      },
+    ])
+    const deleted: string[] = []
+    await withFetch((_url, init) => {
+      expect(String(init?.headers?.['X-TC-Action'])).toBe('DeleteMedia')
+      const fid = String(JSON.parse(String(init?.body || '{}')).FileId)
+      if (fid === '52858907842468612') return { Response: { Error: { Code: 'InternalError', Message: 'mock' } } }
+      deleted.push(fid)
+      return { Response: { RequestId: 'mock' } }
+    }, async () => {
+      const r: any = await cleanupEvents()
+      expect(r.videoGc).toBe(2) // cloud://old + vod 611；612 失败留队、613 未到期
+    })
+    expect(deleted).toEqual(['52858907842468611'])
+    expect((control as any).deletedFiles()).toContain('cloud://v/old.mp4')
+    const q = control.dump('courses')[0].pendingGc.map((en: any) => String(en.fileId))
+    expect(q).toEqual(['52858907842468612', '52858907842468613'])
+  })
+})

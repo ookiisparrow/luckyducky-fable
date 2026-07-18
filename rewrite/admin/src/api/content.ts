@@ -15,9 +15,37 @@ export const getCourseDraft = (courseId: string) => client.post('getCourseDraft'
 // baseRev＝拉草稿时的版本号（乐观并发·课程链路审计 2026-07-17）：不符后端回 DRAFT_CONFLICT 拒覆盖
 export const saveCourseDraft = (course: Record<string, unknown>, baseRev?: number) => client.post('saveCourseDraft', { course, baseRev })
 export const publishCourse = (courseId: string) => client.post('publishCourse', { courseId })
+// 转码状态同步（决策§29 批2·on-demand 拉模式）：就绪段回写 vodUrl/封面/雪碧图/时长·rev 递增（调用方须重载草稿）
+export const syncVodMedia = (courseId: string) => client.post('syncVodMedia', { courseId })
 
-/** 视频直传：换凭证 → POST 表单 → 返回 videoFileId（cloud://）。onProgress 0-1。 */
+// —— VOD 直传（决策§29 转码管线批2·课程视频主路径升级）——签名派发经 adminApi（kit/vod UGC 签名），
+// 浏览器 vod-js-sdk-v6 直传 VOD 并经 procedure 自动触发转码任务流。未配置（VOD_NOT_CONFIGURED）自动
+// 回退下方云存储直传老路——配置填入即切换、零部署零操作变化；帮助视频线（HelpVideos）恒走老路不迁。
+let vodSig: { sig: string | null; exp: number } | null = null
+async function getVodSignature(): Promise<string | null> {
+  if (vodSig && Date.now() < vodSig.exp) return vodSig.sig
+  const r = await client.post('getVodUploadSignature')
+  vodSig = { sig: r.ok ? String(r.signature) : null, exp: Date.now() + 5 * 60_000 } // 负结果同缓 5min：批量百段不重复探测
+  return vodSig.sig
+}
+
+async function uploadVideoVod(file: File, onProgress?: (p: number) => void): Promise<{ ok: boolean; fileId?: string; error?: string }> {
+  try {
+    const TcVod = (await import('vod-js-sdk-v6')).default // 动态引入：未配置 VOD 的会话不载 SDK
+    const uploader = new TcVod({ getSignature: async () => (await getVodSignature()) || '' }).upload({ mediaFile: file })
+    if (onProgress) uploader.on('media_progress', (info: { percent?: number }) => onProgress(Number(info?.percent) || 0))
+    const done = await uploader.done()
+    const fileId = String((done as { fileId?: string })?.fileId || '')
+    if (!fileId) return { ok: false, error: 'VOD_NO_FILEID' }
+    return { ok: true, fileId } // 纯数字 FileId（isVodFileId 判据·转码就绪前段显示「转码中」）
+  } catch (e) {
+    return { ok: false, error: String(e instanceof Error ? e.message : e) } // 原文不吞（同老路口径）
+  }
+}
+
+/** 视频直传：VOD 已配置走 VOD（返回纯数字 FileId），否则走云存储老路（返回 cloud:// fileID）。onProgress 0-1。 */
 export async function uploadVideo(courseId: string, segName: string, file: File, onProgress?: (p: number) => void): Promise<{ ok: boolean; fileId?: string; error?: string }> {
+  if (await getVodSignature()) return uploadVideoVod(file, onProgress)
   const ext = /\.mov$/i.test(file.name) ? 'mov' : 'mp4'
   const meta = await client.post('getVideoUploadMeta', { courseId, name: segName, ext })
   if (!meta.ok) return { ok: false, error: String(meta.error || 'META_UNAVAILABLE') }

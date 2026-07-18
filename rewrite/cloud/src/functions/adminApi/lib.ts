@@ -375,6 +375,12 @@ export function cleanCourse(c: any) {
           name: str(sg?.name, 60),
           dur: str(sg?.dur, 10),
           videoFileId: str(sg?.videoFileId, 300),
+          // VOD 转码产物（决策§29 批2·syncVodMedia 服务端回写；此处入白名单让 admin 草稿保存的
+          // 往返不抹掉它们）。学员端不泄露：publicSegment/getCourses 逐层白名单不含这些字段，
+          // 播放地址只经 getPlaybackUrl 鉴权后签名下发（守卫 rw-learning-golden 断言不漏）。
+          vodUrl: str(sg?.vodUrl, 500),
+          vodPoster: str(sg?.vodPoster, 500),
+          vodSpriteVtt: str(sg?.vodSpriteVtt, 500),
         })),
       })),
     })),
