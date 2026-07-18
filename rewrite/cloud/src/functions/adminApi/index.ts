@@ -181,9 +181,10 @@ const ACTIONS: Record<string, (ctx: Ctx) => Promise<any>> = {
   savePayConfig: secureConfig.savePayConfig,
 }
 
-// 能力闸（RBAC·别让单超管裸奔）：受限 action 须 principal 具备对应能力（'*'=全能力）。
+// 能力闸（RBAC·别让单超管裸奔）：受限 action 须 principal 具备对应能力（'*'=全能力）。值可为单 cap 或
+// cap 数组（「任一命中」语义·C4）——数组内任一 cap 命中即放行。
 // 360 读他人全貌/检索＝customer:view；坐席台＝外包最小权 agent:handle（不含动钱/动状态/退款——留商户超管）。
-const ACTION_CAPS: Record<string, string> = {
+const ACTION_CAPS: Record<string, string | string[]> = {
   getCustomer360: 'customer:view',
   searchCustomer: 'customer:view',
   getUser: 'customer:view',
@@ -206,6 +207,17 @@ const ACTION_CAPS: Record<string, string> = {
   listKb: 'agent:handle',
   // 越规退款（决策§26·退货管理权限）：单立 refund:manage 能力——超管 '*' 天然匹配，未来可给中间角色单授而不放全量 admin:write
   overrideRefund: 'refund:manage',
+  // refund:manage 最小只读面（待办与债 2026-07-12 批 B8 评审发现节·C4 落地）：overrideRefund 依赖的退款
+  // 工作台加载面（列表/计数/详情/订单联查）此前未登记 ACTION_CAPS→默认落 admin:write，给中间角色单授
+  // refund:manage 时页面加载即 403。登记为「任一命中」数组：admin:write 持有者行为完全不变（防收紧误伤），
+  // refund:manage 独立可用（债目意图）。
+  listRefunds: ['admin:write', 'refund:manage'],
+  refundCounts: ['admin:write', 'refund:manage'],
+  getRefundDetail: ['admin:write', 'refund:manage'],
+  // listOrders 对 refund:manage 是「核对退款这一单」的联查口，非全店浏览面：能力闸只按 action 名放行、
+  // 看不到 data 里有没有过滤——放开后 refund:manage-only 可不带 q 翻遍全店客户 PII（P2 评审收窄）。故
+  // listOrders handler 内再对「仅持 refund:manage」的调用方强制精确单号 q（admin:write/'*' 全店浏览不变）。
+  listOrders: ['admin:write', 'refund:manage'],
 }
 // 默认拒：未登记 ACTION_CAPS 的 action 须此高权默认 cap——非超管默认进不去钱/状态/管理 action。
 const ADMIN_DEFAULT_CAP = 'admin:write'
@@ -234,6 +246,20 @@ async function throttleGate(tkey: string): Promise<{ ipWait: number; globalWait:
 async function throttleFailBoth(tkey: string): Promise<void> {
   await throttleFail(tkey, ADMIN_THROTTLE)
   await throttleFail(GLOBAL_KEY, ADMIN_THROTTLE_GLOBAL)
+}
+
+// 审计成功判定（C3·根因#14 失败不可观测）：handler 一律经 reply() 返回 { statusCode, body:JSON字符串 }。
+// 仅看 statusCode===200 会把 ops.ts/wxbill.ts 等「HTTP 200 + body.ok:false」的业务失败误记成成功。改判：
+// statusCode===200 且解析 body 后 ok 不为 false 才算成功（body 无 ok 字段＝按成功·保留旧宽松语义；
+// body 非 JSON＝不该发生，保守按 200 记成功、与旧行为一致，绝不因判定本身反噬审计）。
+function auditOk(res: any): boolean {
+  if (!res || res.statusCode !== 200) return false
+  try {
+    const body = typeof res.body === 'string' ? JSON.parse(res.body) : res.body
+    return !body || body.ok !== false
+  } catch {
+    return true
+  }
 }
 
 export const main = async (event: any) => {
@@ -274,11 +300,16 @@ export const main = async (event: any) => {
   // 企微 OAuth 免登（pre-auth·坐席无口令·同 login 受频控防刷 code）：换 userid→查绑定账号→签发 session 令牌
   if (action === 'loginByWecomCode') {
     const res = await wecomLogin.loginByWecomCode({ db, data })
+    // 按返回码分类计频控（C2·防基建冷窗自我 DoS）：wecomLogin.ts 枚举——200=成功；401 BAD_CODE /
+    // 403 NO_BOUND_ACCOUNT / 403 ACCOUNT_DISABLED=真鉴权失败（爆破证据）→ 计 throttleFail；
+    // 503 KF_TOKEN_UNAVAILABLE（令牌缓存冷窗·非爆破）/ 400 BAD_ARGS（缺 code·客户端错）=既不计失败也不 reset，
+    // 否则办公室固定 IP 会在令牌冷窗期被无辜锁死。GLOBAL_BRUTE 告警跟随计数：仅真鉴权失败且 globalWait>0 才告警。
     if (res.statusCode === 200) await throttleReset(tkey)
-    else {
+    else if (res.statusCode === 401 || res.statusCode === 403) {
       await throttleFailBoth(tkey)
       if (globalWait > 0) alert('security', 'adminLogin', 'GLOBAL_BRUTE', {})
     }
+    // 503/400 等基建/客户端错：直接返回，不触碰频控（不计不 reset·不告警）
     return res
   }
 
@@ -286,13 +317,19 @@ export const main = async (event: any) => {
   const auth = await checkKey(db, key, false)
   if (!auth.ok) {
     await throttleFailBoth(tkey)
+    // C1：泛 action 与 login 打的是同一把口令、同一类爆破——全局锁定态下经任一 action 入口的错误口令
+    // 同样是分布式爆破证据，比照 login 补同款告警（同 tag 'adminLogin' 聚合，供防噪判据统一消费）。
+    if (globalWait > 0) alert('security', 'adminLogin', 'GLOBAL_BRUTE', {})
     return reply(401, auth)
   }
   await throttleReset(tkey)
-  // 能力闸·默认拒：登记的取 ACTION_CAPS、未登记默认高权 ADMIN_DEFAULT_CAP；超管 '*' 匹配一切
+  // 能力闸·默认拒：登记的取 ACTION_CAPS、未登记默认高权 ADMIN_DEFAULT_CAP；超管 '*' 匹配一切。
+  // 「任一命中」语义（C4）：ACTION_CAPS 值可为单 cap 或 cap 数组——principal 持数组中任一 cap 即放行，
+  // admin:write 与 refund:manage 并列登记时，admin:write 持有者行为不变、refund:manage 独立可用。
   const caps: string[] = Array.isArray((auth as any).caps) ? (auth as any).caps : []
-  const needCap = ACTION_CAPS[action] || ADMIN_DEFAULT_CAP
-  if (!caps.some((c) => c === '*' || c === needCap)) return reply(403, { ok: false, error: 'FORBIDDEN' })
+  const capSpec = ACTION_CAPS[action]
+  const needCaps: string[] = Array.isArray(capSpec) ? capSpec : capSpec ? [capSpec] : [ADMIN_DEFAULT_CAP]
+  if (!caps.some((c) => c === '*' || needCaps.includes(c))) return reply(403, { ok: false, error: 'FORBIDDEN' })
   await ensure(db, 'productsDraft')
   const drafts = db.collection('productsDraft')
 
@@ -303,7 +340,7 @@ export const main = async (event: any) => {
   const agentId = String((auth as any).agentId || operator)
   try {
     const res = await handler({ db, cloud, data, drafts, agentId, caps })
-    if (shouldAudit(action)) await recordAudit({ action, operator, ip: auditIp, data, ok: !!res && res.statusCode === 200 })
+    if (shouldAudit(action)) await recordAudit({ action, operator, ip: auditIp, data, ok: auditOk(res) })
     return res
   } catch (e) {
     if (shouldAudit(action)) await recordAudit({ action, operator, ip: auditIp, data, ok: false, error: 'SERVER_ERROR' })
