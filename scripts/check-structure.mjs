@@ -1851,6 +1851,35 @@ export const repoChecks = [
     },
   },
   {
+    // 根因#8「构建过≠真能用」在部署产物层的镜像（盲区体检批4·病根#16 配套）：三道闸此前从不
+    // 构建任何真实生产产物——build:rw-cloud/rw-admin/agent/site 四个真实构建在编辑 hook/pre-commit
+    // /CI 里一次都没跑过；「把产物 require 进来真跑」的行为级验证只有旧线有（verify-cloud-bundles
+    // 只验冻结 packages/cloud/dist）。本守卫钉住产物闸接线不许静默掉：check:artifacts 脚本存在且
+    // 含四个面 + CI 真跑它 + 活线产物验证脚本在位。（产物闸 CI-only：vite/astro 构建分钟级，进
+    // pre-commit 会把每次提交拖到分钟级——三道闸单一定义指 npm run check，产物闸是 CI 追加硬化层。）
+    id: 'rw-artifact-gate-in-ci',
+    roots: ['#8', '#16'],
+    desc: '产物闸接线（根因#8 部署产物层镜像·病根#16 配套）：package.json 须有 check:artifacts（含 verify:rw-cloud + build:rw-admin + build:agent + @ldrw/site 构建四面）、.github/workflows/ci.yml 须真跑 check:artifacts、scripts/verify-rw-cloud-bundles.cjs 在位——防「CI 全绿但生产产物从未被构建/加载过」复发',
+    run() {
+      const bad = []
+      const pkg = JSON.parse(readFileSync(join(ROOT, 'package.json'), 'utf8'))
+      const ca = (pkg.scripts || {})['check:artifacts'] || ''
+      if (!ca) bad.push('package.json 无 check:artifacts 脚本——产物闸未定义（根因#8·四个真实构建零闸覆盖）')
+      else
+        for (const piece of ['verify:rw-cloud', 'build:rw-admin', 'build:agent', '@ldrw/site'])
+          if (!ca.includes(piece)) bad.push(`check:artifacts 缺 ${piece} 面——产物闸不全（根因#8）`)
+      const vs = (pkg.scripts || {})['verify:rw-cloud'] || ''
+      if (!/build:rw-cloud/.test(vs) || !/verify-rw-cloud-bundles/.test(vs))
+        bad.push('verify:rw-cloud 须 = build:rw-cloud + verify-rw-cloud-bundles.cjs（先构建再产物验证）')
+      if (!existsSync(join(ROOT, 'scripts/verify-rw-cloud-bundles.cjs')))
+        bad.push('scripts/verify-rw-cloud-bundles.cjs 缺失——活线产物行为验证真空（旧线 verify 只验冻结线）')
+      const ci = join(ROOT, '.github/workflows/ci.yml')
+      if (!existsSync(ci) || !/check:artifacts/.test(readFileSync(ci, 'utf8')))
+        bad.push('.github/workflows/ci.yml 未跑 check:artifacts——产物闸没进 CI（构建过≠真能用在产物层无人守）')
+      return bad
+    },
+  },
+  {
     id: 'requirement-trace',
     roots: ['元'],
     desc: '需求→守卫闭环（仿 guard-coverage 泛化「病根→守卫」为「需求→功能→守卫」）：需求清单「需求→实现映射」每条 ✅ 实现需求(L1)须有映射行，且行内 函数(见系统事实)/测试(tests/cloud)/守卫(注册表) 真实存在——改需求或改码断链当场红；`npm run trace R#` 查爆炸半径。⚠️ 深审 P3：映射表函数/测试(tests/cloud)全锚**冻结旧线**，旧线冻结⇒对唯一在迭代的 rewrite 实现该守卫的「改码断链当场红」永不触发——是旧线参照链；新线需求追溯（R34/R38 等 rewrite 已实现）走各 rw- golden 守卫、未纳入本表（未闭合债·docs/待办与债）',
