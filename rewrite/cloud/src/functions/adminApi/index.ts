@@ -168,12 +168,14 @@ const ACTIONS: Record<string, (ctx: Ctx) => Promise<any>> = {
   getFgSummary: scmPlanner.getFgSummary,
   // 总览（批 B2）：低库存预警 + 应付未结按织女分组 + 在途采购/外协计数 + 最近流水——只读聚合着陆页
   getScmOverview: scmOverview.getScmOverview,
-  // 运行期观测（批3·体检面板 + 异常账本·治病根#14 告警进人眼）：未登记 ACTION_CAPS→默认仅超管·
-  // runInspect/resolveAnomaly 写类自动审计（不以 list/get 开头）·只读业务数据（只碰 inspectRuns/anomalies）
+  // 运行期观测（批3·体检面板 + 异常账本·治病根#14 告警进人眼 + 批 B6 净新增 listAudit 只读 auditLog·操作审计#4
+  // 读出口）：未登记 ACTION_CAPS→默认仅超管·runInspect/resolveAnomaly 写类自动审计（不以 list/get 开头）·
+  // 只读业务数据（只碰 inspectRuns/anomalies/auditLog）
   runInspect: ops.runInspect,
   getInspectStatus: ops.getInspectStatus,
   listAnomalies: ops.listAnomalies,
   resolveAnomaly: ops.resolveAnomaly,
+  listAudit: ops.listAudit,
   // 人工配置清单（批 B9·只探测状态·零回显）：未登记 ACTION_CAPS→默认拒 admin:write＝仅超管
   getConfigChecklist: configChecklist.getConfigChecklist,
   // 人工配置清单可填写化（决策 2026-07-12）：写敏感凭证/支付接缝配置·未登记 ACTION_CAPS→默认拒 admin:write＝仅超管

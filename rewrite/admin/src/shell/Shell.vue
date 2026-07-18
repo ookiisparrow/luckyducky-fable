@@ -95,6 +95,7 @@ const NAV: Array<{ group: string; icon: Component; solo?: boolean; items: Array<
       { label: '外部后台', path: '/external' },
       { label: '系统设置', path: '/settings' },
       { label: '人工配置清单', path: '/config-checklist' }, // 批 B9·只探测状态·不改六组结构，系统组内追加一项
+      { label: '审计日志', path: '/audit' }, // 批 B6·操作审计#4 读出口·系统组内追加一项（同 B9 精神：组数仍六、不重排）
     ],
   },
 ]

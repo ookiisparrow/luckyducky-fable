@@ -38,6 +38,7 @@ const Checkpoints = () => import('./pages/Checkpoints.vue')
 const Inspect = () => import('./pages/Inspect.vue')
 const Anomalies = () => import('./pages/Anomalies.vue')
 const ConfigChecklist = () => import('./pages/ConfigChecklist.vue')
+const Audit = () => import('./pages/Audit.vue')
 
 export const router = createRouter({
   history: createWebHashHistory(),
@@ -80,6 +81,7 @@ export const router = createRouter({
         { path: 'inspect', component: Inspect },
         { path: 'anomalies', component: Anomalies },
         { path: 'config-checklist', component: ConfigChecklist },
+        { path: 'audit', component: Audit },
       ],
     },
   ],

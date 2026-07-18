@@ -1,5 +1,5 @@
 import { reply, type Ctx } from '../lib'
-import { runInspection } from '../../../kit'
+import { runInspection, pageQuery } from '../../../kit'
 import { COLLECTIONS } from '@ldrw/shared'
 
 // 运行期观测·控制台数据层（批3·体检面板 + 异常账本·治病根#14 告警进人眼）：手动巡检 / 最新体检 / 异常列表 /
@@ -66,4 +66,57 @@ export async function resolveAnomaly({ db, data, agentId }: Ctx) {
     .update({ data: { resolved: true, resolvedAt: Date.now(), resolvedBy: agentId || 'admin' } })
     .catch(() => ({ stats: { updated: 0 } }))
   return reply(200, { ok: !!(r.stats && r.stats.updated), id })
+}
+
+const AUDIT_DEFAULT_LIMIT = 30 // 审计日志默认页大小（同订单/售后体量·bounded·根因#7）
+
+// 审计日志读出口（批 B6·操作审计#4·根因#3 信任边界可追溯）：kit/audit.ts::recordAudit 已全量写 auditLog，
+// 此前唯一读路径是控制台裸翻数据库——本 action 补读出口。只读 auditLog（写侧单点仍在 kit/audit.ts，见
+// 该文件头注 admin-actions-audited 守卫）。未登记 ACTION_CAPS→默认拒 admin:write＝仅超管（同 listAnomalies/
+// getConfigChecklist 等「系统组」action 先例——不复用 customer:view，那是「客户是谁」越权面，这里是「谁动过
+// 系统」，权限语义不同）。cursor 分页复用 kit/paging.ts pageQuery（同 listCsatEntries 样板，无新分页实现）。
+//
+// operator 精确匹配（trim+截 60 字符，同写侧落库长度）：进 pageQuery filter，非 cursorField，翻页不受影响。
+// actionPrefix 前缀筛：页内 startsWith 过滤（同 searchConversations keyword 范式）——真前缀检索须真 sdk 索引，
+// 先页内过滤；不影响 hasMore/nextCursor（发生在 hasMore 判定之后，可能出现「entries 为空但 hasMore 仍真」，
+// 是刻意设计非 bug，前端消费须允许「本页无匹配、点加载更多继续翻」的语义）。
+// [from,to) 含起不含止（同 listCsatEntries 口径）：
+//   · to 走 pageQuery 原生 filter（`ts: _.lt(to)`）——desc 序下天然对续页自持。
+//   · from 走「页后过滤 + 触界即收口」：同字段无法原生持续下限（见 kit/paging.ts 复合游标机制），一旦本页
+//     出现被过滤掉的行即说明后续行只会更早，直接砍 hasMore/nextCursor，不再继续翻页。
+export async function listAudit({ db, data }: Ctx) {
+  const d = data || {}
+  const _ = db.command
+  const filter: Record<string, unknown> = {}
+  const operator = String(d.operator || '').trim().slice(0, 60)
+  if (operator) filter.operator = operator
+  const toMs = Number(d.to)
+  if (Number.isFinite(toMs)) filter.ts = _.lt(toMs)
+  const paged = await pageQuery(db, COLLECTIONS.auditLog, filter, 'ts', d, AUDIT_DEFAULT_LIMIT)
+  let list = paged.list
+  let hasMore = paged.hasMore
+  let nextCursor = paged.nextCursor
+  const fromMs = Number(d.from)
+  if (Number.isFinite(fromMs)) {
+    const kept = list.filter((r: any) => (Number(r.ts) || 0) >= fromMs)
+    if (kept.length < list.length) {
+      // 本页已触到 from 下界——后续页只会更早，全部落在窗口外，就此收口不再续页
+      hasMore = false
+      nextCursor = null
+    }
+    list = kept
+  }
+  const actionPrefix = String(d.actionPrefix || '').trim()
+  if (actionPrefix) list = list.filter((r: any) => String(r.action || '').startsWith(actionPrefix))
+  const entries = list.map((r: any) => ({
+    id: String(r._id || ''),
+    action: String(r.action || ''),
+    operator: String(r.operator || ''),
+    ip: String(r.ip || ''),
+    ok: r.ok === true,
+    error: String(r.error || ''),
+    summary: r.summary && typeof r.summary === 'object' ? r.summary : {}, // 原样透传：写侧 summarize 已剥敏感字段
+    ts: Number(r.ts) || 0,
+  }))
+  return reply(200, { ok: true, entries, nextCursor, hasMore })
 }
