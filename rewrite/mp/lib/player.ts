@@ -139,6 +139,13 @@ export function createPlaybackCache(o: { fetcher: UrlFetcher; now?: () => number
 
   return {
     get,
+    /** 同步窥探（批3·消初见切段 loading 闪烁）：新鲜缓存命中回 url，否则回 ''——绝不触发取址（纯读，
+     *  无 await、无 inflight 参与）；空段回 ''。播放页据此在命中时跳过 state:'loading' 中间态、一次 setData 直落播放。 */
+    peek(courseId: string, segmentId: string): string {
+      if (!courseId || !segmentId) return ''
+      const hit = cache.get(keyOf(courseId, segmentId))
+      return hit && now() - hit.at < ttlMs ? hit.url : ''
+    },
     /** 预热：已有新鲜缓存时空操作；空段不取址不崩。 */
     async prefetch(courseId: string, segmentId: string): Promise<void> {
       if (!courseId || !segmentId) return

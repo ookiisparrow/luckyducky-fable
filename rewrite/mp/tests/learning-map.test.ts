@@ -138,7 +138,7 @@ describe('mapCatalog（目录页数据源·课时状态/续播/磁贴 VM）', ()
     expect(l1.lastLabel).toBe('')
     expect(l1.firstPlayableSegId).toBe('s1')
     expect(l3.firstPlayableSegId).toBe('s4') // s5 无视频跳过
-    expect(r.continueTarget).toEqual({ segmentId: 's1', lessonId: 'l1', lessonName: '起针' })
+    expect(r.continueTarget).toEqual({ segmentId: 's1', lessonId: 'l1', lessonName: '起针', resumeAt: 0 })
   })
 
   it('大白话：部分 done（做完 l1）——l1 标 done、首个未完成且含可播段的课时(l2)标 current；无 last 时续播＝该课时首个可播段', () => {
@@ -148,7 +148,7 @@ describe('mapCatalog（目录页数据源·课时状态/续播/磁贴 VM）', ()
     expect(l2.status).toBe('current')
     expect(l1.firstPlayableSegId).toBe('s1') // done 课时点行仍回首个可播段
     expect(l2.firstPlayableSegId).toBe('s3')
-    expect(r.continueTarget).toEqual({ segmentId: 's3', lessonId: 'l2', lessonName: '收针' })
+    expect(r.continueTarget).toEqual({ segmentId: 's3', lessonId: 'l2', lessonName: '收针', resumeAt: 0 })
   })
 
   it('大白话：last 命中——该课时标 current 且带 lastLabel「上次学到 段落 N」，续播＝last 段', () => {
@@ -159,7 +159,7 @@ describe('mapCatalog（目录页数据源·课时状态/续播/磁贴 VM）', ()
     expect(l2.status).toBe('current')
     expect(l2.lastLabel).toBe('上次学到 段落 1')
     expect(l2.firstPlayableSegId).toBe('s3')
-    expect(r.continueTarget).toEqual({ segmentId: 's3', lessonId: 'l2', lessonName: '收针' })
+    expect(r.continueTarget).toEqual({ segmentId: 's3', lessonId: 'l2', lessonName: '收针', resumeAt: 0 })
   })
 
   it('大白话：last 指向已删段——该课时仍标 current（lessonId 命中）但 lastLabel 空、续播回退课时内首个可播段', () => {
@@ -168,7 +168,7 @@ describe('mapCatalog（目录页数据源·课时状态/续播/磁贴 VM）', ()
     expect(l2.status).toBe('current')
     expect(l2.lastLabel).toBe('')
     expect(l2.firstPlayableSegId).toBe('s3')
-    expect(r.continueTarget).toEqual({ segmentId: 's3', lessonId: 'l2', lessonName: '收针' })
+    expect(r.continueTarget).toEqual({ segmentId: 's3', lessonId: 'l2', lessonName: '收针', resumeAt: 0 })
   })
 
   it('大白话：last 命中段仍存在但已被 admin 撤下视频（hasVideo:false）——lastLabel 仍报「上次学到」（历史事实），但 firstPlayableSegId/continueTarget 不指向不可播段、回退课时内首个 hasVideo 段', () => {
@@ -177,7 +177,14 @@ describe('mapCatalog（目录页数据源·课时状态/续播/磁贴 VM）', ()
     expect(l3.status).toBe('current')
     expect(l3.lastLabel).toBe('上次学到 段落 2') // s5 是 l3 第 2 段，历史事实不因视频撤下而抹去
     expect(l3.firstPlayableSegId).toBe('s4') // s5 无视频，回退课时内首个 hasVideo 段
-    expect(r.continueTarget).toEqual({ segmentId: 's4', lessonId: 'l3', lessonName: '成品' }) // 不落在不可播的 s5 上
+    expect(r.continueTarget).toEqual({ segmentId: 's4', lessonId: 'l3', lessonName: '成品', resumeAt: 0 }) // 不落在不可播的 s5 上
+  })
+
+  it('大白话：last 命中且带播放位置 at/dur——continueTarget.resumeAt 透出 clampResumeAt(at,dur)（续播到秒·数据已在库）；兜底分支 resumeAt=0', () => {
+    const r = mapCatalog(COURSE, [{ courseId: 'c1', done: {}, last: { lessonId: 'l2', segmentId: 's3', at: 40, dur: 60 }, updatedAt: 200 }], 'c1')
+    expect(r.continueTarget).toEqual({ segmentId: 's3', lessonId: 'l2', lessonName: '收针', resumeAt: 40 }) // 中段·原值取整
+    const r2 = mapCatalog(COURSE, [], 'c1') // 无 last 命中·续播＝首个可播段·不带秒
+    expect(r2.continueTarget!.resumeAt).toBe(0)
   })
 
   it('大白话：stale done 键（不属于本课的段 id）不顶爆课时 done 判定，被安全忽略', () => {
@@ -199,7 +206,7 @@ describe('mapCatalog（目录页数据源·课时状态/续播/磁贴 VM）', ()
       expect(l.status).toBe('done')
       expect(l.lastLabel).toBe('')
     }
-    expect(r.continueTarget).toEqual({ segmentId: 's1', lessonId: 'l1', lessonName: '起针' })
+    expect(r.continueTarget).toEqual({ segmentId: 's1', lessonId: 'l1', lessonName: '起针', resumeAt: 0 })
   })
 
   it('大白话：脏 course/progressList 不崩，安全空', () => {

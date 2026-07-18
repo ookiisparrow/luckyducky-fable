@@ -366,6 +366,17 @@
   border-radius: 4rpx;
   background: rgba(255, 255, 255, 0.24);
 }
+/* 缓冲水位（批3·bind:progress 尽力而为）：同轨道几何，灰阶白 0.38 介于轨道底 0.24 与紫填充之间——
+   叠在轨道之上、紫填充之下（DOM 序：track→buffer→fill），显「已缓冲到哪」不抢播放进度的紫。 */
+.lp-seek-buffer {
+  position: absolute;
+  left: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  height: 8rpx;
+  border-radius: 4rpx;
+  background: rgba(255, 255, 255, 0.38);
+}
 .lp-seek-fill {
   position: absolute;
   left: 0;

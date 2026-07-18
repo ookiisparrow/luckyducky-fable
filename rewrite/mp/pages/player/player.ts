@@ -5,11 +5,10 @@
 // onSeekMove），松手才真 seek（onSeekEnd）；关键动作节点磁吸（nearestMark）+ 拖动阻尼震感配方照抄
 // pages/flip-demo 已验真机参考实现（lib/haptics 单源 shouldTick/VIBE_GAP_MS/DRAG_TICK_GAP_MS）。
 // 拖动浮层原设计有雪碧图缩略图窗（R36 后端未建），诚实降级为时间浮窗 + 命中节点时的鸭黄气泡。
-import { getPlaybackUrl, trackEvent, getHelpVideos, getPublicFaq } from '../../api/learning'
+import { trackEvent, getHelpVideos, getPublicFaq } from '../../api/learning'
 import {
   flattenSegments,
   navSegment,
-  createPlaybackCache,
   formatClock,
   clampSeek,
   lessonStrip,
@@ -18,6 +17,9 @@ import {
   type FlatSegment,
   type LessonStrip,
 } from '../../lib/player'
+// 播放地址缓存单例迁 lib（批3·跨页取址预热·根因#15）：本地名仍叫 cache（守卫 rw-mp-player-prefetch-cache
+// 正则钉 cache.prefetch(·且 catalog/me 共享同一实例才能预热·拆回页面私有即断跨页预热）。
+import { playbackCache as cache } from '../../lib/playbackCache'
 import { getCourseByIdDetailed } from '../../lib/courses'
 import { getPageContent } from '../../lib/pageContent'
 import { openCustomerService } from '../../utils/customerService'
@@ -49,17 +51,6 @@ function buildCapText(strip: LessonStrip | null, segDone: boolean, course: Cours
   return next ? `本课时完成 · 接下来 ${next.lessonName}` : '本课程已全部学完'
 }
 
-const cache = createPlaybackCache({
-  fetcher: async (courseId, segmentId) => {
-    const r = await getPlaybackUrl(courseId, segmentId)
-    if (!r.ok && String(r.error || '') === 'NOT_ENTITLED') throw new Error('NOT_ENTITLED')
-    // 取址失败分流（根因#14·守卫 rw-mp-list-loadfailed-state）：网络/服务失败抛 FETCH_FAIL 落 error 态
-    // （有重试入口），不再折进空串——空串专属「素材未剪 url:null」的诚实空态，两者不可混同。
-    if (!r.ok) throw new Error('FETCH_FAIL')
-    return String(r.url || '')
-  },
-})
-
 Page({
   data: {
     statusBarHeight: 0,
@@ -74,6 +65,8 @@ Page({
     state: 'loading' as 'loading' | 'playing' | 'empty' | 'denied' | 'missing' | 'error',
     paused: false, // 真实播放/暂停态·只认 bind:play/bind:pause 回报，不在 tap 里直接翻转当真相
     buffering: false, // 播放中缓冲失速角标（bind:waiting 起·timeupdate/play 恢复清·见 onVideoWaiting）
+    bufferPct: 0, // 缓冲水位（0-100·bind:progress 的 e.detail.buffered 整段已加载百分比·seek 条底层灰条·换段清零·见 onVideoProgress）
+    initialTime: 0, // 续播秒（<video> initial-time·仅组件首挂载读一次·换段/重试归 0 防续秒串段·见 playSegment/_wantAt）
     curSec: 0,
     durSec: 0,
     curClock: '0:00',
@@ -129,6 +122,8 @@ Page({
   lastVibe: 0, // 事件震（vibe()）时间戳（同上·两类震共用时间地板防叠震）
   _backAt: 0, // 返回二次确认判定锚点（P5·BACK_CONFIRM_MS 窗口内二次按返回才真退，见 onBack）
   _wantSeg: '', // onLoad 期望起播段（存实例供 initCourse 课程级失败重试后仍定位到原目标段）
+  _wantAt: 0, // onLoad 期望续播秒（query.t·仅对目标段 _wantSeg 生效·playSegment 首次应用即清零·防换段/重试再续到旧秒串段）
+  _resumeAt: 0, // 本次起播待物理落位的续播秒（=本次 initialTime·onVideoMeta 双保险 seek 兜底 initial-time 失效后消费清零·每次 playSegment 重置）
 
   async onLoad(query: Record<string, string | undefined>) {
     const info = wx.getWindowInfo()
@@ -151,6 +146,7 @@ Page({
     this.courseId = String(query.courseId || '')
     void this.loadPageContent() // 求助面板文案/FAQ·与取课/取址互不依赖，并行发起（不阻塞首帧·默认已在 data）
     this._wantSeg = String(query.segmentId || '')
+    this._wantAt = Math.max(0, Math.floor(Number(query.t) || 0)) // 续播秒（catalog/me 带 &t=·仅对 _wantSeg 生效·脏值归 0）
     await this.initCourse()
   },
   // 课程目录装载（onLoad 与 onRetryError 课程级重试共用）：来源页（me/my-courses）已把课程目录热进
@@ -158,7 +154,14 @@ Page({
   // 失败≠不存在（根因#14·守卫 rw-mp-list-loadfailed-state）：目录拉取失败落 error 态给重试，
   // 只有拉取成功且查无此课才是 missing「课程不存在」。
   async initCourse() {
-    const d = await getCourseByIdDetailed(this.courseId)
+    // 深链冷启并行（根因#15·省一次串行往返）：目录详情与期望段取址同时发起——原先串行（先等目录回、再进
+    // playSegment 才现取地址），深链两跳叠加。并行后耗时＝max(目录, 取址) 而非目录+取址；取址结果不在此直接
+    // 消费（只暖缓存·err 吞掉），仍待目录确认段存在后由 playSegment 经 peek/在途去重命中；期望段空则不发。
+    // NOT_ENTITLED 语义不变：暖取抛错吞掉不缓存，playSegment 正路 cache.get 再抛→denied（错误路径原样）。
+    const [d] = await Promise.all([
+      getCourseByIdDetailed(this.courseId),
+      this._wantSeg ? cache.get(this.courseId, this._wantSeg).catch(() => '') : Promise.resolve(''),
+    ])
     if (d.failed) {
       this.setData({ state: 'error' })
       return
@@ -196,16 +199,18 @@ Page({
     // 的 at/dur 错记到新段 segmentId 头上（P2 bug sweep R2 复查）。
     this._at = 0
     this._dur = 0
-    // src 清空：换段加载态回到「正在加载首帧」骨架，且卸载上一段/坏地址的 <video>——否则旧视频在新段标签下继续播放、
-    // 骨架永不显，且坏 src 重挂到新段会瞬时 bind:error 白吃掉新段的一次重试预算（审计②）。
-    // 进度/暂停态一并归零：新段是新的播放单元，旧段的进度条/暂停指示不该带过来。
-    // segDone/strip/capText 一并重算（completed=false）：新段是新的播放单元，旧段的播完通栏不该带过来（P4）。
-    // seekPct/markVMs/snapName 一并归零：自绘 seek 条填充/节点位图/磁吸气泡都属旧段，不带过来（批C）。
+    // 续播秒（批3·数据已在库·接通最后一公里·根因#15）：仅当本段就是 onLoad 期望段且有未消费续播位置才带 initialTime
+    // 起播，一次性消费（清 _wantAt·防换段/重试再续到旧秒串段）；换段/重试一律 0。_resumeAt 记本次待物理落位的秒供
+    // onVideoMeta 双保险（每次 playSegment 都重置，含 0），initial-time 只在 <video> 首挂载读一次，运行时兜底靠 seek。
+    const initialTime = seg.segmentId === this._wantSeg && this._wantAt > 0 ? this._wantAt : 0
+    this._resumeAt = initialTime
+    if (initialTime > 0) this._wantAt = 0
+    // 换段清零字段单源（peek 直落 playing 与常规 loading→playing 两路共用这份 patch·勿两处各写漂移·病根#5）：
+    // src 清空另在各自 setData 给（loading 给 ''·卸载旧/坏 <video> 显骨架；peek 直给新 url）。进度/暂停/播完通栏/
+    // 自绘 seek 填充节点气泡/缓冲水位都属旧段，一律归零重算（completed=false）——新段是新的播放单元。
     const strip = lessonStrip(this.course, seg.segmentId, false)
-    this.setData({
-      state: 'loading',
+    const clearPatch = {
       current: seg,
-      src: '',
       paused: false,
       curSec: 0,
       durSec: 0,
@@ -219,7 +224,37 @@ Page({
       markVMs: [],
       snapName: '',
       previewLeft: 0,
-    })
+      bufferPct: 0,
+    }
+    // 起播落定回调（peek 直落 / 取址落定共用·定义在方法体内以内联段间预取与 autoplay 兜底·守卫 rw-mp-player-prefetch-cache 咬）。
+    const onPlaying = () => {
+      // 首次量取 seek 条布局；换段重入该回调时已有值即跳过——底条布局不随段变化，无需重量。
+      if (!this._seekRect) this.measureSeekRect()
+      // autoplay 停摆兜底（根因#8·真机 <video autoplay> 首帧常静默不起播·尤 iOS/弱网/上下文冷启）：src 落定即显式
+      // play 一次，与 wxml 的 autoplay 属性叠加（已在播则 play 为 no-op·幂等·不会双播）；停摆时给它第二次触发。
+      // 注：此调用在异步 setData 回调里、不在用户手势栈内，iOS WebKit autoplay 限制可能仍拒——iOS 的可靠恢复靠
+      // onTapVideo（tap 是真手势），两者互补不冗余。
+      wx.createVideoContext('lp-video', this).play()
+      // 段间提速（根因#8·段间转场卡顿·承退役老线 prefetch 语义，新线重写缓存却漏接线）：当前段就绪即预热下一段
+      // 地址，用户点「下一段」时命中缓存零云往返。纯 cache 暖（不 setData·不改 this.data），故不复核 playToken——
+      // 慢回调预热了用户不会到的段也无害；cache.prefetch 对新鲜命中 no-op、在途去重（见 lib/player.ts）。
+      const next = navSegment(this.course, seg.segmentId, 1)
+      if (next) void cache.prefetch(this.courseId, next.segmentId)
+    }
+    // peek 消初见切段闪烁（根因#8）：来源页/上一段预热过则缓存新鲜命中，跳过 state:'loading' 中间态、一次 setData
+    // 直落 playing+src（清零字段全并入同一次·无「加载首帧」骨架一闪）。peek 同步纯读、无异步空窗、无乱序风险，故此路
+    // 不复核请求令牌；令牌复核仍在下方取址路一处（守卫 rw-mp-player-stale-guarded 咬那处·勿动）。
+    const peeked = cache.peek(this.courseId, seg.segmentId)
+    if (peeked) {
+      this.srcSetAt = Date.now()
+      this.setData(
+        { ...clearPatch, state: 'playing', src: peeked, initialTime, canPrev: !!navSegment(this.course, seg.segmentId, -1), canNext: !!navSegment(this.course, seg.segmentId, 1) },
+        onPlaying
+      )
+      return
+    }
+    // 缓存未命中：走 loading 骨架 + 取址（initialTime:0 并入清态·换段/重试不带旧段续播秒·防串段）。
+    this.setData({ ...clearPatch, state: 'loading', src: '', initialTime: 0 })
     let url = ''
     try {
       url = await cache.get(this.courseId, seg.segmentId)
@@ -244,26 +279,8 @@ Page({
     }
     this.srcSetAt = Date.now()
     this.setData(
-      {
-        state: 'playing',
-        src: url,
-        canPrev: !!navSegment(this.course, seg.segmentId, -1),
-        canNext: !!navSegment(this.course, seg.segmentId, 1),
-      },
-      () => {
-        // 首次量取 seek 条布局；换段重入该回调时已有值即跳过——底条布局不随段变化，无需重量。
-        if (!this._seekRect) this.measureSeekRect()
-        // autoplay 停摆兜底（根因#8·真机 <video autoplay> 首帧常静默不起播·尤 iOS/弱网/上下文冷启）：src 落定即显式
-        // play 一次，与 wxml 的 autoplay 属性叠加（已在播则 play 为 no-op·幂等·不会双播）；停摆时给它第二次触发。
-        // 注：此调用在异步 setData 回调里、不在用户手势栈内，iOS WebKit autoplay 限制可能仍拒——iOS 的可靠恢复靠
-        // onTapVideo（tap 是真手势），两者互补不冗余。
-        wx.createVideoContext('lp-video', this).play()
-        // 段间提速（根因#8·段间转场卡顿·承退役老线 prefetch 语义，新线重写缓存却漏接线）：当前段就绪即预热下一段
-        // 地址，用户点「下一段」时命中缓存零云往返。纯 cache 暖（不 setData·不改 this.data），故不复核 playToken——
-        // 慢回调预热了用户不会到的段也无害；cache.prefetch 对新鲜命中 no-op、在途去重（见 lib/player.ts）。
-        const next = navSegment(this.course, seg.segmentId, 1)
-        if (next) void cache.prefetch(this.courseId, next.segmentId)
-      }
+      { state: 'playing', src: url, initialTime, canPrev: !!navSegment(this.course, seg.segmentId, -1), canNext: !!navSegment(this.course, seg.segmentId, 1) },
+      onPlaying
     )
   },
 
@@ -392,11 +409,31 @@ Page({
     if (this.data.buffering) this.setData({ buffering: false })
   },
 
+  // 缓冲水位（批3·根因#8/#14 缓冲可视化第二通道·与失速角标 buffering 是两条独立通道不合并）：bind:progress 的
+  // e.detail.buffered=整段已加载百分比 0-100（真机才触发·可能播 1s 后才首发·偶发 null）——只做尽力而为的 seek 条
+  // 底层灰条（用户能看到「已缓冲到哪」），勿作逻辑判据。节流：与 data.bufferPct 差 ≥2 才 setData（progress 高频·免抖动刷帧）。
+  // 换段清零并入 playSegment 清态 setData（clearPatch.bufferPct:0·旧段缓冲不带进新段）。
+  onVideoProgress(e: WechatMiniprogram.CustomEvent<{ buffered: number }>) {
+    const b = e.detail && e.detail.buffered
+    if (typeof b !== 'number' || !Number.isFinite(b)) return // null/偶发脏值忽略（尽力而为·不崩）
+    const pct = Math.max(0, Math.min(100, b))
+    if (Math.abs(pct - this.data.bufferPct) >= 2) this.setData({ bufferPct: pct })
+  },
+
   // 视频框贴合素材真实比例（2026-07-13 反馈·Bug D2）：loadedmetadata 拿到真实宽高后把播放框 padding-top 设成
   // height/width——竖版素材比默认 1:1.68 框更窄，contain 会在左右留黑；框贴合素材比例后恰好铺满、不裁切、无左右黑边。
   // 封顶到屏幕比例防超高素材撑破屏（.ld-player overflow:hidden·封顶后素材比框更瘦高，contain 高度顶满、
   // 宽度不足→退化为左右留黑不裁切·「去左右黑边」性质在此极端分支保不住，合的是「不裁切」诉求）。
   onVideoMeta(e: WechatMiniprogram.CustomEvent<{ width: number; height: number; duration: number }>) {
+    // 续播秒双保险（批3·根因#15）：initial-time 只在 <video> 首挂载读一次、平台偶有不生效（官方 issue #83 变体）。
+    // 本段有未消费续播位置（_resumeAt>0）时，元数据就绪即兜底——离目标 >2s 判为未落位、seek 一次；消费清零（一次性）。
+    // 无同步读 currentTime 的 API，用最近 timeupdate 的 _at 近似（元数据就绪时通常仍为 0→触发一次幂等 seek 到目标·
+    // 已在目标则平台自 no-op）；initial-time 生效则实际位置≈目标、距离判定自动 no-op。置于比例分支之前（脏元数据早退不漏兜底）。
+    if (this._resumeAt > 0) {
+      const target = this._resumeAt
+      this._resumeAt = 0
+      if (Math.abs((this._at || 0) - target) > 2) wx.createVideoContext('lp-video', this).seek(target)
+    }
     const w = Number(e.detail && e.detail.width)
     const h = Number(e.detail && e.detail.height)
     if (!(w > 0) || !(h > 0)) return // 脏元数据：保持默认 168%·不算比例

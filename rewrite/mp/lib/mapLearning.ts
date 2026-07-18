@@ -1,5 +1,6 @@
 // 学习域映射（纯函数·黄金 learning-content §一激活三态 + §九内容回退）（守卫 rw-mp-learning-golden）。
 import { dateTime } from './mapOrders'
+import { clampResumeAt } from './continueResolve' // 续播秒夹取单源（命中 last 段分支复用·禁复制实现·病根#5）
 
 /** 激活结果五态：activated 新激活（恭喜屏）/ mine 本人已进课（欢迎回来屏）/ taken 他人码（已被使用屏）/
  *  invalid 废码 / error 网络失败（深审20260712 P3：CALL_FAIL/BAD_RESULT≠废码——扫真码遇网络抖动不误告
@@ -139,7 +140,7 @@ export function mapCatalog(
   course: unknown,
   progressList: unknown,
   courseId: string
-): { chapters: CatalogChapterVM[]; continueTarget: { segmentId: string; lessonId: string; lessonName: string } | null } {
+): { chapters: CatalogChapterVM[]; continueTarget: { segmentId: string; lessonId: string; lessonName: string; resumeAt: number } | null } {
   const c = (course && typeof course === 'object' ? course : {}) as Record<string, any>
   const lessons: CatalogLessonRaw[] = []
   const chapterGroups: { title: string; lessonIdxs: number[] }[] = []
@@ -218,22 +219,24 @@ export function mapCatalog(
   // continueTarget：与 current 解耦——last 命中（课时+段都在本课、且该段仍 hasVideo）优先（全完成态重温也回上次位置）；
   // last 命中段已不可播（如 admin 撤下视频）→ 视同未命中，落入下方兜底；
   // 否则 current 课时首个可播段；否则全课首个可播段；全课无可播段 → null。
-  let continueTarget: { segmentId: string; lessonId: string; lessonName: string } | null = null
+  // resumeAt（续播秒·续段又续秒最后一公里·根因#15）：仅命中 last 段分支透出 clampResumeAt(last.at,last.dur)
+  // （与 continueResolve 同口径·单源复用禁复制实现·病根#5）；兜底两分支（current 首段/全课首段）无 last 位置基准，resumeAt:0。
+  let continueTarget: { segmentId: string; lessonId: string; lessonName: string; resumeAt: number } | null = null
   if (lastLessonIdx >= 0 && last && last.segmentId) {
     const l = lessons[lastLessonIdx]
     const segHit = l.segments.find((s) => s.id === String(last.segmentId))
-    if (segHit && segHit.hasVideo) continueTarget = { segmentId: segHit.id, lessonId: l.lessonId, lessonName: l.lessonName }
+    if (segHit && segHit.hasVideo) continueTarget = { segmentId: segHit.id, lessonId: l.lessonId, lessonName: l.lessonName, resumeAt: clampResumeAt(last.at, last.dur) }
   }
   if (!continueTarget && currentIdx >= 0) {
     const l = lessons[currentIdx]
     const fv = firstHasVideo(l)
-    if (fv) continueTarget = { segmentId: fv.id, lessonId: l.lessonId, lessonName: l.lessonName }
+    if (fv) continueTarget = { segmentId: fv.id, lessonId: l.lessonId, lessonName: l.lessonName, resumeAt: 0 }
   }
   if (!continueTarget) {
     for (const l of lessons) {
       const fv = firstHasVideo(l)
       if (fv) {
-        continueTarget = { segmentId: fv.id, lessonId: l.lessonId, lessonName: l.lessonName }
+        continueTarget = { segmentId: fv.id, lessonId: l.lessonId, lessonName: l.lessonName, resumeAt: 0 }
         break
       }
     }

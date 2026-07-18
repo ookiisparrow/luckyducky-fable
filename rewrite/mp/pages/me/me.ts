@@ -4,6 +4,7 @@ import { tapHaptic } from '../../lib/haptics'
 import { login, getMyProgress } from '../../api/user'
 import { getMyCourses } from '../../api/learning'
 import { getAllCourses } from '../../lib/courses'
+import { playbackCache } from '../../lib/playbackCache' // 续播段取址预热（我页停留窗口预热·进播放器 peek 命中零云往返·根因#15）
 import { getPageContent } from '../../lib/pageContent'
 import { continueResolve, type ContinueTarget } from '../../lib/continueResolve'
 import { mapMe, type MeVM } from '../../lib/mapMe' // 直引拆分模块（tab 闭包不拖 mapPages 法务长文·字体分层批）
@@ -63,6 +64,7 @@ Page({
     // 任一取数失败时，空列表与「真没进度/没买课」数据形状等价，喂 continueResolve 会渲染成假空态。
     // 失败不覆盖已有 cont（旧卡仍可点）；一无所有才亮 contFailed 给重试；真空态（全成功无课）仍走引导。
     const contFetchFailed = !progress.ok || !mine.ok || courses === null
+    const cont = contFetchFailed ? null : continueResolve(progress.list, mine.list, courses)
     this.setData({
       loggedIn: agreed,
       // 云端资料回灌：已登录时非空覆盖默认、空回退 CMS 默认昵称（黄金 §九·不显示假名）；登出态一律默认身份
@@ -71,10 +73,11 @@ Page({
       bio: (agreed && user && String(user.bio || '')) || '',
       entries: me.entries,
       contLoaded: true, // 首次取数已落地（放展开之外·成功/失败任一路都置 true）：空态从此才可能出现，之前显骨架不显假空态
-      ...(contFetchFailed
-        ? { contFailed: !this.data.cont }
-        : { cont: continueResolve(progress.list, mine.list, courses), contFailed: false }),
+      ...(contFetchFailed ? { contFailed: !this.data.cont } : { cont, contFailed: false }),
     })
+    // 续播段取址预热（批3·根因#15）：继续学习卡落地即预热续播段地址，用户点卡进播放器时 peek 命中零云往返；
+    // 段位空（从头/挑段·不知具体段）时 prefetch 自 no-op。纯 cache 暖（不 setData·err 吞掉·在途去重）。
+    if (cont) void playbackCache.prefetch(cont.courseId, cont.segmentId)
   },
   onRetryCont() {
     tapHaptic()
@@ -86,7 +89,9 @@ Page({
     if (c) {
       // 带上次段位回到那一段（卡片显的是该课时·不带则播放器落首段·卡片承诺≠行为）；段位空则不拼（播放器挑首个可播段）
       const seg = c.segmentId ? '&segmentId=' + encodeURIComponent(c.segmentId) : ''
-      wx.navigateTo({ url: '/pages/player/player?courseId=' + c.courseId + seg })
+      // 续播到秒（批3·数据已在库·接通最后一公里）：resumeAt>0 才拼 &t=（0=从头/挑段·不拼）
+      const at = c.resumeAt > 0 ? '&t=' + c.resumeAt : ''
+      wx.navigateTo({ url: '/pages/player/player?courseId=' + c.courseId + seg + at })
     } else {
       // 兜底去逛逛→首页应从头逛起：防首页上次恰好滚到 FAQ 板块的旧滚动位置残留，造成「弹出大家都在问」错位观感
       goHomeTab()

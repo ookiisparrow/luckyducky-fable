@@ -6,6 +6,7 @@ import { tapHaptic } from '../../lib/haptics'
 import { getContent } from '../../api/catalog'
 import { getPageContent } from '../../lib/pageContent'
 import { getCourseByIdDetailed } from '../../lib/courses'
+import { playbackCache } from '../../lib/playbackCache' // 续播段取址预热（目录页停留窗口预热·进播放器 peek 命中零云往返·根因#15）
 import { getMyProgress } from '../../api/user'
 import { mapCatalog, bgFor, type CatalogChapterVM } from '../../lib/mapLearning'
 import { mapCatalogPlayer } from '../../lib/mapPages'
@@ -18,7 +19,7 @@ Page({
     state: 'loading' as 'loading' | 'ok' | 'missing' | 'failed', // failed=目录拉取网络失败（可重试·根因#14），与 missing「课程不存在」分治
     bg: '',
     chapters: [] as CatalogChapterVM[],
-    continueTarget: null as { segmentId: string; lessonId: string; lessonName: string } | null,
+    continueTarget: null as { segmentId: string; lessonId: string; lessonName: string; resumeAt: number } | null,
     resumeCta: mapCatalogPlayer(null).catalog.resumeCta, // 「开始学习」CTA 文案·首帧默认（CMS 到达覆盖）
   },
   home: null as unknown,
@@ -83,6 +84,9 @@ Page({
     }
     const { chapters, continueTarget } = mapCatalog(d.course, progress.ok ? progress.list : [], courseId)
     this.setData({ state: 'ok', chapters, continueTarget })
+    // 续播段取址预热（批3·根因#15）：目录展示后即预热续播段地址，用户点「开始学习」进播放器时 peek 命中零云往返；
+    // 纯 cache 暖（不 setData·新鲜命中 no-op·在途去重·err 吞掉）。段为空（全课无可播）时 prefetch 自 no-op。
+    if (continueTarget) void playbackCache.prefetch(courseId, continueTarget.segmentId)
   },
   onRetryLoad() {
     tapHaptic()
@@ -97,7 +101,9 @@ Page({
       return
     }
     tapHaptic()
-    wx.navigateTo({ url: '/pages/player/player?courseId=' + this.data.courseId + '&segmentId=' + t.segmentId })
+    // 续播到秒（批3·数据已在库·接通最后一公里）：resumeAt>0 才拼 &t=（0=从头/挑段起播·不拼）；点课时行（onTapLesson）不带 t＝从头。
+    const at = t.resumeAt > 0 ? '&t=' + t.resumeAt : ''
+    wx.navigateTo({ url: '/pages/player/player?courseId=' + this.data.courseId + '&segmentId=' + t.segmentId + at })
   },
   // 课时行点击：firstPlayableSegId 非空跳该段；空＝本课时无可播视频（半上线），诚实提示。
   onTapLesson(e: WechatMiniprogram.TouchEvent) {

@@ -2762,7 +2762,7 @@ export const repoChecks = [
     // ④ 起播判据含 firstFrameReported（未起播 tap 一律 play·防回退成纯 this.data.paused 判定使停摆首帧原地救不回）。
     id: 'rw-mp-player-prefetch-cache',
     roots: ['#8'],
-    desc: '重写线播放页段间提速+停摆恢复（根因#8·承退役老线 player-playback-prefetch-cache 迁到活线 rewrite/mp）：pages/player/player.ts 的 playSegment 体内须真调 cache.prefetch 预热 navSegment(...,1) 下一段（防回退成每次切段现取地址一个云往返·段间卡顿）+ 须有 createVideoContext(lp-video).play 显式兜底 autoplay 停摆；onTapVideo 体内起播判据须含 firstFrameReported（未起播 tap 一律 play·防回退成纯 paused 判定使停摆首帧原地救不回、只能切段才逃）',
+    desc: '重写线播放页段间提速+停摆恢复（根因#8·承退役老线 player-playback-prefetch-cache 迁到活线 rewrite/mp）：pages/player/player.ts 的 playSegment 体内须真调 cache.prefetch 预热 navSegment(...,1) 下一段（防回退成每次切段现取地址一个云往返·段间卡顿）+ 须有 createVideoContext(lp-video).play 显式兜底 autoplay 停摆；onTapVideo 体内起播判据须含 firstFrameReported（未起播 tap 一律 play·防回退成纯 paused 判定使停摆首帧原地救不回、只能切段才逃）；批3 跨页取址预热（根因#15）：lib/playbackCache.ts 须在场且 export 单例 playbackCache、player.ts 须从 lib/playbackCache import 缓存（防单例拆回页面私有断跨页预热）、catalog.ts 体内须真调 .prefetch(（目录页续播段预热接线不许静默退化）',
     run() {
       const rel = 'rewrite/mp/pages/player/player.ts'
       const abs = join(ROOT, rel)
@@ -2786,6 +2786,22 @@ export const repoChecks = [
       } else if (!/firstFrameReported/.test(tap)) {
         bad.push(`${rel} onTapVideo 起播判据不含 firstFrameReported——回退成纯 this.data.paused 判定：autoplay 停摆时点击反向 pause、首帧原地救不回只能切段才逃（根因#8）`)
       }
+      // 批3 跨页取址预热（根因#15·目录页/我页停留窗口预热·进播放器 peek 命中零云往返）：单例迁 lib/playbackCache.ts
+      // 供 catalog/me 共享，拆回页面私有即断跨页预热。守三件：① 单例文件在场且 export；② player.ts 从它 import
+      // （本地名仍叫 cache·上方 cache.prefetch 断言据此成立）；③ catalog.ts 真调 .prefetch(（接线不许静默退化）。
+      const cacheRel = 'rewrite/mp/lib/playbackCache.ts'
+      const cacheAbs = join(ROOT, cacheRel)
+      if (!existsSync(cacheAbs)) {
+        bad.push(`${cacheRel} 缺失——播放地址缓存单例未迁出页面，catalog/me 无从跨页预热（根因#15）`)
+      } else if (!/export\s+const\s+playbackCache\s*=/.test(readFileSync(cacheAbs, 'utf8'))) {
+        bad.push(`${cacheRel} 未 export const playbackCache 单例——跨页预热须共享同一缓存实例（根因#15）`)
+      }
+      if (!/from\s+['"][^'"]*lib\/playbackCache['"]/.test(src))
+        bad.push(`${rel} 未从 lib/playbackCache import 缓存单例——单例拆回页面私有会断 catalog/me 跨页预热（根因#15）`)
+      const catRel = 'rewrite/mp/pages/catalog/catalog.ts'
+      const catAbs = join(ROOT, catRel)
+      if (existsSync(catAbs) && !/\.prefetch\s*\(/.test(stripComments(readFileSync(catAbs, 'utf8'))))
+        bad.push(`${catRel} 未调 .prefetch(——目录页续播段预热接线静默退化（进课/段间卡顿回潮·根因#15）`)
       return bad
     },
   },
@@ -5990,7 +6006,7 @@ export const repoChecks = [
     // ③ player 取址 fetcher 须区分 FETCH_FAIL（网络/服务失败→error 态可重试）与素材未剪（空串→empty 态）。
     id: 'rw-mp-list-loadfailed-state',
     roots: ['#14'],
-    desc: 'mp 失败≠空态（根因#14）：order-list/reviews/my-courses/aftersales/order 五页 ts+wxml 须有 loadFailed+onRetryLoad；catalog.ts 须有 failed 态且 lib/courses 有 getCourseByIdDetailed；player.ts 取址须分流 FETCH_FAIL——网络失败伪装成「暂无/不存在/整理中」即红',
+    desc: 'mp 失败≠空态（根因#14）：order-list/reviews/my-courses/aftersales/order 五页 ts+wxml 须有 loadFailed+onRetryLoad；catalog.ts 须有 failed 态且 lib/courses 有 getCourseByIdDetailed；取址 fetcher（lib/playbackCache.ts·批3 迁出播放页）须分流 FETCH_FAIL——网络失败伪装成「暂无/不存在/整理中」即红',
     run() {
       const base = join(ROOT, 'rewrite/mp')
       if (!existsSync(base)) return []
@@ -6012,9 +6028,11 @@ export const repoChecks = [
       const lib = join(base, 'lib/courses.ts')
       if (existsSync(lib) && !/getCourseByIdDetailed/.test(readFileSync(lib, 'utf8')))
         bad.push('lib/courses.ts 无 getCourseByIdDetailed——课程读取「网络失败」与「查无此课」在 lib 层就丢失区分度')
-      const player = join(base, 'pages/player/player.ts')
-      if (existsSync(player) && !/FETCH_FAIL/.test(stripComments(readFileSync(player, 'utf8'))))
-        bad.push('pages/player/player.ts 取址链无 FETCH_FAIL 分流——取址网络失败仍伪装成「视频还在整理中」且无重试')
+      // 取址 fetcher 已迁 lib/playbackCache.ts（批3 跨页取址预热·守卫 rw-mp-player-prefetch-cache）：FETCH_FAIL
+      // 分流随 fetcher 迁到单例文件，断言目标随之移；player.ts 消费端仍按「非 NOT_ENTITLED 即 error」分流（无需字面量）。
+      const fetcherHome = join(base, 'lib/playbackCache.ts')
+      if (existsSync(fetcherHome) && !/FETCH_FAIL/.test(stripComments(readFileSync(fetcherHome, 'utf8'))))
+        bad.push('lib/playbackCache.ts 取址 fetcher 无 FETCH_FAIL 分流——取址网络失败仍伪装成「视频还在整理中」且无重试（根因#14）')
       return bad
     },
   },
