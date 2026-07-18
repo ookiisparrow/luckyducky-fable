@@ -1,4 +1,17 @@
+<!-- 整页内容套 <scroll-view>：退出提醒的 page-container 武装态会冻结页面级滚动（决策§30·见 utils/exitGuard），
+     滚动/下拉刷新/锚点跳转全部改在 scroll-view 内发生：
+       · 下拉刷新 ← 原 enablePullDownRefresh（页面级下拉在 fixed 下失效）→ refresher-enabled + bindrefresherrefresh
+       · 锚点跳转 ← 原 wx.pageScrollTo({selector}) （scroll-view 内不生效）→ scroll-into-view（见 home.ts scrollTo）
+       · 回顶按钮阈值 ← 原 onPageScroll → bindscroll
+     浮层（回顶按钮/toast/登录半屏/开屏）本就 fixed，留在外层当兄弟不随内容滚。 -->
+<scroll-view class="ld-home-scroll" scroll-y="{{true}}" enhanced="{{true}}" show-scrollbar="{{false}}"
+  refresher-enabled="{{true}}" refresher-triggered="{{refreshing}}" bindrefresherrefresh="onRefresher"
+  refresher-background="#fcfaff" scroll-into-view="{{scrollInto}}" scroll-with-animation="{{scrollAnim}}"
+  bindscroll="onScroll">
 <view class="ld-home">
+
+  <!-- 回顶锚点（scroll-into-view 目标·零高度不占版式） -->
+  <view id="top"></view>
 
   <!-- ① HERO：全屏图 + 底部白色渐隐 + 居中文案 + 搜索胶囊/购买 -->
   <view class="ld-hero" style="padding-top: {{statusBarHeight}}px">
@@ -165,6 +178,7 @@
   </view>
 
 </view>
+</scroll-view>
 
 <!-- 回到顶部（滚过一屏半浮现） -->
 <view wx:if="{{showTop}}" class="ld-backtop" bind:tap="backTop">
@@ -180,3 +194,6 @@
 
 <!-- 冷启动品牌开屏（每次冷启动一次·min-hold+数据就绪 race+硬上限自撤后 onSplashDone 撤下）·全屏 fixed 覆盖层压过 tabBar 与登录半屏 -->
 <brand-splash wx:if="{{showSplash}}" ready="{{splashReady}}" bind:done="onSplashDone" />
+
+<!-- 误触退出提醒（决策§30）：隐形容器武装拦第一次返回 →「再按一次退出」·仅安卓返回键·见 utils/exitGuard -->
+<page-container show="{{exitGuardArmed}}" overlay="{{false}}" duration="{{0}}" bindbeforeleave="onExitGuardBeforeLeave" />

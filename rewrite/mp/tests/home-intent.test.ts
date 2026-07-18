@@ -93,10 +93,11 @@ describe('接线断言：置位点/消费点/统一出口没被静默断线', ()
     expect(count).toBeGreaterThanOrEqual(2)
   })
 
-  it('大白话：home.ts onShow 消费标记并在 true 时回顶（pageScrollTo scrollTop:0）', () => {
+  // 2026-07-18 退出提醒批：整页套 scroll-view 后页面级 wx.pageScrollTo 不再生效，回顶实现换成
+  // scroll-into-view 顶部锚点（scrollTo('top', false)·不带动画＝原 duration:0 语义）。行为不变、载体变了。
+  it('大白话：home.ts onShow 消费标记并在 true 时瞬时回顶（scroll-into-view 顶部锚点·无动画）', () => {
     const body = methodBody(homeSrc, 'onShow')
     expect(body).toContain('consumeHomeTop()')
-    expect(body).toContain('wx.pageScrollTo')
-    expect(body).toContain('scrollTop: 0')
+    expect(body).toMatch(/scrollTo\(\s*['"]top['"]\s*,\s*false\s*\)/)
   })
 })

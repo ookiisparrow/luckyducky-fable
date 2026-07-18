@@ -1,5 +1,8 @@
 <!-- 购物车·设计「待选区」语言：标题头 + 虚线暂存区(已加购行·勾选/加减/删除) + 下方推荐(圆加号加购) + 信任小字 + 悬浮结算。
      真实购物袋逻辑（lib/cart 单源·结算走选中项）全保留；移出袋的已知商品重回下方推荐（设计 qty→0 落 options）。 -->
+<!-- 整页内容套 <scroll-view>：退出提醒的 page-container 武装态会冻结页面级滚动（决策§30·见 utils/exitGuard），
+     滚动须发生在 scroll-view 内部。固定「去结算」栏与 page-container 留在外层当兄弟（fixed 元素不随内容滚）。 -->
+<scroll-view class="ld-cart-scroll" scroll-y="{{true}}" enhanced="{{true}}" show-scrollbar="{{false}}">
 <view class="ld-cart" style="padding-top: {{statusBarHeight}}px">
   <view class="ld-cart-head">
     <view class="ld-cart-title">购物袋</view>
@@ -58,16 +61,22 @@
 
   <view class="ld-cart-trust">包邮到家 · 七天无理由退货 · 官方正品保障</view>
 
+  <!-- 底部占位：留在滚动流内，撑开最后一屏、避免内容被下方 fixed 结算栏压住 -->
   <view class="ld-checkbar-space"></view>
-  <view class="ld-checkbar {{selectedCount ? '' : 'empty'}}">
-    <view class="ld-selectall" catch:tap="onToggleAll">
-      <view class="ld-check {{allSelected ? 'on' : ''}}"></view>
-      <text>全选</text>
-    </view>
-    <view class="ld-checkbar-total">
-      <text class="ld-checkbar-label">合计</text>
-      <text class="ld-checkbar-num">{{totalLabel}}</text>
-    </view>
-    <view class="ld-checkout-btn {{selectedCount ? '' : 'dim'}}" catch:tap="onCheckout">去结算({{selectedCount}})</view>
-  </view>
 </view>
+</scroll-view>
+
+<view class="ld-checkbar {{selectedCount ? '' : 'empty'}}">
+  <view class="ld-selectall" catch:tap="onToggleAll">
+    <view class="ld-check {{allSelected ? 'on' : ''}}"></view>
+    <text>全选</text>
+  </view>
+  <view class="ld-checkbar-total">
+    <text class="ld-checkbar-label">合计</text>
+    <text class="ld-checkbar-num">{{totalLabel}}</text>
+  </view>
+  <view class="ld-checkout-btn {{selectedCount ? '' : 'dim'}}" catch:tap="onCheckout">去结算({{selectedCount}})</view>
+</view>
+
+<!-- 误触退出提醒（决策§30）：隐形容器武装拦第一次返回 →「再按一次退出」·仅安卓返回键·见 utils/exitGuard -->
+<page-container show="{{exitGuardArmed}}" overlay="{{false}}" duration="{{0}}" bindbeforeleave="onExitGuardBeforeLeave" />

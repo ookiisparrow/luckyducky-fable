@@ -1,8 +1,6 @@
 {
   "navigationStyle": "custom",
   "backgroundColor": "#fcfaff",
-  "enablePullDownRefresh": true,
-  "backgroundTextStyle": "dark",
   "usingComponents": {
     "brand-splash": "/components/brand-splash/brand-splash",
     "login-sheet": "/components/login-sheet/login-sheet"
