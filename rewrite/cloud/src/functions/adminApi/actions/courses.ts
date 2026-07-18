@@ -1,4 +1,83 @@
 import { reply, ensure, cleanCourse, storeImage, manager, type Ctx } from '../lib'
+import { isVodFileId, makeVodUploadSignature, callVodApi } from '../../../kit'
+
+// —— VOD 转码管线（决策§31 批2）——课程视频主路径升级为「admin 直传 VOD + 任务流自动转码」；
+// 帮助视频线（HelpVideos）恒走下方云存储直传老路，不迁。
+
+/** VOD 直传签名（UGC 签名·kit/vod.ts 纯本地 HMAC）：未配置回 VOD_NOT_CONFIGURED——admin 借此
+ *  回退云存储直传老路（迁移期不断档），secureConfig/vod 填入即自动切换、零部署。 */
+export async function getVodUploadSignature({ db }: Ctx) {
+  const sig = await makeVodUploadSignature(db)
+  if (!sig) return reply(200, { ok: false, error: 'VOD_NOT_CONFIGURED' })
+  return reply(200, { ok: true, signature: sig })
+}
+
+const fmtDur = (sec: number) => {
+  const s = Math.round(sec)
+  return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`
+}
+
+// 首选普通转码非源画质产物（Definition 0 = 源文件非转码产物）；模板若配自适应码流则取其输出
+function pickVodPlayUrl(mi: any): string {
+  const ts = mi?.TranscodeInfo?.TranscodeSet
+  for (const t of Array.isArray(ts) ? ts : []) if (t && Number(t.Definition) !== 0 && t.Url) return String(t.Url)
+  const ad = mi?.AdaptiveDynamicStreamingInfo?.AdaptiveDynamicStreamingSet
+  for (const a of Array.isArray(ad) ? ad : []) if (a && a.Url) return String(a.Url)
+  return ''
+}
+
+/**
+ * 转码状态同步（on-demand·admin 点「同步转码状态」触发）：查草稿里「VOD FileId 已回填、vodUrl 未
+ * 就绪」的段，批量 DescribeMediaInfos（≤20/次官方上限），就绪段回写 vodUrl/vodPoster（封面缺口）/
+ * vodSpriteVtt（R36 雪碧图·批3 预览窗消费）/dur（转码元数据回填空时长·手填不覆盖，顺修 mm:ss 口径）。
+ * 选择拉模式而非事件回调：云函数无公网回调入口、开 HTTP 访问服务只为此不值当；admin 发布前本就要
+ * 打开本页，点一下同步即拿最新（VOD 任务记录保留 72h，远大于运营节奏）。rev 递增走乐观并发既有轨——
+ * admin 同步后须重载草稿（前端 syncVod() 已自动 load()），否则下次自动保存撞 DRAFT_CONFLICT（诚实拒绝）。
+ */
+export async function syncVodMedia({ db, data }: Ctx) {
+  const courseId = String(data.courseId || '')
+  if (!courseId) return reply(400, { ok: false, error: 'NO_COURSE_ID' })
+  const got = await db.collection('coursesDraft').doc(courseId).get().catch(() => null)
+  if (!got || !got.data) return reply(400, { ok: false, error: 'NO_DRAFT' })
+  const course: Record<string, any> = { ...got.data }
+  delete course._id
+  const pending: any[] = []
+  for (const ch of course.chapters || [])
+    for (const l of ch.lessons || [])
+      for (const sg of l.segments || []) if (sg && isVodFileId(String(sg.videoFileId || '')) && !sg.vodUrl) pending.push(sg)
+  if (!pending.length) return reply(200, { ok: true, ready: 0, processing: 0, rev: Number(course.rev) || 0 })
+  const ids = [...new Set(pending.map((sg) => String(sg.videoFileId)))]
+  const byId: Record<string, any> = {}
+  for (let i = 0; i < ids.length; i += 20) {
+    const resp = await callVodApi(db, 'DescribeMediaInfos', { FileIds: ids.slice(i, i + 20) })
+    for (const mi of (resp && resp.MediaInfoSet) || []) byId[String(mi.FileId)] = mi
+  }
+  let ready = 0
+  let processing = 0
+  for (const sg of pending) {
+    const mi = byId[String(sg.videoFileId)]
+    const url = pickVodPlayUrl(mi)
+    if (url) {
+      sg.vodUrl = url.slice(0, 500)
+      ready++
+    } else processing++
+    const cover = mi?.BasicInfo?.CoverUrl
+    if (cover && !sg.vodPoster) sg.vodPoster = String(cover).slice(0, 500)
+    const vtt = mi?.ImageSpriteInfo?.ImageSpriteSet?.[0]?.WebVttUrl
+    if (vtt && !sg.vodSpriteVtt) sg.vodSpriteVtt = String(vtt).slice(0, 500)
+    const durSec = Number(mi?.MetaData?.Duration)
+    if (durSec > 0 && !sg.dur) sg.dur = fmtDur(durSec)
+  }
+  const next = { ...course, rev: (Number(course.rev) || 0) + 1 }
+  const drafts = db.collection('coursesDraft')
+  await drafts
+    .doc(courseId)
+    .set({ data: next })
+    .catch(async () => {
+      await drafts.add({ data: { ...next, _id: courseId } })
+    })
+  return reply(200, { ok: true, ready, processing, rev: next.rev })
+}
 
 // 视频直传凭证（主路径）：manager-node 签发 COS 上传元数据，浏览器 PUT 直传
 export async function getVideoUploadMeta({ data }: Ctx) {
@@ -83,6 +162,13 @@ export async function publishCourse({ db, data }: Ctx) {
   if (!got || !got.data) return reply(400, { ok: false, error: 'NO_DRAFT' })
   const course: Record<string, any> = { ...got.data }
   delete course._id
+  // 发布闸（决策§31 批2）：VOD 段转码未就绪（vodUrl 未回写）不放行——「传完 ≠ 可播」，放行了学员端
+  // 该段只会 url:null 显示成「素材未剪」假象（伪成功·病根#14）。admin 点「同步转码状态」全就绪再发布。
+  let pendingVod = 0
+  for (const ch of course.chapters || [])
+    for (const l of ch.lessons || [])
+      for (const sg of l.segments || []) if (sg && isVodFileId(String(sg.videoFileId || '')) && !sg.vodUrl) pendingVod++
+  if (pendingVod) return reply(200, { ok: false, error: 'VOD_PROCESSING', pending: pendingVod })
   const coursesColl = db.collection('courses')
   const prev = await coursesColl.doc(courseId).get().catch(() => null) // GC 基线：读旧发布
   const prevDoc = (prev && prev.data) || null

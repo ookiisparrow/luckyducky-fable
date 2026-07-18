@@ -13,7 +13,10 @@ import { normalizePem } from '../../../kit'
 
 const WXKF_FIELDS = ['corpId', 'secret', 'token', 'aesKey', 'agentId', 'miniappAppId', 'thumbMediaId'] as const
 const WXPAY_FIELDS = ['mchPrivateKey', 'mchSerial'] as const
-const DOC_FIELDS: Record<string, readonly string[]> = { wxkf: WXKF_FIELDS, wxpay: WXPAY_FIELDS }
+// VOD 凭证档（决策§31 转码管线·kit/vod.ts 读取）：secretId/secretKey=服务端 API + 上传签名（控制台子账号·仅授 VOD），
+// playKey=播放 Key 防盗链签名，procedure=上传自动触发的任务流模板名（console-assets/04 正册对照）
+const VOD_FIELDS = ['secretId', 'secretKey', 'playKey', 'procedure'] as const
+const DOC_FIELDS: Record<string, readonly string[]> = { wxkf: WXKF_FIELDS, wxpay: WXPAY_FIELDS, vod: VOD_FIELDS }
 const MAX_LEN: Record<string, number> = {
   corpId: 64,
   secret: 128,
@@ -24,12 +27,16 @@ const MAX_LEN: Record<string, number> = {
   thumbMediaId: 128,
   mchPrivateKey: 4000,
   mchSerial: 80,
+  secretId: 64,
+  secretKey: 64,
+  playKey: 64,
+  procedure: 64,
 }
 
-/** 写「wxkf」/「wxpay」两 doc 的敏感凭证字段（merge-save·同 saveSettings 范式：先读现有、非 undefined 才覆盖）。 */
+/** 写「wxkf」/「wxpay」/「vod」三 doc 的敏感凭证字段（merge-save·同 saveSettings 范式：先读现有、非 undefined 才覆盖）。 */
 export async function saveSecureConfig({ db, data }: Ctx) {
   const docId = String((data && data.docId) || '')
-  if (docId !== 'wxkf' && docId !== 'wxpay') return reply(400, { ok: false, error: 'BAD_DOC' })
+  if (docId !== 'wxkf' && docId !== 'wxpay' && docId !== 'vod') return reply(400, { ok: false, error: 'BAD_DOC' })
   const allow = DOC_FIELDS[docId]
   const fields = (data && typeof data.fields === 'object' && data.fields) || {}
 

@@ -95,9 +95,9 @@ describe('探测规则各态：ok / missing / check（超管可读·数据契约
     const r = await post('getConfigChecklist', SUPER, {})
     expect(r.status).toBe(200)
     const groups = r.groups
-    expect(groups.length).toBe(6)
+    expect(groups.length).toBe(7)
     const totalItems = groups.reduce((n: number, g: any) => n + g.items.length, 0)
-    expect(totalItems).toBe(22) // 22 条全在（铁律·配置清单审查批 +2：小程序卡片 appid/thumbMediaId 随迁入库）
+    expect(totalItems).toBe(27) // 27 条全在（铁律·配置清单审查批 +2：小程序卡片随迁入库；决策§31 批0 +5：VOD 凭证 4 可填 + 播放域名人工项）
 
     for (const key of ['WXKF_AGENTID', 'WXKF_CORPID', 'WXKF_SECRET', 'WXKF_TOKEN', 'WXKF_AESKEY', 'WXKF_MINIAPP_APPID', 'WXKF_THUMB_MEDIA_ID']) {
       expect(itemOf(groups, WXKF_GROUP, key).status).toBe('missing')
@@ -109,6 +109,15 @@ describe('探测规则各态：ok / missing / check（超管可读·数据契约
     for (const key of ['pay.mode', 'pay.subMchId', 'pay.flowId', 'pay.refundFlowId']) {
       expect(itemOf(groups, PAY_GROUP, key).status).toBe('missing')
     }
+
+    // VOD 组（决策§31 批0）：4 凭证可填 missing + 播放域名人工项恒 check
+    const vodGroup = groups.find((g: any) => String(g.group).includes('视频点播 VOD'))
+    for (const key of ['VOD_SECRET_ID', 'VOD_SECRET_KEY', 'VOD_PLAY_KEY', 'VOD_PROCEDURE']) {
+      const it = vodGroup.items.find((x: any) => x.key === key)
+      expect(it.status).toBe('missing')
+      expect(it.fill).toBeTruthy()
+    }
+    expect(vodGroup.items.find((x: any) => x.key === 'vodDomain').status).toBe('check')
 
     expect(itemOf(groups, ADMIN_GROUP, 'alertWebhook').status).toBe('missing')
     expect(itemOf(groups, ADMIN_GROUP, 'scmBomTemplate').status).toBe('missing')
