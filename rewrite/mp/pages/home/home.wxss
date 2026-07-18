@@ -657,3 +657,106 @@
   opacity: 1;
   transform: translate(-50%, -50%) scale(1);
 }
+
+/* ---------- ⑩ 定格动画测试版（特写位换舞台·测试分支） ---------- */
+/* 帧叠层：36 帧全常驻渲染树，opacity 切换（唯一写者 = stopmotion.wxs）。
+   will-change: opacity = Blink 源码级「隐藏帧解码/光栅缓存保温」开关（不绘制的帧缓存会被内核回收、
+   切到冷帧重解码掉帧；裸 opacity:0 与 hidden 同样不保温）——安卓 XWeb 线有源码依据，iOS 无对应
+   保证、靠入场扫帧预热兜底（真机 A/B 项，见 2026-07-18 批记账）。 */
+.sm-frame {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0;
+  will-change: opacity;
+}
+/* 高清定格层（1080²·静止时压顶保清晰）：拖动瞬间被 wxs 撤下（同帧同画面无跳变），归位后淡入 */
+.sm-hi {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 2;
+  opacity: 1;
+  transition: opacity 0.18s ease;
+}
+.sm-chip {
+  position: absolute;
+  z-index: 3;
+  top: 18rpx;
+  left: 18rpx;
+  padding: 8rpx 18rpx;
+  border-radius: var(--ld-radius-pill);
+  background: rgba(255, 255, 255, 0.78);
+  color: #6b5a8a;
+  font-size: 22rpx;
+}
+.sm-hint-chip {
+  position: absolute;
+  z-index: 3;
+  bottom: 96rpx;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 10rpx 24rpx;
+  border-radius: var(--ld-radius-pill);
+  background: rgba(58, 47, 74, 0.62);
+  color: #fff;
+  font-size: 24rpx;
+  white-space: nowrap;
+}
+/* 凹槽滑轨（触摸面·拟物样式承 flip-demo 方案一真机验证版）：stage 不吃触摸，滚动无死区 */
+.sm-rail {
+  position: relative;
+  height: 90rpx;
+  width: 80%;
+  margin: 20rpx auto 0;
+}
+.sm-groove {
+  position: absolute;
+  left: 4rpx;
+  right: 4rpx;
+  top: 50%;
+  height: 30rpx;
+  margin-top: -15rpx;
+  border-radius: var(--ld-radius-pill);
+  background: linear-gradient(180deg, #e4e2da, #f0efe9 75%);
+  box-shadow: inset 0 3rpx 7rpx rgba(54, 58, 80, 0.16), inset 0 -2rpx 0 rgba(255, 255, 255, 0.8);
+}
+.sm-groove::before {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 4rpx;
+  height: 15rpx;
+  margin: -7rpx 0 0 -2rpx;
+  border-radius: 2rpx;
+  background: rgba(54, 58, 80, 0.22);
+}
+.sm-fader {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 86rpx;
+  height: 60rpx;
+  margin: -30rpx 0 0 -43rpx; /* 居中锚点·位移全走 transform（wxs 写 px） */
+  border-radius: var(--ld-radius-pill);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8rpx;
+  background: linear-gradient(180deg, #ffffff, #f2f0ea);
+  box-shadow: 0 3rpx 6rpx rgba(54, 58, 80, 0.16), inset 0 2rpx 0 rgba(255, 255, 255, 0.9);
+}
+.sm-fader-on {
+  box-shadow: 0 4rpx 7rpx rgba(54, 58, 80, 0.2), 0 2rpx 2rpx rgba(54, 58, 80, 0.14),
+    inset 0 2rpx 0 rgba(255, 255, 255, 0.9), inset 0 -2rpx 2rpx rgba(0, 0, 0, 0.06);
+}
+.sm-fader-bar {
+  width: 6rpx;
+  height: 22rpx;
+  border-radius: 4rpx;
+  background: linear-gradient(180deg, #dad8d0, #e9e7e0);
+  box-shadow: inset 0 2rpx 2rpx rgba(0, 0, 0, 0.1), 0 2rpx 0 rgba(255, 255, 255, 0.85);
+}

@@ -3,13 +3,14 @@
 // 买家秀/FAQ/收尾/页脚 + 激活页背景图（全局 + 按课三态）。背景图三态存于 content/home 档、由 saveHomeContent
 // 全档写——故随首页签保留在此不迁移（拆到欢迎签会出双写全档互踩）。
 // 保存链：serialSave 串行防乱序 + 900ms 防抖 + loaded load-guard + onBeforeUnmount 离签补存 + uploadImage 管线。
-import { ref, onMounted, onBeforeUnmount, watch, nextTick } from 'vue'
-import { Plus, Check, Trash2, X, ImageOff, ShieldCheck, HelpCircle } from 'lucide-vue-next'
-import { getHomeContent, saveHomeContent } from '../../api/content'
+import { ref, computed, onMounted, onBeforeUnmount, watch, nextTick } from 'vue'
+import { Plus, Check, Trash2, X, ImageOff, ShieldCheck, HelpCircle, Film, RotateCcw } from 'lucide-vue-next'
+import { getHomeContent, saveHomeContent, uploadFrameImage } from '../../api/content'
 import { uploadImage } from '../../api/products'
-import { normalizeHome, homePayload, type HomeModel } from '../../lib/mapContent'
+import { normalizeHome, homePayload, STOPMOTION_FRAMES, type HomeModel } from '../../lib/mapContent'
 import { b64SizeOk } from '../../lib/mapProducts'
 import { serialSave } from '../../lib/serialSave'
+import { setUploadLock, clearUploadLock } from '../../lib/uploadLock'
 import UiButton from '../ui/Button.vue'
 import Card from '../ui/Card.vue'
 import Badge from '../ui/Badge.vue'
@@ -48,6 +49,7 @@ onBeforeUnmount(() => {
     clearTimeout(saveTimer)
     void flushSave() // 离签补存 pending
   }
+  revokeThumbs() // 定格帧预览的 blob URL 随组件回收（36 张不回收会一直占内存）
 })
 
 onMounted(async () => {
@@ -104,6 +106,176 @@ async function compress(file: File): Promise<string> {
   } finally {
     URL.revokeObjectURL(url)
   }
+}
+
+// —— 首页定格动画（36 帧 scrub 层 720² + 1 张定格层 1080²）——
+// 双层素材：手指拖动逐帧 scrub 用小图（36 张同时在内存，尺寸必须压住），静止那一帧另出高清定格图。
+// 降采样一律在浏览器端 canvas 做，云端只存定尺成品——不依赖 CDN 实时缩放（那条路小程序侧不可控）。
+const framesInput = ref<HTMLInputElement | null>(null)
+const frameBusy = ref(false)
+const frameProgress = ref('') // '' | 'x/36'
+const frameUploading = ref(-1) // 正在上传的槽位（-1＝无）
+const frameThumbs = ref<Record<number, string>>({}) // 槽位→本地 blob URL（直传不回 url，预览只能靠本会话原图）
+const frameSources: File[] = [] // 槽位→本会话原图：改定格帧后可就地重出 1080²，不用让用户重传
+const heroFromSlot = ref<number | null>(null) // 当前定格层由哪一格生成（本会话内可知；云端载入的不可知＝null）
+const slots = computed(() => Array.from({ length: STOPMOTION_FRAMES }, (_, i) => i))
+const framesDone = computed(() => (model.value?.stopmotionFrames || []).filter(Boolean).length)
+const heroStale = computed(() => heroFromSlot.value !== null && heroFromSlot.value !== model.value?.stopmotionHeroIndex)
+
+/** 1:1 居中裁切后缩到 size²（scrub 720 / 定格 1080）。读图失败返回 null，由调用方如实报告、不静默当成功。 */
+async function squareBlob(file: File, size: number): Promise<Blob | null> {
+  const url = URL.createObjectURL(file)
+  try {
+    const img = await new Promise<HTMLImageElement>((resolve, reject) => {
+      const i = new Image()
+      i.onload = () => resolve(i)
+      i.onerror = reject
+      i.src = url
+    })
+    const side = Math.min(img.width, img.height)
+    const canvas = document.createElement('canvas')
+    canvas.width = size
+    canvas.height = size
+    canvas.getContext('2d')!.drawImage(img, (img.width - side) / 2, (img.height - side) / 2, side, side, 0, 0, size, size)
+    return await new Promise<Blob | null>((resolve) => canvas.toBlob((b) => resolve(b), 'image/jpeg', 0.85))
+  } catch {
+    return null
+  } finally {
+    URL.revokeObjectURL(url)
+  }
+}
+
+function setThumb(slot: number, file: File) {
+  const old = frameThumbs.value[slot]
+  if (old) URL.revokeObjectURL(old) // 换图即回收旧 blob URL，否则 36 格反复重传会漏内存
+  frameThumbs.value[slot] = URL.createObjectURL(file)
+}
+const frameThumb = (slot: number) => frameThumbs.value[slot] || ''
+
+/** 写回某一格：云档可能只存了前若干帧，直接 arr[30]= 会在数组里留 empty 洞（JSON 化成 null）——先补齐 36 槽。 */
+function setFrame(m: HomeModel, slot: number, fileId: string) {
+  const arr = m.stopmotionFrames
+  while (arr.length < STOPMOTION_FRAMES) arr.push('')
+  arr[slot] = fileId
+}
+
+/** 生成并上传定格层（1080²）。snap＝本次上传的目标模型，回包时已换档就丢弃（同 Products.addImages 范式）。 */
+async function putHero(snap: HomeModel, slot: number, file: File, fails: string[]) {
+  const hero = await squareBlob(file, 1080)
+  if (!hero) {
+    fails.push(`第 ${slot} 格的定格图读不出来`)
+    return
+  }
+  const r = await uploadFrameImage('hero', hero)
+  if (model.value !== snap) return
+  if (r.ok) {
+    snap.stopmotionHero = String(r.fileId || '')
+    heroFromSlot.value = slot
+  } else fails.push('定格层上传失败：' + String(r.error || ''))
+}
+
+/** 单格落地：720² scrub 帧必传；这一格恰是定格帧时，另出一张 1080² 作定格层。 */
+async function putFrame(snap: HomeModel, slot: number, file: File, fails: string[]) {
+  const scrub = await squareBlob(file, 720)
+  if (!scrub) {
+    fails.push(`第 ${slot} 格图片读不出来，已跳过`)
+    return
+  }
+  const r = await uploadFrameImage(slot, scrub)
+  if (model.value !== snap) return // 回包时已切签/重载——不写回一棵不可达的模型
+  if (!r.ok) {
+    fails.push(`第 ${slot} 格上传失败：${String(r.error || '')}`) // fail-soft：一格失败不中断其余
+    return
+  }
+  setFrame(snap, slot, String(r.fileId || ''))
+  setThumb(slot, file)
+  frameSources[slot] = file
+  if (slot === snap.stopmotionHeroIndex) await putHero(snap, slot, file, fails)
+}
+
+/** 整批 36 张：按文件名自然排序（1,2,10 而非字典序 1,10,2·同 videoBatch.planLessonBatch）后依次占 0..35。 */
+async function uploadFrames(ev: Event) {
+  const input = ev.target as HTMLInputElement
+  const picked = Array.from(input.files || [])
+    .sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' }))
+    .slice(0, STOPMOTION_FRAMES)
+  if (!picked.length || !model.value || frameBusy.value) return
+  const snap = model.value // 快照本次目标（同 Products.addImages）：await 期间可能已切签重建模型
+  const fails: string[] = []
+  frameBusy.value = true
+  setUploadLock() // 36 张是长在途，router 全局 beforeEach 据此拦离页，防上传回包写进不可达的模型
+  try {
+    for (let i = 0; i < picked.length; i++) {
+      frameProgress.value = `${i + 1}/${picked.length}`
+      frameUploading.value = i
+      await putFrame(snap, i, picked[i], fails)
+      if (model.value !== snap) break // 已切签：后续再传也写不回去，早停省流量
+    }
+  } finally {
+    frameBusy.value = false
+    frameUploading.value = -1
+    frameProgress.value = ''
+    clearUploadLock()
+  }
+  message.value = fails.length ? `本次有 ${fails.length} 格没成功——${fails.join('；')}` : ''
+  input.value = '' // 允许再次选同一批（否则浏览器不再触发 change）
+}
+
+async function uploadOneFrame(slot: number, ev: Event) {
+  const input = ev.target as HTMLInputElement
+  const file = input.files?.[0]
+  input.value = ''
+  if (!file || !model.value || frameBusy.value) return
+  const snap = model.value
+  const fails: string[] = []
+  frameBusy.value = true
+  frameUploading.value = slot
+  setUploadLock()
+  try {
+    await putFrame(snap, slot, file, fails)
+  } finally {
+    frameBusy.value = false
+    frameUploading.value = -1
+    clearUploadLock()
+  }
+  message.value = fails.join('；')
+}
+
+/** 改了定格帧序号后重出定格层：本会话有原图就地重出；没有（刷新过/云端载入）只能请用户重传那一格。 */
+async function regenHero() {
+  if (!model.value || frameBusy.value) return
+  const snap = model.value
+  const slot = snap.stopmotionHeroIndex
+  const src = frameSources[slot]
+  if (!src) {
+    message.value = `本会话没有第 ${slot} 格的原图，请点该格重传一次（会自动同时生成高清定格层）`
+    return
+  }
+  const fails: string[] = []
+  frameBusy.value = true
+  setUploadLock()
+  try {
+    await putHero(snap, slot, src, fails)
+  } finally {
+    frameBusy.value = false
+    clearUploadLock()
+  }
+  message.value = fails.length ? fails.join('；') : '定格层已更新'
+}
+
+function clearFrames() {
+  if (!model.value || frameBusy.value) return
+  model.value.stopmotionFrames = []
+  model.value.stopmotionHero = ''
+  revokeThumbs()
+  frameSources.length = 0
+  heroFromSlot.value = null
+  message.value = '已清空 36 帧（保存后小程序回退包内测试帧）'
+}
+
+function revokeThumbs() {
+  for (const url of Object.values(frameThumbs.value)) URL.revokeObjectURL(url)
+  frameThumbs.value = {}
 }
 
 function addCourseRow() {
@@ -188,6 +360,47 @@ async function save() {
               <button v-if="model.heroImg" class="clr" title="恢复默认" @click="model.heroImg = ''"><X :size="14" :stroke-width="2" /></button>
             </div>
           </div>
+        </Card>
+
+        <!-- 首页定格动画（36 帧 scrub + 1 张定格层） -->
+        <!-- 副标题分两态（浏览器实测发现：满 36 帧时仍显示「不满 36 帧…」读着自相矛盾）：
+             齐了就说小程序已在用这组，没齐才提示回退规则——状态描述必须随状态变。 -->
+        <Card
+          title="首页定格动画"
+          :sub="framesDone === 36 ? `36 帧 · 已传 36/36 · 小程序正在用这组帧` : `36 帧 · 已传 ${framesDone}/36 · 不满 36 帧时小程序用包内测试帧`"
+        >
+          <template #head>
+            <UiButton variant="ghost" size="sm" :disabled="frameBusy" @click="framesInput?.click()">
+              <Film :size="14" :stroke-width="2" />{{ frameBusy ? `上传中 ${frameProgress}` : '一次选 36 张' }}
+            </UiButton>
+            <UiButton variant="ghost" size="sm" :disabled="frameBusy || !framesDone" @click="clearFrames">清空</UiButton>
+          </template>
+          <input ref="framesInput" type="file" accept="image/*" multiple hidden @change="uploadFrames" />
+          <p class="sm-hint">按文件名顺序（1,2,…,36）依次占 0–35 格；单格可点开重传。每张在浏览器里裁成 1:1 后压到 720²，定格那一格另出一张 1080² 高清图。</p>
+
+          <div class="fr-grid">
+            <label v-for="i in slots" :key="i" class="fr-cell" :class="{ 'is-hero': model.stopmotionHeroIndex === i }" :title="`第 ${i} 格${model.stopmotionHeroIndex === i ? '（定格帧）' : ''}`">
+              <input type="file" accept="image/*" hidden :disabled="frameBusy" @change="(e) => uploadOneFrame(i, e)" />
+              <img v-if="frameThumb(i)" :src="frameThumb(i)" class="fr-img" alt="" />
+              <span class="fr-idx">{{ i }}</span>
+              <Badge v-if="frameUploading === i" tone="amber" dot>传</Badge>
+              <Badge v-else-if="model.stopmotionFrames[i]" tone="green"><Check :size="10" :stroke-width="2.5" /></Badge>
+              <Badge v-else tone="neutral">空</Badge>
+            </label>
+          </div>
+
+          <div class="field mt">
+            <label>定格帧（首页静止时显示的那一帧 · 默认第 17 格）</label>
+            <select v-model.number="model.stopmotionHeroIndex" :disabled="frameBusy">
+              <option v-for="i in slots" :key="i" :value="i">第 {{ i }} 格</option>
+            </select>
+          </div>
+          <div class="upload-row">
+            <span v-if="model.stopmotionHero" class="filetag"><Check :size="12" :stroke-width="2" />定格层已生成</span>
+            <span v-else class="sm-hint">定格层未生成（小程序会退用该格的 720² 帧）</span>
+            <UiButton variant="ghost" size="sm" :disabled="frameBusy" @click="regenHero"><RotateCcw :size="13" :stroke-width="2" />重新生成定格层</UiButton>
+          </div>
+          <p v-if="heroStale" class="sm-warn">定格帧已改到第 {{ model.stopmotionHeroIndex }} 格，当前定格层还是旧那格的——点「重新生成定格层」。</p>
         </Card>
 
         <!-- 品牌自述 -->
@@ -413,6 +626,74 @@ input[type='file'] {
   padding: 0;
   background: none;
   font-size: 12px;
+}
+select {
+  width: 100%;
+  padding: 8px 12px;
+  border: 1px solid var(--ld-line);
+  border-radius: var(--ld-radius-sm);
+  font-size: 13px;
+  font-family: var(--ld-font);
+  color: var(--ld-content);
+  background: var(--ld-bg);
+  box-sizing: border-box;
+}
+/* 定格动画 36 格 */
+.sm-hint {
+  margin: 0 0 10px;
+  font-size: 11.5px;
+  color: var(--ld-content-2);
+  line-height: 1.6;
+}
+.sm-warn {
+  margin: 8px 0 0;
+  font-size: 11.5px;
+  color: var(--ld-amber);
+  line-height: 1.6;
+}
+.fr-grid {
+  display: grid;
+  grid-template-columns: repeat(9, 1fr);
+  gap: 6px;
+}
+.fr-cell {
+  position: relative;
+  aspect-ratio: 1;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  padding: 3px;
+  border: 1px solid var(--ld-line);
+  border-radius: var(--ld-radius-sm);
+  background: var(--ld-bg-grey);
+  overflow: hidden;
+  cursor: pointer;
+}
+.fr-cell.is-hero {
+  border-color: var(--ld-purple-line);
+  box-shadow: inset 0 0 0 1px var(--ld-purple-line); /* 定格帧那格加内描边，缩略图铺满时也认得出 */
+}
+.fr-img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.fr-idx {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  padding: 0 3px;
+  border-radius: 4px;
+  background: var(--ld-bg); /* 缩略图铺满后序号会糊在图上，垫一层底保证可读 */
+  font-size: 10px;
+  font-family: var(--ld-font-mono);
+  color: var(--ld-content-2);
+}
+.fr-cell .badge {
+  position: relative;
+  transform: scale(0.85);
 }
 /* 手机预览（Hero + 品牌） */
 .hp-frame {

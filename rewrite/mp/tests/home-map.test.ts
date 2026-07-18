@@ -1,7 +1,8 @@
 // 黄金 learning-content §九「首页内容公开读·无记录前端回退默认文案·空块仍用默认防误清空」
 // + 展示面 fail-closed（防「¥undefined」类真机事故·根因#8 展示层半边）（守卫 rw-mp-home-golden）。
 import { describe, it, expect } from 'vitest'
-import { mapHero, mapProducts, mapHomeContent } from '../lib/mapHome'
+import { mapHero, mapProducts, mapHomeContent, mapStopmotion } from '../lib/mapHome'
+import { FLIP_N, FLIP_ZERO } from '../lib/flipLever'
 
 describe('首页 hero 映射（黄金 §九：缺档回退默认文案·不空屏不半空）', () => {
   it('大白话：没配置首页内容 → 完整默认文案；配了一半 → 缺的那半回退默认、配的那半用配置', () => {
@@ -125,5 +126,60 @@ describe('首页全板块映射 mapHomeContent（缺档/空块逐块回退设计
     const def = mapHomeContent(null)
     const d = mapHomeContent({ footer: { links: ['', null, {}] } })
     expect(d.footer.links).toEqual(def.footer.links)
+  })
+})
+
+// ── 首页特写位定格动画帧源（CMS 双层素材 → 视图模型·未配齐则页面回退包内测试帧） ──
+describe('定格动画帧源映射 mapStopmotion（整组全有才用·差一帧就判未配置）', () => {
+  const remote = (i: number) => 'https://cdn.example.com/sm/fr-' + i + '.jpg'
+  const full = Array.from({ length: FLIP_N }, (_, i) => remote(i))
+
+  it('大白话：36 帧配齐 → 用远程帧，定格层用后台配的高清图', () => {
+    const sm = mapStopmotion({ stopmotion: { frames: full, hero: 'https://cdn.example.com/sm/hero.jpg', heroIndex: 17 } })
+    expect(sm!.frames).toEqual(full)
+    expect(sm!.frames.length).toBe(FLIP_N)
+    expect(sm!.hero).toBe('https://cdn.example.com/sm/hero.jpg')
+  })
+
+  it('大白话：只给 35 帧 → 判未配置（返回 null·页面整组回退包内测试帧，不半远程半包内）', () => {
+    expect(mapStopmotion({ stopmotion: { frames: full.slice(0, 35) } })).toBeNull()
+    expect(mapStopmotion({ stopmotion: { frames: full.concat(remote(36)) } })).toBeNull() // 多一帧同样不认
+  })
+
+  it('大白话：36 帧里有空洞（空串/null/非字符串）→ 整组判未配置（拖到那一格会白屏）', () => {
+    const hole = full.slice()
+    hole[9] = ''
+    expect(mapStopmotion({ stopmotion: { frames: hole } })).toBeNull()
+    const nullHole = full.slice()
+    ;(nullHole as unknown[])[0] = null
+    expect(mapStopmotion({ stopmotion: { frames: nullHole } })).toBeNull()
+  })
+
+  it('大白话：定格层没配 → 用同帧序的 scrub 帧顶上（画面对得上·只是分辨率低）', () => {
+    expect(mapStopmotion({ stopmotion: { frames: full, heroIndex: 5 } })!.hero).toBe(remote(5))
+    expect(mapStopmotion({ stopmotion: { frames: full, hero: '', heroIndex: 5 } })!.hero).toBe(remote(5)) // 空串也算没配
+  })
+
+  it('大白话：heroIndex 非法/缺失 → 落默认静止帧 17；越界数字钳进 0..35（后台填错也不取空帧）', () => {
+    expect(mapStopmotion({ stopmotion: { frames: full } })!.hero).toBe(remote(FLIP_ZERO)) // 缺→默认 17
+    expect(mapStopmotion({ stopmotion: { frames: full, heroIndex: 'abc' } })!.hero).toBe(remote(FLIP_ZERO))
+    expect(mapStopmotion({ stopmotion: { frames: full, heroIndex: null } })!.hero).toBe(remote(FLIP_ZERO))
+    expect(mapStopmotion({ stopmotion: { frames: full, heroIndex: 99 } })!.hero).toBe(remote(FLIP_N - 1)) // 钳右端
+    expect(mapStopmotion({ stopmotion: { frames: full, heroIndex: -4 } })!.hero).toBe(remote(0)) // 钳左端
+    expect(mapStopmotion({ stopmotion: { frames: full, heroIndex: '20' } })!.hero).toBe(remote(20)) // 数字字符串照收
+  })
+
+  it('大白话：整档/整块缺失或脏档 → null，不崩（同其余板块的脏档安全）', () => {
+    expect(mapStopmotion(null)).toBeNull()
+    expect(mapStopmotion({})).toBeNull()
+    expect(mapStopmotion({ stopmotion: {} })).toBeNull()
+    expect(mapStopmotion({ stopmotion: '乱七八糟' })).toBeNull()
+    expect(mapStopmotion({ stopmotion: { frames: '不是数组' } })).toBeNull()
+    expect(() => mapStopmotion(42)).not.toThrow()
+  })
+
+  it('大白话：帧源挂在首页内容视图模型上，未配齐是 null（页面据此决定用不用远程帧）', () => {
+    expect(mapHomeContent(null).stopmotion).toBeNull()
+    expect(mapHomeContent({ stopmotion: { frames: full } }).stopmotion!.frames).toEqual(full)
   })
 })

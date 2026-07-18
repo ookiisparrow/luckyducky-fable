@@ -40,3 +40,29 @@ export async function uploadVideo(courseId: string, segName: string, file: File,
     return { ok: false, error: String(e instanceof Error ? e.message : e) } // 原文不吞
   }
 }
+
+/** 定格动画帧直传（首页 36 帧 scrub 层 + 1080² 定格层）：同 uploadVideo 的凭证通道，只换 action。
+ *  slot＝帧序 0..35 或 'hero'（决定云端对象路径）；入参恒 jpg——帧已在浏览器端 canvas 降采样成定尺 JPEG，
+ *  不劳 CDN 实时缩放。传的是 Blob 而非 File（canvas.toBlob 产物），FormData 两者同构。 */
+export async function uploadFrameImage(slot: string | number, blob: Blob, onProgress?: (p: number) => void): Promise<{ ok: boolean; fileId?: string; error?: string }> {
+  const meta = await client.post('getFrameUploadMeta', { slot, ext: 'jpg' })
+  if (!meta.ok) return { ok: false, error: String(meta.error || 'META_UNAVAILABLE') }
+  const fields = uploadFormFields(meta as never)
+  if (!fields) return { ok: false, error: 'META_INCOMPLETE' } // 凭证不齐不发
+  try {
+    await new Promise<void>((resolve, reject) => {
+      const fd = new FormData()
+      for (const [k, v] of Object.entries(fields)) fd.append(k, v)
+      fd.append('file', blob)
+      const xhr = new XMLHttpRequest()
+      xhr.open('POST', String(meta.url)) // 只认 POST 表单（调试日志 G·PUT 403）
+      if (xhr.upload && onProgress) xhr.upload.onprogress = (e) => e.lengthComputable && onProgress(e.loaded / e.total)
+      xhr.onload = () => (xhr.status < 300 ? resolve() : reject(new Error('直传失败 HTTP ' + xhr.status)))
+      xhr.onerror = () => reject(new Error('直传网络错误'))
+      xhr.send(fd)
+    })
+    return { ok: true, fileId: String(meta.fileId) }
+  } catch (e) {
+    return { ok: false, error: String(e instanceof Error ? e.message : e) } // 原文不吞
+  }
+}
