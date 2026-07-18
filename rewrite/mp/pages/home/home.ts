@@ -174,6 +174,9 @@ Page({
     const D2 = 560 // 左满行 → 右满行（扫全 36 帧）
     const t0 = Date.now()
     this.smStop()
+    // phase 转 moving → wxs 撤高清定格层，露出下面的扫帧动画（否则高清层压顶把入场转圈全遮住，
+    // 且被完全遮挡的 scrub 帧不参与光栅/解码、预热落空）；扫帧结束 phase 转 rest 时再淡回高清层。
+    this.setData({ smPhase: 'moving' })
     this.sm.timer = setInterval(() => {
       const t = Date.now() - t0
       if (t < D1) {

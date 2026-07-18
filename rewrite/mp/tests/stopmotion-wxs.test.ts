@@ -12,10 +12,11 @@ import wxmlSrc from '../pages/home/home.wxml?raw'
 import tsSrc from '../pages/home/home.ts?raw'
 // 素材在位 spot-check（?raw 只能静态导入、37 张逐一枚举不值当）：36 帧同一脚本同批 cp 原子落位，
 // 单帧独缺不可达——钉两端边界 + 静止帧 + 高清层四个点即够；成对接线由下方 wxml 断言兜。
-import fr00 from '../static/stopmotion/fr-00.webp?raw'
-import fr17 from '../static/stopmotion/fr-17.webp?raw'
-import fr35 from '../static/stopmotion/fr-35.webp?raw'
-import hi17 from '../static/stopmotion/hi-17.webp?raw'
+// 本地包内素材＝JPEG（微信 <image> 不解析本地 WebP·见 home.wxml 注释），正式版 CDN 走 WebP。
+import fr00 from '../static/stopmotion/fr-00.jpg?raw'
+import fr17 from '../static/stopmotion/fr-17.jpg?raw'
+import fr35 from '../static/stopmotion/fr-35.jpg?raw'
+import hi17 from '../static/stopmotion/hi-17.jpg?raw'
 
 describe('WXS/TS frameForRatio 同构（双源数学对拍）', () => {
   it('大白话：wxs 里 N/ZERO 常量与 flipLever 单源一致', () => {
@@ -44,7 +45,7 @@ describe('素材在位 + wxml/ts 接线成对（E2）', () => {
     expect(wxmlSrc).toContain('<wxs module="sm" src="./stopmotion.wxs" />')
     expect(wxmlSrc).toContain('wx:for="{{smFrames}}"')
     expect(wxmlSrc).toContain('id="sm-f{{index}}"')
-    expect(wxmlSrc).toContain('src="/static/stopmotion/fr-{{item}}.webp"')
+    expect(wxmlSrc).toContain('src="/static/stopmotion/fr-{{item}}.jpg"')
     expect(wxmlSrc).toContain('bindload="onSmFrameLoad"')
     expect(wxmlSrc).toContain('binderror="onSmFrameError"')
     for (const ch of ['maxj', 'ready', 'settlex', 'phase']) {

@@ -76,12 +76,18 @@ function settleXChanged(nv, ov, ow) {
   applyX(ow, nv || 0)
 }
 
-// phase 转 'rest'：权威归位（帧回 17 + 滑钮回中 + 高清定格层淡入）——也兜「切走 tab 打断动画」的自愈
+// phase 权威切换（单写者·高清定格层 opacity 只此一处 + onStart 改）：
+//  'moving' → 撤高清层（入场扫帧/拖动时露出 scrub 帧·否则高清层压顶把动画全遮住、帧也被遮挡不解码）；
+//  'rest'   → 归位（帧回 17 + 滑钮回中 + 高清层淡入）——也兜「切走 tab 打断动画」回来的自愈。
 function phaseChanged(nv, ov, ow) {
-  if (nv !== 'rest' || st.down) return
-  applyX(ow, 0)
+  if (st.down) return
   var hi = ow.selectComponent('#sm-hi')
-  if (hi) hi.setStyle({ opacity: '1' })
+  if (nv === 'moving') {
+    if (hi) hi.setStyle({ opacity: '0' })
+  } else if (nv === 'rest') {
+    applyX(ow, 0)
+    if (hi) hi.setStyle({ opacity: '1' })
+  }
 }
 
 module.exports = {
