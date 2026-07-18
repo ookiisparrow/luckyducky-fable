@@ -6020,14 +6020,17 @@ export const repoChecks = [
   },
   {
     // 品牌启动 splash 必须有界自动消失（根因#8「构建过≠真机能用」的 UI 陷死变体）：冷启动盖在首页上的
-    // 品牌开屏，是纯计时器驱动的覆盖层（show → 淡出 → triggerEvent('done') → home 撤下），不挂钩任何数据
-    // 成功/网络回包。风险＝有人把自动消失的 setTimeout/triggerEvent 删了、或 home 侧忘了把 done 收口成
-    // showSplash=false，则 splash 永久盖死首页、用户进不去——build 全绿、真机才陷死（正是 #8）。故钉三点：
-    // ① 组件 .ts 有 setTimeout 驱动的 triggerEvent('done')（有界自撤）；② home.wxml 挂 <brand-splash bind:done>；
-    // ③ home.ts 的 done 回调把 showSplash 置 false。反向自检＝删组件里的 setTimeout（→红）。撤下 splash 请同删本守卫。
+    // 品牌开屏，撤场＝**min-hold 保底停留 + 数据就绪 race + 硬上限兜底**（2026-07-18 丝滑战役批2 拍板升级·
+    // 前身 PR #34「纯计时器固定停留、不挂钩数据」有意识推翻）——过 min-hold 后父级 ready 即淡出、数据永不
+    // 就绪则 HARD_CAP_MS 无条件撤场。风险＝有人把 setTimeout/triggerEvent 删了、home 侧忘把 done 收口成
+    // showSplash=false、或只留 ready-race 却砍掉硬上限（弱网/云未部署数据永不就绪→splash 永久盖死首页），
+    // 都是 build 全绿、真机才陷死（正是 #8）。故钉四点：① 组件 .ts 有 setTimeout 驱动的 triggerEvent('done')；
+    // ② home.wxml 挂 <brand-splash bind:done>；③ home.ts 的 done 回调把 showSplash 置 false；④ 组件有
+    // HARD_CAP_MS 硬上限常量并接线到 setTimeout（数据永不就绪也无条件撤场）。反向自检＝删组件里 HARD_CAP_MS
+    // 的 setTimeout 接线行（→断言④红）。撤下 splash 请同删本守卫。
     id: 'rw-mp-splash-auto-dismiss',
     roots: ['#8'],
-    desc: '品牌启动 splash 有界自动消失（根因#8 build 绿·真机陷死）：components/brand-splash/brand-splash.ts 须有 setTimeout 驱动的 triggerEvent(\'done\')；home.wxml 须挂 <brand-splash bind:done>；home.ts 须在回调置 showSplash=false——防计时器/回调一断即永久盖死首页、用户进不去',
+    desc: '品牌启动 splash 有界自动消失（根因#8 build 绿·真机陷死·撤场＝min-hold+数据就绪 race+硬上限）：brand-splash.ts 须有 setTimeout 驱动的 triggerEvent(\'done\') 且有 HARD_CAP_MS 硬上限常量接线 setTimeout（数据永不就绪也无条件撤场）；home.wxml 须挂 <brand-splash bind:done>（经 ready 传数据就绪）；home.ts 须在回调置 showSplash=false——防计时器/回调/硬上限一断即永久盖死首页',
     run() {
       const base = join(ROOT, 'rewrite/mp')
       if (!existsSync(base)) return [] // 重写线未建时不红
@@ -6041,6 +6044,13 @@ export const repoChecks = [
       const src = stripComments(readFileSync(comp, 'utf8'))
       if (!/setTimeout\s*\(/.test(src) || !/triggerEvent\(\s*['"]done['"]/.test(src))
         bad.push(`${compRel} 未见 setTimeout 驱动的 triggerEvent('done')——splash 须计时器有界自撤，否则一断即永久盖死首页（根因#8 build 绿·真机陷死）`)
+      // 断言④（批2 升级）：HARD_CAP_MS 硬上限须声明且接线到 setTimeout——只留 ready-race 的话，数据永不就绪
+      // （弱网/云未部署）时 splash 会永久盖死首页（根因#8）；硬上限＝数据不就绪也无条件撤场的兜底。
+      // HARD_CAP_MS 改名须同步本判据（组件内注释亦有此提示）。setTimeout(...,HARD_CAP_MS) 走非贪婪跨回调体匹配。
+      if (!/HARD_CAP_MS\s*=/.test(src))
+        bad.push(`${compRel} 未见 HARD_CAP_MS 常量——splash 缺「数据永不就绪」的硬上限兜底（根因#8·只留 ready-race 会永久盖死首页）`)
+      else if (!/setTimeout\([\s\S]*?,\s*HARD_CAP_MS\s*\)/.test(src))
+        bad.push(`${compRel} HARD_CAP_MS 未接线到 setTimeout——硬上限没有真正驱动撤场（根因#8·数据不就绪即永久盖死首页）`)
       const homeWxmlRel = 'rewrite/mp/pages/home/home.wxml'
       const homeTsRel = 'rewrite/mp/pages/home/home.ts'
       const wxml = existsSync(join(ROOT, homeWxmlRel)) ? readFileSync(join(ROOT, homeWxmlRel), 'utf8') : ''

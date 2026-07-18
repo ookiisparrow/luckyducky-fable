@@ -10,13 +10,15 @@ import * as cart from '../../lib/cart'
 import { consumeHomeTop } from '../../lib/homeIntent'
 import { armExitAlert } from '../../utils/exitGuard'
 import { loginGate } from '../../lib/loginGate'
+import { readSnapshot, writeSnapshot } from '../../lib/snapshot'
 
 let toastTimer: ReturnType<typeof setTimeout> | null = null
 
 Page({
   data: {
     statusBarHeight: 0,
-    showSplash: true, // 冷启动品牌开屏：初值 true=首帧即盖上，纯计时器 splash 自撤后经 onSplashDone 置 false。
+    showSplash: true, // 冷启动品牌开屏：初值 true=首帧即盖上，splash（min-hold+数据就绪 race+硬上限）自撤后经 onSplashDone 置 false。
+    splashReady: false, // 首屏数据就绪信号→传 <brand-splash ready>：reload 落定即置 true 放行 splash 淡出（好网络更快撤·弱网走硬上限兜底）
     // 挂 onLoad（每次冷启动一次），非 onShow——切 tab 回来/热恢复不重播（brand-splash 有界自撤守卫见 rw-mp-splash-auto-dismiss）
     loading: true,
     loadFailed: false,
@@ -30,6 +32,18 @@ Page({
   onLoad() {
     const info = wx.getWindowInfo()
     this.setData({ statusBarHeight: info.statusBarHeight })
+    // 冷启动首屏快照（SWR·批2·根因#15/#8）：上次冷启动存的首页数据即刻渲染真实内容（stale），
+    // splashReady 直接置 true 放行 splash（有真内容不必等云回包）；随后 reload 拉最新覆盖（revalidate）。
+    const snap = readSnapshot()
+    if (snap) {
+      this._hadSnapshot = true
+      this.setData({
+        loading: false,
+        content: mapHomeContent(snap.home),
+        products: mapProducts(snap.products),
+        splashReady: true,
+      })
+    }
     void this.reload()
   },
   hidden: false, // 已切走本 tab 标记（H·完备性扫描新增）：home 是 tabBar 页，切 tab/navigateTo 只触发 onHide、
@@ -55,17 +69,27 @@ Page({
     if (show !== this.data.showTop) this.setData({ showTop: show })
   },
   _seq: 0, // reload 代次（同 order-list 范式）：onLoad + 下拉刷新可能并发触发·丢弃被更晚 reload 取代的过期回包
+  _hadSnapshot: false, // onLoad 是否已用首屏快照渲染过（批2·SWR）：为 true 时网络失败不整页翻失败态（已有真内容垫着）
   async reload() {
     const seq = ++this._seq
-    // 强刷（force:true）：下拉刷新/首屏仍要最新数据，同时回填缓存供详情/购物车复用（省它们的云调用）。
+    // 强刷（force:true）：下拉刷新/首屏仍要最新数据，同时回填缓存供详情/购物车复用（省它们的云调用）；
+    // 兼任 SWR revalidate——onLoad 若已用快照渲染过（stale），这趟拉最新数据覆盖（fresh），陈旧即悄悄换新。
     const [content, products] = await Promise.all([getContent(), getAllProducts({ force: true })])
     if (seq !== this._seq) return // 过期回包（被更晚 reload 取代）：丢弃·不覆盖较新结果
-    this.setData({
+    const nextContent = mapHomeContent(content.ok ? content.home : null) // 逐块回退默认（不空屏·不半空）
+    const nextProducts = mapProducts(products)
+    const patch: Record<string, unknown> = {
       loading: false,
-      content: mapHomeContent(content.ok ? content.home : null), // 逐块回退默认（不空屏·不半空）
-      products: mapProducts(products),
-      loadFailed: products === null,
-    })
+      // 有快照渲染时网络失败不整页翻失败态（读路径 fail-soft·已有真内容垫着·下拉重试入口仍在）；
+      // 无快照（首次冷启动/清缓存）时才让失败态出面（否则空屏）。
+      loadFailed: products === null && !this._hadSnapshot,
+      splashReady: true, // reload 落定（成败都）即放行 splash 离场（数据就绪·race 判定见 brand-splash.shouldLeave）
+    }
+    // setData 前独立 diff（content 与 products 各自比·等值跳过防无谓二次渲染·SWR「拉到的与快照一致」是常态）
+    if (JSON.stringify(nextContent) !== JSON.stringify(this.data.content)) patch.content = nextContent
+    if (JSON.stringify(nextProducts) !== JSON.stringify(this.data.products)) patch.products = nextProducts
+    this.setData(patch)
+    writeSnapshot(products, content.ok ? content.home : null) // 回写快照供下次冷启动首帧即真实内容（products=null 只写 home 半边）
   },
   toggleReassure(e: WechatMiniprogram.TouchEvent) {
     const i = Number(e.currentTarget.dataset.index)
@@ -113,7 +137,7 @@ Page({
   backTop() {
     wx.pageScrollTo({ scrollTop: 0, duration: 320 })
   },
-  // 品牌开屏淡出完成（brand-splash 计时器到点 triggerEvent('done')）：撤下覆盖层露出首页。
+  // 品牌开屏淡出结束（brand-splash 撤场后 triggerEvent('done')·撤场＝min-hold+数据就绪 race+硬上限）：撤下覆盖层露出首页。
   onSplashDone() {
     this.setData({ showSplash: false })
   },
