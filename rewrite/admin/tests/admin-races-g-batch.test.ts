@@ -188,6 +188,30 @@ describe('ScmBom.vue doPreview() 乱序守卫（G5·P2）', () => {
   })
 })
 
+describe('ScmOutwork.vue more() 乱序守卫（D4·战役3 批D·同 ScmPurchase.vue 判例）', () => {
+  it('大白话：reload 套 useLatest begin/isStale，more() 用 peek 绑定当前代际（不递增，防与 reload 互杀）、回包过期即丢弃、append/cursor 写入落在复核之后', () => {
+    const src = scriptSetupSrc(scmOutworkSrc)
+    expect(src).toMatch(/const listGen = useLatest\(\)/)
+    const reloadBody = extractFunctionBody(src, 'async function reload() {')
+    const reloadBeginIdx = reloadBody.indexOf('listGen.begin()')
+    expect(reloadBeginIdx).toBeGreaterThan(-1)
+    const reloadStaleIdx = reloadBody.search(/if\s*\(\s*listGen\.isStale\(my\)\s*\)\s*return/)
+    expect(reloadStaleIdx).toBeGreaterThan(reloadBeginIdx)
+    const ordersIdx = reloadBody.indexOf('orders.value =')
+    expect(ordersIdx).toBeGreaterThan(reloadStaleIdx) // 回写落在过期判断之后
+
+    const moreBody = extractFunctionBody(src, 'async function more() {')
+    const peekIdx = moreBody.indexOf('listGen.peek()')
+    expect(peekIdx).toBeGreaterThan(-1)
+    const moreStaleIdx = moreBody.search(/if\s*\(\s*listGen\.isStale\(gen\)\s*\)\s*return/)
+    expect(moreStaleIdx).toBeGreaterThan(peekIdx)
+    const appendIdx = moreBody.indexOf('orders.value = [...orders.value')
+    const cursorIdx = moreBody.indexOf('cursor.value = r.nextCursor')
+    expect(appendIdx).toBeGreaterThan(moreStaleIdx) // append 复核后才写
+    expect(cursorIdx).toBeGreaterThan(moreStaleIdx) // cursor 复核后才写
+  })
+})
+
 describe('ScmPlanner.vue calc() 乱序守卫（G6·P2）', () => {
   it('大白话：calc 套 useLatest 代际，并发多次点「算缺口」旧回包不覆盖新请求的 plan', () => {
     const src = scriptSetupSrc(scmPlannerSrc)

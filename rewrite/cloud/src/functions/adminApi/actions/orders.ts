@@ -193,6 +193,8 @@ async function shipOne(db: any, idRaw: any, companyRaw: any, trackingRaw: any, o
   // 并发/重试天然幂等）；改单号（shipped→shipped）不重复留痕。fail-soft：留痕失败不反噬发货（发货是主动作），
   // 但 fg 行无 CAS 面、除入参形状外无失败路径；旧单无 items 静默跳过（不落假流水·根因#8）。
   if (cur === 'paid') {
+    // 组合键校验在出生点、不在此消费点（战役3 批D·D1）：这里吃的是历史订单快照（items 下单时已定格），
+    // fail-closed 会拒发既有订单（钱链反噬）——规则单源见 shared/scmKey.ts 头注，此处历史容忍。
     const moves = ((got.data.items as any[]) || [])
       .filter((it) => it && it.productId && Number.isInteger(it.qty) && it.qty > 0)
       .map((it) => ({ materialId: `fg:${it.productId}__${it.spec || ''}`, delta: -it.qty }))

@@ -1,7 +1,7 @@
 import { reply, str, type Ctx } from '../lib'
 import { applyStockMoves, produceStock, listMaterialDocs, notifyAlert, pageQuery } from '../../../kit'
 import { COLLECTIONS, ERR } from '@ldrw/shared'
-import { resolveBom } from '@ldrw/shared'
+import { resolveBom, isValidScmProductId, isValidScmSpec } from '@ldrw/shared'
 
 // 进销存 SCM-C 组装执行（蓝图 docs/进销存ERP/·门5 文件级隔离：本文件=车道 C 组装面）。
 // 组装单**单步执行**（建即执行·无状态机·撤销走调整单——CLAUDE §7 别为不存在的草稿需求建状态机）：
@@ -27,9 +27,12 @@ export async function runAssembly({ db, data, agentId }: Ctx) {
   const productId = String(data.productId || '')
   const spec = str(data.spec, 40) // 成品 SKU 规格（与 inventory/order.items[].spec 同键·可空）
   if (!assemblyId || !productId) return reply(400, { ok: false, error: 'BAD_ARGS' })
-  // spec 禁含复合键分隔符 __（深审 P3·同 checkpoint 拒 ':' 先例）：spec 会拼进 fg:${productId}__${spec} 与
-  // inventory idOf productId__spec——含 __ 会让 `pA` 的 `x__y` 撞进 `pA__x` 的 `y`，写错真实客户库存文档。
-  if (spec.includes('__')) return reply(400, { ok: false, error: 'BAD_SPEC' })
+  // productId/spec 定界符防护（战役3 批D·预审裁决重划边界·helper 单源 shared/scmKey.ts）：二者会拼进
+  // fg:${productId}__${spec} 与 inventory idOf productId__spec——只挡 spec 含 __ 不够（productId 结尾 _ +
+  // spec 开头 _ 仍会撞出同一个组合键，productId 含 __ 也会让首个 __ 反解拆错）；isValidScmProductId/
+  // isValidScmSpec 两条排歧规则合用即证首个 __ 唯一定界（推理见该文件头注）。出生点两处校验之一（另一处
+  // products.ts saveDraft·cleanProduct 之后）——下游消费点（历史订单/存量库存）刻意不校验，各自注释指回本处。
+  if (!isValidScmProductId(productId) || !isValidScmSpec(spec)) return reply(400, { ok: false, error: 'BAD_SPEC' })
   const sets = data.sets
   if (!Number.isInteger(sets) || sets <= 0) return reply(400, { ok: false, error: ERR.BAD_SETS })
   const loaded = await loadBom(db, productId)

@@ -1,4 +1,4 @@
-import { isValidPriceYuan } from '@ldrw/shared'
+import { isValidPriceYuan, isValidScmProductId, isValidScmSpec } from '@ldrw/shared'
 import { reply, cleanProduct, storeImage, type Ctx } from '../lib'
 import { notifyAlert } from '../../../kit'
 
@@ -112,6 +112,23 @@ export async function saveDraft({ db, drafts, data }: Ctx) {
     drafts.doc(p.id).get().then((r: any) => r.data).catch(() => null),
     db.collection('products').doc(p.id).get().then((r: any) => r.data).catch(() => null),
   ])
+  // productId/spec 出生点校验（战役3 批D·D1·helper 单源 shared/scmKey.ts·预审裁决修订：校验只对「出生/变更」
+  // 生效，不对「存量值原样带回」生效）：p.id 是 SCM 组合键的 productId 半边，p.tag/skus[].name 是 spec 半边的
+  // 候选来源（createOrder lineIdOf 取 SKU 名或 tag 作 spec）——二者会拼进 scmAssembly fg:${productId}__${spec}
+  // 与 inventory idOf，歧义 __ 组合会撞键写错库存文档（推理见 scmKey.ts 头注）。
+  // productId 是草稿文档自身的寻址键：prevSource 存在即该 id 早已出生过（此前必过校验或属校验上线前的历史
+  // 数据），不重复校验——只在真正新建（prevSource 不存在）时挡歧义 id 出生。
+  const prevSource = prevDraft || pub
+  if (!prevSource && !isValidScmProductId(p.id)) return reply(400, { ok: false, error: 'BAD_SPEC' })
+  // tag/SKU 名可在既有商品上被编辑，故按「相对旧值是否变化」逐项判断——未变的存量歧义值沿用旧值原样放行
+  // （不追溯拒绝，注释承诺落到代码）；新增/改成的值才拦，歧义身份不再新增出生。
+  const tagChanged = !prevSource || prevSource.tag !== p.tag
+  if (tagChanged && !isValidScmSpec(p.tag)) return reply(400, { ok: false, error: 'BAD_SPEC' })
+  const oldSkuNames = new Set((prevSource?.skus || []).map((s: any) => s?.name))
+  for (const s of p.skus as { name: string }[]) {
+    const skuIsNewOrChanged = !prevSource || !oldSkuNames.has(s.name)
+    if (skuIsNewOrChanged && !isValidScmSpec(s.name)) return reply(400, { ok: false, error: 'BAD_SPEC' })
+  }
   const { orphans, keep } = diffOrphans([prevDraft, pub], [p, pub])
   const withGc = { ...p, pendingGc: mergePendingGc(prevDraft?.pendingGc, orphans, keep) }
   await drafts

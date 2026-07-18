@@ -8,6 +8,7 @@ import { materialHuman, outworkStatusLabel, yuanToFen, fenLabel, scmErrorText } 
 import { dateTime } from '../lib/format'
 import { consumeOutworkHandoff } from '../lib/scmHandoff'
 import { useLoadStatus } from '../lib/status'
+import { useLatest } from '../lib/latest'
 import ScmFlowTabs from '../components/ScmFlowTabs.vue'
 import UiButton from '../components/ui/Button.vue'
 import PageHeader from '../components/ui/PageHeader.vue'
@@ -49,9 +50,12 @@ function lineOver(l: { materialId: string; qty: number }): boolean {
 }
 const anyOver = computed(() => recvLines.value.some(lineOver)) // 任一色收超发→拦确认（后端也会拒·前端先防呆）
 
+const listGen = useLatest() // 外协单乱序守卫（D4·同 ScmPurchase.vue 判例·根因#8）：快切/快刷新时旧回包别覆盖当前结果
 async function reload() {
   confirmKey.value = '' // 刷新即复位危险态（P1·防旧武装的发料/结算/取消按钮跨刷新残留一击直发·批3 规格）
+  const my = listGen.begin()
   const [o, m, s] = await Promise.all([listOutworks(), listMaterials(), listSuppliers()])
+  if (listGen.isStale(my)) return // 已发起更新的 reload·丢弃过期回包
   orders.value = o.ok ? (o.list as Record<string, any>[]) : []
   cursor.value = o.ok ? o.nextCursor : null
   hasMore.value = !!(o.ok && o.hasMore)
@@ -62,10 +66,13 @@ async function reload() {
   load(o.ok, '加载失败：' + String(o.error || '')) // 只在加载失败时写·成功静默不抹动作反馈
 }
 
-// 加载更多（B1·根因#7）：续游标追加·去重防双击重复追加同一页
+// 加载更多（B1·根因#7·D4 补乱序守卫）：续游标追加·去重防双击重复追加同一页·绑定当前 reload 代际（新 reload
+// 会作废在途 more，more 自身不递增代际·防与 reload 互杀，同 ScmPurchase.vue more() 判例）
 async function more() {
   if (!hasMore.value || cursor.value == null) return
+  const gen = listGen.peek()
   const r = await listOutworks(undefined, { cursor: cursor.value })
+  if (listGen.isStale(gen)) return
   if (!r.ok) {
     note(false, '', '加载更多失败：' + scmErrorText(r.error))
     return

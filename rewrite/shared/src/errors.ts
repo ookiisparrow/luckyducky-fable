@@ -122,4 +122,7 @@ export const ERR = {
   NOT_DELIVERED: 'NOT_DELIVERED',
   BAD_TARGETS: 'BAD_TARGETS',
   STOCK_APPLY_FAIL: 'STOCK_APPLY_FAIL',
+  BAD_SPEC: 'BAD_SPEC', // fg 组合键定界符防护（战役3 批D）：productId/spec 出生点拒歧义 __ 组合（见 shared/scmKey.ts）
+  NO_SPECIFIC: 'NO_SPECIFIC', // scmBom.saveBomProfile：专属件（包装/卡片料号）未填全
+  BAD_PROFILE: 'BAD_PROFILE', // shared/scmBom resolveBom：差异位不完整（缺色/缺专属件）
 } as const
