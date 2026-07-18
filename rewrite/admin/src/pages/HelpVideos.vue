@@ -17,12 +17,18 @@ const message = ref('')
 const busy = ref(false)
 const progress = ref('')
 const confirmKey = ref('') // no-alert 两步删除确认（换皮改直接 splice·误删即丢）
+const baseRev = ref(0) // 拉取那一刻的版本号（乐观并发基线·批A·内容域并发安全）
+const conflicted = ref(false) // 冲突态：别处已改过帮助视频档——停自动保存防连环覆盖，重新载入解除
 
 async function reload() {
   const r = await listHelpVideos()
   confirmKey.value = '' // 刷新即复位危险态（P1·防旧武装的删主题/删段残留、重进同一位一击直删·批3 规格）
   loaded = false // 载入期不触发自动保存
   items.value = r.ok ? normalizeHelpItems(r.items) : []
+  if (r.ok) {
+    baseRev.value = Number(r.rev) || 0 // 记下拉取那一刻的版本号
+    conflicted.value = false // 重新载入即解除冲突态·恢复自动保存
+  }
   message.value = r.ok ? '' : '加载失败：' + String(r.error || '')
   saveState.value = ''
   // 只有载入成功才放开自动保存——载入失败(items=[]) 绝不 arm autosave，否则一次编辑就 saveHelpVideos([]) 触发后端整档覆盖 +
@@ -60,11 +66,22 @@ let saveTimer: ReturnType<typeof setTimeout> | null = null
 // key='help-videos'（批D·P1）：改走模块级共享槽位，快速切走再切回本页重建组件实例时，新实例接管旧实例
 // 仍在途的补存链，防旧快照晚到覆盖新实例已存的编辑（全课程共用一份·本就是单一资源，泛 key 恰好对应）。
 const flushSave = serialSave(async () => {
-  if (!loaded) return
-  const r = await saveHelpVideos(items.value)
-  saveState.value = r.ok ? 'saved' : 'error'
+  if (!loaded || conflicted.value) return // 冲突态阻断写者（批A·不得循环重试覆盖别处的编辑）
+  const r = await saveHelpVideos(items.value, baseRev.value)
+  if (r.ok || r.error === 'GC_DELETE_FAIL') {
+    // 保存已成功刷新基线（GC_DELETE_FAIL＝内容落库成功、仅孤儿视频删除失败·后端已 bump rev）——必须与手动 save()
+    // 一致，否则漏刷会让下一次自动保存拿旧 baseRev 撞出「自造的」假 DRAFT_CONFLICT，永久锁死自动保存链（含离页补存）。
+    baseRev.value = Number(r.rev) || baseRev.value + 1
+    saveState.value = r.ok ? 'saved' : 'error' // GC 失败仍算保存过、但显 error 提示点保存重试删孤儿
+  } else if (r.error === 'DRAFT_CONFLICT') {
+    // 别处（另一页签/窗口/管理员）已保存过更新版本：停自动保存·显式提示·不自动 reload 不丢当前编辑
+    conflicted.value = true
+    saveState.value = 'error'
+    message.value = '内容已被别处修改，请重新载入后再保存'
+  } else saveState.value = 'error'
 }, 'help-videos')
 function autosave() {
+  if (conflicted.value) return // 冲突态不再武装自动保存（等人工重新载入解除）
   saveState.value = 'saving'
   if (saveTimer) clearTimeout(saveTimer)
   saveTimer = setTimeout(() => {
@@ -72,7 +89,7 @@ function autosave() {
     void flushSave()
   }, 900)
 }
-watch(items, () => { if (loaded) autosave() }, { deep: true })
+watch(items, () => { if (loaded && !conflicted.value) autosave() }, { deep: true })
 // 离页补存判据用 pending saveTimer 而非 saveState==='saving'：先发的自动保存完成会把 saveState 复位成 'saved'，
 // 后一次编辑只活在待触发的 timer 里——按 saveState 判会漏补、离页丢这次编辑（P2·同 Showcase/HomeContent）
 onBeforeUnmount(() => {
@@ -146,9 +163,16 @@ async function save() {
   }
   busy.value = true
   await flushSave() // 先排空在途/待发自动保存·防旧快照 POST 落在手动保存之后覆盖新编辑（P2·同 HomeContent/Products.closeEditor）
-  const r = await saveHelpVideos(items.value)
+  const r = await saveHelpVideos(items.value, baseRev.value)
   busy.value = false
+  if (r.ok || r.error === 'GC_DELETE_FAIL') baseRev.value = Number(r.rev) || baseRev.value // 刷新基线（保存已成功·GC 失败也已 bump rev）
   if (!r.ok) {
+    if (r.error === 'DRAFT_CONFLICT') {
+      // 别处已保存过更新版本：拒写防互相覆盖·不 reload 不丢当前编辑（批A·迭代I 载入失败保护范式）
+      conflicted.value = true
+      message.value = '内容已被别处修改，请重新载入后再保存'
+      return
+    }
     // 失败留原文·不 reload——否则 listHelpVideos 会把编辑器换回旧数据（丢未存编辑）并抹掉本条错（病根#14·同 Kb）
     message.value = '保存失败：' + String(r.error || '')
     return

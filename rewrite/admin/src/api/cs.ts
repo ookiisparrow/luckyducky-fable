@@ -13,7 +13,8 @@ export const getCsatReport = () => client.post('getCsatReport')
 export const listCsatEntries = (filter: { cursor?: unknown; limit?: number; from?: number; to?: number; maxScore?: number }) =>
   client.post('listCsatEntries', filter as Record<string, unknown>)
 export const listCheckpoints = (courseId?: string) => client.post('listCheckpoints', courseId ? { courseId } : {})
-export const saveCheckpoints = (courseId: string, nodes: unknown[]) => client.post('saveCheckpoints', { courseId, nodes })
+// baseRev＝拉取时的版本号（乐观并发·批A 内容域并发安全·课程级 CAS 元档）：不符后端回 DRAFT_CONFLICT 拒整课覆盖
+export const saveCheckpoints = (courseId: string, nodes: unknown[], baseRev?: number) => client.post('saveCheckpoints', { courseId, nodes, baseRev })
 // 质检抽检（批 B7）：sessionKey=csSession._id（非 externalUserId——listCsatEntries 明细行已改名为 externalUserId，字段已分开不再撞名）
 export const sampleQc = (count = 10) => client.post('sampleQc', { count })
 export const saveQcMark = (sessionKey: string, score: number, note: string) => client.post('saveQcMark', { sessionKey, score, note })

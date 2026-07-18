@@ -3,7 +3,7 @@
 // + agreement history 服务端追加与 cap；app 公开读 getPageContent 同白名单 + catalogPlayer.heroImage 换址。
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import cloud, { control } from 'wx-server-sdk'
-import { savePageContent, getPageContent } from '../src/functions/adminApi/actions/content'
+import { savePageContent, getPageContent, saveHelpVideos, listHelpVideos } from '../src/functions/adminApi/actions/content'
 import { main as app } from '../src/functions/app/index'
 import { __resetTempUrlCacheForTest } from '../src/kit/storage'
 
@@ -213,5 +213,64 @@ describe('app 公开读（getPageContent·空兜底 + heroImage cloud:// 换址 
     const r = await appCall('getPageContent', { page: 'about' })
     expect(r.ok).toBe(true)
     expect(r.content.lead).toBe('你好') // about 页无 heroImage·原样
+  })
+})
+
+// —— 帮助视频乐观并发 + GC 告警（批A·内容域并发安全·根因#1/#14·同 saveCourseDraft rev/baseRev/DRAFT_CONFLICT 口径）——
+// 整档覆盖（items 整体替换）＝两处并发编辑后保存者静默吃掉先保存者；补 rev/baseRev CAS：不符即拒（不覆盖不 GC）。
+// GC 静默吞错（原 deleteFile(...).catch(()=>{})）修掉：删失败留痕 notifyAlert + 如实回 ok:false（保存已成功·orphans 可人工回收）。
+const saveHV = (items: unknown[], baseRev?: number, cloudOverride?: unknown) =>
+  saveHelpVideos({ db: db(), cloud: cloudOverride || cloud, data: { items, baseRev } } as any)
+const listHV = () => listHelpVideos({ db: db() } as any)
+const hvItems = (fileId: string) => [{ id: 'h1', title: '起针总松', segments: [{ id: 's1', name: '段一', dur: '1:00', videoFileId: fileId }] }]
+
+describe('帮助视频乐观并发 + GC 告警（批A·根因#1/#14）', () => {
+  it('大白话：baseRev 陈旧 → DRAFT_CONFLICT，既不覆盖内容也不删任何文件（先保存者的编辑 + 视频都保住）', async () => {
+    control.seed('content', [{ _id: 'helpVideos', items: hvItems('cloud://old-vid'), rev: 2, updatedAt: 1 }])
+    const r = bodyOf(await saveHV(hvItems('cloud://new-vid'), 1)) // baseRev=1 已陈旧（当前 rev=2）
+    expect(r.ok).toBe(false)
+    expect(r.error).toBe('DRAFT_CONFLICT')
+    expect(r.rev).toBe(2) // 回当前 rev 供前端重载
+    // 内容未被覆盖（仍是 old-vid、rev 仍 2）
+    const doc = control.dump('content').find((d: any) => d._id === 'helpVideos')
+    expect(doc.items[0].segments[0].videoFileId).toBe('cloud://old-vid')
+    expect(doc.rev).toBe(2)
+    expect(control.deletedFiles()).toEqual([]) // 冲突分支绝不 GC（先保存者的视频不被误删）
+  })
+
+  it('大白话：正常保存——rev 递增、内容落库、旧份不再引用的孤儿视频被 GC 删掉', async () => {
+    control.seed('content', [{ _id: 'helpVideos', items: hvItems('cloud://old-vid'), rev: 1, updatedAt: 1 }])
+    const r = bodyOf(await saveHV(hvItems('cloud://new-vid'), 1))
+    expect(r.ok).toBe(true)
+    expect(r.rev).toBe(2) // rev 递增
+    const doc = control.dump('content').find((d: any) => d._id === 'helpVideos')
+    expect(doc.items[0].segments[0].videoFileId).toBe('cloud://new-vid') // 内容落库
+    expect(doc.rev).toBe(2)
+    expect(control.deletedFiles()).toEqual(['cloud://old-vid']) // 孤儿 GC 正常
+    // listHelpVideos 响应带 rev 供前端做 baseRev
+    const lr = bodyOf(await listHV())
+    expect(lr.rev).toBe(2)
+  })
+
+  it('大白话：GC deleteFile 失败不再静默吞——留痕 notifyAlert(GC_DELETE_FAIL) + 如实回 ok:false（保存本身已成功）', async () => {
+    control.seed('content', [{ _id: 'helpVideos', items: hvItems('cloud://old-vid'), rev: 1, updatedAt: 1 }])
+    // 注入 deleteFile 拒绝的 cloud（模拟真机偶发删失败）：saveHelpVideos 只用 cloud.deleteFile，最小对象即可
+    const failCloud = { deleteFile: () => Promise.reject(new Error('MOCK_DELETE_FAIL')) }
+    const r = bodyOf(await saveHV(hvItems('cloud://new-vid'), 1, failCloud))
+    expect(r.ok).toBe(false) // 原 .catch(()=>{}) 全吞会恒回 ok:true——前端误显「已保存」
+    expect(r.error).toBe('GC_DELETE_FAIL')
+    // 保存本身已成功：内容已落库、rev 已递增（只是 GC 失败）
+    const doc = control.dump('content').find((d: any) => d._id === 'helpVideos')
+    expect(doc.items[0].segments[0].videoFileId).toBe('cloud://new-vid')
+    expect(doc.rev).toBe(2)
+    // 真留痕（病根#14）：orphans 进 anomalies 账本可人工回收
+    expect(control.dump('anomalies').some((a: any) => a.code === 'GC_DELETE_FAIL')).toBe(true)
+  })
+
+  it('大白话：不带 baseRev 的旧调用按原语义覆盖（部署窗口前后端版本错开不卡死保存）', async () => {
+    control.seed('content', [{ _id: 'helpVideos', items: hvItems('cloud://old-vid'), rev: 5, updatedAt: 1 }])
+    const r = bodyOf(await saveHV(hvItems('cloud://new-vid'))) // 不带 baseRev
+    expect(r.ok).toBe(true)
+    expect(r.rev).toBe(6) // 仍以当前 rev 为基递增
   })
 })

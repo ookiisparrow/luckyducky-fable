@@ -9,6 +9,7 @@ import { isVodFileId } from '@ldrw/shared'
 import { courseVideoStats } from '../lib/mapContent'
 import { planLessonBatch } from '../lib/videoBatch'
 import { serialSave } from '../lib/serialSave'
+import { useLatest } from '../lib/latest'
 import { setUploadLock, clearUploadLock, isUploadLocked } from '../lib/uploadLock'
 import PageHeader from '../components/ui/PageHeader.vue'
 import Card from '../components/ui/Card.vue'
@@ -105,6 +106,7 @@ const publishIssues = computed(() => {
   return issues
 })
 
+const loadGen = useLatest() // load() 乱序守卫（批A）：只让最后一次发起的 getCourseDraft 结果落地
 async function load() {
   if (!courseId.value.trim()) return
   if (batchUploading.value) {
@@ -117,7 +119,9 @@ async function load() {
   confirmKey.value = '' // 换课即复位危险态（P1·防旧武装的删章/删课时/删段残留、重进同一位一击直删·批3 规格）
   publishConfirm.value = false // 换课即复位危险态（P1·防旧武装的发布确认残留、重进一击直发·批3 规格）
   message.value = '加载中…'
+  const my = loadGen.begin() // 乱序守卫（批A·同 Batches G1·根因#8）：连点载入/切课时旧回包别把 course.value 污染成错课
   const r = await getCourseDraft(courseId.value.trim())
+  if (loadGen.isStale(my)) return // 已发起更新的 load()·整包丢弃（course/draftRev/message 全不写）
   if (!r.ok) {
     message.value = '加载失败：' + String(r.error || '')
     return
