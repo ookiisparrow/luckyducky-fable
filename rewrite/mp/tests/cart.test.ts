@@ -18,6 +18,13 @@ beforeEach(() => {
   cart.__resetForTest()
 })
 
+/** 测试专用：绝对值设置的等价替代（G5 死代码清理·生产码只留相对增减 bump、setQty 已删）——
+ *  按「目标值 − 当前已知量」调用 bump（差值法），不为测试便利在生产码保留 setQty。 */
+function setQtyViaBump(id: string, qty: number, sku = ''): void {
+  const cur = cart.getItems().find((it) => it.id === id && it.sku === (sku || ''))?.qty ?? 0
+  cart.bump(id, qty - cur, sku)
+}
+
 describe('行身份与加购（黄金 §一）', () => {
   it('大白话：新商品入车一条数量 1；再加同商品 +1 不重复建行；不同规格各成独立行；改量/删除按双键定位不串行', () => {
     cart.add(DUCK)
@@ -26,14 +33,13 @@ describe('行身份与加购（黄金 §一）', () => {
     expect(cart.getItems()[0].qty).toBe(2)
     cart.add({ ...DUCK, sku: '云朵白', price: 138 })
     expect(cart.getItems()).toHaveLength(2) // 不同规格独立行
-    cart.setQty('p1', 5, '云朵白')
+    setQtyViaBump('p1', 5, '云朵白')
     expect(cart.getItems().find((i) => i.sku === '云朵白')!.qty).toBe(5)
     expect(cart.getItems().find((i) => i.sku === '')!.qty).toBe(2) // 不串到空规格行
     cart.remove('p1', '云朵白')
     expect(cart.getItems()).toHaveLength(1)
     expect(cart.getItems()[0].sku).toBe('') // 删规格行不误删邻行
-    cart.setQty('p1', 0)
-    expect(cart.getItems()[0].qty).toBe(1) // 数量钳位 ≥1
+    // 数量钳位 ≥1 已由下方「bump 相对增减」用例（bump('p1',-5)）覆盖，不再靠 setQty(0) 重复钉（G5）
   })
 
   it('大白话：lineId（wx:key 用·批5）＝id+sku 双键合成——同 id 异 sku 不撞、同 id+sku 唯一稳定', () => {
@@ -64,7 +70,7 @@ describe('行身份与加购（黄金 §一）', () => {
 
   it('大白话：结算按提交数量精确扣——只买走部分剩余保留；全量买走整行移除；同商品其他规格行不受影响', () => {
     cart.add(DUCK)
-    cart.setQty('p1', 3)
+    setQtyViaBump('p1', 3)
     cart.add({ ...DUCK, sku: '云朵白', price: 138 })
     cart.consume([{ id: 'p1', sku: '', qty: 1 }]) // 3 件只买 1
     expect(cart.getItems().find((i) => i.sku === '')!.qty).toBe(2) // 剩余保留·不误删整条

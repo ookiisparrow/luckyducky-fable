@@ -23,6 +23,13 @@ beforeEach(() => {
   checkout.__resetForTest()
 })
 
+/** 测试专用：绝对值设置的等价替代（G5 死代码清理·生产码只留相对增减 bump、setQty 已删）——
+ *  按「目标值 − 当前已知量」调用 bump（差值法），不为测试便利在生产码保留 setQty。 */
+function setQtyViaBump(id: string, qty: number, sku = ''): void {
+  const cur = cart.getItems().find((it) => it.id === id && it.sku === (sku || ''))?.qty ?? 0
+  cart.bump(id, qty - cur, sku)
+}
+
 describe('地址簿（黄金 §五）', () => {
   it('大白话：生产初始空簿不内置样例（防误发货到假地址）；新增 id 不撞号——冷启动回灌后再加也不撞；默认唯一', () => {
     expect(addr.getList()).toEqual([]) // 空簿·无样例
@@ -54,7 +61,7 @@ describe('结算草稿（快照语义·直买不动车·提交精确扣车）', 
     cart.add({ id: 'p2', name: '小熊', price: 22 })
     cart.toggle('p2') // 只选 p1
     checkout.prepareFromCart()
-    cart.setQty('p1', 9) // 快照后改车
+    setQtyViaBump('p1', 9) // 快照后改车
     const draft = checkout.getDraft()
     expect(draft.items).toHaveLength(1)
     expect(draft.items[0].qty).toBe(1) // 快照独立·不随车动
@@ -81,7 +88,7 @@ describe('结算草稿（快照语义·直买不动车·提交精确扣车）', 
 
   it('大白话：搭配购加/减幂等切换；金额=商品+运费−券且不为负（与云端同式·分整数）；提交成功只扣购物车来源行、搭配购不碰车', () => {
     cart.add({ id: 'p1', name: '小鸭', price: 128 })
-    cart.setQty('p1', 3)
+    setQtyViaBump('p1', 3)
     checkout.prepareFromCart()
     checkout.toggleAddon('hook') // +39
     checkout.toggleAddon('hook') // 再点移除
@@ -98,7 +105,7 @@ describe('结算草稿（快照语义·直买不动车·提交精确扣车）', 
     cart.__resetForTest()
     storage = {}
     cart.add({ id: 'p1', name: '小鸭', price: 128 })
-    cart.setQty('p1', 3)
+    setQtyViaBump('p1', 3)
     cart.add({ id: 'p2', name: '小熊', price: 22 })
     cart.toggle('p2')
     checkout.prepareFromCart()

@@ -1,6 +1,7 @@
 // 售后映射（纯函数·黄金 orders-money 售后节前端半边 + frontend-store §八）（守卫 rw-mp-aftersales-golden）：
 // 状态中文化/金额两位小数/可申请行计算（refundable 且剩余可退件>0 且未申请过——与云端 applyRefund 同口径，
-// 前端只做入口收窄，最终裁决在云端）/翻页追加去重/申请成功插头部。
+// 前端只做入口收窄，最终裁决在云端）/翻页追加去重（申请成功后列表即时收窄由 applicableLines 排除已申请实现，
+// 不靠单独的插头部函数·G5 死代码清理删 prependAfterSale）。
 import { dateTime } from './mapOrders'
 import type { OrderLineVM } from './mapOrders'
 
@@ -65,12 +66,6 @@ export function mapAfterSales(list: unknown): AfterSaleVM[] {
 export function mergeAfterSales(existing: AfterSaleVM[], incoming: AfterSaleVM[]): AfterSaleVM[] {
   const seen = new Set(existing.map((a) => a.id))
   return [...existing, ...incoming.filter((a) => !seen.has(a.id))]
-}
-
-/** 申请成功插头部（可申请列表即时消失该条目由 applicableLines 排除已申请实现）。 */
-export function prependAfterSale(list: AfterSaleVM[], rec: unknown): AfterSaleVM[] {
-  const vm = mapAfterSale(rec)
-  return vm ? [vm, ...list.filter((a) => a.id !== vm.id)] : list
 }
 
 /** 可申请行（与云端 applyRefund 同口径的入口收窄）：订单态 ∈ 已付/已发/完成 且 行 refundable

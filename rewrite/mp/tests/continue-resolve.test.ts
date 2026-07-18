@@ -4,8 +4,47 @@ import { describe, it, expect } from 'vitest'
 import { continueResolve, clampResumeAt } from '../lib/continueResolve'
 
 const COURSES = [
-  { id: 'c1', title: '小棉鸭', chapters: [{ id: 'ch1', lessons: [{ id: 'l1', name: '起针', segments: [] }, { id: 'l2', name: '加针', segments: [] }] }] },
-  { id: 'c2', title: '小熊', chapters: [{ id: 'ch1', lessons: [{ id: 'x1', name: '开头', segments: [] }] }] },
+  {
+    id: 'c1',
+    title: '小棉鸭',
+    chapters: [
+      {
+        id: 'ch1',
+        lessons: [
+          { id: 'l1', name: '起针', segments: [{ id: 's1', hasVideo: true }] },
+          { id: 'l2', name: '加针', segments: [{ id: 's5', hasVideo: true }, { id: 's6', hasVideo: false }] }, // s6 命中段无 video 供 G3 降级用例
+        ],
+      },
+    ],
+  },
+  { id: 'c2', title: '小熊', chapters: [{ id: 'ch1', lessons: [{ id: 'x1', name: '开头', segments: [{ id: 'sx', hasVideo: true }] }] }] },
+  {
+    id: 'c3',
+    title: '半上线课程',
+    chapters: [
+      {
+        id: 'ch1',
+        lessons: [
+          { id: 'p1', name: '第一课', segments: [{ id: 'a1', hasVideo: true }] },
+          { id: 'p2', name: '半上线课时', segments: [{ id: 'a2', hasVideo: false }] }, // 整课时无可播段供 G3 兜底用例
+        ],
+      },
+    ],
+  },
+  {
+    id: 'c4',
+    title: '深层可播兜底',
+    chapters: [
+      {
+        id: 'ch1',
+        lessons: [
+          { id: 'q1', name: '开场', segments: [{ id: 'b1', hasVideo: false }] }, // 全课首课时也无视频·不能被误当兜底
+          { id: 'q2', name: '命中课时（视频已下架）', segments: [{ id: 'b2', hasVideo: false }] },
+          { id: 'q3', name: '唯一可播课时', segments: [{ id: 'b3', hasVideo: true }] }, // 全课唯一可播段供 finding 修正用例
+        ],
+      },
+    ],
+  },
 ]
 
 describe('继续学习定位（黄金 §四）', () => {
@@ -62,5 +101,31 @@ describe('继续学习定位（黄金 §四）', () => {
     expect(continueResolve([], [], COURSES)).toBeNull()
     expect(continueResolve([], [{ courseId: 'c-deleted', enteredAt: 1 }], COURSES)).toBeNull() // 课查不到不假装
     expect(continueResolve(undefined, undefined, undefined)).toBeNull() // 脏入参安全
+  })
+})
+
+describe('续播段命中校验（G3·与 mapLearning.mapCatalog continueTarget 同口径·病根#5）', () => {
+  it('大白话：命中段无 video（如 admin 撤下视频）→ 降级到该课时首个 hasVideo 段，resumeAt 一并归 0（不把旧秒错落到别段）', () => {
+    const r = continueResolve([{ courseId: 'c1', last: { lessonId: 'l2', segmentId: 's6', at: 88, dur: 200 }, updatedAt: 200 }], [], COURSES)!
+    expect(r).toMatchObject({ courseId: 'c1', lessonId: 'l2', segmentId: 's5', resumeAt: 0 })
+  })
+  it('大白话：命中段有 video → 原样保留 segmentId/resumeAt（新增校验不误伤正常命中）', () => {
+    const r = continueResolve([{ courseId: 'c1', last: { lessonId: 'l2', segmentId: 's5', at: 42, dur: 300 }, updatedAt: 200 }], [], COURSES)!
+    expect(r).toMatchObject({ courseId: 'c1', lessonId: 'l2', segmentId: 's5', resumeAt: 42 })
+  })
+  it('大白话：命中课时整课时无可播段（全下架）→ 退回全课首个仍可播的课时（本例恰是首课时·带其可播段·与 mapCatalog 全课兜底同口径）', () => {
+    const r = continueResolve([{ courseId: 'c3', last: { lessonId: 'p2', segmentId: 'a2' }, updatedAt: 200 }], [], COURSES)!
+    expect(r).toMatchObject({ courseId: 'c3', lessonId: 'p1', segmentId: 'a1', resumeAt: 0 })
+  })
+  it('大白话（finding 修正）：命中课时整课时无可播段、且全课首课时本身也无视频 → 继续往后扫到全课唯一可播课时，不误退回无视频的首课时（防「卡片承诺≠行为」：卡片与播放器实际起播须同一课时）', () => {
+    const r = continueResolve([{ courseId: 'c4', last: { lessonId: 'q2', segmentId: 'b2' }, updatedAt: 200 }], [], COURSES)!
+    expect(r).toMatchObject({ courseId: 'c4', lessonId: 'q3', segmentId: 'b3', resumeAt: 0 })
+  })
+  it('大白话：全课确实一个可播段都没有 → 退回既有「脏课时」兜底路径（全课首课时·segmentId/resumeAt 归空/0）', () => {
+    const dead = [
+      { id: 'c5', title: '全下架课程', chapters: [{ id: 'ch1', lessons: [{ id: 'z1', name: '唯一课时', segments: [{ id: 'y1', hasVideo: false }] }] }] },
+    ]
+    const r = continueResolve([{ courseId: 'c5', last: { lessonId: 'z1', segmentId: 'y1' }, updatedAt: 200 }], [], dead)!
+    expect(r).toMatchObject({ courseId: 'c5', lessonId: 'z1', segmentId: '', resumeAt: 0 })
   })
 })

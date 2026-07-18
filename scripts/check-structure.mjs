@@ -5094,6 +5094,56 @@ export const repoChecks = [
     },
   },
   {
+    // 手抄常量补机器守卫（G6·根因#5：mp 进不了 @ldrw/shared，两处手抄常量此前无守卫——同族
+    // checkoutConst/order-labels 都已有 rw-mp-*-synced，这两处是漏网）：
+    // ① payFlow.ts PAID_BAD_STATUS 须与 shared order.ts buildBadStatus('paid') 输出逐字一致；
+    //   admin Fulfill.vue 里另有第三处 'BAD_STATUS:' 前缀硬编码（mapShipErr），一并纳入核对面
+    //   （admin/mp 分处不同前端、各自手抄同一个前缀，三处漂移任一处都会致「已发货判定」/「支付判定」误判）。
+    // ② checkout.ts OUT_OF_STOCK_PREFIX 须与 shared errors.ts ERR.OUT_OF_STOCK 一致。
+    id: 'rw-mp-payflow-consts-synced',
+    roots: ['#5'],
+    desc: '手抄常量三点核对面（根因#5·mp 进不了 @ldrw/shared，故手落副本）：① rewrite/mp/lib/payFlow.ts PAID_BAD_STATUS 与 rewrite/shared/src/order.ts buildBadStatus(\'paid\') 输出、及 rewrite/admin/src/pages/Fulfill.vue mapShipErr 里硬编码的 \'BAD_STATUS:\' 前缀三处一致；② rewrite/mp/lib/checkout.ts OUT_OF_STOCK_PREFIX 与 rewrite/shared/src/errors.ts ERR.OUT_OF_STOCK 一致——任一处漂移会致支付/发货/库存判定误判',
+    run() {
+      const bad = []
+      const payFlowPath = join(ROOT, 'rewrite/mp/lib/payFlow.ts')
+      const orderPath = join(ROOT, 'rewrite/shared/src/order.ts')
+      const fulfillPath = join(ROOT, 'rewrite/admin/src/pages/Fulfill.vue')
+      const checkoutPath = join(ROOT, 'rewrite/mp/lib/checkout.ts')
+      const errorsPath = join(ROOT, 'rewrite/shared/src/errors.ts')
+      if (!existsSync(orderPath) || !existsSync(errorsPath)) return [] // shared 未在（不适用场景）
+
+      // ① BAD_STATUS 三点核对
+      if (existsSync(payFlowPath)) {
+        const payFlowSrc = readFileSync(payFlowPath, 'utf8')
+        const orderSrc = readFileSync(orderPath, 'utf8')
+        const mpM = payFlowSrc.match(/const PAID_BAD_STATUS = '([^']+)'/)
+        const prefixM = orderSrc.match(/return '([^']+)' \+ status/)
+        if (!mpM) bad.push('rewrite/mp/lib/payFlow.ts 未找到 PAID_BAD_STATUS 定义——手抄常量守卫需要它（G6）')
+        else if (!prefixM) bad.push('rewrite/shared/src/order.ts buildBadStatus 实现形状变了——本守卫的取值正则找不到前缀字面量，先看是否漂移或需要更新守卫')
+        else {
+          const expected = prefixM[1] + 'paid'
+          if (mpM[1] !== expected) bad.push(`手抄常量漂移：mp payFlow.ts PAID_BAD_STATUS='${mpM[1]}' ≠ shared buildBadStatus('paid')='${expected}'（并发已付幂等判定会失效）`)
+          if (existsSync(fulfillPath)) {
+            const fulfillSrc = readFileSync(fulfillPath, 'utf8')
+            if (!fulfillSrc.includes(`'${prefixM[1]}'`)) bad.push(`手抄常量漂移：admin Fulfill.vue mapShipErr 未见与 shared 一致的 '${prefixM[1]}' 前缀字面量（发货态判定文案会对不上真实状态码）`)
+          }
+        }
+      }
+
+      // ② OUT_OF_STOCK 两点核对
+      if (existsSync(checkoutPath)) {
+        const checkoutSrc = readFileSync(checkoutPath, 'utf8')
+        const errorsSrc = readFileSync(errorsPath, 'utf8')
+        const mpM = checkoutSrc.match(/const OUT_OF_STOCK_PREFIX = '([^']+)'/)
+        const shM = errorsSrc.match(/OUT_OF_STOCK:\s*'([^']+)'/)
+        if (!mpM) bad.push('rewrite/mp/lib/checkout.ts 未找到 OUT_OF_STOCK_PREFIX 定义——手抄常量守卫需要它（G6）')
+        else if (!shM) bad.push('rewrite/shared/src/errors.ts 未找到 ERR.OUT_OF_STOCK——手抄常量守卫需要它（G6）')
+        else if (mpM[1] !== shM[1]) bad.push(`手抄常量漂移：mp checkout.ts OUT_OF_STOCK_PREFIX='${mpM[1]}' ≠ shared ERR.OUT_OF_STOCK='${shM[1]}'（结算页库存不足文案会失联）`)
+      }
+      return bad
+    },
+  },
+  {
     id: 'rw-site-in-gates',
     roots: ['铁律'],
     desc: '内容站 SEO/GEO 基线在位（M4·GEO 基建=可爬可收录+AI 引擎可摘要的机器面）：astro.config 配 site 域名 + sitemap 集成；robots.txt 在且显式放行 AI 爬虫（GPTBot 等）；Base.astro 齐 og 三件+og:image/og:locale/twitter:card+WebSite 结构化卡；llms.txt 与 rss.xml 端点在；404 页 noindex；favicon.svg 与 og-cover.png 分享素材在；根 typecheck 覆盖 rewrite/site；教程 frontmatter 带 reviewed 标记（AI 起草未审稿不冒充定稿——写真机器可核）',
