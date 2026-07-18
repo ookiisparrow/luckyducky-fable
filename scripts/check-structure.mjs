@@ -1769,6 +1769,34 @@ export const repoChecks = [
     },
   },
   {
+    // 病根#16（守卫绑定漂移·盲区体检批2）：guard-coverage 只核「有守卫声明 roots 含此病根」——
+    // 声明层；一条守卫可以挂着 roots:['T4'] 却只扫再不会改动的冻结目录，覆盖率照绿（dep-direction
+    // 在活线空转即前科）。本守卫把「声称守活线」与「真够得着活线」机器对齐：逐条 fileRule 对
+    // rewrite/ 实走 inScope，零命中且不在 OLDLINE_SCOPE_OK 白名单即红；金丝雀夹具在位一并核
+    // （金丝雀是扫描面回潮的行为哨兵——被删=哨位空了，与「哨兵失效」同级对待）。
+    id: 'guard-scan-liveness',
+    roots: ['#16'],
+    desc: '守卫扫描面活性下限（病根#16）：每条 fileRule 的 inScope 须命中 ≥1 个 rewrite/ 活线文件，守冻结参照的须显式列入 OLDLINE_SCOPE_OK 白名单（随 packages/ 处置拍板一并退役）；金丝雀夹具（rewrite/mp/.claude/worktrees/fixture-scan-surface/）在位一并核——防 dep-direction 式「声称覆盖、实际空转」复发',
+    run() {
+      const bad = []
+      for (const c of [
+        'rewrite/mp/.claude/worktrees/fixture-scan-surface/canary.ts',
+        'rewrite/mp/.claude/worktrees/fixture-scan-surface/canary.md',
+      ])
+        if (!existsSync(join(ROOT, c))) bad.push(`${c} 缺失——扫描面金丝雀被拆（病根#16 哨兵·删除须先拍板退役）`)
+      // 守冻结 packages/ 参照的旧线 fileRule 白名单（待办与债 债7：随 packages/ 处置拍板一并退役）
+      const OLDLINE_SCOPE_OK = new Set(['kit-only-cloud-primitives', 'flow-seam-via-kit', 'money-via-fen', 'api-cloud-only', 'dep-direction'])
+      const hits = new Map(fileRules.map((r) => [r.id, 0]))
+      for (const f of walk(join(ROOT, 'rewrite'))) for (const r of fileRules) if (r.inScope(f)) hits.set(r.id, hits.get(r.id) + 1)
+      for (const r of fileRules) {
+        if (OLDLINE_SCOPE_OK.has(r.id)) continue
+        if (!hits.get(r.id))
+          bad.push(`fileRule '${r.id}' 在 rewrite/ 活线零命中且不在 OLDLINE_SCOPE_OK 白名单——扫描面空转（病根#16·dep-direction 前科：声称守 T4 实扫冻结线）`)
+      }
+      return bad
+    },
+  },
+  {
     id: 'requirement-trace',
     roots: ['元'],
     desc: '需求→守卫闭环（仿 guard-coverage 泛化「病根→守卫」为「需求→功能→守卫」）：需求清单「需求→实现映射」每条 ✅ 实现需求(L1)须有映射行，且行内 函数(见系统事实)/测试(tests/cloud)/守卫(注册表) 真实存在——改需求或改码断链当场红；`npm run trace R#` 查爆炸半径。⚠️ 深审 P3：映射表函数/测试(tests/cloud)全锚**冻结旧线**，旧线冻结⇒对唯一在迭代的 rewrite 实现该守卫的「改码断链当场红」永不触发——是旧线参照链；新线需求追溯（R34/R38 等 rewrite 已实现）走各 rw- golden 守卫、未纳入本表（未闭合债·docs/待办与债）',
@@ -7163,6 +7191,42 @@ export const fileRules = [
         ? 'mp 端禁裸 wx.request()——H5/App 不连核心交易流程，微信原生单源经云函数 callCloud（T1·rewrite 镜像）'
         : null,
   },
+  {
+    // T4 按链内聚·活线镜像（盲区体检批2·病根#16 ②）：旧 dep-direction 的 inScope 锁死冻结
+    // packages/miniapp——CLAUDE 四大架构主张之一在唯一迭代的活线上零执行；2026-07-10 镜像批
+    // 注释亲笔「对唯一在迭代的 rewrite/ 空转」却只搬 4 条、漏了这条。方向图（rewrite/mp/README §分层）：
+    // pages/components/custom-tab-bar（顶层·可越级下行直连 api/utils）→ lib → api → utils（叶·出度 0）。
+    // 另钉 rewrite/cloud：kit/ 禁反向 import functions/（kit=原语层，反引=方向反转）。
+    // 侦察实测（2026-07-18）存量违例 0——纯预防守卫，先红由反向自检证（篡改样例 import 必红）。
+    id: 'rw-dep-direction',
+    roots: ['T4', '#16'],
+    inScope: (abs) =>
+      ((/\/rewrite\/mp\/(lib|api|utils)\//.test(abs) && !abs.includes('/rewrite/mp/tests/')) ||
+        /\/rewrite\/cloud\/src\/kit\//.test(abs)) &&
+      abs.endsWith('.ts'),
+    test: (line, ctx) => {
+      const m = line.match(/\bfrom\s+['"]([^'"]+)['"]/)
+      if (!m) return null
+      const spec = m[1]
+      const f = ctx.file.replace(/\\/g, '/')
+      if (f.includes('/rewrite/cloud/src/kit/')) {
+        return /(^|\.\.?\/)functions\//.test(spec)
+          ? 'kit 禁 import functions/——kit 是原语层，反向引用=依赖方向反转（T4·活线）'
+          : null
+      }
+      if (!spec.startsWith('.')) return null
+      const layer = f.includes('/rewrite/mp/lib/') ? 'lib' : f.includes('/rewrite/mp/api/') ? 'api' : 'utils'
+      const target = spec.split('/').filter((s) => s && s !== '.' && s !== '..')[0]
+      const banned = {
+        utils: ['lib', 'api', 'pages', 'components', 'custom-tab-bar'],
+        api: ['lib', 'pages', 'components', 'custom-tab-bar'],
+        lib: ['pages', 'components', 'custom-tab-bar'],
+      }[layer]
+      return banned.includes(target)
+        ? `依赖方向反转：${layer} 层禁 import ${target}/（pages→lib→api→utils·utils 是叶；T4·活线镜像）`
+        : null
+    },
+  },
 ]
 
 // ============== 类型层 + 行为测试守卫（typeAndTestGuards）==============
@@ -7218,8 +7282,13 @@ export const typeAndTestGuards = [
   // admin 频控全局/账户级兜底（审核 P1·根因#13）：per-IP 频控 key 取 x-forwarded-for（可伪造·轮换可绕 5 次锁），
   // 故叠加跨所有 IP 的全局失败计数——轮换伪造 header 的爆破累计达全局阈值仍锁。reverseTest 锁此组合行为。
   { id: 'admin-throttle-global-backstop', mechanism: 'test', roots: ['#13'], reverseTest: 'tests/cloud/adminThrottle.test.js' },
-  { id: 'gate-fail-closed', mechanism: 'test', roots: ['#3'], reverseTest: 'tests/cloud/kit/gate.test.js' },
-  { id: 'notify-forge-proof', mechanism: 'test', roots: ['#3'], reverseTest: 'tests/cloud/kit/notify.test.js' },
+  // 钱/权限两条门面守卫的 reverseTest 改锚活线（盲区体检批2·病根#16 ⑥）：原指冻结旧线
+  // tests/cloud/kit/*.test.js（import packages/cloud·仍随 vitest 跑、守冻结参照），但注册表的
+  // 「证据」字段该指生产代码的等价测试——rewrite/cloud/tests 的 gate/notify 断言面等价
+  // （withOpenId/withAdminGate fail-closed + defineNotifyCallback 见身份即拒伪造）。
+  // 其余 25 条 test 型守卫仍指旧线测试，系统性重登记待拍板（见 待办与债 盲区体检节）。
+  { id: 'gate-fail-closed', mechanism: 'test', roots: ['#3'], reverseTest: 'rewrite/cloud/tests/gate.test.ts' },
+  { id: 'notify-forge-proof', mechanism: 'test', roots: ['#3'], reverseTest: 'rewrite/cloud/tests/notify.test.ts' },
   // 支付配置 fail-closed（根因#3 同款）：createOrder 缺/错 config/pay 时绝不伪造已付单——
   // mock 仅 env ALLOW_MOCK_PAY=1 放行，否则拒 PAY_CONFIG_MISSING（reverseTest 锁此行为）。
   { id: 'pay-config-fail-closed', mechanism: 'test', roots: ['#3'], reverseTest: 'tests/cloud/createOrder.test.js' },
@@ -7425,7 +7494,11 @@ export function checkFile(file) {
   // 扫描面排除（病根#16）：dot 目录（.claude/worktrees 残留 worktree 等）不是活代码——
   // 主循环经 lsScan 已排除，此处再挡 --hook 单文件路径（编辑 hook 直接把文件路径喂进来，
   // 不经 walk；漏了这道，编辑残留 worktree 里的文件仍会被当活代码咬红）。
-  if (/[\\/]\.claude[\\/]/.test(String(file))) return []
+  // 必须对 ROOT 相对路径判（批2 反向自检当场逮住的自埋雷：本仓工作 worktree 本身住在
+  // <主仓>/.claude/worktrees/ 下，拿绝对路径匹配 /.claude/ 会把 worktree 里的**全部活文件**
+  // 一并豁免——fileRules 在所有 worktree 里静默全灭、只在 main/CI 上活着，恰是病根#16 空样本=绿）。
+  const relFile = relative(ROOT, String(file)).replace(/\\/g, '/')
+  if (/(^|\/)\.claude\//.test(relFile)) return []
   const rules = fileRules.filter((r) => r.inScope(file))
   if (!rules.length) return []
   const violations = []
