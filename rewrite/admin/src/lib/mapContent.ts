@@ -26,6 +26,19 @@ export interface HomeModel {
   byCourse: Array<{ courseId: string; welcome: string; welcomeBack: string; taken: string }>
   trust: Array<{ icon: string; label: string }>
   faq: Array<{ title: string; body: string }>
+  stopmotionFrames: string[] // 首页定格动画 scrub 层：恰 36 帧（720²）按帧序 0..35，长度 ≠36 小程序视为未配置
+  stopmotionHero: string // 定格层（1080²）——静止时显示的那一帧，可为空
+  stopmotionHeroIndex: number // 定格帧序号 0..35
+}
+
+export const STOPMOTION_FRAMES = 36 // 帧数是三层（admin/云端/mp）共同的冻结契约，写死一处便于对读
+const STOPMOTION_HERO_DEFAULT = 17
+
+/** 定格帧序号归一：只认 0..35 的整数，其余（越界/小数/空/脏类型）一律落默认 17——
+ *  脏档不该让小程序去取一帧不存在的图。 */
+function normHeroIndex(v: unknown): number {
+  const n = typeof v === 'number' ? v : typeof v === 'string' && v.trim() ? Number(v) : NaN
+  return Number.isInteger(n) && n >= 0 && n < STOPMOTION_FRAMES ? n : STOPMOTION_HERO_DEFAULT
 }
 
 /** 云端 home 档 → 编辑模型（缺档全默认空串·byCourse 映射转行·旧单串值归一 welcome）。
@@ -40,6 +53,7 @@ export function normalizeHome(raw: unknown): HomeModel {
   const reviews = o(h.reviews)
   const closing = o(h.closing)
   const footer = o(h.footer)
+  const stopmotion = o(h.stopmotion)
   const byCourseRaw = h.activationBgByCourse && typeof h.activationBgByCourse === 'object' ? h.activationBgByCourse : {}
   const byCourse: HomeModel['byCourse'] = []
   for (const k of Object.keys(byCourseRaw)) {
@@ -72,6 +86,10 @@ export function normalizeHome(raw: unknown): HomeModel {
     byCourse,
     trust: (Array.isArray(h.trust) ? h.trust : []).map((t: any) => ({ icon: String(t?.icon || ''), label: String(t?.label || '') })),
     faq: (Array.isArray(h.faq) ? h.faq : []).map((f: any) => ({ title: String(f?.title || ''), body: String(f?.body || '') })),
+    // 帧数组只取前 36：多出来的帧编辑器没有槽位放，留着只会在下次保存时原样回写（与契约「恰 36」相悖）
+    stopmotionFrames: (Array.isArray(stopmotion.frames) ? stopmotion.frames : []).slice(0, STOPMOTION_FRAMES).map((s: any) => String(s || '')),
+    stopmotionHero: String(stopmotion.hero || ''),
+    stopmotionHeroIndex: normHeroIndex(stopmotion.heroIndex),
   }
 }
 
@@ -109,6 +127,13 @@ export function homePayload(m: HomeModel): Record<string, unknown> {
     activationBgByCourse,
     trust: m.trust.filter((t) => t.label),
     faq: m.faq.filter((f) => f.title || f.body),
+    stopmotion: {
+      // 空槽剔除：没传满的中间态存下去长度就 ≠36，小程序据此判「未配置」回退包内测试帧——
+      // 半套远程帧混着包内帧播才是最坏结果（画面跳帧），故宁可整组不生效
+      frames: m.stopmotionFrames.map((s) => String(s || '').trim()).filter(Boolean).slice(0, STOPMOTION_FRAMES),
+      hero: m.stopmotionHero,
+      heroIndex: normHeroIndex(m.stopmotionHeroIndex),
+    },
   }
 }
 

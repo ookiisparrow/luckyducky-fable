@@ -5,7 +5,7 @@ import { tapHaptic, dragTick } from '../../lib/haptics'
 import { pendulumAt, FLIP_N, FLIP_ZERO } from '../../lib/flipLever'
 import { getContent } from '../../api/catalog'
 import { getAllProducts, getProductById } from '../../lib/catalog'
-import { mapHomeContent, mapProducts, type HomeContentVM, type ProductVM } from '../../lib/mapHome'
+import { mapHomeContent, mapProducts, type HomeContentVM, type ProductVM, type StopmotionVM } from '../../lib/mapHome'
 import { decideQuickAdd } from '../../lib/quickAdd'
 import * as cart from '../../lib/cart'
 import { consumeHomeTop } from '../../lib/homeIntent'
@@ -15,6 +15,19 @@ import { loginGate } from '../../lib/loginGate'
 let toastTimer: ReturnType<typeof setTimeout> | null = null
 
 const SM_TICK_MS = 16 // 定格动画回摆/入场动画步进（≈60fps 定时器·同 flip-demo）
+
+// 包内测试帧（CMS 未配齐 36 帧时的回退源·素材说明见 home.wxml 头注）：帧源整串在逻辑层拼，
+// 模板只收 src——远程/包内两种来源才能共用同一套 <image>，不在 wxml 里分叉。
+const SM_LOCAL_FRAMES = Array.from({ length: FLIP_N }, (_, i) => '/static/stopmotion/fr-' + String(i).padStart(2, '0') + '.jpg')
+const SM_LOCAL_HERO = '/static/stopmotion/hi-' + String(FLIP_ZERO).padStart(2, '0') + '.jpg'
+
+// 帧源身份（换没换素材的判据）：云端每次 getTempFileURL 都换签名参数，整串比对会让每次下拉刷新
+// 都误判「换源」→ 白白重置门闸重下 36 张；只比路径部分，换的是真文件才算换源。
+const smSourceKey = (frames: string[], hero: string): string =>
+  frames
+    .concat(hero)
+    .map((u) => u.split('?')[0])
+    .join('|')
 
 Page({
   data: {
@@ -29,8 +42,9 @@ Page({
     openFaq: 0,
     showTop: false,
     toast: { show: false, text: '' },
-    // 定格动画测试版（特写位·测试分支）：帧序号 '00'…'35'（wxml 拼素材路径）；四通道喂 wxs（见 stopmotion.wxs 头注）
-    smFrames: Array.from({ length: FLIP_N }, (_, i) => String(i).padStart(2, '0')),
+    // 定格动画（特写位）：帧源＝完整 src 数组（CMS 配齐 36 帧用远程·否则包内测试帧）；四通道喂 wxs（见 stopmotion.wxs 头注）
+    smFrames: SM_LOCAL_FRAMES, // 首帧即包内素材（本地即时可显）；reload 拿到 CMS 帧再经 smApplySource 换源
+    smHero: SM_LOCAL_HERO, // 定格层（1080²）
     smReady: false, // 加载门闸：36 张 bindload 齐才可拖（防拖到冷帧闪白）
     smHint: true, // 首次引导 chip（首拖即收）
     smMaxJ: 0, // 滑轨半行程 px（onReady 量得）
@@ -91,12 +105,14 @@ Page({
     // 强刷（force:true）：下拉刷新/首屏仍要最新数据，同时回填缓存供详情/购物车复用（省它们的云调用）。
     const [content, products] = await Promise.all([getContent(), getAllProducts({ force: true })])
     if (seq !== this._seq) return // 过期回包（被更晚 reload 取代）：丢弃·不覆盖较新结果
+    const vm = mapHomeContent(content.ok ? content.home : null) // 逐块回退默认（不空屏·不半空）
     this.setData({
       loading: false,
-      content: mapHomeContent(content.ok ? content.home : null), // 逐块回退默认（不空屏·不半空）
+      content: vm,
       products: mapProducts(products),
       loadFailed: products === null,
     })
+    this.smApplySource(vm.stopmotion)
   },
   toggleReassure(e: WechatMiniprogram.TouchEvent) {
     const i = Number(e.currentTarget.dataset.index)
@@ -149,9 +165,27 @@ Page({
     this.setData({ showSplash: false })
   },
 
-  /* ---------- 定格动画测试版（特写位·测试分支）：逻辑层半边 ---------- */
-  // 加载门闸：36 张 scrub 帧 bindload 齐才放开拖动（防拖到未加载帧闪白）。包内素材本地即时，
-  // 门闸主要为正式版（云端下发）预演协议；binderror 也计数防死锁（本地素材缺失由测试钉住，理论不可达）。
+  /* ---------- 定格动画（特写位）：逻辑层半边 ---------- */
+  // 换帧源（CMS 配齐 36 帧 → 远程；否则包内测试帧）。三件事必须一起做，缺一即真机事故：
+  //  ① 门闸 smReady 归 false —— 新一批 <image> 要重新走 36 次 bindload，沿用旧门闸＝可拖到还没
+  //     下载完的远程帧上闪白（正是门闸存在的理由，换源是它唯一真正生效的场景）；
+  //  ② 计数器/定时器归零 —— loaded 不清零则新一批永远凑不满 FLIP_N，门闸再也开不了（死锁）；
+  //  ③ phase 转 rest —— wx:for 列表整换会重建帧节点，WXS 之前 setStyle 的 opacity 随之丢失、
+  //     DOM 回到模板初值（帧 17 可见），而 WXS 模块态 st.frame 还停在旧帧；转 rest 让 WXS 权威
+  //     归位（applyX(0) → 帧 17 + 滑钮回中 + 高清层淡入），两边重新对齐。
+  smApplySource(sm: StopmotionVM | null) {
+    const frames = sm ? sm.frames : SM_LOCAL_FRAMES
+    const hero = sm ? sm.hero : SM_LOCAL_HERO
+    if (smSourceKey(frames, hero) === smSourceKey(this.data.smFrames, this.data.smHero)) return // 同一批素材：不折腾
+    this.smStop()
+    this.sm.loaded = 0
+    this.sm.lastFrame = FLIP_ZERO
+    this.sm.lastTickFrame = FLIP_ZERO
+    this.smEntranceDone = false // 新素材重跑一次入场扫帧：它同时是这批帧的解码预热（见 smMaybeEnter 三重身份）
+    this.setData({ smFrames: frames, smHero: hero, smReady: false, smPhase: 'rest', smSettleX: 0 })
+  },
+  // 加载门闸：36 张 scrub 帧 bindload 齐才放开拖动（防拖到未加载帧闪白）。包内回退素材本地即时，
+  // 门闸真正吃劲的是 CMS 远程帧（网络下载有延迟）；binderror 也计数防死锁（某帧 404 不该锁死整个拖动）。
   onSmFrameLoad() {
     this.sm.loaded++
     if (this.sm.loaded === FLIP_N) {

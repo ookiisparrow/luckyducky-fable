@@ -50,8 +50,8 @@ export const getProducts = async () => {
  * （trust/brand/faq/footer 无图字段，不在此列）。原地改写 home（get() 每次新取，不共享缓存引用）。
  */
 async function swapHomeImages(home: any): Promise<void> {
-  const targets: { obj: any; key: string }[] = []
-  const addTarget = (obj: unknown, key: string) => {
+  const targets: { obj: any; key: string | number }[] = []
+  const addTarget = (obj: unknown, key: string | number) => {
     if (obj && typeof obj === 'object') targets.push({ obj, key })
   }
   addTarget(home.hero, 'img')
@@ -59,6 +59,12 @@ async function swapHomeImages(home: any): Promise<void> {
   for (const it of Array.isArray(home.reassure?.items) ? home.reassure.items : []) addTarget(it, 'img')
   for (const it of Array.isArray(home.reviews?.items) ? home.reviews.items : []) addTarget(it, 'img')
   addTarget(home.closing, 'img')
+  // 定格动画素材（36 帧 scrub 层 + 1 定格层）：frames 各项是裸 fileID 串、没有承载它的对象，
+  // 故把数组本身当 obj、下标当 key 回填（addTarget 的 typeof 'object' 判定对数组成立）。
+  // 帧数多但不必单独分批：getTempUrls 内部已按 ≤50/批切分并批间并发，这里只管把目标列全。
+  const smFrames: unknown[] = Array.isArray(home.stopmotion?.frames) ? home.stopmotion.frames : []
+  for (let i = 0; i < smFrames.length; i++) addTarget(smFrames, i)
+  addTarget(home.stopmotion, 'hero')
 
   const ids = [...new Set(targets.map((t) => t.obj[t.key]).filter(isCloudId))]
   if (!ids.length) return

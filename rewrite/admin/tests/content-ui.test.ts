@@ -104,6 +104,47 @@ describe('放心区/买家秀条目非空判据含 img/user（P2·bug sweep Roun
   })
 })
 
+describe('首页定格动画 36 帧往返（stopmotion·三层冻结契约）', () => {
+  const frames36 = Array.from({ length: 36 }, (_, i) => `cloud://fr-${i}.jpg`)
+
+  it('大白话：配齐的 36 帧连同定格图、定格帧序号原样往返，一帧不多一帧不少', () => {
+    const m = normalizeHome({ stopmotion: { frames: frames36, hero: 'cloud://hero.jpg', heroIndex: 20 } })
+    expect(m.stopmotionFrames).toEqual(frames36)
+    expect(m.stopmotionHero).toBe('cloud://hero.jpg')
+    expect(m.stopmotionHeroIndex).toBe(20)
+    const p = homePayload(m) as Record<string, any>
+    expect(p.stopmotion).toEqual({ frames: frames36, hero: 'cloud://hero.jpg', heroIndex: 20 })
+  })
+
+  it('大白话：手抖多选了 40 张只留前 36 格（编辑器没有第 37 格，多的不该偷偷回写）', () => {
+    const m = normalizeHome({ stopmotion: { frames: [...frames36, 'cloud://x36.jpg', 'cloud://x37.jpg', 'cloud://x38.jpg', 'cloud://x39.jpg'] } })
+    expect(m.stopmotionFrames).toHaveLength(36)
+    expect(m.stopmotionFrames[35]).toBe('cloud://fr-35.jpg')
+    expect((homePayload(m) as Record<string, any>).stopmotion.frames).toHaveLength(36)
+  })
+
+  it('大白话：只传了一半的中间态——空格子剔除后长度 ≠36，小程序据此判「未配置」回退包内测试帧', () => {
+    const m = normalizeHome(null)
+    expect(m.stopmotionFrames).toEqual([]) // 缺档＝一帧没有
+    m.stopmotionFrames = ['cloud://a.jpg', '', '   ', 'cloud://b.jpg']
+    const frames = (homePayload(m) as Record<string, any>).stopmotion.frames
+    expect(frames).toEqual(['cloud://a.jpg', 'cloud://b.jpg']) // 空串/纯空白剔除
+    expect(frames.length).not.toBe(36) // ≠36＝未配置（半套远程帧混包内帧播会跳帧，宁可整组不生效）
+  })
+
+  it('大白话：定格帧序号乱填（越界/负数/小数/空/脏类型）一律落回默认第 17 格；0 是合法值不被当成空', () => {
+    for (const bad of [99, -1, 3.5, '', null, undefined, 'abc', {}]) {
+      expect(normalizeHome({ stopmotion: { heroIndex: bad } }).stopmotionHeroIndex).toBe(17)
+    }
+    expect(normalizeHome({ stopmotion: { heroIndex: 0 } }).stopmotionHeroIndex).toBe(0) // 第 0 格合法
+    expect(normalizeHome({ stopmotion: { heroIndex: 35 } }).stopmotionHeroIndex).toBe(35) // 边界内合法
+    const m = normalizeHome(null)
+    expect(m.stopmotionHeroIndex).toBe(17) // 缺档＝默认 17
+    m.stopmotionHeroIndex = 88 // 回写侧同样钳住：脏值不该让小程序去取一帧不存在的图
+    expect((homePayload(m) as Record<string, any>).stopmotion.heroIndex).toBe(17)
+  })
+})
+
 describe('直传表单字段（调试日志 G：错一个字段云存储 403）', () => {
   it('大白话：key 从 fileId 截路径；三个 x-cos/Signature 字段名一字不差；凭证缺任一不发', () => {
     const fields = uploadFormFields({

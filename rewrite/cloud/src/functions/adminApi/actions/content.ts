@@ -1,4 +1,27 @@
-import { reply, ensure, str, type Ctx } from '../lib'
+import { reply, ensure, str, manager, type Ctx } from '../lib'
+
+// 定格动画帧直传凭证（照抄 courses.getVideoUploadMeta 同款：manager-node 签发 COS 上传元数据，浏览器 PUT 直传）。
+// 帧图多达 37 张（36 scrub 帧 + 1 定格），走直传不占云函数出入流量；降采样在 admin 浏览器端做（不依赖 CDN 实时缩放）。
+export async function getFrameUploadMeta({ data }: Ctx) {
+  // 与 getVideoUploadMeta 同款消毒（深审 P3）：客户端串直接拼路径，'../' 类字符不入路径
+  const slot = String(data.slot ?? 'f').replace(/[^\w-]/g, '').slice(0, 40) || 'f'
+  const ext = data.ext === 'png' ? 'png' : 'jpg' // 白名单：帧图只认 jpg/png，其余落 jpg
+  const cloudPath = `stopmotion/${slot}-${Date.now()}.${ext}`
+  try {
+    const meta = await manager().storage.getUploadMetadata(cloudPath)
+    return reply(200, {
+      ok: true,
+      url: meta.url,
+      token: meta.token,
+      authorization: meta.authorization,
+      fileId: meta.fileId,
+      cosFileId: meta.cosFileId,
+    })
+  } catch (e) {
+    console.error('getFrameUploadMeta fail', e)
+    return reply(200, { ok: false, error: 'META_UNAVAILABLE' })
+  }
+}
 
 // —— 首页内容（橱窗逐块②③：hero 文案 / 信任条 / FAQ；规格 §八）——
 export async function getHomeContent({ db }: Ctx) {
@@ -32,6 +55,18 @@ export async function saveHomeContent({ db, data }: Ctx) {
   }
   // 首页九板块内容白名单净化（键限长、数组封顶防滥用；空态照存＝小程序读侧回退设计默认文案·防误清空）：
   const arrOf = (v: any, cap: number) => (Array.isArray(v) ? v : []).slice(0, cap)
+  // 首页定格动画（双层素材）：frames=36 张 720² scrub 层 fileID（按帧序 0..35）、hero=1080² 定格层、
+  // heroIndex=定格落在第几帧。frames 长度 ≠36 由小程序读侧判「未配置」并回退包内测试帧——
+  // 这里不补齐也不拒存（净化后剩几张就存几张·空态照存同本函数既有口径），配齐与否交读侧判。
+  const smRawIndex = Math.trunc(Number(c.stopmotion?.heroIndex))
+  const stopmotion = {
+    frames: arrOf(c.stopmotion?.frames, 36)
+      .map((s: any) => str(s, 200))
+      .filter(Boolean),
+    hero: str(c.stopmotion?.hero, 200),
+    // 越界/非数字（含未传）落默认 17——读侧按此取定格帧，脏值会直接取空图
+    heroIndex: Number.isFinite(smRawIndex) ? Math.min(35, Math.max(0, smRawIndex)) : 17,
+  }
   const doc = {
     // Hero：主标题/副标语 + 搜索框占位文案 + 顶部背景图 fileID（空→小程序回退渐变占位）
     hero: { title: str(c.hero?.title, 20), tagline: str(c.hero?.tagline, 40), search: str(c.hero?.search, 40), img: str(c.hero?.img, 200) },
@@ -56,6 +91,8 @@ export async function saveHomeContent({ db, data }: Ctx) {
     loadingBg: str(c.loadingBg, 200),
     // 按课程·按状态激活欢迎图（welcome 按屏取·回退 activationBg→static）
     activationBgByCourse,
+    // 首页定格动画素材（36 帧 scrub 层 + 定格层·见上方净化）
+    stopmotion,
     trust: arrOf(c.trust, 4).map((t: any) => ({ icon: str(t?.icon, 20), label: str(t?.label, 12) })),
     faq: arrOf(c.faq, 8).map((f: any) => ({ title: str(f?.title, 40), body: str(f?.body, 150) })),
     updatedAt: Date.now(),

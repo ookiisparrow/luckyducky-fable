@@ -3,6 +3,8 @@
 // 内容纪律（黄金 learning-content §九）：整档/逐字段/逐块缺失都回退「设计默认文案」，
 //   空块（空字段/空数组/整组脏行）仍用默认——防线上误清空、防半空板块。默认文案 = 重设计首页原稿。
 
+import { FLIP_N, FLIP_ZERO } from './flipLever'
+
 export interface ProductVM {
   id: string
   name: string
@@ -64,6 +66,12 @@ export interface FooterVM {
   links: string[]
   copy: string
 }
+/** 首页特写位定格动画帧源（双层素材：frames = 36 张 scrub 层 · hero = 定格层）。
+ *  地址已是可直接喂 <image> 的 https（cloud:// → 临时地址的换址在云端 app/catalog 做）。 */
+export interface StopmotionVM {
+  frames: string[]
+  hero: string
+}
 export interface HomeContentVM {
   hero: HeroVM
   brand: BrandVM
@@ -74,6 +82,7 @@ export interface HomeContentVM {
   faq: FaqVM[]
   closing: ClosingVM
   footer: FooterVM
+  stopmotion: StopmotionVM | null // null＝CMS 未配齐（页面回退包内测试帧·区别于文案块的默认回退）
 }
 
 // ── 设计默认文案（重设计首页原稿·Sections.jsx 逐字抄录）──
@@ -199,6 +208,31 @@ const footerLink = (x: unknown): string | null => {
   return s || null
 }
 
+/** 定格层帧序号：缺/非数字 → 默认静止帧 FLIP_ZERO；越界数字钳进 0..FLIP_N-1（不因后台填错而取空帧）。 */
+const heroIndexOf = (v: unknown): number => {
+  if (v == null || v === '') return FLIP_ZERO
+  const n = Math.round(Number(v))
+  if (!Number.isFinite(n)) return FLIP_ZERO
+  return Math.max(0, Math.min(FLIP_N - 1, n))
+}
+
+/** 首页特写位帧源：**整组全有才用**——恰 FLIP_N 张且无空洞才算「已配置」，差一张就整组判未配置。
+ *  区别于文案块的逐字段回退：帧是叠层拖动的连续序列，半组远程半组包内会在拖动中途跳画风/拖到空帧闪白，
+ *  比整组回退包内测试帧糟得多（fail-closed 到「上一版能用的素材」）。 */
+export function mapStopmotion(home: unknown): StopmotionVM | null {
+  const sm = obj(obj(home).stopmotion)
+  const raw = sm.frames
+  if (!Array.isArray(raw) || raw.length !== FLIP_N) return null
+  const frames: string[] = []
+  for (const f of raw) {
+    const s = str(f, '')
+    if (!s) return null // 空洞帧＝整组不可用（拖到那一格就是白屏）
+    frames.push(s)
+  }
+  // 定格层缺 → 用同帧序的 scrub 帧顶上：画面对得上，只是分辨率低，好过高清层空白
+  return { frames, hero: str(sm.hero, frames[heroIndexOf(sm.heroIndex)]) }
+}
+
 /** 首页全板块内容 → 视图模型：整档 / 逐块 / 逐字段缺失都回退设计默认；脏项 fail-closed 剔除。 */
 export function mapHomeContent(home: unknown): HomeContentVM {
   const h = obj(home)
@@ -239,5 +273,6 @@ export function mapHomeContent(home: unknown): HomeContentVM {
       links: arr(footer.links, footerLink, FOOTER_DEFAULT.links),
       copy: str(footer.copy, FOOTER_DEFAULT.copy),
     },
+    stopmotion: mapStopmotion(home),
   }
 }

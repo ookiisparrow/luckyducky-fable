@@ -45,7 +45,8 @@ describe('素材在位 + wxml/ts 接线成对（E2）', () => {
     expect(wxmlSrc).toContain('<wxs module="sm" src="./stopmotion.wxs" />')
     expect(wxmlSrc).toContain('wx:for="{{smFrames}}"')
     expect(wxmlSrc).toContain('id="sm-f{{index}}"')
-    expect(wxmlSrc).toContain('src="/static/stopmotion/fr-{{item}}.jpg"')
+    expect(wxmlSrc).toContain('src="{{item}}"') // 帧源＝完整 src（远程/包内两来源共用同一套 <image>·模板不拼路径）
+    expect(wxmlSrc).toContain('src="{{smHero}}"') // 定格层同理
     expect(wxmlSrc).toContain('bindload="onSmFrameLoad"')
     expect(wxmlSrc).toContain('binderror="onSmFrameError"')
     for (const ch of ['maxj', 'ready', 'settlex', 'phase']) {
@@ -54,6 +55,16 @@ describe('素材在位 + wxml/ts 接线成对（E2）', () => {
     for (const ev of ['catchtouchstart', 'catchtouchmove', 'catchtouchend', 'catchtouchcancel']) {
       expect(wxmlSrc).toContain(`${ev}="{{sm.on`)
     }
+  })
+
+  // 拼路径的地方从 wxml 挪进了 home.ts（帧源可远程可包内），断言随之跟去：上面的 ?raw 素材断言
+  // 证「文件在」，这条证「还有人按这个路径引它」——两条一起才是完整的回退链在位。
+  it('大白话：CMS 没配齐时的包内回退帧路径常量仍在 home.ts（fr- 序列 + hi- 定格层）', () => {
+    expect(tsSrc).toContain("'/static/stopmotion/fr-'")
+    expect(tsSrc).toContain("'/static/stopmotion/hi-'")
+    expect(tsSrc).toMatch(/smFrames: SM_LOCAL_FRAMES/) // 首帧即包内素材（远程未到也不空舞台）
+    // 换源必重置加载门闸（否则拖到还没下载完的远程帧＝闪白，正是门闸存在的理由）
+    expect(tsSrc).toMatch(/smApplySource\(sm[\s\S]*?smReady: false/)
   })
 
   it('大白话：wxs callMethod 指名的逻辑层方法在 home.ts 都有定义（抄一半真机才炸·E2）', () => {

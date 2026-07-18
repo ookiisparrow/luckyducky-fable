@@ -70,6 +70,8 @@ const ACTIONS: Record<string, (ctx: Ctx) => Promise<any>> = {
   saveHomeContent: content.saveHomeContent,
   listHelpVideos: content.listHelpVideos,
   saveHelpVideos: content.saveHelpVideos,
+  // 首页定格动画帧直传凭证（get 前缀→不审计，签发凭证非内容变更；素材落库仍走 saveHomeContent）
+  getFrameUploadMeta: content.getFrameUploadMeta,
   // 页面内容 CMS（批A·5 页可编辑：welcome/catalogPlayer/mePage/about/agreement）·默认 admin:write·save 非 get 前缀自动审计
   savePageContent: content.savePageContent,
   getPageContent: content.getPageContent,
