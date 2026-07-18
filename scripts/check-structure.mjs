@@ -83,6 +83,7 @@ export const RW_GOLDEN_REGISTRY = [
   { id: 'rw-mp-me-golden', roots: ['#6', '#8'], test: 'rewrite/mp/tests/continue-resolve.test.ts' },
   { id: 'rw-mp-list-incremental-golden', roots: ['#7', '#8'], test: 'rewrite/mp/tests/list-incremental.test.ts' },
   { id: 'rw-mp-privacy-golden', roots: ['R27', '#8'], test: 'rewrite/mp/tests/privacy-gate.test.ts' },
+  { id: 'rw-mp-seek-wxs-golden', roots: ['#5', '#8'], test: 'rewrite/mp/tests/player-seek-wxs.test.ts' },
   { id: 'rw-admin-money-ui-golden', roots: ['#4', '#8', '#14'], test: 'rewrite/admin/tests/money-ui.test.ts' },
   { id: 'rw-admin-client-golden', roots: ['#3', '#5', '#14'], test: 'rewrite/admin/tests/client.test.ts' },
   { id: 'rw-admin-load-status-golden', roots: ['#14'], test: 'rewrite/admin/tests/status.test.ts' },
@@ -5733,7 +5734,7 @@ export const repoChecks = [
     // 删除——2026-07-12 拍板·决策§28，防回潮见 rw-mp-no-casting。）
     id: 'rw-mp-player-immersive',
     roots: ['#8', '#5'],
-    desc: '播放页竖屏沉浸全屏 + 帮助(客服)入口：player.json 须 navigationStyle:custom；player.wxml 的 <video> 须 controls="{{false}}" + 求助入口节点（bind:tap=onHelp）+ 自绘 seek 条两段式绑定（touchstart=onSeekStart/touchmove=onSeekMove/touchend=onSeekEnd）；player.ts 的 onSeekMove 方法体内不得出现 .seek(（两段式语义：拖动中只改显示）、onSeekEnd 方法体内须出现 .seek(（松手才真 seek）；客服入口须单源在 rewrite/mp/utils/customerService.ts（rewrite/mp 内 wx.openCustomerServiceChat 只此一处）。段落进度条须落胶囊下方（2026-07-13 反馈）：player.ts 须取 getMenuButtonBoundingClientRect、.lp-segstrip 须动态 top（不硬编码贴屏顶）；视频框须贴合素材比例去左右黑边（2026-07-13 反馈）：主 <video>（controls={{false}}）须 bind:loadedmetadata=onVideoMeta + player.ts 有 onVideoMeta 方法（体内真写 videoRatio）+ .lp-video-box 播放态须动态 padding-top（不写死 168%）',
+    desc: '播放页竖屏沉浸全屏 + 帮助(客服)入口：player.json 须 navigationStyle:custom；player.wxml 的 <video> 须 controls="{{false}}" + 求助入口节点（bind:tap=onHelp）+ 自绘 seek 条 WXS 化两段式绑定（批5·根因#15：60Hz touchmove 每帧 setData 双向过桥＝掉帧源，拖动几何移入渲染层 WXS 闭环）——外置 <wxs src="./seek.wxs" module="sk">（内联 <wxs> 里的 < 会被 wxml-well-formed 咬）+ 绑定钉 touchstart={{sk.onStart}}/touchmove={{sk.onMove}}/touchend={{sk.onEnd}} + change:cfg={{sk.onCfg}} 下发几何（rect/durSec/marks）；seek.wxs 的 onMove 函数体内不得出现 .seek(/onSeekCommit（两段式：WXS 拖动中只改显示、绝不提交·setupFnBody 取真源）、player.ts 的 onSeekCommit 方法体内须出现 .seek(（松手才由逻辑层真 seek）；客服入口须单源在 rewrite/mp/utils/customerService.ts（rewrite/mp 内 wx.openCustomerServiceChat 只此一处）。段落进度条须落胶囊下方（2026-07-13 反馈）：player.ts 须取 getMenuButtonBoundingClientRect、.lp-segstrip 须动态 top（不硬编码贴屏顶）；视频框须贴合素材比例去左右黑边（2026-07-13 反馈）：主 <video>（controls={{false}}）须 bind:loadedmetadata=onVideoMeta + player.ts 有 onVideoMeta 方法（体内真写 videoRatio）+ .lp-video-box 播放态须动态 padding-top（不写死 168%）',
     run() {
       const base = join(ROOT, 'rewrite/mp')
       if (!existsSync(base)) return []
@@ -5750,12 +5751,19 @@ export const repoChecks = [
       if (wxml && !/controls\s*=\s*"\{\{\s*false\s*\}\}"/.test(wxml))
         bad.push('player.wxml 的 <video> 未关闭原生 controls="{{false}}"——自绘控制条会跟原生控件重叠打架（设计定案）')
       if (wxml && !/bind:?tap\s*=\s*"onHelp"/.test(wxml)) bad.push('player.wxml 找不到求助入口节点（bind:tap=onHelp）——客服入口占中央求助钮位缺失（设计定案）')
-      if (wxml && !/bind:?touchstart\s*=\s*"onSeekStart"/.test(wxml))
-        bad.push('player.wxml 的自绘 seek 条未见 bind:touchstart="onSeekStart"——两段式拖动交互缺起点绑定')
-      if (wxml && !/catch:?touchmove\s*=\s*"onSeekMove"/.test(wxml))
-        bad.push('player.wxml 的自绘 seek 条未见 catch:touchmove="onSeekMove"——拖动中显示更新缺失，且未 catch 会让 touchmove 透传（真机滚动/穿透风险）')
-      if (wxml && !/bind:?touchend\s*=\s*"onSeekEnd"/.test(wxml))
-        bad.push('player.wxml 的自绘 seek 条未见 bind:touchend="onSeekEnd"——松手真 seek 绑定缺失')
+      // 自绘 seek 拖动几何 WXS 化（批5·根因#15：60Hz touchmove 每帧 5 字段 setData 双向过桥＝跟手延迟/掉帧源）——
+      // 拖动位置在渲染层 WXS 闭环，wxml 绑定改钉 {{sk.*}}；外置 <wxs src="./seek.wxs">（内联 <wxs> 里的 < 比较会被
+      // wxml-well-formed 栈式扫误咬红，必须外置文件）。旧 onSeekStart/onSeekMove/onSeekEnd 字面绑定随之退役。
+      if (wxml && !/<wxs\s+[^>]*src\s*=\s*"\.\/seek\.wxs"/.test(wxml))
+        bad.push('player.wxml 未见 <wxs src="./seek.wxs" ...>——自绘 seek 拖动几何未 WXS 化（60Hz 每帧过桥回潮·根因#15）')
+      if (wxml && !/bind:?touchstart\s*=\s*"\{\{\s*sk\.onStart\s*\}\}"/.test(wxml))
+        bad.push('player.wxml 的自绘 seek 条未见 bind:touchstart="{{sk.onStart}}"——WXS 两段式拖动缺起点绑定')
+      if (wxml && !/catch:?touchmove\s*=\s*"\{\{\s*sk\.onMove\s*\}\}"/.test(wxml))
+        bad.push('player.wxml 的自绘 seek 条未见 catch:touchmove="{{sk.onMove}}"——拖动几何未走 WXS 渲染层（60Hz 每帧过桥回潮·根因#15），且未 catch 会让 touchmove 透传（真机滚动/穿透风险）')
+      if (wxml && !/bind:?touchend\s*=\s*"\{\{\s*sk\.onEnd\s*\}\}"/.test(wxml))
+        bad.push('player.wxml 的自绘 seek 条未见 bind:touchend="{{sk.onEnd}}"——松手提交绑定缺失')
+      if (wxml && !/change:cfg\s*=\s*"\{\{\s*sk\.onCfg\s*\}\}"/.test(wxml))
+        bad.push('player.wxml 的自绘 seek 条未见 change:cfg="{{sk.onCfg}}"——逻辑层几何（rect/durSec/marks）无法下发 WXS（渲染层无数据无从算秒/磁吸）')
 
       // 段落进度条落胶囊下方（2026-07-13 反馈·Bug D1）：.lp-segstrip 节点须带动态 top（内联 style top:{{...}}），
       // 不许回退到 wxss 硬编码 top（那会相对全屏 .lp-stage 顶贴屏顶·撞状态栏/胶囊）。
@@ -5798,16 +5806,27 @@ export const repoChecks = [
         }
       }
       if (ts) {
-        // 自绘 seek 两段式语义（播放器重设计战役批C）：拖动中绝不真 seek（否则被 timeupdate/卡顿顶回去），
-        // 只在松手时真 seek——各断在各自方法体内、剥注释后判定（错题本 E10：取真源须对剥注释后的函数体匹配）。
-        const seekMoveBody = methodBody(ts, 'onSeekMove')
-        if (!seekMoveBody) bad.push('player.ts 找不到 onSeekMove 方法体——自绘 seek 拖动中显示更新缺失')
-        else if (/\.seek\s*\(/.test(stripComments(seekMoveBody)))
-          bad.push('player.ts 的 onSeekMove 方法体内出现 .seek(——两段式语义破坏：拖动中真 seek 会被 timeupdate/卡顿顶回去')
-        const seekEndBody = methodBody(ts, 'onSeekEnd')
-        if (!seekEndBody) bad.push('player.ts 找不到 onSeekEnd 方法体——松手真 seek 缺失')
-        else if (!/\.seek\s*\(/.test(stripComments(seekEndBody)))
-          bad.push('player.ts 的 onSeekEnd 方法体内未见 .seek(——松手应真正 seek 到位')
+        // 自绘 seek 两段式语义 WXS 化（批5·根因#15）：拖动几何移入 seek.wxs 渲染层闭环——WXS onMove 只改显示、
+        // 绝不提交 seek（.seek(/onSeekCommit 出现即破坏两段式），松手才由逻辑层 onSeekCommit 真 seek。seek.wxs 是 ES5
+        // 独立运行时进不了 tsc，用 setupFnBody（花括号配平·适配顶层 function 声明·methodBody 的两空格逗号收尾启发式
+        // 对 WXS 顶层函数不适用）+ stripComments 取真源（错题本 E1/E10：对剥注释后的函数体判定，防注释假触发/假放行）。
+        const wxsPath = join(base, 'pages/player/seek.wxs')
+        const wxs = existsSync(wxsPath) ? readFileSync(wxsPath, 'utf8') : ''
+        if (!wxs) bad.push('rewrite/mp/pages/player/seek.wxs 缺失——自绘 seek 拖动几何 WXS 化未落地（60Hz 过桥回潮·根因#15）')
+        else {
+          const onMoveBody = setupFnBody(stripComments(wxs), 'onMove') // 已切自剥注释后的源·下方判定无需再剥
+          if (!onMoveBody) bad.push('seek.wxs 找不到 onMove 函数体——WXS 拖动几何缺失')
+          else {
+            if (/onSeekCommit/.test(onMoveBody))
+              bad.push('seek.wxs 的 onMove 函数体内出现 onSeekCommit——两段式语义破坏：WXS 拖动中绝不许提交 seek（松手才提交）')
+            if (/\.seek\s*\(/.test(onMoveBody))
+              bad.push('seek.wxs 的 onMove 函数体内出现 .seek(——WXS 内不得直接 seek（两段式：拖动中只改显示）')
+          }
+        }
+        const seekCommitBody = methodBody(ts, 'onSeekCommit')
+        if (!seekCommitBody) bad.push('player.ts 找不到 onSeekCommit 方法体——WXS 松手提交的逻辑层落点缺失（松手真 seek）')
+        else if (!/\.seek\s*\(/.test(stripComments(seekCommitBody)))
+          bad.push('player.ts 的 onSeekCommit 方法体内未见 .seek(——松手应真正 seek 到位')
 
         // 段落进度条落胶囊下方（2026-07-13 反馈·Bug D1）：须取原生胶囊底边为动态 top 的可靠源。
         if (!/getMenuButtonBoundingClientRect\s*\(/.test(stripComments(ts)))
@@ -5848,7 +5867,7 @@ export const repoChecks = [
     // 再退役本守卫（删与加对等，见 refactor-batch step 4），不许绕。
     id: 'rw-mp-no-casting',
     roots: ['R34'],
-    desc: '投屏全线取缔防回潮（2026-07-12 拍板·决策§28）：rewrite/mp 全部源文件（ts/wxml/wxss/json/md）不得出现 投屏/casting 任一 token（含 startCasting/show-casting-button/casting 事件绑定）——旧分支合并或样板复制把投屏带回来当场红；重启投屏须先改需求清单并退役本守卫',
+    desc: '投屏全线取缔防回潮（2026-07-12 拍板·决策§28）：rewrite/mp 全部源文件（ts/wxml/wxss/json/md/wxs）不得出现 投屏/casting 任一 token（含 startCasting/show-casting-button/casting 事件绑定）——旧分支合并或样板复制把投屏带回来当场红；重启投屏须先改需求清单并退役本守卫。批5 起扩扫 .wxs（渲染层 WXS 亦是投屏回潮盲区，堵之）',
     run() {
       const base = join(ROOT, 'rewrite/mp')
       if (!existsSync(base)) return []
@@ -5859,7 +5878,7 @@ export const repoChecks = [
           if (e === 'node_modules') continue
           const p = join(d, e)
           if (statSync(p).isDirectory()) walk(p)
-          else if (/\.(ts|wxml|wxss|json|md)$/.test(e) && re.test(readFileSync(p, 'utf8')))
+          else if (/\.(ts|wxml|wxss|json|md|wxs)$/.test(e) && re.test(readFileSync(p, 'utf8')))
             bad.push(`${relative(ROOT, p)} 含投屏 token（投屏/casting）——投屏已全线取缔（决策§28），不得回潮`)
         }
       }

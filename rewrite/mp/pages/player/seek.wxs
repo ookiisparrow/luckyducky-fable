@@ -1,0 +1,128 @@
+/* 自绘 seek 条拖动几何·渲染层驱动（批5·根因#15：60Hz touchmove 每帧 5 字段 setData 双向过桥＝跟手延迟/掉帧源）。
+   WXS 响应事件在 WebView 渲染器内闭环——touchmove 每帧只 setStyle 三个节点（fill 宽/handle left/preview left），
+   零逻辑层往返；只在「过秒」时经 callMethod 回逻辑层刷文案+震动（位置 60fps 跟手·文案 ~10fps·可感知取舍已拍板）。
+   两段式铁律：WXS 内绝不提交 seek——onMove 只改显示，松手（onEnd）才 callMethod('onSeekCommit') 由逻辑层真 seek。
+   数学（clampSeek/nearestMark）与 lib/player.ts 同式同构——WXS 进不了 tsc 编译面（ES5 独立运行时），由
+   tests/player-seek-wxs.test.ts 抽本函数体与 TS 单源版逐点对拍钉死（防两处数学漂移·病根#5）。
+   震动走 callMethod 回逻辑层（WXS 内禁 wx.*·离散低频可接受）；无 setTimeout（WXS 不能跑帧循环）。 */
+
+// 渲染层驻留状态（player 是单实例页·模块态与页面同生命周期）。几何由逻辑层经 change:cfg 一次性下发。
+var st = { down: false, rect: null, durSec: 0, marks: [], edgePx: 0, snapSec: 0, lastSec: -1 }
+
+// seek 目标秒夹取到 [0, durSec]（与 lib/player.ts clampSeek 双源·对拍钉死）。
+function clampSeek(value, durSec) {
+  var v = Math.floor(Number(value) || 0)
+  var max = Math.max(0, Math.floor(Number(durSec) || 0))
+  if (v < 0) return 0
+  if (max > 0 && v > max) return max
+  return v
+}
+
+// 磁吸判定（与 lib/player.ts nearestMark 双源·对拍钉死）：窗口内取最近节点，等距取 at 较小者；
+// 空表/非正窗口 → null。（不用 Infinity 初值·WXS 子集稳妥·best===null 即首个候选。）
+function nearestMark(sec, marks, windowSec) {
+  if (!marks || !marks.length) return null
+  if (!(windowSec > 0)) return null
+  var best = null
+  var bestDist = 0
+  for (var i = 0; i < marks.length; i++) {
+    var m = marks[i]
+    var dist = Math.abs(m.at - sec)
+    if (dist > windowSec) continue
+    if (best === null || dist < bestDist || (dist === bestDist && m.at < best.at)) {
+      best = m
+      bestDist = dist
+    }
+  }
+  return best
+}
+
+// 触点 clientX → 秒（量轨未就绪/durSec=0 回 0·不除零），clampSeek 兜越界。
+function secAt(clientX) {
+  if (!st.rect || !st.rect.width || !st.durSec) return 0
+  var raw = Math.round(((clientX - st.rect.left) / st.rect.width) * st.durSec)
+  return clampSeek(raw, st.durSec)
+}
+
+// 预览浮层 left 像素（pct→px·夹在 [edgePx, 轨宽-edgePx] 内防出屏·JS 定值替代 WXSS clamp()·同 player.ts 原 previewLeftPx）。
+function previewLeft(pct) {
+  var trackWidth = st.rect ? st.rect.width : 0
+  if (!trackWidth) return 0
+  var raw = (pct / 100) * trackWidth
+  var edgePx = st.edgePx
+  if (trackWidth <= edgePx * 2) return raw
+  return Math.min(Math.max(raw, edgePx), trackWidth - edgePx)
+}
+
+// 拖动一帧：磁吸+夹取算目标秒 → 渲染层 setStyle 三节点（fill 宽/handle left/preview left）；
+// 过秒才 callMethod('onSeekTick') 回逻辑层（震动+文案在那边·减过桥次数）。绝不提交 seek（两段式）。
+function applyAt(ow, clientX) {
+  var raw = secAt(clientX)
+  var hit = nearestMark(raw, st.marks, st.snapSec)
+  var sec = clampSeek(hit ? hit.at : raw, st.durSec)
+  var pct = st.durSec > 0 ? (sec / st.durSec) * 100 : 0
+  if (pct < 0) pct = 0
+  if (pct > 100) pct = 100
+  var fill = ow.selectComponent('.lp-seek-fill')
+  if (fill) fill.setStyle({ width: pct + '%' })
+  var handle = ow.selectComponent('.lp-seek-handle')
+  if (handle) handle.setStyle({ left: pct + '%' })
+  var preview = ow.selectComponent('.lp-seek-preview')
+  if (preview) preview.setStyle({ left: previewLeft(pct) + 'px' })
+  if (sec !== st.lastSec) {
+    st.lastSec = sec
+    ow.callMethod('onSeekTick', { sec: sec, snapAt: hit ? hit.at : -1 })
+  }
+}
+
+// change:cfg 观察者（逻辑层一次性/换段下发几何）：初始化空调一次·防御 null（durSec:0 → onStart 天然拦住不响应）。
+function onCfg(nv, ov, ow) {
+  if (!nv) {
+    st.rect = null
+    st.durSec = 0
+    st.marks = []
+    return
+  }
+  st.rect = nv.rect || null
+  st.durSec = nv.durSec || 0
+  st.marks = nv.marks || []
+  st.edgePx = nv.edgePx || 0
+  st.snapSec = nv.snapSec || 0
+}
+
+// 拖动起点：几何未就绪（无轨/无时长）不响应；lastSec 置 -1 保证首帧 applyAt 必过桥（逻辑层据此进 seeking 态·
+// 原 onSeekStart 职责）。渲染层即放大 handle（.big）+ 显预览浮层（.on）——显隐纯渲染层，不劳逻辑层 setData。
+function onStart(e, ow) {
+  if (!st.rect || !st.rect.width || !st.durSec) return
+  st.down = true
+  st.lastSec = -1
+  var handle = ow.selectComponent('.lp-seek-handle')
+  if (handle) handle.addClass('big')
+  var preview = ow.selectComponent('.lp-seek-preview')
+  if (preview) preview.addClass('on')
+  applyAt(ow, e.touches[0].clientX)
+}
+
+// 拖动中：只改显示（applyAt）·绝不提交 seek（两段式·守卫 rw-mp-player-immersive 咬本函数体无 .seek(/onSeekCommit）。
+function onMove(e, ow) {
+  if (!st.down) return
+  applyAt(ow, e.touches[0].clientX)
+}
+
+// 松手/取消：收起放大与预览 → callMethod('onSeekCommit') 由逻辑层真 seek 到 lastSec（唯一提交出口）。
+function onEnd(e, ow) {
+  if (!st.down) return
+  st.down = false
+  var handle = ow.selectComponent('.lp-seek-handle')
+  if (handle) handle.removeClass('big')
+  var preview = ow.selectComponent('.lp-seek-preview')
+  if (preview) preview.removeClass('on')
+  ow.callMethod('onSeekCommit', { sec: st.lastSec < 0 ? 0 : st.lastSec })
+}
+
+module.exports = {
+  onCfg: onCfg,
+  onStart: onStart,
+  onMove: onMove,
+  onEnd: onEnd,
+}
