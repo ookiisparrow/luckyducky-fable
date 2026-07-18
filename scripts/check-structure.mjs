@@ -79,6 +79,7 @@ export const RW_GOLDEN_REGISTRY = [
   { id: 'rw-anomaly-record-golden', roots: ['#3', '#14'], test: 'rewrite/cloud/tests/anomaly.test.ts' },
   { id: 'rw-inspect-golden', roots: ['#1', '#3', '#8', '#14'], test: 'rewrite/cloud/tests/inspect.test.ts' },
   { id: 'rw-ops-console-golden', roots: ['#3', '#14'], test: 'rewrite/cloud/tests/ops-console.test.ts' },
+  { id: 'rw-bill-reconcile-golden', roots: ['#1', '#4', '#12', '#14'], test: 'rewrite/cloud/tests/bill-reconcile.test.ts' },
   { id: 'rw-mp-home-golden', roots: ['#8'], test: 'rewrite/mp/tests/home-map.test.ts' },
   { id: 'rw-mp-detail-golden', roots: ['#8'], test: 'rewrite/mp/tests/detail-map.test.ts' },
   { id: 'rw-mp-cart-golden', roots: ['#4', '#8'], test: 'rewrite/mp/tests/cart.test.ts' },

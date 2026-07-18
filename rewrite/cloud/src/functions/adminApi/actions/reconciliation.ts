@@ -1,6 +1,14 @@
 import { toFen, asFen, fenToYuan } from '@ldrw/shared'
 import { reply, getTxAlerts, PAID_STATUSES, type Ctx } from '../lib'
-import { notifyAlert } from '../../../kit'
+// CST 日助手/比对分类器已上提 kit/reconcile 单源（批B2·timers/billReconcile 复用同一套原语）；
+// 别名保持既有调用点零改动
+import {
+  notifyAlert,
+  matchBillRows,
+  dayKeyCST as dayKey,
+  dayStartMsCST as dayStartMs,
+  DAY_MS as DAY,
+} from '../../../kit'
 
 // —— S16 财务对账（内部账·Batch 1）——
 // 口径同看板 GMV（PAID_STATUSES·已付营收）。三块：① 收支汇总 ② 每日流水 ③ 内部异常（txAlerts 单源）。
@@ -11,13 +19,6 @@ import { notifyAlert } from '../../../kit'
 // 抓「我方内部不一致」；抓不到「微信收了款我方无单」——那需逐笔比对微信账单（外部对账·Batch 2/3·需商户凭证）。
 
 const CAP = 2000 // 每日明细有界拉取上限（超则 approx；同 dashboard SAMPLE 范式）
-const DAY = 86400_000
-const CST = 8 * 3600_000 // 东八区·按中国日历日分桶
-
-// ms 时间戳 → CST 日历日 'YYYY-MM-DD'
-const dayKey = (ts: number) => new Date(Number(ts) + CST).toISOString().slice(0, 10)
-// 'YYYY-MM-DD' → CST 当日 00:00:00 的 ms
-const dayStartMs = (d: string) => Date.parse(d + 'T00:00:00+08:00')
 const isDate = (s: any) => typeof s === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(s)
 
 // 累加用整数「分」（toFen·防浮点漂移·根因#4 钱链）；出参再 fenToYuan 回元
@@ -197,37 +198,14 @@ export async function getBillMatch({ db, data }: Ctx) {
   )
 
   const billDays = [...new Set(wxRows.map((w: any) => w.date))].sort()
-  const ourByTxn = new Map(ourOrders.map((o: any) => [String(o.transactionId || ''), o]))
-  const ourById = new Map(ourOrders.map((o: any) => [String(o.id || ''), o]))
   const wxByTxn = new Map(wxRows.map((w: any) => [String(w.transactionId || ''), w]))
   const wxByOut = new Map(wxRows.map((w: any) => [String(w.outTradeNo || ''), w]))
 
-  const matched: string[] = []
-  const wxOnly: any[] = []
+  // 三分支分类（平/微信有我方无/金额不符）提纯 kit matchBillRows（批B2·timer 复用同一分类器·分整数比对#4）；
+  // oursOnly（我方有微信无）需「账单覆盖日」上下文防误报，留本地判。
+  const { matched, wxOnly, amountMismatch } = matchBillRows(ourOrders, wxRows)
   const oursOnly: any[] = []
-  const amountMismatch: any[] = []
 
-  for (const w of wxRows) {
-    const our: any =
-      ourByTxn.get(String(w.transactionId || '')) || ourById.get(String(w.outTradeNo || ''))
-    if (!our) {
-      wxOnly.push({
-        transactionId: w.transactionId,
-        outTradeNo: w.outTradeNo,
-        amount: w.orderAmount,
-        date: w.date,
-      })
-      continue
-    }
-    if (toFen(Number(our.amount) || 0) !== toFen(Number(w.orderAmount) || 0))
-      amountMismatch.push({
-        id: our.id,
-        transactionId: w.transactionId,
-        ourAmount: our.amount,
-        wxAmount: w.orderAmount,
-      })
-    else matched.push(our.id)
-  }
   for (const o of ourOrders) {
     if (!billDays.includes(dayKey(o.paidAt))) continue // 该日未拉账单·无数据·不判（防误报）
     if (!wxByTxn.get(String(o.transactionId || '')) && !wxByOut.get(String(o.id || '')))
