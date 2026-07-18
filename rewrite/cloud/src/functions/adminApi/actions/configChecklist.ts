@@ -3,7 +3,7 @@ import { hasAdjustLedgerEntry, hasThresholdMaterial } from '../../../kit'
 import { COLLECTIONS } from '@ldrw/shared'
 
 // 人工配置清单（批 B9→2026-07-12 补口可填写化·docs/进销存ERP/ 与 docs/后台360工作站/ 之外的「配了没」总览）：
-// 22 项散落配置（云函数环境变量→本页填写自动生效 / admin 页内 DB 字段 / 纯人工外部后台项 / 资产正册）拼一屏
+// 27 项散落配置（云函数环境变量→本页填写自动生效 / admin 页内 DB 字段 / 纯人工外部后台项 / 资产正册）拼一屏
 // （审查批 +2：客服小程序卡片 miniappAppId/thumbMediaId 随迁入库，cs 函数环境变量配置项就此清零）。
 // 探测「配了没」；**可填写的字段绝不回显既有值**（前端 fill.inputType 恒渲染空输入框，留空提交＝不改动，
 // 见 adminApi/actions/secureConfig.ts）——零回显铁律延伸到写入口，本文件仍只做只读探测。
@@ -26,7 +26,7 @@ type Status = 'ok' | 'missing' | 'check'
 type FillAction = 'saveSecureConfig' | 'savePayConfig'
 interface FillMeta {
   action: FillAction
-  docId?: 'wxkf' | 'wxpay' // 仅 saveSecureConfig 用；savePayConfig 固定写 config/pay，无需 docId
+  docId?: 'wxkf' | 'wxpay' | 'vod' // 仅 saveSecureConfig 用；savePayConfig 固定写 config/pay，无需 docId
   field: string
   inputType: 'text' | 'password' | 'textarea' | 'select'
   options?: { value: string; label: string }[] // 仅 select（mode）用
@@ -65,6 +65,11 @@ export async function getConfigChecklist({ db }: Ctx) {
   const payDoc = await db.collection(COLLECTIONS.config).doc('pay').get().catch(() => null)
   const pay = (payDoc && payDoc.data) || {}
   const payOk = (f: string) => !!(pay as Record<string, unknown>)[f]
+
+  // ── 组③′ 视频点播 VOD 凭证：secureConfig/vod 字段存在性（决策§29 转码管线·本页可填写）──
+  const vodDoc = await db.collection(COLLECTIONS.secureConfig).doc('vod').get().catch(() => null)
+  const vod = (vodDoc && vodDoc.data) || {}
+  const vodOk = (f: string) => !!(vod as Record<string, unknown>)[f]
 
   // ── 组④ admin 页内配置：DB 字段/初始化态（规则③④·全部有界·只判存在）──
   const settingsDoc = await db.collection(COLLECTIONS.adminConfig).doc('settings').get().catch(() => null)
@@ -236,6 +241,60 @@ export async function getConfigChecklist({ db }: Ctx) {
           howTo: '云开发控制台→工作流→复制退款工作流 ID（console-assets/01-支付退款工作流.md 正册对照）',
           url: 'https://tcb.cloud.tencent.com',
           fill: { action: 'savePayConfig', field: 'refundFlowId', inputType: 'text' },
+        },
+      ],
+    },
+    {
+      group: '视频点播 VOD（决策§29 转码管线·本页填写 → 云函数读库自动生效；开通/模板/域名等控制台步骤见 console-assets/04）',
+      items: [
+        {
+          key: 'VOD_SECRET_ID',
+          name: 'VOD 子账号 SecretId',
+          location: 'DB secureConfig/vod.secretId',
+          purpose: '上传签名派发 + 服务端 API（转码状态同步/GC 删除）——函数运行时临时密钥签不了 VOD，须独立子账号密钥',
+          status: vodOk('secretId') ? 'ok' : 'missing',
+          howTo: '腾讯云控制台→访问管理 CAM→新建子账号（仅授 QcloudVODFullAccess）→API 密钥',
+          url: 'https://console.cloud.tencent.com/cam',
+          fill: { action: 'saveSecureConfig', docId: 'vod', field: 'secretId', inputType: 'text' },
+        },
+        {
+          key: 'VOD_SECRET_KEY',
+          name: 'VOD 子账号 SecretKey',
+          location: 'DB secureConfig/vod.secretKey',
+          purpose: '与 SecretId 配对（HMAC 签名用·绝不回显）',
+          status: vodOk('secretKey') ? 'ok' : 'missing',
+          howTo: '同上（创建时一次性展示，抄下即填此处）',
+          url: 'https://console.cloud.tencent.com/cam',
+          fill: { action: 'saveSecureConfig', docId: 'vod', field: 'secretKey', inputType: 'password' },
+        },
+        {
+          key: 'VOD_PLAY_KEY',
+          name: '播放 Key 防盗链密钥',
+          location: 'DB secureConfig/vod.playKey',
+          purpose: '播放地址签名（getPlaybackUrl 鉴权后签发）——未配则 VOD 段一律 url:null（fail-closed 拒裸奔）',
+          status: vodOk('playKey') ? 'ok' : 'missing',
+          howTo: '云点播控制台→分发播放设置→域名管理→Key 防盗链→开启并复制 Key',
+          url: 'https://console.cloud.tencent.com/vod',
+          fill: { action: 'saveSecureConfig', docId: 'vod', field: 'playKey', inputType: 'password' },
+        },
+        {
+          key: 'VOD_PROCEDURE',
+          name: '任务流模板名',
+          location: 'DB secureConfig/vod.procedure',
+          purpose: '上传完成自动触发的转码+截图任务流（转码/雪碧图/封面一站）——空则上传后不自动转码',
+          status: vodOk('procedure') ? 'ok' : 'missing',
+          howTo: '云点播控制台→任务流设置→新建（含转码+雪碧图+封面截图任务）→模板名填此处（对照 console-assets/04）',
+          url: 'https://console.cloud.tencent.com/vod',
+          fill: { action: 'saveSecureConfig', docId: 'vod', field: 'procedure', inputType: 'text' },
+        },
+        {
+          key: 'vodDomain',
+          name: 'VOD 播放域名（自有已备案 + CNAME + 防盗链开启）',
+          location: '云点播控制台',
+          purpose: '默认分发域名官方仅限测试，线上须绑自有备案域名（如 vod.luckyducky.cn）',
+          status: 'check',
+          howTo: '云点播→分发播放设置→添加自有域名→按提示 CNAME→开 Key 防盗链（流程对照 console-assets/04）',
+          url: 'https://console.cloud.tencent.com/vod',
         },
       ],
     },
