@@ -35,12 +35,15 @@ const cum = computed(() => {
 const exCount = computed(() => (recon.value ? recon.value.exceptions.reduce((n, e) => n + e.ids.length, 0) : 0))
 
 const listGen = useLatest() // 对账乱序守卫（P2·快改区间时旧结果别覆盖新区间·根因#8）
-async function reload() {
+// 返回本次刷新是否成功（P2·bug 顺手改批遗漏本处·同 Batches/Kb/HelpVideos 判例）：pullBill/pullRange 据此判断
+// reload 自身有没有失败，别让 reload 写的失败文案被后续「成功」文案无条件覆盖（病根#14 失败必可观测）。
+// 乱序命中（listGen.isStale）时早退不改 message，调用方按「未确认成功」处理，回 false 保守。
+async function reload(): Promise<boolean> {
   message.value = '加载中…'
   const my = listGen.begin()
   const [r, m] = await Promise.all([getReconciliation(from.value, to.value), getBillMatch(from.value, to.value)])
-  if (listGen.isStale(my)) return // 已改区间·丢弃过期对账结果
-  if ((r as any).error === 'SESSION_LOST' || (m as any).error === 'SESSION_LOST') return
+  if (listGen.isStale(my)) return false // 已改区间·丢弃过期对账结果
+  if ((r as any).error === 'SESSION_LOST' || (m as any).error === 'SESSION_LOST') return false
   recon.value = mapRecon(r)
   match.value = mapBillMatch(m)
   // 分路报错（P1·bug 清除战役 II C2）：单路失败别被另一路成功吞掉——mapRecon/mapBillMatch 只在 ok!==true
@@ -49,6 +52,7 @@ async function reload() {
   if (!recon.value) bad.push('内部对账加载失败：' + String((r as any).error || ''))
   if (!match.value) bad.push('外部账单勾对加载失败：' + String((m as any).error || ''))
   message.value = bad.join('；')
+  return bad.length === 0
 }
 
 // 自定义对账区间（后端 from/to 就绪·换皮丢了这个·只能看死 30 天窗）
@@ -74,8 +78,11 @@ async function pullBill() {
   busy.value = true
   const r = await downloadBill(billDate.value)
   busy.value = false
-  await reload() // 先刷新对账（其间显加载中·结束落空）
-  message.value = r.ok ? '账单已拉取入库，勾对已刷新' : '拉取失败：' + String(r.error || '') // 后写结果·不被 reload 吞（病根#14）
+  const reloadOk = await reload() // 先刷新对账（其间显加载中·结束落空）
+  // 只在拉取与刷新都成功时显纯成功；reload 失败别被无条件覆盖——保留其错误原文（P2·病根#14 顺手改批遗漏本处）
+  if (!r.ok) message.value = '拉取失败：' + String(r.error || '')
+  else if (!reloadOk) message.value = '账单已拉取入库，但对账刷新失败：' + message.value
+  else message.value = '账单已拉取入库，勾对已刷新'
 }
 
 // CST 起止（含端）逐日列表（cap 62 天·防误填超长区间刷爆）
@@ -110,8 +117,11 @@ async function pullRange() {
     if (r.ok) ok++
   }
   busy.value = false
-  await reload() // 先刷新对账
-  message.value = `区间账单已拉取 ${ok}/${days.length} 天，勾对已刷新` // 后写结果·不被 reload 吞（病根#14）
+  const reloadOk = await reload() // 先刷新对账
+  // reload 失败别被无条件覆盖——保留其错误原文拼在区间拉取结果后（P2·病根#14 顺手改批遗漏本处）
+  message.value = reloadOk
+    ? `区间账单已拉取 ${ok}/${days.length} 天，勾对已刷新`
+    : `区间账单已拉取 ${ok}/${days.length} 天，但对账刷新失败：` + message.value
 }
 
 function exportCsv() {

@@ -4,6 +4,7 @@ import { describe, it, expect } from 'vitest'
 import { mapDashboard, mapOrderRows, mapRefundRows, maskPhone, refundVerdict, deriveDashboardTodos, canOverrideRefund, mapOverrideOrder } from '../src/lib/mapMoney'
 import ordersSrc from '../src/pages/Orders.vue?raw'
 import refundsSrc from '../src/pages/Refunds.vue?raw'
+import dashboardSrc from '../src/pages/Dashboard.vue?raw'
 
 describe('deriveDashboardTodos（待处理计数：加载失败别伪装成 0/全清·病根#14）', () => {
   it('大白话：某路计数加载失败时 partial=true——上层据此不把「加载失败」显示成绿色「今日无待处理」', () => {
@@ -283,5 +284,30 @@ describe('Orders.vue 抽屉商品行 :key 用行身份 productId__spec', () => {
   it('大白话：key 带 spec（=后端 lineId 契约）——同品多规格同单不撞键；旧裸 productId 写法不再存在', () => {
     expect(ordersSrc).toMatch(/v-for="it in drawer\.row\.items" :key="\(it\.productId \|\| it\.name\) \+ '__' \+ it\.spec"/)
     expect(ordersSrc).not.toMatch(/:key="it\.productId \|\| it\.name"/)
+  })
+})
+
+// Refunds.vue 深链预填（债目·全局清零bug战役残余 2026-07-13）：Dashboard 退款类告警「去处理」跳
+// /refunds 只做到「跳对页面」，本页原无 route.query 读取能力接不住具体记录——补 onMounted 读
+// route.query.q 预填搜索框并自动检索一次（同 Conversations.vue/Batches.vue 既有深链范式）。
+describe('Refunds.vue 深链预填：route.query.q 预填搜索框 + 自动检索', () => {
+  it('大白话：search 初值读 route.query.q；挂载时有值走 doSearch 自动检索、无值走普通 reload', () => {
+    expect(refundsSrc).toMatch(/const search = ref\(String\(route\.query\.q \|\| ''\)\)/)
+    expect(refundsSrc).toMatch(/if \(search\.value\) void doSearch\(\)/)
+    expect(refundsSrc).toMatch(/else void reload\(\)/)
+  })
+})
+
+// Dashboard.vue 告警「去处理」深链带 q（债目同上）：恰好 1 个 id 才有「跳到具体记录」的唯一目标语义，
+// 多 id/无 id 仍跳纯列表；afterSales 复合 id（`orderId__lineId[__ovrN]`）反解取 split('__')[0]；
+// feeMismatch 走 /orders，本次深链范围只含 /refunds 一侧。
+describe('Dashboard.vue 告警「去处理」深链带 q：唯一 id 才带参，多 id/无 id/金额不符单不带', () => {
+  const body = dashboardSrc.slice(dashboardSrc.indexOf('function alertQuery'), dashboardSrc.indexOf('const TODOS'))
+  it('大白话：feeMismatch 或非唯一 id 回空 query；恰好 1 个 id 且非 feeMismatch 才反解出 q', () => {
+    expect(body).toMatch(/if \(isFeeMismatch\(a\.label\) \|\| a\.ids\.length !== 1\) return \{\}/)
+    expect(body).toMatch(/return \{ q: raw\.includes\('__'\) \? raw\.split\('__'\)\[0\] : raw \}/)
+  })
+  it('大白话：模板「去处理」按钮把 alertPath/alertQuery 一起塞进 router.push 的 path/query', () => {
+    expect(dashboardSrc).toMatch(/router\.push\(\{ path: alertPath\(a\.label\), query: alertQuery\(a\) \}\)/)
   })
 })
