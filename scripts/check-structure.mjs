@@ -28,13 +28,22 @@ import { deriveTierCharsets } from './lib/brand-font-charset.mjs'
 
 const ROOT = resolve(import.meta.dirname, '..')
 
+// 扫描面统一排除（病根#16·盲区体检批1）：dot 目录（.claude/worktrees 残留 worktree、.git 等）与
+// vendor/产物目录一律不是活代码。任何递归 walker 漏排除都会把残留 worktree 当活代码扫——2026-07-18
+// 事故：rewrite/mp/.claude/worktrees/ 下的过期 worktree 让 main 的 npm run check 假红 10 处（而 CI
+// fresh checkout 恒绿→漂移不可见）。递归遍历一律经 lsScan() 取目录项；金丝雀夹具
+// rewrite/mp/.claude/worktrees/fixture-scan-surface/（故意含违例 token）常驻证明本排除在生效——
+// 闸恒绿=排除活着；谁改坏扫描面，金丝雀当场咬红并指到这里。
+const SKIP_DIR = (n) => n === 'node_modules' || n === 'dist' || n === 'miniprogram_npm' || n.startsWith('.')
+const lsScan = (d) => readdirSync(d).filter((n) => !SKIP_DIR(n))
+
 function listPackageJsons() {
   const out = ['package.json']
   // 旧线 packages/ + 新线 rewrite/（rw-line-in-gates：包级守卫不许漏扫新线）
   for (const base of ['packages', 'rewrite']) {
     const dir = join(ROOT, base)
     if (!existsSync(dir)) continue
-    for (const n of readdirSync(dir)) {
+    for (const n of lsScan(dir)) {
       const p = `${base}/${n}/package.json`
       if (existsSync(join(ROOT, p))) out.push(p)
     }
@@ -202,7 +211,7 @@ export const repoChecks = [
       const dir = join(ROOT, 'packages/cloud/src/functions')
       if (!existsSync(dir)) return []
       const bad = []
-      for (const entry of readdirSync(dir)) {
+      for (const entry of lsScan(dir)) {
         if (statSync(join(dir, entry)).isFile() && entry.endsWith('.ts')) {
           bad.push(`packages/cloud/src/functions/${entry} 在顶层——函数须放进域子目录（catalog/learning/orders/user/system/admin，T2）`)
         }
@@ -220,7 +229,7 @@ export const repoChecks = [
       const allowed = 'packages/cloud/src/kit/flow.ts'
       const hits = []
       const walk = (d) => {
-        for (const e of readdirSync(d)) {
+        for (const e of lsScan(d)) {
           const p = join(d, e)
           if (statSync(p).isDirectory()) walk(p)
           else if (e.endsWith('.ts') && readFileSync(p, 'utf8').includes("'cloudbase_module'")) hits.push(relative(ROOT, p))
@@ -250,7 +259,7 @@ export const repoChecks = [
         bad.push(`${seam} 未见 uploadShippingInfo 上传调用——接缝空壳（债#26）`)
       const srcRoot = join(ROOT, 'packages/cloud/src')
       const walk = (d) => {
-        for (const e of readdirSync(d)) {
+        for (const e of lsScan(d)) {
           const p = join(d, e)
           if (statSync(p).isDirectory()) walk(p)
           else if (e.endsWith('.ts')) {
@@ -283,7 +292,7 @@ export const repoChecks = [
       const srcRoot = join(ROOT, 'packages/cloud/src')
       const calls = new Set()
       const walk = (d) => {
-        for (const e of readdirSync(d)) {
+        for (const e of lsScan(d)) {
           const p = join(d, e)
           if (statSync(p).isDirectory()) walk(p)
           else if (e.endsWith('.ts'))
@@ -305,7 +314,9 @@ export const repoChecks = [
       if (calls.size) {
         const deployFns = join(ROOT, 'scripts/deploy-fns.mjs')
         if (!existsSync(deployFns)) bad.push('scripts/deploy-fns.mjs 缺失——无法核「config.json 改动触发重部署」（根因#8·债#26）')
-        else if (!/'config\.json'\)[\s\S]{0,160}\.update\(\s*readFileSync/.test(readFileSync(deployFns, 'utf8')))
+        // 两种等价形状都认：直连 `join(..., 'config.json')…update(readFileSync` 或批3 的数组循环
+        // `['config.json', 'package.json'] … update(readFileSync(fp)`（意图同一：config.json 参与部署 hash）
+        else if (!/'config\.json'[\s\S]{0,240}?\.update\(\s*readFileSync/.test(readFileSync(deployFns, 'utf8')))
           bad.push('scripts/deploy-fns.mjs 部署 hash 未把 config.json 喂进 hash——只改 openapi 权限（config.json）时漂移检测漏判·权限永不部署（根因#8 部署≠生效·债#26）')
       }
       return bad
@@ -324,7 +335,7 @@ export const repoChecks = [
       const bad = []
       const root = join(ROOT, 'packages/cloud/src')
       const walkSet = (d) => {
-        for (const e of readdirSync(d)) {
+        for (const e of lsScan(d)) {
           const p = join(d, e)
           if (statSync(p).isDirectory()) walkSet(p)
           else if (e.endsWith('.ts') && /\.set\(\{\s*data:\s*\{[^}]*\b_id\b/.test(readFileSync(p, 'utf8')))
@@ -691,7 +702,7 @@ export const repoChecks = [
         bad.push(`${seam} 未导出 pushBotAlert——接缝空壳`)
       const srcRoot = join(ROOT, 'packages/cloud/src')
       const walk = (d) => {
-        for (const e of readdirSync(d)) {
+        for (const e of lsScan(d)) {
           const p = join(d, e)
           if (statSync(p).isDirectory()) walk(p)
           else if (e.endsWith('.ts')) {
@@ -724,7 +735,7 @@ export const repoChecks = [
         bad.push(`${seam} 未导出 pushBotAlert——接缝空壳`)
       const srcRoot = join(ROOT, 'rewrite/cloud/src')
       const walk = (d) => {
-        for (const e of readdirSync(d)) {
+        for (const e of lsScan(d)) {
           const p = join(d, e)
           if (statSync(p).isDirectory()) walk(p)
           else if (e.endsWith('.ts')) {
@@ -760,7 +771,7 @@ export const repoChecks = [
         bad.push(`${seam} 未导出 sendAgentCard——应用消息 fail-soft 编排缺失`)
       const srcRoot = join(ROOT, 'packages/cloud/src')
       const walk = (d) => {
-        for (const e of readdirSync(d)) {
+        for (const e of lsScan(d)) {
           const p = join(d, e)
           if (statSync(p).isDirectory()) walk(p)
           else if (e.endsWith('.ts')) {
@@ -791,7 +802,7 @@ export const repoChecks = [
       const srcRoot = join(ROOT, 'packages/cloud/src')
       const HOST = 'api.mch.weixin.qq.com'
       const walk = (d) => {
-        for (const e of readdirSync(d)) {
+        for (const e of lsScan(d)) {
           const p = join(d, e)
           if (statSync(p).isDirectory()) walk(p)
           else if (e.endsWith('.ts')) {
@@ -823,7 +834,7 @@ export const repoChecks = [
       const allow = new Set([seam, 'packages/cloud/src/kit/collections.ts'])
       const srcRoot = join(ROOT, 'packages/cloud/src')
       const walk = (d) => {
-        for (const e of readdirSync(d)) {
+        for (const e of lsScan(d)) {
           const p = join(d, e)
           if (statSync(p).isDirectory()) walk(p)
           else if (e.endsWith('.ts')) {
@@ -855,7 +866,7 @@ export const repoChecks = [
       const allow = new Set([seam, 'packages/cloud/src/kit/collections.ts'])
       const srcRoot = join(ROOT, 'packages/cloud/src')
       const walk = (d) => {
-        for (const e of readdirSync(d)) {
+        for (const e of lsScan(d)) {
           const p = join(d, e)
           if (statSync(p).isDirectory()) walk(p)
           else if (e.endsWith('.ts')) {
@@ -911,7 +922,7 @@ export const repoChecks = [
       const allow = new Set([seam, caller, 'packages/cloud/src/kit/collections.ts', 'packages/cloud/src/kit/index.ts'])
       const srcRoot = join(ROOT, 'packages/cloud/src')
       const walk = (d) => {
-        for (const e of readdirSync(d)) {
+        for (const e of lsScan(d)) {
           const p = join(d, e)
           if (statSync(p).isDirectory()) walk(p)
           else if (e.endsWith('.ts')) {
@@ -1178,6 +1189,7 @@ export const repoChecks = [
       const dir = join(ROOT, 'packages/cloud/src/functions/cs')
       const walk = (d) => {
         for (const e of readdirSync(d, { withFileTypes: true })) {
+          if (SKIP_DIR(e.name)) continue
           const p = join(d, e.name)
           if (e.isDirectory()) walk(p)
           else if (e.name.endsWith('.ts')) {
@@ -1569,7 +1581,7 @@ export const repoChecks = [
       const WRITE = /\.(add|set|update|remove)\s*\(/
       const readAll = (d) => {
         let src = ''
-        for (const f of readdirSync(d)) {
+        for (const f of lsScan(d)) {
           const fp = join(d, f)
           if (statSync(fp).isDirectory()) src += readAll(fp)
           else if (f.endsWith('.ts')) src += readFileSync(fp, 'utf8')
@@ -1727,6 +1739,143 @@ export const repoChecks = [
           bad.push(`${g.id} 的 reverseTest 不存在：${g.reverseTest}——守卫空转`)
         }
       }
+      return bad
+    },
+  },
+  {
+    // 病根#16（守卫绑定漂移·盲区体检 2026-07-18）：同 id 双注册=计数虚高+其中一份可能是已被
+    // 验尸的坏版本仍在运行——当日实况：rw-scm-ledger-idempotent 批S 修复版的注释写着旧版
+    // 「两条独立正则各自宽松匹配…都仍然各自绿」的死因，而那个旧版本体同时仍在册跑了 6 天；
+    // guard-count-synced 数 repoChecks.length 把含重复的 199/200 盖章进文档。id 唯一是
+    // 「注册表=真相」的最低门槛；违反 /refactor-batch「顺手退役（删与加对等）」纪律的机器兜底。
+    id: 'guard-id-unique',
+    roots: ['#16'],
+    desc: '守卫注册表 id 唯一（病根#16）：repoChecks/fileRules/typeAndTestGuards/conventionRules 四表之内与跨表 id 不得重复——重复=移植/折叠后旧副本未退役（批K/批S 前科），删旧前先核对断言面差异再合并',
+    run() {
+      const seen = new Map()
+      const dup = []
+      for (const [arr, label] of [
+        [repoChecks, 'repoChecks'],
+        [fileRules, 'fileRules'],
+        [typeAndTestGuards, 'typeAndTestGuards'],
+        [conventionRules, 'conventionRules'],
+      ]) {
+        for (const g of arr) {
+          if (!g || !g.id) continue
+          if (seen.has(g.id))
+            dup.push(`守卫 id '${g.id}' 重复注册：${seen.get(g.id)} 与 ${label} 各一份——旧副本未随移植退役（删旧留新·先核对两副本断言面差异，缺的分支移植过去）`)
+          else seen.set(g.id, label)
+        }
+      }
+      return dup
+    },
+  },
+  {
+    // 病根#16（守卫绑定漂移·盲区体检批2）：guard-coverage 只核「有守卫声明 roots 含此病根」——
+    // 声明层；一条守卫可以挂着 roots:['T4'] 却只扫再不会改动的冻结目录，覆盖率照绿（dep-direction
+    // 在活线空转即前科）。本守卫把「声称守活线」与「真够得着活线」机器对齐：逐条 fileRule 对
+    // rewrite/ 实走 inScope，零命中且不在 OLDLINE_SCOPE_OK 白名单即红；金丝雀夹具在位一并核
+    // （金丝雀是扫描面回潮的行为哨兵——被删=哨位空了，与「哨兵失效」同级对待）。
+    id: 'guard-scan-liveness',
+    roots: ['#16'],
+    desc: '守卫扫描面活性下限（病根#16）：每条 fileRule 的 inScope 须命中 ≥1 个 rewrite/ 活线文件，守冻结参照的须显式列入 OLDLINE_SCOPE_OK 白名单（随 packages/ 处置拍板一并退役）；金丝雀夹具（rewrite/mp/.claude/worktrees/fixture-scan-surface/）在位一并核——防 dep-direction 式「声称覆盖、实际空转」复发',
+    run() {
+      const bad = []
+      for (const c of [
+        'rewrite/mp/.claude/worktrees/fixture-scan-surface/canary.ts',
+        'rewrite/mp/.claude/worktrees/fixture-scan-surface/canary.md',
+      ])
+        if (!existsSync(join(ROOT, c))) bad.push(`${c} 缺失——扫描面金丝雀被拆（病根#16 哨兵·删除须先拍板退役）`)
+      // 守冻结 packages/ 参照的旧线 fileRule 白名单（待办与债 债7：随 packages/ 处置拍板一并退役）
+      const OLDLINE_SCOPE_OK = new Set(['kit-only-cloud-primitives', 'flow-seam-via-kit', 'money-via-fen', 'api-cloud-only', 'dep-direction'])
+      const hits = new Map(fileRules.map((r) => [r.id, 0]))
+      for (const f of walk(join(ROOT, 'rewrite'))) for (const r of fileRules) if (r.inScope(f)) hits.set(r.id, hits.get(r.id) + 1)
+      for (const r of fileRules) {
+        if (OLDLINE_SCOPE_OK.has(r.id)) continue
+        if (!hits.get(r.id))
+          bad.push(`fileRule '${r.id}' 在 rewrite/ 活线零命中且不在 OLDLINE_SCOPE_OK 白名单——扫描面空转（病根#16·dep-direction 前科：声称守 T4 实扫冻结线）`)
+      }
+      return bad
+    },
+  },
+  {
+    // 病根#16 ⑤（盲区体检批3·指针大迁移）：M5 切换（2026-07-09）搬走了生产，没有任何机制清点
+    // 「指向生产的引用」——oldline-frozen 守住旧线字节、没守指向旧线的指针。当日实况：deploy-fns.mjs
+    // 仍 build:cloud + packages/cloud/dist + 38 函数旧 manifest——hash 匹配则报「变更待部署 0 个」
+    // 假全清（app 函数落后半月无人察觉的根因），不匹配则会把冻结旧线覆盖上生产、复活已删的 26 函数；
+    // deploy-test.mjs 同病。本守卫：会动环境/验产物的工具脚本禁引用旧线，声明为旧线专属的进白名单
+    // （各带一句为什么），新脚本引用 packages/ 当场红。
+    id: 'rw-toolchain-no-oldline',
+    roots: ['#16'],
+    desc: '工具链禁旧线引用（病根#16 ⑤·M5 残留指针清点）：scripts/ 下 .mjs/.cjs（守卫注册表两文件除外——其内旧线路径是「守冻结参照」的守卫本体）与 .github/workflows/ 禁出现 packages/cloud、packages/miniapp、build:cloud 任一 token；旧线专属工具白名单豁免（freeze 工具/旧线产物验证/旧线视觉回归/旧线格式化域/体检面板标注/preflight+deploy-drift 自证历史遗留）——随 packages/ 处置拍板一并清退',
+    run() {
+      // 白名单：声明就是旧线专属/守冻结参照的工具（值=为什么在册）。deploy-fns/deploy-test 刻意不在册。
+      const OLDLINE_TOOLS = new Map([
+        ['scripts/freeze-oldline.mjs', '冻结基线工具本体'],
+        ['scripts/oldline-freeze-lib.mjs', '冻结基线 lib'],
+        ['scripts/verify-cloud-bundles.cjs', '旧线产物行为验证（自声明 B 类·活线版另有 verify-rw-cloud-bundles）'],
+        ['scripts/visual-check.cjs', '旧线视觉回归（扫描面=packages/miniapp dist·新线走 mp-smoke）'],
+        ['scripts/format-hook.mjs', '格式化域刻意锁旧线（其头注成文·扩域是另一笔决策）'],
+        ['scripts/check-report.mjs', '体检面板把 packages/miniapp 标注为「旧线」——标注非引用'],
+        ['scripts/preflight.mjs', '旧线部署体检·deploy-drift 头注自证「对生产线钱链漂移零检测」·迁活线或退役待拍板'],
+        ['scripts/lib/deploy-drift.mjs', '同上·历史遗留自证已成文'],
+        ['scripts/lib/brand-font-charset.mjs', '字体字集扫描含旧线参照面（sweep 自带 dot 排除）'],
+        ['scripts/build-brand-font.mjs', '品牌字体构建·扫描面含旧线参照'],
+      ])
+      const REGISTRY = new Set(['scripts/check-structure.mjs', 'scripts/check-conventions.mjs'])
+      const TOKEN = /packages\/(cloud|miniapp)|build:cloud\b/
+      const bad = []
+      const scanDirs = ['scripts', '.github/workflows']
+      for (const dir of scanDirs) {
+        const abs = join(ROOT, dir)
+        if (!existsSync(abs)) continue
+        const files = []
+        const collect = (d) => {
+          for (const e of lsScan(d)) {
+            const p = join(d, e)
+            if (statSync(p).isDirectory()) collect(p)
+            else if (/\.(mjs|cjs|yml|yaml)$/.test(e)) files.push(p)
+          }
+        }
+        collect(abs)
+        for (const f of files) {
+          const rel = relative(ROOT, f).replace(/\\/g, '/')
+          if (REGISTRY.has(rel) || OLDLINE_TOOLS.has(rel)) continue
+          // 剥注释再扫（E1 纪律·stripComments 单源）：迁移史/为什么的说明就该写在注释里，不算引用
+          const src = stripComments(readFileSync(f, 'utf8'))
+          if (TOKEN.test(src))
+            bad.push(`${rel} 引用旧线（packages/cloud|packages/miniapp|build:cloud）——生产线在 rewrite/，该迁未迁的指针会假全清或把冻结旧线部署上生产（病根#16 ⑤·M5 残留）；确属旧线专属工具则进 OLDLINE_TOOLS 白名单并写明为什么`)
+        }
+      }
+      return bad
+    },
+  },
+  {
+    // 根因#8「构建过≠真能用」在部署产物层的镜像（盲区体检批4·病根#16 配套）：三道闸此前从不
+    // 构建任何真实生产产物——build:rw-cloud/rw-admin/agent/site 四个真实构建在编辑 hook/pre-commit
+    // /CI 里一次都没跑过；「把产物 require 进来真跑」的行为级验证只有旧线有（verify-cloud-bundles
+    // 只验冻结 packages/cloud/dist）。本守卫钉住产物闸接线不许静默掉：check:artifacts 脚本存在且
+    // 含四个面 + CI 真跑它 + 活线产物验证脚本在位。（产物闸 CI-only：vite/astro 构建分钟级，进
+    // pre-commit 会把每次提交拖到分钟级——三道闸单一定义指 npm run check，产物闸是 CI 追加硬化层。）
+    id: 'rw-artifact-gate-in-ci',
+    roots: ['#8', '#16'],
+    desc: '产物闸接线（根因#8 部署产物层镜像·病根#16 配套）：package.json 须有 check:artifacts（含 verify:rw-cloud + build:rw-admin + build:agent + @ldrw/site 构建四面）、.github/workflows/ci.yml 须真跑 check:artifacts、scripts/verify-rw-cloud-bundles.cjs 在位——防「CI 全绿但生产产物从未被构建/加载过」复发',
+    run() {
+      const bad = []
+      const pkg = JSON.parse(readFileSync(join(ROOT, 'package.json'), 'utf8'))
+      const ca = (pkg.scripts || {})['check:artifacts'] || ''
+      if (!ca) bad.push('package.json 无 check:artifacts 脚本——产物闸未定义（根因#8·四个真实构建零闸覆盖）')
+      else
+        for (const piece of ['verify:rw-cloud', 'build:rw-admin', 'build:agent', '@ldrw/site'])
+          if (!ca.includes(piece)) bad.push(`check:artifacts 缺 ${piece} 面——产物闸不全（根因#8）`)
+      const vs = (pkg.scripts || {})['verify:rw-cloud'] || ''
+      if (!/build:rw-cloud/.test(vs) || !/verify-rw-cloud-bundles/.test(vs))
+        bad.push('verify:rw-cloud 须 = build:rw-cloud + verify-rw-cloud-bundles.cjs（先构建再产物验证）')
+      if (!existsSync(join(ROOT, 'scripts/verify-rw-cloud-bundles.cjs')))
+        bad.push('scripts/verify-rw-cloud-bundles.cjs 缺失——活线产物行为验证真空（旧线 verify 只验冻结线）')
+      const ci = join(ROOT, '.github/workflows/ci.yml')
+      if (!existsSync(ci) || !/check:artifacts/.test(readFileSync(ci, 'utf8')))
+        bad.push('.github/workflows/ci.yml 未跑 check:artifacts——产物闸没进 CI（构建过≠真能用在产物层无人守）')
       return bad
     },
   },
@@ -1916,51 +2065,6 @@ export const repoChecks = [
           bad.push(`${f} 的 ${name} 未经 withRateLimit——用户可调写函数无频控可被刷/爆破（根因#13）`)
         }
       }
-      return bad
-    },
-  },
-  {
-    id: 'rw-material-stock-single-seam',
-    roots: ['#1', '#2'],
-    desc: '原料账单点收口·生产线（SCM 门1·根因#1/#2·深审 P2 补：material-stock-single-seam 只焊冻结旧线是假绿）：生产线 materials.stock/stockLedger 仅 rewrite/cloud/src/kit/scmStock.ts 读写（applyStockMoves 唯一入口·乐观 CAS）；其余 rewrite/cloud/src 直碰即红（防绕 CAS/绕流水改账）',
-    run() {
-      const seam = 'rewrite/cloud/src/kit/scmStock.ts'
-      if (!existsSync(join(ROOT, seam))) return [`${seam} 缺失——生产线原料账原语（SCM 门1）`]
-      const bad = []
-      const src = readFileSync(join(ROOT, seam), 'utf8')
-      if (!/export\s+async\s+function\s+applyStockMoves/.test(src)) bad.push(`${seam} 未导出 applyStockMoves——门1 空壳`)
-      if (!/\.where\(\{[^}]*stock/.test(src)) bad.push(`${seam} 库存变更未用条件 where(stock) 乐观 CAS——有并发互覆盖风险（根因#1）`)
-      const allow = new Set([seam])
-      const srcRoot = join(ROOT, 'rewrite/cloud/src')
-      const walk = (d) => {
-        for (const e of readdirSync(d)) {
-          const p = join(d, e)
-          if (statSync(p).isDirectory()) walk(p)
-          else if (e.endsWith('.ts')) {
-            const rel = relative(ROOT, p).replace(/\\/g, '/')
-            if (allow.has(rel)) continue
-            if (/COLLECTIONS\.(materials|stockLedger)\b|\.collection\(\s*['"](materials|stockLedger)['"]\s*\)/.test(readFileSync(p, 'utf8')))
-              bad.push(`${rel} 直碰 materials/stockLedger 集合——原料账读写须经 kit/scmStock（SCM 门1·防绕 CAS/绕流水）`)
-          }
-        }
-      }
-      if (existsSync(srcRoot)) walk(srcRoot)
-      return bad
-    },
-  },
-  {
-    id: 'rw-scm-ledger-idempotent',
-    roots: ['#2'],
-    desc: '原料流水确定性幂等·生产线（SCM·根因#2·深审 P2 补：scm-ledger-idempotent 只焊冻结旧线是假绿）：生产线 rewrite/cloud/src/kit/scmStock.ts 写 stockLedger 必构造确定性 _id=`docType:docId:itemKey`（撞 id=并发方已写）·禁自动 id 双记账',
-    run() {
-      const seam = 'rewrite/cloud/src/kit/scmStock.ts'
-      if (!existsSync(join(ROOT, seam))) return [`${seam} 缺失——生产线流水写入点（SCM 门1）`]
-      const bad = []
-      const src = readFileSync(join(ROOT, seam), 'utf8')
-      if (!/\$\{[^}]*docType[^}]*\}:\$\{[^}]*docId[^}]*\}:\$\{/.test(src))
-        bad.push(`${seam} 未见确定性流水 _id 构造（\`\${docType}:\${docId}:\${itemKey}\` 三段模板）——流水失幂等（根因#2）`)
-      const ledgerAdds = [...src.matchAll(/stockLedger[\s\S]{0,200}?\.add\(\s*\{\s*data:\s*\{([\s\S]{0,120}?)\}/g)]
-      for (const m of ledgerAdds) if (!/_id\s*:/.test(m[1])) bad.push(`${seam} stockLedger add 未带确定性 _id——自动 id=重放双记账（根因#2）`)
       return bad
     },
   },
@@ -2430,7 +2534,7 @@ export const repoChecks = [
       }
       const wxmlWalk = (d) => {
         if (!existsSync(d)) return
-        for (const name of readdirSync(d)) {
+        for (const name of lsScan(d)) {
           if (name === 'node_modules' || name === 'dist') continue
           const p = join(d, name)
           if (statSync(p).isDirectory()) wxmlWalk(p)
@@ -2453,7 +2557,7 @@ export const repoChecks = [
       const base = join(ROOT, 'rewrite/mp')
       if (!existsSync(base)) return bad
       const walkW = (d) => {
-        for (const name of readdirSync(d)) {
+        for (const name of lsScan(d)) {
           if (name === 'node_modules' || name === 'dist') continue
           const p = join(d, name)
           if (statSync(p).isDirectory()) walkW(p)
@@ -2484,7 +2588,7 @@ export const repoChecks = [
       if (!existsSync(base)) return bad
       const re = /background(?:-image)?\s*:[^;]*url\(\s*['"]?([^'")]+)/i
       const walkS = (d) => {
-        for (const name of readdirSync(d)) {
+        for (const name of lsScan(d)) {
           if (name === 'node_modules' || name === 'dist') continue
           const p = join(d, name)
           if (statSync(p).isDirectory()) walkS(p)
@@ -2522,7 +2626,7 @@ export const repoChecks = [
       const TOTAL = 400 * 1024
       let total = 0
       const walkB = (d) => {
-        for (const name of readdirSync(d)) {
+        for (const name of lsScan(d)) {
           if (name === 'node_modules' || name === 'dist') continue
           const p = join(d, name)
           const st = statSync(p)
@@ -2630,7 +2734,7 @@ export const repoChecks = [
         /data:(?:font\/[a-z0-9.+-]+|application\/(?:x-)?font[a-z0-9.+-]*|application\/vnd\.ms-fontobject)[^"')]*?base64,[A-Za-z0-9+/]{200,}/i
       const scan = (dir) => {
         if (!existsSync(dir)) return
-        for (const name of readdirSync(dir)) {
+        for (const name of lsScan(dir)) {
           if (name === 'node_modules' || name === 'dist') continue
           const p = join(dir, name)
           if (statSync(p).isDirectory()) {
@@ -2829,7 +2933,7 @@ export const repoChecks = [
       // 例外白名单：单源本身 + 拖动/seek 阻尼两处（各自实例节流 vibe·非离散点按）
       const allow = new Set([lib, 'rewrite/mp/pages/flip-demo/flip-demo.ts', 'rewrite/mp/pages/player/player.ts'])
       const walk = (d) => {
-        for (const e of readdirSync(d)) {
+        for (const e of lsScan(d)) {
           const p = join(d, e)
           if (statSync(p).isDirectory()) {
             if (e === 'node_modules' || e === 'dist' || e === 'miniprogram_npm') continue
@@ -3085,7 +3189,7 @@ export const repoChecks = [
       // 仅 import/from/require 语句行才算「引模块」；navigateTo 路由字符串不算
       const isImportLine = (l) => /\b(?:import|require)\b/.test(l) || /\bfrom\s+['"]/.test(l)
       const walk = (dir, relBase) => {
-        for (const e of readdirSync(dir)) {
+        for (const e of lsScan(dir)) {
           const abs = join(dir, e)
           const rel = relBase ? `${relBase}/${e}` : e
           if (statSync(abs).isDirectory()) {
@@ -3251,7 +3355,7 @@ export const repoChecks = [
       const siteRoot = join(ROOT, 'rewrite/site/src')
       if (existsSync(siteRoot)) {
         const walkSite = (d) => {
-          for (const e of readdirSync(d)) {
+          for (const e of lsScan(d)) {
             const p = join(d, e)
             if (statSync(p).isDirectory()) walkSite(p)
             else if (/\.(astro|md|ts)$/.test(e)) {
@@ -3606,7 +3710,7 @@ export const repoChecks = [
       const pat = /(?:\.collection|createCollection)\(\s*['"]([a-zA-Z_]+)['"]|ensure\(\s*\w+\s*,\s*['"]([a-zA-Z_]+)['"]/g
       const root = join(ROOT, 'packages/cloud/src')
       const walkDir = (d) => {
-        for (const e of readdirSync(d)) {
+        for (const e of lsScan(d)) {
           const p = join(d, e)
           if (statSync(p).isDirectory()) walkDir(p)
           else if (e.endsWith('.ts') && p !== home) {
@@ -3637,7 +3741,7 @@ export const repoChecks = [
       const GATE = 'getPlaybackUrl.ts' // 唯一鉴权后下发播放 URL 的云函数
       const FILEID_ALLOW = new Set([GATE, 'getCourses.ts']) // 定位 / 剥 hasVideo·已审计
       const bad = []
-      for (const e of readdirSync(dir)) {
+      for (const e of lsScan(dir)) {
         if (!e.endsWith('.ts')) continue
         const src = readFileSync(join(dir, e), 'utf8')
         if (e !== GATE && /\bgetTempUrl\s*\(/.test(src))
@@ -3682,7 +3786,7 @@ export const repoChecks = [
       if (!existsSync(dir)) return ['catalog 域缺失（帮助视频地址单点·审计 P1）']
       const GATE = 'getHelpVideos.ts' // 唯一服务端换帮助视频临时 URL 的云函数
       const bad = []
-      for (const e of readdirSync(dir)) {
+      for (const e of lsScan(dir)) {
         if (!e.endsWith('.ts')) continue
         const src = readFileSync(join(dir, e), 'utf8')
         if (e !== GATE && /\bgetTempUrls?\s*\(/.test(src))
@@ -3929,7 +4033,7 @@ export const repoChecks = [
       )
       const bad = []
       const dir = join(ROOT, 'docs')
-      for (const f of readdirSync(dir)) {
+      for (const f of lsScan(dir)) {
         if (!f.endsWith('.md') || f === '重构日志.md') continue
         readFileSync(join(dir, f), 'utf8')
           .split('\n')
@@ -4025,10 +4129,10 @@ export const repoChecks = [
     // 的「客观计数别手抄」病（病根#11），但作用在**治理文档自身**：元守卫 guard-coverage 只核「病根↔守卫」逻辑闭环、
     // 不核这些计数，于是它们漂了没人发现。本守卫补这条缝：repoChecks/fileRules 数组长度＝守卫数真值（含本守卫自己）、
     // 根因账本 §一 `### N.` 病根数＝病根数真值（与 guard-coverage 同源），**全部治理文档**里「N repoCheck / M fileRule /
-    // K 类病根」须报同一数。测试数无静态真值源（vitest 才报准·跑全套太重不进静态闸），只校验 现状与路线 内多处「测试 N」自洽。
+    // K 类病根」须报同一数。（原「测试数自洽」子检查批1 退役——空样本恒绿的摆设，见 run() 尾注。）
     id: 'guard-count-synced',
     roots: ['#11'],
-    desc: '客观计数机器维护（规则⑥·病根#11·治理文档自身防漂）：repoChecks/fileRules 数组长度为守卫数真值、根因账本 §一 `### N.` 数为病根数真值（与 guard-coverage 同源）；所有治理文档（现状与路线/自动化验证系统/CLAUDE/元模式/根因账本）里「N repoCheck / M fileRule / K 类病根」须报同一数（防手抄漂移·体检抓的 13≠86、12≠13 那类）。测试数无静态真值源，只校验现状与路线内多处「测试 N」自洽',
+    desc: '客观计数机器维护（规则⑥·病根#11·治理文档自身防漂）：repoChecks/fileRules 数组长度为守卫数真值、根因账本 §一 `### N.` 数为病根数真值（与 guard-coverage 同源）；所有治理文档（现状与路线/自动化验证系统/CLAUDE/元模式/根因账本）里「N repoCheck / M fileRule / K 类病根」须报同一数（防手抄漂移·体检抓的 13≠86、12≠13 那类）',
     run() {
       const bad = []
       const realRepo = repoChecks.length
@@ -4062,17 +4166,11 @@ export const repoChecks = [
             if (Number(m[1]) !== realRoots)
               bad.push(`${rel} 报「${m[1]} 类病根」≠ 真值 ${realRoots}（根因账本 §一 病根数·客观计数单源·别手抄·#11）`)
       }
-      // 测试数：无静态真值源（vitest 才报准），只校验现状与路线内多处「测试 N」互相自洽——防 337 vs 326 自相矛盾
-      const sl = join(ROOT, 'docs/现状与路线.md')
-      if (existsSync(sl)) {
-        const text = readFileSync(sl, 'utf8')
-        const tn = [
-          ...[...text.matchAll(/(\d+)\s*测试/g)].map((m) => m[1]),
-          ...[...text.matchAll(/测试\s*\**\s*(\d+)/g)].map((m) => m[1]),
-        ]
-        if (new Set(tn).size > 1)
-          bad.push(`现状与路线.md 测试数多处不一致：${[...new Set(tn)].join(' vs ')}（手抄自相矛盾·状态只一处权威·规则⑥）`)
-      }
+      // 测试数子检查已退役（批1·盲区体检 2026-07-18·病根#16「空样本=绿」实例）：原「现状与路线内多处
+      // 『测试 N』互相自洽」检查自 M0 后永久空转——该文档的测试数全是「测试 1033→1547」式历史里程碑区间
+      // （本就该互不相等·自洽前提不成立），且两条正则实测只捞到 1 个样本（'1033'），Set.size>1 恒假。
+      // 摆设守卫比没有守卫更糟（给「测试数有人核」的假安全感）。测试数真值只在 vitest 运行时报告里，
+      // 静态闸证不了；若将来要机器核，需 vitest reporter 落一份受版本控制的计数文件再比对（另立批）。
       return bad
     },
   },
@@ -4140,7 +4238,7 @@ export const repoChecks = [
       const pat = /\berr\(\s*['"]([A-Z_]+)['"]\s*\)/g // 纯字面量 err('X')；动态 err('X:'+v) 不匹配
       const root = join(ROOT, 'packages/cloud/src')
       const walkDir = (d) => {
-        for (const e of readdirSync(d)) {
+        for (const e of lsScan(d)) {
           const p = join(d, e)
           if (statSync(p).isDirectory()) walkDir(p)
           else if (e.endsWith('.ts')) {
@@ -4671,7 +4769,7 @@ export const repoChecks = [
       const WRITE = /\.(add|set|update|remove)\s*\(/
       const readAll = (d) => {
         let src = ''
-        for (const f of readdirSync(d)) {
+        for (const f of lsScan(d)) {
           const fp = join(d, f)
           if (statSync(fp).isDirectory()) src += readAll(fp)
           else if (f.endsWith('.ts')) src += readFileSync(fp, 'utf8')
@@ -4681,7 +4779,7 @@ export const repoChecks = [
       // 单元清单：functions/ 递归到「文件」或「含 index.ts 的目录」为一单元（与旧线域级聚合同保护强度、粒度更细）
       const units = []
       const collect = (d) => {
-        for (const e of readdirSync(d)) {
+        for (const e of lsScan(d)) {
           const p = join(d, e)
           if (statSync(p).isDirectory()) {
             if (existsSync(join(p, 'index.ts'))) units.push(p)
@@ -4733,7 +4831,7 @@ export const repoChecks = [
       const COLLS = new Set(Object.keys(declaredEdges)) // orders / afterSales
       const files = []
       const collectTs = (d) => {
-        for (const e of readdirSync(d)) {
+        for (const e of lsScan(d)) {
           const p = join(d, e)
           if (statSync(p).isDirectory()) collectTs(p)
           else if (e.endsWith('.ts')) files.push(p)
@@ -4820,7 +4918,7 @@ export const repoChecks = [
       const COLLS = new Set(Object.keys(declaredEdges))
       const files = []
       const collectTs = (d) => {
-        for (const e of readdirSync(d)) {
+        for (const e of lsScan(d)) {
           const p = join(d, e)
           if (statSync(p).isDirectory()) collectTs(p)
           else if (e.endsWith('.ts')) files.push(p)
@@ -4992,7 +5090,8 @@ export const repoChecks = [
     run() {
       const seam = 'rewrite/cloud/src/kit/scmStock.ts'
       const seamAbs = join(ROOT, seam)
-      if (!existsSync(seamAbs)) return []
+      // seam 缺失即红（批1 从被退役的旧副本移植回：seam 文件整个没了=守卫目标消失，必须显式退役而非静默绿）
+      if (!existsSync(seamAbs)) return [`${seam} 缺失——生产线原料账原语（SCM 门1）·守卫目标消失须显式退役本守卫`]
       const bad = []
       const src = readFileSync(seamAbs, 'utf8')
       if (!/export\s+async\s+function\s+applyStockMoves/.test(src)) bad.push(`${seam} 未导出 applyStockMoves——门1 空壳`)
@@ -5000,7 +5099,7 @@ export const repoChecks = [
       const allow = new Set([seam])
       const srcRoot = join(ROOT, 'rewrite/cloud/src')
       const walk = (d) => {
-        for (const e of readdirSync(d)) {
+        for (const e of lsScan(d)) {
           const p = join(d, e)
           if (statSync(p).isDirectory()) walk(p)
           else if (e.endsWith('.ts')) {
@@ -5037,7 +5136,8 @@ export const repoChecks = [
     desc: '新线原料流水确定性幂等（SCM·根因#2·批K 引入·批S 修复两条独立正则拼出的假绑定：新增「_id 字段实际来自确定性生成函数调用」的绑定核验，不再只各自宽松匹配「有模板」+「有 _id 字样」）：rewrite/cloud/src/kit/scmStock.ts 写 stockLedger 必构造确定性 _id=`docType:docId:itemKey`（撞 id=并发方已写）·禁自动 id 双记账·禁绕开生成函数手写等价 _id',
     run() {
       const seam = 'rewrite/cloud/src/kit/scmStock.ts'
-      if (!existsSync(join(ROOT, seam))) return []
+      // seam 缺失即红（批1 从被退役的旧副本移植回：守卫目标消失=显式退役，不静默绿）
+      if (!existsSync(join(ROOT, seam))) return [`${seam} 缺失——生产线流水写入点（SCM 门1）·守卫目标消失须显式退役本守卫`]
       const bad = []
       const src = readFileSync(join(ROOT, seam), 'utf8')
       // 定位确定性 _id 生成函数并取其名（按「docType:docId:itemKey 三段模板」结构识别，不硬编码 ledgerIdOf——
@@ -5253,7 +5353,7 @@ export const repoChecks = [
       if (!existsSync(srcRoot)) return bad
       const calls = new Set()
       const walk = (d) => {
-        for (const e of readdirSync(d)) {
+        for (const e of lsScan(d)) {
           const p = join(d, e)
           if (statSync(p).isDirectory()) walk(p)
           else if (e.endsWith('.ts'))
@@ -5552,7 +5652,7 @@ export const repoChecks = [
         return [`${kitRel} 不存在——VOD 平台接缝单点未建（根因#12·决策§31 转码管线批1）`]
       const walk = (d) => {
         const out = []
-        for (const e of readdirSync(join(ROOT, d))) {
+        for (const e of lsScan(join(ROOT, d))) {
           const rel = `${d}/${e}`
           if (statSync(join(ROOT, rel)).isDirectory()) out.push(...walk(rel))
           else if (rel.endsWith('.ts')) out.push(rel)
@@ -5950,7 +6050,7 @@ export const repoChecks = [
         const offenders = []
         const pagesDir = join(base, 'pages')
         const walkForCS = (d) => {
-          for (const e of readdirSync(d)) {
+          for (const e of lsScan(d)) {
             const p = join(d, e)
             if (statSync(p).isDirectory()) walkForCS(p)
             else if (/\.(ts|wxml)$/.test(e) && /openCustomerServiceChat/.test(readFileSync(p, 'utf8'))) offenders.push(relative(base, p))
@@ -5978,7 +6078,7 @@ export const repoChecks = [
       const bad = []
       const re = /投屏|casting/i
       const walk = (d) => {
-        for (const e of readdirSync(d)) {
+        for (const e of lsScan(d)) {
           if (e === 'node_modules') continue
           const p = join(d, e)
           if (statSync(p).isDirectory()) walk(p)
@@ -6106,7 +6206,7 @@ export const repoChecks = [
       const allowed = 'rewrite/cloud/src/kit/storage.ts'
       const hits = []
       const walk = (d) => {
-        for (const e of readdirSync(d)) {
+        for (const e of lsScan(d)) {
           const fp = join(d, e)
           if (statSync(fp).isDirectory()) walk(fp)
           else if (e.endsWith('.ts') && readFileSync(fp, 'utf8').includes('imageMogr2'))
@@ -6262,7 +6362,7 @@ export const repoChecks = [
       }
       // ④ 判废机制防回潮：扫 rewrite/mp 全部 .ts（剥注释·tests 除外——测试要按名断言「不得出现」）
       const walk = (d) => {
-        for (const e of readdirSync(d)) {
+        for (const e of lsScan(d)) {
           if (e === 'node_modules' || e === 'tests') continue
           const p = join(d, e)
           if (statSync(p).isDirectory()) walk(p)
@@ -6363,7 +6463,7 @@ export const repoChecks = [
       // 断言A：全目录假 Toast 绝迹
       const walkAll = (d) => {
         const out = []
-        for (const e of readdirSync(d)) {
+        for (const e of lsScan(d)) {
           const p = join(d, e)
           if (statSync(p).isDirectory()) out.push(...walkAll(p))
           else out.push(p)
@@ -6415,7 +6515,7 @@ export const repoChecks = [
       const bad = []
       const walkAll = (d) => {
         const out = []
-        for (const e of readdirSync(d)) {
+        for (const e of lsScan(d)) {
           const p = join(d, e)
           if (statSync(p).isDirectory()) out.push(...walkAll(p))
           else out.push(p)
@@ -6508,7 +6608,7 @@ export const repoChecks = [
       if (!existsSync(base)) return bad
       const NEUTRAL = new Set(['#fff', '#ffffff', '#000', '#000000'])
       const scan = (d) => {
-        for (const e of readdirSync(d)) {
+        for (const e of lsScan(d)) {
           const p = join(d, e)
           if (statSync(p).isDirectory()) {
             if (e === 'styles') continue
@@ -6548,7 +6648,7 @@ export const repoChecks = [
       const bad = []
       const dir = join(ROOT, 'rewrite/admin/src/pages')
       if (!existsSync(dir)) return bad
-      for (const f of readdirSync(dir)) {
+      for (const f of lsScan(dir)) {
         if (!f.endsWith('.vue')) continue
         const css = readFileSync(join(dir, f), 'utf8')
         for (const seg of css.split('}')) {
@@ -6592,7 +6692,7 @@ export const repoChecks = [
       ]
       const dir = join(ROOT, 'rewrite/admin/src/pages')
       if (existsSync(dir)) {
-        for (const f of readdirSync(dir)) {
+        for (const f of lsScan(dir)) {
           if (!f.endsWith('.vue')) continue
           const src = readFileSync(join(dir, f), 'utf8')
           for (const [re, label] of patterns) {
@@ -6626,7 +6726,7 @@ export const repoChecks = [
       const bad = []
       const dir = join(ROOT, 'rewrite/admin/src/pages')
       if (!existsSync(dir)) return bad
-      for (const f of readdirSync(dir)) {
+      for (const f of lsScan(dir)) {
         if (!f.endsWith('.vue')) continue
         const src = stripComments(readFileSync(join(dir, f), 'utf8'))
         const scriptMatch = src.match(/<script setup[^>]*>([\s\S]*?)<\/script>/)
@@ -6720,7 +6820,7 @@ export const repoChecks = [
       const EXCLUDE_FILES = new Set(['lib/catalog.ts', 'lib/courses.ts'])
       const walk = (d, relDir) => {
         const out = []
-        for (const e of readdirSync(d)) {
+        for (const e of lsScan(d)) {
           if (relDir === '' && (e === 'api' || e === 'tests')) continue
           const p = join(d, e)
           if (statSync(p).isDirectory()) out.push(...walk(p, relDir + e + '/'))
@@ -6812,7 +6912,7 @@ export const repoChecks = [
       const allowed = 'rewrite/cloud/src/kit/flow.ts'
       const hits = []
       const walkDir = (d) => {
-        for (const e of readdirSync(d)) {
+        for (const e of lsScan(d)) {
           const p = join(d, e)
           if (e === 'node_modules' || e === 'dist') continue
           if (statSync(p).isDirectory()) walkDir(p)
@@ -6834,7 +6934,7 @@ export const repoChecks = [
       const dir = join(ROOT, 'rewrite/cloud/src/functions')
       if (!existsSync(dir)) return []
       const bad = []
-      for (const entry of readdirSync(dir)) {
+      for (const entry of lsScan(dir)) {
         if (statSync(join(dir, entry)).isFile() && entry.endsWith('.ts')) {
           bad.push(`rewrite/cloud/src/functions/${entry} 在顶层——函数须放进域子目录（adminApi/app/callbacks/cs/ops/timers，T2·rewrite 镜像）`)
         }
@@ -6973,7 +7073,7 @@ export const repoChecks = [
       if (!existsSync(base)) return bad
       const files = []
       const walk = (d) => {
-        for (const e of readdirSync(d)) {
+        for (const e of lsScan(d)) {
           const p = join(d, e)
           if (statSync(p).isDirectory()) walk(p)
           else if (e.endsWith('.wxml')) files.push(p)
@@ -7174,6 +7274,42 @@ export const fileRules = [
         ? 'mp 端禁裸 wx.request()——H5/App 不连核心交易流程，微信原生单源经云函数 callCloud（T1·rewrite 镜像）'
         : null,
   },
+  {
+    // T4 按链内聚·活线镜像（盲区体检批2·病根#16 ②）：旧 dep-direction 的 inScope 锁死冻结
+    // packages/miniapp——CLAUDE 四大架构主张之一在唯一迭代的活线上零执行；2026-07-10 镜像批
+    // 注释亲笔「对唯一在迭代的 rewrite/ 空转」却只搬 4 条、漏了这条。方向图（rewrite/mp/README §分层）：
+    // pages/components/custom-tab-bar（顶层·可越级下行直连 api/utils）→ lib → api → utils（叶·出度 0）。
+    // 另钉 rewrite/cloud：kit/ 禁反向 import functions/（kit=原语层，反引=方向反转）。
+    // 侦察实测（2026-07-18）存量违例 0——纯预防守卫，先红由反向自检证（篡改样例 import 必红）。
+    id: 'rw-dep-direction',
+    roots: ['T4', '#16'],
+    inScope: (abs) =>
+      ((/\/rewrite\/mp\/(lib|api|utils)\//.test(abs) && !abs.includes('/rewrite/mp/tests/')) ||
+        /\/rewrite\/cloud\/src\/kit\//.test(abs)) &&
+      abs.endsWith('.ts'),
+    test: (line, ctx) => {
+      const m = line.match(/\bfrom\s+['"]([^'"]+)['"]/)
+      if (!m) return null
+      const spec = m[1]
+      const f = ctx.file.replace(/\\/g, '/')
+      if (f.includes('/rewrite/cloud/src/kit/')) {
+        return /(^|\.\.?\/)functions\//.test(spec)
+          ? 'kit 禁 import functions/——kit 是原语层，反向引用=依赖方向反转（T4·活线）'
+          : null
+      }
+      if (!spec.startsWith('.')) return null
+      const layer = f.includes('/rewrite/mp/lib/') ? 'lib' : f.includes('/rewrite/mp/api/') ? 'api' : 'utils'
+      const target = spec.split('/').filter((s) => s && s !== '.' && s !== '..')[0]
+      const banned = {
+        utils: ['lib', 'api', 'pages', 'components', 'custom-tab-bar'],
+        api: ['lib', 'pages', 'components', 'custom-tab-bar'],
+        lib: ['pages', 'components', 'custom-tab-bar'],
+      }[layer]
+      return banned.includes(target)
+        ? `依赖方向反转：${layer} 层禁 import ${target}/（pages→lib→api→utils·utils 是叶；T4·活线镜像）`
+        : null
+    },
+  },
 ]
 
 // ============== 类型层 + 行为测试守卫（typeAndTestGuards）==============
@@ -7229,8 +7365,13 @@ export const typeAndTestGuards = [
   // admin 频控全局/账户级兜底（审核 P1·根因#13）：per-IP 频控 key 取 x-forwarded-for（可伪造·轮换可绕 5 次锁），
   // 故叠加跨所有 IP 的全局失败计数——轮换伪造 header 的爆破累计达全局阈值仍锁。reverseTest 锁此组合行为。
   { id: 'admin-throttle-global-backstop', mechanism: 'test', roots: ['#13'], reverseTest: 'tests/cloud/adminThrottle.test.js' },
-  { id: 'gate-fail-closed', mechanism: 'test', roots: ['#3'], reverseTest: 'tests/cloud/kit/gate.test.js' },
-  { id: 'notify-forge-proof', mechanism: 'test', roots: ['#3'], reverseTest: 'tests/cloud/kit/notify.test.js' },
+  // 钱/权限两条门面守卫的 reverseTest 改锚活线（盲区体检批2·病根#16 ⑥）：原指冻结旧线
+  // tests/cloud/kit/*.test.js（import packages/cloud·仍随 vitest 跑、守冻结参照），但注册表的
+  // 「证据」字段该指生产代码的等价测试——rewrite/cloud/tests 的 gate/notify 断言面等价
+  // （withOpenId/withAdminGate fail-closed + defineNotifyCallback 见身份即拒伪造）。
+  // 其余 25 条 test 型守卫仍指旧线测试，系统性重登记待拍板（见 待办与债 盲区体检节）。
+  { id: 'gate-fail-closed', mechanism: 'test', roots: ['#3'], reverseTest: 'rewrite/cloud/tests/gate.test.ts' },
+  { id: 'notify-forge-proof', mechanism: 'test', roots: ['#3'], reverseTest: 'rewrite/cloud/tests/notify.test.ts' },
   // 支付配置 fail-closed（根因#3 同款）：createOrder 缺/错 config/pay 时绝不伪造已付单——
   // mock 仅 env ALLOW_MOCK_PAY=1 放行，否则拒 PAY_CONFIG_MISSING（reverseTest 锁此行为）。
   { id: 'pay-config-fail-closed', mechanism: 'test', roots: ['#3'], reverseTest: 'tests/cloud/createOrder.test.js' },
@@ -7299,7 +7440,7 @@ export const typeAndTestGuards = [
 export const SRC_DIRS = ['packages', 'cloudfunctions', 'scripts', 'rewrite']
 export function* walk(dir) {
   if (!existsSync(dir)) return
-  for (const name of readdirSync(dir)) {
+  for (const name of lsScan(dir)) {
     if (name === 'node_modules' || name === 'dist') continue
     const p = join(dir, name)
     const st = statSync(p)
@@ -7433,6 +7574,14 @@ function mpReachableText(src) {
 }
 
 export function checkFile(file) {
+  // 扫描面排除（病根#16）：dot 目录（.claude/worktrees 残留 worktree 等）不是活代码——
+  // 主循环经 lsScan 已排除，此处再挡 --hook 单文件路径（编辑 hook 直接把文件路径喂进来，
+  // 不经 walk；漏了这道，编辑残留 worktree 里的文件仍会被当活代码咬红）。
+  // 必须对 ROOT 相对路径判（批2 反向自检当场逮住的自埋雷：本仓工作 worktree 本身住在
+  // <主仓>/.claude/worktrees/ 下，拿绝对路径匹配 /.claude/ 会把 worktree 里的**全部活文件**
+  // 一并豁免——fileRules 在所有 worktree 里静默全灭、只在 main/CI 上活着，恰是病根#16 空样本=绿）。
+  const relFile = relative(ROOT, String(file)).replace(/\\/g, '/')
+  if (/(^|\/)\.claude\//.test(relFile)) return []
   const rules = fileRules.filter((r) => r.inScope(file))
   if (!rules.length) return []
   const violations = []
