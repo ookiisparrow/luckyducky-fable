@@ -314,7 +314,7 @@ describe('getCourses / getPlaybackUrl（目录不漏源·鉴权 fail-closed·黄
   })
 })
 
-describe('getPlaybackUrl VOD 前缀分流（转码管线·决策§29 批1：防盗链签名 fail-closed·新旧双线混跑）', () => {
+describe('getPlaybackUrl VOD 前缀分流（转码管线·决策§31 批1：防盗链签名 fail-closed·新旧双线混跑）', () => {
   // videoFileId 为 VOD FileId（纯数字）→ 走 kit/vod.ts 防盗链签名；vodUrl 为批2 转码同步回写的播放地址
   const VOD_COURSE = {
     _id: 'c9',

@@ -34,7 +34,7 @@ const batchUploading = ref(false) // 课时级批量传视频在途（P1·根因
 
 const pct = computed(() => (stats.value.total ? Math.round((stats.value.done / stats.value.total) * 100) : 0))
 
-// VOD 转码态（决策§29 批2）：段 videoFileId 为 VOD FileId（纯数字·判据单源 @ldrw/shared 与云端播放
+// VOD 转码态（决策§31 批2）：段 videoFileId 为 VOD FileId（纯数字·判据单源 @ldrw/shared 与云端播放
 // 分流同款）且 vodUrl 未回写 = 转码中——「传完 ≠ 可播」，发布被云端闸拦，先点「同步转码状态」。
 const vodPending = (sg: Record<string, any>) => isVodFileId(String(sg.videoFileId || '')) && !sg.vodUrl
 const vodPendingCount = computed(() => {
@@ -631,7 +631,7 @@ onMounted(load)
   color: var(--ld-green);
   background: var(--ld-bg-green-soft);
 }
-/* VOD 转码中 chip（决策§29 批2）：已传但转码未就绪——发布被云端闸拦的可视化对应物 */
+/* VOD 转码中 chip（决策§31 批2）：已传但转码未就绪——发布被云端闸拦的可视化对应物 */
 .vod-pending {
   padding: 4px 10px;
   border: 1px solid var(--ld-amber);

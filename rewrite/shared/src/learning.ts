@@ -18,7 +18,7 @@ export const QRCODE_STATUS_SPEC = {
 export type QrcodeStatus = SpecStates<typeof QRCODE_STATUS_SPEC>
 
 /**
- * VOD FileId 判据单源（决策§29 转码管线批2·病根#5 防镜像漂移）：腾讯云点播 FileId＝纯数字长串
+ * VOD FileId 判据单源（决策§31 转码管线批2·病根#5 防镜像漂移）：腾讯云点播 FileId＝纯数字长串
  * （如 5285890784246869296），云开发 fileID＝cloud:// 前缀——三处共用此判据分流新旧双线：
  * 云端 getPlaybackUrl 播放签名、cleanupEvents GC 删除、admin 课程编排「转码中」显示。判据分叉即三处口径漂移。
  */

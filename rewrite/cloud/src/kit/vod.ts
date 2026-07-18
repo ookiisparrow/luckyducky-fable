@@ -4,7 +4,7 @@ import { getSecureConfigFields } from './secureConfig'
 import { alert } from './observe'
 
 // ────────────────────────────────────────────────────────────────────────────
-// 腾讯云点播（VOD）平台接缝单点（根因#12·决策§29 转码管线批1·镜像 kit/flow.ts 之于支付工作流）：
+// 腾讯云点播（VOD）平台接缝单点（根因#12·决策§31 转码管线批1·镜像 kit/flow.ts 之于支付工作流）：
 // 与 VOD 的全部平台触点——Key 防盗链签名算法、（批2 起）服务端 API 域名与 TC3 签名——收口本文件，
 // 平台规则单方变化只改这一点。配置单源 DB secureConfig/vod（admin /config-checklist 填即生效，
 // kit/secureConfig.ts 读取；字段 secretId/secretKey/playKey/procedure——批1 只用 playKey）。
@@ -51,7 +51,7 @@ export async function signVodPlayUrl(db: any, rawUrl: string) {
   return `${rawUrl}?t=${t}&us=${us}&sign=${sign}`
 }
 
-// ── 批2：上传签名 + 服务端 API（决策§29 转码管线批2）─────────────────────────
+// ── 批2：上传签名 + 服务端 API（决策§31 转码管线批2）─────────────────────────
 
 // 最小 fetch 形状 + https 兜底（照抄 kit/wecom.ts 口径：测试经 globalThis.fetch 桩、运行时无全局 fetch 走 https）
 type FetchFn = (url: string, init?: { method?: string; body?: string; headers?: Record<string, string> }) => Promise<{ json: () => Promise<any> }>

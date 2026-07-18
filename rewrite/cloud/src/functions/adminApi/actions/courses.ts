@@ -1,7 +1,7 @@
 import { reply, ensure, cleanCourse, storeImage, manager, type Ctx } from '../lib'
 import { isVodFileId, makeVodUploadSignature, callVodApi } from '../../../kit'
 
-// —— VOD 转码管线（决策§29 批2）——课程视频主路径升级为「admin 直传 VOD + 任务流自动转码」；
+// —— VOD 转码管线（决策§31 批2）——课程视频主路径升级为「admin 直传 VOD + 任务流自动转码」；
 // 帮助视频线（HelpVideos）恒走下方云存储直传老路，不迁。
 
 /** VOD 直传签名（UGC 签名·kit/vod.ts 纯本地 HMAC）：未配置回 VOD_NOT_CONFIGURED——admin 借此
@@ -162,7 +162,7 @@ export async function publishCourse({ db, data }: Ctx) {
   if (!got || !got.data) return reply(400, { ok: false, error: 'NO_DRAFT' })
   const course: Record<string, any> = { ...got.data }
   delete course._id
-  // 发布闸（决策§29 批2）：VOD 段转码未就绪（vodUrl 未回写）不放行——「传完 ≠ 可播」，放行了学员端
+  // 发布闸（决策§31 批2）：VOD 段转码未就绪（vodUrl 未回写）不放行——「传完 ≠ 可播」，放行了学员端
   // 该段只会 url:null 显示成「素材未剪」假象（伪成功·病根#14）。admin 点「同步转码状态」全就绪再发布。
   let pendingVod = 0
   for (const ch of course.chapters || [])

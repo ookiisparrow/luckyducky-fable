@@ -59,7 +59,7 @@ export const main = async () => {
     const q = Array.isArray(c.pendingGc) ? c.pendingGc : []
     const due = q.filter((en: any) => en && en.fileId && Number(en.deleteAfter) <= now)
     if (!due.length) continue
-    // 双线分流（决策§29 批2·同 getPlaybackUrl 的 isVodFileId 判据单源）：cloud:// 走云存储 deleteFile
+    // 双线分流（决策§31 批2·同 getPlaybackUrl 的 isVodFileId 判据单源）：cloud:// 走云存储 deleteFile
     // （整批），VOD FileId 走 DeleteMedia（官方单文件一调）。逐项记成功：任一线失败其项留队下轮再试
     // （fail-soft·与原语义一致）；VOD 侧「媒资已不存在」（ResourceNotFound）视作删除成功出队——防已删
     // 媒资把队列条目卡成永久重试。VOD 未配置时 callVodApi 回 null（已告警），VOD 项留队等配置补上。

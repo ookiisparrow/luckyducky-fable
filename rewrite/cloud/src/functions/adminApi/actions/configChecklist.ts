@@ -66,7 +66,7 @@ export async function getConfigChecklist({ db }: Ctx) {
   const pay = (payDoc && payDoc.data) || {}
   const payOk = (f: string) => !!(pay as Record<string, unknown>)[f]
 
-  // ── 组③′ 视频点播 VOD 凭证：secureConfig/vod 字段存在性（决策§29 转码管线·本页可填写）──
+  // ── 组③′ 视频点播 VOD 凭证：secureConfig/vod 字段存在性（决策§31 转码管线·本页可填写）──
   const vodDoc = await db.collection(COLLECTIONS.secureConfig).doc('vod').get().catch(() => null)
   const vod = (vodDoc && vodDoc.data) || {}
   const vodOk = (f: string) => !!(vod as Record<string, unknown>)[f]
@@ -245,7 +245,7 @@ export async function getConfigChecklist({ db }: Ctx) {
       ],
     },
     {
-      group: '视频点播 VOD（决策§29 转码管线·本页填写 → 云函数读库自动生效；开通/模板/域名等控制台步骤见 console-assets/04）',
+      group: '视频点播 VOD（决策§31 转码管线·本页填写 → 云函数读库自动生效；开通/模板/域名等控制台步骤见 console-assets/04）',
       items: [
         {
           key: 'VOD_SECRET_ID',

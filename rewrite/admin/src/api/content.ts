@@ -15,10 +15,10 @@ export const getCourseDraft = (courseId: string) => client.post('getCourseDraft'
 // baseRev＝拉草稿时的版本号（乐观并发·课程链路审计 2026-07-17）：不符后端回 DRAFT_CONFLICT 拒覆盖
 export const saveCourseDraft = (course: Record<string, unknown>, baseRev?: number) => client.post('saveCourseDraft', { course, baseRev })
 export const publishCourse = (courseId: string) => client.post('publishCourse', { courseId })
-// 转码状态同步（决策§29 批2·on-demand 拉模式）：就绪段回写 vodUrl/封面/雪碧图/时长·rev 递增（调用方须重载草稿）
+// 转码状态同步（决策§31 批2·on-demand 拉模式）：就绪段回写 vodUrl/封面/雪碧图/时长·rev 递增（调用方须重载草稿）
 export const syncVodMedia = (courseId: string) => client.post('syncVodMedia', { courseId })
 
-// —— VOD 直传（决策§29 转码管线批2·课程视频主路径升级）——签名派发经 adminApi（kit/vod UGC 签名），
+// —— VOD 直传（决策§31 转码管线批2·课程视频主路径升级）——签名派发经 adminApi（kit/vod UGC 签名），
 // 浏览器 vod-js-sdk-v6 直传 VOD 并经 procedure 自动触发转码任务流。未配置（VOD_NOT_CONFIGURED）自动
 // 回退下方云存储直传老路——配置填入即切换、零部署零操作变化；帮助视频线（HelpVideos）恒走老路不迁。
 let vodSig: { sig: string | null; exp: number } | null = null

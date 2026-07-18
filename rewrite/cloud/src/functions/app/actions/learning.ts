@@ -280,7 +280,7 @@ export const getPlaybackUrl = withOpenId(
 
     if (!acts.data.length) return err(ERR.NOT_ENTITLED)
 
-    // VOD 前缀分流（决策§29 转码管线批1·守卫 rw-vod-seam-single）：VOD FileId（纯数字）走防盗链
+    // VOD 前缀分流（决策§31 转码管线批1·守卫 rw-vod-seam-single）：VOD FileId（纯数字）走防盗链
     // 签名（kit/vod.ts 单点·纯本地零往返·未配 Key fail-closed 回 null）；转码未就绪（批2 同步回写
     // vodUrl 之前）同「素材未剪」口径 url:null 诚实降级；cloud:// 存量走临时 URL 原路——双线混跑零停机。
     const fid = String(seg.videoFileId)

@@ -13,7 +13,7 @@ import { normalizePem } from '../../../kit'
 
 const WXKF_FIELDS = ['corpId', 'secret', 'token', 'aesKey', 'agentId', 'miniappAppId', 'thumbMediaId'] as const
 const WXPAY_FIELDS = ['mchPrivateKey', 'mchSerial'] as const
-// VOD 凭证档（决策§29 转码管线·kit/vod.ts 读取）：secretId/secretKey=服务端 API + 上传签名（控制台子账号·仅授 VOD），
+// VOD 凭证档（决策§31 转码管线·kit/vod.ts 读取）：secretId/secretKey=服务端 API + 上传签名（控制台子账号·仅授 VOD），
 // playKey=播放 Key 防盗链签名，procedure=上传自动触发的任务流模板名（console-assets/04 正册对照）
 const VOD_FIELDS = ['secretId', 'secretKey', 'playKey', 'procedure'] as const
 const DOC_FIELDS: Record<string, readonly string[]> = { wxkf: WXKF_FIELDS, wxpay: WXPAY_FIELDS, vod: VOD_FIELDS }
