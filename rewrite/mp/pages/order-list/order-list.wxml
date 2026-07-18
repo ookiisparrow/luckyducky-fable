@@ -22,6 +22,28 @@
   <!-- {{anim}}：切 tab 时按方向（anim-next 自右入 / anim-prev 自左入）播一次滑入动画，见 order-list.ts switchTab -->
   <view class="coolist-body {{anim}}">
 
+    <!-- 骨架占位（钱链后回访最高频·加载中且列表空时不再整页空白·根因#8）：微光扫过对齐 home/catalog
+         （@keyframes ld-shimmer·app.wxss）。尺寸照真卡量：图 142rpx 复用 .coolist-img、卡圆角/内距沿用
+         .coolist-card/top/item/foot——高度贴近真卡、落地少跳变。 -->
+    <block wx:if="{{loading && !shown.length}}">
+      <view class="coolist-card coolist-skel" wx:for="{{[1, 2, 3]}}" wx:key="*this">
+        <view class="coolist-top">
+          <view class="coolist-skel-bar" style="width: 190rpx"></view>
+          <view class="coolist-skel-bar" style="width: 92rpx"></view>
+        </view>
+        <view class="coolist-item">
+          <view class="coolist-img coolist-skel-block"></view>
+          <view class="coolist-mid">
+            <view class="coolist-skel-bar" style="width: 300rpx"></view>
+            <view class="coolist-skel-bar" style="width: 160rpx; margin-top: 18rpx"></view>
+          </view>
+        </view>
+        <view class="coolist-foot">
+          <view class="coolist-skel-bar" style="width: 200rpx; margin-left: auto"></view>
+        </view>
+      </view>
+    </block>
+
     <!-- 失败态与空态分治（根因#14·守卫 rw-mp-list-loadfailed-state）：网络失败≠真没有订单 -->
     <view class="coolist-empty" wx:if="{{!loading && loadFailed}}">
       <view>网络开小差，订单没加载出来</view>

@@ -42,7 +42,6 @@ Page({
   data: {
     tabs: TABS,
     tabKey: '',
-    all: [] as OrderVM[],
     shown: [] as OrderRow[],
     loading: true,
     loadFailed: false, // 失败≠空态（根因#14·守卫 rw-mp-list-loadfailed-state）：一无所有时的网络失败态，与「暂无订单」分治
@@ -50,6 +49,7 @@ Page({
     cursor: null as unknown,
     anim: '', // 切 tab 滑入动画类（anim-next/anim-prev）：由 switchTab 置向、reload 落新数据时应用一次；onShow/翻页不带
   },
+  _all: [] as OrderVM[], // 全量已拉列表（迁出 data·wxml 不绑定它）：仅供翻页去重与游标基准；shown 才是渲染源，翻页用路径键 shown[N] 增量追加（根因#7 规模·整表重发传输 O(n²)）
   _seq: 0, // reload 代次·同 tab 内多触发点（onShow/取消后 reload）并发时丢弃过期回包（tab-token 只挡切 tab·挡不住同 tab 乱序）
   unloaded: false, // 页面已退出标记（同 checkout/review 范式·bug sweep II 批E）：onPay 支付回包在途用户退出列表页，迟到回包不再对已退页 toast/reload
   _swX: 0, // 手势起点 clientX（非渲染态直挂·仿 _seq 写法）
@@ -78,14 +78,15 @@ Page({
     // 一无所有时落 loadFailed 给重试，不与「暂无订单」混同。
     if (!r.ok) {
       this._animDir = '' // 切 tab 失败无新内容·丢弃待应用方向（下次成功 reload 才动画，不留陈旧向）
-      this.setData({ loading: false, loadFailed: !this.data.all.length })
-      if (this.data.all.length) wx.showToast({ title: '刷新失败，请稍后重试', icon: 'none' })
+      this.setData({ loading: false, loadFailed: !this._all.length })
+      if (this._all.length) wx.showToast({ title: '刷新失败，请稍后重试', icon: 'none' })
       return
     }
     const all = mapOrders(r.list)
     const anim = this._animDir // 消费一次：仅切 tab 触发的 reload 带方向动画；onShow/翻页 _animDir 为空＝不动画
     this._animDir = ''
-    this.setData({ loading: false, loadFailed: false, all, shown: all.map(decorate), cursor: r.nextCursor, hasMore: !!r.hasMore, anim })
+    this._all = all // 全量重发（新列表本该全发·非增量场景）：迁实例字段后 shown 仍整表替换
+    this.setData({ loading: false, loadFailed: false, shown: all.map(decorate), cursor: r.nextCursor, hasMore: !!r.hasMore, anim })
   },
   onRetryLoad() {
     tapHaptic()
@@ -101,10 +102,19 @@ Page({
       wx.showToast({ title: '加载失败，上拉重试', icon: 'none' }) // 翻页失败不静默（根因#14）
       return // 不覆盖已有数据（黄金 §八口径）
     }
-    const merged = [...this.data.all]
-    const seen = new Set(merged.map((o) => o.id))
-    for (const o of mapOrders(r.list)) if (!seen.has(o.id)) merged.push(o) // 追加去重
-    this.setData({ all: merged, shown: merged.map(decorate), cursor: r.nextCursor, hasMore: !!r.hasMore })
+    // 增量 setData（根因#7 规模）：翻页只把新增行按路径键 shown[N] 追加，不重发已渲染卡（整表 setData 传输 O(n²)）。
+    // _all 迁实例字段仅供去重/游标基准；shown 用路径键局部更新（wxml 只绑定 shown）。
+    const seen = new Set(this._all.map((o) => o.id))
+    const patch: Record<string, unknown> = { cursor: r.nextCursor, hasMore: !!r.hasMore }
+    let idx = this._all.length
+    for (const o of mapOrders(r.list)) {
+      if (seen.has(o.id)) continue // 追加去重
+      seen.add(o.id)
+      this._all.push(o)
+      patch['shown[' + idx + ']'] = decorate(o)
+      idx++
+    }
+    this.setData(patch)
   },
   onTab(e: WechatMiniprogram.TouchEvent) {
     this.switchTab(String(e.currentTarget.dataset.key))
@@ -116,7 +126,8 @@ Page({
     const to = TABS.findIndex((t) => t.key === key)
     this._animDir = to > from ? 'anim-next' : 'anim-prev' // 目标 tab 在右→新内容自右滑入；在左→自左滑入（reload 落数据时应用）
     // 先清 anim 类：reload 落新数据时才把方向类应用上去→动画重新触发（连续同向切换也重播，不是「类没变不重放」）
-    this.setData({ tabKey: key, all: [], shown: [], cursor: null, hasMore: false, anim: '' })
+    this._all = [] // 切 tab 清空全量基准（迁实例字段·随后 reload 从服务端按该状态重新分页）
+    this.setData({ tabKey: key, shown: [], cursor: null, hasMore: false, anim: '' })
     void this.reload() // 切 tab 从服务端按该状态重新分页（过滤与分页同源）
   },
   // 手势滑动换 tab（bind 不 catch，不影响纵向滚动/上拉翻页）：抬指判定，不做跟手动画（需求未要求）。

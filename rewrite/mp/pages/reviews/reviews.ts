@@ -50,7 +50,15 @@ Page({
       wx.showToast({ title: '加载失败，上拉重试', icon: 'none' }) // 翻页失败不静默（根因#14）
       return // 不覆盖已有
     }
-    this.setData({ list: [...this.data.list, ...mapReviews(r.list)], cursor: r.nextCursor, hasMore: !!r.hasMore })
+    // 增量 setData（根因#7 规模）：翻页只把新增行按路径键 list[N] 追加，不整表重发已渲染卡（O(n²) 传输）。
+    // list 仍留 data（wxml 绑定它·wx:key="index" 追加式只读安全，见 wxml 泄露防护注释）；仅 append 不整表重发。
+    const patch: Record<string, unknown> = { cursor: r.nextCursor, hasMore: !!r.hasMore }
+    let idx = this.data.list.length
+    for (const rv of mapReviews(r.list)) {
+      patch['list[' + idx + ']'] = rv
+      idx++
+    }
+    this.setData(patch)
   },
   // 买家秀晒图·点开大图（当前图为焦点·同条评价全部图为轮播集）
   onPreviewPhoto(e: WechatMiniprogram.TouchEvent) {

@@ -234,6 +234,20 @@
   margin-right: 2rpx;
 }
 
+/* ---------- 骨架占位（加载中·钱链后回访高频·根因#8） ---------- */
+/* 微光扫过对齐 home/catalog（@keyframes ld-shimmer·app.wxss 全局）：渐变骨架 + background-size:200% 扫亮带。
+   .coolist-skel-block 复用 .coolist-img 的 142rpx 方形尺寸、仅覆盖背景为微光渐变（图位占位）。 */
+.coolist-skel-block,
+.coolist-skel-bar {
+  background: linear-gradient(90deg, var(--ld-bg-sage) 25%, var(--ld-bg-faint) 50%, var(--ld-bg-sage) 75%);
+  background-size: 200% 100%;
+  animation: ld-shimmer 1500ms ease-in-out infinite;
+}
+.coolist-skel-bar {
+  height: 26rpx;
+  border-radius: 8rpx;
+}
+
 /* ---------- 空态 / 尾注 ---------- */
 .coolist-empty {
   text-align: center;
