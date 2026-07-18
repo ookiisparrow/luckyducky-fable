@@ -1,0 +1,95 @@
+// 首页定格动画测试版·渲染层驱动（WXS 响应事件 = 官方高频拖动正解：touchmove 在渲染层内响应、
+// 零逻辑层往返——setData 驱动切帧在中低端安卓有实测卡顿反证，见 2026-07-18 可行性核验批记账）。
+// 单写者纪律：36 帧/高清定格层/滑钮的样式唯一写者是本模块；逻辑层不 setData 改帧，只经 change:
+// 观察者四通道喂数（maxj 量宽 / settlex 松手回摆与入场扫帧 / ready 加载门闸 / phase 静止相位）。
+// frameForRatio 与 lib/flipLever.ts 同式同构——WXS 进不了 TS 编译面（ES5 独立运行时），由
+// tests/stopmotion-wxs.test.ts 抽取本函数体与 TS 版逐点对拍钉死（防两处数学漂移·病根#5）。
+var N = 36
+var ZERO = 17
+
+function frameForRatio(ratio) {
+  var r = Math.max(-1, Math.min(1, ratio))
+  return Math.max(0, Math.min(N - 1, ZERO + Math.round(r * (r > 0 ? 18 : 17))))
+}
+
+// 渲染层驻留状态（home 是 tab 页单实例常驻，模块态与页面同生命周期）
+var st = { down: false, startX: 0, startJog: 0, jog: 0, maxJ: 0, frame: ZERO, ready: false }
+
+// 切帧：只改前后两个节点的 opacity（叠层常驻·帧节点带 will-change 保温，见 wxss 注释）。
+// 逐格「嗒」只在指下拖动时回逻辑层（callMethod 单向无渲染依赖）；入场扫帧/松手回摆不震。
+function setFrame(ow, frame) {
+  if (frame === st.frame) return
+  var prev = ow.selectComponent('#sm-f' + st.frame)
+  var next = ow.selectComponent('#sm-f' + frame)
+  if (!prev || !next) return
+  prev.setStyle({ opacity: '0' })
+  next.setStyle({ opacity: '1' })
+  st.frame = frame
+  if (st.down) ow.callMethod('onSmFrameTick', { frame: frame })
+}
+
+function applyX(ow, x) {
+  st.jog = x
+  var fader = ow.selectComponent('.sm-fader')
+  if (fader) fader.setStyle({ transform: 'translateX(' + x + 'px)' })
+  setFrame(ow, frameForRatio(st.maxJ > 0 ? x / st.maxJ : 0))
+}
+
+function onStart(e, ow) {
+  if (!st.ready || !st.maxJ) return
+  st.down = true
+  st.startX = e.touches[0].clientX
+  st.startJog = st.jog
+  var hi = ow.selectComponent('#sm-hi')
+  if (hi) hi.setStyle({ opacity: '0' }) // 拖动即撤高清定格层（帧仍是 17·同画面无跳变）
+  var fader = ow.selectComponent('.sm-fader')
+  if (fader) fader.addClass('sm-fader-on')
+  ow.callMethod('onSmDragState', {}) // 逻辑层停回摆定时器 + 收提示 chip + phase 转 moving
+}
+
+function onMove(e, ow) {
+  if (!st.down) return
+  var raw = st.startJog + (e.touches[0].clientX - st.startX)
+  applyX(ow, Math.max(-st.maxJ, Math.min(st.maxJ, raw)))
+}
+
+function onEnd(e, ow) {
+  if (!st.down) return
+  st.down = false
+  var fader = ow.selectComponent('.sm-fader')
+  if (fader) fader.removeClass('sm-fader-on')
+  ow.callMethod('onSmRelease', { x: st.jog }) // 钟摆回中数学在逻辑层（pendulumAt·WXS 无定时器）
+}
+
+/* ---------- 逻辑层 → 渲染层 四通道观察者 ---------- */
+function maxJChanged(nv) {
+  st.maxJ = nv || 0
+}
+
+function readyChanged(nv) {
+  st.ready = !!nv
+}
+
+// 松手回摆/入场扫帧：逻辑层 16ms 定时器只传一个 number，样式仍由本模块落（单写者不破）
+function settleXChanged(nv, ov, ow) {
+  if (st.down) return
+  applyX(ow, nv || 0)
+}
+
+// phase 转 'rest'：权威归位（帧回 17 + 滑钮回中 + 高清定格层淡入）——也兜「切走 tab 打断动画」的自愈
+function phaseChanged(nv, ov, ow) {
+  if (nv !== 'rest' || st.down) return
+  applyX(ow, 0)
+  var hi = ow.selectComponent('#sm-hi')
+  if (hi) hi.setStyle({ opacity: '1' })
+}
+
+module.exports = {
+  onStart: onStart,
+  onMove: onMove,
+  onEnd: onEnd,
+  maxJChanged: maxJChanged,
+  readyChanged: readyChanged,
+  settleXChanged: settleXChanged,
+  phaseChanged: phaseChanged,
+}

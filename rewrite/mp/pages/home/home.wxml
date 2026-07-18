@@ -1,3 +1,5 @@
+<!-- 定格动画测试版（worktree 分支·特写位换舞台）：渲染层驱动见 ./stopmotion.wxs 头注 -->
+<wxs module="sm" src="./stopmotion.wxs" />
 <view class="ld-home">
 
   <!-- ① HERO：全屏图 + 底部白色渐隐 + 居中文案 + 搜索胶囊/购买 -->
@@ -26,8 +28,48 @@
 
   <!-- ③ 特写 + 商品横向轨 -->
   <view class="ld-friends" id="friends">
-    <view class="ld-feature-display">
-      <image wx:if="{{content.feature.img}}" class="ld-feature-img" src="{{content.feature.img}}" mode="aspectFill" lazy-load />
+    <!-- 特写位 → 36 帧定格动画舞台（测试版·分层素材规格同正式方案：scrub 36×720² + 定格 1080²）。
+         帧全叠层常驻（opacity 切换·will-change 保温），加载门闸齐 36 张才可拖；触摸面只在下方滑轨
+         （stage 不吃触摸——首页长滚动不留死区）。CMS 特写图点位随本测试退场（守卫点位表已同步）。 -->
+    <view class="ld-feature-display sm-stage">
+      <image
+        wx:for="{{smFrames}}"
+        wx:key="*this"
+        id="sm-f{{index}}"
+        class="sm-frame"
+        src="/static/stopmotion/fr-{{item}}.webp"
+        mode="aspectFill"
+        bindload="onSmFrameLoad"
+        binderror="onSmFrameError"
+        style="{{index === 17 ? 'opacity:1' : ''}}"
+      />
+      <image id="sm-hi" class="sm-hi" src="/static/stopmotion/hi-17.webp" mode="aspectFill" />
+      <!-- 文案字面受 rw-mp-font-tier-subset-covers 约束：只用 tier1 子集已覆盖的字（重建字体子集
+           需源 OTF+重新部署托管＝人工动作，测试分支不绑架；正式入首页时文案随素材重定 + 重建子集） -->
+      <view class="sm-chip">小鸭连拍 · {{smReady ? '36/36 已加载' : '加载中…'}}</view>
+      <view wx:if="{{smHint && smReady}}" class="sm-hint-chip">拉一拉下方把手 · 松手自回中</view>
+    </view>
+    <view
+      class="sm-rail"
+      maxj="{{smMaxJ}}"
+      change:maxj="{{sm.maxJChanged}}"
+      ready="{{smReady}}"
+      change:ready="{{sm.readyChanged}}"
+      settlex="{{smSettleX}}"
+      change:settlex="{{sm.settleXChanged}}"
+      phase="{{smPhase}}"
+      change:phase="{{sm.phaseChanged}}"
+      catchtouchstart="{{sm.onStart}}"
+      catchtouchmove="{{sm.onMove}}"
+      catchtouchend="{{sm.onEnd}}"
+      catchtouchcancel="{{sm.onEnd}}"
+    >
+      <view class="sm-groove"></view>
+      <view class="sm-fader">
+        <view class="sm-fader-bar"></view>
+        <view class="sm-fader-bar"></view>
+        <view class="sm-fader-bar"></view>
+      </view>
     </view>
     <view class="ld-feature-copy">
       <view class="ld-feature-title">{{content.feature.title}}</view>

@@ -6478,7 +6478,10 @@ export const repoChecks = [
         return src.slice(tagStart, tagEnd + 2)
       }
       const POINTS = [
-        { file: 'pages/home/home.wxml', cls: 'ld-feature-img', srcExpr: '{{content.feature.img}}', label: '首页特写图' },
+        // 测试分支（worktree-stopmotion-home-test）：首页特写位换 36 帧定格动画舞台（包内测试素材·
+        // 帧必须 eager 预载走加载门闸，lazy 反而破坏门闸协议）——CMS 特写图点位随之退场；若测试
+        // 不入首页、本行随分支回滚一并恢复：
+        // { file: 'pages/home/home.wxml', cls: 'ld-feature-img', srcExpr: '{{content.feature.img}}', label: '首页特写图' },
         { file: 'pages/home/home.wxml', cls: 'ld-panel-media-img', srcExpr: '{{item.img}}', label: '首页拆门槛图' },
         { file: 'pages/home/home.wxml', cls: 'ld-closing-img', srcExpr: '{{content.closing.img}}', label: '首页收尾图' },
         { file: 'pages/reviews/reviews.wxml', cls: 'ld-rv-photo', srcExpr: '{{ph}}', label: '评价页晒图' },

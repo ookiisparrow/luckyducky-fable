@@ -1,7 +1,8 @@
 // 首页（重设计 9 板块·M2）：Hero/品牌/特写+商品轨/信任条/拆门槛折叠/买家秀/FAQ/收尾CTA/页脚。
 // 数据经 api/catalog → app 网关；内容拿不到（网络/未部署）逐块回退设计默认文案（mapHomeContent），不空屏。
 // 页只编排：把原始返回交给纯函数 mapHomeContent/mapProducts，再 setData（house style·同 detail/me）。
-import { tapHaptic } from '../../lib/haptics'
+import { tapHaptic, dragTick } from '../../lib/haptics'
+import { pendulumAt, FLIP_N, FLIP_ZERO } from '../../lib/flipLever'
 import { getContent } from '../../api/catalog'
 import { getAllProducts, getProductById } from '../../lib/catalog'
 import { mapHomeContent, mapProducts, type HomeContentVM, type ProductVM } from '../../lib/mapHome'
@@ -12,6 +13,8 @@ import { armExitAlert } from '../../utils/exitGuard'
 import { loginGate } from '../../lib/loginGate'
 
 let toastTimer: ReturnType<typeof setTimeout> | null = null
+
+const SM_TICK_MS = 16 // 定格动画回摆/入场动画步进（≈60fps 定时器·同 flip-demo）
 
 Page({
   data: {
@@ -26,11 +29,36 @@ Page({
     openFaq: 0,
     showTop: false,
     toast: { show: false, text: '' },
+    // 定格动画测试版（特写位·测试分支）：帧序号 '00'…'35'（wxml 拼素材路径）；四通道喂 wxs（见 stopmotion.wxs 头注）
+    smFrames: Array.from({ length: FLIP_N }, (_, i) => String(i).padStart(2, '0')),
+    smReady: false, // 加载门闸：36 张 bindload 齐才可拖（防拖到冷帧闪白）
+    smHint: true, // 首次引导 chip（首拖即收）
+    smMaxJ: 0, // 滑轨半行程 px（onReady 量得）
+    smSettleX: 0, // 松手回摆/入场扫帧位移通道（逻辑层定时器 → wxs 落样式）
+    smPhase: 'boot', // boot → moving ⇄ rest：转 rest 时 wxs 权威归位（帧 17 + 高清层淡入）
   },
   onLoad() {
     const info = wx.getWindowInfo()
     this.setData({ statusBarHeight: info.statusBarHeight })
     void this.reload()
+  },
+  // 定格动画非渲染态（不进 data：不触发 setData——同 flip-demo railState 范式）
+  sm: { maxJ: 0, timer: 0 as ReturnType<typeof setInterval> | 0, loaded: 0, lastFrame: FLIP_ZERO, lastTickFrame: FLIP_ZERO },
+  onReady() {
+    // 量滑轨与滑钮宽出半行程：maxJ = 轨半宽 - 钮半宽 - 2（承 flip-demo railMax()）
+    wx.createSelectorQuery()
+      .in(this)
+      .select('.sm-rail')
+      .boundingClientRect()
+      .select('.sm-fader')
+      .boundingClientRect()
+      .exec((res: { width: number }[]) => {
+        if (res[0] && res[1]) {
+          this.sm.maxJ = res[0].width / 2 - res[1].width / 2 - 2
+          this.setData({ smMaxJ: this.sm.maxJ })
+          this.smMaybeEnter()
+        }
+      })
   },
   hidden: false, // 已切走本 tab 标记（H·完备性扫描新增）：home 是 tabBar 页，切 tab/navigateTo 只触发 onHide、
   // 实例常驻不销毁（不适用 checkout 那套 onUnload→this.unloaded 家族）——quick-add 的 await 恢复点据此判断
@@ -42,9 +70,12 @@ Page({
     loginGate.maybePromptOnce() // 进 App 首个落地页即软门槛弹一次登录半屏（未同意时·本会话共用一次闸·可暂不登录先逛）
     // 兜底意图落地（我页无课/welcome先逛逛）回到顶部；正常切 tab 未置位则保留上次滚动位置（行为不变）
     if (consumeHomeTop()) wx.pageScrollTo({ scrollTop: 0, duration: 0 })
+    // 定格动画自愈：动画中被切走（onHide 停了定时器）回来时 phase 转 rest → wxs 权威归位帧 17
+    if (this.data.smReady && !this.sm.timer && this.data.smPhase === 'moving') this.setData({ smPhase: 'rest' })
   },
   onHide() {
     this.hidden = true
+    this.smStop() // 切走 tab 停回摆/入场定时器（帧停在哪不管，onShow 转 rest 自愈归位）
   },
   async onPullDownRefresh() {
     await this.reload()
@@ -116,6 +147,91 @@ Page({
   // 品牌开屏淡出完成（brand-splash 计时器到点 triggerEvent('done')）：撤下覆盖层露出首页。
   onSplashDone() {
     this.setData({ showSplash: false })
+  },
+
+  /* ---------- 定格动画测试版（特写位·测试分支）：逻辑层半边 ---------- */
+  // 加载门闸：36 张 scrub 帧 bindload 齐才放开拖动（防拖到未加载帧闪白）。包内素材本地即时，
+  // 门闸主要为正式版（云端下发）预演协议；binderror 也计数防死锁（本地素材缺失由测试钉住，理论不可达）。
+  onSmFrameLoad() {
+    this.sm.loaded++
+    if (this.sm.loaded === FLIP_N) {
+      this.setData({ smReady: true })
+      this.smMaybeEnter()
+    }
+  },
+  onSmFrameError() {
+    this.onSmFrameLoad()
+  },
+  // 入场扫帧（门闸开 + 滑轨量宽两条件齐才起跑·两回调竞态各自来敲一次）：左满行→右满行→钟摆归位。
+  // 三重身份：① 开屏可见的「小鸭转一圈」入场动画；② 每帧都被绘制一遍 = 双端解码/光栅预热
+  // （iOS 无 will-change 保证，这就是它的兜底，见 wxss 注释）；③ 顺带自证 36 帧全链可显示。
+  smEntranceDone: false,
+  smMaybeEnter() {
+    if (this.smEntranceDone || !this.data.smReady || !this.sm.maxJ) return
+    this.smEntranceDone = true
+    const maxJ = this.sm.maxJ
+    const D1 = 240 // 中位 → 左满行
+    const D2 = 560 // 左满行 → 右满行（扫全 36 帧）
+    const t0 = Date.now()
+    this.smStop()
+    this.sm.timer = setInterval(() => {
+      const t = Date.now() - t0
+      if (t < D1) {
+        const k = t / D1
+        this.setData({ smSettleX: -maxJ * k * (2 - k) }) // easeOut 探左
+        return
+      }
+      if (t < D1 + D2) {
+        this.setData({ smSettleX: -maxJ + 2 * maxJ * ((t - D1) / D2) }) // 匀速扫右
+        return
+      }
+      const { x, done } = pendulumAt(maxJ, t - D1 - D2) // 右满行起钟摆归位
+      this.setData({ smSettleX: x })
+      if (done) {
+        this.smStop()
+        this.setData({ smPhase: 'rest' })
+      }
+    }, SM_TICK_MS)
+  },
+  // wxs 首拖回调：停回摆定时器 + 收引导 chip + phase 转 moving（rest 的高清层已被 wxs 同步撤下）
+  onSmDragState() {
+    this.smStop()
+    this.sm.lastTickFrame = this.sm.lastFrame
+    const patch: { smPhase: string; smHint?: boolean } = { smPhase: 'moving' }
+    if (this.data.smHint) patch.smHint = false
+    this.setData(patch)
+  },
+  // wxs 指下翻帧回调（仅拖动中触发）：逐格「嗒」走 lib/haptics 单源（40ms 钳制快扫跳齿·配方真机拍板版）
+  onSmFrameTick(e: { frame: number }) {
+    this.sm.lastFrame = e.frame
+    if (dragTick(this.sm.lastTickFrame, e.frame)) this.sm.lastTickFrame = e.frame
+  },
+  // wxs 松手回调：阻尼钟摆回中（数学同 flip-demo 方案一·pendulumAt），摆过中点轻震；终点 phase 转 rest
+  onSmRelease(e: { x: number }) {
+    this.smStop()
+    const x0 = e.x
+    if (!x0) {
+      this.setData({ smPhase: 'rest' })
+      return
+    }
+    const t0 = Date.now()
+    let prevX = x0
+    this.sm.timer = setInterval(() => {
+      const { x, done } = pendulumAt(x0, Date.now() - t0)
+      if ((prevX > 0 && x < 0) || (prevX < 0 && x > 0)) tapHaptic('light') // 过中点（事件震·80ms 地板）
+      prevX = x
+      this.setData({ smSettleX: x })
+      if (done) {
+        this.smStop()
+        this.setData({ smPhase: 'rest' })
+      }
+    }, SM_TICK_MS)
+  },
+  smStop() {
+    if (this.sm.timer) {
+      clearInterval(this.sm.timer)
+      this.sm.timer = 0
+    }
   },
   // bug sweep II L3：页脚链接架构无 href 字段（admin 只存纯文本 label），本无法通用跳转——「关于我们」
   // 是唯一已上线且默认安装态必现的 label（/pages/about/about 已注册·me 页也有正常入口），单独映射修复

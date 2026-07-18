@@ -21,6 +21,19 @@ export function shouldTick(prevFrame: number, frame: number, sinceLastMs: number
 // 真机兼容（根因#8·官方文档+社区核实）：type 分级需基础库 2.13.0+，老库忽略 type 仍震默认档（故直传 type 无害·不必特性
 // 检测）；wx/vibrateShort 存在性兜底防非小程序环境（测试）崩。设备侧坑（代码救不了、只能提示）：iOS 需「设置→声音与
 // 触感→系统触感反馈」开启（关则静默且仍报 success）+ 关低电量模式；开发者工具模拟器不震、只真机震。
+// 拖动逐格「嗒」模块级出口（首页定格动画测试版接入）：配方与数值同上（翻帧才嗒·40ms 钳制跳齿），
+// 守卫 rw-mp-tap-haptic-single-source 禁页面散写裸 wx.vibrateShort——拖动阻尼震感一并收本单源
+// （flip-demo/player 白名单历史例外维持不动）。返回是否真「嗒」——调用方只在 true 时推进
+// lastTickFrame（快扫跳齿后可补嗒·同 flip-demo 语义）。
+let lastDragTick = 0
+export function dragTick(prevFrame: number, frame: number): boolean {
+  const now = Date.now()
+  if (!shouldTick(prevFrame, frame, now - lastDragTick, DRAG_TICK_GAP_MS)) return false
+  lastDragTick = now
+  if (typeof wx !== 'undefined' && typeof wx.vibrateShort === 'function') wx.vibrateShort({ type: 'light' })
+  return true
+}
+
 let lastTapVibe = 0
 export function tapHaptic(type: 'light' | 'medium' | 'heavy' = 'medium'): void {
   const now = Date.now()
