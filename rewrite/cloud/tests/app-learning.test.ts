@@ -1,5 +1,6 @@
 // 黄金 learning-content §一–§五（守卫 rw-learning-golden）。
 import { describe, it, expect, beforeEach, vi } from 'vitest'
+import { createHash } from 'node:crypto'
 import cloud, { control } from 'wx-server-sdk'
 import { main as app } from '../src/functions/app/index'
 
@@ -310,6 +311,87 @@ describe('getCourses / getPlaybackUrl（目录不漏源·鉴权 fail-closed·黄
     control.setBeforeGet(null as never)
     expect(r.ok).toBe(true)
     expect(r.url).toBe(null)
+  })
+})
+
+describe('getPlaybackUrl VOD 前缀分流（转码管线·决策§29 批1：防盗链签名 fail-closed·新旧双线混跑）', () => {
+  // videoFileId 为 VOD FileId（纯数字）→ 走 kit/vod.ts 防盗链签名；vodUrl 为批2 转码同步回写的播放地址
+  const VOD_COURSE = {
+    _id: 'c9',
+    id: 'c9',
+    title: 'VOD 课',
+    sort: 2,
+    chapters: [
+      {
+        id: 'ch1',
+        title: '第一章',
+        lessons: [
+          {
+            id: 'l1',
+            name: '第一节',
+            dur: '2:00',
+            segments: [
+              { id: 'v1', name: '已转码段', dur: '1:00', videoFileId: '5285890784246869296', vodUrl: 'https://vod.example.com/125xx/528589/f0.mp4' },
+              { id: 'v2', name: '转码中段', dur: '1:00', videoFileId: '5285890784246869297' },
+            ],
+          },
+        ],
+      },
+    ],
+  }
+
+  beforeEach(async () => {
+    control.seed('courses', [VOD_COURSE]) // seed 为追加语义：外层已 seed COURSE(c1)
+    control.seed('qrcodes', [{ _id: 'CODE9', status: 'unused', courseId: 'c9' }])
+    await call('activateCourse', { code: 'CODE9' })
+    await call('confirmEnter', { code: 'CODE9' })
+  })
+
+  it('大白话：已转码段下发 Key 防盗链签名地址——t/us/sign 齐全、签名按官方公式可复算、有效期长于 mp 端 25min 地址缓存', async () => {
+    control.seed('secureConfig', [{ _id: 'vod', playKey: 'testkey123' }])
+    const r = await call('getPlaybackUrl', { courseId: 'c9', segmentId: 'v1' })
+    expect(String(r.url).startsWith('https://vod.example.com/125xx/528589/f0.mp4?')).toBe(true)
+    const url = new URL(r.url)
+    const t = url.searchParams.get('t')!
+    const us = url.searchParams.get('us')!
+    const sign = url.searchParams.get('sign')!
+    // 官方公式（266/14047）：sign = md5(KEY + Dir + t + exper + rlimit + us)，不用 exper/rlimit 时拼空串
+    const expected = createHash('md5').update('testkey123' + '/125xx/528589/' + t + us).digest('hex')
+    expect(sign).toBe(expected)
+    // t = 过期时刻十六进制 Unix 秒：须晚于「现在 + mp 端 25min 缓存 TTL」（rewrite/mp/lib/player.ts），
+    // 否则缓存命中会返回已过期签名、播放 403 只能靠失速兜底恢复
+    expect(parseInt(t, 16) * 1000).toBeGreaterThan(Date.now() + 25 * 60 * 1000)
+  })
+
+  it('大白话：防盗链 Key 未配置——fail-closed 回 url:null 并告警 VOD_KEY_MISSING，绝不裸发未签名地址', async () => {
+    const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const r = await call('getPlaybackUrl', { courseId: 'c9', segmentId: 'v1' })
+    expect(r.ok).toBe(true)
+    expect(r.url).toBe(null)
+    expect(errSpy.mock.calls.some((c) => String(c[0]).includes('VOD_KEY_MISSING'))).toBe(true)
+    errSpy.mockRestore()
+  })
+
+  it('大白话：转码未就绪段（vodUrl 未回写）回 url:null——同「素材未剪」口径诚实降级，不报错', async () => {
+    control.seed('secureConfig', [{ _id: 'vod', playKey: 'testkey123' }])
+    const r = await call('getPlaybackUrl', { courseId: 'c9', segmentId: 'v2' })
+    expect(r.ok).toBe(true)
+    expect(r.url).toBe(null)
+  })
+
+  it('大白话：VOD 线不松鉴权——未进课者照拒 NOT_ENTITLED，分流发生在鉴权之后', async () => {
+    control.setOpenId('oSTRANGER')
+    control.seed('secureConfig', [{ _id: 'vod', playKey: 'testkey123' }])
+    expect((await call('getPlaybackUrl', { courseId: 'c9', segmentId: 'v1' })).error).toBe('NOT_ENTITLED')
+  })
+
+  it('大白话：公开目录同样不漏 VOD 播放地址——响应无 vodUrl / vod 域名，段仍只有 hasVideo 布尔', async () => {
+    const r = await call('getCourses')
+    const raw = JSON.stringify(r)
+    expect(raw.includes('vodUrl')).toBe(false)
+    expect(raw.includes('vod.example')).toBe(false)
+    const segs = r.list.find((c: any) => c.id === 'c9').chapters[0].lessons[0].segments
+    expect(segs[0].hasVideo).toBe(true)
   })
 })
 

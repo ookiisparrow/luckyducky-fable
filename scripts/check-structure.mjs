@@ -5480,6 +5480,71 @@ export const repoChecks = [
     },
   },
   {
+    // VOD 平台接缝单点（根因#12·决策§29 转码管线批1·镜像 flow-seam-via-kit 之于支付工作流）：与腾讯云
+    // 点播的平台触点（Key 防盗链签名算法/服务端 API 域名）收口 kit/vod.ts 一处，平台规则单方变化只改
+    // 这一点。同时焊死 getPlaybackUrl 新旧双线前缀分流：VOD FileId（纯数字）走 signVodPlayUrl 防盗链
+    // 签名、cloud:// 老线走 getTempUrl 临时地址、转码未就绪走 vodUrl 判空——分流拆掉任意一半，存量
+    // 课程或新转码课程之一必哑。
+    id: 'rw-vod-seam-single',
+    roots: ['#12'],
+    desc: 'VOD 平台接缝单点（决策§29 批1）：kit/vod.ts 必须存在且为 rewrite/cloud/src 内唯一含 tencentcloudapi.com 字面量的文件；learning.ts getPlaybackUrl 段须含 isVodFileId + signVodPlayUrl + getTempUrl + vodUrl 四件套前缀分流——接缝散写/分流缺失即红',
+    run() {
+      const bad = []
+      const kitRel = 'rewrite/cloud/src/kit/vod.ts'
+      if (!existsSync(join(ROOT, kitRel)))
+        return [`${kitRel} 不存在——VOD 平台接缝单点未建（根因#12·决策§29 转码管线批1）`]
+      const walk = (d) => {
+        const out = []
+        for (const e of readdirSync(join(ROOT, d))) {
+          const rel = `${d}/${e}`
+          if (statSync(join(ROOT, rel)).isDirectory()) out.push(...walk(rel))
+          else if (rel.endsWith('.ts')) out.push(rel)
+        }
+        return out
+      }
+      for (const rel of walk('rewrite/cloud/src')) {
+        if (rel === kitRel) continue
+        if (stripComments(readFileSync(join(ROOT, rel), 'utf8')).includes('tencentcloudapi.com'))
+          bad.push(`${rel} 含腾讯云 API 域名字面量——VOD 平台触点必须收口 kit/vod.ts 单点（根因#12）`)
+      }
+      const lrel = 'rewrite/cloud/src/functions/app/actions/learning.ts'
+      const lsrc = stripComments(readFileSync(join(ROOT, lrel), 'utf8'))
+      const start = lsrc.indexOf('export const getPlaybackUrl')
+      const end = lsrc.indexOf('export const', start + 1)
+      const span = start >= 0 ? lsrc.slice(start, end > start ? end : undefined) : ''
+      if (!span) bad.push(`${lrel} 找不到 getPlaybackUrl——播放地址签发单点丢失`)
+      else
+        for (const token of ['isVodFileId', 'signVodPlayUrl', 'getTempUrl', 'vodUrl'])
+          if (!span.includes(token))
+            bad.push(
+              `${lrel} getPlaybackUrl 缺 ${token}——VOD/云存储双线前缀分流不完整（决策§29 批1：拆掉一半，存量或转码课程之一必哑）`
+            )
+      return bad
+    },
+  },
+  {
+    // 防盗链签名 fail-closed（病根#1 信任边界 + #14 失败可观测·决策§29 批1）：playKey 未配置时
+    // signVodPlayUrl 必须告警（VOD_KEY_MISSING·配置洞可发现）并返回 null——绝不裸发未签名地址
+    // （防盗链已开=裸地址必 403 坏体验；未开=付费内容裸奔，两头都不许发）。行为端由 rw-learning-golden
+    // 测试实证（无 key → url:null + 告警行），本守卫焊死代码形状防「先发裸地址试试」的回潮。
+    id: 'rw-vod-sign-fail-closed',
+    roots: ['#1', '#14'],
+    desc: 'VOD 防盗链签名 fail-closed（决策§29 批1）：kit/vod.ts signVodPlayUrl 须含 playKey 判空→alert(VOD_KEY_MISSING)→null 的 fail-closed 分支，且不得出现裸 return rawUrl（未签名地址下发即红）',
+    run() {
+      const rel = 'rewrite/cloud/src/kit/vod.ts'
+      if (!existsSync(join(ROOT, rel))) return [] // 未建时由 rw-vod-seam-single 负责红——不重复报
+      const src = stripComments(readFileSync(join(ROOT, rel), 'utf8'))
+      const body = setupFnBody(src, 'signVodPlayUrl')
+      if (!body) return [`${rel} 找不到 signVodPlayUrl——防盗链签名单点丢失（决策§29 批1）`]
+      const bad = []
+      if (!body.includes('VOD_KEY_MISSING') || !body.includes('alert('))
+        bad.push(`${rel} signVodPlayUrl 缺 playKey fail-closed 告警（VOD_KEY_MISSING）——密钥未配置将静默不可发现（病根#14）`)
+      if (/return\s+rawUrl/.test(body))
+        bad.push(`${rel} signVodPlayUrl 出现裸 return rawUrl——未签名地址下发（病根#1 fail-closed：宁可 null 不裸奔）`)
+      return bad
+    },
+  },
+  {
     // 重写线播放页切段取址防乱序覆盖（根因#8·把老线 player-playurl-stale-guarded 的不变量迁到活跃 rewrite 线）：
     // playSegment 可重入（快速连点下一段/点目录），await 取址后若不复核请求令牌就写 src，慢回的旧段地址会覆盖新段
     // ——视频播旧段但目录高亮/上下段按新段算，且下次 onEnded 跳错段、不自愈。守此不变量：playSegment await 后必复核 playToken。
