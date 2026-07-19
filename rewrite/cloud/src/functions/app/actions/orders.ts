@@ -16,6 +16,9 @@ import {
   ORDER_STATUS,
   buildBadStatus,
 } from '@ldrw/shared'
+// 响应契约（批B10·病根#5/#8）：返回类型绑定 shared 契约——删键/改名 tsc 红；加键与 createOrder
+// （order:any 展开）编译锁无牙，牙在 tests/contract-shape.test.ts 键集合哨兵。
+import type { CreateOrderResp, PayResp, GetMyOrdersResp, GetOrderByIdResp } from '@ldrw/shared'
 import {
   withOpenId,
   withRateLimit,
@@ -90,7 +93,7 @@ function orderNo(now: number): string {
 const MAX_PENDING_ORDERS = 5
 
 export const createOrder = withOpenId(
-  withRateLimit('createOrder', { max: 20, windowMs: 60_000 }, async ({ db, OPENID, event }) => {
+  withRateLimit('createOrder', { max: 20, windowMs: 60_000 }, async ({ db, OPENID, event }): Promise<CreateOrderResp> => {
     const _ = db.command
     const e: any = event
 
@@ -313,7 +316,7 @@ export const createOrder = withOpenId(
 // 频控（深审 P2·病根#13）：pay 触发外部微信支付下单 API（callFlow 接缝）——无频控可被任意频率触发外呼。
 // 按 openid 限速（同 createOrder 口径·正常下单支付远低于此）。金额安全另有云端换分兜底，此为成本/外呼防刷。
 export const pay = withOpenId(
-  withRateLimit('pay', { max: 20, windowMs: 60_000 }, async ({ db, OPENID, event }) => {
+  withRateLimit('pay', { max: 20, windowMs: 60_000 }, async ({ db, OPENID, event }): Promise<PayResp> => {
     const id = String((event as any).id || '')
     if (!id) return err(ERR.NO_ID)
 
@@ -535,7 +538,7 @@ export const cancelOrder = withOpenId(async ({ db, OPENID, event }) => {
 })
 
 /** 本人订单列表（游标分页·属主隔离）。 */
-export const getMyOrders = withOpenId(async ({ db, OPENID, event }) => {
+export const getMyOrders = withOpenId(async ({ db, OPENID, event }): Promise<GetMyOrdersResp> => {
   // 状态筛选下推服务端（与游标分页同源·修 order-list 短过滤 tab 内容短于视口拉不动、深页匹配单看不到）：
   // status 须是合法订单状态（ORDER_STATUS 全集·不信前端）·空/非法忽略回全部。
   const raw = String((event as any)?.status || '')
@@ -546,7 +549,7 @@ export const getMyOrders = withOpenId(async ({ db, OPENID, event }) => {
 })
 
 /** 按单号取本人订单（他人/不存在一律 NOT_FOUND·不泄露存在性）。 */
-export const getOrderById = withOpenId(async ({ db, OPENID, event }) => {
+export const getOrderById = withOpenId(async ({ db, OPENID, event }): Promise<GetOrderByIdResp> => {
   const id = String((event as any).id || '')
   if (!id) return err(ERR.NO_ID)
   const got = await db

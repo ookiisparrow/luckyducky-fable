@@ -184,3 +184,39 @@ export function stockErrorText(e: unknown, status?: number): string {
   if (code === 'BAD_STOCK') return '库存数不合法（须为非负整数，或留空表示不限量）'
   return '保存没成功（' + code + '）'
 }
+
+export interface AuditEntryVM {
+  id: string
+  timeLabel: string
+  operator: string
+  action: string
+  ok: boolean
+  statusLabel: string
+  statusTone: 'green' | 'red'
+  ip: string
+  error: string
+  summaryText: string
+}
+
+/** 审计日志行归一（批 B6·listAudit）：ok 归一中文徽章（成功绿/失败红）、operator/ip/摘要缺省显 '—'、
+ *  summary 对象拼成 `k: v · k: v` 展示串（同 Anomalies.vue 内联 ctxPairs 的精神，落成可单测的纯函数）。 */
+export function mapAuditEntries(list: unknown): AuditEntryVM[] {
+  if (!Array.isArray(list)) return []
+  return (list as Record<string, any>[]).filter(Boolean).map((e) => {
+    const ok = e.ok === true
+    const summary = e.summary && typeof e.summary === 'object' ? e.summary : {}
+    const summaryText = Object.entries(summary).map(([k, v]) => `${k}: ${v}`).join(' · ')
+    return {
+      id: String(e.id || ''),
+      timeLabel: dateTime(e.ts),
+      operator: String(e.operator || '') || '—',
+      action: String(e.action || ''),
+      ok,
+      statusLabel: ok ? '成功' : '失败',
+      statusTone: ok ? 'green' : 'red',
+      ip: String(e.ip || '') || '—',
+      error: String(e.error || ''),
+      summaryText: summaryText || '—',
+    }
+  })
+}

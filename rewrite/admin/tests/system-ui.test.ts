@@ -1,7 +1,7 @@
 // 系统组+钱组补齐映射（守卫 rw-admin-system-ui-golden）：批次激活率不除零/webhook 预检同云端正则/
 // 对账 approx 诚实透传/wxOnly 标红/库存不限量不显 0/409 冲突人话。
 import { describe, it, expect } from 'vitest'
-import { mapAgents, mapBatches, webhookOk, mapRecon, mapBillMatch, mapStock, stockErrorText } from '../src/lib/mapSystem'
+import { mapAgents, mapBatches, webhookOk, mapRecon, mapBillMatch, mapStock, stockErrorText, mapAuditEntries } from '../src/lib/mapSystem'
 
 describe('外包账号与批次', () => {
   it('大白话：账号行归一（无 id 剔除）；批次激活率算百分比、空批显 — 不除零', () => {
@@ -97,5 +97,31 @@ describe('库存映射与保存错误人话', () => {
     expect(stockErrorText('', 409)).toContain('拒绝覆盖')
     expect(stockErrorText('BAD_STOCK')).toContain('非负整数')
     expect(stockErrorText('X_UNKNOWN')).toContain('X_UNKNOWN') // 原文兜底
+  })
+})
+
+describe('审计日志映射（批 B6·纯函数）', () => {
+  it('大白话：状态徽章归一中文（成功绿/失败红）；summary 对象拼成 k: v · k: v 展示串；operator/ip/摘要缺省显 —', () => {
+    const rows = mapAuditEntries([
+      { id: 'a1', ts: 1783046400000, operator: 'boss', action: 'saveDraft', ok: true, ip: '1.1.1.1', summary: { id: 'p1', qty: 2 } },
+      { id: 'a2', ts: 1783046400000, action: 'shipOrder', ok: false, error: 'BAD_ARGS', summary: {} },
+    ])
+    expect(rows[0].statusLabel).toBe('成功')
+    expect(rows[0].statusTone).toBe('green')
+    expect(rows[0].summaryText).toBe('id: p1 · qty: 2')
+    expect(rows[1].statusLabel).toBe('失败')
+    expect(rows[1].statusTone).toBe('red')
+    expect(rows[1].operator).toBe('—') // 缺省
+    expect(rows[1].ip).toBe('—')
+    expect(rows[1].summaryText).toBe('—') // 空 summary
+    expect(rows[1].error).toBe('BAD_ARGS')
+  })
+
+  it('大白话：null 元素混入不崩、被过滤剔除；非数组输入回空数组', () => {
+    expect(mapAuditEntries(null)).toEqual([])
+    expect(mapAuditEntries('not-array')).toEqual([])
+    const rows = mapAuditEntries([null, { id: 'x1', ts: 1, ok: true, operator: 'a', summary: {} }, null])
+    expect(rows).toHaveLength(1)
+    expect(rows[0].id).toBe('x1')
   })
 })

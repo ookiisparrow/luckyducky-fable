@@ -34,3 +34,6 @@ project.private.config.json
 
 # 体检面板产物（npm run report 生成·守卫 check-report-in-gates 核不入库）
 reports/
+
+# vitest --coverage 产物（B8·仅本地/CI 度量用，不入库）
+coverage/

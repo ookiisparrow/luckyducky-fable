@@ -40,7 +40,7 @@ async function main() {
     process.exit(1)
   }
   const fns = readdirSync(DIST).filter((n) => existsSync(join(DIST, n, 'index.js')))
-  assert(fns.length >= 15, `产物函数数 ${fns.length}（≥15·16 函数拓扑，缺=build 掉队）`)
+  assert(fns.length >= 15, `产物函数数 ${fns.length}（≥15·17 函数拓扑，缺=build 掉队）`)
 
   for (const name of fns) {
     try {

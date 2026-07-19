@@ -16,6 +16,13 @@
       "installDependency": true
     },
     {
+      "name": "billReconcile",
+      "timeout": 30,
+      "handler": "index.main",
+      "installDependency": true,
+      "_note": "未部署·初始值（参考同类网络型 timer recallScan/cleanupEvents 30s·批L 纪律 timeout 照线上真值，本函数尚未部署故只能给初始值）·部署后照线上真值核"
+    },
+    {
       "name": "cleanupEvents",
       "timeout": 30,
       "handler": "index.main",

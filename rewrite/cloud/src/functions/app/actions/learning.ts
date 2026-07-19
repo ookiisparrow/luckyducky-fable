@@ -1,4 +1,7 @@
 import { ERR, COLLECTIONS, QRCODE_STATUS_SPEC } from '@ldrw/shared'
+// 响应契约（批B10·病根#5/#8）：getPlaybackUrl 返回类型绑定 shared 契约——删键/改名 tsc 红；
+// 加键编译不红（TS 宽赋值），牙在 tests/contract-shape.test.ts 键集合哨兵。
+import type { GetPlaybackUrlResp } from '@ldrw/shared'
 import {
   withOpenId,
   withRateLimit,
@@ -236,7 +239,7 @@ export const getCourses = async () => {
 // 频控（深审 P3·病根#13）：签发付费视频临时地址的端点，按 openid 限速防无限铸签名地址/刷成本；
 // 上限宽松（正常观看切段+预取每分钟远低于此·客户端已缓存 prefetch·不误伤连续播放）。
 export const getPlaybackUrl = withOpenId(
-  withRateLimit('getPlaybackUrl', { max: 60, windowMs: 60_000 }, async ({ db, OPENID, event }) => {
+  withRateLimit('getPlaybackUrl', { max: 60, windowMs: 60_000 }, async ({ db, OPENID, event }): Promise<GetPlaybackUrlResp> => {
     const e: any = event
     const courseId = String(e.courseId || '')
     const segmentId = String(e.segmentId || '')

@@ -2,10 +2,10 @@
 
 > ## 本仓身份：生产源（2026-07-09 切换转正·前身重构线自 2026-07-03）
 >
-> 本仓 = Lucky Ducky 的**生产源**。2026-07-03 从 `luckyducky-next`（GitHub `ookiisparrow/luckyducky-next`，HEAD `ff02afb`）完整复制为重构线；**2026-07-09 M5 切换执行完毕、本仓转正**（无真实用户前提下用户拍板压缩 runbook 前置闸·经过见 `docs/重构日志.md` 同日切换条）。云环境 `cloudbase-d4gcssqbv06865479` 唯一版本＝本仓 `rewrite/` 重写线：**16 云函数 + `/admin` `/agent` 新后台 + 根路径内容站**（函数数以 `rewrite/cloud/build.mjs` 产物为准），旧线 26 函数与 `/admin2` `/agent2` 并行路径已清退。本仓对该环境的部署/建表/删表等改动**真实生效**，不是隔离沙盒，操作前务必想清楚。
+> 本仓 = Lucky Ducky 的**生产源**。2026-07-03 从 `luckyducky-next`（GitHub `ookiisparrow/luckyducky-next`，HEAD `ff02afb`）完整复制为重构线；**2026-07-09 M5 切换执行完毕、本仓转正**（无真实用户前提下用户拍板压缩 runbook 前置闸·经过见 `docs/重构日志.md` 同日切换条）。云环境 `cloudbase-d4gcssqbv06865479` 唯一版本＝本仓 `rewrite/` 重写线：**17 云函数 + `/admin` `/agent` 新后台 + 根路径内容站**（函数数以 `rewrite/cloud/build.mjs` 产物为准），旧线 26 函数与 `/admin2` `/agent2` 并行路径已清退。本仓对该环境的部署/建表/删表等改动**真实生效**，不是隔离沙盒，操作前务必想清楚。
 >
 > - **next 仓＝封存回滚基线**：`/Users/sparrow/luckyducky-next` 不再迭代、不再止血（生产源已是本仓）；保留价值＝旧线函数/旧后台可分钟级重建（`build:cloud` + 逐函数 deploy）。除封存标注外不要动它。
-> - **活代码在 `rewrite/`**：微信端原生 TS+glass-easel（全 WebView 首发）、后端云开发 16 函数（`rewrite/cloud`）、admin/agent（Vue3+Vite）、Astro 内容站（`rewrite/site`）。本仓 `packages/` 为旧线字节级冻结参照（守卫 `oldline-frozen`·处置留后续拍板）；**§2/§5 起的旧线工程约定仅对 `packages/` 参照物有效**，新线约定散在 `rewrite/*/README.md` 与各批记账——改动前先确认约定对哪条线生效，不要凭旧文字办事。
+> - **活代码在 `rewrite/`**：微信端原生 TS+glass-easel（全 WebView 首发）、后端云开发 17 函数（`rewrite/cloud`）、admin/agent（Vue3+Vite）、Astro 内容站（`rewrite/site`）。本仓 `packages/` 为旧线字节级冻结参照（守卫 `oldline-frozen`·处置留后续拍板）；**§2/§5 起的旧线工程约定仅对 `packages/` 参照物有效**，新线约定散在 `rewrite/*/README.md` 与各批记账——改动前先确认约定对哪条线生效，不要凭旧文字办事。
 > - **小程序发布面**：AppID `wxcbd2fb68b81bcfb1`；新 mp（`rewrite/mp`）上传/提审/发布为微信后台人工动作——未发布期间线上旧版 v0.9.4 调用的旧函数已删（无真实用户·用户拍板接受）。
 > - **接管 tcb·部署闸**：`scripts/guard-deploy.mjs` 机制不变，规则原样适用——见下方 §3。
 > - **8 件控制台正册资产**：微信支付连接器 `wxpay_33nb7su` 等，git 外、勿动，副本正册在本仓 `console-assets/`（本仓即权威源，随变更先 repo 后控制台）。

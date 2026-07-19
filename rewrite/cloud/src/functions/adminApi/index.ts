@@ -168,12 +168,18 @@ const ACTIONS: Record<string, (ctx: Ctx) => Promise<any>> = {
   getFgSummary: scmPlanner.getFgSummary,
   // 总览（批 B2）：低库存预警 + 应付未结按织女分组 + 在途采购/外协计数 + 最近流水——只读聚合着陆页
   getScmOverview: scmOverview.getScmOverview,
-  // 运行期观测（批3·体检面板 + 异常账本·治病根#14 告警进人眼）：未登记 ACTION_CAPS→默认仅超管·
-  // runInspect/resolveAnomaly 写类自动审计（不以 list/get 开头）·只读业务数据（只碰 inspectRuns/anomalies）
+  // 运行期观测（批3·体检面板 + 异常账本·治病根#14 告警进人眼 + 批 B6 净新增 listAudit 只读 auditLog·操作审计#4
+  // 读出口）：未登记 ACTION_CAPS→默认仅超管·runInspect/resolveAnomaly 写类自动审计（不以 list/get 开头）·
+  // 只读业务数据（只碰 inspectRuns/anomalies/auditLog）
   runInspect: ops.runInspect,
   getInspectStatus: ops.getInspectStatus,
   listAnomalies: ops.listAnomalies,
   resolveAnomaly: ops.resolveAnomaly,
+  listAudit: ops.listAudit,
+  // web 前端错误上报唯一落口（批 B7·治病根#14 client-error 通道 web 半边）：admin/agent errorReporter.ts 三件套
+  // 捕获后打此 action；cap 复用 agent:handle（外包坐席台前端也要能报错），见 ACTION_CAPS 注释；不进 auditLog
+  // （shouldAudit 已排除，见 kit/audit.ts）——它自己的账本是 anomalies。
+  reportClientError: ops.reportClientError,
   // 人工配置清单（批 B9·只探测状态·零回显）：未登记 ACTION_CAPS→默认拒 admin:write＝仅超管
   getConfigChecklist: configChecklist.getConfigChecklist,
   // 人工配置清单可填写化（决策 2026-07-12）：写敏感凭证/支付接缝配置·未登记 ACTION_CAPS→默认拒 admin:write＝仅超管
@@ -205,6 +211,10 @@ const ACTION_CAPS: Record<string, string | string[]> = {
   getSessionCustomer360: 'agent:handle',
   // 快捷回复读知识库（kb=公司 FAQ·非客户 PII）：外包可读；saveKb 仍默认拒 admin:write（仅超管维护）
   listKb: 'agent:handle',
+  // web 前端错误上报（批 B7）：复用 agent:handle——本 action 不读写任何业务数据，只写自己的诊断遥测（anomalies），
+  // 不为它单开新 cap；外包坐席台前端也要能报错（否则 agent 端报错永远 403）；同 searchConversations 复用
+  // customer:view 的先例（不为单 action 开新 cap）。
+  reportClientError: 'agent:handle',
   // 越规退款（决策§26·退货管理权限）：单立 refund:manage 能力——超管 '*' 天然匹配，未来可给中间角色单授而不放全量 admin:write
   overrideRefund: 'refund:manage',
   // refund:manage 最小只读面（待办与债 2026-07-12 批 B8 评审发现节·C4 落地）：overrideRefund 依赖的退款

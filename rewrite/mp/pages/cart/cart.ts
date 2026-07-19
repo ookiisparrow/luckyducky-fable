@@ -2,6 +2,7 @@
 //   待选区＝已加购行（勾选/加减/删除/合计），下方＝推荐商品圆加号加购（设计 options 语义·真数据）。
 //   核心逻辑（lib/cart 单源·结算走选中项）零改；本批只加「推荐加购/开详情」两个读侧 handler。
 import { tapHaptic } from '../../lib/haptics'
+import { trackEvent } from '../../api/learning'
 import * as cart from '../../lib/cart'
 import { prepareFromCart } from '../../lib/checkout'
 import { getAllProducts } from '../../lib/catalog'
@@ -106,6 +107,7 @@ Page({
     }
     tapHaptic()
     prepareFromCart() // 选中项快照进草稿（fromCart·提交成功按实际数量扣车）
+    trackEvent('checkout_start', 'cart', '', { count: this.data.selectedCount }) // 电商漏斗埋点（R41）
     wx.navigateTo({ url: '/pages/checkout/checkout' })
   },
 })

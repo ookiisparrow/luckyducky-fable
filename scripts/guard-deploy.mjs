@@ -32,6 +32,7 @@ const SENSITIVE_FNS = [
   'recallScan', // timers/recallScan：招回扫描（写库·bot 告警接缝·根因#14）
   'inspect', // timers/inspect：巡检机（读密钥/连接器活体/写 inspectRuns + recordAnomaly·根因#14）
   'kfMedia', // cs/kfMedia：微信客服媒体（拉取/落库 UGC·PII·内容安全面·根因#3）
+  'billReconcile', // 每日对账 timer（批B2·第17个部署单元）：读商户私钥（secureConfig/env）+写 wxBills+钱链告警——重部署二次确认
 ]
 // 纯读函数：写部署放行（明确非敏感）——新线**无独立纯读函数**（读 action 收在 app 内、非独立部署单元），
 // 旧线纯读函数（getProducts/getCourses…）2026-07-09 已随旧线清退、云端不复存在；此时部署同名 = 新建孤儿函数

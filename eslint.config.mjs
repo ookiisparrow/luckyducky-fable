@@ -18,6 +18,8 @@ export default [
     ignores: [
       '**/dist/**',
       '**/node_modules/**',
+      // vitest --coverage 产物（B8·vendor 生成的 lcov-report/*.js 会触发误报 warning）
+      'coverage/**',
       'unpackage/**',
       'packages/miniapp/src/uni.scss',
       'console-assets/**',

@@ -3,6 +3,7 @@
 // 迁到 lib 供 catalog.onShow / me.refresh 落续播目标后 prefetch 预热，进播放器时 peek 命中零云往返——
 // 单例须跨页共享同一实例，拆回页面私有即断跨页预热（守卫 rw-mp-player-prefetch-cache 焊死单例在场+被 import）。
 // fetcher 的 NOT_ENTITLED/FETCH_FAIL 分流原样随迁（守卫 rw-mp-list-loadfailed-state 认这里为 fetcher 新家）。
+// 响应形状哨兵见 rewrite/cloud/tests/contract-shape.test.ts·cloud 改键该测试会红·同步时两头一起改（批B10）。
 import { getPlaybackUrl } from '../api/learning'
 import { createPlaybackCache } from './player'
 

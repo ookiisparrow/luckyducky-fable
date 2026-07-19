@@ -3,7 +3,7 @@
 // 只读业务数据——只碰 inspectRuns/anomalies 两 ops 集合。
 import { describe, it, expect, beforeEach } from 'vitest'
 import cloud, { control } from 'wx-server-sdk'
-import { runInspect, getInspectStatus, listAnomalies, resolveAnomaly } from '../src/functions/adminApi/actions/ops'
+import { runInspect, getInspectStatus, listAnomalies, resolveAnomaly, reportClientError } from '../src/functions/adminApi/actions/ops'
 import { COLLECTIONS } from '@ldrw/shared'
 
 const HOUR = 3600 * 1000
@@ -110,5 +110,51 @@ describe('运行期观测控制台数据层（批3·rw-ops-console-golden）', (
     expect(doc.resolvedBy).toBe('superadmin')
     expect(body(await resolveAnomaly(ctx({}))).ok).toBe(false) // 无 id 拒
     expect(control.dump(COLLECTIONS.orders)).toEqual([{ _id: 'O', status: 'paid' }]) // 业务集合原样
+  })
+})
+
+describe('客户端错误上报（批 B7·治病根#14 client-error 通道·web 半边）', () => {
+  it('大白话：裁剪 msg + source 非法记 unknown + page 落 ctx（输入边界收口·根因#3 不信前端）', async () => {
+    const longMsg = '错'.repeat(600) // 超 action 自身 500 上限；落库时再受 recordAnomaly sanitizeCtx 120 上限二次裁剪（两层裁剪均真实存在）
+    const r = body(await reportClientError(ctx({ msg: longMsg, source: 'evil', page: '/pages/home' }, 'agent-1')))
+    expect(r.ok).toBe(true)
+    const doc = control.dump(COLLECTIONS.anomalies)[0]
+    expect(doc.ctx.msg.length).toBe(120) // sanitizeCtx 存储层上限（比 action 自身 500 上限更紧）
+    expect(doc.ctx.source).toBe('unknown') // source 越界字面量记 unknown，不透传垃圾值
+    expect(doc.ctx.page).toBe('/pages/home')
+    expect(doc.code).toBe('WEB_JS_ERROR') // source 记 unknown 时 CLIENT_ERROR_CODE 查无回退通用码
+  })
+
+  it('大白话：无 msg 拒 BAD_ARGS 且不落库', async () => {
+    const r = body(await reportClientError(ctx({ msg: '', source: 'admin' }, 'agent-1')))
+    expect(r.ok).toBe(false)
+    expect(r.error).toBe('BAD_ARGS')
+    expect(control.dump(COLLECTIONS.anomalies).length).toBe(0)
+  })
+
+  it('大白话：同 source+msg 反复上报只累加 count、不新建文档（指纹去重）', async () => {
+    await reportClientError(ctx({ msg: '同一条报错', source: 'admin' }, 'agent-1'))
+    await reportClientError(ctx({ msg: '同一条报错', source: 'admin' }, 'agent-1'))
+    const docs = control.dump(COLLECTIONS.anomalies)
+    expect(docs.length).toBe(1)
+    expect(docs[0].count).toBe(2)
+  })
+
+  it('大白话：两条不同中文消息各自成条（关键回归·钉死 hashSig 不会像 mp 侧 anomalyFingerprint 那样把中文坍缩成一条）', async () => {
+    await reportClientError(ctx({ msg: '无法读取未定义属性', source: 'admin' }, 'agent-cn'))
+    await reportClientError(ctx({ msg: '网络请求超时了', source: 'admin' }, 'agent-cn'))
+    const docs = control.dump(COLLECTIONS.anomalies)
+    expect(docs.length).toBe(2)
+    expect(docs[0]._id).not.toBe(docs[1]._id)
+  })
+
+  it('大白话：同一 agentId 连续 21 次不同报错——第 21 次起服务端节流丢弃（dropped:true），anomalies 总数封顶在 20', async () => {
+    const results: any[] = []
+    for (let i = 0; i < 21; i++) {
+      results.push(body(await reportClientError(ctx({ msg: `错误-${i}`, source: 'admin' }, 'agent-throttle'))))
+    }
+    expect(results.slice(0, 20).every((r) => r.ok === true && !r.dropped)).toBe(true)
+    expect(results[20]).toEqual({ ok: true, dropped: true })
+    expect(control.dump(COLLECTIONS.anomalies).length).toBe(20) // 服务端节流生效·总数不再增长
   })
 })

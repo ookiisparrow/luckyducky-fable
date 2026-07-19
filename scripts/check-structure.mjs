@@ -79,6 +79,7 @@ export const RW_GOLDEN_REGISTRY = [
   { id: 'rw-anomaly-record-golden', roots: ['#3', '#14'], test: 'rewrite/cloud/tests/anomaly.test.ts' },
   { id: 'rw-inspect-golden', roots: ['#1', '#3', '#8', '#14'], test: 'rewrite/cloud/tests/inspect.test.ts' },
   { id: 'rw-ops-console-golden', roots: ['#3', '#14'], test: 'rewrite/cloud/tests/ops-console.test.ts' },
+  { id: 'rw-bill-reconcile-golden', roots: ['#1', '#4', '#12', '#14'], test: 'rewrite/cloud/tests/bill-reconcile.test.ts' },
   { id: 'rw-mp-home-golden', roots: ['#8'], test: 'rewrite/mp/tests/home-map.test.ts' },
   { id: 'rw-mp-detail-golden', roots: ['#8'], test: 'rewrite/mp/tests/detail-map.test.ts' },
   { id: 'rw-mp-cart-golden', roots: ['#4', '#8'], test: 'rewrite/mp/tests/cart.test.ts' },
@@ -1820,7 +1821,7 @@ export const repoChecks = [
     // （各带一句为什么），新脚本引用 packages/ 当场红。
     id: 'rw-toolchain-no-oldline',
     roots: ['#16'],
-    desc: '工具链禁旧线引用（病根#16 ⑤·M5 残留指针清点）：scripts/ 下 .mjs/.cjs（守卫注册表两文件除外——其内旧线路径是「守冻结参照」的守卫本体）与 .github/workflows/ 禁出现 packages/cloud、packages/miniapp、build:cloud 任一 token；旧线专属工具白名单豁免（freeze 工具/旧线产物验证/旧线视觉回归/旧线格式化域/体检面板标注/preflight+deploy-drift 自证历史遗留）——随 packages/ 处置拍板一并清退',
+    desc: '工具链禁旧线引用（病根#16 ⑤·M5 残留指针清点）：scripts/ 下 .mjs/.cjs（守卫注册表两文件除外——其内旧线路径是「守冻结参照」的守卫本体）与 .github/workflows/ 禁出现 packages/cloud、packages/miniapp、build:cloud 任一 token；旧线专属工具白名单豁免（freeze 工具/旧线产物验证/旧线视觉回归/旧线格式化域/体检面板标注）——随 packages/ 处置拍板一并清退',
     run() {
       // 白名单：声明就是旧线专属/守冻结参照的工具（值=为什么在册）。deploy-fns/deploy-test 刻意不在册。
       const OLDLINE_TOOLS = new Map([
@@ -1830,8 +1831,6 @@ export const repoChecks = [
         ['scripts/visual-check.cjs', '旧线视觉回归（扫描面=packages/miniapp dist·新线走 mp-smoke）'],
         ['scripts/format-hook.mjs', '格式化域刻意锁旧线（其头注成文·扩域是另一笔决策）'],
         ['scripts/check-report.mjs', '体检面板把 packages/miniapp 标注为「旧线」——标注非引用'],
-        ['scripts/preflight.mjs', '旧线部署体检·deploy-drift 头注自证「对生产线钱链漂移零检测」·迁活线或退役待拍板'],
-        ['scripts/lib/deploy-drift.mjs', '同上·历史遗留自证已成文'],
         ['scripts/lib/brand-font-charset.mjs', '字体字集扫描含旧线参照面（sweep 自带 dot 排除）'],
         ['scripts/build-brand-font.mjs', '品牌字体构建·扫描面含旧线参照'],
       ])
@@ -1890,6 +1889,27 @@ export const repoChecks = [
       if (!existsSync(ci) || !/check:artifacts/.test(readFileSync(ci, 'utf8')))
         bad.push('.github/workflows/ci.yml 未跑 check:artifacts——产物闸没进 CI（构建过≠真能用在产物层无人守）')
       return bad
+    },
+  },
+  {
+    // 依赖安全审计接线（B8·2026-07-19 快照）：本地 `npm audit --omit=dev` 实测 40 条
+    // 既有告警（13 high / 14 moderate / 13 low，0 critical）；非 --force 的
+    // `npm audit fix` 只能修 1 个 moderate（postcss），13 条 high 全部需要
+    // --force（breaking：@dcloudio/uni-mp-weixin 等），故本批只接「可见性」
+    // （CI 报告模式 + continue-on-error），不升级为 blocking——升级前置条件
+    // （清存量或显式接受风险记账）见 docs/待办与债.md。仿 rw-artifact-gate-in-ci
+    // 同款「闸不能被悄悄拆」模式：只钉「这一步真的在 CI 里跑」，不评判闸门
+    // 严格度（严格度是产品/风险决策，机器管不着也不该管）。
+    id: 'ci-audit-step-present',
+    roots: ['铁律'],
+    desc: 'CI 依赖安全审计步骤在位（铁律·仿 rw-artifact-gate-in-ci 模式）：.github/workflows/ci.yml 须含 `npm audit` 调用——防依赖安全审计（当前报告模式·B8 起步）被静默摘除',
+    run() {
+      const f = '.github/workflows/ci.yml'
+      const abs = join(ROOT, f)
+      if (!existsSync(abs)) return [`${f} 不存在（依赖安全审计闸缺失）`]
+      if (!/npm audit\b/.test(readFileSync(abs, 'utf8')))
+        return [`${f} 未见 npm audit 步骤——依赖安全审计（B8 报告模式）被摘除或从未接线`]
+      return []
     },
   },
   {
@@ -2659,6 +2679,50 @@ export const repoChecks = [
           `rewrite/mp 进包位图总量 ${Math.round(total / 1024)}KB 超上限 400KB——内容图别进包、走云存储按需加载（病根#15/根因#8 冷启）`,
         )
       return bad
+    },
+  },
+  {
+    // 主包体积预算——活线版（2026-07-18·code-gaps 战役批B4）。既有 main-package-budget/
+    // subpackage-config-present 两条扫的是冻结旧线 packages/miniapp/src/pages.json，对本仓唯一在
+    // 迭代的 rewrite/mp 假绿：23 页全塞主包、app.json 无 subPackages，此前从无人测过真实上传体积
+    // （随 packages/ 处置拍板一并退役前先补活线真空，本条只加、不动旧线两条；与 rw-mp-static-bitmap-budget
+    // 同精神互补——那管进包位图，这管进包代码/wxml/wxss/json 总量）。
+    // 实测方法（2026-07-18）：tsc --module CommonJS --target ES2020 编译 rewrite/mp 全部 .ts 落临时目录，
+    // 逐组比对编译前后字节数——比值集中在 1.015–1.026（剥类型注解基本被 CommonJS require/exports 样板
+    // 抵消，非显著收缩），取 ×1.05 留安全边际估「编译后 .js」体积；wxml/wxss 真实上传会被
+    // project.config.json 当前 minifyWXML/minifyWXSS(true) 再压一道，本估算不折算压缩收益——估算天然
+    // 偏保守（宁可判红过严、不可放过真超限）。进包边界：lsScan/SKIP_DIR 已天然排除 node_modules/dist/
+    // 隐藏文件（含 .claude 金丝雀夹具·见 guard-scan-liveness）；本表额外剔除四个不可达/工具专属项——
+    // tests（vitest 用例，非页面/组件可达）、typings（.d.ts 纯类型声明零运行时产出）、README.md/
+    // tsconfig.json（无页面引用，微信 ignoreUploadUnusedFiles 语义下不可达）、project*.config.json
+    // （.gitignore 排除、未入库，防本机已生成时误计入）。2026-07-18 实测约 695KB（0.66MiB），预算
+    // 1.5MiB＝微信主包硬顶 2MiB（2×1024×1024）的 75%——留 25% 边际盖估算误差；当前用量仅占预算
+    // ~44%、占硬顶 ~33%，暂无需分包（评估见 重构日志 同日条目）。
+    id: 'rw-mp-main-package-budget',
+    roots: ['#8'],
+    desc: '主包体积预算（活线 rewrite/mp·根因#8）：会进上传包的源文件（pages/components/custom-tab-bar/lib/api/utils/static/styles + app.json/app.ts/app.wxss/sitemap.json，剔 tests/typings/README/tsconfig/project*.config.json）总字节数（.ts 按 ×1.05 估编译后 .js 体积——实测 tsc CommonJS 输出比源码大 1.5%–2.6%）须 ≤ 1.5MiB（微信主包硬顶 2MiB 的 75%，留边际）——超预算真机冷启退化才现形（根因#8「构建过≠真机能用」）；既有 main-package-budget/subpackage-config-present 扫冻结旧线 packages/miniapp 对活线假绿，本条补活线真空（随 packages/ 处置拍板一并退役前不动旧线两条）',
+    run() {
+      const base = join(ROOT, 'rewrite/mp')
+      if (!existsSync(base)) return []
+      const EXCLUDE_TOP = new Set(['tests', 'typings', 'README.md', 'tsconfig.json', 'project.config.json', 'project.private.config.json'])
+      const TS_MULTIPLIER = 1.05
+      const BUDGET = 1.5 * 1024 * 1024 // 微信主包硬顶 2MiB 的 75%（见守卫头注）
+      let total = 0
+      const walkB = (d, top) => {
+        for (const name of lsScan(d)) {
+          if (top && EXCLUDE_TOP.has(name)) continue
+          const p = join(d, name)
+          const st = statSync(p)
+          if (st.isDirectory()) walkB(p, false)
+          else total += /\.ts$/.test(name) ? st.size * TS_MULTIPLIER : st.size
+        }
+      }
+      walkB(base, true)
+      if (total > BUDGET)
+        return [
+          `rewrite/mp 主包体积估算 ${Math.round(total / 1024)}KB 超预算 ${Math.round(BUDGET / 1024)}KB（微信主包硬顶 2048KB 的 75%）——新增源码/静态资源前先量体积，逼近硬顶需评估分包（根因#8·真机冷启才感知）`,
+        ]
+      return []
     },
   },
   {
@@ -6438,6 +6502,89 @@ export const repoChecks = [
     },
   },
   {
+    // 电商漏斗埋点 + 强制更新 + 冷启动耗时（R41·上线前必埋钩子，运营与增长规划①「上线前必埋钩子——后补极贵」）：
+    // mp 全仓曾零 getUpdateManager 接线（推支付类 hotfix 时老版本用户更新不下去）、电商主漏斗「浏览→加购→
+    // 下单→支付」零埋点、冷启动耗时线上零数据——trackEvent 管道早已通用（服务端 type 自由字符串·零改动），
+    // 缺的只是接线。触点表驱动（同 rw-mp-customer-service-wired/rw-mp-home-quick-add-real 范式）钉住七个
+    // 漏斗触点各自真调对应 type/page；强更五段（getUpdateManager/onCheckForUpdate/onUpdateReady/
+    // applyUpdate/onUpdateFailed）与 app.ts 两处接线（markLaunch/checkForUpdate）单独钉；冷启动
+    // markLaunch/reportColdStart 单独钉。checkout.ts onSubmit 出现两条表项是刻意的（同一方法内两次不同
+    // 调用，各自独立断言，不是共用一次判定）。
+    id: 'rw-mp-funnel-tracked',
+    roots: ['R41'],
+    desc: '电商漏斗埋点+强制更新+冷启动耗时接线（R41）：home/detail/cart/checkout/paysuccess 七个 trackEvent 触点须真调对应 type/page；app.ts onLaunch 须调 markLaunch()+checkForUpdate()；utils/appUpdate.ts 须接线 wx.getUpdateManager 五段（getUpdateManager/onCheckForUpdate/onUpdateReady/applyUpdate/onUpdateFailed）；lib/coldStart.ts 须含 cold_start 上报，home.ts onReady() 须调 reportColdStart()',
+    run() {
+      const base = join(ROOT, 'rewrite/mp')
+      if (!existsSync(base)) return []
+      const bad = []
+      // ① 触点表驱动：七个漏斗埋点各自方法体须真调 trackEvent('type','page',…)
+      const FUNNEL_TOUCHPOINTS = [
+        { file: 'pages/home/home.ts', method: 'onAddProduct', type: 'add_to_cart', page: 'home' },
+        { file: 'pages/detail/detail.ts', method: 'loadProduct', type: 'view_product', page: 'detail' },
+        { file: 'pages/detail/detail.ts', method: 'onAddCart', type: 'add_to_cart', page: 'detail' },
+        { file: 'pages/cart/cart.ts', method: 'onCheckout', type: 'checkout_start', page: 'cart' },
+        { file: 'pages/checkout/checkout.ts', method: 'onSubmit', type: 'order_submit', page: 'checkout' },
+        { file: 'pages/checkout/checkout.ts', method: 'onSubmit', type: 'order_success', page: 'checkout' },
+        { file: 'pages/paysuccess/paysuccess.ts', method: 'onLoad', type: 'pay_success_view', page: 'paysuccess' },
+      ]
+      for (const tp of FUNNEL_TOUCHPOINTS) {
+        const abs = join(base, tp.file)
+        if (!existsSync(abs)) {
+          bad.push(`${tp.file} 缺失（电商漏斗埋点触点·R41）`)
+          continue
+        }
+        const src = readFileSync(abs, 'utf8')
+        const body = methodBody(src, tp.method)
+        if (!body) {
+          bad.push(`${tp.file} 找不到 ${tp.method}() 方法体——电商漏斗埋点触点单点丢失（R41）`)
+          continue
+        }
+        const re = new RegExp(`trackEvent\\(\\s*['"]${tp.type}['"]\\s*,\\s*['"]${tp.page}['"]`)
+        if (!re.test(stripComments(body)))
+          bad.push(`${tp.file} 的 ${tp.method}() 未调 trackEvent('${tp.type}','${tp.page}',…)——电商漏斗埋点缺失（R41）`)
+      }
+      // ② 强更接线：app.ts onLaunch 须调 markLaunch()+checkForUpdate()；utils/appUpdate.ts 须接线五段
+      const appPath = join(base, 'app.ts')
+      if (!existsSync(appPath)) {
+        bad.push('app.ts 缺失（强更/冷启动接线·R41）')
+      } else {
+        const appBody = methodBody(readFileSync(appPath, 'utf8'), 'onLaunch')
+        if (!appBody) {
+          bad.push('app.ts 找不到 onLaunch() 方法体——强更/冷启动接线单点丢失（R41）')
+        } else {
+          const appBodyClean = stripComments(appBody)
+          if (!/markLaunch\s*\(/.test(appBodyClean)) bad.push('app.ts 的 onLaunch() 未调 markLaunch()——冷启动计时起点缺失（R41）')
+          if (!/checkForUpdate\s*\(/.test(appBodyClean)) bad.push('app.ts 的 onLaunch() 未调 checkForUpdate()——强制更新未接线（R41）')
+        }
+      }
+      const updPath = join(base, 'utils/appUpdate.ts')
+      if (!existsSync(updPath)) {
+        bad.push('utils/appUpdate.ts 缺失——强制更新未实现（R41）')
+      } else {
+        const updSrc = stripComments(readFileSync(updPath, 'utf8'))
+        for (const name of ['getUpdateManager', 'onCheckForUpdate', 'onUpdateReady', 'applyUpdate', 'onUpdateFailed'])
+          if (!new RegExp(name + '\\s*\\(').test(updSrc)) bad.push(`utils/appUpdate.ts 未见 ${name}(——强更事件链缺一环（R41）`)
+      }
+      // ③ 冷启动：lib/coldStart.ts 须含 cold_start 上报，home.ts onReady() 须调 reportColdStart()
+      const coldPath = join(base, 'lib/coldStart.ts')
+      if (!existsSync(coldPath)) {
+        bad.push('lib/coldStart.ts 缺失——冷启动耗时上报未实现（R41）')
+      } else if (!/trackEvent\(\s*['"]cold_start['"]/.test(stripComments(readFileSync(coldPath, 'utf8')))) {
+        bad.push("lib/coldStart.ts 未见 trackEvent('cold_start',…)——冷启动耗时未上报（R41）")
+      }
+      const homePath = join(base, 'pages/home/home.ts')
+      if (!existsSync(homePath)) {
+        bad.push('pages/home/home.ts 缺失（冷启动上报挂点·R41）')
+      } else {
+        const readyBody = methodBody(readFileSync(homePath, 'utf8'), 'onReady')
+        if (!readyBody) bad.push('pages/home/home.ts 找不到 onReady() 方法体——冷启动上报挂点缺失（R41）')
+        else if (!/reportColdStart\s*\(/.test(stripComments(readyBody)))
+          bad.push('pages/home/home.ts 的 onReady() 未调 reportColdStart()——冷启动耗时未上报（R41）')
+      }
+      return bad
+    },
+  },
+  {
     // 品牌字体分层子集覆盖（字体分层批·根因#8「构建过≠真机能用」的文案漂移变体）：mp 上屏文案随迭代
     // 只增不减，而字体子集是离线构建产物（源 OTF 84MB 不入仓）——新增文案若带来子集外新字，build 照常
     // 全绿、真机该字静默掉回系统字体（单字版 FOUT 永不结束）。守两条包含关系（推导逻辑与构建脚本共用
@@ -7212,6 +7359,41 @@ export const repoChecks = [
       return bad
     },
   },
+  {
+    // 批 B7（治病根#14 client-error 通道 web 半边）：admin/agent 两端 main.ts 此前零错误捕获——线上报错无声无痕。
+    // 断言面＝源码文本扫描（不跑运行时，window.onerror/unhandledrejection 的真实 DOM 事件挂接交给 golden 测试，
+    // node 环境无 window 全局测不了这层，见 rewrite/admin|agent/tests/errorReporter.test.ts 头注）。
+    id: 'rw-web-error-reporter-wired',
+    roots: ['#14'],
+    desc: 'admin/agent 前端错误上报接线三件套（批 B7·治病根#14 client-error 通道 web 半边）：main.ts 须调用 installErrorReporter(；lib/errorReporter.ts 须同时含 window.onerror / unhandledrejection / errorHandler 三件套捕获 + hasSession( 会话闸判断（不许裸打未鉴权请求）+ reportClientError（真打到约定的服务端 action 名）——任一缺失分别报出具体文件+具体缺项',
+    run() {
+      const bad = []
+      const pairs = [
+        ['admin', 'rewrite/admin/src/main.ts', 'rewrite/admin/src/lib/errorReporter.ts'],
+        ['agent', 'rewrite/agent/src/main.ts', 'rewrite/agent/src/lib/errorReporter.ts'],
+      ]
+      for (const [name, mainRel, libRel] of pairs) {
+        const mainAbs = join(ROOT, mainRel)
+        if (!existsSync(mainAbs)) {
+          bad.push(`${mainRel} 缺失（${name} 端入口文件不存在）`)
+        } else if (!/installErrorReporter\s*\(/.test(stripComments(readFileSync(mainAbs, 'utf8')))) {
+          bad.push(`${mainRel} 未调用 installErrorReporter(——${name} 端错误上报器未装线`)
+        }
+        const libAbs = join(ROOT, libRel)
+        if (!existsSync(libAbs)) {
+          bad.push(`${libRel} 缺失（${name} 端错误上报器未建）`)
+          continue
+        }
+        const libSrc = stripComments(readFileSync(libAbs, 'utf8'))
+        if (!/window\.onerror/.test(libSrc)) bad.push(`${libRel} 未见 window.onerror 挂接`)
+        if (!/unhandledrejection/.test(libSrc)) bad.push(`${libRel} 未见 unhandledrejection 挂接`)
+        if (!/errorHandler/.test(libSrc)) bad.push(`${libRel} 未见 errorHandler 接管（Vue app.config.errorHandler）`)
+        if (!/hasSession\s*\(/.test(libSrc)) bad.push(`${libRel} 未见 hasSession( 会话闸判断——不许裸打未鉴权请求`)
+        if (!/reportClientError/.test(libSrc)) bad.push(`${libRel} 未见 reportClientError——未打到约定的服务端 action 名`)
+      }
+      return bad
+    },
+  },
 ]
 
 // ============== 逐文件规则（fileRules）==============
@@ -7512,6 +7694,12 @@ export const typeAndTestGuards = [
   // 体检面板派生性（正册·可视检查系统批）：面板守卫清单必须=四注册表机器派生（一条不漏不多造）、
   // 失败现场置顶可见、单测带复跑命令、病根地图与根因账本 §一 同源。reverseTest 锁此派生性。
   { id: 'check-report-derived', mechanism: 'test', roots: ['正册'], reverseTest: 'tests/scripts/checkReport.test.js' },
+  // mp↔cloud 响应契约哨兵（批B10·病根#5 手抄副本漂移 + #8 编译绿≠契约没漂）：mp 物理进不了
+  // @ldrw/shared（微信开发者工具编译限制），响应形状全靠手抄——cloud 改键 mp 编译不红＝静默漂移面。
+  // 钱链/学习链 5 热 action（createOrder/pay/getMyOrders/getOrderById/getPlaybackUrl）成功响应
+  // 精确键集合（Object.keys 排序全等·增删都红）；红了先同步 rewrite/shared/src/contracts.ts 与
+  // mp 消费面四点位（payFlow/mapOrders/playbackCache/order-list·清单见测试头注）。
+  { id: 'rw-app-response-contract', mechanism: 'test', roots: ['#5', '#8'], reverseTest: 'rewrite/cloud/tests/contract-shape.test.ts' },
 ]
 
 // export：供 check-report 体检面板复用同一套遍历/判定（面板=派生视图，禁自建第二套语义）

@@ -252,6 +252,84 @@ describe('CSAT 明细钻取（批 B6·cursor 分页·[from,to) 含界·maxScore 
   })
 })
 
+describe('审计日志（批 B6·操作审计#4 读出口·cursor 分页+默认仅超管）', () => {
+  it('大白话：按 ts 倒序；operator 精确筛/actionPrefix 前缀筛各自生效；summary 原样透传；失败行带 error', async () => {
+    control.seed('auditLog', [
+      { _id: 'a1', action: 'saveDraft', operator: 'boss', ip: '1.1.1.1', ok: true, summary: { id: 'p1' }, ts: 3000 },
+      { _id: 'a2', action: 'shipOrder', operator: 'boss', ip: '1.1.1.1', ok: true, summary: { id: 'o1' }, ts: 2000 },
+      { _id: 'a3', action: 'saveSettings', operator: 'other', ip: '2.2.2.2', ok: false, error: 'BAD_ARGS', summary: {}, ts: 1000 },
+    ])
+    const all = await post('listAudit', SUPER, {})
+    expect(all.ok).toBe(true)
+    expect(all.entries.map((e: any) => e.action)).toEqual(['saveDraft', 'shipOrder', 'saveSettings']) // ts 倒序
+    expect(all.entries[0].summary).toEqual({ id: 'p1' }) // summary 原样透传（写侧 summarize 已剥敏感字段）
+    expect(all.entries[2].ok).toBe(false)
+    expect(all.entries[2].error).toBe('BAD_ARGS')
+
+    const byOperator = await post('listAudit', SUPER, { operator: 'boss' })
+    expect(byOperator.entries.map((e: any) => e.action)).toEqual(['saveDraft', 'shipOrder']) // 精确匹配·非前缀
+
+    const byPrefix = await post('listAudit', SUPER, { actionPrefix: 'save' })
+    expect(byPrefix.entries.map((e: any) => e.action)).toEqual(['saveDraft', 'saveSettings']) // 页内前缀过滤
+  })
+
+  it('大白话：[from,to) 含起不含止——起点那条在窗内、止点那条被剔除，窗外记录不进列表；触界即收口不再续页', async () => {
+    control.seed('auditLog', [
+      { _id: 'f-out', action: 'ping', operator: '', ip: '', ok: true, summary: {}, ts: 500 }, // <from·窗外
+      { _id: 'f1', action: 'login', operator: '', ip: '', ok: true, summary: {}, ts: 1000 }, // =from·含界
+      { _id: 'f2', action: 'saveDraft', operator: '', ip: '', ok: true, summary: {}, ts: 3000 },
+      { _id: 'f3', action: 'shipOrder', operator: '', ip: '', ok: true, summary: {}, ts: 5000 }, // =to·被剔除（不含止）
+    ])
+    const r = await post('listAudit', SUPER, { from: 1000, to: 5000 })
+    expect(r.entries.map((e: any) => e.ts)).toEqual([3000, 1000])
+    expect(r.hasMore).toBe(false)
+    expect(r.nextCursor).toBe(null)
+  })
+
+  it('大白话：cursor 翻页——第二页从上页 nextCursor 续、不重不漏', async () => {
+    control.seed('auditLog', [
+      { _id: 'p1', action: 'a1', operator: 'x', ip: '', ok: true, summary: {}, ts: 3000 },
+      { _id: 'p2', action: 'a2', operator: 'x', ip: '', ok: true, summary: {}, ts: 2000 },
+      { _id: 'p3', action: 'a3', operator: 'x', ip: '', ok: true, summary: {}, ts: 1000 },
+    ])
+    const page1 = await post('listAudit', SUPER, { limit: 2 })
+    expect(page1.entries.map((e: any) => e.action)).toEqual(['a1', 'a2'])
+    expect(page1.hasMore).toBe(true)
+    const page2 = await post('listAudit', SUPER, { limit: 2, cursor: page1.nextCursor })
+    expect(page2.entries.map((e: any) => e.action)).toEqual(['a3'])
+    expect(page2.hasMore).toBe(false)
+  })
+
+  it('大白话：limit 钳 200——传超大页也只回 200 条、hasMore 如实标真', async () => {
+    const rows = []
+    for (let i = 0; i < 205; i++) rows.push({ _id: 'l' + i, action: 'ping', operator: 'x', ip: '', ok: true, summary: {}, ts: i + 1 })
+    control.seed('auditLog', rows)
+    const r = await post('listAudit', SUPER, { limit: 500 })
+    expect(r.entries.length).toBe(200)
+    expect(r.hasMore).toBe(true)
+  })
+
+  it('大白话：无参数=全量倒序首页；空集不崩', async () => {
+    const zero = await post('listAudit', SUPER, {})
+    expect(zero.ok).toBe(true)
+    expect(zero.entries).toEqual([])
+    expect(zero.hasMore).toBe(false)
+  })
+})
+
+describe('审计日志 RBAC（批 B6·未登记 ACTION_CAPS→默认仅超管）', () => {
+  it('大白话：外包直调 403；超管过闸；listAudit 自身不递归留痕（^list 前缀天然跳过 shouldAudit）', async () => {
+    control.seed('auditLog', [{ _id: 'z1', action: 'saveDraft', operator: 'boss', ip: '', ok: true, summary: {}, ts: 1000 }])
+    const denied = await post('listAudit', A1, {})
+    expect(denied.status).toBe(403)
+    expect(denied.error).toBe('FORBIDDEN')
+    const ok = await post('listAudit', SUPER, {})
+    expect(ok.ok).toBe(true)
+    expect(ok.entries.length).toBe(1) // 只有种子那条，未混入「查询本身」留下的痕
+    expect(control.dump('auditLog').some((l: any) => l.action === 'listAudit')).toBe(false)
+  })
+})
+
 describe('知识库与节点策展（kb=公司 FAQ·checkpoints=课程节点定义）', () => {
   it('大白话：外包可读 FAQ（快捷回复要用）但不能改；超管整体覆盖保存——删掉的条目真删', async () => {
     control.seed('kb', [{ _id: 'faq0', question: '旧条目', answer: '将被删', category: 'other' }])

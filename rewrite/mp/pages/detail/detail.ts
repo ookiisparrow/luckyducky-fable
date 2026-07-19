@@ -1,5 +1,6 @@
 // 商品详情（M2·重设计对齐 ProductDetail.jsx 方案A）：图册 swiper + 计数 + SKU 价格联动 + 加购/直买 + 客服 + 为你推荐。
 import { tapHaptic } from '../../lib/haptics'
+import { trackEvent } from '../../api/learning'
 import * as cart from '../../lib/cart'
 import { prepareBuyNow } from '../../lib/checkout'
 import { getAllProducts, getProductDetail } from '../../lib/catalog'
@@ -67,6 +68,7 @@ Page({
       currentPriceNum: i >= 0 && vm.skus[i] ? vm.skus[i].price : vm.price,
       galleryWindow: computeGalleryWindow(vm.gallery.length, 0),
     })
+    trackEvent('view_product', 'detail', vm.id, { price: vm.price }) // 电商漏斗埋点（R41）
     void this.loadDetail(id, seq)
     void this.loadRecs(id)
     void this.loadRating(id)
@@ -132,6 +134,7 @@ Page({
       was: vm.was,
       cover: vm.gallery[0] || '',
     })
+    trackEvent('add_to_cart', 'detail', vm.id, { sku: sku ? sku.name : '', price: sku ? sku.price : vm.price }) // 电商漏斗埋点（R41）
     wx.showToast({ title: '已加入购物车', icon: 'success' })
   },
   onService() {

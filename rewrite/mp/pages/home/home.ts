@@ -2,6 +2,7 @@
 // 数据经 api/catalog → app 网关；内容拿不到（网络/未部署）逐块回退设计默认文案（mapHomeContent），不空屏。
 // 页只编排：把原始返回交给纯函数 mapHomeContent/mapProducts，再 setData（house style·同 detail/me）。
 import { tapHaptic } from '../../lib/haptics'
+import { trackEvent } from '../../api/learning'
 import { getContent } from '../../api/catalog'
 import { getAllProducts, getProductById } from '../../lib/catalog'
 import { mapHomeContent, mapProducts, type HomeContentVM, type ProductVM } from '../../lib/mapHome'
@@ -12,6 +13,7 @@ import { consumeHomeTop } from '../../lib/homeIntent'
 import { armExitGuard, releaseExitGuard, onExitGuardBeforeLeave as consumeExitGuard } from '../../utils/exitGuard'
 import { loginGate } from '../../lib/loginGate'
 import { readSnapshot, writeSnapshot } from '../../lib/snapshot'
+import { reportColdStart } from '../../lib/coldStart'
 
 let toastTimer: ReturnType<typeof setTimeout> | null = null
 
@@ -34,6 +36,9 @@ Page({
     refreshing: false, // <scroll-view refresher-triggered>：接管原页面级下拉刷新
     scrollInto: '', // <scroll-view scroll-into-view>：接管原 wx.pageScrollTo({selector}) 锚点跳转
     scrollAnim: true, // 本次 scroll-into-view 是否带动画（意图回顶要瞬时·点击跳转要平滑）
+  },
+  onReady() {
+    reportColdStart() // 冷启动耗时上报（R41）：首帧就绪算 delta（仅首次·onReady 生命周期本身只触发一次+内部 reported 锁双保险）
   },
   onLoad() {
     const info = wx.getWindowInfo()
@@ -153,6 +158,7 @@ Page({
     const payload = decideQuickAdd(raw)
     if (payload) {
       cart.add(payload) // 数据侧动作照做（用户确实点了「+」）：即便已切走本 tab 也不该丢单
+      trackEvent('add_to_cart', 'home', payload.id, { sku: payload.sku || '', price: payload.price }) // 电商漏斗埋点（R41）
       if (this.hidden) return // 已切走 home tab（H·完备性扫描新增）：角标同步/toast 是本页 UI 副作用，用户已看不到，静默跳过
       if (typeof this.getTabBar === 'function') (this.getTabBar() as unknown as LdTabBar).setActive('home') // 角标随动（同 cart.ts:24 范式）
       // 多规格被默认加了首规格时把规格名亮给用户（自绘 ping 不受原生 toast 字数限制）——静默替选规格必须可见

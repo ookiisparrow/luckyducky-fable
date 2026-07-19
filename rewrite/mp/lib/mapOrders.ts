@@ -1,5 +1,6 @@
 // 订单映射（纯函数·黄金 frontend-store §七：脏单归一防白屏/渲染访问点纵深防御/金额恒两位小数/
 // 状态中文化）（守卫 rw-mp-orders-golden）。
+// 响应形状哨兵见 rewrite/cloud/tests/contract-shape.test.ts·cloud 改键该测试会红·同步时两头一起改（批B10）。
 export interface OrderLineVM {
   lineId: string
   name: string
