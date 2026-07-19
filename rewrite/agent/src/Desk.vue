@@ -83,7 +83,10 @@ const draft = ref('')
 const panels = ref<Array<Record<string, any>>>([])
 const panelNote = ref('')
 const message = ref('')
-const busy = ref(false)
+// 发送忙碌锁按会话隔离（F1·P2 race 修复：组件级共享 busy 会让 A 会话发送在途拦住 B 会话发送）——
+// reactive Set 按 sessionId 索引，只拦「同一会话」的重复发送；template :disabled 判 sendingIds.has(currentId)。
+const sendingIds = reactive(new Set<string>())
+const draftLen = computed(() => draft.value.length) // F2：接近 2000 字上限时显字数，避免后端静默截断坐席却不知道
 
 // 顾客发图坐席可见（B5·图片气泡）：组件内缓存，键＝msgid（只有入站客户消息带 hasMedia/msgid，出站/无媒体不入这张表）。
 // 未点开＝表里没有该 key（视同 idle，占位卡「图片 · 点击加载」）；点击才触发 getMediaUrl 下载——回调侧不预下载，坐席按需拉取。
@@ -275,21 +278,25 @@ async function open(sessionId: string) {
 
 async function send() {
   const text = draft.value.trim()
-  if (!text || !currentId.value || busy.value) return
-  const sid = currentId.value // 会话粒度快照（F4·同 act()/open() 治法：await 期间用户可能已切会话——若不快照，
+  if (!text || !currentId.value) return
+  const sid = currentId.value // 会话粒度快照（同 act()/open() 治法：await 期间用户可能已切会话——若不快照，
   // A 发送在途时切到 B 并打新草稿，A 的回包落地会用 currentId.value（此刻已是 B）误清掉 B 正在打的字）
-  busy.value = true
-  const r = await post('sendAgentMessage', { sessionId: sid, text })
-  busy.value = false // 无条件复位（不受 sid 复核约束）：否则切会话后发送按钮永久卡死不可用
-  if (currentId.value === sid) {
-    // 期间已切别的会话——以下 UI 效果不落地：不清掉新会话正在打的字（open() 切会话时已清过旧草稿，
-    // 框里现在是新会话的新字，这里「不清」正是期望行为，不是遗漏）、不把旧会话的失败提示标到新会话上
-    if (r.ok) {
-      draft.value = '' // 只有发成功才清输入框（旧线 95018 教训：失败清框=顾客话丢了）
-      void pollThread()
-    } else {
-      message.value = deskErrorText(r.error)
+  if (sendingIds.has(sid)) return // F1：忙碌锁按会话隔离——只拦同一会话的重复发送，不误伤别的会话
+  sendingIds.add(sid)
+  try {
+    const r = await post('sendAgentMessage', { sessionId: sid, text })
+    if (currentId.value === sid) {
+      // 期间已切别的会话——以下 UI 效果不落地：不清掉新会话正在打的字（open() 切会话时已清过旧草稿，
+      // 框里现在是新会话的新字，这里「不清」正是期望行为，不是遗漏）、不把旧会话的失败提示标到新会话上
+      if (r.ok) {
+        draft.value = '' // 只有发成功才清输入框（旧线 95018 教训：失败清框=顾客话丢了）
+        void pollThread()
+      } else {
+        message.value = deskErrorText(r.error)
+      }
     }
+  } finally {
+    sendingIds.delete(sid) // 无条件复位（不受 currentId 复核约束）：按会话粒度复位，否则该会话按钮永久卡死；不影响其它会话的锁
   }
 }
 
@@ -405,8 +412,17 @@ onBeforeUnmount(() => {
           </div>
         </div>
         <div class="composer">
-          <textarea v-model="draft" placeholder="回复顾客…（Ctrl+Enter 发送）" @keydown.ctrl.enter="send" />
-          <button class="act" :disabled="busy" @click="send">发送</button>
+          <div class="composer-field">
+            <textarea
+              v-model="draft"
+              maxlength="2000"
+              placeholder="回复顾客…（Ctrl+Enter 发送）"
+              @keydown.ctrl.enter="send"
+            />
+            <!-- F2：与 agentDesk.ts MAX_TEXT 手动同步（不改后端）——kit str() 超长静默截断，接近上限先给坐席看见 -->
+            <span v-if="draftLen >= 1900" class="charcount">{{ draftLen }}/2000</span>
+          </div>
+          <button class="act" :disabled="sendingIds.has(currentId)" @click="send">发送</button>
         </div>
         <div class="sessionops">
           <button class="ghost" @click="act('releaseConversation')">放回队列</button>
@@ -574,14 +590,27 @@ main {
   gap: 8px;
   margin-top: 8px;
 }
-textarea {
+.composer-field {
+  position: relative;
   flex: 1;
+}
+textarea {
+  display: block;
+  width: 100%;
   min-height: 60px;
-  padding: 10px 12px;
+  padding: 10px 12px 24px;
   border: 1px solid var(--ld-purple-line);
   border-radius: var(--ld-radius);
   font-size: 14px;
   resize: vertical;
+}
+.charcount {
+  position: absolute;
+  right: 16px;
+  bottom: 6px;
+  font-size: 11px;
+  color: var(--ld-purple-meta);
+  pointer-events: none;
 }
 .sessionops {
   display: flex;
