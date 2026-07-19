@@ -26,6 +26,19 @@ jobs:
       - name: 安装依赖
         run: npm ci
 
+      # 依赖安全审计（B8·2026-07-19 快照·报告模式·不阻断合并）：本地
+      # `npm audit --omit=dev` 实测 40 条既有告警（13 high / 14 moderate /
+      # 13 low，0 critical，advisory DB 持续更新会漂移，实跑数字以当次为准）。
+      # 非 --force 的 `npm audit fix` 只能修 1 个 moderate（postcss），13 条
+      # high 全部需要 --force（breaking：@dcloudio/uni-mp-weixin 等间接依赖），
+      # 故本批不设 blocking——先接可见性，把存量摆到明处。升级 blocking 前置：
+      # ① 逐条核对 breaking change 面后清存量，或 ② 显式接受风险记账后再摘
+      # continue-on-error（见 docs/待办与债.md）。守卫 ci-audit-step-present
+      # 钉住这一步不被静默摘除（不评判闸门严格度，只保证步骤在位）。
+      - name: 依赖安全审计（npm audit，报告模式·不阻断合并）
+        run: npm audit --omit=dev --audit-level=high
+        continue-on-error: true
+
       - name: 质量闸（conventions + structure + typecheck + lint + test）
         run: npm run check
 

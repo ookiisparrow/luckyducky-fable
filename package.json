@@ -44,6 +44,7 @@
     "format": "prettier --write \"packages/miniapp/src/**/*.{vue,js,scss,json}\"",
     "test": "vitest run",
     "test:watch": "vitest",
+    "coverage": "vitest run --coverage",
     "check": "npm run check:conventions && npm run check:structure && npm run typecheck && npm run lint && npm run test"
   },
   "devDependencies": {
@@ -51,6 +52,7 @@
     "@cloudbase/node-sdk": "^3.18.1",
     "@eslint/js": "^9.10.0",
     "@typescript-eslint/parser": "^8.62.1",
+    "@vitest/coverage-v8": "^4.1.8",
     "esbuild": "^0.20.2",
     "eslint": "^9.10.0",
     "eslint-config-prettier": "^9.1.0",

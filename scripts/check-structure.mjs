@@ -1879,6 +1879,27 @@ export const repoChecks = [
     },
   },
   {
+    // 依赖安全审计接线（B8·2026-07-19 快照）：本地 `npm audit --omit=dev` 实测 40 条
+    // 既有告警（13 high / 14 moderate / 13 low，0 critical）；非 --force 的
+    // `npm audit fix` 只能修 1 个 moderate（postcss），13 条 high 全部需要
+    // --force（breaking：@dcloudio/uni-mp-weixin 等），故本批只接「可见性」
+    // （CI 报告模式 + continue-on-error），不升级为 blocking——升级前置条件
+    // （清存量或显式接受风险记账）见 docs/待办与债.md。仿 rw-artifact-gate-in-ci
+    // 同款「闸不能被悄悄拆」模式：只钉「这一步真的在 CI 里跑」，不评判闸门
+    // 严格度（严格度是产品/风险决策，机器管不着也不该管）。
+    id: 'ci-audit-step-present',
+    roots: ['铁律'],
+    desc: 'CI 依赖安全审计步骤在位（铁律·仿 rw-artifact-gate-in-ci 模式）：.github/workflows/ci.yml 须含 `npm audit` 调用——防依赖安全审计（当前报告模式·B8 起步）被静默摘除',
+    run() {
+      const f = '.github/workflows/ci.yml'
+      const abs = join(ROOT, f)
+      if (!existsSync(abs)) return [`${f} 不存在（依赖安全审计闸缺失）`]
+      if (!/npm audit\b/.test(readFileSync(abs, 'utf8')))
+        return [`${f} 未见 npm audit 步骤——依赖安全审计（B8 报告模式）被摘除或从未接线`]
+      return []
+    },
+  },
+  {
     id: 'requirement-trace',
     roots: ['元'],
     desc: '需求→守卫闭环（仿 guard-coverage 泛化「病根→守卫」为「需求→功能→守卫」）：需求清单「需求→实现映射」每条 ✅ 实现需求(L1)须有映射行，且行内 函数(见系统事实)/测试(tests/cloud)/守卫(注册表) 真实存在——改需求或改码断链当场红；`npm run trace R#` 查爆炸半径。⚠️ 深审 P3：映射表函数/测试(tests/cloud)全锚**冻结旧线**，旧线冻结⇒对唯一在迭代的 rewrite 实现该守卫的「改码断链当场红」永不触发——是旧线参照链；新线需求追溯（R34/R38 等 rewrite 已实现）走各 rw- golden 守卫、未纳入本表（未闭合债·docs/待办与债）',
