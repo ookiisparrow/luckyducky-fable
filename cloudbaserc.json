@@ -4,68 +4,26 @@
   "functionRoot": "packages/cloud/dist",
   "functions": [
     {
-      "name": "initDb",
+      "name": "adminApi",
+      "timeout": 30,
+      "handler": "index.main",
+      "installDependency": true
+    },
+    {
+      "name": "app",
       "timeout": 15,
       "handler": "index.main",
       "installDependency": true
     },
     {
-      "name": "seedProducts",
+      "name": "cleanupEvents",
+      "timeout": 30,
+      "handler": "index.main",
+      "installDependency": true
+    },
+    {
+      "name": "closeExpiredOrders",
       "timeout": 20,
-      "handler": "index.main",
-      "installDependency": true
-    },
-    {
-      "name": "getProducts",
-      "timeout": 10,
-      "handler": "index.main",
-      "installDependency": true
-    },
-    {
-      "name": "seedCourses",
-      "timeout": 20,
-      "handler": "index.main",
-      "installDependency": true
-    },
-    {
-      "name": "getCourses",
-      "timeout": 10,
-      "handler": "index.main",
-      "installDependency": true
-    },
-    {
-      "name": "getPlaybackUrl",
-      "timeout": 10,
-      "handler": "index.main",
-      "installDependency": true
-    },
-    {
-      "name": "createOrder",
-      "timeout": 10,
-      "handler": "index.main",
-      "installDependency": true
-    },
-    {
-      "name": "getMyOrders",
-      "timeout": 10,
-      "handler": "index.main",
-      "installDependency": true
-    },
-    {
-      "name": "confirmReceive",
-      "timeout": 10,
-      "handler": "index.main",
-      "installDependency": true
-    },
-    {
-      "name": "submitReview",
-      "timeout": 10,
-      "handler": "index.main",
-      "installDependency": true
-    },
-    {
-      "name": "getReviews",
-      "timeout": 10,
       "handler": "index.main",
       "installDependency": true
     },
@@ -76,130 +34,14 @@
       "installDependency": true
     },
     {
-      "name": "activateCourse",
-      "timeout": 10,
-      "handler": "index.main",
-      "installDependency": true
-    },
-    {
-      "name": "confirmEnter",
-      "timeout": 10,
-      "handler": "index.main",
-      "installDependency": true
-    },
-    {
-      "name": "getMyCourses",
-      "timeout": 10,
-      "handler": "index.main",
-      "installDependency": true
-    },
-    {
-      "name": "updateProfile",
-      "timeout": 10,
-      "handler": "index.main",
-      "installDependency": true
-    },
-    {
-      "name": "trackEvent",
-      "timeout": 10,
-      "handler": "index.main",
-      "installDependency": true
-    },
-    {
-      "name": "getMyProgress",
-      "timeout": 10,
-      "handler": "index.main",
-      "installDependency": true
-    },
-    {
-      "name": "submitCheckpointPhoto",
-      "timeout": 10,
-      "handler": "index.main",
-      "installDependency": true
-    },
-    {
-      "name": "adminApi",
-      "timeout": 30,
-      "handler": "index.main",
-      "installDependency": true
-    },
-    {
-      "name": "getContent",
-      "timeout": 10,
-      "handler": "index.main",
-      "installDependency": true
-    },
-    {
-      "name": "getHelpVideos",
-      "timeout": 10,
-      "handler": "index.main",
-      "installDependency": true
-    },
-    {
-      "name": "pay",
+      "name": "initDb",
       "timeout": 15,
       "handler": "index.main",
       "installDependency": true
     },
     {
-      "name": "payCallback",
+      "name": "inspect",
       "timeout": 15,
-      "handler": "index.main",
-      "installDependency": true
-    },
-    {
-      "name": "closeExpiredOrders",
-      "timeout": 20,
-      "handler": "index.main",
-      "installDependency": true,
-      "triggers": [
-        {
-          "name": "closeExpiredTimer",
-          "type": "timer",
-          "config": "0 */5 * * * * *"
-        }
-      ]
-    },
-    {
-      "name": "cleanupEvents",
-      "timeout": 30,
-      "handler": "index.main",
-      "installDependency": true,
-      "triggers": [
-        {
-          "name": "cleanupEventsTimer",
-          "type": "timer",
-          "config": "0 0 3 * * * *"
-        }
-      ]
-    },
-    {
-      "name": "applyRefund",
-      "timeout": 15,
-      "handler": "index.main",
-      "installDependency": true
-    },
-    {
-      "name": "getMyAfterSales",
-      "timeout": 10,
-      "handler": "index.main",
-      "installDependency": true
-    },
-    {
-      "name": "refundCallback",
-      "timeout": 15,
-      "handler": "index.main",
-      "installDependency": true
-    },
-    {
-      "name": "getOrderById",
-      "timeout": 10,
-      "handler": "index.main",
-      "installDependency": true
-    },
-    {
-      "name": "login",
-      "timeout": 10,
       "handler": "index.main",
       "installDependency": true
     },
@@ -210,8 +52,14 @@
       "installDependency": true
     },
     {
-      "name": "kfBind",
-      "timeout": 10,
+      "name": "kfHealthProbe",
+      "timeout": 20,
+      "handler": "index.main",
+      "installDependency": true
+    },
+    {
+      "name": "kfMedia",
+      "timeout": 15,
       "handler": "index.main",
       "installDependency": true
     },
@@ -222,8 +70,8 @@
       "installDependency": true
     },
     {
-      "name": "dataConsent",
-      "timeout": 10,
+      "name": "payCallback",
+      "timeout": 15,
       "handler": "index.main",
       "installDependency": true
     },
@@ -231,31 +79,23 @@
       "name": "recallScan",
       "timeout": 30,
       "handler": "index.main",
-      "installDependency": true,
-      "triggers": [
-        {
-          "name": "recallTimer",
-          "type": "timer",
-          "config": "0 0 9 * * * *"
-        }
-      ]
+      "installDependency": true
     },
     {
-      "name": "kfHealthProbe",
+      "name": "refundCallback",
+      "timeout": 15,
+      "handler": "index.main",
+      "installDependency": true
+    },
+    {
+      "name": "seedCourses",
       "timeout": 20,
       "handler": "index.main",
-      "installDependency": true,
-      "triggers": [
-        {
-          "name": "kfProbeTimer",
-          "type": "timer",
-          "config": "0 */30 * * * * *"
-        }
-      ]
+      "installDependency": true
     },
     {
-      "name": "submitFeedback",
-      "timeout": 10,
+      "name": "seedProducts",
+      "timeout": 20,
       "handler": "index.main",
       "installDependency": true
     }

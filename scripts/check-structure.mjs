@@ -1626,23 +1626,36 @@ export const repoChecks = [
   {
     id: 'deploy-config-complete',
     roots: ['#8'],
-    desc: '部署配置完整（根因#8 dry-run 过≠真部署能用）：cloudbaserc.json functions 须与 packages/cloud/src/functions/<域>/ 实际函数一一对应——漏配置真部署会卡交互确认（login 漏配即此坑，2026-06-14 真切换暴露）',
+    desc: '部署配置完整（根因#8 dry-run 过≠真部署能用·病根#16 指针漂移）：cloudbaserc.json functions 须与**活线** rewrite/cloud/src/functions 的部署单元（build.mjs collect() 同规则：顶层带 main 的 index.ts / 子目录 index.ts / 子 .ts）一一对应——漏配置真部署会卡交互确认（login 漏配即此坑 2026-06-14；2026-07-19 复现：新线 16 函数全缺配置，tcb 改问「用默认配置？」，答 y 会把 adminApi/cleanupEvents/recallScan 等 9 个函数超时按默认 15s 覆盖线上真值 20-30s）',
     run() {
       const rc = join(ROOT, 'cloudbaserc.json')
-      const fnRoot = join(ROOT, 'packages/cloud/src/functions')
+      const fnRoot = join(ROOT, 'rewrite/cloud/src/functions') // 活线（M5 后唯一部署源）·旧线 packages 已清退
       if (!existsSync(rc) || !existsSync(fnRoot)) return []
       const configured = new Set((JSON.parse(readFileSync(rc, 'utf8')).functions || []).map((f) => f.name))
+      // 部署单元枚举＝镜像 rewrite/cloud/build.mjs collect()：顶层目录含带 main 的 index.ts 即一个函数
+      // （app/adminApi），否则下探一层——子目录的 index.ts 或子 .ts 文件，均须含 `export const main`。
+      const hasMain = (fp) => readFileSync(fp, 'utf8').includes('export const main')
       const actual = []
-      for (const domain of readdirSync(fnRoot)) {
-        const dp = join(fnRoot, domain)
-        if (!statSync(dp).isDirectory()) continue
-        for (const e of readdirSync(dp)) {
-          const name = statSync(join(dp, e)).isDirectory() ? e : e.endsWith('.ts') ? e.slice(0, -3) : null
-          if (name) actual.push(name)
+      for (const top of readdirSync(fnRoot)) {
+        const tp = join(fnRoot, top)
+        if (!statSync(tp).isDirectory()) continue
+        const idx = join(tp, 'index.ts')
+        if (existsSync(idx) && hasMain(idx)) {
+          actual.push(top)
+          continue
+        }
+        for (const e of readdirSync(tp)) {
+          const ep = join(tp, e)
+          if (statSync(ep).isDirectory()) {
+            const ci = join(ep, 'index.ts')
+            if (existsSync(ci) && hasMain(ci)) actual.push(e)
+          } else if (e.endsWith('.ts') && !e.endsWith('.d.ts') && hasMain(ep)) {
+            actual.push(e.slice(0, -3))
+          }
         }
       }
       const bad = []
-      for (const name of actual) if (!configured.has(name)) bad.push(`云函数 ${name} 缺 cloudbaserc.json 配置——真部署会卡交互确认（根因#8）`)
+      for (const name of actual) if (!configured.has(name)) bad.push(`活线云函数 ${name} 缺 cloudbaserc.json 配置——真部署会卡交互确认、答 y 即按默认参数覆盖线上真值（根因#8/#16）`)
       for (const name of configured) if (!actual.includes(name)) bad.push(`cloudbaserc.json 配了不存在的函数 ${name}——孤儿配置`)
       return bad
     },
@@ -4531,7 +4544,7 @@ export const repoChecks = [
     // 「集合在册」——本守卫额外钉死「这个具体函数」的频控与目标集合，防回退成无频控 / 写错集合（运营钩子绝迹证明）。
     id: 'feedback-write-gated',
     roots: ['债#23', '#13'],
-    desc: '用户反馈写库过闸+限频+集合登记（运营钩子①·待办#23）：submitFeedback 须经 withOpenId + withRateLimit（根因#3/#13·公网用户写函数防伪+防刷）且写 COLLECTIONS.feedback（known-collections-only 同治）；cloudbaserc 须配 submitFeedback（漏配真部署卡交互·根因#8）',
+    desc: '用户反馈写库过闸+限频+集合登记（运营钩子①·待办#23）：submitFeedback 须经 withOpenId + withRateLimit（根因#3/#13·公网用户写函数防伪+防刷）且写 COLLECTIONS.feedback（known-collections-only 同治）。【批L】原「cloudbaserc 须配 submitFeedback」断言已退役：本守卫守冻结旧线，而 cloudbaserc 已迁活线、新线 submitFeedback 是 app 内 action',
     run() {
       const bad = []
       const f = 'packages/cloud/src/functions/feedback/submitFeedback.ts'
@@ -4547,10 +4560,10 @@ export const repoChecks = [
       const coll = join(ROOT, 'packages/cloud/src/kit/collections.ts')
       if (existsSync(coll) && !/feedback:\s*['"]feedback['"]/.test(readFileSync(coll, 'utf8')))
         bad.push('kit/collections.ts COLLECTIONS 未登记 feedback——写到锁名单外无权限保护集合（债#28/#23）')
-      // cloudbaserc 须配（漏配真部署卡交互确认·根因#8·同 deploy-config-complete 兜一道）
-      const rc = join(ROOT, 'cloudbaserc.json')
-      if (existsSync(rc) && !/"submitFeedback"/.test(readFileSync(rc, 'utf8')))
-        bad.push('cloudbaserc.json 未配 submitFeedback——真部署会卡交互确认（根因#8）')
+      // 【2026-07-19 批L 退役此断言】本守卫扫描面＝冻结旧线 packages/（独立云函数形态），而 cloudbaserc.json
+      // 已随部署链迁活线：新线没有独立 submitFeedback 函数，它是 `app` 网关内的一个 action，其写库过闸由活线
+      // 守卫族（rw-writes-need-gate / rw-user-writes-throttled）覆盖，部署配置完整性由 deploy-config-complete
+      // （已迁活线枚举）守。旧线守卫不该对活线部署配置提要求——跨线断言即指针漂移（病根#16）。
       return bad
     },
   },
