@@ -1,4 +1,5 @@
 import { defineConfig } from 'vitest/config'
+import vue from '@vitejs/plugin-vue'
 
 // 一仓多包测试编排（vitest projects）：
 //   miniapp —— packages/miniapp/vitest.config.mjs（@ 别名 + uni mock setup）
@@ -55,11 +56,17 @@ export default defineConfig({
       {
         // 新线（rewrite/）测试——rw-line-in-gates 守卫要求新线包必须被测试闸扫到。
         // @ldrw/shared 走源码别名（免建 dist）；wx-server-sdk 经根 node_modules 命中内存桩。
+        // plugins:[vue()]（B9）：只编译 .vue 文件的 transform，不影响其余 .ts/.js 测试文件——给
+        // admin 渲染测试（挂载真实 .vue 组件）提供 SFC 编译支持。environment 仍默认 'node'（纯逻辑
+        // 测试快），渲染测试改在各测试文件顶部单独加 `// @vitest-environment happy-dom` 文档块注释
+        // 切换（vitest 内置 per-file environment 覆盖，无需装 vitest-environment-happy-dom 包，只需
+        // happy-dom 本身在场）。
         resolve: {
           alias: {
             '@ldrw/shared': new URL('./rewrite/shared/src/index.ts', import.meta.url).pathname,
           },
         },
+        plugins: [vue()],
         test: {
           name: 'rw',
           environment: 'node',
