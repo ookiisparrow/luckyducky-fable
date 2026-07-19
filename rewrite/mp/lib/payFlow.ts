@@ -1,4 +1,5 @@
 // 支付结果映射（纯函数·vitest 钉·守卫 rw-mp-pay-golden）：云端 pay 契约 → 页面动作。
+// 响应形状哨兵见 rewrite/cloud/tests/contract-shape.test.ts·cloud 改键该测试会红·同步时两头一起改（批B10）。
 // fail-closed：收银台五参缺任一即判错不拉起（半空参数拉起=收银台闪退·比不拉更糟）；
 // BAD_STATUS:paid 判已付（并发已付幂等成功·不吓用户）。
 export type SignType = 'MD5' | 'HMAC-SHA256' | 'RSA'
