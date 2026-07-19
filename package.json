@@ -39,12 +39,15 @@
     "loadtest": "node scripts/loadtest.mjs",
     "smoke:mp": "node scripts/mp-smoke.cjs",
     "deploy:test": "node scripts/deploy-test.mjs",
+    "db:export": "node scripts/db-export.mjs",
+    "db:check-indexes": "node scripts/check-indexes.mjs",
     "format": "prettier --write \"packages/miniapp/src/**/*.{vue,js,scss,json}\"",
     "test": "vitest run",
     "test:watch": "vitest",
     "check": "npm run check:conventions && npm run check:structure && npm run typecheck && npm run lint && npm run test"
   },
   "devDependencies": {
+    "@cloudbase/manager-node": "^4.2.0",
     "@cloudbase/node-sdk": "^3.18.1",
     "@eslint/js": "^9.10.0",
     "@typescript-eslint/parser": "^8.62.1",
