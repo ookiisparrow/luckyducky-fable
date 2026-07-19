@@ -28,3 +28,10 @@ jobs:
 
       - name: 质量闸（conventions + structure + typecheck + lint + test）
         run: npm run check
+
+      # 产物闸（盲区体检批4·根因#8「构建过≠真能用」部署产物层镜像）：真实构建四个生产产物 +
+      # 活线云函数产物 require 进来真跑（加载面+网关 fail-closed 冒烟）。此前三道闸从不构建任何
+      # 真实产物——esbuild external 错/摇树误删这类问题在 check 全绿下直接流入生产。
+      # CI-only 硬化层（vite/astro 构建分钟级·不进 pre-commit）；守卫 rw-artifact-gate-in-ci 钉接线。
+      - name: 产物闸（build rw-cloud/admin/agent/site + 产物行为验证）
+        run: npm run check:artifacts

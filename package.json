@@ -27,6 +27,8 @@
     "build:cloud": "npm run build:shared && node packages/cloud/build.mjs",
     "build:rw-cloud": "node rewrite/cloud/build.mjs",
     "verify:cloud": "npm run build:cloud && node scripts/verify-cloud-bundles.cjs",
+    "verify:rw-cloud": "npm run build:rw-cloud && node scripts/verify-rw-cloud-bundles.cjs",
+    "check:artifacts": "npm run verify:rw-cloud && npm run build:rw-admin && npm run build:agent && npm run build -w @ldrw/site",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
     "check:conventions": "node scripts/check-conventions.mjs",

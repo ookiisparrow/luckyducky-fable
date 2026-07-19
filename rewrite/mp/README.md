@@ -7,6 +7,21 @@
 > **导入**：微信开发者工具 → 导入项目 → 选本目录（AppID 已预填）→ 工具能跑后点「预览」扫码真机。
 > **渲染引擎拍板（2026-07-04 收口）**：M2 首发**全 WebView**——M0 spike 已证按页 Skyline 可用性无障碍，但增益未证实（吸顶双引擎都不吸），按防过度工程原则不为未证实的收益引入双引擎变量；Skyline 留上线后按页灰度（能力在手，随时可开）。
 
+## 分层与依赖方向（T4 活线约定·守卫 `rw-dep-direction` 机器钉·2026-07-18 盲区体检批2 成文）
+
+此前这条方向只存在于代码事实里（从未写成文字·守卫也只扫冻结旧线）——现成文并配活线守卫：
+
+```text
+pages/ · components/ · custom-tab-bar/   （顶层·可越级下行直连 api/utils）
+        │
+        ▼
+       lib/  ──▶  api/  ──▶  utils/（叶·出度恒 0）
+```
+
+- `utils/` 是叶：禁 import 其余任何层；`api/` 只许 import `utils/`；`lib/` 许 `api/`/`utils/`、禁向上引 `pages/`/`components/`。
+- 顶层（pages/components/custom-tab-bar）越级直连 api/utils 合法（同旧线范式·不入守卫扫描面）；页面取目录数据必须走 `lib/catalog.ts`/`lib/courses.ts` 缓存单源（另一条守卫 `rw-mp-catalog-cache-single-source`·病根#15）。
+- 云端同批钉住：`rewrite/cloud/src/kit/` 禁反向 import `functions/`（kit=原语层）。
+
 ## 逐页走查清单（21 页 · 照着点 ✅/❌ + 一句话现象）
 
 **买东西这条链**

@@ -185,6 +185,8 @@ function inScope(file) {
 
 export function* walk(dir) {
   for (const name of readdirSync(dir)) {
+    // 扫描面排除（病根#16·同 check-structure 的 SKIP_DIR）：dot 目录（残留 worktree 等）与 vendor 目录不是活代码
+    if (name === 'node_modules' || name === 'dist' || name === 'miniprogram_npm' || name.startsWith('.')) continue
     const p = join(dir, name)
     if (statSync(p).isDirectory()) yield* walk(p)
     else if (inScope(p)) yield p
