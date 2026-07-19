@@ -258,6 +258,18 @@ describe('越规退款入口（决策§26·批 B8·钱链后端零改动）', ()
     expect(mapOverrideOrder('garbage', 'o1')).toBeNull()
     expect(mapOverrideOrder(null, 'o1')).toBeNull()
   })
+
+  // 批K K3（可达性回归）：refund_required 死信单是越规退款的**唯一**在库出口，前端不得对它做任何状态白名单——
+  // 商品行照渲染、状态显示「待退款」、门控只看「选了行+填了原因+勾了确认」。防后人顺手加 status 过滤把出口堵死。
+  it('大白话：refund_required 死信单在越规退款面板照常可选可提交（状态显示「待退款」·无状态白名单挡路）', () => {
+    const vm = mapOverrideOrder(
+      [{ _id: 'oD', status: 'refund_required', amount: 178, goods: 198, address: { name: '李四', phone: '13900000000' }, items: [{ lineId: 'p1__红', productId: 'p1', name: '鸭', spec: '红', qty: 2, price: 198 }] }],
+      'oD',
+    )!
+    expect(vm.statusLabel).toBe('待退款')
+    expect(vm.lines).toEqual([{ lineId: 'p1__红', label: '鸭（红） ×2 · ¥198.00' }])
+    expect(canOverrideRefund({ orderFound: true, lineId: vm.lines[0].lineId, reason: '缺货无法履约', ack: true, busy: false })).toBe(true)
+  })
 })
 
 // Orders.vue 抽屉商品行 :key 行身份（深审20260712·P3 撞键·取真源法）：旧 key 裸用 productId，
