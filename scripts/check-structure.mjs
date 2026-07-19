@@ -7148,6 +7148,41 @@ export const repoChecks = [
       return bad
     },
   },
+  {
+    // 批 B7（治病根#14 client-error 通道 web 半边）：admin/agent 两端 main.ts 此前零错误捕获——线上报错无声无痕。
+    // 断言面＝源码文本扫描（不跑运行时，window.onerror/unhandledrejection 的真实 DOM 事件挂接交给 golden 测试，
+    // node 环境无 window 全局测不了这层，见 rewrite/admin|agent/tests/errorReporter.test.ts 头注）。
+    id: 'rw-web-error-reporter-wired',
+    roots: ['#14'],
+    desc: 'admin/agent 前端错误上报接线三件套（批 B7·治病根#14 client-error 通道 web 半边）：main.ts 须调用 installErrorReporter(；lib/errorReporter.ts 须同时含 window.onerror / unhandledrejection / errorHandler 三件套捕获 + hasSession( 会话闸判断（不许裸打未鉴权请求）+ reportClientError（真打到约定的服务端 action 名）——任一缺失分别报出具体文件+具体缺项',
+    run() {
+      const bad = []
+      const pairs = [
+        ['admin', 'rewrite/admin/src/main.ts', 'rewrite/admin/src/lib/errorReporter.ts'],
+        ['agent', 'rewrite/agent/src/main.ts', 'rewrite/agent/src/lib/errorReporter.ts'],
+      ]
+      for (const [name, mainRel, libRel] of pairs) {
+        const mainAbs = join(ROOT, mainRel)
+        if (!existsSync(mainAbs)) {
+          bad.push(`${mainRel} 缺失（${name} 端入口文件不存在）`)
+        } else if (!/installErrorReporter\s*\(/.test(stripComments(readFileSync(mainAbs, 'utf8')))) {
+          bad.push(`${mainRel} 未调用 installErrorReporter(——${name} 端错误上报器未装线`)
+        }
+        const libAbs = join(ROOT, libRel)
+        if (!existsSync(libAbs)) {
+          bad.push(`${libRel} 缺失（${name} 端错误上报器未建）`)
+          continue
+        }
+        const libSrc = stripComments(readFileSync(libAbs, 'utf8'))
+        if (!/window\.onerror/.test(libSrc)) bad.push(`${libRel} 未见 window.onerror 挂接`)
+        if (!/unhandledrejection/.test(libSrc)) bad.push(`${libRel} 未见 unhandledrejection 挂接`)
+        if (!/errorHandler/.test(libSrc)) bad.push(`${libRel} 未见 errorHandler 接管（Vue app.config.errorHandler）`)
+        if (!/hasSession\s*\(/.test(libSrc)) bad.push(`${libRel} 未见 hasSession( 会话闸判断——不许裸打未鉴权请求`)
+        if (!/reportClientError/.test(libSrc)) bad.push(`${libRel} 未见 reportClientError——未打到约定的服务端 action 名`)
+      }
+      return bad
+    },
+  },
 ]
 
 // ============== 逐文件规则（fileRules）==============

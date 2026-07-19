@@ -176,6 +176,10 @@ const ACTIONS: Record<string, (ctx: Ctx) => Promise<any>> = {
   listAnomalies: ops.listAnomalies,
   resolveAnomaly: ops.resolveAnomaly,
   listAudit: ops.listAudit,
+  // web 前端错误上报唯一落口（批 B7·治病根#14 client-error 通道 web 半边）：admin/agent errorReporter.ts 三件套
+  // 捕获后打此 action；cap 复用 agent:handle（外包坐席台前端也要能报错），见 ACTION_CAPS 注释；不进 auditLog
+  // （shouldAudit 已排除，见 kit/audit.ts）——它自己的账本是 anomalies。
+  reportClientError: ops.reportClientError,
   // 人工配置清单（批 B9·只探测状态·零回显）：未登记 ACTION_CAPS→默认拒 admin:write＝仅超管
   getConfigChecklist: configChecklist.getConfigChecklist,
   // 人工配置清单可填写化（决策 2026-07-12）：写敏感凭证/支付接缝配置·未登记 ACTION_CAPS→默认拒 admin:write＝仅超管
@@ -206,6 +210,10 @@ const ACTION_CAPS: Record<string, string> = {
   getSessionCustomer360: 'agent:handle',
   // 快捷回复读知识库（kb=公司 FAQ·非客户 PII）：外包可读；saveKb 仍默认拒 admin:write（仅超管维护）
   listKb: 'agent:handle',
+  // web 前端错误上报（批 B7）：复用 agent:handle——本 action 不读写任何业务数据，只写自己的诊断遥测（anomalies），
+  // 不为它单开新 cap；外包坐席台前端也要能报错（否则 agent 端报错永远 403）；同 searchConversations 复用
+  // customer:view 的先例（不为单 action 开新 cap）。
+  reportClientError: 'agent:handle',
   // 越规退款（决策§26·退货管理权限）：单立 refund:manage 能力——超管 '*' 天然匹配，未来可给中间角色单授而不放全量 admin:write
   overrideRefund: 'refund:manage',
 }

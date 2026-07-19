@@ -197,6 +197,16 @@ describe('RBAC 默认拒（黄金 kit-security §D）', () => {
       delete registries.ACTIONS.testQueue
     }
   })
+
+  it('大白话：外包坐席台前端能过 reportClientError 能力闸（批 B7·cap 复用 agent:handle，否则 agent 端报错永远 403）', async () => {
+    control.seed('adminConfig', [
+      { _id: 'auth', keyHash: sha('super-secret-key'), role: 'superadmin' },
+      { _id: 'agent-1', keyHash: sha('outsourced-key-1'), role: 'outsourced', name: '外包一号' },
+    ])
+    const r = await post({ action: 'reportClientError', key: 'outsourced-key-1', data: { msg: 'x', source: 'agent' } })
+    expect(r.statusCode).toBe(200)
+    expect(bodyOf(r).ok).toBe(true)
+  })
 })
 
 describe('操作审计（黄金 kit-security §H）', () => {
@@ -209,6 +219,7 @@ describe('操作审计（黄金 kit-security §H）', () => {
     expect(shouldAudit('ping')).toBe(false)
     expect(shouldAudit('getCustomer360')).toBe(true) // FORCE_AUDIT
     expect(shouldAudit('searchCustomer')).toBe(true)
+    expect(shouldAudit('reportClientError')).toBe(false) // 批 B7：高频遥测，账本是 anomalies 不是 auditLog
   })
 
   it('大白话：留痕记操作/操作者/成败且剥除凭证类字段；写审计失败绝不反噬业务', async () => {

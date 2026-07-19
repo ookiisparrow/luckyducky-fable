@@ -1,5 +1,5 @@
 import { reply, type Ctx } from '../lib'
-import { runInspection, pageQuery } from '../../../kit'
+import { runInspection, pageQuery, recordAnomaly, throttleHit, str } from '../../../kit'
 import { COLLECTIONS } from '@ldrw/shared'
 
 // 运行期观测·控制台数据层（批3·体检面板 + 异常账本·治病根#14 告警进人眼）：手动巡检 / 最新体检 / 异常列表 /
@@ -119,4 +119,40 @@ export async function listAudit({ db, data }: Ctx) {
     ts: Number(r.ts) || 0,
   }))
   return reply(200, { ok: true, entries, nextCursor, hasMore })
+}
+
+// web 前端错误上报（批 B7·治病根#14 client-error 通道 web 半边）：admin/agent 两端 errorReporter.ts（三件套
+// window.onerror/unhandledrejection/Vue errorHandler）唯一落口。会话内客户端已去重 + 封顶（MAX_REPORTS=20，
+// 见两端 lib/errorReporter.ts）——此处服务端二级节流（按 agentId，10 分钟窗 20 次，同一圆整值降认知负担）
+// 防绕过前端节流的重放/多开。写入走既有 recordAnomaly('client-error',...) 通道（kind 早已在 mp 端启用，见
+// rewrite/mp/app.ts::reportClientError→trackEvent('client_error',...)——本 action 是完全不同的函数/路径，
+// 与 mp 那条本地函数同名不冲突）。**不**过 shouldAudit（kit/audit.ts 已排除）：高频遥测非操作审计对象。
+const CLIENT_ERROR_THROTTLE = { max: 20, windowMs: 10 * 60_000 }
+const CLIENT_ERROR_CODE: Record<string, string> = { admin: 'ADMIN_JS_ERROR', agent: 'AGENT_JS_ERROR' }
+
+// 短哈希指纹（djb2 风格滚动哈希→base36，纯 ASCII 输出）：避开 shared/observability.ts::anomalyFingerprint
+// 的 `[^a-zA-Z0-9_.-]` 白名单剥空坑——若直接把中文报错消息整段当 fp scope，非 ASCII 字符会被整段剥空，
+// 所有中文报错会坍缩成同一条指纹（mp 侧现有实现 `fp:msg.slice(0,60)` 潜藏此坑，见 docs/待办与债.md；
+// 本批不碰 mp，仅新写的这条 action 用字符集无关的短哈希避开同一坑）。指纹用途是去重分组，非安全哈希，
+// 碰撞可接受（同码同源不同措辞的报错折成一条属可接受的粗粒度）。
+function hashSig(s: string): string {
+  let h = 5381
+  for (let i = 0; i < s.length; i++) {
+    h = (h * 33) ^ s.charCodeAt(i)
+    h |= 0
+  }
+  return (h >>> 0).toString(36)
+}
+
+/** web 前端错误上报唯一落口（admin/agent 两端共用）：节流→校验→落 anomalies。fail-soft 由 recordAnomaly 自身承担。 */
+export async function reportClientError({ data, agentId }: Ctx) {
+  const over = await throttleHit('clientError:' + (agentId || 'anon'), CLIENT_ERROR_THROTTLE)
+  if (over) return reply(200, { ok: true, dropped: true }) // 节流丢弃不算错误，前端不必重试
+  const d = data || {}
+  const msg = str(d.msg, 500)
+  if (!msg) return reply(200, { ok: false, error: 'BAD_ARGS' })
+  const source = d.source === 'admin' || d.source === 'agent' ? d.source : 'unknown'
+  const page = str(d.page, 200)
+  await recordAnomaly('client-error', CLIENT_ERROR_CODE[source] || 'WEB_JS_ERROR', { fp: hashSig(msg), source, page, msg, agentId: agentId || '' }, 'low')
+  return reply(200, { ok: true })
 }

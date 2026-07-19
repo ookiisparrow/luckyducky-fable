@@ -58,5 +58,9 @@ const FORCE_AUDIT = new Set(['getCustomer360', 'getUser', 'searchCustomer', 'get
 // FORCE_AUDIT 名单破例（§1.5 越权读）：无视 ^get 跳过、强制留痕。
 export function shouldAudit(action: string): boolean {
   if (FORCE_AUDIT.has(action)) return true
+  // 批 B7 排除：reportClientError 是高频遥测（web 前端错误上报），非操作者动钱/动状态动作——同 upload* 噪声
+  // 豁免精神，它自己的账本是 anomalies（kit/anomaly.ts）不是 auditLog；否则该名不以 list/get/upload 开头会被
+  // 默认正则判进操作审计，把 auditLog 刷成错误日志噪声。
+  if (action === 'reportClientError') return false
   return !/^(list|get|upload)/.test(action) && action !== 'ping' && action !== 'login'
 }
