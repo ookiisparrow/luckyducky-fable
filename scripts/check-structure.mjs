@@ -6418,6 +6418,89 @@ export const repoChecks = [
     },
   },
   {
+    // 电商漏斗埋点 + 强制更新 + 冷启动耗时（R41·上线前必埋钩子，运营与增长规划①「上线前必埋钩子——后补极贵」）：
+    // mp 全仓曾零 getUpdateManager 接线（推支付类 hotfix 时老版本用户更新不下去）、电商主漏斗「浏览→加购→
+    // 下单→支付」零埋点、冷启动耗时线上零数据——trackEvent 管道早已通用（服务端 type 自由字符串·零改动），
+    // 缺的只是接线。触点表驱动（同 rw-mp-customer-service-wired/rw-mp-home-quick-add-real 范式）钉住七个
+    // 漏斗触点各自真调对应 type/page；强更五段（getUpdateManager/onCheckForUpdate/onUpdateReady/
+    // applyUpdate/onUpdateFailed）与 app.ts 两处接线（markLaunch/checkForUpdate）单独钉；冷启动
+    // markLaunch/reportColdStart 单独钉。checkout.ts onSubmit 出现两条表项是刻意的（同一方法内两次不同
+    // 调用，各自独立断言，不是共用一次判定）。
+    id: 'rw-mp-funnel-tracked',
+    roots: ['R41'],
+    desc: '电商漏斗埋点+强制更新+冷启动耗时接线（R41）：home/detail/cart/checkout/paysuccess 七个 trackEvent 触点须真调对应 type/page；app.ts onLaunch 须调 markLaunch()+checkForUpdate()；utils/appUpdate.ts 须接线 wx.getUpdateManager 五段（getUpdateManager/onCheckForUpdate/onUpdateReady/applyUpdate/onUpdateFailed）；lib/coldStart.ts 须含 cold_start 上报，home.ts onReady() 须调 reportColdStart()',
+    run() {
+      const base = join(ROOT, 'rewrite/mp')
+      if (!existsSync(base)) return []
+      const bad = []
+      // ① 触点表驱动：七个漏斗埋点各自方法体须真调 trackEvent('type','page',…)
+      const FUNNEL_TOUCHPOINTS = [
+        { file: 'pages/home/home.ts', method: 'onAddProduct', type: 'add_to_cart', page: 'home' },
+        { file: 'pages/detail/detail.ts', method: 'loadProduct', type: 'view_product', page: 'detail' },
+        { file: 'pages/detail/detail.ts', method: 'onAddCart', type: 'add_to_cart', page: 'detail' },
+        { file: 'pages/cart/cart.ts', method: 'onCheckout', type: 'checkout_start', page: 'cart' },
+        { file: 'pages/checkout/checkout.ts', method: 'onSubmit', type: 'order_submit', page: 'checkout' },
+        { file: 'pages/checkout/checkout.ts', method: 'onSubmit', type: 'order_success', page: 'checkout' },
+        { file: 'pages/paysuccess/paysuccess.ts', method: 'onLoad', type: 'pay_success_view', page: 'paysuccess' },
+      ]
+      for (const tp of FUNNEL_TOUCHPOINTS) {
+        const abs = join(base, tp.file)
+        if (!existsSync(abs)) {
+          bad.push(`${tp.file} 缺失（电商漏斗埋点触点·R41）`)
+          continue
+        }
+        const src = readFileSync(abs, 'utf8')
+        const body = methodBody(src, tp.method)
+        if (!body) {
+          bad.push(`${tp.file} 找不到 ${tp.method}() 方法体——电商漏斗埋点触点单点丢失（R41）`)
+          continue
+        }
+        const re = new RegExp(`trackEvent\\(\\s*['"]${tp.type}['"]\\s*,\\s*['"]${tp.page}['"]`)
+        if (!re.test(stripComments(body)))
+          bad.push(`${tp.file} 的 ${tp.method}() 未调 trackEvent('${tp.type}','${tp.page}',…)——电商漏斗埋点缺失（R41）`)
+      }
+      // ② 强更接线：app.ts onLaunch 须调 markLaunch()+checkForUpdate()；utils/appUpdate.ts 须接线五段
+      const appPath = join(base, 'app.ts')
+      if (!existsSync(appPath)) {
+        bad.push('app.ts 缺失（强更/冷启动接线·R41）')
+      } else {
+        const appBody = methodBody(readFileSync(appPath, 'utf8'), 'onLaunch')
+        if (!appBody) {
+          bad.push('app.ts 找不到 onLaunch() 方法体——强更/冷启动接线单点丢失（R41）')
+        } else {
+          const appBodyClean = stripComments(appBody)
+          if (!/markLaunch\s*\(/.test(appBodyClean)) bad.push('app.ts 的 onLaunch() 未调 markLaunch()——冷启动计时起点缺失（R41）')
+          if (!/checkForUpdate\s*\(/.test(appBodyClean)) bad.push('app.ts 的 onLaunch() 未调 checkForUpdate()——强制更新未接线（R41）')
+        }
+      }
+      const updPath = join(base, 'utils/appUpdate.ts')
+      if (!existsSync(updPath)) {
+        bad.push('utils/appUpdate.ts 缺失——强制更新未实现（R41）')
+      } else {
+        const updSrc = stripComments(readFileSync(updPath, 'utf8'))
+        for (const name of ['getUpdateManager', 'onCheckForUpdate', 'onUpdateReady', 'applyUpdate', 'onUpdateFailed'])
+          if (!new RegExp(name + '\\s*\\(').test(updSrc)) bad.push(`utils/appUpdate.ts 未见 ${name}(——强更事件链缺一环（R41）`)
+      }
+      // ③ 冷启动：lib/coldStart.ts 须含 cold_start 上报，home.ts onReady() 须调 reportColdStart()
+      const coldPath = join(base, 'lib/coldStart.ts')
+      if (!existsSync(coldPath)) {
+        bad.push('lib/coldStart.ts 缺失——冷启动耗时上报未实现（R41）')
+      } else if (!/trackEvent\(\s*['"]cold_start['"]/.test(stripComments(readFileSync(coldPath, 'utf8')))) {
+        bad.push("lib/coldStart.ts 未见 trackEvent('cold_start',…)——冷启动耗时未上报（R41）")
+      }
+      const homePath = join(base, 'pages/home/home.ts')
+      if (!existsSync(homePath)) {
+        bad.push('pages/home/home.ts 缺失（冷启动上报挂点·R41）')
+      } else {
+        const readyBody = methodBody(readFileSync(homePath, 'utf8'), 'onReady')
+        if (!readyBody) bad.push('pages/home/home.ts 找不到 onReady() 方法体——冷启动上报挂点缺失（R41）')
+        else if (!/reportColdStart\s*\(/.test(stripComments(readyBody)))
+          bad.push('pages/home/home.ts 的 onReady() 未调 reportColdStart()——冷启动耗时未上报（R41）')
+      }
+      return bad
+    },
+  },
+  {
     // 品牌字体分层子集覆盖（字体分层批·根因#8「构建过≠真机能用」的文案漂移变体）：mp 上屏文案随迭代
     // 只增不减，而字体子集是离线构建产物（源 OTF 84MB 不入仓）——新增文案若带来子集外新字，build 照常
     // 全绿、真机该字静默掉回系统字体（单字版 FOUT 永不结束）。守两条包含关系（推导逻辑与构建脚本共用

@@ -2,6 +2,7 @@
 // 实付金额来自 checkout 拉起支付时透传的实付分（?amount=fen·钱链单源在云端/checkout·此处仅展示）；
 // 缺 amount（旧链路/异常）则隐去金额行、绝不写死。出口逻辑（回首页/看订单）保持不变。
 import { tapHaptic } from '../../lib/haptics'
+import { trackEvent } from '../../api/learning'
 import { goHomeTab } from '../../lib/homeIntent'
 
 Page({
@@ -19,6 +20,7 @@ Page({
       }
     }
     this.setData({ orderId, amountYuan, hasAmount })
+    trackEvent('pay_success_view', 'paysuccess', orderId, { amountYuan, hasAmount }) // 电商漏斗埋点（R41）
   },
   onGoHome() {
     tapHaptic()

@@ -1,6 +1,7 @@
 // 结算页（M2 批5·批6 接收银）：地址 + 条目预览 + 搭配购 + 金额明细 + 提交订单 + 拉起支付。
 // 提交经 app 网关 createOrder（云端定价/校验/预留库存·不信前端）；支付参数经 mapPayResult fail-closed。
 import { tapHaptic } from '../../lib/haptics'
+import { trackEvent } from '../../api/learning'
 import * as addr from '../../lib/address'
 import * as checkout from '../../lib/checkout'
 import { CHECKOUT_ADDONS } from '../../lib/checkoutConst'
@@ -84,6 +85,7 @@ Page({
     }
     tapHaptic()
     const draft = checkout.getDraft()
+    trackEvent('order_submit', 'checkout', '', { count: draft.items.reduce((n, l) => n + l.qty, 0), amountFen: checkout.summaryFen().amountFen }) // 电商漏斗埋点（R41）
     this.setData({ submitting: true })
     const r = await createOrder(
       draft.items.map((l) => ({ id: l.id, sku: l.sku, qty: l.qty })),
@@ -113,6 +115,7 @@ Page({
     const amountFen = checkout.resolveOrderAmountFen(r.order, fallbackFen)
     checkout.finishSubmitted() // 购物车按实际提交数量精确扣
     const order = (r.order || {}) as Record<string, any>
+    trackEvent('order_success', 'checkout', String(order.id || ''), { amountFen }) // 电商漏斗埋点（R41）
     if (order.status === 'paid') {
       // mock 模式建单即付（开发环境）——直接进成功页
       wx.redirectTo({ url: '/pages/paysuccess/paysuccess?id=' + order.id + '&amount=' + amountFen })

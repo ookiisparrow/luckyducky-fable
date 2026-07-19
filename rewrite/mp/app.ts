@@ -3,6 +3,8 @@
 import { registerPrivacyGate } from './lib/privacyGate'
 import { trackEvent } from './api/learning'
 import { loadBrandFonts } from './utils/brandFont'
+import { markLaunch } from './lib/coldStart'
+import { checkForUpdate } from './utils/appUpdate'
 
 // 错误探针（批次D·守卫 mp-smoke-wired）：封顶数组挂 globalThis，冒烟脚本 evaluate 取证 + 真机排查线索（根因#14）。
 const SMOKE_ERROR_CAP = 50
@@ -35,11 +37,13 @@ function reportClientError(msg: unknown) {
 }
 App({
   onLaunch() {
+    markLaunch() // 冷启动计时起点（R41·配 lib/coldStart.reportColdStart 在 home 首帧 onReady 算 delta 上报）
     if (wx.cloud) {
       wx.cloud.init({ env: 'cloudbase-d4gcssqbv06865479', traceUser: true })
     }
     registerPrivacyGate() // 隐私授权闸（R27㉒·配 privacy-sheet 弹窗·守卫 rw-mp-privacy-gated）
     loadBrandFonts() // 品牌字体远程加载（downloadFile→base64 绕 CORS·见函数注释·根因#8）
+    checkForUpdate() // 强制更新接线（R41·wx.getUpdateManager 三段式）
   },
   onError(err) {
     pushSmokeError(err)
