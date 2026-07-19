@@ -12,7 +12,7 @@
     "build:app": "uni build -p app"
   },
   "dependencies": {
-    "@dcloudio/uni-app": "3.0.0-5000720260410001",
+    "@dcloudio/uni-app": "3.0.0-5010520260709002",
     "@dcloudio/uni-app-harmony": "3.0.0-5000720260410001",
     "@dcloudio/uni-app-plus": "3.0.0-5000720260410001",
     "@dcloudio/uni-components": "3.0.0-5000720260410001",
