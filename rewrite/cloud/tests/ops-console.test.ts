@@ -35,6 +35,21 @@ describe('运行期观测控制台数据层（批3·rw-ops-console-golden）', (
     expect(r.openAnomalies).toBe(1)
   })
 
+  it('大白话：心跳档（startedAt:0）不污染体检读路径——只有心跳档时 latest:null（无真巡检记录）', async () => {
+    control.seed(COLLECTIONS.inspectRuns, [{ _id: 'hb:20260719', startedAt: 0, summary: { green: 0, red: 0 }, results: [] }])
+    const r = body(await getInspectStatus(ctx()))
+    expect(r.latest).toBe(null) // 心跳档被 startedAt>0 过滤·不当最新体检（读侧意图显式）
+  })
+
+  it('大白话：心跳档与真巡检混存→取真巡检（心跳不挤占最新体检位）', async () => {
+    control.seed(COLLECTIONS.inspectRuns, [
+      { _id: 'hb:20260719', startedAt: 0, summary: { green: 0, red: 0 }, results: [] },
+      { _id: 'inspect_timer_5', startedAt: 5, summary: { green: 3, red: 0 }, results: [] },
+    ])
+    const r = body(await getInspectStatus(ctx()))
+    expect(r.latest._id).toBe('inspect_timer_5')
+  })
+
   it('大白话：异常列表按 lastSeen 倒序·筛未处理/kind·有界分页', async () => {
     control.seed(COLLECTIONS.anomalies, [
       { _id: 'a1', kind: 'invariant-violation', resolved: false, lastSeen: 1 },
