@@ -5,6 +5,7 @@ import { ref, computed, onMounted } from 'vue'
 import { RotateCcw, Trash2, Plus, ListChecks, BookOpen } from 'lucide-vue-next'
 import { listCheckpoints, saveCheckpoints } from '../api/cs'
 import { nextNodeId, duplicateNodeIds } from '../lib/mapCs'
+import { useLatest } from '../lib/latest'
 import UiButton from '../components/ui/Button.vue'
 import PageHeader from '../components/ui/PageHeader.vue'
 import Card from '../components/ui/Card.vue'
@@ -25,6 +26,9 @@ const loaded = ref(false)
 const message = ref('')
 const busy = ref(false)
 const confirmKey = ref('')
+const baseRev = ref(0) // 拉取那一刻的元档版本号（乐观并发基线·批A·课程级 CAS 元档 defmeta:<courseId>）
+const conflicted = ref(false) // 冲突态：别处已改过本课策展——提示重载，不自动 reload、不丢当前编辑
+const loadGen = useLatest() // load() 乱序守卫（批A·同 Batches G1）：连点载入/换课时旧回包别把 nodes 污染成错课
 
 // 课号输入框与已载入课漂移（改了没点载入）：提示先重载，避免以为在编 A 其实要覆盖 A（save 仍写 loadedCourseId 保数据安全）
 const courseDrifted = computed(() => loaded.value && courseId.value.trim() !== loadedCourseId.value)
@@ -33,12 +37,18 @@ async function load() {
   if (!courseId.value.trim()) return
   confirmKey.value = '' // 换课即复位危险态（P1·「保存整课」全量覆盖·残留误删会被永久上云·批3 规格）
   const c = courseId.value.trim()
+  const my = loadGen.begin() // 乱序守卫（批A）：只让最后一次发起的 listCheckpoints 结果落地
   const r = await listCheckpoints(c)
+  if (loadGen.isStale(my)) return // 已发起更新的 load()·整包丢弃（nodes/loaded/baseRev/message 全不写）
   nodes.value = r.ok
     ? ((r.list as Record<string, any>[]) || []).map((n) => ({ nodeId: String(n.nodeId || ''), title: String(n.title || ''), remedy: String(n.remedy || ''), order: Number(n.order) || 0 }))
     : []
   loaded.value = r.ok
-  if (r.ok) loadedCourseId.value = c // 钉住本次载入的课·save/覆盖以它为准
+  if (r.ok) {
+    loadedCourseId.value = c // 钉住本次载入的课·save/覆盖以它为准
+    baseRev.value = Number(r.rev) || 0 // 记下拉取那一刻的元档版本号
+    conflicted.value = false // 重新载入即解除冲突态
+  }
   message.value = r.ok ? '' : '加载失败：' + String(r.error || '')
 }
 
@@ -64,7 +74,7 @@ function delNode(i: number) {
 }
 
 async function save() {
-  if (busy.value || !loadedCourseId.value) return
+  if (busy.value || !loadedCourseId.value || conflicted.value) return // 冲突未重载前不再发保存（纵深防御·逼先点「载入」·同 flushSave 范式）
   // order 按当前位置重算（修排序错乱：换皮 order 在 addNode 定死、删除后不重算）+ 过滤空标题节点
   const payload = nodes.value.filter((n) => n.title.trim()).map((n, i) => ({ ...n, order: i }))
   // nodeId 重复即拦（后端 _id=`def:课:nodeId` upsert·撞键会静默相互覆盖丢节点）——用户手改 nid 或历史撞号都挡在提交前
@@ -81,8 +91,18 @@ async function save() {
   }
   busy.value = true
   // 写「已载入的课」loadedCourseId·不是可编辑输入框（P1·改了课号没重载不会把本课节点整册覆盖到别课）
-  const r = await saveCheckpoints(loadedCourseId.value, payload)
+  const r = await saveCheckpoints(loadedCourseId.value, payload, baseRev.value)
   busy.value = false
+  // 保存成功 / GC_REMOVE_FAIL 都已 bump 元档 rev——刷新基线，否则「重存收敛」会撞自己刚 bump 的 rev（批A）。
+  // 刻意排除 DRAFT_CONFLICT（对齐姊妹页 HelpVideos.save 第 166 行）：冲突回包也带 rev=curRev，若照刷基线，
+  // 用户不重载再点一次「保存整课」就会 baseRev===curRev、CAS 通过、本地过期数据整册覆盖别处刚保存的策展（无声丢失·本批要防的场景）。
+  if (r.ok || r.error === 'GC_REMOVE_FAIL') baseRev.value = Number(r.rev) || baseRev.value
+  if (r.error === 'DRAFT_CONFLICT') {
+    // 别处（另一页签/窗口/管理员）已改过本课策展：拒写防互相覆盖·不自动 reload 不丢当前编辑（迭代I 载入失败保护范式）
+    conflicted.value = true
+    message.value = '内容已被别处修改，请重新载入后再保存'
+    return
+  }
   // GC_REMOVE_FAIL（H2）：新节点已 upsert 成功，只是旧节点 GC 删除失败残留——友好文案区分于「整体没存上」
   message.value = r.ok
     ? `已保存 ${Number(r.count) || 0} 个节点到 ${loadedCourseId.value}（整课覆盖·学员提交不受影响）`

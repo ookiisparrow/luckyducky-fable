@@ -10,6 +10,7 @@ import { uploadImage } from '../../api/products'
 import { normalizeHome, homePayload, type HomeModel } from '../../lib/mapContent'
 import { b64SizeOk } from '../../lib/mapProducts'
 import { serialSave } from '../../lib/serialSave'
+import { SAVE_OK_MESSAGE } from '../../lib/mapPageContent'
 import UiButton from '../ui/Button.vue'
 import Card from '../ui/Card.vue'
 import Badge from '../ui/Badge.vue'
@@ -158,7 +159,7 @@ async function save() {
   const r = await saveHomeContent(homePayload(model.value))
   busy.value = false
   autoState.value = ''
-  message.value = r.ok ? '已保存，小程序立即生效' : '保存失败：' + String(r.error || '')
+  message.value = r.ok ? SAVE_OK_MESSAGE : '保存失败：' + String(r.error || '')
 }
 </script>
 

@@ -55,11 +55,54 @@ export async function notifyAlert(sev: AlertSev, fn: string, code: string, ctx: 
   }
 }
 
-/** 召回汇总推运营群（同上·botpush 接缝随观测批接上·现仅落结构化行）。 */
+/**
+ * 召回汇总推运营群（镜像 notifyAlert 推送半边·经同一 botpush 唯一接缝·`[LD_RECALL]` 前缀）。
+ * 召回是「该主动联系的客户」运营通知**非异常**——**不接 recordAnomaly**（不污染 anomalies 账本）。
+ * fail-soft：未配 webhook / 推送失败一律静默、绝不抛错、不反噬主流程。调用方（recallScan）零改动。
+ */
 export async function notifyRecall(summary: Record<string, number>): Promise<void> {
   try {
-    console.error(`[LD_RECALL] ${JSON.stringify(summary)}`)
+    console.error(`[LD_RECALL] ${JSON.stringify(summary)}`) // ① 结构化日志行（backstop·不变）
   } catch {
     /* fail-soft */
+  }
+  // ② 推送（botpush 唯一接缝·sev='recall' 中性图标·不走告警语义）：按 adminConfig/settings.alertWebhook 推运营群。
+  try {
+    const got = await getDb().collection(COLLECTIONS.adminConfig).doc('settings').get().catch(() => null)
+    const s = (got && (got as any).data) || {}
+    if (!s.alertWebhook) return
+    await pushBotAlert(s.alertWebhook, { sev: 'recall', fn: 'recallScan', code: 'RECALL_SUMMARY', ctx: summary })
+  } catch {
+    /* fail-soft：可观测性不反噬主流程 */
+  }
+}
+
+/**
+ * A5 巡检机每日心跳（观测批②「全绿也报平安」·终结「告警的告警」递归）：证明巡检机活着——「该来的消息没来」
+ * 本身可被发现。经同一 botpush 唯一接缝（sev='heartbeat'·`[LD_HEARTBEAT]` 前缀）复用 alertWebhook（人工配置
+ * 清单不新增条目）。语义＝「巡检机存活」非「系统正常」：red>0 照发心跳，但消息只报 green/red 计数、不写「正常」；
+ * 红项另有 notifyAlert 告警通道。心跳非异常——**不接 recordAnomaly**（不污染 anomalies 账本）。去重由调用方
+ * （kit/inspect sendDailyHeartbeat 确定性日 id）保证，本函数只管发。fail-soft：未配/失败静默不抛。
+ */
+export async function notifyHeartbeat(summary: { green: number; red: number }): Promise<void> {
+  const green = Number(summary?.green || 0)
+  const red = Number(summary?.red || 0)
+  const line =
+    red > 0
+      ? `[LD_HEARTBEAT] 巡检机存活·今日体检 green=${green} red=${red}（红项另有告警通道）`
+      : `[LD_HEARTBEAT] 巡检机存活·今日体检全绿 green=${green}`
+  try {
+    console.error(line) // ① 结构化日志行（backstop）
+  } catch {
+    /* fail-soft */
+  }
+  // ② 推送（botpush 唯一接缝·sev='heartbeat'）：按 adminConfig/settings.alertWebhook 推 owner 群机器人。
+  try {
+    const got = await getDb().collection(COLLECTIONS.adminConfig).doc('settings').get().catch(() => null)
+    const s = (got && (got as any).data) || {}
+    if (!s.alertWebhook) return
+    await pushBotAlert(s.alertWebhook, { sev: 'heartbeat', fn: 'inspect', code: red > 0 ? 'HEARTBEAT_RED' : 'HEARTBEAT_GREEN', ctx: { green, red } })
+  } catch {
+    /* fail-soft：可观测性不反噬主流程 */
   }
 }

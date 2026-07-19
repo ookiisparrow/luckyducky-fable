@@ -36,6 +36,15 @@ const alertPath = (label: string) => (isFeeMismatch(label) ? '/orders' : '/refun
 // 待处理瓦片聚合多个类型、只能给一个落点：混有退款类（stuckRefunds 是需要及时人工介入的死信）就默认去
 // /refunds（更紧急）；全是金额不符单（或无告警）保持原 /orders，不引入更复杂的选择菜单（量力而行）。
 const alertsHaveRefundType = computed(() => (vm.value?.alerts || []).some((a) => !isFeeMismatch(a.label)))
+// 深链预填（债目·全局清零bug战役残余 2026-07-13）：告警行「去处理」跳 /refunds 时若该行恰好 1 个 id，
+// 带 ?q=<反解单号> 让 Refunds.vue 深链预填自动检索到具体记录（唯一目标才有「跳到具体记录」语义；
+// 多 id/无 id 仍跳纯列表、不带参——现状）。afterSales 复合 id（`orderId__lineId[__ovrN]`）反解取
+// split('__')[0]（订单 id 不含下划线·债目已核可靠）；feeMismatch 走 /orders、本次深链范围不含它。
+function alertQuery(a: { label: string; ids: string[] }): Record<string, string> {
+  if (isFeeMismatch(a.label) || a.ids.length !== 1) return {}
+  const raw = a.ids[0]
+  return { q: raw.includes('__') ? raw.split('__')[0] : raw }
+}
 const TODOS = computed(() => [
   { key: 'ship', label: '待发货', n: todo.value.ship, to: '/orders', icon: Truck, tone: 'warn' },
   { key: 'refund', label: '待审退款', n: todo.value.refund, to: '/refunds', icon: RotateCcw, tone: 'warn' },
@@ -128,7 +137,7 @@ onMounted(load)
           <div class="alert-title">交易异常待处理 · {{ vm.alerts.reduce((n, a) => n + a.ids.length, 0) }} 笔</div>
           <div v-for="a in vm.alerts" :key="a.label" class="alert-row">
             <span class="alert-item">{{ a.label }}：<code v-for="id in a.ids" :key="id">{{ id }}</code></span>
-            <UiButton variant="danger" size="sm" @click="router.push(alertPath(a.label))">去处理</UiButton>
+            <UiButton variant="danger" size="sm" @click="router.push({ path: alertPath(a.label), query: alertQuery(a) })">去处理</UiButton>
           </div>
         </div>
       </div>

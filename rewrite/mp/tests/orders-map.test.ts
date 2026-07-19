@@ -1,7 +1,7 @@
-// 黄金 frontend-store §七（脏单归一防白屏/渲染访问点纵深防御/状态计数无假计数）+ §四（金额两位小数/
+// 黄金 frontend-store §七（脏单归一防白屏/渲染访问点纵深防御）+ §四（金额两位小数/
 // 时间格式化非法回空）（守卫 rw-mp-orders-golden）。
 import { describe, it, expect } from 'vitest'
-import { mapOrder, mapOrders, itemsOf, countOf, countByStatus, statusLabel, dateTime } from '../lib/mapOrders'
+import { mapOrder, mapOrders, itemsOf, countOf, statusLabel, dateTime } from '../lib/mapOrders'
 
 const GOOD = {
   _id: '2026070412001234',
@@ -46,9 +46,7 @@ describe('订单映射（黄金 §七：脏单归一·纵深防御）', () => {
     expect(list).toHaveLength(1) // 无 id 裸脏档剔除·不进列表
   })
 
-  it('大白话：状态计数无假计数；未知状态回原串不冒充；非法时间戳回空串', () => {
-    const vms = mapOrders([GOOD, { ...GOOD, id: 'b', status: 'pending' }, { ...GOOD, id: 'c', status: 'pending' }])
-    expect(countByStatus(vms)).toEqual({ paid: 1, pending: 2 }) // 无 shipped 键·不出假 0 计数
+  it('大白话：未知状态回原串不冒充；非法时间戳回空串', () => {
     // 待退款（PAID_BUT_OOS 死信·已付但缺货·待人工退款）·非「退款处理中」——与 admin 同口径
     // （admin/src/lib/format.ts）；客户没申请过退款、商家也没在自动处理，别编造行为描述。
     expect(statusLabel('refund_required')).toBe('待退款')

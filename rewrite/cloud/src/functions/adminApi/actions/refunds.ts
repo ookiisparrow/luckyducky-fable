@@ -38,7 +38,14 @@ export async function overrideRefund({ db, data }: Ctx) {
     .catch(() => null)
   if (!got || !got.data) return reply(400, { ok: false, error: 'NO_ORDER' })
   const order = got.data
-  if (!['paid', 'shipped', 'done'].includes(order.status))
+  // 状态闸放行 refund_required（批K·用户拍板方案 A·2026-07-19）：该终态＝关单后晚到支付回调、库存已被
+  // 别人买走（payCallback PAID_BUT_OOS 唯一产生点）——**钱已经收了、货永远发不出**，必须退，此前却无任何
+  // 在库退款路径（只能人工登商户平台退，且巡检把它永久报死信）。故这里放行，且**只放行 overrideRefund 这
+  // 一个管理员越规通道**（cap refund:manage·决策§26），客户自助面 applyRefund 不扩。
+  // 为什么不顺手放行 closed：closed 是「钱根本没收」的正常关单（超时未支付/主动取消），放行＝凭空退款给
+  // 没付过钱的人，是纯资损洞。「已收钱」是本入口的前提，不是状态多寡的问题。
+  // 钱守恒零改动：refundShareFen 行/单双口径封顶原样——refund_required 单的 amount 就是实付额，公式天然成立。
+  if (!['paid', 'shipped', 'done', 'refund_required'].includes(order.status))
     return reply(400, { ok: false, error: buildBadStatus(order.status) })
   const orderStatusAtStart = order.status // 竞态可观测闸用（见下方 SHIP_REFUND_RACE 注释）
 

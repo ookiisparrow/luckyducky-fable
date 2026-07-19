@@ -1664,8 +1664,8 @@ export const repoChecks = [
       }
       const cases = [
         ['tcb fn deploy createOrder', 'ask'], // 敏感函数 → 确认
-        ['tcb fn deploy getProducts', 'allow'], // 单个非敏感读函数 → 放行
-        ['tcb fn invoke getProducts', 'allow'], // 读类 → 放行
+        ['tcb fn deploy getProducts', 'ask'], // 批I 起 READONLY_FNS=[]：旧线纯读函数已清退·部署同名=新建孤儿 → 一律 ask（唯一放行洞已堵）
+        ['tcb fn invoke getProducts', 'allow'], // 读类（invoke 非写）→ 放行
         ['git commit -m chore-tcb-deploy-fns', 'allow'], // 提交信息提字样 → 不拦
         ['DEPLOY_ALLOWED=1 node scripts/deploy-fns.mjs', 'ask'], // 批量部署 → 确认
         // 深审 P1 绕过实录（防回归）：三种自然命令形态过去全放行，现须一律 ask
@@ -5093,7 +5093,7 @@ export const repoChecks = [
       // seam 缺失即红（批1 从被退役的旧副本移植回：seam 文件整个没了=守卫目标消失，必须显式退役而非静默绿）
       if (!existsSync(seamAbs)) return [`${seam} 缺失——生产线原料账原语（SCM 门1）·守卫目标消失须显式退役本守卫`]
       const bad = []
-      const src = readFileSync(seamAbs, 'utf8')
+      const src = stripComments(readFileSync(seamAbs, 'utf8')) // 剥注释再匹配（E1/E10：注释掉保护代码不得仍绿·Phase3 批I 评审加固·合流保留）
       if (!/export\s+async\s+function\s+applyStockMoves/.test(src)) bad.push(`${seam} 未导出 applyStockMoves——门1 空壳`)
       if (!/\.where\(\{[^}]*stock/.test(src)) bad.push(`${seam} 库存变更未用条件 where(stock) 乐观 CAS——有并发互覆盖风险（根因#1）`)
       const allow = new Set([seam])
@@ -5105,7 +5105,7 @@ export const repoChecks = [
           else if (e.endsWith('.ts')) {
             const rel = relative(ROOT, p).replace(/\\/g, '/')
             if (allow.has(rel)) continue
-            if (/COLLECTIONS\.(materials|stockLedger)\b|\.collection\(\s*['"](materials|stockLedger)['"]\s*\)/.test(readFileSync(p, 'utf8')))
+            if (/COLLECTIONS\.(materials|stockLedger)\b|\.collection\(\s*['"](materials|stockLedger)['"]\s*\)/.test(stripComments(readFileSync(p, 'utf8'))))
               bad.push(`${rel} 直碰 materials/stockLedger 集合——原料账读写须经 kit/scmStock（SCM 门1·防绕 CAS/绕流水）`)
           }
         }
@@ -5139,7 +5139,7 @@ export const repoChecks = [
       // seam 缺失即红（批1 从被退役的旧副本移植回：守卫目标消失=显式退役，不静默绿）
       if (!existsSync(join(ROOT, seam))) return [`${seam} 缺失——生产线流水写入点（SCM 门1）·守卫目标消失须显式退役本守卫`]
       const bad = []
-      const src = readFileSync(join(ROOT, seam), 'utf8')
+      const src = stripComments(readFileSync(join(ROOT, seam), 'utf8')) // 剥注释再匹配（E1/E10·批I 评审加固·stripComments 保长置空、下方索引数学不受影响）
       // 定位确定性 _id 生成函数并取其名（按「docType:docId:itemKey 三段模板」结构识别，不硬编码 ledgerIdOf——
       // 函数改名不失效；`const NAME = (…) => \`…\`` 或 `function NAME(…) {…}` 两种写法都认）
       const fnDeclM = src.match(/(?:const|function)\s+(\w+)\s*=?\s*\([^)]*\)\s*(?:=>\s*)?[{`][\s\S]{0,120}?\$\{[^}]*docType[^}]*\}:\$\{[^}]*docId[^}]*\}:\$\{/)
@@ -5235,6 +5235,56 @@ export const repoChecks = [
         const mpKeys = keysOf(readFileSync(mpAftersalesPath, 'utf8'), 'STATUS_LABELS')
         if (mpKeys && mpKeys.join(',') !== shAsKeys.join(','))
           bad.push(`售后状态标签码集合漂移：mp mapAftersales.ts STATUS_LABELS=[${mpKeys.join(',')}] ≠ shared AFTERSALE_STATUS_LABEL_CUSTOMER=[${shAsKeys.join(',')}]（状态机新增/改名状态未同步到 mp）`)
+      }
+      return bad
+    },
+  },
+  {
+    // 手抄常量补机器守卫（G6·根因#5：mp 进不了 @ldrw/shared，两处手抄常量此前无守卫——同族
+    // checkoutConst/order-labels 都已有 rw-mp-*-synced，这两处是漏网）：
+    // ① payFlow.ts PAID_BAD_STATUS 须与 shared order.ts buildBadStatus('paid') 输出逐字一致；
+    //   admin Fulfill.vue 里另有第三处 'BAD_STATUS:' 前缀硬编码（mapShipErr），一并纳入核对面
+    //   （admin/mp 分处不同前端、各自手抄同一个前缀，三处漂移任一处都会致「已发货判定」/「支付判定」误判）。
+    // ② checkout.ts OUT_OF_STOCK_PREFIX 须与 shared errors.ts ERR.OUT_OF_STOCK 一致。
+    id: 'rw-mp-payflow-consts-synced',
+    roots: ['#5'],
+    desc: '手抄常量三点核对面（根因#5·mp 进不了 @ldrw/shared，故手落副本）：① rewrite/mp/lib/payFlow.ts PAID_BAD_STATUS 与 rewrite/shared/src/order.ts buildBadStatus(\'paid\') 输出、及 rewrite/admin/src/pages/Fulfill.vue mapShipErr 里硬编码的 \'BAD_STATUS:\' 前缀三处一致；② rewrite/mp/lib/checkout.ts OUT_OF_STOCK_PREFIX 与 rewrite/shared/src/errors.ts ERR.OUT_OF_STOCK 一致——任一处漂移会致支付/发货/库存判定误判',
+    run() {
+      const bad = []
+      const payFlowPath = join(ROOT, 'rewrite/mp/lib/payFlow.ts')
+      const orderPath = join(ROOT, 'rewrite/shared/src/order.ts')
+      const fulfillPath = join(ROOT, 'rewrite/admin/src/pages/Fulfill.vue')
+      const checkoutPath = join(ROOT, 'rewrite/mp/lib/checkout.ts')
+      const errorsPath = join(ROOT, 'rewrite/shared/src/errors.ts')
+      if (!existsSync(orderPath) || !existsSync(errorsPath)) return [] // shared 未在（不适用场景）
+
+      // ① BAD_STATUS 三点核对
+      if (existsSync(payFlowPath)) {
+        const payFlowSrc = readFileSync(payFlowPath, 'utf8')
+        const orderSrc = readFileSync(orderPath, 'utf8')
+        const mpM = payFlowSrc.match(/const PAID_BAD_STATUS = '([^']+)'/)
+        const prefixM = orderSrc.match(/return '([^']+)' \+ status/)
+        if (!mpM) bad.push('rewrite/mp/lib/payFlow.ts 未找到 PAID_BAD_STATUS 定义——手抄常量守卫需要它（G6）')
+        else if (!prefixM) bad.push('rewrite/shared/src/order.ts buildBadStatus 实现形状变了——本守卫的取值正则找不到前缀字面量，先看是否漂移或需要更新守卫')
+        else {
+          const expected = prefixM[1] + 'paid'
+          if (mpM[1] !== expected) bad.push(`手抄常量漂移：mp payFlow.ts PAID_BAD_STATUS='${mpM[1]}' ≠ shared buildBadStatus('paid')='${expected}'（并发已付幂等判定会失效）`)
+          if (existsSync(fulfillPath)) {
+            const fulfillSrc = readFileSync(fulfillPath, 'utf8')
+            if (!fulfillSrc.includes(`'${prefixM[1]}'`)) bad.push(`手抄常量漂移：admin Fulfill.vue mapShipErr 未见与 shared 一致的 '${prefixM[1]}' 前缀字面量（发货态判定文案会对不上真实状态码）`)
+          }
+        }
+      }
+
+      // ② OUT_OF_STOCK 两点核对
+      if (existsSync(checkoutPath)) {
+        const checkoutSrc = readFileSync(checkoutPath, 'utf8')
+        const errorsSrc = readFileSync(errorsPath, 'utf8')
+        const mpM = checkoutSrc.match(/const OUT_OF_STOCK_PREFIX = '([^']+)'/)
+        const shM = errorsSrc.match(/OUT_OF_STOCK:\s*'([^']+)'/)
+        if (!mpM) bad.push('rewrite/mp/lib/checkout.ts 未找到 OUT_OF_STOCK_PREFIX 定义——手抄常量守卫需要它（G6）')
+        else if (!shM) bad.push('rewrite/shared/src/errors.ts 未找到 ERR.OUT_OF_STOCK——手抄常量守卫需要它（G6）')
+        else if (mpM[1] !== shM[1]) bad.push(`手抄常量漂移：mp checkout.ts OUT_OF_STOCK_PREFIX='${mpM[1]}' ≠ shared ERR.OUT_OF_STOCK='${shM[1]}'（结算页库存不足文案会失联）`)
       }
       return bad
     },
@@ -7275,20 +7325,27 @@ export const fileRules = [
         : null,
   },
   {
-    // T4 按链内聚·活线镜像（盲区体检批2·病根#16 ②）：旧 dep-direction 的 inScope 锁死冻结
-    // packages/miniapp——CLAUDE 四大架构主张之一在唯一迭代的活线上零执行；2026-07-10 镜像批
-    // 注释亲笔「对唯一在迭代的 rewrite/ 空转」却只搬 4 条、漏了这条。方向图（rewrite/mp/README §分层）：
-    // pages/components/custom-tab-bar（顶层·可越级下行直连 api/utils）→ lib → api → utils（叶·出度 0）。
-    // 另钉 rewrite/cloud：kit/ 禁反向 import functions/（kit=原语层，反引=方向反转）。
-    // 侦察实测（2026-07-18）存量违例 0——纯预防守卫，先红由反向自检证（篡改样例 import 必红）。
+    // T4 按链内聚·活线镜像（盲区体检批2·病根#16 ② × Phase3 批I 合并融合）：旧 dep-direction 的 inScope
+    // 锁死冻结 packages/miniapp——CLAUDE 四大架构主张之一在唯一迭代的活线上零执行。两条线（盲区体检批2 /
+    // Phase3 批I）曾各自独立补活线镜像，合流时融合为一条严格强于两者的版本：
+    //   · 骨架取盲区体检版——mp 分层表驱动（pages/components/custom-tab-bar → lib → api → utils 叶·出度 0，
+    //     见 rewrite/mp/README §分层）+ rewrite/cloud kit 禁反向 import functions/ + tests 目录排除；
+    //   · 加固取 Phase3 批I 版——探测正则并入 CommonJS `require('…')`（mp tsconfig module=CommonJS、无
+    //     ESLint 兜底，只认 from 会留等价绕过口·E16 翻版）与反引号模板字面量（动态 import(`../lib/${x}`)
+    //     的依赖前缀在插值前已定型、按前缀判仍正确）+ 先剥行尾注释（E1：注释里提路径不算）+ 扫描面补
+    //     admin src/lib|api（禁引 ../pages/、../shell/）与 agent src/lib（禁引页面级 .vue）。
+    // 存量违例 0（两线各自侦察实测一致）——纯预防守卫，先红由反向自检证。
     id: 'rw-dep-direction',
     roots: ['T4', '#16'],
     inScope: (abs) =>
       ((/\/rewrite\/mp\/(lib|api|utils)\//.test(abs) && !abs.includes('/rewrite/mp/tests/')) ||
-        /\/rewrite\/cloud\/src\/kit\//.test(abs)) &&
+        /\/rewrite\/cloud\/src\/kit\//.test(abs) ||
+        /\/rewrite\/admin\/src\/(lib|api)\//.test(abs) ||
+        /\/rewrite\/agent\/src\/lib\//.test(abs)) &&
       abs.endsWith('.ts'),
     test: (line, ctx) => {
-      const m = line.match(/\bfrom\s+['"]([^'"]+)['"]/)
+      const code = line.replace(/\/\/.*$/, '') // 剥行尾注释再匹配（E1：注释里提到路径不算）
+      const m = code.match(/(?:from|import|require)\s*\(?\s*['"`]([^'"`]+)['"`]/)
       if (!m) return null
       const spec = m[1]
       const f = ctx.file.replace(/\\/g, '/')
@@ -7297,9 +7354,19 @@ export const fileRules = [
           ? 'kit 禁 import functions/——kit 是原语层，反向引用=依赖方向反转（T4·活线）'
           : null
       }
+      if (/\/rewrite\/admin\/src\/(lib|api)\//.test(f)) {
+        return /\.\.\/pages\//.test(spec) || /\.\.\/shell\//.test(spec)
+          ? `依赖方向反转：admin lib/api 禁 import ${spec}——数据/接口层不得依赖页面/外壳（T4·活线镜像）`
+          : null
+      }
+      if (f.includes('/rewrite/agent/src/lib/')) {
+        return /\.vue$/.test(spec) && /\b(Desk|Login|App)\b/.test(spec)
+          ? `依赖方向反转：agent/lib 禁 import 页面级 .vue（${spec}）——lib 不得依赖页面组件（T4·活线镜像）`
+          : null
+      }
       if (!spec.startsWith('.')) return null
       const layer = f.includes('/rewrite/mp/lib/') ? 'lib' : f.includes('/rewrite/mp/api/') ? 'api' : 'utils'
-      const target = spec.split('/').filter((s) => s && s !== '.' && s !== '..')[0]
+      const target = spec.split('/').filter((x) => x && x !== '.' && x !== '..')[0]
       const banned = {
         utils: ['lib', 'api', 'pages', 'components', 'custom-tab-bar'],
         api: ['lib', 'pages', 'components', 'custom-tab-bar'],
@@ -7609,10 +7676,36 @@ function report(violations, stream) {
   stream.write(`\n结构不变量未通过：${violations.length} 处（每条对应一项重构主张守卫；刻意例外行内加 structure-ok）\n`)
 }
 
+// 引擎自检（非守卫·不进 repoChecks/fileRules 计数·与 guard-coverage 的 Set 去重逻辑正交）：注册期 id 撞名
+// 硬断言——任一守卫数组内 id 重复注册即红并使 check:structure 非零退出。批I 前 rw-material-stock-single-seam
+// / rw-scm-ledger-idempotent 各注册两次（length=200 而 distinct=198），guard-coverage 用 Set 去重反而把撞名
+// 掩盖、无任何机制测得出；合并去重后加此断言防再犯（撞名=length 虚高/distinct 漂移，计数根治的前提）。
+function assertNoDuplicateIds() {
+  const bad = []
+  for (const [name, arr] of [
+    ['repoChecks', repoChecks],
+    ['fileRules', fileRules],
+  ]) {
+    const seen = new Set()
+    for (const g of arr) {
+      if (seen.has(g.id)) bad.push({ loc: '[registry-no-dup-id]', msg: `${name} 数组 id 重复注册：${g.id}（撞名=length 虚高、distinct 漂移·合并去重后修）`, src: '注册期 id 撞名硬断言（引擎自检·不计入守卫数）' })
+      seen.add(g.id)
+    }
+  }
+  return bad
+}
+
 // CLI 入口包进 main()，只在被 node 直接运行时执行——这样测试 / guard-coverage
 // 可 import 上面三个守卫数组而不触发全量检查（isMain 守门）。
 async function main() {
   const args = process.argv.slice(2)
+
+  // 注册期 id 撞名硬断言先于一切判定（引擎自检·非守卫）：撞名会让 length 虚高、下游计数全错，先红先停。
+  const dupIds = assertNoDuplicateIds()
+  if (dupIds.length) {
+    report(dupIds, process.stdout)
+    process.exit(1)
+  }
 
   if (args[0] === '--hook') {
     // PostToolUse：stdin 是 hook JSON，只查被编辑的单文件（fileRules），违例 exit 2 反馈 Claude

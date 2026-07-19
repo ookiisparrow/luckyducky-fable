@@ -70,7 +70,7 @@ Page({
     paused: false, // 真实播放/暂停态·只认 bind:play/bind:pause 回报，不在 tap 里直接翻转当真相
     buffering: false, // 播放中缓冲失速角标（bind:waiting 起·timeupdate/play 恢复清·见 onVideoWaiting）
     bufferPct: 0, // 缓冲水位（0-100·bind:progress 的 e.detail.buffered 整段已加载百分比·seek 条底层灰条·换段清零·见 onVideoProgress）
-    initialTime: 0, // 续播秒（<video> initial-time·仅组件首挂载读一次·换段/重试归 0 防续秒串段·见 playSegment/_wantAt）
+    initialTime: 0, // 续播秒（<video> initial-time·仅组件首挂载读一次·换段天然归 0 防续秒串段·同段重试可携原值·见 playSegment/_wantAt）
     curSec: 0,
     durSec: 0,
     curClock: '0:00',
@@ -127,7 +127,7 @@ Page({
   lastVibe: 0, // 事件震（vibe()）时间戳（同上·两类震共用时间地板防叠震）
   _backAt: 0, // 返回二次确认判定锚点（P5·BACK_CONFIRM_MS 窗口内二次按返回才真退，见 onBack）
   _wantSeg: '', // onLoad 期望起播段（存实例供 initCourse 课程级失败重试后仍定位到原目标段）
-  _wantAt: 0, // onLoad 期望续播秒（query.t·仅对目标段 _wantSeg 生效·playSegment 首次应用即清零·防换段/重试再续到旧秒串段）
+  _wantAt: 0, // onLoad 期望续播秒（query.t·仅对目标段 _wantSeg 生效·playSegment 成功把非空 src 交给挂载 video 才消费清零——取址失败/url 为空不消费，留给重试续到秒；G2 批修正消费时机）
   _resumeAt: 0, // 本次起播待物理落位的续播秒（=本次 initialTime·onVideoMeta 双保险 seek 兜底 initial-time 失效后消费清零·每次 playSegment 重置）
 
   async onLoad(query: Record<string, string | undefined>) {
@@ -204,12 +204,15 @@ Page({
     // 的 at/dur 错记到新段 segmentId 头上（P2 bug sweep R2 复查）。
     this._at = 0
     this._dur = 0
-    // 续播秒（批3·数据已在库·接通最后一公里·根因#15）：仅当本段就是 onLoad 期望段且有未消费续播位置才带 initialTime
-    // 起播，一次性消费（清 _wantAt·防换段/重试再续到旧秒串段）；换段/重试一律 0。_resumeAt 记本次待物理落位的秒供
-    // onVideoMeta 双保险（每次 playSegment 都重置，含 0），initial-time 只在 <video> 首挂载读一次，运行时兜底靠 seek。
+    // 续播秒（批3·数据已在库·接通最后一公里·根因#15；G2 批修正消费时机）：仅当本段就是 onLoad 期望段且有未消费
+    // 续播位置才带 initialTime 起播。消费（清 _wantAt）挪到「真正把非空 src 交给挂载 video」的成功路径（peek 命中
+    // 分支 / 取址成功且 url 非空分支，各见下方）——取址异常（denied/error）与 url 为空（素材未剪·转码未就绪·落
+    // 'empty' 态）都不消费，留给之后重试续到秒。换段（seg.segmentId !== this._wantSeg）天然 initialTime=0，不受
+    // 影响——防串秒不变量本质是「跨段挂载绝不携他段的秒」，由该相等判据保证，本批只挪同段内的消费时机。
+    // _resumeAt 记本次待物理落位的秒供 onVideoMeta 双保险（每次 playSegment 都重置，含 0），initial-time 只在
+    // <video> 首挂载读一次，运行时兜底靠 seek。
     const initialTime = seg.segmentId === this._wantSeg && this._wantAt > 0 ? this._wantAt : 0
     this._resumeAt = initialTime
-    if (initialTime > 0) this._wantAt = 0
     // 换段清零字段单源（peek 直落 playing 与常规 loading→playing 两路共用这份 patch·勿两处各写漂移·病根#5）：
     // src 清空另在各自 setData 给（loading 给 ''·卸载旧/坏 <video> 显骨架；peek 直给新 url）。进度/暂停/播完通栏/
     // 自绘 seek 填充节点气泡/缓冲水位都属旧段，一律归零重算（completed=false）——新段是新的播放单元。
@@ -254,13 +257,15 @@ Page({
     const peeked = cache.peek(this.courseId, seg.segmentId)
     if (peeked) {
       this.srcSetAt = Date.now()
+      if (initialTime > 0) this._wantAt = 0 // 消费（peek 命中即真把非空 src 交给挂载 video）
       this.setData(
         { ...clearPatch, state: 'playing', src: peeked, initialTime, canPrev: !!navSegment(this.course, seg.segmentId, -1), canNext: !!navSegment(this.course, seg.segmentId, 1) },
         onPlaying
       )
       return
     }
-    // 缓存未命中：走 loading 骨架 + 取址（initialTime:0 并入清态·换段/重试不带旧段续播秒·防串段）。
+    // 缓存未命中：走 loading 骨架 + 取址（这里的 initialTime:0 只是骨架态占位·<video> 此刻尚未挂载不读它·
+    // 真正带给挂载 video 的 initialTime 在下方成功分支才落地、此时 _wantAt 仍未消费）。
     this.setData({ ...clearPatch, state: 'loading', src: '', initialTime: 0 })
     let url = ''
     try {
@@ -284,6 +289,7 @@ Page({
       this.setData({ state: 'empty', src: '', canPrev: !!navSegment(this.course, seg.segmentId, -1), canNext: !!navSegment(this.course, seg.segmentId, 1) })
       return
     }
+    if (initialTime > 0) this._wantAt = 0 // 消费（取址成功且 url 非空即真把非空 src 交给挂载 video）
     this.srcSetAt = Date.now()
     this.setData(
       { state: 'playing', src: url, initialTime, canPrev: !!navSegment(this.course, seg.segmentId, -1), canNext: !!navSegment(this.course, seg.segmentId, 1) },

@@ -13,9 +13,49 @@ const storageCloud = cloud as unknown as { deleteFile: (o: { fileList: string[] 
 //    大体积 base64 文档无限期堆积）：按 createdAt 超 24h 删，不再依赖偶然条件；
 //  ⑤ courses.pendingGc 孤儿视频缓期删除（publishCourse 只入队不删——给在播学员留播放窗）：到期项
 //    cloud.deleteFile 后从队列摘除，fail-soft（删失败留队下轮再试）。
+//  ⑥ productsDraft.pendingGc 孤儿图册缓期删除（批B·saveDraft/publishProduct 换图/发布替换只入队不删——
+//    admin listDrafts/mp 详情给旧图签过临时址，缓期内不断图）：与 ⑤ 同构，复用同一 gcPendingGc 消费器
+//    （商品图恒 cloud://·无 VOD 分支·harmless no-op）。
 // 仅服务端/定时触发（无 openid）；客户端带身份调用一律拒（根因#3：写库必过闸，防滥调）。
 const RETAIN_MS = 90 * 24 * 3600 * 1000 // 保留 90 天
 const CHUNK_RETAIN_MS = 24 * 3600 * 1000 // 弃传分片保留 24h（正常分片会话分钟级走完·uploadFinish 自清）
+
+// 缓期孤儿 GC 消费器（⑤课程视频 / ⑥商品图册共用·单源防漂移）：逐文档处理 pendingGc 到期项——
+// 双线分流（决策§31·同 getPlaybackUrl 的 isVodFileId 判据单源）：cloud:// 走云存储 deleteFile（整批），
+// VOD FileId 走 DeleteMedia（官方单文件一调·商品图恒 cloud:// 故该分支恒 no-op）。逐项记成功：任一线失败
+// 其项留队下轮再试（fail-soft）；VOD「媒资已不存在」(ResourceNotFound)视作删成功出队防永久重试。返回删除数。
+async function gcPendingGc(
+  db: any,
+  storageCloud: { deleteFile: (o: { fileList: string[] }) => Promise<unknown> },
+  coll: string,
+  now: number
+): Promise<number> {
+  let deleted = 0
+  // 小集合上界（≤1000·同 getCourses 口径），逐文档处理到期项
+  const docs = await db.collection(coll).limit(1000).get().catch(() => ({ data: [] }))
+  for (const c of docs.data || []) {
+    const q = Array.isArray(c.pendingGc) ? c.pendingGc : []
+    const due = q.filter((en: any) => en && en.fileId && Number(en.deleteAfter) <= now)
+    if (!due.length) continue
+    const done = new Set<string>()
+    const dueCos = due.filter((en: any) => !isVodFileId(String(en.fileId)))
+    if (dueCos.length) {
+      const r = await storageCloud.deleteFile({ fileList: dueCos.map((en: any) => String(en.fileId)) }).catch(() => null)
+      if (r) for (const en of dueCos) done.add(String(en.fileId))
+    }
+    for (const en of due) {
+      const id = String(en.fileId)
+      if (!isVodFileId(id)) continue
+      const resp = await callVodApi(db, 'DeleteMedia', { FileId: id })
+      if (resp && (!resp.Error || String(resp.Error.Code || '').includes('ResourceNotFound'))) done.add(id)
+    }
+    if (!done.size) continue
+    const remaining = q.filter((en: any) => !(en && done.has(String(en.fileId)) && Number(en.deleteAfter) <= now))
+    await db.collection(coll).doc(c._id).update({ data: { pendingGc: remaining } }).catch(() => {})
+    deleted += done.size
+  }
+  return deleted
+}
 
 export const main = async () => {
   if (!isServerCall()) return ok({ removed: 0 })
@@ -47,42 +87,9 @@ export const main = async () => {
     .where({ createdAt: _.lt(Date.now() - CHUNK_RETAIN_MS) })
     .remove()
     .catch(() => ({ stats: { removed: 0 } }))
-  // ⑤ 孤儿视频缓期删除：课程数是小集合（≤1000 上界与 getCourses 同口径），逐课处理到期项
-  let gcDeleted = 0
+  // ⑤ 孤儿视频缓期删除（courses.pendingGc） + ⑥ 孤儿图册缓期删除（productsDraft.pendingGc）：同构·共用消费器
   const now = Date.now()
-  const courses = await db
-    .collection('courses')
-    .limit(1000)
-    .get()
-    .catch(() => ({ data: [] }))
-  for (const c of courses.data || []) {
-    const q = Array.isArray(c.pendingGc) ? c.pendingGc : []
-    const due = q.filter((en: any) => en && en.fileId && Number(en.deleteAfter) <= now)
-    if (!due.length) continue
-    // 双线分流（决策§31 批2·同 getPlaybackUrl 的 isVodFileId 判据单源）：cloud:// 走云存储 deleteFile
-    // （整批），VOD FileId 走 DeleteMedia（官方单文件一调）。逐项记成功：任一线失败其项留队下轮再试
-    // （fail-soft·与原语义一致）；VOD 侧「媒资已不存在」（ResourceNotFound）视作删除成功出队——防已删
-    // 媒资把队列条目卡成永久重试。VOD 未配置时 callVodApi 回 null（已告警），VOD 项留队等配置补上。
-    const done = new Set<string>()
-    const dueCos = due.filter((en: any) => !isVodFileId(String(en.fileId)))
-    if (dueCos.length) {
-      const r = await storageCloud.deleteFile({ fileList: dueCos.map((en: any) => String(en.fileId)) }).catch(() => null)
-      if (r) for (const en of dueCos) done.add(String(en.fileId))
-    }
-    for (const en of due) {
-      const id = String(en.fileId)
-      if (!isVodFileId(id)) continue
-      const resp = await callVodApi(db, 'DeleteMedia', { FileId: id })
-      if (resp && (!resp.Error || String(resp.Error.Code || '').includes('ResourceNotFound'))) done.add(id)
-    }
-    if (!done.size) continue
-    const remaining = q.filter((en: any) => !(en && done.has(String(en.fileId)) && Number(en.deleteAfter) <= now))
-    await db
-      .collection('courses')
-      .doc(c._id)
-      .update({ data: { pendingGc: remaining } })
-      .catch(() => {})
-    gcDeleted += done.size
-  }
-  return ok({ removed: n(rmEvents), rateLimit: n(rmRate), kfSeen: n(rmSeen), chunks: n(rmChunks), videoGc: gcDeleted })
+  const videoGc = await gcPendingGc(db, storageCloud, 'courses', now)
+  const imageGc = await gcPendingGc(db, storageCloud, 'productsDraft', now)
+  return ok({ removed: n(rmEvents), rateLimit: n(rmRate), kfSeen: n(rmSeen), chunks: n(rmChunks), videoGc, imageGc })
 }

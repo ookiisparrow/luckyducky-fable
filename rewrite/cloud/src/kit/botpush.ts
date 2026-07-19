@@ -34,16 +34,18 @@ const defaultFetch: BotFetch = (url, init) =>
 // 企微群机器人 webhook 形态校验（凭证 key 在 query·非此形态直接拒，不发·防误发外站）。
 const WEBHOOK_RE = /^https:\/\/qyapi\.weixin\.qq\.com\/cgi-bin\/webhook\/send\?key=[\w-]+$/
 
-// sev→中文标签；anomaly=巡检/采集异常（本线新增·recordAnomaly 直发不经此·仅类型完备兜底）。
+// sev→中文标签；anomaly=巡检/采集异常（本线新增·recordAnomaly 直发不经此·仅类型完备兜底）；
+// recall=运营召回摘要（非告警）；heartbeat=巡检机每日心跳「报平安」（非告警·观测批 A5·经 notifyHeartbeat 发）。
 const SEV_LABEL: Record<string, string> = {
   money: '钱链告警',
   security: '安全告警',
   anomaly: '异常告警',
   recall: '主动召回清单',
+  heartbeat: '巡检机心跳',
 }
 
 export interface BotAlert {
-  sev: 'money' | 'security' | 'anomaly' | 'recall'
+  sev: 'money' | 'security' | 'anomaly' | 'recall' | 'heartbeat'
   fn: string
   code: string
   ctx?: Record<string, unknown>
@@ -68,7 +70,7 @@ export async function pushBotAlert(
     } catch {
       ctxLine = ''
     }
-    const icon = a.sev === 'recall' ? '📋' : '⚠️' // 召回是运营摘要·非告警·换中性图标
+    const icon = a.sev === 'recall' ? '📋' : a.sev === 'heartbeat' ? '💓' : '⚠️' // 召回=运营摘要·心跳=报平安·非告警换中性图标
     const content = `**${icon} Lucky Ducky · ${SEV_LABEL[a.sev] || a.sev}**\n> 来源: ${a.fn}\n> 代码: ${a.code}${ctxLine}`
     const r = await fetchImpl(webhookUrl, {
       method: 'POST',

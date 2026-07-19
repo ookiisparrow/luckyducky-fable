@@ -3,6 +3,11 @@
 import { getProducts, getProductDetail as apiGetProductDetail } from '../api/catalog'
 
 let cache: Record<string, unknown>[] | null = null
+// 全量列表在途去重（G4·镜像 lib/pageContent.ts inflight 范式）：cache 未命中时并发调用（如首页 reload 与
+// 详情页 loadRecs 撞车）此前会各发一次真实云调用；改并发共享同一在途 promise，结算（成功/失败都）即清键、
+// 不缓存 rejection。force 条款仅本函数生效：force 在途时后到调用同样复用在途 promise（不重复拉），
+// 与非 force 在途去重同一份 inflight 变量、无需区分——这正是「force 时后到调用等在途结果」的语义本身。
+let inflight: Promise<Record<string, unknown>[] | null> | null = null
 
 // 单商品详情缓存（批1·列表瘦身后详情页专拉·镜像 lib/pageContent 缓存范式·根因#15）：列表 getProducts 不再
 // 下发 images[]，详情页按 id 拉本档全字段补齐图册。命中缓存直接复用；在途去重（并发同 id 复用同一 promise）；
@@ -14,10 +19,18 @@ const detailInflight = new Map<string, Promise<Record<string, unknown> | null>>(
 // 失败返回 null 且不覆盖已有缓存——保留旧数据，只是这次调用方拿不到新的（下次仍可命中旧缓存或重试）。
 export async function getAllProducts(opts?: { force?: boolean }): Promise<Record<string, unknown>[] | null> {
   if (!opts?.force && cache) return cache
-  const r = await getProducts()
-  if (!r.ok || !Array.isArray(r.list)) return null
-  cache = r.list as Record<string, unknown>[]
-  return cache
+  if (inflight) return inflight // 在途去重：并发调用（含 force）共享同一在途 promise，不重复拉
+  inflight = (async () => {
+    try {
+      const r = await getProducts()
+      if (!r.ok || !Array.isArray(r.list)) return null
+      cache = r.list as Record<string, unknown>[]
+      return cache
+    } finally {
+      inflight = null // 结算即清在途键（成功/失败都清·不缓存 rejection）
+    }
+  })()
+  return inflight
 }
 
 export async function getProductById(id: string): Promise<Record<string, unknown> | null> {
@@ -51,6 +64,7 @@ export async function getProductDetail(id: string): Promise<Record<string, unkno
 /** 仅测试：重置内存态强制下次重新回灌。 */
 export function __resetForTest(): void {
   cache = null
+  inflight = null
   detailCache.clear()
   detailInflight.clear()
 }

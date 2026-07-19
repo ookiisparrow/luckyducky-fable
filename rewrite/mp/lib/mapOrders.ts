@@ -112,13 +112,3 @@ export function mapOrders(list: unknown): OrderVM[] {
   if (!Array.isArray(list)) return []
   return list.map(mapOrder).filter((x): x is OrderVM => !!x)
 }
-
-/** 按状态计数（「我」页角标/tab 数据源·无该状态不出假计数）。 */
-export function countByStatus(list: OrderVM[]): Record<string, number> {
-  const out: Record<string, number> = {}
-  for (const o of list) {
-    if (!o.status) continue
-    out[o.status] = (out[o.status] || 0) + 1
-  }
-  return out
-}

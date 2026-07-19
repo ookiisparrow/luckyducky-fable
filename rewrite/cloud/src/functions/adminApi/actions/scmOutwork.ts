@@ -18,9 +18,13 @@ const L_KNOTTED = /^yarn:([a-z][a-z0-9-]*):L:knotted$/
 // 集合名一律写字面量 'outworkOrders'（非 COLLECTIONS.x/常量）：order-transitions-declared 守卫按字面量
 // 归属集合对账 transition 边与 status 写入——用变量会让本文件逃出对账面（known-collections-only 另核字面量在册）
 
+// 单据行数上限（D3·同 scmPurchase.ts MAX_LINES 判例·bounded·一张外协单不至于超·防垃圾大单）
+const MAX_LINES = 50
+
 /** 行清洗：[{materialId,qty}] → 白名单字段 + qty 正整数校验。返回 null＝形状非法（fail-closed）。 */
 function cleanLines(raw: any): Array<{ materialId: string; qty: number }> | null {
   if (!Array.isArray(raw) || !raw.length) return null
+  if (raw.length > MAX_LINES) return null
   const seen = new Set<string>()
   const out: Array<{ materialId: string; qty: number }> = []
   for (const l of raw) {

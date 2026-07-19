@@ -6,6 +6,7 @@
 import { ref, watch, onMounted, onBeforeUnmount, nextTick, type Ref } from 'vue'
 import { getPageContent, savePageContent } from '../api/content'
 import { serialSave } from './serialSave'
+import { SAVE_OK_MESSAGE } from './mapPageContent'
 
 export type AutoState = '' | 'saving' | 'saved' | 'error'
 
@@ -71,7 +72,7 @@ export function usePageContent<M>(page: string, normalize: (_raw: unknown) => M,
     const r = await savePageContent(page, payload(model.value))
     busy.value = false
     autoState.value = ''
-    message.value = r.ok ? '已保存，小程序立即生效' : '保存失败：' + String(r.error || '')
+    message.value = r.ok ? SAVE_OK_MESSAGE : '保存失败：' + String(r.error || '')
   }
 
   return { model, message, busy, autoState, save }

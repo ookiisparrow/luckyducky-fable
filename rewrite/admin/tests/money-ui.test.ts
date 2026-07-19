@@ -4,6 +4,7 @@ import { describe, it, expect } from 'vitest'
 import { mapDashboard, mapOrderRows, mapRefundRows, maskPhone, refundVerdict, deriveDashboardTodos, canOverrideRefund, mapOverrideOrder } from '../src/lib/mapMoney'
 import ordersSrc from '../src/pages/Orders.vue?raw'
 import refundsSrc from '../src/pages/Refunds.vue?raw'
+import dashboardSrc from '../src/pages/Dashboard.vue?raw'
 
 describe('deriveDashboardTodos（待处理计数：加载失败别伪装成 0/全清·病根#14）', () => {
   it('大白话：某路计数加载失败时 partial=true——上层据此不把「加载失败」显示成绿色「今日无待处理」', () => {
@@ -257,6 +258,18 @@ describe('越规退款入口（决策§26·批 B8·钱链后端零改动）', ()
     expect(mapOverrideOrder('garbage', 'o1')).toBeNull()
     expect(mapOverrideOrder(null, 'o1')).toBeNull()
   })
+
+  // 批K K3（可达性回归）：refund_required 死信单是越规退款的**唯一**在库出口，前端不得对它做任何状态白名单——
+  // 商品行照渲染、状态显示「待退款」、门控只看「选了行+填了原因+勾了确认」。防后人顺手加 status 过滤把出口堵死。
+  it('大白话：refund_required 死信单在越规退款面板照常可选可提交（状态显示「待退款」·无状态白名单挡路）', () => {
+    const vm = mapOverrideOrder(
+      [{ _id: 'oD', status: 'refund_required', amount: 178, goods: 198, address: { name: '李四', phone: '13900000000' }, items: [{ lineId: 'p1__红', productId: 'p1', name: '鸭', spec: '红', qty: 2, price: 198 }] }],
+      'oD',
+    )!
+    expect(vm.statusLabel).toBe('待退款')
+    expect(vm.lines).toEqual([{ lineId: 'p1__红', label: '鸭（红） ×2 · ¥198.00' }])
+    expect(canOverrideRefund({ orderFound: true, lineId: vm.lines[0].lineId, reason: '缺货无法履约', ack: true, busy: false })).toBe(true)
+  })
 })
 
 // Orders.vue 抽屉商品行 :key 行身份（深审20260712·P3 撞键·取真源法）：旧 key 裸用 productId，
@@ -283,5 +296,30 @@ describe('Orders.vue 抽屉商品行 :key 用行身份 productId__spec', () => {
   it('大白话：key 带 spec（=后端 lineId 契约）——同品多规格同单不撞键；旧裸 productId 写法不再存在', () => {
     expect(ordersSrc).toMatch(/v-for="it in drawer\.row\.items" :key="\(it\.productId \|\| it\.name\) \+ '__' \+ it\.spec"/)
     expect(ordersSrc).not.toMatch(/:key="it\.productId \|\| it\.name"/)
+  })
+})
+
+// Refunds.vue 深链预填（债目·全局清零bug战役残余 2026-07-13）：Dashboard 退款类告警「去处理」跳
+// /refunds 只做到「跳对页面」，本页原无 route.query 读取能力接不住具体记录——补 onMounted 读
+// route.query.q 预填搜索框并自动检索一次（同 Conversations.vue/Batches.vue 既有深链范式）。
+describe('Refunds.vue 深链预填：route.query.q 预填搜索框 + 自动检索', () => {
+  it('大白话：search 初值读 route.query.q；挂载时有值走 doSearch 自动检索、无值走普通 reload', () => {
+    expect(refundsSrc).toMatch(/const search = ref\(String\(route\.query\.q \|\| ''\)\)/)
+    expect(refundsSrc).toMatch(/if \(search\.value\) void doSearch\(\)/)
+    expect(refundsSrc).toMatch(/else void reload\(\)/)
+  })
+})
+
+// Dashboard.vue 告警「去处理」深链带 q（债目同上）：恰好 1 个 id 才有「跳到具体记录」的唯一目标语义，
+// 多 id/无 id 仍跳纯列表；afterSales 复合 id（`orderId__lineId[__ovrN]`）反解取 split('__')[0]；
+// feeMismatch 走 /orders，本次深链范围只含 /refunds 一侧。
+describe('Dashboard.vue 告警「去处理」深链带 q：唯一 id 才带参，多 id/无 id/金额不符单不带', () => {
+  const body = dashboardSrc.slice(dashboardSrc.indexOf('function alertQuery'), dashboardSrc.indexOf('const TODOS'))
+  it('大白话：feeMismatch 或非唯一 id 回空 query；恰好 1 个 id 且非 feeMismatch 才反解出 q', () => {
+    expect(body).toMatch(/if \(isFeeMismatch\(a\.label\) \|\| a\.ids\.length !== 1\) return \{\}/)
+    expect(body).toMatch(/return \{ q: raw\.includes\('__'\) \? raw\.split\('__'\)\[0\] : raw \}/)
+  })
+  it('大白话：模板「去处理」按钮把 alertPath/alertQuery 一起塞进 router.push 的 path/query', () => {
+    expect(dashboardSrc).toMatch(/router\.push\(\{ path: alertPath\(a\.label\), query: alertQuery\(a\) \}\)/)
   })
 })

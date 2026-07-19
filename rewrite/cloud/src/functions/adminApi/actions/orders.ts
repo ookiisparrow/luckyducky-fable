@@ -25,9 +25,17 @@ export async function getOrderDetail({ db, data }: Ctx) {
 // 列表游标分页（根因#7）：无参=首页 200（兼容旧控制台读 .list），控制台用 nextCursor 翻页。
 // 服务端筛选/搜索（根因#7 计数/筛选/搜索失真）：status 在云端 where 过滤（不让前端从已加载页筛、
 // 防分页后漏单）；q=单号精确命中（_id），无视状态标签搜全部。计数另走 orderCounts（.count() 精确）。
-export async function listOrders({ db, data }: Ctx) {
+export async function listOrders({ db, data, caps }: Ctx) {
   const q = String((data && data.q) || '').trim()
   const status = String((data && data.status) || '')
+  // 最小权限收窄（P2 评审·refund:manage 越权面）：listOrders 无过滤时逐单回全文（无 .field() 投影：
+  // _openid/address 姓名·电话·详址/items/transactionId/amount），无 q 全表翻页＝翻遍全店客户 PII。
+  // ACTION_CAPS 把 listOrders 放给 admin:write|refund:manage（C4），但 refund:manage（退款专员）只需
+  // 核对「越规退款这一单」——仅持 refund:manage（无 admin:write/'*'）时强制精确单号 q、拒无过滤/状态浏览
+  // （与 lib.ts ROLES 注释「刻意去掉裸 customer:view 防批量导出」同一类风险）。admin:write/'*' 行为完全不变。
+  const capList: string[] = Array.isArray(caps) ? caps : []
+  const canBrowseAll = capList.some((c) => c === '*' || c === 'admin:write')
+  if (!canBrowseAll && !q) return reply(403, { ok: false, error: 'ORDER_NO_REQUIRED' })
   const filter: Record<string, any> = q
     ? { _id: q } // 搜索：单号精确，跨全部状态
     : status && status !== 'all'
@@ -45,7 +53,10 @@ export async function listOrders({ db, data }: Ctx) {
     const _ = db.command
     const held = await db
       .collection('afterSales')
-      .where({ orderId: _.in(orderIds), status: _.in(['approved', 'refunded']) })
+      // 徽标判据对齐 shipOne 拦截三态（C5·根因#2）：shipOne 发货拦截查 applied/approved/refunded 三态，
+      // 此前徽标只查 approved/refunded——待发货列表不标 applied（申请中）单、发货时却被 shipOne 拦，
+      // 前端提示与后端裁决判据不一致。补 applied 对齐，入口即提示「有退款在途·勿发货」。
+      .where({ orderId: _.in(orderIds), status: _.in(['applied', 'approved', 'refunded']) })
       .field({ orderId: true })
       .limit(1000) // 钱链异常账本同款上限（getTxAlerts CAP）：本页订单最多几百单，一单多行售后仍远够
       .get()
@@ -182,6 +193,8 @@ async function shipOne(db: any, idRaw: any, companyRaw: any, trackingRaw: any, o
   // 并发/重试天然幂等）；改单号（shipped→shipped）不重复留痕。fail-soft：留痕失败不反噬发货（发货是主动作），
   // 但 fg 行无 CAS 面、除入参形状外无失败路径；旧单无 items 静默跳过（不落假流水·根因#8）。
   if (cur === 'paid') {
+    // 组合键校验在出生点、不在此消费点（战役3 批D·D1）：这里吃的是历史订单快照（items 下单时已定格），
+    // fail-closed 会拒发既有订单（钱链反噬）——规则单源见 shared/scmKey.ts 头注，此处历史容忍。
     const moves = ((got.data.items as any[]) || [])
       .filter((it) => it && it.productId && Number.isInteger(it.qty) && it.qty > 0)
       .map((it) => ({ materialId: `fg:${it.productId}__${it.spec || ''}`, delta: -it.qty }))

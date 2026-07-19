@@ -110,7 +110,9 @@ Page({
     const [content, products] = await Promise.all([getContent(), getAllProducts({ force: true })])
     if (seq !== this._seq) return // 过期回包（被更晚 reload 取代）：丢弃·不覆盖较新结果
     const nextContent = mapHomeContent(content.ok ? content.home : null) // 逐块回退默认（不空屏·不半空）
-    const nextProducts = mapProducts(products)
+    // products===null（本次强刷失败）时不计算/不写入 patch.products——保留已渲染的现状不动，同 detail.ts loadRecs
+    // fail-soft 范式（G1）：此前无条件 mapProducts(null)⇒[] 会把已有非空商品轨清成空，误导「上新在路上」空态。
+    const nextProducts = products !== null ? mapProducts(products) : null
     const patch: Record<string, unknown> = {
       loading: false,
       // 有快照渲染时网络失败不整页翻失败态（读路径 fail-soft·已有真内容垫着·下拉重试入口仍在）；
@@ -120,7 +122,7 @@ Page({
     }
     // setData 前独立 diff（content 与 products 各自比·等值跳过防无谓二次渲染·SWR「拉到的与快照一致」是常态）
     if (JSON.stringify(nextContent) !== JSON.stringify(this.data.content)) patch.content = nextContent
-    if (JSON.stringify(nextProducts) !== JSON.stringify(this.data.products)) patch.products = nextProducts
+    if (nextProducts !== null && JSON.stringify(nextProducts) !== JSON.stringify(this.data.products)) patch.products = nextProducts
     this.setData(patch)
     writeSnapshot(products, content.ok ? content.home : null) // 回写快照供下次冷启动首帧即真实内容（products=null 只写 home 半边）
   },

@@ -225,7 +225,7 @@ export interface CsatEntryVM {
   score: number
   note: string
   externalUserId: string
-  bad: boolean // 差评（≤3 星）——用于「查会话」按钮与行高亮，同 listCsatEntries maxScore=3 的口径
+  bad: boolean // 差评（≤2 星）——用于「查会话」按钮与行高亮，同 Csat.vue badOnly 筛选 maxScore=2 的口径
 }
 
 /** 满意度明细行（批 B6·listCsatEntries）：时间人话化，note/externalUserId 无则回 '—'/''。 */
@@ -239,7 +239,7 @@ export function mapCsatEntries(list: unknown): CsatEntryVM[] {
       score,
       note: String(e.note || '') || '—',
       externalUserId: String(e.externalUserId || ''),
-      bad: score > 0 && score <= 3,
+      bad: score > 0 && score <= 2,
     }
   })
 }

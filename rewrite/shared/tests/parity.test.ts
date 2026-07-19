@@ -89,6 +89,10 @@ describe('与旧线契约逐键 parity', () => {
       NO_SUPPLIER: 'NO_SUPPLIER',
       RECEIVE_EXCEEDS_ISSUE: 'RECEIVE_EXCEEDS_ISSUE',
       RECEIVE_L_KNOTTED_ONLY: 'RECEIVE_L_KNOTTED_ONLY',
+      // fg 组合键定界符防护（战役3 批D）：shared/scmKey.ts 单源校验规则的登记码
+      BAD_SPEC: 'BAD_SPEC',
+      NO_SPECIFIC: 'NO_SPECIFIC',
+      BAD_PROFILE: 'BAD_PROFILE',
       // 订单/支付域
       OUT_OF_STOCK: 'OUT_OF_STOCK',
       TOO_MANY_PENDING: 'TOO_MANY_PENDING',
