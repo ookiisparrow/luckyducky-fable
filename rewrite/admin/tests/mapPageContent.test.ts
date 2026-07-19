@@ -16,6 +16,8 @@ import {
   combineSaveMessages,
   SAVE_OK_MESSAGE,
 } from '../src/lib/mapPageContent'
+import usePageContentSrc from '../src/lib/usePageContent.ts?raw'
+import homeContentFormSrc from '../src/components/pagecontent/HomeContentForm.vue?raw'
 
 describe('welcome 欢迎与激活往返', () => {
   it('大白话：缺档全默认空串；w2 至多 3 条、超限截断；payload 与 normalize 同形不夹带未知字段', () => {
@@ -146,5 +148,20 @@ describe('agreement 协议文案往返', () => {
     expect(p.user.version).toBe('v2.0')
     expect(p.user.sections).toHaveLength(30)
     expect(p.privacy.sections).toEqual([{ title: '数据', body: '说明' }])
+  })
+})
+
+// SAVE_OK_MESSAGE 手抄单源化（债目·E4 顺手改批）：曾经 usePageContent.ts save() 与 HomeContentForm.vue
+// save() 各自手抄一份「已保存，小程序立即生效」字面量、自称与 mapPageContent.ts「同源」——三处三份改一漏二即
+// 漂移。现两处改 import mapPageContent.ts 的 SAVE_OK_MESSAGE 复用，全仓该文案字面量只剩一处定义点。
+describe('SAVE_OK_MESSAGE 单源化（防手抄回潮）', () => {
+  it('大白话：usePageContent.ts / HomeContentForm.vue 都不再手抄字面量，改 import SAVE_OK_MESSAGE 复用', () => {
+    expect(usePageContentSrc).not.toContain('已保存，小程序立即生效')
+    expect(usePageContentSrc).toMatch(/import\s*\{\s*SAVE_OK_MESSAGE\s*\}\s*from\s*'\.\/mapPageContent'/)
+    expect(usePageContentSrc).toMatch(/message\.value = r\.ok \? SAVE_OK_MESSAGE :/)
+
+    expect(homeContentFormSrc).not.toContain('已保存，小程序立即生效')
+    expect(homeContentFormSrc).toMatch(/import\s*\{\s*SAVE_OK_MESSAGE\s*\}\s*from\s*'\.\.\/\.\.\/lib\/mapPageContent'/)
+    expect(homeContentFormSrc).toMatch(/message\.value = r\.ok \? SAVE_OK_MESSAGE :/)
   })
 })

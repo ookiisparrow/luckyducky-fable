@@ -83,12 +83,6 @@ export function remove(id: string, sku = ''): void {
   save()
 }
 
-export function setQty(id: string, qty: number, sku = ''): void {
-  const it = load().find(keyOf(id, sku))
-  if (it) it.qty = Math.max(1, qty)
-  save()
-}
-
 /** 相对增减：读内存态当前 qty 再 ±delta（钳位 ≥1）。步进器用它、不传渲染层旧值——
  *  防一次 setData 往返内快速连点，多次读同一旧 data-qty 做绝对 setQty 丢增量（lost update）。 */
 export function bump(id: string, delta: number, sku = ''): void {
@@ -137,12 +131,6 @@ export function consume(lines: Array<{ id: string; sku?: string; qty: number }>)
     it.qty -= line.qty || 0
     if (it.qty <= 0) items = load().filter((x) => x !== it)
   }
-  save()
-}
-
-/** 清空（测试/登出用）。 */
-export function clear(): void {
-  items = []
   save()
 }
 

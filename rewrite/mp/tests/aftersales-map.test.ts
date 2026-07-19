@@ -1,7 +1,7 @@
 // 黄金 orders-money 售后节前端半边（可申请口径与云端 applyRefund 一致）+ frontend-store §八
-// （翻页去重/申请成功插头部）（守卫 rw-mp-aftersales-golden）。
+// （翻页去重·申请成功列表即时收窄由 applicableLines 排除已申请实现·非独立插头部函数）（守卫 rw-mp-aftersales-golden）。
 import { describe, it, expect } from 'vitest'
-import { mapAfterSale, mapAfterSales, mergeAfterSales, prependAfterSale, applicableLines, asStatusLabel } from '../lib/mapAftersales'
+import { mapAfterSale, mapAfterSales, mergeAfterSales, applicableLines, asStatusLabel } from '../lib/mapAftersales'
 import type { OrderLineVM } from '../lib/mapOrders'
 
 const line = (over: Partial<OrderLineVM>): OrderLineVM => ({
@@ -47,13 +47,10 @@ describe('售后单映射与列表语义（黄金 §八）', () => {
     expect(mapAfterSales([REC, { status: 'applied' }, null, 42])).toHaveLength(1) // 脏档剔除
   })
 
-  it('大白话：翻页追加去重不重复；申请成功插到头部且不重复', () => {
+  it('大白话：翻页追加去重不重复', () => {
     const p1 = mapAfterSales([REC, { ...REC, _id: 'a2', orderId: 'o2' }])
     const p2 = mapAfterSales([{ ...REC, _id: 'a2', orderId: 'o2' }, { ...REC, _id: 'a3', orderId: 'o3' }]) // 游标边界重复 a2
     const merged = mergeAfterSales(p1, p2)
     expect(merged.map((a) => a.id)).toEqual(['o1__p1__', 'a2', 'a3']) // 去重·顺序稳定
-    const withNew = prependAfterSale(merged, { ...REC, _id: 'a-new', orderId: 'o9' })
-    expect(withNew[0].id).toBe('a-new')
-    expect(prependAfterSale(withNew, { ...REC, _id: 'a-new', orderId: 'o9' })).toHaveLength(withNew.length) // 重复插入不翻倍
   })
 })

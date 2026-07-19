@@ -86,6 +86,9 @@ export function scmErrorText(e: unknown): string {
     DUPLICATE: '这单组装已经执行过了（不会双扣）',
     BAD_TARGETS: '备货目标不合法',
     STOCK_APPLY_FAIL: '入库异常——状态已翻但账未动，请查流水并人工调整',
+    BAD_SPEC: '规格/料号含歧义下划线组合（连续 __ 或以 _ 结尾），请改名',
+    NO_SPECIFIC: '专属件（包装/卡片料号）必须都选',
+    BAD_PROFILE: 'BOM 档不完整，请先补齐三色与专属件',
   }
   const hit = MAP[code] || MAP[code.split(':')[0]]
   return hit || '操作没成功（' + code + '）' // 原文兜底

@@ -121,7 +121,9 @@ export async function saveSupplier({ db, data }: Ctx) {
 export async function adjustStock({ data, agentId }: Ctx) {
   const materialId = String(data.materialId || '')
   const adjustId = String(data.adjustId || '') // 前端每次提交生成一次·重试复用＝幂等键成分
-  const reason = str(data.reason, 200)
+  // trim 后判空（D2·同 scmBom saveBomProfile productId trim 判例）：不 trim 会放行纯空格 reason，
+  // 落库看似「有原因」实则不可读，审计追责时形同白填。
+  const reason = str(data.reason, 200).trim()
   if (!materialId || !adjustId) return reply(400, { ok: false, error: 'BAD_ADJUST' })
   // 拒成品 fg: 调整（深审 P2·假成功账实分叉）：applyStockMoves 对 fg: 行跳过 casChange（成品账在 kit/inventory·
   // 流水行只留痕），adjust 走这里会收 ok:true/applied:1 但 materials/inventory 纹丝不动＝假成功、留一条 stray fg

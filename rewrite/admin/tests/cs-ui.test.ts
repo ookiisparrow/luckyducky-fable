@@ -100,7 +100,7 @@ describe('kb/满意度/消息归一', () => {
 })
 
 describe('满意度明细行（批 B6·mapCsatEntries）', () => {
-  it('大白话：无备注显 —；bad=差评 ≤3 星（供「查会话」按钮/行高亮判据）；非数组回空', () => {
+  it('大白话：无备注显 —；bad=差评 ≤2 星（供「查会话」按钮/行高亮判据，同 Csat.vue badOnly maxScore=2）；非数组回空', () => {
     const rows = mapCsatEntries([
       { id: 'csat:euA:1783046400000', at: 1783046400000, score: 5, note: '很棒', externalUserId: 'euA' },
       { id: 'csat:euB:1783046400000', at: 1783046400000, score: 3, note: '', externalUserId: 'euB' },
@@ -110,8 +110,8 @@ describe('满意度明细行（批 B6·mapCsatEntries）', () => {
     expect(rows[0].note).toBe('很棒')
     expect(rows[0].bad).toBe(false)
     expect(rows[1].note).toBe('—') // 无备注兜底
-    expect(rows[1].bad).toBe(true) // 3 分算差评
-    expect(rows[2].bad).toBe(true)
+    expect(rows[1].bad).toBe(false) // 3 分不算差评
+    expect(rows[2].bad).toBe(true) // 1-2 分算差评
     expect(rows[2].externalUserId).toBe('')
     expect(rows[2].id).toBe('') // 无 id 兜底空串（不崩）
     expect(mapCsatEntries(null)).toEqual([])

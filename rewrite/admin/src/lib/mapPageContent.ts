@@ -123,7 +123,9 @@ export function aboutPayload(m: AboutModel): Record<string, unknown> {
 // `me.message || about.message` 短路合并展示：先完成、总是非空的一方（几乎总是 me）会把另一方的结果——哪怕
 // 是失败——整个遮蔽掉，用户只看到成功提示、实际另一档保存失败且毫不知情（根因#14 失败必可观测）。
 // 改成显式判断两者是否等于成功文案，都成功才显示成功；任一失败就把失败的那个/两个原样话术带上，不丢信息。
-export const SAVE_OK_MESSAGE = '已保存，小程序立即生效' // 与 usePageContent.ts save() 里的成功文案字面量同源
+// 单源（债目·E4 顺手改批）：曾被 usePageContent.ts save() 与 HomeContentForm.vue save() 各手抄一份
+// 「同源」字面量——三处三份、改一处漏两处即漂移。现两者都 import 本常量，全仓该文案字面量只此一处定义点。
+export const SAVE_OK_MESSAGE = '已保存，小程序立即生效'
 export function combineSaveMessages(meMessage: string, aboutMessage: string): { error: boolean; message: string } {
   const meFailed = meMessage !== '' && meMessage !== SAVE_OK_MESSAGE
   const aboutFailed = aboutMessage !== '' && aboutMessage !== SAVE_OK_MESSAGE

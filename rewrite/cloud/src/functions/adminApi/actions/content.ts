@@ -1,4 +1,5 @@
 import { reply, ensure, str, type Ctx } from '../lib'
+import { notifyAlert } from '../../../kit'
 
 // —— 首页内容（橱窗逐块②③：hero 文案 / 信任条 / FAQ；规格 §八）——
 export async function getHomeContent({ db }: Ctx) {
@@ -218,7 +219,9 @@ export async function getPageContent({ db, data }: Ctx) {
 // 管理端读回原始 videoFileId（已过口令闸）便于显「已传」/保存；小程序公开读经 catalog/getHelpVideos 换临时 URL（fileID 不出口）。
 export async function listHelpVideos({ db }: Ctx) {
   const got = await db.collection('content').doc('helpVideos').get().catch(() => null)
-  return reply(200, { ok: true, items: (got?.data as any)?.items || [] })
+  const d = (got?.data as any) || {}
+  // rev 供前端做 baseRev（乐观并发基线·同 saveCourseDraft 口径）：缺档=0
+  return reply(200, { ok: true, items: d.items || [], rev: Number(d.rev) || 0 })
 }
 
 export async function saveHelpVideos({ db, cloud, data }: Ctx) {
@@ -246,22 +249,44 @@ export async function saveHelpVideos({ db, cloud, data }: Ctx) {
       }
     })
     .filter((it: any) => it.title || it.segments.length)
-  const doc = { items, updatedAt: Date.now() }
   await ensure(db, 'content')
   const coll = db.collection('content')
-  const prev = await coll.doc('helpVideos').get().catch(() => null) // GC 基线：读旧份
+  const prev = await coll.doc('helpVideos').get().catch(() => null) // GC 基线 + 乐观并发基线：读旧份
+  // 乐观并发（批A·内容域并发安全·根因#1·同 saveCourseDraft rev/baseRev/DRAFT_CONFLICT 口径）：整档覆盖。
+  // 诚实边界：同 courses.ts 一样是「文档级 get→比对→set」，get 与 set 之间仍有毫秒级 TOCTOU 窗（非
+  // checkpoints.ts defmeta 那种条件 update 真 CAS）——帮助视频保存低频、真实冲突是人差几分钟的编辑，可接受。
+  // （items 整体替换）＝两处并发编辑（双页签/双管理员）后保存者静默吃掉先保存者的编辑。客户端带上拉取时
+  // 的 rev，不符即拒（前端提示重新载入，不静默覆盖）；不带 baseRev 的旧调用按原语义覆盖（部署窗口兼容）。
+  const curRev = prev && prev.data ? Number((prev.data as any).rev) || 0 : 0
+  const baseRev = Number(data.baseRev)
+  // 冲突分支：既不覆盖内容也绝不 GC 删文件——否则先保存者的编辑丢了、其视频还被误删（不可逆）。
+  if (Number.isFinite(baseRev) && curRev !== baseRev) return reply(200, { ok: false, error: 'DRAFT_CONFLICT', rev: curRev })
+  const doc = { items, updatedAt: Date.now(), rev: curRev + 1 }
   await coll
     .doc('helpVideos')
     .set({ data: doc })
     .catch(async () => {
       await coll.add({ data: { ...doc, _id: 'helpVideos' } })
     })
-  // 孤儿视频 GC（深审 P3·同 publishCourse 思路）：删「旧份有、新份没有」的 videoFileId；fail-soft 不反噬保存
+  // 孤儿视频 GC（深审 P3·同 publishCourse 思路）：删「旧份有、新份没有」的 videoFileId。**写成功后才 GC**
+  // （冲突分支已 early-return，到不了这里）。GC 删除失败不再静默吞（H2·同 saveCheckpoints 判例·病根#14）：
+  // 保存本身已成功，但 orphans 删不掉时如实回 ok:false + notifyAlert 留痕（orphans 进 anomalies 账本可人工回收，
+  // 低频面不为罕见失败建 pendingGc 队列）——别静默过关让前端误显「已保存」而云存储悄悄只增不减。
   const keep = new Set(items.flatMap((it: any) => it.segments.map((sg: any) => String(sg.videoFileId))))
   const prevIds = (((prev && (prev.data as any)) || {}).items || []).flatMap((it: any) =>
     ((it.segments || []) as any[]).map((sg: any) => String(sg.videoFileId || '')).filter(Boolean)
   )
   const orphans = [...new Set(prevIds)].filter((id) => !keep.has(id))
-  if (orphans.length) await cloud.deleteFile({ fileList: orphans }).catch(() => {})
-  return reply(200, { ok: true })
+  if (orphans.length) {
+    // 整体调用失败＝全部 orphans 视为删除失败；成功但含 status!=0 的项＝那几个失败（真 sdk 逐文件状态）。
+    const failed: string[] = await cloud
+      .deleteFile({ fileList: orphans })
+      .then((r: any) => ((r && r.fileList) || []).filter((f: any) => f && f.status !== 0).map((f: any) => String(f.fileID)))
+      .catch(() => orphans)
+    if (failed.length) {
+      await notifyAlert('anomaly', 'saveHelpVideos', 'GC_DELETE_FAIL', { orphans: failed })
+      return reply(200, { ok: false, error: 'GC_DELETE_FAIL', rev: doc.rev })
+    }
+  }
+  return reply(200, { ok: true, rev: doc.rev })
 }

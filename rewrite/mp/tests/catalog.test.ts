@@ -74,6 +74,18 @@ describe('getAllProducts（目录会话缓存）', () => {
     const r = await getAllProducts()
     expect(r).toBeNull()
   })
+
+  it('大白话：并发调用只发一次底层请求（在途去重·G4）——两次并发共享同一在途 promise 与结果', async () => {
+    const [a, b] = await Promise.all([getAllProducts(), getAllProducts()])
+    expect(calls).toBe(1)
+    expect(a).toBe(b)
+  })
+
+  it('大白话：force 与非 force 并发撞车时后到调用复用同一在途 promise，不重复拉（G4·force 条款）', async () => {
+    const [a, b] = await Promise.all([getAllProducts({ force: true }), getAllProducts()])
+    expect(calls).toBe(1)
+    expect(a).toBe(b)
+  })
 })
 
 describe('getProductById（既有语义不变·内部改走 getAllProducts）', () => {

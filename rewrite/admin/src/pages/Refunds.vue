@@ -3,6 +3,7 @@
 // grid 列表、右滑决策抽屉——把「退货权判据」摆到决策位（激活码/进课状态取 getRefundDetail 真判据·
 // 根因#8 不伪造徽章）。同意由「人工验收」勾选闸放行，服务端 approveRefund 仍权威复核（进课即拒/降级）。
 import { ref, computed, onMounted } from 'vue'
+import { useRoute } from 'vue-router'
 import { RefreshCw, Search, X, CircleCheck, Ticket, GraduationCap, Check, ShieldAlert } from 'lucide-vue-next'
 import { listRefunds, refundCounts, approveRefund, rejectRefund, getRefundDetail, listOrders, overrideRefund } from '../api/money'
 import UiButton from '../components/ui/Button.vue'
@@ -21,6 +22,10 @@ const TABS = [
   { key: '', label: '全部' },
 ]
 
+// 深链预填（债目·全局清零bug战役残余 2026-07-13）：Dashboard 退款类告警「去处理」按钮
+// router.push({path:'/refunds', query:{q}}) 跳转过来——挂载时读 route.query.q 预填搜索框并自动检索一次
+// （服务端 q 搜索按订单号精确命中已有·同 Conversations.vue/Batches.vue 既有深链范式）。
+const route = useRoute()
 const tab = ref('applied')
 const counts = ref<Record<string, number>>({})
 const countsPartial = ref(false) // P2·bug sweep Round2 item14：某状态 .count() 失败时角标别把占位 0 当真值显示（同 Dashboard todoPartial 风格）
@@ -29,7 +34,7 @@ const cursor = ref<unknown>(null)
 const hasMore = ref(false)
 const message = ref('')
 const busy = ref(false)
-const search = ref('') // 搜索框输入
+const search = ref(String(route.query.q || '')) // 搜索框输入（深链预填初值）
 const activeQ = ref('') // 已提交搜索词（空=按标签·跨全部状态服务端命中）
 
 interface Verdict {
@@ -260,7 +265,10 @@ async function submitOverride() {
   }
 }
 
-onMounted(reload)
+onMounted(() => {
+  if (search.value) void doSearch() // 深链预填带值即自动检索一次（省一次手点·省去 pickTab 切标签的动作）
+  else void reload()
+})
 </script>
 
 <template>

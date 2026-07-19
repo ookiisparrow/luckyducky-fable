@@ -14,6 +14,8 @@ export interface StockLine {
 }
 
 const CAS_RETRY = 5
+// 组合键校验在出生点、不在此消费点（战役3 批D·D1）：本函数吃存量库存文档的 productId/spec（多来自已保存
+// 的历史商品/订单），fail-closed 会拒结算既有数据（钱链反噬）——规则单源见 shared/scmKey.ts 头注，此处历史容忍。
 const idOf = (productId: string, spec: string) => `${productId}__${spec || ''}`
 
 // 单条 CAS 扣减：true=已扣 / false=库存不足（含持续读失败重试耗尽·宁缺勿超卖）/ null=不限量（无档·不扣不计）

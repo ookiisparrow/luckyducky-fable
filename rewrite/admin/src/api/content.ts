@@ -10,7 +10,8 @@ export const saveHomeContent = (home: Record<string, unknown>) => client.post('s
 export const getPageContent = (page: string) => client.post('getPageContent', { page })
 export const savePageContent = (page: string, data: Record<string, unknown>) => client.post('savePageContent', { page, data })
 export const listHelpVideos = () => client.post('listHelpVideos')
-export const saveHelpVideos = (items: unknown[]) => client.post('saveHelpVideos', { items })
+// baseRev＝拉取时的版本号（乐观并发·批A 内容域并发安全）：不符后端回 DRAFT_CONFLICT 拒覆盖·防双页签互吃 + 误 GC 删视频
+export const saveHelpVideos = (items: unknown[], baseRev?: number) => client.post('saveHelpVideos', { items, baseRev })
 export const getCourseDraft = (courseId: string) => client.post('getCourseDraft', { courseId })
 // baseRev＝拉草稿时的版本号（乐观并发·课程链路审计 2026-07-17）：不符后端回 DRAFT_CONFLICT 拒覆盖
 export const saveCourseDraft = (course: Record<string, unknown>, baseRev?: number) => client.post('saveCourseDraft', { course, baseRev })

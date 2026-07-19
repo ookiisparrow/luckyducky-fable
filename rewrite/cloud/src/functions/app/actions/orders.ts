@@ -44,6 +44,9 @@ const ADDONS: Record<string, { name: string; price: number }> = Object.fromEntri
 )
 
 // 订单行稳定身份：同商品多 SKU 同单需稳定行键（售后/评价按此定位）；旧单读路径回退 productId。
+// 组合键校验在出生点、不在此消费点（战役3 批D·D1）：createOrder 建单时 productId/spec 来自库内 products
+// 文档（可能是校验规则上线前的存量商品），fail-closed 会拒建订单（钱链反噬）——规则单源见 shared/scmKey.ts
+// 头注，此处历史容忍（未来新建/编辑商品已在 products.ts saveDraft 出生点拦下歧义身份）。
 const lineIdOf = (productId: string, spec: string) => `${productId}__${spec || ''}`
 
 // 批C·订单读时换址（根因#15 图片面·同 catalog.ts getProducts/getContent 换址口径的订单面延伸）：

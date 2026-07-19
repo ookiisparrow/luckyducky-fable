@@ -8,8 +8,10 @@ import { request } from 'https'
  * 【商户 API v3 直连】拉**交易账单**（云开发支付未封装账单下载·只能商户 API 直取），出站 GET
  * `api.mch.weixin.qq.com`、用**商户私钥 RSA-SHA256** 签名（APIv3 鉴权方案）。
  *
- * 凭证（敏感·非 git/非 DB·根因#9）：商户私钥 + 证书序列号读**云开发环境变量**
- * `WXPAY_MCH_PRIVATE_KEY` / `WXPAY_MCH_SERIAL`；mchid 取 `config.pay.subMchId`（自有商户号 1113881793）。
+ * 凭证（敏感·根因#9·决策 2026-07-12 起单源 DB `secureConfig/wxpay`）：商户私钥 + 证书序列号单源
+ * `secureConfig/wxpay`（字段 `mchPrivateKey`/`mchSerial`·admin /config-checklist 页填即生效·经 kit/secureConfig
+ * 读库·env `WXPAY_MCH_PRIVATE_KEY`/`WXPAY_MCH_SERIAL` 仅迁移期兜底）；调用方（adminApi/actions/wxbill.ts）
+ * 取值后传入本接缝，mchid 取 `config.pay.subMchId`（自有商户号 1113881793）。
  * 出站 + 解析单点收口此处（守卫 wxpay-seam-single）；业务码不直拼签名/不直调商户 API。
  *
  * fail-soft 铁律：缺凭证 / 网络 / 状态码非 200 / 解析失败 → `{ ok:false, error }`，绝不抛错反噬调用方。

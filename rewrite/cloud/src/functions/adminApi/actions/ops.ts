@@ -14,8 +14,10 @@ export async function runInspect(_ctx: Ctx) {
 
 /** 最新体检报告 + 未处理异常计数（体检面板首屏）。 */
 export async function getInspectStatus({ db }: Ctx) {
+  const _ = db.command
   const latest = await db
     .collection(COLLECTIONS.inspectRuns)
+    .where({ startedAt: _.gt(0) }) // 排除 A5 心跳档（startedAt:0·非体检记录）·读侧意图显式、不靠排序碰巧（存量真巡检 startedAt 全 >0·零迁移）
     .orderBy('startedAt', 'desc')
     .limit(1)
     .get()

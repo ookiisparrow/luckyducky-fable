@@ -5,13 +5,26 @@
 import { getCourses } from '../api/learning'
 
 let cache: Record<string, unknown>[] | null = null
+// 在途去重（G4·镜像 lib/catalog.ts getAllProducts / lib/pageContent.ts inflight 范式）：cache 未命中时并发
+// 调用（player/me/my-courses 深链撞车）此前会各发一次真实云调用；改并发共享同一在途 promise，结算（成功/
+// 失败都）即清键、不缓存 rejection。本函数无 force 形参（全仓也无调用方需要），故不新增——纯 inflight 去重
+// （防过度工程）。
+let inflight: Promise<Record<string, unknown>[] | null> | null = null
 
 export async function getAllCourses(): Promise<Record<string, unknown>[] | null> {
   if (cache) return cache
-  const r = await getCourses()
-  if (!r.ok || !Array.isArray(r.list)) return null
-  cache = r.list as Record<string, unknown>[]
-  return cache
+  if (inflight) return inflight // 在途去重：并发调用共享同一在途 promise，不重复拉
+  inflight = (async () => {
+    try {
+      const r = await getCourses()
+      if (!r.ok || !Array.isArray(r.list)) return null
+      cache = r.list as Record<string, unknown>[]
+      return cache
+    } finally {
+      inflight = null // 结算即清在途键（成功/失败都清·不缓存 rejection）
+    }
+  })()
+  return inflight
 }
 
 export async function getCourseById(id: string): Promise<Record<string, unknown> | null> {

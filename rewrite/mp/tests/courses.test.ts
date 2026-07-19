@@ -38,6 +38,14 @@ describe('getAllCourses（miss 回填·命中零调用·失败不毁缓存）', 
     expect(await getAllCourses()).toEqual(COURSES) // 第三次终于成功·填入缓存
     expect(getCoursesMock).toHaveBeenCalledTimes(3)
   })
+
+  it('大白话：并发调用只发一次底层请求（在途去重·G4）——两次并发共享同一在途 promise 与结果', async () => {
+    getCoursesMock.mockResolvedValue({ ok: true, list: COURSES })
+    const { getAllCourses } = await import('../lib/courses')
+    const [a, b] = await Promise.all([getAllCourses(), getAllCourses()])
+    expect(getCoursesMock).toHaveBeenCalledTimes(1)
+    expect(a).toBe(b)
+  })
 })
 
 describe('getCourseById（复用 getAllCourses·命中与 miss）', () => {

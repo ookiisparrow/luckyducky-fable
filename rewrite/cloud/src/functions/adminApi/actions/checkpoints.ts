@@ -22,7 +22,14 @@ export async function listCheckpoints({ db, data }: Ctx) {
       order: Number(d.order) || 0,
     }))
     .sort((a: any, b: any) => a.order - b.order)
-  return reply(200, { ok: true, list })
+  // 元档 rev 供前端做 baseRev（乐观并发基线·课程级 CAS 元档 defmeta:<courseId>）：单课查时读该课元档 rev；
+  // 无 courseId（全部课·customer360 不走此形状）时无单一元档、rev 省 0。where type:'def' 天然排除 defmeta。
+  let rev = 0
+  if (courseId) {
+    const m = await db.collection('checkpoints').doc('defmeta:' + courseId).get().catch(() => null)
+    rev = m && m.data ? Number((m.data as any).rev) || 0 : 0
+  }
+  return reply(200, { ok: true, list, rev })
 }
 
 // 保存某门课的关键节点定义（整课覆盖式：upsert 传入节点 + 删本课不在列表里的旧节点·保持策展集同步；只动 def·不碰用户 sub 提交）
@@ -43,6 +50,34 @@ export async function saveCheckpoints({ db, data }: Ctx) {
     if (!nodeId) return reply(400, { ok: false, error: 'BAD_ARGS:EMPTY_NODE_ID' })
   }
   await ensure(db, 'checkpoints')
+  // 课程级元档 CAS 乐观并发（批A·内容域并发安全·根因#1/#2）：集合原本是逐节点 def 文档、无课程级档，
+  // 整课覆盖式保存（逐节点 upsert + 删本课不在列表里的旧节点）＝两处并发编辑后保存者静默吃掉先保存者的
+  // 整册策展。立元档 `defmeta:<courseId>`（确定性 _id·courseId 已过防冒号校验·段界安全）承 rev：客户端带
+  // 拉取时的 baseRev，不符即拒（DRAFT_CONFLICT·前端提示重载不静默覆盖）。抢占用 CAS——元档存在则条件
+  // update（rev 不符即并发方先行、updated!==1）、缺档则 add（撞 _id＝并发方已建·病根#2 房式）；抢占成功
+  // 才进 upsert+GC。不带 baseRev 的旧调用跳过比对但仍走 CAS 抢占——抢失败也返 DRAFT_CONFLICT（诚实拒绝
+  // 优于静默互吃；courses 的「旧版覆盖」兼容是文档级 set 无法区分并发，这里 CAS 天然可区分，取更强语义）。
+  const metaId = 'defmeta:' + courseId
+  const metaGot = await db.collection('checkpoints').doc(metaId).get().catch(() => null)
+  const curRev = metaGot && metaGot.data ? Number((metaGot.data as any).rev) || 0 : 0
+  const baseRev = Number(data.baseRev)
+  if (Number.isFinite(baseRev) && curRev !== baseRev) return reply(200, { ok: false, error: 'DRAFT_CONFLICT', rev: curRev })
+  const nextRev = curRev + 1
+  if (metaGot && metaGot.data) {
+    const upd = await db
+      .collection('checkpoints')
+      .where({ _id: metaId, rev: curRev })
+      .update({ data: { rev: nextRev, updatedAt: Date.now() } })
+      .catch(() => ({ stats: { updated: 0 } }))
+    if (!upd.stats || upd.stats.updated !== 1) return reply(200, { ok: false, error: 'DRAFT_CONFLICT', rev: curRev })
+  } else {
+    const created = await db
+      .collection('checkpoints')
+      .add({ data: { _id: metaId, type: 'defmeta', courseId, rev: nextRev, updatedAt: Date.now() } })
+      .then(() => true)
+      .catch(() => false)
+    if (!created) return reply(200, { ok: false, error: 'DRAFT_CONFLICT', rev: curRev }) // 撞 _id＝并发方已建
+  }
   const keepIds = new Set<string>()
   let i = 0
   for (const n of nodes) {
@@ -89,7 +124,8 @@ export async function saveCheckpoints({ db, data }: Ctx) {
   }
   if (failedIds.length) {
     await notifyAlert('anomaly', 'saveCheckpoints', 'GC_REMOVE_FAIL', { failedIds, courseId })
-    return reply(200, { ok: false, error: 'GC_REMOVE_FAIL', failedIds })
+    // rev 已递增（CAS 抢占成功·节点已 upsert）——回给前端刷新 baseRev，否则「重存收敛」会撞自己刚 bump 的 rev → DRAFT_CONFLICT
+    return reply(200, { ok: false, error: 'GC_REMOVE_FAIL', failedIds, rev: nextRev })
   }
-  return reply(200, { ok: true, count: keepIds.size })
+  return reply(200, { ok: true, count: keepIds.size, rev: nextRev })
 }

@@ -3,6 +3,7 @@
 // && !busy——此前只有 mapMoney 纯函数单测/?raw 字符串断言覆盖，模板 :disabled 绑定与 @click 接线从未被真跑过。
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { mount, flushPromises } from '@vue/test-utils'
+import { createRouter, createMemoryHistory } from 'vue-router'
 
 const { listRefundsMock, refundCountsMock, approveRefundMock, rejectRefundMock, getRefundDetailMock, listOrdersMock, overrideRefundMock } = vi.hoisted(() => ({
   listRefundsMock: vi.fn(),
@@ -45,7 +46,12 @@ beforeEach(() => {
 
 describe('Refunds.vue 人工验收双勾选闸（canApprove）', () => {
   it('大白话：两项都未勾选禁用，勾齐才启用，点击恰好调用一次 approveRefund(id)', async () => {
-    const wrapper = mount(Refunds)
+    // 批E（Phase3·main 并入）给 Refunds.vue 加了 route.query.q 深链预填，挂载须带真实 router
+    //（同 products-render.test.ts 手法）；空 query → 深链分支不触发、走普通 reload，本测试行为不变。
+    const router = createRouter({ history: createMemoryHistory(), routes: [{ path: '/', component: { template: '<div/>' } }] })
+    await router.push('/')
+    await router.isReady()
+    const wrapper = mount(Refunds, { global: { plugins: [router] } })
     await flushPromises()
 
     const reviewBtn = wrapper.findAll('button').find((b) => b.text() === '审核')

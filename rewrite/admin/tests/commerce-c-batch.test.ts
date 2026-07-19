@@ -103,12 +103,31 @@ describe('Fulfill.vue doShip 在途闸带反馈（C1·P1）', () => {
 
 describe('Reconciliation.vue reload 分路报错（C2·P1）', () => {
   it('大白话：内部对账/外部勾对分别判失败，各自报——不被另一路成功清空', () => {
-    const body = extractFunctionBody(scriptSetupSrc(reconciliationSrc), 'async function reload() {')
+    const body = extractFunctionBody(scriptSetupSrc(reconciliationSrc), 'async function reload(): Promise<boolean> {')
     expect(body).toMatch(/if\s*\(\s*!recon\.value\s*\)\s*bad\.push\(\s*'内部对账加载失败/)
     expect(body).toMatch(/if\s*\(\s*!match\.value\s*\)\s*bad\.push\(\s*'外部账单勾对加载失败/)
     expect(body).toMatch(/message\.value = bad\.join\(/)
     // 旧「任一成功即清空 message」的写法不再存在
     expect(body).not.toMatch(/recon\.value \|\| match\.value \? '' :/)
+  })
+})
+
+describe('Reconciliation.vue pullBill/pullRange 消费 reload 返回值（批E·P2·顺手改批遗漏本处）', () => {
+  it('大白话：pullBill 只在拉取与刷新都成功时显纯成功；reload 失败别被无条件覆盖，保留其错误原文', () => {
+    const body = extractFunctionBody(scriptSetupSrc(reconciliationSrc), 'async function pullBill() {')
+    expect(body).toMatch(/const reloadOk = await reload\(\)/)
+    expect(body).toMatch(/if\s*\(\s*!r\.ok\s*\)\s*message\.value = '拉取失败：'/)
+    expect(body).toMatch(/else if\s*\(\s*!reloadOk\s*\)\s*message\.value = '账单已拉取入库，但对账刷新失败：' \+ message\.value/)
+    expect(body).toMatch(/else message\.value = '账单已拉取入库，勾对已刷新'/)
+    // 旧「reload 后无条件按 downloadBill 结果覆盖」写法不再存在
+    expect(body).not.toMatch(/message\.value = r\.ok \? '账单已拉取入库，勾对已刷新' : '拉取失败：'/)
+  })
+  it('大白话：pullRange 同理——reload 失败要把错误原文拼在区间拉取结果后，不能被纯成功文案盖掉', () => {
+    const body = extractFunctionBody(scriptSetupSrc(reconciliationSrc), 'async function pullRange() {')
+    expect(body).toMatch(/const reloadOk = await reload\(\)/)
+    expect(body).toMatch(/message\.value = reloadOk\s*\n\s*\? `区间账单已拉取 \$\{ok\}\/\$\{days\.length\} 天，勾对已刷新`\s*\n\s*: `区间账单已拉取 \$\{ok\}\/\$\{days\.length\} 天，但对账刷新失败：` \+ message\.value/)
+    // 旧「无条件显纯成功、不看 reload 是否失败」写法不再存在
+    expect(body).not.toMatch(/message\.value = `区间账单已拉取 \$\{ok\}\/\$\{days\.length\} 天，勾对已刷新`$/m)
   })
 })
 

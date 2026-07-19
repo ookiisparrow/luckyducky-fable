@@ -54,6 +54,10 @@ describe('状态与错误人话', () => {
     expect(scmErrorText('BAD_STATUS:received')).toContain('不允许') // 冒号取主码
     expect(scmErrorText('X_WEIRD')).toContain('X_WEIRD') // 原文兜底
     expect(docTypeLabel('assembly_out')).toBe('组装扣料')
+    // D5：fg 组合键定界符防护 + BOM 差异位三码的人话翻译（不再原文兜底）
+    expect(scmErrorText('BAD_SPEC')).toContain('下划线')
+    expect(scmErrorText('NO_SPECIFIC')).toContain('专属件')
+    expect(scmErrorText('BAD_PROFILE')).toContain('BOM')
   })
 
   it('大白话：流水行归一（料号人话/类型中文/脏行安全）', () => {

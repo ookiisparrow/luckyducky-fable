@@ -4,7 +4,7 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { control } from 'wx-server-sdk'
 import { pushBotAlert } from '../src/kit/botpush'
-import { notifyAlert } from '../src/kit'
+import { notifyAlert, notifyRecall } from '../src/kit'
 import { COLLECTIONS } from '@ldrw/shared'
 
 const WEBHOOK = 'https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=abc-1234'
@@ -68,5 +68,28 @@ describe('notifyAlert→企微推送（按 adminConfig 配置·批5）', () => {
       vi.unstubAllGlobals()
     }
     expect(calls.length).toBe(0) // 关了·不推
+  })
+})
+
+describe('notifyRecall→企微推送（H3·镜像 notifyAlert 推送半边·recall 接缝·不接 recordAnomaly）', () => {
+  it('大白话：配了 webhook→召回汇总经唯一接缝推企微一次', async () => {
+    control.seed(COLLECTIONS.adminConfig, [{ _id: 'settings', alertWebhook: WEBHOOK }])
+    const bodies: string[] = []
+    vi.stubGlobal('fetch', async (url: string, init: any) => {
+      bodies.push(init?.body || '')
+      return { json: async () => ({ errcode: 0 }) }
+    })
+    try {
+      await notifyRecall({ unpaid: 2, total: 2 })
+    } finally {
+      vi.unstubAllGlobals()
+    }
+    expect(bodies.length).toBe(1) // 经唯一 botpush 接缝推一次
+    expect(bodies[0]).toContain('RECALL_SUMMARY')
+  })
+
+  it('大白话：未配 webhook→静默不推不炸（fail-soft）·召回非异常不落 anomalies', async () => {
+    await notifyRecall({ unpaid: 1, total: 1 })
+    expect(control.dump(COLLECTIONS.anomalies).length).toBe(0) // 召回是运营通知·不污染异常账本
   })
 })
