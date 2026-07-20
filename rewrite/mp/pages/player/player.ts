@@ -47,6 +47,18 @@ const DESK_GUIDE_KEY = 'ld_player_desk_guide_shown'
 // segcap 文案三态（P4·播放器重设计战役批B §2c）：播放中报「段落 x/y」；播完且课时内有下一段报「x 完成·接下来 x+1」；
 // 播完且课时末段——查 navSegment 是否有跨课时下一段，有则报下一课时名，无则「本课程已全部学完」。
 // 放纯函数（非方法）：与 strip 一起在多个 setData 点重算，避免同一逻辑在 playSegment/onEnded/onReplay/onVideoPlay 四处各自重写。
+// WXS 回桥载荷取值单源（2026-07-20 真机日志逮出·根因#8「按同类 API 的形状想当然」）：
+// `ownerInstance.callMethod(name, args)` 把 args **直接**作为方法的第一个实参传入——它不是 wxml 绑定
+// 那种事件对象，**没有 `.detail`**。原先两个回桥方法都按事件形状写 `e.detail`，实测恒得 undefined，
+// 秒数于是恒取兜底 0：松手 seek(0) 把视频拨回开头、拖动文案恒 0:00、逐秒判重恒「同一秒」故一次不震——
+// 用户报的三个现象同一个因（实测日志见 重构日志 2026-07-20 批Q）。
+// 兼容两种形状（有 .detail 取 detail，否则就是载荷本身）：将来若把这些方法改回 wxml 直绑，不必再改一次。
+function wxsArgs<T extends object>(a: T | { detail: T } | undefined | null): Partial<T> {
+  if (!a) return {}
+  const d = (a as { detail?: T }).detail
+  return (d || a) as Partial<T>
+}
+
 function buildCapText(strip: LessonStrip | null, segDone: boolean, course: CoursePub | null, segId: string): string {
   if (!strip) return ''
   if (!segDone) return `段落 ${strip.segIndex} / ${strip.segTotal}`
@@ -550,8 +562,8 @@ Page({
   // 节流 setData（curClock/snapName·位置 60fps、文案 ~10fps 的可感知取舍已拍板）。首个 tick（!seeking）＝拖动起始
   // （原 onSeekStart 职责）：复位逐秒/节点判重锚点 + 进 seeking 态（阻断 onTimeUpdate 覆盖 seekPct 抢写 WXS 落位）。
   // 绝不 .seek(——两段式：提交只在 onSeekCommit（松手）。snapAt→name 经本段 marks 反查（WXS 只回数字 at·载荷精简）。
-  onSeekTick(e: WechatMiniprogram.CustomEvent<{ sec: number; snapAt: number }>) {
-    const d = e.detail || ({} as { sec: number; snapAt: number })
+  onSeekTick(e: { sec: number; snapAt: number } | WechatMiniprogram.CustomEvent<{ sec: number; snapAt: number }>) {
+    const d = wxsArgs<{ sec: number; snapAt: number }>(e)
     const sec = Math.max(0, Math.floor(Number(d.sec) || 0))
     const snapAt = Number(d.snapAt)
     const cur = this.data.current
@@ -586,17 +598,12 @@ Page({
   // 完成态下拖动＝用户想回看，恢复播放并退出完成遮罩（同 onReplay 语义·completed=false——不留播完遮罩挡住刚拖到的
   // 画面）。收口 seeking/snapName 态 + 把 seekPct/curSec/curClock 同步到落位秒（拖动中 seekPct 被冻结·此处补齐数据
   // 绑定与 WXS 落位一致·免松手一帧回跳）。防御：非 seeking 态的杂散提交丢弃（不误 seek）。
-  onSeekCommit(e: WechatMiniprogram.CustomEvent<{ sec: number }>) {
+  onSeekCommit(e: { sec: number } | WechatMiniprogram.CustomEvent<{ sec: number }>) {
     if (!this.data.seeking) return
-    const d = e.detail || ({} as { sec: number })
+    const d = wxsArgs<{ sec: number }>(e)
     const sec = Math.max(0, Math.floor(Number(d.sec) || 0))
     const ctx = wx.createVideoContext('lp-video', this)
     ctx.seek(sec)
-    // 落位双保险（2026-07-20 用户反馈：拖完视频回到开头、进度条冻在松手位置）：`.seek()` 只是「发起」，平台不
-    // 保证落住——媒体源不支持 Range 请求时（或部分模拟器实现）seek 会触发整段重新加载，位置回 0。记下目标秒
-    // 交给 onVideoMeta 的既有兜底（initial-time 失效那条同一机制·复用不另起炉灶）：重载必再发 loadedmetadata，
-    // 那里发现实际位置离目标 >2s 就补一次 seek。正常平台 seek 不重载→不再发 meta→本值随下次换段重置，无副作用。
-    this._resumeAt = sec
     const durSec = this.data.durSec
     const seekPct = durSec ? Math.min(100, Math.round((sec / durSec) * 10000) / 100) : 0
     if (this.data.segDone) {

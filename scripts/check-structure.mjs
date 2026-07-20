@@ -2679,6 +2679,10 @@ export const repoChecks = [
         [/\b(?:Promise|async\s+function|await\s|setTimeout|setInterval|requestAnimationFrame)\b/, 'WXS 无异步/定时能力（渲染层同步闭环）', '异步交回逻辑层 callMethod'],
         [/\bwx\s*\./, 'WXS 内不能调 wx.* 接口', '经 ownerInstance.callMethod 回逻辑层调'],
         [/\.(?:includes|startsWith|endsWith|padStart|padEnd|repeat|find|findIndex)\s*\(/, 'ES6 字符串/数组方法不在 WXS 子集内', '用 indexOf/循环替代'],
+        // 2026-07-20 实测：`if (x) { doSomething(); return }` 单行写法编译报 `Unexpected token '}'`——
+        // WXS 解析器不接受裸 return 紧跟同行 `}`（换行写同一段就正常）。只咬「return 后直接是 }」，
+        // `return { ... }`（返回对象字面量）因 return 后是 `{` 不匹配、不误伤。
+        [/\breturn\s*\}/, 'WXS 解析器不接受裸 return 紧跟同行的 }（实测 Unexpected token）', 'return 单独占一行、} 换行'],
       ]
       let scanned = 0
       const walkX = (d) => {
@@ -6217,21 +6221,27 @@ import { PROD_ENV } from './lib/env.mjs'（单源·病根#5·债#30①）`)
               bad.push('seek.wxs 的 onMove 函数体内出现 .seek(——WXS 内不得直接 seek（两段式：拖动中只改显示）')
           }
         }
+        // WXS 回桥载荷形状（2026-07-20 真机日志逮出·根因#8「按同类 API 的形状想当然」）：
+        // `ownerInstance.callMethod(name, args)` 把 args **直接**当方法的第一个实参传入——它不是 wxml 事件
+        // 对象，没有 `.detail`。原先两个回桥方法都按事件形状写 `e.detail`，恒得 undefined → 秒数恒取兜底 0：
+        // 松手 seek(0) 把视频拨回开头、拖动文案恒 0:00、逐秒判重恒「同一秒」故一次不震——三个用户报的现象
+        // 同一个因。故两个回桥方法禁裸读 .detail，一律经 wxsArgs() 单源取载荷（该 helper 兼容两种形状，
+        // 将来若改回 wxml 直绑也不会再漂）。
+        for (const fn of ['onSeekTick', 'onSeekCommit']) {
+          const body = stripComments(methodBody(ts, fn))
+          if (body && /\.detail\b/.test(body))
+            bad.push(`player.ts 的 ${fn} 方法体内裸读 .detail——WXS callMethod 直传参数、没有 .detail（读到恒 undefined→秒数恒 0→松手把视频拨回开头且不震动·2026-07-20 实测），载荷一律经 wxsArgs() 取`)
+          if (body && !/wxsArgs\s*</.test(body) && !/wxsArgs\s*\(/.test(body))
+            bad.push(`player.ts 的 ${fn} 方法体内未见 wxsArgs(——WXS 回桥载荷须经该单源 helper 取值（直接读参数形状会随平台/绑定方式漂·2026-07-20 栽过）`)
+        }
+
         const seekCommitBody = methodBody(ts, 'onSeekCommit')
         if (!seekCommitBody) bad.push('player.ts 找不到 onSeekCommit 方法体——WXS 松手提交的逻辑层落点缺失（松手真 seek）')
         else {
           const commit = stripComments(seekCommitBody)
           if (!/\.seek\s*\(/.test(commit)) bad.push('player.ts 的 onSeekCommit 方法体内未见 .seek(——松手应真正 seek 到位')
-          // 松手后「落位 + 续播」双兜底（2026-07-20 用户反馈：拖完视频回到开头、进度条冻在松手位置）。
-          // 病理：`.seek()` 只是发起，平台不保证落住——媒体源不支持 Range 请求（或模拟器实现）时 seek 会触发
-          // 重新加载、位置回 0 且播放停摆；一旦停摆就没有 timeupdate，进度条随之永久冻结在 WXS 最后 setStyle
-          // 的位置（看起来像「进度条失效」，实为播放停了）。故 seek 之后必须做两件事，缺一都会复发：
-          // ① 记 _resumeAt=目标秒——真发生重载时 loadedmetadata 再触发，由 onVideoMeta 既有双保险把位置拉回
-          //    目标（复用 initial-time 失效那条的同一机制·勿另起炉灶）；② 补 play()——把停摆的播放推回去
-          //    （幂等·与 playSegment 的 autoplay 停摆兜底同型）。根因#8：真机与模拟器 seek 行为不一致，
-          //    这两条兜的是「seek 发起了但没落住/没续上」的通用失败面，两端都受益。
-          if (!/_resumeAt\s*=/.test(commit))
-            bad.push('player.ts 的 onSeekCommit 方法体内未见 _resumeAt 赋值——seek 触发媒体重载时位置会回 0（无人拉回目标秒·2026-07-20 反馈复发面·根因#8）')
+          // seek 后补一次 play（幂等·与 playSegment 的 autoplay 停摆兜底同型）：拖动落位后播放若停摆在首帧，
+          // 没人补推就一直停着，而播放一停就没有 timeupdate、进度条随之不再更新。
           // 断言必须钉「非暂停态补推」这一条路径本身，不能只查 .play( 出现过——segDone 分支另有一处
           // ctx.play()（播完态拖动＝回看），删掉常规路径的补推后 .play( 仍在场、宽断言照样绿（错题本 E17
           // 同型：一个方法体内有两处同名调用时，存在性断言测不出删了哪一处）。
