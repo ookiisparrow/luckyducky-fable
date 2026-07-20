@@ -68,9 +68,13 @@ if (dryRun) {
 }
 
 // 4. 逐函数部署（敏感函数二次确认由 guard-deploy 兜底）
+// 源码名→云端名映射（M5 定名·运维手册§①.1 唯一名坑）：不映射会把 adminApi 部署成云端旧孤立函数、
+// 真身 adminApiV2 永不更新（2026-07-20 记录批发现·人工部署未踩、脚本雷）。
+const CLOUD_NAME = { adminApi: 'adminApiV2' }
 for (const name of changed) {
-  console.log(`\n部署 ${name} …`)
-  execSync(`tcb fn deploy ${name} --dir ${join(DIST, name)} --force -e ${ENVID}`, { cwd: ROOT, stdio: 'inherit' })
+  const cloudName = CLOUD_NAME[name] || name
+  console.log(`\n部署 ${cloudName}（源 ${name}）…`)
+  execSync(`tcb fn deploy ${cloudName} --dir ${join(DIST, name)} --force -e ${ENVID}`, { cwd: ROOT, stdio: 'inherit' })
 }
 
 // 5. 更新清单（入 git，记录已部署 hash + 时间）
