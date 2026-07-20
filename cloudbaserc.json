@@ -10,6 +10,12 @@
       "installDependency": true
     },
     {
+      "name": "adminApiV2",
+      "timeout": 15,
+      "handler": "index.main",
+      "installDependency": true
+    },
+    {
       "name": "app",
       "timeout": 15,
       "handler": "index.main",

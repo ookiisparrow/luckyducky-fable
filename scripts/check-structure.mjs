@@ -23,6 +23,7 @@ import { execSync } from 'node:child_process'
 import { join, resolve, relative } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { RULES as conventionRules } from './check-conventions.mjs'
+import { allDeployNames } from './lib/deploy-aliases.mjs' // 部署别名单源（产物→云函数名·adminApi 亦部署为 adminApiV2·病根#16）
 import { oldlineDigest } from './oldline-freeze-lib.mjs'
 import { deriveTierCharsets } from './lib/brand-font-charset.mjs'
 
@@ -1656,8 +1657,10 @@ export const repoChecks = [
         }
       }
       const bad = []
-      for (const name of actual) if (!configured.has(name)) bad.push(`活线云函数 ${name} 缺 cloudbaserc.json 配置——真部署会卡交互确认、答 y 即按默认参数覆盖线上真值（根因#8/#16）`)
-      for (const name of configured) if (!actual.includes(name)) bad.push(`cloudbaserc.json 配了不存在的函数 ${name}——孤儿配置`)
+      // 别名展开（病根#16）：adminApi 产物亦部署为 adminApiV2（/adminv2·admin 前端调用方）——单源 lib/deploy-aliases.mjs
+      const expanded = allDeployNames(actual)
+      for (const name of expanded) if (!configured.has(name)) bad.push(`活线云函数 ${name} 缺 cloudbaserc.json 配置——真部署会卡交互确认、答 y 即按默认参数覆盖线上真值（根因#8/#16）`)
+      for (const name of configured) if (!expanded.includes(name)) bad.push(`cloudbaserc.json 配了不存在的函数 ${name}——孤儿配置（部署别名请登记 scripts/lib/deploy-aliases.mjs）`)
       return bad
     },
   },
@@ -3894,7 +3897,8 @@ export const repoChecks = [
       for (const f of readdirSync(join(ROOT, 'scripts'))) {
         if (!f.endsWith('.mjs') || f === 'guard-deploy.mjs') continue // guard-deploy：id 仅在文案·非逻辑常量·豁免
         if (readFileSync(join(ROOT, 'scripts', f), 'utf8').includes(envId))
-          bad.push(`scripts/${f} 硬编码生产 env id「${envId}」——须 import { PROD_ENV } from './lib/env.mjs'（单源·病根#5·债#30①）`)
+          bad.push(`scripts/${f} 硬编码生产 env id「${envId}」——须 import { allDeployNames } from './lib/deploy-aliases.mjs'
+import { PROD_ENV } from './lib/env.mjs'（单源·病根#5·债#30①）`)
       }
       return bad
     },
