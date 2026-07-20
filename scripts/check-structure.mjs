@@ -6128,7 +6128,7 @@ import { PROD_ENV } from './lib/env.mjs'（单源·病根#5·债#30①）`)
     // 删除——2026-07-12 拍板·决策§28，防回潮见 rw-mp-no-casting。）
     id: 'rw-mp-player-immersive',
     roots: ['#8', '#5'],
-    desc: '播放页竖屏沉浸全屏 + 帮助(客服)入口：player.json 须 navigationStyle:custom；player.wxml 的 <video> 须 controls="{{false}}" + 求助入口节点（bind:tap=onHelp）+ 自绘 seek 条 WXS 化两段式绑定（批5·根因#15：60Hz touchmove 每帧 setData 双向过桥＝掉帧源，拖动几何移入渲染层 WXS 闭环）——外置 <wxs src="./seek.wxs" module="sk">（内联 <wxs> 里的 < 会被 wxml-well-formed 咬）+ 绑定钉 touchstart={{sk.onStart}}/touchmove={{sk.onMove}}/touchend={{sk.onEnd}} + change:cfg={{sk.onCfg}} 下发几何（rect/durSec/marks）；seek.wxs 的 onMove 函数体内不得出现 .seek(/onSeekCommit（两段式：WXS 拖动中只改显示、绝不提交·setupFnBody 取真源）、player.ts 的 onSeekCommit 方法体内须出现 .seek(（松手才由逻辑层真 seek）；客服入口须单源在 rewrite/mp/utils/customerService.ts（rewrite/mp 内 wx.openCustomerServiceChat 只此一处）。段落进度条须落胶囊下方（2026-07-13 反馈）：player.ts 须取 getMenuButtonBoundingClientRect、.lp-segstrip 须动态 top（不硬编码贴屏顶）；视频框须贴合素材比例去左右黑边（2026-07-13 反馈）：主 <video>（controls={{false}}）须 bind:loadedmetadata=onVideoMeta + player.ts 有 onVideoMeta 方法（体内真写 videoRatio）+ .lp-video-box 播放态须动态 padding-top（不写死 168%）',
+    desc: '播放页竖屏沉浸全屏 + 帮助(客服)入口：player.json 须 navigationStyle:custom；player.wxml 的 <video> 须 controls="{{false}}" + 求助入口节点（bind:tap=onHelp）+ 自绘 seek 条 WXS 化两段式绑定（批5·根因#15：60Hz touchmove 每帧 setData 双向过桥＝掉帧源，拖动几何移入渲染层 WXS 闭环）——外置 <wxs src="./seek.wxs" module="sk">（内联 <wxs> 里的 < 会被 wxml-well-formed 咬）+ 绑定钉 touchstart={{sk.onStart}}/touchmove={{sk.onMove}}/touchend={{sk.onEnd}} + change:cfg={{sk.onCfg}} 下发几何（rect/durSec/marks）；seek.wxs 的 onMove 函数体内不得出现 .seek(/onSeekCommit（两段式：WXS 拖动中只改显示、绝不提交·setupFnBody 取真源）、player.ts 的 onSeekCommit 方法体内须出现 .seek(（松手才由逻辑层真 seek）+ _resumeAt 赋值 + .play(（seek 只是发起、平台不保证落住：源不支持 Range 时 seek 会触发重载→位置回 0 且播放停摆→没有 timeupdate→进度条永久冻在松手位置，2026-07-20 用户反馈现象；故须记目标秒交 onVideoMeta 兜底拉回 + 补推 play）；客服入口须单源在 rewrite/mp/utils/customerService.ts（rewrite/mp 内 wx.openCustomerServiceChat 只此一处）。段落进度条须落胶囊下方（2026-07-13 反馈）：player.ts 须取 getMenuButtonBoundingClientRect、.lp-segstrip 须动态 top（不硬编码贴屏顶）；视频框须贴合素材比例去左右黑边（2026-07-13 反馈）：主 <video>（controls={{false}}）须 bind:loadedmetadata=onVideoMeta + player.ts 有 onVideoMeta 方法（体内真写 videoRatio）+ .lp-video-box 播放态须动态 padding-top（不写死 168%）',
     run() {
       const base = join(ROOT, 'rewrite/mp')
       if (!existsSync(base)) return []
@@ -6219,8 +6219,25 @@ import { PROD_ENV } from './lib/env.mjs'（单源·病根#5·债#30①）`)
         }
         const seekCommitBody = methodBody(ts, 'onSeekCommit')
         if (!seekCommitBody) bad.push('player.ts 找不到 onSeekCommit 方法体——WXS 松手提交的逻辑层落点缺失（松手真 seek）')
-        else if (!/\.seek\s*\(/.test(stripComments(seekCommitBody)))
-          bad.push('player.ts 的 onSeekCommit 方法体内未见 .seek(——松手应真正 seek 到位')
+        else {
+          const commit = stripComments(seekCommitBody)
+          if (!/\.seek\s*\(/.test(commit)) bad.push('player.ts 的 onSeekCommit 方法体内未见 .seek(——松手应真正 seek 到位')
+          // 松手后「落位 + 续播」双兜底（2026-07-20 用户反馈：拖完视频回到开头、进度条冻在松手位置）。
+          // 病理：`.seek()` 只是发起，平台不保证落住——媒体源不支持 Range 请求（或模拟器实现）时 seek 会触发
+          // 重新加载、位置回 0 且播放停摆；一旦停摆就没有 timeupdate，进度条随之永久冻结在 WXS 最后 setStyle
+          // 的位置（看起来像「进度条失效」，实为播放停了）。故 seek 之后必须做两件事，缺一都会复发：
+          // ① 记 _resumeAt=目标秒——真发生重载时 loadedmetadata 再触发，由 onVideoMeta 既有双保险把位置拉回
+          //    目标（复用 initial-time 失效那条的同一机制·勿另起炉灶）；② 补 play()——把停摆的播放推回去
+          //    （幂等·与 playSegment 的 autoplay 停摆兜底同型）。根因#8：真机与模拟器 seek 行为不一致，
+          //    这两条兜的是「seek 发起了但没落住/没续上」的通用失败面，两端都受益。
+          if (!/_resumeAt\s*=/.test(commit))
+            bad.push('player.ts 的 onSeekCommit 方法体内未见 _resumeAt 赋值——seek 触发媒体重载时位置会回 0（无人拉回目标秒·2026-07-20 反馈复发面·根因#8）')
+          // 断言必须钉「非暂停态补推」这一条路径本身，不能只查 .play( 出现过——segDone 分支另有一处
+          // ctx.play()（播完态拖动＝回看），删掉常规路径的补推后 .play( 仍在场、宽断言照样绿（错题本 E17
+          // 同型：一个方法体内有两处同名调用时，存在性断言测不出删了哪一处）。
+          if (!/!this\.data\.paused\s*\)[^\n]*\.play\s*\(/.test(commit))
+            bad.push('player.ts 的 onSeekCommit 方法体内未见「非暂停态补推 play」（形如 if (!this.data.paused) ctx.play()）——seek 触发重载会让播放停摆在首帧，无人补推则进度条永久冻在松手位置（2026-07-20 反馈现象·根因#8）')
+        }
 
         // 段落进度条落胶囊下方（2026-07-13 反馈·Bug D1）：须取原生胶囊底边为动态 top 的可靠源。
         if (!/getMenuButtonBoundingClientRect\s*\(/.test(stripComments(ts)))

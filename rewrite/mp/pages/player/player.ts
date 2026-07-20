@@ -585,6 +585,11 @@ Page({
     const sec = Math.max(0, Math.floor(Number(d.sec) || 0))
     const ctx = wx.createVideoContext('lp-video', this)
     ctx.seek(sec)
+    // 落位双保险（2026-07-20 用户反馈：拖完视频回到开头、进度条冻在松手位置）：`.seek()` 只是「发起」，平台不
+    // 保证落住——媒体源不支持 Range 请求时（或部分模拟器实现）seek 会触发整段重新加载，位置回 0。记下目标秒
+    // 交给 onVideoMeta 的既有兜底（initial-time 失效那条同一机制·复用不另起炉灶）：重载必再发 loadedmetadata，
+    // 那里发现实际位置离目标 >2s 就补一次 seek。正常平台 seek 不重载→不再发 meta→本值随下次换段重置，无副作用。
+    this._resumeAt = sec
     const durSec = this.data.durSec
     const seekPct = durSec ? Math.min(100, Math.round((sec / durSec) * 10000) / 100) : 0
     if (this.data.segDone) {
@@ -592,6 +597,10 @@ Page({
       this.exitSegDone({ seeking: false, snapName: '', curSec: sec, curClock: formatClock(sec), seekPct })
       return
     }
+    // 续播兜底：seek 触发重载时播放会停摆在首帧，没人补推就永远停在那——而播放一停就没有 timeupdate，
+    // 进度条随之永久冻结在 WXS 最后落位处（用户看到的「拖动失效」实为播放停了）。play 幂等（已在播＝no-op），
+    // 与 playSegment 的 autoplay 停摆兜底同型。用户主动暂停态（paused 由 bind:pause 真回报）不打扰。
+    if (!this.data.paused) ctx.play()
     this.setData({ seeking: false, snapName: '', curSec: sec, curClock: formatClock(sec), seekPct })
   },
   // 事件震（进节点重嗒）单出口：≥VIBE_GAP_MS 节流，与拖动阻尼「嗒」共用 lastVibe/lastTick 时间地板防叠震
