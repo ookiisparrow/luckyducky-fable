@@ -99,8 +99,10 @@ export function formatClock(totalSec: number): string {
 
 /** seek 目标秒数夹取到 [0, durSec]（拖动条松手/边界脏值不越界跳出可播范围）。 */
 export function clampSeek(value: number, durSec: number): number {
-  const v = Math.floor(Number(value) || 0)
-  const max = Math.max(0, Math.floor(Number(durSec) || 0))
+  // 不写 Number(...)：本函数与 seek.wxs 同源同式，而 WXS 的 Number 是常量对象、调用即编译失败
+  // （2026-07-20 真机 seek.wxs:14 炸过·守卫 rw-mp-wxs-runtime-subset）；入参已是 number，`|| 0` 收 NaN 足够。
+  const v = Math.floor(value || 0)
+  const max = Math.max(0, Math.floor(durSec || 0))
   if (v < 0) return 0
   if (max > 0 && v > max) return max
   return v

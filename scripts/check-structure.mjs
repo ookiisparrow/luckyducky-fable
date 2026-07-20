@@ -2647,6 +2647,65 @@ export const repoChecks = [
     },
   },
   {
+    // WXS 语法子集（2026-07-20·seek.wxs 真机编译失败当场立）。痛：seek.wxs 写了 `Number(value) || 0`，
+    // 微信编译器直接语法层拒绝（`seek.wxs:14:28 Unexpected identifier '('` → 连带 `__route__ is not defined`
+    // 整页白）——WXS 的 Number 只是常量对象（MAX_VALUE/MIN_VALUE…）不可调用，且 WXS 是自带受限 builtin 的
+    // ES5 子集运行时（无 Object/new/箭头/let-const/模板串/try-catch/ES6 方法）。为什么 check 全绿还炸：
+    // tests/player-seek-wxs.test.ts 用 new Function 把 WXS 函数体抽到 **Node** 里跑对拍，Node 有 Number——
+    // 桩比真运行时宽松＝根因#8「过了≠真能用」在 WXS 面的翻版（同日志 P 内存桩形状不符全假阴）；WXS 又进不了
+    // tsc/eslint 编译面（.wxs 不是 .ts/.js），三道闸对它整体真空。本守卫补这块真空：对 .wxs 源剥注释 + 掩蔽
+    // 字符串字面量（防注释/文案里的 `=>`、`...` 假红）后逐行扫已知非法构造。扫描面为空即红——WXS 全删属
+    // 刻意退役、该同批删守卫（病根#16「空样本＝绿不发信号」）。
+    id: 'rw-mp-wxs-runtime-subset',
+    roots: ['#8'],
+    desc: 'WXS 语法子集（活线 rewrite/mp·根因#8）：.wxs 是自带受限 builtin 的 ES5 子集运行时，且不在 tsc/eslint 编译面内——禁 Number()/String()/Boolean()/Array() 调用、Object.*、new、箭头函数、let/const、模板字符串、展开符、try/catch、class、import/export、Promise/async/await/setTimeout、wx.*、ES6 字符串数组方法（includes/startsWith/endsWith/padStart/padEnd/repeat/find/findIndex）；违例真机编译即失败整页白，而 npm run check 全绿（对拍测试在 Node 跑、桩比真运行时宽松）',
+    run() {
+      const bad = []
+      const base = join(ROOT, 'rewrite/mp')
+      if (!existsSync(base)) return bad
+      // 每条：非法构造正则 + 为什么（WXS 运行时没有它）+ 替代写法。行内 structure-ok 可标刻意例外。
+      const BANNED = [
+        [/\bNumber\s*\(/, 'WXS 的 Number 是常量对象（MAX_VALUE 等）不可调用', '数值直接用 `x || 0` 或 parseFloat/parseInt'],
+        [/\b(?:String|Boolean|Array)\s*\(/, 'WXS 无 String/Boolean/Array 构造函数', "拼串用 `'' + x`、判真用 `!!x`、建数组用 `[]`"],
+        [/\bObject\s*\./, 'WXS 无 Object 全局对象', '自己 for-in 遍历'],
+        [/\bnew\s+[A-Za-z_$]/, 'WXS 不支持 new（含 new Date/new RegExp）', '用 getDate() / getRegExp()'],
+        [/=>/, 'WXS 不支持箭头函数', '写 function (a) { ... }'],
+        [/\b(?:let|const)\s+[A-Za-z_$]/, 'WXS 只有 var', '一律 var'],
+        [/`/, 'WXS 不支持模板字符串', "用 '+' 拼接"],
+        [/\.\.\./, 'WXS 不支持展开/剩余参数', '显式列参数或 concat'],
+        [/\b(?:try|catch)\s*[({]/, 'WXS 不支持异常处理', '前置判空代替 try/catch'],
+        [/\bclass\s+[A-Za-z_$]/, 'WXS 不支持 class', '用 function + 对象字面量'],
+        [/^\s*(?:import|export)\s/, 'WXS 模块走 require/module.exports', "module.exports = { ... }"],
+        [/\b(?:Promise|async\s+function|await\s|setTimeout|setInterval|requestAnimationFrame)\b/, 'WXS 无异步/定时能力（渲染层同步闭环）', '异步交回逻辑层 callMethod'],
+        [/\bwx\s*\./, 'WXS 内不能调 wx.* 接口', '经 ownerInstance.callMethod 回逻辑层调'],
+        [/\.(?:includes|startsWith|endsWith|padStart|padEnd|repeat|find|findIndex)\s*\(/, 'ES6 字符串/数组方法不在 WXS 子集内', '用 indexOf/循环替代'],
+      ]
+      let scanned = 0
+      const walkX = (d) => {
+        for (const name of lsScan(d)) {
+          if (name === 'node_modules' || name === 'dist') continue
+          const p = join(d, name)
+          if (statSync(p).isDirectory()) walkX(p)
+          else if (name.endsWith('.wxs')) {
+            scanned++
+            // 剥注释（E1 单源 helper）+ 掩蔽字符串字面量（防文案里的 `=>`/`...` 假红）；两者均保行号一一对应
+            const lines = maskStringLiterals(stripComments(readFileSync(p, 'utf8'))).split('\n')
+            lines.forEach((line, i) => {
+              if (line.includes('structure-ok')) return
+              for (const [re, why, fix] of BANNED)
+                if (re.test(line))
+                  bad.push(`${relative(ROOT, p)}:${i + 1} WXS 非法构造——${why}；改用：${fix}（真机编译即失败整页白·根因#8）`)
+            })
+          }
+        }
+      }
+      walkX(base)
+      if (!scanned)
+        bad.push('rewrite/mp 下零个 .wxs——本守卫扫描面空转（病根#16「空样本＝绿」）；WXS 若已刻意全撤，同批退役本守卫')
+      return bad
+    },
+  },
+  {
     // 进包位图预算（新线·2026-07-16·病根#15 图片面 + 根因#8 冷启）。内容图归云存储（getTempUrl 换临时址按需拉），
     // 进包位图只该是品牌兜底（hero-full.jpg 42K）。防大位图悄爬进主包（2MB 硬顶·含代码）拖慢冷启动——真机冷启
     // 才感知（根因#8「构建过≠真机能用」）。与 font-not-in-package（禁字体二进制进包）同精神互补：那管字体、这管位图。

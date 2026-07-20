@@ -4,6 +4,8 @@
    两段式铁律：WXS 内绝不提交 seek——onMove 只改显示，松手（onEnd）才 callMethod('onSeekCommit') 由逻辑层真 seek。
    数学（clampSeek/nearestMark）与 lib/player.ts 同式同构——WXS 进不了 tsc 编译面（ES5 独立运行时），由
    tests/player-seek-wxs.test.ts 抽本函数体与 TS 单源版逐点对拍钉死（防两处数学漂移·病根#5）。
+   注意：该对拍在 **Node** 里跑（new Function），Node 比 WXS 运行时宽松——写 Number()/箭头/模板串
+   照样绿、真机编译却整页白（2026-07-20 栽过一次）。语法子集由守卫 rw-mp-wxs-runtime-subset 静态咬。
    震动走 callMethod 回逻辑层（WXS 内禁 wx.*·离散低频可接受）；无 setTimeout（WXS 不能跑帧循环）。 */
 
 // 渲染层驻留状态（player 是单实例页·模块态与页面同生命周期）。几何由逻辑层经 change:cfg 一次性下发。
@@ -11,8 +13,8 @@ var st = { down: false, rect: null, durSec: 0, marks: [], edgePx: 0, snapSec: 0,
 
 // seek 目标秒夹取到 [0, durSec]（与 lib/player.ts clampSeek 双源·对拍钉死）。
 function clampSeek(value, durSec) {
-  var v = Math.floor(Number(value) || 0)
-  var max = Math.max(0, Math.floor(Number(durSec) || 0))
+  var v = Math.floor(value || 0)
+  var max = Math.max(0, Math.floor(durSec || 0))
   if (v < 0) return 0
   if (max > 0 && v > max) return max
   return v
