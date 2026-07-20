@@ -478,6 +478,13 @@ Page({
     this._at = Math.floor(e.detail.currentTime || 0)
     this._dur = Math.floor(e.detail.duration || 0)
     if (this.data.buffering) this.clearBuffering() // 播放位置在推进＝数据到了，缓冲已过（waiting 的恢复信号）
+    // 量轨重试（2026-07-20 反馈：拖动完全无反应且无震动·根因#8）：起播回调里那次量轨常常撞上「.lp-seek 尚未
+    // 完成布局提交」→ boundingClientRect 回 width:0 → measureSeekRect 正确地不缓存坏值，但此前没有任何重量
+    // 路径，_seekRect 就此永久为 null → seekCfg 永不下发 → seek.wxs 的 rect 恒 null → onStart 直接 return，
+    // 拖动彻底死掉（连带无震动——震感在 onSeekTick 里，压根没被回调）。播放推进是天然节拍：未量得就再试一次，
+    // 布局提交后必然量到即自行停止（量得后本行不再进入·无定时器·无额外状态）。置于 seeking/节流两道早退之前，
+    // 保证「拖动死掉时也仍在重试」不自锁。
+    if (!this._seekRect) this.measureSeekRect()
     if (this.data.seeking) return
     const now = Date.now()
     if (now - this.lastTimeUpdateAt < TIME_UPDATE_THROTTLE_MS) return

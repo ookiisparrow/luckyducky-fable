@@ -6239,6 +6239,18 @@ import { PROD_ENV } from './lib/env.mjs'（单源·病根#5·债#30①）`)
             bad.push('player.ts 的 onSeekCommit 方法体内未见「非暂停态补推 play」（形如 if (!this.data.paused) ctx.play()）——seek 触发重载会让播放停摆在首帧，无人补推则进度条永久冻在松手位置（2026-07-20 反馈现象·根因#8）')
         }
 
+        // 量轨须有重试路径（2026-07-20 用户反馈第二轮：拖动完全无反应且无震动）。病理：_seekRect 只在
+        // playSegment 的 state:'playing' 回调里量一次（`if (!this._seekRect)`），而 setData 回调触发时
+        // .lp-seek 常常尚未完成布局提交 → boundingClientRect 回 width:0 → 代码正确地拒绝缓存坏值，却
+        // 没有任何重量路径：_seekRect 永久为 null → buildSeekCfg 恒回 null → seekCfg 永不下发 → seek.wxs
+        // 的 st.rect 恒 null → onStart 直接 return。表现＝拖动彻底无反应（无位移/无回桥/无震动/无 seek），
+        // 且只有换段才可能碰运气量到。故量轨必须在播放推进中重试到量得为止（onTimeUpdate 是天然节拍，
+        // 无需另起定时器）。根因#8：布局时序在真机/模拟器各不相同，静态测不出、只有跑起来才现形。
+        const timeUpdateBody = methodBody(ts, 'onTimeUpdate')
+        if (!timeUpdateBody) bad.push('player.ts 找不到 onTimeUpdate 方法体——进度推进落点缺失')
+        else if (!/measureSeekRect\s*\(/.test(stripComments(timeUpdateBody)))
+          bad.push('player.ts 的 onTimeUpdate 方法体内未见 measureSeekRect(——量轨无重试路径：首次量到 width:0（布局未提交）后 _seekRect 永久为 null，seekCfg 永不下发，拖动彻底失效且无震动（2026-07-20 反馈现象·根因#8）')
+
         // 段落进度条落胶囊下方（2026-07-13 反馈·Bug D1）：须取原生胶囊底边为动态 top 的可靠源。
         if (!/getMenuButtonBoundingClientRect\s*\(/.test(stripComments(ts)))
           bad.push('player.ts 未调用 getMenuButtonBoundingClientRect——段落进度条无法按胶囊底边动态避让（逐机型胶囊位不同·statusBarHeight 近似不可靠·2026-07-13 反馈）')
