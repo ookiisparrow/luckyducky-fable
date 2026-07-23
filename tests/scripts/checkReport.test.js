@@ -5,14 +5,12 @@
 // 反向自检：让 guardCatalog 漏掉任一注册表 / 渲染器丢失败信息 → 红。
 import { describe, it, expect } from 'vitest'
 import { repoChecks, fileRules, typeAndTestGuards } from '../../scripts/check-structure.mjs'
-import { RULES as conventionRules } from '../../scripts/check-conventions.mjs'
 import { guardCatalog, parseRootLedger, renderHtml } from '../../scripts/check-report.mjs'
 
 const allIds = [
   ...repoChecks.map((g) => g.id),
   ...fileRules.map((g) => g.id),
   ...typeAndTestGuards.map((g) => g.id),
-  ...conventionRules.map((g) => g.id),
 ]
 
 // 面板数据夹具：真实守卫册 + 人造状态（一条守卫红、一条测试红），不跑真守卫（跑真守卫是 npm run report 的事）

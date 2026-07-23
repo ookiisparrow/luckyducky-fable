@@ -1,9 +1,8 @@
 /**
  * 客服会话状态机声明单源（承面C 坐席台·port 自旧线 packages/shared/src/cs.spec.ts——流转表与
  * rewrite 线 agentDesk.ts/dispatch.ts 里实际的 transition('csSession', …) 调用逐条吻合，语义不改）。
- * 类型经 SpecStates 类型级派生，改声明即改类型，零生成器（新线范式同 order.ts，见其头注）。
+ * （原 CsSessionStatus 类型/CS_SESSION_STATUS 字典零消费·2026-07-23 瘦身批退役；SPEC 本体被 rw-cs-transitions-declared 守卫文本级消费·勿删。）
  */
-import { statesOf, type SpecStates } from './status'
 
 /** 客服会话状态机声明（csSession 集合）。 */
 export const CS_SESSION_STATUS_SPEC = {
@@ -22,12 +21,6 @@ export const CS_SESSION_STATUS_SPEC = {
   ],
 } as const
 
-export type CsSessionStatus = SpecStates<typeof CS_SESSION_STATUS_SPEC>
-
-// 运行时常量（从声明**运行时派生**，见 order.ts 头注同款范式）：键=值的状态字典，消费方 Object.values() 作状态全集。
-const dictOf = <T extends string>(states: readonly string[]) =>
-  Object.fromEntries(states.map((s) => [s.toUpperCase(), s])) as Record<string, T>
-export const CS_SESSION_STATUS = dictOf<CsSessionStatus>(statesOf(CS_SESSION_STATUS_SPEC))
 
 /** 坐席在线态枚举（agentDesk.ts setAgentStatus 校验用·非状态机，无流转规则）。 */
 export const AGENT_STATUS = ['online', 'busy', 'offline'] as const

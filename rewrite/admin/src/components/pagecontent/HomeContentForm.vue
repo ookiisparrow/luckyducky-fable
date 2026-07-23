@@ -193,7 +193,7 @@ async function save() {
 
         <!-- 品牌自述 -->
         <Card title="品牌自述" sub="Hero 下方的品牌名与一句话理念">
-          <div class="field"><label>品牌名（≤20 字·留空＝「易织™小棉鸭®」）</label><input v-model="model.brandName" maxlength="20" placeholder="易织™小棉鸭®" /></div>
+          <div class="field"><label>品牌名（≤20 字·留空＝「小棉鸭」）</label><input v-model="model.brandName" maxlength="20" placeholder="小棉鸭" /></div>
           <div class="field"><label>一句话理念（≤60 字）</label><textarea v-model="model.brandLead" maxlength="60" placeholder="我们希望每个人都能亲手创造自己的随身幸运物。" /></div>
         </Card>
 
@@ -362,7 +362,7 @@ async function save() {
             <div class="hp-search">{{ model.heroSearch || '入门钩织的妙趣方式' }}</div>
           </div>
           <div class="hp-brand">
-            <div class="hp-brand-name">{{ model.brandName || '易织™小棉鸭®' }}</div>
+            <div class="hp-brand-name">{{ model.brandName || '小棉鸭' }}</div>
             <div class="hp-brand-lead" :class="{ 'pc-ph': !model.brandLead }">{{ model.brandLead || '我们希望每个人都能亲手创造自己的随身幸运物。' }}</div>
           </div>
         </div>

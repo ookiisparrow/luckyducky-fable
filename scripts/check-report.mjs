@@ -6,8 +6,7 @@
  * 哪个测试挂了、每条病根有几道网，没有可以「单独查看」的入口。本面板把它们变成一页
  * 可筛可搜的红绿视图（失败置顶·单条带复跑命令·病根覆盖地图）。
  *
- * 派生铁律（防手抄漂移·病根#11 同款）：面板守卫清单 = check-structure / check-conventions
- * 四个注册表的机器派生 + vitest JSON 实跑结果——本文件不允许手抄任何守卫清单；
+ * 派生铁律（防手抄漂移·病根#11 同款）：面板守卫清单 = check-structure 三个注册表的机器派生 + vitest JSON 实跑结果——本文件不允许手抄任何守卫清单；
  * 遍历/判定复用两检查器 export 的同一套 walk/checkFile（不自建第二套语义）。
  * 漏一条注册表守卫 → tests/scripts/checkReport.test.js 红。
  *
@@ -19,7 +18,7 @@
  * 产物：reports/check-report.html（自包含·浏览器直开）+ reports/check-report.json（机器可 diff）
  *
  * 后期加针对性测试（自动入册·无需登记）：
- *   新线行为测试 → rewrite/<包>/tests/xxx.test.ts；旧线/脚本 → tests/<域>/xxx.test.js。
+ *   新线行为测试 → rewrite/<包>/tests/xxx.test.ts；守卫/脚本 → tests/scripts/xxx.test.js。
  *   落文件即被 vitest 项目自动发现，下次生成即出现在面板；要升格为守卫（纳入 guard-coverage
  *   病根覆盖核算）再到 check-structure.mjs 的 typeAndTestGuards 加 { id, mechanism:'test',
  *   roots, reverseTest } 一条。结构守卫 → repoChecks/fileRules 加条目，面板同样自动入册。
@@ -36,24 +35,18 @@ import {
   checkFile as structureCheckFile,
   SRC_DIRS,
 } from './check-structure.mjs'
-import {
-  RULES as conventionRules,
-  walk as conventionWalk,
-  checkFile as conventionCheckFile,
-  CONVENTION_SRC,
-} from './check-conventions.mjs'
+// check-conventions.mjs（旧线 packages/miniapp 专用扫描器）已随旧线于 2026-07-23 瘦身拍板批退役
 
 const ROOT = resolve(import.meta.dirname, '..')
 const OUT_DIR = join(ROOT, 'reports')
 
 // ============ 派生层（纯函数·checkReport.test.js 直测） ============
 
-/** 守卫总册：四个注册表的机器派生（一条不漏也不多造——测试焊死）。 */
+/** 守卫总册：三个注册表的机器派生（一条不漏也不多造——测试焊死）。 */
 export function guardCatalog() {
   return [
     ...repoChecks.map((g) => ({ id: g.id, kind: 'repo', roots: g.roots || [], desc: g.desc || '' })),
     ...fileRules.map((g) => ({ id: g.id, kind: 'file', roots: g.roots || [], desc: g.desc || '逐文件规则（违例信息见规则 test 文案）' })),
-    ...conventionRules.map((g) => ({ id: g.id, kind: 'convention', roots: g.roots || [], desc: g.desc || '多端/样式约定（扫 packages/miniapp/src）' })),
     ...typeAndTestGuards.map((g) => ({
       id: g.id,
       kind: g.mechanism, // 'ts' | 'test'
@@ -98,7 +91,7 @@ function buildRoots(guards, ledger) {
 
 // ============ 采集层（跑真守卫/真测试——npm run report 用；测试不走这层） ============
 
-/** 结构+约定四类规则守卫实跑（repoChecks 逐条计时；file/convention 规则各自复用检查器的 walk+checkFile）。 */
+/** 结构规则守卫实跑（repoChecks 逐条计时；fileRules 复用检查器的 walk+checkFile）。 */
 export function collectRuleGuardResults() {
   const rows = []
   for (const c of repoChecks) {
@@ -119,14 +112,6 @@ export function collectRuleGuardResults() {
   for (const r of fileRules) {
     const hits = fileHits.get(r.id) || []
     rows.push({ id: r.id, kind: 'file', roots: r.roots || [], desc: '逐文件规则', ok: hits.length === 0, ms: fileMs, violations: hits.map((v) => ({ msg: `${v.loc} ${v.msg}` })) })
-  }
-  const t2 = Date.now()
-  const convHits = new Map(conventionRules.map((r) => [r.id, []]))
-  for (const f of conventionWalk(CONVENTION_SRC)) for (const v of conventionCheckFile(f)) convHits.get(v.id)?.push(v)
-  const convMs = (Date.now() - t2) / Math.max(1, conventionRules.length)
-  for (const r of conventionRules) {
-    const hits = convHits.get(r.id) || []
-    rows.push({ id: r.id, kind: 'convention', roots: r.roots || [], desc: '多端/样式约定（packages/miniapp/src）', ok: hits.length === 0, ms: convMs, violations: hits.map((v) => ({ msg: `${v.loc} ${v.msg}` })) })
   }
   return rows
 }
@@ -150,12 +135,8 @@ export function collectVitest() {
   if (!existsSync(jsonPath)) return { ok: false, ms, tests: [], error: 'vitest 未产出 JSON：' + r.out.slice(-400) }
   const raw = JSON.parse(readFileSync(jsonPath, 'utf8'))
   const projectOf = (rel) =>
-    rel.startsWith('rewrite/') ? 'rw（新线）'
-    : rel.startsWith('tests/cloud/') ? 'cloud（旧线）'
-    : rel.startsWith('tests/admin/') ? 'admin（旧线）'
-    : rel.startsWith('tests/agent/') ? 'agent（旧线）'
+    rel.startsWith('rewrite/') ? 'rw（活线）'
     : rel.startsWith('tests/scripts/') ? 'scripts（守卫元测试）'
-    : rel.startsWith('packages/miniapp/') ? 'miniapp（旧线）'
     : '其他'
   const tests = []
   for (const tr of raw.testResults || []) {
