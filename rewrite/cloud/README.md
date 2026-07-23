@@ -12,7 +12,7 @@ src/functions/
   callbacks/   微信回调：payCallback / refundCallback
   cs/          微信客服：kfCallback/ · kfMedia · kfSend
   timers/      定时：billReconcile / cleanupEvents / closeExpiredOrders / inspect / kfHealthProbe / recallScan（recallRules 为库·不独立成函数）
-  ops/         运维一次性：genQrcodes / initDb / seedCourses / seedProducts
+  ops/         运维：genQrcodes（持续运营·实体卡新批次激活码按需生成，非一次性）· 一次性种子：initDb / seedCourses / seedProducts
 src/kit/       横切原语（下方逐文件·业务码经它、不裸调 wx-server-sdk）
 src/types/     共享类型
 tests/         各域测试 + kit 原语 + 契约哨兵（contract-shape.test.ts）

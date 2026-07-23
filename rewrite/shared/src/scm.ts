@@ -3,8 +3,7 @@
  * gen-order-domain 生成器已随瘦身批退役）。改流转须同步 scripts/order-domain.generated.json（rw-scm-transitions-declared 对账守卫会拦漂移）。
  */
 
-// ⚠️ 此段由 scripts/gen-order-domain.mjs 从对应 *.spec.ts 生成——勿手改。改流转改声明源（order.spec.ts/learning.spec.ts）再跑生成器。
-// === GENERATED:order-domain BEGIN ===
+// === order-domain 状态域声明 BEGIN（原生成段·生成器已退役，本段即手改单源，见文件头注） ===
 /** purchaseOrders 状态联合（写错状态名编译失败·根因#2）。 */
 export type PurchaseOrderStatus = 'cancelled' | 'draft' | 'ordered' | 'received'
 
@@ -40,4 +39,4 @@ export const OUTWORK_ORDER_TRANSITIONS: ReadonlyArray<{ from: readonly OutworkOr
   { from: ['delivered'], to: 'settled' }, // settleOutwork 工钱结清销账
   { from: ['draft'], to: 'cancelled' }, // cancelOutwork 取消（仅未发料·发料后异常走调整单兜底·MVP 不做逆向流转）
 ]
-// === GENERATED:order-domain END ===
+// === order-domain 状态域声明 END ===

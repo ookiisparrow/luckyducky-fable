@@ -6,7 +6,7 @@
  *   - 读类 tcb（fn invoke / fn log / env list …）：放行。
  *   - tcb 写部署（deploy/publish/delete/create/framework）命中**敏感函数**（钱/权限/状态），
  *     或批量/删除/认不出具体非敏感函数：`permissionDecision:'ask'` 二次确认。
- *   - 新线（rewrite/cloud·16 部署单元）无独立纯读函数（读 action 收在 app 内）；旧线纯读函数
+ *   - 新线（rewrite/cloud·17 部署单元·以 build.mjs 产物为准）无独立纯读函数（读 action 收在 app 内）；旧线纯读函数
  *     2026-07-09 已清退，部署同名＝静默新建孤儿函数——故任何具名函数写部署一律 ask，READONLY_FNS 空册。
  *   - `DEPLOY_ALLOWED=1 … deploy-fns`（批量部署全量、含敏感）：'ask'。
  *   - 仅在「真把 tcb / deploy-fns 当命令执行」时判（按 shell 分段、看段首）——提交信息 / echo 里
