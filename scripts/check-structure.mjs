@@ -1413,36 +1413,6 @@ import { PROD_ENV } from './lib/env.mjs'（单源·病根#5·债#30①）`)
     },
   },
   {
-    id: 'archive-index-synced',
-    roots: ['#11'],
-    desc: '退役-唤起闭环（根因#11·文档生命周期）：docs/archive/ 每份归档须在 archive/README.md 索引登记（防退役了查不到=唤起失效）+ 活文档（CLAUDE/docs 顶层）引用的 archive/* 路径须真实存在（防悬空退役指针）。索引本身被守＝不会自己 stale',
-    run() {
-      const adir = join(ROOT, 'docs/archive')
-      if (!existsSync(adir)) return []
-      const readmePath = join(adir, 'README.md')
-      if (!existsSync(readmePath)) return ['docs/archive/README.md 缺失——退役归档无索引、不可唤起（根因#11）']
-      const readme = readFileSync(readmePath, 'utf8')
-      const bad = []
-      // 正向：每份归档在索引有登记
-      for (const f of readdirSync(adir)) {
-        if (!f.endsWith('.md') || f === 'README.md') continue
-        if (!readme.includes(f)) bad.push(`docs/archive/${f} 未登记 archive/README.md 索引——退役了查不到（唤起失效·根因#11）`)
-      }
-      // 反向：活文档引用的 archive/* 路径须存在（防悬空指针）
-      const actives = ['CLAUDE.md']
-      const docsDir = join(ROOT, 'docs')
-      if (existsSync(docsDir))
-        for (const f of readdirSync(docsDir)) if (f.endsWith('.md')) actives.push('docs/' + f)
-      for (const rel of actives) {
-        const p = join(ROOT, rel)
-        if (!existsSync(p)) continue
-        for (const m of readFileSync(p, 'utf8').matchAll(/archive\/([^\s)）`、，。"']+\.md)/g))
-          if (!existsSync(join(adir, m[1]))) bad.push(`${rel} 引用 archive/${m[1]} 但文件不存在——悬空退役指针（根因#11）`)
-      }
-      return bad
-    },
-  },
-  {
     // 跨文档「重构日志 <日期>」指针随批次卷档失活（熵地图 E1·我边治边造的盲区）：批次卷档到 archive 后，
     // 活文档里「详 重构日志 2026-06-24」这类指针指向的日期已不在活档（只剩卷档标签）→ 读者扑空。
     // 守卫扫活文档紧邻「重构日志」的日期引用，该日期须在活 重构日志 有 ## 标题（排除卷档标签行），
@@ -1467,7 +1437,7 @@ import { PROD_ENV } from './lib/env.mjs'（单源·病根#5·债#30①）`)
         readFileSync(join(dir, f), 'utf8')
           .split('\n')
           .forEach((line, i) => {
-            if (line.includes('archive')) return // 已显式指归档·放行
+            if (line.includes('archive') || line.includes('史料')) return // 已显式指归档/史料层·放行
             for (const m of line.matchAll(/重构日志[`\s]{0,4}(\d{4}-\d{2}-\d{2})/g))
               if (!liveDates.has(m[1]))
                 bad.push(
@@ -1476,24 +1446,6 @@ import { PROD_ENV } from './lib/env.mjs'（单源·病根#5·债#30①）`)
           })
       }
       return bad
-    },
-  },
-  {
-    // 归档层无界增长（熵地图 E4·我早先 flag 过没闭的盲区）：退役制把熵移进 archive 而非消除，archive 同样
-    // 会无界膨胀（archive-index-synced 只守索引在、不守量）。超份数上限即提示季度合并——治「熵只是搬家不是消失」。
-    id: 'archive-bounded',
-    roots: ['#11'],
-    desc: '归档层有界（根因#11·熵地图 E4）：docs/archive/ 归档文件数 ≤ 上限；超限即提示季度合并（同主题旧档归并为一卷 + 更新 README 索引）——退役制的熵搬进 archive 后同样需治膨胀',
-    run() {
-      const adir = join(ROOT, 'docs/archive')
-      if (!existsSync(adir)) return []
-      const CAP = 30
-      const files = readdirSync(adir).filter((f) => f.endsWith('.md') && f !== 'README.md')
-      if (files.length > CAP)
-        return [
-          `docs/archive/ ${files.length} 份归档 > ${CAP} 上限——归档层膨胀（根因#11·熵地图 E4）；季度合并旧档（同主题归并为一卷）+ 更新 README 索引`,
-        ]
-      return []
     },
   },
   {
@@ -1630,7 +1582,7 @@ import { PROD_ENV } from './lib/env.mjs'（单源·病根#5·债#30①）`)
   {
     id: 'precedent-index-synced',
     roots: ['#11'],
-    desc: '判例索引与四本账同步（车队地基批4·病根#11·「动手前查判例」的机器入口）：docs/判例索引.json 的 decision/rootcause/debuglog(fable) 条数须与 关键决策记录 `## N.`/根因账本 §一 `### N.`/调试日志（活档+fable 结案卷档册）`## X（fable）` 的真值计数一致——新决策/病根/调试条目落账后漏编索引即红（nofix 类人工精选·不计数核）',
+    desc: '判例索引与四本账同步（车队地基批4·病根#11·「动手前查判例」的机器入口）：docs/判例索引.json 的 decision/rootcause/debuglog(fable) 条数须与 关键决策记录 `## N.`/根因账本 §一 `### N.`/调试日志活档 + 史料索引机读计数锚 的真值计数一致——新决策/病根/调试条目落账后漏编索引即红（nofix 类人工精选·不计数核）',
     run() {
       const bad = []
       const idxPath = join(ROOT, 'docs/判例索引.json')
@@ -1649,12 +1601,10 @@ import { PROD_ENV } from './lib/env.mjs'（单源·病根#5·债#30①）`)
         rootcause: [
           ...readFileSync(join(ROOT, 'docs/根因账本.md'), 'utf8').split('## 二、')[0].matchAll(/^### \d+\./gm),
         ].length,
-        // fable 案例卷档后（2026-07-23 瘦身大作战）真值＝活档 + 结案卷档册：判例是前车之鉴，案文退役教训不退役
+        // fable 案文退役进 git 史料层（第一性原理批）后真值＝活档 + 史料索引机读计数锚：判例是前车之鉴，案文退役教训不退役
         debuglog:
           [...readFileSync(join(ROOT, 'docs/调试日志.md'), 'utf8').matchAll(/^## .+（fable）/gm)].length +
-          (existsSync(join(ROOT, 'docs/archive/调试日志-fable-结案-至20260713.md'))
-            ? [...readFileSync(join(ROOT, 'docs/archive/调试日志-fable-结案-至20260713.md'), 'utf8').matchAll(/^## .+（fable）/gm)].length
-            : 0),
+          Number((readFileSync(join(ROOT, 'docs/史料索引.md'), 'utf8').match(/fable 结案调试案例数：(\d+)/) || [0, 0])[1]),
       }
       for (const [kind, want] of Object.entries(truth))
         if (cnt(kind) !== want)

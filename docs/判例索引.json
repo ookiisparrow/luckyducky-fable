@@ -1,5 +1,5 @@
 {
- "__doc__": "判例索引（车队地基批4·前车之鉴档案）：AI 代理动手前先查这里——「这事以前决定过/拒过/修过没」。四类：decision=关键决策记录 §N（计数核）/ rootcause=根因账本 病根#N（计数核）/ debuglog=调试日志 fable 现行线（计数核·归档 next 线另有同字母条目、靠 namespace 消歧勿裸引字母）/ nofix=人工精选「拍板不做/故意不修」（不计数核·可手工增补）。守卫 precedent-index-synced 焊死三类计数与账本一致。关键词含同义词（原文用词+别人可能用的说法），grep 本文件即可命中，命中后按 source 读原文。查不到≠没判过：需求类去 需求清单.md、归档判例走 docs/archive/README.md 索引。",
+ "__doc__": "判例索引（车队地基批4·前车之鉴档案）：AI 代理动手前先查这里——「这事以前决定过/拒过/修过没」。四类：decision=关键决策记录 §N（计数核）/ rootcause=根因账本 病根#N（计数核）/ debuglog=调试日志 fable 现行线（计数核·归档 next 线另有同字母条目、靠 namespace 消歧勿裸引字母）/ nofix=人工精选「拍板不做/故意不修」（不计数核·可手工增补）。守卫 precedent-index-synced 焊死三类计数与账本一致。关键词含同义词（原文用词+别人可能用的说法），grep 本文件即可命中，命中后按 source 读原文。查不到≠没判过：需求类去 需求清单.md、归档判例走 docs/史料索引.md 索引。",
  "entries": [
   {
    "id": "决策§1",
@@ -628,7 +628,7 @@
     "refundNoFor",
     "正则拒绝"
    ],
-   "source": "docs/调试日志.md ##A"
+   "source": "史料「调试日志-fable-结案-至20260713.md」 ##A"
   },
   {
    "id": "fable调试-B",
@@ -643,7 +643,7 @@
     "组装幂等退化",
     "低库存阈值失效"
    ],
-   "source": "docs/调试日志.md ##B"
+   "source": "史料「调试日志-fable-结案-至20260713.md」 ##B"
   },
   {
    "id": "fable调试-C",
@@ -659,7 +659,7 @@
     "anomalies集合恒空",
     "桩与真机不一致"
    ],
-   "source": "docs/调试日志.md ##C"
+   "source": "史料「调试日志-fable-结案-至20260713.md」 ##C"
   },
   {
    "id": "fable调试-D",
@@ -692,7 +692,7 @@
     "无tiebreaker",
     "跨函数TOCTOU"
    ],
-   "source": "docs/调试日志.md ##E"
+   "source": "史料「调试日志-fable-结案-至20260713.md」 ##E"
   },
   {
    "id": "fable调试-F",
@@ -708,7 +708,7 @@
     "reload无代次守卫",
     "onShow抢跑"
    ],
-   "source": "docs/调试日志.md ##F"
+   "source": "史料「调试日志-fable-结案-至20260713.md」 ##F"
   },
   {
    "id": "fable调试-G",
@@ -722,7 +722,7 @@
     "换段未清零学习位置",
     "重试无代次守卫"
    ],
-   "source": "docs/调试日志.md ##G"
+   "source": "史料「调试日志-fable-结案-至20260713.md」 ##G"
   },
   {
    "id": "fable调试-H",
@@ -737,7 +737,7 @@
     "rw-admin-armed-reset-on-load",
     "serialSave竞态"
    ],
-   "source": "docs/调试日志.md ##H"
+   "source": "史料「调试日志-fable-结案-至20260713.md」 ##H"
   },
   {
    "id": "fable调试-I",
@@ -752,7 +752,7 @@
     "batchUpload切课丢失",
     "丢失在途编辑"
    ],
-   "source": "docs/调试日志.md ##I"
+   "source": "史料「调试日志-fable-结案-至20260713.md」 ##I"
   },
   {
    "id": "fable调试-J",
@@ -767,7 +767,7 @@
     "待办计数假绿",
     "切会话串号"
    ],
-   "source": "docs/调试日志.md ##J"
+   "source": "史料「调试日志-fable-结案-至20260713.md」 ##J"
   },
   {
    "id": "fable调试-K",
@@ -780,7 +780,7 @@
     "身份头跨客户残留",
     "setStatus ABA竞态"
    ],
-   "source": "docs/调试日志.md ##K"
+   "source": "史料「调试日志-fable-结案-至20260713.md」 ##K"
   },
   {
    "id": "fable调试-L",
@@ -796,7 +796,7 @@
     "封面时效兜底",
     "孤儿化router拦截"
    ],
-   "source": "docs/调试日志.md ##L"
+   "source": "史料「调试日志-fable-结案-至20260713.md」 ##L"
   },
   {
    "id": "fable调试-M",
@@ -811,7 +811,7 @@
     "过期成功被丢弃",
     "绕开批量上传锁"
    ],
-   "source": "docs/调试日志.md ##M"
+   "source": "史料「调试日志-fable-结案-至20260713.md」 ##M"
   },
   {
    "id": "fable调试-N",
@@ -825,7 +825,7 @@
     "refresh不复核submitting",
     "守卫判据假阴"
    ],
-   "source": "docs/调试日志.md ##N"
+   "source": "史料「调试日志-fable-结案-至20260713.md」 ##N"
   },
   {
    "id": "fable调试-O",
@@ -840,7 +840,7 @@
     "并发收敛无测试",
     "纯函数抽取"
    ],
-   "source": "docs/调试日志.md ##O"
+   "source": "史料「调试日志-fable-结案-至20260713.md」 ##O"
   },
   {
    "id": "fable调试-P",
@@ -856,7 +856,7 @@
     "rollback删审计迹",
     "假成功reject"
    ],
-   "source": "docs/调试日志.md ##P"
+   "source": "史料「调试日志-fable-结案-至20260713.md」 ##P"
   },
   {
    "id": "fable调试-Q",
@@ -872,7 +872,7 @@
     "数据缺失非bug",
     "project.config.json缺失坑"
    ],
-   "source": "docs/调试日志.md ##Q"
+   "source": "史料「调试日志-fable-结案-至20260713.md」 ##Q"
   },
   {
    "id": "fable调试-R",
@@ -888,7 +888,7 @@
     "touchstart绑定节点",
     "换tab动画"
    ],
-   "source": "docs/调试日志.md ##R"
+   "source": "史料「调试日志-fable-结案-至20260713.md」 ##R"
   },
   {
    "id": "免修-课程页失败toast",

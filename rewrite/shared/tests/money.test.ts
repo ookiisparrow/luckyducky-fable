@@ -1,4 +1,4 @@
-// 新线金额契约——黄金基准 rewrite/golden/kit-security.md §I 逐条钉死（守卫 rw-contracts-golden）。
+// 新线金额契约——黄金基准 史料「kit-security.md」§I（git 史料层 rewrite/golden/） 逐条钉死（守卫 rw-contracts-golden）。
 import { describe, it, expect } from 'vitest'
 import fc from 'fast-check'
 import { toFen, asFen, fenToYuan, refundShareFen, type Fen } from '../src/money'

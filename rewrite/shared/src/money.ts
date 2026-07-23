@@ -2,7 +2,7 @@
  * 金额品牌类型（设计约束#4：金额全链整数分——旧线病根「金额浮点靠手工纪律」的类型层根治）。
  * 钱一律「分」整数；元只在展示层出现。把普通 number 当 Fen 用会编译失败，
  * 必须经 toFen / asFen 显式转换——浮点金额在类型边界被挡下。（守卫 rw-fen-branded-type）
- * 黄金基准：rewrite/golden/kit-security.md §I。
+ * 黄金基准：史料「kit-security.md」§I（golden 七册·git show museum-20260723:rewrite/golden/）。
  */
 export type Fen = number & { readonly __brand: 'Fen' }
 
