@@ -1628,7 +1628,7 @@ import { PROD_ENV } from './lib/env.mjs'（单源·病根#5·债#30①）`)
   {
     id: 'precedent-index-synced',
     roots: ['#11'],
-    desc: '判例索引与四本账同步（车队地基批4·病根#11·「动手前查判例」的机器入口）：docs/判例索引.json 的 decision/rootcause/debuglog(fable) 条数须与 关键决策记录 `## N.`/根因账本 §一 `### N.`/调试日志 `## X（fable）` 的真值计数一致——新决策/病根/调试条目落账后漏编索引即红（nofix 类人工精选·不计数核）',
+    desc: '判例索引与四本账同步（车队地基批4·病根#11·「动手前查判例」的机器入口）：docs/判例索引.json 的 decision/rootcause/debuglog(fable) 条数须与 关键决策记录 `## N.`/根因账本 §一 `### N.`/调试日志（活档+fable 结案卷档册）`## X（fable）` 的真值计数一致——新决策/病根/调试条目落账后漏编索引即红（nofix 类人工精选·不计数核）',
     run() {
       const bad = []
       const idxPath = join(ROOT, 'docs/判例索引.json')
@@ -1647,7 +1647,12 @@ import { PROD_ENV } from './lib/env.mjs'（单源·病根#5·债#30①）`)
         rootcause: [
           ...readFileSync(join(ROOT, 'docs/根因账本.md'), 'utf8').split('## 二、')[0].matchAll(/^### \d+\./gm),
         ].length,
-        debuglog: [...readFileSync(join(ROOT, 'docs/调试日志.md'), 'utf8').matchAll(/^## .+（fable）/gm)].length,
+        // fable 案例卷档后（2026-07-23 瘦身大作战）真值＝活档 + 结案卷档册：判例是前车之鉴，案文退役教训不退役
+        debuglog:
+          [...readFileSync(join(ROOT, 'docs/调试日志.md'), 'utf8').matchAll(/^## .+（fable）/gm)].length +
+          (existsSync(join(ROOT, 'docs/archive/调试日志-fable-结案-至20260713.md'))
+            ? [...readFileSync(join(ROOT, 'docs/archive/调试日志-fable-结案-至20260713.md'), 'utf8').matchAll(/^## .+（fable）/gm)].length
+            : 0),
       }
       for (const [kind, want] of Object.entries(truth))
         if (cnt(kind) !== want)

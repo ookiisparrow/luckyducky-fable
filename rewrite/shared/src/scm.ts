@@ -1,11 +1,11 @@
 /**
- * SCM 进销存域（采购/外协单）类型/常量/流转表——**生成物**（单源 scm.spec.ts·勿手改生成段）。
- * 见 scm.spec.ts 头注；改流转改声明再跑 scripts/gen-order-domain.mjs。
+ * SCM 进销存域（采购/外协单）类型/常量/流转表——2026-07-23 起为**手改单源**（原 scm.spec.ts 谱源与
+ * gen-order-domain 生成器已随瘦身批退役）。改流转须同步 scripts/order-domain.generated.json（rw-scm-transitions-declared 对账守卫会拦漂移）。
  */
 
 // ⚠️ 此段由 scripts/gen-order-domain.mjs 从对应 *.spec.ts 生成——勿手改。改流转改声明源（order.spec.ts/learning.spec.ts）再跑生成器。
 // === GENERATED:order-domain BEGIN ===
-/** purchaseOrders 状态联合（从 scm.spec.ts 生成·写错状态名编译失败·根因#2）。 */
+/** purchaseOrders 状态联合（写错状态名编译失败·根因#2）。 */
 export type PurchaseOrderStatus = 'cancelled' | 'draft' | 'ordered' | 'received'
 
 export const PURCHASE_ORDER_STATUS = {
@@ -22,7 +22,7 @@ export const PURCHASE_ORDER_TRANSITIONS: ReadonlyArray<{ from: readonly Purchase
   { from: ['draft', 'ordered'], to: 'cancelled' }, // cancelPurchase 取消（未入库的单·入库后不可取消，走调整单）
 ]
 
-/** outworkOrders 状态联合（从 scm.spec.ts 生成·写错状态名编译失败·根因#2）。 */
+/** outworkOrders 状态联合（写错状态名编译失败·根因#2）。 */
 export type OutworkOrderStatus = 'cancelled' | 'delivered' | 'draft' | 'issued' | 'settled'
 
 export const OUTWORK_ORDER_STATUS = {
