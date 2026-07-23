@@ -4343,6 +4343,41 @@ import { PROD_ENV } from './lib/env.mjs'（单源·病根#5·债#30①）`)
     },
   },
   {
+    id: 'precedent-index-synced',
+    roots: ['#11'],
+    desc: '判例索引与四本账同步（车队地基批4·病根#11·「动手前查判例」的机器入口）：docs/判例索引.json 的 decision/rootcause/debuglog(fable) 条数须与 关键决策记录 `## N.`/根因账本 §一 `### N.`/调试日志 `## X（fable）` 的真值计数一致——新决策/病根/调试条目落账后漏编索引即红（nofix 类人工精选·不计数核）',
+    run() {
+      const bad = []
+      const idxPath = join(ROOT, 'docs/判例索引.json')
+      if (!existsSync(idxPath))
+        return ['docs/判例索引.json 缺失——AI 代理「动手前查有没有判例」的机器入口，按四本账重建（结构见守卫 desc）']
+      let idx
+      try {
+        idx = JSON.parse(readFileSync(idxPath, 'utf8'))
+      } catch (e) {
+        return [`docs/判例索引.json 不是合法 JSON：${e.message}`]
+      }
+      const entries = idx?.entries ?? []
+      const cnt = (kind) => entries.filter((e) => e?.kind === kind).length
+      const truth = {
+        decision: [...readFileSync(join(ROOT, 'docs/关键决策记录.md'), 'utf8').matchAll(/^## \d+\./gm)].length,
+        rootcause: [
+          ...readFileSync(join(ROOT, 'docs/根因账本.md'), 'utf8').split('## 二、')[0].matchAll(/^### \d+\./gm),
+        ].length,
+        debuglog: [...readFileSync(join(ROOT, 'docs/调试日志.md'), 'utf8').matchAll(/^## .+（fable）/gm)].length,
+      }
+      for (const [kind, want] of Object.entries(truth))
+        if (cnt(kind) !== want)
+          bad.push(
+            `判例索引 ${kind} 条数 ${cnt(kind)} ≠ 账本真值 ${want}——新条目落账后补编索引（含关键词同义词），或删幽灵条目`
+          )
+      for (const e of entries)
+        if (!e?.id || !e?.kind || !Array.isArray(e?.keywords) || !e.keywords.length || !e?.source)
+          bad.push(`判例索引条目 \`${e?.id ?? '(无id)'}\` 缺 id/kind/keywords/source 之一——四字段齐全才可查`)
+      return bad
+    },
+  },
+  {
     id: 'module-map-synced',
     roots: ['#11'],
     desc: '运行时模块映射与正册同步（车队地基批2·病根#11 生成物防漂·同 gen-order-domain-synced 范式）：rewrite/shared/src/moduleMap.ts 的 APP_ACTION_MODULE 须与 modules.json 各模块 appActions 完全一致（云函数运行时按它给异常账本标模块，物理进不了 JSON 单源故设镜像+本守卫焊死）——改 modules.json 的 appActions 后同步 moduleMap.ts，漏改即红',
