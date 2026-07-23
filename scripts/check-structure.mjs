@@ -113,7 +113,147 @@ export const RW_GOLDEN_REGISTRY = [
   { id: 'rw-site-schema-golden', roots: ['#8'], test: 'rewrite/site/tests/schema.test.ts' },
 ]
 
+// ── 单一接缝守卫注册表（第一性原理审计批 2026-07-23·元模式 A2「守卫粒度会收敛」·同 RW_GOLDEN_REGISTRY 精神）──
+// 五条「平台/原语接缝单点」守卫的判定骨架完全同构：扫 rewrite/cloud/src 全部 .ts → 特征 pattern 命中且不在
+// allow 名单即红。骨架折成一个 makeSeamGuard 生成器 + 本表五行；守卫 id / 红词 / 逐条额外断言原样保留——
+// 外部文档与代码注释引用的守卫 id 不变，reverse 自检语义不变。新增平台接缝只加表行、不复制 walk。表列语义：
+//   seam＝唯一允许出现点 · pattern＝接缝特征（string=includes / RegExp=test·无 g flag）· strip＝剥注释再匹配（E1/E10）
+//   seamMissing＝接缝文件缺失红词（五条全 fail-closed：守卫目标消失须显式退役守卫，不静默绿）
+//   seamMustHit＝接缝文件本身须命中 pattern 的红词（防接缝空壳）· seamAssert＝对接缝剥注释源码的额外断言
+//   allow＝seam 外额外放行文件 · extra＝注册表装不下的逐条特例（bot-push 调用方接通性 / vod getPlaybackUrl 分流）
+export const SINGLE_SEAM_REGISTRY = [
+  {
+    // 企微推送单一收口·重写线（观测批5·治病根#14「告警不进人眼」+ 根因#13/#12 接缝单点）：pushBotAlert 仅
+    // 定义于 kit/botpush.ts、仅 kit/observe.ts(notifyAlert) 调；其余不得直达（防散调/绕 alertEvents 开关/webhook 凭证多处）。
+    id: 'rw-bot-push-single-seam',
+    roots: ['#12', '#13', '#14'],
+    desc: '企微推送单一收口·重写线：pushBotAlert 仅在 rewrite/cloud/src/kit/botpush.ts 定义、仅 kit/observe.ts 调用；其余不得直达（防散调/绕开关/凭证多处·根因#13/#12）',
+    seam: 'rewrite/cloud/src/kit/botpush.ts',
+    pattern: /pushBotAlert|['"][^'"]*\/botpush['"]/,
+    strip: false,
+    allow: ['rewrite/cloud/src/kit/observe.ts'],
+    seamMissing: 'rewrite/cloud/src/kit/botpush.ts 缺失——企微推送接缝单点（重写线·根因#13）',
+    hitMsg: '直达 pushBotAlert/botpush——企微推送须经 kit/observe.notifyAlert 单一收口（重写线·根因#12）',
+    seamAssert: (src) =>
+      /export\s+async\s+function\s+pushBotAlert/.test(src) ? [] : ['rewrite/cloud/src/kit/botpush.ts 未导出 pushBotAlert——接缝空壳'],
+    extra: () => {
+      const caller = 'rewrite/cloud/src/kit/observe.ts'
+      if (existsSync(join(ROOT, caller)) && !/pushBotAlert/.test(readFileSync(join(ROOT, caller), 'utf8')))
+        return [`${caller}(notifyAlert) 未调 pushBotAlert——接缝未接通（死代码）`]
+      return []
+    },
+  },
+  {
+    // 原料账单点收口——新线扫描面（批K·SCM 门1·根因#1/#2·移植 material-stock-single-seam）：kit/scmStock.ts
+    // 头注承诺「全库唯一 materials.stock/stockLedger 读写处」，applyStockMoves 须导出、CAS 须用条件 where(stock)。
+    id: 'rw-material-stock-single-seam',
+    roots: ['#1', '#2'],
+    desc: '新线原料账单点收口（SCM 门1·根因#1/#2·批K·移植 material-stock-single-seam，同 rw-order-transitions-declared 精神：旧守卫只扫冻结线，kit/scmStock.ts 头注承诺的保护对生产代码此前是假的）：materials.stock/stockLedger 仅 rewrite/cloud/src/kit/scmStock.ts 读写（applyStockMoves 唯一入口·乐观 CAS）；rewrite/cloud/src 其余文件直碰即红（防绕 CAS/绕流水改账）',
+    seam: 'rewrite/cloud/src/kit/scmStock.ts',
+    pattern: /COLLECTIONS\.(materials|stockLedger)\b|\.collection\(\s*['"](materials|stockLedger)['"]\s*\)/,
+    strip: true,
+    seamMissing: 'rewrite/cloud/src/kit/scmStock.ts 缺失——生产线原料账原语（SCM 门1）·守卫目标消失须显式退役本守卫',
+    hitMsg: '直碰 materials/stockLedger 集合——原料账读写须经 kit/scmStock（SCM 门1·防绕 CAS/绕流水）',
+    seamAssert: (src) => {
+      const bad = []
+      if (!/export\s+async\s+function\s+applyStockMoves/.test(src))
+        bad.push('rewrite/cloud/src/kit/scmStock.ts 未导出 applyStockMoves——门1 空壳')
+      if (!/\.where\(\{[^}]*stock/.test(src))
+        bad.push('rewrite/cloud/src/kit/scmStock.ts 库存变更未用条件 where(stock) 乐观 CAS——有并发互覆盖风险（根因#1）')
+      return bad
+    },
+  },
+  {
+    // VOD 平台接缝单点（根因#12·决策§31 转码管线批1·镜像 flow-seam-via-kit 之于支付工作流）：腾讯云点播平台
+    // 触点（Key 防盗链签名算法/服务端 API 域名）收口 kit/vod.ts 一处；extra 焊 getPlaybackUrl 新旧双线前缀分流
+    // 四件套（业务不变量·与接缝单点判定异构，故留 extra 不进骨架）：分流拆掉任意一半，存量或转码课程之一必哑。
+    id: 'rw-vod-seam-single',
+    roots: ['#12'],
+    desc: 'VOD 平台接缝单点（决策§31 批1）：kit/vod.ts 必须存在且为 rewrite/cloud/src 内唯一含 tencentcloudapi.com 字面量的文件；learning.ts getPlaybackUrl 段须含 isVodFileId + signVodPlayUrl + getTempUrl + vodUrl 四件套前缀分流——接缝散写/分流缺失即红',
+    seam: 'rewrite/cloud/src/kit/vod.ts',
+    pattern: 'tencentcloudapi.com',
+    strip: true,
+    seamMissing: 'rewrite/cloud/src/kit/vod.ts 不存在——VOD 平台接缝单点未建（根因#12·决策§31 转码管线批1）',
+    hitMsg: '含腾讯云 API 域名字面量——VOD 平台触点必须收口 kit/vod.ts 单点（根因#12）',
+    extra: () => {
+      const bad = []
+      const lrel = 'rewrite/cloud/src/functions/app/actions/learning.ts'
+      const lsrc = stripComments(readFileSync(join(ROOT, lrel), 'utf8'))
+      const start = lsrc.indexOf('export const getPlaybackUrl')
+      const end = lsrc.indexOf('export const', start + 1)
+      const span = start >= 0 ? lsrc.slice(start, end > start ? end : undefined) : ''
+      if (!span) bad.push(`${lrel} 找不到 getPlaybackUrl——播放地址签发单点丢失`)
+      else
+        for (const token of ['isVodFileId', 'signVodPlayUrl', 'getTempUrl', 'vodUrl'])
+          if (!span.includes(token))
+            bad.push(
+              `${lrel} getPlaybackUrl 缺 ${token}——VOD/云存储双线前缀分流不完整（决策§31 批1：拆掉一半，存量或转码课程之一必哑）`
+            )
+      return bad
+    },
+  },
+  {
+    // 图像处理接缝单点（批1·根因#12 平台规则外部风险）：数据万象（CI）imageMogr2 处理参数拼接收口
+    // kit/storage.ts withImageProc 一处——控制台开通/参数格式变化只改这里 + 环境变量 LD_IMAGE_PROC。
+    id: 'rw-image-proc-seam-single',
+    roots: ['#12'],
+    desc: '图像处理接缝单点（根因#12 平台规则外部风险）：数据万象 imageMogr2 处理参数拼接全库仅 rewrite/cloud/src/kit/storage.ts 一处（withImageProc）——控制台开通/参数格式变化改一处；别处出现 imageMogr2 字面量即红（同 flow-seam-single 形状）',
+    seam: 'rewrite/cloud/src/kit/storage.ts',
+    pattern: 'imageMogr2',
+    strip: false,
+    seamMissing: 'rewrite/cloud/src/kit/storage.ts 应为 imageMogr2 图像处理参数唯一出现点（withImageProc），未见——接缝单点缺失',
+    seamMustHit: 'rewrite/cloud/src/kit/storage.ts 应为 imageMogr2 图像处理参数唯一出现点（withImageProc），未见——接缝单点缺失',
+    hitMsg: '出现 imageMogr2——图像处理接缝须收口 kit/storage.ts 单点（根因#12）',
+  },
+  {
+    // 平台接缝单点（根因#12）rewrite 镜像：cloudbase_module 支付/退款工作流调用仅 kit/flow.ts（callFlow）一处。
+    id: 'rw-flow-seam-single',
+    roots: ['#12'],
+    desc: '平台接缝单点（根因#12 平台规则外部风险）镜像：cloudbase_module 工作流调用 rewrite/cloud/src 内仅 kit/flow.ts 一处（callFlow），平台规则变化改动面最小',
+    seam: 'rewrite/cloud/src/kit/flow.ts',
+    pattern: "'cloudbase_module'",
+    strip: false,
+    seamMissing: 'rewrite/cloud/src/kit/flow.ts 应为 cloudbase_module 唯一调用点（callFlow），未见——接缝单点缺失（rewrite 镜像）',
+    seamMustHit: 'rewrite/cloud/src/kit/flow.ts 应为 cloudbase_module 唯一调用点（callFlow），未见——接缝单点缺失（rewrite 镜像）',
+    hitMsg: '直调 cloudbase_module——接缝须收口 kit callFlow 单点（根因#12·rewrite 镜像）',
+  },
+]
+
+// 注册表行 → repoCheck 守卫对象（骨架单源；per-row 差异全走表列，判定语义与折叠前逐条等价）
+const makeSeamGuard = (s) => ({
+  id: s.id,
+  roots: s.roots,
+  desc: s.desc,
+  run() {
+    const srcRoot = join(ROOT, 'rewrite/cloud/src')
+    if (!existsSync(srcRoot)) return []
+    const seamAbs = join(ROOT, s.seam)
+    if (!existsSync(seamAbs)) return [s.seamMissing]
+    const readMatchable = (abs) => (s.strip ? stripComments(readFileSync(abs, 'utf8')) : readFileSync(abs, 'utf8'))
+    const hit = (text) => (typeof s.pattern === 'string' ? text.includes(s.pattern) : s.pattern.test(text))
+    const bad = []
+    if (s.seamAssert) bad.push(...s.seamAssert(stripComments(readFileSync(seamAbs, 'utf8'))))
+    if (s.seamMustHit && !hit(readMatchable(seamAbs))) bad.push(s.seamMustHit)
+    const allow = new Set([s.seam, ...(s.allow || [])])
+    const walk = (d) => {
+      for (const e of lsScan(d)) {
+        const p = join(d, e)
+        if (statSync(p).isDirectory()) walk(p)
+        else if (e.endsWith('.ts')) {
+          const rel = relative(ROOT, p).replace(/\\/g, '/')
+          if (allow.has(rel)) continue
+          if (hit(readMatchable(p))) bad.push(`${rel} ${s.hitMsg}`)
+        }
+      }
+    }
+    walk(srcRoot)
+    if (s.extra) bad.push(...s.extra())
+    return bad
+  },
+})
+
 export const repoChecks = [
+  ...SINGLE_SEAM_REGISTRY.map(makeSeamGuard),
   {
     id: 'rw-golden-registered',
     roots: [...new Set(RW_GOLDEN_REGISTRY.flatMap((r) => r.roots))],
@@ -215,39 +355,6 @@ export const repoChecks = [
         if (/(title|content)\s*:\s*['"`][^'"`]{2,}/.test(rsrc))
           bad.push(`${rf} 疑似内联写死 FAQ 数据（title/content 字符串字面量）——FAQ 数据须只在 kb 单源、经真实查询映射（R37b·根因#5）`)
       }
-      return bad
-    },
-  },
-  {
-    // 企微推送单一收口·重写线（观测批5·治病根#14「告警不进人眼」+ 根因#13/#12 接缝单点·同旧线 bot-push-single-seam）：
-    // pushBotAlert 仅定义于 rewrite/cloud/src/kit/botpush.ts、仅 kit/observe.ts(notifyAlert) 调；其余 rewrite/cloud/src
-    // 不得直达（防散调/绕 alertEvents 开关/webhook 凭证多处）。归 #14（告警真达人眼）+ #12/#13（接缝单点/爆破）。
-    id: 'rw-bot-push-single-seam',
-    roots: ['#12', '#13', '#14'],
-    desc: '企微推送单一收口·重写线：pushBotAlert 仅在 rewrite/cloud/src/kit/botpush.ts 定义、仅 kit/observe.ts 调用；其余不得直达（防散调/绕开关/凭证多处·根因#13/#12）',
-    run() {
-      const seam = 'rewrite/cloud/src/kit/botpush.ts'
-      const caller = 'rewrite/cloud/src/kit/observe.ts'
-      if (!existsSync(join(ROOT, seam))) return [`${seam} 缺失——企微推送接缝单点（重写线·根因#13）`]
-      const bad = []
-      if (!/export\s+async\s+function\s+pushBotAlert/.test(readFileSync(join(ROOT, seam), 'utf8')))
-        bad.push(`${seam} 未导出 pushBotAlert——接缝空壳`)
-      const srcRoot = join(ROOT, 'rewrite/cloud/src')
-      const walk = (d) => {
-        for (const e of lsScan(d)) {
-          const p = join(d, e)
-          if (statSync(p).isDirectory()) walk(p)
-          else if (e.endsWith('.ts')) {
-            const rel = relative(ROOT, p).replace(/\\/g, '/')
-            if (rel === seam || rel === caller) continue
-            if (/pushBotAlert|['"][^'"]*\/botpush['"]/.test(readFileSync(p, 'utf8')))
-              bad.push(`${rel} 直达 pushBotAlert/botpush——企微推送须经 kit/observe.notifyAlert 单一收口（重写线·根因#12）`)
-          }
-        }
-      }
-      if (existsSync(srcRoot)) walk(srcRoot)
-      if (existsSync(join(ROOT, caller)) && !/pushBotAlert/.test(readFileSync(join(ROOT, caller), 'utf8')))
-        bad.push(`${caller}(notifyAlert) 未调 pushBotAlert——接缝未接通（死代码）`)
       return bad
     },
   },
@@ -2127,42 +2234,6 @@ import { PROD_ENV } from './lib/env.mjs'（单源·病根#5·债#30①）`)
     },
   },
   {
-    // 原料账单点收口——新线扫描面（批K·SCM 门1·根因#1/#2·移植 material-stock-single-seam，同
-    // rw-order-transitions-declared 精神：旧守卫（line 822）只扫 packages/cloud/src，rewrite/cloud/src/
-    // kit/scmStock.ts 头注承诺「全库唯一 materials.stock/stockLedger 读写处（守卫 material-stock-single-seam）」
-    // 对生产代码此前是假的——rewrite/cloud 下任何文件直碰这两个集合从未被拦过。逻辑镜像旧守卫（同一套判定，
-    // 不弱化）：applyStockMoves 须导出、CAS 须用条件 where(stock)、除 seam 本身外全仓禁直碰。
-    id: 'rw-material-stock-single-seam',
-    roots: ['#1', '#2'],
-    desc: '新线原料账单点收口（SCM 门1·根因#1/#2·批K·移植 material-stock-single-seam，同 rw-order-transitions-declared 精神：旧守卫只扫冻结线，kit/scmStock.ts 头注承诺的保护对生产代码此前是假的）：materials.stock/stockLedger 仅 rewrite/cloud/src/kit/scmStock.ts 读写（applyStockMoves 唯一入口·乐观 CAS）；rewrite/cloud/src 其余文件直碰即红（防绕 CAS/绕流水改账）',
-    run() {
-      const seam = 'rewrite/cloud/src/kit/scmStock.ts'
-      const seamAbs = join(ROOT, seam)
-      // seam 缺失即红（批1 从被退役的旧副本移植回：seam 文件整个没了=守卫目标消失，必须显式退役而非静默绿）
-      if (!existsSync(seamAbs)) return [`${seam} 缺失——生产线原料账原语（SCM 门1）·守卫目标消失须显式退役本守卫`]
-      const bad = []
-      const src = stripComments(readFileSync(seamAbs, 'utf8')) // 剥注释再匹配（E1/E10：注释掉保护代码不得仍绿·Phase3 批I 评审加固·合流保留）
-      if (!/export\s+async\s+function\s+applyStockMoves/.test(src)) bad.push(`${seam} 未导出 applyStockMoves——门1 空壳`)
-      if (!/\.where\(\{[^}]*stock/.test(src)) bad.push(`${seam} 库存变更未用条件 where(stock) 乐观 CAS——有并发互覆盖风险（根因#1）`)
-      const allow = new Set([seam])
-      const srcRoot = join(ROOT, 'rewrite/cloud/src')
-      const walk = (d) => {
-        for (const e of lsScan(d)) {
-          const p = join(d, e)
-          if (statSync(p).isDirectory()) walk(p)
-          else if (e.endsWith('.ts')) {
-            const rel = relative(ROOT, p).replace(/\\/g, '/')
-            if (allow.has(rel)) continue
-            if (/COLLECTIONS\.(materials|stockLedger)\b|\.collection\(\s*['"](materials|stockLedger)['"]\s*\)/.test(stripComments(readFileSync(p, 'utf8'))))
-              bad.push(`${rel} 直碰 materials/stockLedger 集合——原料账读写须经 kit/scmStock（SCM 门1·防绕 CAS/绕流水）`)
-          }
-        }
-      }
-      if (existsSync(srcRoot)) walk(srcRoot)
-      return bad
-    },
-  },
-  {
     // 原料流水确定性幂等——新线扫描面（批K·根因#2·移植 scm-ledger-idempotent，同上精神）。
     // 顺手修正旧守卫（line 854）本体带的潜伏 bug（不改旧守卫本身、只是不在新守卫里复制同一个洞）：旧正则
     // 用「'stockLedger' 与 '.add(' 相距 ≤200 字符」定位流水写入点，但实际代码里两者靠变量名（`ledger`）
@@ -2229,26 +2300,35 @@ import { PROD_ENV } from './lib/env.mjs'（单源·病根#5·债#30①）`)
   {
     id: 'rw-mp-checkout-consts-synced',
     roots: ['#5'],
-    desc: '结算常量镜像同步（根因#5·mp 包进不了 @ldrw/shared——开发者工具编译不出仓外引用，故 mp 落副本 + 本守卫焊死）：rewrite/mp/lib/checkoutConst.ts 的 COUPON/SHIP/CHECKOUT_ADDONS 必须与 rewrite/shared/src/checkout.ts 逐值一致',
+    desc: '结算常量镜像同步（根因#5·mp 包进不了 @ldrw/shared——开发者工具编译不出仓外引用，故 mp 落副本 + 本守卫焊死）：rewrite/mp/lib/checkoutConst.ts 的全部导出常量必须与 rewrite/shared/src/checkout.ts 名值双向一致（第一性原理审计批堵元漂移：原版硬编码 COUPON/SHIP/CHECKOUT_ADDONS 三个名字，shared 新增第四个常量 mp 忘抄守卫仍绿——改为自动枚举全部 export const，新增/删除/改值任一侧漂移即红）',
     run() {
       const mpPath = join(ROOT, 'rewrite/mp/lib/checkoutConst.ts')
       const shPath = join(ROOT, 'rewrite/shared/src/checkout.ts')
       if (!existsSync(shPath)) return []
       if (!existsSync(mpPath)) return ['rewrite/mp/lib/checkoutConst.ts 缺失——结算常量副本未落（mp 无法引 @ldrw/shared·守卫需两份对账）']
       const bad = []
+      // 全导出枚举：数值常量取字面量；数组常量取 {id,name,price} 逐项序列化——两类之外的导出形态（对象/函数）
+      // 出现时报「守卫需扩形态」而非静默跳过（防扫描面盲区·病根#16）
       const parse = (src) => {
-        const num = (name) => {
-          const m = src.match(new RegExp(`export const ${name} = ([0-9.]+)`))
-          return m ? Number(m[1]) : NaN
+        const stripped = stripComments(src)
+        const vals = {}
+        for (const m of stripped.matchAll(/export const (\w+)(?::[^=]*)? = ([0-9.]+)/g)) vals[m[1]] = m[2]
+        for (const m of stripped.matchAll(/export const (\w+)(?::[^=]*)? = \[([\s\S]*?)\n\]/g)) {
+          const items = [...m[2].matchAll(/\{ id: '([^']+)', name: '([^']+)', price: ([0-9.]+) \}/g)].map((x) => `${x[1]}|${x[2]}|${x[3]}`)
+          vals[m[1]] = items.join(';')
         }
-        const addons = [...src.matchAll(/\{ id: '([^']+)', name: '([^']+)', price: ([0-9.]+) \}/g)].map((m) => `${m[1]}|${m[2]}|${m[3]}`)
-        return { coupon: num('COUPON'), ship: num('SHIP'), addons: addons.join(';') }
+        const unparsed = [...stripped.matchAll(/export const (\w+)/g)].map((m) => m[1]).filter((n) => !(n in vals))
+        return { vals, unparsed }
       }
       const mp = parse(readFileSync(mpPath, 'utf8'))
       const sh = parse(readFileSync(shPath, 'utf8'))
-      if (mp.coupon !== sh.coupon) bad.push(`结算常量漂移：COUPON mp=${mp.coupon} ≠ shared=${sh.coupon}（结算页展示价与云端定价不一致·下单必对不上账）`)
-      if (mp.ship !== sh.ship) bad.push(`结算常量漂移：SHIP mp=${mp.ship} ≠ shared=${sh.ship}`)
-      if (mp.addons !== sh.addons) bad.push('结算常量漂移：CHECKOUT_ADDONS mp 与 shared 不一致（搭配购展示与云端定价漂移）')
+      if (!Object.keys(sh.vals).length) bad.push('rewrite/shared/src/checkout.ts 未解析出任何导出常量——守卫定位失效（改了导出形态须同步本守卫·病根#16 空样本假绿）')
+      for (const n of sh.unparsed) bad.push(`rewrite/shared/src/checkout.ts 导出 ${n} 形态本守卫不识别（非数值/非 {id,name,price} 数组）——扩守卫解析后再加，不许静默跳过`)
+      for (const [n, v] of Object.entries(sh.vals)) {
+        if (!(n in mp.vals)) bad.push(`结算常量漂移：shared 导出 ${n} 在 mp checkoutConst.ts 无副本（结算页展示价与云端定价不一致·下单必对不上账）`)
+        else if (mp.vals[n] !== v) bad.push(`结算常量漂移：${n} mp=${mp.vals[n]} ≠ shared=${v}（结算页展示价与云端定价不一致·下单必对不上账）`)
+      }
+      for (const n of Object.keys(mp.vals)) if (!(n in sh.vals)) bad.push(`结算常量漂移：mp checkoutConst.ts 导出 ${n} 在 shared checkout.ts 无对应——副本多出无源常量`)
       return bad
     },
   },
@@ -2731,49 +2811,6 @@ import { PROD_ENV } from './lib/env.mjs'（单源·病根#5·债#30①）`)
       const courses = strip('rewrite/admin/src/pages/Courses.vue')
       if (courses && !courses.includes('allowVod'))
         bad.push(`rewrite/admin/src/pages/Courses.vue 未传 allowVod——课程视频线会静默退回云存储老路（转码管线形同未接·决策§31 批2）`)
-      return bad
-    },
-  },
-  {
-    // VOD 平台接缝单点（根因#12·决策§31 转码管线批1·镜像 flow-seam-via-kit 之于支付工作流）：与腾讯云
-    // 点播的平台触点（Key 防盗链签名算法/服务端 API 域名）收口 kit/vod.ts 一处，平台规则单方变化只改
-    // 这一点。同时焊死 getPlaybackUrl 新旧双线前缀分流：VOD FileId（纯数字）走 signVodPlayUrl 防盗链
-    // 签名、cloud:// 老线走 getTempUrl 临时地址、转码未就绪走 vodUrl 判空——分流拆掉任意一半，存量
-    // 课程或新转码课程之一必哑。
-    id: 'rw-vod-seam-single',
-    roots: ['#12'],
-    desc: 'VOD 平台接缝单点（决策§31 批1）：kit/vod.ts 必须存在且为 rewrite/cloud/src 内唯一含 tencentcloudapi.com 字面量的文件；learning.ts getPlaybackUrl 段须含 isVodFileId + signVodPlayUrl + getTempUrl + vodUrl 四件套前缀分流——接缝散写/分流缺失即红',
-    run() {
-      const bad = []
-      const kitRel = 'rewrite/cloud/src/kit/vod.ts'
-      if (!existsSync(join(ROOT, kitRel)))
-        return [`${kitRel} 不存在——VOD 平台接缝单点未建（根因#12·决策§31 转码管线批1）`]
-      const walk = (d) => {
-        const out = []
-        for (const e of lsScan(join(ROOT, d))) {
-          const rel = `${d}/${e}`
-          if (statSync(join(ROOT, rel)).isDirectory()) out.push(...walk(rel))
-          else if (rel.endsWith('.ts')) out.push(rel)
-        }
-        return out
-      }
-      for (const rel of walk('rewrite/cloud/src')) {
-        if (rel === kitRel) continue
-        if (stripComments(readFileSync(join(ROOT, rel), 'utf8')).includes('tencentcloudapi.com'))
-          bad.push(`${rel} 含腾讯云 API 域名字面量——VOD 平台触点必须收口 kit/vod.ts 单点（根因#12）`)
-      }
-      const lrel = 'rewrite/cloud/src/functions/app/actions/learning.ts'
-      const lsrc = stripComments(readFileSync(join(ROOT, lrel), 'utf8'))
-      const start = lsrc.indexOf('export const getPlaybackUrl')
-      const end = lsrc.indexOf('export const', start + 1)
-      const span = start >= 0 ? lsrc.slice(start, end > start ? end : undefined) : ''
-      if (!span) bad.push(`${lrel} 找不到 getPlaybackUrl——播放地址签发单点丢失`)
-      else
-        for (const token of ['isVodFileId', 'signVodPlayUrl', 'getTempUrl', 'vodUrl'])
-          if (!span.includes(token))
-            bad.push(
-              `${lrel} getPlaybackUrl 缺 ${token}——VOD/云存储双线前缀分流不完整（决策§31 批1：拆掉一半，存量或转码课程之一必哑）`
-            )
       return bad
     },
   },
@@ -3324,33 +3361,6 @@ import { PROD_ENV } from './lib/env.mjs'（单源·病根#5·债#30①）`)
       else if (!/\bimages\b/.test(gd))
         bad.push('getProductDetail 函数体未见 images 换址——详情页完整图册须由它补齐（病根#15）')
       return bad
-    },
-  },
-  {
-    // 图像处理接缝单点（批1·根因#12 平台规则外部风险）：数据万象（CI）的 imageMogr2 处理参数拼接收口在
-    // kit/storage.ts withImageProc 一处——控制台开通/参数格式变化只改这里 + 环境变量 LD_IMAGE_PROC。别处出现
-    // imageMogr2 字面量即红（同 flow-seam-single 形状·参数散落=平台规则改动面失控）。
-    id: 'rw-image-proc-seam-single',
-    roots: ['#12'],
-    desc: '图像处理接缝单点（根因#12 平台规则外部风险）：数据万象 imageMogr2 处理参数拼接全库仅 rewrite/cloud/src/kit/storage.ts 一处（withImageProc）——控制台开通/参数格式变化改一处；别处出现 imageMogr2 字面量即红（同 flow-seam-single 形状）',
-    run() {
-      const root = join(ROOT, 'rewrite/cloud/src')
-      if (!existsSync(root)) return []
-      const allowed = 'rewrite/cloud/src/kit/storage.ts'
-      const hits = []
-      const walk = (d) => {
-        for (const e of lsScan(d)) {
-          const fp = join(d, e)
-          if (statSync(fp).isDirectory()) walk(fp)
-          else if (e.endsWith('.ts') && readFileSync(fp, 'utf8').includes('imageMogr2'))
-            hits.push(relative(ROOT, fp).replace(/\\/g, '/'))
-        }
-      }
-      walk(root)
-      const out = []
-      for (const h of hits) if (h !== allowed) out.push(`${h} 出现 imageMogr2——图像处理接缝须收口 kit/storage.ts 单点（根因#12）`)
-      if (!hits.includes(allowed)) out.push(`${allowed} 应为 imageMogr2 图像处理参数唯一出现点（withImageProc），未见——接缝单点缺失`)
-      return out
     },
   },
   {
@@ -4208,31 +4218,7 @@ import { PROD_ENV } from './lib/env.mjs'（单源·病根#5·债#30①）`)
       return bad
     },
   },
-  // —— 以下 3 条为旧线（packages/）repoCheck 的 rewrite/ 镜像（批1·治理重心搬到活代码线）——
-  {
-    id: 'rw-flow-seam-single',
-    roots: ['#12'],
-    desc: '平台接缝单点（根因#12 平台规则外部风险）镜像：cloudbase_module 工作流调用 rewrite/cloud/src 内仅 kit/flow.ts 一处（callFlow），平台规则变化改动面最小',
-    run() {
-      const root = join(ROOT, 'rewrite/cloud/src')
-      if (!existsSync(root)) return []
-      const allowed = 'rewrite/cloud/src/kit/flow.ts'
-      const hits = []
-      const walkDir = (d) => {
-        for (const e of lsScan(d)) {
-          const p = join(d, e)
-          if (e === 'node_modules' || e === 'dist') continue
-          if (statSync(p).isDirectory()) walkDir(p)
-          else if (e.endsWith('.ts') && readFileSync(p, 'utf8').includes("'cloudbase_module'")) hits.push(relative(ROOT, p))
-        }
-      }
-      walkDir(root)
-      const out = []
-      for (const h of hits) if (h !== allowed) out.push(`${h} 直调 cloudbase_module——接缝须收口 kit callFlow 单点（根因#12·rewrite 镜像）`)
-      if (!hits.includes(allowed)) out.push(`${allowed} 应为 cloudbase_module 唯一调用点（callFlow），未见——接缝单点缺失（rewrite 镜像）`)
-      return out
-    },
-  },
+  // —— 以下 2 条为旧线（packages/）repoCheck 的 rewrite/ 镜像（批1·治理重心搬到活代码线；同族 rw-flow-seam-single 已折进 SINGLE_SEAM_REGISTRY）——
   {
     id: 'rw-cloud-domain-grouped',
     roots: ['T2'],
