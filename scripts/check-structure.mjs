@@ -4329,6 +4329,20 @@ import { PROD_ENV } from './lib/env.mjs'（单源·病根#5·债#30①）`)
     },
   },
   {
+    id: 'agents-entry-present',
+    roots: ['#11'],
+    desc: '厂商中立进场入口在位（车队地基批3）：AGENTS.md 是非 Claude 代理的唯一进场手册，须存在且指向三件套——CLAUDE.md（约定单源）/modules.json（模块正册）/npm run check（验收共同语言）。缺文件或缺指针即红（入口断了，外厂模型进场只能瞎摸）',
+    run() {
+      const p = join(ROOT, 'AGENTS.md')
+      if (!existsSync(p)) return ['AGENTS.md 缺失——厂商中立进场入口（非 Claude 代理靠它进场），恢复它']
+      const text = readFileSync(p, 'utf8')
+      const bad = []
+      for (const need of ['CLAUDE.md', 'modules.json', 'npm run check'])
+        if (!text.includes(need)) bad.push(`AGENTS.md 未指向 \`${need}\`——进场三件套缺一（约定单源/模块正册/验收语言）`)
+      return bad
+    },
+  },
+  {
     id: 'module-map-synced',
     roots: ['#11'],
     desc: '运行时模块映射与正册同步（车队地基批2·病根#11 生成物防漂·同 gen-order-domain-synced 范式）：rewrite/shared/src/moduleMap.ts 的 APP_ACTION_MODULE 须与 modules.json 各模块 appActions 完全一致（云函数运行时按它给异常账本标模块，物理进不了 JSON 单源故设镜像+本守卫焊死）——改 modules.json 的 appActions 后同步 moduleMap.ts，漏改即红',
