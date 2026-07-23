@@ -1,6 +1,6 @@
 ---
 name: browser-check
-description: Use when 深度检查/审查 web 线（rewrite/admin 管理控制台 · rewrite/agent 客服工作台 · rewrite/site 内容站）的 UI/UX——机器守卫(npm run check)与构建通过查不出的那层（根因#8「构建过≠真的能用」在 web 端的翻版）。用 Playwright MCP 实际起浏览器截图/点击/填表单，验渲染、对齐、交互反馈、页签联动、响应式断点。Triggers on "检查 admin 前端","控制台 UI 对不对","浏览器验一下","admin 页面视觉验证","这个页签/表单/预览对不对","改完 admin/agent/site 页面了","UI/UX 有没有问题". 区别 `/frontend-check`（管小程序 mp-weixin 真机/微信开发者工具，不管 web）；区别 `/deep-audit`（全栈安全/钱/根因守卫，不管视觉）。任何 rewrite/admin、rewrite/agent、rewrite/site 的页面新增或修改收尾前必须走它——不能只凭 check 绿+构建过就报完成。
+description: Use when 深度检查/审查 web 线（rewrite/admin 管理控制台 · rewrite/agent 客服工作台 · rewrite/site 内容站）的 UI/UX——机器守卫(npm run check)与构建通过查不出的那层（根因#8「构建过≠真的能用」在 web 端的翻版）。用 Playwright MCP 实际起浏览器截图/点击/填表单，验渲染、对齐、交互反馈、页签联动、响应式断点。Triggers on "检查 admin 前端","控制台 UI 对不对","浏览器验一下","admin 页面视觉验证","这个页签/表单/预览对不对","改完 admin/agent/site 页面了","UI/UX 有没有问题". 区别小程序真机走查（手册 `rewrite/mp/README.md`·原 /frontend-check 已随旧线退役）；区别 `/deep-audit`（全栈安全/钱/根因守卫，不管视觉）。任何 rewrite/admin、rewrite/agent、rewrite/site 的页面新增或修改收尾前必须走它——不能只凭 check 绿+构建过就报完成。
 ---
 
 # 浏览器视觉体检（web 线）

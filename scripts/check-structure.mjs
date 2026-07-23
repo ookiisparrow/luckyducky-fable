@@ -512,9 +512,6 @@ export const repoChecks = [
     run() {
       // 白名单：声明就是旧线专属/守冻结参照的工具（值=为什么在册）。deploy-fns/deploy-test 刻意不在册。
       const OLDLINE_TOOLS = new Map([
-        ['scripts/check-report.mjs', '体检面板把 packages/miniapp 标注为「旧线」——标注非引用'],
-        ['scripts/lib/brand-font-charset.mjs', '字体字集扫描含旧线参照面（sweep 自带 dot 排除）'],
-        ['scripts/build-brand-font.mjs', '品牌字体构建·扫描面含旧线参照'],
       ])
       const REGISTRY = new Set(['scripts/check-structure.mjs'])
       const TOKEN = /packages\/(cloud|miniapp)|build:cloud\b/

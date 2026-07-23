@@ -10,7 +10,7 @@
  *   ② 机读流转表   → 并入 `scripts/order-domain.generated.json`（守卫 order-transitions-declared 读它·
  *      扫描面已扩 actions/scm*.ts——车道私自越流转/写未声明状态即红）
  *
- * 改流转只改这里 → 跑 `node scripts/gen-order-domain.mjs` 同步派生物 → check 绿。
+ * 改流转须同步手改 `scripts/order-domain.generated.json`（守卫 rw-scm/cs-transitions 对账会拦漂移） → check 绿。
  *
  * ⚠️ 范式边界：assemblyOrders（组装单）**单步执行无状态机**（建即执行·撤销走调整单·CLAUDE §7
  * 别为不存在的草稿需求建状态机），诚实不纳入本表——同 activations.enteredAt 先例。

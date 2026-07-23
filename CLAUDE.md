@@ -117,8 +117,7 @@ npm run build:rw-admin / build:agent   # 活线后台产物；内容站 npm run 
 - **防过度工程（guardrail）** `/anti-overengineering-check`：喂规模/寿命/用途 → 先具体跑主路径 → 真实脏样本/characterization test 钉行为 → 抽象前查「当前痛点/第三次重复/业务预留来源」→ 小批次改 → `npm run check`。
 - **调 bug（intake）** `/systematic-debugging`：复现 → 根因 → 修复带守卫 → 归因病根（不命中现有病根则立新病根 + 配守卫）。
 - **体检（health）** `/deep-audit`：P0→P3 逐层验、核每病根有守卫（跑 `guard-coverage`）、分级标状态。
-- **前端体检（health·前端）** `/frontend-check`：机器层过后专攻真机/多端/交互坑（page-container/scroll/返回/SVG image…），「构建过≠真机能用」（根因#8）。
-- **浏览器体检（health·web 前端）** `/browser-check`：`/frontend-check` 的 web 线版——`rewrite/admin`/`rewrite/agent`/`rewrite/site` 页面变更收尾前必走，用 Playwright MCP 实起浏览器截图/点击/填表单验渲染与交互，「check 绿+构建过≠能用」在 web 端同样成立。
+- **浏览器体检（health·web 前端）** `/browser-check`：web 前端体检——`rewrite/admin`/`rewrite/agent`/`rewrite/site` 页面变更收尾前必走，用 Playwright MCP 实起浏览器截图/点击/填表单验渲染与交互，「check 绿+构建过≠能用」在 web 端同样成立。
 - **容量体检（health·规模）** `/capacity-check`：量上来扛不扛得住——峰值 QPS 换算、热路径扫规模杀手（聚合封顶/无界查询/缺索引）、基建维度（DB 套餐/视频带宽，代码看不到去控制台）、分清并发正确性 vs 容量、没压测就说推断（根因#8）。
 - **文档体检（health·文档·loop ②周期发现的人工节拍）** `/doc-audit`：一句话起一圈——取真值快照 → 并行只读猎手扫全部活文档（清晰/准确/精准/简洁四维）→ **每条 finding 亲核**（猎手会误数/高估，验证不是相信）；「准确」对 git/代码交叉核（看现象不看声称·A7）；能喂回守卫的扩守卫面、不能的改文本，findings 交 refactor-batch 修。
 - **治熵一圈（loop 总谱·串全环）** `/anti-entropy-loop`：一整轮对抗熵增的总谱——取真值快照 → ②并行猎手发现(7 类熵 E1–E7·每条亲核) → 三选一闭环(喂回守卫/改文本写明/退役) → 走 `/refactor-batch` 落地（沙箱 PR·本机直上 main）；含跨切判断纪律（验证不是相信/挡猎手 over-reach/不为凑数砍/不递扳机/不破单源）。composes `/doc-audit`(②)+`/refactor-batch`(落地)·不复述。
