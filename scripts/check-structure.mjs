@@ -4267,6 +4267,150 @@ import { PROD_ENV } from './lib/env.mjs'（单源·病根#5·债#30①）`)
     },
   },
   {
+    id: 'module-registry-complete',
+    roots: ['#11'],
+    desc: '模块正册不重不漏（车队地基批1·病根#11 单源防漂）：modules.json 把活线全部 app action / adminApi action 文件 / mp 页 / admin 页 / agent 页 / 集合按业务模块登记，一条目归属唯一模块——加 action/页面/集合不登记、登记了源码里不存在的名字、或一条目挂两模块，即红。用途：异常归因带模块 ID（批2 接线）+ 车队施工单范围=模块（tier 定档：red 工头亲自/yellow 逐行评审/green 放手）',
+    run() {
+      const bad = []
+      const regPath = join(ROOT, 'modules.json')
+      if (!existsSync(regPath)) return ['modules.json 缺失——模块正册是异常归因与车队派活的单源，恢复它（结构见守卫 desc）']
+      let reg
+      try {
+        reg = JSON.parse(readFileSync(regPath, 'utf8'))
+      } catch (e) {
+        return [`modules.json 不是合法 JSON：${e.message}`]
+      }
+      const modules = reg?.modules ?? {}
+      const TIERS = new Set(['red', 'yellow', 'green'])
+      for (const [mid, m] of Object.entries(modules)) {
+        if (!m?.name) bad.push(`modules.json 模块 \`${mid}\` 缺 name——补中文名`)
+        if (!TIERS.has(m?.tier)) bad.push(`modules.json 模块 \`${mid}\` tier=\`${m?.tier}\` 非法——取 red/yellow/green 之一`)
+      }
+      // 六轴真值全部从源码/目录现读（不信正册自述·与 build.mjs/枚举同源规则）
+      const appSrc = readFileSync(join(ROOT, 'rewrite/cloud/src/functions/app/index.ts'), 'utf8')
+      const appBlock = appSrc.match(/const ACTIONS[^{]*\{([\s\S]*?)\n\}/)
+      const truth = {
+        appActions: appBlock ? [...appBlock[1].matchAll(/^\s*([A-Za-z0-9_]+),/gm)].map((m) => m[1]) : [],
+        adminActionFiles: readdirSync(join(ROOT, 'rewrite/cloud/src/functions/adminApi/actions'))
+          .filter((f) => f.endsWith('.ts'))
+          .map((f) => f.replace(/\.ts$/, '')),
+        mpPages: readdirSync(join(ROOT, 'rewrite/mp/pages')).filter((d) =>
+          statSync(join(ROOT, 'rewrite/mp/pages', d)).isDirectory()
+        ),
+        adminPages: readdirSync(join(ROOT, 'rewrite/admin/src/pages'))
+          .filter((f) => f.endsWith('.vue'))
+          .map((f) => f.replace(/\.vue$/, '')),
+        agentPages: readdirSync(join(ROOT, 'rewrite/agent/src'))
+          .filter((f) => f.endsWith('.vue'))
+          .map((f) => f.replace(/\.vue$/, '')),
+        collections: [
+          ...readFileSync(join(ROOT, 'rewrite/shared/src/collections.ts'), 'utf8').matchAll(
+            /^\s*([A-Za-z0-9_]+):\s*'/gm
+          ),
+        ].map((m) => m[1]),
+      }
+      for (const axis of Object.keys(truth)) {
+        const owner = new Map()
+        for (const [mid, m] of Object.entries(modules)) {
+          for (const item of m?.[axis] ?? []) {
+            if (owner.has(item))
+              bad.push(`\`${item}\`（${axis}）被登记在 \`${owner.get(item)}\` 与 \`${mid}\` 两个模块——一条目唯一归属，删一处`)
+            else owner.set(item, mid)
+          }
+        }
+        for (const item of truth[axis])
+          if (!owner.has(item))
+            bad.push(`${axis} \`${item}\` 未在 modules.json 任一模块登记——加进所属模块（源头新增先登记再用）`)
+        for (const item of owner.keys())
+          if (!truth[axis].includes(item))
+            bad.push(`modules.json 登记的 ${axis} \`${item}\` 在源码里不存在——删除或改名（防幽灵登记）`)
+      }
+      return bad
+    },
+  },
+  {
+    id: 'agents-entry-present',
+    roots: ['#11'],
+    desc: '厂商中立进场入口在位（车队地基批3）：AGENTS.md 是非 Claude 代理的唯一进场手册，须存在且指向三件套——CLAUDE.md（约定单源）/modules.json（模块正册）/npm run check（验收共同语言）。缺文件或缺指针即红（入口断了，外厂模型进场只能瞎摸）',
+    run() {
+      const p = join(ROOT, 'AGENTS.md')
+      if (!existsSync(p)) return ['AGENTS.md 缺失——厂商中立进场入口（非 Claude 代理靠它进场），恢复它']
+      const text = readFileSync(p, 'utf8')
+      const bad = []
+      for (const need of ['CLAUDE.md', 'modules.json', 'npm run check'])
+        if (!text.includes(need)) bad.push(`AGENTS.md 未指向 \`${need}\`——进场三件套缺一（约定单源/模块正册/验收语言）`)
+      return bad
+    },
+  },
+  {
+    id: 'precedent-index-synced',
+    roots: ['#11'],
+    desc: '判例索引与四本账同步（车队地基批4·病根#11·「动手前查判例」的机器入口）：docs/判例索引.json 的 decision/rootcause/debuglog(fable) 条数须与 关键决策记录 `## N.`/根因账本 §一 `### N.`/调试日志 `## X（fable）` 的真值计数一致——新决策/病根/调试条目落账后漏编索引即红（nofix 类人工精选·不计数核）',
+    run() {
+      const bad = []
+      const idxPath = join(ROOT, 'docs/判例索引.json')
+      if (!existsSync(idxPath))
+        return ['docs/判例索引.json 缺失——AI 代理「动手前查有没有判例」的机器入口，按四本账重建（结构见守卫 desc）']
+      let idx
+      try {
+        idx = JSON.parse(readFileSync(idxPath, 'utf8'))
+      } catch (e) {
+        return [`docs/判例索引.json 不是合法 JSON：${e.message}`]
+      }
+      const entries = idx?.entries ?? []
+      const cnt = (kind) => entries.filter((e) => e?.kind === kind).length
+      const truth = {
+        decision: [...readFileSync(join(ROOT, 'docs/关键决策记录.md'), 'utf8').matchAll(/^## \d+\./gm)].length,
+        rootcause: [
+          ...readFileSync(join(ROOT, 'docs/根因账本.md'), 'utf8').split('## 二、')[0].matchAll(/^### \d+\./gm),
+        ].length,
+        debuglog: [...readFileSync(join(ROOT, 'docs/调试日志.md'), 'utf8').matchAll(/^## .+（fable）/gm)].length,
+      }
+      for (const [kind, want] of Object.entries(truth))
+        if (cnt(kind) !== want)
+          bad.push(
+            `判例索引 ${kind} 条数 ${cnt(kind)} ≠ 账本真值 ${want}——新条目落账后补编索引（含关键词同义词），或删幽灵条目`
+          )
+      for (const e of entries)
+        if (!e?.id || !e?.kind || !Array.isArray(e?.keywords) || !e.keywords.length || !e?.source)
+          bad.push(`判例索引条目 \`${e?.id ?? '(无id)'}\` 缺 id/kind/keywords/source 之一——四字段齐全才可查`)
+      return bad
+    },
+  },
+  {
+    id: 'module-map-synced',
+    roots: ['#11'],
+    desc: '运行时模块映射与正册同步（车队地基批2·病根#11 生成物防漂·同 gen-order-domain-synced 范式）：rewrite/shared/src/moduleMap.ts 的 APP_ACTION_MODULE 须与 modules.json 各模块 appActions 完全一致（云函数运行时按它给异常账本标模块，物理进不了 JSON 单源故设镜像+本守卫焊死）——改 modules.json 的 appActions 后同步 moduleMap.ts，漏改即红',
+    run() {
+      const bad = []
+      const regPath = join(ROOT, 'modules.json')
+      const mapPath = join(ROOT, 'rewrite/shared/src/moduleMap.ts')
+      if (!existsSync(regPath)) return [] // 正册缺失由 module-registry-complete 报，不双报
+      if (!existsSync(mapPath))
+        return ['rewrite/shared/src/moduleMap.ts 缺失——异常账本模块归因的运行时映射（单源 modules.json 的镜像），按 modules.json appActions 生成它']
+      let reg
+      try {
+        reg = JSON.parse(readFileSync(regPath, 'utf8'))
+      } catch {
+        return [] // JSON 坏由 module-registry-complete 报
+      }
+      const want = new Map() // action → module（真值：modules.json）
+      for (const [mid, m] of Object.entries(reg?.modules ?? {}))
+        for (const a of m?.appActions ?? []) want.set(a, mid)
+      const mapSrc = readFileSync(mapPath, 'utf8')
+      const got = new Map(
+        [...mapSrc.matchAll(/^\s*([A-Za-z0-9_]+):\s*'([a-z]+)',/gm)].map((m) => [m[1], m[2]])
+      )
+      for (const [a, mid] of want)
+        if (!got.has(a)) bad.push(`moduleMap.ts 缺 action \`${a}\`（modules.json 归 \`${mid}\`）——补 \`${a}: '${mid}',\``)
+        else if (got.get(a) !== mid)
+          bad.push(`moduleMap.ts 里 \`${a}\` 标 \`${got.get(a)}\` ≠ modules.json 真值 \`${mid}\`——改为真值`)
+      for (const a of got.keys())
+        if (!want.has(a)) bad.push(`moduleMap.ts 多出 action \`${a}\`（modules.json 无此登记）——删除（防幽灵映射）`)
+      return bad
+    },
+  },
+  {
     // 守卫计数 + 病根计数 + 测试计数自洽（文档体系规则⑥·客观计数机器维护·巡检 #009 ④/💡）：守卫数随加守卫
     // 天天涨、病根数随立新病根涨（12→13）、被手抄进治理文档必漂（#009 标 31 vs 真值 35；治理体检抓到
     // 自动化验证系统「13 条 repoCheck」vs 真值 86、元模式/账本「12 类病根」vs 真值 13）——同 collection-count-synced

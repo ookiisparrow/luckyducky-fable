@@ -1,6 +1,6 @@
 ---
 name: frontend-check
-description: Use when 深度检查/审查/体检前端 (Lucky Ducky uni-app 多端, packages/miniapp) for 运行时/真机/多端/交互/UX 问题——机器守卫(npm run check)与构建查不出的那层（根因#8「构建过≠真机能用」）。专抓 mp-weixin 多端坑(page-container 锁滚动 / scroll-view / sticky / 返回拦截无 onBackPress / SVG 走 image / 安全区·胶囊 / 条件编译)、滚动与导航正确性、浮层遮挡交互、卡片对齐与空态。Triggers on "深度检查前端","前端体检","查查前端有没有坑","UI/多端/小程序坑","真机验前端","这页/这交互对不对","改完滚动/返回/浮层了". 区别 /deep-audit（全栈安全/钱/根因守卫，云函数也查）：本 skill 专攻前端运行时与多端表现，不查云函数/钱链。
+description: Use when 深度检查/审查/体检前端 (Lucky Ducky uni-app 多端, packages/miniapp) for 运行时/真机/多端/交互/UX 问题——机器守卫(npm run check)与构建查不出的那层（根因#8「构建过≠真机能用」）。专抓 mp-weixin 多端坑(page-container 锁滚动 / scroll-view / sticky / 返回拦截无 onBackPress / SVG 走 image / 安全区·胶囊 / 条件编译)、滚动与导航正确性、浮层遮挡交互、卡片对齐与空态。Triggers on "深度检查前端","前端体检","查查前端有没有坑","UI/多端/小程序坑","真机验前端","这页/这交互对不对","改完滚动/返回/浮层了". 区别 /deep-audit（全栈安全/钱/根因守卫，云函数也查）：本 skill 专攻前端运行时与多端表现，不查云函数/钱链。作用面=旧线 packages/miniapp（uni-app 专项坑不适用新线原生栈）；新线 rewrite/mp 的真机走查手册见 rewrite/mp/README.md。
 ---
 
 # 深度检查前端

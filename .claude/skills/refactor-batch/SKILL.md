@@ -27,7 +27,7 @@ description: Use when doing any change/batch/audit/fix in the Lucky Ducky 重构
 ## 验证（缺一不可）
 7. `npm run check` 全绿（conventions + structure + typecheck + lint + test）。被拦先修代码、不绕闸。
 8. **反向自检**：临时篡改这批新加的守卫 / 不变量 → 必须红 → 还原 → 绿。证明守卫真在咬、不是摆设。
-9. 碰云产物 / 部署形态：`npm run build:cloud`；碰页面：至少 `npm run build:h5` DONE。
+9. 碰云产物 / 部署形态：活线 `npm run build:rw-cloud`（旧线参照才用 `build:cloud`）；碰页面：活线 `rewrite/mp` 为原生小程序无 bundler 构建、`npm run typecheck` 即等价校验（旧线页面才跑 `build:h5`）DONE。
 
 ## 收尾
 10. 直接上本仓 main（本仓不走异步 PR），**一批一个 squash 提交**；信息 `type：中文说明`（type ∈ feat / fix / docs / refactor / chore / test，全角冒号）。

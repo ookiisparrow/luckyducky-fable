@@ -1,0 +1,945 @@
+{
+  "__doc__": "判例索引（车队地基批4·前车之鉴档案）：AI 代理动手前先查这里——「这事以前决定过/拒过/修过没」。四类：decision=关键决策记录 §N（计数核）/ rootcause=根因账本 病根#N（计数核）/ debuglog=调试日志 fable 现行线（计数核·归档 next 线另有同字母条目、靠 namespace 消歧勿裸引字母）/ nofix=人工精选「拍板不做/故意不修」（不计数核·可手工增补）。守卫 precedent-index-synced 焊死三类计数与账本一致。关键词含同义词（原文用词+别人可能用的说法），grep 本文件即可命中，命中后按 source 读原文。查不到≠没判过：需求类去 需求清单.md、归档判例走 docs/archive/README.md 索引。",
+  "entries": [
+    {
+      "id": "决策§1",
+      "kind": "decision",
+      "title": "使用 uni-app",
+      "keywords": [
+        "uni-app",
+        "框架选型",
+        "多端",
+        "跨端"
+      ],
+      "source": "docs/关键决策记录.md §1"
+    },
+    {
+      "id": "决策§2",
+      "kind": "decision",
+      "title": "使用 JavaScript，暂不使用 TypeScript",
+      "keywords": [
+        "JavaScript",
+        "TypeScript",
+        "TS",
+        "页面层语言"
+      ],
+      "source": "docs/关键决策记录.md §2"
+    },
+    {
+      "id": "决策§3",
+      "kind": "decision",
+      "title": "使用 px，不使用 rpx（旧线·新线 rewrite/mp 已反转：rpx 回归平台正解）",
+      "keywords": [
+        "px",
+        "rpx",
+        "单位",
+        "响应式尺寸"
+      ],
+      "source": "docs/关键决策记录.md §3",
+      "status": "superseded-for-newline",
+      "note": "反转见 CLAUDE.md §4 多端样式作用面注 + rewrite/mp/README.md"
+    },
+    {
+      "id": "决策§4",
+      "kind": "decision",
+      "title": "自绘 TabBar 和导航",
+      "keywords": [
+        "TabBar",
+        "导航栏",
+        "自绘",
+        "custom navigation",
+        "浮动药丸",
+        "navigationStyle custom",
+        "原生tabBar还原不了"
+      ],
+      "source": "docs/关键决策记录.md §4"
+    },
+    {
+      "id": "决策§5",
+      "kind": "decision",
+      "title": "使用 MediaSlot 管理图位",
+      "keywords": [
+        "MediaSlot",
+        "图位",
+        "占位图",
+        "素材替换"
+      ],
+      "source": "docs/关键决策记录.md §5"
+    },
+    {
+      "id": "决策§6",
+      "kind": "decision",
+      "title": "主色统一为幸运紫",
+      "keywords": [
+        "幸运紫",
+        "主题色",
+        "品牌色",
+        "配色"
+      ],
+      "source": "docs/关键决策记录.md §6"
+    },
+    {
+      "id": "决策§7",
+      "kind": "decision",
+      "title": "Sass @import 到 @use 暂缓",
+      "keywords": [
+        "Sass",
+        "@import",
+        "@use",
+        "样式迁移"
+      ],
+      "source": "docs/关键决策记录.md §7"
+    },
+    {
+      "id": "决策§8",
+      "kind": "decision",
+      "title": "顶部安全区使用 systemBar.js",
+      "keywords": [
+        "安全区",
+        "胶囊",
+        "刘海",
+        "systemBar",
+        "状态栏",
+        "env()不可靠",
+        "状态栏胶囊避让"
+      ],
+      "source": "docs/关键决策记录.md §8"
+    },
+    {
+      "id": "决策§9",
+      "kind": "decision",
+      "title": "敏感业务走云函数",
+      "keywords": [
+        "云函数",
+        "敏感业务",
+        "不信前端",
+        "服务端校验"
+      ],
+      "source": "docs/关键决策记录.md §9"
+    },
+    {
+      "id": "决策§10",
+      "kind": "decision",
+      "title": "业务数据上云：小程序优先 + store/api 收口 + 本地回退",
+      "keywords": [
+        "数据上云",
+        "store 收口",
+        "本地回退",
+        "api 层"
+      ],
+      "source": "docs/关键决策记录.md §10"
+    },
+    {
+      "id": "决策§11",
+      "kind": "decision",
+      "title": "管理后台：CMS 管数据 + 自建管二维码/看板",
+      "keywords": [
+        "管理后台",
+        "CMS",
+        "自建 vs 采购",
+        "后台选型"
+      ],
+      "source": "docs/关键决策记录.md §11"
+    },
+    {
+      "id": "决策§12",
+      "kind": "decision",
+      "title": "激活码不绑订单（备货封码）+ 退货验收扫码兜底",
+      "keywords": [
+        "激活码",
+        "不绑订单",
+        "备货封码",
+        "退货验收",
+        "二维码"
+      ],
+      "source": "docs/关键决策记录.md §12"
+    },
+    {
+      "id": "决策§13",
+      "kind": "decision",
+      "title": "二维码类型：普通链接二维码（一码一地址）",
+      "keywords": [
+        "二维码类型",
+        "链接二维码",
+        "scheme",
+        "码地址",
+        "小程序码放弃",
+        "ICP备案域名",
+        "印刷物料"
+      ],
+      "source": "docs/关键决策记录.md §13"
+    },
+    {
+      "id": "决策§14",
+      "kind": "decision",
+      "title": "视频上传控制台：自建网页编排页 + 云存储 v1",
+      "keywords": [
+        "视频上传",
+        "课程编排",
+        "云存储",
+        "控制台"
+      ],
+      "source": "docs/关键决策记录.md §14"
+    },
+    {
+      "id": "决策§15",
+      "kind": "decision",
+      "title": "控制台主轴 = 商品上新流水线",
+      "keywords": [
+        "上新向导",
+        "商品建档",
+        "流水线",
+        "六步"
+      ],
+      "source": "docs/关键决策记录.md §15"
+    },
+    {
+      "id": "决策§16",
+      "kind": "decision",
+      "title": "管理台形态升级：一比一所见即所得橱窗",
+      "keywords": [
+        "所见即所得",
+        "橱窗",
+        "WYSIWYG",
+        "预览"
+      ],
+      "source": "docs/关键决策记录.md §16"
+    },
+    {
+      "id": "决策§17",
+      "kind": "decision",
+      "title": "代码按技术分层组织，不按业务链重组",
+      "keywords": [
+        "技术分层",
+        "业务链",
+        "目录组织",
+        "package-by-layer"
+      ],
+      "source": "docs/关键决策记录.md §17"
+    },
+    {
+      "id": "决策§18",
+      "kind": "decision",
+      "title": "店名定为「Lucky Ducky 小棉鸭」",
+      "keywords": [
+        "店名",
+        "品牌名",
+        "小棉鸭",
+        "Lucky Ducky"
+      ],
+      "source": "docs/关键决策记录.md §18"
+    },
+    {
+      "id": "决策§19",
+      "kind": "decision",
+      "title": "客服 = 微信客服官方组件（后扩为自建 360·分发放开）",
+      "keywords": [
+        "客服选型",
+        "微信客服",
+        "自建客服",
+        "分发",
+        "T1 放开",
+        "open-type=contact",
+        "企业微信接待",
+        "360坐席工作台"
+      ],
+      "source": "docs/关键决策记录.md §19"
+    },
+    {
+      "id": "决策§20",
+      "kind": "decision",
+      "title": "物流方案（发货合规）",
+      "keywords": [
+        "物流",
+        "快递",
+        "发货",
+        "运单",
+        "合规",
+        "upload_shipping_info",
+        "快递100插件",
+        "电子面单"
+      ],
+      "source": "docs/关键决策记录.md §20"
+    },
+    {
+      "id": "决策§21",
+      "kind": "decision",
+      "title": "P3 codegen 范围：只给真有 status 状态机的域立册",
+      "keywords": [
+        "codegen",
+        "生成器",
+        "状态机域",
+        "范围收敛"
+      ],
+      "source": "docs/关键决策记录.md §21"
+    },
+    {
+      "id": "决策§22",
+      "kind": "decision",
+      "title": "故意不抽象：投机泛化默认拒绝（YAGNI / Rule of Three）",
+      "keywords": [
+        "不抽象",
+        "YAGNI",
+        "Rule of Three",
+        "过度工程",
+        "投机泛化"
+      ],
+      "source": "docs/关键决策记录.md §22"
+    },
+    {
+      "id": "决策§23",
+      "kind": "decision",
+      "title": "fable 重写定标：整体重写·按端选栈·web 内容站·冻结替换",
+      "keywords": [
+        "重写定标",
+        "整体重写",
+        "弃 uni-app",
+        "glass-easel",
+        "内容站"
+      ],
+      "source": "docs/关键决策记录.md §23"
+    },
+    {
+      "id": "决策§24",
+      "kind": "decision",
+      "title": "Clean Architecture 采纳边界：采宪法、拒样板",
+      "keywords": [
+        "Clean Architecture",
+        "架构宪法",
+        "Repository",
+        "DTO",
+        "不采样板"
+      ],
+      "source": "docs/关键决策记录.md §24"
+    },
+    {
+      "id": "决策§25",
+      "kind": "decision",
+      "title": "文档预算限制取消：docs-budget 退役、卷档待重设计",
+      "keywords": [
+        "文档预算",
+        "docs-budget",
+        "卷档",
+        "行数限制"
+      ],
+      "source": "docs/关键决策记录.md §25"
+    },
+    {
+      "id": "决策§26",
+      "kind": "decision",
+      "title": "退款规则：一行一售后（刻意）+ 管理员越规退款",
+      "keywords": [
+        "退款规则",
+        "一行一售后",
+        "越规退款",
+        "overrideRefund",
+        "refund:manage权限",
+        "钱守恒红线"
+      ],
+      "source": "docs/关键决策记录.md §26"
+    },
+    {
+      "id": "决策§27",
+      "kind": "decision",
+      "title": "设计单源收敛：console.pen 两代叠加收口",
+      "keywords": [
+        "设计稿",
+        "console.pen",
+        "控制台.pen",
+        "设计单源"
+      ],
+      "source": "docs/关键决策记录.md §27"
+    },
+    {
+      "id": "决策§28",
+      "kind": "decision",
+      "title": "投屏功能全线取缔",
+      "keywords": [
+        "投屏",
+        "casting",
+        "电视播放",
+        "取缔",
+        "rw-mp-no-casting",
+        "show-casting-button"
+      ],
+      "source": "docs/关键决策记录.md §28"
+    },
+    {
+      "id": "决策§29",
+      "kind": "decision",
+      "title": "SEO/GEO 代码侧前置：内容站扩面 + mp 分发放开",
+      "keywords": [
+        "SEO",
+        "GEO",
+        "收录",
+        "转发分享",
+        "搜一搜",
+        "llms.txt",
+        "robots.txt放行AI爬虫"
+      ],
+      "source": "docs/关键决策记录.md §29"
+    },
+    {
+      "id": "决策§30",
+      "kind": "decision",
+      "title": "tab 页误触退出提醒：定选 page-container",
+      "keywords": [
+        "误触退出",
+        "page-container",
+        "返回拦截",
+        "enableAlertBeforeUnload",
+        "再按一次退出",
+        "安卓返回键拦截"
+      ],
+      "source": "docs/关键决策记录.md §30"
+    },
+    {
+      "id": "决策§31",
+      "kind": "decision",
+      "title": "视频转码管线拍板：腾讯云点播 VOD",
+      "keywords": [
+        "转码",
+        "VOD",
+        "视频点播",
+        "播放丝滑",
+        "清晰度",
+        "雪碧图预览",
+        "防盗链签名",
+        "拖动画面跟随伪需求"
+      ],
+      "source": "docs/关键决策记录.md §31"
+    },
+    {
+      "id": "根因#1",
+      "kind": "rootcause",
+      "title": "并发「先查后写」、一次性副作用不幂等",
+      "keywords": [
+        "并发",
+        "幂等",
+        "先查后写",
+        "竞态",
+        "重复执行",
+        "TOCTOU"
+      ],
+      "source": "docs/根因账本.md §一 #1"
+    },
+    {
+      "id": "根因#2",
+      "kind": "rootcause",
+      "title": "状态转移散写、副作用反查状态集窄化",
+      "keywords": [
+        "状态机",
+        "状态转移",
+        "transition",
+        "散写"
+      ],
+      "source": "docs/根因账本.md §一 #2"
+    },
+    {
+      "id": "根因#3",
+      "kind": "rootcause",
+      "title": "信任边界靠每个函数自觉",
+      "keywords": [
+        "信任边界",
+        "越权",
+        "fail-closed",
+        "安全闸",
+        "裸cloud.init"
+      ],
+      "source": "docs/根因账本.md §一 #3"
+    },
+    {
+      "id": "根因#4",
+      "kind": "rootcause",
+      "title": "金额浮点靠手工纪律",
+      "keywords": [
+        "金额",
+        "浮点",
+        "分",
+        "Fen",
+        "精度"
+      ],
+      "source": "docs/根因账本.md §一 #4"
+    },
+    {
+      "id": "根因#5",
+      "kind": "rootcause",
+      "title": "样板复制即漂移",
+      "keywords": [
+        "手抄",
+        "镜像漂移",
+        "单源",
+        "副本"
+      ],
+      "source": "docs/根因账本.md §一 #5"
+    },
+    {
+      "id": "根因#6",
+      "kind": "rootcause",
+      "title": "演示回退双路径泄漏",
+      "keywords": [
+        "mock",
+        "演示数据",
+        "回退分支",
+        "双路径"
+      ],
+      "source": "docs/根因账本.md §一 #6"
+    },
+    {
+      "id": "根因#7",
+      "kind": "rootcause",
+      "title": "固定 limit，规模即挤出",
+      "keywords": [
+        "分页",
+        "limit",
+        "截断",
+        "挤出",
+        "cursor"
+      ],
+      "source": "docs/根因账本.md §一 #7"
+    },
+    {
+      "id": "根因#8",
+      "kind": "rootcause",
+      "title": "验证样本失真——「E2E 过了」≠「真的能用」",
+      "keywords": [
+        "真机",
+        "假绿",
+        "样本失真",
+        "构建过不等于能用",
+        "E2E"
+      ],
+      "source": "docs/根因账本.md §一 #8"
+    },
+    {
+      "id": "根因#9",
+      "kind": "rootcause",
+      "title": "git 外资产无正册",
+      "keywords": [
+        "控制台资产",
+        "正册",
+        "console-assets",
+        "git 外"
+      ],
+      "source": "docs/根因账本.md §一 #9"
+    },
+    {
+      "id": "根因#10",
+      "kind": "rootcause",
+      "title": "工具实例状态不可信",
+      "keywords": [
+        "开发者工具",
+        "僵实例",
+        "重启",
+        "工具状态"
+      ],
+      "source": "docs/根因账本.md §一 #10"
+    },
+    {
+      "id": "根因#11",
+      "kind": "rootcause",
+      "title": "文档职责渗漏",
+      "keywords": [
+        "文档漂移",
+        "计数手抄",
+        "单源",
+        "stale"
+      ],
+      "source": "docs/根因账本.md §一 #11"
+    },
+    {
+      "id": "根因#12",
+      "kind": "rootcause",
+      "title": "平台规则外部风险",
+      "keywords": [
+        "平台接缝",
+        "微信规则",
+        "接缝单点",
+        "外部变更"
+      ],
+      "source": "docs/根因账本.md §一 #12"
+    },
+    {
+      "id": "根因#13",
+      "kind": "rootcause",
+      "title": "无频控，端点可被爆破或滥用穿透",
+      "keywords": [
+        "频控",
+        "爆破",
+        "限流",
+        "throttle",
+        "滥用",
+        "brute force",
+        "滚动窗口"
+      ],
+      "source": "docs/根因账本.md §一 #13"
+    },
+    {
+      "id": "根因#14",
+      "kind": "rootcause",
+      "title": "失败静默化——吞错/伪成功/告警不进人眼",
+      "keywords": [
+        "静默失败",
+        "吞错",
+        "告警",
+        "可观测",
+        "伪空态"
+      ],
+      "source": "docs/根因账本.md §一 #14"
+    },
+    {
+      "id": "根因#15",
+      "kind": "rootcause",
+      "title": "加载链路冗余云调用——静态目录数据无会话缓存收口",
+      "keywords": [
+        "冗余调用",
+        "缓存",
+        "加载性能",
+        "目录数据"
+      ],
+      "source": "docs/根因账本.md §一 #15"
+    },
+    {
+      "id": "根因#16",
+      "kind": "rootcause",
+      "title": "守卫绑定漂移——扫描面指着死目标，空样本＝绿",
+      "keywords": [
+        "守卫漂移",
+        "扫描面",
+        "空样本",
+        "金丝雀",
+        "摆设守卫",
+        "guard-scan-liveness",
+        "worktree污染扫描"
+      ],
+      "source": "docs/根因账本.md §一 #16"
+    },
+    {
+      "id": "fable调试-A",
+      "kind": "debuglog",
+      "namespace": "fable",
+      "title": "真单联测退款触发失败 REFUND_TRIGGER_FAIL（真根因订正）",
+      "keywords": [
+        "退款失败",
+        "REFUND_TRIGGER_FAIL",
+        "out_refund_no",
+        "字符集",
+        "退款单号含中文",
+        "refundNoFor",
+        "正则拒绝"
+      ],
+      "source": "docs/调试日志.md ##A"
+    },
+    {
+      "id": "fable调试-B",
+      "kind": "debuglog",
+      "namespace": "fable",
+      "title": "控制台换皮回归族·5 bug",
+      "keywords": [
+        "控制台换皮",
+        "回归",
+        "admin 重写",
+        "UI换皮丢逻辑",
+        "组装幂等退化",
+        "低库存阈值失效"
+      ],
+      "source": "docs/调试日志.md ##B"
+    },
+    {
+      "id": "fable调试-C",
+      "kind": "debuglog",
+      "namespace": "fable",
+      "title": "recordAnomaly 真机不落库（add-first 修）",
+      "keywords": [
+        "recordAnomaly",
+        "异常不落库",
+        "add-first",
+        "真机桩差异",
+        "update缺失文档抛错",
+        "anomalies集合恒空",
+        "桩与真机不一致"
+      ],
+      "source": "docs/调试日志.md ##C"
+    },
+    {
+      "id": "fable调试-D",
+      "kind": "debuglog",
+      "namespace": "fable",
+      "title": "mp C 类竖切自修循环·6 确认逻辑 bug",
+      "keywords": [
+        "C 类竖切",
+        "自修循环",
+        "mp bug",
+        "phone清空误判",
+        "percent超100",
+        "回包乱序",
+        "地址双击双条"
+      ],
+      "source": "docs/调试日志.md ##D"
+    },
+    {
+      "id": "fable调试-E",
+      "kind": "debuglog",
+      "namespace": "fable",
+      "title": "cloud 钱链/状态机 sweep Round1·7 确认 bug",
+      "keywords": [
+        "钱链 sweep",
+        "状态机 bug",
+        "cloud 审计",
+        "overrideRefund钱守恒缺失",
+        "payCallback关单复活漏窗",
+        "分页截断",
+        "无tiebreaker",
+        "跨函数TOCTOU"
+      ],
+      "source": "docs/调试日志.md ##E"
+    },
+    {
+      "id": "fable调试-F",
+      "kind": "debuglog",
+      "namespace": "fable",
+      "title": "mp 页面 sweep Round1·15 确认 bug",
+      "keywords": [
+        "mp sweep",
+        "页面 bug",
+        "批2",
+        "金额前端自算",
+        "失败伪装已下架",
+        "reload无代次守卫",
+        "onShow抢跑"
+      ],
+      "source": "docs/调试日志.md ##F"
+    },
+    {
+      "id": "fable调试-G",
+      "kind": "debuglog",
+      "namespace": "fable",
+      "title": "F 批复查·2 残留 bug",
+      "keywords": [
+        "复查",
+        "残留 bug",
+        "对抗复核",
+        "换段未清零学习位置",
+        "重试无代次守卫"
+      ],
+      "source": "docs/调试日志.md ##G"
+    },
+    {
+      "id": "fable调试-H",
+      "kind": "debuglog",
+      "namespace": "fable",
+      "title": "admin sweep Round1 批3·8 bug + armed 态复位守卫（⚠归档 next 线另有 H=退货权失效·勿混）",
+      "keywords": [
+        "admin sweep",
+        "armed 复位",
+        "危险操作台",
+        "二次确认armed态残留",
+        "rw-admin-armed-reset-on-load",
+        "serialSave竞态"
+      ],
+      "source": "docs/调试日志.md ##H"
+    },
+    {
+      "id": "fable调试-I",
+      "kind": "debuglog",
+      "namespace": "fable",
+      "title": "H 批复查·4 残留时序 bug（⚠归档 next 线另有 I=confirmEnter 幂等·勿混）",
+      "keywords": [
+        "时序 bug",
+        "复查",
+        "竞态",
+        "finalize旧draft覆盖",
+        "batchUpload切课丢失",
+        "丢失在途编辑"
+      ],
+      "source": "docs/调试日志.md ##I"
+    },
+    {
+      "id": "fable调试-J",
+      "kind": "debuglog",
+      "namespace": "fable",
+      "title": "admin/agent/cloud sweep Round1 批4·11 确认 bug",
+      "keywords": [
+        "三线 sweep",
+        "批4",
+        "空块判据漏字段",
+        "身份头被隐藏",
+        "待办计数假绿",
+        "切会话串号"
+      ],
+      "source": "docs/调试日志.md ##J"
+    },
+    {
+      "id": "fable调试-K",
+      "kind": "debuglog",
+      "namespace": "fable",
+      "title": "J 批复查·2 残留回归",
+      "keywords": [
+        "复查",
+        "回归",
+        "身份头跨客户残留",
+        "setStatus ABA竞态"
+      ],
+      "source": "docs/调试日志.md ##K"
+    },
+    {
+      "id": "fable调试-L",
+      "kind": "debuglog",
+      "namespace": "fable",
+      "title": "Round2 确认项落地批·15 确认 bug",
+      "keywords": [
+        "Round2",
+        "确认项",
+        "批5",
+        "缺_seq代次守卫",
+        "onHide不复位",
+        "封面时效兜底",
+        "孤儿化router拦截"
+      ],
+      "source": "docs/调试日志.md ##L"
+    },
+    {
+      "id": "fable调试-M",
+      "kind": "debuglog",
+      "namespace": "fable",
+      "title": "L 批复查·5 残留修复 + 1 越界记账",
+      "keywords": [
+        "复查",
+        "越界记账",
+        "排空期间新编辑丢失",
+        "无代际守卫",
+        "过期成功被丢弃",
+        "绕开批量上传锁"
+      ],
+      "source": "docs/调试日志.md ##M"
+    },
+    {
+      "id": "fable调试-N",
+      "kind": "debuglog",
+      "namespace": "fable",
+      "title": "Round3 收敛轮·4 确认 bug",
+      "keywords": [
+        "Round3",
+        "收敛轮",
+        "truncNote抢占v-else链",
+        "refresh不复核submitting",
+        "守卫判据假阴"
+      ],
+      "source": "docs/调试日志.md ##N"
+    },
+    {
+      "id": "fable调试-O",
+      "kind": "debuglog",
+      "namespace": "fable",
+      "title": "批6 findings 复审·2 条 P2",
+      "keywords": [
+        "复审",
+        "P2",
+        "文档失真",
+        "注释过期",
+        "并发收敛无测试",
+        "纯函数抽取"
+      ],
+      "source": "docs/调试日志.md ##O"
+    },
+    {
+      "id": "fable调试-P",
+      "kind": "debuglog",
+      "namespace": "fable",
+      "title": "bug 清除战役 II：9 轮 sweep·55 项修复·零确认闭环",
+      "keywords": [
+        "战役 II",
+        "sweep",
+        "零确认",
+        "deleteDraft双吞恒ok",
+        "casIncrement回补丢失",
+        "rollback删审计迹",
+        "假成功reject"
+      ],
+      "source": "docs/调试日志.md ##P"
+    },
+    {
+      "id": "fable调试-Q",
+      "kind": "debuglog",
+      "namespace": "fable",
+      "title": "mp-7fixes 定性：「大家都在问」错位＝兜底落页残留滚动位；首页无图＝数据缺失",
+      "keywords": [
+        "错位",
+        "滚动位残留",
+        "首页无图",
+        "数据缺失",
+        "tab页滚动位置残留",
+        "数据缺失非bug",
+        "project.config.json缺失坑"
+      ],
+      "source": "docs/调试日志.md ##Q"
+    },
+    {
+      "id": "fable调试-R",
+      "kind": "debuglog",
+      "namespace": "fable",
+      "title": "真机逮出：订单横滑下半屏无效＝手势区没盖满 + 方向滑入动画",
+      "keywords": [
+        "横滑",
+        "手势区",
+        "滑动无效",
+        "真机",
+        "手势区未盖满整屏",
+        "touchstart绑定节点",
+        "换tab动画"
+      ],
+      "source": "docs/调试日志.md ##R"
+    },
+    {
+      "id": "免修-课程页失败toast",
+      "kind": "nofix",
+      "title": "my-courses/order-list reload 失败 toast 无失焦复核（P3·瞬态观感不建机制）",
+      "keywords": [
+        "reload 失败",
+        "toast",
+        "失焦复核",
+        "免修",
+        "rw-mp-await-side-effect-unloaded-recheck"
+      ],
+      "source": "docs/待办与债.md Phase3 免修判例①"
+    },
+    {
+      "id": "免修-对账文案边角",
+      "kind": "nofix",
+      "title": "Reconciliation stale-reload 文案拼接边角（P3·极窄并发窗仅影响提示观感）",
+      "keywords": [
+        "对账文案",
+        "stale-reload",
+        "拼接",
+        "免修"
+      ],
+      "source": "docs/待办与债.md Phase3 免修判例②"
+    },
+    {
+      "id": "免修-cover豁免",
+      "kind": "nofix",
+      "title": "批B cover 豁免过宽与 seedProducts 游离点（刻意取舍）",
+      "keywords": [
+        "cover 豁免",
+        "seedProducts",
+        "刻意取舍",
+        "免修"
+      ],
+      "source": "docs/待办与债.md Phase3 免修判例③"
+    },
+    {
+      "id": "免修-不自动连播",
+      "kind": "nofix",
+      "title": "播放页刻意不自动切下一段（拍板设计·守卫 rw-mp-player-no-autonext 防回潮）",
+      "keywords": [
+        "自动连播",
+        "连播",
+        "autonext",
+        "自动切换",
+        "不自动切",
+        "自动播放下一集"
+      ],
+      "source": "docs/需求清单.md R38 + 重构日志 2026-07-11 批B"
+    }
+  ]
+}
