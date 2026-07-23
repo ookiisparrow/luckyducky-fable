@@ -6,7 +6,6 @@ import { existsSync } from 'node:fs'
 import { resolve, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { repoChecks, fileRules, typeAndTestGuards } from '../../scripts/check-structure.mjs'
-import { RULES as conventionRules } from '../../scripts/check-conventions.mjs'
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '../..')
 
@@ -14,7 +13,6 @@ describe('守卫 provenance（roots 不缺失）', () => {
   const ruleGuards = [
     ...repoChecks.map((r) => ['repoCheck', r.id, r.roots]),
     ...fileRules.map((r) => ['fileRule', r.id, r.roots]),
-    ...conventionRules.map((r) => ['convention', r.id, r.roots]),
   ]
 
   it.each(ruleGuards)('%s/%s 有非空 roots', (kind, id, roots) => {

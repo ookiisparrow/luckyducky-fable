@@ -1,6 +1,6 @@
 # 依赖安全可见性（B8·2026-07-19）：npm workspaces 原生支持——单一根目录条目
-# （directory: "/"）自动扫描全部 package.json（root + packages/* + rewrite/*，
-# 共 11 个；rewrite/mp 无 package.json，非 workspace 成员，天然不缺口），
+# （directory: "/"）自动扫描全部 package.json（root + rewrite/*；旧线 packages/*
+# 已于 2026-07-23 瘦身拍板批删除；rewrite/mp 无 package.json，非 workspace 成员，天然不缺口），
 # 无需逐目录列举。minor/patch 打包成一个 PR 降噪；major 刻意不分组，各自独立
 # PR 逐个人工审 breaking change。第二条 github-actions 生态覆盖 ci.yml 里
 # actions/checkout、actions/setup-node 等版本更新。

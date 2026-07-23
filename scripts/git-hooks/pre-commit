@@ -3,17 +3,17 @@
 #
 # - 本目录通过 package.json 的 prepare 脚本注册为 git core.hooksPath，npm install 后自动生效。
 # - **三道闸单一定义**：本闸 = CI = 编辑 hook，全部以 `npm run check` 为唯一定义
-#   （check = conventions + structure + typecheck + lint + test），由 check:structure 的
+#   （check = structure + typecheck + lint + test），由 check:structure 的
 #   gate-single-source 不变量永久守护，防三闸语义漂移。
 # - 检查当前工作区全量（非仅暂存）：单人短分支流下足够，全套约 70–90s（typecheck+test 占大头·2026-07-23 实测）。
 # - 紧急绕过（不建议）：git commit --no-verify
 
-echo "提交闸：npm run check（conventions + structure + typecheck + lint + test）..."
+echo "提交闸：npm run check（structure + typecheck + lint + test）..."
 
 npm run check || {
   echo ""
   echo "❌ 质量闸未通过，已拦下本次提交。"
-  echo "   conventions 例外加 convention-ok 注释；结构不变量例外加 structure-ok；lint 可试 npm run lint:fix。"
+  echo "   结构不变量例外加 structure-ok；lint 可试 npm run lint:fix。"
   exit 1
 }
 

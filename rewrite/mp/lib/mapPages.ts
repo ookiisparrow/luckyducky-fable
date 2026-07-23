@@ -44,7 +44,7 @@ export interface WelcomeVM {
 // 默认文案（welcome.wxml W1/W2 逐字搬入）
 const WELCOME_W1_DEFAULT = {
   title: '恭喜你，开启新课程',
-  sub: '接下来的几个小时里，一团棉线会在你手上变成一只随身的幸运小鸭。',
+  sub: '接下来的几个小时里，一团棉线会在你手上变成一只带来幸运的小棉鸭。',
   warning: '确认进课后，这份材料包将不可退货', // 告知义务·空则强制回默认（不允许被清空）
 }
 const WELCOME_W2_DEFAULT: WelcomePointVM[] = [

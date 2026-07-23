@@ -8,32 +8,20 @@
     "npm": ">=10"
   },
   "workspaces": [
-    "packages/*",
     "rewrite/*"
   ],
   "scripts": {
     "prepare": "git config core.hooksPath scripts/git-hooks || exit 0",
-    "build:shared": "npm run build -w @luckyducky/shared",
-    "typecheck": "npm run build:shared && tsc -p packages/cloud/tsconfig.json && tsc -p rewrite/shared/tsconfig.json --noEmit && tsc -p rewrite/cloud/tsconfig.json && tsc -p rewrite/mp/tsconfig.json && tsc -p rewrite/site/tsconfig.json --noEmit && vue-tsc --noEmit -p rewrite/admin/tsconfig.json && vue-tsc --noEmit -p rewrite/agent/tsconfig.json",
-    "dev:h5": "npm run build:shared && npm run dev:h5 -w luckyducky-miniapp",
-    "dev:mp-weixin": "npm run build:shared && npm run dev:mp-weixin -w luckyducky-miniapp",
-    "dev:app": "npm run build:shared && npm run dev:app -w luckyducky-miniapp",
-    "build:h5": "npm run build:shared && npm run build:h5 -w luckyducky-miniapp",
-    "build:mp-weixin": "npm run build:shared && npm run build:mp-weixin -w luckyducky-miniapp",
-    "build:app": "npm run build:shared && npm run build:app -w luckyducky-miniapp",
-    "build:admin": "npm run build -w luckyducky-admin",
+    "typecheck": "tsc -p rewrite/shared/tsconfig.json --noEmit && tsc -p rewrite/cloud/tsconfig.json && tsc -p rewrite/mp/tsconfig.json && tsc -p rewrite/site/tsconfig.json --noEmit && vue-tsc --noEmit -p rewrite/admin/tsconfig.json && vue-tsc --noEmit -p rewrite/agent/tsconfig.json",
     "build:rw-admin": "npm run build -w @ldrw/admin",
-    "build:agent": "npm run build -w luckyducky-agent",
-    "build:cloud": "npm run build:shared && node packages/cloud/build.mjs",
+    "build:agent": "npm run build -w @ldrw/agent",
     "build:rw-cloud": "node rewrite/cloud/build.mjs",
-    "verify:cloud": "npm run build:cloud && node scripts/verify-cloud-bundles.cjs",
     "verify:rw-cloud": "npm run build:rw-cloud && node scripts/verify-rw-cloud-bundles.cjs",
     "check:artifacts": "npm run verify:rw-cloud && npm run build:rw-admin && npm run build:agent && npm run build -w @ldrw/site",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
-    "check:conventions": "node scripts/check-conventions.mjs",
     "check:structure": "node scripts/check-structure.mjs",
-    "check:fast": "npm run check:conventions && npm run check:structure",
+    "check:fast": "npm run check:structure",
     "typecheck:rw-cloud": "tsc -p rewrite/shared/tsconfig.json --noEmit && tsc -p rewrite/cloud/tsconfig.json",
     "typecheck:rw-mp": "tsc -p rewrite/mp/tsconfig.json",
     "typecheck:rw-admin": "vue-tsc --noEmit -p rewrite/admin/tsconfig.json",
@@ -47,11 +35,10 @@
     "deploy:test": "node scripts/deploy-test.mjs",
     "db:export": "node scripts/db-export.mjs",
     "db:check-indexes": "node scripts/check-indexes.mjs",
-    "format": "prettier --write \"packages/miniapp/src/**/*.{vue,js,scss,json}\"",
     "test": "vitest run",
     "test:watch": "vitest",
     "coverage": "vitest run --coverage",
-    "check": "npm run check:conventions && npm run check:structure && npm run typecheck && npm run lint && npm run test"
+    "check": "npm run check:structure && npm run typecheck && npm run lint && npm run test"
   },
   "devDependencies": {
     "@cloudbase/manager-node": "^4.2.0",

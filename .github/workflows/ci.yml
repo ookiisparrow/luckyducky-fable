@@ -1,7 +1,7 @@
 # CI 质量闸：每个 PR（和合并进 main 时）自动跑全套 `npm run check`。
 # 结果显示在 PR 页面底部——绿勾 = 机器检查通过，红叉 = 有问题先别合并。
 # 三道闸单一定义：本 CI = 本地 pre-commit = 编辑 hook，全部以 `npm run check` 为唯一定义
-# （check = conventions + structure + typecheck + lint + test），由 check:structure 的
+# （check = structure + typecheck + lint + test），由 check:structure 的
 # gate-single-source 不变量守护，防三闸漂移。
 name: CI
 
@@ -39,7 +39,7 @@ jobs:
         run: npm audit --omit=dev --audit-level=high
         continue-on-error: true
 
-      - name: 质量闸（conventions + structure + typecheck + lint + test）
+      - name: 质量闸（structure + typecheck + lint + test）
         run: npm run check
 
       # 产物闸（盲区体检批4·根因#8「构建过≠真能用」部署产物层镜像）：真实构建四个生产产物 +

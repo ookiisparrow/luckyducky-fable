@@ -36,12 +36,7 @@ import {
   checkFile as structureCheckFile,
   SRC_DIRS,
 } from './check-structure.mjs'
-import {
-  RULES as conventionRules,
-  walk as conventionWalk,
-  checkFile as conventionCheckFile,
-  CONVENTION_SRC,
-} from './check-conventions.mjs'
+// check-conventions.mjs（旧线 packages/miniapp 专用扫描器）已随旧线于 2026-07-23 瘦身拍板批退役
 
 const ROOT = resolve(import.meta.dirname, '..')
 const OUT_DIR = join(ROOT, 'reports')
@@ -53,7 +48,6 @@ export function guardCatalog() {
   return [
     ...repoChecks.map((g) => ({ id: g.id, kind: 'repo', roots: g.roots || [], desc: g.desc || '' })),
     ...fileRules.map((g) => ({ id: g.id, kind: 'file', roots: g.roots || [], desc: g.desc || '逐文件规则（违例信息见规则 test 文案）' })),
-    ...conventionRules.map((g) => ({ id: g.id, kind: 'convention', roots: g.roots || [], desc: g.desc || '多端/样式约定（扫 packages/miniapp/src）' })),
     ...typeAndTestGuards.map((g) => ({
       id: g.id,
       kind: g.mechanism, // 'ts' | 'test'
@@ -119,14 +113,6 @@ export function collectRuleGuardResults() {
   for (const r of fileRules) {
     const hits = fileHits.get(r.id) || []
     rows.push({ id: r.id, kind: 'file', roots: r.roots || [], desc: '逐文件规则', ok: hits.length === 0, ms: fileMs, violations: hits.map((v) => ({ msg: `${v.loc} ${v.msg}` })) })
-  }
-  const t2 = Date.now()
-  const convHits = new Map(conventionRules.map((r) => [r.id, []]))
-  for (const f of conventionWalk(CONVENTION_SRC)) for (const v of conventionCheckFile(f)) convHits.get(v.id)?.push(v)
-  const convMs = (Date.now() - t2) / Math.max(1, conventionRules.length)
-  for (const r of conventionRules) {
-    const hits = convHits.get(r.id) || []
-    rows.push({ id: r.id, kind: 'convention', roots: r.roots || [], desc: '多端/样式约定（packages/miniapp/src）', ok: hits.length === 0, ms: convMs, violations: hits.map((v) => ({ msg: `${v.loc} ${v.msg}` })) })
   }
   return rows
 }
