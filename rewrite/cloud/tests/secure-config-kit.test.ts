@@ -1,7 +1,8 @@
 // kit/secureConfig 读取契约守卫（配置清单审查批·2026-07-12）：迁移核心语义「DB 优先·env 兜底·都空 ''·
 // **DB 空串不遮蔽 env**（typeof v==='string'&&v 分支）」直接钉在原语上——此前只有消费者 e2e 间接覆盖
 // env 兜底/都空两态（app-cs1/app-cs2），DB 优先态与 getSecureConfigFields（本批起 6 处消费：kfCallback
-// 外壳/onEvent、kfSend、kfMedia、kfHealthProbe、cs.kfBind、wxbill）无直接测试。四态各一例，双函数同覆盖。
+// 外壳/onEvent、kfSendText、kfFetchMedia（2026-07-23 拓扑收编批：原 cs/kfSend、cs/kfMedia 独立函数
+// 收编进 kit/wecom.ts 高层助手）、kfHealthProbe、cs.kfBind、wxbill）无直接测试。四态各一例，双函数同覆盖。
 //
 // 反向自检：把 getSecureConfig 的 `if (typeof v === 'string' && v) return v` 改成 `if (typeof v === 'string')
 // return v`（空串遮蔽 env）→「DB 空串不遮蔽 env」用例立即红；改回即绿。

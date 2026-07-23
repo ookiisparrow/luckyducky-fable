@@ -2,10 +2,10 @@
 
 > ## 本仓身份：生产源（2026-07-09 切换转正·前身重构线自 2026-07-03）
 >
-> 本仓 = Lucky Ducky 的**生产源**。2026-07-03 从 `luckyducky-next`（GitHub `ookiisparrow/luckyducky-next`，HEAD `ff02afb`）完整复制为重构线；**2026-07-09 M5 切换执行完毕、本仓转正**（无真实用户前提下用户拍板压缩 runbook 前置闸·经过见 `docs/重构日志.md` 同日切换条）。云环境 `cloudbase-d4gcssqbv06865479` 唯一版本＝本仓 `rewrite/` 重写线：**17 云函数 + `/admin` `/agent` 新后台 + 根路径内容站**（函数数以 `rewrite/cloud/build.mjs` 产物为准），旧线 26 函数与 `/admin2` `/agent2` 并行路径已清退。本仓对该环境的部署/建表/删表等改动**真实生效**，不是隔离沙盒，操作前务必想清楚。
+> 本仓 = Lucky Ducky 的**生产源**。2026-07-03 从 `luckyducky-next`（GitHub `ookiisparrow/luckyducky-next`，HEAD `ff02afb`）完整复制为重构线；**2026-07-09 M5 切换执行完毕、本仓转正**（无真实用户前提下用户拍板压缩 runbook 前置闸·经过见 `docs/重构日志.md` 同日切换条）。云环境 `cloudbase-d4gcssqbv06865479` 唯一版本＝本仓 `rewrite/` 重写线：**13 云函数 + `/admin` `/agent` 新后台 + 根路径内容站**（函数数以 `rewrite/cloud/build.mjs` 产物为准），旧线 26 函数与 `/admin2` `/agent2` 并行路径已清退。本仓对该环境的部署/建表/删表等改动**真实生效**，不是隔离沙盒，操作前务必想清楚。
 >
 > - **next 仓＝封存回滚基线**：`/Users/sparrow/luckyducky-next` 不再迭代、不再止血（生产源已是本仓）；保留价值＝旧线全量代码与旧后台可分钟级重建。除封存标注外不要动它。**旧线在本仓的冻结参照 `packages/` 已于 2026-07-23 瘦身拍板批删除**（用户拍板·旧线唯一参照=next 仓·git 历史可查）。
-> - **活代码在 `rewrite/`**：微信端原生 TS+glass-easel（全 WebView 首发）、后端云开发 17 函数（`rewrite/cloud`）、admin/agent（Vue3+Vite）、Astro 内容站（`rewrite/site`）。新线工程约定散在 `rewrite/*/README.md` 与各批记账；旧线专用约定已随旧线退役归档（史料「旧线工程约定-至20260723.md」·参照旧线去 next 仓）。
+> - **活代码在 `rewrite/`**：微信端原生 TS+glass-easel（全 WebView 首发）、后端云开发 13 函数（`rewrite/cloud`）、admin/agent（Vue3+Vite）、Astro 内容站（`rewrite/site`）。新线工程约定散在 `rewrite/*/README.md` 与各批记账；旧线专用约定已随旧线退役归档（史料「旧线工程约定-至20260723.md」·参照旧线去 next 仓）。
 > - **小程序发布面**：AppID `wxcbd2fb68b81bcfb1`；新 mp（`rewrite/mp`）上传/提审/发布为微信后台人工动作——未发布期间线上旧版 v0.9.4 调用的旧函数已删（无真实用户·用户拍板接受）。
 > - **接管 tcb·部署闸**：`scripts/guard-deploy.mjs` 机制不变，规则原样适用——见下方 §3。
 > - **8 件控制台正册资产**：微信支付连接器 `wxpay_33nb7su` 等，git 外、勿动，副本正册在本仓 `console-assets/`（本仓即权威源，随变更先 repo 后控制台）。
@@ -55,7 +55,7 @@ npm run build:rw-admin / build:agent   # 活线后台产物；内容站 npm run 
 
 **架构主张（T1–T4）**
 - **T1 微信原生单源**：H5/App 不连核心交易流程；mp 端 lib/api 只对接云、不引样例数据回退。`[机器守: rw-mp-cloud-only]` ——**代码不变量不松**；**分发范围已放开（决策§19，2026-06-30）**：可经微信小店官方 API「小程序连接小店」拿微信生态多节点分发（不 fork 端、不增回退分支，故不违 T1），H5 自有官网暂缓。
-- **T2 云原语经 kit 收口**：业务码禁裸 `cloud.init`/`getWXContext`，身份/初始化一律经 kit（17 函数拓扑以 `rewrite/cloud/build.mjs` 产物为准）。`[机器守: rw-kit-only-cloud-primitives]`
+- **T2 云原语经 kit 收口**：业务码禁裸 `cloud.init`/`getWXContext`，身份/初始化一律经 kit（13 函数拓扑以 `rewrite/cloud/build.mjs` 产物为准）。`[机器守: rw-kit-only-cloud-primitives]`
 - **T3 云为唯一真相**：商品/课程/页面内容数据单源在云数据库（admin CMS 维护），mp 端只经云读、不落本地样例源。`[机器守: rw-mp-cloud-only]`
 - **T4 按链内聚**：mp 依赖方向 pages→lib（叶），不反转、无环。`[机器守: rw-dep-direction]`
 

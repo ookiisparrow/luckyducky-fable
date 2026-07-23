@@ -9,6 +9,8 @@ import {
   AGENT_DESK_URL,
   notifyAlert,
   getTempUrl,
+  kfSendText,
+  kfFetchMedia,
 } from '../../../kit'
 import { COLLECTIONS, ERR, AGENT_STATUS } from '@ldrw/shared'
 import { assembleCustomer360 } from '../customer360/orchestrator'
@@ -26,8 +28,8 @@ import { assembleCustomer360 } from '../customer360/orchestrator'
 //
 // 状态流转一律走 kit `transition('csSession', …)`（合法流转单源 shared/cs.spec.ts·守卫 rw-cs-transitions-declared
 // 对账·私自越流转即红·根因#2）；一次性副作用绑首次转移（transition moved===true·天然幂等·根因#1）。
-// 读路径 bounded（cursor/limit·守卫 capacity-reads-bounded·根因#7）。发送经 cs/kfSend 服务端接缝（平台接缝
-// 单点·根因#12·不在 adminApi 复制 token/sendMsg 逻辑·避 WXKF env 双份）。
+// 读路径 bounded（cursor/limit·守卫 capacity-reads-bounded·根因#7）。发送经 kit 直连收口（2026-07-23 拓扑收编批·
+// 17→13·原 cs/kfSend 独立函数收编进 kit/wecom.ts kfSendText，不再有跨函数 callFunction 接缝）。
 
 const LIST_LIMIT = 20 // 待接队列默认页大小（bounded）
 const THREAD_LIMIT = 50 // 会话消息流默认页大小（bounded）
@@ -195,12 +197,14 @@ export async function releaseConversation(ctx: Ctx): Promise<any> {
   return reply(200, { ok: true })
 }
 
-// ── ④ sendAgentMessage：坐席回复·经 cs/kfSend（48h 窗口内 send_msg）·出站落 conversations ──
+// ── ④ sendAgentMessage：坐席回复·经 kit kfSendText（48h 窗口内 send_msg）·出站落 conversations ──
 // 越权发送面（§1.5·根因#3）双闸：① 分配 scope（ownsSession·外包只发自己 claim 的会话）；② 接待窗口
 // （仅 active 态·防对已结束/未接会话越窗发·守卫 kf-send-server-gated 焊 sendAgentMessage 须过此两闸再发）。
-// 发送经 cs/kfSend 服务端接缝（callFunction·isServerCall 放行服务端互调·不在此复制 token/sendMsg·接缝单点#12）。
+// 发送经 kit 直连收口（2026-07-23 拓扑收编批·17→13）——原 cs/kfSend 独立函数已收编进 kit/wecom.ts，
+// 不再有跨函数 callFunction 接缝；.catch(() => null) 保留为兜底（助手正常契约不抛网络外错误，
+// 但网络层意外异常仍不该反噬发送流程失败判定，同 B1 fail-soft 精神）。
 export async function sendAgentMessage(ctx: Ctx): Promise<any> {
-  const { db, cloud, data } = ctx
+  const { db, data } = ctx
   const p = principal(ctx)
   const sessionId = str(data && data.sessionId, 200)
   const text = str(data && data.text, MAX_TEXT)
@@ -210,15 +214,12 @@ export async function sendAgentMessage(ctx: Ctx): Promise<any> {
   const s = sl.s
   if (s.status !== 'active') return reply(200, { ok: false, error: ERR.NOT_ACTIVE }) // 接待窗口：仅 active 可发
   if (!s.externalUserId || !s.openKfId) return reply(200, { ok: false, error: ERR.NO_CHANNEL })
-  // 经 cs/kfSend 主动发（服务端专用·48h 窗口内经微信客服 send_msg）；errcode 原样带回便于联调（同 kfSend）
-  const res = await cloud
-    .callFunction({ name: 'kfSend', data: { externalUserId: s.externalUserId, openKfId: s.openKfId, text } })
-    .catch(() => null)
-  const out = (res && res.result) || {}
-  const errcode = Number(out.errcode) || 0
-  // callFunction reject（res=null）或回包无 result（out={}）都不等于送达成功——
-  // 必须先确认真有 result 才看 ok/errcode，否则 undefined!==false 会把整体失败误判为发出（B1·95018 同病根另一路径）。
-  const sent = !!(res && res.result) && out.ok !== false && !errcode
+  // 经 kit 直连主动发（48h 窗口内经微信客服 send_msg）；errcode 原样带回便于联调
+  const out: any = await kfSendText({ externalUserId: s.externalUserId, openKfId: s.openKfId, text }).catch(() => null)
+  const errcode = Number(out?.errcode) || 0
+  // 助手异常（out=null）或未过校验闸（ok:false，如未配置/取 token 失败）都不等于送达成功——
+  // 必须先确认真有返回且 ok 未被判 false 才看 errcode，否则 undefined!==false 会把整体失败误判为发出（B1·95018 同病根另一路径）。
+  const sent = !!out && out.ok !== false && !errcode
   if (sent) {
     // 出站落 conversations（坐席回复归档·与 kfCallback archiveOutbound 同形·内联避跨域 import·铁律二）
     const openid = await resolveOpenid(db, s)
@@ -341,9 +342,9 @@ export async function getThread(ctx: Ctx): Promise<any> {
 // 双闸：① 分配 scope（scopedLoad→assertOwnedByAgent·外包只能拉自己在接会话的图）；② 消息真属于本会话
 // （防跨会话拉图——scope 闸只护「会话本身」，这里再核「消息-会话」对应关系：msgId 对应消息行须与本会话
 // 同一 externalUserId+openKfId，不能借自己名下会话号偷看别会话的图）。
-// 缓存命中（消息行已有 fileId·云存储缓存）直接换临时 URL，不重新下载；否则经 cs/kfMedia 服务端接缝
-// （token/secret 只在 cs 域·跨函数模式同 sendAgentMessage 调 kfSend）下载 media_id（3 天有效·过期如实
-// 回 EXPIRED）→ uploadFile 落 cs-media/<msgId>（幂等：固定云路径，重复下载覆盖同路径无害）→ 回写
+// 缓存命中（消息行已有 fileId·云存储缓存）直接换临时 URL，不重新下载；否则经 kit 直连收口（2026-07-23
+// 拓扑收编批·17→13·原 cs/kfMedia 独立函数收编进 kit/wecom.ts kfFetchMedia）下载 media_id（3 天有效·
+// 过期如实回 EXPIRED）→ uploadFile 落 cs-media/<msgId>（幂等：固定云路径，重复下载覆盖同路径无害）→ 回写
 // fileId → 换临时 URL。下载/上传失败经 notifyAlert 留痕（动作类失败禁静默·根因#14）；不重试风暴（前端手动重试）。
 export async function getMediaUrl(ctx: Ctx): Promise<any> {
   const { db, cloud, data } = ctx
@@ -370,21 +371,17 @@ export async function getMediaUrl(ctx: Ctx): Promise<any> {
   }
   const mediaId = String(row.mediaId || '')
   if (!mediaId) return reply(200, { ok: false, error: ERR.NO_MEDIA }) // 非图片消息/未落 mediaId
-  // 经 cs/kfMedia 服务端接缝下载（跨函数调用·平台接缝单点#12）
-  const res = await cloud.callFunction({ name: 'kfMedia', data: { mediaId } }).catch(() => null)
-  if (!res || !res.result) {
-    await notifyAlert('anomaly', 'getMediaUrl', 'MEDIA_CALL_FAILED', { sessionId, msgId })
-    return reply(200, { ok: false, error: ERR.DOWNLOAD_FAILED })
-  }
-  const out = res.result
-  if (!out.ok) {
-    if (out.expired) return reply(200, { ok: false, error: ERR.EXPIRED }) // media_id 3 天有效·如实语义
-    await notifyAlert('anomaly', 'getMediaUrl', 'MEDIA_DOWNLOAD_FAILED', { sessionId, msgId, errcode: out.errcode || 0 })
+  // 经 kit 直连下载（.catch(() => null) 兜底同 sendAgentMessage：助手正常契约不抛，网络层意外异常不反噬判定）
+  const out: any = await kfFetchMedia(mediaId).catch(() => null)
+  if (!out || out.ok === false) {
+    if (out && out.expired) return reply(200, { ok: false, error: ERR.EXPIRED }) // media_id 3 天有效·如实语义
+    await notifyAlert('anomaly', 'getMediaUrl', out ? 'MEDIA_DOWNLOAD_FAILED' : 'MEDIA_CALL_FAILED', { sessionId, msgId, errcode: out?.errcode || 0 })
     return reply(200, { ok: false, error: ERR.DOWNLOAD_FAILED })
   }
   let fileId: string
   try {
-    const up = await cloud.uploadFile({ cloudPath: `cs-media/${msgId}`, fileContent: Buffer.from(String(out.base64 || ''), 'base64') })
+    // 直连收编后无需 base64 往返（同进程 Buffer 直传·跨函数 JSON 序列化约束已消失）
+    const up = await cloud.uploadFile({ cloudPath: `cs-media/${msgId}`, fileContent: out.buffer })
     fileId = up.fileID
   } catch {
     await notifyAlert('anomaly', 'getMediaUrl', 'UPLOAD_FAILED', { sessionId, msgId })
@@ -451,7 +448,7 @@ export async function escalateToMerchant(ctx: Ctx): Promise<any> {
 
 // ── ⑧ closeConversation：pending/active/escalated → closed（终态·触 CSAT 评分气泡·会话结束）──
 export async function closeConversation(ctx: Ctx): Promise<any> {
-  const { db, cloud, data } = ctx
+  const { db, data } = ctx
   const p = principal(ctx)
   const sessionId = str(data && data.sessionId, 200)
   if (!sessionId) return reply(400, { ok: false, error: ERR.BAD_ARGS })
@@ -470,10 +467,9 @@ export async function closeConversation(ctx: Ctx): Promise<any> {
   //    曾只发提示无人认自由文本数字＝评分链断·顾客照做收到根菜单分数丢失）；
   //  - 提示文字落 conversations 归档（质检回看得到「我们问了什么」·曾只有顾客的「5」没有我们的提问）。
   if (wasEngaged && s.externalUserId && s.openKfId) {
-    const res = await cloud
-      .callFunction({ name: 'kfSend', data: { externalUserId: s.externalUserId, openKfId: s.openKfId, text: CSAT_PROMPT } })
-      .catch(() => null)
-    const sent = !!(res && res.result && res.result.ok !== false && !Number(res.result.errcode))
+    // 经 kit 直连收口发提示（2026-07-23 拓扑收编批·17→13·原 cs/kfSend 独立函数已收编）
+    const out: any = await kfSendText({ externalUserId: s.externalUserId, openKfId: s.openKfId, text: CSAT_PROMPT }).catch(() => null)
+    const sent = !!(out && out.ok !== false && !Number(out.errcode))
     if (sent) {
       await db
         .collection(COLLECTIONS.kfState)

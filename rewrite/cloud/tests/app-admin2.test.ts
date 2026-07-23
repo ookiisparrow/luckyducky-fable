@@ -258,13 +258,16 @@ describe('码批次（黄金：数量闸·聚合·分页全取）', () => {
     expect((await post('createBatch', { courseId: 'c1' })).error).toBe('BAD_ARGS')
     expect((await post('createBatch', { courseId: 'c1', count: 0 })).error).toBe('BAD_ARGS')
 
-    control.setCallFunctionResult({ result: { ok: true, batchId: 'b1', codes: ['K1', 'K2'] } })
+    // createBatch 域内直调 generateQrcodes（2026-07-23 拓扑收编批：原 cloud.callFunction 打 genQrcodes
+    // 独立函数已收编·断言从「调用了哪个函数」改为断言「qrcodes 集合真实写入」）。
+    control.seed('courses', [{ _id: 'c1', title: '钩织入门' }])
     const r = await post('createBatch', { courseId: 'c1', count: 9999 })
     expect(r.ok).toBe(true)
-    expect(r.batchId).toBe('b1')
-    const sent = control.callFunctionCalls()[0]
-    expect(sent.name).toBe('genQrcodes')
-    expect(sent.data.count).toBe(500) // 钳上限
+    expect(r.batchId).toMatch(/^b-c1-\d{14}-[0-9a-f]{6}$/) // makeBatchId 形状：北京时间到秒 + 随机后缀
+    expect(r.codes.length).toBe(500) // 钳上限
+    const written = control.dump('qrcodes').filter((q: any) => q.batchId === r.batchId)
+    expect(written.length).toBe(500) // 真实写入 qrcodes 集合
+    expect(written.every((q: any) => q.courseId === 'c1')).toBe(true)
   })
 
   it('大白话：批次聚合总数/已激活且不混别课；列码分页全取不被单页截断', async () => {
