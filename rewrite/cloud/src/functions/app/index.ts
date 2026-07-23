@@ -1,4 +1,4 @@
-import { ERR } from '@ldrw/shared'
+import { ERR, moduleOfAction } from '@ldrw/shared'
 import { err, recordAnomaly } from '../../kit'
 import { login, updateProfile } from './actions/user'
 import { getProducts, getProductDetail, getContent, getPageContent } from './actions/catalog'
@@ -79,7 +79,8 @@ export const main = async (event: any) => {
     await recordAnomaly(
       'server-exception',
       'APP_ACTION_UNCAUGHT',
-      { fp: action, action, msg: String((e as Error)?.message || e).slice(0, 200) },
+      // module：按模块正册归因（车队地基批2·modules.json→moduleMap 镜像·守卫 module-map-synced 焊死）
+      { fp: action, action, module: moduleOfAction(action), msg: String((e as Error)?.message || e).slice(0, 200) },
       'high'
     )
     return err(ERR.INTERNAL)

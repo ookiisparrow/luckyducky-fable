@@ -4329,6 +4329,39 @@ import { PROD_ENV } from './lib/env.mjs'（单源·病根#5·债#30①）`)
     },
   },
   {
+    id: 'module-map-synced',
+    roots: ['#11'],
+    desc: '运行时模块映射与正册同步（车队地基批2·病根#11 生成物防漂·同 gen-order-domain-synced 范式）：rewrite/shared/src/moduleMap.ts 的 APP_ACTION_MODULE 须与 modules.json 各模块 appActions 完全一致（云函数运行时按它给异常账本标模块，物理进不了 JSON 单源故设镜像+本守卫焊死）——改 modules.json 的 appActions 后同步 moduleMap.ts，漏改即红',
+    run() {
+      const bad = []
+      const regPath = join(ROOT, 'modules.json')
+      const mapPath = join(ROOT, 'rewrite/shared/src/moduleMap.ts')
+      if (!existsSync(regPath)) return [] // 正册缺失由 module-registry-complete 报，不双报
+      if (!existsSync(mapPath))
+        return ['rewrite/shared/src/moduleMap.ts 缺失——异常账本模块归因的运行时映射（单源 modules.json 的镜像），按 modules.json appActions 生成它']
+      let reg
+      try {
+        reg = JSON.parse(readFileSync(regPath, 'utf8'))
+      } catch {
+        return [] // JSON 坏由 module-registry-complete 报
+      }
+      const want = new Map() // action → module（真值：modules.json）
+      for (const [mid, m] of Object.entries(reg?.modules ?? {}))
+        for (const a of m?.appActions ?? []) want.set(a, mid)
+      const mapSrc = readFileSync(mapPath, 'utf8')
+      const got = new Map(
+        [...mapSrc.matchAll(/^\s*([A-Za-z0-9_]+):\s*'([a-z]+)',/gm)].map((m) => [m[1], m[2]])
+      )
+      for (const [a, mid] of want)
+        if (!got.has(a)) bad.push(`moduleMap.ts 缺 action \`${a}\`（modules.json 归 \`${mid}\`）——补 \`${a}: '${mid}',\``)
+        else if (got.get(a) !== mid)
+          bad.push(`moduleMap.ts 里 \`${a}\` 标 \`${got.get(a)}\` ≠ modules.json 真值 \`${mid}\`——改为真值`)
+      for (const a of got.keys())
+        if (!want.has(a)) bad.push(`moduleMap.ts 多出 action \`${a}\`（modules.json 无此登记）——删除（防幽灵映射）`)
+      return bad
+    },
+  },
+  {
     // 守卫计数 + 病根计数 + 测试计数自洽（文档体系规则⑥·客观计数机器维护·巡检 #009 ④/💡）：守卫数随加守卫
     // 天天涨、病根数随立新病根涨（12→13）、被手抄进治理文档必漂（#009 标 31 vs 真值 35；治理体检抓到
     // 自动化验证系统「13 条 repoCheck」vs 真值 86、元模式/账本「12 类病根」vs 真值 13）——同 collection-count-synced
