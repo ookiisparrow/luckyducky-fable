@@ -22,6 +22,8 @@ import { readFileSync, readdirSync, statSync, existsSync } from 'node:fs'
 import { execSync } from 'node:child_process'
 import { join, resolve, relative } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { builtinModules } from 'node:module'
+import { findDeadExports, findPhantomDeps, checkBudget, collectImportSpecifiers, countLoc } from './lib/slim-scan.mjs'
 import { allDeployNames } from './lib/deploy-aliases.mjs' // 部署别名单源（产物→云函数名·adminApi 亦部署为 adminApiV2·病根#16）
 import { deriveTierCharsets } from './lib/brand-font-charset.mjs'
 
@@ -3808,6 +3810,124 @@ import { PROD_ENV } from './lib/env.mjs'（单源·病根#5·债#30①）`)
         bad.push('pages/home/home.ts 的 onAddProduct() 未调 decideQuickAdd()——加购决策未走单源纯函数（R29）')
       if (!/cart\.add\s*\(/.test(bodyNoComments))
         bad.push('pages/home/home.ts 的 onAddProduct() 未调 cart.add()——加购按钮没真加购物车（R29·病根#6）')
+      return bad
+    },
+  },
+  // ── 瘦身哨兵五件套（病根#17·快照外无传感器·2026-07-23 瘦身大作战立）──
+  // 持续性义务（代码量/锁重量）走基线棘轮：涨超预算红＝膨胀须显式记账上调基线；基线虚高也红＝
+  // 瘦身成果锁死不回弹。零容忍类（死导出/幽灵依赖/孤儿资产）快照断言。核心逻辑在 lib/slim-scan.mjs（纯函数有测）。
+  {
+    id: 'rw-loc-budget',
+    roots: ['#17'],
+    desc: '活线代码量基线棘轮（病根#17）：rewrite/ 总行数对 scripts/slim-baseline.json 的 rewriteLoc——涨超 5% 红（膨胀须记账上调基线）、基线高出现值 10% 也红（瘦身后下调基线锁成果）',
+    run() {
+      const bp = join(ROOT, 'scripts/slim-baseline.json')
+      if (!existsSync(bp)) return ['scripts/slim-baseline.json 缺失——瘦身棘轮无基准（病根#17）']
+      const base = JSON.parse(readFileSync(bp, 'utf8'))
+      const cur = countLoc(join(ROOT, 'rewrite'), ['.ts', '.vue', '.wxml', '.wxss', '.astro', '.js', '.mjs'])
+      return checkBudget({ label: '活线代码量(行)', current: cur, baseline: base.rewriteLoc })
+    },
+  },
+  {
+    id: 'rw-lock-budget',
+    roots: ['#17'],
+    desc: '依赖锁重量基线棘轮（病根#17）：package-lock.json 字节数与 packages 条数对基线——防旧线 639 死包式静默积重复发',
+    run() {
+      const bp = join(ROOT, 'scripts/slim-baseline.json')
+      if (!existsSync(bp)) return ['scripts/slim-baseline.json 缺失——瘦身棘轮无基准（病根#17）']
+      const base = JSON.parse(readFileSync(bp, 'utf8'))
+      const lockRaw = readFileSync(join(ROOT, 'package-lock.json'), 'utf8')
+      const pkgs = Object.keys(JSON.parse(lockRaw).packages || {}).length
+      return [
+        ...checkBudget({ label: '依赖锁(字节)', current: lockRaw.length, baseline: base.lockBytes }),
+        ...checkBudget({ label: '依赖锁(包数)', current: pkgs, baseline: base.lockPackages }),
+      ]
+    },
+  },
+  {
+    id: 'rw-dead-exports',
+    roots: ['#17'],
+    desc: '死导出零容忍（病根#17）：rewrite/shared/src 导出符号在消费面（cloud/admin/agent/site 源 + 各包 tests + 守卫注册表文本级消费）零出现即红——防 scm.spec 式「自称单源无人读」复发；mp 手抄副本刻意不算消费（T1 结构性隔离）',
+    run() {
+      const shDir = join(ROOT, 'rewrite/shared/src')
+      if (!existsSync(shDir)) return []
+      const files = []
+      for (const e of lsScan(shDir)) if (e.endsWith('.ts')) files.push({ path: 'rewrite/shared/src/' + e, text: readFileSync(join(shDir, e), 'utf8') })
+      const consumerTexts = []
+      const collectTs = (dir) => {
+        const abs = join(ROOT, dir)
+        if (!existsSync(abs)) return
+        const rec = (d) => {
+          for (const e of lsScan(d)) {
+            const pp = join(d, e)
+            if (statSync(pp).isDirectory()) rec(pp)
+            else if (/\.(ts|vue)$/.test(e)) consumerTexts.push({ path: relative(ROOT, pp), text: readFileSync(pp, 'utf8') })
+          }
+        }
+        rec(abs)
+      }
+      for (const d of ['rewrite/cloud/src', 'rewrite/admin/src', 'rewrite/agent/src', 'rewrite/site/src', 'rewrite/cloud/tests', 'rewrite/shared/tests', 'rewrite/admin/tests']) collectTs(d)
+      consumerTexts.push({ path: 'scripts/check-structure.mjs', text: readFileSync(join(ROOT, 'scripts/check-structure.mjs'), 'utf8') })
+      return findDeadExports({ files, consumerTexts }).map(
+        (d) => `${d.file} 导出 ${d.name} 全消费面零引用——死导出（病根#17·确属预留须有 why 注释并进豁免，别静默躺尸）`
+      )
+    },
+  },
+  {
+    id: 'rw-phantom-deps',
+    roots: ['#17'],
+    desc: '幽灵依赖零容忍（病根#17）：活线源码 import 的顶层包须在自家或根 package.json 声明——防 @vue/compiler-sfc 式「蹭提升、宿主一删就断」复发',
+    run() {
+      const declared = new Set(builtinModules)
+      for (const pj of ['package.json', 'rewrite/cloud/package.json', 'rewrite/admin/package.json', 'rewrite/agent/package.json', 'rewrite/site/package.json', 'rewrite/shared/package.json']) {
+        const abs = join(ROOT, pj)
+        if (!existsSync(abs)) continue
+        const j = JSON.parse(readFileSync(abs, 'utf8'))
+        for (const k of Object.keys({ ...(j.dependencies || {}), ...(j.devDependencies || {}) })) declared.add(k)
+      }
+      const sourceImports = []
+      for (const d of ['rewrite/cloud/src', 'rewrite/admin/src', 'rewrite/agent/src', 'rewrite/site/src', 'rewrite/shared/src', 'tests', 'scripts']) {
+        const abs = join(ROOT, d)
+        if (existsSync(abs)) sourceImports.push(...collectImportSpecifiers(abs))
+      }
+      // 过滤：带 scheme 的虚拟模块 + 非法包名形态（文档字符串里的伪 from '…' 噪声）
+      for (const si of sourceImports) si.specifiers = si.specifiers.filter((x) => !x.includes(':') && /^(@[\w.-]+\/)?[\w.-]+(\/|$)/.test(x))
+      return findPhantomDeps({ sourceImports, declared }).map((x) => `幽灵依赖 ${x}——import 了但无人声明（病根#17·补进对应 package.json）`)
+    },
+  },
+  {
+    id: 'rw-orphan-assets',
+    roots: ['#17'],
+    desc: '孤儿资产零容忍（病根#17）：assets/ 与 site/public、mp/static 下文件须在仓内有引用（按去扩展名 basename 匹配·覆盖 tab 图标 -on 动态拼接）——防素材换版后旧文件躺尸',
+    run() {
+      const pools = ['assets', 'rewrite/site/public', 'rewrite/mp/static']
+      const names = []
+      for (const pool of pools) {
+        const abs = join(ROOT, pool)
+        if (!existsSync(abs)) continue
+        const rec = (d) => {
+          for (const e of lsScan(d)) {
+            const pp = join(d, e)
+            if (statSync(pp).isDirectory()) rec(pp)
+            else if (!/^(README\.md|LICENSE|index\.html)$/.test(e)) names.push({ rel: relative(ROOT, pp), stem: e.replace(/\.[^.]+$/, '') })
+          }
+        }
+        rec(abs)
+      }
+      let corpus = ''
+      const collect = (d) => {
+        for (const e of lsScan(d)) {
+          const pp = join(d, e)
+          if (statSync(pp).isDirectory()) collect(pp)
+          else if (/\.(ts|vue|wxml|wxss|astro|js|mjs|cjs|json|md|txt|html|css)$/.test(e)) corpus += readFileSync(pp, 'utf8')
+        }
+      }
+      for (const d of ['rewrite', 'scripts', 'docs', 'console-assets']) if (existsSync(join(ROOT, d))) collect(join(ROOT, d))
+      const bad = []
+      for (const { rel, stem } of names) {
+        const hit = corpus.includes(stem) || (stem.endsWith('-on') && corpus.includes(stem.slice(0, -3)))
+        if (!hit) bad.push(`${rel} 仓内零引用——孤儿资产（病根#17·删除或补引用；tab 激活态图标按基名 + '-on' 拼接已放行）`)
+      }
       return bad
     },
   },

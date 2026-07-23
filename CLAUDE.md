@@ -71,6 +71,7 @@ npm run build:rw-admin / build:agent   # 活线后台产物；内容站 npm run 
 - **git 外资产正册**：控制台 8 件资产 + 库权限期望表副本在 `console-assets/`，变更先 repo 后控制台。`[机器守: console-assets-present]`
 - **失败必可观测（病根14）**：动作类失败（接缝外呼/发送/回调验签）禁静默吞——留痕告警走 kit `observe.alert` 单出口（`[LD_ALERT]`+webhook 触达），fail-soft 只改返回语义、不抹可观测性；读路径 `doc.get().catch(()=>null)`（缺席=null）不在此列；刻意静默行内注释写明为什么。`[机器守: rw-flow-observable]`
 - **文档防膨胀（政策变更 2026-07-05，决策§25）**：CLAUDE 行数/活文档份数/记录类行数预算取消（原 `docs-budget` 守卫退役），卷档机制待重新设计；「条目 ≤8 行、溢出沉记录类」保留为写作纪律（靠人自律，无机器守卫）。
+- **持续义务有传感器（病根17·瘦身大作战 2026-07-23）**：随时间恶化的量不许只活在人记忆里——活线代码量与依赖锁重量走**基线棘轮**（涨超预算红＝膨胀须显式记账；瘦身后基线虚高也红＝成果锁死不回弹）；死导出/幽灵依赖/孤儿资产零容忍即红。基线单源 `scripts/slim-baseline.json`。`[机器守: rw-loc-budget]` `[机器守: rw-lock-budget]` `[机器守: rw-dead-exports]` `[机器守: rw-phantom-deps]` `[机器守: rw-orphan-assets]`
 - **守卫自身可信（病根16·盲区体检 2026-07-18）**：守卫的**逻辑**不漂移，但守卫与现实的**绑定**（扫描面/指针/清单镜像）会漂——空样本＝绿不发信号。扫描面统一排除（dot 目录恒不入）+金丝雀夹具常驻；注册表 id 唯一；fileRule 活线活性下限；会动环境的工具脚本禁旧线引用（防回潮）。`[机器守: guard-id-unique]` `[机器守: guard-scan-liveness]` `[机器守: rw-toolchain-no-oldline]`
 
 **多端样式**
