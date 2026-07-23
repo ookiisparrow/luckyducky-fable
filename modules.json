@@ -1,0 +1,85 @@
+{
+  "__doc__": "模块正册（车队地基批1·2026-07-23）：活线全部 action/页面/集合按业务模块归属，一条目一模块、不重不漏。用途：①出问题按模块归因（异常账本/告警带模块 ID，批2 接线）②AI 车队派活时施工单范围=模块（tier=改动该模块云端逻辑所需档位：red=工头亲自+人签字 / yellow=工头逐行评审 / green=下层模型放手）。维护：加 action/页面/集合先在此登记，守卫 module-registry-complete 核不重不漏，登记漂移即 npm run check 红。",
+  "modules": {
+    "identity": {
+      "name": "身份与合规",
+      "tier": "yellow",
+      "appActions": ["login", "updateProfile"],
+      "adminActionFiles": [],
+      "mpPages": ["me", "profile-edit", "consent", "agreement"],
+      "adminPages": [],
+      "agentPages": [],
+      "collections": ["users"]
+    },
+    "shop": {
+      "name": "商品与内容",
+      "tier": "yellow",
+      "appActions": ["getProducts", "getProductDetail", "getContent", "getPageContent", "getHelpVideos"],
+      "adminActionFiles": ["products", "content", "cards"],
+      "mpPages": ["home", "detail", "about"],
+      "adminPages": ["Products", "Wizard", "Showcase", "PageContent", "HelpVideos", "Cards"],
+      "agentPages": [],
+      "collections": ["products", "productsDraft", "content", "cards"]
+    },
+    "orders": {
+      "name": "订单交易（钱链）",
+      "tier": "red",
+      "appActions": ["createOrder", "pay", "applyRefund", "confirmReceive", "cancelOrder", "getMyOrders", "getOrderById", "getMyAfterSales"],
+      "adminActionFiles": ["orders", "refunds", "reconciliation", "wxbill"],
+      "mpPages": ["cart", "checkout", "order", "order-list", "paysuccess", "aftersales", "address", "address-edit"],
+      "adminPages": ["Orders", "Fulfill", "Refunds", "Reconciliation"],
+      "agentPages": [],
+      "collections": ["orders", "afterSales", "inventory", "wxBills", "orderIdempotency"]
+    },
+    "learning": {
+      "name": "课程学习（激活/进课/播放）",
+      "tier": "yellow",
+      "appActions": ["activateCourse", "confirmEnter", "getCourses", "getPlaybackUrl", "getMyCourses", "getMyProgress", "trackEvent"],
+      "adminActionFiles": ["courses", "batches"],
+      "mpPages": ["catalog", "player", "my-courses", "welcome", "flip-demo"],
+      "adminPages": ["Courses", "Batches"],
+      "agentPages": [],
+      "collections": ["courses", "coursesDraft", "activations", "qrcodes", "progress", "uploadChunks", "events"]
+    },
+    "reviews": {
+      "name": "评价晒单",
+      "tier": "yellow",
+      "appActions": ["getReviews", "getRatingSummary", "submitReview"],
+      "adminActionFiles": [],
+      "mpPages": ["review", "reviews"],
+      "adminPages": [],
+      "agentPages": [],
+      "collections": ["reviews"]
+    },
+    "cs": {
+      "name": "客服360与私域",
+      "tier": "yellow",
+      "appActions": ["kfBind", "dataConsent", "submitFeedback", "submitCheckpointPhoto", "getPublicFaq"],
+      "adminActionFiles": ["agentDesk", "agents", "checkpoints", "conversations", "csat", "customer360", "kb", "wecomLogin"],
+      "mpPages": ["feedback"],
+      "adminPages": ["Agents", "Checkpoints", "Conversations", "Csat", "Customer360", "External", "Kb"],
+      "agentPages": ["App", "Desk", "Login"],
+      "collections": ["kfState", "kfIdentity", "feedback", "checkpoints", "conversations", "kb", "csat", "csSession", "agentState"]
+    },
+    "scm": {
+      "name": "进销存供应链",
+      "tier": "yellow",
+      "appActions": [],
+      "adminActionFiles": ["scmAssembly", "scmBom", "scmMaterials", "scmOutwork", "scmOverview", "scmPlanner", "scmPurchase", "inventory"],
+      "mpPages": [],
+      "adminPages": ["ScmBom", "ScmMaterials", "ScmOutwork", "ScmOverview", "ScmPlanner", "ScmPurchase", "Inventory"],
+      "agentPages": [],
+      "collections": ["materials", "suppliers", "purchaseOrders", "outworkOrders", "assemblyOrders", "stockLedger", "bomProfiles"]
+    },
+    "ops": {
+      "name": "运维观测与系统配置",
+      "tier": "red",
+      "appActions": [],
+      "adminActionFiles": ["ops", "configChecklist", "secureConfig", "dashboard"],
+      "mpPages": [],
+      "adminPages": ["Dashboard", "Anomalies", "Audit", "Inspect", "ConfigChecklist", "Settings", "Login"],
+      "agentPages": [],
+      "collections": ["adminConfig", "config", "auditLog", "anomalies", "inspectRuns", "secureConfig", "rateLimit"]
+    }
+  }
+}

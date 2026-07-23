@@ -4267,6 +4267,68 @@ import { PROD_ENV } from './lib/env.mjs'（单源·病根#5·债#30①）`)
     },
   },
   {
+    id: 'module-registry-complete',
+    roots: ['#11'],
+    desc: '模块正册不重不漏（车队地基批1·病根#11 单源防漂）：modules.json 把活线全部 app action / adminApi action 文件 / mp 页 / admin 页 / agent 页 / 集合按业务模块登记，一条目归属唯一模块——加 action/页面/集合不登记、登记了源码里不存在的名字、或一条目挂两模块，即红。用途：异常归因带模块 ID（批2 接线）+ 车队施工单范围=模块（tier 定档：red 工头亲自/yellow 逐行评审/green 放手）',
+    run() {
+      const bad = []
+      const regPath = join(ROOT, 'modules.json')
+      if (!existsSync(regPath)) return ['modules.json 缺失——模块正册是异常归因与车队派活的单源，恢复它（结构见守卫 desc）']
+      let reg
+      try {
+        reg = JSON.parse(readFileSync(regPath, 'utf8'))
+      } catch (e) {
+        return [`modules.json 不是合法 JSON：${e.message}`]
+      }
+      const modules = reg?.modules ?? {}
+      const TIERS = new Set(['red', 'yellow', 'green'])
+      for (const [mid, m] of Object.entries(modules)) {
+        if (!m?.name) bad.push(`modules.json 模块 \`${mid}\` 缺 name——补中文名`)
+        if (!TIERS.has(m?.tier)) bad.push(`modules.json 模块 \`${mid}\` tier=\`${m?.tier}\` 非法——取 red/yellow/green 之一`)
+      }
+      // 六轴真值全部从源码/目录现读（不信正册自述·与 build.mjs/枚举同源规则）
+      const appSrc = readFileSync(join(ROOT, 'rewrite/cloud/src/functions/app/index.ts'), 'utf8')
+      const appBlock = appSrc.match(/const ACTIONS[^{]*\{([\s\S]*?)\n\}/)
+      const truth = {
+        appActions: appBlock ? [...appBlock[1].matchAll(/^\s*([A-Za-z0-9_]+),/gm)].map((m) => m[1]) : [],
+        adminActionFiles: readdirSync(join(ROOT, 'rewrite/cloud/src/functions/adminApi/actions'))
+          .filter((f) => f.endsWith('.ts'))
+          .map((f) => f.replace(/\.ts$/, '')),
+        mpPages: readdirSync(join(ROOT, 'rewrite/mp/pages')).filter((d) =>
+          statSync(join(ROOT, 'rewrite/mp/pages', d)).isDirectory()
+        ),
+        adminPages: readdirSync(join(ROOT, 'rewrite/admin/src/pages'))
+          .filter((f) => f.endsWith('.vue'))
+          .map((f) => f.replace(/\.vue$/, '')),
+        agentPages: readdirSync(join(ROOT, 'rewrite/agent/src'))
+          .filter((f) => f.endsWith('.vue'))
+          .map((f) => f.replace(/\.vue$/, '')),
+        collections: [
+          ...readFileSync(join(ROOT, 'rewrite/shared/src/collections.ts'), 'utf8').matchAll(
+            /^\s*([A-Za-z0-9_]+):\s*'/gm
+          ),
+        ].map((m) => m[1]),
+      }
+      for (const axis of Object.keys(truth)) {
+        const owner = new Map()
+        for (const [mid, m] of Object.entries(modules)) {
+          for (const item of m?.[axis] ?? []) {
+            if (owner.has(item))
+              bad.push(`\`${item}\`（${axis}）被登记在 \`${owner.get(item)}\` 与 \`${mid}\` 两个模块——一条目唯一归属，删一处`)
+            else owner.set(item, mid)
+          }
+        }
+        for (const item of truth[axis])
+          if (!owner.has(item))
+            bad.push(`${axis} \`${item}\` 未在 modules.json 任一模块登记——加进所属模块（源头新增先登记再用）`)
+        for (const item of owner.keys())
+          if (!truth[axis].includes(item))
+            bad.push(`modules.json 登记的 ${axis} \`${item}\` 在源码里不存在——删除或改名（防幽灵登记）`)
+      }
+      return bad
+    },
+  },
+  {
     // 守卫计数 + 病根计数 + 测试计数自洽（文档体系规则⑥·客观计数机器维护·巡检 #009 ④/💡）：守卫数随加守卫
     // 天天涨、病根数随立新病根涨（12→13）、被手抄进治理文档必漂（#009 标 31 vs 真值 35；治理体检抓到
     // 自动化验证系统「13 条 repoCheck」vs 真值 86、元模式/账本「12 类病根」vs 真值 13）——同 collection-count-synced
