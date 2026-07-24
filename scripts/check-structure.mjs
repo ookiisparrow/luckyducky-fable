@@ -1590,22 +1590,19 @@ import { PROD_ENV } from './lib/env.mjs'（单源·病根#5·债#30①）`)
     // 与 archive-index-synced 守归档指针、guard-coverage 守 [机器守:id]/test 文件指针同类（防文档指向不存在的东西）。
     id: 'skills-referenced-exist',
     roots: ['#11'],
-    desc: 'skill 指针不悬空（根因#11·同 archive-index-synced）：CLAUDE §9 工作流注册表里每个 `/skill-name` 引用须有 .claude/skills/<name>/SKILL.md——防列了点不出的悬空 skill 指针',
+    desc: 'skill 指针不悬空（根因#11·2026-07-23 治理精简批改全文扫描）：CLAUDE.md 里每个 `/skill-name` 引用须有 .claude/skills/<name>/SKILL.md——防列了点不出的悬空 skill 指针（原只扫 §9 注册表·换稿后 CLAUDE 无注册表段、目录即单源，改扫全文）',
     run() {
       const claudePath = join(ROOT, 'CLAUDE.md')
       if (!existsSync(claudePath)) return []
       const claude = readFileSync(claudePath, 'utf8')
-      // 取 §9 段（## 9. … 到 ## 10. 之前）——「工作流 = skills」的声明册
-      const seg = claude.match(/## 9\.[\s\S]*?(?=\n## 10\.)/)
-      if (!seg) return ['CLAUDE.md 解析不到 §9 工作流段（## 9. … ## 10.）——skills 注册表无从核（根因#11）']
       const bad = []
       const seen = new Set()
-      for (const m of seg[0].matchAll(/`\/([a-z][a-z-]+)`/g)) {
+      for (const m of claude.matchAll(/`\/([a-z][a-z-]+)`/g)) {
         const name = m[1]
         if (seen.has(name)) continue
         seen.add(name)
         if (!existsSync(join(ROOT, '.claude/skills', name, 'SKILL.md')))
-          bad.push(`CLAUDE §9 列 \`/${name}\` 但无 .claude/skills/${name}/SKILL.md——悬空 skill 指针（点了调不出·根因#11）`)
+          bad.push(`CLAUDE.md 引用 \`/${name}\` 但无 .claude/skills/${name}/SKILL.md——悬空 skill 指针（点了调不出·根因#11）`)
       }
       return bad
     },
