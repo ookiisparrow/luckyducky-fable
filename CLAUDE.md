@@ -63,7 +63,7 @@ npm run build:rw-admin / build:agent；内容站 npm run build -w @ldrw/site
 |---|---|
 | 现在干什么/下一步 | `docs/现状与路线.md` |
 | 这事拍板过没 | `docs/判例索引.json`（grep 即可·命中后按 source 读原文） |
-| 接口/集合/计数 | `docs/系统事实.md` |
+| 接口/集合/计数 | 代码即真值（查询钥匙卡 `docs/系统事实.md`） |
 | 需求 | `docs/需求清单.md` |
 | 守卫为什么存在（病根） | `docs/根因账本.md` |
 | 部署/回滚/故障/巡检 runbook | `docs/运维手册.md` |
@@ -75,5 +75,5 @@ npm run build:rw-admin / build:agent；内容站 npm run build -w @ldrw/site
 
 ## 6. 扩展套路与新会话
 
-- mp 加页面：`rewrite/mp/pages/<name>/` 四件套 + `app.json` 注册。加云端 action：`rewrite/cloud/src/functions/` 对应域 + 登记 `modules.json` 与 `docs/系统事实.md`。admin 加页面：`rewrite/admin/src/pages/<Name>.vue` + 路由/侧栏登记（守卫焊同步）。改主题：admin 只改 `styles/tokens.css`。
+- mp 加页面：`rewrite/mp/pages/<name>/` 四件套 + `app.json` 注册。加云端 action：`rewrite/cloud/src/functions/` 对应域 + 登记 `modules.json`（守卫焊双向一致）。admin 加页面：`rewrite/admin/src/pages/<Name>.vue` + 路由/侧栏登记（守卫焊同步）。改主题：admin 只改 `styles/tokens.css`。
 - 新会话三步：本文件 → `docs/现状与路线.md` → `git status` + `git log --oneline -5`。
