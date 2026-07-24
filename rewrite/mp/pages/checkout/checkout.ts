@@ -24,26 +24,42 @@ Page({
     submitting: false,
   },
   backTimer: null as ReturnType<typeof setTimeout> | null,
-  unloaded: false, // 页面已退出标记（守卫扩面统一不变量·同 review/profile-edit/feedback 范式）：本页 backTimer 赋值（refresh
-  // 里的空车分支，见下方第40行）本身在该方法唯一的 await（getAllProducts，第46行）之前，文本序无前置 await 可定位区间，
-  // 守卫按「无 await 同步路径」判——落在其前的 this.unloaded 检查（第37行）即满足。装它仍防将来改动把这条赋值挪到 await
-  // 之后而漏防护。注：守卫现（Round3 item4 扩面）已对「赋值前有 await」的情形做「必须落在该 await 之后」的静态分析，不再是
-  // 「赋值前任意位置皆可」的旧口径——那只是本例恰好落入无 await 的同步分支，不代表守卫整体不做这层分析。
+  unloaded: false, // 页面已退出标记（守卫扩面统一不变量·同 review/profile-edit/feedback 范式）：本页 backTimer 赋值落在
+  // armBackTimer 方法内唯一的同步路径（无 await）——守卫按「无 await 同步路径」判，赋值前任意位置的 this.unloaded 检查即满足。
+  ready: false, // onReady 是否已触发（页面转场是否落地的近似信号·2026-07-24 调试日志 S 案）：见 armBackTimer 起表纪律。
+  pendingBackTimer: false, // refresh() 在 onReady 之前检测到空草稿——先记待办，onReady 触发后补起计时（见 onReady）。
   onUnload() {
     this.unloaded = true
     if (this.backTimer) clearTimeout(this.backTimer) // 空车延时返回坞清理（守卫 rw-mp-navback-timer-cleaned）
   },
+  onReady() {
+    this.ready = true
+    if (this.pendingBackTimer) {
+      this.pendingBackTimer = false
+      this.armBackTimer()
+    }
+  },
   onShow() {
     // onShow 而非 onLoad：从地址列表/编辑页返回时刷新选中地址
     void this.refresh()
+  },
+  // 600ms 空草稿自动返回起表纪律（2026-07-24 调试日志 S 案）：navigateBack 若打在前向转场未落地的窗口内（冷启动
+  // 转场实测可迟至 ~800ms），开发者工具 Nightly≥2.02.2607232 的模拟器导航状态机会死锁（真机同族竞态未必死锁，
+  // 但会退化为「返回被吞·空结算页多停留」）。onReady 只在页面自身渲染就绪后触发一次，天然晚于 onShow，用它当
+  // 「转场大概率已落地」的近似信号——ready 前检测到空草稿只记 pendingBackTimer，onReady 触发后再起 600ms 计时；
+  // ready 已是 true（如从地址页返回，onReady 早已触发过）则照旧立即起表。600ms「可读时长」语义不变，toast 立即弹出。
+  armBackTimer() {
+    if (this.unloaded) return // pendingBackTimer 补起时也需复核（守卫 rw-mp-navback-timer-cleaned·同步路径任意位置皆可）
+    if (this.backTimer) clearTimeout(this.backTimer)
+    this.backTimer = setTimeout(() => wx.navigateBack(), 600)
   },
   async refresh() {
     if (this.data.submitting) return // 提交在途不刷：草稿已被 finishSubmitted 清空·支付中后台返回触发 onShow→refresh 会误报「购物车空」+ navigateBack 弹掉支付中的本页（第3轮审计·与 onPickAddress/onToggleAddon 同闸）
     if (!checkout.getDraft().items.length) {
       if (this.unloaded) return // 页面已退出（守卫扩面统一不变量）：不再对下一页 navigateBack
       wx.showToast({ title: '还没有要结算的商品', icon: 'none' })
-      if (this.backTimer) clearTimeout(this.backTimer)
-      this.backTimer = setTimeout(() => wx.navigateBack(), 600)
+      if (this.ready) this.armBackTimer()
+      else this.pendingBackTimer = true
       return
     }
     // 封面时效兜底（P2·bug sweep Round2 item5·同 cart.ts freshCover 已修根因病根#15 兄弟路径）：草稿里的 cover 可能是
