@@ -118,9 +118,11 @@ export async function callVodApi(db: any, action: string, payload: Record<string
   const timestamp = Math.floor(Date.now() / 1000)
   const date = new Date(timestamp * 1000).toISOString().slice(0, 10)
   const body = JSON.stringify(payload || {})
-  // TC3 规范拼接（各段边界精确到换行——CanonicalHeaders 自带尾 \n，后面直接接 SignedHeaders 不再补空行）
+  // TC3 规范拼接（2026-07-24 修：官方规范=六段以 \n 相接，CanonicalHeaders 段自身以 \n 结尾，
+  // 两者叠加后 host 行与 SignedHeaders 之间必须有一个空行——官方文档示例串可证。原实现少这个 \n，
+  // 任何真实调用必 AuthFailure.SignatureFailure（变异分诊立案实锤·真机验签随 VOD E2E 待办）
   const canonicalHeaders = `content-type:application/json; charset=utf-8\nhost:${host}\n`
-  const canonical = `POST\n/\n\n${canonicalHeaders}content-type;host\n${sha256hex(body)}`
+  const canonical = `POST\n/\n\n${canonicalHeaders}\ncontent-type;host\n${sha256hex(body)}`
   const scope = `${date}/${service}/tc3_request`
   const stringToSign = `TC3-HMAC-SHA256\n${timestamp}\n${scope}\n${sha256hex(canonical)}`
   const kSigning = hmac256(hmac256(hmac256(Buffer.from('TC3' + secretKey), date), service), 'tc3_request')

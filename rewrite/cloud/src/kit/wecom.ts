@@ -498,11 +498,19 @@ const httpsFetchBin: BinFetchFn = (url) =>
 const defaultBinFetch: BinFetchFn = (url) =>
   typeof (globalThis as any).fetch === 'function' ? (globalThis as any).fetch(url) : httpsFetchBin(url)
 
+// 「媒体不存在/已过期」类错误码（企业微信全局错误码·kf/media/get 复用同一套）：仅这些码判 expired:true。
+// 40007＝不合法的媒体文件id——media_id 3 天有效期到期后 media/get 的实际表现即此码（企业微信开放社区
+// 多个 40007 反馈案例均指向 media_id 过期/不存在，无另立的专用「已过期」错误码可细分——2026-07-24 核实
+// 债#getMediaUrl-errcode 时查证；若日后真机遇到其余「媒体不存在」语义码，按此表补充）。
+const KF_MEDIA_EXPIRED_ERRCODES = new Set([40007])
+
 /**
  * 下载顾客发图的临时素材（`kf/media/get`·media_id 3 天有效）：由 content-type 判定成功/失败——
- * 二进制（非 application/json）＝下载成功；JSON（含 errcode）＝失败，统一按「过期/失效」语义回传
- * （media_id 3 天有效是本场景压倒性的失败成因；真机 errcode 具体取值待接入真环境后校验，本期不做
- * 更细分支——过度细分一个尚未验证过的平台错误码表属投机抽象）。
+ * 二进制（非 application/json）＝下载成功；JSON（含 errcode）＝失败，按 errcode 细分语义：
+ * 仅 `KF_MEDIA_EXPIRED_ERRCODES` 命中的码判 expired:true（media_id 不存在/已过期，坐席端提示「素材已过期」）；
+ * 其余错误码（access_token 失效/频控/系统繁忙等真故障）expired:false 原样透出 errcode，不再统一误判为过期
+ * （原设计「过度细分一个尚未验证过的平台错误码表属投机抽象」——40007 现已核实验证，故只细分这一条确凿的，
+ * 不臆造未验证的码；调用方 getMediaUrl 的 MEDIA_DOWNLOAD_FAILED 分支借此才走得到真实链路）。
  */
 export async function getKfMedia(
   accessToken: string,
@@ -515,7 +523,7 @@ export async function getKfMedia(
   if (ct.includes('application/json')) {
     const j = await r.json()
     alert('security', 'wecom', 'KF_MEDIA_GET_FAILED', { errcode: j.errcode })
-    return { ok: false, expired: true, errcode: j.errcode }
+    return { ok: false, expired: KF_MEDIA_EXPIRED_ERRCODES.has(Number(j.errcode)), errcode: j.errcode }
   }
   const buffer = Buffer.from(await r.arrayBuffer())
   return { ok: true, buffer }

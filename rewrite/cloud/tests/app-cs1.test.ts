@@ -355,7 +355,7 @@ describe('kf/media/get 下载 + kfFetchMedia（B5·顾客发图坐席可见·平
     expect(r.buffer.toString()).toBe('img-bytes') // 字节等价原 base64 解码结果·不再经 base64 往返
   })
 
-  it('大白话：下载失败（过期/其余错误码）原样透出 ok:false + expired 标记，不抛错', async () => {
+  it('大白话：下载失败——非过期错误码原样透出 ok:false + expired:false（getKfMedia 按 errcode 细分·40007 才算过期）', async () => {
     process.env.WXKF_CORPID = 'c'
     process.env.WXKF_SECRET = 's'
     stubFetchMedia((url) => {
@@ -364,8 +364,21 @@ describe('kf/media/get 下载 + kfFetchMedia（B5·顾客发图坐席可见·平
     })
     const r: any = await kfFetchMedia('m1')
     expect(r.ok).toBe(false)
-    expect(r.expired).toBe(true)
+    expect(r.expired).toBe(false) // 40014（access_token 失效）非「媒体过期」语义，不误判
     expect(r.errcode).toBe(40014)
+  })
+
+  it('大白话：下载失败——过期类错误码 40007 原样透出 expired:true（media_id 3 天有效到期的实际表现）', async () => {
+    process.env.WXKF_CORPID = 'c'
+    process.env.WXKF_SECRET = 's'
+    stubFetchMedia((url) => {
+      if (url.includes('gettoken')) return { json: { access_token: 'T', expires_in: 7200 } }
+      return { json: { errcode: 40007 } }
+    })
+    const r: any = await kfFetchMedia('m1')
+    expect(r.ok).toBe(false)
+    expect(r.expired).toBe(true)
+    expect(r.errcode).toBe(40007)
   })
 })
 
