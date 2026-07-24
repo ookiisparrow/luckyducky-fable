@@ -1,8 +1,9 @@
 {
-  "desc": "搜一搜收录分级（SEO/GEO 前置·决策§29·2026-07-12 放开）：公开页 allow，交易/学习/隐私页 disallow 兜底（规则顺序即优先级）",
+  "desc": "搜一搜收录分级（SEO/GEO 前置·决策§29·2026-07-12 放开·2026-07-24 用户拍板：买家秀放开引流，课程目录/学习页恒不收录）：公开页 allow，交易/学习/隐私页 disallow 兜底（规则顺序即优先级）",
   "rules": [
     { "action": "allow", "page": "pages/home/home" },
     { "action": "allow", "page": "pages/detail/detail", "params": ["id"], "matching": "inclusive" },
+    { "action": "allow", "page": "pages/reviews/reviews", "params": ["productId"], "matching": "inclusive" },
     { "action": "allow", "page": "pages/about/about" },
     { "action": "disallow", "page": "*" }
   ]
