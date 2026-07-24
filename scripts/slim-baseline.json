@@ -1,6 +1,6 @@
 {
   "__doc__": "瘦身哨兵基线（病根#17·棘轮：现值涨超 grow 红=膨胀须记账上调；基线高出现值 slack 红=瘦身后须下调锁成果）。调整必须在提交信息/重构日志写明为什么。",
   "rewriteLoc": 69841,
-  "lockBytes": 562723,
-  "lockPackages": 1165
+  "lockBytes": 562185,
+  "lockPackages": 1163
 }

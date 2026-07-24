@@ -24,7 +24,6 @@ dist
 project.config.json
 project.private.config.json
 # 例外：Skyline spike 是手写的独立原生工程，其项目定义必须入库（导入即用）
-!rewrite/spike-skyline/project.config.json
 
 # format-hook 测试的临时格式化目录（afterEach 自删，防意外残留入库）
 .fmt-test-*

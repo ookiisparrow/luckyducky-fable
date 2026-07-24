@@ -2060,7 +2060,7 @@ import { PROD_ENV } from './lib/env.mjs'（单源·病根#5·债#30①）`)
     desc: '新线 SCM 域（购/外协单）状态写入只走声明流转（根因#2·批K 引入·批S 修复①对 fromFor(X) 调用形态的假绿：新增分支核对 fromFor 参数 X 与 transition() 第四参数 to 一致，不一致＝越流转被静默放行）：rewrite/cloud/src/functions/adminApi/actions/scm*.ts 里 transition(purchaseOrders/outworkOrders) 的边（字面量数组或 fromFor(X) 两种形态）、裸条件 CAS 的边须在 order-domain.generated.json 声明流转表内（该 JSON 原由已退役的 gen-order-domain-synced 生成器守卫维护·2026-07-23 起为冻结数据快照、锚 rewrite/shared 两份 spec·生成物范式处置见 待办与债 (f)）；写这两集合 status 的字面量须是声明状态——越流转/打错状态名即红',
     run() {
       const jsonPath = join(ROOT, 'scripts/order-domain.generated.json')
-      if (!existsSync(jsonPath)) return ['scripts/order-domain.generated.json 缺失——跑 `node scripts/gen-order-domain.mjs`（SCM 域声明派生物）']
+      if (!existsSync(jsonPath)) return ['scripts/order-domain.generated.json 缺失——它是冻结数据快照（生成器已退役）：`git checkout HEAD -- scripts/order-domain.generated.json` 恢复，或按 rewrite/shared/src/scm.ts 手改单源核正']
       let spec
       try {
         spec = JSON.parse(readFileSync(jsonPath, 'utf8'))
@@ -4489,11 +4489,7 @@ export const typeAndTestGuards = [
   // admin 频控全局/账户级兜底（审核 P1·根因#13）：per-IP 频控 key 取 x-forwarded-for（可伪造·轮换可绕 5 次锁），
   // 故叠加跨所有 IP 的全局失败计数——轮换伪造 header 的爆破累计达全局阈值仍锁。reverseTest 锁此组合行为。
   { id: 'admin-throttle-global-backstop', mechanism: 'test', roots: ['#13'], reverseTest: 'rewrite/cloud/tests/security-dos-hardening.test.ts' },
-  // 钱/权限两条门面守卫的 reverseTest 改锚活线（盲区体检批2·病根#16 ⑥）：原指冻结旧线
-  // tests/cloud/kit/*.test.js（import packages/cloud·仍随 vitest 跑、守冻结参照），但注册表的
-  // 「证据」字段该指生产代码的等价测试——rewrite/cloud/tests 的 gate/notify 断言面等价
-  // （withOpenId/withAdminGate fail-closed + defineNotifyCallback 见身份即拒伪造）。
-  // 其余 25 条 test 型守卫仍指旧线测试，系统性重登记待拍板（见 待办与债 盲区体检节）。
+  // 钱/权限两条门面守卫的 reverseTest 锚活线等价测试（盲区体检批2·病根#16 ⑥）。
   { id: 'gate-fail-closed', mechanism: 'test', roots: ['#3'], reverseTest: 'rewrite/cloud/tests/gate.test.ts' },
   { id: 'notify-forge-proof', mechanism: 'test', roots: ['#3'], reverseTest: 'rewrite/cloud/tests/notify.test.ts' },
   // 支付配置 fail-closed（根因#3 同款）：createOrder 缺/错 config/pay 时绝不伪造已付单——
