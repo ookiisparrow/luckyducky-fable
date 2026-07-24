@@ -1,0 +1,15 @@
+{
+  "$schema": "./node_modules/@stryker-mutator/core/schema/stryker-schema.json",
+  "_doc": "第三方对抗性检验（2026-07-24 拍板接入）：StrykerJS 变异测试——机械地往生产代码注入 bug（改运算符/删分支/翻布尔），看现有测试能不能咬住。规则非本仓自产，专治「运动员兼裁判」盲区。试点范围=钱链核心（shared 契约 + cloud/kit 闸）；.spec/seed/types 是数据与类型面、变异无杀手信号故排除。与覆盖率同族（B8 判例）：度量工具非恒真不变量，不进 npm run check、不立守卫，按需 npm run mutation 实跑看报告。",
+  "testRunner": "vitest",
+  "vitest": { "configFile": "vitest.stryker.mjs" },
+  "mutate": [
+    "rewrite/shared/src/**/*.ts",
+    "!rewrite/shared/src/cs.spec.ts",
+    "!rewrite/shared/src/seed/**",
+    "rewrite/cloud/src/kit/**/*.ts"
+  ],
+  "tempDirName": ".stryker-tmp",
+  "reporters": ["clear-text", "progress", "html", "json"],
+  "thresholds": { "high": 80, "low": 60, "break": null }
+}
