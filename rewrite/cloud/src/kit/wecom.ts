@@ -1,9 +1,10 @@
 import crypto from 'crypto'
 import https from 'https'
 import { getDb } from './db'
-import { COLLECTIONS } from '@ldrw/shared'
+import { COLLECTIONS, ERR } from '@ldrw/shared'
 import { alert } from './observe'
-import { getSecureConfig } from './secureConfig'
+import { getSecureConfig, getSecureConfigFields } from './secureConfig'
+import { ok, err } from './reply'
 
 /**
  * 企业微信「微信客服」平台接缝（根因#12 平台规则外部风险：与企业微信的接缝收口一处）。
@@ -518,4 +519,56 @@ export async function getKfMedia(
   }
   const buffer = Buffer.from(await r.arrayBuffer())
   return { ok: true, buffer }
+}
+
+// ───────────────────────── 高层助手（客服发送/媒体下载·拓扑收编批 2026-07-23） ─────────────────────────
+// 原 functions/cs/kfSend.ts、cs/kfMedia.ts 两个薄壳函数收编：契约/校验顺序逐字保留，
+// 唯一调用方 adminApi/actions/agentDesk.ts 从「cloud.callFunction 服务端互调」改直连本文件助手。
+// 两助手都不带 isServerCall 闸——收编前独立函数需要闸挡「带 openid 的客户端调用」，收编后
+// 已无独立可调用边界（不再是能被任意 event 直接 invoke 的函数），越权发送/下载面随函数消失；
+// 权限改由外层 adminApi 网关闸（口令 + scope + 接待窗口，见 agentDesk.ts sendAgentMessage/getMediaUrl）负责。
+
+/** 客服主动发消息（原 cs/kfSend main 逻辑收编）：参数→配置→token→send_msg，契约与原函数一致。 */
+export async function kfSendText(args: { externalUserId: string; openKfId: string; text: string }) {
+  const externalUserId = String(args.externalUserId || '')
+  const openKfId = String(args.openKfId || '')
+  const text = String(args.text || '')
+  if (!externalUserId || !openKfId || !text) return err(ERR.BAD_ARGS)
+
+  const db = getDb()
+  const { corpId: corpid, secret } = await getSecureConfigFields(db, 'wxkf', ['corpId', 'secret'])
+  if (!corpid || !secret) return err(ERR.KF_NOT_CONFIGURED)
+
+  let token: string
+  try {
+    token = await getAccessToken({ corpid, secret })
+  } catch {
+    return err(ERR.TOKEN_FAILED)
+  }
+  const res = await sendMsg(token, { touser: externalUserId, open_kfid: openKfId, msgtype: 'text', text: { content: text } })
+  return ok({ sent: !res?.errcode, errcode: res?.errcode || 0, msgid: res?.msgid || '' })
+}
+
+/**
+ * 顾客发图下载（原 cs/kfMedia main 逻辑收编）：参数→配置→token→media/get，契约与原函数一致——
+ * 除一处：收编前跨函数调用走 JSON 序列化、二进制须转 base64 转手；收编后同进程直连，这层序列化
+ * 约束随之消失，故**直接回 Buffer**（调用方 agentDesk.ts getMediaUrl 不再需要 base64→Buffer 转换）。
+ */
+export async function kfFetchMedia(mediaId: string) {
+  const id = String(mediaId || '')
+  if (!id) return err(ERR.BAD_ARGS)
+
+  const db = getDb()
+  const { corpId: corpid, secret } = await getSecureConfigFields(db, 'wxkf', ['corpId', 'secret'])
+  if (!corpid || !secret) return err(ERR.KF_NOT_CONFIGURED)
+
+  let token: string
+  try {
+    token = await getAccessToken({ corpid, secret })
+  } catch {
+    return err(ERR.TOKEN_FAILED)
+  }
+  const r = await getKfMedia(token, id)
+  if (!r.ok) return ok({ ok: false, expired: r.expired, errcode: r.errcode || 0 })
+  return ok({ ok: true, buffer: r.buffer })
 }

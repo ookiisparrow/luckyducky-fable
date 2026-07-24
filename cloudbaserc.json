@@ -1,7 +1,7 @@
 {
   "$schema": "https://static.cloudbase.net/cli/cloudbaserc.schema.json",
   "envId": "cloudbase-d4gcssqbv06865479",
-  "functionRoot": "packages/cloud/dist",
+  "functionRoot": "rewrite/cloud/dist",
   "functions": [
     {
       "name": "adminApi",
@@ -41,12 +41,6 @@
       "installDependency": true
     },
     {
-      "name": "genQrcodes",
-      "timeout": 20,
-      "handler": "index.main",
-      "installDependency": true
-    },
-    {
       "name": "initDb",
       "timeout": 15,
       "handler": "index.main",
@@ -71,18 +65,6 @@
       "installDependency": true
     },
     {
-      "name": "kfMedia",
-      "timeout": 15,
-      "handler": "index.main",
-      "installDependency": true
-    },
-    {
-      "name": "kfSend",
-      "timeout": 10,
-      "handler": "index.main",
-      "installDependency": true
-    },
-    {
       "name": "payCallback",
       "timeout": 15,
       "handler": "index.main",
@@ -102,12 +84,6 @@
     },
     {
       "name": "seedCourses",
-      "timeout": 20,
-      "handler": "index.main",
-      "installDependency": true
-    },
-    {
-      "name": "seedProducts",
       "timeout": 20,
       "handler": "index.main",
       "installDependency": true

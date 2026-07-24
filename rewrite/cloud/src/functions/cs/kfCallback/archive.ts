@@ -39,7 +39,8 @@ export function incomingText(msg: any): string {
 
 /**
  * 图片消息的 media_id（B5·企业微信客服 image 消息体：`image.media_id`）。回调不下载媒体（回调要快、
- * fail-soft）——只落 mediaId，下载延迟到坐席台首次请求（adminApi getMediaUrl 经 cs/kfMedia 接缝拉取）。
+ * fail-soft）——只落 mediaId，下载延迟到坐席台首次请求（adminApi getMediaUrl 经 kit/wecom.ts kfFetchMedia
+ * 直连拉取·2026-07-23 拓扑收编批：原 cs/kfMedia 独立函数已收编）。
  * 非 image 消息返 ''（无媒体·getThread hasMedia 据此判定）。
  */
 function msgMediaId(msg: any): string {
