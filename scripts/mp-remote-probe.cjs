@@ -5,12 +5,15 @@
  * 该 RPC 在 Nightly 下必 10s 超时但 GUI 流程照走）→ 用户真机扫码 → 等上线（事件+platform 双信号）
  * → 真机跑八项断言，产出「真机侧能力覆盖报告」。
  *
- * ⚠️ 首验结论（2026-07-25 凌晨·Nightly 2.02.2607242·OPPO-PLP110 实测·勿在同版本重复排查）：
- * 真机扫码连接成功（GUI 面板服务正常/数据流动/Wxml 可见真机页面树），但 automator ws 通道的
- * 全部 RPC（systemInfo/pageStack/reLaunch/evaluate/page.data/element/screenshot）路由不到真机
- * 会话——8/8 一律 10s 超时（工具侧硬限）。官方库自带 remote() 在此版本更是第一步就死（它 await
- * enableRemoteDebug 回包=必超时抛错）。定性：该 Nightly 的 automation-真机桥断路，GUI 人肉真机
- * 调试不受影响。复验条件：工具更新版本后重跑本脚本，0/8 变绿即通。
+ * ⚠️ 首验结论（2026-07-25 凌晨·Nightly 2.02.2607242·OPPO-PLP110 两轮实测·勿在同条件重复排查）：
+ * 扫码模式与 auto 模式（enableRemoteDebug {auto:true}·免扫码自动唤起真机——连接半步已实证零人工）
+ * 均连接成功（GUI 面板服务正常/数据流动），但 automator ws 通道的全部 RPC（systemInfo/pageStack/
+ * reLaunch/evaluate/page.data/element/screenshot）路由不到真机——两模式同款 8/8 十秒超时（工具侧
+ * 硬限）。官方库自带 remote() 在此版本更是第一步就死（它 await enableRemoteDebug 回包=必超时抛错）。
+ * 当前最优假设（未排除·优先待办）：人肉调试数据走微信云中转（通）、automation 指令走手机↔电脑直连
+ * （断）——当晚电脑用手机热点，热点常限「客户端反向直连手机」恰掐此道；面板「局域网模式」开关即管
+ * 直连。复验两步：①热点下勾「局域网模式」重跑（auto:true）；②同一家用 WiFi 重跑。两步都 0/8 才
+ * 终局定性工具缺陷挂起等更新；任一变绿即真机断言通车。详账 docs/待办与债.md 横向扫描节 B 条。
  *
  * 用法：node scripts/mp-remote-probe.cjs（扫码窗口 600s）
  * 前置：同 mp-smoke.cjs（worktree 须拷 project.config.json）；真机与电脑同微信账号。
