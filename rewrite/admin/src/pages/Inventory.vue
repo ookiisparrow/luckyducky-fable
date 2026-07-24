@@ -142,7 +142,8 @@ onMounted(reload)
       <KpiCard label="SKU 总数" :value="counts.all" :icon="Boxes" />
       <KpiCard label="在售" :value="counts.onsale" :icon="CircleCheck" />
       <KpiCard label="低库存预警" :value="counts.low" :icon="TriangleAlert" />
-      <KpiCard label="售罄" :value="counts.out" :icon="XCircle" tone="red" />
+      <!-- 0 是好状态不该红（批6·防红色语义稀释·狼来了效应） -->
+      <KpiCard label="售罄" :value="counts.out" :icon="XCircle" :tone="counts.out > 0 ? 'red' : 'neutral'" />
     </div>
 
     <div class="ld-toolbar">

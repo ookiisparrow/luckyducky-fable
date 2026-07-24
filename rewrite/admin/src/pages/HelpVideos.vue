@@ -189,7 +189,8 @@ onMounted(reload)
   <div class="ld-page help">
     <PageHeader title="帮助视频" sub="小程序播放页「遇到问题了」面板的内容；主题下每个小段挂一条视频，全课程共用一份。">
       <span v-if="saveState" class="autosave" :class="saveState">{{ saveState === 'saving' ? '自动保存中…' : saveState === 'saved' ? '已自动保存' : '自动保存失败·点保存重试' }}</span>
-      <UiButton :disabled="busy" @click="save">{{ busy ? '保存中…' : '保存全部' }}</UiButton>
+      <!-- 空态无可存内容时禁用（批6·曾在零主题时仍高亮主按钮） -->
+      <UiButton :disabled="busy || !items.length" @click="save">{{ busy ? '保存中…' : '保存全部' }}</UiButton>
     </PageHeader>
 
     <p v-if="message" class="status">{{ message }}</p>
