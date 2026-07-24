@@ -19,11 +19,13 @@ const H = vi.hoisted(() => {
     options: { method?: string; hostname?: string; path?: string; headers?: Record<string, string> }
     writes: string[]
     onError?: (e: Error) => void
+    timeoutArm?: { ms: number; cb: () => void } // 超时防线布防记录（分诊缺口③修复锁定用）
   }
   interface ScriptedRes {
     statusCode?: number
     chunks?: string[]
     error?: Error
+    hang?: boolean // 对端悬挂：不回包不报错，只有超时防线能救
   }
   const state = { calls: [] as HttpsCall[], queue: [] as ScriptedRes[] }
   const request = (
@@ -40,8 +42,17 @@ const H = vi.hoisted(() => {
       write(chunk: unknown) {
         rec.writes.push(String(chunk))
       },
+      setTimeout(ms: number, cb: () => void) {
+        rec.timeoutArm = { ms, cb }
+        return req
+      },
+      destroy(e: Error) {
+        rec.onError && rec.onError(e)
+        return req
+      },
       end() {
         const r = state.queue.shift() || { statusCode: 200, chunks: [''] }
+        if (r.hang) return // 悬挂脚本：什么都不发生
         if (r.error) {
           const err = r.error
           queueMicrotask(() => rec.onError && rec.onError(err))
@@ -395,5 +406,16 @@ describe('httpsFetch 默认出站（vi.mock("https") 假 socket·只锁请求拼
   it('大白话：socket 报错 → reject 被 fail-soft 捕获成 WXPAY_FETCH_FAIL:{code}（不悬挂不抛）', async () => {
     H.state.queue.push({ error: Object.assign(new Error('socket hang up'), { code: 'ECONNRESET' }) })
     expect(await fetchTradeBill(OPTS)).toEqual({ ok: false, error: 'WXPAY_FETCH_FAIL:ECONNRESET' })
+  })
+
+  it('大白话：对端悬挂（不回包不报错）→ 超时防线（30 秒）掐掉·WXPAY_FETCH_FAIL:TIMEOUT，不挂死到云函数超时（2026-07-24 分诊缺口③锁定）', async () => {
+    H.state.queue.push({ hang: true })
+    const p = fetchTradeBill(OPTS)
+    await new Promise((r) => setTimeout(r, 0)) // 让请求走到挂起点
+    const rec = H.state.calls[H.state.calls.length - 1]
+    expect(rec.timeoutArm).toBeDefined() // 超时防线必须已布防
+    expect(rec.timeoutArm!.ms).toBe(30_000)
+    rec.timeoutArm!.cb() // 模拟超时触发
+    await expect(p).resolves.toEqual({ ok: false, error: 'WXPAY_FETCH_FAIL:TIMEOUT' })
   })
 })

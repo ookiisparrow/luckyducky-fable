@@ -93,6 +93,17 @@ describe('uploadShippingToWx（发货上传云调用·fail-soft 单点）', () =
     expect(r).toEqual({ ok: true })
   })
 
+  it('大白话：微信回包整个是空的（null）→ 不算成功（WX_EMPTY_RESP）——拿不到确认就不能谎报 ok（2026-07-24 分诊缺口①锁定）', async () => {
+    const cloudAny = cloud as any
+    const realOpenapi = cloudAny.openapi
+    try {
+      cloudAny.openapi = { wxaSecOrder: { uploadShippingInfo: async () => null } }
+      expect(await uploadShippingToWx(SHIP)).toEqual({ ok: false, error: 'WX_EMPTY_RESP' })
+    } finally {
+      cloudAny.openapi = realOpenapi
+    }
+  })
+
   it('大白话：云调用抛错带 errCode（能力未开通/权限未声明）→ 收成 WX_ERR_码，绝不上抛', async () => {
     control.setOpenapiFail(true, 48001) // 48001=api 功能未授权（真机常见首错）
     const r = await uploadShippingToWx(SHIP)
