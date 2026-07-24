@@ -3,7 +3,7 @@
 // + agreement history 服务端追加与 cap；app 公开读 getPageContent 同白名单 + catalogPlayer.heroImage 换址。
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import cloud, { control } from 'wx-server-sdk'
-import { savePageContent, getPageContent, saveHelpVideos, listHelpVideos } from '../src/functions/adminApi/actions/content'
+import { savePageContent, getPageContent, saveHelpVideos, listHelpVideos, getHomeContent, saveHomeContent } from '../src/functions/adminApi/actions/content'
 import { main as app } from '../src/functions/app/index'
 import { __resetTempUrlCacheForTest } from '../src/kit/storage'
 
@@ -19,6 +19,175 @@ beforeEach(() => {
   control.setOpenId('')
 })
 afterEach(() => vi.restoreAllMocks())
+
+// —— 首页内容（saveHomeContent/getHomeContent·橱窗②③ hero/信任条/FAQ·窄债 2026-07-23：写路径此前零测试，
+// 只测过读侧 getContent（同域 getPageContent 已由本文件覆盖）——补写路径三面：①正常保存后读回一致（真实
+// 写库断言）②白名单净化逐条钉行为（长度/封顶/未知字段丢弃，均对齐源码字段，非发明）③越界输入 fail-closed 不崩。
+const saveHome = (home: unknown) => saveHomeContent({ db: db(), data: { home } } as any)
+const getHomeAdmin = () => getHomeContent({ db: db() } as any)
+
+describe('首页内容（saveHomeContent/getHomeContent·橱窗②③ hero/信任条/FAQ）', () => {
+  it('大白话：无文档时读回 null（同 getPageContent 空兜底口径）', async () => {
+    const g = bodyOf(await getHomeAdmin())
+    expect(g.ok).toBe(true)
+    expect(g.home).toBe(null)
+  })
+
+  it('大白话：正常保存后读回一致（真实写库断言）', async () => {
+    const home = {
+      hero: { title: '首页标题', tagline: '副标语', search: '搜什么', img: 'cloud://hero.jpg' },
+      brand: { name: '小棉鸭', lead: '手作温暖' },
+      feature: { title: '特写标题', body: '特写正文', img: 'cloud://feature.jpg' },
+      reassure: {
+        heading: '放心区',
+        lead: '把门槛拆掉',
+        items: [{ icon: 'shield', title: '正品', body: '假一赔十', img: 'cloud://r1.jpg' }],
+      },
+      reviews: { heading: '买家秀', items: [{ quote: '很好用', user: '用户A', img: 'cloud://rv1.jpg' }] },
+      closing: { title: '收尾', cta: '立即购买', img: 'cloud://closing.jpg' },
+      footer: { links: ['关于我们', '联系客服'], copy: '© 2026 小棉鸭' },
+      activationBg: 'cloud://act.jpg',
+      loadingBg: 'cloud://loading.jpg',
+      activationBgByCourse: { c1: { welcome: 'cloud://w1.jpg', welcomeBack: 'cloud://wb1.jpg', taken: 'cloud://t1.jpg' } },
+      trust: [{ icon: 'shield', label: '正品保障' }],
+      faq: [{ title: '问题1', body: '答案1' }],
+    }
+    const r = bodyOf(await saveHome(home))
+    expect(r.ok).toBe(true)
+
+    const c = bodyOf(await getHomeAdmin()).home
+    expect(c.hero).toMatchObject(home.hero)
+    expect(c.brand).toMatchObject(home.brand)
+    expect(c.feature).toMatchObject(home.feature)
+    expect(c.reassure.heading).toBe(home.reassure.heading)
+    expect(c.reassure.items[0]).toMatchObject(home.reassure.items[0])
+    expect(c.reviews.items[0]).toMatchObject(home.reviews.items[0])
+    expect(c.closing).toMatchObject(home.closing)
+    expect(c.footer).toMatchObject(home.footer)
+    expect(c.activationBg).toBe(home.activationBg)
+    expect(c.loadingBg).toBe(home.loadingBg)
+    expect(c.activationBgByCourse.c1).toMatchObject(home.activationBgByCourse.c1)
+    expect(c.trust[0]).toMatchObject(home.trust[0])
+    expect(c.faq[0]).toMatchObject(home.faq[0])
+    expect(typeof c.updatedAt).toBe('number')
+    // 真实写库断言（不只经读侧回读，直接查库·同本文件其余用例 control.dump 手法）
+    const dumped = control.dump('content').find((d: any) => d._id === 'home')
+    expect(dumped.hero.title).toBe(home.hero.title)
+  })
+
+  it('大白话：白名单净化——超长截断/数组封顶/顶层未知字段丢弃（逐条对齐源码字段长度）', async () => {
+    const items6 = Array.from({ length: 8 }, (_, i) => ({ icon: `i${i}`, title: `t${i}`, body: `b${i}`, img: `cloud://${i}.jpg` }))
+    const reviews12 = Array.from({ length: 15 }, (_, i) => ({ quote: `q${i}`, user: `u${i}`, img: `cloud://${i}.jpg` }))
+    const trust4 = Array.from({ length: 6 }, (_, i) => ({ icon: `i${i}`, label: `l${i}` }))
+    const faq8 = Array.from({ length: 10 }, (_, i) => ({ title: `t${i}`, body: `b${i}` }))
+    const links6 = Array.from({ length: 8 }, (_, i) => `link${i}`)
+    await saveHome({
+      hero: { title: 'H'.repeat(30), tagline: 'T'.repeat(60), search: 'S'.repeat(60), img: 'cloud://' + 'x'.repeat(300), evil: 'drop-me' },
+      brand: { name: 'N'.repeat(40), lead: 'L'.repeat(100) },
+      feature: { title: 'F'.repeat(50), body: 'B'.repeat(120), img: 'cloud://' + 'y'.repeat(300) },
+      reassure: { heading: 'H'.repeat(40), lead: 'L'.repeat(120), items: items6 },
+      reviews: { heading: 'R'.repeat(40), items: reviews12 },
+      closing: { title: 'C'.repeat(30), cta: 'X'.repeat(80), img: 'cloud://' + 'z'.repeat(300) },
+      footer: { links: links6, copy: 'P'.repeat(200) },
+      activationBg: 'cloud://' + 'a'.repeat(300),
+      loadingBg: 'cloud://' + 'b'.repeat(300),
+      trust: trust4,
+      faq: faq8,
+      hacker: 'drop-me-too',
+    } as any)
+    const c = bodyOf(await getHomeAdmin()).home
+    expect(c.hero.title.length).toBe(20)
+    expect(c.hero.tagline.length).toBe(40)
+    expect(c.hero.search.length).toBe(40)
+    expect(c.hero.img.length).toBe(200)
+    expect(c.hero.evil).toBeUndefined()
+    expect(c.brand.name.length).toBe(20)
+    expect(c.brand.lead.length).toBe(60)
+    expect(c.feature.title.length).toBe(30)
+    expect(c.feature.body.length).toBe(80)
+    expect(c.feature.img.length).toBe(200)
+    expect(c.reassure.heading.length).toBe(20)
+    expect(c.reassure.lead.length).toBe(60)
+    expect(c.reassure.items.length).toBe(6) // 封顶 6
+    expect(c.reassure.items[0].icon.length).toBeLessThanOrEqual(20)
+    expect(c.reviews.items.length).toBe(12) // 封顶 12
+    expect(c.closing.title.length).toBe(20)
+    expect(c.closing.cta.length).toBe(40)
+    expect(c.closing.img.length).toBe(200)
+    expect(c.footer.links.length).toBe(6) // 封顶 6
+    expect(c.footer.copy.length).toBe(120)
+    expect(c.activationBg.length).toBe(200)
+    expect(c.loadingBg.length).toBe(200)
+    expect(c.trust.length).toBe(4) // 封顶 4
+    expect(c.faq.length).toBe(8) // 封顶 8
+    expect(c.hacker).toBeUndefined() // 顶层未知字段丢弃（doc 只按白名单字段逐个拼装）
+  })
+
+  it('大白话：activationBgByCourse 课程封顶 100（防滥用）', async () => {
+    const many: Record<string, unknown> = {}
+    for (let i = 0; i < 105; i++) many['c' + i] = { welcome: 'cloud://w' + i }
+    await saveHome({ activationBgByCourse: many } as any)
+    const c = bodyOf(await getHomeAdmin()).home
+    expect(Object.keys(c.activationBgByCourse).length).toBe(100)
+    expect(c.activationBgByCourse.c0).toBeDefined()
+    expect(c.activationBgByCourse.c99).toBeDefined()
+    expect(c.activationBgByCourse.c100).toBeUndefined() // 第 101 个起被封顶截断
+  })
+
+  it('大白话：activationBgByCourse 旧单字符串兼容为 welcome、空态/空课剔除、courseId 超长截断', async () => {
+    const longKey = 'k'.repeat(60)
+    await saveHome({
+      activationBgByCourse: {
+        legacyStr: 'cloud://legacy.jpg', // 旧单字符串形态（迁移前存量数据）→ 归一成 welcome
+        emptyEntry: {}, // 全空态 → 整课剔除
+        emptyStates: { welcome: '' }, // 值为空串 → 该态剔除，剔完课也空 → 整课剔除
+        [longKey]: { welcome: 'cloud://long-key.jpg' },
+      },
+    } as any)
+    const c = bodyOf(await getHomeAdmin()).home
+    expect(c.activationBgByCourse.legacyStr).toEqual({ welcome: 'cloud://legacy.jpg' })
+    expect(c.activationBgByCourse.emptyEntry).toBeUndefined()
+    expect(c.activationBgByCourse.emptyStates).toBeUndefined()
+    expect(c.activationBgByCourse[longKey.slice(0, 40)]).toEqual({ welcome: 'cloud://long-key.jpg' }) // courseId 键截断至 40
+  })
+
+  it('大白话：越界输入不崩且 fail-closed——home 非对象/字段类型错乱，安全落默认值', async () => {
+    // home 本身非对象（字符串）：全链路 optional chaining，读不到任何子字段但不应抛错
+    const r1 = bodyOf(await saveHome('not-an-object' as any))
+    expect(r1.ok).toBe(true)
+    const c1 = bodyOf(await getHomeAdmin()).home
+    expect(c1.hero.title).toBe('') // 安全落空默认，不崩
+    expect(c1.faq).toEqual([])
+    expect(c1.activationBgByCourse).toEqual({})
+
+    // 数组类字段传非数组（字符串/对象/null/undefined）：arrOf 一律兜底为空数组，不崩
+    const r2 = bodyOf(
+      await saveHome({
+        reassure: { items: 'not-array' },
+        reviews: { items: { 0: 'x' } },
+        footer: { links: 123 },
+        trust: null,
+        faq: undefined,
+      } as any)
+    )
+    expect(r2.ok).toBe(true)
+    const c2 = bodyOf(await getHomeAdmin()).home
+    expect(c2.reassure.items).toEqual([])
+    expect(c2.reviews.items).toEqual([])
+    expect(c2.footer.links).toEqual([])
+    expect(c2.trust).toEqual([])
+    expect(c2.faq).toEqual([])
+
+    // activationBgByCourse 传非法形态（数组）：typeof 数组也是 'object'，逐 key 遍历但值非字符串/对象一律被
+    // 净化剔除（不会把脏数据写进库），且不抛错
+    const r3 = bodyOf(await saveHome({ activationBgByCourse: [1, 2, 3] } as any))
+    expect(r3.ok).toBe(true)
+
+    // 完全不传 home（data.home undefined）：等价于空对象，落全默认值
+    const r4 = bodyOf(await saveHomeContent({ db: db(), data: {} } as any))
+    expect(r4.ok).toBe(true)
+  })
+})
 
 describe('welcome（欢迎流·超长截断 + w2 封顶 + 未知字段丢弃）', () => {
   it('大白话：w1 title/sub/warning 超长截断、w2 items 封顶 3、未知字段一律丢弃', async () => {

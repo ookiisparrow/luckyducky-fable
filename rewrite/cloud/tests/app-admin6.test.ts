@@ -436,16 +436,22 @@ describe('顾客发图坐席可见（B5·图片消息下载延迟到坐席首次
     expect(r.error).toBe('EXPIRED')
   })
 
-  // 原用例经 control.setCallFunctionResult 直接喂 { ok:false, expired:false, errcode:40014 }，走通 agentDesk.ts
-  // 里 !out.expired 的 DOWNLOAD_FAILED/notifyAlert 分支——但真实 kfFetchMedia（同原 cs/kfMedia）经
-  // kit/wecom.ts getKfMedia 对**任意** JSON 错误响应统一回 expired:true（该文件注释「过度细分一个尚未验证过的
-  // 平台错误码表属投机抽象·本期不做更细分支」），故该分支在真链路当前不可达——此为收编前既有设计（与本批
-  // 拓扑收编无关），不在本批改动范围内，如实反映真实契约：任意错误码目前都落 EXPIRED。
-  it('大白话：任意 media/get JSON 错误响应目前统一按 EXPIRED 语义回传（getKfMedia 尚未细分错误码）', async () => {
-    stubFetchMedia((url) => (url.includes('gettoken') ? { json: { access_token: 'T', expires_in: 7200 } } : { json: { errcode: 40014 } }))
+  // getKfMedia（kit/wecom.ts）按 errcode 细分：仅 40007（不合法的媒体文件id·media_id 过期/不存在的实际
+  // 表现）判 expired:true；其余错误码（access_token 失效/频控/系统繁忙等真故障）expired:false 原样透出，
+  // 走 !out.expired 的 DOWNLOAD_FAILED/notifyAlert 分支——债#getMediaUrl-errcode 修复后此分支经真实链路可达
+  // （此前 getKfMedia 对任意 JSON 错误响应恒回 expired:true，该分支走不到，对坐席是误导）。
+  it('大白话：非过期类错误码（如频控/系统繁忙）细分为 DOWNLOAD_FAILED，不再统一误判 EXPIRED', async () => {
+    stubFetchMedia((url) => (url.includes('gettoken') ? { json: { access_token: 'T', expires_in: 7200 } } : { json: { errcode: 45009 } }))
     const r = await post('getMediaUrl', A1, { sessionId: 's1', msgId: 'img-1' })
     expect(r.ok).toBe(false)
-    expect(r.error).toBe('EXPIRED')
+    expect(r.error).toBe('DOWNLOAD_FAILED')
+  })
+
+  it('大白话：另一个非过期错误码 -1（系统繁忙）同样细分为 DOWNLOAD_FAILED', async () => {
+    stubFetchMedia((url) => (url.includes('gettoken') ? { json: { access_token: 'T', expires_in: 7200 } } : { json: { errcode: -1 } }))
+    const r = await post('getMediaUrl', A1, { sessionId: 's1', msgId: 'img-1' })
+    expect(r.ok).toBe(false)
+    expect(r.error).toBe('DOWNLOAD_FAILED')
   })
 
   it('大白话：非所属会话一律拒（分配 scope）；非本会话的消息即便自己会话号也拒（防跨会话拉图）', async () => {

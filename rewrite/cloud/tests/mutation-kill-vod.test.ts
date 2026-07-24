@@ -10,11 +10,10 @@
 //      出站 URL/方法/五头逐项对；语义错误（Response.Error）/无 Response/传输抛错三分支的返回值与
 //      告警行分毫不差；httpsFetch 兜底（无全局 fetch）用 vi.mock('https') 假 socket 钉请求拼装/
 //      分片重组/空体兜底/错误传播。
-// ⚠️ 疑似真 bug（本批不修·只钉现状）：vod.ts L121-123 canonical 拼接在 CanonicalHeaders 与
-//   SignedHeaders 之间**没有空行**，而腾讯云官方 signature-v3 demo 是 canonicalHeaders + '\n' +
-//   signedHeaders（CanonicalHeaders 自带尾 \n → 中间有一个空行）——真对端大概率报
-//   AuthFailure.SignatureFailure。本文件 expectedTc3Auth 按源码现状（其 L121 注释）钉形状；
-//   若修此 bug，须同步改本测试的 canonical 拼接并真机验签（靠人#8）。
+// ✅ 上述立案已修（2026-07-24 清账批·主脑亲核官方规范）：canonical 六段以 \n 相接 + CanonicalHeaders
+//   自带尾 \n → host 行与 SignedHeaders 之间必有一个空行（官方文档示例串可证）。本文件 expectedTc3Auth
+//   已同步按**规范形状**钉死——再有人把 vod.ts 的空行删回去，本测试逐字符比对即红。
+//   终局证明仍需真机验签（靠人#8·随 VOD E2E 待办：控制台配置后真调 DescribeMediaInfos 看非 AuthFailure）。
 // C 类（等价/接缝不可达·不立案）：L38 dir 初值（必被重赋或不被使用）；L62/L70 的
 //   init?.→init. 与 'GET'→""、if(init?.body)→if(true)（callVodApi 唯一调用面恒传 init 且
 //   method 恒 POST、body 恒非空）。
@@ -81,10 +80,10 @@ const TS = Math.floor(FIXED.getTime() / 1000)
 const VOD_CFG = { _id: 'vod', secretId: 'AKIDtest', secretKey: 'sk-test-secret', playKey: 'pk-test-key', procedure: 'LuckyDuckyVod' }
 const seedVod = (doc: Record<string, unknown> = VOD_CFG) => control.seed('secureConfig', [doc])
 
-// TC3 Authorization 独立复算（形状按 vod.ts L121-123 现状钉死——含文件头注记的「缺空行」疑似 bug）
+// TC3 Authorization 独立复算（按官方 signature-v3 规范钉死：CanonicalHeaders 与 SignedHeaders 之间有空行·2026-07-24 修）
 function expectedTc3Auth(body: string): string {
   const date = new Date(TS * 1000).toISOString().slice(0, 10)
-  const canonical = `POST\n/\n\ncontent-type:application/json; charset=utf-8\nhost:vod.tencentcloudapi.com\ncontent-type;host\n${sha256hex(body)}`
+  const canonical = `POST\n/\n\ncontent-type:application/json; charset=utf-8\nhost:vod.tencentcloudapi.com\n\ncontent-type;host\n${sha256hex(body)}`
   const stringToSign = `TC3-HMAC-SHA256\n${TS}\n${date}/vod/tc3_request\n${sha256hex(canonical)}`
   const kSigning = hmac256(hmac256(hmac256(Buffer.from('TC3' + 'sk-test-secret'), date), 'vod'), 'tc3_request')
   return `TC3-HMAC-SHA256 Credential=AKIDtest/${date}/vod/tc3_request, SignedHeaders=content-type;host, Signature=${hmac256(kSigning, stringToSign).toString('hex')}`
