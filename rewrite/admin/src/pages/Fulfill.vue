@@ -66,11 +66,12 @@ async function reload() {
       for (const o of mapOrderRows((r as any).list) as OrderRowVM[]) {
         if (seen.has(o.id)) continue
         seen.add(o.id)
-        // OrderRowVM 已带 addr*/items·转 FulfillOrder 形状（含 feeMismatch）
+        // OrderRowVM 已带 addr*/items·转 FulfillOrder 形状（含 feeMismatch/refundHold）
         acc.push({
           id: o.id,
           createdAt: o.createdAtMs || 0,
           feeMismatch: o.feeMismatch,
+          refundHold: o.refundHold,
           items: o.items.map((it) => ({ name: it.name, qty: it.qty })),
           address: { name: o.addrName, phone: o.addrPhone, region: o.addrRegion, detail: o.addrDetail },
         })
@@ -92,6 +93,10 @@ async function reload() {
 onMounted(reload)
 
 const summary = computed(() => pickSummary(orders.value))
+// 可发集＝剔掉退款持有单（shipOne 必拦·备货/标签/扫码三步都不该带上它们）。
+// orders 仍留全量：refundHoldCount 要如实报数，扫到那张已打印的旧码也要认得出来（见 onScan）。
+const shippable = computed(() => orders.value.filter((o) => !o.refundHold))
+const heldIdSet = computed(() => new Set(orders.value.filter((o) => o.refundHold).map((o) => o.id as string)))
 const fmtTime = (ts?: number) => {
   if (!ts) return '—'
   const d = new Date(ts)
@@ -137,12 +142,12 @@ function toggleCheck(id: string) {
   checked.value = s
 }
 function selectAll() {
-  checked.value = new Set(orders.value.map((o) => o.id as string))
+  checked.value = new Set(shippable.value.map((o) => o.id as string))
 }
 function selectUnprinted() {
-  checked.value = new Set(orders.value.filter((o) => !printed.value.has(o.id as string)).map((o) => o.id as string))
+  checked.value = new Set(shippable.value.filter((o) => !printed.value.has(o.id as string)).map((o) => o.id as string))
 }
-const chosen = computed(() => orders.value.filter((o) => checked.value.has(o.id as string)))
+const chosen = computed(() => shippable.value.filter((o) => checked.value.has(o.id as string)))
 const previewId = ref('')
 const previewQr = ref('')
 const previewLabel = computed(() => {
@@ -192,7 +197,7 @@ function onCompanyChange() {
   localStorage.setItem(COMPANY_KEY, company.value)
   focusScan()
 }
-const idSet = computed(() => new Set(orders.value.map((o) => o.id as string)))
+const idSet = computed(() => new Set(shippable.value.map((o) => o.id as string)))
 const scanEl = ref<HTMLInputElement | null>(null)
 const scanText = ref('')
 const focused = ref(false)
@@ -209,12 +214,18 @@ function say(msg: string, bad = false) {
   scanMsgBad.value = bad
 }
 function onScan() {
-  const res = classifyScan(scanText.value, idSet.value)
+  const res = classifyScan(scanText.value, idSet.value, heldIdSet.value)
   scanText.value = ''
   if (res.type === 'empty') return
   if (res.type === 'order') {
     selected.value = orders.value.find((o) => o.id === res.id) || null
     say('')
+    return
+  }
+  // 标签打印后才申请退款的真实时序：操作员扫的是自己打的那张码，必须明说停手、别去查单号
+  if (res.type === 'order-refund-hold') {
+    selected.value = null
+    say(`这单退款处理中，不能发货（${shortCode(res.id)}）——到「售后退款」页处置，货别装箱`, true)
     return
   }
   if (res.type === 'order-not-in-queue') {
@@ -233,6 +244,11 @@ function onScan() {
   }
   if (selected.value.feeMismatch) {
     say('金额异常单：先到「订单发货」页核对流水解除，再回来扫码发', true)
+    return
+  }
+  // 兜底：选中后队列刷新出退款（选中态是快照·不随 shippable 重算），最后一枪前再拦一次
+  if (selected.value.refundHold) {
+    say('这单退款处理中，不能发货——到「售后退款」页处置', true)
     return
   }
   void doShip(selected.value, res.trackingNo)
@@ -323,6 +339,9 @@ const railState = (n: number) => (n === step.value ? 'current' : n < step.value 
         <p v-if="summary.mismatchCount" class="warn-line">
           其中 {{ summary.mismatchCount }} 单金额异常——货照备；发货前须到「订单发货」页核对流水解除，扫码发货时会被挡下。
         </p>
+        <p v-if="summary.refundHoldCount" class="warn-line">
+          另有 {{ summary.refundHoldCount }} 单退款处理中——已从备货与标签中排除（发不出去，备了白备）；到「售后退款」页处置。
+        </p>
         <EmptyState v-if="!summary.products.length" :icon="Package" text="没有待发货订单，今天不用备货 🎉" />
         <div v-else class="ld-table">
           <div class="ld-thead">
@@ -354,11 +373,11 @@ const railState = (n: number) => (n === step.value ? 'current' : n < step.value 
         </div>
         <p v-if="printMsg" class="ok-line">{{ printMsg }}</p>
         <p class="tip">打印记录只记在本机浏览器；打废的单点「已打印」徽标取消，重新勾选再打。</p>
-        <EmptyState v-if="!orders.length" :icon="Printer" text="没有待发货订单，无标签可打" />
+        <EmptyState v-if="!shippable.length" :icon="Printer" text="没有待发货订单，无标签可打" />
         <div v-else class="p-body">
-          <Card class="p-list-card" title="订单清单" :sub="`${orders.length} 单`" flush>
+          <Card class="p-list-card" title="订单清单" :sub="`${shippable.length} 单`" flush>
             <div class="p-list">
-              <div v-for="o in orders" :key="o.id" class="p-order" :class="{ on: previewId === o.id }" @click="openPreview(o)">
+              <div v-for="o in shippable" :key="o.id" class="p-order" :class="{ on: previewId === o.id }" @click="openPreview(o)">
                 <input type="checkbox" :checked="checked.has(o.id as string)" @click.stop @change="toggleCheck(o.id as string)" />
                 <div class="po-main">
                   <b class="mono">{{ shortCode(o.id) }}</b>

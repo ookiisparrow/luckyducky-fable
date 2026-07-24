@@ -25,6 +25,10 @@ export interface FulfillOrder {
   id?: string
   createdAt?: number
   feeMismatch?: boolean
+  // 退款持有：后端 listOrders join afterSales 标 applied/approved/refunded（对齐 shipOne 拦截三态），
+  // 契约用途＝供前端入口收窄挡。与 feeMismatch 不同——那个是「货照备·扫码时挡下」（对平后仍要发），
+  // 这个 shipOne 必拦、备了必然白备，故排除出备货与标签面（计数仍单列，不静默丢·病根#14）。
+  refundHold?: boolean
   items?: FulfillItem[]
   address?: { name?: string; phone?: string; region?: string; detail?: string }
 }
@@ -43,18 +47,29 @@ export interface PickSummary {
   orderCount: number
   totalQty: number
   mismatchCount: number
+  refundHoldCount: number
   earliestCreatedAt: number | null
   products: Array<{ name: string; qty: number }>
 }
 
-/** 拣货汇总：全部待发货订单 → 按产品名合并数量（不分规格——产品都是封装成品）。 */
+/**
+ * 拣货汇总：全部待发货订单 → 按产品名合并数量（不分规格——产品都是封装成品）。
+ * refundHold 单整单跳过（shipOne 必拦·备了白备），只累进 refundHoldCount 供 UI 单列告知。
+ */
 export function pickSummary(orders: unknown): PickSummary {
   const list = Array.isArray(orders) ? (orders as FulfillOrder[]) : []
   const byName = new Map<string, number>()
   let totalQty = 0
   let mismatchCount = 0
+  let refundHoldCount = 0
+  let orderCount = 0
   let earliest: number | null = null
   for (const o of list) {
+    if (o && o.refundHold) {
+      refundHoldCount++
+      continue
+    }
+    orderCount++
     if (o && o.feeMismatch) mismatchCount++
     if (o && Number.isFinite(o.createdAt)) earliest = earliest == null ? (o.createdAt as number) : Math.min(earliest, o.createdAt as number)
     for (const it of o && Array.isArray(o.items) ? o.items : []) {
@@ -68,7 +83,7 @@ export function pickSummary(orders: unknown): PickSummary {
   const products = [...byName.entries()]
     .map(([name, qty]) => ({ name, qty }))
     .sort((a, b) => b.qty - a.qty || a.name.localeCompare(b.name))
-  return { orderCount: list.length, totalQty, mismatchCount, earliestCreatedAt: earliest, products }
+  return { orderCount, totalQty, mismatchCount, refundHoldCount, earliestCreatedAt: earliest, products }
 }
 
 export interface LabelData {
@@ -107,13 +122,22 @@ export function labelData(order: FulfillOrder | null | undefined): LabelData {
 export type ScanResult =
   | { type: 'empty' }
   | { type: 'order'; id: string }
+  | { type: 'order-refund-hold'; id: string }
   | { type: 'order-not-in-queue'; id: string }
   | { type: 'tracking'; trackingNo: string }
 
-/** 扫码分类（安全判序，勿调换）：空→empty；在待发货队列→order；id 形状但不在队列→order-not-in-queue（挡误发）；其余→tracking。 */
-export function classifyScan(text: unknown, paidIdSet?: Set<string>): ScanResult {
+/**
+ * 扫码分类（安全判序，勿调换）：空→empty；退款持有→order-refund-hold；在待发货队列→order；
+ * id 形状但不在队列→order-not-in-queue（挡误发）；其余→tracking。
+ *
+ * 持有集判在待发货集之前＝fail-safe：两集若因刷新时序短暂同时命中，宁可挡下也不放行。
+ * 单独成类而不复用 order-not-in-queue：标签打印后才申请退款是真实时序（周一打标·周二退款·周三发货），
+ * 操作员扫的是自己打的那张码，含糊提示「不在队列」会让他去查单号而非停手。
+ */
+export function classifyScan(text: unknown, paidIdSet?: Set<string>, heldIdSet?: Set<string>): ScanResult {
   const t = String(text || '').trim()
   if (!t) return { type: 'empty' }
+  if (heldIdSet && heldIdSet.has(t)) return { type: 'order-refund-hold', id: t }
   if (paidIdSet && paidIdSet.has(t)) return { type: 'order', id: t }
   if (ORDER_ID_RE.test(t)) return { type: 'order-not-in-queue', id: t }
   return { type: 'tracking', trackingNo: t }

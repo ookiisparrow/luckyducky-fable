@@ -43,6 +43,34 @@ describe('拣货汇总', () => {
   })
 })
 
+// refundHold（退款持有·病根#5「漏抄安全字段」）：后端 listOrders join afterSales 标出 applied/approved/refunded
+// 三态（对齐 shipOne 拦截口径），本就是「供前端入口收窄挡」的契约。Orders 页已履约（红标+禁发货入口），
+// 发货工作台此前漏接——队列/备货/标签一路照算，操作员拣货打标装箱到最后扫码才被服务端弹回（白干活）。
+// 与 feeMismatch 的刻意设计（「货照备·扫码时挡下」，金额对平后仍要发）不同：refundHold 单 shipOne 必拦，
+// 备了必然白备，故排除出备货与标签面——但不得静默丢弃（病根#14），须单列计数给操作员看见。
+describe('退款持有单不得进入履约面（refundHold·防白干活）', () => {
+  it('大白话：退款处理中的单不算进备货（单数/件数/产品/最早一单都不含它），但要单列条数告诉操作员', () => {
+    const s = pickSummary([
+      { id: 'a', createdAt: 200, items: [{ name: '小熊', qty: 2 }] },
+      { id: 'b', createdAt: 100, refundHold: true, items: [{ name: '小熊', qty: 4 }] },
+    ])
+    expect(s.orderCount).toBe(1) // 只算真能发的那单
+    expect(s.totalQty).toBe(2) // 退款单的 4 只不进备货件数
+    expect(s.products).toEqual([{ name: '小熊', qty: 2 }]) // 拣货清单不含退款单的货
+    expect(s.earliestCreatedAt).toBe(200) // 最早一单也不被退款单拉早
+    expect(s.refundHoldCount).toBe(1) // 但不静默——单列给人看见
+  })
+
+  it('大白话：标签打印后才申请退款——再扫那张内部码，必须明说「退款处理中」，不能混作「不在队列」', () => {
+    const paid = new Set(['2026070413011234'])
+    const held = new Set(['2026070413015678'])
+    expect(classifyScan('2026070413015678', paid, held)).toEqual({ type: 'order-refund-hold', id: '2026070413015678' })
+    // 判序：持有集优先于「形状像但不在队列」，否则会退化成含糊的旧提示
+    expect(classifyScan('2026070413019999', paid, held)).toEqual({ type: 'order-not-in-queue', id: '2026070413019999' })
+    expect(classifyScan('2026070413011234', paid, held)).toEqual({ type: 'order', id: '2026070413011234' })
+  })
+})
+
 describe('标签派生（不带金额/隐私外泄·收件人全显给快递）', () => {
   it('大白话：短码/收件人/地址/清单合并/总件数；只含发货字段', () => {
     const l = labelData({
