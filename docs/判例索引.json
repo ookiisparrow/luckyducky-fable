@@ -950,6 +950,38 @@
    "source": "docs/需求清单.md R38（原重构日志 2026-07-11 批B 条目已入史料层）"
   },
   {
+   "id": "红线-个人号微信机器人",
+   "kind": "nofix",
+   "title": "个人号微信机器人（协议/hook/UI 自动化）全线不碰——封号+违规风险，主流项目 2025-2026 接连归档/因法律风险停维（WeChatFerry 归档·Gewechat 停维·NGCBot/XYBotV2 归档），合规通道=已自建微信客服 API+企微机器人+官方对话开放平台（2026-07-24 第四轮微信生态全景实证）",
+   "keywords": [
+    "个人号",
+    "个人微信",
+    "微信机器人",
+    "WeChatFerry",
+    "Gewechat",
+    "wxauto",
+    "itchat",
+    "openwechat",
+    "wechaty",
+    "chatgpt-on-wechat",
+    "dify-on-wechat",
+    "AstrBot",
+    "LangBot",
+    "NGCBot",
+    "iPad 协议",
+    "协议机器人",
+    "hook 微信",
+    "逆向",
+    "封号",
+    "群发",
+    "养号",
+    "微信自动化",
+    "RPA 微信",
+    "AI 客服机器人"
+   ],
+   "source": "docs/待办与债.md 微信生态全景第四轮转化清单"
+  },
+  {
    "id": "根因#17",
    "kind": "rootcause",
    "title": "快照外无传感器——持续性义务无机器建模，恶化不发信号（膨胀/瘦身棘轮）",
