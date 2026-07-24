@@ -131,6 +131,8 @@ onMounted(load) // 默认旗舰课自动载入
     <p v-if="courseDrifted" class="ld-status drift">课号框已改为「{{ courseId.trim() }}」但未载入——当前编辑与「保存整课」仍作用于已载入的 <b>{{ loadedCourseId }}</b>；要编另一门课请先点「载入」。</p>
 
     <template v-if="loaded">
+      <!-- 零节点引导（批3）：默认课自动载入成功但没配过节点时，曾裸一个「加节点」无任何说明（全站唯一裸空态） -->
+      <p v-if="!nodes.length" class="ld-status">「{{ loadedCourseId }}」还没配节点——点下方「加节点」建第一个；要编其他课，在上方输入课号点「载入」。</p>
       <Card v-for="(n, i) in nodes" :key="i">
         <div class="node-head">
           <Badge tone="brand">{{ i + 1 }}</Badge>

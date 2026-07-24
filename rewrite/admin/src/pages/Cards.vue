@@ -13,6 +13,7 @@ import { serialSave } from '../lib/serialSave'
 import UiButton from '../components/ui/Button.vue'
 import Card from '../components/ui/Card.vue'
 import Badge from '../components/ui/Badge.vue'
+import EmptyState from '../components/ui/EmptyState.vue'
 import { Download, Upload, Image as ImageIcon } from 'lucide-vue-next'
 
 // 嵌入模式（上新向导步 5 复用·向后兼容·独立 /cards?productId 用法不传 props 行为不变）：
@@ -30,6 +31,13 @@ const busyArt = ref(false)
 const autoState = ref('') // '' | saving | saved | error
 const product = ref<Record<string, any> | null>(null)
 const coverUrl = ref('')
+// 死胡同改选择器（UX 体检批3）：顶层导航直入无 productId 时列商品可选，不再甩红错叫人绕路
+const pickRows = ref<{ id: string; name: string; coverUrl: string }[] | null>(null)
+// 同路由 query 变更不重跑 setup（productId 是 setup 期常量）——replace 后 reload 一次最诚实，
+// 效果等同从商品页深链进入
+function pickProduct(id: string) {
+  void router.replace({ path: '/cards', query: { productId: id } }).then(() => location.reload())
+}
 
 const PRESETS = [
   { label: '90 × 54', w: 90, h: 54 },
@@ -62,7 +70,16 @@ function freshCard(): CardModel {
 let loaded = false
 onMounted(async () => {
   if (!productId) {
-    loadErr.value = '缺少 productId（请从商品页「卡片设计」进入）'
+    // 无 productId＝选择器模式：列全部商品（listDrafts 本页早已 import·量小全量）供点选
+    const dr = await listDrafts().catch(() => null)
+    if ((dr as any)?.ok) {
+      const urls = (dr as any).urls || {}
+      pickRows.value = (((dr as any).list as Record<string, any>[]) || []).map((p) => ({
+        id: String(p.id || p._id || ''),
+        name: String(p.name || '未命名商品'),
+        coverUrl: p.cover ? String(urls[String(p.cover)] || '') : '',
+      }))
+    } else loadErr.value = '商品列表加载失败：' + String((dr as any)?.error || '网络异常')
     loading.value = false
     return
   }
@@ -246,6 +263,19 @@ function downloadSvg(kind: 'front' | 'back') {
 
     <p v-if="loadErr" class="err-line">{{ loadErr }}</p>
     <p v-else-if="loading" class="ld-status">加载中…</p>
+
+    <!-- 选择器模式（导航直入·无 productId）：选一款商品进入卡面设计 -->
+    <Card v-else-if="pickRows" title="选择商品" sub="卡片按商品设计——选一款开始；从商品页「卡片设计」进入可直达">
+      <div v-if="pickRows.length" class="pick-list">
+        <button v-for="p in pickRows" :key="p.id" class="pick-row" @click="pickProduct(p.id)">
+          <img v-if="p.coverUrl" :src="p.coverUrl" class="pick-thumb" alt="" />
+          <span v-else class="pick-thumb pick-ph">图</span>
+          <span class="pick-name">{{ p.name }}</span>
+          <code class="pick-id">{{ p.id }}</code>
+        </button>
+      </div>
+      <EmptyState v-else :icon="ImageIcon" text="还没有商品——先到「商品管理」新建" />
+    </Card>
 
     <div v-else-if="card" class="work">
       <!-- 双面预览 -->
@@ -638,5 +668,49 @@ function downloadSvg(kind: 'front' | 'back') {
   font-size: 11.5px;
   margin: 0;
   color: var(--ld-content-2);
+}
+/* 选择器模式（批3 死胡同改造）：导航直入的商品挑选列表 */
+.pick-list {
+  display: flex;
+  flex-direction: column;
+}
+.pick-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 4px;
+  border: none;
+  border-bottom: 1px solid var(--ld-line);
+  background: none;
+  cursor: pointer;
+  text-align: left;
+  font-size: 13px;
+}
+.pick-row:hover {
+  background: var(--ld-bg);
+}
+.pick-thumb {
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
+  object-fit: cover;
+  flex: none;
+}
+.pick-ph {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--ld-bg);
+  color: var(--ld-content-2);
+  font-size: 11px;
+  font-style: normal;
+}
+.pick-name {
+  color: var(--ld-ink);
+  font-weight: 600;
+}
+.pick-id {
+  color: var(--ld-content-2);
+  font-size: 11px;
 }
 </style>

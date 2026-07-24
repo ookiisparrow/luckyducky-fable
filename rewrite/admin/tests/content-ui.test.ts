@@ -2,6 +2,21 @@
 // 直传表单字段构造（调试日志 G 固化：key 截取·字段名精确·凭证不齐不发）/课程视频统计脏档安全。
 import { describe, it, expect } from 'vitest'
 import { normalizeHome, homePayload, uploadFormFields, courseVideoStats, normalizeHelpItems } from '../src/lib/mapContent'
+import coursesSrc from '../src/pages/Courses.vue?raw'
+import checkpointsSrc from '../src/pages/Checkpoints.vue?raw'
+
+// 死胡同改选择器（UX 体检批3）：「课程管理」直入要求手输不透明编号 course-xxx（无列表可选）；
+// 课程无列表 API（listCourses 不存在·已核）——走「商品行 courseId」桥（商品档是课程唯一入口事实，
+// 商品页「编辑课程」按钮同源）。「节点诊断」loaded 但零节点时无任何引导（全站唯一裸空态）。
+describe('Courses/Checkpoints 死胡同改造：课程选择桥 + 零节点引导', () => {
+  it('大白话：Courses 直入无课号→从商品桥列出已关联课程可点选（loadCourseOptions/pickCourse）', () => {
+    expect(coursesSrc).toMatch(/function loadCourseOptions\(/)
+    expect(coursesSrc).toMatch(/function pickCourse\(/)
+  })
+  it('大白话：Checkpoints 载入成功但零节点时给引导文案，不再裸一个「加节点」', () => {
+    expect(checkpointsSrc).toContain('还没配节点')
+  })
+})
 
 describe('首页模型往返', () => {
   it('大白话：旧存档「按课单串值」归一成欢迎图；编辑后空课行剔除、空态字段不进载荷', () => {

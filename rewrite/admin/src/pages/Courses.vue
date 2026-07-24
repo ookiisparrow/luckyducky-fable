@@ -5,6 +5,7 @@ import { ref, computed, onMounted, onBeforeUnmount, watch, nextTick } from 'vue'
 import { useRoute, onBeforeRouteLeave } from 'vue-router'
 import { RotateCcw, Plus, Trash2, Upload, Check, BookOpen } from 'lucide-vue-next'
 import { getCourseDraft, saveCourseDraft, publishCourse, uploadVideo, syncVodMedia } from '../api/content'
+import { listDrafts } from '../api/products'
 import { isVodFileId } from '@ldrw/shared'
 import { courseVideoStats } from '../lib/mapContent'
 import { planLessonBatch } from '../lib/videoBatch'
@@ -31,6 +32,28 @@ const publishConfirm = ref(false)
 // 视频进度＝computed 自动随课程树更新（迭代E 逮出：原 imperative ref 在 delChapter/delLesson/addSegment 后不刷新致漂移）
 const stats = computed(() => courseVideoStats(course.value))
 const confirmKey = ref('') // no-alert 两步删除确认（换皮改直接 splice·误删即丢）
+// 死胡同改选择器（UX 体检批3）：课程无列表 API（listCourses 不存在·已核）——走「商品行 courseId」桥
+// （商品档是课程唯一入口事实·商品页「编辑课程」按钮同源）；只列已关联课程的商品，未关联的从商品页补建。
+// 拉不到列表就保持手输老路，不挡人
+const courseOptions = ref<{ cid: string; label: string }[] | null>(null)
+async function loadCourseOptions() {
+  // 数据刷新必清危险武装态（守卫 rw-admin-armed-reset-on-load 规格·批3）——本函数只在无课号直入时跑，
+  // 此时本就无可武装对象，复位是幂等的安全动作
+  confirmKey.value = ''
+  publishConfirm.value = false
+  const dr = await listDrafts().catch(() => null)
+  if (!(dr as any)?.ok) return
+  const seen = new Map<string, string>()
+  for (const p of (((dr as any).list as Record<string, any>[]) || [])) {
+    const cid = String(p.courseId || '')
+    if (cid && !seen.has(cid)) seen.set(cid, String(p.name || cid))
+  }
+  courseOptions.value = [...seen.entries()].map(([cid, label]) => ({ cid, label }))
+}
+function pickCourse(cid: string) {
+  courseId.value = cid
+  void load()
+}
 const batchUploading = ref(false) // 课时级批量传视频在途（P1·根因#8）：期间锁重排/删除交互入口，防结构错位与稳定标识失配（批3 规格）
 
 const pct = computed(() => (stats.value.total ? Math.round((stats.value.done / stats.value.total) * 100) : 0))
@@ -379,7 +402,11 @@ async function publish() {
       : '发布失败：' + String(r.error || '')
 }
 
-onMounted(load)
+onMounted(() => {
+  void load()
+  // 直入无课号→加载课程选择桥（embed/带课号路径零变化）
+  if (!props.embed && !courseId.value.trim()) void loadCourseOptions()
+})
 </script>
 
 <template>
@@ -463,6 +490,15 @@ onMounted(load)
 
       <div><button class="add-chapter" @click="addChapter"><Plus :size="15" :stroke-width="2" /><span>加章</span></button></div>
     </template>
+    <!-- 选择器模式（批3 死胡同改造）：直入无课号时从商品桥列已关联课程点选 -->
+    <Card v-else-if="!message && courseOptions && courseOptions.length" title="选择课程" sub="从已关联课程的商品选一门进入；未关联的先到商品页「编辑课程」建立关联">
+      <div class="pick-list">
+        <button v-for="o in courseOptions" :key="o.cid" class="pick-row" @click="pickCourse(o.cid)">
+          <span class="pick-name">{{ o.label }}</span>
+          <code class="pick-id">{{ o.cid }}</code>
+        </button>
+      </div>
+    </Card>
     <EmptyState v-else-if="!message" :icon="BookOpen" text="输入课程编号（course-xxx）载入其章节结构" />
   </div>
 </template>
@@ -715,5 +751,34 @@ onMounted(load)
   font-size: 13px;
   font-weight: 600;
   cursor: pointer;
+}
+
+/* 选择器模式（批3 死胡同改造）：课程挑选列表（商品桥） */
+.pick-list {
+  display: flex;
+  flex-direction: column;
+}
+.pick-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 4px;
+  border: none;
+  border-bottom: 1px solid var(--ld-line);
+  background: none;
+  cursor: pointer;
+  text-align: left;
+  font-size: 13px;
+}
+.pick-row:hover {
+  background: var(--ld-bg);
+}
+.pick-name {
+  color: var(--ld-ink);
+  font-weight: 600;
+}
+.pick-id {
+  color: var(--ld-content-2);
+  font-size: 11px;
 }
 </style>
