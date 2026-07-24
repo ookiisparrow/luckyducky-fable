@@ -5,10 +5,11 @@
 // 待接学习分析 action 后再补趋势/热销卡位（记 docs/待办与债.md）。
 import { ref, onMounted, computed } from 'vue'
 import { useRouter } from 'vue-router'
-import { Users, ShoppingBag, Wallet, QrCode, GraduationCap, RefreshCw, TriangleAlert, Truck, RotateCcw, Boxes, Flame, PauseCircle, PackagePlus, Inbox } from 'lucide-vue-next'
+import { Users, ShoppingBag, Wallet, QrCode, GraduationCap, RefreshCw, TriangleAlert, Truck, RotateCcw, Boxes, Flame, PauseCircle, PackagePlus, Inbox, ShieldAlert } from 'lucide-vue-next'
 import { getDashboard, orderCounts, refundCounts } from '../api/money'
 import { listInventory } from '../api/system'
 import { listDrafts } from '../api/products'
+import { getInspectStatus } from '../api/ops'
 import { mapDashboard, deriveDashboardTodos } from '../lib/mapMoney'
 import { mapDraftRows } from '../lib/mapProducts'
 import { LOW_STOCK_THRESHOLD } from '../lib/thresholds'
@@ -23,6 +24,10 @@ const router = useRouter()
 const vm = ref<ReturnType<typeof mapDashboard>>(null)
 const todo = ref({ ship: 0, refund: 0, lowStock: 0, prep: 0 })
 const todoPartial = ref(false) // 待处理计数有副请求加载失败＝true（病根#14：别把「没加载到」显示成「无待办」）
+// 异常账本未处理数（UX 体检批2·病根#14 信息架构层）：与 /anomalies 页同账本（服务端 count·
+// getInspectStatus 纯只读），让账本高危信号进看板人眼；「钱链告警」是另一套定向口径（getTxAlerts
+// 三类），两格并存各自为真
+const openAnomalies = ref(0)
 const message = ref('加载中…')
 const busy = ref(false)
 
@@ -51,6 +56,7 @@ const TODOS = computed(() => [
   { key: 'prep', label: '上新未完成', n: todo.value.prep, to: '/products', icon: PackagePlus, tone: 'warn' },
   { key: 'low', label: '低库存 / 售罄', n: todo.value.lowStock, to: '/inventory', icon: Boxes, tone: 'red' },
   { key: 'money', label: '钱链告警', n: alertCount.value, to: alertsHaveRefundType.value ? '/refunds' : '/orders', icon: TriangleAlert, tone: 'red' },
+  { key: 'anomaly', label: '异常未处理', n: openAnomalies.value, to: '/anomalies', icon: ShieldAlert, tone: 'red' },
 ])
 const todoTotal = computed(() => TODOS.value.reduce((s, t) => s + t.n, 0))
 const fmtClock = (ts: number) => {
@@ -78,12 +84,13 @@ const funnelMax = computed(() => Math.max(1, ...(vm.value?.funnel || []).map((f)
 async function load() {
   busy.value = true
   // 行动条计数复用服务端精确口径（orderCounts/refundCounts·根因#7）+ 库存按 SKU 实算；任一失败不拖累看板
-  const [d, oc, rc, inv, dr] = await Promise.all([
+  const [d, oc, rc, inv, dr, ins] = await Promise.all([
     getDashboard(),
     orderCounts().catch(() => ({ ok: false }) as any),
     refundCounts().catch(() => ({ ok: false }) as any),
     listInventory().catch(() => ({ ok: false }) as any),
     listDrafts().catch(() => ({ ok: false }) as any),
+    getInspectStatus().catch(() => ({ ok: false }) as any),
   ])
   busy.value = false
   if ((d as any).error === 'SESSION_LOST') return // 会话失效集中导登录（client.onSessionLost·单源·根因#5）
@@ -99,6 +106,9 @@ async function load() {
   })
   todo.value = { ship: t.ship, refund: t.refund, lowStock: t.lowStock, prep: t.prep }
   todoPartial.value = t.partial
+  // 异常计数失败并入 partial 信号（同病根#14 口径：不把「没加载到」伪装成 0）
+  openAnomalies.value = (ins as any)?.ok ? Number((ins as any).openAnomalies) || 0 : 0
+  if (!(ins as any)?.ok) todoPartial.value = true
   message.value = vm.value ? '' : '看板加载失败：' + String((d as any).error || '')
 }
 

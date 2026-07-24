@@ -4,6 +4,7 @@
 // 富详情抽屉（订单进度时间线 / 逐商品激活态 getOrderDetail / 交易单号 / 微信发货合规上报状态）、
 // shipped 改单号 · done 查看、物流公司预设下拉、列表手机号掩码（PII）。删除/解除仍走 no-alert 两步确认。
 import { ref, computed, onMounted } from 'vue'
+import { useRouter } from 'vue-router'
 import { useLatest } from '../lib/latest'
 import { RefreshCw, Search, Package, X, PackageCheck, ScanLine, TriangleAlert } from 'lucide-vue-next'
 import { listOrders, orderCounts, getOrderDetail, shipOrder, shipOrders, clearFeeMismatch } from '../api/money'
@@ -15,6 +16,8 @@ import EmptyState from '../components/ui/EmptyState.vue'
 import { mapOrderRows, type OrderRowVM } from '../lib/mapMoney'
 import { dateTime } from '../lib/format'
 import { COMPANIES } from '../lib/fulfill'
+
+const router = useRouter() // 本页唯一跳转点：退款持有行「查看退款」深链（/refunds?q=单号·复用 Refunds 深链自动检索范式）
 
 const TABS = [
   { key: 'paid', label: '待发货' },
@@ -309,14 +312,15 @@ onMounted(reload)
             <div class="ld-td time" :style="{ width: '150px' }">{{ row.timeLabel }}</div>
             <div class="ld-td r amount" :style="{ width: '110px' }">{{ row.amountLabel }}</div>
             <div class="ld-td" :style="{ width: '110px' }">
-              <Badge :tone="badgeTone(row)">{{ row.feeMismatch ? '待复核' : row.refundHold ? '已退款·勿发货' : row.statusLabel }}</Badge>
+              <Badge :tone="badgeTone(row)">{{ row.feeMismatch ? '待复核' : row.refundHold ? '退款·勿发货' : row.statusLabel }}</Badge>
             </div>
             <div class="ld-td r ops" :style="{ width: '150px' }">
               <UiButton v-if="row.feeMismatch" variant="danger" size="sm" @click="doClearMismatch(row.id)">
                 <TriangleAlert :size="14" :stroke-width="1.8" /><span>{{ clearConfirmId === row.id ? '确认已核对流水？' : '去核对' }}</span>
               </UiButton>
-              <!-- refundHold（P0）：已有行退款 approved/refunded，禁止发货入口——真正裁决在服务端 shipOne，这里只挡入口不给点 -->
-              <span v-else-if="row.refundHold" class="hint-refund-hold">该单退款处理中，请到「退款」页核对后再决定后续</span>
+              <!-- refundHold（P0）：已有行退款 applied/approved/refunded，禁止发货入口——真正裁决在服务端 shipOne，这里只挡入口不给点。
+                   布尔不区分三态→文案不得声称「处理中/已退款」（曾与徽章自相矛盾）；深链带单号让 Refunds 自动检索到具体记录 -->
+              <span v-else-if="row.refundHold" class="hint-refund-hold">该单涉及退款，勿发货<button class="link" @click="router.push({ path: '/refunds', query: { q: row.id } })">查看退款 →</button></span>
               <UiButton v-else-if="row.canShip" variant="primary" size="sm" @click="openDrawer(row, 'ship')">
                 <Package :size="14" :stroke-width="1.8" /><span>发货</span>
               </UiButton>

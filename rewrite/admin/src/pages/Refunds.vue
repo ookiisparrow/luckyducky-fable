@@ -58,6 +58,14 @@ const decideErr = ref('') // 同意/拒绝失败原因（抽屉内红条·不被
 
 // 列表页脚分母＝当前标签计数（换皮恒用 counts.all·在「待审核」栏也显全量总数·误导）
 const tabTotal = computed(() => counts.value[tab.value || 'all'])
+// 空栏提示（UX 体检批·死循环修复）：本栏空但别的栏有货时明说去处——曾让「已退款 4 单」的场景
+// 落在初始「待审核 0」空白页、以为无事可做；counts 就在手边，不用额外请求
+const emptyText = computed(() => {
+  if (activeQ.value) return '没有匹配该订单号的售后单'
+  const others = TABS.filter((t) => t.key && t.key !== tab.value && (counts.value[t.key] || 0) > 0)
+  if (!others.length) return '这一栏没有售后单'
+  return '这一栏没有售后单——' + others.map((t) => `「${t.label}」有 ${counts.value[t.key]} 单`).join('、')
+})
 const canApprove = computed(() => !!decideRow.value?.canDecide && checkPkg.value && checkCard.value && !busy.value)
 // 判据文案绑本单订单行（P2·根因#8 不失真）：以 lineRefundable 为准，不被课程级激活误导
 const verdictVM = computed<RefundVerdictVM | null>(() =>
@@ -285,7 +293,8 @@ onMounted(() => {
     <!-- 状态 tab（云端实时计数徽章·沿用 TABS/pickTab） -->
     <div class="tabs-wrap">
       <div class="ld-toolbar">
-        <button v-for="t in TABS" :key="t.key" class="ld-chip" :class="{ on: tab === t.key }" @click="pickTab(t.key)">
+        <!-- 搜索态（跨全部状态命中）不点亮任何 tab（同 Orders 既有 !activeQ 范式·防「待审核」高亮误导） -->
+        <button v-for="t in TABS" :key="t.key" class="ld-chip" :class="{ on: !activeQ && tab === t.key }" @click="pickTab(t.key)">
           <span>{{ t.label }}</span>
           <span v-if="countsPartial" class="chip-n warn" title="计数不可用（部分统计加载失败·数字可能不实）">?</span>
           <span v-else-if="counts[t.key || 'all'] != null" class="chip-n">{{ counts[t.key || 'all'] }}</span>
@@ -354,7 +363,7 @@ onMounted(() => {
           <UiButton v-if="hasMore" variant="ghost" size="sm" @click="more">加载更多</UiButton>
         </div>
       </template>
-      <EmptyState v-else-if="!message" :text="activeQ ? '没有匹配该订单号的售后单' : '这一栏没有售后单'" />
+      <EmptyState v-else-if="!message" :text="emptyText" />
     </Card>
 
     <div v-if="decideRow" class="drawer-mask" @click.self="closeDecide">
