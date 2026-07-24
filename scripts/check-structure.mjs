@@ -519,6 +519,74 @@ export const repoChecks = [
     },
   },
   {
+    // MCP 写工具封锁（2026-07-25·用户拍板「三个都装」的安全前提·与 deploy-gated 同族）。痛：MCP 工具调用
+    // 不经 Bash，guard-deploy（Bash PreToolUse hook）对它整体失明——wechat-devtools/cloudbase 两个 MCP server
+    // 暴露的生产写工具（发体验版/云函数部署/产库直写/权限修改/任意云API直通）若不在 settings.json 权限层
+    // deny，就是一条绕过部署闸直达生产的暗道（deny 在 bypass/auto 权限模式下依然最高优先级生效，是 MCP 面
+    // 唯一可靠的闸）。清单以 2026-07-25 tools/list 协议直测实录为准（wechatide 44 工具/cloudbase 40 工具逐一
+    // 过筛）；server 未挂载（.mcp.json 缺失）亦红——MCP 接入若刻意退役，按「删与加对等」同批退役本守卫。
+    id: 'mcp-write-tools-denied',
+    roots: ['#3'],
+    desc: 'MCP 写工具封锁（fail-closed·根因#3）：.mcp.json 挂载的 wechat-devtools/cloudbase 两 MCP server，其生产写/危险工具（wechatide 6写+quit+project_remove；cloudbase 全部 manage*/write*/modify* + downloadTemplate + callCloudApi 计 18）须逐条出现在 .claude/settings.json permissions.deny——MCP 调用不经 Bash、guard-deploy 对其失明，deny 是 MCP 面唯一的闸；缺一条即红',
+    run() {
+      const bad = []
+      const REQUIRED_DENY = [
+        'mcp__wechat-devtools__upload',
+        'mcp__wechat-devtools__cloud_fn_deploy',
+        'mcp__wechat-devtools__cloud_fn_inc_deploy',
+        'mcp__wechat-devtools__cloud_db_write_doc',
+        'mcp__wechat-devtools__cloud_db_write_struct',
+        'mcp__wechat-devtools__cloud_manage_storage',
+        'mcp__wechat-devtools__project_remove',
+        'mcp__wechat-devtools__quit',
+        'mcp__cloudbase__envDomainManagement',
+        'mcp__cloudbase__manageEnv',
+        'mcp__cloudbase__writeNoSqlDatabaseStructure',
+        'mcp__cloudbase__writeNoSqlDatabaseContent',
+        'mcp__cloudbase__modifyDataModel',
+        'mcp__cloudbase__managePgDatabase',
+        'mcp__cloudbase__manageMysqlDatabase',
+        'mcp__cloudbase__manageFunctions',
+        'mcp__cloudbase__manageHosting',
+        'mcp__cloudbase__manageStorage',
+        'mcp__cloudbase__manageCloudRun',
+        'mcp__cloudbase__manageGateway',
+        'mcp__cloudbase__manageAppAuth',
+        'mcp__cloudbase__manageApps',
+        'mcp__cloudbase__managePermissions',
+        'mcp__cloudbase__manageAgents',
+        'mcp__cloudbase__downloadTemplate',
+        'mcp__cloudbase__callCloudApi',
+      ]
+      const mcpPath = join(ROOT, '.mcp.json')
+      if (!existsSync(mcpPath)) {
+        bad.push('.mcp.json 缺失——MCP 接入被拆（2026-07-25 用户拍板装载）；若刻意退役 MCP，同批退役本守卫（删与加对等）')
+        return bad
+      }
+      let servers = {}
+      try {
+        servers = JSON.parse(readFileSync(mcpPath, 'utf8')).mcpServers || {}
+      } catch {
+        bad.push('.mcp.json 不是合法 JSON')
+        return bad
+      }
+      for (const name of ['wechat-devtools', 'cloudbase'])
+        if (!servers[name]) bad.push(`.mcp.json 缺 ${name} server——MCP 接入面不完整（拆卸须同批退役本守卫）`)
+      const settingsPath = join(ROOT, '.claude/settings.json')
+      let deny = []
+      try {
+        deny = JSON.parse(readFileSync(settingsPath, 'utf8'))?.permissions?.deny || []
+      } catch {
+        bad.push('.claude/settings.json 读取/解析失败——deny 闸状态不可知（fail-closed 判红）')
+        return bad
+      }
+      for (const t of REQUIRED_DENY)
+        if (!deny.includes(t))
+          bad.push(`settings.json permissions.deny 缺「${t}」——MCP 生产写暗道未封（guard-deploy 对 MCP 失明·根因#3）`)
+      return bad
+    },
+  },
+  {
     // 元守卫——守的是「框架完整性」本身（元模式 A4「闸自己守着闸」）。
     // 把账本 §四「完整性自查」从人工对照升级为机器可证：每条病根都得有守卫或靠人豁免。
     id: 'guard-coverage',
