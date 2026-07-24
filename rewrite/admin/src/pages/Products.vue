@@ -3,7 +3,7 @@
 // + 三态表格（关联课程/规格·图列 + 6 步上新进度圆点）+ 编辑器（整档 round-trip·图片压缩·危操作两步确认）。
 // 「6 步上新进度」换皮误判「无源」——实则 cards/courses/qrcodes 后端 listDrafts bounded join 派生（视频/卡片/批次态·二轮批Cards-3 还原）。
 import { ref, computed, onMounted, onBeforeUnmount, watch, nextTick } from 'vue'
-import { Search, Trash2, Package } from 'lucide-vue-next'
+import { Search, Trash2, Package, MoreHorizontal } from 'lucide-vue-next'
 import { listDrafts, saveDraft, deleteDraft, uploadImage, publishProduct, unpublishProduct, republishProduct } from '../api/products'
 import { mapDraftRows, publishErrorText, b64SizeOk, basicsMissing, type DraftRowVM } from '../lib/mapProducts'
 import { serialSave } from '../lib/serialSave'
@@ -53,6 +53,30 @@ const rows = ref<DraftRowVM[]>([])
 const message = ref('')
 const busy = ref(false)
 const confirmKey = ref('') // 两步确认（`del:<id>` / `off:<id>`）
+const moreKey = ref('') // 操作列「⋯更多」菜单展开行 id（非危险态·仅 UI 开合；顺手在 reload() 里也清，防刷新后残留开着的菜单）
+// 菜单挂视口 fixed 定位（批5 裁剪修正·浏览器实测）：absolute 会被 Card flush 的 overflow:hidden
+// 裁掉——末行菜单实测只露一项；fixed 按 ⋯ 按钮矩形算坐标，不受卡片裁剪。
+// 终审对抗审查两处 P1 修正：① fixed 坐标只在打开瞬间准，页面一滚动立即收起（scroll 不触发 click，
+// backdrop 挡不住滚轮——原「backdrop 先挡」注释被审查证伪）；② 关菜单=取消手势，必须连带解除
+// confirmKey 两步武装（否则武装残留、重开菜单一击直发真删除）。backdrop 用 mousedown 关：mouseup
+// 时 click 落在其下真实目标上——跨行切换菜单一击到位，不吞第一击。
+const morePos = ref({ top: 0, right: 0 })
+function closeMore() {
+  moreKey.value = ''
+  confirmKey.value = ''
+  window.removeEventListener('scroll', closeMore, true)
+}
+function toggleMore(id: string, e: MouseEvent) {
+  if (moreKey.value === id) {
+    closeMore()
+    return
+  }
+  closeMore() // 兜底：任何切换先干净收场（解除武装+摘监听·幂等）
+  const r = (e.currentTarget as HTMLElement).getBoundingClientRect()
+  morePos.value = { top: Math.round(r.bottom + 4), right: Math.round(window.innerWidth - r.right) }
+  moreKey.value = id
+  window.addEventListener('scroll', closeMore, true) // capture：任何滚动容器滚动都收起
+}
 const edit = ref<Record<string, any> | null>(null)
 const coverPreview = ref('')
 const search = ref('')
@@ -92,6 +116,7 @@ const URL_MAP_STALE_MS = 90 * 60 * 1000
 
 async function reload() {
   confirmKey.value = '' // 刷新即复位危险态（P1·防旧武装的上架/下架/删除按钮跨刷新残留一击直发·批3 规格）
+  moreKey.value = '' // 防刷新后残留开着的⋯更多菜单
   message.value = '加载中…'
   const r = await listDrafts()
   urlMap.value = r.ok && (r as any).urls ? (r as any).urls : {}
@@ -176,6 +201,7 @@ function closeEditor() {
       .catch(() => {})
 }
 onBeforeUnmount(() => {
+  window.removeEventListener('scroll', closeMore, true) // 离页摘⋯菜单滚动监听（timer/listener 必清理）
   if (saveTimer) {
     clearTimeout(saveTimer)
     void flushSave()
@@ -483,7 +509,7 @@ onMounted(async () => {
         <div class="ld-th" :style="{ width: '108px' }">规格 / 图</div>
         <div class="ld-th" :style="{ width: '150px' }">上新进度</div>
         <div class="ld-th" :style="{ width: '92px' }">状态</div>
-        <div class="ld-th" :style="{ width: '260px' }">操作</div>
+        <div class="ld-th" :style="{ width: '190px' }">操作</div>
       </div>
       <div class="ld-tbody">
         <div v-for="row in shown" :key="row.id" class="ld-tr">
@@ -512,18 +538,22 @@ onMounted(async () => {
           <div class="ld-td" :style="{ width: '92px' }">
             <Badge :tone="row.state === 'onsale' ? 'green' : row.state === 'unlisted' ? 'red' : 'brand'">{{ row.stateLabel }}</Badge>
           </div>
-          <div class="ld-td ops" :style="{ width: '260px' }">
-            <UiButton variant="ghost" size="sm" title="6 步上新向导：图片→信息→SKU→视频→卡片→批次" @click="router.push('/products/' + row.id + '/wizard')">上新向导</UiButton>
+          <div class="ld-td ops" :style="{ width: '190px' }">
             <UiButton variant="ghost" size="sm" @click="openEdit(row)">编辑</UiButton>
-            <UiButton variant="ghost" size="sm" @click="editCourse(row)">编辑课程</UiButton>
-            <UiButton variant="ghost" size="sm" @click="router.push({ path: '/cards', query: { productId: row.id } })">卡片设计</UiButton>
             <UiButton v-if="row.state === 'preparing'" variant="primary" size="sm" @click="doPublish(row.id)">{{ confirmKey === 'pub:' + row.id ? '确认上架？' : '上架' }}</UiButton>
-            <UiButton v-if="row.state === 'onsale'" variant="ghost" size="sm" @click="doPublish(row.id)">{{ confirmKey === 'pub:' + row.id ? '确认重上？' : '重新上架' }}</UiButton>
             <UiButton v-if="row.state === 'onsale'" variant="danger" size="sm" @click="doUnpublish(row.id)">{{ confirmKey === 'off:' + row.id ? '确认下架？' : '下架' }}</UiButton>
             <UiButton v-if="row.state === 'unlisted'" variant="primary" size="sm" @click="doRepublish(row.id)">{{ confirmKey === 're:' + row.id ? '确认恢复销售？' : '恢复销售' }}</UiButton>
-            <button class="icon-btn" :title="confirmKey === 'del:' + row.id ? '连已上架一起删？' : '删除'" @click="doDelete(row.id)">
-              <Trash2 :size="15" :stroke-width="1.8" />
+            <button class="icon-btn" title="更多操作" @click="toggleMore(row.id, $event)">
+              <MoreHorizontal :size="15" :stroke-width="1.8" />
             </button>
+            <div v-if="moreKey === row.id" class="more-backdrop" @mousedown="closeMore()"></div>
+            <div v-if="moreKey === row.id" class="more-menu" :style="{ top: morePos.top + 'px', right: morePos.right + 'px' }">
+              <button class="menu-item" title="6 步上新向导：图片→信息→SKU→视频→卡片→批次" @click="closeMore(); router.push('/products/' + row.id + '/wizard')">上新向导</button>
+              <button class="menu-item" @click="closeMore(); editCourse(row)">编辑课程</button>
+              <button class="menu-item" @click="closeMore(); router.push({ path: '/cards', query: { productId: row.id } })">卡片设计</button>
+              <button v-if="row.state === 'onsale'" class="menu-item" @click="doPublish(row.id)">{{ confirmKey === 'pub:' + row.id ? '确认重上？' : '重新上架' }}</button>
+              <button class="menu-item danger" @click="doDelete(row.id)">{{ confirmKey === 'del:' + row.id ? '连已上架一起删？' : '删除' }}</button>
+            </div>
           </div>
         </div>
       </div>
@@ -727,8 +757,46 @@ onMounted(async () => {
   color: var(--ld-content-2);
 }
 .ops {
+  position: relative;
   gap: 6px;
   flex-wrap: wrap;
+}
+/* ⋯更多菜单（操作列收敛·主操作+更多·design 批）：透明全屏 backdrop 收合点击外部，菜单本体白卡贴右下角 */
+.more-backdrop {
+  position: fixed;
+  inset: 0;
+  background: transparent;
+  z-index: 15;
+}
+.more-menu {
+  /* fixed 挂视口（批5 裁剪修正）：absolute 被 Card flush 的 overflow:hidden 裁·坐标由 toggleMore 注入 */
+  position: fixed;
+  z-index: 16;
+  display: flex;
+  flex-direction: column;
+  min-width: 132px;
+  padding: 6px;
+  background: var(--ld-bg);
+  border: 1px solid var(--ld-line);
+  border-radius: var(--ld-radius-sm);
+  box-shadow: 0 8px 24px rgba(20, 15, 30, 0.16);
+}
+.menu-item {
+  padding: 7px 10px;
+  border: none;
+  background: none;
+  border-radius: var(--ld-radius-sm);
+  font-size: 12.5px;
+  color: var(--ld-content);
+  text-align: left;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.menu-item:hover {
+  background: var(--ld-bg-lilac);
+}
+.menu-item.danger {
+  color: var(--ld-red);
 }
 .icon-btn {
   display: flex;
