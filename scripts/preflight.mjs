@@ -4,7 +4,7 @@
  * 机器自动核：质量闸全绿 / 生产线（rewrite/cloud）钱链函数无未部署漂移 / console-assets 正册齐 /
  *            .deploy-manifest 在册。
  * 再打印机器够不到、须人工核的清单（console-assets drift / 验收单 / cloudbaserc 迁移）。
- * 详见 docs/验收手册.md §七。
+ * 详见 docs/运维手册.md §⑦（部署后 smoke）。
  */
 import { execSync } from 'node:child_process'
 import { existsSync, readFileSync } from 'node:fs'
@@ -56,11 +56,11 @@ for (const p of pass) console.log(`  ✅ ${p}`)
 for (const f of fail) console.log(`  ❌ ${f}`)
 console.log(`\n机器体检：${fail.length ? `❌ ${fail.length} 项未过——先修，别部署` : '✅ 全过'}`)
 console.log(`
-还须人工核（机器够不到，详见 docs/验收手册.md §七）：
+还须人工核（机器够不到，详见 docs/运维手册.md §⑦）：
   □ console-assets drift-checklist：对照线上控制台逐项核（forward-node.js / flowId / 库权限期望表）
-  □ 验收单 X（16 集合权限档位）/ Y（支付黄金路径）/ Z（退款黄金路径）真机重走
+  □ 验收单 X（集合权限档位·以 COLLECTIONS 单源为准）/ Y（支付黄金路径）/ Z（退款黄金路径）真机重走
   □ cloudbaserc.json 迁移：functionRoot 仍指旧线冻结产物目录，迁至活线产物目录前须先
-    tcb fn detail 逐个抄回 16 函数真实内存/超时值——仓内无记录，凭空写会在下次 config 应用时降级
+    tcb fn detail 逐个抄回全部函数真实内存/超时值（以 cloudbaserc.json functions 为准）——仓内无记录，凭空写会在下次 config 应用时降级
     生产配置（见 docs/待办与债.md 该 flag）
   □ 数据兼容：重构 _id 方案与现网一致＝无需迁移；债#14（users/progress 确定性_id）属切换后改进
 真部署（deploy-fns）须 DEPLOY_ALLOWED=1 + 用户拍板。本体检不触发任何部署。`)
