@@ -6,8 +6,21 @@
  * 工具实例有状态（CLAUDE.md 靠人:#10）：遇怪象（RPC 不回包/白屏/component not found）先
  * `cli quit` 彻底退出后再重启，不要在僵实例上跑——本脚本的探活步骤兜第一道。
  *
+ * Nightly ≥2.02.2607232 已知回归（2026-07-24 实测定性·docs/调试日志.md 同日条）：
+ * checkout 空草稿 600ms 自动 navigateBack 若落在前向转场未完成的窗口内（新版转场冷池可迟至 ~800ms），
+ * 模拟器导航状态机死锁——返回被吞 + 此后一切导航类 RPC（reLaunch/navigateTo）永不回包，而信息类
+ * RPC（systemInfo/pageStack/evaluate）照常应答（半僵态）。三个适配由此而来：
+ *   ① checkout 挪到跑序末位——它一旦死锁，按 app.json 原序其后各页全是陪葬 FAIL 噪音；末位还天然
+ *      多吃 WebView 热池红利（热池转场 <600ms 不触竞态，2026-07-24 全量验证即如此过）；
+ *   ② checkout 的 navigateTo 用 evaluate 发后即忘 + pageStack 轮询断言（callWxMethod 会等导航完成
+ *      回包，死锁时该 RPC 永挂 → 探不到失败原因还拖死脚本）；
+ *   ③ connect 探活加导航道半边（systemInfo 只探信息道，半僵实例探不出来）——探不过就 cli quit 冷启。
+ * 断言语义不放水：checkout 两段式（上栈 + 600ms 空草稿自动返回）照旧必须成立，新版工具下第二段
+ * 失败属真实回归、如实红（模拟器人工手测同样会撞上）。
+ *
  * 抓什么：逐页开验「页面开得起来、无致命运行时错误」——handler 缺失（wxml 绑定引用不存在的方法，
- * 真机必报错、静态层抓不到）、组件未注册、路由级错误、未捕获异常/Promise 拒绝（经 app.ts 探针取证）。
+ * 真机必报错、静态层抓不到；条件节点上的静态半边另有守卫 rw-mp-wxml-handlers-exist）、组件未注册、
+ * 路由级错误、未捕获异常/Promise 拒绝（经 app.ts 探针取证）。
  * 不是全量 UI/交互验证（那层仍是人工真机走查，见 rewrite/mp/README.md）。
  *
  * 不进 pre-commit/CI 三道闸（gate-single-source 单源＝npm run check；本脚本需真实 devtools 实例，
@@ -21,6 +34,7 @@
 const automator = require('miniprogram-automator')
 const fs = require('fs')
 const path = require('path')
+const { execSync } = require('child_process')
 
 const REPO_ROOT = path.join(__dirname, '..')
 const MP_ROOT = path.join(REPO_ROOT, 'rewrite/mp')
@@ -50,6 +64,9 @@ function timeoutReject(ms, msg) {
 
 // 照抄 scripts/visual-check.cjs 已验证过的坑：connect 成功 ≠ RPC 可用（僵尸端口），
 // 所以 connect 后必须先 systemInfo() 探活；连不上/探活超时才 launch 冷启动。
+// 2026-07-24 收紧：systemInfo 只走信息道，checkout 死锁留下的半僵实例（导航道瘫、信息道活）
+// 探不出来——上次失败残留的实例会让本次 connect「成功」然后逐页 reLaunch 全挂成假 FAIL。
+// 补导航道探活（reLaunch 首页），不过即 cli quit 弃实例冷启（自愈，免去人工 quit 一步）。
 async function connectMp() {
   try {
     const mp = await Promise.race([
@@ -60,10 +77,20 @@ async function connectMp() {
       mp.systemInfo(),
       timeoutReject(5000, 'RPC 探活 5s 无响应，工具需 cli quit 后重启（靠人:#10）'),
     ])
-    console.log('已连上现成实例（connect）')
+    await Promise.race([
+      mp.reLaunch('/' + HOME_PATH),
+      timeoutReject(15000, '导航道 15s 无响应（半僵实例·checkout 死锁残留的典型形态）'),
+    ])
+    console.log('已连上现成实例（connect·信息道+导航道双探活通过）')
     return mp
   } catch (e) {
-    console.log(`connect 不可用（${e.message}），改用 automator.launch 冷启动…`)
+    console.log(`connect 不可用（${e.message}），cli quit 弃现存实例后 launch 冷启动…`)
+    try {
+      execSync(`"${CLI_PATH}" quit`, { stdio: 'ignore', timeout: 30000 })
+    } catch {
+      /* 无实例可退＝quit 报错，无妨 */
+    }
+    await sleep(5000)
     return automator.launch({
       cliPath: CLI_PATH,
       projectPath: MP_ROOT,
@@ -94,11 +121,15 @@ async function drainProbe(mp) {
 
 async function main() {
   const appJson = JSON.parse(fs.readFileSync(path.join(MP_ROOT, 'app.json'), 'utf8'))
-  const pagePaths = appJson.pages // 页面清单以 app.json 运行时读取为准，不硬编码页面数
-  if (!Array.isArray(pagePaths) || !pagePaths.length) {
+  const registered = appJson.pages // 页面清单以 app.json 运行时读取为准，不硬编码页面数
+  if (!Array.isArray(registered) || !registered.length) {
     console.error('rewrite/mp/app.json 未解析到 pages 数组，冒烟无从跑')
     process.exit(2)
   }
+  // checkout 挪末位（其余页保持 app.json 原序）：Nightly 回归下它可能死锁导航道（见头注），
+  // 排原位会让其后所有页全 FAIL 成噪音、真信号被淹。
+  const pagePaths = registered.filter((p) => p !== CHECKOUT_PATH)
+  if (registered.includes(CHECKOUT_PATH)) pagePaths.push(CHECKOUT_PATH)
 
   const mp = await connectMp()
   const consoleLog = []
@@ -115,23 +146,35 @@ async function main() {
 
     if (p === CHECKOUT_PATH) {
       // checkout 特例：先 reLaunch 首页再 navigateTo checkout，两层栈让 600ms 空草稿自动
-      // 返回（checkout.ts:35 backTimer）可成功执行——两段式断言：navigateTo 后即刻（<600ms
-      // 内）栈顶=checkout，等待 2s 后栈顶=home。用 callWxMethod 直调而非 mp.navigateTo()
-      // 高阶封装：后者内部固定 sleep(3000) 才返回，测不出「即刻」这一段。
+      // 返回（checkout.ts backTimer）可成功执行——两段式断言：navigateTo 后短窗内栈顶=checkout，
+      // 随后自动返回 home。navigateTo 用 evaluate 发后即忘（不等导航完成回包）+ 50ms 轮询
+      // pageStack 捕「即刻」相位：callWxMethod 会等导航 complete，Nightly 死锁下该 RPC 永挂；
+      // mp.navigateTo() 高阶封装内部固定 sleep(3000)，同样测不出「即刻」这一段。
       await mp.reLaunch('/' + HOME_PATH)
-      await mp.callWxMethod('navigateTo', { url: route })
-      const immediate = await mp.pageStack()
-      const immediateTop = immediate[immediate.length - 1]
-      if (!immediateTop || immediateTop.path !== CHECKOUT_PATH) {
-        reasons.push(
-          `navigateTo 后即刻栈顶=${immediateTop ? immediateTop.path : '(空)'}，期望 ${CHECKOUT_PATH}`
-        )
+      const t0 = Date.now()
+      await mp.evaluate(() => {
+        wx.navigateTo({ url: '/pages/checkout/checkout' })
+      })
+      let seenCheckout = false
+      while (Date.now() - t0 < 1500) {
+        const st = await mp.pageStack()
+        const top = st[st.length - 1]
+        if (top && top.path === CHECKOUT_PATH) {
+          seenCheckout = true
+          break
+        }
+        await sleep(50)
       }
-      await sleep(2000)
+      if (!seenCheckout) reasons.push(`navigateTo 后 1.5s 内未观测到栈顶=${CHECKOUT_PATH}`)
+      await sleep(Math.max(0, 2600 - (Date.now() - t0)))
       const later = await mp.pageStack()
       const laterTop = later[later.length - 1]
       if (!laterTop || laterTop.path !== HOME_PATH) {
-        reasons.push(`等待 2s 后栈顶=${laterTop ? laterTop.path : '(空)'}，期望自动返回 ${HOME_PATH}`)
+        reasons.push(
+          `等待 2.6s 后栈顶=${laterTop ? laterTop.path : '(空)'}，期望自动返回 ${HOME_PATH}` +
+            '（若栈顶仍是 checkout：Nightly ≥2.02.2607232 转场中途 navigateBack 死锁的已知回归，' +
+            '此后本实例导航道已瘫、下次运行由导航道探活自动冷启自愈——见头注与 docs/调试日志.md 2026-07-24 条）',
+        )
       }
     } else {
       await mp.reLaunch(route) // tabBar 页也通吃（reLaunch 不受 navigateTo/redirectTo 的 tabBar 限制）

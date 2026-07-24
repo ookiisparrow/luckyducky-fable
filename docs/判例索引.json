@@ -899,6 +899,27 @@
    "source": "史料「调试日志-fable-结案-至20260713.md」 ##R"
   },
   {
+   "id": "fable调试-S",
+   "kind": "debuglog",
+   "namespace": "fable",
+   "title": "开发者工具 Nightly 回归：checkout 空草稿自动返回死锁导航道（半僵态·冒烟三适配自愈）",
+   "keywords": [
+    "开发者工具",
+    "Nightly",
+    "冒烟卡死",
+    "timeout waiting for automator response",
+    "半僵态",
+    "导航道",
+    "navigateBack死锁",
+    "转场中途返回",
+    "checkout自动返回",
+    "callWxMethod挂死",
+    "automator超时",
+    "工具自动更新回归"
+   ],
+   "source": "docs/调试日志.md ##S"
+  },
+  {
    "id": "免修-课程页失败toast",
    "kind": "nofix",
    "title": "my-courses/order-list reload 失败 toast 无失焦复核（P3·瞬态观感不建机制）",
