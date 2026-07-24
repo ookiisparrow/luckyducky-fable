@@ -74,7 +74,7 @@ async function main() {
 
   const timestamp = new Date().toISOString().replace(/:/g, '-')
   // .db-backups.local/ 命名双重豁免扫描面（零新增守卫/gitignore 编辑）：以 . 开头天然被
-  // check-structure.mjs / check-conventions.mjs 的 SKIP_DIR 跳过；*.local 后缀天然命中
+  // check-structure.mjs 的 SKIP_DIR 跳过；*.local 后缀天然命中
   // 既有 .gitignore 规则，导出的本地数据永不会被 git add 进这个生产源仓。
   const outDir = join(process.cwd(), '.db-backups.local', timestamp)
   mkdirSync(outDir, { recursive: true })

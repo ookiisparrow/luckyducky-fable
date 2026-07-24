@@ -2,8 +2,7 @@
 /**
  * 结构不变量检查——重构主张的「机器守卫」。
  *
- * 与 check-conventions 分工：
- *   - conventions 管「单文件的样式 / 多端写法」（rpx / 写死色 / 内联 svg…）。
+ * （原 check-conventions 扫描器已随旧线退役——单文件样式/多端写法类规则现走本文件 fileRule + eslint。）
  *   - structure  管「跨文件 / 仓级的架构不变量」——**每条重构主张落地为这里一条规则**：
  *     主张做完 = 守卫存在且全绿；主张回退 = 红灯。让架构决策从「靠人记」变「机器守」。
  *
@@ -57,7 +56,7 @@ function listPackageJsons() {
 // roots：本守卫治哪条病根/主张（病根 #N / 主张 TN / 红线·基建·正册·格式 等标签）——
 // 机读 provenance，guard-coverage 据此断言每条病根都有守卫（见 docs/元模式.md A2/A4）。
 // 新线黄金用例注册表（收敛阀）：rewrite 各模块 golden 行为基准测试集中登记，被 rw-golden-registered 一条守卫统一核存在。
-// 新增模块只加一行、不加守卫（守卫总数收敛·呼应 known-collections-only / known-error-codes）。
+// 新增模块只加一行、不加守卫（守卫总数收敛·呼应 known-collections-only）。
 export const RW_GOLDEN_REGISTRY = [
   { id: 'rw-contracts-golden', roots: ['#4', '#2', '#5'], test: 'rewrite/shared/tests/money.test.ts' },
   { id: 'rw-kit-golden', roots: ['#1', '#2', '#3', '#7', '#13'], test: 'rewrite/cloud/tests/transition.test.ts' },
@@ -525,7 +524,7 @@ export const repoChecks = [
       const sec1 = readFileSync(ledgerPath, 'utf8').split('## 二、')[0]
       const rootIds = [...sec1.matchAll(/^###\s*(\d+)\.\s/gm)].map((m) => `#${m[1]}`)
       if (!rootIds.length) bad.push('根因账本 §一 解析不到病根（### N. 标题）——覆盖率无从核')
-      // 守卫 roots：本模块三数组 + conventions 规则
+      // 守卫 roots：本模块三数组
       const allGuards = [...repoChecks, ...fileRules, ...typeAndTestGuards]
       const guardRoots = new Set()
       for (const g of allGuards) for (const r of g.roots || []) guardRoots.add(r)
@@ -1573,6 +1572,17 @@ import { PROD_ENV } from './lib/env.mjs'（单源·病根#5·债#30①）`)
           const sp = join('.claude/skills', d, 'SKILL.md')
           if (existsSync(join(ROOT, sp))) targets.push(sp)
         }
+      // 2026-07-23 治理深查扩面：rewrite/*/README.md 与子项目文档家此前是扫描盲区（mp README 死链实证）
+      for (const sub of ['后台360工作站', '进销存ERP']) {
+        const sp = join(ROOT, 'docs', sub)
+        if (existsSync(sp)) for (const f of readdirSync(sp)) if (f.endsWith('.md')) targets.push(`docs/${sub}/${f}`)
+      }
+      const rwDir = join(ROOT, 'rewrite')
+      if (existsSync(rwDir))
+        for (const d of readdirSync(rwDir)) {
+          const rp = join('rewrite', d, 'README.md')
+          if (existsSync(join(ROOT, rp))) targets.push(rp)
+        }
       for (const rel of targets) {
         const text = readFileSync(join(ROOT, rel), 'utf8')
         for (const m of text.matchAll(/(docs\/archive\/|docs\/|archive\/)([^\s)）、，。`"'\]|]+\.md)/g)) {
@@ -1764,7 +1774,7 @@ import { PROD_ENV } from './lib/env.mjs'（单源·病根#5·债#30①）`)
     // K 类病根」须报同一数。（原「测试数自洽」子检查批1 退役——空样本恒绿的摆设，见 run() 尾注。）
     id: 'guard-count-synced',
     roots: ['#11'],
-    desc: '客观计数机器维护（规则⑥·病根#11·治理文档自身防漂）：repoChecks/fileRules 数组长度为守卫数真值、根因账本 §一 `### N.` 数为病根数真值（与 guard-coverage 同源）；所有治理文档（现状与路线/自动化验证系统/CLAUDE/元模式/根因账本）里「N repoCheck / M fileRule / K 类病根」须报同一数（防手抄漂移·体检抓的 13≠86、12≠13 那类）',
+    desc: '客观计数机器维护（规则⑥·病根#11·治理文档自身防漂）：repoChecks/fileRules 数组长度为守卫数真值、根因账本 §一 `### N.` 数为病根数真值（与 guard-coverage 同源）；所有治理文档（现状与路线/CLAUDE/元模式/根因账本）里「N repoCheck / M fileRule / K 类病根」须报同一数（防手抄漂移·体检抓的 13≠86、12≠13 那类）',
     run() {
       const bad = []
       const realRepo = repoChecks.length
