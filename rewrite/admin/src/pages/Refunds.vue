@@ -62,6 +62,9 @@ const tabTotal = computed(() => counts.value[tab.value || 'all'])
 // 落在初始「待审核 0」空白页、以为无事可做；counts 就在手边，不用额外请求
 const emptyText = computed(() => {
   if (activeQ.value) return '没有匹配该订单号的售后单'
+  // 计数不可信时不引用数字（终审 P1·病根#14）：countsPartial 时 counts 是上次成功加载的陈旧值，
+  // 同屏 tab chip 已显「?」——这里再自信报「有 N 单」就是同屏自相矛盾的假话
+  if (countsPartial.value) return '这一栏没有售后单（其他栏计数暂不可用，刷新后再看）'
   const others = TABS.filter((t) => t.key && t.key !== tab.value && (counts.value[t.key] || 0) > 0)
   if (!others.length) return '这一栏没有售后单'
   return '这一栏没有售后单——' + others.map((t) => `「${t.label}」有 ${counts.value[t.key]} 单`).join('、')
