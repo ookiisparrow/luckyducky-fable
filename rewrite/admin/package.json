@@ -21,6 +21,6 @@
   "devDependencies": {
     "@types/qrcode": "^1.5.5",
     "@vitejs/plugin-vue": "^5.0.4",
-    "vite": "^5.2.8"
+    "vite": "^8.1.5"
   }
 }
