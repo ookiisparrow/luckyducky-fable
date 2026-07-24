@@ -11,7 +11,9 @@
     "多端",
     "跨端"
    ],
-   "source": "docs/关键决策记录.md §1"
+   "source": "docs/关键决策记录.md §1",
+   "status": "superseded-oldline",
+   "note": "旧线（uni-app 线）判例·旧线已删除·仅防重提"
   },
   {
    "id": "决策§2",
@@ -23,7 +25,9 @@
     "TS",
     "页面层语言"
    ],
-   "source": "docs/关键决策记录.md §2"
+   "source": "docs/关键决策记录.md §2",
+   "status": "superseded-oldline",
+   "note": "旧线（uni-app 线）判例·旧线已删除·仅防重提"
   },
   {
    "id": "决策§3",
@@ -64,7 +68,9 @@
     "占位图",
     "素材替换"
    ],
-   "source": "docs/关键决策记录.md §5"
+   "source": "docs/关键决策记录.md §5",
+   "status": "superseded-oldline",
+   "note": "旧线（uni-app 线）判例·旧线已删除·仅防重提"
   },
   {
    "id": "决策§6",
@@ -88,7 +94,9 @@
     "@use",
     "样式迁移"
    ],
-   "source": "docs/关键决策记录.md §7"
+   "source": "docs/关键决策记录.md §7",
+   "status": "superseded-oldline",
+   "note": "旧线（uni-app 线）判例·旧线已删除·仅防重提"
   },
   {
    "id": "决策§8",
@@ -948,31 +956,16 @@
    "keywords": [
     "膨胀",
     "瘦身",
-    "减肥",
     "棘轮",
     "基线",
-    "预算",
     "代码量",
     "LOC",
-    "行数",
     "依赖锁",
-    "package-lock",
-    "死包",
     "死导出",
-    "dead export",
     "幽灵依赖",
-    "phantom dependency",
     "孤儿资产",
-    "孤儿文件",
-    "无人引用",
-    "越长越大",
-    "仓库变大",
-    "文件太大",
-    "上下文成本",
     "传感器",
-    "趋势",
-    "回弹",
-    "slim"
+    "回弹"
    ],
    "source": "docs/根因账本.md §一 ### 17"
   }
