@@ -3,6 +3,9 @@
  * 用法：npm run smoke:mp（miniprogram-automator 已登记为 devDependencies，无需 --no-save 手装）。
  * 前置：微信开发者工具已安装于默认路径 /Applications/wechatwebdevtools.app；
  *       工具「设置 → 安全设置 → 服务端口」需开启（否则 connect/launch 均失败，见下方报错提示）。
+ *       在 git worktree 里跑本脚本：先把主目录 rewrite/mp/project.config.json（gitignored 本地文件，
+ *       worktree 不带）拷进 worktree 同路径——缺它 devtools 编译不出页面 js，模拟器「启动失败」，
+ *       表现为全部自动化 RPC 统一卡在 10s 超时（2026-07-24 调试日志 U 案踩过，别重新排查一遍）。
  * 工具实例有状态（CLAUDE.md 靠人:#10）：遇怪象（RPC 不回包/白屏/component not found）先
  * `cli quit` 彻底退出后再重启，不要在僵实例上跑——本脚本的探活步骤兜第一道。
  *
@@ -35,6 +38,14 @@ const automator = require('miniprogram-automator')
 const fs = require('fs')
 const path = require('path')
 const { execSync } = require('child_process')
+
+// 又一次 Nightly 自动更新期间实测发现（2607232→2607242，同一晚·docs/调试日志.md T 案）：
+// miniprogram-automator 的 connect()/launch() 都无条件调内部 checkVersion()，读 Tool.getInfo
+// 返回值的 .SDKVersion 字段跟 '2.7.3' 比大小；新 Nightly 版的 Tool.getInfo 已改回 { version: '<工具
+// 自身版本号>' }（不再有 SDKVersion 字段）——.split() 撞 undefined，connect/launch 两条路径全断。
+// 这不是我们的模拟器基础库太老，是自动化协议的响应形状变了，上游库尚未跟进。该校验只是起步门槛、
+// 不影响后续任何真实自动化能力（page/evaluate/pageStack 等一概不读 SDKVersion）——原地 no-op 跳过。
+require('miniprogram-automator/out/MiniProgram').default.prototype.checkVersion = async function () {}
 
 const REPO_ROOT = path.join(__dirname, '..')
 const MP_ROOT = path.join(REPO_ROOT, 'rewrite/mp')

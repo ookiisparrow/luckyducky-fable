@@ -920,6 +920,27 @@
    "source": "docs/调试日志.md ##S"
   },
   {
+   "id": "fable调试-U",
+   "kind": "debuglog",
+   "namespace": "fable",
+   "title": "Tool.getInfo 响应形状改变致 automator 版本门崩溃（真回归·猴补）+ worktree 缺 project.config.json 致全RPC假性超时（自查纠偏·非产品bug）",
+   "keywords": [
+    "checkVersion",
+    "cmpVersion",
+    "SDKVersion",
+    "Tool.getInfo",
+    "undefined.split",
+    "miniprogram-automator崩溃",
+    "worktree缺配置",
+    "project.config.json",
+    "gitignore本地文件",
+    "模拟器启动失败",
+    "RPC全超时",
+    "二次自动更新"
+   ],
+   "source": "docs/调试日志.md ##U"
+  },
+  {
    "id": "免修-课程页失败toast",
    "kind": "nofix",
    "title": "my-courses/order-list reload 失败 toast 无失焦复核（P3·瞬态观感不建机制）",
