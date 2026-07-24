@@ -25,6 +25,8 @@ export default [
       // git worktree 隔离副本（.claude/worktrees/*）＝仓库另一份拷贝，非本仓 lint 源——
       // eslint . 递归进去会用错解析器把 .vue 里的 TS 当纯 JS 报解析错，且重复扫一遍全仓。
       '.claude/**',
+      // 变异测试运行时沙盒（npm run mutation·StrykerJS 把仓复制进去跑）＝同上「仓库另一份拷贝」
+      '.stryker-tmp/**',
     ],
   },
 

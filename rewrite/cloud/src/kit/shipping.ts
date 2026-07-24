@@ -75,7 +75,9 @@ export async function uploadShippingToWx(o: ShipUpload): Promise<ShipResult> {
       payer: { openid: o.openid },
     })
     // 云调用成功 errCode/errcode=0；非 0 视为失败（留原始码供对账）。
-    const code = r && (r.errCode ?? r.errcode)
+    // 回包整个 falsy＝拿不到任何确认，也按失败算——fail-soft 只兜「不抛穿」，不兜「谎报成功」（2026-07-24 变异分诊缺口①）。
+    if (!r) return { ok: false, error: 'WX_EMPTY_RESP' }
+    const code = r.errCode ?? r.errcode
     if (code != null && code !== 0) return { ok: false, error: 'WX_ERR_' + code }
     return { ok: true }
   } catch (e: any) {

@@ -38,6 +38,8 @@ const httpsFetch: WxFetch = (url, init) =>
         res.on('end', () => resolve({ status: res.statusCode || 0, text: async () => body }))
       }
     )
+    // 对端悬挂不无限等（2026-07-24 变异分诊缺口③）：账单查询/下载 30 秒不回即掐——destroy 触发 error → reject → fail-soft 兜住。
+    req.setTimeout(30_000, () => req.destroy(new Error('TIMEOUT')))
     req.on('error', reject)
     if (init?.body) req.write(init.body)
     req.end()

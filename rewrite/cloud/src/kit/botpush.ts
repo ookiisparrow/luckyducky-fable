@@ -10,7 +10,7 @@ import { request } from 'https'
 export type BotFetch = (
   url: string,
   init?: { method?: string; headers?: Record<string, string>; body?: string },
-) => Promise<{ json: () => Promise<any> }>
+) => Promise<{ json: () => Promise<any>; status?: number }> // status：全局 fetch 天然带；httpsFetch 补 statusCode（可选·旧注入 mock 不带也兼容）
 
 const httpsFetch: BotFetch = (url, init) =>
   new Promise((resolve, reject) => {
@@ -20,9 +20,11 @@ const httpsFetch: BotFetch = (url, init) =>
       (res) => {
         let body = ''
         res.on('data', (c) => (body += c))
-        res.on('end', () => resolve({ json: async () => JSON.parse(body || '{}') }))
+        res.on('end', () => resolve({ status: res.statusCode, json: async () => JSON.parse(body || '{}') }))
       },
     )
+    // 对端悬挂不无限等（2026-07-24 变异分诊缺口③同族）：告警推送小包，10 秒不回即掐——destroy 触发 error → reject → fail-soft 兜住。
+    req.setTimeout(10_000, () => req.destroy(new Error('TIMEOUT')))
     req.on('error', reject)
     if (init?.body) req.write(init.body)
     req.end()
@@ -77,8 +79,12 @@ export async function pushBotAlert(
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ msgtype: 'markdown', markdown: { content } }),
     })
-    const j = await r.json().catch(() => ({}))
-    if (j && j.errcode) return { ok: false, error: 'WX_' + j.errcode }
+    // 2026-07-24 变异分诊缺口②：HTTP ≥400 或回包非 JSON（如网关 502 吐 HTML）都不算送达——
+    // fail-soft 只要求不抛穿，不要求把「没确认」谎报成 ok:true（调用方留痕语义要真）。
+    if (r && r.status != null && r.status >= 400) return { ok: false, error: 'HTTP_' + r.status }
+    const j = await r.json().catch(() => null)
+    if (!j) return { ok: false, error: 'BAD_RESP' }
+    if (j.errcode) return { ok: false, error: 'WX_' + j.errcode }
     return { ok: true }
   } catch (e: any) {
     return { ok: false, error: 'PUSH_FAIL:' + (e?.message || 'unknown') }

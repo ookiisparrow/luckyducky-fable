@@ -36,3 +36,5 @@ reports/
 
 # vitest --coverage 产物（B8·仅本地/CI 度量用，不入库）
 coverage/
+# 变异测试沙盒（StrykerJS 运行时副本，报告在 reports/mutation/·已随 reports/ 不入库）
+.stryker-tmp/
