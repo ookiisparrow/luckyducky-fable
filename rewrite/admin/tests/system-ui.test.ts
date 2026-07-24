@@ -2,6 +2,19 @@
 // 对账 approx 诚实透传/wxOnly 标红/库存不限量不显 0/409 冲突人话。
 import { describe, it, expect } from 'vitest'
 import { mapAgents, mapBatches, webhookOk, mapRecon, mapBillMatch, mapStock, stockErrorText, mapAuditEntries } from '../src/lib/mapSystem'
+import settingsSrc from '../src/pages/Settings.vue?raw'
+
+// 密钥不明文常驻（UX 体检批4）：webhook key 曾在输入框明文回显（后端 getSettings 原样回值），任何截屏/
+// 投屏即带出——隔壁「人工配置清单」页自标「零回显」，两页安全姿态曾自相矛盾。前端改密码态+显隐切换
+// （只动 input type，v-model/save 语义零改动——「留空=清除」是设计内行为，system-ui 上方 webhookOk
+// 用例锁着）。后端零回显属 API 改动另批拍板。「12 项」死数与清单页动态 27 项打架——删数字防再漂。
+describe('Settings.vue 密钥显示形态 + 死数字清除', () => {
+  it('大白话：webhook 输入默认密码态（可切换显示）+ autocomplete 关自动填充；清单入口不再手抄项数', () => {
+    expect(settingsSrc).toMatch(/:type="showWebhook \? 'text' : 'password'"/)
+    expect(settingsSrc).toMatch(/autocomplete="new-password"/)
+    expect(settingsSrc).not.toContain('12 项散落配置')
+  })
+})
 
 describe('外包账号与批次', () => {
   it('大白话：账号行归一（无 id 剔除）；批次激活率算百分比、空批显 — 不除零', () => {
