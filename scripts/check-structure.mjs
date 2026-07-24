@@ -2,8 +2,7 @@
 /**
  * 结构不变量检查——重构主张的「机器守卫」。
  *
- * 与 check-conventions 分工：
- *   - conventions 管「单文件的样式 / 多端写法」（rpx / 写死色 / 内联 svg…）。
+ * （原 check-conventions 扫描器已随旧线退役——单文件样式/多端写法类规则现走本文件 fileRule + eslint。）
  *   - structure  管「跨文件 / 仓级的架构不变量」——**每条重构主张落地为这里一条规则**：
  *     主张做完 = 守卫存在且全绿；主张回退 = 红灯。让架构决策从「靠人记」变「机器守」。
  *
@@ -57,7 +56,7 @@ function listPackageJsons() {
 // roots：本守卫治哪条病根/主张（病根 #N / 主张 TN / 红线·基建·正册·格式 等标签）——
 // 机读 provenance，guard-coverage 据此断言每条病根都有守卫（见 docs/元模式.md A2/A4）。
 // 新线黄金用例注册表（收敛阀）：rewrite 各模块 golden 行为基准测试集中登记，被 rw-golden-registered 一条守卫统一核存在。
-// 新增模块只加一行、不加守卫（守卫总数收敛·呼应 known-collections-only / known-error-codes）。
+// 新增模块只加一行、不加守卫（守卫总数收敛·呼应 known-collections-only）。
 export const RW_GOLDEN_REGISTRY = [
   { id: 'rw-contracts-golden', roots: ['#4', '#2', '#5'], test: 'rewrite/shared/tests/money.test.ts' },
   { id: 'rw-kit-golden', roots: ['#1', '#2', '#3', '#7', '#13'], test: 'rewrite/cloud/tests/transition.test.ts' },
@@ -525,7 +524,7 @@ export const repoChecks = [
       const sec1 = readFileSync(ledgerPath, 'utf8').split('## 二、')[0]
       const rootIds = [...sec1.matchAll(/^###\s*(\d+)\.\s/gm)].map((m) => `#${m[1]}`)
       if (!rootIds.length) bad.push('根因账本 §一 解析不到病根（### N. 标题）——覆盖率无从核')
-      // 守卫 roots：本模块三数组 + conventions 规则
+      // 守卫 roots：本模块三数组
       const allGuards = [...repoChecks, ...fileRules, ...typeAndTestGuards]
       const guardRoots = new Set()
       for (const g of allGuards) for (const r of g.roots || []) guardRoots.add(r)
@@ -703,14 +702,16 @@ export const repoChecks = [
   {
     id: 'requirement-trace',
     roots: ['元'],
-    desc: '需求→守卫闭环（仿 guard-coverage 泛化「病根→守卫」为「需求→功能→守卫」）：需求清单「需求→实现映射」每条 ✅ 实现需求(L1)须有映射行，且行内 函数(见系统事实)/测试(rewrite/cloud/tests)/守卫(注册表) 真实存在——改需求或改码断链当场红；`npm run trace R#` 查爆炸半径。2026-07-23 瘦身拍板批：映射表已整体迁锚活线（旧线与 tests/cloud 已删）',
+    desc: '需求→守卫闭环（仿 guard-coverage 泛化「病根→守卫」为「需求→功能→守卫」）：需求清单「需求→实现映射」每条 ✅ 实现需求(L1)须有映射行，且行内 函数(代码注册表：app/adminApi index+cloudbaserc)/测试(rewrite/cloud/tests)/守卫(注册表) 真实存在——改需求或改码断链当场红；`npm run trace R#` 查爆炸半径。2026-07-23 瘦身拍板批：映射表已整体迁锚活线（旧线与 tests/cloud 已删）',
     run() {
       const reqPath = join(ROOT, 'docs/需求清单.md')
       if (!existsSync(reqPath)) return ['docs/需求清单.md 缺失（需求源）']
       const bad = []
       const req = readFileSync(reqPath, 'utf8')
-      const factPath = join(ROOT, 'docs/系统事实.md')
-      const fact = existsSync(factPath) ? readFileSync(factPath, 'utf8') : ''
+      // 2026-07-23 减法批：函数名真值从 docs/系统事实.md 名册改为代码单源（名册层已退役·零副本）
+      const fact = ['rewrite/cloud/src/functions/app/index.ts', 'rewrite/cloud/src/functions/adminApi/index.ts', 'cloudbaserc.json']
+        .map((p) => (existsSync(join(ROOT, p)) ? readFileSync(join(ROOT, p), 'utf8') : ''))
+        .join('\n')
       const guardIds = new Set(
         [...repoChecks, ...fileRules, ...typeAndTestGuards].map((g) => g.id)
       )
@@ -730,7 +731,7 @@ export const repoChecks = [
         安全: ['rw-writes-need-gate', 'rw-kit-only-cloud-primitives', 'deterministic-id-concurrency', 'notify-forge-proof', 'gate-fail-closed'],
       }
       for (const [, R, kind, fns, tests, guards] of rows) {
-        for (const fn of cells(fns)) if (!fact.includes(fn)) bad.push(`${R} 函数「${fn}」未见于 系统事实——链接断（改名/删了忘更新映射）`)
+        for (const fn of cells(fns)) if (!fact.includes(fn)) bad.push(`${R} 函数「${fn}」未见于代码注册表（app/adminApi index/cloudbaserc）——链接断（改名/删了忘更新映射）`)
         for (const t of cells(tests)) if (!existsSync(join(ROOT, 'rewrite/cloud/tests', t))) bad.push(`${R} 测试「${t}」不存在 rewrite/cloud/tests/`)
         for (const g of cells(guards)) if (g !== '—' && !guardIds.has(g)) bad.push(`${R} 守卫「${g}」非已知守卫 id`)
         const need = KIND_GUARDS[(kind || '').trim()]
@@ -1421,105 +1422,6 @@ import { PROD_ENV } from './lib/env.mjs'（单源·病根#5·债#30①）`)
     },
   },
   {
-    id: 'function-count-synced',
-    roots: ['#11'],
-    desc: '云函数计数单源（规则⑥·客观计数机器维护）：cloudbaserc.json 的 functions 数为真值；系统事实「云函数」计数行须报同一数——防 28/32/33 手抄漂移（doc-audit 首审命中：部署后没回写状态文档）',
-    run() {
-      const rc = join(ROOT, 'cloudbaserc.json')
-      if (!existsSync(rc)) return []
-      let n = 0
-      try {
-        const fns = JSON.parse(readFileSync(rc, 'utf8')).functions
-        n = Array.isArray(fns) ? fns.length : 0
-      } catch {
-        return []
-      }
-      if (!n) return []
-      const bad = []
-      const sys = join(ROOT, 'docs/系统事实.md')
-      if (existsSync(sys)) {
-        // §3 扫描基线表里「| 云函数 | N | …」那行（数字格·区别于 §2 归口表的同名行）
-        const row = readFileSync(sys, 'utf8')
-          .split('\n')
-          .find((l) => l.trimStart().startsWith('| 云函数 |') && /^\d+$/.test((l.split('|')[2] || '').trim()))
-        const cell = row ? (row.split('|')[2] || '').trim() : ''
-        if (cell !== String(n))
-          bad.push(`系统事实「云函数」计数为「${cell || '缺'}」≠ cloudbaserc.json functions 真值 ${n}（客观计数单源·规则⑥·别手抄·部署后回写）`)
-      }
-      return bad
-    },
-  },
-  {
-    // admin action 计数单源（规则⑥·病根#11·客观计数机器维护）：系统事实「admin action」行长期手抄
-    // （94＝91+3），巡检抓到真值已是 97+3=100——两个真值都动态解析、不许硬编码（硬编码=再造手抄计数，
-    // 恰是本守卫要治的病）：①ACTIONS 键数＝rewrite/cloud/src/functions/adminApi/index.ts `const ACTIONS`
-    // 花括号块（配平取块防 `}` 提前截断，同 collection-count-synced 手法）内 `键:` 行数；②pre-auth 判支数＝
-    // main() 分发处「先于 checkKey(db,key,false) 校验」的 `action === '字面量'` if 链个数（当前实现＝字面量
-    // 比对：ping/login/loginByWecomCode，非集合，故按此构造动态数）。任一解析为 0 视为解析失败即红（防
-    // 结构改动后假绿·同 rw-agent-tokens-synced 交集<5 手法）。
-    id: 'admin-action-count-synced',
-    roots: ['#11'],
-    desc: 'admin action 计数单源（规则⑥·病根#11·客观计数机器维护）：rewrite/cloud/src/functions/adminApi/index.ts 的 ACTIONS 键数 + main() 分发处 checkKey(db,key,false) 之前的 pre-auth `action===字面量` 判支数为真值；系统事实「admin action」行「ACTIONS（N）」与总数须报同一数——防手抄漂移（任一解析为 0 视为解析失败即红）',
-    run() {
-      const bad = []
-      const idx = join(ROOT, 'rewrite/cloud/src/functions/adminApi/index.ts')
-      if (!existsSync(idx)) return []
-      const src = readFileSync(idx, 'utf8')
-      // ① ACTIONS 键数：花括号配平取块（防 `}` 提前截断）
-      const actionsStart = src.indexOf('const ACTIONS')
-      let keyCount = 0
-      if (actionsStart >= 0) {
-        const braceStart = src.indexOf('{', actionsStart)
-        let depth = 0
-        let braceEnd = -1
-        for (let i = braceStart; i < src.length; i++) {
-          if (src[i] === '{') depth++
-          else if (src[i] === '}') {
-            depth--
-            if (depth === 0) {
-              braceEnd = i
-              break
-            }
-          }
-        }
-        const actionsBlock = braceEnd > braceStart ? src.slice(braceStart + 1, braceEnd) : ''
-        keyCount = (actionsBlock.match(/^\s{2}\w+:/gm) || []).length
-      }
-      // ② pre-auth 判支数：main() 分发处、checkKey(db, key, false) 之前的 `action === '字面量'` 个数
-      const mainStart = src.indexOf('export const main')
-      const authIdx = mainStart >= 0 ? src.indexOf("checkKey(db, key, false)", mainStart) : -1
-      const preauthSlice = mainStart >= 0 && authIdx > mainStart ? src.slice(mainStart, authIdx) : ''
-      const preauthCount = (preauthSlice.match(/action === '\w+'/g) || []).length
-      if (!keyCount || !preauthCount) {
-        bad.push(
-          `admin-action-count-synced：解析失败（ACTIONS 键数=${keyCount}、pre-auth 判支数=${preauthCount}，任一为 0 视为解析失败，防结构改动假绿）`,
-        )
-        return bad
-      }
-      const total = keyCount + preauthCount
-      const sys = join(ROOT, 'docs/系统事实.md')
-      if (existsSync(sys)) {
-        const text = readFileSync(sys, 'utf8')
-        const row = text.split('\n').find((l) => l.trimStart().startsWith('| admin action |'))
-        if (!row) {
-          bad.push('系统事实.md 未找到「| admin action |」行——admin-action-count-synced 无法比对')
-          return bad
-        }
-        const totalCell = (row.split('|')[2] || '').trim()
-        if (totalCell !== String(total))
-          bad.push(
-            `系统事实「admin action」总数为「${totalCell}」≠ 真值 ${total}（ACTIONS ${keyCount} + pre-auth ${preauthCount}·客观计数单源·规则⑥·别手抄）`,
-          )
-        const actionsMatch = row.match(/ACTIONS`?\s*[（(](\d+)[）)]/)
-        if (!actionsMatch || Number(actionsMatch[1]) !== keyCount)
-          bad.push(
-            `系统事实「admin action」行「ACTIONS（${actionsMatch ? actionsMatch[1] : '缺'}）」≠ ACTIONS 键数真值 ${keyCount}（客观计数单源·规则⑥·别手抄）`,
-          )
-      }
-      return bad
-    },
-  },
-  {
     // 跨文档「重构日志 <日期>」指针随批次卷档失活（熵地图 E1·我边治边造的盲区）：批次卷档到 archive 后，
     // 活文档里「详 重构日志 2026-06-24」这类指针指向的日期已不在活档（只剩卷档标签）→ 读者扑空。
     // 守卫扫活文档紧邻「重构日志」的日期引用，该日期须在活 重构日志 有 ## 标题（排除卷档标签行），
@@ -1573,6 +1475,17 @@ import { PROD_ENV } from './lib/env.mjs'（单源·病根#5·债#30①）`)
           const sp = join('.claude/skills', d, 'SKILL.md')
           if (existsSync(join(ROOT, sp))) targets.push(sp)
         }
+      // 2026-07-23 治理深查扩面：rewrite/*/README.md 与子项目文档家此前是扫描盲区（mp README 死链实证）
+      for (const sub of ['后台360工作站', '进销存ERP']) {
+        const sp = join(ROOT, 'docs', sub)
+        if (existsSync(sp)) for (const f of readdirSync(sp)) if (f.endsWith('.md')) targets.push(`docs/${sub}/${f}`)
+      }
+      const rwDir = join(ROOT, 'rewrite')
+      if (existsSync(rwDir))
+        for (const d of readdirSync(rwDir)) {
+          const rp = join('rewrite', d, 'README.md')
+          if (existsSync(join(ROOT, rp))) targets.push(rp)
+        }
       for (const rel of targets) {
         const text = readFileSync(join(ROOT, rel), 'utf8')
         for (const m of text.matchAll(/(docs\/archive\/|docs\/|archive\/)([^\s)）、，。`"'\]|]+\.md)/g)) {
@@ -1590,22 +1503,19 @@ import { PROD_ENV } from './lib/env.mjs'（单源·病根#5·债#30①）`)
     // 与 archive-index-synced 守归档指针、guard-coverage 守 [机器守:id]/test 文件指针同类（防文档指向不存在的东西）。
     id: 'skills-referenced-exist',
     roots: ['#11'],
-    desc: 'skill 指针不悬空（根因#11·同 archive-index-synced）：CLAUDE §9 工作流注册表里每个 `/skill-name` 引用须有 .claude/skills/<name>/SKILL.md——防列了点不出的悬空 skill 指针',
+    desc: 'skill 指针不悬空（根因#11·2026-07-23 治理精简批改全文扫描）：CLAUDE.md 里每个 `/skill-name` 引用须有 .claude/skills/<name>/SKILL.md——防列了点不出的悬空 skill 指针（原只扫 §9 注册表·换稿后 CLAUDE 无注册表段、目录即单源，改扫全文）',
     run() {
       const claudePath = join(ROOT, 'CLAUDE.md')
       if (!existsSync(claudePath)) return []
       const claude = readFileSync(claudePath, 'utf8')
-      // 取 §9 段（## 9. … 到 ## 10. 之前）——「工作流 = skills」的声明册
-      const seg = claude.match(/## 9\.[\s\S]*?(?=\n## 10\.)/)
-      if (!seg) return ['CLAUDE.md 解析不到 §9 工作流段（## 9. … ## 10.）——skills 注册表无从核（根因#11）']
       const bad = []
       const seen = new Set()
-      for (const m of seg[0].matchAll(/`\/([a-z][a-z-]+)`/g)) {
+      for (const m of claude.matchAll(/`\/([a-z][a-z-]+)`/g)) {
         const name = m[1]
         if (seen.has(name)) continue
         seen.add(name)
         if (!existsSync(join(ROOT, '.claude/skills', name, 'SKILL.md')))
-          bad.push(`CLAUDE §9 列 \`/${name}\` 但无 .claude/skills/${name}/SKILL.md——悬空 skill 指针（点了调不出·根因#11）`)
+          bad.push(`CLAUDE.md 引用 \`/${name}\` 但无 .claude/skills/${name}/SKILL.md——悬空 skill 指针（点了调不出·根因#11）`)
       }
       return bad
     },
@@ -1767,7 +1677,7 @@ import { PROD_ENV } from './lib/env.mjs'（单源·病根#5·债#30①）`)
     // K 类病根」须报同一数。（原「测试数自洽」子检查批1 退役——空样本恒绿的摆设，见 run() 尾注。）
     id: 'guard-count-synced',
     roots: ['#11'],
-    desc: '客观计数机器维护（规则⑥·病根#11·治理文档自身防漂）：repoChecks/fileRules 数组长度为守卫数真值、根因账本 §一 `### N.` 数为病根数真值（与 guard-coverage 同源）；所有治理文档（现状与路线/自动化验证系统/CLAUDE/元模式/根因账本）里「N repoCheck / M fileRule / K 类病根」须报同一数（防手抄漂移·体检抓的 13≠86、12≠13 那类）',
+    desc: '客观计数机器维护（规则⑥·病根#11·治理文档自身防漂）：repoChecks/fileRules 数组长度为守卫数真值、根因账本 §一 `### N.` 数为病根数真值（与 guard-coverage 同源）；所有治理文档（现状与路线/CLAUDE/元模式/根因账本）里「N repoCheck / M fileRule / K 类病根」须报同一数（防手抄漂移·体检抓的 13≠86、12≠13 那类）',
     run() {
       const bad = []
       const realRepo = repoChecks.length
@@ -1781,7 +1691,6 @@ import { PROD_ENV } from './lib/env.mjs'（单源·病根#5·债#30①）`)
       // 扫全部治理文档：守卫计数 + 病根计数 须报真值（客观计数机器维护·别手抄·病根#11 作用在治理文档自身）
       const govDocs = [
         'docs/现状与路线.md',
-        'docs/自动化验证系统.md',
         'CLAUDE.md',
         'docs/元模式.md',
         'docs/根因账本.md',
@@ -2151,7 +2060,7 @@ import { PROD_ENV } from './lib/env.mjs'（单源·病根#5·债#30①）`)
     desc: '新线 SCM 域（购/外协单）状态写入只走声明流转（根因#2·批K 引入·批S 修复①对 fromFor(X) 调用形态的假绿：新增分支核对 fromFor 参数 X 与 transition() 第四参数 to 一致，不一致＝越流转被静默放行）：rewrite/cloud/src/functions/adminApi/actions/scm*.ts 里 transition(purchaseOrders/outworkOrders) 的边（字面量数组或 fromFor(X) 两种形态）、裸条件 CAS 的边须在 order-domain.generated.json 声明流转表内（该 JSON 原由已退役的 gen-order-domain-synced 生成器守卫维护·2026-07-23 起为冻结数据快照、锚 rewrite/shared 两份 spec·生成物范式处置见 待办与债 (f)）；写这两集合 status 的字面量须是声明状态——越流转/打错状态名即红',
     run() {
       const jsonPath = join(ROOT, 'scripts/order-domain.generated.json')
-      if (!existsSync(jsonPath)) return ['scripts/order-domain.generated.json 缺失——跑 `node scripts/gen-order-domain.mjs`（SCM 域声明派生物）']
+      if (!existsSync(jsonPath)) return ['scripts/order-domain.generated.json 缺失——它是冻结数据快照（生成器已退役）：`git checkout HEAD -- scripts/order-domain.generated.json` 恢复，或按 rewrite/shared/src/scm.ts 手改单源核正']
       let spec
       try {
         spec = JSON.parse(readFileSync(jsonPath, 'utf8'))
@@ -2547,56 +2456,6 @@ import { PROD_ENV } from './lib/env.mjs'（单源·病根#5·债#30①）`)
       for (const c of calls)
         if (!build.includes(`'${c}'`) && !build.includes(`"${c}"`))
           bad.push(`新线云调用 cloud.openapi.${c} 未在 rewrite/cloud/build.mjs OPENAPI_PERMS 登记——产物 config.json 缺权限「${c}」（根因#12）`)
-      return bad
-    },
-  },
-  {
-    id: 'rw-interface-catalog-sync',
-    roots: ['正册'],
-    desc: '新线接口正册同步（移植 interface-catalog-sync）：rewrite 每个云函数（export const main 单元）+ app action + adminApi action 须登记 docs/系统事实.md「重写线」节内（按节内文本核·不借旧线登记假绿）——杜绝「加接口忘登记」',
-    run() {
-      const base = join(ROOT, 'rewrite/cloud/src/functions')
-      if (!existsSync(base)) return []
-      const catPath = join(ROOT, 'docs/系统事实.md')
-      if (!existsSync(catPath)) return ['docs/系统事实.md 缺失（接口权威登记册）']
-      const cat = readFileSync(catPath, 'utf8')
-      const sec = cat.split(/^## .*重写线.*$/m)[1]
-      if (!sec) return ['docs/系统事实.md 缺「重写线」正册节——新线函数/action 无登记处（正册 P1）']
-      const section = sec.split(/^## /m)[0]
-      const has = (name) => section.includes('`' + name + '`')
-      const bad = []
-      // 云函数单元：顶层 dir 含 index.ts（且有 main）＝一函数；组目录下逐文件/子目录含 main 者＝一函数
-      const isFn = (p) => readFileSync(p, 'utf8').includes('export const main')
-      for (const e of readdirSync(base)) {
-        const p = join(base, e)
-        if (!statSync(p).isDirectory()) continue
-        const idx = join(p, 'index.ts')
-        if (existsSync(idx) && isFn(idx)) {
-          if (!has(e)) bad.push(`新线云函数 ${e} 未登记 系统事实「重写线」节（正册 P1）`)
-          continue
-        }
-        for (const c of readdirSync(p)) {
-          const cp = join(p, c)
-          let name = null
-          if (statSync(cp).isDirectory()) {
-            const ci = join(cp, 'index.ts')
-            if (existsSync(ci) && isFn(ci)) name = c
-          } else if (c.endsWith('.ts') && isFn(cp)) name = c.slice(0, -3)
-          if (name && !has(name)) bad.push(`新线云函数 ${name} 未登记 系统事实「重写线」节（正册 P1）`)
-        }
-      }
-      // app / adminApi action 查表键
-      for (const [idxRel, extra] of [
-        ['rewrite/cloud/src/functions/app/index.ts', []],
-        ['rewrite/cloud/src/functions/adminApi/index.ts', ['ping', 'login', 'loginByWecomCode']],
-      ]) {
-        const ip = join(ROOT, idxRel)
-        if (!existsSync(ip)) continue
-        const m = readFileSync(ip, 'utf8').match(/const ACTIONS[^{]*\{([\s\S]*?)\n\}/)
-        const keys = m ? [...m[1].matchAll(/^\s{2}(\w+)[:,]/gm)].map((x) => x[1]) : []
-        for (const a of [...keys, ...extra])
-          if (!has(a)) bad.push(`新线 action ${a} 未登记 系统事实「重写线」节（正册 P1）`)
-      }
       return bad
     },
   },
@@ -4630,11 +4489,7 @@ export const typeAndTestGuards = [
   // admin 频控全局/账户级兜底（审核 P1·根因#13）：per-IP 频控 key 取 x-forwarded-for（可伪造·轮换可绕 5 次锁），
   // 故叠加跨所有 IP 的全局失败计数——轮换伪造 header 的爆破累计达全局阈值仍锁。reverseTest 锁此组合行为。
   { id: 'admin-throttle-global-backstop', mechanism: 'test', roots: ['#13'], reverseTest: 'rewrite/cloud/tests/security-dos-hardening.test.ts' },
-  // 钱/权限两条门面守卫的 reverseTest 改锚活线（盲区体检批2·病根#16 ⑥）：原指冻结旧线
-  // tests/cloud/kit/*.test.js（import packages/cloud·仍随 vitest 跑、守冻结参照），但注册表的
-  // 「证据」字段该指生产代码的等价测试——rewrite/cloud/tests 的 gate/notify 断言面等价
-  // （withOpenId/withAdminGate fail-closed + defineNotifyCallback 见身份即拒伪造）。
-  // 其余 25 条 test 型守卫仍指旧线测试，系统性重登记待拍板（见 待办与债 盲区体检节）。
+  // 钱/权限两条门面守卫的 reverseTest 锚活线等价测试（盲区体检批2·病根#16 ⑥）。
   { id: 'gate-fail-closed', mechanism: 'test', roots: ['#3'], reverseTest: 'rewrite/cloud/tests/gate.test.ts' },
   { id: 'notify-forge-proof', mechanism: 'test', roots: ['#3'], reverseTest: 'rewrite/cloud/tests/notify.test.ts' },
   // 支付配置 fail-closed（根因#3 同款）：createOrder 缺/错 config/pay 时绝不伪造已付单——

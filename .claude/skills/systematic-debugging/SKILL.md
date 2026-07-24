@@ -10,7 +10,7 @@ description: Use when debugging a bug, failure, flaky test, or unexpected behavi
 调试不是猜，是收敛。任何「为什么不对」的问题按四步走，**没复现前禁止改代码，没守卫不算修完**。
 
 ## 0. 先看证据，别先改代码
-- 读 `utils/logger.js` 输出（本项目 src 禁裸 console，日志统一走 logger）。
+- 读云函数日志与 kit `observe.alert` 告警留痕（`[LD_ALERT]`）；mp 端看 devtools 控制台。
 - 读完整报错/堆栈，不要只看最后一行。
 - **工具怪象先疑工具僵态**：白屏 / 假性「component not found」/ RPC 卡死 → `cli quit` 彻底退出再 `cli auto` 重启，别在僵实例上查业务代码（调试日志 D/E 的教训：build 覆盖 dist 期间 + 强杀自动化后工具状态不可信）。
 
