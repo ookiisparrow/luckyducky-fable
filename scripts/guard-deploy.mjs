@@ -12,10 +12,24 @@
  *   - 仅在「真把 tcb / deploy-fns 当命令执行」时判（按 shell 分段、看段首）——提交信息 / echo 里
  *     **提到** "tcb"/"deploy" 字样不算，杜绝误拦 git commit。人在自己终端的命令不经本 hook。
  *
+ * **接管 wechatide**（2026-07-24 官方 skill CLI 正式接入批）：官方 `wechatide` CLI（随开发者工具 Nightly
+ * 自动装好，见 `docs/调试日志.md` U 案附近·`docs/待办与债.md` ai-mode-skills 条）新开了一条平行的生产写
+ * 通道——`upload`（发布体验版）直接把代码包传到微信平台；`cloud_fn_deploy`/`cloud_fn_inc_deploy`/
+ * `cloud_db_write_doc`/`cloud_db_write_struct`/`cloud_manage_storage` 直接读写生产云环境，且**完全绕过
+ * 本仓自己的 kit 写闸**（`rw-writes-need-gate` 只挡得住我们自己代码里发起的写，挡不住这条外部 CLI 通道）。
+ * 若不接管，这条通道会成为部署闸的盲区——故与 tcb 同等级别纳管：命中上述任一写工具名即 ask，不分敏感/
+ * 非敏感（这条通道新、无历史基线可判"非敏感安全"，fail-safe 全挡）。**故意不给 wechatide upload 包一层
+ * npm script**（如 `npm run upload:mp`）——`npm run <name>` 是脚本名, 本 hook 看到的只是这行文本，看不进
+ * package.json 里真正执行的命令，会制造一个静默绕过部署闸的洞；`wechatide upload …` 必须整行手打/由 agent
+ * 整行拼出，本闸才管得到（同 tcb 直打的既有纪律，见 `docs/人工配置清单.md`「小程序新版本上传、提审、发布」）。
+ *
  * 自测：echo '{"tool_input":{"command":"tcb fn deploy createOrder"}}' | node scripts/guard-deploy.mjs  # → ask
  *       echo '{"tool_input":{"command":"npx tcb fn deploy adminApi"}}' | node scripts/guard-deploy.mjs  # → ask（runner 前缀绕过·深审 P1）
  *       echo '{"tool_input":{"command":"export DEPLOY_ALLOWED=1; node scripts/deploy-fns.mjs"}}' | node scripts/guard-deploy.mjs  # → ask（export 分段绕过·深审 P1）
  *       echo '{"tool_input":{"command":"git commit -m \"tcb deploy 记账\""}}' | node scripts/guard-deploy.mjs  # → 放行（无输出）
+ *       echo '{"tool_input":{"command":"wechatide -c x upload --project rewrite/mp --upload-version 1.0.0"}}' | node scripts/guard-deploy.mjs  # → ask
+ *       echo '{"tool_input":{"command":"wechatide -c x cloud_db_write_doc --collection orders"}}' | node scripts/guard-deploy.mjs  # → ask
+ *       echo '{"tool_input":{"command":"wechatide -c x project_list"}}' | node scripts/guard-deploy.mjs  # → 放行（读类/项目列表管理，非生产写）
  */
 
 // 敏感函数（钱/权限/状态/毁灭性删除）：tcb 写部署须二次确认
@@ -38,6 +52,16 @@ const SENSITIVE_FNS = [
 // （唯一真放行洞·会静默造函数不弹确认），故清空为 []：任何 tcb 写部署一律走 ask（fail-safe·收紧不放松）。
 const READONLY_FNS = []
 const word = (w) => new RegExp('\\b' + w + '\\b')
+
+// wechatide 官方 CLI 的生产写工具名（见头注「接管 wechatide」）——命中任一即 ask，不分敏感/非敏感。
+const WECHATIDE_WRITE_TOOLS = [
+  'upload', // 发布体验版：把代码包传到微信平台
+  'cloud_fn_deploy',
+  'cloud_fn_inc_deploy',
+  'cloud_db_write_doc',
+  'cloud_db_write_struct',
+  'cloud_manage_storage', // upload/delete 子操作是写，但工具粒度已到最细，整体纳管不细分 action
+]
 
 let stdin = ''
 process.stdin.setEncoding('utf8')
@@ -69,12 +93,19 @@ for (const raw of command.split(/&&|\|\||;|\n|\|/)) {
   //    旧版段首正则认不出而全放行——先剥 runner 前缀、把 @cloudbase/cli 归一成 tcb，再走原判定。
   const runnerStripped = cmd.replace(/^(?:npx|pnpm\s+dlx|pnpm\s+exec|yarn\s+dlx|bunx)\s+/, '')
   const asTcb = runnerStripped.replace(/^@cloudbase\/cli\b/, 'tcb')
-  if (!/^(?:\S*\/)?tcb[\s:]/.test(asTcb)) continue
-  const isWrite = /\b(deploy|publish|delete|create)\b/.test(asTcb) || /\bframework\b/.test(asTcb)
-  if (!isWrite) continue // 读类 tcb（invoke/log/list/detail…）→ 放行
-  const sensitive = SENSITIVE_FNS.some((fn) => word(fn).test(asTcb))
-  const readonlyOnly = !sensitive && READONLY_FNS.some((fn) => word(fn).test(asTcb))
-  if (sensitive || !readonlyOnly) needConfirm = true // 敏感 / 批量 / 认不出非敏感 → 确认
+  if (/^(?:\S*\/)?tcb[\s:]/.test(asTcb)) {
+    const isWrite = /\b(deploy|publish|delete|create)\b/.test(asTcb) || /\bframework\b/.test(asTcb)
+    if (isWrite) {
+      const sensitive = SENSITIVE_FNS.some((fn) => word(fn).test(asTcb))
+      const readonlyOnly = !sensitive && READONLY_FNS.some((fn) => word(fn).test(asTcb))
+      if (sensitive || !readonlyOnly) needConfirm = true // 敏感 / 批量 / 认不出非敏感 → 确认
+    }
+    continue
+  }
+
+  // ③ wechatide 官方 CLI：段首真为 wechatide 才算（同 tcb 判法，防提交信息/echo 误拦）。
+  if (/^(?:\S*\/)?wechatide\b/.test(runnerStripped) && WECHATIDE_WRITE_TOOLS.some((t) => word(t).test(runnerStripped)))
+    needConfirm = true
 }
 
 if (needConfirm) {
