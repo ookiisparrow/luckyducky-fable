@@ -1778,7 +1778,6 @@ import { PROD_ENV } from './lib/env.mjs'（单源·病根#5·债#30①）`)
       // 扫全部治理文档：守卫计数 + 病根计数 须报真值（客观计数机器维护·别手抄·病根#11 作用在治理文档自身）
       const govDocs = [
         'docs/现状与路线.md',
-        'docs/自动化验证系统.md',
         'CLAUDE.md',
         'docs/元模式.md',
         'docs/根因账本.md',
