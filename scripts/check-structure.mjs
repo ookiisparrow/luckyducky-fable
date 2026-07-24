@@ -1089,6 +1089,61 @@ export const repoChecks = [
     },
   },
   {
+    // wxml 事件绑定 handler 静态存在性（2026-07-24·闭「冒烟条件节点覆盖边界」待决账——待办与债 2026-07-19
+    // 冒烟批次D条）。痛：批次D实测删 player.ts 的 noop() 后冒烟照样全 PASS——wx:if=false 的条件节点（抽屉/
+    // 遮罩）不渲染就摸不到它挂的 handler，真机一打开即报「does not have a method」（根因#8）。原两岔路（冒烟
+    // 补交互步骤 vs 接受边界）都不如静态按类闭：绑定名是 wxml 字面量、方法名是 ts 字面量，静态即可对账，
+    // 条件/普通节点、页面/自定义组件通吃、零工具依赖；且交互步骤追着 UI 跑必腐（批次D当年的标的 listOpen
+    // 抽屉，2026-07-24 已不存在于 player.wxml）。边界如实：动态绑定名（值含 {{}}）不进扫描面（仓内现状
+    // 0 个）；值带点且命中本文件 <wxs module> 名单的走渲染层、跳过。原型实测 2026-07-24：27 wxml/192 绑定
+    // 零误报。ts 侧匹配用 stripComments 后源（E1：裸源会被注释里提到的方法名假绿）。
+    id: 'rw-mp-wxml-handlers-exist',
+    roots: ['#8'],
+    desc: 'wxml 事件绑定 handler 静态存在性（根因#8）：rewrite/mp 全部 .wxml 的 bind/catch/mut-bind/capture-bind/capture-catch 字面 handler 名，须在同目录同名 .ts 中有定义（`名(`/`名:`/`async 名(` 形态）——wx:if=false 条件节点上的 handler 缺失冒烟层摸不到、真机必报 does not have a method；全仓零绑定即红（病根#16「空样本＝绿不发信号」）',
+    run() {
+      const bad = []
+      const base = join(ROOT, 'rewrite/mp')
+      if (!existsSync(base)) return bad
+      const ATTR = /\b(?:mut-bind|capture-bind|capture-catch|bind|catch)[:]?[a-zA-Z]+\s*=\s*"([^"{}]+)"/g
+      let bindings = 0
+      const walkW = (d) => {
+        for (const name of lsScan(d)) {
+          if (name === 'node_modules' || name === 'dist') continue
+          const p = join(d, name)
+          if (statSync(p).isDirectory()) walkW(p)
+          else if (name.endsWith('.wxml')) {
+            // 注释置换为等长空白（保行号列号）；<wxs module> 名单先整文收集（声明位置任意）
+            const src = readFileSync(p, 'utf8').replace(/<!--[\s\S]*?-->/g, (m) => m.replace(/[^\n]/g, ' '))
+            const wxsMods = new Set([...src.matchAll(/<wxs[^>]*\bmodule="([^"]+)"/g)].map((m) => m[1]))
+            const tsPath = p.slice(0, -5) + '.ts'
+            const tsSrc = existsSync(tsPath) ? stripComments(readFileSync(tsPath, 'utf8')) : null
+            src.split('\n').forEach((line, i) => {
+              if (line.includes('structure-ok')) return
+              for (const m of line.matchAll(ATTR)) {
+                const handler = m[1].trim()
+                bindings++
+                if (handler.includes('.') && wxsMods.has(handler.split('.')[0])) continue // wxs 模块函数：渲染层闭环不查 ts
+                if (tsSrc === null) {
+                  bad.push(`${relative(ROOT, p)}:${i + 1} 绑定「${handler}」但同目录无同名 .ts——handler 无处定义（根因#8）`)
+                  continue
+                }
+                const esc = handler.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+                if (!new RegExp(`(?:^|[^\\w$])(?:async\\s+)?${esc}\\s*[(:]`).test(tsSrc))
+                  bad.push(
+                    `${relative(ROOT, p)}:${i + 1} 绑定的 handler「${handler}」在 ${relative(ROOT, tsPath)} 无定义——wx:if 条件节点上冒烟摸不到、真机必报 does not have a method（根因#8）`,
+                  )
+              }
+            })
+          }
+        }
+      }
+      walkW(base)
+      if (!bindings)
+        bad.push('rewrite/mp 下零个 wxml 事件绑定——本守卫扫描面空转（病根#16「空样本＝绿」）；若非 wxml 全撤，先查扫描正则是否失配')
+      return bad
+    },
+  },
+  {
     // 进包位图预算（新线·2026-07-16·病根#15 图片面 + 根因#8 冷启）。内容图归云存储（getTempUrl 换临时址按需拉），
     // 进包位图只该是品牌兜底（hero-full.jpg 42K）。防大位图悄爬进主包（2MB 硬顶·含代码）拖慢冷启动——真机冷启
     // 才感知（根因#8「构建过≠真机能用」）。与 font-not-in-package（禁字体二进制进包）同精神互补：那管字体、这管位图。
