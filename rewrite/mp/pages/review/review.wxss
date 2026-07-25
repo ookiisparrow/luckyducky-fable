@@ -234,7 +234,9 @@
 
 /* ---------- 底部发布坞 ---------- */
 .corev-dock-space {
-  height: 160rpx;
+  /* 占位高度须覆盖吸底栏真实高度（2026-07-25 体检批 P3）：栏内 padding 18+18 + 按钮 26×2 + 字行
+     ≈ 166rpx，再加 iPhone 安全区——原写死 160rpx 不够，滚到底最后一张「匿名评价」卡仍被切掉一截。 */
+  height: calc(176rpx + env(safe-area-inset-bottom));
 }
 .corev-dock {
   position: fixed;

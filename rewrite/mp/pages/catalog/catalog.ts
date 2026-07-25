@@ -108,6 +108,12 @@ Page({
   },
   // 「开始学习」CTA：continueTarget 非空跳播放页续播；为空（全课无可播段）诚实提示，不留死跳转。
   onStart() {
+    // 加载中先说加载中（2026-07-25 体检批 P3）：state 未到 'ok' 时 continueTarget 天然为空，
+    // 原先一律弹「课程视频整理中」——页面还在转圈时点一下就得到一句不实的结论。
+    if (this.data.state === 'loading') {
+      wx.showToast({ title: '课程还在加载，稍等一下', icon: 'none' })
+      return
+    }
     const t = this.data.continueTarget
     if (!t) {
       wx.showToast({ title: '课程视频整理中', icon: 'none' })

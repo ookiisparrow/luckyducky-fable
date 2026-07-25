@@ -1,7 +1,7 @@
 // 详情页映射（展示面 fail-closed 同首页·防半空详情/裂图/「¥undefined」·根因#8 展示层半边）
 // + SKU 价格联动（黄金 frontend-store §一 SKU 行身份的展示半边）（守卫 rw-mp-detail-golden）。
 import { describe, it, expect } from 'vitest'
-import { mapDetail, priceForSelection } from '../lib/mapDetail'
+import { mapDetail } from '../lib/mapDetail'
 
 const FULL = {
   _id: 'p1',
@@ -45,16 +45,5 @@ describe('详情映射（fail-closed：脏档回 null·脏行剔除·图册回�
     expect(mapDetail({ id: 'x', price: 100 })).toBeNull() // 无名
     expect(mapDetail({ id: 'x', name: 'y', price: 'abc' })).toBeNull() // 价非法
     expect(mapDetail(null)).toBeNull()
-  })
-})
-
-describe('SKU 价格联动（选中用 SKU 价·未选/无 SKU 用商品价·原样标不算术）', () => {
-  it('大白话：切换规格价签跟着换；没有规格的商品恒用商品价', () => {
-    const vm = mapDetail(FULL)!
-    expect(priceForSelection(vm, 0)).toBe('¥128')
-    expect(priceForSelection(vm, 1)).toBe('¥138')
-    expect(priceForSelection(vm, -1)).toBe('¥128') // 未选→商品价
-    const noSku = mapDetail({ id: 'p2', name: 'x', price: 98 })!
-    expect(priceForSelection(noSku, 0)).toBe('¥98')
   })
 })

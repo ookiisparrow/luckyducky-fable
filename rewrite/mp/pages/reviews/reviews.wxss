@@ -4,6 +4,9 @@
   min-height: 100vh;
   background: var(--ld-bg-grey);
   padding-bottom: 40rpx;
+  /* box-sizing 必写（2026-07-25 体检批 P3）：min-height:100vh 与 padding 并存时，默认 content-box
+     会让页面总高 = 一屏 + padding，内容明明放得下却能多滚出一截空白（三页同病）。 */
+  box-sizing: border-box;
 }
 
 /* 评分摘要（白卡全宽） */

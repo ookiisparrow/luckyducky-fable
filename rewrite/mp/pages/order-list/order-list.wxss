@@ -173,9 +173,12 @@
   margin-right: 2rpx;
 }
 .coolist-qty {
-  position: absolute;
-  right: 34rpx;
-  bottom: 28rpx;
+  /* 改为随流布局并与内容顶部对齐（2026-07-25 体检批 P3）：原 absolute+bottom:28rpx 把「×N」钉在行
+     底部，而行高随「有没有规格标签」变化——没标签的行更矮，「×1」就掉到图片底部、与价格不在一条线。
+     订单详情页（.co-item-qty）本就是随流写法，此处对齐同族做法。 */
+  flex: 0 0 auto;
+  align-self: flex-start;
+  margin-top: 4rpx;
   font-size: 24rpx;
   color: var(--ld-content-2);
   letter-spacing: 0.4rpx;

@@ -16,9 +16,14 @@
   <!-- 价格卡 -->
   <view class="pdp-card pdp-price">
     <view class="pdp-price-row">
-      <text class="pdp-now"><text class="pdp-cny">¥</text>{{currentPriceNum}}</text>
+      <!-- 划线价在前、现价在后（2026-07-25 体检批 P3）：与首页/购物车顺序统一——原先详情页反着排，
+           同一件商品在三个页面看到的价格顺序不一样。 -->
       <text class="pdp-was" wx:if="{{vm.wasLabel}}">{{vm.wasLabel}}</text>
-      <text class="pdp-ship">满 ¥100 包邮</text>
+      <text class="pdp-now"><text class="pdp-cny">¥</text>{{currentPriceNum}}</text>
+      <!-- 「包邮」不再挂门槛（2026-07-25 体检批 P3）：真实运费规则 shared/src/checkout.ts 的 SHIP=0
+           无任何门槛分支，首页/购物车/支付成功页写的都是无条件包邮——原文「满 ¥100 包邮」是假承诺，
+           买 ¥22 的小熊也包邮却让用户以为要另付运费。 -->
+      <text class="pdp-ship">全场包邮</text>
     </view>
     <view class="pdp-title">{{vm.name}}</view>
     <view class="pdp-sub" wx:if="{{vm.brief}}">{{vm.brief}}</view>
@@ -26,7 +31,7 @@
     <view class="pdp-meta">
       <view class="pdp-meta-item"><text class="pdp-meta-b">顺丰</text><text class="pdp-meta-s">48h 内发出</text></view>
       <view class="pdp-meta-item"><text class="pdp-meta-b">七天</text><text class="pdp-meta-s">无理由退换</text></view>
-      <view class="pdp-meta-item"><text class="pdp-meta-b">包邮</text><text class="pdp-meta-s">满 ¥100</text></view>
+      <view class="pdp-meta-item"><text class="pdp-meta-b">包邮</text><text class="pdp-meta-s">全场</text></view>
       <view class="pdp-meta-item"><text class="pdp-meta-b">免费</text><text class="pdp-meta-s">钩错补料</text></view>
     </view>
   </view>

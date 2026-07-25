@@ -5,7 +5,7 @@ import * as cart from '../../lib/cart'
 import { prepareBuyNow } from '../../lib/checkout'
 import { getAllProducts, getProductDetail } from '../../lib/catalog'
 import { getRatingSummary } from '../../api/reviews'
-import { mapDetail, priceForSelection, type DetailVM } from '../../lib/mapDetail'
+import { mapDetail, type DetailVM } from '../../lib/mapDetail'
 import { mapSummary, type SummaryVM } from '../../lib/mapReviews'
 import { mapProducts, type ProductVM } from '../../lib/mapHome'
 import { openCustomerService } from '../../utils/customerService'
@@ -28,7 +28,6 @@ Page({
     loadFailed: false, // 网络/取数失败——不伪装成已下架，给重试（P2·bug sweep R1 #3）
     vm: null as DetailVM | null,
     skuIndex: -1,
-    currentPrice: '', // 展示标签「¥198」
     currentPriceNum: 0, // 数字部分（¥ 小、数字大）
     galleryIndex: 0,
     galleryWindow: [] as boolean[], // 随 galleryIndex 同步重算，详见 computeGalleryWindow
@@ -64,7 +63,6 @@ Page({
       loading: false,
       vm,
       skuIndex: i,
-      currentPrice: priceForSelection(vm, i),
       currentPriceNum: i >= 0 && vm.skus[i] ? vm.skus[i].price : vm.price,
       galleryWindow: computeGalleryWindow(vm.gallery.length, 0),
     })
@@ -116,7 +114,6 @@ Page({
     if (!vm) return
     this.setData({
       skuIndex: idx,
-      currentPrice: priceForSelection(vm, idx),
       currentPriceNum: vm.skus[idx] ? vm.skus[idx].price : vm.price,
     })
   },

@@ -85,8 +85,3 @@ export function mapDetail(p: unknown): DetailVM | null {
   }
 }
 
-/** SKU 选择价格联动：选中 SKU 用 SKU 价；未选/无 SKU 用商品价（原样标·不算术）。 */
-export function priceForSelection(vm: DetailVM, skuIndex: number): string {
-  const s = vm.skus[skuIndex]
-  return s ? s.priceLabel : vm.priceLabel
-}
