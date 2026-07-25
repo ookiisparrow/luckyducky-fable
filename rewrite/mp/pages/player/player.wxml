@@ -74,8 +74,11 @@
         </view>
       </view>
 
-      <!-- 单击提示条：仅播放中且未被首次 tap 关闭过（页面实例级·不持久化） -->
-      <view class="lp-tap-hint" wx:if="{{state === 'playing' && src && !hintDismissed}}">单击画面 播放 / 暂停</view>
+      <!-- 单击提示条：仅播放中且未被首次 tap 关闭过（页面实例级·不持久化）。
+           top 与 segstrip 同款动态避让（2026-07-25 体检批 P2）：定位祖先是全屏 .lp-stage（顶=屏顶），
+           原先写死 top:26rpx ≈13px 整条压进状态栏、只露一道边——旁边 segstrip 早已按 capsuleBottom
+           避让，这条漏了。落在 segstrip 之下（+92rpx 是 segstrip 实测高度带间距），两条浮层不叠。 -->
+      <view class="lp-tap-hint" wx:if="{{state === 'playing' && src && !hintDismissed}}" style="top: calc({{capsuleBottom}}px + {{strip ? 200 : 26}}rpx)">单击画面 播放 / 暂停</view>
 
       <!-- 分段进度条浮层：段落层级只活在这里（目录页只到课时层，批D 再落）。
            top 按原生胶囊底边动态避让（capsuleBottom+8·2026-07-13 反馈）：浮层的定位祖先是全屏 .lp-stage（inset:0·顶=屏顶），

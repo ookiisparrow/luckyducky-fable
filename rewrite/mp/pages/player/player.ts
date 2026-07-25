@@ -26,6 +26,7 @@ import { openCustomerService } from '../../utils/customerService'
 import { shouldTick, VIBE_GAP_MS, DRAG_TICK_GAP_MS } from '../../lib/haptics'
 import { mapHelpVideos, mapPublicFaq, type HelpTopicVM, type FaqItemVM } from '../../lib/mapLearning'
 import { mapCatalogPlayer, type CatalogPlayerVM } from '../../lib/mapPages'
+import { goBackOrHome } from '../../lib/nav'
 
 const TIME_UPDATE_THROTTLE_MS = 250
 // 拖动文案刷新节流（批5·ms）：位置由 seek.wxs 渲染层 60fps 跟手，curClock/snapName 文案经 onSeekTick 回逻辑层
@@ -751,11 +752,11 @@ Page({
     }
     this.exitPlayer()
   },
-  // 真退单出口：原生返回栈优先，深链无上级页兜底回首页（既有兜底逻辑原样保留）。
+  // 真退单出口：原生返回栈优先，深链无上级页兜底回首页——判断收口到 lib/nav.ts
+  // （2026-07-25 体检批 P2·Rule of Three：catalog/welcome 补自绘返回后同款判断第三次出现，
+  //   守卫 rw-mp-custom-nav-has-back 焊死单源；行为不变，首页兜底由 reLaunch 改 switchTab 保住底部导航栏）。
   exitPlayer() {
-    const pages = getCurrentPages()
-    if (pages.length > 1) wx.navigateBack()
-    else wx.reLaunch({ url: '/pages/home/home' }) // 深链直接进入播放页（无上级页可退）时兜底回首页
+    goBackOrHome()
   },
   // 加桌引导（P5b）：继续学习＝关弹窗留下（不退）；先退出＝执行真退。
   onDeskGuideStay() {

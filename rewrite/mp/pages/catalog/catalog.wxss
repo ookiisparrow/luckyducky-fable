@@ -6,6 +6,31 @@
   background: var(--ld-bg-lilac);
 }
 
+/* —— 自绘返回（守卫 rw-mp-custom-nav-has-back）——
+   fixed 而非 absolute：目录区是整页自然流滚动，absolute 会随内容滚走、滚下去就没了返回入口。
+   左上角与右上角原生胶囊分居两侧不打架；白色半透明圆底让它在深色 hero 图与浅色空态上都看得清。 */
+.ld-cat-back {
+  position: fixed;
+  left: 24rpx;
+  z-index: 20;
+  width: 64rpx;
+  height: 64rpx;
+  border-radius: 999rpx;
+  background: rgba(255, 255, 255, 0.82);
+  box-shadow: 0 4rpx 16rpx rgba(28, 28, 32, 0.12);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.ld-cat-back-h {
+  background: rgba(255, 255, 255, 0.95);
+}
+.ld-cat-back-ico {
+  width: 32rpx;
+  height: 32rpx;
+  transform: rotate(180deg); /* 复用 chevron-right 转向作返回箭头（不新增素材·同 player .lp-back-ico） */
+}
+
 /* —— hero：产品主图 + 底部锚定「开始学习」CTA —— */
 .ld-cat-hero {
   position: relative;

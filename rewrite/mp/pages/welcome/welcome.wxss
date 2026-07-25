@@ -43,6 +43,31 @@
   filter: brightness(0) invert(1) drop-shadow(0 2rpx 10rpx rgba(0, 0, 0, 0.35));
 }
 
+/* —— 自绘返回（守卫 rw-mp-custom-nav-has-back）——
+   照片壳整屏不滚动，absolute 即可（与 catalog 的 fixed 之别：那页整页自然流滚动）。
+   半透明黑底＋反白箭头：压在压暗的照片上，浅色照片也看得清；与右上角原生胶囊分居两侧。 */
+.ld-w-back {
+  position: absolute;
+  left: 24rpx;
+  z-index: 4;
+  width: 64rpx;
+  height: 64rpx;
+  border-radius: 999rpx;
+  background: rgba(0, 0, 0, 0.28);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.ld-w-back-h {
+  background: rgba(0, 0, 0, 0.42);
+}
+.ld-w-back-ico {
+  width: 32rpx;
+  height: 32rpx;
+  transform: rotate(180deg); /* 复用 chevron-right 转向作返回箭头（不新增素材·同 player/catalog） */
+  filter: brightness(0) invert(1);
+}
+
 /* 底部锚定文案区（min-height:100vh + margin-top:auto 顶到底·正常流以便键盘抬升） */
 .ld-w-body {
   position: relative;

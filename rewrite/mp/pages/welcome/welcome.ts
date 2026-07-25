@@ -9,6 +9,7 @@ import { getPageContent } from '../../lib/pageContent'
 import { getCourseById } from '../../lib/courses'
 import { activationView, bgFor, type ActivationKind } from '../../lib/mapLearning'
 import { mapWelcome, type WelcomeVM } from '../../lib/mapPages'
+import { goBackOrHome } from '../../lib/nav'
 import type { ApiResult } from '../../utils/cloud'
 import { goHomeTab } from '../../lib/homeIntent'
 
@@ -109,6 +110,13 @@ Page({
   },
   onRetry() {
     this.setData({ phase: 'input', code: '', kind: 'invalid', bg: '' })
+  },
+  // 自绘返回（守卫 rw-mp-custom-nav-has-back）：custom 导航无原生返回箭头，输入态/废码态此前退不出去。
+  // 与 onGoHome（W2 屏「先逛逛，稍后再进课」）分工不同：那条是**主动放弃进课**的语义化出口、恒回首页；
+  // 这条是通用返回，从「我」页进来的退回「我」、扫码深链进来的兜底回首页。
+  onBack() {
+    tapHaptic()
+    goBackOrHome()
   },
   onGoHome() {
     // 「先逛逛，稍后再进课」→ 首页应从头逛起：防上次恰好滚到 FAQ 板块的旧滚动位置残留，造成错位观感

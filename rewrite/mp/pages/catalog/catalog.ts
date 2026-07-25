@@ -9,6 +9,7 @@ import { getCourseByIdDetailed } from '../../lib/courses'
 import { playbackCache } from '../../lib/playbackCache' // 续播段取址预热（目录页停留窗口预热·进播放器 peek 命中零云往返·根因#15）
 import { getMyProgress } from '../../api/user'
 import { mapCatalog, bgFor, type CatalogChapterVM } from '../../lib/mapLearning'
+import { goBackOrHome } from '../../lib/nav'
 import { mapCatalogPlayer } from '../../lib/mapPages'
 import type { ApiResult } from '../../utils/cloud'
 
@@ -92,6 +93,12 @@ Page({
     tapHaptic()
     this.setData({ state: 'loading' })
     void this.onShow()
+  },
+  // 自绘返回（守卫 rw-mp-custom-nav-has-back）：custom 导航无原生返回箭头；扫码激活直落本页时
+  // 页面栈只有一层，goBackOrHome 兜底回首页 tab，不留死按钮。
+  onBack() {
+    tapHaptic()
+    goBackOrHome()
   },
   // 「开始学习」CTA：continueTarget 非空跳播放页续播；为空（全课无可播段）诚实提示，不留死跳转。
   onStart() {

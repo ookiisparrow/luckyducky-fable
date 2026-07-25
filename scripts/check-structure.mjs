@@ -3379,6 +3379,53 @@ import { PROD_ENV } from './lib/env.mjs'（单源·病根#5·债#30①）`)
     },
   },
   {
+    // 自绘导航页必须自带返回入口（2026-07-25 体检批 P2·根因#8「真机才发现」的导航变体）。
+    // navigationStyle:"custom" 把原生标题栏连同**原生返回箭头**一起去掉了——tabBar 页无所谓（底部
+    // 导航即出路），但非 tabBar 的 custom 页若不自绘返回，用户进去就只剩系统手势/微信胶囊菜单可退：
+    // 安卓返回键与 iOS 边缘侧滑都属平台行为、不可依赖（部分机型/场景不灵），扫码深链进来的更是无处可去。
+    // 病史：catalog（扫码激活→进课目录）与 welcome（激活页·废码态只有「重新输入」）都少这个箭头。
+    // 反向自检＝删 catalog.wxml 的返回节点即红。
+    id: 'rw-mp-custom-nav-has-back',
+    roots: ['#8'],
+    desc: '自绘导航页（navigationStyle:custom）非 tabBar 页必须自绘返回入口：custom 去掉了原生返回箭头，不补就只剩系统手势可退（扫码深链进来的用户无处可去）；tabBar 页豁免（底部导航即出路）。返回落地须走 lib/nav.ts 的 goBackOrHome 单源（有上级页 navigateBack、深链无上级页兜底回首页），别各页复制两行 getCurrentPages 判断',
+    run() {
+      const base = join(ROOT, 'rewrite/mp')
+      const appJsonPath = join(base, 'app.json')
+      if (!existsSync(base) || !existsSync(appJsonPath)) return []
+      const bad = []
+      let app
+      try {
+        app = JSON.parse(readFileSync(appJsonPath, 'utf8'))
+      } catch {
+        return [] // app.json 解析失败另有守卫管
+      }
+      const tabPages = new Set(((app.tabBar && app.tabBar.list) || []).map((x) => String(x.pagePath || '')))
+      for (const p of app.pages || []) {
+        if (tabPages.has(p)) continue // tabBar 页豁免：底部导航即出路
+        const name = String(p).split('/')[1]
+        const jsonPath = join(base, `${p}.json`)
+        const wxmlPath = join(base, `${p}.wxml`)
+        if (!existsSync(jsonPath) || !existsSync(wxmlPath)) continue
+        let cfg
+        try {
+          cfg = JSON.parse(readFileSync(jsonPath, 'utf8'))
+        } catch {
+          continue
+        }
+        if (cfg.navigationStyle !== 'custom') continue // 用原生导航栏的页面自带返回箭头
+        const w = readFileSync(wxmlPath, 'utf8').replace(/<!--[\s\S]*?-->/g, '')
+        if (!/bind:?tap\s*=\s*"onBack"/.test(w))
+          bad.push(`pages/${name}/${name}.wxml 自绘导航（navigationStyle:custom）却无 bind:tap="onBack" 返回入口——原生返回箭头已被 custom 去掉，用户只剩系统手势可退，扫码深链进来的无处可去`)
+      }
+      // 返回落地单源（病根#5·Rule of Three：player/catalog/welcome 三处同款「有上级页 back、否则回首页」）
+      const nav = join(base, 'lib/nav.ts')
+      if (!existsSync(nav)) bad.push('rewrite/mp/lib/nav.ts 缺失——自绘返回的「有上级页 navigateBack、深链兜底回首页」须单源，别各页复制 getCurrentPages 判断（病根#5）')
+      else if (!/export\s+function\s+goBackOrHome\b/.test(readFileSync(nav, 'utf8')))
+        bad.push('rewrite/mp/lib/nav.ts 未导出 goBackOrHome——自绘返回单源缺定值（病根#5）')
+      return bad
+    },
+  },
+  {
     // 品牌启动 splash 必须有界自动消失（根因#8「构建过≠真机能用」的 UI 陷死变体）：冷启动盖在首页上的
     // 品牌开屏，撤场＝**min-hold 保底停留 + 数据就绪 race + 硬上限兜底**（2026-07-18 丝滑战役批2 拍板升级·
     // 前身 PR #34「纯计时器固定停留、不挂钩数据」有意识推翻）——过 min-hold 后父级 ready 即淡出、数据永不

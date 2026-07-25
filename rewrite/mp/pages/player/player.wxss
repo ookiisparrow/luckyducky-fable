@@ -130,7 +130,8 @@
 /* 单击提示条（设计 .tap-hint·402px 画布 ×1.866 换算 rpx）：playing 且未被首次 tap 关闭过 */
 .lp-tap-hint {
   position: absolute;
-  top: 26rpx;
+  /* top 由内联 style 动态提供（capsuleBottom 避让·同 .lp-segstrip 范式·2026-07-25 体检批 P2）：
+     定位祖先是全屏 .lp-stage，写死 top 会让提示条压进状态栏，故此处不写死 top。 */
   left: 50%;
   transform: translateX(-50%);
   z-index: 3;
@@ -258,6 +259,10 @@
   justify-content: center;
   gap: 16rpx;
   padding: 0 40rpx;
+  /* box-sizing 必写（2026-07-25 体检批 P2）：本框同时挂着 .lp-video-box 的 width:100%，
+     默认 content-box 下「100% 内容宽 + 左右各 40rpx padding」总宽超屏 80rpx，又因 left:0 起算，
+     整块文案的居中中心右移 40rpx——「课程不存在」等四种非播放态文字都肉眼可见地偏右。 */
+  box-sizing: border-box;
 }
 .lp-state-title {
   font-size: 28rpx;
