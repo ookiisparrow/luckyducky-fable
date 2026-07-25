@@ -478,7 +478,7 @@ export const repoChecks = [
   {
     id: 'deploy-gated',
     roots: ['铁律'],
-    desc: '生产部署闸（接管 tcb，用户拍板 A）：**实跑** guard-deploy 断言行为——敏感函数/批量部署→ask 二次确认、读类/单个非敏感→放行、提交信息字样不误拦。行为偏离即红（grep 易被注释蒙混，故跑真行为）',
+    desc: '生产部署闸（接管 tcb + wechatide 官方 CLI，用户拍板 A/2026-07-24 正式接入批）：**实跑** guard-deploy 断言行为——敏感函数/批量部署/wechatide 写工具（upload/cloud_fn_deploy/cloud_db_write_*/cloud_manage_storage）→ask 二次确认、读类/单个非敏感→放行、提交信息字样不误拦。行为偏离即红（grep 易被注释蒙混，故跑真行为）',
     run() {
       const abs = join(ROOT, 'scripts/guard-deploy.mjs')
       if (!existsSync(abs)) return ['scripts/guard-deploy.mjs 不存在（部署闸缺失）']
@@ -501,11 +501,41 @@ export const repoChecks = [
         ['npx @cloudbase/cli fn deploy payCallback', 'ask'], // runner + 包名（bin=tcb）
         ['env DEPLOY_ALLOWED=1 node scripts/deploy-fns.mjs', 'ask'], // env 前缀不进 envPrefix
         ['export DEPLOY_ALLOWED=1; node scripts/deploy-fns.mjs', 'ask'], // export 被 ';' 拆段
+        // wechatide 官方 CLI 接管（2026-07-24 正式接入批）：写工具一律 ask，读类/项目列表管理放行
+        ['wechatide -c x upload --project rewrite/mp --upload-version 1.0.0', 'ask'], // 发布体验版
+        ['wechatide -c x cloud_fn_deploy --dir dist/app', 'ask'], // 云函数部署
+        ['wechatide -c x cloud_db_write_doc --collection orders', 'ask'], // 云数据库写
+        ['wechatide -c x cloud_manage_storage --action upload', 'ask'], // 云存储写
+        ['wechatide -c x project_list', 'allow'], // 只读列出项目
+        ['wechatide -c x cloud_query_storage', 'allow'], // 只读查云存储（不与 cloud_manage_storage 误撞）
+        ['git commit -m chore-wechatide-upload-skill', 'allow'], // 提交信息提字样 → 不拦
       ]
       const bad = []
       for (const [cmd, want] of cases) {
         const got = decide(cmd)
         if (got !== want) bad.push(`guard-deploy「${cmd}」期望 ${want}、实际 ${got}——生产部署闸行为偏离（接管 tcb 安全线）`)
+      }
+      // 写工具禁包 npm script（2026-07-25 补机器守）：本闸读的是 Bash 命令**文本**，`npm run <name>` 这层
+      // 间接让它看不进 package.json 里真正执行的命令——把任何写工具包成 script 即等于开一个静默绕过的洞。
+      // 实证：`npm run upload:mp` 经本闸判定为 allow（而 `wechatide … upload` 直打是 ask）。
+      // 此前这条纪律只写在 guard-deploy.mjs 头注里（靠人记）；2026-07-25 加 preview:mp（只读预览·合规）时
+      // 顺手焊成机器守——同一位置最容易手滑把 upload 也包进去。tcb 侧同理一并咬。
+      const pkgPath = join(ROOT, 'package.json')
+      if (existsSync(pkgPath)) {
+        let scripts = {}
+        try {
+          scripts = JSON.parse(readFileSync(pkgPath, 'utf8')).scripts || {}
+        } catch {
+          /* package.json 解析失败另有守卫管 */
+        }
+        const WRITE_TOOLS = ['upload', 'cloud_fn_deploy', 'cloud_fn_inc_deploy', 'cloud_db_write_doc', 'cloud_db_write_struct', 'cloud_manage_storage']
+        for (const [name, body] of Object.entries(scripts)) {
+          const cmd = String(body)
+          if (!/\bwechatide\b/.test(cmd)) continue
+          const hit = WRITE_TOOLS.find((t) => new RegExp('\\b' + t + '\\b').test(cmd))
+          if (hit)
+            bad.push(`package.json script「${name}」把 wechatide 写工具「${hit}」包进了 npm script——部署闸读命令文本、看不进 npm run 内层，等于静默绕过（写工具必须整行手打；只读类如 auto_preview 不在此限）`)
+        }
       }
       return bad
     },

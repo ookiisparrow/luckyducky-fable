@@ -26,6 +26,7 @@
     "trace": "node scripts/trace.mjs",
     "loadtest": "node scripts/loadtest.mjs",
     "smoke:mp": "node scripts/mp-smoke.cjs",
+    "preview:mp": "wechatide -c ldrw-cli auto_preview --project \"$PWD/rewrite/mp\" --page-path pages/home/home",
     "deploy:test": "node scripts/deploy-test.mjs",
     "db:export": "node scripts/db-export.mjs",
     "db:check-indexes": "node scripts/check-indexes.mjs",

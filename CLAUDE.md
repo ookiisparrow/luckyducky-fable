@@ -19,6 +19,7 @@ npm install              # prepare 自动注册 git hooks
 npm run check            # 验收语言：structure+typecheck+lint+test（pre-commit/CI 同源）
 node scripts/check-structure.mjs   # 快检 ~1.4s，改一个文件就跑
 npm run build:rw-cloud   # 云函数产物（部署另为人工授权动作·guard-deploy 闸）
+npm run preview:mp       # 推真机预览（免扫码·落首页；改 --page-path 可直落深层页）。写类 wechatide 工具禁包 script（部署闸看不进 npm run·守卫 deploy-gated 咬）
 npm run build:rw-admin / build:agent；内容站 npm run build -w @ldrw/site
 ```
 
