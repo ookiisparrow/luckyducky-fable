@@ -38,8 +38,22 @@ export interface MyCourseVM {
   enteredAtLabel: string
   doneCount: number // 已看完段数（done 命中且属本课的段·交集）
   totalSegments: number // 本课总段数（跨章跨课时累加）
-  percent: number // 学习进度百分比（0–100·四舍五入·不除零）
+  percent: number // 学习进度百分比（见 progressPercent：0% 只表示真没学、100% 只表示真学完·中间夹 [1,99]）
   progressUnknown: boolean // 进度**没读到**（调用方传 null）：与「真的一段没学」区分——界面须显示「进度暂时读不到」而非 0%（根因#14）
+}
+
+// 学习进度百分比（手落副本·canonical 单源 rewrite/shared/src/learning.ts 的 progressPercent；
+// mp 包进不了 @ldrw/shared——微信开发者工具编译不出仓外引用，同 lib/checkoutConst.ts / mapOrders.ts 头注；
+// 两侧一致由守卫 rw-progress-percent-single-source 逐规则焊死）。
+// **0% 只表示真没学、100% 只表示真学完**，中间态夹到 [1,99]：
+// 原裸写 Math.round 在边界撒谎——1/250 显示 0%（学了却像没学）、199/200 显示 100%（没学完却像结课）。
+function progressPercent(done: number, total: number): number {
+  const d = Number(done)
+  const t = Number(total)
+  if (!Number.isFinite(d) || !Number.isFinite(t) || t <= 0 || d <= 0) return 0
+  if (d >= t) return 100
+  const raw = Math.round((d / t) * 100)
+  return Math.min(99, Math.max(1, raw))
 }
 
 /** 收集一门课的全部段 id（跨 chapters→lessons→segments·脏结构安全）。 */
@@ -98,7 +112,7 @@ export function mapMyCourses(mine: unknown, courses: unknown, progress?: unknown
     const totalSegments = segIds.size
     let doneCount = 0
     for (const k of doneByCourse.get(courseId) || []) if (segIds.has(k)) doneCount++ // 交集·防 stale 顶爆
-    const percent = totalSegments ? Math.round((doneCount / totalSegments) * 100) : 0
+    const percent = progressPercent(doneCount, totalSegments)
     out.push({ courseId, title: titleOf.get(courseId) || courseId, enteredAtLabel: dateTime(m.enteredAt), doneCount, totalSegments, percent, progressUnknown })
   }
   return out

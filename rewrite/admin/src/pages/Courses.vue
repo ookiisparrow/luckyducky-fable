@@ -6,7 +6,7 @@ import { useRoute, onBeforeRouteLeave } from 'vue-router'
 import { RotateCcw, Plus, Trash2, Upload, Check, BookOpen } from 'lucide-vue-next'
 import { getCourseDraft, saveCourseDraft, publishCourse, uploadVideo, syncVodMedia } from '../api/content'
 import { listDrafts } from '../api/products'
-import { isVodFileId } from '@ldrw/shared'
+import { isVodFileId, progressPercent } from '@ldrw/shared'
 import { courseVideoStats } from '../lib/mapContent'
 import { planLessonBatch } from '../lib/videoBatch'
 import { serialSave } from '../lib/serialSave'
@@ -56,7 +56,7 @@ function pickCourse(cid: string) {
 }
 const batchUploading = ref(false) // 课时级批量传视频在途（P1·根因#8）：期间锁重排/删除交互入口，防结构错位与稳定标识失配（批3 规格）
 
-const pct = computed(() => (stats.value.total ? Math.round((stats.value.done / stats.value.total) * 100) : 0))
+const pct = computed(() => progressPercent(stats.value.done, stats.value.total)) // 单源 @ldrw/shared（0%/100% 不撒谎）
 
 // VOD 转码态（决策§31 批2）：段 videoFileId 为 VOD FileId（纯数字·判据单源 @ldrw/shared 与云端播放
 // 分流同款）且 vodUrl 未回写 = 转码中——「传完 ≠ 可播」，发布被云端闸拦，先点「同步转码状态」。

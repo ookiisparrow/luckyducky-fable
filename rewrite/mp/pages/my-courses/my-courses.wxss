@@ -125,6 +125,10 @@
   height: 100%;
   border-radius: var(--ld-radius-pill);
   background: var(--ld-purple);
+  /* 最小可见宽度（2026-07-25 进度条专项）：1% 时 fill 实测仅 3.6px 宽 × 5px 高，配 pill 圆角被搓成
+     一个小圆点，看着像瑕疵而非「刚开始学」。给一个 ≥ 轨高的下限，让极小进度也是一小段可辨认的短条。
+     min-width 只抬下限、不改 100% 时的满宽（width:100% > min-width）。 */
+  min-width: 16rpx;
 }
 .ld-mc-prog-text {
   margin-top: 8rpx;

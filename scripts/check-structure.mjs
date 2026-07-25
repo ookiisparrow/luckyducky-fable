@@ -3390,6 +3390,55 @@ import { PROD_ENV } from './lib/env.mjs'（单源·病根#5·债#30①）`)
     },
   },
   {
+    // 学习进度百分比口径单源（2026-07-25 进度条专项·病根#5 三处裸写同式 + 根因#14 界面说假话）。
+    // 病史：mp mapLearning / cloud customer360 / admin Courses 三处各自裸写
+    // `Math.round((done/total)*100)`，边界上对用户撒谎——1/250 显示 0%（学了却像没学）、
+    // 199/200 显示 100%（没学完却像结课）。收口 shared 的 progressPercent；mp 进不了 @ldrw/shared
+    // 故手落副本，本守卫逐规则焊死两侧（副本最怕单边改：一边收紧一边照旧，同一门课两处显示不同进度）。
+    // 反向自检＝把 mp 副本的 Math.min(99,…) 改回裸 raw 即红。
+    id: 'rw-progress-percent-single-source',
+    roots: ['#5', '#14'],
+    desc: '学习进度百分比口径单源：canonical＝rewrite/shared/src/learning.ts 的 progressPercent（0% 只表示真没学、100% 只表示真学完、中间夹 [1,99]）；cloud customer360 与 admin Courses 须 import 它、不得裸写 Math.round((x/y)*100)；mp 进不了 @ldrw/shared 故手落副本，四条关键规则（d<=0→0 / d>=t→100 / Math.round / Math.min(99,Math.max(1,…))）须与单源一致',
+    run() {
+      const bad = []
+      const shPath = join(ROOT, 'rewrite/shared/src/learning.ts')
+      if (!existsSync(shPath)) return []
+      const sh = stripComments(readFileSync(shPath, 'utf8'))
+      if (!/export\s+function\s+progressPercent\b/.test(sh))
+        bad.push('rewrite/shared/src/learning.ts 未导出 progressPercent——学习进度口径单源缺定值（病根#5）')
+      // ① 两个能引 shared 的消费面：必须引单源、不得裸写
+      for (const rel of ['rewrite/cloud/src/functions/adminApi/customer360/providers/learning.ts', 'rewrite/admin/src/pages/Courses.vue']) {
+        const abs = join(ROOT, rel)
+        if (!existsSync(abs)) continue
+        const src = stripComments(readFileSync(abs, 'utf8'))
+        if (!/progressPercent\s*\(/.test(src))
+          bad.push(`${rel} 未用 progressPercent——学习进度百分比须引 @ldrw/shared 单源（病根#5）`)
+        if (/Math\.round\s*\(\s*\(\s*\w+(\.\w+)*\s*\/\s*\w+(\.\w+)*\s*\)\s*\*\s*100\s*\)/.test(src))
+          bad.push(`${rel} 仍裸写 Math.round((x/y)*100) 算学习进度——边界会撒谎（1/250→0%、199/200→100%），须走 progressPercent`)
+      }
+      // ② mp 手落副本：四条关键规则逐条焊死（同 STATUS_LABELS/checkoutConst 副本范式）
+      const mpPath = join(ROOT, 'rewrite/mp/lib/mapLearning.ts')
+      if (existsSync(mpPath)) {
+        const mp = stripComments(readFileSync(mpPath, 'utf8'))
+        const body = methodBody(mp, 'progressPercent') || mp
+        if (!/function\s+progressPercent\b/.test(mp)) {
+          bad.push('rewrite/mp/lib/mapLearning.ts 无 progressPercent 副本——mp 进不了 @ldrw/shared，须手落副本（病根#5）')
+        } else {
+          const RULES = [
+            { re: /d\s*<=\s*0/, msg: 'd<=0→0（没学过才是 0%）' },
+            { re: /d\s*>=\s*t/, msg: 'd>=t→100（学完才是 100%）' },
+            { re: /Math\.min\s*\(\s*99/, msg: 'Math.min(99,…)（没学完不许显示 100%）' },
+            { re: /Math\.max\s*\(\s*1/, msg: 'Math.max(1,…)（学过了不许显示 0%）' },
+          ]
+          for (const r of RULES)
+            if (!r.re.test(body))
+              bad.push(`rewrite/mp/lib/mapLearning.ts 的 progressPercent 副本缺规则「${r.msg}」——与 shared 单源漂移，同一门课两处显示不同进度（病根#5）`)
+        }
+      }
+      return bad
+    },
+  },
+  {
     // 自绘导航页必须自带返回入口（2026-07-25 体检批 P2·根因#8「真机才发现」的导航变体）。
     // navigationStyle:"custom" 把原生标题栏连同**原生返回箭头**一起去掉了——tabBar 页无所谓（底部
     // 导航即出路），但非 tabBar 的 custom 页若不自绘返回，用户进去就只剩系统手势/微信胶囊菜单可退：

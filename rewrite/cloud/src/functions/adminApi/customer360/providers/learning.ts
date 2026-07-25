@@ -1,4 +1,5 @@
 import type { CustomerPanelProvider } from '../types'
+import { progressPercent } from '@ldrw/shared'
 
 // 学习位置板块（B2.1·后台360工作站·铁律三 provider 模式）：坐席查某客人每门课学到哪——章/节/段/完成度
 // 人话化，精准指导钩织学习求助。数据＝progress（trackEvent 折叠的「每用户每课一条」·last 末位置 + done
@@ -71,7 +72,7 @@ export const learningProvider: CustomerPanelProvider = {
         atSec: Number(last.at) || 0,
         doneCount,
         totalSegments: total,
-        percent: total ? Math.round((doneCount / total) * 100) : 0, // structure-ok 完成度百分比·非金额元分换算
+        percent: progressPercent(doneCount, total), // 单源 @ldrw/shared（未学完不冒充满进度·见其头注）
         updatedAt: p.updatedAt || p.createdAt || null,
       }
     })
