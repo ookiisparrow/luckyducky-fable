@@ -33,7 +33,9 @@
       </view>
       <view class="ld-mc-prog" wx:elif="{{item.totalSegments}}">
         <view class="ld-mc-prog-track"><view class="ld-mc-prog-fill" style="width: {{item.percent}}%"></view></view>
-        <view class="ld-mc-prog-text">已学 {{item.doneCount}}/{{item.totalSegments}} 集 · {{item.percent}}%</view>
+        <!-- 单位「段」对齐数据模型与目录页（章>课时>段落·2026-07-25 体检批 P3）：此处数的是 segments，
+             原写「集」是全仓孤例，与课程目录页的「课时/段落」对不上号，同一门课出现三种叫法。 -->
+        <view class="ld-mc-prog-text">已学 {{item.doneCount}}/{{item.totalSegments}} 段 · {{item.percent}}%</view>
       </view>
       <view class="ld-mc-meta">
         <view class="ld-mc-entered" wx:if="{{item.enteredAtLabel}}">进课于 {{item.enteredAtLabel}}</view>

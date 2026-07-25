@@ -5,5 +5,5 @@
     <image class="ld-splash-logo" src="/static/logo-wordmark.svg" mode="widthFix" />
     <view class="ld-splash-tag">创造幸运~</view>
   </view>
-  <view class="ld-splash-foot">Get Ducky Get Lucky™</view>
+  <view class="ld-splash-foot">{{sloganEn}}™</view>
 </view>

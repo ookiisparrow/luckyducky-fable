@@ -28,7 +28,9 @@
         <view class="lp-title-main">{{strip.chapterTitle}}</view>
         <view class="lp-title-sub">{{strip.lessonNo}} · {{strip.lessonName}}</view>
       </block>
-      <view class="lp-title-main" wx:else>{{(strip && strip.lessonName) || title || '正在学习'}}</view>
+      <!-- 兜底标题按态分流（2026-07-25 体检批 P3）：missing/error 态下课程都没拿到，顶条却写「正在学习」
+           自相矛盾（用户刚被告知「没找到这门课」，抬头看见「正在学习」）。 -->
+      <view class="lp-title-main" wx:else>{{(strip && strip.lessonName) || title || (state === 'missing' ? '课程' : (state === 'error' ? '加载失败' : '正在学习'))}}</view>
     </view>
     <view class="lp-topbar-spacer"></view>
   </view>
@@ -108,8 +110,14 @@
       <view class="lp-state-title">先激活课程才能观看</view>
       <view class="lp-state-btn" bind:tap="onGoActivate">去输入激活码</view>
     </view>
+    <!-- missing 态补出路（2026-07-25 体检批 P3）：原先整屏只有「课程不存在」五个字、一个可点的都没有，
+         而隔壁 error 态早有重试按钮——同页两种失败态待遇不一致。文案同步改用户语言。 -->
     <view class="lp-video-box lp-state" wx:elif="{{state === 'missing'}}">
-      <view class="lp-state-title">课程不存在</view>
+      <view class="lp-state-title">没找到这门课</view>
+      <view class="lp-state-hint">可能课程已下架，或者这个链接不对</view>
+      <view class="lp-state-actions">
+        <view class="lp-state-btn" bind:tap="onGoCourses">去我的课程看看</view>
+      </view>
     </view>
     <!-- error 态双语义（评审修复）：current 有值=段级失败（取址/媒体）；current 空=课程目录都没拉到
          （initCourse 失败·深链冷启动弱网），文案与按钮随态分流，重试都走 onRetryError（内部自分流）。 -->

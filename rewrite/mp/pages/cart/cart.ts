@@ -10,6 +10,7 @@ import { decideQuickAdd } from '../../lib/quickAdd'
 import { mapProducts, type ProductVM } from '../../lib/mapHome'
 // consumeExitGuard 别名：页面方法须叫 onExitGuardBeforeLeave（wxml bindbeforeleave 绑的就是它），同名易误读成递归
 import { armExitGuard, releaseExitGuard, onExitGuardBeforeLeave as consumeExitGuard } from '../../utils/exitGuard'
+import { goHomeTab } from '../../lib/homeIntent'
 
 let allRaw: Record<string, any>[] = [] // 全商品原档（算推荐+加购取价·onLoad 拉一次）
 
@@ -100,9 +101,17 @@ Page({
     const id = String(e.currentTarget.dataset.id || '')
     if (id) wx.navigateTo({ url: '/pages/detail/detail?id=' + id })
   },
+  // 空车「去逛逛」（2026-07-25 体检批 P3）：走 goHomeTab 而非 switchTab 裸调——
+  // 与 welcome「先逛逛」同口径（首页回到顶部，防上次滚动位置残留造成错位观感）。
+  onGoHome() {
+    tapHaptic()
+    goHomeTab()
+  },
   onCheckout() {
     if (!this.data.selectedCount) {
-      wx.showToast({ title: '先勾选要买的宝贝', icon: 'none' })
+      // 提示按「车里有没有东西」分流（2026-07-25 体检批 P3）：空车时说「先勾选」是句废话——
+      // 根本没有可勾的东西，用户会去找那个不存在的勾选框。
+      wx.showToast({ title: this.data.items.length ? '先勾选要买的宝贝' : '先挑一只喜欢的小鸭吧', icon: 'none' })
       return
     }
     tapHaptic()

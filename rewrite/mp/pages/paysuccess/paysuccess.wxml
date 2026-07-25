@@ -37,6 +37,6 @@
   <!-- 幸运小尾巴 -->
   <view class="ld-ps-tip">
     <image class="ld-ps-tip-ico" src="/static/icons/sparkles.svg" mode="aspectFit" />
-    <text>开盒就能跟着视频钩出第一只小鸭，Get Ducky Get Lucky</text>
+    <text>开盒就能跟着视频钩出第一只小鸭，{{sloganEn}}</text>
   </view>
 </view>

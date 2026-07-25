@@ -780,6 +780,11 @@ Page({
   onGoActivate() {
     wx.redirectTo({ url: '/pages/welcome/welcome' })
   },
+  // 「没找到这门课」空态的出路（2026-07-25 体检批 P3·同 catalog.onGoCourses 口径）：
+  // 原 missing 态整屏无可点处，而隔壁 error 态早有重试按钮。
+  onGoCourses() {
+    wx.redirectTo({ url: '/pages/my-courses/my-courses' }) // 不加 tapHaptic：与同页 onGoActivate 一致（本页震感只用于 seek 拖动）
+  },
   // 观看位置上报：onHide（前进导航离页）+ onUnload（系统返回销毁·最常见的离开方式）都触发，
   // 一次性 watchReported 防同段双报（原只挂 onHide→返回退出静默丢失 watch_at·根因#14 可观测）。
   reportWatchAt() {

@@ -10,7 +10,9 @@
 
     <!-- 反馈正文卡（文本域 + 字数） -->
     <view class="co-card fb-card">
-      <textarea class="fb-text" value="{{content}}" bind:input="onContent" maxlength="500" placeholder="遇到的问题、想要的功能，都可以告诉我们（最多 500 字）" placeholder-class="fb-ph" />
+      <!-- 提示语不再重复字数上限（2026-07-25 体检批 P3）：原文尾部「（最多 500 字）」在窄屏折行时
+           把「500」拆成「50 / 0」，读起来像限 50 字；下方 {{content.length}}/500 计数已经在说同一件事。 -->
+      <textarea class="fb-text" value="{{content}}" bind:input="onContent" maxlength="500" placeholder="遇到的问题、想要的功能，都可以告诉我们" placeholder-class="fb-ph" />
       <view class="fb-count">{{content.length}}/500</view>
     </view>
 

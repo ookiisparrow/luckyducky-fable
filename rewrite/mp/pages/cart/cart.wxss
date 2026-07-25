@@ -48,6 +48,19 @@
   color: var(--ld-content-2);
   letter-spacing: 2rpx;
 }
+/* 空车出路按钮（2026-07-25 体检批 P3）：药丸描边次级样式，与全站主按钮形体一致、但不抢主视觉 */
+.ld-cart-hold-cta {
+  margin-top: 20rpx;
+  padding: 14rpx 44rpx;
+  border-radius: 999rpx;
+  border: 2rpx solid var(--ld-purple);
+  color: var(--ld-purple);
+  font-size: 24rpx;
+  font-weight: 600;
+}
+.ld-cart-hold-cta-h {
+  background: var(--ld-bg-lilac);
+}
 .ld-cart-hold-list {
   border-top: 4rpx dashed var(--ld-purple);
   border-bottom: 4rpx dashed var(--ld-purple);

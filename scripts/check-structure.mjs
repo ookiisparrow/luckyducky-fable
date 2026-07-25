@@ -1385,6 +1385,7 @@ export const repoChecks = [
         return rel.endsWith('.wxml') || rel.endsWith('.vue') ? s.replace(/<!--[\s\S]*?-->/g, '') : s
       }
       const brandFile = 'rewrite/mp/lib/brand.ts'
+      const shopFile = 'rewrite/mp/lib/shop.ts' // 店铺全名单源（与 brand.ts 分家的理由见该文件头注：首屏字体子集）
       const absBrand = join(ROOT, brandFile)
       if (!existsSync(absBrand)) bad.push(`${brandFile} 缺失（店名单一来源，R23⑲）`)
       else if (!new RegExp(`BRAND_NAME\\s*=\\s*['"]${NAME}['"]`).test(readFileSync(absBrand, 'utf8')))
@@ -1396,8 +1397,18 @@ export const repoChecks = [
           const s = strip(rel, readFileSync(f, 'utf8'))
           if (rel !== brandFile && s.includes(NAME))
             bad.push(`${rel} 硬编码店名「${NAME}」——须引 constants/brand.js 的 BRAND_NAME 单源（病根#5）`)
-          if (rel !== brandFile && s.includes('官方旗舰店'))
-            bad.push(`${rel} 硬编码「官方旗舰店」店铺后缀——须引 brand.js 的 SHOP_FULL_NAME 单源（病根#5·债#30）`)
+          // 店铺全名单源住 lib/shop.ts 而非 brand.ts（2026-07-25 体检批 P3）：brand.ts 在首页闭包内，
+          // 「旗舰店」并进去会被 rw-mp-font-tier-subset-covers 算作 tier1 首屏字，而首屏子集里没有这三个字
+          // → 真机静默掉系统字体。拆开后本字落 tier2（详见 lib/shop.ts 头注）。
+          if (rel !== shopFile && s.includes('官方旗舰店'))
+            bad.push(`${rel} 硬编码「官方旗舰店」店铺后缀——须引 lib/shop.ts 的 SHOP_FULL_NAME 单源（病根#5·债#30）`)
+          // 英文口号同样单源（2026-07-25 体检批 P3）：paysuccess 曾硬编码「Get Ducky Get Lucky」，
+          // 与 brand.ts 的「Get ducky get lucky」大小写不一致——同一句口号全 App 两种写法。
+          // 大小写不敏感匹配：正是大小写漂移本身要抓，不能只比字面量。
+          // **仅限 mp**：admin/agent 引不到 mp 的 lib/brand.ts（跨包无 import 通路），
+          // 且那边的口号是 CMS 表单默认值/示例文案，性质不同——扩到那两端等于立一条无法满足的规矩。
+          if (dir === 'rewrite/mp' && rel !== brandFile && /get\s+ducky\s+get\s+lucky/i.test(s))
+            bad.push(`${rel} 硬编码英文品牌口号——须引 lib/brand.ts 的 BRAND_SLOGAN_EN 单源（大小写写法会各页漂移·病根#5）`)
         }
       }
       // ② 绝迹名单全库扫（含 shared 种子 / cloud 云函数 / 根级 tests 夹具——中文名当初从这些「单源缺守」处漂进来；

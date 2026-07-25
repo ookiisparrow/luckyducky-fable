@@ -6,6 +6,8 @@
 //  · 数据迟迟不来（弱网/云未部署）则 HARD_CAP_MS 无条件撤场——防「数据永不就绪」splash 永久盖死首页
 //    （根因#8 build 绿·真机陷死）。
 // 有界自撤守卫见 rw-mp-splash-auto-dismiss（三断言＋硬上限断言④·HARD_CAP_MS 改名须同步守卫）。
+import { BRAND_SLOGAN_EN } from '../../lib/brand'
+
 const MIN_HOLD_MS = 800 // 最短停留（低于此一闪而过·观感差）
 const FADE_MS = 500 // 淡出时长（须与 wxss .ld-splash.leaving 动画时长一致）
 const HARD_CAP_MS = 4000 // 硬上限：数据永不就绪也无条件撤场（HARD_CAP_MS 改名须同步守卫 rw-mp-splash-auto-dismiss 断言④）
@@ -25,7 +27,9 @@ Component({
     // 父级（home）数据就绪信号：置 true 触发 observer → maybeLeave（过了 min-hold 即淡出）
     ready: { type: Boolean, value: false, observer() { this.maybeLeave() } },
   },
-  data: { leaving: false },
+  // sloganEn 恒引 lib/brand 单源（2026-07-25 体检批 P3）：本组件原硬编码「Get Ducky Get Lucky™」，
+  // 与单源的「Get ducky get lucky」大小写不一致——开屏第一眼与支付成功页两种写法（病根#5）。™ 留在模板里。
+  data: { leaving: false, sloganEn: BRAND_SLOGAN_EN },
   lifetimes: {
     attached() {
       starts.set(this, Date.now())

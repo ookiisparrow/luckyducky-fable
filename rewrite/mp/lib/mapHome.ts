@@ -3,6 +3,8 @@
 // 内容纪律（黄金 learning-content §九）：整档/逐字段/逐块缺失都回退「设计默认文案」，
 //   空块（空字段/空数组/整组脏行）仍用默认——防线上误清空、防半空板块。默认文案 = 重设计首页原稿。
 
+import { BRAND_SLOGAN_EN } from './brand'
+
 export interface ProductVM {
   id: string
   name: string
@@ -78,7 +80,7 @@ export interface HomeContentVM {
 
 // ── 设计默认文案（重设计首页原稿·Sections.jsx 逐字抄录）──
 // hero 品牌门面缺→包内兜底鸭图（不留灰·README 图片矩阵）：区别商品 cover（缺→CSS 灰占位）——首屏门面不该露灰底。
-const HERO_DEFAULT: HeroVM = { title: '创造幸运', tagline: 'Get ducky get lucky', search: '入门钩织的妙趣方式', img: '/static/hero-full.jpg' }
+const HERO_DEFAULT: HeroVM = { title: '创造幸运', tagline: BRAND_SLOGAN_EN, search: '入门钩织的妙趣方式', img: '/static/hero-full.jpg' }
 const BRAND_DEFAULT: BrandVM = { name: '小棉鸭', lead: '我们希望每个人都能亲手创造自己的随身幸运物。' }
 const FEATURE_DEFAULT: FeatureVM = { title: '入门钩织的妙趣方案', body: '为了让钩织入门更轻松、更有趣，我们精心设计了这些小家伙。', img: '' }
 const TRUST_DEFAULT: TrustVM[] = [
@@ -109,7 +111,7 @@ const FAQ_DEFAULT: FaqVM[] = [
   { title: '做坏了可以补料吗？', body: '可以。线材用尽或钩错都能在社群申请补料，七天内不满意还可无理由退货。' },
   { title: '大概需要多久完成？', body: '新手平均 3–4 小时即可完成一只，可分多次进行，随时暂停继续。' },
 ]
-const CLOSING_DEFAULT: ClosingVM = { title: '创造幸运', cta: 'Get ducky get lucky', img: '' }
+const CLOSING_DEFAULT: ClosingVM = { title: '创造幸运', cta: BRAND_SLOGAN_EN, img: '' }
 const FOOTER_DEFAULT: FooterVM = { links: ['关于我们', 'Lucky 鸭'], copy: 'Copyright © 2026 ZHUO DUCKI LUCKY · All Rights Reserved.' }
 
 // ── 小工具 ──

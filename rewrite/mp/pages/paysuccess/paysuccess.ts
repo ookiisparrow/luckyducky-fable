@@ -4,9 +4,12 @@
 import { tapHaptic } from '../../lib/haptics'
 import { trackEvent } from '../../api/learning'
 import { goHomeTab } from '../../lib/homeIntent'
+import { BRAND_SLOGAN_EN } from '../../lib/brand'
 
 Page({
-  data: { orderId: '', amountYuan: '', hasAmount: false },
+  // sloganEn 恒引 lib/brand 单源（2026-07-25 体检批 P3）：本页原硬编码「Get Ducky Get Lucky」，
+  // 与单源的「Get ducky get lucky」大小写不一致——同一句口号全 App 出现两种写法（病根#5）。
+  data: { orderId: '', amountYuan: '', hasAmount: false, sloganEn: BRAND_SLOGAN_EN },
   onLoad(query: Record<string, string | undefined>) {
     const orderId = String(query.id || '')
     let amountYuan = ''

@@ -100,6 +100,12 @@ Page({
     tapHaptic()
     goBackOrHome()
   },
+  // 「没找到这门课」空态的出路（2026-07-25 体检批 P3）：原空态整屏无可点处。
+  // 去「我的课程」而非首页——能走到本页的都是学员，那里才是他找得到自己课的地方。
+  onGoCourses() {
+    tapHaptic()
+    wx.redirectTo({ url: '/pages/my-courses/my-courses' })
+  },
   // 「开始学习」CTA：continueTarget 非空跳播放页续播；为空（全课无可播段）诚实提示，不留死跳转。
   onStart() {
     const t = this.data.continueTarget
