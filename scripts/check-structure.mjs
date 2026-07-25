@@ -3390,6 +3390,35 @@ import { PROD_ENV } from './lib/env.mjs'（单源·病根#5·债#30①）`)
     },
   },
   {
+    // seek 条位置：渲染层样式单一写入方（2026-07-25 用户报「切下一段后进度条仍停在拖动点」·实测定性）。
+    // 病根：`.lp-seek-fill`/`.lp-seek-handle` 被**两方**写同一样式属性——wxml 的 `style="width:{{seekPct}}%"`
+    // 数据绑定 + seek.wxs 拖动时的 `setStyle`。实测（automator 真触摸取证）：**WXS setStyle 写过一次后，
+    // 该节点的 style 数据绑定永久失灵**——换段 setData({seekPct:0}) 清不掉（画面仍停在拖动点），
+    // 连之后的播放推进也不再带动进度条（拖动一次＝进度条彻底死掉）。
+    // 修法＝位置只由 WXS 写：逻辑层 seekPct 经 `change:pct` 观察者回灌 WXS，由它统一 setStyle。
+    // 故本守卫钉两点：① seek.wxs 导出 onPct（数据→样式的回灌入口）；② player.wxml 的 .lp-seek 挂
+    // change:pct + pct 属性（缺了回灌通道，拖动后进度条即永久冻结）。反向自检＝摘掉 change:pct 即红。
+    id: 'rw-mp-seek-style-single-writer',
+    roots: ['#14', '#15'],
+    desc: 'seek 条位置渲染层样式单一写入方：WXS setStyle 写过后 wxml 的 style 数据绑定永久失灵（实测），故位置须只由 seek.wxs 写——seek.wxs 须导出 onPct 回灌入口，player.wxml 的 .lp-seek 须挂 change:pct="{{sk.onPct}}" 与 pct="{{seekPct}}"；缺回灌通道则拖动一次后进度条永久冻结（换段不归零、播放不推进）',
+    run() {
+      const base = join(ROOT, 'rewrite/mp/pages/player')
+      const wxsPath = join(base, 'seek.wxs')
+      const wxmlPath = join(base, 'player.wxml')
+      if (!existsSync(wxsPath) || !existsSync(wxmlPath)) return []
+      const bad = []
+      const wxs = stripComments(readFileSync(wxsPath, 'utf8'))
+      if (!/function\s+onPct\b/.test(wxs) || !/onPct\s*:\s*onPct/.test(wxs))
+        bad.push('rewrite/mp/pages/player/seek.wxs 未定义并导出 onPct——缺「逻辑层 seekPct → 渲染层样式」回灌入口，拖动一次后进度条永久冻结（换段不归零/播放不推进）')
+      const w = readFileSync(wxmlPath, 'utf8').replace(/<!--[\s\S]*?-->/g, '')
+      if (!/change:pct\s*=\s*"\{\{\s*sk\.onPct\s*\}\}"/.test(w))
+        bad.push('rewrite/mp/pages/player/player.wxml 的 .lp-seek 未挂 change:pct="{{sk.onPct}}"——seekPct 变化到不了渲染层，WXS setStyle 写过后数据绑定已失灵')
+      if (!/\bpct\s*=\s*"\{\{\s*seekPct\s*\}\}"/.test(w))
+        bad.push('rewrite/mp/pages/player/player.wxml 的 .lp-seek 未传 pct="{{seekPct}}"——change:pct 观察者收不到值')
+      return bad
+    },
+  },
+  {
     // 学习进度百分比口径单源（2026-07-25 进度条专项·病根#5 三处裸写同式 + 根因#14 界面说假话）。
     // 病史：mp mapLearning / cloud customer360 / admin Courses 三处各自裸写
     // `Math.round((done/total)*100)`，边界上对用户撒谎——1/250 显示 0%（学了却像没学）、

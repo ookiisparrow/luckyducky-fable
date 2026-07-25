@@ -148,6 +148,8 @@
         bind:touchcancel="{{sk.onEnd}}"
         change:cfg="{{sk.onCfg}}"
         cfg="{{seekCfg}}"
+        change:pct="{{sk.onPct}}"
+        pct="{{seekPct}}"
       >
         <!-- 拖动浮层（批5 WXS 化·常驻不 wx:if：显隐与 left 由 seek.wxs setStyle+addClass('on') 渲染层控——避免 setData 重建
              与 WXS setStyle 抢写 position）；命中关键动作节点再叠鸭黄气泡（缩略图窗降级——雪碧图=R36 后端未建，见 player.ts 头注） -->

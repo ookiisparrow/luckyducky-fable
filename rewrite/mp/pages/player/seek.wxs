@@ -56,25 +56,43 @@ function previewLeft(pct) {
   return Math.min(Math.max(raw, edgePx), trackWidth - edgePx)
 }
 
-// 拖动一帧：磁吸+夹取算目标秒 → 渲染层 setStyle 三节点（fill 宽/handle left/preview left）；
-// 过秒才 callMethod('onSeekTick') 回逻辑层（震动+文案在那边·减过桥次数）。绝不提交 seek（两段式）。
+// 位置落样式·**唯一写入口**（2026-07-25 用户报「切下一段进度条仍停在拖动点」修）：
+// 实测——WXS setStyle 写过一次后，wxml 上 `style="width:{{seekPct}}%"` 的数据绑定**永久失灵**
+// （换段 setData({seekPct:0}) 清不掉，之后播放推进也不再带动进度条＝拖一次进度条就死了）。
+// 故位置不许两方写：拖动走 applyAt→本函数，非拖动期由逻辑层 seekPct 经 change:pct→onPct→本函数。
+// 守卫 rw-mp-seek-style-single-writer 焊死回灌通道存在。
+function applyPct(ow, pct) {
+  var p = pct || 0
+  if (p < 0) p = 0
+  if (p > 100) p = 100
+  var fill = ow.selectComponent('.lp-seek-fill')
+  if (fill) fill.setStyle({ width: p + '%' })
+  var handle = ow.selectComponent('.lp-seek-handle')
+  if (handle) handle.setStyle({ left: p + '%' })
+  var preview = ow.selectComponent('.lp-seek-preview')
+  if (preview) preview.setStyle({ left: previewLeft(p) + 'px' })
+}
+
+// 拖动一帧：磁吸+夹取算目标秒 → applyPct 落位；过秒才 callMethod('onSeekTick') 回逻辑层
+// （震动+文案在那边·减过桥次数）。绝不提交 seek（两段式）。
 function applyAt(ow, clientX) {
   var raw = secAt(clientX)
   var hit = nearestMark(raw, st.marks, st.snapSec)
   var sec = clampSeek(hit ? hit.at : raw, st.durSec)
   var pct = st.durSec > 0 ? (sec / st.durSec) * 100 : 0
-  if (pct < 0) pct = 0
-  if (pct > 100) pct = 100
-  var fill = ow.selectComponent('.lp-seek-fill')
-  if (fill) fill.setStyle({ width: pct + '%' })
-  var handle = ow.selectComponent('.lp-seek-handle')
-  if (handle) handle.setStyle({ left: pct + '%' })
-  var preview = ow.selectComponent('.lp-seek-preview')
-  if (preview) preview.setStyle({ left: previewLeft(pct) + 'px' })
+  applyPct(ow, pct)
   if (sec !== st.lastSec) {
     st.lastSec = sec
     ow.callMethod('onSeekTick', { sec: sec, snapAt: hit ? hit.at : -1 })
   }
+}
+
+// change:pct 观察者（逻辑层 seekPct → 渲染层位置·2026-07-25 修「拖动后进度条冻结」）：
+// 播放推进/换段归零/松手落位都经此回灌。拖动中（st.down）忽略——那会儿位置由 applyAt 每帧接管，
+// 逻辑层的节流回包（onSeekTick 只改文案）不该把手柄拽回旧值。
+function onPct(nv, ov, ow) {
+  if (st.down) return
+  applyPct(ow, nv || 0)
 }
 
 // change:cfg 观察者（逻辑层一次性/换段下发几何）：初始化空调一次·防御 null（durSec:0 → onStart 天然拦住不响应）。
@@ -124,6 +142,7 @@ function onEnd(e, ow) {
 
 module.exports = {
   onCfg: onCfg,
+  onPct: onPct,
   onStart: onStart,
   onMove: onMove,
   onEnd: onEnd,
