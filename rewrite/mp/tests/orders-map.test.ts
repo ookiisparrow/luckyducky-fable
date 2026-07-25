@@ -1,7 +1,8 @@
 // 黄金 frontend-store §七（脏单归一防白屏/渲染访问点纵深防御）+ §四（金额两位小数/
 // 时间格式化非法回空）（守卫 rw-mp-orders-golden）。
 import { describe, it, expect } from 'vitest'
-import { mapOrder, mapOrders, itemsOf, countOf, statusLabel, dateTime } from '../lib/mapOrders'
+import { mapOrder, mapOrders, itemsOf, countOf, statusLabel, dateTime, amountTitle, __amountTitleSets } from '../lib/mapOrders'
+import { ORDER_STATUS } from '../../shared/src/order'
 
 const GOOD = {
   _id: '2026070412001234',
@@ -86,5 +87,41 @@ describe('订单行封面 + 物流运单（C 类竖切·守卫别再退回顶层
     expect(vm.shipCompany).toBe('')
     expect(vm.shippedAtLabel).toBe('')
     expect(() => mapOrder({ id: 'x', shipping: '坏' })).not.toThrow() // shipping 非对象也不抛
+  })
+})
+
+// 2026-07-25 全量页面体检批 P1：订单详情/列表曾对**全部**状态硬编码「实付款」——已关闭订单（从未付过钱，
+// 状态机 closed 只从 pending 转来）同屏两处写「实付款 ¥778.00」，顾客会以为钱被扣了。
+describe('金额行标题·顾客视角「付过没有」（体检批 P1·钱链措辞）', () => {
+  it('大白话：已关闭的订单从没付过钱，金额行绝不能写「实付款」', () => {
+    expect(amountTitle('closed')).toBe('订单金额')
+    expect(mapOrder({ ...GOOD, status: 'closed' })!.amountTitle).toBe('订单金额')
+    expect(mapOrder({ ...GOOD, status: 'closed' })!.amountTitle).not.toBe('实付款')
+  })
+  it('大白话：待支付的单同理——钱还没付，写「实付款」是假话', () => {
+    expect(amountTitle('pending')).toBe('订单金额')
+    expect(mapOrder({ ...GOOD, status: 'pending' })!.amountTitle).toBe('订单金额')
+  })
+  it('大白话：付过钱的（待发货/待收货/已完成）写「实付款」；待退款也算付过（钱已收待人工退）', () => {
+    for (const s of ['paid', 'shipped', 'done', 'refund_required']) {
+      expect(amountTitle(s)).toBe('实付款')
+      expect(mapOrder({ ...GOOD, status: s })!.amountTitle).toBe('实付款')
+    }
+  })
+  it('大白话：没见过的状态按「没付过」兜底，不冒充已付（fail-safe）', () => {
+    expect(amountTitle('weird_new_state')).toBe('订单金额')
+    expect(amountTitle('')).toBe('订单金额')
+    expect(amountTitle(undefined)).toBe('订单金额')
+  })
+  // 穷举性（mp 进不了 @ldrw/shared 故手落副本·同 STATUS_LABELS 范式）：不比对「另一份名单」，
+  // 而是钉「每个订单状态都被显式归过类」——新增状态若两边都忘了加，这里当场红，
+  // 不会被 amountTitle 的未知态兜底默默吞掉（兜底是 fail-safe，不是免检牌）。
+  it('大白话：状态机里每一个订单状态，都必须明确归进「付过钱」或「没付过」，一个都不能漏', () => {
+    const all = Object.values(ORDER_STATUS).sort()
+    const { PAID_LOOK, UNPAID_LOOK } = __amountTitleSets
+    expect([...PAID_LOOK, ...UNPAID_LOOK].sort()).toEqual(all)
+    expect(PAID_LOOK.filter((s) => UNPAID_LOOK.includes(s))).toEqual([]) // 两类互斥
+    for (const s of PAID_LOOK) expect(amountTitle(s)).toBe('实付款')
+    for (const s of UNPAID_LOOK) expect(amountTitle(s)).toBe('订单金额')
   })
 })

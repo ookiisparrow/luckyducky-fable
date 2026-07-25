@@ -84,7 +84,7 @@
           <view class="coolist-btn primary" wx:if="{{item.status === 'pending'}}" data-id="{{item.id}}" catch:tap="onPay">继续支付</view>
           <view class="coolist-btn ghost" wx:if="{{item.status === 'shipped'}}" data-id="{{item.id}}" catch:tap="onConfirm">确认收货</view>
         </view>
-        <text class="coolist-sum">共 {{item.count}} 件 · 实付 <text class="coolist-sum-b"><text class="cny">¥</text>{{item.amountNum}}</text></text>
+        <text class="coolist-sum">共 {{item.count}} 件 · {{item.amountTitle}}<text class="coolist-sum-b"><text class="cny">¥</text>{{item.amountNum}}</text></text>
       </view>
     </view>
 

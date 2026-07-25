@@ -36,7 +36,7 @@
       <!-- 纯展示行·无店铺详情页可跳（仅一家官方旗舰店）：不放 chevron 暗示可点，防误导用户 -->
       <view class="co-shop">
         <image class="co-shop-ico" src="/static/icons/store.svg" mode="aspectFit" />
-        <text class="co-shop-name">易织™小棉鸭® 官方旗舰店</text>
+        <text class="co-shop-name">{{shopName}}</text>
       </view>
       <view class="co-item" wx:for="{{items}}" wx:key="lineId">
         <image wx:if="{{item.cover}}" class="co-item-img" src="{{item.cover}}" mode="aspectFill" />

@@ -1373,6 +1373,17 @@ export const repoChecks = [
       const NAME = 'Lucky Ducky 小棉鸭'
       // 全库绝迹名单：旧占位「易织」+ 中文名漂移变体「幸运小鸭」（定名小棉鸭，幸运小鸭是错掺入的旧名）。
       const BANNED = ['易织', '幸运小鸭']
+      // 扫描面含 .wxml（2026-07-25 全量页面体检批）：默认 walk 只看编译面四类，mp 模板层此前完全不设防——
+      // 废弃占位「易织™小棉鸭® 官方旗舰店」就硬编码在 order.wxml:56 / checkout.wxml:39 活到了生产源，
+      // 守卫在位、禁词正确、npm run check 全绿照样漏（体检取证：结算页与订单详情页顾客可见）。
+      const EXTS = /\.(js|mjs|cjs|ts|vue|wxml)$/
+      // 判定前剥注释（错题本 E1 既有纪律的本守卫落地·扩面后才暴露的老缺陷）：本守卫咬的是**用户可见的
+      // 硬编码文案**，不是解释性注释。wxml 注释是 <!-- -->（stripComments 只认 JS 两式），故叠一层。
+      // 不剥的话 order/checkout.wxml 里「仅一家官方旗舰店」这类说明文字会被误判成硬编码违例。
+      const strip = (rel, src) => {
+        const s = stripComments(src)
+        return rel.endsWith('.wxml') || rel.endsWith('.vue') ? s.replace(/<!--[\s\S]*?-->/g, '') : s
+      }
       const brandFile = 'rewrite/mp/lib/brand.ts'
       const absBrand = join(ROOT, brandFile)
       if (!existsSync(absBrand)) bad.push(`${brandFile} 缺失（店名单一来源，R23⑲）`)
@@ -1380,9 +1391,9 @@ export const repoChecks = [
         bad.push(`${brandFile} 未导出 BRAND_NAME='${NAME}'——店名单源缺定值（R23⑲）`)
       // ① NAME / 官方旗舰店 单源：只在 brand.js，别处引 BRAND_NAME（限引它的 miniapp/admin 两端）
       for (const dir of ['rewrite/mp', 'rewrite/admin/src', 'rewrite/agent/src']) {
-        for (const f of walk(join(ROOT, dir))) {
+        for (const f of walk(join(ROOT, dir), EXTS)) {
           const rel = relative(ROOT, f)
-          const s = readFileSync(f, 'utf8')
+          const s = strip(rel, readFileSync(f, 'utf8'))
           if (rel !== brandFile && s.includes(NAME))
             bad.push(`${rel} 硬编码店名「${NAME}」——须引 constants/brand.js 的 BRAND_NAME 单源（病根#5）`)
           if (rel !== brandFile && s.includes('官方旗舰店'))
@@ -1390,11 +1401,12 @@ export const repoChecks = [
         }
       }
       // ② 绝迹名单全库扫（含 shared 种子 / cloud 云函数 / 根级 tests 夹具——中文名当初从这些「单源缺守」处漂进来；
-      //    tests 当初不在扫描内＝守卫盲区，纳入。注意 walk 只看 .js/.ts/.vue，.json/.html 不在内，故 /q 落地页另走 ③）
+      //    tests 当初不在扫描内＝守卫盲区，纳入。walk 默认只看 .js/.ts/.vue，故显式传 EXTS 把 .wxml 纳入
+      //    （2026-07-25 体检：模板层失明让废弃占位在两处 wxml 活到生产源）；.json/.html 仍不在内，/q 落地页另走 ③）
       for (const dir of ['rewrite/mp', 'rewrite/admin/src', 'rewrite/agent/src', 'rewrite/cloud/src', 'rewrite/shared/src', 'tests']) {
-        for (const f of walk(join(ROOT, dir))) {
+        for (const f of walk(join(ROOT, dir), EXTS)) {
           const rel = relative(ROOT, f)
-          const s = readFileSync(f, 'utf8')
+          const s = strip(rel, readFileSync(f, 'utf8'))
           for (const ban of BANNED)
             if (s.includes(ban))
               bad.push(`${rel} 仍含品牌名漂移变体「${ban}…」——中文名定「小棉鸭」，须全替（病根#5 复制漂移）`)
@@ -2303,7 +2315,9 @@ import { PROD_ENV } from './lib/env.mjs'（单源·病根#5·债#30①）`)
       'mp 落客户向文案副本，本守卫只焊「状态码集合」不焊文案——admin/mp 措辞刻意不同是 UX 针对性、不是漂移，见 ' +
       'rewrite/shared/src/statusLabels.ts 头注）：rewrite/mp/lib/mapOrders.ts 的 STATUS_LABELS 与 ' +
       'rewrite/mp/lib/mapAftersales.ts 的 STATUS_LABELS 键集合必须分别与 shared ORDER_STATUS_LABEL_CUSTOMER / ' +
-      'AFTERSALE_STATUS_LABEL_CUSTOMER 键集合一致——状态机新增状态若 mp 忘配标签，页面会悄悄显示原始状态码',
+      'AFTERSALE_STATUS_LABEL_CUSTOMER 键集合一致——状态机新增状态若 mp 忘配标签，页面会悄悄显示原始状态码；' +
+      '③ order/order-list 模板不得硬编码「实付…」金额行标题（须引 mapOrders 的 amountTitle）——未付订单（pending/closed）' +
+      '写「实付款」是假话，顾客会以为被扣了钱（2026-07-25 体检批 P1 取证：已关闭单同屏两处「实付款 ¥778.00」）',
     run() {
       const shPath = join(ROOT, 'rewrite/shared/src/statusLabels.ts')
       const mpOrdersPath = join(ROOT, 'rewrite/mp/lib/mapOrders.ts')
@@ -2327,6 +2341,17 @@ import { PROD_ENV } from './lib/env.mjs'（单源·病根#5·债#30①）`)
         const mpKeys = keysOf(readFileSync(mpAftersalesPath, 'utf8'), 'STATUS_LABELS')
         if (mpKeys && mpKeys.join(',') !== shAsKeys.join(','))
           bad.push(`售后状态标签码集合漂移：mp mapAftersales.ts STATUS_LABELS=[${mpKeys.join(',')}] ≠ shared AFTERSALE_STATUS_LABEL_CUSTOMER=[${shAsKeys.join(',')}]（状态机新增/改名状态未同步到 mp）`)
+      }
+      // ③ 金额行标题不得在模板层硬编码（2026-07-25 全量页面体检批 P1·钱链措辞）：
+      //    order/order-list 曾对**全部**状态写死「实付款」，已关闭订单（从未付过钱·closed 只从 pending 转来）
+      //    同屏两处写「实付款 ¥778.00」，顾客会以为被扣款。须引 mapOrders 的 amountTitle（付过=实付款/未付=订单金额）。
+      //    语义正确性另由 rewrite/mp/tests/orders-map.test.ts「金额行标题」组锁；本条只封「绕过单源再写死」这条回潮路。
+      for (const rel of ['rewrite/mp/pages/order/order.wxml', 'rewrite/mp/pages/order-list/order-list.wxml']) {
+        const abs = join(ROOT, rel)
+        if (!existsSync(abs)) continue
+        const body = readFileSync(abs, 'utf8').replace(/<!--[\s\S]*?-->/g, '') // 剥注释（错题本 E1）
+        if (/实付/.test(body))
+          bad.push(`${rel} 模板层硬编码「实付…」金额行标题——须引 mapOrders 的 amountTitle（未付订单写「实付款」会让顾客以为被扣款·体检批 P1）`)
       }
       return bad
     },
@@ -4619,14 +4644,18 @@ export const typeAndTestGuards = [
 // 'rewrite' 加入扫描面（批1·2026-07-10）：唯一在迭代的活代码线，此前 fileRules 全量扫描扫不到，
 // rw- 前缀的新守卫不动这条即是装饰。旧 fileRules（5 条）inScope 全部锁死 packages 路径，扩面不误咬。
 export const SRC_DIRS = ['packages', 'cloudfunctions', 'scripts', 'rewrite']
-export function* walk(dir) {
+// 扩展名过滤可选参数（2026-07-25 全量页面体检批）：默认沿用「编译面四类」不动既有全部调用方，
+// 需要扫小程序模板层的守卫显式传 exts。病根：默认集合不含 .wxml/.wxss/.json，**凡走 walk() 的守卫
+// 在 mp 模板层一律失明**——废弃店名占位「易织™小棉鸭®」正是借此在 order/checkout 两处 wxml 里
+// 活了下来（brand-name-single-source 守卫在位、禁词正确、npm run check 全绿，照样漏）。
+export function* walk(dir, exts = /\.(js|mjs|cjs|ts|vue)$/) {
   if (!existsSync(dir)) return
   for (const name of lsScan(dir)) {
     if (name === 'node_modules' || name === 'dist') continue
     const p = join(dir, name)
     const st = statSync(p)
-    if (st.isDirectory()) yield* walk(p)
-    else if (/\.(js|mjs|cjs|ts|vue)$/.test(name)) yield p
+    if (st.isDirectory()) yield* walk(p, exts)
+    else if (exts.test(name)) yield p
   }
 }
 const isCommentLine = (line) => /^(\/\/|\/\*|\*|<!--|#)/.test(line.trim())

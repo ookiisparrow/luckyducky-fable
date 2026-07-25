@@ -16,6 +16,7 @@ export interface OrderVM {
   id: string
   status: string
   statusLabel: string
+  amountTitle: string // 金额行标题（付过钱=「实付款」/ 未付=「订单金额」·见下方 amountTitle()）
   items: OrderLineVM[]
   count: number
   amountLabel: string
@@ -43,6 +44,18 @@ const STATUS_LABELS: Record<string, string> = {
   refund_required: '待退款', // PAID_BUT_OOS 死信（已付但缺货·待人工退款）·非「退款处理中」（与 admin 同口径，见 admin/src/lib/format.ts）
 }
 export const statusLabel = (s: unknown): string => STATUS_LABELS[String(s)] || String(s || '')
+
+// 金额行标题·顾客视角「这单钱付过没有」（2026-07-25 全量页面体检批 P1）。**展示口径**，与 shared 的
+// GMV/对账口径 PAID_ORDER_STATUSES 刻意不同：refund_required 是「已付但缺货、钱已收待人工退款」，
+// GMV 不计入但顾客确实付过款，金额行须写「实付款」。反之 pending/closed 从未付过钱（状态机 closed 只从
+// pending 转来），写「实付款」会让顾客以为被扣了钱——病史：两页曾对全部状态硬编码「实付款」，
+// 已关闭单同屏两处「实付款 ¥778.00」。两个集合**穷举** shared ORDER_STATUS 全集（新增状态漏归类，
+// 测试 orders-map「金额行标题」组当场红；不靠兜底默默吞掉）。
+const PAID_LOOK = ['paid', 'shipped', 'done', 'refund_required']
+const UNPAID_LOOK = ['pending', 'closed']
+export const __amountTitleSets = { PAID_LOOK, UNPAID_LOOK } // 供测试核「两集合并起来=状态机全集」，不供页面用
+/** 金额行标题：付过钱→「实付款」；未付/未知→「订单金额」（未知状态兜底按未付，不冒充已付）。 */
+export const amountTitle = (s: unknown): string => (PAID_LOOK.includes(String(s)) ? '实付款' : '订单金额')
 
 const money = (v: unknown): string => {
   const n = Number(v)
@@ -94,6 +107,7 @@ export function mapOrder(raw: unknown): OrderVM | null {
     id,
     status: String(o.status || ''),
     statusLabel: statusLabel(o.status),
+    amountTitle: amountTitle(o.status),
     items: itemsOf(o),
     count: countOf(o),
     amountLabel: money(o.amount) || '¥0.00',

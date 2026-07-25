@@ -53,7 +53,7 @@
       <!-- 纯展示行·无店铺详情页可跳（仅一家官方旗舰店）：不放 chevron 暗示可点，防误导用户 -->
       <view class="co-shop">
         <image class="co-shop-ico" src="/static/icons/store.svg" mode="aspectFit" />
-        <text class="co-shop-name">易织™小棉鸭® 官方旗舰店</text>
+        <text class="co-shop-name">{{shopName}}</text>
       </view>
       <view class="co-item" wx:for="{{vm.items}}" wx:key="lineId">
         <image wx:if="{{item.cover}}" class="co-item-img" src="{{item.cover}}" mode="aspectFill" lazy-load />
@@ -95,7 +95,7 @@
         <view class="co-sum-row"><text>运费</text><text class="co-sum-v">{{vm.shipLabel}}</text></view>
         <view class="co-sum-row discount" wx:if="{{vm.couponLabel}}"><text>优惠券</text><text class="co-sum-v">{{vm.couponLabel}}</text></view>
         <view class="co-sum-div"></view>
-        <view class="co-sum-row total"><text>实付款</text><text class="co-sum-v">{{vm.amountLabel}}</text></view>
+        <view class="co-sum-row total"><text>{{vm.amountTitle}}</text><text class="co-sum-v">{{vm.amountLabel}}</text></view>
         <!-- 申请售后（金额明细下方独立小按钮·承接 onAfterSale） -->
         <view class="coord-refund-wrap" wx:if="{{canAfterSale}}">
           <view class="coord-refund" bind:tap="onAfterSale">
@@ -107,12 +107,12 @@
 
   </view>
 
-  <!-- 底部坞（实付款 + 状态操作） -->
+  <!-- 底部坞（金额行 + 状态操作·标题随付款态：付过=实付款 / 未付=订单金额） -->
   <view class="co-dock-space"></view>
   <view class="co-dock">
     <view class="co-dockbar">
       <view class="co-dock-total">
-        <text class="co-dock-small">实付款</text>
+        <text class="co-dock-small">{{vm.amountTitle}}</text>
         <view class="co-dock-amount">
           <text class="co-dock-num"><text class="cny">¥</text>{{amountNum}}</text>
         </view>
