@@ -3,6 +3,11 @@
 import { tapHaptic } from '../../lib/haptics'
 import { login, updateProfile } from '../../api/user'
 
+// 账户联系电话可入库位数（手落副本·canonical 单源＝云端 actions/user.ts 的 d.length>=7 与 CAPS.phone=11；
+// 守卫 rw-mp-list-loadfailed-state 焊死两侧一致）：宽下界容座机/带区号号码，与地址页收货电话同精神。
+const PHONE_MIN_DIGITS = 7
+const PHONE_MAX_DIGITS = 11
+
 Page({
   data: {
     nickname: '',
@@ -46,6 +51,16 @@ Page({
     }
     if (!this.data.nickname.trim()) {
       wx.showToast({ title: '起个昵称吧', icon: 'none' })
+      return
+    }
+    // 手机号位数校验（根因#14·2026-07-25 体检批 P2「写入说假话」）：云端 updateProfile 对 phone 走白名单
+    // ——纯数字 7–11 位才入库，否则**剔除不改**（保留旧号）。前端不校验就会出现「填了 6 位 → 弹『已保存』
+    // → 其实一个字没存」。空串合法（＝显式清空，云端同样承认）。
+    // 数字是手落副本，canonical 单源在 rewrite/cloud/src/functions/app/actions/user.ts（CAPS.phone 与 d.length>=7），
+    // 两侧一致由守卫 rw-mp-list-loadfailed-state 焊死（同 lib/checkoutConst.ts 副本范式）。
+    const phoneDigits = this.data.phone.trim().replace(/\D/g, '')
+    if (this.data.phone.trim() && (phoneDigits.length < PHONE_MIN_DIGITS || phoneDigits.length > PHONE_MAX_DIGITS)) {
+      wx.showToast({ title: '手机号填得不对，检查一下', icon: 'none' })
       return
     }
     tapHaptic()

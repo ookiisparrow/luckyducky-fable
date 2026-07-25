@@ -27,7 +27,11 @@
         <image class="ld-mc-cover-chev" src="/static/icons/chevron-right.svg" mode="aspectFit" />
       </view>
       <!-- 学习进度（段粒度·与后台 360 同口径·无段不渲染·真值不编数·独立整行） -->
-      <view class="ld-mc-prog" wx:if="{{item.totalSegments}}">
+      <!-- 进度没读到（progressUnknown·根因#14）：不画 0% 进度条冒充「一段没学过」，诚实说读不到 -->
+      <view class="ld-mc-prog" wx:if="{{item.totalSegments && item.progressUnknown}}">
+        <view class="ld-mc-prog-text ld-mc-prog-unknown">学习进度暂时读不到，下拉或重进本页再试</view>
+      </view>
+      <view class="ld-mc-prog" wx:elif="{{item.totalSegments}}">
         <view class="ld-mc-prog-track"><view class="ld-mc-prog-fill" style="width: {{item.percent}}%"></view></view>
         <view class="ld-mc-prog-text">已学 {{item.doneCount}}/{{item.totalSegments}} 集 · {{item.percent}}%</view>
       </view>

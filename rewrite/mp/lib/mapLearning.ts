@@ -39,6 +39,7 @@ export interface MyCourseVM {
   doneCount: number // 已看完段数（done 命中且属本课的段·交集）
   totalSegments: number // 本课总段数（跨章跨课时累加）
   percent: number // 学习进度百分比（0–100·四舍五入·不除零）
+  progressUnknown: boolean // 进度**没读到**（调用方传 null）：与「真的一段没学」区分——界面须显示「进度暂时读不到」而非 0%（根因#14）
 }
 
 /** 收集一门课的全部段 id（跨 chapters→lessons→segments·脏结构安全）。 */
@@ -73,6 +74,10 @@ export function mapMyCourses(mine: unknown, courses: unknown, progress?: unknown
       }
     }
   }
+  // 进度**读失败**用显式 null 表达（根因#14·2026-07-25 体检批 P2）：此前调用方在 getMyProgress 失败时
+  // 回退空数组，与「真的一段没学过」不可区分 → 课卡照样渲染「已学 0/80 · 0%」，学了一半的用户
+  // 会以为学习记录丢了。null=没读到（界面另给未知态），[]/undefined=真的没进度（0% 是实话）。
+  const progressUnknown = progress === null
   // 每课已看完段键集合（done map 键=segmentId·仅取值为真的键）
   const doneByCourse = new Map<string, Set<string>>()
   if (Array.isArray(progress)) {
@@ -94,7 +99,7 @@ export function mapMyCourses(mine: unknown, courses: unknown, progress?: unknown
     let doneCount = 0
     for (const k of doneByCourse.get(courseId) || []) if (segIds.has(k)) doneCount++ // 交集·防 stale 顶爆
     const percent = totalSegments ? Math.round((doneCount / totalSegments) * 100) : 0
-    out.push({ courseId, title: titleOf.get(courseId) || courseId, enteredAtLabel: dateTime(m.enteredAt), doneCount, totalSegments, percent })
+    out.push({ courseId, title: titleOf.get(courseId) || courseId, enteredAtLabel: dateTime(m.enteredAt), doneCount, totalSegments, percent, progressUnknown })
   }
   return out
 }

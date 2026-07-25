@@ -73,6 +73,20 @@ describe('我的课程学习进度（段粒度·交集防 stale·不除零·守�
     expect(vm[0].totalSegments).toBe(5)
     expect(vm[0].doneCount).toBe(2)
     expect(vm[0].percent).toBe(40) // 2/5
+    expect(vm[0].progressUnknown).toBe(false) // 真读到了进度
+  })
+  // 2026-07-25 体检批 P2（根因#14 延伸）：进度接口失败曾回退空数组，与「真的一段没学过」不可区分，
+  // 课卡照样渲染「已学 0/80 · 0%」——学了一半的用户会以为学习记录丢了。
+  it('大白话：进度没读到（传 null）要如实标未知，不能拿 0% 冒充「一段没学过」', () => {
+    const vm = mapMyCourses([{ courseId: 'c1', enteredAt: 1 }], COURSES, null)
+    expect(vm[0].progressUnknown).toBe(true) // 界面据此显示「进度暂时读不到」而非进度条
+    expect(vm[0].totalSegments).toBe(5) // 课程结构照常（进度失败不该把整张卡打没）
+  })
+  it('大白话：真的没学过（空进度）仍是 0%，不是「读不到」——两者必须分得开', () => {
+    const vm = mapMyCourses([{ courseId: 'c1', enteredAt: 1 }], COURSES, [])
+    expect(vm[0].progressUnknown).toBe(false)
+    expect(vm[0].percent).toBe(0)
+    expect(vm[0].doneCount).toBe(0)
   })
   it('大白话：done 里混入不属于该课的 stale segmentId 不计入（分子不超分母·percent≤100）', () => {
     const vm = mapMyCourses(

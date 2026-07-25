@@ -3339,6 +3339,42 @@ import { PROD_ENV } from './lib/env.mjs'（单源·病根#5·债#30①）`)
       const fetcherHome = join(base, 'lib/playbackCache.ts')
       if (existsSync(fetcherHome) && !/FETCH_FAIL/.test(stripComments(readFileSync(fetcherHome, 'utf8'))))
         bad.push('lib/playbackCache.ts 取址 fetcher 无 FETCH_FAIL 分流——取址网络失败仍伪装成「视频还在整理中」且无重试（根因#14）')
+      // ── 2026-07-25 体检批 P2：同族「界面说假话」三条（前三条守的是「失败伪装成空」，这三条守反向与延伸）──
+      // ① 反向：「查无此单」被伪装成网络失败。云端 getOrderById 对不存在/非本人一律 err(NOT_FOUND)＝ok:false，
+      //    页面若只看 ok 就全落 loadFailed →「网络开小差」+ 重试永远点不通，而 missing「订单不存在」成死代码。
+      const orderTs = join(base, 'pages/order/order.ts')
+      if (existsSync(orderTs) && !/NOT_FOUND/.test(stripComments(readFileSync(orderTs, 'utf8'))))
+        bad.push('pages/order/order.ts 未对 NOT_FOUND 分流——云端「查无此单」被伪装成网络失败，用户对着不存在的订单反复重试，missing 空态成死代码（根因#14 反向）')
+      // ② 延伸：进度读失败被伪装成「一段没学过」。my-courses 三路并发中 progress 若失败回退空数组，
+      //    课卡会显示「已学 0/80 · 0%」——学了一半的用户会以为学习记录丢了。
+      const mcTs = join(base, 'pages/my-courses/my-courses.ts')
+      if (existsSync(mcTs) && /progress\.ok\s*\?\s*progress\.list\s*:\s*\[\]/.test(stripComments(readFileSync(mcTs, 'utf8'))))
+        bad.push('pages/my-courses/my-courses.ts 把进度失败回退成空数组——「读不到进度」被伪装成「一段没学过」（0%），须传 null 落未知态（根因#14 延伸）')
+      // ③ 延伸：写入被云端静默剔除，前端却报「已保存」。云端 updateProfile 对 phone 走白名单
+      //    （纯数字 7–11 位才入库、否则剔除不改），前端不校验就会「说存了其实没存」。
+      //    数字须与 rewrite/cloud/src/functions/app/actions/user.ts 的 CAPS.phone / d.length>=7 一致（手落副本+本条焊死，同 checkout consts 范式）。
+      const peTs = join(base, 'pages/profile-edit/profile-edit.ts')
+      if (existsSync(peTs)) {
+        const src = stripComments(readFileSync(peTs, 'utf8'))
+        const mpMin = src.match(/PHONE_MIN_DIGITS\s*=\s*(\d+)/)
+        const mpMax = src.match(/PHONE_MAX_DIGITS\s*=\s*(\d+)/)
+        if (!mpMin || !mpMax) {
+          bad.push('pages/profile-edit/profile-edit.ts 无手机号位数校验（PHONE_MIN_DIGITS/PHONE_MAX_DIGITS）——非法号被云端白名单静默剔除，界面却弹「已保存」（根因#14 延伸：写入说假话）')
+        } else {
+          // 副本焊死（病根#5）：只断言「有校验」挡不住漂移——前端放宽一位，云端照旧剔除，
+          // 假「已保存」立刻复发。故与云端白名单真值逐数比对（同 rw-mp-checkout-consts-synced 精神）。
+          const cloudUser = join(ROOT, 'rewrite/cloud/src/functions/app/actions/user.ts')
+          if (existsSync(cloudUser)) {
+            const cs = stripComments(readFileSync(cloudUser, 'utf8'))
+            const cMax = cs.match(/CAPS\s*=\s*\{[^}]*phone:\s*(\d+)/)
+            const cMin = cs.match(/d\.length\s*>=\s*(\d+)/)
+            if (cMin && mpMin[1] !== cMin[1])
+              bad.push(`手机号下界漂移：mp profile-edit PHONE_MIN_DIGITS=${mpMin[1]} ≠ 云端 user.ts d.length>=${cMin[1]}——前端放行、云端剔除，假「已保存」复发（病根#5）`)
+            if (cMax && mpMax[1] !== cMax[1])
+              bad.push(`手机号上界漂移：mp profile-edit PHONE_MAX_DIGITS=${mpMax[1]} ≠ 云端 user.ts CAPS.phone=${cMax[1]}——同上（病根#5）`)
+          }
+        }
+      }
       return bad
     },
   },

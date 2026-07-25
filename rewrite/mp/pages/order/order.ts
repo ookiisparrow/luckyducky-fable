@@ -57,8 +57,19 @@ Page({
     // 失败≠不存在（根因#14）：请求失败落 loadFailed 给重试（已有 vm 时保留不覆盖）；
     // 只有请求成功且查无此单才是 missing「订单不存在」。
     if (!r.ok) {
-      this.setData({ loading: false, loadFailed: !this.data.vm })
-      if (this.data.vm) wx.showToast({ title: '刷新失败，请稍后重试', icon: 'none' })
+      // 「查无此单」≠「网络失败」（根因#14 反向·2026-07-25 体检批 P2）：云端 getOrderById 对
+      // 订单不存在/非本人一律 err(NOT_FOUND)、缺 id 是 err(NO_ID)，都是 ok:false——只看 ok 会把
+      // 这两类落进 loadFailed，用户看到「网络开小差」并对着一个根本不存在的单反复点重试，
+      // 而下方 missing「订单不存在」空态永远走不到（死代码）。按错误码分流：确定性的「没有」落
+      // missing 给诚实空态，其余（超时/未部署/云异常）才落 loadFailed 给重试。
+      const notFound = r.error === 'NOT_FOUND' || r.error === 'NO_ID'
+      this.setData({
+        loading: false,
+        missing: notFound && !this.data.vm,
+        loadFailed: !notFound && !this.data.vm,
+      })
+      // 已有 vm（页内刷新失败）：不动已渲染内容，只轻提示——含单据刚被后台删除的边界。
+      if (this.data.vm) wx.showToast({ title: notFound ? '这单已经不在了' : '刷新失败，请稍后重试', icon: 'none' })
       return
     }
     const vm = mapOrder(r.order)
