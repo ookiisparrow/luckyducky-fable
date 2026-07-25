@@ -29,6 +29,15 @@
  * 不进 pre-commit/CI 三道闸（gate-single-source 单源＝npm run check；本脚本需真实 devtools 实例，
  * 机器闸对它无感，属靠人起环境的按需层，同 visual-check.cjs）。
  *
+ * 底座选型拍板（2026-07-24 深夜·官方 wechatide CLI 正式接入后实测评估·勿再重议）：本脚本**保持
+ * miniprogram-automator，不迁官方 wechatide CLI**。数据依据：① wechatide 每条命令冷启动子进程、
+ * 单调用底噪实测 1.0-1.3s，checkout 两段式断言需要 50-300ms 观测粒度——结构性做不到，而该断言正是
+ * Nightly 转场死锁回归（调试日志 S 案）的岗哨，不可弃；② 全量 23 页 CLI 方案估算 ~2.5 分钟，比本
+ * 方案更慢无增益；③ automator 库与 wechatide 底层同走 devtools 自动化 ws 端口（官方长期支持面），
+ * 2026-07-24 崩的只是 checkVersion 门面检查（已就地猴补，见下）。Plan B：若未来 Nightly 真改了 ws
+ * 协议本体导致本库彻底失效，届时再评估 `wechatide mcp` 持久模式（stdio·免冷启动·实测存在未测延迟）
+ * ——现在不预建（防过度工程）。wechatide 的正确用途=交互式单发取证，用法卡见 docs/运维手册.md §⑪。
+ *
  * 容忍清单（明示于此，防误判为红——均不含下方致命模式字样，天然不会被抓）：
  * - 云调用失败态 / {ok:false} 空态渲染（无云数据/未登录环境下的正常降级 UI）
  * - cloud init / 网络类平台告警（devtools 环境常见噪音，非本层职责）

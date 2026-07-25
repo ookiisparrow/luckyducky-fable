@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "wechat-devtools": {
+      "command": "wechatide",
+      "args": ["mcp"]
+    },
+    "cloudbase": {
+      "command": "npx",
+      "args": ["-y", "@cloudbase/cloudbase-mcp@2.24.1"]
+    }
+  }
+}
