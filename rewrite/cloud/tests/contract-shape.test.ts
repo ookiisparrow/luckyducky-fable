@@ -11,7 +11,7 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest'
 import cloud, { control } from 'wx-server-sdk'
 import { main as app } from '../src/functions/app/index'
 import { __resetTempUrlCacheForTest } from '../src/kit/storage'
-import { saveHomeContent, savePageContent } from '../src/functions/adminApi/actions/content'
+import { saveHomeContent, savePageContent, saveHelpVideos } from '../src/functions/adminApi/actions/content'
 import { saveDraft, publishProduct, unpublishProduct } from '../src/functions/adminApi/actions/products'
 import type { Ctx } from '../src/functions/adminApi/lib'
 
@@ -55,6 +55,16 @@ const AS_ORDER = {
   _id: 'oR', id: 'oR', _openid: 'oME', status: 'paid', amount: 178, goods: 198, createdAt: 1000,
   address: { name: '张三', phone: '13800000000', region: '浙江·杭州', detail: 'xx 路 1 号' },
   items: [{ productId: 'p1', lineId: 'p1__基础款', spec: '基础款', name: '小鸭礼盒', price: 198, qty: 1, refundable: true }],
+}
+// C 批（W1 收官）：评价写侧 12 键——submitReview 的 add 字面量。getReviews 只下发其中 7 键
+// （REVIEW_KEYS），差集 5 键＝_id/_openid/orderId/lineId/productId 是归属与内部关联，绝不出网关。
+// 「submitReview 真写入 → getReviews 读回」把写侧字段集与读侧裁剪白名单两头一起锁住。
+const REVIEW_WRITE_KEYS = ['_id', '_openid', 'createdAt', 'lineId', 'name', 'orderId', 'photos', 'productId', 'rating', 'spec', 'tags', 'text']
+const FEEDBACK_WRITE_KEYS = ['_id', '_openid', 'category', 'contact', 'content', 'createdAt', 'page', 'platform', 'version']
+const DONE_ORDER = {
+  _id: 'oDone', id: 'oDone', _openid: 'oME', status: 'done', amount: 198, goods: 198, createdAt: 1000,
+  address: { name: '张三', phone: '13800000000', region: '浙江·杭州', detail: 'xx 路 1 号' },
+  items: [{ productId: 'p1', lineId: 'p1__基础款', spec: '基础款', name: '小鸭礼盒', price: 198, qty: 1, refundable: false }],
 }
 // 第三批扩面键集（战役工单 W1·A 批·目录/内容/FAQ 面）：
 // 商品档 17 键——由 adminApi saveDraft→publishProduct 真写入后回读（publishProduct 的 doc 字面量＝
@@ -476,5 +486,119 @@ describe('契约键集合哨兵（Object.keys 排序全等·增删改名都红�
     const limited = await call('activateCourse', { code: '' })
     expect(keysOf(limited)).toEqual(['error', 'ok'])
     expect(limited.error).toBe('RATE_LIMITED')
+  })
+
+  // ── 第三批扩面（战役工单 W1·C 批收官：评价/帮助视频/反馈/授权五 action）──
+  // 这批与 A/B 又不同：多数是**白名单重建**（逐字段 String() 重造）或**零载荷写**，天然挡住写侧脏字段。
+  // 所以锁点从「防透传」转成两条：① 重建出来的键集本身；② 写侧字段集 ↔ 下发面的差集（谁被裁了）。
+  it('submitReview→getReviews 端到端：写侧 12 键真写入、读回只下发 7 键——_openid/orderId/lineId/productId/_id 五个归属字段不出网关', async () => {
+    control.seed('orders', [DONE_ORDER])
+    control.seed('users', [{ _id: 'oME', _openid: 'oME', nickname: '幸运鸭' }])
+    const s = await call('submitReview', { orderId: 'oDone', lineId: 'p1__基础款', rating: 5, text: '很好', tags: ['手感好'], photos: ['cloud://rev-a.jpg'] })
+    expect(keysOf(s)).toEqual(['ok']) // 成功零载荷（同 trackEvent：写类 action 刻意不回数据）
+
+    // 写侧字段集（真写入回读·不是自造 seed）
+    expect(keysOf(control.dump('reviews')[0])).toEqual(REVIEW_WRITE_KEYS)
+    // 读侧下发面：既有 getReviews 用例造的是 seed 回声，这条是端到端——写侧加字段若被顺手放进读侧映射即红
+    const r = await call('getReviews', { productId: 'p1' })
+    expect(keysOf(r.list[0])).toEqual(REVIEW_KEYS)
+    for (const cut of ['_id', '_openid', 'orderId', 'lineId', 'productId']) {
+      expect(cut in r.list[0]).toBe(false)
+    }
+    expect(r.list[0].photos[0].startsWith('https://')).toBe(true) // 晒图裸 fileID 不出网关，换短时址下发
+
+    // 失败态：本 action 9 个 err 全是裸 err(code)，一律两键（对照 activateCourse 的 CODE_TAKEN 带 courseId）
+    expect(keysOf(await call('submitReview', { orderId: 'oDone', lineId: 'p1__基础款', rating: 5 }))).toEqual(['error', 'ok']) // REVIEWED 幂等
+    expect(keysOf(await call('submitReview', { orderId: 'oDone', lineId: 'p1__基础款', rating: 9 }))).toEqual(['error', 'ok']) // BAD_RATING
+  })
+
+  it('getRatingSummary：扁平 3 键 [count,ok,score]——与 getReviews 的嵌套 summary 刻意不同形（同一个 mp mapSummary 吃两种形状）；无评价时键仍在、score 是字符串 0', async () => {
+    control.seed('reviews', [
+      { _id: 'r1', productId: 'p1', _openid: 'oA', name: '小明', rating: 5, tags: [], text: '好', spec: '基础款', photos: [], createdAt: 200 },
+      { _id: 'r2', productId: 'p1', _openid: 'oB', name: '小红', rating: 4, tags: [], text: '不错', spec: '基础款', photos: [], createdAt: 100 },
+    ])
+    const r = await call('getRatingSummary', { productId: 'p1' })
+    expect(r.ok).toBe(true)
+    expect(keysOf(r)).toEqual(['count', 'ok', 'score'])
+    expect(r.count).toBe(2)
+    expect(r.score).toBe('4.5') // 字符串一位小数（mp 直接显示，不再格式化）
+    // 两个"摘要"刻意不同形（详情页 slim 扁平 3 键 vs 列表页嵌套 summary 5 键·共用 mp mapSummary）：
+    // 钉「score/count 直接挂顶层、不套 summary」——哪天有人把两者"统一"成嵌套，这里红并提醒同步 mp。
+    expect('summary' in r).toBe(false)
+    // 同一份数据经 getReviews 走的是另一条实现（buildSummaryExact），键集多 approx/dist/tags
+    const viaList = await call('getReviews', { productId: 'p1' })
+    expect(keysOf(viaList.summary)).toEqual(SUMMARY_KEYS)
+    expect(viaList.summary.score).toBe(r.score) // 两条独立实现的均分口径必须一致（漂了就是真 bug）
+
+    // 零评价：键全在、值是 count:0 / score:'0'（字符串），不是 null 也不是缺键——mp 据此判不渲染假评
+    const none = await call('getRatingSummary', { productId: 'no-such' })
+    expect(keysOf(none)).toEqual(['count', 'ok', 'score'])
+    expect(none.count).toBe(0)
+    expect(none.score).toBe('0')
+
+    expect(keysOf(await call('getRatingSummary', {}))).toEqual(['error', 'ok']) // 缺 productId：score/count 整个消失
+  })
+
+  it('getHelpVideos：顶层 [items,ok]；主题 5 键 / 小段 4 键（两级白名单重建·写侧脏字段进不来）；videoFileId 换成 url——受保护 fileID 不出网关', async () => {
+    await saveHelpVideos(adminCtx({
+      items: [{
+        id: 'h1', title: '新手入门', sub: '副标题', desc: '说明',
+        // 下毒：白名单外字段（写侧重建即挡掉，两级都验）
+        secret: '内部备注',
+        segments: [{ id: 's1', name: '起针', dur: '5:00', videoFileId: 'cloud://help-s1.mp4', internal: 'x' }],
+      }],
+    }))
+    const r = await call('getHelpVideos')
+    expect(r.ok).toBe(true)
+    expect(keysOf(r)).toEqual(['items', 'ok'])
+    expect(keysOf(r.items[0])).toEqual(['desc', 'id', 'segments', 'sub', 'title'])
+    expect(keysOf(r.items[0].segments[0])).toEqual(['dur', 'id', 'name', 'url'])
+    expect('videoFileId' in r.items[0].segments[0]).toBe(false) // 换成 url 下发，裸 fileID 只在服务端
+    expect(r.items[0].segments[0].url.startsWith('https://')).toBe(true)
+    expect(JSON.stringify(r).includes('内部备注')).toBe(false)
+
+    // url:null 分支只能自造 seed：写侧 saveHelpVideos 会 filter 掉无 videoFileId 的小段，真写入方造不出
+    control.reset()
+    control.seed('content', [{ _id: 'helpVideos', items: [{ id: 'h2', title: '空片', sub: '', desc: '', segments: [{ id: 's9', name: '未剪', dur: '', videoFileId: '' }] }] }])
+    const nullUrl = await call('getHelpVideos')
+    expect(keysOf(nullUrl.items[0].segments[0])).toEqual(['dur', 'id', 'name', 'url'])
+    expect(nullUrl.items[0].segments[0].url).toBe(null) // 诚实 null，不是缺键
+
+    control.setOpenId('')
+    expect(keysOf(await call('getHelpVideos'))).toEqual(['error', 'ok']) // 未登录：items 键整个消失
+  })
+
+  it('submitFeedback：成功恒 [ok] 零载荷；写侧 9 键含 _openid 与用户自填 contact，一个字节都不下发；空内容/未登录各 [error,ok]', async () => {
+    const r = await call('submitFeedback', { content: '很好用', category: 'idea', contact: 'wx: duck', page: 'feedback', version: 'rw-m2', platform: 'mp' })
+    expect(keysOf(r)).toEqual(['ok'])
+    // contact 是本 action 唯一 PII 类字段（用户自填微信号/手机号）：入库有、下发面为空
+    expect(keysOf(control.dump('feedback')[0])).toEqual(FEEDBACK_WRITE_KEYS)
+    expect(control.dump('feedback')[0]._openid).toBe('oME') // 归属取云端可信身份，不认前端传的
+
+    expect(keysOf(await call('submitFeedback', { content: '   ' }))).toEqual(['error', 'ok']) // EMPTY_FEEDBACK
+    control.setOpenId('')
+    expect(keysOf(await call('submitFeedback', { content: 'x' }))).toEqual(['error', 'ok']) // NO_OPENID
+  })
+
+  it('dataConsent：顶层 [agreed,ok]，授权与撤授权同形只差值；库里存 {agreed,at} 凭证——且它会随 updateProfile 的整档透传出网关（零裁剪的连锁后果·如实锁）', async () => {
+    const on = await call('dataConsent', { agree: true })
+    expect(keysOf(on)).toEqual(['agreed', 'ok'])
+    expect(on.agreed).toBe(true)
+    const off = await call('dataConsent', { agree: false }) // 撤回：同形只差值（mp 按 agreed 布尔切换开关）
+    expect(keysOf(off)).toEqual(['agreed', 'ok'])
+    expect(off.agreed).toBe(false)
+
+    // 写侧凭证：响应只回一个布尔，库里存的是带时间戳的凭证对象（响应不带 at——撤回时间不下发）
+    const u = control.dump('users')[0]
+    expect(keysOf(u.csDataShare)).toEqual(['agreed', 'at'])
+    expect('at' in off).toBe(false)
+
+    // 连锁事实：users 是零裁剪透传面，csDataShare 一旦落库就会随 updateProfile/login 出网关。
+    // 这条不是背书、是把风险钉成可见断言——哪天 users 读侧改成白名单投影，这里会红并提醒同步 mp。
+    const p = await call('updateProfile', { nickname: '小鸭' })
+    expect(keysOf(p.user)).toEqual(['_id', '_openid', 'createdAt', 'csDataShare', 'nickname', 'updatedAt'])
+
+    control.setOpenId('')
+    expect(keysOf(await call('dataConsent', { agree: true }))).toEqual(['error', 'ok']) // 未登录：agreed 键消失
   })
 })
