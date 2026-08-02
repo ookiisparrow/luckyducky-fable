@@ -34,6 +34,16 @@ const seedRealPay = () => control.seed('config', [{ _id: 'pay', mode: 'real', fl
 const ORDER_KEYS_MOCK = ['_id', '_openid', 'address', 'amount', 'coupon', 'createdAt', 'goods', 'id', 'items', 'paidAt', 'reserved', 'ship', 'status']
 const ORDER_KEYS_REAL = ORDER_KEYS_MOCK.filter((k) => k !== 'paidAt')
 const LINE_KEYS = ['cover', 'enteredQty', 'lineId', 'name', 'price', 'productId', 'qty', 'refundable', 'spec']
+// 第二批扩面键集（omp 交接工单#1·B10「按热度逐批扩」）：
+// 售后行 16 键——刻意由 applyRefund 真写入后回读（不是测试自造 seed 回声），锁的是「写入方字段集」这个真契约。
+const AFTERSALE_KEYS = ['_id', '_openid', 'addressName', 'appliedAt', 'itemTotal', 'lineId', 'name', 'orderId', 'outRefundNo', 'phone', 'productId', 'qty', 'reason', 'refundAmount', 'spec', 'status']
+const REVIEW_KEYS = ['createdAt', 'name', 'photos', 'rating', 'spec', 'tags', 'text']
+const SUMMARY_KEYS = ['approx', 'count', 'dist', 'score', 'tags']
+const AS_ORDER = {
+  _id: 'oR', id: 'oR', _openid: 'oME', status: 'paid', amount: 178, goods: 198, createdAt: 1000,
+  address: { name: '张三', phone: '13800000000', region: '浙江·杭州', detail: 'xx 路 1 号' },
+  items: [{ productId: 'p1', lineId: 'p1__基础款', spec: '基础款', name: '小鸭礼盒', price: 198, qty: 1, refundable: true }],
+}
 
 beforeEach(() => {
   control.reset()
@@ -133,5 +143,67 @@ describe('契约键集合哨兵（Object.keys 排序全等·增删改名都红�
     expect(signed.ok).toBe(true)
     expect(keysOf(signed)).toEqual(['ok', 'url'])
     expect(typeof signed.url).toBe('string')
+  })
+
+  // ── 第二批扩面（omp 交接工单#1）：四个读 action 补哨兵，写法照第一批 ──
+  it('getCourses：顶层 [list,ok]；课程 3 键 / 章 3 键 / 节 4 键 / 段 4 键——段只投影 hasVideo 布尔，videoFileId 不出网关', async () => {
+    control.seed('courses', [
+      {
+        _id: 'c1', id: 'c1', title: '钩织入门', sort: 1,
+        chapters: [
+          {
+            id: 'ch1', title: '第一章',
+            lessons: [
+              { id: 'l1', name: '第一节', dur: '10:00', segments: [{ id: 's1', name: '起针', dur: '5:00', videoFileId: 'cloud://v/c1-s1.mp4' }] },
+            ],
+          },
+        ],
+      },
+    ])
+    const r = await call('getCourses')
+    expect(r.ok).toBe(true)
+    expect(keysOf(r)).toEqual(['list', 'ok'])
+    const c = r.list[0]
+    expect(keysOf(c)).toEqual(['chapters', 'id', 'title'])
+    expect(keysOf(c.chapters[0])).toEqual(['id', 'lessons', 'title'])
+    expect(keysOf(c.chapters[0].lessons[0])).toEqual(['dur', 'id', 'name', 'segments'])
+    expect(keysOf(c.chapters[0].lessons[0].segments[0])).toEqual(['dur', 'hasVideo', 'id', 'name'])
+    expect(c.chapters[0].lessons[0].segments[0].hasVideo).toBe(true) // 布尔投影：受保护 fileID 不随目录下发
+  })
+
+  it('getMyCourses：顶层 [list,ok]；行只 [courseId,enteredAt]——激活文档的 code/qrcodeId/_openid 一律不出网关', async () => {
+    control.seed('activations', [{ _id: 'A1', _openid: 'oME', courseId: 'c1', qrcodeId: 'q1', code: 'K1', enteredAt: 111, createdAt: 1 }])
+    const r = await call('getMyCourses')
+    expect(r.ok).toBe(true)
+    expect(keysOf(r)).toEqual(['list', 'ok'])
+    expect(keysOf(r.list[0])).toEqual(['courseId', 'enteredAt'])
+  })
+
+  it('getMyAfterSales：顶层 [hasMore,list,nextCursor,ok]（同 getMyOrders 分页契约）；售后行 16 键由 applyRefund 真写入', async () => {
+    control.seed('orders', [AS_ORDER])
+    const a = await call('applyRefund', { orderId: 'oR', lineId: 'p1__基础款', reason: '尺寸不合适' })
+    expect(a.ok).toBe(true)
+    const r = await call('getMyAfterSales')
+    expect(r.ok).toBe(true)
+    expect(keysOf(r)).toEqual(['hasMore', 'list', 'nextCursor', 'ok'])
+    expect(keysOf(r.list[0])).toEqual(AFTERSALE_KEYS)
+  })
+
+  it('getReviews：首页顶层 5 键含 summary；翻页 summary 键仍在（值 undefined·键集合不随页变）；评价行 7 键、summary 5 键——晒图只下发换好的临时地址', async () => {
+    control.seed('reviews', [
+      { _id: 'r1', productId: 'p1', _openid: 'oA', name: '小明', rating: 5, tags: ['手感好'], text: '很好', spec: '基础款', photos: [], createdAt: 200 },
+      { _id: 'r2', productId: 'p1', _openid: 'oB', name: '小红', rating: 4, tags: [], text: '不错', spec: '基础款', photos: [], createdAt: 100 },
+    ])
+    const first = await call('getReviews', { productId: 'p1' })
+    expect(first.ok).toBe(true)
+    expect(keysOf(first)).toEqual(['hasMore', 'list', 'nextCursor', 'ok', 'summary'])
+    expect(keysOf(first.list[0])).toEqual(REVIEW_KEYS)
+    expect(keysOf(first.summary)).toEqual(SUMMARY_KEYS)
+
+    // 翻页（复合游标 {v,id}）：summary 不重算，但键必须还在——mp 解构 r.summary 不能因页码不同而炸
+    const next = await call('getReviews', { productId: 'p1', cursor: { v: 200, id: 'r1' } })
+    expect(next.ok).toBe(true)
+    expect(keysOf(next)).toEqual(['hasMore', 'list', 'nextCursor', 'ok', 'summary'])
+    expect(next.summary).toBeUndefined()
   })
 })
