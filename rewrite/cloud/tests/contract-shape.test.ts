@@ -8,11 +8,23 @@
 // （nextCursor/hasMore）——再同步 rewrite/shared/src/contracts.ts 与本文件期望值。
 // activateCourse 刻意不在此列：app-learning.test.ts 已有整形 toEqual({ok,state,courseId}) 全等断言。
 import { describe, it, expect, beforeEach, afterEach } from 'vitest'
-import { control } from 'wx-server-sdk'
+import cloud, { control } from 'wx-server-sdk'
 import { main as app } from '../src/functions/app/index'
+import { __resetTempUrlCacheForTest } from '../src/kit/storage'
+import { saveHomeContent, savePageContent } from '../src/functions/adminApi/actions/content'
+import { saveDraft, publishProduct, unpublishProduct } from '../src/functions/adminApi/actions/products'
+import type { Ctx } from '../src/functions/adminApi/lib'
 
 const call = (action: string, data: Record<string, unknown> = {}) => app({ action, data }) as Promise<any>
 const keysOf = (o: any) => Object.keys(o).sort()
+
+// 第三批（战役工单 W1·A 批）用：目录/内容面全是**零裁剪透传**（`{...doc}` 只改值不改键），响应键集
+// 由**写侧白名单**单向决定。故这批哨兵一律「经真写侧写入 → 网关读回 → 键集全等」（同 AFTERSALE_KEYS
+// 的写入方字段集范式），不用测试自造 seed——自造只锁得住自己的回声，锁不住写侧漂移。
+// 桩的默认导出没有 database() 的类型声明（真 sdk 有）：一次性具名断言，不内联进成员访问。
+const sdk = cloud as unknown as { database: () => Ctx['db'] }
+const db = () => sdk.database()
+const adminCtx = (data: unknown): Ctx => ({ db: db(), cloud, data, drafts: db().collection('productsDraft') })
 
 const ADDR = { name: '张三', phone: '13800000000', region: '浙江·杭州', detail: 'xx 路 1 号' }
 // 刻意不 seed cloud:// cover（cover 缺省快照成空串）：绕开 swapOrdersCover 换址与容器级签发缓存，
@@ -44,9 +56,27 @@ const AS_ORDER = {
   address: { name: '张三', phone: '13800000000', region: '浙江·杭州', detail: 'xx 路 1 号' },
   items: [{ productId: 'p1', lineId: 'p1__基础款', spec: '基础款', name: '小鸭礼盒', price: 198, qty: 1, refundable: true }],
 }
+// 第三批扩面键集（战役工单 W1·A 批·目录/内容/FAQ 面）：
+// 商品档 17 键——由 adminApi saveDraft→publishProduct 真写入后回读（publishProduct 的 doc 字面量＝
+// products 集合的权威字段集）。app 侧 getProductDetail 整档透传出这 17 键；getProducts 列表瘦身删 images
+// 后为 16 键（守卫 rw-catalog-list-cover-only 的测试半边）。这两条链路**零裁剪**：写侧加一个字段就直接
+// 出公开网关（编译不红、既有值断言也不红），本哨兵是那条唯一的机器闸。
+const PRODUCT_KEYS = ['_id', 'brief', 'courseId', 'cover', 'detailSections', 'featured', 'id', 'images', 'kit', 'name', 'params', 'price', 'skus', 'sort', 'tag', 'updatedAt', 'was']
+const PRODUCT_LIST_KEYS = PRODUCT_KEYS.filter((k) => k !== 'images')
+// 首页内容 14 键＝saveHomeContent 白名单 13 字段 + _id（_id/updatedAt 随公开读一并下发·如实锁现状）。
+const HOME_KEYS = ['_id', 'activationBg', 'activationBgByCourse', 'brand', 'closing', 'faq', 'feature', 'footer', 'hero', 'loadingBg', 'reassure', 'reviews', 'trust', 'updatedAt']
+const DRAFT = { id: 'pd1', name: '小鸭礼盒', tag: '基础款', price: '198', was: '258', brief: '零基础友好', cover: 'cloud://pd1-cover.jpg', images: ['cloud://pd1-a.jpg'], skus: [{ name: '基础款', price: '198' }], params: [['材质', '纯棉']], detailSections: [{ lead: '关于', body: '正文' }], kit: [{ name: '钩针', qty: '1 支' }], courseId: 'course-pd1' }
+// 上架一份规范商品档（_id 刻意避开 beforeEach 的 seedProducts 那条 4 键残档——桩 seed 是 concat 追加、
+// doc().get() 取首个匹配，同 _id 会命中残档，断言错乱且极难排查）。
+const publishProduct1 = async () => {
+  await saveDraft(adminCtx({ product: DRAFT }))
+  const r = await publishProduct(adminCtx({ id: 'pd1' }))
+  expect(JSON.parse(r.body).ok).toBe(true)
+}
 
 beforeEach(() => {
   control.reset()
+  __resetTempUrlCacheForTest() // 清容器级签发缓存：第三批断言「cover/images 换成 https、fileID 不出网关」的值
   control.setOpenId('oME')
   process.env.ALLOW_MOCK_PAY = '1' // 测试环境显式放行 mock（生产永不设）
   seedProducts()
@@ -205,5 +235,130 @@ describe('契约键集合哨兵（Object.keys 排序全等·增删改名都红�
     expect(next.ok).toBe(true)
     expect(keysOf(next)).toEqual(['hasMore', 'list', 'nextCursor', 'ok', 'summary'])
     expect(next.summary).toBeUndefined()
+  })
+
+  // ── 第三批扩面（战役工单 W1·A 批：目录/内容/FAQ 五 action）──
+  // 这组与前两批的差别：catalog/content 面**零裁剪透传**（`{...doc}` 只改值不改键），响应键集由写侧
+  // 白名单单向决定。所以造数一律走真写侧（saveDraft→publishProduct / saveHomeContent / savePageContent），
+  // 锁的是「写侧字段集 ↔ 公开下发面」这条端到端契约；自造 seed 只能锁住自己的回声。
+  it('getProducts：顶层 [list,ok]；列表行 16 键＝商品档 17 键去 images（列表瘦身）；skus 行 2 键；cover 换 https——cloud:// fileID 不出网关', async () => {
+    await publishProduct1()
+    const r = await call('getProducts')
+    expect(r.ok).toBe(true)
+    expect(keysOf(r)).toEqual(['list', 'ok'])
+    const row = r.list.find((p: any) => p._id === 'pd1') // 不靠顺序：桩 orderBy 对缺 sort 的档退化为 seed 序
+    expect(keysOf(row)).toEqual(PRODUCT_LIST_KEYS)
+    expect('images' in row).toBe(false) // 图册只在详情页下发（守卫 rw-catalog-list-cover-only 的测试半边）
+    expect(keysOf(row.skus[0])).toEqual(['name', 'price'])
+    expect(row.cover.startsWith('https://')).toBe(true) // 裸 fileID 不出网关：服务端换好临时址再下发
+  })
+
+  it('getProducts·空库：顶层键集不随有无数据变（[list,ok] 恒定·list 是诚实空数组不是缺键）', async () => {
+    control.reset() // 连 beforeEach 的 seedProducts 一并清掉，验真空库
+    const r = await call('getProducts')
+    expect(r.ok).toBe(true)
+    expect(keysOf(r)).toEqual(['list', 'ok'])
+    expect(r.list).toEqual([])
+  })
+
+  it('getProductDetail：顶层 [ok,product]；product 17 键含 images（与列表相反）；images 逐项换 https；停售/无档 product:null 键仍在', async () => {
+    await publishProduct1()
+    const r = await call('getProductDetail', { id: 'pd1' })
+    expect(r.ok).toBe(true)
+    expect(keysOf(r)).toEqual(['ok', 'product'])
+    expect(keysOf(r.product)).toEqual(PRODUCT_KEYS)
+    expect(keysOf(r.product.skus[0])).toEqual(['name', 'price'])
+    expect(keysOf(r.product.detailSections[0])).toEqual(['body', 'lead'])
+    // kit 行 3 键：写侧 cleanProduct 恒造 {icon,name,qty}，mp mapDetail 只读 {name,qty}——锁写侧真形状，
+    // 不锁消费面那半（少读不是契约，多下发才是；此处如实记录二者不一致）
+    expect(keysOf(r.product.kit[0])).toEqual(['icon', 'name', 'qty'])
+    expect(r.product.params).toEqual([['材质', '纯棉']]) // params 是 [k,v] 二元组数组，不是对象（mp mapDetail 按此消费）
+    expect(r.product.images.every((u: string) => u.startsWith('https://'))).toBe(true)
+
+    // 停售：同为 ok 响应、product 键在值 null（不是错误码、不是缺键——mp 据此走降级而非报错）
+    await unpublishProduct(adminCtx({ id: 'pd1' }))
+    const off = await call('getProductDetail', { id: 'pd1' })
+    expect(keysOf(off)).toEqual(['ok', 'product'])
+    expect(off.product).toBe(null)
+  })
+
+  it('getContent：顶层 [home,ok]；home 14 键由 saveHomeContent 真写入；嵌套逐层锁；无内容时 home:null 键仍在', async () => {
+    await saveHomeContent(adminCtx({
+      home: {
+        hero: { title: '钩织', tagline: '从零开始', search: '搜点什么', img: 'cloud://hero.jpg' },
+        brand: { name: '幸运鸭', lead: '自述' },
+        feature: { title: '特写', body: '正文', img: 'cloud://feature.jpg' },
+        reassure: { heading: '放心', lead: '引言', items: [{ icon: 'heart', title: '标题', body: '正文', img: 'cloud://re1.jpg' }] },
+        reviews: { heading: '买家秀', items: [{ quote: '好评', user: '小明', img: 'cloud://rv1.jpg' }] },
+        closing: { title: '收尾', cta: '开始', img: 'cloud://closing.jpg' },
+        footer: { links: ['关于'], copy: '© LD' },
+        activationBg: 'cloud://act.jpg', loadingBg: 'cloud://loading.jpg',
+        activationBgByCourse: { c1: { welcome: 'cloud://c1-w.jpg' } },
+        trust: [{ icon: 'shield', label: '正品' }],
+        faq: [{ title: '问', body: '答' }],
+      },
+    }))
+    const r = await call('getContent')
+    expect(r.ok).toBe(true)
+    expect(keysOf(r)).toEqual(['home', 'ok'])
+    expect(keysOf(r.home)).toEqual(HOME_KEYS)
+    expect(keysOf(r.home.hero)).toEqual(['img', 'search', 'tagline', 'title'])
+    expect(keysOf(r.home.reassure)).toEqual(['heading', 'items', 'lead'])
+    expect(keysOf(r.home.reassure.items[0])).toEqual(['body', 'icon', 'img', 'title'])
+    expect(keysOf(r.home.reviews.items[0])).toEqual(['img', 'quote', 'user'])
+    expect(keysOf(r.home.footer)).toEqual(['copy', 'links'])
+    expect(keysOf(r.home.trust[0])).toEqual(['icon', 'label'])
+    expect(keysOf(r.home.faq[0])).toEqual(['body', 'title'])
+    // 换址口径两半，一并钉住：五处 img 换成 https；activationBg/loadingBg **刻意不换**、裸 fileID 原样下发
+    expect(r.home.hero.img.startsWith('https://')).toBe(true)
+    expect(r.home.reassure.items[0].img.startsWith('https://')).toBe(true)
+    expect(r.home.activationBg).toBe('cloud://act.jpg')
+    expect(r.home.loadingBg).toBe('cloud://loading.jpg')
+
+    control.reset()
+    const empty = await call('getContent')
+    expect(keysOf(empty)).toEqual(['home', 'ok']) // 无内容：键集不变、值诚实 null（mp 据此回退默认文案）
+    expect(empty.home).toBe(null)
+  })
+
+  it('getPageContent：顶层恒 3 键 [content,ok,page]（有档/无档/未知 page 三态各自锁）；about 档 4 键由 savePageContent 真写入', async () => {
+    await savePageContent(adminCtx({ page: 'about', data: { lead: '你好', sections: [{ title: '关于', body: '正文' }] } }))
+    const r = await call('getPageContent', { page: 'about' })
+    expect(r.ok).toBe(true)
+    expect(keysOf(r)).toEqual(['content', 'ok', 'page'])
+    expect(r.page).toBe('about') // page 是入参回显——mp 按它对号入座，不能悄悄不回
+    expect(keysOf(r.content)).toEqual(['_id', 'lead', 'sections', 'updatedAt'])
+    expect(keysOf(r.content.sections[0])).toEqual(['body', 'title'])
+
+    const missing = await call('getPageContent', { page: 'welcome' }) // 有白名单无档
+    expect(keysOf(missing)).toEqual(['content', 'ok', 'page'])
+    expect(missing.content).toBe(null)
+
+    const bad = await call('getPageContent', { page: 'evilPage' }) // 白名单外 fail-closed
+    expect(keysOf(bad)).toEqual(['error', 'ok', 'page'])
+    expect(bad.ok).toBe(false)
+  })
+
+  it('getPublicFaq：顶层 [items,ok]（空态同形）；kb 管理元数据与库内脏字段一律不出网关——白名单重建而非展开删', async () => {
+    // 行键集 {key,title,content} 已由 app-reviews.test.ts 整形 toEqual 锁死，此处不重复；补的是顶层键集、
+    // 空态形状，以及「白名单重建」这个语义——往库里下毒塞白名单外字段，证明它们物理上进不来。
+    control.seed('kb', [{
+      _id: 'logistics:eta', question: '什么时候发货？', answer: '48 小时内。',
+      category: 'logistics', order: 0, enabled: true, featured: true, updatedAt: 1000,
+      _openid: 'oADMIN', internalNote: '内部备注', reviewStatus: 'pending', // 下毒：白名单外字段
+    }])
+    const r = await call('getPublicFaq')
+    expect(r.ok).toBe(true)
+    expect(keysOf(r)).toEqual(['items', 'ok'])
+    expect(keysOf(r.items[0])).toEqual(['content', 'key', 'title'])
+    // 逐键否定（不用 JSON.stringify includes：'order' 这类短词会被答案正文里的字样喂假绿/假红）
+    for (const leak of ['category', 'order', 'enabled', 'updatedAt', 'featured', '_openid', 'internalNote', 'reviewStatus']) {
+      expect(leak in r.items[0]).toBe(false)
+    }
+
+    control.reset()
+    const empty = await call('getPublicFaq')
+    expect(keysOf(empty)).toEqual(['items', 'ok']) // 空态：items 键恒在、值空数组（不是缺键）
+    expect(empty.items).toEqual([])
   })
 })
