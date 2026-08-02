@@ -84,6 +84,16 @@ const CHECKS: Check[] = [
     kind: 'invariant-violation',
     async run(db) {
       // 扫已退款售后（有界），按 orderId 归集退款额，比对该单实付 order.amount——超了＝静默多退钱。
+      // 口径（R1 统一·与同文件 refundableCapFen / stuck-order 死信判据同源）：afterSales.refundAmount 与
+      // order.amount 同为「元」number，**逐行先 toFen 换整数分再累加**（不累加元浮点后一次性取整），
+      // 整数域比较精确，故不需要也不该有 `1e-6` 容差——那是元浮点域的产物，且 1e-6 远小于 1 分，
+      // 留着既挡不住真差额、又让人误以为「亚分差额可以容忍」。边界用 `>` 不是 `>=`：退＝实付是**全额退**，
+      // 合法，不该报；只有严格多退才是钱漏。
+      //
+      // fail-closed（本检测器最危险的错法是漏报——真钱漏了却报绿）：金额字段不再走 `Number(x || 0)`。
+      // 那个写法把**脏字段变 NaN、缺字段变 0**，两者都让已退总额变小或变 NaN，而 `NaN > amount` 恒 false
+      // ⇒ 真超退单被静默报绿。改为：字段必须是有限非负 number（全部写入方都走 fenToYuan(...) 落 number，
+      // 故此判据不误伤正常行），否则记 suspect 直接报出来给人看——算不准就别假装守恒成立。
       const as = await db
         .collection(COLLECTIONS.afterSales)
         .where({ status: 'refunded' })
@@ -92,25 +102,57 @@ const CHECKS: Check[] = [
         .catch(() => ({ data: [] }))
       const rows: any[] = as.data || []
       const _ = db.command
-      const byOrder = new Map<string, number>()
-      for (const a of rows) byOrder.set(String(a.orderId), (byOrder.get(String(a.orderId)) || 0) + Number(a.refundAmount || 0))
+      const okMoney = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v) && v >= 0
+      const refundedFen = new Map<string, number>()
+      const suspect = new Set<string>() // 金额字段脏/缺 → 无从证明守恒 → 一律报（宁可多报一次）
+      for (const a of rows) {
+        const orderId = String(a.orderId)
+        if (!okMoney(a.refundAmount)) {
+          suspect.add(orderId)
+          continue
+        }
+        refundedFen.set(orderId, (refundedFen.get(orderId) || 0) + toFen(a.refundAmount))
+      }
       // 批量读订单实付（_.in 分块·照 recallScan IN_CHUNK=100·杜绝 ≤500 键逐条串行 doc.get 的 N+1）；
-      // 内存比对，判定语义与逐条 get 版一致（订单缺失=amountById 无键→跳过·不误报超退）。
-      const orderIds = [...byOrder.keys()]
-      const amountById = new Map<string, number>()
+      // 内存比对，判定语义与逐条 get 版一致（订单缺失=不在 known→跳过·不误报超退·既有用例锁此语义）。
+      const orderIds = [...new Set([...refundedFen.keys(), ...suspect])]
+      const amountFenById = new Map<string, number>()
+      const known = new Set<string>()
       for (let i = 0; i < orderIds.length; i += IN_CHUNK) {
         const chunk = orderIds.slice(i, i + IN_CHUNK)
         const got = await db.collection(COLLECTIONS.orders).where({ _id: _.in(chunk) }).limit(IN_CHUNK).get().catch(() => ({ data: [] }))
-        for (const o of got.data || []) amountById.set(String(o._id), Number(o.amount || 0))
+        for (const o of got.data || []) {
+          const id = String(o._id)
+          known.add(id)
+          if (okMoney(o.amount)) amountFenById.set(id, toFen(o.amount))
+          else suspect.add(id) // 实付额脏 → 分母不可信 → 同样报出来
+        }
       }
       const bad: string[] = []
-      for (const [orderId, refunded] of byOrder) {
-        if (!amountById.has(orderId)) continue // 订单缺失（逐条 get 落空即跳过·语义不变）
-        if (refunded > (amountById.get(orderId) || 0) + 1e-6) bad.push(orderId)
+      let dirty = 0
+      for (const orderId of orderIds) {
+        if (!known.has(orderId)) continue // 订单缺失（逐条 get 落空即跳过·语义不变）
+        if (suspect.has(orderId)) {
+          bad.push(orderId)
+          dirty++
+          continue
+        }
+        const amountFen = amountFenById.get(orderId)
+        if (amountFen === undefined) continue // 理论不可达（非 suspect 必已入表）·防御性跳过
+        if ((refundedFen.get(orderId) || 0) > amountFen) bad.push(orderId)
       }
       const capped = rows.length >= SCAN_CAP
+      const over = bad.length - dirty
       return bad.length
-        ? { status: 'red', detail: `${bad.length} 单退款超实付（静默多退钱）`, count: bad.length, samples: bad.slice(0, 10), severity: 'high', scanned: rows.length, capped }
+        ? {
+            status: 'red',
+            detail: `${over} 单退款超实付（静默多退钱）${dirty ? `·${dirty} 单金额字段脏/缺算不准（fail-closed 计入）` : ''}`,
+            count: bad.length,
+            samples: bad.slice(0, 10),
+            severity: 'high',
+            scanned: rows.length,
+            capped,
+          }
         : { status: 'green', detail: '退款均未超实付', severity: 'low', scanned: rows.length, capped }
     },
   },

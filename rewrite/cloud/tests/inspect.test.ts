@@ -63,6 +63,66 @@ describe('runInspection（巡检机·探出静默失败）', () => {
     expect(run.results.find((r) => r.id === 'money-conserved')!.status).toBe('green') // 订单缺失→跳过·不判超退
   })
 
+  // ── 红区考卷 R1：钱守恒口径统一为整数分 + 脏字段 fail-closed ──
+  // 病灶：本检测器原用「元浮点 + 1e-6 容差」，而同文件姊妹判据（refundableCapFen / stuck-order 死信）
+  // 早已全程整数分。危险面不在容差本身，而在 `Number(x || 0)`：脏字段（非数字）→ NaN，缺字段 → 0，
+  // 两者都让「已退总额」**变小或变 NaN**，而 `NaN > amount` 恒 false ⇒ **真超退单被报绿（漏报）**。
+  // 漏报＝真钱漏了却报绿，是本检测器最危险的错法，故一律 fail-closed：算不准就报出来给人看。
+  it('大白话·R1①：整数分精确比较——全额退（退＝实付）是合法的不报，多退 1 分就报', async () => {
+    control.seed(COLLECTIONS.orders, [
+      { _id: 'EQ', status: 'paid', amount: 100, paidAt: Date.now() },
+      { _id: 'OVER', status: 'paid', amount: 100, paidAt: Date.now() },
+    ])
+    control.seed(COLLECTIONS.afterSales, [
+      { _id: 'EQ__l1', orderId: 'EQ', status: 'refunded', refundAmount: 60 },
+      { _id: 'EQ__l2', orderId: 'EQ', status: 'refunded', refundAmount: 40 }, // 恰好退满 100＝全额退·合法
+      { _id: 'OVER__l1', orderId: 'OVER', status: 'refunded', refundAmount: 100.01 }, // 多退 1 分
+    ])
+    const money = (await runInspection('timer')).results.find((r) => r.id === 'money-conserved')!
+    expect(money.samples).not.toContain('EQ') // 边界是 `>` 不是 `>=`——全额退不是超退
+    expect(money.samples).toContain('OVER') // 1 分也是钱：整数分域内 100 vs 10001，精确判
+  })
+
+  it('大白话·R1②：脏 refundAmount 的真超退单必须报出来（原实现 NaN 比较恒 false→静默报绿）', async () => {
+    // 真相：80 + 50 = 130 > 100 实付，是真超退；但其中一行金额字段被写脏（非数字）。
+    // 原实现：Number('脏') → NaN，累加成 NaN，`NaN > 100 + 1e-6` === false → 报绿，钱漏了没人知道。
+    control.seed(COLLECTIONS.orders, [{ _id: 'D', status: 'paid', amount: 100, paidAt: Date.now() }])
+    control.seed(COLLECTIONS.afterSales, [
+      { _id: 'D__l1', orderId: 'D', status: 'refunded', refundAmount: 80 },
+      { _id: 'D__l2', orderId: 'D', status: 'refunded', refundAmount: '五十' },
+    ])
+    const money = (await runInspection('timer')).results.find((r) => r.id === 'money-conserved')!
+    expect(money.status).toBe('red')
+    expect(money.samples).toContain('D')
+  })
+
+  it('大白话·R1③：缺字段/负数/脏实付额一律按算不准处理（宁可多报一次，不可当 0 漏掉）', async () => {
+    control.seed(COLLECTIONS.orders, [
+      { _id: 'M', status: 'paid', amount: 100, paidAt: Date.now() },
+      { _id: 'N', status: 'paid', amount: 100, paidAt: Date.now() },
+      { _id: 'X', status: 'paid', amount: '一百', paidAt: Date.now() }, // 实付额本身脏
+    ])
+    control.seed(COLLECTIONS.afterSales, [
+      { _id: 'M__l1', orderId: 'M', status: 'refunded' }, // 缺 refundAmount：原实现 ||0 当没退过
+      { _id: 'N__l1', orderId: 'N', status: 'refunded', refundAmount: -30 }, // 负数会把总额拉小
+      { _id: 'X__l1', orderId: 'X', status: 'refunded', refundAmount: 10 }, // 分母脏 → 无从证明守恒
+    ])
+    const money = (await runInspection('timer')).results.find((r) => r.id === 'money-conserved')!
+    expect(money.status).toBe('red')
+    for (const id of ['M', 'N', 'X']) expect(money.samples).toContain(id)
+  })
+
+  it('大白话·R1④：干净数据不受影响——正常未超退仍是绿（fail-closed 不等于见谁都报）', async () => {
+    control.seed(COLLECTIONS.orders, [{ _id: 'OK', status: 'paid', amount: 100, paidAt: Date.now() }])
+    control.seed(COLLECTIONS.afterSales, [
+      { _id: 'OK__l1', orderId: 'OK', status: 'refunded', refundAmount: 33.33 },
+      { _id: 'OK__l2', orderId: 'OK', status: 'refunded', refundAmount: 33.33 },
+      { _id: 'OK__l3', orderId: 'OK', status: 'refunded', refundAmount: 33.33 }, // 元浮点累加会出 99.98999…
+    ])
+    const money = (await runInspection('timer')).results.find((r) => r.id === 'money-conserved')!
+    expect(money.status).toBe('green')
+  })
+
   it('大白话：付款超 72h 未发货→卡单红', async () => {
     control.seed(COLLECTIONS.orders, [{ _id: 'A', status: 'paid', amount: 100, transactionId: 'wxA', paidAt: Date.now() - 80 * HOUR }])
     const run = await runInspection('timer')
