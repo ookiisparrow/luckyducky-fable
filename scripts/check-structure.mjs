@@ -3880,6 +3880,45 @@ import { PROD_ENV } from './lib/env.mjs'（单源·病根#5·债#30①）`)
     },
   },
   {
+    // 物流轨迹接线（rewrite/mp·承旧线 express-plugin-wired 所标需求 R17）：旧线守卫随 packages/
+    // 删除退役后，活线「快递100 插件查物流」链路一度零守卫盯（2026-08-02 体检逮到需求清单 R17 仍指
+    // 死守卫 id）——本守卫补回。守三件：① app.json 声明 kuaidi100 插件（同 AppID 声明即用，删了插件页
+    // 打不开）② lib/express.ts 单源编码映射导出 expressCode ③ order.ts onViewLogistics() 真开
+    // plugin://kuaidi100/ 且 fail 回退复制运单号（插件打不开不静默·根因#14）。
+    id: 'rw-mp-express-wired',
+    roots: ['R17'],
+    desc: 'mp 物流轨迹接线（R17）：app.json 须声明 kuaidi100 插件；lib/express.ts 须导出 expressCode；order.ts onViewLogistics() 须开 plugin://kuaidi100/ 且 fail 回退 onCopyTracking（复制运单号兜底）',
+    run() {
+      const base = join(ROOT, 'rewrite/mp')
+      if (!existsSync(base)) return []
+      const bad = []
+      const appJsonPath = join(base, 'app.json')
+      if (existsSync(appJsonPath)) {
+        const plugins = JSON.parse(readFileSync(appJsonPath, 'utf8')).plugins || {}
+        if (!plugins.kuaidi100) bad.push('app.json 未声明 kuaidi100 插件——订单页「查看物流」插件轨迹页打不开（R17）')
+      } else bad.push('rewrite/mp/app.json 缺失（物流插件声明无从谈起·R17）')
+      const expPath = join(base, 'lib/express.ts')
+      if (!existsSync(expPath)) bad.push('lib/express.ts 缺失——快递公司编码映射单源丢失（R17）')
+      else if (!/export\s+function\s+expressCode/.test(stripComments(readFileSync(expPath, 'utf8'))))
+        bad.push('lib/express.ts 未导出 expressCode——编码映射单点丢失（R17）')
+      const orderPath = join(base, 'pages/order/order.ts')
+      if (!existsSync(orderPath)) {
+        bad.push('pages/order/order.ts 缺失（物流触点·R17）')
+      } else {
+        const raw = methodBody(readFileSync(orderPath, 'utf8'), 'onViewLogistics')
+        const body = stripComments(raw)
+        if (!body) bad.push('order.ts 找不到 onViewLogistics() 方法体——物流触点单点丢失（R17）')
+        else {
+          // URL 断言行含 `//`，stripComments 会把它截成 'plugin: ——插件 scheme 断言行只能对剥前原文下断言
+          if (!raw.includes('plugin://kuaidi100/')) bad.push('onViewLogistics 未开 plugin://kuaidi100/ 插件页——物流接线断（R17）')
+          if (!body.includes('wx.navigateTo(')) bad.push('onViewLogistics 未调 wx.navigateTo——物流插件页未真跳转（R17）')
+          if (!body.includes('onCopyTracking')) bad.push('onViewLogistics 缺 fail 回退 onCopyTracking——插件打不开会静默无兜底（根因#14·R17）')
+        }
+      }
+      return bad
+    },
+  },
+  {
     // 客服触点真实化（重写线 rewrite/mp·承旧线 customer-service-wired 所标病根 R18）：批A 建了
     // utils/customerService.ts 单源 helper，但 detail.ts 的 onService() 当场仍是假占位
     // wx.showToast('正在接入客服…')——旧线守卫早已判定这句假 Toast 绝迹，新线却原样重现（复制漂移同源）。
