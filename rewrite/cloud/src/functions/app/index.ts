@@ -32,7 +32,11 @@ import { submitCheckpointPhoto } from './actions/checkpoint'
  * 每个 action 模块自带完整闸（withOpenId/withRateLimit…），注册表只做分发；
  * 未知 action fail-closed 拒（设计约束#3）。M5 切换日小程序 callFunction('app', {action,data})。
  */
-const ACTIONS: Record<string, (event: unknown) => Promise<unknown>> = {
+// 空原型注册表（把上面那条 fail-closed 落成结构事实·根因#3）：普通对象字面量继承 Object.prototype，
+// ACTIONS['constructor'/'toString'/'__proto__'] 非空——继承键要么被当 handler 真调用（把 Object(data)
+// 当业务响应返回），要么抛进顶层兜底往 anomalies 灌 high 噪音，两种都不是「拒」。satisfies 保住字面量
+// 逐条签名校验（Object.assign 返回 any 会吃掉注解那层检查）。负向用例见 tests/course-chain-hardening。
+const ACTIONS: Record<string, (event: unknown) => Promise<unknown>> = Object.assign(Object.create(null), {
   login,
   updateProfile,
   getProducts,
@@ -63,7 +67,7 @@ const ACTIONS: Record<string, (event: unknown) => Promise<unknown>> = {
   dataConsent,
   submitFeedback,
   submitCheckpointPhoto,
-}
+} satisfies Record<string, (event: unknown) => Promise<unknown>>)
 
 export const main = async (event: any) => {
   const action = String(event?.action ?? '')

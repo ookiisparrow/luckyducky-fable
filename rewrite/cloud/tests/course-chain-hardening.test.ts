@@ -157,6 +157,23 @@ describe('app 网关顶层兜底（未捕获异常可观测·根因#14）', () =
   })
 })
 
+// ─── flag 顺手批（2026-08-02·待办与债散项）：网关查表不吃原型链 ───
+describe('app 网关未知 action fail-closed 不吃原型链（根因#3）', () => {
+  // 注册表若是普通对象字面量，就从 Object.prototype 继承了 constructor/toString/__proto__ 等键：
+  // ACTIONS['constructor'] 非空 → 「未知 action 一律拒」这条 fail-closed 在原型链上不成立。
+  // 现象分两种，都不是拒：继承到函数的（constructor/toString）被当 handler 真调用、把 Object({}) 或
+  // '[object Undefined]' 当业务响应返回；继承到非函数/this 不对的（__proto__/valueOf/hasOwnProperty）
+  // 抛进顶层兜底 → 回 INTERNAL 且往 anomalies 账本灌 high 级噪音（客户端可随手伪造告警）。
+  const PROTO_KEYS = ['constructor', 'toString', 'valueOf', 'hasOwnProperty', '__proto__']
+
+  it('大白话：拿 constructor/toString/__proto__ 这类「对象天生自带的名字」当动作名调，一律按未知动作拒，不当业务处理、也不往异常账本灌噪音', async () => {
+    for (const action of PROTO_KEYS) {
+      expect(await call(action)).toEqual({ ok: false, error: 'BAD_ARGS', action })
+    }
+    expect(control.dump('anomalies')).toHaveLength(0) // 拒在门口=没走到顶层兜底，账本干净
+  })
+})
+
 describe('trackEvent video_error 桥接（播放失败率可见·根因#14）', () => {
   it('大白话：播放器报一次 video_error，anomalies 账本按 课程:段 聚合出一条 MP_VIDEO_ERROR', async () => {
     const r = await call('trackEvent', { type: 'video_error', page: 'player', targetId: 's1', meta: { courseId: 'c1', phase: 'stall' } })
