@@ -122,7 +122,8 @@ describe('外部逐笔对账（黄金：四类差异·未拉账单日不误报�
       { _id: day1 + ':tx-2', date: day1, transactionId: 'tx-2', orderAmount: 9.99, outTradeNo: 'm2', tradeState: 'SUCCESS' }, // 金额不符
       { _id: day1 + ':tx-ghost', date: day1, transactionId: 'tx-ghost', orderAmount: 5, outTradeNo: 'ghost', tradeState: 'SUCCESS' }, // 外部有我方无
     ])
-    const r = await post('getBillMatch', {})
+    // 窗口必须显式钉在种子日期上——默认窗随墙钟滑动（近 30 天），固定种子日期终会滑出窗外变时间炸弹（错题本 E30）
+    const r = await post('getBillMatch', { from: '2026-07-01', to: '2026-07-02' })
     expect(r.ok).toBe(true)
     expect(r.summary.matched).toBeGreaterThanOrEqual(1)
     expect(r.discrepancies.wxOnly.some((x: any) => x.transactionId === 'tx-ghost')).toBe(true) // 收钱无单·最危险
