@@ -1082,6 +1082,26 @@
     "subtraction"
    ],
    "source": "docs/关键决策记录.md §33"
+  },
+  {
+   "id": "决策§34",
+   "kind": "decision",
+   "title": "多代理放开：去供应商锁定+双轨试运行 oh-my-pi（AGENTS.md 恢复·red 区仍归主力·订阅 OAuth 灰色通道不上生产）",
+   "keywords": [
+    "多代理",
+    "oh-my-pi",
+    "omp",
+    "锁定",
+    "供应商",
+    "双轨",
+    "试运行",
+    "AGENTS",
+    "代理无关",
+    "迁移",
+    "vendor lock-in",
+    "替换 claude code"
+   ],
+   "source": "docs/关键决策记录.md §34"
   }
  ]
 }

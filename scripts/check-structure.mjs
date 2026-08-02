@@ -1759,6 +1759,20 @@ import { PROD_ENV } from './lib/env.mjs'（单源·病根#5·债#30①）`)
     },
   },
   {
+    id: 'agents-entry-present',
+    roots: ['#11'],
+    desc: '厂商中立进场入口在位（2026-08-02 决策§34 多代理放开·翻案恢复）：AGENTS.md 是非 Claude 代理（oh-my-pi 等原生读它）的进场手册，须存在且指向三件套——CLAUDE.md（约定单源）/modules.json（模块正册）/npm run check（验收共同语言）。缺文件或缺指针即红（入口断了，外厂代理进场只能瞎摸）',
+    run() {
+      const p = join(ROOT, 'AGENTS.md')
+      if (!existsSync(p)) return ['AGENTS.md 缺失——厂商中立进场入口（决策§34 双轨试运行依赖它），恢复它']
+      const text = readFileSync(p, 'utf8')
+      const bad = []
+      for (const need of ['CLAUDE.md', 'modules.json', 'npm run check'])
+        if (!text.includes(need)) bad.push(`AGENTS.md 未指向 \`${need}\`——进场三件套缺一（约定单源/模块正册/验收语言）`)
+      return bad
+    },
+  },
+  {
     id: 'readme-identity-current',
     roots: ['#11'],
     desc: '仓库门面身份卡与现实一致（2026-08-02 文档大清理批·病根#11）：README.md 曾在本仓转正生产源后仍自称「样板房/禁部署」，与现实正相反、误导一切来访者——须声明生产源身份且禁旧身份词残留（原 agents-entry-present 随 AGENTS.md 退役对等换位·用户拍板只用 Claude 单入口）',
