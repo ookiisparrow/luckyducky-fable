@@ -17,7 +17,10 @@
  *      多吃 WebView 热池红利（热池转场 <600ms 不触竞态，2026-07-24 全量验证即如此过）；
  *   ② checkout 的 navigateTo 用 evaluate 发后即忘 + pageStack 轮询断言（callWxMethod 会等导航完成
  *      回包，死锁时该 RPC 永挂 → 探不到失败原因还拖死脚本）；
- *   ③ connect 探活加导航道半边（systemInfo 只探信息道，半僵实例探不出来）——探不过就 cli quit 冷启。
+ *   ③ connect 探活加导航道半边（systemInfo 只探信息道，半僵实例探不出来）——探不过就 cli quit 冷启；
+ *      launch 路径同样过这套探活、且原地重试（2026-08-02 工单#4）：工具「完全未启动」冷开时 launch
+ *      已回而 RPC 通道未就绪（实测 launch 返回 @17s、信息道 ~25s 才通），紧接的首个调用撞 timeout
+ *      会让整跑硬崩（实测 1/5）——信息道探不通就等 1s 再探，别弃实例重开（重开一样要等 ~25s）。
  * 断言语义不放水：checkout 两段式（上栈 + 600ms 空草稿自动返回）照旧必须成立，新版工具下第二段
  * 失败属真实回归、如实红（模拟器人工手测同样会撞上）。
  *
@@ -87,20 +90,42 @@ function timeoutReject(ms, msg) {
 // 2026-07-24 收紧：systemInfo 只走信息道，checkout 死锁留下的半僵实例（导航道瘫、信息道活）
 // 探不出来——上次失败残留的实例会让本次 connect「成功」然后逐页 reLaunch 全挂成假 FAIL。
 // 补导航道探活（reLaunch 首页），不过即 cli quit 弃实例冷启（自愈，免去人工 quit 一步）。
+// 2026-08-02 再收紧（工单#4）：launch 路径同样探活，且**原地重试**——工具「完全未启动」冷开时
+// launch 已回而 RPC 通道尚未就绪，紧接的第一个调用撞 timeout 让整跑硬崩（实测 1/5）。实测取证
+// （冷开一次）：launch 返回 @17.2s → 信息道第 1 次 5s 超时 → 第 2 次 @24.7s 通（1.6s）→ 导航道
+// @28.9s 通。故解法是「等它醒」而非「弃了重开」：同批实测「探不过就 cli quit 再冷启」照样第一次
+// 5s 探不通（又白烧 22s），因为新实例一样要 ~25s 才就绪。
+// 双道探活单源 helper：信息道（systemInfo）+ 导航道（reLaunch 首页）。connect 与 launch 两条
+// 路径共用——半僵实例（导航道瘫、信息道活）只探信息道探不出来。
+// attempts＝信息道最多探几次（每次 5s 预算 + 1s 间隔）。connect 路径 1 次即判：现成实例 5s 不
+// 应答就是病了，早点走 cli quit 冷启自愈更快；launch 路径给足重试预算（冷开就绪要 ~25s）。
+async function probeChannels(mp, attempts = 1) {
+  for (let i = 1; ; i++) {
+    try {
+      await Promise.race([
+        mp.systemInfo(),
+        timeoutReject(5000, 'RPC 探活 5s 无响应，工具需 cli quit 后重启（靠人:#10）'),
+      ])
+      break
+    } catch (e) {
+      if (i >= attempts) throw e
+      console.log(`信息道第 ${i} 次未就绪（${e.message}），1s 后重试…`)
+      await sleep(1000)
+    }
+  }
+  await Promise.race([
+    mp.reLaunch('/' + HOME_PATH),
+    timeoutReject(15000, '导航道 15s 无响应（半僵实例·checkout 死锁残留的典型形态）'),
+  ])
+}
+
 async function connectMp() {
   try {
     const mp = await Promise.race([
       automator.connect({ wsEndpoint: 'ws://127.0.0.1:9420' }),
       timeoutReject(5000, 'connect 5s 超时'),
     ])
-    await Promise.race([
-      mp.systemInfo(),
-      timeoutReject(5000, 'RPC 探活 5s 无响应，工具需 cli quit 后重启（靠人:#10）'),
-    ])
-    await Promise.race([
-      mp.reLaunch('/' + HOME_PATH),
-      timeoutReject(15000, '导航道 15s 无响应（半僵实例·checkout 死锁残留的典型形态）'),
-    ])
+    await probeChannels(mp)
     console.log('已连上现成实例（connect·信息道+导航道双探活通过）')
     return mp
   } catch (e) {
@@ -111,11 +136,15 @@ async function connectMp() {
       /* 无实例可退＝quit 报错，无妨 */
     }
     await sleep(5000)
-    return automator.launch({
+    const mp = await automator.launch({
       cliPath: CLI_PATH,
       projectPath: MP_ROOT,
       timeout: 120000,
     })
+    // 冷开就绪要 ~25s（见上方实测），信息道给 8 次预算（≈48s 上限）——探不通才是真病了。
+    await probeChannels(mp, 8)
+    console.log('launch 冷启动完成（信息道+导航道双探活通过）')
+    return mp
   }
 }
 
