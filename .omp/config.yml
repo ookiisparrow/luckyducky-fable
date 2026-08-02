@@ -37,6 +37,13 @@ tools:
     mcp__cloudbase_manageagents: deny
     mcp__cloudbase_downloadtemplate: deny
     mcp__cloudbase_callcloudapi: deny
+    # —— 白名单模型补出来的 3 条（2026-08-02 老板拍板「反过来」）——
+    # 改用「全量册减去只读册」推导后，这三条是 Claude 那份黑名单漏掉的：auth 改凭证态、
+    # downloadremotefile 往项目里落文件、activateinvitecode 是写操作。**列黑名单漏、列白名单才逮住**。
+    # 全量册单源＝tests/fixtures/cloudbase-mcp-tools.json，由守卫 omp-lane-gate 逐条核。
+    mcp__cloudbase_auth: deny
+    mcp__cloudbase_downloadremotefile: deny
+    mcp__cloudbase_activateinvitecode: deny
     # —— wechat-devtools 8 条（本会话未挂载，但 .mcp.json 在册·先备着，挂上即生效）——
     mcp__wechat-devtools_upload: deny
     mcp__wechat-devtools_cloud_fn_deploy: deny

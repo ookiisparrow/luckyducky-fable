@@ -28,6 +28,7 @@ import { fileURLToPath } from 'node:url'
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '../..')
 const OMP_CFG = resolve(ROOT, '.omp/config.yml')
 const CLAUDE_SETTINGS = resolve(ROOT, '.claude/settings.json')
+const TOOL_REGISTRY = resolve(ROOT, 'tests/fixtures/cloudbase-mcp-tools.json')
 
 /** Claude 条目名 → omp 条目名：`mcp__<server>__<Tool>` ⇒ `mcp__<server>_<tool 全小写>`。 */
 const toOmpName = (claudeName) => {
@@ -40,6 +41,39 @@ describe('omp 车道闸（.omp/config.yml·与 .claude/settings.json 对等）',
   it('闸文件存在且非空——被删/被清空即红（此前无人看守，是原病灶旁的同病灶）', () => {
     expect(existsSync(OMP_CFG), '.omp/config.yml 缺失——omp 车道的 MCP 写工具与部署命令闸没了').toBe(true)
     expect(readFileSync(OMP_CFG, 'utf8').trim().length).toBeGreaterThan(0)
+  })
+
+  // ── 白名单（fail-closed）那一半（2026-08-02 老板拍板「反过来」）──
+  // 为什么需要：deny 名单天生 fail-open——未列名＝放行，server 升级多出一个写工具就自动不受管，
+  // 而且**不会有任何提示**。实测 omp 的 tools.approval 是精确名匹配、不支持 `"*": deny` 通配默认拒
+  // （已验：写了 `"*": deny` 后 glob 照样能用），故配置层做不出默认拒。补法＝全量工具册 + 本组断言：
+  // 「册里每个非只读工具都必须有显式 deny」，未分类/新出现的工具即红，由人分类后才能过。
+  it('cloudbase 全量册的每个非只读工具都有显式 deny——未分类即红（fail-closed 的机器半边）', () => {
+    const reg = JSON.parse(readFileSync(TOOL_REGISTRY, 'utf8'))
+    const cfg = readFileSync(OMP_CFG, 'utf8')
+    const overlap = reg.read.filter((t) => reg.write.includes(t))
+    expect(overlap, `工具册自相矛盾：这些既在 read 又在 write：${overlap.join(', ')}`).toEqual([])
+    // 钉总数：只核「write 册每条有 deny」的话，把某条从册里整条删掉即可静默缩小受检集合
+    // （本批反向自检 W② 当场发现守卫对此不咬，故补此条）
+    expect(
+      reg.read.length + reg.write.length,
+      `工具册条目数（read ${reg.read.length} + write ${reg.write.length}）≠ 钉版实测总数 ${reg._totalTools}——有人删了条目或 server 换了版本`
+    ).toBe(reg._totalTools)
+    expect(new Set([...reg.read, ...reg.write]).size, '工具册有重复条目').toBe(reg._totalTools)
+
+    const missing = reg.write.filter(
+      (t) => !new RegExp(`^\\s*mcp__cloudbase_${t}\\s*:\\s*deny\\s*$`, 'm').test(cfg)
+    )
+    expect(missing, `这些非只读工具没有 deny（fail-open 缺口）：${missing.join(', ')}`).toEqual([])
+  })
+
+  it('工具册与 .mcp.json 的钉版一致——server 升版即红，逼人重新枚举再分类', () => {
+    const reg = JSON.parse(readFileSync(TOOL_REGISTRY, 'utf8'))
+    const mcp = readFileSync(resolve(ROOT, '.mcp.json'), 'utf8')
+    expect(
+      mcp.includes(`@cloudbase/cloudbase-mcp@${reg._pinnedVersion}`),
+      `.mcp.json 的 cloudbase 版本与工具册钉版（${reg._pinnedVersion}）不符——新版可能多出未分类的写工具，须重新 tools/list 枚举后更新 ${'tests/fixtures/cloudbase-mcp-tools.json'}`
+    ).toBe(true)
   })
 
   it('两车道 deny 名单逐条同步——期望值由 Claude 那份自动推导，不手抄第二份清单', () => {
