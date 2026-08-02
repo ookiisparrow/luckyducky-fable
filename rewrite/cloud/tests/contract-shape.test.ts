@@ -1,12 +1,23 @@
-// mp↔cloud 响应契约键集合哨兵（批B10·守卫 rw-app-response-contract·病根#5 手抄副本漂移 + #8 编译绿≠契约没漂）。
+// mp↔cloud 响应契约键集合哨兵（批B10 立·W1 收官扩至全覆盖·守卫 rw-app-response-contract·
+// 病根#5 手抄副本漂移 + #8 编译绿≠契约没漂）。
 // 目的：mp 物理进不了 @ldrw/shared（微信开发者工具编译限制），响应形状全靠手抄——cloud 改键 mp 编译
-// 不红＝静默漂移面。本文件对钱链/学习链 5 热 action（createOrder/pay/getMyOrders/getOrderById/
-// getPlaybackUrl）的成功响应做 Object.keys 排序全等断言：增键/删键/改名都红，覆盖编译锁的盲区
-// （加键 TS 宽赋值不红；createOrder 的 order:any 展开编译锁无牙）。
-// 本测试红了＝契约动了：先同步 mp 手抄四消费点位——rewrite/mp/lib/payFlow.ts（收银台五参）/
+// 不红＝静默漂移面。本文件对 app 网关 **24 个 action** 的响应做 Object.keys 排序全等断言：增键/删键/
+// 改名都红，覆盖编译锁的盲区（加键 TS 宽赋值不红；createOrder 的 order:any 展开编译锁无牙）。
+// 覆盖面分三批（钱链/学习热链 5 个 → 第二批读 action 4 个 → W1 收官 15 个），**成功态与失败态都锁**：
+// 带闸 action 失败时成功那半的键（list/items/user）会整个消失，mp 裸解构即 undefined，故失败态各自锁。
+// 另有 confirmEnter/applyRefund 两个只作造数驱动被调用（推进状态），它们自身的键集不在本文件锁。
+// 未覆盖（有意）：主力保留的钱链语义面 cancelOrder/confirmReceive，以及悬案 kfBind/submitCheckpointPhoto。
+// 三类裁剪形态决定造数方式（W1 结论·照抄前先分清是哪类）：
+//   ① 零裁剪透传（catalog/content/users/progress·{...doc} 整档下发）→ 键集由**写侧**单向决定，必须
+//      「经真写侧写入 → 网关读回」；测试自造 seed 只锁得住自己的回声。
+//   ② 白名单重建（getPublicFaq/getHelpVideos·逐字段 String() 重造）→ 往 seed 里**下毒**验脏字段进不来。
+//   ③ 零载荷写（trackEvent/submitReview/submitFeedback·恒 ok()）→ 锁「写入字段集 ↔ 零下发」的对照。
+// 本测试红了＝契约动了：先同步 mp 手抄消费点位——rewrite/mp/lib/payFlow.ts（收银台五参）/
 // lib/mapOrders.ts（订单文档）/ lib/playbackCache.ts（r.url）/ pages/order-list/order-list.ts
-// （nextCursor/hasMore）——再同步 rewrite/shared/src/contracts.ts 与本文件期望值。
-// activateCourse 刻意不在此列：app-learning.test.ts 已有整形 toEqual({ok,state,courseId}) 全等断言。
+// （nextCursor/hasMore）/ lib/mapDetail.ts / lib/mapLearning.ts——再同步 rewrite/shared/src/contracts.ts
+// 与本文件期望值。
+// activateCourse 的**首扫成功支**不在此列：app-learning.test.ts 已有整形 toEqual({ok,state,courseId})
+// 全等断言；本文件只补它的 mine 支与三个失败态（见下方 W1·B 批那条用例）。
 import { describe, it, expect, beforeEach, afterEach } from 'vitest'
 import cloud, { control } from 'wx-server-sdk'
 import { main as app } from '../src/functions/app/index'
