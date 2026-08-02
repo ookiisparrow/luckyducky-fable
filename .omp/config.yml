@@ -1,0 +1,58 @@
+# omp 车道的 MCP/部署闸（2026-08-02 立·与 .claude/settings.json permissions.deny 对等）
+#
+# 为什么需要这个文件：`.mcp.json` 是**两个代理共用**的挂载清单，cloudbase/wechat-devtools 的生产写工具
+# 对 Claude 与 omp 同时可见。但 deny 名单是**各家自己的 schema**——Claude 读 `.claude/settings.json` 的
+# `permissions.deny`，omp 读本文件的 `tools.approval`。此前只有 Claude 侧有闸，omp 侧 `tools.approval` 是
+# 空的（实测 `omp config get tools.approval` → {}），18 个 cloudbase 写工具（含云函数部署/静态托管/产库
+# 直写/权限修改/任意云 API 直通）在 omp 车道**只有 AGENTS.md 纸面禁令拦着，没有任何机器闸**。
+# 而守卫 `mcp-write-tools-denied` 只核 `.claude/settings.json`，故它一路全绿 —— 病根#16「守卫绑定漂移·
+# 空样本＝绿」的活体实例：多了一条车道，守卫指着的那份名单就不再覆盖现实。
+#
+# 名字对不上会静默失效（本文件最容易踩的坑）：
+#   Claude 侧 `mcp__cloudbase__manageFunctions`（双下划线 + 驼峰）
+#   omp  侧 `mcp__cloudbase_managefunctions`（单下划线 + 全小写）
+# 直接把 Claude 那 26 条粘过来，**每一条都匹配不上**、闸等于没装。下方名字取自 omp 实测 tools/list。
+#
+# 本文件不新增政策，只是把用户已拍板的那 26 条搬到缺闸的车道；改动须与 `.claude/settings.json` 同批。
+# deny 在任何 approval 模式（含 yolo）下优先级最高。
+
+tools:
+  approval:
+    # —— cloudbase 18 条（本会话实测均已挂载·逐条与 Claude 侧 deny 对齐）——
+    mcp__cloudbase_envdomainmanagement: deny
+    mcp__cloudbase_manageenv: deny
+    mcp__cloudbase_writenosqldatabasestructure: deny
+    mcp__cloudbase_writenosqldatabasecontent: deny
+    mcp__cloudbase_modifydatamodel: deny
+    mcp__cloudbase_managepgdatabase: deny
+    mcp__cloudbase_managemysqldatabase: deny
+    mcp__cloudbase_managefunctions: deny
+    mcp__cloudbase_managehosting: deny
+    mcp__cloudbase_managestorage: deny
+    mcp__cloudbase_managecloudrun: deny
+    mcp__cloudbase_managegateway: deny
+    mcp__cloudbase_manageappauth: deny
+    mcp__cloudbase_manageapps: deny
+    mcp__cloudbase_managepermissions: deny
+    mcp__cloudbase_manageagents: deny
+    mcp__cloudbase_downloadtemplate: deny
+    mcp__cloudbase_callcloudapi: deny
+    # —— wechat-devtools 8 条（本会话未挂载，但 .mcp.json 在册·先备着，挂上即生效）——
+    mcp__wechat-devtools_upload: deny
+    mcp__wechat-devtools_cloud_fn_deploy: deny
+    mcp__wechat-devtools_cloud_fn_inc_deploy: deny
+    mcp__wechat-devtools_cloud_db_write_doc: deny
+    mcp__wechat-devtools_cloud_db_write_struct: deny
+    mcp__wechat-devtools_cloud_manage_storage: deny
+    mcp__wechat-devtools_project_remove: deny
+    mcp__wechat-devtools_quit: deny
+
+# 裸部署命令机器闸（交接步1 列为「正式切换前置」的那条·此前只有 AGENTS 纸面铁律）。
+# deny 规则对复合命令按**分段**匹配，`cd x && tcb deploy` 同样拦得住（omp settings 文档明载）。
+# 部署仍是人工授权动作：要放行时由人临时 `--config` 覆盖或走 deploy-fns 自带的 DEPLOY_ALLOWED 闸。
+bash:
+  patterns:
+    - match: "tcb *"
+      approval: deny
+    - match: "wechatide *"
+      approval: deny
