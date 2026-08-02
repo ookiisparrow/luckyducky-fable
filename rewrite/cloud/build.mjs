@@ -24,6 +24,7 @@ import {
   existsSync,
 } from 'node:fs'
 import { join, resolve, basename } from 'node:path'
+import { execFileSync } from 'node:child_process'
 
 const ROOT = resolve(import.meta.dirname)
 const FN_ROOT = join(ROOT, 'src', 'functions')
@@ -66,6 +67,26 @@ const OPENAPI_PERMS = [
 const fns = collect()
 if (existsSync(OUT)) rmSync(OUT, { recursive: true })
 
+// 构建戳（工业级缺口③·release provenance）：产物必须能回答「这是从哪个提交构建的、构建时工作区干不干净」。
+// 此前全仓零构建戳，线上版本只能靠人眼比对打包文件名哈希、生产状态记在待办本散文里。
+// 只写元数据、不改任何函数源码 ⇒ 对运行时零风险；随 dist 一起上云，部署后仍可查。
+// dirty=true 意味着**用未提交的代码构建**（经典工业事故），这里如实留痕而不是拦——拦属部署闸的职责。
+const stamp = (() => {
+  const git = (args) => {
+    try {
+      return execFileSync('git', args, { cwd: ROOT, encoding: 'utf8' }).trim()
+    } catch {
+      return '' // 非 git 环境/无 git ⇒ 记空，不让构建因取不到元数据而失败
+    }
+  }
+  const sha = git(['rev-parse', '--short', 'HEAD'])
+  return {
+    sha: sha || 'unknown',
+    dirty: git(['status', '--porcelain']) !== '', // 工作区有未提交改动
+    builtAt: new Date().toISOString(),
+  }
+})()
+
 for (const fn of fns) {
   const outdir = join(OUT, fn.name)
   mkdirSync(outdir, { recursive: true })
@@ -88,8 +109,7 @@ for (const fn of fns) {
     JSON.stringify(
       {
         name: fn.name,
-        version: '1.0.0',
-        main: 'index.js',
+        version: `0.0.0-${stamp.sha}${stamp.dirty ? '-dirty' : ''}`, // 构建戳随每函数上云（缺口③）
         dependencies: {
           'wx-server-sdk': '~2.6.3',
           ...(usesManager ? { '@cloudbase/manager-node': '^4.2.0' } : {}),
@@ -108,7 +128,13 @@ for (const fn of fns) {
     )
 }
 
+// dist 根一份汇总戳：部署前/后核对「这批产物出自哪个提交」的单一来源。
+writeFileSync(join(OUT, 'BUILD-INFO.json'), JSON.stringify({ ...stamp, functions: fns.map((f) => f.name) }, null, 2) + '\n')
+
 console.log(
   `✅ esbuild 打包 ${fns.length} 个重写线云函数 → rewrite/cloud/dist/：` +
     fns.map((f) => `${f.group}/${f.name}`).join(' · ')
+)
+console.log(
+  `🔖 构建戳 ${stamp.sha}${stamp.dirty ? ' ⚠️ dirty（工作区有未提交改动·部署前请确认这正是你要发的代码）' : ''} @ ${stamp.builtAt}`
 )

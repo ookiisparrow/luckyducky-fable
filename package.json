@@ -34,7 +34,8 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "coverage": "vitest run --coverage",
-    "check": "npm run check:structure && npm run typecheck && npm run lint && npm run test"
+    "check": "npm run check:structure && npm run typecheck && npm run lint && npm run test",
+    "health": "node scripts/health-report.mjs"
   },
   "devDependencies": {
     "@cloudbase/manager-node": "^4.2.0",
