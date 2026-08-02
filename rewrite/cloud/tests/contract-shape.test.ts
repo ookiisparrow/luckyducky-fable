@@ -361,4 +361,120 @@ describe('契约键集合哨兵（Object.keys 排序全等·增删改名都红�
     expect(keysOf(empty)).toEqual(['items', 'ok']) // 空态：items 键恒在、值空数组（不是缺键）
     expect(empty.items).toEqual([])
   })
+
+  // ── 第三批扩面（战役工单 W1·B 批：学习链 + 用户面五 action）──
+  // users/progress 两个集合的读侧同样**零裁剪透传**（`{...doc}` / `res.data` 整档下发），键集由写侧
+  // 单向决定；故一律先走真写入方（login / updateProfile / trackEvent 本身）再读回。
+  // 与 A 批的差别：这批多数带闸（withOpenId + withRateLimit），失败态的键集与成功态**不同形**
+  // （成功的 list/user 键在失败时整个消失），mp 若裸解构就会拿到 undefined——失败态因此也要各自锁。
+  it('login：顶层 [isNew,ok,user]；首登 user 6 键且**不带 unionid**（库里已写·响应是写前快照）；再登才 7 键——锁这条时序契约', async () => {
+    control.reset()
+    control.setOpenId('oNEW')
+    control.setUnionId('uni-1')
+    const first = await call('login')
+    expect(first.ok).toBe(true)
+    expect(first.isNew).toBe(true)
+    expect(keysOf(first)).toEqual(['isNew', 'ok', 'user'])
+    expect(keysOf(first.user)).toEqual(['_id', '_openid', 'avatar', 'createdAt', 'nickname', 'phone'])
+    // 时序契约：storeUnionId 在 ok() 之前写库，但 user 是写前的对象引用——库里有、首登响应里没有。
+    // 这条极易被"顺手改成写完再读回"破坏，破坏后 mp 首登拿到的 user 会多一个键。
+    expect('unionid' in first.user).toBe(false)
+    expect(control.dump('users')[0].unionid).toBe('uni-1')
+
+    const again = await call('login')
+    expect(again.isNew).toBe(false)
+    expect(keysOf(again)).toEqual(['isNew', 'ok', 'user'])
+    expect(keysOf(again.user)).toEqual(['_id', '_openid', 'avatar', 'createdAt', 'nickname', 'phone', 'unionid'])
+  })
+
+  it('login·未登录：[error,ok] 两键——user/isNew 整个消失（mp 裸解构 r.user 会拿 undefined，故失败态也要锁）', async () => {
+    control.setOpenId('')
+    const r = await call('login')
+    expect(keysOf(r)).toEqual(['error', 'ok'])
+    expect(r.error).toBe('NO_OPENID')
+  })
+
+  it('updateProfile：顶层 [ok,user]；user 是整档透传（写侧字段直出用户端网关·如实锁零裁剪）；未知字段丢弃既不入库也不下发；空补丁 [error,ok]', async () => {
+    await call('login') // 先真建档（beforeEach 已 setOpenId('oME')）
+    const r = await call('updateProfile', { nickname: '小鸭', bio: '钩织爱好者', phone: '13800000000', isAdmin: true, hack: '注入' })
+    expect(r.ok).toBe(true)
+    expect(keysOf(r)).toEqual(['ok', 'user'])
+    // login 建档 6 键 + bio + updatedAt＝8 键。白名单外的 isAdmin/hack 既不入库也不出网关
+    expect(keysOf(r.user)).toEqual(['_id', '_openid', 'avatar', 'bio', 'createdAt', 'nickname', 'phone', 'updatedAt'])
+    expect('isAdmin' in r.user).toBe(false) // isAdmin 是 withAdminGate 的判定字段——白名单挡住提权自封
+    expect('hack' in r.user).toBe(false)
+    expect(control.dump('users')[0].isAdmin).toBeUndefined()
+    // 零裁剪的另一半如实钉住：_openid 与 phone 确实随本人档下发（mp profile-edit 回填要用）
+    expect(r.user._openid).toBe('oME')
+    expect(r.user.phone).toBe('13800000000')
+
+    const empty = await call('updateProfile', { avatar: 'https://evil.example/x.png' }) // 非 cloud:// 一律剔除 → 补丁空
+    expect(keysOf(empty)).toEqual(['error', 'ok'])
+    expect(empty.error).toBe('EMPTY_PATCH')
+  })
+
+  it('getMyProgress：顶层 [list,ok]；行 7 键由 trackEvent 真写入回读（不是自造 seed）；last 4 键；未登录时 list 键整个消失', async () => {
+    control.seed('qrcodes', [{ _id: 'CODE1', code: 'CODE1', courseId: 'c1', status: 'unused', activatedBy: null, activatedAt: null, createdAt: 1 }])
+    await call('activateCourse', { code: 'CODE1' })
+    await call('confirmEnter', { code: 'CODE1' }) // 未确认进课的进度事件不折叠，必须先进课
+    await call('trackEvent', { type: 'segment_done', targetId: 's1', page: 'player', meta: { courseId: 'c1', lessonId: 'l1', at: 30, dur: 60 } })
+
+    const r = await call('getMyProgress')
+    expect(r.ok).toBe(true)
+    expect(keysOf(r)).toEqual(['list', 'ok'])
+    expect(keysOf(r.list[0])).toEqual(['_id', '_openid', 'courseId', 'createdAt', 'done', 'last', 'updatedAt'])
+    expect(keysOf(r.list[0].last)).toEqual(['at', 'dur', 'lessonId', 'segmentId'])
+    expect(r.list[0].done.s1).toBe(true) // done 是 segmentId→true 的映射对象，不是数组（mp 按此消费）
+    expect(r.list[0]._openid).toBe('oME') // 零裁剪：本人档的 _openid 随行下发（如实锁现状）
+
+    control.setOpenId('')
+    const anon = await call('getMyProgress')
+    expect(keysOf(anon)).toEqual(['error', 'ok']) // 失败态 list 键消失，与成功态不同形
+  })
+
+  it('trackEvent：三条成功路径响应恒 [ok] 零载荷；events 写入 7 键含 _openid 但一个字节都不下发；NO_TYPE/META_TOO_BIG 各 [error,ok]', async () => {
+    // ① 普通事件（只记流水）② 进度事件但未进课（防刷·不折叠，提前 return）③ 进度事件且已进课（折叠写 progress）
+    // ——三条路径都必须同形 [ok]：mp 是 fire-and-forget，服务端刻意不回数据，回什么都算契约变更
+    const plain = await call('trackEvent', { type: 'page_view', page: 'home' })
+    expect(keysOf(plain)).toEqual(['ok'])
+    const notEntered = await call('trackEvent', { type: 'segment_done', targetId: 's1', meta: { courseId: 'c1' } })
+    expect(keysOf(notEntered)).toEqual(['ok'])
+    expect(control.dump('progress').length).toBe(0) // 未进课不折叠（流水仍记）
+
+    control.seed('activations', [{ _id: 'A1', _openid: 'oME', courseId: 'c1', qrcodeId: 'A1', code: 'A1', enteredAt: 111, createdAt: 1 }])
+    const folded = await call('trackEvent', { type: 'segment_done', targetId: 's1', meta: { courseId: 'c1', lessonId: 'l1' } })
+    expect(keysOf(folded)).toEqual(['ok'])
+
+    // 写侧↔下发面对照：库里逐条带 _openid（归属字段），响应零载荷——这是本 action「敏感字段不出网关」的形态
+    expect(keysOf(control.dump('events')[0])).toEqual(['_id', '_openid', 'createdAt', 'meta', 'page', 'targetId', 'type'])
+
+    expect(keysOf(await call('trackEvent', {}))).toEqual(['error', 'ok']) // NO_TYPE
+    expect(keysOf(await call('trackEvent', { type: 'x', meta: { blob: 'a'.repeat(2000) } }))).toEqual(['error', 'ok']) // META_TOO_BIG
+  })
+
+  it('activateCourse：mine 支与三个失败态各自锁键集——他人占用只带 courseId，activatedBy（别人的 openid）绝不出网关', async () => {
+    // 首扫成功支已由 app-learning.test.ts 整形 toEqual 锁死，此处不重复；补的是 mine 支与失败态。
+    control.seed('qrcodes', [{ _id: 'CODE1', code: 'CODE1', courseId: 'c1', status: 'unused', activatedBy: null, activatedAt: null, createdAt: 1 }])
+    await call('activateCourse', { code: 'CODE1' })
+    await call('confirmEnter', { code: 'CODE1' })
+    const mine = await call('activateCourse', { code: 'CODE1' })
+    expect(keysOf(mine)).toEqual(['courseId', 'ok', 'state'])
+    expect(mine.state).toBe('mine')
+
+    control.setOpenId('oOTHER')
+    const taken = await call('activateCourse', { code: 'CODE1' })
+    expect(keysOf(taken)).toEqual(['courseId', 'error', 'ok'])
+    expect(taken.error).toBe('CODE_TAKEN')
+    expect('activatedBy' in taken).toBe(false) // 占用者 openid 不外泄给扫码的陌生人
+
+    expect(keysOf(await call('activateCourse', { code: 'NOPE' }))).toEqual(['error', 'ok']) // 无档：不带 courseId
+
+    // 网关层限流响应形状（throttle.test.ts 锁的是装饰器单测·不经网关）：activateCourse 是 max 10/60s，
+    // 本用例此前已在 oOTHER 名下调过两次，故这里只是"连打到超阈"，不宣称第几次撞——阈值本身是 throttle
+    // 的契约、有它自己的测试，本哨兵只锁撞闸后的响应形状。选它而非 trackEvent（max 60）纯为省调用次数。
+    for (let i = 0; i < 10; i++) await call('activateCourse', { code: '' })
+    const limited = await call('activateCourse', { code: '' })
+    expect(keysOf(limited)).toEqual(['error', 'ok'])
+    expect(limited.error).toBe('RATE_LIMITED')
+  })
 })
