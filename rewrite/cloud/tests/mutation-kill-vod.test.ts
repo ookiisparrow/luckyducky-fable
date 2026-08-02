@@ -144,6 +144,24 @@ describe('signVodPlayUrl（Key 防盗链签名·官方 266/14047·rw-vod-sign-fa
     expect(errLines).toEqual([])
   })
 
+  it('大白话：地址本身自带参数（?v=2）——续参必须用 &；产出双问号=防盗链参数整体失效（后半段被当成前一个参数的值）', async () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(FIXED)
+    seedVod()
+    const raw = 'https://1250000000.vod2.myqcloud.com/dir1/dir2/v.f100240.m3u8?v=2'
+    const r = await signVodPlayUrl(db, raw)
+    const tHex = (TS + 6 * 3600).toString(16)
+    expect(String(r).startsWith(`${raw}&t=${tHex}&us=`)).toBe(true)
+    expect(String(r).split('?')).toHaveLength(2) // 全串只允许一个 ?
+    const u = new URL(String(r))
+    expect(u.searchParams.get('v')).toBe('2') // 原参数不被吃掉（双问号时它会变成 "2?t=…"）
+    const us = u.searchParams.get('us') || ''
+    expect(us).toMatch(/^[0-9a-f]{8}$/)
+    // Dir 取 pathname 不含 query——签名口径与无参地址完全一致（本修只动拼接、不动算法）
+    expect(u.searchParams.get('sign')).toBe(md5hex('pk-test-key' + '/dir1/dir2/' + tHex + us))
+    expect(errLines).toEqual([])
+  })
+
   it('大白话：rawUrl 为空——直接 null，零告警零动静（不当坏 URL 报警、不读库签名）', async () => {
     seedVod()
     const r = await signVodPlayUrl(db, '')

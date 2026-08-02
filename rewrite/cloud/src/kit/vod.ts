@@ -48,7 +48,11 @@ export async function signVodPlayUrl(db: any, rawUrl: string) {
   const sign = createHash('md5')
     .update(playKey + dir + t + us)
     .digest('hex')
-  return `${rawUrl}?t=${t}&us=${us}&sign=${sign}`
+  // 续参分隔符按「地址是否已带 query」定（omp 交接工单#2·P2 潜伏态）：VOD 自适应码流/带参地址一旦
+  // 硬拼 `?` 就产出双问号——`…?v=2?t=…` 里 `t/us/sign` 整段被解析成 v 的值，防盗链参数等于没带（403），
+  // 且签名本身是对的、日志上看不出毛病。Dir 取 pathname 天然不含 query，签名算法不受影响，只改拼接。
+  const sep = rawUrl.includes('?') ? '&' : '?'
+  return `${rawUrl}${sep}t=${t}&us=${us}&sign=${sign}`
 }
 
 // ── 批2：上传签名 + 服务端 API（决策§31 转码管线批2）─────────────────────────
