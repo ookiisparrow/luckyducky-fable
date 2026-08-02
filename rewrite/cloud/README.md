@@ -28,19 +28,6 @@ tests/         各域测试 + kit 原语 + 契约哨兵（contract-shape.test.ts
 - `flow.ts` 微信退款单号契约（`out_refund_no` 字符集转换·平台接缝）· `wxpay.ts` 微信支付商户接缝（签名/请求）· `reconcile.ts` 对账原语
 - `secureConfig.ts` 敏感凭证单源读取（DB 优先 env 兜底）· `contentsec.ts` 内容安全接缝 · `shipping.ts` 发货信息上传接缝 · `storage.ts` 云存储换 URL 收口 · `vod.ts` 视频点播封装 · `wecom.ts` 企业微信封装 + 客服发送/媒体下载高层助手（`kfSendText`/`kfFetchMedia`·2026-07-23 拓扑收编批）· `csAccess.ts` 外包客服会话访问闸 · `index.ts` 桶导出
 
-## 红线（动前必读 `CLAUDE.md` §4）
+## 钱链文件点名
 
-**钱链文件**（modules.json 里 orders 模块 tier=red·改动=工头级）：`app/actions/orders.ts` · `callbacks/*` · `timers/closeExpiredOrders.ts` · `timers/billReconcile.ts` · `adminApi/actions/refunds.ts`。
-铁律：写库必过 kit 闸；价格/数量/openid/订单状态一律云端校验不信前端；两个网关对未知 action fail-closed。
-
-## 常用命令
-
-```bash
-npm run build:rw-cloud                        # 构建（esbuild·产物 rewrite/cloud/dist/）
-npx vitest run --project rw                   # 本包测试
-DEPLOY_ALLOWED=1 node scripts/deploy-fns.mjs  # 部署＝人工授权动作（经 guard-deploy 闸）
-```
-
-## 模块归属
-
-某 action/文件属哪个业务模块、什么危险档 → 查仓根 `modules.json`（守卫 `module-registry-complete` 焊死不重不漏）。
+modules.json 里 orders 模块 tier=red·改动=工头级：`app/actions/orders.ts` · `callbacks/*` · `timers/closeExpiredOrders.ts` · `timers/billReconcile.ts` · `adminApi/actions/refunds.ts`。

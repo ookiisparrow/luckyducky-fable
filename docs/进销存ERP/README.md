@@ -1,7 +1,7 @@
 # 进销存 ERP（供应链）
 
-> **这是什么**：本文件夹 = 「进销存 ERP」子项目的**活文档家**（需求定稿/施工蓝图/进度）。用户 2026-07-02 从需求出发逐条拍板后确立本线；范围＝**进销存最小闭环**（采购/外协→原料账→按模板组装→成品账→发货核销），非全套 ERP（财务凭证/多仓/批次效期 明确不做·CLAUDE §7 防过度工程）。
-> 需求登记：`../需求清单.md` R31。
+> **这是什么**：本文件夹 = 「进销存 ERP」子项目的**活文档家**。用户 2026-07-02 从需求出发逐条拍板后确立本线；范围＝**进销存最小闭环**（采购/外协→原料账→按模板组装→成品账→发货核销），非全套 ERP（财务凭证/多仓/批次效期 明确不做·防过度工程）。
+> 需求登记：`../需求清单.md` R31。**当前状态：建成上线·挂起按需**（终态见下）。施工蓝图已退役（2026-08-02 文档大清理批·仍准的两块并入本文·git 历史即归档）。
 
 ## 一句话
 
@@ -15,31 +15,30 @@
 - **核销**：沿用「下单即扣成品库存防超卖」现有机制（不改钱链热路径）；发货动作核对实发=订单数并写流水留痕——「如实核销」靠流水可查兑现。
 - **激活码交叉核对（可选后置）**：卡片入库数 ↔ 该产品激活码池 unused 数对账（印错/漏印可见·复用现有 qrcodes 线）。
 
-## 板块清单（构成·**状态只看下方进度表**·防双源漂移）
+## 料号命名契约（配方解析依赖·代码即真值 `rewrite/shared/src/scmKey.ts`）
 
-| 批 | 板块 | 自包含构成 |
-|---|---|---|
-| SCM-0 | 地基：主档 + 两本账接缝 | 7 新集合登记 + 接口五门（蓝图§3）+ `scm.spec.ts` 状态机声明 + 物料/供应商主档 CRUD + admin 物料页（含**期初盘点/调整**） |
-| SCM-A | 采购线 | `purchaseOrders` 状态机 + 到货入库 + admin 采购页 |
-| SCM-B | 外协线 | `outworkOrders` 状态机 + 发料/收料/结算 + admin 外协页 |
-| SCM-C | 配方组装线 | 模板/`bomProfiles` 管理 + `assemblyOrders` 执行（扣原料·入成品）+ admin 配方/打包页 |
-| SCM-D | 计划核销线 | 备货计算器（目标套数→采购/外协缺口清单）+ 发货核销流水 + 激活码对账（可选） |
-| SCM-Z | 整合收尾 | master 登记面并集 + 部署 + 真单验收 |
+毛线 `yarn:<color>:<L|M|S>:<raw|knotted>`（knotted 仅 L 档）；产品专属件 `pkg:<productId>` / `card:<productId>`；共用辅料语义名（`stuffing` 填充棉/`hook` 钩针/`marker` 记号扣/`needle` 缝针/`keyring` 钥匙扣/`eyes` 眼睛）。建档程序生成、不手拼。
 
-## 进度（**本表＝状态单源**·其他文档只引不抄）
+## 业务动线与对账公式（配方解析单源 `rewrite/shared/src/scmBom.ts` `resolveBom`·纯函数）
 
-| 序 | 批次 | 前置 | 状态 |
-|---|---|---|---|
-| 1 | SCM-0 地基（master 串行·先） | 无 | ✅ 代码完成（2026-07-02·`feat/scm-0` 独立 worktree·避让主树 M⑦ CC）：7 集合登记+库权限期望表 · 门1 `kit/scmStock`（applyStockMoves 幂等流水+CAS·主档 uom 锁）· 门2 `scm.spec.ts` 两状态机+gen 扩域+对账守卫扩扫 scm\*.ts · 门3 `resolveBom` 纯函数 · 门5 `actions/scmMaterials` 6 action（默认拒仅超管·写类自动审计）· admin「供应链」组+物料/供应商页（期初盘点/调整必留因）· 守卫 +3（结构×2+test×1）反向自检×4 咬红 · 测试 885→911 · **门4 produceStock 纪律修正随车道 C**（蓝图§3）。**✅ 已整合上 main**（2026-07-02·rebase 到 M⑦ 车道B 之上取并集[adminApi import/系统事实计数]·check 全绿 122 守卫/919 测试·main `ba0509a`·tag `scm/0/merged-1`）。**✅ 已部署上线（2026-07-02·用户终端三步全过）**：deploy-fns 14 函数（adminApi+kit 波及钱链/客服·preflight 钱链漂移清零）+ initDb 建齐 7 新集合 + **7 集合全锁 adminonly（tcb permission get 逐一核过）** + smoke（adminApi 非 POST 拒 405/POST_ONLY·getProducts 真数据 ok）。**SCM-0 整线闭环**；剩期初盘点录入（靠人·上线首日）+ 真单真机验随 SCM-Z |
-| 2 | 第一波并行：SCM-A 采购 ‖ SCM-B 外协 | SCM-0 | ✅ 代码完成+已整合（2026-07-02·**两条车道=两个后台 agent worktree 并行**·用户拍板 agent 自驱动）：A=`scmPurchase` 5 action+采购管理页（received 绑门1 幂等入库·totalFen 服务端算·同料重复行拒防撞幂等键·测试+12）；B=`scmOutwork` 6 action+外协加工页（发原团→收带结·payableFen/lossQty 与流转同次条件更新定格·库存不足状态补偿回滚·测试+14）；零新守卫（transitions 对账/单点收口/审计/RBAC 全白捡·各自反向 sanity 咬红过）；master 取并集（ACTIONS/系统事实 87=84+3[顺带校正旧行漏计 14 的 stale]/router/Sidebar/重构日志）·组合态 check 全绿·**✅ 已部署（2026-07-02·用户终端）**：adminApi（manifest diff 仅此 1 函数·钱链漂移清零）+ admin 静态托管 `/admin`（`index-BvgGTHQc.js`·四路径 200·官网完好未被盖）——**进货侧（采购+外协）整线 LIVE** |
-| 3 | 第二波：SCM-C 配方组装 ‖ SCM-D 计划核销 | SCM-0（门3/门4 已在 0 定义） | **C ✅ 代码完成**（2026-07-02·`feat/scm-c`·单 CC 顺做 C→D·避让主树 M⑦ CC）：门4 `produceStock` 随车道长出（kit/inventory 唯一新增出口·CAS 增·无档则建·不限量不翻限量）· `scmBom` 3 action（全局模板存 config `scmBomTemplate`+差异位 bomProfiles·白名单校验镜像门3·带结仅 L）· `scmAssembly` 3 action（门3 解析→**快照冻结**→门1 扣料 all-or-nothing→门4 入成品→assembly_in 留痕·assemblyId 确定性 claim 重放 409）· admin 配方模板/打包组装页（预演用料×库存对照）· 守卫 +1 `bom-snapshot-frozen`（test 型·反向自检×2 咬红）· 测试 950→962 ｜ **D ✅ 代码完成**（同日·`feat/scm-d` 接续 C）：`scmPlanner.getRestockPlan` 只读备货计算器（Σ目标×门3 → 外协缺口[带结不外购·缺口=应发同色 L 原团·派生原团叠回采购口径] + 采购缺口按供应商分列·未建档点名）· `shipOrder` 首次 shipped 流转逐行落 ship 核销流水（fg 行只留痕·确定性 `_id` 幂等·改单号/批量不重记·旧单无 items 不落假流水）· admin 备货计算页 · 守卫 +1 `ship-verify-ledger`（test 型·反向自检咬红）· 测试 962→971 · 激活码对账（可选项）诚实后置随 SCM-Z。**✅ 已整合上 main**（2026-07-02·主树空闲窗 ff `d07efb3`＝worktree 已全绿同一提交·组合态免重验·tag `scm/c/merged-1`+`scm/d/merged-1`）。**✅ 已部署 LIVE（2026-07-02·用户终端两步·CC 核验）**：adminApi 单函数重部（manifest `86d850b812ef`·dry-run 归零·钱链零波及）+ admin 静态托管 `/admin`（`index-DvmXhYRu.js`）·curl 四路径 200 且根仍官网未被盖·smoke ping ok + 错误口令 BAD_KEY fail-closed——**配方/打包/备货 + 发货核销流水 整线 LIVE**（供应链 6 页全上）|
-| 4 | SCM-Z 整合 + 部署 + 真单验收 | A–D | ⬜ |
-| 5 | 工业化批 B1-B3（2026-07-12 战役「ERP+客服完善至工业级」·设计先行 `控制台.pen` D1 屏） | A–D | ✅ 已合入 main（原 worktree `erp-cs-industrial` 分支三批各一 commit）：**B1 分页收口**＝5 列表读走 pageQuery cursor（债#159 勾销·listSuppliers defaultLimit=200 保 picker·listMaterials 刻意全量·评审咬中 kit 复合游标 cursorField=_id 坍缩 P1 调用点拆纯值游标修+350 条危险区回归）+ 前端 4 页加载更多；**B2 供应链总览**＝getScmOverview 只读聚合着陆页（缺料预警/应付未结按织女/在途计数/最近流水·全有界）+ ScmOverview.vue + 守卫 scm-overview-bounded；**B3 批量盘点**＝ScmMaterials 盘点模式（全量快照→录实盘→差异预览→只交非零行·复用 adjustStock adjustId 幂等·评审 P1「failed 行改值×同键静默丢差异」修法=提交过即锁行）。测试 1666→1701 段内 |
-| 靠人 | 控制台锁 7 新集合仅管理端 · **期初盘点录入**（不录=账实必偏·工具已备（批量盘点模式·批 B3·ScmMaterials 内一屏批量录实盘→差异预览→复用 adjustStock 幂等键一次提交）·实际录入仍靠人）· 真单真机验（根因#8）· 模板数值/单价由用户在 admin 填 | 随批 | ⬜ |
+```
+采购单 received ──purchase_in──▶ 原料账（materials.stock）
+最大团原团(按色) ──issued:outwork_issue──▶ 织女在制 ──delivered:outwork_receive──▶ 带结团入库 + payableFen 应付 ──▶ settled 销账
+组装单（产品×N套） ──assembly_out（按 bomSnapshot 扣料）──▶ assembly_in ──▶ 成品账（inventory·现有）
+订单下单即扣（现有防超卖·热路径不加写） ──▶ shipOrder 首次 shipped 流转落 ship 流水核销留痕
+备货计算器（只读）：目标套数 × resolveBom → 对比库存 → 采购缺口（按供应商分列）+ 外协缺口
+```
+
+对账公式：原料侧 Σ流水 ⇄ `materials.stock`；成品侧 Σ(assembly_in/ship/adjust 流水) + orders 预留 ⇄ `inventory.stock`（下单预留**刻意不写**流水——钱链热路径不加写，orders 本身即那笔账的单据）。
+
+## 终态（建成上线·挂起按需）
+
+- **SCM 全线已在 `rewrite/` 线重建为生产源**：原料账单点 `rewrite/cloud/src/kit/scmStock.ts`（确定性流水幂等+CAS）· action 面 `actions/scmMaterials|scmPurchase|scmOutwork|scmBom|scmAssembly|scmPlanner|scmOverview.ts` · admin「供应链」组页面（含批量盘点模式）· 状态机声明 `rewrite/shared/src/scm.ts`（手改单源）· 守卫 `rw-scm-transitions-declared` / `rw-scm-ledger-idempotent` / `rw-scm-golden` 在册。
+- **未闭环（靠人）**：SCM-Z 真单验收（一单真采购→入库→发料→收带结→打包→下单→发货，全链流水对得上才算通·根因#8）+ **期初盘点录入**（不录=账实必偏·工具已备）+ 模板数值/单价由用户在 admin 填。
+- 建设过程账（旧线五车道 2026-07-02 全完工与新线迁建明细）见 git 历史。
 
 ## 指针（单源·不重抄）
 
-- **领域模型/接口收束/守卫候选/车道拆分**：`施工蓝图.md`
-- **多 CC 并行机制（通用·worktree 隔离/git tag 自动中继/整合纪律/CC 冷启动工单）**：`../后台360工作站/并行工作流.md`——本线只定车道内容（蓝图§4）、机制不重抄
-- **需求正册**：`../需求清单.md` R31 · **接口/集合客观事实**：`../系统事实.md`
-- **成品账现有实现（原料账的镜像先例）**：`rewrite/cloud/src/kit/inventory.ts`（守卫 `rw-scm-ledger-idempotent` + 黄金测试 `app-scm.test.ts`；旧线 packages/ 路径与 `stock-atomic-conditional` 已随 2026-07-23 瘦身批退役）
+- **需求正册**：`../需求清单.md` R31 · **接口/集合**：代码即真值（钥匙卡 `../系统事实.md`）
+- **成品账现有实现（原料账的镜像先例）**：`rewrite/cloud/src/kit/inventory.ts`（守卫 `rw-scm-ledger-idempotent` + 黄金测试 `app-scm.test.ts`）
+- **多 CC 并行机制**：已并入 `.claude/skills/workflow-fanout/SKILL.md` 模式C

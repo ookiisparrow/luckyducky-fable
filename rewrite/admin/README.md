@@ -3,7 +3,7 @@
 > **为什么靠人**（根因#8）：后端 action 全集（单源 `rewrite/cloud/src/functions/adminApi/index.ts` ACTIONS 注册表·计数由守卫焊在 `docs/系统事实.md`，此处不手抄）有全量测试盯着，但「真登录真操作顺不顺手」只有人验得了。本手册 = M3 验收的人工半边。
 >
 > **本机启动**：`cd rewrite/admin && npm run dev` → 浏览器开提示的地址 → 用管理口令登录。
-> **在线部署**：`npm run build` 产物传静态托管**正式路径 `/admin`**（2026-07-09 M5 切换起为线上唯一版本·并行期 `/admin2` 已退役）；部署前先清空旧目录防哈希堆积（`tcb hosting delete admin --dir --yes` 再 deploy·坑见 `docs/云开发参考.md`）。部署是用户动作。
+> **在线部署**：构建产物传静态托管**正式路径 `/admin`**，清空再传/入口哈希核验纪律见 `docs/运维手册.md` §1.2；部署是用户动作。
 
 ## 运营九类动作演练清单（照做一遍 ✅/❌）
 

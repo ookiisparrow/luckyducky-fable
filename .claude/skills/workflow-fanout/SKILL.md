@@ -47,5 +47,14 @@ description: Use when 要用 Workflow 多 agent 并行编排干一大片同构�
 - **批间串行**：同一 worktree 的多批不可并发——边界断言 `git status` 会把别批改动误判越界；提交一批再发下一批。
 - **交付形态**：后台 job = worktree 分支多批多 commit + PR；合并用 rebase/merge commit **不用 squash merge**（保批次账一事一行）；用户自己的插件/设置类未提交改动列入边界断言 `ignore` 且不 add。
 
+## 模式C：多 CC 并行（多个人工启动的 Claude Code 会话·非 Workflow agent）
+
+> 源自客服/ERP 建设线实证（原《后台360工作站/并行工作流.md》2026-08-02 并入本节退役·全文见 git 历史）。适用：活太大要多个独立 CC 会话分线推进，且人不当中继（人转达状态会漂·该机器化——2026-06-30 用户拍板）。
+
+- **车道=自包含板块**：切分边界按板块清单（自包含+禁互 import），一 CC 一组相关板块；地基（框架/守卫/共同契约）master 串行先行，没好不开并行（否则各造一套=整合灾难）。
+- **物理隔离**：每车道一棵 git worktree、各自 `npm install`（错题本 E11）；master 树唯一上 main。
+- **自动中继靠 git tag**：车道 `npm run check` 绿 → push `feat/<线>-<lane>` → `git tag <线>/<lane>/ready-<seq>` + push tags；master 跑 /loop 轮询 tag → merge（冲突取并集）→ 全局 check → 绿则 push main + 打 `merged-<n>`，红/解不了则打 `blocked-<n>` 报警转人工（不硬解、不默默卡）。车道下一批前 `git fetch --tags` 看 merged/blocked 决定 rebase 续做还是修。
+- **单源登记面只 master 串行改**（集合注册/ACTIONS/守卫表/进度表/registry 一类冲突热点）：车道只在 ready 信号里「报」要登记什么，master 整合时统一办；禁 `git add -A`/`commit -a`，显式路径 add 自己车道的文件。
+
 ## 验收
 照本 skill 跑完应有：plan 文件（契约+批次勾选）、每批一个 squash commit、flag 清单（待用户定的产品决策）、模式B 另有「round N 零确认」的收敛证据——都拿得出来才算照做了。

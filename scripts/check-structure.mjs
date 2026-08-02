@@ -1759,16 +1759,17 @@ import { PROD_ENV } from './lib/env.mjs'（单源·病根#5·债#30①）`)
     },
   },
   {
-    id: 'agents-entry-present',
+    id: 'readme-identity-current',
     roots: ['#11'],
-    desc: '厂商中立进场入口在位（车队地基批3）：AGENTS.md 是非 Claude 代理的唯一进场手册，须存在且指向三件套——CLAUDE.md（约定单源）/modules.json（模块正册）/npm run check（验收共同语言）。缺文件或缺指针即红（入口断了，外厂模型进场只能瞎摸）',
+    desc: '仓库门面身份卡与现实一致（2026-08-02 文档大清理批·病根#11）：README.md 曾在本仓转正生产源后仍自称「样板房/禁部署」，与现实正相反、误导一切来访者——须声明生产源身份且禁旧身份词残留（原 agents-entry-present 随 AGENTS.md 退役对等换位·用户拍板只用 Claude 单入口）',
     run() {
-      const p = join(ROOT, 'AGENTS.md')
-      if (!existsSync(p)) return ['AGENTS.md 缺失——厂商中立进场入口（非 Claude 代理靠它进场），恢复它']
+      const p = join(ROOT, 'README.md')
+      if (!existsSync(p)) return ['README.md 缺失——仓库门面身份卡（GitHub 落地页），须存在并声明生产源身份']
       const text = readFileSync(p, 'utf8')
       const bad = []
-      for (const need of ['CLAUDE.md', 'modules.json', 'npm run check'])
-        if (!text.includes(need)) bad.push(`AGENTS.md 未指向 \`${need}\`——进场三件套缺一（约定单源/模块正册/验收语言）`)
+      if (!text.includes('生产源')) bad.push('README.md 未声明「生产源」身份——门面必须让来访者第一眼知道本仓部署真实生效')
+      for (const w of ['样板房', '禁部署'])
+        if (text.includes(w)) bad.push(`README.md 含旧身份词「${w}」——与生产源现实相反（前身仓陈稿残留·病根#11）`)
       return bad
     },
   },
