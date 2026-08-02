@@ -41,7 +41,7 @@
    ],
    "source": "docs/关键决策记录.md §3",
    "status": "superseded-for-newline",
-   "note": "反转见 CLAUDE.md §4 多端样式作用面注 + rewrite/mp/README.md"
+   "note": "反转见 rewrite/mp/README.md"
   },
   {
    "id": "决策§4",
@@ -917,7 +917,7 @@
     "automator超时",
     "工具自动更新回归"
    ],
-   "source": "docs/调试日志.md ##S"
+   "source": "git 历史（2026-08-02 退役·史料索引登记） ##S"
   },
   {
    "id": "fable调试-U",
@@ -938,7 +938,7 @@
     "RPC全超时",
     "二次自动更新"
    ],
-   "source": "docs/调试日志.md ##U"
+   "source": "git 历史（2026-08-02 退役·史料索引登记） ##U"
   },
   {
    "id": "免修-课程页失败toast",

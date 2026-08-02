@@ -25,9 +25,9 @@ description: Use when doing any change/batch/audit/fix in the Lucky Ducky 重构
 6. 新增云函数/action → 登记 `modules.json`（`module-registry-complete` 会拦）；新增写库 → 必过 kit 闸（`rw-writes-need-gate` 会拦）；新增敏感云函数 → 加进 `scripts/guard-deploy.mjs` SENSITIVE_FNS。
 
 ## 验证（缺一不可）
-7. `npm run check` 全绿（conventions + structure + typecheck + lint + test）。被拦先修代码、不绕闸。
+7. `npm run check` 全绿（structure + typecheck + lint + test·conventions 已并入 structure）。被拦先修代码、不绕闸。
 8. **反向自检**：临时篡改这批新加的守卫 / 不变量 → 必须红 → 还原 → 绿。证明守卫真在咬、不是摆设。
-9. 碰云产物 / 部署形态：活线 `npm run build:rw-cloud`（旧线参照才用 `build:cloud`）；碰页面：活线 `rewrite/mp` 为原生小程序无 bundler 构建、`npm run typecheck` 即等价校验（旧线页面才跑 `build:h5`）DONE。
+9. 碰云产物 / 部署形态：活线 `npm run build:rw-cloud`；碰页面：活线 `rewrite/mp` 为原生小程序无 bundler 构建、`npm run typecheck` 即等价校验 DONE。
 
 ## 收尾
 10. 直接上本仓 main（本仓不走异步 PR），**一批一个 squash 提交**；信息 `type：中文说明`（type ∈ feat / fix / docs / refactor / chore / test，全角冒号）。

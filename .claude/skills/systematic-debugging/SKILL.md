@@ -20,7 +20,7 @@ description: Use when debugging a bug, failure, flaky test, or unexpected behavi
 
 ## 2. 隔离 + 根因（Isolate → Root cause）
 - 二分夹逼：日志/注释/断点逐步缩小，定位到**具体一行或一个状态**。
-- 追到**结构性根因**，别停在表面现象。问：这属于哪一类？（并发先查后写？状态反查窄化？信任边界？回退双路径？金额浮点？——对照 `docs/根因账本.md` 十二类病根）
+- 追到**结构性根因**，别停在表面现象。问：这属于哪一类？（并发先查后写？状态反查窄化？信任边界？回退双路径？金额浮点？——对照 `docs/根因账本.md` 病根清单（计数以账本为准·别手抄））
 - 形成**可证伪的假设**再验证；一次只改一处，别同时动多处碰运气。
 
 ## 3. 修复 + 守卫（Fix + Guard）—— 本项目铁律
@@ -37,6 +37,6 @@ description: Use when debugging a bug, failure, flaky test, or unexpected behavi
 - 目的不是记 bug 本身，是**追到根因、顺出同类、让这类 bug 机器永久拦**。
 
 ## 收尾验证
-- 跑 `npm run check`（conventions + structure + typecheck + lint + test 全绿）再算关账。
+- 跑 `npm run check`（structure + typecheck + lint + test 全绿·conventions 已并入 structure）再算关账。
 
 > 一句话：复现 → 根因 → 修复带守卫 → 记账。**没复现别改，没反向自检别算修完。**
