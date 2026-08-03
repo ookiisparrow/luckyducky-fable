@@ -20,9 +20,9 @@
 import { execSync } from 'node:child_process'
 import { readdirSync, readFileSync, writeFileSync, existsSync } from 'node:fs'
 import { join, resolve } from 'node:path'
-import { createHash } from 'node:crypto'
 import { PROD_ENV as ENVID } from './lib/env.mjs' // 生产 env id 单源（病根#5·债#30①）
 import { deployTargets } from './lib/deploy-aliases.mjs' // 产物→云函数名映射单源（adminApi 产物亦部署为 adminApiV2·病根#16）
+import { hashFnDist } from './lib/deploy-drift.mjs' // 产物 hash 单源（preflight 同源·2026-08-03 收口镜像实现）
 
 const ROOT = resolve(import.meta.dirname, '..')
 const DIST = join(ROOT, 'rewrite/cloud/dist') // 生产线产物（M5 后唯一部署源·勿改回 packages/）
@@ -44,15 +44,11 @@ for (const name of readdirSync(DIST)) {
   const idx = join(DIST, name, 'index.js')
   if (!existsSync(idx)) continue
   // hash 覆盖随产物部署的文件：index.js（恒有）+ config.json（云调用 openapi 权限声明·债#26）
-  // + package.json（rewrite build.mjs 每函数生成·deps 声明——@cloudbase/manager-node 增删也该触发重部署）。
-  // 只算 index.js 会漏判「仅 config/package 变」→ hash 不变 → 不重部署 → 权限/依赖永不生效
-  // （根因#8 部署≠生效·守卫 openapi-perm-declared ③ 锁此）。
-  const h = createHash('sha256').update(readFileSync(idx))
-  for (const extra of ['config.json', 'package.json']) {
-    const fp = join(DIST, name, extra)
-    if (existsSync(fp)) h.update(readFileSync(fp))
-  }
-  cur[name] = h.digest('hex').slice(0, 12)
+  // + package.json 除 version 外（deps 声明——@cloudbase/manager-node 增删也该触发重部署；version 是
+  // 构建戳 `0.0.0-<sha>`，参与 hash 会让每次提交都全量重部署、diff 失去分辨力·2026-08-03 回归修复）。
+  // 只算 index.js 会漏判「仅 config/package 变」→ hash 不变 → 不重部署 → 权限/依赖永不生效（根因#8）。
+  // 算法单源＝scripts/lib/deploy-drift.mjs（preflight 与本脚本同一实现，不再各留镜像）。
+  cur[name] = hashFnDist(DIST, name)
 }
 
 // 3. 与已部署清单 diff

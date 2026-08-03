@@ -91,6 +91,59 @@ describe('deploy-drift hashFnDist：产物内容 hash（逐字节镜像 deploy-f
     }
   })
 
+  // 构建戳回归（2026-08-03·omp 评估 R03 由 opus-5 逮到·主力核实）：build.mjs 把提交号写进每函数
+  // package.json.version（`0.0.0-<sha>`），而本 hash 原先吃 package.json 全文 → **每次提交号一变，
+  // 13 个函数 hash 全变**，「变更待部署 N 个」恒等于全量、再分不出谁真改了。而这条 hash 机制当初正是
+  // 为治「假报 0 个」而建（deploy-fns.mjs 头注：app 函数落后 git 半月无人察觉）——从漏报变成全是噪音，
+  // 两种失效方式都等于没有信号。故 version 字段排除在 hash 外；deps/其余字段照旧参与（下一条锁）。
+  it('index.js 不变、只改 package.json 的 version（构建戳）→ hash 不得变（否则部署 diff 恒等全量）', () => {
+    const dist = mkTmp()
+    try {
+      mkdirSync(join(dist, 'foo'), { recursive: true })
+      writeFileSync(join(dist, 'foo', 'index.js'), 'exports.main = () => 1')
+      writeFileSync(join(dist, 'foo', 'package.json'), '{"name":"foo","version":"0.0.0-aaaaaaa","dependencies":{}}')
+      const h1 = hashFnDist(dist, 'foo')
+      writeFileSync(join(dist, 'foo', 'package.json'), '{"name":"foo","version":"0.0.0-bbbbbbb","dependencies":{}}')
+      const h2 = hashFnDist(dist, 'foo')
+      expect(h2).toBe(h1)
+    } finally {
+      rmSync(dist, { recursive: true, force: true })
+    }
+  })
+
+  it('version 排除不得殃及 deps：只改 dependencies → hash 仍须变（防修过头把依赖漂移也放行）', () => {
+    const dist = mkTmp()
+    try {
+      mkdirSync(join(dist, 'foo'), { recursive: true })
+      writeFileSync(join(dist, 'foo', 'index.js'), 'exports.main = () => 1')
+      writeFileSync(join(dist, 'foo', 'package.json'), '{"name":"foo","version":"0.0.0-aaaaaaa","dependencies":{}}')
+      const h1 = hashFnDist(dist, 'foo')
+      writeFileSync(
+        join(dist, 'foo', 'package.json'),
+        '{"name":"foo","version":"0.0.0-aaaaaaa","dependencies":{"@cloudbase/manager-node":"4.x"}}',
+      )
+      const h2 = hashFnDist(dist, 'foo')
+      expect(h2).not.toBe(h1)
+    } finally {
+      rmSync(dist, { recursive: true, force: true })
+    }
+  })
+
+  it('package.json 不是合法 JSON 时不吞不崩：退回全文 hash（fail-safe·内容变了照样能咬）', () => {
+    const dist = mkTmp()
+    try {
+      mkdirSync(join(dist, 'foo'), { recursive: true })
+      writeFileSync(join(dist, 'foo', 'index.js'), 'exports.main = () => 1')
+      writeFileSync(join(dist, 'foo', 'package.json'), '{ 坏掉的 json')
+      const h1 = hashFnDist(dist, 'foo')
+      expect(h1).toMatch(/^[0-9a-f]{12}$/)
+      writeFileSync(join(dist, 'foo', 'package.json'), '{ 坏掉的 json 又改了')
+      expect(hashFnDist(dist, 'foo')).not.toBe(h1)
+    } finally {
+      rmSync(dist, { recursive: true, force: true })
+    }
+  })
+
   it('无 config.json/package.json 时不因文件不存在而抛错', () => {
     const dist = mkTmp()
     try {

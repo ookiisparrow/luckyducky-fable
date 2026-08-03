@@ -37,18 +37,35 @@ export function detectDrift(cur, deployed, fns) {
 // 时的算法（index.js 恒有 + config.json 若存在 + package.json 若存在）。index.js 缺失（未构建/函数
 // 不存在）返回 null。
 //
-// 为什么不与 deploy-fns.mjs 抽同一实现：openapi-perm-declared 守卫（scripts/check-structure.mjs·
-// roots ['#12','#8']）用正则原文锚定 scripts/deploy-fns.mjs 自身源码（要求 `'config.json'` 字面
-// 紧邻 `.update(readFileSync` 就长在该文件里），抽出会连带需要改这条守卫的匹配目标，超出本批
-// （盲区体检批5）授权范围——留独立实现，靠两处头注互相指认维持一致；deploy-fns.mjs 若改了 hash
-// 算法，这里也要同步改，见 docs/待办与债.md 的窄债记账。
+// 单源（2026-08-03 收口）：deploy-fns.mjs 部署时直接 import 本函数，不再各留一份镜像实现。原头注写
+// 「不能抽，因为 openapi-perm-declared 用正则原文锚定 deploy-fns.mjs 的 `'config.json'` 字面」——
+// **实测该守卫只锚 rewrite/cloud/build.mjs（OPENAPI_PERMS + config.json 产出），从不读 deploy-fns.mjs**，
+// 那条约束早已不存在（文档失真·同 R02 族）。抽单源后「两处要记得同步改」这条窄债一并消。
+//
+// version 排除的由来（构建戳回归·2026-08-03 omp 评估 R03 由 opus-5 逮到、主力独立核实）：build.mjs 把
+// 提交号写进每函数 package.json.version（`0.0.0-<sha>`），而本 hash 原吃 package.json 全文 → 提交号
+// 一变 13 个函数 hash 全变，「变更待部署 N 个」恒等于全量、再分不出谁真改了；而这条 hash 机制当初正是
+// 为治「假报 0 个」而建（deploy-fns.mjs 头注：app 函数落后 git 半月无人察觉）——漏报变全噪，同样没信号。
+// 故 version 不参与 hash，deps/name/其余字段照旧参与（tests/scripts/deploy-drift.test.js 两条对锁）。
+// 代价（明写）：仅提交号变而产物内容不变时不再触发重部署，线上戳会停在「上次真有内容变更」那一版——
+// 内容仍是对的，只是戳不等于最新 HEAD。要让线上戳恒等 HEAD 得全量重部署换戳，值不值是部署面决策。
+const stripBuildStamp = (buf) => {
+  try {
+    const { version: _stamp, ...rest } = JSON.parse(buf)
+    return Buffer.from(JSON.stringify(rest))
+  } catch {
+    return buf // 非法 JSON：退回全文 hash（fail-safe——宁可多报一次，不能因解析失败静默放行内容变更）
+  }
+}
+
 export function hashFnDist(distRoot, name) {
   const idx = join(distRoot, name, 'index.js')
   if (!existsSync(idx)) return null
   const h = createHash('sha256').update(readFileSync(idx))
   for (const extra of ['config.json', 'package.json']) {
     const fp = join(distRoot, name, extra)
-    if (existsSync(fp)) h.update(readFileSync(fp))
+    if (!existsSync(fp)) continue
+    h.update(extra === 'package.json' ? stripBuildStamp(readFileSync(fp)) : readFileSync(fp))
   }
   return h.digest('hex').slice(0, 12)
 }
