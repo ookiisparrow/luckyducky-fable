@@ -71,6 +71,10 @@ describe('isDocMissing 判据兼容真 sdk 文案（K3 复审）', () => {
     const real = new Error('collection.doc.get:fail Error: cannot find document with _id abc123 in database')
     expect(isDocMissing(real)).toBe(true)
   })
+  it('大白话：真云缺档文案 document.get:fail document with _id X does not exist（errCode -1）也要判定为无档（P0-1）', () => {
+    const real = new Error('document.get:fail document with _id abc123 does not exist')
+    expect(isDocMissing(real)).toBe(true)
+  })
   it('大白话：测试桩字面量仍要判定为无档（回归保护）', () => {
     expect(isDocMissing(new Error('DOCUMENT_NOT_FOUND'))).toBe(true)
   })
