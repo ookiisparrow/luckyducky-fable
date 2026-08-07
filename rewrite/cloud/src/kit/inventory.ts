@@ -70,7 +70,11 @@ async function casDecrement(coll: any, _id: string, qty: number): Promise<boolea
 // 导出仅供测试直打（真 sdk 报错文案没有内存桩可复现，只能对纯函数单测）。
 export const isDocMissing = (e: unknown): boolean => {
   const msg = String((e as any)?.message ?? (e as any)?.errMsg ?? '')
-  return msg === 'DOCUMENT_NOT_FOUND' || /cannot find document/i.test(msg)
+  return (
+    msg === 'DOCUMENT_NOT_FOUND' ||
+    /cannot find document/i.test(msg) ||
+    /does not exist/i.test(msg)
+  )
 }
 
 // 单条 CAS 回补：true=已扣回/无档或不限量（合法不处理）；false=重试耗尽仍未确认写入（回补丢失，调用方需知道）。
