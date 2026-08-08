@@ -80,8 +80,20 @@ const stamp = (() => {
     }
   }
   const sha = git(['rev-parse', '--short', 'HEAD'])
+  // 版本号单源：仓根 package.json（生产定版权在老板，见 scripts/release.mjs）。
+  // 测试部署（deploy-test.mjs）会经 LD_BUILD_VERSION 注入 `X.Y.Z-test.N`；生产构建不带该
+  // 变量 ⇒ version 即正式号。取不到记 'unknown'，不让构建因元数据缺失而失败。
+  let version = 'unknown'
+  try {
+    // 版本单源=仓根 package.json（ROOT 是 rewrite/cloud，仓根上两级）
+    version = JSON.parse(readFileSync(resolve(ROOT, '..', '..', 'package.json'), 'utf8')).version || 'unknown'
+  } catch {
+    version = 'unknown'
+  }
+  if (process.env.LD_BUILD_VERSION) version = process.env.LD_BUILD_VERSION
   return {
     sha: sha || 'unknown',
+    version, // 业务版本号：生产=X.Y.Z；测试=X.Y.Z-test.N（LD_BUILD_VERSION 注入）
     dirty: git(['status', '--porcelain']) !== '', // 工作区有未提交改动
     builtAt: new Date().toISOString(),
   }

@@ -1,6 +1,6 @@
 {
   "name": "luckyducky-fable",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "private": true,
   "description": "Lucky Ducky 重写线（fable）——生产源=rewrite/ 各包（本仓不留旧代码·旧线参照去 next 仓）；共用生产云环境（部署闸 guard-deploy）",
   "engines": {
@@ -35,7 +35,8 @@
     "test:watch": "vitest",
     "coverage": "vitest run --coverage",
     "check": "npm run check:structure && npm run typecheck && npm run lint && npm run test",
-    "health": "node scripts/health-report.mjs"
+    "health": "node scripts/health-report.mjs",
+    "release": "node scripts/release.mjs"
   },
   "devDependencies": {
     "@cloudbase/manager-node": "^4.2.0",
