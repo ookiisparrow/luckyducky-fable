@@ -72,6 +72,18 @@ describe('createOrder · 契约与定价（黄金 orders-money）', () => {
     expect(o.amount).toBe(o.goods - 20) // 券 20·包邮
   })
 
+  it('大白话：商品名服务端来源——前端上送 name 被忽略，订单行快照 products 主数据名（LD-001 契约守卫·病根#3/#8）', async () => {
+    // LD-001（PI 第二意见 2026-08-08）：篡改 orders.ts 商品名写入来源为硬编码串后契约/订单测试全绿＝
+    // 商品名来源无守卫。本用例锁「name 只来自服务端 products 查询结果（byId[p.id]）」——
+    // 篡改成硬编码串或客户端上送字段都必红（价格/封面已有同族来源守卫，name 此前独缺）。
+    control.seed('products', [{ _id: 'pn1', id: 'pn1', name: '守卫锚点·典藏礼盒', price: 88 }])
+    const r = await order([{ id: 'pn1', qty: 1, name: '客户端伪造商品名' }])
+    expect(r.ok).toBe(true)
+    const line = r.order.items.find((i: any) => i.productId === 'pn1')
+    expect(line.name).toBe('守卫锚点·典藏礼盒') // 与 products 主数据一致（硬编码篡改必红）
+    expect(line.name).not.toBe('客户端伪造商品名') // 客户端上送值不得进订单行（改用 l.name 必红）
+  })
+
   it('大白话：库内脏价 fail-closed——主价/SKU 价非法整单拒（历史脏数据不放行）', async () => {
     expect((await order([{ id: 'pBad', qty: 1 }])).error).toContain('BAD_PRICE')
     expect((await order([{ id: 'p2', qty: 1, sku: '脏价' }])).error).toContain('BAD_SKU_PRICE')

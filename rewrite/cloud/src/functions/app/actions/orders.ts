@@ -151,6 +151,8 @@ export const createOrder = withOpenId(
         items.push({
           productId: p.id,
           lineId: lineIdOf(p.id, spec),
+          // LD-001 契约守卫：商品名只认服务端 products 主数据（byId 来自库内查询·不信前端上送）——
+          // 写入来源被篡改（硬编码/客户端字段）时 app-orders.test.ts 的商品名来源用例必红。
           name: p.name,
           spec,
           price,
