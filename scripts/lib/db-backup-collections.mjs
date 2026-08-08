@@ -19,6 +19,7 @@ export const DEFAULT_COLLECTIONS = [
   'checkpoints', // 学习打卡记录，UGC
   'feedback', // 用户反馈，UGC
   'qrcodes', // 权益二维码/核销凭证
+  'wxBills', // 微信支付账单/对账凭证（2026-08-08 补：实测云端有数据 3 条，此前漏备份）
 ]
 
 // 明文凭证集合（见 rewrite/cloud/src/kit/secureConfig.ts）——默认排除，避免备份文件本身
