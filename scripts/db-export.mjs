@@ -106,10 +106,17 @@ async function main() {
         hadFailure = true
         console.error(`[db-export] ${name} 超时`)
       } else {
-        entry.status = 'fail'
-        entry.error = info.ErrorMsg || `未知失败（Status=${info.Status}）`
-        hadFailure = true
-        console.error(`[db-export] ${name} 失败：${entry.error}`)
+        // 空集合（云端 ErrorMsg「记录条数为0」）是正常现象，不算失败（8/6 首备确认）
+        if (info.ErrorMsg && /记录条数为0|does not exist/i.test(info.ErrorMsg)) {
+          entry.status = 'empty'
+          entry.count = 0
+          console.log(`[db-export] ${name} 空集合（正常，无数据可导）`)
+        } else {
+          entry.status = 'fail'
+          entry.error = info.ErrorMsg || `未知失败（Status=${info.Status}）`
+          hadFailure = true
+          console.error(`[db-export] ${name} 失败：${entry.error}`)
+        }
       }
     } catch (e) {
       entry.status = 'fail'
