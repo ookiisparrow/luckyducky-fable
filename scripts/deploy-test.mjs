@@ -13,7 +13,7 @@
  * 前置：tcb 已登录（tcb login）；脚本会先 npm run build:rw-cloud。
  * 注：tcb 命令以你本机 tcb 版本为准——flag 对不上就按上面 tcb 报错改本脚本那一行。
  */
-import { readdirSync, existsSync } from 'node:fs'
+import { readdirSync, existsSync, readFileSync } from 'node:fs'
 import { execSync } from 'node:child_process'
 import { join, resolve } from 'node:path'
 import { PROD_ENV } from './lib/env.mjs' // 生产 env id 单源（病根#5·债#30①）·禁部署
@@ -35,8 +35,21 @@ if (env === PROD_ENV) {
   process.exit(1)
 }
 
+// 版本号管理（2026-08-08 老板拍板）：测试部署自动标 `X.Y.Z-test.N`
+// N = git 提交总数（同仓同历史 ⇒ 稳定递增）；经 LD_BUILD_VERSION 注入 build.mjs stamp，
+// 落 BUILD-INFO.json + 每函数 package.json.version ⇒ 测试环境"跑的是哪版"机器可答。
+let pkgVersion = '0.0.0'
+try {
+  pkgVersion = JSON.parse(readFileSync(join(ROOT, 'package.json'), 'utf8')).version || '0.0.0'
+} catch {
+  // 读不到就用占位号，不让部署因版本缺失而中断
+}
+const revCount = execSync('git rev-list --count HEAD', { cwd: ROOT, encoding: 'utf8' }).trim() || '0'
+const testVersion = `${pkgVersion}-test.${revCount}`
+console.log(`🔖 测试版本号：${testVersion}（生产正式号 ${pkgVersion}，定版权在老板 scripts/release.mjs）`)
+
 console.log('构建云函数（build:rw-cloud）…')
-execSync('npm run build:rw-cloud', { stdio: 'inherit', cwd: ROOT })
+execSync('npm run build:rw-cloud', { stdio: 'inherit', cwd: ROOT, env: { ...process.env, LD_BUILD_VERSION: testVersion } })
 
 // 函数清单=活线产物目录（与 deploy-fns 同源·dist/<fn>/index.js 存在即一个函数）
 const DIST = join(ROOT, 'rewrite/cloud/dist')
