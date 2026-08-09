@@ -32,6 +32,7 @@ npm run build:rw-admin / build:agent；内容站 npm run build -w @ldrw/site
 5. 收尾记账，一事一本：过程 → `docs/重构日志.md`；状态 → `docs/现状与路线.md`；bug → `docs/调试日志.md`；债/待拍板 → `docs/待办与债.md`；需求变更先改 `docs/需求清单.md` 再动代码。客观计数不手抄（写「以 X 为准」）；过程账过期直接删——git 历史即归档层，退役登记 `docs/史料索引.md`。
 6. **文档写作三纪律**：引用文档一律 `docs/`+实名可 resolve 格式；防御性墓碑（「已删/已退役」注记）要么配守卫要么不写；给本文件加内容先过准入测试——「删了这行，典型会话会变差吗」。
 7. 提交 `type：中文说明`（全角冒号，type ∈ feat/fix/docs/refactor/chore/test），main 唯一长期分支、一批一 squash。**部署与提交解耦，永远是人工授权动作**。
+8. **合并纪律：禁止同一 PR 重复 squash merge**。合并前先确认 PR 相对目标分支有实际 diff（`git diff --stat <base>...<head>` 为空=空合并，直接关闭并说明，不重复合并；已推送的空提交在 commit 上留备注说明、不 force-push 改写历史）。
 
 ## 3. 不变量表（设计期先知道，省得白干一轮；违例机器会拦）
 
