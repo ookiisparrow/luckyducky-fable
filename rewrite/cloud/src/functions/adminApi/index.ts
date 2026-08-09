@@ -187,6 +187,85 @@ const ACTIONS: Record<string, (ctx: Ctx) => Promise<any>> = {
   savePayConfig: secureConfig.savePayConfig,
 }
 
+// 方案 b：adminApi 顶层兜底需要按 action 归因，但 action 名本身不带文件名。
+// 这里沿 ACTIONS 的真实 handler 引用反查所属 action 文件，再用模块正册的 adminActionFiles 镜像归因；
+// 未挂载/未匹配的动态 action 保守回 unknown，不影响错误兜底本身。
+const ADMIN_ACTION_MODULE: Record<string, string> = {
+  products: 'shop',
+  content: 'shop',
+  cards: 'shop',
+  orders: 'orders',
+  refunds: 'orders',
+  reconciliation: 'orders',
+  wxbill: 'orders',
+  courses: 'learning',
+  batches: 'learning',
+  agentDesk: 'cs',
+  agents: 'cs',
+  checkpoints: 'cs',
+  conversations: 'cs',
+  csat: 'cs',
+  customer360: 'cs',
+  kb: 'cs',
+  wecomLogin: 'cs',
+  scmAssembly: 'scm',
+  scmBom: 'scm',
+  scmMaterials: 'scm',
+  scmOutwork: 'scm',
+  scmOverview: 'scm',
+  scmPlanner: 'scm',
+  scmPurchase: 'scm',
+  inventory: 'scm',
+  ops: 'ops',
+  configChecklist: 'ops',
+  secureConfig: 'ops',
+  dashboard: 'ops',
+}
+
+const ADMIN_ACTION_FILES: Record<string, Record<string, unknown>> = {
+  products,
+  content,
+  cards,
+  orders: ordersA,
+  refunds,
+  reconciliation,
+  wxbill,
+  courses,
+  batches,
+  agentDesk,
+  agents,
+  checkpoints,
+  conversations,
+  csat,
+  customer360,
+  kb,
+  wecomLogin,
+  scmAssembly,
+  scmBom,
+  scmMaterials,
+  scmOutwork,
+  scmOverview,
+  scmPlanner,
+  scmPurchase,
+  inventory: inventoryA,
+  ops,
+  configChecklist,
+  secureConfig,
+  dashboard,
+}
+
+const ADMIN_ACTION_MODULE_BY_NAME: Record<string, string> = Object.create(null)
+for (const [file, actionModule] of Object.entries(ADMIN_ACTION_FILES)) {
+  const module = ADMIN_ACTION_MODULE[file] ?? 'unknown'
+  for (const [action, handler] of Object.entries(actionModule)) {
+    if (ACTIONS[action] === handler) ADMIN_ACTION_MODULE_BY_NAME[action] = module
+  }
+}
+
+function moduleOfAdminAction(action: string): string {
+  return ADMIN_ACTION_MODULE_BY_NAME[action] ?? 'unknown'
+}
+
 // 能力闸（RBAC·别让单超管裸奔）：受限 action 须 principal 具备对应能力（'*'=全能力）。值可为单 cap 或
 // cap 数组（「任一命中」语义·C4）——数组内任一 cap 命中即放行。
 // 360 读他人全貌/检索＝customer:view；坐席台＝外包最小权 agent:handle（不含动钱/动状态/退款——留商户超管）。
@@ -353,7 +432,16 @@ export const main = async (event: any) => {
     if (shouldAudit(action)) await recordAudit({ action, operator, ip: auditIp, data, ok: auditOk(res) })
     return res
   } catch (e) {
-    if (shouldAudit(action)) await recordAudit({ action, operator, ip: auditIp, data, ok: false, error: 'SERVER_ERROR' })
+    if (shouldAudit(action))
+      await recordAudit({
+        action,
+        module: moduleOfAdminAction(action),
+        operator,
+        ip: auditIp,
+        data,
+        ok: false,
+        error: 'SERVER_ERROR',
+      })
     console.error('adminApi error', action, e)
     return reply(500, { ok: false, error: 'SERVER_ERROR' })
   }

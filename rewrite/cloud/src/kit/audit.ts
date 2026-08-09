@@ -23,6 +23,7 @@ function summarize(data: any): Record<string, unknown> {
 /** 记一条管理端操作审计；**fail-soft——绝不抛错**（审计不反噬业务）。 */
 export async function recordAudit(entry: {
   action: string
+  module?: string
   operator?: string
   ip?: string
   data?: any
@@ -35,6 +36,7 @@ export async function recordAudit(entry: {
       .add({
         data: {
           action: entry.action,
+          ...(entry.module ? { module: String(entry.module).slice(0, 60) } : {}),
           operator: String(entry.operator || 'admin').slice(0, 60),
           ip: String(entry.ip || '').slice(0, 60),
           summary: summarize(entry.data),
