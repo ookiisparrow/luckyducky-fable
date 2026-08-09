@@ -16,6 +16,11 @@ jobs:
     steps:
       - name: 检出代码
         uses: actions/checkout@v4
+        with:
+          # LD-002/003（2026-08-08）：precedent-index-synced 守卫扫描面改为实读 git 史料层
+          # （museum-20260723 归档册 + S/U 退役快照 0103deff）——浅检出缺 tag/历史对象即红，
+          # 必须全量检出（fetch-depth: 0 = 全历史 + 全 tag）。
+          fetch-depth: 0
 
       - name: 安装 Node 20（与本地开发版本一致）
         uses: actions/setup-node@v4

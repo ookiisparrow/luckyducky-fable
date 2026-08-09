@@ -1790,7 +1790,7 @@ import { PROD_ENV } from './lib/env.mjs'（单源·病根#5·债#30①）`)
   {
     id: 'precedent-index-synced',
     roots: ['#11'],
-    desc: '判例索引与四本账同步（车队地基批4·病根#11·「动手前查判例」的机器入口）：docs/判例索引.json 的 decision/rootcause/debuglog(fable) 条数须与 关键决策记录 `## N.`/根因账本 §一 `### N.`/调试日志活档 + 史料索引机读计数锚 的真值计数一致——新决策/病根/调试条目落账后漏编索引即红（nofix 类人工精选·不计数核）',
+    desc: '判例索引与四本账同步（车队地基批4·病根#11·「动手前查判例」的机器入口）：docs/判例索引.json 的 decision/rootcause/debuglog(fable) 条数须与 关键决策记录 `## N.`/根因账本 §一 `### N.`/调试日志三源实读（活档 + museum-20260723 归档册 + S/U 退役快照） 的真值计数一致——新决策/病根/调试条目落账后漏编索引即红（nofix 类人工精选·不计数核；2026-08-08 LD-002/003：废弃史料索引手写计数锚——信手写 19 的空样本=绿，改真读归档册与 git 历史，缺 tag/历史即红）',
     run() {
       const bad = []
       const idxPath = join(ROOT, 'docs/判例索引.json')
@@ -1804,15 +1804,45 @@ import { PROD_ENV } from './lib/env.mjs'（单源·病根#5·债#30①）`)
       }
       const entries = idx?.entries ?? []
       const cnt = (kind) => entries.filter((e) => e?.kind === kind).length
+      // debuglog 真值＝三源实读（不许空样本=绿）：活档 D + museum-20260723 tag 归档册
+      // （`调试日志-fable-结案-至20260713.md`·A~R 入册 17 卷，D 案留活档故不在册）+ S/U 退役前
+      // 最后快照 0103deff（2026-08-02 体检批退役·案文见 git 历史）。任一源读不到即红——无法核
+      // 就是无法核，宁红不拿手写计数凑绿（LD-002 空样本实证：锚点一改写法真值就塌成 1 条）。
+      const gitShow = (rev, path) =>
+        execSync(`git show ${rev}:${path}`, { encoding: 'utf8', maxBuffer: 8 * 1024 * 1024, stdio: ['ignore', 'pipe', 'ignore'], cwd: ROOT })
+      const liveCount = [
+        ...readFileSync(join(ROOT, 'docs/调试日志.md'), 'utf8').matchAll(/^## .+（fable）/gm),
+      ].length
+      let archiveCount = 0
+      try {
+        archiveCount = [
+          ...gitShow('museum-20260723', 'docs/archive/调试日志-fable-结案-至20260713.md').matchAll(/^## .+（fable）/gm),
+        ].length
+      } catch {
+        return ['判例 debuglog 归档册读不到（museum-20260723 tag 缺失）——先 `git fetch origin tag museum-20260723` 再重跑；守卫扫描面=tag 实读，缺样本即红不许空样本=绿（LD-002）']
+      }
+      let retiredCount = 0
+      try {
+        retiredCount = [
+          ...gitShow('0103deff98df6cdea59a04b77795f1b724e1a71b', 'docs/调试日志.md').matchAll(/^## [SU]（fable）/gm),
+        ].length
+      } catch {
+        return ['判例 debuglog S/U 退役快照读不到（0103deff 对象缺失）——本地/CI 检出须含全量历史（CI 用 checkout fetch-depth 0），S/U 2 案真值核不了即红（LD-002）']
+      }
+      const debuglogTruth = liveCount + archiveCount + retiredCount
+      // 史料索引声明数与真值互核（2026-08-08 起：手写计数锚不再当事实源，只做文档同步核——声明漂移即红）
+      const anchor = readFileSync(join(ROOT, 'docs/史料索引.md'), 'utf8').match(/fable 结案调试案例数：\*{0,2}(\d+)\*{0,2}/)
+      if (!anchor || Number(anchor[1]) !== debuglogTruth)
+        bad.push(
+          `史料索引「fable 结案调试案例数」声明 ${anchor ? anchor[1] : '(缺失/不可解析)'} ≠ 三源实读真值 ${debuglogTruth}——文档计数漂移，以机器真值为准改文档（客观计数别手抄·#11）`
+        )
       const truth = {
         decision: [...readFileSync(join(ROOT, 'docs/关键决策记录.md'), 'utf8').matchAll(/^## \d+\./gm)].length,
         rootcause: [
           ...readFileSync(join(ROOT, 'docs/根因账本.md'), 'utf8').split('## 二、')[0].matchAll(/^### \d+\./gm),
         ].length,
-        // fable 案文退役进 git 史料层（第一性原理批）后真值＝活档 + 史料索引机读计数锚：判例是前车之鉴，案文退役教训不退役
-        debuglog:
-          [...readFileSync(join(ROOT, 'docs/调试日志.md'), 'utf8').matchAll(/^## .+（fable）/gm)].length +
-          Number((readFileSync(join(ROOT, 'docs/史料索引.md'), 'utf8').match(/fable 结案调试案例数：(\d+)/) || [0, 0])[1]),
+        // fable 案文退役进 git 史料层（第一性原理批）后真值＝活档 + 归档册 + 退役快照实读：判例是前车之鉴，案文退役教训不退役
+        debuglog: debuglogTruth,
       }
       for (const [kind, want] of Object.entries(truth))
         if (cnt(kind) !== want)
