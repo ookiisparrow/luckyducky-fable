@@ -2815,6 +2815,8 @@ import { PROD_ENV } from './lib/env.mjs'（单源·病根#5·债#30①）`)
         if (!sheet.includes('privacy-agree-btn')) bad.push('privacy-sheet.wxml 缺 privacy-agree-btn 按钮 id——resolve buttonId 对不上')
       }
       // 涉隐私接口页扫描：哪页调隐私接口，哪页 wxml 必挂 <privacy-sheet/>（+ json 注册组件）
+      // 扩守卫面必须同步改这里——曾有 20 接口「扩补此册」注册册死代码误导（LD-007，2026-08-09 已删）。
+      // ⚠️ 守卫范围=下方内联正则（wxml: chooseAvatar/nickname；wx. 接口 6 项：chooseImage/chooseMedia/getUserProfile/getClipboardData/getLocation/saveImageToPhotosAlbum）。
       const PRIV = /open-type="chooseAvatar"|type="nickname"|wx\.(chooseImage|chooseMedia|getUserProfile|getClipboardData|getLocation|saveImageToPhotosAlbum)\b/
       const pagesDir = join(base, 'pages')
       if (existsSync(pagesDir))
@@ -5070,18 +5072,6 @@ function maskStringLiterals(src) {
   }
   return out
 }
-
-// —— 隐私挂载可达性（守卫 privacy-authorize-wired 用·债#25/根因#8）——
-// 微信「涉隐私接口」登记：调用前会触发 onNeedPrivacyAuthorization（全局闸经弹窗放行）。新接口扩补此册。
-const PRIVACY_INTERFACES = [
-  'chooseImage', 'chooseMedia', 'chooseVideo', 'chooseMessageFile',
-  'getLocation', 'chooseLocation', 'choosePoi', 'chooseAddress',
-  'chooseInvoice', 'chooseInvoiceTitle', 'saveImageToPhotosAlbum',
-  'saveVideoToPhotosAlbum', 'getClipboardData', 'startRecord',
-  'getRecorderManager', 'getWeRunData', 'addPhoneContact', 'scanCode',
-  'createCameraContext', 'addPhoneCalendar',
-]
-const PRIVACY_RE = new RegExp('\\b(?:uni|wx)\\.(?:' + PRIVACY_INTERFACES.join('|') + ')\\s*\\(')
 
 // 剥「mp-weixin 不可达」的条件编译块（#ifndef MP-WEIXIN / #ifdef H5|APP… 等），留 mp 可达文本
 // （#ifdef MP-WEIXIN/MP + 未 gate）。宁过勿漏：未 gate 的脚本级调用一律计入（多挂个 PrivacySheet 是无害防御）。
