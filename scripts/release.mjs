@@ -8,7 +8,7 @@
  *   - 只升号+打 tag，不 push、不部署——推送/部署/merge 仍走既有人工流程。
  *   - agent 不碰本脚本的执行（生产定版权在老板）。
  */
-import { readFileSync, writeFileSync } from 'node:fs'
+import { existsSync, readFileSync, writeFileSync } from 'node:fs'
 import { execSync } from 'node:child_process'
 import { join, resolve } from 'node:path'
 
@@ -48,6 +48,18 @@ if (next === cur) { console.error('✗ 版本未变化'); process.exit(1) }
 
 pkg.version = next
 writeFileSync(pkgPath, JSON.stringify(pkg, null, 2) + '\n')
+
+// LD-004：同步 lockfile 顶层 version（版本号单源，以 package.json 为准）
+const lockPath = join(ROOT, 'package-lock.json')
+if (existsSync(lockPath)) {
+  const lock = JSON.parse(readFileSync(lockPath, 'utf8'))
+  lock.version = next
+  if (lock.packages?.['']) {
+    lock.packages[''].version = next
+  }
+  writeFileSync(lockPath, JSON.stringify(lock, null, 2) + '\n')
+}
+
 execSync('git add package.json package-lock.json 2>/dev/null || git add package.json', { cwd: ROOT })
 execSync(`git commit -m "release: v${next}"`, { cwd: ROOT, stdio: 'inherit' })
 execSync(`git tag v${next}`, { cwd: ROOT })
