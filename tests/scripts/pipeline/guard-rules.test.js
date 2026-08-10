@@ -95,3 +95,38 @@ describe("guard-rules bash 重定向写 red 文件", () => {
     expect(bashWritesRedFile("ls -la")).toBe(false);
   });
 });
+
+describe("guard-rules 危险等级标注（老板追加令）", () => {
+  it("不可撤回/影响巨大操作标 critical", () => {
+    const critical = L0_RULES.filter((r) => r.critical).map((r) => r.name);
+    // 删除类（不可撤回）
+    expect(critical).toContain("rm-force");
+    expect(critical).toContain("find-delete");
+    expect(critical).toContain("py-rmtree");
+    expect(critical).toContain("git-reset-hard");
+    // 数据/部署/发布（影响巨大）
+    expect(critical).toContain("db-write");
+    expect(critical).toContain("deploy-prod");
+    expect(critical).toContain("publish");
+  });
+
+  it("git-push 保持普通 L0（可 force-push 恢复, 非最高危）", () => {
+    const push = L0_RULES.find((r) => r.name === "git-push");
+    expect(push).toBeTruthy();
+    expect(push.critical).toBeFalsy();
+  });
+
+  it("critical 规则必须带三要素白话文案", () => {
+    for (const r of L0_RULES.filter((x) => x.critical)) {
+      expect(r.human).toBeTruthy();
+      expect(r.why).toBeTruthy();
+      expect(r.effect).toBeTruthy();
+    }
+  });
+
+  it("critical 数量适度（≤7 条, 避免全标失去区分度）", () => {
+    const n = L0_RULES.filter((r) => r.critical).length;
+    expect(n).toBeGreaterThan(0);
+    expect(n).toBeLessThanOrEqual(7);
+  });
+});

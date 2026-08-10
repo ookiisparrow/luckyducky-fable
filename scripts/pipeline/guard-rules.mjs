@@ -6,26 +6,28 @@
 //   human  = 是什么权限（一句话大白话）
 //   why    = 为什么需要你确认
 //   effect = 通过会怎么样（同意后的后果）
+// 危险等级（老板 2026-08-11 追加令）: critical: true = 最危险/不可撤回/影响巨大——
+//   弹窗必须用 🚨 警告标志醒目标注；其余 L0 用 ⚠️。
 
 // L0: 必须人工确认（herdr blocked 可见）— 弹窗文案 = 三要素
 export const L0_RULES = [
   { name: "rm-force", pattern: /\brm\b[^;|&\n]*(?:\s+-[a-zA-Z]*[fF][a-zA-Z]*|\s+--force|\s+--recursive)/,
-    desc: "强制删除",
+    desc: "强制删除", critical: true,
     human: "强制删除文件或目录（rm -rf 类命令）",
     why: "删除不可恢复。AI 可能误删代码、订单数据等重要文件",
     effect: "命令立即执行，被删的东西永久消失，无法找回" },
   { name: "find-delete", pattern: /\bfind\b[^;|&\n]*\s-delete/,
-    desc: "批量删除",
+    desc: "批量删除", critical: true,
     human: "用 find 命令批量删除文件",
     why: "批量删除范围大，一条命令可能删掉成百上千个文件",
     effect: "匹配到的文件全部被删除，不可恢复" },
   { name: "py-rmtree", pattern: /\b(shutil\.rmtree|os\.remove|os\.unlink)\s*\(/,
-    desc: "Python 删除",
+    desc: "Python 删除", critical: true,
     human: "用 Python 脚本删除文件或整棵目录",
     why: "这是绕过 rm 的另一种删除方式，AI 可能用它删目录树",
     effect: "指定文件/目录整体删除，不可恢复" },
   { name: "git-reset-hard", pattern: /\bgit\b[^;|&\n]*reset[^;|&\n]*--hard/,
-    desc: "Git 硬重置",
+    desc: "Git 硬重置", critical: true,
     human: "Git 硬重置（丢弃工作区所有改动）",
     why: "会丢掉所有未提交的修改，包括刚写好的代码",
     effect: "工作区回到指定版本，未提交的改动全部丢失" },
@@ -35,17 +37,17 @@ export const L0_RULES = [
     why: "代码一旦推上去就进入共享历史，改错会影响整个项目；红区代码推送尤其危险",
     effect: "本地提交推送到 GitHub，远程历史改变，不易撤回" },
   { name: "db-write", pattern: /\b(mongo|mysql|sqlite|cloudbase|tcb|wx-server-sdk)\b.*\b(delete|drop|remove|update|insert|set)\b/i,
-    desc: "数据库写操作",
+    desc: "数据库写操作", critical: true,
     human: "修改数据库里的数据（增、删、改）",
     why: "线上数据（订单、用户）改错无法轻易恢复，可能造成真实经济损失",
     effect: "数据库数据被改动，直接影响线上用户" },
   { name: "deploy-prod", pattern: /((tcb|cloudbase|@cloudbase\/cli|miniprogram-ci|wechatide)[^;|&]*(deploy|upload|preview|functions|storage))|(deploy-fns)/i,
-    desc: "云部署/上传",
+    desc: "云部署/上传", critical: true,
     human: "把云函数部署/上传到云端",
     why: "部署后云端立刻运行新代码，出问题影响所有用户",
     effect: "云端函数更新，线上行为立即改变" },
   { name: "publish", pattern: /(publish|release|提审|上线|rollback|回滚)/i,
-    desc: "发布/回滚",
+    desc: "发布/回滚", critical: true,
     human: "发布、回滚、提审相关操作",
     why: "发布是面向全体用户的动作，提审被拒或发布事故代价很高",
     effect: "版本发布/回滚生效，用户能立即看到变化" },
