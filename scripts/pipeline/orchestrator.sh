@@ -104,10 +104,17 @@ list() {
   "$HERDR" agent list
 }
 
+# P3: 部署到测试环境（排练厅）。调用既有 deploy-test.mjs, TEST_ENV 单源兜底。
+# 生产部署不在此命令——永远走人工授权（AGENTS.md 铁律）。
+deploy_test() {
+  node "$ROOT/scripts/deploy-test.mjs" "$@"
+}
+
 case "${1:-}" in
   freeze) freeze "${2:?LD号}";;
   review-send) review_send "${2:?target}" "${3:?LD号}";;
   archive) archive "${2:?LD号}" "${3:?票名}" "${4:?target}";;
+  deploy-test) shift; deploy_test "$@";;
   list) list;;
   *) echo "用法见文件头"; exit 2;;
 esac

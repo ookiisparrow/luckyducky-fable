@@ -49,4 +49,6 @@ export const COLLECTIONS = {
   // createOrder 幂等键（批E·P1 防网络超时重试双建单）：_id=(openid+客户端幂等键) 确定性哈希，
   // 存 { openid, orderId, createdAt }；建单前 claim、建单后回填 orderId——见 orders.ts createOrder。
   orderIdempotency: 'orderIdempotency',
+  // 反馈通知游标（流水线 P3·意见箱铃铛）：doc('state') 记录上次扫描时间, 防重复推送
+  feedbackNotifyCursor: 'feedbackNotifyCursor',
 } as const

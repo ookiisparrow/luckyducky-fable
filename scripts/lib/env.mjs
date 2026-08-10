@@ -4,3 +4,6 @@
 // 收口此处一份；守卫 prod-env-single-source 锁「scripts/ 里这个 id 只此处定义」。
 // 注：guard-deploy.mjs 的同 id 仅在注释 + 确认消息文案里（非逻辑常量）——故不导入（避动 PreToolUse 钩子 runtime）、守卫豁免它。
 export const PROD_ENV = 'cloudbase-d4gcssqbv06865479'
+// 测试环境 id 单源（流水线 P3·排练厅门牌号·老板 2026-08-11 提供）：
+// deploy-test.mjs 的目标; 与 PROD_ENV 并列收口, 防测试/生产目标漂移。
+export const TEST_ENV = 'yaliceshi-d3get0o7ja6c91f8f'
