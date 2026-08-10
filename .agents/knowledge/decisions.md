@@ -35,3 +35,27 @@
 
 ## 判定
 双票都拒 → 打回修改 → P2.1 修复清单执行
+
+## 条目 PL-001-02
+
+- 时间: 2026-08-11T00:45:00
+- 操作者: main
+- 输入快照 hash: da4ca4a
+- 结论: P2.1 修复后双票复核仍判"不通过"（codex 9 项含严重 / kimi 12 项含 5 严重）
+- 依据: .agents/archives/PL-001-w6p1.md + kimi 完整输出
+- 适用条件: P2 组件
+- 失效条件: P2.2 修复完成且双票复核通过时
+- 置信度: high
+- 来源: B票(codex)+C票(kimi) 双拒
+- 验证状态: 已验证[双票独立审查]
+- 覆盖/推翻原因: -
+
+## 双票交集必修（P2.2）
+
+1. 冻结包不含代码 → B/C 读活仓库（快照失效）→ freeze 用 git archive 打包代码
+2. archive 自动 git commit --no-verify → 污染主仓库历史+绕过复核钩子 → 归档只写文件+sha256, 不自动 commit
+3. guard 硬编码绝对路径 → 不可移植 → 环境变量/相对解析
+4. 正则绕过 (git -C / rm 大写R / find -delete / npx cloudbase / python rmtree) → 补规则
+5. red 文件匹配: codex 说遗漏 + kimi 说 includes 误报 → 精确目录边界匹配
+6. orchestrator 无测试 → 冒烟测试
+7. 归档读取 200 行截断 → 扩到 400 行

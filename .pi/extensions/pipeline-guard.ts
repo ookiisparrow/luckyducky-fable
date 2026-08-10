@@ -1,18 +1,15 @@
 // pipeline-guard.ts — 多模型流水线权限守卫（主控 pi 扩展）
 // 定稿方案 §4 最低约束: 工具白名单 + 关键操作人工确认 + 审计日志
 // 规则表独立于 scripts/pipeline/guard-rules.mjs（项目内受版本控制, 可测试）
+// 路径: 环境变量 PIPELINE_ROOT 覆盖, 默认 ~/luckyducky-fable（可移植）
 // 生效: /reload 或重启 pi
 
 import { appendFileSync, mkdirSync } from "node:fs";
 import { join } from "node:path";
-import {
-  L0_RULES,
-  L1_RULES,
-  matchRules,
-  isRedFilePath,
-} from "/Users/sparrow/luckyducky-fable/scripts/pipeline/guard-rules.mjs";
+import { homedir } from "node:os";
 
-const AUDIT_DIR = "/Users/sparrow/luckyducky-fable/.agents/knowledge";
+const PIPELINE_ROOT = process.env.PIPELINE_ROOT || join(homedir(), "luckyducky-fable");
+const AUDIT_DIR = join(PIPELINE_ROOT, ".agents", "knowledge");
 
 function audit(entry) {
   try {
@@ -24,7 +21,15 @@ function audit(entry) {
   }
 }
 
-export default function (pi) {
+export default async function (pi) {
+  // 动态加载规则表（ESM 静态 import 不支持变量路径）
+  const rules = await import(`${PIPELINE_ROOT}/scripts/pipeline/guard-rules.mjs`).catch(() => null);
+  if (!rules) {
+    console.error("[pipeline-guard] 无法加载 guard-rules.mjs, 守卫未生效");
+    return;
+  }
+  const { L0_RULES, L1_RULES, matchRules, isRedFilePath } = rules;
+
   pi.on("tool_call", async (event, ctx) => {
     const ts = new Date().toISOString();
 

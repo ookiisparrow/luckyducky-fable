@@ -17,11 +17,27 @@ describe("guard-rules L0 危险命令拦截", () => {
 
   it("git reset --hard 拦截", () => {
     expect(matchRules("git reset --hard HEAD~1", L0_RULES)?.name).toBe("git-reset-hard");
+    expect(matchRules("git -C rewrite reset --hard HEAD", L0_RULES)?.name).toBe("git-reset-hard");
     expect(matchRules("git reset HEAD", L0_RULES)).toBeNull(); // 软重置不拦
   });
 
-  it("git push 拦截", () => {
+  it("git push 拦截 (含 -C 变体)", () => {
     expect(matchRules("git push origin main", L0_RULES)?.name).toBe("git-push");
+    expect(matchRules("git -C subdir push origin main", L0_RULES)?.name).toBe("git-push");
+  });
+
+  it("rm 大小写变体拦截", () => {
+    expect(matchRules("rm -fR target", L0_RULES)?.name).toBe("rm-force");
+    expect(matchRules("rm -RF target", L0_RULES)?.name).toBe("rm-force");
+  });
+
+  it("非 rm 删除手段拦截", () => {
+    expect(matchRules("find . -type f -delete", L0_RULES)?.name).toBe("find-delete");
+    expect(matchRules("python -c 'import shutil; shutil.rmtree(\"/\")'", L0_RULES)?.name).toBe("py-rmtree");
+  });
+
+  it("npx cloudbase 部署拦截", () => {
+    expect(matchRules("npx @cloudbase/cli functions:deploy", L0_RULES)?.name).toBe("deploy-prod");
   });
 
   it("数据库写拦截", () => {
@@ -54,6 +70,11 @@ describe("guard-rules red 文件路径", () => {
   it("orders 路径命中", () => {
     expect(isRedFilePath("rewrite/cloud/src/functions/app/actions/orders.ts")).toBe(true);
     expect(isRedFilePath("rewrite/cloud/src/kit/wxpay.ts")).toBe(true);
+  });
+  it("子串误报消除: gateway 不命中 gate", () => {
+    expect(isRedFilePath("rewrite/cloud/src/kit/gateway.ts")).toBe(false);
+    expect(isRedFilePath("rewrite/cloud/src/kit/transitional.ts")).toBe(false);
+    expect(isRedFilePath("rewrite/cloud/src/kit/gate.test.ts")).toBe(true); // 同名测试文件仍命中
   });
   it("非 red 路径不命中", () => {
     expect(isRedFilePath("rewrite/cloud/src/functions/app/actions/identity.ts")).toBe(false);

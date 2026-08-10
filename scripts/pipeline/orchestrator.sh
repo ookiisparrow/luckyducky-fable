@@ -1,31 +1,32 @@
 #!/usr/bin/env bash
 # 多模型流水线编排器 (orchestrator.sh)
-# 定稿方案 §3/§4 最低约束: 交叉验证 + 快照冻结 + 只读审查包 + 不可变归档
+# 定稿方案 §3/§4 最低约束: 交叉验证 + 快照冻结(含代码) + 只读审查包 + 不可变归档
 #
 # 用法:
-#   pipeline.sh freeze <LD号>                冻结快照 + 生成只读审查包 (B/C 只看这个)
+#   pipeline.sh freeze <LD号>                冻结快照(git archive 全代码) + 只读审查包
 #   pipeline.sh review-send <target> <LD号>  发审查任务(指向只读审查包) + 等待 + 归档
-#   pipeline.sh archive <LD号> <票名> <target> 归档 B/C 原始输出 (真 commit, 不可变)
+#   pipeline.sh archive <LD号> <票名> <target> 归档 B/C 原始输出 (写文件+sha256, 不自动 commit)
 #   pipeline.sh list                         列出当前 herdr agent
 #
-# 原则: 审查对象 = 冻结的只读审查包; 原始输出不可变归档; 主控不得改写删减。
+# 原则: 审查对象 = 冻结的只读审查包(含完整代码); 原始输出不可变归档; 不向主仓库自动写 commit。
 
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 ARCHIVES="$ROOT/.agents/archives"
 CONTEXTS="$ROOT/.agents/contexts"
-REVIEW_DIR="/tmp/pipeline-review"
+REVIEW_DIR="${PIPELINE_REVIEW_DIR:-/tmp/pipeline-review}"
 HERDR="${HERDR:-herdr}"
 
-# 只允许安全字符, 防路径穿越 (P2.1-4)
+# 只允许安全字符, 防路径穿越 (P2.1-4): 先校验原始输入, 再过滤
 safe_id() {
-  echo "$1" | tr -cd 'A-Za-z0-9_-'
+  local raw="$1"
+  [[ "$raw" =~ ^[A-Za-z0-9_-]+$ ]] || { echo "❌ 非法 LD (仅允许 A-Za-z0-9_-)" >&2; return 1; }
+  echo "$raw"
 }
 
-# P2.1-1/2: 冻结快照 + 只读审查包
 freeze() {
   local ld raw
-  raw="$1"; ld="$(safe_id "$1")"
+  raw="$1"; ld="$(safe_id "$raw")" || return 1
   [ -n "$ld" ] || { echo "❌ 非法 LD"; return 1; }
 
   local ctx_file="$CONTEXTS/$ld.md"
@@ -36,9 +37,12 @@ freeze() {
   ts="$(date +%Y%m%d-%H%M%S)"
   pkg="$REVIEW_DIR/$ld-$commit"
 
-  rm -rf "$pkg"
+  rm -rf -- "$pkg"
   mkdir -p "$pkg"
-  # 审查包 = 变更上下文 + 快照元数据 (只读副本)
+  # 完整代码快照 (冻结审查对象, B/C 无需访问活仓库)
+  git -C "$ROOT" archive --format=tar HEAD | (cd "$pkg" && tar xf -) 2>/dev/null || \
+    { echo "❌ git archive 失败"; return 1; }
+  # 审查上下文 + 快照元数据
   cp "$ctx_file" "$pkg/context.md"
   {
     echo "snapshot_commit: $commit"
@@ -51,41 +55,43 @@ freeze() {
   echo "{\"ld\":\"$ld\",\"snapshot_commit\":\"$commit\",\"review_package\":\"$pkg\",\"frozen\":\"$ts\"}"
 }
 
-# 发审查任务: B/C 只读审查包
+# 发审查任务: B/C 只读审查包 (含完整代码, 不接触活仓库)
 review_send() {
   local raw_target ld pkg
-  raw_target="$1"; ld="$(safe_id "$2")"
+  raw_target="$1"; ld="$(safe_id "$2")" || return 1
   [ -n "$ld" ] || { echo "❌ 非法 LD"; return 1; }
 
-  # 找最新审查包
   pkg="$(ls -dt "$REVIEW_DIR"/"$ld"-* 2>/dev/null | head -1 || true)"
   [ -n "$pkg" ] || { echo "❌ 无审查包, 先运行 freeze"; return 1; }
+  local commit
+  commit="$(grep '^snapshot_commit' "$pkg/snapshot.txt" | cut -d' ' -f2)"
 
-  local prompt="请对以下变更做独立审查(挑错者角色)。审查材料(只读, 勿修改): $pkg/ 目录
-请先读 context.md 和 snapshot.txt, 再按需访问变更代码(快照 commit: $(cat "$pkg/snapshot.txt" | grep snapshot_commit | cut -d' ' -f2))。
+  local prompt="请对以下变更做独立审查(挑错者角色)。审查材料在(只读, 勿修改): $pkg/
+审查包内含完整代码快照(snapshot_commit: $commit) + context.md + snapshot.txt。
+请只基于审查包内容审查, 不要访问项目活仓库。
 审查要求: 1.独立审查不参考其他审查者 2.每条意见必须结构化{类型,位置,复现,证据,影响,置信度} 3.无意见明确说'通过' 4.按严重程度排序。请用中文回答。"
 
   "$HERDR" agent prompt "$raw_target" "$prompt" --wait --timeout "${REVIEW_TIMEOUT:-600000}" >/dev/null
   archive "$ld" "$raw_target" "$raw_target"
 }
 
-# 归档: 先 visible 后 recent-unwrapped 合并, 真 commit (P2.1-4)
+# 归档: 写文件 + sha256 校验和; 不自动 commit (P2.2: 不污染主仓库/不绕过复核钩子)
 archive() {
   local ld label target out
-  ld="$(safe_id "$1")"; label="$(safe_id "$2")"; target="$3"
+  ld="$(safe_id "$1")" || return 1; label="$(safe_id "$2")" || return 1; target="$3"
   out="$ARCHIVES/$ld-$label.md"
 
-  "$HERDR" agent read "$target" --source visible --lines 200 --format text > "$out" 2>/dev/null || true
+  "$HERDR" agent read "$target" --source visible --lines 400 --format text > "$out" 2>/dev/null || true
   local vlines
   vlines="$(wc -l < "$out" 2>/dev/null || echo 0)"
   if [ "$vlines" -lt 5 ]; then
-    "$HERDR" agent read "$target" --source recent-unwrapped --lines 200 --format text > "$out" 2>/dev/null || true
+    "$HERDR" agent read "$target" --source recent-unwrapped --lines 400 --format text > "$out" 2>/dev/null || true
   fi
 
-  # 真 commit: 归档随审查批次入库, 不可变
-  git -C "$ROOT" add "$out" >/dev/null 2>&1 || true
-  git -C "$ROOT" commit -m "docs：流水线审查归档 $ld ($label)" --no-verify >/dev/null 2>&1 || true
-  echo "📦 归档: $out ($(wc -l < "$out") 行) commit=$(git -C "$ROOT" rev-parse --short HEAD)"
+  local hash
+  hash="$(shasum -a 256 "$out" | cut -d' ' -f1)"
+  echo "$hash  $(basename "$out")" > "$out.sha256"
+  echo "📦 归档: $out ($(wc -l < "$out") 行) sha256=${hash:0:12}… (未自动提交, 请人工决定入库)"
 }
 
 list() {
