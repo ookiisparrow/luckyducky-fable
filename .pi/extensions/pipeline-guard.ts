@@ -3,6 +3,9 @@
 // 规则表独立于 scripts/pipeline/guard-rules.mjs（项目内受版本控制, 可测试）
 // 路径: 环境变量 PIPELINE_ROOT 覆盖, 默认 ~/luckyducky-fable（可移植）
 // 生效: /reload 或重启 pi
+//
+// 全局约定（老板 2026-08-11 令）: 所有确认弹窗必须用大白话说明三要素——
+//   ① 是什么权限  ② 为什么需要你确认  ③ 通过会怎么样
 
 import { appendFileSync, mkdirSync } from "node:fs";
 import { join } from "node:path";
@@ -19,6 +22,18 @@ function audit(entry) {
   } catch (e) {
     return false;
   }
+}
+
+// 组装三要素大白话确认文案（全局约定）
+function confirmBody(what, why, effect, extra) {
+  const lines = [
+    `📋 是什么权限：${what}`,
+    `❓ 为什么需要你确认：${why}`,
+    `✅ 通过会怎么样：${effect}`,
+  ];
+  if (extra) lines.push(`\n命令/对象：${extra}`);
+  lines.push("\n【允许】继续执行　【拒绝】拦截");
+  return lines.join("\n");
 }
 
 export default async function (pi) {
@@ -40,7 +55,15 @@ export default async function (pi) {
       const target = event.input?.path || "";
       if (isRedFilePath(target)) {
         const ok = ctx.hasUI
-          ? await ctx.ui.confirm("[L0·red 文件写操作]", `修改红区文件需确认:\n\n${target}`)
+          ? await ctx.ui.confirm(
+              "需要你确认：修改红区文件",
+              confirmBody(
+                "修改红区文件（订单、支付、运维相关的核心代码）",
+                "红区是钱链和运维核心，改错会直接造成经济损失或线上事故",
+                "文件被修改，改动会进入后续检查与发布流程",
+                target,
+              ),
+            )
           : false;
         const logged = audit(`${ts} L0 red-file-write allow=${ok} path="${target}"`);
         if (!ok) {
@@ -55,10 +78,19 @@ export default async function (pi) {
 
     if (event.toolName === "bash") {
       const cmd = event.input?.command || "";
+
       // bash 重定向写 red 文件 → 拦截
       if (bashWritesRedFile(cmd)) {
         const ok = ctx.hasUI
-          ? await ctx.ui.confirm("[L0·bash 写 red 文件]", `重定向写入红区文件需确认:\n\n${cmd.slice(0, 400)}`)
+          ? await ctx.ui.confirm(
+              "需要你确认：用命令改写红区文件",
+              confirmBody(
+                "通过命令重定向（> 或 >>）向红区文件写入内容",
+                "这是绕过文件编辑工具的直接写入，可能悄悄改掉钱链/运维核心代码",
+                "红区文件被改写，影响线上核心逻辑",
+                cmd.slice(0, 400),
+              ),
+            )
           : false;
         audit(`${ts} L0 bash-red-write allow=${ok} cmd="${cmd.slice(0, 200)}"`);
         if (!ok) {
@@ -70,7 +102,10 @@ export default async function (pi) {
       const l0 = matchRules(cmd, L0_RULES);
       if (l0) {
         const ok = ctx.hasUI
-          ? await ctx.ui.confirm(`[L0·${l0.desc}]`, `执行?\n\n${cmd.slice(0, 400)}`)
+          ? await ctx.ui.confirm(
+              `需要你确认：${l0.desc}`,
+              confirmBody(l0.human || l0.desc, l0.why || "该操作属于危险动作", l0.effect || "命令立即执行", cmd.slice(0, 400)),
+            )
           : false;
         const logged = audit(`${ts} L0 ${l0.name} allow=${ok} cmd="${cmd.slice(0, 200)}"`);
         if (!ok) {
