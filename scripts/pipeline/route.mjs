@@ -2,15 +2,15 @@
 /**
  * 路由分类器 (route.mjs)
  * 定稿方案 §1 最低约束: 任务路由不得由模型自我判定。
- * 本脚本用代码规则分类: 输入工单描述 → 输出 {level, models, reason}
- * 多标签取最高风险标签优先。
+ * 代码化规则分类: 输入工单描述 → {level, models, reason}
+ * 多标签取最高风险标签优先; 未知任务 fail-closed (默认人工确认)。
  *
- * 用法: node scripts/pipeline/route.mjs "<任务描述>"
- * 输出: JSON
+ * 用法: node scripts/pipeline/route.mjs "<任务描述>"   (CLI)
+ *       import { classify } from "./route.mjs"         (测试/编排)
  */
 import { readFileSync } from "node:fs";
 import { resolve, dirname } from "node:path";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const repoRoot = resolve(__dirname, "../..");
@@ -39,16 +39,15 @@ const RULES = [
 ];
 
 // 3. 模块关键词命中 (模块名进上下文)
-const moduleHit = (kw) => {
-  const text = kw.toLowerCase();
-  if (redModules.some((m) => text.includes(m))) return "red";
-  if (yellowModules.some((m) => text.includes(m))) return "yellow";
+const moduleHit = (text) => {
+  const t = text.toLowerCase();
+  if (redModules.some((m) => t.includes(m))) return "red";
+  if (yellowModules.some((m) => t.includes(m))) return "yellow";
   return null;
 };
 
-function classify(input) {
+export function classify(input) {
   const hits = [];
-  // 模块命中优先于关键词: red 模块直接 L0
   const tier = moduleHit(input);
   if (tier === "red") {
     hits.push({ level: "L0", reason: `命中 red 模块`, models: ["kimi", "codex"], human: true });
@@ -58,10 +57,13 @@ function classify(input) {
       hits.push({ level: rule.level, reason: rule.reason, models: rule.models, human: rule.human });
     }
   }
+  // 未知任务 fail-closed: 无任何命中 → 默认人工确认 (L0 + human), 防止含糊描述绕过
   if (hits.length === 0) {
-    return { level: "L2", models: [], reason: "无关键词命中, 默认普通迭代", human: false };
+    return {
+      level: "L0", models: ["kimi", "codex"], human: true,
+      reason: "无规则命中, fail-closed 默认人工确认", allHits: ["L0"],
+    };
   }
-  // 最高风险优先 (L0 > L1 > L2 > L3)
   const order = { L0: 0, L1: 1, L2: 2, L3: 3 };
   hits.sort((a, b) => order[a.level] - order[b.level]);
   const top = hits[0];
@@ -74,9 +76,12 @@ function classify(input) {
   };
 }
 
-const input = process.argv.slice(2).join(" ") || "";
-if (!input) {
-  console.error("用法: node scripts/pipeline/route.mjs \"<任务描述>\"");
-  process.exit(2);
+// CLI 入口 (仅直接运行时)
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  const input = process.argv.slice(2).join(" ") || "";
+  if (!input) {
+    console.error('用法: node scripts/pipeline/route.mjs "<任务描述>"');
+    process.exit(2);
+  }
+  console.log(JSON.stringify({ input, ...classify(input) }, null, 2));
 }
-console.log(JSON.stringify({ input, ...classify(input) }, null, 2));
