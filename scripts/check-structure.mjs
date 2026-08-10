@@ -4772,6 +4772,76 @@ import { PROD_ENV } from './lib/env.mjs'（单源·病根#5·债#30①）`)
       return bad
     },
   },
+  {
+    id: 'rw-red-second-review',
+    roots: ['#3'],
+    desc: '红区（订单交易钱链 orders / 运维观测与配置 ops）改动必须双人复核——red 模块文件被改动时，提交信息须带 [red-review: <复核人>] 标记（工头亲自+人签字的机器化），拦截点在 commit-msg hook（pre-commit 阶段拿不到本次提交信息）。本守卫职责=机器闸完整性：commit-msg hook 缺失/未注册（core.hooksPath 错）即红——红区改动无人复核也拦不住=机器闸形同虚设。红区文件清单从 modules.json tier=red 推导 + 显式补录（app 网关壳/kit 共享内核）。反向自检：删 hook 或改 hooksPath 必红；改 red 文件无标记被 hook 拦。',
+    run() {
+      const bad = []
+      const modPath = join(ROOT, 'modules.json')
+      if (!existsSync(modPath)) return []
+      let mods
+      try { mods = JSON.parse(readFileSync(modPath, 'utf8'))?.modules ?? {} } catch { return [] }
+
+      const redFiles = new Set()
+      const appActionFileOf = {}
+      const appDir = join(ROOT, 'rewrite/cloud/src/functions/app/actions')
+      if (existsSync(appDir)) {
+        for (const f of readdirSync(appDir).filter((x) => x.endsWith('.ts'))) {
+          const src = readFileSync(join(appDir, f), 'utf8')
+          for (const m of src.matchAll(/^export\s+(?:async\s+)?(?:const\s+)?(?:function\s+)?(\w+)\s*[=(]/gm)) {
+            appActionFileOf[m[1]] = `rewrite/cloud/src/functions/app/actions/${f}`
+          }
+        }
+      }
+      for (const [mid, m] of Object.entries(mods)) {
+        if (m?.tier !== 'red') continue
+        for (const a of m?.appActions ?? []) {
+          if (appActionFileOf[a]) redFiles.add(appActionFileOf[a])
+        }
+        for (const f of m?.adminActionFiles ?? []) {
+          redFiles.add(`rewrite/cloud/src/functions/adminApi/actions/${f}.ts`)
+        }
+        for (const p of m?.mpPages ?? []) {
+          redFiles.add(`rewrite/mp/pages/${p}`)
+        }
+        for (const p of m?.adminPages ?? []) {
+          redFiles.add(`rewrite/admin/src/pages/${p}.vue`)
+        }
+      }
+      const EXTRA_RED = [
+        'rewrite/cloud/src/functions/app/index.ts',
+        'rewrite/cloud/src/functions/adminApi/index.ts',
+        'rewrite/cloud/src/functions/adminApi/lib.ts',
+        'rewrite/cloud/src/kit/gate.ts',
+        'rewrite/cloud/src/kit/wxpay.ts',
+        'rewrite/cloud/src/kit/transition.ts',
+        'rewrite/shared/src/fen.ts',
+      ]
+      for (const f of EXTRA_RED) redFiles.add(f)
+
+      let changed = []
+      try {
+        const staged = execSync('git diff --cached --name-only', { encoding: 'utf8', maxBuffer: 8 * 1024 * 1024, stdio: ['ignore', 'pipe', 'ignore'], cwd: ROOT })
+        const unstaged = execSync('git diff --name-only', { encoding: 'utf8', maxBuffer: 8 * 1024 * 1024, stdio: ['ignore', 'pipe', 'ignore'], cwd: ROOT })
+        changed = [...new Set([...staged.split('\n'), ...unstaged.split('\n')])].map((s) => s.trim()).filter(Boolean)
+      } catch {
+        return []
+      }
+      const redTouched = changed.filter((f) => [...redFiles].some((rf) => f === rf || f.startsWith(rf + '/')))
+      if (redTouched.length === 0) return []
+
+      const hookPath = join(ROOT, 'scripts/git-hooks/commit-msg')
+      let hooksPath = ''
+      try {
+        hooksPath = execSync('git config core.hooksPath', { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'], cwd: ROOT }).trim()
+      } catch { /* hooksPath 读取失败按未设置处理（下方判红） */ }
+      if (!existsSync(hookPath) || hooksPath !== 'scripts/git-hooks') {
+        bad.push(`红区文件被改动（${redTouched.slice(0, 5).join(', ')}）但 commit-msg 复核闸缺失（scripts/git-hooks/commit-msg 不存在或 core.hooksPath=${hooksPath || '未设置'}）——红区改动必须双人复核 [red-review: <复核人>]，机器闸缺失即红（rw-red-second-review·根因#3）`)
+      }
+      return bad
+    },
+  },
 ]
 
 // ============== 逐文件规则（fileRules）==============
