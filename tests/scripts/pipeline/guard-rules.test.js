@@ -1,6 +1,6 @@
 // guard-rules.mjs 规则表测试（P2.1-3 组件测试 + P2.1-5 绕过路径回归）
 import { describe, it, expect } from "vitest";
-import { L0_RULES, L1_RULES, matchRules, isRedFilePath } from "../../../scripts/pipeline/guard-rules.mjs";
+import { L0_RULES, L1_RULES, matchRules, isRedFilePath, bashWritesRedFile } from "../../../scripts/pipeline/guard-rules.mjs";
 
 describe("guard-rules L0 危险命令拦截", () => {
   it.each([
@@ -79,5 +79,19 @@ describe("guard-rules red 文件路径", () => {
   it("非 red 路径不命中", () => {
     expect(isRedFilePath("rewrite/cloud/src/functions/app/actions/identity.ts")).toBe(false);
     expect(isRedFilePath("scripts/pipeline/route.mjs")).toBe(false);
+  });
+  it("绝对路径命中 red", () => {
+    expect(isRedFilePath("/Users/sparrow/luckyducky-fable/rewrite/cloud/src/kit/wxpay.ts")).toBe(true);
+  });
+});
+
+describe("guard-rules bash 重定向写 red 文件", () => {
+  it("重定向到 red 路径拦截", () => {
+    expect(bashWritesRedFile("echo 'x' > rewrite/cloud/src/kit/wxpay.ts")).toBe(true);
+    expect(bashWritesRedFile("cat a b >> rewrite/cloud/src/functions/app/actions/orders.ts")).toBe(true);
+  });
+  it("非 red 重定向不拦截", () => {
+    expect(bashWritesRedFile("echo x > /tmp/foo.txt")).toBe(false);
+    expect(bashWritesRedFile("ls -la")).toBe(false);
   });
 });

@@ -23,12 +23,14 @@ function audit(entry) {
 
 export default async function (pi) {
   // 动态加载规则表（ESM 静态 import 不支持变量路径）
+  // fail-closed: 加载失败时告警并降级, 绝不静默失效
   const rules = await import(`${PIPELINE_ROOT}/scripts/pipeline/guard-rules.mjs`).catch(() => null);
   if (!rules) {
-    console.error("[pipeline-guard] 无法加载 guard-rules.mjs, 守卫未生效");
-    return;
+    console.error("[pipeline-guard] 规则表加载失败, 守卫 fail-closed 告警");
+    if (pi && pi.events) pi.events.emit("herdr:blocked", { active: true, label: "pipeline-guard 规则加载失败" });
+    return; // 无规则可用时不再挂载拦截（已告警 blocked, 不会静默）
   }
-  const { L0_RULES, L1_RULES, matchRules, isRedFilePath } = rules;
+  const { L0_RULES, L1_RULES, matchRules, isRedFilePath, bashWritesRedFile } = rules;
 
   pi.on("tool_call", async (event, ctx) => {
     const ts = new Date().toISOString();
@@ -50,8 +52,21 @@ export default async function (pi) {
     }
 
     // ---- bash 命令: L0 确认 / L1 审计 ----
+
     if (event.toolName === "bash") {
       const cmd = event.input?.command || "";
+      // bash 重定向写 red 文件 → 拦截
+      if (bashWritesRedFile(cmd)) {
+        const ok = ctx.hasUI
+          ? await ctx.ui.confirm("[L0·bash 写 red 文件]", `重定向写入红区文件需确认:\n\n${cmd.slice(0, 400)}`)
+          : false;
+        audit(`${ts} L0 bash-red-write allow=${ok} cmd="${cmd.slice(0, 200)}"`);
+        if (!ok) {
+          return { block: true, reason: "bash 重定向写 red 模块文件被权限守卫拦截" };
+        }
+        return;
+      }
+
       const l0 = matchRules(cmd, L0_RULES);
       if (l0) {
         const ok = ctx.hasUI

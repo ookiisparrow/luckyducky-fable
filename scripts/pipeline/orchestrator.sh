@@ -42,6 +42,8 @@ freeze() {
   # 完整代码快照 (冻结审查对象, B/C 无需访问活仓库)
   git -C "$ROOT" archive --format=tar HEAD | (cd "$pkg" && tar xf -) 2>/dev/null || \
     { echo "❌ git archive 失败"; return 1; }
+  # 排除审查污染/敏感目录: 历史审查归档(交叉污染) + 扩展凭据(.pi)
+  rm -rf -- "$pkg/.agents" "$pkg/.pi" "$pkg/.claude" "$pkg/.omp" "$pkg/.github" 2>/dev/null || true
   # 审查上下文 + 快照元数据
   cp "$ctx_file" "$pkg/context.md"
   {
@@ -91,7 +93,11 @@ archive() {
   local hash
   hash="$(shasum -a 256 "$out" | cut -d' ' -f1)"
   echo "$hash  $(basename "$out")" > "$out.sha256"
-  echo "📦 归档: $out ($(wc -l < "$out") 行) sha256=${hash:0:12}… (未自动提交, 请人工决定入库)"
+  chmod a-w "$out" "$out.sha256" 2>/dev/null || true
+  if [ "$vlines" -lt 5 ]; then
+    echo "⚠️ 归档疑似为空 ($vlines 行), 请人工核查审查输出是否完整"
+  fi
+  echo "📦 归档: $out ($vlines 行) sha256=${hash:0:12}… (未自动提交, 请人工决定入库)"
 }
 
 list() {

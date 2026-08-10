@@ -45,14 +45,22 @@ export const RED_FILE_PREFIXES = [
   "rewrite/shared/src/fen",
 ];
 
-// 精确边界匹配: 消除 includes 误报 (gateway 不应命中 gate)
+// 精确边界匹配: 消除 includes 误报 (gateway 不应命中 gate); 兼容相对/绝对路径
 export function isRedFilePath(p) {
+  const norm = p.replace(/^.*\/luckyducky-fable\//, ""); // 绝对路径 → 相对
   return RED_FILE_PREFIXES.some((prefix) => {
-    if (p === prefix) return true;
-    if (p.startsWith(prefix + "/")) return true; // 目录内
-    if (p.startsWith(prefix + ".")) return true; // 同名不同扩展名 gate.ts / gate.js
+    if (norm === prefix) return true;
+    if (norm.startsWith(prefix + "/")) return true; // 目录内
+    if (norm.startsWith(prefix + ".")) return true; // 同名不同扩展名 gate.ts / gate.js
     return false;
   });
+}
+
+// bash 重定向写入 red 文件检测 (echo 'x' > rewrite/cloud/src/kit/wxpay.ts)
+export function bashWritesRedFile(cmd) {
+  // 匹配 > 或 >> 后跟 red 路径 (含引号/绝对路径变体)
+  const m = cmd.match(/>>?\s*["']?([^"'\s;|&]+)/);
+  return m ? isRedFilePath(m[1]) : false;
 }
 
 export function matchRules(cmd, rules) {
