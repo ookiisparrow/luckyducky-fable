@@ -706,6 +706,32 @@ export const repoChecks = [
     },
   },
   {
+    id: 'guard-path-liveness',
+    roots: ['#11', '#16'],
+    desc: '路径清单活性（守卫的守卫·MG-A·2026-08-13 引入）：三处硬编码红区文件清单（commit-msg RED_DIRS / guard-rules RED_FILE_PREFIXES / 本文件 EXTRA_RED）的每个路径须真实存在于工作区——文件改名/删除后清单未同步即红（fen.ts→money.ts 漂移即此守卫逮到）',
+    run() {
+      const bad = []
+      const commitMsg = readFileSync(join(ROOT, 'scripts/git-hooks/commit-msg'), 'utf8')
+      const m1 = commitMsg.match(/RED_DIRS="([^"]+)"/)
+      if (m1) for (const p of m1[1].split(/\s+/).filter(Boolean)) if (!existsSync(join(ROOT, p))) bad.push(`[commit-msg RED_DIRS] ${p} 不存在——红区清单漂移（文件改名/删除后清单未同步）`)
+      const gr = readFileSync(join(ROOT, 'scripts/pipeline/guard-rules.mjs'), 'utf8')
+      const m2 = gr.match(/RED_FILE_PREFIXES\s*=\s*\[([\s\S]*?)\]/)
+      if (m2) for (const prefix of [...m2[1].matchAll(/"([^"]+)"/g)].map((x) => x[1])) {
+        const alive = existsSync(join(ROOT, prefix)) || ['.ts', '.mjs', '.js', '.json', '.vue', '.cjs'].some((e) => existsSync(join(ROOT, prefix + e)))
+        if (!alive) {
+          const segs = prefix.split('/'), parent = segs.slice(0, -1).join('/'), leaf = segs[segs.length - 1]
+          let matched = false
+          try { matched = readdirSync(join(ROOT, parent)).some((f) => f.startsWith(leaf)) } catch { matched = false }
+          if (!matched) bad.push(`[guard-rules RED_FILE_PREFIXES] ${prefix} 前缀失配——红区清单漂移`)
+        }
+      }
+      const cs = readFileSync(join(ROOT, 'scripts/check-structure.mjs'), 'utf8')
+      const m3 = cs.match(/const EXTRA_RED\s*=\s*\[([\s\S]*?)\]/)
+      if (m3) for (const p of [...m3[1].matchAll(/'([^']+)'/g)].map((x) => x[1])) if (!existsSync(join(ROOT, p))) bad.push(`[check-structure EXTRA_RED] ${p} 不存在——红区清单漂移`)
+      return bad
+    },
+  },
+  {
     // 病根#16 ⑤（盲区体检批3·指针大迁移）：M5 切换（2026-07-09）搬走了生产，没有任何机制清点
     // 「指向生产的引用」——oldline-frozen 守住旧线字节、没守指向旧线的指针。当日实况：deploy-fns.mjs
     // 仍 build:cloud + packages/cloud/dist + 38 函数旧 manifest——hash 匹配则报「变更待部署 0 个」
@@ -4816,7 +4842,7 @@ import { PROD_ENV } from './lib/env.mjs'（单源·病根#5·债#30①）`)
         'rewrite/cloud/src/kit/gate.ts',
         'rewrite/cloud/src/kit/wxpay.ts',
         'rewrite/cloud/src/kit/transition.ts',
-        'rewrite/shared/src/fen.ts',
+        'rewrite/shared/src/money.ts',
       ]
       for (const f of EXTRA_RED) redFiles.add(f)
 

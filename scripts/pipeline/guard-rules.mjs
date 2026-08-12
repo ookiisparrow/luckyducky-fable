@@ -75,7 +75,7 @@ export const RED_FILE_PREFIXES = [
   "rewrite/cloud/src/kit/gate",
   "rewrite/cloud/src/kit/wxpay",
   "rewrite/cloud/src/kit/transition",
-  "rewrite/shared/src/fen",
+  "rewrite/shared/src/money",
 ];
 
 // 精确边界匹配: 消除 includes 误报 (gateway 不应命中 gate); 兼容相对/绝对路径
