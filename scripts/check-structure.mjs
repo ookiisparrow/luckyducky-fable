@@ -732,6 +732,33 @@ export const repoChecks = [
     },
   },
   {
+    id: 'guard-scan-surface-liveness',
+    roots: ['#16'],
+    desc: '扫描面非空活性（守卫的守卫·MG-C·防未来空转哨兵）：所有守卫 run() 里 join(ROOT, <dir>) 引用的目录须递归非空——目录被清空后守卫空转即红（2026-08-13 引入时活线 61 目录均非空，当前 0 命中，守住未来）',
+    run() {
+      const bad = []
+      const src = readFileSync(join(ROOT, 'scripts/check-structure.mjs'), 'utf8')
+      const dirs = new Set()
+      for (const m of src.matchAll(/join\(ROOT,\s*'([^']+)'\)/g)) dirs.add(m[1])
+      for (const d of dirs) {
+        const full = join(ROOT, d)
+        if (!existsSync(full) || !statSync(full).isDirectory()) continue
+        let empty = true
+        const rec = (p) => {
+          for (const n of readdirSync(p)) {
+            const fp = join(p, n)
+            const st = statSync(fp)
+            if (st.isDirectory()) rec(fp)
+            else { empty = false }
+          }
+        }
+        try { rec(full) } catch { continue }
+        if (empty) bad.push(`扫描目录 ${d} 为空——引用它的守卫空转（防未来空转哨兵）`)
+      }
+      return bad
+    },
+  },
+  {
     // 病根#16 ⑤（盲区体检批3·指针大迁移）：M5 切换（2026-07-09）搬走了生产，没有任何机制清点
     // 「指向生产的引用」——oldline-frozen 守住旧线字节、没守指向旧线的指针。当日实况：deploy-fns.mjs
     // 仍 build:cloud + packages/cloud/dist + 38 函数旧 manifest——hash 匹配则报「变更待部署 0 个」
