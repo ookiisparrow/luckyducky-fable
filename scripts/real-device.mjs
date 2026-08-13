@@ -20,6 +20,7 @@ import { fileURLToPath } from 'node:url';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PROJECT = path.resolve(__dirname, '../rewrite/mp');
 const HOME_PAGE = 'pages/home/home';
+const CLI_PATH = '/Applications/wechatwebdevtools.app/Contents/MacOS/cli';
 
 const KNOWN_PORTS = [9420, 9421, 9422];
 const DEFAULT_TIMEOUT = 60000;
@@ -167,12 +168,23 @@ async function cmdPreview(port, pagePath) {
 }
 
 async function cmdDebug(port, pagePath) {
-  console.log(`\n🔧 正在触发真机调试（最长等待 4 分钟，请留意手机端）...\n  项目: ${PROJECT}\n  页面: ${pagePath}\n`);
+  console.log(`\n🔧 正在准备真机调试环境...\n  项目: ${PROJECT}\n  页面: ${pagePath}\n`);
+  // 关键前置：拉起 automation 服务器（真机调试依赖 automation 通道）
+  console.log('  ⚙️  启动 automation 服务器...');
+  try {
+    execSync(`"${CLI_PATH}" agent start --project "${PROJECT}" --port ${port} 2>/dev/null`, { encoding: 'utf8', timeout: 30000 });
+    console.log('  ✅ automation 服务器就绪');
+  } catch { console.log('  ⚠️  automation 服务器启动提示（可忽略，继续尝试）'); }
   const sid = await openSession(port);
   // 确保项目窗口已打开（真机调试依赖窗口环境）
   try {
     await callTool(port, sid, 'open_project_window', { project: PROJECT });
   } catch { /* 窗口已开则忽略 */ }
+  // 确保模拟器编译运行（automation 需要小程序在运行）
+  try {
+    await callTool(port, sid, 'simulator_open_page', { project: PROJECT, page: pagePath });
+  } catch { /* 编译失败则继续尝试 */ }
+  console.log('  📲 正在触发真机调试（最长等待 4 分钟，请留意手机端）...');
   const r = await callTool(port, sid, 'automation_viewport_action', {
     project: PROJECT,
     action: 'remote',
