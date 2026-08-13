@@ -280,7 +280,7 @@ describe('卡单（stuck-order·72h 判据逐条件/售后豁免面/有界扫描
     const stuck = entry(run, 'stuck-order')
     expect(stuck.status).toBe('red')
     expect(stuck.severity).toBe('low') // 纯超时未发＝低危提醒（死信才高危）
-    expect(stuck.detail).toBe('1 单真付款超 72h 未发货·0 单待人工退款死信')
+    expect(stuck.detail).toBe('1 单真付款超 72h 未发货·0 单待人工退款死信·0 单支付异常待处理')
     expect(stuck.count).toBe(1)
     expect(stuck.samples).toEqual(['S1'])
   })
@@ -301,7 +301,7 @@ describe('卡单（stuck-order·72h 判据逐条件/售后豁免面/有界扫描
     const stuck = entry(run, 'stuck-order')
     expect(stuck.status).toBe('red')
     expect(stuck.severity).toBe('high')
-    expect(stuck.detail).toBe('0 单真付款超 72h 未发货·1 单待人工退款死信')
+    expect(stuck.detail).toBe('0 单真付款超 72h 未发货·1 单待人工退款死信·0 单支付异常待处理')
     expect(stuck.samples).toEqual(['D0'])
     const an = control.dump(COLLECTIONS.anomalies)
     expect(an.length).toBe(1)

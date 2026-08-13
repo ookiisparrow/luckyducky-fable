@@ -103,10 +103,16 @@ describe('金额行标题·顾客视角「付过没有」（体检批 P1·钱链
     expect(mapOrder({ ...GOOD, status: 'pending' })!.amountTitle).toBe('订单金额')
   })
   it('大白话：付过钱的（待发货/待收货/已完成）写「实付款」；待退款也算付过（钱已收待人工退）', () => {
-    for (const s of ['paid', 'shipped', 'done', 'refund_required']) {
+    for (const s of ['paid', 'shipped', 'done', 'refund_required', 'payment_exception']) {
       expect(amountTitle(s)).toBe('实付款')
       expect(mapOrder({ ...GOOD, status: s })!.amountTitle).toBe('实付款')
     }
+  })
+  it('大白话：支付异常单「实付款」展示实际到账 paidFee，不是订单标价（多代理审核 codex#5·对账/退款沟通依据）', () => {
+    const r = mapOrder({ ...GOOD, status: 'payment_exception', paidFee: 17700 })!
+    expect(r.amountLabel).toBe('¥177.00')
+    // 实付额脏/缺回退订单金额（不造假数）
+    expect(mapOrder({ ...GOOD, status: 'payment_exception', paidFee: null })!.amountLabel).toBe('¥258.50')
   })
   it('大白话：没见过的状态按「没付过」兜底，不冒充已付（fail-safe）', () => {
     expect(amountTitle('weird_new_state')).toBe('订单金额')

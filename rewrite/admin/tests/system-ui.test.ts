@@ -73,7 +73,7 @@ describe('对账映射（approx 诚实·wxOnly 最危险）', () => {
     expect(recon.approxNote).toContain('近似')
     // B2 修：exceptions 是 {feeMismatch,refundMismatch,stuckRefunds} 对象·结构化成带单号明细（有则渲染·空类不显）
     expect(recon.exceptions).toEqual([
-      { label: '金额不符单（发货前须核对流水解除）', ids: ['o-bad'] },
+      { label: '金额不符单（先核对流水；支付异常走退款处理）', ids: ['o-bad'] },
       { label: '审批后卡单（死信·退款未走通）', ids: ['a-stuck'] },
     ])
     const clean = mapRecon({ ok: true, cumulative: { income: 0, refund: 0, net: 0 }, daily: [], approx: false })!

@@ -108,6 +108,11 @@ describe('订单行映射（发货入口收窄）', () => {
     expect(rows[0]).toMatchObject({ canShip: true, amountLabel: '¥2.00', count: 1 })
     expect(rows[0].address).toContain('贵州')
     expect(rows[1]).toMatchObject({ canShip: false, feeMismatch: true }) // 金额不符禁发
+    // 支付异常单「实付款」展示实际到账 paidFee（多代理审核 codex#5）：paidFee 为整数分→元
+    const [pe] = mapOrderRows([{ id: 'ope', status: 'payment_exception', amount: 2, paidFee: 17700, items: [] }])
+    expect(pe.amountLabel).toBe('¥177.00')
+    expect(pe.paymentException).toBe(true)
+    expect(pe.canShip).toBe(false)
     expect(rows[2]).toMatchObject({ canShip: false, trackingNo: 'SF123' }) // 已发货不再发
     expect(rows[2].summary).toContain('等 3 件商品')
     // refund_required（PAID_BUT_OOS 死信·待人工退款）标「待退款」·非「退款处理中」（换皮误标·与退款 approved 语义撞车）

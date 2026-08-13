@@ -1,5 +1,5 @@
 import { toFen, COLLECTIONS } from '@ldrw/shared'
-import { defineNotifyCallback, transition, alert, notifyAlert, reserveStock, restoreStock, getDb } from '../../kit'
+import { defineNotifyCallback, transition, notifyAlert, reserveStock, restoreStock, getDb } from '../../kit'
 
 // 支付结果回调（黄金 orders-money·payCallback 节全量）。防伪/ACK/id 提取由 defineNotifyCallback 强制。
 // pending→paid 直接翻单（库存自下单持有）；closed→paid 复活前必须重抢库存——抢不到进 refund_required
@@ -40,19 +40,30 @@ export const main = defineNotifyCallback<any>({
           ? Number(e.amount.total)
           : Number(e.totalFee)
     const transactionId = String(e.transaction_id || e.transactionId || '')
-    // 金额不符照翻 paid（钱已到账）只留 feeMismatch 痕 + 告警人工对账——静默语义失败不能丢
+    const initial = await getDb().collection(COLLECTIONS.orders).doc(id).get().catch(() => null)
+    if (!initial || !initial.data) return void (await notifyAlert('money', 'payCallback', 'UNKNOWN_ORDER', { id }))
+    const expectedFee = toFen(initial.data.amount as number)
+    const mismatch = paidFee !== expectedFee
+    const mismatchDirection = paidFee < expectedFee ? 'underpaid' : paidFee > expectedFee ? 'overpaid' : 'unknown'
     const payPatch = (order: Record<string, unknown>): Record<string, unknown> => {
+      const expectFen = toFen(order.amount as number)
       const patch: Record<string, unknown> = { paidAt: Date.now(), transactionId }
-      if (paidFee !== toFen(order.amount as number)) {
+      if (paidFee !== expectFen) {
         patch.feeMismatch = true
-        alert('money', 'payCallback', 'FEE_MISMATCH', { id, paidFee, expectFen: toFen(order.amount as number) })
+        patch.expectedFee = expectFen
+        patch.paidFee = Number.isFinite(paidFee) ? paidFee : null
+        patch.paymentMismatchDirection = paidFee < expectFen ? 'underpaid' : paidFee > expectFen ? 'overpaid' : 'unknown'
       }
       return patch
     }
 
-    // 正常路径：pending → paid（库存自下单一直持有）
-    const p = await transition(COLLECTIONS.orders, id, ['pending'], 'paid', payPatch)
-    if (p.moved) return
+    // 正常路径：pending → paid；金额不符进入 payment_exception（库存自下单持有，异常单不得履约）。
+    const p = await transition(COLLECTIONS.orders, id, ['pending'], mismatch ? 'payment_exception' : 'paid', payPatch)
+    if (p.moved) {
+      if (mismatch && Array.isArray(p.doc && p.doc.reserved) && p.doc.reserved.length) await restoreStock(p.doc.reserved)
+      if (mismatch) await notifyAlert('money', 'payCallback', 'FEE_MISMATCH', { id, paidFee, expectFen: expectedFee, direction: mismatchDirection })
+      return
+    }
     if (!p.doc) return void (await notifyAlert('money', 'payCallback', 'UNKNOWN_ORDER', { id })) // 收钱无单
 
     // 关单复活漏窗（P1·根因#1 修复）：p.doc 是条件更新**前**的读。若读到的仍是 'pending' 但 moved=false，
@@ -64,8 +75,18 @@ export const main = defineNotifyCallback<any>({
       status = String(fresh.data.status || '')
     }
     if (status === 'paid' || status === 'shipped' || status === 'done') return // 幂等 no-op
-    if (status === 'refund_required') return // 幂等 no-op：另一路并发回调已处理并已告警，不重复告警
+    if (status === 'refund_required' || status === 'payment_exception') return // 幂等 no-op：已处理，不重复告警
     if (status !== 'closed') return void (await notifyAlert('money', 'payCallback', 'UNEXPECTED_STATUS', { id, status }))
+
+    // 关单后晚到但金额不符：不重抢库存，直接进入异常态，避免先占货再把异常单冻结。
+    if (mismatch) {
+      const ex = await transition(COLLECTIONS.orders, id, ['closed'], 'payment_exception', (order) => ({
+        ...payPatch(order),
+        feeReceivedAt: Date.now(),
+      }))
+      if (ex.moved) await notifyAlert('money', 'payCallback', 'FEE_MISMATCH', { id, paidFee, expectFen: expectedFee, direction: mismatchDirection })
+      return
+    }
 
     // 关单后晚到的成功回调：库存已回补，须重抢回 reserved 才可复活（带竞态缓冲）。reserved 字段不受
     // 「关单」这次状态转移影响（closeExpiredOrders 只 patch status/closedAt），沿用 p.doc（条件更新前

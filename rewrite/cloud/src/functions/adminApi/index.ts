@@ -90,6 +90,7 @@ const ACTIONS: Record<string, (ctx: Ctx) => Promise<any>> = {
   approveRefund: refunds.approveRefund,
   rejectRefund: refunds.rejectRefund,
   overrideRefund: refunds.overrideRefund,
+  recordPaidFee: refunds.recordPaidFee,
   // 看板 / 对账 / 库存（批14）
   getDashboard: dashboard.getDashboard,
   getReconciliation: reconciliation.getReconciliation,
@@ -296,6 +297,9 @@ const ACTION_CAPS: Record<string, string | string[]> = {
   reportClientError: 'agent:handle',
   // 越规退款（决策§26·退货管理权限）：单立 refund:manage 能力——超管 '*' 天然匹配，未来可给中间角色单授而不放全量 admin:write
   overrideRefund: 'refund:manage',
+  // 补录实际到账金额（支付异常单退款死胡同出口·退款链路前置）：与 overrideRefund 同权——它直接决定退款金额分母，
+  // 属退款管理面，不放全量 admin:write；仅 payment_exception 态可补（不篡改正常单实付）。
+  recordPaidFee: 'refund:manage',
   // refund:manage 最小只读面（待办与债 2026-07-12 批 B8 评审发现节·C4 落地）：overrideRefund 依赖的退款
   // 工作台加载面（列表/计数/详情/订单联查）此前未登记 ACTION_CAPS→默认落 admin:write，给中间角色单授
   // refund:manage 时页面加载即 403。登记为「任一命中」数组：admin:write 持有者行为完全不变（防收紧误伤），

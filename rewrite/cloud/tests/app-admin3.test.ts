@@ -45,6 +45,9 @@ describe('发货（黄金：状态闸/金额异常挡/核销流水/合规上传 
     expect((await post('shipOrder', { id: 'o2', company: '顺丰', trackingNo: 'SF1' })).error).toBe('FEE_MISMATCH_HOLD')
     expect((await post('clearFeeMismatch', { id: 'o2' })).ok).toBe(true)
     expect((await post('shipOrder', { id: 'o2', company: '顺丰', trackingNo: 'SF1' })).ok).toBe(true)
+
+    seedOrder({ _id: 'o3', id: 'o3', status: 'payment_exception', feeMismatch: true } as any)
+    expect((await post('clearFeeMismatch', { id: 'o3' })).error).toContain('BAD_STATUS')
   })
 
   it('大白话：退款在途/已退款的单挡发货（REFUND_HOLD·钱退了货不能再发）；退款被拒后自然解闸', async () => {
@@ -489,6 +492,51 @@ describe('退款审批（黄金：原子抢占/回滚条件化/进课重算封�
 
     // 金额红线不因本批松动：同行再退一次 → NOTHING_LEFT（行级封顶照咬 refund_required 单）
     expect((await post('overrideRefund', { orderId: 'o1', lineId: 'p1__红', reason: '再退' })).error).toBe('NOTHING_LEFT')
+  })
+
+  it('大白话：payment_exception 走系统退款入口时按实际到账 paidFee 退款，不按订单标价退款', async () => {
+    const seedFlow2 = () => control.seed('config', [{ _id: 'pay', mode: 'real', refundFlowId: 'flow-refund' }])
+    seedOrder({ status: 'payment_exception', paidFee: 17700, expectedFee: 17800, feeMismatch: true } as any)
+    seedFlow2()
+    control.setCallFunctionResult({ result: { data: { status: 'PROCESSING', refund_id: 'pe1' } } })
+    const r = await post('overrideRefund', { orderId: 'o1', lineId: 'p1__红', reason: '金额异常·退实际到账' })
+    expect(r.ok).toBe(true)
+    const created = control.dump('afterSales').find((a: any) => a.overridden)
+    expect(created.refundAmount).toBe(177)
+    expect(control.callFunctionCalls()[0].data.data.amount).toMatchObject({ refund: 17700, total: 17700 })
+    expect((await post('overrideRefund', { orderId: 'o1', lineId: 'p1__红', reason: '重复退款' })).error).toBe('NOTHING_LEFT')
+  })
+
+  it('大白话：异常单实付额缺（回调没带金额）→ 退款被 PAYMENT_AMOUNT_MISSING 卡死；补录实际到账后即可按实付退款', async () => {
+    seedOrder({ status: 'payment_exception', paidFee: null, expectedFee: 17800, feeMismatch: true } as any)
+    control.seed('config', [{ _id: 'pay', mode: 'real', refundFlowId: 'flow-refund' }])
+    // 补录前：退款死胡同（此前无任何在库入口能补）
+    expect((await post('overrideRefund', { orderId: 'o1', lineId: 'p1__红', reason: '金额异常' })).error).toBe('PAYMENT_AMOUNT_MISSING')
+    // 非法金额 / 无单 / 非异常态补录一律拒（资金安全：不篡改正常单实付）
+    expect((await post('recordPaidFee', { id: 'o1', paidFeeFen: -1 })).error).toBe('BAD_ARGS')
+    expect((await post('recordPaidFee', { id: 'ghost', paidFeeFen: 17700 })).error).toBe('NO_ORDER')
+    seedOrder({ _id: 'o2', id: 'o2', status: 'paid', amount: 178 } as any)
+    expect((await post('recordPaidFee', { id: 'o2', paidFeeFen: 17700 })).error).toContain('BAD_STATUS')
+    // 上界护栏（多代理审核 kimi#3）：补录不得远超订单应付（防手滑打错位数/恶意放大退款分母）
+    expect((await post('recordPaidFee', { id: 'o1', paidFeeFen: 17800 * 20 + 1 })).error).toBe('BAD_AMOUNT')
+    // 补录成功：落库 + 留痕（可对账可溯）
+    expect((await post('recordPaidFee', { id: 'o1', paidFeeFen: 17700 })).ok).toBe(true)
+    const o1 = control.dump('orders').find((o: any) => o._id === 'o1')
+    expect(o1.paidFee).toBe(17700)
+    expect(o1.paidFeePrev).toBeNull()
+    expect(o1.paidFeeRecordedAt).toBeGreaterThan(0)
+    // 无售后单时允许覆盖修正（补录错了改对·留痕旧值），不留死胡同；修正后改回正确值再退款
+    expect((await post('recordPaidFee', { id: 'o1', paidFeeFen: 17600 })).ok).toBe(true)
+    expect(control.dump('orders').find((o: any) => o._id === 'o1').paidFeePrev).toBe(17700)
+    expect((await post('recordPaidFee', { id: 'o1', paidFeeFen: 17700 })).ok).toBe(true)
+    // 补录后按实付退款走通
+    control.setCallFunctionResult({ result: { data: { status: 'PROCESSING', refund_id: 'pe2' } } })
+    const r = await post('overrideRefund', { orderId: 'o1', lineId: 'p1__红', reason: '金额异常·退实际到账' })
+    expect(r.ok).toBe(true)
+    const created = control.dump('afterSales').find((a: any) => a.overridden)
+    expect(created.refundAmount).toBe(177)
+    // 已有售后单后禁止改实付额（资损洞：先退款再改 paidFee→overrideRefund 按新分母重算→同一笔钱退两次·多代理审核 codex 严重#2）
+    expect((await post('recordPaidFee', { id: 'o1', paidFeeFen: 20000 })).error).toBe('REFUND_EXISTS')
   })
 
   it('大白话：closed（关单·钱根本没收）仍被拒——放行死信不等于放行所有终态，否则等于凭空退钱给没付钱的人', async () => {

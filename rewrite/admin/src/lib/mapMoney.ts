@@ -131,6 +131,8 @@ export interface OrderRowVM {
   amountLabel: string
   timeLabel: string
   feeMismatch: boolean
+  paymentException: boolean
+  paidFeeMissing: boolean // 异常单实付额脏/缺 → 需人工补录后才能走退款（退款死胡同出口）
   refundHold: boolean // 已有行退款 approved/refunded（后端 listOrders join afterSales·真正拦截闸在 shipOne 服务端）→ 禁发货
   trackingNo: string
   address: string // 列表用·手机号已掩码（PII）
@@ -178,9 +180,17 @@ export function mapOrderRows(list: unknown): OrderRowVM[] {
       statusLabel: orderStatusLabel(o.status),
       summary: names.slice(0, 2).join('、') + (names.length > 2 ? ` 等 ${names.length} 件商品` : ''),
       count: items.reduce((n, it) => n + it.qty, 0),
-      amountLabel: yuan(o.amount) || '¥0.00',
+      // 支付异常单展示实际到账（多代理审核 codex#5）：列表「实付款」不能配「订单标价」；paidFee 为整数分，脏/缺回退订单金额。
+      amountLabel:
+        status === 'payment_exception' && Number.isInteger(Number(o.paidFee)) && Number(o.paidFee) > 0
+          ? yuan(Number(o.paidFee) / 100) || '¥0.00'
+          : yuan(o.amount) || '¥0.00',
       timeLabel: dateTime(o.createdAt),
       feeMismatch: o.feeMismatch === true,
+      paymentException: status === 'payment_exception',
+      // 异常单但实付额脏/缺（回调缺金额字段）→ 无法走退款（PAYMENT_AMOUNT_MISSING），须人工补录后才有关口；
+      // 供列表行渲染「补录实付」按钮（补录成功后刷新即消失）。
+      paidFeeMissing: status === 'payment_exception' && !(Number.isInteger(Number(o.paidFee)) && Number(o.paidFee) > 0),
       refundHold: o.refundHold === true,
       trackingNo: String((o.shipping && o.shipping.trackingNo) || o.trackingNo || ''),
       address: [a.name, maskPhone(a.phone), a.region, a.detail].filter(Boolean).join(' '), // 列表掩码

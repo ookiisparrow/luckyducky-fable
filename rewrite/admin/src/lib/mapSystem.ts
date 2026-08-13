@@ -114,7 +114,7 @@ function mapExceptions(ex: unknown): Array<{ label: string; ids: string[] }> {
   const o = (ex && typeof ex === 'object' ? ex : {}) as Record<string, any>
   const list = (v: unknown) => (Array.isArray(v) ? v.map(String) : [])
   return [
-    { label: '金额不符单（发货前须核对流水解除）', ids: list(o.feeMismatch) },
+    { label: '金额不符单（先核对流水；支付异常走退款处理）', ids: list(o.feeMismatch) },
     { label: '退款金额不符', ids: list(o.refundMismatch) },
     { label: '审批后卡单（死信·退款未走通）', ids: list(o.stuckRefunds) },
   ].filter((e) => e.ids.length)

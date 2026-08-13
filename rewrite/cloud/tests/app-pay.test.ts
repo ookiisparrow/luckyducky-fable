@@ -118,13 +118,15 @@ describe('payCallback（支付回调·黄金）', () => {
     expect(control.dump('orders').find((o: any) => o._id === 'o2').status).toBe('pending')
   })
 
-  it('大白话：金额不符仍照常入账（钱已收）但留对账痕；未知订单号确认不抛；旧版回调字段同样入账', async () => {
+  it('大白话：金额不符进支付异常（钱已收但不当正常已付）；未知订单号确认不抛；旧版回调字段同样入账', async () => {
     control.setOpenId('')
     seedOrder()
     await cb({ out_trade_no: 'o1', trade_state: 'SUCCESS', amount: { total: 1 }, transaction_id: 'wx-t1' })
     const o1 = control.dump('orders')[0]
-    expect(o1.status).toBe('paid')
+    expect(o1.status).toBe('payment_exception')
     expect(o1.feeMismatch).toBe(true)
+    expect(o1.expectedFee).toBe(17800)
+    expect(o1.paidFee).toBe(1)
 
     const r = await cb({ out_trade_no: 'ghost', trade_state: 'SUCCESS', amount: { total: 1 } })
     expect(r).toEqual({ errcode: 0, errmsg: 'OK' })

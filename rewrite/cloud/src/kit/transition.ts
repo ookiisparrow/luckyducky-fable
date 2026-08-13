@@ -29,6 +29,9 @@ export async function transition(
     .catch(() => null)
   if (!got || !got.data) return { moved: false }
   const doc = got.data
+  // 先确认当前态仍在允许的 from 集合内，再计算函数 patch。否则重复回调/并发落后方会
+  // 在 CAS 失败前触发告警等副作用，破坏状态流转的幂等语义。
+  if (!from.includes(doc.status)) return { moved: false, doc }
   const extra = typeof patch === 'function' ? patch(doc) : patch || {}
   const _ = db.command
   const r = await db

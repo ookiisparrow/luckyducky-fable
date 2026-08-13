@@ -21,3 +21,5 @@ export const approveRefund = (id: string) => client.post('approveRefund', { id }
 export const rejectRefund = (id: string, reason: string) => client.post('rejectRefund', { id, reason })
 // 越规退款（决策§26·cap refund:manage）：金额/退货资格一律云端裁决（钱链后端零改动），前端只传订单/行/原因
 export const overrideRefund = (orderId: string, lineId: string, reason: string) => client.post('overrideRefund', { orderId, lineId, reason })
+// 补录实际到账金额（支付异常单退款死胡同出口·cap refund:manage）：paidFeeFen=整数分，管理员核对流水后填写
+export const recordPaidFee = (id: string, paidFeeFen: number) => client.post('recordPaidFee', { id, paidFeeFen })

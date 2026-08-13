@@ -42,10 +42,12 @@ export async function overrideRefund({ db, data }: Ctx) {
   // 别人买走（payCallback PAID_BUT_OOS 唯一产生点）——**钱已经收了、货永远发不出**，必须退，此前却无任何
   // 在库退款路径（只能人工登商户平台退，且巡检把它永久报死信）。故这里放行，且**只放行 overrideRefund 这
   // 一个管理员越规通道**（cap refund:manage·决策§26），客户自助面 applyRefund 不扩。
+  // payment_exception 同样放行，但退款分母必须改用回调记录的实际到账 paidFee：少付退少付、多付退多付，不能
+  // 继续拿订单标价 order.amount 作为退款总额，否则少付会多退、多付会少退。补差转正常支付不在本入口内。
   // 为什么不顺手放行 closed：closed 是「钱根本没收」的正常关单（超时未支付/主动取消），放行＝凭空退款给
   // 没付过钱的人，是纯资损洞。「已收钱」是本入口的前提，不是状态多寡的问题。
-  // 钱守恒零改动：refundShareFen 行/单双口径封顶原样——refund_required 单的 amount 就是实付额，公式天然成立。
-  if (!['paid', 'shipped', 'done', 'refund_required'].includes(order.status))
+  // 钱守恒零改动：refundShareFen 行/单双口径封顶原样——payment_exception 改用 paidFee 作为全单实付分母。
+  if (!['paid', 'shipped', 'done', 'refund_required', 'payment_exception'].includes(order.status))
     return reply(400, { ok: false, error: buildBadStatus(order.status) })
   const orderStatusAtStart = order.status // 竞态可观测闸用（见下方 SHIP_REFUND_RACE 注释）
 
@@ -59,7 +61,12 @@ export async function overrideRefund({ db, data }: Ctx) {
   // 整单余额退光。现按行/单双口径分别封顶再取小：usedLine=同 orderId+lineId 的已提交额度（该行自己已拿走
   // 多少）、usedOrder=全单已提交额度（既有口径，防超实付总额）；lineShare 用 used=0 算出「该行理论分摊上限
   // （不看用量）」，减去 usedLine 得该行剩余，再与 orderCap（usedOrder 封顶后的全单剩余）取小。
-  const amountFen = toFen(Number(order.amount))
+  const actualPaidFen = Number(order.paidFee)
+  if (order.status === 'payment_exception' && (!Number.isInteger(actualPaidFen) || actualPaidFen <= 0)) {
+    await notifyAlert('money', 'overrideRefund', 'PAYMENT_AMOUNT_MISSING', { orderId })
+    return reply(400, { ok: false, error: 'PAYMENT_AMOUNT_MISSING' })
+  }
+  const amountFen = order.status === 'payment_exception' ? asFen(actualPaidFen) : toFen(Number(order.amount))
   const goodsFen = toFen(Number(order.goods))
   const itemFen = asFen(toFen(line.price) * (line.qty || 1))
   // 同单售后须读齐才能算准 usedOrder/usedLine 封顶（深审 P2·根因#7）：裸 .get() 默认 100 条截断会少算
@@ -145,7 +152,7 @@ export async function overrideRefund({ db, data }: Ctx) {
     out_trade_no: orderId,
     out_refund_no: outRefundNo,
     reason: reason.slice(0, 80),
-    amount: { refund: refundFen, total: toFen(order.amount), currency: 'CNY' },
+    amount: { refund: refundFen, total: amountFen, currency: 'CNY' },
   })
   if (!r || !(r.status || r.refund_id || r.out_refund_no)) {
     await notifyAlert('money', 'overrideRefund', 'REFUND_TRIGGER_FAIL', { id: asId })
@@ -169,6 +176,62 @@ export async function overrideRefund({ db, data }: Ctx) {
     }
   }
   return reply(200, { ok: true, id: asId })
+}
+
+// —— 补录实际到账金额（支付异常单的运维闭环·死胡同出口）——
+// payment_exception 单若支付回调缺金额字段（amount/totalFee 缺失→paidFee 落 null），overrideRefund 的
+// PAYMENT_AMOUNT_MISSING 会把退款永久卡死（此前无任何在库入口能补，只能人工改库）。本动作＝管理员核对
+// 微信商户流水后补录实际到账额（整数分），补录后该单即可正常走 overrideRefund 按实付退款。
+// 资金安全：① 仅 payment_exception 态可补（其余状态实付额以支付回调为准，不允许人工篡改）；
+// ② paidFee 须正整数分（asFen 同款校验·脏数据早暴露）；③ 条件更新防并发推进（仍是异常态才写）；
+// ④ 覆盖旧值留痕（paidFeePrev/paidFeeRecordedAt/paidFeeRecordedBy·可对账可溯）。
+export async function recordPaidFee({ db, data, agentId }: Ctx) {
+  const id = String((data && data.id) || '')
+  const paidFee = Number((data && data.paidFeeFen) ?? NaN)
+  if (!id || !Number.isInteger(paidFee) || paidFee <= 0) return reply(400, { ok: false, error: 'BAD_ARGS' })
+  const got = await db.collection('orders').doc(id).get().catch(() => null)
+  if (!got || !got.data) return reply(400, { ok: false, error: 'NO_ORDER' })
+  if (got.data.status !== 'payment_exception') return reply(400, { ok: false, error: buildBadStatus(got.data.status) })
+  // 防手滑护栏（多代理审核 codex/kimi 双票）：补录金额必须与订单应付同量级——
+  // 真实少付/多付不会超出应付 20 倍，超限＝打错位数/恶意放大退款分母，直接拒。
+  const expectedFen = toFen(Number(got.data.amount) || 0)
+  if (!(expectedFen > 0) || paidFee > expectedFen * 20) {
+    await notifyAlert('money', 'recordPaidFee', 'BAD_AMOUNT_RANGE', { id, paidFee, expectedFen })
+    return reply(400, { ok: false, error: 'BAD_AMOUNT' })
+  }
+  // 已退/在退（任何售后单）绝不允许改实付额（审核 codex 严重#2：先退款再改 paidFee→
+  // overrideRefund 按新分母重算可退余额→同一笔钱累计退两次）。售后单是退款真相单一来源，
+  // 有单即锁定分母，只能人工改库介入。
+  const exist = await db
+    .collection('afterSales')
+    .where({ orderId: id })
+    .limit(AFTERSALE_SCAN_CAP)
+    .get()
+    .catch(() => ({ data: [] }))
+  if (exist.data.length >= AFTERSALE_SCAN_CAP) {
+    await notifyAlert('money', 'recordPaidFee', 'AFTERSALE_SCAN_CAP', { id })
+    return reply(400, { ok: false, error: 'REFUND_SCAN_CAP' })
+  }
+  if (exist.data.length) return reply(400, { ok: false, error: 'REFUND_EXISTS' })
+  // 已有有效实付额：无售后单时允许覆盖修正（补录错了改对），留痕 paidFeePrev 可对账。
+  const prev = Number(got.data.paidFee)
+  const prevValid = Number.isInteger(prev) && prev > 0
+  const upd = await db
+    .collection('orders')
+    .where({ _id: id, status: 'payment_exception' })
+    .update({
+      data: {
+        paidFee,
+        paidFeePrev: prevValid ? prev : null,
+        paidFeeRecordedAt: Date.now(),
+        paidFeeRecordedBy: String(agentId || ''),
+      },
+    })
+  if (!upd.stats || upd.stats.updated !== 1) {
+    await notifyAlert('money', 'recordPaidFee', 'RECORD_FAIL', { id })
+    return reply(409, { ok: false, error: 'CONCURRENT' })
+  }
+  return reply(200, { ok: true })
 }
 
 // —— 售后退款（链10：审核 + 触发退款工作流；金额在申请时已云端分摊算定）——

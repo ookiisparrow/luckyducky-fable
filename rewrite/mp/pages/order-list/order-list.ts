@@ -21,6 +21,7 @@ const TINT: Record<string, string> = {
   done: 'sage',
   closed: 'muted',
   refund_required: 'muted',
+  payment_exception: 'muted',
 }
 // 去 ¥ 前缀（label 已含半角 ¥·拆出纯数字供模板把货币符号做小号处理，展示不改口径）。
 const stripCny = (s: string): string => (s || '').replace(/^¥/, '')
