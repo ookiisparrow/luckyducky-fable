@@ -113,7 +113,34 @@ npm run agent:status   # 门禁检查
 npm run agent:open     # 打开项目窗口
 npm run agent:debug    # 官方 API 真机调试（自动开窗+编译+触发）
 npm run agent:preview  # 推送预览到微信
+npm run agent:read     # automator 读页面数据
+npm run agent:nav      # automator 导航
+npm run agent:eval     # automator 执行 JS
+npm run agent:net      # 读网络请求
 ```
+
+## 八、automator 自动化通道（重点：IPv6！）
+
+miniprogram-automator 连接工具的 WebSocket 端点是 **`ws://[::1]:9420`（IPv6）**，不是 `127.0.0.1`！
+
+- 工具 9420 端口双监听：IPv4 = HTTP/MCP 服务；IPv6 = automator WebSocket
+- 连 IPv4 会 404/挂起，连 IPv6 秒连
+- 前置条件：`cli agent start`（automation 服务器）+ `open_project_window` + `simulator_open_page`（编译运行）
+- ticket：官方 API `automation_testaccount --action getTicket` 获取（需工具「设置→安全」开启 ticket）
+
+已验证能力（实测）：
+
+```js
+const automator = require('miniprogram-automator');
+const mini = await automator.connect({ wsEndpoint: 'ws://[::1]:9420' });
+const sys = await mini.systemInfo();          // 读系统信息
+const page = await mini.currentPage();        // 读当前页面
+const data = await page.data();               // 读页面数据
+await mini.navigateTo('/pages/detail/detail?id=x'); // 导航
+await mini.evaluate('function(){ return 1+1 }');    // 执行 JS
+```
+
+> 架构说明：automator 驱动**模拟器**运行时（与真机同一份代码，数据一致）；真机调试（手机运行）是另一条通道，二者配合即为完整自动化。
 
 ## 七、常见问题
 

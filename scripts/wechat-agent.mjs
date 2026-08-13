@@ -13,10 +13,17 @@
  *   node scripts/wechat-agent.mjs preview [page]      # 推送预览到微信
  *   node scripts/wechat-agent.mjs net                 # 读网络请求
  *   node scripts/wechat-agent.mjs console [pattern]   # 读 console（默认全部）
+ *   node scripts/wechat-agent.mjs read-data [page]    # automator 读页面数据（IPv6 连接）
+ *   node scripts/wechat-agent.mjs nav <url>           # automator 导航（如 /pages/detail/detail?id=x）
+ *   node scripts/wechat-agent.mjs eval <js>           # automator 执行 JS（如 '1+1'）
+ *
+ * automator 连接：ws://[::1]:9420（IPv6！不是 127.0.0.1）
+ * 依赖：node_modules/miniprogram-automator（项目已装）
  *
  * 环境变量：WECHAT_AGENT_CLIENT 客户端名（默认 pi-agent）
  */
 import { execSync } from 'node:child_process';
+import { createRequire } from 'node:module';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -25,6 +32,21 @@ const PROJECT = path.resolve(__dirname, '../rewrite/mp');
 const HOME_PAGE = 'pages/home/home';
 const CLIENT = process.env.WECHAT_AGENT_CLIENT || 'pi-agent';
 const SKILL_VERSION = '0.3.9';
+const AUTOMATOR_WS = 'ws://[::1]:9420'; // IPv6！automator 的 WebSocket 端点
+
+// ---------- automator（IPv6 连接，读/操作模拟器运行时） ----------
+async function automatorConnect() {
+  const require = createRequire(import.meta.url);
+  const automator = require('miniprogram-automator');
+  // 前置：确保 automation 服务器与项目窗口就绪
+  try {
+    execSync(`wechatide -c ${CLIENT} agent start --project "${PROJECT}" --port 9420 2>/dev/null`, { encoding: 'utf8', timeout: 30000 });
+  } catch { /* 已就绪则忽略 */ }
+  try {
+    execSync(`wechatide -c ${CLIENT} open_project_window --project "${PROJECT}" 2>/dev/null`, { encoding: 'utf8', timeout: 30000 });
+  } catch { /* 已打开则忽略 */ }
+  return automator.connect({ wsEndpoint: AUTOMATOR_WS });
+}
 
 function runTool(tool, args = {}, timeoutMs = 120000) {
   const flags = [`-c ${CLIENT}`, tool];
@@ -112,6 +134,49 @@ async function cmdConsole(pattern) {
   console.log('');
 }
 
+async function cmdReadData(page) {
+  console.log(`\n📊 读取页面数据: ${page}\n`);
+  const mini = await automatorConnect();
+  try {
+    await execSync(`wechatide -c ${CLIENT} simulator_open_page --project "${PROJECT}" --page ${page} 2>/dev/null`, { encoding: 'utf8', timeout: 60000 });
+    await new Promise((r) => setTimeout(r, 5000));
+    const cur = await mini.currentPage();
+    console.log('📄 当前页面:', cur?.path);
+    const data = await cur?.data();
+    console.log('📊 页面数据:', JSON.stringify(data, null, 2).slice(0, 2000));
+  } finally { await mini.disconnect(); }
+}
+
+async function cmdNav(url) {
+  console.log(`\n🧭 导航到: ${url}\n`);
+  const mini = await automatorConnect();
+  try {
+    await mini.navigateTo(url);
+    await new Promise((r) => setTimeout(r, 3000));
+    const cur = await mini.currentPage();
+    console.log('✅ 导航完成，当前页面:', cur?.path);
+  } catch {
+    // navigateTo 失败可能是 tab 页，改试 reLaunch
+    try {
+      await mini.reLaunch(url);
+      await new Promise((r) => setTimeout(r, 3000));
+      const cur = await mini.currentPage();
+      console.log('✅ reLaunch 完成，当前页面:', cur?.path);
+    } catch (e2) { console.error('❌ 导航失败:', e2.message); }
+  } finally { await mini.disconnect(); }
+}
+
+async function cmdEval(js) {
+  console.log(`\n💻 执行 JS: ${js}\n`);
+  const mini = await automatorConnect();
+  try {
+    // automator 的 evaluate 需要函数字符串；纯表达式自动包成函数
+    const fnSrc = /^\s*(function|async|\()/.test(js) ? js : `function(){ return ${js} }`;
+    const result = await mini.evaluate(fnSrc);
+    console.log('✅ 结果:', JSON.stringify(result, null, 2).slice(0, 1500));
+  } finally { await mini.disconnect(); }
+}
+
 // ---------- 主流程 ----------
 const [sub, arg] = process.argv.slice(2);
 const help = `
@@ -125,6 +190,9 @@ const help = `
   node scripts/wechat-agent.mjs preview [page]      # 推送预览到微信（零扫码）
   node scripts/wechat-agent.mjs net                 # 读网络请求
   node scripts/wechat-agent.mjs console [pattern]   # 读 console（可带 grep 模式）
+  node scripts/wechat-agent.mjs read-data [page]    # automator 读页面数据（IPv6）
+  node scripts/wechat-agent.mjs nav <url>           # automator 导航
+  node scripts/wechat-agent.mjs eval <js>           # automator 执行 JS
 
 环境变量: WECHAT_AGENT_CLIENT 客户端名（默认 pi-agent）
 `;
@@ -144,6 +212,9 @@ try {
     case 'preview': await cmdPreview(page); break;
     case 'net':     await cmdNet(); break;
     case 'console': await cmdConsole(arg); break;
+    case 'read-data': await cmdReadData(page); break;
+    case 'nav': if (!arg) { console.log('❌ 请提供导航路径，如 /pages/detail/detail?id=x'); process.exit(1); } await cmdNav(arg); break;
+    case 'eval': if (!arg) { console.log('❌ 请提供 JS 表达式，如 "1+1"'); process.exit(1); } await cmdEval(arg); break;
     default:
       console.log(`❌ 未知子命令: ${sub}`);
       console.log(help);
