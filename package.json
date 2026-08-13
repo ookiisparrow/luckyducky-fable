@@ -49,7 +49,10 @@
     "agent:net": "node scripts/wechat-agent.mjs net",
     "agent:read": "node scripts/wechat-agent.mjs read-data",
     "agent:nav": "node scripts/wechat-agent.mjs nav",
-    "agent:eval": "node scripts/wechat-agent.mjs eval"
+    "agent:eval": "node scripts/wechat-agent.mjs eval",
+    "flow:test": "node scripts/automation-flow.mjs",
+    "flow:probe": "node scripts/automation-flow.mjs probe",
+    "flow:data": "node scripts/automation-flow.mjs data"
   },
   "devDependencies": {
     "@cloudbase/manager-node": "^5.6.3",
