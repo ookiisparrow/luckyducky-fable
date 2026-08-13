@@ -41,7 +41,12 @@
     "device:status": "node scripts/real-device.mjs status",
     "device:open": "node scripts/real-device.mjs open",
     "device:preview": "node scripts/real-device.mjs preview",
-    "device:debug": "node scripts/real-device.mjs debug"
+    "device:debug": "node scripts/real-device.mjs debug",
+    "agent:status": "node scripts/wechat-agent.mjs status",
+    "agent:open": "node scripts/wechat-agent.mjs open",
+    "agent:debug": "node scripts/wechat-agent.mjs debug",
+    "agent:preview": "node scripts/wechat-agent.mjs preview",
+    "agent:net": "node scripts/wechat-agent.mjs net"
   },
   "devDependencies": {
     "@cloudbase/manager-node": "^5.6.3",
