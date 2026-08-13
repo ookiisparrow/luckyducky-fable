@@ -16,7 +16,7 @@
 import { readdirSync, existsSync, readFileSync } from 'node:fs'
 import { execSync } from 'node:child_process'
 import { join, resolve } from 'node:path'
-import { PROD_ENV } from './lib/env.mjs' // 生产 env id 单源（病根#5·债#30①）·禁部署
+import { PROD_ENV, TEST_ENV } from './lib/env.mjs' // 生产/测试 env id 单源（病根#5·债#30①）·禁部署
 
 const ROOT = resolve(import.meta.dirname, '..')
 
@@ -25,7 +25,7 @@ function arg(name) {
   return i >= 0 ? process.argv[i + 1] : ''
 }
 
-const env = arg('env') || process.env.LD_TEST_ENV || ''
+const env = arg('env') || process.env.LD_TEST_ENV || TEST_ENV || ''
 if (!env) {
   console.error('✗ 缺测试 envId：node scripts/deploy-test.mjs --env <env>（或 LD_TEST_ENV=...）')
   process.exit(1)

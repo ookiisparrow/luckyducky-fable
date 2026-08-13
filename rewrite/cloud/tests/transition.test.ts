@@ -46,4 +46,15 @@ describe('transition（条件状态流转·黄金 A）', () => {
     expect(r2.moved).toBe(false)
     expect(control.dump('orders').find((o) => o._id === 'a').paidAt).toBe(111)
   })
+
+  it('大白话：当前态不在 from 时，不执行函数 patch 的副作用', async () => {
+    let calls = 0
+    const r = await transition('orders', 'b', ['pending'], 'paid', () => {
+      calls++
+      return { shouldNotWrite: true }
+    })
+    expect(r.moved).toBe(false)
+    expect(calls).toBe(0)
+    expect(control.dump('orders').find((o) => o._id === 'b').shouldNotWrite).toBeUndefined()
+  })
 })

@@ -225,7 +225,7 @@ const makeSeamGuard = (s) => ({
   desc: s.desc,
   run() {
     const srcRoot = join(ROOT, 'rewrite/cloud/src')
-    if (!existsSync(srcRoot)) return []
+    if (!existsSync(srcRoot)) return ['rewrite/cloud/src 缺失——守卫扫描面消失（rw-flow-seam-single）']
     const seamAbs = join(ROOT, s.seam)
     if (!existsSync(seamAbs)) return [s.seamMissing]
     const readMatchable = (abs) => (s.strip ? stripComments(readFileSync(abs, 'utf8')) : readFileSync(abs, 'utf8'))
@@ -706,6 +706,59 @@ export const repoChecks = [
     },
   },
   {
+    id: 'guard-path-liveness',
+    roots: ['#11', '#16'],
+    desc: '路径清单活性（守卫的守卫·MG-A·2026-08-13 引入）：三处硬编码红区文件清单（commit-msg RED_DIRS / guard-rules RED_FILE_PREFIXES / 本文件 EXTRA_RED）的每个路径须真实存在于工作区——文件改名/删除后清单未同步即红（fen.ts→money.ts 漂移即此守卫逮到）',
+    run() {
+      const bad = []
+      const commitMsg = readFileSync(join(ROOT, 'scripts/git-hooks/commit-msg'), 'utf8')
+      const m1 = commitMsg.match(/RED_DIRS="([^"]+)"/)
+      if (m1) for (const p of m1[1].split(/\s+/).filter(Boolean)) if (!existsSync(join(ROOT, p))) bad.push(`[commit-msg RED_DIRS] ${p} 不存在——红区清单漂移（文件改名/删除后清单未同步）`)
+      const gr = readFileSync(join(ROOT, 'scripts/pipeline/guard-rules.mjs'), 'utf8')
+      const m2 = gr.match(/RED_FILE_PREFIXES\s*=\s*\[([\s\S]*?)\]/)
+      if (m2) for (const prefix of [...m2[1].matchAll(/"([^"]+)"/g)].map((x) => x[1])) {
+        const alive = existsSync(join(ROOT, prefix)) || ['.ts', '.mjs', '.js', '.json', '.vue', '.cjs'].some((e) => existsSync(join(ROOT, prefix + e)))
+        if (!alive) {
+          const segs = prefix.split('/'), parent = segs.slice(0, -1).join('/'), leaf = segs[segs.length - 1]
+          let matched = false
+          try { matched = readdirSync(join(ROOT, parent)).some((f) => f.startsWith(leaf)) } catch { matched = false }
+          if (!matched) bad.push(`[guard-rules RED_FILE_PREFIXES] ${prefix} 前缀失配——红区清单漂移`)
+        }
+      }
+      const cs = readFileSync(join(ROOT, 'scripts/check-structure.mjs'), 'utf8')
+      const m3 = cs.match(/const EXTRA_RED\s*=\s*\[([\s\S]*?)\]/)
+      if (m3) for (const p of [...m3[1].matchAll(/'([^']+)'/g)].map((x) => x[1])) if (!existsSync(join(ROOT, p))) bad.push(`[check-structure EXTRA_RED] ${p} 不存在——红区清单漂移`)
+      return bad
+    },
+  },
+  {
+    id: 'guard-scan-surface-liveness',
+    roots: ['#16'],
+    desc: '扫描面非空活性（守卫的守卫·MG-C·防未来空转哨兵）：所有守卫 run() 里 join(ROOT, <dir>) 引用的目录须递归非空——目录被清空后守卫空转即红（2026-08-13 引入时活线 61 目录均非空，当前 0 命中，守住未来）',
+    run() {
+      const bad = []
+      const src = readFileSync(join(ROOT, 'scripts/check-structure.mjs'), 'utf8')
+      const dirs = new Set()
+      for (const m of src.matchAll(/join\(ROOT,\s*'([^']+)'\)/g)) dirs.add(m[1])
+      for (const d of dirs) {
+        const full = join(ROOT, d)
+        if (!existsSync(full) || !statSync(full).isDirectory()) continue
+        let empty = true
+        const rec = (p) => {
+          for (const n of readdirSync(p)) {
+            const fp = join(p, n)
+            const st = statSync(fp)
+            if (st.isDirectory()) rec(fp)
+            else { empty = false }
+          }
+        }
+        try { rec(full) } catch { continue }
+        if (empty) bad.push(`扫描目录 ${d} 为空——引用它的守卫空转（防未来空转哨兵）`)
+      }
+      return bad
+    },
+  },
+  {
     // 病根#16 ⑤（盲区体检批3·指针大迁移）：M5 切换（2026-07-09）搬走了生产，没有任何机制清点
     // 「指向生产的引用」——oldline-frozen 守住旧线字节、没守指向旧线的指针。当日实况：deploy-fns.mjs
     // 仍 build:cloud + packages/cloud/dist + 38 函数旧 manifest——hash 匹配则报「变更待部署 0 个」
@@ -845,7 +898,7 @@ export const repoChecks = [
     desc: '需求复核计数自洽（规则⑥·客观计数机器维护·熵地图 E2）：需求清单「复核进度/复核小结」的 ✅/⚠️/💬/🗑️/⬜ 计数须等于 L0/L1/L2 判定列实际 tally——防 R 逐条定论后摘要忘回写漂移（doc-audit round-2 命中 26 ✅/4 💬 vs 真值 29/1）。tally 源＝判定列本身（映射表行末格是守卫名无 emoji·自然排除）',
     run() {
       const p = join(ROOT, 'docs/需求清单.md')
-      if (!existsSync(p)) return []
+      if (!existsSync(p)) return ['docs/需求清单.md 缺失——守卫扫描面消失（requirement-tally-synced）']
       const text = readFileSync(p, 'utf8')
       const MARKS = ['✅', '⚠️', '🗑️', '💬', '⬜']
       const tally = { '✅': 0, '⚠️': 0, '🗑️': 0, '💬': 0, '⬜': 0 }
@@ -1301,7 +1354,7 @@ export const repoChecks = [
     desc: '主包体积预算（活线 rewrite/mp·根因#8）：会进上传包的源文件（pages/components/custom-tab-bar/lib/api/utils/static/styles + app.json/app.ts/app.wxss/sitemap.json，剔 tests/typings/README/tsconfig/project*.config.json）总字节数（.ts 按 ×1.05 估编译后 .js 体积——实测 tsc CommonJS 输出比源码大 1.5%–2.6%）须 ≤ 1.5MiB（微信主包硬顶 2MiB 的 75%，留边际）——超预算真机冷启退化才现形（根因#8「构建过≠真机能用」）；既有 main-package-budget/subpackage-config-present 扫冻结旧线 packages/miniapp 对活线假绿，本条补活线真空（随 packages/ 处置拍板一并退役前不动旧线两条）',
     run() {
       const base = join(ROOT, 'rewrite/mp')
-      if (!existsSync(base)) return []
+      if (!existsSync(base)) return ['rewrite/mp 缺失——守卫扫描面消失（rw-mp-main-package-budget）']
       const EXCLUDE_TOP = new Set(['tests', 'typings', 'README.md', 'tsconfig.json', 'project.config.json', 'project.private.config.json'])
       const TS_MULTIPLIER = 1.05
       const BUDGET = 1.5 * 1024 * 1024 // 微信主包硬顶 2MiB 的 75%（见守卫头注）
@@ -1380,7 +1433,7 @@ export const repoChecks = [
     run() {
       const rel = 'rewrite/mp/pages/player/player.ts'
       const abs = join(ROOT, rel)
-      if (!existsSync(abs)) return [] // 重写线未建时不红
+      if (!existsSync(abs)) return ['rewrite/mp/pages/player/player.ts 缺失——守卫扫描面消失（rw-mp-player-prefetch-cache）']
       const src = stripComments(readFileSync(abs, 'utf8')) // 剥注释单源 helper（错题本 E1/E10）：防注释文本假触发/假放行
       const bad = []
       const ps = methodBody(src, 'playSegment')
@@ -1432,7 +1485,7 @@ export const repoChecks = [
     desc: '主按钮点按触觉反馈单源（病根#5 复制漂移）：rewrite/mp 离散点按震感一律走 lib/haptics.ts 的 tapHaptic（须导出）·页面 .ts 禁散写裸 wx.vibrateShort；例外仅 lib/haptics.ts（单源）+ pages/flip-demo/player（拖动/seek 阻尼各自实例节流 vibe·非点按）——防强度/节流复制各写各的漂移',
     run() {
       const base = join(ROOT, 'rewrite/mp')
-      if (!existsSync(base)) return [] // 重写线未建时不红
+      if (!existsSync(base)) return ['rewrite/mp 缺失——守卫扫描面消失（rw-mp-tap-haptic-single-source）']
       const bad = []
       const lib = 'rewrite/mp/lib/haptics.ts'
       if (!existsSync(join(ROOT, lib))) bad.push(`${lib} 缺失——点按震感单源丢失（病根#5）`)
@@ -1607,7 +1660,7 @@ import { PROD_ENV } from './lib/env.mjs'（单源·病根#5·债#30①）`)
     desc: '跨文档指针不失活（根因#11·熵地图 E1）：活文档「重构日志 <YYYY-MM-DD>」引用，该日期须在活 重构日志.md 有真标题（非卷档标签）；否则该行须显式指 archive——防批次卷档后指针扑空',
     run() {
       const log = join(ROOT, 'docs/重构日志.md')
-      if (!existsSync(log)) return []
+      if (!existsSync(log)) return ['docs/重构日志.md 缺失——守卫扫描面消失（docs-pointer-liveness）']
       // 活日期＝真标题里的日期；排除卷档标签行（含「卷档」或「archive」）——那些日期已搬走、不算活
       const liveDates = new Set(
         readFileSync(log, 'utf8')
@@ -1682,7 +1735,7 @@ import { PROD_ENV } from './lib/env.mjs'（单源·病根#5·债#30①）`)
     desc: 'skill 指针不悬空（根因#11·2026-07-23 治理精简批改全文扫描）：CLAUDE.md 里每个 `/skill-name` 引用须有 .claude/skills/<name>/SKILL.md——防列了点不出的悬空 skill 指针（原只扫 §9 注册表·换稿后 CLAUDE 无注册表段、目录即单源，改扫全文）',
     run() {
       const claudePath = join(ROOT, 'CLAUDE.md')
-      if (!existsSync(claudePath)) return []
+      if (!existsSync(claudePath)) return ['CLAUDE.md 缺失——守卫扫描面消失（skills-referenced-exist）']
       const claude = readFileSync(claudePath, 'utf8')
       const bad = []
       const seen = new Set()
@@ -2300,7 +2353,7 @@ import { PROD_ENV } from './lib/env.mjs'（单源·病根#5·债#30①）`)
       }
 
       const actionsDir = join(ROOT, 'rewrite/cloud/src/functions/adminApi/actions')
-      if (!existsSync(actionsDir)) return []
+      if (!existsSync(actionsDir)) return ['rewrite/cloud/src/functions/adminApi/actions 缺失——守卫扫描面消失（rw-scm-transitions-declared）']
       const files = readdirSync(actionsDir).filter((e) => /^scm\w*\.ts$/.test(e)).map((e) => join(actionsDir, e))
       const collOf = (head) => {
         const ms = [...head.matchAll(/(?:\.collection\(|transition\()\s*(?:['"](\w+)['"]|COLLECTIONS\.(\w+))/g)]
@@ -2434,7 +2487,7 @@ import { PROD_ENV } from './lib/env.mjs'（单源·病根#5·债#30①）`)
     run() {
       const mpPath = join(ROOT, 'rewrite/mp/lib/checkoutConst.ts')
       const shPath = join(ROOT, 'rewrite/shared/src/checkout.ts')
-      if (!existsSync(shPath)) return []
+      if (!existsSync(shPath)) return ['rewrite/shared/src/checkout.ts 缺失——守卫扫描面消失（rw-mp-checkout-consts-synced）']
       if (!existsSync(mpPath)) return ['rewrite/mp/lib/checkoutConst.ts 缺失——结算常量副本未落（mp 无法引 @ldrw/shared·守卫需两份对账）']
       const bad = []
       // 全导出枚举：数值常量取字面量；数组常量取 {id,name,price} 逐项序列化——两类之外的导出形态（对象/函数）
@@ -2476,7 +2529,7 @@ import { PROD_ENV } from './lib/env.mjs'（单源·病根#5·债#30①）`)
       const shPath = join(ROOT, 'rewrite/shared/src/statusLabels.ts')
       const mpOrdersPath = join(ROOT, 'rewrite/mp/lib/mapOrders.ts')
       const mpAftersalesPath = join(ROOT, 'rewrite/mp/lib/mapAftersales.ts')
-      if (!existsSync(shPath)) return []
+      if (!existsSync(shPath)) return ['rewrite/shared/src/statusLabels.ts 缺失——守卫扫描面消失（rw-mp-order-labels-synced）']
       const bad = []
       const keysOf = (src, exportName) => {
         const m = src.match(new RegExp(`export const ${exportName}[^{]*{([^}]*)}`, 's'))
@@ -2566,7 +2619,7 @@ import { PROD_ENV } from './lib/env.mjs'（单源·病根#5·债#30①）`)
     desc: '内容站 SEO/GEO 基线在位（M4·GEO 基建=可爬可收录+AI 引擎可摘要的机器面）：astro.config 配 site 域名 + sitemap 集成；robots.txt 在且显式放行 AI 爬虫（GPTBot 等）；Base.astro 齐 og 三件+og:image/og:locale/twitter:card+WebSite 结构化卡；llms.txt 与 rss.xml 端点在；404 页 noindex；favicon.svg 与 og-cover.png 分享素材在；根 typecheck 覆盖 rewrite/site；教程 frontmatter 带 reviewed 标记（AI 起草未审稿不冒充定稿——写真机器可核）',
     run() {
       const base = join(ROOT, 'rewrite/site')
-      if (!existsSync(base)) return []
+      if (!existsSync(base)) return ['rewrite/site 缺失——守卫扫描面消失（rw-site-in-gates）']
       const bad = []
       const cfg = join(base, 'astro.config.mjs')
       if (!existsSync(cfg)) bad.push('rewrite/site/astro.config.mjs 缺失')
@@ -2615,7 +2668,7 @@ import { PROD_ENV } from './lib/env.mjs'（单源·病根#5·债#30①）`)
     desc: '新坐席台包必须被三道闸扫到（M3 批8·坐席台=在用人工客服唯一通道·零断档红线）：root typecheck 覆盖 rewrite/agent；轮询合并纯函数有行为测试；package.json 有 build 脚本',
     run() {
       const base = join(ROOT, 'rewrite/agent')
-      if (!existsSync(base)) return []
+      if (!existsSync(base)) return ['rewrite/agent 缺失——守卫扫描面消失（rw-agent-in-gates）']
       const bad = []
       const pkg = JSON.parse(readFileSync(join(ROOT, 'package.json'), 'utf8'))
       if (!/rewrite\/agent/.test(pkg.scripts?.typecheck || '')) bad.push('package.json scripts.typecheck 未覆盖 rewrite/agent——新坐席台类型不过闸')
@@ -2631,7 +2684,7 @@ import { PROD_ENV } from './lib/env.mjs'（单源·病根#5·债#30①）`)
     desc: '新后台包必须被三道闸扫到（M3 批1）：root typecheck 覆盖 rewrite/admin；api 客户端有行为测试在位（会话/规整属钱链入口）；package.json 有 build 脚本（vite 产物形态在）',
     run() {
       const base = join(ROOT, 'rewrite/admin')
-      if (!existsSync(base)) return []
+      if (!existsSync(base)) return ['rewrite/admin 缺失——守卫扫描面消失（rw-admin-ui-in-gates）']
       const bad = []
       const pkg = JSON.parse(readFileSync(join(ROOT, 'package.json'), 'utf8'))
       if (!/rewrite\/admin/.test(pkg.scripts?.typecheck || '')) bad.push('package.json scripts.typecheck 未覆盖 rewrite/admin——新后台类型不过闸')
@@ -2647,7 +2700,7 @@ import { PROD_ENV } from './lib/env.mjs'（单源·病根#5·债#30①）`)
     desc: '新线小程序包必须被三道闸扫到（M2 批1·ADR §24 测试一等公民）：root typecheck 覆盖 rewrite/mp；app.json 每个注册页面四件套（.wxml/.ts/.json/.wxss）齐全（缺件=真机白屏或工具报错·构建过≠真机能用的结构半边）；tabBar.custom 时 custom-tab-bar 组件四件套在位',
     run() {
       const base = join(ROOT, 'rewrite/mp')
-      if (!existsSync(base)) return []
+      if (!existsSync(base)) return ['rewrite/mp 缺失——守卫扫描面消失（rw-mp-line-in-gates）']
       const bad = []
       const pkg = JSON.parse(readFileSync(join(ROOT, 'package.json'), 'utf8'))
       if (!/rewrite\/mp/.test(pkg.scripts?.typecheck || '')) bad.push('package.json scripts.typecheck 未覆盖 rewrite/mp——新线小程序类型不过闸')
@@ -2761,7 +2814,7 @@ import { PROD_ENV } from './lib/env.mjs'（单源·病根#5·债#30①）`)
     run() {
       const bad = []
       const base = join(ROOT, 'rewrite/mp')
-      if (!existsSync(base)) return []
+      if (!existsSync(base)) return ['rewrite/mp 缺失——守卫扫描面消失（rw-mp-page-content-golden）']
       const MAPPERS = ['mapWelcome', 'mapCatalogPlayer', 'mapMe', 'mapAbout', 'mapAgreement']
       // ① golden 测试存在且覆盖五 mapper 整档 null→默认回退
       const testRel = 'rewrite/mp/tests/pages-map.test.ts'
@@ -2823,7 +2876,7 @@ import { PROD_ENV } from './lib/env.mjs'（单源·病根#5·债#30①）`)
     desc: '新线隐私授权+数据共享同意已接（R27㉒·M5 前置闸1）：app.json __usePrivacyCheck__ + privacyGate 挂 onNeedPrivacyAuthorization + app.ts 注册 + privacy-sheet 组件（agreePrivacyAuthorization）+ 涉隐私接口页必挂弹窗（扫描制）+ consent 页写 dataConsent + me 入口',
     run() {
       const base = join(ROOT, 'rewrite/mp')
-      if (!existsSync(base)) return []
+      if (!existsSync(base)) return ['rewrite/mp 缺失——守卫扫描面消失（rw-mp-privacy-gated）']
       const bad = []
       const rd = (rel) => (existsSync(join(base, rel)) ? readFileSync(join(base, rel), 'utf8') : null)
       const appJson = rd('app.json')
@@ -2941,7 +2994,7 @@ import { PROD_ENV } from './lib/env.mjs'（单源·病根#5·债#30①）`)
     run() {
       const rel = 'rewrite/mp/pages/player/player.ts'
       const abs = join(ROOT, rel)
-      if (!existsSync(abs)) return [] // 重写线未建时不红
+      if (!existsSync(abs)) return ['rewrite/mp/pages/player/player.ts 缺失——守卫扫描面消失（rw-mp-player-stale-guarded）']
       const src = readFileSync(abs, 'utf8')
       const body = methodBody(src, 'playSegment')
       if (!body) return [`${rel} 找不到 playSegment 方法——切段取址单点丢失（根因#8）`]
@@ -2996,7 +3049,7 @@ import { PROD_ENV } from './lib/env.mjs'（单源·病根#5·债#30①）`)
     run() {
       const base = join(ROOT, 'rewrite/mp')
       const tsPath = join(base, 'pages/player/player.ts')
-      if (!existsSync(tsPath)) return [] // 播放页未建时不红
+      if (!existsSync(tsPath)) return ['pages/player/player.ts 缺失——守卫扫描面消失（rw-mp-player-no-autonext）'] // 播放页未建时不红
       const bad = []
       const src = stripComments(readFileSync(tsPath, 'utf8')) // 剥注释单源 helper（错题本 E1）：防注释文本假触发/假放行
       const endedBody = methodBody(src, 'onEnded')
@@ -3034,10 +3087,10 @@ import { PROD_ENV } from './lib/env.mjs'（单源·病根#5·债#30①）`)
     desc: 'mp 延时自动返回坞生命周期清理（病根#5 样板漂移·根因#8）：凡 rewrite/mp 页 .ts 既 setTimeout 又 navigateBack（延时自动返回）须 onUnload + clearTimeout 清定时器；具名 backTimer 坞另须 onUnload 置 this.unloaded=true + 每处 backTimer=setTimeout 赋值须有 this.unloaded 早退检查且位于「赋值点前最后一个 await 之后、赋值之前」（无前置 await 的同步路径为赋值前任意位置·批6 收紧：检查早于 await＝迟到回包窗口失守）——否则用户在延时窗口内手动返回/退页→孤儿定时器再 navigateBack 多弹页，或迟到回包对已退页再 toast/navigateBack（工具端不暴露·真机才炸）',
     run() {
       const base = join(ROOT, 'rewrite/mp')
-      if (!existsSync(base)) return []
+      if (!existsSync(base)) return ['rewrite/mp 缺失——守卫扫描面消失（rw-mp-navback-timer-cleaned）']
       const bad = []
       const pagesDir = join(base, 'pages')
-      if (!existsSync(pagesDir)) return []
+      if (!existsSync(pagesDir)) return ['pages 缺失——守卫扫描面消失（rw-mp-navback-timer-cleaned）']
       // 枚举源码里全部 2 空格缩进的顶层方法名（Page({...}) 对象方法书写惯例·`^\s{2}` 锚定行首恰好两空格，
       // 更深缩进的嵌套回调（如 success: async (res) => {}）不会误命中）——配 methodBody 取各方法体范围，
       // 定位某个 backTimer 赋值点具体落在哪个方法体内。
@@ -3151,7 +3204,7 @@ import { PROD_ENV } from './lib/env.mjs'（单源·病根#5·债#30①）`)
     run() {
       const f = 'rewrite/mp/pages/address-edit/address-edit.wxml'
       const abs = join(ROOT, f)
-      if (!existsSync(abs)) return []
+      if (!existsSync(abs)) return ['rewrite/mp/pages/address-edit/address-edit.wxml 缺失——守卫扫描面消失（rw-mp-address-region-picker）']
       const src = readFileSync(abs, 'utf8')
       const bad = []
       if (!/mode="region"/.test(src)) bad.push(`${f} 未用 <picker mode="region">——地区选择器回退自由文本（丢省市区级联·根因#8）`)
@@ -3171,9 +3224,9 @@ import { PROD_ENV } from './lib/env.mjs'（单源·病根#5·债#30①）`)
     desc: '播放页竖屏沉浸全屏 + 帮助(客服)入口：player.json 须 navigationStyle:custom；player.wxml 的 <video> 须 controls="{{false}}" + 求助入口节点（bind:tap=onHelp）+ 自绘 seek 条 WXS 化两段式绑定（批5·根因#15：60Hz touchmove 每帧 setData 双向过桥＝掉帧源，拖动几何移入渲染层 WXS 闭环）——外置 <wxs src="./seek.wxs" module="sk">（内联 <wxs> 里的 < 会被 wxml-well-formed 咬）+ 绑定钉 touchstart={{sk.onStart}}/touchmove={{sk.onMove}}/touchend={{sk.onEnd}} + change:cfg={{sk.onCfg}} 下发几何（rect/durSec/marks）；seek.wxs 的 onMove 函数体内不得出现 .seek(/onSeekCommit（两段式：WXS 拖动中只改显示、绝不提交·setupFnBody 取真源）、player.ts 的 onSeekCommit 方法体内须出现 .seek(（松手才由逻辑层真 seek）+ _resumeAt 赋值 + .play(（seek 只是发起、平台不保证落住：源不支持 Range 时 seek 会触发重载→位置回 0 且播放停摆→没有 timeupdate→进度条永久冻在松手位置，2026-07-20 用户反馈现象；故须记目标秒交 onVideoMeta 兜底拉回 + 补推 play）；客服入口须单源在 rewrite/mp/utils/customerService.ts（rewrite/mp 内 wx.openCustomerServiceChat 只此一处）。段落进度条须落胶囊下方（2026-07-13 反馈）：player.ts 须取 getMenuButtonBoundingClientRect、.lp-segstrip 须动态 top（不硬编码贴屏顶）；视频框须贴合素材比例去左右黑边（2026-07-13 反馈）：主 <video>（controls={{false}}）须 bind:loadedmetadata=onVideoMeta + player.ts 有 onVideoMeta 方法（体内真写 videoRatio）+ .lp-video-box 播放态须动态 padding-top（不写死 168%）',
     run() {
       const base = join(ROOT, 'rewrite/mp')
-      if (!existsSync(base)) return []
+      if (!existsSync(base)) return ['rewrite/mp 缺失——守卫扫描面消失（rw-mp-player-immersive）']
       const jsonPath = join(base, 'pages/player/player.json')
-      if (!existsSync(jsonPath)) return [] // 播放页未建时不红（早期批次）
+      if (!existsSync(jsonPath)) return ['pages/player/player.json 缺失——守卫扫描面消失（rw-mp-player-immersive）']
       const bad = []
       const json = JSON.parse(readFileSync(jsonPath, 'utf8'))
       if (json.navigationStyle !== 'custom')
@@ -3339,7 +3392,7 @@ import { PROD_ENV } from './lib/env.mjs'（单源·病根#5·债#30①）`)
     desc: '投屏全线取缔防回潮（2026-07-12 拍板·决策§28）：rewrite/mp 全部源文件（ts/wxml/wxss/json/md/wxs）不得出现 投屏/casting 任一 token（含 startCasting/show-casting-button/casting 事件绑定）——旧分支合并或样板复制把投屏带回来当场红；重启投屏须先改需求清单并退役本守卫。批5 起扩扫 .wxs（渲染层 WXS 亦是投屏回潮盲区，堵之）',
     run() {
       const base = join(ROOT, 'rewrite/mp')
-      if (!existsSync(base)) return []
+      if (!existsSync(base)) return ['rewrite/mp 缺失——守卫扫描面消失（rw-mp-no-casting）']
       const bad = []
       const re = /投屏|casting/i
       const walk = (d) => {
@@ -3471,7 +3524,7 @@ import { PROD_ENV } from './lib/env.mjs'（单源·病根#5·债#30①）`)
     desc: 'mp 失败≠空态（根因#14）：order-list/reviews/my-courses/aftersales/order 五页 ts+wxml 须有 loadFailed+onRetryLoad；catalog.ts 须有 failed 态且 lib/courses 有 getCourseByIdDetailed；取址 fetcher（lib/playbackCache.ts·批3 迁出播放页）须分流 FETCH_FAIL——网络失败伪装成「暂无/不存在/整理中」即红',
     run() {
       const base = join(ROOT, 'rewrite/mp')
-      if (!existsSync(base)) return []
+      if (!existsSync(base)) return ['rewrite/mp 缺失——守卫扫描面消失（rw-mp-list-loadfailed-state）']
       const bad = []
       for (const p of ['order-list', 'reviews', 'my-courses', 'aftersales', 'order']) {
         const ts = join(base, `pages/${p}/${p}.ts`)
@@ -3576,7 +3629,7 @@ import { PROD_ENV } from './lib/env.mjs'（单源·病根#5·债#30①）`)
     run() {
       const bad = []
       const shPath = join(ROOT, 'rewrite/shared/src/learning.ts')
-      if (!existsSync(shPath)) return []
+      if (!existsSync(shPath)) return ['rewrite/shared/src/learning.ts 缺失——守卫扫描面消失（rw-progress-percent-single-source）']
       const sh = stripComments(readFileSync(shPath, 'utf8'))
       if (!/export\s+function\s+progressPercent\b/.test(sh))
         bad.push('rewrite/shared/src/learning.ts 未导出 progressPercent——学习进度口径单源缺定值（病根#5）')
@@ -3674,7 +3727,7 @@ import { PROD_ENV } from './lib/env.mjs'（单源·病根#5·债#30①）`)
     desc: '品牌启动 splash 有界自动消失（根因#8 build 绿·真机陷死·撤场＝min-hold+数据就绪 race+硬上限）：brand-splash.ts 须有 setTimeout 驱动的 triggerEvent(\'done\') 且有 HARD_CAP_MS 硬上限常量接线 setTimeout（数据永不就绪也无条件撤场）；home.wxml 须挂 <brand-splash bind:done>（经 ready 传数据就绪）；home.ts 须在回调置 showSplash=false——防计时器/回调/硬上限一断即永久盖死首页',
     run() {
       const base = join(ROOT, 'rewrite/mp')
-      if (!existsSync(base)) return [] // 重写线未建时不红
+      if (!existsSync(base)) return ['rewrite/mp 缺失——守卫扫描面消失（rw-mp-splash-auto-dismiss）']
       const bad = []
       const compRel = 'rewrite/mp/components/brand-splash/brand-splash.ts'
       const comp = join(ROOT, compRel)
@@ -3723,7 +3776,7 @@ import { PROD_ENV } from './lib/env.mjs'（单源·病根#5·债#30①）`)
     desc: 'tab 栈底页误触退出提醒焊死（决策§30·根因#8/#10）：home/cart/me 三页 wxml 须各有绑 bindbeforeleave 的 <page-container> + 纵向 <scroll-view scroll-y>（武装态注入 position:fixed 冻结页面滚动·不套即真机死锁），ts 须接线 utils/exitGuard 三件套（armExitGuard/onExitGuardBeforeLeave/releaseExitGuard），json 不得开 enablePullDownRefresh（fixed 下失效·须走 refresher-enabled）；rewrite/mp 源内不得回潮已判废的 wx.enableAlertBeforeUnload',
     run() {
       const base = join(ROOT, 'rewrite/mp')
-      if (!existsSync(base)) return [] // 重写线未建时不红
+      if (!existsSync(base)) return ['rewrite/mp 缺失——守卫扫描面消失（rw-mp-tabbar-exit-guard）']
       const bad = []
       for (const name of ['home', 'cart', 'me']) {
         const wxmlRel = `rewrite/mp/pages/${name}/${name}.wxml`
@@ -3787,7 +3840,7 @@ import { PROD_ENV } from './lib/env.mjs'（单源·病根#5·债#30①）`)
     desc: '电商漏斗埋点+强制更新+冷启动耗时接线（R41）：home/detail/cart/checkout/paysuccess 七个 trackEvent 触点须真调对应 type/page；app.ts onLaunch 须调 markLaunch()+checkForUpdate()；utils/appUpdate.ts 须接线 wx.getUpdateManager 五段（getUpdateManager/onCheckForUpdate/onUpdateReady/applyUpdate/onUpdateFailed）；lib/coldStart.ts 须含 cold_start 上报，home.ts onReady() 须调 reportColdStart()',
     run() {
       const base = join(ROOT, 'rewrite/mp')
-      if (!existsSync(base)) return []
+      if (!existsSync(base)) return ['rewrite/mp 缺失——守卫扫描面消失（rw-mp-funnel-tracked）']
       const bad = []
       // ① 触点表驱动：七个漏斗埋点各自方法体须真调 trackEvent('type','page',…)
       const FUNNEL_TOUCHPOINTS = [
@@ -3871,7 +3924,7 @@ import { PROD_ENV } from './lib/env.mjs'（单源·病根#5·债#30①）`)
     desc: '品牌字体分层子集覆盖上屏字（字体分层批·根因#8）：deriveTierCharsets 推导 tier1 ⊆ assets/brand-fonts/tier1.txt 且三层并集 ⊆ 三 txt 并集——新增文案带来子集外新字即红（真机该字静默掉系统字体）；红了跑 BRAND_FONT_SRC=<源OTF> node scripts/build-brand-font.mjs 重建 + 重新部署托管 /fonts/',
     run() {
       const base = join(ROOT, 'rewrite/mp')
-      if (!existsSync(base)) return [] // 重写线未建时不红
+      if (!existsSync(base)) return ['rewrite/mp 缺失——守卫扫描面消失（rw-mp-font-tier-subset-covers）']
       const bad = []
       const dir = join(ROOT, 'assets/brand-fonts')
       const readSet = (f) => (existsSync(join(dir, f)) ? new Set([...readFileSync(join(dir, f), 'utf8')]) : null)
@@ -3905,7 +3958,7 @@ import { PROD_ENV } from './lib/env.mjs'（单源·病根#5·债#30①）`)
     desc: 'mp 分发前置（决策§29）：home.ts/detail.ts 须有 onShareAppMessage+onShareTimeline；detail 分享路径须带 pages/detail/detail?id=；sitemap.json 须至少 allow pages/home/home（不得整站 disallow 兜头关）',
     run() {
       const base = join(ROOT, 'rewrite/mp')
-      if (!existsSync(base)) return []
+      if (!existsSync(base)) return ['rewrite/mp 缺失——守卫扫描面消失（rw-mp-share-wired）']
       const bad = []
       for (const p of ['home', 'detail']) {
         const f = join(base, `pages/${p}/${p}.ts`)
@@ -3937,7 +3990,7 @@ import { PROD_ENV } from './lib/env.mjs'（单源·病根#5·债#30①）`)
     desc: 'mp 物流轨迹接线（R17）：app.json 须声明 kuaidi100 插件；lib/express.ts 须导出 expressCode；order.ts onViewLogistics() 须开 plugin://kuaidi100/ 且 fail 回退 onCopyTracking（复制运单号兜底）',
     run() {
       const base = join(ROOT, 'rewrite/mp')
-      if (!existsSync(base)) return []
+      if (!existsSync(base)) return ['rewrite/mp 缺失——守卫扫描面消失（rw-mp-express-wired）']
       const bad = []
       const appJsonPath = join(base, 'app.json')
       if (existsSync(appJsonPath)) {
@@ -3979,7 +4032,7 @@ import { PROD_ENV } from './lib/env.mjs'（单源·病根#5·债#30①）`)
     desc: '客服触点真实化（rewrite/mp）：① 全目录禁「正在接入客服」假 Toast 绝迹（同旧线 customer-service-wired 判定的假占位家族）② 触点表驱动——detail.ts 的 onService()、player.ts 的 onHelpContact()、me.ts 的 onKefu()、aftersales.ts 的 onKefu() 方法体须真调 openCustomerService()，防触点各自散接/漏接',
     run() {
       const base = join(ROOT, 'rewrite/mp')
-      if (!existsSync(base)) return []
+      if (!existsSync(base)) return ['rewrite/mp 缺失——守卫扫描面消失（rw-mp-customer-service-wired）']
       const bad = []
       // 断言A：全目录假 Toast 绝迹
       const walkAll = (d) => {
@@ -4032,7 +4085,7 @@ import { PROD_ENV } from './lib/env.mjs'（单源·病根#5·债#30①）`)
     desc: '首页「+」加购真做事（rewrite/mp）：① 全目录禁「已收藏」假 Toast 绝迹 ② home.ts 的 onAddProduct() 方法体须真调 decideQuickAdd() 与 cart.add()，防加购按钮接成收藏占位（病根#6）',
     run() {
       const base = join(ROOT, 'rewrite/mp')
-      if (!existsSync(base)) return []
+      if (!existsSync(base)) return ['rewrite/mp 缺失——守卫扫描面消失（rw-mp-home-quick-add-real）']
       const bad = []
       const walkAll = (d) => {
         const out = []
@@ -4105,7 +4158,7 @@ import { PROD_ENV } from './lib/env.mjs'（单源·病根#5·债#30①）`)
     desc: '死导出零容忍（病根#17）：rewrite/shared/src 导出符号在消费面（cloud/admin/agent/site 源 + 各包 tests + 守卫注册表文本级消费）零出现即红——防 scm.spec 式「自称单源无人读」复发；mp 手抄副本刻意不算消费（T1 结构性隔离）',
     run() {
       const shDir = join(ROOT, 'rewrite/shared/src')
-      if (!existsSync(shDir)) return []
+      if (!existsSync(shDir)) return ['rewrite/shared/src 缺失——守卫扫描面消失（rw-dead-exports）']
       const files = []
       for (const e of lsScan(shDir)) if (e.endsWith('.ts')) files.push({ path: 'rewrite/shared/src/' + e, text: readFileSync(join(shDir, e), 'utf8') })
       const consumerTexts = []
@@ -4427,7 +4480,7 @@ import { PROD_ENV } from './lib/env.mjs'（单源·病根#5·债#30①）`)
     desc: '目录数据会话缓存单源（rewrite/mp·病根#15）：页面层禁绕过 lib 缓存直取商品/课程列表——禁 import 语句从 api/catalog 引入 getProducts、从 api/learning 引入 getCourses，禁 callApp(\'getProducts\')/callApp(\'getCourses\') 字面量出现在 api 层以外；商品缓存单源 lib/catalog.ts、课程缓存单源 lib/courses.ts（及 api/**、tests/** 本体豁免）',
     run() {
       const base = join(ROOT, 'rewrite/mp')
-      if (!existsSync(base)) return []
+      if (!existsSync(base)) return ['rewrite/mp 缺失——守卫扫描面消失（rw-mp-catalog-cache-single-source）']
       const bad = []
       const EXCLUDE_FILES = new Set(['lib/catalog.ts', 'lib/courses.ts'])
       const walk = (d, relDir) => {
@@ -4470,7 +4523,7 @@ import { PROD_ENV } from './lib/env.mjs'（单源·病根#5·债#30①）`)
     desc: '内容图 lazy-load 接线（rewrite/mp·病根#15 图片面）：接线表列出的每个内容图点位（home 特写图/拆门槛图/收尾图、reviews 晒图、detail 推荐位、order/order-list 缩略图）须带 lazy-load 且仍绑定期望 src 表达式，防未接线/被删改假绿',
     run() {
       const base = join(ROOT, 'rewrite/mp')
-      if (!existsSync(base)) return []
+      if (!existsSync(base)) return ['rewrite/mp 缺失——守卫扫描面消失（rw-mp-image-lazy-wired）']
       const bad = []
       // 定位形如 <image ... class="cls" ... /> 的完整标签文本（从 class 属性向前找最近 <image、
       // 向后找最近 />，兼容属性任意顺序与多行书写——同 methodBody 的「找边界」精神，未引入新范式）。
@@ -4520,7 +4573,7 @@ import { PROD_ENV } from './lib/env.mjs'（单源·病根#5·债#30①）`)
     desc: 'T2 域分组镜像：rewrite/cloud/src/functions 顶层不得有裸 .ts（函数须放进域子目录 adminApi/app/callbacks/cs/ops/timers）',
     run() {
       const dir = join(ROOT, 'rewrite/cloud/src/functions')
-      if (!existsSync(dir)) return []
+      if (!existsSync(dir)) return ['rewrite/cloud/src/functions 缺失——守卫扫描面消失（rw-cloud-domain-grouped）']
       const bad = []
       for (const entry of lsScan(dir)) {
         if (statSync(join(dir, entry)).isFile() && entry.endsWith('.ts')) {
@@ -4779,7 +4832,7 @@ import { PROD_ENV } from './lib/env.mjs'（单源·病根#5·债#30①）`)
     run() {
       const bad = []
       const modPath = join(ROOT, 'modules.json')
-      if (!existsSync(modPath)) return []
+      if (!existsSync(modPath)) return ['modules.json 缺失——守卫扫描面消失（rw-red-second-review）']
       let mods
       try { mods = JSON.parse(readFileSync(modPath, 'utf8'))?.modules ?? {} } catch { return [] }
 
@@ -4816,7 +4869,7 @@ import { PROD_ENV } from './lib/env.mjs'（单源·病根#5·债#30①）`)
         'rewrite/cloud/src/kit/gate.ts',
         'rewrite/cloud/src/kit/wxpay.ts',
         'rewrite/cloud/src/kit/transition.ts',
-        'rewrite/shared/src/fen.ts',
+        'rewrite/shared/src/money.ts',
       ]
       for (const f of EXTRA_RED) redFiles.add(f)
 
@@ -5223,7 +5276,14 @@ export function checkFile(file) {
 function runRepoChecks() {
   const violations = []
   for (const c of repoChecks) {
-    for (const msg of c.run()) violations.push({ loc: `[${c.id}]`, msg, src: c.desc })
+    let result
+    try {
+      result = c.run()
+    } catch (e) {
+      violations.push({ loc: `[${c.id}]`, msg: `守卫执行抛异常（扫描面缺失/IO 失败）：${e?.message || e}`, src: c.desc })
+      continue
+    }
+    for (const msg of result) violations.push({ loc: `[${c.id}]`, msg, src: c.desc })
   }
   return violations
 }

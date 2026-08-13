@@ -123,6 +123,30 @@ describe('runInspection（巡检机·探出静默失败）', () => {
     expect(money.status).toBe('green')
   })
 
+  it('大白话：多付异常单按实际到账额退款→钱守恒用 paidFee，不把正确退款误报成超退', async () => {
+    control.seed(COLLECTIONS.orders, [{ _id: 'OVER_PE', status: 'payment_exception', amount: 100, paidFee: 12000, paidAt: Date.now() }])
+    control.seed(COLLECTIONS.afterSales, [{ _id: 'OVER_PE__l1', orderId: 'OVER_PE', status: 'refunded', refundAmount: 120 }])
+    const money = (await runInspection('timer')).results.find((r) => r.id === 'money-conserved')!
+    expect(money.status).toBe('green')
+    expect(money.samples || []).not.toContain('OVER_PE')
+  })
+
+  it('大白话：异常单实付额脏/缺→钱守恒 fail-closed 报出（不得回退 amount 掩盖·多代理审核 codex#3）', async () => {
+    control.seed(COLLECTIONS.orders, [{ _id: 'PE_NOPAID', status: 'payment_exception', amount: 100, paidFee: null, paidAt: Date.now() }])
+    control.seed(COLLECTIONS.afterSales, [{ _id: 'PE_NOPAID__l1', orderId: 'PE_NOPAID', status: 'refunded', refundAmount: 100 }])
+    const money = (await runInspection('timer')).results.find((r) => r.id === 'money-conserved')!
+    expect(money.status).toBe('red') // 实付额未知 → 无法证明守恒 → 报（回退 amount=100 会把这个 100 元退款洗绿）
+    expect(money.samples).toContain('PE_NOPAID')
+  })
+
+  it('大白话：refund_required 死信退款额脏→fail-closed 计死信（不得被 NaN 洗绿·多代理审核 codex#4）', async () => {
+    control.seed(COLLECTIONS.orders, [{ _id: 'DEAD_DIRTY', status: 'refund_required', amount: 100, paidAt: Date.now() }])
+    control.seed(COLLECTIONS.afterSales, [{ _id: 'DEAD_DIRTY__l1', orderId: 'DEAD_DIRTY', status: 'refunded', refundAmount: 'bad' }])
+    const run = await runInspection('timer')
+    const stuck = run.results.find((r) => r.id === 'stuck-order')!
+    expect(stuck.samples).toContain('DEAD_DIRTY') // Number('bad')→NaN 曾让已退额=NaN → NaN<cap 恒 false → 死信被洗绿漏报
+  })
+
   it('大白话：付款超 72h 未发货→卡单红', async () => {
     control.seed(COLLECTIONS.orders, [{ _id: 'A', status: 'paid', amount: 100, transactionId: 'wxA', paidAt: Date.now() - 80 * HOUR }])
     const run = await runInspection('timer')
@@ -151,6 +175,54 @@ describe('runInspection（巡检机·探出静默失败）', () => {
     expect(stuck.status).toBe('red')
     expect(stuck.samples).toContain('D')
     expect(control.dump(COLLECTIONS.anomalies).some((a: any) => a.severity === 'high')).toBe(true)
+  })
+
+  it('大白话：payment_exception 单（到账金额不符）→巡检报红并带回单号', async () => {
+    control.seed(COLLECTIONS.orders, [{ _id: 'PE', status: 'payment_exception', amount: 100, paidFee: 9900, paidAt: Date.now() }])
+    const run = await runInspection('timer')
+    const stuck = run.results.find((r) => r.id === 'stuck-order')!
+    expect(stuck.status).toBe('red')
+    expect(stuck.samples).toContain('PE')
+    expect(stuck.detail).toContain('1 单支付异常待处理')
+    expect(stuck.severity).toBe('high') // 异常单＝钱已收待人工退款·与死信同属高危（此前纯异常单被降级 low）
+  })
+
+  it('大白话：异常单退款额脏/缺 → fail-closed 仍报（脏值不得被 NaN 污染成「已退清」漏报）', async () => {
+    control.seed(COLLECTIONS.orders, [{ _id: 'PED', status: 'payment_exception', amount: 100, paidFee: 9900, paidAt: Date.now() }])
+    control.seed(COLLECTIONS.afterSales, [{ _id: 'PED__l1', orderId: 'PED', status: 'refunded', refundAmount: 'bad' }])
+    const run = await runInspection('timer')
+    const stuck = run.results.find((r) => r.id === 'stuck-order')!
+    expect(stuck.samples).toContain('PED') // Number('bad')→NaN 曾让 已退额=NaN → NaN<cap 恒 false → 漏报；现 fail-closed 报出
+  })
+
+  it('大白话：payment_exception 已按实际到账额退清→不再重复报卡单', async () => {
+    control.seed(COLLECTIONS.orders, [{ _id: 'PER', status: 'payment_exception', amount: 100, paidFee: 9900, paidAt: Date.now() }])
+    control.seed(COLLECTIONS.afterSales, [{ _id: 'PER__l1', orderId: 'PER', status: 'refunded', refundAmount: 99 }])
+    const run = await runInspection('timer')
+    const stuck = run.results.find((r) => r.id === 'stuck-order')!
+    expect(stuck.status).toBe('green')
+    expect(stuck.samples || []).not.toContain('PER')
+  })
+
+  it('大白话：多行异常单逐行分摊有取整缺口（和<实付 537）→ 退到上限和 536 后不再误报假死信', async () => {
+    control.seed(COLLECTIONS.orders, [{
+      _id: 'PEM', status: 'payment_exception', amount: 10.5, goods: 10.5, paidFee: 537, paidAt: Date.now(),
+      items: [
+        { lineId: 'l1', price: 3.99, qty: 1 },
+        { lineId: 'l2', price: 0.42, qty: 1 },
+        { lineId: 'l3', price: 6.09, qty: 1 },
+      ],
+    }])
+    // 逐行分摊（refundShareFen 同一公式）：round(537*399/1050)=204 · round(537*42/1050)=21 · round(537*609/1050)=311，和=536 < paidFee 537
+    control.seed(COLLECTIONS.afterSales, [
+      { _id: 'PEM__l1', orderId: 'PEM', status: 'refunded', refundAmount: 2.04 },
+      { _id: 'PEM__l2', orderId: 'PEM', status: 'refunded', refundAmount: 0.21 },
+      { _id: 'PEM__l3', orderId: 'PEM', status: 'refunded', refundAmount: 3.11 },
+    ])
+    const run = await runInspection('timer')
+    const stuck = run.results.find((r) => r.id === 'stuck-order')!
+    // 旧判据（裸 paidFen 分母）：536 < 537 → 永远报红；新判据（逐行分摊上限和）已退清 → 不报
+    expect(stuck.samples || []).not.toContain('PEM')
   })
 
   // 批K K2：放行 overrideRefund 后，退清的 refund_required 单**订单状态不变**（refundCallback 只回补库存 +

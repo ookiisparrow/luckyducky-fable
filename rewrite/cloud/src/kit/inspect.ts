@@ -21,6 +21,10 @@ const SCAN_CAP = 500 // 单类单次扫描上限（有界·防容量炸弹）；
 const IN_CHUNK = 100 // _.in 每批键数（照 recallScan 先例·≤500 键 ≤5 次查询·每轮巡检可担）
 const STUCK_PAID_MS = 72 * 3600 * 1000 // 付款超 72h 仍未发货＝卡单（付了钱没发货·典型静默伤客）
 
+// 金额字段合法性（全文件共用一把尺子）：必须是有限非负 number——全部写入方都走 fenToYuan 落 number，
+// 故此判据不误伤正常行；脏/缺则 fail-closed 报给人看（算不准就别假装守恒/已退清成立）。
+const okMoney = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v) && v >= 0
+
 type Partial = Omit<CheckResult, 'id' | 'title' | 'layer'>
 
 /**
@@ -36,8 +40,10 @@ type Partial = Omit<CheckResult, 'id' | 'title' | 'layer'>
  * 钱守恒不受影响：这里只改**巡检报不报**的判据，不放宽任何退款金额闸（refundShareFen 封顶原样）。
  * fail-closed：items/goods 快照缺失或脏数据算不出 → 退回 amount 口径（更严），让该单继续被报死信。
  */
-function refundableCapFen(o: any): number {
-  const amountFen = toFen(Number(o.amount || 0))
+function refundableCapFen(o: any, amountFenOverride?: number): number {
+  // amountFenOverride：payment_exception 单按实际到账 paidFee 退款（overrideRefund 分母），
+  // 巡检判「已退清」也必须用同一分母；缺省走订单 amount（refund_required/普通单）。
+  const amountFen = amountFenOverride !== undefined ? asFen(amountFenOverride) : toFen(Number(o.amount || 0))
   if (!(amountFen > 0)) return 0
   try {
     const items: any[] = Array.isArray(o.items) ? o.items : []
@@ -102,7 +108,6 @@ const CHECKS: Check[] = [
         .catch(() => ({ data: [] }))
       const rows: any[] = as.data || []
       const _ = db.command
-      const okMoney = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v) && v >= 0
       const refundedFen = new Map<string, number>()
       const suspect = new Set<string>() // 金额字段脏/缺 → 无从证明守恒 → 一律报（宁可多报一次）
       for (const a of rows) {
@@ -114,6 +119,8 @@ const CHECKS: Check[] = [
         refundedFen.set(orderId, (refundedFen.get(orderId) || 0) + toFen(a.refundAmount))
       }
       // 批量读订单实付（_.in 分块·照 recallScan IN_CHUNK=100·杜绝 ≤500 键逐条串行 doc.get 的 N+1）；
+      // payment_exception 的退款入口按实际到账 paidFee 退款，所以钱守恒也必须用 paidFee 做分母；
+      // 其他订单仍用订单实付 amount。paidFee 脏/缺时回退 amount，交给既有金额脏数据路径处理。
       // 内存比对，判定语义与逐条 get 版一致（订单缺失=不在 known→跳过·不误报超退·既有用例锁此语义）。
       const orderIds = [...new Set([...refundedFen.keys(), ...suspect])]
       const amountFenById = new Map<string, number>()
@@ -124,7 +131,12 @@ const CHECKS: Check[] = [
         for (const o of got.data || []) {
           const id = String(o._id)
           known.add(id)
-          if (okMoney(o.amount)) amountFenById.set(id, toFen(o.amount))
+          if (o.status === 'payment_exception') {
+            // 异常单实付额必须是可信的整数分才可作分母；脏/缺→suspect fail-closed（多代理审核
+            // codex#3：回退 amount 会把「退款按实付退、分母却是应付」的不一致掩盖成守恒成立）。
+            if (Number.isInteger(o.paidFee) && o.paidFee > 0) amountFenById.set(id, o.paidFee)
+            else suspect.add(id)
+          } else if (okMoney(o.amount)) amountFenById.set(id, toFen(o.amount))
           else suspect.add(id) // 实付额脏 → 分母不可信 → 同样报出来
         }
       }
@@ -197,6 +209,54 @@ const CHECKS: Check[] = [
         .get()
         .catch(() => ({ data: [] }))
       const deadRows: any[] = dead.data || []
+      // 金额不符单不属于退款死信，但同样是「钱已到、不能履约、待人工处理」；单独扫，避免
+      // 被 refund_required 的退款金额算法误判为已处理或漏报。
+      const exceptions = await db
+        .collection(COLLECTIONS.orders)
+        .where({ status: 'payment_exception' })
+        .limit(SCAN_CAP)
+        .get()
+        .catch(() => ({ data: [] }))
+      const exceptionRows: any[] = exceptions.data || []
+      // payment_exception 退款完成后仍保留原订单状态（退款真相在 afterSales），所以像
+      // refund_required 一样按「已退清」过滤；查询失败时空集兜底，宁可多报不能漏报。
+      const exceptionRefunded = new Map<string, number>()
+      const exceptionDirty = new Set<string>() // refundAmount 脏/缺 → 无从证明已退清 → 报异常（fail-closed·与 money-conserved 同口径）
+      let exceptionRefundScanCapped = false
+      const exceptionOrderIds = exceptionRows.map((o) => String(o._id))
+      for (let i = 0; i < exceptionOrderIds.length; i += IN_CHUNK) {
+        const chunk = exceptionOrderIds.slice(i, i + IN_CHUNK)
+        const got = await db
+          .collection(COLLECTIONS.afterSales)
+          .where({ orderId: _.in(chunk), status: 'refunded' })
+          .limit(SCAN_CAP)
+          .get()
+          .catch(() => ({ data: [] }))
+        if (got.data.length >= SCAN_CAP) exceptionRefundScanCapped = true
+        for (const a of got.data || []) {
+          if (!okMoney(a.refundAmount)) {
+            // 脏值绝不能参与累加：Number('abc')→NaN 会把整单已退额污染成 NaN，而 NaN<cap 恒 false
+            // → 该异常单被当成「已退清」漏报。与 money-conserved 同口径，脏即报（宁可多报）。
+            exceptionDirty.add(String(a.orderId))
+            continue
+          }
+          exceptionRefunded.set(String(a.orderId), (exceptionRefunded.get(String(a.orderId)) || 0) + toFen(a.refundAmount))
+        }
+      }
+      const exceptionIds = exceptionRows
+        .filter((o) => {
+          if (exceptionDirty.has(String(o._id))) return true // 退款额脏 → 无从证明已退清 → 报（fail-closed）
+          const paidFen = Number(o.paidFee)
+          if (!Number.isInteger(paidFen) || paidFen <= 0) return true // paidFee 脏/缺 → 保守计异常
+          // 与 deadIds 同源判据（批K P1·同文件 refundableCapFen）：退款按行走 refundShareFen 分摊、
+          // 逐行 Math.round，多行单「各行分摊之和」可能比实付少几分且无任何入口追回——分母须用
+          // 「以 paidFee 为实付的逐行分摊上限和」，不能拿裸 paidFen，否则已退清的多行异常单会被
+          // 永久误报假死信（正是批K 为 refund_required 消灭的问题在此复发）。
+          const capFen = refundableCapFen(o, paidFen)
+          if (!(capFen > 0)) return true // 可退上限算不出 → 保守计异常
+          return (exceptionRefunded.get(String(o._id)) || 0) < capFen
+        })
+        .map((o) => String(o._id))
       // 死信判据＝「refund_required **且钱还没退清**」（批K K2·与放行越规退款同批落地）：退款成功后**订单
       // 状态不变**（refundCallback 只回补库存 + 写 refunded.<lineId> 对账痕，从不改 order.status——退款真相
       // 单一来源是售后单），若判据停在「状态即死信」，退清的单会被永远报死信、淹没真死信。
@@ -207,6 +267,7 @@ const CHECKS: Check[] = [
       // fail-closed：查询失败 → catch 兜空 → 该单已退额算 0 → 仍计死信（宁可多报一次，不可漏报真死信）；
       // amount 缺失/为 0 同理按未退清计（不让脏数据把死信静默洗白）。
       const refundedByOrder = new Map<string, number>()
+      const deadDirty = new Set<string>() // refundAmount 脏/缺 → 无从证明退清 → 计死信（fail-closed·与 exception 分支同口径）
       const deadOrderIds = deadRows.map((o) => String(o._id))
       for (let i = 0; i < deadOrderIds.length; i += IN_CHUNK) {
         const chunk = deadOrderIds.slice(i, i + IN_CHUNK)
@@ -216,27 +277,34 @@ const CHECKS: Check[] = [
           .limit(SCAN_CAP) // 一单可多行售后 → 按行数封顶（非键数）·有界
           .get()
           .catch(() => ({ data: [] }))
-        for (const a of got.data || [])
+        for (const a of got.data || []) {
+          if (!okMoney(a.refundAmount)) {
+            // 脏值绝不参与累加：NaN 污染整单已退额→NaN<cap 恒 false→真实未退死信被洗绿漏报（多代理审核 codex#4）
+            deadDirty.add(String(a.orderId))
+            continue
+          }
           // 逐行先换算成整数分再累加（不累加元浮点后一次性取整）：整数域比较无需容差，杜绝浮点噪声。
-          refundedByOrder.set(String(a.orderId), (refundedByOrder.get(String(a.orderId)) || 0) + toFen(Number(a.refundAmount || 0)))
+          refundedByOrder.set(String(a.orderId), (refundedByOrder.get(String(a.orderId)) || 0) + toFen(a.refundAmount))
+        }
       }
       const deadIds = deadRows
         .filter((o) => {
+          if (deadDirty.has(String(o._id))) return true // 退款额脏 → 无从证明退清 → 保守计死信
           const capFen = refundableCapFen(o)
           if (!(capFen > 0)) return true // 实付额/可退上限读不到 → 保守计死信
           return (refundedByOrder.get(String(o._id)) || 0) < capFen // 没退清才是死信（整数分比较）
         })
         .map((o) => String(o._id))
-      const all = [...stuck, ...deadIds]
-      const scanned = paidRows.length + deadRows.length + asRows.length
-      const capped = paidRows.length >= SCAN_CAP || deadRows.length >= SCAN_CAP || asRows.length >= SCAN_CAP
+      const all = [...stuck, ...deadIds, ...exceptionIds]
+      const scanned = paidRows.length + deadRows.length + exceptionRows.length + asRows.length
+      const capped = paidRows.length >= SCAN_CAP || deadRows.length >= SCAN_CAP || exceptionRows.length >= SCAN_CAP || exceptionRefundScanCapped || asRows.length >= SCAN_CAP
       return all.length
         ? {
             status: 'red',
-            detail: `${stuck.length} 单真付款超 72h 未发货·${deadIds.length} 单待人工退款死信`,
+            detail: `${stuck.length} 单真付款超 72h 未发货·${deadIds.length} 单待人工退款死信·${exceptionIds.length} 单支付异常待处理`,
             count: all.length,
             samples: all.slice(0, 10),
-            severity: deadIds.length ? 'high' : 'low', // 死信＝钱已收没人管·高危；纯超时未发＝低危提醒
+            severity: deadIds.length || exceptionIds.length ? 'high' : 'low', // 死信/支付异常＝钱已收没人管·高危（异常单同样钱已到、待人工退款）；纯超时未发＝低危提醒
             scanned,
             capped,
           }

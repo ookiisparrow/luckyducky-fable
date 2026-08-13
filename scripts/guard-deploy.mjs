@@ -39,7 +39,7 @@ const SENSITIVE_FNS = [
   'login', 'updateProfile', 'trackEvent', 'seedCourses', 'initDb', 'cleanupEvents',
   'kfCallback', 'kfBind', 'kfHealthProbe', // 微信客服：回调状态写 + 身份桥接映射写 + 活体探针（读密钥/调API/推告警·敏感·根因#3）
   'submitFeedback', // 用户写函数（写库·频控敏感·根因#13），同 trackEvent/updateProfile 二次确认
-  'app', 'adminApiV2', // 重写线并行期部署面（M2/M3）：app 含钱链用户 action、adminApiV2 含审批退款/改库存——重部署二次确认
+  'app', // 重写线并行期部署面（M2/M3）：app 含钱链用户 action——重部署二次确认（adminApiV2 已于 2026-08-13 合并去重下线）
   // 新线（rewrite/cloud）函数拓扑刷新（批I·以 build.mjs collect() 产物为准，非记忆）：新线部署单元全部纳入敏感面，
   // 部署任一即二次确认。2026-07-23 拓扑收编批：kfSend/kfMedia/genQrcodes 收编进 adminApi、seedProducts 退役
   // ——四名从本册剔除（产物不复存在·部署同名=新建孤儿函数，落 READONLY_FNS 空册的兜底 ask，见下注）。

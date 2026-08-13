@@ -9,7 +9,7 @@ import PageHeader from '../components/ui/PageHeader.vue'
 import Card from '../components/ui/Card.vue'
 import Badge from '../components/ui/Badge.vue'
 
-// 生产 env id 从后端端点派生（不新增硬编码单源·VITE_ADMIN_API 已含：https://<envId>-<num>.<region>.app.tcloudbase.com/adminv2）
+// 生产 env id 从后端端点派生（不新增硬编码单源·VITE_ADMIN_API 已含：https://<envId>-<num>.<region>.app.tcloudbase.com/admin）
 const envId = (String(import.meta.env.VITE_ADMIN_API || '').match(/\/\/(cloudbase-[a-z0-9]+)-\d+/) || [])[1] || ''
 function withEnv(url: string): string {
   return envId ? url + (url.includes('?') ? '&' : '?') + 'envId=' + envId : url // 无 env（本地未配）则退回通用链·不断

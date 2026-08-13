@@ -42,6 +42,7 @@ const STATUS_LABELS: Record<string, string> = {
   done: '已完成',
   closed: '已关闭',
   refund_required: '待退款', // PAID_BUT_OOS 死信（已付但缺货·待人工退款）·非「退款处理中」（与 admin 同口径，见 admin/src/lib/format.ts）
+  payment_exception: '支付异常待处理',
 }
 export const statusLabel = (s: unknown): string => STATUS_LABELS[String(s)] || String(s || '')
 
@@ -51,7 +52,7 @@ export const statusLabel = (s: unknown): string => STATUS_LABELS[String(s)] || S
 // pending 转来），写「实付款」会让顾客以为被扣了钱——病史：两页曾对全部状态硬编码「实付款」，
 // 已关闭单同屏两处「实付款 ¥778.00」。两个集合**穷举** shared ORDER_STATUS 全集（新增状态漏归类，
 // 测试 orders-map「金额行标题」组当场红；不靠兜底默默吞掉）。
-const PAID_LOOK = ['paid', 'shipped', 'done', 'refund_required']
+const PAID_LOOK = ['paid', 'shipped', 'done', 'refund_required', 'payment_exception']
 const UNPAID_LOOK = ['pending', 'closed']
 export const __amountTitleSets = { PAID_LOOK, UNPAID_LOOK } // 供测试核「两集合并起来=状态机全集」，不供页面用
 /** 金额行标题：付过钱→「实付款」；未付/未知→「订单金额」（未知状态兜底按未付，不冒充已付）。 */
@@ -110,7 +111,12 @@ export function mapOrder(raw: unknown): OrderVM | null {
     amountTitle: amountTitle(o.status),
     items: itemsOf(o),
     count: countOf(o),
-    amountLabel: money(o.amount) || '¥0.00',
+    // 支付异常单展示实际到账（多代理审核 codex#5）：标题「实付款」不能配「订单标价」，否则对账/退款沟通依据错。
+    // paidFee 为整数分（回调/补录落库），脏/缺回退订单金额。
+    amountLabel:
+      o.status === 'payment_exception' && Number.isInteger(Number(o.paidFee)) && Number(o.paidFee) > 0
+        ? money(Number(o.paidFee) / 100) || '¥0.00'
+        : money(o.amount) || '¥0.00',
     createdAtLabel: dateTime(o.createdAt),
     trackingNo: String(s.trackingNo || ''),
     shipCompany: String(s.company || ''),

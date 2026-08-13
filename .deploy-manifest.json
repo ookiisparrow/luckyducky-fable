@@ -1,22 +1,19 @@
 {
-  "updatedAt": 1784534427670,
+  "updatedAt": 1786602064738,
   "functions": {
-    "adminApi": "774743286541",
-    "app": "c1e44da7479a",
-    "billReconcile": "666381d84a7b",
-    "cleanupEvents": "b7fda4fb87c5",
-    "closeExpiredOrders": "6c74235102dc",
-    "genQrcodes": "f91a65b3a6af",
-    "initDb": "b2fbaa85b57b",
-    "inspect": "a94aec0bb827",
-    "kfCallback": "88b3bde9d296",
-    "kfHealthProbe": "8cf4d225c856",
-    "kfMedia": "de790f0502da",
-    "kfSend": "2c8a9f10aef9",
-    "payCallback": "0de37fb37216",
-    "recallScan": "2d5c6637b863",
-    "refundCallback": "8665b1963be4",
-    "seedCourses": "0d09d0c289cf",
-    "seedProducts": "ca9b5a7df2f6"
+    "adminApi": "52b7ee8c0d42",
+    "app": "a3175d8e79fd",
+    "billReconcile": "1bb059dde350",
+    "cleanupEvents": "e654a49e4350",
+    "closeExpiredOrders": "bfb268b9c49e",
+    "feedbackNotify": "e906b41131ce",
+    "initDb": "784783b66be9",
+    "inspect": "dcf4dfa78a90",
+    "kfCallback": "5ed98f59cd0d",
+    "kfHealthProbe": "d2d54714bca7",
+    "payCallback": "ec72893d3de4",
+    "recallScan": "767182d8a5a6",
+    "refundCallback": "4d107fde3975",
+    "seedCourses": "23d274bd69cc"
   }
 }

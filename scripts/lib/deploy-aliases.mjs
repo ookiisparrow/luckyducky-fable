@@ -12,8 +12,7 @@
  * 普通函数不进此表（`deployTargets` 默认返回其自身）。
  */
 export const DEPLOY_ALIASES = {
-  // adminApi 产物同时部署为 adminApi（旧名·保留）与 adminApiV2（/adminv2·admin 前端实际调用方）
-  adminApi: ['adminApi', 'adminApiV2'],
+  // 2026-08-13 合并去重：adminApi/adminApiV2 双名收编为单名 adminApi（HTTP 路径 /admin），别名册清空。
 }
 
 /** 产物名 → 该产物要部署到的全部云函数名（无别名则为其自身） */

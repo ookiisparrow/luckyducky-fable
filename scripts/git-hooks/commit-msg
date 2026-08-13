@@ -9,7 +9,7 @@ MSG_FILE="$1"
 ROOT="$(git rev-parse --show-toplevel 2>/dev/null)"
 
 # ① 暂存区是否含 red 文件（与守卫同源：从 modules.json 推导，此处用轻量路径前缀匹配）
-RED_DIRS="rewrite/cloud/src/functions/app/actions/orders.ts rewrite/cloud/src/functions/adminApi/actions/orders.ts rewrite/cloud/src/functions/adminApi/actions/refunds.ts rewrite/cloud/src/functions/adminApi/actions/reconciliation.ts rewrite/cloud/src/functions/adminApi/actions/wxbill.ts rewrite/cloud/src/functions/adminApi/actions/ops.ts rewrite/cloud/src/functions/adminApi/actions/configChecklist.ts rewrite/cloud/src/functions/adminApi/actions/secureConfig.ts rewrite/cloud/src/functions/adminApi/actions/dashboard.ts rewrite/cloud/src/kit/gate.ts rewrite/cloud/src/kit/wxpay.ts rewrite/cloud/src/kit/transition.ts rewrite/shared/src/fen.ts"
+RED_DIRS="rewrite/cloud/src/functions/app/actions/orders.ts rewrite/cloud/src/functions/adminApi/actions/orders.ts rewrite/cloud/src/functions/adminApi/actions/refunds.ts rewrite/cloud/src/functions/adminApi/actions/reconciliation.ts rewrite/cloud/src/functions/adminApi/actions/wxbill.ts rewrite/cloud/src/functions/adminApi/actions/ops.ts rewrite/cloud/src/functions/adminApi/actions/configChecklist.ts rewrite/cloud/src/functions/adminApi/actions/secureConfig.ts rewrite/cloud/src/functions/adminApi/actions/dashboard.ts rewrite/cloud/src/kit/gate.ts rewrite/cloud/src/kit/wxpay.ts rewrite/cloud/src/kit/transition.ts rewrite/shared/src/money.ts"
 
 TOUCHED=""
 for f in $(git diff --cached --name-only 2>/dev/null); do

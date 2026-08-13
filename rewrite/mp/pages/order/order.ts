@@ -23,6 +23,7 @@ const BANNER: Record<string, BannerVM> = {
   // PAID_BUT_OOS 死信（已付但缺货·待人工退款）：客户没申请过退款、商家也没在自动处理——诚实描述需人工介入，
   // 不承诺不存在的自动化流程（与 admin 标签「待退款」同口径，见 admin/src/lib/format.ts）。
   refund_required: { icon: 'wallet', tint: 'lilac', head: '待退款', sub: '该订单需人工处理退款，请联系客服协助处理' },
+  payment_exception: { icon: 'info', tint: 'muted', head: '支付异常，待人工处理', sub: '到账金额与订单金额不一致，请联系客服处理退款' },
 }
 
 Page({

@@ -113,6 +113,9 @@ async function shipOne(db: any, idRaw: any, companyRaw: any, trackingRaw: any, o
   const cur = got.data.status
   // paid = 首次发货；shipped = 改单号。其余状态不允许动。
   if (cur !== 'paid' && cur !== 'shipped') return { ok: false, error: buildBadStatus(cur) }
+  // 支付异常终态显式拒绝（多代理审核 kimi#2 加固）：不能只依赖 feeMismatch 派生标志——
+  // 即便未来出现误流转/改库把异常单写成 paid 且 feeMismatch 被清，也不允许发货（金额没对清绝不发货）。
+  if (got.data.status === 'payment_exception') return { ok: false, error: buildBadStatus(got.data.status) }
   // 金额异常单（feeMismatch 留痕）须先「解除」后才能发货（审核批次A 折中）
   if (got.data.feeMismatch) return { ok: false, error: 'FEE_MISMATCH_HOLD' }
   // 退款↔履约状态同步闸（P0·根因：afterSales 与 orders 是两套各自实现的状态机，互不知晓对方——
@@ -257,6 +260,9 @@ export async function clearFeeMismatch({ db, data }: Ctx) {
   if (!id) return reply(400, { ok: false, error: 'BAD_ARGS' })
   const got = await db.collection('orders').doc(id).get().catch(() => null)
   if (!got || !got.data) return reply(400, { ok: false, error: 'NO_ORDER' })
+  // payment_exception 是金额不符后的待处理终态，不能被旧的「解除 feeMismatch」按钮
+  // 误清成看似正常；它必须走人工退款/补差后的明确处理流程。
+  if (got.data.status === 'payment_exception') return reply(400, { ok: false, error: buildBadStatus(got.data.status) })
   await db.collection('orders').doc(id).update({ data: { feeMismatch: false, feeMismatchClearedAt: Date.now() } })
   return reply(200, { ok: true })
 }

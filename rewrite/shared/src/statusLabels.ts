@@ -27,6 +27,7 @@ export const ORDER_STATUS_LABEL_OPS: Record<OrderStatus, string> = {
   done: '已完成',
   closed: '已关闭',
   refund_required: '待退款', // PAID_BUT_OOS 死信（已付但缺货·待人工退款）·非「退款处理中」（与退款 approved 撞车）
+  payment_exception: '支付异常待处理',
 }
 
 /** 订单状态·客户向标签（mp 手落副本消费：rewrite/mp/lib/mapOrders.ts，见该文件头注）。 */
@@ -37,6 +38,7 @@ export const ORDER_STATUS_LABEL_CUSTOMER: Record<OrderStatus, string> = {
   done: '已完成',
   closed: '已关闭',
   refund_required: '待退款',
+  payment_exception: '支付异常待处理',
 }
 
 /** 售后状态·运营向标签（admin 消费：rewrite/admin/src/lib/format.ts）。 */

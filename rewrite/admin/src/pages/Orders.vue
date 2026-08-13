@@ -7,7 +7,7 @@ import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useLatest } from '../lib/latest'
 import { RefreshCw, Search, Package, X, PackageCheck, ScanLine, TriangleAlert } from 'lucide-vue-next'
-import { listOrders, orderCounts, getOrderDetail, shipOrder, shipOrders, clearFeeMismatch } from '../api/money'
+import { listOrders, orderCounts, getOrderDetail, shipOrder, shipOrders, clearFeeMismatch, recordPaidFee } from '../api/money'
 import UiButton from '../components/ui/Button.vue'
 import PageHeader from '../components/ui/PageHeader.vue'
 import Card from '../components/ui/Card.vue'
@@ -138,8 +138,8 @@ function timeline(row: OrderRowVM) {
 }
 // 状态徽章 tone（批2 refactor·同文件字面重复 ×2 去重）：三输入——feeMismatch/refundHold 优先分支 + status 分支。
 // refundHold（P0 修复·退款↔履约状态同步）：已有行退款 approved/refunded，绝不能让「待发货」绿标误导操作员点发货。
-function badgeTone(row: { feeMismatch: boolean; refundHold?: boolean; status: string }): 'neutral' | 'brand' | 'green' | 'red' | 'amber' {
-  if (row.feeMismatch) return 'red'
+function badgeTone(row: { feeMismatch: boolean; paymentException?: boolean; refundHold?: boolean; status: string }): 'neutral' | 'brand' | 'green' | 'red' | 'amber' {
+  if (row.paymentException || row.feeMismatch) return 'red'
   if (row.refundHold) return 'red'
   if (row.status === 'done') return 'green'
   if (row.status === 'shipped') return 'brand'
@@ -238,6 +238,29 @@ async function doClearMismatch(id: string) {
   }
 }
 
+// 补录实际到账金额（异常单退款死胡同出口）：管理员核对微信商户流水后输入「元」，云端转分存库。
+// 金额输入本身即确认动作（无二次按钮态）：cancel 不动作、非法输入即报错留原文，不吞。
+async function doRecordPaidFee(row: OrderRowVM) {
+  // 补录金额必须人工输入（库内无现成输入弹窗组件）；prompt 是唯一简单路径，豁免 no-alert——
+  // 管理员后台·人工强操作（核对流水后填写），非自动弹窗打扰，风险可控。
+  // eslint-disable-next-line no-alert
+  const input = window.prompt(`订单 ${row.id} 实际到账金额（元）？\n请核对微信商户流水后填写——将作为该单退款金额的依据，请勿随意填写。`)
+  if (input == null) return
+  const yuan = Number(input)
+  const fen = Math.round(yuan * 100)
+  if (!Number.isFinite(yuan) || !Number.isInteger(fen) || fen <= 0) {
+    message.value = '补录失败：金额必须是大于 0 的元数'
+    return
+  }
+  const r = await recordPaidFee(row.id, fen)
+  if (r.ok) {
+    message.value = ''
+    void reload()
+  } else {
+    message.value = '补录失败：' + String(r.error || '')
+  }
+}
+
 onMounted(reload)
 </script>
 
@@ -290,7 +313,7 @@ onMounted(reload)
           <div class="ld-th r" :style="{ width: '150px' }">操作</div>
         </div>
         <div class="ld-tbody">
-          <div v-for="row in rows" :key="row.id" class="ld-tr" :class="{ mismatch: row.feeMismatch || row.refundHold, sel: canBatch && isSel(row.id) }">
+          <div v-for="row in rows" :key="row.id" class="ld-tr" :class="{ mismatch: row.feeMismatch || row.paymentException || row.refundHold, sel: canBatch && isSel(row.id) }">
             <div v-if="canBatch" class="ld-td col-ck">
               <input
                 type="checkbox"
@@ -312,11 +335,14 @@ onMounted(reload)
             <div class="ld-td time" :style="{ width: '150px' }">{{ row.timeLabel }}</div>
             <div class="ld-td r amount" :style="{ width: '110px' }">{{ row.amountLabel }}</div>
             <div class="ld-td" :style="{ width: '110px' }">
-              <Badge :tone="badgeTone(row)">{{ row.feeMismatch ? '待复核' : row.refundHold ? '退款·勿发货' : row.statusLabel }}</Badge>
+              <Badge :tone="badgeTone(row)">{{ row.paymentException ? row.statusLabel : row.feeMismatch ? '待复核' : row.refundHold ? '退款·勿发货' : row.statusLabel }}</Badge>
             </div>
             <div class="ld-td r ops" :style="{ width: '150px' }">
-              <UiButton v-if="row.feeMismatch" variant="danger" size="sm" @click="doClearMismatch(row.id)">
+              <UiButton v-if="row.feeMismatch && !row.paymentException" variant="danger" size="sm" @click="doClearMismatch(row.id)">
                 <TriangleAlert :size="14" :stroke-width="1.8" /><span>{{ clearConfirmId === row.id ? '确认已核对流水？' : '去核对' }}</span>
+              </UiButton>
+              <UiButton v-else-if="row.paidFeeMissing" variant="danger" size="sm" @click="doRecordPaidFee(row)">
+                <TriangleAlert :size="14" :stroke-width="1.8" /><span>补录实付</span>
               </UiButton>
               <!-- refundHold（P0）：已有行退款 applied/approved/refunded，禁止发货入口——真正裁决在服务端 shipOne，这里只挡入口不给点。
                    布尔不区分三态→文案不得声称「处理中/已退款」（曾与徽章自相矛盾）；深链带单号让 Refunds 自动检索到具体记录 -->

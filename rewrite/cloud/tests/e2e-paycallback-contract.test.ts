@@ -59,15 +59,25 @@ describe('payCallback 幂等/防伪/复活跨状态契约（E2E）', () => {
     expect(o.paidAt).toBeUndefined()
   })
 
-  it('大白话：金额不符——钱已到账仍翻 paid，但留 feeMismatch 对账痕并告警（静默失败语义不丢）', async () => {
-    seedOrder()
+  it('大白话：金额不符——进入支付异常待处理，留应付/实付对账痕并只告警一次', async () => {
+    seedOrder({ reserved: [{ productId: 'p1', spec: '', qty: 1 }] })
+    control.seed('inventory', [{ _id: 'p1__', productId: 'p1', spec: '', stock: 0 }])
     const alerts = await captureAlerts(() =>
       cb({ out_trade_no: 'o1', trade_state: 'SUCCESS', amount: { total: 1 }, transaction_id: 'wx-m' })
     )
     const o = control.dump('orders')[0]
-    expect(o.status).toBe('paid') // 钱已收·不吞
+    expect(o.status).toBe('payment_exception') // 钱已收但金额不符·不当正常已付
     expect(o.feeMismatch).toBe(true) // 对账痕
+    expect(o.expectedFee).toBe(17800)
+    expect(o.paidFee).toBe(1)
+    expect(o.paymentMismatchDirection).toBe('underpaid')
+    expect(control.dump('inventory')[0].stock).toBe(1) // 异常单不继续占库存
     expect(alerts.some((l) => l.includes('[LD_ALERT]') && l.includes('FEE_MISMATCH'))).toBe(true)
+
+    const more = await captureAlerts(() =>
+      cb({ out_trade_no: 'o1', trade_state: 'SUCCESS', amount: { total: 1 }, transaction_id: 'wx-m-duplicate' })
+    )
+    expect(more.some((l) => l.includes('FEE_MISMATCH'))).toBe(false) // 异常态重复回调静默幂等
   })
 
   it('大白话：关单后晚到成功回调 + 库存已被买走——进 refund_required 死信、库存不为负、绝不超卖', async () => {
@@ -92,5 +102,19 @@ describe('payCallback 幂等/防伪/复活跨状态契约（E2E）', () => {
     expect(o.status).toBe('paid')
     expect(o.revivedAt).toBeGreaterThan(0)
     expect(control.dump('inventory')[0].stock).toBe(0) // 重抢扣回
+  })
+
+  it('大白话：关单后晚到回调但金额不符——直接进支付异常，不重抢库存', async () => {
+    seedOrder({ status: 'closed', reserved: [{ productId: 'p1', spec: '', qty: 1 }] })
+    control.seed('inventory', [{ _id: 'p1__', productId: 'p1', spec: '', stock: 1 }])
+    const alerts = await captureAlerts(() =>
+      cb({ out_trade_no: 'o1', trade_state: 'SUCCESS', amount: { total: 17700 }, transaction_id: 'wx-late-m' })
+    )
+    const o = control.dump('orders')[0]
+    expect(o.status).toBe('payment_exception')
+    expect(o.paidFee).toBe(17700)
+    expect(o.paymentMismatchDirection).toBe('underpaid')
+    expect(control.dump('inventory')[0].stock).toBe(1) // 未重抢·不把异常单占成可发货
+    expect(alerts.filter((l) => l.includes('FEE_MISMATCH')).length).toBe(1)
   })
 })
