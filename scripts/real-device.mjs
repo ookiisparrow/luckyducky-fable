@@ -178,7 +178,7 @@ async function cmdDebug(port, pagePath) {
   const sid = await openSession(port);
   // 确保项目窗口已打开（真机调试依赖窗口环境）
   try {
-    await callTool(port, sid, 'open_project_window', { project: PROJECT });
+    await callTool(port, sid, 'open_project_window', { project: PROJECT, windowMode: 'fullMode' });
   } catch { /* 窗口已开则忽略 */ }
   // 确保模拟器编译运行（automation 需要小程序在运行）
   try {
@@ -196,8 +196,8 @@ async function cmdDebug(port, pagePath) {
     console.log('\n📱 检测到需要确认的任务（taskId: ' + parsed.taskId + '）');
   }
   console.log('\n📱 请检查：');
-  console.log('   1. 电脑上微信开发者工具窗口是否弹出「真机调试」二维码 → 用手机微信扫码；');
-  console.log('   2. 手机端弹出确认时点击「允许」，等待真机连接调试器。\n');
+  console.log('   1. 工具会弹出「远程调试窗口」(RemoteDebugWindow)——二维码可能被主窗口挡住，请找一下；');
+  console.log('   2. 用手机微信扫码 → 手机端点「允许」→ 真机连接调试器。\n');
 }
 
 async function cmdOpen(port) {
