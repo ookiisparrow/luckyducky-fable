@@ -142,6 +142,20 @@ await mini.evaluate('function(){ return 1+1 }');    // 执行 JS
 
 > 架构说明：automator 驱动**模拟器**运行时（与真机同一份代码，数据一致）；真机调试（手机运行）是另一条通道，二者配合即为完整自动化。
 
+## 九、真机自动化的边界（实测结论）
+
+**自动化能力边界（微信平台架构决定）：**
+
+| 能力 | 状态 | 路径 |
+|------|------|------|
+| 真机运行（触发调试） | ✅ 全自动 | 官方 API `automation_viewport_action --action remote` / automator `remote()` |
+| 模拟器自动化（读数据/点按钮/跑流程） | ✅ 全自动 | automator（`ws://[::1]:9420`） |
+| 真机自动化操作（在手机上操作/读真机数据） | ❌ 官方不开放 | automator 只驱动模拟器；真机 DevTools 是私有协议；工具内「远程重放」系统未公开 API |
+
+**验证过程**：真机调试连接后，`automator.systemInfo()` / `automation_wx_api` / `automation_runtime_info` 均返回模拟器数据（`brand: devtools`）；真机调试端口（CDP 定制协议）不接受标准 CDP 消息。
+
+**实用组合**：`agent:debug` 触发真机运行（人看真机）+ `flow:test` 模拟器全自动回归（同一代码同一后端，数据一致）。
+
 ## 七、常见问题
 
 | 问题 | 处理 |
