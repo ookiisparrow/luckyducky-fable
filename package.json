@@ -82,5 +82,8 @@
     "vitest": "^4.1.8",
     "vue-tsc": "~2.2.10",
     "wx-server-sdk": "file:tests/helpers/wx-server-sdk"
+  },
+  "overrides": {
+    "axios": "^1.19.0"
   }
 }
