@@ -7,12 +7,13 @@
 
 | # | 资产 | 标识 / 期望值 | 作用 |
 |---|---|---|---|
-| 1 | 云点播服务开通 | 主应用（不启用子应用） | 媒资存储 + 转码 + 分发的载体；按量后付费需账户预充值 |
-| 2 | CAM 子账号 + API 密钥 | 子账号名建议 `ld-vod`（仅授 `QcloudVODFullAccess`）| `secureConfig/vod.secretId/secretKey`——上传签名派发 + DescribeMediaInfos/DeleteMedia。**函数运行时临时密钥签不了 VOD，必须独立子账号** |
-| 3 | 任务流模板 | 名称 = `secureConfig/vod.procedure` 所填（建议 `LuckyDuckyVod`）| 上传完成自动触发：转码（首选 H.264 720p 单档·教学视频量级够用成本最低）+ 雪碧图（R36 拖动预览·建议每 2s 一帧）+ 封面截图（poster 缺口）|
-| 4 | 播放域名 | 自有已备案域名（建议 `vod.luckyducky.cn`·CNAME 指 VOD）| 默认分发域名官方定位「仅用于测试」，线上必须自有域名（同 `kf.luckyducky.cn` 备案先例）|
-| 5 | Key 防盗链 | 在播放域名上开启；Key = `secureConfig/vod.playKey` | `getPlaybackUrl` 鉴权后本地 md5 签名（有效期 6h·kit/vod.ts SIGN_TTL_SEC）；**Key 未配则 VOD 段一律 url:null（fail-closed）** |
-| 6 | 事件通知模式 | **不配置回调 URL**（拉模式·刻意）| 转码完成感知走 admin「同步转码状态」按钮 on-demand 查询（DescribeMediaInfos）——云函数无公网回调入口，不为此开 HTTP 访问服务 |
+| 1 | 云点播服务开通 | ✅ 已开通（2026-08-18·存储区 ap-chongqing 默认） | 媒资存储 + 转码 + 分发的载体；按量后付费需账户预充值 |
+| 2 | CAM 子账号 + API 密钥 | ✅ `ld-vod`（已建·仅授 `QcloudVODFullAccess`·2026-08-18 实测密钥有效） | `secureConfig/vod.secretId/secretKey`——上传签名派发 + DescribeMediaInfos/DeleteMedia。**函数运行时临时密钥签不了 VOD，必须独立子账号** |
+| 3 | 任务流模板 | ✅ `LuckyDuckyVod`（已建·转码 1982549 + 雪碧图 172236 + 封面 233175） | 上传完成自动触发：转码（H.264 720p 单档·GOP2s）+ 雪碧图（2s 一帧 10×10）+ 封面截图 |
+| 4 | 播放域名 | ✅ `vod.luckyducky.cn`（已接入 Online·CNAME→`vod.luckyducky.cn.cdn.dnsv1.com`·阿里云 DNS 已配） | 默认分发域名官方定位「仅用于测试」，线上必须自有域名（同 `kf.luckyducky.cn` 备案先例）|
+| 5 | Key 防盗链 | ✅ 已开启（EncryptedKey=`secureConfig/vod.playKey`·2026-08-18） | `getPlaybackUrl` 鉴权后本地 md5 签名（有效期 6h·kit/vod.ts SIGN_TTL_SEC）；**Key 未配则 VOD 段一律 url:null（fail-closed）** |
+| 6 | HTTPS 证书 | ✅ `a6eOgKnW`（vod.luckyducky.cn·已配 CloudCertId·2026-11-16 到期） | 播放必须 HTTPS（小程序合法域名要求）；到期前续期（DNS 在阿里云须手动验证）|
+| 7 | 事件通知模式 | **不配置回调 URL**（拉模式·刻意）| 转码完成感知走 admin「同步转码状态」按钮 on-demand 查询（DescribeMediaInfos）——云函数无公网回调入口，不为此开 HTTP 访问服务 |
 
 ## 重建手册（新环境 / 误删后照做）
 
