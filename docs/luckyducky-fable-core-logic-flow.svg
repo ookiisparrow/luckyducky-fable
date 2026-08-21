@@ -1,0 +1,104 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="2600" viewBox="0 0 1200 2600">
+  <defs>
+    <linearGradient id="black" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#050505"/><stop offset="1" stop-color="#121212"/></linearGradient>
+    <linearGradient id="paper" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#ffffff"/><stop offset="1" stop-color="#f7f7f7"/></linearGradient>
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="150%"><feDropShadow dx="0" dy="10" stdDeviation="12" flood-color="#000000" flood-opacity="0.22"/></filter>
+    <marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#999999"/></marker>
+    <marker id="arrow-purple" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#8d65bd"/></marker>
+    <style>
+      .cn{font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif}.mono{font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,monospace}
+      .white{fill:#fff}.title{font-size:39px;font-weight:800;letter-spacing:1px}.sub{fill:#9b9b9b;font-size:20px}.h1{fill:#161616;font-size:33px;font-weight:800}.h2{fill:#333;font-size:24px;font-weight:800}.body{fill:#555;font-size:18px}.tiny{fill:#888;font-size:15px}
+      .node{fill:#fff;stroke:#d7d7d7;stroke-width:2}.entry{fill:#fbf8ff;stroke:#b99bd7;stroke-width:3}.gate{fill:#f5fbf7;stroke:#9dc8a9;stroke-width:3}.domain{fill:#fffaf1;stroke:#e4c26b;stroke-width:2}.danger{fill:#fff5f4;stroke:#dfaaa4;stroke-width:2}.blue{fill:#f2f8ff;stroke:#9bb8db;stroke-width:2}
+      .line{fill:none;stroke:#a8a8a8;stroke-width:3;marker-end:url(#arrow)}.purple-line{fill:none;stroke:#8d65bd;stroke-width:3;marker-end:url(#arrow-purple)}.soft{fill:none;stroke:#d3d3d3;stroke-width:2}.dash{fill:none;stroke:#999;stroke-width:2;stroke-dasharray:8 7;marker-end:url(#arrow)}
+      .tag{font-size:15px;font-weight:700}.purple{fill:#704a92}.green{fill:#37734d}.yellow{fill:#8b6b27}.red{fill:#9e4c45}.blue-text{fill:#3e6e9d}
+    </style>
+  </defs>
+
+  <!-- Reference-image-like shell -->
+  <rect width="1200" height="2600" fill="url(#black)"/>
+  <text x="64" y="82" class="cn sub">20:26</text><text x="965" y="82" class="cn sub">● 5G  ▰ 86%</text>
+  <text x="65" y="170" class="cn white" font-size="48">‹</text><text x="1100" y="170" class="cn white" font-size="45">⋮</text>
+  <circle cx="116" cy="292" r="62" fill="#f4bd55"/><circle cx="116" cy="292" r="51" fill="#ffd875" stroke="#fff" stroke-width="3"/>
+  <text x="116" y="307" text-anchor="middle" class="cn" font-size="45">🦆</text>
+  <text x="205" y="280" class="cn title" font-size="31">LuckyDucky 小棉鸭</text><circle cx="560" cy="269" r="13" fill="#1e9bf0"/><path d="M553 269 l6 6 11 -14" fill="none" stroke="#fff" stroke-width="4"/>
+  <text x="205" y="323" class="mono sub">@luckyducky_fable</text><rect x="936" y="255" width="186" height="68" rx="34" fill="none" stroke="#fff" stroke-width="3"/>
+  <text x="1029" y="299" text-anchor="middle" class="cn white" font-size="27" font-weight="700">实现流程</text>
+
+  <rect x="24" y="390" width="1152" height="1945" rx="4" fill="url(#paper)" filter="url(#shadow)"/>
+  <text x="600" y="460" text-anchor="middle" class="cn h1">LuckyDucky fable · 核心业务逻辑实现图</text>
+  <text x="600" y="498" text-anchor="middle" class="cn" fill="#777" font-size="18">请求入口 → 安全闸门 → 领域函数 → 状态机 / CAS → 外部副作用 → 回调闭环</text>
+  <line x1="72" y1="535" x2="1128" y2="535" class="soft"/>
+
+  <!-- Phase 1: entrances -->
+  <text x="72" y="582" class="cn h2">1 · 请求进入系统</text><text x="1128" y="582" text-anchor="end" class="mono tiny">pages → lib → api → cloud gateway</text>
+  <rect x="72" y="610" width="320" height="128" rx="18" class="entry"/>
+  <text x="96" y="650" class="cn h2">顾客端入口</text><text x="96" y="687" class="mono body">rewrite/mp</text><text x="96" y="716" class="cn body">页面事件 → api → callApp('app')</text>
+  <rect x="440" y="610" width="320" height="128" rx="18" class="entry"/>
+  <text x="464" y="650" class="cn h2">运营与坐席入口</text><text x="464" y="687" class="mono body">rewrite/admin · rewrite/agent</text><text x="464" y="716" class="cn body">HTTPS POST /adminv2</text>
+  <rect x="808" y="610" width="320" height="128" rx="18" class="entry"/>
+  <text x="832" y="650" class="cn h2">回调与定时入口</text><text x="832" y="687" class="mono body">payCallback · refundCallback</text><text x="832" y="716" class="mono body">timers / inspect / reconcile</text>
+  <path d="M232 738 L232 780 M600 738 L600 780 M968 738 L968 780" class="line"/>
+
+  <!-- Phase 2: gateways -->
+  <text x="72" y="828" class="cn h2">2 · 网关与统一闸门</text><text x="1128" y="828" text-anchor="end" class="cn tiny">先拒绝不可信请求，再进入领域逻辑</text>
+  <rect x="72" y="852" width="320" height="164" rx="18" class="gate"/>
+  <text x="96" y="892" class="cn h2">app 聚合网关</text><text x="96" y="929" class="mono body">withOpenId(getWXContext)</text><text x="96" y="964" class="cn body">action 白名单 · 频控 · 参数形状</text><rect x="96" y="978" width="130" height="23" rx="11" fill="#dcefe2"/><text x="161" y="995" text-anchor="middle" class="cn tag green">未知 action 拒绝</text>
+  <rect x="440" y="852" width="320" height="164" rx="18" class="gate"/>
+  <text x="464" y="892" class="cn h2">adminApi 管理网关</text><text x="464" y="929" class="cn body">口令 / 企微免登 → sessionToken</text><text x="464" y="964" class="cn body">RBAC ACTION_CAPS · 审计留痕</text><rect x="464" y="978" width="136" height="23" rx="11" fill="#dcefe2"/><text x="532" y="995" text-anchor="middle" class="cn tag green">默认最小权限</text>
+  <rect x="808" y="852" width="320" height="164" rx="18" class="gate"/>
+  <text x="832" y="892" class="cn h2">回调 / 定时保护</text><text x="832" y="929" class="cn body">isServerCall · 验签 · 防伪 callback</text><text x="832" y="964" class="cn body">SERVER_ONLY · 伪造请求静默 ACK</text><rect x="832" y="978" width="120" height="23" rx="11" fill="#dcefe2"/><text x="892" y="995" text-anchor="middle" class="cn tag green">fail-closed</text>
+  <path d="M232 780 L232 852 M600 780 L600 852 M968 780 L968 852" class="line"/>
+
+  <!-- Shared primitives -->
+  <rect x="150" y="1060" width="900" height="116" rx="20" class="blue"/>
+  <text x="600" y="1100" text-anchor="middle" class="cn h2 blue-text">共享业务原语（所有核心链路复用）</text>
+  <text x="600" y="1137" text-anchor="middle" class="mono body">transition(CAS) · idempotency claim · Fen money · paging · withRateLimit · notifyAlert · storage / VOD signed URL</text>
+  <path d="M232 1016 L232 1040 L600 1040 L600 1060 M600 1016 L600 1060 M968 1016 L968 1040 L600 1040" class="line"/>
+
+  <!-- Domain implementation matrix -->
+  <text x="72" y="1240" class="cn h2">3 · 领域函数：输入校验、状态流转、持久化与副作用</text>
+  <rect x="72" y="1270" width="510" height="270" rx="20" class="domain"/>
+  <text x="98" y="1312" class="cn h2">订单 / 支付 / 库存主链</text>
+  <text x="98" y="1350" class="mono body">createOrder</text><text x="98" y="1381" class="cn body">清洗行项目 → 云端取价 → Fen 金额</text><text x="98" y="1412" class="cn body">幂等 claim → reserveStock → 写 pending</text>
+  <text x="98" y="1452" class="mono body">payCallback</text><text x="98" y="1483" class="cn body">验签 / 验额 / 幂等 → pending → paid</text><text x="98" y="1514" class="cn body">金额异常 → payment_exception，冻结发货</text>
+  <rect x="98" y="1519" width="181" height="21" rx="10" fill="#fff0c9"/><text x="188" y="1534" text-anchor="middle" class="cn tag yellow">先状态，后副作用</text>
+
+  <rect x="618" y="1270" width="510" height="270" rx="20" class="domain"/>
+  <text x="644" y="1312" class="cn h2">履约 / SCM 主链</text>
+  <text x="644" y="1350" class="mono body">shipOrder / shipOne</text><text x="644" y="1381" class="cn body">paid → REFUND_HOLD / feeMismatch 校验</text><text x="644" y="1412" class="cn body">CAS 抢发货锁 → shipped → SCM ship 流水</text>
+  <text x="644" y="1452" class="mono body">confirmReceive</text><text x="644" y="1483" class="cn body">本人 + shipped → CAS → done</text><text x="644" y="1514" class="cn body">物流上报失败不回滚发货，但必须告警</text>
+  <rect x="644" y="1519" width="168" height="21" rx="10" fill="#fff0c9"/><text x="728" y="1534" text-anchor="middle" class="cn tag yellow">库存账唯一接缝</text>
+
+  <rect x="72" y="1570" width="510" height="270" rx="20" class="domain"/>
+  <text x="98" y="1612" class="cn h2">激活 / 学习 / 播放主链</text>
+  <text x="98" y="1650" class="mono body">activateCourse</text><text x="98" y="1681" class="cn body">一码一用条件抢占 → activatedBy / At</text><text x="98" y="1712" class="cn body">confirmEnter → enteredAt（进课唯一闸）</text>
+  <text x="98" y="1752" class="mono body">getPlaybackUrl / trackEvent</text><text x="98" y="1783" class="cn body">已进课才签 VOD 短时地址、折叠进度</text><text x="98" y="1814" class="cn body">段完成 / 续播秒数 → progress 单条聚合</text>
+
+  <rect x="618" y="1570" width="510" height="270" rx="20" class="domain"/>
+  <text x="644" y="1612" class="cn h2">售后 / 评价 / 客服主链</text>
+  <text x="644" y="1650" class="mono body">applyRefund → approveRefund</text><text x="644" y="1681" class="cn body">本人 / 行归属 / refundable → 金额分摊</text><text x="644" y="1712" class="cn body">afterSales CAS → callFlow 退款工作流</text>
+  <text x="644" y="1752" class="mono body">submitReview / kfCallback</text><text x="644" y="1783" class="cn body">done 单行一评 + 文本/图片安全检查</text><text x="644" y="1814" class="cn body">验签 → 去重游标 → FAQ / 订单 / 转人工</text>
+
+  <path d="M600 1176 L600 1220 L327 1220 L327 1270 M600 1220 L873 1220 L873 1270" class="line"/>
+  <path d="M327 1540 L327 1570 M873 1540 L873 1570" class="line"/>
+
+  <!-- State machines -->
+  <text x="72" y="1908" class="cn h2">4 · 状态机与失败分支（rewrite/shared 是声明单源）</text>
+  <rect x="72" y="1935" width="1056" height="172" rx="20" class="node"/>
+  <text x="96" y="1975" class="cn h2">订单</text><rect x="184" y="1952" width="120" height="40" rx="20" fill="#f0e7f8"/><text x="244" y="1978" text-anchor="middle" class="cn tag purple">pending</text><text x="315" y="1978" class="cn" fill="#777" font-size="25">→</text><rect x="344" y="1952" width="90" height="40" rx="20" fill="#e4f3e8"/><text x="389" y="1978" text-anchor="middle" class="cn tag green">paid</text><text x="445" y="1978" class="cn" fill="#777" font-size="25">→</text><rect x="475" y="1952" width="110" height="40" rx="20" fill="#fff1cf"/><text x="530" y="1978" text-anchor="middle" class="cn tag yellow">shipped</text><text x="600" y="1978" class="cn" fill="#777" font-size="25">→</text><rect x="620" y="1952" width="90" height="40" rx="20" fill="#e4f3e8"/><text x="665" y="1978" text-anchor="middle" class="cn tag green">done</text>
+  <text x="96" y="2030" class="cn body">支付超时 / 用户取消 → closed；晚到回调库存不足 → refund_required；金额不符 → payment_exception</text>
+  <rect x="72" y="2130" width="510" height="108" rx="18" class="danger"/><text x="96" y="2168" class="cn h2">钱货安全</text><text x="96" y="2205" class="cn body">支付金额不符不置 paid；退款金额云端封顶；库存回补按状态执行</text>
+  <rect x="618" y="2130" width="510" height="108" rx="18" class="danger"/><text x="642" y="2168" class="cn h2">并发安全</text><text x="642" y="2205" class="cn body">确定性 _id / claim + 条件更新 + CAS，防重复下单、超卖、双退</text>
+  <path d="M600 2107 L600 2130" class="line"/>
+
+  <!-- Side effects and observability -->
+  <text x="72" y="2288" class="cn h2">5 · 外部副作用、异步回调与可观测闭环</text>
+  <rect x="72" y="2315" width="320" height="116" rx="18" class="blue"/><text x="96" y="2355" class="cn h2">外部副作用</text><text x="96" y="2392" class="cn body">微信支付 / 退款工作流 / VOD / 客服 API</text>
+  <rect x="440" y="2315" width="320" height="116" rx="18" class="blue"/><text x="464" y="2355" class="cn h2">异步回写</text><text x="464" y="2392" class="cn body">payCallback / refundCallback / 定时关单</text>
+  <rect x="808" y="2315" width="320" height="116" rx="18" class="blue"/><text x="832" y="2355" class="cn h2">观测与守卫</text><text x="832" y="2392" class="cn body">notifyAlert / anomalies / inspect / billReconcile</text>
+  <path d="M327 1840 L327 2265 L232 2265 L232 2315 M873 1840 L873 2265 L968 2265 L968 2315 M600 2238 L600 2315" class="dash"/>
+
+  <!-- Final implementation contract -->
+  <rect x="180" y="2460" width="840" height="64" rx="32" fill="#252525"/><text x="600" y="2501" text-anchor="middle" class="cn white" font-size="22" font-weight="700">入口可信 → 业务可算 → 状态可证 → 副作用幂等 → 异常可追</text>
+  <text x="600" y="2550" text-anchor="middle" class="mono" fill="#626262" font-size="16">core-logic implementation view · luckyducky-fable · 2026-08-15</text>
+</svg>

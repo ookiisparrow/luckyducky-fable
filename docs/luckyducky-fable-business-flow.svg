@@ -1,0 +1,119 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="2400" viewBox="0 0 1200 2400">
+  <defs>
+    <linearGradient id="black" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#050505"/><stop offset="1" stop-color="#121212"/></linearGradient>
+    <linearGradient id="paper" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#ffffff"/><stop offset="1" stop-color="#f7f7f7"/></linearGradient>
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="150%"><feDropShadow dx="0" dy="10" stdDeviation="12" flood-color="#000000" flood-opacity="0.22"/></filter>
+    <marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#999999"/></marker>
+    <marker id="arrow-purple" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#8d65bd"/></marker>
+    <style>
+      .cn{font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif}
+      .mono{font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,monospace}
+      .white{fill:#fff}.title{font-size:40px;font-weight:800;letter-spacing:1px}.sub{fill:#9b9b9b;font-size:21px}
+      .h1{fill:#161616;font-size:35px;font-weight:800}.h2{fill:#333;font-size:25px;font-weight:800}.body{fill:#555;font-size:19px}.tiny{fill:#888;font-size:16px}
+      .lane-head{font-size:22px;font-weight:800}.node{fill:#fff;stroke:#d8d8d8;stroke-width:2}.customer{fill:#fbf8ff;stroke:#b99bd7;stroke-width:3}.platform{fill:#f5fbf7;stroke:#9dc8a9;stroke-width:3}.ops{fill:#fffaf1;stroke:#e4c26b;stroke-width:2}
+      .line{fill:none;stroke:#a8a8a8;stroke-width:3;marker-end:url(#arrow)}.purple-line{fill:none;stroke:#8d65bd;stroke-width:3;marker-end:url(#arrow-purple)}.soft{fill:none;stroke:#d3d3d3;stroke-width:2}
+      .tag{font-size:16px;font-weight:700}.tag-purple{fill:#7a519e}.tag-green{fill:#43835a}.tag-yellow{fill:#916e24}
+    </style>
+  </defs>
+
+  <!-- Mobile poster shell inspired by the reference -->
+  <rect width="1200" height="2400" fill="url(#black)"/>
+  <text x="64" y="82" class="cn sub">20:26</text><text x="965" y="82" class="cn sub">● 5G  ▰ 86%</text>
+  <text x="65" y="170" class="cn white" font-size="48">‹</text><text x="1100" y="170" class="cn white" font-size="45">⋮</text>
+  <circle cx="116" cy="292" r="62" fill="#f4bd55"/><circle cx="116" cy="292" r="51" fill="#ffd875" stroke="#fff" stroke-width="3"/>
+  <text x="116" y="307" text-anchor="middle" class="cn" font-size="45">🦆</text>
+  <text x="205" y="280" class="cn title" font-size="31">LuckyDucky 小棉鸭</text>
+  <circle cx="560" cy="269" r="13" fill="#1e9bf0"/><path d="M553 269 l6 6 11 -14" fill="none" stroke="#fff" stroke-width="4"/>
+  <text x="205" y="323" class="mono sub">@luckyducky_fable</text>
+  <rect x="936" y="255" width="186" height="68" rx="34" fill="none" stroke="#fff" stroke-width="3"/>
+  <text x="1029" y="299" text-anchor="middle" class="cn white" font-size="27" font-weight="700">业务闭环</text>
+
+  <rect x="24" y="390" width="1152" height="1745" rx="4" fill="url(#paper)" filter="url(#shadow)"/>
+  <text x="600" y="460" text-anchor="middle" class="cn h1">LuckyDucky fable · 业务流程图</text>
+  <text x="600" y="499" text-anchor="middle" class="cn" fill="#777" font-size="19">从内容触达到交易履约，再到学习、评价与服务的完整闭环</text>
+  <line x1="72" y1="535" x2="1128" y2="535" class="soft"/>
+
+  <!-- Swimlane headers -->
+  <rect x="72" y="565" width="320" height="52" rx="14" fill="#f0e7f8"/><text x="232" y="599" text-anchor="middle" class="cn lane-head" fill="#704a92">顾客旅程</text>
+  <rect x="440" y="565" width="320" height="52" rx="14" fill="#e4f3e8"/><text x="600" y="599" text-anchor="middle" class="cn lane-head" fill="#37734d">平台与业务闸门</text>
+  <rect x="808" y="565" width="320" height="52" rx="14" fill="#fff1cf"/><text x="968" y="599" text-anchor="middle" class="cn lane-head" fill="#8b6b27">运营与履约</text>
+
+  <!-- Main vertical spine -->
+  <path d="M600 617 L600 1998" class="soft"/>
+
+  <!-- 1. Reach -->
+  <rect x="72" y="655" width="320" height="148" rx="18" class="customer"/>
+  <text x="96" y="695" class="cn h2">① 内容触达</text><text x="96" y="732" class="cn body">官网 / 扫码页 / 小程序首页</text><text x="96" y="767" class="cn body">看见小棉鸭与课程内容</text>
+  <rect x="96" y="778" width="123" height="23" rx="11" fill="#eadcf5"/><text x="157" y="795" text-anchor="middle" class="cn tag tag-purple">进入兴趣</text>
+  <rect x="440" y="655" width="320" height="148" rx="18" class="platform"/>
+  <text x="464" y="695" class="cn h2">内容服务</text><text x="464" y="732" class="cn body">CMS 白名单净化 · 会话缓存</text><text x="464" y="767" class="cn body">缺失内容回退默认文案，不空屏</text>
+  <rect x="808" y="655" width="320" height="148" rx="18" class="ops"/>
+  <text x="832" y="695" class="cn h2">商品与课程上架</text><text x="832" y="732" class="cn body">草稿 → 校验 → 发布</text><text x="832" y="767" class="cn body">图片、课程、橱窗由后台运营</text>
+  <path d="M392 729 L440 729" class="purple-line"/><path d="M760 729 L808 729" class="line"/>
+
+  <!-- 2. Identity -->
+  <rect x="72" y="845" width="320" height="148" rx="18" class="customer"/>
+  <text x="96" y="885" class="cn h2">② 登录与隐私同意</text><text x="96" y="922" class="cn body">可先浏览，触发需要时再登录</text><text x="96" y="957" class="cn body">微信一键授权，不采集多余资料</text>
+  <rect x="440" y="845" width="320" height="148" rx="18" class="platform"/>
+  <text x="464" y="885" class="cn h2">身份建档</text><text x="464" y="922" class="cn body">可信 openid → users 幂等 upsert</text><text x="464" y="957" class="cn body">登录频控 · 隐私闸 · 内容安全</text>
+  <rect x="808" y="845" width="320" height="148" rx="18" class="ops"/>
+  <text x="832" y="885" class="cn h2">客服身份桥</text><text x="832" y="922" class="cn body">订单查询与客服服务绑定用户</text><text x="832" y="957" class="cn body">不登录不暴露私有订单信息</text>
+  <path d="M600 803 L600 845" class="line"/><path d="M392 919 L440 919" class="purple-line"/><path d="M760 919 L808 919" class="line"/>
+
+  <!-- 3. Browse -->
+  <rect x="72" y="1035" width="320" height="148" rx="18" class="customer"/>
+  <text x="96" y="1075" class="cn h2">③ 浏览与选购</text><text x="96" y="1112" class="cn body">商品列表 → 详情 → 规格选择</text><text x="96" y="1147" class="cn body">加入购物车 / 立即购买</text>
+  <rect x="440" y="1035" width="320" height="148" rx="18" class="platform"/>
+  <text x="464" y="1075" class="cn h2">真实商品源</text><text x="464" y="1112" class="cn body">只读在售商品 · 云端价格现算</text><text x="464" y="1147" class="cn body">SKU / 封面 / 库存白名单</text>
+  <rect x="808" y="1035" width="320" height="148" rx="18" class="ops"/>
+  <text x="832" y="1075" class="cn h2">供应链备货</text><text x="832" y="1112" class="cn body">原料账 → BOM → 成品库存</text><text x="832" y="1147" class="cn body">发布前补齐商品与库存资料</text>
+  <path d="M600 993 L600 1035" class="line"/><path d="M392 1109 L440 1109" class="purple-line"/><path d="M760 1109 L808 1109" class="line"/>
+
+  <!-- 4. Order and payment -->
+  <rect x="72" y="1225" width="320" height="168" rx="18" class="customer"/>
+  <text x="96" y="1265" class="cn h2">④ 结算与支付</text><text x="96" y="1302" class="cn body">确认地址 → 提交订单 → 微信支付</text><text x="96" y="1337" class="cn body">看到明确的待支付 / 支付异常状态</text><rect x="96" y="1350" width="105" height="23" rx="11" fill="#eadcf5"/><text x="148" y="1367" text-anchor="middle" class="cn tag tag-purple">不重复下单</text>
+  <rect x="440" y="1225" width="320" height="168" rx="18" class="platform"/>
+  <text x="464" y="1265" class="cn h2">订单安全闸</text><text x="464" y="1302" class="cn body">价格重算 · 幂等 claim · 预留库存</text><text x="464" y="1337" class="cn body">支付回调验签 / 验额 / 幂等</text><rect x="464" y="1350" width="160" height="23" rx="11" fill="#dcefe2"/><text x="544" y="1367" text-anchor="middle" class="cn tag tag-green">pending → paid</text>
+  <rect x="808" y="1225" width="320" height="168" rx="18" class="ops"/>
+  <text x="832" y="1265" class="cn h2">订单工作台</text><text x="832" y="1302" class="cn body">支付成功进入待发货队列</text><text x="832" y="1337" class="cn body">超时关单先释放库存，再留痕</text><rect x="832" y="1350" width="150" height="23" rx="11" fill="#fff0c9"/><text x="907" y="1367" text-anchor="middle" class="cn tag tag-yellow">钱与货守恒</text>
+  <path d="M600 1183 L600 1225" class="line"/><path d="M392 1309 L440 1309" class="purple-line"/><path d="M760 1309 L808 1309" class="line"/>
+
+  <!-- 5. Fulfillment -->
+  <rect x="72" y="1435" width="320" height="168" rx="18" class="customer"/>
+  <text x="96" y="1475" class="cn h2">⑤ 收货与售后入口</text><text x="96" y="1512" class="cn body">查看订单 → 等待发货 → 确认收货</text><text x="96" y="1547" class="cn body">问题商品可按行申请售后</text><rect x="96" y="1560" width="136" height="23" rx="11" fill="#eadcf5"/><text x="164" y="1577" text-anchor="middle" class="cn tag tag-purple">paid → done</text>
+  <rect x="440" y="1435" width="320" height="168" rx="18" class="platform"/>
+  <text x="464" y="1475" class="cn h2">履约状态机</text><text x="464" y="1512" class="cn body">paid → shipped → done</text><text x="464" y="1547" class="cn body">发货与退款竞态闸 · 确认收货 CAS</text><rect x="464" y="1560" width="170" height="23" rx="11" fill="#dcefe2"/><text x="549" y="1577" text-anchor="middle" class="cn tag tag-green">shipOne + SCM 核销</text>
+  <rect x="808" y="1435" width="320" height="168" rx="18" class="ops"/>
+  <text x="832" y="1475" class="cn h2">拣货、打包、发货</text><text x="832" y="1512" class="cn body">备货汇总 → 扫码核销 → 物流上报</text><text x="832" y="1547" class="cn body">异常订单冻结发货并进入告警账本</text><rect x="832" y="1560" width="122" height="23" rx="11" fill="#fff0c9"/><text x="893" y="1577" text-anchor="middle" class="cn tag tag-yellow">履约台</text>
+  <path d="M600 1393 L600 1435" class="line"/><path d="M392 1519 L440 1519" class="purple-line"/><path d="M760 1519 L808 1519" class="line"/>
+
+  <!-- 6. Learning branch -->
+  <text x="72" y="1672" class="cn" fill="#333" font-size="26" font-weight="800">⑥ 课程与内容消费（购买后的第二条价值链）</text><line x1="72" y1="1688" x2="1128" y2="1688" class="soft"/>
+  <rect x="72" y="1720" width="320" height="164" rx="18" class="customer"/>
+  <text x="96" y="1760" class="cn h2">扫码兑课 → 确认进课</text><text x="96" y="1797" class="cn body">激活码一码一用</text><text x="96" y="1832" class="cn body">确认进课后获得播放资格</text><rect x="96" y="1845" width="156" height="23" rx="11" fill="#eadcf5"/><text x="174" y="1862" text-anchor="middle" class="cn tag tag-purple">进入课程</text>
+  <rect x="440" y="1720" width="320" height="164" rx="18" class="platform"/>
+  <text x="464" y="1760" class="cn h2">激活与播放鉴权</text><text x="464" y="1797" class="cn body">activateCourse / confirmEnter</text><text x="464" y="1832" class="cn body">getPlaybackUrl 签发短时地址</text><rect x="464" y="1845" width="184" height="23" rx="11" fill="#dcefe2"/><text x="556" y="1862" text-anchor="middle" class="cn tag tag-green">进课 = 退货权节点</text>
+  <rect x="808" y="1720" width="320" height="164" rx="18" class="ops"/>
+  <text x="832" y="1760" class="cn h2">课程运营</text><text x="832" y="1797" class="cn body">制课 → VOD 转码 → 发布</text><text x="832" y="1832" class="cn body">发布前检查转码就绪，防止不可播</text><rect x="832" y="1845" width="125" height="23" rx="11" fill="#fff0c9"/><text x="894" y="1862" text-anchor="middle" class="cn tag tag-yellow">内容后台</text>
+  <path d="M392 1802 L440 1802" class="purple-line"/><path d="M760 1802 L808 1802" class="line"/>
+
+  <!-- 7. Retention, service and safety -->
+  <text x="72" y="1930" class="cn" fill="#333" font-size="26" font-weight="800">⑦ 留存、服务与异常闭环</text><line x1="72" y1="1946" x2="1128" y2="1946" class="soft"/>
+  <rect x="72" y="1975" width="320" height="106" rx="18" class="customer"/>
+  <text x="96" y="2013" class="cn h2">学习进度 / 评价 / 客服</text><text x="96" y="2050" class="cn body">续播到秒 · 完成后评价 · 发起咨询</text>
+  <rect x="440" y="1975" width="320" height="106" rx="18" class="platform"/>
+  <text x="464" y="2013" class="cn h2">事件与业务闭环</text><text x="464" y="2050" class="cn body">trackEvent · submitReview · refundFlow · kfCallback</text>
+  <rect x="808" y="1975" width="320" height="106" rx="18" class="ops"/>
+  <text x="832" y="2013" class="cn h2">客服、退款与巡检</text><text x="832" y="2050" class="cn body">agent 坐席 · 退款审批 · 对账 / 告警 / CSAT</text>
+  <path d="M392 2028 L440 2028" class="purple-line"/><path d="M760 2028 L808 2028" class="line"/>
+
+  <!-- Business summary -->
+  <rect x="180" y="2110" width="840" height="64" rx="32" fill="#252525"/>
+  <text x="600" y="2151" text-anchor="middle" class="cn white" font-size="23" font-weight="700">触达 → 信任 → 交易 → 履约 → 进课 → 学习 → 评价 / 服务 → 复购</text>
+  <text x="600" y="2208" text-anchor="middle" class="cn" fill="#666" font-size="17">业务流程视图 · 代码实现分布在 rewrite/mp、rewrite/cloud、rewrite/admin、rewrite/agent、rewrite/site</text>
+
+  <!-- Bottom reference-style status bar -->
+  <line x1="64" y1="2260" x2="1136" y2="2260" stroke="#292929" stroke-width="2"/>
+  <text x="84" y="2310" class="cn white" font-size="22">◎ 顾客旅程</text><text x="370" y="2310" class="cn white" font-size="22">↗ 平台闸门</text><text x="665" y="2310" class="cn white" font-size="22">◇ 运营履约</text><text x="950" y="2310" class="cn white" font-size="22">⌘ 状态闭环</text>
+  <text x="600" y="2365" text-anchor="middle" class="mono" fill="#626262" font-size="16">business-flow view · luckyducky-fable · 2026-08-15</text>
+</svg>
