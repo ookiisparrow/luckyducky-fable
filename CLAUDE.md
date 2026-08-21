@@ -75,6 +75,7 @@ npm run build:rw-admin / build:agent；内容站 npm run build -w @ldrw/site
 | 上线人工配置台账 | `docs/人工配置清单.md` |
 | 待办/技术债/待拍板 | GitHub Issues（`gh issue list`·办完关） |
 | 发布/巡检/回滚工作流 | `docs/工作流.md`（工作流正册·1.0） |
+| 怀疑有过时/失真/孤立信息 | /stale-sweep（一键清淤·五类扫描） |
 | 历史（全部过程账） | `git log` / `git show`（过程账本已退役 2026-08-21） |
 | 治理框架本身 | `docs/元模式.md` |
 | 子项目线 | `docs/后台360工作站/` · `docs/进销存ERP/`（各自 README 为入口） |
