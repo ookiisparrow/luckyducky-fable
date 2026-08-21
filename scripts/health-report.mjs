@@ -7,7 +7,7 @@
 // 有红项时打印 ⚠️ 供人判断。刻意不进 npm run check（同 db-export/preflight 等运维脚本惯例）。
 //
 // 为什么不自动挂定时任务：每跑一次要起一个代理＝周期性花钱，属老板决策。要挂的话一条命令即可
-// （omp 自带定时能力），见 docs/待办与债.md「工业级生产六缺口」⑥。
+// （omp 自带定时能力），（2026-08-21 起：挂定时与否由用户决定·原待办账已迁 GitHub Issues。）
 
 import { readFileSync, existsSync, readdirSync, statSync } from 'node:fs'
 import { execFileSync } from 'node:child_process'
@@ -63,16 +63,8 @@ const sh = (cmd, args) => {
   } catch {
     add('依赖安全债', false, 'npm audit 输出解析失败（离线？）')
   }
-  if (high || critical) add('依赖安全债', false, `high ${high} · critical ${critical} —— 见待办「npm audit 存量未清」`)
+  if (high || critical) add('依赖安全债', false, `high ${high} · critical ${critical} —— 见 GitHub Issue「npm audit 存量清理」`)
   else if (out) add('依赖安全债', true, '无 high/critical')
-}
-
-// ③ 提案堆积（收编队列没人收就等于知识漏出·效能瓶颈⑤）
-{
-  const txt = readSafe(join(ROOT, 'docs/守卫与错题提案.md'))
-  const total = (txt.match(/^### 提案 /gm) || []).length
-  const done = (txt.match(/^### 提案 .*✅/gm) || []).length
-  add('提案收编队列', total === 0 || total - done <= 3, `${total - done}/${total} 条待主力收编`)
 }
 
 // ④ 闸完整性（缺口⑤的静态半边·与 tests/scripts/omp-lane-gate.test.js 同源判据的轻量版）
@@ -111,4 +103,4 @@ console.log('\n仓库侧健康报表（只读·非闸）\n' + '─'.repeat(52))
 for (const r of rows) console.log(`${r.ok ? '✅' : '⚠️ '} ${r.name.padEnd(14)} ${r.detail}`)
 console.log('─'.repeat(52))
 console.log(bad.length ? `⚠️  ${bad.length} 项需要看一眼：${bad.map((r) => r.name).join('、')}` : '✅ 全部正常')
-console.log('提醒：本报表证明不了「备份能恢复」——恢复通路尚不存在（docs/待办与债.md 工业级缺口②）。\n')
+console.log('提醒：本报表证明不了「备份能恢复」——恢复演练需按 GitHub Issue「数据库备份定期化」节奏定期做。\n')

@@ -10,7 +10,7 @@ description: Use when doing any change/batch/audit/fix in the Lucky Ducky 重构
 本仓（fable 重构线）每一处改动（功能/审计/修复/加守卫）都按这套走。**铁律：冻结仓 `/Users/sparrow/luckyducky-next`（回滚基线）零改动——紧急止血除外且须用户明示；一切迭代在 `luckyducky-fable`；部署是独立人工动作、必过 `guard-deploy` 部署闸（共用真实云环境，见 CLAUDE 身份段），git 提交与部署解耦。**
 
 ## 接活前
-1. 读 `docs/重构日志.md` 最新一批 + `git log --oneline -5`；修 bug 先查 `docs/根因账本.md` 同类病根；执行前必读同目录 `执行者错题本.md`（历任执行者踩坑清单）。
+1. 读 `git log --oneline -10`（最近批次=过程账）+ `gh issue list --state open`（活待办）；修 bug 先查 `docs/根因账本.md` 同类病根；执行前必读同目录 `执行者错题本.md`（历任执行者踩坑清单）。
 2. 定位这批治哪条根因/主张。**每主张 / 不变量 → 一条机器守卫**（不是靠人记）。
 3. 动工前写意图单：用业务大白话写清这批「改什么/业务规则是什么/为什么」；涉钱/库存/权限等敏感规则须老板点头才动手，不敏感批次至少写明供老板抽查；意图单与批次验证的红绿证据一并附上。
 
@@ -34,7 +34,7 @@ description: Use when doing any change/batch/audit/fix in the Lucky Ducky 重构
 10. 推分支（绝不直接推 main·生产仓管理权不给 agent），**一批一个 squash 提交**；信息 `type：中文说明`（type ∈ feat / fix / docs / refactor / chore / test，全角冒号）。
 11. `git push`（GitHub 备份库 `ookiisparrow/luckyducky-fable`）。
 12. **核验冻结仓零改动**：`git -C /Users/sparrow/luckyducky-next status --short`（空）+ HEAD 未变。
-13. 记 `docs/重构日志.md`（结论 + 净化指标 / 根治病根 + 验证证据 + 反向自检 + **本批退役/折叠了哪些守卫**）+ 新踩的坑记回 `执行者错题本.md`。
+13. 过程记进 **commit 信息**（结论 + 净化指标 / 根治病根 + 验证证据 + 反向自检 + **本批退役/折叠了哪些守卫**·重构日志已退役 2026-08-21）+ 新踩的坑记回 `执行者错题本.md`。
 14. 向用户汇报用**业务语言**、决策给收益 / 代价（用户非技术）；如实报结果（红就说红、跳过就说跳过）。
 
 ## 红线

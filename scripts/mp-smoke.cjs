@@ -5,11 +5,11 @@
  *       工具「设置 → 安全设置 → 服务端口」需开启（否则 connect/launch 均失败，见下方报错提示）。
  *       在 git worktree 里跑本脚本：先把主目录 rewrite/mp/project.config.json（gitignored 本地文件，
  *       worktree 不带）拷进 worktree 同路径——缺它 devtools 编译不出页面 js，模拟器「启动失败」，
- *       表现为全部自动化 RPC 统一卡在 10s 超时（2026-07-24 调试日志 U 案踩过，别重新排查一遍）。
+ *       表现为全部自动化 RPC 统一卡在 10s 超时（2026-07-24 踩过（案文见 git 历史·原调试日志 U 案），别重新排查一遍）。
  * 工具实例有状态（CLAUDE.md 靠人:#10）：遇怪象（RPC 不回包/白屏/component not found）先
  * `cli quit` 彻底退出后再重启，不要在僵实例上跑——本脚本的探活步骤兜第一道。
  *
- * Nightly ≥2.02.2607232 已知回归（2026-07-24 实测定性·docs/调试日志.md 同日条）：
+ * Nightly ≥2.02.2607232 已知回归（2026-07-24 实测定性·案文见 git 历史）：
  * checkout 空草稿 600ms 自动 navigateBack 若落在前向转场未完成的窗口内（新版转场冷池可迟至 ~800ms），
  * 模拟器导航状态机死锁——返回被吞 + 此后一切导航类 RPC（reLaunch/navigateTo）永不回包，而信息类
  * RPC（systemInfo/pageStack/evaluate）照常应答（半僵态）。三个适配由此而来：
@@ -35,7 +35,7 @@
  * 底座选型拍板（2026-07-24 深夜·官方 wechatide CLI 正式接入后实测评估·勿再重议）：本脚本**保持
  * miniprogram-automator，不迁官方 wechatide CLI**。数据依据：① wechatide 每条命令冷启动子进程、
  * 单调用底噪实测 1.0-1.3s，checkout 两段式断言需要 50-300ms 观测粒度——结构性做不到，而该断言正是
- * Nightly 转场死锁回归（调试日志 S 案）的岗哨，不可弃；② 全量 23 页 CLI 方案估算 ~2.5 分钟，比本
+ * Nightly 转场死锁回归（2026-07-24 S 案·案文见 git 历史）的岗哨，不可弃；② 全量 23 页 CLI 方案估算 ~2.5 分钟，比本
  * 方案更慢无增益；③ automator 库与 wechatide 底层同走 devtools 自动化 ws 端口（官方长期支持面），
  * 2026-07-24 崩的只是 checkVersion 门面检查（已就地猴补，见下）。Plan B：若未来 Nightly 真改了 ws
  * 协议本体导致本库彻底失效，届时再评估 `wechatide mcp` 持久模式（stdio·免冷启动·实测存在未测延迟）
@@ -51,7 +51,7 @@ const fs = require('fs')
 const path = require('path')
 const { execSync } = require('child_process')
 
-// 又一次 Nightly 自动更新期间实测发现（2607232→2607242，同一晚·docs/调试日志.md T 案）：
+// 又一次 Nightly 自动更新期间实测发现（2607232→2607242，同一晚·案文见 git 历史）：
 // miniprogram-automator 的 connect()/launch() 都无条件调内部 checkVersion()，读 Tool.getInfo
 // 返回值的 .SDKVersion 字段跟 '2.7.3' 比大小；新 Nightly 版的 Tool.getInfo 已改回 { version: '<工具
 // 自身版本号>' }（不再有 SDKVersion 字段）——.split() 撞 undefined，connect/launch 两条路径全断。
@@ -222,7 +222,7 @@ async function main() {
         reasons.push(
           `等待 2.6s 后栈顶=${laterTop ? laterTop.path : '(空)'}，期望自动返回 ${HOME_PATH}` +
             '（若栈顶仍是 checkout：Nightly ≥2.02.2607232 转场中途 navigateBack 死锁的已知回归，' +
-            '此后本实例导航道已瘫、下次运行由导航道探活自动冷启自愈——见头注与 docs/调试日志.md 2026-07-24 条）',
+            '此后本实例导航道已瘫、下次运行由导航道探活自动冷启自愈——见头注与 git 历史 2026-07-24 案文）',
         )
       }
     } else {

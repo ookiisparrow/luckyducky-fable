@@ -5,7 +5,7 @@ description: Use when 要用 Workflow 多 agent 并行编排干一大片同构�
 
 # Workflow 多 agent 并行编排（fanout 方法）
 
-> 实战来源：M-adminImpl（30 页并行重写·6 批）、admin2 迭代I（两维 sweep·round6 零确认）、bug 清除战役 I（4 轮 81 项）、**战役 II（9 轮 55 项·13 批·Round9 零确认·规格预审 4 次咬中真矛盾）**，账在 `docs/重构日志.md`。核心信条：**并行产出、串行亲核——验证不是相信**（元模式 A7）。用户已拍板分层执行：fable 做大脑、执行派下层模型，agent 只返回精简结构化结果。
+> 实战来源：M-adminImpl（30 页并行重写·6 批）、admin2 迭代I（两维 sweep·round6 零确认）、bug 清除战役 I（4 轮 81 项）、**战役 II（9 轮 55 项·13 批·Round9 零确认·规格预审 4 次咬中真矛盾）**，账在 git 史料层（重构日志已退役 2026-08-21）。核心信条：**并行产出、串行亲核——验证不是相信**（元模式 A7）。用户已拍板分层执行：fable 做大脑、执行派下层模型，agent 只返回精简结构化结果。
 
 ## 何时用哪个模式
 - **模式A 并行重写/迁移**：几十个同构单元（页/屏/函数域）各自独立改写，彼此无依赖。
@@ -38,7 +38,7 @@ description: Use when 要用 Workflow 多 agent 并行编排干一大片同构�
 - Workflow 脚本默认 `pipeline()`，只有真需要全量汇合（去重/早退）才用 `parallel()` barrier。
 - agent 返回**精简结构化结果**（schema 钉死），不要大段散文；主会话只拿结论做亲核与编排。
 - 并行期 git 纪律：精确路径 add、每批 check 全绿、冻结仓（`../luckyducky-next`）零改动核验。
-- 进度记账：plan 文件记批次勾选与 flag 汇总；里程碑落 `docs/重构日志.md`。
+- 进度记账：plan 文件记批次勾选与 flag 汇总；里程碑写进 commit 信息（跨会话跟进开 GitHub Issue）。
 
 ### 规格与流水线机制坑（战役 II 增补）
 - **规格预审是与对抗验证并列的最大杠杆——但主脑的「钉死」也会失真**：战役 II 预审 4 次咬中真矛盾，全是我写规格时没亲读现场（pageQuery 硬编码 desc 与队列 FIFO 不可兼得、函数名 saveAgent 不存在、文件路径指错、footerLink 钉死实现与测试段自相矛盾）。规格里给字面代码前**必须先读那几行现场**；预审报「矛盾」也要人工裁决——lint agent 会把「未发现矛盾」的说明误塞进 contradictions 数组造成假中止。

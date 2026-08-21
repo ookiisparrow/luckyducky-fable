@@ -61,7 +61,7 @@ console.log(`
   □ 验收单 X（集合权限档位·以 COLLECTIONS 单源为准）/ Y（支付黄金路径）/ Z（退款黄金路径）真机重走
   □ cloudbaserc.json 迁移：functionRoot 仍指旧线冻结产物目录，迁至活线产物目录前须先
     tcb fn detail 逐个抄回全部函数真实内存/超时值（以 cloudbaserc.json functions 为准）——仓内无记录，凭空写会在下次 config 应用时降级
-    生产配置（见 docs/待办与债.md 该 flag）
+    生产配置（待办见 GitHub Issues）
   □ 数据兼容：重构 _id 方案与现网一致＝无需迁移；债#14（users/progress 确定性_id）属切换后改进
 真部署（deploy-fns）须 DEPLOY_ALLOWED=1 + 用户拍板。本体检不触发任何部署。`)
 process.exit(fail.length ? 1 : 0)

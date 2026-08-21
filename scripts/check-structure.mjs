@@ -835,7 +835,7 @@ export const repoChecks = [
     // `npm audit fix` 只能修 1 个 moderate（postcss），13 条 high 全部需要
     // --force（breaking：@dcloudio/uni-mp-weixin 等），故本批只接「可见性」
     // （CI 报告模式 + continue-on-error），不升级为 blocking——升级前置条件
-    // （清存量或显式接受风险记账）见 docs/待办与债.md。仿 rw-artifact-gate-in-ci
+    // （清存量或显式接受风险记账·待办见 GitHub Issues）。仿 rw-artifact-gate-in-ci
     // 同款「闸不能被悄悄拆」模式：只钉「这一步真的在 CI 里跑」，不评判闸门
     // 严格度（严格度是产品/风险决策，机器管不着也不该管）。
     id: 'ci-audit-step-present',
@@ -1650,42 +1650,8 @@ import { PROD_ENV } from './lib/env.mjs'（单源·病根#5·债#30①）`)
       return bad
     },
   },
-  {
-    // 跨文档「重构日志 <日期>」指针随批次卷档失活（熵地图 E1·我边治边造的盲区）：批次卷档到 archive 后，
-    // 活文档里「详 重构日志 2026-06-24」这类指针指向的日期已不在活档（只剩卷档标签）→ 读者扑空。
-    // 守卫扫活文档紧邻「重构日志」的日期引用，该日期须在活 重构日志 有 ## 标题（排除卷档标签行），
-    // 否则该处须显式指 archive（含 'archive'）。同 archive-index-synced 守指针不悬空。
-    id: 'docs-pointer-liveness',
-    roots: ['#11'],
-    desc: '跨文档指针不失活（根因#11·熵地图 E1）：活文档「重构日志 <YYYY-MM-DD>」引用，该日期须在活 重构日志.md 有真标题（非卷档标签）；否则该行须显式指 archive——防批次卷档后指针扑空',
-    run() {
-      const log = join(ROOT, 'docs/重构日志.md')
-      if (!existsSync(log)) return ['docs/重构日志.md 缺失——守卫扫描面消失（docs-pointer-liveness）']
-      // 活日期＝真标题里的日期；排除卷档标签行（含「卷档」或「archive」）——那些日期已搬走、不算活
-      const liveDates = new Set(
-        readFileSync(log, 'utf8')
-          .split('\n')
-          .filter((l) => /^#{2,3}\s/.test(l) && !l.includes('卷档') && !l.includes('archive'))
-          .flatMap((l) => [...l.matchAll(/(\d{4}-\d{2}-\d{2})/g)].map((m) => m[1]))
-      )
-      const bad = []
-      const dir = join(ROOT, 'docs')
-      for (const f of lsScan(dir)) {
-        if (!f.endsWith('.md') || f === '重构日志.md') continue
-        readFileSync(join(dir, f), 'utf8')
-          .split('\n')
-          .forEach((line, i) => {
-            if (line.includes('archive') || line.includes('史料')) return // 已显式指归档/史料层·放行
-            for (const m of line.matchAll(/重构日志[`\s]{0,4}(\d{4}-\d{2}-\d{2})/g))
-              if (!liveDates.has(m[1]))
-                bad.push(
-                  `docs/${f}:${i + 1} 引用「重构日志 ${m[1]}」但该日期已不在活 重构日志（卷档了）——失活指针，须改指 archive（根因#11·熵地图 E1）`
-                )
-          })
-      }
-      return bad
-    },
-  },
+  // （docs-pointer-liveness 已退役 2026-08-21 治理减负批：过程账本 重构日志/调试日志/史料索引/待办与债 全部退役
+  // ——过程账=git 提交信息、待办=GitHub Issues、状态=现状与路线，不再有「活档 vs 卷档」可失活的指针面。）
   {
     // 文档引用不失效（「看别的文档」批·泛化 archive-index-synced 反向指针检查到所有 doc 引用）：active docs +
     // CLAUDE + skills 里写的 `docs/X.md` / `archive/X.md` 引用，被引文件须真实存在——治「接口正册→已并入系统事实 /
@@ -1843,7 +1809,7 @@ import { PROD_ENV } from './lib/env.mjs'（单源·病根#5·债#30①）`)
   {
     id: 'precedent-index-synced',
     roots: ['#11'],
-    desc: '判例索引与四本账同步（车队地基批4·病根#11·「动手前查判例」的机器入口）：docs/判例索引.json 的 decision/rootcause/debuglog(fable) 条数须与 关键决策记录 `## N.`/根因账本 §一 `### N.`/调试日志三源实读（活档 + museum-20260723 归档册 + S/U 退役快照） 的真值计数一致——新决策/病根/调试条目落账后漏编索引即红（nofix 类人工精选·不计数核；2026-08-08 LD-002/003：废弃史料索引手写计数锚——信手写 19 的空样本=绿，改真读归档册与 git 历史，缺 tag/历史即红）',
+    desc: '判例索引与两本账同步（车队地基批4·病根#11·「动手前查判例」的机器入口·2026-08-21 治理减负批收窄）：docs/判例索引.json 的 decision/rootcause 条数须与 关键决策记录 `## N.`/根因账本 §一 `### N.` 真值计数一致——新决策/病根落账后漏编索引即红。debuglog 类已冻结不再计数核（调试日志退役入 git 史料层·存量条目保留可查·新增 bug 教训走 commit 信息+Issue）；nofix 类人工精选·不计数核',
     run() {
       const bad = []
       const idxPath = join(ROOT, 'docs/判例索引.json')
@@ -1857,45 +1823,13 @@ import { PROD_ENV } from './lib/env.mjs'（单源·病根#5·债#30①）`)
       }
       const entries = idx?.entries ?? []
       const cnt = (kind) => entries.filter((e) => e?.kind === kind).length
-      // debuglog 真值＝三源实读（不许空样本=绿）：活档 D + museum-20260723 tag 归档册
-      // （`调试日志-fable-结案-至20260713.md`·A~R 入册 17 卷，D 案留活档故不在册）+ S/U 退役前
-      // 最后快照 0103deff（2026-08-02 体检批退役·案文见 git 历史）。任一源读不到即红——无法核
-      // 就是无法核，宁红不拿手写计数凑绿（LD-002 空样本实证：锚点一改写法真值就塌成 1 条）。
-      const gitShow = (rev, path) =>
-        execSync(`git show ${rev}:${path}`, { encoding: 'utf8', maxBuffer: 8 * 1024 * 1024, stdio: ['ignore', 'pipe', 'ignore'], cwd: ROOT })
-      const liveCount = [
-        ...readFileSync(join(ROOT, 'docs/调试日志.md'), 'utf8').matchAll(/^## .+（fable）/gm),
-      ].length
-      let archiveCount = 0
-      try {
-        archiveCount = [
-          ...gitShow('museum-20260723', 'docs/archive/调试日志-fable-结案-至20260713.md').matchAll(/^## .+（fable）/gm),
-        ].length
-      } catch {
-        return ['判例 debuglog 归档册读不到（museum-20260723 tag 缺失）——先 `git fetch origin tag museum-20260723` 再重跑；守卫扫描面=tag 实读，缺样本即红不许空样本=绿（LD-002）']
-      }
-      let retiredCount = 0
-      try {
-        retiredCount = [
-          ...gitShow('0103deff98df6cdea59a04b77795f1b724e1a71b', 'docs/调试日志.md').matchAll(/^## [SU]（fable）/gm),
-        ].length
-      } catch {
-        return ['判例 debuglog S/U 退役快照读不到（0103deff 对象缺失）——本地/CI 检出须含全量历史（CI 用 checkout fetch-depth 0），S/U 2 案真值核不了即红（LD-002）']
-      }
-      const debuglogTruth = liveCount + archiveCount + retiredCount
-      // 史料索引声明数与真值互核（2026-08-08 起：手写计数锚不再当事实源，只做文档同步核——声明漂移即红）
-      const anchor = readFileSync(join(ROOT, 'docs/史料索引.md'), 'utf8').match(/fable 结案调试案例数：\*{0,2}(\d+)\*{0,2}/)
-      if (!anchor || Number(anchor[1]) !== debuglogTruth)
-        bad.push(
-          `史料索引「fable 结案调试案例数」声明 ${anchor ? anchor[1] : '(缺失/不可解析)'} ≠ 三源实读真值 ${debuglogTruth}——文档计数漂移，以机器真值为准改文档（客观计数别手抄·#11）`
-        )
+      // debuglog 类已冻结（2026-08-21 治理减负批）：调试日志退役入 git 史料层，存量判例条目保留可查、
+      // 不再与任何活档计数对账（无活档可对＝计数核失去真值源）；新增 bug 教训走 commit 信息 + GitHub Issue。
       const truth = {
         decision: [...readFileSync(join(ROOT, 'docs/关键决策记录.md'), 'utf8').matchAll(/^## \d+\./gm)].length,
         rootcause: [
           ...readFileSync(join(ROOT, 'docs/根因账本.md'), 'utf8').split('## 二、')[0].matchAll(/^### \d+\./gm),
         ].length,
-        // fable 案文退役进 git 史料层（第一性原理批）后真值＝活档 + 归档册 + 退役快照实读：判例是前车之鉴，案文退役教训不退役
-        debuglog: debuglogTruth,
       }
       for (const [kind, want] of Object.entries(truth))
         if (cnt(kind) !== want)

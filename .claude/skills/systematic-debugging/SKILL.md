@@ -30,7 +30,7 @@ description: Use when debugging a bug, failure, flaky test, or unexpected behavi
 - 能升级成机器守卫就升级：数据契约（persist sanitize）、结构不变量（`scripts/check-structure.mjs` 加一条规则）、TS 类型（非法状态不可表达）——把「这次的 bug」变成「这类 bug 机器永久拦」。
 
 ## 4. 记账 + 归因到病根（Ledger，intake 闭环）
-- 结案记 `docs/调试日志.md`，格式：日期 / 现象 / 根因 / 同类隐患（启发式）/ 是否结构性 / 状态。
+- 结案记进 **commit 信息**（格式：现象 / 根因 / 同类隐患（启发式）/ 是否结构性；跨会话跟进开 GitHub Issue·调试日志已退役 2026-08-21）。
 - **归因到 `docs/根因账本.md`**（框架自迭代的发动机，别跳）：
   - 命中某条病根 → 那条的守卫漏了或缺了，**补 / 收紧守卫**，别只修眼前这一处。
   - 谁都不命中 → 它是**新病根**：在账本 §一 立 `### N.`（病史→本质→根治→落点→绝迹证明）+ 配一条守卫。`guard-coverage` 会一直红到守卫到位为止——这是安全网不是负担。

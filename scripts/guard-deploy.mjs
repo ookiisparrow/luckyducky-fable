@@ -13,7 +13,7 @@
  *     **提到** "tcb"/"deploy" 字样不算，杜绝误拦 git commit。人在自己终端的命令不经本 hook。
  *
  * **接管 wechatide**（2026-07-24 官方 skill CLI 正式接入批）：官方 `wechatide` CLI（随开发者工具 Nightly
- * 自动装好，见 `docs/调试日志.md` U 案附近·`docs/待办与债.md` ai-mode-skills 条）新开了一条平行的生产写
+ * 自动装好，见 git 历史（原调试日志 U 案·2026-08-21 退役））新开了一条平行的生产写
  * 通道——`upload`（发布体验版）直接把代码包传到微信平台；`cloud_fn_deploy`/`cloud_fn_inc_deploy`/
  * `cloud_db_write_doc`/`cloud_db_write_struct`/`cloud_manage_storage` 直接读写生产云环境，且**完全绕过
  * 本仓自己的 kit 写闸**（`rw-writes-need-gate` 只挡得住我们自己代码里发起的写，挡不住这条外部 CLI 通道）。

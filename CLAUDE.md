@@ -29,7 +29,7 @@ npm run build:rw-admin / build:agent；内容站 npm run build -w @ldrw/site
 2. 任何改动走 `/refactor-batch`：先立守卫（红）→ 改到绿 → 反向自检（篡改守卫必红再还原）→ 一批一个 squash。体检走 `/audit`（文档面 `/doc-audit` + 代码面 `/deep-audit` 可单独调）；修 bug 走 `/systematic-debugging`；验收走 `/acceptance-check`；其余按系统注入的 skill 描述自选。
 3. **被闸拦=修代码，不绕闸**（编辑 hook 当场咬违例；刻意例外行内注明 `structure-ok`）。不碰 `scripts/check-*.mjs` 与 `.claude/`（裁判不被球员改写；治理批经用户拍板除外）。
 4. **派活与红区**：机械批量活可派子代理并行、产出亲核；立不出红灯的判断题亲自做、不下放。red 模块/钱链语义/删守卫/合规文案/部署与数据库不可逆操作——先问老板，**宁停勿猜**。
-5. 收尾记账，一事一本：过程 → `docs/重构日志.md`；状态 → `docs/现状与路线.md`；bug → `docs/调试日志.md`；债/待拍板 → `docs/待办与债.md`；需求变更先改 `docs/需求清单.md` 再动代码。客观计数不手抄（写「以 X 为准」）；过程账过期直接删——git 历史即归档层，退役登记 `docs/史料索引.md`。
+5. 收尾记账（2026-08-21 减负·一事一归处）：过程账＝**git 提交信息**（写清结论/验证证据/反向自检，不另记日志本）；待办/债/待拍板＝**GitHub Issues**（`gh issue create/close`·办完即关）；状态＝`docs/现状与路线.md`；bug 修复过程＝commit 信息（跨会话跟进才开 Issue）；需求变更先改 `docs/需求清单.md` 再动代码。客观计数不手抄（写「以 X 为准」）；过期文档直接删——git 历史即归档层。
 6. **文档写作三纪律**：引用文档一律 `docs/`+实名可 resolve 格式；防御性墓碑（「已删/已退役」注记）要么配守卫要么不写；给本文件加内容先过准入测试——「删了这行，典型会话会变差吗」。
 7. 提交 `type：中文说明`（全角冒号，type ∈ feat/fix/docs/refactor/chore/test），main 唯一长期分支、一批一 squash。**部署与提交解耦，永远是人工授权动作**。
 8. **合并纪律：禁止同一 PR 重复 squash merge**。合并前先确认 PR 相对目标分支有实际 diff（`git diff --stat <base>...<head>` 为空=空合并，直接关闭并说明，不重复合并；已推送的空提交在 commit 上留备注说明、不 force-push 改写历史）。
@@ -73,7 +73,8 @@ npm run build:rw-admin / build:agent；内容站 npm run build -w @ldrw/site
 | 部署/回滚/故障/巡检 runbook | `docs/运维手册.md` |
 | 云开发平台坑 | `docs/云开发参考.md` |
 | 上线人工配置台账 | `docs/人工配置清单.md` |
-| 历史（全部过程账） | `docs/史料索引.md` → `git show` |
+| 待办/技术债/待拍板 | GitHub Issues（`gh issue list`·办完关） |
+| 历史（全部过程账） | `git log` / `git show`（过程账本已退役 2026-08-21） |
 | 治理框架本身 | `docs/元模式.md` |
 | 子项目线 | `docs/后台360工作站/` · `docs/进销存ERP/`（各自 README 为入口） |
 
