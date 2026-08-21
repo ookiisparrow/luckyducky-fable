@@ -57,7 +57,9 @@
     "test:conc": "node scripts/test-api/concurrent.mjs",
     "test:soak": "node scripts/test-api/soak.mjs",
     "test:sec": "node scripts/test-api/security.mjs",
-    "test:auth": "node scripts/test-api/security-auth.mjs"
+    "test:auth": "node scripts/test-api/security-auth.mjs",
+    "patrol": "sh scripts/daily-patrol.sh",
+    "cert:check": "node scripts/check-cert-expiry.mjs"
   },
   "devDependencies": {
     "@cloudbase/manager-node": "^5.6.3",
