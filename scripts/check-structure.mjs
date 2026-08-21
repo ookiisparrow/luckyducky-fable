@@ -541,6 +541,36 @@ export const repoChecks = [
     },
   },
   {
+    // 红区（钱链）提交闸在位（2026-08-21 治理减负批·用户拍板「物理层面划分 AI 权限」）：闸=pre-commit 钩子
+    // 拦截命中 scripts/lib/moneychain-paths.mjs 的暂存提交（MONEYCHAIN_ALLOWED=1 显式授权放行·与部署闸同模式）。
+    // 本守卫守闸自身：清单存在且含关键路径、钩子真引用它——防「锁被拆了没人知道」（同 omp 闸漏3 教训·病根#16）。
+    id: 'moneychain-gate-present',
+    roots: ['#3'],
+    desc: '红区提交闸在位（根因#3·物理隔离）：scripts/lib/moneychain-paths.mjs 存在且含 callbacks/kit 钱件/shared 契约关键路径与 isMoneychainPath 导出；scripts/git-hooks/pre-commit 含 moneychain-paths 引用与 MONEYCHAIN_ALLOWED 闸逻辑——闸被删/被改瘦即红（改红区边界=治理批须老板拍板）',
+    run() {
+      const bad = []
+      const manifest = join(ROOT, 'scripts/lib/moneychain-paths.mjs')
+      if (!existsSync(manifest)) return ['scripts/lib/moneychain-paths.mjs 缺失——红区提交闸的路径单源，重建它（含 isMoneychainPath 导出）']
+      const mSrc = readFileSync(manifest, 'utf8')
+      for (const must of [
+        'rewrite/cloud/src/functions/callbacks/',
+        'rewrite/cloud/src/kit/wxpay.ts',
+        'rewrite/cloud/src/kit/transition.ts',
+        'rewrite/shared/src/money.ts',
+        'rewrite/shared/src/order.ts',
+        'rewrite/mp/pages/checkout/',
+      ])
+        if (!mSrc.includes(must)) bad.push(`moneychain-paths.mjs 缺关键路径 ${must}——红区边界被收窄，补回或经治理批正式改边界`)
+      if (!mSrc.includes('export function isMoneychainPath')) bad.push('moneychain-paths.mjs 缺 isMoneychainPath 导出——pre-commit 闸依赖它判定')
+      const hook = join(ROOT, 'scripts/git-hooks/pre-commit')
+      if (!existsSync(hook)) return ['scripts/git-hooks/pre-commit 缺失——提交闸不存在（core.hooksPath 指 scripts/git-hooks）']
+      const hSrc = readFileSync(hook, 'utf8')
+      if (!hSrc.includes('moneychain-paths')) bad.push('pre-commit 钩子不再引用 moneychain-paths——红区闸被拆除，恢复闸逻辑')
+      if (!hSrc.includes('MONEYCHAIN_ALLOWED')) bad.push('pre-commit 钩子缺 MONEYCHAIN_ALLOWED 授权开关——红区闸语义被改，恢复')
+      return bad
+    },
+  },
+  {
     // MCP 写工具封锁（2026-07-25·用户拍板「三个都装」的安全前提·与 deploy-gated 同族）。痛：MCP 工具调用
     // 不经 Bash，guard-deploy（Bash PreToolUse hook）对它整体失明——wechat-devtools/cloudbase 两个 MCP server
     // 暴露的生产写工具（发体验版/云函数部署/产库直写/权限修改/任意云API直通）若不在 settings.json 权限层

@@ -6,7 +6,31 @@
 #   （check = structure + typecheck + lint + test），由 check:structure 的
 #   gate-single-source 不变量永久守护，防三闸语义漂移。
 # - 检查当前工作区全量（非仅暂存）：单人短分支流下足够，全套约 70–90s（typecheck+test 占大头·2026-07-23 实测）。
+# - 红区闸（2026-08-21·用户拍板）：暂存文件命中 scripts/lib/moneychain-paths.mjs 清单且未显式
+#   设 MONEYCHAIN_ALLOWED=1 时直接拦下——红区改动须老板授权，与部署闸 DEPLOY_ALLOWED 同模式。
+#   闸拦「顺手误用」，拦不住刻意绕过；刻意绕过=可见行为，走授权流程。
 # - 紧急绕过（不建议）：git commit --no-verify
+
+# ── 红区（钱链）提交闸 ──────────────────────────────────────
+if [ "$MONEYCHAIN_ALLOWED" != "1" ]; then
+  HIT=$(git diff --cached --name-only | node -e "
+    let d='';
+    process.stdin.on('data',(c)=>d+=c).on('end',()=>{
+      import('./scripts/lib/moneychain-paths.mjs').then(({isMoneychainPath})=>{
+        const hits=d.split('\n').filter(Boolean).filter(isMoneychainPath);
+        hits.forEach(h=>console.log('  '+h));
+        process.exit(0);
+      });
+    });")
+  if [ -n "$HIT" ]; then
+    echo ""
+    echo "❌ 红区（钱链）提交闸：以下暂存文件属订单交易钱链，未获授权不可提交："
+    echo "$HIT"
+    echo ""
+    echo "   红区改动须老板明示授权。确认后：MONEYCHAIN_ALLOWED=1 git commit ...（其余参数照旧）"
+    exit 1
+  fi
+fi
 
 echo "提交闸：npm run check（structure + typecheck + lint + test）..."
 
