@@ -4,7 +4,7 @@
   "private": true,
   "description": "Lucky Ducky 重写线（fable）——生产源=rewrite/ 各包（本仓不留旧代码·旧线参照去 next 仓）；共用生产云环境（部署闸 guard-deploy）",
   "engines": {
-    "node": ">=20",
+    "node": ">=20.9",
     "npm": ">=10"
   },
   "workspaces": [
@@ -62,7 +62,7 @@
     "cert:check": "node scripts/check-cert-expiry.mjs"
   },
   "devDependencies": {
-    "@cloudbase/manager-node": "^5.6.3",
+    "@cloudbase/manager-node": "5.7.0",
     "@cloudbase/node-sdk": "^3.18.3",
     "@eslint/js": "^9.10.0",
     "@stryker-mutator/core": "^9.6.1",
@@ -86,6 +86,16 @@
     "wx-server-sdk": "file:tests/helpers/wx-server-sdk"
   },
   "overrides": {
-    "axios": "^1.19.0"
+    "axios": "^1.19.0",
+    "minimist": "^1.2.8",
+    "sharp": "^0.35.3",
+    "request": {
+      "qs": "^6.15.2",
+      "tough-cookie": "^4.1.3",
+      "form-data": "^4.0.6"
+    },
+    "vod-js-sdk-v6": {
+      "uuid": "^3.4.0"
+    }
   }
 }
