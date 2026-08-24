@@ -256,7 +256,8 @@ describe('会话归档（黄金 §六）', () => {
     await archiveInbound(db(), msg, 'kf1') // 重投
     const rows = control.dump('conversations')
     expect(rows.length).toBe(1)
-    expect(rows[0].at).toBe(1700000000_000) // 秒→毫秒
+    expect(rows[0].at).toBeGreaterThanOrEqual(Date.now() - 5_000) // #124 起 at＝入库时刻毫秒（不再取 send_time 秒截断·晚到同秒消息不被游标永久跳过）
+    expect(rows[0].at).toBeLessThanOrEqual(Date.now() + 5_000)
 
     await archiveInbound(db(), { msgid: 'e1', msgtype: 'event', event: {} }, 'kf1') // 事件不归档
     await archiveInbound(db(), { msgtype: 'text', text: { content: 'x' } }, 'kf1') // 无 msgid 不归档

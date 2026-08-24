@@ -4,6 +4,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import { control } from 'wx-server-sdk'
 import { main as adminApi } from '../src/functions/adminApi/index'
 import { sha, kdf, keyMatches } from '../src/functions/adminApi/lib'
+import { archiveInbound } from '../src/functions/cs/kfCallback/archive'
 import { getDb } from '../src/kit'
 
 const SUPER = 'super-secret-key'
@@ -388,6 +389,24 @@ describe('坐席回复与会话流（黄金 §四：接缝发送·归档·失败
     expect(c.msgid).toBeUndefined() // 出站消息无 msgid 语义·原样回空
     expect(a.hasMedia).toBe(true) // B5：有 mediaId → 坐席台渲染图片气泡
     expect(b.hasMedia).toBe(false) // 无 mediaId/fileId → 不渲染
+  })
+
+  it('大白话（#124）：坐席回复先交付（毫秒 at）、同秒顾客消息晚归档——旧实现取 send_time 秒截断 at 落在已推进 cursor 之前被永久跳过；改后 at＝入库时刻·第二轮增量必取到', async () => {
+    const now = Date.now()
+    control.seed('conversations', [
+      // 第一轮前：坐席已回复（出站 at＝毫秒入库时刻·now-2000）；顾客同秒消息尚未归档（回调延迟·真实发送时刻与出站同秒）
+      { _id: 'out-1', direction: 'out', externalUserId: 'eu-s1', openKfId: 'kf1', msgtype: 'text', text: '马上处理', at: now - 2000 },
+    ])
+    const r1 = await post('getThread', A1, { sessionId: 's1' })
+    expect(r1.messages.map((m: any) => m.text)).toEqual(['马上处理'])
+    // 顾客消息晚归档：send_time 秒截断（真实发送时刻＝出站同秒·毫秒 at 小于出站毫秒 at 的值）
+    await archiveInbound(getDb(), { msgid: 'late-1', msgtype: 'text', external_userid: 'eu-s1', text: { content: '加急！' }, send_time: Math.floor((now - 2000) / 1000) }, 'kf1')
+    const late = control.dump('conversations').find((m: any) => m._id === 'wxkf:in:late-1')
+    expect(late).toBeTruthy()
+    expect(late.at).toBeGreaterThan(r1.nextCursor) // 归档时刻必大于已交付 cursor（旧实现 at=send_time*1000 会小于 cursor）
+    // 第二轮增量：晚到消息必须被取到——旧实现在此处为空·消息永久丢失（P1）
+    const r2 = await post('getThread', A1, { sessionId: 's1', cursor: r1.nextCursor })
+    expect(r2.messages.map((m: any) => m.text)).toContain('加急！')
   })
 })
 
