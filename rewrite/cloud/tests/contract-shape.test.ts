@@ -23,6 +23,8 @@ import cloud, { control } from 'wx-server-sdk'
 import { main as app } from '../src/functions/app/index'
 import { __resetTempUrlCacheForTest } from '../src/kit/storage'
 import { saveHomeContent, savePageContent, saveHelpVideos } from '../src/functions/adminApi/actions/content'
+import { publishCourse, saveCourseDraft } from '../src/functions/adminApi/actions/courses'
+import { saveKb } from '../src/functions/adminApi/actions/kb'
 import { saveDraft, publishProduct, unpublishProduct } from '../src/functions/adminApi/actions/products'
 import type { Ctx } from '../src/functions/adminApi/lib'
 
@@ -220,6 +222,29 @@ describe('契约键集合哨兵（Object.keys 排序全等·增删改名都红�
     expect(keysOf(c.chapters[0].lessons[0])).toEqual(['dur', 'id', 'name', 'segments'])
     expect(keysOf(c.chapters[0].lessons[0].segments[0])).toEqual(['dur', 'hasVideo', 'id', 'name'])
     expect(c.chapters[0].lessons[0].segments[0].hasVideo).toBe(true) // 布尔投影：受保护 fileID 不随目录下发
+    // 值非空（Issue #110 同类扫描）：getCourses 是逐层显式白名单投影——投影改读错字段时键集哨兵全绿、值静默 undefined
+    expect(c.title).toBe('钩织入门')
+    expect(c.chapters[0].title).toBe('第一章')
+    expect(c.chapters[0].lessons[0].name).toBe('第一节')
+    expect(c.chapters[0].lessons[0].dur).toBe('10:00')
+    expect(c.chapters[0].lessons[0].segments[0].name).toBe('起针')
+    expect(c.chapters[0].lessons[0].segments[0].dur).toBe('5:00')
+  })
+
+  it('getCourses·写→读闭环（Issue #110 同类扫描）：saveCourseDraft→publishCourse 真发布 → 目录读回标题/节名非空', async () => {
+    // courses 公开目录是白名单投影、且上面那条哨兵全靠自造 seed（绕过写侧）——cleanCourse/publishCourse
+    // 若改名 title/name 字段，seed 哨兵全绿而学员端目录静默变空白。经真写侧发布一份再读回，锁死两端。
+    const draft = { id: 'cW', title: '进阶课', sort: 99, chapters: [{ id: 'chW', title: '第二章', lessons: [{ id: 'lW', name: '收针一节', dur: '8:00', segments: [{ id: 'sW', name: '藏线头', dur: '3:00', videoFileId: '' }] }] }] }
+    expect(JSON.parse((await saveCourseDraft(adminCtx({ course: draft }))).body).ok).toBe(true)
+    expect(JSON.parse((await publishCourse(adminCtx({ courseId: 'cW' }))).body).ok).toBe(true)
+    const r = await call('getCourses')
+    expect(r.ok).toBe(true)
+    const c = r.list.find((x: any) => x.id === 'cW')
+    // 写侧（cleanCourse 白名单）或读侧（publicChapter/publicLesson/publicSegment 投影）任一改名即红
+    expect(c.title).toBe('进阶课')
+    expect(c.chapters[0].title).toBe('第二章')
+    expect(c.chapters[0].lessons[0].name).toBe('收针一节')
+    expect(c.chapters[0].lessons[0].segments[0].name).toBe('藏线头')
   })
 
   it('getMyCourses：顶层 [list,ok]；行只 [courseId,enteredAt]——激活文档的 code/qrcodeId/_openid 一律不出网关', async () => {
@@ -228,6 +253,21 @@ describe('契约键集合哨兵（Object.keys 排序全等·增删改名都红�
     expect(r.ok).toBe(true)
     expect(keysOf(r)).toEqual(['list', 'ok'])
     expect(keysOf(r.list[0])).toEqual(['courseId', 'enteredAt'])
+    expect(r.list[0]).toEqual({ courseId: 'c1', enteredAt: 111 }) // 值非空且如实（Issue #110 同类·byCourse 聚合读错字段时键集仍绿）
+  })
+
+  it('getMyCourses·写→读闭环（Issue #110 同类扫描）：activateCourse→confirmEnter 真进课 → 读回 courseId/enteredAt 非空', async () => {
+    // 激活文档由 ensureActivation（app 写侧 add 字面量）落地——若它改名 courseId/enteredAt，自造 seed 的
+    // 哨兵全绿、学员「我的课程」静默消失。走真进课链路读回，两端一起锁。
+    control.seed('qrcodes', [{ _id: 'CODE9', code: 'CODE9', courseId: 'cW', status: 'unused', activatedBy: null, activatedAt: null, createdAt: 1 }])
+    await call('activateCourse', { code: 'CODE9' })
+    await call('confirmEnter', { code: 'CODE9' })
+    const r = await call('getMyCourses')
+    expect(r.ok).toBe(true)
+    expect(r.list.length).toBe(1)
+    expect(r.list[0].courseId).toBe('cW')
+    expect(typeof r.list[0].enteredAt).toBe('number')
+    expect(r.list[0].enteredAt).toBeGreaterThan(0)
   })
 
   it('getMyAfterSales：顶层 [hasMore,list,nextCursor,ok]（同 getMyOrders 分页契约）；售后行 16 键由 applyRefund 真写入', async () => {
@@ -372,6 +412,12 @@ describe('契约键集合哨兵（Object.keys 排序全等·增删改名都红�
     expect(r.ok).toBe(true)
     expect(keysOf(r)).toEqual(['items', 'ok'])
     expect(keysOf(r.items[0])).toEqual(['content', 'key', 'title'])
+    // 值非空（Issue #110）：白名单重建 String(d.x||'') 的兜底会把「写侧字段改名」静默降级成空串，键集
+    // 哨兵对此天然失明（输出键恒在、值恒 string）——读侧投影漂移由值断言咬住；写侧改名由下一条真写入
+    // 链路用例专治。
+    expect(r.items[0].key).toBe('logistics:eta')
+    expect(r.items[0].title).toBe('什么时候发货？')
+    expect(r.items[0].content).toBe('48 小时内。')
     // 逐键否定（不用 JSON.stringify includes：'order' 这类短词会被答案正文里的字样喂假绿/假红）
     for (const leak of ['category', 'order', 'enabled', 'updatedAt', 'featured', '_openid', 'internalNote', 'reviewStatus']) {
       expect(leak in r.items[0]).toBe(false)
@@ -381,6 +427,23 @@ describe('契约键集合哨兵（Object.keys 排序全等·增删改名都红�
     const empty = await call('getPublicFaq')
     expect(keysOf(empty)).toEqual(['items', 'ok']) // 空态：items 键恒在、值空数组（不是缺键）
     expect(empty.items).toEqual([])
+  })
+
+  it('getPublicFaq·写→读闭环（Issue #110）：saveKb 真写入 → 公开读回 title/content 非空——「写侧改名静默降级」的专治断言', async () => {
+    // 经真写侧 adminApi saveKb 落库，不自造 seed——自造 seed 只锁得住自己的回声：saveKb 若把
+    // question/answer 改名，键集哨兵全绿而顾客端内容变空串。本条把写侧字段集与读回值两头一起锁死
+    // （同 REVIEW_WRITE_KEYS 范式），kb 单源的另一个消费面（cs bot faqAnswer 读 d.answer）随之同受保护。
+    const saved = await saveKb(adminCtx({
+      entries: [{ key: 'logistics:eta', question: '什么时候发货？', answer: '48 小时内。', category: 'logistics', order: 0, featured: true }],
+    }))
+    expect(JSON.parse(saved.body).ok).toBe(true)
+    // 写侧字段集（真写入回读）：question/answer/featured 任一改名，这里先红
+    expect(keysOf(control.dump('kb')[0])).toEqual(['_id', 'answer', 'category', 'enabled', 'featured', 'order', 'question', 'updatedAt'])
+    const r = await call('getPublicFaq')
+    expect(r.ok).toBe(true)
+    expect(r.items.length).toBe(1)
+    // 读回值逐字等于所存内容：两侧任一改名（写侧不存 question / 读侧不读 question）都到不了这句绿
+    expect(r.items[0]).toEqual({ key: 'logistics:eta', title: '什么时候发货？', content: '48 小时内。' })
   })
 
   // ── 第三批扩面（战役工单 W1·B 批：学习链 + 用户面五 action）──
@@ -517,6 +580,11 @@ describe('契约键集合哨兵（Object.keys 排序全等·增删改名都红�
       expect(cut in r.list[0]).toBe(false)
     }
     expect(r.list[0].photos[0].startsWith('https://')).toBe(true) // 晒图裸 fileID 不出网关，换短时址下发
+    // 值非空（Issue #110 同类扫描）：读侧 text/spec 走 `||''` 兜底，submitReview 写侧改名会静默降级成空串——
+    // 真写入的内容必须原样读回（name←users.nickname / spec←订单行快照）
+    expect(r.list[0].text).toBe('很好')
+    expect(r.list[0].name).toBe('幸运鸭')
+    expect(r.list[0].spec).toBe('基础款')
 
     // 失败态：本 action 9 个 err 全是裸 err(code)，一律两键（对照 activateCourse 的 CODE_TAKEN 带 courseId）
     expect(keysOf(await call('submitReview', { orderId: 'oDone', lineId: 'p1__基础款', rating: 5 }))).toEqual(['error', 'ok']) // REVIEWED 幂等
@@ -567,6 +635,10 @@ describe('契约键集合哨兵（Object.keys 排序全等·增删改名都红�
     expect('videoFileId' in r.items[0].segments[0]).toBe(false) // 换成 url 下发，裸 fileID 只在服务端
     expect(r.items[0].segments[0].url.startsWith('https://')).toBe(true)
     expect(JSON.stringify(r).includes('内部备注')).toBe(false)
+    // 值非空（Issue #110 同类扫描）：两级 String(x||'') 重建对字段改名会静默降级成空串——本支已走真写侧
+    // （saveHelpVideos）落库，所存 title/sub/desc/段名必须原样读回，两侧任一改名即红
+    expect([r.items[0].title, r.items[0].sub, r.items[0].desc]).toEqual(['新手入门', '副标题', '说明'])
+    expect(r.items[0].segments[0].name).toBe('起针')
 
     // url:null 分支只能自造 seed：写侧 saveHelpVideos 会 filter 掉无 videoFileId 的小段，真写入方造不出
     control.reset()
