@@ -162,7 +162,7 @@ onMounted(() => {
     <!-- 明细钻取（批 B6）：无「暂无评价」也展示（区间/开关可换），故不依赖上方 vm.total 门控 -->
     <Card title="评价明细" sub="按时间窗 + 评分筛选逐条查看；差评行可一键跳会话时间轴取证">
       <template #head>
-        <div class="range-chips">
+        <div class="range-chips ld-range-chips">
           <UiButton
             v-for="c in RANGE_CHIPS"
             :key="c.key"
@@ -188,12 +188,12 @@ onMounted(() => {
         </div>
         <div class="ld-tbody">
           <div v-for="row in entries" :key="row.id" class="ld-tr" :class="{ bad: row.bad }">
-            <div class="ld-td muted mono" :style="{ width: '170px' }">{{ row.timeLabel }}</div>
+            <div class="ld-td muted mono ld-muted ld-mono" :style="{ width: '170px' }">{{ row.timeLabel }}</div>
             <div class="ld-td" :style="{ width: '80px' }">
               <Badge :tone="row.bad ? 'red' : 'green'">{{ row.score }} 分</Badge>
             </div>
             <div class="ld-td grow">{{ row.note }}</div>
-            <div class="ld-td mono" :style="{ width: '150px' }">{{ row.externalUserId || '—' }}</div>
+            <div class="ld-td mono ld-mono" :style="{ width: '150px' }">{{ row.externalUserId || '—' }}</div>
             <div class="ld-td ops-cell" :style="{ width: '110px' }">
               <UiButton v-if="row.bad && row.externalUserId" variant="ghost" size="sm" @click="viewSession(row)">
                 <Search :size="13" :stroke-width="1.8" /><span>查会话</span>
@@ -201,9 +201,9 @@ onMounted(() => {
             </div>
           </div>
         </div>
-        <div class="more-wrap">
+        <div class="more-wrap ld-more-wrap">
           <UiButton v-if="entriesHasMore" size="sm" variant="ghost" @click="moreEntries">加载更多</UiButton>
-          <p v-else class="end-mark">— 已到最早 —</p>
+          <p v-else class="end-mark ld-end-mark">— 已到最早 —</p>
         </div>
       </div>
     </Card>
@@ -258,37 +258,10 @@ onMounted(() => {
   color: var(--ld-content-2);
 }
 
-/* 明细钻取（批 B6）：时间/差评筛选 chips · 表格辅助类（scoped 边界铁律·组件间互不共享·同 Agents/Conversations 各自定义） */
-.range-chips {
-  display: flex;
-  gap: 6px;
-  flex-wrap: wrap;
-}
-.mono {
-  font-family: var(--ld-font-mono);
-  font-size: 12px;
-  color: var(--ld-content-2);
-}
-.muted {
-  color: var(--ld-content-2);
-  font-size: 12.5px;
-}
 .ops-cell {
   justify-content: flex-end;
 }
 .ld-tr.bad {
   background: var(--ld-bg-red-soft);
-}
-.more-wrap {
-  display: flex;
-  justify-content: center;
-  margin-top: 6px;
-}
-.end-mark {
-  width: 100%;
-  margin: 6px 0 0;
-  text-align: center;
-  font-size: 11px;
-  color: var(--ld-content-2);
 }
 </style>

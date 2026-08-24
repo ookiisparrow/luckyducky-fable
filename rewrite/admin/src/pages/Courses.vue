@@ -427,7 +427,7 @@ onMounted(() => {
     </div>
 
     <p v-if="message" class="status">{{ message }}</p>
-    <p v-if="progress" class="uploading">{{ progress }}</p>
+    <p v-if="progress" class="uploading ld-uploading">{{ progress }}</p>
 
     <template v-if="course">
       <!-- 课程信息 / 视频进度 / 自动保存 / 发布 -->
@@ -439,7 +439,7 @@ onMounted(() => {
               <span class="vstat-num">视频 {{ stats.done }}/{{ stats.total }}</span>
               <div class="vbar"><div class="vbar-fill" :style="{ width: pct + '%' }" /></div>
             </div>
-            <span v-if="saveState" class="autosave" :class="saveState">{{ saveState === 'saving' ? '自动保存中…' : saveState === 'saved' ? '已自动存草稿' : '自动保存失败·点保存重试' }}</span>
+            <span v-if="saveState" class="autosave ld-autosave" :class="saveState">{{ saveState === 'saving' ? '自动保存中…' : saveState === 'saved' ? '已自动存草稿' : '自动保存失败·点保存重试' }}</span>
             <UiButton v-if="vodPendingCount" variant="ghost" size="sm" :disabled="busy || batchUploading" @click="syncVod">同步转码状态（{{ vodPendingCount }} 段转码中）</UiButton>
             <UiButton variant="ghost" size="sm" :disabled="busy" @click="save">保存草稿</UiButton>
             <UiButton size="sm" :disabled="busy" @click="publish">{{ publishConfirm ? '确认发布？老学员立即生效' : '发布上线' }}</UiButton>
@@ -454,41 +454,41 @@ onMounted(() => {
         <div class="ch-head">
           <Badge tone="brand">第 {{ ci + 1 }} 章</Badge>
           <input v-model="ch.title" placeholder="章标题" maxlength="60" class="ch-title" />
-          <button class="icon-btn" title="上移" :disabled="ci === 0 || batchUploading" @click="move(course.chapters, ci, -1)">↑</button>
-          <button class="icon-btn" title="下移" :disabled="ci === course.chapters.length - 1 || batchUploading" @click="move(course.chapters, ci, 1)">↓</button>
-          <button class="icon-btn" :disabled="batchUploading" :class="{ warn: confirmKey === 'ch:' + ci }" :title="confirmKey === 'ch:' + ci ? '再点确认删章' : '删章'" @click="delChapter(ci)"><Trash2 :size="14" :stroke-width="1.8" /></button>
+          <button class="icon-btn ld-icon-btn" title="上移" :disabled="ci === 0 || batchUploading" @click="move(course.chapters, ci, -1)">↑</button>
+          <button class="icon-btn ld-icon-btn" title="下移" :disabled="ci === course.chapters.length - 1 || batchUploading" @click="move(course.chapters, ci, 1)">↓</button>
+          <button class="icon-btn ld-icon-btn" :disabled="batchUploading" :class="{ warn: confirmKey === 'ch:' + ci }" :title="confirmKey === 'ch:' + ci ? '再点确认删章' : '删章'" @click="delChapter(ci)"><Trash2 :size="14" :stroke-width="1.8" /></button>
         </div>
 
         <div v-for="(l, li) in ch.lessons" :key="li" class="lesson">
           <div class="l-head">
             <input v-model="l.name" placeholder="课时名" maxlength="60" class="l-name" />
             <input v-model="l.dur" placeholder="时长" class="dur" maxlength="10" />
-            <button class="icon-btn" title="上移" :disabled="li === 0 || batchUploading" @click="move(ch.lessons, li, -1)">↑</button>
-            <button class="icon-btn" title="下移" :disabled="li === ch.lessons.length - 1 || batchUploading" @click="move(ch.lessons, li, 1)">↓</button>
-            <button class="icon-btn" :disabled="batchUploading" :class="{ warn: confirmKey === 'l:' + ci + ':' + li }" :title="confirmKey === 'l:' + ci + ':' + li ? '再点确认删课时' : '删课时'" @click="delLesson(ch, ci, li)"><Trash2 :size="14" :stroke-width="1.8" /></button>
+            <button class="icon-btn ld-icon-btn" title="上移" :disabled="li === 0 || batchUploading" @click="move(ch.lessons, li, -1)">↑</button>
+            <button class="icon-btn ld-icon-btn" title="下移" :disabled="li === ch.lessons.length - 1 || batchUploading" @click="move(ch.lessons, li, 1)">↓</button>
+            <button class="icon-btn ld-icon-btn" :disabled="batchUploading" :class="{ warn: confirmKey === 'l:' + ci + ':' + li }" :title="confirmKey === 'l:' + ci + ':' + li ? '再点确认删课时' : '删课时'" @click="delLesson(ch, ci, li)"><Trash2 :size="14" :stroke-width="1.8" /></button>
           </div>
           <div v-for="(sg, si) in l.segments" :key="si" class="seg">
             <input v-model="sg.name" placeholder="段名" maxlength="60" class="seg-name" />
             <input v-model="sg.dur" placeholder="时长" class="dur" maxlength="10" />
-            <label class="upload" :class="{ done: sg.videoFileId, disabled: batchUploading }">
+            <label class="upload ld-tree-upload" :class="{ done: sg.videoFileId, disabled: batchUploading }">
               <component :is="sg.videoFileId ? Check : Upload" :size="13" :stroke-width="2" />
               <span>{{ sg.videoFileId ? '已传 · 替换' : '选视频' }}</span>
               <input type="file" accept="video/mp4,video/quicktime" hidden :disabled="batchUploading" @change="(e) => pickVideo(l, sg, e)" />
             </label>
             <span v-if="vodPending(sg)" class="vod-pending" title="视频已传到点播平台，转码完成前不可发布——点上方「同步转码状态」">转码中</span>
-            <button class="icon-btn" title="上移" :disabled="si === 0 || batchUploading" @click="move(l.segments, si, -1)">↑</button>
-            <button class="icon-btn" title="下移" :disabled="si === l.segments.length - 1 || batchUploading" @click="move(l.segments, si, 1)">↓</button>
-            <button class="icon-btn" :disabled="batchUploading" :class="{ warn: confirmKey === 's:' + ci + ':' + li + ':' + si }" title="删段" @click="delSegment(l, ci, li, si)"><Trash2 :size="14" :stroke-width="1.8" /></button>
+            <button class="icon-btn ld-icon-btn" title="上移" :disabled="si === 0 || batchUploading" @click="move(l.segments, si, -1)">↑</button>
+            <button class="icon-btn ld-icon-btn" title="下移" :disabled="si === l.segments.length - 1 || batchUploading" @click="move(l.segments, si, 1)">↓</button>
+            <button class="icon-btn ld-icon-btn" :disabled="batchUploading" :class="{ warn: confirmKey === 's:' + ci + ':' + li + ':' + si }" title="删段" @click="delSegment(l, ci, li, si)"><Trash2 :size="14" :stroke-width="1.8" /></button>
           </div>
           <div class="seg-adds">
-            <button class="add-btn" @click="addSegment(l)"><Plus :size="13" :stroke-width="2" /><span>加段</span></button>
-            <label class="add-btn batch-up" :class="{ disabled: batchUploading }" title="多选视频·按文件名顺序自动灌入/新建小段"><Upload :size="13" :stroke-width="2" /><span>批量传视频</span><input type="file" accept="video/mp4,video/quicktime" multiple hidden :disabled="batchUploading" @change="(e) => batchUpload(l, e)" /></label>
+            <button class="add-btn ld-tree-add" @click="addSegment(l)"><Plus :size="13" :stroke-width="2" /><span>加段</span></button>
+            <label class="add-btn ld-tree-add batch-up" :class="{ disabled: batchUploading }" title="多选视频·按文件名顺序自动灌入/新建小段"><Upload :size="13" :stroke-width="2" /><span>批量传视频</span><input type="file" accept="video/mp4,video/quicktime" multiple hidden :disabled="batchUploading" @change="(e) => batchUpload(l, e)" /></label>
           </div>
         </div>
-        <button class="add-btn" @click="addLesson(ch)"><Plus :size="13" :stroke-width="2" /><span>加课时</span></button>
+        <button class="add-btn ld-tree-add" @click="addLesson(ch)"><Plus :size="13" :stroke-width="2" /><span>加课时</span></button>
       </Card>
 
-      <div><button class="add-chapter" @click="addChapter"><Plus :size="15" :stroke-width="2" /><span>加章</span></button></div>
+      <div><button class="add-chapter ld-tree-add-root" @click="addChapter"><Plus :size="15" :stroke-width="2" /><span>加章</span></button></div>
     </template>
     <!-- 选择器模式（批3 死胡同改造）：直入无课号时从商品桥列已关联课程点选 -->
     <Card v-else-if="!message && courseOptions && courseOptions.length" title="选择课程" sub="从已关联课程的商品选一门进入；未关联的先到商品页「编辑课程」建立关联">
@@ -518,11 +518,6 @@ onMounted(() => {
 .status {
   font-size: 13px;
   color: var(--ld-red);
-}
-.uploading {
-  font-size: 12.5px;
-  color: var(--ld-brand-active);
-  font-weight: 600;
 }
 /* 课程信息行（外框由 Card 提供） */
 .course-head {
@@ -576,20 +571,6 @@ onMounted(() => {
   border-radius: var(--ld-radius-sm);
   font-size: 12px;
   background: var(--ld-bg-red-soft);
-  color: var(--ld-red);
-}
-.autosave {
-  font-size: 11.5px;
-  font-weight: 600;
-  white-space: nowrap;
-}
-.autosave.saving {
-  color: var(--ld-content-2);
-}
-.autosave.saved {
-  color: var(--ld-green);
-}
-.autosave.error {
   color: var(--ld-red);
 }
 /* 章头（外框由 Card 提供） */
@@ -653,26 +634,6 @@ onMounted(() => {
   font-size: 13px;
   background: var(--ld-bg);
 }
-/* 视频上传位（未传=紫描边 / 已传=绿） */
-.upload {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  padding: 6px 12px;
-  border: 1px solid var(--ld-purple-line);
-  border-radius: 999px;
-  background: var(--ld-bg);
-  color: var(--ld-brand-active);
-  font-size: 12px;
-  font-weight: 600;
-  cursor: pointer;
-  white-space: nowrap;
-}
-.upload.done {
-  border-color: var(--ld-green);
-  color: var(--ld-green);
-  background: var(--ld-bg-green-soft);
-}
 /* VOD 转码中 chip（决策§31 批2）：已传但转码未就绪——发布被云端闸拦的可视化对应物 */
 .vod-pending {
   padding: 4px 10px;
@@ -691,20 +652,6 @@ onMounted(() => {
   cursor: not-allowed;
   pointer-events: none;
 }
-/* 树内 ↑ ↓ 删 图标按钮（危态转红） */
-.icon-btn {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 30px;
-  height: 30px;
-  flex: none;
-  border: 1px solid var(--ld-line);
-  border-radius: var(--ld-radius-sm);
-  background: var(--ld-bg);
-  color: var(--ld-content-2);
-  cursor: pointer;
-}
 .icon-btn:hover {
   color: var(--ld-red);
   border-color: var(--ld-red-line);
@@ -720,39 +667,10 @@ onMounted(() => {
   gap: 8px;
   flex-wrap: wrap;
 }
-.add-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  margin-top: 4px;
-  padding: 6px 14px;
-  border: 1px dashed var(--ld-purple-line);
-  border-radius: 999px;
-  background: transparent;
-  color: var(--ld-brand-active);
-  font-size: 12px;
-  font-weight: 600;
-  cursor: pointer;
-}
 .batch-up {
   border-style: solid;
   background: var(--ld-bg-lilac);
 }
-/* 加章（页级增项·虚线药丸） */
-.add-chapter {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 9px 18px;
-  border: 1px dashed var(--ld-purple-line);
-  border-radius: 999px;
-  background: var(--ld-bg-lilac);
-  color: var(--ld-brand-active);
-  font-size: 13px;
-  font-weight: 600;
-  cursor: pointer;
-}
-
 /* 选择器模式（批3 死胡同改造）：课程挑选列表（商品桥） */
 .pick-list {
   display: flex;

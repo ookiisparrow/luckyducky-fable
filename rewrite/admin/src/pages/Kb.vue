@@ -134,7 +134,7 @@ onMounted(reload)
             <label class="kb-en"><input v-model="row.enabled" type="checkbox" /><span>启用</span></label>
             <label class="kb-en" title="勾选后公开下发到小程序播放页求助面板常见问题区（R37b）"><input v-model="row.featured" type="checkbox" /><span>精选</span></label>
             <button
-              class="kb-del"
+              class="kb-del ld-icon-btn"
               :class="{ warn: confirmKey === 'd:' + i }"
               :title="confirmKey === 'd:' + i ? '再点确认删除' : '删行'"
               @click="delRow(i)"
@@ -212,19 +212,6 @@ onMounted(reload)
   width: 15px;
   height: 15px;
   accent-color: var(--ld-brand);
-}
-.kb-del {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 30px;
-  height: 30px;
-  flex: none;
-  border: 1px solid var(--ld-line);
-  border-radius: var(--ld-radius-sm);
-  background: var(--ld-bg);
-  color: var(--ld-content-2);
-  cursor: pointer;
 }
 .kb-del:hover {
   color: var(--ld-red);

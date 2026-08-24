@@ -543,7 +543,7 @@ onMounted(async () => {
             <UiButton v-if="row.state === 'preparing'" variant="primary" size="sm" @click="doPublish(row.id)">{{ confirmKey === 'pub:' + row.id ? '确认上架？' : '上架' }}</UiButton>
             <UiButton v-if="row.state === 'onsale'" variant="danger" size="sm" @click="doUnpublish(row.id)">{{ confirmKey === 'off:' + row.id ? '确认下架？' : '下架' }}</UiButton>
             <UiButton v-if="row.state === 'unlisted'" variant="primary" size="sm" @click="doRepublish(row.id)">{{ confirmKey === 're:' + row.id ? '确认恢复销售？' : '恢复销售' }}</UiButton>
-            <button class="icon-btn" title="更多操作" @click="toggleMore(row.id, $event)">
+            <button class="icon-btn ld-icon-btn" title="更多操作" @click="toggleMore(row.id, $event)">
               <MoreHorizontal :size="15" :stroke-width="1.8" />
             </button>
             <div v-if="moreKey === row.id" class="more-backdrop" @mousedown="closeMore()"></div>
@@ -589,7 +589,7 @@ onMounted(async () => {
       <div v-for="(s, i) in edit.skus" :key="i" class="skurow">
         <input v-model="s.name" placeholder="规格名" maxlength="30" />
         <input v-model="s.price" placeholder="价格（元）" />
-        <button class="icon-btn" title="删除该规格" @click="delSku(i)"><Trash2 :size="14" :stroke-width="1.8" /></button>
+        <button class="icon-btn ld-icon-btn" title="删除该规格" @click="delSku(i)"><Trash2 :size="14" :stroke-width="1.8" /></button>
       </div>
       <UiButton variant="ghost" size="sm" @click="addSku">＋ 加规格</UiButton>
 
@@ -611,7 +611,7 @@ onMounted(async () => {
       <div v-for="(p, i) in (edit.params as string[][])" :key="i" class="kvrow">
         <input v-model="p[0]" placeholder="参数名（如 适用年龄）" maxlength="20" />
         <input v-model="p[1]" placeholder="参数值（如 8 岁+）" maxlength="40" />
-        <button class="icon-btn" title="删除该参数" @click="delParam(i)"><Trash2 :size="14" :stroke-width="1.8" /></button>
+        <button class="icon-btn ld-icon-btn" title="删除该参数" @click="delParam(i)"><Trash2 :size="14" :stroke-width="1.8" /></button>
       </div>
       <UiButton variant="ghost" size="sm" :disabled="(edit.params as unknown[]).length >= 8" @click="addParam">＋ 加参数</UiButton>
 
@@ -619,7 +619,7 @@ onMounted(async () => {
       <div v-for="(d, i) in detailSections" :key="i" class="secrow">
         <div class="secrow-head">
           <input v-model="d.lead" placeholder="小标题" maxlength="30" />
-          <button class="icon-btn" title="删除该段落" @click="delSection(i)"><Trash2 :size="14" :stroke-width="1.8" /></button>
+          <button class="icon-btn ld-icon-btn" title="删除该段落" @click="delSection(i)"><Trash2 :size="14" :stroke-width="1.8" /></button>
         </div>
         <textarea v-model="d.body" placeholder="段落正文" maxlength="200" rows="2" />
       </div>
@@ -632,7 +632,7 @@ onMounted(async () => {
         </select>
         <input v-model="k.name" placeholder="物品名" maxlength="14" />
         <input v-model="k.qty" placeholder="数量（如 1 包 50g）" maxlength="14" />
-        <button class="icon-btn" title="删除该材料" @click="delKit(i)"><Trash2 :size="14" :stroke-width="1.8" /></button>
+        <button class="icon-btn ld-icon-btn" title="删除该材料" @click="delKit(i)"><Trash2 :size="14" :stroke-width="1.8" /></button>
       </div>
       <UiButton variant="ghost" size="sm" :disabled="kitItems.length >= 8" @click="addKit">＋ 加材料</UiButton>
 
@@ -797,19 +797,6 @@ onMounted(async () => {
 }
 .menu-item.danger {
   color: var(--ld-red);
-}
-.icon-btn {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 30px;
-  height: 30px;
-  flex: none;
-  border: 1px solid var(--ld-line);
-  border-radius: var(--ld-radius-sm);
-  background: var(--ld-bg);
-  color: var(--ld-content-2);
-  cursor: pointer;
 }
 .icon-btn:hover {
   color: var(--ld-red);

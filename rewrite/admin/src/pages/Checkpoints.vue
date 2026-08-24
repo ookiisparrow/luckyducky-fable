@@ -138,9 +138,9 @@ onMounted(load) // 默认旗舰课自动载入
           <Badge tone="brand">{{ i + 1 }}</Badge>
           <input v-model="n.nodeId" placeholder="节点 id（如 n1）" class="nid" />
           <input v-model="n.title" placeholder="节点名（如 第二段收口）" maxlength="100" class="ntitle" />
-          <button class="icon-btn" title="上移" :disabled="i === 0" @click="move(i, -1)">↑</button>
-          <button class="icon-btn" title="下移" :disabled="i === nodes.length - 1" @click="move(i, 1)">↓</button>
-          <button class="icon-btn del" :class="{ warn: confirmKey === 'd:' + i }" :title="confirmKey === 'd:' + i ? '再点确认删除' : '删节点'" @click="delNode(i)"><Trash2 :size="14" :stroke-width="1.8" /></button>
+          <button class="icon-btn ld-icon-btn" title="上移" :disabled="i === 0" @click="move(i, -1)">↑</button>
+          <button class="icon-btn ld-icon-btn" title="下移" :disabled="i === nodes.length - 1" @click="move(i, 1)">↓</button>
+          <button class="icon-btn ld-icon-btn del" :class="{ warn: confirmKey === 'd:' + i }" :title="confirmKey === 'd:' + i ? '再点确认删除' : '删节点'" @click="delNode(i)"><Trash2 :size="14" :stroke-width="1.8" /></button>
         </div>
         <textarea v-model="n.remedy" placeholder="挽回办法（学员卡这里时坐席照此指导·≤2000 字）" maxlength="2000" />
       </Card>
@@ -181,19 +181,6 @@ onMounted(load) // 默认旗舰课自动载入
   border: 1px solid var(--ld-line);
   border-radius: var(--ld-radius-sm);
   font-size: 13px;
-}
-.icon-btn {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 30px;
-  height: 30px;
-  flex: none;
-  border: 1px solid var(--ld-line);
-  border-radius: var(--ld-radius-sm);
-  background: var(--ld-bg);
-  color: var(--ld-content-2);
-  cursor: pointer;
 }
 .icon-btn:hover:not(:disabled) {
   color: var(--ld-content);

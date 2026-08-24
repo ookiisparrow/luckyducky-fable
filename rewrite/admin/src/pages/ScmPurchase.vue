@@ -234,7 +234,7 @@ onMounted(async () => {
           </div>
         </template>
       </div>
-      <div v-if="hasMore" class="tbl-foot">
+      <div v-if="hasMore" class="tbl-foot ld-table-foot">
         <span>已加载 {{ orders.length }} 单</span>
         <UiButton variant="ghost" size="sm" @click="more">加载更多</UiButton>
       </div>
@@ -338,14 +338,4 @@ onMounted(async () => {
   line-height: 1.5;
 }
 
-/* 翻页页脚（B1·根因#7·同 Orders.vue 范式） */
-.tbl-foot {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 12px 16px;
-  border-top: 1px solid var(--ld-line);
-  font-size: 12px;
-  color: var(--ld-content-2);
-}
 </style>

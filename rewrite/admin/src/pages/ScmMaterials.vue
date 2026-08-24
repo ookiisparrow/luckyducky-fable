@@ -373,7 +373,7 @@ onMounted(reload)
               <span class="sup-name">{{ s.name }}<span v-if="s.note" class="sup-note"> · {{ s.note }}</span></span>
               <Badge tone="brand">{{ s.type === 'factory' ? '厂家' : '织女' }}</Badge>
             </div>
-            <div v-if="supHasMore" class="tbl-foot">
+            <div v-if="supHasMore" class="tbl-foot ld-table-foot">
               <span>已加载 {{ sups.length }}</span>
               <UiButton variant="ghost" size="sm" @click="moreSuppliers">加载更多</UiButton>
             </div>
@@ -458,7 +458,7 @@ onMounted(reload)
               <div class="ld-td mono muted" :style="{ width: '160px' }">{{ l.docId || '—' }}</div>
             </div>
           </div>
-          <div v-if="ledgerHasMore" class="tbl-foot">
+          <div v-if="ledgerHasMore" class="tbl-foot ld-table-foot">
             <span>已加载 {{ ledger.length }} 条</span>
             <UiButton variant="ghost" size="sm" @click="moreLedger">加载更多</UiButton>
           </div>
@@ -674,16 +674,6 @@ onMounted(reload)
   font-weight: 600;
 }
 
-/* 翻页页脚（B1·根因#7·供应商列表 + 流水列表两处·同 Orders.vue 范式） */
-.tbl-foot {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 12px 16px;
-  border-top: 1px solid var(--ld-line);
-  font-size: 12px;
-  color: var(--ld-content-2);
-}
 
 /* 批量盘点模式（批 B3）：入口按钮 + 顶部工具条 + 汇总行 + 失败行重试（本页独有·不进全局样式） */
 .stocktake-entry {

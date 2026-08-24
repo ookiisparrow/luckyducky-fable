@@ -152,7 +152,7 @@ onMounted(reload)
       <div class="ld-tbody">
         <div v-for="row in rows" :key="row.id" class="ld-tr" :class="{ off: row.disabled }">
           <div class="ld-td grow"><span class="name">{{ row.name }}</span></div>
-          <div class="ld-td" :style="{ width: '150px' }"><span class="mono">{{ row.id }}</span></div>
+          <div class="ld-td" :style="{ width: '150px' }"><span class="mono ld-mono">{{ row.id }}</span></div>
           <div class="ld-td" :style="{ width: '92px' }">
             <Badge :tone="row.statusTone" dot>{{ row.statusLabel }}</Badge>
           </div>
@@ -168,7 +168,7 @@ onMounted(reload)
               <UiButton variant="ghost" size="sm" @click="bindWecom(row)">改绑</UiButton>
             </template>
           </div>
-          <div class="ld-td muted mono" :style="{ width: '150px' }">{{ row.createdAt }}</div>
+          <div class="ld-td muted mono ld-muted ld-mono" :style="{ width: '150px' }">{{ row.createdAt }}</div>
           <div class="ld-td" :style="{ width: '84px' }">
             <Badge :tone="row.disabled ? 'neutral' : 'green'" dot>{{ row.disabled ? '已停用' : '正常' }}</Badge>
           </div>
@@ -255,15 +255,6 @@ onMounted(reload)
 .name {
   font-weight: 600;
   color: var(--ld-ink);
-}
-.mono {
-  font-family: var(--ld-font-mono);
-  font-size: 12px;
-  color: var(--ld-content-2);
-}
-.muted {
-  color: var(--ld-content-2);
-  font-size: 12.5px;
 }
 .bind {
   gap: 8px;

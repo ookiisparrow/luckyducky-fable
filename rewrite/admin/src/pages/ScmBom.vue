@@ -212,7 +212,7 @@ onMounted(reload)
             <option v-for="m in commonCandidates" :key="m._id" :value="m._id">{{ materialHuman(m._id) }}</option>
           </select>
           <input v-model.number="l.qtyPerSet" type="number" min="1" />
-          <button class="icon-btn" title="移除" @click="template.commonLines.splice(i, 1)"><X :size="14" :stroke-width="1.8" /></button>
+          <button class="icon-btn ld-icon-btn" title="移除" @click="template.commonLines.splice(i, 1)"><X :size="14" :stroke-width="1.8" /></button>
         </div>
         <UiButton variant="ghost" size="sm" class="add-row" @click="template.commonLines.push({ materialId: '', qtyPerSet: 1 })">
           <Plus :size="14" :stroke-width="2" /><span>加料</span>
@@ -223,7 +223,7 @@ onMounted(reload)
           <select v-model="s.tier"><option value="L">大团</option><option value="M">中团</option><option value="S">小团</option></select>
           <select v-model="s.form"><option value="raw">原团</option><option value="knotted">带结（仅大团）</option></select>
           <input v-model.number="s.qtyPerSet" type="number" min="1" />
-          <button class="icon-btn" title="移除" @click="template.yarnSlots.splice(i, 1)"><X :size="14" :stroke-width="1.8" /></button>
+          <button class="icon-btn ld-icon-btn" title="移除" @click="template.yarnSlots.splice(i, 1)"><X :size="14" :stroke-width="1.8" /></button>
         </div>
         <UiButton variant="ghost" size="sm" class="add-row" @click="template.yarnSlots.push({ tier: 'L', form: 'knotted', qtyPerSet: 1 })">
           <Plus :size="14" :stroke-width="2" /><span>加槽</span>
@@ -320,7 +320,7 @@ onMounted(reload)
             </div>
           </template>
         </div>
-        <div v-if="asmHasMore" class="tbl-foot">
+        <div v-if="asmHasMore" class="tbl-foot ld-table-foot">
           <span>已加载 {{ assemblies.length }} 单</span>
           <UiButton variant="ghost" size="sm" @click="moreAssemblies">加载更多</UiButton>
         </div>
@@ -393,19 +393,6 @@ onMounted(reload)
 }
 .linerow.yarn {
   grid-template-columns: 1fr 1fr 56px 30px;
-}
-.icon-btn {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 30px;
-  height: 30px;
-  flex: none;
-  border: 1px solid var(--ld-line);
-  border-radius: var(--ld-radius-sm);
-  background: var(--ld-bg);
-  color: var(--ld-content-2);
-  cursor: pointer;
 }
 .icon-btn:hover {
   color: var(--ld-red);
@@ -545,14 +532,4 @@ onMounted(reload)
   text-align: right;
 }
 
-/* 翻页页脚（B1·根因#7·同 Orders.vue 范式） */
-.tbl-foot {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 12px 16px;
-  border-top: 1px solid var(--ld-line);
-  font-size: 12px;
-  color: var(--ld-content-2);
-}
 </style>

@@ -244,9 +244,9 @@ onMounted(() => {
             <div v-if="m.text" class="text">{{ m.text }}</div>
           </div>
         </div>
-        <div class="more-wrap">
+        <div class="more-wrap ld-more-wrap">
           <UiButton v-if="hasMore" size="sm" variant="ghost" @click="more">更早的消息</UiButton>
-          <p v-else class="end-mark">— 已到最早 —</p>
+          <p v-else class="end-mark ld-end-mark">— 已到最早 —</p>
         </div>
       </div>
       <EmptyState v-else-if="!message" :icon="Search" text="输入 openid / 外部用户号 / 关键词后检索会话时间轴" />
@@ -278,10 +278,10 @@ onMounted(() => {
         </div>
         <div class="ld-tbody">
           <div v-for="row in qcRows" :key="row.sessionKey" class="ld-tr">
-            <div class="ld-td mono" :style="{ width: '110px' }">{{ row.tailId }}</div>
-            <div class="ld-td muted" :style="{ width: '150px' }">{{ row.sampledLabel }}</div>
+            <div class="ld-td mono ld-mono" :style="{ width: '110px' }">{{ row.tailId }}</div>
+            <div class="ld-td muted ld-muted" :style="{ width: '150px' }">{{ row.sampledLabel }}</div>
             <div class="ld-td" :style="{ width: '80px' }">{{ row.messageCount == null ? '—' : row.messageCount }}</div>
-            <div class="ld-td muted" :style="{ width: '90px' }">{{ row.avgResponseLabel }}</div>
+            <div class="ld-td muted ld-muted" :style="{ width: '90px' }">{{ row.avgResponseLabel }}</div>
             <!-- 已评行只读显示 qc（不可覆盖·后端 409 ALREADY_MARKED 拒二次保存也在此兜底不再露编辑控件） -->
             <template v-if="row.scored">
               <div class="ld-td" :style="{ width: '90px' }"><Badge :tone="row.score <= 3 ? 'red' : 'green'">{{ row.score }} 分</Badge></div>
@@ -307,9 +307,9 @@ onMounted(() => {
           </div>
         </div>
         <p v-for="row in qcRows.filter((r) => r.err)" :key="'err:' + row.sessionKey" class="ld-status qc-row-err">{{ row.tailId }}：{{ row.err }}</p>
-        <div class="more-wrap">
+        <div class="more-wrap ld-more-wrap">
           <UiButton v-if="qcHasMore" size="sm" variant="ghost" @click="moreQc">加载更多</UiButton>
-          <p v-else-if="qcRows.length" class="end-mark">— 已到最早 —</p>
+          <p v-else-if="qcRows.length" class="end-mark ld-end-mark">— 已到最早 —</p>
         </div>
       </div>
       <EmptyState v-else-if="!qcMsg" :icon="ClipboardCheck" text="点「随机抽取 10 条」从已结束会话里抽样质检" />
@@ -399,29 +399,6 @@ onMounted(() => {
 }
 .msg.out .text {
   color: #fff;
-}
-.more-wrap {
-  display: flex;
-  justify-content: center;
-  margin-top: 6px;
-}
-.end-mark {
-  width: 100%;
-  margin: 6px 0 0;
-  text-align: center;
-  font-size: 11px;
-  color: var(--ld-content-2);
-}
-
-/* 质检抽检（批 B7）：表格辅助类（scoped 边界铁律·各页各自定义、不共享全局，同 Csat.vue 既有范式） */
-.mono {
-  font-family: var(--ld-font-mono);
-  font-size: 12px;
-  color: var(--ld-content-2);
-}
-.muted {
-  color: var(--ld-content-2);
-  font-size: 12.5px;
 }
 .ops-cell {
   justify-content: flex-end;

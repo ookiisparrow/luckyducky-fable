@@ -1,5 +1,6 @@
 import type { App } from 'vue'
 
+// 刻意孪生·改必同步：rewrite/agent/src/lib/errorReporter.ts（除 source='admin|agent' 外保持同构）。
 // 前端错误上报（批 B7·治病根#14 client-error 通道 web 半边）：window.onerror + unhandledrejection +
 // Vue app.config.errorHandler 三件套捕获 → 打 adminApi `reportClientError` action → 落 kit/anomaly.ts
 // 的 anomalies 账本（服务端 hashSig 避开 mp 侧 anomalyFingerprint 对非 ASCII 字符剥空可能导致的中文报错
