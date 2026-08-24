@@ -37,7 +37,7 @@ description: Use when 要用 Workflow 多 agent 并行编排干一大片同构�
 - **模型分层遵流程 v2**（单源＝memory `layered-execution-preference`，此处只列钩子不复述）：执行者 `model:'sonnet'`＋提示词先读 `.claude/skills/refactor-batch/执行者错题本.md`；承重 hunk（钱/权限/并发/状态机）fable 亲读或派高档评审员攻击；批次必配无镜头评审员；改动文件 ⊆ 白名单在脚本层断言；优先用模板 `.claude/workflows/batch-pipeline.mjs`。
 - Workflow 脚本默认 `pipeline()`，只有真需要全量汇合（去重/早退）才用 `parallel()` barrier。
 - agent 返回**精简结构化结果**（schema 钉死），不要大段散文；主会话只拿结论做亲核与编排。
-- 并行期 git 纪律：精确路径 add、每批 check 全绿、冻结仓（`../luckyducky-next`）零改动核验。
+- 并行期 git 纪律：精确路径 add、每批 check 全绿。
 - 进度记账：plan 文件记批次勾选与 flag 汇总；里程碑写进 commit 信息（跨会话跟进开 GitHub Issue）。
 
 ### 规格与流水线机制坑（战役 II 增补）

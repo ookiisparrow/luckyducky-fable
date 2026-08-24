@@ -2,7 +2,7 @@
   "name": "luckyducky-fable",
   "version": "1.0.0",
   "private": true,
-  "description": "Lucky Ducky 重写线（fable）——生产源=rewrite/ 各包（本仓不留旧代码·旧线参照去 next 仓）；共用生产云环境（部署闸 guard-deploy）",
+  "description": "Lucky Ducky 重写线（fable）——生产源=rewrite/ 各包（本仓不留旧代码）；共用生产云环境（部署闸 guard-deploy）",
   "engines": {
     "node": ">=20.9",
     "npm": ">=10"

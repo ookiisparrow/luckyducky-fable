@@ -4,7 +4,7 @@ import vue from '@vitejs/plugin-vue'
 // 一仓多包测试编排（vitest projects）——2026-07-23 瘦身拍板批后仅活线：
 //   scripts —— 仓根 tests/scripts/（守卫/工具脚本自测）
 //   rw      —— rewrite/*/tests/（新线全部包）
-// 旧线（packages/ 五包）及其 tests/{cloud,admin,agent} 已随旧线删除（回滚基线在 next 仓）。
+// 旧线（packages/ 五包）及其 tests/{cloud,admin,agent} 已随旧线删除。
 export default defineConfig({
   test: {
     // 覆盖率度量（B8·纯度量不设阈值）：先看基线数字，不拍脑袋定一个阈值然后
