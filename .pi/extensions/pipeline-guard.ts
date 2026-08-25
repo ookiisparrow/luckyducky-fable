@@ -8,10 +8,18 @@
 //   ① 是什么权限  ② 为什么需要你确认  ③ 通过会怎么样
 
 import { appendFileSync, mkdirSync } from "node:fs";
-import { join } from "node:path";
-import { homedir } from "node:os";
+import { join, dirname } from "node:path";
+import { fileURLToPath } from "node:url";
 
-const PIPELINE_ROOT = process.env.PIPELINE_ROOT || join(homedir(), "luckyducky-fable");
+// 项目根推导: 本文件位于 <仓根>/.pi/extensions/, 往上两级即仓根。
+// 旧默认值 join(homedir(), "luckyducky-fable") 指向不存在的目录, 导致守卫 fail-closed 空转(2026-08-25 会议修复)。
+const PIPELINE_ROOT = process.env.PIPELINE_ROOT || (() => {
+  try {
+    return join(dirname(fileURLToPath(import.meta.url)), "..", "..");
+  } catch {
+    return process.cwd(); // 保险丝: import.meta.url 不可用时退回启动目录
+  }
+})();
 const AUDIT_DIR = join(PIPELINE_ROOT, ".agents", "knowledge");
 
 function audit(entry) {
