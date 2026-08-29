@@ -16,7 +16,7 @@ export function orgSchema(): Record<string, unknown> {
     '@type': 'Organization',
     name: BRAND_NAME,
     url: SITE,
-    description: '专注钩织的材料包品牌：毛线、配件、工具与分步教学视频打包成材料包，零基础也能亲手钩出随身幸运物。',
+    description: '专注钩织的初学者钩织学习套装品牌：毛线、配件、工具与分步教学视频打包成初学者钩织学习套装，零基础也能亲手钩出随身幸运物。',
   }
 }
 

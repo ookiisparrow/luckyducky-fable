@@ -32,7 +32,7 @@ const schemas = [
 
 <Base title={d.title} description={d.description} type="article" publishedTime={d.datePublished} modifiedTime={d.dateModified || d.datePublished}>
   {schemas.map((s) => <script type="application/ld+json" set:html={jsonLd(s)} />)}
-  {!d.reviewed && <p class="draft-banner">📝 本文为 AI 起草的内容初稿，店主审核后转正——细节以材料包内教学视频为准。</p>}
+  {!d.reviewed && <p class="draft-banner">📝 本文为 AI 起草的内容初稿，店主审核后转正——细节以初学者钩织学习套装内教学视频为准。</p>}
   <article>
     <h1>{d.title}</h1>
     <Content />
@@ -49,7 +49,7 @@ const schemas = [
     </section>
   )}
   <p class="cta">
-    🧶 想跟着视频一步步钩？先看看<a href="/kits/">材料包里都有什么</a>——材料包与配套课程在微信小程序：<strong>微信搜「LuckyDucky小棉鸭」</strong>
+    🧶 想跟着视频一步步钩？先看看<a href="/kits/">初学者钩织学习套装里都有什么</a>——初学者钩织学习套装与配套课程在微信小程序：<strong>微信搜「LuckyDucky小棉鸭」</strong>
   </p>
 </Base>
 

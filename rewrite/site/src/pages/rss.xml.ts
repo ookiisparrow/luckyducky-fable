@@ -27,7 +27,7 @@ export const GET: APIRoute = async () => {
     '  <channel>',
     `    <title>${esc(`${BRAND_NAME} · 钩织教程`)}</title>`,
     `    <link>${SITE}/</link>`,
-    '    <description>零基础钩织教程：起针、针目、换色、收尾——配合小棉鸭材料包的分步图文讲解。</description>',
+    '    <description>零基础钩织教程：起针、针目、换色、收尾——配合小棉鸭初学者钩织学习套装的分步图文讲解。</description>',
     '    <language>zh-CN</language>',
     items,
     '  </channel>',
