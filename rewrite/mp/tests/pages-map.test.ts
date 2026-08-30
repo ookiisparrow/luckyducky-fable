@@ -120,6 +120,13 @@ describe('mapAbout（lead + 三段自述·缺档回退默认全文）', () => {
     expect(d.lead).toBeTruthy()
     expect(d.sections.length).toBe(3)
     expect(d.sections.every((s) => s.title && s.body)).toBe(true)
+    // 关于页默认稿只换产品名，故事不重写
+    const who = d.sections.find((s) => s.title === '我们是谁')
+    const what = d.sections.find((s) => s.title === '我们做什么')
+    expect(who?.body).toContain('专注钩织的初学者钩织学习套装品牌')
+    expect(who?.body).toContain('打包成一个个初学者钩织学习套装')
+    expect(what?.body).toContain('每一份初学者钩织学习套装都配有分步教学视频')
+    expect(d.sections.map((s) => s.body).join('\n')).not.toContain('材料包')
   })
 
   it('大白话：配了 sections → 用配置；空数组 / 全脏 → 回退默认全文（防误清空）', () => {
