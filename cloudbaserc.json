@@ -6,85 +6,98 @@
         {
             "name": "adminApi",
             "timeout": 30,
+            "memorySize": 256,
             "handler": "index.main",
             "installDependency": true
         },
         {
             "name": "app",
             "timeout": 15,
+            "memorySize": 256,
             "handler": "index.main",
             "installDependency": true
         },
         {
             "name": "billReconcile",
             "timeout": 30,
+            "memorySize": 256,
             "handler": "index.main",
-            "installDependency": true,
-            "_note": "未部署·初始值（参考同类网络型 timer recallScan/cleanupEvents 30s·批L 纪律 timeout 照线上真值，本函数尚未部署故只能给初始值）·部署后照线上真值核"
+            "installDependency": true
         },
         {
             "name": "cleanupEvents",
             "timeout": 30,
+            "memorySize": 256,
             "handler": "index.main",
             "installDependency": true
         },
         {
             "name": "closeExpiredOrders",
             "timeout": 20,
+            "memorySize": 256,
             "handler": "index.main",
             "installDependency": true
         },
         {
             "name": "initDb",
             "timeout": 15,
+            "memorySize": 256,
             "handler": "index.main",
             "installDependency": true
         },
         {
             "name": "inspect",
             "timeout": 15,
+            "memorySize": 256,
             "handler": "index.main",
             "installDependency": true
         },
         {
             "name": "kfCallback",
             "timeout": 20,
+            "memorySize": 256,
             "handler": "index.main",
             "installDependency": true
         },
         {
             "name": "kfHealthProbe",
             "timeout": 20,
+            "memorySize": 256,
             "handler": "index.main",
             "installDependency": true
         },
         {
             "name": "payCallback",
             "timeout": 15,
+            "memorySize": 256,
             "handler": "index.main",
             "installDependency": true
         },
         {
             "name": "recallScan",
             "timeout": 30,
+            "memorySize": 256,
             "handler": "index.main",
             "installDependency": true
         },
         {
             "name": "refundCallback",
             "timeout": 15,
+            "memorySize": 256,
             "handler": "index.main",
             "installDependency": true
         },
         {
             "name": "seedCourses",
             "timeout": 20,
+            "memorySize": 256,
             "handler": "index.main",
             "installDependency": true
         },
         {
             "name": "feedbackNotify",
             "timeout": 20,
+            "memorySize": 256,
             "handler": "index.main",
             "installDependency": true
         }
