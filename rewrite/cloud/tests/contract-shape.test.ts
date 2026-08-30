@@ -26,6 +26,7 @@ import { saveHomeContent, savePageContent, saveHelpVideos } from '../src/functio
 import { publishCourse, saveCourseDraft } from '../src/functions/adminApi/actions/courses'
 import { saveKb } from '../src/functions/adminApi/actions/kb'
 import { saveDraft, publishProduct, unpublishProduct } from '../src/functions/adminApi/actions/products'
+import { setReviewPicked } from '../src/functions/adminApi/actions/reviews'
 import type { Ctx } from '../src/functions/adminApi/lib'
 
 const call = (action: string, data: Record<string, unknown> = {}) => app({ action, data }) as Promise<any>
@@ -69,10 +70,10 @@ const AS_ORDER = {
   address: { name: '张三', phone: '13800000000', region: '浙江·杭州', detail: 'xx 路 1 号' },
   items: [{ productId: 'p1', lineId: 'p1__基础款', spec: '基础款', name: '小鸭礼盒', price: 198, qty: 1, refundable: true }],
 }
-// C 批（W1 收官）：评价写侧 12 键——submitReview 的 add 字面量。getReviews 只下发其中 7 键
-// （REVIEW_KEYS），差集 5 键＝_id/_openid/orderId/lineId/productId 是归属与内部关联，绝不出网关。
-// 「submitReview 真写入 → getReviews 读回」把写侧字段集与读侧裁剪白名单两头一起锁住。
-const REVIEW_WRITE_KEYS = ['_id', '_openid', 'createdAt', 'lineId', 'name', 'orderId', 'photos', 'productId', 'rating', 'spec', 'tags', 'text']
+// C 批（W1 收官）+ 先审后发：评价写侧 13 键——submitReview 的 add 字面量（含 picked:false）。
+// getReviews 只下发其中 7 键（REVIEW_KEYS），差集 6 键＝_id/_openid/orderId/lineId/productId/picked
+// 是归属、内部关联与挑选闸，绝不出公开网关。
+const REVIEW_WRITE_KEYS = ['_id', '_openid', 'createdAt', 'lineId', 'name', 'orderId', 'photos', 'picked', 'productId', 'rating', 'spec', 'tags', 'text']
 const FEEDBACK_WRITE_KEYS = ['_id', '_openid', 'category', 'contact', 'content', 'createdAt', 'page', 'platform', 'version']
 const DONE_ORDER = {
   _id: 'oDone', id: 'oDone', _openid: 'oME', status: 'done', amount: 198, goods: 198, createdAt: 1000,
@@ -282,8 +283,8 @@ describe('契约键集合哨兵（Object.keys 排序全等·增删改名都红�
 
   it('getReviews：首页顶层 5 键含 summary；翻页 summary 键仍在（值 undefined·键集合不随页变）；评价行 7 键、summary 5 键——晒图只下发换好的临时地址', async () => {
     control.seed('reviews', [
-      { _id: 'r1', productId: 'p1', _openid: 'oA', name: '小明', rating: 5, tags: ['手感好'], text: '很好', spec: '基础款', photos: [], createdAt: 200 },
-      { _id: 'r2', productId: 'p1', _openid: 'oB', name: '小红', rating: 4, tags: [], text: '不错', spec: '基础款', photos: [], createdAt: 100 },
+      { _id: 'r1', productId: 'p1', picked: true, _openid: 'oA', name: '小明', rating: 5, tags: ['手感好'], text: '很好', spec: '基础款', photos: [], createdAt: 200 },
+      { _id: 'r2', productId: 'p1', picked: true, _openid: 'oB', name: '小红', rating: 4, tags: [], text: '不错', spec: '基础款', photos: [], createdAt: 100 },
     ])
     const first = await call('getReviews', { productId: 'p1' })
     expect(first.ok).toBe(true)
@@ -565,18 +566,24 @@ describe('契约键集合哨兵（Object.keys 排序全等·增删改名都红�
   // ── 第三批扩面（战役工单 W1·C 批收官：评价/帮助视频/反馈/授权五 action）──
   // 这批与 A/B 又不同：多数是**白名单重建**（逐字段 String() 重造）或**零载荷写**，天然挡住写侧脏字段。
   // 所以锁点从「防透传」转成两条：① 重建出来的键集本身；② 写侧字段集 ↔ 下发面的差集（谁被裁了）。
-  it('submitReview→getReviews 端到端：写侧 12 键真写入、读回只下发 7 键——_openid/orderId/lineId/productId/_id 五个归属字段不出网关', async () => {
+  it('submitReview→getReviews 端到端：写侧 13 键真写入（含 picked:false）；未挑选公开读空；挑过才下发 7 键——_openid/orderId/lineId/productId/_id/picked 不出网关', async () => {
     control.seed('orders', [DONE_ORDER])
     control.seed('users', [{ _id: 'oME', _openid: 'oME', nickname: '幸运鸭' }])
     const s = await call('submitReview', { orderId: 'oDone', lineId: 'p1__基础款', rating: 5, text: '很好', tags: ['手感好'], photos: ['cloud://rev-a.jpg'] })
     expect(keysOf(s)).toEqual(['ok']) // 成功零载荷（同 trackEvent：写类 action 刻意不回数据）
 
     // 写侧字段集（真写入回读·不是自造 seed）
-    expect(keysOf(control.dump('reviews')[0])).toEqual(REVIEW_WRITE_KEYS)
+    const written = control.dump('reviews')[0]
+    expect(keysOf(written)).toEqual(REVIEW_WRITE_KEYS)
+    expect(written.picked).toBe(false)
+    expect((await call('getReviews', { productId: 'p1' })).list).toEqual([]) // 未挑选不上墙
+
+    const pick = await setReviewPicked(adminCtx({ id: written._id, picked: true }))
+    expect(JSON.parse(pick.body).ok).toBe(true)
     // 读侧下发面：既有 getReviews 用例造的是 seed 回声，这条是端到端——写侧加字段若被顺手放进读侧映射即红
     const r = await call('getReviews', { productId: 'p1' })
     expect(keysOf(r.list[0])).toEqual(REVIEW_KEYS)
-    for (const cut of ['_id', '_openid', 'orderId', 'lineId', 'productId']) {
+    for (const cut of ['_id', '_openid', 'orderId', 'lineId', 'productId', 'picked']) {
       expect(cut in r.list[0]).toBe(false)
     }
     expect(r.list[0].photos[0].startsWith('https://')).toBe(true) // 晒图裸 fileID 不出网关，换短时址下发
@@ -593,8 +600,8 @@ describe('契约键集合哨兵（Object.keys 排序全等·增删改名都红�
 
   it('getRatingSummary：扁平 3 键 [count,ok,score]——与 getReviews 的嵌套 summary 刻意不同形（同一个 mp mapSummary 吃两种形状）；无评价时键仍在、score 是字符串 0', async () => {
     control.seed('reviews', [
-      { _id: 'r1', productId: 'p1', _openid: 'oA', name: '小明', rating: 5, tags: [], text: '好', spec: '基础款', photos: [], createdAt: 200 },
-      { _id: 'r2', productId: 'p1', _openid: 'oB', name: '小红', rating: 4, tags: [], text: '不错', spec: '基础款', photos: [], createdAt: 100 },
+      { _id: 'r1', productId: 'p1', picked: true, _openid: 'oA', name: '小明', rating: 5, tags: [], text: '好', spec: '基础款', photos: [], createdAt: 200 },
+      { _id: 'r2', productId: 'p1', picked: true, _openid: 'oB', name: '小红', rating: 4, tags: [], text: '不错', spec: '基础款', photos: [], createdAt: 100 },
     ])
     const r = await call('getRatingSummary', { productId: 'p1' })
     expect(r.ok).toBe(true)

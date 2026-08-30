@@ -30,6 +30,7 @@ import * as scmOverview from './actions/scmOverview'
 import * as ops from './actions/ops'
 import * as configChecklist from './actions/configChecklist'
 import * as secureConfig from './actions/secureConfig'
+import * as reviews from './actions/reviews'
 
 // 管理控制台后端 v2（HTTP 访问服务触发·鉴权外壳逐字承接旧线 index.ts·业务 action 已全域挂载
 // 进 ACTIONS/ACTION_CAPS——与旧线注册表逐行核对过）。
@@ -186,6 +187,9 @@ const ACTIONS: Record<string, (ctx: Ctx) => Promise<any>> = {
   // 人工配置清单可填写化（决策 2026-07-12）：写敏感凭证/支付接缝配置·未登记 ACTION_CAPS→默认拒 admin:write＝仅超管
   saveSecureConfig: secureConfig.saveSecureConfig,
   savePayConfig: secureConfig.savePayConfig,
+  // 评价挑选（先审后发·未登记 ACTION_CAPS→默认拒 admin:write＝仅超管）
+  listReviews: reviews.listReviews,
+  setReviewPicked: reviews.setReviewPicked,
 }
 
 // 方案 b：adminApi 顶层兜底需要按 action 归因，但 action 名本身不带文件名。
@@ -221,6 +225,7 @@ const ADMIN_ACTION_MODULE: Record<string, string> = {
   configChecklist: 'ops',
   secureConfig: 'ops',
   dashboard: 'ops',
+  reviews: 'reviews',
 }
 
 const ADMIN_ACTION_FILES: Record<string, Record<string, unknown>> = {
@@ -253,6 +258,7 @@ const ADMIN_ACTION_FILES: Record<string, Record<string, unknown>> = {
   configChecklist,
   secureConfig,
   dashboard,
+  reviews,
 }
 
 const ADMIN_ACTION_MODULE_BY_NAME: Record<string, string> = Object.create(null)
