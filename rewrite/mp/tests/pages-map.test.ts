@@ -153,11 +153,21 @@ describe('mapAgreement（用户协议/隐私政策·缺档回退默认全文·in
     // 隐私政策第三方披露事实对齐（快递100·不通过微信授权）不因回退丢失
     expect(d.privacy.intro).toContain('不通过微信授权')
     expect(JSON.stringify(d.privacy.articles)).toContain('快递100')
-    // 用户协议默认稿：产品名换成「初学者钩织学习套装」，进课失权句子一字不改，不再写材料包
+    // 用户协议默认稿：产品名「初学者钩织学习套装」；扫印刷码只开欢迎页、仍可退；确认进课才失七天无理由
     const userBodies = d.user.articles.map((a) => a.body).join('\n')
+    const article4 = d.user.articles.find((a) => a.title.startsWith('第四条'))?.body ?? ''
+    const article5 = d.user.articles.find((a) => a.title.startsWith('第五条'))?.body ?? ''
     expect(userBodies).toContain('本小程序提供初学者钩织学习套装等实物商品的在线销售')
     expect(userBodies).toContain('初学者钩织学习套装内含用于开通配套课程的唯一二维码')
-    expect(userBodies).toContain('一旦你扫码并确认开始观看课程，即视为该件商品所含数字内容已实质交付，你将就该件商品失去七天无理由退货的权利')
+    expect(article4).toContain('扫描该印刷二维码仅打开欢迎页')
+    expect(article4).toContain('并不因扫码而失去七天无理由退货的权利')
+    expect(article4).toContain('仅当你在欢迎页确认进课后')
+    expect(article4).toContain('失去七天无理由退货的权利')
+    expect(article4).toContain('你下单及在欢迎页确认进课即表示已知悉并同意')
+    expect(article4).not.toContain('下单及扫码')
+    expect(article4).not.toContain('扫码并确认开始观看')
+    expect(article5).toContain('尚未确认进课')
+    expect(article5).not.toContain('确认开始观看课程')
     expect(userBodies).not.toContain('材料包')
     // 隐私默认稿：头像昵称只在编辑资料自愿填；补上微信指引已声明的相册/剪切板/摄像头
     const privacyBodies = d.privacy.articles.map((a) => a.body).join('\n')
