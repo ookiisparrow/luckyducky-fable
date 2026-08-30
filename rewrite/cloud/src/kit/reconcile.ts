@@ -2,6 +2,21 @@ import { COLLECTIONS, toFen } from '@ldrw/shared'
 import { fetchTradeBill, normalizePem, type BillRow, type WxFetch } from './wxpay'
 import { getSecureConfigFields } from './secureConfig'
 
+/** 库/API 金额（元，number 或数字串）→ 元 number。字符串绝不走 `+`。 */
+export function toYuanAmount(v: unknown): number {
+  if (typeof v === 'number') return Number.isFinite(v) ? v : 0
+  if (typeof v === 'string') {
+    const n = Number(v.trim())
+    return Number.isFinite(n) ? n : 0
+  }
+  return 0
+}
+
+/** 库/API 金额 → 整数分（比对/累加只走这条）。 */
+export function toFenAmount(v: unknown): number {
+  return toFen(toYuanAmount(v))
+}
+
 // —— S16 对账原语单源（钱链·批B2）——与 kit/wxpay 分工：wxpay 管微信 v3 出站签名/账单解析
 // （平台接缝单点#12），本文件管「拉一日→落库→比对」编排与纯分类器。消费方：adminApi 手动路径
 // （downloadBill/getBillMatch）+ timers/billReconcile 每日自动对账——同一套原语，行为单源不双轨。
@@ -95,17 +110,17 @@ export function matchBillRows(
       wxOnly.push({
         transactionId: w.transactionId,
         outTradeNo: w.outTradeNo,
-        amount: w.orderAmount,
+        amount: toYuanAmount(w.orderAmount),
         date: w.date,
       })
       continue
     }
-    if (toFen(Number(our.amount) || 0) !== toFen(Number(w.orderAmount) || 0))
+    if (toFenAmount(our.amount) !== toFenAmount(w.orderAmount))
       amountMismatch.push({
         id: our.id,
         transactionId: w.transactionId,
-        ourAmount: our.amount,
-        wxAmount: w.orderAmount,
+        ourAmount: toYuanAmount(our.amount),
+        wxAmount: toYuanAmount(w.orderAmount),
       })
     else matched.push(our.id)
   }

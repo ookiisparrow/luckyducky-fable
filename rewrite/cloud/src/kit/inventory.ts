@@ -43,7 +43,7 @@ async function casDecrement(coll: any, _id: string, qty: number): Promise<boolea
       lastRoundReadFailed = true
       continue // 读失败（非「无档」）：当一次尝试失败，进入下一轮重试，不静默判不限量
     }
-    if (!got || !got.data) return null // 防御：正常返回但无数据
+    if (isEmptyDoc(got)) return null // 无档（空 data / 空数组）＝不限量
     const stock = got.data.stock
     if (stock == null) return null // 不限量：合法不处理
     if (stock < qty) return false
@@ -60,21 +60,42 @@ async function casDecrement(coll: any, _id: string, qty: number): Promise<boolea
   return false // 重试耗尽按不足处理·宁缺勿超卖
 }
 
-// 「无档」的判据（真 sdk：doc(id).get() 缺失即 reject）——与其他读失败（网络/瞬时故障）区分开：
-// 前者是合法状态（无档=不限量），后者不该被静默吞成合法。
-// 复核（bug sweep II 复审）：真 sdk 拒因文案不是固定字面量，实测/社区报错形如
-// 「...cannot find document with _id [ID号]...」（errCode -1），与本仓测试桩自造的 'DOCUMENT_NOT_FOUND'
-// 不是同一字符串——原判据 `message === 'DOCUMENT_NOT_FOUND'` 只在测试桩下命中，真机会全部落进 else
-// 分支被当「读失败」重试 5 次再误报 GIVEBACK_LOST（无档是高频合法态，会把可观测机制拖成告警疲劳）。
-// 改为兼容双源：测试桩字面量 精确匹配 + 真 sdk 文案子串匹配，任一命中即判定「无档」。
-// 导出仅供测试直打（真 sdk 报错文案没有内存桩可复现，只能对纯函数单测）。
+// 「无档」判据：只认「这一份文档不在」，不认集合/权限/网络（那些当读失败·fail-closed）。
+// 文案散落在 message / errMsg / code / errCode（CloudBase HTTP 只给 code、桩只给 message）。
+// `/does not exist/i` 太宽：collection/permission 文案也带这句，旧版会把限量 SKU 当不限量放行。
+function errHaystack(e: unknown): string {
+  if (e == null) return ''
+  if (typeof e === 'string') return e
+  const o = e as Record<string, unknown>
+  return [o.message, o.errMsg, o.errmsg, o.code, o.errCode, o.errcode]
+    .map((x) => (x == null ? '' : String(x)))
+    .join('\n')
+}
+
 export const isDocMissing = (e: unknown): boolean => {
-  const msg = String((e as any)?.message ?? (e as any)?.errMsg ?? '')
-  return (
-    msg === 'DOCUMENT_NOT_FOUND' ||
-    /cannot find document/i.test(msg) ||
-    /does not exist/i.test(msg)
+  const t = errHaystack(e)
+  if (!t) return false
+  if (
+    /permission denied|PERMISSION_DENIED|-502003|COLLECTION_NOT_EXIST|-502005|collection does not exist|ECONNRESET|NETWORK_TIMEOUT/i.test(
+      t
+    )
   )
+    return false
+  return (
+    /DOCUMENT_NOT_FOUND|DOCUMENT_NOT_EXIST/i.test(t) ||
+    /cannot find document/i.test(t) ||
+    /document(?:\.get|\s+with\s+_id\b)?[^.\n]*does not exist/i.test(t)
+  )
+}
+
+/** get() 成功但没文档：CloudBase 有的版本不抛、回 { data: [] } / { data: {} }。 */
+export const isEmptyDoc = (got: unknown): boolean => {
+  if (!got || typeof got !== 'object') return true
+  const data = (got as { data?: unknown }).data
+  if (data == null) return true
+  if (Array.isArray(data)) return data.length === 0
+  if (typeof data === 'object') return Object.keys(data as object).length === 0
+  return false
 }
 
 // 单条 CAS 回补：true=已扣回/无档或不限量（合法不处理）；false=重试耗尽仍未确认写入（回补丢失，调用方需知道）。
@@ -92,7 +113,7 @@ async function casIncrement(coll: any, _id: string, qty: number): Promise<boolea
       continue // 读失败（非「无档」）：当一次尝试失败，进入下一轮重试——持续性读失败下该行 get 最多放大到
       // CAS_RETRY 次（原实现 1 次即静默放弃）：刻意权衡（评审 P3 要求注明），回补只走关单/退款等低频补偿路径，可接受
     }
-    if (!got || !got.data) return true // 防御：正常返回但无数据
+    if (isEmptyDoc(got)) return true // 无档（空 data / 空数组）＝不限量
     const stock = got.data.stock
     if (stock == null) return true // 不限量：合法不处理
     const r = await coll
@@ -188,8 +209,14 @@ export async function produceStock(productId: string, spec: string, qty: number)
   const coll = getDb().collection(COLLECTIONS.inventory)
   const _id = idOf(productId, spec)
   for (let i = 0; i < CAS_RETRY; i++) {
-    const got = await coll.doc(_id).get().catch(() => null)
-    if (!got || !got.data) {
+    let got: any
+    try {
+      got = await coll.doc(_id).get()
+    } catch (e) {
+      if (!isDocMissing(e)) continue // 读失败：重试，不当「无档」去新建
+      got = null
+    }
+    if (isEmptyDoc(got)) {
       // 无文档则建（确定性 _id·并发双建一方撞 DUPLICATE 走下轮 CAS 累加）
       const created = await coll
         .add({ data: { _id, productId, spec, stock: qty, updatedAt: Date.now() } })
