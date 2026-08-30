@@ -5,7 +5,7 @@
 import { describe, it, expect, beforeEach } from 'vitest'
 import { control } from 'wx-server-sdk'
 import { restoreStock, reserveStock } from '../src/kit'
-import { isDocMissing } from '../src/kit/inventory'
+import { isDocMissing, isEmptyDoc } from '../src/kit/inventory'
 import { COLLECTIONS } from '@ldrw/shared'
 
 function captureAlerts(fn: () => Promise<void>): Promise<string[]> {
@@ -81,6 +81,55 @@ describe('isDocMissing 判据兼容真 sdk 文案（K3 复审）', () => {
   it('大白话：真读失败（网络/瞬时故障，非「无档」文案）不能被误判成无档', () => {
     expect(isDocMissing(new Error('NETWORK_TIMEOUT'))).toBe(false)
     expect(isDocMissing(new Error('ECONNRESET'))).toBe(false)
+  })
+
+  // P0-1：旧判据 `/does not exist/i` 太宽，集合不存在/权限拒绝也被当成「无档」→ 限量 SKU 当不限量放行超卖。
+  // 同时漏认「只有 code 字段、没有 message」的 CloudBase 缺档壳。
+  it('大白话：集合不存在不能当成「这个 SKU 没档案」（否则整仓库存档读失败会被当成不限量超卖）', () => {
+    expect(isDocMissing(new Error('The collection does not exist'))).toBe(false)
+    expect(isDocMissing({ errCode: -502005, errMsg: 'collection does not exist' })).toBe(false)
+  })
+  it('大白话：权限拒绝不能当成无档（有库存但读不到 ≠ 不限量）', () => {
+    expect(isDocMissing(new Error('permission denied: resource does not exist'))).toBe(false)
+    expect(isDocMissing({ errCode: -502003, errMsg: 'DATABASE_PERMISSION_DENIED' })).toBe(false)
+  })
+  it('大白话：CloudBase 只在 code 字段标 DOCUMENT_NOT_FOUND（没有 message）也要认无档', () => {
+    expect(isDocMissing({ code: 'DOCUMENT_NOT_FOUND' })).toBe(true)
+    expect(isDocMissing({ errCode: 'DOCUMENT_NOT_EXIST' })).toBe(true)
+    expect(isDocMissing('DOCUMENT_NOT_FOUND')).toBe(true)
+  })
+  it('大白话：get() 不抛、只回空 data（[] / {} / null）也算无档；有字段的文档不算', () => {
+    expect(isEmptyDoc({ data: [] })).toBe(true)
+    expect(isEmptyDoc({ data: {} })).toBe(true)
+    expect(isEmptyDoc({ data: null })).toBe(true)
+    expect(isEmptyDoc(null)).toBe(true)
+    expect(isEmptyDoc({ data: { _id: 'p1__', stock: 5 } })).toBe(false)
+  })
+})
+
+describe('reserveStock/casDecrement 缺档误判不超卖（P0-1 多调用面）', () => {
+  it('大白话：读库存抛「集合不存在」——不能当无档放行，须 fail-closed 拒单（旧：isDocMissing 真、整单当不限量成交）', async () => {
+    control.seed('inventory', [{ _id: 'p1__', productId: 'p1', spec: '', stock: 5, updatedAt: 1000 }])
+    control.setBeforeGet(({ coll, id }: any) => {
+      if (coll === COLLECTIONS.inventory && id === 'p1__') throw new Error('The collection does not exist')
+    })
+    const r = await reserveStock([{ productId: 'p1', spec: '', qty: 1 }])
+    control.setBeforeGet(null as never)
+    expect(r.ok).toBe(false)
+    expect(r.short).toEqual({ productId: 'p1', spec: '', qty: 1 })
+    expect(control.dump('inventory').find((x: any) => x._id === 'p1__')?.stock).toBe(5)
+  })
+
+  it('大白话：回补路径遇到权限拒绝——不能当无档吞成成功、须耗尽后打回补丢失（旧：does not exist 子串误命中）', async () => {
+    control.seed('inventory', [{ _id: 'p1__', productId: 'p1', spec: '', stock: 5, updatedAt: 1000 }])
+    control.setBeforeGet(({ coll, id }: any) => {
+      if (coll === COLLECTIONS.inventory && id === 'p1__')
+        throw new Error('permission denied: resource does not exist')
+    })
+    const lines = await captureAlerts(() => restoreStock([{ productId: 'p1', spec: '', qty: 2 }]))
+    control.setBeforeGet(null as never)
+    expect(lines.some((l) => l.includes('GIVEBACK_LOST'))).toBe(true)
+    expect(control.dump('inventory').find((x: any) => x._id === 'p1__')?.stock).toBe(5)
   })
 })
 
