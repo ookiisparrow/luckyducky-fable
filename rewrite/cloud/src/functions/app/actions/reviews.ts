@@ -47,6 +47,11 @@ export const getHelpVideos = withOpenId(
 
 const SUMMARY_SAMPLE = 200
 
+/** 公开读只认人工挑选。缺字段 / false = 不出（fail-closed·先审后发）。 */
+function publicReviewFilter(productId: string) {
+  return { productId, picked: true }
+}
+
 /**
  * 精确汇总（黄金 §七：全量精确、永不近似）：星级桶 count + aggregate 求和，不受样本截断。
  * 六路互不依赖并行（批C·云端加载链微优化）：原为「五路 Promise.all 后再串行拉一次 tags 样本」，
@@ -59,19 +64,19 @@ async function buildSummaryExact(db: any, productId: string) {
   const _ = db.command
   const coll = () => db.collection(COLLECTIONS.reviews)
   const [c5, c4, c3, c21, sumRes, tres] = await Promise.all([
-    coll().where({ productId, rating: 5 }).count(),
-    coll().where({ productId, rating: 4 }).count(),
-    coll().where({ productId, rating: 3 }).count(),
+    coll().where({ ...publicReviewFilter(productId), rating: 5 }).count(),
+    coll().where({ ...publicReviewFilter(productId), rating: 4 }).count(),
+    coll().where({ ...publicReviewFilter(productId), rating: 3 }).count(),
     coll()
-      .where({ productId, rating: _.in([1, 2]) })
+      .where({ ...publicReviewFilter(productId), rating: _.in([1, 2]) })
       .count(), // 1 星并入 2 星档（与展示折叠一致）
     coll()
       .aggregate()
-      .match({ productId })
+      .match(publicReviewFilter(productId))
       .group({ _id: null, s: $.sum('$rating') })
       .end(),
     coll()
-      .where({ productId })
+      .where(publicReviewFilter(productId))
       .orderBy('createdAt', 'desc')
       .limit(SUMMARY_SAMPLE)
       .field({ tags: true }) // 只用 tags 分桶计数，其余字段（text/photos 等）不需要、投影裁掉
@@ -162,7 +167,7 @@ export const getReviews = async (event: any = {}) => {
         // 不改变精确口径优先、此仅兜底口径的语义。
         const sres = await db
           .collection(COLLECTIONS.reviews)
-          .where({ productId })
+          .where(publicReviewFilter(productId))
           .orderBy('createdAt', 'desc')
           .limit(SUMMARY_SAMPLE + 1)
           .get()
@@ -171,7 +176,7 @@ export const getReviews = async (event: any = {}) => {
       })
     : null
 
-  const paged = await pageQuery(db, COLLECTIONS.reviews, { productId }, 'createdAt', event, 20)
+  const paged = await pageQuery(db, COLLECTIONS.reviews, publicReviewFilter(productId), 'createdAt', event, 20)
   // 买家秀晒图：受保护云存储 fileID 只在服务端，鉴权后批量换短时地址下发（不漏裸 fileID·黄金 §九同 helpVideos）。
   const photoIds = paged.list.flatMap((r: any) =>
     (Array.isArray(r.photos) ? r.photos : []).filter(Boolean).map(String)
@@ -209,11 +214,11 @@ export const getRatingSummary = async (event: any = {}) => {
   const $ = db.command.aggregate
   try {
     const [cRes, sumRes] = await Promise.all([
-      db.collection(COLLECTIONS.reviews).where({ productId }).count(),
+      db.collection(COLLECTIONS.reviews).where(publicReviewFilter(productId)).count(),
       db
         .collection(COLLECTIONS.reviews)
         .aggregate()
-        .match({ productId })
+        .match(publicReviewFilter(productId))
         .group({ _id: null, s: $.sum('$rating') })
         .end(),
     ])
@@ -312,6 +317,7 @@ export const submitReview = withOpenId(
           photos, // 已逐张过内容安全的 cloud:// fileID（读侧换短时址下发）
           spec: String(item.spec || ''),
           createdAt: Date.now(),
+          picked: false, // 先审后发：提交不自动上墙，admin 挑过才公开
         },
       })
     } catch {

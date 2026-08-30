@@ -6,6 +6,7 @@ import agents from '../src/pages/Agents.vue?raw'
 import checkpoints from '../src/pages/Checkpoints.vue?raw'
 import conversations from '../src/pages/Conversations.vue?raw'
 import csat from '../src/pages/Csat.vue?raw'
+import reviews from '../src/pages/Reviews.vue?raw'
 import kb from '../src/pages/Kb.vue?raw'
 import products from '../src/pages/Products.vue?raw'
 import scmBom from '../src/pages/ScmBom.vue?raw'
@@ -47,7 +48,7 @@ describe('admin 页面共享结构样式单源（Issue #137 F1）', () => {
       expect(style(source)).not.toMatch(/^\.(icon-btn|kb-del|eye-btn)\s*\{/m)
       expect(source).toContain('ld-icon-btn')
     }
-    for (const source of [agents, conversations, csat]) {
+    for (const source of [agents, conversations, csat, reviews]) {
       expect(style(source)).not.toMatch(/^\.(mono|muted|range-chips|more-wrap|end-mark)\s*\{/m)
       expect(source).toMatch(/ld-(mono|muted|range-chips|more-wrap|end-mark)/)
     }

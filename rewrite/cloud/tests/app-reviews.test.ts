@@ -2,6 +2,8 @@
 import { describe, it, expect, beforeEach } from 'vitest'
 import { control } from 'wx-server-sdk'
 import { main as app } from '../src/functions/app/index'
+import { main as adminApi } from '../src/functions/adminApi/index'
+import { sha } from '../src/functions/adminApi/lib'
 import { __resetTempUrlCacheForTest } from '../src/kit/storage'
 
 const call = (action: string, data: Record<string, unknown> = {}) => app({ action, data }) as Promise<any>
@@ -70,6 +72,7 @@ describe('getReviews（游标分页+全量精确汇总·黄金 §七）', () => 
     const many = Array.from({ length: 250 }, (_, i) => ({
       _id: 'r' + i,
       productId: 'p1',
+      picked: true,
       rating: i % 2 ? 5 : 4,
       tags: ['好评'],
       createdAt: i,
@@ -77,10 +80,11 @@ describe('getReviews（游标分页+全量精确汇总·黄金 §七）', () => 
     const lowStars = Array.from({ length: 30 }, (_, i) => ({
       _id: 'x' + i,
       productId: 'p1',
+      picked: true,
       rating: 1,
       createdAt: 900 + i,
     }))
-    control.seed('reviews', [...many, ...lowStars, { _id: 'other', productId: 'p2', rating: 3, createdAt: 991 }])
+    control.seed('reviews', [...many, ...lowStars, { _id: 'other', productId: 'p2', picked: true, rating: 3, createdAt: 991 }])
     const r = await call('getReviews', { productId: 'p1' })
     expect(r.summary.count).toBe(280) // 250+30 一星·p2 不混入
     expect(r.summary.score).toBe('4.1') // (125*5+125*4+30*1)/280=4.125→toFixed(1)（钉住批C 汇总数值正确性，非仅样本近似）
@@ -96,13 +100,13 @@ describe('getReviews（游标分页+全量精确汇总·黄金 §七）', () => 
     })
     control.seed(
       'reviews',
-      Array.from({ length: 200 }, (_, i) => ({ _id: 'r' + i, productId: 'p1', rating: 5, createdAt: i }))
+      Array.from({ length: 200 }, (_, i) => ({ _id: 'r' + i, productId: 'p1', picked: true, rating: 5, createdAt: i }))
     )
     const r200 = await call('getReviews', { productId: 'p1' })
     expect(r200.summary.count).toBe(200)
     expect(r200.summary.approx).toBe(false) // 恰好占满上限＝全量，不是被截断，不该标近似
 
-    control.seed('reviews', [{ _id: 'r200', productId: 'p1', rating: 5, createdAt: 200 }]) // 第 201 条
+    control.seed('reviews', [{ _id: 'r200', productId: 'p1', picked: true, rating: 5, createdAt: 200 }]) // 第 201 条
     const r201 = await call('getReviews', { productId: 'p1' })
     expect(r201.summary.count).toBe(200) // 真被截断只统计前 200（多取的那条只用于探测截断，不参与聚合）
     expect(r201.summary.approx).toBe(true)
@@ -113,7 +117,7 @@ describe('getReviews（游标分页+全量精确汇总·黄金 §七）', () => 
   it('大白话：首页倒序+游标续页不重不漏；续页不重算汇总；到底无更多', async () => {
     control.seed(
       'reviews',
-      Array.from({ length: 25 }, (_, i) => ({ _id: 'r' + i, productId: 'p1', rating: 5, createdAt: 1000 + i }))
+      Array.from({ length: 25 }, (_, i) => ({ _id: 'r' + i, productId: 'p1', picked: true, rating: 5, createdAt: 1000 + i }))
     )
     const p1 = await call('getReviews', { productId: 'p1', limit: 10 })
     expect(p1.list.length).toBe(10)
@@ -137,10 +141,10 @@ describe('getRatingSummary（详情页评分摘要·slim·公开只读·C 类竖
   })
   it('大白话：有评价时 score=均分保留一位、count=本商品评价数；他商品不混入；slim 不下发列表/图/标签', async () => {
     control.seed('reviews', [
-      { _id: 'a', productId: 'p1', rating: 5, tags: ['棒'], photos: ['cloud://a.jpg'], createdAt: 1 },
-      { _id: 'b', productId: 'p1', rating: 4, createdAt: 2 },
-      { _id: 'c', productId: 'p1', rating: 3, createdAt: 3 },
-      { _id: 'z', productId: 'p2', rating: 1, createdAt: 4 },
+      { _id: 'a', productId: 'p1', picked: true, rating: 5, tags: ['棒'], photos: ['cloud://a.jpg'], createdAt: 1 },
+      { _id: 'b', productId: 'p1', picked: true, rating: 4, createdAt: 2 },
+      { _id: 'c', productId: 'p1', picked: true, rating: 3, createdAt: 3 },
+      { _id: 'z', productId: 'p2', picked: true, rating: 1, createdAt: 4 },
     ])
     const r = await call('getRatingSummary', { productId: 'p1' })
     expect(r.count).toBe(3) // p2 不混入
@@ -184,6 +188,7 @@ describe('submitReview（多重闸门·一单一行一评·黄金 §七）', () 
     expect(r1.name).toBe('幸运鸭')
     expect(r1.spec).toBe('红')
     expect(r1.text).toBe('好')
+    expect(r1.picked).toBe(false) // 先审后发：提交不自动上墙
     await call('submitReview', { orderId: 'o1', lineId: 'p1__蓝', rating: 4, anon: true })
     expect(control.dump('reviews').find((r: any) => r.lineId === 'p1__蓝').name).toBe('匿名钩友')
   })
@@ -221,13 +226,115 @@ describe('submitReview（多重闸门·一单一行一评·黄金 §七）', () 
 
   it('大白话：列表回图把 fileID 换成短时地址下发（不出裸 fileID）；无图评价 photos 空数组', async () => {
     control.seed('reviews', [
-      { _id: 'r1', productId: 'p1', rating: 5, photos: ['cloud://a.jpg', 'cloud://b.jpg'], createdAt: 20 },
-      { _id: 'r2', productId: 'p1', rating: 4, createdAt: 10 },
+      { _id: 'r1', productId: 'p1', picked: true, rating: 5, photos: ['cloud://a.jpg', 'cloud://b.jpg'], createdAt: 20 },
+      { _id: 'r2', productId: 'p1', picked: true, rating: 4, createdAt: 10 },
     ])
     const rv = await call('getReviews', { productId: 'p1' })
     const first = rv.list.find((r: any) => r.createdAt === 20)
     expect(first.photos).toEqual(['https://tmp/cloud://a.jpg', 'https://tmp/cloud://b.jpg']) // 短时址·非裸 fileID
     expect(rv.list.find((r: any) => r.createdAt === 10).photos).toEqual([]) // 无图 → 空数组
+  })
+})
+
+describe('先审后发（公开读只认 picked:true·缺字段不出）', () => {
+  const seedOrder = (id = 'o1', status = 'done') =>
+    control.seed('orders', [
+      {
+        _id: id,
+        id,
+        _openid: 'oME',
+        status,
+        items: [{ productId: 'p1', lineId: 'p1__红', spec: '红', qty: 1 }],
+      },
+    ])
+
+  it('大白话：列表和评分摘要都只统计已挑选的——未挑选、缺字段、false 一律不出；分数和条数跟墙上对得上', async () => {
+    control.seed('reviews', [
+      { _id: 'live', productId: 'p1', picked: true, rating: 5, tags: ['好评'], text: '上墙', createdAt: 30 },
+      { _id: 'raw', productId: 'p1', picked: false, rating: 1, tags: ['差'], text: '原评', createdAt: 20 },
+      { _id: 'legacy', productId: 'p1', rating: 1, tags: ['旧'], text: '老文档', createdAt: 10 }, // 缺 picked＝不出
+    ])
+    const list = await call('getReviews', { productId: 'p1' })
+    expect(list.list.map((r: any) => r.text)).toEqual(['上墙'])
+    expect(list.summary.count).toBe(1)
+    expect(list.summary.score).toBe('5.0')
+    expect(list.summary.tags[0][0]).toBe('好评')
+    const slim = await call('getRatingSummary', { productId: 'p1' })
+    expect(slim.count).toBe(1)
+    expect(slim.score).toBe('5.0')
+    expect(slim.score).toBe(list.summary.score)
+  })
+
+  it('大白话：顾客提交成功后库里有评、picked=false；小程序列表和摘要都还看不见', async () => {
+    seedOrder()
+    expect((await call('submitReview', { orderId: 'o1', lineId: 'p1__红', rating: 5, text: '新评' })).ok).toBe(true)
+    const row = control.dump('reviews').find((r: any) => r.lineId === 'p1__红')
+    expect(row.picked).toBe(false)
+    expect(row.text).toBe('新评')
+    const list = await call('getReviews', { productId: 'p1' })
+    expect(list.list).toEqual([])
+    expect(list.summary.count).toBe(0)
+    expect((await call('getRatingSummary', { productId: 'p1' })).count).toBe(0)
+  })
+})
+
+const SUPER = 'super-secret-key'
+const A1 = 'outsourced-key-1'
+const adminPost = (action: string, key: string, data: Record<string, unknown> = {}) =>
+  adminApi({
+    httpMethod: 'POST',
+    headers: { 'x-forwarded-for': '1.1.1.1' },
+    body: JSON.stringify({ action, key, data }),
+  }).then((r: any) => ({ status: r.statusCode, ...JSON.parse(r.body) }))
+
+describe('admin 评价挑选（listReviews / setReviewPicked）', () => {
+  beforeEach(() => {
+    control.seed('adminConfig', [
+      { _id: 'auth', keyHash: sha(SUPER), role: 'superadmin' },
+      { _id: 'agent-1', keyHash: sha(A1), role: 'outsourced', name: '外包一号' },
+    ])
+  })
+
+  it('大白话：超管能看见待挑选和已上架；外包进不去；列表不回买家 openid', async () => {
+    control.seed('reviews', [
+      { _id: 'pend', productId: 'p1', picked: false, name: '鸭友', rating: 5, text: '待审', createdAt: 20, _openid: 'oSECRET' },
+      { _id: 'live', productId: 'p1', picked: true, name: '钩友', rating: 4, text: '已上', createdAt: 10, _openid: 'oSECRET2' },
+      { _id: 'old', productId: 'p1', name: '老评', rating: 3, text: '缺字段', createdAt: 5, _openid: 'oSECRET3' },
+    ])
+    expect((await adminPost('listReviews', A1)).status).toBe(403)
+    const all = await adminPost('listReviews', SUPER, { status: 'all' })
+    expect(all.ok).toBe(true)
+    expect(all.list.map((r: any) => r.id)).toEqual(['pend', 'live', 'old'])
+    expect(JSON.stringify(all)).not.toContain('oSECRET')
+    expect(all.list[0]._openid).toBeUndefined()
+    const pending = await adminPost('listReviews', SUPER, { status: 'pending' })
+    expect(pending.list.map((r: any) => r.id).sort()).toEqual(['old', 'pend'])
+    const picked = await adminPost('listReviews', SUPER, { status: 'picked' })
+    expect(picked.list.map((r: any) => r.id)).toEqual(['live'])
+  })
+
+  it('大白话：超管挑上墙后小程序才看得见；再撤下又消失', async () => {
+    control.seed('orders', [
+      {
+        _id: 'o1',
+        id: 'o1',
+        _openid: 'oME',
+        status: 'done',
+        items: [{ productId: 'p1', lineId: 'p1__红', spec: '红', qty: 1 }],
+      },
+    ])
+    expect((await call('submitReview', { orderId: 'o1', lineId: 'p1__红', rating: 5, text: '先审' })).ok).toBe(true)
+    expect((await call('getReviews', { productId: 'p1' })).list).toEqual([])
+    const id = control.dump('reviews')[0]._id
+    expect((await adminPost('setReviewPicked', A1, { id, picked: true })).status).toBe(403)
+    const pick = await adminPost('setReviewPicked', SUPER, { id, picked: true })
+    expect(pick.ok).toBe(true)
+    const pub = await call('getReviews', { productId: 'p1' })
+    expect(pub.list.map((r: any) => r.text)).toEqual(['先审'])
+    expect(pub.summary.count).toBe(1)
+    expect((await adminPost('setReviewPicked', SUPER, { id, picked: false })).ok).toBe(true)
+    expect((await call('getReviews', { productId: 'p1' })).list).toEqual([])
+    expect((await call('getRatingSummary', { productId: 'p1' })).count).toBe(0)
   })
 })
 

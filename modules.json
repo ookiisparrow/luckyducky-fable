@@ -147,12 +147,16 @@
         "getRatingSummary",
         "submitReview"
       ],
-      "adminActionFiles": [],
+      "adminActionFiles": [
+        "reviews"
+      ],
       "mpPages": [
         "review",
         "reviews"
       ],
-      "adminPages": [],
+      "adminPages": [
+        "Reviews"
+      ],
       "agentPages": [],
       "collections": [
         "reviews"
