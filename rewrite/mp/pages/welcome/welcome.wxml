@@ -23,7 +23,7 @@
     <block wx:if="{{phase === 'input'}}">
       <view class="ld-w-eyebrow">ACTIVATION · 激活课程</view>
       <view class="ld-w-display">激活你的课程</view>
-      <view class="ld-w-lead">输入材料包里激活卡上的激活码，一针一线开启你的钩织之旅。</view>
+      <view class="ld-w-lead">输入初学者钩织学习套装里激活卡上的激活码，一针一线开启你的钩织之旅。</view>
       <input class="ld-w-input" value="{{code}}" bind:input="onInput" placeholder="LD 开头的激活码" placeholder-class="ld-w-ph" confirm-type="done" bind:confirm="onActivate" />
       <view class="ld-w-cta {{busy ? 'dim' : ''}}" bind:tap="onActivate">
         <text>激活</text>
@@ -44,7 +44,7 @@
     <block wx:elif="{{kind === 'taken'}}">
       <view class="ld-w-eyebrow">NOTICE · 已被使用</view>
       <view class="ld-w-display">这个码已被使用</view>
-      <view class="ld-w-lead">它已经被别的账号激活了。如果是家人朋友，让 TA 用自己的手机继续学；买过材料包想自己学，用包里你自己的码。</view>
+      <view class="ld-w-lead">它已经被别的账号激活了。如果是家人朋友，让 TA 用自己的手机继续学；买过初学者钩织学习套装想自己学，用套装里你自己的码。</view>
       <view class="ld-w-cta ghost" bind:tap="onRetry">
         <text>换一个码试试</text>
         <image class="ld-w-cta-ico" src="/static/icons/rotate-ccw-on.svg" mode="aspectFit" />

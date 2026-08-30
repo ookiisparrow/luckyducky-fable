@@ -30,6 +30,12 @@ describe('mapWelcome（W1 恭喜屏 + W2 三件事·缺档回退默认·不空�
     expect(mapWelcome({ w1: { warning: '   ' } }).w1.warning).toBe(def.w1.warning) // 纯空白也算清空
   })
 
+  it('大白话：默认进课警示只换产品名，确认进课仍不可退货，不再写材料包', () => {
+    const w = mapWelcome(null).w1.warning
+    expect(w).toBe('确认进课后，这份初学者钩织学习套装将不可退货')
+    expect(w).not.toContain('材料包')
+  })
+
   it('大白话：脏档不崩（非对象入参安全）', () => {
     expect(() => mapWelcome('乱')).not.toThrow()
     expect(() => mapWelcome(42)).not.toThrow()
@@ -140,6 +146,22 @@ describe('mapAgreement（用户协议/隐私政策·缺档回退默认全文·in
     // 隐私政策第三方披露事实对齐（快递100·不通过微信授权）不因回退丢失
     expect(d.privacy.intro).toContain('不通过微信授权')
     expect(JSON.stringify(d.privacy.articles)).toContain('快递100')
+    // 用户协议默认稿：产品名换成「初学者钩织学习套装」，进课失权句子一字不改，不再写材料包
+    const userBodies = d.user.articles.map((a) => a.body).join('\n')
+    expect(userBodies).toContain('本小程序提供初学者钩织学习套装等实物商品的在线销售')
+    expect(userBodies).toContain('初学者钩织学习套装内含用于开通配套课程的唯一二维码')
+    expect(userBodies).toContain('一旦你扫码并确认开始观看课程，即视为该件商品所含数字内容已实质交付，你将就该件商品失去七天无理由退货的权利')
+    expect(userBodies).not.toContain('材料包')
+    // 隐私默认稿：头像昵称只在编辑资料自愿填；补上微信指引已声明的相册/剪切板/摄像头
+    const privacyBodies = d.privacy.articles.map((a) => a.body).join('\n')
+    expect(privacyBodies).toContain('编辑资料')
+    expect(privacyBodies).toContain('自愿')
+    expect(privacyBodies).toMatch(/相册|选中的照片或视频/)
+    expect(privacyBodies).toContain('剪切板')
+    expect(privacyBodies).toMatch(/摄像头/)
+    expect(privacyBodies).toContain('注视屏幕')
+    expect(privacyBodies).toContain('暂停手工教学视频')
+    expect(d.user.articles[1].body).toContain('登录不索取你的手机号')
   })
 
   it('大白话：CMS 给了 effectiveDate + sections → 覆盖更新日期与条款；intro/title 恒固定（合规文本不被覆盖）', () => {
