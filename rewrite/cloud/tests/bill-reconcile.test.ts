@@ -255,4 +255,51 @@ describe('matchBillRows（纯分类器·金额分整数比对·#4）', () => {
     expect(r.matched).toEqual(['o2']) // 分整数比对下 0.30000000000000004 ≡ 0.3·不误报
     expect(r.wxOnly.length).toBe(0)
   })
+
+  // P1-2：库/API 金额常是字符串。旧实现把 ourAmount/wxAmount/wxOnly.amount 原样吐出，
+  // 下游 `+` 会拼接（"10"+"20"="1020"），账是假的。出参必须是数字，相加是算术。
+  it('大白话：字符串金额进、数字金额出——相加是 30 不是「1020」；和数字入对得上', () => {
+    const stringIn = matchBillRows(
+      [{ id: 'a', transactionId: 't', amount: '10' }],
+      [{ transactionId: 't', outTradeNo: 'a', orderAmount: '20', tradeState: 'SUCCESS' }] as any
+    )
+    const numberIn = matchBillRows(
+      [{ id: 'a', transactionId: 't', amount: 10 }],
+      [{ transactionId: 't', outTradeNo: 'a', orderAmount: 20, tradeState: 'SUCCESS' }] as any
+    )
+    expect(stringIn.amountMismatch).toHaveLength(1)
+    expect(numberIn.amountMismatch).toHaveLength(1)
+    const s = stringIn.amountMismatch[0]
+    const n = numberIn.amountMismatch[0]
+    expect(typeof s.ourAmount).toBe('number')
+    expect(typeof s.wxAmount).toBe('number')
+    expect(s.ourAmount).toBe(10)
+    expect(s.wxAmount).toBe(20)
+    expect(s.ourAmount + s.wxAmount).toBe(30) // 旧：字符串 "10"+"20"="1020"
+    expect(('10' as unknown as number) + ('20' as unknown as number)).toBe('1020') // 钉住旧拼接长什么样
+    expect(s.ourAmount).toBe(n.ourAmount)
+    expect(s.wxAmount).toBe(n.wxAmount)
+  })
+
+  it('大白话：字符串「100.00」和数字 100 是同一笔——不能因字符串对不上误报金额不符', () => {
+    const r = matchBillRows(
+      [{ id: 'o1', transactionId: 'tx1', amount: '100.00' }],
+      [{ transactionId: 'tx1', outTradeNo: 'o1', orderAmount: 100, tradeState: 'SUCCESS' }] as any
+    )
+    expect(r.matched).toEqual(['o1'])
+    expect(r.amountMismatch).toEqual([])
+  })
+
+  it('大白话：微信有我方无时金额也要是数字——两笔字符串金额相加不能拼成假账', () => {
+    const r = matchBillRows(
+      [],
+      [
+        { transactionId: 'g1', outTradeNo: 'x', orderAmount: '10', tradeState: 'SUCCESS' },
+        { transactionId: 'g2', outTradeNo: 'y', orderAmount: '20', tradeState: 'SUCCESS' },
+      ] as any
+    )
+    expect(r.wxOnly).toHaveLength(2)
+    expect(r.wxOnly.every((w) => typeof w.amount === 'number')).toBe(true)
+    expect(r.wxOnly.reduce((n, w) => n + w.amount, 0)).toBe(30)
+  })
 })

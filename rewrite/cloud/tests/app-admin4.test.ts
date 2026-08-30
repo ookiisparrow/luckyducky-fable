@@ -107,6 +107,20 @@ describe('内部对账（黄金：全量精确·日分桶·截断如实标）', 
     expect(r.cumulative.refund).toBe(30)
     expect(r.cumulative.net).toBe(120)
   })
+
+  it('大白话：库里金额是字符串「100」「50」——窗内合计仍是 150，不是拼出来的「10050」', async () => {
+    const d1 = Date.UTC(2026, 6, 1, 4)
+    control.seed('orders', [
+      { _id: 's1', id: 's1', _openid: 'x', status: 'paid', amount: '100', paidAt: d1, createdAt: d1, items: [] },
+      { _id: 's2', id: 's2', _openid: 'x', status: 'done', amount: '50', paidAt: d1, createdAt: d1, items: [] },
+    ])
+    const r = await post('getReconciliation', { from: '2026-07-01', to: '2026-07-01' })
+    expect(r.ok).toBe(true)
+    expect(r.summary.income).toBe(150)
+    expect(r.summary.income).not.toBe('10050')
+    expect(typeof r.summary.income).toBe('number')
+    expect(r.daily[0].income).toBe(150)
+  })
 })
 
 describe('外部逐笔对账（黄金：四类差异·未拉账单日不误报）', () => {

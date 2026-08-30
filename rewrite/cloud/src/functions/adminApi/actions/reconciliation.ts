@@ -1,10 +1,12 @@
-import { toFen, asFen, fenToYuan } from '@ldrw/shared'
+import { asFen, fenToYuan } from '@ldrw/shared'
 import { reply, getTxAlerts, PAID_STATUSES, type Ctx } from '../lib'
 // CST 日助手/比对分类器已上提 kit/reconcile 单源（批B2·timers/billReconcile 复用同一套原语）；
 // 别名保持既有调用点零改动
 import {
   notifyAlert,
   matchBillRows,
+  toFenAmount,
+  toYuanAmount,
   dayKeyCST as dayKey,
   dayStartMsCST as dayStartMs,
   DAY_MS as DAY,
@@ -50,7 +52,7 @@ export async function getReconciliation({ db, data }: Ctx) {
       .match({ status })
       .group({ _id: null, s: $.sum('$' + field) })
       .end()
-      .then((r: any) => (r.list && r.list[0] ? Number(r.list[0].s) || 0 : 0))
+      .then((r: any) => (r.list && r.list[0] ? toYuanAmount(r.list[0].s) : 0))
       .catch(() => {
         cumDegraded = true
         return 0
@@ -102,13 +104,13 @@ export async function getReconciliation({ db, data }: Ctx) {
   for (const o of paidRows) {
     if (!inRange(o.paidAt)) continue
     const b = bucket(dayKey(o.paidAt))
-    b.incomeFen += toFen(Number(o.amount) || 0)
+    b.incomeFen += toFenAmount(o.amount)
     b.orders += 1
   }
   for (const a of refundRows) {
     if (!inRange(a.refundedAt)) continue
     const b = bucket(dayKey(a.refundedAt))
-    b.refundFen += toFen(Number(a.refundAmount) || 0)
+    b.refundFen += toFenAmount(a.refundAmount)
     b.refunds += 1
   }
   const sorted = [...buckets.values()].sort((x, y) => (x.day < y.day ? -1 : 1))
@@ -148,7 +150,7 @@ export async function getReconciliation({ db, data }: Ctx) {
     cumulative: {
       income: incomeCum,
       refund: refundCum,
-      net: fenToYuan(asFen(toFen(incomeCum) - toFen(refundCum))),
+      net: fenToYuan(asFen(toFenAmount(incomeCum) - toFenAmount(refundCum))),
     },
     summary: {
       income: fenToYuan(asFen(incFen)),
@@ -212,7 +214,7 @@ export async function getBillMatch({ db, data }: Ctx) {
       oursOnly.push({
         id: o.id,
         transactionId: o.transactionId || '',
-        amount: o.amount,
+        amount: toYuanAmount(o.amount),
         paidAt: o.paidAt,
       })
   }
