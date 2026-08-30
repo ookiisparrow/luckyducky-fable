@@ -1,13 +1,14 @@
-// 官网页脚备案号（Issue #102 ②·老板拍板：只挂号，不挂执照、不写公司法定名）。
-// 读共用布局源码钉死——删号/改链/夹带执照或公司名必红。
+// 官网页脚备案号 + 执照文字链（Issue #102 ②③）。
+// 读共用布局源码钉死——删号/改链/页脚夹带执照图或公司法定名必红。
 import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 
 const layout = readFileSync(new URL('../src/layouts/Base.astro', import.meta.url), 'utf8')
 const footer = layout.match(/<footer>[\s\S]*?<\/footer>/)?.[0] ?? ''
+const yyzzPage = readFileSync(new URL('../src/pages/yyzz.astro', import.meta.url), 'utf8')
 
-describe('官网共用页脚备案号', () => {
-  it('大白话：页脚挂工信部备案号，点开能查，不写公司名也不挂执照；品牌行和小程序提示还在', () => {
+describe('官网共用页脚备案号与执照链', () => {
+  it('大白话：页脚挂工信部备案号，旁边一个「营业执照」文字链指向专页；品牌行和小程序提示还在；不写公司名、不把执照大图塞进页脚', () => {
     expect(footer).toContain('浙ICP备2024136798号-3')
     expect(footer).toContain('href="https://beian.miit.gov.cn/"')
     expect(footer).toContain('target="_blank"')
@@ -15,7 +16,21 @@ describe('官网共用页脚备案号', () => {
     expect(footer).toContain('{BRAND_NAME} · 尝试钩织，创造幸运。')
     expect(footer).toContain('class="mp-hint"')
     expect(footer).toContain('微信搜「LuckyDucky小棉鸭」')
-    expect(footer).not.toMatch(/执照/)
-    expect(footer).not.toMatch(/有限公司|有限责任公司/)
+    expect(footer).toContain('营业执照')
+    expect(footer).toContain('href="/yyzz/"')
+    expect(footer).not.toContain('yyzz.jpg')
+    expect(footer).not.toMatch(/<img\b/)
+    expect(footer).not.toMatch(/好好看|工作室|92330106|有限公司|有限责任公司/)
+  })
+})
+
+describe('营业执照专页', () => {
+  it('大白话：专页公开、标题就是营业执照、照片够大能看清；不另写法定名和信用代码段落；页可 noindex', () => {
+    expect(yyzzPage).toContain('title="营业执照"')
+    expect(yyzzPage).toContain('<h1>营业执照</h1>')
+    expect(yyzzPage).toContain('src="/yyzz.jpg"')
+    expect(yyzzPage).toContain('noindex')
+    expect(yyzzPage).not.toMatch(/统一社会信用代码/)
+    expect(yyzzPage).not.toMatch(/好好看文化/)
   })
 })

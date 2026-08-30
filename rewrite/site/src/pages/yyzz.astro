@@ -1,0 +1,30 @@
+---
+// 营业执照公示页（Issue #102 ③·电商法 15 条）：只放执照照片，页脚点文字链进来。
+// noindex：执照照片不必进搜索结果；地址公开，页脚有链。
+import Base from '../layouts/Base.astro'
+---
+
+<Base title="营业执照" description="Lucky Ducky 小棉鸭营业执照公示。" noindex>
+  <h1>营业执照</h1>
+  <figure class="license">
+    <img src="/yyzz.jpg" alt="营业执照" />
+  </figure>
+</Base>
+
+<style>
+  :global(main) {
+    max-width: min(1100px, 96vw);
+  }
+  h1 {
+    color: #241733;
+    font-size: 26px;
+  }
+  .license {
+    margin: 0;
+  }
+  .license img {
+    display: block;
+    width: 100%;
+    height: auto;
+  }
+</style>
