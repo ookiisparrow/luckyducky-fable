@@ -216,7 +216,17 @@ describe('confirmEnter（退货权法律节点·黄金 §二）', () => {
     expect(it0.refundable).toBe(false)
   })
 
-  it('大白话：重试中途重读订单也失败（非耗尽 3 次而是读故障提前跳出循环）——退货权撤销仍须告警，不能因 cur 变 null 悄悄绕过 attempt===2 检查（P2·根因#14）', async () => {
+  /** 旧洞：课已交付（enteredAt 有值）+ 对应订单行整行仍可退（没记 enteredQty）。对齐后必须为假。 */
+  function deliveredAndStillFullyRefundable() {
+    const act = control.dump('activations').find((a: any) => a._id === 'CODE1' || a.code === 'CODE1')
+    const line = control.dump('orders')[0]?.items?.[0]
+    if (!act || !line) return false
+    const delivered = !!act.enteredAt
+    const stillFullyRefundable = line.refundable !== false && !(line.enteredQty)
+    return delivered && stillFullyRefundable
+  }
+
+  it('大白话：重试中途重读订单也失败（非耗尽 3 次而是读故障提前跳出循环）——退货权撤销仍须告警，不能因 cur 变 null 悄悄绕过 attempt===2 检查（P2·根因#14）；且须回滚进课，不能留下已交付+仍可退', async () => {
     control.seed('products', [{ _id: 'p1', id: 'p1', courseId: 'c1' }])
     control.seed('orders', [
       {
@@ -257,15 +267,76 @@ describe('confirmEnter（退货权法律节点·黄金 §二）', () => {
     control.setBeforeUpdate(null as never)
     control.setBeforeGet(null as never)
 
-    expect(r.ok).toBe(true)
-    expect(r.revoked).toBe(null) // 撤销确实没做成——读故障提前放弃，这单退货权行原样留可退
-    expect(control.dump('orders')[0].items[0].refundable).toBe(true) // 未被误撤销
+    expect(r.ok).toBe(false)
+    expect(r.error).toBe('ENTER_REVOKE_FAILED')
+    expect(r.revoked).toBeUndefined() // 没做成就不回成功包
+    expect(control.dump('orders')[0].items[0].refundable).toBe(true) // 行原样留可退
+    expect(control.dump('activations').find((a: any) => a._id === 'CODE1').enteredAt).toBe(null) // 进课已回滚
+    // 旧洞会绿在「ok + 仍可退」上；这一句在旧代码上必红
+    expect(deliveredAndStillFullyRefundable()).toBe(false)
+    expect((await call('getPlaybackUrl', { courseId: 'c1', segmentId: 's1' })).error).toBe('NOT_ENTITLED')
     // 核心断言：即便提前跳出循环（未到 attempt===2），也必须留痕告警，不能悄悄放弃
     expect(
       errSpy.mock.calls.some((c) => String(c[0]).includes('REVOKE_RACE') && String(c[0]).includes('confirmEnter'))
     ).toBe(true)
 
     errSpy.mockRestore()
+  })
+
+  it('大白话：撤退货权 CAS 三次都没写成——回滚进课，不留「课已给+钱还能退」；再点一次能接着进', async () => {
+    control.seed('products', [{ _id: 'p1', id: 'p1', courseId: 'c1' }])
+    control.seed('orders', [
+      {
+        _id: 'o1',
+        id: 'o1',
+        _openid: 'oME',
+        status: 'paid',
+        createdAt: 100,
+        items: [{ productId: 'p1', qty: 1, refundable: true }],
+      },
+    ])
+
+    // 每次订单 CAS 求值前拨 entVer，三次条件更新全部落空（updated:0）
+    async function bumpEntVerAlways({ coll }: { coll: string }) {
+      if (coll === 'orders') {
+        control.setBeforeUpdate(null as never)
+        const o = control.dump('orders').find((d: any) => d._id === 'o1')
+        await cloud
+          .database()
+          .collection('orders')
+          .doc('o1')
+          .update({ data: { entVer: (o?.entVer || 0) + 1 } })
+        control.setBeforeUpdate(bumpEntVerAlways as never)
+      }
+    }
+    control.setBeforeUpdate(bumpEntVerAlways as never)
+    const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+
+    const r = await call('confirmEnter', { code: 'CODE1' })
+
+    control.setBeforeUpdate(null as never)
+
+    expect(r.ok).toBe(false)
+    expect(r.error).toBe('ENTER_REVOKE_FAILED')
+    expect(control.dump('orders')[0].items[0].refundable).toBe(true)
+    expect(control.dump('orders')[0].items[0].enteredQty).toBeFalsy()
+    expect(control.dump('activations').find((a: any) => a._id === 'CODE1').enteredAt).toBe(null)
+    expect(deliveredAndStillFullyRefundable()).toBe(false)
+    expect(
+      errSpy.mock.calls.some((c) => String(c[0]).includes('REVOKE_RACE') && String(c[0]).includes('confirmEnter'))
+    ).toBe(true)
+    expect((await call('getPlaybackUrl', { courseId: 'c1', segmentId: 's1' })).error).toBe('NOT_ENTITLED')
+
+    errSpy.mockRestore()
+
+    // 钩子撤掉后再点：进课 + 撤权一次做成，钱课对齐
+    const r2 = await call('confirmEnter', { code: 'CODE1' })
+    expect(r2.ok).toBe(true)
+    expect(r2.revoked).toEqual({ orderId: 'o1', lineId: 'p1', productId: 'p1' })
+    expect(control.dump('orders')[0].items[0].refundable).toBe(false)
+    expect(control.dump('orders')[0].items[0].enteredQty).toBe(1)
+    expect(control.dump('activations').find((a: any) => a._id === 'CODE1').enteredAt).toBeGreaterThan(0)
+    expect(deliveredAndStillFullyRefundable()).toBe(false)
   })
 
   it('大白话：送礼场景——确认者名下无相关订单，正常确认、不失效任何退货权、不报错', async () => {
