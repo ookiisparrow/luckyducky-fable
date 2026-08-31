@@ -358,6 +358,19 @@ describe('getCourses / getPlaybackUrl（目录不漏源·鉴权 fail-closed·黄
     expect(segs[1].hasVideo).toBe(false)
   })
 
+  it('大白话：带 ids 只回这些课；不带 ids 仍是整本目录（其它页目录不变）；投影仍无视频源', async () => {
+    control.seed('courses', [{ ...COURSE, _id: 'c2', id: 'c2', title: '小熊课', sort: 2 }])
+    const all = await call('getCourses')
+    expect(all.list.map((c: any) => c.id).sort()).toEqual(['c1', 'c2'])
+    const one = await call('getCourses', { ids: ['c2'] })
+    expect(one.ok).toBe(true)
+    expect(one.list.map((c: any) => c.id)).toEqual(['c2'])
+    expect(JSON.stringify(one).includes('videoFileId')).toBe(false)
+    const miss = await call('getCourses', { ids: ['ghost'] })
+    expect(miss.ok).toBe(true)
+    expect(miss.list).toEqual([])
+  })
+
   it('大白话：未确认进课任何段都拒（只激活未确认也拒；残留免费标记不构成授权）', async () => {
     expect((await call('getPlaybackUrl', { courseId: 'c1', segmentId: 's1' })).error).toBe('NOT_ENTITLED')
     await call('activateCourse', { code: 'CODE1' }) // 激活但未确认

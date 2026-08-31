@@ -3,7 +3,8 @@ import { callApp, type ApiResult } from '../utils/cloud'
 
 export const activateCourse = (code: string): Promise<ApiResult> => callApp('activateCourse', { code })
 export const confirmEnter = (code: string): Promise<ApiResult> => callApp('confirmEnter', { code })
-export const getCourses = (): Promise<ApiResult> => callApp('getCourses')
+export const getCourses = (data?: { ids?: string[] }): Promise<ApiResult> =>
+  data ? callApp('getCourses', data) : callApp('getCourses')
 export const getMyCourses = (): Promise<ApiResult> => callApp('getMyCourses')
 export const getPlaybackUrl = (courseId: string, segmentId: string): Promise<ApiResult> => callApp('getPlaybackUrl', { courseId, segmentId })
 export const getHelpVideos = (): Promise<ApiResult> => callApp('getHelpVideos')
