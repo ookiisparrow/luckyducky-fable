@@ -243,19 +243,37 @@ function publicLesson(l: any) {
 function publicChapter(ch: any) {
   return { id: ch.id, title: ch.title, lessons: (ch.lessons || []).map(publicLesson) }
 }
+function publicCourse(c: any) {
+  return { id: c.id, title: c.title, chapters: (c.chapters || []).map(publicChapter) }
+}
 
-export const getCourses = async () => {
+/** 无 ids / ids 非数组 → 整本目录（其它页不变）；带 ids → 只取这些课（继续学习卡·上限 20）。 */
+function requestedCourseIds(event: unknown): string[] | null {
+  const raw = event && typeof event === 'object' ? (event as { ids?: unknown }).ids : undefined
+  if (!Array.isArray(raw)) return null
+  const out: string[] = []
+  const seen = new Set<string>()
+  for (const x of raw) {
+    const id = String(x || '')
+    if (!id || seen.has(id)) continue
+    seen.add(id)
+    out.push(id)
+    if (out.length >= 20) break
+  }
+  return out
+}
+
+export const getCourses = async (event: unknown = {}) => {
   const db = getDb()
+  const ids = requestedCourseIds(event)
+  if (ids) {
+    const docs = await Promise.all(ids.map((id) => db.collection(COLLECTIONS.courses).doc(id).get().catch(() => null)))
+    return ok({ list: docs.filter((d: any) => d && d.data).map((d: any) => publicCourse(d.data)) })
+  }
   // 显式上界（病根#7·守卫 rw-app-catalog-reads-bounded·深审 P2 同处独立发现取并）：同 getProducts 口径，
   // 防默认 100 条静默截断——课程目录破百后第 101 门起从用户课程页无声消失。
   const res = await db.collection(COLLECTIONS.courses).orderBy('sort', 'asc').limit(1000).get()
-  return ok({
-    list: res.data.map((c: any) => ({
-      id: c.id,
-      title: c.title,
-      chapters: (c.chapters || []).map(publicChapter),
-    })),
-  })
+  return ok({ list: res.data.map((c: any) => publicCourse(c)) })
 }
 
 /**

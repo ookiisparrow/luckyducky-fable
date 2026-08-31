@@ -27,6 +27,24 @@ export async function getAllCourses(): Promise<Record<string, unknown>[] | null>
   return inflight
 }
 
+/** 继续学习只要进度/已解锁里那几门（通常 1 门），不拉整本树。
+ *  整本会话缓存已热则只筛、不发请求；未热则按 ids 取，且不把残片写进整本缓存（防毒化目录页）。 */
+export async function getCoursesByIds(ids: string[]): Promise<Record<string, unknown>[] | null> {
+  const uniq = [...new Set(ids.map((id) => String(id || '')).filter(Boolean))].slice(0, 20)
+  if (!uniq.length) return []
+  if (cache) {
+    const hit: Record<string, unknown>[] = []
+    for (const id of uniq) {
+      const c = cache.find((x) => String(x.id || x._id || '') === id)
+      if (c) hit.push(c)
+    }
+    return hit
+  }
+  const r = await getCourses({ ids: uniq })
+  if (!r.ok || !Array.isArray(r.list)) return null
+  return r.list as Record<string, unknown>[]
+}
+
 export async function getCourseById(id: string): Promise<Record<string, unknown> | null> {
   if (!id) return null
   const list = await getAllCourses()

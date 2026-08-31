@@ -48,6 +48,39 @@ describe('getAllCourses（miss 回填·命中零调用·失败不毁缓存）', 
   })
 })
 
+describe('getCoursesByIds（继续学习只取所需课·不毒化整本缓存）', () => {
+  it('大白话：空 ids 不发请求，直接回空列表', async () => {
+    const { getCoursesByIds } = await import('../lib/courses')
+    expect(await getCoursesByIds([])).toEqual([])
+    expect(getCoursesMock).toHaveBeenCalledTimes(0)
+  })
+
+  it('大白话：整本缓存已热 → 只从缓存筛，不发新请求', async () => {
+    getCoursesMock.mockResolvedValue({ ok: true, list: COURSES })
+    const { getAllCourses, getCoursesByIds } = await import('../lib/courses')
+    await getAllCourses()
+    getCoursesMock.mockClear()
+    expect(await getCoursesByIds(['c2'])).toEqual([COURSES[1]])
+    expect(getCoursesMock).toHaveBeenCalledTimes(0)
+  })
+
+  it('大白话：缓存未热 → 只按 ids 取，不把残片写进整本缓存', async () => {
+    getCoursesMock.mockResolvedValue({ ok: true, list: [COURSES[1]] })
+    const { getCoursesByIds, getAllCourses } = await import('../lib/courses')
+    expect(await getCoursesByIds(['c2'])).toEqual([COURSES[1]])
+    expect(getCoursesMock).toHaveBeenCalledWith({ ids: ['c2'] })
+    getCoursesMock.mockResolvedValue({ ok: true, list: COURSES })
+    expect(await getAllCourses()).toEqual(COURSES)
+    expect(getCoursesMock).toHaveBeenCalledTimes(2) // 残片未冒充整本·整本仍要再拉一次
+  })
+
+  it('大白话：按 ids 拉取失败回 null（失败≠空目录）', async () => {
+    getCoursesMock.mockResolvedValue({ ok: false })
+    const { getCoursesByIds } = await import('../lib/courses')
+    expect(await getCoursesByIds(['c1'])).toBeNull()
+  })
+})
+
 describe('getCourseById（复用 getAllCourses·命中与 miss）', () => {
   it('大白话：空 id 直接返回 null，不发请求', async () => {
     const { getCourseById } = await import('../lib/courses')

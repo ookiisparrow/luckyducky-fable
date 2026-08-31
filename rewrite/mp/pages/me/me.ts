@@ -4,7 +4,7 @@ import { tapHaptic } from '../../lib/haptics'
 import { login, getMyProgress, deleteAccount } from '../../api/user'
 import { clearAll as clearAddresses } from '../../lib/address'
 import { getMyCourses } from '../../api/learning'
-import { getAllCourses } from '../../lib/courses'
+import { getCoursesByIds } from '../../lib/courses'
 import { playbackCache } from '../../lib/playbackCache' // 续播段取址预热（我页停留窗口预热·进播放器 peek 命中零云往返·根因#15）
 import { getPageContent } from '../../lib/pageContent'
 import { continueResolve, type ContinueTarget } from '../../lib/continueResolve'
@@ -15,16 +15,64 @@ import { goHomeTab } from '../../lib/homeIntent'
 import { armExitGuard, releaseExitGuard, onExitGuardBeforeLeave as consumeExitGuard } from '../../utils/exitGuard'
 import { loginGate } from '../../lib/loginGate'
 
+const CONT_KEY = 'ld:me-cont'
+
+function sanitizeCont(raw: unknown): ContinueTarget | null {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null
+  const o = raw as Record<string, unknown>
+  const courseId = String(o.courseId || '')
+  const lessonId = String(o.lessonId || '')
+  if (!courseId || !lessonId) return null
+  return {
+    courseId,
+    courseTitle: String(o.courseTitle || ''),
+    lessonId,
+    lessonName: String(o.lessonName || ''),
+    segmentId: String(o.segmentId || ''),
+    resumeAt: Math.floor(Number(o.resumeAt) || 0),
+  }
+}
+
+function readStoredCont(): ContinueTarget | null {
+  try {
+    return sanitizeCont(wx.getStorageSync(CONT_KEY))
+  } catch {
+    return null
+  }
+}
+
+function writeStoredCont(cont: ContinueTarget | null): void {
+  try {
+    if (cont) wx.setStorageSync(CONT_KEY, cont)
+    else wx.removeStorageSync(CONT_KEY)
+  } catch {
+    /* 旧卡是加分项·存不上不影响本趟刷新 */
+  }
+}
+
+function continueCourseIds(progress: unknown, mine: unknown): string[] {
+  const ids: string[] = []
+  const add = (id: unknown) => {
+    const s = String(id || '')
+    if (s && !ids.includes(s)) ids.push(s)
+  }
+  if (Array.isArray(progress)) for (const p of progress) add((p as { courseId?: unknown } | null)?.courseId)
+  if (Array.isArray(mine)) for (const m of mine) add((m as { courseId?: unknown } | null)?.courseId)
+  return ids
+}
+
+const seededCont = readStoredCont()
+
 Page({
   data: {
     statusBarHeight: 0, // 沉浸式自绘导航：头部让开状态栏（navigationStyle:custom·2026-07-16 用户需求）
     nickname: '',
     avatar: '',
     bio: '',
-    cont: null as ContinueTarget | null,
+    cont: seededCont,
     entries: mapMe(null).entries as MeVM['entries'], // 九入口标题/可见性·首帧默认（CMS 到达覆盖）
     contFailed: false, // 继续学习区取数失败标记（同 aftersales/order-list loadFailed 分治：失败≠没进度）
-    contLoaded: false, // 继续学习区首次取数是否落地（加载中≠没课·根因#8/#14）：首帧 cont=null 同时表示「尚未加载」
+    contLoaded: !!seededCont, // 继续学习区首次取数是否落地（加载中≠没课·根因#8/#14）；有上次会话旧卡则首帧先画、后台再刷
     // 和「确认无课」，无 loading 位会让空态在数据未回来时就渲染成假空态（先空后有闪烁·2026-07-13 反馈）；
     // 置 true 前空态不显、改显骨架；首次 refresh 落地后恒 true（成功/失败任一路都置）。
     loggedIn: false, // 已显式同意登录（loginGate hint）：真才显真实资料 + 退出按钮，假显登出态（默认身份 + 登录入口）
@@ -53,43 +101,42 @@ Page({
   onLoggedIn() {
     void this.refresh()
   },
-  _seq: 0, // refresh 代次（同 order-list/aftersales 范式）：onShow 多触发点（tab 切回/其他页返回）四路并发 Promise.all，
+  _seq: 0, // refresh 代次（同 order-list/aftersales 范式）：onShow 多触发点（tab 切回/其他页返回）并发 refresh，
   // 慢回包迟到落地会覆盖更晚一次 refresh 已落的新结果（P2·bug sweep Round2 item1）。
   async refresh() {
-    // login/getMyProgress/getMyCourses 保持实时（login 兼具服务端记账语义，进度/我的课不缓存）；
-    // 课程目录本会话内不变，走 lib/courses 会话缓存（根因账本#15）——命中零云调用。
     const seq = ++this._seq
-    // mePage 内容（默认昵称 + 九入口标题/可见性）并入 Promise.all——本会话内经 lib/pageContent 缓存命中零重拉，
-    // 且随 _seq 一并做过期回包复核（慢回包不覆盖更晚一次 refresh 的落地）。
-    const [u, progress, mine, courses, meContent] = await Promise.all([
-      login(),
-      getMyProgress(),
-      getMyCourses(),
-      getAllCourses(),
-      getPageContent('mePage'),
-    ])
-    if (seq !== this._seq) return // 过期回包（被更晚 refresh 取代）：丢弃
+    const contP = this.refreshCont(seq) // 继续学习卡不等人资料/CMS（那两路只喂头像昵称/入口）
+    const [u, meContent] = await Promise.all([login(), getPageContent('mePage')])
+    if (seq !== this._seq) return
     const user = (u.ok ? u.user : null) as Record<string, any> | null
     const me = mapMe(meContent)
-    // 登出态不显真实资料（退出登录后即便 openid 仍可回灌，也按登出显默认身份·不假装还登着）
     const agreed = loginGate.hasAgreed()
-    // 失败≠没进度（同 aftersales/order-list loadFailed 分治·失败伪装空态 P2）：progress/mine/courses
-    // 任一取数失败时，空列表与「真没进度/没买课」数据形状等价，喂 continueResolve 会渲染成假空态。
-    // 失败不覆盖已有 cont（旧卡仍可点）；一无所有才亮 contFailed 给重试；真空态（全成功无课）仍走引导。
-    const contFetchFailed = !progress.ok || !mine.ok || courses === null
-    const cont = contFetchFailed ? null : continueResolve(progress.list, mine.list, courses)
     this.setData({
       loggedIn: agreed,
-      // 云端资料回灌：已登录时非空覆盖默认、空回退 CMS 默认昵称（黄金 §九·不显示假名）；登出态一律默认身份
       nickname: (agreed && user && String(user.nickname || '')) || me.defaultNickname,
       avatar: (agreed && user && String(user.avatar || '')) || '',
       bio: (agreed && user && String(user.bio || '')) || '',
       entries: me.entries,
-      contLoaded: true, // 首次取数已落地（放展开之外·成功/失败任一路都置 true）：空态从此才可能出现，之前显骨架不显假空态
-      ...(contFetchFailed ? { contFailed: !this.data.cont } : { cont, contFailed: false }),
     })
-    // 续播段取址预热（批3·根因#15）：继续学习卡落地即预热续播段地址，用户点卡进播放器时 peek 命中零云往返；
-    // 段位空（从头/挑段·不知具体段）时 prefetch 自 no-op。纯 cache 暖（不 setData·err 吞掉·在途去重）。
+    await contP
+  },
+  async refreshCont(seq: number) {
+    const [progress, mine] = await Promise.all([getMyProgress(), getMyCourses()])
+    if (seq !== this._seq) return
+    if (!progress.ok || !mine.ok) {
+      this.setData({ contLoaded: true, ...(this.data.cont ? {} : { contFailed: true }) })
+      return
+    }
+    const ids = continueCourseIds(progress.list, mine.list)
+    const courses = ids.length ? await getCoursesByIds(ids) : []
+    if (seq !== this._seq) return
+    if (courses === null) {
+      this.setData({ contLoaded: true, ...(this.data.cont ? {} : { contFailed: true }) })
+      return
+    }
+    const cont = continueResolve(progress.list, mine.list, courses)
+    writeStoredCont(cont)
+    this.setData({ cont, contFailed: false, contLoaded: true })
     if (cont) void playbackCache.prefetch(cont.courseId, cont.segmentId)
   },
   onRetryCont() {
@@ -166,6 +213,8 @@ Page({
     }
     clearAddresses()
     loginGate.logout()
+    writeStoredCont(null)
+    this.setData({ cont: null, contFailed: false, contLoaded: true })
     void this.refresh()
     wx.showToast({ title: '已删除', icon: 'none' })
   },
