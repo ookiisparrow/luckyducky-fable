@@ -128,6 +128,20 @@ describe('forward-node refundnotify 注释副本：同形只换函数名', () =>
     expect(calls[0].data.out_refund_no).toBe('r-outer')
     expect(calls[0].data.transaction_id).toBe('txn-r')
   })
+
+  it('resource 只有 camelCase refundStatus 时 alias 成 refund_status（refundCallback 只认 snake）', async () => {
+    const { main, calls } = loadScript(uncommentRefundCopy(SRC))
+    await main({
+      wepayTrigger: {
+        output: {
+          resource: { refundStatus: 'SUCCESS', outRefundNo: 'r-camel', transactionId: 'txn-r' },
+        },
+      },
+    })
+    expect(calls[0].data.refund_status).toBe('SUCCESS')
+    expect(calls[0].data.out_refund_no).toBe('r-camel')
+    expect(calls[0].data.transaction_id).toBe('txn-r')
+  })
 })
 
 describe('01-支付退款工作流.md 抄本与 forward-node.js 同文', () => {
