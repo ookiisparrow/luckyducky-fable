@@ -79,6 +79,12 @@
       <view class="co-ship-note">除新疆、内蒙古、西藏外包邮。确认进课后不可退货。</view>
     </view>
 
+    <!-- 商品券领取（后台关掉则整块不出现·不改占位抵扣行） -->
+    <view class="co-card co-claim" wx:if="{{couponOfferOn}}">
+      <view class="co-claim-text">{{couponOfferLabel || '领取优惠'}}</view>
+      <view class="co-claim-btn {{couponClaiming ? 'dim' : ''}}" bind:tap="onClaimCoupon">{{couponClaiming ? '领取中…' : '领取'}}</view>
+    </view>
+
     <!-- 金额明细 -->
     <view class="co-card">
       <view class="co-summary">

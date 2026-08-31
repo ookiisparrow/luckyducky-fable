@@ -16,7 +16,8 @@ const WXPAY_FIELDS = ['mchPrivateKey', 'mchSerial'] as const
 // VOD 凭证档（决策§31 转码管线·kit/vod.ts 读取）：secretId/secretKey=服务端 API + 上传签名（控制台子账号·仅授 VOD），
 // playKey=播放 Key 防盗链签名，procedure=上传自动触发的任务流模板名（console-assets/04 正册对照）
 const VOD_FIELDS = ['secretId', 'secretKey', 'playKey', 'procedure'] as const
-const DOC_FIELDS: Record<string, readonly string[]> = { wxkf: WXKF_FIELDS, wxpay: WXPAY_FIELDS, vod: VOD_FIELDS }
+const WXBRAND_FIELDS = ['brandPrivateKey', 'brandSerial', 'wxpayPublicKey', 'wxpayPublicKeyId', 'brandApiKey'] as const
+const DOC_FIELDS: Record<string, readonly string[]> = { wxkf: WXKF_FIELDS, wxpay: WXPAY_FIELDS, vod: VOD_FIELDS, wxbrand: WXBRAND_FIELDS }
 const MAX_LEN: Record<string, number> = {
   corpId: 64,
   secret: 128,
@@ -31,12 +32,17 @@ const MAX_LEN: Record<string, number> = {
   secretKey: 64,
   playKey: 64,
   procedure: 64,
+  brandPrivateKey: 4000,
+  brandSerial: 80,
+  wxpayPublicKey: 4000,
+  wxpayPublicKeyId: 80,
+  brandApiKey: 32,
 }
 
-/** 写「wxkf」/「wxpay」/「vod」三 doc 的敏感凭证字段（merge-save·同 saveSettings 范式：先读现有、非 undefined 才覆盖）。 */
+/** 写「wxkf」/「wxpay」/「vod」/「wxbrand」敏感凭证（merge-save·同 saveSettings 范式：先读现有、非 undefined 才覆盖）。 */
 export async function saveSecureConfig({ db, data }: Ctx) {
   const docId = String((data && data.docId) || '')
-  if (docId !== 'wxkf' && docId !== 'wxpay' && docId !== 'vod') return reply(400, { ok: false, error: 'BAD_DOC' })
+  if (docId !== 'wxkf' && docId !== 'wxpay' && docId !== 'vod' && docId !== 'wxbrand') return reply(400, { ok: false, error: 'BAD_DOC' })
   const allow = DOC_FIELDS[docId]
   const fields = (data && typeof data.fields === 'object' && data.fields) || {}
 
@@ -48,7 +54,8 @@ export async function saveSecureConfig({ db, data }: Ctx) {
     if (v.length > MAX_LEN[f]) return reply(400, { ok: false, error: 'TOO_LONG:' + f })
     // EncodingAESKey 平台定长 43（base64）：长度不对多半是抄漏/多抄——早拒早发现，别等回调解密才崩
     if (f === 'aesKey' && v.length !== 43) return reply(400, { ok: false, error: 'BAD_AESKEY_LEN' })
-    if (f === 'mchPrivateKey') v = normalizePem(v) // 换行常被输入框/剪贴板塌行——存前先规整（同 wxbill 读时兜底）
+    if (f === 'brandApiKey' && v.length !== 32) return reply(400, { ok: false, error: 'BAD_BRAND_APIKEY_LEN' })
+    if (f === 'mchPrivateKey' || f === 'brandPrivateKey' || f === 'wxpayPublicKey') v = normalizePem(v)
     patch[f] = v
   }
   if (!Object.keys(patch).length) return reply(400, { ok: false, error: 'NO_FIELDS' })

@@ -6,6 +6,7 @@ import * as addr from '../../lib/address'
 import * as checkout from '../../lib/checkout'
 import { CHECKOUT_ADDONS } from '../../lib/checkoutConst'
 import { createOrder, pay } from '../../api/orders'
+import { getCouponOffer, claimCoupon } from '../../api/coupons'
 import { mapPayResult } from '../../lib/payFlow'
 import { freshCover } from '../../lib/cart'
 import { getAllProducts } from '../../lib/catalog'
@@ -24,6 +25,9 @@ Page({
     count: 0, // 合计件数（草稿含已勾搭配购·底坞展示）
     submitting: false,
     shopName: SHOP_FULL_NAME, // 店铺行恒引 lib/shop 单源（不硬编码·病根#5·守卫 brand-name-single-source）
+    couponOfferOn: false,
+    couponOfferLabel: '',
+    couponClaiming: false,
   },
   backTimer: null as ReturnType<typeof setTimeout> | null,
   unloaded: false, // 页面已退出标记（守卫扩面统一不变量·同 review/profile-edit/feedback 范式）：本页 backTimer 赋值落在
@@ -84,6 +88,34 @@ Page({
       amountNum: (s.amountFen / 100).toFixed(2),
       count: draft.items.reduce((n, l) => n + l.qty, 0),
     })
+    void this.refreshCouponOffer()
+  },
+  async refreshCouponOffer() {
+    const r = await getCouponOffer()
+    if (this.unloaded || this.data.submitting) return
+    this.setData({
+      couponOfferOn: !!(r.ok && r.enabled),
+      couponOfferLabel: r.ok ? String(r.label || '') : '',
+    })
+  },
+  async onClaimCoupon() {
+    if (this.data.couponClaiming || this.data.submitting) return
+    this.setData({ couponClaiming: true })
+    const r = await claimCoupon()
+    if (this.unloaded) return
+    this.setData({ couponClaiming: false })
+    const code = String(r.error || '')
+    const title =
+      r.ok
+        ? '已领取，请到微信卡包查看'
+        : code === 'COUPON_DISABLED'
+          ? '暂未开放领取'
+          : code === 'COUPON_ALREADY_CLAIMED'
+            ? '已经领过了'
+            : code === 'NO_OPENID'
+              ? '请先到「我」页登录'
+              : '领取没成功，稍后再试'
+    wx.showToast({ title, icon: 'none' })
   },
   onPickAddress() {
     if (this.data.submitting) return // 提交在途禁止跳地址页：否则地址页压栈后·下单成功的 redirectTo/switchTab 打到栈顶地址页、劫持返回

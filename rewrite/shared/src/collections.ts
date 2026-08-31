@@ -51,4 +51,7 @@ export const COLLECTIONS = {
   orderIdempotency: 'orderIdempotency',
   // 反馈通知游标（流水线 P3·意见箱铃铛）：doc('state') 记录上次扫描时间, 防重复推送
   feedbackNotifyCursor: 'feedbackNotifyCursor',
+  // 商品券领取（测试版·发券不核销）：开关/批次手填 + 领券幂等档
+  couponConfig: 'couponConfig',
+  couponClaims: 'couponClaims',
 } as const

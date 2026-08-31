@@ -43,6 +43,7 @@ const NAV: Array<{ group: string; icon: Component; solo?: boolean; items: Array<
       { label: '卡片设计', path: '/cards' },
       { label: '小程序橱窗', path: '/showcase' },
       { label: '评价挑选', path: '/reviews' },
+      { label: '商品券', path: '/coupons' },
       { label: '页面内容', path: '/page-content' },
       { label: '帮助视频', path: '/help-videos' },
     ],
