@@ -31,7 +31,7 @@ import Products from '../src/pages/Products.vue'
 beforeEach(() => {
   listDraftsMock.mockReset().mockResolvedValue({
     ok: true,
-    list: [{ id: 'p1', name: '钩织材料包·筹备款', price: '99', skus: [], images: [] }],
+    list: [{ id: 'p1', name: '钩织材料包·筹备款', price: '99', sold: 0, skus: [], images: [], params: [], detailSections: [], kit: [] }],
     urls: {},
     listed: {}, // p1 不在 listed 表 → state='preparing'
     hasVideo: {},
