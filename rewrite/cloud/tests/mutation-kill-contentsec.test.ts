@@ -125,3 +125,53 @@ describe('msgSecCheck（UGC 文本审核·fail-closed·空文本不外呼）', (
     expect(await msgSecCheck('任意文本', 'oU')).toEqual({ ok: false, error: 'SEC_CHECK_FAIL' })
   })
 })
+
+describe('msgSecCheck fail-open（客服/反馈·违规仍拒、抖动放行记日志）', () => {
+  const infraLines = () => {
+    const orig = console.error
+    const seen: string[] = []
+    console.error = (...a: unknown[]) => {
+      seen.push(String(a[0]))
+    }
+    return {
+      seen,
+      restore: () => {
+        console.error = orig
+      },
+    }
+  }
+
+  it('大白话：平台判违规（87014 / suggest=risky / 抛错带 87014）一律拦，不因 fail-open 放行', async () => {
+    control.setOpenapiResult({ errCode: 87014 })
+    expect(await msgSecCheck('文本A', 'oU', SCENE_COMMENT, 'open')).toEqual({ ok: false, error: 'SEC_CHECK_FAIL' })
+    control.setOpenapiResult({ errCode: 0, result: { suggest: 'risky' } })
+    expect(await msgSecCheck('擦边', 'oU', SCENE_COMMENT, 'open')).toEqual({ ok: false, error: 'SEC_CHECK_FAIL' })
+    control.setOpenapiFail(true, 87014)
+    expect(await msgSecCheck('抛错违规', 'oU', SCENE_COMMENT, 'open')).toEqual({ ok: false, error: 'SEC_CHECK_FAIL' })
+  })
+
+  it('大白话：接口失败（非 0 非违规码 / 抛 48001）仍放行，并打 SEC_CHECK_INFRA 日志', async () => {
+    const cap = infraLines()
+    try {
+      control.setOpenapiResult({ errCode: 40001 })
+      expect(await msgSecCheck('文本B', 'oU', SCENE_COMMENT, 'open')).toEqual({ ok: true })
+      control.setOpenapiFail(true, 48001)
+      expect(await msgSecCheck('文本C', 'oU', SCENE_COMMENT, 'open')).toEqual({ ok: true })
+    } finally {
+      cap.restore()
+    }
+    const hits = cap.seen.filter((s) => s.includes('[LD_ALERT]') && s.includes('SEC_CHECK_INFRA'))
+    expect(hits.length).toBe(2)
+    expect(hits[0]).toContain('fn=msgSecCheck')
+  })
+
+  it('大白话：正常文本通过 {ok:true}，不打 INFRA 日志', async () => {
+    const cap = infraLines()
+    try {
+      expect(await msgSecCheck('这鸭子真可爱', 'oU', SCENE_COMMENT, 'open')).toEqual({ ok: true })
+    } finally {
+      cap.restore()
+    }
+    expect(cap.seen.filter((s) => s.includes('SEC_CHECK_INFRA')).length).toBe(0)
+  })
+})

@@ -9,8 +9,10 @@ import {
   alert,
   kfCustomerBatchget,
   getSecureConfigFields,
+  msgSecCheck,
+  SCENE_COMMENT,
 } from '../../../kit'
-import { handleMessage, rootMenu, buildMsgMenu, extUserId, processKfBatch, heldStatus, type Incoming } from './dispatch'
+import { handleMessage, rootMenu, buildMsgMenu, extUserId, processKfBatch, heldStatus, resolveOpenid, type Incoming } from './dispatch'
 import { archiveInbound, archiveOutbound } from './archive' // 会话归档（B5.1·入站/出站落档·守卫 conversations-archived）
 
 // 微信客服 in-chat 智能客服回调（HTTP 访问服务·类比 adminApi 的 /adminapi）。
@@ -102,8 +104,27 @@ export const main = defineKfCallback({
     // 单条消息处理（防吞单经 processKfBatch 包 try/catch·见 dispatch）：进会话欢迎 / 文本分流
     const handleOne = async (msg: any) => {
       console.log('[kf] handle', { msgtype: msg.msgtype, hasText: !!msg.text?.content, hasMenuId: !!msg.text?.menu_id })
-      await archiveInbound(db, msg, openKfId) // 入站客户消息落档（B5.1·有 msgid 才记·确定性 _id 幂等·fail-soft）
       const euid = extUserId(msg)
+      // 自由打字过 msgSecCheck（Issue #113）：违规不归档不分流；接口抖动 fail-open 放行并记日志。
+      // 菜单回传（menu_id）是我方预设文案，不送审。v2 必带 openid——尚未建身份桥则跳过（等同 fail-open，不打无意义 INFRA）。
+      if (msg.msgtype === 'text' && !(msg.text && msg.text.menu_id)) {
+        const openid = (await resolveOpenid(db, euid)) || ''
+        if (openid) {
+          const sec = await msgSecCheck(String((msg.text && msg.text.content) || ''), openid, SCENE_COMMENT, 'open')
+          if (!sec.ok) {
+            console.log('[kf] sec-blocked')
+            if (euid)
+              await send({
+                touser: euid,
+                open_kfid: openKfId,
+                msgtype: 'text',
+                text: { content: '这条消息未能发送，请换个说法再试' },
+              })
+            return
+          }
+        }
+      }
+      await archiveInbound(db, msg, openKfId) // 入站客户消息落档（B5.1·有 msgid 才记·确定性 _id 幂等·fail-soft）
       // 回复前确保会话为「智能助手接待」态(service_state=1)：新会话默认 0未处理，不置态 send_msg 报 95018 静默无回复
       // （调试日志 AB·迁移到企业微信内后平台默认态漂移·根因#12）。人工/排队态 bot 不抢话（skip·仍尽力建身份桥接）。
       if (euid) {

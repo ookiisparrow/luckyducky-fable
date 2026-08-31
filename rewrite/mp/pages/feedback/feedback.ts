@@ -48,6 +48,9 @@ Page({
       return
     }
     this.setData({ busy: false })
-    wx.showToast({ title: String(r.error) === 'RATE_LIMITED' ? '说得有点频繁啦，歇一会' : '提交没成功，稍后再试', icon: 'none' })
+    const err = String(r.error)
+    const tip =
+      err === 'RATE_LIMITED' ? '说得有点频繁啦，歇一会' : err === 'SEC_CHECK_FAIL' ? '内容没通过审核，换个说法再试' : '提交没成功，稍后再试'
+    wx.showToast({ title: tip, icon: 'none' })
   },
 })

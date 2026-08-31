@@ -332,3 +332,103 @@ describe('端到端（验签→拉取→分流→归档→游标推进）', () =
     expect(control.dump('kfState').find((x: any) => x._id === 'seen:mm1')).toBeTruthy() // 已认领
   })
 })
+
+/** 加密投一条顾客文本进 kfCallback（复用端到端验签形状·带身份桥才能触发 msgSecCheck）。 */
+async function postKfUserText(content: string, msgid: string): Promise<{ sendCalls: any[] }> {
+  const AES = 'b'.repeat(43)
+  process.env.WXKF_TOKEN = 'cbtok'
+  process.env.WXKF_AESKEY = AES
+  process.env.WXKF_CORPID = 'corp-1'
+  process.env.WXKF_SECRET = 'sec'
+  control.seed('kfIdentity', [{ _id: 'ext:euSec', openid: 'oSec' }])
+  const sendCalls: any[] = []
+  ;(globalThis as any).fetch = async (url: string, init?: any) => ({
+    json: async () => {
+      const u = String(url)
+      const body = init?.body ? JSON.parse(init.body) : {}
+      if (u.includes('gettoken')) return { access_token: 'T', expires_in: 7200 }
+      if (u.includes('sync_msg'))
+        return body.cursor
+          ? { next_cursor: body.cursor, has_more: 0, msg_list: [] }
+          : {
+              next_cursor: 'CUR-SEC',
+              has_more: 0,
+              msg_list: [{ msgid, msgtype: 'text', external_userid: 'euSec', text: { content }, send_time: 1700000001 }],
+            }
+      if (u.includes('service_state/get')) return { service_state: 1 }
+      if (u.includes('send_msg')) {
+        sendCalls.push(body)
+        return { errcode: 0, msgid: 'out-sec' }
+      }
+      if (u.includes('batchget')) return { customer_list: [] }
+      return {}
+    },
+  })
+  const key = Buffer.from(AES + '=', 'base64')
+  const iv = key.subarray(0, 16)
+  const xml = '<xml><Token>SYNC</Token><OpenKfId>kf-sec</OpenKfId></xml>'
+  const msgBuf = Buffer.from(xml, 'utf8')
+  const len = Buffer.alloc(4)
+  len.writeUInt32BE(msgBuf.length, 0)
+  let buf = Buffer.concat([crypto.randomBytes(16), len, msgBuf, Buffer.from('corp-1', 'utf8')])
+  const pad = 32 - (buf.length % 32 || 32) || 32
+  buf = Buffer.concat([buf, Buffer.alloc(pad, pad)])
+  const cipher = crypto.createCipheriv('aes-256-cbc', key, iv)
+  cipher.setAutoPadding(false)
+  const enc = Buffer.concat([cipher.update(buf), cipher.final()]).toString('base64')
+  const sig = kfSignature('cbtok', '1', '2', enc)
+  await kfCallback({
+    httpMethod: 'POST',
+    queryStringParameters: { msg_signature: sig, timestamp: '1', nonce: '2' },
+    body: `<xml><Encrypt><![CDATA[${enc}]]></Encrypt></xml>`,
+  })
+  return { sendCalls }
+}
+
+describe('客服入站文本 msgSecCheck（fail-open·Issue #113）', () => {
+  it('大白话：违规拦截——不归档、不分流，只回一句换个说法', async () => {
+    control.setOpenapiResult({ errCode: 0, result: { suggest: 'risky' } })
+    const { sendCalls } = await postKfUserText('快递到哪了', 'mm-risky')
+    expect(sendCalls.length).toBe(1)
+    expect(sendCalls[0].msgtype).toBe('text')
+    expect(sendCalls[0].text.content).toContain('换个说法')
+    expect(control.dump('conversations').filter((c: any) => c.direction === 'in').length).toBe(0)
+    expect(control.dump('kfState').find((x: any) => x._id === 'seen:mm-risky')).toBeTruthy() // 已认领不重试违规
+  })
+
+  it('大白话：接口失败仍放行并记日志——照常分流归档，不卡死顾客消息', async () => {
+    control.setOpenapiFail(true, 48001)
+    const seen: string[] = []
+    const orig = console.error
+    console.error = (...a: unknown[]) => {
+      seen.push(String(a[0]))
+    }
+    let sendCalls: any[] = []
+    try {
+      ;({ sendCalls } = await postKfUserText('快递到哪了', 'mm-infra'))
+    } finally {
+      console.error = orig
+    }
+    expect(sendCalls.length).toBe(1)
+    expect(sendCalls[0].msgtype).toBe('msgmenu') // 关键词命中＝分流跑过
+    expect(control.dump('conversations').filter((c: any) => c.direction === 'in').length).toBe(1)
+    expect(seen.some((s) => s.includes('[LD_ALERT]') && s.includes('SEC_CHECK_INFRA'))).toBe(true)
+  })
+
+  it('大白话：正常文本通过——送审后照常分流归档，无 INFRA 日志', async () => {
+    const seen: string[] = []
+    const orig = console.error
+    console.error = (...a: unknown[]) => {
+      seen.push(String(a[0]))
+    }
+    let sendCalls: any[] = []
+    try {
+      ;({ sendCalls } = await postKfUserText('快递到哪了', 'mm-ok'))
+    } finally {
+      console.error = orig
+    }
+    expect(sendCalls[0].msgtype).toBe('msgmenu')
+    expect(control.dump('conversations').filter((c: any) => c.direction === 'in').length).toBe(1)
+    expect(seen.filter((s) => s.includes('SEC_CHECK_INFRA')).length).toBe(0)
+  })
+})
