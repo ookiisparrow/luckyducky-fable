@@ -122,8 +122,7 @@
         "catalog",
         "player",
         "my-courses",
-        "welcome",
-        "flip-demo"
+        "welcome"
       ],
       "adminPages": [
         "Courses",

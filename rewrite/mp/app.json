@@ -21,8 +21,7 @@
     "pages/feedback/feedback",
     "pages/about/about",
     "pages/agreement/agreement",
-    "pages/consent/consent",
-    "pages/flip-demo/flip-demo"
+    "pages/consent/consent"
   ],
   "__usePrivacyCheck__": true,
   "window": {

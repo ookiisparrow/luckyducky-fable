@@ -10,7 +10,7 @@
 // 原生滚动 + onReachBottom 游标分页（reload/_seq）」，接 swiper 须拆五份独立 tab 状态并把每个
 // tab 包一层 scroll-view——旧线接 swiper 时正是这样「实质重构」过（见 docs/archive/重构日志-202606上半.md
 // 2026-06-18 条）；本批规格明确
-// 不许动这套滚动/分页机制，故延续本文件已有的自造 touch 手势范式（同 lib/flipLever.ts、
+// 不许动这套滚动/分页机制，故延续本文件已有的自造 touch 手势范式（同
 // player 自绘 seek 条），用角度护栏（|dx|>1.5|dy|）+ 耗时上限缓解误触。真机横滑 vs 纵向滚动/上拉
 // 翻页误触仍待走查（根因#8·rewrite/mp/README.md 走查表第 9 项「五栏切换」覆盖）。
 
