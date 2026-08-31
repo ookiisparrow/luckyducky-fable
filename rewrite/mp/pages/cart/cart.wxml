@@ -62,7 +62,8 @@
     </view>
   </view>
 
-  <view class="ld-cart-trust">包邮到家 · 七天无理由退货 · 官方正品保障</view>
+  <!-- tab 首屏只能用 tier1 字：「疆/蒙/确/课」不在子集，完整政策写在详情/结算/协议。勿写七天无理由。 -->
+  <view class="ld-cart-trust">包邮到家 · 官方正品保障</view>
 
   <!-- 底部占位：留在滚动流内，撑开最后一屏、避免内容被下方 fixed 结算栏压住 -->
   <view class="ld-checkbar-space"></view>

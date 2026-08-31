@@ -300,6 +300,12 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+.co-ship-note {
+  padding: 0 30rpx 24rpx;
+  font-size: 22rpx;
+  line-height: 1.5;
+  color: var(--ld-content-2);
+}
 
 /* ---------- 金额明细（灰色内嵌盒） ---------- */
 .co-summary {

@@ -70,12 +70,13 @@
       </view>
     </view>
 
-    <!-- 配送方式 -->
+    <!-- 配送方式：金额行仍用 shipLabel（SHIP=0 显示「包邮」）；政策说明另起一行，不算钱。 -->
     <view class="co-card co-rows">
       <view class="co-row">
         <text class="co-row-key">配送方式</text>
         <text class="co-row-val">顺丰速运 · {{shipLabel}}</text>
       </view>
+      <view class="co-ship-note">除新疆、内蒙古、西藏外包邮。确认进课后不可退货。</view>
     </view>
 
     <!-- 金额明细 -->

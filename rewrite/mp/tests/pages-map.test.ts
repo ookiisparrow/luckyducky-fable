@@ -167,8 +167,12 @@ describe('mapAgreement（用户协议/隐私政策·缺档回退默认全文·in
     expect(article4).not.toContain('下单及扫码')
     expect(article4).not.toContain('扫码并确认开始观看')
     expect(article5).toContain('尚未确认进课')
+    expect(article5).toContain('除新疆、内蒙古、西藏外包邮')
+    expect(article5).toContain('确认进课后该件不可退')
     expect(article5).toContain('如需发票，请联系客服。')
     expect(article5).not.toContain('确认开始观看课程')
+    expect(article5).not.toMatch(/满\s*¥?\s*100\s*包邮/)
+    expect(article5).not.toContain('全场包邮')
     expect(userBodies).not.toContain('材料包')
     // 隐私默认稿：头像昵称只在编辑资料自愿填；补上微信指引已声明的相册/剪切板/摄像头
     const privacyBodies = d.privacy.articles.map((a) => a.body).join('\n')

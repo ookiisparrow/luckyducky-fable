@@ -8,6 +8,10 @@ describe('官网套装页售后 FAQ', () => {
   it('大白话：现有 FAQ 里有一条售后/发票，原句「如需发票，请联系客服。」', () => {
     expect(kits).toContain('如需发票，请联系客服。')
     expect(kits).toContain('售后怎么申请？需要发票怎么办？')
+    expect(kits).toContain('除新疆、内蒙古、西藏外包邮')
+    expect(kits).toContain('确认进课后该件不可退')
     expect(kits).not.toContain('材料包')
+    expect(kits).not.toMatch(/满\s*¥?\s*100\s*包邮/)
+    expect(kits).not.toContain('全场包邮')
   })
 })
