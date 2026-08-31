@@ -31,7 +31,7 @@ import Products from '../src/pages/Products.vue'
 beforeEach(() => {
   listDraftsMock.mockReset().mockResolvedValue({
     ok: true,
-    list: [{ id: 'p1', name: '钩织材料包·筹备款', price: '99', skus: [], images: [] }],
+    list: [{ id: 'p1', name: '钩织材料包·筹备款', price: '99', sold: 0, skus: [], images: [], params: [], detailSections: [], kit: [] }],
     urls: {},
     listed: {}, // p1 不在 listed 表 → state='preparing'
     hasVideo: {},
@@ -47,6 +47,29 @@ async function mountWithRouter() {
   await router.isReady()
   return mount(Products, { global: { plugins: [router] } })
 }
+
+describe('Products.vue 销量输入（#119 ①·后台手填）', () => {
+  it('大白话：编辑器有销量框；填 128 点保存草稿，saveDraft 带着这个数', async () => {
+    saveDraftMock.mockReset().mockResolvedValue({ ok: true })
+    const wrapper = await mountWithRouter()
+    await flushPromises()
+    const editBtn = wrapper.findAll('button').find((b) => b.text() === '编辑')
+    expect(editBtn).toBeTruthy()
+    await editBtn!.trigger('click')
+    await flushPromises()
+    const soldInput = wrapper.find('input[type="number"]')
+    expect(soldInput.exists()).toBe(true)
+    await soldInput.setValue(128)
+    const saveBtn = wrapper.findAll('button').find((b) => b.text() === '保存草稿')
+    expect(saveBtn).toBeTruthy()
+    await saveBtn!.trigger('click')
+    await flushPromises()
+    expect(saveDraftMock).toHaveBeenCalled()
+    const payload = saveDraftMock.mock.calls.find((c) => c[0] && Number(c[0].sold) === 128)?.[0]
+    expect(payload).toBeTruthy()
+    expect(payload.sold).toBe(128)
+  })
+})
 
 describe('Products.vue 上架两步确认（twoStep：doPublish）', () => {
   it('大白话：筹备中商品第一次点「上架」只武装不调用，第二次点「确认上架？」才恰好调用一次 publishProduct(id)', async () => {

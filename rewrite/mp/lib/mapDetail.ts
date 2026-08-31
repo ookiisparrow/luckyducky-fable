@@ -21,11 +21,18 @@ export interface DetailVM {
   params: Array<{ k: string; v: string }>
   sections: Array<{ lead: string; body: string }>
   kit: Array<{ name: string; qty: string }>
+  soldLabel: string // 后台手填销量；0/缺省空串，模板 wx:if 藏掉（少噪音）
 }
 
 const priceText = (v: unknown): string => {
   const n = Number(v)
   return Number.isFinite(n) && n > 0 ? '¥' + String(n) : ''
+}
+
+/** 后台手填销量 → 「已售 N」；0/缺/脏值空串（详情页藏掉，不写「已售 0」）。 */
+const soldText = (v: unknown): string => {
+  const n = Math.floor(Number(v))
+  return Number.isFinite(n) && n > 0 ? '已售 ' + String(n) : ''
 }
 
 /** 商品档 → 详情 VM；档缺身份/名/价 → null（页面落「商品不存在」态，不渲染半空详情）。 */
@@ -82,6 +89,7 @@ export function mapDetail(p: unknown): DetailVM | null {
     params,
     sections,
     kit,
+    soldLabel: soldText(d.sold),
   }
 }
 

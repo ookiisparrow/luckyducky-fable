@@ -1,5 +1,5 @@
 import { isValidPriceYuan, isValidScmProductId, isValidScmSpec } from '@ldrw/shared'
-import { reply, cleanProduct, storeImage, type Ctx } from '../lib'
+import { reply, cleanProduct, cleanSold, storeImage, type Ctx } from '../lib'
 import { notifyAlert } from '../../../kit'
 
 // —— 商品图册孤儿 GC 判据单源（E16 共享 helper·防多点漂移·批B）——
@@ -253,6 +253,7 @@ export async function publishProduct({ db, drafts, data }: Ctx) {
     params: d.params || [],
     detailSections: d.detailSections || [],
     kit: d.kit || [],
+    sold: cleanSold(d.sold), // 运营手填·详情页展示·0 不渲染（#119 ①·不从订单加总）
     courseId: d.courseId || '',
     featured: !!featured,
     sort,

@@ -98,6 +98,17 @@ describe('getProductDetail（公开只读·列表瘦身配套·批1）', () => {
     expect(r.product.images).toEqual(['https://tmp/cloud://p1-img1.jpg', 'https://tmp/cloud://p1-img2.jpg'])
   })
 
+  it('大白话：详情带回后台填的 sold；缺字段就是没有（不现场加总订单）', async () => {
+    control.seed('products', [{ _id: 'p1', name: 'A', sort: 1, sold: 128 }])
+    const r: any = await call('getProductDetail', { id: 'p1' })
+    expect(r.ok).toBe(true)
+    expect(r.product.sold).toBe(128)
+    control.reset()
+    control.seed('products', [{ _id: 'p2', name: 'B', sort: 2 }])
+    const bare: any = await call('getProductDetail', { id: 'p2' })
+    expect(bare.product.sold).toBeUndefined()
+  })
+
   it('大白话：未知 id → { product:null }（fail-soft·前端保持列表项降级不裂）', async () => {
     const r: any = await call('getProductDetail', { id: 'ghost' })
     expect(r.ok).toBe(true)

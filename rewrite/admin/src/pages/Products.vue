@@ -210,7 +210,7 @@ onBeforeUnmount(() => {
 
 function newProduct() {
   openEditGen++ // 使任何仍在等 silentRefresh 回包的 openEdit 调用作废——不得晚落地覆盖这次新建（同上代际守卫）
-  edit.value = { id: 'p' + Date.now().toString(36), name: '', tag: '', brief: '', price: '', was: '', cover: '', images: [], skus: [], params: [], detailSections: [], kit: [], courseId: '' }
+  edit.value = { id: 'p' + Date.now().toString(36), name: '', tag: '', brief: '', price: '', was: '', sold: 0, cover: '', images: [], skus: [], params: [], detailSections: [], kit: [], courseId: '' }
   coverPreview.value = ''
   markLoaded()
 }
@@ -575,6 +575,7 @@ onMounted(async () => {
         <label>标签 <input v-model="edit.tag" maxlength="20" placeholder="如 送礼首选" /></label>
         <label>价格（元）<input v-model="edit.price" /></label>
         <label>划线价 <input v-model="edit.was" /></label>
+        <label>销量 <input v-model.number="edit.sold" type="number" min="0" step="1" placeholder="0 不在详情页显示" /></label>
         <label class="wide">一句话简介 <input v-model="edit.brief" maxlength="120" /></label>
         <label>关联课程 <input v-model="edit.courseId" placeholder="course-xxx（可空）" /></label>
         <label>封面图

@@ -50,7 +50,25 @@ describe('商品草稿与上架（黄金：白名单/四道门/软下架不隐�
     const p = control.dump('products')[0]
     expect(p.price).toBe(198) // 字符串价转数字
     expect(p.featured).toBe(true)
+    expect(p.sold).toBe(0) // 未填销量默认 0（详情页藏掉）
     expect(control.dump('productsDraft')[0].status).toBe('onsale')
+  })
+
+  it('大白话：销量后台可填可改——整数落草稿并上架写入 products.sold；负数/小数/乱码洗成非负整数', async () => {
+    await post('saveDraft', { product: { ...DRAFT, sold: 128 } })
+    expect(control.dump('productsDraft')[0].sold).toBe(128)
+    await post('saveDraft', { product: { ...DRAFT, sold: -3 } })
+    expect(control.dump('productsDraft')[0].sold).toBe(0)
+    await post('saveDraft', { product: { ...DRAFT, sold: 1.8 } })
+    expect(control.dump('productsDraft')[0].sold).toBe(1)
+    await post('saveDraft', { product: { ...DRAFT, sold: 'hack' } })
+    expect(control.dump('productsDraft')[0].sold).toBe(0)
+    await post('saveDraft', { product: { ...DRAFT, sold: 256 } })
+    expect((await post('publishProduct', { id: 'p1' })).ok).toBe(true)
+    expect(control.dump('products')[0].sold).toBe(256)
+    await post('saveDraft', { product: { ...DRAFT, sold: 300 } })
+    await post('publishProduct', { id: 'p1' })
+    expect(control.dump('products')[0].sold).toBe(300) // 可改
   })
 
   it('大白话：停售可恢复不丢记录；编辑重发不隐式复活——须显式恢复销售；操作不存在商品报无此商品', async () => {
