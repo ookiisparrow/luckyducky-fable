@@ -319,6 +319,13 @@ export async function checkKey(db: any, key: any, bootstrap: boolean) {
   }
 }
 
+// 运营手填销量（#119 ①）：非负整数；脏值/缺省→0。不是订单加总。
+export function cleanSold(v: unknown): number {
+  const n = Math.floor(Number(v))
+  if (!Number.isFinite(n) || n < 0) return 0
+  return n > 99_999_999 ? 99_999_999 : n
+}
+
 // 草稿白名单字段（防杂字段入库）
 export function cleanProduct(p: any) {
   if (!p || typeof p !== 'object' || !p.id) return null
@@ -329,6 +336,7 @@ export function cleanProduct(p: any) {
     name: str(p.name, 60),
     price: str(String(p.price ?? ''), 12),
     was: str(String(p.was ?? ''), 12),
+    sold: cleanSold(p.sold),
     tag: str(p.tag, 20),
     brief: str(p.brief, 120),
     skus: (Array.isArray(p.skus) ? p.skus : [])

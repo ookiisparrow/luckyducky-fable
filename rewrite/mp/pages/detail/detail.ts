@@ -80,10 +80,16 @@ Page({
     const vm = this.data.vm
     if (!vm) return
     const detailVm = mapDetail(raw)
-    if (!detailVm || detailVm.gallery.length <= vm.gallery.length) return // 无档/无更多图：保持列表项降级
+    if (!detailVm) return
+    const morePics = detailVm.gallery.length > vm.gallery.length
     this.setData({
-      'vm.gallery': detailVm.gallery,
-      galleryWindow: computeGalleryWindow(detailVm.gallery.length, this.data.galleryIndex),
+      'vm.soldLabel': detailVm.soldLabel, // 详情档带回后台销量（列表项可能还没有这个字段）
+      ...(morePics
+        ? {
+            'vm.gallery': detailVm.gallery,
+            galleryWindow: computeGalleryWindow(detailVm.gallery.length, this.data.galleryIndex),
+          }
+        : {}),
     })
   },
   onRetryLoad() {

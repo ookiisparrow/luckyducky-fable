@@ -81,15 +81,15 @@ const DONE_ORDER = {
   items: [{ productId: 'p1', lineId: 'p1__基础款', spec: '基础款', name: '小鸭礼盒', price: 198, qty: 1, refundable: false }],
 }
 // 第三批扩面键集（战役工单 W1·A 批·目录/内容/FAQ 面）：
-// 商品档 17 键——由 adminApi saveDraft→publishProduct 真写入后回读（publishProduct 的 doc 字面量＝
-// products 集合的权威字段集）。app 侧 getProductDetail 整档透传出这 17 键；getProducts 列表瘦身删 images
-// 后为 16 键（守卫 rw-catalog-list-cover-only 的测试半边）。这两条链路**零裁剪**：写侧加一个字段就直接
+// 商品档 18 键——由 adminApi saveDraft→publishProduct 真写入后回读（publishProduct 的 doc 字面量＝
+// products 集合的权威字段集）。app 侧 getProductDetail 整档透传出这 18 键；getProducts 列表瘦身删 images
+// 后为 17 键（守卫 rw-catalog-list-cover-only 的测试半边）。这两条链路**零裁剪**：写侧加一个字段就直接
 // 出公开网关（编译不红、既有值断言也不红），本哨兵是那条唯一的机器闸。
-const PRODUCT_KEYS = ['_id', 'brief', 'courseId', 'cover', 'detailSections', 'featured', 'id', 'images', 'kit', 'name', 'params', 'price', 'skus', 'sort', 'tag', 'updatedAt', 'was']
+const PRODUCT_KEYS = ['_id', 'brief', 'courseId', 'cover', 'detailSections', 'featured', 'id', 'images', 'kit', 'name', 'params', 'price', 'skus', 'sold', 'sort', 'tag', 'updatedAt', 'was']
 const PRODUCT_LIST_KEYS = PRODUCT_KEYS.filter((k) => k !== 'images')
 // 首页内容 14 键＝saveHomeContent 白名单 13 字段 + _id（_id/updatedAt 随公开读一并下发·如实锁现状）。
 const HOME_KEYS = ['_id', 'activationBg', 'activationBgByCourse', 'brand', 'closing', 'faq', 'feature', 'footer', 'hero', 'loadingBg', 'reassure', 'reviews', 'trust', 'updatedAt']
-const DRAFT = { id: 'pd1', name: '小鸭礼盒', tag: '基础款', price: '198', was: '258', brief: '零基础友好', cover: 'cloud://pd1-cover.jpg', images: ['cloud://pd1-a.jpg'], skus: [{ name: '基础款', price: '198' }], params: [['材质', '纯棉']], detailSections: [{ lead: '关于', body: '正文' }], kit: [{ name: '钩针', qty: '1 支' }], courseId: 'course-pd1' }
+const DRAFT = { id: 'pd1', name: '小鸭礼盒', tag: '基础款', price: '198', was: '258', sold: 128, brief: '零基础友好', cover: 'cloud://pd1-cover.jpg', images: ['cloud://pd1-a.jpg'], skus: [{ name: '基础款', price: '198' }], params: [['材质', '纯棉']], detailSections: [{ lead: '关于', body: '正文' }], kit: [{ name: '钩针', qty: '1 支' }], courseId: 'course-pd1' }
 // 上架一份规范商品档（_id 刻意避开 beforeEach 的 seedProducts 那条 4 键残档——桩 seed 是 concat 追加、
 // doc().get() 取首个匹配，同 _id 会命中残档，断言错乱且极难排查）。
 const publishProduct1 = async () => {
@@ -303,7 +303,7 @@ describe('契约键集合哨兵（Object.keys 排序全等·增删改名都红�
   // 这组与前两批的差别：catalog/content 面**零裁剪透传**（`{...doc}` 只改值不改键），响应键集由写侧
   // 白名单单向决定。所以造数一律走真写侧（saveDraft→publishProduct / saveHomeContent / savePageContent），
   // 锁的是「写侧字段集 ↔ 公开下发面」这条端到端契约；自造 seed 只能锁住自己的回声。
-  it('getProducts：顶层 [list,ok]；列表行 16 键＝商品档 17 键去 images（列表瘦身）；skus 行 2 键；cover 换 https——cloud:// fileID 不出网关', async () => {
+  it('getProducts：顶层 [list,ok]；列表行 17 键＝商品档 18 键去 images（列表瘦身）；skus 行 2 键；cover 换 https——cloud:// fileID 不出网关', async () => {
     await publishProduct1()
     const r = await call('getProducts')
     expect(r.ok).toBe(true)
@@ -323,12 +323,13 @@ describe('契约键集合哨兵（Object.keys 排序全等·增删改名都红�
     expect(r.list).toEqual([])
   })
 
-  it('getProductDetail：顶层 [ok,product]；product 17 键含 images（与列表相反）；images 逐项换 https；停售/无档 product:null 键仍在', async () => {
+  it('getProductDetail：顶层 [ok,product]；product 18 键含 images（与列表相反）；images 逐项换 https；停售/无档 product:null 键仍在', async () => {
     await publishProduct1()
     const r = await call('getProductDetail', { id: 'pd1' })
     expect(r.ok).toBe(true)
     expect(keysOf(r)).toEqual(['ok', 'product'])
     expect(keysOf(r.product)).toEqual(PRODUCT_KEYS)
+    expect(r.product.sold).toBe(128) // 后台手填销量原样下发（#119 ①·不从订单加总）
     expect(keysOf(r.product.skus[0])).toEqual(['name', 'price'])
     expect(keysOf(r.product.detailSections[0])).toEqual(['body', 'lead'])
     // kit 行 3 键：写侧 cleanProduct 恒造 {icon,name,qty}，mp mapDetail 只读 {name,qty}——锁写侧真形状，

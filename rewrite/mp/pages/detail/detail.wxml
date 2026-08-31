@@ -25,6 +25,7 @@
       <text class="pdp-ship">除新疆、内蒙古、西藏外包邮</text>
     </view>
     <view class="pdp-title">{{vm.name}}</view>
+    <view class="pdp-sold" wx:if="{{vm.soldLabel}}">{{vm.soldLabel}}</view>
     <view class="pdp-sub" wx:if="{{vm.brief}}">{{vm.brief}}</view>
     <view class="pdp-tag" wx:elif="{{vm.tag}}">{{vm.tag}}</view>
     <view class="pdp-meta">

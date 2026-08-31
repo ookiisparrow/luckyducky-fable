@@ -88,6 +88,11 @@
   line-height: 1.35;
   color: var(--ld-ink);
 }
+.pdp-sold {
+  margin-top: 10rpx;
+  font-size: 24rpx;
+  color: var(--ld-content-2);
+}
 .pdp-sub {
   margin-top: 13rpx;
   font-size: 25rpx;
