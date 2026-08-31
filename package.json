@@ -63,7 +63,7 @@
   },
   "devDependencies": {
     "@cloudbase/manager-node": "5.7.0",
-    "@cloudbase/node-sdk": "^3.18.3",
+    "@cloudbase/node-sdk": "^4.0.3",
     "@eslint/js": "^9.10.0",
     "@stryker-mutator/core": "^9.6.1",
     "@stryker-mutator/vitest-runner": "^9.6.1",
