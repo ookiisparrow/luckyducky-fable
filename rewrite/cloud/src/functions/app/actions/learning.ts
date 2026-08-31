@@ -107,6 +107,7 @@ export const activateCourse = withOpenId(
 /**
  * 确认进课（黄金 §二）：退货权法律节点。enteredAt null→时间戳原子抢占（只一次）；
  * 首次进课按件失效退货权（enteredQty++·entVer CAS 防并发少记）；送礼无单不报错。
+ * 撤权 CAS 耗尽：回滚本次 enteredAt（Issue #114·不留已交付+仍可退）。
  */
 // 频控（深审 P2·根因#13）：确认进课是退货权失效的法律节点写，按 openid 限速挡刷（正常人一次进课远低于此）。
 export const confirmEnter = withOpenId(
@@ -122,6 +123,8 @@ export const confirmEnter = withOpenId(
     const now = Date.now()
     let enteredAt = act.enteredAt
     let revoked: { orderId: string; lineId: string; productId: string } | null = null
+    // 找到了该撤的行但 CAS 没写成：必须回滚本次 enteredAt，不能留下「课已交付 + 钱仍可退」。
+    let revokeFailed = false
 
     if (!enteredAt) {
       const grab = await db
@@ -196,9 +199,32 @@ export const confirmEnter = withOpenId(
             // 放弃即告警：耗尽 3 次重试（attempt===2）与「重读本身失败」（cur 变 null，下一轮 for
             // 条件 `attempt<3 && cur` 直接为假、提前退出）是两条不同的放弃路径，缺一都会让这单退货权
             // 撤销悄悄没了却无人知道——收敛到同一告警出口，不让控制流的巧合替某条失败路径顶案。
-            if (attempt === 2 || !cur) alert('money', 'confirmEnter', 'REVOKE_RACE', { orderId: order.id })
+            if (attempt === 2 || !cur) {
+              alert('money', 'confirmEnter', 'REVOKE_RACE', { orderId: order.id })
+              revokeFailed = true
+            }
           }
           if (revoked) break
+        }
+        // Issue #114：抢到 enteredAt 后撤权 CAS 全败只告警不回滚 → 已交付课程 + 订单仍可退。
+        // 最小对齐：撤权没做成就把本次进课抢占退回去；客户稍后再点，欢迎页已有失败提示。
+        // 送礼/无对应行（从未 attempt）不走这里——那不是钱课裂。
+        if (revokeFailed && !revoked) {
+          const undo = await db
+            .collection(COLLECTIONS.activations)
+            .where({ _id: act._id, enteredAt: now })
+            .update({ data: { enteredAt: null } })
+          let rolled = !!(undo.stats && undo.stats.updated === 1)
+          if (!rolled) {
+            const force = await db
+              .collection(COLLECTIONS.activations)
+              .doc(act._id)
+              .update({ data: { enteredAt: null } })
+              .catch(() => null)
+            rolled = !!(force && force.stats && force.stats.updated === 1)
+          }
+          if (!rolled) alert('money', 'confirmEnter', 'ENTER_ROLLBACK_FAIL', { activationId: act._id })
+          return err(ERR.ENTER_REVOKE_FAILED)
         }
       }
     }
