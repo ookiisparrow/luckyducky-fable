@@ -247,6 +247,26 @@
         "bomProfiles"
       ]
     },
+    "coupons": {
+      "name": "商品券领取",
+      "tier": "yellow",
+      "appActions": [
+        "getCouponOffer",
+        "claimCoupon"
+      ],
+      "adminActionFiles": [
+        "coupons"
+      ],
+      "mpPages": [],
+      "adminPages": [
+        "Coupons"
+      ],
+      "agentPages": [],
+      "collections": [
+        "couponConfig",
+        "couponClaims"
+      ]
+    },
     "ops": {
       "name": "运维观测与系统配置",
       "tier": "red",

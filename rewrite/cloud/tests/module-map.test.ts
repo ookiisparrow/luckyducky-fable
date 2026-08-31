@@ -18,9 +18,9 @@ describe('moduleOfAction（异常账本模块归因）', () => {
     expect(moduleOfAction('')).toBe('unknown')
   })
 
-  it('全表 31 项、无空值、模块名全小写', () => {
+  it('全表 33 项、无空值、模块名全小写', () => {
     const entries = Object.entries(APP_ACTION_MODULE)
-    expect(entries.length).toBe(31)
+    expect(entries.length).toBe(33)
     for (const [, mod] of entries) expect(mod).toMatch(/^[a-z]+$/)
   })
 })

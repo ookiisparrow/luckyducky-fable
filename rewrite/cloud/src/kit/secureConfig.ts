@@ -10,7 +10,7 @@ import { COLLECTIONS } from '@ldrw/shared'
 // 'vod'（决策§31 转码管线批1）：腾讯云点播凭证档——secretId/secretKey（批2 服务端 API）、
 // playKey（Key 防盗链签名）、procedure（上传自动触发的任务流模板名）。VOD 无环境变量史，
 // 不设 ENV_FALLBACK 条目（回退表只服务「旧环境变量层迁移期兼容」，新档一步到位走库）。
-export type SecureDocId = 'wxkf' | 'wxpay' | 'vod'
+export type SecureDocId = 'wxkf' | 'wxpay' | 'vod' | 'wxbrand'
 
 const ENV_FALLBACK: Record<string, string> = {
   'wxkf.corpId': 'WXKF_CORPID',

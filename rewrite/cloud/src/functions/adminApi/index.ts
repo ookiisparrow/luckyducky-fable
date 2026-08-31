@@ -31,6 +31,7 @@ import * as ops from './actions/ops'
 import * as configChecklist from './actions/configChecklist'
 import * as secureConfig from './actions/secureConfig'
 import * as reviews from './actions/reviews'
+import * as coupons from './actions/coupons'
 
 // 管理控制台后端 v2（HTTP 访问服务触发·鉴权外壳逐字承接旧线 index.ts·业务 action 已全域挂载
 // 进 ACTIONS/ACTION_CAPS——与旧线注册表逐行核对过）。
@@ -190,6 +191,9 @@ const ACTIONS: Record<string, (ctx: Ctx) => Promise<any>> = {
   // 评价挑选（先审后发·未登记 ACTION_CAPS→默认拒 admin:write＝仅超管）
   listReviews: reviews.listReviews,
   setReviewPicked: reviews.setReviewPicked,
+  getCouponConfig: coupons.getCouponConfig,
+  saveCouponConfig: coupons.saveCouponConfig,
+  setCouponNotifyUrl: coupons.setCouponNotifyUrl,
 }
 
 // 方案 b：adminApi 顶层兜底需要按 action 归因，但 action 名本身不带文件名。
@@ -226,6 +230,7 @@ const ADMIN_ACTION_MODULE: Record<string, string> = {
   secureConfig: 'ops',
   dashboard: 'ops',
   reviews: 'reviews',
+  coupons: 'coupons',
 }
 
 const ADMIN_ACTION_FILES: Record<string, Record<string, unknown>> = {
@@ -259,6 +264,7 @@ const ADMIN_ACTION_FILES: Record<string, Record<string, unknown>> = {
   secureConfig,
   dashboard,
   reviews,
+  coupons,
 }
 
 const ADMIN_ACTION_MODULE_BY_NAME: Record<string, string> = Object.create(null)

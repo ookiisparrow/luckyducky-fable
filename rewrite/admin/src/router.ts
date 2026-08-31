@@ -40,6 +40,7 @@ const Anomalies = () => import('./pages/Anomalies.vue')
 const ConfigChecklist = () => import('./pages/ConfigChecklist.vue')
 const Audit = () => import('./pages/Audit.vue')
 const Reviews = () => import('./pages/Reviews.vue')
+const Coupons = () => import('./pages/Coupons.vue')
 
 export const router = createRouter({
   history: createWebHashHistory(),
@@ -59,6 +60,7 @@ export const router = createRouter({
         { path: 'products/:id/wizard', component: Wizard }, // 上新分步向导（带参·nav-route 守卫豁免孤儿页检查）
         { path: 'showcase', component: Showcase },
         { path: 'reviews', component: Reviews },
+        { path: 'coupons', component: Coupons },
         { path: 'page-content', component: PageContent }, // 页面内容五页签工作台（批C·首页内容并入）
         { path: 'help-videos', component: HelpVideos },
         { path: 'courses', component: Courses },

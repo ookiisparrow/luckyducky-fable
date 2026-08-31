@@ -41,6 +41,15 @@ describe('RBAC 默认拒：外包访问两个写 action 403（未登记 ACTION_C
 })
 
 describe('saveSecureConfig 校验', () => {
+  it('大白话：品牌 API 密钥必须 32 位；wxbrand 可存私钥', async () => {
+    const short = await post('saveSecureConfig', SUPER, { docId: 'wxbrand', fields: { brandApiKey: 'too-short' } })
+    expect(short.error).toBe('BAD_BRAND_APIKEY_LEN')
+    const r = await post('saveSecureConfig', SUPER, { docId: 'wxbrand', fields: { brandSerial: 'SER1' } })
+    expect(r.ok).toBe(true)
+    const doc = control.dump('secureConfig').find((d: any) => d._id === 'wxbrand')
+    expect(doc.brandSerial).toBe('SER1')
+  })
+
   it('大白话：docId 不是 wxkf/wxpay → 400 BAD_DOC', async () => {
     const r = await post('saveSecureConfig', SUPER, { docId: 'bogus', fields: { corpId: 'x' } })
     expect(r.status).toBe(400)

@@ -35,6 +35,8 @@ export const APP_ACTION_MODULE: Record<string, string> = {
   submitFeedback: 'cs',
   submitCheckpointPhoto: 'cs',
   getPublicFaq: 'cs',
+  getCouponOffer: 'coupons',
+  claimCoupon: 'coupons',
 }
 
 /** 查 action 所属模块；未登记（理论上被 module-registry-complete 挡住）回 'unknown' 不抛。 */

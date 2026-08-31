@@ -26,6 +26,7 @@ import {
 import { kfBind, dataConsent } from './actions/cs'
 import { submitFeedback } from './actions/feedback'
 import { submitCheckpointPhoto } from './actions/checkpoint'
+import { getCouponOffer, claimCoupon } from './actions/coupons'
 
 /**
  * 用户端聚合网关（蓝图定案·adminApi registry 范式）：event = { action, data }。
@@ -68,6 +69,8 @@ const ACTIONS: Record<string, (event: unknown) => Promise<unknown>> = Object.ass
   dataConsent,
   submitFeedback,
   submitCheckpointPhoto,
+  getCouponOffer,
+  claimCoupon,
 } satisfies Record<string, (event: unknown) => Promise<unknown>>)
 
 export const main = async (event: any) => {

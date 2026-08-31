@@ -28,6 +28,10 @@ export const ERR = {
   PAY_CONFIG_MISSING: 'PAY_CONFIG_MISSING',
   UNIFIED_ORDER_FAIL: 'UNIFIED_ORDER_FAIL',
   COUPON_EXCEEDS_GOODS: 'COUPON_EXCEEDS_GOODS', // 占位券抵扣≥货款即拒单（深审 2026-07-05·真券系统前的白送闸·新线新增码见 parity 登记名单）
+  COUPON_DISABLED: 'COUPON_DISABLED', // 后台关掉商品券领取
+  COUPON_NOT_CONFIGURED: 'COUPON_NOT_CONFIGURED', // 缺 brand_id / 批次 / 品牌证书
+  COUPON_SEND_FAIL: 'COUPON_SEND_FAIL', // 向用户发放商品券出站失败
+  COUPON_ALREADY_CLAIMED: 'COUPON_ALREADY_CLAIMED', // 同一用户同一批次已领过
   OUT_OF_STOCK: 'OUT_OF_STOCK', // 库存不足（cloud-order 域·跨系统一致性批次追加登记）
   TOO_MANY_PENDING: 'TOO_MANY_PENDING', // 在途未支付单超上限（收尾硬化批·防单账号零成本预留锁死热销 SKU）
   ORDER_CLAIM_PENDING: 'ORDER_CLAIM_PENDING', // 批E：同幂等键的原请求仍在处理中（极端并发窗口）——不建二单，前端稍候按原键重试

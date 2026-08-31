@@ -411,3 +411,27 @@
 .co-submit.dim {
   opacity: 0.5;
 }
+.co-claim {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20rpx;
+  padding: 28rpx 30rpx;
+}
+.co-claim-text {
+  flex: 1 1 auto;
+  font-size: 27rpx;
+  color: var(--ld-content);
+}
+.co-claim-btn {
+  flex: 0 0 auto;
+  padding: 12rpx 28rpx;
+  border-radius: var(--ld-radius-pill);
+  background: var(--ld-purple);
+  color: #ffffff;
+  font-size: 26rpx;
+  font-weight: 600;
+}
+.co-claim-btn.dim {
+  opacity: 0.5;
+}
