@@ -87,6 +87,31 @@ describe('意见反馈（黄金 admin-misc：过闸·白名单·限频）', () =
     expect(over.error).toBe('RATE_LIMITED')
     expect(control.dump('feedback').length).toBe(10)
   })
+
+  it('大白话：违规正文拦截——平台判 risky 拒且不落库（fail-open 不放违规）', async () => {
+    control.setOpenId('oU1')
+    control.setOpenapiResult({ errCode: 0, result: { suggest: 'risky' } })
+    expect((await submit({ content: '擦边广告' })).error).toBe('SEC_CHECK_FAIL')
+    expect(control.dump('feedback').length).toBe(0)
+  })
+
+  it('大白话：安检接口抖动仍收下反馈并记日志（fail-open·区别评价 fail-closed）', async () => {
+    control.setOpenId('oU1')
+    control.setOpenapiFail(true, 48001)
+    const seen: string[] = []
+    const orig = console.error
+    console.error = (...a: unknown[]) => {
+      seen.push(String(a[0]))
+    }
+    try {
+      expect((await submit({ content: '按钮点不了' })).ok).toBe(true)
+    } finally {
+      console.error = orig
+    }
+    expect(control.dump('feedback').length).toBe(1)
+    expect(control.dump('feedback')[0].content).toBe('按钮点不了')
+    expect(seen.some((s) => s.includes('[LD_ALERT]') && s.includes('SEC_CHECK_INFRA'))).toBe(true)
+  })
 })
 
 describe('节点拍照上传（黄金 §八：进课闸·内容安全 fail-closed·覆盖式幂等）', () => {
