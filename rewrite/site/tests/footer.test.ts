@@ -1,6 +1,6 @@
 // 官网页脚备案号 + 执照文字链（Issue #102 ②③）。
 // 读共用布局源码钉死——删号/改链/页脚夹带执照图或公司法定名必红。
-import { readFileSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 
 const layout = readFileSync(new URL('../src/layouts/Base.astro', import.meta.url), 'utf8')
@@ -32,5 +32,16 @@ describe('营业执照专页', () => {
     expect(yyzzPage).toContain('noindex')
     expect(yyzzPage).not.toMatch(/统一社会信用代码/)
     expect(yyzzPage).not.toMatch(/好好看文化/)
+  })
+
+  it('大白话：执照照片文件就在官网静态目录，是真 JPEG，专页才不会裂图', () => {
+    const img = new URL('../public/yyzz.jpg', import.meta.url)
+    expect(existsSync(img)).toBe(true)
+    const bytes = readFileSync(img)
+    expect(bytes.length).toBeGreaterThan(10_000)
+    expect(bytes[0]).toBe(0xff)
+    expect(bytes[1]).toBe(0xd8)
+    expect(bytes[bytes.length - 2]).toBe(0xff)
+    expect(bytes[bytes.length - 1]).toBe(0xd9)
   })
 })

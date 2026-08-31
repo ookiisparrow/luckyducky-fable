@@ -95,6 +95,11 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+.ld-ps-info-v.wrap {
+  white-space: normal;
+  overflow: visible;
+  text-overflow: unset;
+}
 .ld-ps-info-v.mono {
   letter-spacing: 0.4rpx;
 }
