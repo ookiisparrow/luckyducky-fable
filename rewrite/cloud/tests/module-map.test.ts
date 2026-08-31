@@ -10,6 +10,7 @@ describe('moduleOfAction（异常账本模块归因）', () => {
     expect(moduleOfAction('pay')).toBe('orders')
     expect(moduleOfAction('activateCourse')).toBe('learning')
     expect(moduleOfAction('login')).toBe('identity')
+    expect(moduleOfAction('deleteAccount')).toBe('identity')
   })
 
   it('未登记 action 回 unknown、不抛（异常兜底路径不可反噬）', () => {
@@ -17,9 +18,9 @@ describe('moduleOfAction（异常账本模块归因）', () => {
     expect(moduleOfAction('')).toBe('unknown')
   })
 
-  it('全表 30 项、无空值、模块名全小写', () => {
+  it('全表 31 项、无空值、模块名全小写', () => {
     const entries = Object.entries(APP_ACTION_MODULE)
-    expect(entries.length).toBe(30)
+    expect(entries.length).toBe(31)
     for (const [, mod] of entries) expect(mod).toMatch(/^[a-z]+$/)
   })
 })

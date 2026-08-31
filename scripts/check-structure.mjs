@@ -37,6 +37,25 @@ const ROOT = resolve(import.meta.dirname, '..')
 const SKIP_DIR = (n) => n === 'node_modules' || n === 'dist' || n === 'miniprogram_npm' || n.startsWith('.')
 const lsScan = (d) => readdirSync(d).filter((n) => !SKIP_DIR(n))
 
+// 开发版/正式提审包线＝main。测试版分支另留 A/B flip-demo，本判定给 rw-mp-no-flip-demo-pack 收窄扫描面：
+// 只在 main（及指向 main 的 PR/push）上禁 flip-demo，test 与合入 test 的分支不咬。
+function isDevPackLine() {
+  const base = process.env.GITHUB_BASE_REF || ''
+  const ref = process.env.GITHUB_REF || ''
+  if (base === 'main' || ref === 'refs/heads/main') return true
+  if (process.env.GITHUB_ACTIONS === 'true') return false
+  try {
+    const branch = execSync('git rev-parse --abbrev-ref HEAD', {
+      cwd: ROOT,
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'ignore'],
+    }).trim()
+    return branch === 'main'
+  } catch {
+    return false
+  }
+}
+
 function listPackageJsons() {
   const out = ['package.json']
   // 旧线 packages/ + 新线 rewrite/（rw-line-in-gates：包级守卫不许漏扫新线）
@@ -1560,7 +1579,7 @@ export const repoChecks = [
     // haptics 收编前科）。例外三处：lib/haptics.ts（单源定义本身）+ pages/flip-demo、pages/player（拖动逐格「嗒」/
     // seek 拖动阻尼，用各自实例节流的 vibe()·非离散点按·不并入 tapHaptic）。本守卫为预防性（当前即绿·锁未来不散
     // 写）——反向自检靠篡改（页面塞裸 wx.vibrateShort→红）。覆盖面（哪些按钮该震）是判断题·靠约定+评审，不建脆弱
-    // 的枚举式覆盖守卫（§7 防摆设·同 #8/#10 靠人）。
+    // 的枚举式覆盖守卫（§7 防摆设·同 #8/#10 靠人）。flip-demo 只留测试版；开发版由 rw-mp-no-flip-demo-pack 禁带。
     id: 'rw-mp-tap-haptic-single-source',
     roots: ['#5'],
     desc: '主按钮点按触觉反馈单源（病根#5 复制漂移）：rewrite/mp 离散点按震感一律走 lib/haptics.ts 的 tapHaptic（须导出）·页面 .ts 禁散写裸 wx.vibrateShort；例外仅 lib/haptics.ts（单源）+ pages/flip-demo/player（拖动/seek 阻尼各自实例节流 vibe·非点按）——防强度/节流复制各写各的漂移',
@@ -3393,6 +3412,30 @@ import { PROD_ENV } from './lib/env.mjs'（单源·病根#5·债#30①）`)
         if (offenders.length)
           bad.push(`rewrite/mp 内 wx.openCustomerServiceChat 不该在 pages 下内联调用（${offenders.join(', ')}）——客服入口须收口 utils/customerService.ts 单源（病根#5）`)
       }
+      return bad
+    },
+  },
+  {
+    // 开发版提审包禁带 A/B 翻转演示页（Issue #117）：pages/flip-demo 是隔离真机对比台，不是顾客面。
+    // 测试版分支另留；本守卫只在 main/开发版线咬（isDevPackLine），test 与合入 test 的分支不咬。
+    id: 'rw-mp-no-flip-demo-pack',
+    roots: ['#8'],
+    desc: '开发版/正式提审包不得收录 A/B 翻转演示页（Issue #117）：仅 main/开发版线检查——app.json 不得注册 pages/flip-demo/flip-demo，pages/flip-demo 目录不得存在；测试版分支另留 A/B（根因#8 构建过≠真能用）',
+    run() {
+      if (!isDevPackLine()) return []
+      const bad = []
+      const appJsonPath = join(ROOT, 'rewrite/mp/app.json')
+      if (!existsSync(appJsonPath)) return ['rewrite/mp/app.json 缺失——守卫扫描面消失（rw-mp-no-flip-demo-pack）']
+      let appJson
+      try {
+        appJson = JSON.parse(readFileSync(appJsonPath, 'utf8'))
+      } catch (e) {
+        return [`rewrite/mp/app.json 不是合法 JSON：${e.message}`]
+      }
+      if ((appJson.pages || []).includes('pages/flip-demo/flip-demo'))
+        bad.push('app.json 仍注册 pages/flip-demo/flip-demo——开发版提审包不得带 A/B 演示页（Issue #117）')
+      if (existsSync(join(ROOT, 'rewrite/mp/pages/flip-demo')))
+        bad.push('rewrite/mp/pages/flip-demo 目录仍在——演示页文件会随包上传，须从开发版删掉（测试版分支另留）')
       return bad
     },
   },

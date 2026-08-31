@@ -498,6 +498,17 @@ describe('契约键集合哨兵（Object.keys 排序全等·增删改名都红�
     expect(empty.error).toBe('EMPTY_PATCH')
   })
 
+  it('deleteAccount：成功顶层 [deleted,ok]；未登录 [error,ok]', async () => {
+    const r = await call('deleteAccount')
+    expect(r.ok).toBe(true)
+    expect(keysOf(r)).toEqual(['deleted', 'ok'])
+    expect(r.deleted).toBe(true)
+    control.setOpenId('')
+    const no = await call('deleteAccount')
+    expect(keysOf(no)).toEqual(['error', 'ok'])
+    expect(no.error).toBe('NO_OPENID')
+  })
+
   it('getMyProgress：顶层 [list,ok]；行 7 键由 trackEvent 真写入回读（不是自造 seed）；last 4 键；未登录时 list 键整个消失', async () => {
     control.seed('qrcodes', [{ _id: 'CODE1', code: 'CODE1', courseId: 'c1', status: 'unused', activatedBy: null, activatedAt: null, createdAt: 1 }])
     await call('activateCourse', { code: 'CODE1' })

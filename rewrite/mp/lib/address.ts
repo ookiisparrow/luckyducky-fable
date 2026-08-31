@@ -95,6 +95,12 @@ export function setDefault(id: number): void {
   save()
 }
 
+/** 删除资料：清本地地址簿（本机才有这份·云端不存地址本）。 */
+export function clearAll(): void {
+  list = []
+  save()
+}
+
 /** 仅测试：重置内存态强制回灌。 */
 export function __resetForTest(): void {
   list = null
