@@ -154,6 +154,10 @@
     <view wx:if="{{loggedIn}}" class="ld-me-logout" bind:tap="onLogout" hover-class="ld-me-logout-h">
       <text>退出登录</text>
     </view>
+    <!-- 删除资料（隐私政策第六条·两次确认在 ts）：仅已登录时显示。文案不用「注销账户」——那三字不在「我」页首屏字体。 -->
+    <view wx:if="{{loggedIn}}" class="ld-me-logout" bind:tap="onDeleteAccount" hover-class="ld-me-logout-h">
+      <text>删除资料</text>
+    </view>
   </view>
 
   <view class="ld-me-pad-bottom"></view>

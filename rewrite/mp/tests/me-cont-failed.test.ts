@@ -13,7 +13,7 @@ const { loginMock, getMyProgressMock, getMyCoursesMock, getAllCoursesMock, getPa
   getAllCoursesMock: vi.fn(),
   getPageContentMock: vi.fn(),
 }))
-vi.mock('../api/user', () => ({ login: loginMock, getMyProgress: getMyProgressMock }))
+vi.mock('../api/user', () => ({ login: loginMock, getMyProgress: getMyProgressMock, deleteAccount: vi.fn() }))
 vi.mock('../api/learning', () => ({ getMyCourses: getMyCoursesMock }))
 vi.mock('../lib/courses', () => ({ getAllCourses: getAllCoursesMock }))
 // 合流补桩（页面内容 CMS 战役后 me.ts 并入 getPageContent('mePage')·本测试只钉 cont 分治，CMS 内容走默认 null）

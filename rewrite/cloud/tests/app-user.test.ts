@@ -116,3 +116,72 @@ describe('updateProfile（黄金：白名单+截断+归属·不信前端）', ()
     expect(u._openid).toBe('oME')
   })
 })
+
+describe('deleteAccount（删除资料·抹识别信息·课不可再看·订单依法留）', () => {
+  it('大白话：无身份拒；抹掉昵称头像签名电话与客服授权，标删除时间', async () => {
+    control.setOpenId('')
+    expect(((await call('deleteAccount')) as any).error).toBe('NO_OPENID')
+
+    control.setOpenId('oME')
+    await call('updateProfile', { nickname: '小鸭', bio: '钩织', phone: '13800000000', avatar: 'cloud://env.x/a.png' })
+    const r: any = await call('deleteAccount')
+    expect(r).toEqual({ ok: true, deleted: true })
+    const u = control.dump('users')[0]
+    expect(u.nickname).toBe('')
+    expect(u.avatar).toBe('')
+    expect(u.bio).toBe('')
+    expect(u.phone).toBe('')
+    expect(u.unionid).toBe('')
+    expect(u.csDataShare).toEqual({ agreed: false, at: u.deletedAt })
+    expect(u.deletedAt).toBeGreaterThan(0)
+  })
+
+  it('大白话：删完课单和进度空、旧码不能再抢回、订单行还在', async () => {
+    control.setOpenId('oME')
+    await call('login')
+    control.seed('activations', [
+      { _id: 'A1', _openid: 'oME', courseId: 'c1', code: 'K1', enteredAt: 111, createdAt: 1 },
+    ])
+    control.seed('progress', [{ _id: 'oME:c1', _openid: 'oME', courseId: 'c1', done: { s1: true } }])
+    control.seed('qrcodes', [{ _id: 'K1', status: 'activated', courseId: 'c1', activatedBy: 'oME' }])
+    control.seed('kfIdentity', [{ _id: 'ext:eu1', openid: 'oME', unionid: 'u1' }])
+    control.seed('orders', [{ _id: 'ord1', _openid: 'oME', status: 'paid', amount: 9900 }])
+
+    await call('deleteAccount')
+
+    expect(control.dump('activations')).toEqual([])
+    expect(control.dump('progress')).toEqual([])
+    expect(control.dump('kfIdentity')).toEqual([])
+    expect(control.dump('qrcodes')[0].activatedBy).toBe('deleted:oME')
+    expect(control.dump('orders')).toHaveLength(1)
+    expect(control.dump('orders')[0]._id).toBe('ord1')
+
+    const mine: any = await call('getMyCourses')
+    expect(mine.ok).toBe(true)
+    expect(mine.list).toEqual([])
+
+    const again: any = await call('activateCourse', { code: 'K1' })
+    expect(again.ok).toBe(false)
+    expect(again.error).toBe('CODE_TAKEN')
+  })
+
+  it('大白话：再登是空资料；再删一次仍成功（幂等）', async () => {
+    control.setOpenId('oME')
+    await call('updateProfile', { nickname: '小鸭' })
+    await call('deleteAccount')
+    const login1: any = await call('login')
+    expect(login1.ok).toBe(true)
+    expect(login1.isNew).toBe(false)
+    expect(login1.user.nickname).toBe('')
+    const r2: any = await call('deleteAccount')
+    expect(r2).toEqual({ ok: true, deleted: true })
+    expect(control.dump('users')).toHaveLength(1)
+  })
+
+  it('大白话：删除资料按用户限频——超阈拒', async () => {
+    control.setOpenId('oME')
+    for (let i = 0; i < 5; i++) await call('deleteAccount')
+    const r: any = await call('deleteAccount')
+    expect(r).toEqual({ ok: false, error: 'RATE_LIMITED' })
+  })
+})

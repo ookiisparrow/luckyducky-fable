@@ -1,6 +1,6 @@
 import { ERR, moduleOfAction } from '@ldrw/shared'
 import { err, recordAnomaly } from '../../kit'
-import { login, updateProfile } from './actions/user'
+import { login, updateProfile, deleteAccount } from './actions/user'
 import { getProducts, getProductDetail, getContent, getPageContent } from './actions/catalog'
 import {
   activateCourse,
@@ -39,6 +39,7 @@ import { submitCheckpointPhoto } from './actions/checkpoint'
 const ACTIONS: Record<string, (event: unknown) => Promise<unknown>> = Object.assign(Object.create(null), {
   login,
   updateProfile,
+  deleteAccount,
   getProducts,
   getProductDetail,
   getContent,

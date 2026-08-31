@@ -30,7 +30,7 @@ let loaded = false
 const PRESET: Omit<KbRow, 'order'>[] = [
   { key: 'logistics:eta', question: '什么时候发货 / 多久到？', answer: '付款后 48 小时内发货，快递一般 3-5 天到；物流单号在「我的订单」可查。', category: 'logistics', enabled: true, featured: false },
   { key: 'activation:howto', question: '激活码怎么用？', answer: '收到材料包后扫卡片上的二维码，输入激活码即可进入课程。', category: 'activation', enabled: true, featured: false },
-  { key: 'aftersale:refund', question: '可以退货退款吗？', answer: '激活卡未拆封可 7 天无理由退；已激活进课不支持退款。', category: 'aftersale', enabled: true, featured: false },
+  { key: 'aftersale:refund', question: '可以退货退款吗？', answer: '激活卡未拆封可 7 天无理由退；已激活进课不支持退款。如需发票，请联系客服。', category: 'aftersale', enabled: true, featured: false },
   { key: 'tutorial:start', question: '零基础能学会吗？', answer: '可以，套装配分步视频，跟着做就能完成第一只小棉鸭。', category: 'tutorial', enabled: true, featured: false },
 ]
 

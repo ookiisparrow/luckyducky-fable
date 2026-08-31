@@ -114,3 +114,70 @@ export const updateProfile = withOpenId(
     return ok({ user })
   })
 )
+
+const OWNED_STRIP_CAP = 200 // 同 getMyCourses 上界·一人激活/进度极少触顶；触顶剩行下轮再删（ponytail: 不做成游标清扫器）
+
+/** 按归属字段有界摘除本人行（集合未建/读失败当空·fail-soft 不挡主路径）。 */
+async function removeOwned(db: any, coll: string, field: string, value: string): Promise<void> {
+  const res = await db
+    .collection(coll)
+    .where({ [field]: value })
+    .limit(OWNED_STRIP_CAP)
+    .get()
+    .catch(() => ({ data: [] }))
+  for (const d of res.data || []) {
+    await db
+      .collection(coll)
+      .doc(d._id)
+      .remove()
+      .catch(() => {})
+  }
+}
+
+/**
+ * 自助删除资料（隐私政策第六条「我的 / 删除资料」）：
+ * 抹掉可识别个人资料，摘掉课程权限与客服身份桥，订单行依法留存。
+ * 同一微信再登是空身份：资料空、课看不了；旧码不能凭本人身份抢回（activatedBy 改成 deleted:openid）。
+ */
+export const deleteAccount = withOpenId(
+  withRateLimit('deleteAccount', { max: 5, windowMs: 60_000 }, async ({ db, OPENID }) => {
+    const now = Date.now()
+    const blank = {
+      nickname: '',
+      avatar: '',
+      bio: '',
+      phone: '',
+      unionid: '',
+      csDataShare: { agreed: false, at: now },
+      deletedAt: now,
+      updatedAt: now,
+    }
+    const users = db.collection(COLLECTIONS.users)
+    const found = await users.where({ _openid: OPENID }).get()
+    if (found.data.length) {
+      await users.doc(found.data[0]._id).update({ data: blank })
+    } else {
+      await ensureDoc(COLLECTIONS.users, OPENID, { _openid: OPENID, createdAt: now, ...blank })
+    }
+
+    await removeOwned(db, COLLECTIONS.activations, '_openid', OPENID)
+    await removeOwned(db, COLLECTIONS.progress, '_openid', OPENID)
+    await removeOwned(db, COLLECTIONS.kfIdentity, 'openid', OPENID)
+
+    const qrs = await db
+      .collection(COLLECTIONS.qrcodes)
+      .where({ activatedBy: OPENID })
+      .limit(OWNED_STRIP_CAP)
+      .get()
+      .catch(() => ({ data: [] }))
+    for (const q of qrs.data || []) {
+      await db
+        .collection(COLLECTIONS.qrcodes)
+        .doc(q._id)
+        .update({ data: { activatedBy: 'deleted:' + OPENID } })
+        .catch(() => {})
+    }
+
+    return ok({ deleted: true })
+  })
+)
