@@ -21,7 +21,7 @@
 - [ ] 连接器 `wxpay_33nb7su` 存在，凭证未过期（证书序列号无空格）。
 - [ ] 主支付工作流 `sywxzfapifqzf_nncvqss2` 存在且**已发布**；入参表达式含 notify_url + payer.openid。
 - [ ] 退款工作流 `kbgzl_n8gojr3a` 存在且已发布；方法=申请退款，数据源=wxpay_33nb7su。
-- [ ] paynotify（正册 URL 含 `2065345255437447170`）+ refundnotify（尾号 `1863425`）的 script 节点代码 == `forward-node.js`（核对函数名 payCallback/refundCallback 与 resource 取值路径）。
+- [ ] paynotify（正册 URL 含 `2065345255437447170`）+ refundnotify（尾号 `1863425`）的 script 节点代码 == `forward-node.js`（核对三键 name/functionName/FunctionName、OUTER+resource merge、camelCase alias）。
 - [ ] `config.pay` 文档 == `01-支付退款工作流.md` §⑦（`tcb db` 可读核对 mode/subMchId/flowId/refundFlowId）。
 - [ ] 37 集合 + 云存储权限档位 == `02-库权限期望表.md`（绝无「所有人可读写」）。
 - [ ] **forward-node.js 与线上节点逐字核对**（本副本是据记录重建，首次须校正为权威）。
