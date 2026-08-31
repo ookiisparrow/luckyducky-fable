@@ -6,6 +6,7 @@
 export const APP_ACTION_MODULE: Record<string, string> = {
   login: 'identity',
   updateProfile: 'identity',
+  deleteAccount: 'identity',
   getProducts: 'shop',
   getProductDetail: 'shop',
   getContent: 'shop',

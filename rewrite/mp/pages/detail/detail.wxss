@@ -70,13 +70,16 @@
 .pdp-ship {
   margin-left: auto;
   align-self: center;
+  max-width: 280rpx;
   padding: 7rpx 16rpx;
   border-radius: 8rpx;
   background: #fff7ec;
   border: 1rpx solid #f6e2be;
   color: #e37318;
   font-size: 22rpx;
-  white-space: nowrap;
+  line-height: 1.35;
+  text-align: right;
+  white-space: normal;
 }
 .pdp-title {
   margin-top: 22rpx;

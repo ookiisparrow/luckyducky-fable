@@ -6,7 +6,8 @@
       "tier": "yellow",
       "appActions": [
         "login",
-        "updateProfile"
+        "updateProfile",
+        "deleteAccount"
       ],
       "adminActionFiles": [],
       "mpPages": [

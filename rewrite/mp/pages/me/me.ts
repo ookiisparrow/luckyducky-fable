@@ -1,7 +1,8 @@
 // 「我」页（M2 批13 真化）：静默登录回灌资料 + 继续学习卡 + 入口列。
 // 登录零资料采集（黄金 §九）；继续学习定位纯函数（不假装有课·无课卡片走「去逛逛」兜底）。
 import { tapHaptic } from '../../lib/haptics'
-import { login, getMyProgress } from '../../api/user'
+import { login, getMyProgress, deleteAccount } from '../../api/user'
+import { clearAll as clearAddresses } from '../../lib/address'
 import { getMyCourses } from '../../api/learning'
 import { getAllCourses } from '../../lib/courses'
 import { playbackCache } from '../../lib/playbackCache' // 续播段取址预热（我页停留窗口预热·进播放器 peek 命中零云往返·根因#15）
@@ -130,6 +131,43 @@ Page({
         wx.showToast({ title: '已退出登录', icon: 'none' })
       },
     })
+  },
+  // 删除资料（隐私政策第六条）：两次确认后清云端个人资料/课程权限 + 本地登录与地址簿。
+  // 上屏文案只用「我」页首屏字体已有的字（「注销账」不在 tier1·写上去会掉系统字体）。
+  _deleting: false,
+  onDeleteAccount() {
+    if (this._deleting) return
+    wx.showModal({
+      title: '删除资料',
+      content: '删除后这个微信不能再回到你的个人资料。学习记录和地址都会没有。订单还在。点继续才会删除。',
+      confirmText: '继续',
+      success: (r) => {
+        if (!r.confirm) return
+        wx.showModal({
+          title: '删除资料',
+          content: '删除后不能再看学习记录。',
+          confirmText: '删除',
+          success: (r2) => {
+            if (!r2.confirm) return
+            void this.runDeleteAccount()
+          },
+        })
+      },
+    })
+  },
+  async runDeleteAccount() {
+    if (this._deleting) return
+    this._deleting = true
+    const r = await deleteAccount()
+    this._deleting = false
+    if (!r.ok) {
+      wx.showToast({ title: '没删成请稍后再试', icon: 'none' })
+      return
+    }
+    clearAddresses()
+    loginGate.logout()
+    void this.refresh()
+    wx.showToast({ title: '已删除', icon: 'none' })
   },
   onCourses() {
     wx.navigateTo({ url: '/pages/my-courses/my-courses' })
