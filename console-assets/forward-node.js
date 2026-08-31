@@ -6,7 +6,7 @@
  * 工作流节点里、不在 git**——本文件是其正册副本，控制台节点变更须先改这里（先 repo 后控制台）。
  *
  * 现网 2026-08-30：只传 name + resource 会炸——工作流 SDK 认 functionName/FunctionName；
- * WeChat v3 常是 camelCase，且 out_trade_no 可能只在 OUTER output。merge+alias 后按 snake_case 转发。
+ * WeChat v3 常是 camelCase（tradeState / refundStatus / outTradeNo），且单号可能只在 OUTER output。merge+alias 后按 snake_case 转发。
  *
  * 节点环境：云开发工作流 script 节点（Node 运行时，@cloudbase/node-sdk 可用）。
  * 触发器变量名：wepayTrigger。空数据防御=`|| {}`。
@@ -32,6 +32,7 @@ exports.main = async (event) => {
   if (data.transactionId && !data.transaction_id) data.transaction_id = data.transactionId
   if (data.outTradeNo && !data.out_trade_no) data.out_trade_no = data.outTradeNo
   if (data.outRefundNo && !data.out_refund_no) data.out_refund_no = data.outRefundNo
+  if (data.refundStatus && !data.refund_status) data.refund_status = data.refundStatus
   // FunctionName：工作流 SDK 认 functionName/FunctionName，只写 name 会 FunctionName parameter could not be found
   await app.callFunction({
     name: 'payCallback',
@@ -58,6 +59,7 @@ exports.main = async (event) => {
 //   if (data.transactionId && !data.transaction_id) data.transaction_id = data.transactionId
 //   if (data.outTradeNo && !data.out_trade_no) data.out_trade_no = data.outTradeNo
 //   if (data.outRefundNo && !data.out_refund_no) data.out_refund_no = data.outRefundNo
+//   if (data.refundStatus && !data.refund_status) data.refund_status = data.refundStatus
 //   await app.callFunction({
 //     name: 'refundCallback',
 //     functionName: 'refundCallback',
