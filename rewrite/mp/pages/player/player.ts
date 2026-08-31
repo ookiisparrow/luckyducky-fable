@@ -5,7 +5,7 @@
 // seek。拖动几何（clientX→秒/磁吸/预览 left）移入 pages/player/seek.wxs 渲染层闭环（批5·根因#15：60Hz touchmove
 // 每帧 5 字段 setData 双向过桥＝跟手延迟/掉帧源）；逻辑层经 change:cfg 下发几何（seekCfg），收 WXS callMethod
 // onSeekTick（过秒·刷文案+震动·~10fps）/ onSeekCommit（松手·真 seek）。关键动作节点磁吸（nearestMark 双源在 seek.wxs·
-// 对拍钉死）+ 拖动阻尼震感配方照抄 pages/flip-demo 真机参考（lib/haptics 单源 shouldTick/VIBE_GAP_MS/DRAG_TICK_GAP_MS）。
+// 对拍钉死）+ 拖动阻尼震感配方单源 lib/haptics（shouldTick/VIBE_GAP_MS/DRAG_TICK_GAP_MS）。
 // 拖动浮层雪碧图缩略图窗（R36 后端未建）诚实降级为时间浮窗 + 命中节点时的鸭黄气泡。
 import { trackEvent, getHelpVideos, getPublicFaq } from '../../api/learning'
 import {
@@ -136,7 +136,7 @@ Page({
   _seekPrevSec: 0, // 拖动逐秒轻嗒判重锚点（onSeekTick 首个 tick＝拖动起始时置为当前 curSec）
   _lastSnapAt: -1, // 拖动进节点重嗒判重（onSeekTick 首个 tick 重置为 -1·新命中/换节点才震）
   _seekTextAt: 0, // 拖动文案 setData 节流时间戳（SEEK_TEXT_THROTTLE_MS·onSeekTick 用·位置 WXS 60fps、文案 ~10fps）
-  lastTick: 0, // 拖动阻尼「嗒」时间戳（配方单源 lib/haptics·照抄 pages/flip-demo）
+  lastTick: 0, // 拖动阻尼「嗒」时间戳（配方单源 lib/haptics）
   lastVibe: 0, // 事件震（vibe()）时间戳（同上·两类震共用时间地板防叠震）
   _backAt: 0, // 返回二次确认判定锚点（P5·BACK_CONFIRM_MS 窗口内二次按返回才真退，见 onBack）
   _wantSeg: '', // onLoad 期望起播段（存实例供 initCourse 课程级失败重试后仍定位到原目标段）
@@ -558,7 +558,7 @@ Page({
     return { rect: this._seekRect, durSec, marks, edgePx: this.seekEdgePx(), snapSec: MARK_SNAP_SEC }
   },
   // WXS 过秒回桥（批5·根因#15）：位置已由 seek.wxs 渲染层 60fps setStyle 落位，本方法只做「过桥才做」的两件事——
-  // ① 震感（配方单源 lib/haptics·数值用户真机拍板禁改·照抄 pages/flip-demo）：逐秒轻嗒（shouldTick·40ms 钳制快扫
+  // ① 震感（配方单源 lib/haptics·数值用户真机拍板禁改）：逐秒轻嗒（shouldTick·40ms 钳制快扫
   // 跳齿）+ 进节点重嗒（vibe('medium')·≥80ms 节流·两类震共用 lastTick/lastVibe 时间地板防叠震）；② 文案 ~100ms
   // 节流 setData（curClock/snapName·位置 60fps、文案 ~10fps 的可感知取舍已拍板）。首个 tick（!seeking）＝拖动起始
   // （原 onSeekStart 职责）：复位逐秒/节点判重锚点 + 进 seeking 态（阻断 onTimeUpdate 覆盖 seekPct 抢写 WXS 落位）。
@@ -619,7 +619,7 @@ Page({
     this.setData({ seeking: false, snapName: '', curSec: sec, curClock: formatClock(sec), seekPct })
   },
   // 事件震（进节点重嗒）单出口：≥VIBE_GAP_MS 节流，与拖动阻尼「嗒」共用 lastVibe/lastTick 时间地板防叠震
-  // （配方单源 lib/haptics·数值为用户真机拍板定版，照抄 pages/flip-demo 已验实现，改动需用户重新拍板）。
+  // （配方单源 lib/haptics·数值为用户真机拍板定版，改动需用户重新拍板）。
   vibe(type: 'light' | 'medium') {
     const now = Date.now()
     if (now - this.lastVibe < VIBE_GAP_MS) return

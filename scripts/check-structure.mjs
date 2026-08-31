@@ -1557,13 +1557,13 @@ export const repoChecks = [
     // 主按钮点按触觉反馈单源（病根#5 样板复制即漂移）：2026-07-14 用户「深色主要按钮都增加震动反馈」——深色/紫墨
     // 填充主 CTA 点按「震一下」的能力收口 lib/haptics.ts 的 tapHaptic（轻档 impact + VIBE_GAP_MS 节流·单源），
     // 页面处理器一律调 tapHaptic()、禁散写裸 wx.vibrateShort（否则强度/节流各写各的、复制即漂移·同 flipLever→
-    // haptics 收编前科）。例外三处：lib/haptics.ts（单源定义本身）+ pages/flip-demo、pages/player（拖动逐格「嗒」/
-    // seek 拖动阻尼，用各自实例节流的 vibe()·非离散点按·不并入 tapHaptic）。本守卫为预防性（当前即绿·锁未来不散
-    // 写）——反向自检靠篡改（页面塞裸 wx.vibrateShort→红）。覆盖面（哪些按钮该震）是判断题·靠约定+评审，不建脆弱
-    // 的枚举式覆盖守卫（§7 防摆设·同 #8/#10 靠人）。
+    // haptics 收编前科）。例外两处：lib/haptics.ts（单源定义本身）+ pages/player（seek 拖动阻尼，用实例节流
+    // vibe()·非离散点按·不并入 tapHaptic）。本守卫为预防性（当前即绿·锁未来不散写）——反向自检靠篡改
+    // （页面塞裸 wx.vibrateShort→红）。覆盖面（哪些按钮该震）是判断题·靠约定+评审，不建脆弱的枚举式覆盖守卫
+    // （§7 防摆设·同 #8/#10 靠人）。flip-demo 演示页已从开发版卸下（rw-mp-no-flip-demo-pack）。
     id: 'rw-mp-tap-haptic-single-source',
     roots: ['#5'],
-    desc: '主按钮点按触觉反馈单源（病根#5 复制漂移）：rewrite/mp 离散点按震感一律走 lib/haptics.ts 的 tapHaptic（须导出）·页面 .ts 禁散写裸 wx.vibrateShort；例外仅 lib/haptics.ts（单源）+ pages/flip-demo/player（拖动/seek 阻尼各自实例节流 vibe·非点按）——防强度/节流复制各写各的漂移',
+    desc: '主按钮点按触觉反馈单源（病根#5 复制漂移）：rewrite/mp 离散点按震感一律走 lib/haptics.ts 的 tapHaptic（须导出）·页面 .ts 禁散写裸 wx.vibrateShort；例外仅 lib/haptics.ts（单源）+ pages/player（seek 阻尼各自实例节流 vibe·非点按）——防强度/节流复制各写各的漂移',
     run() {
       const base = join(ROOT, 'rewrite/mp')
       if (!existsSync(base)) return ['rewrite/mp 缺失——守卫扫描面消失（rw-mp-tap-haptic-single-source）']
@@ -1572,8 +1572,8 @@ export const repoChecks = [
       if (!existsSync(join(ROOT, lib))) bad.push(`${lib} 缺失——点按震感单源丢失（病根#5）`)
       else if (!/export\s+function\s+tapHaptic\b/.test(readFileSync(join(ROOT, lib), 'utf8')))
         bad.push(`${lib} 未导出 tapHaptic——离散点按震感须有单源 helper（病根#5）`)
-      // 例外白名单：单源本身 + 拖动/seek 阻尼两处（各自实例节流 vibe·非离散点按）
-      const allow = new Set([lib, 'rewrite/mp/pages/flip-demo/flip-demo.ts', 'rewrite/mp/pages/player/player.ts'])
+      // 例外白名单：单源本身 + 播放页 seek 阻尼（实例节流 vibe·非离散点按）
+      const allow = new Set([lib, 'rewrite/mp/pages/player/player.ts'])
       const walk = (d) => {
         for (const e of lsScan(d)) {
           const p = join(d, e)
@@ -1584,7 +1584,7 @@ export const repoChecks = [
             const rel = relative(ROOT, p).replace(/\\/g, '/')
             if (allow.has(rel)) continue
             if (/wx\.vibrateShort\s*\(/.test(readFileSync(p, 'utf8')))
-              bad.push(`${rel} 散写裸 wx.vibrateShort——离散点按震感须走 lib/haptics.ts 的 tapHaptic（防强度/节流复制漂移·病根#5；拖动/seek 阻尼例外仅 flip-demo/player）`)
+              bad.push(`${rel} 散写裸 wx.vibrateShort——离散点按震感须走 lib/haptics.ts 的 tapHaptic（防强度/节流复制漂移·病根#5；拖动/seek 阻尼例外仅 player）`)
           }
         }
       }
@@ -3393,6 +3393,29 @@ import { PROD_ENV } from './lib/env.mjs'（单源·病根#5·债#30①）`)
         if (offenders.length)
           bad.push(`rewrite/mp 内 wx.openCustomerServiceChat 不该在 pages 下内联调用（${offenders.join(', ')}）——客服入口须收口 utils/customerService.ts 单源（病根#5）`)
       }
+      return bad
+    },
+  },
+  {
+    // 开发版提审包禁带 A/B 翻转演示页（Issue #117）：pages/flip-demo 是隔离真机对比台，不是顾客面。
+    // 测试版分支另留；本守卫锁开发版/正式包不得注册、不得留目录（文件在包里即会被审核员点到）。
+    id: 'rw-mp-no-flip-demo-pack',
+    roots: ['#8'],
+    desc: '开发版/正式提审包不得收录 A/B 翻转演示页（Issue #117）：app.json 不得注册 pages/flip-demo/flip-demo，pages/flip-demo 目录不得存在——演示页只留测试版分支；提审包带 demo 会被审核员点到（根因#8 构建过≠真能用）',
+    run() {
+      const bad = []
+      const appJsonPath = join(ROOT, 'rewrite/mp/app.json')
+      if (!existsSync(appJsonPath)) return ['rewrite/mp/app.json 缺失——守卫扫描面消失（rw-mp-no-flip-demo-pack）']
+      let appJson
+      try {
+        appJson = JSON.parse(readFileSync(appJsonPath, 'utf8'))
+      } catch (e) {
+        return [`rewrite/mp/app.json 不是合法 JSON：${e.message}`]
+      }
+      if ((appJson.pages || []).includes('pages/flip-demo/flip-demo'))
+        bad.push('app.json 仍注册 pages/flip-demo/flip-demo——开发版提审包不得带 A/B 演示页（Issue #117）')
+      if (existsSync(join(ROOT, 'rewrite/mp/pages/flip-demo')))
+        bad.push('rewrite/mp/pages/flip-demo 目录仍在——演示页文件会随包上传，须从开发版删掉（测试版分支另留）')
       return bad
     },
   },
