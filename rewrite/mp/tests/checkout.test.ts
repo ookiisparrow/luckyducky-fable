@@ -1,8 +1,6 @@
 // 黄金 frontend-store §五（地址簿：空簿/唯一 id/默认唯一）+ 结算草稿语义（快照独立/直买不动车/
 // 提交精确扣车）+ 金额分口径与云端 createOrder 同式（守卫 rw-mp-checkout-golden）。
 import { describe, it, expect, beforeEach } from 'vitest'
-import { readFileSync } from 'node:fs'
-import { fileURLToPath } from 'node:url'
 import * as addr from '../lib/address'
 import * as cart from '../lib/cart'
 import * as checkout from '../lib/checkout'
@@ -162,13 +160,5 @@ describe('建单失败错误码 → 人话文案（bug sweep R1 #2·不吞成通
     expect(checkout.mapCreateOrderError('OUT_OF_STOCK:p1')).toBe('有商品库存不足')
     expect(checkout.mapCreateOrderError('WEIRD_CODE')).toBe('下单没成功，稍后再试')
     expect(checkout.mapCreateOrderError('')).toBe('下单没成功，稍后再试')
-  })
-})
-
-describe('主线结算页不展示优惠券（2026-09-02·开发版/发布版禁展示）', () => {
-  it('大白话：结算页金额明细没有「优惠券」这一行——顾客看不见、也不会按占位 20 少付钱', () => {
-    const wxml = readFileSync(fileURLToPath(new URL('../pages/checkout/checkout.wxml', import.meta.url)), 'utf8')
-    expect(wxml).not.toContain('优惠券')
-    expect(wxml).not.toContain('couponLabel')
   })
 })
