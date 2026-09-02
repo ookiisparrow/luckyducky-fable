@@ -160,6 +160,7 @@
     </view>
   </view>
 
+  <view class="ld-me-ver">{{versionLine}}</view>
   <view class="ld-me-pad-bottom"></view>
 </view>
 </scroll-view>
