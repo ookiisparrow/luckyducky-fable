@@ -19,7 +19,6 @@ Page({
     addons: CHECKOUT_ADDONS.map((a) => ({ ...a, added: false, priceNum: a.price.toFixed(2) })),
     goodsLabel: '',
     shipLabel: '',
-    couponLabel: '',
     amountNum: '', // 实付金额数字（无符号·底坞/明细大字用；金额单源仍在云端/summaryFen）
     count: 0, // 合计件数（草稿含已勾搭配购·底坞展示）
     submitting: false,
@@ -80,7 +79,6 @@ Page({
       addons: CHECKOUT_ADDONS.map((a) => ({ ...a, added: draft.items.some((l) => l.id === a.id), priceNum: a.price.toFixed(2) })),
       goodsLabel: checkout.fenLabel(s.goodsFen),
       shipLabel: s.shipFen ? checkout.fenLabel(s.shipFen) : '包邮',
-      couponLabel: '-' + checkout.fenLabel(s.couponFen),
       amountNum: (s.amountFen / 100).toFixed(2),
       count: draft.items.reduce((n, l) => n + l.qty, 0),
     })

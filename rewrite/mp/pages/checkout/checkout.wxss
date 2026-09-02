@@ -329,9 +329,6 @@
   color: var(--ld-content) !important;
   letter-spacing: 0.4rpx;
 }
-.co-sum-row.discount .co-sum-v {
-  color: var(--ld-purple) !important; /* 券抵扣沿 cart 用幸运紫强调（mp 无 red token） */
-}
 .co-sum-div {
   height: 1rpx;
   background: var(--ld-line);

@@ -1,6 +1,8 @@
 /**
  * 结算搭配购 + 优惠/运费常量——单一来源（设计约束#5 镜像消灭·镜像旧线 seed/checkout.ts，parity 焊死）。
- * 云端 createOrder 派生权威定价；miniapp（M2）派生 UI。占位券 COUPON 开发期无条件抵扣，真实券系统一并替换只改这里。
+ * 云端 createOrder 派生权威定价；miniapp（M2）派生 UI。
+ * 主线 COUPON 恒 0：开发版/发布版不抵扣、顾客页不展示优惠券（2026-09-02 老板明令）。
+ * 真券/领取只在 git test / yaliceshi，禁止合进 main。
  */
 export interface CheckoutAddon {
   id: string
@@ -13,5 +15,5 @@ export const CHECKOUT_ADDONS: CheckoutAddon[] = [
   { id: 'yarn', name: '补充棉线包 · 暖色 5 色', price: 29 },
 ]
 
-export const COUPON = 20 // 优惠券抵扣（元·占位）
+export const COUPON = 0 // 主线不抵扣（元）；顾客可见版本禁展示优惠券
 export const SHIP = 0 // 运费（0 = 包邮）

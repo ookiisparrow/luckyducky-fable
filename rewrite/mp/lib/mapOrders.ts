@@ -124,7 +124,8 @@ export function mapOrder(raw: unknown): OrderVM | null {
     address: a ? { name: String(a.name || ''), phone: String(a.phone || ''), region: String(a.region || ''), detail: String(a.detail || '') } : null,
     goodsLabel: money(o.goods),
     shipLabel: Number(o.ship) > 0 ? money(o.ship) : '包邮',
-    couponLabel: Number(o.coupon) > 0 ? '-' + money(o.coupon) : '',
+    // 主线顾客页不展示优惠券（2026-09-02）：历史单可能仍带 coupon 快照，标签恒空，实付走库内 amount。
+    couponLabel: '',
   }
 }
 

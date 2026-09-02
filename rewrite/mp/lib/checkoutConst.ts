@@ -11,5 +11,5 @@ export const CHECKOUT_ADDONS: CheckoutAddon[] = [
   { id: 'yarn', name: '补充棉线包 · 暖色 5 色', price: 29 },
 ]
 
-export const COUPON = 20 // 优惠券抵扣（元·占位）
+export const COUPON = 0 // 主线不抵扣（元）；顾客可见版本禁展示优惠券（镜像 shared/src/checkout.ts）
 export const SHIP = 0 // 运费（0 = 包邮）

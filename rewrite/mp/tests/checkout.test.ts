@@ -97,12 +97,15 @@ describe('结算草稿（快照语义·直买不动车·提交精确扣车）', 
     checkout.toggleAddon('hook') // 再加回
     checkout.toggleAddon('ghost') // 未知搭配购不理
     const s = checkout.summaryFen()
+    expect(COUPON).toBe(0) // 主线不抵扣（2026-09-02）
     expect(s.goodsFen).toBe(128 * 3 * 100 + 3900)
+    expect(s.couponFen).toBe(0)
     expect(s.amountFen).toBe(s.goodsFen + s.shipFen - COUPON * 100)
+    expect(s.amountFen).toBe(s.goodsFen + s.shipFen) // 券 0：应付=商品+运费
     expect(Number.isInteger(s.amountFen)).toBe(true)
-    // 低于券额不出负数（云端 Math.max(0,…) 同式）
+    // 低价货按原价付、不静默少 20、也不出负数
     checkout.prepareBuyNow({ id: 'cheap', name: '便宜货', price: 5 })
-    expect(checkout.summaryFen().amountFen).toBe(0)
+    expect(checkout.summaryFen().amountFen).toBe(500)
     // 提交精确扣车：3 件 p1 的草稿提交 → 车里 p1 整行走（含搭配购行不反噬车）
     cart.__resetForTest()
     storage = {}

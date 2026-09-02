@@ -58,7 +58,7 @@ export function toggleAddon(addonId: string): void {
   else draftItems.push({ id: a.id, sku: '', name: a.name, tag: '搭配购', price: a.price, qty: 1, cover: '', lineId: cart.lineIdOf(a.id, '') })
 }
 
-/** 金额汇总（分整数·与云端 createOrder 同式：应付 = max(0, 商品 + 运费 − 券)）。 */
+/** 金额汇总（分整数·与云端 createOrder 同式：应付 = max(0, 商品 + 运费 − 券)；主线券恒 0）。 */
 export function summaryFen(): { goodsFen: number; shipFen: number; couponFen: number; amountFen: number } {
   const goodsFen = draftItems.reduce((n, l) => n + Math.round(l.price * 100) * l.qty, 0)
   const shipFen = Math.round(SHIP * 100)

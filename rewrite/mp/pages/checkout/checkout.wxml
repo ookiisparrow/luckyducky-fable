@@ -84,7 +84,6 @@
       <view class="co-summary">
         <view class="co-sum-row"><text>商品金额</text><text class="co-sum-v">{{goodsLabel}}</text></view>
         <view class="co-sum-row"><text>运费</text><text class="co-sum-v">{{shipLabel}}</text></view>
-        <view class="co-sum-row discount"><text>优惠券</text><text class="co-sum-v">{{couponLabel}}</text></view>
         <view class="co-sum-div"></view>
         <view class="co-sum-row total">
           <text>实付款</text>
