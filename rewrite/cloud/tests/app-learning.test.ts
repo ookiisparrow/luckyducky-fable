@@ -171,6 +171,44 @@ describe('confirmEnter（退货权法律节点·黄金 §二）', () => {
     expect(it0.enteredQty).toBe(1)
   })
 
+  it('大白话：同一人两单同款，只确认第一件的码——只锁第一单；第二单仍可按未进课退', async () => {
+    // 已进课/退货权按订单行，不按「用户+商品」。第一单确认进课后，后买的同款未确认仍可退。
+    control.seed('products', [{ _id: 'p1', id: 'p1', courseId: 'c1' }])
+    control.seed('orders', [
+      {
+        _id: 'o1',
+        id: 'o1',
+        _openid: 'oME',
+        status: 'paid',
+        amount: 198,
+        goods: 198,
+        createdAt: 100,
+        items: [{ productId: 'p1', lineId: 'p1__', spec: '', name: '小熊', price: 198, qty: 1, refundable: true, enteredQty: 0 }],
+      },
+      {
+        _id: 'o2',
+        id: 'o2',
+        _openid: 'oME',
+        status: 'paid',
+        amount: 198,
+        goods: 198,
+        createdAt: 200,
+        items: [{ productId: 'p1', lineId: 'p1__', spec: '', name: '小熊', price: 198, qty: 1, refundable: true, enteredQty: 0 }],
+      },
+    ])
+    const r = await call('confirmEnter', { code: 'CODE1' })
+    expect(r.revoked).toEqual({ orderId: 'o1', lineId: 'p1__', productId: 'p1' })
+    const byId = Object.fromEntries(control.dump('orders').map((o: any) => [o.id, o]))
+    expect(byId.o1.items[0].refundable).toBe(false)
+    expect(byId.o1.items[0].enteredQty).toBe(1)
+    expect(byId.o2.items[0].refundable).toBe(true)
+    expect(byId.o2.items[0].enteredQty || 0).toBe(0)
+    expect((await call('applyRefund', { orderId: 'o1', lineId: 'p1__' })).error).toBe('NOT_REFUNDABLE')
+    const refund2 = await call('applyRefund', { orderId: 'o2', lineId: 'p1__' })
+    expect(refund2.ok).toBe(true)
+    expect(refund2.afterSale.orderId).toBe('o2')
+  })
+
   it('大白话：数量级进课——买 3 进 1 只记一件、整行仍可退；重复确认不多扣', async () => {
     control.seed('products', [{ _id: 'p1', id: 'p1', courseId: 'c1' }])
     control.seed('orders', [

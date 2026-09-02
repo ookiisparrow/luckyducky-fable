@@ -68,10 +68,15 @@ export async function ensure(db: any, coll: string) {
   }
 }
 
-// 激活码状态数据链（退款判据 + 订单详情共用·根因#8 真数据不伪造）：买家对某商品对应课程是否
-// 已激活/已进课。courseId＝products.courseId·回退 course-<productId>（与 genQrcodes/StepBatch 同口径）；
-// 查 activations（activateCourse 写的 {_openid, courseId, enteredAt}）。
-export async function activationFor(db: any, openid: string, productId: string) {
+// 该件进课态（退款判据 + 订单详情共用·根因#8 真数据不伪造）：
+// 已进课＝本单这一行 enteredQty>0，不查「这人这门课有没有进过」。扫码只到欢迎页、不锁退货权。
+// courseId＝products.courseId·回退 course-<productId>（与 genQrcodes/StepBatch 同口径）。
+export async function activationFor(
+  db: any,
+  openid: string,
+  productId: string,
+  line?: { enteredQty?: number } | null
+) {
   const pid = String(productId || '')
   const prod = await db
     .collection('products')
@@ -79,6 +84,10 @@ export async function activationFor(db: any, openid: string, productId: string) 
     .get()
     .catch(() => null)
   const courseId = (prod && prod.data && prod.data.courseId) || 'course-' + pid
+  const entered = (Number(line && line.enteredQty) || 0) > 0
+  if (!entered) {
+    return { courseId, activated: false, entered: false, code: '', enteredAt: null }
+  }
   const acts = openid
     ? await db
         .collection('activations')
@@ -87,11 +96,11 @@ export async function activationFor(db: any, openid: string, productId: string) 
         .then((r: any) => r.data)
         .catch(() => [])
     : []
-  const act = acts[0] || null
+  const act = (acts || []).find((a: any) => a && a.enteredAt) || acts[0] || null
   return {
     courseId,
-    activated: !!act,
-    entered: !!(act && act.enteredAt),
+    activated: true,
+    entered: true,
     code: act ? act.qrcodeId || act.code || act._id : '',
     enteredAt: act ? act.enteredAt || null : null,
   }

@@ -418,8 +418,8 @@ onMounted(() => {
             <div class="crit-l">
               <div class="crit-ib"><GraduationCap :size="15" :stroke-width="1.8" /></div>
               <div>
-                <div class="crit-a">这门课进课（课程级）</div>
-                <div class="crit-b">{{ verdict.courseId || '—' }} · 是否拦本单看上方判据</div>
+                <div class="crit-a">本单此行进课</div>
+                <div class="crit-b">{{ verdict.courseId || '—' }} · 只看这一单有没有确认进课</div>
               </div>
             </div>
             <span class="crit-chip" :class="verdict.entered ? 'note' : 'good'">{{ verdict.entered ? '已进课' : '未进课' }}</span>
