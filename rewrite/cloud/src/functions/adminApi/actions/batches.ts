@@ -1,4 +1,5 @@
 import { randomBytes } from 'crypto'
+import { pageQuery } from '../../../kit'
 import { reply, type Ctx } from '../lib'
 
 // 分页全取（债#22：避免单次拉取封顶截断——批次/码增长后旧码被挤出工作台）。
@@ -111,9 +112,18 @@ export async function createBatch({ db, data }: Ctx) {
   return reply(200, { ok: true, batchId: r.batchId, codes: r.codes })
 }
 
+const CODE_PAGE = 50
+
 export async function listBatchCodes({ db, data }: Ctx) {
   const batchId = String(data.batchId || '')
   if (!batchId) return reply(400, { ok: false, error: 'NO_BATCH' })
-  const all = await fetchAll(() => db.collection('qrcodes').where({ batchId }))
-  return reply(200, { ok: true, codes: all.map((q: any) => q._id) })
+  // 一批可有几百到几千张：默认一页 50、limit 钳到 200，cursor 翻页（根因#7）。
+  // createdAt 同批同值（generate 一次 now），靠 kit 复合游标 {_id} 打破平局。
+  const paged = await pageQuery(db, 'qrcodes', { batchId }, 'createdAt', data, CODE_PAGE, 'asc')
+  return reply(200, {
+    ok: true,
+    codes: paged.list.map((q: any) => q._id),
+    nextCursor: paged.nextCursor,
+    hasMore: paged.hasMore,
+  })
 }

@@ -271,7 +271,7 @@ describe('分片上传（黄金：缺号拒·重组等字节·清理）', () => 
   })
 })
 
-describe('码批次（黄金：数量闸·聚合·分页全取）', () => {
+describe('码批次（黄金：数量闸·聚合·列码 cursor 分页）', () => {
   it('大白话：数量漏传/非法拒不静默成 1；成功透传批次与码；超大数量钳到上限', async () => {
     expect((await post('createBatch', { courseId: 'c1' })).error).toBe('BAD_ARGS')
     expect((await post('createBatch', { courseId: 'c1', count: 0 })).error).toBe('BAD_ARGS')
@@ -288,7 +288,7 @@ describe('码批次（黄金：数量闸·聚合·分页全取）', () => {
     expect(written.every((q: any) => q.courseId === 'c1')).toBe(true)
   })
 
-  it('大白话：批次聚合总数/已激活且不混别课；列码分页全取不被单页截断', async () => {
+  it('大白话：批次聚合总数/已激活且不混别课；列码默认一页不超过 50', async () => {
     const codes = Array.from({ length: 250 }, (_, i) => ({
       _id: 'K' + i,
       courseId: 'c1',
@@ -304,6 +304,38 @@ describe('码批次（黄金：数量闸·聚合·分页全取）', () => {
     expect(b1.activated).toBe(100)
 
     const lc = await post('listBatchCodes', { batchId: 'b1' })
-    expect(lc.codes.length).toBe(200) // 跨页取齐
+    expect(lc.codes.length).toBeLessThanOrEqual(50) // 默认一页·不一次铺 200
+    expect(lc.hasMore).toBe(true)
+    expect(lc.nextCursor).toBeTruthy()
+    expect((await post('listBatchCodes', {})).error).toBe('NO_BATCH')
+  })
+
+  it('大白话：列码 cursor 翻页不重不漏，走完拿齐一批、不混别批', async () => {
+    const codes = Array.from({ length: 80 }, (_, i) => ({
+      _id: 'P' + String(i).padStart(3, '0'),
+      courseId: 'c1',
+      batchId: 'b-page',
+      status: 'unused',
+      createdAt: 1000 + i,
+    }))
+    control.seed('qrcodes', [...codes, { _id: 'other', courseId: 'c1', batchId: 'b-other', status: 'unused', createdAt: 1 }])
+    const seen = new Set<string>()
+    let cursor: unknown = undefined
+    for (let round = 0; round < 8; round++) {
+      const p = await post('listBatchCodes', { batchId: 'b-page', cursor, limit: 20 })
+      expect(p.ok).toBe(true)
+      expect(p.codes.length).toBeLessThanOrEqual(20)
+      for (const c of p.codes) {
+        expect(seen.has(c)).toBe(false)
+        seen.add(c)
+      }
+      if (!p.hasMore) {
+        expect(p.nextCursor).toBe(null)
+        break
+      }
+      cursor = p.nextCursor
+    }
+    expect(seen.size).toBe(80)
+    expect(seen.has('other')).toBe(false)
   })
 })

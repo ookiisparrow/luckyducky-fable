@@ -1,9 +1,9 @@
 <script setup lang="ts">
 // 激活码批次（design/console.pen S9 视觉 + 批次详情抽屉·M3 UI 批6）：统计卡/进度条/状态 chip 由真聚合派生、
-// 详情抽屉码表接 listBatchCodes 真码 + CSV 导出（客户端真生成）。
+// 详情抽屉码表接 listBatchCodes 真码（cursor 分页，一页 50）+ CSV/印刷包另取齐整批。
 // 诚实边界：后端 listBatches 需 courseId（无「列全量批次」action）——按课程范围查（非跨课「全部」）；
 // listBatchCodes 只回码串无每码激活态——码表不标单码已激活/未用（记待办）。印刷包 ZIP 已还原（卡面SVG+地址CSV+说明·二轮批Cards-2）。
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import QRCode from 'qrcode'
 import JSZip from 'jszip'
@@ -37,6 +37,14 @@ const filter = ref<'all' | 'using' | 'used' | 'fresh'>('all')
 const detail = ref<BatchRow | null>(null)
 const codes = ref<string[]>([])
 const codesLoading = ref(false)
+const CODE_PAGE = 50 // 一批可有几百到几千张·一屏只看一页（根因#7）
+const BATCH_PAGE = 20 // 批次表本身也翻页，避免批次多时一次铺开
+const codeHasMore = ref(false)
+const codeNextCursor = ref<unknown>(null)
+const codePage = ref(1)
+const codeCursors = ref<unknown[]>([]) // 已走过的游标栈·上一页用
+const firstCode = ref('') // 本批首码（测试二维码用·不随翻页漂）
+const batchPage = ref(1)
 const urlPrefix = ref('') // 激活码落地网址前缀（换皮 CSV 只导码不导网址·印刷厂拿不到落地地址）
 const testQr = ref('') // 测试二维码 dataURL（量产前扫码验落地页·换皮丢了这个·根因#8）
 const exportBlockedMsg = ref('') // 导出 fail-closed 提示（未配网址前缀时挡导出·印刷交付物必须是完整网址）
@@ -85,6 +93,14 @@ const shown = computed(() => {
     (b) => (filter.value === 'all' || statusOf(b) === filter.value) && (!q || b.batchId.toLowerCase().includes(q))
   )
 })
+const batchPages = computed(() => Math.max(1, Math.ceil(shown.value.length / BATCH_PAGE)))
+const pagedShown = computed(() => {
+  const start = (batchPage.value - 1) * BATCH_PAGE
+  return shown.value.slice(start, start + BATCH_PAGE)
+})
+watch([filter, search, rows], () => {
+  batchPage.value = 1
+})
 const pct = (b: BatchRow) => (b.total ? Math.min(100, Math.round((b.activated / b.total) * 100)) : 0)
 
 const loadGen = useLatest() // 乱序守卫（G1·P1）：切课/连点「载入课程」时旧回包别把新课的 loadedCourse 污染成旧课——
@@ -129,17 +145,66 @@ async function doCreate() {
 }
 
 const codesGen = useLatest() // 码表乱序守卫（P1·A 的码别配到 B 的批次头·防印错卡·根因#8）
+function applyCodePage(r: { ok: boolean; codes?: unknown; nextCursor?: unknown; hasMore?: unknown }, page: number) {
+  codes.value = r.ok ? ((r.codes as string[]) || []) : []
+  codeHasMore.value = !!(r.ok && r.hasMore)
+  codeNextCursor.value = r.ok ? r.nextCursor : null
+  codePage.value = page
+  if (page === 1 && codes.value[0]) firstCode.value = codes.value[0]
+}
 async function openDetail(b: BatchRow) {
   detail.value = b
   codes.value = []
+  codeHasMore.value = false
+  codeNextCursor.value = null
+  codePage.value = 1
+  codeCursors.value = []
+  firstCode.value = ''
   testQr.value = ''
   exportBlockedMsg.value = ''
   codesLoading.value = true
   const my = codesGen.begin()
-  const r = await listBatchCodes(b.batchId)
+  const r = await listBatchCodes(b.batchId, { limit: CODE_PAGE })
   if (codesGen.isStale(my) || detail.value?.batchId !== b.batchId) return // 已切别批次·丢弃过期码表（防码/头错配印错卡）
-  codes.value = r.ok ? (r.codes as string[]) : []
+  applyCodePage(r, 1)
   codesLoading.value = false
+}
+async function nextCodes() {
+  if (!detail.value || !codeHasMore.value || codeNextCursor.value == null || codesLoading.value) return
+  const forBatch = detail.value.batchId
+  const cursor = codeNextCursor.value
+  codesLoading.value = true
+  const g = codesGen.peek()
+  const r = await listBatchCodes(forBatch, { cursor, limit: CODE_PAGE })
+  if (codesGen.isStale(g) || detail.value?.batchId !== forBatch) return
+  codeCursors.value.push(cursor)
+  applyCodePage(r, codePage.value + 1)
+  codesLoading.value = false
+}
+async function prevCodes() {
+  if (!detail.value || codePage.value <= 1 || codesLoading.value) return
+  const forBatch = detail.value.batchId
+  const targetPage = codePage.value - 1
+  const cursor = targetPage <= 1 ? undefined : codeCursors.value[targetPage - 2]
+  codesLoading.value = true
+  const g = codesGen.peek()
+  const r = await listBatchCodes(forBatch, { cursor, limit: CODE_PAGE })
+  if (codesGen.isStale(g) || detail.value?.batchId !== forBatch) return
+  codeCursors.value.pop()
+  applyCodePage(r, targetPage)
+  codesLoading.value = false
+}
+async function collectAllCodes(batchId: string): Promise<string[] | null> {
+  const all: string[] = []
+  let cursor: unknown = undefined
+  for (let i = 0; i < 50; i++) {
+    const r = await listBatchCodes(batchId, { cursor, limit: 200 })
+    if (!r.ok) return null
+    all.push(...((r.codes as string[]) || []))
+    if (!r.hasMore || r.nextCursor == null) return all
+    cursor = r.nextCursor
+  }
+  return all
 }
 function closeDetail() {
   detail.value = null
@@ -147,14 +212,14 @@ function closeDetail() {
 }
 // 测试二维码（量产前扫码验落地页·换皮丢·根因#8「拿到≠用通」）：取首码生成 QR，手机微信扫屏验证
 async function makeTestQr() {
-  const first = codes.value[0]
+  const first = firstCode.value || codes.value[0]
   if (!first) return
   testQr.value = await QRCode.toDataURL(codeUrl(first), { width: 320, margin: 1 })
 }
 // 印刷包 ZIP（换皮丢·旧台 downloadPack·印刷厂拿不到矢量卡面与制卡说明·整条「设计→打包→交付」链断）：
 // 卡面正面.svg + 卡面反面.svg（取该课产品的卡片设计·课程编号 course-<productId> 反推 productId）+ 地址清单.csv + 说明.txt。
 async function downloadPack() {
-  if (!detail.value || !codes.value.length || packing.value) return
+  if (!detail.value || packing.value) return
   // fail-closed（用户拍板 2026-07-08）：印刷交付物必须是完整网址，未配置网址前缀不许导出——
   // 印错「仅码无址」的包给印刷厂等于交付物废掉，宁可挡下不让走、也不悄悄降级成单列码。
   if (!urlPrefix.value.trim()) {
@@ -164,11 +229,16 @@ async function downloadPack() {
   exportBlockedMsg.value = ''
   packing.value = true
   try {
+    const all = await collectAllCodes(detail.value.batchId)
+    if (!all || !all.length) {
+      exportBlockedMsg.value = '取齐本批码失败，请稍后重试'
+      return
+    }
     const productId = loadedCourse.value.replace(/^course-/, '')
     const r = await getCard(productId)
     const zip = new JSZip()
     const head = urlPrefix.value ? '激活码,网址' : '激活码'
-    const csv = [head, ...codes.value.map((c) => (urlPrefix.value ? `${c},${codeUrl(c)}` : c))].join('\n')
+    const csv = [head, ...all.map((c) => (urlPrefix.value ? `${c},${codeUrl(c)}` : c))].join('\n')
     zip.file('二维码地址.csv', '﻿' + csv) // BOM 防 Excel 中文乱码
     const card = (r as any).ok ? (r as any).card : null
     if (card) {
@@ -194,16 +264,21 @@ async function downloadPack() {
 }
 
 // CSV 导出：换皮只导「激活码」单列·印刷厂拿不到落地地址；补「网址」列（激活码,完整URL·Excel BOM）
-function exportCsv() {
-  if (!detail.value || !codes.value.length) return
+async function exportCsv() {
+  if (!detail.value) return
   // fail-closed（同 downloadPack）：未配网址前缀不许导出，防印刷厂拿到「仅码无址」的废交付物
   if (!urlPrefix.value.trim()) {
     exportBlockedMsg.value = '先在「设置」配置扫码网址前缀，印刷交付物必须是完整网址'
     return
   }
   exportBlockedMsg.value = ''
+  const all = await collectAllCodes(detail.value.batchId)
+  if (!all || !all.length) {
+    exportBlockedMsg.value = '取齐本批码失败，请稍后重试'
+    return
+  }
   const head = urlPrefix.value ? '激活码,网址' : '激活码'
-  const lines = codes.value.map((c) => (urlPrefix.value ? `${c},${codeUrl(c)}` : c))
+  const lines = all.map((c) => (urlPrefix.value ? `${c},${codeUrl(c)}` : c))
   const csv = [head, ...lines].join('\n')
   const url = URL.createObjectURL(new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8' })) // BOM 防 Excel 中文乱码
   const a = document.createElement('a')
@@ -219,7 +294,7 @@ function exportCsv() {
     <PageHeader
       v-if="!embed"
       title="二维码批次"
-      sub="激活卡批次的生成 · 印刷打包 · 激活追踪——一码一地址、一码一用"
+      sub="按一次生成分成一批；打开一批翻页看码，不会一次铺开整批"
     >
       <UiButton :disabled="!loadedCourse" @click="creating = !creating">＋ 生成新批次</UiButton>
     </PageHeader>
@@ -270,7 +345,7 @@ function exportCsv() {
         <div class="ld-th r" :style="{ width: '128px' }">操作</div>
       </div>
       <div class="ld-tbody">
-        <div v-for="b in shown" :key="b.batchId" class="ld-tr">
+        <div v-for="b in pagedShown" :key="b.batchId" class="ld-tr">
           <div class="ld-td grow"><span class="bid">{{ b.batchId }}</span></div>
           <div class="ld-td time" :style="{ width: '140px' }">{{ b.createdAt }}</div>
           <div class="ld-td r qty" :style="{ width: '72px' }">{{ b.total }}</div>
@@ -284,11 +359,17 @@ function exportCsv() {
             <Badge :tone="statusOf(b) === 'used' ? 'green' : statusOf(b) === 'using' ? 'brand' : 'neutral'">{{ STATUS_LABEL[statusOf(b)] }}</Badge>
           </div>
           <div class="ld-td r" :style="{ width: '128px' }">
-            <UiButton variant="ghost" size="sm" @click="openDetail(b)">详情 / 看码</UiButton>
+            <UiButton variant="ghost" size="sm" @click="openDetail(b)">打开这批</UiButton>
           </div>
         </div>
       </div>
-      <div class="tfoot">已加载 {{ rows.length }} 批次（课程 {{ loadedCourse }}）</div>
+      <div class="tfoot">
+        <span>第 {{ (batchPage - 1) * BATCH_PAGE + 1 }}–{{ Math.min(batchPage * BATCH_PAGE, shown.length) }} 批 · 共 {{ shown.length }} 批（课程 {{ loadedCourse }}）</span>
+        <span v-if="batchPages > 1" class="pager">
+          <UiButton variant="ghost" size="sm" :disabled="batchPage <= 1" @click="batchPage--">上一页</UiButton>
+          <UiButton variant="ghost" size="sm" :disabled="batchPage >= batchPages" @click="batchPage++">下一页</UiButton>
+        </span>
+      </div>
     </Card>
     <Card v-else-if="!message && loadedCourse"><EmptyState :icon="Layers" text="没有符合筛选的批次" /></Card>
     <Card v-else-if="!loadedCourse"><EmptyState :icon="QrCode" text="输入课程编号（course-xxx）载入其激活码批次" /></Card>
@@ -314,24 +395,28 @@ function exportCsv() {
         </div>
 
         <div class="codes-head">
-          <span class="codes-title">激活码 · {{ detail.total }}</span>
+          <span class="codes-title">激活码 · 这批共 {{ detail.total }} 个</span>
           <div class="codes-ops">
-            <button class="export" :disabled="!codes.length" @click="makeTestQr"><QrCode :size="13" :stroke-width="1.8" /><span>测试二维码</span></button>
-            <button class="export" :disabled="!codes.length" @click="exportCsv"><Download :size="13" :stroke-width="1.8" /><span>导出 CSV</span></button>
-            <button class="export" :disabled="!codes.length || packing" @click="downloadPack"><Package :size="13" :stroke-width="1.8" /><span>{{ packing ? '打包中…' : '印刷包 ZIP' }}</span></button>
+            <button class="export" :disabled="!firstCode && !codes.length" @click="makeTestQr"><QrCode :size="13" :stroke-width="1.8" /><span>测试二维码</span></button>
+            <button class="export" :disabled="!detail.total || packing" @click="exportCsv"><Download :size="13" :stroke-width="1.8" /><span>导出 CSV</span></button>
+            <button class="export" :disabled="!detail.total || packing" @click="downloadPack"><Package :size="13" :stroke-width="1.8" /><span>{{ packing ? '打包中…' : '印刷包 ZIP' }}</span></button>
           </div>
         </div>
         <p v-if="exportBlockedMsg" class="export-blocked">{{ exportBlockedMsg }}</p>
         <div v-if="testQr" class="testqr">
           <img :src="testQr" alt="测试二维码" />
-          <p>手机微信扫这个码，量产前验证激活落地页正常（首码 <b>{{ codes[0] }}</b>）<br /><code>{{ codeUrl(codes[0]) }}</code></p>
+          <p>手机微信扫这个码，量产前验证激活落地页正常（首码 <b>{{ firstCode || codes[0] }}</b>）<br /><code>{{ codeUrl(firstCode || codes[0]) }}</code></p>
         </div>
-        <p class="codes-note">码表为批次全部激活码（一码一地址）；导出 CSV 含「激活码,网址」双列（印刷厂据此制卡）。单码「已激活/未用」状态后端暂未随码返回，看整体激活率。</p>
+        <p class="codes-note">每次只看一页（{{ CODE_PAGE }} 个），不会一次铺开整批。导出 CSV / 印刷包仍是这一批的全部码。单码「已激活/未用」后端暂未随码返回，看上面整体激活率。</p>
         <div class="code-list">
           <p v-if="codesLoading" class="code-loading">取码中…</p>
           <p v-else-if="!codes.length" class="code-loading">无码</p>
-          <div v-for="c in codes.slice(0, 100)" :key="c" class="code-row">{{ c }}</div>
-          <div v-if="codes.length > 100" class="code-more">…共 {{ codes.length }} 个，导出 CSV 查看全部</div>
+          <div v-for="c in codes" :key="c" class="code-row">{{ c }}</div>
+        </div>
+        <div class="code-pager">
+          <UiButton variant="ghost" size="sm" :disabled="codePage <= 1 || codesLoading" @click="prevCodes">上一页</UiButton>
+          <span>第 {{ codePage }} 页 · 本页 {{ codes.length }} 个 · 这批共 {{ detail.total }} 个</span>
+          <UiButton variant="ghost" size="sm" :disabled="!codeHasMore || codesLoading" @click="nextCodes">下一页</UiButton>
         </div>
       </aside>
     </div>
@@ -458,8 +543,24 @@ function exportCsv() {
   background: var(--ld-line-strong);
 }
 .tfoot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
   padding: 12px 16px;
   border-top: 1px solid var(--ld-line);
+  font-size: 12px;
+  color: var(--ld-content-2);
+}
+.pager,
+.code-pager {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.code-pager {
+  justify-content: space-between;
   font-size: 12px;
   color: var(--ld-content-2);
 }
@@ -611,11 +712,5 @@ function exportCsv() {
 }
 .code-row:first-child {
   border-top: none;
-}
-.code-more {
-  padding: 9px 13px;
-  border-top: 1px solid var(--ld-line);
-  font-size: 11.5px;
-  color: var(--ld-content-2);
 }
 </style>
