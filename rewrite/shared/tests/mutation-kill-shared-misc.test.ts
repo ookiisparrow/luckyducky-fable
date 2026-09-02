@@ -27,7 +27,7 @@ describe('CHECKOUT_ADDONS（搭配购定价单源·云端 createOrder 派生权�
       { id: 'hook', name: '替换钩针组 · 2.5 / 3.0mm', price: 39 },
       { id: 'yarn', name: '补充棉线包 · 暖色 5 色', price: 29 },
     ])
-    expect(COUPON).toBe(20)
+    expect(COUPON).toBe(0) // 主线不抵扣（2026-09-02·顾客可见版本禁展示优惠券）
     expect(SHIP).toBe(0)
   })
 })

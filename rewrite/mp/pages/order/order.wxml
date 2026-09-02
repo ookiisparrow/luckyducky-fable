@@ -93,7 +93,6 @@
       <view class="co-summary">
         <view class="co-sum-row" wx:if="{{vm.goodsLabel}}"><text>商品金额</text><text class="co-sum-v">{{vm.goodsLabel}}</text></view>
         <view class="co-sum-row"><text>运费</text><text class="co-sum-v">{{vm.shipLabel}}</text></view>
-        <view class="co-sum-row discount" wx:if="{{vm.couponLabel}}"><text>优惠券</text><text class="co-sum-v">{{vm.couponLabel}}</text></view>
         <view class="co-sum-div"></view>
         <view class="co-sum-row total"><text>{{vm.amountTitle}}</text><text class="co-sum-v">{{vm.amountLabel}}</text></view>
         <!-- 申请售后（金额明细下方独立小按钮·承接 onAfterSale） -->

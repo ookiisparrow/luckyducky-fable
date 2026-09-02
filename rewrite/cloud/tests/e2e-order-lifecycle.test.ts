@@ -35,13 +35,13 @@ describe('订单全生命周期 E2E（下单→支付→发货→收货·钱与�
     expect(r.ok).toBe(true)
     const oid = r.order.id
     expect(r.order.status).toBe('pending')
-    expect(r.order.amount).toBe(178) // 198 − 20 券·包邮
+    expect(r.order.amount).toBe(198) // 主线券 0·包邮：应付=商品
     expect(r.order.reserved).toEqual([{ productId: 'p1', spec: '', qty: 1 }])
     expect(control.dump('inventory')[0].stock).toBe(4) // 下单即预留扣一件
 
     // ② 支付回调 SUCCESS（真回调无用户身份·防伪要求 OPENID 空）：pending→paid、留交易号、金额相符无对账痕
     control.setOpenId('')
-    const ack = await cb({ out_trade_no: oid, trade_state: 'SUCCESS', amount: { total: 17800 }, transaction_id: 'wx-t1' })
+    const ack = await cb({ out_trade_no: oid, trade_state: 'SUCCESS', amount: { total: 19800 }, transaction_id: 'wx-t1' })
     expect(ack).toEqual({ errcode: 0, errmsg: 'OK' })
     let o = control.dump('orders').find((x: any) => x._id === oid)
     expect(o.status).toBe('paid')
@@ -76,7 +76,7 @@ describe('订单全生命周期 E2E（下单→支付→发货→收货·钱与�
     control.setOpenId('')
     expect((await post('shipOrder', { id: oid, company: '顺丰', trackingNo: 'SF1' })).error).toContain('BAD_STATUS')
     // 支付到账后可发
-    await cb({ out_trade_no: oid, trade_state: 'SUCCESS', amount: { total: 17800 }, transaction_id: 'wx-t1' })
+    await cb({ out_trade_no: oid, trade_state: 'SUCCESS', amount: { total: 19800 }, transaction_id: 'wx-t1' })
     expect((await post('shipOrder', { id: oid, company: '顺丰', trackingNo: 'SF1' })).ok).toBe(true)
     // 他人确认收货：属主隔离表现为不存在
     control.setOpenId('oOTHER')

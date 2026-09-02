@@ -1,6 +1,8 @@
 // 黄金 frontend-store §七（脏单归一防白屏/渲染访问点纵深防御）+ §四（金额两位小数/
 // 时间格式化非法回空）（守卫 rw-mp-orders-golden）。
 import { describe, it, expect } from 'vitest'
+import { readFileSync } from 'node:fs'
+import { fileURLToPath } from 'node:url'
 import { mapOrder, mapOrders, itemsOf, countOf, statusLabel, dateTime, amountTitle, __amountTitleSets } from '../lib/mapOrders'
 import { ORDER_STATUS } from '../../shared/src/order'
 
@@ -28,7 +30,7 @@ describe('订单映射（黄金 §七：脏单归一·纵深防御）', () => {
     expect(vm.amountLabel).toBe('¥258.50') // 恒两位小数
     expect(vm.items[1].priceLabel).toBe('¥22.50')
     expect(vm.count).toBe(3)
-    expect(vm.couponLabel).toBe('-¥20.00')
+    expect(vm.couponLabel).toBe('') // 历史单 coupon=20 也不展示优惠券标签；实付仍用库内 amount
     expect(vm.shipLabel).toBe('包邮')
     expect(vm.createdAtLabel).toMatch(/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}$/)
     expect(JSON.stringify(vm)).not.toContain('undefined')
@@ -129,5 +131,14 @@ describe('金额行标题·顾客视角「付过没有」（体检批 P1·钱链
     expect(PAID_LOOK.filter((s) => UNPAID_LOOK.includes(s))).toEqual([]) // 两类互斥
     for (const s of PAID_LOOK) expect(amountTitle(s)).toBe('实付款')
     for (const s of UNPAID_LOOK) expect(amountTitle(s)).toBe('订单金额')
+  })
+})
+
+describe('主线订单详情不展示优惠券（2026-09-02·开发版/发布版禁展示）', () => {
+  it('大白话：历史单库里就算还有券字段，详情页也不出现「优惠券」这一行', () => {
+    const wxml = readFileSync(fileURLToPath(new URL('../pages/order/order.wxml', import.meta.url)), 'utf8')
+    expect(wxml).not.toContain('优惠券')
+    expect(wxml).not.toContain('couponLabel')
+    expect(mapOrder({ ...GOOD, coupon: 20 })!.couponLabel).toBe('')
   })
 })

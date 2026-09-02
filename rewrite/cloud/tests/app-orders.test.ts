@@ -69,7 +69,9 @@ describe('createOrder · 契约与定价（黄金 orders-money）', () => {
     expect(line2.spec).toBe('雾霭蓝')
     expect(line2.lineId).toBe('p2__雾霭蓝')
     expect(o.goods).toBe(198 * 3 + 218 + 39)
-    expect(o.amount).toBe(o.goods - 20) // 券 20·包邮
+    expect(o.coupon).toBe(0)
+    expect(o.ship).toBe(0)
+    expect(o.amount).toBe(o.goods) // 主线券 0·包邮：应付=商品
   })
 
   it('大白话：商品名服务端来源——前端上送 name 被忽略，订单行快照 products 主数据名（LD-001 契约守卫·病根#3/#8）', async () => {
@@ -95,10 +97,13 @@ describe('createOrder · 契约与定价（黄金 orders-money）', () => {
     expect(r.order.goods).toBe(59.7)
   })
 
-  it('大白话：占位券吞穿地板即拒单——单件 19.9 被 20 元券抵到 0 元不白送（深审 2026-07-05）', async () => {
+  it('大白话：主线不扣占位券——单件 19.9 按原价收，不静默少 20、也不误拒（2026-09-02）', async () => {
     control.seed('products', [{ _id: 'p9', id: 'p9', name: '小件', price: 19.9 }])
     const r = await order([{ id: 'p9', qty: 1 }])
-    expect(r.error).toBe('COUPON_EXCEEDS_GOODS')
+    expect(r.ok).toBe(true)
+    expect(r.order.goods).toBe(19.9)
+    expect(r.order.coupon).toBe(0)
+    expect(r.order.amount).toBe(19.9)
   })
 
   it('大白话：地址四要素缺一拒、电话过短拒；超长截断、非白名单字段丢弃', async () => {
