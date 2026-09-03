@@ -15,6 +15,7 @@ import { goHomeTab } from '../../lib/homeIntent'
 import { armExitGuard, releaseExitGuard, onExitGuardBeforeLeave as consumeExitGuard } from '../../utils/exitGuard'
 import { loginGate } from '../../lib/loginGate'
 import { currentAppVersionLine } from '../../lib/appVersion'
+import { BRAND_SHORT } from '../../lib/brand'
 
 const CONT_KEY = 'ld:me-cont'
 
@@ -76,6 +77,7 @@ Page({
     contLoaded: !!seededCont, // 继续学习区首次取数是否落地（加载中≠没课·根因#8/#14）；有上次会话旧卡则首帧先画、后台再刷
     // 和「确认无课」，无 loading 位会让空态在数据未回来时就渲染成假空态（先空后有闪烁·2026-07-13 反馈）；
     // 置 true 前空态不显、改显骨架；首次 refresh 落地后恒 true（成功/失败任一路都置）。
+    guestGreet: '欢迎来到' + BRAND_SHORT,
     loggedIn: false, // 已显式同意登录（loginGate hint）：真才显真实资料 + 退出按钮，假显登出态（默认身份 + 登录入口）
     exitGuardArmed: false, // 误触退出提醒（决策§30）：驱动 <page-container show>·onShow 武装（初值 false·未上屏不拦）
     versionLine: currentAppVersionLine(), // 页底版本行（开发/测试/发布候选·数字跟 package.json）

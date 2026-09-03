@@ -4,6 +4,12 @@
 // navigateBack 会失败并把用户卡死在页内。故统一：有上级页就退回去，没有就兜底回首页 tab。
 // 守卫 rw-mp-custom-nav-has-back 焊死本文件存在与各页接线。
 
+/** 前进一页；栈深 ≥8 改 redirectTo，否则 navigateTo，失败再降级 redirectTo（防 10 层上限卡片变哑）。 */
+export function pushOrReplace(url: string): void {
+  if (getCurrentPages().length >= 8) wx.redirectTo({ url })
+  else wx.navigateTo({ url, fail: () => wx.redirectTo({ url }) })
+}
+
 /** 返回上一页；深链无上级页时兜底回首页 tab（不留死按钮）。 */
 export function goBackOrHome(): void {
   const pages = getCurrentPages()

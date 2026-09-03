@@ -22,11 +22,17 @@ Page({
   },
   orderId: '',
   lineId: '',
+  submitted: false,
   backTimer: null as ReturnType<typeof setTimeout> | null,
   unloaded: false, // 提交在途页面已退出标记（P2·bug sweep R1 #9）：提交本身已达服务端，退页后回包只是迟到副作用，不补偿
+  dropPhotos(ids: string[]) {
+    if (!ids.length) return
+    wx.cloud.deleteFile({ fileList: ids })
+  },
   onUnload() {
     this.unloaded = true
     if (this.backTimer) clearTimeout(this.backTimer) // 延时返回坞清理（守卫 rw-mp-navback-timer-cleaned）
+    if (!this.submitted && this.data.photos.length) this.dropPhotos(this.data.photos)
   },
   onLoad(query: Record<string, string | undefined>) {
     this.orderId = String(query.orderId || '')
@@ -78,7 +84,9 @@ Page({
   },
   onDelPhoto(e: WechatMiniprogram.TouchEvent) {
     const i = Number(e.currentTarget.dataset.i)
+    const gone = this.data.photos[i]
     this.setData({ photos: this.data.photos.filter((_, idx) => idx !== i) })
+    if (gone) this.dropPhotos([gone])
   },
   onPreviewPhoto(e: WechatMiniprogram.TouchEvent) {
     const url = String(e.currentTarget.dataset.url || '')
@@ -107,6 +115,7 @@ Page({
     )
     if (this.unloaded) return // 迟到回包：已退页（onUnload 已清 backTimer）——不弹 toast、不 navigateBack
     if (r.ok) {
+      this.submitted = true
       // 成功不复位 busy——锁到返回·防延时窗口内二次提交（撞主键回 REVIEWED 的矛盾 toast）；toast 加 mask·定时器存实例待清
       wx.showToast({ title: '感谢你的评价', icon: 'success', mask: true })
       this.backTimer = setTimeout(() => wx.navigateBack(), 800)
@@ -122,7 +131,7 @@ Page({
           : e === 'IMG_RISKY'
             ? '图片没通过审核，换一张再试'
             : e === 'SEC_CHECK_FAIL'
-              ? '图片没检查成功，稍后再试'
+              ? '内容没通过审核，改改再试'
               : '提交没成功，稍后再试'
     wx.showToast({ title: msg, icon: 'none' })
   },

@@ -62,6 +62,28 @@ describe('写读 roundtrip + 白名单裁剪', () => {
     expect(s.products).toHaveLength(2) // products 半边被保留
     expect((s.home as any).hero.title).toBe('换了文案') // home 半边被更新
   })
+
+  it('大白话：半边回写不给旧临时址续 TTL——保留半边时 savedAt 沿用上次，弱网重开不会把 80 分钟前的图假装成刚签发', () => {
+    writeSnapshot(RAW_PRODUCTS, RAW_HOME)
+    const old = Date.now() - 80 * 60 * 1000
+    ;(storage[KEY] as { savedAt: number }).savedAt = old
+    writeSnapshot(null, { hero: { title: '弱网只到文案', img: 'https://cdn/x/new.jpg' } })
+    const raw = storage[KEY] as { savedAt: number }
+    expect(Math.abs(raw.savedAt - old)).toBeLessThan(50) // 沿用旧戳，不是 Date.now()
+    const s = readSnapshot() as HomeSnapshot
+    expect(s.products[0].cover).toBe('https://cdn/x/p1.jpg') // 80min 未超龄，址还在
+    expect((s.home as any).hero.img).toBe('https://cdn/x/new.jpg')
+  })
+
+  it('大白话：旧半边已经超龄——半边回写后读档仍剥临时址（含本趟新 home 图·fail-closed 不续命）', () => {
+    writeSnapshot(RAW_PRODUCTS, RAW_HOME)
+    ;(storage[KEY] as { savedAt: number }).savedAt = Date.now() - 91 * 60 * 1000
+    writeSnapshot(null, { hero: { title: '新文案', img: 'https://cdn/x/fresh.jpg' } })
+    const s = readSnapshot() as HomeSnapshot
+    expect(s.products[0].cover).toBe('')
+    expect((s.home as any).hero.img).toBe('')
+    expect((s.home as any).hero.title).toBe('新文案')
+  })
 })
 
 describe('弃档（sanitize）', () => {

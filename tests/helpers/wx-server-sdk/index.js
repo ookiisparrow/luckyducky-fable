@@ -104,7 +104,11 @@ class DocRef {
     // 写前注入同款读侧钩子（批H：casDecrement 瞬时读故障测试）：可对 doc(id).get() 单点注入抛错
     // （非「无档」的真读失败，如网络/DB 瞬时故障），与下方「无档」reject 区分——回调收到 {coll,id}
     // （Query.get() 的 beforeGet 收到 {coll,filter,skip}，字段不同，测试按需解构，互不干扰）。默认无。
-    if (typeof G.beforeGet === 'function') await G.beforeGet({ coll: this.coll, id: this.id })
+    // 闸门有效性批（2026-09-01）：若回调显式 return 值，则用作 get() 结果（测 CloudBase「不抛、回空 data」路径）。
+    if (typeof G.beforeGet === 'function') {
+      const override = await G.beforeGet({ coll: this.coll, id: this.id })
+      if (override !== undefined) return override
+    }
     const found = rows(this.coll).find((d) => d._id === this.id)
     if (!found) throw new Error('DOCUMENT_NOT_FOUND') // 真 sdk：缺失即 reject
     return { data: clone(found) }

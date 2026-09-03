@@ -44,6 +44,19 @@ describe('privacyGate 授权链', () => {
     expect(resolve).toHaveBeenCalledTimes(1)
   })
 
+  it('弹窗开着再 open：旧 resolve 先收到 disagree，新调用接管弹窗', () => {
+    const gate = createPrivacyGate()
+    const first = vi.fn()
+    const second = vi.fn()
+    gate.open(first)
+    gate.open(second)
+    expect(first).toHaveBeenCalledWith({ event: 'disagree' })
+    expect(gate.visible()).toBe(true)
+    gate.agree()
+    expect(second).toHaveBeenCalledWith({ buttonId: 'privacy-agree-btn', event: 'agree' })
+    expect(first).toHaveBeenCalledTimes(1)
+  })
+
   it('open 收到非函数 resolve 不崩，agree 安全空转', () => {
     const gate = createPrivacyGate()
     gate.open(undefined)

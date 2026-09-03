@@ -114,18 +114,21 @@ function loadTier(fs: WechatMiniprogram.FileSystemManager, cacheDir: string | nu
     if (pending === 0) loadTier(fs, cacheDir, tierIndex + 1)
   }
   for (const file of tier.files) {
-    getFontBase64(fs, cacheDir, file.name, (data, fromCache, cachePath) => {
+    getFontBase64(fs, cacheDir, file.name, (data, fromCache, cachePath, tempPath) => {
       if (!data) return settle() // 取不到（下载最终失败）：跳过该字重，回退栈兜底
       wx.loadFontFace({
         global: true,
         family: tier.family,
         source: `url("data:font/woff;charset=utf-8;base64,${data}")`,
         desc: { weight: file.weight },
-        complete: settle,
-        fail: () => {
-          // 缓存文件解析失败（写坏/截断）：删缓存，下次冷启动重新下载自愈；本次会话该字重走回退栈。
-          if (fromCache && cachePath) fs.unlink({ filePath: cachePath, fail: () => {} })
+        success: () => {
+          if (!fromCache && cachePath && tempPath) fs.copyFile({ srcPath: tempPath, destPath: cachePath, fail: () => {} })
         },
+        fail: () => {
+          // 解析失败（缓存写坏或 CDN 200 但非字体）：删缓存，下次冷启动重下；本次走回退栈
+          if (cachePath) fs.unlink({ filePath: cachePath, fail: () => {} })
+        },
+        complete: settle,
       })
     })
   }
@@ -136,7 +139,7 @@ function getFontBase64(
   fs: WechatMiniprogram.FileSystemManager,
   cacheDir: string | null,
   name: string,
-  cb: (data: string | null, fromCache: boolean, cachePath: string | null) => void
+  cb: (data: string | null, fromCache: boolean, cachePath: string | null, tempPath?: string) => void
 ): void {
   const cachePath = cacheDir ? `${cacheDir}/${name}` : null
   const download = () => downloadFont(fs, name, cachePath, cb)
@@ -153,7 +156,7 @@ function downloadFont(
   fs: WechatMiniprogram.FileSystemManager,
   name: string,
   cachePath: string | null,
-  cb: (data: string | null, fromCache: boolean, cachePath: string | null) => void,
+  cb: (data: string | null, fromCache: boolean, cachePath: string | null, tempPath?: string) => void,
   attempt = 0
 ): void {
   const retry = () => {
@@ -165,13 +168,14 @@ function downloadFont(
     url: `${FONT_HOST}/fonts/${name}`,
     timeout: DOWNLOAD_TIMEOUT_MS,
     success: (res) => {
-      if (res.statusCode !== 200) return retry() // 非 200（404/5xx）也重试：CDN 抖动与瞬断同待遇
+      const code = res.statusCode
+      if (code >= 400 && code < 500) return cb(null, false, null) // 4xx=下架/路径错，重试白烧
+      if (code !== 200) return retry() // 5xx / 非 200：CDN 抖动再试
       fs.readFile({
         filePath: res.tempFilePath,
         encoding: 'base64',
         success: ({ data }) => {
-          cb(data as string, false, null) // 先交付渲染，再异步落盘（落盘失败不牺牲本次换字）
-          if (cachePath) fs.copyFile({ srcPath: res.tempFilePath, destPath: cachePath, fail: () => {} })
+          cb(data as string, false, cachePath, res.tempFilePath) // 先交付渲染；落盘挪到 loadFontFace success
         },
         fail: () => cb(null, false, null), // 临时文件读失败：不重试（非网络问题·刻意静默）
       })

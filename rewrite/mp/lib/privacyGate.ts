@@ -29,6 +29,7 @@ export function createPrivacyGate(): PrivacyGate {
       return () => listeners.delete(fn)
     },
     open(resolve) {
+      if (pending) pending({ event: 'disagree' }) // 弹窗未结算又来一次：先中止旧调用，避免永久悬挂
       pending = typeof resolve === 'function' ? (resolve as PrivacyResolve) : null
       setShown(true)
     },

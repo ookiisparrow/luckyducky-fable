@@ -51,7 +51,7 @@ describe('地址簿（黄金 §五）', () => {
     addr.removeAddress(li.id)
     expect(addr.getList().filter((x) => x.isDefault)).toHaveLength(1)
     // 回灌清洗：残缺地址丢弃
-    expect(addr.sanitizeAddresses({ list: [{ id: 1, name: 'x', phone: '1', region: 'r', detail: 'd' }, { id: 2, name: '缺电话', region: 'r', detail: 'd' }, null] })).toHaveLength(1)
+    expect(addr.sanitizeAddresses({ list: [{ id: 1, name: 'x', phone: '1', region: 'r', detail: 'd' }, { id: 2, name: '缺电话', region: 'r', detail: 'd' }, { id: 'abc', name: 'x', phone: '1', region: 'r', detail: 'd' }, { id: 1, name: '撞号', phone: '1', region: 'r', detail: 'd' }, null] })).toHaveLength(1)
     addr.clearAll()
     expect(addr.getList()).toEqual([])
   })

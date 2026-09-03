@@ -1,8 +1,10 @@
 #!/bin/sh
-# 红区双人复核闸（commit-msg hook·2026-08-10 老板令·rw-red-second-review 的提交信息检查点）
-# pre-commit 阶段拿不到本次提交信息（git log -1 是旧 HEAD），故提交信息标记检查在此做：
-# 暂存区含 red 模块文件（订单钱链 orders / 运维配置 ops）→ 提交信息必须带 [red-review: <复核人>]，
-# 缺复核即拦下。与 check-structure.mjs 的 rw-red-second-review 守卫（兜底 amend/cherry-pick）双保险。
+# 红区复核标记闸（commit-msg hook·2026-08-10 老板令·rw-red-second-review 的提交信息检查点）
+# 诚实边界：本闸只强制 commit message 里出现 [red-review: <姓名>]——证明「有人写了标记」，
+# 不证明第二人真的独立审过（自填即可过）。真双人复核靠 PR/人工流程，勿把本闸当双人铁证。
+# pre-commit 阶段拿不到本次提交信息（git log -1 是旧 HEAD），故标记检查在此做：
+# 暂存区含 red 模块文件（订单钱链 orders / 运维配置 ops）→ 提交信息必须带 [red-review: <姓名>]，
+# 缺标记即拦下。与 check-structure.mjs 的 rw-red-second-review 守卫（兜底 amend/cherry-pick）双保险。
 #
 # 用法：git commit 自动触发；紧急绕过（不建议）：git commit --no-verify
 MSG_FILE="$1"
@@ -22,11 +24,11 @@ done
 
 [ -z "$TOUCHED" ] && exit 0
 
-# ② 提交信息须带双人复核标记
+# ② 提交信息须带复核标记（自填姓名即可过·不验第二人身份）
 if ! grep -qE '\[red-review:[[:space:]]*[^]]+\]' "$MSG_FILE"; then
   echo ""
-  echo "❌ 红区复核闸：本次改动涉及钱链/运维红区文件：$TOUCHED"
-  echo "   须在 commit message 加 [red-review: <复核人>]（谁独立复核过这笔改动），缺复核即拦。"
+  echo "❌ 红区复核标记闸：本次改动涉及钱链/运维红区文件：$TOUCHED"
+  echo "   须在 commit message 加 [red-review: <姓名>]（谁声称复核过；自填可过，不证明独立双人）。"
   echo "   示例：git commit -m \"fix：xxx [red-review: Hermes]\""
   echo ""
   exit 1

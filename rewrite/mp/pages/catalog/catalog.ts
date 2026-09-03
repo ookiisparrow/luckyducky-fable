@@ -83,6 +83,10 @@ Page({
       this.setData({ state: 'missing' })
       return
     }
+    if (!progress.ok) {
+      wx.showToast({ title: '学习进度暂时读不到', icon: 'none' })
+      if (this.data.state === 'ok') return // 已有目录：保留上次章节/续播，不拿空进度冒充从没学过
+    }
     const { chapters, continueTarget } = mapCatalog(d.course, progress.ok ? progress.list : [], courseId)
     this.setData({ state: 'ok', chapters, continueTarget })
     // 续播段取址预热（批3·根因#15）：目录展示后即预热续播段地址，用户点「开始学习」进播放器时 peek 命中零云往返；

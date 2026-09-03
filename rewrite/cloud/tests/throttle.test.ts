@@ -104,6 +104,68 @@ describe('限频热路径库调用次数（批C·盲发条件更新——先红�
       vi.useRealTimers()
     }
   })
+
+  // mutation 清洞（2026-09-01）：锁定路径须真打 LOCKOUT 告警——否则 count>=max 分支被掏空仍绿。
+  it('大白话：失败达 max 触发锁定时必须打 LOCKOUT 告警（防爆破信号不可静默）', async () => {
+    const lines: string[] = []
+    const orig = console.error
+    console.error = (...a: unknown[]) => {
+      lines.push(String(a[0]))
+    }
+    try {
+      for (let i = 0; i < 5; i++) await throttleFail('ip:lockout-alert', OPTS)
+      expect(await throttleLocked('ip:lockout-alert')).toBeGreaterThan(0)
+      expect(lines.some((l) => l.includes('LOCKOUT'))).toBe(true)
+    } finally {
+      console.error = orig
+    }
+  })
+
+  // mutation 清洞续：边界比较与重置写路径——杀 n>max / fails>0 / 锁定期满语义。
+  it('大白话：恰好 max 次命中仍放行，第 max+1 次才超限（n>max 非 >=）', async () => {
+    const o = { max: 2, windowMs: 60_000 }
+    expect(await throttleHit('eq-max', o)).toBe(false) // 1
+    expect(await throttleHit('eq-max', o)).toBe(false) // 2 == max
+    expect(await throttleHit('eq-max', o)).toBe(true) // 3 > max
+  })
+
+  it('大白话：lockedUntil 已过期 → 剩余 0（left>0 才算锁）', async () => {
+    control.seed('rateLimit', [{ _id: 'rl_ip:expired', lockedUntil: Date.now() - 1000, fails: 0 }])
+    expect(await throttleLocked('ip:expired')).toBe(0)
+  })
+
+  it('大白话：throttleReset 仅在有残留 fails/锁定时写库；干净记录零开销', async () => {
+    const db = getDb()
+    const docProto = Object.getPrototypeOf(db.collection('__probe__').doc('x'))
+    const updateSpy = vi.spyOn(docProto, 'update')
+    control.seed('rateLimit', [{ _id: 'rl_ip:clean', fails: 0, lockedUntil: 0 }])
+    await throttleReset('ip:clean')
+    expect(updateSpy).not.toHaveBeenCalled()
+    updateSpy.mockClear()
+    control.seed('rateLimit', [{ _id: 'rl_ip:dirty', fails: 2, lockedUntil: 0 }])
+    await throttleReset('ip:dirty')
+    expect(updateSpy).toHaveBeenCalled()
+  })
+
+  it('大白话：失败计数恰好达 max 才 LOCKOUT（第 max 次触发，第 max-1 次不告警）', async () => {
+    const lines: string[] = []
+    const orig = console.error
+    console.error = (...a: unknown[]) => {
+      lines.push(String(a[0]))
+    }
+    try {
+      const o = { max: 3, windowMs: 60_000, lockMs: 600_000 }
+      await throttleFail('ip:edge', o)
+      await throttleFail('ip:edge', o)
+      expect(lines.some((l) => l.includes('LOCKOUT'))).toBe(false)
+      expect(await throttleLocked('ip:edge')).toBe(0)
+      await throttleFail('ip:edge', o) // 第 3 次 == max
+      expect(lines.some((l) => l.includes('LOCKOUT'))).toBe(true)
+      expect(await throttleLocked('ip:edge')).toBeGreaterThan(0)
+    } finally {
+      console.error = orig
+    }
+  })
 })
 
 describe('withRateLimit（用户端写函数限频·黄金 F）', () => {

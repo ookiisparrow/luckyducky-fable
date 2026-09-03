@@ -164,7 +164,8 @@ Page({
     this.courseId = String(query.courseId || '')
     void this.loadPageContent() // 求助面板文案/FAQ·与取课/取址互不依赖，并行发起（不阻塞首帧·默认已在 data）
     this._wantSeg = String(query.segmentId || '')
-    this._wantAt = Math.max(0, Math.floor(Number(query.t) || 0)) // 续播秒（catalog/me 带 &t=·仅对 _wantSeg 生效·脏值归 0）
+    const t = Number(query.t)
+    this._wantAt = Number.isFinite(t) && t > 0 ? Math.floor(t) : 0 // 续播秒（catalog/me 带 &t=·Infinity/NaN 归 0）
     await this.initCourse()
   },
   // 课程目录装载（onLoad 与 onRetryError 课程级重试共用）：来源页（me/my-courses）已把课程目录热进
@@ -180,6 +181,7 @@ Page({
       getCourseByIdDetailed(this.courseId),
       this._wantSeg ? cache.get(this.courseId, this._wantSeg).catch(() => '') : Promise.resolve(''),
     ])
+    if (this.unloaded) return
     if (d.failed) {
       this.setData({ state: 'error' })
       return
@@ -251,6 +253,7 @@ Page({
     }
     // 起播落定回调（peek 直落 / 取址落定共用·定义在方法体内以内联段间预取与 autoplay 兜底·守卫 rw-mp-player-prefetch-cache 咬）。
     const onPlaying = () => {
+      if (this.unloaded || token !== this.playToken) return
       // 首次量取 seek 条布局；换段重入该回调时已有值即跳过——底条布局不随段变化，无需重量。
       if (!this._seekRect) this.measureSeekRect()
       // autoplay 停摆兜底（根因#8·真机 <video autoplay> 首帧常静默不起播·尤 iOS/弱网/上下文冷启）：src 落定即显式
@@ -284,7 +287,7 @@ Page({
     try {
       url = await cache.get(this.courseId, seg.segmentId)
     } catch (e) {
-      if (token !== this.playToken) return // 已被更晚的切段接管·本次作废
+      if (this.unloaded || token !== this.playToken) return // 退页或已被更晚的切段接管·本次作废
       // NOT_ENTITLED→denied 导流激活；FETCH_FAIL（网络/服务失败）→error 态给重试（根因#14：
       // 不再伪装成「素材整理中」的 empty 死态）。
       if ((e as Error).message === 'NOT_ENTITLED') {
@@ -297,7 +300,7 @@ Page({
       this.setData({ state: 'error', canPrev: !!navSegment(this.course, seg.segmentId, -1), canNext: !!navSegment(this.course, seg.segmentId, 1) })
       return
     }
-    if (token !== this.playToken) return // 乱序回包：更晚的 playSegment 已接管·丢弃本次结果（不覆盖新段）
+    if (this.unloaded || token !== this.playToken) return // 退页或乱序回包：更晚的 playSegment 已接管·丢弃本次结果
     if (!url) {
       this.setData({ state: 'empty', src: '', canPrev: !!navSegment(this.course, seg.segmentId, -1), canNext: !!navSegment(this.course, seg.segmentId, 1) })
       return
@@ -374,6 +377,8 @@ Page({
     this.errSeg = ''
     this.errCount = 0
     cache.invalidate(this.courseId, cur.segmentId)
+    this._wantSeg = cur.segmentId
+    this._wantAt = this._at
     void this.playSegment(cur, 'retry')
   },
 
@@ -382,6 +387,7 @@ Page({
     // 刚被替换的旧视频可能补发一个 bind:error——若不拦，会被错记到新段头上、白吃掉新段的一次重试预算（第3轮审计）。
     // 新段真出错时 state 已是 'playing'（url 落定后才设），故按 state 判身份即可，无需给 video 挂 token。
     if (this.data.state !== 'playing') return
+    if (Date.now() - this.srcSetAt < 300) return // peek 换源后旧 video 迟到 error 丢掉，不白吃新段重试预算
     const cur = this.data.current
     if (!cur) return
     // 地址可能过期（可恢复）→ 失效后重取；预算 2 次（见 errCount 字段注：容同段两次独立瞬时抖动自愈，
@@ -398,6 +404,8 @@ Page({
     }
     this.errCount++
     cache.invalidate(this.courseId, cur.segmentId)
+    this._wantSeg = cur.segmentId
+    this._wantAt = this._at // 断流自愈接着断的地方，不从头
     void this.playSegment(cur, 'retry')
   },
 
@@ -507,14 +515,13 @@ Page({
     if (curSec === this.data.curSec && durSec === this.data.durSec) return
     const seekPct = durSec ? Math.min(100, Math.round((curSec / durSec) * 10000) / 100) : 0
     const patch: Record<string, unknown> = { curSec, durSec, curClock: formatClock(curSec), durClock: formatClock(durSec), seekPct }
-    if (durSec && !this.data.durSec) {
+    if (durSec && durSec !== this.data.durSec) {
       const cur = this.data.current
       const marks = cur ? cur.marks : []
       patch.markVMs = marks
         .filter((m) => m.at <= durSec)
         .map((m) => ({ at: m.at, pct: Math.min(100, Math.round((m.at / durSec) * 10000) / 100), name: m.name }))
-      // 首个非零 durSec：组装完整 seek.wxs 几何下发（批5·根因#15·rect 已在首帧 onPlaying 量得则此处即完整；
-      // 若 rect 尚未量得则 buildSeekCfg 回 null·由 measureSeekRect 落定回调补下发·两序都收口）。
+      // 时长变了（含换段后迟到旧 timeupdate 先写入、新段真时长到达）重算节点位与 seek 几何
       const cfg = this.buildSeekCfg(durSec, marks)
       if (cfg) patch.seekCfg = cfg
     }
@@ -532,6 +539,7 @@ Page({
       .select('.lp-seek')
       .boundingClientRect()
       .exec((res: { left: number; width: number }[]) => {
+        if (this.unloaded) return
         const r = res && res[0]
         if (r && r.width > 0) {
           this._seekRect = { left: r.left, width: r.width }
@@ -654,6 +662,7 @@ Page({
   async loadHelpVideos() {
     const token = ++this.helpVideosToken // 本次进入子层的请求令牌·await 后复核，防慢回旧请求覆盖新请求
     const r = await getHelpVideos()
+    if (this.unloaded) return
     // 令牌不匹配＝更晚的一次 onHelpVideos 已接管（含「退出再重进 videos 层」这种 helpPanel 状态不变但
     // 请求已过期的场景，光判 helpPanel==='videos' 拦不住）：丢弃本次回包，不覆盖新数据。
     if (token !== this.helpVideosToken) return
@@ -673,6 +682,7 @@ Page({
   async loadHelpFaq() {
     const token = ++this.helpFaqToken // 本次进入子层的请求令牌·await 后复核，防慢回旧请求覆盖新请求
     const r = await getPublicFaq()
+    if (this.unloaded) return
     if (token !== this.helpFaqToken) return // 更晚的一次 onHelpFaq 已接管，丢弃本次回包
     if (this.data.helpPanel !== 'faq') return // 用户已退出 faq 层：同样丢弃，不写脏 state
     const list = mapPublicFaq(r)
@@ -789,7 +799,8 @@ Page({
   // 一次性 watchReported 防同段双报（原只挂 onHide→返回退出静默丢失 watch_at·根因#14 可观测）。
   reportWatchAt() {
     const cur = this.data.current
-    if (!cur || this.data.state !== 'playing' || this.watchReported) return
+    if (!cur || this.watchReported) return
+    if (this.data.state !== 'playing' && !(this.data.state === 'error' && this._at > 0)) return
     this.watchReported = true
     trackEvent('watch_at', 'player', cur.segmentId, { courseId: this.courseId, lessonId: cur.lessonId, segmentId: cur.segmentId, at: this._at, dur: this._dur })
   },
@@ -807,6 +818,7 @@ Page({
   },
   onUnload() {
     this.unloaded = true
+    this.playToken++ // 废掉在途 initCourse/playSegment，迟到回包不再 setData/play
     this.reportWatchAt()
     if (this._bufTimer) {
       clearTimeout(this._bufTimer) // 离页销毁定时器（timer 必清理）；不再 setData（页面已卸载）

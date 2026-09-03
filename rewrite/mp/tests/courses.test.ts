@@ -74,6 +74,24 @@ describe('getCoursesByIds（继续学习只取所需课·不毒化整本缓存�
     expect(getCoursesMock).toHaveBeenCalledTimes(2) // 残片未冒充整本·整本仍要再拉一次
   })
 
+  it('大白话：整本在途时调 getCoursesByIds——等在途结束从缓存筛，不再发 ids 请求', async () => {
+    let release!: (v: { ok: boolean; list: typeof COURSES }) => void
+    getCoursesMock.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          release = resolve
+        })
+    )
+    const { getAllCourses, getCoursesByIds } = await import('../lib/courses')
+    const whole = getAllCourses()
+    const byIds = getCoursesByIds(['c2'])
+    expect(getCoursesMock).toHaveBeenCalledTimes(1) // 在途期间 ids 没另发
+    release({ ok: true, list: COURSES })
+    expect(await byIds).toEqual([COURSES[1]])
+    expect(await whole).toEqual(COURSES)
+    expect(getCoursesMock).toHaveBeenCalledTimes(1)
+  })
+
   it('大白话：按 ids 拉取失败回 null（失败≠空目录）', async () => {
     getCoursesMock.mockResolvedValue({ ok: false })
     const { getCoursesByIds } = await import('../lib/courses')

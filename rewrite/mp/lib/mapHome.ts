@@ -137,7 +137,7 @@ function arr<T>(raw: unknown, mapItem: (x: unknown) => T | null, def: T[]): T[] 
 
 const priceText = (v: unknown): string => {
   const n = Number(v)
-  return Number.isFinite(n) && n > 0 ? '¥' + String(n) : ''
+  return Number.isFinite(n) && n > 0 ? '¥' + n.toFixed(2) : ''
 }
 
 /** 商品列表 → 网格视图模型：无名/无价的脏行不进首页（fail-closed 展示面）；cover 空串由模板落占位块。 */

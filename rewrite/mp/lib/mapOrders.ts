@@ -59,6 +59,7 @@ export const __amountTitleSets = { PAID_LOOK, UNPAID_LOOK } // 供测试核「�
 export const amountTitle = (s: unknown): string => (PAID_LOOK.includes(String(s)) ? '实付款' : '订单金额')
 
 const money = (v: unknown): string => {
+  if (v == null) return ''
   const n = Number(v)
   return Number.isFinite(n) ? '¥' + n.toFixed(2) : ''
 }

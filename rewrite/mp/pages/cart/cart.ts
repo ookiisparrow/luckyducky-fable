@@ -36,6 +36,14 @@ Page({
     armExitGuard(this) // tabBar 栈底页误触退出提醒：放 ready 早返回之前·首建实例也需武装（决策§30·见 utils/exitGuard）
     if (!this.ready) return // 首建实例抢跑：onLoad 首拉还没完成，交给它自己的 refresh 收尾，这次 onShow 不重复刷新
     if (typeof this.getTabBar === 'function') (this.getTabBar() as unknown as LdTabBar).setActive('cart')
+    if (!allRaw.length) {
+      void this.reloadRaw()
+      return
+    }
+    this.refresh()
+  },
+  async reloadRaw() {
+    allRaw = (await getAllProducts()) || []
     this.refresh()
   },
   onHide() {
@@ -51,7 +59,12 @@ Page({
   refresh() {
     // 展示 cover 用 allRaw 最新值覆盖（批B 图片链提速回归：持久化 cover 是 2h 时效临时址，隔天过期挂图）；
     // 存量 cart.getItems() 仍是持久化真值，只在这层视图组装时覆盖展示字段，不改 storage 契约。
-    const items = cart.getItems().map((it) => ({ ...it, cover: cart.freshCover(it, allRaw) }))
+    const items = cart.getItems().map((it) => ({
+      ...it,
+      cover: cart.freshCover(it, allRaw),
+      priceLabel: '¥' + it.price.toFixed(2),
+      wasLabel: typeof it.was === 'number' && Number.isFinite(it.was) ? '¥' + it.was.toFixed(2) : '',
+    }))
     const inCart = new Set(items.map((it) => it.id))
     this.setData({
       items,

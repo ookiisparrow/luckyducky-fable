@@ -34,15 +34,19 @@ export function callApp(action: string, data: Record<string, unknown> = {}): Pro
       resolve(r)
     }
     const timer = setTimeout(() => done({ ok: false, error: 'CALL_TIMEOUT' }), CALL_TIMEOUT_MS)
-    wx.cloud.callFunction({
-      name: 'app',
-      data: { action, data },
-      success: (res) => {
-        const r = res.result as ApiResult | undefined
-        if (r && typeof r === 'object' && 'ok' in r) done(r)
-        else done({ ok: false, error: 'BAD_RESULT' })
-      },
-      fail: () => done({ ok: false, error: 'CALL_FAIL' }), // 含 app 未部署（并行期真机自然落空态）
-    })
+    try {
+      wx.cloud.callFunction({
+        name: 'app',
+        data: { action, data },
+        success: (res) => {
+          const r = res.result as ApiResult | undefined
+          if (r && typeof r === 'object' && 'ok' in r) done(r)
+          else done({ ok: false, error: 'BAD_RESULT' })
+        },
+        fail: () => done({ ok: false, error: 'CALL_FAIL' }), // 含 app 未部署（并行期真机自然落空态）
+      })
+    } catch {
+      done({ ok: false, error: 'CALL_FAIL' }) // wx.cloud 未初始化时同步抛，收敛成 ok:false，不留给页面未处理 rejection
+    }
   })
 }

@@ -5,8 +5,8 @@
 import { describe, it, expect, beforeEach } from 'vitest'
 import { control } from 'wx-server-sdk'
 import { restoreStock, reserveStock } from '../src/kit'
-import { isDocMissing, isEmptyDoc } from '../src/kit/inventory'
-import { COLLECTIONS } from '@ldrw/shared'
+import { isDocMissing, isEmptyDoc, produceStock } from '../src/kit/inventory'
+import { COLLECTIONS, ERR } from '@ldrw/shared'
 
 function captureAlerts(fn: () => Promise<void>): Promise<string[]> {
   const seen: string[] = []
@@ -218,5 +218,55 @@ describe('reserveStock/casDecrement 瞬时读故障不被误判不限量（批H�
     expect(lines.some((l) => l.includes('RESERVE_READ_FAILED'))).toBe(false)
     // 库存真未被扣（全部 CAS 落空）
     expect(control.dump('inventory').find((x: any) => x._id === 'p5__')?.stock).toBe(5)
+  })
+})
+
+// 闸门有效性批（2026-09-01·mutation 清洞）：咬住「有档但不限量 / 空 data 无档 / 坏行跳过 / 入成品校验」——
+// 旧报告里 inventory 存活突变大量落在这些分支；缺集成断言时运算符翻转仍绿。
+describe('reserveStock/produceStock 不限量与坏行（mutation 清洞）', () => {
+  it('大白话：库存档存在但 stock=null（显式不限量）——放行且不扣减、不进 reserved', async () => {
+    control.seed('inventory', [{ _id: 'pNull__', productId: 'pNull', spec: '', stock: null, updatedAt: 1000 }])
+    const r = await reserveStock([{ productId: 'pNull', spec: '', qty: 3 }])
+    expect(r.ok).toBe(true)
+    expect(r.reserved).toEqual([])
+    expect(control.dump('inventory').find((x: any) => x._id === 'pNull__')?.stock).toBe(null)
+  })
+
+  it('大白话：get() 不抛、回空 data[]（CloudBase 无档形态）——当不限量放行，不误扣', async () => {
+    control.setBeforeGet(({ coll, id }: any) => {
+      if (coll === COLLECTIONS.inventory && id === 'pEmpty__') return { data: [] }
+    })
+    const r = await reserveStock([{ productId: 'pEmpty', spec: '', qty: 2 }])
+    control.setBeforeGet(null as never)
+    expect(r.ok).toBe(true)
+    expect(r.reserved).toEqual([])
+  })
+
+  it('大白话：缺 productId / qty≤0 的行直接跳过——不碰库存、整单仍可对其它合法行预留', async () => {
+    control.seed('inventory', [{ _id: 'pOk__', productId: 'pOk', spec: '', stock: 5, updatedAt: 1000 }])
+    const r = await reserveStock([
+      { productId: '', spec: '', qty: 1 },
+      { productId: 'pOk', spec: '', qty: 0 },
+      { productId: 'pOk', spec: '', qty: -2 },
+      { productId: 'pOk', spec: '', qty: 2 },
+    ])
+    expect(r.ok).toBe(true)
+    expect(r.reserved).toEqual([{ productId: 'pOk', spec: '', qty: 2 }])
+    expect(control.dump('inventory').find((x: any) => x._id === 'pOk__')?.stock).toBe(3)
+  })
+
+  it('大白话：produceStock 非正整数 qty / 缺 productId——fail-closed 回 BAD_QTY，不动账', async () => {
+    control.seed('inventory', [{ _id: 'pP__', productId: 'pP', spec: '', stock: 4, updatedAt: 1000 }])
+    expect(await produceStock('', '', 1)).toEqual({ ok: false, error: ERR.BAD_QTY })
+    expect(await produceStock('pP', '', 0)).toEqual({ ok: false, error: ERR.BAD_QTY })
+    expect(await produceStock('pP', '', -1)).toEqual({ ok: false, error: ERR.BAD_QTY })
+    expect(await produceStock('pP', '', 1.5)).toEqual({ ok: false, error: ERR.BAD_QTY })
+    expect(control.dump('inventory').find((x: any) => x._id === 'pP__')?.stock).toBe(4)
+  })
+
+  it('大白话：produceStock 对不限量成品（stock=null）保持不限量——入账成功但不把 null 翻成数字', async () => {
+    control.seed('inventory', [{ _id: 'pU__', productId: 'pU', spec: '', stock: null, updatedAt: 1000 }])
+    expect(await produceStock('pU', '', 5)).toEqual({ ok: true })
+    expect(control.dump('inventory').find((x: any) => x._id === 'pU__')?.stock).toBe(null)
   })
 })

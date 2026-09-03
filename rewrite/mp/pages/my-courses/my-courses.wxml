@@ -29,7 +29,7 @@
       <!-- 学习进度（段粒度·与后台 360 同口径·无段不渲染·真值不编数·独立整行） -->
       <!-- 进度没读到（progressUnknown·根因#14）：不画 0% 进度条冒充「一段没学过」，诚实说读不到 -->
       <view class="ld-mc-prog" wx:if="{{item.totalSegments && item.progressUnknown}}">
-        <view class="ld-mc-prog-text ld-mc-prog-unknown">学习进度暂时读不到，下拉或重进本页再试</view>
+        <view class="ld-mc-prog-text ld-mc-prog-unknown">学习进度暂时读不到，重进本页再试</view>
       </view>
       <view class="ld-mc-prog" wx:elif="{{item.totalSegments}}">
         <!-- percent=0 不渲染 fill：min-width 下限只该抬「已学一点点」，不能让「一段没学」也显出一截紫条（自查发现·2026-07-25） -->

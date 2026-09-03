@@ -14,6 +14,7 @@ export default defineConfig({
   test: {
     environment: 'node',
     globals: true,
+    setupFiles: ['./tests/setup-has-assertions.js'],
     include: ['rewrite/shared/tests/**/*.test.ts', 'rewrite/cloud/tests/**/*.test.ts'],
   },
 })

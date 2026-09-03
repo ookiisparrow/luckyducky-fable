@@ -20,8 +20,8 @@
         <view class="ld-cart-row-name">{{item.name}}</view>
         <view class="ld-cart-row-tag" wx:if="{{item.sku}}">{{item.sku}}</view>
         <view class="ld-cart-row-price">
-          <text class="ld-cart-was" wx:if="{{item.was}}">¥{{item.was}}</text>
-          <text class="ld-cart-now">¥{{item.price}}</text>
+          <text class="ld-cart-was" wx:if="{{item.wasLabel}}">{{item.wasLabel}}</text>
+          <text class="ld-cart-now">{{item.priceLabel}}</text>
         </view>
       </view>
       <view class="ld-cart-row-act">

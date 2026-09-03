@@ -6,6 +6,8 @@ import { mapOrder, type OrderVM } from '../../lib/mapOrders'
 import { applicableLines, mapAfterSales } from '../../lib/mapAftersales'
 import { expressCode } from '../../lib/express'
 import { SHOP_FULL_NAME, SHOP_NAME_LINE1, SHOP_NAME_LINE2 } from '../../lib/shop'
+import { BRAND_NAME } from '../../lib/brand'
+import { pushOrReplace } from '../../lib/nav'
 
 // 状态横幅配置（纯展示派生·icon/tint/文案随订单态·不含业务判定）。
 interface BannerVM {
@@ -91,6 +93,7 @@ Page({
     wx.setClipboardData({
       data: this.orderId,
       success: () => wx.showToast({ title: '已复制单号', icon: 'none' }),
+      fail: () => wx.showToast({ title: '复制没成功，请重试', icon: 'none' }),
     })
   },
   onCopyTracking() {
@@ -99,6 +102,7 @@ Page({
     wx.setClipboardData({
       data: no,
       success: () => wx.showToast({ title: '已复制运单号', icon: 'none' }),
+      fail: () => wx.showToast({ title: '复制没成功，请重试', icon: 'none' }),
     })
   },
   // 查看物流：快递100 插件结果页（同 AppID 已授权·app.json 声明即用）。插件打不开（未安装/版本不匹配等）
@@ -108,7 +112,7 @@ Page({
     const no = vm && vm.trackingNo
     if (!no) return
     const com = expressCode(vm!.shipCompany)
-    const url = 'plugin://kuaidi100/index?num=' + no + '&appName=' + encodeURIComponent('小棉鸭') + (com ? '&com=' + com : '')
+    const url = 'plugin://kuaidi100/index?num=' + no + '&appName=' + encodeURIComponent(BRAND_NAME) + (com ? '&com=' + com : '')
     wx.navigateTo({
       url,
       fail: () => this.onCopyTracking(),
@@ -207,9 +211,7 @@ Page({
               wx.showToast({ title: '已提交申请', icon: 'success' })
               // order↔aftersales 互跳环无叠栈守卫（P3·bug sweep Round2 item6·同 detail.ts onTapRec 范式）：
               // 反复「订单详情→申请售后→我的售后→回订单→再申请」会持续叠栈，逼近上限改 redirectTo 替换本页。
-              const url = '/pages/aftersales/aftersales'
-              if (getCurrentPages().length >= 8) wx.redirectTo({ url })
-              else wx.navigateTo({ url, fail: () => wx.redirectTo({ url }) })
+              pushOrReplace('/pages/aftersales/aftersales')
             } else {
               const e = String(r.error || '')
               const msg = e === 'ALREADY_APPLIED' ? '这条已申请过了' : e === 'NOT_REFUNDABLE' ? '该条目不可退（已开课）' : e === 'NOTHING_LEFT' ? '本单可退额度已用完' : '申请没成功，稍后再试'

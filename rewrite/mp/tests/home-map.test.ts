@@ -32,8 +32,8 @@ describe('商品网格映射（展示面 fail-closed：脏行不上首页）', (
       null, // 脏元素不崩
     ])
     expect(vm.map((p) => p.id)).toEqual(['p1', 'p2'])
-    expect(vm[0]).toEqual({ id: 'p1', name: '小棉鸭礼盒', tag: '送礼首选', priceLabel: '¥198', wasLabel: '¥258', cover: 'cloud://x/cover.png' })
-    expect(vm[1].priceLabel).toBe('¥98')
+    expect(vm[0]).toEqual({ id: 'p1', name: '小棉鸭礼盒', tag: '送礼首选', priceLabel: '¥198.00', wasLabel: '¥258.00', cover: 'cloud://x/cover.png' })
+    expect(vm[1].priceLabel).toBe('¥98.00')
     expect(vm[1].wasLabel).toBe('') // 无划线价→空串·模板按空隐藏
     expect(JSON.stringify(vm)).not.toContain('undefined')
     expect(mapProducts(undefined)).toEqual([]) // 非数组入参安全

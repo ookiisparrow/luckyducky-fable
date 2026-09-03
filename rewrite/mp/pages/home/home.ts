@@ -14,6 +14,7 @@ import { armExitGuard, releaseExitGuard, onExitGuardBeforeLeave as consumeExitGu
 import { loginGate } from '../../lib/loginGate'
 import { readSnapshot, writeSnapshot } from '../../lib/snapshot'
 import { reportColdStart } from '../../lib/coldStart'
+import { BRAND_NAME } from '../../lib/brand'
 
 let toastTimer: ReturnType<typeof setTimeout> | null = null
 
@@ -202,9 +203,9 @@ Page({
   // 转发/朋友圈钩子（分发前置·决策§29·守卫 rw-mp-share-wired）：公开页开转发，私有页（交易/学习/隐私）
   // 刻意不加钩子＝默认不可转发。不配 imageUrl——微信默认截页面顶部真身，不造假分享图。
   onShareAppMessage() {
-    return { title: '小棉鸭钩织材料包｜一针一线，钩出随身幸运物', path: '/pages/home/home' }
+    return { title: BRAND_NAME + '钩织材料包｜一针一线，钩出随身幸运物', path: '/pages/home/home' }
   },
   onShareTimeline() {
-    return { title: '小棉鸭钩织材料包｜一针一线，钩出随身幸运物' }
+    return { title: BRAND_NAME + '钩织材料包｜一针一线，钩出随身幸运物' }
   },
 })

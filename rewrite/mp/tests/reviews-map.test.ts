@@ -29,6 +29,7 @@ describe('列表映射（脏行剔除）', () => {
     expect(vm[0].timeLabel).toMatch(/^\d{4}-/)
     expect(vm[0].photos).toEqual(['https://tmp/a.jpg', 'https://tmp/b.jpg']) // 买家秀晒图·空址剔除
     expect(vm[1].photos).toEqual([]) // 无图 → 空数组（非 undefined·模板 wx:if 稳）
+    expect(mapReviews([{ name: 'x', rating: 5, tags: ['好', { x: 1 }, 2, ''] }])[0].tags).toEqual(['好', '2'])
     expect(mapReviews(undefined)).toEqual([])
   })
 })

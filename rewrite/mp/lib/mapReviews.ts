@@ -30,7 +30,9 @@ export function mapReviews(list: unknown): ReviewVM[] {
       name: String(r.name || '鸭友'),
       stars: stars(rating),
       rating,
-      tags: Array.isArray(r.tags) ? r.tags.map(String) : [],
+      tags: Array.isArray(r.tags)
+        ? r.tags.filter((t: unknown) => (typeof t === 'string' || typeof t === 'number') && String(t)).map(String)
+        : [],
       text: String(r.text || ''),
       spec: String(r.spec || ''),
       photos: Array.isArray(r.photos) ? r.photos.map(String).filter(Boolean) : [], // 云端已换短时址·空址剔除

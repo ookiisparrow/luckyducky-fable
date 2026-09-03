@@ -9,6 +9,8 @@ import { mapDetail, type DetailVM } from '../../lib/mapDetail'
 import { mapSummary, type SummaryVM } from '../../lib/mapReviews'
 import { mapProducts, type ProductVM } from '../../lib/mapHome'
 import { openCustomerService } from '../../utils/customerService'
+import { pushOrReplace } from '../../lib/nav'
+import { BRAND_NAME } from '../../lib/brand'
 
 // 图册窗口（病根#15 图片面·批B）：current±1 才渲染，circular 时首尾邻接也算窗口内——
 // swiper 内 lazy-load 真机不生效，全量 swiper-item 会让画廊全部图并发下载抢首屏带宽。
@@ -160,9 +162,7 @@ Page({
     if (!id) return
     // detail→详情 会叠栈：连点推荐卡逼近微信 10 层上限后 navigateTo 静默失败、卡片变哑。
     // 逼近上限（留 headroom）改 redirectTo 替换本页不叠栈；否则 navigateTo 并补 fail 降级 redirectTo（不静默）。
-    const url = '/pages/detail/detail?id=' + id
-    if (getCurrentPages().length >= 8) wx.redirectTo({ url })
-    else wx.navigateTo({ url, fail: () => wx.redirectTo({ url }) })
+    pushOrReplace('/pages/detail/detail?id=' + id)
   },
 
   // 转发/朋友圈钩子（分发前置·决策§29·守卫 rw-mp-share-wired）：路径带 ?id= 保证收到的人打开的是
@@ -171,10 +171,10 @@ Page({
     const vm = this.data.vm
     return vm
       ? { title: vm.name, path: '/pages/detail/detail?id=' + vm.id, imageUrl: vm.gallery[0] || '' }
-      : { title: '小棉鸭钩织材料包', path: '/pages/home/home' }
+      : { title: BRAND_NAME + '钩织材料包', path: '/pages/home/home' }
   },
   onShareTimeline() {
     const vm = this.data.vm
-    return vm ? { title: vm.name, query: 'id=' + vm.id } : { title: '小棉鸭钩织材料包' }
+    return vm ? { title: vm.name, query: 'id=' + vm.id } : { title: BRAND_NAME + '钩织材料包' }
   },
 })

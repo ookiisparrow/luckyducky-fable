@@ -26,8 +26,10 @@ Page({
   },
   async onLoad() {
     const u = await login()
+    if (this.unloaded) return
     const user = (u.ok ? u.user : null) as Record<string, any> | null
     if (user) this.setData({ nickname: String(user.nickname || ''), bio: String(user.bio || ''), phone: String(user.phone || ''), avatar: String(user.avatar || ''), loaded: true })
+    else wx.showToast({ title: '资料没加载出来，稍后再进', icon: 'none' })
   },
   onChooseAvatar(e: WechatMiniprogram.CustomEvent<{ avatarUrl: string }>) {
     if (this.data.busy) return // 保存在途禁止重选头像：否则 onSave 已捕获的 avatarTemp 与此刻新选的分叉、上传的是旧图（P2·bug sweep R1 #8）
@@ -92,7 +94,10 @@ Page({
     if (r.ok && avatarFailed) {
       wx.showToast({ title: '资料已存，头像上传没成功', icon: 'none' })
     } else {
-      wx.showToast({ title: '保存没成功，稍后再试', icon: 'none' })
+      const e = String(r.error || '')
+      const msg =
+        e === 'SEC_CHECK_FAIL' ? '内容没通过审核，改改再试' : e === 'IMG_RISKY' ? '图片没通过审核，换一张再试' : '保存没成功，稍后再试'
+      wx.showToast({ title: msg, icon: 'none' })
     }
   },
 })

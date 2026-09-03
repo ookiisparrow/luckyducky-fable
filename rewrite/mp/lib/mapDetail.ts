@@ -26,7 +26,7 @@ export interface DetailVM {
 
 const priceText = (v: unknown): string => {
   const n = Number(v)
-  return Number.isFinite(n) && n > 0 ? '¥' + String(n) : ''
+  return Number.isFinite(n) && n > 0 ? '¥' + n.toFixed(2) : ''
 }
 
 /** 后台手填销量 → 「已售 N」；0/缺/脏值空串（详情页藏掉，不写「已售 0」）。 */
@@ -82,7 +82,7 @@ export function mapDetail(p: unknown): DetailVM | null {
     brief: String(d.brief || ''),
     gallery,
     price: Number(d.price),
-    was: typeof d.was === 'number' ? d.was : undefined,
+    was: typeof d.was === 'number' && Number.isFinite(d.was) && d.was > 0 ? d.was : undefined,
     priceLabel,
     wasLabel: priceText(d.was),
     skus,

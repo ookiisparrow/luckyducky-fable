@@ -10,7 +10,7 @@
     </view>
     <view class="ld-me-greet">
       <view class="ld-me-greet-text">
-        <view class="ld-me-eyebrow">{{loggedIn ? '欢迎回来' : '欢迎来到小棉鸭'}}</view>
+        <view class="ld-me-eyebrow">{{loggedIn ? '欢迎回来' : guestGreet}}</view>
         <view class="ld-me-greet-name">{{nickname}}</view>
         <view wx:if="{{bio}}" class="ld-me-greet-bio">{{bio}}</view>
       </view>

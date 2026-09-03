@@ -710,16 +710,6 @@
   padding: 26rpx;
   margin-bottom: 22rpx;
 }
-.lp-help-faq-q {
-  font-size: 28rpx;
-  font-weight: 700;
-  color: var(--ld-ink);
-}
-.lp-help-faq-a {
-  font-size: 26rpx;
-  line-height: 1.6;
-  color: var(--ld-content-2);
-}
 
 /* 帮助视频/常见问题空态（loading/empty 共用容器，文案由 wxml 分支） */
 .lp-help-empty {

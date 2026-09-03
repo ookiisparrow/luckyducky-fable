@@ -77,9 +77,14 @@ function readRaw(): Record<string, unknown> | null {
 export function writeSnapshot(products: unknown, home: unknown): void {
   try {
     const prev = readRaw()
+    const keepProducts = !Array.isArray(products)
+    const keepHome = home == null
+    const prevAt = prev && typeof prev.savedAt === 'number' && Number.isFinite(prev.savedAt) ? prev.savedAt : 0
+    // 保留任一旧半边时沿用更早的 savedAt——半边失败回写不得给旧临时址续 90min TTL（绕过剥离闸会隔夜裂图）
+    const savedAt = (keepProducts || keepHome) && prevAt ? prevAt : Date.now()
     const snap: HomeSnapshot = {
       v: SNAP_VERSION,
-      savedAt: Date.now(),
+      savedAt,
       products: Array.isArray(products) ? products.map(pickProduct) : ((prev?.products as SnapProduct[] | undefined) ?? []),
       home: home != null ? home : (prev?.home ?? null),
     }

@@ -32,6 +32,7 @@ export async function getAllCourses(): Promise<Record<string, unknown>[] | null>
 export async function getCoursesByIds(ids: string[]): Promise<Record<string, unknown>[] | null> {
   const uniq = [...new Set(ids.map((id) => String(id || '')).filter(Boolean))].slice(0, 20)
   if (!uniq.length) return []
+  if (!cache && inflight) await inflight // 整本在途（me/player 深链撞车）先等它，避免再发一次 getCourses({ids})
   if (cache) {
     const hit: Record<string, unknown>[] = []
     for (const id of uniq) {

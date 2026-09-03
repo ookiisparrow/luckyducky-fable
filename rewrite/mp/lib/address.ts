@@ -18,8 +18,10 @@ export function sanitizeAddresses(raw: unknown): Address[] {
   const out: Address[] = []
   for (const a of arr as Record<string, any>[]) {
     if (!a || a.id == null || !a.name || !a.phone || !a.region || !a.detail) continue
+    const id = Number(a.id)
+    if (!Number.isFinite(id) || out.some((x) => x.id === id)) continue
     out.push({
-      id: Number(a.id),
+      id,
       name: String(a.name),
       phone: String(a.phone),
       region: String(a.region),
