@@ -2,6 +2,8 @@
 // 搜索引擎与 AI 引擎读的是这层——字段错了收录面就废，纯函数钉死。
 export const SITE = 'https://www.luckyducky.cn'
 export const BRAND_NAME = 'Lucky Ducky 小棉鸭'
+export const SHOP_NAME_LINE2 = '初学钩织入门'
+export const SHOP_FULL_NAME = `${BRAND_NAME} ${SHOP_NAME_LINE2}`
 
 const abs = (path: string): string => (path.startsWith('http') ? path : SITE + (path.startsWith('/') ? path : '/' + path))
 
@@ -14,7 +16,7 @@ export function orgSchema(): Record<string, unknown> {
   return {
     '@context': 'https://schema.org',
     '@type': 'Organization',
-    name: BRAND_NAME,
+    name: SHOP_FULL_NAME,
     url: SITE,
     description: '专注钩织的初学者钩织学习套装品牌：毛线、配件、工具与分步教学视频打包成初学者钩织学习套装，零基础也能亲手钩出随身幸运物。',
   }
@@ -25,11 +27,11 @@ export function websiteSchema(): Record<string, unknown> {
   return {
     '@context': 'https://schema.org',
     '@type': 'WebSite',
-    name: BRAND_NAME,
+    name: SHOP_FULL_NAME,
     alternateName: 'LuckyDucky小棉鸭',
     url: SITE,
     inLanguage: 'zh-CN',
-    publisher: { '@type': 'Organization', name: BRAND_NAME, url: SITE },
+    publisher: { '@type': 'Organization', name: SHOP_FULL_NAME, url: SITE },
   }
 }
 

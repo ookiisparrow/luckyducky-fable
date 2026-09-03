@@ -201,10 +201,10 @@
   overflow: hidden;
 }
 
-/* 店铺行 */
+/* 店铺行（两行：核名 + 初学钩织入门） */
 .co-shop {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: 13rpx;
   padding: 26rpx 30rpx 8rpx;
 }
@@ -212,11 +212,23 @@
   width: 32rpx;
   height: 32rpx;
   flex: 0 0 auto;
+  margin-top: 6rpx;
 }
 .co-shop-name {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.co-shop-line1 {
   font-size: 28rpx;
   font-weight: 600;
   color: var(--ld-ink);
+}
+.co-shop-line2 {
+  margin-top: 4rpx;
+  font-size: 24rpx;
+  font-weight: 500;
+  color: var(--ld-content-2);
 }
 .co-shop-chev {
   margin-left: auto;

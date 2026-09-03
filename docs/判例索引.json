@@ -229,12 +229,14 @@
     {
       "id": "决策§18",
       "kind": "decision",
-      "title": "店名定为「Lucky Ducky 小棉鸭」",
+      "title": "店名核名「Lucky Ducky 小棉鸭」；展示全名「Lucky Ducky 小棉鸭 初学钩织入门」",
       "keywords": [
         "店名",
         "品牌名",
         "小棉鸭",
-        "Lucky Ducky"
+        "Lucky Ducky",
+        "初学钩织入门",
+        "展示全名"
       ],
       "source": "docs/关键决策记录.md §18"
     },

@@ -1,12 +1,13 @@
 // 关于我们（M2 批13·文案 CMS 优先·硬编码降级为默认回退，见 lib/mapPages mapAbout）。品牌名引 lib/brand 单源（病根#5）。
-import { BRAND_NAME } from '../../lib/brand'
+import { SHOP_NAME_LINE1, SHOP_NAME_LINE2 } from '../../lib/shop'
 import { getPageContent } from '../../lib/pageContent'
 import { mapAbout } from '../../lib/mapPages'
 import { currentAppVersionLine } from '../../lib/appVersion'
 
 Page({
   data: {
-    brand: BRAND_NAME, // 品牌名恒引 lib/brand 单源（不经 CMS·病根#5）
+    brand: SHOP_NAME_LINE1, // 店名第一行（核名·不经 CMS·病根#5）
+    brandLine2: SHOP_NAME_LINE2,
     lead: mapAbout(null).lead, // 首帧默认（CMS 到达覆盖·不空屏）
     sections: mapAbout(null).sections,
     version: currentAppVersionLine(), // 与「我」页同一行（lib/appVersion 单源）

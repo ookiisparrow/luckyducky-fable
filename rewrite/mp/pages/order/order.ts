@@ -5,7 +5,7 @@ import { mapPayResult } from '../../lib/payFlow'
 import { mapOrder, type OrderVM } from '../../lib/mapOrders'
 import { applicableLines, mapAfterSales } from '../../lib/mapAftersales'
 import { expressCode } from '../../lib/express'
-import { SHOP_FULL_NAME } from '../../lib/shop'
+import { SHOP_FULL_NAME, SHOP_NAME_LINE1, SHOP_NAME_LINE2 } from '../../lib/shop'
 
 // 状态横幅配置（纯展示派生·icon/tint/文案随订单态·不含业务判定）。
 interface BannerVM {
@@ -35,7 +35,9 @@ Page({
     banner: null as BannerVM | null,
     amountNum: '',
     canAfterSale: false,
-    shopName: SHOP_FULL_NAME, // 店铺行恒引 lib/shop 单源（不硬编码·病根#5·守卫 brand-name-single-source）
+    shopName: SHOP_FULL_NAME, // 店铺全名单源（病根#5·守卫 brand-name-single-source）
+    shopLine1: SHOP_NAME_LINE1,
+    shopLine2: SHOP_NAME_LINE2,
   },
   onLoad(query: Record<string, string | undefined>) {
     this.orderId = String(query.id || '')

@@ -3,6 +3,7 @@
   <view class="ld-ab-hero">
     <image class="ld-ab-logo" src="/static/logo-wordmark.svg" mode="aspectFit" />
     <view class="ld-ab-brand">{{brand}}</view>
+    <view class="ld-ab-brand-sub">{{brandLine2}}</view>
     <view class="ld-ab-lead">{{lead}}</view>
   </view>
 

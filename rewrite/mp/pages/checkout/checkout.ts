@@ -10,7 +10,7 @@ import { mapPayResult } from '../../lib/payFlow'
 import { freshCover } from '../../lib/cart'
 import { getAllProducts } from '../../lib/catalog'
 import { goHomeTab } from '../../lib/homeIntent'
-import { SHOP_FULL_NAME } from '../../lib/shop'
+import { SHOP_FULL_NAME, SHOP_NAME_LINE1, SHOP_NAME_LINE2 } from '../../lib/shop'
 
 Page({
   data: {
@@ -22,7 +22,9 @@ Page({
     amountNum: '', // 实付金额数字（无符号·底坞/明细大字用；金额单源仍在云端/summaryFen）
     count: 0, // 合计件数（草稿含已勾搭配购·底坞展示）
     submitting: false,
-    shopName: SHOP_FULL_NAME, // 店铺行恒引 lib/shop 单源（不硬编码·病根#5·守卫 brand-name-single-source）
+    shopName: SHOP_FULL_NAME, // 店铺全名单源（病根#5·守卫 brand-name-single-source）
+    shopLine1: SHOP_NAME_LINE1,
+    shopLine2: SHOP_NAME_LINE2,
   },
   backTimer: null as ReturnType<typeof setTimeout> | null,
   unloaded: false, // 页面已退出标记（守卫扩面统一不变量·同 review/profile-edit/feedback 范式）：本页 backTimer 赋值落在

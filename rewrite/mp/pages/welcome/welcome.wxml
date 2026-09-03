@@ -77,7 +77,10 @@
 <!-- W1 恭喜屏（kind==='activated' 的 result 屏）：lilac 底·产品主图卡·课程名·「下一步」纯前端翻屏 -->
 <view class="ld-wl" wx:elif="{{phase === 'result' && kind === 'activated'}}">
   <view class="ld-wl-body" style="padding-top: {{statusBarHeight + 24}}px">
-    <view class="ld-wl-brand">LUCKY DUCKY · 小棉鸭课堂</view>
+    <view class="ld-wl-brand">
+      <view class="ld-wl-brand-l1">{{shopLine1}}</view>
+      <view class="ld-wl-brand-l2">{{shopLine2}}</view>
+    </view>
     <image wx:if="{{bg}}" class="ld-wl-hero" src="{{bg}}" mode="aspectFill" />
     <view wx:else class="ld-wl-hero ld-wl-hero-empty"></view>
     <view class="ld-wl-copy">
@@ -101,7 +104,10 @@
 <!-- W2 三件事屏：lilac 底·三点卡·不可退货警示·「进入课程」走既有 onEnter -->
 <view class="ld-wl" wx:elif="{{phase === 'w2'}}">
   <view class="ld-wl-body" style="padding-top: {{statusBarHeight + 24}}px">
-    <view class="ld-wl-brand">LUCKY DUCKY · 小棉鸭课堂</view>
+    <view class="ld-wl-brand">
+      <view class="ld-wl-brand-l1">{{shopLine1}}</view>
+      <view class="ld-wl-brand-l2">{{shopLine2}}</view>
+    </view>
     <view class="ld-wl-points">
       <view class="ld-wl-points-title">开始前，想让你知道三件事</view>
       <!-- 三点位固定 onboarding·图标与位置绑定（CMS 只覆盖 title/desc，图标恒取默认槽位·见 lib/mapPages mapWelcome） -->

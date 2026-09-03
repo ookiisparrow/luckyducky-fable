@@ -178,10 +178,21 @@
   padding: 0 44rpx 48rpx;
 }
 .ld-wl-brand {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  color: var(--ld-purple-meta);
+}
+.ld-wl-brand-l1 {
   font-size: 28rpx;
   font-weight: 700;
+  letter-spacing: 2rpx;
+}
+.ld-wl-brand-l2 {
+  margin-top: 6rpx;
+  font-size: 22rpx;
+  font-weight: 500;
   letter-spacing: 4rpx;
-  color: var(--ld-purple-meta);
 }
 
 /* —— W1：产品主图卡 + 恭喜文案 —— */

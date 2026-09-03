@@ -12,6 +12,7 @@ import { mapWelcome, type WelcomeVM } from '../../lib/mapPages'
 import { goBackOrHome } from '../../lib/nav'
 import type { ApiResult } from '../../utils/cloud'
 import { goHomeTab } from '../../lib/homeIntent'
+import { SHOP_NAME_LINE1, SHOP_NAME_LINE2 } from '../../lib/shop'
 
 Page({
   data: {
@@ -24,6 +25,8 @@ Page({
     bg: '',
     busy: false,
     welcome: mapWelcome(null) as WelcomeVM, // W1/W2 文案·首帧即默认（CMS 到达后覆盖·不空屏）
+    shopLine1: SHOP_NAME_LINE1,
+    shopLine2: SHOP_NAME_LINE2,
   },
   home: null as unknown,
   // getContent（背景图）与 activateCourse（兑课）互不依赖：并行发起省一次云调用往返（0.7-1.4s/次）。
