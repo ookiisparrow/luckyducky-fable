@@ -7,7 +7,10 @@ const tutorials = (await getCollection('tutorials')).sort((a, b) => (a.data.date
 ---
 
 <Base title="初学者钩织学习套装与新手教程" description="Lucky Ducky 小棉鸭：专注钩织的初学者钩织学习套装品牌。毛线、工具与分步视频教学打包成初学者钩织学习套装，零基础从第一针开始，亲手钩出属于自己的随身幸运物。">
-  <h1>一针一线，钩出一只小暖鸭</h1>
+  <section class="hero" aria-label="首页主视觉">
+    <div class="hero-visual" aria-hidden="true"></div>
+  </section>
+  <h1>luckyducky 小棉鸭</h1>
   <p>
     我们把毛线、配件、工具与配套教学打包成一个个<strong>初学者钩织学习套装</strong>，让没有基础的人也能从第一针开始，
     亲手钩出属于自己的小鸭与小物。每份初学者钩织学习套装配有分步教学视频：扫码开课、跟着一针一线，把一团毛线变成可以随身携带的幸运物。
@@ -26,6 +29,16 @@ const tutorials = (await getCollection('tutorials')).sort((a, b) => (a.data.date
 </Base>
 
 <style>
+  .hero {
+    margin: 0 0 28px;
+  }
+  .hero-visual {
+    width: 100%;
+    aspect-ratio: 16 / 9;
+    border-radius: 12px;
+    background: #efe8f8;
+    border: 1px solid #c9bbe0;
+  }
   h1 {
     color: #241733;
     font-size: 32px;
