@@ -2,6 +2,7 @@
 import { describe, it, expect, afterEach } from 'vitest'
 import {
   APP_VERSION,
+  BUILD_CHANNEL,
   PUBLIC_RELEASE_NAME,
   DEV_UPDATE_DATE,
   formatAppVersionLine,
@@ -49,7 +50,8 @@ describe('运行时通道（微信开发版/体验版/正式版）', () => {
     delete (globalThis as unknown as { wx?: unknown }).wx
   })
 
-  it('大白话：读到体验版就出测试行，读到正式包就出发布候选行，拿不到就按开发版；简介跟着通道走', () => {
+  it('大白话：主线不钉编译期通道，跟微信读到的开发/体验/正式走；简介跟着通道走', () => {
+    expect(BUILD_CHANNEL).toBe('')
     const g = globalThis as unknown as { wx?: { getAccountInfoSync: () => { miniProgram: { envVersion: string } } } }
     g.wx = { getAccountInfoSync: () => ({ miniProgram: { envVersion: 'trial' } }) }
     expect(currentAppVersionLine()).toBe('内部预览版 · 测试 ' + APP_VERSION)

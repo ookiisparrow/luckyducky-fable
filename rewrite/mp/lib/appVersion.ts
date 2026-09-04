@@ -1,8 +1,12 @@
 // 小程序版本展示单源。数字跟仓根 package.json（LD-004·release.mjs 升号时同步本文件）；
 // 对外名在 PUBLIC_RELEASE_NAME（空＝还没有公开版，正式包只写「发布候选」）。
 // 通道看运行时 envVersion：同一份代码上传成开发版 / 体验版 / 正式版，文案跟着变。
+// BUILD_CHANNEL 空＝跟微信运行时。测试线钉 'trial'：开发者工具 / 开发版上传测试代码时 envVersion 仍是 develop。
 
 export const APP_VERSION = '1.0.0'
+
+/** 编译期通道戳。空＝跟微信 envVersion。测试线写成 'trial'。 */
+export const BUILD_CHANNEL: '' | 'develop' | 'trial' | 'release' = ''
 
 /** 对外发布名。空＝仍是内部预览。写成「公开版」后，正式包才自称公开版。 */
 export const PUBLIC_RELEASE_NAME = ''
@@ -26,6 +30,9 @@ export function formatAppVersionLine(
 }
 
 function runtimeEnvVersion(): 'develop' | 'trial' | 'release' {
+  if (BUILD_CHANNEL === 'develop' || BUILD_CHANNEL === 'trial' || BUILD_CHANNEL === 'release') {
+    return BUILD_CHANNEL
+  }
   try {
     if (typeof wx === 'undefined' || typeof wx.getAccountInfoSync !== 'function') return 'develop'
     const v = wx.getAccountInfoSync().miniProgram.envVersion
