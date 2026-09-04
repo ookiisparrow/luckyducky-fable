@@ -14,6 +14,7 @@ import pkgRaw from '../../../package.json?raw'
 import meWxml from '../pages/me/me.wxml?raw'
 import meTs from '../pages/me/me.ts?raw'
 import releaseSrc from '../../../scripts/release.mjs?raw'
+import stampSrc from '../../../scripts/stamp-mp-version-date.mjs?raw'
 
 describe('版本号单源（LD-004）', () => {
   it('大白话：小程序上屏的数字必须跟仓根 package.json 同一个，不能各写各的', () => {
@@ -24,6 +25,14 @@ describe('版本号单源（LD-004）', () => {
   it('大白话：定版脚本升号时必须顺手改小程序这一处，不然「我」页会停在旧数字', () => {
     expect(releaseSrc).toContain('rewrite/mp/lib/appVersion.ts')
     expect(releaseSrc).toContain('APP_VERSION')
+  })
+
+  it('大白话：发版和上传都会把「我」页第二行日期戳成上海当天，不能人为忘改', () => {
+    const pkg = JSON.parse(pkgRaw)
+    expect(pkg.scripts['mp:stamp-version-date']).toContain('stamp-mp-version-date.mjs')
+    expect(stampSrc).toContain('Asia/Shanghai')
+    expect(stampSrc).toContain('DEV_UPDATE_DATE')
+    expect(releaseSrc).toContain('stampMpVersionDate')
   })
 })
 
@@ -68,7 +77,6 @@ describe('运行时通道（微信开发版/体验版/正式版）', () => {
 describe('版本简介（三通道都上屏·简介＝通道名）', () => {
   it('大白话：日期是上海日历的年月日；简介就是通道名，不是退款说明也不是占位稿', () => {
     expect(DEV_UPDATE_DATE).toMatch(/^\d{4}-\d{2}-\d{2}$/)
-    expect(DEV_UPDATE_DATE).toBe('2026-09-04')
     expect(formatAppVersionDetail('develop')).not.toContain('退款')
     expect(formatAppVersionDetail('trial')).not.toContain('退款')
     expect(formatAppVersionDetail('release')).not.toContain('退款')
@@ -76,9 +84,10 @@ describe('版本简介（三通道都上屏·简介＝通道名）', () => {
   })
 
   it('大白话：开发/测试/正式三通道都在版本号下面多一行「哪天 · 通道名」', () => {
-    expect(formatAppVersionDetail('develop')).toBe('2026-09-04 · 开发')
-    expect(formatAppVersionDetail('trial')).toBe('2026-09-04 · 测试')
-    expect(formatAppVersionDetail('release')).toBe('2026-09-04 · 发布候选')
+    expect(formatAppVersionDetail('develop')).toBe(DEV_UPDATE_DATE + ' · 开发')
+    expect(formatAppVersionDetail('trial')).toBe(DEV_UPDATE_DATE + ' · 测试')
+    expect(formatAppVersionDetail('release')).toBe(DEV_UPDATE_DATE + ' · 发布候选')
+    expect(formatAppVersionDetail('trial', '2020-01-02')).toBe('2020-01-02 · 测试')
     expect(formatAppVersionDetail('develop', '', '开发')).toBe('')
     expect(formatAppVersionDetail('develop', DEV_UPDATE_DATE, '')).toBe('')
   })

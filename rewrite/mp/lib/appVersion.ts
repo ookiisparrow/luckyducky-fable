@@ -48,7 +48,8 @@ export function currentAppVersionLine(): string {
 }
 
 // 日期＝上海日历当天（YYYY-MM-DD）；简介＝通道名（开发/测试/发布候选），三通道都上屏。
-// 每次上传前改 DEV_UPDATE_DATE。简介用码点拼：走系统字体，不把字拖进 tab 首屏品牌子集（E33·无源 OTF）。
+// 每次上传/发版前必须改成上海当天：npm run mp:stamp-version-date（定版脚本 release.mjs 也会戳）。
+// 简介用码点拼：走系统字体，不把字拖进 tab 首屏品牌子集（E33·无源 OTF）。
 export const DEV_UPDATE_DATE = '2026-09-04'
 
 function channelNote(envVersion: string): string {
