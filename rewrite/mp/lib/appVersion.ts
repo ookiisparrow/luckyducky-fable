@@ -1,8 +1,12 @@
 // 小程序版本展示单源。数字跟仓根 package.json（LD-004·release.mjs 升号时同步本文件）；
 // 对外名在 PUBLIC_RELEASE_NAME（空＝还没有公开版，正式包只写「发布候选」）。
 // 通道看运行时 envVersion：同一份代码上传成开发版 / 体验版 / 正式版，文案跟着变。
+// BUILD_CHANNEL 空＝跟微信运行时。测试线钉 'trial'：开发者工具 / 开发版上传测试代码时 envVersion 仍是 develop。
 
 export const APP_VERSION = '1.0.0'
+
+/** 编译期通道戳。空＝跟微信 envVersion。测试线写成 'trial'。 */
+export const BUILD_CHANNEL: '' | 'develop' | 'trial' | 'release' = ''
 
 /** 对外发布名。空＝仍是内部预览。写成「公开版」后，正式包才自称公开版。 */
 export const PUBLIC_RELEASE_NAME = ''
@@ -26,6 +30,9 @@ export function formatAppVersionLine(
 }
 
 function runtimeEnvVersion(): 'develop' | 'trial' | 'release' {
+  if (BUILD_CHANNEL === 'develop' || BUILD_CHANNEL === 'trial' || BUILD_CHANNEL === 'release') {
+    return BUILD_CHANNEL
+  }
   try {
     if (typeof wx === 'undefined' || typeof wx.getAccountInfoSync !== 'function') return 'develop'
     const v = wx.getAccountInfoSync().miniProgram.envVersion
@@ -40,26 +47,24 @@ export function currentAppVersionLine(): string {
   return formatAppVersionLine(runtimeEnvVersion())
 }
 
-// 每次上传开发版前改 DEV_UPDATE_DATE + DEV_UPDATE_NOTE。
-// 日期＝上海日历当天（YYYY-MM-DD）；简介一行。只给开发通道看，测试/正式不上屏。
+// 日期＝上海日历当天（YYYY-MM-DD）；简介＝通道名（开发/测试/发布候选），三通道都上屏。
+// 每次上传/发版前必须改成上海当天：npm run mp:stamp-version-date（定版脚本 release.mjs 也会戳）。
 // 简介用码点拼：走系统字体，不把字拖进 tab 首屏品牌子集（E33·无源 OTF）。
 export const DEV_UPDATE_DATE = '2026-09-04'
-export const DEV_UPDATE_NOTE =
-  han(0x9000, 0x6b3e, 0x515c, 0x5e95) + // 退款兜底
-  '：' +
-  han(0x5df2, 0x8fdb, 0x8bfe, 0x62d2, 0x9000) + // 已进课拒退
-  '（' +
-  han(0x6d4b, 0x73af, 0x5883, 0x5df2, 0x53d1) + // 测环境已发
-  '）'
+
+function channelNote(envVersion: string): string {
+  if (envVersion === 'trial') return TRIAL
+  if (envVersion === 'release') return RC
+  return DEV
+}
 
 export function formatAppVersionDetail(
   envVersion: string,
   date = DEV_UPDATE_DATE,
-  note = DEV_UPDATE_NOTE,
+  note?: string,
 ): string {
-  if (envVersion !== 'develop') return ''
   const d = String(date || '').trim()
-  const n = String(note || '').trim()
+  const n = String((note ?? channelNote(envVersion)) || '').trim()
   if (!d || !n) return ''
   return d + ' · ' + n
 }

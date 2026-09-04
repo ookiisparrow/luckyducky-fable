@@ -2,9 +2,9 @@
 import { describe, it, expect, afterEach } from 'vitest'
 import {
   APP_VERSION,
+  BUILD_CHANNEL,
   PUBLIC_RELEASE_NAME,
   DEV_UPDATE_DATE,
-  DEV_UPDATE_NOTE,
   formatAppVersionLine,
   formatAppVersionDetail,
   currentAppVersionLine,
@@ -14,6 +14,7 @@ import pkgRaw from '../../../package.json?raw'
 import meWxml from '../pages/me/me.wxml?raw'
 import meTs from '../pages/me/me.ts?raw'
 import releaseSrc from '../../../scripts/release.mjs?raw'
+import stampSrc from '../../../scripts/stamp-mp-version-date.mjs?raw'
 
 describe('版本号单源（LD-004）', () => {
   it('大白话：小程序上屏的数字必须跟仓根 package.json 同一个，不能各写各的', () => {
@@ -24,6 +25,14 @@ describe('版本号单源（LD-004）', () => {
   it('大白话：定版脚本升号时必须顺手改小程序这一处，不然「我」页会停在旧数字', () => {
     expect(releaseSrc).toContain('rewrite/mp/lib/appVersion.ts')
     expect(releaseSrc).toContain('APP_VERSION')
+  })
+
+  it('大白话：发版和上传都会把「我」页第二行日期戳成上海当天，不能人为忘改', () => {
+    const pkg = JSON.parse(pkgRaw)
+    expect(pkg.scripts['mp:stamp-version-date']).toContain('stamp-mp-version-date.mjs')
+    expect(stampSrc).toContain('Asia/Shanghai')
+    expect(stampSrc).toContain('DEV_UPDATE_DATE')
+    expect(releaseSrc).toContain('stampMpVersionDate')
   })
 })
 
@@ -50,33 +59,36 @@ describe('运行时通道（微信开发版/体验版/正式版）', () => {
     delete (globalThis as unknown as { wx?: unknown }).wx
   })
 
-  it('大白话：读到体验版就出测试行，读到正式包就出发布候选行，拿不到就按开发版', () => {
+  it('大白话：主线不钉编译期通道，跟微信读到的开发/体验/正式走；简介跟着通道走', () => {
+    expect(BUILD_CHANNEL).toBe('')
     const g = globalThis as unknown as { wx?: { getAccountInfoSync: () => { miniProgram: { envVersion: string } } } }
     g.wx = { getAccountInfoSync: () => ({ miniProgram: { envVersion: 'trial' } }) }
     expect(currentAppVersionLine()).toBe('内部预览版 · 测试 ' + APP_VERSION)
-    expect(currentAppVersionDetail()).toBe('')
+    expect(currentAppVersionDetail()).toBe(DEV_UPDATE_DATE + ' · 测试')
     g.wx = { getAccountInfoSync: () => ({ miniProgram: { envVersion: 'release' } }) }
     expect(currentAppVersionLine()).toBe('内部预览版 · 发布候选 ' + APP_VERSION)
-    expect(currentAppVersionDetail()).toBe('')
+    expect(currentAppVersionDetail()).toBe(DEV_UPDATE_DATE + ' · 发布候选')
     delete g.wx
     expect(currentAppVersionLine()).toBe('内部预览版 · 开发 ' + APP_VERSION)
-    expect(currentAppVersionDetail()).toBe(DEV_UPDATE_DATE + ' · ' + DEV_UPDATE_NOTE)
+    expect(currentAppVersionDetail()).toBe(DEV_UPDATE_DATE + ' · 开发')
   })
 })
 
-describe('开发版更新日期与简介（仅 develop）', () => {
-  it('大白话：日期是上海日历的年月日；简介是老板定的那句，不是占位稿', () => {
+describe('版本简介（三通道都上屏·简介＝通道名）', () => {
+  it('大白话：日期是上海日历的年月日；简介就是通道名，不是退款说明也不是占位稿', () => {
     expect(DEV_UPDATE_DATE).toMatch(/^\d{4}-\d{2}-\d{2}$/)
-    expect(DEV_UPDATE_DATE).toBe('2026-09-04')
-    expect(DEV_UPDATE_NOTE).toBe('退款兜底：已进课拒退（测环境已发）')
-    expect(DEV_UPDATE_NOTE).not.toContain('版本脚')
+    expect(formatAppVersionDetail('develop')).not.toContain('退款')
+    expect(formatAppVersionDetail('trial')).not.toContain('退款')
+    expect(formatAppVersionDetail('release')).not.toContain('退款')
+    expect(formatAppVersionDetail('develop')).not.toContain('版本脚')
   })
 
-  it('大白话：只有开发版才在版本号下面多一行「哪天改了啥」；测试版、正式包不加这行', () => {
-    expect(formatAppVersionDetail('develop')).toBe('2026-09-04 · 退款兜底：已进课拒退（测环境已发）')
-    expect(formatAppVersionDetail('trial')).toBe('')
-    expect(formatAppVersionDetail('release')).toBe('')
-    expect(formatAppVersionDetail('develop', '', DEV_UPDATE_NOTE)).toBe('')
+  it('大白话：开发/测试/正式三通道都在版本号下面多一行「哪天 · 通道名」', () => {
+    expect(formatAppVersionDetail('develop')).toBe(DEV_UPDATE_DATE + ' · 开发')
+    expect(formatAppVersionDetail('trial')).toBe(DEV_UPDATE_DATE + ' · 测试')
+    expect(formatAppVersionDetail('release')).toBe(DEV_UPDATE_DATE + ' · 发布候选')
+    expect(formatAppVersionDetail('trial', '2020-01-02')).toBe('2020-01-02 · 测试')
+    expect(formatAppVersionDetail('develop', '', '开发')).toBe('')
     expect(formatAppVersionDetail('develop', DEV_UPDATE_DATE, '')).toBe('')
   })
 })
@@ -94,5 +106,6 @@ describe('我页底部版本行', () => {
     expect(live.indexOf('{{versionLine}}')).toBeLessThan(live.indexOf('{{versionDetail}}'))
     expect(live.indexOf('{{versionDetail}}')).toBeLessThan(live.indexOf('ld-me-pad-bottom'))
     expect(live).toMatch(/wx:if="\{\{versionDetail\}\}"/)
+    expect(meTs).not.toMatch(/仅开发版/)
   })
 })
