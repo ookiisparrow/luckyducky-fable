@@ -34,6 +34,7 @@ import {
   getTempUrls,
   IMAGE_URL_MAX_AGE,
   hash53,
+  enteredAtBlocksRefund,
 } from '../../../kit'
 
 // 创建订单（黄金 orders-money·createOrder 节全量）：价格一律云端现算不信前端；服务端不变量
@@ -424,6 +425,8 @@ export const applyRefund = withOpenId(async ({ db, OPENID, event }) => {
   if (item.refundable === false || refundableQty <= 0) return err(ERR.NOT_REFUNDABLE)
   const lineId = item.lineId || item.productId
   const productId = item.productId
+  // Issue #114 Option A：行标仍可退，但 activations.enteredAt 已抢占且没记账 → 兜底拒
+  if (await enteredAtBlocksRefund(db, OPENID, productId)) return err(ERR.NOT_REFUNDABLE)
 
   // 分摊全程分整数；同单已占额度（申请中/已同意/已退）不可重复退
   const amountFen = toFen(Number(order.amount))
