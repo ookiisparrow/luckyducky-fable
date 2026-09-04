@@ -267,9 +267,9 @@ describe('退款审批（黄金：原子抢占/回滚条件化/进课重算封�
     expect(control.dump('afterSales')[0].outRefundNo).toBe(sent.data.data.out_refund_no) // 落库供回调反查
   })
 
-  it('大白话：退款判据绑本单订单行——买家这门课已进过、但本单此行仍可退时 lineRefundable:true（不误判会拦）；本单此行被撤则 false（P2·根因#8 判据不失真）', async () => {
+  it('大白话：退款判据绑本单订单行——买家别单已进课，本单未进则 已进课=否且仍可退；本单此行被撤则 已进课=是且不可退（根因#8 判据按订单）', async () => {
     control.seed('products', [{ _id: 'p1', id: 'p1', courseId: 'c1' }])
-    // 买家经"别单/别码"进过这门课（enteredAt 有值·课程级已进课），别单已记下 enteredQty——本单未进仍可退
+    // 买家经别单进过这门课（enteredAt 有值），别单已记下 enteredQty——#188 兜底不误伤；本单徽章仍按本单行
     control.seed('activations', [{ _id: 'act-old', _openid: 'oBUYER', courseId: 'c1', code: 'OLD', enteredAt: 111 }])
     control.seed('orders', [
       {
@@ -299,17 +299,25 @@ describe('退款审批（黄金：原子抢占/回滚条件化/进课重算封�
     ])
     const r1 = await post('getRefundDetail', { id: 'o1__p1__红' })
     expect(r1.ok).toBe(true)
-    expect(r1.activation.entered).toBe(true) // 课程级：买家进过这门课（真事实）
-    expect(r1.lineRefundable).toBe(true) // 本单此行：仍可退——判据绑单，不因"课程进过"误判会拦
+    expect(r1.activation.entered).toBe(false) // 本单此行未进课——不因别单进过就亮「已进课」
+    expect(r1.activation.activated).toBe(false)
+    expect(r1.lineRefundable).toBe(true)
 
-    // 别单 o2·本单此行被撤退货权（refundable:false）→ lineRefundable:false（与 approveRefund ENTERED_NOT_REFUNDABLE 同口径）
     control.seed('orders', [
       { _id: 'o2', id: 'o2', _openid: 'oBUYER', status: 'paid', amount: 178, goods: 198, transactionId: 'wx-t2', createdAt: 1000, items: [{ productId: 'p1', lineId: 'p1__蓝', spec: '蓝', price: 198, qty: 1, enteredQty: 1, refundable: false }] },
     ])
     control.seed('afterSales', [
       { _id: 'o2__p1__蓝', orderId: 'o2', _openid: 'oBUYER', lineId: 'p1__蓝', productId: 'p1', spec: '蓝', qty: 1, refundAmount: 178, status: 'applied', appliedAt: 2000 },
     ])
-    expect((await post('getRefundDetail', { id: 'o2__p1__蓝' })).lineRefundable).toBe(false)
+    const r2 = await post('getRefundDetail', { id: 'o2__p1__蓝' })
+    expect(r2.lineRefundable).toBe(false)
+    expect(r2.activation.entered).toBe(true) // 本单此行已进课
+
+    const d1 = await post('getOrderDetail', { id: 'o1' })
+    expect(d1.ok).toBe(true)
+    expect(d1.activations.p1.entered).toBe(false)
+    const d2 = await post('getOrderDetail', { id: 'o2' })
+    expect(d2.activations.p1.entered).toBe(true)
   })
 
   it('大白话：Issue #114 兜底——已进课但本单行没记账，审核拒 ENTERED_NOT_REFUNDABLE；判据 lineRefundable 同步为否', async () => {

@@ -2,8 +2,8 @@ import { ORDER_STATUS, buildBadStatus } from '@ldrw/shared'
 import { pageQuery, uploadShippingToWx, notifyAlert, applyStockMoves } from '../../../kit'
 import { reply, activationFor, type Ctx } from '../lib'
 
-// 订单详情补充（VMlhp·读类）：逐商品的激活码状态数据链（复用 activationFor·与退款判据同口径）。
-// 时间线/交易单号/物流/合规上报等都在订单对象里、前端直接读；本 action 只补「需联查 activations」的激活态。
+// 订单详情补充（读类）：逐商品进课态（复用 activationFor·与退款判据同口径·绑本单行 enteredQty）。
+// 时间线/交易单号/物流/合规上报等都在订单对象里、前端直接读；本 action 只补「该件是否已进课」。
 export async function getOrderDetail({ db, data }: Ctx) {
   const id = String((data && data.id) || '')
   if (!id) return reply(400, { ok: false, error: 'BAD_ARGS' })
@@ -16,7 +16,7 @@ export async function getOrderDetail({ db, data }: Ctx) {
     const pid = String(it.productId || '')
     if (!pid || seen.has(pid)) continue
     seen.add(pid)
-    activations[pid] = await activationFor(db, o._openid, pid)
+    activations[pid] = await activationFor(db, o._openid, pid, it)
   }
   return reply(200, { ok: true, activations })
 }
