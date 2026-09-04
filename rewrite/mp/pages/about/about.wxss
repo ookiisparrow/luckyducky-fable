@@ -82,6 +82,7 @@
 }
 .ld-ab-version {
   margin-top: 20rpx;
+  font-family: 'PingFang SC', 'Hiragino Sans GB', system-ui, sans-serif;
   font-size: 22rpx;
   color: var(--ld-content-2);
 }

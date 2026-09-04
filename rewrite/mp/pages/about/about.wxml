@@ -22,6 +22,6 @@
       <text class="ld-ab-sep">·</text>
       <text class="ld-ab-link" bind:tap="onPrivacy">隐私政策</text>
     </view>
-    <view class="ld-ab-version" wx:if="{{version}}">版本 {{version}}</view>
+    <view class="ld-ab-version">{{version}}</view>
   </view>
 </view>

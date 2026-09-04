@@ -160,6 +160,8 @@
     </view>
   </view>
 
+  <view class="ld-me-ver">{{versionLine}}</view>
+  <view wx:if="{{versionDetail}}" class="ld-me-ver-n">{{versionDetail}}</view>
   <view class="ld-me-pad-bottom"></view>
 </view>
 </scroll-view>
