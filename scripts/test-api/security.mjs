@@ -5,7 +5,7 @@
  *
  * 用法：node scripts/test-api/security.mjs
  */
-import { callFn, FUNCS, writeReport } from './lib.mjs';
+import { callFn, ENV, FUNCS, writeReport } from './lib.mjs';
 
 let passed = 0, failed = 0;
 const lines = [];
@@ -103,7 +103,7 @@ async function main() {
   const report = `# 云函数 API 安全测试报告（yaliceshi·非破坏性）
 
 - 时间：${new Date().toLocaleString('zh-CN')}
-- 环境：yaliceshi-d3get0o7ja6c91f8f
+- 环境：${ENV}
 - 结果：${passed} 通过 / ${failed} 失败
 
 | 结果 | 用例 | 详情 |

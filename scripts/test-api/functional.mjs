@@ -5,7 +5,7 @@
  *
  * 用法：node scripts/test-api/functional.mjs
  */
-import { callFn, FUNCS, writeReport } from './lib.mjs';
+import { callFn, ENV, FUNCS, writeReport } from './lib.mjs';
 
 const cases = [];
 let passed = 0;
@@ -108,7 +108,7 @@ async function main() {
   const report = `# 云函数 API 功能测试报告（yaliceshi）
 
 - 时间：${new Date().toLocaleString('zh-CN')}
-- 环境：${process.env.TEST_ENV || 'yaliceshi-d3get0o7ja6c91f8f'}
+- 环境：${ENV}
 - 结果：${passed} 通过 / ${failed} 失败 / 共 ${cases.length}
 
 | 结果 | 分组 | 用例 | 详情 |

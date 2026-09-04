@@ -7,7 +7,7 @@
  *
  * 用法：node scripts/test-api/security-auth.mjs
  */
-import { callFn, FUNCS, writeReport } from './lib.mjs';
+import { callFn, ENV, FUNCS, writeReport } from './lib.mjs';
 
 let passed = 0, failed = 0;
 const lines = [];
@@ -54,7 +54,7 @@ async function main() {
 
   // 伪造订单未落库验证（需要数据库直查）
   const cloudbase = (await import('@cloudbase/node-sdk')).default;
-  const app = cloudbase.init({ env: process.env.TEST_ENV || 'yaliceshi-d3get0o7ja6c91f8f', secretId: process.env.TCB_SECRETID, secretKey: process.env.TCB_SECRETKEY });
+  const app = cloudbase.init({ env: ENV, secretId: process.env.TCB_SECRETID, secretKey: process.env.TCB_SECRETKEY });
   const db = app.database();
   const fakeOrderId = fakePay.out_trade_no;
   const found = await db.collection('orders').where({ _id: fakeOrderId }).get();

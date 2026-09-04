@@ -71,6 +71,7 @@ npm run build:rw-admin / build:agent；内容站 npm run build -w @ldrw/site
 | 现在干什么/下一步 | `docs/现状与路线.md` |
 | 这事拍板过没 | `docs/判例索引.json`（grep 即可·命中后按 source 读原文） |
 | 接口/集合/计数 | 代码即真值（查询钥匙卡 `docs/系统事实.md`） |
+| 云环境门牌 / 选哪个环境 | `scripts/lib/env.mjs`（`npm run env:resolve`） |
 | 需求 | `docs/需求清单.md` |
 | 守卫为什么存在（病根） | `docs/根因账本.md` |
 | 部署/回滚/故障/巡检 runbook | `docs/运维手册.md` |

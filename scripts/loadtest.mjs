@@ -16,14 +16,14 @@
  * 前置：① 独立测试环境（非生产）② npm i -D @cloudbase/node-sdk ③ 本地 export
  *   TCB_SECRETID/TCB_SECRETKEY（经典 CAM 密钥·别进仓库/聊天）。
  * 用法：
- *   node scripts/loadtest.mjs --env <测试envId> --mode cas --n 200
- *   node scripts/loadtest.mjs --env <测试envId> --mode capacity --seed 2000
- *   node scripts/loadtest.mjs --env <测试envId> --mode throttle --n 20 --max 10
- * 安全闸：--env 等于生产 envId 直接退出。跑完自动清理 _loadtest 数据。
+ *   node scripts/loadtest.mjs --target test --mode cas --n 200
+ *   node scripts/loadtest.mjs --target test --mode capacity --seed 2000
+ *   node scripts/loadtest.mjs --target test --mode throttle --n 20 --max 10
+ * 安全闸：须显式 --target test（或 --env 命中目录测试 id）；生产/桩/只读一律拒。跑完自动清理 _loadtest 数据。
  */
 
 import { fileURLToPath } from 'node:url'
-import { PROD_ENV } from './lib/env.mjs' // 生产 env id 单源（病根#5·债#30①）·禁压
+import { assertMay, parseTargetFromArgv, resolveWriteTestTarget } from './lib/env.mjs'
 const COL = 'loadtest' // 专用集合·与业务集合隔离·跑完清空
 
 function parseArgs(argv) {
@@ -33,7 +33,7 @@ function parseArgs(argv) {
 }
 function usage(msg) {
   if (msg) console.error('✗ ' + msg)
-  console.error('用法：node scripts/loadtest.mjs --env <测试envId> --mode <cas|capacity|throttle|stock> [--n 200] [--seed 2000] [--max 10] [--stockN 10]')
+  console.error('用法：node scripts/loadtest.mjs --target test --mode <cas|capacity|throttle|stock> [--n 200] [--seed 2000] [--max 10] [--stockN 10]')
   process.exit(1)
 }
 
@@ -236,9 +236,14 @@ async function runStock(db, n, stockN) {
 
 async function main() {
   const a = parseArgs(process.argv.slice(2))
-  if (!a.env) usage('缺 --env <测试envId>')
-  if (a.env === PROD_ENV) usage('拒绝：--env 是生产环境，压测只打独立测试环境')
-  const db = await getDb(a.env)
+  let target
+  try {
+    target = resolveWriteTestTarget(parseTargetFromArgv(process.argv, process.env) || a.target || a.env)
+    assertMay(target, 'loadtest')
+  } catch (e) {
+    usage(e && e.message ? e.message : e)
+  }
+  const db = await getDb(target.envId)
   // CloudBase 不像 MongoDB 写时自动建集合——写不存在的集合即 ResourceNotFound；先确保测试集合在（已存在则忽略）
   await db.createCollection(COL).catch(() => {})
   if (a.mode === 'cas') await runCas(db, Number(a.n) || 200)
