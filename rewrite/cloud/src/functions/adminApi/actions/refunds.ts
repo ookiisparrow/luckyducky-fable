@@ -7,7 +7,7 @@ import {
   AFTERSALE_SCAN_CAP,
   buildBadStatus,
 } from '@ldrw/shared'
-import { callFlow, refundNoFor, pageQuery, notifyAlert } from '../../../kit'
+import { callFlow, refundNoFor, pageQuery, notifyAlert, enteredAtBlocksRefund } from '../../../kit'
 import { reply, ensure, activationFor, type Ctx } from '../lib'
 
 // —— 管理员越规退款（决策§26·客服端退货管理权限 refund:manage·净新增·超出旧线 92 parity）——
@@ -328,8 +328,11 @@ export async function getRefundDetail({ db, data }: Ctx) {
     order.data &&
     (order.data.items || []).find((it: any) => (it.lineId || it.productId) === reqLine)
   const refundableQty = line ? (Number(line.qty) || 1) - (Number(line.enteredQty) || 0) : 0
+  // Issue #114：enteredAt 已抢占但行没记账 → 与 approveRefund 同口径拒
+  const enteredHole = await enteredAtBlocksRefund(db, a._openid, a.productId)
   // 行缺失＝approveRefund 的 if(line) 跳过、不因进课拦 → 视作不被 ENTERED 拦（lineRefundable:true）
-  const lineRefundable = line ? line.refundable !== false && refundableQty > 0 : true
+  // 裂口除外：没行也要看 activations.enteredAt，避免审核页显示可退、点批准却被拦
+  const lineRefundable = enteredHole ? false : line ? line.refundable !== false && refundableQty > 0 : true
   return reply(200, {
     ok: true,
     activation: await activationFor(db, a._openid, a.productId),
@@ -374,6 +377,9 @@ export async function approveRefund({ db, data }: Ctx) {
   const reqLine = got.data.lineId || got.data.productId
   const line = (order.data.items || []).find((it: any) => (it.lineId || it.productId) === reqLine)
   let requalify: Record<string, unknown> | null = null
+  if (await enteredAtBlocksRefund(db, order.data._openid, got.data.productId || (line && line.productId))) {
+    return reply(400, { ok: false, error: 'ENTERED_NOT_REFUNDABLE' })
+  }
   if (line) {
     const lineQty = line.qty || 1
     const refundableQtyNow = lineQty - (line.enteredQty || 0)

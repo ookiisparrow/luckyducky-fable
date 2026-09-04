@@ -110,6 +110,75 @@ describe('applyRefund（黄金：云端分摊·一行一售后·数量级·封�
     } as any)
     expect((await call('applyRefund', { orderId: 'o4', lineId: 'p1__基础款' })).error).toBe('NOT_REFUNDABLE')
   })
+
+  it('大白话：Issue #114 兜底——已进课（enteredAt 有值）但订单行没记账，申请退款拒', async () => {
+    control.seed('products', [{ _id: 'p1', id: 'p1', courseId: 'c1' }])
+    control.seed('activations', [
+      { _id: 'CODE1', _openid: 'oME', courseId: 'c1', code: 'CODE1', enteredAt: 111 },
+    ])
+    seedOrder({
+      items: [{ productId: 'p1', lineId: 'p1__基础款', spec: '基础款', name: '小鸭', price: 198, qty: 1, enteredQty: 0, refundable: true }],
+    } as any)
+    expect((await call('applyRefund', { orderId: 'o1', lineId: 'p1__基础款' })).error).toBe('NOT_REFUNDABLE')
+  })
+
+  it('大白话：无激活记录 / 只激活未进课——原规则不变，行可退就能申请', async () => {
+    control.seed('products', [{ _id: 'p1', id: 'p1', courseId: 'c1' }])
+    seedOrder()
+    expect((await call('applyRefund', { orderId: 'o1', lineId: 'p1__基础款' })).ok).toBe(true)
+
+    seedOrder({ _id: 'o5', id: 'o5' } as any)
+    control.seed('activations', [
+      { _id: 'CODE5', _openid: 'oME', courseId: 'c1', code: 'CODE5', enteredAt: null },
+    ])
+    const r = await call('applyRefund', { orderId: 'o5', lineId: 'p1__基础款' })
+    expect(r.ok).toBe(true)
+    expect(r.afterSale.orderId).toBe('o5')
+  })
+
+  it('大白话：进课已记账——按件剩量仍可退；两单同款只锁已记账的那一单', async () => {
+    control.seed('products', [{ _id: 'p1', id: 'p1', courseId: 'c1' }])
+    control.seed('activations', [
+      { _id: 'CODE1', _openid: 'oME', courseId: 'c1', code: 'CODE1', enteredAt: 111 },
+    ])
+    seedOrder({
+      _id: 'o3',
+      id: 'o3',
+      amount: 574,
+      goods: 594,
+      items: [{ productId: 'p1', lineId: 'p1__基础款', spec: '基础款', name: '鸭', price: 198, qty: 3, enteredQty: 1, refundable: true }],
+    } as any)
+    const remain = await call('applyRefund', { orderId: 'o3', lineId: 'p1__基础款' })
+    expect(remain.ok).toBe(true)
+    expect(remain.afterSale.qty).toBe(2)
+
+    control.seed('orders', [
+      {
+        _id: 'oA',
+        id: 'oA',
+        _openid: 'oME',
+        status: 'paid',
+        amount: 178,
+        goods: 198,
+        createdAt: 100,
+        items: [{ productId: 'p1', lineId: 'p1__基础款', spec: '基础款', name: '小鸭', price: 198, qty: 1, enteredQty: 1, refundable: false }],
+      },
+      {
+        _id: 'oB',
+        id: 'oB',
+        _openid: 'oME',
+        status: 'paid',
+        amount: 178,
+        goods: 198,
+        createdAt: 200,
+        items: [{ productId: 'p1', lineId: 'p1__基础款', spec: '基础款', name: '小鸭', price: 198, qty: 1, enteredQty: 0, refundable: true }],
+      },
+    ])
+    expect((await call('applyRefund', { orderId: 'oA', lineId: 'p1__基础款' })).error).toBe('NOT_REFUNDABLE')
+    const second = await call('applyRefund', { orderId: 'oB', lineId: 'p1__基础款' })
+    expect(second.ok).toBe(true)
+    expect(second.afterSale.orderId).toBe('oB')
+  })
 })
 
 describe('refundCallback（黄金：防伪·核验 fail-closed·幂等·回补规则）', () => {

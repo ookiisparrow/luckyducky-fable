@@ -269,10 +269,31 @@ describe('退款审批（黄金：原子抢占/回滚条件化/进课重算封�
 
   it('大白话：退款判据绑本单订单行——买家这门课已进过、但本单此行仍可退时 lineRefundable:true（不误判会拦）；本单此行被撤则 false（P2·根因#8 判据不失真）', async () => {
     control.seed('products', [{ _id: 'p1', id: 'p1', courseId: 'c1' }])
-    // 买家经"别单/别码"进过这门课（enteredAt 有值·课程级已进课）
+    // 买家经"别单/别码"进过这门课（enteredAt 有值·课程级已进课），别单已记下 enteredQty——本单未进仍可退
     control.seed('activations', [{ _id: 'act-old', _openid: 'oBUYER', courseId: 'c1', code: 'OLD', enteredAt: 111 }])
-    // 本单此行仍可退（refundable:true·enteredQty:0）
-    seedOrder({ items: [{ productId: 'p1', lineId: 'p1__红', spec: '红', price: 198, qty: 1, enteredQty: 0, refundable: true }] } as any)
+    control.seed('orders', [
+      {
+        _id: 'o-old',
+        id: 'o-old',
+        _openid: 'oBUYER',
+        status: 'paid',
+        amount: 178,
+        goods: 198,
+        createdAt: 500,
+        items: [{ productId: 'p1', lineId: 'p1__旧', spec: '旧', price: 198, qty: 1, enteredQty: 1, refundable: false }],
+      },
+      {
+        _id: 'o1',
+        id: 'o1',
+        _openid: 'oBUYER',
+        status: 'paid',
+        amount: 178,
+        goods: 198,
+        transactionId: 'wx-t1',
+        createdAt: 1000,
+        items: [{ productId: 'p1', lineId: 'p1__红', spec: '红', price: 198, qty: 1, enteredQty: 0, refundable: true }],
+      },
+    ])
     control.seed('afterSales', [
       { _id: 'o1__p1__红', orderId: 'o1', _openid: 'oBUYER', lineId: 'p1__红', productId: 'p1', spec: '红', qty: 1, refundAmount: 178, status: 'applied', appliedAt: 2000 },
     ])
@@ -289,6 +310,33 @@ describe('退款审批（黄金：原子抢占/回滚条件化/进课重算封�
       { _id: 'o2__p1__蓝', orderId: 'o2', _openid: 'oBUYER', lineId: 'p1__蓝', productId: 'p1', spec: '蓝', qty: 1, refundAmount: 178, status: 'applied', appliedAt: 2000 },
     ])
     expect((await post('getRefundDetail', { id: 'o2__p1__蓝' })).lineRefundable).toBe(false)
+  })
+
+  it('大白话：Issue #114 兜底——已进课但本单行没记账，审核拒 ENTERED_NOT_REFUNDABLE；判据 lineRefundable 同步为否', async () => {
+    control.seed('products', [{ _id: 'p1', id: 'p1', courseId: 'c1' }])
+    control.seed('activations', [{ _id: 'CODE1', _openid: 'oBUYER', courseId: 'c1', code: 'CODE1', enteredAt: 111 }])
+    seedOrder({ items: [{ productId: 'p1', lineId: 'p1__红', spec: '红', price: 198, qty: 1, enteredQty: 0, refundable: true }] } as any)
+    seedAS({ _id: 'as1', lineId: 'p1__红', productId: 'p1', qty: 1, refundAmount: 178 })
+    seedFlow()
+    control.setCallFunctionResult({ result: { data: { status: 'PROCESSING', refund_id: 'r1' } } })
+    const detail = await post('getRefundDetail', { id: 'as1' })
+    expect(detail.ok).toBe(true)
+    expect(detail.lineRefundable).toBe(false)
+    expect((await post('approveRefund', { id: 'as1' })).error).toBe('ENTERED_NOT_REFUNDABLE')
+    expect(control.callFunctionCalls().length).toBe(0)
+    expect(control.dump('afterSales')[0].status).toBe('applied')
+  })
+
+  it('大白话：Issue #114 兜底不误伤——只激活未进课，审核仍按原规则放行', async () => {
+    control.seed('products', [{ _id: 'p1', id: 'p1', courseId: 'c1' }])
+    control.seed('activations', [{ _id: 'CODE1', _openid: 'oBUYER', courseId: 'c1', code: 'CODE1', enteredAt: null }])
+    seedOrder({ items: [{ productId: 'p1', lineId: 'p1__红', spec: '红', price: 198, qty: 1, enteredQty: 0, refundable: true }] } as any)
+    seedAS({ qty: 1, refundAmount: 178 })
+    seedFlow()
+    control.setCallFunctionResult({ result: { data: { status: 'PROCESSING', refund_id: 'r1' } } })
+    const r = await post('approveRefund', { id: 'as1' })
+    expect(r.ok).toBe(true)
+    expect(control.dump('afterSales')[0].status).toBe('approved')
   })
 
   it('大白话：工作流未受理回滚可重试；但回滚条件化——退款回调已抢先置已退款时绝不打回（防二次退款）', async () => {
