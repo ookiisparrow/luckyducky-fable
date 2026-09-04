@@ -79,7 +79,7 @@ Page({
     loggedIn: false, // 已显式同意登录（loginGate hint）：真才显真实资料 + 退出按钮，假显登出态（默认身份 + 登录入口）
     exitGuardArmed: false, // 误触退出提醒（决策§30）：驱动 <page-container show>·onShow 武装（初值 false·未上屏不拦）
     versionLine: currentAppVersionLine(), // 页底版本行（开发/测试/发布候选·数字跟 package.json）
-    versionDetail: currentAppVersionDetail(), // 仅开发版：日期 + 简介；测试/正式为空不上屏
+    versionDetail: currentAppVersionDetail(), // 日期 + 简介（开发/测试/发布候选）；三通道都上屏
   },
   onLoad() {
     this.setData({ statusBarHeight: wx.getWindowInfo().statusBarHeight }) // 沉浸式：读状态栏高度让开自绘导航（onLoad 一次即可·不随 onShow 变）
