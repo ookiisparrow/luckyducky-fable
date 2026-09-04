@@ -3,8 +3,12 @@ import { describe, it, expect, afterEach } from 'vitest'
 import {
   APP_VERSION,
   PUBLIC_RELEASE_NAME,
+  DEV_UPDATE_DATE,
+  DEV_UPDATE_NOTE,
   formatAppVersionLine,
+  formatAppVersionDetail,
   currentAppVersionLine,
+  currentAppVersionDetail,
 } from '../lib/appVersion'
 import pkgRaw from '../../../package.json?raw'
 import meWxml from '../pages/me/me.wxml?raw'
@@ -50,10 +54,30 @@ describe('运行时通道（微信开发版/体验版/正式版）', () => {
     const g = globalThis as unknown as { wx?: { getAccountInfoSync: () => { miniProgram: { envVersion: string } } } }
     g.wx = { getAccountInfoSync: () => ({ miniProgram: { envVersion: 'trial' } }) }
     expect(currentAppVersionLine()).toBe('内部预览版 · 测试 ' + APP_VERSION)
+    expect(currentAppVersionDetail()).toBe('')
     g.wx = { getAccountInfoSync: () => ({ miniProgram: { envVersion: 'release' } }) }
     expect(currentAppVersionLine()).toBe('内部预览版 · 发布候选 ' + APP_VERSION)
+    expect(currentAppVersionDetail()).toBe('')
     delete g.wx
     expect(currentAppVersionLine()).toBe('内部预览版 · 开发 ' + APP_VERSION)
+    expect(currentAppVersionDetail()).toBe(DEV_UPDATE_DATE + ' · ' + DEV_UPDATE_NOTE)
+  })
+})
+
+describe('开发版更新日期与简介（仅 develop）', () => {
+  it('大白话：日期是上海日历的年月日；简介是老板定的那句，不是占位稿', () => {
+    expect(DEV_UPDATE_DATE).toMatch(/^\d{4}-\d{2}-\d{2}$/)
+    expect(DEV_UPDATE_DATE).toBe('2026-09-04')
+    expect(DEV_UPDATE_NOTE).toBe('退款兜底：已进课拒退（测环境已发）')
+    expect(DEV_UPDATE_NOTE).not.toContain('版本脚')
+  })
+
+  it('大白话：只有开发版才在版本号下面多一行「哪天改了啥」；测试版、正式包不加这行', () => {
+    expect(formatAppVersionDetail('develop')).toBe('2026-09-04 · 退款兜底：已进课拒退（测环境已发）')
+    expect(formatAppVersionDetail('trial')).toBe('')
+    expect(formatAppVersionDetail('release')).toBe('')
+    expect(formatAppVersionDetail('develop', '', DEV_UPDATE_NOTE)).toBe('')
+    expect(formatAppVersionDetail('develop', DEV_UPDATE_DATE, '')).toBe('')
   })
 })
 
@@ -64,6 +88,11 @@ describe('我页底部版本行', () => {
     expect(live.indexOf('ld-me-ver')).toBeGreaterThan(live.lastIndexOf('ld-me-logout'))
     expect(live.indexOf('ld-me-ver')).toBeLessThan(live.indexOf('ld-me-pad-bottom'))
     expect(meTs).toMatch(/currentAppVersionLine/)
+    expect(meTs).toMatch(/currentAppVersionDetail/)
     expect(meTs).toMatch(/from ['"]\.\.\/\.\.\/lib\/appVersion['"]/)
+    expect(live).toContain('{{versionDetail}}')
+    expect(live.indexOf('{{versionLine}}')).toBeLessThan(live.indexOf('{{versionDetail}}'))
+    expect(live.indexOf('{{versionDetail}}')).toBeLessThan(live.indexOf('ld-me-pad-bottom'))
+    expect(live).toMatch(/wx:if="\{\{versionDetail\}\}"/)
   })
 })
