@@ -75,6 +75,15 @@ describe('isDocMissing 判据兼容真 sdk 文案（K3 复审）', () => {
     const real = new Error('document.get:fail document with _id abc123 does not exist')
     expect(isDocMissing(real)).toBe(true)
   })
+  it('大白话：yaliceshi 完整缺档壳（message=unknown error，细节在 errMsg）也要判定为无档（P0-1）', () => {
+    const errMsg = 'document.get:fail document with _id pNew__基础款 does not exist; at document.get api'
+    const real = Object.assign(new Error('errCode: -1 unknown error | errMsg: ' + errMsg), {
+      errCode: -1,
+      errMsg,
+    })
+    expect(isDocMissing(real)).toBe(true)
+    expect(isDocMissing({ errCode: -1, errMsg })).toBe(true)
+  })
   it('大白话：测试桩字面量仍要判定为无档（回归保护）', () => {
     expect(isDocMissing(new Error('DOCUMENT_NOT_FOUND'))).toBe(true)
   })
@@ -173,6 +182,19 @@ describe('reserveStock/casDecrement 瞬时读故障不被误判不限量（批H�
       expect(r.reserved).toEqual([]) // 不限量不计入 reserved
     })
     expect(lines.some((l) => l.includes('RESERVE_READ_FAILED'))).toBe(false)
+  })
+
+  it('大白话：真云缺档壳抛在 get() 上——reserveStock 当不限量放行，不当 OUT_OF_STOCK（P0-1）', async () => {
+    control.setBeforeGet(({ coll, id }: { coll: string; id: string }) => {
+      if (coll !== COLLECTIONS.inventory || id !== 'ghost-sku__') return
+      const errMsg = `document.get:fail document with _id ${id} does not exist; at document.get api`
+      throw Object.assign(new Error(`errCode: -1 unknown error | errMsg: ${errMsg}`), { errCode: -1, errMsg })
+    })
+    const r = await reserveStock([{ productId: 'ghost-sku', spec: '', qty: 3 }])
+    control.setBeforeGet(null as never)
+    expect(r.ok).toBe(true)
+    expect(r.reserved).toEqual([])
+    expect(r.short).toBeUndefined()
   })
 
   it('大白话：正常路径（有档、库存充足、读写都成功）不受影响——照常一次扣减成功', async () => {

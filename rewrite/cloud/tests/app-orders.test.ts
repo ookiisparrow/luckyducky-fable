@@ -165,6 +165,46 @@ describe('createOrder · 库存预留（黄金 inventory-scm §A/§B）', () => 
     expect(r3.order.reserved).toEqual([])
   })
 
+  // P0-1（#112）：yaliceshi 真云缺档不是桩字面量 DOCUMENT_NOT_FOUND，而是
+  // `errCode:-1 / document.get:fail document with _id X does not exist`。
+  // 判据认不出 → reserveStock 当读失败重试耗尽 → createOrder 必拒 OUT_OF_STOCK。
+  // 新上架 publishProduct 不建库存档，这条是上新后第一单的主路径。
+  it('大白话：新上架无库存档 + 真云缺档文案——不得 OUT_OF_STOCK，整单放行（P0-1 无档暂不限量）', async () => {
+    control.seed('config', [{ _id: 'pay', mode: 'real' }])
+    control.seed('products', [{ _id: 'pNew', id: 'pNew', name: '新上架礼盒', price: 88, listed: true, tag: '基础款' }])
+    control.setBeforeGet(({ coll, id }: { coll: string; id: string }) => {
+      if (coll !== 'inventory' || id !== 'pNew__基础款') return
+      const errMsg = `document.get:fail document with _id ${id} does not exist; at document.get api`
+      const e = new Error(`errCode: -1 unknown error | errMsg: ${errMsg}`)
+      Object.assign(e, { errCode: -1, errMsg })
+      throw e
+    })
+    const r = await order([{ id: 'pNew', qty: 1 }])
+    control.setBeforeGet(null as never)
+    expect(r.ok).toBe(true)
+    expect(String(r.error || '')).not.toContain('OUT_OF_STOCK')
+    expect(r.order.reserved).toEqual([])
+    expect(r.order.status).toBe('pending')
+    expect(control.dump('orders').length).toBe(1)
+    expect(control.dump('inventory').length).toBe(0)
+  })
+
+  it('大白话：有库存档且库存为 0——仍拒 OUT_OF_STOCK，不建单（有档限量，不是无档）', async () => {
+    control.seed('inventory', [{ _id: 'p1__基础款', productId: 'p1', spec: '基础款', stock: 0 }])
+    const r = await order([{ id: 'p1', qty: 1 }])
+    expect(r.error).toContain('OUT_OF_STOCK')
+    expect(control.dump('orders').length).toBe(0)
+    expect(control.dump('inventory')[0].stock).toBe(0)
+  })
+
+  it('大白话：有库存档且库存充足——照常预留扣减', async () => {
+    control.seed('inventory', [{ _id: 'p1__基础款', productId: 'p1', spec: '基础款', stock: 7 }])
+    const r = await order([{ id: 'p1', qty: 2 }])
+    expect(r.ok).toBe(true)
+    expect(r.order.reserved).toEqual([{ productId: 'p1', spec: '基础款', qty: 2 }])
+    expect(control.dump('inventory')[0].stock).toBe(5)
+  })
+
   it('大白话：多条目任一不足整单失败、已扣的其他条目全部回滚（不锁死库存）并指明短缺', async () => {
     control.seed('inventory', [
       { _id: 'p1__基础款', productId: 'p1', spec: '基础款', stock: 5 },
