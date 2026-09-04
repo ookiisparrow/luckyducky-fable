@@ -11,6 +11,7 @@
 import { existsSync, readFileSync, writeFileSync } from 'node:fs'
 import { execSync } from 'node:child_process'
 import { join, resolve } from 'node:path'
+import { stampMpVersionDate } from './stamp-mp-version-date.mjs'
 
 const ROOT = resolve(import.meta.dirname, '..')
 const bump = process.argv[2]
@@ -76,6 +77,7 @@ if (mpVerNext === mpVerSrc) {
   process.exit(1)
 }
 writeFileSync(mpVerPath, mpVerNext)
+stampMpVersionDate(ROOT) // 「我」页第二行日期戳成上海当天，跟升号同批，免得发版忘改
 
 execSync('git add package.json package-lock.json rewrite/mp/lib/appVersion.ts 2>/dev/null || git add package.json', { cwd: ROOT })
 execSync(`git commit -m "release: v${next}"`, { cwd: ROOT, stdio: 'inherit' })
