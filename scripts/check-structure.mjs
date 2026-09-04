@@ -1686,23 +1686,52 @@ export const repoChecks = [
     },
   },
   {
-    // 生产 env id 单源（病根#5·债#30①脚本侧）：deploy-fns 部署目标 / loadtest·deploy-test「拒生产」
-    // 安全闸 共用生产 env id；各写一份→改一漏一致安全闸与部署目标不一致。收口 scripts/lib/env.mjs 一份。
+    // 云环境目录单源（病根#5·债#30① + Issue #106）：生产/测试 env id 只在 scripts/lib/env.mjs
+    // 以 PROD_ENV / TEST_ENV 字面量定义；ENV_CATALOG 给出 stub|test|prod-readonly 选择子。
+    // scripts/ 递归扫（含 test-api/）禁再抄门牌号——抄漏会让「拒生产」闸与压测目标不一致。
+    // guard-deploy 的 id 仅在确认消息文案（非逻辑常量）·豁免。
     id: 'prod-env-single-source',
     roots: ['#5'],
-    desc: '生产 env id 单源（病根#5·债#30①）：scripts/ 里生产云环境 id 只在 scripts/lib/env.mjs 定义（PROD_ENV）；deploy-fns/loadtest/deploy-test 须 import、不各写一份——防改一漏一致「拒生产」安全闸不一致。guard-deploy 的 id 仅在确认消息文案（非逻辑常量）·豁免',
+    desc: '云环境目录单源（病根#5·Issue #106）：scripts/ 里生产/测试 env id 只在 scripts/lib/env.mjs 定义；ENV_CATALOG 须有 stub/test/prod-readonly；递归扫 scripts/**/*.mjs 禁硬编码门牌（guard-deploy 豁免）',
     run() {
       const src = join(ROOT, 'scripts/lib/env.mjs')
-      if (!existsSync(src)) return ['scripts/lib/env.mjs 缺失（生产 env id 单源·病根#5）']
-      const m = readFileSync(src, 'utf8').match(/PROD_ENV\s*=\s*['"]([a-z0-9-]+)['"]/i)
-      const envId = m ? m[1] : ''
-      if (!envId) return ['scripts/lib/env.mjs 未定义 PROD_ENV（生产 env id 单源·病根#5）']
+      if (!existsSync(src)) return ['scripts/lib/env.mjs 缺失（云环境目录单源·病根#5）']
+      const text = readFileSync(src, 'utf8')
+      const prodM = text.match(/PROD_ENV\s*=\s*['"]([a-z0-9-]+)['"]/i)
+      const testM = text.match(/TEST_ENV\s*=\s*['"]([a-z0-9-]+)['"]/i)
+      const envId = prodM ? prodM[1] : ''
+      const testId = testM ? testM[1] : ''
+      if (!envId) return ['scripts/lib/env.mjs 未定义 PROD_ENV（云环境目录单源·病根#5）']
+      if (!testId) return ['scripts/lib/env.mjs 未定义 TEST_ENV（测试云门牌须与生产并列入册·Issue #106）']
+      if (envId === testId) return ['scripts/lib/env.mjs 生产/测试 env id 撞号——目录失效']
       const bad = []
-      for (const f of readdirSync(join(ROOT, 'scripts'))) {
-        if (!f.endsWith('.mjs') || f === 'guard-deploy.mjs') continue // guard-deploy：id 仅在文案·非逻辑常量·豁免
-        if (readFileSync(join(ROOT, 'scripts', f), 'utf8').includes(envId))
-          bad.push(`scripts/${f} 硬编码生产 env id「${envId}」——须 import { allDeployNames } from './lib/deploy-aliases.mjs'
-import { PROD_ENV } from './lib/env.mjs'（单源·病根#5·债#30①）`)
+      if (!/export const ENV_CATALOG\s*=/.test(text))
+        bad.push('scripts/lib/env.mjs 缺 ENV_CATALOG（选择子目录·Issue #106）')
+      if (!/export function resolveTarget\s*\(/.test(text))
+        bad.push('scripts/lib/env.mjs 缺 resolveTarget（断言套件入口·Issue #106）')
+      if (!/export function resolveWriteTestTarget\s*\(/.test(text))
+        bad.push('scripts/lib/env.mjs 缺 resolveWriteTestTarget（写测试须显式 test·Issue #106）')
+      for (const sel of ['stub', 'test', 'prod-readonly']) {
+        if (!text.includes("selector: '" + sel + "'") && !text.includes('selector: "' + sel + '"'))
+          bad.push(`ENV_CATALOG 缺选择子 ${sel}（stub|test|prod-readonly 须齐·Issue #106）`)
+      }
+      const walkMjs = (d, acc) => {
+        for (const e of lsScan(d)) {
+          const p = join(d, e)
+          if (statSync(p).isDirectory()) walkMjs(p, acc)
+          else if (e.endsWith('.mjs')) acc.push(p)
+        }
+        return acc
+      }
+      const exempt = new Set(['scripts/lib/env.mjs', 'scripts/guard-deploy.mjs'])
+      for (const abs of walkMjs(join(ROOT, 'scripts'), [])) {
+        const rel = relative(ROOT, abs).replace(/\\/g, '/')
+        if (exempt.has(rel)) continue
+        const s = readFileSync(abs, 'utf8')
+        if (s.includes(envId))
+          bad.push(`${rel} 硬编码生产 env id——须 import { PROD_ENV } / resolveTarget from scripts/lib/env.mjs（单源·病根#5）`)
+        if (s.includes(testId))
+          bad.push(`${rel} 硬编码测试 env id——须 import { TEST_ENV } / resolveTarget from scripts/lib/env.mjs（单源·Issue #106）`)
       }
       return bad
     },
@@ -5155,6 +5184,9 @@ export const typeAndTestGuards = [
   // 精确键集合（Object.keys 排序全等·增删都红）；红了先同步 rewrite/shared/src/contracts.ts 与
   // mp 消费面四点位（payFlow/mapOrders/playbackCache/order-list·清单见测试头注）。
   { id: 'rw-app-response-contract', mechanism: 'test', roots: ['#5', '#8'], reverseTest: 'rewrite/cloud/tests/contract-shape.test.ts' },
+  // 云环境选择子（Issue #106·病根#5）：同一套断言对 stub|test|prod-readonly 分别解析；
+  // 空输入=生产只读保险；写测试须显式 test；目录无密钥。reverseTest 锁解析矩阵。
+  { id: 'env-catalog-resolve', mechanism: 'test', roots: ['#5'], reverseTest: 'tests/scripts/env-catalog.test.js' },
 ]
 
 // export：供 check-report 体检面板复用同一套遍历/判定（面板=派生视图，禁自建第二套语义）

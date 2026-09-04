@@ -1,14 +1,18 @@
 #!/usr/bin/env node
 /**
- * 云函数 API 测试公共库（yaliceshi 环境）
+ * 云函数 API 测试公共库（目录 test 行）
  * 用法：被 functional/concurrent/soak/security 脚本 import
+ * 选环境：LD_TARGET=test（缺省按目录 test；生产/未知 id 拒）
  */
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
+import { assertMay, parseTargetFromArgv, resolveWriteTestTarget } from '../lib/env.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
-export const ENV = process.env.TEST_ENV || 'yaliceshi-d3get0o7ja6c91f8f';
+const _target = resolveWriteTestTarget(parseTargetFromArgv() || 'test');
+assertMay(_target, 'test-api');
+export const ENV = _target.envId;
 export const FUNCS = {
   app: 'app',           // 用户端网关
   admin: 'adminApi',    // 管理后台 API（测试环境旧名）

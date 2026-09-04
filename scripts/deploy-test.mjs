@@ -8,32 +8,30 @@
  * cloudbaserc 的迁移需先从控制台抄回 14 函数真实内存/超时值，待办见 GitHub Issue「测试环境常量与环境抽象层入仓」）。
  * **物理防误部署生产**：env 等于生产 envId 直接中止。本脚本在你自己终端跑（不经部署闸 hook）。
  *
- * 用法：node scripts/deploy-test.mjs --env <测试envId>
- *   或：LD_TEST_ENV=<测试envId> npm run deploy:test
+ * 用法：node scripts/deploy-test.mjs --target test
+ *   或：LD_TARGET=test npm run deploy:test
+ *   兼容：--env <目录里的测试 envId> / LD_TEST_ENV
+ * 本脚本名即「测部署」——没写 --target 时按目录 test 行（不是生产、也不接受任意 envId）。
  * 前置：tcb 已登录（tcb login）；脚本会先 npm run build:rw-cloud。
  * 注：tcb 命令以你本机 tcb 版本为准——flag 对不上就按上面 tcb 报错改本脚本那一行。
  */
 import { readdirSync, existsSync, readFileSync } from 'node:fs'
 import { execSync } from 'node:child_process'
 import { join, resolve } from 'node:path'
-import { PROD_ENV, TEST_ENV } from './lib/env.mjs' // 生产/测试 env id 单源（病根#5·债#30①）·禁部署
+import { assertMay, parseTargetFromArgv, resolveWriteTestTarget } from './lib/env.mjs'
 
 const ROOT = resolve(import.meta.dirname, '..')
 
-function arg(name) {
-  const i = process.argv.indexOf('--' + name)
-  return i >= 0 ? process.argv[i + 1] : ''
-}
-
-const env = arg('env') || process.env.LD_TEST_ENV || TEST_ENV || ''
-if (!env) {
-  console.error('✗ 缺测试 envId：node scripts/deploy-test.mjs --env <env>（或 LD_TEST_ENV=...）')
+let target
+try {
+  // 脚本本身是 deploy-test：空输入按目录 test 行，不接受生产/未知 envId。
+  target = resolveWriteTestTarget(parseTargetFromArgv() || 'test')
+  assertMay(target, 'deploy-test')
+} catch (e) {
+  console.error('✗ ' + (e && e.message ? e.message : e))
   process.exit(1)
 }
-if (env === PROD_ENV) {
-  console.error('✗ 拒绝：目标是生产环境 ' + PROD_ENV + '——本脚本只部署测试环境')
-  process.exit(1)
-}
+const env = target.envId
 
 // 版本号管理（2026-08-08 老板拍板）：测试部署自动标 `X.Y.Z-test.N`
 // N = git 提交总数（同仓同历史 ⇒ 稳定递增）；经 LD_BUILD_VERSION 注入 build.mjs stamp，
