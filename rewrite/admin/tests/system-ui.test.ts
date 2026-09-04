@@ -3,6 +3,7 @@
 import { describe, it, expect } from 'vitest'
 import { mapAgents, mapBatches, webhookOk, mapRecon, mapBillMatch, mapStock, stockErrorText, mapAuditEntries } from '../src/lib/mapSystem'
 import settingsSrc from '../src/pages/Settings.vue?raw'
+import batchesSrc from '../src/pages/Batches.vue?raw'
 
 // 密钥不明文常驻（UX 体检批4）：webhook key 曾在输入框明文回显（后端 getSettings 原样回值），任何截屏/
 // 投屏即带出——隔壁「人工配置清单」页自标「零回显」，两页安全姿态曾自相矛盾。前端改密码态+显隐切换
@@ -52,6 +53,25 @@ describe('外包账号与批次', () => {
     expect(webhookOk('https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=abc-123')).toBe(true)
     expect(webhookOk('https://evil.com/hook')).toBe(false)
     expect(webhookOk('http://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=x')).toBe(false) // http 不行
+  })
+})
+
+describe('Batches.vue 按批看码 + 页内翻页（不一次铺开）', () => {
+  it('大白话：打开一批只看一页码，有上一页/下一页，不 slice(0,100) 一次铺开；导出另取齐整批；还能生成新批次', () => {
+    expect(batchesSrc).toMatch(/async function nextCodes/)
+    expect(batchesSrc).toMatch(/async function prevCodes/)
+    expect(batchesSrc).toMatch(/listBatchCodes\([^)]*cursor/)
+    expect(batchesSrc).not.toMatch(/codes\.slice\(0,\s*100\)/)
+    expect(batchesSrc).toMatch(/async function collectAllCodes/)
+    expect(batchesSrc).toContain('上一页')
+    expect(batchesSrc).toContain('下一页')
+    expect(batchesSrc).toMatch(/async function doCreate/)
+    expect(batchesSrc).toContain('生成新批次')
+  })
+
+  it('大白话：码表翻页用 peek 绑当前批次代际，回包过期即丢，不把 A 批的下一页写进 B 批抽屉', () => {
+    expect(batchesSrc).toMatch(/const g = codesGen\.peek\(\)/)
+    expect(batchesSrc).toMatch(/if \(codesGen\.isStale\(g\) \|\| detail\.value\?\.batchId !== forBatch\) return/)
   })
 })
 

@@ -8,7 +8,8 @@ export const setAgentWecomUserId = (id: string, wecomUserId: string) => client.p
 
 export const listBatches = (courseId: string) => client.post('listBatches', { courseId })
 export const createBatch = (courseId: string, count: number) => client.post('createBatch', { courseId, count })
-export const listBatchCodes = (batchId: string) => client.post('listBatchCodes', { batchId })
+export const listBatchCodes = (batchId: string, page?: { cursor?: unknown; limit?: number }) =>
+  client.post('listBatchCodes', { batchId, ...page })
 
 export const getSettings = () => client.post('getSettings')
 export const saveSettings = (patch: Record<string, unknown>) => client.post('saveSettings', patch)
