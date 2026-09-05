@@ -24,6 +24,7 @@ const thumb = (fileID: string) => sessionUrls.value[fileID] || ''
 
 const autoState = ref('') // '' | saving | saved | error
 let saveTimer: ReturnType<typeof setTimeout> | null = null
+let saveResult: { ok: boolean; error?: string } = { ok: false } // 手动保存读取队列结果，不再另发一次请求
 let loaded = false // load-guard：首次载入赋值不触发自动保存
 watch(
   model,
@@ -31,13 +32,17 @@ watch(
     if (!model.value || !loaded) return
     autoState.value = 'saving'
     if (saveTimer) clearTimeout(saveTimer)
-    saveTimer = setTimeout(() => void flushSave(), 900)
+    saveTimer = setTimeout(() => {
+      saveTimer = null
+      void flushSave()
+    }, 900)
   },
   { deep: true }
 )
 async function autosave() {
   if (!model.value) return
   const r = await saveHomeContent(homePayload(model.value))
+  saveResult = r
   autoState.value = r.ok ? 'saved' : 'error'
 }
 // 串行化·防慢网下两次自动保存乱序覆盖（P2·根因#8）；key='page-content:home'（批D·P1，与 usePageContent.ts
@@ -155,8 +160,8 @@ async function save() {
     saveTimer = null
   }
   busy.value = true
-  await flushSave() // 先排空在途/待发的自动保存链（防旧快照 autosave POST 落在手动保存之后·覆盖新编辑·P2）
-  const r = await saveHomeContent(homePayload(model.value))
+  await flushSave() // 排空并补存最新编辑，保存结果来自同一条队列
+  const r = saveResult
   busy.value = false
   autoState.value = ''
   message.value = r.ok ? SAVE_OK_MESSAGE : '保存失败：' + String(r.error || '')

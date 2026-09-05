@@ -16,11 +16,13 @@ export function usePageContent<M>(page: string, normalize: (_raw: unknown) => M,
   const busy = ref(false)
   const autoState = ref<AutoState>('')
   let saveTimer: ReturnType<typeof setTimeout> | null = null
+  let saveResult: { ok: boolean; error?: string } = { ok: false } // 手动保存读取队列结果，不再另发一次请求
   let loaded = false // load-guard：首次载入赋值不触发自动保存
 
   async function autosave() {
     if (!model.value) return
     const r = await savePageContent(page, payload(model.value))
+    saveResult = r
     autoState.value = r.ok ? 'saved' : 'error'
   }
   // 串行·防慢网两次自动保存乱序覆盖（根因#8）；key='page-content:'+page（批D·P1）：改走模块级共享槽位，
@@ -34,7 +36,10 @@ export function usePageContent<M>(page: string, normalize: (_raw: unknown) => M,
       if (!model.value || !loaded) return
       autoState.value = 'saving'
       if (saveTimer) clearTimeout(saveTimer)
-      saveTimer = setTimeout(() => void flushSave(), 900)
+      saveTimer = setTimeout(() => {
+        saveTimer = null
+        void flushSave()
+      }, 900)
     },
     { deep: true }
   )
@@ -68,8 +73,8 @@ export function usePageContent<M>(page: string, normalize: (_raw: unknown) => M,
       saveTimer = null
     }
     busy.value = true
-    await flushSave() // 先排空在途/待发的自动保存链（防旧快照落在手动保存之后覆盖新编辑·根因#8）
-    const r = await savePageContent(page, payload(model.value))
+    await flushSave() // 排空并补存最新编辑，保存结果来自同一条队列
+    const r = saveResult
     busy.value = false
     autoState.value = ''
     message.value = r.ok ? SAVE_OK_MESSAGE : '保存失败：' + String(r.error || '')
