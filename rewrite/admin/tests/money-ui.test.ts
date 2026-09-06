@@ -1,7 +1,7 @@
 // 订单与钱组映射（守卫 rw-admin-money-ui-golden）：看板近似诚实标注/警报有则必显无则不吓人/
 // 订单行金额不符禁发入口收窄/售后行只待审核可裁决/脏档安全（与 mp 同口径）。
 import { describe, it, expect } from 'vitest'
-import { mapDashboard, mapOrderRows, mapRefundRows, maskPhone, refundVerdict, deriveDashboardTodos, canOverrideRefund, mapOverrideOrder, orderErrorText } from '../src/lib/mapMoney'
+import { mapDashboard, mapOrderRows, mapRefundRows, maskPhone, refundVerdict, deriveDashboardTodos, canOverrideRefund, mapOverrideOrder, orderErrorText, refundErrorText } from '../src/lib/mapMoney'
 import ordersSrc from '../src/pages/Orders.vue?raw'
 import fulfillSrc from '../src/pages/Fulfill.vue?raw'
 import refundsSrc from '../src/pages/Refunds.vue?raw'
@@ -396,5 +396,19 @@ describe('orderErrorText（钱组英文码→操作者中文·#222 同类）', (
     expect(fulfillSrc).toMatch(/function syncDefaultChecked\(\) \{\n  checked\.value = new Set\(shippable\.value\.filter/)
     expect(fulfillSrc).not.toMatch(/if \(msg === 'FEE_MISMATCH_HOLD'\)/)
     expect(fulfillSrc).not.toMatch(/if \(msg === 'NO_ORDER'\)/)
+  })
+})
+
+describe('refundErrorText（退款页英文码→操作者中文）', () => {
+  it('大白话：退款页专有码说人话，通用码复用既有映射，未知码兜底不裸崩', () => {
+    expect(refundErrorText('NO_RECORD')).toBe('找不到这条售后单')
+    expect(refundErrorText('REFUND_FLOW_NOT_CONFIGURED')).toBe('退款通道还没配置好，请先去系统设置检查')
+    expect(refundErrorText('ENTERED_NOT_REFUNDABLE')).toBe('这件商品已进课，不符合退款规则')
+    expect(refundErrorText('NOTHING_LEFT')).toBe('这件商品已经没有可退金额了')
+    expect(refundErrorText('PAYMENT_AMOUNT_MISSING')).toBe('这单缺实际到账金额，请先去「订单发货」页补录实付')
+    expect(refundErrorText('BAD_STATUS:approved')).toBe('售后状态「退款处理中」不允许此操作')
+    expect(refundErrorText('NO_ORDER')).toBe('找不到这单订单')
+    expect(refundErrorText('NETWORK:fetch failed')).toBe('网络有点不稳，请刷新重试')
+    expect(refundErrorText('FUTURE_UNKNOWN_CODE')).toBe('操作失败（FUTURE_UNKNOWN_CODE）')
   })
 })

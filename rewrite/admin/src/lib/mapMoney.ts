@@ -22,7 +22,29 @@ export function orderErrorText(e: unknown): string {
   const s = String(e || '')
   if (!s) return '未知错误'
   if (s.startsWith('BAD_STATUS:')) return `订单状态「${orderStatusLabel(s.slice(11))}」不允许此操作`
+  if (s.startsWith('NETWORK:')) return '网络有点不稳，请刷新重试'
+  if (s === 'BAD_JSON_RESPONSE') return '系统回包不完整，请稍后重试'
+  if (s === 'NO_ENDPOINT') return '后台地址没配好，请联系管理员检查'
   return ORDER_ERR[s] || `操作失败（${s}）`
+}
+
+const REFUND_ERR: Record<string, string> = {
+  BAD_ARGS: '参数不完整',
+  NO_RECORD: '找不到这条售后单',
+  REFUND_FLOW_NOT_CONFIGURED: '退款通道还没配置好，请先去系统设置检查',
+  ENTERED_NOT_REFUNDABLE: '这件商品已进课，不符合退款规则',
+  REFUND_TRIGGER_FAIL: '退款通道没接住，请稍后重试',
+  REFUND_SCAN_CAP: '售后记录异常，请刷新后重试',
+  NOTHING_LEFT: '这件商品已经没有可退金额了',
+  CONCURRENT: '刚被别的管理员处理了，请刷新重试',
+  PAYMENT_AMOUNT_MISSING: '这单缺实际到账金额，请先去「订单发货」页补录实付',
+}
+
+export function refundErrorText(e: unknown): string {
+  const s = String(e || '')
+  if (!s) return '未知错误'
+  if (s.startsWith('BAD_STATUS:')) return `售后状态「${refundStatusLabel(s.slice(11))}」不允许此操作`
+  return REFUND_ERR[s] || orderErrorText(s)
 }
 
 export interface StatCard {

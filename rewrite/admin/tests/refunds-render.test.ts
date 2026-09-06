@@ -42,6 +42,9 @@ beforeEach(() => {
     lineFound: true,
   })
   approveRefundMock.mockReset().mockResolvedValue({ ok: true })
+  rejectRefundMock.mockReset().mockResolvedValue({ ok: true })
+  listOrdersMock.mockReset().mockResolvedValue({ ok: true, list: [] })
+  overrideRefundMock.mockReset().mockResolvedValue({ ok: true, id: 'as-override-1' })
 })
 
 describe('Refunds.vue 人工验收双勾选闸（canApprove）', () => {
@@ -74,5 +77,51 @@ describe('Refunds.vue 人工验收双勾选闸（canApprove）', () => {
     await flushPromises()
     expect(approveRefundMock).toHaveBeenCalledTimes(1)
     expect(approveRefundMock).toHaveBeenCalledWith('r1')
+  })
+
+  it('大白话：退款失败说人话，不裸甩英文码', async () => {
+    approveRefundMock.mockResolvedValueOnce({ ok: false, error: 'ENTERED_NOT_REFUNDABLE' })
+    const router = createRouter({ history: createMemoryHistory(), routes: [{ path: '/', component: { template: '<div/>' } }] })
+    await router.push('/')
+    await router.isReady()
+    const wrapper = mount(Refunds, { global: { plugins: [router] } })
+    await flushPromises()
+
+    const reviewBtn = wrapper.findAll('button').find((b) => b.text() === '审核')
+    await reviewBtn!.trigger('click')
+    await flushPromises()
+
+    const checks = wrapper.findAll('.ck input[type=checkbox]')
+    await checks[0].setValue(true)
+    await checks[1].setValue(true)
+    const approveBtn = wrapper.findAll('button').find((b) => b.text().includes('同意退款'))
+    await approveBtn!.trigger('click')
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('退款没成功：这件商品已进课，不符合退款规则')
+    expect(wrapper.text()).not.toContain('ENTERED_NOT_REFUNDABLE')
+  })
+
+  it('大白话：越规退款没填单号前按钮禁用，点回车会提示先输入订单号', async () => {
+    const router = createRouter({ history: createMemoryHistory(), routes: [{ path: '/', component: { template: '<div/>' } }] })
+    await router.push('/')
+    await router.isReady()
+    const wrapper = mount(Refunds, { global: { plugins: [router] } })
+    await flushPromises()
+
+    const overrideOpen = wrapper.findAll('button').find((b) => b.text().includes('越规退款'))
+    await overrideOpen!.trigger('click')
+    await flushPromises()
+
+    const findBtn = wrapper.findAll('button').find((b) => b.text() === '查找')
+    expect(findBtn!.attributes('disabled')).toBeDefined()
+
+    const input = wrapper.find('.ov-find input')
+    await input.trigger('keyup.enter')
+    await flushPromises()
+
+    const msg = wrapper.find('.ov-msg.err')
+    expect(msg.exists()).toBe(true)
+    expect(msg.text()).toBe('先输入订单号')
   })
 })
