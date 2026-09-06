@@ -8,10 +8,15 @@ export function isWizardPath(path: string): boolean {
   return path === '/launch' || /^\/products\/[^/]+\/wizard$/.test(path)
 }
 
-/** ?step=N 夹到 1..6，非法/缺省回 1（列表深链落到首个未完成步·Products.vue firstTodoStep） */
+/** 上新向导步数（侧栏/进度圆点/URL ?step 同读） */
+export const WIZARD_STEP_MAX = 5
+
+/** ?step=N 夹到 1..5；旧 step=6 深链落到新第 5 步；非法/缺省回 1（列表深链落到首个未完成步） */
 export function wizardStepFromQuery(step: unknown): number {
   const n = Number.parseInt(String(step ?? ''), 10)
-  return Number.isFinite(n) ? Math.min(6, Math.max(1, n)) : 1
+  if (!Number.isFinite(n) || n < 1) return 1
+  if (n >= 6) return WIZARD_STEP_MAX
+  return Math.min(WIZARD_STEP_MAX, n)
 }
 
 /** 当前路由命中的可展开组名（solo 项/未命中回 ''）——供 Shell 判「当前组自动展开」+ 组头点击不做「翻转
@@ -29,19 +34,18 @@ export function currentNavGroup(
   return ''
 }
 
-/** 上新向导 6 步（老板拍板主路径·覆盖旧设计帧 kz2uD 文案：新建→图与名→详情→课程→卡片→二维码） */
+/** 上新向导 5 步（封面并进第 1 步、卡片上传并进第 5 步·不要「设计」） */
 export interface WizardStep {
   n: number
   label: string
   icon: string
 }
 export const WIZARD_STEPS: WizardStep[] = [
-  { n: 1, label: '新建商品', icon: 'plus' },
+  { n: 1, label: '新建与封面', icon: 'plus' },
   { n: 2, label: '图片与名字', icon: 'image' },
   { n: 3, label: '详情信息', icon: 'file-text' },
   { n: 4, label: '课程视频', icon: 'clapperboard' },
-  { n: 5, label: '卡片设计', icon: 'credit-card' },
-  { n: 6, label: '二维码管理', icon: 'qr-code' },
+  { n: 5, label: '卡片与二维码', icon: 'credit-card' },
 ]
 
 /** 「商品与上新」组只准这两条主入口（橱窗/评价/课程运维另组·防再把上新塞进子菜单） */

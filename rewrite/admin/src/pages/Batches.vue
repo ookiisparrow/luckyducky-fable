@@ -29,7 +29,7 @@ const courseId = ref(props.wizardCourseId || String(route.query.courseId || ''))
 function backToLaunch() {
   const cid = courseId.value
   const pid = cid.startsWith('course-') ? cid.slice('course-'.length) : ''
-  void router.push(pid ? { path: `/products/${pid}/wizard`, query: { step: '6' } } : '/launch')
+  void router.push(pid ? { path: `/products/${pid}/wizard`, query: { step: '5' } } : '/launch')
 }
 const loadedCourse = ref('')
 const rows = ref<BatchRow[]>([])
@@ -185,7 +185,7 @@ async function downloadPack() {
         `批次 ${detail.value.batchId}\n课程 ${loadedCourse.value}\n数量 ${detail.value.total} 张\n卡面尺寸 ${card.sizeMM.w}×${card.sizeMM.h} mm（双面同尺寸）\n\n给印刷厂：卡面正反两张矢量 SVG；反面二维码区为占位框，按「二维码地址.csv」一码一图（每张卡一个唯一二维码，扫码即落地激活页）。`
       )
     } else {
-      zip.file('说明.txt', `批次 ${detail.value.batchId}\n课程 ${loadedCourse.value}\n数量 ${detail.value.total} 张\n\n注意：该产品还没有卡面设计（去「卡片设计」定稿后重新打包），本包仅含二维码地址清单。`)
+      zip.file('说明.txt', `批次 ${detail.value.batchId}\n课程 ${loadedCourse.value}\n数量 ${detail.value.total} 张\n\n注意：该产品还没有上传卡片（去上新第 5 步上传后重新打包），本包仅含二维码地址清单。`)
     }
     const blob = await zip.generateAsync({ type: 'blob' })
     const url = URL.createObjectURL(blob)

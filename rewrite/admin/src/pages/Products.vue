@@ -1,7 +1,7 @@
 <script setup lang="ts">
 // 商品管理（design/console.pen S11 视觉·M3 UI 批3）：页头+流水线副标+筛选 chip（真计数）+ 搜索（按名）
-// + 三态表格（关联课程/规格·图列 + 6 步上新进度圆点）+ 编辑器（整档 round-trip·图片压缩·危操作两步确认）。
-// 「6 步上新进度」换皮误判「无源」——实则 cards/courses/qrcodes 后端 listDrafts bounded join 派生（视频/卡片/批次态·二轮批Cards-3 还原）。
+// + 三态表格（关联课程/规格·图列 + 5 步上新进度圆点）+ 编辑器（整档 round-trip·图片压缩·危操作两步确认）。
+// 「5 步上新进度」——cards/courses/qrcodes 后端 listDrafts bounded join 派生（视频/卡片/批次态）。
 import { ref, computed, onMounted, onBeforeUnmount, watch, nextTick } from 'vue'
 import { Search, Trash2, Package, MoreHorizontal } from 'lucide-vue-next'
 import { listDrafts, saveDraft, deleteDraft, uploadImage, publishProduct, unpublishProduct, republishProduct } from '../api/products'
@@ -18,7 +18,8 @@ const KIT_ICONS = ['circle', 'pen-tool', 'cloud', 'eye', 'book-open', 'sparkles-
 
 // 嵌入模式（上新向导步 1-3 复用本编辑器·向后兼容·独立 /products 路由用法不传 props 行为不变）：
 // embed=true 隐列表壳只留编辑器·wizardProductId 指定要编辑的商品档（向导载入后自动打开）。
-const props = defineProps<{ embed?: boolean; wizardProductId?: string; wizardSlice?: 2 | 3 }>()
+const props = defineProps<{ embed?: boolean; wizardProductId?: string; wizardSlice?: 1 | 2 | 3 }>()
+const showCover = computed(() => !props.embed || props.wizardSlice === 1)
 const showLook = computed(() => !props.embed || props.wizardSlice === 2)
 const showDetail = computed(() => !props.embed || props.wizardSlice === 3)
 // 编辑器持久化成功即通知父级（上新向导嵌本编辑器·步1-3）——让 Wizard 顶部「上架闸/进度圆点/缺项徽章」随
@@ -126,7 +127,7 @@ async function reload() {
   rows.value = r.ok ? mapDraftRows(r.list, r.urls, r.listed, stepExtras(r)) : []
   message.value = r.ok ? '' : '加载失败：' + String(r.error || '')
 }
-// listDrafts 派生的 6 步分步态（后端 join·换皮误判「无源」）
+// listDrafts 派生的 5 步分步态（后端 join）
 const stepExtras = (r: any) => ({ hasVideo: r.hasVideo || {}, cardFinal: r.cardFinal || {}, hasBatch: r.hasBatch || {} })
 // 静默刷新列表（不闪「加载中」·不打断正在编辑的编辑器）
 async function silentRefresh() {
@@ -460,7 +461,8 @@ const kitItems = computed(() => (edit.value?.kit ?? []) as KitItem[])
 // 上架前缺项预检（1:1 旧 Wizard missing·换皮退成事后报错）：封面/名称/价格/有效规格四项必备。
 // basicsMissing 单源（向导上架闸与本页预检同口径·守卫 rw-admin-products-ui-golden）。
 const missing = computed(() => (edit.value ? basicsMissing(edit.value) : []))
-const lookMissing = computed(() => missing.value.filter((x) => x === '封面图' || x === '商品名称'))
+const coverMissing = computed(() => missing.value.filter((x) => x === '封面图'))
+const lookMissing = computed(() => missing.value.filter((x) => x === '商品名称'))
 const detailMissing = computed(() => missing.value.filter((x) => x === '价格' || x === '至少一个有效规格'))
 
 onMounted(async () => {
@@ -521,7 +523,7 @@ onMounted(async () => {
           <div class="ld-td course" :style="{ width: '130px' }">{{ courseOf(row) || '未关联' }}</div>
           <div class="ld-td price" :style="{ width: '80px' }">{{ row.priceLabel }}</div>
           <div class="ld-td spec" :style="{ width: '108px' }">{{ row.skuCount }} 规格 · {{ imgCount(row) }} 图</div>
-          <!-- 6 步上新进度圆点（真值 productSteps·后端 listDrafts 派生视频/卡片/批次态·根因#7 bounded join）·点击进上新向导落到第一个未完成步 -->
+          <!-- 5 步上新进度圆点（真值 productSteps·后端 listDrafts 派生视频/卡片/批次态）·点击进上新向导落到第一个未完成步 -->
           <div class="ld-td" :style="{ width: '150px' }">
             <div
               class="steps-cell"
@@ -529,7 +531,7 @@ onMounted(async () => {
               @click="router.push('/products/' + row.id + '/wizard?step=' + firstTodoStep(row))"
             >
               <span v-for="s in row.steps" :key="s.key" class="dot" :class="{ on: s.done }"></span>
-              <span class="done-n">{{ row.doneCount }}/6</span>
+              <span class="done-n">{{ row.doneCount }}/5</span>
             </div>
           </div>
           <div class="ld-td" :style="{ width: '92px' }">
@@ -566,13 +568,13 @@ onMounted(async () => {
       <h3>{{ edit.name || '新商品' }} <span class="pid">{{ edit.id }}</span>
         <span class="auto" :class="autoState">{{ autoState === 'saving' ? '自动保存中…' : autoState === 'saved' ? '已自动保存草稿（顾客还看不见）' : autoState === 'error' ? '自动保存失败' : '' }}</span>
       </h3>
-      <div v-if="showLook" class="grid">
-        <label>名称 <input v-model="edit.name" maxlength="60" /></label>
-        <label>封面图
+      <div v-if="showLook || showCover" class="grid">
+        <label v-if="showLook">名称 <input v-model="edit.name" maxlength="60" /></label>
+        <label v-if="showCover">封面图
           <input type="file" accept="image/*" @change="pickCover" />
         </label>
       </div>
-      <div v-if="showLook && coverPreview" class="cover-wrap">
+      <div v-if="showCover && coverPreview" class="cover-wrap">
         <img :src="coverPreview" class="cover-preview" />
         <UiButton variant="ghost" size="sm" @click="clearCover">删除封面</UiButton>
       </div>
@@ -638,8 +640,10 @@ onMounted(async () => {
         <UiButton variant="ghost" size="sm" :disabled="kitItems.length >= 8" @click="addKit">＋ 加材料</UiButton>
       </template>
 
+      <p v-if="embed && showCover && coverMissing.length" class="preflight">本步还差：<b>{{ coverMissing.join('、') }}</b></p>
+      <p v-else-if="embed && showCover" class="preflight ok">✓ 本步封面已齐</p>
       <p v-if="embed && showLook && lookMissing.length" class="preflight">本步还差：<b>{{ lookMissing.join('、') }}</b></p>
-      <p v-else-if="embed && showLook" class="preflight ok">✓ 本步名称和封面已齐</p>
+      <p v-else-if="embed && showLook" class="preflight ok">✓ 本步名字已齐</p>
       <p v-if="embed && showDetail && detailMissing.length" class="preflight">本步还差：<b>{{ detailMissing.join('、') }}</b></p>
       <p v-else-if="embed && showDetail && !detailMissing.length" class="preflight ok">✓ 本步价格和规格已齐</p>
       <p v-if="!embed && missing.length" class="preflight">同步到小程序还差：<b>{{ missing.join('、') }}</b></p>

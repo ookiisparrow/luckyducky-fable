@@ -49,15 +49,21 @@ async function mountWithRouter() {
 }
 
 describe('Products.vue 向导切片（1–3 步不再同一张大表）', () => {
-  it('大白话：嵌进向导第 2 步只见名称/封面/相册，不见规格；第 3 步相反', async () => {
+  it('大白话：第 1 步只封面；第 2 步只名字和相册、不再逼传封面；第 3 步才是规格', async () => {
     const router = createRouter({ history: createMemoryHistory(), routes: [{ path: '/', component: { template: '<div/>' } }] })
     await router.push('/')
     await router.isReady()
+    const cover = mount(Products, { props: { embed: true, wizardProductId: 'p1', wizardSlice: 1 }, global: { plugins: [router] } })
+    await flushPromises()
+    expect(cover.text()).toContain('封面图')
+    expect(cover.text()).not.toContain('商品相册')
+    expect(cover.text()).not.toContain('规格（SKU）')
+    cover.unmount()
     const look = mount(Products, { props: { embed: true, wizardProductId: 'p1', wizardSlice: 2 }, global: { plugins: [router] } })
     await flushPromises()
     expect(look.text()).toContain('名称')
-    expect(look.text()).toContain('封面图')
     expect(look.text()).toContain('商品相册')
+    expect(look.text()).not.toContain('封面图')
     expect(look.text()).not.toContain('规格（SKU）')
     expect(look.text()).not.toContain('参数表')
     look.unmount()

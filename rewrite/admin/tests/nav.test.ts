@@ -1,11 +1,10 @@
 // 上下文侧栏导航模型（守卫 rw-admin-nav-contextual·根因#8「构建过≠真机能用」）：向导路由识别 /
-// 步单源 ?step 夹取 / 6 步文案·顺序·图标对齐设计 console.pen Component/Sidebar（kz2uD）——换皮把上新
-// 向导「按步直达」聚焦侧栏删光、退成全局 nav（决策§27②收敛为上下文侧栏·此表焊死设计单源）。
+// 步单源 ?step 夹取 / 5 步文案·顺序·图标（老板预览后改口径：封面并进第 1 步、卡片上传并进第 5 步）。
 import { describe, it, expect } from 'vitest'
 import { readFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { isWizardPath, wizardStepFromQuery, WIZARD_STEPS, currentNavGroup, SHOP_PRIMARY_NAV } from '../src/lib/nav'
+import { isWizardPath, wizardStepFromQuery, WIZARD_STEPS, WIZARD_STEP_MAX, currentNavGroup, SHOP_PRIMARY_NAV } from '../src/lib/nav'
 
 describe('向导路由识别（上下文侧栏切换靶·isWizardPath）', () => {
   it('大白话：只有 /products/:id/wizard 进聚焦模式；列表/其它页不进', () => {
@@ -20,11 +19,13 @@ describe('向导路由识别（上下文侧栏切换靶·isWizardPath）', () =>
 })
 
 describe('步单源 ?step 夹取（wizardStepFromQuery·URL 为步真值·侧栏与横向 rail 同步）', () => {
-  it('大白话：1..6 内原样；越界夹回；缺省/非法回 1', () => {
+  it('大白话：1..5 内原样；旧 step=6 落到第 5 步；越界夹回；缺省/非法回 1', () => {
+    expect(WIZARD_STEP_MAX).toBe(5)
     expect(wizardStepFromQuery('3')).toBe(3)
     expect(wizardStepFromQuery('1')).toBe(1)
-    expect(wizardStepFromQuery('6')).toBe(6)
-    expect(wizardStepFromQuery('9')).toBe(6) // 上越界夹到 6
+    expect(wizardStepFromQuery('5')).toBe(5)
+    expect(wizardStepFromQuery('6')).toBe(5) // 旧深链兼容 → 新第 5 步
+    expect(wizardStepFromQuery('9')).toBe(5) // 上越界夹到 5
     expect(wizardStepFromQuery('0')).toBe(1) // 下越界夹到 1
     expect(wizardStepFromQuery(undefined)).toBe(1)
     expect(wizardStepFromQuery('x')).toBe(1) // 非数字回 1
@@ -45,25 +46,19 @@ describe('当前路由所在组定位（currentNavGroup·治组头死点击 + �
   })
 })
 
-describe('6 步文案/顺序（老板拍板主路径·覆盖旧设计帧 kz2uD 文案）', () => {
-  it('大白话：新建商品→图片与名字→详情信息→课程视频→卡片设计→二维码管理，步号 1..6', () => {
+describe('5 步文案/顺序（封面并进第 1 步、卡片上传并进第 5 步·不要「设计」）', () => {
+  it('大白话：新建与封面→图片与名字→详情信息→课程视频→卡片与二维码，步号 1..5', () => {
+    expect(WIZARD_STEPS).toHaveLength(5)
     expect(WIZARD_STEPS.map((s) => s.label)).toEqual([
-      '新建商品',
+      '新建与封面',
       '图片与名字',
       '详情信息',
       '课程视频',
-      '卡片设计',
-      '二维码管理',
+      '卡片与二维码',
     ])
-    expect(WIZARD_STEPS.map((s) => s.n)).toEqual([1, 2, 3, 4, 5, 6])
-    expect(WIZARD_STEPS.map((s) => s.icon)).toEqual([
-      'plus',
-      'image',
-      'file-text',
-      'clapperboard',
-      'credit-card',
-      'qr-code',
-    ])
+    expect(WIZARD_STEPS.map((s) => s.n)).toEqual([1, 2, 3, 4, 5])
+    expect(WIZARD_STEPS.map((s) => s.icon)).toEqual(['plus', 'image', 'file-text', 'clapperboard', 'credit-card'])
+    expect(WIZARD_STEPS.every((s) => !s.label.includes('设计'))).toBe(true)
   })
 })
 
@@ -84,14 +79,26 @@ describe('商品与上新组只留两大入口（防再把上新藏进子页/更
 })
 
 describe('向导 1–3 步不再嵌同一张大表（假进度 P0）', () => {
-  it('大白话：向导不再用 step<=3 整表嵌入；第 2/3 步各切一块字段', () => {
+  it('大白话：第 1 步封面、第 2 步图与名、第 3 步详情各切一块；第 5 步卡片上传+二维码同屏', () => {
     const here = dirname(fileURLToPath(import.meta.url))
     const wiz = readFileSync(join(here, '../src/pages/Wizard.vue'), 'utf8')
     const prod = readFileSync(join(here, '../src/pages/Products.vue'), 'utf8')
+    const router = readFileSync(join(here, '../src/router.ts'), 'utf8')
     expect(wiz).not.toMatch(/Products v-if="step <= 3"/)
-    expect(wiz).toMatch(/wizard-slice/)
+    expect(wiz).toMatch(/wizard-slice="1"|:wizard-slice="1"/)
+    expect(wiz).toMatch(/wizard-slice="2"|:wizard-slice="2"/)
+    expect(wiz).toMatch(/wizard-slice="3"|:wizard-slice="3"/)
     expect(prod).toMatch(/wizardSlice/)
+    expect(prod).toMatch(/showCover/)
     expect(prod).toMatch(/showLook/)
     expect(prod).toMatch(/showDetail/)
+    expect(wiz).not.toMatch(/卡片设计/)
+    expect(wiz).not.toMatch(/\/ 6/)
+    expect(wiz).toMatch(/\/ 5/)
+    expect(wiz).not.toMatch(/step === 6/)
+    expect(wiz).toMatch(/step === 5/)
+    expect(wiz).toMatch(/<Cards[\s\S]*<Batches/)
+    expect(router).toMatch(/String\(to\.query\.step\) === '6'/)
+    expect(router).toMatch(/step:\s*'5'/)
   })
 })

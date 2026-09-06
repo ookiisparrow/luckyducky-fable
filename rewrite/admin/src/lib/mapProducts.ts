@@ -28,7 +28,7 @@ export interface StepExtras {
   hasBatch?: Record<string, boolean> // courseId → 有码批次
 }
 
-/** 6 步上新进度（老板拍板主路径）：建档/图与名/详情前端算·课程/卡片/二维码取后端 listDrafts extras。 */
+/** 5 步上新进度：建档+封面 / 图与名 / 详情前端算·课程 / 卡片+二维码取后端 listDrafts extras。 */
 export function productSteps(p: Record<string, any>, extras?: StepExtras): StepDot[] {
   const id = String((p && (p.id || p._id)) || '')
   const courseId = String((p && p.courseId) || '') || 'course-' + id
@@ -36,19 +36,21 @@ export function productSteps(p: Record<string, any>, extras?: StepExtras): StepD
   const nameOk = !!String((p && p.name) || '').trim()
   const priceOk = !!(p && p.price != null && String(p.price) !== '')
   const skusOk = Array.isArray(p && p.skus) && p.skus.length > 0
+  const cardOk = !!(e.cardFinal && e.cardFinal[id])
+  const qrOk = !!(e.hasBatch && e.hasBatch[courseId])
   return [
-    { key: 'create', label: '新建商品', done: !!id },
-    { key: 'look', label: '图片与名字', done: !!(p && p.cover) && nameOk },
+    { key: 'create', label: '新建与封面', done: !!id && !!(p && p.cover) },
+    { key: 'look', label: '图片与名字', done: nameOk },
     { key: 'detail', label: '详情信息', done: priceOk && skusOk },
     { key: 'video', label: '课程视频', done: !!(e.hasVideo && e.hasVideo[courseId]) },
-    { key: 'card', label: '卡片设计', done: !!(e.cardFinal && e.cardFinal[id]) },
-    { key: 'qr', label: '二维码管理', done: !!(e.hasBatch && e.hasBatch[courseId]) },
+    { key: 'cardQr', label: '卡片与二维码', done: cardOk && qrOk },
   ]
 }
 
-/** 向导 1–3 步各管哪些字段（互斥·防再嵌同一张大表三次）。步 1 只建档身份，不进编辑器切片。 */
-export const WIZARD_SLICE_FIELDS: Record<2 | 3, readonly string[]> = {
-  2: ['name', 'cover', 'images'],
+/** 向导 1–3 步各管哪些字段（互斥·防再嵌同一张大表）。第 1 步封面，第 2 步名字和相册，第 3 步详情。 */
+export const WIZARD_SLICE_FIELDS: Record<1 | 2 | 3, readonly string[]> = {
+  1: ['cover'],
+  2: ['name', 'images'],
   3: ['tag', 'brief', 'price', 'was', 'sold', 'skus', 'params', 'detailSections', 'kit'],
 }
 
@@ -80,7 +82,7 @@ export interface DraftRowVM {
   stateLabel: string
   coverUrl: string
   skuCount: number
-  steps: StepDot[] // 6 步上新进度圆点（换皮删了这列·「无源」说法误·后端 extras 就绪即真）
+  steps: StepDot[] // 5 步上新进度圆点（后端 extras 就绪即真）
   doneCount: number
   raw: Record<string, unknown> // 整档（编辑 round-trip 用·防覆盖式保存抹字段）
 }

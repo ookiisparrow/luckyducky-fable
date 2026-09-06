@@ -27,23 +27,27 @@ describe('三态口径（与云端 listDrafts listed 表一致）', () => {
     expect(mapDraftRows([{ id: 'u', name: 'x', skus: [] }], {}, {})[0].priceLabel).toBe('未定价')
   })
 
-  it('大白话：6 步上新进度（换皮误判「无源·略」·实则 cards/courses/qrcodes 后端 join 派生）：图片/信息/SKU 前端算·视频/卡片/批次取后端 extras', () => {
+  it('大白话：5 步上新进度：建档+封面 / 图与名 / 详情前端算·视频 / 卡片+批次取后端 extras', () => {
     const steps = productSteps(
       { id: 'p1', name: '熊', price: 20, cover: 'c', skus: [{ name: 'a' }], courseId: 'course-p1' },
       { hasVideo: { 'course-p1': true }, cardFinal: { p1: true }, hasBatch: {} }
     )
-    expect(steps.map((s) => s.done)).toEqual([true, true, true, true, true, false]) // 建档/图与名/详情/课程/卡片 done·二维码未
-    expect(steps.map((s) => s.key)).toEqual(['create', 'look', 'detail', 'video', 'card', 'qr'])
-    // 有编号＝第 1 步已完成；其余缺项全灭
+    expect(steps.map((s) => s.done)).toEqual([true, true, true, true, false]) // 前四步齐·第 5 步要卡片+批次都齐
+    expect(steps.map((s) => s.key)).toEqual(['create', 'look', 'detail', 'video', 'cardQr'])
+    expect(steps.every((s) => !s.label.includes('设计'))).toBe(true)
+    // 有编号但没封面＝第 1 步未完成；有封面没名字＝第 1 步完成、第 2 步未
     const empty = productSteps({ id: 'p2', name: '', price: '', cover: '', skus: [] }, {})
-    expect(empty.find((s) => s.key === 'create')!.done).toBe(true)
-    expect(empty.filter((s) => s.key !== 'create').every((s) => !s.done)).toBe(true)
-    const derived = productSteps({ id: 'p3', name: 'x', price: 1, cover: 'c', skus: [{}] }, { hasBatch: { 'course-p3': true } })
-    expect(derived.find((s) => s.key === 'qr')!.done).toBe(true) // courseId 缺→course-p3 回退命中
-    // mapDraftRows 带 extras 时行含 steps + doneCount
+    expect(empty.find((s) => s.key === 'create')!.done).toBe(false)
+    expect(empty.every((s) => !s.done)).toBe(true)
+    const covered = productSteps({ id: 'p2', name: '', cover: 'c', skus: [] }, {})
+    expect(covered.find((s) => s.key === 'create')!.done).toBe(true)
+    expect(covered.find((s) => s.key === 'look')!.done).toBe(false)
+    const derived = productSteps({ id: 'p3', name: 'x', price: 1, cover: 'c', skus: [{}] }, { cardFinal: { p3: true }, hasBatch: { 'course-p3': true } })
+    expect(derived.find((s) => s.key === 'cardQr')!.done).toBe(true) // courseId 缺→course-p3 回退命中
+    expect(productSteps({ id: 'p3', cover: 'c' }, { hasBatch: { 'course-p3': true } }).find((s) => s.key === 'cardQr')!.done).toBe(false)
     const rows = mapDraftRows([{ id: 'p1', name: '熊', price: 20, cover: 'c', skus: [{ name: 'a' }], courseId: 'course-p1' }], {}, { p1: true }, { hasVideo: { 'course-p1': true }, cardFinal: { p1: true }, hasBatch: { 'course-p1': true } })
-    expect(rows[0].doneCount).toBe(6)
-    expect(rows[0].steps).toHaveLength(6)
+    expect(rows[0].doneCount).toBe(5)
+    expect(rows[0].steps).toHaveLength(5)
   })
 })
 
@@ -79,13 +83,20 @@ describe('上架四道门人话（原文兜底不吞）', () => {
 })
 
 describe('向导 1–3 步字段互斥（假进度 P0：不得再复制整表三次）', () => {
-  it('大白话：第 2 步只管图与名，第 3 步管详情/规格；两边字段不重叠；新建草稿自带课程号', () => {
-    const a = new Set(WIZARD_SLICE_FIELDS[2])
-    const b = new Set(WIZARD_SLICE_FIELDS[3])
-    for (const f of a) expect(b.has(f)).toBe(false)
-    expect([...a]).toEqual(['name', 'cover', 'images'])
-    expect(b.has('skus')).toBe(true)
-    expect(b.has('name')).toBe(false)
+  it('大白话：第 1 步只封面，第 2 步名字和相册，第 3 步详情；三块字段不重叠；新建草稿自带课程号', () => {
+    const a = new Set(WIZARD_SLICE_FIELDS[1])
+    const b = new Set(WIZARD_SLICE_FIELDS[2])
+    const c = new Set(WIZARD_SLICE_FIELDS[3])
+    for (const f of a) {
+      expect(b.has(f)).toBe(false)
+      expect(c.has(f)).toBe(false)
+    }
+    for (const f of b) expect(c.has(f)).toBe(false)
+    expect([...a]).toEqual(['cover'])
+    expect([...b]).toEqual(['name', 'images'])
+    expect(c.has('skus')).toBe(true)
+    expect(c.has('name')).toBe(false)
+    expect(c.has('cover')).toBe(false)
     const d = freshDraft('p9')
     expect(d.id).toBe('p9')
     expect(d.courseId).toBe('course-p9')

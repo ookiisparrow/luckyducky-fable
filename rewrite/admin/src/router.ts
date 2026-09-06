@@ -4,6 +4,7 @@ import { createRouter, createWebHashHistory } from 'vue-router'
 import { client } from './api'
 import { isUploadLocked } from './lib/uploadLock'
 import { hasPendingSaves } from './lib/serialSave'
+import { isWizardPath } from './lib/nav'
 
 const Login = () => import('./pages/Login.vue')
 const Shell = () => import('./shell/Shell.vue')
@@ -106,6 +107,10 @@ router.beforeEach((to, from) => {
   if (to.path !== '/login' && isUploadLocked() && to.fullPath !== from.fullPath) {
     window.alert('批量上传进行中，完成前请勿离开当前步骤')
     return false
+  }
+  // 旧 step=6 深链兼容：落到合并后的第 5 步（卡片上传 + 二维码）
+  if (isWizardPath(to.path) && String(to.query.step) === '6') {
+    return { path: to.path, query: { ...to.query, step: '5' }, replace: true }
   }
   return true
 })

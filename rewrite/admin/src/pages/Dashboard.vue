@@ -133,7 +133,7 @@ onMounted(load)
       </button>
       <button class="shop-entry" @click="router.push('/launch')">
         <span class="shop-entry-k">上新</span>
-        <span class="shop-entry-v">新品六步：建档 → 图与名 → 详情 → 课程 → 卡片 → 二维码</span>
+        <span class="shop-entry-v">新品五步：建档与封面 → 图与名 → 详情 → 课程 → 卡片与二维码</span>
       </button>
     </div>
 

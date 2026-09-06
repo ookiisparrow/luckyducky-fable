@@ -1,14 +1,13 @@
 <script setup lang="ts">
-// 上新分步向导（还原旧线 packages/admin StepWizard·换皮删成扁平表 + 只读进度圆点·「导向」这半没还原）：
-// 顶部 6 步可点进度条 → 当前步嵌入对应工作面板 → 上一步/下一步 + 上架闸。
-// 不重建 2500 行分步逻辑——功能都在 admin2 现有页里，本页只做「编排」：嵌入 Products 编辑器(步1-3)/Courses(步4)/
-// Cards(步5)/Batches(步6)（各页 embed 模式·向后兼容）。进度真值走 listDrafts 后端 join 派生（productSteps·同列表列）。
+// 上新分步向导：顶部 5 步可点进度条 → 当前步嵌入对应工作面板 → 上一步/下一步 + 上架闸。
+// 编排：Products 切片(步1 封面 / 步2 图与名 / 步3 详情) / Courses(步4) / Cards 上传 + Batches(步5)。
+// 进度真值走 listDrafts 后端 join 派生（productSteps·同列表列）。
 import { ref, computed, onMounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { Store, ArrowLeft, ChevronLeft, ChevronRight, Check } from 'lucide-vue-next'
 import { listDrafts, publishProduct, saveDraft } from '../api/products'
 import { productSteps, productState, basicsMissing, wizardCanPublish, freshDraft, type StepDot } from '../lib/mapProducts'
-import { wizardStepFromQuery, WIZARD_STEPS } from '../lib/nav'
+import { wizardStepFromQuery, WIZARD_STEPS, WIZARD_STEP_MAX } from '../lib/nav'
 import { isUploadLocked } from '../lib/uploadLock'
 import Products from './Products.vue'
 import Courses from './Courses.vue'
@@ -34,7 +33,7 @@ const busy = ref(false)
 const pubConfirm = ref(false)
 
 const STEP_NAMES = WIZARD_STEPS.map((s) => s.label)
-// 步单源=URL ?step（决策§27②·Shell 侧栏与本页横向 rail 同读它·深链落到首个未完成步）·夹 1..6
+// 步单源=URL ?step（侧栏与本页横向 rail 同读它·深链落到首个未完成步）·夹 1..5
 // 还没建档（/launch）只能停在第 1 步
 const step = computed(() => (id.value ? wizardStepFromQuery(route.query.step) : 1))
 
@@ -51,7 +50,7 @@ const nextTodo = computed(() => {
   return i < 0 ? null : { n: i + 1, name: STEP_NAMES[i] }
 })
 
-// 载入商品档 + 6 步派生真值（listDrafts 一次给 list/listed/urls + hasVideo/cardFinal/hasBatch）
+// 载入商品档 + 5 步派生真值（listDrafts 一次给 list/listed/urls + hasVideo/cardFinal/hasBatch）
 async function reloadProduct() {
   if (!id.value) {
     product.value = null
@@ -85,7 +84,7 @@ function retryLoad() {
 }
 
 function go(n: number) {
-  if (n < 1 || n > 6 || n === step.value) return
+  if (n < 1 || n > WIZARD_STEP_MAX || n === step.value) return
   // 批量上传在途拦截（P1·bug sweep Round2 item12c）：Wizard 切步＝仅 query 变化＝路由 update 非 leave，
   // Courses.vue 内嵌的 onBeforeRouteLeave 不会触发——这是 batchUpload 孤儿化的主触发路径，须在这里前置拦。
   if (isUploadLocked()) {
@@ -133,7 +132,7 @@ async function createDraft() {
     msgLoadFail = false
     return
   }
-  void router.replace({ path: `/products/${newId}/wizard`, query: { step: '2' } })
+  void router.replace({ path: `/products/${newId}/wizard`, query: { step: '1' } })
 }
 
 // 切步 / 从 /launch 建档后换成带编号路由 → 刷新进度真值 + 收起同步二次确认
@@ -160,17 +159,17 @@ onMounted(() => {
       <UiButton variant="ghost" size="sm" @click="router.push('/products')"><ArrowLeft :size="14" :stroke-width="1.8" /><span>回产品管理</span></UiButton>
     </EmptyState>
 
-    <!-- /launch：还没建档，只做第 1 步（不得嵌整张商品表） -->
+    <!-- /launch：还没建档，第 1 步先建草稿（建完留在本步传封面） -->
     <template v-else-if="!id">
       <a class="crumb" @click="router.push('/products')"><ArrowLeft :size="14" :stroke-width="1.8" /><span>产品管理</span></a>
-      <PageHeader title="上新" sub="第 1 / 6 步 · 先建草稿（顾客看不见）" />
+      <PageHeader title="上新" sub="第 1 / 5 步 · 先建草稿，再建好就能传封面（顾客看不见）" />
       <p v-if="message" class="banner">{{ message }}</p>
       <section class="step-card">
-        <div class="step-head"><h2>第 1 步 · 新建商品</h2></div>
+        <div class="step-head"><h2>第 1 步 · 新建与封面</h2></div>
         <div class="step-body">
-          <p class="identity-lead">先建一档草稿。编号和课程号自动生成。顾客还看不见。</p>
-          <p class="legend">保存草稿 ≠ 发布课程 ≠ 同步到小程序 ≠ 卡片定稿 ≠ 生成批次</p>
-          <UiButton :disabled="busy" @click="createDraft">{{ busy ? '建立中…' : '建立草稿，进入下一步' }}</UiButton>
+          <p class="identity-lead">先建一档草稿。编号和课程号自动生成。建好后在本步上传封面。顾客还看不见。</p>
+          <p class="legend">保存草稿 ≠ 发布课程 ≠ 同步到小程序 ≠ 上传卡片 ≠ 生成批次</p>
+          <UiButton :disabled="busy" @click="createDraft">{{ busy ? '建立中…' : '建立草稿，接着传封面' }}</UiButton>
         </div>
       </section>
     </template>
@@ -181,7 +180,7 @@ onMounted(() => {
 
     <template v-else>
       <a class="crumb" @click="router.push('/products')"><ArrowLeft :size="14" :stroke-width="1.8" /><span>产品管理</span></a>
-      <PageHeader :title="product.name || '上新'" :sub="'上新 · 第 ' + step + ' / 6 步 · 已完成 ' + doneCount + '/6'">
+      <PageHeader :title="product.name || '上新'" :sub="'上新 · 第 ' + step + ' / 5 步 · 已完成 ' + doneCount + '/5'">
         <Badge v-if="state === 'onsale'" tone="green">小程序在售</Badge>
         <Badge v-else-if="state === 'unlisted'" tone="red">已从橱窗拿下</Badge>
         <Badge v-else tone="brand">草稿（顾客看不见）</Badge>
@@ -193,17 +192,17 @@ onMounted(() => {
       </PageHeader>
 
       <p v-if="message" class="banner">{{ message }}</p>
-      <p class="legend">保存草稿 ≠ 发布课程 ≠ 同步到小程序 ≠ 卡片定稿 ≠ 生成批次</p>
+      <p class="legend">保存草稿 ≠ 发布课程 ≠ 同步到小程序 ≠ 上传卡片 ≠ 生成批次</p>
 
       <div class="rail">
-        <template v-for="sn in 6" :key="sn">
-          <span v-if="sn > 1" class="rail-line" :class="{ lit: railState(sn) !== 'todo' || railState(sn - 1) === 'done' }"></span>
-          <button class="rail-step" :class="railState(sn)" @click="go(sn)">
+        <template v-for="s in WIZARD_STEPS" :key="s.n">
+          <span v-if="s.n > 1" class="rail-line" :class="{ lit: railState(s.n) !== 'todo' || railState(s.n - 1) === 'done' }"></span>
+          <button class="rail-step" :class="railState(s.n)" @click="go(s.n)">
             <span class="rail-dot">
-              <Check v-if="railState(sn) === 'done'" :size="12" :stroke-width="2.6" />
-              <template v-else>{{ sn }}</template>
+              <Check v-if="railState(s.n) === 'done'" :size="12" :stroke-width="2.6" />
+              <template v-else>{{ s.n }}</template>
             </span>
-            <span class="rail-name">{{ STEP_NAMES[sn - 1] }}</span>
+            <span class="rail-name">{{ s.label }}</span>
           </button>
         </template>
       </div>
@@ -215,16 +214,21 @@ onMounted(() => {
         </div>
 
         <div class="step-body">
-          <div v-if="step === 1" class="identity">
-            <p>商品编号 <code>{{ id }}</code> · 课程编号 <code>{{ courseId }}</code></p>
-            <p>状态：{{ stateLabel }} · 已完成 {{ doneCount }}/6</p>
-            <p class="identity-lead">草稿已建。顾客还看不见。下一步改图片与名字。</p>
+          <div v-if="step === 1">
+            <div class="identity">
+              <p>商品编号 <code>{{ id }}</code> · 课程编号 <code>{{ courseId }}</code></p>
+              <p>状态：{{ stateLabel }} · 已完成 {{ doneCount }}/5</p>
+              <p class="identity-lead">草稿已建。顾客还看不见。本步上传封面，下一步再改相册和名字。</p>
+            </div>
+            <Products embed :wizard-product-id="id" :wizard-slice="1" @saved="reloadProduct" />
           </div>
           <Products v-else-if="step === 2" embed :wizard-product-id="id" :wizard-slice="2" @saved="reloadProduct" />
           <Products v-else-if="step === 3" embed :wizard-product-id="id" :wizard-slice="3" @saved="reloadProduct" />
           <Courses v-else-if="step === 4" embed :wizard-course-id="courseId" />
-          <Cards v-else-if="step === 5" embed :wizard-product-id="id" />
-          <Batches v-else-if="step === 6" embed :wizard-course-id="courseId" />
+          <div v-else-if="step === 5" class="step5">
+            <Cards embed :wizard-product-id="id" @saved="reloadProduct" />
+            <Batches embed :wizard-course-id="courseId" />
+          </div>
         </div>
       </section>
 
@@ -233,7 +237,7 @@ onMounted(() => {
           <ChevronLeft :size="15" :stroke-width="1.9" />
           <span>上一步{{ step > 1 ? ' · ' + STEP_NAMES[step - 2] : '' }}</span>
         </UiButton>
-        <UiButton v-if="step < 6" @click="go(step + 1)">
+        <UiButton v-if="step < WIZARD_STEP_MAX" @click="go(step + 1)">
           <span>下一步 · {{ STEP_NAMES[step] }}</span>
           <ChevronRight :size="15" :stroke-width="1.9" />
         </UiButton>
@@ -380,6 +384,11 @@ onMounted(() => {
 }
 .step-body {
   min-height: 360px;
+}
+.step5 {
+  display: flex;
+  flex-direction: column;
+  gap: 28px;
 }
 
 /* Footer：上一步 ghost（步1禁用·UiButton 自带禁用态）/ 下一步·完成 brand（两端对齐） */

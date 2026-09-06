@@ -23,7 +23,6 @@ import {
   FileText,
   Clapperboard,
   CreditCard,
-  QrCode,
 } from 'lucide-vue-next'
 import { client } from '../api'
 import { isWizardPath, WIZARD_STEPS, wizardStepFromQuery, currentNavGroup } from '../lib/nav'
@@ -120,7 +119,6 @@ const STEP_ICONS: Record<string, Component> = {
   'file-text': FileText,
   clapperboard: Clapperboard,
   'credit-card': CreditCard,
-  'qr-code': QrCode,
 }
 
 // 分组默认收起（照设计·chevron-right）；当前路由所在组自动展开；用户手动展开记 localStorage
