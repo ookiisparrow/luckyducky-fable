@@ -110,4 +110,66 @@ describe('Orders.vue 发货表单校验闸（shipOrder）', () => {
     expect(calls[0][0]).toBe('o2')
     expect(calls[0][2]).toBe('SF1234567890')
   })
+
+  it('大白话：发货失败人话出现在抽屉内（挡不住），不把英文码甩脸上', async () => {
+    listOrdersMock.mockReset().mockResolvedValue({
+      ok: true,
+      list: [baseOrder({ id: 'o3', status: 'paid' })],
+      nextCursor: null,
+      hasMore: false,
+    })
+    shipOrderMock.mockReset().mockResolvedValue({ ok: false, error: 'REFUND_HOLD' })
+    const wrapper = mount(Orders)
+    await flushPromises()
+
+    const shipBtn = wrapper.findAll('.ld-tr button').find((b) => b.text() === '发货')
+    expect(shipBtn).toBeTruthy()
+    await shipBtn!.trigger('click')
+    await flushPromises()
+
+    const trackingInput = wrapper.find('input[placeholder="扫描或输入运单号"]')
+    await trackingInput.setValue('SF1234567890')
+    const confirmBtn = wrapper.findAll('.drawer button').find((b) => b.text().includes('确认发货'))
+    await confirmBtn!.trigger('click')
+    await flushPromises()
+
+    expect(wrapper.find('.drawer').exists()).toBe(true)
+    const err = wrapper.find('.drawer-error')
+    expect(err.exists()).toBe(true)
+    expect(err.text()).toContain('这单涉及退款')
+    expect(err.text()).not.toContain('REFUND_HOLD')
+  })
+})
+
+describe('Orders.vue 刷新后勾选与可见行求交', () => {
+  it('大白话：刷新后已不在列表里的勾选清掉，批量栏不再假装还能发', async () => {
+    listOrdersMock.mockReset().mockResolvedValueOnce({
+      ok: true,
+      list: [baseOrder({ id: 'oKeep' }), baseOrder({ id: 'oGone' })],
+      nextCursor: null,
+      hasMore: false,
+    })
+    const wrapper = mount(Orders)
+    await flushPromises()
+
+    const boxes = wrapper.findAll('.ld-tr input.ck')
+    expect(boxes.length).toBe(2)
+    await boxes[1].trigger('change')
+    await flushPromises()
+    expect(wrapper.find('.batchbar').exists()).toBe(true)
+    expect(wrapper.find('.batchbar').text()).toContain('已选')
+
+    listOrdersMock.mockResolvedValueOnce({
+      ok: true,
+      list: [baseOrder({ id: 'oKeep' })],
+      nextCursor: null,
+      hasMore: false,
+    })
+    const refresh = wrapper.findAll('button').find((b) => b.text().includes('刷新'))
+    expect(refresh).toBeTruthy()
+    await refresh!.trigger('click')
+    await flushPromises()
+
+    expect(wrapper.find('.batchbar').exists()).toBe(false)
+  })
 })

@@ -1,7 +1,7 @@
 // 订单与钱组映射（守卫 rw-admin-money-ui-golden）：看板近似诚实标注/警报有则必显无则不吓人/
 // 订单行金额不符禁发入口收窄/售后行只待审核可裁决/脏档安全（与 mp 同口径）。
 import { describe, it, expect } from 'vitest'
-import { mapDashboard, mapOrderRows, mapRefundRows, maskPhone, refundVerdict, deriveDashboardTodos, canOverrideRefund, mapOverrideOrder } from '../src/lib/mapMoney'
+import { mapDashboard, mapOrderRows, mapRefundRows, maskPhone, refundVerdict, deriveDashboardTodos, canOverrideRefund, mapOverrideOrder, orderErrorText } from '../src/lib/mapMoney'
 import ordersSrc from '../src/pages/Orders.vue?raw'
 import refundsSrc from '../src/pages/Refunds.vue?raw'
 import dashboardSrc from '../src/pages/Dashboard.vue?raw'
@@ -360,5 +360,28 @@ describe('Dashboard.vue 待处理行动条含「异常未处理」（异常账�
     expect(dashboardSrc).toMatch(/getInspectStatus\(\)/)
     expect(dashboardSrc).toMatch(/to: '\/anomalies'/)
     expect(dashboardSrc).toMatch(/openAnomalies/)
+  })
+})
+
+describe('orderErrorText（钱组英文码→操作者中文·#222 同类）', () => {
+  it('大白话：已知码出人话、BAD_STATUS 复合码拆出状态中文、未知码兜底不裸甩', () => {
+    expect(orderErrorText('REFUND_HOLD')).toBe('这单涉及退款，先去「售后退款」处理')
+    expect(orderErrorText('FEE_MISMATCH_HOLD')).toBe('金额异常单被挡下：先去核对流水解除')
+    expect(orderErrorText('SHIP_IN_PROGRESS')).toBe('正在处理中，请稍后重试')
+    expect(orderErrorText('NO_RESULT')).toBe('系统没返回这单结果，请重试')
+    expect(orderErrorText('TOO_MANY')).toBe('一次最多 100 单，请分批')
+    expect(orderErrorText('BAD_STATUS:done')).toBe('订单状态「已完成」不允许此操作')
+    expect(orderErrorText('BAD_STATUS:payment_exception')).toBe('订单状态「支付异常待处理」不允许此操作')
+    expect(orderErrorText('FUTURE_UNKNOWN_CODE')).toBe('操作失败（FUTURE_UNKNOWN_CODE）')
+    expect(orderErrorText('')).toBe('未知错误')
+    expect(orderErrorText(null)).toBe('未知错误')
+  })
+  it('大白话：Orders.vue 错误展示走人话映射 + 抽屉内报错 + 刷新勾选求交（不裸 String(r.error)、不双套字典）', () => {
+    expect(ordersSrc).not.toMatch(/shipErrorText/)
+    expect(ordersSrc).not.toMatch(/String\(r\.error\b/)
+    expect(ordersSrc).toMatch(/orderErrorText\(/)
+    expect(ordersSrc).toMatch(/d\.error = '发货没成功：' \+ orderErrorText\(r\.error\)/)
+    expect(ordersSrc).toMatch(/drawer-error/)
+    expect(ordersSrc).toMatch(/selectedIds\.value = selectedIds\.value\.filter\(\(id\) => vis\.has\(id\)\)/)
   })
 })
