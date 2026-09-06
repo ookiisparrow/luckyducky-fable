@@ -7,7 +7,7 @@ import { ref, computed, nextTick, onMounted } from 'vue'
 import QRCode from 'qrcode'
 import { RefreshCw, ScanLine, Printer, Package } from 'lucide-vue-next'
 import { listOrders, shipOrder } from '../api/money'
-import { mapOrderRows, type OrderRowVM } from '../lib/mapMoney'
+import { mapOrderRows, orderErrorText, type OrderRowVM } from '../lib/mapMoney'
 import {
   FULFILL_STEP_NAMES,
   COMPANIES,
@@ -254,11 +254,9 @@ function onScan() {
   void doShip(selected.value, res.trackingNo)
 }
 function mapShipErr(msg: string) {
-  if (msg === 'FEE_MISMATCH_HOLD') return '金额异常单被挡下：先到「订单发货」页核对流水解除'
   if (msg === 'BAD_STATUS:shipped') return '这单已发过货；要改运单号请去「订单发货」页'
-  if (msg && msg.startsWith('BAD_STATUS:')) return `这单当前状态（${msg.slice(11)}）不能发货`
-  if (msg === 'NO_ORDER') return '找不到这单订单'
-  return `发货失败：${msg}`
+  const text = orderErrorText(msg)
+  return text.startsWith('订单状态「') ? text.replace('不允许此操作', '不能发货') : text
 }
 async function doShip(order: FulfillOrder, trackingNo: string) {
   if (shipping.value) {
