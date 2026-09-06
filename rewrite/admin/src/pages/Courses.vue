@@ -8,6 +8,7 @@ import { getCourseDraft, saveCourseDraft, publishCourse, uploadVideo, syncVodMed
 import { listDrafts } from '../api/products'
 import { isVodFileId, progressPercent } from '@ldrw/shared'
 import { courseVideoStats } from '../lib/mapContent'
+import { launchErrorText } from '../lib/mapSystem'
 import { planLessonBatch } from '../lib/videoBatch'
 import { serialSave } from '../lib/serialSave'
 import { useLatest } from '../lib/latest'
@@ -83,7 +84,7 @@ async function syncVod() {
   if (r.ok) {
     message.value = `转码状态已同步：本次就绪 ${r.ready} 段、仍在转码 ${r.processing} 段` + (Number(r.processing) ? '——短视频通常几分钟内转完，稍后再点一次' : '，可以发布了')
     await load() // 服务端已回写 vodUrl 且 rev 递增——不重载，下次自动保存会撞 DRAFT_CONFLICT（诚实拒绝）
-  } else message.value = '同步失败：' + String(r.error || '')
+  } else message.value = launchErrorText(r.error)
 }
 
 function twoStep(key: string, run: () => void) {
@@ -155,7 +156,7 @@ async function load() {
   const r = await getCourseDraft(courseId.value.trim())
   if (loadGen.isStale(my)) return // 已发起更新的 load()·整包丢弃（course/draftRev/message 全不写）
   if (!r.ok) {
-    message.value = '加载失败：' + String(r.error || '')
+    message.value = launchErrorText(r.error)
     return
   }
   loaded = false // 载入期不触发自动保存
@@ -290,7 +291,7 @@ async function pickVideo(l: Record<string, any>, sg: Record<string, any>, ev: Ev
       refreshStats()
       message.value = ''
     } else if (r.error === 'SESSION_LOST') message.value = '登录已过期，这段视频未上传成功，请重新登录后重试' // 同 batchUpload 措辞（批D·根因2）
-    else message.value = '视频上传失败：' + String(r.error || '')
+    else message.value = launchErrorText(r.error)
   } finally {
     progress.value = ''
     batchUploading.value = false
@@ -338,7 +339,7 @@ async function batchUpload(l: Record<string, any>, ev: Event) {
         // client.onSessionLost 已集中导登录（见 router.ts），这里只负责把「传到哪、剩多少」说清楚。
         fails.push(`登录已过期，已上传 ${uploaded}/${plan.length} 个，剩余 ${plan.length - uploaded} 个未上传，请重新登录后继续`)
         break
-      } else fails.push(`「${sg.name || item.segName}」上传失败：${String(r.error || '')}`) // fail-soft·一段失败不拖累其余
+      } else fails.push(`「${sg.name || item.segName}」${launchErrorText(r.error)}`) // fail-soft·一段失败不拖累其余
     }
   } finally {
     batchUploading.value = false
@@ -409,7 +410,7 @@ async function publish() {
     ? '已发布，学员立即看到新版'
     : r.error === 'VOD_PROCESSING'
       ? `发布未执行：还有 ${r.pending} 段视频转码中——点「同步转码状态」，全部就绪后再发布`
-      : '发布失败：' + String(r.error || '')
+      : launchErrorText(r.error)
 }
 
 onMounted(() => {

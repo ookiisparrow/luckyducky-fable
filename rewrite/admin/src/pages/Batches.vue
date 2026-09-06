@@ -11,7 +11,7 @@ import { Layers, QrCode, CircleCheck, TrendingUp, X, Download, Package } from 'l
 import { listBatches, createBatch, listBatchCodes, getSettings } from '../api/system'
 import { getCard } from '../api/products'
 import { buildFrontSvg, buildBackSvg } from '../lib/cardSvg'
-import { mapBatches, type BatchRow } from '../lib/mapSystem'
+import { mapBatches, launchErrorText, UNKNOWN_COURSE_HINT, type BatchRow } from '../lib/mapSystem'
 import { useLatest } from '../lib/latest'
 import UiButton from '../components/ui/Button.vue'
 import PageHeader from '../components/ui/PageHeader.vue'
@@ -22,7 +22,7 @@ import EmptyState from '../components/ui/EmptyState.vue'
 
 // 嵌入模式（上新向导第 5 步复用）+ 修独立深链 bug：换皮把 courseId 写死空 ref、不读 route.query，
 // 致商品页「码批次」深链(/batches?courseId=)落地要手输课程号；改读 props(向导)||route.query(深链)||空。
-const props = defineProps<{ embed?: boolean; wizardCourseId?: string }>()
+const props = defineProps<{ embed?: boolean; wizardCourseId?: string; courseReady?: boolean }>()
 const emit = defineEmits<{ saved: [] }>()
 const route = useRoute()
 const router = useRouter()
@@ -121,11 +121,15 @@ async function load() {
   if (loadGen.isStale(my)) return // 已发起更新的 load()·整包丢弃（rows/loadedCourse/message 全不写）
   rows.value = r.ok ? mapBatches(r.list) : []
   loadedCourse.value = r.ok ? c : ''
-  message.value = r.ok ? (rows.value.length ? '' : '这门课还没有批次') : '加载失败：' + String(r.error || '')
+  message.value = r.ok ? (rows.value.length ? '' : '这门课还没有批次') : launchErrorText(r.error)
 }
 
 async function doCreate() {
   if (busy.value) return
+  if (props.embed && props.courseReady === false) {
+    message.value = launchErrorText('UNKNOWN_COURSE:' + (loadedCourse.value || courseId.value.trim()))
+    return
+  }
   if (!Number.isInteger(count.value) || count.value < 1) {
     message.value = '数量要是正整数（≤500）'
     return
@@ -136,7 +140,7 @@ async function doCreate() {
   const r = await createBatch(target, count.value)
   busy.value = false
   if (!r.ok) {
-    message.value = '生成失败：' + String(r.error || '') // 失败留原文·不 reload 吞（病根#14）
+    message.value = launchErrorText(r.error) // 人话映射·不 reload 吞（病根#14）
     return
   }
   creating.value = false
@@ -309,14 +313,14 @@ async function exportCsv() {
     </PageHeader>
     <div v-else class="embed-head">
       <span class="embed-course">课程 <b>{{ loadedCourse || courseId || '（未定稿卡片/未关联课程）' }}</b></span>
-      <UiButton :disabled="!loadedCourse" @click="creating = !creating">＋ 生成新批次</UiButton>
+      <UiButton :disabled="!loadedCourse || courseReady === false" @click="creating = !creating">＋ 生成新批次</UiButton>
     </div>
 
     <div v-if="creating" class="create-bar">
       <span>为课程 <b>{{ loadedCourse }}</b> 生成</span>
       <input v-model.number="count" type="number" min="1" max="500" />
       <span>张码</span>
-      <UiButton size="sm" :disabled="busy" @click="doCreate">确认生成</UiButton>
+      <UiButton size="sm" :disabled="busy || courseReady === false" @click="doCreate">确认生成</UiButton>
       <UiButton variant="ghost" size="sm" @click="creating = false">取消</UiButton>
     </div>
 
@@ -340,6 +344,7 @@ async function exportCsv() {
         </div>
       </div>
       <p v-if="!embed" class="note">后端按课程查批次（一码一地址）；先输入课程编号载入，统计卡与筛选为该课程范围。</p>
+      <p v-else-if="courseReady === false" class="note">{{ UNKNOWN_COURSE_HINT }}</p>
       <p v-else class="note">本步管理这门课的二维码批次（课程已绑定，不用再输编号）。</p>
     </div>
 

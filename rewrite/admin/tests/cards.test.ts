@@ -21,6 +21,11 @@ describe('向导第 5 步只上传卡片（不要设计向 UI）', () => {
     expect(cardsSrc).toMatch(/upload-only|上传卡片/)
     expect(cardsSrc).toMatch(/v-if="!embed"[\s\S]*class="work"|v-else-if="!embed"/)
   })
+  it('大白话：卡面加载/上传失败走人话映射，不裸甩英文码', () => {
+    expect(cardsSrc).toMatch(/launchErrorText\(/)
+    expect(cardsSrc).not.toMatch(/卡面加载失败：' \+ String\(/)
+    expect(cardsSrc).not.toMatch(/图片上传失败：' \+ String\(/)
+  })
 })
 
 const card: CardModel = {

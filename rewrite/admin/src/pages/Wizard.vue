@@ -6,7 +6,8 @@ import { ref, computed, onMounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { Store, ArrowLeft, ChevronLeft, ChevronRight, Check } from 'lucide-vue-next'
 import { listDrafts, publishProduct, saveDraft } from '../api/products'
-import { productSteps, productState, basicsMissing, wizardCanPublish, freshDraft, type StepDot } from '../lib/mapProducts'
+import { productSteps, productState, basicsMissing, wizardCanPublish, freshDraft, publishErrorText, type StepDot } from '../lib/mapProducts'
+import { launchErrorText } from '../lib/mapSystem'
 import { wizardStepFromQuery, WIZARD_STEPS, WIZARD_STEP_MAX } from '../lib/nav'
 import { isUploadLocked } from '../lib/uploadLock'
 import { settleAllSaves } from '../lib/serialSave'
@@ -74,7 +75,7 @@ async function reloadProduct() {
     // 载入失败：仅在「还没载到商品」（初次深链·product 仍 null）时显全屏可重试态区别于「商品不存在」；
     // 已载入后的刷新失败（@saved autosave 回刷 / 切步回刷）只降级为 message banner、不撕掉正在编辑的向导+内嵌编辑器（P2 回归修·reloadProduct 是共享回刷路径）
     if (!product.value) loadError.value = true
-    message.value = '加载失败：' + String(r.error || '')
+    message.value = launchErrorText(r.error)
     msgLoadFail = true
     loading.value = false
     return
@@ -134,7 +135,7 @@ async function shelve() {
     msgLoadFail = false // 这是动作反馈·非加载失败——随后的 reloadProduct 成功不得把它当 stale banner 清掉（病根#14）
     void reloadProduct()
   } else {
-    message.value = '同步到小程序没成功：' + String(r.error || '')
+    message.value = publishErrorText(r.error)
     msgLoadFail = false
   }
 }
@@ -147,7 +148,7 @@ async function createDraft() {
   const r: any = await saveDraft(draft)
   busy.value = false
   if (!r.ok) {
-    message.value = '建立草稿没成功：' + String(r.error || '')
+    message.value = launchErrorText(r.error)
     msgLoadFail = false
     return
   }
@@ -293,7 +294,7 @@ onMounted(() => {
                 <h3>二维码批次</h3>
                 <p>生成可扫码的激活码，一码一用。</p>
               </header>
-              <Batches embed :wizard-course-id="courseId" @saved="reloadProduct" />
+              <Batches embed :wizard-course-id="courseId" :course-ready="!!(extras.hasVideo && extras.hasVideo[courseId])" @saved="reloadProduct" />
             </section>
           </div>
         </div>

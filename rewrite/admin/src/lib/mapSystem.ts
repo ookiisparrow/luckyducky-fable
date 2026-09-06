@@ -1,5 +1,6 @@
 // 系统组+钱组补齐映射（纯函数·守卫 rw-admin-system-ui-golden）：外包账号行/批次激活率/
 // 对账日表与勾对差异（approx 诚实透传·wxOnly=最危险标红）/库存冲突 409 人话/webhook 形态前端预检。
+// 上新五步/批次/课程操作者可见错误码 → 中文大白话（UNKNOWN_COURSE 等·编号只作次要信息）。
 import { yuan, dateTime } from './format'
 
 export interface AgentRow {
@@ -175,6 +176,58 @@ export function mapStock(list: unknown, truncated: unknown): { rows: StockRow[];
     }
   }
   return { rows, truncNote: truncated === true ? '已触扫描上限·列表非全量（如实标注）' : '' }
+}
+
+/** 未发布课程就生成二维码（第 5 步常见拒因）——提示与拦截共用这一句。 */
+export const UNKNOWN_COURSE_HINT =
+  '还没有发布课程，不能生成二维码。请先到第 4 步保存并点「发布课程」，再回来生成。'
+
+const LAUNCH_ERR: Record<string, string> = {
+  UNKNOWN_COURSE: UNKNOWN_COURSE_HINT,
+  NO_COURSE_ID: '还没有课程编号。请先完成前面步骤，或从商品页进入上新。',
+  NO_DRAFT: '还没有可发布的课程草稿。请先到第 4 步保存课程，再点「发布课程」。',
+  BAD_COURSE: '课程内容不完整，保存没成功。请检查章节、课时是否填好。',
+  BAD_ARGS: '填写的数量或编号不对。数量要是正整数，课程号不能空。',
+  NO_BATCH: '找不到这个批次。请刷新后再打开。',
+  GEN_FAIL: '生成二维码没成功。请稍后重试；若反复出现，先确认第 4 步已经发布课程。',
+  VOD_NOT_CONFIGURED: '视频点播还没配好。请稍后重试；若反复失败，请找技术看点播配置。',
+  VOD_PROCESSING: '还有视频在转码，现在不能发布。请点「同步转码状态」，全部就绪后再发布。',
+  META_UNAVAILABLE: '上传通道暂时不可用。请稍后重试。',
+  BAD_CHUNK: '视频分片上传失败。请换网络或换小一点的文件再试。',
+  BAD_FINISH: '视频合并失败。请重新上传。',
+  CHUNKS_MISSING: '视频分片不完整，合并失败。请重新上传。',
+  DRAFT_CONFLICT: '草稿在别处被改过（另一个页签或窗口）。本次未保存以免互相覆盖；请点「载入」取最新后再编辑。',
+  SESSION_LOST: '登录已过期。请重新登录后再试。',
+  NO_PRODUCT: '找不到这个商品。请刷新后重试。',
+  BAD_CARD: '卡片信息不完整，保存没成功。请检查卡面是否上传。',
+  BAD_IMAGE: '图片太大或格式不对。请换一张再传。',
+  BAD_PRODUCT: '商品信息不完整，保存没成功。请检查名称、价格和规格。',
+  NO_ID: '缺少商品编号。请从商品列表重新进入。',
+  NO_ENDPOINT: '后台还没接上服务器地址。请找技术看配置。',
+  BAD_JSON_RESPONSE: '服务器回包读不懂。请刷新后再试。',
+  NETWORK: '网络不通，请检查网络后重试。',
+}
+
+/** 剥 `Error:` 前缀，取 `CODE` / `CODE:detail` 的主码。已是中文则原样。 */
+function launchErrHead(raw: unknown): { head: string; rest: string; original: string } {
+  let s = String(raw ?? '').trim()
+  s = s.replace(/^Error:\s*/i, '')
+  const m = /^([A-Z][A-Z0-9_]{1,})(?::(.*))?$/.exec(s)
+  if (!m) return { head: '', rest: '', original: s }
+  return { head: m[1], rest: (m[2] || '').trim(), original: s }
+}
+
+/** 上新五步 / 批次 / 课程给操作者看的错误：主句人话，编号只挂括号里。无映射也不裸甩 CODE。 */
+export function launchErrorText(e: unknown): string {
+  const { head, rest, original } = launchErrHead(e)
+  const mapped = head ? LAUNCH_ERR[head] : ''
+  if (mapped) {
+    if (rest && /^[\w./-]+$/.test(rest) && rest.length <= 80) return `${mapped}（编号 ${rest}）`
+    return mapped
+  }
+  if (!original) return '操作没成功。请稍后重试。'
+  if (/[\u4e00-\u9fff]/.test(original)) return original
+  return `操作没成功。请先检查前面步骤是否都做完，再重试。（技术编号 ${original}）`
 }
 
 /** 库存保存错误人话（409 版本冲突=有人先改过/顾客下单占用——刷新重试而不是覆盖）。 */

@@ -13,6 +13,13 @@ describe('Courses/Checkpoints 死胡同改造：课程选择桥 + 零节点引�
     expect(coursesSrc).toMatch(/function loadCourseOptions\(/)
     expect(coursesSrc).toMatch(/function pickCourse\(/)
   })
+  it('大白话：课程加载/发布/上传失败走 launchErrorText，不把 UNKNOWN_* 原文甩给操作者', () => {
+    expect(coursesSrc).toMatch(/launchErrorText\(/)
+    expect(coursesSrc).not.toMatch(/发布失败：' \+ String\(r\.error/)
+    expect(coursesSrc).not.toMatch(/加载失败：' \+ String\(r\.error/)
+    expect(coursesSrc).not.toMatch(/同步失败：' \+ String\(r\.error/)
+    expect(coursesSrc).not.toMatch(/视频上传失败：' \+ String\(r\.error/)
+  })
   it('大白话：Checkpoints 载入成功但零节点时给引导文案，不再裸一个「加节点」', () => {
     expect(checkpointsSrc).toContain('还没配节点')
   })
