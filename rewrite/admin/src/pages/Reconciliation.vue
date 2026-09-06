@@ -4,9 +4,10 @@
 // 诚实边界：设计稿「微信手续费≈0.6% / 微信实际到账」为估算/结算数据，后端 getReconciliation 无——不伪造，
 // 只渲染应收−退款=净额真等式；月份选择器（近 30 天固定窗，无 month 参数）与「导出 Excel」（改 CSV）记待办。
 import { ref, computed, onMounted } from 'vue'
-import { CircleDollarSign, RotateCcw, Wallet, Download, CircleCheck } from 'lucide-vue-next'
+import { CircleDollarSign, RotateCcw, Wallet, Download, CircleCheck, TriangleAlert } from 'lucide-vue-next'
 import { getReconciliation, getBillMatch, downloadBill } from '../api/system'
 import { mapRecon, mapBillMatch, type ReconVM, type BillMatchVM } from '../lib/mapSystem'
+import { orderErrorText } from '../lib/mapMoney'
 import { useLatest } from '../lib/latest'
 import UiButton from '../components/ui/Button.vue'
 import PageHeader from '../components/ui/PageHeader.vue'
@@ -49,8 +50,8 @@ async function reload(): Promise<boolean> {
   // 分路报错（P1·bug 清除战役 II C2）：单路失败别被另一路成功吞掉——mapRecon/mapBillMatch 只在 ok!==true
   // 或响应体缺 cumulative/summary 容器时才回 null（合法空数据容器仍在、只是内部数组/数值为空，不会误判成失败）。
   const bad: string[] = []
-  if (!recon.value) bad.push('内部对账加载失败：' + String((r as any).error || ''))
-  if (!match.value) bad.push('外部账单勾对加载失败：' + String((m as any).error || ''))
+  if (!recon.value) bad.push('内部对账加载失败：' + orderErrorText((r as any).error))
+  if (!match.value) bad.push('外部账单勾对加载失败：' + orderErrorText((m as any).error))
   message.value = bad.join('；')
   return bad.length === 0
 }
@@ -77,10 +78,10 @@ async function pullBill() {
   }
   busy.value = true
   const r = await downloadBill(billDate.value)
+  const reloadOk = await reload() // 先刷新对账（其间显加载中·结束落空）；busy 贯穿拉取+刷新防连点
   busy.value = false
-  const reloadOk = await reload() // 先刷新对账（其间显加载中·结束落空）
   // 只在拉取与刷新都成功时显纯成功；reload 失败别被无条件覆盖——保留其错误原文（P2·病根#14 顺手改批遗漏本处）
-  if (!r.ok) message.value = '拉取失败：' + String(r.error || '')
+  if (!r.ok) message.value = '拉取失败：' + orderErrorText(r.error)
   else if (!reloadOk) message.value = '账单已拉取入库，但对账刷新失败：' + message.value
   else message.value = '账单已拉取入库，勾对已刷新'
 }
@@ -116,8 +117,8 @@ async function pullRange() {
     const r = await downloadBill(days[i])
     if (r.ok) ok++
   }
+  const reloadOk = await reload() // 先刷新对账；busy 贯穿拉取+刷新防连点
   busy.value = false
-  const reloadOk = await reload() // 先刷新对账
   // reload 失败别被无条件覆盖——保留其错误原文拼在区间拉取结果后（P2·病根#14 顺手改批遗漏本处）
   message.value = reloadOk
     ? `区间账单已拉取 ${ok}/${days.length} 天，勾对已刷新`
@@ -129,7 +130,7 @@ function exportCsv() {
   const head = '日期,订单数,应收GMV,退款,净额,退款笔数'
   const lines = recon.value.daily.map((d) => [d.day, d.orders, d.income, d.refund, d.net, d.refunds].join(','))
   const csv = [head, ...lines].join('\n')
-  const url = URL.createObjectURL(new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8' }))
+  const url = URL.createObjectURL(new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8' }))
   const a = document.createElement('a')
   a.href = url
   a.download = '财务对账-按日.csv'
@@ -143,7 +144,7 @@ onMounted(reload)
 <template>
   <div class="ld-page">
     <PageHeader title="财务对账" sub="应收 GMV、退款按日对账 + 微信官方账单逐笔勾对 · 资金对得上才安心（内部近 30 天窗）">
-      <UiButton :disabled="!recon" @click="exportCsv">
+      <UiButton :disabled="!recon || busy" @click="exportCsv">
         <Download :size="15" :stroke-width="1.8" /><span>导出 CSV</span>
       </UiButton>
     </PageHeader>
@@ -154,8 +155,8 @@ onMounted(reload)
       <label class="ld-search"><input v-model="from" placeholder="起 YYYY-MM-DD" /></label>
       <span class="dash">→</span>
       <label class="ld-search"><input v-model="to" placeholder="止 YYYY-MM-DD" /></label>
-      <UiButton size="sm" @click="applyRange">查询</UiButton>
-      <UiButton v-if="from || to" size="sm" variant="ghost" @click="clearRange">近 30 天</UiButton>
+      <UiButton size="sm" :disabled="busy" @click="applyRange">查询</UiButton>
+      <UiButton v-if="from || to" size="sm" variant="ghost" :disabled="busy" @click="clearRange">近 30 天</UiButton>
       <span class="range-note">留空＝默认近 30 天窗</span>
     </div>
 
@@ -163,10 +164,10 @@ onMounted(reload)
 
     <template v-if="totals">
       <!-- 账平/异常横幅（全账累计等式·真值） -->
-      <div class="balance" :class="{ warn: exCount }">
-        <CircleCheck :size="20" :stroke-width="1.8" />
+      <div class="balance" :class="{ warn: exCount || recon!.partial }">
+        <component :is="exCount || recon!.partial ? TriangleAlert : CircleCheck" :size="20" :stroke-width="1.8" />
         <div>
-          <div class="balance-t">{{ exCount ? `内部有 ${exCount} 笔异常待处理` : '内部账已对平' }}</div>
+          <div class="balance-t">{{ recon!.partial ? '对账数据可能不完整，请稍后重试' : exCount ? `内部有 ${exCount} 笔异常待处理` : '内部账已对平' }}</div>
           <div class="balance-s">全账累计 应收 {{ cum.income }} − 退款 {{ cum.refund }} = 净额 {{ cum.net }}</div>
         </div>
       </div>
@@ -186,7 +187,7 @@ onMounted(reload)
         <template #head><Badge tone="red">{{ exCount }} 笔</Badge></template>
         <div v-for="e in recon.exceptions" :key="e.label" class="ex-group">
           <div class="ex-label">{{ e.label }}（{{ e.ids.length }}）</div>
-          <p v-for="id in e.ids" :key="id" class="ex-id">{{ id }}</p>
+          <p v-for="id in e.ids" :key="id" class="ex-id" :title="id">{{ id }}</p>
         </div>
       </Card>
 
@@ -205,7 +206,7 @@ onMounted(reload)
 
       <!-- 逐日对账表（含窗内合计行·真值） -->
       <Card v-if="recon && recon.daily.length" title="逐日对账" flush>
-        <div class="ld-table">
+        <div class="ld-table table-scroll">
           <div class="ld-thead">
             <div class="ld-th grow">日期</div>
             <div class="ld-th r" :style="{ width: '90px' }">订单数</div>
@@ -234,6 +235,9 @@ onMounted(reload)
           </div>
         </div>
       </Card>
+      <Card v-else-if="recon" title="逐日对账">
+        <EmptyState text="当前区间暂无订单/退款记录" />
+      </Card>
     </template>
 
     <!-- 外部逐笔勾对 · 微信官方账单 -->
@@ -255,7 +259,7 @@ onMounted(reload)
         <div class="sub-h danger">
           <span>微信收了钱、我方没单</span><span class="sub-note">最危险 · 立即人工核</span><Badge tone="red">{{ match.wxOnly.length }} 笔</Badge>
         </div>
-        <div class="ld-table">
+        <div class="ld-table table-scroll">
           <div class="ld-thead">
             <div class="ld-th grow">日期</div>
             <div class="ld-th" :style="{ width: '220px' }">微信交易号</div>
@@ -264,7 +268,7 @@ onMounted(reload)
           <div class="ld-tbody">
             <div v-for="w in match.wxOnly" :key="w.transactionId" class="ld-tr">
               <div class="ld-td grow mono">{{ w.date }}</div>
-              <div class="ld-td mono" :style="{ width: '220px' }">{{ w.transactionId }}</div>
+              <div class="ld-td mono id-cell" :style="{ width: '220px' }" :title="w.transactionId">{{ w.transactionId }}</div>
               <div class="ld-td r num danger" :style="{ width: '120px' }">{{ w.amount }}</div>
             </div>
           </div>
@@ -274,7 +278,7 @@ onMounted(reload)
       <!-- 金额不符 -->
       <template v-if="match.amountMismatch.length">
         <div class="sub-h"><span>金额不符</span><Badge tone="amber">{{ match.amountMismatch.length }} 笔</Badge></div>
-        <div class="ld-table">
+        <div class="ld-table table-scroll">
           <div class="ld-thead">
             <div class="ld-th grow">单号</div>
             <div class="ld-th r" :style="{ width: '130px' }">我方</div>
@@ -282,7 +286,7 @@ onMounted(reload)
           </div>
           <div class="ld-tbody">
             <div v-for="mm in match.amountMismatch" :key="mm.id" class="ld-tr">
-              <div class="ld-td grow mono">{{ mm.id }}</div>
+              <div class="ld-td grow mono id-cell" :title="mm.id">{{ mm.id }}</div>
               <div class="ld-td r num" :style="{ width: '130px' }">{{ mm.ours }}</div>
               <div class="ld-td r num amber" :style="{ width: '130px' }">{{ mm.wx }}</div>
             </div>
@@ -293,21 +297,21 @@ onMounted(reload)
       <!-- 我方有单微信无 -->
       <template v-if="match.oursOnly.length">
         <div class="sub-h"><span>我方有单微信无</span><span class="sub-note">多为账单未拉/未支付成功</span><Badge tone="neutral">{{ match.oursOnly.length }} 笔</Badge></div>
-        <div class="ld-table">
+        <div class="ld-table table-scroll">
           <div class="ld-thead">
             <div class="ld-th grow">单号</div>
             <div class="ld-th r" :style="{ width: '130px' }">金额</div>
           </div>
           <div class="ld-tbody">
             <div v-for="o in match.oursOnly" :key="o.id" class="ld-tr">
-              <div class="ld-td grow mono">{{ o.id }}</div>
+              <div class="ld-td grow mono id-cell" :title="o.id">{{ o.id }}</div>
               <div class="ld-td r num" :style="{ width: '130px' }">{{ o.amount }}</div>
             </div>
           </div>
         </div>
       </template>
 
-      <EmptyState v-if="!match.wxOnly.length && !match.amountMismatch.length && !match.oursOnly.length" :icon="CircleCheck" text="逐笔已勾对 · 无差异" />
+      <EmptyState v-if="!match.wxOnly.length && !match.amountMismatch.length && !match.oursOnly.length" :icon="match.summary[0]?.value ? CircleCheck : TriangleAlert" :text="match.summary[0]?.value ? '逐笔已勾对 · 无差异' : '暂无勾对数据——请先拉取账单'" />
     </Card>
 
     <p class="foot-note">「微信手续费 / 实际到账」需微信结算数据源，后端暂无——本页只作应收/退款/净额真等式与账单逐笔勾对（区间可自选·全账累计恒为 money 锚）。</p>
@@ -394,9 +398,17 @@ onMounted(reload)
   font-size: 12px;
   font-family: var(--ld-font-mono);
   color: var(--ld-content-2);
+  overflow-wrap: anywhere;
 }
 
 /* 表格单元修饰（右对齐/等宽数字/强调/异常·外壳走 .ld-table） */
+.table-scroll {
+  overflow-x: auto;
+}
+.table-scroll .ld-thead,
+.table-scroll .ld-tr {
+  min-width: 560px;
+}
 .ld-th.r,
 .ld-td.r {
   justify-content: flex-end;
@@ -405,6 +417,10 @@ onMounted(reload)
 .ld-td.mono {
   font-family: var(--ld-font-mono);
   font-size: 12.5px;
+}
+.ld-td.id-cell {
+  overflow-wrap: anywhere;
+  white-space: normal;
 }
 .ld-td.num {
   font-variant-numeric: tabular-nums;
