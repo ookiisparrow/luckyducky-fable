@@ -7,7 +7,7 @@ import { ref, computed, nextTick, onMounted } from 'vue'
 import QRCode from 'qrcode'
 import { RefreshCw, ScanLine, Printer, Package } from 'lucide-vue-next'
 import { listOrders, shipOrder } from '../api/money'
-import { mapOrderRows, type OrderRowVM } from '../lib/mapMoney'
+import { mapOrderRows, orderErrorText, type OrderRowVM } from '../lib/mapMoney'
 import {
   FULFILL_STEP_NAMES,
   COMPANIES,
@@ -134,7 +134,7 @@ function onPaperChange() {
 }
 const checked = ref<Set<string>>(new Set())
 function syncDefaultChecked() {
-  checked.value = new Set(orders.value.filter((o) => !printed.value.has(o.id as string)).map((o) => o.id as string))
+  checked.value = new Set(shippable.value.filter((o) => !printed.value.has(o.id as string)).map((o) => o.id as string))
 }
 function toggleCheck(id: string) {
   const s = new Set(checked.value)
@@ -253,12 +253,9 @@ function onScan() {
   }
   void doShip(selected.value, res.trackingNo)
 }
-function mapShipErr(msg: string) {
-  if (msg === 'FEE_MISMATCH_HOLD') return '金额异常单被挡下：先到「订单发货」页核对流水解除'
-  if (msg === 'BAD_STATUS:shipped') return '这单已发过货；要改运单号请去「订单发货」页'
-  if (msg && msg.startsWith('BAD_STATUS:')) return `这单当前状态（${msg.slice(11)}）不能发货`
-  if (msg === 'NO_ORDER') return '找不到这单订单'
-  return `发货失败：${msg}`
+function mapShipErr(code: string): string {
+  if (code === 'BAD_STATUS:' + 'shipped') return '这单已发过货；要改运单号请去「订单发货」页'
+  return orderErrorText(code)
 }
 async function doShip(order: FulfillOrder, trackingNo: string) {
   if (shipping.value) {
@@ -454,7 +451,7 @@ const railState = (n: number) => (n === step.value ? 'current' : n < step.value 
             </template>
             <EmptyState v-else :icon="ScanLine" text="扫箱上的内部二维码，订单核对卡显示在这里" />
           </Card>
-          <Card class="feed-card" title="发货记录" :sub="`剩 ${orders.length} 单待发 · 本次已发 ${shippedCount} 单`" flush>
+          <Card class="feed-card" title="发货记录" :sub="`剩 ${shippable.length} 单待发 · 本次已发 ${shippedCount} 单`" flush>
             <EmptyState v-if="!sessionLog.length" text="本次还没有发货记录" />
             <div v-else class="feed-list">
               <div v-for="(e, i) in sessionLog" :key="e.id + '-' + e.time + '-' + i" class="feed-row" :class="{ bad: !e.ok }">
