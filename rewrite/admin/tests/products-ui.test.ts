@@ -42,6 +42,8 @@ describe('三态口径（与云端 listDrafts listed 表一致）', () => {
     const covered = productSteps({ id: 'p2', name: '', cover: 'c', skus: [] }, {})
     expect(covered.find((s) => s.key === 'create')!.done).toBe(true)
     expect(covered.find((s) => s.key === 'look')!.done).toBe(false)
+    expect(productSteps({ id: 'p4', name: 'x', price: 1, cover: 'c', skus: [{ name: 'a' }] }).find((s) => s.key === 'detail')!.done).toBe(false)
+    expect(productSteps({ id: 'p4', name: 'x', price: 1, cover: 'c', skus: [{ name: 'a', price: '' }] }).find((s) => s.key === 'detail')!.done).toBe(false)
     const derived = productSteps({ id: 'p3', name: 'x', price: 1, cover: 'c', skus: [{}] }, { cardFinal: { p3: true }, hasBatch: { 'course-p3': true } })
     expect(derived.find((s) => s.key === 'cardQr')!.done).toBe(true) // courseId 缺→course-p3 回退命中
     expect(productSteps({ id: 'p3', cover: 'c' }, { hasBatch: { 'course-p3': true } }).find((s) => s.key === 'cardQr')!.done).toBe(false)
