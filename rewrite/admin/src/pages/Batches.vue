@@ -23,6 +23,7 @@ import EmptyState from '../components/ui/EmptyState.vue'
 // 嵌入模式（上新向导步 6 复用·向后兼容）+ 修独立深链 bug：换皮把 courseId 写死空 ref、不读 route.query，
 // 致商品页「码批次」深链(/batches?courseId=)落地要手输课程号；改读 props(向导)||route.query(深链)||空。
 const props = defineProps<{ embed?: boolean; wizardCourseId?: string }>()
+const emit = defineEmits<{ saved: [] }>()
 const route = useRoute()
 const router = useRouter()
 const courseId = ref(props.wizardCourseId || String(route.query.courseId || ''))
@@ -132,6 +133,7 @@ async function doCreate() {
     loadedCourse.value === target
       ? `已生成批次 ${batchId}（${codeN} 张码）`
       : `已生成批次 ${batchId}（${codeN} 张码），但列表刷新失败，请点「载入课程」重试`
+  emit('saved')
 }
 
 const codesGen = useLatest() // 码表乱序守卫（P1·A 的码别配到 B 的批次头·防印错卡·根因#8）

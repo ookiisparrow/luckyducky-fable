@@ -21,6 +21,7 @@ import UiButton from '../components/ui/Button.vue'
 // 嵌入模式（上新向导步 4 复用·向后兼容·独立 /courses?courseId 用法不传 props 行为不变）：
 // embed=true 隐页头/手输课程号工具条·wizardCourseId 覆盖 route.query.courseId。
 const props = defineProps<{ embed?: boolean; wizardCourseId?: string }>()
+const emit = defineEmits<{ saved: [] }>()
 const route = useRoute()
 const router = useRouter()
 const courseId = ref(props.wizardCourseId || String(route.query.courseId || ''))
@@ -208,6 +209,7 @@ const flushSave = serialSave(async () => {
   if (r.ok) {
     draftRev.value = Number(r.rev) || draftRev.value + 1
     saveState.value = 'saved'
+    emit('saved')
   } else if (r.error === 'DRAFT_CONFLICT') {
     // 别处（另一页签/窗口/管理员）已保存过更新版本：本次拒写防互相覆盖，停自动保存等人工「载入」拿最新
     conflicted.value = true
