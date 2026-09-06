@@ -102,7 +102,7 @@ async function compress(file: File): Promise<string> {
           <div class="pc-field"><label>联系客服栏标题（≤60 字）</label><input v-model="model.help.contactTitle" class="pc-input" maxlength="60" placeholder="联系客服" /></div>
           <div class="pc-field"><label>帮助视频栏标题（≤60 字）</label><input v-model="model.help.videosTitle" class="pc-input" maxlength="60" placeholder="帮助视频" /></div>
           <div class="pc-field"><label>常见问题栏标题（≤60 字）</label><input v-model="model.help.faqTitle" class="pc-input" maxlength="60" placeholder="常见问题" /></div>
-          <p class="pc-hint">帮助视频的增删改与上传在「帮助视频」页（侧栏 · 商品与上新组）单独维护，此处只设栏标题。</p>
+          <p class="pc-hint">帮助视频的增删改与上传在「帮助视频」页（侧栏 · 店面内容组）单独维护，此处只设栏标题。</p>
         </Card>
 
         <Card title="常见问题 FAQ" :sub="`求助面板 FAQ · 最多 20 条 · 当前 ${model.help.faq.length} 条`">

@@ -31,7 +31,7 @@ import Products from '../src/pages/Products.vue'
 beforeEach(() => {
   listDraftsMock.mockReset().mockResolvedValue({
     ok: true,
-    list: [{ id: 'p1', name: '钩织材料包·筹备款', price: '99', skus: [], images: [] }],
+    list: [{ id: 'p1', name: '钩织材料包·筹备款', price: '99', skus: [], images: [], params: [], detailSections: [], kit: [] }],
     urls: {},
     listed: {}, // p1 不在 listed 表 → state='preparing'
     hasVideo: {},
@@ -48,20 +48,49 @@ async function mountWithRouter() {
   return mount(Products, { global: { plugins: [router] } })
 }
 
+describe('Products.vue 向导切片（1–3 步不再同一张大表）', () => {
+  it('大白话：第 1 步只封面；第 2 步只名字和相册、不再逼传封面；第 3 步才是规格', async () => {
+    const router = createRouter({ history: createMemoryHistory(), routes: [{ path: '/', component: { template: '<div/>' } }] })
+    await router.push('/')
+    await router.isReady()
+    const cover = mount(Products, { props: { embed: true, wizardProductId: 'p1', wizardSlice: 1 }, global: { plugins: [router] } })
+    await flushPromises()
+    expect(cover.text()).toContain('封面图')
+    expect(cover.text()).not.toContain('商品相册')
+    expect(cover.text()).not.toContain('规格（SKU）')
+    cover.unmount()
+    const look = mount(Products, { props: { embed: true, wizardProductId: 'p1', wizardSlice: 2 }, global: { plugins: [router] } })
+    await flushPromises()
+    expect(look.text()).toContain('名称')
+    expect(look.text()).toContain('商品相册')
+    expect(look.text()).not.toContain('封面图')
+    expect(look.text()).not.toContain('规格（SKU）')
+    expect(look.text()).not.toContain('参数表')
+    look.unmount()
+    const detail = mount(Products, { props: { embed: true, wizardProductId: 'p1', wizardSlice: 3 }, global: { plugins: [router] } })
+    await flushPromises()
+    expect(detail.text()).toContain('规格（SKU）')
+    expect(detail.text()).toContain('一句话简介')
+    expect(detail.text()).not.toContain('封面图')
+    expect(detail.text()).not.toContain('商品相册')
+    detail.unmount()
+  })
+})
+
 describe('Products.vue 上架两步确认（twoStep：doPublish）', () => {
-  it('大白话：筹备中商品第一次点「上架」只武装不调用，第二次点「确认上架？」才恰好调用一次 publishProduct(id)', async () => {
+  it('大白话：筹备中商品第一次点「同步到小程序」只武装不调用，第二次点「确认同步到小程序？」才恰好调用一次 publishProduct(id)', async () => {
     const wrapper = await mountWithRouter()
     await flushPromises()
 
-    const findPublishBtn = () => wrapper.findAll('.ld-tr button').find((b) => b.text() === '上架' || b.text() === '确认上架？')
+    const findPublishBtn = () => wrapper.findAll('.ld-tr button').find((b) => b.text() === '同步到小程序' || b.text() === '确认同步到小程序？')
     const btn = findPublishBtn()
     expect(btn).toBeTruthy()
-    expect(btn!.text()).toBe('上架')
+    expect(btn!.text()).toBe('同步到小程序')
 
     await btn!.trigger('click')
     await flushPromises()
     expect(publishProductMock).not.toHaveBeenCalled()
-    expect(findPublishBtn()!.text()).toBe('确认上架？')
+    expect(findPublishBtn()!.text()).toBe('确认同步到小程序？')
 
     await findPublishBtn()!.trigger('click')
     await flushPromises()
@@ -95,6 +124,16 @@ describe('Products.vue 操作列收敛（主操作 + ⋯更多菜单）：菜单
     await flushPromises()
     expect(deleteDraftMock).toHaveBeenCalledTimes(1)
     expect(deleteDraftMock).toHaveBeenCalledWith('p1')
+  })
+
+  it('大白话：继续上新在操作列看得见，不必先点⋯；⋯里不再藏「上新向导」', async () => {
+    const wrapper = await mountWithRouter()
+    await flushPromises()
+    expect(wrapper.findAll('button').some((b) => b.text() === '继续上新')).toBe(true)
+    const moreBtn = wrapper.findAll('.ld-tr button').find((b) => b.attributes('title') === '更多操作')
+    await moreBtn!.trigger('click')
+    await flushPromises()
+    expect(wrapper.findAll('.more-menu button').some((b) => b.text() === '上新向导')).toBe(false)
   })
 })
 

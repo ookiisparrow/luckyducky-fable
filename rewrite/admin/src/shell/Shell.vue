@@ -18,12 +18,11 @@ import {
   ChevronRight,
   Pencil,
   LogOut,
+  Plus,
   Image,
   FileText,
-  Tags,
   Clapperboard,
-  QrCode,
-  Printer,
+  CreditCard,
 } from 'lucide-vue-next'
 import { client } from '../api'
 import { isWizardPath, WIZARD_STEPS, wizardStepFromQuery, currentNavGroup } from '../lib/nav'
@@ -38,14 +37,21 @@ const NAV: Array<{ group: string; icon: Component; solo?: boolean; items: Array<
     group: '商品与上新',
     icon: Tag,
     items: [
-      { label: '商品管理', path: '/products' },
-      { label: '课程管理', path: '/courses' },
-      { label: '卡片设计', path: '/cards' },
+      { label: '产品管理', path: '/products' },
+      { label: '上新', path: '/launch' },
+    ],
+  },
+  {
+    group: '店面内容',
+    icon: Image,
+    items: [
       { label: '小程序橱窗', path: '/showcase' },
       { label: '评价挑选', path: '/reviews' },
       { label: '商品券', path: '/coupons' },
       { label: '页面内容', path: '/page-content' },
       { label: '帮助视频', path: '/help-videos' },
+      { label: '课程运维', path: '/courses' },
+      { label: '卡片运维', path: '/cards' },
     ],
   },
   {
@@ -105,8 +111,15 @@ const NAV: Array<{ group: string; icon: Component; solo?: boolean; items: Array<
 const route = useRoute()
 // 上下文侧栏（决策§27②）：进上新向导路由切「按步直达」聚焦步导航，否则六组运营 nav
 const wizardMode = computed(() => isWizardPath(route.path))
-const curStep = computed(() => wizardStepFromQuery(route.query.step))
-const STEP_ICONS: Record<string, Component> = { image: Image, 'file-text': FileText, tags: Tags, clapperboard: Clapperboard, 'qr-code': QrCode, printer: Printer }
+const wizardId = computed(() => String(route.params.id || ''))
+const curStep = computed(() => (wizardId.value ? wizardStepFromQuery(route.query.step) : 1))
+const STEP_ICONS: Record<string, Component> = {
+  plus: Plus,
+  image: Image,
+  'file-text': FileText,
+  clapperboard: Clapperboard,
+  'credit-card': CreditCard,
+}
 
 // 分组默认收起（照设计·chevron-right）；当前路由所在组自动展开；用户手动展开记 localStorage
 const EXPAND_KEY = 'ldrw-admin-nav-expanded'
@@ -153,15 +166,15 @@ function logout() {
       <nav v-if="wizardMode" class="nav">
         <router-link to="/products" class="wiz-head">
           <Tag class="item-icon" :size="17" :stroke-width="1.8" />
-          <span>商品与上新</span>
+          <span>回产品管理</span>
         </router-link>
         <div class="nav-cap"><span>按步骤直达</span></div>
         <router-link
           v-for="s in WIZARD_STEPS"
           :key="s.n"
-          :to="{ path: route.path, query: { ...route.query, step: s.n } }"
+          :to="wizardId || s.n === 1 ? { path: route.path, query: { ...route.query, step: s.n } } : '/launch'"
           class="item wiz-step"
-          :class="{ 'wiz-on': curStep === s.n }"
+          :class="{ 'wiz-on': curStep === s.n, 'wiz-off': !wizardId && s.n > 1 }"
         >
           <component :is="STEP_ICONS[s.icon]" class="item-icon" :size="17" :stroke-width="1.8" />
           <span>{{ s.n }} · {{ s.label }}</span>
@@ -403,8 +416,11 @@ aside {
 .wiz-head .item-icon {
   color: var(--ld-brand);
 }
-.wiz-step.wiz-on {
-  background: var(--ld-bg-lilac);
+.wiz-step.wiz-off {
+  opacity: 0.4;
+  pointer-events: none;
+}
+.wiz-step.wiz-on {  background: var(--ld-bg-lilac);
   border-color: var(--ld-purple-line);
   color: var(--ld-purple-ink);
   font-weight: 600;
