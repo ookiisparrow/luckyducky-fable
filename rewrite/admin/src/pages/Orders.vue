@@ -13,7 +13,7 @@ import PageHeader from '../components/ui/PageHeader.vue'
 import Card from '../components/ui/Card.vue'
 import Badge from '../components/ui/Badge.vue'
 import EmptyState from '../components/ui/EmptyState.vue'
-import { mapOrderRows, type OrderRowVM } from '../lib/mapMoney'
+import { mapOrderRows, orderErrorText, type OrderRowVM } from '../lib/mapMoney'
 import { dateTime } from '../lib/format'
 import { COMPANIES } from '../lib/fulfill'
 
@@ -40,7 +40,7 @@ const clearConfirmId = ref('')
 
 // 发货/查看抽屉：mode ship=填单发货（paid 首发 / shipped 改单号）· view=只读查看（done 等）
 type Acts = Record<string, { activated?: boolean; entered?: boolean } | undefined>
-const drawer = ref<{ row: OrderRowVM; mode: 'ship' | 'view'; company: string; trackingNo: string; acts: Acts | null } | null>(null)
+const drawer = ref<{ row: OrderRowVM; mode: 'ship' | 'view'; company: string; trackingNo: string; acts: Acts | null; error?: string } | null>(null)
 
 // 列表页脚分母＝当前标签计数（换皮恒用 counts.all·在「待发货」栏也显全量总数·误导以为本栏还有一堆没翻）
 const tabTotal = computed(() => counts.value[tab.value || 'all'])
@@ -68,9 +68,13 @@ async function reload() {
   rows.value = r.ok ? mapOrderRows((r as any).list) : []
   cursor.value = r.ok ? (r as any).nextCursor : null
   hasMore.value = !!(r.ok && (r as any).hasMore)
+  if (selectedIds.value.length) {
+    const vis = new Set(rows.value.map((x) => x.id))
+    selectedIds.value = selectedIds.value.filter((id) => vis.has(id))
+  }
   if (c.ok && (c as any).counts) counts.value = (c as any).counts as Record<string, number>
   countsPartial.value = c.ok ? !!(c as any).partial : true // 计数请求本身失败也按不可信处理（不误显陈旧/占位数字）
-  message.value = r.ok ? '' : '加载失败：' + String(r.error || '')
+  message.value = r.ok ? '' : '加载失败：' + orderErrorText(r.error)
 }
 
 async function more() {
@@ -153,9 +157,10 @@ async function doShip() {
   const d = drawer.value
   if (!d || busy.value) return
   if (!d.company.trim() || !d.trackingNo.trim()) {
-    message.value = '快递公司和运单号都要填'
+    d.error = '快递公司和运单号都要填'
     return
   }
+  d.error = ''
   busy.value = true
   const r = await shipOrder(d.row.id, d.company.trim(), d.trackingNo.trim())
   busy.value = false
@@ -164,7 +169,7 @@ async function doShip() {
     message.value = ''
     void reload()
   } else {
-    message.value = `发货没成功（${String(r.error || '')}）` // 错误原文如实显示·不吞
+    d.error = '发货没成功：' + orderErrorText(r.error) // 抽屉内可见·不挡死顶部 message
   }
 }
 
@@ -210,11 +215,11 @@ async function doBatchShip() {
   const res = await shipOrders(items, b.company.trim())
   b.saving = false
   if (!res.ok) {
-    b.rows.forEach((r) => (r.error = String(res.error || '发货失败')))
+    b.rows.forEach((r) => (r.error = res.error ? orderErrorText(res.error) : '发货失败'))
     return
   }
   const byId = Object.fromEntries(((res as any).results || []).map((x: any) => [x.id, x]))
-  b.rows.forEach((r) => (r.error = byId[r.id]?.ok ? '' : String(byId[r.id]?.error || 'NO_RESULT')))
+  b.rows.forEach((r) => (r.error = byId[r.id]?.ok ? '' : orderErrorText(byId[r.id]?.error || 'NO_RESULT')))
   b.rows = b.rows.filter((r) => r.error) // 只留失败的可改运单号重试
   b.done = true
   selectedIds.value = []
@@ -234,7 +239,7 @@ async function doClearMismatch(id: string) {
     message.value = ''
     void reload()
   } else {
-    message.value = '解除失败：' + String(r.error || '') // 失败留原文·不 reload 吞（同 doShip 约定·病根#14）
+    message.value = '解除失败：' + orderErrorText(r.error) // 失败留人话·不 reload 吞（同 doShip 约定·病根#14）
   }
 }
 
@@ -257,7 +262,7 @@ async function doRecordPaidFee(row: OrderRowVM) {
     message.value = ''
     void reload()
   } else {
-    message.value = '补录失败：' + String(r.error || '')
+    message.value = '补录失败：' + orderErrorText(r.error)
   }
 }
 
@@ -476,6 +481,7 @@ onMounted(reload)
               <input v-model="drawer.trackingNo" placeholder="扫描或输入运单号" @keyup.enter="doShip" />
             </div>
           </div>
+          <div v-if="drawer.error" class="drawer-error">{{ drawer.error }}</div>
         </template>
 
         <div class="drawer-foot">
@@ -954,6 +960,11 @@ onMounted(reload)
   color: var(--ld-red);
 }
 /* 抽屉底部（两枚 block UiButton 纵向堆叠） */
+.drawer-error {
+  font-size: 12.5px;
+  color: var(--ld-red);
+  margin-top: -6px;
+}
 .drawer-foot {
   margin-top: auto;
   display: flex;
