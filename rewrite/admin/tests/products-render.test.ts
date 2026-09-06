@@ -130,6 +130,8 @@ describe('Products.vue 操作列收敛（主操作 + ⋯更多菜单）：菜单
     const wrapper = await mountWithRouter()
     await flushPromises()
     expect(wrapper.findAll('button').some((b) => b.text() === '继续上新')).toBe(true)
+    expect(wrapper.text()).toContain('去上新')
+    expect(wrapper.text()).toMatch(/共 \d+ 款商品/)
     const moreBtn = wrapper.findAll('.ld-tr button').find((b) => b.attributes('title') === '更多操作')
     await moreBtn!.trigger('click')
     await flushPromises()

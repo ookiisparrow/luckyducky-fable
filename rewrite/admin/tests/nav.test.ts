@@ -58,7 +58,34 @@ describe('5 步文案/顺序（封面并进第 1 步、卡片上传并进第 5 �
     ])
     expect(WIZARD_STEPS.map((s) => s.n)).toEqual([1, 2, 3, 4, 5])
     expect(WIZARD_STEPS.map((s) => s.icon)).toEqual(['plus', 'image', 'file-text', 'clapperboard', 'credit-card'])
+    expect(WIZARD_STEPS.map((s) => s.hint)).toEqual([
+      '创建草稿并上传封面图',
+      '商品图集与标题文案',
+      '规格、价格与详情页',
+      '上传并发布教学视频',
+      '卡面素材与批次二维码',
+    ])
     expect(WIZARD_STEPS.every((s) => !s.label.includes('设计'))).toBe(true)
+  })
+})
+
+describe('控制台顶栏 + 侧栏步提示（Magic Patterns 打磨·不编同步时间）', () => {
+  it('大白话：顶栏写明「同步到小程序顾客才看得见」；侧栏步下挂 hint；向导进度条有卡托', () => {
+    const here = dirname(fileURLToPath(import.meta.url))
+    const shell = readFileSync(join(here, '../src/shell/Shell.vue'), 'utf8')
+    const wiz = readFileSync(join(here, '../src/pages/Wizard.vue'), 'utf8')
+    expect(shell).toContain('class="topbar"')
+    expect(shell).toContain('Lucky Ducky 运营控制台')
+    expect(shell).toContain('小棉鸭')
+    expect(shell).toContain('同步到小程序')
+    expect(shell).toContain('to="/showcase"')
+    expect(shell).toContain('s.hint')
+    expect(shell).toContain('class="wiz-hint"')
+    expect(shell).not.toMatch(/分钟前同步/) // 禁止 Magic Patterns 假同步时间
+    expect(wiz).toContain('class="rail-card"')
+    expect(wiz).toContain('这五件事互不等同')
+    expect(wiz).toContain('卡片素材')
+    expect(wiz).toContain('二维码批次')
   })
 })
 

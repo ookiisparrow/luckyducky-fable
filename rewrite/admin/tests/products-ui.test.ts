@@ -1,7 +1,7 @@
 // 商品与橱窗映射（守卫 rw-admin-products-ui-golden）：三态口径与云端一致/四道门人话原文兜底/
 // 整档 round-trip 保真/图片尺寸闸提前拦/脏档安全。
 import { describe, it, expect } from 'vitest'
-import { productState, mapDraftRows, publishErrorText, mapShowcaseRows, b64SizeOk, productSteps, basicsMissing, wizardCanPublish, WIZARD_SLICE_FIELDS, freshDraft } from '../src/lib/mapProducts'
+import { productState, mapDraftRows, publishErrorText, mapShowcaseRows, b64SizeOk, productSteps, stepProgressHint, basicsMissing, wizardCanPublish, WIZARD_SLICE_FIELDS, freshDraft } from '../src/lib/mapProducts'
 
 describe('三态口径（与云端 listDrafts listed 表一致）', () => {
   it('大白话：表里 true=在售、false=已下架、不在表=筹备中（未上架）', () => {
@@ -48,6 +48,9 @@ describe('三态口径（与云端 listDrafts listed 表一致）', () => {
     const rows = mapDraftRows([{ id: 'p1', name: '熊', price: 20, cover: 'c', skus: [{ name: 'a' }], courseId: 'course-p1' }], {}, { p1: true }, { hasVideo: { 'course-p1': true }, cardFinal: { p1: true }, hasBatch: { 'course-p1': true } })
     expect(rows[0].doneCount).toBe(5)
     expect(rows[0].steps).toHaveLength(5)
+    expect(stepProgressHint(rows[0].steps)).toBe('上新完成')
+    expect(stepProgressHint(empty)).toBe('第 1 步：新建与封面')
+    expect(stepProgressHint(covered)).toBe('第 2 步：图片与名字')
   })
 })
 

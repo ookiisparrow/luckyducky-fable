@@ -292,14 +292,25 @@ function downloadSvg(kind: 'front' | 'back') {
 
     <div v-else-if="embed && card" class="upload-only">
       <p class="upload-lead">上传印刷用的卡片图。不用在这里改尺寸或文案。</p>
-      <div class="artrow">
-        <div class="artthumb" :style="{ background: card.front.bg }"><img v-if="artUrl" :src="artUrl" alt="" /></div>
-        <div class="artbtns">
-          <UiButton variant="ghost" size="sm" @click="useCover"><ImageIcon :size="14" :stroke-width="1.8" /><span>用商品封面图</span></UiButton>
-          <label class="upload-btn"><input type="file" accept="image/*" hidden @change="pickArt" /><Upload :size="14" :stroke-width="1.8" /><span>{{ busyArt ? '上传中…' : '上传卡片' }}</span></label>
+      <div class="source-grid">
+        <button type="button" class="source-tile" :class="{ on: !!artUrl && artUrl === coverUrl }" @click="useCover">
+          <span class="source-ico"><ImageIcon :size="16" :stroke-width="1.8" /></span>
+          <span class="source-title">用商品封面图</span>
+          <span class="source-desc">直接沿用第 1 步的封面。</span>
+        </button>
+        <label class="source-tile">
+          <span class="source-ico"><Upload :size="16" :stroke-width="1.8" /></span>
+          <span class="source-title">{{ busyArt ? '上传中…' : '上传卡片' }}</span>
+          <span class="source-desc">上传印厂成品卡面。</span>
+          <input type="file" accept="image/*" hidden @change="pickArt" />
+        </label>
+        <div class="source-preview">
+          <p>卡面预览</p>
+          <div class="artthumb" :style="{ background: card.front.bg }"><img v-if="artUrl" :src="artUrl" alt="" /></div>
+          <p v-if="artUrl" class="upload-ok">✓ 卡片图已上传</p>
+          <p v-else class="source-empty">尚未上传卡片文件</p>
         </div>
       </div>
-      <p v-if="artUrl" class="upload-ok">✓ 卡片图已上传</p>
     </div>
 
     <div v-else-if="card" class="work">
@@ -433,6 +444,73 @@ function downloadSvg(kind: 'front' | 'back') {
   margin: 0;
   font-size: 13px;
   color: var(--ld-green);
+}
+.source-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr minmax(180px, 248px);
+  gap: 16px;
+  align-items: stretch;
+}
+@media (max-width: 820px) {
+  .source-grid {
+    grid-template-columns: 1fr;
+  }
+}
+.source-tile {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 16px;
+  border: 1px solid var(--ld-line);
+  border-radius: var(--ld-radius);
+  background: var(--ld-bg);
+  text-align: left;
+  cursor: pointer;
+  font: inherit;
+}
+.source-tile:hover {
+  border-color: var(--ld-line-strong);
+  background: var(--ld-bg-faint);
+}
+.source-tile.on {
+  border-color: var(--ld-purple-line);
+  background: var(--ld-bg-lilac);
+}
+.source-ico {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 9px;
+  background: var(--ld-bg-grey);
+  color: var(--ld-content-2);
+}
+.source-tile.on .source-ico {
+  background: var(--ld-brand);
+  color: #fff;
+}
+.source-title {
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--ld-ink);
+}
+.source-desc {
+  font-size: 12.5px;
+  color: var(--ld-content-2);
+  line-height: 1.4;
+}
+.source-preview p {
+  margin: 0 0 8px;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--ld-content);
+}
+.source-empty {
+  margin-top: 8px;
+  font-size: 12.5px;
+  font-weight: 400;
+  color: var(--ld-content-2);
 }
 
 .work {
