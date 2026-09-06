@@ -320,7 +320,7 @@ onMounted(reload)
           <div class="ld-tbody">
             <div v-for="w in match.wxOnly" :key="w.transactionId" class="ld-tr">
               <div class="ld-td grow mono">{{ w.date }}</div>
-              <div class="ld-td mono" :style="{ width: '220px' }" :title="w.transactionId">{{ w.transactionId }}</div>
+              <div class="ld-td mono id-cell" :style="{ width: '220px' }" :title="w.transactionId">{{ w.transactionId }}</div>
               <div class="ld-td r num danger" :style="{ width: '120px' }">{{ w.amount }}</div>
             </div>
           </div>
@@ -338,7 +338,7 @@ onMounted(reload)
           </div>
           <div class="ld-tbody">
             <div v-for="mm in match.amountMismatch" :key="mm.id" class="ld-tr">
-              <div class="ld-td grow mono" :title="mm.id">{{ mm.id }}</div>
+              <div class="ld-td grow mono id-cell" :title="mm.id">{{ mm.id }}</div>
               <div class="ld-td r num" :style="{ width: '130px' }">{{ mm.ours }}</div>
               <div class="ld-td r num amber" :style="{ width: '130px' }">{{ mm.wx }}</div>
             </div>
@@ -356,7 +356,7 @@ onMounted(reload)
           </div>
           <div class="ld-tbody">
             <div v-for="o in match.oursOnly" :key="o.id" class="ld-tr">
-              <div class="ld-td grow mono" :title="o.id">{{ o.id }}</div>
+              <div class="ld-td grow mono id-cell" :title="o.id">{{ o.id }}</div>
               <div class="ld-td r num" :style="{ width: '130px' }">{{ o.amount }}</div>
             </div>
           </div>
@@ -493,6 +493,10 @@ onMounted(reload)
 .table-scroll .ld-tr {
   min-width: 560px;
 }
+.table-scroll .ld-th,
+.table-scroll .ld-td {
+  white-space: nowrap;
+}
 .ld-th.r,
 .ld-td.r {
   justify-content: flex-end;
@@ -501,7 +505,10 @@ onMounted(reload)
 .ld-td.mono {
   font-family: var(--ld-font-mono);
   font-size: 12.5px;
+}
+.ld-td.id-cell {
   overflow-wrap: anywhere;
+  white-space: normal;
 }
 .ld-td.num {
   font-variant-numeric: tabular-nums;
