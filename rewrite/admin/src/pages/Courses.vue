@@ -2,7 +2,7 @@
 // 课程管理（design/console.pen S2 课程编排视觉·M3 UI 批10）：章→课时→段 树编辑 + 每段视频直传 + 发布
 // （引用模型·老学员自动生效；孤儿视频云端 GC）。逻辑批10 未动，仅套设计语言（页头/视频进度条/章节卡/段上传 chip）。
 import { ref, computed, onMounted, onBeforeUnmount, watch, nextTick } from 'vue'
-import { useRoute, onBeforeRouteLeave } from 'vue-router'
+import { useRoute, useRouter, onBeforeRouteLeave } from 'vue-router'
 import { RotateCcw, Plus, Trash2, Upload, Check, BookOpen } from 'lucide-vue-next'
 import { getCourseDraft, saveCourseDraft, publishCourse, uploadVideo, syncVodMedia } from '../api/content'
 import { listDrafts } from '../api/products'
@@ -21,8 +21,15 @@ import UiButton from '../components/ui/Button.vue'
 // 嵌入模式（上新向导步 4 复用·向后兼容·独立 /courses?courseId 用法不传 props 行为不变）：
 // embed=true 隐页头/手输课程号工具条·wizardCourseId 覆盖 route.query.courseId。
 const props = defineProps<{ embed?: boolean; wizardCourseId?: string }>()
+const emit = defineEmits<{ saved: [] }>()
 const route = useRoute()
+const router = useRouter()
 const courseId = ref(props.wizardCourseId || String(route.query.courseId || ''))
+function backToLaunch() {
+  const cid = courseId.value
+  const pid = cid.startsWith('course-') ? cid.slice('course-'.length) : ''
+  void router.push(pid ? { path: `/products/${pid}/wizard`, query: { step: '4' } } : '/launch')
+}
 const course = ref<Record<string, any> | null>(null)
 const fromPublished = ref(false)
 const message = ref('')
@@ -41,7 +48,9 @@ async function loadCourseOptions() {
   // 此时本就无可武装对象，复位是幂等的安全动作
   confirmKey.value = ''
   publishConfirm.value = false
+  message.value = '加载中…'
   const dr = await listDrafts().catch(() => null)
+  message.value = ''
   if (!(dr as any)?.ok) return
   const seen = new Map<string, string>()
   for (const p of (((dr as any).list as Record<string, any>[]) || [])) {
@@ -200,6 +209,7 @@ const flushSave = serialSave(async () => {
   if (r.ok) {
     draftRev.value = Number(r.rev) || draftRev.value + 1
     saveState.value = 'saved'
+    emit('saved')
   } else if (r.error === 'DRAFT_CONFLICT') {
     // 别处（另一页签/窗口/管理员）已保存过更新版本：本次拒写防互相覆盖，停自动保存等人工「载入」拿最新
     conflicted.value = true
@@ -415,8 +425,10 @@ onMounted(() => {
     <PageHeader
       v-if="!embed"
       title="课程编排"
-      sub="一门课 = 章 → 课时 → 段；每段挂一条视频。保存＝存草稿（学员不可见），发布＝老学员立即看到新版。"
-    />
+      sub="一门课 = 章 → 课时 → 段；每段挂一条视频。保存课程草稿（学员不可见）≠ 发布课程（学员立刻看到）。"
+    >
+      <UiButton variant="ghost" size="sm" @click="backToLaunch">返回上新</UiButton>
+    </PageHeader>
 
     <!-- courseId 载入条（embed 隐·向导用 wizardCourseId 直接带入） -->
     <div v-if="!embed" class="ld-toolbar">
@@ -442,7 +454,7 @@ onMounted(() => {
             <span v-if="saveState" class="autosave ld-autosave" :class="saveState">{{ saveState === 'saving' ? '自动保存中…' : saveState === 'saved' ? '已自动存草稿' : '自动保存失败·点保存重试' }}</span>
             <UiButton v-if="vodPendingCount" variant="ghost" size="sm" :disabled="busy || batchUploading" @click="syncVod">同步转码状态（{{ vodPendingCount }} 段转码中）</UiButton>
             <UiButton variant="ghost" size="sm" :disabled="busy" @click="save">保存草稿</UiButton>
-            <UiButton size="sm" :disabled="busy" @click="publish">{{ publishConfirm ? '确认发布？老学员立即生效' : '发布上线' }}</UiButton>
+            <UiButton size="sm" :disabled="busy" @click="publish">{{ publishConfirm ? '确认发布课程？学员立刻看到' : '发布课程' }}</UiButton>
           </div>
         </div>
         <p v-if="fromPublished" class="from-pub">当前显示已发布版（尚无草稿·保存即建草稿）</p>

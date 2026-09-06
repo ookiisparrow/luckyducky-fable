@@ -4,7 +4,7 @@
 // 诚实边界：后端 listBatches 需 courseId（无「列全量批次」action）——按课程范围查（非跨课「全部」）；
 // listBatchCodes 只回码串无每码激活态——码表不标单码已激活/未用（记待办）。印刷包 ZIP 已还原（卡面SVG+地址CSV+说明·二轮批Cards-2）。
 import { ref, computed, onMounted, watch } from 'vue'
-import { useRoute } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import QRCode from 'qrcode'
 import JSZip from 'jszip'
 import { Layers, QrCode, CircleCheck, TrendingUp, X, Download, Package } from 'lucide-vue-next'
@@ -20,11 +20,18 @@ import KpiCard from '../components/ui/KpiCard.vue'
 import Badge from '../components/ui/Badge.vue'
 import EmptyState from '../components/ui/EmptyState.vue'
 
-// 嵌入模式（上新向导步 6 复用·向后兼容）+ 修独立深链 bug：换皮把 courseId 写死空 ref、不读 route.query，
+// 嵌入模式（上新向导第 5 步复用）+ 修独立深链 bug：换皮把 courseId 写死空 ref、不读 route.query，
 // 致商品页「码批次」深链(/batches?courseId=)落地要手输课程号；改读 props(向导)||route.query(深链)||空。
 const props = defineProps<{ embed?: boolean; wizardCourseId?: string }>()
+const emit = defineEmits<{ saved: [] }>()
 const route = useRoute()
+const router = useRouter()
 const courseId = ref(props.wizardCourseId || String(route.query.courseId || ''))
+function backToLaunch() {
+  const cid = courseId.value
+  const pid = cid.startsWith('course-') ? cid.slice('course-'.length) : ''
+  void router.push(pid ? { path: `/products/${pid}/wizard`, query: { step: '5' } } : '/launch')
+}
 const loadedCourse = ref('')
 const rows = ref<BatchRow[]>([])
 const message = ref('')
@@ -142,6 +149,7 @@ async function doCreate() {
     loadedCourse.value === target
       ? `已生成批次 ${batchId}（${codeN} 张码）`
       : `已生成批次 ${batchId}（${codeN} 张码），但列表刷新失败，请点「载入课程」重试`
+  emit('saved')
 }
 
 const codesGen = useLatest() // 码表乱序守卫（P1·A 的码别配到 B 的批次头·防印错卡·根因#8）
@@ -249,7 +257,7 @@ async function downloadPack() {
         `批次 ${detail.value.batchId}\n课程 ${loadedCourse.value}\n数量 ${detail.value.total} 张\n卡面尺寸 ${card.sizeMM.w}×${card.sizeMM.h} mm（双面同尺寸）\n\n给印刷厂：卡面正反两张矢量 SVG；反面二维码区为占位框，按「二维码地址.csv」一码一图（每张卡一个唯一二维码，扫码即落地激活页）。`
       )
     } else {
-      zip.file('说明.txt', `批次 ${detail.value.batchId}\n课程 ${loadedCourse.value}\n数量 ${detail.value.total} 张\n\n注意：该产品还没有卡面设计（去「卡片设计」定稿后重新打包），本包仅含二维码地址清单。`)
+      zip.file('说明.txt', `批次 ${detail.value.batchId}\n课程 ${loadedCourse.value}\n数量 ${detail.value.total} 张\n\n注意：该产品还没有上传卡片（去上新第 5 步上传后重新打包），本包仅含二维码地址清单。`)
     }
     const blob = await zip.generateAsync({ type: 'blob' })
     const url = URL.createObjectURL(blob)
@@ -296,6 +304,7 @@ async function exportCsv() {
       title="二维码批次"
       sub="按一次生成分成一批；打开一批翻页看码，不会一次铺开整批"
     >
+      <UiButton variant="ghost" size="sm" @click="backToLaunch">返回上新</UiButton>
       <UiButton :disabled="!loadedCourse" @click="creating = !creating">＋ 生成新批次</UiButton>
     </PageHeader>
     <div v-else class="embed-head">
@@ -330,7 +339,8 @@ async function exportCsv() {
           <UiButton variant="ghost" size="sm" @click="load">载入课程</UiButton>
         </div>
       </div>
-      <p class="note">后端按课程查批次（一码一地址）；先输入课程编号载入，统计卡与筛选为该课程范围。</p>
+      <p v-if="!embed" class="note">后端按课程查批次（一码一地址）；先输入课程编号载入，统计卡与筛选为该课程范围。</p>
+      <p v-else class="note">本步管理这门课的二维码批次（课程已绑定，不用再输编号）。</p>
     </div>
 
     <p v-if="message" class="ld-status">{{ message }}</p>
@@ -372,7 +382,7 @@ async function exportCsv() {
       </div>
     </Card>
     <Card v-else-if="!message && loadedCourse"><EmptyState :icon="Layers" text="没有符合筛选的批次" /></Card>
-    <Card v-else-if="!loadedCourse"><EmptyState :icon="QrCode" text="输入课程编号（course-xxx）载入其激活码批次" /></Card>
+    <Card v-else-if="!loadedCourse"><EmptyState :icon="QrCode" :text="embed ? '课程还没绑上，先完成前面步骤' : '输入课程编号（course-xxx）载入其激活码批次'" /></Card>
 
     <div v-if="detail" class="drawer-mask" @click.self="closeDetail">
       <aside class="drawer">
@@ -424,7 +434,7 @@ async function exportCsv() {
 </template>
 
 <style scoped>
-/* 嵌入模式页头（向导步 6·换课程 chip·右侧仍留生成钮·独立路由走 PageHeader） */
+/* 嵌入模式页头（向导第 5 步·换课程 chip·右侧仍留生成钮·独立路由走 PageHeader） */
 .embed-head {
   display: flex;
   align-items: center;

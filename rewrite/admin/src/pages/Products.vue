@@ -1,11 +1,11 @@
 <script setup lang="ts">
 // 商品管理（design/console.pen S11 视觉·M3 UI 批3）：页头+流水线副标+筛选 chip（真计数）+ 搜索（按名）
-// + 三态表格（关联课程/规格·图列 + 6 步上新进度圆点）+ 编辑器（整档 round-trip·图片压缩·危操作两步确认）。
-// 「6 步上新进度」换皮误判「无源」——实则 cards/courses/qrcodes 后端 listDrafts bounded join 派生（视频/卡片/批次态·二轮批Cards-3 还原）。
+// + 三态表格（关联课程/规格·图列 + 5 步上新进度圆点）+ 编辑器（整档 round-trip·图片压缩·危操作两步确认）。
+// 「5 步上新进度」——cards/courses/qrcodes 后端 listDrafts bounded join 派生（视频/卡片/批次态）。
 import { ref, computed, onMounted, onBeforeUnmount, watch, nextTick } from 'vue'
-import { Search, Trash2, Package, MoreHorizontal } from 'lucide-vue-next'
+import { Search, Trash2, Package, MoreHorizontal, Plus } from 'lucide-vue-next'
 import { listDrafts, saveDraft, deleteDraft, uploadImage, publishProduct, unpublishProduct, republishProduct } from '../api/products'
-import { mapDraftRows, publishErrorText, b64SizeOk, basicsMissing, type DraftRowVM } from '../lib/mapProducts'
+import { mapDraftRows, publishErrorText, b64SizeOk, basicsMissing, stepProgressHint, productsListSub, type DraftRowVM } from '../lib/mapProducts'
 import { serialSave } from '../lib/serialSave'
 import { useRouter } from 'vue-router'
 import UiButton from '../components/ui/Button.vue'
@@ -18,7 +18,10 @@ const KIT_ICONS = ['circle', 'pen-tool', 'cloud', 'eye', 'book-open', 'sparkles-
 
 // 嵌入模式（上新向导步 1-3 复用本编辑器·向后兼容·独立 /products 路由用法不传 props 行为不变）：
 // embed=true 隐列表壳只留编辑器·wizardProductId 指定要编辑的商品档（向导载入后自动打开）。
-const props = defineProps<{ embed?: boolean; wizardProductId?: string }>()
+const props = defineProps<{ embed?: boolean; wizardProductId?: string; wizardSlice?: 1 | 2 | 3 }>()
+const showCover = computed(() => !props.embed || props.wizardSlice === 1)
+const showLook = computed(() => !props.embed || props.wizardSlice === 2)
+const showDetail = computed(() => !props.embed || props.wizardSlice === 3)
 // 编辑器持久化成功即通知父级（上新向导嵌本编辑器·步1-3）——让 Wizard 顶部「上架闸/进度圆点/缺项徽章」随
 // 内嵌编辑器 autosave 重算真值（P2·否则补齐必备项后向导头仍锁死、与编辑器自身预检自相矛盾·根因#8）。
 const emit = defineEmits<{ saved: [] }>()
@@ -94,6 +97,8 @@ const FILTERS = [
   { key: 'preparing', label: '筹备中' },
   { key: 'unlisted', label: '已下架' },
 ] as const
+const listReady = ref(false) // 首包回来之前不谎报「还没有商品」（polish 把空态收进表卡后首屏会闪）
+const listSub = computed(() => (listReady.value ? productsListSub(counts.value.all, counts.value.preparing) : ''))
 const shown = computed(() => {
   const q = search.value.trim().toLowerCase()
   return rows.value.filter(
@@ -123,8 +128,9 @@ async function reload() {
   urlMapAt = Date.now()
   rows.value = r.ok ? mapDraftRows(r.list, r.urls, r.listed, stepExtras(r)) : []
   message.value = r.ok ? '' : '加载失败：' + String(r.error || '')
+  listReady.value = true
 }
-// listDrafts 派生的 6 步分步态（后端 join·换皮误判「无源」）
+// listDrafts 派生的 5 步分步态（后端 join）
 const stepExtras = (r: any) => ({ hasVideo: r.hasVideo || {}, cardFinal: r.cardFinal || {}, hasBatch: r.hasBatch || {} })
 // 静默刷新列表（不闪「加载中」·不打断正在编辑的编辑器）
 async function silentRefresh() {
@@ -207,13 +213,6 @@ onBeforeUnmount(() => {
     void flushSave()
   }
 })
-
-function newProduct() {
-  openEditGen++ // 使任何仍在等 silentRefresh 回包的 openEdit 调用作废——不得晚落地覆盖这次新建（同上代际守卫）
-  edit.value = { id: 'p' + Date.now().toString(36), name: '', tag: '', brief: '', price: '', was: '', sold: 0, cover: '', images: [], skus: [], params: [], detailSections: [], kit: [], courseId: '' }
-  coverPreview.value = ''
-  markLoaded()
-}
 
 // urlMap 超龄（≥90 分钟未刷新）先静默刷一次再开编辑器（P3·bug sweep Round2 item10）：只在这一个入口挂钩子，
 // 列表渲染路径（模板求值）不挂副作用、也不做定时轮询（防过度工程）。row 可能是刷新前的旧快照，刷新后按 id 重找。
@@ -465,6 +464,9 @@ const kitItems = computed(() => (edit.value?.kit ?? []) as KitItem[])
 // 上架前缺项预检（1:1 旧 Wizard missing·换皮退成事后报错）：封面/名称/价格/有效规格四项必备。
 // basicsMissing 单源（向导上架闸与本页预检同口径·守卫 rw-admin-products-ui-golden）。
 const missing = computed(() => (edit.value ? basicsMissing(edit.value) : []))
+const coverMissing = computed(() => missing.value.filter((x) => x === '封面图'))
+const lookMissing = computed(() => missing.value.filter((x) => x === '商品名称'))
+const detailMissing = computed(() => missing.value.filter((x) => x === '价格' || x === '至少一个有效规格'))
 
 onMounted(async () => {
   await reload()
@@ -481,165 +483,200 @@ onMounted(async () => {
     <!-- 页头（独立态显·embed 隐·右操作＝新建商品） -->
     <PageHeader
       v-if="!embed"
-      title="商品与上新"
-      sub="一款商品一条流水线：产品图片 → 商品信息 → SKU → 教学视频 → 二维码卡片 → 码批次"
+      title="产品管理"
+      :sub="listSub"
     >
-      <UiButton @click="newProduct">＋ 新建商品</UiButton>
+      <UiButton size="lg" @click="router.push('/launch')">
+        <Plus :size="15" :stroke-width="2" />
+        去上新
+      </UiButton>
     </PageHeader>
-
-    <!-- 工具条：筛选 chip（真计数）+ 搜索（独立态显·embed 隐） -->
-    <div v-if="!embed" class="ld-toolbar">
-      <button v-for="f in FILTERS" :key="f.key" class="ld-chip" :class="{ on: filter === f.key }" @click="filter = f.key">
-        {{ f.label }}<span class="chip-n">{{ counts[f.key] }}</span>
-      </button>
-      <div class="ld-search prod-search">
-        <Search :size="15" :stroke-width="1.8" />
-        <input v-model="search" placeholder="搜索商品名 / 编号" />
-      </div>
-    </div>
 
     <p v-if="message" class="ld-status">{{ message }}</p>
 
-    <!-- 商品表卡（S11 表格语言·独立态显·embed 隐） -->
-    <Card v-if="shown.length && !embed" flush>
-      <div class="ld-thead">
-        <div class="ld-th grow">商品</div>
-        <div class="ld-th" :style="{ width: '130px' }">关联课程</div>
-        <div class="ld-th" :style="{ width: '80px' }">价格</div>
-        <div class="ld-th" :style="{ width: '108px' }">规格 / 图</div>
-        <div class="ld-th" :style="{ width: '150px' }">上新进度</div>
-        <div class="ld-th" :style="{ width: '92px' }">状态</div>
-        <div class="ld-th" :style="{ width: '190px' }">操作</div>
+    <!-- 商品表卡：筛选+搜索贴在表头（独立态显·embed 隐） -->
+    <Card v-if="!embed" flush>
+      <div class="table-tools">
+        <div class="ld-toolbar">
+          <button v-for="f in FILTERS" :key="f.key" class="ld-chip" :class="{ on: filter === f.key }" @click="filter = f.key">
+            {{ f.label }}<span class="chip-n">{{ counts[f.key] }}</span>
+          </button>
+        </div>
+        <div class="ld-search prod-search">
+          <Search :size="15" :stroke-width="1.8" />
+          <input v-model="search" placeholder="搜索商品名 / 编号" />
+        </div>
       </div>
-      <div class="ld-tbody">
-        <div v-for="row in shown" :key="row.id" class="ld-tr">
-          <div class="ld-td grow prod">
-            <img v-if="row.coverUrl" :src="row.coverUrl" class="thumb" />
-            <span v-else class="thumb empty">无图</span>
-            <div class="prod-text">
-              <div class="prod-name">{{ row.name }}</div>
-              <div class="pid">{{ row.id }}</div>
+      <template v-if="shown.length">
+        <div class="table-scroll">
+        <div class="ld-thead">
+          <div class="ld-th grow">商品</div>
+          <div class="ld-th" :style="{ width: '130px' }">关联课程</div>
+          <div class="ld-th" :style="{ width: '80px' }">价格</div>
+          <div class="ld-th" :style="{ width: '108px' }">规格 / 图</div>
+          <div class="ld-th" :style="{ width: '196px' }">上新进度</div>
+          <div class="ld-th" :style="{ width: '92px' }">状态</div>
+          <div class="ld-th" :style="{ width: '240px' }">操作</div>
+        </div>
+        <div class="ld-tbody">
+          <div v-for="row in shown" :key="row.id" class="ld-tr">
+            <div class="ld-td grow prod">
+              <img v-if="row.coverUrl" :src="row.coverUrl" class="thumb" />
+              <span v-else class="thumb empty">无图</span>
+              <div class="prod-text">
+                <div class="prod-name">{{ row.name }}</div>
+                <div class="pid">{{ row.id }}</div>
+              </div>
             </div>
-          </div>
-          <div class="ld-td course" :style="{ width: '130px' }">{{ courseOf(row) || '未关联' }}</div>
-          <div class="ld-td price" :style="{ width: '80px' }">{{ row.priceLabel }}</div>
-          <div class="ld-td spec" :style="{ width: '108px' }">{{ row.skuCount }} 规格 · {{ imgCount(row) }} 图</div>
-          <!-- 6 步上新进度圆点（真值 productSteps·后端 listDrafts 派生视频/卡片/批次态·根因#7 bounded join）·点击进上新向导落到第一个未完成步 -->
-          <div class="ld-td" :style="{ width: '150px' }">
-            <div
-              class="steps-cell"
-              :title="row.steps.map((s) => (s.done ? '✓' : '○') + ' ' + s.label).join(' · ') + ' · 点击进上新向导'"
-              @click="router.push('/products/' + row.id + '/wizard?step=' + firstTodoStep(row))"
-            >
-              <span v-for="s in row.steps" :key="s.key" class="dot" :class="{ on: s.done }"></span>
-              <span class="done-n">{{ row.doneCount }}/6</span>
+            <div class="ld-td course" :style="{ width: '130px' }">{{ courseOf(row) || '未关联' }}</div>
+            <div class="ld-td price" :style="{ width: '80px' }">{{ row.priceLabel }}</div>
+            <div class="ld-td spec" :style="{ width: '108px' }">{{ row.skuCount }} 规格 · {{ imgCount(row) }} 图</div>
+            <!-- 5 步上新进度条（真值 productSteps·后端 listDrafts 派生）·点击进向导落到第一个未完成步 -->
+            <div class="ld-td" :style="{ width: '196px' }">
+              <div
+                class="steps-cell"
+                :title="row.steps.map((s) => (s.done ? '✓' : '○') + ' ' + s.label).join(' · ') + ' · 点击继续上新'"
+                @click="router.push('/products/' + row.id + '/wizard?step=' + firstTodoStep(row))"
+              >
+                <span class="step-bars" :aria-label="'已完成 ' + row.doneCount + ' / 5 步'">
+                  <span v-for="s in row.steps" :key="s.key" class="bar" :class="{ on: s.done }"></span>
+                </span>
+                <span class="done-n">{{ stepProgressHint(row.steps) }}</span>
+              </div>
             </div>
-          </div>
-          <div class="ld-td" :style="{ width: '92px' }">
-            <Badge :tone="row.state === 'onsale' ? 'green' : row.state === 'unlisted' ? 'red' : 'brand'">{{ row.stateLabel }}</Badge>
-          </div>
-          <div class="ld-td ops" :style="{ width: '190px' }">
-            <UiButton variant="ghost" size="sm" @click="openEdit(row)">编辑</UiButton>
-            <UiButton v-if="row.state === 'preparing'" variant="primary" size="sm" @click="doPublish(row.id)">{{ confirmKey === 'pub:' + row.id ? '确认上架？' : '上架' }}</UiButton>
-            <UiButton v-if="row.state === 'onsale'" variant="danger" size="sm" @click="doUnpublish(row.id)">{{ confirmKey === 'off:' + row.id ? '确认下架？' : '下架' }}</UiButton>
-            <UiButton v-if="row.state === 'unlisted'" variant="primary" size="sm" @click="doRepublish(row.id)">{{ confirmKey === 're:' + row.id ? '确认恢复销售？' : '恢复销售' }}</UiButton>
-            <button class="icon-btn ld-icon-btn" title="更多操作" @click="toggleMore(row.id, $event)">
-              <MoreHorizontal :size="15" :stroke-width="1.8" />
-            </button>
-            <div v-if="moreKey === row.id" class="more-backdrop" @mousedown="closeMore()"></div>
-            <div v-if="moreKey === row.id" class="more-menu" :style="{ top: morePos.top + 'px', right: morePos.right + 'px' }">
-              <button class="menu-item" title="6 步上新向导：图片→信息→SKU→视频→卡片→批次" @click="closeMore(); router.push('/products/' + row.id + '/wizard')">上新向导</button>
-              <button class="menu-item" @click="closeMore(); editCourse(row)">编辑课程</button>
-              <button class="menu-item" @click="closeMore(); router.push({ path: '/cards', query: { productId: row.id } })">卡片设计</button>
-              <button v-if="row.state === 'onsale'" class="menu-item" @click="doPublish(row.id)">{{ confirmKey === 'pub:' + row.id ? '确认重上？' : '重新上架' }}</button>
-              <button class="menu-item danger" @click="doDelete(row.id)">{{ confirmKey === 'del:' + row.id ? '连已上架一起删？' : '删除' }}</button>
+            <div class="ld-td" :style="{ width: '92px' }">
+              <Badge :tone="row.state === 'onsale' ? 'green' : row.state === 'unlisted' ? 'red' : 'amber'" dot>{{ row.stateLabel }}</Badge>
+            </div>
+            <div class="ld-td ops" :style="{ width: '240px' }">
+              <UiButton v-if="row.doneCount < 5" class="cta-continue" variant="ghost" size="sm" @click="router.push('/products/' + row.id + '/wizard?step=' + firstTodoStep(row))">继续上新</UiButton>
+              <UiButton variant="ghost" size="sm" @click="openEdit(row)">编辑</UiButton>
+              <UiButton v-if="row.state === 'preparing' || row.state === 'onsale'" variant="primary" size="sm" @click="doPublish(row.id)">{{ confirmKey === 'pub:' + row.id ? '确认同步到小程序？' : '同步到小程序' }}</UiButton>
+              <UiButton v-if="row.state === 'unlisted'" variant="primary" size="sm" @click="doRepublish(row.id)">{{ confirmKey === 're:' + row.id ? '确认同步到小程序？' : '同步到小程序' }}</UiButton>
+              <UiButton v-if="row.state === 'onsale'" variant="danger" size="sm" @click="doUnpublish(row.id)">{{ confirmKey === 'off:' + row.id ? '确认从橱窗拿下？' : '从橱窗拿下' }}</UiButton>
+              <button class="icon-btn ld-icon-btn" title="更多操作" @click="toggleMore(row.id, $event)">
+                <MoreHorizontal :size="15" :stroke-width="1.8" />
+              </button>
+              <div v-if="moreKey === row.id" class="more-backdrop" @mousedown="closeMore()"></div>
+              <div v-if="moreKey === row.id" class="more-menu" :style="{ top: morePos.top + 'px', right: morePos.right + 'px' }">
+                <button class="menu-item" @click="closeMore(); editCourse(row)">课程运维</button>
+                <button class="menu-item" @click="closeMore(); router.push({ path: '/cards', query: { productId: row.id } })">卡片运维</button>
+                <button class="menu-item danger" @click="doDelete(row.id)">{{ confirmKey === 'del:' + row.id ? '连已上架一起删？' : '删除' }}</button>
+              </div>
             </div>
           </div>
         </div>
-      </div>
-      <div class="tfoot">共 {{ counts.all }} 款商品<span v-if="filter !== 'all' || search">（当前筛选 {{ shown.length }}）</span></div>
+        </div>
+        <div class="tfoot">共 {{ counts.all }} 款商品<span v-if="filter !== 'all' || search">（当前筛选 {{ shown.length }}）</span></div>
+      </template>
+      <EmptyState
+        v-else-if="listReady && !message"
+        :icon="Package"
+        :text="rows.length ? '没有符合筛选的商品' : '还没有商品，点「去上新」开始'"
+      />
     </Card>
-    <EmptyState
-      v-else-if="!message && !embed"
-      :icon="Package"
-      :text="rows.length ? '没有符合筛选的商品' : '还没有商品，点「新建商品」开始'"
-    />
 
     <!-- 编辑器（独立态 + embed 步 1-3 都显·白卡语言·embed 时去外框由向导供卡） -->
     <div v-if="edit" class="editor">
       <h3>{{ edit.name || '新商品' }} <span class="pid">{{ edit.id }}</span>
-        <span class="auto" :class="autoState">{{ autoState === 'saving' ? '自动保存中…' : autoState === 'saved' ? '已自动保存' : autoState === 'error' ? '自动保存失败' : '' }}</span>
+        <span class="auto" :class="autoState">{{ autoState === 'saving' ? '自动保存中…' : autoState === 'saved' ? '已自动保存草稿（顾客还看不见）' : autoState === 'error' ? '自动保存失败' : '' }}</span>
       </h3>
-      <div class="grid">
-        <label>名称 <input v-model="edit.name" maxlength="60" /></label>
+      <div v-if="showLook || (showCover && !embed)" class="grid">
+        <label v-if="showLook">名称 <input v-model="edit.name" maxlength="60" /></label>
+        <label v-if="showCover && !embed">封面图
+          <input type="file" accept="image/*" @change="pickCover" />
+        </label>
+      </div>
+      <div v-if="showCover && embed" class="cover-panel">
+        <p class="cover-label">封面图</p>
+        <p class="cover-hint">正方形，顾客第一眼看到的图</p>
+        <div v-if="coverPreview" class="cover-frame">
+          <img :src="coverPreview" class="cover-preview" alt="" />
+          <div class="cover-ops">
+            <label class="cover-replace">替换<input type="file" accept="image/*" hidden @change="pickCover" /></label>
+            <UiButton variant="ghost" size="sm" @click="clearCover">删除封面</UiButton>
+          </div>
+        </div>
+        <label v-else class="cover-drop">
+          <span>上传封面图</span>
+          <span>点击选择本地图片</span>
+          <input type="file" accept="image/*" hidden @change="pickCover" />
+        </label>
+      </div>
+      <div v-if="showCover && !embed && coverPreview" class="cover-wrap">
+        <img :src="coverPreview" class="cover-preview" />
+        <UiButton variant="ghost" size="sm" @click="clearCover">删除封面</UiButton>
+      </div>
+      <template v-if="showLook">
+        <h4>商品相册（小程序详情页轮播 · 可拖序 ‹ ›）</h4>
+        <div class="gallery">
+          <div v-for="(f, i) in (edit.images as string[])" :key="i" class="g-item">
+            <img v-if="imgUrl(f)" :src="imgUrl(f)" alt="" />
+            <span v-else class="g-ph">已存图</span>
+            <div class="g-ops">
+              <button v-if="i > 0" title="前移" @click="moveImage(i, -1)">‹</button>
+              <button v-if="i < (edit.images as string[]).length - 1" title="后移" @click="moveImage(i, 1)">›</button>
+              <button class="g-del" title="删除" @click="delImage(i)">✕</button>
+            </div>
+          </div>
+          <label class="g-add">＋ 加图<input type="file" accept="image/*" multiple hidden @change="addImages" /></label>
+        </div>
+      </template>
+
+      <div v-if="showDetail" class="grid">
         <label>标签 <input v-model="edit.tag" maxlength="20" placeholder="如 送礼首选" /></label>
         <label>价格（元）<input v-model="edit.price" /></label>
         <label>划线价 <input v-model="edit.was" /></label>
         <label>销量 <input v-model.number="edit.sold" type="number" min="0" step="1" placeholder="0 不在详情页显示" /></label>
         <label class="wide">一句话简介 <input v-model="edit.brief" maxlength="120" /></label>
-        <label>关联课程 <input v-model="edit.courseId" placeholder="course-xxx（可空）" /></label>
-        <label>封面图
-          <input type="file" accept="image/*" @change="pickCover" />
-        </label>
+        <label v-if="!embed">关联课程 <input v-model="edit.courseId" placeholder="course-xxx（可空）" /></label>
       </div>
-      <div v-if="coverPreview" class="cover-wrap">
-        <img :src="coverPreview" class="cover-preview" />
-        <UiButton variant="ghost" size="sm" @click="clearCover">删除封面</UiButton>
-      </div>
-      <h4>规格（SKU）</h4>
-      <div v-for="(s, i) in edit.skus" :key="i" class="skurow">
-        <input v-model="s.name" placeholder="规格名" maxlength="30" />
-        <input v-model="s.price" placeholder="价格（元）" />
-        <button class="icon-btn ld-icon-btn" title="删除该规格" @click="delSku(i)"><Trash2 :size="14" :stroke-width="1.8" /></button>
-      </div>
-      <UiButton variant="ghost" size="sm" @click="addSku">＋ 加规格</UiButton>
+      <template v-if="showDetail">
+        <h4>规格（SKU）</h4>
+        <div v-for="(s, i) in edit.skus" :key="i" class="skurow">
+          <input v-model="s.name" placeholder="规格名" maxlength="30" />
+          <input v-model="s.price" placeholder="价格（元）" />
+          <button class="icon-btn ld-icon-btn" title="删除该规格" @click="delSku(i)"><Trash2 :size="14" :stroke-width="1.8" /></button>
+        </div>
+        <UiButton variant="ghost" size="sm" @click="addSku">＋ 加规格</UiButton>
 
-      <h4>商品相册（小程序详情页轮播 · 可拖序 ‹ ›）</h4>
-      <div class="gallery">
-        <div v-for="(f, i) in (edit.images as string[])" :key="i" class="g-item">
-          <img v-if="imgUrl(f)" :src="imgUrl(f)" alt="" />
-          <span v-else class="g-ph">已存图</span>
-          <div class="g-ops">
-            <button v-if="i > 0" title="前移" @click="moveImage(i, -1)">‹</button>
-            <button v-if="i < (edit.images as string[]).length - 1" title="后移" @click="moveImage(i, 1)">›</button>
-            <button class="g-del" title="删除" @click="delImage(i)">✕</button>
+        <h4>参数表（≤8）</h4>
+        <div v-for="(p, i) in (edit.params as string[][])" :key="i" class="kvrow">
+          <input v-model="p[0]" placeholder="参数名（如 适用年龄）" maxlength="20" />
+          <input v-model="p[1]" placeholder="参数值（如 8 岁+）" maxlength="40" />
+          <button class="icon-btn ld-icon-btn" title="删除该参数" @click="delParam(i)"><Trash2 :size="14" :stroke-width="1.8" /></button>
+        </div>
+        <UiButton variant="ghost" size="sm" :disabled="(edit.params as unknown[]).length >= 8" @click="addParam">＋ 加参数</UiButton>
+
+        <h4>详情段落（≤4）</h4>
+        <div v-for="(d, i) in detailSections" :key="i" class="secrow">
+          <div class="secrow-head">
+            <input v-model="d.lead" placeholder="小标题" maxlength="30" />
+            <button class="icon-btn ld-icon-btn" title="删除该段落" @click="delSection(i)"><Trash2 :size="14" :stroke-width="1.8" /></button>
           </div>
+          <textarea v-model="d.body" placeholder="段落正文" maxlength="200" rows="2" />
         </div>
-        <label class="g-add">＋ 加图<input type="file" accept="image/*" multiple hidden @change="addImages" /></label>
-      </div>
+        <UiButton variant="ghost" size="sm" :disabled="detailSections.length >= 4" @click="addSection">＋ 加段落</UiButton>
 
-      <h4>参数表（≤8）</h4>
-      <div v-for="(p, i) in (edit.params as string[][])" :key="i" class="kvrow">
-        <input v-model="p[0]" placeholder="参数名（如 适用年龄）" maxlength="20" />
-        <input v-model="p[1]" placeholder="参数值（如 8 岁+）" maxlength="40" />
-        <button class="icon-btn ld-icon-btn" title="删除该参数" @click="delParam(i)"><Trash2 :size="14" :stroke-width="1.8" /></button>
-      </div>
-      <UiButton variant="ghost" size="sm" :disabled="(edit.params as unknown[]).length >= 8" @click="addParam">＋ 加参数</UiButton>
-
-      <h4>详情段落（≤4）</h4>
-      <div v-for="(d, i) in detailSections" :key="i" class="secrow">
-        <div class="secrow-head">
-          <input v-model="d.lead" placeholder="小标题" maxlength="30" />
-          <button class="icon-btn ld-icon-btn" title="删除该段落" @click="delSection(i)"><Trash2 :size="14" :stroke-width="1.8" /></button>
+        <h4>材料清单（≤8）</h4>
+        <div v-for="(k, i) in kitItems" :key="i" class="kvrow">
+          <select v-model="k.icon" class="kit-icon" title="图标">
+            <option v-for="ic in KIT_ICONS" :key="ic" :value="ic">{{ ic }}</option>
+          </select>
+          <input v-model="k.name" placeholder="物品名" maxlength="14" />
+          <input v-model="k.qty" placeholder="数量（如 1 包 50g）" maxlength="14" />
+          <button class="icon-btn ld-icon-btn" title="删除该材料" @click="delKit(i)"><Trash2 :size="14" :stroke-width="1.8" /></button>
         </div>
-        <textarea v-model="d.body" placeholder="段落正文" maxlength="200" rows="2" />
-      </div>
-      <UiButton variant="ghost" size="sm" :disabled="detailSections.length >= 4" @click="addSection">＋ 加段落</UiButton>
+        <UiButton variant="ghost" size="sm" :disabled="kitItems.length >= 8" @click="addKit">＋ 加材料</UiButton>
+      </template>
 
-      <h4>材料清单（≤8）</h4>
-      <div v-for="(k, i) in kitItems" :key="i" class="kvrow">
-        <select v-model="k.icon" class="kit-icon" title="图标">
-          <option v-for="ic in KIT_ICONS" :key="ic" :value="ic">{{ ic }}</option>
-        </select>
-        <input v-model="k.name" placeholder="物品名" maxlength="14" />
-        <input v-model="k.qty" placeholder="数量（如 1 包 50g）" maxlength="14" />
-        <button class="icon-btn ld-icon-btn" title="删除该材料" @click="delKit(i)"><Trash2 :size="14" :stroke-width="1.8" /></button>
-      </div>
-      <UiButton variant="ghost" size="sm" :disabled="kitItems.length >= 8" @click="addKit">＋ 加材料</UiButton>
-
-      <!-- 上架前缺项预检（换皮退成事后报错·1:1 旧 Wizard missing） -->
-      <p v-if="missing.length" class="preflight">上架还差：<b>{{ missing.join('、') }}</b>（补齐保存后到列表点「上架」）</p>
-      <p v-else class="preflight ok">✓ 必备项齐全，保存后可到列表上架</p>
+      <p v-if="embed && showCover && coverMissing.length" class="preflight">本步还差：<b>{{ coverMissing.join('、') }}</b></p>
+      <p v-else-if="embed && showCover" class="preflight ok">✓ 本步封面已齐</p>
+      <p v-if="embed && showLook && lookMissing.length" class="preflight">本步还差：<b>{{ lookMissing.join('、') }}</b></p>
+      <p v-else-if="embed && showLook" class="preflight ok">✓ 本步名字已齐</p>
+      <p v-if="embed && showDetail && detailMissing.length" class="preflight">本步还差：<b>{{ detailMissing.join('、') }}</b></p>
+      <p v-else-if="embed && showDetail && !detailMissing.length" class="preflight ok">✓ 本步价格和规格已齐</p>
+      <p v-if="!embed && missing.length" class="preflight">同步到小程序还差：<b>{{ missing.join('、') }}</b></p>
+      <p v-else-if="!embed" class="preflight ok">✓ 必备项齐全，保存后可同步到小程序</p>
 
       <!-- 嵌入向导步 1-3 时隐藏「保存草稿/关闭」：doSave 会 edit.value=null 关掉编辑器、而 embed 无列表可回→步面板变空白死胡同（P2）；
            embed 下 autosave（900ms + 离页补存）已负责持久化，切步/上架走向导自身按钮 -->
@@ -680,36 +717,59 @@ onMounted(async () => {
 .prod-search {
   margin-left: auto;
 }
-
-/* 6 步上新进度圆点（可点深链进向导） */
-.steps-cell {
+.table-tools {
   display: flex;
   align-items: center;
-  gap: 3px;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--ld-line);
+}
+.table-tools .prod-search {
+  margin-left: 0;
+}
+.table-scroll {
+  overflow-x: auto;
+}
+
+/* 5 步上新进度条（可点深链进向导） */
+.steps-cell {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 5px;
   cursor: pointer;
-  border-radius: 999px;
+  border-radius: var(--ld-radius-sm);
   padding: 4px 6px;
   margin: -4px -6px;
 }
 .steps-cell:hover {
   background: var(--ld-bg-lilac);
 }
-.dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: var(--ld-bg-faint);
-  border: 1px solid var(--ld-line-strong);
+.step-bars {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.bar {
+  width: 16px;
+  height: 6px;
+  border-radius: 999px;
+  background: var(--ld-line-strong);
   flex: none;
 }
-.dot.on {
+.bar.on {
   background: var(--ld-brand);
-  border-color: var(--ld-brand);
 }
 .done-n {
-  margin-left: 5px;
-  font-size: 11px;
+  font-size: 12px;
   color: var(--ld-content-2);
+}
+.cta-continue {
+  background: var(--ld-bg-lilac);
+  border-color: var(--ld-purple-line);
+  color: var(--ld-brand-active);
 }
 
 /* 商品列（缩略图 + 名/编号） */
@@ -859,6 +919,64 @@ onMounted(async () => {
 .cover-preview {
   width: 120px;
   border-radius: var(--ld-radius-sm);
+}
+.cover-panel {
+  max-width: 300px;
+}
+.cover-label {
+  margin: 0;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--ld-content);
+}
+.cover-hint {
+  margin: 2px 0 0;
+  font-size: 12px;
+  color: var(--ld-content-2);
+}
+.cover-frame {
+  margin-top: 10px;
+  overflow: hidden;
+  border: 1px solid var(--ld-line);
+  border-radius: var(--ld-radius);
+}
+.cover-frame .cover-preview {
+  display: block;
+  width: 100%;
+  aspect-ratio: 1;
+  object-fit: cover;
+}
+.cover-ops {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
+  padding: 8px 10px;
+  border-top: 1px solid var(--ld-line);
+}
+.cover-replace {
+  font-size: 12.5px;
+  color: var(--ld-content);
+  cursor: pointer;
+}
+.cover-drop {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  margin-top: 10px;
+  min-height: 200px;
+  border: 1px dashed var(--ld-line-strong);
+  border-radius: var(--ld-radius);
+  background: var(--ld-bg-faint);
+  color: var(--ld-content-2);
+  font-size: 12.5px;
+  cursor: pointer;
+}
+.cover-drop span:first-child {
+  font-weight: 600;
+  color: var(--ld-content);
 }
 .auto {
   margin-left: 10px;

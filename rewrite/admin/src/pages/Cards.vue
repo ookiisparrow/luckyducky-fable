@@ -19,6 +19,7 @@ import { Download, Upload, Image as ImageIcon } from 'lucide-vue-next'
 // 嵌入模式（上新向导步 5 复用·向后兼容·独立 /cards?productId 用法不传 props 行为不变）：
 // embed=true 隐页头/返回·wizardProductId 覆盖 route.query.productId。
 const props = defineProps<{ embed?: boolean; wizardProductId?: string }>()
+const emit = defineEmits<{ saved: [] }>()
 const route = useRoute()
 const router = useRouter()
 const productId = props.wizardProductId || String(route.query.productId || '')
@@ -166,16 +167,28 @@ async function pickArt(e: Event) {
     card.value.front.art = String((r as any).fileID || '')
     artUrl.value = String((r as any).url || '')
     loadErr.value = ''
+    void afterCardArtChanged()
   } else loadErr.value = '图片上传失败：' + String((r as any).error || '')
 }
 function useCover() {
   if (!card.value) return
   if (!product.value?.cover) {
-    loadErr.value = '该商品还没有封面图（去商品页上传）'
+    loadErr.value = '该商品还没有封面图（去第 1 步上传）'
     return
   }
   card.value.front.art = String(product.value.cover)
   artUrl.value = coverUrl.value
+  void afterCardArtChanged()
+}
+/** 向导第 5 步只要上传：图到位后自动定稿（印刷批次仍认 cardFinal），并通知向导重算进度 */
+async function afterCardArtChanged() {
+  if (props.embed && card.value?.front.art && card.value.status !== 'final') {
+    pendingStatus = 'final'
+    await flushSave()
+    pendingStatus = null
+    if (autoState.value === 'saved' && card.value) card.value.status = 'final'
+  }
+  emit('saved')
 }
 async function finalize() {
   if (!card.value) return
@@ -256,8 +269,8 @@ function downloadSvg(kind: 'front' | 'back') {
         <Badge v-if="autoState" :tone="autoState === 'saved' ? 'green' : autoState === 'error' ? 'red' : 'neutral'" dot>
           {{ autoState === 'saving' ? '自动保存中…' : autoState === 'saved' ? '已自动保存' : '自动保存失败' }}
         </Badge>
-        <UiButton v-if="!embed" variant="ghost" @click="router.back()">← 返回</UiButton>
-        <UiButton v-if="card" :variant="card.status === 'final' ? 'ghost' : 'primary'" @click="finalize">{{ card.status === 'final' ? '↩ 改回草稿' : '✅ 定稿并启用' }}</UiButton>
+        <UiButton v-if="!embed" variant="ghost" @click="router.push(productId ? '/products/' + productId + '/wizard?step=5' : '/launch')">返回上新</UiButton>
+        <UiButton v-if="card && !embed" :variant="card.status === 'final' ? 'ghost' : 'primary'" @click="finalize">{{ card.status === 'final' ? '↩ 改回草稿' : '✅ 定稿并启用' }}</UiButton>
       </div>
     </header>
 
@@ -274,8 +287,31 @@ function downloadSvg(kind: 'front' | 'back') {
           <code class="pick-id">{{ p.id }}</code>
         </button>
       </div>
-      <EmptyState v-else :icon="ImageIcon" text="还没有商品——先到「商品管理」新建" />
+      <EmptyState v-else :icon="ImageIcon" text="还没有商品——先到侧栏「上新」建档" />
     </Card>
+
+    <div v-else-if="embed && card" class="upload-only">
+      <p class="upload-lead">上传印刷用的卡片图。不用在这里改尺寸或文案。</p>
+      <div class="source-grid">
+        <button type="button" class="source-tile" :class="{ on: !!artUrl && artUrl === coverUrl }" @click="useCover">
+          <span class="source-ico"><ImageIcon :size="16" :stroke-width="1.8" /></span>
+          <span class="source-title">用商品封面图</span>
+          <span class="source-desc">直接沿用第 1 步的封面。</span>
+        </button>
+        <label class="source-tile">
+          <span class="source-ico"><Upload :size="16" :stroke-width="1.8" /></span>
+          <span class="source-title">{{ busyArt ? '上传中…' : '上传卡片' }}</span>
+          <span class="source-desc">上传印厂成品卡面。</span>
+          <input type="file" accept="image/*" hidden @change="pickArt" />
+        </label>
+        <div class="source-preview">
+          <p>卡面预览</p>
+          <div class="artthumb" :style="{ background: card.front.bg }"><img v-if="artUrl" :src="artUrl" alt="" /></div>
+          <p v-if="artUrl" class="upload-ok">✓ 卡片图已上传</p>
+          <p v-else class="source-empty">尚未上传卡片文件</p>
+        </div>
+      </div>
+    </div>
 
     <div v-else-if="card" class="work">
       <!-- 双面预览 -->
@@ -393,6 +429,88 @@ function downloadSvg(kind: 'front' | 'back') {
   margin: 0;
   font-size: 13px;
   color: var(--ld-red);
+}
+.upload-only {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.upload-lead {
+  margin: 0;
+  font-size: 14px;
+  color: var(--ld-content);
+}
+.upload-ok {
+  margin: 0;
+  font-size: 13px;
+  color: var(--ld-green);
+}
+.source-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr minmax(180px, 248px);
+  gap: 16px;
+  align-items: stretch;
+}
+@media (max-width: 820px) {
+  .source-grid {
+    grid-template-columns: 1fr;
+  }
+}
+.source-tile {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 16px;
+  border: 1px solid var(--ld-line);
+  border-radius: var(--ld-radius);
+  background: var(--ld-bg);
+  text-align: left;
+  cursor: pointer;
+  font: inherit;
+}
+.source-tile:hover {
+  border-color: var(--ld-line-strong);
+  background: var(--ld-bg-faint);
+}
+.source-tile.on {
+  border-color: var(--ld-purple-line);
+  background: var(--ld-bg-lilac);
+}
+.source-ico {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 9px;
+  background: var(--ld-bg-grey);
+  color: var(--ld-content-2);
+}
+.source-tile.on .source-ico {
+  background: var(--ld-brand);
+  color: #fff;
+}
+.source-title {
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--ld-ink);
+}
+.source-desc {
+  font-size: 12.5px;
+  color: var(--ld-content-2);
+  line-height: 1.4;
+}
+.source-preview p {
+  margin: 0 0 8px;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--ld-content);
+}
+.source-empty {
+  margin-top: 8px;
+  font-size: 12.5px;
+  font-weight: 400;
+  color: var(--ld-content-2);
 }
 
 .work {

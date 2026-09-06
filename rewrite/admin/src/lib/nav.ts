@@ -3,15 +3,20 @@
 // Component/Sidebar kz2uD 单源·决策§27②）。步文案/顺序/图标抄录设计帧、URL ?step 为步单源，侧栏与
 // Wizard 顶部横向 rail 同读它。纯数据+纯函数收口在此，Shell 只消费——便于 nav.test 焊死不靠组件挂载。
 
-/** 向导路由：/products/:id/wizard（带参·rw-admin-nav-route-synced 已豁免孤儿检查·单段 id） */
+/** 向导路由：/launch（新建）或 /products/:id/wizard（续做·带参·rw-admin-nav-route-synced 已豁免孤儿检查） */
 export function isWizardPath(path: string): boolean {
-  return /^\/products\/[^/]+\/wizard$/.test(path)
+  return path === '/launch' || /^\/products\/[^/]+\/wizard$/.test(path)
 }
 
-/** ?step=N 夹到 1..6，非法/缺省回 1（列表深链落到首个未完成步·Products.vue firstTodoStep） */
+/** 上新向导步数（侧栏/进度圆点/URL ?step 同读） */
+export const WIZARD_STEP_MAX = 5
+
+/** ?step=N 夹到 1..5；旧 step=6 深链落到新第 5 步；非法/缺省回 1（列表深链落到首个未完成步） */
 export function wizardStepFromQuery(step: unknown): number {
   const n = Number.parseInt(String(step ?? ''), 10)
-  return Number.isFinite(n) ? Math.min(6, Math.max(1, n)) : 1
+  if (!Number.isFinite(n) || n < 1) return 1
+  if (n >= 6) return WIZARD_STEP_MAX
+  return Math.min(WIZARD_STEP_MAX, n)
 }
 
 /** 当前路由命中的可展开组名（solo 项/未命中回 ''）——供 Shell 判「当前组自动展开」+ 组头点击不做「翻转
@@ -29,17 +34,23 @@ export function currentNavGroup(
   return ''
 }
 
-/** 上新向导 6 步（文案/顺序/图标抄录设计 kz2uD·NavImg…NavBatch·icon 为 lucide 名，Shell 侧映射组件） */
+/** 上新向导 5 步（封面并进第 1 步、卡片上传并进第 5 步·不要「设计」） */
 export interface WizardStep {
   n: number
   label: string
   icon: string
+  hint: string
 }
 export const WIZARD_STEPS: WizardStep[] = [
-  { n: 1, label: '产品图片', icon: 'image' },
-  { n: 2, label: '商品信息', icon: 'file-text' },
-  { n: 3, label: '商品 SKU', icon: 'tags' },
-  { n: 4, label: '视频上传', icon: 'clapperboard' },
-  { n: 5, label: '二维码卡片', icon: 'qr-code' },
-  { n: 6, label: '码批次与印刷包', icon: 'printer' },
+  { n: 1, label: '新建与封面', icon: 'plus', hint: '创建草稿并上传封面图' },
+  { n: 2, label: '图片与名字', icon: 'image', hint: '商品图集与标题文案' },
+  { n: 3, label: '详情信息', icon: 'file-text', hint: '规格、价格与详情页' },
+  { n: 4, label: '课程视频', icon: 'clapperboard', hint: '上传并发布教学视频' },
+  { n: 5, label: '卡片与二维码', icon: 'credit-card', hint: '卡面素材与批次二维码' },
 ]
+
+/** 「商品与上新」组只准这两条主入口（橱窗/评价/课程运维另组·防再把上新塞进子菜单） */
+export const SHOP_PRIMARY_NAV = [
+  { label: '产品管理', path: '/products' },
+  { label: '上新', path: '/launch' },
+] as const
