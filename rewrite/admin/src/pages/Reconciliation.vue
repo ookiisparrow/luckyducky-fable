@@ -7,6 +7,7 @@ import { ref, computed, onMounted } from 'vue'
 import { CircleDollarSign, RotateCcw, Wallet, Download, CircleCheck } from 'lucide-vue-next'
 import { getReconciliation, getBillMatch, downloadBill } from '../api/system'
 import { mapRecon, mapBillMatch, type ReconVM, type BillMatchVM } from '../lib/mapSystem'
+import { orderErrorText } from '../lib/mapMoney'
 import { useLatest } from '../lib/latest'
 import UiButton from '../components/ui/Button.vue'
 import PageHeader from '../components/ui/PageHeader.vue'
@@ -49,8 +50,8 @@ async function reload(): Promise<boolean> {
   // 分路报错（P1·bug 清除战役 II C2）：单路失败别被另一路成功吞掉——mapRecon/mapBillMatch 只在 ok!==true
   // 或响应体缺 cumulative/summary 容器时才回 null（合法空数据容器仍在、只是内部数组/数值为空，不会误判成失败）。
   const bad: string[] = []
-  if (!recon.value) bad.push('内部对账加载失败：' + String((r as any).error || ''))
-  if (!match.value) bad.push('外部账单勾对加载失败：' + String((m as any).error || ''))
+  if (!recon.value) bad.push('内部对账加载失败：' + orderErrorText((r as any).error))
+  if (!match.value) bad.push('外部账单勾对加载失败：' + orderErrorText((m as any).error))
   message.value = bad.join('；')
   return bad.length === 0
 }
@@ -80,7 +81,7 @@ async function pullBill() {
   busy.value = false
   const reloadOk = await reload() // 先刷新对账（其间显加载中·结束落空）
   // 只在拉取与刷新都成功时显纯成功；reload 失败别被无条件覆盖——保留其错误原文（P2·病根#14 顺手改批遗漏本处）
-  if (!r.ok) message.value = '拉取失败：' + String(r.error || '')
+  if (!r.ok) message.value = '拉取失败：' + orderErrorText(r.error)
   else if (!reloadOk) message.value = '账单已拉取入库，但对账刷新失败：' + message.value
   else message.value = '账单已拉取入库，勾对已刷新'
 }
@@ -129,7 +130,7 @@ function exportCsv() {
   const head = '日期,订单数,应收GMV,退款,净额,退款笔数'
   const lines = recon.value.daily.map((d) => [d.day, d.orders, d.income, d.refund, d.net, d.refunds].join(','))
   const csv = [head, ...lines].join('\n')
-  const url = URL.createObjectURL(new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8' }))
+  const url = URL.createObjectURL(new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8' }))
   const a = document.createElement('a')
   a.href = url
   a.download = '财务对账-按日.csv'
