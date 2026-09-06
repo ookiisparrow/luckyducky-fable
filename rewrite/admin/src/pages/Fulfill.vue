@@ -255,8 +255,9 @@ function onScan() {
 }
 function mapShipErr(msg: string) {
   if (msg === 'BAD_STATUS:shipped') return '这单已发过货；要改运单号请去「订单发货」页'
+  if (msg.startsWith('BAD_STATUS:')) return orderErrorText(msg).replace('不允许此操作', '不能发货')
   const text = orderErrorText(msg)
-  return text.startsWith('订单状态「') ? text.replace('不允许此操作', '不能发货') : text
+  return text
 }
 async function doShip(order: FulfillOrder, trackingNo: string) {
   if (shipping.value) {
