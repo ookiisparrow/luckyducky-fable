@@ -6,6 +6,7 @@ import { ref, computed, onMounted, onBeforeUnmount, watch, nextTick } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { getCard, saveCard, uploadImage, listDrafts } from '../api/products'
 import { b64SizeOk } from '../lib/mapProducts'
+import { launchErrorText } from '../lib/mapSystem'
 import { buildFrontSvg, buildBackSvg, type CardModel } from '../lib/cardSvg'
 import { serialSave } from '../lib/serialSave'
 // 视图层原语（批F 共享 UI）+ lucide 图标——仅新增 import，管道零改。
@@ -80,7 +81,7 @@ onMounted(async () => {
         name: String(p.name || '未命名商品'),
         coverUrl: p.cover ? String(urls[String(p.cover)] || '') : '',
       }))
-    } else loadErr.value = '商品列表加载失败：' + String((dr as any)?.error || '网络异常')
+    } else loadErr.value = launchErrorText((dr as any)?.error || '网络异常')
     loading.value = false
     return
   }
@@ -99,7 +100,7 @@ onMounted(async () => {
       card.value.front.art = String(product.value.cover)
       artUrl.value = coverUrl.value
     }
-  } else loadErr.value = '卡面加载失败：' + String((r as any).error || '')
+  } else loadErr.value = launchErrorText((r as any).error)
   loading.value = false
   void nextTick(() => (loaded = true))
 })
@@ -168,7 +169,7 @@ async function pickArt(e: Event) {
     artUrl.value = String((r as any).url || '')
     loadErr.value = ''
     void afterCardArtChanged()
-  } else loadErr.value = '图片上传失败：' + String((r as any).error || '')
+  } else loadErr.value = launchErrorText((r as any).error)
 }
 function useCover() {
   if (!card.value) return
