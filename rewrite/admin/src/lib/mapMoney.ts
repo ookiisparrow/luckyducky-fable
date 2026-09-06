@@ -326,7 +326,7 @@ export function refundVerdict(v: { lineRefundable: boolean; entered: boolean; re
   return {
     tone: 'lost',
     title: '本单此行退货权已失',
-    sub: '本单此行已被撤退货权（进课）——同意退款服务端会拦（ENTERED_NOT_REFUNDABLE）',
+    sub: '本单此行已被撤退货权（进课）——现在同意退款，服务端也会拦下',
   }
 }
 

@@ -124,4 +124,49 @@ describe('Refunds.vue 人工验收双勾选闸（canApprove）', () => {
     expect(msg.exists()).toBe(true)
     expect(msg.text()).toBe('先输入订单号')
   })
+
+  it('大白话：越规退款成功后结果提示走绿色高亮，不是灰说明字', async () => {
+    listOrdersMock.mockResolvedValueOnce({
+      ok: true,
+      list: [
+        {
+          _id: 'OV-1',
+          status: 'refund_required',
+          amount: 199,
+          goods: 199,
+          address: { name: '特批买家', phone: '13500005555' },
+          items: [{ lineId: 'p1__奶黄', productId: 'p1', name: '小棉鸭材料包', spec: '奶黄', qty: 1, price: 199 }],
+        },
+      ],
+    })
+    const router = createRouter({ history: createMemoryHistory(), routes: [{ path: '/', component: { template: '<div/>' } }] })
+    await router.push('/')
+    await router.isReady()
+    const wrapper = mount(Refunds, { global: { plugins: [router] } })
+    await flushPromises()
+
+    const overrideOpen = wrapper.findAll('button').find((b) => b.text().includes('越规退款'))
+    await overrideOpen!.trigger('click')
+    await flushPromises()
+
+    const input = wrapper.find('.ov-find input')
+    await input.setValue('OV-1')
+    const findBtn = wrapper.findAll('button').find((b) => b.text() === '查找')
+    await findBtn!.trigger('click')
+    await flushPromises()
+
+    const radio = wrapper.find('input[type=radio]')
+    expect(radio.exists()).toBe(true)
+    await radio.setValue(true)
+    await wrapper.find('textarea').setValue('客服特批')
+    await wrapper.find('.ck input[type=checkbox]').setValue(true)
+
+    const submitBtn = wrapper.findAll('button').find((b) => b.text().includes('发起越规退款'))
+    await submitBtn!.trigger('click')
+    await flushPromises()
+
+    const msg = wrapper.find('.ov-msg.ok')
+    expect(msg.exists()).toBe(true)
+    expect(msg.text()).toContain('已发起越规退款')
+  })
 })

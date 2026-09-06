@@ -220,7 +220,8 @@ describe('退款判据文案（绑本单订单行·非课程级·根因#8 判据
     // 本单此行被撤退货权（进课）→ 会拦
     const lost = refundVerdict({ lineRefundable: false, entered: true, refundableQty: 0 })
     expect(lost.tone).toBe('lost')
-    expect(lost.sub).toContain('ENTERED_NOT_REFUNDABLE')
+    expect(lost.sub).toContain('服务端也会拦下')
+    expect(lost.sub).not.toContain('ENTERED_NOT_REFUNDABLE')
   })
 })
 
