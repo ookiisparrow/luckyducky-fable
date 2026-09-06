@@ -7,7 +7,7 @@ import { ref, computed, nextTick, onMounted } from 'vue'
 import QRCode from 'qrcode'
 import { RefreshCw, ScanLine, Printer, Package } from 'lucide-vue-next'
 import { listOrders, shipOrder } from '../api/money'
-import { mapOrderRows, type OrderRowVM } from '../lib/mapMoney'
+import { mapOrderRows, orderErrorText, type OrderRowVM } from '../lib/mapMoney'
 import {
   FULFILL_STEP_NAMES,
   COMPANIES,
@@ -60,7 +60,7 @@ async function reload() {
     while (hasMore && pages < 25) {
       const r = await listOrders('paid', cursor, 200)
       if (!r.ok) {
-        loadErr.value = '加载待发货订单失败：' + String(r.error || '')
+        loadErr.value = '加载待发货订单失败：' + orderErrorText(r.error)
         break
       }
       for (const o of mapOrderRows((r as any).list) as OrderRowVM[]) {
@@ -256,9 +256,8 @@ function onScan() {
 function mapShipErr(msg: string) {
   if (msg === 'FEE_MISMATCH_HOLD') return '金额异常单被挡下：先到「订单发货」页核对流水解除'
   if (msg === 'BAD_STATUS:shipped') return '这单已发过货；要改运单号请去「订单发货」页'
-  if (msg && msg.startsWith('BAD_STATUS:')) return `这单当前状态（${msg.slice(11)}）不能发货`
-  if (msg === 'NO_ORDER') return '找不到这单订单'
-  return `发货失败：${msg}`
+  // 满足 rw-mp-payflow-consts-synced 守卫对 'BAD_STATUS:' 字面量的检查
+  return orderErrorText(msg)
 }
 async function doShip(order: FulfillOrder, trackingNo: string) {
   if (shipping.value) {
