@@ -51,7 +51,7 @@ export function productSteps(p: Record<string, any>, extras?: StepExtras): StepD
 export const WIZARD_SLICE_FIELDS: Record<1 | 2 | 3, readonly string[]> = {
   1: ['cover'],
   2: ['name', 'images'],
-  3: ['tag', 'brief', 'price', 'was', 'sold', 'skus', 'params', 'detailSections', 'kit'],
+  3: ['tag', 'brief', 'price', 'was', 'skus', 'params', 'detailSections', 'kit'],
 }
 
 /** 新建草稿骨架（向导第 1 步与列表「去上新」同形·课程号当场绑上，后面不用手输） */
