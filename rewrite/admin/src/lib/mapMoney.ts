@@ -1,6 +1,29 @@
 // 订单与钱组映射（纯函数·守卫 rw-admin-money-ui-golden）：v2 契约 → 页面 VM。
 // 脏档安全同 mp 口径（缺条目恒数组/裸脏档剔除/金额恒两位）；近似诚实标注（approx 透传不隐藏）。
+// orderErrorText：钱组 action 英文码→操作者中文（同 mapSystem.ts launchErrorText 手法·#222 同类）。
 import { yuan, orderStatusLabel, refundStatusLabel, dateTime } from './format'
+
+const ORDER_ERR: Record<string, string> = {
+  BAD_ARGS: '参数不完整',
+  NO_ORDER: '订单不存在',
+  FEE_MISMATCH_HOLD: '金额不符未解除',
+  REFUND_HOLD: '该单涉及退款',
+  SHIP_IN_PROGRESS: '正在处理中，请稍后',
+  TOO_MANY: '单批上限 100 单',
+  BAD_AMOUNT: '金额超出合理范围',
+  REFUND_EXISTS: '已有退款记录，不能补录',
+  REFUND_SCAN_CAP: '售后记录异常',
+  CONCURRENT: '刚被改过，请刷新重试',
+  ORDER_NO_REQUIRED: '需要输入单号',
+  NOT_EXCEPTION: '该单不是支付异常状态',
+  NO_RESULT: '未收到结果',
+}
+export function orderErrorText(e: unknown): string {
+  const s = String(e || '')
+  if (!s) return '未知错误'
+  if (s.startsWith('BAD_STATUS:')) return `订单状态「${orderStatusLabel(s.slice(11))}」不允许此操作`
+  return ORDER_ERR[s] || `操作失败（${s}）`
+}
 
 export interface StatCard {
   label: string

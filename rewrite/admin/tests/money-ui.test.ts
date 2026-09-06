@@ -1,7 +1,7 @@
 // 订单与钱组映射（守卫 rw-admin-money-ui-golden）：看板近似诚实标注/警报有则必显无则不吓人/
 // 订单行金额不符禁发入口收窄/售后行只待审核可裁决/脏档安全（与 mp 同口径）。
 import { describe, it, expect } from 'vitest'
-import { mapDashboard, mapOrderRows, mapRefundRows, maskPhone, refundVerdict, deriveDashboardTodos, canOverrideRefund, mapOverrideOrder } from '../src/lib/mapMoney'
+import { mapDashboard, mapOrderRows, mapRefundRows, maskPhone, refundVerdict, deriveDashboardTodos, canOverrideRefund, mapOverrideOrder, orderErrorText } from '../src/lib/mapMoney'
 import ordersSrc from '../src/pages/Orders.vue?raw'
 import refundsSrc from '../src/pages/Refunds.vue?raw'
 import dashboardSrc from '../src/pages/Dashboard.vue?raw'
@@ -360,5 +360,23 @@ describe('Dashboard.vue 待处理行动条含「异常未处理」（异常账�
     expect(dashboardSrc).toMatch(/getInspectStatus\(\)/)
     expect(dashboardSrc).toMatch(/to: '\/anomalies'/)
     expect(dashboardSrc).toMatch(/openAnomalies/)
+  })
+})
+
+describe('orderErrorText（钱组英文码→操作者中文·#222 同类）', () => {
+  it('大白话：已知码出人话、BAD_STATUS 复合码拆出状态中文、未知码兜底不裸甩', () => {
+    expect(orderErrorText('REFUND_HOLD')).toBe('该单涉及退款')
+    expect(orderErrorText('SHIP_IN_PROGRESS')).toBe('正在处理中，请稍后')
+    expect(orderErrorText('NO_RESULT')).toBe('未收到结果')
+    expect(orderErrorText('BAD_STATUS:done')).toBe('订单状态「已完成」不允许此操作')
+    expect(orderErrorText('BAD_STATUS:payment_exception')).toBe('订单状态「支付异常待处理」不允许此操作')
+    expect(orderErrorText('FUTURE_UNKNOWN_CODE')).toBe('操作失败（FUTURE_UNKNOWN_CODE）')
+    expect(orderErrorText('')).toBe('未知错误')
+    expect(orderErrorText(null)).toBe('未知错误')
+  })
+  it('大白话：Orders.vue 6 处错误展示都走 orderErrorText（不裸 String(r.error)）', () => {
+    expect(ordersSrc).not.toMatch(/message\.value = ['"].*\$\{String\(r\.error/)
+    expect(ordersSrc).not.toMatch(/String\(r\.error\b/)
+    expect(ordersSrc).not.toMatch(/'NO_RESULT'/)
   })
 })
