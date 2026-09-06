@@ -1,7 +1,7 @@
 // 订单与钱组映射（守卫 rw-admin-money-ui-golden）：看板近似诚实标注/警报有则必显无则不吓人/
 // 订单行金额不符禁发入口收窄/售后行只待审核可裁决/脏档安全（与 mp 同口径）。
 import { describe, it, expect } from 'vitest'
-import { mapDashboard, mapOrderRows, mapRefundRows, maskPhone, refundVerdict, deriveDashboardTodos, canOverrideRefund, mapOverrideOrder } from '../src/lib/mapMoney'
+import { mapDashboard, mapOrderRows, mapRefundRows, maskPhone, shipErrorText, refundVerdict, deriveDashboardTodos, canOverrideRefund, mapOverrideOrder } from '../src/lib/mapMoney'
 import ordersSrc from '../src/pages/Orders.vue?raw'
 import refundsSrc from '../src/pages/Refunds.vue?raw'
 import dashboardSrc from '../src/pages/Dashboard.vue?raw'
@@ -140,6 +140,16 @@ describe('手机号掩码（PII·还原批 Orders）', () => {
     expect(maskPhone('13812345678')).toBe('138****5678')
     expect(maskPhone('123')).toBe('123')
     expect(maskPhone('')).toBe('')
+  })
+})
+
+describe('发货错误码人话（Orders/Fulfill 同口径）', () => {
+  it('大白话：常见发货错误码都翻成人话，坏状态复用订单状态中文映射', () => {
+    expect(shipErrorText('BAD_ARGS')).toBe('快递公司和运单号都要填')
+    expect(shipErrorText('FEE_MISMATCH_HOLD')).toBe('金额异常单被挡下：先去核对流水解除')
+    expect(shipErrorText('REFUND_HOLD')).toBe('这单涉及退款，先去「售后退款」处理')
+    expect(shipErrorText('BAD_STATUS:done')).toBe('这单当前状态（已完成）不能发货')
+    expect(shipErrorText('NO_RESULT')).toBe('系统没返回这单结果，请重试')
   })
 })
 
@@ -301,6 +311,13 @@ describe('Orders.vue 抽屉商品行 :key 用行身份 productId__spec', () => {
   it('大白话：key 带 spec（=后端 lineId 契约）——同品多规格同单不撞键；旧裸 productId 写法不再存在', () => {
     expect(ordersSrc).toMatch(/v-for="it in drawer\.row\.items" :key="\(it\.productId \|\| it\.name\) \+ '__' \+ it\.spec"/)
     expect(ordersSrc).not.toMatch(/:key="it\.productId \|\| it\.name"/)
+  })
+})
+
+describe('Orders.vue 发货失败文案用人话映射（不把英文码直接甩给运营）', () => {
+  it('大白话：单单发货与批量发货失败都走 shipErrorText，同口径翻译错误码', () => {
+    expect(ordersSrc).toMatch(/message\.value = shipErrorText\(r\.error\)/)
+    expect(ordersSrc).toMatch(/shipErrorText\(byId\[r\.id\]\?\.error \|\| 'NO_RESULT'\)/)
   })
 })
 

@@ -13,7 +13,7 @@ import PageHeader from '../components/ui/PageHeader.vue'
 import Card from '../components/ui/Card.vue'
 import Badge from '../components/ui/Badge.vue'
 import EmptyState from '../components/ui/EmptyState.vue'
-import { mapOrderRows, type OrderRowVM } from '../lib/mapMoney'
+import { mapOrderRows, shipErrorText, type OrderRowVM } from '../lib/mapMoney'
 import { dateTime } from '../lib/format'
 import { COMPANIES } from '../lib/fulfill'
 
@@ -164,7 +164,7 @@ async function doShip() {
     message.value = ''
     void reload()
   } else {
-    message.value = `发货没成功（${String(r.error || '')}）` // 错误原文如实显示·不吞
+    message.value = shipErrorText(r.error)
   }
 }
 
@@ -214,7 +214,7 @@ async function doBatchShip() {
     return
   }
   const byId = Object.fromEntries(((res as any).results || []).map((x: any) => [x.id, x]))
-  b.rows.forEach((r) => (r.error = byId[r.id]?.ok ? '' : String(byId[r.id]?.error || 'NO_RESULT')))
+  b.rows.forEach((r) => (r.error = byId[r.id]?.ok ? '' : shipErrorText(byId[r.id]?.error || 'NO_RESULT')))
   b.rows = b.rows.filter((r) => r.error) // 只留失败的可改运单号重试
   b.done = true
   selectedIds.value = []

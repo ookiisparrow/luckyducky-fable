@@ -115,6 +115,22 @@ export function maskPhone(p: unknown): string {
   return s.length >= 7 ? s.slice(0, 3) + '****' + s.slice(-4) : s
 }
 
+// 发货错误码人话：Orders/Fulfill 同口径（保留兜底原码便于排障）。
+export function shipErrorText(e: unknown): string {
+  const code = String(e || '')
+  if (!code) return '发货没成功'
+  if (code === 'BAD_ARGS') return '快递公司和运单号都要填'
+  if (code === 'NO_ORDER') return '找不到这单订单'
+  if (code === 'FEE_MISMATCH_HOLD') return '金额异常单被挡下：先去核对流水解除'
+  if (code === 'REFUND_HOLD') return '这单涉及退款，先去「售后退款」处理'
+  if (code === 'SHIP_IN_PROGRESS') return '这单正在发货处理中，请稍后重试'
+  if (code === 'TOO_MANY') return '一次最多批量发 100 单，请分批操作'
+  if (code === 'NO_RESULT') return '系统没返回这单结果，请重试'
+  if (code === 'BAD_STATUS:shipped') return '这单已发过货；要改运单号请点「改单号」'
+  if (code.startsWith('BAD_STATUS:')) return `这单当前状态（${orderStatusLabel(code.slice(11))}）不能发货`
+  return `发货没成功（${code}）`
+}
+
 export interface OrderItemVM {
   productId: string
   name: string
