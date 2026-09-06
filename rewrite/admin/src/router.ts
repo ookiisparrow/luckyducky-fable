@@ -57,6 +57,7 @@ export const router = createRouter({
         { path: 'fulfill', component: Fulfill },
         { path: 'refunds', component: Refunds },
         { path: 'products', component: Products },
+        { path: 'launch', component: Wizard }, // 上新入口：无编号时第 1 步建档，建完进 /products/:id/wizard
         { path: 'products/:id/wizard', component: Wizard }, // 上新分步向导（带参·nav-route 守卫豁免孤儿页检查）
         { path: 'showcase', component: Showcase },
         { path: 'reviews', component: Reviews },

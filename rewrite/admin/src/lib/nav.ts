@@ -3,9 +3,9 @@
 // Component/Sidebar kz2uD 单源·决策§27②）。步文案/顺序/图标抄录设计帧、URL ?step 为步单源，侧栏与
 // Wizard 顶部横向 rail 同读它。纯数据+纯函数收口在此，Shell 只消费——便于 nav.test 焊死不靠组件挂载。
 
-/** 向导路由：/products/:id/wizard（带参·rw-admin-nav-route-synced 已豁免孤儿检查·单段 id） */
+/** 向导路由：/launch（新建）或 /products/:id/wizard（续做·带参·rw-admin-nav-route-synced 已豁免孤儿检查） */
 export function isWizardPath(path: string): boolean {
-  return /^\/products\/[^/]+\/wizard$/.test(path)
+  return path === '/launch' || /^\/products\/[^/]+\/wizard$/.test(path)
 }
 
 /** ?step=N 夹到 1..6，非法/缺省回 1（列表深链落到首个未完成步·Products.vue firstTodoStep） */
@@ -29,17 +29,23 @@ export function currentNavGroup(
   return ''
 }
 
-/** 上新向导 6 步（文案/顺序/图标抄录设计 kz2uD·NavImg…NavBatch·icon 为 lucide 名，Shell 侧映射组件） */
+/** 上新向导 6 步（老板拍板主路径·覆盖旧设计帧 kz2uD 文案：新建→图与名→详情→课程→卡片→二维码） */
 export interface WizardStep {
   n: number
   label: string
   icon: string
 }
 export const WIZARD_STEPS: WizardStep[] = [
-  { n: 1, label: '产品图片', icon: 'image' },
-  { n: 2, label: '商品信息', icon: 'file-text' },
-  { n: 3, label: '商品 SKU', icon: 'tags' },
-  { n: 4, label: '视频上传', icon: 'clapperboard' },
-  { n: 5, label: '二维码卡片', icon: 'qr-code' },
-  { n: 6, label: '码批次与印刷包', icon: 'printer' },
+  { n: 1, label: '新建商品', icon: 'plus' },
+  { n: 2, label: '图片与名字', icon: 'image' },
+  { n: 3, label: '详情信息', icon: 'file-text' },
+  { n: 4, label: '课程视频', icon: 'clapperboard' },
+  { n: 5, label: '卡片设计', icon: 'credit-card' },
+  { n: 6, label: '二维码管理', icon: 'qr-code' },
 ]
+
+/** 「商品与上新」组只准这两条主入口（橱窗/评价/课程运维另组·防再把上新塞进子菜单） */
+export const SHOP_PRIMARY_NAV = [
+  { label: '产品管理', path: '/products' },
+  { label: '上新', path: '/launch' },
+] as const

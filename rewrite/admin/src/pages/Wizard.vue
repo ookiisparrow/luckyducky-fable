@@ -6,9 +6,9 @@
 import { ref, computed, onMounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { Store, ArrowLeft, ChevronLeft, ChevronRight, Check } from 'lucide-vue-next'
-import { listDrafts, publishProduct } from '../api/products'
-import { productSteps, productState, basicsMissing, wizardCanPublish, type StepDot } from '../lib/mapProducts'
-import { wizardStepFromQuery } from '../lib/nav'
+import { listDrafts, publishProduct, saveDraft } from '../api/products'
+import { productSteps, productState, basicsMissing, wizardCanPublish, freshDraft, type StepDot } from '../lib/mapProducts'
+import { wizardStepFromQuery, WIZARD_STEPS } from '../lib/nav'
 import { isUploadLocked } from '../lib/uploadLock'
 import Products from './Products.vue'
 import Courses from './Courses.vue'
@@ -21,26 +21,28 @@ import EmptyState from '../components/ui/EmptyState.vue'
 
 const route = useRoute()
 const router = useRouter()
-const id = String(route.params.id || '')
+const id = computed(() => String(route.params.id || ''))
 
 const product = ref<Record<string, any> | null>(null)
 const extras = ref<{ hasVideo?: Record<string, boolean>; cardFinal?: Record<string, boolean>; hasBatch?: Record<string, boolean> }>({})
 const listed = ref<Record<string, boolean>>({})
-const loading = ref(true)
+const loading = ref(!!route.params.id)
 const loadError = ref(false) // 载入失败（网络波动）≠ 商品不存在——分开显「重试」态而非误报「商品不存在」死胡同（P3）
 let msgLoadFail = false // 当前 banner 是否为「加载失败」——回刷成功只清它、不误清上架等动作反馈（P3）
 const message = ref('')
 const busy = ref(false)
 const pubConfirm = ref(false)
 
-const STEP_NAMES = ['产品图片', '商品信息', 'SKU', '教学视频', '二维码卡片', '码批次']
+const STEP_NAMES = WIZARD_STEPS.map((s) => s.label)
 // 步单源=URL ?step（决策§27②·Shell 侧栏与本页横向 rail 同读它·深链落到首个未完成步）·夹 1..6
-const step = computed(() => wizardStepFromQuery(route.query.step))
+// 还没建档（/launch）只能停在第 1 步
+const step = computed(() => (id.value ? wizardStepFromQuery(route.query.step) : 1))
 
-const courseId = computed(() => String(product.value?.courseId || '') || 'course-' + id)
+const courseId = computed(() => String(product.value?.courseId || '') || (id.value ? 'course-' + id.value : ''))
 const steps = computed<StepDot[]>(() => (product.value ? productSteps(product.value, extras.value) : []))
 const doneCount = computed(() => steps.value.filter((s) => s.done).length)
-const state = computed(() => productState(id, listed.value))
+const state = computed(() => productState(id.value, listed.value))
+const stateLabel = computed(() => (state.value === 'onsale' ? '小程序在售' : state.value === 'unlisted' ? '已从橱窗拿下' : '草稿（顾客看不见）'))
 const missing = computed(() => (product.value ? basicsMissing(product.value) : []))
 const canPublish = computed(() => !!product.value && wizardCanPublish(product.value))
 // 下一步待办：第一个未完成步（引导「先做这个」）；全齐则空
@@ -51,7 +53,12 @@ const nextTodo = computed(() => {
 
 // 载入商品档 + 6 步派生真值（listDrafts 一次给 list/listed/urls + hasVideo/cardFinal/hasBatch）
 async function reloadProduct() {
-  pubConfirm.value = false // 刷新即复位危险态（P1·防旧武装的「确认上架」残留、重进一击直发·批3 规格）
+  if (!id.value) {
+    product.value = null
+    loading.value = false
+    return
+  }
+  pubConfirm.value = false // 刷新即复位危险态（P1·防旧武装的「确认同步」残留、重进一击直发·批3 规格）
   loadError.value = false
   const r: any = await listDrafts()
   if (!r.ok) {
@@ -67,7 +74,7 @@ async function reloadProduct() {
     message.value = '' // 回刷成功只清上次残留的「加载失败」banner（批10 让回刷失败保编辑器不撕后·否则常驻工作中的编辑器上·P3）
     msgLoadFail = false
   }
-  product.value = (r.list as Record<string, any>[]).find((p) => String(p.id || p._id) === id) || null
+  product.value = (r.list as Record<string, any>[]).find((p) => String(p.id || p._id) === id.value) || null
   listed.value = r.listed || {}
   extras.value = { hasVideo: r.hasVideo || {}, cardFinal: r.cardFinal || {}, hasBatch: r.hasBatch || {} }
   loading.value = false
@@ -96,33 +103,53 @@ function railState(n: number): 'current' | 'done' | 'todo' {
 }
 
 async function shelve() {
-  if (busy.value || !canPublish.value) return
+  if (busy.value || !canPublish.value || !id.value) return
   if (!pubConfirm.value) {
     pubConfirm.value = true
     return
   }
   pubConfirm.value = false
   busy.value = true
-  const r: any = await publishProduct(id)
+  const r: any = await publishProduct(id.value)
   busy.value = false
   if (r.ok) {
-    message.value = '已上架，打开小程序即可看到该商品'
+    message.value = '已同步到小程序，打开小程序即可看到该商品'
     msgLoadFail = false // 这是动作反馈·非加载失败——随后的 reloadProduct 成功不得把它当 stale banner 清掉（病根#14）
     void reloadProduct()
   } else {
-    // publishErrorText 四道门人话在列表页·此处后端已过前置预检，直报原文错误码
-    message.value = '上架没成功：' + String(r.error || '')
+    message.value = '同步到小程序没成功：' + String(r.error || '')
     msgLoadFail = false
   }
 }
 
-// 切步（本页按钮或侧栏点步改 ?step）→ 刷新进度真值 + 收起上架二次确认
-watch(step, () => {
+async function createDraft() {
+  if (busy.value) return
+  busy.value = true
+  const newId = 'p' + Date.now().toString(36)
+  const r: any = await saveDraft(freshDraft(newId))
+  busy.value = false
+  if (!r.ok) {
+    message.value = '建立草稿没成功：' + String(r.error || '')
+    msgLoadFail = false
+    return
+  }
+  void router.replace({ path: `/products/${newId}/wizard`, query: { step: '2' } })
+}
+
+// 切步 / 从 /launch 建档后换成带编号路由 → 刷新进度真值 + 收起同步二次确认
+watch([step, id], () => {
   pubConfirm.value = false
-  void reloadProduct()
+  if (id.value) void reloadProduct()
+  else {
+    product.value = null
+    loading.value = false
+  }
 })
 
-onMounted(reloadProduct)
+onMounted(() => {
+  if (id.value) void reloadProduct()
+  else loading.value = false
+})
 </script>
 
 <template>
@@ -130,27 +157,44 @@ onMounted(reloadProduct)
     <EmptyState v-if="loading" text="加载中…" />
     <EmptyState v-else-if="loadError" :icon="Store" text="加载失败（可能是网络波动，非商品不存在）">
       <UiButton variant="primary" size="sm" @click="retryLoad">重试</UiButton>
-      <UiButton variant="ghost" size="sm" @click="router.push('/products')"><ArrowLeft :size="14" :stroke-width="1.8" /><span>回商品列表</span></UiButton>
+      <UiButton variant="ghost" size="sm" @click="router.push('/products')"><ArrowLeft :size="14" :stroke-width="1.8" /><span>回产品管理</span></UiButton>
     </EmptyState>
+
+    <!-- /launch：还没建档，只做第 1 步（不得嵌整张商品表） -->
+    <template v-else-if="!id">
+      <a class="crumb" @click="router.push('/products')"><ArrowLeft :size="14" :stroke-width="1.8" /><span>产品管理</span></a>
+      <PageHeader title="上新" sub="第 1 / 6 步 · 先建草稿（顾客看不见）" />
+      <p v-if="message" class="banner">{{ message }}</p>
+      <section class="step-card">
+        <div class="step-head"><h2>第 1 步 · 新建商品</h2></div>
+        <div class="step-body">
+          <p class="identity-lead">先建一档草稿。编号和课程号自动生成。顾客还看不见。</p>
+          <p class="legend">保存草稿 ≠ 发布课程 ≠ 同步到小程序 ≠ 卡片定稿 ≠ 生成批次</p>
+          <UiButton :disabled="busy" @click="createDraft">{{ busy ? '建立中…' : '建立草稿，进入下一步' }}</UiButton>
+        </div>
+      </section>
+    </template>
+
     <EmptyState v-else-if="!product" :icon="Store" :text="'没有找到这个商品（编号 ' + id + '）'">
-      <UiButton variant="ghost" size="sm" @click="router.push('/products')"><ArrowLeft :size="14" :stroke-width="1.8" /><span>回商品列表</span></UiButton>
+      <UiButton variant="ghost" size="sm" @click="router.push('/products')"><ArrowLeft :size="14" :stroke-width="1.8" /><span>回产品管理</span></UiButton>
     </EmptyState>
 
     <template v-else>
-      <!-- TopBar：返回面包屑 + 标题/步进副标 + 在售/缺项徽章 + 上架 CTA -->
-      <a class="crumb" @click="router.push('/products')"><ArrowLeft :size="14" :stroke-width="1.8" /><span>商品列表</span></a>
-      <PageHeader :title="product.name || '新建商品'" :sub="'上新向导 · 第 ' + step + ' / 6 步 · 已完成 ' + doneCount + '/6'">
-        <Badge v-if="state === 'onsale'" tone="green">在售</Badge>
-        <Badge v-if="missing.length" tone="red">上架还差：{{ missing.join('、') }}</Badge>
-        <UiButton :disabled="!canPublish || busy" :title="canPublish ? '' : '完成前三步（图片/信息/SKU）后可上架'" @click="shelve">
+      <a class="crumb" @click="router.push('/products')"><ArrowLeft :size="14" :stroke-width="1.8" /><span>产品管理</span></a>
+      <PageHeader :title="product.name || '上新'" :sub="'上新 · 第 ' + step + ' / 6 步 · 已完成 ' + doneCount + '/6'">
+        <Badge v-if="state === 'onsale'" tone="green">小程序在售</Badge>
+        <Badge v-else-if="state === 'unlisted'" tone="red">已从橱窗拿下</Badge>
+        <Badge v-else tone="brand">草稿（顾客看不见）</Badge>
+        <Badge v-if="missing.length" tone="red">同步到小程序还差：{{ missing.join('、') }}</Badge>
+        <UiButton v-if="step !== 4" :disabled="!canPublish || busy" :title="canPublish ? '' : '补齐封面、名称、价格和规格后才能同步到小程序'" @click="shelve">
           <Store v-if="!busy" :size="15" :stroke-width="1.8" />
-          {{ busy ? '上架中…' : pubConfirm ? '确认上架？' : state === 'onsale' ? '更新上架信息' : '上架小程序' }}
+          {{ busy ? '同步中…' : pubConfirm ? '确认同步到小程序？' : '同步到小程序' }}
         </UiButton>
       </PageHeader>
 
       <p v-if="message" class="banner">{{ message }}</p>
+      <p class="legend">保存草稿 ≠ 发布课程 ≠ 同步到小程序 ≠ 卡片定稿 ≠ 生成批次</p>
 
-      <!-- 细进度条：步导航主源在侧栏（Shell）·此处只作轻量进度回显（可点跳步·railState/go 不变） -->
       <div class="rail">
         <template v-for="sn in 6" :key="sn">
           <span v-if="sn > 1" class="rail-line" :class="{ lit: railState(sn) !== 'todo' || railState(sn - 1) === 'done' }"></span>
@@ -164,7 +208,6 @@ onMounted(reloadProduct)
         </template>
       </div>
 
-      <!-- StepCard：白卡·圆角12·$line 描边·padding24·包裹本步嵌入子页 -->
       <section class="step-card">
         <div class="step-head">
           <h2>第 {{ step }} 步 · {{ STEP_NAMES[step - 1] }}</h2>
@@ -172,16 +215,19 @@ onMounted(reloadProduct)
         </div>
 
         <div class="step-body">
-          <!-- 步 1-3：商品图片/信息/SKU 同属商品编辑器（旧线 StepImages/StepInfo/StepSkus·新线合并为一编辑器） -->
-          <!-- @saved：内嵌编辑器 autosave 落库后重算顶部上架闸/进度圆点/缺项徽章（P2·否则补齐必备项后向导头仍锁死） -->
-          <Products v-if="step <= 3" embed :wizard-product-id="id" @saved="reloadProduct" />
+          <div v-if="step === 1" class="identity">
+            <p>商品编号 <code>{{ id }}</code> · 课程编号 <code>{{ courseId }}</code></p>
+            <p>状态：{{ stateLabel }} · 已完成 {{ doneCount }}/6</p>
+            <p class="identity-lead">草稿已建。顾客还看不见。下一步改图片与名字。</p>
+          </div>
+          <Products v-else-if="step === 2" embed :wizard-product-id="id" :wizard-slice="2" @saved="reloadProduct" />
+          <Products v-else-if="step === 3" embed :wizard-product-id="id" :wizard-slice="3" @saved="reloadProduct" />
           <Courses v-else-if="step === 4" embed :wizard-course-id="courseId" />
           <Cards v-else-if="step === 5" embed :wizard-product-id="id" />
           <Batches v-else-if="step === 6" embed :wizard-course-id="courseId" />
         </div>
       </section>
 
-      <!-- Footer：上一步 ghost（步1禁用）/ 下一步·完成 brand（两端对齐） -->
       <div class="wiz-footer">
         <UiButton variant="ghost" :disabled="step === 1" @click="go(step - 1)">
           <ChevronLeft :size="15" :stroke-width="1.9" />
@@ -193,7 +239,7 @@ onMounted(reloadProduct)
         </UiButton>
         <UiButton v-else @click="router.push('/products')">
           <Check :size="15" :stroke-width="2" />
-          <span>完成 · 返回商品列表</span>
+          <span>完成 · 回产品管理</span>
         </UiButton>
       </div>
     </template>
@@ -313,6 +359,24 @@ onMounted(reloadProduct)
 .next-hint {
   font-size: 12px;
   color: var(--ld-content-2);
+}
+.legend {
+  margin: 0;
+  font-size: 12px;
+  color: var(--ld-content-2);
+}
+.identity-lead {
+  margin: 0 0 12px;
+  font-size: 14px;
+  color: var(--ld-content);
+}
+.identity p {
+  margin: 0 0 8px;
+  font-size: 14px;
+}
+.identity code {
+  font-family: var(--ld-font-mono);
+  font-size: 12px;
 }
 .step-body {
   min-height: 360px;

@@ -256,7 +256,7 @@ function downloadSvg(kind: 'front' | 'back') {
         <Badge v-if="autoState" :tone="autoState === 'saved' ? 'green' : autoState === 'error' ? 'red' : 'neutral'" dot>
           {{ autoState === 'saving' ? '自动保存中…' : autoState === 'saved' ? '已自动保存' : '自动保存失败' }}
         </Badge>
-        <UiButton v-if="!embed" variant="ghost" @click="router.back()">← 返回</UiButton>
+        <UiButton v-if="!embed" variant="ghost" @click="router.push(productId ? '/products/' + productId + '/wizard?step=5' : '/launch')">返回上新</UiButton>
         <UiButton v-if="card" :variant="card.status === 'final' ? 'ghost' : 'primary'" @click="finalize">{{ card.status === 'final' ? '↩ 改回草稿' : '✅ 定稿并启用' }}</UiButton>
       </div>
     </header>
@@ -274,7 +274,7 @@ function downloadSvg(kind: 'front' | 'back') {
           <code class="pick-id">{{ p.id }}</code>
         </button>
       </div>
-      <EmptyState v-else :icon="ImageIcon" text="还没有商品——先到「商品管理」新建" />
+      <EmptyState v-else :icon="ImageIcon" text="还没有商品——先到侧栏「上新」建档" />
     </Card>
 
     <div v-else-if="card" class="work">

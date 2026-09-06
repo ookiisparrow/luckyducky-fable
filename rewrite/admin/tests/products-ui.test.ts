@@ -1,7 +1,7 @@
 // 商品与橱窗映射（守卫 rw-admin-products-ui-golden）：三态口径与云端一致/四道门人话原文兜底/
 // 整档 round-trip 保真/图片尺寸闸提前拦/脏档安全。
 import { describe, it, expect } from 'vitest'
-import { productState, mapDraftRows, publishErrorText, mapShowcaseRows, b64SizeOk, productSteps, basicsMissing, wizardCanPublish } from '../src/lib/mapProducts'
+import { productState, mapDraftRows, publishErrorText, mapShowcaseRows, b64SizeOk, productSteps, basicsMissing, wizardCanPublish, WIZARD_SLICE_FIELDS, freshDraft } from '../src/lib/mapProducts'
 
 describe('三态口径（与云端 listDrafts listed 表一致）', () => {
   it('大白话：表里 true=在售、false=已下架、不在表=筹备中（未上架）', () => {
@@ -32,13 +32,14 @@ describe('三态口径（与云端 listDrafts listed 表一致）', () => {
       { id: 'p1', name: '熊', price: 20, cover: 'c', skus: [{ name: 'a' }], courseId: 'course-p1' },
       { hasVideo: { 'course-p1': true }, cardFinal: { p1: true }, hasBatch: {} }
     )
-    expect(steps.map((s) => s.done)).toEqual([true, true, true, true, true, false]) // 图片/信息/SKU/视频/卡片 done·批次未
-    expect(steps.map((s) => s.key)).toEqual(['image', 'info', 'sku', 'video', 'card', 'batch'])
-    // 缺项全灭；courseId 缺省回退 course-<id>
+    expect(steps.map((s) => s.done)).toEqual([true, true, true, true, true, false]) // 建档/图与名/详情/课程/卡片 done·二维码未
+    expect(steps.map((s) => s.key)).toEqual(['create', 'look', 'detail', 'video', 'card', 'qr'])
+    // 有编号＝第 1 步已完成；其余缺项全灭
     const empty = productSteps({ id: 'p2', name: '', price: '', cover: '', skus: [] }, {})
-    expect(empty.every((s) => !s.done)).toBe(true)
+    expect(empty.find((s) => s.key === 'create')!.done).toBe(true)
+    expect(empty.filter((s) => s.key !== 'create').every((s) => !s.done)).toBe(true)
     const derived = productSteps({ id: 'p3', name: 'x', price: 1, cover: 'c', skus: [{}] }, { hasBatch: { 'course-p3': true } })
-    expect(derived.find((s) => s.key === 'batch')!.done).toBe(true) // courseId 缺→course-p3 回退命中
+    expect(derived.find((s) => s.key === 'qr')!.done).toBe(true) // courseId 缺→course-p3 回退命中
     // mapDraftRows 带 extras 时行含 steps + doneCount
     const rows = mapDraftRows([{ id: 'p1', name: '熊', price: 20, cover: 'c', skus: [{ name: 'a' }], courseId: 'course-p1' }], {}, { p1: true }, { hasVideo: { 'course-p1': true }, cardFinal: { p1: true }, hasBatch: { 'course-p1': true } })
     expect(rows[0].doneCount).toBe(6)
@@ -73,6 +74,22 @@ describe('上架四道门人话（原文兜底不吞）', () => {
     expect(publishErrorText('NEED_SKUS')).toContain('规格')
     expect(publishErrorText('NO_DRAFT')).toContain('草稿')
     expect(publishErrorText('WEIRD_500')).toContain('WEIRD_500') // 原文兜底
+    expect(publishErrorText('WEIRD_500')).toContain('同步到小程序')
+  })
+})
+
+describe('向导 1–3 步字段互斥（假进度 P0：不得再复制整表三次）', () => {
+  it('大白话：第 2 步只管图与名，第 3 步管详情/规格；两边字段不重叠；新建草稿自带课程号', () => {
+    const a = new Set(WIZARD_SLICE_FIELDS[2])
+    const b = new Set(WIZARD_SLICE_FIELDS[3])
+    for (const f of a) expect(b.has(f)).toBe(false)
+    expect([...a]).toEqual(['name', 'cover', 'images'])
+    expect(b.has('skus')).toBe(true)
+    expect(b.has('name')).toBe(false)
+    const d = freshDraft('p9')
+    expect(d.id).toBe('p9')
+    expect(d.courseId).toBe('course-p9')
+    expect(d.name).toBe('')
   })
 })
 
