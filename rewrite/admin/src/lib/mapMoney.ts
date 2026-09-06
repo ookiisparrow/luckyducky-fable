@@ -17,6 +17,14 @@ const ORDER_ERR: Record<string, string> = {
   ORDER_NO_REQUIRED: '需要输入单号',
   NOT_EXCEPTION: '该单不是支付异常状态',
   NO_RESULT: '系统没返回这单结果，请重试',
+  // 退款专用错误
+  ENTERED_NOT_REFUNDABLE: '买家已进课，不能再退货',
+  NOTHING_LEFT: '这单可退余额不足',
+  REFUND_FLOW_NOT_CONFIGURED: '退款系统未配置，请联系技术',
+  NO_RECORD: '找不到这笔售后申请',
+  REFUND_TRIGGER_FAIL: '退款触发失败，请稍后重试',
+  WRITE_FAIL: '系统写入失败，请重试',
+  PAYMENT_AMOUNT_MISSING: '实付金额缺失，请先补录',
 }
 export function orderErrorText(e: unknown): string {
   const s = String(e || '')
