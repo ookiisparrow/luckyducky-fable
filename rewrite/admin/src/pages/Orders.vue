@@ -40,7 +40,7 @@ const clearConfirmId = ref('')
 
 // 发货/查看抽屉：mode ship=填单发货（paid 首发 / shipped 改单号）· view=只读查看（done 等）
 type Acts = Record<string, { activated?: boolean; entered?: boolean } | undefined>
-const drawer = ref<{ row: OrderRowVM; mode: 'ship' | 'view'; company: string; trackingNo: string; acts: Acts | null } | null>(null)
+const drawer = ref<{ row: OrderRowVM; mode: 'ship' | 'view'; company: string; trackingNo: string; acts: Acts | null; error?: string } | null>(null)
 
 // 列表页脚分母＝当前标签计数（换皮恒用 counts.all·在「待发货」栏也显全量总数·误导以为本栏还有一堆没翻）
 const tabTotal = computed(() => counts.value[tab.value || 'all'])
@@ -68,6 +68,12 @@ async function reload() {
   rows.value = r.ok ? mapOrderRows((r as any).list) : []
   cursor.value = r.ok ? (r as any).nextCursor : null
   hasMore.value = !!(r.ok && (r as any).hasMore)
+  
+  if (selectedIds.value.length) {
+    const vis = new Set(rows.value.map(x => x.id))
+    selectedIds.value = selectedIds.value.filter(id => vis.has(id))
+  }
+
   if (c.ok && (c as any).counts) counts.value = (c as any).counts as Record<string, number>
   countsPartial.value = c.ok ? !!(c as any).partial : true // 计数请求本身失败也按不可信处理（不误显陈旧/占位数字）
   message.value = r.ok ? '' : '加载失败：' + String(r.error || '')
@@ -153,9 +159,10 @@ async function doShip() {
   const d = drawer.value
   if (!d || busy.value) return
   if (!d.company.trim() || !d.trackingNo.trim()) {
-    message.value = '快递公司和运单号都要填'
+    d.error = '快递公司和运单号都要填'
     return
   }
+  d.error = ''
   busy.value = true
   const r = await shipOrder(d.row.id, d.company.trim(), d.trackingNo.trim())
   busy.value = false
@@ -164,7 +171,7 @@ async function doShip() {
     message.value = ''
     void reload()
   } else {
-    message.value = `发货没成功（${String(r.error || '')}）` // 错误原文如实显示·不吞
+    d.error = `发货没成功（${String(r.error || '')}）` // 错误原文如实显示·不吞，且显示在抽屉内防死按钮假象
   }
 }
 
@@ -476,6 +483,7 @@ onMounted(reload)
               <input v-model="drawer.trackingNo" placeholder="扫描或输入运单号" @keyup.enter="doShip" />
             </div>
           </div>
+          <div v-if="drawer.error" class="drawer-error">{{ drawer.error }}</div>
         </template>
 
         <div class="drawer-foot">
@@ -959,5 +967,10 @@ onMounted(reload)
   display: flex;
   flex-direction: column;
   gap: 8px;
+}
+.drawer-error {
+  font-size: 12.5px;
+  color: var(--ld-red);
+  margin-top: -6px;
 }
 </style>
