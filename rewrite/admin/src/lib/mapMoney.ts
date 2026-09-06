@@ -131,6 +131,35 @@ export function mapDashboard(r: unknown): DashboardVM | null {
   return { cards, funnel, alerts, hot: seg(d.hot), stuck: seg(d.stuck), recent, approxSeg: !!(d.approx && d.approx.hot) }
 }
 
+const REFUND_ERR: Record<string, string> = {
+  BAD_ARGS: '参数不完整',
+  NO_ORDER: '找不到这单订单',
+  NO_RECORD: '找不到这条售后单',
+  ENTERED_NOT_REFUNDABLE: '买家已进课，退货权已失',
+  NOTHING_LEFT: '这行已退完，没有可退余额',
+  REFUND_FLOW_NOT_CONFIGURED: '退款工作流未配置，联系技术',
+  REFUND_TRIGGER_FAIL: '微信退款触发失败，可稍后重试',
+  REFUND_SCAN_CAP: '售后记录异常',
+  CONCURRENT: '刚被改过，请刷新重试',
+  UNKNOWN_ITEM: '商品行不在订单里',
+  WRITE_FAIL: '写数据库失败，可重试',
+  PAYMENT_AMOUNT_MISSING: '支付异常单未补录实付额，先去订单页补录',
+  BAD_AMOUNT: '金额超出合理范围',
+  REFUND_EXISTS: '已有退款记录，不能重复',
+}
+export function refundErrorText(e: unknown): string {
+  const s = String(e || '')
+  if (!s) return '未知错误'
+  if (s.startsWith('BAD_STATUS:')) {
+    const raw = s.slice(11)
+    if (raw === 'concurrent') return '刚被改过，请刷新重试'
+    const rl = refundStatusLabel(raw)
+    const label = rl !== raw ? rl : orderStatusLabel(raw)
+    return `当前状态「${label}」不允许此操作`
+  }
+  return REFUND_ERR[s] || `操作失败（${s}）`
+}
+
 // 手机号掩码（PII·根因#3 信任边界）：列表只显掩码，抽屉给操作员看完整号（联系买家/填面单）。
 // 短号（<7 位·脏档/占位）原样返回，不假掩成 ****。
 export function maskPhone(p: unknown): string {

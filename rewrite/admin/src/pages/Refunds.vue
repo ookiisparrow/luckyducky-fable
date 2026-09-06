@@ -7,7 +7,7 @@ import { useRoute } from 'vue-router'
 import { RefreshCw, Search, X, CircleCheck, Ticket, GraduationCap, Check, ShieldAlert } from 'lucide-vue-next'
 import { listRefunds, refundCounts, approveRefund, rejectRefund, getRefundDetail, listOrders, overrideRefund } from '../api/money'
 import UiButton from '../components/ui/Button.vue'
-import { mapRefundRows, refundVerdict, mapOverrideOrder, canOverrideRefund, type RefundRowVM, type RefundVerdictVM, type OverrideOrderVM } from '../lib/mapMoney'
+import { mapRefundRows, refundVerdict, mapOverrideOrder, canOverrideRefund, refundErrorText, type RefundRowVM, type RefundVerdictVM, type OverrideOrderVM } from '../lib/mapMoney'
 import { useLatest } from '../lib/latest'
 import PageHeader from '../components/ui/PageHeader.vue'
 import Card from '../components/ui/Card.vue'
@@ -92,7 +92,7 @@ async function reload() {
   hasMore.value = !!(r.ok && (r as any).hasMore)
   if (c.ok && c.counts) counts.value = c.counts as Record<string, number>
   countsPartial.value = c.ok ? !!(c as any).partial : true // 计数请求本身失败也按不可信处理（不误显陈旧/占位数字）
-  message.value = r.ok ? '' : '加载失败：' + String(r.error || '')
+  message.value = r.ok ? '' : '加载失败：' + refundErrorText(r.error)
 }
 
 // 加载更多（游标分页·根因#7·换皮丢了这个·退款首页 20 条封顶·第 21 单起翻不到）
@@ -179,7 +179,7 @@ async function doApprove() {
   } else if (stillHere) {
     // 失败：不关抽屉、不刷新——真实原因留在眼前（P2·根因#14 admin 侧·别被 reload 的"加载中…"盖掉）；
     // 若抽屉已切别单则不挂错误（P2·根因#8）
-    decideErr.value = `退款触发失败：${String(r.error || '未知错误')}`
+    decideErr.value = '退款触发失败：' + refundErrorText(r.error)
   }
 }
 
@@ -202,7 +202,7 @@ async function doReject() {
     void reload()
   } else if (stillHere) {
     // 失败：留抽屉 + 红条（同 doApprove·不被刷新吞）；若抽屉已切别单则不挂错误
-    decideErr.value = '拒绝没成功：' + String(r.error || '')
+    decideErr.value = '拒绝没成功：' + refundErrorText(r.error)
   }
 }
 
@@ -246,7 +246,7 @@ async function findOverrideOrder() {
   overrideFindMsg.value = '查找中…'
   const r = await listOrders(undefined, undefined, 1, id)
   if (!r.ok) {
-    overrideFindMsg.value = '查找失败：' + String(r.error || '')
+    overrideFindMsg.value = '查找失败：' + refundErrorText(r.error)
     return
   }
   const vm = mapOverrideOrder((r as any).list, id)
@@ -272,7 +272,7 @@ async function submitOverride() {
     overrideReason.value = ''
     overrideAck.value = false
   } else {
-    overrideResultMsg.value = '越规退款触发失败：' + String(r.error || '未知错误')
+    overrideResultMsg.value = '越规退款触发失败：' + refundErrorText(r.error)
   }
 }
 
@@ -288,7 +288,7 @@ onMounted(() => {
       <UiButton variant="ghost" size="sm" title="越过常规售后资格规则直接发起退款——仅限特殊情况" @click="openOverride">
         <ShieldAlert :size="14" :stroke-width="1.8" /><span>越规退款</span>
       </UiButton>
-      <UiButton variant="ghost" size="sm" :disabled="message === '加载中…'" @click="reload">
+      <UiButton variant="ghost" size="sm" :disabled="reloading" @click="reload">
         <RefreshCw :size="14" :stroke-width="1.8" /><span>刷新</span>
       </UiButton>
     </PageHeader>
@@ -467,7 +467,7 @@ onMounted(() => {
           <input v-model="overrideOrderId" placeholder="输入订单号" @keyup.enter="findOverrideOrder" />
           <UiButton size="sm" @click="findOverrideOrder">查找</UiButton>
         </div>
-        <p v-if="overrideFindMsg" class="ov-msg">{{ overrideFindMsg }}</p>
+        <p v-if="overrideFindMsg" class="ov-msg" :class="{ err: overrideFindMsg.includes('失败') }">{{ overrideFindMsg }}</p>
 
         <template v-if="overrideOrder">
           <div class="summary">

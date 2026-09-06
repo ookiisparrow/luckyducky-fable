@@ -1,7 +1,7 @@
 // 订单与钱组映射（守卫 rw-admin-money-ui-golden）：看板近似诚实标注/警报有则必显无则不吓人/
 // 订单行金额不符禁发入口收窄/售后行只待审核可裁决/脏档安全（与 mp 同口径）。
 import { describe, it, expect } from 'vitest'
-import { mapDashboard, mapOrderRows, mapRefundRows, maskPhone, refundVerdict, deriveDashboardTodos, canOverrideRefund, mapOverrideOrder, orderErrorText } from '../src/lib/mapMoney'
+import { mapDashboard, mapOrderRows, mapRefundRows, maskPhone, refundVerdict, deriveDashboardTodos, canOverrideRefund, mapOverrideOrder, orderErrorText, refundErrorText } from '../src/lib/mapMoney'
 import ordersSrc from '../src/pages/Orders.vue?raw'
 import fulfillSrc from '../src/pages/Fulfill.vue?raw'
 import refundsSrc from '../src/pages/Refunds.vue?raw'
@@ -396,5 +396,30 @@ describe('orderErrorText（钱组英文码→操作者中文·#222 同类）', (
     expect(fulfillSrc).toMatch(/function syncDefaultChecked\(\) \{\n  checked\.value = new Set\(shippable\.value\.filter/)
     expect(fulfillSrc).not.toMatch(/if \(msg === 'FEE_MISMATCH_HOLD'\)/)
     expect(fulfillSrc).not.toMatch(/if \(msg === 'NO_ORDER'\)/)
+  })
+})
+
+describe('refundErrorText（售后英文码→操作者中文·#222 同类·退款侧）', () => {
+  it('大白话：售后已知码出人话、BAD_STATUS 复合码拆售后/订单状态中文、concurrent 特殊处理、未知码兜底不裸甩', () => {
+    expect(refundErrorText('ENTERED_NOT_REFUNDABLE')).toBe('买家已进课，退货权已失')
+    expect(refundErrorText('NOTHING_LEFT')).toBe('这行已退完，没有可退余额')
+    expect(refundErrorText('REFUND_TRIGGER_FAIL')).toBe('微信退款触发失败，可稍后重试')
+    expect(refundErrorText('REFUND_FLOW_NOT_CONFIGURED')).toBe('退款工作流未配置，联系技术')
+    expect(refundErrorText('CONCURRENT')).toBe('刚被改过，请刷新重试')
+    expect(refundErrorText('NO_RECORD')).toBe('找不到这条售后单')
+    expect(refundErrorText('UNKNOWN_ITEM')).toBe('商品行不在订单里')
+    expect(refundErrorText('PAYMENT_AMOUNT_MISSING')).toBe('支付异常单未补录实付额，先去订单页补录')
+    expect(refundErrorText('BAD_STATUS:approved')).toBe('当前状态「退款处理中」不允许此操作')
+    expect(refundErrorText('BAD_STATUS:paid')).toBe('当前状态「待发货」不允许此操作')
+    expect(refundErrorText('BAD_STATUS:concurrent')).toBe('刚被改过，请刷新重试')
+    expect(refundErrorText('FUTURE_UNKNOWN_CODE')).toBe('操作失败（FUTURE_UNKNOWN_CODE）')
+    expect(refundErrorText('')).toBe('未知错误')
+    expect(refundErrorText(null)).toBe('未知错误')
+  })
+  it('大白话：Refunds.vue 报错走人话映射（不裸 String(r.error)）+ 刷新按钮用 reloading 而非字符串匹配', () => {
+    expect(refundsSrc).toMatch(/refundErrorText\(/)
+    expect(refundsSrc).not.toMatch(/String\(r\.error/)
+    expect(refundsSrc).toMatch(/:disabled="reloading"/)
+    expect(refundsSrc).not.toMatch(/:disabled="message === '加载中…'"/)
   })
 })
