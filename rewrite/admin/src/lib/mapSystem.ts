@@ -72,6 +72,7 @@ export interface ReconVM {
   range: { from: string; to: string }
   daily: Array<{ day: string; income: string; refund: string; net: string; orders: number; refunds: number }>
   approxNote: string
+  partial: boolean // 累计聚合/异常查询降级：数据不可信（后端 cumDegraded·前端须警告操作员别当真 0）
   // 内部异常明细（bug B2 修：后端 getTxAlerts 返回 {feeMismatch,refundMismatch,stuckRefunds} 三数组对象·
   // 换皮误当数组取 .length 恒 0、明细永不渲染。改按对象结构化·有则渲染带单号、无则空数组不吓人）
   exceptions: Array<{ label: string; ids: string[] }>
@@ -106,6 +107,7 @@ export function mapRecon(r: unknown): ReconVM | null {
       refunds: Number(b.refunds) || 0,
     })),
     approxNote: d.approx ? '窗内明细触上限·近似（累计不受影响）' : '', // 诚实透传
+    partial: d.partial === true,
     exceptions: mapExceptions(d.exceptions),
   }
 }
@@ -138,7 +140,7 @@ export function mapBillMatch(r: unknown): BillMatchVM | null {
     summary: [
       { label: '已平', value: Number(s.matched) || 0 },
       { label: '微信有我方无（最危险）', value: Number(s.wxOnly) || 0, danger: (Number(s.wxOnly) || 0) > 0 }, // 收钱无单标红
-      { label: '我方有微信无', value: Number(s.oursOnly) || 0, danger: (Number(s.oursOnly) || 0) > 0 },
+      { label: '我方有微信无', value: Number(s.oursOnly) || 0 },
       { label: '金额不符', value: Number(s.amountMismatch) || 0, danger: (Number(s.amountMismatch) || 0) > 0 },
     ],
     wxOnly: (Array.isArray(dis.wxOnly) ? dis.wxOnly : []).map((w: Record<string, any>) => ({ transactionId: String(w.transactionId || ''), amount: yuan(w.amount), date: String(w.date || '') })),

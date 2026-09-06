@@ -4,7 +4,7 @@
 // 诚实边界：设计稿「微信手续费≈0.6% / 微信实际到账」为估算/结算数据，后端 getReconciliation 无——不伪造，
 // 只渲染应收−退款=净额真等式；月份选择器（近 30 天固定窗，无 month 参数）与「导出 Excel」（改 CSV）记待办。
 import { ref, computed, onMounted } from 'vue'
-import { CircleDollarSign, RotateCcw, Wallet, Download, CircleCheck } from 'lucide-vue-next'
+import { CircleDollarSign, RotateCcw, Wallet, Download, CircleCheck, TriangleAlert } from 'lucide-vue-next'
 import { getReconciliation, getBillMatch, downloadBill } from '../api/system'
 import { mapRecon, mapBillMatch, type ReconVM, type BillMatchVM } from '../lib/mapSystem'
 import { useLatest } from '../lib/latest'
@@ -163,10 +163,10 @@ onMounted(reload)
 
     <template v-if="totals">
       <!-- 账平/异常横幅（全账累计等式·真值） -->
-      <div class="balance" :class="{ warn: exCount }">
-        <CircleCheck :size="20" :stroke-width="1.8" />
+      <div class="balance" :class="{ warn: exCount || recon!.partial }">
+        <component :is="exCount || recon!.partial ? TriangleAlert : CircleCheck" :size="20" :stroke-width="1.8" />
         <div>
-          <div class="balance-t">{{ exCount ? `内部有 ${exCount} 笔异常待处理` : '内部账已对平' }}</div>
+          <div class="balance-t">{{ recon!.partial ? '对账数据可能不完整，请稍后重试' : exCount ? `内部有 ${exCount} 笔异常待处理` : '内部账已对平' }}</div>
           <div class="balance-s">全账累计 应收 {{ cum.income }} − 退款 {{ cum.refund }} = 净额 {{ cum.net }}</div>
         </div>
       </div>
@@ -307,7 +307,7 @@ onMounted(reload)
         </div>
       </template>
 
-      <EmptyState v-if="!match.wxOnly.length && !match.amountMismatch.length && !match.oursOnly.length" :icon="CircleCheck" text="逐笔已勾对 · 无差异" />
+      <EmptyState v-if="!match.wxOnly.length && !match.amountMismatch.length && !match.oursOnly.length" :icon="match.summary[0]?.value ? CircleCheck : TriangleAlert" :text="match.summary[0]?.value ? '逐笔已勾对 · 无差异' : '暂无勾对数据——请先拉取账单'" />
     </Card>
 
     <p class="foot-note">「微信手续费 / 实际到账」需微信结算数据源，后端暂无——本页只作应收/退款/净额真等式与账单逐笔勾对（区间可自选·全账累计恒为 money 锚）。</p>
