@@ -17,11 +17,28 @@ const ORDER_ERR: Record<string, string> = {
   ORDER_NO_REQUIRED: '需要输入单号',
   NOT_EXCEPTION: '该单不是支付异常状态',
   NO_RESULT: '系统没返回这单结果，请重试',
+  ENTERED_NOT_REFUNDABLE: '这件商品已进课，不符合退款规则',
+  NOTHING_LEFT: '这件商品已经没有可退金额了',
+  REFUND_FLOW_NOT_CONFIGURED: '退款通道还没配置好，请先去系统设置检查',
+  NO_RECORD: '找不到这条售后单',
+  REFUND_TRIGGER_FAIL: '退款没发出去，请稍后重试',
+  WRITE_FAIL: '系统写入失败，请重试',
+  PAYMENT_AMOUNT_MISSING: '这单缺实际到账金额，请先去「订单发货」页补录实付',
+  UNKNOWN_ITEM: '商品行不在订单里',
+  NO_ENDPOINT: '后台地址没配好，请联系管理员检查',
+  BAD_JSON_RESPONSE: '系统回包不完整，请稍后重试',
 }
 export function orderErrorText(e: unknown): string {
   const s = String(e || '')
   if (!s) return '未知错误'
-  if (s.startsWith('BAD_STATUS:')) return `订单状态「${orderStatusLabel(s.slice(11))}」不允许此操作`
+  if (s.startsWith('NETWORK:')) return '网络有点不稳，请刷新重试'
+  if (s.startsWith('BAD_STATUS:')) {
+    const raw = s.slice(11)
+    const orderLabel = orderStatusLabel(raw)
+    if (orderLabel !== raw) return `订单状态「${orderLabel}」不允许此操作`
+    const refundLabel = refundStatusLabel(raw)
+    return `${refundLabel !== raw ? '售后' : '当前'}状态「${refundLabel}」不允许此操作`
+  }
   return ORDER_ERR[s] || `操作失败（${s}）`
 }
 
@@ -304,7 +321,7 @@ export function refundVerdict(v: { lineRefundable: boolean; entered: boolean; re
   return {
     tone: 'lost',
     title: '本单此行退货权已失',
-    sub: '本单此行已被撤退货权（进课）——同意退款服务端会拦（ENTERED_NOT_REFUNDABLE）',
+    sub: '本单此行已被撤退货权（进课）——现在同意退款，服务端也会拦下',
   }
 }
 
