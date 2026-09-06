@@ -15,6 +15,14 @@ describe('Cards.vue 无 productId 不再是死胡同（商品选择器兜底）'
   })
 })
 
+describe('向导第 5 步只上传卡片（不要设计向 UI）', () => {
+  it('大白话：嵌入向导时只露上传，设计尺寸/色板/文案面板藏起来', () => {
+    expect(cardsSrc).toMatch(/v-if="!embed"/)
+    expect(cardsSrc).toMatch(/upload-only|上传卡片/)
+    expect(cardsSrc).toMatch(/v-if="!embed"[\s\S]*class="work"|v-else-if="!embed"/)
+  })
+})
+
 const card: CardModel = {
   productId: 'p1',
   courseId: 'course-p1',

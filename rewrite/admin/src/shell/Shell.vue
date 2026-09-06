@@ -1,6 +1,6 @@
 <script setup lang="ts">
 // 壳布局（照 design/控制台.pen 侧栏 nsvaZ 重写·M-adminImpl 批F）：248px 白侧栏（右 $line 分线）、
-// 鸭徽 logo「运营控制台」、「导航」小标题 + 编辑排序 chip、6 顶层（数据看板=独立项·其余=可展开组）、
+// 鸭徽 logo「运营控制台」、「导航」小标题 + 编辑排序 chip、顶层（数据看板=独立项·其余=可展开组；上新与店面内容拆开）、
 // 底部管理员条。进上新向导路由切「按步直达」聚焦步导航（决策§27②·lib/nav）。
 //
 // IA 归置说明（交付时待用户确认）：设计把「商品与上新 / 进销存」画成单项工作流入口，但现实现各有
@@ -19,11 +19,6 @@ import {
   Pencil,
   LogOut,
   Image,
-  FileText,
-  Tags,
-  Clapperboard,
-  QrCode,
-  Printer,
 } from 'lucide-vue-next'
 import { client } from '../api'
 import { isWizardPath, WIZARD_STEPS, wizardStepFromQuery, currentNavGroup } from '../lib/nav'
@@ -38,13 +33,20 @@ const NAV: Array<{ group: string; icon: Component; solo?: boolean; items: Array<
     group: '商品与上新',
     icon: Tag,
     items: [
-      { label: '商品管理', path: '/products' },
-      { label: '课程管理', path: '/courses' },
-      { label: '卡片设计', path: '/cards' },
+      { label: '产品管理', path: '/products' },
+      { label: '上新', path: '/launch' },
+    ],
+  },
+  {
+    group: '店面内容',
+    icon: Image,
+    items: [
       { label: '小程序橱窗', path: '/showcase' },
       { label: '评价挑选', path: '/reviews' },
       { label: '页面内容', path: '/page-content' },
       { label: '帮助视频', path: '/help-videos' },
+      { label: '课程运维', path: '/courses' },
+      { label: '卡片运维', path: '/cards' },
     ],
   },
   {
@@ -104,8 +106,8 @@ const NAV: Array<{ group: string; icon: Component; solo?: boolean; items: Array<
 const route = useRoute()
 // 上下文侧栏（决策§27②）：进上新向导路由切「按步直达」聚焦步导航，否则六组运营 nav
 const wizardMode = computed(() => isWizardPath(route.path))
-const curStep = computed(() => wizardStepFromQuery(route.query.step))
-const STEP_ICONS: Record<string, Component> = { image: Image, 'file-text': FileText, tags: Tags, clapperboard: Clapperboard, 'qr-code': QrCode, printer: Printer }
+const wizardId = computed(() => String(route.params.id || ''))
+const curStep = computed(() => (wizardId.value ? wizardStepFromQuery(route.query.step) : 1))
 
 // 分组默认收起（照设计·chevron-right）；当前路由所在组自动展开；用户手动展开记 localStorage
 const EXPAND_KEY = 'ldrw-admin-nav-expanded'
@@ -152,18 +154,21 @@ function logout() {
       <nav v-if="wizardMode" class="nav">
         <router-link to="/products" class="wiz-head">
           <Tag class="item-icon" :size="17" :stroke-width="1.8" />
-          <span>商品与上新</span>
+          <span>回产品管理</span>
         </router-link>
         <div class="nav-cap"><span>按步骤直达</span></div>
         <router-link
           v-for="s in WIZARD_STEPS"
           :key="s.n"
-          :to="{ path: route.path, query: { ...route.query, step: s.n } }"
+          :to="wizardId || s.n === 1 ? { path: route.path, query: { ...route.query, step: s.n } } : '/launch'"
           class="item wiz-step"
-          :class="{ 'wiz-on': curStep === s.n }"
+          :class="{ 'wiz-on': curStep === s.n, 'wiz-off': !wizardId && s.n > 1 }"
         >
-          <component :is="STEP_ICONS[s.icon]" class="item-icon" :size="17" :stroke-width="1.8" />
-          <span>{{ s.n }} · {{ s.label }}</span>
+          <span class="wiz-num">{{ s.n }}</span>
+          <span class="wiz-copy">
+            <span class="wiz-label">{{ s.label }}</span>
+            <span class="wiz-hint">{{ s.hint }}</span>
+          </span>
         </router-link>
         <div class="spacer" />
       </nav>
@@ -209,9 +214,21 @@ function logout() {
         </button>
       </div>
     </aside>
-    <main>
-      <router-view />
-    </main>
+    <div class="workspace">
+      <header class="topbar">
+        <div class="topbar-left">
+          <h2 class="topbar-title">Lucky Ducky 运营控制台</h2>
+          <span class="topbar-brand">小棉鸭</span>
+        </div>
+        <p class="topbar-hint">
+          改完要点「同步到小程序」，顾客才看得见 ·
+          <router-link to="/showcase">去橱窗</router-link>
+        </p>
+      </header>
+      <main>
+        <router-view />
+      </main>
+    </div>
   </div>
 </template>
 
@@ -402,14 +419,54 @@ aside {
 .wiz-head .item-icon {
   color: var(--ld-brand);
 }
+.wiz-step.wiz-off {
+  opacity: 0.4;
+  pointer-events: none;
+}
+.wiz-step {
+  align-items: flex-start;
+}
+.wiz-num {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  margin-top: 1px;
+  flex: none;
+  border-radius: 999px;
+  border: 1px solid var(--ld-line-strong);
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--ld-content-2);
+}
+.wiz-copy {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.wiz-label {
+  font-size: 13px;
+}
+.wiz-hint {
+  font-size: 11px;
+  color: var(--ld-content-2);
+  font-weight: 400;
+  line-height: 1.3;
+}
 .wiz-step.wiz-on {
   background: var(--ld-bg-lilac);
   border-color: var(--ld-purple-line);
   color: var(--ld-purple-ink);
   font-weight: 600;
 }
-.wiz-step.wiz-on .item-icon {
+.wiz-step.wiz-on .wiz-num {
+  border-color: var(--ld-brand);
   color: var(--ld-brand);
+}
+.wiz-step.wiz-on .wiz-hint {
+  color: var(--ld-purple-meta);
 }
 .spacer {
   flex: 1;
@@ -463,6 +520,61 @@ aside {
   color: var(--ld-red);
   border-color: var(--ld-red-line);
   background: var(--ld-bg-red-soft);
+}
+.workspace {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+}
+.topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex: none;
+  flex-wrap: wrap;
+  min-height: 56px;
+  padding: 10px 32px;
+  background: var(--ld-bg);
+  border-bottom: 1px solid var(--ld-line);
+}
+.topbar-left {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+.topbar-title {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--ld-ink);
+  white-space: nowrap;
+}
+.topbar-brand {
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--ld-bg-lilac);
+  color: var(--ld-brand-active);
+  font-size: 11.5px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.topbar-hint {
+  margin: 0;
+  min-width: 0;
+  font-size: 12.5px;
+  color: var(--ld-content-2);
+  text-align: right;
+}
+.topbar-hint a {
+  color: var(--ld-brand-active);
+  text-decoration: none;
+}
+.topbar-hint a:hover {
+  text-decoration: underline;
 }
 main {
   flex: 1;

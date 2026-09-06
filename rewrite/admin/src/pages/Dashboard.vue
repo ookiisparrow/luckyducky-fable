@@ -126,6 +126,17 @@ onMounted(load)
 
     <p v-if="message" class="ld-status">{{ message }}</p>
 
+    <div class="shop-entries">
+      <button class="shop-entry" @click="router.push('/products')">
+        <span class="shop-entry-k">产品管理</span>
+        <span class="shop-entry-v">已有商品：编辑、同步到小程序、继续上新</span>
+      </button>
+      <button class="shop-entry" @click="router.push('/launch')">
+        <span class="shop-entry-k">上新</span>
+        <span class="shop-entry-v">新品五步：建档与封面 → 图与名 → 详情 → 课程 → 卡片与二维码</span>
+      </button>
+    </div>
+
     <template v-if="vm">
       <!-- 待处理行动条（owner 行动入口·真值）：数字直接点进对应页 -->
       <Card v-if="todoTotal" title="待处理" :sub="`共 ${todoTotal} 项`">
@@ -219,6 +230,37 @@ onMounted(load)
   margin: 0;
   font-size: 13px;
   color: var(--ld-green);
+}
+.shop-entries {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+.shop-entry {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  padding: 16px 18px;
+  border: 1px solid var(--ld-line);
+  border-radius: var(--ld-radius);
+  background: var(--ld-bg);
+  cursor: pointer;
+  text-align: left;
+  font-family: inherit;
+}
+.shop-entry:hover {
+  border-color: var(--ld-brand);
+  background: var(--ld-bg-lilac);
+}
+.shop-entry-k {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--ld-purple-ink);
+}
+.shop-entry-v {
+  font-size: 12.5px;
+  color: var(--ld-content-2);
 }
 /* 交易异常告警条 */
 .alert {

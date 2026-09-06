@@ -46,3 +46,11 @@ export function hasPendingSaves(): boolean {
   for (const slot of registry.values()) if (slot.running || slot.dirty) return true
   return false
 }
+
+export async function settleAllSaves(): Promise<void> {
+  const promises = []
+  for (const slot of registry.values()) {
+    if (slot.running) promises.push(slot.running)
+  }
+  await Promise.all(promises)
+}

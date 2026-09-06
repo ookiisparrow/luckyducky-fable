@@ -153,7 +153,7 @@ onMounted(reload)
             </div>
             <button class="switch" :class="{ on: r.featured }" :title="r.featured ? '点击下架橱窗' : '点击上架橱窗'" @click="toggle(r)"><span class="knob"></span></button>
           </div>
-          <p class="hint">开关 = 是否出现在首页橱窗；拖哪边都行、两侧画面双向联动。停售/恢复销售在「商品管理」页。</p>
+          <p class="hint">开关 = 是否出现在首页橱窗；拖哪边都行、两侧画面双向联动。同步到小程序 / 从橱窗拿下在「产品管理」页。</p>
         </div>
       </div>
     </Card>

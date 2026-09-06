@@ -28,19 +28,64 @@ export interface StepExtras {
   hasBatch?: Record<string, boolean> // courseId → 有码批次
 }
 
-/** 6 步上新进度（S11·换皮误判「无源·略」）：图片/信息/SKU 前端算·视频/卡片/批次取后端 listDrafts extras。 */
+/** 5 步上新进度：建档+封面 / 图与名 / 详情前端算·课程 / 卡片+二维码取后端 listDrafts extras。 */
 export function productSteps(p: Record<string, any>, extras?: StepExtras): StepDot[] {
   const id = String((p && (p.id || p._id)) || '')
   const courseId = String((p && p.courseId) || '') || 'course-' + id
   const e = extras || {}
+  const nameOk = !!String((p && p.name) || '').trim()
+  const priceOk = !!(p && p.price != null && String(p.price).trim() !== '')
+  const skus = Array.isArray(p && p.skus) ? p.skus : []
+  const skusOk = skus.length > 0 && skus.every((s: any) => String(s?.name || '').trim() !== '' && String(s?.price ?? '').trim() !== '')
+  const cardOk = !!(e.cardFinal && e.cardFinal[id])
+  const qrOk = !!(e.hasBatch && e.hasBatch[courseId])
   return [
-    { key: 'image', label: '产品图片', done: !!(p && p.cover) },
-    { key: 'info', label: '商品信息', done: !!String((p && p.name) || '').trim() && !!(p && p.price != null && String(p.price) !== '') },
-    { key: 'sku', label: 'SKU', done: Array.isArray(p && p.skus) && p.skus.length > 0 },
-    { key: 'video', label: '教学视频', done: !!(e.hasVideo && e.hasVideo[courseId]) },
-    { key: 'card', label: '二维码卡片', done: !!(e.cardFinal && e.cardFinal[id]) },
-    { key: 'batch', label: '码批次', done: !!(e.hasBatch && e.hasBatch[courseId]) },
+    { key: 'create', label: '新建与封面', done: !!id && !!(p && p.cover) },
+    { key: 'look', label: '图片与名字', done: nameOk },
+    { key: 'detail', label: '详情信息', done: priceOk && skusOk },
+    { key: 'video', label: '课程视频', done: !!(e.hasVideo && e.hasVideo[courseId]) },
+    { key: 'cardQr', label: '卡片与二维码', done: cardOk && qrOk },
   ]
+}
+
+/** 列表「上新进度」旁标：下一未完成步，或「上新完成」 */
+export function stepProgressHint(steps: StepDot[]): string {
+  const i = steps.findIndex((s) => !s.done)
+  if (i < 0) return '上新完成'
+  return `第 ${i + 1} 步：${steps[i].label}`
+}
+
+/** 产品表副标：有筹备中才跟「待完成上新」；0 款不跟，避免「都已上架」还写待完成。 */
+export function productsListSub(all: number, preparing: number): string {
+  if (preparing > 0) return `共 ${all} 款商品 · ${preparing} 款筹备中待完成上新`
+  return `共 ${all} 款商品`
+}
+
+/** 向导 1–3 步各管哪些字段（互斥·防再嵌同一张大表）。第 1 步封面，第 2 步名字和相册，第 3 步详情。 */
+export const WIZARD_SLICE_FIELDS: Record<1 | 2 | 3, readonly string[]> = {
+  1: ['cover'],
+  2: ['name', 'images'],
+  3: ['tag', 'brief', 'price', 'was', 'sold', 'skus', 'params', 'detailSections', 'kit'],
+}
+
+/** 新建草稿骨架（向导第 1 步与列表「去上新」同形·课程号当场绑上，后面不用手输） */
+export function freshDraft(id: string): Record<string, unknown> {
+  return {
+    id,
+    name: '',
+    tag: '',
+    brief: '',
+    price: '',
+    was: '',
+    sold: 0,
+    cover: '',
+    images: [],
+    skus: [],
+    params: [],
+    detailSections: [],
+    kit: [],
+    courseId: 'course-' + id,
+  }
 }
 
 export interface DraftRowVM {
@@ -51,7 +96,7 @@ export interface DraftRowVM {
   stateLabel: string
   coverUrl: string
   skuCount: number
-  steps: StepDot[] // 6 步上新进度圆点（换皮删了这列·「无源」说法误·后端 extras 就绪即真）
+  steps: StepDot[] // 5 步上新进度圆点（后端 extras 就绪即真）
   doneCount: number
   raw: Record<string, unknown> // 整档（编辑 round-trip 用·防覆盖式保存抹字段）
 }
@@ -113,10 +158,10 @@ export function wizardCanPublish(p: unknown): boolean {
 export function publishErrorText(e: unknown): string {
   const code = String(e || '')
   if (code === 'NO_DRAFT') return '草稿不存在（可能已被删除）'
-  if (code === 'NEED_COVER') return '先上传封面图才能上架'
+  if (code === 'NEED_COVER') return '先上传封面图才能同步到小程序'
   if (code === 'NEED_INFO') return '名称或价格没填好（价格须是有效金额）'
   if (code === 'NEED_SKUS') return '规格行不完整（每行都要有名称和有效价格）'
-  return '上架没成功（' + code + '）' // 原文兜底
+  return '同步到小程序没成功（' + code + '）' // 原文兜底
 }
 
 export interface ShowcaseRowVM {
