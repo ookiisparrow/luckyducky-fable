@@ -54,6 +54,12 @@ export function stepProgressHint(steps: StepDot[]): string {
   return `第 ${i + 1} 步：${steps[i].label}`
 }
 
+/** 产品表副标：有筹备中才跟「待完成上新」；0 款不跟，避免「都已上架」还写待完成。 */
+export function productsListSub(all: number, preparing: number): string {
+  if (preparing > 0) return `共 ${all} 款商品 · ${preparing} 款筹备中待完成上新`
+  return `共 ${all} 款商品`
+}
+
 /** 向导 1–3 步各管哪些字段（互斥·防再嵌同一张大表）。第 1 步封面，第 2 步名字和相册，第 3 步详情。 */
 export const WIZARD_SLICE_FIELDS: Record<1 | 2 | 3, readonly string[]> = {
   1: ['cover'],

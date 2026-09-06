@@ -5,7 +5,7 @@
 import { ref, computed, onMounted, onBeforeUnmount, watch, nextTick } from 'vue'
 import { Search, Trash2, Package, MoreHorizontal, Plus } from 'lucide-vue-next'
 import { listDrafts, saveDraft, deleteDraft, uploadImage, publishProduct, unpublishProduct, republishProduct } from '../api/products'
-import { mapDraftRows, publishErrorText, b64SizeOk, basicsMissing, stepProgressHint, type DraftRowVM } from '../lib/mapProducts'
+import { mapDraftRows, publishErrorText, b64SizeOk, basicsMissing, stepProgressHint, productsListSub, type DraftRowVM } from '../lib/mapProducts'
 import { serialSave } from '../lib/serialSave'
 import { useRouter } from 'vue-router'
 import UiButton from '../components/ui/Button.vue'
@@ -97,7 +97,8 @@ const FILTERS = [
   { key: 'preparing', label: '筹备中' },
   { key: 'unlisted', label: '已下架' },
 ] as const
-const listSub = computed(() => `共 ${counts.value.all} 款商品 · ${counts.value.preparing} 款筹备中待完成上新`)
+const listSub = computed(() => productsListSub(counts.value.all, counts.value.preparing))
+const listReady = ref(false) // 首包回来之前不谎报「还没有商品」（polish 把空态收进表卡后首屏会闪）
 const shown = computed(() => {
   const q = search.value.trim().toLowerCase()
   return rows.value.filter(
@@ -127,6 +128,7 @@ async function reload() {
   urlMapAt = Date.now()
   rows.value = r.ok ? mapDraftRows(r.list, r.urls, r.listed, stepExtras(r)) : []
   message.value = r.ok ? '' : '加载失败：' + String(r.error || '')
+  listReady.value = true
 }
 // listDrafts 派生的 5 步分步态（后端 join）
 const stepExtras = (r: any) => ({ hasVideo: r.hasVideo || {}, cardFinal: r.cardFinal || {}, hasBatch: r.hasBatch || {} })
@@ -506,6 +508,7 @@ onMounted(async () => {
         </div>
       </div>
       <template v-if="shown.length">
+        <div class="table-scroll">
         <div class="ld-thead">
           <div class="ld-th grow">商品</div>
           <div class="ld-th" :style="{ width: '130px' }">关联课程</div>
@@ -547,8 +550,8 @@ onMounted(async () => {
             <div class="ld-td ops" :style="{ width: '240px' }">
               <UiButton v-if="row.doneCount < 5" class="cta-continue" variant="ghost" size="sm" @click="router.push('/products/' + row.id + '/wizard?step=' + firstTodoStep(row))">继续上新</UiButton>
               <UiButton variant="ghost" size="sm" @click="openEdit(row)">编辑</UiButton>
-              <UiButton v-if="row.state === 'preparing' || row.state === 'onsale'" variant="ghost" size="sm" @click="doPublish(row.id)">{{ confirmKey === 'pub:' + row.id ? '确认同步到小程序？' : '同步到小程序' }}</UiButton>
-              <UiButton v-if="row.state === 'unlisted'" variant="ghost" size="sm" @click="doRepublish(row.id)">{{ confirmKey === 're:' + row.id ? '确认同步到小程序？' : '同步到小程序' }}</UiButton>
+              <UiButton v-if="row.state === 'preparing' || row.state === 'onsale'" variant="primary" size="sm" @click="doPublish(row.id)">{{ confirmKey === 'pub:' + row.id ? '确认同步到小程序？' : '同步到小程序' }}</UiButton>
+              <UiButton v-if="row.state === 'unlisted'" variant="primary" size="sm" @click="doRepublish(row.id)">{{ confirmKey === 're:' + row.id ? '确认同步到小程序？' : '同步到小程序' }}</UiButton>
               <UiButton v-if="row.state === 'onsale'" variant="danger" size="sm" @click="doUnpublish(row.id)">{{ confirmKey === 'off:' + row.id ? '确认从橱窗拿下？' : '从橱窗拿下' }}</UiButton>
               <button class="icon-btn ld-icon-btn" title="更多操作" @click="toggleMore(row.id, $event)">
                 <MoreHorizontal :size="15" :stroke-width="1.8" />
@@ -562,10 +565,11 @@ onMounted(async () => {
             </div>
           </div>
         </div>
+        </div>
         <div class="tfoot">共 {{ counts.all }} 款商品<span v-if="filter !== 'all' || search">（当前筛选 {{ shown.length }}）</span></div>
       </template>
       <EmptyState
-        v-else-if="!message"
+        v-else-if="listReady && !message"
         :icon="Package"
         :text="rows.length ? '没有符合筛选的商品' : '还没有商品，点「去上新」开始'"
       />
@@ -723,6 +727,9 @@ onMounted(async () => {
 }
 .table-tools .prod-search {
   margin-left: 0;
+}
+.table-scroll {
+  overflow-x: auto;
 }
 
 /* 5 步上新进度条（可点深链进向导） */

@@ -140,14 +140,20 @@ async function createDraft() {
     msgLoadFail = false
     return
   }
+  // 同实例从 /launch 切到带编号路由：product 仍是 null、loading 已是 false——
+  // 不先占住加载态，模板会先闪「没有找到这个商品」（P1）。
+  loading.value = true
   void router.replace({ path: `/products/${newId}/wizard`, query: { step: '1' } })
 }
 
 // 切步 / 从 /launch 建档后换成带编号路由 → 刷新进度真值 + 收起同步二次确认
 watch([step, id], () => {
   pubConfirm.value = false
-  if (id.value) void reloadProduct()
-  else {
+  if (id.value) {
+    const same = !!(product.value && String(product.value.id || product.value._id) === id.value)
+    if (!same) loading.value = true // 换编号才转圈；同档切步不撕编辑器
+    void reloadProduct()
+  } else {
     product.value = null
     loading.value = false
   }
@@ -368,6 +374,9 @@ onMounted(() => {
 .rail-name {
   font-size: 12px;
   color: var(--ld-content-2);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .rail-step.done .rail-dot {
   background: var(--ld-bg-green-soft);
