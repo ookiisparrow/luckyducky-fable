@@ -251,7 +251,7 @@ onMounted(() => {
           </div>
           <Products v-else-if="step === 2" embed :wizard-product-id="id" :wizard-slice="2" @saved="reloadProduct" />
           <Products v-else-if="step === 3" embed :wizard-product-id="id" :wizard-slice="3" @saved="reloadProduct" />
-          <Courses v-else-if="step === 4" embed :wizard-course-id="courseId" />
+          <Courses v-else-if="step === 4" embed :wizard-course-id="courseId" @saved="reloadProduct" />
           <div v-else-if="step === 5" class="step5">
             <section class="step5-sec">
               <header class="step5-head">
@@ -265,7 +265,7 @@ onMounted(() => {
                 <h3>二维码批次</h3>
                 <p>生成可扫码的激活码，一码一用。</p>
               </header>
-              <Batches embed :wizard-course-id="courseId" />
+              <Batches embed :wizard-course-id="courseId" @saved="reloadProduct" />
             </section>
           </div>
         </div>

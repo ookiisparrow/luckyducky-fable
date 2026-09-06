@@ -97,7 +97,7 @@ const FILTERS = [
   { key: 'preparing', label: '筹备中' },
   { key: 'unlisted', label: '已下架' },
 ] as const
-const listSub = computed(() => productsListSub(counts.value.all, counts.value.preparing))
+const listSub = computed(() => listReady.value ? productsListSub(counts.value.all, counts.value.preparing) : '')
 const listReady = ref(false) // 首包回来之前不谎报「还没有商品」（polish 把空态收进表卡后首屏会闪）
 const shown = computed(() => {
   const q = search.value.trim().toLowerCase()

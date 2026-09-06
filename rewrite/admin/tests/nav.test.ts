@@ -129,5 +129,7 @@ describe('向导 1–3 步不再嵌同一张大表（假进度 P0）', () => {
     expect(router).toMatch(/step:\s*'5'/)
     expect(wiz).toMatch(/loading\.value = true/)
     expect(wiz).toContain('没有找到这个商品')
+    expect(wiz).toMatch(/<Courses[\s\S]*@saved/)
+    expect(wiz).toMatch(/<Batches[\s\S]*@saved/)
   })
 })

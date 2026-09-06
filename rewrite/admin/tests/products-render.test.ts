@@ -198,6 +198,12 @@ describe('产品表空态 / 筛选 / 五步齐了（polish 自检）', () => {
     expect(wrapper.text()).not.toContain('还没有商品')
   })
 
+  it('大白话：首包没回来前副标不写「共 0 款商品」', async () => {
+    listDraftsMock.mockReset().mockReturnValue(new Promise(() => {}))
+    const { wrapper } = await mountWithRouter()
+    expect(wrapper.text()).not.toContain('共 0 款商品')
+  })
+
   it('大白话：真的 0 款才说「还没有商品」，并仍看得见「去上新」', async () => {
     listDraftsMock.mockReset().mockResolvedValue({ ok: true, list: [], urls: {}, listed: {}, hasVideo: {}, cardFinal: {}, hasBatch: {} })
     const { wrapper } = await mountWithRouter()
