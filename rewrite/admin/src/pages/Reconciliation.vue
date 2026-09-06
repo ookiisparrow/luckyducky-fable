@@ -6,7 +6,7 @@
 import { ref, computed, onMounted } from 'vue'
 import { CircleDollarSign, RotateCcw, Wallet, Download, CircleCheck } from 'lucide-vue-next'
 import { getReconciliation, getBillMatch, downloadBill } from '../api/system'
-import { mapRecon, mapBillMatch, type ReconVM, type BillMatchVM } from '../lib/mapSystem'
+import { mapRecon, mapBillMatch, reconciliationErrorText, type ReconVM, type BillMatchVM } from '../lib/mapSystem'
 import { useLatest } from '../lib/latest'
 import UiButton from '../components/ui/Button.vue'
 import PageHeader from '../components/ui/PageHeader.vue'
@@ -18,10 +18,12 @@ import EmptyState from '../components/ui/EmptyState.vue'
 const recon = ref<ReconVM | null>(null)
 const match = ref<BillMatchVM | null>(null)
 const message = ref('')
+const messageTone = ref<'loading' | 'success' | 'warn' | 'error'>('loading')
 const billDate = ref('')
 const busy = ref(false)
 const from = ref('') // 自定义对账区间起（空=默认近 30 天窗）
 const to = ref('')
+const dateOk = (s: string) => !s || /^\d{4}-\d{2}-\d{2}$/.test(s)
 
 // 窗内合计（所选区间真值·后端 summary 就绪·换皮误用 cumulative 全时值致口径错乱：窗内订单数与全时钱额混排、tfoot 穿帮）
 const totals = computed(() => (recon.value ? recon.value.summary : null))
@@ -33,33 +35,56 @@ const cum = computed(() => {
 })
 // 内部异常总笔数（B2 修后·换皮误当数组恒 0·明细块永不渲染）
 const exCount = computed(() => (recon.value ? recon.value.exceptions.reduce((n, e) => n + e.ids.length, 0) : 0))
+const internalWarn = computed(() => exCount.value > 0 || !!recon.value?.partialNote)
+const internalTitle = computed(() => {
+  if (!recon.value?.partialNote) return exCount.value ? `内部有 ${exCount.value} 笔异常待处理` : '内部应收/退款等式已对平'
+  if (!exCount.value) return '内部对账数据读取不完整'
+  return `内部有 ${exCount.value} 笔异常，且数据读取不完整`
+})
+
+function setMessage(text: string, tone: typeof messageTone.value) {
+  message.value = text
+  messageTone.value = tone
+}
 
 const listGen = useLatest() // 对账乱序守卫（P2·快改区间时旧结果别覆盖新区间·根因#8）
 // 返回本次刷新是否成功（P2·bug 顺手改批遗漏本处·同 Batches/Kb/HelpVideos 判例）：pullBill/pullRange 据此判断
 // reload 自身有没有失败，别让 reload 写的失败文案被后续「成功」文案无条件覆盖（病根#14 失败必可观测）。
 // 乱序命中（listGen.isStale）时早退不改 message，调用方按「未确认成功」处理，回 false 保守。
 async function reload(): Promise<boolean> {
-  message.value = '加载中…'
+  setMessage('加载中…', 'loading')
   const my = listGen.begin()
-  const [r, m] = await Promise.all([getReconciliation(from.value, to.value), getBillMatch(from.value, to.value)])
+  let r: any
+  let m: any
+  try {
+    ;[r, m] = await Promise.all([getReconciliation(from.value, to.value), getBillMatch(from.value, to.value)])
+  } catch (e) {
+    if (listGen.isStale(my)) return false
+    recon.value = null
+    match.value = null
+    setMessage('对账加载失败：' + reconciliationErrorText(e), 'error')
+    return false
+  }
   if (listGen.isStale(my)) return false // 已改区间·丢弃过期对账结果
-  if ((r as any).error === 'SESSION_LOST' || (m as any).error === 'SESSION_LOST') return false
+  if (r?.error === 'SESSION_LOST' || m?.error === 'SESSION_LOST') {
+    setMessage(reconciliationErrorText('SESSION_LOST'), 'error')
+    return false
+  }
   recon.value = mapRecon(r)
   match.value = mapBillMatch(m)
   // 分路报错（P1·bug 清除战役 II C2）：单路失败别被另一路成功吞掉——mapRecon/mapBillMatch 只在 ok!==true
   // 或响应体缺 cumulative/summary 容器时才回 null（合法空数据容器仍在、只是内部数组/数值为空，不会误判成失败）。
   const bad: string[] = []
-  if (!recon.value) bad.push('内部对账加载失败：' + String((r as any).error || ''))
-  if (!match.value) bad.push('外部账单勾对加载失败：' + String((m as any).error || ''))
-  message.value = bad.join('；')
+  if (!recon.value) bad.push('内部对账加载失败：' + reconciliationErrorText(r?.error))
+  if (!match.value) bad.push('外部账单勾对加载失败：' + reconciliationErrorText(m?.error))
+  setMessage(bad.join('；'), bad.length ? 'error' : 'success')
   return bad.length === 0
 }
 
 // 自定义对账区间（后端 from/to 就绪·换皮丢了这个·只能看死 30 天窗）
 function applyRange() {
-  const ok = (s: string) => !s || /^\d{4}-\d{2}-\d{2}$/.test(s)
-  if (!ok(from.value) || !ok(to.value)) {
-    message.value = '日期格式 YYYY-MM-DD'
+  if (!dateOk(from.value) || !dateOk(to.value)) {
+    setMessage('请先修正对账区间日期，格式为 YYYY-MM-DD', 'error')
     return
   }
   void reload()
@@ -72,17 +97,25 @@ function clearRange() {
 
 async function pullBill() {
   if (busy.value || !/^\d{4}-\d{2}-\d{2}$/.test(billDate.value)) {
-    message.value = billDate.value ? '日期格式 YYYY-MM-DD' : '先填日期'
+    setMessage(billDate.value ? '请先修正账单日期，格式为 YYYY-MM-DD' : '先填要拉取的账单日期', 'error')
     return
   }
   busy.value = true
-  const r = await downloadBill(billDate.value)
-  busy.value = false
-  const reloadOk = await reload() // 先刷新对账（其间显加载中·结束落空）
-  // 只在拉取与刷新都成功时显纯成功；reload 失败别被无条件覆盖——保留其错误原文（P2·病根#14 顺手改批遗漏本处）
-  if (!r.ok) message.value = '拉取失败：' + String(r.error || '')
-  else if (!reloadOk) message.value = '账单已拉取入库，但对账刷新失败：' + message.value
-  else message.value = '账单已拉取入库，勾对已刷新'
+  try {
+    const r = await downloadBill(billDate.value)
+    if (!r.ok) {
+      setMessage('拉取失败：' + reconciliationErrorText(r.error), 'error')
+      return
+    }
+    const reloadOk = await reload() // 先刷新对账（其间显加载中·结束落空）
+    // 只在拉取与刷新都成功时显纯成功；reload 失败别被无条件覆盖——保留其错误原文（P2·病根#14 顺手改批遗漏本处）
+    if (!reloadOk) setMessage('账单已拉取入库，但对账刷新失败：' + message.value, 'warn')
+    else setMessage('账单已拉取入库，勾对已刷新', 'success')
+  } catch (e) {
+    setMessage('拉取失败：' + reconciliationErrorText(e), 'error')
+  } finally {
+    busy.value = false
+  }
 }
 
 // CST 起止（含端）逐日列表（cap 62 天·防误填超长区间刷爆）
@@ -100,28 +133,42 @@ function daysBetween(a: string, b: string): string[] {
 // 区间空则默认近 30 天窗（与后端默认对齐）。
 async function pullRange() {
   if (busy.value) return
+  if ((from.value && !dateOk(from.value)) || (to.value && !dateOk(to.value))) {
+    setMessage('请先修正对账区间日期，格式为 YYYY-MM-DD', 'error')
+    return
+  }
   const CST = 8 * 3600_000
   const today = new Date(Date.now() + CST).toISOString().slice(0, 10)
   const f = /^\d{4}-\d{2}-\d{2}$/.test(from.value) ? from.value : new Date(Date.now() - 29 * 86400_000 + CST).toISOString().slice(0, 10)
   const t = /^\d{4}-\d{2}-\d{2}$/.test(to.value) ? to.value : today
   const days = daysBetween(f, t)
   if (!days.length) {
-    message.value = '区间不合法（起须早于止·YYYY-MM-DD）'
+    setMessage('区间不合法（起不能晚于止·YYYY-MM-DD）', 'error')
     return
   }
   busy.value = true
   let ok = 0
-  for (let i = 0; i < days.length; i++) {
-    message.value = `拉取账单 ${i + 1}/${days.length}（${days[i]}）…`
-    const r = await downloadBill(days[i])
-    if (r.ok) ok++
+  const failed: string[] = []
+  try {
+    for (let i = 0; i < days.length; i++) {
+      setMessage(`拉取账单 ${i + 1}/${days.length}（${days[i]}）…`, 'loading')
+      const r = await downloadBill(days[i])
+      if (r.ok) ok++
+      else failed.push(`${days[i]}（${reconciliationErrorText(r.error)}）`)
+    }
+    const reloadOk = await reload() // 先刷新对账
+    const failedText = failed.length
+      ? `；失败 ${failed.length} 天：${failed.slice(0, 3).join('、')}${failed.length > 3 ? ' 等' : ''}`
+      : ''
+    // reload 失败别被无条件覆盖——保留其错误原文拼在区间拉取结果后（P2·病根#14 顺手改批遗漏本处）
+    if (!reloadOk) setMessage(`区间账单已拉取 ${ok}/${days.length} 天${failedText}，但对账刷新失败：` + message.value, 'warn')
+    else if (failed.length) setMessage(`区间账单部分拉取成功：成功 ${ok}/${days.length} 天${failedText}，勾对已刷新`, 'warn')
+    else setMessage(`区间账单已拉取 ${ok}/${days.length} 天，勾对已刷新`, 'success')
+  } catch (e) {
+    setMessage('区间账单拉取中断：' + reconciliationErrorText(e), 'error')
+  } finally {
+    busy.value = false
   }
-  busy.value = false
-  const reloadOk = await reload() // 先刷新对账
-  // reload 失败别被无条件覆盖——保留其错误原文拼在区间拉取结果后（P2·病根#14 顺手改批遗漏本处）
-  message.value = reloadOk
-    ? `区间账单已拉取 ${ok}/${days.length} 天，勾对已刷新`
-    : `区间账单已拉取 ${ok}/${days.length} 天，但对账刷新失败：` + message.value
 }
 
 function exportCsv() {
@@ -142,8 +189,8 @@ onMounted(reload)
 
 <template>
   <div class="ld-page">
-    <PageHeader title="财务对账" sub="应收 GMV、退款按日对账 + 微信官方账单逐笔勾对 · 资金对得上才安心（内部近 30 天窗）">
-      <UiButton :disabled="!recon" @click="exportCsv">
+    <PageHeader title="财务对账" sub="应收 GMV、退款按日对账 + 微信官方账单逐笔勾对 · 默认近 30 天，可自选区间">
+      <UiButton :disabled="!recon || busy" @click="exportCsv">
         <Download :size="15" :stroke-width="1.8" /><span>导出 CSV</span>
       </UiButton>
     </PageHeader>
@@ -154,19 +201,23 @@ onMounted(reload)
       <label class="ld-search"><input v-model="from" placeholder="起 YYYY-MM-DD" /></label>
       <span class="dash">→</span>
       <label class="ld-search"><input v-model="to" placeholder="止 YYYY-MM-DD" /></label>
-      <UiButton size="sm" @click="applyRange">查询</UiButton>
-      <UiButton v-if="from || to" size="sm" variant="ghost" @click="clearRange">近 30 天</UiButton>
+      <UiButton size="sm" :disabled="busy" @click="applyRange">查询</UiButton>
+      <UiButton v-if="from || to" size="sm" variant="ghost" :disabled="busy" @click="clearRange">近 30 天</UiButton>
       <span class="range-note">留空＝默认近 30 天窗</span>
     </div>
 
-    <p v-if="message" class="ld-status">{{ message }}</p>
+    <p v-if="message" class="ld-status" :class="`tone-${messageTone}`">{{ message }}</p>
+
+    <Card v-if="messageTone === 'loading' && !recon && !match" title="正在加载财务对账">
+      <EmptyState :icon="RotateCcw" text="正在加载财务对账数据…" />
+    </Card>
 
     <template v-if="totals">
       <!-- 账平/异常横幅（全账累计等式·真值） -->
-      <div class="balance" :class="{ warn: exCount }">
+      <div class="balance" :class="{ warn: internalWarn }">
         <CircleCheck :size="20" :stroke-width="1.8" />
         <div>
-          <div class="balance-t">{{ exCount ? `内部有 ${exCount} 笔异常待处理` : '内部账已对平' }}</div>
+          <div class="balance-t">{{ internalTitle }}</div>
           <div class="balance-s">全账累计 应收 {{ cum.income }} − 退款 {{ cum.refund }} = 净额 {{ cum.net }}</div>
         </div>
       </div>
@@ -186,7 +237,7 @@ onMounted(reload)
         <template #head><Badge tone="red">{{ exCount }} 笔</Badge></template>
         <div v-for="e in recon.exceptions" :key="e.label" class="ex-group">
           <div class="ex-label">{{ e.label }}（{{ e.ids.length }}）</div>
-          <p v-for="id in e.ids" :key="id" class="ex-id">{{ id }}</p>
+          <p v-for="id in e.ids" :key="id" class="ex-id" :title="id">{{ id }}</p>
         </div>
       </Card>
 
@@ -201,11 +252,12 @@ onMounted(reload)
           <KpiCard label="区间退款笔数" :value="totals.refunds" :icon="RotateCcw" />
         </div>
         <div v-if="recon && recon.approxNote" class="approx">{{ recon.approxNote }}</div>
+        <div v-if="recon && recon.partialNote" class="approx danger">{{ recon.partialNote }}</div>
       </div>
 
       <!-- 逐日对账表（含窗内合计行·真值） -->
       <Card v-if="recon && recon.daily.length" title="逐日对账" flush>
-        <div class="ld-table">
+        <div class="ld-table table-scroll">
           <div class="ld-thead">
             <div class="ld-th grow">日期</div>
             <div class="ld-th r" :style="{ width: '90px' }">订单数</div>
@@ -234,6 +286,9 @@ onMounted(reload)
           </div>
         </div>
       </Card>
+      <Card v-else-if="recon" title="逐日对账">
+        <EmptyState text="当前区间暂无订单/退款记录" />
+      </Card>
     </template>
 
     <!-- 外部逐笔勾对 · 微信官方账单 -->
@@ -244,6 +299,7 @@ onMounted(reload)
         <label class="ld-search wide"><input v-model="billDate" placeholder="拉某日账单 YYYY-MM-DD" /></label>
         <UiButton size="sm" :disabled="busy" @click="pullBill">拉单日</UiButton>
         <UiButton size="sm" variant="ghost" :disabled="busy" title="按上方对账区间逐日拉取（空=近 30 天）" @click="pullRange">拉整个区间</UiButton>
+        <span class="range-note">按上方区间逐日拉取；留空则拉近 30 天</span>
       </div>
 
       <div class="ld-kpi-grid ext-sum">
@@ -255,7 +311,7 @@ onMounted(reload)
         <div class="sub-h danger">
           <span>微信收了钱、我方没单</span><span class="sub-note">最危险 · 立即人工核</span><Badge tone="red">{{ match.wxOnly.length }} 笔</Badge>
         </div>
-        <div class="ld-table">
+        <div class="ld-table table-scroll">
           <div class="ld-thead">
             <div class="ld-th grow">日期</div>
             <div class="ld-th" :style="{ width: '220px' }">微信交易号</div>
@@ -264,7 +320,7 @@ onMounted(reload)
           <div class="ld-tbody">
             <div v-for="w in match.wxOnly" :key="w.transactionId" class="ld-tr">
               <div class="ld-td grow mono">{{ w.date }}</div>
-              <div class="ld-td mono" :style="{ width: '220px' }">{{ w.transactionId }}</div>
+              <div class="ld-td mono" :style="{ width: '220px' }" :title="w.transactionId">{{ w.transactionId }}</div>
               <div class="ld-td r num danger" :style="{ width: '120px' }">{{ w.amount }}</div>
             </div>
           </div>
@@ -274,7 +330,7 @@ onMounted(reload)
       <!-- 金额不符 -->
       <template v-if="match.amountMismatch.length">
         <div class="sub-h"><span>金额不符</span><Badge tone="amber">{{ match.amountMismatch.length }} 笔</Badge></div>
-        <div class="ld-table">
+        <div class="ld-table table-scroll">
           <div class="ld-thead">
             <div class="ld-th grow">单号</div>
             <div class="ld-th r" :style="{ width: '130px' }">我方</div>
@@ -282,7 +338,7 @@ onMounted(reload)
           </div>
           <div class="ld-tbody">
             <div v-for="mm in match.amountMismatch" :key="mm.id" class="ld-tr">
-              <div class="ld-td grow mono">{{ mm.id }}</div>
+              <div class="ld-td grow mono" :title="mm.id">{{ mm.id }}</div>
               <div class="ld-td r num" :style="{ width: '130px' }">{{ mm.ours }}</div>
               <div class="ld-td r num amber" :style="{ width: '130px' }">{{ mm.wx }}</div>
             </div>
@@ -293,21 +349,23 @@ onMounted(reload)
       <!-- 我方有单微信无 -->
       <template v-if="match.oursOnly.length">
         <div class="sub-h"><span>我方有单微信无</span><span class="sub-note">多为账单未拉/未支付成功</span><Badge tone="neutral">{{ match.oursOnly.length }} 笔</Badge></div>
-        <div class="ld-table">
+        <div class="ld-table table-scroll">
           <div class="ld-thead">
             <div class="ld-th grow">单号</div>
             <div class="ld-th r" :style="{ width: '130px' }">金额</div>
           </div>
           <div class="ld-tbody">
             <div v-for="o in match.oursOnly" :key="o.id" class="ld-tr">
-              <div class="ld-td grow mono">{{ o.id }}</div>
+              <div class="ld-td grow mono" :title="o.id">{{ o.id }}</div>
               <div class="ld-td r num" :style="{ width: '130px' }">{{ o.amount }}</div>
             </div>
           </div>
         </div>
       </template>
 
-      <EmptyState v-if="!match.wxOnly.length && !match.amountMismatch.length && !match.oursOnly.length" :icon="CircleCheck" text="逐笔已勾对 · 无差异" />
+      <div v-if="!match.wxOnly.length && !match.amountMismatch.length && !match.oursOnly.length" class="success-empty">
+        <EmptyState :icon="CircleCheck" text="逐笔已勾对 · 无差异" />
+      </div>
     </Card>
 
     <p class="foot-note">「微信手续费 / 实际到账」需微信结算数据源，后端暂无——本页只作应收/退款/净额真等式与账单逐笔勾对（区间可自选·全账累计恒为 money 锚）。</p>
@@ -316,6 +374,33 @@ onMounted(reload)
 
 <style scoped>
 /* 区间筛选条内的说明文字（工具条/搜索框/按钮走 kit） */
+.ld-status {
+  margin: 0;
+  padding: 10px 12px;
+  border: 1px solid var(--ld-line);
+  border-radius: var(--ld-radius-sm);
+  background: var(--ld-bg);
+}
+.ld-status.tone-loading {
+  color: var(--ld-brand-active);
+  border-color: var(--ld-purple-line);
+  background: var(--ld-bg-lilac);
+}
+.ld-status.tone-success {
+  color: var(--ld-green);
+  border-color: var(--ld-green);
+  background: var(--ld-bg-green-soft);
+}
+.ld-status.tone-warn {
+  color: var(--ld-amber);
+  border-color: var(--ld-amber);
+  background: var(--ld-bg-amber-soft);
+}
+.ld-status.tone-error {
+  color: var(--ld-red);
+  border-color: var(--ld-red-line);
+  background: var(--ld-bg-red-soft);
+}
 .range-label {
   font-size: 12.5px;
   color: var(--ld-content-2);
@@ -376,6 +461,9 @@ onMounted(reload)
   font-size: 11.5px;
   color: var(--ld-amber);
 }
+.approx.danger {
+  color: var(--ld-red);
+}
 
 /* 内部异常明细行（外壳走 Card） */
 .ex-group {
@@ -394,9 +482,17 @@ onMounted(reload)
   font-size: 12px;
   font-family: var(--ld-font-mono);
   color: var(--ld-content-2);
+  overflow-wrap: anywhere;
 }
 
 /* 表格单元修饰（右对齐/等宽数字/强调/异常·外壳走 .ld-table） */
+.table-scroll {
+  overflow-x: auto;
+}
+.table-scroll .ld-thead,
+.table-scroll .ld-tr {
+  min-width: 560px;
+}
 .ld-th.r,
 .ld-td.r {
   justify-content: flex-end;
@@ -405,6 +501,7 @@ onMounted(reload)
 .ld-td.mono {
   font-family: var(--ld-font-mono);
   font-size: 12.5px;
+  overflow-wrap: anywhere;
 }
 .ld-td.num {
   font-variant-numeric: tabular-nums;
@@ -458,5 +555,23 @@ onMounted(reload)
   margin: 0;
   font-size: 11.5px;
   color: var(--ld-content-2);
+}
+.success-empty :deep(.empty-ico),
+.success-empty :deep(.empty-text) {
+  color: var(--ld-green);
+}
+@media (max-width: 640px) {
+  .ld-toolbar .ld-search,
+  .ld-search.wide {
+    width: 100%;
+  }
+  .ld-toolbar .ld-search input,
+  .ld-search.wide input {
+    width: 100%;
+    min-width: 0;
+  }
+  .dash {
+    display: none;
+  }
 }
 </style>

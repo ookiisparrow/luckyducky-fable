@@ -72,6 +72,7 @@ export interface ReconVM {
   range: { from: string; to: string }
   daily: Array<{ day: string; income: string; refund: string; net: string; orders: number; refunds: number }>
   approxNote: string
+  partialNote: string
   // 内部异常明细（bug B2 修：后端 getTxAlerts 返回 {feeMismatch,refundMismatch,stuckRefunds} 三数组对象·
   // 换皮误当数组取 .length 恒 0、明细永不渲染。改按对象结构化·有则渲染带单号、无则空数组不吓人）
   exceptions: Array<{ label: string; ids: string[] }>
@@ -97,7 +98,7 @@ export function mapRecon(r: unknown): ReconVM | null {
       refunds: Number(sm.refunds) || 0,
     },
     range: { from: String(rg.from || ''), to: String(rg.to || '') },
-    daily: (Array.isArray(d.daily) ? d.daily : []).map((b: Record<string, any>) => ({
+    daily: (Array.isArray(d.daily) ? d.daily : []).filter((b): b is Record<string, any> => !!b && typeof b === 'object').map((b) => ({
       day: String(b.day || ''),
       income: yuan(b.income),
       refund: yuan(b.refund),
@@ -106,6 +107,7 @@ export function mapRecon(r: unknown): ReconVM | null {
       refunds: Number(b.refunds) || 0,
     })),
     approxNote: d.approx ? '窗内明细触上限·近似（累计不受影响）' : '', // 诚实透传
+    partialNote: d.partial ? '有一部分对账数据读取失败，请刷新后再判断账是否对平' : '',
     exceptions: mapExceptions(d.exceptions),
   }
 }
@@ -146,6 +148,30 @@ export function mapBillMatch(r: unknown): BillMatchVM | null {
     amountMismatch: (Array.isArray(dis.amountMismatch) ? dis.amountMismatch : []).map((m: Record<string, any>) => ({ id: String(m.id || m.outTradeNo || ''), ours: yuan(m.ours ?? m.ourAmount), wx: yuan(m.wx ?? m.wxAmount) })),
     approxNote: d.approx ? '比对窗触上限·更早的单未进比对面（近似）' : '',
   }
+}
+
+const RECON_ERR: Record<string, string> = {
+  SESSION_LOST: '登录已过期，请重新登录后再试。',
+  BAD_ARGS: '日期不对，请按 YYYY-MM-DD 填写后再试。',
+  BAD_DATE: '日期不对，请按 YYYY-MM-DD 填写后再试。',
+  NO_WXPAY_CREDS: '微信支付账单凭证还没配好，请先到「人工配置清单」检查。',
+  NO_MCHID: '微信支付商户号还没配好，请先到「人工配置清单」检查。',
+  NO_DOWNLOAD_URL: '微信账单暂时没有下载地址，请稍后重试。',
+  BILL_FETCH_FAIL: '微信账单拉取失败，请稍后重试。',
+}
+
+/** 财务对账页给操作者看的错误：只说下一步，不裸甩英文码。 */
+export function reconciliationErrorText(e: unknown): string {
+  let s = String(e ?? '').trim().replace(/^Error:\s*/i, '')
+  if (!s) return '系统没说清失败原因，请刷新后再试。'
+  if (/[\u4e00-\u9fff]/.test(s)) return s
+  const code = (/^([A-Z][A-Z0-9_]{1,})(?::.*)?$/.exec(s)?.[1] || s).trim()
+  if (RECON_ERR[code]) return RECON_ERR[code]
+  if (code.startsWith('BILL_QUERY_') || code.startsWith('BILL_DOWNLOAD_') || code.startsWith('WXPAY_')) {
+    return '微信账单接口暂时没拉通，请稍后重试；若反复失败，请找技术检查微信支付配置。'
+  }
+  if (code === 'NETWORK' || code.includes('FETCH') || code.includes('TIMEOUT')) return '网络有点不稳，请刷新后重试。'
+  return '操作没成功，请刷新后再试。'
 }
 
 export interface StockRow {

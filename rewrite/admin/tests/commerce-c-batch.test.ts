@@ -106,7 +106,8 @@ describe('Reconciliation.vue reload 分路报错（C2·P1）', () => {
     const body = extractFunctionBody(scriptSetupSrc(reconciliationSrc), 'async function reload(): Promise<boolean> {')
     expect(body).toMatch(/if\s*\(\s*!recon\.value\s*\)\s*bad\.push\(\s*'内部对账加载失败/)
     expect(body).toMatch(/if\s*\(\s*!match\.value\s*\)\s*bad\.push\(\s*'外部账单勾对加载失败/)
-    expect(body).toMatch(/message\.value = bad\.join\(/)
+    expect(body).toMatch(/setMessage\(bad\.join\('；'\), bad\.length \? 'error' : 'success'\)/)
+    expect(body).toMatch(/reconciliationErrorText\(/)
     // 旧「任一成功即清空 message」的写法不再存在
     expect(body).not.toMatch(/recon\.value \|\| match\.value \? '' :/)
   })
@@ -116,16 +117,18 @@ describe('Reconciliation.vue pullBill/pullRange 消费 reload 返回值（批E·
   it('大白话：pullBill 只在拉取与刷新都成功时显纯成功；reload 失败别被无条件覆盖，保留其错误原文', () => {
     const body = extractFunctionBody(scriptSetupSrc(reconciliationSrc), 'async function pullBill() {')
     expect(body).toMatch(/const reloadOk = await reload\(\)/)
-    expect(body).toMatch(/if\s*\(\s*!r\.ok\s*\)\s*message\.value = '拉取失败：'/)
-    expect(body).toMatch(/else if\s*\(\s*!reloadOk\s*\)\s*message\.value = '账单已拉取入库，但对账刷新失败：' \+ message\.value/)
-    expect(body).toMatch(/else message\.value = '账单已拉取入库，勾对已刷新'/)
+    expect(body).toMatch(/if\s*\(\s*!r\.ok\s*\)\s*\{[\s\S]*setMessage\('拉取失败：' \+ reconciliationErrorText\(r\.error\), 'error'\)/)
+    expect(body).toMatch(/if\s*\(\s*!reloadOk\s*\) setMessage\('账单已拉取入库，但对账刷新失败：' \+ message\.value, 'warn'\)/)
+    expect(body).toMatch(/else setMessage\('账单已拉取入库，勾对已刷新', 'success'\)/)
     // 旧「reload 后无条件按 downloadBill 结果覆盖」写法不再存在
     expect(body).not.toMatch(/message\.value = r\.ok \? '账单已拉取入库，勾对已刷新' : '拉取失败：'/)
   })
   it('大白话：pullRange 同理——reload 失败要把错误原文拼在区间拉取结果后，不能被纯成功文案盖掉', () => {
     const body = extractFunctionBody(scriptSetupSrc(reconciliationSrc), 'async function pullRange() {')
     expect(body).toMatch(/const reloadOk = await reload\(\)/)
-    expect(body).toMatch(/message\.value = reloadOk\s*\n\s*\? `区间账单已拉取 \$\{ok\}\/\$\{days\.length\} 天，勾对已刷新`\s*\n\s*: `区间账单已拉取 \$\{ok\}\/\$\{days\.length\} 天，但对账刷新失败：` \+ message\.value/)
+    expect(body).toMatch(/if\s*\(\s*!reloadOk\s*\) setMessage\(`区间账单已拉取 \$\{ok\}\/\$\{days\.length\} 天\$\{failedText\}，但对账刷新失败：` \+ message\.value, 'warn'\)/)
+    expect(body).toMatch(/else if \(failed\.length\) setMessage\(`区间账单部分拉取成功：成功 \$\{ok\}\/\$\{days\.length\} 天\$\{failedText\}，勾对已刷新`, 'warn'\)/)
+    expect(body).toMatch(/else setMessage\(`区间账单已拉取 \$\{ok\}\/\$\{days\.length\} 天，勾对已刷新`, 'success'\)/)
     // 旧「无条件显纯成功、不看 reload 是否失败」写法不再存在
     expect(body).not.toMatch(/message\.value = `区间账单已拉取 \$\{ok\}\/\$\{days\.length\} 天，勾对已刷新`$/m)
   })

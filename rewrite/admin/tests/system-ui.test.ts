@@ -1,10 +1,11 @@
 // 系统组+钱组补齐映射（守卫 rw-admin-system-ui-golden）：批次激活率不除零/webhook 预检同云端正则/
 // 对账 approx 诚实透传/wxOnly 标红/库存不限量不显 0/409 冲突人话。
 import { describe, it, expect } from 'vitest'
-import { mapAgents, mapBatches, webhookOk, mapRecon, mapBillMatch, mapStock, stockErrorText, mapAuditEntries, launchErrorText, UNKNOWN_COURSE_HINT } from '../src/lib/mapSystem'
+import { mapAgents, mapBatches, webhookOk, mapRecon, mapBillMatch, mapStock, stockErrorText, mapAuditEntries, launchErrorText, UNKNOWN_COURSE_HINT, reconciliationErrorText } from '../src/lib/mapSystem'
 import settingsSrc from '../src/pages/Settings.vue?raw'
 import batchesSrc from '../src/pages/Batches.vue?raw'
 import wizardSrc from '../src/pages/Wizard.vue?raw'
+import reconciliationSrc from '../src/pages/Reconciliation.vue?raw'
 
 // 密钥不明文常驻（UX 体检批4）：webhook key 曾在输入框明文回显（后端 getSettings 原样回值），任何截屏/
 // 投屏即带出——隔壁「人工配置清单」页自标「零回显」，两页安全姿态曾自相矛盾。前端改密码态+显隐切换
@@ -130,6 +131,7 @@ describe('对账映射（approx 诚实·wxOnly 最危险）', () => {
       range: { from: '2026-07-01', to: '2026-07-01' },
       daily: [{ day: '2026-07-01', income: 100, refund: 0, net: 100, orders: 1, refunds: 0 }],
       approx: true,
+      partial: true,
       exceptions: { feeMismatch: ['o-bad'], refundMismatch: [], stuckRefunds: ['a-stuck'] },
     })!
     expect(recon.cumulative[2]).toEqual({ label: '净额', value: '¥120.00' })
@@ -137,14 +139,17 @@ describe('对账映射（approx 诚实·wxOnly 最危险）', () => {
     expect(recon.summary).toEqual({ income: '¥100.00', refund: '¥0.00', net: '¥100.00', orders: 1, refunds: 0 })
     expect(recon.range).toEqual({ from: '2026-07-01', to: '2026-07-01' })
     expect(recon.approxNote).toContain('近似')
+    expect(recon.partialNote).toContain('读取失败')
     // B2 修：exceptions 是 {feeMismatch,refundMismatch,stuckRefunds} 对象·结构化成带单号明细（有则渲染·空类不显）
     expect(recon.exceptions).toEqual([
       { label: '金额不符单（先核对流水；支付异常走退款处理）', ids: ['o-bad'] },
       { label: '审批后卡单（死信·退款未走通）', ids: ['a-stuck'] },
     ])
-    const clean = mapRecon({ ok: true, cumulative: { income: 0, refund: 0, net: 0 }, daily: [], approx: false })!
+    const clean = mapRecon({ ok: true, cumulative: { income: 0, refund: 0, net: 0 }, daily: [null], approx: false })!
     expect(clean.approxNote).toBe('')
+    expect(clean.partialNote).toBe('')
     expect(clean.exceptions).toEqual([]) // 无异常空数组·不吓人
+    expect(clean.daily).toEqual([]) // 坏 daily 行剔除，不把页面打崩
     expect(clean.summary).toEqual({ income: '¥0.00', refund: '¥0.00', net: '¥0.00', orders: 0, refunds: 0 }) // 缺 summary 安全归零
     expect(clean.range).toEqual({ from: '', to: '' })
     const m = mapBillMatch({ ok: true, summary: { matched: 5, wxOnly: 1, oursOnly: 0, amountMismatch: 0 }, discrepancies: { wxOnly: [{ transactionId: 'tx-ghost', amount: 5, date: '2026-07-01' }], oursOnly: [], amountMismatch: [] } })!
@@ -152,6 +157,33 @@ describe('对账映射（approx 诚实·wxOnly 最危险）', () => {
     expect(m.summary[0].danger).toBeFalsy() // 已平不标红
     expect(m.wxOnly[0].amount).toBe('¥5.00')
     expect(mapBillMatch({ ok: false })).toBeNull()
+  })
+
+  it('大白话：对账页错误只给中文下一步，不把英文码裸甩给操作者', () => {
+    expect(reconciliationErrorText('SESSION_LOST')).toContain('登录已过期')
+    expect(reconciliationErrorText('BAD_DATE')).toContain('YYYY-MM-DD')
+    expect(reconciliationErrorText('NO_WXPAY_CREDS')).toContain('微信支付账单凭证')
+    expect(reconciliationErrorText('BILL_DOWNLOAD_500:server')).toContain('微信账单接口')
+    expect(reconciliationErrorText('FUTURE_UNKNOWN_CODE')).toBe('操作没成功，请刷新后再试。')
+  })
+
+  it('大白话：Reconciliation.vue 提示分红绿琥珀/加载，长编号不撑破，失败不裸拼 String(error)', () => {
+    expect(reconciliationSrc).toContain('reconciliationErrorText')
+    expect(reconciliationSrc).not.toMatch(/String\([^)]*\.error/)
+    expect(reconciliationSrc).toMatch(/:class="`tone-\$\{messageTone\}`"/)
+    expect(reconciliationSrc).toContain('tone-error')
+    expect(reconciliationSrc).toContain('tone-warn')
+    expect(reconciliationSrc).toContain('tone-success')
+    expect(reconciliationSrc).toContain('正在加载财务对账数据')
+    expect(reconciliationSrc).toContain('当前区间暂无订单/退款记录')
+    expect(reconciliationSrc).toContain('请先修正对账区间日期')
+    expect(reconciliationSrc).toContain('内部应收/退款等式已对平')
+    expect(reconciliationSrc).toContain('按上方区间逐日拉取；留空则拉近 30 天')
+    expect(reconciliationSrc).toContain('class="ld-table table-scroll"')
+    expect(reconciliationSrc).toContain('overflow-wrap: anywhere')
+    expect(reconciliationSrc).toMatch(/:title="w\.transactionId"/)
+    expect(reconciliationSrc).toMatch(/:title="mm\.id"/)
+    expect(reconciliationSrc).toMatch(/:title="o\.id"/)
   })
 })
 
