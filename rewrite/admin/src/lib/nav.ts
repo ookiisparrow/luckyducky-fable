@@ -39,13 +39,14 @@ export interface WizardStep {
   n: number
   label: string
   icon: string
+  hint: string
 }
 export const WIZARD_STEPS: WizardStep[] = [
-  { n: 1, label: '新建与封面', icon: 'plus' },
-  { n: 2, label: '图片与名字', icon: 'image' },
-  { n: 3, label: '详情信息', icon: 'file-text' },
-  { n: 4, label: '课程视频', icon: 'clapperboard' },
-  { n: 5, label: '卡片与二维码', icon: 'credit-card' },
+  { n: 1, label: '新建与封面', icon: 'plus', hint: '创建草稿并上传封面图' },
+  { n: 2, label: '图片与名字', icon: 'image', hint: '商品图集与标题文案' },
+  { n: 3, label: '详情信息', icon: 'file-text', hint: '规格、价格与详情页' },
+  { n: 4, label: '课程视频', icon: 'clapperboard', hint: '上传并发布教学视频' },
+  { n: 5, label: '卡片与二维码', icon: 'credit-card', hint: '卡面素材与批次二维码' },
 ]
 
 /** 「商品与上新」组只准这两条主入口（橱窗/评价/课程运维另组·防再把上新塞进子菜单） */

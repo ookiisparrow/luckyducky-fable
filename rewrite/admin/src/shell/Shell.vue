@@ -18,11 +18,7 @@ import {
   ChevronRight,
   Pencil,
   LogOut,
-  Plus,
   Image,
-  FileText,
-  Clapperboard,
-  CreditCard,
 } from 'lucide-vue-next'
 import { client } from '../api'
 import { isWizardPath, WIZARD_STEPS, wizardStepFromQuery, currentNavGroup } from '../lib/nav'
@@ -113,13 +109,6 @@ const route = useRoute()
 const wizardMode = computed(() => isWizardPath(route.path))
 const wizardId = computed(() => String(route.params.id || ''))
 const curStep = computed(() => (wizardId.value ? wizardStepFromQuery(route.query.step) : 1))
-const STEP_ICONS: Record<string, Component> = {
-  plus: Plus,
-  image: Image,
-  'file-text': FileText,
-  clapperboard: Clapperboard,
-  'credit-card': CreditCard,
-}
 
 // 分组默认收起（照设计·chevron-right）；当前路由所在组自动展开；用户手动展开记 localStorage
 const EXPAND_KEY = 'ldrw-admin-nav-expanded'
@@ -176,8 +165,11 @@ function logout() {
           class="item wiz-step"
           :class="{ 'wiz-on': curStep === s.n, 'wiz-off': !wizardId && s.n > 1 }"
         >
-          <component :is="STEP_ICONS[s.icon]" class="item-icon" :size="17" :stroke-width="1.8" />
-          <span>{{ s.n }} · {{ s.label }}</span>
+          <span class="wiz-num">{{ s.n }}</span>
+          <span class="wiz-copy">
+            <span class="wiz-label">{{ s.label }}</span>
+            <span class="wiz-hint">{{ s.hint }}</span>
+          </span>
         </router-link>
         <div class="spacer" />
       </nav>
@@ -223,9 +215,21 @@ function logout() {
         </button>
       </div>
     </aside>
-    <main>
-      <router-view />
-    </main>
+    <div class="workspace">
+      <header class="topbar">
+        <div class="topbar-left">
+          <h2 class="topbar-title">Lucky Ducky 运营控制台</h2>
+          <span class="topbar-brand">小棉鸭</span>
+        </div>
+        <p class="topbar-hint">
+          改完要点「同步到小程序」，顾客才看得见 ·
+          <router-link to="/showcase">去橱窗</router-link>
+        </p>
+      </header>
+      <main>
+        <router-view />
+      </main>
+    </div>
   </div>
 </template>
 
@@ -420,13 +424,50 @@ aside {
   opacity: 0.4;
   pointer-events: none;
 }
-.wiz-step.wiz-on {  background: var(--ld-bg-lilac);
+.wiz-step {
+  align-items: flex-start;
+}
+.wiz-num {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  margin-top: 1px;
+  flex: none;
+  border-radius: 999px;
+  border: 1px solid var(--ld-line-strong);
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--ld-content-2);
+}
+.wiz-copy {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.wiz-label {
+  font-size: 13px;
+}
+.wiz-hint {
+  font-size: 11px;
+  color: var(--ld-content-2);
+  font-weight: 400;
+  line-height: 1.3;
+}
+.wiz-step.wiz-on {
+  background: var(--ld-bg-lilac);
   border-color: var(--ld-purple-line);
   color: var(--ld-purple-ink);
   font-weight: 600;
 }
-.wiz-step.wiz-on .item-icon {
+.wiz-step.wiz-on .wiz-num {
+  border-color: var(--ld-brand);
   color: var(--ld-brand);
+}
+.wiz-step.wiz-on .wiz-hint {
+  color: var(--ld-purple-meta);
 }
 .spacer {
   flex: 1;
@@ -480,6 +521,59 @@ aside {
   color: var(--ld-red);
   border-color: var(--ld-red-line);
   background: var(--ld-bg-red-soft);
+}
+.workspace {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+}
+.topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex: none;
+  min-height: 56px;
+  padding: 10px 32px;
+  background: var(--ld-bg);
+  border-bottom: 1px solid var(--ld-line);
+}
+.topbar-left {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+.topbar-title {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--ld-ink);
+  white-space: nowrap;
+}
+.topbar-brand {
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--ld-bg-lilac);
+  color: var(--ld-brand-active);
+  font-size: 11.5px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.topbar-hint {
+  margin: 0;
+  font-size: 12.5px;
+  color: var(--ld-content-2);
+  text-align: right;
+}
+.topbar-hint a {
+  color: var(--ld-brand-active);
+  text-decoration: none;
+}
+.topbar-hint a:hover {
+  text-decoration: underline;
 }
 main {
   flex: 1;

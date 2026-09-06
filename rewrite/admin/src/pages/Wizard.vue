@@ -33,6 +33,14 @@ const busy = ref(false)
 const pubConfirm = ref(false)
 
 const STEP_NAMES = WIZARD_STEPS.map((s) => s.label)
+const STEP_HINTS = WIZARD_STEPS.map((s) => s.hint)
+const LEGEND = [
+  { term: '保存草稿', desc: '只存在后台，前台看不到' },
+  { term: '发布课程', desc: '视频对已购学员可见' },
+  { term: '同步到小程序', desc: '商品出现在小程序橱窗' },
+  { term: '上传卡片', desc: '把卡面素材交给印厂' },
+  { term: '生成批次', desc: '产出可扫码的二维码序列' },
+] as const
 // 步单源=URL ?step（侧栏与本页横向 rail 同读它·深链落到首个未完成步）·夹 1..5
 // 还没建档（/launch）只能停在第 1 步
 const step = computed(() => (id.value ? wizardStepFromQuery(route.query.step) : 1))
@@ -162,15 +170,24 @@ onMounted(() => {
     <!-- /launch：还没建档，第 1 步先建草稿（建完留在本步传封面） -->
     <template v-else-if="!id">
       <a class="crumb" @click="router.push('/products')"><ArrowLeft :size="14" :stroke-width="1.8" /><span>产品管理</span></a>
-      <PageHeader title="上新" sub="第 1 / 5 步 · 先建草稿，再建好就能传封面（顾客看不见）" />
+      <PageHeader title="上新" sub="第 1 / 5 步 · 新建与封面" />
       <p v-if="message" class="banner">{{ message }}</p>
       <section class="step-card">
-        <div class="step-head"><h2>第 1 步 · 新建与封面</h2></div>
+        <div class="step-head">
+          <h2>新建与封面</h2>
+          <span class="next-hint">先创建草稿并上传封面图，这两件事在同一步完成。</span>
+        </div>
         <div class="step-body">
           <p class="identity-lead">先建一档草稿。编号和课程号自动生成。建好后在本步上传封面。顾客还看不见。</p>
-          <p class="legend">保存草稿 ≠ 发布课程 ≠ 同步到小程序 ≠ 上传卡片 ≠ 生成批次</p>
           <UiButton :disabled="busy" @click="createDraft">{{ busy ? '建立中…' : '建立草稿，接着传封面' }}</UiButton>
         </div>
+        <dl class="legend-grid">
+          <div class="legend-cap">这五件事互不等同</div>
+          <div v-for="item in LEGEND" :key="item.term" class="legend-row">
+            <dt>{{ item.term }}</dt>
+            <dd>{{ item.desc }}</dd>
+          </div>
+        </dl>
       </section>
     </template>
 
@@ -192,29 +209,33 @@ onMounted(() => {
       </PageHeader>
 
       <p v-if="message" class="banner">{{ message }}</p>
-      <p class="legend">保存草稿 ≠ 发布课程 ≠ 同步到小程序 ≠ 上传卡片 ≠ 生成批次</p>
 
-      <div class="rail">
-        <template v-for="s in WIZARD_STEPS" :key="s.n">
-          <span v-if="s.n > 1" class="rail-line" :class="{ lit: railState(s.n) !== 'todo' || railState(s.n - 1) === 'done' }"></span>
-          <button class="rail-step" :class="railState(s.n)" @click="go(s.n)">
-            <span class="rail-dot">
-              <Check v-if="railState(s.n) === 'done'" :size="12" :stroke-width="2.6" />
-              <template v-else>{{ s.n }}</template>
-            </span>
-            <span class="rail-name">{{ s.label }}</span>
-          </button>
-        </template>
+      <div class="rail-card">
+        <div class="rail">
+          <template v-for="s in WIZARD_STEPS" :key="s.n">
+            <button class="rail-step" :class="railState(s.n)" @click="go(s.n)">
+              <span class="rail-dot">
+                <Check v-if="railState(s.n) === 'done'" :size="12" :stroke-width="2.6" />
+                <template v-else>{{ s.n }}</template>
+              </span>
+              <span class="rail-name">{{ s.label }}</span>
+            </button>
+            <span v-if="s.n < WIZARD_STEP_MAX" class="rail-line" :class="{ lit: railState(s.n) === 'done' }"></span>
+          </template>
+        </div>
       </div>
 
       <section class="step-card">
         <div class="step-head">
-          <h2>第 {{ step }} 步 · {{ STEP_NAMES[step - 1] }}</h2>
+          <div>
+            <h2>{{ STEP_NAMES[step - 1] }}</h2>
+            <p class="step-hint">{{ STEP_HINTS[step - 1] }}</p>
+          </div>
           <span v-if="nextTodo && nextTodo.n !== step" class="next-hint">下一个待办：第 {{ nextTodo.n }} 步 {{ nextTodo.name }}</span>
         </div>
 
         <div class="step-body">
-          <div v-if="step === 1">
+          <div v-if="step === 1" class="step1">
             <div class="identity">
               <p>商品编号 <code>{{ id }}</code> · 课程编号 <code>{{ courseId }}</code></p>
               <p>状态：{{ stateLabel }} · 已完成 {{ doneCount }}/5</p>
@@ -226,10 +247,29 @@ onMounted(() => {
           <Products v-else-if="step === 3" embed :wizard-product-id="id" :wizard-slice="3" @saved="reloadProduct" />
           <Courses v-else-if="step === 4" embed :wizard-course-id="courseId" />
           <div v-else-if="step === 5" class="step5">
-            <Cards embed :wizard-product-id="id" @saved="reloadProduct" />
-            <Batches embed :wizard-course-id="courseId" />
+            <section class="step5-sec">
+              <header class="step5-head">
+                <h3>卡片素材</h3>
+                <p>这里只负责上传成品卡面，不做设计。设计稿请在设计工具中完成后导出上传。</p>
+              </header>
+              <Cards embed :wizard-product-id="id" @saved="reloadProduct" />
+            </section>
+            <section class="step5-sec">
+              <header class="step5-head">
+                <h3>二维码批次</h3>
+                <p>生成可扫码的激活码，一码一用。</p>
+              </header>
+              <Batches embed :wizard-course-id="courseId" />
+            </section>
           </div>
         </div>
+        <dl v-if="step === 1" class="legend-grid">
+          <div class="legend-cap">这五件事互不等同</div>
+          <div v-for="item in LEGEND" :key="item.term" class="legend-row">
+            <dt>{{ item.term }}</dt>
+            <dd>{{ item.desc }}</dd>
+          </div>
+        </dl>
       </section>
 
       <div class="wiz-footer">
@@ -278,28 +318,36 @@ onMounted(() => {
   color: var(--ld-brand-active);
 }
 
-/* 细进度条：小圆点 + 细连接线（步导航主源在侧栏·此处轻量回显·可点跳步） */
+/* 进度条：白卡托起·当前步淡紫底（步导航主源在侧栏·此处可点跳步） */
+.rail-card {
+  padding: 8px 10px;
+  background: var(--ld-bg);
+  border: 1px solid var(--ld-line);
+  border-radius: var(--ld-radius);
+}
 .rail {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 4px;
 }
 .rail-line {
-  flex: 1;
-  height: 2px;
-  border-radius: 2px;
-  background: var(--ld-line);
+  width: 16px;
+  height: 1px;
+  flex: none;
+  background: var(--ld-line-strong);
 }
 .rail-line.lit {
-  background: var(--ld-green);
+  background: var(--ld-purple-line);
 }
 .rail-step {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  flex: none;
-  padding: 0;
+  gap: 8px;
+  flex: 1;
+  min-width: 0;
+  padding: 8px 10px;
   border: none;
+  border-radius: 10px;
   background: none;
   font-family: inherit;
   cursor: pointer;
@@ -329,13 +377,16 @@ onMounted(() => {
 .rail-step.done .rail-name {
   color: var(--ld-content);
 }
+.rail-step.current {
+  background: var(--ld-bg-lilac);
+}
 .rail-step.current .rail-dot {
-  background: var(--ld-brand);
+  background: var(--ld-bg);
   border-color: var(--ld-brand);
-  color: #fff;
+  color: var(--ld-brand-active);
 }
 .rail-step.current .rail-name {
-  color: var(--ld-purple-ink);
+  color: var(--ld-brand-active);
   font-weight: 700;
 }
 
@@ -360,14 +411,47 @@ onMounted(() => {
   font-weight: 600;
   color: var(--ld-purple-ink);
 }
+.step-hint {
+  margin: 4px 0 0;
+  font-size: 12.5px;
+  color: var(--ld-content-2);
+}
 .next-hint {
   font-size: 12px;
   color: var(--ld-content-2);
 }
-.legend {
+.legend-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 8px 20px;
+  margin: 20px 0 0;
+  padding: 14px 16px;
+  border-top: 1px solid var(--ld-line);
+  background: var(--ld-bg-faint);
+}
+.legend-cap {
+  grid-column: 1 / -1;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--ld-content);
+}
+.legend-row {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  min-width: 0;
+}
+.legend-row dt {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--ld-ink);
+  white-space: nowrap;
+}
+.legend-row dd {
   margin: 0;
-  font-size: 12px;
+  font-size: 12.5px;
   color: var(--ld-content-2);
+  min-width: 0;
 }
 .identity-lead {
   margin: 0 0 12px;
@@ -385,10 +469,35 @@ onMounted(() => {
 .step-body {
   min-height: 360px;
 }
+.step1 {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(220px, 300px);
+  gap: 28px;
+  align-items: start;
+}
+@media (max-width: 820px) {
+  .step1 {
+    grid-template-columns: 1fr;
+  }
+}
 .step5 {
   display: flex;
   flex-direction: column;
   gap: 28px;
+}
+.step5-sec {
+  padding-bottom: 8px;
+}
+.step5-head h3 {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--ld-purple-ink);
+}
+.step5-head p {
+  margin: 4px 0 14px;
+  font-size: 12.5px;
+  color: var(--ld-content-2);
 }
 
 /* Footer：上一步 ghost（步1禁用·UiButton 自带禁用态）/ 下一步·完成 brand（两端对齐） */

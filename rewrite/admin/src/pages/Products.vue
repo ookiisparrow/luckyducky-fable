@@ -3,9 +3,9 @@
 // + 三态表格（关联课程/规格·图列 + 5 步上新进度圆点）+ 编辑器（整档 round-trip·图片压缩·危操作两步确认）。
 // 「5 步上新进度」——cards/courses/qrcodes 后端 listDrafts bounded join 派生（视频/卡片/批次态）。
 import { ref, computed, onMounted, onBeforeUnmount, watch, nextTick } from 'vue'
-import { Search, Trash2, Package, MoreHorizontal } from 'lucide-vue-next'
+import { Search, Trash2, Package, MoreHorizontal, Plus } from 'lucide-vue-next'
 import { listDrafts, saveDraft, deleteDraft, uploadImage, publishProduct, unpublishProduct, republishProduct } from '../api/products'
-import { mapDraftRows, publishErrorText, b64SizeOk, basicsMissing, type DraftRowVM } from '../lib/mapProducts'
+import { mapDraftRows, publishErrorText, b64SizeOk, basicsMissing, stepProgressHint, type DraftRowVM } from '../lib/mapProducts'
 import { serialSave } from '../lib/serialSave'
 import { useRouter } from 'vue-router'
 import UiButton from '../components/ui/Button.vue'
@@ -97,6 +97,7 @@ const FILTERS = [
   { key: 'preparing', label: '筹备中' },
   { key: 'unlisted', label: '已下架' },
 ] as const
+const listSub = computed(() => `共 ${counts.value.all} 款商品 · ${counts.value.preparing} 款筹备中待完成上新`)
 const shown = computed(() => {
   const q = search.value.trim().toLowerCase()
   return rows.value.filter(
@@ -481,100 +482,123 @@ onMounted(async () => {
     <PageHeader
       v-if="!embed"
       title="产品管理"
-      sub="管已有商品：编辑、同步到小程序、继续上新。新品请走侧栏「上新」。"
+      :sub="listSub"
     >
-      <UiButton @click="router.push('/launch')">＋ 去上新</UiButton>
+      <UiButton size="lg" @click="router.push('/launch')">
+        <Plus :size="15" :stroke-width="2" />
+        去上新
+      </UiButton>
     </PageHeader>
-
-    <!-- 工具条：筛选 chip（真计数）+ 搜索（独立态显·embed 隐） -->
-    <div v-if="!embed" class="ld-toolbar">
-      <button v-for="f in FILTERS" :key="f.key" class="ld-chip" :class="{ on: filter === f.key }" @click="filter = f.key">
-        {{ f.label }}<span class="chip-n">{{ counts[f.key] }}</span>
-      </button>
-      <div class="ld-search prod-search">
-        <Search :size="15" :stroke-width="1.8" />
-        <input v-model="search" placeholder="搜索商品名 / 编号" />
-      </div>
-    </div>
 
     <p v-if="message" class="ld-status">{{ message }}</p>
 
-    <!-- 商品表卡（S11 表格语言·独立态显·embed 隐） -->
-    <Card v-if="shown.length && !embed" flush>
-      <div class="ld-thead">
-        <div class="ld-th grow">商品</div>
-        <div class="ld-th" :style="{ width: '130px' }">关联课程</div>
-        <div class="ld-th" :style="{ width: '80px' }">价格</div>
-        <div class="ld-th" :style="{ width: '108px' }">规格 / 图</div>
-        <div class="ld-th" :style="{ width: '150px' }">上新进度</div>
-        <div class="ld-th" :style="{ width: '92px' }">状态</div>
-        <div class="ld-th" :style="{ width: '240px' }">操作</div>
+    <!-- 商品表卡：筛选+搜索贴在表头（独立态显·embed 隐） -->
+    <Card v-if="!embed" flush>
+      <div class="table-tools">
+        <div class="ld-toolbar">
+          <button v-for="f in FILTERS" :key="f.key" class="ld-chip" :class="{ on: filter === f.key }" @click="filter = f.key">
+            {{ f.label }}<span class="chip-n">{{ counts[f.key] }}</span>
+          </button>
+        </div>
+        <div class="ld-search prod-search">
+          <Search :size="15" :stroke-width="1.8" />
+          <input v-model="search" placeholder="搜索商品名 / 编号" />
+        </div>
       </div>
-      <div class="ld-tbody">
-        <div v-for="row in shown" :key="row.id" class="ld-tr">
-          <div class="ld-td grow prod">
-            <img v-if="row.coverUrl" :src="row.coverUrl" class="thumb" />
-            <span v-else class="thumb empty">无图</span>
-            <div class="prod-text">
-              <div class="prod-name">{{ row.name }}</div>
-              <div class="pid">{{ row.id }}</div>
+      <template v-if="shown.length">
+        <div class="ld-thead">
+          <div class="ld-th grow">商品</div>
+          <div class="ld-th" :style="{ width: '130px' }">关联课程</div>
+          <div class="ld-th" :style="{ width: '80px' }">价格</div>
+          <div class="ld-th" :style="{ width: '108px' }">规格 / 图</div>
+          <div class="ld-th" :style="{ width: '196px' }">上新进度</div>
+          <div class="ld-th" :style="{ width: '92px' }">状态</div>
+          <div class="ld-th" :style="{ width: '240px' }">操作</div>
+        </div>
+        <div class="ld-tbody">
+          <div v-for="row in shown" :key="row.id" class="ld-tr">
+            <div class="ld-td grow prod">
+              <img v-if="row.coverUrl" :src="row.coverUrl" class="thumb" />
+              <span v-else class="thumb empty">无图</span>
+              <div class="prod-text">
+                <div class="prod-name">{{ row.name }}</div>
+                <div class="pid">{{ row.id }}</div>
+              </div>
             </div>
-          </div>
-          <div class="ld-td course" :style="{ width: '130px' }">{{ courseOf(row) || '未关联' }}</div>
-          <div class="ld-td price" :style="{ width: '80px' }">{{ row.priceLabel }}</div>
-          <div class="ld-td spec" :style="{ width: '108px' }">{{ row.skuCount }} 规格 · {{ imgCount(row) }} 图</div>
-          <!-- 5 步上新进度圆点（真值 productSteps·后端 listDrafts 派生视频/卡片/批次态）·点击进上新向导落到第一个未完成步 -->
-          <div class="ld-td" :style="{ width: '150px' }">
-            <div
-              class="steps-cell"
-              :title="row.steps.map((s) => (s.done ? '✓' : '○') + ' ' + s.label).join(' · ') + ' · 点击继续上新'"
-              @click="router.push('/products/' + row.id + '/wizard?step=' + firstTodoStep(row))"
-            >
-              <span v-for="s in row.steps" :key="s.key" class="dot" :class="{ on: s.done }"></span>
-              <span class="done-n">{{ row.doneCount }}/5</span>
+            <div class="ld-td course" :style="{ width: '130px' }">{{ courseOf(row) || '未关联' }}</div>
+            <div class="ld-td price" :style="{ width: '80px' }">{{ row.priceLabel }}</div>
+            <div class="ld-td spec" :style="{ width: '108px' }">{{ row.skuCount }} 规格 · {{ imgCount(row) }} 图</div>
+            <!-- 5 步上新进度条（真值 productSteps·后端 listDrafts 派生）·点击进向导落到第一个未完成步 -->
+            <div class="ld-td" :style="{ width: '196px' }">
+              <div
+                class="steps-cell"
+                :title="row.steps.map((s) => (s.done ? '✓' : '○') + ' ' + s.label).join(' · ') + ' · 点击继续上新'"
+                @click="router.push('/products/' + row.id + '/wizard?step=' + firstTodoStep(row))"
+              >
+                <span class="step-bars" :aria-label="'已完成 ' + row.doneCount + ' / 5 步'">
+                  <span v-for="s in row.steps" :key="s.key" class="bar" :class="{ on: s.done }"></span>
+                </span>
+                <span class="done-n">{{ stepProgressHint(row.steps) }}</span>
+              </div>
             </div>
-          </div>
-          <div class="ld-td" :style="{ width: '92px' }">
-            <Badge :tone="row.state === 'onsale' ? 'green' : row.state === 'unlisted' ? 'red' : 'brand'">{{ row.stateLabel }}</Badge>
-          </div>
-          <div class="ld-td ops" :style="{ width: '240px' }">
-            <UiButton variant="ghost" size="sm" @click="openEdit(row)">编辑</UiButton>
-            <UiButton variant="ghost" size="sm" @click="router.push('/products/' + row.id + '/wizard?step=' + firstTodoStep(row))">继续上新</UiButton>
-            <UiButton v-if="row.state === 'preparing' || row.state === 'onsale'" variant="primary" size="sm" @click="doPublish(row.id)">{{ confirmKey === 'pub:' + row.id ? '确认同步到小程序？' : '同步到小程序' }}</UiButton>
-            <UiButton v-if="row.state === 'unlisted'" variant="primary" size="sm" @click="doRepublish(row.id)">{{ confirmKey === 're:' + row.id ? '确认同步到小程序？' : '同步到小程序' }}</UiButton>
-            <UiButton v-if="row.state === 'onsale'" variant="danger" size="sm" @click="doUnpublish(row.id)">{{ confirmKey === 'off:' + row.id ? '确认从橱窗拿下？' : '从橱窗拿下' }}</UiButton>
-            <button class="icon-btn ld-icon-btn" title="更多操作" @click="toggleMore(row.id, $event)">
-              <MoreHorizontal :size="15" :stroke-width="1.8" />
-            </button>
-            <div v-if="moreKey === row.id" class="more-backdrop" @mousedown="closeMore()"></div>
-            <div v-if="moreKey === row.id" class="more-menu" :style="{ top: morePos.top + 'px', right: morePos.right + 'px' }">
-              <button class="menu-item" @click="closeMore(); editCourse(row)">课程运维</button>
-              <button class="menu-item" @click="closeMore(); router.push({ path: '/cards', query: { productId: row.id } })">卡片运维</button>
-              <button class="menu-item danger" @click="doDelete(row.id)">{{ confirmKey === 'del:' + row.id ? '连已上架一起删？' : '删除' }}</button>
+            <div class="ld-td" :style="{ width: '92px' }">
+              <Badge :tone="row.state === 'onsale' ? 'green' : row.state === 'unlisted' ? 'red' : 'amber'" dot>{{ row.stateLabel }}</Badge>
+            </div>
+            <div class="ld-td ops" :style="{ width: '240px' }">
+              <UiButton v-if="row.doneCount < 5" class="cta-continue" variant="ghost" size="sm" @click="router.push('/products/' + row.id + '/wizard?step=' + firstTodoStep(row))">继续上新</UiButton>
+              <UiButton variant="ghost" size="sm" @click="openEdit(row)">编辑</UiButton>
+              <UiButton v-if="row.state === 'preparing' || row.state === 'onsale'" variant="ghost" size="sm" @click="doPublish(row.id)">{{ confirmKey === 'pub:' + row.id ? '确认同步到小程序？' : '同步到小程序' }}</UiButton>
+              <UiButton v-if="row.state === 'unlisted'" variant="ghost" size="sm" @click="doRepublish(row.id)">{{ confirmKey === 're:' + row.id ? '确认同步到小程序？' : '同步到小程序' }}</UiButton>
+              <UiButton v-if="row.state === 'onsale'" variant="danger" size="sm" @click="doUnpublish(row.id)">{{ confirmKey === 'off:' + row.id ? '确认从橱窗拿下？' : '从橱窗拿下' }}</UiButton>
+              <button class="icon-btn ld-icon-btn" title="更多操作" @click="toggleMore(row.id, $event)">
+                <MoreHorizontal :size="15" :stroke-width="1.8" />
+              </button>
+              <div v-if="moreKey === row.id" class="more-backdrop" @mousedown="closeMore()"></div>
+              <div v-if="moreKey === row.id" class="more-menu" :style="{ top: morePos.top + 'px', right: morePos.right + 'px' }">
+                <button class="menu-item" @click="closeMore(); editCourse(row)">课程运维</button>
+                <button class="menu-item" @click="closeMore(); router.push({ path: '/cards', query: { productId: row.id } })">卡片运维</button>
+                <button class="menu-item danger" @click="doDelete(row.id)">{{ confirmKey === 'del:' + row.id ? '连已上架一起删？' : '删除' }}</button>
+              </div>
             </div>
           </div>
         </div>
-      </div>
-      <div class="tfoot">共 {{ counts.all }} 款商品<span v-if="filter !== 'all' || search">（当前筛选 {{ shown.length }}）</span></div>
+        <div class="tfoot">共 {{ counts.all }} 款商品<span v-if="filter !== 'all' || search">（当前筛选 {{ shown.length }}）</span></div>
+      </template>
+      <EmptyState
+        v-else-if="!message"
+        :icon="Package"
+        :text="rows.length ? '没有符合筛选的商品' : '还没有商品，点「去上新」开始'"
+      />
     </Card>
-    <EmptyState
-      v-else-if="!message && !embed"
-      :icon="Package"
-      :text="rows.length ? '没有符合筛选的商品' : '还没有商品，点「去上新」开始'"
-    />
 
     <!-- 编辑器（独立态 + embed 步 1-3 都显·白卡语言·embed 时去外框由向导供卡） -->
     <div v-if="edit" class="editor">
       <h3>{{ edit.name || '新商品' }} <span class="pid">{{ edit.id }}</span>
         <span class="auto" :class="autoState">{{ autoState === 'saving' ? '自动保存中…' : autoState === 'saved' ? '已自动保存草稿（顾客还看不见）' : autoState === 'error' ? '自动保存失败' : '' }}</span>
       </h3>
-      <div v-if="showLook || showCover" class="grid">
+      <div v-if="showLook || (showCover && !embed)" class="grid">
         <label v-if="showLook">名称 <input v-model="edit.name" maxlength="60" /></label>
-        <label v-if="showCover">封面图
+        <label v-if="showCover && !embed">封面图
           <input type="file" accept="image/*" @change="pickCover" />
         </label>
       </div>
-      <div v-if="showCover && coverPreview" class="cover-wrap">
+      <div v-if="showCover && embed" class="cover-panel">
+        <p class="cover-label">封面图</p>
+        <p class="cover-hint">正方形，顾客第一眼看到的图</p>
+        <div v-if="coverPreview" class="cover-frame">
+          <img :src="coverPreview" class="cover-preview" alt="" />
+          <div class="cover-ops">
+            <label class="cover-replace">替换<input type="file" accept="image/*" hidden @change="pickCover" /></label>
+            <UiButton variant="ghost" size="sm" @click="clearCover">删除封面</UiButton>
+          </div>
+        </div>
+        <label v-else class="cover-drop">
+          <span>上传封面图</span>
+          <span>点击选择本地图片</span>
+          <input type="file" accept="image/*" hidden @change="pickCover" />
+        </label>
+      </div>
+      <div v-if="showCover && !embed && coverPreview" class="cover-wrap">
         <img :src="coverPreview" class="cover-preview" />
         <UiButton variant="ghost" size="sm" @click="clearCover">删除封面</UiButton>
       </div>
@@ -688,36 +712,56 @@ onMounted(async () => {
 .prod-search {
   margin-left: auto;
 }
-
-/* 6 步上新进度圆点（可点深链进向导） */
-.steps-cell {
+.table-tools {
   display: flex;
   align-items: center;
-  gap: 3px;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--ld-line);
+}
+.table-tools .prod-search {
+  margin-left: 0;
+}
+
+/* 5 步上新进度条（可点深链进向导） */
+.steps-cell {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 5px;
   cursor: pointer;
-  border-radius: 999px;
+  border-radius: var(--ld-radius-sm);
   padding: 4px 6px;
   margin: -4px -6px;
 }
 .steps-cell:hover {
   background: var(--ld-bg-lilac);
 }
-.dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: var(--ld-bg-faint);
-  border: 1px solid var(--ld-line-strong);
+.step-bars {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.bar {
+  width: 16px;
+  height: 6px;
+  border-radius: 999px;
+  background: var(--ld-line-strong);
   flex: none;
 }
-.dot.on {
+.bar.on {
   background: var(--ld-brand);
-  border-color: var(--ld-brand);
 }
 .done-n {
-  margin-left: 5px;
-  font-size: 11px;
+  font-size: 12px;
   color: var(--ld-content-2);
+}
+.cta-continue {
+  background: var(--ld-bg-lilac);
+  border-color: var(--ld-purple-line);
+  color: var(--ld-brand-active);
 }
 
 /* 商品列（缩略图 + 名/编号） */
@@ -867,6 +911,64 @@ onMounted(async () => {
 .cover-preview {
   width: 120px;
   border-radius: var(--ld-radius-sm);
+}
+.cover-panel {
+  max-width: 300px;
+}
+.cover-label {
+  margin: 0;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--ld-content);
+}
+.cover-hint {
+  margin: 2px 0 0;
+  font-size: 12px;
+  color: var(--ld-content-2);
+}
+.cover-frame {
+  margin-top: 10px;
+  overflow: hidden;
+  border: 1px solid var(--ld-line);
+  border-radius: var(--ld-radius);
+}
+.cover-frame .cover-preview {
+  display: block;
+  width: 100%;
+  aspect-ratio: 1;
+  object-fit: cover;
+}
+.cover-ops {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
+  padding: 8px 10px;
+  border-top: 1px solid var(--ld-line);
+}
+.cover-replace {
+  font-size: 12.5px;
+  color: var(--ld-content);
+  cursor: pointer;
+}
+.cover-drop {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  margin-top: 10px;
+  min-height: 200px;
+  border: 1px dashed var(--ld-line-strong);
+  border-radius: var(--ld-radius);
+  background: var(--ld-bg-faint);
+  color: var(--ld-content-2);
+  font-size: 12.5px;
+  cursor: pointer;
+}
+.cover-drop span:first-child {
+  font-weight: 600;
+  color: var(--ld-content);
 }
 .auto {
   margin-left: 10px;

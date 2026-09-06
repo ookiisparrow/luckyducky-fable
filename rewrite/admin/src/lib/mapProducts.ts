@@ -47,6 +47,13 @@ export function productSteps(p: Record<string, any>, extras?: StepExtras): StepD
   ]
 }
 
+/** 列表「上新进度」旁标：下一未完成步，或「上新完成」 */
+export function stepProgressHint(steps: StepDot[]): string {
+  const i = steps.findIndex((s) => !s.done)
+  if (i < 0) return '上新完成'
+  return `第 ${i + 1} 步：${steps[i].label}`
+}
+
 /** 向导 1–3 步各管哪些字段（互斥·防再嵌同一张大表）。第 1 步封面，第 2 步名字和相册，第 3 步详情。 */
 export const WIZARD_SLICE_FIELDS: Record<1 | 2 | 3, readonly string[]> = {
   1: ['cover'],
