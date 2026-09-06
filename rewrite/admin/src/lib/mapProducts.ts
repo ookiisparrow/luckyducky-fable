@@ -34,8 +34,9 @@ export function productSteps(p: Record<string, any>, extras?: StepExtras): StepD
   const courseId = String((p && p.courseId) || '') || 'course-' + id
   const e = extras || {}
   const nameOk = !!String((p && p.name) || '').trim()
-  const priceOk = !!(p && p.price != null && String(p.price) !== '')
-  const skusOk = Array.isArray(p && p.skus) && p.skus.length > 0
+  const priceOk = !!(p && p.price != null && String(p.price).trim() !== '')
+  const skus = Array.isArray(p && p.skus) ? p.skus : []
+  const skusOk = skus.length > 0 && skus.every((s: any) => String(s?.name || '').trim() !== '' && String(s?.price ?? '').trim() !== '')
   const cardOk = !!(e.cardFinal && e.cardFinal[id])
   const qrOk = !!(e.hasBatch && e.hasBatch[courseId])
   return [

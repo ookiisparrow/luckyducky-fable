@@ -9,6 +9,7 @@ import { listDrafts, publishProduct, saveDraft } from '../api/products'
 import { productSteps, productState, basicsMissing, wizardCanPublish, freshDraft, type StepDot } from '../lib/mapProducts'
 import { wizardStepFromQuery, WIZARD_STEPS, WIZARD_STEP_MAX } from '../lib/nav'
 import { isUploadLocked } from '../lib/uploadLock'
+import { settleAllSaves } from '../lib/serialSave'
 import Products from './Products.vue'
 import Courses from './Courses.vue'
 import Cards from './Cards.vue'
@@ -81,7 +82,14 @@ async function reloadProduct() {
     message.value = '' // 回刷成功只清上次残留的「加载失败」banner（批10 让回刷失败保编辑器不撕后·否则常驻工作中的编辑器上·P3）
     msgLoadFail = false
   }
-  product.value = (r.list as Record<string, any>[]).find((p) => String(p.id || p._id) === id.value) || null
+  const found = (r.list as Record<string, any>[]).find((p) => String(p.id || p._id) === id.value)
+  if (found) {
+    product.value = found
+  } else if (product.value && String(product.value.id || product.value._id) === id.value) {
+    // Keep product.value to prevent race condition flashing
+  } else {
+    product.value = null
+  }
   listed.value = r.listed || {}
   extras.value = { hasVideo: r.hasVideo || {}, cardFinal: r.cardFinal || {}, hasBatch: r.hasBatch || {} }
   loading.value = false
@@ -133,13 +141,19 @@ async function createDraft() {
   if (busy.value) return
   busy.value = true
   const newId = 'p' + Date.now().toString(36)
-  const r: any = await saveDraft(freshDraft(newId))
+  const draft = freshDraft(newId)
+  const r: any = await saveDraft(draft)
   busy.value = false
   if (!r.ok) {
     message.value = '建立草稿没成功：' + String(r.error || '')
     msgLoadFail = false
     return
   }
+  
+  product.value = draft
+  listed.value = {}
+  extras.value = {}
+  
   // 同实例从 /launch 切到带编号路由：product 仍是 null、loading 已是 false——
   // 不先占住加载态，模板会先闪「没有找到这个商品」（P1）。
   loading.value = true
@@ -147,7 +161,7 @@ async function createDraft() {
 }
 
 // 切步 / 从 /launch 建档后换成带编号路由 → 刷新进度真值 + 收起同步二次确认
-watch([step, id], () => {
+watch(id, () => {
   pubConfirm.value = false
   if (id.value) {
     const same = !!(product.value && String(product.value.id || product.value._id) === id.value)
@@ -156,6 +170,14 @@ watch([step, id], () => {
   } else {
     product.value = null
     loading.value = false
+  }
+})
+
+watch(step, async () => {
+  pubConfirm.value = false
+  if (id.value) {
+    await settleAllSaves()
+    void reloadProduct()
   }
 })
 
@@ -208,7 +230,7 @@ onMounted(() => {
         <Badge v-else-if="state === 'unlisted'" tone="red">已从橱窗拿下</Badge>
         <Badge v-else tone="brand">草稿（顾客看不见）</Badge>
         <Badge v-if="missing.length" tone="red">同步到小程序还差：{{ missing.join('、') }}</Badge>
-        <UiButton v-if="step !== 4" :disabled="!canPublish || busy" :title="canPublish ? '' : '补齐封面、名称、价格和规格后才能同步到小程序'" @click="shelve">
+        <UiButton :disabled="!canPublish || busy" :title="canPublish ? '' : '补齐封面、名称、价格和规格后才能同步到小程序'" @click="shelve">
           <Store v-if="!busy" :size="15" :stroke-width="1.8" />
           {{ busy ? '同步中…' : pubConfirm ? '确认同步到小程序？' : '同步到小程序' }}
         </UiButton>

@@ -29,7 +29,7 @@ describe('三态口径（与云端 listDrafts listed 表一致）', () => {
 
   it('大白话：5 步上新进度：建档+封面 / 图与名 / 详情前端算·视频 / 卡片+批次取后端 extras', () => {
     const steps = productSteps(
-      { id: 'p1', name: '熊', price: 20, cover: 'c', skus: [{ name: 'a' }], courseId: 'course-p1' },
+      { id: 'p1', name: '熊', price: 20, cover: 'c', skus: [{ name: 'a', price: 20 }], courseId: 'course-p1' },
       { hasVideo: { 'course-p1': true }, cardFinal: { p1: true }, hasBatch: {} }
     )
     expect(steps.map((s) => s.done)).toEqual([true, true, true, true, false]) // 前四步齐·第 5 步要卡片+批次都齐
@@ -45,7 +45,7 @@ describe('三态口径（与云端 listDrafts listed 表一致）', () => {
     const derived = productSteps({ id: 'p3', name: 'x', price: 1, cover: 'c', skus: [{}] }, { cardFinal: { p3: true }, hasBatch: { 'course-p3': true } })
     expect(derived.find((s) => s.key === 'cardQr')!.done).toBe(true) // courseId 缺→course-p3 回退命中
     expect(productSteps({ id: 'p3', cover: 'c' }, { hasBatch: { 'course-p3': true } }).find((s) => s.key === 'cardQr')!.done).toBe(false)
-    const rows = mapDraftRows([{ id: 'p1', name: '熊', price: 20, cover: 'c', skus: [{ name: 'a' }], courseId: 'course-p1' }], {}, { p1: true }, { hasVideo: { 'course-p1': true }, cardFinal: { p1: true }, hasBatch: { 'course-p1': true } })
+    const rows = mapDraftRows([{ id: 'p1', name: '熊', price: 20, cover: 'c', skus: [{ name: 'a', price: 20 }], courseId: 'course-p1' }], {}, { p1: true }, { hasVideo: { 'course-p1': true }, cardFinal: { p1: true }, hasBatch: { 'course-p1': true } })
     expect(rows[0].doneCount).toBe(5)
     expect(rows[0].steps).toHaveLength(5)
     expect(stepProgressHint(rows[0].steps)).toBe('上新完成')

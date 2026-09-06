@@ -47,7 +47,9 @@ async function loadCourseOptions() {
   // 此时本就无可武装对象，复位是幂等的安全动作
   confirmKey.value = ''
   publishConfirm.value = false
+  message.value = '加载中…'
   const dr = await listDrafts().catch(() => null)
+  message.value = ''
   if (!(dr as any)?.ok) return
   const seen = new Map<string, string>()
   for (const p of (((dr as any).list as Record<string, any>[]) || [])) {
