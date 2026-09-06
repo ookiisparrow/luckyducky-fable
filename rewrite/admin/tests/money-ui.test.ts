@@ -3,6 +3,7 @@
 import { describe, it, expect } from 'vitest'
 import { mapDashboard, mapOrderRows, mapRefundRows, maskPhone, refundVerdict, deriveDashboardTodos, canOverrideRefund, mapOverrideOrder, orderErrorText } from '../src/lib/mapMoney'
 import ordersSrc from '../src/pages/Orders.vue?raw'
+import fulfillSrc from '../src/pages/Fulfill.vue?raw'
 import refundsSrc from '../src/pages/Refunds.vue?raw'
 import dashboardSrc from '../src/pages/Dashboard.vue?raw'
 
@@ -383,5 +384,17 @@ describe('orderErrorText（钱组英文码→操作者中文·#222 同类）', (
     expect(ordersSrc).toMatch(/d\.error = '发货没成功：' \+ orderErrorText\(r\.error\)/)
     expect(ordersSrc).toMatch(/drawer-error/)
     expect(ordersSrc).toMatch(/selectedIds\.value = selectedIds\.value\.filter\(\(id\) => vis\.has\(id\)\)/)
+  })
+  it('大白话：Fulfill.vue 发货/加载失败走人话 + 已发货特化指路 + 剩单数不含退款持有（不裸 String(r.error)、不第三套字典）', () => {
+    expect(fulfillSrc).toMatch(/orderErrorText\(/)
+    expect(fulfillSrc).not.toMatch(/String\(r\.error/)
+    expect(fulfillSrc).toMatch(/加载待发货订单失败：' \+ orderErrorText\(r\.error\)/)
+    expect(fulfillSrc).toMatch(/'BAD_STATUS:' \+ 'shipped'/)
+    expect(fulfillSrc).toMatch(/要改运单号请去「订单发货」页/)
+    expect(fulfillSrc).toMatch(/return orderErrorText\(/)
+    expect(fulfillSrc).toMatch(/剩 \$\{shippable\.length\} 单待发/)
+    expect(fulfillSrc).toMatch(/function syncDefaultChecked\(\) \{\n  checked\.value = new Set\(shippable\.value\.filter/)
+    expect(fulfillSrc).not.toMatch(/if \(msg === 'FEE_MISMATCH_HOLD'\)/)
+    expect(fulfillSrc).not.toMatch(/if \(msg === 'NO_ORDER'\)/)
   })
 })

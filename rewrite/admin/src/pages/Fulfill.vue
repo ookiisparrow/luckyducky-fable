@@ -7,7 +7,7 @@ import { ref, computed, nextTick, onMounted } from 'vue'
 import QRCode from 'qrcode'
 import { RefreshCw, ScanLine, Printer, Package } from 'lucide-vue-next'
 import { listOrders, shipOrder } from '../api/money'
-import { mapOrderRows, type OrderRowVM } from '../lib/mapMoney'
+import { mapOrderRows, orderErrorText, type OrderRowVM } from '../lib/mapMoney'
 import {
   FULFILL_STEP_NAMES,
   COMPANIES,
@@ -60,7 +60,7 @@ async function reload() {
     while (hasMore && pages < 25) {
       const r = await listOrders('paid', cursor, 200)
       if (!r.ok) {
-        loadErr.value = '加载待发货订单失败：' + String(r.error || '')
+        loadErr.value = '加载待发货订单失败：' + orderErrorText(r.error)
         break
       }
       for (const o of mapOrderRows((r as any).list) as OrderRowVM[]) {
@@ -134,7 +134,7 @@ function onPaperChange() {
 }
 const checked = ref<Set<string>>(new Set())
 function syncDefaultChecked() {
-  checked.value = new Set(orders.value.filter((o) => !printed.value.has(o.id as string)).map((o) => o.id as string))
+  checked.value = new Set(shippable.value.filter((o) => !printed.value.has(o.id as string)).map((o) => o.id as string))
 }
 function toggleCheck(id: string) {
   const s = new Set(checked.value)
@@ -253,12 +253,9 @@ function onScan() {
   }
   void doShip(selected.value, res.trackingNo)
 }
-function mapShipErr(msg: string) {
-  if (msg === 'FEE_MISMATCH_HOLD') return '金额异常单被挡下：先到「订单发货」页核对流水解除'
-  if (msg === 'BAD_STATUS:shipped') return '这单已发过货；要改运单号请去「订单发货」页'
-  if (msg && msg.startsWith('BAD_STATUS:')) return `这单当前状态（${msg.slice(11)}）不能发货`
-  if (msg === 'NO_ORDER') return '找不到这单订单'
-  return `发货失败：${msg}`
+function mapShipErr(code: unknown): string {
+  if (code === 'BAD_STATUS:' + 'shipped') return '这单已发过货；要改运单号请去「订单发货」页'
+  return orderErrorText(code)
 }
 async function doShip(order: FulfillOrder, trackingNo: string) {
   if (shipping.value) {
@@ -280,7 +277,7 @@ async function doShip(order: FulfillOrder, trackingNo: string) {
     if (selected.value?.id === order.id) selected.value = null
     say(`已发货 ${code} · ${company.value} ${trackingNo}`)
   } else {
-    const msg = mapShipErr(String(r.error || ''))
+    const msg = mapShipErr(r.error)
     // 失败保持选中：多半运单号扫歪/网络抖，纠正后直接重扫，不用再扫箱码
     sessionLog.value.unshift({ id: order.id as string, time, code, name, trackingNo, company: company.value, ok: false, msg })
     say(msg, true)
@@ -454,7 +451,7 @@ const railState = (n: number) => (n === step.value ? 'current' : n < step.value 
             </template>
             <EmptyState v-else :icon="ScanLine" text="扫箱上的内部二维码，订单核对卡显示在这里" />
           </Card>
-          <Card class="feed-card" title="发货记录" :sub="`剩 ${orders.length} 单待发 · 本次已发 ${shippedCount} 单`" flush>
+          <Card class="feed-card" title="发货记录" :sub="`剩 ${shippable.length} 单待发 · 本次已发 ${shippedCount} 单`" flush>
             <EmptyState v-if="!sessionLog.length" text="本次还没有发货记录" />
             <div v-else class="feed-list">
               <div v-for="(e, i) in sessionLog" :key="e.id + '-' + e.time + '-' + i" class="feed-row" :class="{ bad: !e.ok }">
