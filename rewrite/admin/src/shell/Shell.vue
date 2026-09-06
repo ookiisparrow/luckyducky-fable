@@ -535,6 +535,7 @@ aside {
   justify-content: space-between;
   gap: 16px;
   flex: none;
+  flex-wrap: wrap;
   min-height: 56px;
   padding: 10px 32px;
   background: var(--ld-bg);
@@ -564,6 +565,7 @@ aside {
 }
 .topbar-hint {
   margin: 0;
+  min-width: 0;
   font-size: 12.5px;
   color: var(--ld-content-2);
   text-align: right;
