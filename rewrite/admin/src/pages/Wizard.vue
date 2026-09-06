@@ -31,6 +31,7 @@ let msgLoadFail = false // 当前 banner 是否为「加载失败」——回刷
 const message = ref('')
 const busy = ref(false)
 const pubConfirm = ref(false)
+const createdDraftId = ref('') // /launch 刚建档后首包偶发读不到新档时，用于区分「暂未同步」与真不存在
 
 const STEP_NAMES = WIZARD_STEPS.map((s) => s.label)
 const STEP_HINTS = WIZARD_STEPS.map((s) => s.hint)
@@ -82,6 +83,7 @@ async function reloadProduct() {
     msgLoadFail = false
   }
   product.value = (r.list as Record<string, any>[]).find((p) => String(p.id || p._id) === id.value) || null
+  if (product.value) createdDraftId.value = '' // 刚建档已可读，清掉「同步中」上下文
   listed.value = r.listed || {}
   extras.value = { hasVideo: r.hasVideo || {}, cardFinal: r.cardFinal || {}, hasBatch: r.hasBatch || {} }
   loading.value = false
@@ -140,6 +142,7 @@ async function createDraft() {
     msgLoadFail = false
     return
   }
+  createdDraftId.value = newId
   // 同实例从 /launch 切到带编号路由：product 仍是 null、loading 已是 false——
   // 不先占住加载态，模板会先闪「没有找到这个商品」（P1）。
   loading.value = true
@@ -154,6 +157,7 @@ watch([step, id], () => {
     if (!same) loading.value = true // 换编号才转圈；同档切步不撕编辑器
     void reloadProduct()
   } else {
+    createdDraftId.value = ''
     product.value = null
     loading.value = false
   }
@@ -197,7 +201,12 @@ onMounted(() => {
       </section>
     </template>
 
-    <EmptyState v-else-if="!product" :icon="Store" :text="'没有找到这个商品（编号 ' + id + '）'">
+    <EmptyState
+      v-else-if="!product"
+      :icon="Store"
+      :text="id === createdDraftId ? '草稿已创建，列表还在同步，点「重试」继续（编号 ' + id + '）' : '没有找到这个商品（编号 ' + id + '）'"
+    >
+      <UiButton variant="primary" size="sm" @click="retryLoad">重试</UiButton>
       <UiButton variant="ghost" size="sm" @click="router.push('/products')"><ArrowLeft :size="14" :stroke-width="1.8" /><span>回产品管理</span></UiButton>
     </EmptyState>
 
