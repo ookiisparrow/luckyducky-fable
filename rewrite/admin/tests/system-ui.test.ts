@@ -5,6 +5,7 @@ import { mapAgents, mapBatches, webhookOk, mapRecon, mapBillMatch, mapStock, sto
 import settingsSrc from '../src/pages/Settings.vue?raw'
 import batchesSrc from '../src/pages/Batches.vue?raw'
 import wizardSrc from '../src/pages/Wizard.vue?raw'
+import reconciliationSrc from '../src/pages/Reconciliation.vue?raw'
 
 // 密钥不明文常驻（UX 体检批4）：webhook key 曾在输入框明文回显（后端 getSettings 原样回值），任何截屏/
 // 投屏即带出——隔壁「人工配置清单」页自标「零回显」，两页安全姿态曾自相矛盾。前端改密码态+显隐切换
@@ -130,6 +131,7 @@ describe('对账映射（approx 诚实·wxOnly 最危险）', () => {
       range: { from: '2026-07-01', to: '2026-07-01' },
       daily: [{ day: '2026-07-01', income: 100, refund: 0, net: 100, orders: 1, refunds: 0 }],
       approx: true,
+      partial: true,
       exceptions: { feeMismatch: ['o-bad'], refundMismatch: [], stuckRefunds: ['a-stuck'] },
     })!
     expect(recon.cumulative[2]).toEqual({ label: '净额', value: '¥120.00' })
@@ -137,6 +139,7 @@ describe('对账映射（approx 诚实·wxOnly 最危险）', () => {
     expect(recon.summary).toEqual({ income: '¥100.00', refund: '¥0.00', net: '¥100.00', orders: 1, refunds: 0 })
     expect(recon.range).toEqual({ from: '2026-07-01', to: '2026-07-01' })
     expect(recon.approxNote).toContain('近似')
+    expect(recon.partial).toBe(true)
     // B2 修：exceptions 是 {feeMismatch,refundMismatch,stuckRefunds} 对象·结构化成带单号明细（有则渲染·空类不显）
     expect(recon.exceptions).toEqual([
       { label: '金额不符单（先核对流水；支付异常走退款处理）', ids: ['o-bad'] },
@@ -144,14 +147,27 @@ describe('对账映射（approx 诚实·wxOnly 最危险）', () => {
     ])
     const clean = mapRecon({ ok: true, cumulative: { income: 0, refund: 0, net: 0 }, daily: [], approx: false })!
     expect(clean.approxNote).toBe('')
+    expect(clean.partial).toBe(false)
     expect(clean.exceptions).toEqual([]) // 无异常空数组·不吓人
     expect(clean.summary).toEqual({ income: '¥0.00', refund: '¥0.00', net: '¥0.00', orders: 0, refunds: 0 }) // 缺 summary 安全归零
     expect(clean.range).toEqual({ from: '', to: '' })
-    const m = mapBillMatch({ ok: true, summary: { matched: 5, wxOnly: 1, oursOnly: 0, amountMismatch: 0 }, discrepancies: { wxOnly: [{ transactionId: 'tx-ghost', amount: 5, date: '2026-07-01' }], oursOnly: [], amountMismatch: [] } })!
+    const m = mapBillMatch({ ok: true, summary: { matched: 5, wxOnly: 1, oursOnly: 2, amountMismatch: 0 }, discrepancies: { wxOnly: [{ transactionId: 'tx-ghost', amount: 5, date: '2026-07-01' }], oursOnly: [], amountMismatch: [] } })!
     expect(m.summary[1]).toMatchObject({ danger: true }) // wxOnly>0 标红
     expect(m.summary[0].danger).toBeFalsy() // 已平不标红
+    expect(m.summary[2].danger).toBeFalsy() // 我方有微信无多为账单未拉·不与「收钱无单」同色标红
     expect(m.wxOnly[0].amount).toBe('¥5.00')
     expect(mapBillMatch({ ok: false })).toBeNull()
+  })
+
+  it('大白话：对账页用人话报错、CSV 带可见 BOM、降级不装成账平、没账单不装成已勾对', () => {
+    expect(reconciliationSrc).toMatch(/orderErrorText\(/)
+    expect(reconciliationSrc).not.toMatch(/String\([^;]*error/)
+    expect(reconciliationSrc).toContain('\\uFEFF')
+    expect(reconciliationSrc).toContain('recon!.partial')
+    expect(reconciliationSrc).toContain('TriangleAlert')
+    expect(reconciliationSrc).toContain('暂无勾对数据——请先拉取账单')
+    expect(reconciliationSrc).toContain('当前区间暂无订单/退款记录')
+    expect(reconciliationSrc).toContain('class="ld-table table-scroll"')
   })
 })
 

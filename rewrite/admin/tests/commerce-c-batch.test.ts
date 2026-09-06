@@ -116,6 +116,7 @@ describe('Reconciliation.vue pullBill/pullRange 消费 reload 返回值（批E·
   it('大白话：pullBill 只在拉取与刷新都成功时显纯成功；reload 失败别被无条件覆盖，保留其错误原文', () => {
     const body = extractFunctionBody(scriptSetupSrc(reconciliationSrc), 'async function pullBill() {')
     expect(body).toMatch(/const reloadOk = await reload\(\)/)
+    expect(body.indexOf('const reloadOk')).toBeLessThan(body.indexOf('busy.value = false'))
     expect(body).toMatch(/if\s*\(\s*!r\.ok\s*\)\s*message\.value = '拉取失败：'/)
     expect(body).toMatch(/else if\s*\(\s*!reloadOk\s*\)\s*message\.value = '账单已拉取入库，但对账刷新失败：' \+ message\.value/)
     expect(body).toMatch(/else message\.value = '账单已拉取入库，勾对已刷新'/)
@@ -125,6 +126,7 @@ describe('Reconciliation.vue pullBill/pullRange 消费 reload 返回值（批E·
   it('大白话：pullRange 同理——reload 失败要把错误原文拼在区间拉取结果后，不能被纯成功文案盖掉', () => {
     const body = extractFunctionBody(scriptSetupSrc(reconciliationSrc), 'async function pullRange() {')
     expect(body).toMatch(/const reloadOk = await reload\(\)/)
+    expect(body.indexOf('const reloadOk')).toBeLessThan(body.indexOf('busy.value = false'))
     expect(body).toMatch(/message\.value = reloadOk\s*\n\s*\? `区间账单已拉取 \$\{ok\}\/\$\{days\.length\} 天，勾对已刷新`\s*\n\s*: `区间账单已拉取 \$\{ok\}\/\$\{days\.length\} 天，但对账刷新失败：` \+ message\.value/)
     // 旧「无条件显纯成功、不看 reload 是否失败」写法不再存在
     expect(body).not.toMatch(/message\.value = `区间账单已拉取 \$\{ok\}\/\$\{days\.length\} 天，勾对已刷新`$/m)
