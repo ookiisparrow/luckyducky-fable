@@ -135,6 +135,22 @@ describe('认证频控（黄金 kit-security §F·per-IP + 全局兜底）', () 
     const admin = await post({ action: 'login', key: 'super-secret-key' }, '10.0.0.99')
     expect(admin.statusCode).toBe(200)
   })
+
+  it('大白话：网关没给客户端 IP、或别人已打满共享失败计数时，正确口令仍先验再放行——不因缺 IP 落到全局同一把锁而预拒', async () => {
+    seedSuper()
+    const noIp = (payload: Record<string, unknown>) =>
+      adminApi({ httpMethod: 'POST', headers: {}, body: JSON.stringify(payload) }) as Promise<any>
+    // 缺 IP 连错 5 次：旧实现 clientKey 落到 adminlogin:global，throttleFailBoth 对同一条 +2，
+    // 第 3 次就会按 per-IP 阈锁死，下一次正确口令在 checkKey 前 429（生产手机登录即此状）。
+    for (let i = 0; i < 5; i++) await noIp({ action: 'login', key: 'wrong-key-abc' })
+    expect((await noIp({ action: 'login', key: 'super-secret-key' })).statusCode).toBe(200)
+
+    control.reset()
+    seedSuper()
+    for (let i = 0; i < 20; i++) await post({ action: 'login', key: 'wrong-key-abc' }, `11.0.0.${i}`)
+    const sharedLocked = await noIp({ action: 'login', key: 'super-secret-key' })
+    expect(sharedLocked.statusCode).toBe(200)
+  })
 })
 
 describe('会话令牌（黄金 kit-security §C）', () => {

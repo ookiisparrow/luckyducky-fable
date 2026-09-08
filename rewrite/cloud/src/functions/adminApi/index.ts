@@ -331,7 +331,8 @@ function clientKey(event: any): string {
   const h = event.headers || {}
   const xff = String(h['x-forwarded-for'] || h['X-Forwarded-For'] || '')
   const ip = xff.split(',')[0].trim() || String(h['x-real-ip'] || h['X-Real-Ip'] || '')
-  return 'adminlogin:' + (ip || 'global')
+  // 缺 IP 与全局信号共用 GLOBAL_KEY——调用方必须当「无独立源」，不得当 per-IP 硬预拒/双计/成功清全局。
+  return ip ? 'adminlogin:' + ip : GLOBAL_KEY
 }
 
 // per-IP 是合法单源限速·硬预拒；全局闸只作分布式爆破的**信号**、不硬预拒（收尾硬化批 2026-07-13·用户拍板）：
@@ -343,7 +344,7 @@ async function throttleGate(tkey: string): Promise<{ ipWait: number; globalWait:
   return { ipWait, globalWait }
 }
 async function throttleFailBoth(tkey: string): Promise<void> {
-  await throttleFail(tkey, ADMIN_THROTTLE)
+  if (tkey !== GLOBAL_KEY) await throttleFail(tkey, ADMIN_THROTTLE)
   await throttleFail(GLOBAL_KEY, ADMIN_THROTTLE_GLOBAL)
 }
 
@@ -380,7 +381,8 @@ export const main = async (event: any) => {
   // 仅作信号——见 throttleGate 注释。
   const tkey = clientKey(event)
   const { ipWait, globalWait } = await throttleGate(tkey)
-  if (ipWait > 0) return reply(429, { ok: false, error: 'TOO_MANY_ATTEMPTS', retryAfter: Math.ceil(ipWait / 1000) })
+  // 只有独立 IP 的 per-IP 锁才硬预拒。缺 IP 时 tkey===GLOBAL_KEY，ipWait 其实是全局信号——预拒会把真超管锁门外。
+  if (ipWait > 0 && tkey !== GLOBAL_KEY) return reply(429, { ok: false, error: 'TOO_MANY_ATTEMPTS', retryAfter: Math.ceil(ipWait / 1000) })
 
   if (action === 'login') {
     const res = await checkKey(db, key, true)
@@ -389,7 +391,7 @@ export const main = async (event: any) => {
       if (globalWait > 0) alert('security', 'adminLogin', 'GLOBAL_BRUTE', {}) // 全局锁定态下仍有错误口令=疑似分布式爆破·告警人工
       return reply(401, res)
     }
-    await throttleReset(tkey) // 成功只清 per-IP；全局计数靠滚动窗口自然衰减（防分布式爆破信号丢失）
+    if (tkey !== GLOBAL_KEY) await throttleReset(tkey) // 成功只清独立 IP；缺 IP/全局靠窗口衰减（防爆破信号被一次成功登入抹掉）
     // 签发会话令牌（口令不落盘）：前端此后只存/只发令牌；签发失败如实返空、前端 fail-closed 拒登
     const docId = (res as any).agentId === 'admin' ? 'auth' : String((res as any).agentId || 'auth')
     const sessionToken = await issueSession(db, docId, 'pwd').catch(() => '')
@@ -403,7 +405,7 @@ export const main = async (event: any) => {
     // 403 NO_BOUND_ACCOUNT / 403 ACCOUNT_DISABLED=真鉴权失败（爆破证据）→ 计 throttleFail；
     // 503 KF_TOKEN_UNAVAILABLE（令牌缓存冷窗·非爆破）/ 400 BAD_ARGS（缺 code·客户端错）=既不计失败也不 reset，
     // 否则办公室固定 IP 会在令牌冷窗期被无辜锁死。GLOBAL_BRUTE 告警跟随计数：仅真鉴权失败且 globalWait>0 才告警。
-    if (res.statusCode === 200) await throttleReset(tkey)
+    if (res.statusCode === 200 && tkey !== GLOBAL_KEY) await throttleReset(tkey)
     else if (res.statusCode === 401 || res.statusCode === 403) {
       await throttleFailBoth(tkey)
       if (globalWait > 0) alert('security', 'adminLogin', 'GLOBAL_BRUTE', {})
@@ -421,7 +423,7 @@ export const main = async (event: any) => {
     if (globalWait > 0) alert('security', 'adminLogin', 'GLOBAL_BRUTE', {})
     return reply(401, auth)
   }
-  await throttleReset(tkey)
+  if (tkey !== GLOBAL_KEY) await throttleReset(tkey)
   // 能力闸·默认拒：登记的取 ACTION_CAPS、未登记默认高权 ADMIN_DEFAULT_CAP；超管 '*' 匹配一切。
   // 「任一命中」语义（C4）：ACTION_CAPS 值可为单 cap 或 cap 数组——principal 持数组中任一 cap 即放行，
   // admin:write 与 refund:manage 并列登记时，admin:write 持有者行为不变、refund:manage 独立可用。
