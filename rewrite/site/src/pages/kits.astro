@@ -1,7 +1,7 @@
 ---
 // 初学者钩织学习套装介绍（静态导流·不做交易·不造具体价格/规格声称——货架真相在小程序）。
 import Base from '../layouts/Base.astro'
-import { faqSchema, breadcrumbSchema, jsonLd } from '../lib/schema'
+import { faqSchema, breadcrumbSchema, jsonLd, BRAND_IDENTITY } from '../lib/schema'
 
 const crumbs = breadcrumbSchema([
   { name: '首页', path: '/' },
@@ -15,10 +15,11 @@ const faq = faqSchema([
 ])
 ---
 
-<Base title="初学者钩织学习套装" description="小棉鸭初学者钩织学习套装：毛线、钩针、填充棉、配件与分步视频课程一盒配齐，零基础从第一针到完成一只小鸭。购买在微信小程序。">
+<Base title="初学者钩织学习套装" description={BRAND_IDENTITY}>
   {crumbs && <script type="application/ld+json" set:html={jsonLd(crumbs)} />}
   {faq && <script type="application/ld+json" set:html={jsonLd(faq)} />}
   <h1>一盒配齐，从第一针到一只小鸭</h1>
+  <p>{BRAND_IDENTITY}</p>
   <p>
     每份小棉鸭初学者钩织学习套装把<strong>毛线、钩针、填充棉、安全眼、说明卡</strong>与<strong>配套视频课程</strong>配齐——
     不用比对线材、不用另买工具，开盒就能开始。
