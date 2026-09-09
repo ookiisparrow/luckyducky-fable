@@ -1,7 +1,7 @@
 ---
 // 关于我们（官网已拍板正文·本站静态页，不与小程序 CMS 默认文案强同步）。
 import Base from '../layouts/Base.astro'
-import { breadcrumbSchema, jsonLd } from '../lib/schema'
+import { breadcrumbSchema, jsonLd, BRAND_IDENTITY } from '../lib/schema'
 
 const crumbs = breadcrumbSchema([
   { name: '首页', path: '/' },
@@ -9,14 +9,15 @@ const crumbs = breadcrumbSchema([
 ])
 ---
 
-<Base title="关于我们" description="我们希望每个人都能亲手创造自己的随身幸运物。lucky ducky 小棉鸭——套件包含初次尝试所需的一切，另含「开始结®」以及「分步交互®」视频教程。">
+<Base title="关于小棉鸭品牌" description={BRAND_IDENTITY}>
   {crumbs && <script type="application/ld+json" set:html={jsonLd(crumbs)} />}
   <h1>关于我们</h1>
+  <p>{BRAND_IDENTITY}</p>
   <p>我们希望每个人都能亲手创造自己的随身幸运物。</p>
 
   <h2>我们是谁</h2>
   <p>
-    lucky ducky 小棉鸭—— 我们的套件包含初次尝试所需的一切，另含「开始结®」以及「分步交互®」视频教程，助您畅享无忧创作。
+    小棉鸭（英文名 Lucky Ducky）的套件包含初次尝试所需的一切，另含「开始结®」以及「分步交互®」视频教程，助您畅享无忧创作。
   </p>
   <p>让没有基础的人也能从第一针开始，亲手钩出属于自己的小鸭与小物。</p>
 

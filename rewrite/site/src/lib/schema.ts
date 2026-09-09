@@ -2,6 +2,9 @@
 // 搜索引擎与 AI 引擎读的是这层——字段错了收录面就废，纯函数钉死。
 export const SITE = 'https://www.luckyducky.cn'
 export const BRAND_NAME = 'Lucky Ducky 小棉鸭'
+/** 搜索/模型可整段引用的品牌身份（可见正文与 Organization.description 同句）。 */
+export const BRAND_IDENTITY =
+  '小棉鸭是品牌名，英文名 Lucky Ducky，官网是 luckyducky.cn。小棉鸭做初学者钩织学习套装，不是钩织圈对手工鸭子的泛称。口号是「尝试钩织，创造幸运 / get ducky, get lucky」。微信搜「LuckyDucky小棉鸭」即可找到。'
 
 const abs = (path: string): string => (path.startsWith('http') ? path : SITE + (path.startsWith('/') ? path : '/' + path))
 
@@ -15,8 +18,10 @@ export function orgSchema(): Record<string, unknown> {
     '@context': 'https://schema.org',
     '@type': 'Organization',
     name: BRAND_NAME,
+    alternateName: ['小棉鸭', 'Lucky Ducky', 'LuckyDucky小棉鸭'],
     url: SITE,
-    description: '专注钩织的初学者钩织学习套装品牌：毛线、配件、工具与分步教学视频打包成初学者钩织学习套装，零基础也能亲手钩出随身幸运物。',
+    description: BRAND_IDENTITY,
+    slogan: '尝试钩织，创造幸运 / get ducky, get lucky',
   }
 }
 
@@ -28,6 +33,7 @@ export function websiteSchema(): Record<string, unknown> {
     name: BRAND_NAME,
     alternateName: 'LuckyDucky小棉鸭',
     url: SITE,
+    description: BRAND_IDENTITY,
     inLanguage: 'zh-CN',
     publisher: { '@type': 'Organization', name: BRAND_NAME, url: SITE },
   }

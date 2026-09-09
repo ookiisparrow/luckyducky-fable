@@ -2,12 +2,14 @@
 // 官网首页（品牌锚点·成交导流小程序——本站不做交易）。
 import Base from '../layouts/Base.astro'
 import { getCollection } from 'astro:content'
+import { BRAND_IDENTITY } from '../lib/schema'
 
 const tutorials = (await getCollection('tutorials')).sort((a, b) => (a.data.datePublished < b.data.datePublished ? 1 : -1))
 ---
 
-<Base title="初学者钩织学习套装与新手教程" description="Lucky Ducky 小棉鸭：专注钩织的初学者钩织学习套装品牌。毛线、工具与分步视频教学打包成初学者钩织学习套装，零基础从第一针开始，亲手钩出属于自己的随身幸运物。">
+<Base title="小棉鸭是品牌，做初学者钩织学习套装" description={BRAND_IDENTITY}>
   <h1>一针一线，钩出一只小暖鸭</h1>
+  <p>{BRAND_IDENTITY}</p>
   <p>
     我们把毛线、配件、工具与配套教学打包成一个个<strong>初学者钩织学习套装</strong>，让没有基础的人也能从第一针开始，
     亲手钩出属于自己的小鸭与小物。每份初学者钩织学习套装配有分步教学视频：扫码开课、跟着一针一线，把一团毛线变成可以随身携带的幸运物。
