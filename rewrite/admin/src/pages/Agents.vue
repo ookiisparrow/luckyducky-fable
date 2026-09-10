@@ -2,7 +2,7 @@
 // 外包账号（设计语言一致性·M3 UI 批11 + 看板化批 B6）：建号（口令只在建号请求用一次·库存哈希）/停启/企微 userid
 // 绑定（免登用·全局唯一）。看板 KPI 行：在线坐席数/接待中总数/今日结束总数由 listAgents 扩展字段聚合（真·非造）；
 // 整体均分并行调 getCsatReport（csat 集合结构性无 agentId·见 csat.ts listCsatEntries 注释——故坐席表不设
-// 「满意度」列，恒 null 的列是摆设，不编数不摆设；flag 记 docs/待办与债.md：落 agentId 维度后再补逐坐席满意度）。
+// 「满意度」列，恒 null 的列是摆设，不编数不摆设；落 agentId 维度后再补逐坐席满意度）。
 import { ref, onMounted, computed } from 'vue'
 import { listAgents, createAgent, disableAgent, setAgentWecomUserId } from '../api/system'
 import { getCsatReport } from '../api/cs'
