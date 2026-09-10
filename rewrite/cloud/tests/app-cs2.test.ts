@@ -12,6 +12,7 @@ import {
   enqueueSession,
   handleMessage,
   recordCsat,
+  attachCsatNote,
   summarizeOrders,
   buildMsgMenu,
   rootMenu,
@@ -234,6 +235,50 @@ describe('CSAT 编排（黄金 §七）', () => {
     expect(ret).toBe(null) // 写失败不回 csatId
     expect(control.dump('csat').length).toBe(0) // 没落库
     expect(seen.filter((s) => s.includes('[LD_ALERT]') && s.includes('CSAT_WRITE_FAIL')).length).toBe(1) // 留痕告警
+  })
+
+  it('大白话：评分写失败如实告诉顾客没记上，不发补充原因菜单（菜单星 + 关单数字两条路）', async () => {
+    control.setBeforeUpdate(({ coll }: any) => {
+      if (coll === 'csat') throw new Error('WRITE_FAIL')
+    })
+    const orig = console.error
+    console.error = () => {}
+    const { sent, ctx } = sendCollector()
+    try {
+      await handleMessage(ctx, { externalUserId: 'euFailMenu', menuId: 'rate:5', text: '' })
+      control.seed('kfState', [{ _id: 'csatask:euFailTxt', at: Date.now() }])
+      await handleMessage(ctx, { externalUserId: 'euFailTxt', menuId: '', text: '4' })
+    } finally {
+      console.error = orig
+      control.setBeforeUpdate(null as never)
+    }
+    expect(control.dump('csat').length).toBe(0)
+    expect(sent).toHaveLength(2)
+    expect(sent.every((p) => p.msgtype === 'text')).toBe(true)
+    expect(sent.some((p) => p.msgtype === 'msgmenu')).toBe(false)
+    expect(sent[0].text.content).toContain('没记上')
+    expect(sent[1].text.content).toContain('没记上')
+  })
+
+  it('大白话：备注回写失败要告警，不空吞（病根#14）', async () => {
+    control.seed('kfState', [{ _id: 'csatlast:euNote', csatId: 'csat:euNote:1', at: Date.now() }])
+    control.seed('csat', [{ _id: 'csat:euNote:1', externalUserId: 'euNote', score: 5, note: '', createdAt: 1 }])
+    control.setBeforeUpdate(({ coll }: any) => {
+      if (coll === 'csat') throw new Error('NOTE_FAIL')
+    })
+    const seen: string[] = []
+    const orig = console.error
+    console.error = (...a: unknown[]) => {
+      seen.push(String(a[0]))
+    }
+    try {
+      await attachCsatNote(db(), 'euNote', '问题已解决')
+    } finally {
+      console.error = orig
+      control.setBeforeUpdate(null as never)
+    }
+    expect(control.dump('csat')[0].note).toBe('')
+    expect(seen.filter((s) => s.includes('[LD_ALERT]') && s.includes('CSAT_NOTE_FAIL')).length).toBe(1)
   })
 
   it('大白话：关单评分标记在时窗内回纯数字才记分；无标记的纯数字不记分照常回根菜单（防随口数字误当评分）', async () => {
