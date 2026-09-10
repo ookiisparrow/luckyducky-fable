@@ -1,6 +1,6 @@
 /**
- * 订单域状态机声明单源（镜像旧线 order.spec.ts·状态串=前后端契约与库内数据，不可改名——数据零迁移前提）。
- * 类型经 SpecStates 类型级派生，改声明即改类型，零生成器。（守卫 rw-contracts-golden parity 测试焊死与旧线逐字一致）
+ * 订单域状态机声明单源（状态串=前后端契约与库内数据，不可改名）。
+ * 类型经 SpecStates 类型级派生，改声明即改类型，零生成器。
  */
 import { statesOf, type SpecStates } from './status'
 

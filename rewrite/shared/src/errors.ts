@@ -1,6 +1,6 @@
 /**
- * 错误码权威登记册（设计约束#3 fail-closed 闸配套·镜像旧线 shared/errors.ts——码是前端分支契约，
- * 不可改名、新增只追加）。并存期 parity 测试焊死与旧线逐键一致；新线 kit err() 随 M1 kit 批接上本册。
+ * 错误码权威登记册（设计约束#3 fail-closed 闸配套——码是前端分支契约，
+ * 不可改名、新增只追加）。kit err() 读本册。
  */
 export const ERR = {
   // 闸 / 身份
