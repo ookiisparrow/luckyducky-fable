@@ -24,24 +24,8 @@
   padding: 30rpx;
 }
 .corev-prod {
-  display: flex;
-  align-items: center;
-  gap: 22rpx;
   padding-bottom: 30rpx;
   border-bottom: 2rpx solid var(--ld-line);
-}
-.corev-prod-img {
-  width: 98rpx;
-  height: 98rpx;
-  flex: 0 0 auto;
-  border-radius: var(--ld-radius-sm);
-  background: var(--ld-bg-sage);
-}
-.corev-prod-mid {
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 12rpx;
 }
 .corev-prod-name {
   font-size: 28rpx;
