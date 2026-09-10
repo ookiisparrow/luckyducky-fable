@@ -15,7 +15,7 @@
         <view wx:if="{{bio}}" class="ld-me-greet-bio">{{bio}}</view>
       </view>
       <image wx:if="{{avatar}}" class="ld-me-avatar" src="{{avatar}}" mode="aspectFill" />
-      <view wx:else class="ld-me-avatar ld-me-avatar-empty">🦆</view>
+      <image wx:else class="ld-me-avatar ld-me-avatar-empty" src="/static/logo-wordmark.svg" mode="aspectFit" />
     </view>
     <view wx:if="{{loggedIn}}" class="ld-me-edit" bind:tap="onEditProfile" hover-class="ld-me-edit-h">
       <text>编辑资料</text>

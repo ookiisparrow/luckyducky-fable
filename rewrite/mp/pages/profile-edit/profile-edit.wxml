@@ -13,7 +13,7 @@
         <text class="coaddr-label">头像</text>
         <view class="coprof-avatar">
           <image wx:if="{{avatarTemp || avatar}}" class="coprof-avatar-img" src="{{avatarTemp || avatar}}" mode="aspectFill" />
-          <view wx:else class="coprof-avatar-img coprof-avatar-empty">🦆</view>
+          <image wx:else class="coprof-avatar-img coprof-avatar-empty" src="/static/logo-wordmark.svg" mode="aspectFit" />
           <view class="coprof-cam">
             <image class="coprof-cam-ico" src="/static/icons/camera.svg" mode="aspectFit" />
           </view>
