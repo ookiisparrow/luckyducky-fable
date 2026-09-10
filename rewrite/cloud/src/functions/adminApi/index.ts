@@ -1,6 +1,6 @@
 import cloud from 'wx-server-sdk'
 import { getDb, throttleLocked, throttleFail, throttleReset, recordAudit, shouldAudit, alert } from '../../kit'
-import { reply, ensure, checkKey, issueSession, type Ctx } from './lib'
+import { reply, checkKey, issueSession, type Ctx } from './lib'
 import * as products from './actions/products'
 import * as courses from './actions/courses'
 import * as cards from './actions/cards'
@@ -431,7 +431,6 @@ export const main = async (event: any) => {
   const capSpec = ACTION_CAPS[action]
   const needCaps: string[] = Array.isArray(capSpec) ? capSpec : capSpec ? [capSpec] : [ADMIN_DEFAULT_CAP]
   if (!caps.some((c) => c === '*' || needCaps.includes(c))) return reply(403, { ok: false, error: 'FORBIDDEN' })
-  await ensure(db, 'productsDraft')
   const drafts = db.collection('productsDraft')
 
   const handler = ACTIONS[action]

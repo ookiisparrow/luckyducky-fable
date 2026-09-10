@@ -1,9 +1,16 @@
 // 黄金 admin-misc §二（上新流水线/软下架/孤儿视频回收/分片/批次）（守卫 rw-admin2-golden）。
 import { describe, it, expect, beforeEach, vi } from 'vitest'
+import { readFileSync } from 'node:fs'
+import { dirname, join } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { control } from 'wx-server-sdk'
 import { main as adminApi } from '../src/functions/adminApi/index'
 import { sha } from '../src/functions/adminApi/lib'
 import { getDb } from '../src/kit'
+
+const SRC = (p: string) => join(dirname(fileURLToPath(import.meta.url)), '..', 'src', p)
+const stripComments = (s: string) => s.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/gm, '')
+const ENSURE_DRAFTS = /ensure\(\s*db\s*,\s*['"]productsDraft['"]\s*\)/
 
 const post = (action: string, data: Record<string, unknown> = {}) =>
   adminApi({
@@ -140,6 +147,46 @@ describe('商品草稿与上架（黄金：白名单/四道门/软下架不隐�
     expect(r2.cardFinal.p2).toBeFalsy()
     expect(r2.hasVideo['course-p2']).toBeFalsy()
     expect(r2.hasBatch['course-p2']).toBeFalsy()
+  })
+})
+
+describe('productsDraft ensure 不跟全局网关（夜间审计 2026-09-09 cloud）', () => {
+  it('大白话：进销存/体检/客服/360/看板登录后不再顺手建商品草稿集合；草稿动作用前才建', async () => {
+    const db = getDb()
+    const created: string[] = []
+    const orig = db.createCollection.bind(db)
+    db.createCollection = async (name: string) => {
+      created.push(name)
+      return orig(name)
+    }
+    try {
+      for (const action of ['getDashboard', 'listMaterials', 'getInspectStatus', 'listKb', 'searchCustomer']) {
+        created.length = 0
+        await post(action)
+        expect(created.includes('productsDraft'), action).toBe(false)
+      }
+      created.length = 0
+      await post('listDrafts')
+      expect(created).toContain('productsDraft')
+      created.length = 0
+      await post('saveDraft', { product: DRAFT })
+      expect(created).toContain('productsDraft')
+    } finally {
+      db.createCollection = orig
+    }
+  })
+
+  it('大白话：网关源码不再全局 ensure productsDraft；四个草稿动作各自用前 ensure', () => {
+    const gw = stripComments(readFileSync(SRC('functions/adminApi/index.ts'), 'utf8'))
+    expect(gw).not.toMatch(ENSURE_DRAFTS)
+    const products = stripComments(readFileSync(SRC('functions/adminApi/actions/products.ts'), 'utf8'))
+    for (const name of ['listDrafts', 'saveDraft', 'deleteDraft', 'publishProduct']) {
+      const start = new RegExp(`export\\s+async\\s+function\\s+${name}\\s*\\(`).exec(products)
+      expect(start, name).toBeTruthy()
+      const next = /export\s+async\s+function\s+\w+\s*\(/.exec(products.slice(start!.index + 1))
+      const body = products.slice(start!.index, next ? start!.index + 1 + next.index : products.length)
+      expect(body).toMatch(ENSURE_DRAFTS)
+    }
   })
 })
 
