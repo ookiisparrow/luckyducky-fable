@@ -26,9 +26,9 @@
       </view>
       <view class="ld-cart-row-act">
         <view class="ld-stepper">
-          <view class="ld-step {{item.qty <= 1 ? 'dim' : ''}}" data-id="{{item.id}}" data-sku="{{item.sku}}" data-qty="{{item.qty}}" catch:tap="onDec">−</view>
+          <view class="ld-step {{item.qty <= 1 ? 'dim' : ''}}" data-id="{{item.id}}" data-sku="{{item.sku}}" catch:tap="onDec">−</view>
           <text class="ld-step-qty">{{item.qty}}</text>
-          <view class="ld-step" data-id="{{item.id}}" data-sku="{{item.sku}}" data-qty="{{item.qty}}" catch:tap="onInc">+</view>
+          <view class="ld-step" data-id="{{item.id}}" data-sku="{{item.sku}}" catch:tap="onInc">+</view>
         </view>
         <view class="ld-cart-row-del" data-id="{{item.id}}" data-sku="{{item.sku}}" catch:tap="onRemove">删除</view>
       </view>

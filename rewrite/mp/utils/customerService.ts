@@ -5,7 +5,7 @@
 // 原生线（rewrite/mp）无 uni-app 多端条件编译，恒在微信小程序环境运行，故无需 #ifdef 分支。
 // 根因#8「构建过≠真机能用」：corpId/url 须真机验（小程序后台须绑同主体企业微信 ID + 接待人配置）——
 //   本批未验，见 rewrite/mp/README.md 真机走查清单「帮助拉起客服」条目。
-export const CUSTOMER_SERVICE = {
+const CUSTOMER_SERVICE = {
   corpId: 'wwda6861818cb50dd9',
   url: 'https://work.weixin.qq.com/kfid/kfcd94c3a2551535247',
 }

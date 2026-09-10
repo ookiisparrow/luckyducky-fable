@@ -148,7 +148,7 @@ interface CatalogLessonRaw {
 
 /** dur 口径修复（决策§31 批2 顺修）：段 dur 库内是 'm:ss' 字符串（admin readDuration/VOD 转码回填同款），
  *  原 Number('5:00')→NaN→0 把全部课时时长隐藏成 0 分钟。兼容三种历史写法：数字秒、纯数字串、'm:ss'。 */
-export function parseDurSec(v: unknown): number {
+function parseDurSec(v: unknown): number {
   if (typeof v === 'number') return v > 0 ? v : 0
   const s = String(v || '').trim()
   const m = s.match(/^(\d+):([0-5]?\d)$/)
