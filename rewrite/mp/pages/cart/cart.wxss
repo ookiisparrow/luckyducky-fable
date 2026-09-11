@@ -234,7 +234,7 @@
   position: fixed;
   left: 0;
   right: 0;
-  bottom: calc(140rpx + env(safe-area-inset-bottom)); /* 让开悬浮 TabBar */
+  bottom: calc(160rpx + env(safe-area-inset-bottom)); /* 让开悬浮 icon TabBar（压高度后仍留缝） */
   display: flex;
   align-items: center;
   gap: 20rpx;

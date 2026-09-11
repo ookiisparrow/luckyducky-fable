@@ -1,7 +1,5 @@
-/* 悬浮胶囊 TabBar（2026-07-16 用户需求：由 2026-07-13 贴边通栏改回悬浮形态；2026-09-11 只留图标不写字）。
-   守住 2026-07-13「tabbar 不要透明」的约束——悬浮≠透明：胶囊本体实底不透明（白底），四周
-   加显著投影使其读作「浮在内容之上的一块实心胶囊」而非透明空洞（当初透明感来自露内容+安全区悬空，
-   靠实底+重投影+胶囊分明的形体消解）。官方 custom-tab-bar 机制不变（setActive/角标/switchTab 在 index.ts）；此文件只管视觉。 */
+/* 悬浮胶囊 TabBar（2026-07-16 悬浮形态；2026-09-11 只留图标）。
+   守「tabbar 不要透明」：实底白 + 重投影。图标模式须压高度，避免盖住购物车结算条（bottom≈140rpx 让位）。 */
 .ld-tabbar {
   position: fixed;
   left: 44rpx;
@@ -10,11 +8,9 @@
   display: flex;
   align-items: center;
   gap: 8rpx;
-  padding: 10rpx 20rpx;
+  padding: 8rpx 12rpx;
   background: var(--ld-bg, #ffffff);
-  /* 胶囊：整体大圆角药丸 */
   border-radius: var(--ld-radius-pill, 999rpx);
-  /* 实底不透明 + 显著落影：读作浮起的实心块，非透明空洞（守 2026-07-13「不要透明」） */
   box-shadow: 0 12rpx 40rpx rgba(28, 28, 32, 0.2), 0 4rpx 12rpx rgba(28, 28, 32, 0.1);
   overflow: visible;
 }
@@ -23,25 +19,24 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  min-height: 88rpx;
-  padding: 22rpx 0;
-  /* 内部选中态也走胶囊形，与外壳呼应 */
+  /* 仅图标：约 72rpx 触控高，整栏≈外垫+触控 ≈ 与结算条 160rpx 让位匹配 */
+  height: 72rpx;
+  padding: 0;
   border-radius: var(--ld-radius-pill, 999rpx);
 }
 .ld-tab-iconwrap {
   position: relative;
-  /* 给角标留出一圈，避免贴到胶囊边或被裁 */
-  padding: 8rpx 12rpx 4rpx;
+  padding: 4rpx 10rpx;
 }
 .ld-tab-icon {
-  width: 44rpx;
-  height: 44rpx;
+  width: 40rpx;
+  height: 40rpx;
   display: block;
 }
 .ld-tab-badge {
   position: absolute;
-  top: 0;
-  right: 0;
+  top: -4rpx;
+  right: -2rpx;
   min-width: 28rpx;
   height: 28rpx;
   padding: 0 8rpx;
@@ -53,5 +48,5 @@
   font-size: 18rpx;
 }
 .ld-tab.active {
-  background: #f2ebfc; /* 选中丁香紫药丸（设计 #F2EBFC） */
+  background: #f2ebfc;
 }
