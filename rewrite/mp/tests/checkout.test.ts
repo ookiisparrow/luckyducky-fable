@@ -122,6 +122,15 @@ describe('结算草稿（快照语义·直买不动车·提交精确扣车）', 
   })
 })
 
+describe('搭配购占位不进展示', () => {
+  it('大白话：checkoutConst 里 hook/yarn 是占位，顾客看不见搭配购块；钱账函数还认它们', () => {
+    expect(checkout.sellableAddons()).toEqual([])
+    checkout.prepareBuyNow({ id: 'p1', name: '小鸭', price: 128 })
+    checkout.toggleAddon('hook')
+    expect(checkout.summaryFen().goodsFen).toBe(12800 + 3900) // 占位加项仍可入账，只是页面不画
+  })
+})
+
 describe('结算幂等键（批E·P1 防网络超时重试双建单）', () => {
   it('大白话：同一草稿的键在提交/重试期间不变；换一次结算（重新 prepare）才换新键；草稿清空后键失效', () => {
     cart.add({ id: 'p1', name: '小鸭', price: 128 })

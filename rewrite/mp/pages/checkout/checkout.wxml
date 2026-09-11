@@ -52,8 +52,8 @@
       </view>
     </view>
 
-    <!-- 搭配购买 -->
-    <view class="co-card">
+    <!-- 搭配购买：只有真能卖的加项才露整块；checkoutConst 里 hook/yarn 是占位，空则整块不渲染。 -->
+    <view class="co-card" wx:if="{{addons.length}}">
       <view class="co-addon-head">
         <text class="co-addon-title">搭配购买</text>
         <text class="co-addon-sub">一起买更划算</text>
@@ -76,7 +76,7 @@
         <text class="co-row-key">配送方式</text>
         <text class="co-row-val">顺丰速运 · {{shipLabel}}</text>
       </view>
-      <view class="co-ship-note">除新疆、内蒙古、西藏外包邮。确认进课后不可退货。</view>
+      <view class="co-ship-note">包邮到家·售后无忧</view>
     </view>
 
     <!-- 金额明细 -->

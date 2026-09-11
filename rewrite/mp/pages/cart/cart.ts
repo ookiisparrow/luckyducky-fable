@@ -95,7 +95,7 @@ Page({
     if (!payload) return
     cart.add(payload)
     this.refresh()
-    wx.showToast({ title: '已加入购物袋', icon: 'success' })
+    wx.showToast({ title: '已加入购物车', icon: 'success' })
   },
   onOpen(e: WechatMiniprogram.TouchEvent) {
     const id = String(e.currentTarget.dataset.id || '')

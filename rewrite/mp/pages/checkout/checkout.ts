@@ -4,7 +4,6 @@ import { tapHaptic } from '../../lib/haptics'
 import { trackEvent } from '../../api/learning'
 import * as addr from '../../lib/address'
 import * as checkout from '../../lib/checkout'
-import { CHECKOUT_ADDONS } from '../../lib/checkoutConst'
 import { createOrder, pay } from '../../api/orders'
 import { mapPayResult } from '../../lib/payFlow'
 import { freshCover } from '../../lib/cart'
@@ -16,7 +15,7 @@ Page({
   data: {
     address: null as ReturnType<typeof addr.defaultAddress>,
     items: [] as Array<checkout.DraftLine & { priceNum: string }>,
-    addons: CHECKOUT_ADDONS.map((a) => ({ ...a, added: false, priceNum: a.price.toFixed(2) })),
+    addons: checkout.sellableAddons().map((a) => ({ ...a, added: false, priceNum: a.price.toFixed(2) })),
     goodsLabel: '',
     shipLabel: '',
     amountNum: '', // 实付金额数字（无符号·底坞/明细大字用；金额单源仍在云端/summaryFen）
@@ -76,7 +75,7 @@ Page({
     this.setData({
       address: addr.defaultAddress(),
       items: draft.items.map((l) => ({ ...l, cover: freshCover(l, allRaw), priceNum: l.price.toFixed(2) })), // 结算页两位小数（财务口径）
-      addons: CHECKOUT_ADDONS.map((a) => ({ ...a, added: draft.items.some((l) => l.id === a.id), priceNum: a.price.toFixed(2) })),
+      addons: checkout.sellableAddons().map((a) => ({ ...a, added: draft.items.some((l) => l.id === a.id), priceNum: a.price.toFixed(2) })),
       goodsLabel: checkout.fenLabel(s.goodsFen),
       shipLabel: s.shipFen ? checkout.fenLabel(s.shipFen) : '包邮',
       amountNum: (s.amountFen / 100).toFixed(2),

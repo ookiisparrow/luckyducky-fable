@@ -1,8 +1,14 @@
 // 结算草稿（旧线 cart store 的 checkoutItems 半边·临时态不持久化——冷启动不残留旧草稿）：
 // 购物车「去结算」快照选中项（fromCart=true·提交成功按实际数量精确扣车）；
 // 详情「立即购买」单件成稿（fromCart=false·不动购物车）。金额分口径与 cart 同源。
-import { CHECKOUT_ADDONS, COUPON, SHIP } from './checkoutConst'
+import { CHECKOUT_ADDONS, COUPON, SHIP, type CheckoutAddon } from './checkoutConst'
 import * as cart from './cart'
+
+// checkoutConst 里 hook/yarn 是写死占位、不是货架真 SKU。展示层过滤掉，钱账仍认 CHECKOUT_ADDONS。
+const PLACEHOLDER_ADDON_IDS = new Set(['hook', 'yarn'])
+export function sellableAddons(): CheckoutAddon[] {
+  return CHECKOUT_ADDONS.filter((a) => !PLACEHOLDER_ADDON_IDS.has(a.id))
+}
 
 export interface DraftLine {
   id: string

@@ -5,7 +5,8 @@ import { tapHaptic } from '../../lib/haptics'
 import { trackEvent } from '../../api/learning'
 import { getContent } from '../../api/catalog'
 import { getAllProducts, getProductById } from '../../lib/catalog'
-import { mapHomeContent, mapProducts, type HomeContentVM, type ProductVM } from '../../lib/mapHome'
+import { HOME_SHARE_TITLE } from '../../lib/brand'
+import { mapHomeContent, mapProducts, pickDuckKit, type HomeContentVM, type ProductVM } from '../../lib/mapHome'
 import { decideQuickAdd } from '../../lib/quickAdd'
 import * as cart from '../../lib/cart'
 import { consumeHomeTop } from '../../lib/homeIntent'
@@ -170,7 +171,12 @@ Page({
   },
   toProducts() {
     tapHaptic()
-    this.scrollTo('friends') // 「购买」滚到商品轨（设计 scrollToProduct）
+    const duck = pickDuckKit(this.data.products)
+    if (duck) {
+      wx.navigateTo({ url: '/pages/detail/detail?id=' + duck.id })
+      return
+    }
+    this.scrollTo('friends') // 货架上还没有小棉鸭套装：退回商品轨，不瞎跳旧 id
   },
   toIntro() {
     this.scrollTo('intro') // 搜索胶囊滚到品牌介绍（设计 scrollToIntro）
@@ -182,12 +188,11 @@ Page({
   onSplashDone() {
     this.setData({ showSplash: false })
   },
-  // bug sweep II L3：页脚链接架构无 href 字段（admin 只存纯文本 label），本无法通用跳转——「关于我们」
-  // 是唯一已上线且默认安装态必现的 label（/pages/about/about 已注册·me 页也有正常入口），单独映射修复
-  // 默认误报「敬请期待」；其余 label 无对应页仍是合法占位（不加配置面/不引 href 机制，运营真需要再配跳转）。
+  // 页脚无 href：默认「关于我们」「Lucky Ducky小棉鸭」都进关于页，不弹敬请期待。
+  // 其余 label 无对应页仍是合法占位（不加配置面/不引 href 机制，运营真需要再配跳转）。
   onTapFooterLink(e: WechatMiniprogram.TouchEvent) {
     const label = String(e.currentTarget.dataset.label || '')
-    if (label === '关于我们') {
+    if (label === '关于我们' || label === 'Lucky Ducky小棉鸭') {
       wx.navigateTo({ url: '/pages/about/about' })
       return
     }
@@ -202,9 +207,9 @@ Page({
   // 转发/朋友圈钩子（分发前置·决策§29·守卫 rw-mp-share-wired）：公开页开转发，私有页（交易/学习/隐私）
   // 刻意不加钩子＝默认不可转发。不配 imageUrl——微信默认截页面顶部真身，不造假分享图。
   onShareAppMessage() {
-    return { title: '小棉鸭钩织材料包｜一针一线，钩出随身幸运物', path: '/pages/home/home' }
+    return { title: HOME_SHARE_TITLE, path: '/pages/home/home' }
   },
   onShareTimeline() {
-    return { title: '小棉鸭钩织材料包｜一针一线，钩出随身幸运物' }
+    return { title: HOME_SHARE_TITLE }
   },
 })

@@ -62,7 +62,7 @@
       <image class="ld-mc-empty-img" src="/static/icons/graduation-cap.svg" mode="aspectFit" />
     </view>
     <view class="ld-mc-empty-title">还没有进行中的课程</view>
-    <view class="ld-mc-empty-hint">买了材料包？用包里的激活码开课</view>
+    <view class="ld-mc-empty-hint">扫描二维码开始</view>
     <view class="ld-mc-empty-btn" bind:tap="onActivate" hover-class="ld-mc-empty-btn-h" hover-stay-time="80">输入激活码</view>
   </view>
 </view>
