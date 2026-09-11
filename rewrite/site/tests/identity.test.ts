@@ -10,6 +10,9 @@ const pages = {
   llms: readFileSync(new URL('../src/pages/llms.txt.ts', import.meta.url), 'utf8'),
 }
 
+const ogCover = readFileSync(new URL('../public/og-cover.png', import.meta.url))
+const ogText = ogCover.toString('utf8')
+
 describe('官网品牌身份可引用', () => {
   it('大白话：身份句写明品牌名、英文名、官网、初学者钩织学习套装、两句口号、微信搜法；首页/关于/套装/llms 都挂这句；不叫材料包', () => {
     expect(BRAND_IDENTITY).toContain('小棉鸭是品牌名')
@@ -26,5 +29,24 @@ describe('官网品牌身份可引用', () => {
     expect(pages.kits).toContain('<p>{BRAND_IDENTITY}</p>')
     expect(pages.llms).toContain('${BRAND_IDENTITY}')
     for (const src of Object.values(pages)) expect(src).not.toContain('材料包')
+  })
+
+  it('大白话：关于页跟小程序一样写「开始练习」「分步交互」，不写假注册商标', () => {
+    expect(pages.about).toContain('开始练习')
+    expect(pages.about).toContain('分步交互')
+    expect(pages.about).not.toContain('开始结')
+    expect(pages.about).not.toContain('®')
+  })
+
+  it('大白话：分享图文案块写初学者钩织学习套装和体验钩织，不写材料包；光有文件不够', () => {
+    expect(ogCover[0]).toBe(0x89)
+    expect(ogCover.subarray(1, 4).toString('ascii')).toBe('PNG')
+    expect(ogCover.readUInt32BE(16)).toBe(1200)
+    expect(ogCover.readUInt32BE(20)).toBe(630)
+    expect(ogText).toContain('初学者钩织学习套装')
+    expect(ogText).toContain('体验钩织，创造幸运')
+    expect(ogText).not.toContain('材料包')
+    expect(ogText).not.toContain('尝试钩织')
+    expect(ogText).not.toContain('学习钩织')
   })
 })

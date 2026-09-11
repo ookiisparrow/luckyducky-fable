@@ -7,12 +7,13 @@ const crumbs = breadcrumbSchema([
   { name: '首页', path: '/' },
   { name: '初学者钩织学习套装', path: '/kits/' },
 ])
-const faq = faqSchema([
+const pairs = [
   { q: '初学者钩织学习套装里都有什么？', a: '毛线、钩针、填充棉、安全眼、说明卡与配套视频课程的激活卡，开盒即可开始，不用另外买工具。' },
   { q: '零基础能钩完吗？', a: '可以。每份初学者钩织学习套装配分步教学视频，从起针到收尾逐段演示；网站教程区还有图文版基本功讲解。' },
   { q: '在哪里购买？', a: '在微信小程序内购买：微信搜「LuckyDucky小棉鸭」。价格、规格与最新款式以小程序货架为准。' },
   { q: '售后怎么申请？需要发票怎么办？', a: '除新疆、内蒙古、西藏外包邮。未确认进课可按小程序售后流程退货；确认进课后该件不可退。如需发票，请联系客服。' },
-])
+]
+const faq = faqSchema(pairs)
 ---
 
 <Base title="初学者钩织学习套装" description={BRAND_IDENTITY}>
@@ -29,6 +30,15 @@ const faq = faqSchema([
     <li>🦆 <strong>新手友好</strong>：针法从魔术环起针教起，配图文教程复习。</li>
     <li>🎁 <strong>适合送礼</strong>：亲手钩的幸运物，也可以连初学者钩织学习套装一起送。</li>
   </ul>
+  <section>
+    <h2>常见问题</h2>
+    {pairs.map((f) => (
+      <details>
+        <summary>{f.q}</summary>
+        <p>{f.a}</p>
+      </details>
+    ))}
+  </section>
   <p class="cta">🛒 款式、价格与库存以小程序货架为准：<strong>微信搜「LuckyDucky小棉鸭」</strong></p>
   <p>先看看<a href="/tutorials/">钩织教程</a>，感受一下难度再决定也不迟。</p>
 </Base>
@@ -37,6 +47,22 @@ const faq = faqSchema([
   h1 {
     color: #241733;
     font-size: 26px;
+  }
+  h2 {
+    color: #241733;
+    margin-top: 28px;
+  }
+  details {
+    margin-bottom: 10px;
+    padding: 8px 14px;
+    background: #fff;
+    border: 1px solid #c9bbe0;
+    border-radius: 10px;
+  }
+  summary {
+    cursor: pointer;
+    color: #7b5caf;
+    font-weight: 600;
   }
   ul {
     padding-left: 18px;
