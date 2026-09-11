@@ -97,4 +97,13 @@ describe('登录半屏接线（防两报告 bug 回归·R1）', () => {
     expect(tabbarTs).toContain('loginGate.subscribe')
     expect(tabbarWxml).toContain('!hidden')
   })
+  it('大白话：自定义底栏只画图标和购物车角标，不写首页/购物车/我', () => {
+    const live = tabbarWxml.replace(/<!--[\s\S]*?-->/g, '')
+    expect(live).toContain('ld-tab-icon')
+    expect(live).toContain('ld-tab-badge')
+    expect(tabbarTs).toContain('setActive')
+    expect(tabbarTs).toContain('cartCount')
+    expect(live).not.toContain('ld-tab-label')
+    expect(live).not.toContain('item.label')
+  })
 })
