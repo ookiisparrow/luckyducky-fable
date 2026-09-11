@@ -5,7 +5,7 @@
 
     <view class="ls-head">
       <image class="ls-logo" src="/static/logo-wordmark.svg" mode="heightFix" />
-      <text class="ls-sub">登录后同步你的订单 · 收藏 · 学习进度</text>
+      <text class="ls-sub">登录后同步你的订单 · 学习进度</text>
     </view>
 
     <view class="ls-foot">

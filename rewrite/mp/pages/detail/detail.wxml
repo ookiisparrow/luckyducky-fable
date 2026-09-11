@@ -20,9 +20,9 @@
            同一件商品在三个页面看到的价格顺序不一样。 -->
       <text class="pdp-was" wx:if="{{vm.wasLabel}}">{{vm.wasLabel}}</text>
       <text class="pdp-now"><text class="pdp-cny">¥</text>{{currentPriceNum}}</text>
-      <!-- 顾客看见的运费政策：除新疆、内蒙古、西藏外包邮。结算算钱仍走 SHIP=0（不在本页改钱链）。
+      <!-- 顾客看见的运费/售后短句；结算算钱仍走 SHIP=0（不在本页改钱链）。
            不要写「满 ¥100 包邮」或「全场包邮」——都不是现政策。 -->
-      <text class="pdp-ship">除新疆、内蒙古、西藏外包邮</text>
+      <text class="pdp-ship">包邮到家·售后无忧</text>
     </view>
     <view class="pdp-title">{{vm.name}}</view>
     <view class="pdp-sold" wx:if="{{vm.soldLabel}}">{{vm.soldLabel}}</view>
@@ -31,7 +31,7 @@
     <view class="pdp-meta">
       <view class="pdp-meta-item"><text class="pdp-meta-b">顺丰</text><text class="pdp-meta-s">48h 内发出</text></view>
       <view class="pdp-meta-item"><text class="pdp-meta-b">开课后</text><text class="pdp-meta-s">不可退货</text></view>
-      <view class="pdp-meta-item"><text class="pdp-meta-b">包邮</text><text class="pdp-meta-s">除疆蒙藏外</text></view>
+      <view class="pdp-meta-item"><text class="pdp-meta-b">包邮到家</text><text class="pdp-meta-s">售后无忧</text></view>
       <view class="pdp-meta-item"><text class="pdp-meta-b">免费</text><text class="pdp-meta-s">钩错补料</text></view>
     </view>
   </view>
