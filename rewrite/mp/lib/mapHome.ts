@@ -114,7 +114,7 @@ const FAQ_DEFAULT: FaqVM[] = [
   { title: '大概需要多久完成？', body: '新手平均 3–4 小时即可完成一只，可分多次进行，随时暂停继续。' },
 ]
 const CLOSING_DEFAULT: ClosingVM = { title: '创造幸运', cta: BRAND_SLOGAN_EN, img: '' }
-const FOOTER_DEFAULT: FooterVM = { links: ['关于我们', 'Lucky Ducky小棉鸭'], copy: 'Copyright © 2026 ZHUO DUCKI LUCKY · All Rights Reserved.' }
+const FOOTER_DEFAULT: FooterVM = { links: ['关于我们', 'Lucky Ducky小棉鸭'], copy: 'Copyright © 2026 Lucky Ducky · All Rights Reserved.' }
 
 // ── 小工具 ──
 type Dict = Record<string, unknown>
