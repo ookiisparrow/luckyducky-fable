@@ -21,8 +21,8 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 12rpx;
-  padding: 20rpx 0;
+  gap: 0;
+  padding: 22rpx 0;
   /* 内部选中态也走胶囊形，与外壳呼应 */
   border-radius: var(--ld-radius-pill, 999rpx);
 }
@@ -30,8 +30,8 @@
   position: relative;
 }
 .ld-tab-icon {
-  width: 38rpx;
-  height: 38rpx;
+  width: 44rpx;
+  height: 44rpx;
   display: block;
 }
 .ld-tab-badge {
@@ -48,7 +48,8 @@
   color: #ffffff;
   font-size: 18rpx;
 }
-.ld-tab-label {
+/* 文案已去掉，仅保留 icon（2026-09-11 赵老板） */
+.ld-tab-label { display: none;
   font-size: 24rpx;
   font-weight: 500;
   color: rgba(0, 0, 0, 0.55);
@@ -56,7 +57,8 @@
 .ld-tab.active {
   background: #f2ebfc; /* 选中丁香紫药丸（设计 #F2EBFC） */
 }
-.ld-tab.active .ld-tab-label {
+.ld-tab.active /* 文案已去掉，仅保留 icon（2026-09-11 赵老板） */
+.ld-tab-label { display: none;
   color: var(--ld-purple-tab, #7b5caf);
   font-weight: 600;
 }
