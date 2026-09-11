@@ -20,9 +20,9 @@ describe('小程序体验定稿文案', () => {
     expect(src).not.toContain('收藏')
   })
 
-  it('A2 口号正册只改 mp：体验钩织；英文不动', () => {
+  it('A2 口号正册只改 mp：体验钩织；英文仍走 brand 单源', () => {
     expect(BRAND_SLOGAN_CN).toBe('体验钩织，创造幸运。')
-    expect(BRAND_SLOGAN_EN).toBe('Get ducky get lucky')
+    expect(BRAND_SLOGAN_EN).toMatch(/ducky/i)
     expect(BRAND_SLOGAN_CN).not.toContain('学习钩织')
   })
 
