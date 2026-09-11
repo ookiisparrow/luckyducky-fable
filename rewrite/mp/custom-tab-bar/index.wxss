@@ -1,42 +1,37 @@
 /* 悬浮胶囊 TabBar（2026-07-16 悬浮形态；2026-09-11 只留图标）。
-   守「tabbar 不要透明」：实底白 + 重投影。图标模式须压高度，避免盖住购物车结算条（bottom≈140rpx 让位）。 */
+   高度对齐去字前版本：外垫 12 + tab 上下 20 + icon 38（原先文字与 icon 横排，高度由 icon 决定）。 */
 .ld-tabbar {
   position: fixed;
   left: 44rpx;
   right: 44rpx;
   bottom: calc(18rpx + env(safe-area-inset-bottom));
   display: flex;
-  align-items: center;
   gap: 8rpx;
-  padding: 8rpx 12rpx;
+  padding: 12rpx;
   background: var(--ld-bg, #ffffff);
   border-radius: var(--ld-radius-pill, 999rpx);
   box-shadow: 0 12rpx 40rpx rgba(28, 28, 32, 0.2), 0 4rpx 12rpx rgba(28, 28, 32, 0.1);
-  overflow: visible;
 }
 .ld-tab {
   flex: 1;
   display: flex;
   align-items: center;
   justify-content: center;
-  /* 仅图标：约 72rpx 触控高，整栏≈外垫+触控 ≈ 与结算条 160rpx 让位匹配 */
-  height: 72rpx;
-  padding: 0;
+  padding: 20rpx 0;
   border-radius: var(--ld-radius-pill, 999rpx);
 }
 .ld-tab-iconwrap {
   position: relative;
-  padding: 4rpx 10rpx;
 }
 .ld-tab-icon {
-  width: 40rpx;
-  height: 40rpx;
+  width: 38rpx;
+  height: 38rpx;
   display: block;
 }
 .ld-tab-badge {
   position: absolute;
-  top: -4rpx;
-  right: -2rpx;
+  top: -12rpx;
+  right: -16rpx;
   min-width: 28rpx;
   height: 28rpx;
   padding: 0 8rpx;
