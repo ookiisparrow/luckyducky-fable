@@ -23,7 +23,6 @@ const keyword = ref('')
 const msgs = ref<MsgVM[]>([])
 const cursor = ref<unknown>(null)
 const hasMore = ref(false)
-const searched = ref(false)
 const report = ref<ReportVM | null>(null)
 const message = ref('')
 // 首响 SLA 阈值（分钟）：初值 5 与后端 conversations.ts DEFAULT_SLA_MS 同口径（P2 顺手改批——此前前端默认 30
@@ -63,7 +62,6 @@ async function search() {
   msgs.value = r.ok ? mapMessages(r.messages) : []
   cursor.value = r.ok ? r.nextCursor : null
   hasMore.value = !!(r.ok && r.hasMore)
-  searched.value = true
   message.value = r.ok ? (msgs.value.length ? '' : '没有匹配的会话') : '检索失败：' + String(r.error || '')
 }
 

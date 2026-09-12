@@ -43,10 +43,10 @@ function statusOf(stock: number | null, threshold: number): Row['status'] {
   return 'onsale'
 }
 const STATUS = {
-  onsale: { label: '在售', cls: 'onsale' },
-  low: { label: '低库存', cls: 'low' },
-  out: { label: '售罄', cls: 'out' },
-  unlimited: { label: '不限量', cls: 'unlimited' },
+  onsale: '在售',
+  low: '低库存',
+  out: '售罄',
+  unlimited: '不限量',
 }
 const FILTERS = [
   { key: 'all', label: '全部' },
@@ -197,7 +197,7 @@ onMounted(reload)
           </div>
           <div class="ld-td" :style="{ width: '110px' }">
             <Badge :tone="row.status === 'onsale' ? 'green' : row.status === 'low' ? 'amber' : row.status === 'out' ? 'red' : 'brand'">{{
-              STATUS[row.status].label
+              STATUS[row.status]
             }}</Badge>
           </div>
           <div class="ld-td ops-cell" :style="{ width: '180px' }">

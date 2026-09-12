@@ -460,9 +460,6 @@ body {
   color: var(--ld-content-2);
   line-height: 1.5;
 }
-.pc-row-add {
-  margin-top: 4px;
-}
 /* 上传位缩略 */
 .pc-thumb {
   width: 40px;
