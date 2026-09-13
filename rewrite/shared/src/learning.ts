@@ -1,5 +1,5 @@
 /**
- * learning 域状态机声明单源（镜像旧线 learning.spec.ts·状态串不可改名——数据零迁移前提）。
+ * learning 域状态机声明单源（状态串不可改名）。
  * 范式边界：只管「status 字符串状态机」；「进课确认」是 activations.enteredAt 的 null→时间戳
  * 条件抢占（并发开关闩·设计约束#1），不是 status 机、不在此声明——正确性由原子抢占保证。
  */
