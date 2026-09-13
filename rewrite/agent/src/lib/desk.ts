@@ -150,6 +150,40 @@ export function titleWithBadge(base: string, n: number): string {
   return n > 0 ? `(${n}) ${base}` : base
 }
 
+// 坐席切状态：代际号拦过期回包，锚只被更新成功推进，全部请求收尾后 UI 收敛到最后确认态。
+// 测见 tests/desk.test.ts「坐席状态并发收敛」。无服务端版本号，不保证与服务端处理顺序强一致。
+export function createStatusController(
+  post: (_action: string, _payload?: Record<string, unknown>) => Promise<{ ok: boolean; error?: string }>,
+  initial: 'online' | 'busy' | 'offline' = 'online',
+) {
+  let statusSeq = 0
+  let confirmedStatus: 'online' | 'busy' | 'offline' = initial
+  let confirmedGen = 0
+  let inFlight = 0
+  return {
+    async setStatus(
+      s: 'online' | 'busy' | 'offline',
+      apply: { setStatus: (_v: 'online' | 'busy' | 'offline') => void; setMessage: (_v: string) => void },
+      errorText: (_code: string | undefined) => string,
+    ) {
+      const my = ++statusSeq
+      inFlight++
+      apply.setStatus(s)
+      const r = await post('setAgentStatus', { status: s })
+      inFlight--
+      if (r.ok && my > confirmedGen) {
+        confirmedStatus = s
+        confirmedGen = my
+      }
+      if (my === statusSeq && !r.ok) {
+        apply.setStatus(confirmedStatus)
+        apply.setMessage(errorText(r.error))
+      }
+      if (inFlight === 0) apply.setStatus(confirmedStatus)
+    },
+  }
+}
+
 /** 坐席动作错误人话（原文兜底）。 */
 export function deskErrorText(e: unknown): string {
   const code = String(e || '')
