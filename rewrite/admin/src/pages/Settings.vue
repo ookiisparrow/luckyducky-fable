@@ -1,6 +1,6 @@
 <script setup lang="ts">
 // 系统设置（设计语言一致性·M3 UI 批13）：告警推送 webhook（企微群机器人·空=清除退回纯日志）+ 激活码 urlPrefix。
-// 逻辑未动，仅套设计语言。激活卡双面设计器（印刷用）随印刷批补——记待办。
+// 激活卡双面设计器（印刷用）随印刷批补——记待办。
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { getSettings, saveSettings } from '../api/system'

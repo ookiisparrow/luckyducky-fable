@@ -1,4 +1,4 @@
-// 卡面 SVG 生成黄金基准（守卫 rw-admin-cards-golden·换皮丢了整块卡片设计器·误判"卡后端"实则后端早就绪·仅前端从没接）：
+// 卡面 SVG 生成黄金基准（守卫 rw-admin-cards-golden）：
 // 正面满版图/品牌角标条件渲染 / 反面五项文案 + 品牌条 / 文本转义防注入 / 双版尺寸不崩。
 import { describe, it, expect } from 'vitest'
 import { buildFrontSvg, buildBackSvg, type CardModel } from '../src/lib/cardSvg'

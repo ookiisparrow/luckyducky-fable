@@ -325,7 +325,7 @@ aside {
   background: var(--ld-bg-faint);
   color: var(--ld-content);
 }
-/* 向导步链接排除在 router-link-exact-active 之外（6 步同 path 仅 query.step 不同·exact-active 不看 query→6 步会
+/* 向导步链接排除在 router-link-exact-active 之外（5 步同 path 仅 query.step 不同·exact-active 不看 query→5 步会
  * 全部命中同时高亮·当前步指示失效）——步高亮单独由 .wiz-step.wiz-on 驱动（P2·根因#8）。 */
 .item.router-link-exact-active:not(.wiz-step) {
   background: var(--ld-bg-lilac);

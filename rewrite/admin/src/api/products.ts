@@ -11,6 +11,6 @@ export const republishProduct = (id: string) => client.post('republishProduct', 
 export const listShowcase = () => client.post('listShowcase')
 export const saveShowcase = (items: Array<{ id: string; sort: number; featured: boolean }>) => client.post('saveShowcase', { items })
 
-// 二维码卡片设计器（换皮丢了整块设计器·误判「卡后端」·实则后端 getCard/saveCard + cards 集合早就绪）
+// 二维码卡片设计器（getCard/saveCard + cards 集合）
 export const getCard = (productId: string) => client.post('getCard', { productId })
 export const saveCard = (card: Record<string, unknown>) => client.post('saveCard', { card })
