@@ -5,10 +5,7 @@ import { COLLECTIONS } from '@ldrw/shared'
 // 外包账号管理（后台360工作站 §1.5·B5.2·承面C 车道 C·根因#3）：商户超管建/停/列外包坐席账号
 // （adminConfig 多账号·role=outsourced 最小权·checkKey 据 keyHash 认账号 + disabled 停用·骨架已在 lib.ts）。
 // 本三 action 仅超管可调——**未登记 ACTION_CAPS 默认拒 ADMIN_DEFAULT_CAP**（守卫 agent-rbac-gated·外包
-// 自身 caps 无 admin:write、不能建/停账号·防外包自扩权）。
-//
-// ⚠️ 5 单源面归 master（车道 C 只报·见 ready 报告）：ACTIONS 注册（index.ts）+ ACTION_CAPS（默认拒即够·
-// 无须显式登记）+ 系统事实.md action 目录。本文件只实现 action 函数，master 整合时 wire。
+// 自身 caps 无 admin:write、不能建/停账号·防外包自扩权）。已挂 adminApi ACTIONS。
 
 const AGENT_ROLE = 'outsourced' // 外包最小权角色（ROLES.outsourced·caps 由 role 派生·车道 A 补 agent:handle）
 

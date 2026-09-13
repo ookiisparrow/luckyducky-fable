@@ -38,7 +38,7 @@ import * as reviews from './actions/reviews'
 // 认证频控 per-IP + 全局兜底。M5 切换日以新名部署、admin 前端切 endpoint。
 const db = getDb()
 
-// action → handler 查表（业务批逐域填充·与旧线注册表逐行核对）
+// action → handler 查表（已全域挂载·与旧线注册表逐行核对过）
 const ACTIONS: Record<string, (ctx: Ctx) => Promise<any>> = {
   // 商品草稿 / 上架 / 橱窗（批12）
   listDrafts: products.listDrafts,
@@ -459,5 +459,5 @@ export const main = async (event: any) => {
   }
 }
 
-/** 业务批挂载口（后续批逐域填 ACTIONS/ACTION_CAPS·与旧线注册表逐行核对）。 */
+/** 测试挂载口（ACTIONS/ACTION_CAPS 已全域挂载·与旧线注册表逐行核对过）。 */
 export const registries = { ACTIONS, ACTION_CAPS }
