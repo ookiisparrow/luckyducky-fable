@@ -83,9 +83,9 @@ export async function activationFor(db: any, openid: string, productId: string) 
     ? await db
         .collection('activations')
         .where({ _openid: openid, courseId })
+        .limit(1)
         .get()
-        .then((r: any) => r.data)
-        .catch(() => [])
+        .then((r: any) => (r && r.data) || [])
     : []
   const act = acts[0] || null
   return {

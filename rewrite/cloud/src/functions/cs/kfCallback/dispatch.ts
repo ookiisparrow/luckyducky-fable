@@ -478,6 +478,7 @@ async function notifyOnlineAgents(db: any, sessionId: string): Promise<void> {
     const st = await db
       .collection(COLLECTIONS.agentState)
       .where({ status: 'online' })
+      .limit(50) // 坐席席位上限同账号扫描窗·有界读
       .get()
       .catch(() => ({ data: [] }))
     const ids = (st.data || []).map((a: any) => a._id).filter(Boolean)
