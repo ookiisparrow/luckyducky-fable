@@ -96,8 +96,10 @@ async function agentLimit(db: any, agentId: string): Promise<number> {
 
 // 坐席当前在接会话数（**派生**·防计数漂移·根因#8 桩≠真里的 inc 也不复现）：直接 count 本坐席 active 会话，
 // 不维护 agentState.activeCount 手写计数器（claim/release/close/escalate 后自动准确·无 TOCTOU 漂移）。
-async function activeCountFor(db: any, agentId: string): Promise<number> {
-  const r = await db.collection(COLLECTIONS.csSession).where({ agentId, status: 'active' }).count().catch(() => ({ total: 0 }))
+// count 失败返 null（不当 0）——调用方 fail-closed，避免席位被超领。
+async function activeCountFor(db: any, agentId: string): Promise<number | null> {
+  const r = await db.collection(COLLECTIONS.csSession).where({ agentId, status: 'active' }).count().catch(() => null)
+  if (!r) return null
   return (r && r.total) || 0
 }
 
@@ -163,6 +165,7 @@ export async function claimConversation(ctx: Ctx): Promise<any> {
   // 跟"甩给超管兜底"的设计意图矛盾）：isSuper 直接放行，不查 activeCountFor/agentLimit。
   if (!p.isSuper) {
     const [count, limit] = await Promise.all([activeCountFor(db, p.agentId), agentLimit(db, p.agentId)])
+    if (count == null) return reply(200, { ok: false, error: ERR.WRITE_FAIL })
     if (count >= limit) return reply(200, { ok: false, error: 'AT_CAPACITY', limit })
   }
   const now = Date.now()

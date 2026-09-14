@@ -44,10 +44,12 @@ export const dataConsent = withOpenId(
     const now = Date.now()
     const csDataShare = { agreed: agree, at: now }
     const users = db.collection(COLLECTIONS.users)
+    // 读失败不当空档：否则会 doc(OPENID).set 再造一份同意凭证（老档随机 _id 时必重复）
     const found = await users
       .where({ _openid: OPENID })
       .get()
-      .catch(() => ({ data: [] }))
+      .catch(() => null)
+    if (!found) return err(ERR.USER_LOOKUP_FAIL)
     if (found.data.length) {
       await users.doc(found.data[0]._id).update({ data: { csDataShare, updatedAt: now } })
     } else {
