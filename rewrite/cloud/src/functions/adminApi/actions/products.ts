@@ -63,12 +63,12 @@ export async function listDrafts({ cloud, db, drafts }: Ctx) {
   const draftIds = res.data.map((p: any) => p.id || p._id).filter(Boolean)
   const listed: Record<string, boolean> = {}
   if (draftIds.length) {
+    // 读失败 fail-loud：.catch 空表会让前端把已上架画成「筹备中」。
     const pr = await db
       .collection('products')
       .where({ _id: db.command.in(draftIds) })
       .field({ listed: true })
       .get()
-      .catch(() => ({ data: [] as any[] }))
     for (const p of pr.data) listed[p._id] = p.listed !== false
   }
 
@@ -81,11 +81,12 @@ export async function listDrafts({ cloud, db, drafts }: Ctx) {
   const hasBatch: Record<string, boolean> = {}
   if (draftIds.length) {
     const cardIds = draftIds.map((id: string) => 'card-' + id)
+    // 联表失败 fail-loud：.catch 空表会把已完成步画成未做。
     const [cr, cor, br] = await Promise.all([
-      db.collection('cards').where({ _id: _.in(cardIds) }).get().catch(() => ({ data: [] as any[] })),
-      db.collection('courses').where({ _id: _.in(courseIds) }).get().catch(() => ({ data: [] as any[] })),
+      db.collection('cards').where({ _id: _.in(cardIds) }).get(),
+      db.collection('courses').where({ _id: _.in(courseIds) }).get(),
       // aggregate group：只回「有 qrcode 的 courseId」一行/课·不逐码扫（capacity·根因#7）
-      db.collection('qrcodes').aggregate().match({ courseId: _.in(courseIds) }).group({ _id: '$courseId' }).end().catch(() => ({ list: [] as any[] })),
+      db.collection('qrcodes').aggregate().match({ courseId: _.in(courseIds) }).group({ _id: '$courseId' }).end(),
     ])
     for (const c of (cr as any).data || []) {
       const pid = String(c.productId || String(c._id || '').replace(/^card-/, ''))

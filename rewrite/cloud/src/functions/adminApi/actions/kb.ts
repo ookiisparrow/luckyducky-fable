@@ -14,7 +14,7 @@ const CATS = ['logistics', 'activation', 'aftersale', 'tutorial', 'other'] // �
 
 // 列出全部知识条目（bounded·读类·shouldAudit 跳 ^list 降噪）：按 分类→order 升序，供 admin 维护页编辑。
 export async function listKb({ db }: Ctx) {
-  const r = await db.collection('kb').limit(SCAN).get().catch(() => ({ data: [] }))
+  const r = await db.collection('kb').limit(SCAN).get()
   const list = ((r && r.data) || [])
     .map((d: any) => ({
       key: d._id,

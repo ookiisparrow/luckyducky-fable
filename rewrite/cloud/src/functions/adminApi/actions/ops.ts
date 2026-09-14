@@ -22,13 +22,11 @@ export async function getInspectStatus({ db }: Ctx) {
     .limit(1)
     .get()
     .then((r: any) => (r.data && r.data[0]) || null)
-    .catch(() => null)
   const openAnomalies = await db
     .collection(COLLECTIONS.anomalies)
     .where({ resolved: false })
     .count()
     .then((r: any) => r.total || 0)
-    .catch(() => 0)
   return reply(200, { ok: true, latest, openAnomalies })
 }
 
@@ -48,7 +46,6 @@ export async function listAnomalies({ db, data }: Ctx) {
     .limit(limit)
     .get()
     .then((r: any) => r.data)
-    .catch(() => [])
   const total = await db
     .collection(COLLECTIONS.anomalies)
     .where(filter)

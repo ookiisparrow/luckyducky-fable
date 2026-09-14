@@ -87,6 +87,19 @@ describe('看板（黄金：精确计数·GMV 聚合恒不近似·钱链异常�
     expect(r.txAlerts.partial).toBe(true) // 不冒充零异常·标不可信
     expect(seen.filter((s) => s.includes('[LD_ALERT]') && s.includes('TXALERTS_QUERY_FAIL')).length).toBeGreaterThanOrEqual(1)
   })
+
+  it('大白话：计数读炸不装成空店——整体报错，stats 不得是 0', async () => {
+    control.seed('users', [{ _id: 'u1', _openid: 'u1' }])
+    control.setBeforeCount(({ coll }: any) => {
+      if (coll === 'users') throw new Error('QUERY_FAIL')
+    })
+    const r = await post('getDashboard')
+    control.setBeforeCount(null as never)
+    expect(r.ok).toBe(false)
+    expect(r.status).toBe(500)
+    expect(r.error).toBe('SERVER_ERROR')
+    expect(r.stats).toBeUndefined()
+  })
 })
 
 describe('内部对账（黄金：全量精确·日分桶·截断如实标）', () => {

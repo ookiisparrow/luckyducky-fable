@@ -100,6 +100,24 @@ describe('运行期观测控制台数据层（批3·rw-ops-console-golden）', (
     expect(r.total).toBe(null)
   })
 
+  it('大白话：未处理异常 count 炸——不装成 0，往上抛', async () => {
+    control.seed(COLLECTIONS.anomalies, [{ _id: 'a1', resolved: false }])
+    control.setBeforeCount(({ coll }: any) => {
+      if (coll === COLLECTIONS.anomalies) throw new Error('COUNT_FAIL')
+    })
+    await expect(getInspectStatus(ctx())).rejects.toThrow('COUNT_FAIL')
+    control.setBeforeCount(null as never)
+  })
+
+  it('大白话：异常列表 get 炸——不装成空账本，往上抛', async () => {
+    control.seed(COLLECTIONS.anomalies, [{ _id: 'c1', resolved: false, lastSeen: 1 }])
+    control.setBeforeGet(({ coll }: any) => {
+      if (coll === COLLECTIONS.anomalies) throw new Error('LIST_FAIL')
+    })
+    await expect(listAnomalies(ctx({ resolved: false }))).rejects.toThrow('LIST_FAIL')
+    control.setBeforeGet(null as never)
+  })
+
   it('大白话：标记已处理→写 resolved/resolvedBy(真实操作者)·无 id 拒·业务数据不碰', async () => {
     control.seed(COLLECTIONS.anomalies, [{ _id: 'a1', resolved: false }])
     control.seed(COLLECTIONS.orders, [{ _id: 'O', status: 'paid' }])

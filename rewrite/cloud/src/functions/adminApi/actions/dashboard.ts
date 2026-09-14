@@ -10,16 +10,9 @@ const SAMPLE = 1000
 export async function getDashboard({ db }: Ctx) {
   const _ = db.command
   const $ = db.command.aggregate
-  const cnt = (q: any) =>
-    q
-      .count()
-      .then((r: any) => r.total || 0)
-      .catch(() => 0)
-  const rows = (q: any) =>
-    q
-      .get()
-      .then((r: any) => r.data)
-      .catch(() => [])
+  // 读失败 fail-loud（同 getInventory）：.catch 装 0/[] 会让看板把「库挂了」画成空店。抛给 adminApi 网关 500。
+  const cnt = (q: any) => q.count().then((r: any) => r.total || 0)
+  const rows = (q: any) => q.get().then((r: any) => r.data)
 
   const [
     usersN,
@@ -47,8 +40,7 @@ export async function getDashboard({ db }: Ctx) {
       .match({ status: _.in(PAID_STATUSES) })
       .group({ _id: null, gmv: $.sum('$amount') })
       .end()
-      .then((r: any) => (r.list && r.list[0] ? Number(r.list[0].gmv) || 0 : 0))
-      .catch(() => 0),
+      .then((r: any) => (r.list && r.list[0] ? Number(r.list[0].gmv) || 0 : 0)),
     rows(db.collection('progress').field({ done: true, last: true }).limit(SAMPLE)),
     rows(db.collection('courses').field({ id: true, title: true, chapters: true }).limit(SAMPLE)),
     // 钱链异常：单源 helper（dashboard 与 S16 对账共用·防漂移）；内部定向 where 精确（不从样本 filter）

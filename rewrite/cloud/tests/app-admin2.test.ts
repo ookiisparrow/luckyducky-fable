@@ -141,6 +141,20 @@ describe('商品草稿与上架（黄金：白名单/四道门/软下架不隐�
     expect(r2.hasVideo['course-p2']).toBeFalsy()
     expect(r2.hasBatch['course-p2']).toBeFalsy()
   })
+
+  it('大白话：上架态联表读炸不装成筹备中——整体报错，不回空 listed', async () => {
+    await post('saveDraft', { product: DRAFT })
+    await post('publishProduct', { id: 'p1' })
+    control.setBeforeGet(({ coll }: any) => {
+      if (coll === 'products') throw new Error('QUERY_FAIL')
+    })
+    const r = await post('listDrafts')
+    control.setBeforeGet(null as never)
+    expect(r.ok).toBe(false)
+    expect(r.status).toBe(500)
+    expect(r.listed).toBeUndefined()
+    expect(r.list).toBeUndefined()
+  })
 })
 
 describe('productId/spec 出生点校验（战役3 批D·D1·shared/scmKey.ts 单源）：saveDraft 拒歧义 __ 组合、正常商品照常', () => {
@@ -308,6 +322,27 @@ describe('码批次（黄金：数量闸·聚合·列码 cursor 分页）', () =
     expect(lc.hasMore).toBe(true)
     expect(lc.nextCursor).toBeTruthy()
     expect((await post('listBatchCodes', {})).error).toBe('NO_BATCH')
+  })
+
+  it('大白话：批次翻页中途读炸不装成扫到底——整体报错，不回半份', async () => {
+    control.seed(
+      'qrcodes',
+      Array.from({ length: 250 }, (_, i) => ({
+        _id: 'Q' + i,
+        courseId: 'c1',
+        batchId: 'b1',
+        status: 'unused',
+        createdAt: i,
+      }))
+    )
+    control.setBeforeGet(({ coll, skip }: any) => {
+      if (coll === 'qrcodes' && skip === 200) throw new Error('PAGE_FAIL')
+    })
+    const r = await post('listBatches', { courseId: 'c1' })
+    control.setBeforeGet(null as never)
+    expect(r.ok).toBe(false)
+    expect(r.status).toBe(500)
+    expect(r.list).toBeUndefined()
   })
 
   it('大白话：列码 cursor 翻页不重不漏，走完拿齐一批、不混别批', async () => {

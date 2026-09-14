@@ -69,7 +69,6 @@ export async function conversationsReport({ db, data }: Ctx) {
     .orderBy('at', 'desc')
     .limit(REPORT_SAMPLE)
     .get()
-    .catch(() => ({ data: [] }))
   const rows: any[] = (res && res.data) || []
 
   let inbound = 0
