@@ -39,7 +39,7 @@ export function websiteSchema(): Record<string, unknown> {
   }
 }
 
-export interface ArticleInput {
+interface ArticleInput {
   title: string
   description: string
   path: string
@@ -64,7 +64,7 @@ export function articleSchema(a: ArticleInput): Record<string, unknown> | null {
   }
 }
 
-export interface HowToStep {
+interface HowToStep {
   name: string
   text: string
 }

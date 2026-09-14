@@ -1,13 +1,13 @@
-// RSS 端点（内容分发/收录信号）：教程集合出 feed。手写 XML 零新依赖——本站 10 页规模，
-// @astrojs/rss 整包为此过重（CLAUDE §7 防过度工程）；转义闸齐全，schema.test 同仓锁纯函数层。
+// RSS 端点（内容分发/收录信号）：教程集合出 feed。手写 XML 零新依赖——
+// @astrojs/rss 整包为此过重（CLAUDE §7 防过度工程）；转义闸齐全。
 import type { APIRoute } from 'astro'
-import { getCollection } from 'astro:content'
 import { SITE, BRAND_NAME } from '../lib/schema'
+import { sortedTutorials, TUTORIALS_DESCRIPTION } from '../lib/tutorials'
 
 const esc = (s: string): string => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
 
 export const GET: APIRoute = async () => {
-  const tutorials = (await getCollection('tutorials')).sort((a, b) => (a.data.datePublished < b.data.datePublished ? 1 : -1))
+  const tutorials = await sortedTutorials()
   const items = tutorials
     .map((t) =>
       [
@@ -27,7 +27,7 @@ export const GET: APIRoute = async () => {
     '  <channel>',
     `    <title>${esc(`${BRAND_NAME} · 钩织教程`)}</title>`,
     `    <link>${SITE}/</link>`,
-    '    <description>零基础钩织教程：起针、针目、换色、收尾——配合小棉鸭初学者钩织学习套装的分步图文讲解。</description>',
+    `    <description>${esc(TUTORIALS_DESCRIPTION)}</description>`,
     '    <language>zh-CN</language>',
     items,
     '  </channel>',
