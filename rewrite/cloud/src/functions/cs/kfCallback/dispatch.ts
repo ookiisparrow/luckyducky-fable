@@ -385,7 +385,8 @@ export async function summarizeOrders(db: any, openid: string): Promise<string> 
     .orderBy('createdAt', 'desc')
     .limit(3)
     .get()
-    .catch(() => ({ data: [] }))
+    .catch(() => null)
+  if (!r) return '订单暂时查不到，请稍后再试，或点「转人工」。' // 库挂 ≠ 名下没有订单（根因#14）
   const list = (r && r.data) || []
   if (!list.length) return '没查到你名下的订单。如果刚下单可稍后再试，或点「转人工」。'
   // refund_required 用词对齐 admin/src/lib/format.ts 的选择："待退款"而非"退款处理中"（后者与售后 approved 状态撞车，见该文件同款注释）

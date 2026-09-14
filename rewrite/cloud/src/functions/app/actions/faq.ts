@@ -1,5 +1,5 @@
-import { COLLECTIONS } from '@ldrw/shared'
-import { getDb, ok } from '../../../kit'
+import { COLLECTIONS, ERR } from '@ldrw/shared'
+import { getDb, ok, err } from '../../../kit'
 
 const FAQ_LIMIT = 20 // bounded（黄金 §七）：FAQ 量级远低于此，非近似截断
 
@@ -18,8 +18,9 @@ export const getPublicFaq = async () => {
     .orderBy('order', 'asc') // 遵 admin 策展顺序（同 listKb order 字段口径·同 getProducts sort 惯例）——不是数据库任意返回序
     .limit(FAQ_LIMIT)
     .get()
-    .catch(() => ({ data: [] }))
-  const items = ((got && got.data) || [])
+    .catch(() => null)
+  if (!got) return err(ERR.INTERNAL) // 库挂 ≠ 没有精选 FAQ（根因#14·同 getUser 读失败口径）
+  const items = (got.data || [])
     .filter((d: any) => d && d.enabled !== false)
     .map((d: any) => ({
       key: String(d._id || ''),
