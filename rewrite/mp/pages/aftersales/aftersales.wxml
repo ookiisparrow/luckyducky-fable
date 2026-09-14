@@ -15,8 +15,6 @@
       bind:tap="onTapOrder"
     >
       <view class="ldas-top">
-        <!-- 售后单无商品图字段→灰底占位 -->
-        <view class="coas-order-img"></view>
         <view class="coas-order-mid">
           <text class="coas-order-name">{{item.name}}{{item.spec ? '（' + item.spec + '）' : ''}}</text>
           <text class="coas-order-meta">申请于 {{item.appliedAtLabel}} · ×{{item.qty}}</text>
