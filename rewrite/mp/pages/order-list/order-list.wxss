@@ -114,7 +114,7 @@
   color: var(--ld-duck-deep);
 }
 .coolist-status.coolist-muted {
-  color: #9a9a9a; /* 设计已关闭态弱灰·tokens 无对应中性灰（见 tokensNeeded） */
+  color: #9a9a9a; /* 设计已关闭态弱灰·tokens 无对应中性灰 */
 }
 
 /* 商品行 */
@@ -267,7 +267,7 @@
 .coolist-end {
   text-align: center;
   font-size: 22rpx;
-  color: #b7b7b7; /* 设计尾注弱灰·tokens 无对应（见 tokensNeeded） */
+  color: #b7b7b7; /* 设计尾注弱灰·tokens 无对应 */
   padding: 16rpx 0 8rpx;
   letter-spacing: 1rpx;
 }

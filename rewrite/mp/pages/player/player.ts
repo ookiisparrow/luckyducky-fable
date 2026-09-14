@@ -52,7 +52,7 @@ const DESK_GUIDE_KEY = 'ld_player_desk_guide_shown'
 // `ownerInstance.callMethod(name, args)` 把 args **直接**作为方法的第一个实参传入——它不是 wxml 绑定
 // 那种事件对象，**没有 `.detail`**。原先两个回桥方法都按事件形状写 `e.detail`，实测恒得 undefined，
 // 秒数于是恒取兜底 0：松手 seek(0) 把视频拨回开头、拖动文案恒 0:00、逐秒判重恒「同一秒」故一次不震——
-// 用户报的三个现象同一个因（实测日志见 重构日志 2026-07-20 批Q）。
+// 用户报的三个现象同一个因。
 // 兼容两种形状（有 .detail 取 detail，否则就是载荷本身）：将来若把这些方法改回 wxml 直绑，不必再改一次。
 function wxsArgs<T extends object>(a: T | { detail: T } | undefined | null): Partial<T> {
   if (!a) return {}

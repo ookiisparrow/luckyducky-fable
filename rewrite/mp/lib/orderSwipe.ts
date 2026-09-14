@@ -1,18 +1,5 @@
-// 我的订单页手势滑动换 tab 纯逻辑单源（mp-7fixes 批2）：抬指判定 + 越界钳制。
-// 不做跟手动画（需求未要求，防过度工程）；不碰 reload/_seq/onReachBottom 分页机制——
-// 页面层只在判定命中时调用既有 switchTab，逻辑与既有状态机完全解耦。
-//
-// 与旧线差异（有意识·非疏漏）：旧线 packages/miniapp 对「订单列表左右滑切 tab」立过
-// swipe-native-swiper 守卫（scripts/check-structure.mjs），钉死须用原生 <swiper>+<swiper-item>，
-// 理由是自造 touchmove 计算真机易误触纵向滚动（H5 假绿）。该守卫扫描面硬编码在
-// packages/miniapp/src 下的旧线文件路径，本就不覆盖 rewrite/mp（新线约定见 rewrite/mp/README.md，
-// 随线重议）。这里选自造 touch 判定而非 swiper，是因为 order-list 现为「单份共享列表 + Page 级
-// 原生滚动 + onReachBottom 游标分页（reload/_seq）」，接 swiper 须拆五份独立 tab 状态并把每个
-// tab 包一层 scroll-view——旧线接 swiper 时正是这样「实质重构」过（见 docs/archive/重构日志-202606上半.md
-// 2026-06-18 条）；本批规格明确
-// 不许动这套滚动/分页机制，故延续本文件已有的自造 touch 手势范式（同
-// player 自绘 seek 条），用角度护栏（|dx|>1.5|dy|）+ 耗时上限缓解误触。真机横滑 vs 纵向滚动/上拉
-// 翻页误触仍待走查（根因#8·rewrite/mp/README.md 走查表第 9 项「五栏切换」覆盖）。
+// 我的订单页手势滑动换 tab 纯逻辑单源：抬指判定 + 越界钳制。
+// 不做跟手动画；不碰 reload/_seq/onReachBottom。页面只在判定命中时调用既有 switchTab。
 
 const SWIPE_MIN_DX = 60 // 最小横向位移 px（低于此不算滑动手势）
 const SWIPE_ANGLE_GUARD = 1.5 // 角度护栏：|dx| 须大于 |dy| 的这个倍数，排除纵向滚动误判为横滑

@@ -218,16 +218,6 @@
   font-weight: 600;
   color: var(--ld-ink);
 }
-.co-shop-chev {
-  margin-left: auto;
-  display: flex;
-  align-items: center;
-  opacity: 0.6;
-}
-.co-shop-chev .co-ico {
-  width: 30rpx;
-  height: 30rpx;
-}
 
 /* 订单商品行（只读） */
 .co-item {
@@ -240,7 +230,7 @@
   height: 150rpx;
   flex: 0 0 auto;
   border-radius: var(--ld-radius-sm);
-  background: var(--ld-bg-sage); /* 订单行无商品图字段→灰底占位 */
+  background: var(--ld-bg-sage); /* 无封面时灰底占位 */
 }
 .co-item-mid {
   flex: 1 1 auto;
