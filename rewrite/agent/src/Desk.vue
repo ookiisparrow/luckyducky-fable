@@ -53,7 +53,7 @@ export function createStatusController(
 </script>
 
 <script setup lang="ts">
-// 工作台单屏（M3 批8）：左=待接队列+我在接；中=会话窗（3s 轮询·卸载清理·合并去重）；右=360 侧栏（双闸）。
+// 工作台单屏：左=待接队列+我在接；中=会话窗（3s 轮询·卸载清理·合并去重）；右=360 侧栏（双闸）。
 import { ref, reactive, computed, onMounted, onBeforeUnmount } from 'vue'
 import { post, logout, listKb } from './api/client'
 import {
@@ -150,7 +150,7 @@ let listTimer: ReturnType<typeof setInterval> | null = null
 
 async function refreshLists() {
   const [q, m] = await Promise.all([post('listQueue'), post('listMyActive')])
-  if (q.error === 'SESSION_LOST' || m.error === 'SESSION_LOST') return doLogout()
+  if (q.error === 'SESSION_LOST' || m.error === 'SESSION_LOST') return // 导登录单源＝壳层 onSessionLost；此处只停刷新，不自调 doLogout
   queue.value = q.ok ? mapQueue(q.items, Date.now()) : queue.value // 失败不清已有
   mine.value = m.ok ? ((m.sessions as Record<string, any>[]) || []) : mine.value
   recomputeAlert() // 队列增量是提醒聚合公式一半（改动契约 3）
@@ -340,13 +340,12 @@ onMounted(() => {
   window.addEventListener('focus', onWindowFocus)
 })
 onBeforeUnmount(() => {
-  // 轮询必清理（守卫 agent-poll-cleanup 的教训承接）
   if (pollTimer) clearInterval(pollTimer)
   if (listTimer) clearInterval(listTimer)
   window.removeEventListener('blur', onWindowBlur)
   window.removeEventListener('focus', onWindowFocus)
   // 卸载必还原标题（P2 修复）：失焦期间登出（如轮询收到 SESSION_LOST）会带着角标态卸载——不还原则标题
-  // 永久停留在带角标字符串上；且下次重登 mount 时 line 89 会把这个已污染的标题当新 baseTitle 捕获，
+  // 永久停留在带角标字符串上；且下次重登 mount 时会把这个已污染的标题当新 baseTitle 捕获，
   // 跨多次「失焦掉线-重登」循环叠加复合（与 toggleNotify/onWindowFocus 的还原语义保持一致）。
   document.title = baseTitle
 })
