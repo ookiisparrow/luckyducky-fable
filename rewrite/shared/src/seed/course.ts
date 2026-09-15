@@ -30,7 +30,7 @@ export interface SeedCourse {
   chapters: SeedChapter[]
 }
 
-// 时长 mm:ss ↔ 秒（种子模块自带，与 miniapp utils/format 的同名显示工具分属不同层，各自自洽）
+// 时长 mm:ss ↔ 秒（种子模块自带）
 const parseDur = (s: string): number => {
   const [m, sec] = String(s).split(':').map(Number)
   return m * 60 + sec

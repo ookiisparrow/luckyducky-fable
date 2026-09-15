@@ -44,15 +44,15 @@ export type AfterSaleStatus = SpecStates<typeof AFTERSALE_STATUS_SPEC>
  *  profile.ts 各自手抄同一份数组，改状态机漏改一处即口径分叉——收口到订单状态声明单源旁，其余四处改 import。 */
 export const PAID_ORDER_STATUSES: readonly OrderStatus[] = ['paid', 'shipped', 'done']
 
-// 运行时常量（从声明**运行时派生**·旧线由生成器产出，新线直接派生零漂移）：
-// 键=值的状态字典，消费方 Object.values() 作状态全集（计数/筛选枚举用）。
+// 运行时常量（从声明运行时派生）：
+// 键是大写状态名、值是小写状态串；消费方 Object.values() 作状态全集（计数/筛选枚举用）。
 const dictOf = <T extends string>(states: readonly string[]) =>
   Object.fromEntries(states.map((s) => [s.toUpperCase(), s])) as Record<string, T>
 export const ORDER_STATUS = dictOf<OrderStatus>(statesOf(ORDER_STATUS_SPEC))
 export const AFTERSALE_STATUS = dictOf<AfterSaleStatus>(statesOf(AFTERSALE_STATUS_SPEC))
 
 /**
- * 'BAD_STATUS:'+状态 复合码的构造单源：buildBadStatus 由 cloud-order/cloud-erp 生产。
+ * 'BAD_STATUS:'+状态 复合码的构造单源。云端 orders/refunds 用本函数拼码；
  * 解析侧 mp payFlow.ts / admin Fulfill.vue 各自按字面量手动同步（mp 进不了 @ldrw/shared）——
  * 前缀不可改，一改三处（本文件 + mp + admin）都得跟着改。
  */

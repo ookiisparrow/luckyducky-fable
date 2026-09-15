@@ -85,7 +85,7 @@ export const ERR = {
   NOT_OWNER: 'NOT_OWNER',
   USER_LOOKUP_FAIL: 'USER_LOOKUP_FAIL',
   PANEL_FETCH_FAIL: 'PANEL_FETCH_FAIL',
-  // 进销存 ERP（scmAssembly.ts + kit/scmStock.ts + kit/inventory.ts + admin mapScm.ts 33 项旁证清单·跨系统一致性批次追加登记）
+  // 进销存 ERP
   BAD_SETS: 'BAD_SETS',
   NO_PROFILE: 'NO_PROFILE',
   NO_TEMPLATE: 'NO_TEMPLATE',
