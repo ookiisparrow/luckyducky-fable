@@ -1,6 +1,6 @@
 /**
- * 错误码权威登记册（设计约束#3 fail-closed 闸配套·镜像旧线 shared/errors.ts——码是前端分支契约，
- * 不可改名、新增只追加）。并存期 parity 测试焊死与旧线逐键一致；新线 kit err() 随 M1 kit 批接上本册。
+ * 错误码权威登记册（设计约束#3 fail-closed 闸配套——码是前端分支契约，
+ * 不可改名、新增只追加）。kit err() 读本册。
  */
 export const ERR = {
   // 闸 / 身份
@@ -27,10 +27,10 @@ export const ERR = {
   PAY_NOT_ENABLED: 'PAY_NOT_ENABLED',
   PAY_CONFIG_MISSING: 'PAY_CONFIG_MISSING',
   UNIFIED_ORDER_FAIL: 'UNIFIED_ORDER_FAIL',
-  COUPON_EXCEEDS_GOODS: 'COUPON_EXCEEDS_GOODS', // 占位券抵扣≥货款即拒单（深审 2026-07-05·真券系统前的白送闸·新线新增码见 parity 登记名单）
+  COUPON_EXCEEDS_GOODS: 'COUPON_EXCEEDS_GOODS', // 占位券抵扣≥货款即拒单（深审 2026-07-05·真券系统前的白送闸）
   OUT_OF_STOCK: 'OUT_OF_STOCK', // 库存不足（cloud-order 域·跨系统一致性批次追加登记）
   TOO_MANY_PENDING: 'TOO_MANY_PENDING', // 在途未支付单超上限（收尾硬化批·防单账号零成本预留锁死热销 SKU）
-  ORDER_CLAIM_PENDING: 'ORDER_CLAIM_PENDING', // 批E：同幂等键的原请求仍在处理中（极端并发窗口）——不建二单，前端稍候按原键重试
+  ORDER_CLAIM_PENDING: 'ORDER_CLAIM_PENDING', // 同幂等键的原请求仍在处理中（极端并发窗口）——不建二单，前端稍候按原键重试
   // 售后 / 退款
   ALREADY_APPLIED: 'ALREADY_APPLIED',
   NOT_REFUNDABLE: 'NOT_REFUNDABLE',
@@ -85,7 +85,7 @@ export const ERR = {
   NOT_OWNER: 'NOT_OWNER',
   USER_LOOKUP_FAIL: 'USER_LOOKUP_FAIL',
   PANEL_FETCH_FAIL: 'PANEL_FETCH_FAIL',
-  // 进销存 ERP（scmAssembly.ts + kit/scmStock.ts + kit/inventory.ts + admin mapScm.ts 33 项旁证清单·跨系统一致性批次追加登记）
+  // 进销存 ERP
   BAD_SETS: 'BAD_SETS',
   NO_PROFILE: 'NO_PROFILE',
   NO_TEMPLATE: 'NO_TEMPLATE',
@@ -123,7 +123,7 @@ export const ERR = {
   NOT_DELIVERED: 'NOT_DELIVERED',
   BAD_TARGETS: 'BAD_TARGETS',
   STOCK_APPLY_FAIL: 'STOCK_APPLY_FAIL',
-  BAD_SPEC: 'BAD_SPEC', // fg 组合键定界符防护（战役3 批D）：productId/spec 出生点拒歧义 __ 组合（见 shared/scmKey.ts）
+  BAD_SPEC: 'BAD_SPEC', // fg 组合键定界符防护：productId/spec 出生点拒歧义 __ 组合（见 shared/scmKey.ts）
   NO_SPECIFIC: 'NO_SPECIFIC', // scmBom.saveBomProfile：专属件（包装/卡片料号）未填全
   BAD_PROFILE: 'BAD_PROFILE', // shared/scmBom resolveBom：差异位不完整（缺色/缺专属件）
 } as const

@@ -20,7 +20,7 @@ export function anomalyFingerprint(kind: AnomalyKind, code: string, scope?: stri
   return raw.replace(/[^a-zA-Z0-9_.-]/g, '').slice(0, 120)
 }
 
-// —— 巡检机（inspect·批2·不依赖 AI 的定时/手动体检）——
+// —— 巡检机（不依赖 AI 的定时/手动体检）——
 
 /** 检查分层：基建存活 / 业务不变量（用户拍板「两层都要」）。 */
 export type CheckLayer = 'infra' | 'invariant'
@@ -28,7 +28,7 @@ export type CheckLayer = 'infra' | 'invariant'
 /** 检查结果灯：绿=过·黄=可疑降级·红=违反。 */
 export type CheckStatus = 'green' | 'yellow' | 'red'
 
-/** 一条检查结果（控制台体检面板按此渲染红绿灯·批3 用）。 */
+/** 一条检查结果（控制台体检面板按此渲染红绿灯）。 */
 export interface CheckResult {
   id: string // 检查 id（db-reachable / money-conserved / stuck-order …）
   title: string // 大白话标题

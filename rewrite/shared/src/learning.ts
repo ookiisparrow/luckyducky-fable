@@ -1,5 +1,5 @@
 /**
- * learning 域状态机声明单源（镜像旧线 learning.spec.ts·状态串不可改名——数据零迁移前提）。
+ * learning 域状态机声明单源（状态串不可改名）。
  * 范式边界：只管「status 字符串状态机」；「进课确认」是 activations.enteredAt 的 null→时间戳
  * 条件抢占（并发开关闩·设计约束#1），不是 status 机、不在此声明——正确性由原子抢占保证。
  */
@@ -16,8 +16,8 @@ export const QRCODE_STATUS_SPEC = {
 
 
 /**
- * VOD FileId 判据单源（决策§31 转码管线批2·病根#5 防镜像漂移）：腾讯云点播 FileId＝纯数字长串
- * （如 5285890784246869296），云开发 fileID＝cloud:// 前缀——三处共用此判据分流新旧双线：
+ * VOD FileId 判据单源（决策§31·病根#5 防镜像漂移）：腾讯云点播 FileId＝纯数字长串
+ * （如 5285890784246869296），云开发 fileID＝cloud:// 前缀。三处共用此判据：
  * 云端 getPlaybackUrl 播放签名、cleanupEvents GC 删除、admin 课程编排「转码中」显示。判据分叉即三处口径漂移。
  */
 export const isVodFileId = (id: string): boolean => /^\d{8,32}$/.test(id)

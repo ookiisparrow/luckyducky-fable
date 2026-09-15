@@ -26,6 +26,7 @@ Page({
   },
   async onLoad() {
     const u = await login()
+    if (this.unloaded) return // 资料拉取在途已退页——迟到回包不再 setData
     const user = (u.ok ? u.user : null) as Record<string, any> | null
     if (user) this.setData({ nickname: String(user.nickname || ''), bio: String(user.bio || ''), phone: String(user.phone || ''), avatar: String(user.avatar || ''), loaded: true })
   },

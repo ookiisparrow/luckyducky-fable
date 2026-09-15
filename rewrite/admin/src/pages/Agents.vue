@@ -2,7 +2,7 @@
 // 外包账号（设计语言一致性·M3 UI 批11 + 看板化批 B6）：建号（口令只在建号请求用一次·库存哈希）/停启/企微 userid
 // 绑定（免登用·全局唯一）。看板 KPI 行：在线坐席数/接待中总数/今日结束总数由 listAgents 扩展字段聚合（真·非造）；
 // 整体均分并行调 getCsatReport（csat 集合结构性无 agentId·见 csat.ts listCsatEntries 注释——故坐席表不设
-// 「满意度」列，恒 null 的列是摆设，不编数不摆设；flag 记 docs/待办与债.md：落 agentId 维度后再补逐坐席满意度）。
+// 「满意度」列，恒 null 的列是摆设，不编数不摆设；落 agentId 维度后再补逐坐席满意度）。
 import { ref, onMounted, computed } from 'vue'
 import { listAgents, createAgent, disableAgent, setAgentWecomUserId } from '../api/system'
 import { getCsatReport } from '../api/cs'
@@ -33,9 +33,10 @@ async function reload() {
   confirmId.value = '' // 刷新即复位危险态（P1·防旧武装的停用确认残留、重进同一行一击直发·批3 规格）
   const [r, csat] = await Promise.all([listAgents(), getCsatReport()])
   rows.value = r.ok ? mapAgents(r.agents) : []
-  message.value = r.ok ? '' : '加载失败：' + String(r.error || '')
   const csatVm = mapCsat(csat)
-  csatAvg.value = csatVm && csatVm.total ? csatVm.avg : null // 无有效评分不编数字·显 —
+  // 报表失败 ≠ 还没人评：空均分「—」会把加载失败读成零评价（病根#14·同 Conversations loadReport）
+  csatAvg.value = !csatVm ? '加载失败' : csatVm.total ? csatVm.avg : null
+  message.value = !r.ok ? '加载失败：' + String(r.error || '') : csatVm ? '' : '满意度报表加载失败'
 }
 
 async function doCreate() {

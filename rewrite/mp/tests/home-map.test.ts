@@ -1,7 +1,8 @@
 // 黄金 learning-content §九「首页内容公开读·无记录前端回退默认文案·空块仍用默认防误清空」
 // + 展示面 fail-closed（防「¥undefined」类真机事故·根因#8 展示层半边）（守卫 rw-mp-home-golden）。
 import { describe, it, expect } from 'vitest'
-import { mapHero, mapProducts, mapHomeContent } from '../lib/mapHome'
+import { BRAND_SLOGAN_CN, HOME_SHARE_TITLE, LEARNER_KIT } from '../lib/brand'
+import { mapHero, mapProducts, mapHomeContent, pickDuckKit } from '../lib/mapHome'
 
 describe('首页 hero 映射（黄金 §九：缺档回退默认文案·不空屏不半空）', () => {
   it('大白话：没配置首页内容 → 完整默认文案；配了一半 → 缺的那半回退默认、配的那半用配置', () => {
@@ -125,5 +126,45 @@ describe('首页全板块映射 mapHomeContent（缺档/空块逐块回退设计
     const def = mapHomeContent(null)
     const d = mapHomeContent({ footer: { links: ['', null, {}] } })
     expect(d.footer.links).toEqual(def.footer.links)
+  })
+
+  it('大白话：默认信任条/拆门槛/页脚/FAQ 跟赵老板体验定稿，首页看不见七天无理由', () => {
+    const d = mapHomeContent(null)
+    expect(d.trust.map((t) => t.label)).toEqual(['包邮到家', '售后无忧', '多数买家推荐'])
+    expect(d.trust.some((t) => t.label.includes('七天无理由'))).toBe(false)
+    expect(d.reassure.items[0].body).toBe('每份' + LEARNER_KIT + '包含初次尝试所需的一切，另含「开始练习」以及「分步交互」视频教程，助你轻松无忧创作。')
+    expect(d.faq[1].title).toBe('材料包里都有什么？')
+    expect(d.faq[2].body).toBe('可以。线材用尽或钩错都能在社群申请补料，售后无忧。')
+    expect(d.faq[2].body).not.toContain('七天')
+    expect(d.footer.links).toEqual(['关于我们', 'Lucky Ducky小棉鸭'])
+    expect(JSON.stringify(d)).not.toContain('七天无理由')
+  })
+
+  it('大白话：CMS 还写着旧信任条/旧页脚/旧 FAQ 退货句，顾客看见的是新口径', () => {
+    const d = mapHomeContent({
+      trust: [{ icon: 'rotate-ccw', label: '七天无理由退货' }],
+      footer: { links: ['Lucky 鸭'] },
+      faq: [{ title: '做坏了可以补料吗？', body: '可以。线材用尽或钩错都能在社群申请补料，七天内不满意还可无理由退货。' }],
+    })
+    expect(d.trust[0].label).toBe('售后无忧')
+    expect(d.footer.links).toEqual(['Lucky Ducky小棉鸭'])
+    expect(d.faq[0].body).toBe('可以。线材用尽或钩错都能在社群申请补料，售后无忧。')
+  })
+})
+
+describe('首页购买跳小棉鸭详情 pickDuckKit', () => {
+  it('大白话：货架上第一件名字带小棉鸭的就用它；没有就不瞎给旧 id', () => {
+    const duck = { id: 'kit-2', name: '小棉鸭入门套装', tag: '', priceLabel: '¥128', wasLabel: '', cover: '' }
+    const other = { id: 'yarn', name: '补充棉线', tag: '', priceLabel: '¥29', wasLabel: '', cover: '' }
+    expect(pickDuckKit([other, duck])).toEqual(duck)
+    expect(pickDuckKit([other])).toBeNull()
+    expect(pickDuckKit([])).toBeNull()
+  })
+})
+
+describe('口号与分享标题正册', () => {
+  it('大白话：中文口号是体验钩织；首页分享标题带初学者套装和口号', () => {
+    expect(BRAND_SLOGAN_CN).toBe('体验钩织，创造幸运。')
+    expect(HOME_SHARE_TITLE).toBe('小棉鸭初学者钩织学习套装｜体验钩织，创造幸运')
   })
 })

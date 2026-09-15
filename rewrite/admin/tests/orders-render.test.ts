@@ -2,8 +2,7 @@
 // Orders.vue 钱链交互闸渲染回归（B9）：① clearFeeMismatch 是 Orders.vue 里唯一真实存在的「点一次=武装
 // （按钮文案变确认态）、点两次才生效」toggle（clearConfirmId 驱动，见 doClearMismatch）；② shipOrder 本身
 // 不是这种两步 toggle，而是「开抽屉填表单→点确认发货」一次性提交，闸门是公司/运单号必填校验（doShip）——
-// 两条都测，覆盖两条真实存在的安全闸（主脑裁决：Orders.vue 无字面意义上「同一按钮点两下」的发货二次确认，
-// 是否要仿 Products.vue 补一道另记 docs/待办与债.md flag，不在本批范围）。
+// 两条都测，覆盖两条真实存在的安全闸（主脑裁决：Orders.vue 无字面意义上「同一按钮点两下」的发货二次确认）。
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { mount, flushPromises } from '@vue/test-utils'
 

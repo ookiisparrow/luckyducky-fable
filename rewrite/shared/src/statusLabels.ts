@@ -1,5 +1,5 @@
 /**
- * 状态码 → 中文标签单源（orders / afterSales / purchaseOrders / outworkOrders·P2 顺手改批收口）。
+ * 状态码 → 中文标签单源（orders / afterSales / purchaseOrders / outworkOrders）。
  *
  * 与状态机声明的类型绑定（Record<OrderStatus,...> 等）：canonical 状态集合新增/改名，这里漏配标签直接
  * 编译期报错（根因#2 同款纪律）——比此前 admin/mp 各自散抄 `Record<string,string>` 强，那种写法加了新状态

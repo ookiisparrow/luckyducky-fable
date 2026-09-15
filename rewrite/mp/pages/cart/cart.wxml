@@ -1,11 +1,11 @@
 <!-- 购物车·设计「待选区」语言：标题头 + 虚线暂存区(已加购行·勾选/加减/删除) + 下方推荐(圆加号加购) + 信任小字 + 悬浮结算。
-     真实购物袋逻辑（lib/cart 单源·结算走选中项）全保留；移出袋的已知商品重回下方推荐（设计 qty→0 落 options）。 -->
+     真实购物车逻辑（lib/cart 单源·结算走选中项）全保留；移出车的已知商品重回下方推荐（设计 qty→0 落 options）。 -->
 <!-- 整页内容套 <scroll-view>：退出提醒的 page-container 武装态会冻结页面级滚动（决策§30·见 utils/exitGuard），
      滚动须发生在 scroll-view 内部。固定「去结算」栏与 page-container 留在外层当兄弟（fixed 元素不随内容滚）。 -->
 <scroll-view class="ld-cart-scroll" scroll-y="{{true}}" enhanced="{{true}}" show-scrollbar="{{false}}">
 <view class="ld-cart" style="padding-top: {{statusBarHeight}}px">
   <view class="ld-cart-head">
-    <view class="ld-cart-title">购物袋</view>
+    <view class="ld-cart-title">购物车</view>
     <view class="ld-cart-sub">挑好的小伙伴都在这儿，随时结算带走</view>
   </view>
 
@@ -63,7 +63,7 @@
   </view>
 
   <!-- tab 首屏只能用 tier1 字：「疆/蒙/确/课」不在子集，完整政策写在详情/结算/协议。勿写七天无理由。 -->
-  <view class="ld-cart-trust">包邮到家 · 官方正品保障</view>
+  <view class="ld-cart-trust">包邮到家·售后无忧</view>
 
   <!-- 底部占位：留在滚动流内，撑开最后一屏、避免内容被下方 fixed 结算栏压住 -->
   <view class="ld-checkbar-space"></view>

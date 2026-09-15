@@ -3,7 +3,7 @@
 // 内容纪律（黄金 learning-content §九）：整档/逐字段/逐块缺失都回退「设计默认文案」，
 //   空块（空字段/空数组/整组脏行）仍用默认——防线上误清空、防半空板块。默认文案 = 重设计首页原稿。
 
-import { BRAND_SLOGAN_EN } from './brand'
+import { BRAND_SLOGAN_EN, LEARNER_KIT } from './brand'
 
 export interface ProductVM {
   id: string
@@ -85,14 +85,16 @@ const BRAND_DEFAULT: BrandVM = { name: '小棉鸭', lead: '我们希望每个人
 const FEATURE_DEFAULT: FeatureVM = { title: '入门钩织的妙趣方案', body: '为了让钩织入门更轻松、更有趣，我们精心设计了这些小家伙。', img: '' }
 const TRUST_DEFAULT: TrustVM[] = [
   { icon: 'truck', label: '包邮到家' },
-  { icon: 'rotate-ccw', label: '七天无理由退货' },
+  { icon: 'rotate-ccw', label: '售后无忧' },
   { icon: 'thumbs-up', label: '多数买家推荐' },
 ]
+const REASSURE_START_BODY =
+  '每份' + LEARNER_KIT + '包含初次尝试所需的一切，另含「开始练习」以及「分步交互」视频教程，助你轻松无忧创作。'
 const REASSURE_DEFAULT: ReassureVM = {
   heading: '把门槛一一拆掉',
   lead: '新手学习钩织存在很多门槛，我们把这些门槛一一拆掉了。',
   items: [
-    { icon: 'heart-handshake', title: '放心开始', body: '全材料包含初次尝试所需的一切，另含「开始练习」以及「分步交互」视频教程，助你轻松无忧创作。', img: '' },
+    { icon: 'heart-handshake', title: '放心开始', body: REASSURE_START_BODY, img: '' },
     { icon: 'shield-check', title: '难以失败', body: '钩错了也不怕——分步教程可回看，社群里有耐心的老师傅随时答疑，失败也是创造的一部分。', img: '' },
     { icon: 'sparkles', title: '幸运随行', body: '每只小棉鸭都附赠一张幸运卡，做完带在身边，把这份手作的幸运一直带着走。', img: '' },
   ],
@@ -108,11 +110,11 @@ const REVIEWS_DEFAULT: ReviewsVM = {
 const FAQ_DEFAULT: FaqVM[] = [
   { title: '完全没有基础可以做吗？', body: '可以。套装专为零基础设计，附带分步视频，跟着做就能完成第一只小棉鸭。' },
   { title: '材料包里都有什么？', body: '棉线、钩针、填充棉、安全眼、说明卡与幸运卡一应俱全，开盒即可开始。' },
-  { title: '做坏了可以补料吗？', body: '可以。线材用尽或钩错都能在社群申请补料，七天内不满意还可无理由退货。' },
+  { title: '做坏了可以补料吗？', body: '可以。线材用尽或钩错都能在社群申请补料，售后无忧。' },
   { title: '大概需要多久完成？', body: '新手平均 3–4 小时即可完成一只，可分多次进行，随时暂停继续。' },
 ]
 const CLOSING_DEFAULT: ClosingVM = { title: '创造幸运', cta: BRAND_SLOGAN_EN, img: '' }
-const FOOTER_DEFAULT: FooterVM = { links: ['关于我们', 'Lucky 鸭'], copy: 'Copyright © 2026 ZHUO DUCKI LUCKY · All Rights Reserved.' }
+const FOOTER_DEFAULT: FooterVM = { links: ['关于我们', 'Lucky Ducky小棉鸭'], copy: 'Copyright © 2026 Lucky Ducky · All Rights Reserved.' }
 
 // ── 小工具 ──
 type Dict = Record<string, unknown>
@@ -138,6 +140,14 @@ function arr<T>(raw: unknown, mapItem: (x: unknown) => T | null, def: T[]): T[] 
 const priceText = (v: unknown): string => {
   const n = Number(v)
   return Number.isFinite(n) && n > 0 ? '¥' + String(n) : ''
+}
+
+/** 首页「购买」：货架上第一件名字带「小棉鸭」的套装；没有就不瞎跳旧 id。 */
+export function pickDuckKit(products: ProductVM[]): ProductVM | null {
+  for (const p of products) {
+    if (p.id && p.name.includes('小棉鸭')) return p
+  }
+  return null
 }
 
 /** 商品列表 → 网格视图模型：无名/无价的脏行不进首页（fail-closed 展示面）；cover 空串由模板落占位块。 */
@@ -175,7 +185,8 @@ export function mapHero(home: unknown): HeroVM {
 
 const trustItem = (raw: unknown): TrustVM | null => {
   const x = obj(raw)
-  const label = str(x.label, '')
+  let label = str(x.label, '')
+  if (label.includes('七天无理由')) label = '售后无忧' // CMS 旧稿仍按现口径显示
   return label ? { icon: str(x.icon, ''), label } : null // 无标签整条剔除
 }
 const reassureItem = (raw: unknown): ReassureItemVM | null => {
@@ -191,14 +202,18 @@ const reviewItem = (raw: unknown): ReviewVM | null => {
 const faqItem = (raw: unknown): FaqVM | null => {
   const x = obj(raw)
   const title = str(x.title, '')
-  return title ? { title, body: str(x.body, '') } : null
+  if (!title) return null
+  let body = str(x.body, '')
+  if (body.includes('七天内不满意还可无理由退货')) body = body.replace('七天内不满意还可无理由退货', '售后无忧')
+  return { title, body }
 }
 /** footer.links 是纯字符串数组（admin 存法·cloud content.ts）——只收 string/number，
  *  其余类型（对象/数组/null/undefined/boolean）一律剔除，防 String({})='[object Object]' 塌缩值混入。 */
 const footerLink = (x: unknown): string | null => {
   if (typeof x !== 'string' && typeof x !== 'number') return null
   const s = String(x).trim()
-  return s || null
+  if (!s) return null
+  return s === 'Lucky 鸭' ? 'Lucky Ducky小棉鸭' : s
 }
 
 /** 首页全板块内容 → 视图模型：整档 / 逐块 / 逐字段缺失都回退设计默认；脏项 fail-closed 剔除。 */

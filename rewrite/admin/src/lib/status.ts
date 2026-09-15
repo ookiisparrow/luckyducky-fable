@@ -1,5 +1,4 @@
 // 后台状态反馈收口（组合式·治病根#14 admin 前端侧·守卫 rw-admin-load-status-golden）。
-// 沿用本仓已验的「散落副作用抽组合式收口」范式（useTimers/useAutosave·根因账本#14 留档）。
 //
 // 病根：各页把「动作反馈」与「后台 reload 的加载态」共用一条 message，动作 note 设完提示随即
 //   `void reload()`，reload 成功时又无条件写 message → 把刚设的成功/失败原文抹掉（伪成功/吞反馈）。
