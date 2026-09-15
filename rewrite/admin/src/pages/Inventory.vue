@@ -24,6 +24,7 @@ interface Row extends StockRow {
 
 const rows = ref<Row[]>([])
 const truncNote = ref('')
+const invOk = ref(false) // listInventory 成功才信 KPI；失败不画假零
 // 动作反馈/加载态收口（病根#14）：reload 成功不再抹掉 doSave 刚设的 409 冲突原文等动作反馈。
 const { message, load } = useLoadStatus()
 const busy = ref(false)
@@ -81,6 +82,7 @@ async function reload() {
       if (id) cat[id] = { name: String(p.name || id), price: p.price != null && String(p.price) !== '' ? '¥' + String(p.price) : '—' }
     }
   }
+  invOk.value = !!(inv as any).ok
   const m = mapStock((inv as any).ok ? (inv as any).list : [], (inv as any).ok ? (inv as any).truncated : false)
   rows.value = m.rows.map((r) => ({
     ...r,
@@ -136,7 +138,7 @@ onMounted(reload)
 
     <p v-if="truncNote" class="ld-status">{{ truncNote }}</p>
 
-    <div class="ld-kpi-grid">
+    <div v-if="invOk" class="ld-kpi-grid">
       <KpiCard label="SKU 总数" :value="counts.all" :icon="Boxes" />
       <KpiCard label="在售" :value="counts.onsale" :icon="CircleCheck" />
       <KpiCard label="低库存预警" :value="counts.low" :icon="TriangleAlert" />
