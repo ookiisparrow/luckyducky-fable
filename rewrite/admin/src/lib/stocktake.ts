@@ -3,7 +3,7 @@
 // 纯函数（可注入 now/rand 便于测试）；副作用（listMaterials 拉全量/逐行调 adjustStock）留在 ScmMaterials.vue。
 
 /** 实盘数合法性：只有非负整数才算「已盘」——空/负数/小数/非数一律不合法（视同未盘，不进提交）。 */
-export function isValidActual(v: unknown): v is number {
+function isValidActual(v: unknown): v is number {
   return typeof v === 'number' && Number.isFinite(v) && Number.isInteger(v) && v >= 0
 }
 
@@ -13,13 +13,13 @@ export function stocktakeDiff(stock: number, actual: unknown): number | null {
   return actual - stock
 }
 
-export interface StocktakeRow {
+interface StocktakeRow {
   materialId: string
   stock: number
   actual: unknown
 }
 
-export interface StocktakeSubmitRow {
+interface StocktakeSubmitRow {
   materialId: string
   delta: number
 }

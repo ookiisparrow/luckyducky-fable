@@ -157,7 +157,7 @@ describe('app 网关顶层兜底（未捕获异常可观测·根因#14）', () =
   })
 })
 
-// ─── flag 顺手批（2026-08-02·待办与债散项）：网关查表不吃原型链 ───
+// ─── 网关查表不吃原型链（根因#3）───
 describe('app 网关未知 action fail-closed 不吃原型链（根因#3）', () => {
   // 注册表若是普通对象字面量，就从 Object.prototype 继承了 constructor/toString/__proto__ 等键：
   // ACTIONS['constructor'] 非空 → 「未知 action 一律拒」这条 fail-closed 在原型链上不成立。

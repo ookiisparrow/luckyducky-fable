@@ -1,8 +1,6 @@
 <script setup lang="ts">
 // 库存管理（design/console.pen S14 视觉·M3 UI 批7）：统计卡 + 状态 chip + SKU 表（商品名/价格 join listDrafts
-// 真数据·当前库存/低库存预警/售罄/不限量派生）+ 行内调整（保留版本校验 409 并发逻辑）。
-// 诚实边界：低库存阈值为显示常量（后端无 per-SKU 阈值·单源 lib/thresholds.ts，与 Dashboard.vue 同口径）；
-// 「批量导入/盘点」无后端 action——省略不加假钮（记待办）。
+// 真数据·当前库存/低库存预警/售罄/不限量派生）+ 行内调整（saveStock 带 per-SKU 阈值与版本校验 409）。
 import { ref, computed, onMounted } from 'vue'
 import { Search, Boxes, CircleCheck, TriangleAlert, XCircle, Infinity as InfinityIcon, RefreshCw } from 'lucide-vue-next'
 import { listInventory, saveStock } from '../api/system'
@@ -26,6 +24,7 @@ interface Row extends StockRow {
 
 const rows = ref<Row[]>([])
 const truncNote = ref('')
+const invOk = ref(false) // listInventory 成功才信 KPI；失败不画假零
 // 动作反馈/加载态收口（病根#14）：reload 成功不再抹掉 doSave 刚设的 409 冲突原文等动作反馈。
 const { message, load } = useLoadStatus()
 const busy = ref(false)
@@ -43,10 +42,10 @@ function statusOf(stock: number | null, threshold: number): Row['status'] {
   return 'onsale'
 }
 const STATUS = {
-  onsale: { label: '在售', cls: 'onsale' },
-  low: { label: '低库存', cls: 'low' },
-  out: { label: '售罄', cls: 'out' },
-  unlimited: { label: '不限量', cls: 'unlimited' },
+  onsale: '在售',
+  low: '低库存',
+  out: '售罄',
+  unlimited: '不限量',
 }
 const FILTERS = [
   { key: 'all', label: '全部' },
@@ -83,6 +82,7 @@ async function reload() {
       if (id) cat[id] = { name: String(p.name || id), price: p.price != null && String(p.price) !== '' ? '¥' + String(p.price) : '—' }
     }
   }
+  invOk.value = !!(inv as any).ok
   const m = mapStock((inv as any).ok ? (inv as any).list : [], (inv as any).ok ? (inv as any).truncated : false)
   rows.value = m.rows.map((r) => ({
     ...r,
@@ -138,7 +138,7 @@ onMounted(reload)
 
     <p v-if="truncNote" class="ld-status">{{ truncNote }}</p>
 
-    <div class="ld-kpi-grid">
+    <div v-if="invOk" class="ld-kpi-grid">
       <KpiCard label="SKU 总数" :value="counts.all" :icon="Boxes" />
       <KpiCard label="在售" :value="counts.onsale" :icon="CircleCheck" />
       <KpiCard label="低库存预警" :value="counts.low" :icon="TriangleAlert" />
@@ -197,7 +197,7 @@ onMounted(reload)
           </div>
           <div class="ld-td" :style="{ width: '110px' }">
             <Badge :tone="row.status === 'onsale' ? 'green' : row.status === 'low' ? 'amber' : row.status === 'out' ? 'red' : 'brand'">{{
-              STATUS[row.status].label
+              STATUS[row.status]
             }}</Badge>
           </div>
           <div class="ld-td ops-cell" :style="{ width: '180px' }">

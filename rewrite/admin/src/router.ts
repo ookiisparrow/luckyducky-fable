@@ -46,8 +46,6 @@ export const router = createRouter({
   history: createWebHashHistory(),
   routes: [
     { path: '/login', component: Login },
-    // 旧「首页内容」入口重定向到统一的「页面内容」工作台（批C·顶层绝对 path＝导航同步守卫不当孤儿页核）
-    { path: '/home-content', redirect: '/page-content' },
     {
       path: '/',
       component: Shell,

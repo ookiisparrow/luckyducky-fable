@@ -2,26 +2,26 @@
 // UI 交互（进入盘点/提交/重试/退出确认）留在 ScmMaterials.vue，本文件只钉纯函数（可注入 now/rand 稳定断言）+
 // 源码扫描钉关键接线（同 scm-ui.test.ts/scm-overview.test.ts `?raw` 范式）。
 import { describe, it, expect } from 'vitest'
-import { isValidActual, stocktakeDiff, filterSubmittable, genStocktakeNo, stocktakeAdjustId } from '../src/lib/stocktake'
+import { stocktakeDiff, filterSubmittable, genStocktakeNo, stocktakeAdjustId } from '../src/lib/stocktake'
 import scmMaterialsSrc from '../src/pages/ScmMaterials.vue?raw'
 
 describe('实盘合法性 + 差异（非负整数才算已盘）', () => {
+  it('大白话：isValidActual 只给同文件 stocktakeDiff 用，不再对外 export', async () => {
+    expect(await import('../src/lib/stocktake')).not.toHaveProperty('isValidActual')
+  })
   it('大白话：0/正整数合法；负数/小数/空/非数一律不合法——不合法时差异算 null（模板显示「—」灰）', () => {
-    expect(isValidActual(5)).toBe(true)
-    expect(isValidActual(0)).toBe(true)
-    expect(isValidActual(-1)).toBe(false)
-    expect(isValidActual(1.5)).toBe(false)
-    expect(isValidActual('')).toBe(false)
-    expect(isValidActual(undefined)).toBe(false)
-    expect(isValidActual(null)).toBe(false)
-    expect(isValidActual('7')).toBe(false) // 字符串不算（模板走 v-model.number 转数字·防脏字符串溜进提交）
-
+    // 合法性走外层 stocktakeDiff（isValidActual 已不对外 export）：合法有数字差，非法回 null
+    expect(stocktakeDiff(10, 5)).toBe(-5)
+    expect(stocktakeDiff(10, 0)).toBe(-10) // 0 合法
     expect(stocktakeDiff(10, 7)).toBe(-3)
     expect(stocktakeDiff(10, 13)).toBe(3)
     expect(stocktakeDiff(10, 10)).toBe(0)
     expect(stocktakeDiff(10, '')).toBeNull()
     expect(stocktakeDiff(10, -1)).toBeNull()
     expect(stocktakeDiff(10, 1.5)).toBeNull()
+    expect(stocktakeDiff(10, undefined)).toBeNull()
+    expect(stocktakeDiff(10, null)).toBeNull()
+    expect(stocktakeDiff(10, '7')).toBeNull() // 字符串不算（模板走 v-model.number 转数字·防脏字符串溜进提交）
   })
 })
 

@@ -497,3 +497,39 @@ describe('Desk.vue 图片气泡（B5·顾客发图坐席可见·源码断言：�
     expect(tpl).toMatch(/加载失败，点击重试/)
   })
 })
+
+describe('refreshLists / open 失败出声（病根#14·首屏不得装成队列空或空白会话）', () => {
+  it('大白话：拉队列或我在接失败须写入 listNote；两边成功才清空。模板「队列空 ✓」只在没有 listNote 时出现——首屏拉失败不得装成没事', () => {
+    const body = extractFunctionBody(scriptSetupSrc(), 'async function refreshLists() {')
+    expect(body).toMatch(/listNote\.value = q\.ok && m\.ok \? '' : deskErrorText\(q\.ok \? m\.error : q\.error\)/)
+    expect(body).toMatch(/queue\.value = q\.ok \? mapQueue/) // 失败不清已有
+    expect(body).toMatch(/mine\.value = m\.ok \?/)
+    const { descriptor } = parse(deskSrc)
+    const tpl = descriptor.template?.content || ''
+    expect(tpl).toMatch(/v-if="listNote"/)
+    expect(tpl).toMatch(/v-else-if="!queue\.length"/)
+    expect(tpl).toContain('队列空 ✓')
+    const emptyOkIdx = tpl.indexOf('队列空 ✓')
+    const elseIfIdx = tpl.lastIndexOf('v-else-if="!queue.length"', emptyOkIdx)
+    expect(elseIfIdx).toBeGreaterThan(-1)
+  })
+
+  it('大白话：打开会话时 pollThread 失败须像 360 一样写出 threadNote；后台 3 秒轮询仍静默重试、不打断输入', () => {
+    const poll = extractFunctionBody(scriptSetupSrc(), 'async function pollThread(loud = false) {')
+    expect(poll).toMatch(/if\s*\(\s*loud\s*\)\s*threadNote\.value = deskErrorText\(r\.error\)/)
+    expect(poll).toMatch(/if\s*\(\s*!r\.ok\s*\)/)
+    // 成功须清 threadNote（后台重试拉到了就把首拉错误收掉）
+    const failIdx = poll.indexOf('if (loud) threadNote.value = deskErrorText(r.error)')
+    const clearIdx = poll.indexOf("threadNote.value = ''")
+    expect(failIdx).toBeGreaterThan(-1)
+    expect(clearIdx).toBeGreaterThan(failIdx)
+    const open = extractFunctionBody(scriptSetupSrc(), 'async function open(sessionId: string) {')
+    expect(open).toMatch(/pollThread\(\s*true\s*\)/)
+    const setup = scriptSetupSrc()
+    expect(setup).toMatch(/setInterval\(\s*pollThread\s*,\s*3_000\s*\)/) // 后台调用不传 true
+    const { descriptor } = parse(deskSrc)
+    const tpl = descriptor.template?.content || ''
+    expect(tpl).toMatch(/v-if="threadNote"/)
+    expect(tpl).toMatch(/v-if="panelNote"/)
+  })
+})

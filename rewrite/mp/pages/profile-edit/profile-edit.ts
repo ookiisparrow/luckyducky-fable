@@ -26,32 +26,31 @@ Page({
     if (this.backTimer) clearTimeout(this.backTimer) // 延时返回坞清理（守卫 rw-mp-navback-timer-cleaned）
   },
   async onLoad() {
-    await this.loadProfile()
-  },
-  onRetryLoad() {
-    if (this.data.loading) return
-    return this.loadProfile()
-  },
-  async loadProfile() {
-    this.setData({ loading: true })
+    let user: Record<string, any> | null = null
     try {
       const u = await login()
-      const user = (u.ok ? u.user : null) as Record<string, any> | null
-      if (user) {
-        this.setData({
-          nickname: String(user.nickname || ''),
-          bio: String(user.bio || ''),
-          phone: String(user.phone || ''),
-          avatar: String(user.avatar || ''),
-          loaded: true,
-          loading: false,
-        })
-        return
-      }
+      user = (u.ok ? u.user : null) as Record<string, any> | null
     } catch {
       // 抛错与 ok:false 同落失败态：不把空白表单当档案（根因#14）
     }
+    if (this.unloaded) return // 资料拉取在途已退页——迟到回包不再 setData
+    if (user) {
+      this.setData({
+        nickname: String(user.nickname || ''),
+        bio: String(user.bio || ''),
+        phone: String(user.phone || ''),
+        avatar: String(user.avatar || ''),
+        loaded: true,
+        loading: false,
+      })
+      return
+    }
     this.setData({ loading: false, loaded: false })
+  },
+  onRetryLoad() {
+    if (this.data.loading) return
+    this.setData({ loading: true })
+    return this.onLoad()
   },
   onChooseAvatar(e: WechatMiniprogram.CustomEvent<{ avatarUrl: string }>) {
     if (this.data.busy) return // 保存在途禁止重选头像：否则 onSave 已捕获的 avatarTemp 与此刻新选的分叉、上传的是旧图（P2·bug sweep R1 #8）

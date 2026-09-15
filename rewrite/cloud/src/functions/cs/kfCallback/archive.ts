@@ -32,7 +32,7 @@ async function resolveOpenidBestEffort(db: any, euid: string): Promise<string> {
 }
 
 /** 入站客户文本消息的可检索文本（非文本类回退占位·检索按关键词命中 text）。 */
-export function incomingText(msg: any): string {
+function incomingText(msg: any): string {
   if (msg && msg.msgtype === 'text') return String((msg.text && msg.text.content) || '')
   return '[' + String((msg && msg.msgtype) || 'unknown') + ']'
 }
@@ -83,12 +83,7 @@ export async function archiveInbound(db: any, msg: any, openKfId: string): Promi
         msgtype: String((msg && msg.msgtype) || ''),
         text: incomingText(msg),
         mediaId: msgMediaId(msg), // B5：image 消息落 media_id（非 image 为''）·getMediaUrl 据此下载
-        // at＝统一「入库时刻」（毫秒·与出站 archiveOutbound/sendAgentMessage 同轴）——#124 另立批修复：
-        // 旧实现取 send_time*1000（微信秒级→毫秒刻度仍只在整秒），与出站 Date.now() 毫秒混用同一游标轴，
-        // 坐席回复（毫秒 at）先交付、同秒顾客消息（秒截断 at）晚归档时，晚到消息 at 落在已推进 cursor 之前，
-        // 被 getThread 的 at > since 永久跳过（in 晚到插入被丢弃·P1）。统一为入库时刻后 at 单调递增
-        // （归档顺序＝轮询顺序·微信同会话回调基本按发送序投递·乱序仅秒级且肉眼不可辨），晚到消息
-        // 归档时刻必大于此前任何已交付 cursor——游标语义自洽，不丢不重。send_time 无其他消费方（已 grep）。
+        // at＝统一「入库时刻」（毫秒·与出站 archiveOutbound/sendAgentMessage 同轴），游标按单调递增不丢晚到消息。
         at: Date.now(),
       },
     })

@@ -1,4 +1,4 @@
-// mp↔cloud 响应契约（批B10·病根#5 手抄副本漂移 + #8 编译绿≠契约没漂）。
+// mp↔cloud 响应契约（病根#5 手抄副本漂移 + #8 编译绿≠契约没漂）。
 // 为什么存在：mp 物理进不了 @ldrw/shared（微信开发者工具编译不出仓外引用·rewrite/mp/lib/mapOrders.ts
 // 头注等自证），响应形状全靠手抄——cloud 改键 mp 编译不红＝静默漂移面。本文件＝cloud 侧编译锚
 // （handler 返回类型绑定）+ mp 手抄副本的人类正本；机器哨兵＝rewrite/cloud/tests/contract-shape.test.ts

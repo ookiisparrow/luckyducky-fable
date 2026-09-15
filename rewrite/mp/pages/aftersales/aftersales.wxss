@@ -56,13 +56,6 @@
   align-items: center;
   gap: 20rpx;
 }
-.coas-order-img {
-  width: 120rpx;
-  height: 120rpx;
-  flex: 0 0 auto;
-  border-radius: var(--ld-radius-sm);
-  background: var(--ld-bg-sage); /* 无商品图字段→灰底占位 */
-}
 .coas-order-mid {
   flex: 1 1 auto;
   min-width: 0;

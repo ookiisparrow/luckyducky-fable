@@ -1,7 +1,7 @@
 // 商品与橱窗映射（守卫 rw-admin-products-ui-golden）：三态口径与云端一致/四道门人话原文兜底/
 // 整档 round-trip 保真/图片尺寸闸提前拦/脏档安全。
 import { describe, it, expect } from 'vitest'
-import { productState, mapDraftRows, publishErrorText, mapShowcaseRows, b64SizeOk, productSteps, stepProgressHint, productsListSub, basicsMissing, wizardCanPublish, WIZARD_SLICE_FIELDS, freshDraft } from '../src/lib/mapProducts'
+import { productState, mapDraftRows, publishErrorText, mapShowcaseRows, b64SizeOk, productSteps, stepProgressHint, productsListSub, basicsMissing, wizardCanPublish, freshDraft } from '../src/lib/mapProducts'
 
 describe('三态口径（与云端 listDrafts listed 表一致）', () => {
   it('大白话：表里 true=在售、false=已下架、不在表=筹备中（未上架）', () => {
@@ -63,7 +63,7 @@ describe('三态口径（与云端 listDrafts listed 表一致）', () => {
 })
 
 describe('上新向导上架闸（basicsMissing/wizardCanPublish·前三步必备·换皮把事前预检退成事后报错）', () => {
-  it('大白话：封面/名称/价格/有效规格四项缺哪报哪；四项齐才可上架（步4-6 视频/卡片/批次非上架硬门槛）', () => {
+    it('大白话：封面/名称/价格/有效规格四项缺哪报哪；四项齐才可上架（步 4–5 视频/卡片与二维码非上架硬门槛）', () => {
     // 空档：四项全缺、不可上架
     expect(basicsMissing({})).toEqual(['封面图', '商品名称', '价格', '至少一个有效规格'])
     expect(wizardCanPublish({})).toBe(false)
@@ -93,22 +93,8 @@ describe('上架四道门人话（原文兜底不吞）', () => {
   })
 })
 
-describe('向导 1–3 步字段互斥（假进度 P0：不得再复制整表三次）', () => {
-  it('大白话：第 1 步只封面，第 2 步名字和相册，第 3 步详情；三块字段不重叠；新建草稿自带课程号', () => {
-    const a = new Set(WIZARD_SLICE_FIELDS[1])
-    const b = new Set(WIZARD_SLICE_FIELDS[2])
-    const c = new Set(WIZARD_SLICE_FIELDS[3])
-    for (const f of a) {
-      expect(b.has(f)).toBe(false)
-      expect(c.has(f)).toBe(false)
-    }
-    for (const f of b) expect(c.has(f)).toBe(false)
-    expect([...a]).toEqual(['cover'])
-    expect([...b]).toEqual(['name', 'images'])
-    expect(c.has('skus')).toBe(true)
-    expect(c.has('sold')).toBe(true)
-    expect(c.has('name')).toBe(false)
-    expect(c.has('cover')).toBe(false)
+describe('新建草稿骨架（freshDraft·向导第 1 步与列表「去上新」同形）', () => {
+  it('大白话：新建草稿自带课程号，切片由 Products.vue showCover/showLook/showDetail 管', () => {
     const d = freshDraft('p9')
     expect(d.id).toBe('p9')
     expect(d.courseId).toBe('course-p9')

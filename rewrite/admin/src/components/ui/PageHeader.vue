@@ -1,6 +1,6 @@
 <script setup lang="ts">
 // 页头·自建原语（design/控制台.pen Header：H1 20/700 + 副标 content-2 12.5·右侧操作槽）。
-// 30 页每页都有页头（换皮期各写各的 .page-head）——收敛单源，右侧放筛选/刷新/主 CTA 用默认插槽。
+// 各页页头（换皮期各写各的 .page-head）——收敛单源，右侧放筛选/刷新/主 CTA 用默认插槽。
 withDefaults(defineProps<{ title: string; sub?: string }>(), { sub: undefined })
 </script>
 
