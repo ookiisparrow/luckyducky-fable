@@ -32,7 +32,7 @@ async function resolveOpenidBestEffort(db: any, euid: string): Promise<string> {
 }
 
 /** 入站客户文本消息的可检索文本（非文本类回退占位·检索按关键词命中 text）。 */
-export function incomingText(msg: any): string {
+function incomingText(msg: any): string {
   if (msg && msg.msgtype === 'text') return String((msg.text && msg.text.content) || '')
   return '[' + String((msg && msg.msgtype) || 'unknown') + ']'
 }
