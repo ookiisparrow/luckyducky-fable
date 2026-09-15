@@ -115,6 +115,16 @@
   height: 20rpx;
 }
 
+/* 加载骨架（login 在途·不画可编辑空档）：微光扫过对齐 reviews（@keyframes ld-shimmer·app.wxss） */
+.coprof-skel {
+  height: 28rpx;
+  margin: 28rpx 0;
+  border-radius: 8rpx;
+  background: linear-gradient(90deg, var(--ld-bg-sage) 25%, var(--ld-bg-faint) 50%, var(--ld-bg-sage) 75%);
+  background-size: 200% 100%;
+  animation: ld-shimmer 1500ms ease-in-out infinite;
+}
+
 /* 表单下说明 */
 .coprof-tip {
   display: block;

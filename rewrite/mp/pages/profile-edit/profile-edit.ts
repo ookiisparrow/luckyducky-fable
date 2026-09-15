@@ -16,6 +16,7 @@ Page({
     avatar: '', // cloud:// 或空
     avatarTemp: '', // 本次新选的临时路径（待上传）
     busy: false,
+    loading: true, // login 在途：不画空白可编辑档（根因#14·失败≠空档案）
     loaded: false, // 资料是否成功载入（login 成功）·未载入不允许保存（防读故障→空字段→破坏性覆盖清空已存 phone/bio）
   },
   backTimer: null as ReturnType<typeof setTimeout> | null,
@@ -25,10 +26,31 @@ Page({
     if (this.backTimer) clearTimeout(this.backTimer) // 延时返回坞清理（守卫 rw-mp-navback-timer-cleaned）
   },
   async onLoad() {
-    const u = await login()
+    let user: Record<string, any> | null = null
+    try {
+      const u = await login()
+      user = (u.ok ? u.user : null) as Record<string, any> | null
+    } catch {
+      // 抛错与 ok:false 同落失败态：不把空白表单当档案（根因#14）
+    }
     if (this.unloaded) return // 资料拉取在途已退页——迟到回包不再 setData
-    const user = (u.ok ? u.user : null) as Record<string, any> | null
-    if (user) this.setData({ nickname: String(user.nickname || ''), bio: String(user.bio || ''), phone: String(user.phone || ''), avatar: String(user.avatar || ''), loaded: true })
+    if (user) {
+      this.setData({
+        nickname: String(user.nickname || ''),
+        bio: String(user.bio || ''),
+        phone: String(user.phone || ''),
+        avatar: String(user.avatar || ''),
+        loaded: true,
+        loading: false,
+      })
+      return
+    }
+    this.setData({ loading: false, loaded: false })
+  },
+  onRetryLoad() {
+    if (this.data.loading) return
+    this.setData({ loading: true })
+    return this.onLoad()
   },
   onChooseAvatar(e: WechatMiniprogram.CustomEvent<{ avatarUrl: string }>) {
     if (this.data.busy) return // 保存在途禁止重选头像：否则 onSave 已捕获的 avatarTemp 与此刻新选的分叉、上传的是旧图（P2·bug sweep R1 #8）

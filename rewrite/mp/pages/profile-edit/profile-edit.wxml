@@ -3,6 +3,27 @@
      昵称 type=nickname→onNickname、签名→onBio、手机号→onPhone、保存→onSave 全承接 profile-edit.ts。
      手机号＝账户联系电话（手动输入·云端 updateProfile 白名单归一化校验·与地址电话独立·供客服 360 检索）。token 见 styles/tokens.wxss。 -->
 <view class="co coprof">
+  <!-- 加载中：骨架占位，不画空白可编辑档（根因#14） -->
+  <view class="co-body" wx:if="{{loading}}">
+    <view class="co-card coaddr-form">
+      <view class="coprof-skel" wx:for="{{[1, 2, 3, 4]}}" wx:key="*this"></view>
+    </view>
+  </view>
+
+  <!-- 登录失败：给重试，不露出空白可改表单 -->
+  <block wx:elif="{{!loaded}}">
+    <view class="co-body">
+      <text class="coprof-tip">资料没加载好</text>
+    </view>
+    <view class="co-dock-space"></view>
+    <view class="co-dock">
+      <view class="co-dockbar coaddr-dock">
+        <view class="co-submit coaddr-save" bind:tap="onRetryLoad">重试</view>
+      </view>
+    </view>
+  </block>
+
+  <block wx:else>
   <view class="co-body">
 
     <!-- 资料表单卡（头像行 + 昵称 + 个性签名·设计白卡分隔发丝线） -->
@@ -50,6 +71,7 @@
       <view class="co-submit coaddr-save {{busy ? 'dim' : ''}}" bind:tap="onSave">保存</view>
     </view>
   </view>
+  </block>
 
   <privacy-sheet />
 </view>
