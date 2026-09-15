@@ -20,15 +20,19 @@ describe('官网品牌身份可引用', () => {
     expect(BRAND_IDENTITY).toContain('luckyducky.cn')
     expect(BRAND_IDENTITY).toContain('初学者钩织学习套装')
     expect(BRAND_IDENTITY).toContain('不是钩织圈对手工鸭子的泛称')
-    expect(BRAND_IDENTITY).toContain('尝试钩织，创造幸运')
+    expect(BRAND_IDENTITY).toContain('体验钩织，创造幸运')
     expect(BRAND_IDENTITY).toContain('get ducky, get lucky')
     expect(BRAND_IDENTITY).toContain('微信搜「LuckyDucky小棉鸭」')
     expect(BRAND_IDENTITY).not.toContain('材料包')
+    expect(BRAND_IDENTITY).not.toContain('尝试钩织')
     expect(pages.home).toContain('<p>{BRAND_IDENTITY}</p>')
     expect(pages.about).toContain('<p>{BRAND_IDENTITY}</p>')
     expect(pages.kits).toContain('<p>{BRAND_IDENTITY}</p>')
     expect(pages.llms).toContain('${BRAND_IDENTITY}')
-    for (const src of Object.values(pages)) expect(src).not.toContain('材料包')
+    for (const src of Object.values(pages)) {
+      expect(src).not.toContain('材料包')
+      expect(src).not.toContain('尝试钩织')
+    }
   })
 
   it('大白话：关于页跟小程序一样写「开始练习」「分步交互」，不写假注册商标', () => {
