@@ -20,7 +20,7 @@ export function anomalyFingerprint(kind: AnomalyKind, code: string, scope?: stri
   return raw.replace(/[^a-zA-Z0-9_.-]/g, '').slice(0, 120)
 }
 
-// —— 巡检机（inspect·批2·不依赖 AI 的定时/手动体检）——
+// —— 巡检机（不依赖 AI 的定时/手动体检）——
 
 /** 检查分层：基建存活 / 业务不变量（用户拍板「两层都要」）。 */
 export type CheckLayer = 'infra' | 'invariant'

@@ -1,5 +1,5 @@
 /**
- * SCM 组合键定界符防护（单源·门5 排歧规则·战役3 批D 判例）。
+ * SCM 组合键定界符防护（单源·门5 排歧规则）。
  *
  * 病根：fg 库存/流水键形如 `${productId}__${spec}`（inventory idOf / scmAssembly fg:productId__spec /
  * orders lineIdOf 同构）——若 productId/spec 本身可含 `__` 或以 `_` 结尾，`productId="p_"+spec="q"` 与

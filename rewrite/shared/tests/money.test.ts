@@ -3,7 +3,7 @@ import { describe, it, expect } from 'vitest'
 import fc from 'fast-check'
 import { toFen, asFen, fenToYuan, refundShareFen, type Fen } from '../src/money'
 
-describe('金额分整数（黄金 I 节）', () => {
+describe('金额分整数', () => {
   it('大白话：整分金额经「分→元→分」往返恒回原值（无浮点漂移）', () => {
     fc.assert(
       fc.property(fc.integer({ min: 0, max: 100_000_000 }), (fen) => {
@@ -37,7 +37,7 @@ describe('金额分整数（黄金 I 节）', () => {
   })
 })
 
-describe('售后分摊单源（黄金 orders-money·分摊按占比封顶）', () => {
+describe('售后分摊单源（分摊按占比封顶）', () => {
   const fen = (n: number): Fen => asFen(n)
   it('大白话：单品订单退额=全额实付；多品按行金额占比分摊', () => {
     expect(refundShareFen(fen(17800), fen(17800), fen(17800), fen(0))).toBe(17800)
