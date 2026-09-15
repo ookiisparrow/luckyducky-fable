@@ -39,7 +39,7 @@ export const AFTERSALE_STATUS_SPEC = {
 export type OrderStatus = SpecStates<typeof ORDER_STATUS_SPEC>
 export type AfterSaleStatus = SpecStates<typeof AFTERSALE_STATUS_SPEC>
 
-/** 已付订单状态集合单源（GMV/对账/客户画像总消费口径·防四处漂移·P2 顺手改批）：pending/closed/
+/** 已付订单状态集合单源（GMV/对账/客户画像总消费口径·防四处漂移）：pending/closed/
  *  refund_required 未付不计。此前 adminApi lib.ts / dashboard.ts / reconciliation.ts / customer360
  *  profile.ts 各自手抄同一份数组，改状态机漏改一处即口径分叉——收口到订单状态声明单源旁，其余四处改 import。 */
 export const PAID_ORDER_STATUSES: readonly OrderStatus[] = ['paid', 'shipped', 'done']
