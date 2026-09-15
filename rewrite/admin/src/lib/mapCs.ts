@@ -266,7 +266,7 @@ function tailId(v: unknown): string {
   return s.length > 6 ? '…' + s.slice(-6) : s || '—'
 }
 
-export function mapQcRow(r: unknown): QcRowVM | null {
+function mapQcRow(r: unknown): QcRowVM | null {
   const d = (r && typeof r === 'object' ? r : {}) as Record<string, any>
   const sessionKey = String(d.sessionKey || '')
   if (!sessionKey) return null

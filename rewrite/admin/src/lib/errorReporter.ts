@@ -9,7 +9,7 @@ import type { App } from 'vue'
 // （不为上报开未鉴权口子）。agent 端 lib/errorReporter.ts 是本文件的同构小副本（两包各自独立部署，不新开
 // 共享包——Rule of Three 未到，见该文件头注）。
 
-export interface ReportableClient {
+interface ReportableClient {
   hasSession(): boolean
   post(action: string, data?: Record<string, unknown>): Promise<unknown>
 }
@@ -29,7 +29,7 @@ function currentPage(): string {
 }
 
 /** 上报一条前端错误（fail-soft：内部异常绝不外溢——不能让「报错本身报错」形成自激环）。 */
-export function reportError(cli: ReportableClient, msg: unknown, page = currentPage()): void {
+function reportError(cli: ReportableClient, msg: unknown, page = currentPage()): void {
   try {
     if (!cli.hasSession()) return // 无会话不外呼——不为上报建未鉴权端点
     const text = String(msg).slice(0, 500)

@@ -1,8 +1,13 @@
 // 客服组映射（守卫 rw-admin-cs-ui-golden）：时长人话/报表 approx 诚实透传/360 单面板失败隔离/
 // 命中依据中文/kb 行归一/满意度分布。
 import { describe, it, expect } from 'vitest'
-import { msHuman, mapReport, mapPanels, matchLabel, normalizeKb, mapCsat, mapCsatEntries, mapMessages, nextNodeId, duplicateNodeIds, mapQcRow, mapQcRows } from '../src/lib/mapCs'
+import { msHuman, mapReport, mapPanels, matchLabel, normalizeKb, mapCsat, mapCsatEntries, mapMessages, nextNodeId, duplicateNodeIds, mapQcRows } from '../src/lib/mapCs'
 import customer360Src from '../src/pages/Customer360.vue?raw'
+
+// 单行走外层 mapQcRows（mapQcRow 已不对外 export）
+function mapQcRow(r: unknown) {
+  return mapQcRows([r])[0] ?? null
+}
 
 describe('时长人话与报表', () => {
   it('大白话：秒/分/小时逐级人话；非法回 —；报表 approx 时明标「估算」，否则标「全量精确」', () => {
@@ -157,6 +162,10 @@ describe('节点诊断 nodeId 唯一（防删中间节点后 length+1 撞号→�
 })
 
 describe('质检抽检行映射（批 B7·sessionKey≠externalUserId·聚合失败诚实省略非造 0）', () => {
+  it('大白话：mapQcRow 只给同文件 mapQcRows 用，不再对外 export', async () => {
+    expect(await import('../src/lib/mapCs')).not.toHaveProperty('mapQcRow')
+  })
+
   it('大白话：未评行 scored=false/score=0/note 空；已评行读 qc 字段；聚合字段带则透传、无则 messageCount=null 且首响回 —', () => {
     const pending = mapQcRow({ sessionKey: 'wxkf:kf1:eu123456789', externalUserId: 'eu123456789', qcSampledAt: 1783046400000, messageCount: 3, avgResponseMs: 61_000 })!
     expect(pending.sessionKey).toBe('wxkf:kf1:eu123456789') // sessionKey 是 csSession._id·非 externalUserId
