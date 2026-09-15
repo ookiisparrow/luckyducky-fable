@@ -77,7 +77,7 @@ pages/ · components/ · custom-tab-bar/   （顶层·可越级下行直连 api/
 - **B 首屏 vs 折叠 → eager vs lazy（横向容器例外）**：首屏首图 eager（hero 不加 lazy）；折叠下方纵向内容图加 `lazy-load`；横向 scroll-view / swiper 内 `lazy-load` **真机不生效**（验证过），不加。守：`rw-mp-image-lazy-wired`（钉 7 点位）。
 - **C 单张 vs 列表 vs 大画廊 → 要否窗口化**：swiper/横向轨 lazy 失效 → 窗口化只渲 current±1（`computeGalleryWindow`·`pages/detail/detail.ts`）。
 - **D 临时址时效（~2h）→ 防过期**：持久化进 storage 的（cart/checkout）读时 `freshCover`（`lib/cart.ts`）重取；order 存 fileID 服务端 `swapOrdersCover` 换址；现取现渲（home/detail）天然新鲜。home 首屏快照（`lib/snapshot.ts`·冷启动 SWR）存的是已换好的 https 临时址，带 **90min TTL 剥离闸**（< 服务端 2h 有效期）——超龄读时剥掉快照内所有 http 临时址回退兜底（本地 `/static` 路径保留·mapHero 落包内鸭图/cover 落灰底），防隔夜冷启动首帧裂图。
-- **E 失败/缺席 → 占位兜底分级**：品牌门面缺→本地兜底图（永远有图·`mapHome.ts` `HERO_DEFAULT.img`）；课程 hero 缺→`bgFor` 三级回退→CSS 占位；内容图/cover 缺→`wx:if` 守空 + CSS 灰底（方向 A·弃 MediaSlot）；头像缺→🦆 emoji；换址一律 fail-soft；UGC 入库 `imgSecCheck` fail-closed（守 `ugc-imgsecchecked`）。
+- **E 失败/缺席 → 占位兜底分级**：品牌门面缺→本地兜底图（永远有图·`mapHome.ts` `HERO_DEFAULT.img`）；课程 hero 缺→`bgFor` 三级回退→CSS 占位；内容图/cover 缺→`wx:if` 守空 + CSS 灰底（方向 A·弃 MediaSlot）；头像缺→包内 `/static/logo-wordmark.svg`；换址一律 fail-soft；UGC 入库 `imgSecCheck` fail-closed（守 `ugc-imgsecchecked`）。
 
 **按位置矩阵**（来源｜加载｜防过期｜兜底）：
 
@@ -89,7 +89,7 @@ pages/ · components/ · custom-tab-bar/   （顶层·可越级下行直连 api/
 | CMS 内容图（feature/拆门槛/收尾/晒图） | CMS→`swapHomeImages` 换址 | **lazy** | 现取现渲 | `wx:if`+灰底 |
 | 商品 cover（轨/列表/详情） | `cloud://`→`getProducts` 批量换址 | 横向轨 eager（lazy 失效）·纵向列表 lazy | cart/checkout `freshCover`·order 服务端换址·余现取现渲 | `wx:if`+灰底 |
 | 详情图册（swiper） | 同 cover | **窗口 current±1** | 同 cover | 空数组落占位 |
-| 头像 | UGC `cloud://` | eager·`<image>` 直解 fileID | 免（直解不过期） | 🦆 emoji |
+| 头像 | UGC `cloud://` | eager·`<image>` 直解 fileID | 免（直解不过期） | 包内 `/static/logo-wordmark.svg` |
 | UGC 晒图 | UGC `cloud://`→读时换址 | **lazy** | 读时换址 | `wx:if` 守空 |
 
 **约定守卫（防策略漂移）**：折叠内容图必 `lazy-load`（`rw-mp-image-lazy-wired`）；禁内联 `<svg>`（`rw-mp-no-inline-svg`）；禁本地 `background:url()`（`rw-mp-no-bg-image-local`）；进包位图预算（`rw-mp-static-bitmap-budget`）；视频源禁外链（`no-external-video-src`·双线）。

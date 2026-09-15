@@ -25,7 +25,7 @@
   <view class="ld-rv-list" wx:if="{{list.length}}">
     <view class="ld-rv-item" wx:for="{{list}}" wx:key="index">
       <view class="ld-rv-item-top">
-        <view class="ld-rv-av">🦆</view>
+        <image class="ld-rv-av" src="/static/logo-wordmark.svg" mode="aspectFit" />
         <text class="ld-rv-name">{{item.name}}</text>
         <text class="ld-rv-date">{{item.timeLabel}}</text>
       </view>
@@ -53,11 +53,11 @@
   </view>
 
   <!-- 骨架占位（加载中且列表空时不再整页空白·根因#8）：微光扫过对齐 home/catalog（@keyframes ld-shimmer·
-       app.wxss）。头像复用真卡 🦆（ReviewVM 无头像·空灰圆永远空）；图 200rpx 复用 .ld-rv-photo·两行文案条 + 图格。 -->
+       app.wxss）。头像复用真卡店标（ReviewVM 无头像·空灰圆永远空）；图 200rpx 复用 .ld-rv-photo·两行文案条 + 图格。 -->
   <view class="ld-rv-list" wx:if="{{loading && !list.length}}">
     <view class="ld-rv-item ld-rv-skel" wx:for="{{[1, 2, 3]}}" wx:key="*this">
       <view class="ld-rv-item-top">
-        <view class="ld-rv-av">🦆</view>
+        <image class="ld-rv-av" src="/static/logo-wordmark.svg" mode="aspectFit" />
         <view class="ld-rv-skel-bar" style="width: 160rpx"></view>
       </view>
       <view class="ld-rv-skel-bar" style="width: 86%"></view>
