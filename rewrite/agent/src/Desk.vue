@@ -82,6 +82,8 @@ const cursor = ref(0)
 const draft = ref('')
 const panels = ref<Array<Record<string, any>>>([])
 const panelNote = ref('')
+const listNote = ref('') // 队列/我在接拉失败出声（病根#14）：首屏失败不得装成「队列空 ✓」
+const threadNote = ref('') // 打开会话拉消息失败出声（病根#14）：与 360 panelNote 同形；后台轮询仍静默
 const message = ref('')
 // 发送忙碌锁按会话隔离（F1·P2 race 修复：组件级共享 busy 会让 A 会话发送在途拦住 B 会话发送）——
 // reactive Set 按 sessionId 索引，只拦「同一会话」的重复发送；template :disabled 判 sendingIds.has(currentId)。
@@ -153,15 +155,20 @@ async function refreshLists() {
   if (q.error === 'SESSION_LOST' || m.error === 'SESSION_LOST') return doLogout()
   queue.value = q.ok ? mapQueue(q.items, Date.now()) : queue.value // 失败不清已有
   mine.value = m.ok ? ((m.sessions as Record<string, any>[]) || []) : mine.value
+  listNote.value = q.ok && m.ok ? '' : deskErrorText(q.ok ? m.error : q.error)
   recomputeAlert() // 队列增量是提醒聚合公式一半（改动契约 3）
 }
 
-async function pollThread() {
+async function pollThread(loud = false) {
   if (!currentId.value) return
   const sid = currentId.value // 会话粒度快照（P1·item8：防切会话后旧轮询回包串号——await 期间用户可能已切会话）
   const r = await post('getThread', { sessionId: sid, cursor: cursor.value || undefined })
   if (sid !== currentId.value) return // 期间已切别的会话·丢弃过期回包（不写进新会话的 msgs/cursor）
-  if (!r.ok) return // 轮询失败静默重试（不打断输入）
+  if (!r.ok) {
+    if (loud) threadNote.value = deskErrorText(r.error) // 打开会话首拉失败出声；后台 setInterval 默认静默重试
+    return
+  }
+  threadNote.value = ''
   msgs.value = mergeThread(msgs.value, r.messages) // 去重合并·不重气泡
   cursor.value = advanceCursor(cursor.value, r.nextCursor) // 只进不退
   recomputeAlert() // 当前会话新入站是提醒聚合公式另一半（改动契约 3）
@@ -269,7 +276,8 @@ async function open(sessionId: string) {
   cursor.value = 0
   panels.value = []
   panelNote.value = ''
-  await pollThread()
+  threadNote.value = ''
+  await pollThread(true) // 首拉失败写出 threadNote（与 360 panelNote 同形）；后台轮询仍走默认静默
   const p = await post('getSessionCustomer360', { sessionId })
   if (currentId.value !== sessionId) return // 期间又切了别的会话·丢弃过期 360 回包（P1·item8·同 pollThread 治法）
   if (p.ok) panels.value = (p.panels as Record<string, any>[]) || []
@@ -373,7 +381,8 @@ onBeforeUnmount(() => {
         </div>
         <button class="act" @click="claim(q.sessionId)">接</button>
       </div>
-      <p v-if="!queue.length" class="empty">队列空 ✓</p>
+      <p v-if="listNote" class="note">{{ listNote }}</p>
+      <p v-else-if="!queue.length" class="empty">队列空 ✓</p>
       <h3>我在接（{{ mine.length }}）</h3>
       <div v-for="s in mine" :key="s.sessionId" class="qitem" :class="{ on: s.sessionId === currentId }" @click="open(String(s.sessionId))">
         <span class="euid">{{ String(s.externalUserId || '').slice(-8) }}</span>
@@ -394,6 +403,7 @@ onBeforeUnmount(() => {
         <button class="chip faq" :disabled="!currentId" @click="openFaq">FAQ 面板</button>
       </div>
       <template v-if="currentId">
+        <p v-if="threadNote" class="note">{{ threadNote }}</p>
         <div class="thread">
           <!-- :key 与 lib/desk.ts 去重键 keyOf 同源（深审20260712 P2）：旧 at+direction+text 键在同秒同向
                两张图（msgid 不同、text 恒为占位）时撞 Vue 重复 key——去重键已认 msgid，key 必须同源防再漂移 -->
