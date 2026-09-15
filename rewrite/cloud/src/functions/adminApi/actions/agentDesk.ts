@@ -278,9 +278,8 @@ export async function getThread(ctx: Ctx): Promise<any> {
   const PRE_CONTEXT_MS = 10 * 60_000
   // 合流取舍（2026-07-13·mp-7fixes 同步 PR#16→main）：本函数被 #16（深审·GRACE_MS 游标回退窗）与 main（PR#20 批B·
   // tie-group 补查）各自独立重写、解同一「同秒消息分页丢失」根因但契约互斥（GRACE_MS 靠客户端 msgid 去重容忍重取，
-  // tie-group 契约要求服务端跨轮零重复）。承重并发代码不做行级硬拼——取 main tie-group 版为准（新、在目标分支、
-  // 测试原样通过）；#16 的「出站毫秒>入站秒截断的晚到同秒消息」修复另立批用兼容 tie-group 的方式重叠（见待办与债 flag）。
-  // 【#124 另立批·2026-08-24】该修复不在本函数——根因在归档侧：kfCallback/archive.ts 入站 at 旧取 send_time*1000
+  // tie-group 契约要求服务端跨轮零重复）。承重并发代码不做行级硬拼——取 main tie-group 版为准。
+  // 【#124·2026-08-24】晚到同秒根因在归档侧：kfCallback/archive.ts 入站 at 旧取 send_time*1000
   // （秒截断）与出站 Date.now() 毫秒混用同一条游标轴，晚到同秒顾客消息 at 落在已推进 cursor 之前被 at > since 永久
   // 跳过（P1）。已改入站 at＝统一入库时刻（毫秒·单调递增），晚到消息归档时刻必大于此前任何已交付 cursor——
   // tie-group 边界机制零改动、契约不变（等价测试见 app-admin6.test.ts）。
