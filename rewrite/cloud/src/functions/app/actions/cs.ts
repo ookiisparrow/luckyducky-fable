@@ -46,6 +46,7 @@ export const dataConsent = withOpenId(
     const users = db.collection(COLLECTIONS.users)
     const found = await users
       .where({ _openid: OPENID })
+      .limit(1)
       .get()
       .catch(() => ({ data: [] }))
     if (found.data.length) {

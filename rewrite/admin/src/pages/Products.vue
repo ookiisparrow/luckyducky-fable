@@ -153,7 +153,7 @@ watch(
     autoState.value = 'saving'
     if (saveTimer) clearTimeout(saveTimer)
     saveTimer = setTimeout(() => {
-      saveTimer = null // 触发后清空·让 saveTimer 真实反映「有未落盘的待发编辑」（照 Courses.vue:146 写法·P1·bug sweep Round2 item7）
+      saveTimer = null // 触发后清空·让 saveTimer 真实反映「有未落盘的待发编辑」
       void flushSave()
     }, 900)
   },

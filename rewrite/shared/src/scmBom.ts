@@ -1,11 +1,11 @@
 /**
- * 配方解析纯函数（进销存 SCM-0 门3·蓝图 docs/进销存ERP/施工蓝图.md §3）。
+ * 配方解析纯函数（进销存 SCM·活文档 docs/进销存ERP/README.md）。
  *
  * 业务事实（用户 2026-07-02 拍板）：所有产品构成几乎一致、数量重量完全相同 → **全局一张模板** +
  * 每产品三个填空（三档毛线颜色 + 专属包装料号 + 专属卡片料号）。最大团(L)用带结、中/小团(M/S)用原团。
  *
- * 组装（车道 C）与备货计算器（车道 D）共用本解析——配方语义只此一处（两车道共用＝真冲突面，
- * 故落地基；纯函数零 IO，模板/差异位由调用方读库后喂入）。料号命名契约与 kit/collections.ts 头注一致。
+ * 组装与备货计算器共用本解析——配方语义只此一处（纯函数零 IO，模板/差异位由调用方读库后喂入）。
+ * 料号命名契约见 scmKey.ts。
  */
 
 export type YarnTier = 'L' | 'M' | 'S'
@@ -36,12 +36,9 @@ export type ResolveBomResult =
   | { ok: false; error: 'BAD_SETS' | 'BAD_TEMPLATE' | 'BAD_PROFILE' }
 
 /**
- * 模板白名单清洗（存取层用·门3 校验口径单源）：非法即拒 null（fail-closed 不静默修，防脏模板入库
- * 后组装才炸）——校验规则与 resolveBom() 里对 template 的校验同一套业务口径，此前 cloud 层
- * （adminApi/actions/scmBom.ts）手写复刻过一份、未导入复用，是根因#8「单源」的反例，本函数补齐
- * 单源。与 resolveBom() 各自独立（不是同一函数）：本函数只管「清洗 + 落库前收窄字段」，入参只有
- * template（不需要 profile/sets）；resolveBom() 要 template×profile×sets 三者才能算出用料清单，
- * 两者输出形状也不同（清洗后的模板 vs 解析出的用料行）——校验*规则*同源，函数职责不同源，故不强合。
+ * 模板白名单清洗（存取层用）：非法即拒 null（fail-closed 不静默修，防脏模板入库后组装才炸）。
+ * 校验规则与 resolveBom() 对 template 的口径同一套；本函数只管清洗 + 落库前收窄字段，入参只有
+ * template。resolveBom() 要 template×profile×sets 才能算出用料清单——规则同源、职责不同，不强合。
  */
 export function cleanBomTemplate(t: any): BomTemplate | null {
   if (!t || !Array.isArray(t.commonLines) || !Array.isArray(t.yarnSlots) || !t.yarnSlots.length) return null

@@ -8,7 +8,7 @@ import { getPageContent, savePageContent } from '../api/content'
 import { serialSave } from './serialSave'
 import { SAVE_OK_MESSAGE } from './mapPageContent'
 
-export type AutoState = '' | 'saving' | 'saved' | 'error'
+type AutoState = '' | 'saving' | 'saved' | 'error'
 
 export function usePageContent<M>(page: string, normalize: (_raw: unknown) => M, payload: (_m: M) => Record<string, unknown>) {
   const model: Ref<M | null> = ref(null) as Ref<M | null>

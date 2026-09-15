@@ -209,7 +209,7 @@ export async function uploadFinish({ db, cloud, data }: Ctx) {
   const total = parseInt(data.total, 10)
   // 片数上限须覆盖 admin 体积闸（uploadVideo 放行 ≤15MB·~80KB/片 b64 → 15MB≈263 片）+ 余量，
   // 否则 12~15MB 视频走回落分片必 BAD_FINISH（P2·回落容量 vs 体积闸不一致）。300 片≈17MB，封顶防无界回落。
-  // 任一片数变动同步 tests/cloud/adminMisc.test.js「视频回落分片」用例。
+  // 任一片数变动同步 rewrite/cloud/tests/app-admin2.test.ts「分片上传」片数封顶用例。
   if (!id || !(total > 0) || total > 300) return reply(400, { ok: false, error: 'BAD_FINISH' })
   const chunksColl = db.collection('uploadChunks')
   const got = await chunksColl.where({ uploadId: id }).limit(1000).get()

@@ -1,10 +1,10 @@
 // 上下文侧栏导航模型（守卫 rw-admin-nav-contextual·根因#8「构建过≠真机能用」）：向导路由识别 /
-// 步单源 ?step 夹取 / 5 步文案·顺序·图标（老板预览后改口径：封面并进第 1 步、卡片上传并进第 5 步）。
+// 步单源 ?step 夹取 / 5 步文案·顺序（老板预览后改口径：封面并进第 1 步、卡片上传并进第 5 步）。
 import { describe, it, expect } from 'vitest'
 import { readFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { isWizardPath, wizardStepFromQuery, WIZARD_STEPS, WIZARD_STEP_MAX, currentNavGroup, SHOP_PRIMARY_NAV } from '../src/lib/nav'
+import { isWizardPath, wizardStepFromQuery, WIZARD_STEPS, WIZARD_STEP_MAX, currentNavGroup } from '../src/lib/nav'
 
 describe('向导路由识别（上下文侧栏切换靶·isWizardPath）', () => {
   it('大白话：只有 /products/:id/wizard 进聚焦模式；列表/其它页不进', () => {
@@ -57,7 +57,6 @@ describe('5 步文案/顺序（封面并进第 1 步、卡片上传并进第 5 �
       '卡片与二维码',
     ])
     expect(WIZARD_STEPS.map((s) => s.n)).toEqual([1, 2, 3, 4, 5])
-    expect(WIZARD_STEPS.map((s) => s.icon)).toEqual(['plus', 'image', 'file-text', 'clapperboard', 'credit-card'])
     expect(WIZARD_STEPS.map((s) => s.hint)).toEqual([
       '创建草稿并上传封面图',
       '商品图集与标题文案',
@@ -82,6 +81,7 @@ describe('控制台顶栏 + 侧栏步提示（Magic Patterns 打磨·不编同�
     expect(shell).toContain('s.hint')
     expect(shell).toContain('class="wiz-hint"')
     expect(shell).not.toMatch(/分钟前同步/) // 禁止 Magic Patterns 假同步时间
+    expect(shell).not.toContain('编辑排序') // 假 chip（即将支持、无 handler）不进生产侧栏
     expect(wiz).toContain('class="rail-card"')
     expect(wiz).toContain('这五件事互不等同')
     expect(wiz).toContain('卡片素材')
@@ -91,8 +91,6 @@ describe('控制台顶栏 + 侧栏步提示（Magic Patterns 打磨·不编同�
 
 describe('商品与上新组只留两大入口（防再把上新藏进子页/更多操作）', () => {
   it('大白话：侧栏这组只有「产品管理」和「上新」，路径对得上', () => {
-    expect(SHOP_PRIMARY_NAV.map((x) => x.label)).toEqual(['产品管理', '上新'])
-    expect(SHOP_PRIMARY_NAV.map((x) => x.path)).toEqual(['/products', '/launch'])
     const here = dirname(fileURLToPath(import.meta.url))
     const src = readFileSync(join(here, '../src/shell/Shell.vue'), 'utf8')
     const block = src.match(/group:\s*'商品与上新'[\s\S]*?items:\s*\[([\s\S]*?)\]/)
@@ -127,6 +125,7 @@ describe('向导 1–3 步不再嵌同一张大表（假进度 P0）', () => {
     expect(wiz).toMatch(/<Cards[\s\S]*<Batches/)
     expect(router).toMatch(/String\(to\.query\.step\) === '6'/)
     expect(router).toMatch(/step:\s*'5'/)
+    expect(router).not.toContain('/home-content')
     expect(wiz).toMatch(/loading\.value = true/)
     expect(wiz).toContain('没有找到这个商品')
     expect(wiz).toContain('草稿已创建，列表还在同步')

@@ -33,7 +33,7 @@ export const dayStartMsCST = (d: string) => Date.parse(d + 'T00:00:00+08:00')
 /** 幂等落库：确定性 _id=`<date>:<transactionId>`（重拉同日覆盖不重复·根因#1）。
  *  先建集合（wxBills 动态建·往不存在的集合 doc().set() 会失败）；只对真写成功的计数（不吞错装成功）。
  *  自 adminApi/actions/wxbill.ts 原样移入（批B2·timer 复用），ensure 改本地 createCollection（kit 不 import functions/）。 */
-export async function upsertBills(db: any, date: string, rows: BillRow[]): Promise<number> {
+async function upsertBills(db: any, date: string, rows: BillRow[]): Promise<number> {
   try {
     await db.createCollection(COLLECTIONS.wxBills) // 集合不存在则建（否则 set 静默失败·count 虚高）
   } catch {

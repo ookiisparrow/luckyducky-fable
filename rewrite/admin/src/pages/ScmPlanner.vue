@@ -30,13 +30,13 @@ function goPurchaseOrder(g: Record<string, any>) {
 const targets = ref<Array<{ productId: string; sets: number }>>([{ productId: '', sets: 10 }])
 const plan = ref<Record<string, any> | null>(null)
 const fg = ref<{ packed: Array<Record<string, any>>; shipped: Array<Record<string, any>> } | null>(null)
-const inv = ref<Record<string, number>>({}) // 成品现存库存 fg:<pid>__<spec> → stock（换皮丢了「现存库存」列）
-const products = ref<Array<Record<string, any>>>([]) // 全产品目录（换皮 SCM 未接·产品只显 id·手敲易错）
+const inv = ref<Record<string, number>>({}) // 成品现存库存 fg:<pid>__<spec> → stock
+const products = ref<Array<Record<string, any>>>([]) // 全产品目录
 const productName = (id: unknown) => productNameOf(products.value, id)
 const allProductIds = computed(() => products.value.map((p) => String(p.id || p._id)).filter(Boolean))
 const message = ref('')
 
-// 产销三列并表（换皮只两列打包/发货·丢了现存库存）：按 产品×规格 union 打包/发货/现存
+// 产销三列并表：按 产品×规格 union 打包/发货/现存
 const produceRows = computed(() => {
   const packed: Record<string, number> = {}
   const shipped: Record<string, number> = {}
@@ -87,6 +87,12 @@ onMounted(async () => {
     })
     inv.value = map
   }
+  // 分路报错（照 ScmBom.reload）：任一路失败点名报出，不装「没数据」
+  const bad: string[] = []
+  if (!r.ok) bad.push('产销统计加载失败：' + String(r.error || ''))
+  if (!i.ok) bad.push('库存加载失败：' + String(i.error || ''))
+  if (!d.ok) bad.push('产品目录加载失败：' + String(d.error || ''))
+  message.value = bad.join('；')
 })
 </script>
 

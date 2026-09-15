@@ -1,6 +1,6 @@
 <script setup lang="ts">
 // 壳布局（照 design/控制台.pen 侧栏 nsvaZ 重写·M-adminImpl 批F）：248px 白侧栏（右 $line 分线）、
-// 鸭徽 logo「运营控制台」、「导航」小标题 + 编辑排序 chip、顶层（数据看板=独立项·其余=可展开组；上新与店面内容拆开）、
+// 鸭徽 logo「运营控制台」、「导航」小标题、顶层（数据看板=独立项·其余=可展开组；上新与店面内容拆开）、
 // 底部管理员条。进上新向导路由切「按步直达」聚焦步导航（决策§27②·lib/nav）。
 //
 // IA 归置说明（交付时待用户确认）：设计把「商品与上新 / 进销存」画成单项工作流入口，但现实现各有
@@ -16,7 +16,6 @@ import {
   Factory,
   Settings,
   ChevronRight,
-  Pencil,
   LogOut,
   Image,
 } from 'lucide-vue-next'
@@ -176,7 +175,6 @@ function logout() {
       <nav v-else class="nav">
         <div class="nav-cap">
           <span>导航</span>
-          <span class="reorder" title="侧栏拖拽排序即将支持"><Pencil :size="12" :stroke-width="1.8" /> 编辑排序</span>
         </div>
         <template v-for="n in NAV" :key="n.group">
           <!-- 独立项（数据看板） -->
@@ -288,22 +286,10 @@ aside {
 .nav-cap {
   display: flex;
   align-items: center;
-  justify-content: space-between;
   padding: 8px 10px 6px 12px;
   font-size: 10.5px;
   letter-spacing: 0.5px;
   color: var(--ld-purple-meta);
-}
-.reorder {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  padding: 3px 8px;
-  border: 1px solid var(--ld-purple-line);
-  border-radius: 999px;
-  font-size: 10.5px;
-  color: var(--ld-purple-meta);
-  cursor: default;
 }
 /* 项（独立项 + 向导步） */
 .item {

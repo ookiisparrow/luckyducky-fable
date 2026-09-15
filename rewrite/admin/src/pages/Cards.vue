@@ -1,7 +1,7 @@
 <script setup lang="ts">
 // 二维码卡片设计器（前端 Cards.vue + 后端 getCard/saveCard + cards 集合）：
 // 正面=插画面（满版图+品牌角标）/ 反面=二维码面（标题/副文案/占位/扫码引导/退货小字+品牌条）·双面实时预览·防抖自动保存·
-// 定稿并启用（第 6 步批次生成前置）·卡面 SVG 下载（印刷交付）。深链自商品页「卡片设计」。
+// 定稿并启用（第 5 步批次生成前置）·卡面 SVG 下载（印刷交付）。深链自商品页「卡片设计」。
 import { ref, computed, onMounted, onBeforeUnmount, watch, nextTick } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { getCard, saveCard, uploadImage, listDrafts } from '../api/products'
@@ -198,7 +198,7 @@ async function finalize() {
     return
   }
   // 先落库、成功才翻定稿态（审核补漏·病根#14 伪成功）：不乐观翻——防前端显「已定稿」而后端仍 draft，
-  // 第 6 步码批次依赖 cardFinal 落库·否则生成失败且排障无线索。
+  // 第 5 步码批次依赖 cardFinal 落库·否则生成失败且排障无线索。
   if (saveTimer) {
     clearTimeout(saveTimer) // 取消未触发的防抖定时器（只挡得住这半·同 Products/HomeContent 约定）
     saveTimer = null

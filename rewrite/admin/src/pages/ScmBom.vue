@@ -30,7 +30,7 @@ const asmHasMore = ref(false)
 // 组装记录加载失败标记（P2·深审20260712 失败伪装空态）：listAssemblies 单独失败时 assemblies=[]，
 // EmptyState 若仍显「还没有组装记录」＝把查询失败伪装成空账——文案按此标记分流。
 const asmFailed = ref(false)
-const products = ref<Array<Record<string, any>>>([]) // 全产品目录（换皮 SCM 域整体没接·致只显 id/无 SKU 下拉/看不到未填差异位）
+const products = ref<Array<Record<string, any>>>([]) // 全产品目录
 // 产品名解析 + 未填差异位总览 + 组装规格 SKU 下拉（接回 listDrafts 一并复原）
 const productName = (id: unknown) => productNameOf(products.value, id)
 const unprofiled = computed(() => unprofiledProducts(products.value, profiles.value))

@@ -110,6 +110,7 @@ Page({
   },
   courseId: '',
   unloaded: false, // 已退页标记（await 恢复点复核·同 welcome/catalog 范式·onUnload 置真）
+  _seq: 0, // initCourse 代次（同 catalog）：课程级重试并发时丢弃过期回包
   course: null as CoursePub | null,
   srcSetAt: 0,
   windowWidthPx: 0, // rpx→px 换算基准（onLoad 存·750rpx = windowWidthPx px）
@@ -172,6 +173,7 @@ Page({
   // 失败≠不存在（根因#14·守卫 rw-mp-list-loadfailed-state）：目录拉取失败落 error 态给重试，
   // 只有拉取成功且查无此课才是 missing「课程不存在」。
   async initCourse() {
+    const seq = ++this._seq
     // 深链冷启并行（根因#15·省一次串行往返）：目录详情与期望段取址同时发起——原先串行（先等目录回、再进
     // playSegment 才现取地址），深链两跳叠加。并行后耗时＝max(目录, 取址) 而非目录+取址；取址结果不在此直接
     // 消费（只暖缓存·err 吞掉），仍待目录确认段存在后由 playSegment 经 peek/在途去重命中；期望段空则不发。
@@ -180,6 +182,7 @@ Page({
       getCourseByIdDetailed(this.courseId),
       this._wantSeg ? cache.get(this.courseId, this._wantSeg).catch(() => '') : Promise.resolve(''),
     ])
+    if (this.unloaded || seq !== this._seq) return // 已退页或过期回包（被更晚一次 initCourse 取代）：丢弃
     if (d.failed) {
       this.setData({ state: 'error' })
       return
@@ -664,7 +667,7 @@ Page({
   // 卡3 常见问题（R37b 已接线：云端 FAQ 单源=客服知识库 KB，getPublicFaq 只回精选条目）：进子层 + 每次重拉
   // （同 onHelpVideos 口径·辅助内容低频不缓存）；载入失败/空仍诚实空态导流客服，不造假 Q&A。
   // help.faq（CMS 自由文本·并行战役新增·wxml 级联优先）非空时该子层直接渲染 CMS 内容，不必再打 KB 请求
-  // ——两套编辑面并存是待用户裁决的 flag（docs/待办与债.md），此处只做最小的「CMS 已覆盖就不浪费一次请求」。
+  // ——两套编辑面并存时，此处只做最小的「CMS 已覆盖就不浪费一次请求」。
   onHelpFaq() {
     this.setData({ helpPanel: 'faq', helpFaqState: 'loading', helpFaqList: [] })
     if ((this.data.help.faq || []).length > 0) return // CMS 自由文本已覆盖，wxml 走 help.faq 分支，跳过 KB 拉取

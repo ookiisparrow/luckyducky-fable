@@ -298,7 +298,7 @@ export const submitReview = withOpenId(
 
     let name = '匿名钩友'
     if (!e.anon) {
-      const u = await db.collection(COLLECTIONS.users).where({ _openid: OPENID }).get()
+      const u = await db.collection(COLLECTIONS.users).where({ _openid: OPENID }).limit(1).get()
       name = (u.data[0] && u.data[0].nickname) || '鸭友'
     }
 

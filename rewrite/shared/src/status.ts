@@ -1,8 +1,7 @@
 /**
  * 状态机声明的公共形状与派生工具（设计约束#2：状态机单一权威声明 + 可枚举类型）。
- * 新线改进：类型直接从声明**类型级派生**（SpecStates），无需旧线的生成器脚本——
- * 声明与类型零漂移是构造使然，不靠对账。转移原语（kit/transition）随 M1 kit 批立，
- * 届时「一切流转经原语 + 流转表校验」的运行时守卫接上本声明。
+ * 类型从声明**类型级派生**（SpecStates），声明与类型零漂移是构造使然。
+ * 运行时流转走 kit/transition + 流转表校验。
  */
 export interface StatusSpec {
   readonly collection: string

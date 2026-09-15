@@ -14,12 +14,15 @@ Page({
   },
   productId: '',
   loadingMore: false, // 触底翻页在途标记（P2·bug sweep R1 #10）：防快速多次触底并发请求各自 append 造成重复行
+  _seq: 0, // reload 代次（同 aftersales/order-list）：onLoad + 重试 + 触底翻页并发时丢弃过期回包
   onLoad(query: Record<string, string | undefined>) {
     this.productId = String(query.productId || '')
     void this.reload()
   },
   async reload() {
+    const seq = ++this._seq
     const r = await getReviews(this.productId)
+    if (seq !== this._seq) return // 过期回包（被更晚 reload 取代）：丢弃
     // 失败≠空态（根因#14）：失败不覆盖已有列表；一无所有时落 loadFailed 给重试，不与「还没有评价」混同。
     if (!r.ok) {
       this.setData({ loading: false, loadFailed: !this.data.list.length })
@@ -44,8 +47,10 @@ Page({
     if (!this.data.hasMore || this.data.cursor == null) return
     if (this.loadingMore) return // 在途重复触底：直接丢弃（防重复 append）
     this.loadingMore = true
+    const seq = this._seq // 捕获当前代次（翻页不 bump）：期间若发生 reload（_seq 递增）则本次 append 作废
     const r = await getReviews(this.productId, this.data.cursor)
     this.loadingMore = false
+    if (seq !== this._seq) return // reload 已取代当前列表：丢弃·不错配游标
     if (!r.ok) {
       wx.showToast({ title: '加载失败，上拉重试', icon: 'none' }) // 翻页失败不静默（根因#14）
       return // 不覆盖已有
