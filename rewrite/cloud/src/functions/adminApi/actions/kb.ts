@@ -59,7 +59,8 @@ export async function saveKb({ db, data }: Ctx) {
   // GC 删除失败不再吞（H2·同批F F1 判例）：原 .catch(()=>{}) 全吞、恒 ok:true——旧条目删不掉时前端仍显「已保存」，
   // 残留条目继续被 bot/坐席读到（可能是已改名/合并进别条的旧答案，误导话术）。upsert 已成功的部分保留（数据是
   // 新的、只是旧条目残留，重存一次即可收敛）；GC 失败经 notifyAlert 留痕 + 如实回 ok:false，别静默过关。
-  const old = await db.collection('kb').limit(SCAN).get().catch(() => ({ data: [] }))
+  const old = await db.collection('kb').limit(SCAN).get().catch(() => null)
+  if (!old) return reply(200, { ok: false, error: 'DOC_READ_FAIL' }) // 扫描失败≠空库：停 GC，不假装整册已替换
   const failedIds: string[] = []
   for (const d of (old && old.data) || []) {
     if (!keep.has(d._id)) {

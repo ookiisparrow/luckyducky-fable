@@ -1,5 +1,5 @@
 import crypto from 'crypto'
-import { str, notifyAlert } from '../../kit'
+import { str, notifyAlert, isDocMissing, isEmptyDoc } from '../../kit'
 import { PAID_ORDER_STATUSES } from '@ldrw/shared'
 export { str } // 供 action 模块复用（saveCard / saveHomeContent 等截断）
 
@@ -65,6 +65,20 @@ export async function ensure(db: any, coll: string) {
     await db.createCollection(coll)
   } catch {
     /* 已存在 */
+  }
+}
+
+// 预读一份文档：缺档 ≠ 读失败（根因#14）。原 .get().catch(() => null) 把网络/权限/集合故障也折成「没有这份」，
+// 写路径就会按空档/rev=0 覆盖或拿失败基线做 GC。缺档 data=null；读失败 ok=false——调用方必须停写。
+// 判据复用 kit isDocMissing（真 sdk 缺档文案已查证，禁再抄一份更宽的 /does not exist/）。
+export async function readDoc(p: Promise<any>): Promise<{ ok: true; data: any | null } | { ok: false }> {
+  try {
+    const got = await p
+    if (isEmptyDoc(got)) return { ok: true, data: null }
+    return { ok: true, data: got.data }
+  } catch (e) {
+    if (isDocMissing(e)) return { ok: true, data: null }
+    return { ok: false }
   }
 }
 
