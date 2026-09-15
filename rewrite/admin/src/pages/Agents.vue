@@ -33,9 +33,10 @@ async function reload() {
   confirmId.value = '' // 刷新即复位危险态（P1·防旧武装的停用确认残留、重进同一行一击直发·批3 规格）
   const [r, csat] = await Promise.all([listAgents(), getCsatReport()])
   rows.value = r.ok ? mapAgents(r.agents) : []
-  message.value = r.ok ? '' : '加载失败：' + String(r.error || '')
   const csatVm = mapCsat(csat)
-  csatAvg.value = csatVm && csatVm.total ? csatVm.avg : null // 无有效评分不编数字·显 —
+  // 报表失败 ≠ 还没人评：空均分「—」会把加载失败读成零评价（病根#14·同 Conversations loadReport）
+  csatAvg.value = !csatVm ? '加载失败' : csatVm.total ? csatVm.avg : null
+  message.value = !r.ok ? '加载失败：' + String(r.error || '') : csatVm ? '' : '满意度报表加载失败'
 }
 
 async function doCreate() {

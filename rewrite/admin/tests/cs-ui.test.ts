@@ -3,6 +3,8 @@
 import { describe, it, expect } from 'vitest'
 import { msHuman, mapReport, mapPanels, matchLabel, normalizeKb, mapCsat, mapCsatEntries, mapMessages, nextNodeId, duplicateNodeIds, mapQcRow, mapQcRows } from '../src/lib/mapCs'
 import customer360Src from '../src/pages/Customer360.vue?raw'
+import agentsSrc from '../src/pages/Agents.vue?raw'
+import csatSrc from '../src/pages/Csat.vue?raw'
 
 describe('时长人话与报表', () => {
   it('大白话：秒/分/小时逐级人话；非法回 —；报表 approx 时明标「估算」，否则标「全量精确」', () => {
@@ -209,5 +211,22 @@ describe('客户 360 getUser 取数失败与真无档区分', () => {
   it('大白话：open()/search()/返回结果 三处重置点都清 userLoadFailed，避免跨客户残留误报', () => {
     expect((customer360Src.match(/userLoadFailed\.value\s*=\s*false/g) || []).length).toBeGreaterThanOrEqual(2)
     expect(customer360Src).toMatch(/userLoadFailed\s*=\s*false;\s*message\s*=\s*''/)
+  })
+})
+
+// listAgents 成功 + getCsatReport 失败 ≠ 还没人评分（病根#14/#8）：旧写法 mapCsat 失败后 csatAvg=null，
+// KPI 渲「—」、message 被 list 成功清掉，管理员会当成「客户还没评」。
+describe('外包账号页满意度报表失败 ≠ 还没评分', () => {
+  it('大白话：list 成功但 getCsatReport 失败时点名「满意度报表加载失败」，不把空均分「—」当成还没人评', () => {
+    expect(agentsSrc).toMatch(/满意度报表加载失败/)
+    expect(agentsSrc).toMatch(/csatVm[\s\S]{0,220}满意度报表加载失败|满意度报表加载失败[\s\S]{0,220}csatVm/)
+    expect(agentsSrc).toMatch(/!csatVm\s*\?[\s\S]{0,80}加载失败/)
+  })
+})
+
+describe('Csat.vue 文件头差评口径与按钮一致', () => {
+  it('大白话：文件头「仅差评」写 ≤2，不再写 ≤3（按钮/筛选已是 ≤2）', () => {
+    expect(csatSrc).not.toMatch(/仅差评\s*≤3/)
+    expect(csatSrc).toMatch(/仅差评\s*≤2/)
   })
 })
