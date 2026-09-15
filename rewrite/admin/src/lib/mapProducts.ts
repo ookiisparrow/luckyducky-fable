@@ -61,13 +61,6 @@ export function productsListSub(all: number, preparing: number): string {
   return `共 ${all} 款商品`
 }
 
-/** 向导 1–3 步各管哪些字段（互斥·防再嵌同一张大表）。第 1 步封面，第 2 步名字和相册，第 3 步详情。 */
-export const WIZARD_SLICE_FIELDS: Record<1 | 2 | 3, readonly string[]> = {
-  1: ['cover'],
-  2: ['name', 'images'],
-  3: ['tag', 'brief', 'price', 'was', 'sold', 'skus', 'params', 'detailSections', 'kit'],
-}
-
 /** 新建草稿骨架（向导第 1 步与列表「去上新」同形·课程号当场绑上，后面不用手输） */
 export function freshDraft(id: string): Record<string, unknown> {
   return {
@@ -136,7 +129,7 @@ export function mapDraftRows(list: unknown, urls: unknown, listedMap: unknown, e
 }
 
 /** 上新向导上架闸：前三步（封面/信息/SKU）缺什么——事前预检（换皮退成事后报错）·与云端 publishProduct 四道门同口径。
- *  步 4-6（教学视频/二维码卡片/码批次）非上架硬门槛（可先上架、之后补课程），故不进此清单。 */
+ *  步 4–5（教学视频/卡片与二维码）非上架硬门槛（可先上架、之后补课程），故不进此清单。 */
 export function basicsMissing(p: unknown): string[] {
   const d = (p && typeof p === 'object' ? p : {}) as Record<string, any>
   const m: string[] = []

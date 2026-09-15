@@ -48,9 +48,3 @@ export const WIZARD_STEPS: WizardStep[] = [
   { n: 4, label: '课程视频', icon: 'clapperboard', hint: '上传并发布教学视频' },
   { n: 5, label: '卡片与二维码', icon: 'credit-card', hint: '卡面素材与批次二维码' },
 ]
-
-/** 「商品与上新」组只准这两条主入口（橱窗/评价/课程运维另组·防再把上新塞进子菜单） */
-export const SHOP_PRIMARY_NAV = [
-  { label: '产品管理', path: '/products' },
-  { label: '上新', path: '/launch' },
-] as const
