@@ -1,11 +1,10 @@
 /**
  * 课程种子单一来源 · 三层结构（规格 v2 §三：chapter / lesson / segment）。
- * 根因账本 #5：原 miniapp data/course.js + cloud seedCourses 各一份（连 buildSegments 派生逻辑
- * 与 mmss/parseDur 都三处复制）。此处为唯一 canonical，两侧 import 派生。
+ * 根因账本 #5：目录与时长只改这一处，cloud `ops/seedCourses` 从这派生。
  *
  * - 目录只显 chapter + lesson 两层；segment 只在播放页（顶部分段进度条）。
  * - 每个 segment 将来是独立视频文件（videoFileId）；素材未剪前为 null，播放页按时长等分回退。
- * - 用户学习进度（done/watched）是用户态，不在课程内容里（样例 SAMPLE_PROGRESS 留 miniapp data/course）。
+ * - 用户学习进度（done/watched）是用户态，不在课程内容里。
  */
 export interface SeedSegment {
   id: string
@@ -31,7 +30,7 @@ export interface SeedCourse {
   chapters: SeedChapter[]
 }
 
-// 时长 mm:ss ↔ 秒（种子模块自带，与 miniapp utils/format 的同名显示工具分属不同层，各自自洽）
+// 时长 mm:ss ↔ 秒（种子模块自带）
 const parseDur = (s: string): number => {
   const [m, sec] = String(s).split(':').map(Number)
   return m * 60 + sec

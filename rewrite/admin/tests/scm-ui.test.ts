@@ -6,6 +6,9 @@ import scmMaterialsSrc from '../src/pages/ScmMaterials.vue?raw'
 import scmPurchaseSrc from '../src/pages/ScmPurchase.vue?raw'
 import scmOutworkSrc from '../src/pages/ScmOutwork.vue?raw'
 import scmBomSrc from '../src/pages/ScmBom.vue?raw'
+import scmPlannerSrc from '../src/pages/ScmPlanner.vue?raw'
+import inventorySrc from '../src/pages/Inventory.vue?raw'
+import mapScmSrc from '../src/lib/mapScm.ts?raw'
 import { materialHuman, materialCategoryLabel, uomLabel, purchaseStatusLabel, outworkStatusLabel, yuanToFen, fenLabel, scmErrorText, docTypeLabel, mapLedger, unprofiledProducts } from '../src/lib/mapScm'
 import { SCM_FLOW } from '../src/lib/scmFlow'
 import { setPurchaseHandoff, consumePurchaseHandoff, setOutworkHandoff, consumeOutworkHandoff } from '../src/lib/scmHandoff'
@@ -187,7 +190,7 @@ describe('ScmBom.vue reload 分路报错（失败不伪装空态）', () => {
 })
 
 // ScmMaterials.vue 流水加载失败不伪装空账本（深审20260712·P2）：loadLedger 失败原先 ledger=[] 且
-// 不留痕，EmptyState「还没有流水」把查询失败伪装成空账；且不可复用 message——reload 收尾 load(m.ok…)
+// 不留痕，EmptyState「还没有流水」把查询失败伪装成空账；且不可复用 message——reload 收尾 load(…)
 // 会覆盖它，须独立 ledgerError。
 describe('ScmMaterials.vue 流水加载失败独立记账（不伪装空账本）', () => {
   it('大白话：listLedger 挂掉写独立 ledgerError；模板失败提示先于表格/空态（v-if 链头），EmptyState 只在真空账时出现', () => {
@@ -199,5 +202,56 @@ describe('ScmMaterials.vue 流水加载失败独立记账（不伪装空账本�
     const emptyIdx = scmMaterialsSrc.indexOf(':icon="ScrollText"')
     expect(errIdx).toBeGreaterThan(-1)
     expect(emptyIdx).toBeGreaterThan(errIdx) // 流水 EmptyState 落在失败提示同链之后
+  })
+})
+
+// 2026-09-15 SCM UI 诚实度：挂载/次级列表失败不许装空目录；库存 KPI 失败不许画假零（病根#8/#14）。
+describe('ScmPlanner.vue 挂载三路失败点名报（不装「没数据」）', () => {
+  it('大白话：产销/库存/产品目录任一路挂掉都写进 message，不被静默吞成空表', () => {
+    expect(scmPlannerSrc).toMatch(/if \(!r\.ok\) bad\.push\('产销统计加载失败：'/)
+    expect(scmPlannerSrc).toMatch(/if \(!i\.ok\) bad\.push\('库存加载失败：'/)
+    expect(scmPlannerSrc).toMatch(/if \(!d\.ok\) bad\.push\('产品目录加载失败：'/)
+    expect(scmPlannerSrc).toMatch(/message\.value = bad\.join\(/)
+  })
+})
+
+describe('采购/外协/物料页次级目录失败点名报（不装空目录）', () => {
+  it('大白话：采购单页物料/供应商挂掉要单独报，不被采购单成功吞成「厂家/料都是空的」', () => {
+    expect(scmPurchaseSrc).toMatch(/if \(!p\.ok\) bad\.push\('采购单加载失败：'/)
+    expect(scmPurchaseSrc).toMatch(/if \(!m\.ok\) bad\.push\('物料主档加载失败：'/)
+    expect(scmPurchaseSrc).toMatch(/if \(!s\.ok\) bad\.push\('供应商加载失败：'/)
+    expect(scmPurchaseSrc).toMatch(/load\(bad\.length === 0, bad\.join\(/)
+    expect(scmPurchaseSrc).not.toMatch(/load\(p\.ok/)
+  })
+
+  it('大白话：外协单页物料/织女挂掉要单独报，不被外协单成功吞成「织女/原团都是空的」', () => {
+    expect(scmOutworkSrc).toMatch(/if \(!o\.ok\) bad\.push\('外协单加载失败：'/)
+    expect(scmOutworkSrc).toMatch(/if \(!m\.ok\) bad\.push\('物料主档加载失败：'/)
+    expect(scmOutworkSrc).toMatch(/if \(!s\.ok\) bad\.push\('织女名单加载失败：'/)
+    expect(scmOutworkSrc).toMatch(/load\(bad\.length === 0, bad\.join\(/)
+    expect(scmOutworkSrc).not.toMatch(/load\(o\.ok/)
+  })
+
+  it('大白话：物料页供应商挂掉要单独报，不被物料成功吞成「没有供应商」', () => {
+    expect(scmMaterialsSrc).toMatch(/if \(!m\.ok\) bad\.push\('物料主档加载失败：'/)
+    expect(scmMaterialsSrc).toMatch(/if \(!s\.ok\) bad\.push\('供应商加载失败：'/)
+    expect(scmMaterialsSrc).toMatch(/load\(bad\.length === 0, bad\.join\(/)
+  })
+})
+
+describe('Inventory.vue 库存列表失败不画 KPI 假零', () => {
+  it('大白话：listInventory 挂掉时四张 KPI 卡不渲染（不把失败画成 0）', () => {
+    expect(inventorySrc).toMatch(/invOk\.value = !!\(inv as any\)\.ok/)
+    expect(inventorySrc).toMatch(/<div v-if="invOk" class="ld-kpi-grid">/)
+  })
+})
+
+describe('过期「SCM 没接/只显 id」注释已退役', () => {
+  it('大白话：活代码已接目录与库存列，注释不许再写「没接/只显 id/丢了库存列」', () => {
+    expect(scmPlannerSrc).not.toMatch(/换皮 SCM 未接/)
+    expect(scmPlannerSrc).not.toMatch(/换皮丢了「现存库存」列/)
+    expect(scmPlannerSrc).not.toMatch(/换皮只两列打包/)
+    expect(scmBomSrc).not.toMatch(/SCM 域整体没接/)
+    expect(mapScmSrc).not.toMatch(/换皮 SCM 全程只显 id/)
   })
 })

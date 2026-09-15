@@ -1,4 +1,5 @@
 // 商品详情（M2·重设计对齐 ProductDetail.jsx 方案A）：图册 swiper + 计数 + SKU 价格联动 + 加购/直买 + 客服 + 为你推荐。
+import { BRAND_SLOGAN_CN } from '../../lib/brand'
 import { tapHaptic } from '../../lib/haptics'
 import { trackEvent } from '../../api/learning'
 import * as cart from '../../lib/cart'
@@ -171,10 +172,10 @@ Page({
     const vm = this.data.vm
     return vm
       ? { title: vm.name, path: '/pages/detail/detail?id=' + vm.id, imageUrl: vm.gallery[0] || '' }
-      : { title: '小棉鸭钩织材料包', path: '/pages/home/home' }
+      : { title: BRAND_SLOGAN_CN, path: '/pages/home/home' }
   },
   onShareTimeline() {
     const vm = this.data.vm
-    return vm ? { title: vm.name, query: 'id=' + vm.id } : { title: '小棉鸭钩织材料包' }
+    return vm ? { title: vm.name, query: 'id=' + vm.id } : { title: BRAND_SLOGAN_CN }
   },
 })

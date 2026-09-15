@@ -41,7 +41,7 @@ describe('anomalyFingerprint（异常去重键·确定性 _id）', () => {
   })
 })
 
-describe('isVodFileId（VOD FileId 判据单源·三处分流新旧线）', () => {
+describe('isVodFileId（VOD FileId 判据单源·纯数字长串 vs cloud://）', () => {
   it('大白话：纯数字 8-32 位才算 VOD；短了/长了/混字母/cloud:// 前缀/前后缀夹带都不算', () => {
     expect(isVodFileId('5285890784246869296')).toBe(true)
     expect(isVodFileId('12345678')).toBe(true) // 恰 8 位（下界）

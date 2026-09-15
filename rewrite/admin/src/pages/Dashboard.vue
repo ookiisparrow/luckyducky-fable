@@ -2,7 +2,6 @@
 // 数据看板（照 design/控制台.pen PxuIO 视觉语言重写·M-adminImpl 批1）：套新卡片/KPI/表格语言，
 // 数据仍全绑云端真值。设计的「成交额趋势柱图 / 热销商品 Top5」当前后端无数据源——不编数（根因#8·T3），
 // 保留真实的 KPI/转化漏斗/段位分析/最近动态 + owner 待处理行动条 + 交易异常告警（换皮曾删·复原不再丢）。
-// 待接学习分析 action 后再补趋势/热销卡位（记 docs/待办与债.md）。
 import { ref, onMounted, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { Users, ShoppingBag, Wallet, QrCode, GraduationCap, RefreshCw, TriangleAlert, Truck, RotateCcw, Boxes, Flame, PauseCircle, PackagePlus, Inbox, ShieldAlert } from 'lucide-vue-next'

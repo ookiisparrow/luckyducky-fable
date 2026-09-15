@@ -1,6 +1,6 @@
 /**
- * 结算搭配购 + 优惠/运费常量——单一来源（设计约束#5 镜像消灭·镜像旧线 seed/checkout.ts，parity 焊死）。
- * 云端 createOrder 派生权威定价；miniapp（M2）派生 UI。
+ * 结算搭配购 + 优惠/运费常量——单一来源（设计约束#5 镜像消灭）。
+ * 云端 createOrder 派生权威定价；mp 派生 UI。
  * 主线 COUPON 恒 0：开发版/发布版不抵扣、顾客页不展示优惠券（2026-09-02 老板明令）。
  * 真券/领取只在 git test / yaliceshi，禁止合进 main。
  */

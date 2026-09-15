@@ -48,7 +48,7 @@ export async function imgSecCheck(fileId: string): Promise<SecResult> {
 }
 
 /** 接口抖动时：closed＝拒（评价/头像）；open＝放行并记日志（客服/反馈·防卡死顾客通道）。 */
-export type MsgSecInfra = 'closed' | 'open'
+type MsgSecInfra = 'closed' | 'open'
 
 function isRisky(code: unknown, suggest: unknown): boolean {
   return code === RISKY || suggest === 'risky'

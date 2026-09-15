@@ -15,9 +15,9 @@ Component({
     // 全屏遮罩想盖住底部只能让 tabBar 自身让位（订阅 loginGate·关闭即恢复）。
     hidden: false,
     tabs: [
-      { id: 'home', label: '首页', icon: 'house', path: '/pages/home/home' },
-      { id: 'cart', label: '购物车', icon: 'shopping-cart', path: '/pages/cart/cart' },
-      { id: 'me', label: '我', icon: 'user', path: '/pages/me/me' },
+      { id: 'home', icon: 'house', path: '/pages/home/home' },
+      { id: 'cart', icon: 'shopping-cart', path: '/pages/cart/cart' },
+      { id: 'me', icon: 'user', path: '/pages/me/me' },
     ],
   },
   lifetimes: {
