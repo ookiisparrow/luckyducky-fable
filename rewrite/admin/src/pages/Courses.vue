@@ -1,6 +1,6 @@
 <script setup lang="ts">
 // 课程管理（design/console.pen S2 课程编排视觉·M3 UI 批10）：章→课时→段 树编辑 + 每段视频直传 + 发布
-// （引用模型·老学员自动生效；孤儿视频云端 GC）。逻辑批10 未动，仅套设计语言（页头/视频进度条/章节卡/段上传 chip）。
+// （引用模型·老学员自动生效；孤儿视频云端 GC）。
 import { ref, computed, onMounted, onBeforeUnmount, watch, nextTick } from 'vue'
 import { useRoute, useRouter, onBeforeRouteLeave } from 'vue-router'
 import { RotateCcw, Plus, Trash2, Upload, Check, BookOpen } from 'lucide-vue-next'

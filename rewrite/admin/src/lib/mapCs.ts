@@ -164,9 +164,6 @@ export function mapPanels(r: unknown): PanelVM[] {
           rows.push({ k: csLabel(k), v: fmtVal(k, v) })
         }
       }
-    } else if (!failed && Array.isArray(data)) {
-      // 顶层数组（现 provider 不产此形状·留兜底）：整块成一个明细分组
-      groups.push(buildGroup(String(p.key || 'items'), data as unknown[]))
     }
     return { key: String(p.key || ''), label: String(p.label || p.key || ''), failed, rows, groups } // 单面板 error 隔离·其余照渲染
   })
