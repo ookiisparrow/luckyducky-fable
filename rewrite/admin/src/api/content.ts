@@ -1,6 +1,6 @@
 // 内容组 api（首页内容/帮助视频/课程与视频直传）。
 // 直传（调试日志 G）：getVideoUploadMeta 签发凭证 → POST 表单直传 COS（PUT 会 403）；
-// 失败如实报错（分片回落通道随补——待办记账·不静默装成功）。
+// 失败如实报错（不静默装成功）。
 import { client } from './index'
 import { uploadFormFields } from '../lib/mapContent'
 

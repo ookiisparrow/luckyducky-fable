@@ -1,6 +1,6 @@
 <script setup lang="ts">
 // 备货计算 + 产销统计（设计语言一致性·M3 UI 批18·只读）：目标套数 → 外协缺口（带结不外购）+ 采购缺口按供应商分列；
-// 产销 = 打包累计 vs 发货累计。逻辑未动，仅套设计语言。
+// 产销 = 打包累计 vs 发货累计。
 import { ref, onMounted, computed } from 'vue'
 import { Plus, ArrowRight, Boxes } from 'lucide-vue-next'
 import { useRouter } from 'vue-router'

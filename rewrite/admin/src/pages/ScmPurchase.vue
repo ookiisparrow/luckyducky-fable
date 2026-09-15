@@ -1,6 +1,5 @@
 <script setup lang="ts">
 // 采购单（设计语言一致性·M3 UI 批16）：草稿→已下单→已收货（收货首次流转入库·重复收货不双入）；总价服务端算。
-// 逻辑未动，仅套设计语言（页头/草稿表单卡/grid 表/token）。
 import { ref, onMounted, computed } from 'vue'
 import { Plus, Trash2, ClipboardList, ChevronDown, ChevronUp } from 'lucide-vue-next'
 import { listPurchases, savePurchase, markOrdered, receivePurchase, cancelPurchase, listMaterials, listSuppliers } from '../api/scm'

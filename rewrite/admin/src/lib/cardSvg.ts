@@ -1,7 +1,6 @@
 // 卡面 SVG 生成（印刷包交付物·1:1 移植旧线 utils/cardSvg.js·守卫 rw-admin-cards-golden）：
 // 正面 = 插画面（满版图案 + 品牌角标）；反面 = 二维码面（标题/副文案/二维码占位/扫码引导/退货小字 + 品牌条）。
-// 二维码区为占位框——印刷厂按地址清单 CSV 一码一图（用户确认的工作方式）。换皮把整块卡面设计器丢了（误判"卡后端"·
-// 实则后端 getCard/saveCard + cards 集合早就绪·仅前端从没接）。
+// 二维码区为占位框——印刷厂按地址清单 CSV 一码一图（用户确认的工作方式）。
 export interface CardModel {
   productId: string
   courseId: string
