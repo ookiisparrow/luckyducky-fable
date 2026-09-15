@@ -125,7 +125,7 @@ export function unprofiledProducts(products: unknown, profiles: unknown): Array<
     .filter((p) => p.id && !prof.has(p.id))
 }
 
-/** 产品 id → 名字（换皮 SCM 全程只显 id·长表不好读）；找不到回退 id。 */
+/** 产品 id → 名字；找不到回退 id。 */
 export function productNameOf(products: unknown, id: unknown): string {
   const wanted = String(id || '')
   const hit = (Array.isArray(products) ? products : []).find((p: any) => String((p && (p.id || p._id)) || '') === wanted)
