@@ -46,7 +46,7 @@ describe('面包屑与组织卡', () => {
     const org = orgSchema()
     expect(org.name).toContain('小棉鸭')
     expect(org.description).toBe(BRAND_IDENTITY)
-    expect(org.slogan).toBe('尝试钩织，创造幸运 / get ducky, get lucky')
+    expect(org.slogan).toBe('体验钩织，创造幸运 / get ducky, get lucky')
     expect(org.alternateName).toEqual(['小棉鸭', 'Lucky Ducky', 'LuckyDucky小棉鸭'])
   })
 })

@@ -13,7 +13,7 @@ describe('官网共用页脚备案号与执照链', () => {
     expect(footer).toContain('href="https://beian.miit.gov.cn/"')
     expect(footer).toContain('target="_blank"')
     expect(footer).toContain('rel="noopener noreferrer"')
-    expect(footer).toContain('{BRAND_NAME} · 尝试钩织，创造幸运。')
+    expect(footer).toContain('{BRAND_NAME} · 体验钩织，创造幸运。')
     expect(footer).toContain('class="mp-hint"')
     expect(footer).toContain('微信搜「LuckyDucky小棉鸭」')
     expect(footer).toContain('营业执照')

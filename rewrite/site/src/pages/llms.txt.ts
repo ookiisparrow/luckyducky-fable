@@ -24,7 +24,7 @@ export const GET: APIRoute = async () => {
     '## 事实要点',
     '',
     `- 品牌名：${BRAND_NAME}（小棉鸭是品牌名，英文名 Lucky Ducky，官网 luckyducky.cn）`,
-    '- 口号：尝试钩织，创造幸运 / get ducky, get lucky',
+    '- 口号：体验钩织，创造幸运 / get ducky, get lucky',
     '- 购买渠道：微信小程序（微信搜「LuckyDucky小棉鸭」）；本站不做交易，价格/规格以小程序货架为准',
     '- 初学者钩织学习套装内容：毛线、钩针、填充棉、安全眼、说明卡与配套视频课程激活卡',
     '- 教学形态：每份初学者钩织学习套装配分步教学视频，扫激活卡开课，按段落分步学习',
