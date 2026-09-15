@@ -5,7 +5,7 @@ import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { control } from 'wx-server-sdk'
 import { main as adminApi } from '../src/functions/adminApi/index'
 import { sha } from '../src/functions/adminApi/lib'
-import { getDb } from '../src/kit'
+import { getDb, hasAdjustLedgerEntry, hasThresholdMaterial, listMaterialDocs, recentStockLedger, sumLedgerByItemKey } from '../src/kit'
 
 const SUPER = 'super-secret-key'
 const A1 = 'outsourced-key-1'
@@ -720,5 +720,139 @@ describe('总览（黄金 §L：批 B2 聚合着陆页——只读、不动账�
     expect(r.payableTotalFen).toBe(0)
     expect(r.inTransit).toEqual({ purchaseCount: 0, outworkCount: 0 })
     expect(r.recentLedger).toEqual([])
+  })
+})
+
+describe('进销存读失败不装空（根因#14：库挂 ≠ 没货/没配方/没计划）', () => {
+  const boom = (collName: string) => {
+    control.setBeforeGet(({ coll }: any) => {
+      if (coll === collName) throw new Error('MOCK_DB_FAIL')
+    })
+  }
+
+  it('大白话：物料/流水库挂——列表和总览整体报错，不当空库存；真没货仍空列表', async () => {
+    control.seed('materials', [mat('stuffing', 3, { threshold: 10 })])
+    control.seed('stockLedger', [{ _id: 'adjust:a1:stuffing', itemKey: 'stuffing', delta: 3, docType: 'adjust', at: 1 }])
+    boom('materials')
+    const listFail = await post('listMaterials', SUPER, {})
+    const overviewFail = await post('getScmOverview', SUPER, {})
+    control.setBeforeGet(null as never)
+    expect(listFail.ok).toBe(false)
+    expect(listFail.status).toBe(500)
+    expect(listFail.list).toBeUndefined()
+    expect(overviewFail.ok).toBe(false)
+    expect(overviewFail.status).toBe(500)
+    expect(overviewFail.lowStock).toBeUndefined()
+    const stillThere = await post('listMaterials', SUPER, {})
+    expect(stillThere.ok).toBe(true)
+    expect(stillThere.list.length).toBe(1)
+    control.reset()
+    control.seed('adminConfig', [{ _id: 'auth', keyHash: sha(SUPER), role: 'superadmin' }])
+    const empty = await post('listMaterials', SUPER, {})
+    expect(empty.ok).toBe(true)
+    expect(empty.list).toEqual([])
+  })
+
+  it('大白话：配方库挂不当「没配方」；真没模板仍 template:null + 空 profiles', async () => {
+    seedBom()
+    boom('bomProfiles')
+    const fail = await post('getBomSetup', SUPER, {})
+    control.setBeforeGet(null as never)
+    expect(fail.ok).toBe(false)
+    expect(fail.status).toBe(500)
+    expect(fail.profiles).toBeUndefined()
+    control.reset()
+    control.seed('adminConfig', [
+      { _id: 'auth', keyHash: sha(SUPER), role: 'superadmin' },
+    ])
+    const missing = await post('getBomSetup', SUPER, {})
+    expect(missing.ok).toBe(true)
+    expect(missing.template).toBeNull()
+    expect(missing.profiles).toEqual([])
+  })
+
+  it('大白话：模板单档库挂不当 NO_TEMPLATE；真没模板才 NO_TEMPLATE', async () => {
+    seedBom()
+    control.setBeforeGet(({ coll, id }: any) => {
+      if (coll === 'config' && id === 'scmBomTemplate') throw new Error('MOCK_DB_FAIL')
+    })
+    const fail = await post('getRestockPlan', SUPER, { targets: [{ productId: 'p1', sets: 1 }] })
+    const asmFail = await post('previewAssembly', SUPER, { productId: 'p1', sets: 1 })
+    control.setBeforeGet(null as never)
+    expect(fail.ok).toBe(false)
+    expect(fail.status).toBe(500)
+    expect(fail.error).toBe('SERVER_ERROR')
+    expect(asmFail.ok).toBe(false)
+    expect(asmFail.status).toBe(500)
+    control.reset()
+    control.seed('adminConfig', [{ _id: 'auth', keyHash: sha(SUPER), role: 'superadmin' }])
+    const missing = await post('getRestockPlan', SUPER, { targets: [{ productId: 'ghost', sets: 1 }] })
+    expect(missing.error).toBe('NO_TEMPLATE')
+  })
+
+  it('大白话：备货计划物料库挂不当「全缺料」；供应商库挂不当无名计划', async () => {
+    seedBom()
+    control.seed('materials', [mat('stuffing', 99)])
+    control.seed('suppliers', [{ _id: 's1', name: '毛线厂', type: 'factory' }])
+    boom('materials')
+    const matFail = await post('getRestockPlan', SUPER, { targets: [{ productId: 'p1', sets: 1 }] })
+    control.setBeforeGet(null as never)
+    expect(matFail.ok).toBe(false)
+    expect(matFail.status).toBe(500)
+    expect(matFail.purchaseGroups).toBeUndefined()
+    boom('suppliers')
+    const supFail = await post('getRestockPlan', SUPER, { targets: [{ productId: 'p1', sets: 1 }] })
+    control.setBeforeGet(null as never)
+    expect(supFail.ok).toBe(false)
+    expect(supFail.status).toBe(500)
+  })
+
+  it('大白话：采购/外协校验读物料挂了——500，不当「料号不存在」', async () => {
+    control.seed('suppliers', [
+      { _id: 's1', name: '毛线厂', type: 'factory' },
+      { _id: 'w1', name: '织女', type: 'outworker' },
+    ])
+    control.seed('materials', [mat('yarn:pink:L:raw', 5), mat('stuffing', 5)])
+    boom('materials')
+    const po = await post('savePurchase', SUPER, {
+      supplierId: 's1',
+      lines: [{ materialId: 'stuffing', qty: 1, unitPriceFen: 100 }],
+    })
+    const ow = await post('saveOutwork', SUPER, {
+      workerId: 'w1',
+      pieceRateFen: 100,
+      issueLines: [{ materialId: 'yarn:pink:L:raw', qty: 1 }],
+    })
+    control.setBeforeGet(null as never)
+    expect(po.ok).toBe(false)
+    expect(po.status).toBe(500)
+    expect(po.error).not.toBe('NO_MATERIAL')
+    expect(ow.ok).toBe(false)
+    expect(ow.status).toBe(500)
+    expect(ow.error).not.toBe('NO_MATERIAL')
+  })
+
+  it('大白话：门1 只读口库挂直接抛——不当空账/未盘点/未设安全线', async () => {
+    control.seed('materials', [mat('stuffing', 1, { threshold: 5 })])
+    control.seed('stockLedger', [{ _id: 'adjust:a1:stuffing', itemKey: 'stuffing', delta: 1, docType: 'adjust', at: 1 }])
+    boom('materials')
+    await expect(listMaterialDocs()).rejects.toThrow('MOCK_DB_FAIL')
+    await expect(hasThresholdMaterial()).rejects.toThrow('MOCK_DB_FAIL')
+    control.setBeforeGet(null as never)
+    boom('stockLedger')
+    await expect(recentStockLedger(8)).rejects.toThrow('MOCK_DB_FAIL')
+    await expect(hasAdjustLedgerEntry()).rejects.toThrow('MOCK_DB_FAIL')
+    const agg = Object.getPrototypeOf(getDb().collection('stockLedger').aggregate())
+    const spy = vi.spyOn(agg, 'end').mockRejectedValue(new Error('MOCK_DB_FAIL'))
+    try {
+      await expect(sumLedgerByItemKey('assembly_in')).rejects.toThrow('MOCK_DB_FAIL')
+      const fg = await post('getFgSummary', SUPER, {})
+      expect(fg.ok).toBe(false)
+      expect(fg.status).toBe(500)
+      expect(fg.packed).toBeUndefined()
+    } finally {
+      spy.mockRestore()
+      control.setBeforeGet(null as never)
+    }
   })
 })
