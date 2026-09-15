@@ -274,11 +274,10 @@
         </block>
       </block>
 
-      <!-- faq 子层（合并 2026-07-12 两条并行战役·级联兼容非终态·flag 待用户裁去留）：
+      <!-- faq 子层（合并 2026-07-12 两条并行战役·级联兼容非终态）：
            CMS 自由文本（批B page-content 编辑器 help.faq）非空则优先渲染；CMS 空则回退 KB 精选单源
            （批 B8 R37b getPublicFaq·helpFaqList 状态机）；两者都空才是诚实空态导流客服。
-           两套编辑面并存＝FAQ 内容有两处可改入口，与 faq-via-kb-single-source 单源治理精神冲突，
-           留给用户拍板长期只留一套（见 docs/待办与债.md 本条 flag）。 -->
+           两套编辑面并存＝FAQ 内容有两处可改入口，与 faq-via-kb-single-source 单源治理精神冲突。 -->
       <block wx:if="{{helpPanel === 'faq'}}">
         <view class="lp-help-nav">
           <view class="lp-help-back" bind:tap="onHelpBackMenu">
