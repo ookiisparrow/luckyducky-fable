@@ -11,6 +11,7 @@ import {
   getTempUrl,
   kfSendText,
   kfFetchMedia,
+  isDocMissing,
 } from '../../../kit'
 import { COLLECTIONS, ERR, AGENT_STATUS } from '@ldrw/shared'
 import { assembleCustomer360 } from '../customer360/orchestrator'
@@ -111,10 +112,15 @@ function inboundMsgid(id: unknown): string | undefined {
   return s.startsWith(INBOUND_ID_PREFIX) ? s.slice(INBOUND_ID_PREFIX.length) : undefined
 }
 
-// 读一条会话（缺失返 null·同 doc().get() reject 兜底）。
+// 读一条会话：真无档返 null；读失败上抛（不当「没有」·根因#14）。
 async function loadSession(db: any, sessionId: string): Promise<any | null> {
-  const got = await db.collection(COLLECTIONS.csSession).doc(sessionId).get().catch(() => null)
-  return got && got.data ? got.data : null
+  try {
+    const got = await db.collection(COLLECTIONS.csSession).doc(sessionId).get()
+    return got && got.data ? got.data : null
+  } catch (e) {
+    if (isDocMissing(e)) return null
+    throw e
+  }
 }
 
 // ── ① listQueue：待接队列（pending 会话·FIFO createdAt 升序·bounded cursor/limit·根因#7）──
@@ -291,8 +297,7 @@ export async function getThread(ctx: Ctx): Promise<any> {
     .orderBy('at', 'asc')
     .orderBy('_id', 'asc') // 同 at 值内稳定次序（tie-breaker 边界判定跨轮询一致，不靠底层默认序）
     .limit(THREAD_LIMIT + 1) // 多查一条判 hasMore（bounded·capacity-reads-bounded）
-    .get()
-    .catch(() => ({ data: [] }))
+    .get() // 读失败上抛（网关 500）——不当空消息流（根因#14）
   const raw: any[] = (res && res.data) || []
   const hasMore = raw.length > THREAD_LIMIT
   let list = hasMore ? raw.slice(0, THREAD_LIMIT) : raw
@@ -513,8 +518,7 @@ export async function listMyActive(ctx: Ctx): Promise<any> {
     .where({ agentId: p.agentId, status: 'active' })
     .orderBy('claimedAt', 'asc')
     .limit(limit)
-    .get()
-    .catch(() => ({ data: [] }))
+    .get() // 读失败上抛（网关 500）——不当「我在接」空列表（根因#14）
   const rows: any[] = (res && res.data) || []
   const sessions = await Promise.all(rows.map(async (s) => toView(s, await resolveOpenid(db, s))))
   return reply(200, { ok: true, sessions })

@@ -142,6 +142,19 @@ describe('认领/放手/升级/结束（黄金 §一：互斥·上限·归属·�
     expect((await post('claimConversation', A2, { sessionId: 'nope' })).status).toBe(404)
   })
 
+  it('大白话：认领时会话档读失败回 SERVER_ERROR——不当 404「没这条」（真没有仍 404，库挂了要报错）', async () => {
+    control.seed('csSession', [S('s1', 'pending')])
+    control.setBeforeGet(({ coll, id }: any) => {
+      if (coll === 'csSession' && id === 's1') throw new Error('MOCK_DB_FAIL')
+    })
+    const r = await post('claimConversation', A1, { sessionId: 's1' })
+    control.setBeforeGet(null as never)
+    expect(r.ok).toBe(false)
+    expect(r.error).toBe('SERVER_ERROR')
+    expect(r.status).not.toBe(404)
+    expect(control.dump('csSession').find((s: any) => s._id === 's1').status).toBe('pending')
+  })
+
   it('大白话（P2 评审）：超管接待上限满额也能接被外包升级的会话——豁免容量闸，否则外包甩单没人能接（escalateToMerchant 设计意图）', async () => {
     // 超管（agentId='admin'）已 claim 满默认上限（DEFAULT_AGENT_LIMIT=5，未配 agentState 走默认）
     const busy = Array.from({ length: 5 }, (_, i) => S('busy-' + i, 'active', { agentId: 'admin' }))
@@ -311,6 +324,43 @@ describe('坐席回复与会话流（黄金 §四：接缝发送·归档·失败
     const mine = await post('listMyActive', A1, {})
     expect(mine.sessions.map((s: any) => s.sessionId)).toEqual(['s1'])
     expect((await post('listMyActive', A2, {})).sessions).toEqual([])
+  })
+
+  it('大白话：拉会话消息时库挂了回 SERVER_ERROR——不当空消息流（坐席会以为顾客没说话）', async () => {
+    control.seed('conversations', [
+      { _id: 'm1', direction: 'in', externalUserId: 'eu-s1', openKfId: 'kf1', msgtype: 'text', text: '在吗', at: 1000 },
+    ])
+    control.setBeforeGet(({ coll }: any) => {
+      if (coll === 'conversations') throw new Error('MOCK_DB_FAIL')
+    })
+    const r = await post('getThread', A1, { sessionId: 's1' })
+    control.setBeforeGet(null as never)
+    expect(r.ok).toBe(false)
+    expect(r.error).toBe('SERVER_ERROR')
+    expect(r.messages).toBeUndefined()
+  })
+
+  it('大白话：超管读会话档失败回 SERVER_ERROR——不当「会话不存在」404（loadSession 读挂≠没这条）', async () => {
+    control.setBeforeGet(({ coll, id }: any) => {
+      if (coll === 'csSession' && id === 's1') throw new Error('MOCK_DB_FAIL')
+    })
+    const r = await post('getThread', SUPER, { sessionId: 's1' })
+    control.setBeforeGet(null as never)
+    expect(r.ok).toBe(false)
+    expect(r.error).toBe('SERVER_ERROR')
+    expect(r.status).not.toBe(404)
+    expect(r.messages).toBeUndefined()
+  })
+
+  it('大白话：「我在接」列表库挂了回 SERVER_ERROR——不当空会话列表（刷新后以为没单了）', async () => {
+    control.setBeforeGet(({ coll, filter }: any) => {
+      if (coll === 'csSession' && filter && filter.status === 'active') throw new Error('MOCK_DB_FAIL')
+    })
+    const r = await post('listMyActive', A1, {})
+    control.setBeforeGet(null as never)
+    expect(r.ok).toBe(false)
+    expect(r.error).toBe('SERVER_ERROR')
+    expect(r.sessions).toBeUndefined()
   })
 
   it('大白话（P1 bug sweep 批B）：同一秒多条消息撞在分页截断边界——原手写单字段 gt(cursor) 会把撞点值的尾部永久漏掉，改后整组延后到下一轮整批捞回，两轮拉全不丢不重', async () => {
@@ -654,6 +704,43 @@ describe('外包账号管理（黄金 §十：口令哈希·停用即时·白名
     expect(a2.stateUpdatedAt).toBeNull()
     expect(a2.activeCount).toBe(1)
     expect(a2.todayClosed).toBe(1) // clC 今日零点整含界
+  })
+
+  it('大白话：列外包账号时库挂了回 SERVER_ERROR——不当空名单（老板会以为没外包）', async () => {
+    control.setBeforeGet(({ coll, filter }: any) => {
+      if (coll === 'adminConfig' && filter && filter.role === 'outsourced') throw new Error('MOCK_DB_FAIL')
+    })
+    const r = await post('listAgents', SUPER, {})
+    control.setBeforeGet(null as never)
+    expect(r.ok).toBe(false)
+    expect(r.error).toBe('SERVER_ERROR')
+    expect(r.agents).toBeUndefined()
+  })
+
+  it('大白话：看板 count 失败回 SERVER_ERROR——不当 0 接待/0 今日结束（#271 只读展示剩渣）', async () => {
+    control.setBeforeCount(({ coll }: any) => {
+      if (coll === 'csSession') throw new Error('MOCK_COUNT_FAIL')
+    })
+    const r = await post('listAgents', SUPER, {})
+    control.setBeforeCount(null as never)
+    expect(r.ok).toBe(false)
+    expect(r.error).toBe('SERVER_ERROR')
+    expect(r.agents).toBeUndefined()
+  })
+
+  it('大白话：坐席状态档读失败回 SERVER_ERROR——不当 offline；真无档仍 offline', async () => {
+    control.seed('agentState', [{ _id: 'agent-1', status: 'online', updatedAt: 999 }])
+    control.setBeforeGet(({ coll, id }: any) => {
+      if (coll === 'agentState' && id === 'agent-1') throw new Error('MOCK_DB_FAIL')
+    })
+    const bad = await post('listAgents', SUPER, {})
+    control.setBeforeGet(null as never)
+    expect(bad.ok).toBe(false)
+    expect(bad.error).toBe('SERVER_ERROR')
+    const ok = await post('listAgents', SUPER, {})
+    const a2 = ok.agents.find((a: any) => a.id === 'agent-2')
+    expect(ok.ok).toBe(true)
+    expect(a2.status).toBe('offline') // 真无档兜底不变
   })
 
   it('大白话（N3）：wecomUserId 竞态回滚若也失败——双凭证残留同样留痕；409 回复不变', async () => {
