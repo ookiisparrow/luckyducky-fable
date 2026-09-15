@@ -7,6 +7,8 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 // wxml 门控断言用（同 home-cards.test.ts 的 ?raw 原文导入范式·类型见 raw-imports.d.ts）
 import meWxmlRaw from '../pages/me/me.wxml?raw'
 import meTsRaw from '../pages/me/me.ts?raw'
+import { LOGIN_HINT_KEY } from '../lib/loginGate'
+import { mapMe } from '../lib/mapMe'
 
 const { loginMock, getMyProgressMock, getMyCoursesMock, getCoursesByIdsMock, getPageContentMock } = vi.hoisted(() => ({
   loginMock: vi.fn(),
@@ -218,5 +220,47 @@ describe('继续学习卡不等人资料/不拉整本树/旧卡先画（根因#1
     expect(getCoursesByIdsMock).toHaveBeenCalledWith(['c1'])
     expect(meTsRaw).toMatch(/getCoursesByIds\s*\(/)
     expect(meTsRaw.replace(/\/\/.*$/gm, '')).not.toMatch(/\bgetAllCourses\s*\(/)
+  })
+})
+
+// 登录态首帧（2026-09-14）：loggedIn/nickname 写死未登录，本地 hint 已同意仍先闪「欢迎来到小棉鸭 / 点击登录」。
+// 镜像 contLoaded：初始 data 从 loginGate.hasAgreed + mapMe(null).defaultNickname 预填，不等云回包。
+describe('我页登录态首帧（本地已同意不先闪登出·根因#8/#14）', () => {
+  it('大白话：本地 loginGate 已同意 → 首帧 loggedIn 真、昵称先用默认名，不等人资料云回包', async () => {
+    store[LOGIN_HINT_KEY] = true
+    const page = await mountMe()
+    expect(page.data.loggedIn).toBe(true)
+    expect(page.data.nickname).toBe(mapMe(null).defaultNickname)
+  })
+
+  it('大白话：本地未同意 → 首帧仍是登出态，不误显示已登录', async () => {
+    const page = await mountMe()
+    expect(page.data.loggedIn).toBe(false)
+    expect(page.data.nickname).toBe(mapMe(null).defaultNickname)
+  })
+
+  it('大白话：已同意但 login() 还没回来 → 首帧已经是登录态，不会先画「欢迎来到小棉鸭」', async () => {
+    store[LOGIN_HINT_KEY] = true
+    loginMock.mockReturnValue(new Promise(() => {}))
+    const page = await mountMe()
+    void page.refresh()
+    await flush()
+    expect(page.data.loggedIn).toBe(true)
+    expect(page.data.nickname).toBe(mapMe(null).defaultNickname)
+  })
+
+  it('大白话：me.ts 初始 data 的 loggedIn/nickname 须从 loginGate.hasAgreed 与 mapMe 默认名预填，禁写死 false/空串', () => {
+    const ts = meTsRaw.replace(/\/\/.*$/gm, '')
+    expect(ts).toMatch(/loggedIn:\s*(seededLoggedIn|loginGate\.hasAgreed\(\))/)
+    expect(ts).toMatch(/nickname:\s*(seededMe\.defaultNickname|mapMe\(null\)\.defaultNickname)/)
+    expect(ts).not.toMatch(/loggedIn:\s*false/)
+    expect(ts).not.toMatch(/nickname:\s*''/)
+  })
+
+  it('大白话：问候与登录入口仍门控 loggedIn（已同意首帧走欢迎回来/编辑资料，未同意走欢迎来到/点击登录）', () => {
+    const wxml = meWxmlRaw.replace(/<!--[\s\S]*?-->/g, '')
+    expect(wxml).toMatch(/loggedIn \? '欢迎回来' : '欢迎来到小棉鸭'/)
+    expect(wxml).toContain('点击登录')
+    expect(wxml).toContain('编辑资料')
   })
 })

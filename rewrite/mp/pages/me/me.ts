@@ -63,20 +63,22 @@ function continueCourseIds(progress: unknown, mine: unknown): string[] {
 }
 
 const seededCont = readStoredCont()
+const seededMe = mapMe(null)
+const seededLoggedIn = loginGate.hasAgreed() // 首帧跟继续学习卡同款：本地 hint 已同意就先画登录态，不等云回包（根因#8/#14）
 
 Page({
   data: {
     statusBarHeight: 0, // 沉浸式自绘导航：头部让开状态栏（navigationStyle:custom·2026-07-16 用户需求）
-    nickname: '',
+    nickname: seededMe.defaultNickname, // 默认名先上屏；云端真昵称 refresh 覆盖
     avatar: '',
     bio: '',
     cont: seededCont,
-    entries: mapMe(null).entries as MeVM['entries'], // 九入口标题/可见性·首帧默认（CMS 到达覆盖）
+    entries: seededMe.entries as MeVM['entries'], // 九入口标题/可见性·首帧默认（CMS 到达覆盖）
     contFailed: false, // 继续学习区取数失败标记（同 aftersales/order-list loadFailed 分治：失败≠没进度）
     contLoaded: !!seededCont, // 继续学习区首次取数是否落地（加载中≠没课·根因#8/#14）；有上次会话旧卡则首帧先画、后台再刷
     // 和「确认无课」，无 loading 位会让空态在数据未回来时就渲染成假空态（先空后有闪烁·2026-07-13 反馈）；
     // 置 true 前空态不显、改显骨架；首次 refresh 落地后恒 true（成功/失败任一路都置）。
-    loggedIn: false, // 已显式同意登录（loginGate hint）：真才显真实资料 + 退出按钮，假显登出态（默认身份 + 登录入口）
+    loggedIn: seededLoggedIn, // 已显式同意登录（loginGate hint）：真才显真实资料 + 退出按钮，假显登出态（默认身份 + 登录入口）
     exitGuardArmed: false, // 误触退出提醒（决策§30）：驱动 <page-container show>·onShow 武装（初值 false·未上屏不拦）
     versionLine: currentAppVersionLine(), // 页底版本行（开发/测试/发布候选·数字跟 package.json）
     versionDetail: currentAppVersionDetail(), // 日期 + 简介（开发/测试/发布候选）；三通道都上屏
