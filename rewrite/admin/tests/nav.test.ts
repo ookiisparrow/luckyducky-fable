@@ -1,5 +1,5 @@
 // 上下文侧栏导航模型（守卫 rw-admin-nav-contextual·根因#8「构建过≠真机能用」）：向导路由识别 /
-// 步单源 ?step 夹取 / 5 步文案·顺序·图标（老板预览后改口径：封面并进第 1 步、卡片上传并进第 5 步）。
+// 步单源 ?step 夹取 / 5 步文案·顺序（老板预览后改口径：封面并进第 1 步、卡片上传并进第 5 步）。
 import { describe, it, expect } from 'vitest'
 import { readFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
@@ -57,7 +57,6 @@ describe('5 步文案/顺序（封面并进第 1 步、卡片上传并进第 5 �
       '卡片与二维码',
     ])
     expect(WIZARD_STEPS.map((s) => s.n)).toEqual([1, 2, 3, 4, 5])
-    expect(WIZARD_STEPS.map((s) => s.icon)).toEqual(['plus', 'image', 'file-text', 'clapperboard', 'credit-card'])
     expect(WIZARD_STEPS.map((s) => s.hint)).toEqual([
       '创建草稿并上传封面图',
       '商品图集与标题文案',

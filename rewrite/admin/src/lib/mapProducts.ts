@@ -95,7 +95,7 @@ export interface DraftRowVM {
 }
 
 /** 价格标签：多规格显最低 SKU 价 +「起」（换皮丢了起价语义·平铺 product.price）；无 SKU 退商品价。 */
-export function skuPriceLabel(p: Record<string, any>): string {
+function skuPriceLabel(p: Record<string, any>): string {
   const skus = Array.isArray(p.skus) ? p.skus : []
   const prices = skus.map((s: any) => Number(s && s.price)).filter((n: number) => n > 0)
   if (prices.length) return `¥${Math.min(...prices)}${skus.length > 1 ? ' 起' : ''}`

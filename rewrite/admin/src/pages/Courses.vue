@@ -117,7 +117,6 @@ function delSegment(l: Record<string, any>, ci: number, li: number, si: number) 
   if (batchUploading.value) return
   twoStep('s:' + ci + ':' + li + ':' + si, () => {
     l.segments.splice(si, 1)
-    refreshStats()
   })
 }
 // 发布前护栏（换皮退成可静默发布残课）：空结构硬拦、缺视频/空课时软提醒
@@ -165,14 +164,9 @@ async function load() {
   // 乐观并发基线（课程链路审计 2026-07-17）：记下拉草稿那一刻的版本号；重新载入即解除冲突态恢复自动保存
   draftRev.value = Number((r.course as Record<string, any>)?.rev) || 0
   conflicted.value = false
-  refreshStats()
   message.value = ''
   saveState.value = ''
   void nextTick(() => (loaded = true)) // 载入后的用户编辑才自动保存
-}
-
-function refreshStats() {
-  /* stats 已改 computed·自动随 course 更新；保留空函数免改各调用点（无副作用） */
 }
 
 // 视频时长自动读取（换皮丢·选完视频读元数据填 dur·mm:ss）
@@ -288,7 +282,6 @@ async function pickVideo(l: Record<string, any>, sg: Record<string, any>, ev: Ev
     }
     if (r.ok) {
       sg.videoFileId = r.fileId || ''
-      refreshStats()
       message.value = ''
     } else if (r.error === 'SESSION_LOST') message.value = '登录已过期，这段视频未上传成功，请重新登录后重试' // 同 batchUpload 措辞（批D·根因2）
     else message.value = launchErrorText(r.error)
@@ -347,7 +340,6 @@ async function batchUpload(l: Record<string, any>, ev: Event) {
   }
   message.value = fails.length ? `本次有 ${fails.length} 项没成功——${fails.join('；')}` : ''
   progress.value = ''
-  refreshStats()
   input.value = ''
 }
 
