@@ -1,11 +1,11 @@
 // GEO llms.txt 端点（llmstxt.org 约定）：AI 引擎抓取入口——品牌事实 + 页面地图 + 教程清单。
 // 做成端点而非 public/ 静态文件：教程清单从内容集合现取，新增教程零手工同步（防 stale）。
 import type { APIRoute } from 'astro'
-import { getCollection } from 'astro:content'
 import { SITE, BRAND_NAME, BRAND_IDENTITY } from '../lib/schema'
+import { sortedTutorials } from '../lib/tutorials'
 
 export const GET: APIRoute = async () => {
-  const tutorials = (await getCollection('tutorials')).sort((a, b) => (a.data.datePublished < b.data.datePublished ? 1 : -1))
+  const tutorials = await sortedTutorials()
   const lines = [
     `# ${BRAND_NAME}`,
     '',

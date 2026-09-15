@@ -2,7 +2,7 @@
   "name": "@ldrw/site",
   "private": true,
   "version": "0.1.0",
-  "description": "Lucky Ducky 官网+教程内容站（M4·Astro SSG·GEO 语料源·成交留小程序）",
+  "description": "Lucky Ducky 官网+教程内容站（Astro SSG·GEO 语料源·成交留小程序）",
   "type": "module",
   "scripts": {
     "dev": "astro dev",
