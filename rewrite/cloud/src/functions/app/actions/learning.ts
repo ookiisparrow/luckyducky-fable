@@ -16,6 +16,7 @@ import {
   recordAnomaly,
   isVodFileId,
   signVodPlayUrl,
+  isDocMissing,
 } from '../../../kit'
 
 const QR = QRCODE_STATUS_SPEC.transitions[0] // unused→activated（声明单源，不散写状态串）
@@ -267,8 +268,21 @@ export const getCourses = async (event: unknown = {}) => {
   const db = getDb()
   const ids = requestedCourseIds(event)
   if (ids) {
-    const docs = await Promise.all(ids.map((id) => db.collection(COLLECTIONS.courses).doc(id).get().catch(() => null)))
-    return ok({ list: docs.filter((d: any) => d && d.data).map((d: any) => publicCourse(d.data)) })
+    try {
+      const docs = await Promise.all(
+        ids.map(async (id) => {
+          try {
+            return await db.collection(COLLECTIONS.courses).doc(id).get()
+          } catch (e) {
+            if (isDocMissing(e)) return null // 真无这门课
+            throw e
+          }
+        })
+      )
+      return ok({ list: docs.filter((d: any) => d && d.data).map((d: any) => publicCourse(d.data)) })
+    } catch {
+      return err(ERR.INTERNAL) // 库挂 ≠ 没有这门课（根因#14）
+    }
   }
   // 显式上界（病根#7·守卫 rw-app-catalog-reads-bounded·深审 P2 同处独立发现取并）：同 getProducts 口径，
   // 防默认 100 条静默截断——课程目录破百后第 101 门起从用户课程页无声消失。

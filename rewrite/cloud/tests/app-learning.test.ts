@@ -371,6 +371,20 @@ describe('getCourses / getPlaybackUrl（目录不漏源·鉴权 fail-closed·黄
     expect(miss.list).toEqual([])
   })
 
+  it('大白话：按 id 取课库挂不再装成「没有这门课」——ok:false INTERNAL；真无档仍空', async () => {
+    control.setBeforeGet(({ coll, id }: any) => {
+      if (coll === 'courses' && id === 'c1') throw new Error('MOCK_DB_FAIL')
+    })
+    const fail = await call('getCourses', { ids: ['c1'] })
+    control.setBeforeGet(null as never)
+    expect(fail.ok).toBe(false)
+    expect(fail.error).toBe('INTERNAL')
+    expect(fail.list).toBeUndefined()
+    const missing = await call('getCourses', { ids: ['ghost'] })
+    expect(missing.ok).toBe(true)
+    expect(missing.list).toEqual([])
+  })
+
   it('大白话：未确认进课任何段都拒（只激活未确认也拒；残留免费标记不构成授权）', async () => {
     expect((await call('getPlaybackUrl', { courseId: 'c1', segmentId: 's1' })).error).toBe('NOT_ENTITLED')
     await call('activateCourse', { code: 'CODE1' }) // 激活但未确认

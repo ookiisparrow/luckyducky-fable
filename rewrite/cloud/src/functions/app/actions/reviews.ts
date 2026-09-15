@@ -10,6 +10,7 @@ import {
   IMAGE_URL_MAX_AGE,
   imgSecCheck,
   msgSecCheck,
+  isDocMissing,
 } from '../../../kit'
 
 /**
@@ -19,11 +20,13 @@ import {
 // 频控（深审 P3·病根#13）：批量签发视频临时地址的读端点，按 openid 限速防无节流刷签名地址。
 export const getHelpVideos = withOpenId(
   withRateLimit('getHelpVideos', { max: 30, windowMs: 60_000 }, async ({ db }) => {
-    const got = await db
-      .collection(COLLECTIONS.content)
-      .doc('helpVideos')
-      .get()
-      .catch(() => null)
+    let got: any
+    try {
+      got = await db.collection(COLLECTIONS.content).doc('helpVideos').get()
+    } catch (e) {
+      if (isDocMissing(e)) got = null // 真无档：求助面板空列表
+      else return err(ERR.INTERNAL) // 库挂 ≠ 没有求助视频（根因#14）
+    }
     const items = (got?.data?.items || []) as any[]
     const allIds = items.flatMap((it) =>
       ((it.segments || []) as any[]).map((sg) => String(sg.videoFileId || '')).filter(Boolean)
