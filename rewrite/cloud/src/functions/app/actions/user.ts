@@ -22,7 +22,7 @@ const CAPS = { nickname: 20, bio: 60, avatar: 256, phone: 11 }
 export const login = withOpenId(
   withRateLimit('login', { max: 30, windowMs: 60_000 }, async ({ db, OPENID }) => {
     const users = db.collection(COLLECTIONS.users)
-    const found = await users.where({ _openid: OPENID }).get()
+    const found = await users.where({ _openid: OPENID }).limit(1).get()
     const isNew = !found.data.length
     // 云函数是管理端，add 不自动写 _openid，必须显式写入（否则查不回）
     const user = isNew
@@ -97,7 +97,7 @@ export const updateProfile = withOpenId(
 
     // 先查后改（不用 update 的 stats 判建档：内容未变 updated=0 会误判重复建档）
     const users = db.collection(COLLECTIONS.users)
-    const found = await users.where({ _openid: OPENID }).get()
+    const found = await users.where({ _openid: OPENID }).limit(1).get()
     if (found.data.length) {
       const doc = found.data[0]
       await users.doc(doc._id).update({ data: patch })
@@ -153,7 +153,7 @@ export const deleteAccount = withOpenId(
       updatedAt: now,
     }
     const users = db.collection(COLLECTIONS.users)
-    const found = await users.where({ _openid: OPENID }).get()
+    const found = await users.where({ _openid: OPENID }).limit(1).get()
     if (found.data.length) {
       await users.doc(found.data[0]._id).update({ data: blank })
     } else {
