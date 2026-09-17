@@ -100,7 +100,7 @@ function xmlTag(xml: string, tag: string): string {
   return m ? m[1] : ''
 }
 
-export interface KfTrustedEvent {
+interface KfTrustedEvent {
   /** 客服事件里的 Token，调 sync_msg 拉消息用（与回调验签的 token 不是一回事）。 */
   syncToken: string
   /** 指定客服帐号 open_kfid。 */
@@ -126,7 +126,7 @@ function readBody(event: any): string {
 
 /** defineKfCallback 的凭证组（单 getter 每请求取一次——决策 2026-07-12 读库后，逐字段懒读＝同文档多次
  * 往返；收敛为一次注入。corpid 空＝跳过 receiveId 校验，配齐即 fail-closed。 */
-export interface KfCallbackCreds {
+interface KfCallbackCreds {
   token: string
   aesKey: string
   /** 自己的 corpid（企业内部单 corp）：解密后 receiveId 须等于它，否则拒（WXBizMsgCrypt 验签三要素之一·

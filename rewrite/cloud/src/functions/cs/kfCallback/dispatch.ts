@@ -21,7 +21,7 @@ import { alert, transition, sendAgentCard, AGENT_DESK_URL } from '../../../kit'
  * 旧实现把 add 的任何异常都返 false（=已处理·跳过），基建错也被当重复 → 真实客服消息静默丢失。改为 add 失败后
  * **回查该 seen 文档是否真存在**：存在＝真撞号（duplicate）；不存在＝add 没写进去（基建错·error），消息未认领须重试。
  */
-export type ClaimResult = 'first' | 'duplicate' | 'error'
+type ClaimResult = 'first' | 'duplicate' | 'error'
 export async function firstSeen(db: any, msgid: string): Promise<ClaimResult> {
   try {
     await db.collection(COLLECTIONS.kfState).add({ data: { _id: 'seen:' + msgid, at: Date.now() } })
@@ -90,7 +90,7 @@ const KEYWORDS: { cat: Category; words: string[] }[] = [
   },
   { cat: 'tutorial', words: ['教程', '钩织', '针法', '图解', '怎么钩', '教学'] },
 ]
-export type Category = 'logistics' | 'activation' | 'aftersale' | 'tutorial'
+type Category = 'logistics' | 'activation' | 'aftersale' | 'tutorial'
 
 /** 识别自由文本命中的类别 + 命中词（无命中返 null）。 */
 export function recognize(text: string): { cat: Category; word: string } | null {
@@ -116,7 +116,7 @@ interface MenuItem {
   id: string
   content: string
 }
-export interface MsgMenuContent {
+interface MsgMenuContent {
   head_content: string
   list: { type: 'click'; click: { id: string; content: string } }[]
   tail_content: string
@@ -220,7 +220,7 @@ export function menuFor(cat: Category, word: string): MsgMenuContent {
 }
 
 // ── menu_id 路由 ──
-export type Route =
+type Route =
   | { type: 'menu'; content: MsgMenuContent }
   // faqKey：FAQ 叶子答案的键（=kb 文档 _id·同菜单叶子 menu_id）；答案由 handleMessage 从 kb 单源读
   // （B4.1·守卫 faq-via-kb-single-source·不再在本文件写死 FAQ 文案）。

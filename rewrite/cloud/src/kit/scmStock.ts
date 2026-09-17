@@ -14,7 +14,7 @@ import { COLLECTIONS, ERR } from '@ldrw/shared'
 // 失败——并发抢占——保留该行流水作审计迹 + 打 ROLLBACK_FAIL 告警，不删流水掩盖差额，需人工对账回补）。
 // 计量：delta 一律非零整数（克或件·单位随主档 uom·validate fail-closed）；余额不允许为负。
 
-export type MoveDocType =
+type MoveDocType =
   | 'purchase_in' // 采购到货入库（车道 A）
   | 'outwork_issue' // 外协发料出库（车道 B）
   | 'outwork_receive' // 外协交付入库（车道 B）
@@ -23,12 +23,12 @@ export type MoveDocType =
   | 'adjust' // 期初盘点/人工调整（SCM-0·须 reason）
   | 'ship' // 发货核销留痕（车道 D·itemKey=fg:…）
 
-export interface StockMove {
+interface StockMove {
   materialId: string // 料号（materials._id）；成品行用 fg: 前缀 itemKey、不动 materials
   delta: number // ± 非零整数（克或件·按主档 uom）
 }
 
-export interface MoveDoc {
+interface MoveDoc {
   docType: MoveDocType
   docId: string // 来源单据 id（幂等键成分）
   operator?: string
@@ -38,7 +38,7 @@ export interface MoveDoc {
 const CAS_RETRY = 5
 const ledgerIdOf = (docType: string, docId: string, itemKey: string) => `${docType}:${docId}:${itemKey}`
 
-export type ApplyResult =
+type ApplyResult =
   | { ok: true; applied: number }
   | { ok: false; error: 'BAD_MOVE' | 'NO_MATERIAL' | 'INSUFFICIENT' | 'CONTENTION' | 'LEDGER_WRITE_FAILED'; materialId?: string }
 
@@ -208,7 +208,7 @@ export async function hasThresholdMaterial(): Promise<boolean> {
 // 主档字段与库存字段分治：saveMaterialDoc 只写主档字段（name/category/uom/…），**绝不碰 stock**
 // （建档初始化 stock:0 除外）；库存只经 applyStockMoves。uom 建档锁死（守卫 scm-uom-integer 行为锁）。
 
-export interface MaterialDoc {
+interface MaterialDoc {
   _id: string // 确定性料号（action 层按命名契约推导）
   name: string
   category: 'yarn' | 'packaging' | 'card' | 'accessory'
