@@ -16,7 +16,10 @@ describe('订单详情/售后列表加载骨架（根因#8·加载中不再整�
   it('大白话：售后列表首次加载（loading 且列表空）要画出骨架，中间不能空白', () => {
     expect(aftersalesWxml).toMatch(/wx:if="\{\{loading && !list\.length\}\}"/)
     expect(aftersalesWxml).toContain('ldas-skel')
+    expect(aftersalesWxml).not.toContain('coas-order-img')
     expect(aftersalesWxss).toMatch(/ldas-skel/)
     expect(aftersalesWxss).toMatch(/ld-shimmer/)
+    expect(aftersalesWxss).toMatch(/\.ldas-skel-block\s*\{[^}]*width:\s*120rpx/)
+    expect(aftersalesWxss).toMatch(/\.ldas-skel-block\s*\{[^}]*height:\s*120rpx/)
   })
 })

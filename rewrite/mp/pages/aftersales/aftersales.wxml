@@ -48,7 +48,7 @@
     <block wx:if="{{loading && !list.length}}">
       <view class="co-card ldas-card ldas-skel" wx:for="{{[1, 2, 3]}}" wx:key="*this">
         <view class="ldas-top">
-          <view class="coas-order-img ldas-skel-block"></view>
+          <view class="ldas-skel-block"></view>
           <view class="coas-order-mid">
             <view class="ldas-skel-bar" style="width: 240rpx"></view>
             <view class="ldas-skel-bar" style="width: 160rpx"></view>
