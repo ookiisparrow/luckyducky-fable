@@ -1,4 +1,4 @@
-// 重写线小程序（M2·原生 TS + glass-easel·默认 WebView·关键页按页开 Skyline——M0 spike 已真机验证）。
+// 重写线小程序（原生 TS + glass-easel·全 WebView）。
 // 云环境与旧线同一个（数据零迁移·ADR §23）；壳启动接字体、隐私闸、强制更新和错误上报，业务读数走页面网关。
 import { registerPrivacyGate } from './lib/privacyGate'
 import { trackEvent } from './api/learning'

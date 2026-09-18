@@ -1,7 +1,7 @@
 <!-- 订单详情·重设计对齐 Checkout.jsx 的 OrderStatus 版式（设计 402px 画板→rpx ×1.87）。
      业务逻辑一字不动：续付(onPay)/确认收货(onConfirm)/申请售后(onAfterSale)/写评价(onWriteReview·per-line)
      全承接 order.ts；本文件只重排结构与视觉。banner/amountNum/canAfterSale 为 order.ts 派生视图。
-     订单行为历史快照·只读；无商品图字段→灰底占位。token 见 styles/tokens.wxss。 -->
+     订单行为历史快照·只读。有封面画缩略图，没有就灰底占位。token 见 styles/tokens.wxss。 -->
 <view class="co" wx:if="{{vm}}">
   <view class="co-body">
 
@@ -33,7 +33,7 @@
 
     <!-- 收货地址（历史快照·只读·含彩色针脚底边） -->
     <view class="co-addr" wx:if="{{vm.address}}">
-      <view class="co-addr-main co-addr-static">
+      <view class="co-addr-main">
         <view class="co-addr-pin">
           <image class="co-ico co-ico-lg" src="/static/icons/map-pin.svg" mode="aspectFit" />
         </view>
@@ -75,14 +75,14 @@
 
     <!-- 订单信息 -->
     <view class="co-card co-rows">
-      <view class="co-row co-row-static">
+      <view class="co-row">
         <text class="co-row-key">订单编号</text>
         <text class="co-row-val co-row-mono">{{vm.id}}</text>
         <view class="coord-copy" catch:tap="onCopyOrderNo">
           <image class="coord-copy-img" src="/static/icons/copy.svg" mode="aspectFit" />
         </view>
       </view>
-      <view class="co-row co-row-static" wx:if="{{vm.createdAtLabel}}">
+      <view class="co-row" wx:if="{{vm.createdAtLabel}}">
         <text class="co-row-key">下单时间</text>
         <text class="co-row-val muted">{{vm.createdAtLabel}}</text>
       </view>

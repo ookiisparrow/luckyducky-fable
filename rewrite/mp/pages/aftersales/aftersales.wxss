@@ -42,10 +42,6 @@
   color: var(--ld-ink);
   letter-spacing: -0.3rpx;
 }
-.coas-sechead-sub {
-  font-size: 22rpx;
-  color: var(--ld-content-2);
-}
 
 /* ---------- 售后单卡（设计 coas-order 横卡 + 状态/原因扩展） ---------- */
 .ldas-card {
