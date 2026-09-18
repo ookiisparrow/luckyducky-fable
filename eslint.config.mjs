@@ -1,14 +1,12 @@
 /**
  * ESLint 配置（新版 flat config，ESLint 9）。
  * 作用：自动揪出潜在错误（未用变量、拼写错的变量、误用等），统一代码质量。
- * 与 Prettier 分工：ESLint 管「对不对」，Prettier 管「排版好不好看」——
- * 末尾的 configPrettier 会关掉与 Prettier 冲突的排版类规则，互不打架。
+ * Prettier CLI/配置已按 ADR §409 退役；本文件不再关排版规则、也不依赖 eslint-config-prettier。
  *
- * 命令：npm run lint （自动修复可修的）
+ * 命令：npm run lint（只报）；npm run lint:fix（自动修可修的）
  */
 import js from '@eslint/js'
 import pluginVue from 'eslint-plugin-vue'
-import configPrettier from 'eslint-config-prettier'
 import globals from 'globals'
 import tsParser from '@typescript-eslint/parser'
 
@@ -20,7 +18,6 @@ export default [
       '**/node_modules/**',
       // vitest --coverage 产物（B8·vendor 生成的 lcov-report/*.js 会触发误报 warning）
       'coverage/**',
-      'unpackage/**',
       'console-assets/**',
       // git worktree 隔离副本（.claude/worktrees/*）＝仓库另一份拷贝，非本仓 lint 源——
       // eslint . 递归进去会用错解析器把 .vue 里的 TS 当纯 JS 报解析错，且重复扫一遍全仓。
@@ -44,14 +41,10 @@ export default [
       globals: {
         ...globals.browser,
         ...globals.node,
-        // uni-app / 小程序全局对象（声明为只读，避免被报「未定义」）
-        uni: 'readonly',
+        // 原生小程序全局对象（声明为只读，避免被报「未定义」）
         wx: 'readonly',
-        plus: 'readonly',
         getApp: 'readonly',
         getCurrentPages: 'readonly',
-        // uni-app 页面生命周期（部分通过全局暴露）
-        getCurrentInstance: 'readonly',
       },
     },
     rules: {
@@ -75,7 +68,4 @@ export default [
     languageOptions: { parserOptions: { parser: tsParser } },
     rules: { 'no-alert': 'error' },
   },
-
-  // 放最后：关闭与 Prettier 冲突的排版规则
-  configPrettier,
 ]
