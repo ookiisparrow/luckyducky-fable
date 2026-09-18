@@ -100,7 +100,7 @@ Page({
     helpPanel: '' as '' | 'menu' | 'videos' | 'faq', // 求助面板状态机（P3·播放器重设计战役批D）：''=关闭·不阻断主视频播放
     helpVideosState: 'loading' as 'loading' | 'ok' | 'empty', // 帮助视频子层拉取态（每次进入 videos 层重拉·短时 URL 过期特性）
     helpTopics: [] as HelpTopicVM[], // 帮助视频主题分组 VM（mapHelpVideos 产出）
-    helpFaqState: 'loading' as 'loading' | 'ok' | 'empty', // 常见问题子层拉取态（R37b·KB 精选 FAQ 公开读·同 videos 每次重拉口径）
+    helpFaqState: 'loading' as 'loading' | 'ok' | 'empty' | 'fail', // 常见问题子层拉取态（R37b·KB 精选 FAQ·失败≠空）
     helpFaqList: [] as FaqItemVM[], // 精选 FAQ VM（mapPublicFaq 产出）
     helpSrc: '', // 内嵌播放（P3b-play）地址：非空=切到播放视图；关面板/返回列表/退出播放视图清空
     helpSegName: '', // 内嵌播放视图顶部标题（=命中小段 name）
@@ -664,10 +664,9 @@ Page({
     const topics = mapHelpVideos(r)
     this.setData(topics.length ? { helpVideosState: 'ok', helpTopics: topics } : { helpVideosState: 'empty', helpTopics: [] })
   },
-  // 卡3 常见问题（R37b 已接线：云端 FAQ 单源=客服知识库 KB，getPublicFaq 只回精选条目）：进子层 + 每次重拉
-  // （同 onHelpVideos 口径·辅助内容低频不缓存）；载入失败/空仍诚实空态导流客服，不造假 Q&A。
-  // help.faq（CMS 自由文本·并行战役新增·wxml 级联优先）非空时该子层直接渲染 CMS 内容，不必再打 KB 请求
-  // ——两套编辑面并存时，此处只做最小的「CMS 已覆盖就不浪费一次请求」。
+  // 卡3 常见问题（R37b：云端 FAQ 单源=客服知识库 KB，getPublicFaq 只回精选条目）：进子层 + 每次重拉
+  // （同 onHelpVideos 口径·辅助内容低频不缓存）。!ok / mapPublicFaq=null 落 fail，不装成「还在整理」；
+  // 真没有才空态导流客服。help.faq（CMS 自由文本）非空时该子层直接渲染 CMS，不必再打 KB 请求。
   onHelpFaq() {
     this.setData({ helpPanel: 'faq', helpFaqState: 'loading', helpFaqList: [] })
     if ((this.data.help.faq || []).length > 0) return // CMS 自由文本已覆盖，wxml 走 help.faq 分支，跳过 KB 拉取
@@ -678,7 +677,11 @@ Page({
     const r = await getPublicFaq()
     if (token !== this.helpFaqToken) return // 更晚的一次 onHelpFaq 已接管，丢弃本次回包
     if (this.data.helpPanel !== 'faq') return // 用户已退出 faq 层：同样丢弃，不写脏 state
-    const list = mapPublicFaq(r)
+    if (!r.ok) {
+      this.setData({ helpFaqState: 'fail', helpFaqList: [] })
+      return
+    }
+    const list = mapPublicFaq(r) || []
     this.setData(list.length ? { helpFaqState: 'ok', helpFaqList: list } : { helpFaqState: 'empty', helpFaqList: [] })
   },
   // 子层顶部返回箭头：回 menu（videos/faq 共用同一个方法）。

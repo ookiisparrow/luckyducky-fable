@@ -528,6 +528,23 @@ describe('getMyCourses / getMyProgress / trackEvent（黄金 §四/§五）', ()
     expect(mine.list.length).toBe(1)
   })
 
+  it('大白话：库挂不再装成「没有进度」——ok:false INTERNAL；真没学过仍空列表', async () => {
+    control.seed('progress', [{ _id: 'p1', _openid: 'oME', courseId: 'c1', done: { s1: true } }])
+    control.setBeforeGet(({ coll }: any) => {
+      if (coll === 'progress') throw new Error('MOCK_DB_FAIL')
+    })
+    const fail = await call('getMyProgress')
+    control.setBeforeGet(null as never)
+    expect(fail.ok).toBe(false)
+    expect(fail.error).toBe('INTERNAL')
+    expect(fail.list).toBeUndefined()
+    control.reset()
+    control.setOpenId('oME')
+    const empty = await call('getMyProgress')
+    expect(empty.ok).toBe(true)
+    expect(empty.list).toEqual([])
+  })
+
   it('大白话：防刷——未确认进课的进度事件不折叠（流水仍记，供分析）', async () => {
     await call('trackEvent', { type: 'segment_done', targetId: 's1', meta: { courseId: 'c1' } })
     expect(control.dump('events').length).toBe(1)

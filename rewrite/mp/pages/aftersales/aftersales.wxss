@@ -175,6 +175,24 @@
   color: var(--ld-content-2);
 }
 
+/* ---------- 加载骨架（首次加载中间空白·根因#8·对齐 order-list coolist-skel） ---------- */
+.ldas-skel-block,
+.ldas-skel-bar {
+  background: linear-gradient(90deg, var(--ld-bg-sage) 25%, var(--ld-bg-faint) 50%, var(--ld-bg-sage) 75%);
+  background-size: 200% 100%;
+  animation: ld-shimmer 1500ms ease-in-out infinite;
+}
+.ldas-skel-block {
+  width: 120rpx;
+  height: 120rpx;
+  flex: 0 0 auto;
+  border-radius: var(--ld-radius-sm);
+}
+.ldas-skel-bar {
+  height: 24rpx;
+  border-radius: 8rpx;
+}
+
 /* ---------- 空态 ---------- */
 .coas-empty {
   text-align: center;

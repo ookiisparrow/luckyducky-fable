@@ -358,18 +358,16 @@ export const getMyCourses = withOpenId(async ({ db, OPENID }) => {
   return ok({ list: Object.values(byCourse) })
 })
 
-/** 我的学习进度（只本人·集合未建=空）。 */
+/** 我的学习进度（只本人·真没学过才空；库挂不装成 0%）。 */
 export const getMyProgress = withOpenId(async ({ db, OPENID }) => {
-  try {
-    const res = await db
-      .collection(COLLECTIONS.progress)
-      .where({ _openid: OPENID })
-      .limit(200)
-      .get()
-    return ok({ list: res.data })
-  } catch {
-    return ok({ list: [] })
-  }
+  const res = await db
+    .collection(COLLECTIONS.progress)
+    .where({ _openid: OPENID })
+    .limit(200)
+    .get()
+    .catch(() => null)
+  if (!res) return err(ERR.INTERNAL) // 库挂 ≠ 没有进度（根因#14·同 getUser 读失败口径）
+  return ok({ list: res.data })
 })
 
 async function addTo(db: any, coll: string, data: any) {

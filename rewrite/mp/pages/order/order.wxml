@@ -123,6 +123,22 @@
   </view>
 </view>
 
+<!-- 加载骨架（根因#8·loading 且 vm 空时三分支曾全假→白屏）：对齐 detail pdp-skeleton / order-list coolist-skel -->
+<view class="co coord-skel" wx:elif="{{loading}}">
+  <view class="co-body">
+    <view class="coord-skel-banner"></view>
+    <view class="co-card">
+      <view class="co-item">
+        <view class="co-item-img coord-skel-block"></view>
+        <view class="co-item-mid">
+          <view class="coord-skel-bar" style="width: 300rpx"></view>
+          <view class="coord-skel-bar" style="width: 160rpx; margin-top: 18rpx"></view>
+        </view>
+      </view>
+    </view>
+  </view>
+</view>
+
 <!-- 失败态与不存在分治（根因#14·守卫 rw-mp-list-loadfailed-state）：弱网失败给重试，不误报「订单不存在」 -->
 <view class="co coord-empty" wx:elif="{{!loading && loadFailed}}">
   <view class="coord-empty-title">网络开小差</view>
