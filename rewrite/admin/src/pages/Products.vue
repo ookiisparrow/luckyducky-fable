@@ -7,6 +7,7 @@ import { Search, Trash2, Package, MoreHorizontal, Plus } from 'lucide-vue-next'
 import { listDrafts, saveDraft, deleteDraft, uploadImage, publishProduct, unpublishProduct, republishProduct } from '../api/products'
 import { mapDraftRows, publishErrorText, b64SizeOk, basicsMissing, stepProgressHint, productsListSub, type DraftRowVM } from '../lib/mapProducts'
 import { serialSave } from '../lib/serialSave'
+import { compressImage } from '../lib/compressImage'
 import { useRouter } from 'vue-router'
 import UiButton from '../components/ui/Button.vue'
 import PageHeader from '../components/ui/PageHeader.vue'
@@ -251,7 +252,7 @@ async function pickCover(ev: Event) {
   // 快照本次上传目标（H·完备性扫描新增·同 doSave 范式）：openEdit/列表「编辑」按钮无 busy 门控，
   // 压缩/上传两段 await 期间都可能已切到另一件商品的编辑器——回包不该打到已切换的新编辑器上。
   const snap = edit.value
-  const b64 = await compress(file)
+  const b64 = await compressImage(file, PRODUCT_COMPRESS)
   if (!b64SizeOk(b64)) {
     if (edit.value === snap) message.value = '图片压缩后仍超限，换小一点的图'
     return
@@ -270,30 +271,8 @@ async function pickCover(ev: Event) {
   }
 }
 
-// 前端压缩（canvas ≤720px 宽·jpeg 0.8→0.5 逐档压到 80K 内）
-async function compress(file: File): Promise<string> {
-  const url = URL.createObjectURL(file)
-  try {
-    const img = await new Promise<HTMLImageElement>((resolve, reject) => {
-      const i = new Image()
-      i.onload = () => resolve(i)
-      i.onerror = reject
-      i.src = url
-    })
-    const scale = Math.min(1, 720 / img.width)
-    const canvas = document.createElement('canvas')
-    canvas.width = Math.round(img.width * scale)
-    canvas.height = Math.round(img.height * scale)
-    canvas.getContext('2d')!.drawImage(img, 0, 0, canvas.width, canvas.height)
-    for (const q of [0.8, 0.65, 0.5, 0.35]) {
-      const b64 = canvas.toDataURL('image/jpeg', q).split(',')[1] || ''
-      if (b64SizeOk(b64)) return b64
-    }
-    return ''
-  } finally {
-    URL.revokeObjectURL(url)
-  }
-}
+// 商品封面/相册：M3 起就是 720 档（比卡片/首页 hero 更小），调用方覆盖默认，不是抄偏。
+const PRODUCT_COMPRESS = { maxWidth: 720, qualities: [0.8, 0.65, 0.5, 0.35] as const }
 
 async function doSave() {
   if (!edit.value || busy.value) return
@@ -404,7 +383,7 @@ async function addImages(ev: Event) {
   const snap = edit.value
   busy.value = true
   for (const file of Array.from(files)) {
-    const b64 = await compress(file)
+    const b64 = await compressImage(file, PRODUCT_COMPRESS)
     if (!b64SizeOk(b64)) {
       if (edit.value === snap) message.value = '有图压缩后仍超限，已跳过'
       continue

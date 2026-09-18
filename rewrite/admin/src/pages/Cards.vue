@@ -9,8 +9,9 @@ import { b64SizeOk } from '../lib/mapProducts'
 import { launchErrorText } from '../lib/mapSystem'
 import { buildFrontSvg, buildBackSvg, type CardModel } from '../lib/cardSvg'
 import { serialSave } from '../lib/serialSave'
+import { compressImage } from '../lib/compressImage'
 // 视图层原语（批F 共享 UI）+ lucide 图标——仅新增 import，管道零改。
-// 注意：lucide 的 Image 与 compress() 里 new Image() 的全局 Image 同名，别名 ImageIcon 防遮蔽。
+// 注意：lucide 的 Image 与全局 Image 同名，别名 ImageIcon 防遮蔽。
 import UiButton from '../components/ui/Button.vue'
 import Card from '../components/ui/Card.vue'
 import Badge from '../components/ui/Badge.vue'
@@ -156,7 +157,7 @@ async function pickArt(e: Event) {
   const file = (e.target as HTMLInputElement).files?.[0]
   ;(e.target as HTMLInputElement).value = ''
   if (!file || busyArt.value || !card.value) return
-  const b64 = await compress(file)
+  const b64 = await compressImage(file)
   if (!b64SizeOk(b64)) {
     loadErr.value = '图片压缩后仍超限，换小一点的图'
     return
@@ -218,30 +219,6 @@ async function finalize() {
     loadErr.value = ''
   } else {
     loadErr.value = (next === 'final' ? '定稿' : '取消定稿') + '保存失败：请重试'
-  }
-}
-
-async function compress(file: File): Promise<string> {
-  const url = URL.createObjectURL(file)
-  try {
-    const img = await new Promise<HTMLImageElement>((resolve, reject) => {
-      const i = new Image()
-      i.onload = () => resolve(i)
-      i.onerror = reject
-      i.src = url
-    })
-    const scale = Math.min(1, 900 / img.width)
-    const canvas = document.createElement('canvas')
-    canvas.width = Math.round(img.width * scale)
-    canvas.height = Math.round(img.height * scale)
-    canvas.getContext('2d')!.drawImage(img, 0, 0, canvas.width, canvas.height)
-    for (const q of [0.8, 0.6, 0.45, 0.3]) {
-      const b64 = canvas.toDataURL('image/jpeg', q).split(',')[1] || ''
-      if (b64SizeOk(b64)) return b64
-    }
-    return ''
-  } finally {
-    URL.revokeObjectURL(url)
   }
 }
 

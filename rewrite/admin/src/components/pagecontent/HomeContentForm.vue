@@ -10,6 +10,7 @@ import { uploadImage } from '../../api/products'
 import { normalizeHome, homePayload, type HomeModel } from '../../lib/mapContent'
 import { b64SizeOk } from '../../lib/mapProducts'
 import { serialSave } from '../../lib/serialSave'
+import { compressImage } from '../../lib/compressImage'
 import { SAVE_OK_MESSAGE } from '../../lib/mapPageContent'
 import UiButton from '../ui/Button.vue'
 import Card from '../ui/Card.vue'
@@ -72,7 +73,7 @@ async function uploadTo(assign: (_fileID: string) => void, ev: Event) {
   const file = input.files?.[0]
   input.value = '' // 重置 value：允许上传失败后重选同一文件重试（否则浏览器不再触发 change）
   if (!file) return
-  const b64 = await compress(file)
+  const b64 = await compressImage(file)
   if (!b64SizeOk(b64)) {
     message.value = '图片压缩后仍超限，换小一点的图'
     return
@@ -86,30 +87,6 @@ async function uploadTo(assign: (_fileID: string) => void, ev: Event) {
     if (fid) sessionUrls.value[fid] = String(r.url || '') // 缩略预览（本会话）
     message.value = ''
   } else message.value = '图片上传失败：' + String(r.error || '')
-}
-
-async function compress(file: File): Promise<string> {
-  const url = URL.createObjectURL(file)
-  try {
-    const img = await new Promise<HTMLImageElement>((resolve, reject) => {
-      const i = new Image()
-      i.onload = () => resolve(i)
-      i.onerror = reject
-      i.src = url
-    })
-    const scale = Math.min(1, 900 / img.width)
-    const canvas = document.createElement('canvas')
-    canvas.width = Math.round(img.width * scale)
-    canvas.height = Math.round(img.height * scale)
-    canvas.getContext('2d')!.drawImage(img, 0, 0, canvas.width, canvas.height)
-    for (const q of [0.8, 0.6, 0.45, 0.3]) {
-      const b64 = canvas.toDataURL('image/jpeg', q).split(',')[1] || ''
-      if (b64SizeOk(b64)) return b64
-    }
-    return ''
-  } finally {
-    URL.revokeObjectURL(url)
-  }
 }
 
 function addCourseRow() {
