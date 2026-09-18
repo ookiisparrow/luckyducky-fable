@@ -1,7 +1,8 @@
 /**
  * ESLint 配置（新版 flat config，ESLint 9）。
  * 作用：自动揪出潜在错误（未用变量、拼写错的变量、误用等），统一代码质量。
- * Prettier CLI/配置已按 ADR §409 退役；本文件不再关排版规则、也不依赖 eslint-config-prettier。
+ * Prettier CLI/配置已按 ADR §409 退役；不再依赖 eslint-config-prettier。
+ * 排版类 vue recommended 规则在下面显式关掉——lint 管对错，不管排版。
  *
  * 命令：npm run lint（只报）；npm run lint:fix（自动修可修的）
  */
@@ -52,6 +53,13 @@ export default [
       'vue/multi-word-component-names': 'off',
       // 占位 / 预留代码里允许「定义但暂未使用」的参数（以 _ 开头则完全忽略）
       'no-unused-vars': ['warn', { argsIgnorePattern: '^_', varsIgnorePattern: '^_' }],
+      // 无 Prettier（ADR §409）。vue recommended 自带排版规则，不靠已卸的 eslint-config-prettier 闭嘴。
+      'vue/max-attributes-per-line': 'off',
+      'vue/singleline-html-element-content-newline': 'off',
+      'vue/html-self-closing': 'off',
+      'vue/html-indent': 'off',
+      'vue/multiline-html-element-content-newline': 'off',
+      'vue/html-closing-bracket-newline': 'off',
     },
   },
 
