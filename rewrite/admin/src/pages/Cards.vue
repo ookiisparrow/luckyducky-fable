@@ -35,10 +35,9 @@ const product = ref<Record<string, any> | null>(null)
 const coverUrl = ref('')
 // 死胡同改选择器（UX 体检批3）：顶层导航直入无 productId 时列商品可选，不再甩红错叫人绕路
 const pickRows = ref<{ id: string; name: string; coverUrl: string }[] | null>(null)
-// 同路由 query 变更不重跑 setup（productId 是 setup 期常量）——replace 后 reload 一次最诚实，
-// 效果等同从商品页深链进入
+// 同路由只改 query 不重跑 setup（productId 是 setup 期常量）——Shell 按 productId 重挂本页
 function pickProduct(id: string) {
-  void router.replace({ path: '/cards', query: { productId: id } }).then(() => location.reload())
+  void router.replace({ path: '/cards', query: { productId: id } })
 }
 
 const PRESETS = [
