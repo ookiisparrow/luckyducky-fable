@@ -1,10 +1,18 @@
 /**
- * 闸开时的话术状态机：只按 Jev 路由答案选节点/抽句（不发气泡、不编政策）。
+ * 闸开选句：优先级 订单→情绪→严重程度→责任（勿反）。
+ * 需求只给主题池 / 犹豫 / 拍照，不抢前四步。不编政策。
  * 会话记在 kfState `jevflow:<euid>`。
  */
 
 import { COLLECTIONS } from '@ldrw/shared'
-import type { JevEmotionStatus, JevNeedStatus, JevOrderStatus, JevResult } from './jev'
+import type {
+  JevEmotionStatus,
+  JevNeedStatus,
+  JevOrderStatus,
+  JevResponsibility,
+  JevResult,
+  JevSeverity,
+} from './jev'
 import { fillSlots, pickLine, rememberUsed, type ScriptPoolId } from './scriptPool'
 
 export type ScriptNode =
@@ -21,6 +29,8 @@ export type ScriptNode =
   | 'empathy'
   | 'reassure'
   | 'photo'
+  | 'severity'
+  | 'apology'
 
 export type ScriptTopic =
   | 'logistics'
@@ -40,6 +50,8 @@ export type JevFlowState = {
   hesitated: boolean
   surprised: boolean
   photoAsked: boolean
+  severitySaid: boolean
+  apologized: boolean
   used: string[]
 }
 
@@ -47,46 +59,96 @@ export type JevRoute = {
   topic: ScriptTopic
   orderStatus: JevOrderStatus
   emotionStatus: JevEmotionStatus
+  severity: JevSeverity
+  responsibility: JevResponsibility
   needStatus: JevNeedStatus
   exceeds: boolean
 }
 
-function topicFromOrder(order: JevOrderStatus, need: JevNeedStatus): ScriptTopic | '' {
-  if (need === 'unclear') return 'greeting'
+const TOPIC_NEEDS: readonly ScriptTopic[] = [
+  'logistics',
+  'packaging',
+  'missing',
+  'course',
+  'discount',
+  'rush',
+  'greeting',
+  'other',
+]
+
+function topicFromOrder(order: JevOrderStatus): ScriptTopic | '' {
   if (order === 'pre_order' || order === 'ordering') return 'discount'
   if (order === 'pre_ship') return 'rush'
   if (order === 'shipped') return 'logistics'
-  if (order === 'aftersale') return 'other'
+  if (order === 'unknown') return 'greeting'
   return ''
 }
 
-/** 只读 Jev 答案（+会话里已记下的主题/订单态）。不扫顾客原文猜题。 */
+function topicOf(need: JevNeedStatus, order: JevOrderStatus, prev: ScriptTopic | ''): ScriptTopic {
+  if ((TOPIC_NEEDS as readonly string[]).includes(need)) return need as ScriptTopic
+  return prev || topicFromOrder(order) || 'other'
+}
+
+function isTopicNeed(need: JevNeedStatus): boolean {
+  return (
+    need === 'logistics' ||
+    need === 'packaging' ||
+    need === 'missing' ||
+    need === 'course' ||
+    need === 'discount' ||
+    need === 'rush'
+  )
+}
+
+function isNegative(emotion: JevEmotionStatus): boolean {
+  return emotion === 'upset' || emotion === 'angry' || emotion === 'disappointed'
+}
+
+/** 只读 Jev 答案。不扫顾客原文猜题。 */
 export function routeFromJev(state: JevFlowState, ev: JevResult): JevRoute {
   const orderStatus = ev.orderStatus || state.orderStatus || 'unknown'
   const emotionStatus = ev.emotionStatus || 'calm'
-  const needStatus = ev.needStatus || 'unclear'
-  const exceeds = needStatus === 'exception' || Number(ev.exceeds || 0) >= 0.55
-  const topic = (ev.topic ||
-    topicFromOrder(orderStatus, needStatus) ||
-    state.topic ||
-    'other') as ScriptTopic
-  return { topic, orderStatus, emotionStatus, needStatus, exceeds }
+  const severity = ev.severity || 'low'
+  const responsibility = ev.responsibility || 'n/a'
+  const needStatus = ev.needStatus || (ev.topic && (TOPIC_NEEDS as readonly string[]).includes(ev.topic) ? ev.topic : 'other')
+  const exceeds = needStatus === 'exceeds' || Number(ev.exceeds || 0) >= 0.55
+  const topic = topicOf(needStatus, orderStatus, (ev.topic || state.topic || '') as ScriptTopic | '')
+  return { topic, orderStatus, emotionStatus, severity, responsibility, needStatus, exceeds }
 }
 
 export function nextNode(state: JevFlowState, ev: JevResult, _text = ''): ScriptNode {
-  const { topic, emotionStatus, needStatus, exceeds } = routeFromJev(state, ev)
-  const negative = emotionStatus === 'upset' || emotionStatus === 'angry'
+  const r = routeFromJev(state, ev)
 
-  if (exceeds && !state.hesitated) return 'hesitate'
-  if (negative && !state.surprised) return 'surprise'
-  if (negative && state.surprised && state.node === 'surprise') return 'awkward'
-  if (!state.greeted) return needStatus === 'unclear' || topic === 'greeting' ? 'greet' : 'greetIssue'
-  if (needStatus === 'photo_needed' && !state.photoAsked) return 'photo'
+  // 1. 订单（最高）：没开场先按订单/有没有事走开场，情绪/严重/责任/需求都让路
+  if (!state.greeted) {
+    if (r.needStatus === 'greeting' || (r.orderStatus === 'unknown' && !isTopicNeed(r.needStatus))) return 'greet'
+    return 'greetIssue'
+  }
+
+  // 2. 情绪
+  if (isNegative(r.emotionStatus) && !state.surprised) return 'surprise'
+  if (isNegative(r.emotionStatus) && state.surprised && state.node === 'surprise') return 'awkward'
+  if (r.emotionStatus === 'embarrassed' && state.surprised) return 'awkward'
   if (
-    emotionStatus === 'anxious' &&
+    r.emotionStatus === 'anxious' &&
     (state.node === 'greet' || state.node === 'greetIssue' || state.node === 'ack')
   )
     return 'empathy'
+
+  // 3. 严重程度（情绪处理完或不需要处理才到这一步；有旗，不循环）
+  if (r.severity === 'high' && !state.severitySaid) return 'severity'
+
+  // 4. 责任（最后）：已确认我方才道歉；物流/顾客侧只同理（同理不设旗，仍钉在刚处理完的节点，防循环）
+  if (r.responsibility === 'merchant' && !state.apologized) return 'apology'
+  if (
+    (r.responsibility === 'logistics' || r.responsibility === 'customer') &&
+    (state.node === 'surprise' || state.node === 'awkward' || state.node === 'severity')
+  )
+    return 'empathy'
+
+  // 需求：犹豫 / 拍照（不抢 1→4）
+  if (r.exceeds && !state.hesitated) return 'hesitate'
+  if (r.needStatus === 'photo_needed' && !state.photoAsked) return 'photo'
 
   switch (state.node) {
     case 'hesitate':
@@ -94,14 +156,17 @@ export function nextNode(state: JevFlowState, ev: JevResult, _text = ''): Script
     case 'surprise':
     case 'awkward':
       return 'empathy'
+    case 'severity':
+    case 'apology':
+      return r.needStatus === 'photo_needed' ? 'photo' : 'trySolve'
     case 'empathy':
-      if (needStatus === 'photo_needed') return 'photo'
-      return needStatus === 'resolve' ? 'reassure' : 'restate'
+      if (r.needStatus === 'photo_needed') return 'photo'
+      return r.responsibility === 'merchant' ? 'reassure' : 'restate'
     case 'reassure':
-      return needStatus === 'photo_needed' ? 'photo' : 'trySolve'
+      return r.needStatus === 'photo_needed' ? 'photo' : 'trySolve'
     case 'greet':
     case 'greetIssue':
-      return needStatus === 'info' ? 'restate' : 'ack'
+      return 'ack'
     case 'ack':
       return 'restate'
     case 'restate':
@@ -109,7 +174,9 @@ export function nextNode(state: JevFlowState, ev: JevResult, _text = ''): Script
     case 'photo':
       return 'trySolve'
     case 'trySolve':
-      return needStatus === 'info' || needStatus === 'resolve' ? 'answer' : 'askMore'
+      return r.needStatus === 'greeting' || r.needStatus === 'other' || r.needStatus === 'exceeds'
+        ? 'askMore'
+        : 'answer'
     default:
       return 'askMore'
   }
@@ -119,8 +186,7 @@ function poolFor(node: ScriptNode, topic: ScriptTopic, ev: JevResult): ScriptPoo
   if (node === 'answer') {
     if (topic === 'discount') return 'discountConfirm'
     if (topic === 'rush') return 'rushConfirm'
-    if (topic === 'logistics' && (ev.emotionStatus === 'upset' || ev.emotionStatus === 'angry'))
-      return 'logisticsSlow'
+    if (topic === 'logistics' && isNegative(ev.emotionStatus || 'calm')) return 'logisticsSlow'
     return 'answer'
   }
   if (node === 'photo') {
@@ -148,6 +214,8 @@ export function emptyFlow(): JevFlowState {
     hesitated: false,
     surprised: false,
     photoAsked: false,
+    severitySaid: false,
+    apologized: false,
     used: [],
   }
 }
@@ -167,6 +235,8 @@ export function applyNode(
     hesitated: state.hesitated || node === 'hesitate',
     surprised: state.surprised || node === 'surprise',
     photoAsked: state.photoAsked || node === 'photo',
+    severitySaid: state.severitySaid || node === 'severity',
+    apologized: state.apologized || node === 'apology',
   }
 }
 

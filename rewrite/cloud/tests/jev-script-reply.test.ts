@@ -25,6 +25,13 @@ const ev = (over: Record<string, unknown> = {}) => ({
   ...over,
 })
 
+const greeted = (node: 'greetIssue' | 'ack' | 'surprise' | 'awkward' | 'severity' = 'greetIssue') => ({
+  ...emptyFlow(),
+  greeted: true,
+  node,
+  surprised: node === 'surprise' || node === 'awkward' || node === 'severity',
+})
+
 describe('话术库打包与取句', () => {
   it('大白话：编号行能抽出来，主节点每库至少 20 句，构建产物里不写 GitHub 地址', () => {
     expect(parseNumberedLines('1. 嗨\n2. 在的\n不是编号').length).toBe(2)
@@ -46,49 +53,89 @@ describe('话术库打包与取句', () => {
   })
 })
 
-describe('闸开话术状态机（只听 Jev 三态）', () => {
-  it('大白话：需求不清就问候；有需求用「在的我看看」；超出预期先犹豫', () => {
-    expect(routeFromJev(emptyFlow(), ev({ needStatus: 'unclear' })).topic).toBe('greeting')
-    expect(routeFromJev(emptyFlow(), ev({ orderStatus: 'pre_order', needStatus: 'resolve' })).topic).toBe(
-      'discount'
-    )
-    expect(nextNode(emptyFlow(), ev({ needStatus: 'unclear' }))).toBe('greet')
-    expect(
-      nextNode(emptyFlow(), ev({ topic: 'discount', orderStatus: 'pre_order', needStatus: 'resolve' }))
-    ).toBe('greetIssue')
+describe('闸开话术状态机（1→4 优先级）', () => {
+  it('大白话：没开场先按订单走，愤怒/超预期/严重/我方责任都让路', () => {
     expect(
       nextNode(
         emptyFlow(),
-        ev({ topic: 'rush', orderStatus: 'pre_ship', needStatus: 'exception', exceeds: 0.9 })
+        ev({
+          orderStatus: 'unknown',
+          emotionStatus: 'angry',
+          severity: 'high',
+          responsibility: 'merchant',
+          needStatus: 'exceeds',
+        })
       )
-    ).toBe('hesitate')
-    const { line, node } = composeLine(
-      emptyFlow(),
-      ev({ topic: 'discount', needStatus: 'exception' }),
-      '再便宜五十',
-      () => 0
+    ).toBe('greet')
+    expect(
+      nextNode(emptyFlow(), ev({ orderStatus: 'shipped', emotionStatus: 'angry', needStatus: 'logistics' }))
+    ).toBe('greetIssue')
+    expect(routeFromJev(emptyFlow(), ev({ needStatus: 'greeting' })).topic).toBe('greeting')
+    expect(routeFromJev(emptyFlow(), ev({ orderStatus: 'pre_order', needStatus: 'discount' })).topic).toBe(
+      'discount'
     )
+  })
+
+  it('大白话：开场后才按情绪→严重程度→责任；超出预期仍走犹豫', () => {
+    expect(
+      nextNode(
+        greeted('greetIssue'),
+        ev({
+          emotionStatus: 'angry',
+          severity: 'high',
+          responsibility: 'merchant',
+          needStatus: 'exceeds',
+          orderStatus: 'shipped',
+        })
+      )
+    ).toBe('surprise')
+    expect(
+      nextNode(
+        { ...greeted('surprise'), surprised: true },
+        ev({ emotionStatus: 'angry', severity: 'high', needStatus: 'logistics' })
+      )
+    ).toBe('awkward')
+    expect(
+      nextNode(
+        { ...greeted('awkward'), surprised: true },
+        ev({
+          emotionStatus: 'angry',
+          severity: 'high',
+          responsibility: 'merchant',
+          needStatus: 'exceeds',
+        })
+      )
+    ).toBe('severity')
+    expect(
+      nextNode(
+        { ...greeted('severity'), surprised: true, severitySaid: true },
+        ev({ responsibility: 'merchant', severity: 'high', needStatus: 'exceeds' })
+      )
+    ).toBe('apology')
+    expect(
+      nextNode(greeted('greetIssue'), ev({ emotionStatus: 'calm', severity: 'high', needStatus: 'logistics' }))
+    ).toBe('severity')
+    expect(
+      nextNode(greeted('ack'), ev({ emotionStatus: 'calm', responsibility: 'merchant', needStatus: 'missing' }))
+    ).toBe('apology')
+    expect(
+      nextNode(greeted('ack'), ev({ emotionStatus: 'calm', needStatus: 'exceeds', orderStatus: 'pre_order' }))
+    ).toBe('hesitate')
+    const { line, node } = composeLine(greeted('ack'), ev({ needStatus: 'exceeds' }), '再便宜五十', () => 0)
     expect(node).toBe('hesitate')
     expect(line.length).toBeGreaterThan(0)
     expect(line).not.toMatch(/菜单|点一下|👇/)
   })
 
-  it('大白话：不扫顾客原文字猜题——原文像砍价，Jev 说需求不清就仍走问候', () => {
-    expect(nextNode(emptyFlow(), ev({ needStatus: 'unclear' }), '能便宜点吗')).toBe('greet')
-    expect(
-      nextNode(emptyFlow(), ev({ needStatus: 'resolve', topic: 'discount', orderStatus: 'pre_order' }), '在吗')
-    ).toBe('greetIssue')
-  })
-
-  it('大白话：情绪不满先惊讶；要图走拍照；不编政策结论', () => {
-    expect(nextNode(emptyFlow(), ev({ emotionStatus: 'upset', needStatus: 'info', topic: 'logistics' }))).toBe(
-      'surprise'
+  it('大白话：不扫顾客原文字猜题；要图走拍照；不编政策结论', () => {
+    expect(nextNode(emptyFlow(), ev({ needStatus: 'greeting' }), '能便宜点吗')).toBe('greet')
+    expect(nextNode(emptyFlow(), ev({ needStatus: 'discount', orderStatus: 'pre_order' }), '在吗')).toBe(
+      'greetIssue'
     )
-    const greeted = { ...emptyFlow(), greeted: true, node: 'ack' as const }
-    expect(nextNode(greeted, ev({ needStatus: 'photo_needed', topic: 'packaging' }))).toBe('photo')
+    expect(nextNode(greeted('ack'), ev({ needStatus: 'photo_needed', topic: 'packaging' }))).toBe('photo')
     const { line } = composeLine(
       { ...emptyFlow(), greeted: true, node: 'trySolve', topic: 'discount' },
-      ev({ topic: 'discount', needStatus: 'resolve', orderStatus: 'pre_order' }),
+      ev({ needStatus: 'discount', orderStatus: 'pre_order' }),
       '能便宜点吗',
       () => 0
     )
@@ -126,8 +173,9 @@ describe('闸开编排发纯文本', () => {
             department: { choice: 'sales' },
             orderStatus: { choice: 'pre_order' },
             emotionStatus: { choice: 'calm' },
-            needStatus: { choice: exception ? 'exception' : 'resolve' },
-            topic: { choice: 'discount' },
+            severity: { choice: 'low' },
+            responsibility: { choice: 'n/a' },
+            needStatus: { choice: exception ? 'exceeds' : 'discount' },
             exceeds: { noul: exception ? 0.9 : 0.1 },
           },
         }),
