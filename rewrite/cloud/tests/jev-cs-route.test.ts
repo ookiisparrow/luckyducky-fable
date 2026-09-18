@@ -56,17 +56,32 @@ describe('Jev 请求体与映射', () => {
     expect(body.questions.urgency.type).toBe('noul')
     expect(body.questions.department.type).toBe('choice')
     expect(Object.keys(body.questions.department.criteria)).toEqual(['billing', 'technical', 'sales'])
-    expect(Object.keys(body.questions.topic.criteria)).toEqual([
-      'logistics',
-      'packaging',
-      'missing',
-      'course',
-      'discount',
-      'rush',
-      'greeting',
-      'other',
+    expect(Object.keys(body.questions.orderStatus.criteria)).toEqual([
+      'unknown',
+      'pre_order',
+      'ordering',
+      'pre_ship',
+      'shipped',
+      'delivered',
+      'aftersale',
+    ])
+    expect(Object.keys(body.questions.emotionStatus.criteria)).toEqual([
+      'calm',
+      'anxious',
+      'upset',
+      'angry',
+      'positive',
+    ])
+    expect(Object.keys(body.questions.needStatus.criteria)).toEqual([
+      'unclear',
+      'info',
+      'resolve',
+      'exception',
+      'photo_needed',
     ])
     expect(body.questions.exceeds.type).toBe('noul')
+    expect('negative' in body.questions).toBe(false)
+    expect('photo' in body.questions).toBe(false)
   })
 
   it('大白话：科室对上现有菜单类；认不出就空，好走旧路', () => {
@@ -75,6 +90,27 @@ describe('Jev 请求体与映射', () => {
     expect(mapJevDepartment('sales')).toBe('tutorial')
     expect(mapJevDepartment('unknown')).toBe(null)
     expect(parseJevBody(probeBody)).toEqual({ model: 'jev-1.13.0', urgency: 0.98, department: 'billing' })
+    expect(
+      parseJevBody({
+        model: 'jev-1.13.0',
+        answers: {
+          urgency: { noul: 0.2 },
+          department: { choice: 'sales' },
+          orderStatus: { choice: 'pre_order' },
+          emotionStatus: { choice: 'anxious' },
+          needStatus: { choice: 'exception' },
+          topic: { choice: 'discount' },
+        },
+      })
+    ).toEqual({
+      model: 'jev-1.13.0',
+      urgency: 0.2,
+      department: 'sales',
+      orderStatus: 'pre_order',
+      emotionStatus: 'anxious',
+      needStatus: 'exception',
+      topic: 'discount',
+    })
     expect(parseJevBody({ model: 'jev-1.13.0', answers: {} })).toBe(null)
   })
 })
@@ -160,6 +196,9 @@ describe('fail-open 与闸开映射', () => {
     expect(blob).toContain('[kf] jev')
     expect(blob).toContain('jev-1.13.0')
     expect(blob).toContain('billing')
+    expect(blob).toContain('orderStatus')
+    expect(blob).toContain('emotionStatus')
+    expect(blob).toContain('needStatus')
     expect(blob).not.toContain('test-key')
     expect(blob).not.toContain('Bearer')
     expect(blob).not.toContain('TYPESAFE')

@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest'
 import { control } from 'wx-server-sdk'
 import { handleMessage, type DispatchCtx } from '../src/functions/cs/kfCallback/dispatch'
 import { parseNumberedLines, buildPools, pickLine, fillSlots, scriptPools } from '../src/functions/cs/kfCallback/scriptPool'
-import { composeLine, emptyFlow, inferTopic, nextNode } from '../src/functions/cs/kfCallback/scriptReply'
+import { composeLine, emptyFlow, nextNode, routeFromJev } from '../src/functions/cs/kfCallback/scriptReply'
 import { getDb } from '../src/kit'
 import SCRIPT_MD from '../src/functions/cs/kfCallback/scriptAssets.generated.json'
 
@@ -46,17 +46,53 @@ describe('话术库打包与取句', () => {
   })
 })
 
-describe('闸开话术状态机', () => {
-  it('大白话：闲聊先问候；带问题用「在的我看看」；超出预期先犹豫', () => {
-    expect(inferTopic('在吗')).toBe('greeting')
-    expect(inferTopic('能便宜点吗')).toBe('discount')
-    expect(nextNode(emptyFlow(), ev({ topic: 'greeting' }), '在吗')).toBe('greet')
-    expect(nextNode(emptyFlow(), ev({ topic: 'discount' }), '能便宜点吗')).toBe('greetIssue')
-    expect(nextNode(emptyFlow(), ev({ topic: 'rush', exceeds: 0.9 }), '能今天发吗还送赠品')).toBe('hesitate')
-    const { line, node } = composeLine(emptyFlow(), ev({ topic: 'discount', exceeds: 0.9 }), '再便宜五十', () => 0)
+describe('闸开话术状态机（只听 Jev 三态）', () => {
+  it('大白话：需求不清就问候；有需求用「在的我看看」；超出预期先犹豫', () => {
+    expect(routeFromJev(emptyFlow(), ev({ needStatus: 'unclear' })).topic).toBe('greeting')
+    expect(routeFromJev(emptyFlow(), ev({ orderStatus: 'pre_order', needStatus: 'resolve' })).topic).toBe(
+      'discount'
+    )
+    expect(nextNode(emptyFlow(), ev({ needStatus: 'unclear' }))).toBe('greet')
+    expect(
+      nextNode(emptyFlow(), ev({ topic: 'discount', orderStatus: 'pre_order', needStatus: 'resolve' }))
+    ).toBe('greetIssue')
+    expect(
+      nextNode(
+        emptyFlow(),
+        ev({ topic: 'rush', orderStatus: 'pre_ship', needStatus: 'exception', exceeds: 0.9 })
+      )
+    ).toBe('hesitate')
+    const { line, node } = composeLine(
+      emptyFlow(),
+      ev({ topic: 'discount', needStatus: 'exception' }),
+      '再便宜五十',
+      () => 0
+    )
     expect(node).toBe('hesitate')
     expect(line.length).toBeGreaterThan(0)
     expect(line).not.toMatch(/菜单|点一下|👇/)
+  })
+
+  it('大白话：不扫顾客原文字猜题——原文像砍价，Jev 说需求不清就仍走问候', () => {
+    expect(nextNode(emptyFlow(), ev({ needStatus: 'unclear' }), '能便宜点吗')).toBe('greet')
+    expect(
+      nextNode(emptyFlow(), ev({ needStatus: 'resolve', topic: 'discount', orderStatus: 'pre_order' }), '在吗')
+    ).toBe('greetIssue')
+  })
+
+  it('大白话：情绪不满先惊讶；要图走拍照；不编政策结论', () => {
+    expect(nextNode(emptyFlow(), ev({ emotionStatus: 'upset', needStatus: 'info', topic: 'logistics' }))).toBe(
+      'surprise'
+    )
+    const greeted = { ...emptyFlow(), greeted: true, node: 'ack' as const }
+    expect(nextNode(greeted, ev({ needStatus: 'photo_needed', topic: 'packaging' }))).toBe('photo')
+    const { line } = composeLine(
+      { ...emptyFlow(), greeted: true, node: 'trySolve', topic: 'discount' },
+      ev({ topic: 'discount', needStatus: 'resolve', orderStatus: 'pre_order' }),
+      '能便宜点吗',
+      () => 0
+    )
+    expect(line).not.toMatch(/满\d|减\d|暗折/)
   })
 })
 
@@ -79,7 +115,7 @@ describe('闸开编排发纯文本', () => {
     process.env.TYPESAFE_API_KEY = 'test-key'
     ;(globalThis as any).fetch = async (_url: string, init?: any) => {
       const state = init && init.body ? JSON.parse(init.body).state : ''
-      const exceeds = String(state).includes('赠品') || String(state).includes('五十')
+      const exception = String(state).includes('赠品') || String(state).includes('五十')
       return {
         ok: true,
         status: 200,
@@ -88,8 +124,11 @@ describe('闸开编排发纯文本', () => {
           answers: {
             urgency: { noul: 0.2 },
             department: { choice: 'sales' },
+            orderStatus: { choice: 'pre_order' },
+            emotionStatus: { choice: 'calm' },
+            needStatus: { choice: exception ? 'exception' : 'resolve' },
             topic: { choice: 'discount' },
-            exceeds: { noul: exceeds ? 0.9 : 0.1 },
+            exceeds: { noul: exception ? 0.9 : 0.1 },
           },
         }),
       }

@@ -21,14 +21,29 @@ export const JEV_TOPICS = [
   'other',
 ] as const
 export type JevTopic = (typeof JEV_TOPICS)[number]
+export const JEV_ORDER = [
+  'unknown',
+  'pre_order',
+  'ordering',
+  'pre_ship',
+  'shipped',
+  'delivered',
+  'aftersale',
+] as const
+export type JevOrderStatus = (typeof JEV_ORDER)[number]
+export const JEV_EMOTION = ['calm', 'anxious', 'upset', 'angry', 'positive'] as const
+export type JevEmotionStatus = (typeof JEV_EMOTION)[number]
+export const JEV_NEED = ['unclear', 'info', 'resolve', 'exception', 'photo_needed'] as const
+export type JevNeedStatus = (typeof JEV_NEED)[number]
 export type JevResult = {
   model: string
   urgency: number
   department: JevDepartment
   topic?: JevTopic | null
+  orderStatus?: JevOrderStatus
+  emotionStatus?: JevEmotionStatus
+  needStatus?: JevNeedStatus
   exceeds?: number
-  negative?: number
-  photo?: number
 }
 
 type JevFetch = (
@@ -36,7 +51,7 @@ type JevFetch = (
   init?: { method?: string; headers?: Record<string, string>; body?: string; signal?: AbortSignal }
 ) => Promise<{ ok?: boolean; status?: number; json: () => Promise<any> }>
 
-/** 官方请求体：state=进线原文，questions=urgency(noul)+department(choice)。 */
+/** 官方请求体：state=进线原文。Jev 主分流=订单/情绪/需求三态（话术库只按答案选句，不编政策）。 */
 export function jevRequestBody(state: string) {
   return {
     model: JEV_MODEL,
@@ -50,6 +65,41 @@ export function jevRequestBody(state: string) {
           billing: 'Payments, invoicing, refunds',
           technical: 'Bugs, outages, integrations',
           sales: 'Pricing, upgrades, new accounts',
+        },
+      },
+      orderStatus: {
+        type: 'choice',
+        instructions: 'Where is this order in its lifecycle?',
+        criteria: {
+          unknown: 'Cannot tell / no order context yet',
+          pre_order: 'Browsing or asking before placing an order',
+          ordering: 'In the middle of placing an order',
+          pre_ship: 'Paid, not shipped yet',
+          shipped: 'Shipped, not received',
+          delivered: 'Customer says they received it',
+          aftersale: 'Refund, return, or dispute after sale',
+        },
+      },
+      emotionStatus: {
+        type: 'choice',
+        instructions: 'What is the customer emotion right now?',
+        criteria: {
+          calm: 'Neutral, polite, matter-of-fact',
+          anxious: 'Worried, in a hurry, restless',
+          upset: 'Unhappy, disappointed, complaining',
+          angry: 'Angry, accusing, harsh',
+          positive: 'Pleased, thankful, friendly',
+        },
+      },
+      needStatus: {
+        type: 'choice',
+        instructions: 'What does the customer need from us in this turn?',
+        criteria: {
+          unclear: 'Greeting or no concrete ask yet',
+          info: 'Wants a status or explanation',
+          resolve: 'Wants us to fix or do something',
+          exception: 'Ask exceeds normal policy; do not promise',
+          photo_needed: 'A photo or screenshot from the customer is required next',
         },
       },
       topic: {
@@ -71,15 +121,6 @@ export function jevRequestBody(state: string) {
         instructions:
           'Does the customer ask for something beyond normal policy (extra discount, special rush, free extras, a promise you cannot make)?',
       },
-      negative: {
-        type: 'noul',
-        instructions: 'Is the customer upset, angry, or complaining?',
-      },
-      photo: {
-        type: 'noul',
-        instructions:
-          'Would a photo or screenshot from the customer help (damage, missing parts, error screen)?',
-      },
     },
   }
 }
@@ -91,6 +132,11 @@ function noulOf(body: any, key: string): number | undefined {
   return Number.isFinite(n) ? n : undefined
 }
 
+function choiceOf<T extends string>(body: any, key: string, allowed: readonly T[]): T | undefined {
+  const raw = String((body && body.answers && body.answers[key] && body.answers[key].choice) || '')
+  return allowed.includes(raw as T) ? (raw as T) : undefined
+}
+
 export function parseJevBody(body: any): JevResult | null {
   const model = String((body && body.model) || '')
   const urgency = Number(body && body.answers && body.answers.urgency && body.answers.urgency.noul)
@@ -98,19 +144,20 @@ export function parseJevBody(body: any): JevResult | null {
     (body && body.answers && body.answers.department && body.answers.department.choice) || ''
   )
   if (!model || !Number.isFinite(urgency) || !DEPTS.includes(department as JevDepartment)) return null
-  const topicRaw = String((body && body.answers && body.answers.topic && body.answers.topic.choice) || '')
-  const topic = JEV_TOPICS.includes(topicRaw as JevTopic) ? (topicRaw as JevTopic) : undefined
+  const topic = choiceOf(body, 'topic', JEV_TOPICS)
+  const orderStatus = choiceOf(body, 'orderStatus', JEV_ORDER)
+  const emotionStatus = choiceOf(body, 'emotionStatus', JEV_EMOTION)
+  const needStatus = choiceOf(body, 'needStatus', JEV_NEED)
   const exceeds = noulOf(body, 'exceeds')
-  const negative = noulOf(body, 'negative')
-  const photo = noulOf(body, 'photo')
   return {
     model,
     urgency,
     department: department as JevDepartment,
     ...(topic ? { topic } : {}),
+    ...(orderStatus ? { orderStatus } : {}),
+    ...(emotionStatus ? { emotionStatus } : {}),
+    ...(needStatus ? { needStatus } : {}),
     ...(exceeds != null ? { exceeds } : {}),
-    ...(negative != null ? { negative } : {}),
-    ...(photo != null ? { photo } : {}),
   }
 }
 
@@ -176,7 +223,7 @@ export async function askJev(state: string, apiKey: string, fetchFn?: JevFetch):
   return parseJevBody(await res.json())
 }
 
-/** 非密钥证据：模型号 / 紧急度 / 科室 / 映射结果。不打 key、不打原文、不打 Authorization。 */
+/** 非密钥证据：模型号 / 三态 / 科室。不打 key、不打原文、不打 Authorization。 */
 export function logJevEvidence(
   ev: JevResult,
   mapped: string | null,
@@ -186,6 +233,9 @@ export function logJevEvidence(
     model: ev.model,
     urgency: ev.urgency,
     department: ev.department,
+    orderStatus: ev.orderStatus || null,
+    emotionStatus: ev.emotionStatus || null,
+    needStatus: ev.needStatus || null,
     topic: extra && extra.topic != null ? extra.topic : ev.topic || null,
     exceeds: ev.exceeds,
     mapped,

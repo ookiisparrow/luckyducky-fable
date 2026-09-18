@@ -1,9 +1,10 @@
 /**
- * 闸开时的话术状态机：按节点取一句纯文本（不发气泡）。会话记在 kfState `jevflow:<euid>`。
+ * 闸开时的话术状态机：只按 Jev 路由答案选节点/抽句（不发气泡、不编政策）。
+ * 会话记在 kfState `jevflow:<euid>`。
  */
 
 import { COLLECTIONS } from '@ldrw/shared'
-import type { JevResult } from './jev'
+import type { JevEmotionStatus, JevNeedStatus, JevOrderStatus, JevResult } from './jev'
 import { fillSlots, pickLine, rememberUsed, type ScriptPoolId } from './scriptPool'
 
 export type ScriptNode =
@@ -34,6 +35,7 @@ export type ScriptTopic =
 export type JevFlowState = {
   node: ScriptNode | ''
   topic: ScriptTopic | ''
+  orderStatus: JevOrderStatus | ''
   greeted: boolean
   hesitated: boolean
   surprised: boolean
@@ -41,45 +43,50 @@ export type JevFlowState = {
   used: string[]
 }
 
-const HELLO = /^(在吗|你好|您好|嗨|哈喽|hello|hi|在么|有人吗)[？?!~～。.\s]*$/i
-
-const TOPIC_HINTS: { topic: ScriptTopic; words: string[] }[] = [
-  { topic: 'logistics', words: ['物流', '快递', '包裹', '运单', '几天到', '还没到'] },
-  { topic: 'packaging', words: ['包装', '箱子', '盒子烂', '破了', '压坏'] },
-  { topic: 'missing', words: ['缺件', '少配件', '少材料', '没齐'] },
-  { topic: 'course', words: ['进不去', '打不开课', '看不了课', '报错'] },
-  { topic: 'discount', words: ['便宜', '打折', '优惠', '券', '减价'] },
-  { topic: 'rush', words: ['加急', '催发', '快点发', '今天发'] },
-]
-
-export function inferTopic(text: string, department?: string): ScriptTopic {
-  const t = String(text || '')
-  for (const g of TOPIC_HINTS) if (g.words.some((w) => t.includes(w))) return g.topic
-  if (HELLO.test(t.trim())) return 'greeting'
-  if (department === 'technical') return 'course'
-  if (department === 'sales') return 'discount'
-  if (department === 'billing') return 'other'
-  return t.trim().length <= 4 ? 'greeting' : 'other'
+export type JevRoute = {
+  topic: ScriptTopic
+  orderStatus: JevOrderStatus
+  emotionStatus: JevEmotionStatus
+  needStatus: JevNeedStatus
+  exceeds: boolean
 }
 
-export function nextNode(state: JevFlowState, ev: JevResult, text: string): ScriptNode {
-  const topic = (ev.topic || state.topic || inferTopic(text, ev.department)) as ScriptTopic
-  const exceeds = Number(ev.exceeds || 0) >= 0.55
-  const negative = Number(ev.negative || 0) >= 0.55
-  const photoTopic = topic === 'packaging' || topic === 'missing' || topic === 'course'
+function topicFromOrder(order: JevOrderStatus, need: JevNeedStatus): ScriptTopic | '' {
+  if (need === 'unclear') return 'greeting'
+  if (order === 'pre_order' || order === 'ordering') return 'discount'
+  if (order === 'pre_ship') return 'rush'
+  if (order === 'shipped') return 'logistics'
+  if (order === 'aftersale') return 'other'
+  return ''
+}
+
+/** 只读 Jev 答案（+会话里已记下的主题/订单态）。不扫顾客原文猜题。 */
+export function routeFromJev(state: JevFlowState, ev: JevResult): JevRoute {
+  const orderStatus = ev.orderStatus || state.orderStatus || 'unknown'
+  const emotionStatus = ev.emotionStatus || 'calm'
+  const needStatus = ev.needStatus || 'unclear'
+  const exceeds = needStatus === 'exception' || Number(ev.exceeds || 0) >= 0.55
+  const topic = (ev.topic ||
+    topicFromOrder(orderStatus, needStatus) ||
+    state.topic ||
+    'other') as ScriptTopic
+  return { topic, orderStatus, emotionStatus, needStatus, exceeds }
+}
+
+export function nextNode(state: JevFlowState, ev: JevResult, _text = ''): ScriptNode {
+  const { topic, emotionStatus, needStatus, exceeds } = routeFromJev(state, ev)
+  const negative = emotionStatus === 'upset' || emotionStatus === 'angry'
 
   if (exceeds && !state.hesitated) return 'hesitate'
   if (negative && !state.surprised) return 'surprise'
   if (negative && state.surprised && state.node === 'surprise') return 'awkward'
-  if (!state.greeted)
-    return topic === 'greeting' || HELLO.test(String(text || '').trim()) ? 'greet' : 'greetIssue'
-
+  if (!state.greeted) return needStatus === 'unclear' || topic === 'greeting' ? 'greet' : 'greetIssue'
+  if (needStatus === 'photo_needed' && !state.photoAsked) return 'photo'
   if (
-    photoTopic &&
-    !state.photoAsked &&
-    (state.node === 'ack' || state.node === 'restate' || state.node === 'empathy')
+    emotionStatus === 'anxious' &&
+    (state.node === 'greet' || state.node === 'greetIssue' || state.node === 'ack')
   )
-    return 'photo'
+    return 'empathy'
 
   switch (state.node) {
     case 'hesitate':
@@ -88,10 +95,13 @@ export function nextNode(state: JevFlowState, ev: JevResult, text: string): Scri
     case 'awkward':
       return 'empathy'
     case 'empathy':
-      return photoTopic ? 'photo' : 'restate'
+      if (needStatus === 'photo_needed') return 'photo'
+      return needStatus === 'resolve' ? 'reassure' : 'restate'
+    case 'reassure':
+      return needStatus === 'photo_needed' ? 'photo' : 'trySolve'
     case 'greet':
     case 'greetIssue':
-      return 'ack'
+      return needStatus === 'info' ? 'restate' : 'ack'
     case 'ack':
       return 'restate'
     case 'restate':
@@ -99,7 +109,7 @@ export function nextNode(state: JevFlowState, ev: JevResult, text: string): Scri
     case 'photo':
       return 'trySolve'
     case 'trySolve':
-      return 'answer'
+      return needStatus === 'info' || needStatus === 'resolve' ? 'answer' : 'askMore'
     default:
       return 'askMore'
   }
@@ -109,7 +119,8 @@ function poolFor(node: ScriptNode, topic: ScriptTopic, ev: JevResult): ScriptPoo
   if (node === 'answer') {
     if (topic === 'discount') return 'discountConfirm'
     if (topic === 'rush') return 'rushConfirm'
-    if (topic === 'logistics' && Number(ev.negative || 0) >= 0.55) return 'logisticsSlow'
+    if (topic === 'logistics' && (ev.emotionStatus === 'upset' || ev.emotionStatus === 'angry'))
+      return 'logisticsSlow'
     return 'answer'
   }
   if (node === 'photo') {
@@ -123,16 +134,6 @@ function poolFor(node: ScriptNode, topic: ScriptTopic, ev: JevResult): ScriptPoo
   return node
 }
 
-function safeConclusion(topic: ScriptTopic): string {
-  if (topic === 'logistics') return '物流进度我先核对，核对完立刻回您'
-  if (topic === 'discount') return '优惠规则我先确认，确认后回您，不跟您瞎说'
-  if (topic === 'rush') return '能不能加急我先问排期，问完回您'
-  if (topic === 'packaging') return '您先把包装和产品合照发我，我看好不好处理'
-  if (topic === 'missing') return '您先拍张开箱图，我对完清单再处理'
-  if (topic === 'course') return '您先发报错截图，我按图帮您排'
-  return '我先帮您确认一下，确认后回您'
-}
-
 export function compressNeed(text: string): string {
   const t = String(text || '').replace(/\s+/g, '').slice(0, 24)
   return t || '您刚说的这件事'
@@ -142,6 +143,7 @@ export function emptyFlow(): JevFlowState {
   return {
     node: '',
     topic: '',
+    orderStatus: '',
     greeted: false,
     hesitated: false,
     surprised: false,
@@ -150,11 +152,17 @@ export function emptyFlow(): JevFlowState {
   }
 }
 
-export function applyNode(state: JevFlowState, node: ScriptNode, topic: ScriptTopic): JevFlowState {
+export function applyNode(
+  state: JevFlowState,
+  node: ScriptNode,
+  topic: ScriptTopic,
+  orderStatus: JevOrderStatus
+): JevFlowState {
   return {
     ...state,
     node,
     topic: topic || state.topic,
+    orderStatus: orderStatus || state.orderStatus,
     greeted: state.greeted || node === 'greet' || node === 'greetIssue',
     hesitated: state.hesitated || node === 'hesitate',
     surprised: state.surprised || node === 'surprise',
@@ -168,14 +176,14 @@ export function composeLine(
   text: string,
   rand: () => number = Math.random
 ): { line: string; next: JevFlowState; node: ScriptNode; topic: ScriptTopic } {
-  const topic = (ev.topic || state.topic || inferTopic(text, ev.department)) as ScriptTopic
-  const node = nextNode({ ...state, topic }, ev, text)
-  const slots = { 需求: compressNeed(text), 结论: safeConclusion(topic) }
-  let line = fillSlots(pickLine(poolFor(node, topic, ev), state.used, undefined, rand), slots)
+  const route = routeFromJev(state, ev)
+  const node = nextNode({ ...state, topic: route.topic, orderStatus: route.orderStatus }, ev)
+  const slots = { 需求: compressNeed(text) }
+  let line = fillSlots(pickLine(poolFor(node, route.topic, ev), state.used, undefined, rand), slots)
   if (!line) line = fillSlots(pickLine('ack', state.used, undefined, rand), slots)
-  const next = applyNode(state, node, topic)
+  const next = applyNode(state, node, route.topic, route.orderStatus)
   next.used = rememberUsed(state.used, line)
-  return { line, next, node, topic }
+  return { line, next, node, topic: route.topic }
 }
 
 export async function composeScriptReply(
