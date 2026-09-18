@@ -56,6 +56,48 @@ describe('Jev 请求体与映射', () => {
     expect(body.questions.urgency.type).toBe('noul')
     expect(body.questions.department.type).toBe('choice')
     expect(Object.keys(body.questions.department.criteria)).toEqual(['billing', 'technical', 'sales'])
+    expect(Object.keys(body.questions.orderStatus.criteria)).toEqual([
+      'pre_order',
+      'ordering',
+      'pre_ship',
+      'shipped',
+      'delivered',
+      'unknown',
+    ])
+    expect(Object.keys(body.questions.emotionStatus.criteria)).toEqual([
+      'calm',
+      'anxious',
+      'upset',
+      'angry',
+      'disappointed',
+      'confused',
+      'embarrassed',
+      'hesitant',
+      'curious',
+      'other',
+    ])
+    expect(Object.keys(body.questions.severity.criteria)).toEqual(['low', 'medium', 'high'])
+    expect(Object.keys(body.questions.responsibility.criteria)).toEqual([
+      'customer',
+      'merchant',
+      'logistics',
+      'unclear',
+      'n/a',
+    ])
+    expect(Object.keys(body.questions.needStatus.criteria)).toEqual([
+      'logistics',
+      'packaging',
+      'missing',
+      'course',
+      'discount',
+      'rush',
+      'exceeds',
+      'photo_needed',
+      'greeting',
+      'other',
+    ])
+    expect(body.questions.exceeds.type).toBe('noul')
+    expect('topic' in body.questions).toBe(false)
   })
 
   it('大白话：科室对上现有菜单类；认不出就空，好走旧路', () => {
@@ -64,6 +106,29 @@ describe('Jev 请求体与映射', () => {
     expect(mapJevDepartment('sales')).toBe('tutorial')
     expect(mapJevDepartment('unknown')).toBe(null)
     expect(parseJevBody(probeBody)).toEqual({ model: 'jev-1.13.0', urgency: 0.98, department: 'billing' })
+    expect(
+      parseJevBody({
+        model: 'jev-1.13.0',
+        answers: {
+          urgency: { noul: 0.2 },
+          department: { choice: 'sales' },
+          orderStatus: { choice: 'pre_order' },
+          emotionStatus: { choice: 'anxious' },
+          severity: { choice: 'medium' },
+          responsibility: { choice: 'unclear' },
+          needStatus: { choice: 'exceeds' },
+        },
+      })
+    ).toEqual({
+      model: 'jev-1.13.0',
+      urgency: 0.2,
+      department: 'sales',
+      orderStatus: 'pre_order',
+      emotionStatus: 'anxious',
+      severity: 'medium',
+      responsibility: 'unclear',
+      needStatus: 'exceeds',
+    })
     expect(parseJevBody({ model: 'jev-1.13.0', answers: {} })).toBe(null)
   })
 })
@@ -105,7 +170,7 @@ describe('fail-open 与闸开映射', () => {
     expect(sent[1].msgmenu.head_content).toContain('想咨询什么')
   })
 
-  it('大白话：闸开且 Jev 回 billing——没关键词时弹售后菜单；打中关键词仍听关键词', async () => {
+  it('大白话：闸开且 Jev 回了——没关键词发话术纯文本，不弹气泡；打中关键词仍听关键词', async () => {
     process.env.JEV_CS_ROUTE = '1'
     process.env.TYPESAFE_API_KEY = 'test-key'
     const seen: { url: string; auth?: string; body?: any }[] = []
@@ -123,7 +188,8 @@ describe('fail-open 与闸开映射', () => {
     expect(seen[0].auth).toBe('Bearer test-key')
     expect(seen[0].body.model).toBe(JEV_MODEL)
     expect(seen[0].body.state).toBe('钱的事情问一下')
-    expect(sent[0].msgmenu.head_content).toContain('售后')
+    expect(sent[0].msgtype).toBe('text')
+    expect(sent[0].text.content).toMatch(/在的|帮您|嗨|帮忙/)
 
     await handleMessage(ctx, { externalUserId: 'eu1', menuId: '', text: '快递到哪了' })
     expect(sent[1].msgmenu.head_content).toContain('快递') // 关键词优先
@@ -148,6 +214,12 @@ describe('fail-open 与闸开映射', () => {
     expect(blob).toContain('[kf] jev')
     expect(blob).toContain('jev-1.13.0')
     expect(blob).toContain('billing')
+    expect(blob).toContain('orderStatus')
+    expect(blob).toContain('emotionStatus')
+    expect(blob).toContain('severity')
+    expect(blob).toContain('responsibility')
+    expect(blob).toContain('needStatus')
+    expect(blob).toContain('acting')
     expect(blob).not.toContain('test-key')
     expect(blob).not.toContain('Bearer')
     expect(blob).not.toContain('TYPESAFE')
