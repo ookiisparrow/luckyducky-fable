@@ -42,7 +42,17 @@ beforeEach(() => {
 })
 afterEach(() => {
   ;(globalThis as any).fetch = fetchBackup
-  for (const k of ['WXKF_CORPID', 'WXKF_SECRET', 'WXKF_TOKEN', 'WXKF_AESKEY']) delete process.env[k]
+  for (const k of [
+    'WXKF_CORPID',
+    'WXKF_SECRET',
+    'WXKF_TOKEN',
+    'WXKF_AESKEY',
+    'JEV_CS_ROUTE',
+    'TYPESAFE_API_KEY',
+    'WX_ENV_VERSION',
+    'TCB_ENV_VERSION',
+  ])
+    delete process.env[k]
 })
 
 describe('去重认领与防吞单（黄金 §四）', () => {

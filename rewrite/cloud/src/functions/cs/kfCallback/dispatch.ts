@@ -1,5 +1,6 @@
 import { COLLECTIONS } from '@ldrw/shared'
 import { alert, transition, sendAgentCard, AGENT_DESK_URL } from '../../../kit'
+import { jevHitWord, logJevEvidence, mapJevDepartment, tryJevClassify } from './jev'
 
 /**
  * 客服分流引擎（避免幻觉第一·非生成式）：关键词识别 → 高亮 msgmenu 气泡分流；按回传 menu_id →
@@ -618,8 +619,15 @@ export async function handleMessage(ctx: DispatchCtx, incoming: Incoming): Promi
 
   const r: Route = incoming.menuId
     ? route(incoming.menuId)
-    : (() => {
+    : await (async () => {
         const hit = recognize(incoming.text)
+        // 体验/开发闸开才打 Jev；正式/闸关走旧关键词。Jev 挂了 fail-open 回关键词/根菜单。
+        const ev = await tryJevClassify(db, incoming.text)
+        if (ev) {
+          const cat = mapJevDepartment(ev.department)
+          logJevEvidence(ev, cat || (hit ? hit.cat : null), { stateLen: String(incoming.text || '').length })
+          if (!hit && cat) return { type: 'menu' as const, content: menuFor(cat, jevHitWord(ev.department)) }
+        }
         return hit
           ? ({ type: 'menu', content: menuFor(hit.cat, hit.word) } as Route)
           : ({ type: 'menu', content: rootMenu() } as Route)
