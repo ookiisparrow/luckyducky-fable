@@ -1,10 +1,12 @@
 /**
- * 闸开选句：优先级 订单→情绪→严重程度→责任（勿反）。
- * 需求只给主题池 / 犹豫 / 拍照，不抢前四步。不编政策。
- * 会话记在 kfState `jevflow:<euid>`。
+ * 闸开主流程 v0.0.2（含 bot 情绪表演）。图：cs-scripts/docs/10 + 老板定稿 mermaid。
+ * 选句优先级 订单→情绪→严重程度→责任（勿反）。需求只给主题/犹豫/拍照。
+ * 顾客情绪 ≠ bot 表演；道歉仅 responsibility=merchant。不编政策。
+ * 会话记在 kfState `jevflow:<euid>`；data 不带 _id（真 sdk reject）。
  */
 
 import { COLLECTIONS } from '@ldrw/shared'
+import { alert } from '../../../kit'
 import type {
   JevEmotionStatus,
   JevNeedStatus,
@@ -18,19 +20,31 @@ import { fillSlots, pickLine, rememberUsed, type ScriptPoolId } from './scriptPo
 export type ScriptNode =
   | 'greet'
   | 'greetIssue'
-  | 'ack'
   | 'restate'
-  | 'hesitate'
-  | 'trySolve'
-  | 'answer'
   | 'askMore'
+  | 'photo'
+  | 'promise'
+  | 'askCoop'
+  | 'answer'
+  | 'askNext'
+  | 'hesitate'
   | 'surprise'
   | 'awkward'
-  | 'empathy'
-  | 'reassure'
-  | 'photo'
   | 'severity'
+  | 'human'
+
+export type Acting =
+  | 'reassure'
+  | 'empathy'
   | 'apology'
+  | 'hesitate'
+  | 'clarify'
+  | 'steady'
+  | 'light'
+  | 'surprise'
+  | 'awkward'
+
+export type ActingCheckpoint = 'pick' | 'review' | 'promise' | 'coop' | 'solve' | ''
 
 export type ScriptTopic =
   | 'logistics'
@@ -46,12 +60,17 @@ export type JevFlowState = {
   node: ScriptNode | ''
   topic: ScriptTopic | ''
   orderStatus: JevOrderStatus | ''
+  acting: Acting | ''
+  checkpoint: ActingCheckpoint
   greeted: boolean
   hesitated: boolean
   surprised: boolean
   photoAsked: boolean
   severitySaid: boolean
-  apologized: boolean
+  restated: boolean
+  promised: boolean
+  solved: boolean
+  coopCount: number
   used: string[]
 }
 
@@ -64,6 +83,24 @@ export type JevRoute = {
   needStatus: JevNeedStatus
   exceeds: boolean
 }
+
+const FLOW_KEYS = [
+  'node',
+  'topic',
+  'orderStatus',
+  'acting',
+  'checkpoint',
+  'greeted',
+  'hesitated',
+  'surprised',
+  'photoAsked',
+  'severitySaid',
+  'restated',
+  'promised',
+  'solved',
+  'coopCount',
+  'used',
+] as const
 
 const TOPIC_NEEDS: readonly ScriptTopic[] = [
   'logistics',
@@ -104,85 +141,116 @@ function isNegative(emotion: JevEmotionStatus): boolean {
   return emotion === 'upset' || emotion === 'angry' || emotion === 'disappointed'
 }
 
+function needsCoop(r: JevRoute, state: JevFlowState): boolean {
+  if (r.needStatus === 'photo_needed' && !state.photoAsked) return true
+  if ((r.needStatus === 'missing' || r.needStatus === 'packaging' || r.needStatus === 'course') && !state.photoAsked)
+    return true
+  return false
+}
+
+function infoThin(r: JevRoute): boolean {
+  if (r.needStatus === 'photo_needed') return true
+  if (r.emotionStatus === 'confused') return true
+  if (r.needStatus === 'other' || r.needStatus === 'greeting') return true
+  return false
+}
+
 /** 只读 Jev 答案。不扫顾客原文猜题。 */
 export function routeFromJev(state: JevFlowState, ev: JevResult): JevRoute {
   const orderStatus = ev.orderStatus || state.orderStatus || 'unknown'
   const emotionStatus = ev.emotionStatus || 'calm'
   const severity = ev.severity || 'low'
   const responsibility = ev.responsibility || 'n/a'
-  const needStatus = ev.needStatus || (ev.topic && (TOPIC_NEEDS as readonly string[]).includes(ev.topic) ? ev.topic : 'other')
+  const needStatus =
+    ev.needStatus || (ev.topic && (TOPIC_NEEDS as readonly string[]).includes(ev.topic) ? ev.topic : 'other')
   const exceeds = needStatus === 'exceeds' || Number(ev.exceeds || 0) >= 0.55
   const topic = topicOf(needStatus, orderStatus, (ev.topic || state.topic || '') as ScriptTopic | '')
   return { topic, orderStatus, emotionStatus, severity, responsibility, needStatus, exceeds }
 }
 
+export function checkpointOf(node: ScriptNode): ActingCheckpoint {
+  if (node === 'greet' || node === 'greetIssue' || node === 'surprise' || node === 'awkward' || node === 'hesitate')
+    return 'pick'
+  if (node === 'severity' || node === 'restate' || node === 'askMore') return 'review'
+  if (node === 'promise') return 'promise'
+  if (node === 'photo' || node === 'askCoop') return 'coop'
+  if (node === 'answer' || node === 'askNext') return 'solve'
+  return ''
+}
+
+function emotionToActing(emotion: JevEmotionStatus): Acting {
+  if (emotion === 'angry' || emotion === 'upset' || emotion === 'anxious') return 'reassure'
+  if (emotion === 'disappointed') return 'empathy'
+  if (emotion === 'confused' || emotion === 'embarrassed') return 'clarify'
+  if (emotion === 'hesitant') return 'hesitate'
+  if (emotion === 'curious') return 'light'
+  return 'steady'
+}
+
+/**
+ * 顾客情绪 → bot 表演。顾客激动 ≠ 客服激动。
+ * 道歉仅责任=我方。严重程度/责任在映射层叠加。
+ */
+export function actingOf(route: JevRoute, node: ScriptNode): Acting {
+  if (node === 'surprise') return 'surprise'
+  if (node === 'awkward') return 'awkward'
+  if (node === 'hesitate') return 'hesitate'
+  if (node === 'human') return 'steady'
+
+  const cp = checkpointOf(node)
+  const afterReview = cp === 'review' || cp === 'promise' || cp === 'coop' || cp === 'solve'
+  if (route.responsibility === 'merchant' && afterReview) return 'apology'
+  if (route.exceeds && afterReview) return 'hesitate'
+  if (
+    (route.responsibility === 'logistics' || route.responsibility === 'customer') &&
+    (isNegative(route.emotionStatus) || route.emotionStatus === 'anxious')
+  )
+    return 'empathy'
+  if (node === 'askNext' && !isNegative(route.emotionStatus)) return 'light'
+  const base = emotionToActing(route.emotionStatus)
+  if (route.severity === 'high' && (base === 'steady' || base === 'light') && afterReview) return 'reassure'
+  return base
+}
+
 export function nextNode(state: JevFlowState, ev: JevResult, _text = ''): ScriptNode {
   const r = routeFromJev(state, ev)
 
-  // 1. 订单（最高）：没开场先按订单/有没有事走开场，情绪/严重/责任/需求都让路
+  // 1. 订单（最高）：没开场先按订单/有没有事走开场
   if (!state.greeted) {
     if (r.needStatus === 'greeting' || (r.orderStatus === 'unknown' && !isTopicNeed(r.needStatus))) return 'greet'
     return 'greetIssue'
   }
 
-  // 2. 情绪
+  // 2. 情绪穿插
   if (isNegative(r.emotionStatus) && !state.surprised) return 'surprise'
   if (isNegative(r.emotionStatus) && state.surprised && state.node === 'surprise') return 'awkward'
-  if (r.emotionStatus === 'embarrassed' && state.surprised) return 'awkward'
-  if (
-    r.emotionStatus === 'anxious' &&
-    (state.node === 'greet' || state.node === 'greetIssue' || state.node === 'ack')
-  )
-    return 'empathy'
+  if (r.emotionStatus === 'embarrassed' && state.surprised && state.node === 'surprise') return 'awkward'
 
-  // 3. 严重程度（情绪处理完或不需要处理才到这一步；有旗，不循环）
+  // 3. 严重程度
   if (r.severity === 'high' && !state.severitySaid) return 'severity'
 
-  // 4. 责任（最后）：已确认我方才道歉；物流/顾客侧只同理（同理不设旗，仍钉在刚处理完的节点，防循环）
-  if (r.responsibility === 'merchant' && !state.apologized) return 'apology'
-  if (
-    (r.responsibility === 'logistics' || r.responsibility === 'customer') &&
-    (state.node === 'surprise' || state.node === 'awkward' || state.node === 'severity')
-  )
-    return 'empathy'
-
-  // 需求：犹豫 / 拍照（不抢 1→4）
+  // 4. 责任不单独占一句（表演复核里才允许道歉）；需求：犹豫 / 要图
   if (r.exceeds && !state.hesitated) return 'hesitate'
-  if (r.needStatus === 'photo_needed' && !state.photoAsked) return 'photo'
+  if (r.needStatus === 'photo_needed' && !state.photoAsked && !state.restated) return 'photo'
 
-  switch (state.node) {
-    case 'hesitate':
-      return 'trySolve'
-    case 'surprise':
-    case 'awkward':
-      return 'empathy'
-    case 'severity':
-    case 'apology':
-      return r.needStatus === 'photo_needed' ? 'photo' : 'trySolve'
-    case 'empathy':
-      if (r.needStatus === 'photo_needed') return 'photo'
-      return r.responsibility === 'merchant' ? 'reassure' : 'restate'
-    case 'reassure':
-      return r.needStatus === 'photo_needed' ? 'photo' : 'trySolve'
-    case 'greet':
-    case 'greetIssue':
-      return 'ack'
-    case 'ack':
-      return 'restate'
-    case 'restate':
-      return 'trySolve'
-    case 'photo':
-      return 'trySolve'
-    case 'trySolve':
-      return r.needStatus === 'greeting' || r.needStatus === 'other' || r.needStatus === 'exceeds'
-        ? 'askMore'
-        : 'answer'
-    default:
-      return 'askMore'
+  if (!state.restated) {
+    if (infoThin(r)) return r.needStatus === 'photo_needed' ? 'photo' : 'askMore'
+    return 'restate'
   }
+  if (!state.promised) return 'promise'
+  if (needsCoop(r, state)) {
+    if (state.coopCount >= 3) return 'human'
+    return r.needStatus === 'photo_needed' || r.needStatus === 'missing' || r.needStatus === 'packaging' || r.needStatus === 'course'
+      ? 'photo'
+      : 'askCoop'
+  }
+  if (!state.solved) return 'answer'
+  return 'askNext'
 }
 
 function poolFor(node: ScriptNode, topic: ScriptTopic, ev: JevResult): ScriptPoolId {
+  if (node === 'promise') return 'trySolve'
+  if (node === 'askNext' || node === 'askCoop') return 'askMore'
   if (node === 'answer') {
     if (topic === 'discount') return 'discountConfirm'
     if (topic === 'rush') return 'rushConfirm'
@@ -196,8 +264,19 @@ function poolFor(node: ScriptNode, topic: ScriptTopic, ev: JevResult): ScriptPoo
     return 'photo'
   }
   if (node === 'restate' && topic === 'discount') return 'discountRestate'
-  if (node === 'empathy' && topic === 'rush') return 'rushEmpathy'
-  return node
+  return node === 'human' ? 'askMore' : (node as ScriptPoolId)
+}
+
+function actingPool(acting: Acting): ScriptPoolId {
+  if (acting === 'reassure') return 'reassure'
+  if (acting === 'empathy') return 'empathy'
+  if (acting === 'apology') return 'apology'
+  if (acting === 'hesitate') return 'hesitate'
+  if (acting === 'clarify') return 'clarify'
+  if (acting === 'surprise') return 'surprise'
+  if (acting === 'awkward') return 'awkward'
+  if (acting === 'light') return 'askMore'
+  return 'ack'
 }
 
 export function compressNeed(text: string): string {
@@ -210,34 +289,90 @@ export function emptyFlow(): JevFlowState {
     node: '',
     topic: '',
     orderStatus: '',
+    acting: '',
+    checkpoint: '',
     greeted: false,
     hesitated: false,
     surprised: false,
     photoAsked: false,
     severitySaid: false,
-    apologized: false,
+    restated: false,
+    promised: false,
+    solved: false,
+    coopCount: 0,
     used: [],
   }
+}
+
+/** 读库：只收状态机字段，丢掉 _id / 杂字段。 */
+export function loadFlow(raw: unknown): JevFlowState {
+  const next = emptyFlow()
+  if (!raw || typeof raw !== 'object') return next
+  const src = raw as Record<string, unknown>
+  for (const k of FLOW_KEYS) {
+    if (k === 'used') continue
+    if (src[k] !== undefined) (next as Record<string, unknown>)[k] = src[k]
+  }
+  next.used = Array.isArray(src.used) ? (src.used as string[]) : []
+  next.coopCount = Number.isFinite(Number(src.coopCount)) ? Number(src.coopCount) : 0
+  return next
+}
+
+/** 写库：显式字段，永不带 _id（真 sdk set data 含 _id 即拒）。 */
+export function persistableFlow(state: JevFlowState): Record<string, unknown> {
+  const out: Record<string, unknown> = { at: Date.now() }
+  for (const k of FLOW_KEYS) out[k] = state[k]
+  return out
 }
 
 export function applyNode(
   state: JevFlowState,
   node: ScriptNode,
   topic: ScriptTopic,
-  orderStatus: JevOrderStatus
+  orderStatus: JevOrderStatus,
+  acting: Acting
 ): JevFlowState {
+  const coopInc = node === 'askCoop' || (node === 'photo' && state.photoAsked) ? 1 : 0
   return {
-    ...state,
+    ...loadFlow(state),
     node,
     topic: topic || state.topic,
     orderStatus: orderStatus || state.orderStatus,
+    acting,
+    checkpoint: checkpointOf(node),
     greeted: state.greeted || node === 'greet' || node === 'greetIssue',
     hesitated: state.hesitated || node === 'hesitate',
     surprised: state.surprised || node === 'surprise',
     photoAsked: state.photoAsked || node === 'photo',
     severitySaid: state.severitySaid || node === 'severity',
-    apologized: state.apologized || node === 'apology',
+    restated: state.restated || node === 'restate' || node === 'askMore',
+    promised: state.promised || node === 'promise',
+    solved: state.solved || node === 'answer',
+    coopCount: state.coopCount + coopInc,
+    used: state.used,
   }
+}
+
+function speak(
+  node: ScriptNode,
+  acting: Acting,
+  topic: ScriptTopic,
+  ev: JevResult,
+  used: string[],
+  slots: Record<string, string>,
+  rand: () => number
+): string {
+  const body = fillSlots(pickLine(poolFor(node, topic, ev), used, undefined, rand), slots)
+  if (node === 'human') return ''
+  const actOnly = node === 'surprise' || node === 'awkward' || node === 'hesitate' || node === 'severity'
+  if (actOnly) {
+    const flavor = fillSlots(pickLine(actingPool(acting), used, undefined, rand), slots)
+    return flavor || body
+  }
+  if (acting === 'steady' || acting === 'light') return body
+  const flavor = fillSlots(pickLine(actingPool(acting), used, undefined, rand), slots)
+  if (flavor && body && flavor !== body) return flavor + body
+  return body || flavor
 }
 
 export function composeLine(
@@ -245,15 +380,16 @@ export function composeLine(
   ev: JevResult,
   text: string,
   rand: () => number = Math.random
-): { line: string; next: JevFlowState; node: ScriptNode; topic: ScriptTopic } {
+): { line: string; next: JevFlowState; node: ScriptNode; topic: ScriptTopic; acting: Acting; checkpoint: ActingCheckpoint } {
   const route = routeFromJev(state, ev)
   const node = nextNode({ ...state, topic: route.topic, orderStatus: route.orderStatus }, ev)
+  const acting = actingOf(route, node)
   const slots = { 需求: compressNeed(text) }
-  let line = fillSlots(pickLine(poolFor(node, route.topic, ev), state.used, undefined, rand), slots)
-  if (!line) line = fillSlots(pickLine('ack', state.used, undefined, rand), slots)
-  const next = applyNode(state, node, route.topic, route.orderStatus)
+  let line = speak(node, acting, route.topic, ev, state.used, slots, rand)
+  if (!line && node !== 'human') line = fillSlots(pickLine('ack', state.used, undefined, rand), slots)
+  const next = applyNode(state, node, route.topic, route.orderStatus, acting)
   next.used = rememberUsed(state.used, line)
-  return { line, next, node, topic: route.topic }
+  return { line, next, node, topic: route.topic, acting, checkpoint: checkpointOf(node) }
 }
 
 export async function composeScriptReply(
@@ -261,21 +397,27 @@ export async function composeScriptReply(
   euid: string,
   text: string,
   ev: JevResult
-): Promise<{ text: string; node: ScriptNode; topic: ScriptTopic } | null> {
+): Promise<{ text: string; node: ScriptNode; topic: ScriptTopic; acting: Acting; checkpoint: ActingCheckpoint } | null> {
   const id = 'jevflow:' + euid
   const got = await db
     .collection(COLLECTIONS.kfState)
     .doc(id)
     .get()
     .catch(() => null)
-  const prev: JevFlowState = { ...emptyFlow(), ...((got && got.data) || {}) }
-  if (!Array.isArray(prev.used)) prev.used = []
-  const { line, next, node, topic } = composeLine(prev, ev, text)
-  if (!line) return null
+  const prev = loadFlow(got && got.data)
+  const { line, next, node, topic, acting, checkpoint } = composeLine(prev, ev, text)
+  if (!line && node !== 'human') return null
+  let wrote = true
   await db
     .collection(COLLECTIONS.kfState)
     .doc(id)
-    .set({ data: { ...next, at: Date.now() } })
-    .catch(() => {})
-  return { text: line, node, topic }
+    .set({ data: persistableFlow(next) })
+    .catch(() => {
+      wrote = false
+    })
+  if (!wrote) {
+    alert('anomaly', 'kfCallback', 'JEVFLOW_WRITE_FAIL', { euid })
+    return null
+  }
+  return { text: line, node, topic, acting, checkpoint }
 }

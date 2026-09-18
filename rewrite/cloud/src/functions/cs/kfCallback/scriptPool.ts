@@ -33,6 +33,7 @@ export type ScriptPoolId =
   | 'missingPhoto'
   | 'missingSearch'
   | 'coursePhoto'
+  | 'clarify'
 
 const POOL_HINTS: { file: string; heading: RegExp; id: ScriptPoolId }[] = [
   { file: 'docs/01-主流程7节点.md', heading: /问候询问需求/, id: 'greet' },
@@ -52,6 +53,7 @@ const POOL_HINTS: { file: string; heading: RegExp; id: ScriptPoolId }[] = [
   { file: 'docs/04-negative.md', heading: /^严重性分析/, id: 'severity' },
   { file: 'docs/05-信息采集-请求拍照.md', heading: /请求拍照/, id: 'photo' },
   { file: 'docs/07-犹豫节点.md', heading: /话术库/, id: 'hesitate' },
+  { file: 'docs/11-态度投诉-澄清非有意.md', heading: /话术库/, id: 'clarify' },
   { file: 'topics/发货后-物流.md', heading: /开场/, id: 'logisticsGreet' },
   { file: 'topics/发货后-物流.md', heading: /报节点/, id: 'logisticsEta' },
   { file: 'topics/发货后-物流.md', heading: /这么慢/, id: 'logisticsSlow' },

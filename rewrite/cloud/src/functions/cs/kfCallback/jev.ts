@@ -273,7 +273,7 @@ export async function askJev(state: string, apiKey: string, fetchFn?: JevFetch):
 export function logJevEvidence(
   ev: JevResult,
   mapped: string | null,
-  extra?: { stateLen?: number; skipped?: string; node?: string; topic?: string }
+  extra?: { stateLen?: number; skipped?: string; node?: string; topic?: string; acting?: string; checkpoint?: string }
 ): void {
   console.info('[kf] jev', {
     model: ev.model,
@@ -288,6 +288,8 @@ export function logJevEvidence(
     exceeds: ev.exceeds,
     mapped,
     ...(extra && extra.node ? { node: extra.node } : {}),
+    ...(extra && extra.acting ? { acting: extra.acting } : {}),
+    ...(extra && extra.checkpoint ? { checkpoint: extra.checkpoint } : {}),
     ...(extra && extra.stateLen != null ? { stateLen: extra.stateLen } : {}),
     ...(extra && extra.skipped ? { skip: extra.skipped } : {}),
   })

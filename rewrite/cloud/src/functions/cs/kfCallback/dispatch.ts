@@ -631,11 +631,23 @@ export async function handleMessage(ctx: DispatchCtx, incoming: Incoming): Promi
           const stateLen = String(incoming.text || '').length
           if (!hit) {
             const scripted = await composeScriptReply(db, incoming.externalUserId, incoming.text, ev)
+            if (scripted && scripted.node === 'human') {
+              logJevEvidence(ev, scripted.topic, {
+                stateLen,
+                node: scripted.node,
+                topic: scripted.topic,
+                acting: scripted.acting,
+                checkpoint: scripted.checkpoint,
+              })
+              return { type: 'transfer' as const }
+            }
             if (scripted && scripted.text) {
               logJevEvidence(ev, scripted.topic, {
                 stateLen,
                 node: scripted.node,
                 topic: scripted.topic,
+                acting: scripted.acting,
+                checkpoint: scripted.checkpoint,
               })
               return { type: 'text' as const, content: scripted.text }
             }

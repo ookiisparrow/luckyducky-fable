@@ -219,6 +219,7 @@ describe('fail-open 与闸开映射', () => {
     expect(blob).toContain('severity')
     expect(blob).toContain('responsibility')
     expect(blob).toContain('needStatus')
+    expect(blob).toContain('acting')
     expect(blob).not.toContain('test-key')
     expect(blob).not.toContain('Bearer')
     expect(blob).not.toContain('TYPESAFE')

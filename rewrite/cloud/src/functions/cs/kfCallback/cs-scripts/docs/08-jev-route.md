@@ -17,6 +17,13 @@
 - responsibility: customer | merchant | logistics | unclear | n/a
 - needStatus: logistics | packaging | missing | course | discount | rush | exceeds | photo_needed | greeting | other
 
+## 情绪两层（不可混）
+
+- 顾客情绪 = Jev 输入（emotionStatus）
+- bot 表演 = 输出（安抚/同理/道歉/犹豫/澄清/平稳/轻松/惊讶尴尬）
+- 顾客激动 ≠ 客服激动；道歉仅 responsibility=merchant
+- 每句回复都带表演；表演由 Jev 的情绪+严重程度+责任选，不扫原文猜
+
 ## 不做什么（源仓硬规则）
 
 - Jev 只出路由信号，不写长回复、不编政策
