@@ -23,7 +23,7 @@ const RC = han(0x53d1, 0x5e03, 0x5019, 0x9009) // 发布候选
 const EXPERIMENTAL = han(0x5b9e, 0x9a8c) // 实验
 const UPDATED = han(0x66f4, 0x65b0) // 更新
 
-export type AppChannel = 'develop' | 'trial' | 'release' | 'experimental'
+type AppChannel = 'develop' | 'trial' | 'release' | 'experimental'
 
 /** 通道优先级：编译期 BUILD_CHANNEL > 微信 envVersion > 开发。 */
 export function resolveAppChannel(
@@ -71,7 +71,7 @@ export function currentAppVersionLine(): string {
 
 // 日期＝上海日历当天（YYYY-MM-DD）；第二行＝「更新 YYYY-MM-DD」，一眼能看见更新时间。
 // 自动戳：pre-commit / CI 合入 main|test / preview:mp / release.mjs / mac-sync-ends。
-export const DEV_UPDATE_DATE = '2026-09-18'
+export const DEV_UPDATE_DATE = '2026-09-19'
 
 export function formatAppVersionDetail(
   _envVersion: string,

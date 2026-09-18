@@ -1,6 +1,6 @@
 // 收货地址簿（黄金 frontend-store §五·旧线 Pinia address 原生承接）：
 // 空簿不内置样例（真支付误发样例人=错发货）；新增 id 取现有最大+1（回灌后天然不撞号）；默认唯一。
-export interface Address {
+interface Address {
   id: number
   name: string
   phone: string

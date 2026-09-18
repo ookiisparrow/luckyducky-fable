@@ -2,9 +2,9 @@
 // 响应形状哨兵见 rewrite/cloud/tests/contract-shape.test.ts·cloud 改键该测试会红·同步时两头一起改（批B10）。
 // fail-closed：收银台五参缺任一即判错不拉起（半空参数拉起=收银台闪退·比不拉更糟）；
 // BAD_STATUS:paid 判已付（并发已付幂等成功·不吓用户）。
-export type SignType = 'MD5' | 'HMAC-SHA256' | 'RSA'
+type SignType = 'MD5' | 'HMAC-SHA256' | 'RSA'
 
-export interface PaymentParams {
+interface PaymentParams {
   timeStamp: string
   nonceStr: string
   package: string
@@ -17,7 +17,7 @@ const SIGN_TYPES: readonly string[] = ['MD5', 'HMAC-SHA256', 'RSA']
 // 必须与 rewrite/shared/src/order.ts 的 buildBadStatus('paid') 输出逐字一致——mp 进不了 @ldrw/shared（开发者工具编译限制），手动同步，改一处两处都要改
 const PAID_BAD_STATUS = 'BAD_STATUS:paid'
 
-export type PayOutcome =
+type PayOutcome =
   | { kind: 'paid' }
   | { kind: 'request'; payment: PaymentParams }
   | { kind: 'closed'; message: string }

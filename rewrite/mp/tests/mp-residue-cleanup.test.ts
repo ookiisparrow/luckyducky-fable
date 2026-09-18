@@ -6,6 +6,14 @@ import aftersalesWxss from '../pages/aftersales/aftersales.wxss?raw'
 import orderWxml from '../pages/order/order.wxml?raw'
 import cartWxml from '../pages/cart/cart.wxml?raw'
 import mapPages from '../lib/mapPages.ts?raw'
+import mapHome from '../lib/mapHome.ts?raw'
+import mapMe from '../lib/mapMe.ts?raw'
+import quickAdd from '../lib/quickAdd.ts?raw'
+import privacyGate from '../lib/privacyGate.ts?raw'
+import appVersion from '../lib/appVersion.ts?raw'
+import player from '../lib/player.ts?raw'
+import address from '../lib/address.ts?raw'
+import payFlow from '../lib/payFlow.ts?raw'
 
 function live(src: string): string {
   return src.replace(/<!--[\s\S]*?-->/g, '').replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/[^\n]*/g, '')
@@ -38,5 +46,31 @@ describe('mp 残留清理', () => {
     expect(src).not.toMatch(/export interface AgreementArticleVM\b/)
     expect(src).not.toMatch(/export interface AgreementVM\b/)
     expect(src).not.toMatch(/export type \{[^}]*MeVM/)
+
+    const home = live(mapHome)
+    expect(home).not.toMatch(/export interface HeroVM\b/)
+    expect(home).not.toMatch(/export interface BrandVM\b/)
+    expect(home).not.toMatch(/export interface FeatureVM\b/)
+    expect(home).not.toMatch(/export interface TrustVM\b/)
+    expect(home).not.toMatch(/export interface ReassureItemVM\b/)
+    expect(home).not.toMatch(/export interface ReassureVM\b/)
+    expect(home).not.toMatch(/export interface ReviewVM\b/)
+    expect(home).not.toMatch(/export interface ReviewsVM\b/)
+    expect(home).not.toMatch(/export interface FaqVM\b/)
+    expect(home).not.toMatch(/export interface ClosingVM\b/)
+    expect(home).not.toMatch(/export interface FooterVM\b/)
+
+    const me = live(mapMe)
+    expect(me).not.toMatch(/export type MeEntryKey\b/)
+    expect(me).not.toMatch(/export interface MeEntryVM\b/)
+
+    expect(live(quickAdd)).not.toMatch(/export interface QuickAddPayload\b/)
+    expect(live(privacyGate)).not.toMatch(/export interface PrivacyGate\b/)
+    expect(live(appVersion)).not.toMatch(/export type AppChannel\b/)
+    expect(live(player)).not.toMatch(/export type UrlFetcher\b/)
+    expect(live(address)).not.toMatch(/export interface Address\b/)
+    expect(live(payFlow)).not.toMatch(/export type SignType\b/)
+    expect(live(payFlow)).not.toMatch(/export interface PaymentParams\b/)
+    expect(live(payFlow)).not.toMatch(/export type PayOutcome\b/)
   })
 })

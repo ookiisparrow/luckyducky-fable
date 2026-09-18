@@ -14,55 +14,55 @@ export interface ProductVM {
   cover: string
 }
 
-export interface HeroVM {
+interface HeroVM {
   title: string
   tagline: string
   search: string
   img: string
 }
-export interface BrandVM {
+interface BrandVM {
   name: string
   lead: string
 }
-export interface FeatureVM {
+interface FeatureVM {
   title: string
   body: string
   img: string
 }
-export interface TrustVM {
+interface TrustVM {
   icon: string
   label: string
 }
-export interface ReassureItemVM {
+interface ReassureItemVM {
   icon: string
   title: string
   body: string
   img: string
 }
-export interface ReassureVM {
+interface ReassureVM {
   heading: string
   lead: string
   items: ReassureItemVM[]
 }
-export interface ReviewVM {
+interface ReviewVM {
   quote: string
   user: string
   img: string
 }
-export interface ReviewsVM {
+interface ReviewsVM {
   heading: string
   items: ReviewVM[]
 }
-export interface FaqVM {
+interface FaqVM {
   title: string
   body: string
 }
-export interface ClosingVM {
+interface ClosingVM {
   title: string
   cta: string
   img: string
 }
-export interface FooterVM {
+interface FooterVM {
   links: string[]
   copy: string
 }
