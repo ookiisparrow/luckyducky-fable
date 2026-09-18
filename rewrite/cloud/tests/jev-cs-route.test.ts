@@ -56,6 +56,17 @@ describe('Jev 请求体与映射', () => {
     expect(body.questions.urgency.type).toBe('noul')
     expect(body.questions.department.type).toBe('choice')
     expect(Object.keys(body.questions.department.criteria)).toEqual(['billing', 'technical', 'sales'])
+    expect(Object.keys(body.questions.topic.criteria)).toEqual([
+      'logistics',
+      'packaging',
+      'missing',
+      'course',
+      'discount',
+      'rush',
+      'greeting',
+      'other',
+    ])
+    expect(body.questions.exceeds.type).toBe('noul')
   })
 
   it('大白话：科室对上现有菜单类；认不出就空，好走旧路', () => {
@@ -105,7 +116,7 @@ describe('fail-open 与闸开映射', () => {
     expect(sent[1].msgmenu.head_content).toContain('想咨询什么')
   })
 
-  it('大白话：闸开且 Jev 回 billing——没关键词时弹售后菜单；打中关键词仍听关键词', async () => {
+  it('大白话：闸开且 Jev 回了——没关键词发话术纯文本，不弹气泡；打中关键词仍听关键词', async () => {
     process.env.JEV_CS_ROUTE = '1'
     process.env.TYPESAFE_API_KEY = 'test-key'
     const seen: { url: string; auth?: string; body?: any }[] = []
@@ -123,7 +134,8 @@ describe('fail-open 与闸开映射', () => {
     expect(seen[0].auth).toBe('Bearer test-key')
     expect(seen[0].body.model).toBe(JEV_MODEL)
     expect(seen[0].body.state).toBe('钱的事情问一下')
-    expect(sent[0].msgmenu.head_content).toContain('售后')
+    expect(sent[0].msgtype).toBe('text')
+    expect(sent[0].text.content).toMatch(/在的|帮您/)
 
     await handleMessage(ctx, { externalUserId: 'eu1', menuId: '', text: '快递到哪了' })
     expect(sent[1].msgmenu.head_content).toContain('快递') // 关键词优先

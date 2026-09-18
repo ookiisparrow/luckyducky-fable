@@ -1,6 +1,7 @@
 import { COLLECTIONS } from '@ldrw/shared'
 import { alert, transition, sendAgentCard, AGENT_DESK_URL } from '../../../kit'
 import { jevHitWord, logJevEvidence, mapJevDepartment, tryJevClassify } from './jev'
+import { composeScriptReply } from './scriptReply'
 
 /**
  * 客服分流引擎（避免幻觉第一·非生成式）：关键词识别 → 高亮 msgmenu 气泡分流；按回传 menu_id →
@@ -233,6 +234,7 @@ export type Route =
   // CSAT（B4.3）：score=点选的 1-5 分；note=可选备注文案（预设标签映射后）
   | { type: 'csat'; score: number }
   | { type: 'csat_note'; note: string }
+  | { type: 'text'; content: string }
 
 export function route(menuId: string): Route {
   if (menuId === 'human') return { type: 'transfer' }
@@ -626,8 +628,22 @@ export async function handleMessage(ctx: DispatchCtx, incoming: Incoming): Promi
         const ev = await tryJevClassify(db, incoming.text)
         if (ev) {
           const cat = mapJevDepartment(ev.department)
-          logJevEvidence(ev, cat || (hit ? hit.cat : null), { stateLen: String(incoming.text || '').length })
-          if (!hit && cat) return { type: 'menu' as const, content: menuFor(cat, jevHitWord(ev.department)) }
+          const stateLen = String(incoming.text || '').length
+          if (!hit) {
+            const scripted = await composeScriptReply(db, incoming.externalUserId, incoming.text, ev)
+            if (scripted && scripted.text) {
+              logJevEvidence(ev, scripted.topic, {
+                stateLen,
+                node: scripted.node,
+                topic: scripted.topic,
+              })
+              return { type: 'text' as const, content: scripted.text }
+            }
+            logJevEvidence(ev, cat, { stateLen })
+            if (cat) return { type: 'menu' as const, content: menuFor(cat, jevHitWord(ev.department)) }
+          } else {
+            logJevEvidence(ev, hit.cat, { stateLen, skipped: 'keyword' })
+          }
         }
         return hit
           ? ({ type: 'menu', content: menuFor(hit.cat, hit.word) } as Route)
@@ -662,6 +678,9 @@ export async function handleMessage(ctx: DispatchCtx, incoming: Incoming): Promi
     }
     case 'menu':
       await send(buildMsgMenu(to, openKfId, r.content))
+      return
+    case 'text':
+      await send(buildText(to, openKfId, r.content))
       return
     case 'miniprogram':
       // 卡片需 appid + 封面素材都齐才发；缺任一即降级文字（防 thumb 空致 send_msg 40058）

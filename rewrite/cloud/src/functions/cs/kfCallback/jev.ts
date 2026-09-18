@@ -10,7 +10,26 @@ export const JEV_URL = 'https://api.typesafe.ai/v1/systemone'
 export const JEV_MODEL = 'jev-latest'
 
 export type JevDepartment = 'billing' | 'technical' | 'sales'
-export type JevResult = { model: string; urgency: number; department: JevDepartment }
+export const JEV_TOPICS = [
+  'logistics',
+  'packaging',
+  'missing',
+  'course',
+  'discount',
+  'rush',
+  'greeting',
+  'other',
+] as const
+export type JevTopic = (typeof JEV_TOPICS)[number]
+export type JevResult = {
+  model: string
+  urgency: number
+  department: JevDepartment
+  topic?: JevTopic | null
+  exceeds?: number
+  negative?: number
+  photo?: number
+}
 
 type JevFetch = (
   url: string,
@@ -33,11 +52,44 @@ export function jevRequestBody(state: string) {
           sales: 'Pricing, upgrades, new accounts',
         },
       },
+      topic: {
+        type: 'choice',
+        instructions: 'Which Lucky Ducky customer-service topic is this?',
+        criteria: {
+          logistics: 'Shipped package tracking, delivery delay, where is my parcel',
+          packaging: 'Damaged box or wrapping after arrival',
+          missing: 'Missing parts or materials from a kit',
+          course: 'Cannot open course, activation, video or app errors',
+          discount: 'Price, coupon, cheaper before checkout',
+          rush: 'Need faster shipping or earlier dispatch',
+          greeting: 'Hello / is anyone there / no specific issue yet',
+          other: 'Something else',
+        },
+      },
+      exceeds: {
+        type: 'noul',
+        instructions:
+          'Does the customer ask for something beyond normal policy (extra discount, special rush, free extras, a promise you cannot make)?',
+      },
+      negative: {
+        type: 'noul',
+        instructions: 'Is the customer upset, angry, or complaining?',
+      },
+      photo: {
+        type: 'noul',
+        instructions:
+          'Would a photo or screenshot from the customer help (damage, missing parts, error screen)?',
+      },
     },
   }
 }
 
 const DEPTS: readonly JevDepartment[] = ['billing', 'technical', 'sales']
+
+function noulOf(body: any, key: string): number | undefined {
+  const n = Number(body && body.answers && body.answers[key] && body.answers[key].noul)
+  return Number.isFinite(n) ? n : undefined
+}
 
 export function parseJevBody(body: any): JevResult | null {
   const model = String((body && body.model) || '')
@@ -46,7 +98,20 @@ export function parseJevBody(body: any): JevResult | null {
     (body && body.answers && body.answers.department && body.answers.department.choice) || ''
   )
   if (!model || !Number.isFinite(urgency) || !DEPTS.includes(department as JevDepartment)) return null
-  return { model, urgency, department: department as JevDepartment }
+  const topicRaw = String((body && body.answers && body.answers.topic && body.answers.topic.choice) || '')
+  const topic = JEV_TOPICS.includes(topicRaw as JevTopic) ? (topicRaw as JevTopic) : undefined
+  const exceeds = noulOf(body, 'exceeds')
+  const negative = noulOf(body, 'negative')
+  const photo = noulOf(body, 'photo')
+  return {
+    model,
+    urgency,
+    department: department as JevDepartment,
+    ...(topic ? { topic } : {}),
+    ...(exceeds != null ? { exceeds } : {}),
+    ...(negative != null ? { negative } : {}),
+    ...(photo != null ? { photo } : {}),
+  }
 }
 
 /** Jev 科室 → 现有关键词类别（只用于「没打中关键词」时的菜单；命中关键词仍走旧路）。 */
@@ -115,13 +180,16 @@ export async function askJev(state: string, apiKey: string, fetchFn?: JevFetch):
 export function logJevEvidence(
   ev: JevResult,
   mapped: string | null,
-  extra?: { stateLen?: number; skipped?: string }
+  extra?: { stateLen?: number; skipped?: string; node?: string; topic?: string }
 ): void {
   console.info('[kf] jev', {
     model: ev.model,
     urgency: ev.urgency,
     department: ev.department,
+    topic: extra && extra.topic != null ? extra.topic : ev.topic || null,
+    exceeds: ev.exceeds,
     mapped,
+    ...(extra && extra.node ? { node: extra.node } : {}),
     ...(extra && extra.stateLen != null ? { stateLen: extra.stateLen } : {}),
     ...(extra && extra.skipped ? { skip: extra.skipped } : {}),
   })
