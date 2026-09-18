@@ -5,7 +5,7 @@
      上下 UI 是黑条覆盖层（普通 view 绝对定位 z-index 盖在 video 上·同层渲染官方已允许，不必 cover-view）。
      业务逻辑与既有回归红线（playToken 乱序防护/首帧埋点/segment_done/watch_at/25min 地址缓存）一字不动；
      唯一刻意行为变更＝段落播完不再自动切下一段（onEnded 停在完成态，重播/切段交由用户，见 player.ts）。
-     自绘 seek 条两段式语义（拖动中只改显示 onSeekMove·松手才真 seek onSeekEnd）+ 关键动作节点磁吸/震感
+     自绘 seek 条两段式语义（WXS sk.onStart/onMove/onEnd + 逻辑层 onSeekTick/onSeekCommit：拖动中只改显示，松手才真 seek）+ 关键动作节点磁吸/震感
      配方（单源 lib/haptics，见 player.ts）；缩略图窗未做（雪碧图=R36 后端未建，
      诚实降级为时间浮窗+关键节点气泡）。
      求助面板（P3·批D）：中央求助钮拉起底部 sheet（menu/videos/faq 三态，见 player.ts helpPanel），播放
