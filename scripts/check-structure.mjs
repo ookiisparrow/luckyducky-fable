@@ -932,6 +932,77 @@ export const repoChecks = [
     },
   },
   {
+    // 小程序「我」页版本脚靠人改日期必忘（2026-09-04 手戳停住·根因#8 过了≠真能用 / #5 手抄漂移）：
+    // 日期+通道必须由 stamp 脚本自动写，hook/CI/预览/定版/三端跟上任一拆线即红。
+    id: 'rw-mp-version-auto-stamp',
+    roots: ['#8', '#5'],
+    desc: '小程序版本脚自动戳（根因#8/#5）：stamp-mp-version-date.mjs 须按上海日历写 DEV_UPDATE_DATE、按 main→develop / test→trial 对齐 BUILD_CHANNEL；pre-commit、CI（PR/push→main/test）、preview:mp / device:preview / agent:preview、release.mjs、mac-sync-ends 必须真调用——人不用记 mp:stamp-version-date。不碰微信正式上传。',
+    run() {
+      const bad = []
+      const stampRel = 'scripts/stamp-mp-version-date.mjs'
+      const stampAbs = join(ROOT, stampRel)
+      if (!existsSync(stampAbs)) return [`${stampRel} 缺失——版本脚没人戳`]
+      const stamp = readFileSync(stampAbs, 'utf8')
+      if (!stamp.includes('Asia/Shanghai')) bad.push(`${stampRel} 未按上海日历算日期`)
+      if (!stamp.includes('resolveStampChannel')) bad.push(`${stampRel} 缺 resolveStampChannel——分支对不齐通道`)
+      if (!stamp.includes("'experimental'")) bad.push(`${stampRel} 通道表缺 experimental（实验仓映射）`)
+      if (!/line === 'main'/.test(stamp) || !/line === 'test'/.test(stamp)) {
+        bad.push(`${stampRel} 未把 main→develop / test→trial 写死`)
+      }
+      if (/wechatide[\s\S]{0,80}upload/.test(stamp)) {
+        bad.push(`${stampRel} 碰了微信正式上传——版本戳不得改上传/提审/发布`)
+      }
+
+      const hook = join(ROOT, 'scripts/git-hooks/pre-commit')
+      if (!existsSync(hook) || !readFileSync(hook, 'utf8').includes('stamp-mp-version-date')) {
+        bad.push('scripts/git-hooks/pre-commit 未调 stamp-mp-version-date——本地提交会忘戳日期')
+      }
+
+      const wf = join(ROOT, '.github/workflows/mp-version-stamp.yml')
+      if (!existsSync(wf)) {
+        bad.push('.github/workflows/mp-version-stamp.yml 缺失——合入 main/test 不会自动戳')
+      } else {
+        const yml = readFileSync(wf, 'utf8')
+        if (!yml.includes('stamp-mp-version-date')) bad.push('mp-version-stamp.yml 未调 stamp-mp-version-date')
+        if (!/branches:\s*\[[^\]]*main[^\]]*test/.test(yml)) {
+          bad.push('mp-version-stamp.yml 未同时挂 main 与 test')
+        }
+        if (!yml.includes('pull_request') || !yml.includes('push:')) {
+          bad.push('mp-version-stamp.yml 须对 PR 和 push 都跑（合入后写回）')
+        }
+      }
+
+      const pkg = JSON.parse(readFileSync(join(ROOT, 'package.json'), 'utf8'))
+      for (const s of ['preview:mp', 'device:preview', 'agent:preview']) {
+        const cmd = (pkg.scripts || {})[s] || ''
+        if (!cmd.includes('stamp-mp-version-date')) {
+          bad.push(`package.json scripts.${s} 未先戳版本脚——预览包日期会停在旧值`)
+        }
+      }
+
+      const release = join(ROOT, 'scripts/release.mjs')
+      if (!existsSync(release) || !readFileSync(release, 'utf8').includes('stampMpVersionDate')) {
+        bad.push('scripts/release.mjs 未调 stampMpVersionDate——定版会忘戳日期')
+      }
+      const mac = join(ROOT, 'scripts/mac-sync-ends.mjs')
+      if (!existsSync(mac) || !readFileSync(mac, 'utf8').includes('stampMpVersionDate')) {
+        bad.push('scripts/mac-sync-ends.mjs 未调 stampMpVersionDate——三端跟上会忘戳日期')
+      }
+
+      const appVer = join(ROOT, 'rewrite/mp/lib/appVersion.ts')
+      if (!existsSync(appVer)) return [...bad, 'rewrite/mp/lib/appVersion.ts 缺失']
+      const ver = readFileSync(appVer, 'utf8')
+      if (!ver.includes('experimental')) bad.push('appVersion.ts 通道类型缺 experimental')
+      if (!ver.includes('0x5b9e') || !ver.includes('0x9a8c')) {
+        bad.push('appVersion.ts 缺「实验」码点（E33·勿写字面量）')
+      }
+      if (!ver.includes('0x66f4') || !ver.includes('0x65b0')) {
+        bad.push('appVersion.ts 缺「更新」码点（第二行更新时间）')
+      }
+      return bad
+    },
+  },
+  {
     id: 'requirement-trace',
     roots: ['元'],
     desc: '需求→守卫闭环（仿 guard-coverage 泛化「病根→守卫」为「需求→功能→守卫」）：需求清单「需求→实现映射」每条 ✅ 实现需求(L1)须有映射行，且行内 函数(代码注册表：app/adminApi index+cloudbaserc)/测试(rewrite/cloud/tests)/守卫(注册表) 真实存在——改需求或改码断链当场红；`npm run trace R#` 查爆炸半径。2026-07-23 瘦身拍板批：映射表已整体迁锚活线（旧线与 tests/cloud 已删）',
@@ -5187,6 +5258,10 @@ export const typeAndTestGuards = [
   // 云环境选择子（Issue #106·病根#5）：同一套断言对 stub|test|prod-readonly 分别解析；
   // 空输入=生产只读保险；写测试须显式 test；目录无密钥。reverseTest 锁解析矩阵。
   { id: 'env-catalog-resolve', mechanism: 'test', roots: ['#5'], reverseTest: 'tests/scripts/env-catalog.test.js' },
+  // 小程序「我」页版本脚自动戳（老板 2026-09-18·根因#8/#5）：日期上海日历、通道 main→开发 / test→测试 /
+  // release→发布候选 / experimental→实验。reverseTest 锁脚本行为 + hook/CI/预览接线。
+  { id: 'rw-mp-version-stamp-script', mechanism: 'test', roots: ['#8', '#5'], reverseTest: 'tests/scripts/stamp-mp-version-date.test.js' },
+  { id: 'rw-mp-version-channel', mechanism: 'test', roots: ['#5', '#8'], reverseTest: 'rewrite/mp/tests/app-version.test.ts' },
 ]
 
 // export：供 check-report 体检面板复用同一套遍历/判定（面板=派生视图，禁自建第二套语义）

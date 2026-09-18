@@ -32,6 +32,10 @@ if [ "$MONEYCHAIN_ALLOWED" != "1" ]; then
   fi
 fi
 
+# 小程序版本脚：提交时自动戳上海当天（并按当前枝对齐通道）。人不用记 mp:stamp-version-date。
+node scripts/stamp-mp-version-date.mjs
+git add rewrite/mp/lib/appVersion.ts 2>/dev/null || true
+
 echo "提交闸：npm run check（structure + typecheck + lint + test）..."
 
 npm run check || {
