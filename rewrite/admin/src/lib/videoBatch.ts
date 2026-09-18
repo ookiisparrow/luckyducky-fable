@@ -2,13 +2,13 @@
 // 上传本身走 api/content.uploadVideo（不在此·本文件只算「多文件→小段」灌入计划）。守卫 rw-admin-videobatch-golden。
 
 // 去掉最后一段扩展名（"起针.mp4" → "起针"；无扩展名原样返回）
-export function stripExt(name: string): string {
+function stripExt(name: string): string {
   const s = String(name)
   const i = s.lastIndexOf('.')
   return i > 0 ? s.slice(0, i) : s
 }
 
-export interface BatchPlanItem<T> {
+interface BatchPlanItem<T> {
   file: T
   segIndex: number
   isNew: boolean

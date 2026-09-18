@@ -333,5 +333,12 @@ describe('mapPublicFaq（R37b·KB 精选 FAQ 公开读清洗·脏结构安全）
 
   it('大白话：空——items 缺失/空数组回空数组', () => {
     expect(mapPublicFaq({ items: [] })).toEqual([])
+    expect(mapPublicFaq({ ok: true, items: [] })).toEqual([])
+  })
+
+  it('大白话：接口失败（ok:false）回 null，不把空 items 装成「没有 FAQ」', () => {
+    expect(mapPublicFaq({ ok: false })).toBeNull()
+    expect(mapPublicFaq({ ok: false, items: [] })).toBeNull()
+    expect(mapPublicFaq({ ok: false, error: 'INTERNAL', items: [] })).toBeNull()
   })
 })

@@ -31,7 +31,7 @@ function arr<T>(raw: unknown, mapItem: (x: unknown) => T | null, def: T[]): T[] 
 }
 
 // ═══════════════ 激活页 welcome（W1 恭喜屏 + W2 三件事屏）═══════════════
-export interface WelcomePointVM {
+interface WelcomePointVM {
   icon: string // 图标名（tied to position·CMS 不含图标字段，恒取默认）
   title: string
   desc: string
@@ -127,14 +127,13 @@ export function mapCatalogPlayer(content: unknown): CatalogPlayerVM {
 // 协议/隐私法务长文只在二级页上屏，同住会把 511 字拖进首屏子集（守卫 rw-mp-font-tier-subset-covers）。
 // me.ts 直引 lib/mapMe；这里 re-export 保住「五页 mapper 单源入口」与既有测试/守卫引用。
 export { mapMe } from './mapMe'
-export type { MeEntryKey, MeEntryVM, MeVM } from './mapMe'
 
 // ═══════════════ 关于我们 about ═══════════════
-export interface AboutSectionVM {
+interface AboutSectionVM {
   title: string
   body: string
 }
-export interface AboutVM {
+interface AboutVM {
   lead: string
   sections: AboutSectionVM[]
 }
@@ -168,7 +167,7 @@ export function mapAbout(content: unknown): AboutVM {
 // 条款正文逐字承接旧线（2026-06-27 经营者评估拍板上线的已过审文案）：intro（引言）与 title 为固定法律
 // 文本、不经 CMS 覆盖（合规文案勿随意改·契约无 intro/title 字段）；CMS 仅覆盖 effectiveDate（更新日期）
 // 与 sections（条款条目）。sections 空数组 → 回退默认全文（防误清空上线过审文本）。
-export interface AgreementArticleVM {
+interface AgreementArticleVM {
   title: string
   body: string
 }
@@ -178,7 +177,7 @@ export interface AgreementDocVM {
   intro: string
   articles: AgreementArticleVM[]
 }
-export interface AgreementVM {
+interface AgreementVM {
   user: AgreementDocVM
   privacy: AgreementDocVM
 }

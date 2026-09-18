@@ -11,7 +11,7 @@ src/functions/
   adminApi/    管理端网关（actions/ 逐域动作文件；customer360/ 为 provider 编排子域）
   callbacks/   微信回调：payCallback / refundCallback
   cs/          微信客服：kfCallback/（主动发送/媒体下载已收编进 kit/wecom.ts，见下·2026-07-23 拓扑收编批）
-  timers/      定时：billReconcile / cleanupEvents / closeExpiredOrders / inspect / kfHealthProbe / recallScan（recallRules 为库·不独立成函数）
+  timers/      定时：billReconcile / cleanupEvents / closeExpiredOrders / feedbackNotify / inspect / kfHealthProbe / recallScan（recallRules 为库·不独立成函数）
   ops/         运维：一次性种子：initDb / seedCourses（激活码生成已收编进 adminApi/actions/batches.ts generateQrcodes、seedProducts 已退役·2026-07-23 拓扑收编批）
 src/kit/       横切原语（下方逐文件·业务码经它、不裸调 wx-server-sdk）
 src/types/     共享类型

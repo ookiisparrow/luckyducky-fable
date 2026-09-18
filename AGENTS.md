@@ -24,3 +24,4 @@
 ## 一句话地形
 
 钩织材料包电商小程序 + 云开发后端 + 管理后台 + 内容站。活代码全在 `rewrite/`，**本仓＝生产源**、部署真实生效于生产云环境——这不是沙盒。
+写 admin UI 先读 `rewrite/admin/DESIGN.md`。色值只许来自 `rewrite/admin/src/styles/tokens.css`。

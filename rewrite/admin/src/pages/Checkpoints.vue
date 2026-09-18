@@ -1,6 +1,6 @@
 <script setup lang="ts">
 // 节点诊断策展（设计语言一致性·M3 UI 批15）：为某门课维护「关键节点 + 挽回办法」（学员卡壳时坐席据此精准指导）。
-// 整课覆盖式保存——只动定义、绝不碰学员拍照提交（云端保证）。逻辑未动，仅套设计语言。
+// 整课覆盖式保存——只动定义、绝不碰学员拍照提交（云端保证）。
 import { ref, computed, onMounted } from 'vue'
 import { RotateCcw, Trash2, Plus, ListChecks, BookOpen } from 'lucide-vue-next'
 import { listCheckpoints, saveCheckpoints } from '../api/cs'

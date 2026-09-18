@@ -1,6 +1,5 @@
 <script setup lang="ts">
 // 采购单（设计语言一致性·M3 UI 批16）：草稿→已下单→已收货（收货首次流转入库·重复收货不双入）；总价服务端算。
-// 逻辑未动，仅套设计语言（页头/草稿表单卡/grid 表/token）。
 import { ref, onMounted, computed } from 'vue'
 import { Plus, Trash2, ClipboardList, ChevronDown, ChevronUp } from 'lucide-vue-next'
 import { listPurchases, savePurchase, markOrdered, receivePurchase, cancelPurchase, listMaterials, listSuppliers } from '../api/scm'
@@ -68,7 +67,12 @@ async function reload() {
   hasMore.value = !!(p.ok && p.hasMore)
   mats.value = m.ok ? (m.list as Record<string, any>[]) : []
   sups.value = s.ok ? ((s.list as Record<string, any>[]) || []).filter((x) => x.type === 'factory') : []
-  load(p.ok, '加载失败：' + String(p.error || '')) // 只在加载失败时写·成功静默不抹动作反馈
+  // 分路报错（照 ScmBom.reload）：物料/供应商挂掉不装空目录
+  const bad: string[] = []
+  if (!p.ok) bad.push('采购单加载失败：' + String(p.error || ''))
+  if (!m.ok) bad.push('物料主档加载失败：' + String(m.error || ''))
+  if (!s.ok) bad.push('供应商加载失败：' + String(s.error || ''))
+  load(bad.length === 0, bad.join('；')) // 只在加载失败时写·成功静默不抹动作反馈
 }
 
 // 加载更多（B1·根因#7）：复用当前状态筛选·续游标追加·去重防双击重复追加同一页（同 Conversations more() 范式）

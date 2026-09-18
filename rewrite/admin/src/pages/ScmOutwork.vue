@@ -1,6 +1,5 @@
 <script setup lang="ts">
 // 外协单（设计语言一致性·M3 UI 批17）：发织女大团原团 → 收同色带结团 → 应付=收×计件价·损耗=发−收 → 结算销账。
-// 逻辑未动，仅套设计语言（页头/草稿卡/grid 表/状态 chip/收货卡/token）。
 import { ref, onMounted, computed } from 'vue'
 import { Plus, ClipboardList } from 'lucide-vue-next'
 import { listOutworks, saveOutwork, issueOutwork, receiveOutwork, settleOutwork, cancelOutwork, listMaterials, listSuppliers } from '../api/scm'
@@ -63,7 +62,12 @@ async function reload() {
   rawL.value = all.filter((x) => /^yarn:[a-z0-9-]+:L:raw$/.test(String(x._id)))
   knottedL.value = all.filter((x) => /^yarn:[a-z0-9-]+:L:knotted$/.test(String(x._id)))
   workers.value = s.ok ? ((s.list as Record<string, any>[]) || []).filter((x) => x.type === 'outworker') : []
-  load(o.ok, '加载失败：' + String(o.error || '')) // 只在加载失败时写·成功静默不抹动作反馈
+  // 分路报错（照 ScmBom.reload）：物料/织女挂掉不装空目录
+  const bad: string[] = []
+  if (!o.ok) bad.push('外协单加载失败：' + String(o.error || ''))
+  if (!m.ok) bad.push('物料主档加载失败：' + String(m.error || ''))
+  if (!s.ok) bad.push('织女名单加载失败：' + String(s.error || ''))
+  load(bad.length === 0, bad.join('；')) // 只在加载失败时写·成功静默不抹动作反馈
 }
 
 // 加载更多（B1·根因#7·D4 补乱序守卫）：续游标追加·去重防双击重复追加同一页·绑定当前 reload 代际（新 reload

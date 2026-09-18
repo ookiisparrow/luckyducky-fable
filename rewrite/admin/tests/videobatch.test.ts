@@ -1,9 +1,17 @@
 // 课时级批量传视频计划黄金基准（守卫 rw-admin-videobatch-golden·1:1 承接旧 tests/admin/videoBatch）：
 // 去扩展名 / 文件名 numeric 排序（防字典序 1,10,2）/ 超现有段数标 isNew。换皮回归还原·视频批量传专项。
 import { describe, it, expect } from 'vitest'
-import { stripExt, planLessonBatch } from '../src/lib/videoBatch'
+import { planLessonBatch } from '../src/lib/videoBatch'
+
+// 去扩展名走外层 planLessonBatch.segName（stripExt 已不对外 export）
+function stripExt(name: string) {
+  return planLessonBatch([{ name }], 0)[0].segName
+}
 
 describe('课时级批量传视频计划', () => {
+  it('大白话：stripExt 只给同文件 planLessonBatch 用，不再对外 export', async () => {
+    expect(await import('../src/lib/videoBatch')).not.toHaveProperty('stripExt')
+  })
   it('大白话：去扩展名；多文件按文件名 numeric 排序映射到小段、超出现有数的标新建', () => {
     expect(stripExt('起针.mp4')).toBe('起针')
     expect(stripExt('无扩展')).toBe('无扩展')

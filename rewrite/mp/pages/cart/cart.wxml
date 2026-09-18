@@ -14,7 +14,7 @@
     <view class="ld-cart-row" wx:for="{{items}}" wx:key="lineId">
       <view class="ld-check {{item.selected ? 'on' : ''}}" data-id="{{item.id}}" data-sku="{{item.sku}}" catch:tap="onToggle"></view>
       <view class="ld-cart-row-img" data-id="{{item.id}}" catch:tap="onOpen">
-        <image wx:if="{{item.cover}}" class="ld-cart-row-photo" src="{{item.cover}}" mode="aspectFill" />
+        <image wx:if="{{item.cover}}" class="ld-cart-row-photo" src="{{item.cover}}" mode="aspectFill" lazy-load />
       </view>
       <view class="ld-cart-row-mid" data-id="{{item.id}}" catch:tap="onOpen">
         <view class="ld-cart-row-name">{{item.name}}</view>
@@ -26,9 +26,9 @@
       </view>
       <view class="ld-cart-row-act">
         <view class="ld-stepper">
-          <view class="ld-step {{item.qty <= 1 ? 'dim' : ''}}" data-id="{{item.id}}" data-sku="{{item.sku}}" data-qty="{{item.qty}}" catch:tap="onDec">−</view>
+          <view class="ld-step {{item.qty <= 1 ? 'dim' : ''}}" data-id="{{item.id}}" data-sku="{{item.sku}}" catch:tap="onDec">−</view>
           <text class="ld-step-qty">{{item.qty}}</text>
-          <view class="ld-step" data-id="{{item.id}}" data-sku="{{item.sku}}" data-qty="{{item.qty}}" catch:tap="onInc">+</view>
+          <view class="ld-step" data-id="{{item.id}}" data-sku="{{item.sku}}" catch:tap="onInc">+</view>
         </view>
         <view class="ld-cart-row-del" data-id="{{item.id}}" data-sku="{{item.sku}}" catch:tap="onRemove">删除</view>
       </view>
@@ -46,7 +46,7 @@
     <view class="ld-cart-recs-title">{{items.length ? '再加点别的' : '挑一只喜欢的小鸭'}}</view>
     <view class="ld-cart-row" wx:for="{{recs}}" wx:key="id">
       <view class="ld-cart-row-img" data-id="{{item.id}}" catch:tap="onOpen">
-        <image wx:if="{{item.cover}}" class="ld-cart-row-photo" src="{{item.cover}}" mode="aspectFill" />
+        <image wx:if="{{item.cover}}" class="ld-cart-row-photo" src="{{item.cover}}" mode="aspectFill" lazy-load />
       </view>
       <view class="ld-cart-row-mid" data-id="{{item.id}}" catch:tap="onOpen">
         <view class="ld-cart-row-name">{{item.name}}</view>

@@ -4,7 +4,7 @@ export const SITE = 'https://www.luckyducky.cn'
 export const BRAND_NAME = 'Lucky Ducky 小棉鸭'
 /** 搜索/模型可整段引用的品牌身份（可见正文与 Organization.description 同句）。 */
 export const BRAND_IDENTITY =
-  '小棉鸭是品牌名，英文名 Lucky Ducky，官网是 luckyducky.cn。小棉鸭做初学者钩织学习套装，不是钩织圈对手工鸭子的泛称。口号是「尝试钩织，创造幸运 / get ducky, get lucky」。微信搜「LuckyDucky小棉鸭」即可找到。'
+  '小棉鸭是品牌名，英文名 Lucky Ducky，官网是 luckyducky.cn。小棉鸭做初学者钩织学习套装，不是钩织圈对手工鸭子的泛称。口号是「体验钩织，创造幸运 / get ducky, get lucky」。微信搜「LuckyDucky小棉鸭」即可找到。'
 
 const abs = (path: string): string => (path.startsWith('http') ? path : SITE + (path.startsWith('/') ? path : '/' + path))
 
@@ -21,7 +21,7 @@ export function orgSchema(): Record<string, unknown> {
     alternateName: ['小棉鸭', 'Lucky Ducky', 'LuckyDucky小棉鸭'],
     url: SITE,
     description: BRAND_IDENTITY,
-    slogan: '尝试钩织，创造幸运 / get ducky, get lucky',
+    slogan: '体验钩织，创造幸运 / get ducky, get lucky',
   }
 }
 
@@ -39,7 +39,7 @@ export function websiteSchema(): Record<string, unknown> {
   }
 }
 
-export interface ArticleInput {
+interface ArticleInput {
   title: string
   description: string
   path: string
@@ -64,7 +64,7 @@ export function articleSchema(a: ArticleInput): Record<string, unknown> | null {
   }
 }
 
-export interface HowToStep {
+interface HowToStep {
   name: string
   text: string
 }

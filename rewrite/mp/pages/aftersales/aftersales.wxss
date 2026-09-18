@@ -42,10 +42,6 @@
   color: var(--ld-ink);
   letter-spacing: -0.3rpx;
 }
-.coas-sechead-sub {
-  font-size: 22rpx;
-  color: var(--ld-content-2);
-}
 
 /* ---------- 售后单卡（设计 coas-order 横卡 + 状态/原因扩展） ---------- */
 .ldas-card {
@@ -55,13 +51,6 @@
   display: flex;
   align-items: center;
   gap: 20rpx;
-}
-.coas-order-img {
-  width: 120rpx;
-  height: 120rpx;
-  flex: 0 0 auto;
-  border-radius: var(--ld-radius-sm);
-  background: var(--ld-bg-sage); /* 无商品图字段→灰底占位 */
 }
 .coas-order-mid {
   flex: 1 1 auto;
@@ -184,6 +173,24 @@
   padding: 20rpx 0;
   font-size: 22rpx;
   color: var(--ld-content-2);
+}
+
+/* ---------- 加载骨架（首次加载中间空白·根因#8·对齐 order-list coolist-skel） ---------- */
+.ldas-skel-block,
+.ldas-skel-bar {
+  background: linear-gradient(90deg, var(--ld-bg-sage) 25%, var(--ld-bg-faint) 50%, var(--ld-bg-sage) 75%);
+  background-size: 200% 100%;
+  animation: ld-shimmer 1500ms ease-in-out infinite;
+}
+.ldas-skel-block {
+  width: 120rpx;
+  height: 120rpx;
+  flex: 0 0 auto;
+  border-radius: var(--ld-radius-sm);
+}
+.ldas-skel-bar {
+  height: 24rpx;
+  border-radius: 8rpx;
 }
 
 /* ---------- 空态 ---------- */

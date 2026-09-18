@@ -123,8 +123,8 @@ export async function conversationsReport({ db, data }: Ctx) {
 }
 
 // ── 质检抽检（B7·板块#11 续）──
-// 粒度＝客户会话档级（csSession 文档，非「轮次」——csSession 跨轮复用重开、消息无 sessionId，轮次实体不存在，
-// 见 docs/待办与债.md flag）。sessionKey＝csSession._id（形如 `wxkf:<openKfId>:<externalUserId>`——**不是**
+// 粒度＝客户会话档级（csSession 文档，非「轮次」——csSession 跨轮复用重开、消息无 sessionId，轮次实体不存在）。
+// sessionKey＝csSession._id（形如 `wxkf:<openKfId>:<externalUserId>`——**不是**
 // externalUserId：csat.ts 的明细行已改名为 externalUserId 字段、不再借用 sessionKey 之名，这里前端跳「查会话」
 // 时仍须解出 externalUserId 传给 searchConversations，别把 csSession._id 当 externalUserId 传错接口）。
 // 鉴权：均走 adminApi 现行机制——本文件三个 action 都不登记 ACTION_CAPS（见 index.ts），默认高权

@@ -75,10 +75,8 @@
   box-shadow: 0 0 0 6rpx #fff, 0 6rpx 16rpx rgba(54, 58, 80, 0.16);
 }
 .ld-me-avatar-empty {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 52rpx;
+  box-sizing: border-box;
+  padding: 22rpx 12rpx;
 }
 .ld-me-edit {
   display: inline-flex;

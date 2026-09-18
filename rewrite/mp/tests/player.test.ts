@@ -295,3 +295,15 @@ describe('nearestMark（磁吸判定·拖动·纯函数）', () => {
     expect(nearestMark(10, MARKS, -1)).toBeNull()
   })
 })
+
+describe('求助面板 FAQ 失败分治（根因#14·库挂≠没有常见问题）', () => {
+  it('大白话：getPublicFaq 失败要落 fail，不能把空列表画成「还在整理」', () => {
+    const load = playerTsRaw.slice(playerTsRaw.indexOf('async loadHelpFaq()'), playerTsRaw.indexOf('onHelpBackMenu()'))
+    expect(load).toMatch(/if\s*\(\s*!r\.ok\s*\)/)
+    expect(load).toMatch(/helpFaqState:\s*'fail'/)
+    expect(load.indexOf("helpFaqState: 'fail'")).toBeLessThan(load.indexOf("helpFaqState: 'empty'"))
+    expect(playerWxmlRaw).toContain("helpFaqState === 'fail'")
+    expect(playerWxmlRaw).toContain('暂时查不到')
+    expect(playerWxmlRaw).toContain('还在整理中')
+  })
+})

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 // 客户 360（设计语言一致性·M3 UI 批14）：搜人（openid/手机/昵称/订单号）→ 全景面板（单面板失败隔离·其余照渲染）。
-// 本页读他人数据全程强制留痕（云端 FORCE_AUDIT）。逻辑未动，仅套设计语言。
+// 本页读他人数据全程强制留痕（云端 FORCE_AUDIT）。
 import { ref } from 'vue'
 import { Search, ChevronLeft, RotateCcw, User } from 'lucide-vue-next'
 import { searchCustomer, getCustomer360, getUser } from '../api/cs'
@@ -19,7 +19,7 @@ const hits = ref<Array<{ openid: string; nickname: string; phone: string; matche
 const panels = ref<PanelVM[]>([])
 const current = ref('')
 const message = ref('')
-// 身份头（换皮丢·getUser 没导出·坐席查客户只剩 openid 看不到姓名/手机/画像）
+// 身份头（getUser：昵称/手机/头像/简介）
 const user = ref<{ nickname: string; phone: string; avatar: string; bio: string } | null>(null)
 // getUser 与 getCustomer360 并行、各自独立成败（P2·bug sweep II D 补：区分「u.ok=false 取数失败」与「真无档」——
 // 二者若合并成同一句「暂无用户档案」文案，会把一次网络抖动误报成「查无此档」这一更强结论，与病根14「失败必可观测」相悖）
@@ -134,7 +134,7 @@ async function open(openid: string) {
       <code class="cur mono">{{ current }}</code>
     </div>
 
-    <!-- 身份头（真值·换皮丢·getUser 未导出）：头像/昵称/手机(掩码)/openid/bio——P2·item3：与下方 360
+    <!-- 身份头（真值·getUser）：头像/昵称/手机(掩码)/openid/bio——P2·item3：与下方 360
          面板区解耦，getUser 独立成功即显，不因 panels 取数失败（mapPanels 空）被 v-if="panels.length" 连坐隐藏 -->
     <Card v-if="user">
       <div class="profile">

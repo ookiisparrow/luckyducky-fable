@@ -43,7 +43,7 @@ export function withAdminGate(handler: (ctx: OpenIdCtx) => Promise<any>) {
     const db = getDb()
     const { OPENID } = cloud.getWXContext()
     if (OPENID) {
-      const u = await db.collection(COLLECTIONS.users).where({ _openid: OPENID }).get()
+      const u = await db.collection(COLLECTIONS.users).where({ _openid: OPENID }).limit(1).get()
       if (!u.data.length || u.data[0].isAdmin !== true) return err(ERR.ADMIN_ONLY)
     }
     return handler({ db, OPENID, event })

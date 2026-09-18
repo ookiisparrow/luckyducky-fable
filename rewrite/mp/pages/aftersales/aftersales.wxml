@@ -15,8 +15,6 @@
       bind:tap="onTapOrder"
     >
       <view class="ldas-top">
-        <!-- 售后单无商品图字段→灰底占位 -->
-        <view class="coas-order-img"></view>
         <view class="coas-order-mid">
           <text class="coas-order-name">{{item.name}}{{item.spec ? '（' + item.spec + '）' : ''}}</text>
           <text class="coas-order-meta">申请于 {{item.appliedAtLabel}} · ×{{item.qty}}</text>
@@ -45,6 +43,19 @@
 
     <text class="coas-note" wx:if="{{list.length}}" bind:tap="onKefu">需要帮助？联系客服</text>
     <view class="ldas-more" wx:if="{{hasMore}}">上拉加载更多</view>
+
+    <!-- 骨架占位（首次加载中间空白·根因#8）：对齐 order-list/reviews，不误报空态 -->
+    <block wx:if="{{loading && !list.length}}">
+      <view class="co-card ldas-card ldas-skel" wx:for="{{[1, 2, 3]}}" wx:key="*this">
+        <view class="ldas-top">
+          <view class="ldas-skel-block"></view>
+          <view class="coas-order-mid">
+            <view class="ldas-skel-bar" style="width: 240rpx"></view>
+            <view class="ldas-skel-bar" style="width: 160rpx"></view>
+          </view>
+        </view>
+      </view>
+    </block>
 
     <!-- 失败态与空态分治（根因#14·守卫 rw-mp-list-loadfailed-state） -->
     <view class="coas-empty" wx:if="{{!loading && loadFailed}}">

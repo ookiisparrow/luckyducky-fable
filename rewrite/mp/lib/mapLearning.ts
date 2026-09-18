@@ -148,7 +148,7 @@ interface CatalogLessonRaw {
 
 /** dur 口径修复（决策§31 批2 顺修）：段 dur 库内是 'm:ss' 字符串（admin readDuration/VOD 转码回填同款），
  *  原 Number('5:00')→NaN→0 把全部课时时长隐藏成 0 分钟。兼容三种历史写法：数字秒、纯数字串、'm:ss'。 */
-export function parseDurSec(v: unknown): number {
+function parseDurSec(v: unknown): number {
   if (typeof v === 'number') return v > 0 ? v : 0
   const s = String(v || '').trim()
   const m = s.match(/^(\d+):([0-5]?\d)$/)
@@ -316,17 +316,18 @@ export function mapHelpVideos(r: unknown): HelpTopicVM[] {
 }
 
 // 播放页求助面板·常见问题（R37b·KB 精选 FAQ 公开读接线·播放器重设计战役批B8）：云端 getPublicFaq
-// 只回 admin 勾选「精选」的 kb 条目（本批零改动·rewrite/cloud/src/functions/app/actions/faq.ts），
-// 字段瘦身 {key,title,content}（title←question/content←answer）。清洗脏结构同 mapHelpVideos 先例
-// （null 防御）：非数组归空、字段 String 化、无标题剔除（脏档不占位）。空/失败仍由 player.ts 落诚实空态。
+// 只回 admin 勾选「精选」的 kb 条目，字段瘦身 {key,title,content}（title←question/content←answer）。
+// 清洗脏结构同 mapHelpVideos 先例（null 防御）：非数组归空、字段 String 化、无标题剔除（脏档不占位）。
+// ok:false（库挂/超时）回 null，不把空 items 装成「没有 FAQ」；真没有才回 []（根因#14）。
 export interface FaqItemVM {
   key: string
   title: string
   content: string
 }
 
-export function mapPublicFaq(r: unknown): FaqItemVM[] {
+export function mapPublicFaq(r: unknown): FaqItemVM[] | null {
   const res = (r && typeof r === 'object' ? r : {}) as Record<string, any>
+  if (res.ok === false) return null
   const items = Array.isArray(res.items) ? res.items : []
   const out: FaqItemVM[] = []
   for (const raw of items) {

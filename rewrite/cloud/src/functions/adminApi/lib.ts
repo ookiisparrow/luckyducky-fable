@@ -32,7 +32,7 @@ export interface Ctx {
   caps?: string[] // 认证主体能力位（'*'=超管全量·坐席台分配 scope 判超管用）
 }
 
-export const CORS = {
+const CORS = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
   'Access-Control-Allow-Headers': 'Content-Type',
@@ -170,7 +170,7 @@ export async function getTxAlerts(
 // 设密钥流程：部署时设云环境变量 ADMIN_BOOTSTRAP_KEY＝期望口令 → 首登用该口令 → 设定后可移除。
 // 坐席 RBAC 角色→能力位单源（§1.5·B5.2·别让单超管裸奔）：superadmin 全能力；outsourced 外包最小权
 // （只 agent:handle·余皆默认拒·防越权动钱/状态/导出）。中间角色（如内部坐席）按需扩——加新角色 + 给对应 action 标 cap 即可。
-export const ROLES: Record<string, string[]> = {
+const ROLES: Record<string, string[]> = {
   superadmin: ['*'],
   // 外包最小权（§1 定稿·根因#3·master 整合收窄）：**仅 agent:handle**——承面C 坐席台（查 listQueue/getThread + 回复 send +
   // 认领/放手/升级/结束 + 快捷回复读 kb·**不含**动钱/动状态/退款·留商户超管）。**刻意去掉裸 customer:view**：
@@ -184,7 +184,7 @@ export const capsForRole = (role: string): string[] => ROLES[role] || []
 // 前端只存令牌不存口令原文（口令是可复用主凭证，落在外包机器上=失守；令牌 12h 自灭 + 停号即拒）。
 // 存储形状：账号 doc.sessions = [{ hash, exp, via, at }]（sha 入库·绝不存明文）；数组容多设备
 // （商户同时登控制台+坐席台不互踢），签发时剪过期、超容剪最旧。守卫 admin-session-token-not-password。
-export const SESSION_TTL_MS = 12 * 60 * 60 * 1000 // 12h·一个工作班次；过期重登（企微内静默 OAuth 无感）
+const SESSION_TTL_MS = 12 * 60 * 60 * 1000 // 12h·一个工作班次；过期重登（企微内静默 OAuth 无感）
 const SESSION_MAX = 8 // 单账号并存会话上限（多设备够用·防 sessions 数组无界膨胀）
 
 /** 签发会话令牌：写进账号 doc.sessions（剪过期/超容），返回令牌明文（只此一次·不再可取回）。 */

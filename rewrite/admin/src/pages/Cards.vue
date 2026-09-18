@@ -1,7 +1,7 @@
 <script setup lang="ts">
-// 二维码卡片设计器（换皮丢了整块·误判「卡后端」·实则后端 getCard/saveCard + cards 集合早就绪·仅前端从没接）：
+// 二维码卡片设计器（前端 Cards.vue + 后端 getCard/saveCard + cards 集合）：
 // 正面=插画面（满版图+品牌角标）/ 反面=二维码面（标题/副文案/占位/扫码引导/退货小字+品牌条）·双面实时预览·防抖自动保存·
-// 定稿并启用（第 6 步批次生成前置）·卡面 SVG 下载（印刷交付）。深链自商品页「卡片设计」。
+// 定稿并启用（第 5 步批次生成前置）·卡面 SVG 下载（印刷交付）。深链自商品页「卡片设计」。
 import { ref, computed, onMounted, onBeforeUnmount, watch, nextTick } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { getCard, saveCard, uploadImage, listDrafts } from '../api/products'
@@ -198,7 +198,7 @@ async function finalize() {
     return
   }
   // 先落库、成功才翻定稿态（审核补漏·病根#14 伪成功）：不乐观翻——防前端显「已定稿」而后端仍 draft，
-  // 第 6 步码批次依赖 cardFinal 落库·否则生成失败且排障无线索。
+  // 第 5 步码批次依赖 cardFinal 落库·否则生成失败且排障无线索。
   if (saveTimer) {
     clearTimeout(saveTimer) // 取消未触发的防抖定时器（只挡得住这半·同 Products/HomeContent 约定）
     saveTimer = null
@@ -206,7 +206,7 @@ async function finalize() {
   const next = card.value.status === 'final' ? 'draft' : 'final'
   // 定稿写并入同一条 serialSave 队列（P1 复审补漏·根因#8）：不再旁路直发 saveCard，改走 flushSave()
   // 本尊（非 .settled()）——trigger() 对「已在途」的链只标脏、不并发再发一次 POST，会等其跑完再补跑
-  // 一轮；期间若又有新 autosave 触发（watch 的 900ms 计时器到点），一样标脏排进同一条链，不会跟本次
+  // 一轮；期间若又有新 autosave 触发（watch 的 700ms 计时器到点），一样标脏排进同一条链，不会跟本次
   // 定稿写并发在途。pendingStatus 保证链上「当前轮 + 尾随补跑轮」发出的都是 next 状态，不被旧 draft
   // 覆盖；flushSave() 收尾即整条链跑空，autoState 反映的是链上最后一轮（即本次定稿）的真实结果。
   pendingStatus = next

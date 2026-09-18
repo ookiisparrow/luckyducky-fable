@@ -1,4 +1,4 @@
-// fg 组合键定界符防护（战役3 批D·D1）：isValidScmProductId/isValidScmSpec 单测 + 放行集合反解无错拆
+// fg 组合键定界符防护：isValidScmProductId/isValidScmSpec 单测 + 放行集合反解无错拆
 // 表驱动对拍（证明 scmKey.ts 头注的排歧规则数学上成立——首个 __ 恒是分隔符本身）。
 import { describe, it, expect } from 'vitest'
 import { isValidScmProductId, isValidScmSpec } from '../src/scmKey'

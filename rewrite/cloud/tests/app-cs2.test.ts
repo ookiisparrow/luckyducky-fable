@@ -42,7 +42,17 @@ beforeEach(() => {
 })
 afterEach(() => {
   ;(globalThis as any).fetch = fetchBackup
-  for (const k of ['WXKF_CORPID', 'WXKF_SECRET', 'WXKF_TOKEN', 'WXKF_AESKEY']) delete process.env[k]
+  for (const k of [
+    'WXKF_CORPID',
+    'WXKF_SECRET',
+    'WXKF_TOKEN',
+    'WXKF_AESKEY',
+    'JEV_CS_ROUTE',
+    'TYPESAFE_API_KEY',
+    'WX_ENV_VERSION',
+    'TCB_ENV_VERSION',
+  ])
+    delete process.env[k]
 })
 
 describe('去重认领与防吞单（黄金 §四）', () => {
@@ -196,6 +206,18 @@ describe('FAQ 单源 / 卡片降级 / 查订单（黄金 §五）', () => {
     expect(text).toContain('已发货')
     expect(text).toContain('SF123')
     expect(text).toContain('已支付/待发货')
+  })
+
+  it('大白话：库挂不再说「没查到你名下的订单」——实话暂时查不到；真没单仍走原空态', async () => {
+    control.setBeforeGet(({ coll }: any) => {
+      if (coll === 'orders') throw new Error('MOCK_DB_FAIL')
+    })
+    const fail = await summarizeOrders(db(), 'oME')
+    control.setBeforeGet(null as never)
+    expect(fail).toContain('暂时查不到')
+    expect(fail).not.toContain('没查到你名下的订单')
+    const empty = await summarizeOrders(db(), 'oNobody')
+    expect(empty).toContain('没查到你名下的订单')
   })
 })
 

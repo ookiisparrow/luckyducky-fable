@@ -14,7 +14,7 @@ import Card from '../components/ui/Card.vue'
 import Badge from '../components/ui/Badge.vue'
 import EmptyState from '../components/ui/EmptyState.vue'
 
-const KIT_ICONS = ['circle', 'pen-tool', 'cloud', 'eye', 'book-open', 'sparkles-purple', 'package', 'truck'] // 材料清单图标（换皮丢了选择器·恒 circle）
+const KIT_ICONS = ['circle', 'pen-tool', 'cloud', 'eye', 'book-open', 'sparkles-purple', 'package', 'truck'] // 材料清单图标（编辑器下拉可选；新行默认 circle）
 
 // 嵌入模式（上新向导步 1-3 复用本编辑器·向后兼容·独立 /products 路由用法不传 props 行为不变）：
 // embed=true 隐列表壳只留编辑器·wizardProductId 指定要编辑的商品档（向导载入后自动打开）。
@@ -153,7 +153,7 @@ watch(
     autoState.value = 'saving'
     if (saveTimer) clearTimeout(saveTimer)
     saveTimer = setTimeout(() => {
-      saveTimer = null // 触发后清空·让 saveTimer 真实反映「有未落盘的待发编辑」（照 Courses.vue:146 写法·P1·bug sweep Round2 item7）
+      saveTimer = null // 触发后清空·让 saveTimer 真实反映「有未落盘的待发编辑」
       void flushSave()
     }, 900)
   },

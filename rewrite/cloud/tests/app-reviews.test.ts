@@ -358,6 +358,22 @@ describe('getPublicFaq（R37b·KB 精选 FAQ 公开读·守卫 faq-via-kb-single
     expect((await call('getPublicFaq')).items).toEqual([])
   })
 
+  it('大白话：库挂不再装成「没有 FAQ」——ok:false INTERNAL；真无精选仍空列表', async () => {
+    control.seed('kb', [{ _id: 'k1', question: 'q', answer: 'a', featured: true }])
+    control.setBeforeGet(({ coll }: any) => {
+      if (coll === 'kb') throw new Error('MOCK_DB_FAIL')
+    })
+    const fail = await call('getPublicFaq')
+    control.setBeforeGet(null as never)
+    expect(fail.ok).toBe(false)
+    expect(fail.error).toBe('INTERNAL')
+    expect(fail.items).toBeUndefined()
+    control.reset()
+    const empty = await call('getPublicFaq')
+    expect(empty.ok).toBe(true)
+    expect(empty.items).toEqual([])
+  })
+
   it('大白话：bounded 上限 20——精选条目多于上限时只回前 20 条，不无界下发', async () => {
     control.seed(
       'kb',
