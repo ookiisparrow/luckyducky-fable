@@ -1,7 +1,7 @@
 /**
  * Config Pack lucky-ducky-2026-09-19 挂进测版运行时（T2）。
  * 构建打进 kfCallback，运行时不拉 GitHub。Jev/原文 → triage_rules → script id。
- * 旧 cs-scripts 只当 flavor；包装破损首次进线主句走 atomic-v1 sequence，Pack 脚本仍供槽位/其它线。
+ * 旧 cs-scripts 只当 flavor；包装破损主句走 atomic-v1 门闩+优先级组装，Pack 脚本仍供槽位/其它线。
  */
 
 import { COLLECTIONS } from '@ldrw/shared'
@@ -106,7 +106,7 @@ const ALLOWED: Record<PackMachineState, PackMachineState[]> = {
   resolve: [],
 }
 
-const PACKAGING_RE = /包装|摔坏|破损|压坏|磕坏|外箱/
+const PACKAGING_RE = /包装|摔坏|破损|压坏|压烂|磕坏|外箱|摔烂/
 
 export function packSessionId(euid: string): string {
   return 'jevpack:' + euid

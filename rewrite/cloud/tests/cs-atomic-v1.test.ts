@@ -4,11 +4,16 @@ import { handleMessage, type DispatchCtx } from '../src/functions/cs/kfCallback/
 import { sendBubbles } from '../src/functions/cs/kfCallback/bubbles'
 import {
   PACKAGING_FIRST_TOUCH_ID,
+  PACKAGING_NO_ORDER_ID,
+  PACKAGING_WITH_ORDER_SHORT_ID,
+  assemblePackagingBubbles,
   atomicText,
+  detectPackagingFacets,
   listAtomicLib,
   loadAtomicAssets,
   packagingFirstTouchBubbles,
   playSequence,
+  stitchUtterance,
 } from '../src/functions/cs/kfCallback/csAtomic'
 import { packScriptReply } from '../src/functions/cs/kfCallback/csPack'
 import { composeLine, emptyFlow } from '../src/functions/cs/kfCallback/scriptReply'
@@ -21,7 +26,19 @@ const PHOTO3 = [
   atomicText('business/packaging/ask_photo_03'),
 ] as const
 
-const firstTouch = (rand: () => number = () => 0) => packagingFirstTouchBubbles(rand)
+const ACCEPT = '我的包裹被压烂了'
+
+const withOrderShort = (text = ACCEPT, extra?: { severity?: string; style?: 'short' | 'long' }) =>
+  assemblePackagingBubbles({
+    text,
+    hasRecentOrder: true,
+    style: (extra && extra.style) || 'short',
+    severity: extra && extra.severity,
+    rand: () => 0,
+  })
+
+const noOrder = (text = ACCEPT) =>
+  assemblePackagingBubbles({ text, hasRecentOrder: false, style: 'short', rand: () => 0 })
 
 const db = () => getDb()
 const sendCollector = () => {
@@ -40,6 +57,13 @@ const texts = (sent: any[], from = 0) =>
     .slice(from)
     .filter((p) => p && p.msgtype === 'text')
     .map((p) => String(p.text && p.text.content))
+
+function seedRecentOrder(euid: string, openid = 'o' + euid) {
+  control.seed('kfIdentity', [{ _id: 'ext:' + euid, openid }])
+  control.seed('orders', [
+    { _id: 'ord-' + euid, id: 'ord-' + euid, _openid: openid, status: 'shipped', createdAt: Date.now() },
+  ])
+}
 
 const ENV_KEYS = ['JEV_CS_ROUTE', 'TYPESAFE_API_KEY', 'WX_ENV_VERSION', 'TCB_ENV_VERSION', 'CS_TRIAL_REFRESH', 'CS_BUBBLE_GAP_MS'] as const
 let fetchBackup: unknown
@@ -74,45 +98,82 @@ const jevPackaging = async () => ({
   }),
 })
 
-describe('atomic-v1 包装首次进线', () => {
-  it('大白话：构建打进的原子库有 route/sequence/txt，没有 GitHub 地址', () => {
+describe('atomic-v1 包装优先级组装', () => {
+  it('大白话：构建打进的原子库有门闩/新情绪/理赔，没有 GitHub 地址', () => {
     const assets = loadAtomicAssets()
     expect(assets.id).toBe('atomic-v1')
     expect(assets.route.emotionAlways).toBe(true)
-    expect(assets.route.emotionLibBySignal && assets.route.emotionLibBySignal.surprise).toBe('emotion/surprise')
+    expect(assets.route.gate && assets.route.gate.recentOrderRequiredForBusiness).toBe(true)
+    expect(assets.route.gate && assets.route.gate.noOrderSequence).toBe(PACKAGING_NO_ORDER_ID)
+    expect(assets.route.sequences && assets.route.sequences.withOrderShort).toBe(PACKAGING_WITH_ORDER_SHORT_ID)
+    expect(assets.route.styleDefault).toBe('short')
+    expect(assets.sequences[PACKAGING_WITH_ORDER_SHORT_ID]).toBeTruthy()
+    expect(assets.sequences[PACKAGING_NO_ORDER_ID]).toBeTruthy()
     expect(assets.sequences[PACKAGING_FIRST_TOUCH_ID]).toBeTruthy()
     expect(listAtomicLib('emotion/surprise')).toHaveLength(22)
+    expect(listAtomicLib('emotion/apology')).toHaveLength(3)
+    expect(listAtomicLib('emotion/try_hard')).toHaveLength(3)
+    expect(listAtomicLib('business/claim')).toHaveLength(3)
+    expect(listAtomicLib('gate/no_order')).toEqual(['clarify_01', 'clarify_02', 'human_01'])
     expect(listAtomicLib('business/packaging')).toHaveLength(18)
-    expect(Object.keys(assets.files)).toHaveLength(40)
-    expect(listAtomicLib('business/packaging')).toEqual(
-      expect.arrayContaining(['ask_photo_01', 'ask_photo_02', 'ask_photo_03', 'empathy_01', 'empathy_02', 'empathy_03'])
-    )
+    expect(Object.keys(assets.files)).toHaveLength(52)
     expect(atomicText('business/packaging/empathy_01')).toBe('理解，包装成这样确实烦。')
-    expect(atomicText('business/packaging/empathy_02')).toBe('包装破损体验不好，理解您不舒服。')
-    expect(atomicText('business/packaging/empathy_03')).toBe('理解，换谁都烦。')
+    expect(atomicText('gate/no_order/clarify_01')).toMatch(/没查到您近期的订单/)
     const blob = JSON.stringify(assets)
     expect(blob).not.toContain('api.github.com')
     expect(blob).not.toContain('raw.githubusercontent.com')
   })
 
-  it('大白话：sequence 解析出 5 条气泡，内容等于对应 txt，不要订单号', () => {
-    const got = playSequence(PACKAGING_FIRST_TOUCH_ID, () => 0)
-    const surpriseStem = listAtomicLib('emotion/surprise')[0]
-    const surprise = atomicText('emotion/surprise/' + surpriseStem)
-    const empathy = atomicText('business/packaging/empathy_01')
-    expect(got).toHaveLength(5)
-    expect(got).toEqual([surprise, empathy, ...PHOTO3])
-    expect(got[0]).toBe(surprise)
-    expect(got[1]).toBe(empathy)
-    expect(got[2]).toBe(atomicText('business/packaging/ask_photo_01'))
-    expect(got[3]).toBe(atomicText('business/packaging/ask_photo_02'))
-    expect(got[4]).toBe(atomicText('business/packaging/ask_photo_03'))
+  it('大白话：有单短句=惊讶→道歉/共情→尽力→合照×3，不要订单号', () => {
+    const got = withOrderShort()
+    const surprise = atomicText('emotion/surprise/' + listAtomicLib('emotion/surprise')[0])
+    const apology = atomicText('emotion/apology/01')
+    const tryHard = atomicText('emotion/try_hard/01')
+    expect(got).toEqual([surprise, apology, tryHard, ...PHOTO3])
+    expect(got).toHaveLength(6)
     expect(got.join('')).not.toMatch(/订单号/)
     expect(PHOTO3).toEqual([
       '您拍一张包装和产品放一起的合照发我～',
       '外箱破口和产品都入镜拍一张发过来。',
       '包装+内物合照一张，我帮您看产品有没有事。',
     ])
+    expect(packagingFirstTouchBubbles(() => 0)).toEqual(got)
+  })
+
+  it('大白话：无单只澄清/转人工，不发合照、不理赔', () => {
+    const got = noOrder()
+    expect(got).toEqual([atomicText('gate/no_order/clarify_01'), atomicText('gate/no_order/human_01')])
+    expect(got.join('')).not.toMatch(/合照/)
+    expect(got.join('')).not.toMatch(/理赔|索赔/)
+    expect(got.some((s) => PHOTO3.includes(s as (typeof PHOTO3)[number]))).toBe(false)
+    expect(playSequence(PACKAGING_NO_ORDER_ID, () => 0).join('')).not.toMatch(/合照/)
+  })
+
+  it('大白话：物流运输严重才后挂理赔；压烂本身不挂', () => {
+    const smashed = withOrderShort(ACCEPT)
+    expect(smashed).toHaveLength(6)
+    expect(smashed.join('')).not.toMatch(/理赔|索赔/)
+    const severe = withOrderShort('物流运输把箱子压烂了', { severity: 'high' })
+    expect(severe).toHaveLength(7)
+    expect(listAtomicLib('business/claim').map((s) => atomicText('business/claim/' + s))).toContain(severe[6])
+    expect(detectPackagingFacets(ACCEPT).logisticsSevere).toBe(false)
+    expect(detectPackagingFacets('快递摔坏了').logisticsSevere).toBe(true)
+  })
+
+  it('大白话：long 把同 priority 合成更少长气泡', () => {
+    const short = withOrderShort(ACCEPT, { style: 'short' })
+    const long = withOrderShort(ACCEPT, { style: 'long' })
+    expect(short).toHaveLength(6)
+    expect(long).toHaveLength(2)
+    expect(long[0]).toBe(short.slice(0, 3).join(''))
+    expect(long[1]).toBe(PHOTO3.join(''))
+  })
+
+  it('大白话：同会话连续短输入可拼', () => {
+    const now = 1_000_000
+    expect(stitchUtterance('包裹被', now, '压烂了', now + 200)).toBe('包裹被压烂了')
+    expect(stitchUtterance('包裹被', now, '压烂了', now + 9000)).toBe('压烂了')
+    expect(stitchUtterance('我的包裹被压烂了真的很生气', now, '还有图', now + 200)).toBe('还有图')
   })
 
   it('大白话：原样直发，带问号的一句也不切开', async () => {
@@ -126,8 +187,8 @@ describe('atomic-v1 包装首次进线', () => {
     expect(sent).toEqual(['嗯？怎么了', '理解理解。'])
   })
 
-  it('大白话：compose 走 sequence，不再只回三句合照或惊讶空壳', () => {
-    const expect5 = firstTouch()
+  it('大白话：compose 走有单短句序，不再只回三句合照或惊讶空壳', () => {
+    const expect6 = withOrderShort()
     const { line, node, pieces } = composeLine(
       emptyFlow(),
       {
@@ -139,52 +200,74 @@ describe('atomic-v1 包装首次进线', () => {
         orderStatus: 'delivered',
         topic: 'packaging',
       },
-      '包裹被摔坏了',
+      ACCEPT,
       () => 0
     )
     expect(node).toBe('photo')
-    expect(pieces).toEqual(expect5)
-    expect(line).toBe(expect5.join('\n'))
+    expect(pieces).toEqual(expect6)
+    expect(line).toBe(expect6.join('\n'))
     expect(line).not.toMatch(/订单号/)
     expect(pieces).not.toEqual([...PHOTO3])
     expect(line).not.toBe(packScriptReply('aftersale_packaging', [], () => 0))
   })
 
-  it('大白话：闸开说包裹被摔坏了，连发 5 气泡=对应 txt', async () => {
+  it('大白话：闸开有单说压烂，连发惊讶→道歉/共情→尽力→合照×3', async () => {
     process.env.JEV_CS_ROUTE = '1'
     process.env.TYPESAFE_API_KEY = 'test-key'
     ;(globalThis as any).fetch = jevPackaging
+    seedRecentOrder('euAtomic1')
     const { sent, ctx } = sendCollector()
-    await handleMessage(ctx, { externalUserId: 'euAtomic1', menuId: '', text: '包裹被摔坏了' })
+    await handleMessage(ctx, { externalUserId: 'euAtomic1', menuId: '', text: ACCEPT })
     const got = texts(sent)
     const surprisePool = listAtomicLib('emotion/surprise').map((s) => atomicText('emotion/surprise/' + s))
+    const apologyPool = listAtomicLib('emotion/apology').map((s) => atomicText('emotion/apology/' + s))
     const empathyPool = ['empathy_01', 'empathy_02', 'empathy_03'].map((s) => atomicText('business/packaging/' + s))
-    expect(got).toHaveLength(5)
+    const tryHardPool = listAtomicLib('emotion/try_hard').map((s) => atomicText('emotion/try_hard/' + s))
+    expect(got).toHaveLength(6)
     expect(surprisePool).toContain(got[0])
-    expect(empathyPool).toContain(got[1])
-    expect(got.slice(2)).toEqual([...PHOTO3])
+    expect([...apologyPool, ...empathyPool]).toContain(got[1])
+    expect(tryHardPool).toContain(got[2])
+    expect(got.slice(3)).toEqual([...PHOTO3])
     expect(got.join('')).not.toMatch(/订单号/)
     expect(got.join('\n')).not.toBe(packScriptReply('aftersale_packaging'))
   })
 
-  it('大白话：刷新后再说包裹被摔坏了，仍是惊讶→同理→三条合照，不抽旧 Pack', async () => {
+  it('大白话：闸开无单说压烂，只澄清/转人工，无合照', async () => {
+    process.env.JEV_CS_ROUTE = '1'
+    process.env.TYPESAFE_API_KEY = 'test-key'
+    ;(globalThis as any).fetch = jevPackaging
+    const { sent, ctx } = sendCollector()
+    await handleMessage(ctx, { externalUserId: 'euAtomicNone', menuId: '', text: ACCEPT })
+    const got = texts(sent)
+    const clarifyPool = ['clarify_01', 'clarify_02'].map((s) => atomicText('gate/no_order/' + s))
+    expect(got.length).toBeGreaterThanOrEqual(1)
+    expect(clarifyPool).toContain(got[0])
+    expect(got.join('')).not.toMatch(/合照/)
+    expect(got.some((s) => PHOTO3.includes(s as (typeof PHOTO3)[number]))).toBe(false)
+  })
+
+  it('大白话：刷新后再说压烂，有单仍是短句默认序，不抽旧 Pack', async () => {
     process.env.CS_TRIAL_REFRESH = '1'
     process.env.JEV_CS_ROUTE = '1'
     process.env.TYPESAFE_API_KEY = 'test-key'
     ;(globalThis as any).fetch = jevPackaging
+    seedRecentOrder('euAtomicRef')
     const { sent, ctx } = sendCollector()
     await handleMessage(ctx, { externalUserId: 'euAtomicRef', menuId: '', text: '刷新' })
     await handleMessage(ctx, { externalUserId: 'euAtomicRef', menuId: 'trial:refresh:ok', text: '确认重来' })
     expect(sent[1].text.content).toBe(formatRefreshDone(1))
     const n = sent.length
-    await handleMessage(ctx, { externalUserId: 'euAtomicRef', menuId: '', text: '包裹被摔坏了' })
+    await handleMessage(ctx, { externalUserId: 'euAtomicRef', menuId: '', text: ACCEPT })
     const got = texts(sent, n)
     const surprisePool = listAtomicLib('emotion/surprise').map((s) => atomicText('emotion/surprise/' + s))
+    const apologyPool = listAtomicLib('emotion/apology').map((s) => atomicText('emotion/apology/' + s))
     const empathyPool = ['empathy_01', 'empathy_02', 'empathy_03'].map((s) => atomicText('business/packaging/' + s))
-    expect(got).toHaveLength(5)
+    const tryHardPool = listAtomicLib('emotion/try_hard').map((s) => atomicText('emotion/try_hard/' + s))
+    expect(got).toHaveLength(6)
     expect(surprisePool).toContain(got[0])
-    expect(empathyPool).toContain(got[1])
-    expect(got.slice(2)).toEqual([...PHOTO3])
+    expect([...apologyPool, ...empathyPool]).toContain(got[1])
+    expect(tryHardPool).toContain(got[2])
+    expect(got.slice(3)).toEqual([...PHOTO3])
     expect(got).not.toEqual([...PHOTO3])
     expect(got.join('')).not.toMatch(/订单号/)
   })

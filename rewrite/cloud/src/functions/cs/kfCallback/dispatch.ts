@@ -414,6 +414,27 @@ export async function summarizeOrders(db: any, openid: string): Promise<string> 
   return '你最近的订单：\n' + lines.join('\n') + '\n需要更多帮助点「转人工」。'
 }
 
+/** 与 summarizeOrders 同口径：最近 3 单。库挂返 null（根因#14：库挂 ≠ 没单）。 */
+export async function hasRecentOrders(db: any, openid: string): Promise<boolean | null> {
+  const r = await db
+    .collection(COLLECTIONS.orders)
+    .where({ _openid: openid })
+    .orderBy('createdAt', 'desc')
+    .limit(3)
+    .get()
+    .catch(() => null)
+  if (!r) return null
+  return ((r.data || []).length > 0)
+}
+
+/** 客服用户有没有近期订单。未绑定=无单；库挂当有单（不误走无单澄清）。 */
+export async function kfUserHasRecentOrder(db: any, euid: string): Promise<boolean> {
+  const openid = await resolveOpenid(db, euid)
+  if (!openid) return false
+  const hit = await hasRecentOrders(db, openid)
+  return hit !== false
+}
+
 // ── 承面 C 会话入队（M0.c·让 csSession 有真实 writer·会话进自建工作台待接队列）──
 /**
  * 转人工时把这通会话写入 csSession 待接队列（承面 C 坐席台 `listQueue` 读它·阶段0地基）。
@@ -648,17 +669,24 @@ export async function handleMessage(ctx: DispatchCtx, incoming: Incoming): Promi
           const hello = looksGreeting(incoming.text)
           // Jev 并行只为取证；人工/招呼选句不靠它。08:55 只有 [kf] jev greeting、没有梯子日志。
           const evP = tryJevClassify(db, incoming.text)
+          const recentOrder = await kfUserHasRecentOrder(db, incoming.externalUserId)
           const scripted = human
-            ? await composeScriptReply(db, incoming.externalUserId, incoming.text, HUMAN_LADDER_EV)
+            ? await composeScriptReply(db, incoming.externalUserId, incoming.text, HUMAN_LADDER_EV, {
+                hasRecentOrder: recentOrder,
+              })
             : hello
-              ? await composeScriptReply(db, incoming.externalUserId, incoming.text, GREET_EV)
+              ? await composeScriptReply(db, incoming.externalUserId, incoming.text, GREET_EV, {
+                  hasRecentOrder: recentOrder,
+                })
               : null
           const ev = await evP
           const got =
             scripted ||
             (human || hello || !ev
               ? null
-              : await composeScriptReply(db, incoming.externalUserId, incoming.text, ev))
+              : await composeScriptReply(db, incoming.externalUserId, incoming.text, ev, {
+                  hasRecentOrder: recentOrder,
+                }))
           console.log('[kf] humanLadder', {
             matched: human,
             humanAsks: got ? got.humanAsks : null,
