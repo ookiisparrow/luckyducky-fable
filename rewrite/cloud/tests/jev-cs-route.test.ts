@@ -28,7 +28,7 @@ const sendCollector = () => {
   return { sent, ctx }
 }
 
-const JEV_KEYS = ['JEV_CS_ROUTE', 'TYPESAFE_API_KEY', 'WX_ENV_VERSION', 'TCB_ENV_VERSION'] as const
+const JEV_KEYS = ['JEV_CS_ROUTE', 'TYPESAFE_API_KEY', 'WX_ENV_VERSION', 'TCB_ENV_VERSION', 'CS_BUBBLE_GAP_MS'] as const
 let fetchBackup: unknown
 
 beforeEach(() => {
@@ -36,6 +36,7 @@ beforeEach(() => {
   control.setOpenId('')
   fetchBackup = (globalThis as any).fetch
   for (const k of JEV_KEYS) delete process.env[k]
+  process.env.CS_BUBBLE_GAP_MS = '0'
 })
 afterEach(() => {
   ;(globalThis as any).fetch = fetchBackup
@@ -214,17 +215,20 @@ describe('fail-open 与闸开映射', () => {
       expect(seen[0].body.model).toBe(JEV_MODEL)
       expect(seen[0].body.state).toBe('钱的事情问一下')
       expect(sent[0].msgtype).toBe('text')
-      expect(sent[0].text.content).toMatch(/在的|在呀|在呢|帮您|嗨|帮忙|请说|您说/)
+      const joinAt = (from: number) => sent.slice(from).map((p) => String(p.text && p.text.content || '')).join('')
+      expect(joinAt(0)).toMatch(/在的|在呀|在呢|帮您|嗨|帮忙|请说|您说/)
 
+      const nExpress = sent.length
       await handleMessage(ctx, { externalUserId: 'euExpress', menuId: '', text: '快递到哪了' })
-      expect(sent[1].msgtype).toBe('text')
-      expect(sent[1].msgmenu).toBeUndefined()
-      expect(sent[1].text.content).toMatch(/在的|在呀|在呢|帮您|嗨|帮忙|请说|您说/)
+      expect(sent[nExpress].msgtype).toBe('text')
+      expect(sent[nExpress].msgmenu).toBeUndefined()
+      expect(joinAt(nExpress)).toMatch(/在的|在呀|在呢|帮您|嗨|帮忙|请说|您说/)
 
+      const nRefund = sent.length
       await handleMessage(ctx, { externalUserId: 'euRefund', menuId: '', text: '退款怎么还没到账' })
-      expect(sent[2].msgtype).toBe('text')
-      expect(sent[2].msgmenu).toBeUndefined()
-      expect(sent[2].text.content).toMatch(/在的|在呀|在呢|帮您|嗨|帮忙|请说|您说/)
+      expect(sent[nRefund].msgtype).toBe('text')
+      expect(sent[nRefund].msgmenu).toBeUndefined()
+      expect(joinAt(nRefund)).toMatch(/在的|在呀|在呢|帮您|嗨|帮忙|请说|您说/)
     } finally {
       log.restore()
     }
