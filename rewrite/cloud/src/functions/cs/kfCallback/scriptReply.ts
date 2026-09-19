@@ -1,8 +1,10 @@
 /**
  * 闸开主流程 v0.0.2（含 bot 情绪表演）。图：cs-scripts/docs/10 + 老板定稿 mermaid。
- * 选句优先级 订单→情绪→严重程度→责任（勿反）。需求只给主题/犹豫/拍照。
+ * 选句优先级 订单→情绪→严重程度→责任（勿反）；可行动要图（needsPhoto）优先于惊讶/尴尬空壳。
  * 顾客情绪 ≠ bot 表演；道歉仅 responsibility=merchant。不编政策。
  * 会话记在 kfState `jevflow:<euid>`；data 不带 _id（真 sdk reject）。
+ * Pack lucky-ducky-2026-09-19/scripts/* 尚未挂进运行时（T2）；权威库仍是 cs-scripts
+ *（包装要图＝topics/收到后-包装.md → pool packPhoto）。
  */
 
 import { COLLECTIONS } from '@ldrw/shared'
@@ -142,7 +144,7 @@ function isTopicNeed(need: JevNeedStatus): boolean {
   )
 }
 
-function needsPhoto(need: JevNeedStatus): boolean {
+function needsPhoto(need: JevNeedStatus | undefined): boolean {
   return need === 'photo_needed' || need === 'packaging' || need === 'missing' || need === 'course'
 }
 
@@ -299,13 +301,16 @@ export function nextNode(state: JevFlowState, ev: JevResult, text = ''): ScriptN
   const logisticsNoFacts =
     (r.needStatus === 'logistics' || r.topic === 'logistics') && !r.hasLogisticsFacts
 
+  // 可行动要图优先于开场/惊讶/尴尬/严重度空壳，避免整轮只回「嗯？您慢慢说」。
+  if (needsPhoto(r.needStatus) && !s.photoAsked) return 'photo'
+
   // 1. 订单（最高）：没开场先按订单/有没有事走开场
   if (!s.greeted) {
     if (r.orderStatus === 'unknown' && !isTopicNeed(r.needStatus)) return 'greet'
     return 'greetIssue'
   }
 
-  // 2. 情绪穿插
+  // 2. 情绪穿插（无具体要图售后时才独占一轮）
   if (isNegative(r.emotionStatus) && !s.surprised) return 'surprise'
   if (isNegative(r.emotionStatus) && s.surprised && s.node === 'surprise') return 'awkward'
   if (r.emotionStatus === 'embarrassed' && s.surprised && s.node === 'surprise') return 'awkward'
@@ -313,9 +318,8 @@ export function nextNode(state: JevFlowState, ev: JevResult, text = ''): ScriptN
   // 3. 严重程度
   if (r.severity === 'high' && !s.severitySaid) return 'severity'
 
-  // 4. 责任不单独占一句（表演复核里才允许道歉）；需求：犹豫 / 要图
+  // 4. 责任不单独占一句（表演复核里才允许道歉）；需求：犹豫
   if (r.exceeds && !s.hesitated) return 'hesitate'
-  if (needsPhoto(r.needStatus) && !s.photoAsked) return 'photo'
 
   if (!s.restated) {
     if (logisticsNoFacts) return 'promise'
@@ -456,6 +460,11 @@ function speak(
   const actOnly = node === 'surprise' || node === 'awkward' || node === 'hesitate' || node === 'severity'
   if (actOnly) {
     const flavor = fillSlots(pickLine(actingPool(acting), used, undefined, rand), slots)
+    // 惊讶/尴尬/严重度不得当唯一主回复：有要图售后时正文仍走 packPhoto/同类池
+    if (needsPhoto(ev.needStatus) && node !== 'hesitate') {
+      const photoBody = fillSlots(pickLine(poolFor('photo', topic, ev), used, undefined, rand), slots)
+      if (photoBody) return flavor && flavor !== photoBody ? flavor + photoBody : photoBody
+    }
     return flavor || body
   }
   if (acting === 'steady' || acting === 'light') return body

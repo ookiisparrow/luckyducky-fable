@@ -207,6 +207,47 @@ describe('闸开话术状态机（mermaid + 1→4 + 表演）', () => {
     expect(payload.greeted).toBe(true)
   })
 
+  it('大白话：刷新后首句「包裹被摔坏了」要合照，不能整句只回惊讶空壳', () => {
+    const pools = scriptPools()
+    const afterRefresh = emptyFlow()
+    const smashed = ev({
+      needStatus: 'packaging',
+      emotionStatus: 'upset',
+      orderStatus: 'delivered',
+      topic: 'packaging',
+    })
+    expect(nextNode(afterRefresh, smashed, '包裹被摔坏了')).toBe('photo')
+    expect(nextNode(afterRefresh, smashed, '包裹被摔坏了')).not.toBe('surprise')
+    expect(
+      nextNode(greeted('greetIssue'), ev({ needStatus: 'packaging', emotionStatus: 'angry', topic: 'packaging' }))
+    ).toBe('photo')
+    expect(
+      nextNode(
+        { ...greeted('surprise'), surprised: true },
+        ev({ needStatus: 'packaging', emotionStatus: 'angry', topic: 'packaging' })
+      )
+    ).toBe('photo')
+
+    const { line, node, topic } = composeLine(afterRefresh, smashed, '包裹被摔坏了', () => 0)
+    expect(topic).toBe('packaging')
+    expect(node).toBe('photo')
+    expect(pools.packPhoto.some((s) => line.includes(s))).toBe(true)
+    expect(pools.surprise.includes(line)).toBe(false)
+    expect(line).toMatch(/拍|照|图|合照/)
+
+    for (const need of ['missing', 'course', 'photo_needed'] as const) {
+      const got = composeLine(
+        greeted('greetIssue'),
+        ev({ needStatus: need, emotionStatus: 'angry', topic: need === 'photo_needed' ? 'packaging' : need }),
+        '包裹被摔坏了',
+        () => 0
+      )
+      expect(got.node).toBe('photo')
+      expect(pools.surprise.includes(got.line)).toBe(false)
+      expect(got.line).toMatch(/拍|照|图/)
+    }
+  })
+
   it('大白话：包装破损要图，不拿默认【结论】装成已经查完', () => {
     const { line, node, topic } = composeLine(
       { ...greeted('restate'), promised: true, restated: true, node: 'promise', topic: 'other' },
