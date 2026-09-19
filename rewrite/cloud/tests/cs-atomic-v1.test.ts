@@ -21,11 +21,36 @@ import { composeLine, emptyFlow } from '../src/functions/cs/kfCallback/scriptRep
 import { formatRefreshDone } from '@ldrw/shared'
 import { getDb } from '../src/kit'
 
+const PHOTO1 = atomicText('business/packaging/ask_photo_01')
 const PHOTO3 = [
-  atomicText('business/packaging/ask_photo_01'),
+  PHOTO1,
   atomicText('business/packaging/ask_photo_02'),
   atomicText('business/packaging/ask_photo_03'),
 ] as const
+
+const expectedEmotion = () =>
+  atomicText('emotion/surprise/' + listAtomicLib('emotion/surprise')[0]) +
+  atomicText('emotion/apology/01') +
+  atomicText('emotion/try_hard/01')
+
+const surprisePool = () => listAtomicLib('emotion/surprise').map((s) => atomicText('emotion/surprise/' + s))
+const apologyPool = () => listAtomicLib('emotion/apology').map((s) => atomicText('emotion/apology/' + s))
+const empathyPool = () => ['empathy_01', 'empathy_02', 'empathy_03'].map((s) => atomicText('business/packaging/' + s))
+const tryHardPool = () => listAtomicLib('emotion/try_hard').map((s) => atomicText('emotion/try_hard/' + s))
+
+function expectCappedPackaging(got: string[], opts?: { claim?: boolean }) {
+  expect(got.length).toBeGreaterThanOrEqual(2)
+  expect(got.length).toBeLessThanOrEqual(3)
+  expect(surprisePool().some((s) => got[0].includes(s))).toBe(true)
+  expect([...apologyPool(), ...empathyPool()].some((s) => got[0].includes(s))).toBe(true)
+  expect(tryHardPool().some((s) => got[0].includes(s))).toBe(true)
+  expect(got).toContain(PHOTO1)
+  expect(got.join('')).not.toMatch(/订单号/)
+  if (opts && opts.claim) {
+    expect(got).toHaveLength(3)
+    expect(listAtomicLib('business/claim').map((s) => atomicText('business/claim/' + s))).toContain(got[2])
+  }
+}
 
 const ACCEPT = '我的包裹被压烂了'
 
@@ -76,6 +101,7 @@ const ENV_KEYS = [
   'CS_TRIAL_REFRESH',
   'CS_TEST_ASSUME_ORDER',
   'CS_BUBBLE_GAP_MS',
+  'CS_MAX_BUBBLES',
 ] as const
 let fetchBackup: unknown
 
@@ -135,14 +161,12 @@ describe('atomic-v1 包装优先级组装', () => {
     expect(blob).not.toContain('raw.githubusercontent.com')
   })
 
-  it('大白话：有单短句=惊讶→道歉/共情→尽力→合照×3，不要订单号', () => {
+  it('大白话：有单短句=情绪综合→合照 ask_photo_01，不要订单号、不要 6 连发', () => {
     const got = withOrderShort()
-    const surprise = atomicText('emotion/surprise/' + listAtomicLib('emotion/surprise')[0])
-    const apology = atomicText('emotion/apology/01')
-    const tryHard = atomicText('emotion/try_hard/01')
-    expect(got).toEqual([surprise, apology, tryHard, ...PHOTO3])
-    expect(got).toHaveLength(6)
+    expect(got).toEqual([expectedEmotion(), PHOTO1])
+    expect(got.length).toBeLessThanOrEqual(3)
     expect(got.join('')).not.toMatch(/订单号/)
+    expect(PHOTO1).toBe('您拍一张包装和产品放一起的合照发我～')
     expect(PHOTO3).toEqual([
       '您拍一张包装和产品放一起的合照发我～',
       '外箱破口和产品都入镜拍一张发过来。',
@@ -160,24 +184,37 @@ describe('atomic-v1 包装优先级组装', () => {
     expect(playSequence(PACKAGING_NO_ORDER_ID, () => 0).join('')).not.toMatch(/合照/)
   })
 
-  it('大白话：物流运输严重才后挂理赔；压烂本身不挂', () => {
+  it('大白话：物流运输严重才后挂理赔；压烂本身不挂；有理赔仍 ≤3 泡', () => {
     const smashed = withOrderShort(ACCEPT)
-    expect(smashed).toHaveLength(6)
+    expect(smashed).toEqual([expectedEmotion(), PHOTO1])
     expect(smashed.join('')).not.toMatch(/理赔|索赔/)
     const severe = withOrderShort('物流运输把箱子压烂了', { severity: 'high' })
-    expect(severe).toHaveLength(7)
-    expect(listAtomicLib('business/claim').map((s) => atomicText('business/claim/' + s))).toContain(severe[6])
+    expect(severe).toHaveLength(3)
+    expect(severe[0]).toBe(expectedEmotion())
+    expect(severe[1]).toBe(PHOTO1)
+    expect(listAtomicLib('business/claim').map((s) => atomicText('business/claim/' + s))).toContain(severe[2])
     expect(detectPackagingFacets(ACCEPT).logisticsSevere).toBe(false)
     expect(detectPackagingFacets('快递摔坏了').logisticsSevere).toBe(true)
   })
 
-  it('大白话：long 把同 priority 合成更少长气泡', () => {
+  it('大白话：long 同样 ≤3，同 priority 合成更少长气泡', () => {
     const short = withOrderShort(ACCEPT, { style: 'short' })
     const long = withOrderShort(ACCEPT, { style: 'long' })
-    expect(short).toHaveLength(6)
-    expect(long).toHaveLength(2)
-    expect(long[0]).toBe(short.slice(0, 3).join(''))
+    expect(short.length).toBeLessThanOrEqual(3)
+    expect(long.length).toBeLessThanOrEqual(3)
+    expect(long[0]).toBe(short[0])
     expect(long[1]).toBe(PHOTO3.join(''))
+    const severeLong = withOrderShort('物流运输把箱子压烂了', { style: 'long', severity: 'high' })
+    expect(severeLong.length).toBeLessThanOrEqual(3)
+  })
+
+  it('大白话：CS_MAX_BUBBLES=2 时理赔并进合照条，总泡仍 ≤2', () => {
+    process.env.CS_MAX_BUBBLES = '2'
+    const severe = withOrderShort('物流运输把箱子压烂了', { severity: 'high' })
+    expect(severe).toHaveLength(2)
+    expect(severe[0]).toBe(expectedEmotion())
+    expect(severe[1]).toContain(PHOTO1)
+    expect(severe[1]).toMatch(/理赔|索赔/)
   })
 
   it('大白话：同会话连续短输入可拼', () => {
@@ -217,12 +254,14 @@ describe('atomic-v1 包装优先级组装', () => {
     expect(node).toBe('photo')
     expect(pieces).toEqual(expect6)
     expect(line).toBe(expect6.join('\n'))
+    expect(expect6.length).toBeLessThanOrEqual(3)
+    expect(line).toContain(PHOTO1)
     expect(line).not.toMatch(/订单号/)
     expect(pieces).not.toEqual([...PHOTO3])
     expect(line).not.toBe(packScriptReply('aftersale_packaging', [], () => 0))
   })
 
-  it('大白话：闸开有单说压烂，连发惊讶→道歉/共情→尽力→合照×3', async () => {
+  it('大白话：闸开有单说压烂，连发情绪综合→合照，约 3 泡', async () => {
     process.env.JEV_CS_ROUTE = '1'
     process.env.TYPESAFE_API_KEY = 'test-key'
     ;(globalThis as any).fetch = jevPackaging
@@ -230,16 +269,7 @@ describe('atomic-v1 包装优先级组装', () => {
     const { sent, ctx } = sendCollector()
     await handleMessage(ctx, { externalUserId: 'euAtomic1', menuId: '', text: ACCEPT })
     const got = texts(sent)
-    const surprisePool = listAtomicLib('emotion/surprise').map((s) => atomicText('emotion/surprise/' + s))
-    const apologyPool = listAtomicLib('emotion/apology').map((s) => atomicText('emotion/apology/' + s))
-    const empathyPool = ['empathy_01', 'empathy_02', 'empathy_03'].map((s) => atomicText('business/packaging/' + s))
-    const tryHardPool = listAtomicLib('emotion/try_hard').map((s) => atomicText('emotion/try_hard/' + s))
-    expect(got).toHaveLength(6)
-    expect(surprisePool).toContain(got[0])
-    expect([...apologyPool, ...empathyPool]).toContain(got[1])
-    expect(tryHardPool).toContain(got[2])
-    expect(got.slice(3)).toEqual([...PHOTO3])
-    expect(got.join('')).not.toMatch(/订单号/)
+    expectCappedPackaging(got)
     expect(got.join('\n')).not.toBe(packScriptReply('aftersale_packaging'))
   })
 
@@ -300,17 +330,8 @@ describe('atomic-v1 包装优先级组装', () => {
     const { sent, ctx } = sendCollector()
     await handleMessage(ctx, { externalUserId: 'euAssumeNone', menuId: '', text: ACCEPT })
     const got = texts(sent)
-    const surprisePool = listAtomicLib('emotion/surprise').map((s) => atomicText('emotion/surprise/' + s))
-    const apologyPool = listAtomicLib('emotion/apology').map((s) => atomicText('emotion/apology/' + s))
-    const empathyPool = ['empathy_01', 'empathy_02', 'empathy_03'].map((s) => atomicText('business/packaging/' + s))
-    const tryHardPool = listAtomicLib('emotion/try_hard').map((s) => atomicText('emotion/try_hard/' + s))
-    expect(got).toHaveLength(6)
-    expect(surprisePool).toContain(got[0])
-    expect([...apologyPool, ...empathyPool]).toContain(got[1])
-    expect(tryHardPool).toContain(got[2])
-    expect(got.slice(3)).toEqual([...PHOTO3])
+    expectCappedPackaging(got)
     expect(got.join('')).not.toMatch(/没查到您近期的订单/)
-    expect(got.join('')).not.toMatch(/订单号/)
   })
 
   it('大白话：测版开关 0/false 恢复真查单，无单走澄清', async () => {
@@ -362,16 +383,7 @@ describe('atomic-v1 包装优先级组装', () => {
     const n = sent.length
     await handleMessage(ctx, { externalUserId: 'euAtomicRef', menuId: '', text: ACCEPT })
     const got = texts(sent, n)
-    const surprisePool = listAtomicLib('emotion/surprise').map((s) => atomicText('emotion/surprise/' + s))
-    const apologyPool = listAtomicLib('emotion/apology').map((s) => atomicText('emotion/apology/' + s))
-    const empathyPool = ['empathy_01', 'empathy_02', 'empathy_03'].map((s) => atomicText('business/packaging/' + s))
-    const tryHardPool = listAtomicLib('emotion/try_hard').map((s) => atomicText('emotion/try_hard/' + s))
-    expect(got).toHaveLength(6)
-    expect(surprisePool).toContain(got[0])
-    expect([...apologyPool, ...empathyPool]).toContain(got[1])
-    expect(tryHardPool).toContain(got[2])
-    expect(got.slice(3)).toEqual([...PHOTO3])
+    expectCappedPackaging(got)
     expect(got).not.toEqual([...PHOTO3])
-    expect(got.join('')).not.toMatch(/订单号/)
   })
 })

@@ -1,7 +1,13 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest'
 import { control } from 'wx-server-sdk'
 import { handleMessage, type DispatchCtx } from '../src/functions/cs/kfCallback/dispatch'
-import { bubbleGapMs, parseBubbleGapMs, sendBubbles, splitBubbles } from '../src/functions/cs/kfCallback/bubbles'
+import {
+  bubbleGapMs,
+  parseBubbleGapMs,
+  parseMaxBubbles,
+  sendBubbles,
+  splitBubbles,
+} from '../src/functions/cs/kfCallback/bubbles'
 import { packScriptLines, packScriptReply } from '../src/functions/cs/kfCallback/csPack'
 import { packagingFirstTouchBubbles } from '../src/functions/cs/kfCallback/csAtomic'
 import { composeLine, emptyFlow } from '../src/functions/cs/kfCallback/scriptReply'
@@ -30,7 +36,15 @@ const sendCollector = () => {
 const texts = (sent: any[], from = 0) =>
   sent.slice(from).filter((p) => p && p.msgtype === 'text').map((p) => String(p.text && p.text.content))
 
-const ENV_KEYS = ['JEV_CS_ROUTE', 'TYPESAFE_API_KEY', 'WX_ENV_VERSION', 'TCB_ENV_VERSION', 'CS_TRIAL_REFRESH', 'CS_BUBBLE_GAP_MS'] as const
+const ENV_KEYS = [
+  'JEV_CS_ROUTE',
+  'TYPESAFE_API_KEY',
+  'WX_ENV_VERSION',
+  'TCB_ENV_VERSION',
+  'CS_TRIAL_REFRESH',
+  'CS_BUBBLE_GAP_MS',
+  'CS_MAX_BUBBLES',
+] as const
 let fetchBackup: unknown
 
 beforeEach(() => {
@@ -86,6 +100,13 @@ describe('切分短句', () => {
     expect(bubbleGapMs('300-800', () => 0)).toBe(300)
     expect(bubbleGapMs('300-800', () => 0.999)).toBe(800)
     expect(bubbleGapMs('0', () => 0.5)).toBe(0)
+    expect(parseMaxBubbles(undefined)).toBe(3)
+    expect(parseMaxBubbles('')).toBe(3)
+    expect(parseMaxBubbles('abc')).toBe(3)
+    expect(parseMaxBubbles('0')).toBe(3)
+    expect(parseMaxBubbles('1')).toBe(1)
+    expect(parseMaxBubbles('6')).toBe(6)
+    expect(parseMaxBubbles('99')).toBe(20)
   })
 
   it('大白话：连发按段 send，段间会睡配置的间隔', async () => {
@@ -99,6 +120,17 @@ describe('切分短句', () => {
     )
     expect(sent).toEqual([...PHOTO3])
     expect(gaps).toEqual([300, 300])
+  })
+
+  it('大白话：连发硬顶默认 3 泡，多出来的丢掉', async () => {
+    const sent: string[] = []
+    await sendBubbles(
+      async (p: any) => void sent.push(p.text.content),
+      (content) => ({ msgtype: 'text', text: { content } }),
+      '甲。乙。丙。丁。戊。',
+      { gapEnv: '0' }
+    )
+    expect(sent).toEqual(['甲。', '乙。', '丙。'])
   })
 })
 
@@ -124,14 +156,15 @@ describe('包装破损三句合照气泡', () => {
     )
     expect(node).toBe('photo')
     expect(line).toBe(expect5.join('\n'))
-    expect(expect5.length).toBeGreaterThanOrEqual(6)
-    expect(PHOTO3.every((s) => line.includes(s))).toBe(true)
+    expect(expect5.length).toBeGreaterThanOrEqual(2)
+    expect(expect5.length).toBeLessThanOrEqual(3)
+    expect(line).toContain(PHOTO3[0])
     expect(line).not.toMatch(/订单号/)
     expect(line).not.toBe('嗯？您慢慢说')
     expect(scriptPools().surprise.includes(line)).toBe(false)
   })
 
-  it('大白话：闸开说包裹被摔坏了，连发惊讶+同理+三条合照，不粘一条、不要订单号、不要空壳', async () => {
+  it('大白话：闸开说包裹被摔坏了，约 3 泡内：情绪综合→合照，不要订单号、不要空壳、不要 6 连发', async () => {
     process.env.JEV_CS_ROUTE = '1'
     process.env.TYPESAFE_API_KEY = 'test-key'
     ;(globalThis as any).fetch = jevPackaging
@@ -139,14 +172,15 @@ describe('包装破损三句合照气泡', () => {
     control.seed('kfIdentity', [{ _id: 'ext:euBub1', openid: 'oBub1' }])
     control.seed('orders', [{ _id: 'ord-euBub1', id: 'ord-euBub1', _openid: 'oBub1', status: 'shipped', createdAt: Date.now() }])
     await handleMessage(ctx, { externalUserId: 'euBub1', menuId: '', text: '包裹被摔坏了' })
-    expect(sent).toHaveLength(6)
+    expect(sent.length).toBeGreaterThanOrEqual(2)
+    expect(sent.length).toBeLessThanOrEqual(3)
     expect(sent.every((p) => p.msgtype === 'text')).toBe(true)
-    expect(texts(sent).slice(3)).toEqual([...PHOTO3])
+    expect(texts(sent)).toContain(PHOTO3[0])
     expect(texts(sent).join('')).not.toMatch(/订单号/)
     expect(texts(sent)).not.toEqual([...PHOTO3])
   })
 
-  it('大白话：刷新后再说包裹被摔坏了，仍是惊讶+同理+三条合照', async () => {
+  it('大白话：刷新后再说包裹被摔坏了，仍是约 3 泡：情绪综合→合照', async () => {
     process.env.CS_TRIAL_REFRESH = '1'
     process.env.JEV_CS_ROUTE = '1'
     process.env.TYPESAFE_API_KEY = 'test-key'
@@ -160,8 +194,9 @@ describe('包装破损三句合照气泡', () => {
     const n = sent.length
     expect(n).toBe(2)
     await handleMessage(ctx, { externalUserId: 'euBubRef', menuId: '', text: '包裹被摔坏了' })
-    expect(texts(sent, n).slice(3)).toEqual([...PHOTO3])
-    expect(sent.length - n).toBe(6)
+    expect(texts(sent, n)).toContain(PHOTO3[0])
+    expect(sent.length - n).toBeGreaterThanOrEqual(2)
+    expect(sent.length - n).toBeLessThanOrEqual(3)
     expect(texts(sent, n).join('')).not.toMatch(/订单号/)
   })
 

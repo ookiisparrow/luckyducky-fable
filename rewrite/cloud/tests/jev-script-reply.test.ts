@@ -239,7 +239,7 @@ describe('闸开话术状态机（mermaid + 1→4 + 表演）', () => {
       '外箱破口和产品都入镜拍一张发过来。',
       '包装+内物合照一张，我帮您看产品有没有事。',
     ])
-    expect(packMain.every((s) => line.includes(s))).toBe(true)
+    expect(line).toContain(packMain[0])
     expect(line).toBe(packagingFirstTouchBubbles(() => 0).join('\n'))
     expect(line).toMatch(/合照/)
     expect(line).not.toMatch(/订单号/)
@@ -268,7 +268,7 @@ describe('闸开话术状态机（mermaid + 1→4 + 表演）', () => {
     )
     expect(topic).toBe('packaging')
     expect(node).toBe('photo')
-    expect(packScriptLines('aftersale_packaging').every((s) => line.includes(s))).toBe(true)
+    expect(line).toContain(packScriptLines('aftersale_packaging')[0])
     expect(line).toMatch(/合照/)
     expect(line).not.toMatch(/订单号/)
     expect(line).not.toBe('嗯？您慢慢说')
@@ -332,7 +332,7 @@ describe('闸开话术状态机（mermaid + 1→4 + 表演）', () => {
 
     const pack = composeLine(stuck, ev({ needStatus: 'packaging', orderStatus: 'delivered' }), '包裹压坏了', () => 0)
     expect(pack.node).toBe('photo')
-    expect(packScriptLines('aftersale_packaging').every((s) => pack.line.includes(s))).toBe(true)
+    expect(pack.line).toContain(packScriptLines('aftersale_packaging')[0])
     expect(pack.line).toMatch(/合照/)
     expect(pack.line).not.toMatch(/订单号/)
     expect(pack.line).not.toBe('嗯？您慢慢说')
