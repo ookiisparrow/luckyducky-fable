@@ -5,7 +5,13 @@
   "emotionLibBySignal": {
     "surprise": "emotion/surprise",
     "apology": "emotion/apology",
-    "try_hard": "emotion/try_hard",
+    "empathy": "emotion/empathy",
+    "soothe": "emotion/soothe",
+    "awkward": "emotion/awkward",
+    "ack": "emotion/ack",
+    "neutral": "emotion/neutral",
+    "celebrate": "emotion/celebrate",
+    "boundary": "emotion/boundary",
     "default": "emotion/surprise"
   },
   "gate": {
@@ -17,5 +23,8 @@
     "firstTouchLegacy": "packaging_damage_first_touch"
   },
   "styleDefault": "short",
-  "pick": { "business": "sequence_or_priority", "emotion": "random_one" }
+  "pick": {
+    "business": "sequence_or_priority",
+    "emotion": "random_one"
+  }
 }

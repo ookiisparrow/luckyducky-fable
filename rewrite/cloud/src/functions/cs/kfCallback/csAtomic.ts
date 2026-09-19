@@ -1,7 +1,7 @@
 /**
  * atomic-v1 测版挂接：按 route.json + sequences 取原子 .txt，全文 trim 后原样当一条气泡。
  * 查单门闩 / 多面 / 优先级组装 / 句型 short|long。构建打进 kfCallback，运行时不拉 GitHub。
- * 装完后压到 ≤CS_MAX_BUBBLES（默认 3）：P1 情绪并 1 条，P2 只发 ask_photo_01，P3 理赔可留或并进业务条。
+ * 装完后压到 ≤CS_MAX_BUBBLES（默认 3）：P1 惊讶+道歉/共情并 1 条（不含尽力），P2 只发 ask_photo_01，P3 理赔可留或并进业务条。
  * 不现编、不改写。正式闸关路径不走这里。
  */
 import { parseMaxBubbles } from './bubbles'
@@ -110,6 +110,12 @@ export function stitchUtterance(prevText: string, prevAt: number, text: string, 
   return prev + cur
 }
 
+/** 尽力已取缔：序列/路由再挂 try_hard 或 _deprecated 也不出泡。 */
+function isRetiredLib(lib: string): boolean {
+  const s = String(lib || '')
+  return s.includes('_deprecated') || /(^|\/)try_hard(\/|$)/.test(s)
+}
+
 function stemsOf(step: AtomicStep): string[] {
   if (step.files && step.files.length) {
     if (step.pick === 'all' || step.pick === 'one') return step.files
@@ -150,7 +156,7 @@ function withEmotionAlways(seq: AtomicSequence, steps: AtomicStep[]): AtomicStep
   if (steps.some((s) => String(s.lib || '').startsWith('gate/'))) return steps
   const emoLib =
     (route.emotionLibBySignal && (route.emotionLibBySignal.surprise || route.emotionLibBySignal.default)) || ''
-  if (!emoLib) return steps
+  if (!emoLib || isRetiredLib(emoLib)) return steps
   const first = steps[0]
   if (first && String(first.lib || '').startsWith('emotion/')) return steps
   return [{ lib: emoLib, pick: 'random_one' }, ...steps]
@@ -225,6 +231,7 @@ export function playSequence(id: string, rand: () => number = Math.random, ctx: 
   const items: Array<{ priority: number; text: string }> = []
   for (const raw of withEmotionAlways(seq, seq.steps)) {
     if (!stepApplies(raw, ctx)) continue
+    if (isRetiredLib(raw.lib) || isRetiredLib(raw.orLib || '')) continue
     const step = resolveStep(raw, rand)
     const pri = Number.isFinite(Number(raw.priority)) ? Number(raw.priority) : 1
     for (const text of stepBubbles(step, rand)) items.push({ priority: pri, text })
