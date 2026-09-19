@@ -395,6 +395,42 @@ describe('闸开编排发纯文本', () => {
     expect(control.dump('csSession').some((s: any) => s._id === 'wxkf:kf1:euMenu')).toBe(true)
   })
 
+  it('大白话：库里已停在还想问啥时，打人工走阶梯，打快递拉回物流不反复问还有事吗', async () => {
+    process.env.JEV_CS_ROUTE = '1'
+    process.env.TYPESAFE_API_KEY = 'test-key'
+    const stuck = {
+      node: 'askNext',
+      topic: 'other',
+      greeted: true,
+      restated: true,
+      promised: true,
+      solved: true,
+      humanAsks: 0,
+      used: ['另外还想问啥不？'],
+      at: Date.now(),
+    }
+    control.seed(COLLECTIONS.kfState, [
+      { _id: 'jevflow:euStuckH', ...stuck },
+      { _id: 'jevflow:euStuckL', ...stuck },
+    ])
+    const pools = scriptPools()
+    const { sent, ctx } = sendCollector()
+    ;(globalThis as any).fetch = jevOk('greeting')
+    await handleMessage(ctx, { externalUserId: 'euStuckH', menuId: '', text: '人工' })
+    expect(pools.humanAskWhat).toContain(sent[0].text.content)
+    expect(String(sent[0].text.content)).not.toMatch(/还想问|还有问题|另外还/)
+    expect(control.dump('csSession')).toEqual([])
+
+    ;(globalThis as any).fetch = jevOk('logistics')
+    await handleMessage(ctx, { externalUserId: 'euStuckL', menuId: '', text: '快递到哪了？' })
+    const second = String(sent[1].text.content)
+    expect(sent[1].msgtype).toBe('text')
+    expect(second).not.toMatch(/还想问|还有问题|另外还|转运中|预计还要几/)
+    const d = await db().collection(COLLECTIONS.kfState).doc('jevflow:euStuckL').get()
+    expect(d.data.node).not.toBe('askNext')
+    expect(d.data.topic).toBe('logistics')
+  })
+
   it('大白话：闸关打字人工仍走旧根菜单，不入队', async () => {
     const { sent, ctx } = sendCollector()
     await handleMessage(ctx, { externalUserId: 'euOff', menuId: '', text: '人工' })
