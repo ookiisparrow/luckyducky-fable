@@ -7,9 +7,9 @@
 //   ⑥ msgSecCheck 空串/纯空白/非 string 直接过且不外呼（省无谓计费调用）、trim 后才送审、
 //      v2 请求形状（openid+content+version:2+scene）、errCode 非 0 / suggest==='risky' 拒、异常拒。
 // 期望值全部来自 contentsec.ts 内注释（fail-CLOSED、87014=违规、空文本无需检测、v2 scene 规范），不发明行为。
-// 等价幸存（C 类·本文件不追杀）：L31 `dl && dl.fileList && …` → `true && dl.fileList[0]`——dl falsy 时
+// 等价幸存（C 类·本文件不追杀）：`dl && dl.fileContent` → `true && dl.fileContent`——dl falsy 时
 // 变异体抛 TypeError 被 catch 收成 SEC_CHECK_FAIL，与原码 !buf 分支产出完全同形，外部不可分辨。
-import { describe, it, expect, beforeEach } from 'vitest'
+import { describe, it, expect, beforeEach, vi } from 'vitest'
 import cloud, { control } from 'wx-server-sdk'
 import { imgSecCheck, msgSecCheck, SCENE_PROFILE, SCENE_COMMENT } from '../src/kit/contentsec'
 
@@ -25,13 +25,20 @@ describe('imgSecCheck（UGC 图片审核·fail-closed）', () => {
     expect(control.openapiCalls().length).toBe(0) // 守门失效（if(false) 变异）会打到审核 → 必红
   })
 
-  it('大白话：好图放行 { ok:true }，且送审参数形状完整——contentType 是 image/png、value 是真图字节', async () => {
-    const r = await imgSecCheck('cloud://test/ugc/photo-1.png')
-    expect(r).toEqual({ ok: true }) // 成功=纯 ok:true·无 error 字段
-    const calls = control.openapiCalls()
-    expect(calls.length).toBe(1)
-    // media 缺件/contentType 被清空/value 不是图字节（如整个文件对象、true）＝审核请求失真必红
-    expect(calls[0]).toEqual({ media: { contentType: 'image/png', value: MOCK_IMG_JSON } })
+  it('大白话：好图放行 { ok:true }，下载走云函数官方 { fileID }，送审 contentType 是 image/png、value 是真图字节', async () => {
+    const spy = vi.spyOn(cloud, 'downloadFile')
+    try {
+      const r = await imgSecCheck('cloud://test/ugc/photo-1.png')
+      expect(r).toEqual({ ok: true }) // 成功=纯 ok:true·无 error 字段
+      // 抄成 getTempFileURL 的 { fileList }＝真机取不到图·桩也会拒无 fileID
+      expect(spy.mock.calls).toEqual([[{ fileID: 'cloud://test/ugc/photo-1.png' }]])
+      const calls = control.openapiCalls()
+      expect(calls.length).toBe(1)
+      // media 缺件/contentType 被清空/value 不是图字节（如整个文件对象、true）＝审核请求失真必红
+      expect(calls[0]).toEqual({ media: { contentType: 'image/png', value: MOCK_IMG_JSON } })
+    } finally {
+      spy.mockRestore()
+    }
   })
 
   it('大白话：下载回来没有图内容 → fail-closed 拒（SEC_CHECK_FAIL），不拿空参数去打审核', async () => {
@@ -40,7 +47,7 @@ describe('imgSecCheck（UGC 图片审核·fail-closed）', () => {
     const cloudAny = cloud as any
     const realDownload = cloudAny.downloadFile
     try {
-      cloudAny.downloadFile = async () => ({ fileList: [{ fileID: 'x' }] }) // 有条目、无 fileContent
+      cloudAny.downloadFile = async () => ({ statusCode: 404 }) // 官方形状回包、无 fileContent
       expect(await imgSecCheck('cloud://x')).toEqual({ ok: false, error: 'SEC_CHECK_FAIL' })
       expect(control.openapiCalls().length).toBe(0) // !buf 守门被拆（if(false)）会继续出站 → 必红
 
