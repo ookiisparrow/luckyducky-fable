@@ -12,7 +12,7 @@
   ],
   "scripts": {
     "prepare": "git config core.hooksPath scripts/git-hooks || exit 0",
-    "typecheck": "tsc -p rewrite/shared/tsconfig.json --noEmit && tsc -p rewrite/cloud/tsconfig.json && tsc -p rewrite/mp/tsconfig.json && tsc -p rewrite/site/tsconfig.json --noEmit && vue-tsc --noEmit -p rewrite/admin/tsconfig.json && vue-tsc --noEmit -p rewrite/agent/tsconfig.json",
+    "typecheck": "tsc -p rewrite/shared/tsconfig.json --noEmit && tsc -p rewrite/cloud/tsconfig.json && tsc -p rewrite/mp/tsconfig.json && npm exec -w @ldrw/site -- astro sync && tsc -p rewrite/site/tsconfig.json --noEmit && vue-tsc --noEmit -p rewrite/admin/tsconfig.json && vue-tsc --noEmit -p rewrite/agent/tsconfig.json",
     "build:rw-admin": "npm run build -w @ldrw/admin",
     "build:agent": "npm run build -w @ldrw/agent",
     "build:rw-cloud": "node rewrite/cloud/build.mjs",

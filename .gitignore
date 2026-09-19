@@ -39,6 +39,9 @@ reports/
 
 # vitest --coverage 产物（B8·仅本地/CI 度量用，不入库）
 coverage/
+
+# Astro 生成目录（默认不入库；typecheck 先 astro sync 再给 env.d.ts 用）
+rewrite/site/.astro/
 # 变异测试沙盒（StrykerJS 运行时副本，报告在 reports/mutation/·已随 reports/ 不入库）
 .stryker-tmp/
 
