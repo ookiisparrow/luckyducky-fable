@@ -58,9 +58,12 @@ export async function sendBubbles(
   send: (payload: unknown) => Promise<unknown>,
   makeText: (content: string) => unknown,
   source: string | string[],
-  opts?: { sleep?: (ms: number) => Promise<void>; rand?: () => number; gapEnv?: string }
+  opts?: { sleep?: (ms: number) => Promise<void>; rand?: () => number; gapEnv?: string; raw?: boolean }
 ): Promise<void> {
-  const parts = (Array.isArray(source) ? source : [source]).flatMap(splitBubbles)
+  const parts =
+    opts && opts.raw && Array.isArray(source)
+      ? source.map((s) => String(s || '').trim()).filter(Boolean)
+      : (Array.isArray(source) ? source : [source]).flatMap(splitBubbles)
   if (!parts.length) return
   const sleep = opts && opts.sleep ? opts.sleep : defaultSleep
   const rand = opts && opts.rand ? opts.rand : Math.random
