@@ -1,7 +1,9 @@
 import { COLLECTIONS } from '@ldrw/shared'
 import { alert, transition, sendAgentCard, AGENT_DESK_URL } from '../../../kit'
-import { JEV_FAIL_OPEN_TEXT, loadJevGate, logJevEvidence, tryJevClassify } from './jev'
-import { composeScriptReply } from './scriptReply'
+import { JEV_FAIL_OPEN_TEXT, loadJevGate, logJevEvidence, tryJevClassify, type JevResult } from './jev'
+import { composeScriptReply, wantsHuman } from './scriptReply'
+
+const HUMAN_LADDER_EV: JevResult = { model: 'local-human', urgency: 0, department: 'sales' }
 
 /**
  * 客服分流引擎（避免幻觉第一·非生成式）：关键词识别 → 高亮 msgmenu 气泡分流；按回传 menu_id →
@@ -628,30 +630,34 @@ export async function handleMessage(ctx: DispatchCtx, incoming: Incoming): Promi
         const gate = await loadJevGate(db)
         if (gate.on) {
           const ev = await tryJevClassify(db, incoming.text)
-          if (ev) {
-            const scripted = await composeScriptReply(db, incoming.externalUserId, incoming.text, ev)
+          const human = wantsHuman(incoming.text)
+          const useEv = ev || (human ? HUMAN_LADDER_EV : null)
+          if (useEv) {
+            const scripted = await composeScriptReply(db, incoming.externalUserId, incoming.text, useEv)
             const stateLen = String(incoming.text || '').length
             if (scripted && scripted.node === 'human') {
-              logJevEvidence(ev, scripted.topic, {
-                stateLen,
-                node: scripted.node,
-                topic: scripted.topic,
-                acting: scripted.acting,
-                checkpoint: scripted.checkpoint,
-              })
+              if (ev)
+                logJevEvidence(ev, scripted.topic, {
+                  stateLen,
+                  node: scripted.node,
+                  topic: scripted.topic,
+                  acting: scripted.acting,
+                  checkpoint: scripted.checkpoint,
+                })
               return { type: 'transfer' as const }
             }
             if (scripted && scripted.text) {
-              logJevEvidence(ev, scripted.topic, {
-                stateLen,
-                node: scripted.node,
-                topic: scripted.topic,
-                acting: scripted.acting,
-                checkpoint: scripted.checkpoint,
-              })
+              if (ev)
+                logJevEvidence(ev, scripted.topic, {
+                  stateLen,
+                  node: scripted.node,
+                  topic: scripted.topic,
+                  acting: scripted.acting,
+                  checkpoint: scripted.checkpoint,
+                })
               return { type: 'text' as const, content: scripted.text }
             }
-            logJevEvidence(ev, null, { stateLen })
+            if (ev) logJevEvidence(ev, null, { stateLen })
           }
           return { type: 'text' as const, content: JEV_FAIL_OPEN_TEXT }
         }

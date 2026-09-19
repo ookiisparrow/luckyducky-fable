@@ -34,6 +34,8 @@ export type ScriptPoolId =
   | 'missingSearch'
   | 'coursePhoto'
   | 'clarify'
+  | 'humanAskWhat'
+  | 'humanSayDirect'
 
 const POOL_HINTS: { file: string; heading: RegExp; id: ScriptPoolId }[] = [
   { file: 'docs/01-主流程7节点.md', heading: /问候询问需求/, id: 'greet' },
@@ -65,6 +67,8 @@ const POOL_HINTS: { file: string; heading: RegExp; id: ScriptPoolId }[] = [
   { file: 'topics/收到后-缺材料.md', heading: /要图确认/, id: 'missingPhoto' },
   { file: 'topics/收到后-缺材料.md', heading: /提醒再找/, id: 'missingSearch' },
   { file: 'topics/收到后-课程程序.md', heading: /要截图/, id: 'coursePhoto' },
+  { file: 'docs/14-开场仅人工.md', heading: /怎么了/, id: 'humanAskWhat' },
+  { file: 'docs/14-开场仅人工.md', heading: /您直接说吧/, id: 'humanSayDirect' },
 ]
 
 export function parseNumberedLines(md: string): string[] {
@@ -128,14 +132,16 @@ export function rememberUsed(used: string[], line: string): string[] {
 
 const SLOT_FALLBACK: Record<string, string> = {
   需求: '您刚说的这件事',
-  结论: '我先帮您确认一下，确认后回您',
-  地点: '转运中',
-  天数: '几',
   地址: '订单上的地址',
 }
 
+const FACT_SLOTS = new Set(['结论', '地点', '天数'])
+
 export function fillSlots(line: string, slots: Record<string, string>): string {
-  return String(line || '').replace(/【([^】]+)】/g, (_, k) => {
+  const raw = String(line || '')
+  const keys = [...raw.matchAll(/【([^】]+)】/g)].map((m) => m[1])
+  if (keys.some((k) => FACT_SLOTS.has(k) && !slots[k])) return ''
+  return raw.replace(/【([^】]+)】/g, (_, k) => {
     const v = slots[k]
     return v ? v : SLOT_FALLBACK[k] || ''
   })

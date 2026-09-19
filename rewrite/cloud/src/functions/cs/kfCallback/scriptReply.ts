@@ -32,6 +32,8 @@ export type ScriptNode =
   | 'awkward'
   | 'severity'
   | 'human'
+  | 'humanAsk'
+  | 'humanAsk2'
 
 export type Acting =
   | 'reassure'
@@ -71,6 +73,7 @@ export type JevFlowState = {
   promised: boolean
   solved: boolean
   coopCount: number
+  humanAsks: number
   used: string[]
 }
 
@@ -99,6 +102,7 @@ const FLOW_KEYS = [
   'promised',
   'solved',
   'coopCount',
+  'humanAsks',
   'used',
 ] as const
 
@@ -135,6 +139,37 @@ function isTopicNeed(need: JevNeedStatus): boolean {
     need === 'discount' ||
     need === 'rush'
   )
+}
+
+function needsPhoto(need: JevNeedStatus): boolean {
+  return need === 'photo_needed' || need === 'packaging' || need === 'missing' || need === 'course'
+}
+
+/** 没查到的事实不走「给回答」池（禁假【结论】/【地点】）。打折/加急有专题确认句。 */
+function canEmitAnswer(r: JevRoute): boolean {
+  return r.topic === 'discount' || r.topic === 'rush' || r.needStatus === 'discount' || r.needStatus === 'rush'
+}
+
+function flowForTopic(state: JevFlowState, r: JevRoute): JevFlowState {
+  if (state.topic && r.topic && state.topic !== r.topic && isTopicNeed(r.needStatus)) {
+    return {
+      ...state,
+      restated: false,
+      promised: false,
+      solved: false,
+      photoAsked: needsPhoto(r.needStatus) ? false : state.photoAsked,
+    }
+  }
+  return state
+}
+
+/** 闸开自由文本明确要人工（边界逃生口，不扫业务专题）。 */
+export function wantsHuman(text: string): boolean {
+  const t = String(text || '')
+    .replace(/[\s!！。.~～?？,，、]/g, '')
+    .replace(/(谢谢|多谢|吧|哈|啊|呀|呢)+$/g, '')
+  if (!t) return false
+  return /^(我)?(请?帮我?)?(想|要|麻烦)?(转接?|找|叫)?(一下)?人工(客服)?$/.test(t)
 }
 
 function isNegative(emotion: JevEmotionStatus): boolean {
@@ -195,7 +230,7 @@ export function actingOf(route: JevRoute, node: ScriptNode): Acting {
   if (node === 'surprise') return 'surprise'
   if (node === 'awkward') return 'awkward'
   if (node === 'hesitate') return 'hesitate'
-  if (node === 'human') return 'steady'
+  if (node === 'human' || node === 'humanAsk' || node === 'humanAsk2') return 'steady'
 
   const cp = checkpointOf(node)
   const afterReview = cp === 'review' || cp === 'promise' || cp === 'coop' || cp === 'solve'
@@ -214,47 +249,49 @@ export function actingOf(route: JevRoute, node: ScriptNode): Acting {
 
 export function nextNode(state: JevFlowState, ev: JevResult, _text = ''): ScriptNode {
   const r = routeFromJev(state, ev)
+  const s = flowForTopic(state, r)
 
   // 1. 订单（最高）：没开场先按订单/有没有事走开场
-  if (!state.greeted) {
+  if (!s.greeted) {
     if (r.needStatus === 'greeting' || (r.orderStatus === 'unknown' && !isTopicNeed(r.needStatus))) return 'greet'
     return 'greetIssue'
   }
 
   // 2. 情绪穿插
-  if (isNegative(r.emotionStatus) && !state.surprised) return 'surprise'
-  if (isNegative(r.emotionStatus) && state.surprised && state.node === 'surprise') return 'awkward'
-  if (r.emotionStatus === 'embarrassed' && state.surprised && state.node === 'surprise') return 'awkward'
+  if (isNegative(r.emotionStatus) && !s.surprised) return 'surprise'
+  if (isNegative(r.emotionStatus) && s.surprised && s.node === 'surprise') return 'awkward'
+  if (r.emotionStatus === 'embarrassed' && s.surprised && s.node === 'surprise') return 'awkward'
 
   // 3. 严重程度
-  if (r.severity === 'high' && !state.severitySaid) return 'severity'
+  if (r.severity === 'high' && !s.severitySaid) return 'severity'
 
   // 4. 责任不单独占一句（表演复核里才允许道歉）；需求：犹豫 / 要图
-  if (r.exceeds && !state.hesitated) return 'hesitate'
-  if (r.needStatus === 'photo_needed' && !state.photoAsked && !state.restated) return 'photo'
+  if (r.exceeds && !s.hesitated) return 'hesitate'
+  if (needsPhoto(r.needStatus) && !s.photoAsked) return 'photo'
 
-  if (!state.restated) {
+  if (!s.restated) {
     if (infoThin(r)) return r.needStatus === 'photo_needed' ? 'photo' : 'askMore'
     return 'restate'
   }
-  if (!state.promised) return 'promise'
-  if (needsCoop(r, state)) {
-    if (state.coopCount >= 3) return 'human'
-    return r.needStatus === 'photo_needed' || r.needStatus === 'missing' || r.needStatus === 'packaging' || r.needStatus === 'course'
-      ? 'photo'
-      : 'askCoop'
+  if (!s.promised) return 'promise'
+  if (needsCoop(r, s)) {
+    if (s.coopCount >= 3) return 'human'
+    return needsPhoto(r.needStatus) ? 'photo' : 'askCoop'
   }
-  if (!state.solved) return 'answer'
+  if (!s.solved && canEmitAnswer(r)) return 'answer'
   return 'askNext'
 }
 
 function poolFor(node: ScriptNode, topic: ScriptTopic, ev: JevResult): ScriptPoolId {
+  if (node === 'humanAsk') return 'humanAskWhat'
+  if (node === 'humanAsk2') return 'humanSayDirect'
   if (node === 'promise') return 'trySolve'
   if (node === 'askNext' || node === 'askCoop') return 'askMore'
+  if (node === 'greetIssue' && topic === 'logistics') return 'logisticsGreet'
   if (node === 'answer') {
     if (topic === 'discount') return 'discountConfirm'
     if (topic === 'rush') return 'rushConfirm'
-    if (topic === 'logistics' && isNegative(ev.emotionStatus || 'calm')) return 'logisticsSlow'
+    if (topic === 'logistics') return isNegative(ev.emotionStatus || 'calm') ? 'logisticsSlow' : 'logisticsEta'
     return 'answer'
   }
   if (node === 'photo') {
@@ -300,6 +337,7 @@ export function emptyFlow(): JevFlowState {
     promised: false,
     solved: false,
     coopCount: 0,
+    humanAsks: 0,
     used: [],
   }
 }
@@ -315,6 +353,7 @@ export function loadFlow(raw: unknown): JevFlowState {
   }
   next.used = Array.isArray(src.used) ? (src.used as string[]) : []
   next.coopCount = Number.isFinite(Number(src.coopCount)) ? Number(src.coopCount) : 0
+  next.humanAsks = Number.isFinite(Number(src.humanAsks)) ? Number(src.humanAsks) : 0
   return next
 }
 
@@ -382,13 +421,25 @@ export function composeLine(
   rand: () => number = Math.random
 ): { line: string; next: JevFlowState; node: ScriptNode; topic: ScriptTopic; acting: Acting; checkpoint: ActingCheckpoint } {
   const route = routeFromJev(state, ev)
-  const node = nextNode({ ...state, topic: route.topic, orderStatus: route.orderStatus }, ev)
+  if (wantsHuman(text)) {
+    const n = state.humanAsks + 1
+    const node: ScriptNode = n >= 3 ? 'human' : n === 1 ? 'humanAsk' : 'humanAsk2'
+    const acting = actingOf(route, node)
+    const line = node === 'human' ? '' : speak(node, acting, route.topic, ev, state.used, {}, rand)
+    const next = applyNode(state, node, route.topic, route.orderStatus, acting)
+    next.humanAsks = n
+    next.used = rememberUsed(state.used, line)
+    return { line, next, node, topic: route.topic, acting, checkpoint: checkpointOf(node) }
+  }
+  const base = flowForTopic(state, route)
+  const node = nextNode({ ...base, topic: route.topic, orderStatus: route.orderStatus }, ev)
   const acting = actingOf(route, node)
   const slots = { 需求: compressNeed(text) }
-  let line = speak(node, acting, route.topic, ev, state.used, slots, rand)
-  if (!line && node !== 'human') line = fillSlots(pickLine('ack', state.used, undefined, rand), slots)
-  const next = applyNode(state, node, route.topic, route.orderStatus, acting)
-  next.used = rememberUsed(state.used, line)
+  let line = speak(node, acting, route.topic, ev, base.used, slots, rand)
+  if (!line && node !== 'human') line = fillSlots(pickLine('ack', base.used, undefined, rand), slots)
+  const next = applyNode(base, node, route.topic, route.orderStatus, acting)
+  next.humanAsks = state.humanAsks
+  next.used = rememberUsed(base.used, line)
   return { line, next, node, topic: route.topic, acting, checkpoint: checkpointOf(node) }
 }
 
