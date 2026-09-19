@@ -476,13 +476,17 @@ describe('闸开编排发纯文本', () => {
     expect(String(sent[0].text.content)).not.toMatch(/还想问|还有问题|另外还|还有别的|还有吗/)
     expect(control.dump('csSession')).toEqual([])
     expect(
-      logSpy.mock.calls.some(
-        (a) =>
+      logSpy.mock.calls.some((a) => {
+        const row = a[1] as { matched?: boolean; node?: string; needStatus?: string; humanAsks?: number }
+        return (
           a[0] === '[kf] humanLadder' &&
-          a[1] &&
-          (a[1] as { matched?: boolean }).matched === true &&
-          (a[1] as { node?: string }).node === 'humanAsk'
-      )
+          row &&
+          row.matched === true &&
+          row.node === 'humanAsk' &&
+          row.humanAsks === 1 &&
+          row.needStatus === 'logistics'
+        )
+      })
     ).toBe(true)
 
     await handleMessage(ctx, { externalUserId: 'euStuckHz', menuId: '', text: '人工\u200b  ' })
@@ -509,6 +513,32 @@ describe('闸开编排发纯文本', () => {
     const dHi = await db().collection(COLLECTIONS.kfState).doc('jevflow:euStuckHi').get()
     expect(dHi.data.node).toBe('greet')
     expect(dHi.data.solved).toBe(false)
+    logSpy.mockRestore()
+  })
+
+  it('大白话：Jev 判成寒暄时打人工仍走阶梯，日志必有 humanLadder 和 needStatus', async () => {
+    process.env.JEV_CS_ROUTE = '1'
+    process.env.TYPESAFE_API_KEY = 'test-key'
+    ;(globalThis as any).fetch = jevOk('greeting')
+    const pools = scriptPools()
+    const { sent, ctx } = sendCollector()
+    const logSpy = vi.spyOn(console, 'log')
+    await handleMessage(ctx, { externalUserId: 'euJevHi', menuId: '', text: '人工' })
+    expect(pools.humanAskWhat).toContain(sent[0].text.content)
+    expect(String(sent[0].text.content)).not.toMatch(/还有别的|还有没有|还需不需要|还想问|还有吗/)
+    expect(
+      logSpy.mock.calls.some((a) => {
+        const row = a[1] as { matched?: boolean; node?: string; needStatus?: string; humanAsks?: number }
+        return (
+          a[0] === '[kf] humanLadder' &&
+          row &&
+          row.matched === true &&
+          row.node === 'humanAsk' &&
+          row.humanAsks === 1 &&
+          row.needStatus === 'greeting'
+        )
+      })
+    ).toBe(true)
     logSpy.mockRestore()
   })
 

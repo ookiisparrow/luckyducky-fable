@@ -633,56 +633,59 @@ export async function handleMessage(ctx: DispatchCtx, incoming: Incoming): Promi
           const textLen = String(incoming.text || '').length
           const human = wantsHuman(incoming.text)
           const hello = looksGreeting(incoming.text)
-          // 命中人工 / 短招呼就不问 Jev：needStatus 再怪也不能掉进 askMore
-          const ev = human || hello ? null : await tryJevClassify(db, incoming.text)
-          const useEv = ev || (human ? HUMAN_LADDER_EV : hello ? GREET_EV : null)
-          const scripted = useEv
-            ? await composeScriptReply(db, incoming.externalUserId, incoming.text, useEv)
-            : null
+          // Jev 并行只为取证；人工/招呼选句不靠它。08:55 只有 [kf] jev greeting、没有梯子日志。
+          const evP = tryJevClassify(db, incoming.text)
+          const scripted = human
+            ? await composeScriptReply(db, incoming.externalUserId, incoming.text, HUMAN_LADDER_EV)
+            : hello
+              ? await composeScriptReply(db, incoming.externalUserId, incoming.text, GREET_EV)
+              : null
+          const ev = await evP
+          const got =
+            scripted ||
+            (human || hello || !ev
+              ? null
+              : await composeScriptReply(db, incoming.externalUserId, incoming.text, ev))
           console.log('[kf] humanLadder', {
-            textLen,
             matched: human,
-            humanAsks: scripted ? scripted.humanAsks : null,
-            node: scripted ? scripted.node : null,
-            topic: scripted ? scripted.topic : null,
-            ...(human && !scripted ? { compose: 'null' } : {}),
+            humanAsks: got ? got.humanAsks : null,
+            node: got ? got.node : null,
+            needStatus: ev && ev.needStatus ? ev.needStatus : null,
+            ...(human && !got ? { compose: 'null' } : {}),
+            stateLen: textLen,
           })
           if (human) {
-            if (scripted && scripted.node === 'human') return { type: 'transfer' as const }
-            if (
-              scripted &&
-              scripted.text &&
-              (scripted.node === 'humanAsk' || scripted.node === 'humanAsk2')
-            )
-              return { type: 'text' as const, content: scripted.text }
+            if (got && got.node === 'human') return { type: 'transfer' as const }
+            if (got && got.text && (got.node === 'humanAsk' || got.node === 'humanAsk2'))
+              return { type: 'text' as const, content: got.text }
             return { type: 'text' as const, content: '怎么了？😳' }
           }
           if (hello) {
-            if (scripted && scripted.text && scripted.node !== 'askNext' && scripted.node !== 'askMore')
-              return { type: 'text' as const, content: scripted.text }
+            if (got && got.text && got.node !== 'askNext' && got.node !== 'askMore')
+              return { type: 'text' as const, content: got.text }
             return { type: 'text' as const, content: '在的在的，请说。' }
           }
-          if (scripted && scripted.node === 'human') {
+          if (got && got.node === 'human') {
             if (ev)
-              logJevEvidence(ev, scripted.topic, {
+              logJevEvidence(ev, got.topic, {
                 stateLen: textLen,
-                node: scripted.node,
-                topic: scripted.topic,
-                acting: scripted.acting,
-                checkpoint: scripted.checkpoint,
+                node: got.node,
+                topic: got.topic,
+                acting: got.acting,
+                checkpoint: got.checkpoint,
               })
             return { type: 'transfer' as const }
           }
-          if (scripted && scripted.text) {
+          if (got && got.text) {
             if (ev)
-              logJevEvidence(ev, scripted.topic, {
+              logJevEvidence(ev, got.topic, {
                 stateLen: textLen,
-                node: scripted.node,
-                topic: scripted.topic,
-                acting: scripted.acting,
-                checkpoint: scripted.checkpoint,
+                node: got.node,
+                topic: got.topic,
+                acting: got.acting,
+                checkpoint: got.checkpoint,
               })
-            return { type: 'text' as const, content: scripted.text }
+            return { type: 'text' as const, content: got.text }
           }
           if (ev) logJevEvidence(ev, null, { stateLen: textLen })
           return { type: 'text' as const, content: JEV_FAIL_OPEN_TEXT }
