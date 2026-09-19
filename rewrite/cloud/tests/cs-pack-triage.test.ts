@@ -23,6 +23,7 @@ import {
   resolvePackagingMainScript,
   walkPackStates,
 } from '../src/functions/cs/kfCallback/csPack'
+import { packagingFirstTouchBubbles } from '../src/functions/cs/kfCallback/csAtomic'
 import { composeLine, emptyFlow, looksGreeting } from '../src/functions/cs/kfCallback/scriptReply'
 import { flowStateId, sessionEpochId } from '../src/functions/cs/kfCallback/trialRefresh'
 import { scriptPools } from '../src/functions/cs/kfCallback/scriptPool'
@@ -111,7 +112,7 @@ describe('Config Pack 挂载', () => {
     expect(topic).toBe('packaging')
     expect(node).toBe('photo')
     expect(packMain.every((s) => line.includes(s))).toBe(true)
-    expect(line).toBe(packScriptReply('aftersale_packaging'))
+    expect(line).toBe(packagingFirstTouchBubbles(() => 0).join('\n'))
     expect(line).toMatch(/合照/)
     expect(line).not.toMatch(/订单号/)
     expect(line).not.toBe('嗯？您慢慢说')
@@ -208,11 +209,13 @@ describe('闸开编排吃 Pack', () => {
     })
     const { sent, ctx } = sendCollector()
     await handleMessage(ctx, { externalUserId: 'euPack', menuId: '', text: '包裹被摔坏了' })
-    expect(sent).toHaveLength(3)
+    expect(sent).toHaveLength(5)
     expect(sent.every((p) => p.msgtype === 'text')).toBe(true)
     const packMain = packScriptLines('aftersale_packaging')
-    expect(sent.map((p) => String(p.text.content))).toEqual(packMain)
-    const line = packMain.join('\n')
+    const got = sent.map((p) => String(p.text.content))
+    expect(got.slice(2)).toEqual(packMain)
+    expect(packMain.every((s) => got.includes(s))).toBe(true)
+    const line = got.join('\n')
     expect(line).toMatch(/合照|入镜拍/)
     expect(line).not.toMatch(/订单号/)
     expect(scriptPools().surprise.includes(line)).toBe(false)
@@ -262,9 +265,11 @@ describe('闸开编排吃 Pack', () => {
     const n = sent.length
     await handleMessage(ctx, { externalUserId: 'euRefSmash', menuId: '', text: '包裹被摔坏了' })
     const packMain = packScriptLines('aftersale_packaging')
-    expect(sent.slice(n).map((p) => String(p.text.content))).toEqual(packMain)
-    expect(sent.slice(n)).toHaveLength(3)
-    const line = packMain.join('\n')
+    const got = sent.slice(n).map((p) => String(p.text.content))
+    expect(got.slice(2)).toEqual(packMain)
+    expect(got).toHaveLength(5)
+    expect(packMain.every((s) => got.includes(s))).toBe(true)
+    const line = got.join('\n')
     expect(line).toMatch(/合照|入镜拍/)
     expect(line).not.toMatch(/订单号/)
     expect(line).not.toBe('嗯？您慢慢说')

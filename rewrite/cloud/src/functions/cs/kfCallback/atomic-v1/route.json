@@ -1,0 +1,7 @@
+{
+  "line": "packaging_damage",
+  "businessLib": "business/packaging",
+  "emotionAlways": true,
+  "emotionLibBySignal": { "surprise": "emotion/surprise", "default": "emotion/surprise" },
+  "pick": { "business": "sequence_or_random_pool", "emotion": "random_one" }
+}

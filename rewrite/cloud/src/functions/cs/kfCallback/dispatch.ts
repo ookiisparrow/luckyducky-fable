@@ -247,7 +247,7 @@ export type Route =
   // CSAT（B4.3）：score=点选的 1-5 分；note=可选备注文案（预设标签映射后）
   | { type: 'csat'; score: number }
   | { type: 'csat_note'; note: string }
-  | { type: 'text'; content: string; bubbles?: boolean }
+  | { type: 'text'; content: string; bubbles?: boolean; pieces?: string[] }
 
 export function route(menuId: string): Route {
   if (menuId === 'human') return { type: 'transfer' }
@@ -670,12 +670,12 @@ export async function handleMessage(ctx: DispatchCtx, incoming: Incoming): Promi
           if (human) {
             if (got && got.node === 'human') return { type: 'transfer' as const }
             if (got && got.text && (got.node === 'humanAsk' || got.node === 'humanAsk2'))
-              return { type: 'text' as const, content: got.text }
+              return { type: 'text' as const, content: got.text, pieces: got.pieces }
             return { type: 'text' as const, content: '怎么了？😳' }
           }
           if (hello) {
             if (got && got.text && got.node !== 'askNext' && got.node !== 'askMore')
-              return { type: 'text' as const, content: got.text, bubbles: true }
+              return { type: 'text' as const, content: got.text, bubbles: true, pieces: got.pieces }
             return { type: 'text' as const, content: '在的在的，请说。' }
           }
           if (got && got.node === 'human') {
@@ -698,7 +698,7 @@ export async function handleMessage(ctx: DispatchCtx, incoming: Incoming): Promi
                 acting: got.acting,
                 checkpoint: got.checkpoint,
               })
-            return { type: 'text' as const, content: got.text, bubbles: true }
+            return { type: 'text' as const, content: got.text, bubbles: true, pieces: got.pieces }
           }
           if (ev) logJevEvidence(ev, null, { stateLen: textLen })
           return { type: 'text' as const, content: JEV_FAIL_OPEN_TEXT }
@@ -751,7 +751,9 @@ export async function handleMessage(ctx: DispatchCtx, incoming: Incoming): Promi
       await send(buildMsgMenu(to, openKfId, r.content))
       return
     case 'text':
-      if (r.bubbles)
+      if (r.pieces && r.pieces.length)
+        await sendBubbles(send, (content) => buildText(to, openKfId, content), r.pieces, { raw: true })
+      else if (r.bubbles)
         await sendBubbles(send, (content) => buildText(to, openKfId, content), r.content)
       else await send(buildText(to, openKfId, r.content))
       return

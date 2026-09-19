@@ -4,7 +4,7 @@
  * 顾客情绪 ≠ bot 表演；道歉仅 responsibility=merchant。不编政策。
  * 会话记在 kfState `jevflow:<euid>`；data 不带 _id（真 sdk reject）。
  * Pack lucky-ducky-2026-09-19/scripts 已挂进运行时（T2）：Jev/原文 → triage_rules → Pack 主句。
- * 旧 cs-scripts 表演池只当 flavor；包装破损主句必须来自 Pack，禁止单独惊讶空壳。
+ * 旧 cs-scripts 表演池只当 flavor；包装破损首次进线走 atomic-v1 sequence（惊讶→同理→合照×3），不抽 Pack 池、不现编。
  */
 
 import { COLLECTIONS } from '@ldrw/shared'
@@ -26,6 +26,7 @@ import {
   resolvePackagingMainScript,
   writeHandoffStub,
 } from './csPack'
+import { packagingFirstTouchBubbles } from './csAtomic'
 
 export type ScriptNode =
   | 'greet'
@@ -455,7 +456,15 @@ export function applyNode(
   }
 }
 
+function packagingPieces(topic: ScriptTopic, ev: JevResult, text: string, rand: () => number): string[] {
+  const scriptId = resolvePackagingMainScript(ev, text)
+  if (!scriptId && topic !== 'packaging' && ev.needStatus !== 'packaging') return []
+  return packagingFirstTouchBubbles(rand)
+}
+
 function packMain(topic: ScriptTopic, ev: JevResult, text: string, used: string[], rand: () => number): string {
+  const pieces = packagingPieces(topic, ev, text, rand)
+  if (pieces.length) return pieces.join('\n')
   const scriptId = resolvePackagingMainScript(ev, text)
   if (!scriptId && topic !== 'packaging' && ev.needStatus !== 'packaging') return ''
   const line = packScriptReply(scriptId || 'aftersale_packaging', used, rand)
@@ -498,7 +507,15 @@ export function composeLine(
   ev: JevResult,
   text: string,
   rand: () => number = Math.random
-): { line: string; next: JevFlowState; node: ScriptNode; topic: ScriptTopic; acting: Acting; checkpoint: ActingCheckpoint } {
+): {
+  line: string
+  next: JevFlowState
+  node: ScriptNode
+  topic: ScriptTopic
+  acting: Acting
+  checkpoint: ActingCheckpoint
+  pieces?: string[]
+} {
   const useEv = evForScript(state, ev, text)
   const route = routeFromJev(state, useEv)
   if (wantsHuman(text)) {
@@ -515,15 +532,17 @@ export function composeLine(
   const node = nextNode({ ...base, topic: route.topic, orderStatus: route.orderStatus }, useEv, text)
   const acting = actingOf(route, node)
   const slots = { 需求: compressNeed(text), ...factSlots(useEv) }
-  let line = speak(node, acting, route.topic, useEv, base.used, slots, rand, text)
+  const atomic = packagingPieces(route.topic, useEv, text, rand)
+  let line = atomic.length ? atomic.join('\n') : speak(node, acting, route.topic, useEv, base.used, slots, rand, text)
   if ((looksPackagingDamage(text) || route.topic === 'packaging') && /订单号/.test(line)) {
-    line = packScriptReply('aftersale_packaging', base.used, rand)
+    line = packagingFirstTouchBubbles(rand).join('\n')
   }
   if (!line && node !== 'human') line = fillSlots(pickLine('ack', base.used, undefined, rand), slots)
   const next = applyNode(base, node, route.topic, route.orderStatus, acting)
   next.humanAsks = state.humanAsks
   next.used = rememberUsed(base.used, line)
-  return { line, next, node, topic: route.topic, acting, checkpoint: checkpointOf(node) }
+  const pieces = atomic.length ? atomic : undefined
+  return { line, next, node, topic: route.topic, acting, checkpoint: checkpointOf(node), pieces }
 }
 
 export async function composeScriptReply(
@@ -538,6 +557,7 @@ export async function composeScriptReply(
   acting: Acting
   checkpoint: ActingCheckpoint
   humanAsks: number
+  pieces?: string[]
 } | null> {
   const id = 'jevflow:' + euid
   const got = await db
@@ -546,7 +566,7 @@ export async function composeScriptReply(
     .get()
     .catch(() => null)
   const prev = loadFlow(got && got.data)
-  const { line, next, node, topic, acting, checkpoint } = composeLine(prev, ev, text)
+  const { line, next, node, topic, acting, checkpoint, pieces } = composeLine(prev, ev, text)
   if (!line && node !== 'human') return null
   let wrote = true
   await db
@@ -574,5 +594,5 @@ export async function composeScriptReply(
       epoch,
     })
   }
-  return { text: line, node, topic, acting, checkpoint, humanAsks: next.humanAsks }
+  return { text: line, node, topic, acting, checkpoint, humanAsks: next.humanAsks, pieces }
 }

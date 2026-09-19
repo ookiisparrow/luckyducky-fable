@@ -3,6 +3,7 @@ import { control } from 'wx-server-sdk'
 import { handleMessage, type DispatchCtx } from '../src/functions/cs/kfCallback/dispatch'
 import { bubbleGapMs, parseBubbleGapMs, sendBubbles, splitBubbles } from '../src/functions/cs/kfCallback/bubbles'
 import { packScriptLines, packScriptReply } from '../src/functions/cs/kfCallback/csPack'
+import { packagingFirstTouchBubbles } from '../src/functions/cs/kfCallback/csAtomic'
 import { composeLine, emptyFlow } from '../src/functions/cs/kfCallback/scriptReply'
 import { formatRefreshDone } from '@ldrw/shared'
 import { getDb } from '../src/kit'
@@ -106,6 +107,7 @@ describe('包装破损三句合照气泡', () => {
     expect(packScriptLines('aftersale_packaging')).toEqual([...PHOTO3])
     expect(packScriptReply('aftersale_packaging', [], () => 0)).toBe(PHOTO3.join('\n'))
     expect(packScriptReply('aftersale_quality', [], () => 0)).not.toContain('\n')
+    const expect5 = packagingFirstTouchBubbles(() => 0)
     const { line, node } = composeLine(
       emptyFlow(),
       {
@@ -121,26 +123,27 @@ describe('包装破损三句合照气泡', () => {
       () => 0
     )
     expect(node).toBe('photo')
-    expect(line).toBe(PHOTO3.join('\n'))
+    expect(line).toBe(expect5.join('\n'))
+    expect(PHOTO3.every((s) => line.includes(s))).toBe(true)
     expect(line).not.toMatch(/订单号/)
     expect(line).not.toBe('嗯？您慢慢说')
     expect(scriptPools().surprise.includes(line)).toBe(false)
   })
 
-  it('大白话：闸开说包裹被摔坏了，连发三条合照气泡，不粘一条、不要订单号、不要空壳', async () => {
+  it('大白话：闸开说包裹被摔坏了，连发惊讶+同理+三条合照，不粘一条、不要订单号、不要空壳', async () => {
     process.env.JEV_CS_ROUTE = '1'
     process.env.TYPESAFE_API_KEY = 'test-key'
     ;(globalThis as any).fetch = jevPackaging
     const { sent, ctx } = sendCollector()
     await handleMessage(ctx, { externalUserId: 'euBub1', menuId: '', text: '包裹被摔坏了' })
-    expect(sent).toHaveLength(3)
+    expect(sent).toHaveLength(5)
     expect(sent.every((p) => p.msgtype === 'text')).toBe(true)
-    expect(texts(sent)).toEqual([...PHOTO3])
+    expect(texts(sent).slice(2)).toEqual([...PHOTO3])
     expect(texts(sent).join('')).not.toMatch(/订单号/)
-    expect(texts(sent).some((t) => t === '嗯？您慢慢说' || t === '嗯？')).toBe(false)
+    expect(texts(sent)).not.toEqual([...PHOTO3])
   })
 
-  it('大白话：刷新后再说包裹被摔坏了，仍是连续三条合照气泡', async () => {
+  it('大白话：刷新后再说包裹被摔坏了，仍是惊讶+同理+三条合照', async () => {
     process.env.CS_TRIAL_REFRESH = '1'
     process.env.JEV_CS_ROUTE = '1'
     process.env.TYPESAFE_API_KEY = 'test-key'
@@ -152,8 +155,9 @@ describe('包装破损三句合照气泡', () => {
     const n = sent.length
     expect(n).toBe(2)
     await handleMessage(ctx, { externalUserId: 'euBubRef', menuId: '', text: '包裹被摔坏了' })
-    expect(texts(sent, n)).toEqual([...PHOTO3])
-    expect(sent.length - n).toBe(3)
+    expect(texts(sent, n).slice(2)).toEqual([...PHOTO3])
+    expect(sent.length - n).toBe(5)
+    expect(texts(sent, n).join('')).not.toMatch(/订单号/)
   })
 
   it('大白话：人工梯子短句仍是一条，不切开连发', async () => {

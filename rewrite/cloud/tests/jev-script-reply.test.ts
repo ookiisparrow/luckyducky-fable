@@ -17,6 +17,7 @@ import { getDb } from '../src/kit'
 import { COLLECTIONS } from '@ldrw/shared'
 import SCRIPT_MD from '../src/functions/cs/kfCallback/scriptAssets.generated.json'
 import { packScriptLines } from '../src/functions/cs/kfCallback/csPack'
+import { packagingFirstTouchBubbles } from '../src/functions/cs/kfCallback/csAtomic'
 
 const db = () => getDb()
 const sendCollector = () => {
@@ -239,7 +240,7 @@ describe('闸开话术状态机（mermaid + 1→4 + 表演）', () => {
       '包装+内物合照一张，我帮您看产品有没有事。',
     ])
     expect(packMain.every((s) => line.includes(s))).toBe(true)
-    expect(line).toBe(packMain.join('\n'))
+    expect(line).toBe(packagingFirstTouchBubbles(() => 0).join('\n'))
     expect(line).toMatch(/合照/)
     expect(line).not.toMatch(/订单号/)
     expect(line).not.toBe('嗯？您慢慢说')
