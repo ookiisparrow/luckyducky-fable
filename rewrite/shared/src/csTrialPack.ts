@@ -2,6 +2,7 @@
  * 测版配置包 lucky-ducky-2026-09-19 的代码真相。
  * 设计基线：客服系统设计-测版打磨-v0.3.1（§1.4 对标映射不改 T1；§5/§8 刷新核心）。
  * T1 刷新文案/重置清单 + 自修开关（供 T3/T4 读）。禁 auto_apply=true。
+ * T2 话术/分流 JSON 挂在 kfCallback/cs-pack，由 bundle-cs-pack 打进运行时。
  */
 
 export const CS_PACK_ID = 'lucky-ducky-2026-09-19'

@@ -7,6 +7,7 @@
 import { COLLECTIONS, CS_REFRESH_COPY, CS_REFRESH_PASSPHRASES, formatRefreshDone } from '@ldrw/shared'
 import { recordAudit, transition } from '../../../kit'
 import { emptyFlow, persistableFlow } from './scriptReply'
+import { packSessionId } from './csPack'
 
 export const DEFAULT_REFRESH_WORDS = CS_REFRESH_PASSPHRASES
 export const REFRESH_MENU_ASK = 'trial:refresh'
@@ -212,6 +213,11 @@ export async function applyTrialRefresh(
     .collection(COLLECTIONS.kfState)
     .doc(flowStateId(euid))
     .set({ data: persistableFlow(emptyFlow()) })
+    .catch(() => {})
+  await db
+    .collection(COLLECTIONS.kfState)
+    .doc(packSessionId(euid))
+    .remove()
     .catch(() => {})
   await db
     .collection(COLLECTIONS.kfState)

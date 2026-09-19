@@ -3,8 +3,8 @@
  * 选句优先级 订单→情绪→严重程度→责任（勿反）；可行动要图（needsPhoto）优先于惊讶/尴尬空壳。
  * 顾客情绪 ≠ bot 表演；道歉仅 responsibility=merchant。不编政策。
  * 会话记在 kfState `jevflow:<euid>`；data 不带 _id（真 sdk reject）。
- * Pack lucky-ducky-2026-09-19/scripts/* 尚未挂进运行时（T2）；权威库仍是 cs-scripts
- *（包装要图＝topics/收到后-包装.md → pool packPhoto）。
+ * Pack lucky-ducky-2026-09-19/scripts 已挂进运行时（T2）：Jev/原文 → triage_rules → Pack 主句。
+ * 旧 cs-scripts 表演池只当 flavor；包装破损主句必须来自 Pack，禁止单独惊讶空壳。
  */
 
 import { COLLECTIONS } from '@ldrw/shared'
@@ -18,6 +18,14 @@ import type {
   JevSeverity,
 } from './jev'
 import { fillSlots, pickLine, rememberUsed, type ScriptPoolId } from './scriptPool'
+import {
+  looksPackagingDamage,
+  loadAndAdvancePack,
+  pickPackScript,
+  readEpochForHandoff,
+  resolvePackagingMainScript,
+  writeHandoffStub,
+} from './csPack'
 
 export type ScriptNode =
   | 'greet'
@@ -210,8 +218,9 @@ export function looksGreeting(text: string): boolean {
   return /^(你好|您好|嗨嗨?|哈喽|在吗|在么|在不在|有人吗|hello|hi)$/i.test(t)
 }
 
-/** 卡在收尾或 Jev 把招呼/快递判薄时，用原文拉回专题。不覆盖包装/缺件。 */
+/** 卡在收尾或 Jev 把招呼/快递判薄时，用原文拉回专题。包装破损原文优先于招呼。 */
 function evForScript(_state: JevFlowState, ev: JevResult, text: string): JevResult {
+  if (looksPackagingDamage(text)) return { ...ev, needStatus: 'packaging', topic: 'packaging' }
   const need = ev.needStatus || 'other'
   if (looksLogistics(text) && !isTopicNeed(need)) return { ...ev, needStatus: 'logistics' }
   if (looksGreeting(text) && !isTopicNeed(need)) return { ...ev, needStatus: 'greeting' }
@@ -446,6 +455,13 @@ export function applyNode(
   }
 }
 
+function packMain(topic: ScriptTopic, ev: JevResult, text: string, used: string[], rand: () => number): string {
+  const scriptId = resolvePackagingMainScript(ev, text)
+  if (!scriptId && topic !== 'packaging' && ev.needStatus !== 'packaging') return ''
+  const line = pickPackScript(scriptId || 'aftersale_packaging', used, rand)
+  return /订单号/.test(line) ? '' : line
+}
+
 function speak(
   node: ScriptNode,
   acting: Acting,
@@ -453,16 +469,18 @@ function speak(
   ev: JevResult,
   used: string[],
   slots: Record<string, string>,
-  rand: () => number
+  rand: () => number,
+  text = ''
 ): string {
-  const body = fillSlots(pickLine(poolFor(node, topic, ev), used, undefined, rand), slots)
+  const packBody = packMain(topic, ev, text, used, rand)
+  const body = packBody || fillSlots(pickLine(poolFor(node, topic, ev), used, undefined, rand), slots)
   if (node === 'human') return ''
   const actOnly = node === 'surprise' || node === 'awkward' || node === 'hesitate' || node === 'severity'
   if (actOnly) {
     const flavor = fillSlots(pickLine(actingPool(acting), used, undefined, rand), slots)
-    // 惊讶/尴尬/严重度不得当唯一主回复：有要图售后时正文仍走 packPhoto/同类池
-    if (needsPhoto(ev.needStatus) && node !== 'hesitate') {
-      const photoBody = fillSlots(pickLine(poolFor('photo', topic, ev), used, undefined, rand), slots)
+    // 惊讶/尴尬/严重度不得当唯一主回复：包装破损正文走 Pack，其它要图走旧拍照池
+    if ((packBody || needsPhoto(ev.needStatus)) && node !== 'hesitate') {
+      const photoBody = packBody || fillSlots(pickLine(poolFor('photo', topic, ev), used, undefined, rand), slots)
       if (photoBody) return flavor && flavor !== photoBody ? flavor + photoBody : photoBody
     }
     return flavor || body
@@ -485,7 +503,7 @@ export function composeLine(
     const n = state.humanAsks + 1
     const node: ScriptNode = n >= 3 ? 'human' : n === 1 ? 'humanAsk' : 'humanAsk2'
     const acting = actingOf(route, node)
-    const line = node === 'human' ? '' : speak(node, acting, route.topic, ev, state.used, {}, rand)
+    const line = node === 'human' ? '' : speak(node, acting, route.topic, ev, state.used, {}, rand, text)
     const next = applyNode(state, node, route.topic, route.orderStatus, acting)
     next.humanAsks = n
     next.used = rememberUsed(state.used, line)
@@ -495,7 +513,10 @@ export function composeLine(
   const node = nextNode({ ...base, topic: route.topic, orderStatus: route.orderStatus }, useEv, text)
   const acting = actingOf(route, node)
   const slots = { 需求: compressNeed(text), ...factSlots(useEv) }
-  let line = speak(node, acting, route.topic, useEv, base.used, slots, rand)
+  let line = speak(node, acting, route.topic, useEv, base.used, slots, rand, text)
+  if ((looksPackagingDamage(text) || route.topic === 'packaging') && /订单号/.test(line)) {
+    line = pickPackScript('aftersale_packaging', base.used, rand)
+  }
   if (!line && node !== 'human') line = fillSlots(pickLine('ack', base.used, undefined, rand), slots)
   const next = applyNode(base, node, route.topic, route.orderStatus, acting)
   next.humanAsks = state.humanAsks
@@ -536,6 +557,20 @@ export async function composeScriptReply(
   if (!wrote) {
     alert('anomaly', 'kfCallback', 'JEVFLOW_WRITE_FAIL', { euid })
     return null
+  }
+  const pack = await loadAndAdvancePack(db, euid, ev, text, {
+    toHuman: node === 'human',
+    userAsksHuman: wantsHuman(text),
+  })
+  if (node === 'human') {
+    const epoch = await readEpochForHandoff(db, euid)
+    await writeHandoffStub(db, euid, {
+      intent: pack.session.intent || topic || 'unknown',
+      filledSlots: pack.session.slots,
+      summary: String(text || '').slice(0, 160),
+      failReason: wantsHuman(text) ? 'user_asks_human' : pack.hit && pack.hit.action === 'human' ? pack.hit.ruleId : 'collect_rounds_ge_3',
+      epoch,
+    })
   }
   return { text: line, node, topic, acting, checkpoint, humanAsks: next.humanAsks }
 }

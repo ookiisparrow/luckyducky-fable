@@ -3,6 +3,7 @@ import { alert, transition, sendAgentCard, AGENT_DESK_URL } from '../../../kit'
 import { JEV_FAIL_OPEN_TEXT, loadJevGate, logJevEvidence, tryJevClassify, type JevResult } from './jev'
 import { composeScriptReply, looksGreeting, wantsHuman } from './scriptReply'
 import { REFRESH_BTN_LABEL, REFRESH_MENU_ASK, loadTrialRefreshGate, interceptTrialRefresh } from './trialRefresh'
+import { loadAndAdvancePack, readEpochForHandoff, readPackSession, writeHandoffStub } from './csPack'
 
 const HUMAN_LADDER_EV: JevResult = { model: 'local-human', urgency: 0, department: 'sales' }
 const GREET_EV: JevResult = { model: 'local-hello', urgency: 0, department: 'sales', needStatus: 'greeting' }
@@ -713,6 +714,18 @@ export async function handleMessage(ctx: DispatchCtx, incoming: Incoming): Promi
       // **不动平台 service_state**（守卫 agent-channel-stays-assistant·根因#12·调试日志 AC）：坐席回复走
       // send_msg API、仅智能助手态(1)可发——曾在此调 transferToServicer 转 3（原生接待台模式）致坐席发送
       // 全被 95018 拒（2026-07-02 真机逼出）。人工排队/认领/结束由 csSession 状态机管，平台侧全程留 1。
+      let pack = await readPackSession(db, to)
+      if (pack.state !== 'human') {
+        pack = (await loadAndAdvancePack(db, to, null, incoming.text, { toHuman: true, userAsksHuman: true })).session
+      }
+      const epoch = await readEpochForHandoff(db, to)
+      await writeHandoffStub(db, to, {
+        intent: pack.intent || 'unknown',
+        filledSlots: pack.slots,
+        summary: String(incoming.text || incoming.menuId || 'human').slice(0, 160),
+        failReason: 'user_asks_human',
+        epoch,
+      })
       const q = await enqueueSession(db, openKfId, to)
       // 深审 F4：基建错入队失败＝如实提示重试，不发假「已转接」（会话没进队列·无人会接）
       await send(
