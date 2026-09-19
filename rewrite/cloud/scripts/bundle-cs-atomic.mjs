@@ -10,6 +10,7 @@ const OUT = join(ROOT, '..', 'src', 'functions', 'cs', 'kfCallback', 'csAtomicAs
 
 function walk(dir, acc = []) {
   for (const e of readdirSync(dir)) {
+    if (e === '_deprecated') continue // 退役库不打进运行时（尽力已迁此，接线不引用）
     const p = join(dir, e)
     if (statSync(p).isDirectory()) walk(p, acc)
     else acc.push(p)

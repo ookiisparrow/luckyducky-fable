@@ -4,7 +4,7 @@
  * 顾客情绪 ≠ bot 表演；道歉仅 responsibility=merchant。不编政策。
  * 会话记在 kfState `jevflow:<euid>`；data 不带 _id（真 sdk reject）。
  * Pack lucky-ducky-2026-09-19/scripts 已挂进运行时（T2）：Jev/原文 → triage_rules → Pack 主句。
- * 旧 cs-scripts 表演池只当 flavor；包装破损走 atomic-v1 门闩+优先级组装（有单 short：情绪综合→合照请求→可选理赔，≤3 泡），不抽 Pack 池、不现编。
+ * 旧 cs-scripts 表演池只当 flavor；包装破损走 atomic-v1 门闩+优先级组装（有单 short：惊讶+道歉/共情→合照→可选理赔，≤3 泡，无尽力），不抽 Pack 池、不现编。
  */
 
 import { COLLECTIONS } from '@ldrw/shared'
