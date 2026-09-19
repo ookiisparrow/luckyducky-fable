@@ -24,7 +24,7 @@ atomic-v1/
 ## 流水线（测版）
 
 1. 拼句窗：同会话连续短输入可拼（最小 debounce）
-2. 查单门闩：无近期订单只跑 `packaging_damage_no_order`，后面合照/理赔不发
+2. 查单门闩：无近期订单只跑 `packaging_damage_no_order`，后面合照/理赔不发。yaliceshi/develop 默认 `CS_TEST_ASSUME_ORDER` 开（缺省或 `1`），没绑号也走有单短句；`0`/`false` 恢复真查单。正式 release / 生产云硬关。
 3. 一问多面：外包装破损→合照；物流/运输严重→理赔；负面→惊讶→道歉/共情→尽力
 4. 优先级：P0 门闩 → P1 情绪 → P2 要图×3 → P3 理赔（条件）→ P4 收尾（本批空）
 5. 句型：会话级 `short|long`，不足默认 short。short=一原子一气泡
@@ -33,7 +33,7 @@ atomic-v1/
 
 刷新后发「我的包裹被压烂了」：
 
-- **有单短句**：惊讶 → 道歉/共情 → 尽力 → 合照×3（严重再 P3 理赔）
-- **无单**：只澄清/转人工，无合照
+- **有单短句**（测版默认）：惊讶 → 道歉/共情 → 尽力 → 合照×3（严重再 P3 理赔）
+- **无单**：只澄清/转人工，无合照（测版须 `CS_TEST_ASSUME_ORDER=0`）
 
 测版 yaliceshi only；正式闸关路径不走这里。构建打进 kfCallback（`bundle-cs-atomic.mjs`），运行时不拉 GitHub。
