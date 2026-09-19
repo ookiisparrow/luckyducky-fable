@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest'
 import { control } from 'wx-server-sdk'
-import { handleMessage, type DispatchCtx } from '../src/functions/cs/kfCallback/dispatch'
+import { handleMessage, kfUserHasRecentOrder, type DispatchCtx } from '../src/functions/cs/kfCallback/dispatch'
+import { csTestAssumeRecentOrder } from '../src/functions/cs/kfCallback/trialRefresh'
 import { sendBubbles } from '../src/functions/cs/kfCallback/bubbles'
 import {
   PACKAGING_FIRST_TOUCH_ID,
@@ -65,7 +66,17 @@ function seedRecentOrder(euid: string, openid = 'o' + euid) {
   ])
 }
 
-const ENV_KEYS = ['JEV_CS_ROUTE', 'TYPESAFE_API_KEY', 'WX_ENV_VERSION', 'TCB_ENV_VERSION', 'CS_TRIAL_REFRESH', 'CS_BUBBLE_GAP_MS'] as const
+const ENV_KEYS = [
+  'JEV_CS_ROUTE',
+  'TYPESAFE_API_KEY',
+  'WX_ENV_VERSION',
+  'TCB_ENV_VERSION',
+  'TCB_ENV',
+  'SCF_NAMESPACE',
+  'CS_TRIAL_REFRESH',
+  'CS_TEST_ASSUME_ORDER',
+  'CS_BUBBLE_GAP_MS',
+] as const
 let fetchBackup: unknown
 
 beforeEach(() => {
@@ -244,6 +255,98 @@ describe('atomic-v1 包装优先级组装', () => {
     expect(clarifyPool).toContain(got[0])
     expect(got.join('')).not.toMatch(/合照/)
     expect(got.some((s) => PHOTO3.includes(s as (typeof PHOTO3)[number]))).toBe(false)
+  })
+
+  it('大白话：CS_TEST_ASSUME_ORDER 只在测版缺省/1 开，0/false 关，正式硬关', () => {
+    process.env.TCB_ENV = 'yaliceshi-unit'
+    delete process.env.CS_TEST_ASSUME_ORDER
+    expect(csTestAssumeRecentOrder()).toBe(true)
+    process.env.CS_TEST_ASSUME_ORDER = '1'
+    expect(csTestAssumeRecentOrder()).toBe(true)
+    process.env.CS_TEST_ASSUME_ORDER = '0'
+    expect(csTestAssumeRecentOrder()).toBe(false)
+    process.env.CS_TEST_ASSUME_ORDER = 'false'
+    expect(csTestAssumeRecentOrder()).toBe(false)
+    delete process.env.TCB_ENV
+    delete process.env.CS_TEST_ASSUME_ORDER
+    process.env.WX_ENV_VERSION = 'develop'
+    expect(csTestAssumeRecentOrder()).toBe(true)
+    process.env.WX_ENV_VERSION = 'release'
+    process.env.CS_TEST_ASSUME_ORDER = '1'
+    process.env.TCB_ENV = 'yaliceshi-unit'
+    expect(csTestAssumeRecentOrder()).toBe(false)
+    delete process.env.WX_ENV_VERSION
+    process.env.TCB_ENV = 'cloudbase-prodlike'
+    expect(csTestAssumeRecentOrder()).toBe(false)
+    delete process.env.TCB_ENV
+    delete process.env.CS_TEST_ASSUME_ORDER
+    expect(csTestAssumeRecentOrder()).toBe(false)
+  })
+
+  it('大白话：测版假设开时没绑号也当有单；关掉才按真库', async () => {
+    process.env.TCB_ENV = 'yaliceshi-unit'
+    expect(await kfUserHasRecentOrder(db(), 'euNoBind')).toBe(true)
+    process.env.CS_TEST_ASSUME_ORDER = '0'
+    expect(await kfUserHasRecentOrder(db(), 'euNoBind')).toBe(false)
+    seedRecentOrder('euNoBind', 'oNoBind')
+    expect(await kfUserHasRecentOrder(db(), 'euNoBind')).toBe(true)
+  })
+
+  it('大白话：测版默认假设有单，没绑号/没单也走短句序，不走无单澄清', async () => {
+    process.env.TCB_ENV = 'yaliceshi-unit'
+    process.env.JEV_CS_ROUTE = '1'
+    process.env.TYPESAFE_API_KEY = 'test-key'
+    ;(globalThis as any).fetch = jevPackaging
+    const { sent, ctx } = sendCollector()
+    await handleMessage(ctx, { externalUserId: 'euAssumeNone', menuId: '', text: ACCEPT })
+    const got = texts(sent)
+    const surprisePool = listAtomicLib('emotion/surprise').map((s) => atomicText('emotion/surprise/' + s))
+    const apologyPool = listAtomicLib('emotion/apology').map((s) => atomicText('emotion/apology/' + s))
+    const empathyPool = ['empathy_01', 'empathy_02', 'empathy_03'].map((s) => atomicText('business/packaging/' + s))
+    const tryHardPool = listAtomicLib('emotion/try_hard').map((s) => atomicText('emotion/try_hard/' + s))
+    expect(got).toHaveLength(6)
+    expect(surprisePool).toContain(got[0])
+    expect([...apologyPool, ...empathyPool]).toContain(got[1])
+    expect(tryHardPool).toContain(got[2])
+    expect(got.slice(3)).toEqual([...PHOTO3])
+    expect(got.join('')).not.toMatch(/没查到您近期的订单/)
+    expect(got.join('')).not.toMatch(/订单号/)
+  })
+
+  it('大白话：测版开关 0/false 恢复真查单，无单走澄清', async () => {
+    process.env.TCB_ENV = 'yaliceshi-unit'
+    process.env.CS_TEST_ASSUME_ORDER = '0'
+    process.env.JEV_CS_ROUTE = '1'
+    process.env.TYPESAFE_API_KEY = 'test-key'
+    ;(globalThis as any).fetch = jevPackaging
+    const { sent, ctx } = sendCollector()
+    await handleMessage(ctx, { externalUserId: 'euAssumeOff', menuId: '', text: ACCEPT })
+    const got = texts(sent)
+    const clarifyPool = ['clarify_01', 'clarify_02'].map((s) => atomicText('gate/no_order/' + s))
+    expect(got.length).toBeGreaterThanOrEqual(1)
+    expect(clarifyPool).toContain(got[0])
+    expect(got.join('')).not.toMatch(/合照/)
+    process.env.CS_TEST_ASSUME_ORDER = 'false'
+    const second = sendCollector()
+    await handleMessage(second.ctx, { externalUserId: 'euAssumeFalse', menuId: '', text: ACCEPT })
+    expect(['clarify_01', 'clarify_02'].map((s) => atomicText('gate/no_order/' + s))).toContain(texts(second.sent)[0])
+  })
+
+  it('大白话：正式 release / 生产云硬关假设，旗标开了也按真库', async () => {
+    process.env.CS_TEST_ASSUME_ORDER = '1'
+    process.env.TCB_ENV = 'yaliceshi-unit'
+    process.env.WX_ENV_VERSION = 'release'
+    expect(await kfUserHasRecentOrder(db(), 'euAssumeRel')).toBe(false)
+    delete process.env.WX_ENV_VERSION
+    process.env.TCB_ENV = 'cloudbase-prodlike'
+    expect(await kfUserHasRecentOrder(db(), 'euAssumeProd')).toBe(false)
+    process.env.JEV_CS_ROUTE = '1'
+    process.env.TYPESAFE_API_KEY = 'test-key'
+    ;(globalThis as any).fetch = jevPackaging
+    const { sent, ctx } = sendCollector()
+    await handleMessage(ctx, { externalUserId: 'euAssumeProd', menuId: '', text: ACCEPT })
+    expect(texts(sent).join('')).not.toMatch(/合照/)
+    expect(['clarify_01', 'clarify_02'].map((s) => atomicText('gate/no_order/' + s))).toContain(texts(sent)[0])
   })
 
   it('大白话：刷新后再说压烂，有单仍是短句默认序，不抽旧 Pack', async () => {

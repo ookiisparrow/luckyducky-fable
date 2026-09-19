@@ -2,7 +2,13 @@ import { COLLECTIONS } from '@ldrw/shared'
 import { alert, transition, sendAgentCard, AGENT_DESK_URL } from '../../../kit'
 import { JEV_FAIL_OPEN_TEXT, loadJevGate, logJevEvidence, tryJevClassify, type JevResult } from './jev'
 import { composeScriptReply, looksGreeting, wantsHuman } from './scriptReply'
-import { REFRESH_BTN_LABEL, REFRESH_MENU_ASK, loadTrialRefreshGate, interceptTrialRefresh } from './trialRefresh'
+import {
+  REFRESH_BTN_LABEL,
+  REFRESH_MENU_ASK,
+  csTestAssumeRecentOrder,
+  loadTrialRefreshGate,
+  interceptTrialRefresh,
+} from './trialRefresh'
 import { loadAndAdvancePack, readEpochForHandoff, readPackSession, writeHandoffStub } from './csPack'
 import { sendBubbles } from './bubbles'
 
@@ -427,8 +433,9 @@ export async function hasRecentOrders(db: any, openid: string): Promise<boolean 
   return ((r.data || []).length > 0)
 }
 
-/** 客服用户有没有近期订单。未绑定=无单；库挂当有单（不误走无单澄清）。 */
+/** 客服用户有没有近期订单。未绑定=无单；库挂当有单（不误走无单澄清）。测版默认假设有单。 */
 export async function kfUserHasRecentOrder(db: any, euid: string): Promise<boolean> {
+  if (csTestAssumeRecentOrder()) return true
   const openid = await resolveOpenid(db, euid)
   if (!openid) return false
   const hit = await hasRecentOrders(db, openid)

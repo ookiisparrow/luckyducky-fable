@@ -48,6 +48,31 @@ function isYaliceshiCloud(): boolean {
   return cloudEnvId().startsWith('yaliceshi')
 }
 
+/** 正式 release / 微信预发 / 生产云：测版能力硬关。 */
+function isOfficialHardOff(): boolean {
+  const ver = envVersion()
+  return ver === 'release' || ver === 'trial' || isProdCloud()
+}
+
+/** 测版口径：yaliceshi* / develop；正式线硬关。 */
+function isCsTrialLikeEnv(): boolean {
+  if (isOfficialHardOff()) return false
+  return envVersion() === 'develop' || isYaliceshiCloud()
+}
+
+/**
+ * 测版默认当有近期订单（方便走有单话术）。
+ * CS_TEST_ASSUME_ORDER：1 或缺省＝开；0/false＝关（真查单）。
+ * 正式/生产硬关，旗标开了也不假设。
+ */
+export function csTestAssumeRecentOrder(): boolean {
+  if (!isCsTrialLikeEnv()) return false
+  const raw = String(process.env.CS_TEST_ASSUME_ORDER ?? '')
+    .trim()
+    .toLowerCase()
+  return raw !== '0' && raw !== 'false'
+}
+
 function parseWords(raw: unknown): string[] {
   if (Array.isArray(raw)) {
     return raw.map((w) => String(w || '').trim()).filter(Boolean)
