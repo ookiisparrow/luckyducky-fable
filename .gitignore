@@ -45,3 +45,5 @@ coverage/
 # 流水线运行数据（密钥/凭据绝不入库）
 .agents/archives/*.local
 .agents/tmp/
+# orchestrator.smoke.sh 每次重写的占位上下文，不入库
+.agents/contexts/SMOKE-01.md
