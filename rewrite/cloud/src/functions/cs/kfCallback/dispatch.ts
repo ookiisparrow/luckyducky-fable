@@ -2,6 +2,7 @@ import { COLLECTIONS } from '@ldrw/shared'
 import { alert, transition, sendAgentCard, AGENT_DESK_URL } from '../../../kit'
 import { JEV_FAIL_OPEN_TEXT, loadJevGate, logJevEvidence, tryJevClassify, type JevResult } from './jev'
 import { composeScriptReply, looksGreeting, wantsHuman } from './scriptReply'
+import { REFRESH_BTN_LABEL, REFRESH_MENU_ASK, loadTrialRefreshGate, interceptTrialRefresh } from './trialRefresh'
 
 const HUMAN_LADDER_EV: JevResult = { model: 'local-human', urgency: 0, department: 'sales' }
 const GREET_EV: JevResult = { model: 'local-hello', urgency: 0, department: 'sales', needStatus: 'greeting' }
@@ -138,16 +139,23 @@ function menu(head: string, items: MenuItem[], tail = '或直接打字告诉我�
   }
 }
 
-/** 首张菜单（无关键词命中 / 进会话）：四大入口 + 评价服务（B4.3）+ 找人工。 */
-export function rootMenu(): MsgMenuContent {
-  return menu('想咨询什么？点一下快速定位 👇', [
+/** 首张菜单（无关键词命中 / 进会话）：四大入口 + 评价服务（B4.3）+ 找人工。测版可多一颗刷新按钮。 */
+export function rootMenu(opts?: { trialRefresh?: boolean }): MsgMenuContent {
+  const items: MenuItem[] = [
     { id: 'cat:logistics', content: '📦 我的订单 / 物流' },
     { id: 'cat:activation', content: '🎬 激活码 / 课程 / 视频' },
     { id: 'cat:aftersale', content: '🔄 退换货 / 售后' },
     { id: 'cat:tutorial', content: '🧶 钩织教程' },
     { id: 'csat', content: '⭐ 评价服务' },
     { id: 'human', content: '🙋 其它 / 找人工' },
-  ])
+  ]
+  if (opts && opts.trialRefresh) items.push({ id: REFRESH_MENU_ASK, content: REFRESH_BTN_LABEL })
+  return menu('想咨询什么？点一下快速定位 👇', items)
+}
+
+export async function welcomeMenu(db: any): Promise<MsgMenuContent> {
+  const gate = await loadTrialRefreshGate(db)
+  return rootMenu({ trialRefresh: gate.on })
 }
 
 // ── 满意度评分（CSAT·B4.3·会话后评分 1-5 + 可选备注·确定性菜单不靠生成）──
@@ -578,6 +586,9 @@ export async function handleMessage(ctx: DispatchCtx, incoming: Incoming): Promi
   const { db, openKfId, cfg, send } = ctx
   const to = incoming.externalUserId
 
+  // 测版刷新：闸开时口令/按钮拦在 Jev、关键词、人工让位之前（人工接待中默认拒刷）。
+  if (await interceptTrialRefresh(db, incoming, openKfId, send)) return
+
   // 人工接管时 bot 不抢话（平台态恒 1 后「谁在接待」由**我方** csSession 状态机判·非平台 service_state·调试日志 AC）：
   // pending/active/escalated＝排队中/坐席接待中/待商户——bot 静默（消息仍归档+身份桥接在 index 侧不受影响·坐席经
   // getThread 看到顾客新消息）；closed/无会话＝bot 正常应答。曾靠平台 state 3 让 bot 让位（AB），随转 3 退役改此判。
@@ -693,7 +704,7 @@ export async function handleMessage(ctx: DispatchCtx, incoming: Incoming): Promi
         const hit = recognize(incoming.text)
         return hit
           ? ({ type: 'menu', content: menuFor(hit.cat, hit.word) } as Route)
-          : ({ type: 'menu', content: rootMenu() } as Route)
+          : ({ type: 'menu', content: await welcomeMenu(db) } as Route)
       })()
 
   switch (r.type) {
@@ -719,7 +730,7 @@ export async function handleMessage(ctx: DispatchCtx, incoming: Incoming): Promi
       // FAQ 答案从 kb 单源读（B4.1·守卫 faq-via-kb-single-source）；kb 无此条/未启用 → 兜底回根菜单（不写死答案）
       const ans = await faqAnswer(db, r.faqKey)
       if (ans) await send(buildText(to, openKfId, ans))
-      else await send(buildMsgMenu(to, openKfId, rootMenu()))
+      else await send(buildMsgMenu(to, openKfId, await welcomeMenu(db)))
       return
     }
     case 'menu':
