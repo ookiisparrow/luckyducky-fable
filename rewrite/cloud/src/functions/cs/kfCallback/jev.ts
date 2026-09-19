@@ -207,7 +207,7 @@ export function parseJevBody(body: any): JevResult | null {
   }
 }
 
-/** Jev 科室 → 现有关键词类别（只用于「没打中关键词」时的菜单；命中关键词仍走旧路）。 */
+/** Jev 科室 → 旧关键词类别（闸关菜单路仍用；闸开总分流不再靠这张表弹气泡）。 */
 export function mapJevDepartment(department: string): 'aftersale' | 'activation' | 'tutorial' | null {
   if (department === 'billing') return 'aftersale'
   if (department === 'technical') return 'activation'
@@ -228,8 +228,12 @@ function envVersion(): string {
 
 /**
  * 正式（release 字面或未开闸）= 旧关键词路。
+ * 闸开 = Jev 总分流（自由文本不再走关键词气泡）。
  * 企微回调拿不到小程序 envVersion，所以体验环境靠 JEV_CS_ROUTE=1（env 或 secureConfig/typesafe）。
  */
+
+/** 闸开时 Jev/话术挂了：短句请重试，不回旧关键词气泡。 */
+export const JEV_FAIL_OPEN_TEXT = '刚才遇到点问题，请稍后再发一次，或点「找人工」🙏'
 export async function loadJevGate(db: any): Promise<{ on: boolean; key: string }> {
   const ver = envVersion()
   if (ver === 'release') return { on: false, key: '' }
@@ -295,7 +299,7 @@ export function logJevEvidence(
   })
 }
 
-/** 闸关 / 无 key / Jev 失败 → null（调用方走旧关键词/根菜单）。 */
+/** 闸关 / 无 key / Jev 失败 → null（闸关走旧菜单；闸开由调用方发短句，不弹气泡）。 */
 export async function tryJevClassify(db: any, text: string): Promise<JevResult | null> {
   try {
     const gate = await loadJevGate(db)
