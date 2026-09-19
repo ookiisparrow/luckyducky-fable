@@ -85,6 +85,7 @@ export type JevRoute = {
   responsibility: JevResponsibility
   needStatus: JevNeedStatus
   exceeds: boolean
+  hasLogisticsFacts: boolean
 }
 
 const FLOW_KEYS = [
@@ -145,9 +146,20 @@ function needsPhoto(need: JevNeedStatus): boolean {
   return need === 'photo_needed' || need === 'packaging' || need === 'missing' || need === 'course'
 }
 
-/** 没查到的事实不走「给回答」池（禁假【结论】/【地点】）。打折/加急有专题确认句。 */
+function hasLogisticsFacts(ev: JevResult): boolean {
+  return !!(String(ev.location || '').trim() && String(ev.etaDays || '').trim())
+}
+
+function factSlots(ev: JevResult): Record<string, string> {
+  if (!hasLogisticsFacts(ev)) return {}
+  return { 地点: String(ev.location).trim(), 天数: String(ev.etaDays).trim() }
+}
+
+/** 没查到的事实不走「给回答」池（禁假【结论】/【地点】）。打折/加急有专题确认句。物流有实槽才报节点。 */
 function canEmitAnswer(r: JevRoute): boolean {
-  return r.topic === 'discount' || r.topic === 'rush' || r.needStatus === 'discount' || r.needStatus === 'rush'
+  if (r.topic === 'discount' || r.topic === 'rush' || r.needStatus === 'discount' || r.needStatus === 'rush')
+    return true
+  return (r.topic === 'logistics' || r.needStatus === 'logistics') && r.hasLogisticsFacts
 }
 
 function flowForTopic(state: JevFlowState, r: JevRoute): JevFlowState {
@@ -232,7 +244,7 @@ export function routeFromJev(state: JevFlowState, ev: JevResult): JevRoute {
     ev.needStatus || (ev.topic && (TOPIC_NEEDS as readonly string[]).includes(ev.topic) ? ev.topic : 'other')
   const exceeds = needStatus === 'exceeds' || Number(ev.exceeds || 0) >= 0.55
   const topic = topicOf(needStatus, orderStatus, (ev.topic || state.topic || '') as ScriptTopic | '')
-  return { topic, orderStatus, emotionStatus, severity, responsibility, needStatus, exceeds }
+  return { topic, orderStatus, emotionStatus, severity, responsibility, needStatus, exceeds, hasLogisticsFacts: hasLogisticsFacts(ev) }
 }
 
 export function checkpointOf(node: ScriptNode): ActingCheckpoint {
@@ -284,9 +296,8 @@ export function nextNode(state: JevFlowState, ev: JevResult, text = ''): ScriptN
   const s = flowForTopic(state, r)
   if (r.needStatus === 'greeting') return 'greet'
   if (looksGreeting(text) && !isTopicNeed(r.needStatus)) return 'greet'
-  const wrapupNewNeed =
-    (state.node === 'askNext' || state.solved) && isTopicNeed(r.needStatus) && !canEmitAnswer(r)
-  if (wrapupNewNeed && r.needStatus === 'logistics') return s.greeted ? 'promise' : 'greetIssue'
+  const logisticsNoFacts =
+    (r.needStatus === 'logistics' || r.topic === 'logistics') && !r.hasLogisticsFacts
 
   // 1. 订单（最高）：没开场先按订单/有没有事走开场
   if (!s.greeted) {
@@ -307,6 +318,7 @@ export function nextNode(state: JevFlowState, ev: JevResult, text = ''): ScriptN
   if (needsPhoto(r.needStatus) && !s.photoAsked) return 'photo'
 
   if (!s.restated) {
+    if (logisticsNoFacts) return 'promise'
     if (infoThin(r)) return r.needStatus === 'photo_needed' ? 'photo' : 'askMore'
     return 'restate'
   }
@@ -315,7 +327,8 @@ export function nextNode(state: JevFlowState, ev: JevResult, text = ''): ScriptN
     if (s.coopCount >= 3) return 'human'
     return needsPhoto(r.needStatus) ? 'photo' : 'askCoop'
   }
-  if (!s.solved && canEmitAnswer(r)) return 'answer'
+  if (canEmitAnswer(r) && (!s.solved || r.hasLogisticsFacts)) return 'answer'
+  if (logisticsNoFacts) return 'promise'
   return 'askNext'
 }
 
@@ -328,7 +341,7 @@ function poolFor(node: ScriptNode, topic: ScriptTopic, ev: JevResult): ScriptPoo
   if (node === 'answer') {
     if (topic === 'discount') return 'discountConfirm'
     if (topic === 'rush') return 'rushConfirm'
-    if (topic === 'logistics') return isNegative(ev.emotionStatus || 'calm') ? 'logisticsSlow' : 'logisticsEta'
+    if (topic === 'logistics') return hasLogisticsFacts(ev) ? 'logisticsEta' : 'trySolve'
     return 'answer'
   }
   if (node === 'photo') {
@@ -472,8 +485,8 @@ export function composeLine(
   const base = flowForTopic(state, route)
   const node = nextNode({ ...base, topic: route.topic, orderStatus: route.orderStatus }, useEv, text)
   const acting = actingOf(route, node)
-  const slots = { 需求: compressNeed(text) }
-  let line = speak(node, acting, route.topic, ev, base.used, slots, rand)
+  const slots = { 需求: compressNeed(text), ...factSlots(useEv) }
+  let line = speak(node, acting, route.topic, useEv, base.used, slots, rand)
   if (!line && node !== 'human') line = fillSlots(pickLine('ack', base.used, undefined, rand), slots)
   const next = applyNode(base, node, route.topic, route.orderStatus, acting)
   next.humanAsks = state.humanAsks

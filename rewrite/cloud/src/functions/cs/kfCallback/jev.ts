@@ -71,6 +71,9 @@ export type JevResult = {
   responsibility?: JevResponsibility
   needStatus?: JevNeedStatus
   exceeds?: number
+  /** 真查到的物流节点。空=无实槽，禁止报 logisticsEta。 */
+  location?: string
+  etaDays?: string
 }
 
 type JevFetch = (

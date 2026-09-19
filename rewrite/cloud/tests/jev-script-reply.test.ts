@@ -237,9 +237,28 @@ describe('闸开话术状态机（mermaid + 1→4 + 表演）', () => {
       () => 0
     )
     expect(topic).toBe('logistics')
-    expect(node).not.toBe('answer')
+    expect(node === 'greetIssue' || node === 'promise').toBe(true)
+    expect(scriptPools().logisticsGreet.includes(line) || scriptPools().trySolve.includes(line)).toBe(true)
     expect(line).not.toMatch(/转运中|预计还要几/)
     expect(line).not.toMatch(/简单说，|我查到了|结论是/)
+
+    const withSlots = composeLine(
+      {
+        ...late,
+        topic: 'logistics',
+        restated: true,
+        promised: true,
+        solved: false,
+        node: 'promise',
+      },
+      ev({ needStatus: 'logistics', orderStatus: 'shipped', location: '杭州', etaDays: '3' }),
+      '快递到哪了？',
+      () => 0
+    )
+    expect(withSlots.node).toBe('answer')
+    expect(withSlots.line).toMatch(/杭州/)
+    expect(withSlots.line).toMatch(/3/)
+    expect(withSlots.line).not.toMatch(/转运中/)
   })
 
   it('大白话：卡在「还想问啥」时打人工要走阶梯，打物流要拉回专题，不能反复问还有事吗', () => {
@@ -264,6 +283,9 @@ describe('闸开话术状态机（mermaid + 1→4 + 表演）', () => {
     expect(logi.node === 'greetIssue' || logi.node === 'promise').toBe(true)
     expect(logi.node).not.toBe('askNext')
     expect(logi.node).not.toBe('answer')
+    expect(scriptPools().logisticsGreet.includes(logi.line) || scriptPools().trySolve.includes(logi.line)).toBe(
+      true
+    )
     expect(logi.line).not.toMatch(/还想问|还有问题|另外还|还有别的|还有吗|转运中|预计还要几/)
 
     const logiWeird = composeLine(stuck, ev({ needStatus: 'greeting' }), '快递到哪了', () => 0)
