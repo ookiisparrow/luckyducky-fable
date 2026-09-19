@@ -143,6 +143,12 @@ export function pickPackScript(scriptId: string, used: string[] = [], rand: () =
   return list[Math.floor(rand() * list.length)] || list[0]
 }
 
+/** 包装破损：一次发出全部合照句（不抽一句）。其它脚本仍抽一句。 */
+export function packScriptReply(scriptId: string, used: string[] = [], rand: () => number = Math.random): string {
+  if (scriptId === 'aftersale_packaging') return packScriptLines(scriptId).join('\n')
+  return pickPackScript(scriptId, used, rand)
+}
+
 export function looksPackagingDamage(text: string): boolean {
   return PACKAGING_RE.test(String(text || ''))
 }

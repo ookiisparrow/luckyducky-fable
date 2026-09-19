@@ -4,6 +4,7 @@ import { JEV_FAIL_OPEN_TEXT, loadJevGate, logJevEvidence, tryJevClassify, type J
 import { composeScriptReply, looksGreeting, wantsHuman } from './scriptReply'
 import { REFRESH_BTN_LABEL, REFRESH_MENU_ASK, loadTrialRefreshGate, interceptTrialRefresh } from './trialRefresh'
 import { loadAndAdvancePack, readEpochForHandoff, readPackSession, writeHandoffStub } from './csPack'
+import { sendBubbles } from './bubbles'
 
 const HUMAN_LADDER_EV: JevResult = { model: 'local-human', urgency: 0, department: 'sales' }
 const GREET_EV: JevResult = { model: 'local-hello', urgency: 0, department: 'sales', needStatus: 'greeting' }
@@ -246,7 +247,7 @@ export type Route =
   // CSAT（B4.3）：score=点选的 1-5 分；note=可选备注文案（预设标签映射后）
   | { type: 'csat'; score: number }
   | { type: 'csat_note'; note: string }
-  | { type: 'text'; content: string }
+  | { type: 'text'; content: string; bubbles?: boolean }
 
 export function route(menuId: string): Route {
   if (menuId === 'human') return { type: 'transfer' }
@@ -674,7 +675,7 @@ export async function handleMessage(ctx: DispatchCtx, incoming: Incoming): Promi
           }
           if (hello) {
             if (got && got.text && got.node !== 'askNext' && got.node !== 'askMore')
-              return { type: 'text' as const, content: got.text }
+              return { type: 'text' as const, content: got.text, bubbles: true }
             return { type: 'text' as const, content: '在的在的，请说。' }
           }
           if (got && got.node === 'human') {
@@ -697,7 +698,7 @@ export async function handleMessage(ctx: DispatchCtx, incoming: Incoming): Promi
                 acting: got.acting,
                 checkpoint: got.checkpoint,
               })
-            return { type: 'text' as const, content: got.text }
+            return { type: 'text' as const, content: got.text, bubbles: true }
           }
           if (ev) logJevEvidence(ev, null, { stateLen: textLen })
           return { type: 'text' as const, content: JEV_FAIL_OPEN_TEXT }
@@ -750,7 +751,9 @@ export async function handleMessage(ctx: DispatchCtx, incoming: Incoming): Promi
       await send(buildMsgMenu(to, openKfId, r.content))
       return
     case 'text':
-      await send(buildText(to, openKfId, r.content))
+      if (r.bubbles)
+        await sendBubbles(send, (content) => buildText(to, openKfId, content), r.content)
+      else await send(buildText(to, openKfId, r.content))
       return
     case 'miniprogram':
       // 卡片需 appid + 封面素材都齐才发；缺任一即降级文字（防 thumb 空致 send_msg 40058）

@@ -21,7 +21,7 @@ import { fillSlots, pickLine, rememberUsed, type ScriptPoolId } from './scriptPo
 import {
   looksPackagingDamage,
   loadAndAdvancePack,
-  pickPackScript,
+  packScriptReply,
   readEpochForHandoff,
   resolvePackagingMainScript,
   writeHandoffStub,
@@ -458,7 +458,7 @@ export function applyNode(
 function packMain(topic: ScriptTopic, ev: JevResult, text: string, used: string[], rand: () => number): string {
   const scriptId = resolvePackagingMainScript(ev, text)
   if (!scriptId && topic !== 'packaging' && ev.needStatus !== 'packaging') return ''
-  const line = pickPackScript(scriptId || 'aftersale_packaging', used, rand)
+  const line = packScriptReply(scriptId || 'aftersale_packaging', used, rand)
   return /订单号/.test(line) ? '' : line
 }
 
@@ -473,6 +473,8 @@ function speak(
   text = ''
 ): string {
   const packBody = packMain(topic, ev, text, used, rand)
+  // 包装破损三句合照整段发出，不跟表演空壳粘成一条、也不只抽一句
+  if (packBody.includes('\n')) return packBody
   const body = packBody || fillSlots(pickLine(poolFor(node, topic, ev), used, undefined, rand), slots)
   if (node === 'human') return ''
   const actOnly = node === 'surprise' || node === 'awkward' || node === 'hesitate' || node === 'severity'
@@ -515,7 +517,7 @@ export function composeLine(
   const slots = { 需求: compressNeed(text), ...factSlots(useEv) }
   let line = speak(node, acting, route.topic, useEv, base.used, slots, rand, text)
   if ((looksPackagingDamage(text) || route.topic === 'packaging') && /订单号/.test(line)) {
-    line = pickPackScript('aftersale_packaging', base.used, rand)
+    line = packScriptReply('aftersale_packaging', base.used, rand)
   }
   if (!line && node !== 'human') line = fillSlots(pickLine('ack', base.used, undefined, rand), slots)
   const next = applyNode(base, node, route.topic, route.orderStatus, acting)
