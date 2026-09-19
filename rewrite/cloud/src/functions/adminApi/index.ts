@@ -113,6 +113,9 @@ const ACTIONS: Record<string, (ctx: Ctx) => Promise<any>> = {
   sampleQc: conversations.sampleQc,
   saveQcMark: conversations.saveQcMark,
   listQcSampled: conversations.listQcSampled,
+  // 测版刷新（T1）：未登记 ACTION_CAPS→默认拒 admin:write＝仅超管；refresh 写类自动审计
+  getTrialRefreshGate: conversations.getTrialRefreshGate,
+  refreshTrialSession: conversations.refreshTrialSession,
   // 知识库（批15·FAQ 单源·admin 维护、客服 bot dispatch 读同一份）
   listKb: kb.listKb,
   saveKb: kb.saveKb,

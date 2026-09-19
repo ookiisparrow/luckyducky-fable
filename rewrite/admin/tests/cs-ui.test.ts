@@ -3,6 +3,7 @@
 import { describe, it, expect } from 'vitest'
 import { msHuman, mapReport, mapPanels, matchLabel, normalizeKb, mapCsat, mapCsatEntries, mapMessages, nextNodeId, duplicateNodeIds, mapQcRows } from '../src/lib/mapCs'
 import customer360Src from '../src/pages/Customer360.vue?raw'
+import conversationsSrc from '../src/pages/Conversations.vue?raw'
 import agentsSrc from '../src/pages/Agents.vue?raw'
 import csatSrc from '../src/pages/Csat.vue?raw'
 
@@ -237,5 +238,18 @@ describe('Csat.vue 文件头差评口径与按钮一致', () => {
   it('大白话：文件头「仅差评」写 ≤2，不再写 ≤3（按钮/筛选已是 ≤2）', () => {
     expect(csatSrc).not.toMatch(/仅差评\s*≤3/)
     expect(csatSrc).toMatch(/仅差评\s*≤2/)
+  })
+})
+
+describe('测版刷新入口只在闸开时露', () => {
+  it('大白话：管理端「当作新客重新开始」跟 trialRefreshOn，正式环境不该看见', () => {
+    expect(conversationsSrc).toMatch(/v-if="trialRefreshOn"/)
+    expect(conversationsSrc).toMatch(/当作新客重新开始/)
+    expect(conversationsSrc).toMatch(/getTrialRefreshGate/)
+    expect(conversationsSrc).toMatch(/请填写刷新原因（必填）/)
+    expect(conversationsSrc).toMatch(/测版会话刷新（无刷金）/)
+    expect(conversationsSrc).toMatch(/已刷新，epoch 已 \+1/)
+    expect(conversationsSrc).toMatch(/trialRefreshArmed/)
+    expect(conversationsSrc).not.toMatch(/window\.prompt|window\.confirm/)
   })
 })
