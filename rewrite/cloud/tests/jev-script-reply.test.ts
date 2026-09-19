@@ -10,6 +10,7 @@ import {
   nextNode,
   persistableFlow,
   routeFromJev,
+  wantsHuman,
 } from '../src/functions/cs/kfCallback/scriptReply'
 import { getDb } from '../src/kit'
 import { COLLECTIONS } from '@ldrw/shared'
@@ -47,7 +48,19 @@ describe('话术库打包与取句', () => {
   it('大白话：编号行能抽出来，主节点每库至少 20 句，构建产物里不写 GitHub 地址', () => {
     expect(parseNumberedLines('1. 嗨\n2. 在的\n不是编号').length).toBe(2)
     const pools = scriptPools()
-    for (const id of ['greet', 'greetIssue', 'ack', 'restate', 'trySolve', 'answer', 'askMore', 'hesitate', 'clarify']) {
+    for (const id of [
+      'greet',
+      'greetIssue',
+      'ack',
+      'restate',
+      'trySolve',
+      'answer',
+      'askMore',
+      'hesitate',
+      'clarify',
+      'humanAskWhat',
+      'humanSayDirect',
+    ]) {
       expect(pools[id]?.length, id).toBeGreaterThanOrEqual(20)
     }
     const blob = JSON.stringify(SCRIPT_MD)
@@ -62,6 +75,11 @@ describe('话术库打包与取句', () => {
     })
     expect(pickLine('hesitate', ['额这个…'], pools, () => 0)).toBe('我先问问')
     expect(fillSlots('您是说【需求】对吧？', { 需求: '能不能便宜' })).toBe('您是说能不能便宜对吧？')
+    expect(fillSlots('简单说，【结论】', {})).toBe('')
+    expect(fillSlots('最新到【地点】了，预计还要【天数】天到。', {})).toBe('')
+    expect(fillSlots('最新到【地点】了，预计还要【天数】天到。', { 地点: '杭州', 天数: '3' })).toBe(
+      '最新到杭州了，预计还要3天到。'
+    )
   })
 })
 
@@ -185,6 +203,99 @@ describe('闸开话术状态机（mermaid + 1→4 + 表演）', () => {
     expect(payload.node).toBe('greetIssue')
     expect(payload.greeted).toBe(true)
   })
+
+  it('大白话：包装破损要图，不拿默认【结论】装成已经查完', () => {
+    const { line, node, topic } = composeLine(
+      { ...greeted('restate'), promised: true, restated: true, node: 'promise', topic: 'other' },
+      ev({ needStatus: 'packaging', orderStatus: 'delivered' }),
+      '我的包裹压坏了',
+      () => 0
+    )
+    expect(topic).toBe('packaging')
+    expect(node).toBe('photo')
+    expect(line).toMatch(/拍|照|图/)
+    expect(line).not.toMatch(/简单说，|我查到了|结论是|我先帮您确认一下，确认后回您/)
+  })
+
+  it('大白话：物流没查到地点天数就不报节点，也不填转运中/几天', () => {
+    const late = {
+      ...emptyFlow(),
+      greeted: true,
+      restated: true,
+      promised: true,
+      solved: true,
+      topic: 'other' as const,
+      node: 'askNext' as const,
+    }
+    const { line, node, topic } = composeLine(
+      late,
+      ev({ needStatus: 'logistics', orderStatus: 'shipped' }),
+      '快递到哪了？',
+      () => 0
+    )
+    expect(topic).toBe('logistics')
+    expect(node).not.toBe('answer')
+    expect(line).not.toMatch(/转运中|预计还要几/)
+    expect(line).not.toMatch(/简单说，|我查到了|结论是/)
+  })
+
+  it('大白话：卡在「还想问啥」时打人工要走阶梯，打物流要拉回专题，不能反复问还有事吗', () => {
+    const stuck = {
+      ...emptyFlow(),
+      greeted: true,
+      restated: true,
+      promised: true,
+      solved: true,
+      topic: 'other' as const,
+      node: 'askNext' as const,
+    }
+    const human = composeLine(stuck, ev({ needStatus: 'greeting' }), '人工', () => 0)
+    expect(human.node).toBe('humanAsk')
+    expect(scriptPools().humanAskWhat).toContain(human.line)
+
+    const pack = composeLine(stuck, ev({ needStatus: 'packaging', orderStatus: 'delivered' }), '包裹压坏了', () => 0)
+    expect(pack.node).toBe('photo')
+    expect(pack.line).toMatch(/拍|照|图/)
+
+    const logi = composeLine(stuck, ev({ needStatus: 'logistics', orderStatus: 'shipped' }), '快递到哪了？', () => 0)
+    expect(logi.node).not.toBe('askNext')
+    expect(logi.node).not.toBe('answer')
+    expect(logi.line).not.toMatch(/还想问|还有问题|另外还|转运中|预计还要几/)
+  })
+})
+
+describe('闸开打字「人工」三次阶梯', () => {
+  it('大白话：只有明确要人工才算；业务句不扫', () => {
+    expect(wantsHuman('人工')).toBe(true)
+    expect(wantsHuman('转人工')).toBe(true)
+    expect(wantsHuman('找人工')).toBe(true)
+    expect(wantsHuman('转接人工')).toBe(true)
+    expect(wantsHuman('我要人工')).toBe(true)
+    expect(wantsHuman('帮我转人工谢谢')).toBe(true)
+    expect(wantsHuman('快递到哪了')).toBe(false)
+    expect(wantsHuman('你好')).toBe(false)
+    expect(wantsHuman('测试')).toBe(false)
+    expect(wantsHuman('我的包裹压坏了')).toBe(false)
+  })
+
+  it('大白话：同会话 1 问怎么了、2 让直说、3 空句转人工', () => {
+    const pools = scriptPools()
+    const e = ev({ needStatus: 'greeting' })
+    const a = composeLine(emptyFlow(), e, '人工', () => 0)
+    expect(a.node).toBe('humanAsk')
+    expect(a.line).toBe(pools.humanAskWhat[0])
+    expect(a.next.humanAsks).toBe(1)
+
+    const b = composeLine(a.next, e, '转人工', () => 0)
+    expect(b.node).toBe('humanAsk2')
+    expect(b.line).toBe(pools.humanSayDirect[0])
+    expect(b.next.humanAsks).toBe(2)
+
+    const c = composeLine(b.next, e, '找人工', () => 0)
+    expect(c.node).toBe('human')
+    expect(c.line).toBe('')
+    expect(c.next.humanAsks).toBe(3)
+  })
 })
 
 describe('闸开编排发纯文本', () => {
@@ -254,5 +365,77 @@ describe('闸开编排发纯文本', () => {
     expect(sent[1].msgtype).toBe('text')
     expect(String(sent[1].text.content)).not.toBe(String(sent[0].text.content))
     expect(d2.data.acting).toBeTruthy()
+  })
+
+  it('大白话：闸开打字人工三次才入队；点菜单找人工仍立刻转', async () => {
+    process.env.JEV_CS_ROUTE = '1'
+    process.env.TYPESAFE_API_KEY = 'test-key'
+    ;(globalThis as any).fetch = jevOk('greeting')
+    const pools = scriptPools()
+    const { sent, ctx } = sendCollector()
+    await handleMessage(ctx, { externalUserId: 'euH', menuId: '', text: '人工' })
+    expect(sent[0].msgtype).toBe('text')
+    expect(sent[0].msgmenu).toBeUndefined()
+    expect(pools.humanAskWhat).toContain(sent[0].text.content)
+    expect(control.dump('csSession')).toEqual([])
+    const d1 = await db().collection(COLLECTIONS.kfState).doc('jevflow:euH').get()
+    expect(d1.data.humanAsks).toBe(1)
+
+    await handleMessage(ctx, { externalUserId: 'euH', menuId: '', text: '转人工' })
+    expect(pools.humanSayDirect).toContain(sent[1].text.content)
+    expect(control.dump('csSession')).toEqual([])
+
+    await handleMessage(ctx, { externalUserId: 'euH', menuId: '', text: '找人工' })
+    expect(sent[2].text.content).toContain('已为你转接')
+    expect(control.dump('csSession')[0].status).toBe('pending')
+
+    const { sent: menuSent, ctx: menuCtx } = sendCollector()
+    await handleMessage(menuCtx, { externalUserId: 'euMenu', menuId: 'human', text: '' })
+    expect(menuSent[0].text.content).toContain('已为你转接')
+    expect(control.dump('csSession').some((s: any) => s._id === 'wxkf:kf1:euMenu')).toBe(true)
+  })
+
+  it('大白话：库里已停在还想问啥时，打人工走阶梯，打快递拉回物流不反复问还有事吗', async () => {
+    process.env.JEV_CS_ROUTE = '1'
+    process.env.TYPESAFE_API_KEY = 'test-key'
+    const stuck = {
+      node: 'askNext',
+      topic: 'other',
+      greeted: true,
+      restated: true,
+      promised: true,
+      solved: true,
+      humanAsks: 0,
+      used: ['另外还想问啥不？'],
+      at: Date.now(),
+    }
+    control.seed(COLLECTIONS.kfState, [
+      { _id: 'jevflow:euStuckH', ...stuck },
+      { _id: 'jevflow:euStuckL', ...stuck },
+    ])
+    const pools = scriptPools()
+    const { sent, ctx } = sendCollector()
+    ;(globalThis as any).fetch = jevOk('greeting')
+    await handleMessage(ctx, { externalUserId: 'euStuckH', menuId: '', text: '人工' })
+    expect(pools.humanAskWhat).toContain(sent[0].text.content)
+    expect(String(sent[0].text.content)).not.toMatch(/还想问|还有问题|另外还/)
+    expect(control.dump('csSession')).toEqual([])
+
+    ;(globalThis as any).fetch = jevOk('logistics')
+    await handleMessage(ctx, { externalUserId: 'euStuckL', menuId: '', text: '快递到哪了？' })
+    const second = String(sent[1].text.content)
+    expect(sent[1].msgtype).toBe('text')
+    expect(second).not.toMatch(/还想问|还有问题|另外还|转运中|预计还要几/)
+    const d = await db().collection(COLLECTIONS.kfState).doc('jevflow:euStuckL').get()
+    expect(d.data.node).not.toBe('askNext')
+    expect(d.data.topic).toBe('logistics')
+  })
+
+  it('大白话：闸关打字人工仍走旧根菜单，不入队', async () => {
+    const { sent, ctx } = sendCollector()
+    await handleMessage(ctx, { externalUserId: 'euOff', menuId: '', text: '人工' })
+    expect(sent[0].msgtype).toBe('msgmenu')
+    expect(sent[0].msgmenu.head_content).toContain('想咨询什么')
+    expect(control.dump('csSession')).toEqual([])
   })
 })
