@@ -21,7 +21,6 @@ import { fillSlots, pickLine, rememberUsed, type ScriptPoolId } from './scriptPo
 import {
   looksPackagingDamage,
   loadAndAdvancePack,
-  packScriptReply,
   readEpochForHandoff,
   resolvePackagingMainScript,
   writeHandoffStub,
@@ -462,13 +461,8 @@ function packagingPieces(topic: ScriptTopic, ev: JevResult, text: string, rand: 
   return packagingFirstTouchBubbles(rand)
 }
 
-function packMain(topic: ScriptTopic, ev: JevResult, text: string, used: string[], rand: () => number): string {
-  const pieces = packagingPieces(topic, ev, text, rand)
-  if (pieces.length) return pieces.join('\n')
-  const scriptId = resolvePackagingMainScript(ev, text)
-  if (!scriptId && topic !== 'packaging' && ev.needStatus !== 'packaging') return ''
-  const line = packScriptReply(scriptId || 'aftersale_packaging', used, rand)
-  return /订单号/.test(line) ? '' : line
+function packMain(topic: ScriptTopic, ev: JevResult, text: string, _used: string[], rand: () => number): string {
+  return packagingPieces(topic, ev, text, rand).join('\n')
 }
 
 function speak(
@@ -482,7 +476,7 @@ function speak(
   text = ''
 ): string {
   const packBody = packMain(topic, ev, text, used, rand)
-  // 包装破损三句合照整段发出，不跟表演空壳粘成一条、也不只抽一句
+  // 包装破损走 atomic sequence（惊讶→同理→合照×3），不跟表演空壳粘、不抽旧 Pack
   if (packBody.includes('\n')) return packBody
   const body = packBody || fillSlots(pickLine(poolFor(node, topic, ev), used, undefined, rand), slots)
   if (node === 'human') return ''

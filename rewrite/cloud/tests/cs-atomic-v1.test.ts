@@ -10,7 +10,9 @@ import {
   packagingFirstTouchBubbles,
   playSequence,
 } from '../src/functions/cs/kfCallback/csAtomic'
+import { packScriptReply } from '../src/functions/cs/kfCallback/csPack'
 import { composeLine, emptyFlow } from '../src/functions/cs/kfCallback/scriptReply'
+import { formatRefreshDone } from '@ldrw/shared'
 import { getDb } from '../src/kit'
 
 const PHOTO3 = [
@@ -145,6 +147,7 @@ describe('atomic-v1 包装首次进线', () => {
     expect(line).toBe(expect5.join('\n'))
     expect(line).not.toMatch(/订单号/)
     expect(pieces).not.toEqual([...PHOTO3])
+    expect(line).not.toBe(packScriptReply('aftersale_packaging', [], () => 0))
   })
 
   it('大白话：闸开说包裹被摔坏了，连发 5 气泡=对应 txt', async () => {
@@ -160,6 +163,29 @@ describe('atomic-v1 包装首次进线', () => {
     expect(surprisePool).toContain(got[0])
     expect(empathyPool).toContain(got[1])
     expect(got.slice(2)).toEqual([...PHOTO3])
+    expect(got.join('')).not.toMatch(/订单号/)
+    expect(got.join('\n')).not.toBe(packScriptReply('aftersale_packaging'))
+  })
+
+  it('大白话：刷新后再说包裹被摔坏了，仍是惊讶→同理→三条合照，不抽旧 Pack', async () => {
+    process.env.CS_TRIAL_REFRESH = '1'
+    process.env.JEV_CS_ROUTE = '1'
+    process.env.TYPESAFE_API_KEY = 'test-key'
+    ;(globalThis as any).fetch = jevPackaging
+    const { sent, ctx } = sendCollector()
+    await handleMessage(ctx, { externalUserId: 'euAtomicRef', menuId: '', text: '刷新' })
+    await handleMessage(ctx, { externalUserId: 'euAtomicRef', menuId: 'trial:refresh:ok', text: '确认重来' })
+    expect(sent[1].text.content).toBe(formatRefreshDone(1))
+    const n = sent.length
+    await handleMessage(ctx, { externalUserId: 'euAtomicRef', menuId: '', text: '包裹被摔坏了' })
+    const got = texts(sent, n)
+    const surprisePool = listAtomicLib('emotion/surprise').map((s) => atomicText('emotion/surprise/' + s))
+    const empathyPool = ['empathy_01', 'empathy_02', 'empathy_03'].map((s) => atomicText('business/packaging/' + s))
+    expect(got).toHaveLength(5)
+    expect(surprisePool).toContain(got[0])
+    expect(empathyPool).toContain(got[1])
+    expect(got.slice(2)).toEqual([...PHOTO3])
+    expect(got).not.toEqual([...PHOTO3])
     expect(got.join('')).not.toMatch(/订单号/)
   })
 })
