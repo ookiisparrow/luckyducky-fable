@@ -2,7 +2,7 @@
   "id": "packaging_damage_priority_short",
   "line": "packaging_damage",
   "style": "short",
-  "desc": "有单短句：P1 惊讶→道歉/共情→尽力 → P2 合照×3；严重时 P3 理赔可后挂",
+  "desc": "有单短句：P1 情绪综合 1 泡 → P2 合照 ask_photo_01 →（可选）P3 理赔；硬顶 ≤3",
   "requiresRecentOrder": true,
   "steps": [
     { "priority": 1, "lib": "emotion/surprise", "pick": "random_one" },

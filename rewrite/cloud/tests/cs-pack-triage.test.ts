@@ -111,7 +111,7 @@ describe('Config Pack 挂载', () => {
     )
     expect(topic).toBe('packaging')
     expect(node).toBe('photo')
-    expect(packMain.every((s) => line.includes(s))).toBe(true)
+    expect(line).toContain(packMain[0])
     expect(line).toBe(packagingFirstTouchBubbles(() => 0).join('\n'))
     expect(line).toMatch(/合照/)
     expect(line).not.toMatch(/订单号/)
@@ -121,7 +121,7 @@ describe('Config Pack 挂载', () => {
 
     const thinJev = composeLine(emptyFlow(), ev({ needStatus: 'greeting' }), '包裹被摔坏了', () => 0)
     expect(thinJev.topic).toBe('packaging')
-    expect(packMain.every((s) => thinJev.line.includes(s))).toBe(true)
+    expect(thinJev.line).toContain(packMain[0])
     expect(thinJev.line).toMatch(/合照/)
     expect(thinJev.line).not.toMatch(/订单号/)
     expect(thinJev.line).not.toBe('嗯？您慢慢说')
@@ -173,7 +173,15 @@ describe('状态机禁跳与交接包', () => {
 })
 
 describe('闸开编排吃 Pack', () => {
-  const JEV_KEYS = ['JEV_CS_ROUTE', 'TYPESAFE_API_KEY', 'WX_ENV_VERSION', 'TCB_ENV_VERSION', 'CS_TRIAL_REFRESH', 'CS_BUBBLE_GAP_MS'] as const
+  const JEV_KEYS = [
+    'JEV_CS_ROUTE',
+    'TYPESAFE_API_KEY',
+    'WX_ENV_VERSION',
+    'TCB_ENV_VERSION',
+    'CS_TRIAL_REFRESH',
+    'CS_BUBBLE_GAP_MS',
+    'CS_MAX_BUBBLES',
+  ] as const
   let fetchBackup: unknown
   beforeEach(() => {
     control.reset()
@@ -211,12 +219,12 @@ describe('闸开编排吃 Pack', () => {
     control.seed('kfIdentity', [{ _id: 'ext:euPack', openid: 'oPack' }])
     control.seed('orders', [{ _id: 'ord-euPack', id: 'ord-euPack', _openid: 'oPack', status: 'shipped', createdAt: Date.now() }])
     await handleMessage(ctx, { externalUserId: 'euPack', menuId: '', text: '包裹被摔坏了' })
-    expect(sent).toHaveLength(6)
+    expect(sent.length).toBeGreaterThanOrEqual(2)
+    expect(sent.length).toBeLessThanOrEqual(3)
     expect(sent.every((p) => p.msgtype === 'text')).toBe(true)
     const packMain = packScriptLines('aftersale_packaging')
     const got = sent.map((p) => String(p.text.content))
-    expect(got.slice(3)).toEqual(packMain)
-    expect(packMain.every((s) => got.includes(s))).toBe(true)
+    expect(got).toContain(packMain[0])
     const line = got.join('\n')
     expect(line).toMatch(/合照|入镜拍/)
     expect(line).not.toMatch(/订单号/)
@@ -272,9 +280,9 @@ describe('闸开编排吃 Pack', () => {
     await handleMessage(ctx, { externalUserId: 'euRefSmash', menuId: '', text: '包裹被摔坏了' })
     const packMain = packScriptLines('aftersale_packaging')
     const got = sent.slice(n).map((p) => String(p.text.content))
-    expect(got.slice(3)).toEqual(packMain)
-    expect(got).toHaveLength(6)
-    expect(packMain.every((s) => got.includes(s))).toBe(true)
+    expect(got).toContain(packMain[0])
+    expect(got.length).toBeGreaterThanOrEqual(2)
+    expect(got.length).toBeLessThanOrEqual(3)
     const line = got.join('\n')
     expect(line).toMatch(/合照|入镜拍/)
     expect(line).not.toMatch(/订单号/)

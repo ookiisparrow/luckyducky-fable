@@ -1,8 +1,10 @@
 /**
  * atomic-v1 测版挂接：按 route.json + sequences 取原子 .txt，全文 trim 后原样当一条气泡。
  * 查单门闩 / 多面 / 优先级组装 / 句型 short|long。构建打进 kfCallback，运行时不拉 GitHub。
+ * 装完后压到 ≤CS_MAX_BUBBLES（默认 3）：P1 情绪并 1 条，P2 只发 ask_photo_01，P3 理赔可留或并进业务条。
  * 不现编、不改写。正式闸关路径不走这里。
  */
+import { parseMaxBubbles } from './bubbles'
 import ASSETS from './csAtomicAssets.generated.json'
 
 export const PACKAGING_FIRST_TOUCH_ID = 'packaging_damage_first_touch'
@@ -154,21 +156,66 @@ function withEmotionAlways(seq: AtomicSequence, steps: AtomicStep[]): AtomicStep
   return [{ lib: emoLib, pick: 'random_one' }, ...steps]
 }
 
-function mergeByPriority(items: Array<{ priority: number; text: string }>, style: UtteranceStyle): string[] {
-  if (style !== 'long') return items.map((i) => i.text)
-  const out: string[] = []
-  let buf = ''
-  let pri = items.length ? items[0].priority : 0
+function groupByPriority(items: Array<{ priority: number; text: string }>): Array<{ priority: number; texts: string[] }> {
+  const out: Array<{ priority: number; texts: string[] }> = []
   for (const it of items) {
-    if (it.priority !== pri && buf) {
-      out.push(buf)
-      buf = ''
-    }
-    pri = it.priority
-    buf += it.text
+    const last = out[out.length - 1]
+    if (last && last.priority === it.priority) last.texts.push(it.text)
+    else out.push({ priority: it.priority, texts: [it.text] })
   }
-  if (buf) out.push(buf)
   return out
+}
+
+function pickPhotoBubble(texts: string[]): string {
+  const auth = atomicText('business/packaging/ask_photo_01')
+  return (auth && texts.find((t) => t === auth)) || texts[0] || ''
+}
+
+function finalizeBubbles(items: Array<{ priority: number; text: string }>, style: UtteranceStyle, max: number): string[] {
+  const groups = groupByPriority(items)
+  let bubbles: Array<{ priority: number; text: string }> = []
+  for (const g of groups) {
+    if (g.priority === 1) {
+      bubbles.push({ priority: 1, text: g.texts.join('') })
+      continue
+    }
+    if (g.priority === 2) {
+      const text = style === 'long' ? g.texts.join('') : pickPhotoBubble(g.texts)
+      if (text) bubbles.push({ priority: 2, text })
+      continue
+    }
+    if (style === 'long') {
+      bubbles.push({ priority: g.priority, text: g.texts.join('') })
+      continue
+    }
+    for (const text of g.texts) bubbles.push({ priority: g.priority, text })
+  }
+  if (bubbles.length > max) {
+    const extra = bubbles.filter((b) => b.priority >= 3)
+    let bizAt = -1
+    for (let i = bubbles.length - 1; i >= 0; i--) {
+      if (bubbles[i].priority === 2) {
+        bizAt = i
+        break
+      }
+    }
+    if (extra.length && bizAt >= 0) {
+      bubbles[bizAt] = { priority: 2, text: bubbles[bizAt].text + extra.map((e) => e.text).join('') }
+      bubbles = bubbles.filter((b) => b.priority < 3)
+    }
+  }
+  while (bubbles.length > max) {
+    let dropAt = bubbles.length - 1
+    let dropPri = bubbles[dropAt] ? bubbles[dropAt].priority : 0
+    for (let i = 0; i < bubbles.length; i++) {
+      if (bubbles[i].priority >= dropPri) {
+        dropPri = bubbles[i].priority
+        dropAt = i
+      }
+    }
+    bubbles.splice(dropAt, 1)
+  }
+  return bubbles.map((b) => b.text).filter(Boolean)
 }
 
 export function playSequence(id: string, rand: () => number = Math.random, ctx: AtomicPlayCtx = {}): string[] {
@@ -182,7 +229,7 @@ export function playSequence(id: string, rand: () => number = Math.random, ctx: 
     const pri = Number.isFinite(Number(raw.priority)) ? Number(raw.priority) : 1
     for (const text of stepBubbles(step, rand)) items.push({ priority: pri, text })
   }
-  return mergeByPriority(items, style)
+  return finalizeBubbles(items, style, parseMaxBubbles(process.env.CS_MAX_BUBBLES))
 }
 
 export function assemblePackagingBubbles(input: {
