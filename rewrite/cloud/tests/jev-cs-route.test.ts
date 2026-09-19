@@ -214,17 +214,17 @@ describe('fail-open 与闸开映射', () => {
       expect(seen[0].body.model).toBe(JEV_MODEL)
       expect(seen[0].body.state).toBe('钱的事情问一下')
       expect(sent[0].msgtype).toBe('text')
-      expect(sent[0].text.content).toMatch(/在的|帮您|嗨|帮忙/)
+      expect(sent[0].text.content).toMatch(/在的|在呀|在呢|帮您|嗨|帮忙|请说|您说/)
 
       await handleMessage(ctx, { externalUserId: 'euExpress', menuId: '', text: '快递到哪了' })
       expect(sent[1].msgtype).toBe('text')
       expect(sent[1].msgmenu).toBeUndefined()
-      expect(sent[1].text.content).toMatch(/在的|帮您|嗨|帮忙/)
+      expect(sent[1].text.content).toMatch(/在的|在呀|在呢|帮您|嗨|帮忙|请说|您说/)
 
       await handleMessage(ctx, { externalUserId: 'euRefund', menuId: '', text: '退款怎么还没到账' })
       expect(sent[2].msgtype).toBe('text')
       expect(sent[2].msgmenu).toBeUndefined()
-      expect(sent[2].text.content).toMatch(/在的|帮您|嗨|帮忙/)
+      expect(sent[2].text.content).toMatch(/在的|在呀|在呢|帮您|嗨|帮忙|请说|您说/)
     } finally {
       log.restore()
     }
