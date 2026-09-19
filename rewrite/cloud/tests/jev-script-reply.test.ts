@@ -238,6 +238,30 @@ describe('闸开话术状态机（mermaid + 1→4 + 表演）', () => {
     expect(line).not.toMatch(/转运中|预计还要几/)
     expect(line).not.toMatch(/简单说，|我查到了|结论是/)
   })
+
+  it('大白话：卡在「还想问啥」时打人工要走阶梯，打物流要拉回专题，不能反复问还有事吗', () => {
+    const stuck = {
+      ...emptyFlow(),
+      greeted: true,
+      restated: true,
+      promised: true,
+      solved: true,
+      topic: 'other' as const,
+      node: 'askNext' as const,
+    }
+    const human = composeLine(stuck, ev({ needStatus: 'greeting' }), '人工', () => 0)
+    expect(human.node).toBe('humanAsk')
+    expect(scriptPools().humanAskWhat).toContain(human.line)
+
+    const pack = composeLine(stuck, ev({ needStatus: 'packaging', orderStatus: 'delivered' }), '包裹压坏了', () => 0)
+    expect(pack.node).toBe('photo')
+    expect(pack.line).toMatch(/拍|照|图/)
+
+    const logi = composeLine(stuck, ev({ needStatus: 'logistics', orderStatus: 'shipped' }), '快递到哪了？', () => 0)
+    expect(logi.node).not.toBe('askNext')
+    expect(logi.node).not.toBe('answer')
+    expect(logi.line).not.toMatch(/还想问|还有问题|另外还|转运中|预计还要几/)
+  })
 })
 
 describe('闸开打字「人工」三次阶梯', () => {

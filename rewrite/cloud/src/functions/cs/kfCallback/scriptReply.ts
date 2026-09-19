@@ -151,7 +151,10 @@ function canEmitAnswer(r: JevRoute): boolean {
 }
 
 function flowForTopic(state: JevFlowState, r: JevRoute): JevFlowState {
-  if (state.topic && r.topic && state.topic !== r.topic && isTopicNeed(r.needStatus)) {
+  const switchTopic = !!(r.topic && state.topic !== r.topic && isTopicNeed(r.needStatus))
+  const wrapupNewNeed =
+    (state.node === 'askNext' || state.solved) && isTopicNeed(r.needStatus) && !canEmitAnswer(r)
+  if (switchTopic || wrapupNewNeed) {
     return {
       ...state,
       restated: false,
