@@ -154,7 +154,8 @@ function flowForTopic(state: JevFlowState, r: JevRoute): JevFlowState {
   const switchTopic = !!(r.topic && state.topic !== r.topic && isTopicNeed(r.needStatus))
   const wrapupNewNeed =
     (state.node === 'askNext' || state.solved) && isTopicNeed(r.needStatus) && !canEmitAnswer(r)
-  if (switchTopic || wrapupNewNeed) {
+  const greetingWrap = r.needStatus === 'greeting' && (state.node === 'askNext' || state.solved)
+  if (switchTopic || wrapupNewNeed || greetingWrap) {
     return {
       ...state,
       restated: false,
@@ -166,13 +167,41 @@ function flowForTopic(state: JevFlowState, r: JevRoute): JevFlowState {
   return state
 }
 
-/** 闸开自由文本明确要人工（边界逃生口，不扫业务专题）。 */
-export function wantsHuman(text: string): boolean {
-  const t = String(text || '')
-    .replace(/[\s!！。.~～?？,，、]/g, '')
+/** 只留汉字/字母数字，剥零宽、标点、emoji。长业务句留给 Jev，不在这里猜题。 */
+function foldHumanText(text: string): string {
+  return String(text || '')
+    .normalize('NFKC')
+    .replace(/[\u200B-\u200D\uFEFF\u2060\u180E]/g, '')
+    .replace(/[^\u4e00-\u9fffA-Za-z0-9]/g, '')
     .replace(/(谢谢|多谢|吧|哈|啊|呀|呢)+$/g, '')
+}
+
+/** 闸开短句要人工（边界逃生口）。长句中间提到「人工」不算。 */
+export function wantsHuman(text: string): boolean {
+  const t = foldHumanText(text)
   if (!t) return false
-  return /^(我)?(请?帮我?)?(想|要|麻烦)?(转接?|找|叫)?(一下)?人工(客服)?$/.test(t)
+  if (/^(我)?(请?帮我?)?(想|要|麻烦)?(转接?|找|叫)?(一下)?人工(客服)?$/.test(t)) return true
+  if (t.length <= 12 && /转人工|找人工|叫人工/.test(t)) return true
+  return t.length <= 6 && t.includes('人工')
+}
+
+function looksLogistics(text: string): boolean {
+  return /物流|快递|发货|运单|单号/.test(String(text || ''))
+}
+
+/** 短招呼、没具体事。长句里带「你好」不算。 */
+export function looksGreeting(text: string): boolean {
+  const t = foldHumanText(text)
+  if (!t || t.length > 8) return false
+  return /^(你好|您好|嗨嗨?|哈喽|在吗|在么|在不在|有人吗|hello|hi)$/i.test(t)
+}
+
+/** 卡在收尾或 Jev 把招呼/快递判薄时，用原文拉回专题。不覆盖包装/缺件。 */
+function evForScript(_state: JevFlowState, ev: JevResult, text: string): JevResult {
+  const need = ev.needStatus || 'other'
+  if (looksLogistics(text) && !isTopicNeed(need)) return { ...ev, needStatus: 'logistics' }
+  if (looksGreeting(text) && !isTopicNeed(need)) return { ...ev, needStatus: 'greeting' }
+  return ev
 }
 
 function isNegative(emotion: JevEmotionStatus): boolean {
@@ -250,13 +279,18 @@ export function actingOf(route: JevRoute, node: ScriptNode): Acting {
   return base
 }
 
-export function nextNode(state: JevFlowState, ev: JevResult, _text = ''): ScriptNode {
+export function nextNode(state: JevFlowState, ev: JevResult, text = ''): ScriptNode {
   const r = routeFromJev(state, ev)
   const s = flowForTopic(state, r)
+  if (r.needStatus === 'greeting') return 'greet'
+  if (looksGreeting(text) && !isTopicNeed(r.needStatus)) return 'greet'
+  const wrapupNewNeed =
+    (state.node === 'askNext' || state.solved) && isTopicNeed(r.needStatus) && !canEmitAnswer(r)
+  if (wrapupNewNeed && r.needStatus === 'logistics') return s.greeted ? 'promise' : 'greetIssue'
 
   // 1. 订单（最高）：没开场先按订单/有没有事走开场
   if (!s.greeted) {
-    if (r.needStatus === 'greeting' || (r.orderStatus === 'unknown' && !isTopicNeed(r.needStatus))) return 'greet'
+    if (r.orderStatus === 'unknown' && !isTopicNeed(r.needStatus)) return 'greet'
     return 'greetIssue'
   }
 
@@ -423,7 +457,8 @@ export function composeLine(
   text: string,
   rand: () => number = Math.random
 ): { line: string; next: JevFlowState; node: ScriptNode; topic: ScriptTopic; acting: Acting; checkpoint: ActingCheckpoint } {
-  const route = routeFromJev(state, ev)
+  const useEv = evForScript(state, ev, text)
+  const route = routeFromJev(state, useEv)
   if (wantsHuman(text)) {
     const n = state.humanAsks + 1
     const node: ScriptNode = n >= 3 ? 'human' : n === 1 ? 'humanAsk' : 'humanAsk2'
@@ -435,7 +470,7 @@ export function composeLine(
     return { line, next, node, topic: route.topic, acting, checkpoint: checkpointOf(node) }
   }
   const base = flowForTopic(state, route)
-  const node = nextNode({ ...base, topic: route.topic, orderStatus: route.orderStatus }, ev)
+  const node = nextNode({ ...base, topic: route.topic, orderStatus: route.orderStatus }, useEv, text)
   const acting = actingOf(route, node)
   const slots = { 需求: compressNeed(text) }
   let line = speak(node, acting, route.topic, ev, base.used, slots, rand)
@@ -451,7 +486,14 @@ export async function composeScriptReply(
   euid: string,
   text: string,
   ev: JevResult
-): Promise<{ text: string; node: ScriptNode; topic: ScriptTopic; acting: Acting; checkpoint: ActingCheckpoint } | null> {
+): Promise<{
+  text: string
+  node: ScriptNode
+  topic: ScriptTopic
+  acting: Acting
+  checkpoint: ActingCheckpoint
+  humanAsks: number
+} | null> {
   const id = 'jevflow:' + euid
   const got = await db
     .collection(COLLECTIONS.kfState)
@@ -473,5 +515,5 @@ export async function composeScriptReply(
     alert('anomaly', 'kfCallback', 'JEVFLOW_WRITE_FAIL', { euid })
     return null
   }
-  return { text: line, node, topic, acting, checkpoint }
+  return { text: line, node, topic, acting, checkpoint, humanAsks: next.humanAsks }
 }

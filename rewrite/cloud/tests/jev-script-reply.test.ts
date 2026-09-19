@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest'
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import { control } from 'wx-server-sdk'
 import { handleMessage, type DispatchCtx } from '../src/functions/cs/kfCallback/dispatch'
 import { parseNumberedLines, buildPools, pickLine, fillSlots, scriptPools } from '../src/functions/cs/kfCallback/scriptPool'
@@ -7,6 +7,7 @@ import {
   composeLine,
   emptyFlow,
   loadFlow,
+  looksGreeting,
   nextNode,
   persistableFlow,
   routeFromJev,
@@ -67,6 +68,8 @@ describe('话术库打包与取句', () => {
     expect(blob).not.toContain('api.github.com')
     expect(blob).not.toContain('raw.githubusercontent.com')
     expect(blob).toContain('bot情绪表演')
+    expect(pools.greet).toContain('嗨～在呢，有什么问题呢？')
+    expect(pools.greet).toContain('在的在的，请说。')
   })
 
   it('大白话：用过的句子先跳过；占位能填进去', () => {
@@ -258,9 +261,22 @@ describe('闸开话术状态机（mermaid + 1→4 + 表演）', () => {
     expect(pack.line).toMatch(/拍|照|图/)
 
     const logi = composeLine(stuck, ev({ needStatus: 'logistics', orderStatus: 'shipped' }), '快递到哪了？', () => 0)
+    expect(logi.node === 'greetIssue' || logi.node === 'promise').toBe(true)
     expect(logi.node).not.toBe('askNext')
     expect(logi.node).not.toBe('answer')
-    expect(logi.line).not.toMatch(/还想问|还有问题|另外还|转运中|预计还要几/)
+    expect(logi.line).not.toMatch(/还想问|还有问题|另外还|还有别的|还有吗|转运中|预计还要几/)
+
+    const logiWeird = composeLine(stuck, ev({ needStatus: 'greeting' }), '快递到哪了', () => 0)
+    expect(logiWeird.node).not.toBe('askNext')
+    expect(logiWeird.topic).toBe('logistics')
+    expect(logiWeird.line).not.toMatch(/还想问|还有问题|另外还|还有别的|还有吗/)
+
+    const hi = composeLine(stuck, ev({ needStatus: 'greeting' }), '你好', () => 0)
+    expect(hi.node).toBe('greet')
+    expect(scriptPools().greet).toContain(hi.line)
+    expect(hi.line).not.toMatch(/还有别的|还有没有|还需不需要|还想问|还有问题|另外还|还有吗/)
+    expect(hi.next.solved).toBe(false)
+    expect(hi.next.node).toBe('greet')
   })
 })
 
@@ -272,15 +288,28 @@ describe('闸开打字「人工」三次阶梯', () => {
     expect(wantsHuman('转接人工')).toBe(true)
     expect(wantsHuman('我要人工')).toBe(true)
     expect(wantsHuman('帮我转人工谢谢')).toBe(true)
+    expect(wantsHuman('人工\u200b')).toBe(true)
+    expect(wantsHuman('人工\u200b\u200b   ')).toBe(true)
+    expect(wantsHuman(' \u3000人工\uFEFF')).toBe(true)
+    expect(wantsHuman('「人工」')).toBe(true)
     expect(wantsHuman('快递到哪了')).toBe(false)
     expect(wantsHuman('你好')).toBe(false)
     expect(wantsHuman('测试')).toBe(false)
     expect(wantsHuman('我的包裹压坏了')).toBe(false)
+    expect(wantsHuman('这个订单要人工核对地址和运单还要改收货信息')).toBe(false)
+    expect(looksGreeting('你好')).toBe(true)
+    expect(looksGreeting('您好')).toBe(true)
+    expect(looksGreeting('嗨')).toBe(true)
+    expect(looksGreeting('在吗')).toBe(true)
+    expect(looksGreeting('你好～')).toBe(true)
+    expect(looksGreeting('快递到哪了')).toBe(false)
+    expect(looksGreeting('你好，我的快递到哪了还没收到')).toBe(false)
   })
 
   it('大白话：同会话 1 问怎么了、2 让直说、3 空句转人工', () => {
     const pools = scriptPools()
     const e = ev({ needStatus: 'greeting' })
+    expect(composeLine(emptyFlow(), e, '人工\u200b', () => 0).node).toBe('humanAsk')
     const a = composeLine(emptyFlow(), e, '人工', () => 0)
     expect(a.node).toBe('humanAsk')
     expect(a.line).toBe(pools.humanAskWhat[0])
@@ -412,23 +441,67 @@ describe('闸开编排发纯文本', () => {
     control.seed(COLLECTIONS.kfState, [
       { _id: 'jevflow:euStuckH', ...stuck },
       { _id: 'jevflow:euStuckL', ...stuck },
+      { _id: 'jevflow:euStuckL2', ...stuck },
+      { _id: 'jevflow:euStuckHz', ...stuck },
+      { _id: 'jevflow:euStuckHi', ...stuck },
     ])
     const pools = scriptPools()
     const { sent, ctx } = sendCollector()
-    ;(globalThis as any).fetch = jevOk('greeting')
+    const logSpy = vi.spyOn(console, 'log')
+    ;(globalThis as any).fetch = jevOk('logistics')
     await handleMessage(ctx, { externalUserId: 'euStuckH', menuId: '', text: '人工' })
     expect(pools.humanAskWhat).toContain(sent[0].text.content)
-    expect(String(sent[0].text.content)).not.toMatch(/还想问|还有问题|另外还/)
+    expect(String(sent[0].text.content)).not.toMatch(/还想问|还有问题|另外还|还有别的|还有吗/)
     expect(control.dump('csSession')).toEqual([])
+    expect(
+      logSpy.mock.calls.some(
+        (a) =>
+          a[0] === '[kf] humanLadder' &&
+          a[1] &&
+          (a[1] as { matched?: boolean }).matched === true &&
+          (a[1] as { node?: string }).node === 'humanAsk'
+      )
+    ).toBe(true)
 
-    ;(globalThis as any).fetch = jevOk('logistics')
+    await handleMessage(ctx, { externalUserId: 'euStuckHz', menuId: '', text: '人工\u200b  ' })
+    expect(pools.humanAskWhat).toContain(sent[1].text.content)
+    expect(String(sent[1].text.content)).not.toMatch(/还想问|还有问题|另外还|还有别的|还有吗/)
+
+    ;(globalThis as any).fetch = jevOk('greeting')
     await handleMessage(ctx, { externalUserId: 'euStuckL', menuId: '', text: '快递到哪了？' })
-    const second = String(sent[1].text.content)
-    expect(sent[1].msgtype).toBe('text')
-    expect(second).not.toMatch(/还想问|还有问题|另外还|转运中|预计还要几/)
+    const second = String(sent[2].text.content)
+    expect(sent[2].msgtype).toBe('text')
+    expect(second).not.toMatch(/还想问|还有问题|另外还|还有别的|还有吗|转运中|预计还要几/)
     const d = await db().collection(COLLECTIONS.kfState).doc('jevflow:euStuckL').get()
     expect(d.data.node).not.toBe('askNext')
     expect(d.data.topic).toBe('logistics')
+
+    await handleMessage(ctx, { externalUserId: 'euStuckL2', menuId: '', text: '快递到哪了' })
+    expect(String(sent[3].text.content)).not.toMatch(/还想问|还有问题|另外还|还有别的|还有吗/)
+    const d2 = await db().collection(COLLECTIONS.kfState).doc('jevflow:euStuckL2').get()
+    expect(d2.data.node).not.toBe('askNext')
+
+    await handleMessage(ctx, { externalUserId: 'euStuckHi', menuId: '', text: '你好' })
+    expect(pools.greet).toContain(sent[4].text.content)
+    expect(String(sent[4].text.content)).not.toMatch(/还有别的|还有没有|还需不需要|还想问|还有问题|另外还|还有吗/)
+    const dHi = await db().collection(COLLECTIONS.kfState).doc('jevflow:euStuckHi').get()
+    expect(dHi.data.node).toBe('greet')
+    expect(dHi.data.solved).toBe(false)
+    logSpy.mockRestore()
+  })
+
+  it('大白话：闸开打你好走打招呼开场库，不走还有吗收尾', async () => {
+    process.env.JEV_CS_ROUTE = '1'
+    process.env.TYPESAFE_API_KEY = 'test-key'
+    ;(globalThis as any).fetch = jevOk('other')
+    const pools = scriptPools()
+    const { sent, ctx } = sendCollector()
+    await handleMessage(ctx, { externalUserId: 'euHi', menuId: '', text: '你好' })
+    expect(sent[0].msgtype).toBe('text')
+    expect(pools.greet).toContain(sent[0].text.content)
+    expect(String(sent[0].text.content)).not.toMatch(/还有别的|还有没有|还需不需要|还想问|还有吗/)
+    const d = await db().collection(COLLECTIONS.kfState).doc('jevflow:euHi').get()
+    expect(d.data.node).toBe('greet')
   })
 
   it('大白话：闸关打字人工仍走旧根菜单，不入队', async () => {

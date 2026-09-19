@@ -38,7 +38,7 @@ export type ScriptPoolId =
   | 'humanSayDirect'
 
 const POOL_HINTS: { file: string; heading: RegExp; id: ScriptPoolId }[] = [
-  { file: 'docs/01-主流程7节点.md', heading: /问候询问需求/, id: 'greet' },
+  { file: 'docs/12-开场-打招呼无具体事.md', heading: /话术库/, id: 'greet' },
   { file: 'docs/01-主流程7节点.md', heading: /开场·已带问题/, id: 'greetIssue' },
   { file: 'docs/01-主流程7节点.md', heading: /快速回应反馈/, id: 'ack' },
   { file: 'docs/01-主流程7节点.md', heading: /复述顾客需求/, id: 'restate' },
