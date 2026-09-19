@@ -16,8 +16,7 @@ import {
 import { getDb } from '../src/kit'
 import { COLLECTIONS } from '@ldrw/shared'
 import SCRIPT_MD from '../src/functions/cs/kfCallback/scriptAssets.generated.json'
-import { packScriptLines } from '../src/functions/cs/kfCallback/csPack'
-import { packagingFirstTouchBubbles } from '../src/functions/cs/kfCallback/csAtomic'
+import { assemblePackagingBubbles, atomicText } from '../src/functions/cs/kfCallback/csAtomic'
 
 const db = () => getDb()
 const sendCollector = () => {
@@ -69,7 +68,7 @@ describe('话术库打包与取句', () => {
     const blob = JSON.stringify(SCRIPT_MD)
     expect(blob).not.toContain('api.github.com')
     expect(blob).not.toContain('raw.githubusercontent.com')
-    expect(blob).toContain('bot情绪表演')
+    expect(blob).toContain('嗨～在呢，有什么问题呢？')
     expect(pools.greet).toContain('嗨～在呢，有什么问题呢？')
     expect(pools.greet).toContain('在的在的，请说。')
   })
@@ -233,14 +232,14 @@ describe('闸开话术状态机（mermaid + 1→4 + 表演）', () => {
     const { line, node, topic } = composeLine(afterRefresh, smashed, '包裹被摔坏了', () => 0)
     expect(topic).toBe('packaging')
     expect(node).toBe('photo')
-    const packMain = packScriptLines('aftersale_packaging')
-    expect(packMain).toEqual([
-      '您拍一张包装和产品放一起的合照发我～',
-      '外箱破口和产品都入镜拍一张发过来。',
-      '包装+内物合照一张，我帮您看产品有没有事。',
-    ])
-    expect(line).toContain(packMain[0])
-    expect(line).toBe(packagingFirstTouchBubbles(() => 0).join('\n'))
+    const expectAtomic = assemblePackagingBubbles({
+      text: '包裹被摔坏了',
+      hasRecentOrder: true,
+      style: 'short',
+      rand: () => 0,
+    })
+    expect(line).toContain(atomicText('business/packaging/ask_photo_01'))
+    expect(line).toBe(expectAtomic.join('\n'))
     expect(line).toMatch(/合照/)
     expect(line).not.toMatch(/订单号/)
     expect(line).not.toBe('嗯？您慢慢说')
@@ -268,7 +267,7 @@ describe('闸开话术状态机（mermaid + 1→4 + 表演）', () => {
     )
     expect(topic).toBe('packaging')
     expect(node).toBe('photo')
-    expect(line).toContain(packScriptLines('aftersale_packaging')[0])
+    expect(line).toContain(atomicText('business/packaging/ask_photo_01'))
     expect(line).toMatch(/合照/)
     expect(line).not.toMatch(/订单号/)
     expect(line).not.toBe('嗯？您慢慢说')
@@ -332,7 +331,7 @@ describe('闸开话术状态机（mermaid + 1→4 + 表演）', () => {
 
     const pack = composeLine(stuck, ev({ needStatus: 'packaging', orderStatus: 'delivered' }), '包裹压坏了', () => 0)
     expect(pack.node).toBe('photo')
-    expect(pack.line).toContain(packScriptLines('aftersale_packaging')[0])
+    expect(pack.line).toContain(atomicText('business/packaging/ask_photo_01'))
     expect(pack.line).toMatch(/合照/)
     expect(pack.line).not.toMatch(/订单号/)
     expect(pack.line).not.toBe('嗯？您慢慢说')

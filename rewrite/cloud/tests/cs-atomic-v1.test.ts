@@ -4,7 +4,6 @@ import { handleMessage, kfUserHasRecentOrder, type DispatchCtx } from '../src/fu
 import { csTestAssumeRecentOrder } from '../src/functions/cs/kfCallback/trialRefresh'
 import { sendBubbles } from '../src/functions/cs/kfCallback/bubbles'
 import {
-  PACKAGING_FIRST_TOUCH_ID,
   PACKAGING_NO_ORDER_ID,
   PACKAGING_WITH_ORDER_SHORT_ID,
   assemblePackagingBubbles,
@@ -12,11 +11,9 @@ import {
   detectPackagingFacets,
   listAtomicLib,
   loadAtomicAssets,
-  packagingFirstTouchBubbles,
   playSequence,
   stitchUtterance,
 } from '../src/functions/cs/kfCallback/csAtomic'
-import { packScriptReply } from '../src/functions/cs/kfCallback/csPack'
 import { composeLine, emptyFlow } from '../src/functions/cs/kfCallback/scriptReply'
 import { formatRefreshDone } from '@ldrw/shared'
 import { getDb } from '../src/kit'
@@ -149,7 +146,8 @@ describe('atomic-v1 包装优先级组装', () => {
     expect(assets.route.styleDefault).toBe('short')
     expect(assets.sequences[PACKAGING_WITH_ORDER_SHORT_ID]).toBeTruthy()
     expect(assets.sequences[PACKAGING_NO_ORDER_ID]).toBeTruthy()
-    expect(assets.sequences[PACKAGING_FIRST_TOUCH_ID]).toBeTruthy()
+    expect(assets.sequences.packaging_damage_first_touch).toBeUndefined()
+    expect(assets.route.sequences && (assets.route.sequences as { firstTouchLegacy?: string }).firstTouchLegacy).toBeUndefined()
     expect(listAtomicLib('emotion/surprise')).toHaveLength(22)
     expect(listAtomicLib('emotion/apology')).toHaveLength(3)
     expect(listAtomicLib('emotion/empathy')).toHaveLength(3)
@@ -184,7 +182,7 @@ describe('atomic-v1 包装优先级组装', () => {
       '外箱破口和产品都入镜拍一张发过来。',
       '包装+内物合照一张，我帮您看产品有没有事。',
     ])
-    expect(packagingFirstTouchBubbles(() => 0)).toEqual(got)
+    expect(assemblePackagingBubbles({ text: '包裹被摔坏了', hasRecentOrder: true, style: 'short', rand: () => 0 })).toEqual(got)
   })
 
   it('大白话：无单只澄清/转人工，不发合照、不理赔', () => {
@@ -271,7 +269,7 @@ describe('atomic-v1 包装优先级组装', () => {
     expect(line).toContain(PHOTO1)
     expect(line).not.toMatch(/订单号/)
     expect(pieces).not.toEqual([...PHOTO3])
-    expect(line).not.toBe(packScriptReply('aftersale_packaging', [], () => 0))
+    expect(line).toBe(assemblePackagingBubbles({ text: ACCEPT, hasRecentOrder: true, style: 'short', rand: () => 0 }).join('\n'))
   })
 
   it('大白话：闸开有单说压烂，连发情绪综合→合照，约 3 泡', async () => {
@@ -283,7 +281,8 @@ describe('atomic-v1 包装优先级组装', () => {
     await handleMessage(ctx, { externalUserId: 'euAtomic1', menuId: '', text: ACCEPT })
     const got = texts(sent)
     expectCappedPackaging(got)
-    expect(got.join('\n')).not.toBe(packScriptReply('aftersale_packaging'))
+    expect(got.join('')).toContain(PHOTO1)
+    expect(got.join('')).not.toMatch(/订单号/)
   })
 
   it('大白话：闸开无单说压烂，只澄清/转人工，无合照', async () => {

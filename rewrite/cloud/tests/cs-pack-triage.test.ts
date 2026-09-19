@@ -12,18 +12,13 @@ import {
   handoffMissingFields,
   loadPackAssets,
   matchTriageRule,
-  packScriptLines,
   packSessionId,
-  parsePackScript,
   packagingMustNotAskOrderId,
-  packagingPhotoAsks,
-  packScriptReply,
-  pickPackScript,
   resolvePackScriptId,
   resolvePackagingMainScript,
   walkPackStates,
 } from '../src/functions/cs/kfCallback/csPack'
-import { packagingFirstTouchBubbles } from '../src/functions/cs/kfCallback/csAtomic'
+import { assemblePackagingBubbles, atomicText } from '../src/functions/cs/kfCallback/csAtomic'
 import { composeLine, emptyFlow, looksGreeting } from '../src/functions/cs/kfCallback/scriptReply'
 import { flowStateId, sessionEpochId } from '../src/functions/cs/kfCallback/trialRefresh'
 import { scriptPools } from '../src/functions/cs/kfCallback/scriptPool'
@@ -60,10 +55,8 @@ describe('Config Pack 挂载', () => {
     expect(blob).not.toContain('api.github.com')
     expect(blob).not.toContain('raw.githubusercontent.com')
     for (const id of PACK_REQUIRED_SCRIPTS) {
-      expect(packScriptLines(id).length, id).toBeGreaterThan(0)
-      expect(pickPackScript(id, [], () => 0).length, id).toBeGreaterThan(0)
+      expect(String(assets.scripts[id] || '').trim().length, id).toBeGreaterThan(0)
     }
-    expect(parsePackScript('# x\n1. 甲\n2. 乙').length).toBe(2)
   })
 
   it('大白话：Jev 判包装或原文说摔坏，都选到 Pack 包装/要图脚本', () => {
@@ -93,7 +86,11 @@ describe('Config Pack 挂载', () => {
     expect(r30 && r30.do_not_ask).toEqual(['order_id'])
     const photo = pack.slots_schema.slots.find((s) => s.name === 'severity_photo_hint')
     expect(photo && photo.required_for).toContain('packaging')
-    expect(photo && photo.ask_variants_packaging).toEqual(packagingPhotoAsks())
+    expect(photo && photo.ask_variants_packaging).toEqual([
+      atomicText('business/packaging/ask_photo_01'),
+      atomicText('business/packaging/ask_photo_02'),
+      atomicText('business/packaging/ask_photo_03'),
+    ])
     const order = pack.slots_schema.slots.find((s) => s.name === 'order_id')
     expect(order && order.required_for).not.toContain('packaging')
     expect(order && String(order.note || '')).toMatch(/禁止要订单号/)
@@ -101,8 +98,13 @@ describe('Config Pack 挂载', () => {
 
   it('大白话：刷新后「包裹被摔坏了」主句要合照，不要订单号，不要惊讶空壳', () => {
     const pools = scriptPools()
-    const packMain = packScriptLines('aftersale_packaging')
-    expect(packMain).toContain('您拍一张包装和产品放一起的合照发我～')
+    const expectAtomic = assemblePackagingBubbles({
+      text: '包裹被摔坏了',
+      hasRecentOrder: true,
+      style: 'short',
+      rand: () => 0,
+    })
+    expect(expectAtomic.join('')).toContain(atomicText('business/packaging/ask_photo_01'))
     const { line, node, topic } = composeLine(
       emptyFlow(),
       ev({ needStatus: 'packaging', emotionStatus: 'upset', orderStatus: 'delivered', topic: 'packaging' }),
@@ -111,8 +113,8 @@ describe('Config Pack 挂载', () => {
     )
     expect(topic).toBe('packaging')
     expect(node).toBe('photo')
-    expect(line).toContain(packMain[0])
-    expect(line).toBe(packagingFirstTouchBubbles(() => 0).join('\n'))
+    expect(line).toContain(atomicText('business/packaging/ask_photo_01'))
+    expect(line).toBe(expectAtomic.join('\n'))
     expect(line).toMatch(/合照/)
     expect(line).not.toMatch(/订单号/)
     expect(line).not.toBe('嗯？您慢慢说')
@@ -121,7 +123,7 @@ describe('Config Pack 挂载', () => {
 
     const thinJev = composeLine(emptyFlow(), ev({ needStatus: 'greeting' }), '包裹被摔坏了', () => 0)
     expect(thinJev.topic).toBe('packaging')
-    expect(thinJev.line).toContain(packMain[0])
+    expect(thinJev.line).toContain(atomicText('business/packaging/ask_photo_01'))
     expect(thinJev.line).toMatch(/合照/)
     expect(thinJev.line).not.toMatch(/订单号/)
     expect(thinJev.line).not.toBe('嗯？您慢慢说')
@@ -172,7 +174,7 @@ describe('状态机禁跳与交接包', () => {
   })
 })
 
-describe('闸开编排吃 Pack', () => {
+describe('闸开编排吃 atomic 包装', () => {
   const JEV_KEYS = [
     'JEV_CS_ROUTE',
     'TYPESAFE_API_KEY',
@@ -195,7 +197,7 @@ describe('闸开编排吃 Pack', () => {
     for (const k of JEV_KEYS) delete process.env[k]
   })
 
-  it('大白话：闸开说包裹摔坏，回 Pack 要图句，并记下会话状态', async () => {
+  it('大白话：闸开说包裹摔坏，回 atomic 要图句，并记下会话状态', async () => {
     process.env.JEV_CS_ROUTE = '1'
     process.env.TYPESAFE_API_KEY = 'test-key'
     ;(globalThis as any).fetch = async () => ({
@@ -222,9 +224,8 @@ describe('闸开编排吃 Pack', () => {
     expect(sent.length).toBeGreaterThanOrEqual(2)
     expect(sent.length).toBeLessThanOrEqual(3)
     expect(sent.every((p) => p.msgtype === 'text')).toBe(true)
-    const packMain = packScriptLines('aftersale_packaging')
     const got = sent.map((p) => String(p.text.content))
-    expect(got).toContain(packMain[0])
+    expect(got).toContain(atomicText('business/packaging/ask_photo_01'))
     const line = got.join('\n')
     expect(line).toMatch(/合照|入镜拍/)
     expect(line).not.toMatch(/订单号/)
@@ -278,9 +279,8 @@ describe('闸开编排吃 Pack', () => {
     expect(sent[1].text.content).toBe(formatRefreshDone(1))
     const n = sent.length
     await handleMessage(ctx, { externalUserId: 'euRefSmash', menuId: '', text: '包裹被摔坏了' })
-    const packMain = packScriptLines('aftersale_packaging')
     const got = sent.slice(n).map((p) => String(p.text.content))
-    expect(got).toContain(packMain[0])
+    expect(got).toContain(atomicText('business/packaging/ask_photo_01'))
     expect(got.length).toBeGreaterThanOrEqual(2)
     expect(got.length).toBeLessThanOrEqual(3)
     const line = got.join('\n')

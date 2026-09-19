@@ -1,7 +1,7 @@
 /**
  * Config Pack lucky-ducky-2026-09-19 挂进测版运行时（T2）。
- * 构建打进 kfCallback，运行时不拉 GitHub。Jev/原文 → triage_rules → script id。
- * 旧 cs-scripts 只当 flavor；包装破损主句走 atomic-v1 门闩+优先级组装，Pack 脚本仍供槽位/其它线。
+ * 构建打进 kfCallback，运行时不拉 GitHub。Jev/原文 → triage_rules → 会话/交接（script id / lastScript）。
+ * 包装破损对客正文只走 atomic-v1 assemblePackagingBubbles；Pack .txt 不发给顾客。
  */
 
 import { COLLECTIONS } from '@ldrw/shared'
@@ -120,35 +120,6 @@ export function loadPackAssets(): PackAssets {
   return assets
 }
 
-export function parsePackScript(raw: string): string[] {
-  const out: string[] = []
-  for (const line of String(raw || '').split(/\r?\n/)) {
-    const t = line.trim()
-    if (!t || t.startsWith('#')) continue
-    const m = /^\d+[\.、]\s+(.+)$/.exec(t)
-    out.push(m ? m[1] : t)
-  }
-  return out
-}
-
-export function packScriptLines(scriptId: string): string[] {
-  return parsePackScript(assets.scripts[scriptId] || '')
-}
-
-export function pickPackScript(scriptId: string, used: string[] = [], rand: () => number = Math.random): string {
-  const pool = packScriptLines(scriptId)
-  const unused = pool.filter((l) => !used.includes(l))
-  const list = unused.length ? unused : pool
-  if (!list.length) return ''
-  return list[Math.floor(rand() * list.length)] || list[0]
-}
-
-/** 包装破损：一次发出全部合照句（不抽一句）。其它脚本仍抽一句。 */
-export function packScriptReply(scriptId: string, used: string[] = [], rand: () => number = Math.random): string {
-  if (scriptId === 'aftersale_packaging') return packScriptLines(scriptId).join('\n')
-  return pickPackScript(scriptId, used, rand)
-}
-
 export function looksPackagingDamage(text: string): boolean {
   return PACKAGING_RE.test(String(text || ''))
 }
@@ -259,13 +230,6 @@ export function resolvePackagingMainScript(ev: JevResult | null | undefined, tex
   if (!looksPackagingDamage(text) && String((ev && ev.needStatus) || '') !== 'packaging' && String((ev && ev.topic) || '') !== 'packaging')
     return ''
   return 'aftersale_packaging'
-}
-
-export function packagingPhotoAsks(): string[] {
-  const slot = (assets.slots_schema.slots || []).find((s) => s.name === 'severity_photo_hint')
-  const variants = slot && slot.ask_variants_packaging ? slot.ask_variants_packaging.filter(Boolean) : []
-  const fromScript = packScriptLines('aftersale_packaging')
-  return [...new Set(fromScript.concat(variants))]
 }
 
 /** 实现铁律：packaging 不得向用户要订单号（规则残留 order_id 也滤掉）。 */

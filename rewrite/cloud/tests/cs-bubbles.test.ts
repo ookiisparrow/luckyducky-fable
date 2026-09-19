@@ -8,17 +8,16 @@ import {
   sendBubbles,
   splitBubbles,
 } from '../src/functions/cs/kfCallback/bubbles'
-import { packScriptLines, packScriptReply } from '../src/functions/cs/kfCallback/csPack'
-import { packagingFirstTouchBubbles } from '../src/functions/cs/kfCallback/csAtomic'
+import { assemblePackagingBubbles, atomicText } from '../src/functions/cs/kfCallback/csAtomic'
 import { composeLine, emptyFlow } from '../src/functions/cs/kfCallback/scriptReply'
 import { formatRefreshDone } from '@ldrw/shared'
 import { getDb } from '../src/kit'
 import { scriptPools } from '../src/functions/cs/kfCallback/scriptPool'
 
 const PHOTO3 = [
-  '您拍一张包装和产品放一起的合照发我～',
-  '外箱破口和产品都入镜拍一张发过来。',
-  '包装+内物合照一张，我帮您看产品有没有事。',
+  atomicText('business/packaging/ask_photo_01'),
+  atomicText('business/packaging/ask_photo_02'),
+  atomicText('business/packaging/ask_photo_03'),
 ] as const
 
 const db = () => getDb()
@@ -135,11 +134,14 @@ describe('切分短句', () => {
 })
 
 describe('包装破损三句合照气泡', () => {
-  it('大白话：Pack 包装脚本一次给出三句，不抽一句', () => {
-    expect(packScriptLines('aftersale_packaging')).toEqual([...PHOTO3])
-    expect(packScriptReply('aftersale_packaging', [], () => 0)).toBe(PHOTO3.join('\n'))
-    expect(packScriptReply('aftersale_quality', [], () => 0)).not.toContain('\n')
-    const expect5 = packagingFirstTouchBubbles(() => 0)
+  it('大白话：对客包装走 atomic 短句序，合照钉 ask_photo 原文', () => {
+    expect(PHOTO3[0]).toBe('您拍一张包装和产品放一起的合照发我～')
+    const expect5 = assemblePackagingBubbles({
+      text: '包裹被摔坏了',
+      hasRecentOrder: true,
+      style: 'short',
+      rand: () => 0,
+    })
     const { line, node } = composeLine(
       emptyFlow(),
       {

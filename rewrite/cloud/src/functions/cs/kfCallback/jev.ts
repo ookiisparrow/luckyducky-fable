@@ -210,21 +210,6 @@ export function parseJevBody(body: any): JevResult | null {
   }
 }
 
-/** Jev 科室 → 旧关键词类别（闸关菜单路仍用；闸开总分流不再靠这张表弹气泡）。 */
-export function mapJevDepartment(department: string): 'aftersale' | 'activation' | 'tutorial' | null {
-  if (department === 'billing') return 'aftersale'
-  if (department === 'technical') return 'activation'
-  if (department === 'sales') return 'tutorial'
-  return null
-}
-
-export function jevHitWord(department: string): string {
-  if (department === 'billing') return '售后'
-  if (department === 'technical') return '课程'
-  if (department === 'sales') return '教程'
-  return '该分类'
-}
-
 function envVersion(): string {
   return String(process.env.WX_ENV_VERSION || process.env.TCB_ENV_VERSION || '').toLowerCase()
 }
