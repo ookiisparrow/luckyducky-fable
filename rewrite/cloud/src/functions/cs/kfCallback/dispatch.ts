@@ -1,6 +1,6 @@
 import { COLLECTIONS } from '@ldrw/shared'
 import { alert, transition, sendAgentCard, AGENT_DESK_URL } from '../../../kit'
-import { jevHitWord, logJevEvidence, mapJevDepartment, tryJevClassify } from './jev'
+import { JEV_FAIL_OPEN_TEXT, loadJevGate, logJevEvidence, tryJevClassify } from './jev'
 import { composeScriptReply } from './scriptReply'
 
 /**
@@ -623,14 +623,14 @@ export async function handleMessage(ctx: DispatchCtx, incoming: Incoming): Promi
   const r: Route = incoming.menuId
     ? route(incoming.menuId)
     : await (async () => {
-        const hit = recognize(incoming.text)
-        // 体验/开发闸开才打 Jev；正式/闸关走旧关键词。Jev 挂了 fail-open 回关键词/根菜单。
-        const ev = await tryJevClassify(db, incoming.text)
-        if (ev) {
-          const cat = mapJevDepartment(ev.department)
-          const stateLen = String(incoming.text || '').length
-          if (!hit) {
+        // 闸开：自由文本一律 Jev + 话术库，旧关键词气泡不参与。挂了发短句，不回菜单。
+        // 闸关：今天的关键词/根菜单兜底，不打话术路径。
+        const gate = await loadJevGate(db)
+        if (gate.on) {
+          const ev = await tryJevClassify(db, incoming.text)
+          if (ev) {
             const scripted = await composeScriptReply(db, incoming.externalUserId, incoming.text, ev)
+            const stateLen = String(incoming.text || '').length
             if (scripted && scripted.node === 'human') {
               logJevEvidence(ev, scripted.topic, {
                 stateLen,
@@ -651,12 +651,11 @@ export async function handleMessage(ctx: DispatchCtx, incoming: Incoming): Promi
               })
               return { type: 'text' as const, content: scripted.text }
             }
-            logJevEvidence(ev, cat, { stateLen })
-            if (cat) return { type: 'menu' as const, content: menuFor(cat, jevHitWord(ev.department)) }
-          } else {
-            logJevEvidence(ev, hit.cat, { stateLen, skipped: 'keyword' })
+            logJevEvidence(ev, null, { stateLen })
           }
+          return { type: 'text' as const, content: JEV_FAIL_OPEN_TEXT }
         }
+        const hit = recognize(incoming.text)
         return hit
           ? ({ type: 'menu', content: menuFor(hit.cat, hit.word) } as Route)
           : ({ type: 'menu', content: rootMenu() } as Route)

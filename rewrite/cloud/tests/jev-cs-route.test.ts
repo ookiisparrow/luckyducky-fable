@@ -1,10 +1,12 @@
-// Jev 挂在企微自由文本分流：映射 / fail-open / 闸关=旧路（正式关键词不变）。
+// Jev 挂在企微自由文本分流：闸开=总分流（关键词不抢路）/ 闸关=旧菜单。
 import { describe, it, expect, beforeEach, afterEach } from 'vitest'
 import { control } from 'wx-server-sdk'
 import { handleMessage, type DispatchCtx } from '../src/functions/cs/kfCallback/dispatch'
 import {
+  JEV_FAIL_OPEN_TEXT,
   JEV_MODEL,
   JEV_URL,
+  jevHitWord,
   jevRequestBody,
   mapJevDepartment,
   parseJevBody,
@@ -105,6 +107,9 @@ describe('Jev 请求体与映射', () => {
     expect(mapJevDepartment('technical')).toBe('activation')
     expect(mapJevDepartment('sales')).toBe('tutorial')
     expect(mapJevDepartment('unknown')).toBe(null)
+    expect(jevHitWord('billing')).toBe('售后')
+    expect(jevHitWord('technical')).toBe('课程')
+    expect(jevHitWord('sales')).toBe('教程')
     expect(parseJevBody(probeBody)).toEqual({ model: 'jev-1.13.0', urgency: 0.98, department: 'billing' })
     expect(
       parseJevBody({
@@ -156,8 +161,22 @@ describe('闸关 = 旧关键词路', () => {
   })
 })
 
+const captureInfo = () => {
+  const lines: string[] = []
+  const orig = console.info
+  console.info = (...a: unknown[]) => {
+    lines.push(a.map((x) => (typeof x === 'string' ? x : JSON.stringify(x))).join(' '))
+  }
+  return {
+    lines,
+    restore() {
+      console.info = orig
+    },
+  }
+}
+
 describe('fail-open 与闸开映射', () => {
-  it('大白话：Jev 挂了顾客仍走旧路——关键词还在，闲聊仍回根菜单', async () => {
+  it('大白话：闸开时 Jev 挂了发短句请重试，不弹旧关键词/根菜单', async () => {
     process.env.JEV_CS_ROUTE = '1'
     process.env.TYPESAFE_API_KEY = 'test-key'
     ;(globalThis as any).fetch = async () => {
@@ -165,12 +184,16 @@ describe('fail-open 与闸开映射', () => {
     }
     const { sent, ctx } = sendCollector()
     await handleMessage(ctx, { externalUserId: 'eu1', menuId: '', text: '快递到哪了' })
-    expect(sent[0].msgmenu.head_content).toContain('快递')
+    expect(sent[0].msgtype).toBe('text')
+    expect(sent[0].msgmenu).toBeUndefined()
+    expect(sent[0].text.content).toBe(JEV_FAIL_OPEN_TEXT)
     await handleMessage(ctx, { externalUserId: 'eu1', menuId: '', text: '在吗' })
-    expect(sent[1].msgmenu.head_content).toContain('想咨询什么')
+    expect(sent[1].msgtype).toBe('text')
+    expect(sent[1].msgmenu).toBeUndefined()
+    expect(String(sent[1].text.content || '')).not.toContain('想咨询什么')
   })
 
-  it('大白话：闸开且 Jev 回了——没关键词发话术纯文本，不弹气泡；打中关键词仍听关键词', async () => {
+  it('大白话：闸开且 Jev 回了——自由文本一律话术纯文本；打中快递/退款也不走旧菜单', async () => {
     process.env.JEV_CS_ROUTE = '1'
     process.env.TYPESAFE_API_KEY = 'test-key'
     const seen: { url: string; auth?: string; body?: any }[] = []
@@ -182,17 +205,33 @@ describe('fail-open 与闸开映射', () => {
       })
       return { ok: true, status: 200, json: async () => probeBody }
     }
+    const log = captureInfo()
     const { sent, ctx } = sendCollector()
-    await handleMessage(ctx, { externalUserId: 'eu1', menuId: '', text: '钱的事情问一下' })
-    expect(seen[0].url).toBe(JEV_URL)
-    expect(seen[0].auth).toBe('Bearer test-key')
-    expect(seen[0].body.model).toBe(JEV_MODEL)
-    expect(seen[0].body.state).toBe('钱的事情问一下')
-    expect(sent[0].msgtype).toBe('text')
-    expect(sent[0].text.content).toMatch(/在的|帮您|嗨|帮忙/)
+    try {
+      await handleMessage(ctx, { externalUserId: 'eu1', menuId: '', text: '钱的事情问一下' })
+      expect(seen[0].url).toBe(JEV_URL)
+      expect(seen[0].auth).toBe('Bearer test-key')
+      expect(seen[0].body.model).toBe(JEV_MODEL)
+      expect(seen[0].body.state).toBe('钱的事情问一下')
+      expect(sent[0].msgtype).toBe('text')
+      expect(sent[0].text.content).toMatch(/在的|帮您|嗨|帮忙/)
 
-    await handleMessage(ctx, { externalUserId: 'eu1', menuId: '', text: '快递到哪了' })
-    expect(sent[1].msgmenu.head_content).toContain('快递') // 关键词优先
+      await handleMessage(ctx, { externalUserId: 'euExpress', menuId: '', text: '快递到哪了' })
+      expect(sent[1].msgtype).toBe('text')
+      expect(sent[1].msgmenu).toBeUndefined()
+      expect(sent[1].text.content).toMatch(/在的|帮您|嗨|帮忙/)
+
+      await handleMessage(ctx, { externalUserId: 'euRefund', menuId: '', text: '退款怎么还没到账' })
+      expect(sent[2].msgtype).toBe('text')
+      expect(sent[2].msgmenu).toBeUndefined()
+      expect(sent[2].text.content).toMatch(/在的|帮您|嗨|帮忙/)
+    } finally {
+      log.restore()
+    }
+    const blob = log.lines.join('\n')
+    expect(blob).toContain('[kf] jev')
+    expect(blob).not.toContain('keyword')
+    expect(blob).not.toMatch(/"skip"\s*:\s*"keyword"/)
   })
 
   it('大白话：取证日志只记模型号和科室，不带密钥和 Bearer', async () => {
