@@ -2,6 +2,20 @@
   "line": "packaging_damage",
   "businessLib": "business/packaging",
   "emotionAlways": true,
-  "emotionLibBySignal": { "surprise": "emotion/surprise", "default": "emotion/surprise" },
-  "pick": { "business": "sequence_or_random_pool", "emotion": "random_one" }
+  "emotionLibBySignal": {
+    "surprise": "emotion/surprise",
+    "apology": "emotion/apology",
+    "try_hard": "emotion/try_hard",
+    "default": "emotion/surprise"
+  },
+  "gate": {
+    "recentOrderRequiredForBusiness": true,
+    "noOrderSequence": "packaging_damage_no_order"
+  },
+  "sequences": {
+    "withOrderShort": "packaging_damage_priority_short",
+    "firstTouchLegacy": "packaging_damage_first_touch"
+  },
+  "styleDefault": "short",
+  "pick": { "business": "sequence_or_priority", "emotion": "random_one" }
 }

@@ -1,0 +1,14 @@
+{
+  "id": "packaging_damage_priority_short",
+  "line": "packaging_damage",
+  "style": "short",
+  "desc": "有单短句：P1 惊讶→道歉/共情→尽力 → P2 合照×3；严重时 P3 理赔可后挂",
+  "requiresRecentOrder": true,
+  "steps": [
+    { "priority": 1, "lib": "emotion/surprise", "pick": "random_one" },
+    { "priority": 1, "lib": "emotion/apology", "pick": "random_one", "orLib": "business/packaging", "orPool": ["empathy_01","empathy_02","empathy_03"] },
+    { "priority": 1, "lib": "emotion/try_hard", "pick": "random_one" },
+    { "priority": 2, "lib": "business/packaging", "pick": "all", "files": ["ask_photo_01","ask_photo_02","ask_photo_03"] },
+    { "priority": 3, "lib": "business/claim", "pick": "random_one", "when": "severity_high_or_logistics_damage" }
+  ]
+}

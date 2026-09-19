@@ -1,0 +1,10 @@
+{
+  "id": "packaging_damage_no_order",
+  "line": "packaging_damage",
+  "desc": "无近期订单：仅 P0 澄清/转人工，不发合照",
+  "requiresRecentOrder": false,
+  "steps": [
+    { "priority": 0, "lib": "gate/no_order", "pick": "random_one", "pool": ["clarify_01","clarify_02"] },
+    { "priority": 0, "lib": "gate/no_order", "pick": "one", "files": ["human_01"], "optional": true }
+  ]
+}

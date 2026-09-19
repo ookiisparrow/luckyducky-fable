@@ -208,12 +208,14 @@ describe('闸开编排吃 Pack', () => {
       }),
     })
     const { sent, ctx } = sendCollector()
+    control.seed('kfIdentity', [{ _id: 'ext:euPack', openid: 'oPack' }])
+    control.seed('orders', [{ _id: 'ord-euPack', id: 'ord-euPack', _openid: 'oPack', status: 'shipped', createdAt: Date.now() }])
     await handleMessage(ctx, { externalUserId: 'euPack', menuId: '', text: '包裹被摔坏了' })
-    expect(sent).toHaveLength(5)
+    expect(sent).toHaveLength(6)
     expect(sent.every((p) => p.msgtype === 'text')).toBe(true)
     const packMain = packScriptLines('aftersale_packaging')
     const got = sent.map((p) => String(p.text.content))
-    expect(got.slice(2)).toEqual(packMain)
+    expect(got.slice(3)).toEqual(packMain)
     expect(packMain.every((s) => got.includes(s))).toBe(true)
     const line = got.join('\n')
     expect(line).toMatch(/合照|入镜拍/)
@@ -259,6 +261,10 @@ describe('闸开编排吃 Pack', () => {
       }),
     })
     const { sent, ctx } = sendCollector()
+    control.seed('kfIdentity', [{ _id: 'ext:euRefSmash', openid: 'oRefSmash' }])
+    control.seed('orders', [
+      { _id: 'ord-euRefSmash', id: 'ord-euRefSmash', _openid: 'oRefSmash', status: 'shipped', createdAt: Date.now() },
+    ])
     await handleMessage(ctx, { externalUserId: 'euRefSmash', menuId: '', text: '刷新' })
     await handleMessage(ctx, { externalUserId: 'euRefSmash', menuId: 'trial:refresh:ok', text: '确认重来' })
     expect(sent[1].text.content).toBe(formatRefreshDone(1))
@@ -266,8 +272,8 @@ describe('闸开编排吃 Pack', () => {
     await handleMessage(ctx, { externalUserId: 'euRefSmash', menuId: '', text: '包裹被摔坏了' })
     const packMain = packScriptLines('aftersale_packaging')
     const got = sent.slice(n).map((p) => String(p.text.content))
-    expect(got.slice(2)).toEqual(packMain)
-    expect(got).toHaveLength(5)
+    expect(got.slice(3)).toEqual(packMain)
+    expect(got).toHaveLength(6)
     expect(packMain.every((s) => got.includes(s))).toBe(true)
     const line = got.join('\n')
     expect(line).toMatch(/合照|入镜拍/)

@@ -4,7 +4,7 @@
  * 顾客情绪 ≠ bot 表演；道歉仅 responsibility=merchant。不编政策。
  * 会话记在 kfState `jevflow:<euid>`；data 不带 _id（真 sdk reject）。
  * Pack lucky-ducky-2026-09-19/scripts 已挂进运行时（T2）：Jev/原文 → triage_rules → Pack 主句。
- * 旧 cs-scripts 表演池只当 flavor；包装破损首次进线走 atomic-v1 sequence（惊讶→同理→合照×3），不抽 Pack 池、不现编。
+ * 旧 cs-scripts 表演池只当 flavor；包装破损走 atomic-v1 门闩+优先级组装（有单 short：惊讶→道歉/共情→尽力→合照×3），不抽 Pack 池、不现编。
  */
 
 import { COLLECTIONS } from '@ldrw/shared'
@@ -25,7 +25,7 @@ import {
   resolvePackagingMainScript,
   writeHandoffStub,
 } from './csPack'
-import { packagingFirstTouchBubbles } from './csAtomic'
+import { assemblePackagingBubbles, stitchUtterance, type UtteranceStyle } from './csAtomic'
 
 export type ScriptNode =
   | 'greet'
@@ -85,6 +85,9 @@ export type JevFlowState = {
   coopCount: number
   humanAsks: number
   used: string[]
+  stitchText: string
+  stitchAt: number
+  utteranceStyle: UtteranceStyle | ''
 }
 
 export type JevRoute = {
@@ -115,6 +118,9 @@ const FLOW_KEYS = [
   'coopCount',
   'humanAsks',
   'used',
+  'stitchText',
+  'stitchAt',
+  'utteranceStyle',
 ] as const
 
 const TOPIC_NEEDS: readonly ScriptTopic[] = [
@@ -402,6 +408,9 @@ export function emptyFlow(): JevFlowState {
     coopCount: 0,
     humanAsks: 0,
     used: [],
+    stitchText: '',
+    stitchAt: 0,
+    utteranceStyle: '',
   }
 }
 
@@ -417,6 +426,9 @@ export function loadFlow(raw: unknown): JevFlowState {
   next.used = Array.isArray(src.used) ? (src.used as string[]) : []
   next.coopCount = Number.isFinite(Number(src.coopCount)) ? Number(src.coopCount) : 0
   next.humanAsks = Number.isFinite(Number(src.humanAsks)) ? Number(src.humanAsks) : 0
+  next.stitchText = String(src.stitchText || '')
+  next.stitchAt = Number.isFinite(Number(src.stitchAt)) ? Number(src.stitchAt) : 0
+  next.utteranceStyle = src.utteranceStyle === 'long' || src.utteranceStyle === 'short' ? src.utteranceStyle : ''
   return next
 }
 
@@ -455,10 +467,21 @@ export function applyNode(
   }
 }
 
-function packagingPieces(topic: ScriptTopic, ev: JevResult, text: string, rand: () => number): string[] {
+export type ComposeCtx = {
+  hasRecentOrder?: boolean
+  style?: UtteranceStyle
+}
+
+function packagingPieces(topic: ScriptTopic, ev: JevResult, text: string, rand: () => number, ctx?: ComposeCtx): string[] {
   const scriptId = resolvePackagingMainScript(ev, text)
   if (!scriptId && topic !== 'packaging' && ev.needStatus !== 'packaging') return []
-  return packagingFirstTouchBubbles(rand)
+  return assemblePackagingBubbles({
+    text,
+    hasRecentOrder: !ctx || ctx.hasRecentOrder !== false,
+    style: (ctx && ctx.style) || 'short',
+    severity: ev.severity,
+    rand,
+  })
 }
 
 function packMain(topic: ScriptTopic, ev: JevResult, text: string, _used: string[], rand: () => number): string {
@@ -476,7 +499,7 @@ function speak(
   text = ''
 ): string {
   const packBody = packMain(topic, ev, text, used, rand)
-  // 包装破损走 atomic sequence（惊讶→同理→合照×3），不跟表演空壳粘、不抽旧 Pack
+  // 包装破损走 atomic 门闩+优先级组装，不跟表演空壳粘、不抽旧 Pack
   if (packBody.includes('\n')) return packBody
   const body = packBody || fillSlots(pickLine(poolFor(node, topic, ev), used, undefined, rand), slots)
   if (node === 'human') return ''
@@ -500,7 +523,8 @@ export function composeLine(
   state: JevFlowState,
   ev: JevResult,
   text: string,
-  rand: () => number = Math.random
+  rand: () => number = Math.random,
+  ctx?: ComposeCtx
 ): {
   line: string
   next: JevFlowState
@@ -526,10 +550,16 @@ export function composeLine(
   const node = nextNode({ ...base, topic: route.topic, orderStatus: route.orderStatus }, useEv, text)
   const acting = actingOf(route, node)
   const slots = { 需求: compressNeed(text), ...factSlots(useEv) }
-  const atomic = packagingPieces(route.topic, useEv, text, rand)
+  const atomic = packagingPieces(route.topic, useEv, text, rand, ctx)
   let line = atomic.length ? atomic.join('\n') : speak(node, acting, route.topic, useEv, base.used, slots, rand, text)
   if ((looksPackagingDamage(text) || route.topic === 'packaging') && /订单号/.test(line)) {
-    line = packagingFirstTouchBubbles(rand).join('\n')
+    line = assemblePackagingBubbles({
+      text,
+      hasRecentOrder: !ctx || ctx.hasRecentOrder !== false,
+      style: (ctx && ctx.style) || 'short',
+      severity: useEv.severity,
+      rand,
+    }).join('\n')
   }
   if (!line && node !== 'human') line = fillSlots(pickLine('ack', base.used, undefined, rand), slots)
   const next = applyNode(base, node, route.topic, route.orderStatus, acting)
@@ -543,7 +573,8 @@ export async function composeScriptReply(
   db: any,
   euid: string,
   text: string,
-  ev: JevResult
+  ev: JevResult,
+  ctx?: ComposeCtx
 ): Promise<{
   text: string
   node: ScriptNode
@@ -560,7 +591,16 @@ export async function composeScriptReply(
     .get()
     .catch(() => null)
   const prev = loadFlow(got && got.data)
-  const { line, next, node, topic, acting, checkpoint, pieces } = composeLine(prev, ev, text)
+  const now = Date.now()
+  const stitched = stitchUtterance(prev.stitchText, prev.stitchAt, text, now)
+  const style: UtteranceStyle = prev.utteranceStyle === 'long' ? 'long' : 'short'
+  const { line, next, node, topic, acting, checkpoint, pieces } = composeLine(prev, ev, stitched, Math.random, {
+    hasRecentOrder: !ctx || ctx.hasRecentOrder !== false,
+    style: (ctx && ctx.style) || style,
+  })
+  next.stitchText = stitched
+  next.stitchAt = now
+  next.utteranceStyle = (ctx && ctx.style) || style
   if (!line && node !== 'human') return null
   let wrote = true
   await db
@@ -574,17 +614,17 @@ export async function composeScriptReply(
     alert('anomaly', 'kfCallback', 'JEVFLOW_WRITE_FAIL', { euid })
     return null
   }
-  const pack = await loadAndAdvancePack(db, euid, ev, text, {
+  const pack = await loadAndAdvancePack(db, euid, ev, stitched, {
     toHuman: node === 'human',
-    userAsksHuman: wantsHuman(text),
+    userAsksHuman: wantsHuman(stitched),
   })
   if (node === 'human') {
     const epoch = await readEpochForHandoff(db, euid)
     await writeHandoffStub(db, euid, {
       intent: pack.session.intent || topic || 'unknown',
       filledSlots: pack.session.slots,
-      summary: String(text || '').slice(0, 160),
-      failReason: wantsHuman(text) ? 'user_asks_human' : pack.hit && pack.hit.action === 'human' ? pack.hit.ruleId : 'collect_rounds_ge_3',
+      summary: String(stitched || '').slice(0, 160),
+      failReason: wantsHuman(stitched) ? 'user_asks_human' : pack.hit && pack.hit.action === 'human' ? pack.hit.ruleId : 'collect_rounds_ge_3',
       epoch,
     })
   }

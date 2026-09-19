@@ -124,6 +124,7 @@ describe('包装破损三句合照气泡', () => {
     )
     expect(node).toBe('photo')
     expect(line).toBe(expect5.join('\n'))
+    expect(expect5.length).toBeGreaterThanOrEqual(6)
     expect(PHOTO3.every((s) => line.includes(s))).toBe(true)
     expect(line).not.toMatch(/订单号/)
     expect(line).not.toBe('嗯？您慢慢说')
@@ -135,10 +136,12 @@ describe('包装破损三句合照气泡', () => {
     process.env.TYPESAFE_API_KEY = 'test-key'
     ;(globalThis as any).fetch = jevPackaging
     const { sent, ctx } = sendCollector()
+    control.seed('kfIdentity', [{ _id: 'ext:euBub1', openid: 'oBub1' }])
+    control.seed('orders', [{ _id: 'ord-euBub1', id: 'ord-euBub1', _openid: 'oBub1', status: 'shipped', createdAt: Date.now() }])
     await handleMessage(ctx, { externalUserId: 'euBub1', menuId: '', text: '包裹被摔坏了' })
-    expect(sent).toHaveLength(5)
+    expect(sent).toHaveLength(6)
     expect(sent.every((p) => p.msgtype === 'text')).toBe(true)
-    expect(texts(sent).slice(2)).toEqual([...PHOTO3])
+    expect(texts(sent).slice(3)).toEqual([...PHOTO3])
     expect(texts(sent).join('')).not.toMatch(/订单号/)
     expect(texts(sent)).not.toEqual([...PHOTO3])
   })
@@ -149,14 +152,16 @@ describe('包装破损三句合照气泡', () => {
     process.env.TYPESAFE_API_KEY = 'test-key'
     ;(globalThis as any).fetch = jevPackaging
     const { sent, ctx } = sendCollector()
+    control.seed('kfIdentity', [{ _id: 'ext:euBubRef', openid: 'oBubRef' }])
+    control.seed('orders', [{ _id: 'ord-euBubRef', id: 'ord-euBubRef', _openid: 'oBubRef', status: 'shipped', createdAt: Date.now() }])
     await handleMessage(ctx, { externalUserId: 'euBubRef', menuId: '', text: '刷新' })
     await handleMessage(ctx, { externalUserId: 'euBubRef', menuId: 'trial:refresh:ok', text: '确认重来' })
     expect(sent[1].text.content).toBe(formatRefreshDone(1))
     const n = sent.length
     expect(n).toBe(2)
     await handleMessage(ctx, { externalUserId: 'euBubRef', menuId: '', text: '包裹被摔坏了' })
-    expect(texts(sent, n).slice(2)).toEqual([...PHOTO3])
-    expect(sent.length - n).toBe(5)
+    expect(texts(sent, n).slice(3)).toEqual([...PHOTO3])
+    expect(sent.length - n).toBe(6)
     expect(texts(sent, n).join('')).not.toMatch(/订单号/)
   })
 
