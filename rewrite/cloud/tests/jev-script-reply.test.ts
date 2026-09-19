@@ -16,6 +16,7 @@ import {
 import { getDb } from '../src/kit'
 import { COLLECTIONS } from '@ldrw/shared'
 import SCRIPT_MD from '../src/functions/cs/kfCallback/scriptAssets.generated.json'
+import { packScriptLines } from '../src/functions/cs/kfCallback/csPack'
 
 const db = () => getDb()
 const sendCollector = () => {
@@ -231,9 +232,17 @@ describe('闸开话术状态机（mermaid + 1→4 + 表演）', () => {
     const { line, node, topic } = composeLine(afterRefresh, smashed, '包裹被摔坏了', () => 0)
     expect(topic).toBe('packaging')
     expect(node).toBe('photo')
-    expect(pools.packPhoto.some((s) => line.includes(s))).toBe(true)
+    const packMain = packScriptLines('aftersale_packaging')
+    expect(packMain).toEqual([
+      '您拍一张包装和产品放一起的合照发我～',
+      '外箱破口和产品都入镜拍一张发过来。',
+      '包装+内物合照一张，我帮您看产品有没有事。',
+    ])
+    expect(packMain.some((s) => line.includes(s))).toBe(true)
+    expect(line).toMatch(/合照/)
+    expect(line).not.toMatch(/订单号/)
+    expect(line).not.toBe('嗯？您慢慢说')
     expect(pools.surprise.includes(line)).toBe(false)
-    expect(line).toMatch(/拍|照|图|合照/)
 
     for (const need of ['missing', 'course', 'photo_needed'] as const) {
       const got = composeLine(
@@ -257,7 +266,9 @@ describe('闸开话术状态机（mermaid + 1→4 + 表演）', () => {
     )
     expect(topic).toBe('packaging')
     expect(node).toBe('photo')
-    expect(line).toMatch(/拍|照|图/)
+    expect(line).toMatch(/合照/)
+    expect(line).not.toMatch(/订单号/)
+    expect(line).not.toBe('嗯？您慢慢说')
     expect(line).not.toMatch(/简单说，|我查到了|结论是|我先帮您确认一下，确认后回您/)
   })
 
@@ -318,7 +329,9 @@ describe('闸开话术状态机（mermaid + 1→4 + 表演）', () => {
 
     const pack = composeLine(stuck, ev({ needStatus: 'packaging', orderStatus: 'delivered' }), '包裹压坏了', () => 0)
     expect(pack.node).toBe('photo')
-    expect(pack.line).toMatch(/拍|照|图/)
+    expect(pack.line).toMatch(/合照/)
+    expect(pack.line).not.toMatch(/订单号/)
+    expect(pack.line).not.toBe('嗯？您慢慢说')
 
     const logi = composeLine(stuck, ev({ needStatus: 'logistics', orderStatus: 'shipped' }), '快递到哪了？', () => 0)
     expect(logi.node === 'greetIssue' || logi.node === 'promise').toBe(true)

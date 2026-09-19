@@ -1,0 +1,2 @@
+# aftersale_product_course
+1. 课程打不开的话，说一下卡在哪一步，有报错就截一张图。
