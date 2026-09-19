@@ -11,7 +11,14 @@ import {
   sessionEpochId,
   trialRefreshDenyStatus,
 } from '../src/functions/cs/kfCallback/trialRefresh'
-import { CS_PACK_ID, CS_REFRESH_COPY, CS_REFRESH_RESET, CS_SELF_HEAL, formatRefreshDone } from '@ldrw/shared'
+import {
+  CS_DESIGN_BASELINE,
+  CS_PACK_ID,
+  CS_REFRESH_COPY,
+  CS_REFRESH_RESET,
+  CS_SELF_HEAL,
+  formatRefreshDone,
+} from '@ldrw/shared'
 import { main as adminApi } from '../src/functions/adminApi/index'
 import { sha } from '../src/functions/adminApi/lib'
 import { getDb } from '../src/kit'
@@ -259,6 +266,7 @@ describe('管理端 API', () => {
 describe('配置包真相', () => {
   it('大白话：自修 P1 必须人点，任何一级都没有自动落库；刷新只清会话层', () => {
     expect(CS_PACK_ID).toBe('lucky-ducky-2026-09-19')
+    expect(CS_DESIGN_BASELINE).toBe('v0.3.1')
     expect(CS_SELF_HEAL.customerFacing).toBe(false)
     expect(CS_SELF_HEAL.severity.P1.auto_apply).toBe(false)
     expect(CS_SELF_HEAL.severity.P1.human_click_apply_required).toBe(true)
