@@ -1,5 +1,5 @@
 <script setup lang="ts">
-// 商品管理（design/console.pen S11 视觉·M3 UI 批3）：页头+流水线副标+筛选 chip（真计数）+ 搜索（按名）
+// 商品管理：页头+流水线副标+筛选 chip（真计数）+ 搜索（按名）
 // + 三态表格（关联课程/规格·图列 + 5 步上新进度圆点）+ 编辑器（整档 round-trip·图片压缩·危操作两步确认）。
 // 「5 步上新进度」——cards/courses/qrcodes 后端 listDrafts bounded join 派生（视频/卡片/批次态）。
 import { ref, computed, onMounted, onBeforeUnmount, watch, nextTick } from 'vue'

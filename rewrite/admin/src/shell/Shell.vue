@@ -1,11 +1,10 @@
 <script setup lang="ts">
-// 壳布局（照 design/控制台.pen 侧栏 nsvaZ 重写·M-adminImpl 批F）：248px 白侧栏（右 $line 分线）、
+// 壳布局：248px 白侧栏（右 $line 分线）、
 // 鸭徽 logo「运营控制台」、「导航」小标题、顶层（数据看板=独立项·其余=可展开组；上新与店面内容拆开）、
 // 底部管理员条。进上新向导路由切「按步直达」聚焦步导航（决策§27②·lib/nav）。
 //
-// IA 归置说明（交付时待用户确认）：设计把「商品与上新 / 进销存」画成单项工作流入口，但现实现各有
-// 6 / 5 个子页——为让 30 页全可达（守卫 rw-admin-nav-route-synced 要求 nav↔route 双向同步）且不丢功能，
-// 此二者暂做成可展开组；IA 收尾定稿后可收成纯工作流入口。NAV 每个 path 都内联在此（守卫扫本文件）。
+// 现侧栏即活 IA：看板独立项，其余六组可展开（商品与上新 / 店面内容 / 订单履约 / 客服 360 / 进销存 / 系统）。
+// 「商品与上新」「进销存」做成展开组，好让全部子页可达（守卫 rw-admin-nav-route-synced 要求 nav↔route 双向同步）。NAV 每个 path 都内联在此。
 import { ref, computed, type Component } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import {

@@ -1,8 +1,6 @@
 <script setup lang="ts">
-// 客服会话（设计语言一致性·M3 UI 批13 + 批 B6 深链预填）：按客户检索时间轴 + 质检报表（样本口径诚实标注）。
-// 深链预填（批 B6·本页原无 route.query 读取能力·新增最小实现）：Csat.vue 差评行「查会话」
-// router.push({path:'/conversations', query:{externalUserId}}) 跳转过来——挂载时读 route.query.externalUserId/
-// openid 预填输入框并自动检索一次（同 Batches.vue/Cards.vue 既有「props(嵌入) || route.query(深链) || 空」范式）。
+// 客服会话：按客户检索时间轴 + 质检报表（样本口径诚实标注）。
+// 深链：满意度差评行「查会话」带 ?externalUserId（或 openid）跳来，挂载时预填并自动检索一次。
 import { ref, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
 import { Search, RotateCcw, ClipboardCheck, RefreshCw } from 'lucide-vue-next'
