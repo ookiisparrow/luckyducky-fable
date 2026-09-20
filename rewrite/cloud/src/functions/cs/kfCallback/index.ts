@@ -38,7 +38,7 @@ async function ensureKfIdentity(db: any, token: string, euid: string): Promise<v
       console.log('[kf-bind] no-unionid via batchget（顾客没绑开放平台/没授权）')
       return
     }
-    const u = await db.collection('users').where({ unionid }).limit(1).get().catch(() => ({ data: [] }))
+    const u = await db.collection(COLLECTIONS.users).where({ unionid }).limit(1).get().catch(() => ({ data: [] }))
     const openid = u.data && u.data[0] && u.data[0]._openid
     if (!openid) {
       console.log('[kf-bind] unionid 不在 users（该顾客没登录过小程序·或与小程序不同开放平台主体）')
