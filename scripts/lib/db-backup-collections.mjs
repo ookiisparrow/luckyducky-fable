@@ -24,7 +24,7 @@ export const DEFAULT_COLLECTIONS = [
 
 // 明文凭证集合（见 rewrite/cloud/src/kit/secureConfig.ts）——默认排除，避免备份文件本身
 // 变成一份新的泄漏面；需要时须显式 --include-secrets 加回。
-export const SECRET_COLLECTIONS = ['secureConfig']
+const SECRET_COLLECTIONS = ['secureConfig']
 
 // 纯函数：给 CLI argv 解析结果，返回最终导出集合清单。
 // 无 --collections → DEFAULT_COLLECTIONS；有 → 按逗号切分（不校验集合是否真实存在，交给
