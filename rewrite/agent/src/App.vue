@@ -41,6 +41,9 @@ onMounted(async () => {
   --ld-bg: #ffffff;
   --ld-bg-lilac: #fcfaff;
   --ld-bg-faint: #fafafa;
+  --ld-red: #d54941;
+  --ld-amber: #b9770e;
+  --ld-red-line: #f0c0ba;
   --ld-radius: 12px;
 }
 * {
