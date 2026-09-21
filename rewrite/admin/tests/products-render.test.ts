@@ -120,6 +120,111 @@ describe('Products.vue 销量输入（#119 ①·后台手填）', () => {
   })
 })
 
+describe('Products.vue 编辑器价格块与在售同步入口（#198 #199）', () => {
+  it('大白话：价格/划线价/销量单独成一块，写明先存草稿顾客才看见；在售编辑器主按钮是「同步到小程序」', async () => {
+    listDraftsMock.mockReset().mockResolvedValue({
+      ok: true,
+      list: [{ id: 'p1', name: '在售款', price: '99', sold: 0, skus: [], images: [], params: [], detailSections: [], kit: [] }],
+      urls: {},
+      listed: { p1: true },
+      hasVideo: {},
+      cardFinal: {},
+      hasBatch: {},
+    })
+    const { wrapper } = await mountWithRouter()
+    await flushPromises()
+    const editBtn = wrapper.findAll('button').find((b) => b.text() === '编辑')
+    await editBtn!.trigger('click')
+    await flushPromises()
+    expect(wrapper.find('.price-sales').exists()).toBe(true)
+    expect(wrapper.text()).toContain('先存草稿，上架后顾客才看见')
+    const editorSync = wrapper.findAll('.editor-ops button').find((b) => b.text() === '同步到小程序')
+    expect(editorSync).toBeTruthy()
+    await editorSync!.trigger('click')
+    await flushPromises()
+    expect(publishProductMock).not.toHaveBeenCalled()
+    expect(wrapper.findAll('.editor-ops button').some((b) => b.text() === '确认同步？顾客将看到新价格/新图')).toBe(true)
+  })
+})
+
+describe('Products.vue 已下架：同步草稿 ≠ 恢复销售（#211）', () => {
+  function unlistedList() {
+    return {
+      ok: true,
+      list: [{ id: 'p1', name: '已下架款', price: '99', skus: [], images: [], params: [], detailSections: [], kit: [] }],
+      urls: {},
+      listed: { p1: false },
+      hasVideo: {},
+      cardFinal: {},
+      hasBatch: {},
+    }
+  }
+
+  it('大白话：已下架主区同时有「同步草稿」和「恢复销售」；恢复两步才调 republish，且绝不调 publishProduct', async () => {
+    listDraftsMock.mockReset().mockResolvedValue(unlistedList())
+    republishProductMock.mockReset().mockResolvedValue({ ok: true })
+    const { wrapper } = await mountWithRouter()
+    await flushPromises()
+    const sync = wrapper.findAll('.ld-tr button').find((b) => b.text() === '同步草稿')
+    const restore = wrapper.findAll('.ld-tr button').find((b) => b.text() === '恢复销售')
+    expect(sync).toBeTruthy()
+    expect(restore).toBeTruthy()
+    expect(wrapper.findAll('.ld-tr button').some((b) => b.text() === '同步到小程序')).toBe(false)
+
+    await restore!.trigger('click')
+    await flushPromises()
+    expect(republishProductMock).not.toHaveBeenCalled()
+    expect(wrapper.findAll('.ld-tr button').some((b) => b.text().includes('上次上架页'))).toBe(true)
+
+    const confirmRestore = wrapper.findAll('.ld-tr button').find((b) => b.text().includes('上次上架页'))
+    await confirmRestore!.trigger('click')
+    await flushPromises()
+    expect(republishProductMock).toHaveBeenCalledTimes(1)
+    expect(republishProductMock).toHaveBeenCalledWith('p1')
+    expect(publishProductMock).not.toHaveBeenCalled()
+  })
+
+  it('大白话：已下架点「同步草稿」两步才调 publishProduct，不调 republish（恢复不会悄悄改价）', async () => {
+    listDraftsMock.mockReset().mockResolvedValue(unlistedList())
+    republishProductMock.mockReset().mockResolvedValue({ ok: true })
+    const { wrapper } = await mountWithRouter()
+    await flushPromises()
+    const findSync = () => wrapper.findAll('.ld-tr button').find((b) => b.text() === '同步草稿' || b.text().includes('商品仍停售'))
+    await findSync()!.trigger('click')
+    await flushPromises()
+    expect(publishProductMock).not.toHaveBeenCalled()
+    await findSync()!.trigger('click')
+    await flushPromises()
+    expect(publishProductMock).toHaveBeenCalledTimes(1)
+    expect(publishProductMock).toHaveBeenCalledWith('p1')
+    expect(republishProductMock).not.toHaveBeenCalled()
+  })
+})
+
+describe('Products.vue 在售同步确认写清新价/新图（#199）', () => {
+  it('大白话：在售第一次点「同步到小程序」只武装，确认文案写顾客将看到新价格/新图，不再说上架', async () => {
+    listDraftsMock.mockReset().mockResolvedValue({
+      ok: true,
+      list: [{ id: 'p1', name: '在售款', price: '99', skus: [], images: [], params: [], detailSections: [], kit: [] }],
+      urls: {},
+      listed: { p1: true },
+      hasVideo: {},
+      cardFinal: {},
+      hasBatch: {},
+    })
+    const { wrapper } = await mountWithRouter()
+    await flushPromises()
+    const btn = wrapper.findAll('.ld-tr button').find((b) => b.text() === '同步到小程序')
+    expect(btn).toBeTruthy()
+    await btn!.trigger('click')
+    await flushPromises()
+    expect(publishProductMock).not.toHaveBeenCalled()
+    const confirm = wrapper.findAll('.ld-tr button').find((b) => b.text() === '确认同步？顾客将看到新价格/新图')
+    expect(confirm).toBeTruthy()
+    expect(wrapper.text()).not.toMatch(/重新上架|确认上架？/)
+  })
+})
+
 describe('Products.vue 上架两步确认（twoStep：doPublish）', () => {
   it('大白话：筹备中商品第一次点「同步到小程序」只武装不调用，第二次点「确认同步到小程序？」才恰好调用一次 publishProduct(id)', async () => {
     const { wrapper } = await mountWithRouter()

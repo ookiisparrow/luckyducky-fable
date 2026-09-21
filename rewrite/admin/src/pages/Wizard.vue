@@ -5,8 +5,22 @@
 import { ref, computed, onMounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { Store, ArrowLeft, ChevronLeft, ChevronRight, Check } from 'lucide-vue-next'
-import { listDrafts, publishProduct, saveDraft } from '../api/products'
-import { productSteps, productState, basicsMissing, wizardCanPublish, freshDraft, publishErrorText, type StepDot } from '../lib/mapProducts'
+import { listDrafts, publishProduct, republishProduct, saveDraft } from '../api/products'
+import {
+  productSteps,
+  productState,
+  basicsMissing,
+  wizardCanPublish,
+  freshDraft,
+  publishErrorText,
+  COURSE_NE_PRODUCT,
+  draftSyncLabel,
+  draftSyncConfirm,
+  restoreSaleLabel,
+  restoreSaleConfirm,
+  draftSyncUnlistedOk,
+  type StepDot,
+} from '../lib/mapProducts'
 import { launchErrorText } from '../lib/mapSystem'
 import { wizardStepFromQuery, WIZARD_STEPS, WIZARD_STEP_MAX } from '../lib/nav'
 import { isUploadLocked } from '../lib/uploadLock'
@@ -33,6 +47,7 @@ let msgLoadFail = false // 当前 banner 是否为「加载失败」——回刷
 const message = ref('')
 const busy = ref(false)
 const pubConfirm = ref(false)
+const restoreArmed = ref(false)
 const createdDraftId = ref('') // /launch 刚建档后首包偶发读不到新档时，区分「暂未同步」与真不存在
 
 const STEP_NAMES = WIZARD_STEPS.map((s) => s.label)
@@ -69,6 +84,7 @@ async function reloadProduct() {
     return
   }
   pubConfirm.value = false // 刷新即复位危险态（P1·防旧武装的「确认同步」残留、重进一击直发·批3 规格）
+  restoreArmed.value = false
   loadError.value = false
   const r: any = await listDrafts()
   if (!r.ok) {
@@ -131,11 +147,31 @@ async function shelve() {
   const r: any = await publishProduct(id.value)
   busy.value = false
   if (r.ok) {
-    message.value = '已同步到小程序，打开小程序即可看到该商品'
+    message.value = state.value === 'unlisted' ? draftSyncUnlistedOk() : '已同步到小程序，打开小程序即可看到该商品'
     msgLoadFail = false // 这是动作反馈·非加载失败——随后的 reloadProduct 成功不得把它当 stale banner 清掉（病根#14）
     void reloadProduct()
   } else {
     message.value = publishErrorText(r.error)
+    msgLoadFail = false
+  }
+}
+
+async function restoreSale() {
+  if (busy.value || !id.value || state.value !== 'unlisted') return
+  if (!restoreArmed.value) {
+    restoreArmed.value = true
+    return
+  }
+  restoreArmed.value = false
+  busy.value = true
+  const r: any = await republishProduct(id.value)
+  busy.value = false
+  if (r.ok) {
+    message.value = '已恢复销售。若刚改过价格或图，请确认已经先点过「同步草稿」'
+    msgLoadFail = false
+    void reloadProduct()
+  } else {
+    message.value = '恢复失败：' + String(r.error || '')
     msgLoadFail = false
   }
 }
@@ -164,6 +200,7 @@ async function createDraft() {
 // 切步 / 从 /launch 建档后换成带编号路由 → 刷新进度真值 + 收起同步二次确认
 watch(id, () => {
   pubConfirm.value = false
+  restoreArmed.value = false
   if (id.value) {
     const same = !!(product.value && String(product.value.id || product.value._id) === id.value)
     if (!same) loading.value = true // 换编号才转圈；同档切步不撕编辑器
@@ -177,6 +214,7 @@ watch(id, () => {
 
 watch(step, async () => {
   pubConfirm.value = false
+  restoreArmed.value = false
   if (id.value) {
     await settleAllSaves()
     void reloadProduct()
@@ -239,7 +277,10 @@ onMounted(() => {
         <Badge v-if="missing.length" tone="red">同步到小程序还差：{{ missing.join('、') }}</Badge>
         <UiButton :disabled="!canPublish || busy" :title="canPublish ? '' : '补齐封面、名称、价格和规格后才能同步到小程序'" @click="shelve">
           <Store v-if="!busy" :size="15" :stroke-width="1.8" />
-          {{ busy ? '同步中…' : pubConfirm ? '确认同步到小程序？' : '同步到小程序' }}
+          {{ busy ? '同步中…' : pubConfirm ? draftSyncConfirm(state) : draftSyncLabel(state) }}
+        </UiButton>
+        <UiButton v-if="state === 'unlisted'" variant="ghost" :disabled="busy" @click="restoreSale">
+          {{ restoreArmed ? restoreSaleConfirm() : restoreSaleLabel() }}
         </UiButton>
       </PageHeader>
 
@@ -280,7 +321,10 @@ onMounted(() => {
           </div>
           <Products v-else-if="step === 2" embed :wizard-product-id="id" :wizard-slice="2" @saved="reloadProduct" />
           <Products v-else-if="step === 3" embed :wizard-product-id="id" :wizard-slice="3" @saved="reloadProduct" />
-          <Courses v-else-if="step === 4" embed :wizard-course-id="courseId" @saved="reloadProduct" />
+          <div v-else-if="step === 4" class="step4">
+            <p class="course-split">{{ COURSE_NE_PRODUCT }}</p>
+            <Courses embed :wizard-course-id="courseId" :course-published="!!(extras.hasVideo && extras.hasVideo[courseId])" @saved="reloadProduct" />
+          </div>
           <div v-else-if="step === 5" class="step5">
             <section class="step5-sec">
               <header class="step5-head">
@@ -495,6 +539,19 @@ onMounted(() => {
   margin: 0 0 12px;
   font-size: 14px;
   color: var(--ld-content);
+}
+.step4 {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.course-split {
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: var(--ld-radius-sm);
+  background: var(--ld-bg-amber-soft);
+  color: var(--ld-content);
+  font-size: 12.5px;
 }
 .identity p {
   margin: 0 0 8px;

@@ -61,7 +61,7 @@ describe('5 步文案/顺序（封面并进第 1 步、卡片上传并进第 5 �
       '创建草稿并上传封面图',
       '商品图集与标题文案',
       '规格、价格与详情页',
-      '上传并发布教学视频',
+      '有视频文件 ≠ 课已发布；材料包可先卖',
       '卡面素材与批次二维码',
     ])
     expect(WIZARD_STEPS.every((s) => !s.label.includes('设计'))).toBe(true)
@@ -84,6 +84,7 @@ describe('控制台顶栏 + 侧栏步提示（Magic Patterns 打磨·不编同�
     expect(shell).not.toContain('编辑排序') // 假 chip（即将支持、无 handler）不进生产侧栏
     expect(wiz).toContain('class="rail-card"')
     expect(wiz).toContain('这五件事互不等同')
+    expect(wiz).toContain('COURSE_NE_PRODUCT')
     expect(wiz).toContain('卡片素材')
     expect(wiz).toContain('二维码批次')
   })

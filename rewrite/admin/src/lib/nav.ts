@@ -44,6 +44,6 @@ export const WIZARD_STEPS: WizardStep[] = [
   { n: 1, label: '新建与封面', hint: '创建草稿并上传封面图' },
   { n: 2, label: '图片与名字', hint: '商品图集与标题文案' },
   { n: 3, label: '详情信息', hint: '规格、价格与详情页' },
-  { n: 4, label: '课程视频', hint: '上传并发布教学视频' },
+  { n: 4, label: '课程视频', hint: '有视频文件 ≠ 课已发布；材料包可先卖' },
   { n: 5, label: '卡片与二维码', hint: '卡面素材与批次二维码' },
 ]

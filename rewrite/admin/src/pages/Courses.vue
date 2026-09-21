@@ -21,7 +21,7 @@ import UiButton from '../components/ui/Button.vue'
 
 // 嵌入模式（上新向导步 4 复用·向后兼容·独立 /courses?courseId 用法不传 props 行为不变）：
 // embed=true 隐页头/手输课程号工具条·wizardCourseId 覆盖 route.query.courseId。
-const props = defineProps<{ embed?: boolean; wizardCourseId?: string }>()
+const props = defineProps<{ embed?: boolean; wizardCourseId?: string; coursePublished?: boolean }>()
 const emit = defineEmits<{ saved: [] }>()
 const route = useRoute()
 const router = useRouter()
@@ -433,6 +433,10 @@ onMounted(() => {
 
     <p v-if="message" class="status">{{ message }}</p>
     <p v-if="progress" class="uploading ld-uploading">{{ progress }}</p>
+    <p v-if="embed" class="course-marks" aria-label="视频文件与课程发布是两件事">
+      <span class="course-mark" :class="{ on: stats.done > 0 }">{{ stats.done > 0 ? '有视频文件' : '还没有视频文件' }}</span>
+      <span class="course-mark" :class="{ on: coursePublished }">{{ coursePublished ? '课已发布' : '课还没发布' }}</span>
+    </p>
 
     <template v-if="course">
       <!-- 课程信息 / 视频进度 / 自动保存 / 发布 -->
@@ -564,6 +568,23 @@ onMounted(() => {
   height: 100%;
   background: var(--ld-brand);
   border-radius: 999px;
+}
+.course-marks {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 0;
+}
+.course-mark {
+  padding: 3px 8px;
+  border-radius: var(--ld-radius-sm);
+  font-size: 12px;
+  background: var(--ld-bg-grey);
+  color: var(--ld-content-2);
+}
+.course-mark.on {
+  background: var(--ld-bg-green-soft);
+  color: var(--ld-green);
 }
 .from-pub {
   margin: 10px 0 0;

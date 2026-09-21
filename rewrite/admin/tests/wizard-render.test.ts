@@ -5,15 +5,17 @@ import { mount, flushPromises } from '@vue/test-utils'
 import { createRouter, createMemoryHistory } from 'vue-router'
 import { freshDraft } from '../src/lib/mapProducts'
 
-const { listDraftsMock, saveDraftMock, publishProductMock } = vi.hoisted(() => ({
+const { listDraftsMock, saveDraftMock, publishProductMock, republishProductMock } = vi.hoisted(() => ({
   listDraftsMock: vi.fn(),
   saveDraftMock: vi.fn(),
   publishProductMock: vi.fn(),
+  republishProductMock: vi.fn(),
 }))
 vi.mock('../src/api/products', () => ({
   listDrafts: listDraftsMock,
   saveDraft: saveDraftMock,
   publishProduct: publishProductMock,
+  republishProduct: republishProductMock,
 }))
 
 import Wizard from '../src/pages/Wizard.vue'
@@ -33,6 +35,7 @@ beforeEach(() => {
   listDraftsMock.mockReset()
   saveDraftMock.mockReset().mockResolvedValue({ ok: true })
   publishProductMock.mockReset().mockResolvedValue({ ok: true })
+  republishProductMock.mockReset().mockResolvedValue({ ok: true })
 })
 
 describe('上新向导 /launch 建档不闪「商品不存在」（polish 自检 P1）', () => {
@@ -140,6 +143,77 @@ describe('上新向导 /launch 建档不闪「商品不存在」（polish 自检
     await flushPromises()
     expect(wrapper.text()).toContain('新建与封面')
     expect(wrapper.text()).not.toContain('没有找到这个商品')
+    wrapper.unmount()
+  })
+})
+
+describe('上新向导第 4 步 / 已下架同步（#213 #211 #199）', () => {
+  it('大白话：第 4 步写明商品上架不等于课程发布，课可以后补', async () => {
+    const draft = { ...freshDraft('p-course'), name: '有课', cover: 'c', price: '99', skus: [{ name: '标', price: '99' }] }
+    listDraftsMock.mockResolvedValue({
+      ok: true,
+      list: [draft],
+      urls: {},
+      listed: {},
+      hasVideo: {},
+      cardFinal: {},
+      hasBatch: {},
+    })
+    const router = createRouter({
+      history: createMemoryHistory(),
+      routes: [
+        { path: '/launch', component: Wizard },
+        { path: '/products/:id/wizard', component: Wizard },
+        { path: '/products', component: { template: '<div/>' } },
+      ],
+    })
+    await router.push({ path: '/products/p-course/wizard', query: { step: '4' } })
+    await router.isReady()
+    const wrapper = mount(Wizard, { global: { plugins: [router], stubs } })
+    await flushPromises()
+    expect(wrapper.text()).toContain('商品上架 ≠ 课程发布')
+    expect(wrapper.text()).toContain('材料包可以先卖')
+    expect(wrapper.text()).toContain('发布课程')
+    wrapper.unmount()
+  })
+
+  it('大白话：已下架向导顶同时有「同步草稿」和「恢复销售」，恢复不调 publishProduct', async () => {
+    const draft = { ...freshDraft('p-off'), name: '下架款', cover: 'c', price: '99', skus: [{ name: '标', price: '99' }] }
+    listDraftsMock.mockResolvedValue({
+      ok: true,
+      list: [draft],
+      urls: {},
+      listed: { 'p-off': false },
+      hasVideo: {},
+      cardFinal: {},
+      hasBatch: {},
+    })
+    const router = createRouter({
+      history: createMemoryHistory(),
+      routes: [
+        { path: '/launch', component: Wizard },
+        { path: '/products/:id/wizard', component: Wizard },
+        { path: '/products', component: { template: '<div/>' } },
+      ],
+    })
+    await router.push('/products/p-off/wizard')
+    await router.isReady()
+    const wrapper = mount(Wizard, { global: { plugins: [router], stubs } })
+    await flushPromises()
+    const sync = wrapper.findAll('button').find((b) => b.text().includes('同步草稿'))
+    const restore = wrapper.findAll('button').find((b) => b.text() === '恢复销售')
+    expect(sync).toBeTruthy()
+    expect(restore).toBeTruthy()
+    await restore!.trigger('click')
+    await flushPromises()
+    expect(republishProductMock).not.toHaveBeenCalled()
+    const confirm = wrapper.findAll('button').find((b) => b.text().includes('上次上架页'))
+    expect(confirm).toBeTruthy()
+    await confirm!.trigger('click')
+    await flushPromises()
+    expect(republishProductMock).toHaveBeenCalledTimes(1)
+    expect(republishProductMock).toHaveBeenCalledWith('p-off')
+    expect(publishProductMock).not.toHaveBeenCalled()
     wrapper.unmount()
   })
 })

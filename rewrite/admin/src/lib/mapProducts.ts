@@ -48,11 +48,46 @@ export function productSteps(p: Record<string, any>, extras?: StepExtras): StepD
   ]
 }
 
-/** 列表「上新进度」旁标：下一未完成步，或「上新完成」 */
+/** 列表「上新进度」旁标：下一未完成步，或「上新完成」。
+ *  第 4 步 extras.hasVideo 来自已发布 courses 档（有视频＝课已对学员可见），
+ *  不是「草稿里传过文件」——旁标写清，避免店员以为传完视频就算发布（#213）。 */
 export function stepProgressHint(steps: StepDot[]): string {
   const i = steps.findIndex((s) => !s.done)
   if (i < 0) return '上新完成'
+  if (steps[i].key === 'video') return `第 ${i + 1} 步：课还没发布`
   return `第 ${i + 1} 步：${steps[i].label}`
+}
+
+/** 价格/销量块提示：自动保存只写草稿，顾客要再走同步才看见（#198）。 */
+export const DRAFT_PRICE_HINT = '先存草稿，上架后顾客才看见'
+
+/** 向导第 4 步：商品上架不会自动发布课；材料包可先卖（#213·非上架硬门槛）。 */
+export const COURSE_NE_PRODUCT = '商品上架 ≠ 课程发布。材料包可以先卖；学员要看见视频，还要再点「发布课程」。'
+
+/** 把草稿拷到发布档的按钮字：已下架叫「同步草稿」，避免跟「恢复销售」混成一件事（#199 #211）。 */
+export function draftSyncLabel(state: ProductState): string {
+  return state === 'unlisted' ? '同步草稿' : '同步到小程序'
+}
+
+/** 同步二次确认：在售写清顾客看见新价/新图；已下架写清仍停售（#199 #211）。 */
+export function draftSyncConfirm(state: ProductState): string {
+  if (state === 'onsale') return '确认同步？顾客将看到新价格/新图'
+  if (state === 'unlisted') return '确认同步草稿？写入新价格/新图，商品仍停售'
+  return '确认同步到小程序？'
+}
+
+export function restoreSaleLabel(): string {
+  return '恢复销售'
+}
+
+/** 恢复销售只露旧发布档，不拷刚才改的草稿——确认必须说破（#211）。 */
+export function restoreSaleConfirm(): string {
+  return '确认恢复？顾客看到的是上次上架页，不是刚才改的草稿'
+}
+
+/** 已下架同步成功：发布档已更新，listed 仍是 false，还要再恢复（#211）。 */
+export function draftSyncUnlistedOk(): string {
+  return '草稿已同步。商品仍停售，还要再点「恢复销售」顾客才看得到'
 }
 
 /** 产品表副标：有筹备中才跟「待完成上新」；0 款不跟，避免「都已上架」还写待完成。 */
