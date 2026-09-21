@@ -25,7 +25,7 @@ export interface StepDot {
   key: string
   label: string
   done: boolean
-  marks?: StepMark[] // 第 4 步拆「有视频文件」/「课已发布」——上架不硬等发布（#213）
+  marks?: StepMark[] // 第 4 步拆「有视频文件」/「课已发布」——上架不硬等发布（工单213）
 }
 // listDrafts 后端派生的分步态（换皮误判「无源」·实则 cards/courses/qrcodes 可 join）
 export interface StepExtras {
@@ -35,14 +35,14 @@ export interface StepExtras {
   hasBatch?: Record<string, boolean> // courseId → 有码批次
 }
 
-/** #213：商品上架不代替课程发布。店规可先卖材料包，但配套课时必须看得出还差发布。 */
+/** 工单213：商品上架不代替课程发布。店规可先卖材料包，但配套课时必须看得出还差发布。 */
 export const COURSE_VS_LISTING_HINT =
   '商品上架 ≠ 课程发布。学员要看见视频，还要再点「发布课程」。没有课也可以先卖材料包。'
 
 export const VIDEO_MARK_FILE = '有视频文件'
 export const VIDEO_MARK_LIVE = '课已发布'
 
-/** #212：橱窗开关＝是否出现在首页，禁「上架橱窗」以免和商品上架撞词。 */
+/** 工单212：橱窗开关＝是否出现在首页，禁「上架橱窗」以免和商品上架撞词。 */
 export const HOME_FEATURE_ASK = '要不要同时出现在首页'
 export const HOME_FEATURE_SWITCH_ON = '出现在首页'
 export const HOME_FEATURE_SWITCH_OFF = '不出现在首页'

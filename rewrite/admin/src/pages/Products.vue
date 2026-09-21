@@ -74,7 +74,7 @@ const rows = ref<DraftRowVM[]>([])
 const message = ref('')
 const busy = ref(false)
 const confirmKey = ref('') // 两步确认（`del:<id>` / `off:<id>` / `pub:<id>`）
-const wantHome = ref(false) // 首次上架问首页·默认不挂（#212）
+const wantHome = ref(false) // 首次上架问首页·默认不挂（工单212）
 const moreKey = ref('') // 操作列「⋯更多」菜单展开行 id（非危险态·仅 UI 开合；顺手在 reload() 里也清，防刷新后残留开着的菜单）
 // 菜单挂视口 fixed 定位（批5 裁剪修正·浏览器实测）：absolute 会被 Card flush 的 overflow:hidden
 // 裁掉——末行菜单实测只露一项；fixed 按 ⋯ 按钮矩形算坐标，不受卡片裁剪。
@@ -139,16 +139,17 @@ const imgUrl = (fileID: string) => sessionUrls.value[fileID] || urlMap.value[fil
 let urlMapAt = 0
 const URL_MAP_STALE_MS = 90 * 60 * 1000
 
-async function reload() {
+async function reload(keepMsg = false) {
+  const held = keepMsg ? message.value : ''
   confirmKey.value = '' // 刷新即复位危险态（P1·防旧武装的上架/下架/删除按钮跨刷新残留一击直发·批3 规格）
   wantHome.value = false
   moreKey.value = '' // 防刷新后残留开着的⋯更多菜单
-  message.value = '加载中…'
+  if (!keepMsg) message.value = '加载中…'
   const r = await listDrafts()
   urlMap.value = r.ok && (r as any).urls ? (r as any).urls : {}
   urlMapAt = Date.now()
   rows.value = r.ok ? mapDraftRows(r.list, r.urls, r.listed, stepExtras(r)) : []
-  message.value = r.ok ? '' : '加载失败：' + String(r.error || '')
+  message.value = r.ok ? held : '加载失败：' + String(r.error || '')
   listReady.value = true
 }
 // listDrafts 派生的 5 步分步态（后端 join）
@@ -372,14 +373,14 @@ const doPublish = (id: string) =>
     const featured = st === 'preparing' && wantHome.value
     wantHome.value = false
     busy.value = true
-    const r = await publishProduct(id, st === 'preparing' ? { featured } : undefined)
+    const r = st === 'preparing' ? await publishProduct(id, { featured }) : await publishProduct(id)
     busy.value = false
     if (!r.ok) {
       message.value = publishErrorText(r.error, st)
       return
     }
     message.value = draftSyncOk(st, st === 'preparing' ? { featured } : undefined)
-    void reload()
+    void reload(true) // 成功口要留下首页状态（工单212）·reload 默认会冲掉 message
   })
 
 async function twoStep(key: string, run: () => Promise<void>) {

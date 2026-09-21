@@ -56,7 +56,7 @@ let msgLoadFail = false // 当前 banner 是否为「加载失败」——回刷
 const message = ref('')
 const busy = ref(false)
 const pubConfirm = ref(false)
-const wantHome = ref(false) // 首次上架问首页·默认不挂（#212）
+const wantHome = ref(false) // 首次上架问首页·默认不挂（工单212）
 const restoreArmed = ref(false)
 const createdDraftId = ref('') // /launch 刚建档后首包偶发读不到新档时，区分「暂未同步」与真不存在
 
