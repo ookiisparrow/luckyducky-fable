@@ -2170,6 +2170,41 @@ import { PROD_ENV } from './lib/env.mjs'（单源·病根#5·债#30①）`)
     },
   },
   {
+    // 降熵测版 Jev 入口必须与企微客服分流物理隔离（根因#5 样板复制即漂移）：
+    // 客服走 kfCallback + JEV_CS_ROUTE；项目降熵走 ops/entropyDecide。并线=测版配额/提示词/
+    // 失败降级会污染正式接待。本守卫扫 .ts 源（CALLER.md 点名「别走客服」不算违例）。
+    id: 'rw-entropy-decide-isolated',
+    roots: ['#5'],
+    desc: '降熵 Jev 测版入口与企微客服分流隔离（根因#5）：ops/entropyDecide 禁引 kfCallback / JEV_CS_ROUTE；kfCallback 禁引 entropyDecide——两套问题面不得并线',
+    run() {
+      const bad = []
+      const edDir = join(ROOT, 'rewrite/cloud/src/functions/ops/entropyDecide')
+      if (!existsSync(edDir)) return ['rewrite/cloud/src/functions/ops/entropyDecide 缺失——降熵测版入口未落地']
+      const readTs = (dir) => {
+        let src = ''
+        if (!existsSync(dir)) return src
+        const rec = (d) => {
+          for (const n of lsScan(d)) {
+            const p = join(d, n)
+            if (statSync(p).isDirectory()) rec(p)
+            else if (n.endsWith('.ts')) src += '\n' + readFileSync(p, 'utf8')
+          }
+        }
+        rec(dir)
+        return src
+      }
+      const edSrc = stripComments(readTs(edDir))
+      if (/\bJEV_CS_ROUTE\b/.test(edSrc))
+        bad.push('entropyDecide 引用了 JEV_CS_ROUTE——客服体验闸，禁并进降熵入口')
+      if (/\bkfCallback\b/.test(edSrc) || /functions\/cs\//.test(edSrc))
+        bad.push('entropyDecide 引用了 kfCallback/cs 客服路径——降熵入口必须独立')
+      const kfSrc = stripComments(readTs(join(ROOT, 'rewrite/cloud/src/functions/cs/kfCallback')))
+      if (/\bentropyDecide\b/.test(kfSrc))
+        bad.push('kfCallback 引用了 entropyDecide——客服正式分流不得挂降熵入口')
+      return bad
+    },
+  },
+  {
     id: 'rw-order-transitions-declared',
     roots: ['#2'],
     desc: '新线订单/售后状态写入只走声明流转（根因#2·移植 order-transitions-declared·深审 2026-07-05 抓到旧守卫只扫冻结线的缺口）：rewrite/cloud 里 transition(orders/afterSales) 的边、裸条件 CAS（where status→update status）的边须在 rewrite/shared/src/order.ts 声明流转表内；写这两集合 status 的字面量须是声明状态——越流转/打错状态名即红（谱源直接解析 order.ts·零生成器·qrcode/cs/scm 域各有 spec 派生调用不在本册）',
@@ -5175,6 +5210,9 @@ export const typeAndTestGuards = [
   // 精确键集合（Object.keys 排序全等·增删都红）；红了先同步 rewrite/shared/src/contracts.ts 与
   // mp 消费面四点位（payFlow/mapOrders/playbackCache/order-list·清单见测试头注）。
   { id: 'rw-app-response-contract', mechanism: 'test', roots: ['#5', '#8'], reverseTest: 'rewrite/cloud/tests/contract-shape.test.ts' },
+  // 降熵测版 Jev：strip 仅 high+noul；无 key/超时/5xx → suspect fallback；一次一个 candidate。
+  // 实现方门控，不信任模型松口（根因#3 fail-closed / #8 过了≠真能用）。
+  { id: 'rw-entropy-decide-gated', mechanism: 'test', roots: ['#3', '#8'], reverseTest: 'rewrite/cloud/tests/entropy-decide.test.ts' },
 ]
 
 // export：供 check-report 体检面板复用同一套遍历/判定（面板=派生视图，禁自建第二套语义）

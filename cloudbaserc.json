@@ -107,6 +107,13 @@
             "memorySize": 256,
             "handler": "index.main",
             "installDependency": true
+        },
+        {
+            "name": "entropyDecide",
+            "timeout": 15,
+            "memorySize": 256,
+            "handler": "index.main",
+            "installDependency": true
         }
     ]
 }
