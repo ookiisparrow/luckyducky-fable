@@ -187,4 +187,66 @@ describe('上新向导已下架同步（#211 #199）', () => {
     expect(publishProductMock).not.toHaveBeenCalled()
     wrapper.unmount()
   })
+
+  it('大白话：在售向导顶是「同步到小程序」，确认只说新价/新图，没有上架/重新上架/确认上架？', async () => {
+    const draft = { ...freshDraft('p-on'), name: '在售款', cover: 'c', price: '99', skus: [{ name: '标', price: '99' }] }
+    listDraftsMock.mockResolvedValue({
+      ok: true,
+      list: [draft],
+      urls: {},
+      listed: { 'p-on': true },
+      hasVideo: {},
+      cardFinal: {},
+      hasBatch: {},
+    })
+    const router = createRouter({
+      history: createMemoryHistory(),
+      routes: [
+        { path: '/launch', component: Wizard },
+        { path: '/products/:id/wizard', component: Wizard },
+        { path: '/products', component: { template: '<div/>' } },
+      ],
+    })
+    await router.push('/products/p-on/wizard')
+    await router.isReady()
+    const wrapper = mount(Wizard, { global: { plugins: [router], stubs } })
+    await flushPromises()
+    const sync = wrapper.findAll('button').find((b) => b.text().includes('同步到小程序'))
+    expect(sync).toBeTruthy()
+    expect(wrapper.text()).not.toMatch(/重新上架|确认上架？/)
+    expect(wrapper.findAll('button').some((b) => b.text() === '上架')).toBe(false)
+    await sync!.trigger('click')
+    await flushPromises()
+    expect(publishProductMock).not.toHaveBeenCalled()
+    const confirm = wrapper.findAll('button').find((b) => b.text().includes('顾客将看到新价/新图'))
+    expect(confirm).toBeTruthy()
+    expect(confirm!.text()).not.toMatch(/上架|重新上架|确认上架/)
+    wrapper.unmount()
+  })
+
+  it('大白话：向导图例钉验收词表四套字，禁另起别名', async () => {
+    listDraftsMock.mockResolvedValue({ ok: true, list: [], urls: {}, listed: {}, hasVideo: {}, cardFinal: {}, hasBatch: {} })
+    const router = createRouter({
+      history: createMemoryHistory(),
+      routes: [
+        { path: '/launch', component: Wizard },
+        { path: '/products/:id/wizard', component: Wizard },
+        { path: '/products', component: { template: '<div/>' } },
+      ],
+    })
+    await router.push('/launch')
+    await router.isReady()
+    const wrapper = mount(Wizard, { global: { plugins: [router], stubs } })
+    await flushPromises()
+    const text = wrapper.text()
+    expect(text).toContain('上架')
+    expect(text).toContain('第一次公开卖')
+    expect(text).toContain('同步到小程序')
+    expect(text).toContain('在售时把草稿推给顾客')
+    expect(text).toContain('同步草稿')
+    expect(text).toContain('恢复销售')
+    expect(text).toContain('上次上架页')
+    expect(text).not.toContain('重新上架')
+    wrapper.unmount()
+  })
 })

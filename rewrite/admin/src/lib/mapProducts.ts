@@ -196,14 +196,15 @@ export function wizardCanPublish(p: unknown): boolean {
   return basicsMissing(p).length === 0
 }
 
-/** 上架四道门 → 人话（原文兜底不吞·守卫反向测试面）。 */
-export function publishErrorText(e: unknown): string {
+/** 上架四道门 → 人话（原文兜底不吞·守卫反向测试面）。动作用词跟 draftSyncLabel，禁另起别名。 */
+export function publishErrorText(e: unknown, state: ProductState = 'onsale'): string {
+  const act = draftSyncLabel(state)
   const code = String(e || '')
   if (code === 'NO_DRAFT') return '草稿不存在（可能已被删除）'
-  if (code === 'NEED_COVER') return '先上传封面图才能同步到小程序'
+  if (code === 'NEED_COVER') return '先上传封面图才能' + act
   if (code === 'NEED_INFO') return '名称或价格没填好（价格须是有效金额）'
   if (code === 'NEED_SKUS') return '规格行不完整（每行都要有名称和有效价格）'
-  return '同步到小程序没成功（' + code + '）' // 原文兜底
+  return act + '没成功（' + code + '）' // 原文兜底
 }
 
 export interface ShowcaseRowVM {

@@ -74,6 +74,10 @@ describe('三态口径（与云端 listDrafts listed 表一致）', () => {
     expect(draftSyncOk('preparing')).toContain('已上架')
     expect(draftSyncOk('onsale')).toContain('已同步到小程序')
     expect(draftSyncOk('unlisted')).toBe(draftSyncUnlistedOk())
+    expect(publishErrorText('NEED_COVER', 'preparing')).toContain('上架')
+    expect(publishErrorText('NEED_COVER', 'preparing')).not.toContain('同步到小程序')
+    expect(publishErrorText('NEED_COVER', 'unlisted')).toContain('同步草稿')
+    expect(publishErrorText('WEIRD_500', 'unlisted')).toContain('同步草稿')
   })
 
   it('大白话：副标有筹备中才跟「待完成上新」；0 款筹备中不写待完成', () => {
@@ -111,6 +115,7 @@ describe('上架四道门人话（原文兜底不吞）', () => {
     expect(publishErrorText('NO_DRAFT')).toContain('草稿')
     expect(publishErrorText('WEIRD_500')).toContain('WEIRD_500') // 原文兜底
     expect(publishErrorText('WEIRD_500')).toContain('同步到小程序')
+    expect(publishErrorText('NEED_COVER', 'onsale')).toContain('同步到小程序')
   })
 })
 

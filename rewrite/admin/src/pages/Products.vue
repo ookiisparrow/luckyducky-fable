@@ -360,7 +360,7 @@ const doPublish = (id: string) =>
     const r = await publishProduct(id)
     busy.value = false
     if (!r.ok) {
-      message.value = publishErrorText(r.error) // 四道门人话
+      message.value = publishErrorText(r.error, rows.value.find((r) => r.id === id)?.state ?? editState.value)
       return
     }
     message.value = draftSyncOk(rows.value.find((r) => r.id === id)?.state ?? 'preparing')

@@ -58,6 +58,8 @@ const LEGEND = [
   { term: '发布课程', desc: '视频对已购学员可见' },
   { term: '上架', desc: '第一次公开卖' },
   { term: '同步到小程序', desc: '在售时把草稿推给顾客' },
+  { term: '同步草稿', desc: '已下架时把新草稿写出去，商品仍停售' },
+  { term: '恢复销售', desc: '按上次上架页再卖，不是刚才改的草稿' },
   { term: '上传卡片', desc: '把卡面素材交给印厂' },
   { term: '生成批次', desc: '产出可扫码的二维码序列' },
 ] as const
@@ -153,7 +155,7 @@ async function shelve() {
     msgLoadFail = false // 这是动作反馈·非加载失败——随后的 reloadProduct 成功不得把它当 stale banner 清掉（病根#14）
     void reloadProduct()
   } else {
-    message.value = publishErrorText(r.error)
+    message.value = publishErrorText(r.error, state.value)
     msgLoadFail = false
   }
 }
