@@ -1,19 +1,21 @@
-import { reply, ensure, str, type Ctx } from '../lib'
+import { reply, ensure, str, readDoc, type Ctx } from '../lib'
 
 // —— 二维码卡片 + 设置（规格 §六/§七 步骤⑤⑥）——
 export async function getSettings({ db }: Ctx) {
-  const got = await db.collection('adminConfig').doc('settings').get().catch(() => null)
-  return reply(200, { ok: true, settings: got?.data || {} })
+  const got = await readDoc(db.collection('adminConfig').doc('settings').get())
+  if (!got.ok) return reply(200, { ok: false, error: 'DOC_READ_FAIL' })
+  return reply(200, { ok: true, settings: got.data || {} })
 }
 
 // 合并保存（非整存覆盖）：urlPrefix(步骤⑥) 与 alertWebhook/alertEvents(消息通知) 各自分别保存、互不抹除。
 export async function saveSettings({ db, data }: Ctx) {
   await ensure(db, 'adminConfig')
   const coll = db.collection('adminConfig')
-  const got = await coll.doc('settings').get().catch(() => null)
+  const got = await readDoc(coll.doc('settings').get())
+  if (!got.ok) return reply(200, { ok: false, error: 'DOC_READ_FAIL' }) // 读失败≠空配置：停写，不拿 {} 合并覆盖
   // 去掉 get 回来的 _id：真 sdk doc(id).set({data}) 的 data 含 _id 即 reject（_id 由 doc(id) 指定）——
   // 不剥则二次保存（doc 已存在·get 带回 _id）必 500（根因#8 桩≠真 SDK 藏过·守卫 no-id-in-set-data 兜字面版）。
-  const { _id: _omitId, ...cur } = (got?.data as Record<string, any>) || {}
+  const { _id: _omitId, ...cur } = (got.data as Record<string, any>) || {}
   const patch: Record<string, any> = { updatedAt: Date.now() }
   if (data.urlPrefix !== undefined) patch.urlPrefix = String(data.urlPrefix || '').slice(0, 200)
   if (data.alertWebhook !== undefined) {
@@ -38,8 +40,9 @@ export async function getCard({ db, cloud, data }: Ctx) {
   const productId = String(data.productId || '')
   if (!productId) return reply(400, { ok: false, error: 'NO_PRODUCT' })
   await ensure(db, 'cards')
-  const got = await db.collection('cards').doc(`card-${productId}`).get().catch(() => null)
-  let card: any = got?.data || null
+  const got = await readDoc(db.collection('cards').doc(`card-${productId}`).get())
+  if (!got.ok) return reply(200, { ok: false, error: 'DOC_READ_FAIL' })
+  let card: any = got.data
   // 旧单面结构 → 双面结构（兼容已存草稿）
   if (card && !card.front) {
     card = {
