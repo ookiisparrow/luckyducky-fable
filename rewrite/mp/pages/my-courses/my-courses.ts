@@ -40,7 +40,7 @@ Page({
       loading: false,
       loadFailed: false,
       // 进度失败传 null 而非 []（根因#14·体检批 P2）：[] 与「真的一段没学过」不可区分，课卡会谎报
-      // 「已学 0/80 · 0%」；null 落 progressUnknown，界面显示「进度暂时读不到」并给重试入口。
+      // 「已学 0/80 · 0%」；null 落 progressUnknown，界面显示「进度暂时读不到，点此重试」（点按走 onRetryLoad，本页无下拉刷新）。
       // 课程列表本身照常渲染（进度只是卡上一行，不该因它失败把整页打成失败态）。
       list: mapMyCourses(mine.list, courses || [], progress.ok ? progress.list : null),
     })
