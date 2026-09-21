@@ -16,17 +16,38 @@ export function productState(id: string, listedMap: unknown): ProductState {
   return m[id] === false ? 'unlisted' : 'onsale'
 }
 
-export interface StepDot {
+export interface StepMark {
   key: string
   label: string
   done: boolean
 }
+export interface StepDot {
+  key: string
+  label: string
+  done: boolean
+  marks?: StepMark[] // 第 4 步拆「有视频文件」/「课已发布」——上架不硬等发布（#213）
+}
 // listDrafts 后端派生的分步态（换皮误判「无源」·实则 cards/courses/qrcodes 可 join）
 export interface StepExtras {
-  hasVideo?: Record<string, boolean> // courseId → 有教学视频
+  hasVideo?: Record<string, boolean> // courseId → 草稿或已发布课有教学视频文件
+  coursePublished?: Record<string, boolean> // courseId → 课已发布（学员看得见）
   cardFinal?: Record<string, boolean> // productId → 卡片已定稿
   hasBatch?: Record<string, boolean> // courseId → 有码批次
 }
+
+/** #213：商品上架不代替课程发布。店规可先卖材料包，但配套课时必须看得出还差发布。 */
+export const COURSE_VS_LISTING_HINT =
+  '商品上架 ≠ 课程发布。学员要看见视频，还要再点「发布课程」。没有课也可以先卖材料包。'
+
+export const VIDEO_MARK_FILE = '有视频文件'
+export const VIDEO_MARK_LIVE = '课已发布'
+
+/** #212：橱窗开关＝是否出现在首页，禁「上架橱窗」以免和商品上架撞词。 */
+export const HOME_FEATURE_ASK = '要不要同时出现在首页'
+export const HOME_FEATURE_SWITCH_ON = '出现在首页'
+export const HOME_FEATURE_SWITCH_OFF = '不出现在首页'
+export const HOME_FEATURE_SWITCH_TITLE_ON = '点击后不再出现在首页'
+export const HOME_FEATURE_SWITCH_TITLE_OFF = '点击后出现在首页'
 
 /** 5 步上新进度：建档+封面 / 图与名 / 详情前端算·课程 / 卡片+二维码取后端 listDrafts extras。 */
 export function productSteps(p: Record<string, any>, extras?: StepExtras): StepDot[] {
@@ -39,19 +60,44 @@ export function productSteps(p: Record<string, any>, extras?: StepExtras): StepD
   const skusOk = skus.length > 0 && skus.every((s: any) => String(s?.name || '').trim() !== '' && String(s?.price ?? '').trim() !== '')
   const cardOk = !!(e.cardFinal && e.cardFinal[id])
   const qrOk = !!(e.hasBatch && e.hasBatch[courseId])
+  const hasVideo = !!(e.hasVideo && e.hasVideo[courseId])
+  const courseLive = !!(e.coursePublished && e.coursePublished[courseId])
   return [
     { key: 'create', label: '新建与封面', done: !!id && !!(p && p.cover) },
     { key: 'look', label: '图片与名字', done: nameOk },
     { key: 'detail', label: '详情信息', done: priceOk && skusOk },
-    { key: 'video', label: '课程视频', done: !!(e.hasVideo && e.hasVideo[courseId]) },
+    {
+      key: 'video',
+      label: '课程视频',
+      done: hasVideo, // 有文件即本步齐；发布课另标，不挡先卖材料包
+      marks: [
+        { key: 'file', label: VIDEO_MARK_FILE, done: hasVideo },
+        { key: 'live', label: VIDEO_MARK_LIVE, done: courseLive },
+      ],
+    },
     { key: 'cardQr', label: '卡片与二维码', done: cardOk && qrOk },
   ]
 }
 
-/** 列表「上新进度」旁标：下一未完成步，或「上新完成」 */
+/** 第 4 步是否「有文件但课还没发布」——进度旁标用，不上架闸。 */
+export function courseNeedsPublish(steps: StepDot[]): boolean {
+  const video = steps.find((s) => s.key === 'video')
+  const live = video?.marks?.find((m) => m.key === 'live')
+  return !!(video?.done && live && !live.done)
+}
+
+/** 圆点/进度条 title：第 4 步拆出有视频文件 vs 课已发布。 */
+export function stepDotTitle(s: StepDot): string {
+  const head = (s.done ? '✓' : '○') + ' ' + s.label
+  if (!s.marks?.length) return head
+  return head + '（' + s.marks.map((m) => (m.done ? '✓' : '○') + m.label).join(' / ') + '）'
+}
+
+/** 列表「上新进度」旁标：下一未完成步，或「上新完成」；有视频未发布课时补一句。 */
 export function stepProgressHint(steps: StepDot[]): string {
   const i = steps.findIndex((s) => !s.done)
-  if (i < 0) return '上新完成'
+  const unpublished = courseNeedsPublish(steps)
+  if (i < 0) return unpublished ? '上新完成 · 课未发布' : '上新完成'
   return `第 ${i + 1} 步：${steps[i].label}`
 }
 
@@ -103,10 +149,13 @@ export function draftSyncReadyHint(state: ProductState): string {
   return '✓ 必备项齐全，保存后可' + draftSyncLabel(state)
 }
 
-export function draftSyncOk(state: ProductState): string {
+export function draftSyncOk(state: ProductState, opts?: { featured?: boolean }): string {
   if (state === 'unlisted') return draftSyncUnlistedOk()
   if (state === 'onsale') return '已同步到小程序，打开小程序即可看到该商品'
-  return '已上架，打开小程序即可看到该商品'
+  if (opts?.featured) {
+    return '已上架，已出现在小程序目录和首页人气条。不想挂首页请去橱窗关掉「出现在首页」'
+  }
+  return '已上架，已出现在小程序目录；首页人气条未打开。想出现在首页请去橱窗打开「出现在首页」'
 }
 
 /** 产品表副标：有筹备中才跟「待完成上新」；0 款不跟，避免「都已上架」还写待完成。 */

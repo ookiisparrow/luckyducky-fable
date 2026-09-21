@@ -11,6 +11,7 @@ import {
   b64SizeOk,
   basicsMissing,
   stepProgressHint,
+  stepDotTitle,
   productsListSub,
   DRAFT_PRICE_HINT,
   draftSyncLabel,
@@ -20,6 +21,7 @@ import {
   draftSyncOk,
   draftSyncMissingHint,
   draftSyncReadyHint,
+  HOME_FEATURE_ASK,
   type DraftRowVM,
 } from '../lib/mapProducts'
 import { serialSave } from '../lib/serialSave'
@@ -71,7 +73,8 @@ async function editCourse(row: DraftRowVM) {
 const rows = ref<DraftRowVM[]>([])
 const message = ref('')
 const busy = ref(false)
-const confirmKey = ref('') // 两步确认（`del:<id>` / `off:<id>`）
+const confirmKey = ref('') // 两步确认（`del:<id>` / `off:<id>` / `pub:<id>`）
+const wantHome = ref(false) // 首次上架问首页·默认不挂（#212）
 const moreKey = ref('') // 操作列「⋯更多」菜单展开行 id（非危险态·仅 UI 开合；顺手在 reload() 里也清，防刷新后残留开着的菜单）
 // 菜单挂视口 fixed 定位（批5 裁剪修正·浏览器实测）：absolute 会被 Card flush 的 overflow:hidden
 // 裁掉——末行菜单实测只露一项；fixed 按 ⋯ 按钮矩形算坐标，不受卡片裁剪。
@@ -125,6 +128,7 @@ const imgCount = (r: DraftRowVM) => (Array.isArray((r.raw as any).images) ? (r.r
 // 圆点深链：进上新向导落到第一个未完成步（全完成落第 1 步）
 const firstTodoStep = (r: DraftRowVM) => (r.steps.findIndex((s) => !s.done) + 1) || 1
 const courseOf = (r: DraftRowVM) => String((r.raw as any).courseId || '')
+const videoMarksOf = (r: DraftRowVM) => r.steps.find((s) => s.key === 'video')?.marks || []
 
 // 图片 fileID→url 解析：listDrafts 回的 urls 映射（已存图）+ 本会话新上传的 url
 const urlMap = ref<Record<string, string>>({})
@@ -137,6 +141,7 @@ const URL_MAP_STALE_MS = 90 * 60 * 1000
 
 async function reload() {
   confirmKey.value = '' // 刷新即复位危险态（P1·防旧武装的上架/下架/删除按钮跨刷新残留一击直发·批3 规格）
+  wantHome.value = false
   moreKey.value = '' // 防刷新后残留开着的⋯更多菜单
   message.value = '加载中…'
   const r = await listDrafts()
@@ -147,7 +152,12 @@ async function reload() {
   listReady.value = true
 }
 // listDrafts 派生的 5 步分步态（后端 join）
-const stepExtras = (r: any) => ({ hasVideo: r.hasVideo || {}, cardFinal: r.cardFinal || {}, hasBatch: r.hasBatch || {} })
+const stepExtras = (r: any) => ({
+  hasVideo: r.hasVideo || {},
+  coursePublished: r.coursePublished || {},
+  cardFinal: r.cardFinal || {},
+  hasBatch: r.hasBatch || {},
+})
 // 静默刷新列表（不闪「加载中」·不打断正在编辑的编辑器）
 async function silentRefresh() {
   const r = await listDrafts()
@@ -358,20 +368,24 @@ async function doSave() {
 // 范式：失败分支直接 return、不 reload；只有成功才清空 message 再 reload。
 const doPublish = (id: string) =>
   twoStep('pub:' + id, async () => {
+    const st = rows.value.find((r) => r.id === id)?.state ?? editState.value
+    const featured = st === 'preparing' && wantHome.value
+    wantHome.value = false
     busy.value = true
-    const r = await publishProduct(id)
+    const r = await publishProduct(id, st === 'preparing' ? { featured } : undefined)
     busy.value = false
     if (!r.ok) {
-      message.value = publishErrorText(r.error, rows.value.find((r) => r.id === id)?.state ?? editState.value)
+      message.value = publishErrorText(r.error, st)
       return
     }
-    message.value = draftSyncOk(rows.value.find((r) => r.id === id)?.state ?? 'preparing')
+    message.value = draftSyncOk(st, st === 'preparing' ? { featured } : undefined)
     void reload()
   })
 
 async function twoStep(key: string, run: () => Promise<void>) {
   if (confirmKey.value !== key) {
     confirmKey.value = key
+    if (key.startsWith('pub:')) wantHome.value = false
     return
   }
   confirmKey.value = ''
@@ -557,11 +571,20 @@ onMounted(async () => {
             <div class="ld-td" :style="{ width: '196px' }">
               <div
                 class="steps-cell"
-                :title="row.steps.map((s) => (s.done ? '✓' : '○') + ' ' + s.label).join(' · ') + ' · 点击继续上新'"
+                :title="row.steps.map(stepDotTitle).join(' · ') + ' · 点击继续上新'"
                 @click="router.push('/products/' + row.id + '/wizard?step=' + firstTodoStep(row))"
               >
                 <span class="step-bars" :aria-label="'已完成 ' + row.doneCount + ' / 5 步'">
                   <span v-for="s in row.steps" :key="s.key" class="bar" :class="{ on: s.done }"></span>
+                </span>
+                <span v-if="videoMarksOf(row).length" class="vmarks">
+                  <i
+                    v-for="m in videoMarksOf(row)"
+                    :key="m.key"
+                    class="vmark"
+                    :class="{ on: m.done }"
+                    :title="m.label"
+                  ></i>
                 </span>
                 <span class="done-n">{{ stepProgressHint(row.steps) }}</span>
               </div>
@@ -572,6 +595,10 @@ onMounted(async () => {
             <div class="ld-td ops" :style="{ width: '280px' }">
               <UiButton v-if="row.doneCount < 5" class="cta-continue" variant="ghost" size="sm" @click="router.push('/products/' + row.id + '/wizard?step=' + firstTodoStep(row))">继续上新</UiButton>
               <UiButton variant="ghost" size="sm" @click="openEdit(row)">编辑</UiButton>
+              <label v-if="row.state === 'preparing' && confirmKey === 'pub:' + row.id" class="home-ask">
+                <input v-model="wantHome" type="checkbox" />
+                <span>{{ HOME_FEATURE_ASK }}</span>
+              </label>
               <UiButton v-if="row.state === 'preparing' || row.state === 'onsale'" variant="primary" size="sm" @click="doPublish(row.id)">{{ confirmKey === 'pub:' + row.id ? draftSyncConfirm(row.state) : draftSyncLabel(row.state) }}</UiButton>
               <UiButton v-if="row.state === 'unlisted'" variant="primary" size="sm" @click="doPublish(row.id)">{{ confirmKey === 'pub:' + row.id ? draftSyncConfirm('unlisted') : draftSyncLabel('unlisted') }}</UiButton>
               <UiButton v-if="row.state === 'unlisted'" variant="ghost" size="sm" @click="doRepublish(row.id)">{{ confirmKey === 're:' + row.id ? restoreSaleConfirm() : restoreSaleLabel() }}</UiButton>
@@ -793,6 +820,33 @@ onMounted(async () => {
 }
 .bar.on {
   background: var(--ld-brand);
+}
+.vmarks {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+}
+.vmark {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--ld-line-strong);
+  flex: none;
+}
+.vmark.on {
+  background: var(--ld-green);
+}
+.home-ask {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11.5px;
+  color: var(--ld-content);
+  cursor: pointer;
+  white-space: nowrap;
+}
+.home-ask input {
+  margin: 0;
 }
 .done-n {
   font-size: 12px;

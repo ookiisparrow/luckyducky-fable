@@ -61,7 +61,7 @@ describe('5 步文案/顺序（封面并进第 1 步、卡片上传并进第 5 �
       '创建草稿并上传封面图',
       '商品图集与标题文案',
       '规格、价格与详情页',
-      '上传并发布教学视频',
+      '上传视频并发布课程；上架商品不代替发布课程',
       '卡面素材与批次二维码',
     ])
     expect(WIZARD_STEPS.every((s) => !s.label.includes('设计'))).toBe(true)
@@ -89,6 +89,9 @@ describe('控制台顶栏 + 侧栏步提示（Magic Patterns 打磨·不编同�
     expect(wiz).toContain("term: '同步到小程序'")
     expect(wiz).toContain("term: '同步草稿'")
     expect(wiz).toContain("term: '恢复销售'")
+    expect(wiz).toContain('COURSE_VS_LISTING_HINT')
+    expect(wiz).toContain('HOME_FEATURE_ASK')
+    expect(wiz).toContain('video-marks-line')
     expect(wiz).not.toMatch(/['"`]重新上架['"`]/)
     expect(prod).not.toMatch(/['"`]重新上架['"`]/)
     expect(wiz).toContain('卡片素材')

@@ -78,12 +78,15 @@ export async function listDrafts({ cloud, db, drafts }: Ctx) {
   const courseIds = res.data.map((p: any) => String(p.courseId || '') || 'course-' + (p.id || p._id)).filter(Boolean)
   const cardFinal: Record<string, boolean> = {}
   const hasVideo: Record<string, boolean> = {}
+  const coursePublished: Record<string, boolean> = {}
   const hasBatch: Record<string, boolean> = {}
   if (draftIds.length) {
     const cardIds = draftIds.map((id: string) => 'card-' + id)
-    const [cr, cor, br] = await Promise.all([
+    const [cr, cor, cdr, br] = await Promise.all([
       db.collection('cards').where({ _id: _.in(cardIds) }).get().catch(() => ({ data: [] as any[] })),
       db.collection('courses').where({ _id: _.in(courseIds) }).get().catch(() => ({ data: [] as any[] })),
+      // 草稿课也算「有视频文件」——进度圆点要能区分「有文件」vs「课已发布」（#213）
+      db.collection('coursesDraft').where({ _id: _.in(courseIds) }).get().catch(() => ({ data: [] as any[] })),
       // aggregate group：只回「有 qrcode 的 courseId」一行/课·不逐码扫（capacity·根因#7）
       db.collection('qrcodes').aggregate().match({ courseId: _.in(courseIds) }).group({ _id: '$courseId' }).end().catch(() => ({ list: [] as any[] })),
     ])
@@ -91,15 +94,22 @@ export async function listDrafts({ cloud, db, drafts }: Ctx) {
       const pid = String(c.productId || String(c._id || '').replace(/^card-/, ''))
       cardFinal[pid] = c.status === 'final'
     }
+    const markVideo = (c: any) => {
+      const cid = String(c.id || c._id || '')
+      if (!cid) return
+      for (const ch of c.chapters || [])
+        for (const ls of ch.lessons || [])
+          for (const sg of ls.segments || []) if (sg && sg.videoFileId) hasVideo[cid] = true
+    }
     for (const c of (cor as any).data || []) {
       const cid = String(c.id || c._id || '')
-      let vid = false
-      for (const ch of c.chapters || []) for (const ls of ch.lessons || []) for (const sg of ls.segments || []) if (sg && sg.videoFileId) vid = true
-      hasVideo[cid] = vid
+      if (cid) coursePublished[cid] = true
+      markVideo(c)
     }
+    for (const c of (cdr as any).data || []) markVideo(c)
     for (const g of (br as any).list || []) hasBatch[String(g._id || '')] = true
   }
-  return reply(200, { ok: true, list: res.data, urls, listed, cardFinal, hasVideo, hasBatch })
+  return reply(200, { ok: true, list: res.data, urls, listed, cardFinal, hasVideo, coursePublished, hasBatch })
 }
 
 export async function saveDraft({ db, drafts, data }: Ctx) {
@@ -236,7 +246,8 @@ export async function publishProduct({ db, drafts, data }: Ctx) {
   if (sort === undefined) {
     const top = await productsColl.orderBy('sort', 'desc').limit(1).get()
     sort = (top.data[0]?.sort ?? 0) + 1
-    featured = true
+    // 首发默认不进首页人气条（#212）：要挂首页须显式 featured:true。再同步保留原 featured，不覆盖橱窗开关。
+    featured = data.featured === true
   }
   // 重新上架（编辑后再发布）不得隐式改变销售状态：保留旧 listed/unlistedAt——已停售（listed:false）商品
   // 编辑重发仍停售，须显式 republishProduct 才恢复销售（审核 P1·债#12·防整文档 set 抹掉 listed→「无字段=可售」隐式复活）。
