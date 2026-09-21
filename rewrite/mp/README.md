@@ -5,7 +5,7 @@
 > **走查/传体验版前先跑** `npm run smoke:mp`（miniprogram-automator + devtools headless 逐页开验，捕 handler 缺失/组件未注册/未捕获异常类致命错误——把「构建过≠真机能用」先过一遍机器半边，剩下才轮到本手册的人工走查；不入三道闸，见 `docs/运维手册.md` §⑨）。
 >
 > **导入**：微信开发者工具 → 导入项目 → 选本目录（AppID 已预填）→ 工具能跑后点「预览」扫码真机。
-> **上传/发版前**：`npm run mp:stamp-version-date`（「我」页第二行日期改成上海当天；`npm run release` 定版也会戳）。各端跟上用 `npm run mac:sync-ends`（Mac 上跑）。
+> **版本脚**：提交钩子 / CI 合入 main 或 test / `preview:mp` / `device:preview` / `agent:preview` / `npm run release` / `mac:sync-ends` 会自动把「我」页日期戳成上海当天，并按分支对齐通道（main＝开发、test＝测试）。人不用记 `mp:stamp-version-date`。实验线在仓 `luckyducky-fable-ablation` 把 `BUILD_CHANNEL` 写成 `experimental`，本仓不回收。**不要改微信正式上传/提审/发布命令。**
 > **渲染引擎拍板（2026-07-04 收口）**：M2 首发**全 WebView**——M0 spike 已证按页 Skyline 可用性无障碍，但增益未证实（吸顶双引擎都不吸），按防过度工程原则不为未证实的收益引入双引擎变量；Skyline 留上线后按页灰度（能力在手，随时可开）。
 
 ## 分层与依赖方向（T4 活线约定·守卫 `rw-dep-direction` 机器钉·2026-07-18 盲区体检批2 成文）
