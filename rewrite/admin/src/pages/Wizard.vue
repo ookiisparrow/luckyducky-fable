@@ -13,7 +13,6 @@ import {
   wizardCanPublish,
   freshDraft,
   publishErrorText,
-  COURSE_NE_PRODUCT,
   draftSyncLabel,
   draftSyncConfirm,
   restoreSaleLabel,
@@ -321,10 +320,7 @@ onMounted(() => {
           </div>
           <Products v-else-if="step === 2" embed :wizard-product-id="id" :wizard-slice="2" @saved="reloadProduct" />
           <Products v-else-if="step === 3" embed :wizard-product-id="id" :wizard-slice="3" @saved="reloadProduct" />
-          <div v-else-if="step === 4" class="step4">
-            <p class="course-split">{{ COURSE_NE_PRODUCT }}</p>
-            <Courses embed :wizard-course-id="courseId" :course-published="!!(extras.hasVideo && extras.hasVideo[courseId])" @saved="reloadProduct" />
-          </div>
+          <Courses v-else-if="step === 4" embed :wizard-course-id="courseId" @saved="reloadProduct" />
           <div v-else-if="step === 5" class="step5">
             <section class="step5-sec">
               <header class="step5-head">
@@ -539,19 +535,6 @@ onMounted(() => {
   margin: 0 0 12px;
   font-size: 14px;
   color: var(--ld-content);
-}
-.step4 {
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
-}
-.course-split {
-  margin: 0;
-  padding: 10px 12px;
-  border-radius: var(--ld-radius-sm);
-  background: var(--ld-bg-amber-soft);
-  color: var(--ld-content);
-  font-size: 12.5px;
 }
 .identity p {
   margin: 0 0 8px;

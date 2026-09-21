@@ -13,13 +13,6 @@ describe('Courses/Checkpoints 死胡同改造：课程选择桥 + 零节点引�
     expect(coursesSrc).toMatch(/function loadCourseOptions\(/)
     expect(coursesSrc).toMatch(/function pickCourse\(/)
   })
-  it('大白话：向导第 4 步嵌入时能分清「有视频文件」和「课已发布」，且不把发布课写成卖货门槛', () => {
-    expect(coursesSrc).toContain('有视频文件')
-    expect(coursesSrc).toContain('课已发布')
-    expect(coursesSrc).toContain('coursePublished')
-    expect(coursesSrc).toMatch(/stats\.done > 0 \? '有视频文件'/)
-  })
-
   it('大白话：课程加载/发布/上传失败走 launchErrorText，不把 UNKNOWN_* 原文甩给操作者', () => {
     expect(coursesSrc).toMatch(/launchErrorText\(/)
     expect(coursesSrc).not.toMatch(/发布失败：' \+ String\(r\.error/)

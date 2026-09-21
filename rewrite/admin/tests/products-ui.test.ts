@@ -1,7 +1,7 @@
 // 商品与橱窗映射（守卫 rw-admin-products-ui-golden）：三态口径与云端一致/四道门人话原文兜底/
 // 整档 round-trip 保真/图片尺寸闸提前拦/脏档安全。
 import { describe, it, expect } from 'vitest'
-import { productState, mapDraftRows, publishErrorText, mapShowcaseRows, b64SizeOk, productSteps, stepProgressHint, productsListSub, basicsMissing, wizardCanPublish, freshDraft, DRAFT_PRICE_HINT, COURSE_NE_PRODUCT, draftSyncLabel, draftSyncConfirm, restoreSaleLabel, restoreSaleConfirm, draftSyncUnlistedOk } from '../src/lib/mapProducts'
+import { productState, mapDraftRows, publishErrorText, mapShowcaseRows, b64SizeOk, productSteps, stepProgressHint, productsListSub, basicsMissing, wizardCanPublish, freshDraft, DRAFT_PRICE_HINT, draftSyncLabel, draftSyncConfirm, restoreSaleLabel, restoreSaleConfirm, draftSyncUnlistedOk } from '../src/lib/mapProducts'
 
 describe('三态口径（与云端 listDrafts listed 表一致）', () => {
   it('大白话：表里 true=在售、false=已下架、不在表=筹备中（未上架）', () => {
@@ -53,11 +53,6 @@ describe('三态口径（与云端 listDrafts listed 表一致）', () => {
     expect(stepProgressHint(rows[0].steps)).toBe('上新完成')
     expect(stepProgressHint(empty)).toBe('第 1 步：新建与封面')
     expect(stepProgressHint(covered)).toBe('第 2 步：图片与名字')
-    // 前三步齐、课没发布：旁标写「课还没发布」，不说成「有视频就齐了」（#213）
-    const noCourse = productSteps({ id: 'p5', name: 'x', price: 1, cover: 'c', skus: [{ name: 'a', price: 1 }] }, {})
-    expect(noCourse.find((s) => s.key === 'video')!.done).toBe(false)
-    expect(stepProgressHint(noCourse)).toBe('第 4 步：课还没发布')
-    expect(wizardCanPublish({ cover: 'c', name: 'x', price: 1, skus: [{ name: 'a', price: 1 }] })).toBe(true) // 课未发布不挡卖材料包
   })
 
   it('大白话：同步/恢复用三套字——在售说新价新图，已下架同步仍停售，恢复不假装拷了草稿', () => {
@@ -72,8 +67,6 @@ describe('三态口径（与云端 listDrafts listed 表一致）', () => {
     expect(restoreSaleConfirm()).toContain('不是刚才改的草稿')
     expect(draftSyncUnlistedOk()).toContain('仍停售')
     expect(DRAFT_PRICE_HINT).toBe('先存草稿，上架后顾客才看见')
-    expect(COURSE_NE_PRODUCT).toContain('商品上架 ≠ 课程发布')
-    expect(COURSE_NE_PRODUCT).toContain('材料包可以先卖')
   })
 
   it('大白话：副标有筹备中才跟「待完成上新」；0 款筹备中不写待完成', () => {

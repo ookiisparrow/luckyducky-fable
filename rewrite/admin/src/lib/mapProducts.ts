@@ -48,21 +48,15 @@ export function productSteps(p: Record<string, any>, extras?: StepExtras): StepD
   ]
 }
 
-/** 列表「上新进度」旁标：下一未完成步，或「上新完成」。
- *  第 4 步 extras.hasVideo 来自已发布 courses 档（有视频＝课已对学员可见），
- *  不是「草稿里传过文件」——旁标写清，避免店员以为传完视频就算发布（#213）。 */
+/** 列表「上新进度」旁标：下一未完成步，或「上新完成」 */
 export function stepProgressHint(steps: StepDot[]): string {
   const i = steps.findIndex((s) => !s.done)
   if (i < 0) return '上新完成'
-  if (steps[i].key === 'video') return `第 ${i + 1} 步：课还没发布`
   return `第 ${i + 1} 步：${steps[i].label}`
 }
 
 /** 价格/销量块提示：自动保存只写草稿，顾客要再走同步才看见（#198）。 */
 export const DRAFT_PRICE_HINT = '先存草稿，上架后顾客才看见'
-
-/** 向导第 4 步：商品上架不会自动发布课；材料包可先卖（#213·非上架硬门槛）。 */
-export const COURSE_NE_PRODUCT = '商品上架 ≠ 课程发布。材料包可以先卖；学员要看见视频，还要再点「发布课程」。'
 
 /** 把草稿拷到发布档的按钮字：已下架叫「同步草稿」，避免跟「恢复销售」混成一件事（#199 #211）。 */
 export function draftSyncLabel(state: ProductState): string {
