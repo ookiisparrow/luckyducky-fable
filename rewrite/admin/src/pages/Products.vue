@@ -194,6 +194,7 @@ function markLoaded() {
   void nextTick(() => (editorLoaded = true)) // 赋值落定后再放开自动保存
 }
 function closeEditor() {
+  confirmKey.value = '' // 列表/编辑器共用 twoStep：关编辑必须卸武装，否则回到列表仍是确认文案
   openEditGen++ // 使任何仍在等 silentRefresh 回包的 openEdit 调用作废——不得在关闭后悄悄把编辑器重新弹开（同上代际守卫）
   const myGen = openEditGen // 快照本次关闭的代际（N1·bug 清除战役 II 遗留）：异步链 resolve 前用户可能已 openEdit 打开另一件商品，
   // 失败提示不得晚落地误标到新开的编辑器屏上——照 openEdit/silentRefresh 既有代际模式。
@@ -236,6 +237,7 @@ onBeforeUnmount(() => {
 // 打开两件不同商品，若网络乱序（先点的那次 silentRefresh 回包更晚落地），过期调用不得覆盖后来者正在看/编辑的编辑器。
 let openEditGen = 0
 async function openEdit(row: DraftRowVM) {
+  confirmKey.value = '' // 开编辑/换商品卸武装：列表确认态不得漏进编辑器一击直发
   const my = ++openEditGen
   let r = row
   if (Date.now() - urlMapAt > URL_MAP_STALE_MS) {

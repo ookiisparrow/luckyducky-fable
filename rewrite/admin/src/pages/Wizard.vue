@@ -17,6 +17,7 @@ import {
   draftSyncConfirm,
   restoreSaleLabel,
   restoreSaleConfirm,
+  restoreSaleOk,
   draftSyncBusy,
   draftSyncMissingHint,
   draftSyncOk,
@@ -171,7 +172,7 @@ async function restoreSale() {
   const r: any = await republishProduct(id.value)
   busy.value = false
   if (r.ok) {
-    message.value = '已恢复销售。若刚改过价格或图，请确认已经先点过「同步草稿」'
+    message.value = restoreSaleOk()
     msgLoadFail = false
     void reloadProduct()
   } else {

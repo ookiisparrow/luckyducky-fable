@@ -201,6 +201,44 @@ describe('Products.vue 已下架：同步草稿 ≠ 恢复销售（#211）', () 
   })
 })
 
+describe('Products.vue 列表武装不得漏进编辑器', () => {
+  it('大白话：列表点过「同步到小程序」武装后进编辑，编辑器须回到未确认；再点一次只武装不发布；关掉编辑列表也不再武装', async () => {
+    listDraftsMock.mockReset().mockResolvedValue({
+      ok: true,
+      list: [{ id: 'p1', name: '在售款', price: '99', sold: 0, skus: [], images: [], params: [], detailSections: [], kit: [] }],
+      urls: {},
+      listed: { p1: true },
+      hasVideo: {},
+      cardFinal: {},
+      hasBatch: {},
+    })
+    const { wrapper } = await mountWithRouter()
+    await flushPromises()
+    const listSync = wrapper.findAll('.ld-tr button').find((b) => b.text() === '同步到小程序')
+    expect(listSync).toBeTruthy()
+    await listSync!.trigger('click')
+    await flushPromises()
+    expect(publishProductMock).not.toHaveBeenCalled()
+    expect(wrapper.findAll('.ld-tr button').some((b) => b.text() === '顾客将看到新价/新图')).toBe(true)
+
+    const editBtn = wrapper.findAll('.ld-tr button').find((b) => b.text() === '编辑')
+    await editBtn!.trigger('click')
+    await flushPromises()
+    const editorSync = () => wrapper.findAll('.editor-ops button').find((b) => b.text() === '同步到小程序' || b.text() === '顾客将看到新价/新图')
+    expect(editorSync()!.text()).toBe('同步到小程序')
+    await editorSync()!.trigger('click')
+    await flushPromises()
+    expect(publishProductMock).not.toHaveBeenCalled()
+    expect(editorSync()!.text()).toBe('顾客将看到新价/新图')
+
+    const closeBtn = wrapper.findAll('.editor-ops button').find((b) => b.text() === '关闭')
+    await closeBtn!.trigger('click')
+    await flushPromises()
+    expect(wrapper.findAll('.ld-tr button').some((b) => b.text() === '同步到小程序')).toBe(true)
+    expect(wrapper.findAll('.ld-tr button').some((b) => b.text() === '顾客将看到新价/新图')).toBe(false)
+  })
+})
+
 describe('Products.vue 在售同步确认写清新价/新图（#199）', () => {
   it('大白话：在售第一次点「同步到小程序」只武装，确认文案写顾客将看到新价/新图，不再说上架', async () => {
     listDraftsMock.mockReset().mockResolvedValue({

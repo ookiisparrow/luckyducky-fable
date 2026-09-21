@@ -78,7 +78,12 @@ export function restoreSaleLabel(): string {
 
 /** 恢复销售只露旧发布档，不拷刚才改的草稿——确认必须说破（#211）。 */
 export function restoreSaleConfirm(): string {
-  return '确认恢复销售？顾客看到的是上次上架页，不是刚才改的草稿'
+  return '确认恢复销售？顾客看到的是上次上架页，不是刚才改的草稿。若刚改过价/图请先同步草稿'
+}
+
+/** 恢复成功：列表清提示（reload 会冲掉）；向导留下这句，跟确认同一口径。 */
+export function restoreSaleOk(): string {
+  return '已恢复销售。若刚改过价/图请先同步草稿'
 }
 
 /** 已下架同步成功：发布档已更新，listed 仍是 false，还要再恢复（#211）。 */
