@@ -1,4 +1,4 @@
-import { reply, ensure, str, type Ctx } from '../lib'
+import { reply, ensure, str, isCollectionMissing, type Ctx } from '../lib'
 import { notifyAlert } from '../../../kit'
 
 // 知识库维护（后台360工作站 B4.1·admin 侧）：管理端维护 FAQ/知识条目（问题 + 答案 + 分类 + 启用 + 顺序 + 精选），
@@ -14,7 +14,13 @@ const CATS = ['logistics', 'activation', 'aftersale', 'tutorial', 'other'] // �
 
 // 列出全部知识条目（bounded·读类·shouldAudit 跳 ^list 降噪）：按 分类→order 升序，供 admin 维护页编辑。
 export async function listKb({ db }: Ctx) {
-  const r = await db.collection('kb').limit(SCAN).get().catch(() => ({ data: [] }))
+  let r: { data?: any[] }
+  try {
+    r = await db.collection('kb').limit(SCAN).get()
+  } catch (e) {
+    if (isCollectionMissing(e)) return reply(200, { ok: true, list: [] }) // 集合未建＝真没有册（第一次保存前）
+    return reply(200, { ok: false, error: 'DOC_READ_FAIL' }) // 库挂了≠空册：停手，别让后台解锁「保存整册」
+  }
   const list = ((r && r.data) || [])
     .map((d: any) => ({
       key: d._id,

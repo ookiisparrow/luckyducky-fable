@@ -41,7 +41,18 @@ describe('content：预读失败停写，真缺档仍当空', () => {
     control.setBeforeGet(null as never)
     failGet('content', 'helpVideos')
     expect(await post('listHelpVideos')).toMatchObject({ ok: false, error: 'DOC_READ_FAIL' })
+    control.setBeforeGet(null as never)
+    control.setBeforeGet((args: any) => {
+      if (args.coll === 'content' && args.id === 'home') throw new Error('DATABASE_COLLECTION_NOT_EXIST:content')
+    })
+    expect(await post('getHomeContent')).toMatchObject({ ok: true, home: null })
+    control.setBeforeGet(null as never)
+    control.setBeforeGet((args: any) => {
+      if (args.coll === 'content' && args.id === 'helpVideos') throw new Error('DATABASE_COLLECTION_NOT_EXIST:content')
+    })
+    expect(await post('listHelpVideos')).toMatchObject({ ok: true, items: [] })
   })
+
 
   it('大白话：帮助视频旧档读失败——不覆盖、不把旧视频当垃圾删', async () => {
     control.seed('content', [
@@ -82,7 +93,13 @@ describe('cards：设置合并读失败不拿空对象盖掉', () => {
     control.setBeforeGet(null as never)
     failGet('cards', 'card-p1')
     expect(await post('getCard', { productId: 'p1' })).toMatchObject({ ok: false, error: 'DOC_READ_FAIL' })
+    control.setBeforeGet(null as never)
+    control.setBeforeGet((args: any) => {
+      if (args.coll === 'adminConfig' && args.id === 'settings') throw new Error('DATABASE_COLLECTION_NOT_EXIST:adminConfig')
+    })
+    expect(await post('getSettings')).toMatchObject({ ok: true, settings: {} })
   })
+
 
   it('大白话：设置已有前缀，读失败再保存——旧前缀还在，不会被空底合并抹掉', async () => {
     control.seed('adminConfig', [{ _id: 'settings', urlPrefix: 'https://keep.example/', alertWebhook: '' }])
@@ -182,5 +199,24 @@ describe('kb：整册扫描失败不假装替换成功', () => {
     expect(r).toMatchObject({ ok: false, error: 'DOC_READ_FAIL' })
     const keys = control.dump('kb').map((d: any) => d._id)
     expect(keys).toContain('faq-old')
+  })
+
+  it('大白话：listKb 库挂了——回 DOC_READ_FAIL 不装成空册；真没有仍 ok+空表', async () => {
+    expect((await post('listKb')).list).toEqual([])
+    control.seed('kb', [{ _id: 'faq-keep', question: '旧问', answer: '旧答', category: 'other' }])
+    failGet('kb')
+    expect(await post('listKb')).toMatchObject({ ok: false, error: 'DOC_READ_FAIL' })
+  })
+
+  it('大白话：listKb 集合还没建——当空册 ok，不挡第一次保存；权限/超时仍当读失败', async () => {
+    control.setBeforeGet((args: any) => {
+      if (args.coll === 'kb') throw new Error('DATABASE_COLLECTION_NOT_EXIST:kb')
+    })
+    expect(await post('listKb')).toMatchObject({ ok: true, list: [] })
+    control.setBeforeGet(null as never)
+    control.setBeforeGet((args: any) => {
+      if (args.coll === 'kb') throw new Error('DATABASE_PERMISSION_DENIED')
+    })
+    expect(await post('listKb')).toMatchObject({ ok: false, error: 'DOC_READ_FAIL' })
   })
 })

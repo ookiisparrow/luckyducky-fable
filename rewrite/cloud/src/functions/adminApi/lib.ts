@@ -68,16 +68,28 @@ export async function ensure(db: any, coll: string) {
   }
 }
 
+// 集合未建 ≠ 库挂了。isDocMissing 故意不认 COLLECTION_NOT_EXIST（库存钱链：集合没了不能当「无档不限量」）。
+// 内容预读：集合还没建＝真没有文档，第一次保存前合法空；权限/超时仍当读失败。
+export function isCollectionMissing(e: unknown): boolean {
+  const o = e && typeof e === 'object' ? (e as Record<string, unknown>) : null
+  const t = [o && o.message, o && o.errMsg, o && o.errmsg, o && o.code, o && o.errCode, e]
+    .map((x) => (x == null ? '' : String(x)))
+    .join('\n')
+  if (/permission denied|PERMISSION_DENIED|-502003|ECONNRESET|NETWORK_TIMEOUT/i.test(t)) return false
+  return /COLLECTION_NOT_EXIST|-502005|collection does not exist/i.test(t)
+}
+
 // 预读一份文档：缺档 ≠ 读失败（根因#14）。原 .get().catch(() => null) 把网络/权限/集合故障也折成「没有这份」，
 // 写路径就会按空档/rev=0 覆盖或拿失败基线做 GC。缺档 data=null；读失败 ok=false——调用方必须停写。
 // 判据复用 kit isDocMissing（真 sdk 缺档文案已查证，禁再抄一份更宽的 /does not exist/）。
+// 集合未建走 isCollectionMissing：后台页靠读成功才放开保存，不当读失败挡第一次落档。
 export async function readDoc(p: Promise<any>): Promise<{ ok: true; data: any | null } | { ok: false }> {
   try {
     const got = await p
     if (isEmptyDoc(got)) return { ok: true, data: null }
     return { ok: true, data: got.data }
   } catch (e) {
-    if (isDocMissing(e)) return { ok: true, data: null }
+    if (isDocMissing(e) || isCollectionMissing(e)) return { ok: true, data: null }
     return { ok: false }
   }
 }
