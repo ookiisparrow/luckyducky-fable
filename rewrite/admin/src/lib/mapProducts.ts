@@ -55,19 +55,21 @@ export function stepProgressHint(steps: StepDot[]): string {
   return `第 ${i + 1} 步：${steps[i].label}`
 }
 
-/** 价格/销量块提示：自动保存只写草稿，顾客要再走同步才看见（#198）。 */
-export const DRAFT_PRICE_HINT = '先存草稿，上架后顾客才看见'
+/** 价格/销量块提示：自动保存只写草稿，顾客要再走同步才看见（#198 词表）。 */
+export const DRAFT_PRICE_HINT = '先存草稿，同步后顾客才见'
 
-/** 把草稿拷到发布档的按钮字：已下架叫「同步草稿」，避免跟「恢复销售」混成一件事（#199 #211）。 */
+/** 词表单源（#198 #199 #211）：筹备中第一次＝上架；在售推草稿＝同步到小程序；已下架推新稿＝同步草稿。禁「重新上架」。 */
 export function draftSyncLabel(state: ProductState): string {
-  return state === 'unlisted' ? '同步草稿' : '同步到小程序'
+  if (state === 'preparing') return '上架'
+  if (state === 'unlisted') return '同步草稿'
+  return '同步到小程序'
 }
 
-/** 同步二次确认：在售写清顾客看见新价/新图；已下架写清仍停售（#199 #211）。 */
+/** 二次确认：在售只说新价/新图；已下架写清仍停售；筹备中第一次才说确认上架。 */
 export function draftSyncConfirm(state: ProductState): string {
-  if (state === 'onsale') return '确认同步？顾客将看到新价格/新图'
-  if (state === 'unlisted') return '确认同步草稿？写入新价格/新图，商品仍停售'
-  return '确认同步到小程序？'
+  if (state === 'onsale') return '顾客将看到新价/新图'
+  if (state === 'unlisted') return '确认同步草稿？写入新价/新图，商品仍停售'
+  return '确认上架？'
 }
 
 export function restoreSaleLabel(): string {
@@ -76,12 +78,30 @@ export function restoreSaleLabel(): string {
 
 /** 恢复销售只露旧发布档，不拷刚才改的草稿——确认必须说破（#211）。 */
 export function restoreSaleConfirm(): string {
-  return '确认恢复？顾客看到的是上次上架页，不是刚才改的草稿'
+  return '确认恢复销售？顾客看到的是上次上架页，不是刚才改的草稿'
 }
 
 /** 已下架同步成功：发布档已更新，listed 仍是 false，还要再恢复（#211）。 */
 export function draftSyncUnlistedOk(): string {
   return '草稿已同步。商品仍停售，还要再点「恢复销售」顾客才看得到'
+}
+
+export function draftSyncBusy(state: ProductState): string {
+  return state === 'preparing' ? '上架中…' : '同步中…'
+}
+
+export function draftSyncMissingHint(state: ProductState, missing: string[]): string {
+  return draftSyncLabel(state) + '还差：' + missing.join('、')
+}
+
+export function draftSyncReadyHint(state: ProductState): string {
+  return '✓ 必备项齐全，保存后可' + draftSyncLabel(state)
+}
+
+export function draftSyncOk(state: ProductState): string {
+  if (state === 'unlisted') return draftSyncUnlistedOk()
+  if (state === 'onsale') return '已同步到小程序，打开小程序即可看到该商品'
+  return '已上架，打开小程序即可看到该商品'
 }
 
 /** 产品表副标：有筹备中才跟「待完成上新」；0 款不跟，避免「都已上架」还写待完成。 */

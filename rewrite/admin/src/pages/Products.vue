@@ -17,7 +17,9 @@ import {
   draftSyncConfirm,
   restoreSaleLabel,
   restoreSaleConfirm,
-  draftSyncUnlistedOk,
+  draftSyncOk,
+  draftSyncMissingHint,
+  draftSyncReadyHint,
   type DraftRowVM,
 } from '../lib/mapProducts'
 import { serialSave } from '../lib/serialSave'
@@ -361,7 +363,7 @@ const doPublish = (id: string) =>
       message.value = publishErrorText(r.error) // 四道门人话
       return
     }
-    message.value = rows.value.find((r) => r.id === id)?.state === 'unlisted' ? draftSyncUnlistedOk() : ''
+    message.value = draftSyncOk(rows.value.find((r) => r.id === id)?.state ?? 'preparing')
     void reload()
   })
 
@@ -700,8 +702,8 @@ onMounted(async () => {
       <p v-else-if="embed && showLook" class="preflight ok">✓ 本步名字已齐</p>
       <p v-if="embed && showDetail && detailMissing.length" class="preflight">本步还差：<b>{{ detailMissing.join('、') }}</b></p>
       <p v-else-if="embed && showDetail && !detailMissing.length" class="preflight ok">✓ 本步价格和规格已齐</p>
-      <p v-if="!embed && missing.length" class="preflight">同步到小程序还差：<b>{{ missing.join('、') }}</b></p>
-      <p v-else-if="!embed" class="preflight ok">✓ 必备项齐全，保存后可同步到小程序</p>
+      <p v-if="!embed && missing.length" class="preflight">{{ draftSyncMissingHint(editState, missing) }}</p>
+      <p v-else-if="!embed" class="preflight ok">{{ draftSyncReadyHint(editState) }}</p>
 
       <!-- 嵌入向导步 1-3 时隐藏「保存草稿/关闭」：doSave 会 edit.value=null 关掉编辑器、而 embed 无列表可回→步面板变空白死胡同（P2）；
            embed 下 autosave（900ms + 离页补存）已负责持久化，切步/上架走向导自身按钮 -->

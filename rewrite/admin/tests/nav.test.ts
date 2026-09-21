@@ -83,7 +83,7 @@ describe('控制台顶栏 + 侧栏步提示（Magic Patterns 打磨·不编同�
     expect(shell).not.toMatch(/分钟前同步/) // 禁止 Magic Patterns 假同步时间
     expect(shell).not.toContain('编辑排序') // 假 chip（即将支持、无 handler）不进生产侧栏
     expect(wiz).toContain('class="rail-card"')
-    expect(wiz).toContain('这五件事互不等同')
+    expect(wiz).toContain('这些事互不等同')
     expect(wiz).toContain('卡片素材')
     expect(wiz).toContain('二维码批次')
   })

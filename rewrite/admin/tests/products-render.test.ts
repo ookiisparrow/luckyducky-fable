@@ -137,13 +137,13 @@ describe('Products.vue 编辑器价格块与在售同步入口（#198 #199）', 
     await editBtn!.trigger('click')
     await flushPromises()
     expect(wrapper.find('.price-sales').exists()).toBe(true)
-    expect(wrapper.text()).toContain('先存草稿，上架后顾客才看见')
+    expect(wrapper.text()).toContain('先存草稿，同步后顾客才见')
     const editorSync = wrapper.findAll('.editor-ops button').find((b) => b.text() === '同步到小程序')
     expect(editorSync).toBeTruthy()
     await editorSync!.trigger('click')
     await flushPromises()
     expect(publishProductMock).not.toHaveBeenCalled()
-    expect(wrapper.findAll('.editor-ops button').some((b) => b.text() === '确认同步？顾客将看到新价格/新图')).toBe(true)
+    expect(wrapper.findAll('.editor-ops button').some((b) => b.text() === '顾客将看到新价/新图')).toBe(true)
   })
 })
 
@@ -202,7 +202,7 @@ describe('Products.vue 已下架：同步草稿 ≠ 恢复销售（#211）', () 
 })
 
 describe('Products.vue 在售同步确认写清新价/新图（#199）', () => {
-  it('大白话：在售第一次点「同步到小程序」只武装，确认文案写顾客将看到新价格/新图，不再说上架', async () => {
+  it('大白话：在售第一次点「同步到小程序」只武装，确认文案写顾客将看到新价/新图，不再说上架', async () => {
     listDraftsMock.mockReset().mockResolvedValue({
       ok: true,
       list: [{ id: 'p1', name: '在售款', price: '99', skus: [], images: [], params: [], detailSections: [], kit: [] }],
@@ -219,26 +219,26 @@ describe('Products.vue 在售同步确认写清新价/新图（#199）', () => {
     await btn!.trigger('click')
     await flushPromises()
     expect(publishProductMock).not.toHaveBeenCalled()
-    const confirm = wrapper.findAll('.ld-tr button').find((b) => b.text() === '确认同步？顾客将看到新价格/新图')
+    const confirm = wrapper.findAll('.ld-tr button').find((b) => b.text() === '顾客将看到新价/新图')
     expect(confirm).toBeTruthy()
     expect(wrapper.text()).not.toMatch(/重新上架|确认上架？/)
   })
 })
 
 describe('Products.vue 上架两步确认（twoStep：doPublish）', () => {
-  it('大白话：筹备中商品第一次点「同步到小程序」只武装不调用，第二次点「确认同步到小程序？」才恰好调用一次 publishProduct(id)', async () => {
+  it('大白话：筹备中商品第一次点「上架」只武装不调用，第二次点「确认上架？」才恰好调用一次 publishProduct(id)', async () => {
     const { wrapper } = await mountWithRouter()
     await flushPromises()
 
-    const findPublishBtn = () => wrapper.findAll('.ld-tr button').find((b) => b.text() === '同步到小程序' || b.text() === '确认同步到小程序？')
+    const findPublishBtn = () => wrapper.findAll('.ld-tr button').find((b) => b.text() === '上架' || b.text() === '确认上架？')
     const btn = findPublishBtn()
     expect(btn).toBeTruthy()
-    expect(btn!.text()).toBe('同步到小程序')
+    expect(btn!.text()).toBe('上架')
 
     await btn!.trigger('click')
     await flushPromises()
     expect(publishProductMock).not.toHaveBeenCalled()
-    expect(findPublishBtn()!.text()).toBe('确认同步到小程序？')
+    expect(findPublishBtn()!.text()).toBe('确认上架？')
 
     await findPublishBtn()!.trigger('click')
     await flushPromises()
@@ -365,7 +365,7 @@ describe('产品表空态 / 筛选 / 五步齐了（polish 自检）', () => {
     expect(wrapper.text()).not.toContain('还没有商品')
   })
 
-  it('大白话：五步齐了不再亮「继续上新」，「同步到小程序」仍是主按钮；进度写「上新完成」', async () => {
+  it('大白话：五步齐了不再亮「继续上新」，筹备中主按钮是「上架」；进度写「上新完成」', async () => {
     listDraftsMock.mockReset().mockResolvedValue({
       ok: true,
       list: [{ id: 'p1', name: '齐活', price: '99', cover: 'c', skus: [{ name: '标', price: '99' }], images: [], params: [], detailSections: [], kit: [], courseId: 'course-p1' }],
@@ -379,7 +379,7 @@ describe('产品表空态 / 筛选 / 五步齐了（polish 自检）', () => {
     await flushPromises()
     expect(wrapper.text()).toContain('上新完成')
     expect(wrapper.findAll('button').some((b) => b.text() === '继续上新')).toBe(false)
-    const pub = wrapper.findAll('.ld-tr button').find((b) => b.text() === '同步到小程序')
+    const pub = wrapper.findAll('.ld-tr button').find((b) => b.text() === '上架')
     expect(pub).toBeTruthy()
     expect(pub!.classes().join(' ')).toMatch(/v-primary|is-sm/)
     expect(pub!.html()).toContain('v-primary')
