@@ -1,7 +1,9 @@
 #!/usr/bin/env node
 /**
  * 云函数 API 功能测试（yaliceshi）
- * 用例：正常 / 边界 / 异常 三维，覆盖 app 网关 + adminApi 鉴权闸
+ * 用例：正常 / 边界 / 异常 三维，只覆盖 app 网关。
+ * 后台鉴权不在这里测：管理接口只收 HTTP POST，云函数直调在验口令前就被挡住，
+ * 不能把这次拒绝当成鉴权通过。测试云没有单独的后台 HTTP 地址，也不打生产地址。
  *
  * 用法：node scripts/test-api/functional.mjs
  */
@@ -15,12 +17,15 @@ function addCase(group, name, fn, expect) {
   cases.push({ group, name, fn, expect });
 }
 
+function cell(value) {
+  return String(value ?? '').replace(/\|/g, '/').replace(/\s+/g, ' ').slice(0, 180);
+}
+
 function record(name, group, ok, detail, ms) {
   const mark = ok ? '✅' : '❌';
-  const line = `${mark} [${group}] ${name} ${ok ? '' : '← ' + detail} (${ms}ms)`;
-  console.log(line);
+  console.log(`${mark} [${group}] ${name} ${ok ? '' : '← ' + detail} (${ms}ms)`);
   ok ? passed++ : failed++;
-  return line;
+  return { name, group, ok, detail, ms };
 }
 
 // ============ 用例定义 ============
@@ -36,7 +41,7 @@ const appPublic = [
   ['getRatingSummary', { productId: 'prod-test' }],
 ];
 for (const [action, data] of appPublic) {
-  addCase('app-正常', `getProducts-公开接口 ${action}`, async () => {
+  addCase('app-正常', `${action} 公开接口`, async () => {
     const r = await callFn(FUNCS.app, action, data);
     return { ok: r.ok && r.result !== undefined, detail: r.error || JSON.stringify(r.result).slice(0, 120), ms: r.ms };
   });
@@ -68,21 +73,6 @@ addCase('app-边界', 'getProducts 空对象正常返回结构', async () => {
   return { ok: r.ok && typeof r.result === 'object', detail: JSON.stringify(r.result).slice(0, 100), ms: r.ms };
 });
 
-// --- adminApi 鉴权闸（无 key 应拒；adminApi 为 HTTP 服务函数，callFunction 调它返回 405 也是「拒」= fail-closed 正确）---
-addCase('admin-鉴权', 'adminApi 无 key 应被拒（fail-closed）', async () => {
-  const r = await callFn(FUNCS.admin, 'listProducts', {});
-  // 只要不是成功返回业务数据（ok:true 且无 error）即算被拒
-  const granted = r.ok && r.result && r.result.ok === true && !r.result.error;
-  const rejected = !granted;
-  return { ok: rejected, detail: (r.error || JSON.stringify(r.result).slice(0, 120)), ms: r.ms };
-});
-
-addCase('admin-鉴权', 'adminApi 未知 action 应被拒', async () => {
-  const r = await callFn(FUNCS.admin, 'hackAction', {});
-  const granted = r.ok && r.result && r.result.ok === true && !r.result.error;
-  return { ok: !granted, detail: (r.error || JSON.stringify(r.result).slice(0, 120)), ms: r.ms };
-});
-
 // ============ 执行 ============
 async function main() {
   console.log('═══════════════════════════════════════');
@@ -93,13 +83,13 @@ async function main() {
   await callFn(FUNCS.app, 'getProducts', {});
   console.log('（预热完成）\n');
 
-  const lines = [];
+  const rows = [];
   for (const c of cases) {
     try {
       const { ok, detail, ms } = await c.fn();
-      lines.push(record(c.name, c.group, ok, detail, ms));
+      rows.push(record(c.name, c.group, ok, detail, ms));
     } catch (e) {
-      lines.push(record(c.name, c.group, false, e.message.slice(0, 120), 0));
+      rows.push(record(c.name, c.group, false, e.message.slice(0, 120), 0));
     }
   }
 
@@ -113,7 +103,7 @@ async function main() {
 
 | 结果 | 分组 | 用例 | 详情 |
 |---|---|---|---|
-${lines.map((l) => `| ${l.split(' ')[0]} | ${l.replace(/^[✅❌]\s*/, '').replace(/\(.*ms\)$/, '').split(']')[0].slice(1)} | ... | ... |`).join('\n')}
+${rows.map((r) => `| ${r.ok ? '✅' : '❌'} | ${cell(r.group)} | ${cell(r.name)} | ${cell(r.detail)} |`).join('\n')}
 `;
   const out = await writeReport('functional', report);
   console.log(`\n📄 报告已存: ${out}`);

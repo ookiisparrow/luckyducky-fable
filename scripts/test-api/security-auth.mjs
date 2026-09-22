@@ -7,7 +7,7 @@
  *
  * 用法：node scripts/test-api/security-auth.mjs
  */
-import { callFn, ENV, FUNCS, writeReport } from './lib.mjs';
+import { authConclusions, callFn, ENV, FUNCS, writeReport } from './lib.mjs';
 
 let passed = 0, failed = 0;
 const lines = [];
@@ -80,8 +80,8 @@ ${lines.filter((l) => l.name.startsWith('app.')).map((l) => `| ${l.ok ? '✅' : 
 ${lines.filter((l) => !l.name.startsWith('app.')).map((l) => `| ${l.ok ? '✅' : '❌'} | ${l.name} | ${l.detail || '-'} |`).join('\n')}
 
 ## 结论
-- 所有登录后/写操作接口在无身份下全部被拒（NO_OPENID），身份防护 fail-closed 有效
-- 伪造支付/退款回调返回协议 ACK（避免微信重发）但不处理业务、不落库——防伪机制有效
+
+${authConclusions(lines)}
 `;
   const out = await writeReport('security-auth', report);
   console.log(`📄 报告已存: ${out}`);

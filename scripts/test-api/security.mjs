@@ -1,11 +1,12 @@
 #!/usr/bin/env node
 /**
  * 云函数 API 安全测试（yaliceshi，仅非破坏性）
- * 覆盖：认证/授权、注入、原型链污染、边界输入、敏感信息泄露
+ * 覆盖：用户网关的注入、原型链污染、边界输入、敏感信息泄露。
+ * 管理后台鉴权不在这里测：云函数直调发生在验口令之前，不能当成鉴权通过。
  *
  * 用法：node scripts/test-api/security.mjs
  */
-import { callFn, ENV, FUNCS, writeReport } from './lib.mjs';
+import { callFn, ENV, FUNCS, isGatewayRejected, writeReport } from './lib.mjs';
 
 let passed = 0, failed = 0;
 const lines = [];
@@ -27,10 +28,7 @@ async function check(name, fn) {
   }
 }
 
-// 判定工具：请求被拒 = 安全（fail-closed）
-function isRejected(r) {
-  return !r.ok || (r.result && (r.result.ok === false || r.result.error || r.result.code || r.result.statusCode));
-}
+// 用户网关：请求被拒 = 这道探针通过。405 不算拒绝，见 isGatewayRejected。
 // 判定工具：成功且无异常数据
 function isSafe(r) {
   return r.ok && !JSON.stringify(r.result).includes('<script>') && !JSON.stringify(r.result).includes('OR 1=1');
@@ -46,7 +44,7 @@ async function main() {
   for (const bad of ['__proto__', 'constructor', 'toString', 'hasOwnProperty', 'prototype']) {
     await check(`action=${bad} 应被拒（原型链防护）`, async () => {
       const r = await callFn(FUNCS.app, bad, {});
-      return { ok: isRejected(r), detail: JSON.stringify(r.result).slice(0, 120), ms: 0 };
+      return { ok: isGatewayRejected(r), detail: JSON.stringify(r.result).slice(0, 120), ms: 0 };
     });
   }
 
@@ -54,7 +52,7 @@ async function main() {
   for (const bad of ['../../etc/passwd', 'a;rm -rf /', '$(whoami)', '`id`', 'getProducts;drop table']) {
     await check(`action=${bad.slice(0, 20)}... 应被拒（命令/路径注入）`, async () => {
       const r = await callFn(FUNCS.app, bad, {});
-      return { ok: isRejected(r), detail: JSON.stringify(r.result).slice(0, 120), ms: 0 };
+      return { ok: isGatewayRejected(r), detail: JSON.stringify(r.result).slice(0, 120), ms: 0 };
     });
   }
 
@@ -75,7 +73,7 @@ async function main() {
   await check('超长输入（100KB）不应崩溃', async () => {
     const big = 'A'.repeat(100000);
     const r = await callFn(FUNCS.app, 'getProducts', { search: big });
-    return { ok: r.ok || isRejected(r), detail: r.error || JSON.stringify(r.result).slice(0, 100), ms: 0 };
+    return { ok: r.ok || isGatewayRejected(r), detail: r.error || JSON.stringify(r.result).slice(0, 100), ms: 0 };
   });
 
   await check('Unicode/emoji 输入正常处理', async () => {
@@ -89,14 +87,6 @@ async function main() {
     const err = JSON.stringify(r).toLowerCase();
     return { ok: !/(secretkey|secretid|access.?key|stack trace|at .*\.js:)/.test(err), detail: '检查响应体', ms: 0 };
   });
-
-  // 7. adminApi 认证暴力尝试（非破坏性，少量）
-  for (const key of ['', 'admin', '123456', 'letmein', 'password', "' OR 1=1 --"]) {
-    await check(`adminApi key="${key}" 应被拒`, async () => {
-      const r = await callFn(FUNCS.admin, 'listProducts', { key });
-      return { ok: isRejected(r), detail: (r.error || JSON.stringify(r.result).slice(0, 100)), ms: 0 };
-    });
-  }
 
   console.log(`\n════════ 结果：${passed} 通过 / ${failed} 失败 / 共 ${passed + failed} ════════`);
 
@@ -112,7 +102,7 @@ ${lines.map((l) => `| ${l.ok ? '✅' : '❌'} | ${l.name} | ${l.detail || '-'} |
 
 ## 说明
 - 全部为非破坏性测试（无 DoS、无数据删除、无生产环境操作）
-- adminApi 为 HTTP 服务函数，callFunction 直调被拒（405）本身即 fail-closed 正确行为
+- 只打用户网关。管理后台不在这里测：云函数直调发生在验口令之前，不能当成鉴权通过
 `;
   const out = await writeReport('security', report);
   console.log(`📄 报告已存: ${out}`);
