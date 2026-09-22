@@ -3,8 +3,6 @@
     <!-- 我的售后申请（数据源 getMyAfterSales·状态语义不变） -->
     <view class="coas-sechead" wx:if="{{list.length}}">
       <text class="coas-title">我的售后申请</text>
-      <!-- 副标题删「近 90 天」（2026-07-25 体检批 P3）：云端 getMyAfterSales 按 _openid 全量取、
-           无任何时间窗过滤，写「近 90 天」是对用户的不实陈述（真要限期须先在服务端做）。 -->
     </view>
 
     <view

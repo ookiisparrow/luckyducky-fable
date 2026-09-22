@@ -415,9 +415,7 @@
 }
 
 /* 拖动浮层（seeking 时显示·seek 条上方 absolute）：时间预览胶囊 + 命中关键动作节点再叠气泡。
-   left 值不用 WXSS clamp()（本仓无先例·真机支持度未经验证）——player.ts previewLeftPx() 在 JS 侧算好
-   夹在 [PREVIEW_EDGE_RPX, 轨道宽-PREVIEW_EDGE_RPX] 内的 px 落点，wxml 直接内联 px（MARK_SNAP_SEC
-   磁吸窗口同批·真机再调参）。 */
+   left 由 seek.wxs previewLeft() 按 seekCfg.edgePx 夹取后 setStyle，不写在 wxml 上。 */
 /* 批5 WXS 化：预览浮层常驻 DOM（不再 wx:if seeking）·默认隐藏·left 与显隐由 seek.wxs 渲染层控制
    （setStyle left + addClass('on')·避免 setData 重建与 WXS setStyle 抢写 position）。 */
 .lp-seek-preview {
@@ -711,12 +709,10 @@
   margin-bottom: 22rpx;
 }
 .lp-help-faq-q {
-  font-size: 28rpx;
   font-weight: 700;
   color: var(--ld-ink);
 }
 .lp-help-faq-a {
-  font-size: 26rpx;
   line-height: 1.6;
   color: var(--ld-content-2);
 }
@@ -752,13 +748,13 @@
   padding: 22rpx;
   margin-bottom: 22rpx;
 }
-.lp-help-faq-q {
+.lp-help-faq-item .lp-help-faq-q {
   font-size: 27rpx;
   font-weight: 700;
   color: var(--ld-ink);
   margin-bottom: 10rpx;
 }
-.lp-help-faq-a {
+.lp-help-faq-item .lp-help-faq-a {
   font-size: 25rpx;
   color: var(--ld-content-2);
   line-height: 1.6;

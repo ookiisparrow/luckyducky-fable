@@ -1,5 +1,4 @@
-// 震感配方单源守卫（迁自 tests/flip-lever.test.ts·2026-07-11 批A：从 flip-demo 专属位置迁到共享单源
-// lib/haptics，防复制漂移·病根#5·播放页 seek 条即将复用）。
+// 震感配方单源守卫（2026-07-11 批A：共享单源 lib/haptics，防复制漂移·病根#5）。
 import { describe, it, expect } from 'vitest'
 import { shouldTick, VIBE_GAP_MS, DRAG_TICK_GAP_MS } from '../lib/haptics'
 
