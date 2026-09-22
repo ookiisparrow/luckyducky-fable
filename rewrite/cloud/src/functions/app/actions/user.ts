@@ -31,7 +31,7 @@ export const login = withOpenId(
           nickname: '',
           avatar: '',
           phone: '',
-          createdAt: db.serverDate(),
+          createdAt: Date.now(), // 毫秒数字：与改资料/授权同形；后台 dateTime 只认数字，云端日期回读后注册时间是空白
         })
       : found.data[0]
     await storeUnionId(db, OPENID, user).catch(() => {})
