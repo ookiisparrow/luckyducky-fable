@@ -201,10 +201,13 @@ describe('闸开话术状态机（mermaid + 1→4 + 表演）', () => {
       node: 'greetIssue',
       greeted: true,
       used: ['在的在的，我帮您看看哈。'],
+      utteranceStyle: 'long',
     })
     expect(dirty).not.toHaveProperty('_id')
+    expect(dirty).not.toHaveProperty('utteranceStyle')
     const payload = persistableFlow(dirty)
     expect(payload).not.toHaveProperty('_id')
+    expect(payload).not.toHaveProperty('utteranceStyle')
     expect(payload.node).toBe('greetIssue')
     expect(payload.greeted).toBe(true)
   })

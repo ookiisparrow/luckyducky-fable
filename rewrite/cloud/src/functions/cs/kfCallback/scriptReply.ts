@@ -25,7 +25,7 @@ import {
   resolvePackagingMainScript,
   writeHandoffStub,
 } from './csPack'
-import { assemblePackagingBubbles, stitchUtterance, type UtteranceStyle } from './csAtomic'
+import { assemblePackagingBubbles, stitchUtterance } from './csAtomic'
 
 export type ScriptNode =
   | 'greet'
@@ -87,7 +87,6 @@ export type JevFlowState = {
   used: string[]
   stitchText: string
   stitchAt: number
-  utteranceStyle: UtteranceStyle | ''
 }
 
 export type JevRoute = {
@@ -120,7 +119,6 @@ const FLOW_KEYS = [
   'used',
   'stitchText',
   'stitchAt',
-  'utteranceStyle',
 ] as const
 
 const TOPIC_NEEDS: readonly ScriptTopic[] = [
@@ -410,7 +408,6 @@ export function emptyFlow(): JevFlowState {
     used: [],
     stitchText: '',
     stitchAt: 0,
-    utteranceStyle: '',
   }
 }
 
@@ -428,7 +425,6 @@ export function loadFlow(raw: unknown): JevFlowState {
   next.humanAsks = Number.isFinite(Number(src.humanAsks)) ? Number(src.humanAsks) : 0
   next.stitchText = String(src.stitchText || '')
   next.stitchAt = Number.isFinite(Number(src.stitchAt)) ? Number(src.stitchAt) : 0
-  next.utteranceStyle = src.utteranceStyle === 'long' || src.utteranceStyle === 'short' ? src.utteranceStyle : ''
   return next
 }
 
@@ -469,7 +465,6 @@ export function applyNode(
 
 export type ComposeCtx = {
   hasRecentOrder?: boolean
-  style?: UtteranceStyle
 }
 
 function packagingPieces(topic: ScriptTopic, ev: JevResult, text: string, rand: () => number, ctx?: ComposeCtx): string[] {
@@ -478,7 +473,6 @@ function packagingPieces(topic: ScriptTopic, ev: JevResult, text: string, rand: 
   return assemblePackagingBubbles({
     text,
     hasRecentOrder: !ctx || ctx.hasRecentOrder !== false,
-    style: (ctx && ctx.style) || 'short',
     severity: ev.severity,
     rand,
   })
@@ -556,7 +550,6 @@ export function composeLine(
     line = assemblePackagingBubbles({
       text,
       hasRecentOrder: !ctx || ctx.hasRecentOrder !== false,
-      style: (ctx && ctx.style) || 'short',
       severity: useEv.severity,
       rand,
     }).join('\n')
@@ -593,14 +586,11 @@ export async function composeScriptReply(
   const prev = loadFlow(got && got.data)
   const now = Date.now()
   const stitched = stitchUtterance(prev.stitchText, prev.stitchAt, text, now)
-  const style: UtteranceStyle = prev.utteranceStyle === 'long' ? 'long' : 'short'
   const { line, next, node, topic, acting, checkpoint, pieces } = composeLine(prev, ev, stitched, Math.random, {
     hasRecentOrder: !ctx || ctx.hasRecentOrder !== false,
-    style: (ctx && ctx.style) || style,
   })
   next.stitchText = stitched
   next.stitchAt = now
-  next.utteranceStyle = (ctx && ctx.style) || style
   if (!line && node !== 'human') return null
   let wrote = true
   await db
