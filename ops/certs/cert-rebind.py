@@ -55,7 +55,7 @@ def rebind(domain, cert_id, path, upstream_type, upstream_name, env):
         ok = d is not None and "message" in str(d)
         print(f"[{name}] {'✅' if ok else '❌'} {(d or {}).get('data', {}).get('message', '') or out[-200:]}")
         if not ok:
-            print(f"!! {name} 失败，中止。回滚参考备份目录（runner 本地 logs/cert-rebind-backup-*/）")
+            print(f"!! {name} 失败，中止。本脚本不留备份；停在失败这一步，到云开发控制台按当前域名和路由状态手工恢复。")
             sys.exit(1)
 
     print("等待边缘生效…")
