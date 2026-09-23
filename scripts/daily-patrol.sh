@@ -87,6 +87,6 @@ echo ""
 if [ "$FAIL" -eq 0 ]; then
   echo "✅✅ 平安报：今日巡逻全部通过（$(date '+%F %T')）"
 else
-  echo "❌❌ 巡逻有红项（$? 上文逐条·$(date '+%F %T')）——处理指引见 docs/工作流.md §4"
+  echo "❌❌ 巡逻有红项（见上方红项·$(date '+%F %T')）——处理指引见 docs/工作流.md §4"
 fi
 exit $FAIL

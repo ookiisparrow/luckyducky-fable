@@ -94,9 +94,11 @@ async function runCas(db, n) {
   const fin = await db.collection(COL).doc(id).get()
   const v = readV(fin)
   console.log(`  最终 v=${v}（期望 ${n}）· 重试耗尽 ${lost}`)
-  if (v === n) console.log('  ✅ 真库 where().update() CAS 原子·无丢更新——throttle/transition/激活码 地基成立')
+  const pass = v === n
+  if (pass) console.log('  ✅ 真库 where().update() CAS 原子·无丢更新——throttle/transition/激活码 地基成立')
   else console.log(`  ❌ 丢更新（v=${v}≠${n}）——真库 CAS 非原子，throttle 限频/激活抢占会漏！`)
   await db.collection(COL).doc(id).remove().catch(() => {})
+  return pass
 }
 
 // ② 规模精确：灌 seed 条假单 → count() 应===seed、aggregate 求和应精确（验破千不少算）。
@@ -123,10 +125,12 @@ async function runCapacity(db, seed) {
   const list = agg.data || agg.list || []
   const gmv = list[0] ? list[0].gmv : 0
   console.log(`  count=${cnt.total}（期望 ${seed}）· aggregate gmv=${gmv}（期望 ${seed}）· 耗时 ${ms}ms`)
-  if (cnt.total === seed && gmv === seed) console.log('  ✅ 破千仍精确（count/aggregate 不受 1000 封顶·验 #18/#18续）')
+  const pass = cnt.total === seed && gmv === seed
+  if (pass) console.log('  ✅ 破千仍精确（count/aggregate 不受 1000 封顶·验 #18/#18续）')
   else console.log('  ❌ 不精确——破千被封顶/漏算？')
   console.log('  清理种子…')
   await db.collection(COL).where({ _loadtest: true }).remove().catch(() => {})
+  return pass
 }
 
 function $sum(db) {
@@ -186,12 +190,14 @@ async function runThrottle(db, n, max) {
   )
   const finalCount = (readDoc(await db.collection(COL).doc(id).get().catch(() => null)) || {})[COUNT] || 0
   console.log(`  放行 ${allowed}（期望 ${max}）· 拒 ${denied}· 最终 hits=${finalCount}（期望 ${n}）· 重试耗尽 ${exhausted}`)
-  if (allowed === max && finalCount === n && exhausted === 0)
-    console.log('  ✅ 真库频控并发安全：恰 max 放行·无丢更新·无泄漏（首写 add 撞号竞争 + 窗内 CAS 计数 都原子）')
-  else if (allowed > max)
-    console.log(`  ❌ 泄漏：放行 ${allowed} > max ${max}——丢更新让超额请求漏过频控！`)
+  const pass = allowed === max && finalCount === n && exhausted === 0
+  // ❌ 泄漏才算失败；⚠️ 待查仍只打印（限流/重试耗尽不是已证实的泄漏）
+  const failed = allowed > max
+  if (pass) console.log('  ✅ 真库频控并发安全：恰 max 放行·无丢更新·无泄漏（首写 add 撞号竞争 + 窗内 CAS 计数 都原子）')
+  else if (failed) console.log(`  ❌ 泄漏：放行 ${allowed} > max ${max}——丢更新让超额请求漏过频控！`)
   else console.log(`  ⚠️ 待查：allowed=${allowed}/finalCount=${finalCount}/exhausted=${exhausted}（贴回排查·限流或重试耗尽？）`)
   await db.collection(COL).doc(id).remove().catch(() => {})
+  return !failed
 }
 
 // ④ 库存防超卖（库存#1·根因#1/#2/#8）：真库验 reserveStock 乐观 CAS——n 并发抢同 SKU、库存仅 stockN，
@@ -226,12 +232,14 @@ async function runStock(db, n, stockN) {
   const fin = readDoc(await db.collection(COL).doc(id).get().catch(() => null))
   const stockFin = fin && typeof fin.stock === 'number' ? fin.stock : -1
   console.log(`  扣成 ${ok}（期望 ${stockN}）· 拒(缺货) ${short}· 最终 stock=${stockFin}（期望 0）· 重试耗尽 ${exhausted}`)
-  if (ok === stockN && stockFin === 0 && exhausted === 0)
-    console.log('  ✅ 真库库存 CAS 无超卖：恰库存数扣成·余者缺货拒·stock 见底不穿底——下单预留防超卖成立（库存#1）')
-  else if (ok > stockN || stockFin < 0)
-    console.log(`  ❌ 超卖：扣成 ${ok} > 库存 ${stockN} 或 stock 穿底 ${stockFin}——丢更新让多扣穿底！`)
+  const pass = ok === stockN && stockFin === 0 && exhausted === 0
+  // ❌ 超卖才算失败；⚠️ 待查仍只打印（限流/重试耗尽不是已证实的超卖）
+  const failed = ok > stockN || stockFin < 0
+  if (pass) console.log('  ✅ 真库库存 CAS 无超卖：恰库存数扣成·余者缺货拒·stock 见底不穿底——下单预留防超卖成立（库存#1）')
+  else if (failed) console.log(`  ❌ 超卖：扣成 ${ok} > 库存 ${stockN} 或 stock 穿底 ${stockFin}——丢更新让多扣穿底！`)
   else console.log(`  ⚠️ 待查：ok=${ok}/stock=${stockFin}/exhausted=${exhausted}（限流或重试耗尽？贴回排查）`)
   await db.collection(COL).doc(id).remove().catch(() => {})
+  return !failed
 }
 
 async function main() {
@@ -246,11 +254,13 @@ async function main() {
   const db = await getDb(target.envId)
   // CloudBase 不像 MongoDB 写时自动建集合——写不存在的集合即 ResourceNotFound；先确保测试集合在（已存在则忽略）
   await db.createCollection(COL).catch(() => {})
-  if (a.mode === 'cas') await runCas(db, Number(a.n) || 200)
-  else if (a.mode === 'capacity') await runCapacity(db, Number(a.seed) || 2000)
-  else if (a.mode === 'throttle') await runThrottle(db, Number(a.n) || 20, Number(a.max) || 10)
-  else if (a.mode === 'stock') await runStock(db, Number(a.n) || 50, Number(a.stockN) || 10)
+  let pass = false
+  if (a.mode === 'cas') pass = await runCas(db, Number(a.n) || 200)
+  else if (a.mode === 'capacity') pass = await runCapacity(db, Number(a.seed) || 2000)
+  else if (a.mode === 'throttle') pass = await runThrottle(db, Number(a.n) || 20, Number(a.max) || 10)
+  else if (a.mode === 'stock') pass = await runStock(db, Number(a.n) || 50, Number(a.stockN) || 10)
   else usage('--mode 须为 cas / capacity / throttle / stock')
+  if (!pass) process.exit(1)
 }
 
 // 只在直接执行（node scripts/loadtest.mjs …）时跑；被 vitest import 时不触发 main
