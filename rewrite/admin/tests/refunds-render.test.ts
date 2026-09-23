@@ -39,7 +39,6 @@ beforeEach(() => {
     activation: { activated: false, entered: false, code: '', courseId: '' },
     lineRefundable: true,
     refundableQty: 1,
-    lineFound: true,
   })
   approveRefundMock.mockReset().mockResolvedValue({ ok: true })
 })
