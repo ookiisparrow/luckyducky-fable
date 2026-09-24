@@ -1,4 +1,4 @@
-// 登录软门槛 loginGate（R1·规格§四-1）——旧线 packages/miniapp/tests/auth.test.js 原生 mp 移植。
+// 登录软门槛 loginGate（R1）——旧线 packages/miniapp/tests/auth.test.js 原生 mp 移植。
 // ensureLogin：已同意（本地 hint=true）放行返回 true 不弹；未同意拦截返回 false 并打开半屏。
 // hint sanitize：storage 不可信只认字面 true。markAgreed 写 hint + 关闭 + 广播订阅者。
 import { describe, it, expect, beforeEach, afterEach } from 'vitest'

@@ -1,7 +1,7 @@
 <script setup lang="ts">
 // 壳布局：248px 白侧栏（右 $line 分线）、
 // 鸭徽 logo「运营控制台」、「导航」小标题、顶层（数据看板=独立项·其余=可展开组；上新与店面内容拆开）、
-// 底部管理员条。进上新向导路由切「按步直达」聚焦步导航（决策§27②·lib/nav）。
+// 底部管理员条。进上新向导路由切「按步直达」聚焦步导航（决策§27·lib/nav）。
 //
 // 现侧栏即活 IA：看板独立项，其余六组可展开（商品与上新 / 店面内容 / 订单履约 / 客服 360 / 进销存 / 系统）。
 // 「商品与上新」「进销存」做成展开组，好让全部子页可达（守卫 rw-admin-nav-route-synced 要求 nav↔route 双向同步）。NAV 每个 path 都内联在此。
@@ -108,7 +108,7 @@ const route = useRoute()
 const pageKey = computed(() =>
   route.path === '/cards' ? 'cards:' + String(route.query.productId || '') : 'page',
 )
-// 上下文侧栏（决策§27②）：进上新向导路由切「按步直达」聚焦步导航，否则六组运营 nav
+// 上下文侧栏（决策§27）：进上新向导路由切「按步直达」聚焦步导航，否则六组运营 nav
 const wizardMode = computed(() => isWizardPath(route.path))
 const wizardId = computed(() => String(route.params.id || ''))
 const curStep = computed(() => (wizardId.value ? wizardStepFromQuery(route.query.step) : 1))

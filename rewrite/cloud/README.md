@@ -30,4 +30,4 @@ tests/         各域测试 + kit 原语 + 契约哨兵（contract-shape.test.ts
 
 ## 钱链文件点名
 
-modules.json 里 orders 模块 tier=red·改动=工头级：`app/actions/orders.ts` · `callbacks/*` · `timers/closeExpiredOrders.ts` · `timers/billReconcile.ts` · `adminApi/actions/refunds.ts`。
+`modules.json` 里 orders 模块 tier=red，改动要过钱链闸（`MONEYCHAIN_ALLOWED`，老板授权）：`app/actions/orders.ts` · `callbacks/*` · `timers/closeExpiredOrders.ts` · `timers/billReconcile.ts` · `adminApi/actions/refunds.ts`。

@@ -1,5 +1,5 @@
 {
-  "__doc__": "模块正册（车队地基批1·2026-07-23）：活线全部 action/页面/集合按业务模块归属，一条目一模块、不重不漏。用途：①出问题按模块归因（异常账本/告警带模块 ID，批2 接线）②AI 车队派活时施工单范围=模块（tier=改动该模块云端逻辑所需档位：red=工头亲自+人签字 / yellow=工头逐行评审 / green=下层模型放手）。维护：加 action/页面/集合先在此登记，守卫 module-registry-complete 核不重不漏，登记漂移即 npm run check 红。",
+  "__doc__": "模块正册：活线全部 action/页面/集合按业务模块归属，一条目一模块、不重不漏。用途：①出问题按模块归因（告警带模块 ID）②tier 定改动门槛：red＝先问老板、提交带 [red-review: 复核人]；yellow＝逐行评审；green＝常规流程。维护：加 action/页面/集合先在此登记，守卫 module-registry-complete 核不重不漏。",
   "modules": {
     "identity": {
       "name": "身份与合规",

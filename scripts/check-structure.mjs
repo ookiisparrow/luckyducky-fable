@@ -2279,7 +2279,7 @@ export const repoChecks = [
     },
   },
   {
-    // 登录零资料采集防回潮（R1·规格§四-1·决策§3）：登录半屏 components/login-sheet 是「真·一键登录」——
+    // 登录零资料采集防回潮（R1）：登录半屏 components/login-sheet 是「真·一键登录」——
     // 微信静默 openid 直接登录、登录环节不采集头像昵称/手机号（微信 2022-10 废 getUserProfile；chooseAvatar/
     // type=nickname 官方要求主动点击、无法自动带出；索手机号违运营规范）。资料改后续「编辑资料」页补。
     // 守此不变量：login-sheet.wxml 须存在且不得出现 chooseAvatar / getPhoneNumber / type="nickname" 采集标记——
