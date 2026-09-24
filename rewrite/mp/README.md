@@ -2,10 +2,10 @@
 
 > **为什么靠人**（根因#8）：构建过、测试绿 ≠ 真机能用——视觉/手感/键盘/支付收银台/视频首帧只有真机证得了。本手册 = M2 验收的人工半边（机器半边＝`npm run check` 全量测试与守卫·计数以其输出为准，另有按需冒烟层，见下）。
 >
-> **走查/传体验版前先跑** `npm run smoke:mp`（miniprogram-automator + devtools headless 逐页开验，捕 handler 缺失/组件未注册/未捕获异常类致命错误——把「构建过≠真机能用」先过一遍机器半边，剩下才轮到本手册的人工走查；不入三道闸，见 `docs/运维手册.md` §⑨）。
+> **走查/传体验版前先跑** `npm run smoke:mp`（miniprogram-automator + devtools headless 逐页开验，捕 handler 缺失/组件未注册/未捕获异常类致命错误——把「构建过≠真机能用」先过一遍机器半边，剩下才轮到本手册的人工走查；不入三道闸，见 `docs/运维手册.md`「工具」）。
 >
 > **导入**：微信开发者工具 → 导入项目 → 选本目录（AppID 已预填）→ 工具能跑后点「预览」扫码真机。
-> **免扫码一键推真机**（`npm run device:preview` 等·端口探测与排障表）：见 `docs/real-device-debug.md`。
+> **免扫码一键推真机**（`npm run device:preview` 等·端口探测与排障表）：见 `docs/运维手册.md`「工具」。
 > **版本脚**：提交钩子 / CI 合入 main 或 test / `preview:mp` / `device:preview` / `agent:preview` / `npm run release` / `mac:sync-ends` 会自动把「我」页日期戳成上海当天，并按分支对齐通道（main＝开发、test＝测试）。人不用记 `mp:stamp-version-date`。实验线在仓 `luckyducky-fable-ablation` 把 `BUILD_CHANNEL` 写成 `experimental`，本仓不回收。**不要改微信正式上传/提审/发布命令。**
 > **渲染引擎拍板（2026-07-04 收口）**：M2 首发**全 WebView**——M0 spike 已证按页 Skyline 可用性无障碍，但增益未证实（吸顶双引擎都不吸），按防过度工程原则不为未证实的收益引入双引擎变量；Skyline 留上线后按页灰度（能力在手，随时可开）。
 

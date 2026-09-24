@@ -21,7 +21,7 @@
 
 ### 阶段 0 · 让代码上线（前置，否则清单页看不到 VOD 组）
 
-改动面＝云函数 `adminApiV2`/`app`/`cleanupEvents` + admin 静态托管。照运维手册 §① 部署（险级顺序：定时器 → adminApiV2 → app 最后·`app` 先读 §1.4 stale 陷阱）：
+改动面＝云函数 `adminApiV2`/`app`/`cleanupEvents` + admin 静态托管。照运维手册「部署」 部署（险级顺序：定时器 → adminApiV2 → app 最后·`app` 先读 §1.4 stale 陷阱）：
 
 ```bash
 npm run build:rw-cloud
@@ -32,7 +32,7 @@ npm run build:rw-admin
 tcb hosting delete admin --dir --yes -e cloudbase-d4gcssqbv06865479
 tcb hosting deploy rewrite/admin/dist admin -e cloudbase-d4gcssqbv06865479
 ```
-`echo y |` 不可省（带 config.json 的函数弹确认框，不答＝假部署·运维手册 §1.1）。**上线自证**：`/admin` → 配置清单页出现「视频点播 VOD」组 5 项（4 项 missing + 1 项 check）＝前后端都真上线了；看不到就别往下走。
+`echo y |` 不可省（带 config.json 的函数弹确认框，不答＝假部署·运维手册「部署」）。**上线自证**：`/admin` → 配置清单页出现「视频点播 VOD」组 5 项（4 项 missing + 1 项 check）＝前后端都真上线了；看不到就别往下走。
 
 ### 阶段 1 · 锁 secureConfig 集合权限（密钥要进这个抽屉·前置硬闸）
 
@@ -40,7 +40,7 @@ tcb hosting deploy rewrite/admin/dist admin -e cloudbase-d4gcssqbv06865479
 echo y | tcb permission set collection:secureConfig --level adminonly -e cloudbase-d4gcssqbv06865479
 tcb permission get collection:secureConfig -e cloudbase-d4gcssqbv06865479   # 应回 adminonly
 ```
-报「集合不存在」＝先在云开发控制台建 `secureConfig` 集合再锁（运维手册 §3.6 同条·待办与债最高优先项）。
+报「集合不存在」＝先在云开发控制台建 `secureConfig` 集合再锁（运维手册「凭证轮换」 同条·待办与债最高优先项）。
 
 ### 阶段 2 · 腾讯云控制台四步
 

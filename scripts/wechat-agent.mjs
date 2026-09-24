@@ -3,7 +3,7 @@
  * 微信开发者工具官方 Agent API 调用封装
  *
  * 官方调用方式：wechatide -c <clientName> <toolName> [flags...]
- * 文档：docs/wechat-agent-api.md
+ * 文档：docs/运维手册.md「工具」（官方完整手册在本机开发者工具安装目录的 wechatide-skill/）
  *
  * 用法：
  *   node scripts/wechat-agent.mjs status              # 门禁检查（认证）

@@ -48,4 +48,4 @@ npm run build:rw-cloud             # 云函数产物（部署另为人工授权�
 npm run preview:mp                 # 推真机预览
 ```
 - mp 加页面：`rewrite/mp/pages/<name>/` 四件套 + `app.json` 注册。加云端 action：放进对应域 + 登记 `modules.json`。admin 加页面：页面 + 路由/侧栏登记；写 admin UI 先读 `rewrite/admin/DESIGN.md`，色值只来自 `styles/tokens.css`。
-- 查别的：需求 `docs/需求清单.md` · 病根 `docs/根因账本.md` · 运维 `docs/运维手册.md` · 发布/巡检 `docs/工作流.md` · 平台坑 `docs/云开发参考.md` · 环境 `npm run env:resolve` · 历史 `git log`。
+- 查别的：需求 `docs/需求清单.md` · 病根 `docs/根因账本.md` · 运维/发布/巡检/平台坑 `docs/运维手册.md` · 外部平台配置 `docs/外部配置手册.md` · 环境 `npm run env:resolve` · 历史 `git log`。

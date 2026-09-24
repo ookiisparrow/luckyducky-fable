@@ -4,7 +4,7 @@
  * 机器自动核：质量闸全绿 / 生产线（rewrite/cloud）钱链函数无未部署漂移 / console-assets 正册齐 /
  *            .deploy-manifest 在册。
  * 再打印机器够不到、须人工核的清单（console-assets drift / 验收单）。
- * 详见 docs/运维手册.md §⑦（部署后 smoke）。
+ * 详见 docs/运维手册.md「出事与上线」（部署后 smoke）。
  */
 import { execSync } from 'node:child_process'
 import { existsSync, readFileSync } from 'node:fs'
@@ -56,7 +56,7 @@ for (const p of pass) console.log(`  ✅ ${p}`)
 for (const f of fail) console.log(`  ❌ ${f}`)
 console.log(`\n机器体检：${fail.length ? `❌ ${fail.length} 项未过——先修，别部署` : '✅ 全过'}`)
 console.log(`
-还须人工核（机器够不到，详见 docs/运维手册.md §⑦）：
+还须人工核（机器够不到，详见 docs/运维手册.md「出事与上线」）：
   □ console-assets drift-checklist：对照线上控制台逐项核（forward-node.js / flowId / 库权限期望表）
   □ 验收单 X（集合权限档位·以 COLLECTIONS 单源为准）/ Y（支付黄金路径）/ Z（退款黄金路径）真机重走
   □ cloudbaserc.json：functionRoot 已是 rewrite/cloud/dist。部署源就是这份活线产物。
