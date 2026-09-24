@@ -482,7 +482,7 @@ h3 {
 }
 .esc {
   font-size: 11px;
-  color: #b9770e;
+  color: var(--ld-amber);
 }
 .empty {
   font-size: 12px;
@@ -499,7 +499,7 @@ main {
 }
 .status {
   font-size: 13px;
-  color: #c0392b;
+  color: var(--ld-red);
   margin: 0 0 8px;
 }
 .thread {
@@ -527,7 +527,7 @@ main {
   color: var(--ld-purple-meta);
 }
 .media.error {
-  color: #c0392b;
+  color: var(--ld-red);
 }
 .media-img {
   max-width: 100%;
@@ -593,8 +593,8 @@ textarea {
   cursor: pointer;
 }
 .ghost.warn {
-  color: #c0392b;
-  border-color: #f0c0ba;
+  color: var(--ld-red);
+  border-color: var(--ld-red-line);
 }
 .pill {
   padding: 6px 14px;
@@ -698,6 +698,6 @@ textarea {
 }
 .note {
   font-size: 12px;
-  color: #b9770e;
+  color: var(--ld-amber);
 }
 </style>
