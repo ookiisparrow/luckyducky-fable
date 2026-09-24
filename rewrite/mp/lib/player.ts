@@ -108,7 +108,7 @@ export function clampSeek(value: number, durSec: number): number {
   return v
 }
 
-export type UrlFetcher = (courseId: string, segmentId: string) => Promise<string>
+type UrlFetcher = (courseId: string, segmentId: string) => Promise<string>
 
 /** 播放地址缓存（黄金 §六）：TTL 内命中不重取（默认 25min·远小于服务端临时 URL 过期）；
  *  空结果不缓存（素材未剪/未授权下次仍重试）；键含课程标识跨课隔离；在途去重；可定向失效。 */
