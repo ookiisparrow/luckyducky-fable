@@ -1,5 +1,5 @@
 import { COLLECTIONS, ERR } from '@ldrw/shared'
-import { getDb, ok, err, getTempUrls, IMAGE_URL_MAX_AGE } from '../../../kit'
+import { getDb, ok, err, getTempUrls, IMAGE_URL_MAX_AGE, isDocMissing } from '../../../kit'
 
 // 图片换址策略（批1·根因#15/#7/#12）：cover/图册等长命展示图统一带 maxAge（容器级签发缓存复用·省重签）
 // + imageProc（默认关·数据万象未开通时 withImageProc 空返原址·见 kit/storage.ts）。视频/一次性址不带此策略。
@@ -70,8 +70,10 @@ export const getProductDetail = async (data: any) => {
     if ('cover' in out) out.cover = swapUrl(out.cover, urlMap)
     if (Array.isArray(out.images)) out.images = out.images.map((im: unknown) => swapUrl(im, urlMap))
     return ok({ product: out })
-  } catch {
-    return ok({ product: null }) // 无档（doc 不存在抛错）/瞬时抖动 fail-soft（前端保持列表项降级·不裂不崩）
+  } catch (e) {
+    // 真无档才 null；库挂/权限/集合不在走 INTERNAL，不装成「商品不存在」（根因#14）
+    if (isDocMissing(e)) return ok({ product: null })
+    return err(ERR.INTERNAL)
   }
 }
 
@@ -108,8 +110,9 @@ export const getContent = async () => {
     const home = got.data || null
     if (home) await swapHomeImages(home)
     return ok({ home })
-  } catch {
-    return ok({ home: null })
+  } catch (e) {
+    if (isDocMissing(e)) return ok({ home: null }) // 真无档：前端回退默认文案
+    return err(ERR.INTERNAL) // 库挂 ≠ 没有首页
   }
 }
 
@@ -133,7 +136,8 @@ export const getPageContent = async (data: any) => {
       content.catalog.heroImage = swapUrl(content.catalog.heroImage, urlMap)
     }
     return ok({ page, content })
-  } catch {
-    return ok({ page, content: null })
+  } catch (e) {
+    if (isDocMissing(e)) return ok({ page, content: null }) // 真无档
+    return err(ERR.INTERNAL, { page }) // 库挂 ≠ 该页没内容
   }
 }

@@ -295,3 +295,42 @@ describe('nearestMark（磁吸判定·拖动·纯函数）', () => {
     expect(nearestMark(10, MARKS, -1)).toBeNull()
   })
 })
+
+describe('求助面板 FAQ 失败分治（根因#14·库挂≠没有常见问题）', () => {
+  it('大白话：getPublicFaq 失败要落 fail，不能把空列表画成「还在整理」', () => {
+    const load = playerTsRaw.slice(playerTsRaw.indexOf('async loadHelpFaq()'), playerTsRaw.indexOf('onHelpBackMenu()'))
+    expect(load).toMatch(/if\s*\(\s*!r\.ok\s*\)/)
+    expect(load).toMatch(/helpFaqState:\s*'fail'/)
+    expect(load.indexOf("helpFaqState: 'fail'")).toBeLessThan(load.indexOf("helpFaqState: 'empty'"))
+    expect(playerWxmlRaw).toContain("helpFaqState === 'fail'")
+    expect(playerWxmlRaw).toContain('暂时查不到')
+    expect(playerWxmlRaw).toContain('还在整理中')
+  })
+})
+
+describe('播放页死状态（data.segments / CMS FAQ 假 loading）', () => {
+  const stripWxml = (s: string) => s.replace(/<!--[\s\S]*?-->/g, '')
+  const stripTs = (s: string) => s.replace(/\/\/[^\n]*/g, '').replace(/\/\*[\s\S]*?\*\//g, '')
+  it('大白话：全段列表只本地用来挑开播段，不再塞进页面 data——界面不绑、代码也不读 this.data.segments', () => {
+    const ts = stripTs(playerTsRaw)
+    const wxml = stripWxml(playerWxmlRaw)
+    expect(ts).not.toMatch(/this\.data\.segments/)
+    const dataStart = ts.indexOf('data: {')
+    const dataEnd = ts.indexOf('courseId:')
+    expect(dataStart).toBeGreaterThan(-1)
+    expect(dataEnd).toBeGreaterThan(dataStart)
+    expect(ts.slice(dataStart, dataEnd)).not.toMatch(/\bsegments\s*:/)
+    expect(ts).not.toMatch(/setData\(\{[^}]*\bsegments\b/)
+    expect(wxml).not.toMatch(/\{\{\s*segments\s*\}\}/)
+    expect(ts).toMatch(/flattenSegments\(/) // 本地挑开播段还在
+  })
+  it('大白话：后台已经配了常见问题时，进 FAQ 不再先写成加载中——界面看的是问题条数，加载中永远不露面', () => {
+    const ts = stripTs(playerTsRaw)
+    const onHelp = ts.slice(ts.indexOf('onHelpFaq('), ts.indexOf('loadHelpFaq('))
+    const faqIdx = onHelp.search(/help\.faq/)
+    const retIdx = onHelp.indexOf('return')
+    expect(faqIdx).toBeGreaterThan(-1)
+    expect(retIdx).toBeGreaterThan(faqIdx)
+    expect(onHelp.slice(0, retIdx)).not.toMatch(/helpFaqState:\s*'loading'/)
+  })
+})

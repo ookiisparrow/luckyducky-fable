@@ -3,7 +3,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import { control } from 'wx-server-sdk'
 import { main as adminApi } from '../src/functions/adminApi/index'
-import { sha, kdf, keyMatches } from '../src/functions/adminApi/lib'
+import { sha, kdf, keyMatches, activationFor } from '../src/functions/adminApi/lib'
 import { archiveInbound } from '../src/functions/cs/kfCallback/archive'
 import { getDb } from '../src/kit'
 
@@ -140,6 +140,19 @@ describe('认领/放手/升级/结束（黄金 §一：互斥·上限·归属·�
     expect(retake.ok).toBe(true)
     expect(retake.session.agentId).toBe('admin')
     expect((await post('claimConversation', A2, { sessionId: 'nope' })).status).toBe(404)
+  })
+
+  it('大白话：在接会话数 count 失败拒认领——不当 0 让坐席超领', async () => {
+    control.seed('csSession', [S('s1', 'pending'), S('busy', 'active', { agentId: 'agent-1' })])
+    control.seed('agentState', [{ _id: 'agent-1', status: 'online', limit: 5 }])
+    control.setBeforeCount(({ coll, filter }: any) => {
+      if (coll === 'csSession' && filter && filter.status === 'active') throw new Error('MOCK_COUNT_FAIL')
+    })
+    const r = await post('claimConversation', A1, { sessionId: 's1' })
+    control.setBeforeCount(null as never)
+    expect(r.ok).toBe(false)
+    expect(r.error).toBe('WRITE_FAIL')
+    expect(control.dump('csSession').find((s: any) => s._id === 's1').status).toBe('pending')
   })
 
   it('大白话（P2 评审）：超管接待上限满额也能接被外包升级的会话——豁免容量闸，否则外包甩单没人能接（escalateToMerchant 设计意图）', async () => {
@@ -496,9 +509,8 @@ describe('顾客发图坐席可见（B5·图片消息下载延迟到坐席首次
   })
 
   // 已移除（2026-07-13 mp-7fixes 同步 PR#16→main·合流取舍）：#16「增量轮询回退一秒重查·晚到同秒顾客消息不被 gt 游标
-  // 跳过（深审 P2·GRACE_MS）」用例——其被测的 GRACE_MS 回退窗与 main（PR#20 批B）的 tie-group 补查契约互斥（GRACE_MS
-  // 靠客户端 msgid 去重容忍服务端跨轮重取，tie-group 契约要求服务端零重复）。合流取 main tie-group 版为准，#16 的「出站
-  // 毫秒>入站秒截断的晚到消息」修复连同本用例另立批用兼容 tie-group 的方式重做（见 docs/待办与债.md 同日 flag）。
+  // 跳过（深审 P2·GRACE_MS）」用例——其被测的 GRACE_MS 回退窗与 main（PR#20 批B）的 tie-group 补查契约互斥。
+  // 合流取 main tie-group 版为准；晚到同秒根因已在归档侧修完（#124·kfCallback/archive.ts）。
 })
 
 describe('scoped 360 双闸（黄金 §二：归属 + 数据共享同意·超管数据控制者）', () => {
@@ -556,6 +568,34 @@ describe('外包账号管理（黄金 §十：口令哈希·停用即时·白名
     expect((await post('createAgent', A1, { name: 'x', key: 'whatever-key' })).status).toBe(403) // 外包不能自扩权
   })
 
+  it('大白话：撞口令预检扫描读失败拒建号——DB 挂了不当「没撞」放行', async () => {
+    control.setBeforeGet(({ coll, filter }: any) => {
+      if (coll === 'adminConfig' && filter && filter.keyHash) throw new Error('MOCK_DB_FAIL')
+    })
+    const before = control.dump('adminConfig').length
+    const r = await post('createAgent', SUPER, { name: '库挂号', key: 'brand-new-scan-fail' })
+    control.setBeforeGet(null as never)
+    expect(r.status).toBe(503)
+    expect(r.error).toBe('KEY_LOOKUP_FAIL')
+    expect(control.dump('adminConfig').length).toBe(before)
+  })
+
+  it('大白话：写后撞口令复核扫描读失败——回滚刚建的号，不当「没撞」放行', async () => {
+    let keyHashGets = 0
+    control.setBeforeGet(({ coll, filter }: any) => {
+      if (coll === 'adminConfig' && filter && filter.keyHash) {
+        keyHashGets++
+        if (keyHashGets >= 2) throw new Error('MOCK_DB_FAIL')
+      }
+    })
+    const beforeIds = control.dump('adminConfig').map((a: any) => a._id)
+    const r = await post('createAgent', SUPER, { name: '复核挂号', key: 'brand-new-rescan-fail' })
+    control.setBeforeGet(null as never)
+    expect(r.status).toBe(503)
+    expect(r.error).toBe('KEY_LOOKUP_FAIL')
+    expect(control.dump('adminConfig').map((a: any) => a._id)).toEqual(beforeIds)
+  })
+
   it('大白话：停用即时生效（连登录都不行）；不许停超管；列表只列外包、不回口令哈希；企微 userid 全局唯一防登错身份', async () => {
     const off = await post('disableAgent', SUPER, { id: 'agent-1', disabled: true })
     expect(off.ok).toBe(true)
@@ -569,6 +609,35 @@ describe('外包账号管理（黄金 §十：口令哈希·停用即时·白名
     expect((await post('setAgentWecomUserId', SUPER, { id: 'agent-2', wecomUserId: 'w1' })).status).toBe(409)
     expect((await post('setAgentWecomUserId', SUPER, { id: 'agent-1', wecomUserId: 'w1' })).ok).toBe(true)
     expect((await post('setAgentWecomUserId', SUPER, { id: 'auth', wecomUserId: 'wboss' })).ok).toBe(true)
+  })
+
+  it('大白话：企微 userid 唯一性查询有界且读失败拒建号——DB 挂了不当「没人占用」；where(wecomUserId) 必须 limit(2)', async () => {
+    const wecomLimits: Array<number | null> = []
+    control.setBeforeGet(({ coll, filter, limit }: any) => {
+      if (coll === 'adminConfig' && filter && filter.wecomUserId) {
+        wecomLimits.push(limit == null ? null : limit)
+        throw new Error('MOCK_DB_FAIL')
+      }
+    })
+    const r = await post('createAgent', SUPER, { name: '库挂号', key: 'unique-key-db-down-1', wecomUserId: 'w-down' })
+    control.setBeforeGet(null as never)
+    expect(r.status).toBe(503)
+    expect(r.ok).toBe(false)
+    expect(r.error).toBe('WECOM_ID_LOOKUP_FAIL')
+    expect(control.dump('adminConfig').some((a: any) => a.wecomUserId === 'w-down')).toBe(false)
+    expect(wecomLimits.length).toBeGreaterThan(0)
+    expect(wecomLimits.every((n) => n === 2)).toBe(true)
+  })
+
+  it('大白话：改绑企微 userid 读失败同样 503——不当「没撞号」放行', async () => {
+    control.setBeforeGet(({ coll, filter }: any) => {
+      if (coll === 'adminConfig' && filter && filter.wecomUserId) throw new Error('MOCK_DB_FAIL')
+    })
+    const r = await post('setAgentWecomUserId', SUPER, { id: 'agent-2', wecomUserId: 'w-down-2' })
+    control.setBeforeGet(null as never)
+    expect(r.status).toBe(503)
+    expect(r.error).toBe('WECOM_ID_LOOKUP_FAIL')
+    expect(control.dump('adminConfig').find((a: any) => a._id === 'agent-2').wecomUserId).toBeUndefined()
   })
 
   it('大白话：先查后写竞态（P2·根因#1）——createAgent 建号窗口内被并发方撞同一口令（legacy 存量形态），写后复核揪出、回滚自己那份并回 409（不留串号双凭证）', async () => {
@@ -654,6 +723,16 @@ describe('外包账号管理（黄金 §十：口令哈希·停用即时·白名
     expect(a2.stateUpdatedAt).toBeNull()
     expect(a2.activeCount).toBe(1)
     expect(a2.todayClosed).toBe(1) // clC 今日零点整含界
+  })
+
+  it('大白话：列外包账号 where(role) 有界——limit(50)，不裸 get 整表', async () => {
+    let roleLimit: number | null = null
+    control.setBeforeGet(({ coll, filter, limit }: any) => {
+      if (coll === 'adminConfig' && filter && filter.role === 'outsourced') roleLimit = limit == null ? null : limit
+    })
+    await post('listAgents', SUPER, {})
+    control.setBeforeGet(null as never)
+    expect(roleLimit).toBe(50)
   })
 
   it('大白话（N3）：wecomUserId 竞态回滚若也失败——双凭证残留同样留痕；409 回复不变', async () => {
@@ -771,5 +850,55 @@ describe('企微免登（黄金 §十：code 换身份→签发令牌·fail-clos
         expect(control.dump('adminConfig').find((a: any) => a._id === 'agent-1').sessions).toBeFalsy() // 未签发
       }
     )
+  })
+
+  it('大白话：同一企微 userid 绑了两个号——免登拒发令牌，不静默捡第一条', async () => {
+    control.reset()
+    control.seed('adminConfig', [
+      { _id: 'agent-1', keyHash: sha(A1), role: 'outsourced', wecomUserId: 'w-dup' },
+      { _id: 'agent-2', keyHash: sha(A2), role: 'outsourced', wecomUserId: 'w-dup' },
+    ])
+    seedToken()
+    await withFetch(
+      (url) => (url.includes('auth/getuserinfo') ? { errcode: 0, userid: 'w-dup' } : { errcode: 0 }),
+      async () => {
+        const r = await post('loginByWecomCode', '', { code: 'c' }, '7.7.7.7')
+        expect(r.status).toBe(409)
+        expect(r.error).toBe('WECOM_ID_TAKEN')
+        expect(r.sessionToken).toBeFalsy()
+      }
+    )
+  })
+
+  it('大白话：免登反查账号时 DB 挂了回 503，不当「没绑账号」', async () => {
+    seedToken()
+    control.setBeforeGet(({ coll, filter }: any) => {
+      if (coll === 'adminConfig' && filter && filter.wecomUserId) throw new Error('MOCK_DB_FAIL')
+    })
+    await withFetch(
+      (url) => (url.includes('auth/getuserinfo') ? { errcode: 0, userid: 'w1' } : { errcode: 0 }),
+      async () => {
+        const r = await post('loginByWecomCode', '', { code: 'c' }, '8.8.8.8')
+        expect(r.status).toBe(503)
+        expect(r.error).toBe('WECOM_ID_LOOKUP_FAIL')
+        expect(r.sessionToken).toBeFalsy()
+      }
+    )
+    control.setBeforeGet(null as never)
+  })
+})
+
+describe('激活码展示读（activationFor·有界且读失败不装没激活）', () => {
+  it('大白话：activations 读失败抛错，不当「没激活」；查询带 limit(1)', async () => {
+    let actLimit: number | null = null
+    control.setBeforeGet(({ coll, limit }: any) => {
+      if (coll === 'activations') {
+        actLimit = limit == null ? null : limit
+        throw new Error('MOCK_DB_FAIL')
+      }
+    })
+    await expect(activationFor(getDb(), 'oBUYER', 'p1')).rejects.toThrow('MOCK_DB_FAIL')
+    control.setBeforeGet(null as never)
+    expect(actLimit).toBe(1)
   })
 })

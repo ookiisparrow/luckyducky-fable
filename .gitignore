@@ -27,7 +27,6 @@ project.config.json
 project.private.config.json
 # 小程序自动化测试(minitest)自动生成的本地配置（不入库）
 rewrite/mp/minitest/
-# 例外：Skyline spike 是手写的独立原生工程，其项目定义必须入库（导入即用）
 
 # format-hook 测试的临时格式化目录（afterEach 自删，防意外残留入库）
 .fmt-test-*
@@ -40,9 +39,14 @@ reports/
 
 # vitest --coverage 产物（B8·仅本地/CI 度量用，不入库）
 coverage/
+
+# Astro 生成目录（默认不入库；typecheck 先 astro sync 再给 env.d.ts 用）
+rewrite/site/.astro/
 # 变异测试沙盒（StrykerJS 运行时副本，报告在 reports/mutation/·已随 reports/ 不入库）
 .stryker-tmp/
 
 # 流水线运行数据（密钥/凭据绝不入库）
 .agents/archives/*.local
 .agents/tmp/
+# orchestrator.smoke.sh 每次重写的占位上下文，不入库
+.agents/contexts/SMOKE-01.md

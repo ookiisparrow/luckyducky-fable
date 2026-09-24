@@ -2,7 +2,6 @@
 // 数据看板（照 design/控制台.pen PxuIO 视觉语言重写·M-adminImpl 批1）：套新卡片/KPI/表格语言，
 // 数据仍全绑云端真值。设计的「成交额趋势柱图 / 热销商品 Top5」当前后端无数据源——不编数（根因#8·T3），
 // 保留真实的 KPI/转化漏斗/段位分析/最近动态 + owner 待处理行动条 + 交易异常告警（换皮曾删·复原不再丢）。
-// 待接学习分析 action 后再补趋势/热销卡位（记 docs/待办与债.md）。
 import { ref, onMounted, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { Users, ShoppingBag, Wallet, QrCode, GraduationCap, RefreshCw, TriangleAlert, Truck, RotateCcw, Boxes, Flame, PauseCircle, PackagePlus, Inbox, ShieldAlert } from 'lucide-vue-next'
@@ -41,10 +40,8 @@ const alertPath = (label: string) => (isFeeMismatch(label) ? '/orders' : '/refun
 // 待处理瓦片聚合多个类型、只能给一个落点：混有退款类（stuckRefunds 是需要及时人工介入的死信）就默认去
 // /refunds（更紧急）；全是金额不符单（或无告警）保持原 /orders，不引入更复杂的选择菜单（量力而行）。
 const alertsHaveRefundType = computed(() => (vm.value?.alerts || []).some((a) => !isFeeMismatch(a.label)))
-// 深链预填（债目·全局清零bug战役残余 2026-07-13）：告警行「去处理」跳 /refunds 时若该行恰好 1 个 id，
-// 带 ?q=<反解单号> 让 Refunds.vue 深链预填自动检索到具体记录（唯一目标才有「跳到具体记录」语义；
-// 多 id/无 id 仍跳纯列表、不带参——现状）。afterSales 复合 id（`orderId__lineId[__ovrN]`）反解取
-// split('__')[0]（订单 id 不含下划线·债目已核可靠）；feeMismatch 走 /orders、本次深链范围不含它。
+// 深链预填：告警行「去处理」跳 /refunds 时若该行恰好 1 个 id，带 ?q=<反解单号> 让 Refunds 预填检索；
+// 多 id/无 id 仍跳纯列表。afterSales 复合 id 取 split('__')[0]；feeMismatch 走 /orders，不带这套预填。
 function alertQuery(a: { label: string; ids: string[] }): Record<string, string> {
   if (isFeeMismatch(a.label) || a.ids.length !== 1) return {}
   const raw = a.ids[0]

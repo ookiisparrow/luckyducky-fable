@@ -805,7 +805,7 @@
   font-weight: 700;
   text-align: center;
 }
-/* 矢量循环动画降级为静态示意区+文案（简化决策·真机动画开销与辅助内容优先级不匹配，记账见重构日志） */
+/* 矢量循环动画降级为静态示意区+文案 */
 .lp-dg-guide {
   width: 100%;
   background: #f2ebfc;

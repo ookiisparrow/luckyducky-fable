@@ -14,4 +14,12 @@ describe('官网套装页售后 FAQ', () => {
     expect(kits).not.toMatch(/满\s*¥?\s*100\s*包邮/)
     expect(kits).not.toContain('全场包邮')
   })
+
+  it('大白话：四条问答人看得见（<details>），不是只塞进 JSON-LD 给机器', () => {
+    expect(kits).toContain('<details>')
+    expect(kits).toContain('<summary>{f.q}</summary>')
+    expect(kits).toContain('<p>{f.a}</p>')
+    expect(kits).toContain('pairs.map')
+    expect(kits).toContain('faqSchema(pairs)')
+  })
 })

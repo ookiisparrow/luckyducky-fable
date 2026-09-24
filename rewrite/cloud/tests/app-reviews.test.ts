@@ -57,6 +57,25 @@ describe('getHelpVideos（两级白名单·不漏源·黄金 §九）', () => {
     expect(segs.length).toBe(60)
     for (let i = 0; i < 60; i++) expect(segs[i].url).toBe(`https://tmp/cloud://h/v${i}.mp4`)
   })
+
+  it('大白话：库挂不再装成「没有求助视频」——ok:false INTERNAL；真无档仍空列表', async () => {
+    control.seed('content', [
+      { _id: 'helpVideos', items: [{ id: 't1', title: 'T', segments: [{ id: 'g1', name: '段', dur: '1:00', videoFileId: 'cloud://h/g1.mp4' }] }] },
+    ])
+    control.setBeforeGet(({ coll, id }: any) => {
+      if (coll === 'content' && id === 'helpVideos') throw new Error('MOCK_DB_FAIL')
+    })
+    const fail = await call('getHelpVideos')
+    control.setBeforeGet(null as never)
+    expect(fail.ok).toBe(false)
+    expect(fail.error).toBe('INTERNAL')
+    expect(fail.items).toBeUndefined()
+    control.reset()
+    control.setOpenId('oME')
+    const empty = await call('getHelpVideos')
+    expect(empty.ok).toBe(true)
+    expect(empty.items).toEqual([])
+  })
 })
 
 describe('getReviews（游标分页+全量精确汇总·黄金 §七）', () => {
@@ -356,6 +375,22 @@ describe('getPublicFaq（R37b·KB 精选 FAQ 公开读·守卫 faq-via-kb-single
     control.reset() // 清空登录态·验证公开读无需 openid（同 getProducts/getContent 口径）
     control.seed('kb', [{ _id: 'x', question: 'q', answer: 'a', featured: true, enabled: false }])
     expect((await call('getPublicFaq')).items).toEqual([])
+  })
+
+  it('大白话：库挂不再装成「没有 FAQ」——ok:false INTERNAL；真无精选仍空列表', async () => {
+    control.seed('kb', [{ _id: 'k1', question: 'q', answer: 'a', featured: true }])
+    control.setBeforeGet(({ coll }: any) => {
+      if (coll === 'kb') throw new Error('MOCK_DB_FAIL')
+    })
+    const fail = await call('getPublicFaq')
+    control.setBeforeGet(null as never)
+    expect(fail.ok).toBe(false)
+    expect(fail.error).toBe('INTERNAL')
+    expect(fail.items).toBeUndefined()
+    control.reset()
+    const empty = await call('getPublicFaq')
+    expect(empty.ok).toBe(true)
+    expect(empty.items).toEqual([])
   })
 
   it('大白话：bounded 上限 20——精选条目多于上限时只回前 20 条，不无界下发', async () => {

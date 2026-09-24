@@ -5,7 +5,7 @@
 > **走查/传体验版前先跑** `npm run smoke:mp`（miniprogram-automator + devtools headless 逐页开验，捕 handler 缺失/组件未注册/未捕获异常类致命错误——把「构建过≠真机能用」先过一遍机器半边，剩下才轮到本手册的人工走查；不入三道闸，见 `docs/运维手册.md` §⑨）。
 >
 > **导入**：微信开发者工具 → 导入项目 → 选本目录（AppID 已预填）→ 工具能跑后点「预览」扫码真机。
-> **上传/发版前**：`npm run mp:stamp-version-date`（「我」页第二行日期改成上海当天；`npm run release` 定版也会戳）。各端跟上用 `npm run mac:sync-ends`（Mac 上跑）。
+> **版本脚**：提交钩子 / CI 合入 main 或 test / `preview:mp` / `device:preview` / `agent:preview` / `npm run release` / `mac:sync-ends` 会自动把「我」页日期戳成上海当天，并按分支对齐通道（main＝开发、test＝测试）。人不用记 `mp:stamp-version-date`。实验线在仓 `luckyducky-fable-ablation` 把 `BUILD_CHANNEL` 写成 `experimental`，本仓不回收。**不要改微信正式上传/提审/发布命令。**
 > **渲染引擎拍板（2026-07-04 收口）**：M2 首发**全 WebView**——M0 spike 已证按页 Skyline 可用性无障碍，但增益未证实（吸顶双引擎都不吸），按防过度工程原则不为未证实的收益引入双引擎变量；Skyline 留上线后按页灰度（能力在手，随时可开）。
 
 ## 分层与依赖方向（T4 活线约定·守卫 `rw-dep-direction` 机器钉·2026-07-18 盲区体检批2 成文）
@@ -44,7 +44,7 @@ pages/ · components/ · custom-tab-bar/   （顶层·可越级下行直连 api/
 | # | 页面 | 看什么 | 结果 |
 |---|---|---|---|
 | 12 | 激活页（W1/W2 两屏·播放器重设计战役 批E） | 手动输码四态（成功/回访/他人码/废码文案）、背景图；**新激活成功**→ W1 恭喜屏（产品主图卡/课程名/双点指示①）→「下一步」纯前端翻屏 → W2 三件事屏（双点指示②/不可退货警示文案「确认进课后，这份材料包将不可退货」）→「进入课程」直达该课目录页；「先逛逛，稍后再进课」逃逸链接；**回访（mine）态**沉浸壳不变、不经 W1/W2 | |
-| 13 | 我的课程 | 已进课列表、点进目录页、**扫码激活后刚拿到的课卡高亮描边**（激活页确认进课→本页定位真机验） | |
+| 13 | 我的课程 | 已进课列表、点进目录页（激活页确认进课先直达该课目录，不再落本页高亮） | |
 | 14 | 课程目录页（C1·播放器重设计战役 批E 新增） | hero 产品主图（复用激活背景回退链，取不到落渐变占位）、「开始学习」CTA（有续播段跳播放/全课无可播段变灰+toast「课程视频整理中」）、**章>课时两层目录**（段落层级不出现，只活在播放页 segstrip）、课时行状态三态（done 紫勾/current 鸭黄播放圈+淡紫高亮描边+「上次学到 段落 N」/todo 灰空圈）、点整理中课时（无可播视频）toast「这节课还在整理中」不跳转、课程不存在空态 | |
 | 15 | 播放页（竖屏沉浸全屏重设计·播放器重设计战役 批B 结构重排 + 段落播完不自动切换、批C 自绘 seek 条、批D 求助面板+返回二次确认+加桌引导） | **视频首帧速度**、**段落播完不自动切下一段**（停在完成态·通栏「重播本段」点了真从头重来）、顶条两行标题（章节/课时·脏档回退只显课时名）、分段进度条浮层（segstrip：段格 done/cur/todo 三色 + 左侧文案三态「段落 x/y」「x 完成·接下来 x+1」「本课时/本课程完成」+ 右侧「关键动作节点」图例仅有标注才显）、**黑条不遮胶囊/状态栏**（顶条右上留白不被原生胶囊遮挡）、**全屏单击播放/暂停**（首次单击提示条「单击画面 播放/暂停」、tap 后永久消失）、**自绘 seek 条拖动**（原生 `<slider>` 已换：拖动中只改显示跟手、松手才真 seek 不被 timeupdate 顶回去；逐秒轻嗒阻尼震感 + 关键动作节点磁吸吸附命中再重嗒一下；seeking 时浮层显示时间预览胶囊，命中节点再叠鸭黄气泡「✦ 关键动作 · 节点名」——**真机专项**：安卓震感是否糊嗡成一片、磁吸窗口 3 秒手感松紧、拖动浮窗贴近屏幕左右边缘时是否出屏；完成态下 seek 条仍可拖，拖完自动恢复播放退出完成遮罩；缩略图窗未做——雪碧图后端 R36 未建，降级为纯时间浮窗+气泡）、**中央求助大圆钮拉起求助面板**（P3·占播放键位，图标 headset.svg——本机不再直连客服，客服真调用移入面板卡1）、**求助面板**（menu 三卡「联系客服/帮助视频/常见问题」——帮助视频接真数据 `getHelpVideos`，进子层每次重拉，点可播段同 sheet 内切内嵌播放视图·原生 controls·暂停主视频防双声，退出播放视图/关面板不自动恢复主视频；无地址段置灰+「整理中」角标；常见问题接真数据 `getPublicFaq`（R37b·KB 精选 FAQ 公开读·批B8·2026-07-12）——每次进子层重拉，`mapPublicFaq` 清洗，载入失败/空仍诚实空态导流客服；scrim/grab 区关闭；**真机专项**：内嵌视频真机播放流畅度、面板打开期间主视频背景进度是否正常继续）、**返回二次确认**（P5·每次返回都出现「再按一次返回退出」toast，非仅首次；**手势/系统返回无法拦截**——WebView 页无 onBackPress，只有自绘返回箭头经此判定，真机验证侧滑手势退出不受影响系预期内非缺口；求助面板开着时按返回逐层收口不计入退出确认）、**首次成功退出加桌引导**（P5b·仅展示一次，iOS/其余平台分端文案，「继续学习」关弹窗留下/「先退出，下次继续」真退；**真机验证清单**：清 `wx.getStorageSync('ld_player_desk_guide_shown')` 或小程序缓存后重进播放页触发两次返回，验证只弹一次且分端文案对；iOS 设备核验 `wx.getDeviceInfo().platform` 取值）、上/下段 chevron 端点置灰、empty/error 态「跳到下一段」（`canNext` 为假时隐藏，不留死按钮）、**旧 16:9 素材** contain 显示（上下留黑不裁切）；**已移除**：底部目录抽屉（目录已在课程目录页承接，段落层级只活在 segstrip） | |
 
@@ -64,7 +64,7 @@ pages/ · components/ · custom-tab-bar/   （顶层·可越级下行直连 api/
 
 **合规必须（M5 上线前·剩用户侧两件）**：mp 后台《用户隐私保护指引》登记与新版采集面对齐 + 真机验弹窗（根因#8）。
 
-**记账待补（GitHub Issues·非上线阻塞）**：分享卡剩真机验样式与朋友圈单页态；订单物流轨迹（快递100 插件）与扫码激活定位已接通（2026-07-08 批次C），剩真机验（见走查表第10项）。
+**记账待补（GitHub Issues·非上线阻塞）**：分享卡剩真机验样式与朋友圈单页态；订单物流轨迹（快递100 插件）剩真机验（见走查表第10项）。
 
 **非缺口（设计已变·UI 方向 A 拍板覆盖）**：MediaSlot 灰占位体系（新线 cover 直渲+灰底替代·见下「图片/资产加载策略」）· 节点拍照页（用户确认未投产·挂起）。
 
@@ -77,7 +77,7 @@ pages/ · components/ · custom-tab-bar/   （顶层·可越级下行直连 api/
 - **B 首屏 vs 折叠 → eager vs lazy（横向容器例外）**：首屏首图 eager（hero 不加 lazy）；折叠下方纵向内容图加 `lazy-load`；横向 scroll-view / swiper 内 `lazy-load` **真机不生效**（验证过），不加。守：`rw-mp-image-lazy-wired`（钉 7 点位）。
 - **C 单张 vs 列表 vs 大画廊 → 要否窗口化**：swiper/横向轨 lazy 失效 → 窗口化只渲 current±1（`computeGalleryWindow`·`pages/detail/detail.ts`）。
 - **D 临时址时效（~2h）→ 防过期**：持久化进 storage 的（cart/checkout）读时 `freshCover`（`lib/cart.ts`）重取；order 存 fileID 服务端 `swapOrdersCover` 换址；现取现渲（home/detail）天然新鲜。home 首屏快照（`lib/snapshot.ts`·冷启动 SWR）存的是已换好的 https 临时址，带 **90min TTL 剥离闸**（< 服务端 2h 有效期）——超龄读时剥掉快照内所有 http 临时址回退兜底（本地 `/static` 路径保留·mapHero 落包内鸭图/cover 落灰底），防隔夜冷启动首帧裂图。
-- **E 失败/缺席 → 占位兜底分级**：品牌门面缺→本地兜底图（永远有图·`mapHome.ts` `HERO_DEFAULT.img`）；课程 hero 缺→`bgFor` 三级回退→CSS 占位；内容图/cover 缺→`wx:if` 守空 + CSS 灰底（方向 A·弃 MediaSlot）；头像缺→🦆 emoji；换址一律 fail-soft；UGC 入库 `imgSecCheck` fail-closed（守 `ugc-imgsecchecked`）。
+- **E 失败/缺席 → 占位兜底分级**：品牌门面缺→本地兜底图（永远有图·`mapHome.ts` `HERO_DEFAULT.img`）；课程 hero 缺→`bgFor` 三级回退→CSS 占位；内容图/cover 缺→`wx:if` 守空 + CSS 灰底（方向 A·弃 MediaSlot）；头像缺→包内 `/static/logo-wordmark.svg`；换址一律 fail-soft；UGC 入库 `imgSecCheck` fail-closed（守 `ugc-imgsecchecked`）。
 
 **按位置矩阵**（来源｜加载｜防过期｜兜底）：
 
@@ -89,7 +89,7 @@ pages/ · components/ · custom-tab-bar/   （顶层·可越级下行直连 api/
 | CMS 内容图（feature/拆门槛/收尾/晒图） | CMS→`swapHomeImages` 换址 | **lazy** | 现取现渲 | `wx:if`+灰底 |
 | 商品 cover（轨/列表/详情） | `cloud://`→`getProducts` 批量换址 | 横向轨 eager（lazy 失效）·纵向列表 lazy | cart/checkout `freshCover`·order 服务端换址·余现取现渲 | `wx:if`+灰底 |
 | 详情图册（swiper） | 同 cover | **窗口 current±1** | 同 cover | 空数组落占位 |
-| 头像 | UGC `cloud://` | eager·`<image>` 直解 fileID | 免（直解不过期） | 🦆 emoji |
+| 头像 | UGC `cloud://` | eager·`<image>` 直解 fileID | 免（直解不过期） | 包内 `/static/logo-wordmark.svg` |
 | UGC 晒图 | UGC `cloud://`→读时换址 | **lazy** | 读时换址 | `wx:if` 守空 |
 
 **约定守卫（防策略漂移）**：折叠内容图必 `lazy-load`（`rw-mp-image-lazy-wired`）；禁内联 `<svg>`（`rw-mp-no-inline-svg`）；禁本地 `background:url()`（`rw-mp-no-bg-image-local`）；进包位图预算（`rw-mp-static-bitmap-budget`）；视频源禁外链（`no-external-video-src`·双线）。

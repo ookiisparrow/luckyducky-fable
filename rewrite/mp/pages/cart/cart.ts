@@ -17,19 +17,19 @@ let allRaw: Record<string, any>[] = [] // 全商品原档（算推荐+加购取�
 Page({
   data: {
     statusBarHeight: 0, // 沉浸式自绘导航：内容让开状态栏（navigationStyle:custom·2026-07-16 用户需求）
-    items: [] as ReturnType<typeof cart.getItems>,
-    allSelected: false,
-    selectedCount: 0,
-    totalLabel: '¥0.00',
-    recs: [] as ProductVM[], // 未在袋中的推荐（设计「下方选品」）
+    items: cart.getItems(), // 首帧走本地车，不等云目录（有货时不闪「这里还没有东西」）
+    allSelected: cart.allSelected(),
+    selectedCount: cart.selectedCount(),
+    totalLabel: cart.selectedTotalLabel(),
+    recs: [] as ProductVM[], // 未在袋中的推荐（设计「下方选品」）·目录回来再补
     exitGuardArmed: false, // 误触退出提醒（决策§30）：驱动 <page-container show>·onShow 武装（初值 false·未上屏不拦）
   },
-  ready: false, // 首建实例 onLoad 首拉完成前的 onShow 抢跑标记（P3·bug sweep R1 #11）：微信 onLoad→onShow 相邻触发，
-  // onLoad 的 await 未落地时 onShow 已跑，allRaw 还是空数组、二者并发各自 setData 互相踩踏。
+  ready: false, // 云目录首拉完成前 onShow 不重复 refresh（onLoad 已先本地刷一屏，避免与二次 refresh 互踩）
   async onLoad() {
     this.setData({ statusBarHeight: wx.getWindowInfo().statusBarHeight }) // 沉浸式：读状态栏高度让开自绘导航
+    this.refresh() // 本地车先上屏（allRaw 仍空·freshCover 回退行内 cover）
     allRaw = (await getAllProducts()) || [] // 复用首页缓存·热路径零云调用（miss 则兜底重拉一次）
-    this.refresh() // 首拉落地（refresh 内部含 setActive('cart')）
+    this.refresh() // 封面换新临时址 + 推荐补齐
     this.ready = true
   },
   onShow() {

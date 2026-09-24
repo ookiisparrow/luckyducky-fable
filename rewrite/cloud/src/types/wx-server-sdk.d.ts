@@ -16,6 +16,9 @@ declare module 'wx-server-sdk' {
     getWXContext(): WXContext
     callFunction(params: { name: string; data?: unknown }): Promise<any>
     uploadFile(params: { cloudPath: string; fileContent: unknown }): Promise<{ fileID: string }>
+    // 云函数官方形状（不是 getTempFileURL/deleteFile 的 fileList）：
+    // https://developers.weixin.qq.com/miniprogram/dev/wxcloudservice/wxcloud/reference-sdk-api/storage/downloadFile/server.downloadFile.html
+    downloadFile(params: { fileID: string }): Promise<{ fileContent: Buffer; statusCode: number }>
     getTempFileURL(params: {
       fileList: (string | { fileID: string; maxAge?: number })[]
     }): Promise<{ fileList: { fileID: string; tempFileURL: string }[] }>

@@ -1,6 +1,6 @@
 # @ldrw/shared — 全仓契约单源
 
-**一句话**：全仓契约唯一权威（金额/状态机/集合名/错误码/action↔模块映射），**改一处全仓震动**；本包多数文件是红区（数据契约不可改名）或黄区（镜像/生成物，改动需连带同步）。
+**一句话**：全仓契约唯一权威（金额/状态机/集合名/错误码/action↔模块映射），**改一处全仓震动**；本包多数文件是红区（数据契约不可改名）或黄区（须与正册同步的镜像，如 moduleMap）。
 
 ## 逐文件职责
 
@@ -18,5 +18,6 @@
 ## 红线
 
 - **集合名是数据契约**：`collections.ts` 的键即生产库集合名，不可改。
-- **状态机流转表改动 = 工头级**：状态串是前后端契约+库内数据，多处有 parity 测试焊死。
+- **状态机流转表改动 = 工头级**：状态串是前后端契约+库内数据，不可改名。
 - **mp 侧 4 处手抄消费点**（mp 物理进不了本包·靠手抄同步·改键必连带）：`rewrite/mp/lib/payFlow.ts`（收银台五参）· `lib/mapOrders.ts`（订单文档）· `lib/playbackCache.ts`（r.url）· `pages/order-list/order-list.ts`（nextCursor/hasMore）——改 `contracts.ts` 后同步这四处 + 哨兵测试。
+- **mp 侧其它手抄副本**（同样进不了本包·改值必连带·守卫已焊；不改手抄正文，只补漏记对照点）：`lib/mapLearning.ts` 的 `progressPercent`（镜像 `learning.ts`·`rw-progress-percent-single-source`）· `lib/mapAftersales.ts` 的售后客户向标签（镜像 `statusLabels.ts` `AFTERSALE_STATUS_LABEL_CUSTOMER`·`rw-mp-order-labels-synced`）· `lib/checkoutConst.ts`（镜像 `checkout.ts`·`rw-mp-checkout-consts-synced`）。

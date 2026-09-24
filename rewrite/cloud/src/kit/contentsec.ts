@@ -16,7 +16,7 @@ import { alert } from './observe'
  *   （build.mjs OPENAPI_PERMS 自动产·守卫 openapi-perm-declared）；② mp 后台开通内容安全能力；③ 真机验图片
  *   真能拦黄暴恐（imgSecCheck v1 同步·errCode 87014=内容含违规信息）。代码替不了 ②③，只把链路做成「配好即生效」。
  */
-export type SecResult = { ok: boolean; error?: string }
+type SecResult = { ok: boolean; error?: string }
 
 const RISKY = 87014 // 微信内容安全：图片含违规信息
 
@@ -29,9 +29,9 @@ export const SCENE_COMMENT = 2
 export async function imgSecCheck(fileId: string): Promise<SecResult> {
   if (!fileId) return { ok: false, error: 'NO_FILE' }
   try {
-    const dl = await (cloud as any).downloadFile({ fileList: [fileId] })
-    const f = dl && dl.fileList && dl.fileList[0]
-    const buf = f && f.fileContent
+    // 云函数 downloadFile 官方形状是 { fileID } → { fileContent, statusCode }，不是 getTempFileURL 的 fileList
+    const dl = await cloud.downloadFile({ fileID: fileId })
+    const buf = dl && dl.fileContent
     if (!buf) return { ok: false, error: 'SEC_CHECK_FAIL' } // 取不到图内容 → fail-closed 拒
     const r = await (cloud as any).openapi.security.imgSecCheck({
       media: { contentType: 'image/png', value: buf },
@@ -48,7 +48,7 @@ export async function imgSecCheck(fileId: string): Promise<SecResult> {
 }
 
 /** 接口抖动时：closed＝拒（评价/头像）；open＝放行并记日志（客服/反馈·防卡死顾客通道）。 */
-export type MsgSecInfra = 'closed' | 'open'
+type MsgSecInfra = 'closed' | 'open'
 
 function isRisky(code: unknown, suggest: unknown): boolean {
   return code === RISKY || suggest === 'risky'

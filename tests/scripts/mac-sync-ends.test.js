@@ -14,7 +14,7 @@ import {
 const ROOT = resolve(import.meta.dirname, '../..')
 const src = readFileSync(resolve(ROOT, 'scripts/mac-sync-ends.mjs'), 'utf8')
 const pkg = JSON.parse(readFileSync(resolve(ROOT, 'package.json'), 'utf8'))
-const SAMPLE = "export const BUILD_CHANNEL: '' | 'develop' | 'trial' | 'release' = ''\n"
+const SAMPLE = "export const BUILD_CHANNEL: '' | 'develop' | 'trial' | 'release' | 'experimental' = ''\n"
 
 describe('mac-sync-ends 接线', () => {
   it('package.json 挂上 mac:sync-ends', () => {
@@ -69,7 +69,7 @@ describe('gitFollowPlan：只快进 / detach，不硬撤', () => {
 describe('rewriteBuildChannel：只改赋值', () => {
   it('空通道钉成 release，类型字面量不动', () => {
     const next = rewriteBuildChannel(SAMPLE, 'release')
-    expect(next).toBe("export const BUILD_CHANNEL: '' | 'develop' | 'trial' | 'release' = 'release'\n")
+    expect(next).toBe("export const BUILD_CHANNEL: '' | 'develop' | 'trial' | 'release' | 'experimental' = 'release'\n")
   })
 
   it('测试线 trial → release；已经是 release 再钉一次不变形', () => {

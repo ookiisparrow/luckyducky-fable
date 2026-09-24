@@ -5,7 +5,7 @@ export const searchConversations = (filter: { openid?: string; externalUserId?: 
   client.post('searchConversations', filter as Record<string, unknown>)
 export const conversationsReport = (slaMs?: number) => client.post('conversationsReport', slaMs ? { slaMs } : {})
 export const getCustomer360 = (openid: string) => client.post('getCustomer360', { openid })
-export const getUser = (openid: string) => client.post('getUser', { openid }) // 单人画像·身份头（换皮没导出·坐席看不到姓名/手机）
+export const getUser = (openid: string) => client.post('getUser', { openid }) // 单人画像·身份头（Customer360 用）
 export const searchCustomer = (q: string) => client.post('searchCustomer', { q })
 export const listKb = () => client.post('listKb')
 export const saveKb = (entries: unknown[]) => client.post('saveKb', { entries })
@@ -20,3 +20,14 @@ export const sampleQc = (count = 10) => client.post('sampleQc', { count })
 export const saveQcMark = (sessionKey: string, score: number, note: string) => client.post('saveQcMark', { sessionKey, score, note })
 export const listQcSampled = (filter: { cursor?: unknown; limit?: number; onlyPending?: boolean } = {}) =>
   client.post('listQcSampled', filter as Record<string, unknown>)
+export const getTrialRefreshGate = () => client.post('getTrialRefreshGate')
+export const refreshTrialSession = (data: {
+  reason: string
+  force?: boolean
+  externalUserId?: string
+  externalUserIds?: string[]
+  sessionId?: string
+  sessionIds?: string[]
+  openid?: string
+  openids?: string[]
+}) => client.post('refreshTrialSession', data as Record<string, unknown>)

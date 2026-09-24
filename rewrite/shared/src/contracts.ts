@@ -1,4 +1,4 @@
-// mp↔cloud 响应契约（批B10·病根#5 手抄副本漂移 + #8 编译绿≠契约没漂）。
+// mp↔cloud 响应契约（病根#5 手抄副本漂移 + #8 编译绿≠契约没漂）。
 // 为什么存在：mp 物理进不了 @ldrw/shared（微信开发者工具编译不出仓外引用·rewrite/mp/lib/mapOrders.ts
 // 头注等自证），响应形状全靠手抄——cloud 改键 mp 编译不红＝静默漂移面。本文件＝cloud 侧编译锚
 // （handler 返回类型绑定）+ mp 手抄副本的人类正本；机器哨兵＝rewrite/cloud/tests/contract-shape.test.ts
@@ -8,13 +8,13 @@
 // 纯类型零运行时：只 export type/interface，不 export 值（esbuild 内联零产物影响）。
 
 /** 成功包：{ ok:true, ...data } 整包展开（kit/reply.ts ok() 无 data 信封）。 */
-export type AppOk<T> = { ok: true } & T
+type AppOk<T> = { ok: true } & T
 /** 失败包：恒含 ok/error 两键；extra 动态键（如 CODE_TAKEN 带 courseId）刻意不建模——锁了拦创新。 */
-export type AppErr = { ok: false; error: string }
-export type AppResp<T> = AppOk<T> | AppErr
+type AppErr = { ok: false; error: string }
+type AppResp<T> = AppOk<T> | AppErr
 
 /** 订单地址快照（createOrder 白名单四要素）。 */
-export interface AppOrderAddress {
+interface AppOrderAddress {
   name: string
   phone: string
   region: string
@@ -22,7 +22,7 @@ export interface AppOrderAddress {
 }
 
 /** 订单行（下单快照·9 键）。price 单位「元」——库记元、运算走分（orders.ts 金额注释）。 */
-export interface AppOrderLine {
+interface AppOrderLine {
   productId: string
   lineId: string
   name: string
@@ -39,7 +39,7 @@ export interface AppOrderLine {
  * 两条路径哨兵各锁一例）；paidAt 之外的生命周期键由 callbacks/adminApi 写入，第一批仅类型登记、
  * 不进键集合断言（锁它们要造全生命周期夹具＝脆而无谓）；mp mapOrders 消费 shipping/shippedAt。
  */
-export interface AppOrderDoc {
+interface AppOrderDoc {
   _id: string
   id: string
   _openid: string
@@ -62,7 +62,7 @@ export interface AppOrderDoc {
 }
 
 /** wx.requestPayment 收银台五参（mp 消费面：payFlow.ts PaymentParams 手抄副本）。 */
-export interface WxPaymentParams {
+interface WxPaymentParams {
   timeStamp: string
   nonceStr: string
   package: string

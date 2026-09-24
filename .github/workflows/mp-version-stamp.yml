@@ -1,0 +1,52 @@
+# 小程序「我」页版本脚：合入 main/test 时自动戳上海当天日期，并按分支对齐通道。
+# PR 上跑一遍 dry-run（证明脚本能跑）；真正写回只在 push 到 main/test（合入后）。
+# 不碰微信正式上传 / 提审 / 发布。
+name: 小程序版本戳
+
+on:
+  pull_request:
+    branches: [main, test]
+  push:
+    branches: [main, test]
+
+permissions:
+  contents: write
+
+jobs:
+  stamp:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 检出代码
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.head_ref || github.ref }}
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: 安装 Node 20
+        uses: actions/setup-node@v7
+        with:
+          node-version: 20
+
+      - name: 计算该戳的日期和通道
+        id: dry
+        env:
+          GITHUB_REF_NAME: ${{ github.event_name == 'push' && github.ref_name || github.head_ref }}
+          GITHUB_BASE_REF: ${{ github.base_ref }}
+        run: node scripts/stamp-mp-version-date.mjs --check
+        continue-on-error: true
+
+      - name: 合入后写回版本脚
+        if: github.event_name == 'push'
+        env:
+          GITHUB_REF_NAME: ${{ github.ref_name }}
+        run: |
+          node scripts/stamp-mp-version-date.mjs
+          if git diff --quiet -- rewrite/mp/lib/appVersion.ts; then
+            echo "版本脚已是最新"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add rewrite/mp/lib/appVersion.ts
+          git commit -m "chore：自动戳小程序版本日期"
+          git push

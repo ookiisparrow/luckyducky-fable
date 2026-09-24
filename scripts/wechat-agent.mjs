@@ -20,7 +20,7 @@
  * automator 连接：ws://[::1]:9420（IPv6！不是 127.0.0.1）
  * 依赖：node_modules/miniprogram-automator（项目已装）
  *
- * 环境变量：WECHAT_AGENT_CLIENT 客户端名（默认 pi-agent）
+ * 环境变量：WECHAT_AGENT_CLIENT 客户端名（默认 ldrw-cli，与运维手册一致）
  */
 import { execSync } from 'node:child_process';
 import { createRequire } from 'node:module';
@@ -30,7 +30,7 @@ import { fileURLToPath } from 'node:url';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PROJECT = path.resolve(__dirname, '../rewrite/mp');
 const HOME_PAGE = 'pages/home/home';
-const CLIENT = process.env.WECHAT_AGENT_CLIENT || 'pi-agent';
+const CLIENT = process.env.WECHAT_AGENT_CLIENT || 'ldrw-cli';
 const SKILL_VERSION = '0.3.9';
 const AUTOMATOR_WS = 'ws://[::1]:9420'; // IPv6！automator 的 WebSocket 端点
 
@@ -106,7 +106,7 @@ async function cmdDebug(page) {
   console.log('  ', fmt(r));
   console.log('\n📱 若返回 pending + taskId：');
   console.log('   用 polling_task_result 轮询回调（每 10 秒，最多 10 次）：');
-  console.log('   wechatide -c pi-agent polling_task_result --task-id <taskId>');
+  console.log(`   wechatide -c ${CLIENT} polling_task_result --task-id <taskId>`);
   console.log('\n   二维码可能在 RemoteDebugWindow（远程调试窗口），被主窗口遮挡时找一下。\n');
 }
 
@@ -194,7 +194,7 @@ const help = `
   node scripts/wechat-agent.mjs nav <url>           # automator 导航
   node scripts/wechat-agent.mjs eval <js>           # automator 执行 JS
 
-环境变量: WECHAT_AGENT_CLIENT 客户端名（默认 pi-agent）
+环境变量: WECHAT_AGENT_CLIENT 客户端名（默认 ldrw-cli）
 `;
 
 if (!sub || sub === 'help' || sub === '--help' || sub === '-h') {

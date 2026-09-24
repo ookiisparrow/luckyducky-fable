@@ -1,12 +1,11 @@
 <script setup lang="ts">
-// 客服会话（设计语言一致性·M3 UI 批13 + 批 B6 深链预填）：按客户检索时间轴 + 质检报表（样本口径诚实标注）。
-// 深链预填（批 B6·本页原无 route.query 读取能力·新增最小实现）：Csat.vue 差评行「查会话」
-// router.push({path:'/conversations', query:{externalUserId}}) 跳转过来——挂载时读 route.query.externalUserId/
-// openid 预填输入框并自动检索一次（同 Batches.vue/Cards.vue 既有「props(嵌入) || route.query(深链) || 空」范式）。
+// 客服会话：按客户检索时间轴 + 质检报表（样本口径诚实标注）。
+// 深链：满意度差评行「查会话」带 ?externalUserId（或 openid）跳来，挂载时预填并自动检索一次。
 import { ref, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
-import { Search, RotateCcw, ClipboardCheck } from 'lucide-vue-next'
-import { searchConversations, conversationsReport, sampleQc, saveQcMark, listQcSampled } from '../api/cs'
+import { Search, RotateCcw, ClipboardCheck, RefreshCw } from 'lucide-vue-next'
+import { CS_REFRESH_COPY } from '@ldrw/shared'
+import { searchConversations, conversationsReport, sampleQc, saveQcMark, listQcSampled, getTrialRefreshGate, refreshTrialSession } from '../api/cs'
 import { mapMessages, mapReport, mapQcRows, type MsgVM, type ReportVM, type QcRowVM } from '../lib/mapCs'
 import { useLatest } from '../lib/latest'
 import UiButton from '../components/ui/Button.vue'
@@ -23,7 +22,6 @@ const keyword = ref('')
 const msgs = ref<MsgVM[]>([])
 const cursor = ref<unknown>(null)
 const hasMore = ref(false)
-const searched = ref(false)
 const report = ref<ReportVM | null>(null)
 const message = ref('')
 // 首响 SLA 阈值（分钟）：初值 5 与后端 conversations.ts DEFAULT_SLA_MS 同口径（P2 顺手改批——此前前端默认 30
@@ -63,7 +61,6 @@ async function search() {
   msgs.value = r.ok ? mapMessages(r.messages) : []
   cursor.value = r.ok ? r.nextCursor : null
   hasMore.value = !!(r.ok && r.hasMore)
-  searched.value = true
   message.value = r.ok ? (msgs.value.length ? '' : '没有匹配的会话') : '检索失败：' + String(r.error || '')
 }
 
@@ -188,9 +185,63 @@ function viewQcSession(row: QcRow) {
   void search()
 }
 
+const trialRefreshOn = ref(false)
+const trialRefreshBusy = ref(false)
+const trialRefreshForce = ref(false)
+const trialRefreshReason = ref('')
+const trialRefreshArmed = ref(false)
+const trialRefreshMsg = ref('')
+
+async function loadTrialRefreshGate() {
+  const r = await getTrialRefreshGate()
+  trialRefreshOn.value = !!(r.ok && (r as { enabled?: boolean }).enabled)
+}
+
+async function doTrialRefresh() {
+  const target = externalUserId.value.trim() || openid.value.trim()
+  if (!target) {
+    trialRefreshMsg.value = '先填外部用户号或 openid，再刷新'
+    trialRefreshArmed.value = false
+    return
+  }
+  const reason = trialRefreshReason.value.trim()
+  if (!reason) {
+    trialRefreshMsg.value = CS_REFRESH_COPY.adminReasonPlaceholder
+    trialRefreshArmed.value = false
+    return
+  }
+  if (!trialRefreshArmed.value) {
+    trialRefreshArmed.value = true
+    trialRefreshMsg.value = trialRefreshForce.value
+      ? '再点一次确认强制刷新（人工接待会被关掉，真订单不动）'
+      : '再点一次确认刷新（会话进度会清空，真订单不动）'
+    return
+  }
+  trialRefreshArmed.value = false
+  trialRefreshBusy.value = true
+  trialRefreshMsg.value = ''
+  const payload = externalUserId.value.trim()
+    ? { reason, force: trialRefreshForce.value, externalUserId: externalUserId.value.trim() }
+    : { reason, force: trialRefreshForce.value, openid: openid.value.trim() }
+  const r = await refreshTrialSession(payload)
+  trialRefreshBusy.value = false
+  if (r.ok) {
+    trialRefreshMsg.value = CS_REFRESH_COPY.adminSuccess
+    return
+  }
+  const err = String((r as { error?: string }).error || '')
+  trialRefreshMsg.value =
+    err === 'HUMAN_ACTIVE'
+      ? '人工处理中，默认不能刷新。如需强制请走管理端并写原因。'
+      : err === 'TRIAL_ONLY'
+        ? '当前环境未开放刷新'
+        : '刷新失败：' + err
+}
+
 onMounted(() => {
   void loadReport()
   void loadQcSampled()
+  void loadTrialRefreshGate()
   if (openid.value || externalUserId.value) void search() // 深链预填带值即自动检索一次（省一次手点）
 })
 </script>
@@ -221,13 +272,24 @@ onMounted(() => {
     </Card>
 
     <!-- 会话检索（按客户）：本页无「会话列表/客户上下文」数据源，不建三栏实时收件箱，保持检索→时间轴 -->
-    <Card title="会话检索（按客户）" sub="按 openid / 外部用户号 / 关键词 检索消息时间轴">
+    <Card title="会话检索（按客户）" :sub="trialRefreshOn ? '按客户检索时间轴 · ' + CS_REFRESH_COPY.adminListHint : '按 openid / 外部用户号 / 关键词 检索消息时间轴'">
       <div class="ld-toolbar">
         <label class="ld-search"><input v-model="openid" placeholder="openid" @keyup.enter="search" /></label>
         <label class="ld-search"><input v-model="externalUserId" placeholder="或 外部用户号（未绑定时）" @keyup.enter="search" /></label>
         <label class="ld-search"><input v-model="keyword" placeholder="关键词（页内过滤）" @keyup.enter="search" /></label>
         <UiButton @click="search"><Search :size="14" :stroke-width="1.8" /><span>检索</span></UiButton>
+        <template v-if="trialRefreshOn">
+          <label class="ld-search"><input v-model="trialRefreshReason" :placeholder="CS_REFRESH_COPY.adminReasonPlaceholder" /></label>
+          <label class="trial-force">
+            <input v-model="trialRefreshForce" type="checkbox" />
+            强制（人工中）
+          </label>
+          <UiButton variant="ghost" size="sm" :disabled="trialRefreshBusy" @click="doTrialRefresh">
+            <RefreshCw :size="14" :stroke-width="1.8" /><span>{{ trialRefreshBusy ? '刷新中…' : '当作新客重新开始' }}</span>
+          </UiButton>
+        </template>
       </div>
+      <p v-if="trialRefreshOn && trialRefreshMsg" class="ld-status conv-status">{{ trialRefreshMsg }}</p>
 
       <!-- 检索状态/加载反馈：独立于时间轴显示（重检索时「检索中…」不被旧结果抑制） -->
       <p v-if="message" class="ld-status conv-status">{{ message }}</p>
@@ -319,6 +381,14 @@ onMounted(() => {
 
 <style scoped>
 /* 质检报表卡头：SLA 阈值输入（重算按 slaMin 换算 ms 传 conversationsReport） */
+.trial-force {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  color: var(--ld-content-2);
+  white-space: nowrap;
+}
 .sla-in {
   font-size: 11.5px;
   color: var(--ld-content-2);

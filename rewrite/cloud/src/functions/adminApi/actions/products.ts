@@ -1,6 +1,6 @@
 import { isValidPriceYuan, isValidScmProductId, isValidScmSpec } from '@ldrw/shared'
-import { reply, cleanProduct, cleanSold, storeImage, type Ctx } from '../lib'
-import { notifyAlert } from '../../../kit'
+import { reply, cleanProduct, cleanSold, storeImage, readDoc, isCollectionMissing, type Ctx } from '../lib'
+import { notifyAlert, getTempUrls } from '../../../kit'
 
 // —— 商品图册孤儿 GC 判据单源（E16 共享 helper·防多点漂移·批B）——
 // 换图/发布替换/删档三处写点共用这一份 diff 计算 + cover 豁免，别各写一份（漂移＝漏删或误删）。
@@ -45,18 +45,23 @@ function mergePendingGc(old: any, orphans: string[], keep: Set<string>): { fileI
   return [...carried, ...fresh.map((fileId) => ({ fileId, deleteAfter: now + GC_GRACE_MS }))]
 }
 
-export async function listDrafts({ cloud, db, drafts }: Ctx) {
+// 列表图换临时地址。微信一次最多 50 个 fileID；草稿封面+图册、橱窗封面凑一批会超，整包丢过去会整批失败。
+// 走 kit getTempUrls：去重后按 50 张分批。不传 maxAge，和原先裸 string 换址同形。换不到的不放进结果。
+async function listedImageUrls(fileIds: Iterable<string>): Promise<Record<string, string>> {
+  const urls: Record<string, string> = {}
+  const map = await getTempUrls([...fileIds])
+  for (const [id, url] of Object.entries(map)) if (url) urls[id] = url
+  return urls
+}
+
+export async function listDrafts({ db, drafts }: Ctx) {
   const res = await drafts.orderBy('createdAt', 'desc').limit(100).get()
   const ids = new Set<string>()
   for (const p of res.data) {
     if (p.cover && p.cover.startsWith('cloud://')) ids.add(p.cover)
     for (const u of p.images || []) if (u.startsWith('cloud://')) ids.add(u)
   }
-  const urls: Record<string, string> = {}
-  if (ids.size) {
-    const r = await cloud.getTempFileURL({ fileList: [...ids] })
-    for (const f of r.fileList) if (f.tempFileURL) urls[f.fileID] = f.tempFileURL
-  }
+  const urls = await listedImageUrls(ids)
   // 上架/下架状态映射（S11·债#12 软下架显形）：listed 标记在 products、不在草稿，控制台靠它分
   // 「在售（onsale+listed≠false）/ 已下架（onsale+listed:false）/ 筹备中（未上架·无 products 文档）」。
   // 一次性批量取（草稿 ≤100·bounded·根因#7），口径与 getProducts 一致（旧无字段=可售）。
@@ -78,13 +83,19 @@ export async function listDrafts({ cloud, db, drafts }: Ctx) {
   const courseIds = res.data.map((p: any) => String(p.courseId || '') || 'course-' + (p.id || p._id)).filter(Boolean)
   const cardFinal: Record<string, boolean> = {}
   const hasVideo: Record<string, boolean> = {}
+  const coursePublished: Record<string, boolean> = {}
   const hasBatch: Record<string, boolean> = {}
   if (draftIds.length) {
     const cardIds = draftIds.map((id: string) => 'card-' + id)
-    // 联表失败 fail-loud：.catch 空表会把已完成步画成未做。
-    const [cr, cor, br] = await Promise.all([
+    // 联表失败 fail-loud：.catch 空表会把已完成步画成未做。草稿课集合可能尚未建，只把「集合不存在」当空表。
+    const [cr, cor, cdr, br] = await Promise.all([
       db.collection('cards').where({ _id: _.in(cardIds) }).get(),
       db.collection('courses').where({ _id: _.in(courseIds) }).get(),
+      // 草稿课也算「有视频文件」——进度圆点要能区分「有文件」vs「课已发布」（#213）
+      db.collection('coursesDraft').where({ _id: _.in(courseIds) }).get().catch((e: unknown) => {
+        if (isCollectionMissing(e)) return { data: [] as any[] }
+        throw e
+      }),
       // aggregate group：只回「有 qrcode 的 courseId」一行/课·不逐码扫（capacity·根因#7）
       db.collection('qrcodes').aggregate().match({ courseId: _.in(courseIds) }).group({ _id: '$courseId' }).end(),
     ])
@@ -92,15 +103,22 @@ export async function listDrafts({ cloud, db, drafts }: Ctx) {
       const pid = String(c.productId || String(c._id || '').replace(/^card-/, ''))
       cardFinal[pid] = c.status === 'final'
     }
+    const markVideo = (c: any) => {
+      const cid = String(c.id || c._id || '')
+      if (!cid) return
+      for (const ch of c.chapters || [])
+        for (const ls of ch.lessons || [])
+          for (const sg of ls.segments || []) if (sg && sg.videoFileId) hasVideo[cid] = true
+    }
     for (const c of (cor as any).data || []) {
       const cid = String(c.id || c._id || '')
-      let vid = false
-      for (const ch of c.chapters || []) for (const ls of ch.lessons || []) for (const sg of ls.segments || []) if (sg && sg.videoFileId) vid = true
-      hasVideo[cid] = vid
+      if (cid) coursePublished[cid] = true
+      markVideo(c)
     }
+    for (const c of (cdr as any).data || []) markVideo(c)
     for (const g of (br as any).list || []) hasBatch[String(g._id || '')] = true
   }
-  return reply(200, { ok: true, list: res.data, urls, listed, cardFinal, hasVideo, hasBatch })
+  return reply(200, { ok: true, list: res.data, urls, listed, cardFinal, hasVideo, coursePublished, hasBatch })
 }
 
 export async function saveDraft({ db, drafts, data }: Ctx) {
@@ -109,10 +127,13 @@ export async function saveDraft({ db, drafts, data }: Ctx) {
   // 换图缓期 GC（批B·规则4）：整份覆盖前先取旧草稿+发布档，算被撤且非 cover 的孤儿图，缓期入 drafts.pendingGc
   // （单队列之家=草稿档）；不立删——admin listDrafts/mp 详情给这些图签过临时址，同步删=在场会话见 404。
   // pendingGc 是服务端衍生字段（cleanProduct 白名单不含它·客户端注入不了）：从旧草稿读、覆盖时带回。
-  const [prevDraft, pub] = await Promise.all([
-    drafts.doc(p.id).get().then((r: any) => r.data).catch(() => null),
-    db.collection('products').doc(p.id).get().then((r: any) => r.data).catch(() => null),
+  const [prevDraftR, pubR] = await Promise.all([
+    readDoc(drafts.doc(p.id).get()),
+    readDoc(db.collection('products').doc(p.id).get()),
   ])
+  if (!prevDraftR.ok || !pubR.ok) return reply(200, { ok: false, error: 'DOC_READ_FAIL' })
+  const prevDraft = prevDraftR.data
+  const pub = pubR.data
   // productId/spec 出生点校验（战役3 批D·D1·helper 单源 shared/scmKey.ts·预审裁决修订：校验只对「出生/变更」
   // 生效，不对「存量值原样带回」生效）：p.id 是 SCM 组合键的 productId 半边，p.tag/skus[].name 是 spec 半边的
   // 候选来源（createOrder lineIdOf 取 SKU 名或 tag 作 spec）——二者会拼进 scmAssembly fg:${productId}__${spec}
@@ -212,8 +233,9 @@ export async function uploadImage({ cloud, data }: Ctx) {
 export async function publishProduct({ db, drafts, data }: Ctx) {
   const id = String(data.id || '')
   if (!id) return reply(400, { ok: false, error: 'NO_ID' })
-  const got = await drafts.doc(id).get().catch(() => null)
-  if (!got || !got.data) return reply(400, { ok: false, error: 'NO_DRAFT' })
+  const got = await readDoc(drafts.doc(id).get())
+  if (!got.ok) return reply(200, { ok: false, error: 'DOC_READ_FAIL' })
+  if (!got.data) return reply(400, { ok: false, error: 'NO_DRAFT' })
   const d = got.data
   if (!d.cover) return reply(400, { ok: false, error: 'NEED_COVER' })
   // 价格硬边界：有限正数且 ≤ 上限——拦负价 / Infinity / 超大价穿透（外部体检 P1）
@@ -226,18 +248,20 @@ export async function publishProduct({ db, drafts, data }: Ctx) {
     return reply(400, { ok: false, error: 'NEED_SKUS' })
   }
   const productsColl = db.collection('products')
-  const exist = await productsColl.doc(id).get().catch(() => null)
-  let sort = exist?.data?.sort
-  let featured = exist?.data?.featured
+  const exist = await readDoc(productsColl.doc(id).get())
+  if (!exist.ok) return reply(200, { ok: false, error: 'DOC_READ_FAIL' })
+  let sort = exist.data?.sort
+  let featured = exist.data?.featured
   if (sort === undefined) {
     const top = await productsColl.orderBy('sort', 'desc').limit(1).get()
     sort = (top.data[0]?.sort ?? 0) + 1
-    featured = true
+    // 首发默认不进首页人气条（#212）：要挂首页须显式 featured:true。再同步保留原 featured，不覆盖橱窗开关。
+    featured = data.featured === true
   }
   // 重新上架（编辑后再发布）不得隐式改变销售状态：保留旧 listed/unlistedAt——已停售（listed:false）商品
   // 编辑重发仍停售，须显式 republishProduct 才恢复销售（审核 P1·债#12·防整文档 set 抹掉 listed→「无字段=可售」隐式复活）。
   const carry: Record<string, unknown> = {}
-  if (exist?.data && 'listed' in exist.data) {
+  if (exist.data && 'listed' in exist.data) {
     carry.listed = exist.data.listed
     if (exist.data.unlistedAt != null) carry.unlistedAt = exist.data.unlistedAt
   }
@@ -270,7 +294,7 @@ export async function publishProduct({ db, drafts, data }: Ctx) {
   // 发布替换孤儿缓期入队（批B·规则4）：旧发布(exist)不再被新发布(doc=草稿)引用的非 cover 图进 drafts.pendingGc
   // （单队列之家=草稿档·发布 action 也写它），对齐 courses.publishCourse；立删会让在场 admin/详情会话临时址 404。
   // products 档本身不携 pendingGc（doc 显式白名单不含它）——队列只此一家在草稿档。
-  const { orphans, keep } = diffOrphans([exist?.data, d], [doc, d])
+  const { orphans, keep } = diffOrphans([exist.data, d], [doc, d])
   const pendingGc = mergePendingGc(d.pendingGc, orphans, keep)
   await drafts.doc(id).update({ data: { status: 'onsale', pendingGc } })
   return reply(200, { ok: true })
@@ -305,14 +329,10 @@ export async function republishProduct({ db, data }: Ctx) {
 }
 
 // —— 小程序橱窗（规格 §八）：一比一首页预览的排序与上下架 ——
-export async function listShowcase({ db, cloud }: Ctx) {
+export async function listShowcase({ db }: Ctx) {
   const res = await db.collection('products').orderBy('sort', 'asc').limit(100).get()
   const ids = res.data.map((p: any) => p.cover).filter((u: any) => u && u.startsWith('cloud://'))
-  const urls: Record<string, string> = {}
-  if (ids.length) {
-    const r = await cloud.getTempFileURL({ fileList: [...new Set<string>(ids)] })
-    for (const f of r.fileList) if (f.tempFileURL) urls[f.fileID] = f.tempFileURL
-  }
+  const urls = await listedImageUrls(ids)
   return reply(200, { ok: true, list: res.data, urls })
 }
 

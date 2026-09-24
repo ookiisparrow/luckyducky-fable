@@ -1,0 +1,245 @@
+{
+  "version": "1.0",
+  "comment_absorb": "学七鱼转人工策略链 + 美洽连续无匹配；低置信学 MaxKB 阈值；显式 handoff 学 Chatwoot",
+  "default_confidence_threshold": 0.55,
+  "consecutive_unknown_threshold": 2,
+  "collect_rounds_handoff": 3,
+  "rules": [
+    {
+      "id": "R01_ask_human",
+      "priority": 1,
+      "when": {
+        "user_asks_human": true
+      },
+      "action": "human",
+      "human_substate": "queued",
+      "script": "human_queued"
+    },
+    {
+      "id": "R02_complaint_high",
+      "priority": 2,
+      "when": {
+        "intent": "complaint",
+        "severity": "high"
+      },
+      "action": "human",
+      "human_substate": "queued",
+      "script": "human_queued"
+    },
+    {
+      "id": "R03_sensitive",
+      "priority": 3,
+      "when": {
+        "sensitive_hit": true
+      },
+      "action": "human",
+      "human_substate": "queued",
+      "script": "human_queued"
+    },
+    {
+      "id": "R04_low_confidence",
+      "priority": 4,
+      "when": {
+        "confidence_lt": 0.55
+      },
+      "action": "human",
+      "human_substate": "queued",
+      "script": "human_queued",
+      "note": "MaxKB 低置信不硬答"
+    },
+    {
+      "id": "R05_consecutive_unknown",
+      "priority": 5,
+      "when": {
+        "consecutive_unknown_ge": 2
+      },
+      "action": "human",
+      "human_substate": "queued",
+      "script": "human_queued",
+      "note": "美洽连续无匹配 + 七鱼未知策略"
+    },
+    {
+      "id": "R10_presale_consult",
+      "priority": 10,
+      "when": {
+        "intent": "consult",
+        "stage": "presale"
+      },
+      "action": "collect",
+      "script": "presale_consult",
+      "required_slots": [
+        "issue_type"
+      ]
+    },
+    {
+      "id": "R11_presale_compare",
+      "priority": 11,
+      "when": {
+        "intent": "compare",
+        "stage": "presale"
+      },
+      "action": "collect",
+      "script": "presale_compare",
+      "required_slots": [
+        "product_type",
+        "issue_type"
+      ]
+    },
+    {
+      "id": "R12_presale_order_guide",
+      "priority": 12,
+      "when": {
+        "intent": "order_guide",
+        "stage": "presale"
+      },
+      "action": "collect",
+      "script": "presale_order_guide",
+      "required_slots": [
+        "product_type"
+      ]
+    },
+    {
+      "id": "R20_insale_logistics",
+      "priority": 20,
+      "when": {
+        "intent": "logistics",
+        "stage": "insale"
+      },
+      "action": "collect",
+      "script": "insale_logistics",
+      "required_slots": [
+        "order_id"
+      ]
+    },
+    {
+      "id": "R21_insale_not_arrived",
+      "priority": 21,
+      "when": {
+        "intent": "not_arrived",
+        "stage": "insale"
+      },
+      "action": "collect",
+      "script": "insale_not_arrived",
+      "required_slots": [
+        "order_id"
+      ]
+    },
+    {
+      "id": "R30_aftersale_packaging",
+      "priority": 30,
+      "when": {
+        "intent": "packaging",
+        "stage": "aftersale"
+      },
+      "action": "collect",
+      "script": "aftersale_packaging",
+      "required_slots": [
+        "severity_photo_hint"
+      ],
+      "do_not_ask": [
+        "order_id"
+      ],
+      "comment": "演练定稿：只要合照，禁止要订单号"
+    },
+    {
+      "id": "R31_aftersale_product_course",
+      "priority": 31,
+      "when": {
+        "intent": "product_course",
+        "stage": "aftersale"
+      },
+      "action": "collect",
+      "script": "aftersale_product_course",
+      "required_slots": [
+        "product_type",
+        "issue_type"
+      ]
+    },
+    {
+      "id": "R32_aftersale_product_app",
+      "priority": 32,
+      "when": {
+        "intent": "product_app",
+        "stage": "aftersale"
+      },
+      "action": "collect",
+      "script": "aftersale_product_app",
+      "required_slots": [
+        "product_type",
+        "issue_type"
+      ]
+    },
+    {
+      "id": "R33_aftersale_quality",
+      "priority": 33,
+      "when": {
+        "intent": "quality",
+        "stage": "aftersale"
+      },
+      "action": "collect",
+      "script": "aftersale_quality",
+      "required_slots": [
+        "order_id",
+        "issue_type",
+        "severity_desc"
+      ]
+    },
+    {
+      "id": "R34_aftersale_howto",
+      "priority": 34,
+      "when": {
+        "intent": "howto_craft",
+        "stage": "aftersale"
+      },
+      "action": "collect",
+      "script": "aftersale_howto_craft",
+      "required_slots": [
+        "product_type",
+        "issue_type"
+      ]
+    },
+    {
+      "id": "R35_aftersale_wrong_missing",
+      "priority": 35,
+      "when": {
+        "intent": "wrong_or_missing",
+        "stage": "aftersale"
+      },
+      "action": "collect",
+      "script": "aftersale_wrong_or_missing",
+      "required_slots": [
+        "order_id",
+        "issue_type",
+        "severity_desc"
+      ]
+    }
+  ],
+  "stage_keywords": {
+    "presale": [
+      "咨询",
+      "对比",
+      "怎么买",
+      "下单",
+      "课程介绍",
+      "材料包"
+    ],
+    "insale": [
+      "物流",
+      "快递",
+      "发货",
+      "到哪了",
+      "没到",
+      "签收"
+    ],
+    "aftersale": [
+      "包装",
+      "破损",
+      "质量",
+      "发错",
+      "缺件",
+      "不会钩",
+      "课程打不开",
+      "小程序"
+    ]
+  }
+}

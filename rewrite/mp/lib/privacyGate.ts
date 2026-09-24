@@ -5,7 +5,7 @@
 // ⚠️ 运行时行为依赖 mp 后台已登记《小程序用户隐私保护指引》+ 真机验（根因#8 构建过≠真机能用）。
 export type PrivacyResolve = (r: { buttonId?: string; event: 'agree' | 'disagree' }) => void
 
-export interface PrivacyGate {
+interface PrivacyGate {
   visible(): boolean
   subscribe(fn: (visible: boolean) => void): () => void
   open(resolve: unknown): void

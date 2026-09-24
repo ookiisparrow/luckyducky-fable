@@ -1,5 +1,5 @@
 <script setup lang="ts">
-// 激活码批次（design/console.pen S9 视觉 + 批次详情抽屉·M3 UI 批6）：统计卡/进度条/状态 chip 由真聚合派生、
+// 激活码批次：统计卡/进度条/状态 chip 由真聚合派生、
 // 详情抽屉码表接 listBatchCodes 真码（cursor 分页，一页 50）+ CSV/印刷包另取齐整批。
 // 诚实边界：后端 listBatches 需 courseId（无「列全量批次」action）——按课程范围查（非跨课「全部」）；
 // listBatchCodes 只回码串无每码激活态——码表不标单码已激活/未用（记待办）。印刷包 ZIP 已还原（卡面SVG+地址CSV+说明·二轮批Cards-2）。
@@ -38,7 +38,6 @@ const message = ref('')
 const busy = ref(false)
 const count = ref(50)
 const creating = ref(false)
-const search = ref('')
 const filter = ref<'all' | 'using' | 'used' | 'fresh'>('all')
 
 const detail = ref<BatchRow | null>(null)
@@ -95,17 +94,14 @@ const counts = computed(() => ({
   fresh: rows.value.filter((b) => statusOf(b) === 'fresh').length,
 }))
 const shown = computed(() => {
-  const q = search.value.trim().toLowerCase()
-  return rows.value.filter(
-    (b) => (filter.value === 'all' || statusOf(b) === filter.value) && (!q || b.batchId.toLowerCase().includes(q))
-  )
+  return rows.value.filter((b) => filter.value === 'all' || statusOf(b) === filter.value)
 })
 const batchPages = computed(() => Math.max(1, Math.ceil(shown.value.length / BATCH_PAGE)))
 const pagedShown = computed(() => {
   const start = (batchPage.value - 1) * BATCH_PAGE
   return shown.value.slice(start, start + BATCH_PAGE)
 })
-watch([filter, search, rows], () => {
+watch([filter, rows], () => {
   batchPage.value = 1
 })
 const pct = (b: BatchRow) => (b.total ? Math.min(100, Math.round((b.activated / b.total) * 100)) : 0)
@@ -249,8 +245,7 @@ async function downloadPack() {
     const productId = loadedCourse.value.replace(/^course-/, '')
     const r = await getCard(productId)
     const zip = new JSZip()
-    const head = urlPrefix.value ? '激活码,网址' : '激活码'
-    const csv = [head, ...all.map((c) => (urlPrefix.value ? `${c},${codeUrl(c)}` : c))].join('\n')
+    const csv = ['激活码,网址', ...all.map((c) => `${c},${codeUrl(c)}`)].join('\n')
     zip.file('二维码地址.csv', '﻿' + csv) // BOM 防 Excel 中文乱码
     const card = (r as any).ok ? (r as any).card : null
     if (card) {
@@ -289,9 +284,7 @@ async function exportCsv() {
     exportBlockedMsg.value = '取齐本批码失败，请稍后重试'
     return
   }
-  const head = urlPrefix.value ? '激活码,网址' : '激活码'
-  const lines = all.map((c) => (urlPrefix.value ? `${c},${codeUrl(c)}` : c))
-  const csv = [head, ...lines].join('\n')
+  const csv = ['激活码,网址', ...all.map((c) => `${c},${codeUrl(c)}`)].join('\n')
   const url = URL.createObjectURL(new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8' })) // BOM 防 Excel 中文乱码
   const a = document.createElement('a')
   a.href = url

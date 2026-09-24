@@ -1,0 +1,2 @@
+# collect_product_type
+1. 是课程、小程序，还是实物材料包？

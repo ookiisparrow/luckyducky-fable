@@ -5,8 +5,26 @@
 import { ref, computed, onMounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { Store, ArrowLeft, ChevronLeft, ChevronRight, Check } from 'lucide-vue-next'
-import { listDrafts, publishProduct, saveDraft } from '../api/products'
-import { productSteps, productState, basicsMissing, wizardCanPublish, freshDraft, publishErrorText, type StepDot } from '../lib/mapProducts'
+import { listDrafts, publishProduct, republishProduct, saveDraft } from '../api/products'
+import {
+  productSteps,
+  productState,
+  basicsMissing,
+  wizardCanPublish,
+  freshDraft,
+  publishErrorText,
+  draftSyncLabel,
+  draftSyncConfirm,
+  restoreSaleLabel,
+  restoreSaleConfirm,
+  restoreSaleOk,
+  draftSyncBusy,
+  draftSyncMissingHint,
+  draftSyncOk,
+  COURSE_VS_LISTING_HINT,
+  HOME_FEATURE_ASK,
+  type StepDot,
+} from '../lib/mapProducts'
 import { launchErrorText } from '../lib/mapSystem'
 import { wizardStepFromQuery, WIZARD_STEPS, WIZARD_STEP_MAX } from '../lib/nav'
 import { isUploadLocked } from '../lib/uploadLock'
@@ -25,7 +43,12 @@ const router = useRouter()
 const id = computed(() => String(route.params.id || ''))
 
 const product = ref<Record<string, any> | null>(null)
-const extras = ref<{ hasVideo?: Record<string, boolean>; cardFinal?: Record<string, boolean>; hasBatch?: Record<string, boolean> }>({})
+const extras = ref<{
+  hasVideo?: Record<string, boolean>
+  coursePublished?: Record<string, boolean>
+  cardFinal?: Record<string, boolean>
+  hasBatch?: Record<string, boolean>
+}>({})
 const listed = ref<Record<string, boolean>>({})
 const loading = ref(!!route.params.id)
 const loadError = ref(false) // 载入失败（网络波动）≠ 商品不存在——分开显「重试」态而非误报「商品不存在」死胡同（P3）
@@ -33,6 +56,8 @@ let msgLoadFail = false // 当前 banner 是否为「加载失败」——回刷
 const message = ref('')
 const busy = ref(false)
 const pubConfirm = ref(false)
+const wantHome = ref(false) // 首次上架问首页·默认不挂（工单212）
+const restoreArmed = ref(false)
 const createdDraftId = ref('') // /launch 刚建档后首包偶发读不到新档时，区分「暂未同步」与真不存在
 
 const STEP_NAMES = WIZARD_STEPS.map((s) => s.label)
@@ -40,7 +65,10 @@ const STEP_HINTS = WIZARD_STEPS.map((s) => s.hint)
 const LEGEND = [
   { term: '保存草稿', desc: '只存在后台，前台看不到' },
   { term: '发布课程', desc: '视频对已购学员可见' },
-  { term: '同步到小程序', desc: '商品出现在小程序橱窗' },
+  { term: '上架', desc: '第一次公开卖' },
+  { term: '同步到小程序', desc: '在售时把草稿推给顾客' },
+  { term: '同步草稿', desc: '已下架时把新草稿写出去，商品仍停售' },
+  { term: '恢复销售', desc: '按上次上架页再卖，不是刚才改的草稿' },
   { term: '上传卡片', desc: '把卡面素材交给印厂' },
   { term: '生成批次', desc: '产出可扫码的二维码序列' },
 ] as const
@@ -60,6 +88,7 @@ const nextTodo = computed(() => {
   const i = steps.value.findIndex((s) => !s.done)
   return i < 0 ? null : { n: i + 1, name: STEP_NAMES[i] }
 })
+const videoMarks = computed(() => steps.value.find((s) => s.key === 'video')?.marks || [])
 
 // 载入商品档 + 5 步派生真值（listDrafts 一次给 list/listed/urls + hasVideo/cardFinal/hasBatch）
 async function reloadProduct() {
@@ -69,6 +98,8 @@ async function reloadProduct() {
     return
   }
   pubConfirm.value = false // 刷新即复位危险态（P1·防旧武装的「确认同步」残留、重进一击直发·批3 规格）
+  wantHome.value = false
+  restoreArmed.value = false
   loadError.value = false
   const r: any = await listDrafts()
   if (!r.ok) {
@@ -94,7 +125,12 @@ async function reloadProduct() {
     product.value = null
   }
   listed.value = r.listed || {}
-  extras.value = { hasVideo: r.hasVideo || {}, cardFinal: r.cardFinal || {}, hasBatch: r.hasBatch || {} }
+  extras.value = {
+    hasVideo: r.hasVideo || {},
+    coursePublished: r.coursePublished || {},
+    cardFinal: r.cardFinal || {},
+    hasBatch: r.hasBatch || {},
+  }
   loading.value = false
 }
 function retryLoad() {
@@ -124,18 +160,41 @@ async function shelve() {
   if (busy.value || !canPublish.value || !id.value) return
   if (!pubConfirm.value) {
     pubConfirm.value = true
+    wantHome.value = false
     return
   }
   pubConfirm.value = false
+  const featured = state.value === 'preparing' && wantHome.value
+  wantHome.value = false
   busy.value = true
-  const r: any = await publishProduct(id.value)
+  const r: any = await publishProduct(id.value, state.value === 'preparing' ? { featured } : undefined)
   busy.value = false
   if (r.ok) {
-    message.value = '已同步到小程序，打开小程序即可看到该商品'
+    message.value = draftSyncOk(state.value, state.value === 'preparing' ? { featured } : undefined)
     msgLoadFail = false // 这是动作反馈·非加载失败——随后的 reloadProduct 成功不得把它当 stale banner 清掉（病根#14）
     void reloadProduct()
   } else {
-    message.value = publishErrorText(r.error)
+    message.value = publishErrorText(r.error, state.value)
+    msgLoadFail = false
+  }
+}
+
+async function restoreSale() {
+  if (busy.value || !id.value || state.value !== 'unlisted') return
+  if (!restoreArmed.value) {
+    restoreArmed.value = true
+    return
+  }
+  restoreArmed.value = false
+  busy.value = true
+  const r: any = await republishProduct(id.value)
+  busy.value = false
+  if (r.ok) {
+    message.value = restoreSaleOk()
+    msgLoadFail = false
+    void reloadProduct()
+  } else {
+    message.value = '恢复失败：' + String(r.error || '')
     msgLoadFail = false
   }
 }
@@ -164,6 +223,8 @@ async function createDraft() {
 // 切步 / 从 /launch 建档后换成带编号路由 → 刷新进度真值 + 收起同步二次确认
 watch(id, () => {
   pubConfirm.value = false
+  wantHome.value = false
+  restoreArmed.value = false
   if (id.value) {
     const same = !!(product.value && String(product.value.id || product.value._id) === id.value)
     if (!same) loading.value = true // 换编号才转圈；同档切步不撕编辑器
@@ -177,6 +238,8 @@ watch(id, () => {
 
 watch(step, async () => {
   pubConfirm.value = false
+  wantHome.value = false
+  restoreArmed.value = false
   if (id.value) {
     await settleAllSaves()
     void reloadProduct()
@@ -212,7 +275,7 @@ onMounted(() => {
           <UiButton :disabled="busy" @click="createDraft">{{ busy ? '建立中…' : '建立草稿，接着传封面' }}</UiButton>
         </div>
         <dl class="legend-grid">
-          <div class="legend-cap">这五件事互不等同</div>
+          <div class="legend-cap">这些事互不等同</div>
           <div v-for="item in LEGEND" :key="item.term" class="legend-row">
             <dt>{{ item.term }}</dt>
             <dd>{{ item.desc }}</dd>
@@ -236,10 +299,17 @@ onMounted(() => {
         <Badge v-if="state === 'onsale'" tone="green">小程序在售</Badge>
         <Badge v-else-if="state === 'unlisted'" tone="red">已从橱窗拿下</Badge>
         <Badge v-else tone="brand">草稿（顾客看不见）</Badge>
-        <Badge v-if="missing.length" tone="red">同步到小程序还差：{{ missing.join('、') }}</Badge>
-        <UiButton :disabled="!canPublish || busy" :title="canPublish ? '' : '补齐封面、名称、价格和规格后才能同步到小程序'" @click="shelve">
+        <Badge v-if="missing.length" tone="red">{{ draftSyncMissingHint(state, missing) }}</Badge>
+        <label v-if="state === 'preparing' && pubConfirm" class="home-ask">
+          <input v-model="wantHome" type="checkbox" />
+          <span>{{ HOME_FEATURE_ASK }}</span>
+        </label>
+        <UiButton :disabled="!canPublish || busy" :title="canPublish ? '' : '补齐封面、名称、价格和规格后才能' + draftSyncLabel(state)" @click="shelve">
           <Store v-if="!busy" :size="15" :stroke-width="1.8" />
-          {{ busy ? '同步中…' : pubConfirm ? '确认同步到小程序？' : '同步到小程序' }}
+          {{ busy ? draftSyncBusy(state) : pubConfirm ? draftSyncConfirm(state) : draftSyncLabel(state) }}
+        </UiButton>
+        <UiButton v-if="state === 'unlisted'" variant="ghost" :disabled="busy" @click="restoreSale">
+          {{ restoreArmed ? restoreSaleConfirm() : restoreSaleLabel() }}
         </UiButton>
       </PageHeader>
 
@@ -254,6 +324,9 @@ onMounted(() => {
                 <template v-else>{{ s.n }}</template>
               </span>
               <span class="rail-name">{{ s.label }}</span>
+              <span v-if="s.n === 4 && videoMarks.length" class="rail-marks">
+                <span v-for="m in videoMarks" :key="m.key" class="rail-mark" :class="{ on: m.done }">{{ m.label }}</span>
+              </span>
             </button>
             <span v-if="s.n < WIZARD_STEP_MAX" class="rail-line" :class="{ lit: railState(s.n) === 'done' }"></span>
           </template>
@@ -280,7 +353,13 @@ onMounted(() => {
           </div>
           <Products v-else-if="step === 2" embed :wizard-product-id="id" :wizard-slice="2" @saved="reloadProduct" />
           <Products v-else-if="step === 3" embed :wizard-product-id="id" :wizard-slice="3" @saved="reloadProduct" />
-          <Courses v-else-if="step === 4" embed :wizard-course-id="courseId" @saved="reloadProduct" />
+          <div v-else-if="step === 4" class="step4">
+            <p class="course-gate">{{ COURSE_VS_LISTING_HINT }}</p>
+            <p class="video-marks-line">
+              <span v-for="m in videoMarks" :key="m.key" class="video-mark" :class="{ on: m.done }">{{ m.done ? '✓' : '○' }} {{ m.label }}</span>
+            </p>
+            <Courses embed :wizard-course-id="courseId" @saved="reloadProduct" />
+          </div>
           <div v-else-if="step === 5" class="step5">
             <section class="step5-sec">
               <header class="step5-head">
@@ -299,7 +378,7 @@ onMounted(() => {
           </div>
         </div>
         <dl v-if="step === 1" class="legend-grid">
-          <div class="legend-cap">这五件事互不等同</div>
+          <div class="legend-cap">这些事互不等同</div>
           <div v-for="item in LEGEND" :key="item.term" class="legend-row">
             <dt>{{ item.term }}</dt>
             <dd>{{ item.desc }}</dd>
@@ -406,6 +485,54 @@ onMounted(() => {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+.rail-marks {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+.rail-mark {
+  font-size: 10px;
+  color: var(--ld-content-2);
+  white-space: nowrap;
+}
+.rail-mark.on {
+  color: var(--ld-green);
+}
+.home-ask {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12.5px;
+  color: var(--ld-content);
+  cursor: pointer;
+}
+.home-ask input {
+  margin: 0;
+}
+.course-gate {
+  margin: 0 0 10px;
+  padding: 10px 12px;
+  border-radius: var(--ld-radius-sm);
+  background: var(--ld-bg-lilac);
+  font-size: 13px;
+  color: var(--ld-content);
+}
+.video-marks-line {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 16px;
+  margin: 0 0 16px;
+  font-size: 12.5px;
+  color: var(--ld-content-2);
+}
+.video-mark.on {
+  color: var(--ld-green);
+  font-weight: 600;
+}
+.step4 {
+  min-width: 0;
 }
 .rail-step.done .rail-dot {
   background: var(--ld-bg-green-soft);

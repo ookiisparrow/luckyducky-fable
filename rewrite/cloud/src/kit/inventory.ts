@@ -7,7 +7,7 @@ import { notifyAlert } from './observe'
 // 不限量：无文档或 stock=null＝不限量（缺货前不阻断下单·安全迁移）。
 // 单一收口：全库仅本文件读写 inventory.stock。getInventory（批14）/produceStock（批16 SCM）已随域批次补齐。
 
-export interface StockLine {
+interface StockLine {
   productId: string
   spec: string
   qty: number
@@ -239,7 +239,7 @@ export async function produceStock(productId: string, spec: string, qty: number)
 
 // 全量扫描上限（黄金 inventory-scm §L）：裸 .get() 服务端默认 100 条静默截断——SKU 破百后库存页
 // 少显示像没记录。分页取齐（100/页）、封顶防无界；到顶如实报 truncated（调用方提示、不装全量）。
-export const INVENTORY_SCAN_CAP = 1000
+const INVENTORY_SCAN_CAP = 1000
 
 /**
  * 读库存（管理端列表/看板低库存）。productIds 为空＝全量（分页取齐·封顶）。

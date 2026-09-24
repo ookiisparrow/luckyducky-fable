@@ -52,7 +52,7 @@ const DESK_GUIDE_KEY = 'ld_player_desk_guide_shown'
 // `ownerInstance.callMethod(name, args)` 把 args **直接**作为方法的第一个实参传入——它不是 wxml 绑定
 // 那种事件对象，**没有 `.detail`**。原先两个回桥方法都按事件形状写 `e.detail`，实测恒得 undefined，
 // 秒数于是恒取兜底 0：松手 seek(0) 把视频拨回开头、拖动文案恒 0:00、逐秒判重恒「同一秒」故一次不震——
-// 用户报的三个现象同一个因（实测日志见 重构日志 2026-07-20 批Q）。
+// 用户报的三个现象同一个因。
 // 兼容两种形状（有 .detail 取 detail，否则就是载荷本身）：将来若把这些方法改回 wxml 直绑，不必再改一次。
 function wxsArgs<T extends object>(a: T | { detail: T } | undefined | null): Partial<T> {
   if (!a) return {}
@@ -74,7 +74,6 @@ Page({
     capsuleBottom: 0, // 原生胶囊底边 y（px·onLoad 取 getMenuButtonBoundingClientRect().bottom）：段落进度条按此动态避让落胶囊下方（2026-07-13 反馈·Bug D1）
     videoRatio: 168, // 播放框比例 padding-top%（默认 1:1.68·onVideoMeta 拿素材真实宽高后贴合·去左右黑边·2026-07-13 反馈·Bug D2）
     title: '',
-    segments: [] as FlatSegment[],
     current: null as FlatSegment | null,
     src: '',
     canPrev: false,
@@ -100,7 +99,7 @@ Page({
     helpPanel: '' as '' | 'menu' | 'videos' | 'faq', // 求助面板状态机（P3·播放器重设计战役批D）：''=关闭·不阻断主视频播放
     helpVideosState: 'loading' as 'loading' | 'ok' | 'empty', // 帮助视频子层拉取态（每次进入 videos 层重拉·短时 URL 过期特性）
     helpTopics: [] as HelpTopicVM[], // 帮助视频主题分组 VM（mapHelpVideos 产出）
-    helpFaqState: 'loading' as 'loading' | 'ok' | 'empty', // 常见问题子层拉取态（R37b·KB 精选 FAQ 公开读·同 videos 每次重拉口径）
+    helpFaqState: 'loading' as 'loading' | 'ok' | 'empty' | 'fail', // 常见问题子层拉取态（R37b·KB 精选 FAQ·失败≠空）
     helpFaqList: [] as FaqItemVM[], // 精选 FAQ VM（mapPublicFaq 产出）
     helpSrc: '', // 内嵌播放（P3b-play）地址：非空=切到播放视图；关面板/返回列表/退出播放视图清空
     helpSegName: '', // 内嵌播放视图顶部标题（=命中小段 name）
@@ -110,6 +109,7 @@ Page({
   },
   courseId: '',
   unloaded: false, // 已退页标记（await 恢复点复核·同 welcome/catalog 范式·onUnload 置真）
+  _seq: 0, // initCourse 代次（同 catalog）：课程级重试并发时丢弃过期回包
   course: null as CoursePub | null,
   srcSetAt: 0,
   windowWidthPx: 0, // rpx→px 换算基准（onLoad 存·750rpx = windowWidthPx px）
@@ -172,6 +172,7 @@ Page({
   // 失败≠不存在（根因#14·守卫 rw-mp-list-loadfailed-state）：目录拉取失败落 error 态给重试，
   // 只有拉取成功且查无此课才是 missing「课程不存在」。
   async initCourse() {
+    const seq = ++this._seq
     // 深链冷启并行（根因#15·省一次串行往返）：目录详情与期望段取址同时发起——原先串行（先等目录回、再进
     // playSegment 才现取地址），深链两跳叠加。并行后耗时＝max(目录, 取址) 而非目录+取址；取址结果不在此直接
     // 消费（只暖缓存·err 吞掉），仍待目录确认段存在后由 playSegment 经 peek/在途去重命中；期望段空则不发。
@@ -180,6 +181,7 @@ Page({
       getCourseByIdDetailed(this.courseId),
       this._wantSeg ? cache.get(this.courseId, this._wantSeg).catch(() => '') : Promise.resolve(''),
     ])
+    if (this.unloaded || seq !== this._seq) return // 已退页或过期回包（被更晚一次 initCourse 取代）：丢弃
     if (d.failed) {
       this.setData({ state: 'error' })
       return
@@ -191,7 +193,7 @@ Page({
     }
     this.course = course
     const segments = flattenSegments(course)
-    this.setData({ title: String(course.title || ''), segments })
+    this.setData({ title: String(course.title || '') })
     const want = this._wantSeg
     const start = segments.find((s) => s.segmentId === want && s.hasVideo) || segments.find((s) => s.hasVideo) || null
     if (!start) {
@@ -661,13 +663,15 @@ Page({
     const topics = mapHelpVideos(r)
     this.setData(topics.length ? { helpVideosState: 'ok', helpTopics: topics } : { helpVideosState: 'empty', helpTopics: [] })
   },
-  // 卡3 常见问题（R37b 已接线：云端 FAQ 单源=客服知识库 KB，getPublicFaq 只回精选条目）：进子层 + 每次重拉
-  // （同 onHelpVideos 口径·辅助内容低频不缓存）；载入失败/空仍诚实空态导流客服，不造假 Q&A。
-  // help.faq（CMS 自由文本·并行战役新增·wxml 级联优先）非空时该子层直接渲染 CMS 内容，不必再打 KB 请求
-  // ——两套编辑面并存是待用户裁决的 flag（docs/待办与债.md），此处只做最小的「CMS 已覆盖就不浪费一次请求」。
+  // 卡3 常见问题（R37b：云端 FAQ 单源=客服知识库 KB，getPublicFaq 只回精选条目）：进子层 + 每次重拉
+  // （同 onHelpVideos 口径·辅助内容低频不缓存）。!ok / mapPublicFaq=null 落 fail，不装成「还在整理」；
+  // 真没有才空态导流客服。help.faq（CMS 自由文本）非空时该子层直接渲染 CMS，不必再打 KB 请求。
   onHelpFaq() {
+    if ((this.data.help.faq || []).length > 0) {
+      this.setData({ helpPanel: 'faq' }) // CMS 自由文本已覆盖，wxml 走 help.faq 分支，跳过 KB 拉取
+      return
+    }
     this.setData({ helpPanel: 'faq', helpFaqState: 'loading', helpFaqList: [] })
-    if ((this.data.help.faq || []).length > 0) return // CMS 自由文本已覆盖，wxml 走 help.faq 分支，跳过 KB 拉取
     void this.loadHelpFaq()
   },
   async loadHelpFaq() {
@@ -675,7 +679,11 @@ Page({
     const r = await getPublicFaq()
     if (token !== this.helpFaqToken) return // 更晚的一次 onHelpFaq 已接管，丢弃本次回包
     if (this.data.helpPanel !== 'faq') return // 用户已退出 faq 层：同样丢弃，不写脏 state
-    const list = mapPublicFaq(r)
+    if (!r.ok) {
+      this.setData({ helpFaqState: 'fail', helpFaqList: [] })
+      return
+    }
+    const list = mapPublicFaq(r) || []
     this.setData(list.length ? { helpFaqState: 'ok', helpFaqList: list } : { helpFaqState: 'empty', helpFaqList: [] })
   },
   // 子层顶部返回箭头：回 menu（videos/faq 共用同一个方法）。

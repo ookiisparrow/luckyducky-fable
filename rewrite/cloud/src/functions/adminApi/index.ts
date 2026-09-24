@@ -38,8 +38,9 @@ import * as reviews from './actions/reviews'
 // 认证频控 per-IP + 全局兜底。M5 切换日以新名部署、admin 前端切 endpoint。
 const db = getDb()
 
-// action → handler 查表（业务批逐域填充·与旧线注册表逐行核对）
-const ACTIONS: Record<string, (ctx: Ctx) => Promise<any>> = {
+// 空原型注册表（与 app 网关同式·根因#3）：普通对象字面量继承 Object.prototype，
+// ACTIONS['constructor'/'toString'] 在鉴权通过后会被当成真 handler 调用。satisfies 保住字面量逐条签名校验。
+const ACTIONS: Record<string, (ctx: Ctx) => Promise<any>> = Object.assign(Object.create(null), {
   // 商品草稿 / 上架 / 橱窗（批12）
   listDrafts: products.listDrafts,
   saveDraft: products.saveDraft,
@@ -113,6 +114,9 @@ const ACTIONS: Record<string, (ctx: Ctx) => Promise<any>> = {
   sampleQc: conversations.sampleQc,
   saveQcMark: conversations.saveQcMark,
   listQcSampled: conversations.listQcSampled,
+  // 测版刷新（T1）：未登记 ACTION_CAPS→默认拒 admin:write＝仅超管；refresh 写类自动审计
+  getTrialRefreshGate: conversations.getTrialRefreshGate,
+  refreshTrialSession: conversations.refreshTrialSession,
   // 知识库（批15·FAQ 单源·admin 维护、客服 bot dispatch 读同一份）
   listKb: kb.listKb,
   saveKb: kb.saveKb,
@@ -190,7 +194,7 @@ const ACTIONS: Record<string, (ctx: Ctx) => Promise<any>> = {
   // 评价挑选（先审后发·未登记 ACTION_CAPS→默认拒 admin:write＝仅超管）
   listReviews: reviews.listReviews,
   setReviewPicked: reviews.setReviewPicked,
-}
+} satisfies Record<string, (ctx: Ctx) => Promise<any>>)
 
 // 方案 b：adminApi 顶层兜底需要按 action 归因，但 action 名本身不带文件名。
 // 这里沿 ACTIONS 的真实 handler 引用反查所属 action 文件，再用模块正册的 adminActionFiles 镜像归因；

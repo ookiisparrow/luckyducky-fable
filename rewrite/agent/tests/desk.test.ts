@@ -13,38 +13,18 @@ import {
   diffNewSessions,
   diffNewInbound,
   titleWithBadge,
+  createStatusController,
   type Msg,
 } from '../src/lib/desk'
 import { parse } from '@vue/compiler-sfc'
-import { transform } from 'esbuild'
-// Desk.vue 原文按 Vite 内建 ?raw 取纯文本（vite/client.d.ts 声明了 `*?raw` 环境模块类型，rewrite/agent/tsconfig.json
-// 的 "types":["vite/client"] 已覆盖·免装 @vue/test-utils/jsdom，也免碰本仓白名单外的 node 类型/tsconfig）。
+// Desk.vue 原文按 Vite 内建 ?raw 取纯文本，给下方源码断言用（open/send/act 等仍钉页面真代码）。
 import deskSrc from '../src/Desk.vue?raw'
 
 const m = (at: number, direction: 'in' | 'out', text: string): Msg => ({ at, direction, text })
 const last = <T>(arr: T[]): T | undefined => arr[arr.length - 1] // rewrite/agent tsconfig lib=ES2020，无 Array.prototype.at（ES2022）
 
-// Desk.vue setStatus 并发收敛（Round3 item3·findings 复审新增回归测）：仓库没装 @vue/test-utils/jsdom，不便
-// mount 整个 .vue 组件；Desk.vue 顶部专门放了一个与 Vue 无关的非 setup <script> 块导出 createStatusController
-// （纯函数，UI 落地经 apply 回调交回调用方）。这里用 @vue/compiler-sfc 的 parse() 把那块源码原样抽出、esbuild
-// 剥 TS 类型后拼成 data: URL 动态 import——测的是 Desk.vue 里那份真代码，不是另抄一份影子实现；改了这段逻辑
-// 这里会真的红。不落临时文件（不碰 node:fs/os/path，规避白名单外 tsconfig 缺 "node" 类型的连锁改动）。
 type StatusRes = { ok: boolean; error?: string }
 type Status = 'online' | 'busy' | 'offline'
-async function loadStatusController(): Promise<{
-  createStatusController: (
-    post: (action: string, payload?: Record<string, unknown>) => Promise<StatusRes>,
-    initial?: Status,
-  ) => { setStatus: (s: Status, apply: { setStatus: (v: Status) => void; setMessage: (v: string) => void }, errorText: (c: string | undefined) => string) => Promise<void> }
-}> {
-  const { descriptor } = parse(deskSrc)
-  if (!descriptor.script?.content) throw new Error('Desk.vue 缺少非 setup 的 <script> 块（createStatusController 应放这里）——测试抽不到真代码')
-  const { code } = await transform(descriptor.script.content, { loader: 'ts', format: 'esm' })
-  // data: URL 直接塞 URI 编码文本（不用 base64/Buffer——Buffer 全局类型来自 @types/node，本 tsconfig 未装，
-  // encodeURIComponent 是标准全局、任意 tsconfig 下都认得，且原文含中文注释，天然免走 Latin1-only 的 btoa）。
-  const dataUrl = 'data:text/javascript,' + encodeURIComponent(code)
-  return import(/* @vite-ignore */ dataUrl)
-}
 
 // B2/B3 源码断言用：从 <script setup> 原文里抠出指定函数的完整函数体（花括号配平·跳过注释/字符串内的花括号，
 // 避免 E1 同类坑——裸括号计数会被注释里的 { } 或字符串里的 { } 带偏）。只服务本文件的静态断言，不是 check-structure.mjs
@@ -251,9 +231,14 @@ describe('队列与错误人话', () => {
   })
 })
 
-describe('坐席状态并发收敛（setStatus·Round3 item3 三场景，钉住 Desk.vue 真代码）', () => {
+describe('坐席状态并发收敛（setStatus·Round3 item3 三场景，钉住 lib/desk 真代码）', () => {
+  it('大白话：Desk 直接调 lib 里同一份控制器，不再另放非 setup 脚本块给测试抽', () => {
+    expect(scriptSetupSrc()).toMatch(/createStatusController\(/)
+    const { descriptor } = parse(deskSrc)
+    expect(descriptor.script).toBeFalsy()
+  })
+
   it('大白话：fresh 请求失败 + stale 请求后到成功——静止后 UI 收到最新代际的成功目标，不被过期失败卡住', async () => {
-    const { createStatusController } = await loadStatusController()
     const { post, resolvers } = deferredPost()
     const ctl = createStatusController(post, 'online')
     const applied: Status[] = []
@@ -274,7 +259,6 @@ describe('坐席状态并发收敛（setStatus·Round3 item3 三场景，钉住 
   })
 
   it('大白话：两次都成功但先发的后到——后一次用户意图（更大代际）赢，不被旧的成功回填', async () => {
-    const { createStatusController } = await loadStatusController()
     const { post, resolvers } = deferredPost()
     const ctl = createStatusController(post, 'online')
     const applied: Status[] = []
@@ -293,7 +277,6 @@ describe('坐席状态并发收敛（setStatus·Round3 item3 三场景，钉住 
   })
 
   it('大白话：单请求成功/失败——与现状等价（成功收敛到目标；失败回滚到锚并报错）', async () => {
-    const { createStatusController } = await loadStatusController()
     {
       const { post, resolvers } = deferredPost()
       const ctl = createStatusController(post, 'online')
@@ -430,6 +413,21 @@ describe('onBeforeUnmount 标题复位（B4 后审 P2·源码断言）', () => {
     expect(body).toMatch(/removeEventListener\('blur', onWindowBlur\)/)
     expect(body).toMatch(/removeEventListener\('focus', onWindowFocus\)/)
   })
+
+  it('大白话：卸载注释不得再引用不存在的 agent-poll-cleanup 守卫、也不得钉死会漂的 line 89', () => {
+    expect(deskSrc).not.toMatch(/agent-poll-cleanup/)
+    expect(deskSrc).not.toMatch(/line 89/)
+  })
+})
+
+describe('refreshLists 会话失效不自登出（源码断言）', () => {
+  it('大白话：列表刷新遇到 SESSION_LOST 只早退，不自调 doLogout——登出单源是壳层 onSessionLost，按钮退出才走 doLogout', () => {
+    const body = extractFunctionBody(scriptSetupSrc(), 'async function refreshLists() {')
+    expect(body).toMatch(/SESSION_LOST/)
+    expect(body).not.toMatch(/doLogout/)
+    expect(scriptSetupSrc()).toMatch(/function doLogout\(\)/)
+    expect(deskSrc).toMatch(/@click="doLogout"/)
+  })
 })
 
 describe('claim() 会话代际快照（bug sweep II R5·五个会话敏感异步动作的最后收口·源码断言）', () => {
@@ -495,5 +493,41 @@ describe('Desk.vue 图片气泡（B5·顾客发图坐席可见·源码断言：�
     expect(tpl).toMatch(/@click="openMedia\(m\)"/)
     expect(tpl).toMatch(/图片已过期（超 3 天）/)
     expect(tpl).toMatch(/加载失败，点击重试/)
+  })
+})
+
+describe('refreshLists / open 失败出声（病根#14·首屏不得装成队列空或空白会话）', () => {
+  it('大白话：拉队列或我在接失败须写入 listNote；两边成功才清空。模板「队列空 ✓」只在没有 listNote 时出现——首屏拉失败不得装成没事', () => {
+    const body = extractFunctionBody(scriptSetupSrc(), 'async function refreshLists() {')
+    expect(body).toMatch(/listNote\.value = q\.ok && m\.ok \? '' : deskErrorText\(q\.ok \? m\.error : q\.error\)/)
+    expect(body).toMatch(/queue\.value = q\.ok \? mapQueue/) // 失败不清已有
+    expect(body).toMatch(/mine\.value = m\.ok \?/)
+    const { descriptor } = parse(deskSrc)
+    const tpl = descriptor.template?.content || ''
+    expect(tpl).toMatch(/v-if="listNote"/)
+    expect(tpl).toMatch(/v-else-if="!queue\.length"/)
+    expect(tpl).toContain('队列空 ✓')
+    const emptyOkIdx = tpl.indexOf('队列空 ✓')
+    const elseIfIdx = tpl.lastIndexOf('v-else-if="!queue.length"', emptyOkIdx)
+    expect(elseIfIdx).toBeGreaterThan(-1)
+  })
+
+  it('大白话：打开会话时 pollThread 失败须像 360 一样写出 threadNote；后台 3 秒轮询仍静默重试、不打断输入', () => {
+    const poll = extractFunctionBody(scriptSetupSrc(), 'async function pollThread(loud = false) {')
+    expect(poll).toMatch(/if\s*\(\s*loud\s*\)\s*threadNote\.value = deskErrorText\(r\.error\)/)
+    expect(poll).toMatch(/if\s*\(\s*!r\.ok\s*\)/)
+    // 成功须清 threadNote（后台重试拉到了就把首拉错误收掉）
+    const failIdx = poll.indexOf('if (loud) threadNote.value = deskErrorText(r.error)')
+    const clearIdx = poll.indexOf("threadNote.value = ''")
+    expect(failIdx).toBeGreaterThan(-1)
+    expect(clearIdx).toBeGreaterThan(failIdx)
+    const open = extractFunctionBody(scriptSetupSrc(), 'async function open(sessionId: string) {')
+    expect(open).toMatch(/pollThread\(\s*true\s*\)/)
+    const setup = scriptSetupSrc()
+    expect(setup).toMatch(/setInterval\(\s*pollThread\s*,\s*3_000\s*\)/) // 后台调用不传 true
+    const { descriptor } = parse(deskSrc)
+    const tpl = descriptor.template?.content || ''
+    expect(tpl).toMatch(/v-if="threadNote"/)
+    expect(tpl).toMatch(/v-if="panelNote"/)
   })
 })

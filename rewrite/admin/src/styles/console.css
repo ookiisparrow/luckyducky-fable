@@ -1,6 +1,6 @@
 /* 控制台全局基础 + 共享布局/表格/工具条类（design/控制台.pen 设计语言）。
  * token 见 tokens.css；自成组件的部件（按钮/卡/KPI/徽章/空态）在 components/ui/*.vue；
- * 这里放「包裹页面自有 markup」的布局配方类（ld- 前缀·页面 opt-in·防 30 页各写各的表格/工具条漂移·病根#5）。
+ * 这里放「包裹页面自有 markup」的布局配方类（ld- 前缀·页面 opt-in·防各页各写各的表格/工具条漂移·病根#5）。
  * 页面差异仍写页面 scoped。 */
 @import './tokens.css';
 
@@ -396,7 +396,7 @@ body {
 }
 /* 琥珀描边输入（警示语·保留原意勿清空） */
 .pc-input.pc-amber-edge {
-  border-color: #c47d1e;
+  border-color: var(--ld-amber-line);
   background: var(--ld-bg-amber-soft);
 }
 /* 琥珀警示横幅（协议页顶部·已过审文案提醒） */
@@ -404,7 +404,7 @@ body {
   display: flex;
   gap: 8px;
   padding: 10px 14px;
-  border: 1px solid #c47d1e;
+  border: 1px solid var(--ld-amber-line);
   border-radius: var(--ld-radius-sm);
   background: var(--ld-bg-amber-soft);
   color: var(--ld-amber);
@@ -459,9 +459,6 @@ body {
   font-size: 12px;
   color: var(--ld-content-2);
   line-height: 1.5;
-}
-.pc-row-add {
-  margin-top: 4px;
 }
 /* 上传位缩略 */
 .pc-thumb {

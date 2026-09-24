@@ -25,7 +25,6 @@ function computeGalleryWindow(len: number, current: number): boolean[] {
 Page({
   data: {
     loading: true,
-    missing: false, // 网络成功、id 未命中——真下架/无效链接
     loadFailed: false, // 网络/取数失败——不伪装成已下架，给重试（P2·bug sweep R1 #3）
     vm: null as DetailVM | null,
     skuIndex: -1,
@@ -42,11 +41,11 @@ Page({
     void this.loadProduct()
   },
   // 加载失败重试入口（onLoad 与 onRetryLoad 共用）：先拿全量表判两态——
-  // all===null（网络/取数失败）→ loadFailed 给重试；all 有值但 id 未命中 → missing（真下架）。
+  // all===null（网络/取数失败）→ loadFailed 给重试；all 有值但 id 未命中 → 灭 loading（wxml !loading 空态＝真下架）。
   async loadProduct() {
     const id = this.productId
     const seq = ++this._seq
-    this.setData({ loading: true, missing: false, loadFailed: false })
+    this.setData({ loading: true, loadFailed: false })
     const all = await getAllProducts()
     if (seq !== this._seq) return // 过期回包（被更晚一次 loadProduct 取代）：丢弃·不覆盖较新结果
     if (all === null) {
@@ -56,7 +55,7 @@ Page({
     const raw = all.find((p) => String(p.id || p._id || '') === id) || null
     const vm = mapDetail(raw)
     if (!vm) {
-      this.setData({ loading: false, missing: true })
+      this.setData({ loading: false })
       return
     }
     const i = vm.skus.length ? 0 : -1
@@ -69,8 +68,8 @@ Page({
     })
     trackEvent('view_product', 'detail', vm.id, { price: vm.price }) // 电商漏斗埋点（R41）
     void this.loadDetail(id, seq)
-    void this.loadRecs(id)
-    void this.loadRating(id)
+    void this.loadRecs(id, seq)
+    void this.loadRating(id, seq)
   },
   // 图册补齐（批1·列表瘦身不下发 images·详情页按 id 拉全档补进 swiper·根因#15）：列表项首帧已渲染
   // （gallery 仅 cover·零等待），详情回包到达把完整 gallery setData 补齐；详情失败/无更多图保持列表项降级
@@ -97,15 +96,17 @@ Page({
     tapHaptic()
     void this.loadProduct()
   },
-  async loadRecs(id: string) {
+  async loadRecs(id: string, seq: number) {
     const list = await getAllProducts() // 复用首页缓存·热路径零云调用（miss 则兜底重拉一次）
+    if (seq !== this._seq) return // 过期回包（连点重试/离开后迟到）：丢弃·不覆盖较新结果
     if (list) {
       this.setData({ recs: mapProducts(list).filter((p) => p.id !== id).slice(0, 4) }) // 排除本商品·取 4 个
     }
   },
   // 评分摘要（云端聚合下发·不用列表页缓存自算·云为唯一真相）：count=0 或失败→mapSummary 返 null→回退静态入口
-  async loadRating(id: string) {
+  async loadRating(id: string, seq: number) {
     const r = await getRatingSummary(id)
+    if (seq !== this._seq) return // 过期回包（连点重试/离开后迟到）：丢弃·不覆盖较新结果
     this.setData({ rating: r.ok ? mapSummary(r) : null })
   },
   onGallery(e: { detail: { current: number } }) {
@@ -167,7 +168,7 @@ Page({
   },
 
   // 转发/朋友圈钩子（分发前置·决策§29·守卫 rw-mp-share-wired）：路径带 ?id= 保证收到的人打开的是
-  // 同一件商品（守卫钉此）；标题/图取当前商品真身，vm 未就绪（loading/missing）回退品牌语不造假。
+  // 同一件商品（守卫钉此）；标题/图取当前商品真身，vm 未就绪回退品牌语不造假。
   onShareAppMessage() {
     const vm = this.data.vm
     return vm

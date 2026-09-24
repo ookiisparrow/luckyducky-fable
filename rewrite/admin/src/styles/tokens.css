@@ -1,7 +1,7 @@
 /**
  * 调色板单源（design/console.pen 变量表抄录·2026-07-05）。
  * 换皮只改这个文件——src 其余地方禁裸 hex（守卫 rw-admin-theme-single-source）。
- * 命名沿用设计稿 token 名，加 --ld- 前缀；旧名（purple-tab 等）以别名保留，屏批次逐步换新名。
+ * 命名沿用设计稿 token 名，加 --ld- 前缀。
  */
 :root {
   /* 品牌 */
@@ -33,14 +33,10 @@
   --ld-bg-red-soft: #fff6f5; /* 危险底 */
   --ld-bg-amber-soft: #fbf1e2; /* 预警/进行中底（3 态状态补 amber·呼应改主题只改 token） */
   --ld-red-line: #f0c0ba; /* 危险描边 */
-
-  /* 旧名别名（24 页存量在用；单源仍是上面的值） */
-  --ld-purple: var(--ld-brand);
-  --ld-purple-tab: var(--ld-brand-active);
+  --ld-amber-line: #c47d1e; /* 预警描边 */
 
   /* 形状与字体 */
   --ld-radius: 12px; /* 卡片/面板（design 控制台.pen 卡角） */
-  --ld-radius-l: 16px;
   --ld-radius-sm: 8px; /* 按钮/chip/图标位（design 控制台.pen 小件角） */
   --ld-radius-item: 9px; /* 侧栏项/小件 */
   --ld-font:
