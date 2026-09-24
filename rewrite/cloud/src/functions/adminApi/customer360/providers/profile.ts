@@ -17,11 +17,8 @@ export const profileProvider: CustomerPanelProvider = {
   enabled: true,
   order: 5, // 排最前（概览先于订单/激活明细面板）
   async fetch(db: any, openid: string) {
-    const rows = (qy: any) =>
-      qy
-        .get()
-        .then((r: any) => (r && r.data) || [])
-        .catch(() => [])
+    // 读失败抛给编排器标 PANEL_FETCH_FAIL——空数组会被当成「真没花过钱」
+    const rows = (qy: any) => qy.get().then((r: any) => (r && r.data) || [])
     const [orders, acts, lastEvt] = await Promise.all([
       rows(db.collection('orders').where({ _openid: openid }).limit(ORDER_LIMIT)),
       rows(db.collection('activations').where({ _openid: openid }).limit(ACT_LIMIT)),
