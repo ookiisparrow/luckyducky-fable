@@ -43,7 +43,7 @@ async function loadLedger(materialId?: string) {
   ledgerHasMore.value = !!(l.ok && l.hasMore)
   ledgerError.value = l.ok ? '' : '流水加载失败：' + String(l.error || '') // 独立 ref·不被 reload 的 load() 抹掉
   ledgerMat.value = materialId || ''
-  stocktakeExitConfirm.value = false // 刷新即复位危险态（守卫 rw-admin-armed-reset-on-load·防旧武装退出确认跨刷新残留一击直发）
+  stocktakeExitConfirm.value = false // 刷新即复位危险态（防旧武装退出确认跨刷新残留一击直发）
 }
 
 // 流水「加载更多」（B1）：复用当前料号筛选·续游标追加·去重防双击重复追加同一页（同 Conversations more() 范式）
@@ -252,7 +252,7 @@ async function reload() {
   if (!m.ok) bad.push('物料主档加载失败：' + String(m.error || ''))
   if (!s.ok) bad.push('供应商加载失败：' + String(s.error || ''))
   load(bad.length === 0, bad.join('；')) // 只在加载失败时写·成功静默不抹动作反馈
-  stocktakeExitConfirm.value = false // 刷新即复位危险态（守卫 rw-admin-armed-reset-on-load）
+  stocktakeExitConfirm.value = false // 刷新即复位危险态
 }
 
 async function doSaveMaterial() {

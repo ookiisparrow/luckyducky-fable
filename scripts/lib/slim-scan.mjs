@@ -1,6 +1,6 @@
 // 瘦身扫描（病根17「持续义务有传感器」·瘦身大作战 2026-07-23）：死导出/幽灵依赖/规模棘轮的纯逻辑核。
 // 「靠人记住哪个导出没人用了/哪个依赖其实没声明」迟早漂移——本模块把判定做成可测的纯函数，
-// 供 rw-dead-exports / rw-phantom-deps / rw-loc-budget / rw-lock-budget 等守卫复用，基线单源
+// 供 rw-dead-exports / rw-phantom-deps / rw-lock-budget 等守卫复用，基线单源
 // scripts/slim-baseline.json（守卫侧维护，本模块只提供判定，不读该文件）。
 // IO 收集层（collectImportSpecifiers/countLoc）薄封装真实文件系统，不进单测断言——
 // 单测只喂字符串固件锁纯逻辑（tests/scripts/slimScan.test.js），IO 层的正确性靠守卫跑起来时的真实产物验。

@@ -6,7 +6,7 @@ description: 一键清扫工作流中的过时/失真/孤立信息——死路�
 # stale-sweep · 过时信息清淤
 
 > **定位**：本 skill 清的是「信息层的债」——会让任何进场者（人或 AI）产生误会、误解、歧义的残留物。
-> 与既有工具分工：守卫管机器能钉死的（doc-refs-exist/dead-exports/orphan-assets）；`/doc-audit` 管活文档瘦身；
+> 与既有工具分工：守卫管机器能钉死的（dead-exports/orphan-assets）；`/doc-audit` 管活文档瘦身；
 > **本 skill 管跨层交叉核实**——「文档说的」与「仓库真实」之间的裂缝。
 
 ## 一句话纪律
@@ -43,7 +43,7 @@ description: 一键清扫工作流中的过时/失真/孤立信息——死路�
 
 1. **机检先行**（零判断部分交给机器）：
    ```bash
-   node scripts/check-structure.mjs          # 守卫基线（doc-refs-exist/dead-exports/orphan-assets 已覆盖的面不重复报）
+   node scripts/check-structure.mjs          # 守卫基线（dead-exports/orphan-assets 已覆盖的面不重复报）
    npm run patrol                            # 顺带验证巡逻自身没坏
    ```
    再按上方 A–E 类逐类 grep（模式见各类小节）。

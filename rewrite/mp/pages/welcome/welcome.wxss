@@ -43,7 +43,7 @@
   filter: brightness(0) invert(1) drop-shadow(0 2rpx 10rpx rgba(0, 0, 0, 0.35));
 }
 
-/* —— 自绘返回（守卫 rw-mp-custom-nav-has-back）——
+/* —— 自绘返回——
    照片壳整屏不滚动，absolute 即可（与 catalog 的 fixed 之别：那页整页自然流滚动）。
    半透明黑底＋反白箭头：压在压暗的照片上，浅色照片也看得清；与右上角原生胶囊分居两侧。 */
 .ld-w-back {

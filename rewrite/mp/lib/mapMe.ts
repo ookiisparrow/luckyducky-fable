@@ -1,7 +1,7 @@
 // 「我」页 CMS 内容映射（从 lib/mapPages 拆出·字体分层批）：me 是 tab 首屏页，它的 ts import 闭包决定
 // 品牌字体 tier1（首屏子集）的字符面——mapPages 里同住的协议/隐私 511 字法务长文只在二级页上屏，
 // 拆出 mapMe 后 tab 闭包不再拖进长文（守卫 rw-mp-font-tier-subset-covers 机器盯闭包⊆子集）。
-// 行为与测试不变：lib/mapPages 原名 re-export，pages-map.test.ts / rw-mp-page-content-golden 黄金继续钉。
+// 行为与测试不变：lib/mapPages 原名 re-export，pages-map.test.ts 继续钉。
 // 内容纪律同 mapPages（黄金 §九）：整档 null / 逐块缺 / 逐字段空 都回退设计默认文案，页面永不空白。
 
 // ── 小工具（同 mapPages 口径·本文件自持不跨 lib 复用私有 helper·病根#5 判例：宁可小重复）──

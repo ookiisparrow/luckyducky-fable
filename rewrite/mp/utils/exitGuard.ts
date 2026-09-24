@@ -9,7 +9,7 @@
 // 为什么不用 wx.enableAlertBeforeUnload（**已判废·不要再搬回来**）：双死因——① 它是「返回上一页」
 //   语义、绑 navigateBack/左上角原生返回按钮，tab 栈底页无上一页；② 本 app navigationStyle:custom
 //   自绘导航**藏掉了它要挂的原生返回按钮**。→ 栈底页永远不弹。铁证：仓内 2026-06-14 真机存档
-//   （docs/archive/调试日志-至20260616.md）早已测出「真机无弹窗」。防回潮见守卫 rw-mp-tabbar-exit-guard。
+//   （docs/archive/调试日志-至20260616.md）早已测出「真机无弹窗」。防回潮见 tests/tabbar-exit-guard.test.ts。
 //
 // 真机覆盖边界（根因#8「构建过≠真机能用」·机器守不了·须真机验）：
 //   ✓ 安卓实体返回键 / 返回手势——最主要的误触退出路径，旧 uni-app 线安卓真机验证过；
@@ -19,7 +19,7 @@
 // 副作用（调用方必须知道）：武装态的 page-container 会给 Page 注入 position:fixed、冻结**页面级**滚动
 //   （overlay=false 不解此锁）→ 页面内容必须套在填满视口的 <scroll-view scroll-y> 里，滚动发生在
 //   scroll-view 内部（page-container 锁不到）。页面级下拉刷新（enablePullDownRefresh）同理失效，
-//   须改用 <scroll-view refresher-enabled>。两条都由守卫 rw-mp-tabbar-exit-guard 焊死。
+//   须改用 <scroll-view refresher-enabled>。
 const REARM_MS = 2000
 // 用「点」不用「按」：本文件在 tab 首屏字体闭包内，「按」不在 tier1 子集（改回去会咬红 rw-mp-font-tier-coverage，
 // 且不重建 woff 的话真机该字掉系统字体）。语义无损——原生 toast 本就由客户端用系统字体渲染。

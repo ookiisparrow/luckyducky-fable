@@ -4,7 +4,7 @@
  * 正查：npm run trace -- R4        → R4 牵动的 函数 / 测试 / 守卫
  * 反查：npm run trace -- --fn confirmEnter      → 哪些需求碰这个函数
  *       npm run trace -- --guard fen-money-chain → 哪些需求靠这个守卫
- * 数据源：docs/需求清单.md「需求→实现映射」表（由 requirement-trace 守卫保完整且 resolve）。
+ * 数据源：docs/需求清单.md「需求→实现映射」表。
  */
 import { readFileSync } from 'node:fs'
 import { join, dirname } from 'node:path'

@@ -23,7 +23,7 @@ Page({
     statusBarHeight: 0,
     showSplash: true, // 冷启动品牌开屏：初值 true=首帧即盖上，splash（min-hold+数据就绪 race+硬上限）自撤后经 onSplashDone 置 false。
     splashReady: false, // 首屏数据就绪信号→传 <brand-splash ready>：reload 落定即置 true 放行 splash 淡出（好网络更快撤·弱网走硬上限兜底）
-    // 挂 onLoad（每次冷启动一次），非 onShow——切 tab 回来/热恢复不重播（brand-splash 有界自撤守卫见 rw-mp-splash-auto-dismiss）
+    // 挂 onLoad（每次冷启动一次），非 onShow——切 tab 回来/热恢复不重播
     loading: true,
     loadFailed: false,
     content: mapHomeContent(null) as HomeContentVM, // 首帧即默认文案·不空屏
@@ -212,7 +212,7 @@ Page({
     toastTimer = setTimeout(() => this.setData({ 'toast.show': false }), 1600)
   },
 
-  // 转发/朋友圈钩子（分发前置·决策§29·守卫 rw-mp-share-wired）：公开页开转发，私有页（交易/学习/隐私）
+  // 转发/朋友圈钩子（分发前置·决策§29）：公开页开转发，私有页（交易/学习/隐私）
   // 刻意不加钩子＝默认不可转发。不配 imageUrl——微信默认截页面顶部真身，不造假分享图。
   onShareAppMessage() {
     return { title: HOME_SHARE_TITLE, path: '/pages/home/home' }

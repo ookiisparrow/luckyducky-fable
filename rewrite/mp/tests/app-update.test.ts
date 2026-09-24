@@ -1,4 +1,4 @@
-// 强制更新接线（R41·守卫 rw-mp-funnel-tracked）：wx.getUpdateManager 三分支——基础库过低静默跳过 /
+// 强制更新接线（R41）：wx.getUpdateManager 三分支——基础库过低静默跳过 /
 // 新版本就绪弹确认框（带「稍后」取消项）只有用户点确认才 applyUpdate / 下载失败提示删除重装。
 import { describe, it, expect, vi, afterEach } from 'vitest'
 import { checkForUpdate } from '../utils/appUpdate'

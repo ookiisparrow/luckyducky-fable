@@ -1,4 +1,4 @@
-// 五页 CMS 内容映射黄金（守卫 rw-mp-page-content-golden·同 mapHome 黄金 §九）：整档 null / 逐块缺 /
+// 五页 CMS 内容映射黄金（同 mapHome 黄金 §九）：整档 null / 逐块缺 /
 // 逐字段空 都回退设计默认——CMS 拉不到或字段被误清空时页面永不空白（fail-soft）。逐 mapper 钉默认回退行为。
 import { describe, it, expect } from 'vitest'
 import { mapWelcome, mapCatalogPlayer, mapMe, mapAbout, mapAgreement } from '../lib/mapPages'
