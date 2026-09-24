@@ -5,7 +5,7 @@ description: Use when debugging a bug, failure, flaky test, or unexpected behavi
 
 # 系统化调试
 
-> 本 skill = 元模式的 **intake 环**（`docs/元模式.md` A5）：把每次痛归因到病根，归不进就长出新病根。循环（痛→本质→不变量→守卫→反向自检→归因）的定义在元模式，本文不复述、只做这一环。
+> 本 skill 把每次痛归因到 `docs/根因账本.md` 的病根，归不进就立新病根；要不要为它加守卫，按 `docs/元模式.md`「守卫准入」判断。
 
 调试不是猜，是收敛。任何「为什么不对」的问题按四步走，**没复现前禁止改代码，没守卫不算修完**。
 
