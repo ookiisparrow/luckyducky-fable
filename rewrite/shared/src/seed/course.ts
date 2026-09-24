@@ -6,24 +6,24 @@
  * - 每个 segment 将来是独立视频文件（videoFileId）；素材未剪前为 null，播放页按时长等分回退。
  * - 用户学习进度（done/watched）是用户态，不在课程内容里。
  */
-export interface SeedSegment {
+interface SeedSegment {
   id: string
   name: string
   dur: string
   videoFileId: string | null
 }
-export interface SeedLesson {
+interface SeedLesson {
   id: string
   name: string
   dur: string
   segments: SeedSegment[]
 }
-export interface SeedChapter {
+interface SeedChapter {
   id: string
   title: string
   lessons: SeedLesson[]
 }
-export interface SeedCourse {
+interface SeedCourse {
   id: string
   title: string
   sort: number

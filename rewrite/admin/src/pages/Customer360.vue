@@ -1,5 +1,5 @@
 <script setup lang="ts">
-// 客户 360（设计语言一致性·M3 UI 批14）：搜人（openid/手机/昵称/订单号）→ 全景面板（单面板失败隔离·其余照渲染）。
+// 客户 360：搜人（openid/手机/昵称/订单号）→ 全景面板（单面板失败隔离·其余照渲染）。
 // 本页读他人数据全程强制留痕（云端 FORCE_AUDIT）。
 import { ref } from 'vue'
 import { Search, ChevronLeft, RotateCcw, User } from 'lucide-vue-next'

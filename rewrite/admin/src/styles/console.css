@@ -396,7 +396,7 @@ body {
 }
 /* 琥珀描边输入（警示语·保留原意勿清空） */
 .pc-input.pc-amber-edge {
-  border-color: #c47d1e;
+  border-color: var(--ld-amber-line);
   background: var(--ld-bg-amber-soft);
 }
 /* 琥珀警示横幅（协议页顶部·已过审文案提醒） */
@@ -404,7 +404,7 @@ body {
   display: flex;
   gap: 8px;
   padding: 10px 14px;
-  border: 1px solid #c47d1e;
+  border: 1px solid var(--ld-amber-line);
   border-radius: var(--ld-radius-sm);
   background: var(--ld-bg-amber-soft);
   color: var(--ld-amber);

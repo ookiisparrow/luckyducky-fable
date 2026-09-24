@@ -1,0 +1,169 @@
+{
+  "version": "1.0",
+  "comment_absorb": "槽位=会话变量，学 Dify Conversation Variables；刷新清空；一次只问一个必填",
+  "ask_policy": {
+    "one_required_at_a_time": true,
+    "max_collect_rounds_before_handoff": 3,
+    "reask_style": "短句换说法，不连珠炮"
+  },
+  "slots": [
+    {
+      "name": "order_id",
+      "type": "string",
+      "required_for": [
+        "logistics",
+        "not_arrived",
+        "quality",
+        "wrong_or_missing"
+      ],
+      "ask": "请发一下订单号，我帮你查。",
+      "persist": "session",
+      "clear_on_refresh": true,
+      "note": "packaging 意图禁止要订单号（客服侧可见订单；演练定稿 2026-09-19）"
+    },
+    {
+      "name": "issue_type",
+      "type": "enum",
+      "enum": [
+        "consult",
+        "compare",
+        "order_guide",
+        "logistics",
+        "not_arrived",
+        "packaging",
+        "product_course",
+        "product_app",
+        "quality",
+        "howto_craft",
+        "wrong_or_missing",
+        "other"
+      ],
+      "required_for": [
+        "*after_triage"
+      ],
+      "ask": "方便说一下，是售前咨询、物流，还是售后问题？",
+      "persist": "session",
+      "clear_on_refresh": true
+    },
+    {
+      "name": "product_type",
+      "type": "enum",
+      "enum": [
+        "course",
+        "app",
+        "physical_kit",
+        "unknown"
+      ],
+      "labels": {
+        "course": "课程",
+        "app": "程序/小程序",
+        "physical_kit": "实物材料包",
+        "unknown": "不确定"
+      },
+      "required_for": [
+        "compare",
+        "order_guide",
+        "product_course",
+        "product_app",
+        "howto_craft"
+      ],
+      "ask": "是课程、小程序，还是实物材料包？",
+      "persist": "session",
+      "clear_on_refresh": true
+    },
+    {
+      "name": "severity_desc",
+      "type": "string",
+      "required_for": [
+        "quality",
+        "wrong_or_missing"
+      ],
+      "ask": "简单描述一下具体情况，一两句就行。",
+      "persist": "session",
+      "clear_on_refresh": true,
+      "optional_for": [
+        "packaging"
+      ]
+    },
+    {
+      "name": "severity_photo_hint",
+      "type": "string",
+      "required_for": [
+        "packaging"
+      ],
+      "optional_for": [
+        "quality",
+        "wrong_or_missing"
+      ],
+      "ask": "您拍一张包装和产品放一起的合照发我～",
+      "persist": "session",
+      "clear_on_refresh": true,
+      "ask_variants_packaging": [
+        "您拍一张包装和产品放一起的合照发我～",
+        "外箱破口和产品都入镜拍一张发过来。",
+        "包装+内物合照一张，我帮您看产品有没有事。"
+      ],
+      "note": "packaging=必填合照；不要订单号"
+    },
+    {
+      "name": "stage",
+      "type": "enum",
+      "enum": [
+        "presale",
+        "insale",
+        "aftersale",
+        "unknown"
+      ],
+      "required_for": [],
+      "persist": "session",
+      "clear_on_refresh": true
+    },
+    {
+      "name": "intent",
+      "type": "string",
+      "persist": "session",
+      "clear_on_refresh": true
+    },
+    {
+      "name": "confidence",
+      "type": "number",
+      "persist": "session",
+      "clear_on_refresh": true
+    },
+    {
+      "name": "consecutive_unknown",
+      "type": "integer",
+      "default": 0,
+      "persist": "session",
+      "clear_on_refresh": true
+    },
+    {
+      "name": "collect_rounds",
+      "type": "integer",
+      "default": 0,
+      "persist": "session",
+      "clear_on_refresh": true
+    },
+    {
+      "name": "session_epoch",
+      "type": "integer",
+      "persist": "account_test_meta",
+      "clear_on_refresh": false,
+      "note": "刷新时 epoch++，openid 不变"
+    },
+    {
+      "name": "order_binding",
+      "type": "object",
+      "persist": "session",
+      "clear_on_refresh": true,
+      "note": "本会话订单逻辑绑定；真实订单数据不因刷新删除"
+    }
+  ],
+  "forbidden_fields": [
+    "virtual_gold",
+    "virtual_coin",
+    "brush_points",
+    "fake_balance",
+    "refresh_reward"
+  ]
+}

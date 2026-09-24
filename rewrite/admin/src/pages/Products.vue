@@ -1,11 +1,27 @@
 <script setup lang="ts">
-// 商品管理（design/console.pen S11 视觉·M3 UI 批3）：页头+流水线副标+筛选 chip（真计数）+ 搜索（按名）
+// 商品管理：页头+流水线副标+筛选 chip（真计数）+ 搜索（按名）
 // + 三态表格（关联课程/规格·图列 + 5 步上新进度圆点）+ 编辑器（整档 round-trip·图片压缩·危操作两步确认）。
 // 「5 步上新进度」——cards/courses/qrcodes 后端 listDrafts bounded join 派生（视频/卡片/批次态）。
 import { ref, computed, onMounted, onBeforeUnmount, watch, nextTick } from 'vue'
 import { Search, Trash2, Package, MoreHorizontal, Plus } from 'lucide-vue-next'
 import { listDrafts, saveDraft, deleteDraft, uploadImage, publishProduct, unpublishProduct, republishProduct } from '../api/products'
-import { mapDraftRows, publishErrorText, b64SizeOk, basicsMissing, stepProgressHint, productsListSub, type DraftRowVM } from '../lib/mapProducts'
+import {
+  mapDraftRows,
+  publishErrorText,
+  b64SizeOk,
+  basicsMissing,
+  stepProgressHint,
+  productsListSub,
+  DRAFT_PRICE_HINT,
+  draftSyncLabel,
+  draftSyncConfirm,
+  restoreSaleLabel,
+  restoreSaleConfirm,
+  draftSyncOk,
+  draftSyncMissingHint,
+  draftSyncReadyHint,
+  type DraftRowVM,
+} from '../lib/mapProducts'
 import { serialSave } from '../lib/serialSave'
 import { compressImage } from '../lib/compressImage'
 import { useRouter } from 'vue-router'
@@ -179,6 +195,7 @@ function markLoaded() {
   void nextTick(() => (editorLoaded = true)) // 赋值落定后再放开自动保存
 }
 function closeEditor() {
+  confirmKey.value = '' // 列表/编辑器共用 twoStep：关编辑必须卸武装，否则回到列表仍是确认文案
   openEditGen++ // 使任何仍在等 silentRefresh 回包的 openEdit 调用作废——不得在关闭后悄悄把编辑器重新弹开（同上代际守卫）
   const myGen = openEditGen // 快照本次关闭的代际（N1·bug 清除战役 II 遗留）：异步链 resolve 前用户可能已 openEdit 打开另一件商品，
   // 失败提示不得晚落地误标到新开的编辑器屏上——照 openEdit/silentRefresh 既有代际模式。
@@ -221,6 +238,7 @@ onBeforeUnmount(() => {
 // 打开两件不同商品，若网络乱序（先点的那次 silentRefresh 回包更晚落地），过期调用不得覆盖后来者正在看/编辑的编辑器。
 let openEditGen = 0
 async function openEdit(row: DraftRowVM) {
+  confirmKey.value = '' // 开编辑/换商品卸武装：列表确认态不得漏进编辑器一击直发
   const my = ++openEditGen
   let r = row
   if (Date.now() - urlMapAt > URL_MAP_STALE_MS) {
@@ -323,10 +341,10 @@ const doPublish = (id: string) =>
     const r = await publishProduct(id)
     busy.value = false
     if (!r.ok) {
-      message.value = publishErrorText(r.error) // 四道门人话
+      message.value = publishErrorText(r.error, rows.value.find((r) => r.id === id)?.state ?? editState.value)
       return
     }
-    message.value = ''
+    message.value = draftSyncOk(rows.value.find((r) => r.id === id)?.state ?? 'preparing')
     void reload()
   })
 
@@ -446,6 +464,10 @@ const missing = computed(() => (edit.value ? basicsMissing(edit.value) : []))
 const coverMissing = computed(() => missing.value.filter((x) => x === '封面图'))
 const lookMissing = computed(() => missing.value.filter((x) => x === '商品名称'))
 const detailMissing = computed(() => missing.value.filter((x) => x === '价格' || x === '至少一个有效规格'))
+const editState = computed(() => {
+  if (!edit.value) return 'preparing' as const
+  return rows.value.find((r) => r.id === String(edit.value!.id))?.state ?? 'preparing'
+})
 
 onMounted(async () => {
   await reload()
@@ -495,7 +517,7 @@ onMounted(async () => {
           <div class="ld-th" :style="{ width: '108px' }">规格 / 图</div>
           <div class="ld-th" :style="{ width: '196px' }">上新进度</div>
           <div class="ld-th" :style="{ width: '92px' }">状态</div>
-          <div class="ld-th" :style="{ width: '240px' }">操作</div>
+          <div class="ld-th" :style="{ width: '280px' }">操作</div>
         </div>
         <div class="ld-tbody">
           <div v-for="row in shown" :key="row.id" class="ld-tr">
@@ -526,11 +548,12 @@ onMounted(async () => {
             <div class="ld-td" :style="{ width: '92px' }">
               <Badge :tone="row.state === 'onsale' ? 'green' : row.state === 'unlisted' ? 'red' : 'amber'" dot>{{ row.stateLabel }}</Badge>
             </div>
-            <div class="ld-td ops" :style="{ width: '240px' }">
+            <div class="ld-td ops" :style="{ width: '280px' }">
               <UiButton v-if="row.doneCount < 5" class="cta-continue" variant="ghost" size="sm" @click="router.push('/products/' + row.id + '/wizard?step=' + firstTodoStep(row))">继续上新</UiButton>
               <UiButton variant="ghost" size="sm" @click="openEdit(row)">编辑</UiButton>
-              <UiButton v-if="row.state === 'preparing' || row.state === 'onsale'" variant="primary" size="sm" @click="doPublish(row.id)">{{ confirmKey === 'pub:' + row.id ? '确认同步到小程序？' : '同步到小程序' }}</UiButton>
-              <UiButton v-if="row.state === 'unlisted'" variant="primary" size="sm" @click="doRepublish(row.id)">{{ confirmKey === 're:' + row.id ? '确认同步到小程序？' : '同步到小程序' }}</UiButton>
+              <UiButton v-if="row.state === 'preparing' || row.state === 'onsale'" variant="primary" size="sm" @click="doPublish(row.id)">{{ confirmKey === 'pub:' + row.id ? draftSyncConfirm(row.state) : draftSyncLabel(row.state) }}</UiButton>
+              <UiButton v-if="row.state === 'unlisted'" variant="primary" size="sm" @click="doPublish(row.id)">{{ confirmKey === 'pub:' + row.id ? draftSyncConfirm('unlisted') : draftSyncLabel('unlisted') }}</UiButton>
+              <UiButton v-if="row.state === 'unlisted'" variant="ghost" size="sm" @click="doRepublish(row.id)">{{ confirmKey === 're:' + row.id ? restoreSaleConfirm() : restoreSaleLabel() }}</UiButton>
               <UiButton v-if="row.state === 'onsale'" variant="danger" size="sm" @click="doUnpublish(row.id)">{{ confirmKey === 'off:' + row.id ? '确认从橱窗拿下？' : '从橱窗拿下' }}</UiButton>
               <button class="icon-btn ld-icon-btn" title="更多操作" @click="toggleMore(row.id, $event)">
                 <MoreHorizontal :size="15" :stroke-width="1.8" />
@@ -603,11 +626,17 @@ onMounted(async () => {
 
       <div v-if="showDetail" class="grid">
         <label>标签 <input v-model="edit.tag" maxlength="20" placeholder="如 送礼首选" /></label>
-        <label>价格（元）<input v-model="edit.price" /></label>
-        <label>划线价 <input v-model="edit.was" /></label>
-        <label>销量 <input v-model.number="edit.sold" type="number" min="0" step="1" placeholder="0 不在详情页显示" /></label>
         <label class="wide">一句话简介 <input v-model="edit.brief" maxlength="120" /></label>
         <label v-if="!embed">关联课程 <input v-model="edit.courseId" placeholder="course-xxx（可空）" /></label>
+      </div>
+      <div v-if="showDetail" class="price-sales">
+        <h4>价格与销量</h4>
+        <p class="price-sales-hint">{{ DRAFT_PRICE_HINT }}</p>
+        <div class="grid">
+          <label>价格（元）<input v-model="edit.price" /></label>
+          <label>划线价 <input v-model="edit.was" /></label>
+          <label>销量 <input v-model.number="edit.sold" type="number" min="0" step="1" placeholder="0 不在详情页显示" /></label>
+        </div>
       </div>
       <template v-if="showDetail">
         <h4>规格（SKU）</h4>
@@ -654,13 +683,16 @@ onMounted(async () => {
       <p v-else-if="embed && showLook" class="preflight ok">✓ 本步名字已齐</p>
       <p v-if="embed && showDetail && detailMissing.length" class="preflight">本步还差：<b>{{ detailMissing.join('、') }}</b></p>
       <p v-else-if="embed && showDetail && !detailMissing.length" class="preflight ok">✓ 本步价格和规格已齐</p>
-      <p v-if="!embed && missing.length" class="preflight">同步到小程序还差：<b>{{ missing.join('、') }}</b></p>
-      <p v-else-if="!embed" class="preflight ok">✓ 必备项齐全，保存后可同步到小程序</p>
+      <p v-if="!embed && missing.length" class="preflight">{{ draftSyncMissingHint(editState, missing) }}</p>
+      <p v-else-if="!embed" class="preflight ok">{{ draftSyncReadyHint(editState) }}</p>
 
       <!-- 嵌入向导步 1-3 时隐藏「保存草稿/关闭」：doSave 会 edit.value=null 关掉编辑器、而 embed 无列表可回→步面板变空白死胡同（P2）；
            embed 下 autosave（900ms + 离页补存）已负责持久化，切步/上架走向导自身按钮 -->
       <div v-if="!embed" class="editor-ops">
-        <UiButton variant="primary" :disabled="busy" @click="doSave">保存草稿</UiButton>
+        <UiButton v-if="editState === 'onsale'" variant="primary" :disabled="busy" @click="doPublish(String(edit.id))">{{ confirmKey === 'pub:' + edit.id ? draftSyncConfirm('onsale') : draftSyncLabel('onsale') }}</UiButton>
+        <UiButton v-if="editState === 'unlisted'" variant="primary" :disabled="busy" @click="doPublish(String(edit.id))">{{ confirmKey === 'pub:' + edit.id ? draftSyncConfirm('unlisted') : draftSyncLabel('unlisted') }}</UiButton>
+        <UiButton v-if="editState === 'unlisted'" variant="ghost" :disabled="busy" @click="doRepublish(String(edit.id))">{{ confirmKey === 're:' + edit.id ? restoreSaleConfirm() : restoreSaleLabel() }}</UiButton>
+        <UiButton :variant="editState === 'preparing' ? 'primary' : 'ghost'" :disabled="busy" @click="doSave">保存草稿</UiButton>
         <UiButton variant="ghost" @click="closeEditor">关闭</UiButton>
       </div>
     </div>
@@ -988,7 +1020,23 @@ onMounted(async () => {
 .editor-ops {
   margin-top: 12px;
   display: flex;
+  flex-wrap: wrap;
   gap: 8px;
+}
+.price-sales {
+  margin-top: 16px;
+  padding: 12px 14px;
+  border: 1px solid var(--ld-line);
+  border-radius: var(--ld-radius-sm);
+  background: var(--ld-bg-faint);
+}
+.price-sales h4 {
+  margin: 0 0 4px;
+}
+.price-sales-hint {
+  margin: 0 0 10px;
+  font-size: 12.5px;
+  color: var(--ld-content-2);
 }
 /* 相册（本页独有·多图排序拖序） */
 .gallery {

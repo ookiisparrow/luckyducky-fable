@@ -55,6 +55,60 @@ export function stepProgressHint(steps: StepDot[]): string {
   return `第 ${i + 1} 步：${steps[i].label}`
 }
 
+/** 价格/销量块提示：自动保存只写草稿，顾客要再走同步才看见（#198 词表）。 */
+export const DRAFT_PRICE_HINT = '先存草稿，同步后顾客才见'
+
+/** 词表单源（#198 #199 #211）：筹备中第一次＝上架；在售推草稿＝同步到小程序；已下架推新稿＝同步草稿。禁「重新上架」。 */
+export function draftSyncLabel(state: ProductState): string {
+  if (state === 'preparing') return '上架'
+  if (state === 'unlisted') return '同步草稿'
+  return '同步到小程序'
+}
+
+/** 二次确认：在售只说新价/新图；已下架写清仍停售；筹备中第一次才说确认上架。 */
+export function draftSyncConfirm(state: ProductState): string {
+  if (state === 'onsale') return '顾客将看到新价/新图'
+  if (state === 'unlisted') return '确认同步草稿？写入新价/新图，商品仍停售'
+  return '确认上架？'
+}
+
+export function restoreSaleLabel(): string {
+  return '恢复销售'
+}
+
+/** 恢复销售只露旧发布档，不拷刚才改的草稿——确认必须说破（#211）。 */
+export function restoreSaleConfirm(): string {
+  return '确认恢复销售？顾客看到的是上次上架页，不是刚才改的草稿。若刚改过价/图请先同步草稿'
+}
+
+/** 恢复成功：列表清提示（reload 会冲掉）；向导留下这句，跟确认同一口径。 */
+export function restoreSaleOk(): string {
+  return '已恢复销售。若刚改过价/图请先同步草稿'
+}
+
+/** 已下架同步成功：发布档已更新，listed 仍是 false，还要再恢复（#211）。 */
+export function draftSyncUnlistedOk(): string {
+  return '草稿已同步。商品仍停售，还要再点「恢复销售」顾客才看得到'
+}
+
+export function draftSyncBusy(state: ProductState): string {
+  return state === 'preparing' ? '上架中…' : '同步中…'
+}
+
+export function draftSyncMissingHint(state: ProductState, missing: string[]): string {
+  return draftSyncLabel(state) + '还差：' + missing.join('、')
+}
+
+export function draftSyncReadyHint(state: ProductState): string {
+  return '✓ 必备项齐全，保存后可' + draftSyncLabel(state)
+}
+
+export function draftSyncOk(state: ProductState): string {
+  if (state === 'unlisted') return draftSyncUnlistedOk()
+  if (state === 'onsale') return '已同步到小程序，打开小程序即可看到该商品'
+  return '已上架，打开小程序即可看到该商品'
+}
+
 /** 产品表副标：有筹备中才跟「待完成上新」；0 款不跟，避免「都已上架」还写待完成。 */
 export function productsListSub(all: number, preparing: number): string {
   if (preparing > 0) return `共 ${all} 款商品 · ${preparing} 款筹备中待完成上新`
@@ -147,14 +201,15 @@ export function wizardCanPublish(p: unknown): boolean {
   return basicsMissing(p).length === 0
 }
 
-/** 上架四道门 → 人话（原文兜底不吞·守卫反向测试面）。 */
-export function publishErrorText(e: unknown): string {
+/** 上架四道门 → 人话（原文兜底不吞·守卫反向测试面）。动作用词跟 draftSyncLabel，禁另起别名。 */
+export function publishErrorText(e: unknown, state: ProductState = 'onsale'): string {
+  const act = draftSyncLabel(state)
   const code = String(e || '')
   if (code === 'NO_DRAFT') return '草稿不存在（可能已被删除）'
-  if (code === 'NEED_COVER') return '先上传封面图才能同步到小程序'
+  if (code === 'NEED_COVER') return '先上传封面图才能' + act
   if (code === 'NEED_INFO') return '名称或价格没填好（价格须是有效金额）'
   if (code === 'NEED_SKUS') return '规格行不完整（每行都要有名称和有效价格）'
-  return '同步到小程序没成功（' + code + '）' // 原文兜底
+  return act + '没成功（' + code + '）' // 原文兜底
 }
 
 export interface ShowcaseRowVM {
