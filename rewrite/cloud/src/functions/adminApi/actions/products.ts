@@ -1,6 +1,6 @@
 import { isValidPriceYuan, isValidScmProductId, isValidScmSpec } from '@ldrw/shared'
 import { reply, cleanProduct, cleanSold, storeImage, readDoc, type Ctx } from '../lib'
-import { notifyAlert } from '../../../kit'
+import { notifyAlert, getTempUrls } from '../../../kit'
 
 // —— 商品图册孤儿 GC 判据单源（E16 共享 helper·防多点漂移·批B）——
 // 换图/发布替换/删档三处写点共用这一份 diff 计算 + cover 豁免，别各写一份（漂移＝漏删或误删）。
@@ -45,18 +45,23 @@ function mergePendingGc(old: any, orphans: string[], keep: Set<string>): { fileI
   return [...carried, ...fresh.map((fileId) => ({ fileId, deleteAfter: now + GC_GRACE_MS }))]
 }
 
-export async function listDrafts({ cloud, db, drafts }: Ctx) {
+// 列表图换临时地址。微信一次最多 50 个 fileID；草稿封面+图册、橱窗封面凑一批会超，整包丢过去会整批失败。
+// 走 kit getTempUrls：去重后按 50 张分批。不传 maxAge，和原先裸 string 换址同形。换不到的不放进结果。
+async function listedImageUrls(fileIds: Iterable<string>): Promise<Record<string, string>> {
+  const urls: Record<string, string> = {}
+  const map = await getTempUrls([...fileIds])
+  for (const [id, url] of Object.entries(map)) if (url) urls[id] = url
+  return urls
+}
+
+export async function listDrafts({ db, drafts }: Ctx) {
   const res = await drafts.orderBy('createdAt', 'desc').limit(100).get()
   const ids = new Set<string>()
   for (const p of res.data) {
     if (p.cover && p.cover.startsWith('cloud://')) ids.add(p.cover)
     for (const u of p.images || []) if (u.startsWith('cloud://')) ids.add(u)
   }
-  const urls: Record<string, string> = {}
-  if (ids.size) {
-    const r = await cloud.getTempFileURL({ fileList: [...ids] })
-    for (const f of r.fileList) if (f.tempFileURL) urls[f.fileID] = f.tempFileURL
-  }
+  const urls = await listedImageUrls(ids)
   // 上架/下架状态映射（S11·债#12 软下架显形）：listed 标记在 products、不在草稿，控制台靠它分
   // 「在售（onsale+listed≠false）/ 已下架（onsale+listed:false）/ 筹备中（未上架·无 products 文档）」。
   // 一次性批量取（草稿 ≤100·bounded·根因#7），口径与 getProducts 一致（旧无字段=可售）。
@@ -309,14 +314,10 @@ export async function republishProduct({ db, data }: Ctx) {
 }
 
 // —— 小程序橱窗（规格 §八）：一比一首页预览的排序与上下架 ——
-export async function listShowcase({ db, cloud }: Ctx) {
+export async function listShowcase({ db }: Ctx) {
   const res = await db.collection('products').orderBy('sort', 'asc').limit(100).get()
   const ids = res.data.map((p: any) => p.cover).filter((u: any) => u && u.startsWith('cloud://'))
-  const urls: Record<string, string> = {}
-  if (ids.length) {
-    const r = await cloud.getTempFileURL({ fileList: [...new Set<string>(ids)] })
-    for (const f of r.fileList) if (f.tempFileURL) urls[f.fileID] = f.tempFileURL
-  }
+  const urls = await listedImageUrls(ids)
   return reply(200, { ok: true, list: res.data, urls })
 }
 

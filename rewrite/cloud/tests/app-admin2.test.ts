@@ -178,6 +178,69 @@ describe('productId/spec 出生点校验（战役3 批D·D1·shared/scmKey.ts �
   })
 })
 
+describe('草稿/橱窗列表换临时图（微信一次最多 50 个 fileID·走 getTempUrls 分批）', () => {
+  it('大白话：不到 50 张时，临时地址还是一张对一张，外链和空图不换', async () => {
+    control.seed('productsDraft', [
+      {
+        _id: 'p1',
+        id: 'p1',
+        cover: 'cloud://c/a.png',
+        images: ['cloud://c/b.png', 'https://ext/x.png', ''],
+        createdAt: 1,
+      },
+    ])
+    const r = await post('listDrafts')
+    expect(r.ok).toBe(true)
+    expect(control.tempUrlCalls()).toEqual([2])
+    expect(r.urls).toEqual({
+      'cloud://c/a.png': 'https://tmp/cloud://c/a.png',
+      'cloud://c/b.png': 'https://tmp/cloud://c/b.png',
+    })
+  })
+
+  it('大白话：草稿图超过 50 张时分批都能换到，不再整批失败', async () => {
+    const drafts = []
+    for (let i = 0; i < 3; i++) {
+      drafts.push({
+        _id: `p${i}`,
+        id: `p${i}`,
+        cover: `cloud://c/cover-${i}.png`,
+        images: Array.from({ length: 20 }, (_, j) => `cloud://c/p${i}-${j}.png`),
+        createdAt: 1000 - i,
+      })
+    }
+    control.seed('productsDraft', drafts)
+    const r = await post('listDrafts')
+    expect(r.ok).toBe(true)
+    const calls = control.tempUrlCalls()
+    expect(calls.length).toBeGreaterThan(1)
+    expect(Math.max(...calls)).toBeLessThanOrEqual(50)
+    expect(calls.reduce((a: number, b: number) => a + b, 0)).toBe(63)
+    expect(r.urls['cloud://c/cover-0.png']).toBe('https://tmp/cloud://c/cover-0.png')
+    expect(r.urls['cloud://c/p2-19.png']).toBe('https://tmp/cloud://c/p2-19.png')
+  })
+
+  it('大白话：橱窗封面超过 50 张也分批换到；重复封面只换一次，外链不换', async () => {
+    const products = Array.from({ length: 51 }, (_, i) => ({
+      _id: `s${i}`,
+      cover: `cloud://c/s${i}.png`,
+      sort: i,
+    }))
+    products.push({ _id: 'dup', cover: 'cloud://c/s0.png', sort: 99 })
+    products.push({ _id: 'ext', cover: 'https://ext/z.png', sort: 100 })
+    control.seed('products', products)
+    const r = await post('listShowcase')
+    expect(r.ok).toBe(true)
+    const calls = control.tempUrlCalls()
+    expect(calls.length).toBeGreaterThan(1)
+    expect(Math.max(...calls)).toBeLessThanOrEqual(50)
+    expect(calls.reduce((a: number, b: number) => a + b, 0)).toBe(51)
+    expect(r.urls['cloud://c/s0.png']).toBe('https://tmp/cloud://c/s0.png')
+    expect(r.urls['cloud://c/s50.png']).toBe('https://tmp/cloud://c/s50.png')
+    expect(r.urls['https://ext/z.png']).toBeUndefined()
+  })
+})
+
 describe('橱窗排序保存（saveShowcase·根因#14 部分失败不静默）', () => {
   it('大白话：全部成功回 ok:true；任一条 update 失败不再被 .catch(()=>{}) 静默吞掉——回 ok:false 报失败数，不误显"已保存"', async () => {
     await post('saveDraft', { product: DRAFT })
