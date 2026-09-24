@@ -43,7 +43,6 @@ interface Verdict {
   courseId: string
   lineRefundable: boolean // 本单此行真实可退性（P2·判据绑单·非课程级）
   refundableQty: number | null
-  lineFound: boolean
 }
 const decideRow = ref<RefundRowVM | null>(null)
 const verdict = ref<Verdict | null>(null)
@@ -134,7 +133,7 @@ async function openDecide(row: RefundRowVM) {
   rejecting.value = false
   rejectReason.value = ''
   decideErr.value = ''
-  verdict.value = { loading: true, activated: false, entered: false, code: '', courseId: '', lineRefundable: true, refundableQty: null, lineFound: false }
+  verdict.value = { loading: true, activated: false, entered: false, code: '', courseId: '', lineRefundable: true, refundableQty: null }
   const my = detailGen.begin()
   const r = await getRefundDetail(row.id)
   if (detailGen.isStale(my) || decideRow.value?.id !== row.id) return // 抽屉已切别单·丢弃过期详情（防判据错配）
@@ -154,7 +153,6 @@ async function openDecide(row: RefundRowVM) {
     courseId: String(a.courseId || ''),
     lineRefundable: (r as any)?.lineRefundable !== false, // 缺字段/老后端默认可退（不误判会拦）
     refundableQty: (r as any)?.refundableQty ?? null,
-    lineFound: !!(r as any)?.lineFound,
   }
 }
 function closeDecide() {

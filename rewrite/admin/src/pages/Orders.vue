@@ -271,7 +271,7 @@ onMounted(reload)
 <template>
   <div class="ld-page">
     <PageHeader title="订单发货" sub="待发货订单处理与物流跟踪 · 填好运单号，小程序订单页即刻可见">
-      <UiButton variant="ghost" size="sm" :disabled="message === '加载中…'" @click="reload">
+      <UiButton variant="ghost" size="sm" :disabled="reloading" @click="reload">
         <RefreshCw :size="14" :stroke-width="1.8" />
         <span>刷新</span>
       </UiButton>
