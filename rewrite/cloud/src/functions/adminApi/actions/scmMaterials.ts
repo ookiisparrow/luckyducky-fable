@@ -3,7 +3,7 @@ import { applyStockMoves, listStockLedger, saveMaterialDoc, listMaterialDocs, pa
 import { COLLECTIONS } from '@ldrw/shared'
 import { yarnMaterialId } from '@ldrw/shared'
 
-// 进销存 SCM-0 地基·物料/供应商主档 + 期初盘点/调整（蓝图 docs/进销存ERP/·门5 文件级隔离：本文件=SCM-0 车道）。
+// 进销存 SCM-0 地基·物料/供应商主档 + 期初盘点/调整（见 docs/业务逻辑架构.md 链 12·门5 文件级隔离：本文件=SCM-0 车道）。
 // 库存/主档持久化收口 kit/scmStock（门1·守卫 material-stock-single-seam）；本文件只做入参校验 + 料号推导 + 转调。
 // RBAC：不登记 ACTION_CAPS → 默认拒 admin:write＝仅超管（外包坐席天然无权·蓝图门5）；写类 action 自动审计（shouldAudit）。
 

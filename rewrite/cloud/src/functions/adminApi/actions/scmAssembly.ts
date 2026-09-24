@@ -3,7 +3,7 @@ import { applyStockMoves, produceStock, listMaterialDocs, notifyAlert, pageQuery
 import { COLLECTIONS, ERR } from '@ldrw/shared'
 import { resolveBom, isValidScmProductId, isValidScmSpec } from '@ldrw/shared'
 
-// 进销存 SCM-C 组装执行（蓝图 docs/进销存ERP/·门5 文件级隔离：本文件=车道 C 组装面）。
+// 进销存 SCM-C 组装执行（见 docs/业务逻辑架构.md 链 12·门5 文件级隔离：本文件=车道 C 组装面）。
 // 组装单**单步执行**（建即执行·无状态机·撤销走调整单——CLAUDE.md 别为不存在的草稿需求建状态机）：
 //   门3 resolveBom 解析 → **快照冻结**存单（bomSnapshot/consumedLines·历史单不追新·守卫 bom-snapshot-frozen）
 //   → 门1 applyStockMoves 扣原料（assembly_out·all-or-nothing）→ 门4 produceStock 入成品（kit/inventory 唯一出口）

@@ -3,7 +3,7 @@ import { applyStockMoves, listMaterialDocs, transition, pageQuery, notifyAlert }
 import { COLLECTIONS } from '@ldrw/shared'
 import { asFen, OUTWORK_ORDER_STATUS, OUTWORK_ORDER_TRANSITIONS } from '@ldrw/shared'
 
-// 进销存车道 B·外协线（蓝图 docs/进销存ERP/施工蓝图.md §4B·门5 文件级隔离：本文件=车道 B 全部 action）。
+// 进销存车道 B·外协线（见 docs/业务逻辑架构.md 链 12·门5 文件级隔离：本文件=车道 B 全部 action）。
 // 业务定稿（README 需求）：织女把起手结做在**最大团**毛线上——发最大团原团（按色）→ 收同色带结团入库 →
 // 损耗=发−收可见 → 计件工钱应付（收回数×单价）→ 结算销账。
 // 出入库只经门1 kit/scmStock.applyStockMoves（守卫 material-stock-single-seam）；状态只走门2 transition()
