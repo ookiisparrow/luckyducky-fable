@@ -10,13 +10,8 @@ Page({
     list: [] as MyCourseVM[],
     loading: true,
     loadFailed: false, // 失败≠空态（根因#14·守卫 rw-mp-list-loadfailed-state）：与「输入激活码」引导分治——付费用户弱网一次失败不该被引导输码
-    highlightId: '', // 扫码激活定位：welcome.ts onEnter 带 courseId 跳回本页，高亮刚拿到的那张课卡
   },
   _seq: 0, // onShow 代次·丢弃过期回包（同 player playToken）
-  onLoad(query: Record<string, string | undefined>) {
-    // query 只在 onLoad 拿得到（onShow 无参）；先存起来供 onShow 渲染时读
-    this.setData({ highlightId: String(query.courseId || '') })
-  },
   onShow() {
     void this.reload()
   },
@@ -51,7 +46,6 @@ Page({
     void this.reload()
   },
   onTapCourse(e: WechatMiniprogram.TouchEvent) {
-    // 课卡进目录（章>课时两层浏览），目录再进播放——播放器重设计战役批E 接线，highlightId 高亮逻辑不变。
     wx.navigateTo({ url: '/pages/catalog/catalog?courseId=' + String(e.currentTarget.dataset.id) })
   },
   onActivate() {
