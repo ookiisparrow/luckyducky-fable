@@ -128,6 +128,25 @@ describe('节点拍照上传（黄金 §八：进课闸·内容安全 fail-close
     expect(control.dump('checkpoints').length).toBe(0)
   })
 
+  it('大白话：进课资格读失败不再装成没资格——ok:false INTERNAL；真没进课仍 NOT_ENTITLED', async () => {
+    control.setOpenId('oU1')
+    seedEntered()
+    control.setBeforeGet(({ coll }: any) => {
+      if (coll === 'activations') throw new Error('MOCK_DB_FAIL')
+    })
+    const fail = await submit({ courseId: 'c1', nodeId: 'n1', fileId: 'f1' })
+    control.setBeforeGet(null as never)
+    expect(fail.ok).toBe(false)
+    expect(fail.error).toBe('INTERNAL')
+    expect(fail.error).not.toBe('NOT_ENTITLED')
+    expect(control.dump('checkpoints').length).toBe(0)
+    control.reset()
+    control.setOpenId('oU1')
+    const empty = await submit({ courseId: 'c1', nodeId: 'n1', fileId: 'f1' })
+    expect(empty.error).toBe('NOT_ENTITLED')
+    expect(control.dump('checkpoints').length).toBe(0)
+  })
+
   it('大白话：图安全放行落库为本人提交；同节点重传覆盖不重复建档；违规拒；校验不了（能力未开/网络）也拒——证明安全才放行', async () => {
     control.setOpenId('oU1')
     seedEntered()
