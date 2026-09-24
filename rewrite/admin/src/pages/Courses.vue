@@ -45,7 +45,7 @@ const confirmKey = ref('') // no-alert 两步删除确认（换皮改直接 spli
 // 拉不到列表就保持手输老路，不挡人
 const courseOptions = ref<{ cid: string; label: string }[] | null>(null)
 async function loadCourseOptions() {
-  // 数据刷新必清危险武装态（守卫 rw-admin-armed-reset-on-load 规格·批3）——本函数只在无课号直入时跑，
+  // 数据刷新必清危险武装态——本函数只在无课号直入时跑，
   // 此时本就无可武装对象，复位是幂等的安全动作
   confirmKey.value = ''
   publishConfirm.value = false
@@ -273,7 +273,7 @@ async function pickVideo(l: Record<string, any>, sg: Record<string, any>, ev: Ev
   try {
     progress.value = '上传中 0%'
     if (!sg.dur) sg.dur = await readDuration(file) // 时长自动读取（未填才读·不覆盖手填）
-    // allowVod（决策§31 批2 自纠·守卫 rw-admin-help-video-stays-cos）：课程视频线显式走 VOD——
+    // allowVod（决策§31 批2 自纠）：课程视频线显式走 VOD——
     // 帮助视频线共用本函数但恒不传（其播放侧只认云存储 fileID）。
     const r = await uploadVideo(String(course.value.id), String(sg.name || 'seg'), file, (p) => (progress.value = `上传中 ${Math.round(p * 100)}%`), { allowVod: true })
     if (!l.segments.includes(sg)) {

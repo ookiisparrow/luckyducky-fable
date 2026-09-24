@@ -83,7 +83,7 @@ const DONE_ORDER = {
 // 第三批扩面键集（战役工单 W1·A 批·目录/内容/FAQ 面）：
 // 商品档 18 键——由 adminApi saveDraft→publishProduct 真写入后回读（publishProduct 的 doc 字面量＝
 // products 集合的权威字段集）。app 侧 getProductDetail 整档透传出这 18 键；getProducts 列表瘦身删 images
-// 后为 17 键（守卫 rw-catalog-list-cover-only 的测试半边）。这两条链路**零裁剪**：写侧加一个字段就直接
+// 后为 17 键。这两条链路**零裁剪**：写侧加一个字段就直接
 // 出公开网关（编译不红、既有值断言也不红），本哨兵是那条唯一的机器闸。
 const PRODUCT_KEYS = ['_id', 'brief', 'courseId', 'cover', 'detailSections', 'featured', 'id', 'images', 'kit', 'name', 'params', 'price', 'skus', 'sold', 'sort', 'tag', 'updatedAt', 'was']
 const PRODUCT_LIST_KEYS = PRODUCT_KEYS.filter((k) => k !== 'images')
@@ -310,7 +310,7 @@ describe('契约键集合哨兵（Object.keys 排序全等·增删改名都红�
     expect(keysOf(r)).toEqual(['list', 'ok'])
     const row = r.list.find((p: any) => p._id === 'pd1') // 不靠顺序：桩 orderBy 对缺 sort 的档退化为 seed 序
     expect(keysOf(row)).toEqual(PRODUCT_LIST_KEYS)
-    expect('images' in row).toBe(false) // 图册只在详情页下发（守卫 rw-catalog-list-cover-only 的测试半边）
+    expect('images' in row).toBe(false) // 图册只在详情页下发
     expect(keysOf(row.skus[0])).toEqual(['name', 'price'])
     expect(row.cover.startsWith('https://')).toBe(true) // 裸 fileID 不出网关：服务端换好临时址再下发
   })

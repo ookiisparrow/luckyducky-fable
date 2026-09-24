@@ -43,7 +43,7 @@
 
 ## 组件（规则，不另起原语）
 
-- **Button**：一屏一个 primary；行内 ghost / `sm`；破坏性用红，且不与主操作双胞胎并排。页面用现有 `UiButton`，禁手搓填充主按钮（`rw-admin-btn-single-source`）。
+- **Button**：一屏一个 primary；行内 ghost / `sm`；破坏性用红，且不与主操作双胞胎并排。页面用现有 `UiButton`，禁手搓填充主按钮。
 - **Table**：表头次要色；行高紧；操作列右对齐。
 - **Form**：标签在上；危险确认单独一步。
 - **Empty**：短文案 + 一个主操作，禁插画堆砌。

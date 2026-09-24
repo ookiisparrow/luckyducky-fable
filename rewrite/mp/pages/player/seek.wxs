@@ -60,7 +60,6 @@ function previewLeft(pct) {
 // 实测——WXS setStyle 写过一次后，wxml 上 `style="width:{{seekPct}}%"` 的数据绑定**永久失灵**
 // （换段 setData({seekPct:0}) 清不掉，之后播放推进也不再带动进度条＝拖一次进度条就死了）。
 // 故位置不许两方写：拖动走 applyAt→本函数，非拖动期由逻辑层 seekPct 经 change:pct→onPct→本函数。
-// 守卫 rw-mp-seek-style-single-writer 焊死回灌通道存在。
 function applyPct(ow, pct) {
   var p = pct || 0
   if (p < 0) p = 0
@@ -123,7 +122,7 @@ function onStart(e, ow) {
   applyAt(ow, e.touches[0].clientX)
 }
 
-// 拖动中：只改显示（applyAt）·绝不提交 seek（两段式·守卫 rw-mp-player-immersive 咬本函数体无 .seek(/onSeekCommit）。
+// 拖动中：只改显示（applyAt）·绝不提交 seek（两段式：本函数体不得调 .seek(/onSeekCommit）。
 function onMove(e, ow) {
   if (!st.down) return
   applyAt(ow, e.touches[0].clientX)

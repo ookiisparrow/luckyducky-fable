@@ -1,6 +1,6 @@
 // 坐席台前端错误上报器行为测试（批 B7·治病根#14 client-error 通道 web 半边·与 admin 版同构测试，唯一差异是
 // 断言 source==='agent'）：window.onerror/unhandledrejection 的真实 DOM 事件挂接不在此测——同 admin 版头注，
-// 交给 scripts/check-structure.mjs 的 rw-web-error-reporter-wired 源码扫描断言。模块级 seen/sent 状态需在
+// 目前无自动验证。模块级 seen/sent 状态需在
 // 每个 it 前 vi.resetModules() + 动态 import 取全新模块实例（同本包已有的 tests/client.test.ts 先例）。
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 

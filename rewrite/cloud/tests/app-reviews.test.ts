@@ -338,7 +338,7 @@ describe('admin 评价挑选（listReviews / setReviewPicked）', () => {
   })
 })
 
-describe('getPublicFaq（R37b·KB 精选 FAQ 公开读·守卫 faq-via-kb-single-source 扩面）', () => {
+describe('getPublicFaq（R37b·KB 精选 FAQ 公开读）', () => {
   it('大白话：只回 featured=true 的条目，字段瘦身 {key,title,content}——不带 category/order/enabled 等 kb 管理元数据', async () => {
     control.seed('kb', [
       { _id: 'logistics:eta', question: '什么时候发货？', answer: '付款后 48 小时内发货。', category: 'logistics', order: 1, enabled: true, featured: true },

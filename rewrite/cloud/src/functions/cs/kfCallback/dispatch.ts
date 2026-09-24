@@ -244,7 +244,7 @@ export function menuFor(cat: Category, word: string): MsgMenuContent {
 export type Route =
   | { type: 'menu'; content: MsgMenuContent }
   // faqKey：FAQ 叶子答案的键（=kb 文档 _id·同菜单叶子 menu_id）；答案由 handleMessage 从 kb 单源读
-  // （B4.1·守卫 faq-via-kb-single-source·不再在本文件写死 FAQ 文案）。
+  // （B4.1·不再在本文件写死 FAQ 文案）。
   | { type: 'faq'; faqKey: string }
   // fallbackText：小程序卡片需封面素材(thumb_media_id)+已发布小程序，未配齐时降级为这段文字（防 40058·见下）
   | { type: 'miniprogram'; page: string; title: string; fallbackText: string }
@@ -294,7 +294,7 @@ export function route(menuId: string): Route {
   return { type: 'menu', content: rootMenu() }
 }
 
-// ── 知识库 FAQ 答案（单源·B4.1·守卫 faq-via-kb-single-source）──
+// ── 知识库 FAQ 答案（单源·B4.1）──
 /**
  * 从 kb 集合读 FAQ 答案（_id=faqKey·同菜单叶子 menu_id）。未命中 / 未启用（enabled:false）/ 无答案 → 返 null，
  * 调用方兜底回根菜单。**答案只在 kb、admin 经 adminApi listKb/saveKb 维护**——本文件不再写死 FAQ 文案（根因#5 防漂移）。
@@ -776,7 +776,7 @@ export async function handleMessage(ctx: DispatchCtx, incoming: Incoming): Promi
       return
     }
     case 'faq': {
-      // FAQ 答案从 kb 单源读（B4.1·守卫 faq-via-kb-single-source）；kb 无此条/未启用 → 兜底回根菜单（不写死答案）
+      // FAQ 答案从 kb 单源读（B4.1）；kb 无此条/未启用 → 兜底回根菜单（不写死答案）
       const ans = await faqAnswer(db, r.faqKey)
       if (ans) await send(buildText(to, openKfId, ans))
       else await send(buildMsgMenu(to, openKfId, await welcomeMenu(db)))

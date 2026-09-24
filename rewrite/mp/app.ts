@@ -6,7 +6,7 @@ import { loadBrandFonts } from './utils/brandFont'
 import { markLaunch } from './lib/coldStart'
 import { checkForUpdate } from './utils/appUpdate'
 
-// 错误探针（批次D·守卫 mp-smoke-wired）：封顶数组挂 globalThis，冒烟脚本 evaluate 取证 + 真机排查线索（根因#14）。
+// 错误探针（批次D）：封顶数组挂 globalThis，冒烟脚本 evaluate 取证 + 真机排查线索（根因#14）。
 const SMOKE_ERROR_CAP = 50
 function pushSmokeError(msg: unknown) {
   const g = globalThis as unknown as { __ldSmokeErrors?: string[] }

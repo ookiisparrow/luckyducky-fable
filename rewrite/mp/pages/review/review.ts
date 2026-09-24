@@ -26,7 +26,7 @@ Page({
   unloaded: false, // 提交在途页面已退出标记（P2·bug sweep R1 #9）：提交本身已达服务端，退页后回包只是迟到副作用，不补偿
   onUnload() {
     this.unloaded = true
-    if (this.backTimer) clearTimeout(this.backTimer) // 延时返回坞清理（守卫 rw-mp-navback-timer-cleaned）
+    if (this.backTimer) clearTimeout(this.backTimer) // 延时返回坞清理
   },
   onLoad(query: Record<string, string | undefined>) {
     this.orderId = String(query.orderId || '')

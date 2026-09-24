@@ -23,7 +23,7 @@ Page({
   unloaded: false, // 保存在途页面已退出标记（同 review.ts 范式·P2·bug sweep Round2 item2）：迟到回包别再对下一页 navigateBack+toast
   onUnload() {
     this.unloaded = true
-    if (this.backTimer) clearTimeout(this.backTimer) // 延时返回坞清理（守卫 rw-mp-navback-timer-cleaned）
+    if (this.backTimer) clearTimeout(this.backTimer) // 延时返回坞清理
   },
   async onLoad() {
     let user: Record<string, any> | null = null

@@ -7,7 +7,7 @@ import {
   checkBudget,
 } from '../../scripts/lib/slim-scan.mjs'
 
-// 守卫 rw-dead-exports/rw-phantom-deps/rw-loc-budget/rw-lock-budget（病根17「持续义务有传感器」）
+// 守卫 rw-dead-exports/rw-phantom-deps/rw-lock-budget（病根17「持续义务有传感器」）
 // 的核心判定逻辑（tests/scripts/slimScan.test.js·反向自检）。IO 收集层不进本文件断言范围。
 describe('slim-scan parseExports：六种导出形态 + 注释行排除', () => {
   it('抓到 const/function/async function/type/interface/class 六种形态', () => {

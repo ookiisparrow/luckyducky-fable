@@ -1,8 +1,8 @@
 // 页面内容 CMS 会话缓存单源（跨页共享·镜像 lib/catalog.ts / lib/courses.ts 缓存范式·根因账本#15）：
 // 五页可编辑文案本会话内基本不变（catalogPlayer 由目录页 + 播放页共用），逐页缓存住首次成功回包、复用零重拉。
 // 在途去重（inflight 按页收口：并发同页只真取一次）；失败不缓存、不覆盖既有（下次仍可重试）。
-// 不持久化（会话内即可）。调用方（页面）在 await 恢复点仍须自行做 _seq/unloaded 复核（守卫
-// rw-mp-await-side-effect-unloaded-recheck）——本层只负责「取一次、缓存住」，不管页面生命周期。
+// 不持久化（会话内即可）。调用方（页面）在 await 恢复点仍须自行做 _seq/unloaded 复核——
+// 本层只负责「取一次、缓存住」，不管页面生命周期。
 import { getPageContent as apiGetPageContent } from '../api/catalog'
 
 export type PageKey = 'welcome' | 'catalogPlayer' | 'mePage' | 'about' | 'agreement'
