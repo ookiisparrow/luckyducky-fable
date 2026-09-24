@@ -15,7 +15,7 @@ import { ok, err } from './reply'
  * 出网用全局 fetch（node18+ 自带），运行时低于 18 回退内置 https（杜绝「Node<18 下 fetch undefined」——
  * 验签只做加密会照样过、真消息进来调 access_token 才崩的根因#8 隐患）；fetchImpl 可注入便于单测打桩。
  * 密钥（corpid/secret/token/aeskey）单源经 kit/secureConfig 读取（DB secureConfig/wxkf 优先·env 兜底迁移期·
- * 决策 2026-07-12：config-checklist 页填写自动生效），绝不进日志（CLAUDE §7 敏感信息不进日志）。
+ * 决策 2026-07-12：config-checklist 页填写自动生效），绝不进日志（CLAUDE.md 敏感信息不进日志）。
  */
 
 const QY = 'https://qyapi.weixin.qq.com/cgi-bin'

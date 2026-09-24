@@ -4,7 +4,7 @@
 
 ## 进场三步
 
-1. **读约定**：`CLAUDE.md`（危险简报/干活循环/不变量表/判断题/查询路由，全在里面）。
+1. **读约定**：`CLAUDE.md`（危险速览/干活流水线/不变量/判断题，全在里面）。
 2. **认地图**：仓根 `modules.json`（模块归属 + 危险分级 `tier: red/yellow/green`）；动手前 grep `docs/判例索引.json` 查有没有判过。
 3. **看现状**：先 `git fetch` 对 origin/main（本地历史可能落后·错题本 E24）→ `docs/现状与路线.md` + `git log --oneline -5`。
 
@@ -12,12 +12,12 @@
 
 - **验收共同语言 = `npm run check` 全绿**；快检 `node scripts/check-structure.mjs`（秒级）。
 - **不许碰**：`scripts/check-*.mjs` 与 `.claude/`（裁判不被球员改写）、部署命令（`tcb`/`deploy-fns`/wechatide 写类＝人工授权动作）。
-- **改动纪律**：任何批次走 `.claude/skills/refactor-batch/SKILL.md`（守卫先红 → 改到绿 → 反向自检 → 一批一 squash）；执行前必读同目录 `执行者错题本.md`。
+- **改动纪律**：任何批次走 `.claude/skills/refactor-batch/SKILL.md`（先写会红的测试 → 改到绿 → 反向自检 → 一批一 squash）；执行前必读同目录 `执行者错题本.md`。
 
 ## 双轨边界（2026-08-02 起）
 
 - 试运行代理只碰**非 red 面**（modules.json 无 green 档·实况＝yellow 低危批 + 工具/测试/文档面）；red 两模块（订单交易钱链/运维观测与系统配置）、部署、数据库不可逆操作恒禁，先问老板，**宁停勿猜**。
-- **MCP/云扩展禁自装**：本代理当前零 MCP 能力（2026-08-02 实测），保持现状——任何引入 MCP 或云端直连能力的扩展，接入前必须复刻 `.claude/settings.json` 全部 26 条 deny 并经老板确认；裸 `tcb`/`wechatide` 写命令同属部署面人工授权，不因没有钩子拦着就自跑。
+- **MCP/云扩展禁自装**：本代理当前零 MCP 能力（2026-08-02 实测），保持现状——任何引入 MCP 或云端直连能力的扩展，接入前必须复刻 `.claude/settings.json` 的全部 deny 规则 并经老板确认；裸 `tcb`/`wechatide` 写命令同属部署面人工授权，不因没有钩子拦着就自跑。
 - 工单单源：GitHub Issues（原 docs/待办与债.md 已于 2026-08-21 拆入 Issue）；不自派任务。悬案 PR 分诊见 Issue #134、验收员机制草案见 #135（原代理交接备忘已退役入 git 历史）。
 - **🔒 双轨常态锁（老板 2026-08-02 明令）**：双轨保持到老板**明说「切换」**为止——在那之前任何会话都不得触发切换日动作（red 移交/工程约定单源反转/双轨撤销），也不主动推「切换」或「模型通道」议程。
 
