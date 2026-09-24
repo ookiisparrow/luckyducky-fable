@@ -52,4 +52,4 @@ CERT_OPS_LOG_DIR="$HOME/Work/logs" python3 ops/certs/cert-dns-watch.py
 
 `vod.luckyducky.cn` 只跑 renew（或周检），换绑走 CDN/点播控制台，别用 `cert-rebind.py`。
 
-台账：`docs/人工配置清单.md`「SSL 证书台账」· 下一轮到期见 Issue #139。
+域名清单见 `docs/外部配置手册.md`；下一轮到期见 Issue #139。
