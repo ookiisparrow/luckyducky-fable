@@ -405,8 +405,9 @@ describe('知识库与节点策展（kb=公司 FAQ·checkpoints=课程节点定�
     const kb = await post('listKb', SUPER, {})
     const cp = await post('listCheckpoints', SUPER, { courseId: 'c1' })
     control.setBeforeGet(null as never)
+    // 知识库读炸走 #293 的停写口径：200 + DOC_READ_FAIL（前端据此锁住「保存整册」，不拿空册覆盖）
     expect(kb.ok).toBe(false)
-    expect(kb.status).toBe(500)
+    expect(kb.error).toBe('DOC_READ_FAIL')
     expect(kb.list).toBeUndefined()
     expect(cp.ok).toBe(false)
     expect(cp.status).toBe(500)
