@@ -21,7 +21,7 @@ import { execSync } from 'node:child_process'
 import { readdirSync, readFileSync, writeFileSync, existsSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import { PROD_ENV as ENVID } from './lib/env.mjs' // 生产 env id 单源（病根#5·债#30①）
-import { deployTargets } from './lib/deploy-aliases.mjs' // 产物→云函数名映射单源（adminApi 产物亦部署为 adminApiV2·病根#16）
+import { deployTargets } from './lib/deploy-aliases.mjs' // 产物→云函数名映射单源（别名册已空·adminApi 只部署自身）
 import { hashFnDist } from './lib/deploy-drift.mjs' // 产物 hash 单源（preflight 同源·2026-08-03 收口镜像实现）
 
 const ROOT = resolve(import.meta.dirname, '..')
@@ -66,8 +66,8 @@ if (dryRun) {
 
 // 4. 逐函数部署（敏感函数二次确认由 guard-deploy 兜底）
 for (const name of changed) {
-  // 别名展开（病根#16·2026-07-20 实测缺口）：adminApi 产物须同时部署为 adminApi 与 adminApiV2——
-  // 后者才是 /adminv2 HTTP 路径绑定、admin 前端真正调用的函数。漏了它＝17 个产物全部署完、后台零生效。
+  // 别名展开入口仍在：DEPLOY_ALIASES 空则 deployTargets(name) === [name]。
+  // 2026-08-13 起 adminApi 只发自身，不要再部署 adminApiV2。
   for (const target of deployTargets(name)) {
     console.log(`\n部署 ${target}${target === name ? '' : `（${name} 产物·部署别名）`} …`)
     execSync(`tcb fn deploy ${target} --dir ${join(DIST, name)} --force -e ${ENVID}`, { cwd: ROOT, stdio: 'inherit' })

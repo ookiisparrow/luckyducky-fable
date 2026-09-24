@@ -378,7 +378,9 @@ export async function attachCsatNote(db: any, externalUserId: string, note: stri
     .collection(COLLECTIONS.csat)
     .doc(csatId)
     .update({ data: { note: String(note).slice(0, 200) } })
-    .catch(() => {})
+    .catch(() => {
+      alert('anomaly', 'attachCsatNote', 'CSAT_NOTE_FAIL', { euid })
+    })
   await db
     .collection(COLLECTIONS.kfState)
     .doc('csatlast:' + euid)
@@ -523,6 +525,7 @@ async function notifyOnlineAgents(db: any, sessionId: string): Promise<void> {
     const st = await db
       .collection(COLLECTIONS.agentState)
       .where({ status: 'online' })
+      .limit(50) // 坐席席位上限同账号扫描窗·有界读
       .get()
       .catch(() => ({ data: [] }))
     const ids = (st.data || []).map((a: any) => a._id).filter(Boolean)
@@ -657,7 +660,11 @@ export async function handleMessage(ctx: DispatchCtx, incoming: Incoming): Promi
           .remove()
           .catch(() => {})
         const openid = await resolveOpenid(db, to)
-        await recordCsat(db, { externalUserId: to, openid, score: Number(m[1]) })
+        const csatId = await recordCsat(db, { externalUserId: to, openid, score: Number(m[1]) })
+        if (!csatId) {
+          await send(buildText(to, openKfId, '评分没记上，请稍后再评一次 🙏'))
+          return
+        }
         await send(buildMsgMenu(to, openKfId, csatReasonMenu()))
         return
       }
@@ -814,9 +821,13 @@ export async function handleMessage(ctx: DispatchCtx, incoming: Incoming): Promi
       return
     }
     case 'csat': {
-      // 记分（fail-closed 校验 1..5·绑 openid 若可解析）→ 再问可选备注（B4.3）
+      // 记分（fail-closed 校验 1..5·绑 openid 若可解析）→ 再问可选备注（B4.3）；写失败如实告知不发菜单
       const openid = await resolveOpenid(db, to)
-      await recordCsat(db, { externalUserId: to, openid, score: r.score })
+      const csatId = await recordCsat(db, { externalUserId: to, openid, score: r.score })
+      if (!csatId) {
+        await send(buildText(to, openKfId, '评分没记上，请稍后再评一次 🙏'))
+        return
+      }
       await send(buildMsgMenu(to, openKfId, csatReasonMenu()))
       return
     }

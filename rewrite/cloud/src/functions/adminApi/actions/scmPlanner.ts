@@ -1,5 +1,5 @@
 import { reply, type Ctx } from '../lib'
-import { listMaterialDocs, sumLedgerByItemKey } from '../../../kit'
+import { listMaterialDocs, sumLedgerByItemKey, isDocMissing } from '../../../kit'
 import { COLLECTIONS } from '@ldrw/shared'
 import { resolveBom, yarnMaterialId } from '@ldrw/shared'
 
@@ -19,14 +19,28 @@ export async function getRestockPlan({ db, data }: Ctx) {
   for (const t of targets) {
     if (!t || !t.productId || !Number.isInteger(t.sets) || t.sets <= 0) return reply(400, { ok: false, error: 'BAD_TARGETS' })
   }
-  const tDoc = await db.collection(COLLECTIONS.config).doc('scmBomTemplate').get().catch(() => null)
+  const tDoc = await db
+    .collection(COLLECTIONS.config)
+    .doc('scmBomTemplate')
+    .get()
+    .catch((e: unknown) => {
+      if (isDocMissing(e)) return null
+      throw e // 库挂 ≠ 没有模板
+    })
   if (!tDoc || !tDoc.data) return reply(400, { ok: false, error: 'NO_TEMPLATE' })
   const { _id: _omit, updatedAt: _omit2, ...template } = tDoc.data as Record<string, any>
 
   // 聚合需求：Σ各产品 resolveBom（同料号跨产品累加）
   const need = new Map<string, number>()
   for (const t of targets) {
-    const p = await db.collection(COLLECTIONS.bomProfiles).doc(String(t.productId)).get().catch(() => null)
+    const p = await db
+      .collection(COLLECTIONS.bomProfiles)
+      .doc(String(t.productId))
+      .get()
+      .catch((e: unknown) => {
+        if (isDocMissing(e)) return null
+        throw e // 库挂 ≠ 没有差异位
+      })
     if (!p || !p.data) return reply(400, { ok: false, error: 'NO_PROFILE', productId: String(t.productId) })
     const r = resolveBom(template as any, p.data, t.sets)
     if (!r.ok) return reply(400, { ok: false, error: r.error, productId: String(t.productId) })
@@ -65,7 +79,7 @@ export async function getRestockPlan({ db, data }: Ctx) {
     if (!groups.has(supplierId)) groups.set(supplierId, { supplierId, lines: [] })
     groups.get(supplierId).lines.push({ materialId: id, name: (m && m.name) || id, uom: (m && m.uom) || 'count', need: n, stock, gap, missing: !m })
   }
-  const sups = await db.collection(COLLECTIONS.suppliers).limit(200).get().catch(() => ({ data: [] }))
+  const sups = await db.collection(COLLECTIONS.suppliers).limit(200).get()
   const supName = new Map((sups.data || []).map((s: any) => [s._id, s.name]))
   const purchaseGroups = [...groups.values()].map((g) => ({ ...g, supplierName: supName.get(g.supplierId) || (g.supplierId || '未挂供应商') }))
   return reply(200, { ok: true, outworkGaps, purchaseGroups, missingMaterials })
