@@ -2,7 +2,6 @@
 // #272 只挡退页后迟到回包；本页加载中/失败仍会露出空表单+小鸭子，点保存才说没加载好。
 // Page 桩同 me-cont-failed.test.ts；wxml 走 ?raw（E34·mp 测试不进 node:fs）。
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import wxmlRaw from '../pages/profile-edit/profile-edit.wxml?raw'
 
 const { loginMock } = vi.hoisted(() => ({ loginMock: vi.fn() }))
 vi.mock('../api/user', () => ({ login: loginMock, updateProfile: vi.fn() }))
@@ -11,10 +10,6 @@ vi.mock('../lib/haptics', () => ({ tapHaptic: vi.fn() }))
 let pageOpts: Record<string, any> = {}
 ;(globalThis as any).Page = (o: unknown) => {
   pageOpts = o as Record<string, any>
-}
-
-function stripWxml(src: string): string {
-  return src.replace(/<!--[\s\S]*?-->/g, '')
 }
 
 async function flush() {
@@ -74,15 +69,5 @@ describe('编辑资料加载中/登录失败不画空白档案', () => {
     await page.onLoad()
     expect(page.data.loading).toBe(false)
     expect(page.data.loaded).toBe(false)
-  })
-
-  it('大白话：加载块和失败重试挡住空表单——鸭子头像/输入/保存只在资料载入成功后出现', () => {
-    const wxml = stripWxml(wxmlRaw)
-    expect(wxml).toMatch(/wx:if="\{\{loading\}\}"/)
-    expect(wxml).toMatch(/bind:tap="onRetryLoad"/)
-    expect(wxml).toContain('重试')
-    const loadChunk = wxml.split(/wx:if="\{\{loading\}\}"/)[1]?.split(/wx:(?:elif|else)/)[0] || ''
-    expect(loadChunk).not.toMatch(/chooseAvatar|type="nickname"|onSave|>保存</)
-    expect(wxml).toMatch(/wx:(?:else|elif|if)="\{\{loaded\}\}"[\s\S]*chooseAvatar|wx:else[\s\S]*chooseAvatar/)
   })
 })

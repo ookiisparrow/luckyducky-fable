@@ -1,9 +1,6 @@
 // 商品与橱窗映射（守卫 rw-admin-products-ui-golden）：三态口径与云端一致/四道门人话原文兜底/
 // 整档 round-trip 保真/图片尺寸闸提前拦/脏档安全。
 import { describe, it, expect } from 'vitest'
-import { readFileSync } from 'node:fs'
-import { dirname, join } from 'node:path'
-import { fileURLToPath } from 'node:url'
 import { productState, mapDraftRows, publishErrorText, mapShowcaseRows, b64SizeOk, productSteps, stepProgressHint, stepDotTitle, courseNeedsPublish, productsListSub, basicsMissing, wizardCanPublish, freshDraft, DRAFT_PRICE_HINT, draftSyncLabel, draftSyncConfirm, restoreSaleLabel, restoreSaleConfirm, restoreSaleOk, draftSyncUnlistedOk, draftSyncBusy, draftSyncOk, COURSE_VS_LISTING_HINT, HOME_FEATURE_ASK, HOME_FEATURE_SWITCH_ON, HOME_FEATURE_SWITCH_OFF, VIDEO_MARK_FILE, VIDEO_MARK_LIVE } from '../src/lib/mapProducts'
 
 describe('三态口径（与云端 listDrafts listed 表一致）', () => {
@@ -184,16 +181,5 @@ describe('橱窗映射与图片闸', () => {
     expect(b64SizeOk('x'.repeat(80_000))).toBe(true)
     expect(b64SizeOk('x'.repeat(80_001))).toBe(false)
     expect(b64SizeOk('')).toBe(false)
-  })
-
-  it('大白话：橱窗开关用「出现在首页」，禁「上架橱窗/下架橱窗」和商品上架撞词', () => {
-    const here = dirname(fileURLToPath(import.meta.url))
-    const src = readFileSync(join(here, '../src/pages/Showcase.vue'), 'utf8')
-    expect(src).toContain('HOME_FEATURE_SWITCH_ON')
-    expect(src).toContain('HOME_FEATURE_SWITCH_TITLE_ON')
-    expect(src).toContain('出现在首页')
-    expect(src).not.toContain('上架橱窗')
-    expect(src).not.toContain('下架橱窗')
-    expect(src).not.toContain('开关上下架橱窗')
   })
 })

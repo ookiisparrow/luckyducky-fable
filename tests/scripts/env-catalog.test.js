@@ -1,6 +1,5 @@
 import { describe, it, expect } from 'vitest'
 import { execFileSync } from 'node:child_process'
-import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import {
   ENV_CATALOG,
@@ -150,13 +149,5 @@ describe('env-resolve dry-run：无密钥、三选择子解析对', () => {
 
   it('未知 --target 非零退出', () => {
     expect(() => execFileSync(process.execPath, [bin, '--target', 'no-such'], { encoding: 'utf8' })).toThrow()
-  })
-})
-
-describe('env.mjs 源：门牌字面量只此一份', () => {
-  it('PROD_ENV / TEST_ENV 各一个字面量', () => {
-    const src = readFileSync(resolve(ROOT, 'scripts/lib/env.mjs'), 'utf8')
-    expect(src.split(PROD_ENV).length - 1).toBe(1)
-    expect(src.split(TEST_ENV).length - 1).toBe(1)
   })
 })

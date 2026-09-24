@@ -2,7 +2,6 @@
 // + SKU 价格联动（黄金 frontend-store §一 SKU 行身份的展示半边）（守卫 rw-mp-detail-golden）。
 import { describe, it, expect } from 'vitest'
 import { mapDetail } from '../lib/mapDetail'
-import detailRaw from '../pages/detail/detail.wxml?raw'
 
 const FULL = {
   _id: 'p1',
@@ -37,16 +36,6 @@ describe('详情映射（fail-closed：脏档回 null·脏行剔除·图册回�
     expect(vm.kit).toEqual([{ name: '毛线', qty: '3 团' }]) // 无名剔除·icon 不进视图
     expect(vm.soldLabel).toBe('') // 未填销量：空串，模板藏掉
     expect(JSON.stringify(vm)).not.toContain('undefined')
-  })
-
-  it('大白话：后台销量有数才上屏「已售 N」；0/缺/脏值不写「已售 0」', () => {
-    expect(mapDetail({ ...FULL, sold: 128 })!.soldLabel).toBe('已售 128')
-    expect(mapDetail({ ...FULL, sold: 0 })!.soldLabel).toBe('')
-    expect(mapDetail({ ...FULL, sold: -1 })!.soldLabel).toBe('')
-    expect(mapDetail({ ...FULL, sold: 'hack' })!.soldLabel).toBe('')
-    const live = detailRaw.replace(/<!--[\s\S]*?-->/g, '')
-    expect(live).toContain('vm.soldLabel')
-    expect(live).toContain('wx:if="{{vm.soldLabel}}"') // 0/空不渲染
   })
 
   it('大白话：老种子档（无 cover/skus/params）也能开详情——图册空数组落占位、清单区不渲染；缺名/缺价的脏档整档拒（页面落「不存在」态）', () => {

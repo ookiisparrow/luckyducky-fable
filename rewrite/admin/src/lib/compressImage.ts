@@ -3,8 +3,8 @@
 // 商品封面/相册是更早的 720 档（M3 批3 起就写明），调用方显式覆盖，不在这里猜。
 import { b64SizeOk } from './mapProducts'
 
-export const COMPRESS_DEFAULT_MAX_WIDTH = 900
-export const COMPRESS_DEFAULT_QUALITIES = [0.8, 0.6, 0.45, 0.3] as const
+const COMPRESS_DEFAULT_MAX_WIDTH = 900
+const COMPRESS_DEFAULT_QUALITIES = [0.8, 0.6, 0.45, 0.3] as const
 
 export type CompressImageOpts = {
   maxWidth?: number
