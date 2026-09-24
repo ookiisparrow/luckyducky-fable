@@ -213,7 +213,7 @@ export function parseRate(menuId: string): number | null {
 }
 
 /** 命中关键词后的高亮气泡：head 点出识别词，list 是贴问题的下级选项。 */
-export function menuFor(cat: Category, word: string): MsgMenuContent {
+function menuFor(cat: Category, word: string): MsgMenuContent {
   if (cat === 'logistics')
     return menu(`看你在问「${word}」相关 👇`, [
       { id: 'order:query', content: '查我的订单 / 物流' },
@@ -299,7 +299,7 @@ export function route(menuId: string): Route {
  * 从 kb 集合读 FAQ 答案（_id=faqKey·同菜单叶子 menu_id）。未命中 / 未启用（enabled:false）/ 无答案 → 返 null，
  * 调用方兜底回根菜单。**答案只在 kb、admin 经 adminApi listKb/saveKb 维护**——本文件不再写死 FAQ 文案（根因#5 防漂移）。
  */
-export async function faqAnswer(db: any, faqKey: string): Promise<string | null> {
+async function faqAnswer(db: any, faqKey: string): Promise<string | null> {
   if (!faqKey) return null
   const got = await db
     .collection(COLLECTIONS.kb)
@@ -312,7 +312,7 @@ export async function faqAnswer(db: any, faqKey: string): Promise<string | null>
 }
 
 // ── 满意度评分入库（CSAT·B4.3·守卫 csat-score-bounded）──
-export interface CsatInput {
+interface CsatInput {
   externalUserId: string
   openid: string | null
   score: number

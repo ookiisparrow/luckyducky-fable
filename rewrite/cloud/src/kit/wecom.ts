@@ -356,10 +356,6 @@ export async function sendAgentCard(
   }
 }
 
-// （已退役 2026-07-02·调试日志 AC）transferToServicer（service_state→3 原生接待台转接）：与承面C 自建坐席
-// 通道互斥——state 3 下坐席 send_msg 全被 95018 拒。人工由自建 csSession 队列承接、平台会话恒智能助手态(1)；
-// 守卫 agent-channel-stays-assistant 焊 functions/cs/ 禁再引入。历史实现见 git（2026-07-02 前）。
-
 /**
  * 读会话状态（`kf/service_state/get`）：返回 service_state 数字——
  * 0 未处理 / 1 由智能助手接待 / 2 待接入池排队 / 3 由人工接待 / 4 已结束。errcode/无值返 -1（调用方尽力接入）。

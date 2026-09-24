@@ -463,5 +463,5 @@ export const main = async (event: any) => {
   }
 }
 
-/** 业务批挂载口（后续批逐域填 ACTIONS/ACTION_CAPS·与旧线注册表逐行核对）。 */
+/** 测试挂载口（ACTIONS/ACTION_CAPS 已全域挂载·与旧线注册表逐行核对过）。 */
 export const registries = { ACTIONS, ACTION_CAPS }
