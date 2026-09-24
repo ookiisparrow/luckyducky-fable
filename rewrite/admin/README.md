@@ -1,6 +1,6 @@
-# rewrite/admin · 管理控制台 v2（M3）走查手册
+# rewrite/admin · 管理控制台走查手册
 
-> **为什么靠人**（根因#8）：后端 action 全集（单源 `rewrite/cloud/src/functions/adminApi/index.ts` ACTIONS 注册表·计数由守卫焊在 `docs/系统事实.md`，此处不手抄）有全量测试盯着，但「真登录真操作顺不顺手」只有人验得了。本手册 = M3 验收的人工半边。
+> **为什么靠人**（根因#8）：后端 action 全集（单源 `rewrite/cloud/src/functions/adminApi/index.ts` ACTIONS 注册表·计数由守卫焊在 `docs/系统事实.md`，此处不手抄）有全量测试盯着，但「真登录真操作顺不顺手」只有人验得了。本手册 = 真登录真操作的人工半边。
 >
 > **本机启动**：`cd rewrite/admin && npm run dev` → 浏览器开提示的地址 → 用管理口令登录。
 > **在线部署**：构建产物传静态托管**正式路径 `/admin`**，清空再传/入口哈希核验纪律见 `docs/运维手册.md` §1.2；部署是用户动作。
@@ -23,5 +23,3 @@
 
 ## 已知待办（低频·不阻塞演练）
 进销存真单验收（SCM-Z·随真采购流程）。
-
-走完把 ❌ 项发 Claude，逐项修完 M3 关账。

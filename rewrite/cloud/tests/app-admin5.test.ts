@@ -91,6 +91,19 @@ describe('客户 360 聚合（黄金 §十三：只本人·钱链口径·错误�
     expect(r.panels.map((p: any) => p.key)).toEqual(['profile', 'orders', 'activation', 'checkpoints'])
     expect((await post('getCustomer360', SUPER, {})).status).toBe(400)
   })
+
+  it('大白话：画像板块读失败标 PANEL_FETCH_FAIL——空零不当真没花过钱', async () => {
+    control.seed('users', [{ _id: 'u1', _openid: 'oU1', nickname: '鸭鸭' }])
+    control.seed('orders', [{ _id: 'o1', _openid: 'oU1', status: 'paid', amount: 100, createdAt: 1 }])
+    control.setBeforeGet(({ coll }: any) => {
+      if (coll === 'orders') throw new Error('MOCK_DB_FAIL')
+    })
+    const r = await post('getCustomer360', SUPER, { openid: 'oU1' })
+    control.setBeforeGet(null as never)
+    const profile = r.panels.find((p: any) => p.key === 'profile')
+    expect(profile.data).toBeNull()
+    expect(profile.error).toBe('PANEL_FETCH_FAIL')
+  })
 })
 
 describe('客户检索与画像（黄金 §十三）', () => {
@@ -131,6 +144,18 @@ describe('客户检索与画像（黄金 §十三）', () => {
     // 真查无结果（无异常注入）：保持 ok:true+user:null 不变
     expect((await post('getUser', SUPER, { openid: 'oNobody' })).ok).toBe(true)
     expect((await post('getUser', SUPER, { openid: 'oNobody' })).user).toBeNull()
+  })
+
+  it('大白话：检索客户时 DB 挂了回 USER_LOOKUP_FAIL——不当「查无此人」空列表', async () => {
+    control.seed('users', [{ _id: 'u1', _openid: 'oA', nickname: '鸭鸭', phone: '13800000001' }])
+    control.setBeforeGet(({ coll }: any) => {
+      if (coll === 'users') throw new Error('MOCK_DB_FAIL')
+    })
+    const r = await post('searchCustomer', SUPER, { q: '13800000001' })
+    control.setBeforeGet(null as never)
+    expect(r.ok).toBe(false)
+    expect(r.error).toBe('USER_LOOKUP_FAIL')
+    expect(r.customers).toBeUndefined()
   })
 })
 

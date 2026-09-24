@@ -1,9 +1,4 @@
-// 学习进度百分比取整规则（2026-07-25 进度条专项·用户报「进度条有问题」）。
-// 病史：三处（mp mapLearning / cloud customer360 / admin Courses）各自裸写
-// `Math.round((done/total)*100)`，在边界上对用户撒谎——
-//   · 1/250 → round(0.4) = 0%：学了第一段却显示 0%，与「一段没学过」完全无法区分；
-//   · 199/200 → round(99.5) = 100%：没学完却显示 100%，用户以为结课了。
-// 规则：0% 只表示真没学、100% 只表示真学完，中间态一律夹到 [1,99]。
+// 0%/100% 夹取规则与病史见 rewrite/shared/src/learning.ts `progressPercent` 头注；本文件只锁行为。
 import { describe, it, expect } from 'vitest'
 import { progressPercent } from '../src/learning'
 

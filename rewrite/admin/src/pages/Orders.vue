@@ -1,6 +1,5 @@
 <script setup lang="ts">
-// 订单发货（design/console.pen S8 视觉 · 换皮回归还原批）：在 M3 批4 换皮基础上 1:1 还原旧线交互——
-// 服务端跨状态搜索（q·不再只搜已载页）、批量发货（多选→批量面板 shipOrders·上量瓶颈 P1）、
+// 订单发货：服务端跨状态搜索（q·不再只搜已载页）、批量发货（多选→批量面板 shipOrders）、
 // 富详情抽屉（订单进度时间线 / 逐商品激活态 getOrderDetail / 交易单号 / 微信发货合规上报状态）、
 // shipped 改单号 · done 查看、物流公司预设下拉、列表手机号掩码（PII）。删除/解除仍走 no-alert 两步确认。
 import { ref, computed, onMounted } from 'vue'

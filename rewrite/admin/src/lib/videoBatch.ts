@@ -1,5 +1,5 @@
-// 课时级批量传视频纯逻辑（换皮回归还原·1:1 移植旧 packages/admin/src/utils/videoBatch.js·TS 泛型化便测）。
-// 上传本身走 api/content.uploadVideo（不在此·本文件只算「多文件→小段」灌入计划）。守卫 rw-admin-videobatch-golden。
+// 课时级批量传视频：只算「多文件→小段」灌入计划，上传走 api/content.uploadVideo。
+// 守卫 rw-admin-videobatch-golden。
 
 // 去掉最后一段扩展名（"起针.mp4" → "起针"；无扩展名原样返回）
 function stripExt(name: string): string {

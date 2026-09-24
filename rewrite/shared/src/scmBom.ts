@@ -8,8 +8,8 @@
  * 料号命名契约见 scmKey.ts。
  */
 
-export type YarnTier = 'L' | 'M' | 'S'
-export type YarnForm = 'raw' | 'knotted'
+type YarnTier = 'L' | 'M' | 'S'
+type YarnForm = 'raw' | 'knotted'
 
 /** 全局配方模板（存 config 集合确定性 _id='scmBomTemplate'·数值是业务数据 admin 填）。 */
 export interface BomTemplate {
@@ -31,7 +31,7 @@ export function yarnMaterialId(color: string, tier: YarnTier, form: YarnForm): s
   return `yarn:${color}:${tier}:${form}`
 }
 
-export type ResolveBomResult =
+type ResolveBomResult =
   | { ok: true; lines: Array<{ materialId: string; qty: number }> }
   | { ok: false; error: 'BAD_SETS' | 'BAD_TEMPLATE' | 'BAD_PROFILE' }
 
