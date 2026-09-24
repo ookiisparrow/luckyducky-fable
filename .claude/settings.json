@@ -75,7 +75,10 @@
       "mcp__cloudbase__managePermissions",
       "mcp__cloudbase__manageAgents",
       "mcp__cloudbase__downloadTemplate",
-      "mcp__cloudbase__callCloudApi"
+      "mcp__cloudbase__callCloudApi",
+      "mcp__cloudbase__activateInviteCode",
+      "mcp__cloudbase__auth",
+      "mcp__cloudbase__downloadRemoteFile"
     ]
   },
   "hooks": {
