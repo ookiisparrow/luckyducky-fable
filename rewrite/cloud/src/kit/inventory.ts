@@ -7,7 +7,7 @@ import { notifyAlert } from './observe'
 // 不限量：无文档或 stock=null＝不限量（缺货前不阻断下单·安全迁移）。
 // 单一收口：全库仅本文件读写 inventory.stock。getInventory（批14）/produceStock（批16 SCM）已随域批次补齐。
 
-export interface StockLine {
+interface StockLine {
   productId: string
   spec: string
   qty: number

@@ -389,13 +389,15 @@ describe('orderErrorText（钱组英文码→操作者中文·#222 同类）', (
     expect(orderErrorText('')).toBe('未知错误')
     expect(orderErrorText(null)).toBe('未知错误')
   })
-  it('大白话：Orders.vue 错误展示走人话映射 + 抽屉内报错 + 刷新勾选求交（不裸 String(r.error)、不双套字典）', () => {
+  it('大白话：Orders.vue 错误展示走人话映射 + 抽屉内报错 + 刷新勾选求交（不裸 String(r.error)、不双套字典）+ 刷新用 reloading', () => {
     expect(ordersSrc).not.toMatch(/shipErrorText/)
     expect(ordersSrc).not.toMatch(/String\(r\.error\b/)
     expect(ordersSrc).toMatch(/orderErrorText\(/)
     expect(ordersSrc).toMatch(/d\.error = '发货没成功：' \+ orderErrorText\(r\.error\)/)
     expect(ordersSrc).toMatch(/drawer-error/)
     expect(ordersSrc).toMatch(/selectedIds\.value = selectedIds\.value\.filter\(\(id\) => vis\.has\(id\)\)/)
+    expect(ordersSrc).toMatch(/:disabled="reloading"/)
+    expect(ordersSrc).not.toMatch(/:disabled="message === '加载中…'"/)
   })
   it('大白话：Fulfill.vue 发货/加载失败走人话 + 已发货特化指路 + 剩单数不含退款持有（不裸 String(r.error)、不第三套字典）', () => {
     expect(fulfillSrc).toMatch(/orderErrorText\(/)

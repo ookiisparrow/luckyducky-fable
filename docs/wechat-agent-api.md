@@ -10,9 +10,9 @@
 wechatide -c <clientName> <toolName> [flags...] [--token <cliAccessToken>]
 ```
 
-- `-c <clientName>`：调用方标识（如 `pi-agent`、`CodeBuddy`），需与授权弹窗一致
+- `-c <clientName>`：调用方标识。本仓约定 `ldrw-cli`（与 `docs/运维手册.md` §⑪ 一致）；换名字会重新弹授权，须与已授权的弹窗一致
 - `<toolName>`：下划线工具名，共 47 个，按 7 个场景（scene）分组
-- 工具的 `--help` 可查参数：`wechatide -c pi-agent <tool> --help`
+- 工具的 `--help` 可查参数：`wechatide -c ldrw-cli <tool> --help`
 
 官方 skill 文档位于工具安装目录（随工具版本发布，天然与工具版本一致）：
 
@@ -31,7 +31,7 @@ wechatide -c <clientName> <toolName> [flags...] [--token <cliAccessToken>]
 调用业务工具前，先做一次状态检查（登录态 + skill 版本 + token）：
 
 ```bash
-wechatide -c pi-agent check_wechatide_status --skill-version 0.3.9
+wechatide -c ldrw-cli check_wechatide_status --skill-version 0.3.9
 ```
 
 返回关键字段：
@@ -45,16 +45,16 @@ wechatide -c pi-agent check_wechatide_status --skill-version 0.3.9
 
 ```bash
 # 1. 门禁检查（会话首次）
-wechatide -c pi-agent check_wechatide_status --skill-version 0.3.9
+wechatide -c ldrw-cli check_wechatide_status --skill-version 0.3.9
 
 # 2. 打开项目窗口（initializer）
-wechatide -c pi-agent open_project_window --project /Users/sparrow/luckyducky-fable/rewrite/mp
+wechatide -c ldrw-cli open_project_window --project <仓根>/rewrite/mp
 
 # 3. 编译并打开首页（compiler）
-wechatide -c pi-agent simulator_open_page --project /Users/sparrow/luckyducky-fable/rewrite/mp --page pages/home/home
+wechatide -c ldrw-cli simulator_open_page --project <仓根>/rewrite/mp --page pages/home/home
 
 # 4. 触发真机调试（automator；--auto 自动真机调试，配合局域网模式免扫码）
-wechatide -c pi-agent automation_viewport_action --project /Users/sparrow/luckyducky-fable/rewrite/mp --action remote --auto
+wechatide -c ldrw-cli automation_viewport_action --project <仓根>/rewrite/mp --action remote --auto
 ```
 
 实测返回：
@@ -63,7 +63,7 @@ wechatide -c pi-agent automation_viewport_action --project /Users/sparrow/luckyd
 {
   "ok": true,
   "tool": "automation_viewport_action",
-  "clientName": "pi-agent",
+  "clientName": "ldrw-cli",
   "result": { "success": true }
 }
 ```
@@ -81,7 +81,7 @@ wechatide -c pi-agent automation_viewport_action --project /Users/sparrow/luckyd
 2. **仅两类必须主动轮询**：`login`（扫码登录）和 `wechatide auth`（客户端授权）。每 10 秒查一次：
 
 ```bash
-wechatide -c pi-agent polling_task_result --task-id <taskId>
+wechatide -c ldrw-cli polling_task_result --task-id <taskId>
 ```
 
 3. 轮询最多 10 次；状态终态：

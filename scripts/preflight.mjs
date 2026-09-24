@@ -3,7 +3,7 @@
  * 部署前置体检（B9 preflight）：一条命令确认「可部署」。只读、不部署、不改任何东西。
  * 机器自动核：质量闸全绿 / 生产线（rewrite/cloud）钱链函数无未部署漂移 / console-assets 正册齐 /
  *            .deploy-manifest 在册。
- * 再打印机器够不到、须人工核的清单（console-assets drift / 验收单 / cloudbaserc 迁移）。
+ * 再打印机器够不到、须人工核的清单（console-assets drift / 验收单）。
  * 详见 docs/运维手册.md §⑦（部署后 smoke）。
  */
 import { execSync } from 'node:child_process'
@@ -27,8 +27,8 @@ run('质量闸全绿（npm run check）', () => {
   execSync('npm run check', { cwd: ROOT, stdio: 'pipe' })
 })
 run('生产线（rewrite/cloud）钱链函数无未部署漂移（根因#8）', () => {
-  // 构建活线产物（原 build:cloud 结构检查块已退役——functionRoot/内存/超时等 cloudbaserc 迁移
-  // 待人工先抄回控制台真值，见 footer 提醒；这里只需要 dist 字节，故独立跑 build:rw-cloud）。
+  // 构建活线产物。cloudbaserc.json 的 functionRoot 已是 rewrite/cloud/dist；
+  // 这里只需要 dist 字节，故独立跑 build:rw-cloud。
   // 2026-06-16 实测漏洞：钱链 [LD_ALERT]/支付窗口 改了 4 天没部署，而 preflight 原只验结构、不验
   // 「部署时效」——本项补这洞。hash 算法（index.js+config.json+package.json）与 deploy-fns.mjs
   // 部署时逐字节一致（hashFnDist 单源，见 scripts/lib/deploy-drift.mjs 头注）。
@@ -59,9 +59,8 @@ console.log(`
 还须人工核（机器够不到，详见 docs/运维手册.md §⑦）：
   □ console-assets drift-checklist：对照线上控制台逐项核（forward-node.js / flowId / 库权限期望表）
   □ 验收单 X（集合权限档位·以 COLLECTIONS 单源为准）/ Y（支付黄金路径）/ Z（退款黄金路径）真机重走
-  □ cloudbaserc.json 迁移：functionRoot 仍指旧线冻结产物目录，迁至活线产物目录前须先
-    tcb fn detail 逐个抄回全部函数真实内存/超时值（以 cloudbaserc.json functions 为准）——仓内无记录，凭空写会在下次 config 应用时降级
-    生产配置（待办见 GitHub Issues）
+  □ cloudbaserc.json：functionRoot 已是 rewrite/cloud/dist。部署源就是这份活线产物。
+    函数个数、内存、超时以 cloudbaserc.json 的 functions 为准。
   □ 数据兼容：重构 _id 方案与现网一致＝无需迁移；债#14（users/progress 确定性_id）属切换后改进
 真部署（deploy-fns）须 DEPLOY_ALLOWED=1 + 用户拍板。本体检不触发任何部署。`)
 process.exit(fail.length ? 1 : 0)

@@ -339,9 +339,9 @@ export async function getConfigChecklist({ db }: Ctx) {
           location: '企业微信后台',
           purpose: '坐席台单点登录',
           status: 'check',
-          howTo: '应用主页/OAuth 可信域名（迁移批落地后再配）',
+          howTo: '企微后台→自建应用→网页授权及JS-SDK→设可信域名；应用主页走 OAuth 拿 code',
           url: 'https://work.weixin.qq.com',
-          noteExtra: '重写线坐席台现走外包令牌登录；企微 OAuth 免登为旧线 M⑦ 能力、未迁移至 rewrite/agent（批 B9 预审发现·已记债）',
+          noteExtra: '后端 loginByWecomCode 已接（code→userid→绑定账号→会话令牌）。坐席台 rewrite/agent 打开带 ?code= 即免登；未绑 userid 仍走令牌登录',
         },
         {
           key: 'contactMe',

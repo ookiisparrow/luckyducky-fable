@@ -35,7 +35,7 @@ const GREET_EV: JevResult = { model: 'local-hello', urgency: 0, department: 'sal
  * 旧实现把 add 的任何异常都返 false（=已处理·跳过），基建错也被当重复 → 真实客服消息静默丢失。改为 add 失败后
  * **回查该 seen 文档是否真存在**：存在＝真撞号（duplicate）；不存在＝add 没写进去（基建错·error），消息未认领须重试。
  */
-export type ClaimResult = 'first' | 'duplicate' | 'error'
+type ClaimResult = 'first' | 'duplicate' | 'error'
 export async function firstSeen(db: any, msgid: string): Promise<ClaimResult> {
   try {
     await db.collection(COLLECTIONS.kfState).add({ data: { _id: 'seen:' + msgid, at: Date.now() } })
@@ -104,7 +104,7 @@ const KEYWORDS: { cat: Category; words: string[] }[] = [
   },
   { cat: 'tutorial', words: ['教程', '钩织', '针法', '图解', '怎么钩', '教学'] },
 ]
-export type Category = 'logistics' | 'activation' | 'aftersale' | 'tutorial'
+type Category = 'logistics' | 'activation' | 'aftersale' | 'tutorial'
 
 /** 识别自由文本命中的类别 + 命中词（无命中返 null）。 */
 export function recognize(text: string): { cat: Category; word: string } | null {
@@ -130,7 +130,7 @@ interface MenuItem {
   id: string
   content: string
 }
-export interface MsgMenuContent {
+interface MsgMenuContent {
   head_content: string
   list: { type: 'click'; click: { id: string; content: string } }[]
   tail_content: string
@@ -213,7 +213,7 @@ export function parseRate(menuId: string): number | null {
 }
 
 /** 命中关键词后的高亮气泡：head 点出识别词，list 是贴问题的下级选项。 */
-export function menuFor(cat: Category, word: string): MsgMenuContent {
+function menuFor(cat: Category, word: string): MsgMenuContent {
   if (cat === 'logistics')
     return menu(`看你在问「${word}」相关 👇`, [
       { id: 'order:query', content: '查我的订单 / 物流' },
@@ -241,7 +241,7 @@ export function menuFor(cat: Category, word: string): MsgMenuContent {
 }
 
 // ── menu_id 路由 ──
-export type Route =
+type Route =
   | { type: 'menu'; content: MsgMenuContent }
   // faqKey：FAQ 叶子答案的键（=kb 文档 _id·同菜单叶子 menu_id）；答案由 handleMessage 从 kb 单源读
   // （B4.1·守卫 faq-via-kb-single-source·不再在本文件写死 FAQ 文案）。
@@ -299,7 +299,7 @@ export function route(menuId: string): Route {
  * 从 kb 集合读 FAQ 答案（_id=faqKey·同菜单叶子 menu_id）。未命中 / 未启用（enabled:false）/ 无答案 → 返 null，
  * 调用方兜底回根菜单。**答案只在 kb、admin 经 adminApi listKb/saveKb 维护**——本文件不再写死 FAQ 文案（根因#5 防漂移）。
  */
-export async function faqAnswer(db: any, faqKey: string): Promise<string | null> {
+async function faqAnswer(db: any, faqKey: string): Promise<string | null> {
   if (!faqKey) return null
   const got = await db
     .collection(COLLECTIONS.kb)
@@ -312,7 +312,7 @@ export async function faqAnswer(db: any, faqKey: string): Promise<string | null>
 }
 
 // ── 满意度评分入库（CSAT·B4.3·守卫 csat-score-bounded）──
-export interface CsatInput {
+interface CsatInput {
   externalUserId: string
   openid: string | null
   score: number
@@ -378,7 +378,9 @@ export async function attachCsatNote(db: any, externalUserId: string, note: stri
     .collection(COLLECTIONS.csat)
     .doc(csatId)
     .update({ data: { note: String(note).slice(0, 200) } })
-    .catch(() => {})
+    .catch(() => {
+      alert('anomaly', 'attachCsatNote', 'CSAT_NOTE_FAIL', { euid })
+    })
   await db
     .collection(COLLECTIONS.kfState)
     .doc('csatlast:' + euid)
@@ -523,6 +525,7 @@ async function notifyOnlineAgents(db: any, sessionId: string): Promise<void> {
     const st = await db
       .collection(COLLECTIONS.agentState)
       .where({ status: 'online' })
+      .limit(50) // 坐席席位上限同账号扫描窗·有界读
       .get()
       .catch(() => ({ data: [] }))
     const ids = (st.data || []).map((a: any) => a._id).filter(Boolean)
@@ -657,7 +660,11 @@ export async function handleMessage(ctx: DispatchCtx, incoming: Incoming): Promi
           .remove()
           .catch(() => {})
         const openid = await resolveOpenid(db, to)
-        await recordCsat(db, { externalUserId: to, openid, score: Number(m[1]) })
+        const csatId = await recordCsat(db, { externalUserId: to, openid, score: Number(m[1]) })
+        if (!csatId) {
+          await send(buildText(to, openKfId, '评分没记上，请稍后再评一次 🙏'))
+          return
+        }
         await send(buildMsgMenu(to, openKfId, csatReasonMenu()))
         return
       }
@@ -814,9 +821,13 @@ export async function handleMessage(ctx: DispatchCtx, incoming: Incoming): Promi
       return
     }
     case 'csat': {
-      // 记分（fail-closed 校验 1..5·绑 openid 若可解析）→ 再问可选备注（B4.3）
+      // 记分（fail-closed 校验 1..5·绑 openid 若可解析）→ 再问可选备注（B4.3）；写失败如实告知不发菜单
       const openid = await resolveOpenid(db, to)
-      await recordCsat(db, { externalUserId: to, openid, score: r.score })
+      const csatId = await recordCsat(db, { externalUserId: to, openid, score: r.score })
+      if (!csatId) {
+        await send(buildText(to, openKfId, '评分没记上，请稍后再评一次 🙏'))
+        return
+      }
       await send(buildMsgMenu(to, openKfId, csatReasonMenu()))
       return
     }

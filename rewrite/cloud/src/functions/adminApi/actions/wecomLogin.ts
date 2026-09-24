@@ -18,9 +18,13 @@ export async function loginByWecomCode({ db, data }: { db: any; data: any }) {
   if (!token) return reply(503, { ok: false, error: 'KF_TOKEN_UNAVAILABLE' })
   const userid = await getWecomOAuthUserId(token, code)
   if (!userid) return reply(401, { ok: false, error: 'BAD_CODE' }) // code 失效 / 非企业成员（返 openid 非 userid）
-  // 反查绑定账号（超管 auth 或外包 agent·wecomUserId 唯一·M⑦ 地基唯一性已保证）
-  const hit = await db.collection('adminConfig').where({ wecomUserId: userid }).limit(1).get().catch(() => ({ data: [] }))
-  const acct = (hit && hit.data && hit.data[0]) || null
+  // 反查绑定账号（超管 auth 或外包 agent·wecomUserId 应唯一）。limit(2) 才能发现撞号——
+  // limit(1) 会静默捡第一条、登错身份。读失败不当「没绑」。
+  const hit = await db.collection('adminConfig').where({ wecomUserId: userid }).limit(2).get().catch(() => null)
+  if (!hit) return reply(503, { ok: false, error: 'WECOM_ID_LOOKUP_FAIL' })
+  const rows = (hit.data || []) as any[]
+  if (rows.length > 1) return reply(409, { ok: false, error: 'WECOM_ID_TAKEN' })
+  const acct = rows[0] || null
   if (!acct) return reply(403, { ok: false, error: 'NO_BOUND_ACCOUNT' }) // userid 未绑任何坐席账号·fail-closed 拒登
   if (acct.disabled) return reply(403, { ok: false, error: 'ACCOUNT_DISABLED' })
   // 签发高熵 session 令牌（lib.issueSession 单源·口令登录同款·存 sessions 数组容多设备·深审 P1）

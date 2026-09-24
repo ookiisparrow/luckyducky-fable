@@ -11,7 +11,7 @@ const DAY = 86400_000
 const SHIPPED_STUCK_DAYS = 7 // 发货超 7 天未签收＝疑卡件
 const NUDGE_AFTER_MS = 5 * 60_000 // 下单 5 分钟还没付＝值得催（仍在支付窗口内·将超时）
 
-export interface RecallInput {
+interface RecallInput {
   now: number
   payWindowMs: number
   pendingOrders: any[] // status=pending（含 createdAt/id/_id）
@@ -19,7 +19,7 @@ export interface RecallInput {
   activations: any[] // 激活记录（含 _openid/courseId/enteredAt）
   progress: any[] // 学习进度（含 _openid/courseId）
 }
-export interface RecallResult {
+interface RecallResult {
   unpaid: string[]
   logistics: string[]
   unstarted: string[]

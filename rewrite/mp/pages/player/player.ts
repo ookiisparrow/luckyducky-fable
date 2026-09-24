@@ -72,7 +72,6 @@ Page({
     capsuleBottom: 0, // 原生胶囊底边 y（px·onLoad 取 getMenuButtonBoundingClientRect().bottom）：段落进度条按此动态避让落胶囊下方（2026-07-13 反馈·Bug D1）
     videoRatio: 168, // 播放框比例 padding-top%（默认 1:1.68·onVideoMeta 拿素材真实宽高后贴合·去左右黑边·2026-07-13 反馈·Bug D2）
     title: '',
-    segments: [] as FlatSegment[],
     current: null as FlatSegment | null,
     src: '',
     canPrev: false,
@@ -192,7 +191,7 @@ Page({
     }
     this.course = course
     const segments = flattenSegments(course)
-    this.setData({ title: String(course.title || ''), segments })
+    this.setData({ title: String(course.title || '') })
     const want = this._wantSeg
     const start = segments.find((s) => s.segmentId === want && s.hasVideo) || segments.find((s) => s.hasVideo) || null
     if (!start) {
@@ -665,8 +664,11 @@ Page({
   // （同 onHelpVideos 口径·辅助内容低频不缓存）。!ok / mapPublicFaq=null 落 fail，不装成「还在整理」；
   // 真没有才空态导流客服。help.faq（CMS 自由文本）非空时该子层直接渲染 CMS，不必再打 KB 请求。
   onHelpFaq() {
+    if ((this.data.help.faq || []).length > 0) {
+      this.setData({ helpPanel: 'faq' }) // CMS 自由文本已覆盖，wxml 走 help.faq 分支，跳过 KB 拉取
+      return
+    }
     this.setData({ helpPanel: 'faq', helpFaqState: 'loading', helpFaqList: [] })
-    if ((this.data.help.faq || []).length > 0) return // CMS 自由文本已覆盖，wxml 走 help.faq 分支，跳过 KB 拉取
     void this.loadHelpFaq()
   },
   async loadHelpFaq() {

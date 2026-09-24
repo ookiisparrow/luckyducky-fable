@@ -20,11 +20,11 @@
     </view>
     <view class="ld-ps-info-row">
       <text class="ld-ps-info-k">配送方式</text>
-      <text class="ld-ps-info-v wrap">顺丰速运 · 除新疆、内蒙古、西藏外包邮</text>
+      <text class="ld-ps-info-v wrap">顺丰速运 · 包邮到家·售后无忧</text>
     </view>
     <view class="ld-ps-info-row">
       <text class="ld-ps-info-k">预计送达</text>
-      <text class="ld-ps-info-v">48 小时内发出 · 次日达</text>
+      <text class="ld-ps-info-v">48 小时内发出</text>
     </view>
   </view>
 

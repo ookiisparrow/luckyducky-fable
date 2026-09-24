@@ -17,19 +17,22 @@ const checkout = live(checkoutRaw)
 const paysuccess = live(paysuccessRaw)
 
 describe('详情/购物车/结算运费与退货话术', () => {
-  it('大白话：详情和结算顾客短句是「包邮到家·售后无忧」，不再写满额包邮或全场包邮', () => {
-    for (const src of [detail, checkout]) {
+  it('大白话：详情、结算和支付成功页顾客短句都是「包邮到家·售后无忧」，不再写满额包邮、全场包邮或疆蒙藏长句', () => {
+    for (const src of [detail, checkout, paysuccess]) {
       expect(src).toContain('包邮到家·售后无忧')
       expect(src).not.toContain('除新疆、内蒙古、西藏外包邮')
       expect(src).not.toContain('除疆蒙藏外')
       expect(src).not.toMatch(/满\s*¥?\s*100\s*包邮/)
       expect(src).not.toContain('全场包邮')
       expect(src).not.toContain('全场无门槛包邮')
+      expect(src).not.toContain('次日达')
     }
   })
 
-  it('大白话：支付成功页仍写完整配送范围；也不写满额/全场包邮', () => {
-    expect(paysuccess).toContain('除新疆、内蒙古、西藏外包邮')
+  it('大白话：支付成功页可留顺丰，履约只承诺 48 小时内发出，不硬承诺次日达', () => {
+    expect(paysuccess).toContain('顺丰速运')
+    expect(paysuccess).toContain('48 小时内发出')
+    expect(paysuccess).not.toContain('次日达')
     expect(paysuccess).not.toMatch(/满\s*¥?\s*100\s*包邮/)
     expect(paysuccess).not.toContain('全场包邮')
     expect(paysuccess).not.toContain('全场无门槛包邮')
@@ -50,6 +53,8 @@ describe('详情/购物车/结算运费与退货话术', () => {
     expect(cart).not.toContain('全场包邮')
     expect(cart).toContain('包邮到家·售后无忧')
     expect(cart).not.toContain('官方正品保障')
+    expect(cart).not.toContain('除新疆、内蒙古、西藏外包邮')
+    expect(cart).not.toContain('次日达')
   })
 
   it('大白话：客服知识库退货预设跟同一套说法，发票那句还在', () => {

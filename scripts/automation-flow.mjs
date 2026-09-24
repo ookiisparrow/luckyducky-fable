@@ -6,28 +6,32 @@
  * 依赖：微信开发者工具已启动 + automation 服务器已拉起（agent start）
  * 通道：ws://[::1]:9420（IPv6！）
  *
+ * 环境变量：WECHAT_AGENT_CLIENT 客户端名（默认 ldrw-cli，与运维手册一致）
+ *
  * 用法：
  *   node scripts/automation-flow.mjs                 # 跑完整业务流
  *   node scripts/automation-flow.mjs probe [page]    # 探查页面元素类名
  *   node scripts/automation-flow.mjs data [page]     # 读页面数据
  */
 import { execSync } from 'node:child_process';
+import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createRequire } from 'node:module';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PROJECT = path.resolve(__dirname, '../rewrite/mp');
+const CLIENT = process.env.WECHAT_AGENT_CLIENT || 'ldrw-cli';
 const AUTOMATOR_WS = 'ws://[::1]:9420'; // IPv6！automator 的 WebSocket 端点
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 async function connect() {
   // 前置：确保 automation 服务器与项目窗口就绪
   try {
-    execSync(`wechatide -c pi-agent agent start --project "${PROJECT}" --port 9420 2>/dev/null`, { encoding: 'utf8', timeout: 30000 });
+    execSync(`wechatide -c ${CLIENT} agent start --project "${PROJECT}" --port 9420 2>/dev/null`, { encoding: 'utf8', timeout: 30000 });
   } catch { /* 已就绪则忽略 */ }
   try {
-    execSync(`wechatide -c pi-agent open_project_window --project "${PROJECT}" 2>/dev/null`, { encoding: 'utf8', timeout: 30000 });
+    execSync(`wechatide -c ${CLIENT} open_project_window --project "${PROJECT}" 2>/dev/null`, { encoding: 'utf8', timeout: 30000 });
   } catch { /* 已打开则忽略 */ }
   const require = createRequire(import.meta.url);
   const automator = require('miniprogram-automator');
@@ -89,8 +93,9 @@ async function runFlow() {
     // 5️⃣ 截图取证
     console.log('\n【5/5】截图取证...');
     try {
-      await mini.screenshot('/Users/sparrow/Desktop/wx_cart_result.png');
-      console.log('  ✅ 截图已存桌面 wx_cart_result.png');
+      const shotPath = path.join(os.tmpdir(), 'wx_cart_result.png');
+      await mini.screenshot(shotPath);
+      console.log(`  ✅ 截图已存 ${shotPath}`);
     } catch (e) { console.log('  ⚠️ 截图失败:', e.message); }
 
     console.log('\n🏁 业务流测试完成');

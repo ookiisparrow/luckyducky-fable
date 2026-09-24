@@ -6,7 +6,7 @@
 // 抽纯函数进 lib：分支判定与副作用（cart.add）分离，vitest 钉行为不用桩 wx。
 import { mapDetail } from './mapDetail'
 
-export interface QuickAddPayload {
+interface QuickAddPayload {
   id: string
   sku: string
   name: string

@@ -1,6 +1,6 @@
 import { getDb } from './db'
 
-export interface TransitionResult {
+interface TransitionResult {
   /** 是否真的发生了流转（当前态 ∈ from 才会）。 */
   moved: boolean
   /** 流转前的单据（不存在则缺省）。供调用方据旧值记日志/算 patch。 */

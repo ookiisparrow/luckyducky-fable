@@ -73,9 +73,17 @@ Page({
   onHide() {
     this.hidden = true
     releaseExitGuard(this) // 切走本 tab：清在途重武装定时器（不回调已隐藏页的 setData）
+    if (toastTimer) {
+      clearTimeout(toastTimer)
+      toastTimer = null
+    }
   },
   onUnload() {
     releaseExitGuard(this)
+    if (toastTimer) {
+      clearTimeout(toastTimer)
+      toastTimer = null
+    }
   },
   /** <page-container bindbeforeleave>：拦下第一次返回 →「再按一次退出」（2s 内再按放行·2s 后自动重新武装）。 */
   onExitGuardBeforeLeave() {

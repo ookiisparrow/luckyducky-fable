@@ -224,6 +224,86 @@ describe('上新向导已下架同步（#211 #199）', () => {
     wrapper.unmount()
   })
 
+  it('大白话：筹备中第一次上架要问「要不要同时出现在首页」，默认不勾，成功口写清首页没开', async () => {
+    const draft = { ...freshDraft('p-new'), name: '新款', cover: 'c', price: '99', skus: [{ name: '标', price: '99' }] }
+    listDraftsMock.mockResolvedValue({
+      ok: true,
+      list: [draft],
+      urls: {},
+      listed: {},
+      hasVideo: {},
+      coursePublished: {},
+      cardFinal: {},
+      hasBatch: {},
+    })
+    const router = createRouter({
+      history: createMemoryHistory(),
+      routes: [
+        { path: '/launch', component: Wizard },
+        { path: '/products/:id/wizard', component: Wizard },
+        { path: '/products', component: { template: '<div/>' } },
+      ],
+    })
+    await router.push('/products/p-new/wizard')
+    await router.isReady()
+    const wrapper = mount(Wizard, { global: { plugins: [router], stubs } })
+    await flushPromises()
+    expect(wrapper.text()).not.toContain('要不要同时出现在首页')
+    const pub = wrapper.findAll('button').find((b) => b.text().includes('上架'))
+    expect(pub).toBeTruthy()
+    await pub!.trigger('click')
+    await flushPromises()
+    expect(publishProductMock).not.toHaveBeenCalled()
+    expect(wrapper.text()).toContain('要不要同时出现在首页')
+    const box = wrapper.find('.home-ask input')
+    expect(box.exists()).toBe(true)
+    expect((box.element as HTMLInputElement).checked).toBe(false)
+    const confirm = wrapper.findAll('button').find((b) => b.text().includes('确认上架'))
+    expect(confirm).toBeTruthy()
+    await confirm!.trigger('click')
+    await flushPromises()
+    expect(publishProductMock).toHaveBeenCalledTimes(1)
+    expect(publishProductMock).toHaveBeenCalledWith('p-new', { featured: false })
+    expect(wrapper.text()).toContain('首页人气条未打开')
+    expect(wrapper.text()).toContain('出现在首页')
+    wrapper.unmount()
+  })
+
+  it('大白话：第 4 步写清商品上架不等于课程发布，进度能分开有视频和课已发布', async () => {
+    const draft = { ...freshDraft('p-vid'), name: '有视频未发布', cover: 'c', price: '99', skus: [{ name: '标', price: '99' }] }
+    listDraftsMock.mockResolvedValue({
+      ok: true,
+      list: [draft],
+      urls: {},
+      listed: {},
+      hasVideo: { 'course-p-vid': true },
+      coursePublished: {},
+      cardFinal: {},
+      hasBatch: {},
+    })
+    const router = createRouter({
+      history: createMemoryHistory(),
+      routes: [
+        { path: '/launch', component: Wizard },
+        { path: '/products/:id/wizard', component: Wizard },
+        { path: '/products', component: { template: '<div/>' } },
+      ],
+    })
+    await router.push({ path: '/products/p-vid/wizard', query: { step: '4' } })
+    await router.isReady()
+    const wrapper = mount(Wizard, { global: { plugins: [router], stubs } })
+    await flushPromises()
+    expect(wrapper.text()).toContain('商品上架 ≠ 课程发布')
+    expect(wrapper.text()).toContain('先卖材料包')
+    expect(wrapper.text()).toContain('有视频文件')
+    expect(wrapper.text()).toContain('课已发布')
+    const marks = wrapper.findAll('.video-mark')
+    expect(marks).toHaveLength(2)
+    expect(marks[0].classes()).toContain('on')
+    expect(marks[1].classes()).not.toContain('on')
+    wrapper.unmount()
+  })
+
   it('大白话：向导图例钉验收词表四套字，禁另起别名', async () => {
     listDraftsMock.mockResolvedValue({ ok: true, list: [], urls: {}, listed: {}, hasVideo: {}, cardFinal: {}, hasBatch: {} })
     const router = createRouter({

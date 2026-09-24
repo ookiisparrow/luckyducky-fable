@@ -1,10 +1,6 @@
 <script setup lang="ts">
-// 客服满意度（设计语言一致性·M3 UI 批15 + 明细钻取批 B6）：均分 + 星级分布 + 带备注数（越界分云端已剔）。
-// 不编数（根因#8·T3）：mapCsat 只给 avg/total/withNote/dist——设计稿的「坐席排名」「区间对比」无数据源，一律不建。
-// 好评率/差评数从 dist 派生（真·非造）。
-// 明细钻取（批 B6）：listCsatEntries 真数据——时间 chips（近7天/近30天/全部）+「仅差评 ≤2」开关 + 明细表
-// （时间/评分/备注/定位键）+ 翻页照 Conversations.vue 模式（useLatest 乱序守卫·根因#8）+ 差评行「查会话」
-// 跳 Conversations 页带 externalUserId 预填（该页新增最小 query 预填能力，见 Conversations.vue）。
+// 客服满意度：均分 + 星级分布 + 带备注数（越界分云端已剔）。
+// 不编数：mapCsat 只给 avg/total/withNote/dist；好评率/差评数从 dist 派生。差评行「查会话」深链客服会话页。
 import { ref, onMounted, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { RotateCcw, Star, ThumbsUp, ThumbsDown, MessageSquare, Search } from 'lucide-vue-next'

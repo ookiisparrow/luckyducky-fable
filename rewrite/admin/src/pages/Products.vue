@@ -1,5 +1,5 @@
 <script setup lang="ts">
-// 商品管理（design/console.pen S11 视觉·M3 UI 批3）：页头+流水线副标+筛选 chip（真计数）+ 搜索（按名）
+// 商品管理：页头+流水线副标+筛选 chip（真计数）+ 搜索（按名）
 // + 三态表格（关联课程/规格·图列 + 5 步上新进度圆点）+ 编辑器（整档 round-trip·图片压缩·危操作两步确认）。
 // 「5 步上新进度」——cards/courses/qrcodes 后端 listDrafts bounded join 派生（视频/卡片/批次态）。
 import { ref, computed, onMounted, onBeforeUnmount, watch, nextTick } from 'vue'
@@ -11,6 +11,7 @@ import {
   b64SizeOk,
   basicsMissing,
   stepProgressHint,
+  stepDotTitle,
   productsListSub,
   DRAFT_PRICE_HINT,
   draftSyncLabel,
@@ -20,9 +21,11 @@ import {
   draftSyncOk,
   draftSyncMissingHint,
   draftSyncReadyHint,
+  HOME_FEATURE_ASK,
   type DraftRowVM,
 } from '../lib/mapProducts'
 import { serialSave } from '../lib/serialSave'
+import { compressImage } from '../lib/compressImage'
 import { useRouter } from 'vue-router'
 import UiButton from '../components/ui/Button.vue'
 import PageHeader from '../components/ui/PageHeader.vue'
@@ -71,7 +74,8 @@ async function editCourse(row: DraftRowVM) {
 const rows = ref<DraftRowVM[]>([])
 const message = ref('')
 const busy = ref(false)
-const confirmKey = ref('') // 两步确认（`del:<id>` / `off:<id>`）
+const confirmKey = ref('') // 两步确认（`del:<id>` / `off:<id>` / `pub:<id>`）
+const wantHome = ref(false) // 首次上架问首页·默认不挂（工单212）
 const moreKey = ref('') // 操作列「⋯更多」菜单展开行 id（非危险态·仅 UI 开合；顺手在 reload() 里也清，防刷新后残留开着的菜单）
 // 菜单挂视口 fixed 定位（批5 裁剪修正·浏览器实测）：absolute 会被 Card flush 的 overflow:hidden
 // 裁掉——末行菜单实测只露一项；fixed 按 ⋯ 按钮矩形算坐标，不受卡片裁剪。
@@ -125,6 +129,7 @@ const imgCount = (r: DraftRowVM) => (Array.isArray((r.raw as any).images) ? (r.r
 // 圆点深链：进上新向导落到第一个未完成步（全完成落第 1 步）
 const firstTodoStep = (r: DraftRowVM) => (r.steps.findIndex((s) => !s.done) + 1) || 1
 const courseOf = (r: DraftRowVM) => String((r.raw as any).courseId || '')
+const videoMarksOf = (r: DraftRowVM) => r.steps.find((s) => s.key === 'video')?.marks || []
 
 // 图片 fileID→url 解析：listDrafts 回的 urls 映射（已存图）+ 本会话新上传的 url
 const urlMap = ref<Record<string, string>>({})
@@ -135,19 +140,26 @@ const imgUrl = (fileID: string) => sessionUrls.value[fileID] || urlMap.value[fil
 let urlMapAt = 0
 const URL_MAP_STALE_MS = 90 * 60 * 1000
 
-async function reload() {
+async function reload(keepMsg = false) {
+  const held = keepMsg ? message.value : ''
   confirmKey.value = '' // 刷新即复位危险态（P1·防旧武装的上架/下架/删除按钮跨刷新残留一击直发·批3 规格）
+  wantHome.value = false
   moreKey.value = '' // 防刷新后残留开着的⋯更多菜单
-  message.value = '加载中…'
+  if (!keepMsg) message.value = '加载中…'
   const r = await listDrafts()
   urlMap.value = r.ok && (r as any).urls ? (r as any).urls : {}
   urlMapAt = Date.now()
   rows.value = r.ok ? mapDraftRows(r.list, r.urls, r.listed, stepExtras(r)) : []
-  message.value = r.ok ? '' : '加载失败：' + String(r.error || '')
+  message.value = r.ok ? held : '加载失败：' + String(r.error || '')
   listReady.value = true
 }
 // listDrafts 派生的 5 步分步态（后端 join）
-const stepExtras = (r: any) => ({ hasVideo: r.hasVideo || {}, cardFinal: r.cardFinal || {}, hasBatch: r.hasBatch || {} })
+const stepExtras = (r: any) => ({
+  hasVideo: r.hasVideo || {},
+  coursePublished: r.coursePublished || {},
+  cardFinal: r.cardFinal || {},
+  hasBatch: r.hasBatch || {},
+})
 // 静默刷新列表（不闪「加载中」·不打断正在编辑的编辑器）
 async function silentRefresh() {
   const r = await listDrafts()
@@ -269,7 +281,7 @@ async function pickCover(ev: Event) {
   // 快照本次上传目标（H·完备性扫描新增·同 doSave 范式）：openEdit/列表「编辑」按钮无 busy 门控，
   // 压缩/上传两段 await 期间都可能已切到另一件商品的编辑器——回包不该打到已切换的新编辑器上。
   const snap = edit.value
-  const b64 = await compress(file)
+  const b64 = await compressImage(file, PRODUCT_COMPRESS)
   if (!b64SizeOk(b64)) {
     if (edit.value === snap) message.value = '图片压缩后仍超限，换小一点的图'
     return
@@ -288,30 +300,8 @@ async function pickCover(ev: Event) {
   }
 }
 
-// 前端压缩（canvas ≤720px 宽·jpeg 0.8→0.5 逐档压到 80K 内）
-async function compress(file: File): Promise<string> {
-  const url = URL.createObjectURL(file)
-  try {
-    const img = await new Promise<HTMLImageElement>((resolve, reject) => {
-      const i = new Image()
-      i.onload = () => resolve(i)
-      i.onerror = reject
-      i.src = url
-    })
-    const scale = Math.min(1, 720 / img.width)
-    const canvas = document.createElement('canvas')
-    canvas.width = Math.round(img.width * scale)
-    canvas.height = Math.round(img.height * scale)
-    canvas.getContext('2d')!.drawImage(img, 0, 0, canvas.width, canvas.height)
-    for (const q of [0.8, 0.65, 0.5, 0.35]) {
-      const b64 = canvas.toDataURL('image/jpeg', q).split(',')[1] || ''
-      if (b64SizeOk(b64)) return b64
-    }
-    return ''
-  } finally {
-    URL.revokeObjectURL(url)
-  }
-}
+// 商品封面/相册：M3 起就是 720 档（比卡片/首页 hero 更小），调用方覆盖默认，不是抄偏。
+const PRODUCT_COMPRESS = { maxWidth: 720, qualities: [0.8, 0.65, 0.5, 0.35] as const }
 
 async function doSave() {
   if (!edit.value || busy.value) return
@@ -358,20 +348,24 @@ async function doSave() {
 // 范式：失败分支直接 return、不 reload；只有成功才清空 message 再 reload。
 const doPublish = (id: string) =>
   twoStep('pub:' + id, async () => {
+    const st = rows.value.find((r) => r.id === id)?.state ?? editState.value
+    const featured = st === 'preparing' && wantHome.value
+    wantHome.value = false
     busy.value = true
-    const r = await publishProduct(id)
+    const r = st === 'preparing' ? await publishProduct(id, { featured }) : await publishProduct(id)
     busy.value = false
     if (!r.ok) {
-      message.value = publishErrorText(r.error, rows.value.find((r) => r.id === id)?.state ?? editState.value)
+      message.value = publishErrorText(r.error, st)
       return
     }
-    message.value = draftSyncOk(rows.value.find((r) => r.id === id)?.state ?? 'preparing')
-    void reload()
+    message.value = draftSyncOk(st, st === 'preparing' ? { featured } : undefined)
+    void reload(true) // 成功口要留下首页状态（工单212）·reload 默认会冲掉 message
   })
 
 async function twoStep(key: string, run: () => Promise<void>) {
   if (confirmKey.value !== key) {
     confirmKey.value = key
+    if (key.startsWith('pub:')) wantHome.value = false
     return
   }
   confirmKey.value = ''
@@ -422,7 +416,7 @@ async function addImages(ev: Event) {
   const snap = edit.value
   busy.value = true
   for (const file of Array.from(files)) {
-    const b64 = await compress(file)
+    const b64 = await compressImage(file, PRODUCT_COMPRESS)
     if (!b64SizeOk(b64)) {
       if (edit.value === snap) message.value = '有图压缩后仍超限，已跳过'
       continue
@@ -557,11 +551,20 @@ onMounted(async () => {
             <div class="ld-td" :style="{ width: '196px' }">
               <div
                 class="steps-cell"
-                :title="row.steps.map((s) => (s.done ? '✓' : '○') + ' ' + s.label).join(' · ') + ' · 点击继续上新'"
+                :title="row.steps.map(stepDotTitle).join(' · ') + ' · 点击继续上新'"
                 @click="router.push('/products/' + row.id + '/wizard?step=' + firstTodoStep(row))"
               >
                 <span class="step-bars" :aria-label="'已完成 ' + row.doneCount + ' / 5 步'">
                   <span v-for="s in row.steps" :key="s.key" class="bar" :class="{ on: s.done }"></span>
+                </span>
+                <span v-if="videoMarksOf(row).length" class="vmarks">
+                  <i
+                    v-for="m in videoMarksOf(row)"
+                    :key="m.key"
+                    class="vmark"
+                    :class="{ on: m.done }"
+                    :title="m.label"
+                  ></i>
                 </span>
                 <span class="done-n">{{ stepProgressHint(row.steps) }}</span>
               </div>
@@ -572,6 +575,10 @@ onMounted(async () => {
             <div class="ld-td ops" :style="{ width: '280px' }">
               <UiButton v-if="row.doneCount < 5" class="cta-continue" variant="ghost" size="sm" @click="router.push('/products/' + row.id + '/wizard?step=' + firstTodoStep(row))">继续上新</UiButton>
               <UiButton variant="ghost" size="sm" @click="openEdit(row)">编辑</UiButton>
+              <label v-if="row.state === 'preparing' && confirmKey === 'pub:' + row.id" class="home-ask">
+                <input v-model="wantHome" type="checkbox" />
+                <span>{{ HOME_FEATURE_ASK }}</span>
+              </label>
               <UiButton v-if="row.state === 'preparing' || row.state === 'onsale'" variant="primary" size="sm" @click="doPublish(row.id)">{{ confirmKey === 'pub:' + row.id ? draftSyncConfirm(row.state) : draftSyncLabel(row.state) }}</UiButton>
               <UiButton v-if="row.state === 'unlisted'" variant="primary" size="sm" @click="doPublish(row.id)">{{ confirmKey === 'pub:' + row.id ? draftSyncConfirm('unlisted') : draftSyncLabel('unlisted') }}</UiButton>
               <UiButton v-if="row.state === 'unlisted'" variant="ghost" size="sm" @click="doRepublish(row.id)">{{ confirmKey === 're:' + row.id ? restoreSaleConfirm() : restoreSaleLabel() }}</UiButton>
@@ -793,6 +800,33 @@ onMounted(async () => {
 }
 .bar.on {
   background: var(--ld-brand);
+}
+.vmarks {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+}
+.vmark {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--ld-line-strong);
+  flex: none;
+}
+.vmark.on {
+  background: var(--ld-green);
+}
+.home-ask {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11.5px;
+  color: var(--ld-content);
+  cursor: pointer;
+  white-space: nowrap;
+}
+.home-ask input {
+  margin: 0;
 }
 .done-n {
   font-size: 12px;

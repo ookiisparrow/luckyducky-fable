@@ -1,6 +1,6 @@
 import { isValidPriceYuan, isValidScmProductId, isValidScmSpec } from '@ldrw/shared'
-import { reply, cleanProduct, cleanSold, storeImage, readDoc, type Ctx } from '../lib'
-import { notifyAlert } from '../../../kit'
+import { reply, cleanProduct, cleanSold, storeImage, readDoc, isCollectionMissing, type Ctx } from '../lib'
+import { notifyAlert, getTempUrls } from '../../../kit'
 
 // —— 商品图册孤儿 GC 判据单源（E16 共享 helper·防多点漂移·批B）——
 // 换图/发布替换/删档三处写点共用这一份 diff 计算 + cover 豁免，别各写一份（漂移＝漏删或误删）。
@@ -45,30 +45,35 @@ function mergePendingGc(old: any, orphans: string[], keep: Set<string>): { fileI
   return [...carried, ...fresh.map((fileId) => ({ fileId, deleteAfter: now + GC_GRACE_MS }))]
 }
 
-export async function listDrafts({ cloud, db, drafts }: Ctx) {
+// 列表图换临时地址。微信一次最多 50 个 fileID；草稿封面+图册、橱窗封面凑一批会超，整包丢过去会整批失败。
+// 走 kit getTempUrls：去重后按 50 张分批。不传 maxAge，和原先裸 string 换址同形。换不到的不放进结果。
+async function listedImageUrls(fileIds: Iterable<string>): Promise<Record<string, string>> {
+  const urls: Record<string, string> = {}
+  const map = await getTempUrls([...fileIds])
+  for (const [id, url] of Object.entries(map)) if (url) urls[id] = url
+  return urls
+}
+
+export async function listDrafts({ db, drafts }: Ctx) {
   const res = await drafts.orderBy('createdAt', 'desc').limit(100).get()
   const ids = new Set<string>()
   for (const p of res.data) {
     if (p.cover && p.cover.startsWith('cloud://')) ids.add(p.cover)
     for (const u of p.images || []) if (u.startsWith('cloud://')) ids.add(u)
   }
-  const urls: Record<string, string> = {}
-  if (ids.size) {
-    const r = await cloud.getTempFileURL({ fileList: [...ids] })
-    for (const f of r.fileList) if (f.tempFileURL) urls[f.fileID] = f.tempFileURL
-  }
+  const urls = await listedImageUrls(ids)
   // 上架/下架状态映射（S11·债#12 软下架显形）：listed 标记在 products、不在草稿，控制台靠它分
   // 「在售（onsale+listed≠false）/ 已下架（onsale+listed:false）/ 筹备中（未上架·无 products 文档）」。
   // 一次性批量取（草稿 ≤100·bounded·根因#7），口径与 getProducts 一致（旧无字段=可售）。
   const draftIds = res.data.map((p: any) => p.id || p._id).filter(Boolean)
   const listed: Record<string, boolean> = {}
   if (draftIds.length) {
+    // 读失败 fail-loud：.catch 空表会让前端把已上架画成「筹备中」。
     const pr = await db
       .collection('products')
       .where({ _id: db.command.in(draftIds) })
       .field({ listed: true })
       .get()
-      .catch(() => ({ data: [] as any[] }))
     for (const p of pr.data) listed[p._id] = p.listed !== false
   }
 
@@ -78,28 +83,42 @@ export async function listDrafts({ cloud, db, drafts }: Ctx) {
   const courseIds = res.data.map((p: any) => String(p.courseId || '') || 'course-' + (p.id || p._id)).filter(Boolean)
   const cardFinal: Record<string, boolean> = {}
   const hasVideo: Record<string, boolean> = {}
+  const coursePublished: Record<string, boolean> = {}
   const hasBatch: Record<string, boolean> = {}
   if (draftIds.length) {
     const cardIds = draftIds.map((id: string) => 'card-' + id)
-    const [cr, cor, br] = await Promise.all([
-      db.collection('cards').where({ _id: _.in(cardIds) }).get().catch(() => ({ data: [] as any[] })),
-      db.collection('courses').where({ _id: _.in(courseIds) }).get().catch(() => ({ data: [] as any[] })),
+    // 联表失败 fail-loud：.catch 空表会把已完成步画成未做。草稿课集合可能尚未建，只把「集合不存在」当空表。
+    const [cr, cor, cdr, br] = await Promise.all([
+      db.collection('cards').where({ _id: _.in(cardIds) }).get(),
+      db.collection('courses').where({ _id: _.in(courseIds) }).get(),
+      // 草稿课也算「有视频文件」——进度圆点要能区分「有文件」vs「课已发布」（#213）
+      db.collection('coursesDraft').where({ _id: _.in(courseIds) }).get().catch((e: unknown) => {
+        if (isCollectionMissing(e)) return { data: [] as any[] }
+        throw e
+      }),
       // aggregate group：只回「有 qrcode 的 courseId」一行/课·不逐码扫（capacity·根因#7）
-      db.collection('qrcodes').aggregate().match({ courseId: _.in(courseIds) }).group({ _id: '$courseId' }).end().catch(() => ({ list: [] as any[] })),
+      db.collection('qrcodes').aggregate().match({ courseId: _.in(courseIds) }).group({ _id: '$courseId' }).end(),
     ])
     for (const c of (cr as any).data || []) {
       const pid = String(c.productId || String(c._id || '').replace(/^card-/, ''))
       cardFinal[pid] = c.status === 'final'
     }
+    const markVideo = (c: any) => {
+      const cid = String(c.id || c._id || '')
+      if (!cid) return
+      for (const ch of c.chapters || [])
+        for (const ls of ch.lessons || [])
+          for (const sg of ls.segments || []) if (sg && sg.videoFileId) hasVideo[cid] = true
+    }
     for (const c of (cor as any).data || []) {
       const cid = String(c.id || c._id || '')
-      let vid = false
-      for (const ch of c.chapters || []) for (const ls of ch.lessons || []) for (const sg of ls.segments || []) if (sg && sg.videoFileId) vid = true
-      hasVideo[cid] = vid
+      if (cid) coursePublished[cid] = true
+      markVideo(c)
     }
+    for (const c of (cdr as any).data || []) markVideo(c)
     for (const g of (br as any).list || []) hasBatch[String(g._id || '')] = true
   }
-  return reply(200, { ok: true, list: res.data, urls, listed, cardFinal, hasVideo, hasBatch })
+  return reply(200, { ok: true, list: res.data, urls, listed, cardFinal, hasVideo, coursePublished, hasBatch })
 }
 
 export async function saveDraft({ db, drafts, data }: Ctx) {
@@ -236,7 +255,8 @@ export async function publishProduct({ db, drafts, data }: Ctx) {
   if (sort === undefined) {
     const top = await productsColl.orderBy('sort', 'desc').limit(1).get()
     sort = (top.data[0]?.sort ?? 0) + 1
-    featured = true
+    // 首发默认不进首页人气条（#212）：要挂首页须显式 featured:true。再同步保留原 featured，不覆盖橱窗开关。
+    featured = data.featured === true
   }
   // 重新上架（编辑后再发布）不得隐式改变销售状态：保留旧 listed/unlistedAt——已停售（listed:false）商品
   // 编辑重发仍停售，须显式 republishProduct 才恢复销售（审核 P1·债#12·防整文档 set 抹掉 listed→「无字段=可售」隐式复活）。
@@ -309,14 +329,10 @@ export async function republishProduct({ db, data }: Ctx) {
 }
 
 // —— 小程序橱窗（规格 §八）：一比一首页预览的排序与上下架 ——
-export async function listShowcase({ db, cloud }: Ctx) {
+export async function listShowcase({ db }: Ctx) {
   const res = await db.collection('products').orderBy('sort', 'asc').limit(100).get()
   const ids = res.data.map((p: any) => p.cover).filter((u: any) => u && u.startsWith('cloud://'))
-  const urls: Record<string, string> = {}
-  if (ids.length) {
-    const r = await cloud.getTempFileURL({ fileList: [...new Set<string>(ids)] })
-    for (const f of r.fileList) if (f.tempFileURL) urls[f.fileID] = f.tempFileURL
-  }
+  const urls = await listedImageUrls(ids)
   return reply(200, { ok: true, list: res.data, urls })
 }
 

@@ -2,6 +2,9 @@
 // 读共用布局源码钉死——删号/改链/页脚夹带执照图或公司法定名必红。
 import { existsSync, readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
+import { includeInSitemap } from '../astro.config.mjs'
+
+const astroCfg = readFileSync(new URL('../astro.config.mjs', import.meta.url), 'utf8')
 
 const layout = readFileSync(new URL('../src/layouts/Base.astro', import.meta.url), 'utf8')
 const footer = layout.match(/<footer>[\s\S]*?<\/footer>/)?.[0] ?? ''
@@ -32,6 +35,15 @@ describe('营业执照专页', () => {
     expect(yyzzPage).toContain('noindex')
     expect(yyzzPage).not.toMatch(/统一社会信用代码/)
     expect(yyzzPage).not.toMatch(/好好看文化/)
+  })
+
+  it('大白话：执照专页不进站点地图，首页和教程还在', () => {
+    expect(astroCfg).toContain('integrations: [sitemap()]')
+    expect(astroCfg).toContain('filter: includeInSitemap')
+    expect(includeInSitemap('https://www.luckyducky.cn/yyzz/')).toBe(false)
+    expect(includeInSitemap('https://www.luckyducky.cn/yyzz')).toBe(false)
+    expect(includeInSitemap('https://www.luckyducky.cn/')).toBe(true)
+    expect(includeInSitemap('https://www.luckyducky.cn/tutorials/how-to/')).toBe(true)
   })
 
   it('大白话：执照照片文件就在官网静态目录，是真 JPEG，专页才不会裂图', () => {

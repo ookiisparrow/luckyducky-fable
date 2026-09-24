@@ -2,7 +2,7 @@ import { getDb } from './db'
 import { isServerCall } from './gate'
 import { alert } from './observe'
 
-export interface NotifyOptions<E> {
+interface NotifyOptions<E> {
   /** 给微信的 ACK（不返回 ACK 微信会重试推送）。 */
   ack: Record<string, unknown>
   /** 从通知事件提取单据 id（out_trade_no / out_refund_no）；空则忽略（缺单号）。 */

@@ -103,7 +103,7 @@ class DocRef {
   async get() {
     // 写前注入同款读侧钩子（批H：casDecrement 瞬时读故障测试）：可对 doc(id).get() 单点注入抛错
     // （非「无档」的真读失败，如网络/DB 瞬时故障），与下方「无档」reject 区分——回调收到 {coll,id}
-    // （Query.get() 的 beforeGet 收到 {coll,filter,skip}，字段不同，测试按需解构，互不干扰）。默认无。
+    // （Query.get() 的 beforeGet 收到 {coll,filter,skip,limit}，字段不同，测试按需解构，互不干扰）。默认无。
     if (typeof G.beforeGet === 'function') await G.beforeGet({ coll: this.coll, id: this.id })
     const found = rows(this.coll).find((d) => d._id === this.id)
     if (!found) throw new Error('DOCUMENT_NOT_FOUND') // 真 sdk：缺失即 reject
@@ -194,7 +194,8 @@ class Query {
   async get() {
     // 写前注入同款读侧钩子（批1 bug sweep·kit/inventory getInventory 分页扫描单页失败测试）：
     // 可在具体页（按 coll/skip 判断）注入抛错，模拟真机分页扫描中单页 .get() 失败（非到底）。默认无。
-    if (typeof G.beforeGet === 'function') await G.beforeGet({ coll: this.coll, filter: this._filter, skip: this._skip })
+    if (typeof G.beforeGet === 'function')
+      await G.beforeGet({ coll: this.coll, filter: this._filter, skip: this._skip, limit: this._limit })
     return { data: this._rows().map(clone) }
   }
   async count() {
@@ -341,11 +342,15 @@ const cloud = {
     G.deletedFiles.push(...(fileList || []))
     return { fileList: (fileList || []).map((id) => ({ fileID: id, status: 0 })) }
   },
-  // 下载云存储文件 mock（kit/contentsec imgSecCheck 取图字节走它）：返回固定小 buffer；内容安全的
-  // 通过/违规分支由 openapi mock（setOpenapiFail/Result）驱动（真 sdk 下载属根因#8 靠人·桩只锁链路）。
-  downloadFile: async ({ fileList }) => ({
-    fileList: (fileList || []).map((id) => ({ fileID: id, fileContent: Buffer.from('mock-image-bytes') })),
-  }),
+  // 下载云存储文件 mock（kit/contentsec imgSecCheck 取图字节走它）：云函数官方形状
+  // { fileID } → { fileContent, statusCode }（不是 getTempFileURL/deleteFile 的 fileList）。
+  // 内容安全的通过/违规分支由 openapi mock（setOpenapiFail/Result）驱动（真 sdk 下载属根因#8 靠人·桩只锁链路与形状）。
+  downloadFile: async ({ fileID } = {}) => {
+    if (typeof fileID !== 'string' || !fileID) {
+      throw new Error('MOCK: downloadFile expects { fileID }（云函数 wx-server-sdk 官方形状，不是 fileList）')
+    }
+    return { fileContent: Buffer.from('mock-image-bytes'), statusCode: 200 }
+  },
   // 云调用 mock（cloud.openapi.*·债#26 发货上传走它）：嵌套属性任意命中、调用记录入参，
   // openapiFail 时抛错（模拟能力未开通/权限未声明）、否则返 openapiResult（默认 errCode:0 成功）。
   // 真 sdk openapi 绑定名 + config.json 权限属真机验（根因#8），桩只锁「接缝被调 + 成功/失败分支」。

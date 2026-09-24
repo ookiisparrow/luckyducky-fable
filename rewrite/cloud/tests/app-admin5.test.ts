@@ -91,6 +91,19 @@ describe('客户 360 聚合（黄金 §十三：只本人·钱链口径·错误�
     expect(r.panels.map((p: any) => p.key)).toEqual(['profile', 'orders', 'activation', 'checkpoints'])
     expect((await post('getCustomer360', SUPER, {})).status).toBe(400)
   })
+
+  it('大白话：画像板块读失败标 PANEL_FETCH_FAIL——空零不当真没花过钱', async () => {
+    control.seed('users', [{ _id: 'u1', _openid: 'oU1', nickname: '鸭鸭' }])
+    control.seed('orders', [{ _id: 'o1', _openid: 'oU1', status: 'paid', amount: 100, createdAt: 1 }])
+    control.setBeforeGet(({ coll }: any) => {
+      if (coll === 'orders') throw new Error('MOCK_DB_FAIL')
+    })
+    const r = await post('getCustomer360', SUPER, { openid: 'oU1' })
+    control.setBeforeGet(null as never)
+    const profile = r.panels.find((p: any) => p.key === 'profile')
+    expect(profile.data).toBeNull()
+    expect(profile.error).toBe('PANEL_FETCH_FAIL')
+  })
 })
 
 describe('客户检索与画像（黄金 §十三）', () => {
@@ -132,6 +145,18 @@ describe('客户检索与画像（黄金 §十三）', () => {
     expect((await post('getUser', SUPER, { openid: 'oNobody' })).ok).toBe(true)
     expect((await post('getUser', SUPER, { openid: 'oNobody' })).user).toBeNull()
   })
+
+  it('大白话：检索客户时 DB 挂了回 USER_LOOKUP_FAIL——不当「查无此人」空列表', async () => {
+    control.seed('users', [{ _id: 'u1', _openid: 'oA', nickname: '鸭鸭', phone: '13800000001' }])
+    control.setBeforeGet(({ coll }: any) => {
+      if (coll === 'users') throw new Error('MOCK_DB_FAIL')
+    })
+    const r = await post('searchCustomer', SUPER, { q: '13800000001' })
+    control.setBeforeGet(null as never)
+    expect(r.ok).toBe(false)
+    expect(r.error).toBe('USER_LOOKUP_FAIL')
+    expect(r.customers).toBeUndefined()
+  })
 })
 
 describe('质检报表与会话检索（黄金 §六）', () => {
@@ -158,6 +183,18 @@ describe('质检报表与会话检索（黄金 §六）', () => {
     const zero = await post('conversationsReport', SUPER, {})
     expect(zero.volume.messages).toBe(0)
     expect(zero.response.answeredRate).toBe(0)
+  })
+
+  it('大白话：会话库读炸不装成 0 量——整体报错', async () => {
+    control.seed('conversations', [{ _id: 'c1', direction: 'in', externalUserId: 'euA', at: 1 }])
+    control.setBeforeGet(({ coll }: any) => {
+      if (coll === 'conversations') throw new Error('QUERY_FAIL')
+    })
+    const r = await post('conversationsReport', SUPER, {})
+    control.setBeforeGet(null as never)
+    expect(r.ok).toBe(false)
+    expect(r.status).toBe(500)
+    expect(r.volume).toBeUndefined()
   })
 
   it('大白话：会话检索按客户倒序翻页、关键词页内过滤、按渠道叠加筛选；无匹配空列表', async () => {
@@ -196,6 +233,18 @@ describe('CSAT 报表（黄金 §七）', () => {
     const zero = await post('getCsatReport', SUPER, {})
     expect(zero.total).toBe(0)
     expect(zero.avg).toBe(0)
+  })
+
+  it('大白话：满意度库读炸不装成均分 0——整体报错', async () => {
+    control.seed('csat', [{ _id: 's1', score: 5 }])
+    control.setBeforeGet(({ coll }: any) => {
+      if (coll === 'csat') throw new Error('QUERY_FAIL')
+    })
+    const r = await post('getCsatReport', SUPER, {})
+    control.setBeforeGet(null as never)
+    expect(r.ok).toBe(false)
+    expect(r.status).toBe(500)
+    expect(r.total).toBeUndefined()
   })
 })
 
@@ -345,6 +394,23 @@ describe('知识库与节点策展（kb=公司 FAQ·checkpoints=课程节点定�
     const list = await post('listKb', SUPER, {})
     expect(list.list.map((e: any) => e.key).sort()).toEqual(['faq1', 'faq2']) // faq0 已真删
     expect(list.list.every((e: any) => e.enabled)).toBe(true)
+  })
+
+  it('大白话：知识库/节点定义读炸不装成空册——整体报错', async () => {
+    control.seed('kb', [{ _id: 'faq1', question: 'q', answer: 'a', category: 'other' }])
+    control.seed('checkpoints', [{ _id: 'def:c1:n1', type: 'def', courseId: 'c1', nodeId: 'n1', title: '节点' }])
+    control.setBeforeGet(({ coll }: any) => {
+      if (coll === 'kb' || coll === 'checkpoints') throw new Error('QUERY_FAIL')
+    })
+    const kb = await post('listKb', SUPER, {})
+    const cp = await post('listCheckpoints', SUPER, { courseId: 'c1' })
+    control.setBeforeGet(null as never)
+    expect(kb.ok).toBe(false)
+    expect(kb.status).toBe(500)
+    expect(kb.list).toBeUndefined()
+    expect(cp.ok).toBe(false)
+    expect(cp.status).toBe(500)
+    expect(cp.list).toBeUndefined()
   })
 
   it('大白话：精选(featured)白名单字段round trip——存 true 读回 true，旧条目/未传字段默认 false（R37b·公开读 getPublicFaq 的策展面）', async () => {

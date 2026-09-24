@@ -10,11 +10,8 @@ const SCAN_PAGES = 50
 async function fetchAll(makeQuery: () => any, pageSize = 200): Promise<any[]> {
   const out: any[] = []
   for (let page = 0; page < SCAN_PAGES; page++) {
-    const r = await makeQuery()
-      .skip(page * pageSize)
-      .limit(pageSize)
-      .get()
-      .catch(() => ({ data: [] }))
+    // 页失败 fail-loud（同 getInventory）：.catch 空页会命中「不足一页即止」，静默截成半份批次。
+    const r = await makeQuery().skip(page * pageSize).limit(pageSize).get()
     const batch = (r && r.data) || []
     out.push(...batch)
     if (batch.length < pageSize) break
