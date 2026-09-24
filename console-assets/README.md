@@ -1,42 +1,47 @@
 # console-assets · 控制台资产正册（根因账本 #9）
 
-系统的真实形态 = **git 内代码 + git 外配置**。后者（微信云开发控制台里的连接器、工作流、库权限规则）没有版本管理、误删即支付/退款/安全瘫痪——这是根因账本 #9。本目录把这些 git 外资产**正册化**：副本（密钥 REDACTED）+ 变更纪律 + 重建手册 + drift-checklist。
+系统的真实形态＝git 内代码 + git 外配置。后者（云开发控制台里的连接器、工作流、库权限、触发器等）没有版本管理，误删即支付/退款/安全瘫痪。本目录把它们正册化：副本（密钥 REDACTED）+ 重建手册 + 核对清单。
 
 ## 目录
 
-- `01-支付退款工作流.md` — 8 件支付/退款资产（连接器/3 工作流/转发节点/config.pay/商户号）+ 30 分钟重建手册（根因#9/#12）。
-- `forward-node.js` — paynotify/refundnotify 转发节点代码正册副本。
-- `02-库权限期望表.md` — 37 集合 + 云存储权限期望档位（固化验收单 X，根因#9）。
-- `03-复合索引期望表.md` — 全部 where+orderBy 复合查询的建索引靶（容量前置·量上来前照单建，根因#9）。
-- `04-视频点播VOD.md` — VOD 转码管线 6 件资产（子账号密钥/任务流模板/播放域名/防盗链 Key 等）+ 重建手册（决策§31，根因#9/#12）。
-- `05-云函数现网规格.md` — 14 个云函数 timeout/内存/运行时 + 6 个定时器（2026-08-30 只读抄回现网，根因#9 · Issue #104 ②）。
+- `01-支付退款工作流.md` — 支付/退款资产（连接器、3 条工作流、转发节点、`config/pay`、商户号）+ 30 分钟重建手册。
+- `forward-node.js` — paynotify / refundnotify 转发节点代码副本。
+- `02-库权限期望表.md` — 集合与云存储权限期望档位。
+- `03-复合索引期望表.md` — 全部 where+orderBy 复合查询的建索引靶（`npm run db:check-indexes` 对照）。
+- `04-视频点播VOD.md` — VOD 转码管线资产（子账号、任务流模板、播放域名、防盗链 Key）+ 重建手册。
+- 云函数的超时与内存以仓根 `cloudbaserc.json` 为准（缺 `memorySize` 会在下次应用配置时把现网内存打回默认）；只在控制台、不在 `cloudbaserc.json` 里的见下节。
+
+## 云函数：只在控制台的配置
+
+**定时触发器**（`cloudbaserc.json` 刻意不写 `triggers`：写了会在下次应用配置时碰线上触发器）：
+
+| 函数 | 触发器名 | cron | 含义 |
+|---|---|---|---|
+| `billReconcile` | `billReconcileTimer` | `0 0 11 * * * *` | 每天 11 点 |
+| `cleanupEvents` | `cleanupEventsTimer` | `0 0 3 * * * *` | 每天 3 点 |
+| `closeExpiredOrders` | `closeExpiredTimer` | `0 */5 * * * * *` | 每 5 分钟 |
+| `inspect` | `inspectTimer` | `0 0 */2 * * * *` | 每 2 小时 |
+| `kfHealthProbe` | `kfProbeTimer` | `0 */30 * * * * *` | 每 30 分钟 |
+| `recallScan` | `recallTimer` | `0 0 9 * * * *` | 每天 9 点 |
+
+`feedbackNotify` 部署后另配定时触发（建议每日 09:00）。
+
+**其他**：`kfCallback` 的 HTTP 自定义路由是 `/kfcallback`；`initDb` 现网运行时是 Node 16.13（其余 Node 18.15），要升级先改本文件再动控制台，不在 `cloudbaserc.json` 里偷加 `runtime`。环境变量不入 git。
 
 ## 变更纪律：先 repo 后控制台
 
-控制台资产要改时，**先改本目录的副本、再动控制台**——让正册永远领先或同步于线上，杜绝「线上改了、文档忘了」的漂移（根因#9/#11 的教训）。
+控制台资产要改时，先改本目录的副本，再动控制台，让正册永远领先或同步于线上。
 
-## drift-checklist（上线前 / 迁移后 / 定期，人工对照一次）
+## 核对清单（上线前 / 迁移后 / 定期人工对照一次）
 
 - [ ] 连接器 `wxpay_33nb7su` 存在，凭证未过期（证书序列号无空格）。
 - [ ] 主支付工作流 `sywxzfapifqzf_nncvqss2` 存在且**已发布**；入参表达式含 notify_url + payer.openid。
-- [ ] 退款工作流 `kbgzl_n8gojr3a` 存在且已发布；方法=申请退款，数据源=wxpay_33nb7su。
-- [ ] paynotify（正册 URL 含 `2065345255437447170`）+ refundnotify（尾号 `1863425`）的 script 节点代码 == `forward-node.js`（核对三键 name/functionName/FunctionName、OUTER+resource merge、camelCase alias）。
-- [ ] `config.pay` 文档 == `01-支付退款工作流.md` §⑦（`tcb db` 可读核对 mode/subMchId/flowId/refundFlowId）。
-- [ ] 37 集合 + 云存储权限档位 == `02-库权限期望表.md`（绝无「所有人可读写」）。
-- [ ] **forward-node.js 与线上节点逐字核对**（本副本是据记录重建，首次须校正为权威）。
-- [ ] VOD 五项对照 `04-视频点播VOD.md` drift-checklist（开通/子账号/任务流/播放域名+防盗链/配置清单页全绿）。
-- [ ] 云函数 14 个 timeout / 内存 256MB / 六个定时器 cron == `05-云函数现网规格.md`（2026-08-30 抄回；改规格先改正册再动控制台。`billReconcile` 已在现网，勿当未部署）。
+- [ ] 退款工作流 `kbgzl_n8gojr3a` 存在且已发布；方法＝申请退款，数据源＝`wxpay_33nb7su`。
+- [ ] paynotify（正册 URL 含 `2065345255437447170`）与 refundnotify（尾号 `1863425`）的 script 节点代码 == `forward-node.js`（核对 name/functionName/FunctionName 三键、OUTER+resource merge、camelCase alias）。本副本据记录重建，首次须与线上逐字校正。
+- [ ] `config/pay` 文档 == `01-支付退款工作流.md` 所列 mode / subMchId / flowId / refundFlowId（`tcb db` 可读核对）。
+- [ ] 集合与云存储权限档位 == `02-库权限期望表.md`（绝无「所有人可读写」）。
+- [ ] VOD 各项 == `04-视频点播VOD.md` 的核对清单。
+- [ ] 现网仍是 `cloudbaserc.json` 里的那些函数，超时/内存一致；上表 6 个触发器仍挂、cron 一致；`kfCallback` 路由仍是 `/kfcallback`。
 - [ ] 小程序 downloadFile 合法域名（见 `docs/外部配置手册.md`「小程序后台」）。
 
-## 运维坑册（根因账本 #12 + 工作日志教训）
-
-- **工作流改完必须「发布」** 才能被云函数调用（改了不发布=旧版仍在跑）。
-- **证书序列号不能带空格**（粘贴易混入，签名失败）。
-- **tcb 一条命令多函数名只发第一个**（部署多函数要逐个或 `--all`）。
-- **paynotify 双条同码双保险**——删任一条前确认另一条在跑。
-- **`cloudbaserc` 缺 `memorySize` 会在下次 config 应用时把现网内存打掉**（schema 真字段；现网 14 个都是 256MB，正册 `05-云函数现网规格.md`）。
-- 平台规则会单方面变（云调用支付被封改工作流=调试日志 J）；接缝已收到 kit.callFlow 一点（根因#12），平台再变改动面最小。
-
-## 验证
-
-本目录是文档正册，无机器可验项（控制台资产 git 外）——验证 = 用户照 drift-checklist 对照线上核一遍。check-structure 的 `console-assets-present` 不变量保证本正册不被误删。
+控制台资产在 git 外，本目录没有机器可验项，验证＝照清单对照线上。`check-structure` 的 `console-assets-present` 保证本正册不被误删。
