@@ -1,5 +1,5 @@
 import { reply, ensure, str, newSalt, kdf, keyMatches, alertIfScanAtCap, type Ctx } from '../lib'
-import { notifyAlert } from '../../../kit'
+import { notifyAlert, isDocMissing } from '../../../kit'
 import { COLLECTIONS } from '@ldrw/shared'
 
 // 外包账号管理（后台360工作站 §1.5·B5.2·承面C 车道 C·根因#3）：商户超管建/停/列外包坐席账号
@@ -168,8 +168,7 @@ export async function listAgents({ db }: Ctx) {
     .collection('adminConfig')
     .where({ role: AGENT_ROLE })
     .limit(50)
-    .get()
-    .catch(() => ({ data: [] }))
+    .get() // 读失败上抛（网关 500）——不当「没有外包」（根因#14）
   const rows = (r.data || []) as any[]
   const _ = db.command
   // 今日零点（CST +08:00）：沿用 reconciliation.ts dayStartMs 的口径同构内联（预审拍板点 3）。
@@ -179,14 +178,20 @@ export async function listAgents({ db }: Ctx) {
   const agents = await Promise.all(
     rows.map(async (a: any) => {
       const [stateGot, activeR, closedR] = await Promise.all([
-        db.collection(COLLECTIONS.agentState).doc(a._id).get().catch(() => null),
-        db.collection(COLLECTIONS.csSession).where({ agentId: a._id, status: 'active' }).count().catch(() => ({ total: 0 })),
+        db
+          .collection(COLLECTIONS.agentState)
+          .doc(a._id)
+          .get()
+          .catch((e: unknown) => {
+            if (isDocMissing(e)) return null // 无档＝offline 兜底仍成立
+            throw e // 读失败不当 offline
+          }),
+        db.collection(COLLECTIONS.csSession).where({ agentId: a._id, status: 'active' }).count(),
         // todayStartMs 恒整数 ms：gt(todayStartMs-1) 等价 gte(todayStartMs)（桩/真 sdk 均无 gte 算子）。
         db
           .collection(COLLECTIONS.csSession)
           .where({ agentId: a._id, status: 'closed', updatedAt: _.gt(todayStartMs - 1) })
-          .count()
-          .catch(() => ({ total: 0 })),
+          .count(),
       ])
       const st = stateGot && stateGot.data
       return {
