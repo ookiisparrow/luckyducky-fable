@@ -7,7 +7,6 @@
 import { parseMaxBubbles } from './bubbles'
 import ASSETS from './csAtomicAssets.generated.json'
 
-export const PACKAGING_FIRST_TOUCH_ID = 'packaging_damage_first_touch'
 export const PACKAGING_WITH_ORDER_SHORT_ID = 'packaging_damage_priority_short'
 export const PACKAGING_NO_ORDER_ID = 'packaging_damage_no_order'
 
@@ -37,7 +36,7 @@ type AtomicRoute = {
   emotionAlways?: boolean
   emotionLibBySignal?: Record<string, string>
   gate?: { recentOrderRequiredForBusiness?: boolean; noOrderSequence?: string }
-  sequences?: { withOrderShort?: string; firstTouchLegacy?: string }
+  sequences?: { withOrderShort?: string }
   styleDefault?: string
 }
 
@@ -249,8 +248,4 @@ export function assemblePackagingBubbles(input: {
     severityHigh: input.severity === 'high',
     logisticsSevere: facets.logisticsSevere,
   })
-}
-
-export function packagingFirstTouchBubbles(rand: () => number = Math.random): string[] {
-  return assemblePackagingBubbles({ text: '包裹被摔坏了', hasRecentOrder: true, rand })
 }

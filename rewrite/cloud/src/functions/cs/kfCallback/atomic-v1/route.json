@@ -19,8 +19,7 @@
     "noOrderSequence": "packaging_damage_no_order"
   },
   "sequences": {
-    "withOrderShort": "packaging_damage_priority_short",
-    "firstTouchLegacy": "packaging_damage_first_touch"
+    "withOrderShort": "packaging_damage_priority_short"
   },
   "styleDefault": "short",
   "pick": {

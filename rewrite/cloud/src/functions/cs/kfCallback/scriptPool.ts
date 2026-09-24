@@ -12,8 +12,6 @@ export type ScriptPoolId =
   | 'trySolve'
   | 'answer'
   | 'askMore'
-  | 'pause'
-  | 'think'
   | 'apology'
   | 'empathy'
   | 'reassure'
@@ -24,14 +22,11 @@ export type ScriptPoolId =
   | 'hesitate'
   | 'logisticsGreet'
   | 'logisticsEta'
-  | 'logisticsSlow'
   | 'discountRestate'
   | 'discountConfirm'
-  | 'rushEmpathy'
   | 'rushConfirm'
   | 'packPhoto'
   | 'missingPhoto'
-  | 'missingSearch'
   | 'coursePhoto'
   | 'clarify'
   | 'humanAskWhat'
@@ -45,8 +40,6 @@ const POOL_HINTS: { file: string; heading: RegExp; id: ScriptPoolId }[] = [
   { file: 'docs/01-主流程7节点.md', heading: /开始尝试解决问题/, id: 'trySolve' },
   { file: 'docs/01-主流程7节点.md', heading: /给顾客回答/, id: 'answer' },
   { file: 'docs/01-主流程7节点.md', heading: /再次询问其他需求/, id: 'askMore' },
-  { file: 'docs/02-语气穿插-停顿思考.md', heading: /^停顿/, id: 'pause' },
-  { file: 'docs/02-语气穿插-停顿思考.md', heading: /^思考/, id: 'think' },
   { file: 'docs/03-情绪-道歉同理安抚.md', heading: /^道歉/, id: 'apology' },
   { file: 'docs/03-情绪-道歉同理安抚.md', heading: /^同理心/, id: 'empathy' },
   { file: 'docs/03-情绪-道歉同理安抚.md', heading: /^安抚/, id: 'reassure' },
@@ -58,14 +51,11 @@ const POOL_HINTS: { file: string; heading: RegExp; id: ScriptPoolId }[] = [
   { file: 'docs/11-态度投诉-澄清非有意.md', heading: /话术库/, id: 'clarify' },
   { file: 'topics/发货后-物流.md', heading: /开场/, id: 'logisticsGreet' },
   { file: 'topics/发货后-物流.md', heading: /报节点/, id: 'logisticsEta' },
-  { file: 'topics/发货后-物流.md', heading: /这么慢/, id: 'logisticsSlow' },
   { file: 'topics/下单前-打折.md', heading: /^复述/, id: 'discountRestate' },
   { file: 'topics/下单前-打折.md', heading: /无优惠|需确认/, id: 'discountConfirm' },
-  { file: 'topics/发货前-加急.md', heading: /同理/, id: 'rushEmpathy' },
   { file: 'topics/发货前-加急.md', heading: /不可加急|需如实/, id: 'rushConfirm' },
   { file: 'topics/收到后-包装.md', heading: /要合照/, id: 'packPhoto' },
   { file: 'topics/收到后-缺材料.md', heading: /要图确认/, id: 'missingPhoto' },
-  { file: 'topics/收到后-缺材料.md', heading: /提醒再找/, id: 'missingSearch' },
   { file: 'topics/收到后-课程程序.md', heading: /要截图/, id: 'coursePhoto' },
   { file: 'docs/14-开场仅人工.md', heading: /怎么了/, id: 'humanAskWhat' },
   { file: 'docs/14-开场仅人工.md', heading: /您直接说吧/, id: 'humanSayDirect' },
