@@ -5,7 +5,7 @@ import { request } from 'https'
 // 群机器人，owner 手机实时收。**单一收口（根因#12 接缝单点·守卫 rw-bot-push-single-seam）**：全库仅本文件
 // POST 群机器人；业务码不直调，一律经 kit/observe 的 notifyAlert。
 // **fail-soft 铁律**：推送/网络/配置任何失败绝不抛错——可观测性不能反噬主流程（钱链回调照常 ACK）。
-// 安全（CLAUDE §7）：webhook URL 是凭证、不进日志；ctx 只放非敏感标识（沿用 observe 约束）。
+// 安全（CLAUDE.md）：webhook URL 是凭证、不进日志；ctx 只放非敏感标识（沿用 observe 约束）。
 
 export type BotFetch = (
   url: string,

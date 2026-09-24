@@ -14,7 +14,7 @@
  *
  * 用法：
  *   node scripts/deploy-fns.mjs --dry-run        # 算 diff 报告（无部署，可随时跑）
- *   DEPLOY_ALLOWED=1 node scripts/deploy-fns.mjs # 真部署（人工授权动作·CLAUDE §3 部署闸）
+ *   DEPLOY_ALLOWED=1 node scripts/deploy-fns.mjs # 真部署（人工授权动作·CLAUDE.md 部署闸）
  */
 import { execSync } from 'node:child_process'
 import { readdirSync, readFileSync, writeFileSync, existsSync } from 'node:fs'

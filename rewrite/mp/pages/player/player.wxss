@@ -144,7 +144,7 @@
   white-space: nowrap;
 }
 
-/* 分段进度条浮层（设计 .segstrip：不用 backdrop-filter——CLAUDE §4 css-compat 避雷，
+/* 分段进度条浮层（设计 .segstrip：不用 backdrop-filter——CLAUDE.md css-compat 避雷，
    直接把底色不透明度提到 .72 替代毛玻璃）。段落层级只活在这里，目录页只到课时层。 */
 .lp-segstrip {
   position: absolute;

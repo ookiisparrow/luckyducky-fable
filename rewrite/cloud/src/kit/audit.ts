@@ -3,7 +3,7 @@ import { COLLECTIONS } from '@ldrw/shared'
 
 // 操作审计（操作审计#4·根因#3 信任边界可追溯）：管理端动钱/状态的操作留「谁·何时·做了什么·成没成」痕，
 // 退款/发货/改价/调库存事后可查。单一收口（守卫 admin-actions-audited）：仅 adminApi 分发处经 recordAudit
-// 写 auditLog。**fail-soft**：审计失败绝不反噬业务响应。安全（CLAUDE §7）：凭证（口令 key/密码/webhook）
+// 写 auditLog。**fail-soft**：审计失败绝不反噬业务响应。安全（CLAUDE.md）：凭证（口令 key/密码/webhook）
 // 不入审计——summary 已剥。operator＝真实操作者账号身份（B5.4·§1.5·多账号 RBAC 上线后由 checkKey 解析后贯入·
 // 见 adminApi/index.ts；缺省回退 'admin' 保 fail-soft 与向后兼容）——留痕「谁查/改了谁」，非再糊成单口令 admin。
 
