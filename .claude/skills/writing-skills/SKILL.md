@@ -5,7 +5,7 @@ description: Use when creating, editing, or porting a Claude Code skill (a reusa
 
 # 写 skill 的 skill
 
-> 本 skill = 元模式的 **meta 环**（`docs/元模式.md` A5）：skills 本身就是框架的「环」（intake/genesis/health/discovery/acceptance/meta），写新 skill 时想清它补哪个环。**可移植**：元模式 §A 与「skills=框架的环」是项目无关的，下个项目可整套播种。
+> 本 skill 管 skill 本身的写法：写新 skill 前先想清它服务 `docs/元模式.md` 流水线的哪一步，对不上就别写。
 
 把「反复用到的工作流」固化成可复用技能。一次性的事不做 skill。
 

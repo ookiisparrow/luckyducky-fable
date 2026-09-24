@@ -5,7 +5,7 @@ description: Use when 全面/深度审核 the Lucky Ducky codebase — 按 P0(�
 
 # 深度审核
 
-> 本 skill = 元模式的 **health 环**（`docs/元模式.md` A5）：周期体检——按尺子逐层验 + 核每病根有守卫。循环定义见元模式。
+> 本 skill 对应 `docs/元模式.md`「周期审查」：按尺子逐层验，核每条病根有守卫或靠人锚。
 
 审核 = **验证，不是相信**。每条结论去代码核实（上次正因只信声称，把"金额安全做完了"吹过了被抓）。好的说好、该挑往死里挑、不吹。
 
@@ -16,7 +16,7 @@ P0 崩溃 / 数据错乱 / 交易错误 / 安全 ｜ P1 主流程错 / 状态不
 1. **交易链**：createOrder（库内价二次校验？数量/条数上限？分整数算？）→ pay（金额取库内、换分）→ payCallback/refundCallback（`defineNotifyCallback` 防伪、金额核验 fail-closed）→ applyRefund（分摊 ≤ 实付、确定性 _id）。
 2. **安全闸（kit）**：`withOpenId`/`withAdminGate`/`isServerCall`/`checkKey` 是否 fail-closed；越权先验本人再动；写库点是否都过闸（`writes-need-gate` 守卫）。
 3. **状态机**：转移走 `transition()` 原子幂等？副作用绑首次（confirmEnter）？
-4. **每条根因有没有机器守卫**：跑 `npm run check`，再对照 `docs/根因账本.md` 人工核每条病根有守卫或 CLAUDE `[靠人:#N]` 锚（没有机器覆盖率闸）。靠人项（#8 验收样本 / #10 工具僵态）按 CLAUDE 锚人工复核；新发现的缺口能机器化就补守卫 + 标 `roots`（曾抓到 #3 写库没过闸、#4 Fen 没接钱链）。
+4. **每条根因有没有机器守卫**：跑 `npm run check`，再跑 `npm run report` 看病根地图：每条病根要么有守卫，要么在 CLAUDE 有 `[靠人:#N]` 锚。靠人项（#8 验收样本 / #10 工具僵态）按 CLAUDE 锚人工复核；新发现的缺口能机器化就补守卫 + 标 `roots`（曾抓到 #3 写库没过闸、#4 Fen 没接钱链）。
 5. **自动化元审**：哪些规矩还靠人？能结构化的补 `scripts/check-structure.mjs` 守卫；不能的（方法论/守则）成文并写清"为什么靠人"。
 6. **接口/契约**：接口零副本、代码即真值（`modules.json` 登记由 `module-registry-complete` 焊双向一致）；敏感函数入 `scripts/guard-deploy.mjs` 名单。
 7. **依赖/发布**：`npm audit`（分清运行时 vs 构建工具链——后者暴露近零）；manifest urlCheck 发布前恢复。
