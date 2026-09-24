@@ -1,7 +1,10 @@
 // 商品与橱窗映射（守卫 rw-admin-products-ui-golden）：三态口径与云端一致/四道门人话原文兜底/
 // 整档 round-trip 保真/图片尺寸闸提前拦/脏档安全。
 import { describe, it, expect } from 'vitest'
-import { productState, mapDraftRows, publishErrorText, mapShowcaseRows, b64SizeOk, productSteps, stepProgressHint, productsListSub, basicsMissing, wizardCanPublish, WIZARD_SLICE_FIELDS, freshDraft } from '../src/lib/mapProducts'
+import { readFileSync } from 'node:fs'
+import { dirname, join } from 'node:path'
+import { fileURLToPath } from 'node:url'
+import { productState, mapDraftRows, publishErrorText, mapShowcaseRows, b64SizeOk, productSteps, stepProgressHint, stepDotTitle, courseNeedsPublish, productsListSub, basicsMissing, wizardCanPublish, freshDraft, DRAFT_PRICE_HINT, draftSyncLabel, draftSyncConfirm, restoreSaleLabel, restoreSaleConfirm, restoreSaleOk, draftSyncUnlistedOk, draftSyncBusy, draftSyncOk, COURSE_VS_LISTING_HINT, HOME_FEATURE_ASK, HOME_FEATURE_SWITCH_ON, HOME_FEATURE_SWITCH_OFF, VIDEO_MARK_FILE, VIDEO_MARK_LIVE } from '../src/lib/mapProducts'
 
 describe('三态口径（与云端 listDrafts listed 表一致）', () => {
   it('大白话：表里 true=在售、false=已下架、不在表=筹备中（未上架）', () => {
@@ -47,12 +50,72 @@ describe('三态口径（与云端 listDrafts listed 表一致）', () => {
     const derived = productSteps({ id: 'p3', name: 'x', price: 1, cover: 'c', skus: [{}] }, { cardFinal: { p3: true }, hasBatch: { 'course-p3': true } })
     expect(derived.find((s) => s.key === 'cardQr')!.done).toBe(true) // courseId 缺→course-p3 回退命中
     expect(productSteps({ id: 'p3', cover: 'c' }, { hasBatch: { 'course-p3': true } }).find((s) => s.key === 'cardQr')!.done).toBe(false)
-    const rows = mapDraftRows([{ id: 'p1', name: '熊', price: 20, cover: 'c', skus: [{ name: 'a', price: 20 }], courseId: 'course-p1' }], {}, { p1: true }, { hasVideo: { 'course-p1': true }, cardFinal: { p1: true }, hasBatch: { 'course-p1': true } })
+    const rows = mapDraftRows([{ id: 'p1', name: '熊', price: 20, cover: 'c', skus: [{ name: 'a', price: 20 }], courseId: 'course-p1' }], {}, { p1: true }, { hasVideo: { 'course-p1': true }, coursePublished: { 'course-p1': true }, cardFinal: { p1: true }, hasBatch: { 'course-p1': true } })
     expect(rows[0].doneCount).toBe(5)
     expect(rows[0].steps).toHaveLength(5)
     expect(stepProgressHint(rows[0].steps)).toBe('上新完成')
     expect(stepProgressHint(empty)).toBe('第 1 步：新建与封面')
     expect(stepProgressHint(covered)).toBe('第 2 步：图片与名字')
+  })
+
+  it('大白话：第 4 步圆点能分开「有视频文件」和「课已发布」；有文件就算本步齐，发布课不挡先卖材料包', () => {
+    const fileOnly = productSteps(
+      { id: 'p1', name: '熊', price: 20, cover: 'c', skus: [{ name: 'a', price: 20 }], courseId: 'course-p1' },
+      { hasVideo: { 'course-p1': true }, coursePublished: {}, cardFinal: { p1: true }, hasBatch: { 'course-p1': true } },
+    )
+    const video = fileOnly.find((s) => s.key === 'video')!
+    expect(video.done).toBe(true)
+    expect(video.marks).toEqual([
+      { key: 'file', label: VIDEO_MARK_FILE, done: true },
+      { key: 'live', label: VIDEO_MARK_LIVE, done: false },
+    ])
+    expect(courseNeedsPublish(fileOnly)).toBe(true)
+    expect(stepProgressHint(fileOnly)).toBe('上新完成 · 课未发布')
+    expect(stepDotTitle(video)).toContain('✓有视频文件')
+    expect(stepDotTitle(video)).toContain('○课已发布')
+    expect(wizardCanPublish({ cover: 'c', name: '熊', price: 20, skus: [{ name: '标', price: 20 }] })).toBe(true)
+    expect(COURSE_VS_LISTING_HINT).toContain('商品上架 ≠ 课程发布')
+    expect(COURSE_VS_LISTING_HINT).toContain('先卖材料包')
+    const live = productSteps(
+      { id: 'p1', name: '熊', price: 20, cover: 'c', skus: [{ name: 'a', price: 20 }], courseId: 'course-p1' },
+      { hasVideo: { 'course-p1': true }, coursePublished: { 'course-p1': true } },
+    )
+    expect(courseNeedsPublish(live)).toBe(false)
+    expect(live.find((s) => s.key === 'video')!.marks!.every((m) => m.done)).toBe(true)
+  })
+
+  it('大白话：同步/恢复用三套字——在售说新价新图，已下架同步仍停售，恢复不假装拷了草稿', () => {
+    expect(draftSyncLabel('preparing')).toBe('上架')
+    expect(draftSyncLabel('onsale')).toBe('同步到小程序')
+    expect(draftSyncLabel('unlisted')).toBe('同步草稿')
+    expect(draftSyncConfirm('preparing')).toBe('确认上架？')
+    expect(draftSyncConfirm('onsale')).toBe('顾客将看到新价/新图')
+    expect(draftSyncConfirm('onsale')).not.toMatch(/上架|重新上架|确认上架/)
+    expect(draftSyncConfirm('unlisted')).toContain('仍停售')
+    expect(draftSyncConfirm('unlisted')).toContain('新价/新图')
+    expect(restoreSaleLabel()).toBe('恢复销售')
+    expect(restoreSaleConfirm()).toContain('上次上架页')
+    expect(restoreSaleConfirm()).toContain('不是刚才改的草稿')
+    expect(restoreSaleConfirm()).toContain('若刚改过价/图请先同步草稿')
+    expect(restoreSaleOk()).toContain('若刚改过价/图请先同步草稿')
+    expect(draftSyncUnlistedOk()).toContain('仍停售')
+    expect(DRAFT_PRICE_HINT).toBe('先存草稿，同步后顾客才见')
+    expect(draftSyncBusy('preparing')).toBe('上架中…')
+    expect(draftSyncBusy('onsale')).toBe('同步中…')
+    expect(draftSyncOk('preparing')).toContain('已上架')
+    expect(draftSyncOk('preparing')).toContain('首页人气条未打开')
+    expect(draftSyncOk('preparing')).toContain('出现在首页')
+    expect(draftSyncOk('preparing', { featured: true })).toContain('首页人气条')
+    expect(draftSyncOk('preparing', { featured: true })).toContain('出现在首页')
+    expect(draftSyncOk('onsale')).toContain('已同步到小程序')
+    expect(draftSyncOk('unlisted')).toBe(draftSyncUnlistedOk())
+    expect(HOME_FEATURE_ASK).toBe('要不要同时出现在首页')
+    expect(HOME_FEATURE_SWITCH_ON).toBe('出现在首页')
+    expect(HOME_FEATURE_SWITCH_OFF).toBe('不出现在首页')
+    expect(publishErrorText('NEED_COVER', 'preparing')).toContain('上架')
+    expect(publishErrorText('NEED_COVER', 'preparing')).not.toContain('同步到小程序')
+    expect(publishErrorText('NEED_COVER', 'unlisted')).toContain('同步草稿')
+    expect(publishErrorText('WEIRD_500', 'unlisted')).toContain('同步草稿')
   })
 
   it('大白话：副标有筹备中才跟「待完成上新」；0 款筹备中不写待完成', () => {
@@ -63,7 +126,7 @@ describe('三态口径（与云端 listDrafts listed 表一致）', () => {
 })
 
 describe('上新向导上架闸（basicsMissing/wizardCanPublish·前三步必备·换皮把事前预检退成事后报错）', () => {
-  it('大白话：封面/名称/价格/有效规格四项缺哪报哪；四项齐才可上架（步4-6 视频/卡片/批次非上架硬门槛）', () => {
+    it('大白话：封面/名称/价格/有效规格四项缺哪报哪；四项齐才可上架（步 4–5 视频/卡片与二维码非上架硬门槛）', () => {
     // 空档：四项全缺、不可上架
     expect(basicsMissing({})).toEqual(['封面图', '商品名称', '价格', '至少一个有效规格'])
     expect(wizardCanPublish({})).toBe(false)
@@ -90,25 +153,12 @@ describe('上架四道门人话（原文兜底不吞）', () => {
     expect(publishErrorText('NO_DRAFT')).toContain('草稿')
     expect(publishErrorText('WEIRD_500')).toContain('WEIRD_500') // 原文兜底
     expect(publishErrorText('WEIRD_500')).toContain('同步到小程序')
+    expect(publishErrorText('NEED_COVER', 'onsale')).toContain('同步到小程序')
   })
 })
 
-describe('向导 1–3 步字段互斥（假进度 P0：不得再复制整表三次）', () => {
-  it('大白话：第 1 步只封面，第 2 步名字和相册，第 3 步详情；三块字段不重叠；新建草稿自带课程号', () => {
-    const a = new Set(WIZARD_SLICE_FIELDS[1])
-    const b = new Set(WIZARD_SLICE_FIELDS[2])
-    const c = new Set(WIZARD_SLICE_FIELDS[3])
-    for (const f of a) {
-      expect(b.has(f)).toBe(false)
-      expect(c.has(f)).toBe(false)
-    }
-    for (const f of b) expect(c.has(f)).toBe(false)
-    expect([...a]).toEqual(['cover'])
-    expect([...b]).toEqual(['name', 'images'])
-    expect(c.has('skus')).toBe(true)
-    expect(c.has('sold')).toBe(true)
-    expect(c.has('name')).toBe(false)
-    expect(c.has('cover')).toBe(false)
+describe('新建草稿骨架（freshDraft·向导第 1 步与列表「去上新」同形）', () => {
+  it('大白话：新建草稿自带课程号，切片由 Products.vue showCover/showLook/showDetail 管', () => {
     const d = freshDraft('p9')
     expect(d.id).toBe('p9')
     expect(d.courseId).toBe('course-p9')
@@ -134,5 +184,16 @@ describe('橱窗映射与图片闸', () => {
     expect(b64SizeOk('x'.repeat(80_000))).toBe(true)
     expect(b64SizeOk('x'.repeat(80_001))).toBe(false)
     expect(b64SizeOk('')).toBe(false)
+  })
+
+  it('大白话：橱窗开关用「出现在首页」，禁「上架橱窗/下架橱窗」和商品上架撞词', () => {
+    const here = dirname(fileURLToPath(import.meta.url))
+    const src = readFileSync(join(here, '../src/pages/Showcase.vue'), 'utf8')
+    expect(src).toContain('HOME_FEATURE_SWITCH_ON')
+    expect(src).toContain('HOME_FEATURE_SWITCH_TITLE_ON')
+    expect(src).toContain('出现在首页')
+    expect(src).not.toContain('上架橱窗')
+    expect(src).not.toContain('下架橱窗')
+    expect(src).not.toContain('开关上下架橱窗')
   })
 })

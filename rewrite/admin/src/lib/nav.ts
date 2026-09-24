@@ -1,6 +1,6 @@
 // 控制台导航模型（守卫 rw-admin-nav-contextual·根因#8「构建过≠真机能用」）：上下文侧栏——顶层用 Shell
 // 六组运营 nav，进上新向导路由（/products/:id/wizard）切成「按步直达」聚焦步导航（设计 console.pen
-// Component/Sidebar kz2uD 单源·决策§27②）。步文案/顺序/图标抄录设计帧、URL ?step 为步单源，侧栏与
+// Component/Sidebar kz2uD 单源·决策§27②）。步文案/顺序抄录设计帧、URL ?step 为步单源，侧栏与
 // Wizard 顶部横向 rail 同读它。纯数据+纯函数收口在此，Shell 只消费——便于 nav.test 焊死不靠组件挂载。
 
 /** 向导路由：/launch（新建）或 /products/:id/wizard（续做·带参·rw-admin-nav-route-synced 已豁免孤儿检查） */
@@ -38,19 +38,12 @@ export function currentNavGroup(
 export interface WizardStep {
   n: number
   label: string
-  icon: string
   hint: string
 }
 export const WIZARD_STEPS: WizardStep[] = [
-  { n: 1, label: '新建与封面', icon: 'plus', hint: '创建草稿并上传封面图' },
-  { n: 2, label: '图片与名字', icon: 'image', hint: '商品图集与标题文案' },
-  { n: 3, label: '详情信息', icon: 'file-text', hint: '规格、价格与详情页' },
-  { n: 4, label: '课程视频', icon: 'clapperboard', hint: '上传并发布教学视频' },
-  { n: 5, label: '卡片与二维码', icon: 'credit-card', hint: '卡面素材与批次二维码' },
+  { n: 1, label: '新建与封面', hint: '创建草稿并上传封面图' },
+  { n: 2, label: '图片与名字', hint: '商品图集与标题文案' },
+  { n: 3, label: '详情信息', hint: '规格、价格与详情页' },
+  { n: 4, label: '课程视频', hint: '上传视频并发布课程；上架商品不代替发布课程' },
+  { n: 5, label: '卡片与二维码', hint: '卡面素材与批次二维码' },
 ]
-
-/** 「商品与上新」组只准这两条主入口（橱窗/评价/课程运维另组·防再把上新塞进子菜单） */
-export const SHOP_PRIMARY_NAV = [
-  { label: '产品管理', path: '/products' },
-  { label: '上新', path: '/launch' },
-] as const

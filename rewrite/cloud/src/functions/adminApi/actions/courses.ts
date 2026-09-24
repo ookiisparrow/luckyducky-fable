@@ -1,4 +1,4 @@
-import { reply, ensure, cleanCourse, storeImage, manager, type Ctx } from '../lib'
+import { reply, ensure, cleanCourse, storeImage, manager, readDoc, type Ctx } from '../lib'
 import { isVodFileId, makeVodUploadSignature, callVodApi } from '../../../kit'
 
 // —— VOD 转码管线（决策§31 批2）——课程视频主路径升级为「admin 直传 VOD + 任务流自动转码」；
@@ -37,8 +37,9 @@ function pickVodPlayUrl(mi: any): string {
 export async function syncVodMedia({ db, data }: Ctx) {
   const courseId = String(data.courseId || '')
   if (!courseId) return reply(400, { ok: false, error: 'NO_COURSE_ID' })
-  const got = await db.collection('coursesDraft').doc(courseId).get().catch(() => null)
-  if (!got || !got.data) return reply(400, { ok: false, error: 'NO_DRAFT' })
+  const got = await readDoc(db.collection('coursesDraft').doc(courseId).get())
+  if (!got.ok) return reply(200, { ok: false, error: 'DOC_READ_FAIL' })
+  if (!got.data) return reply(400, { ok: false, error: 'NO_DRAFT' })
   const course: Record<string, any> = { ...got.data }
   delete course._id
   const pending: any[] = []
@@ -107,10 +108,12 @@ export async function getCourseDraft({ db, data }: Ctx) {
   const courseId = String(data.courseId || '')
   if (!courseId) return reply(400, { ok: false, error: 'NO_COURSE_ID' })
   await ensure(db, 'coursesDraft')
-  const got = await db.collection('coursesDraft').doc(courseId).get().catch(() => null)
-  if (got && got.data) return reply(200, { ok: true, course: got.data })
-  const pub = await db.collection('courses').doc(courseId).get().catch(() => null)
-  if (pub && pub.data) return reply(200, { ok: true, course: pub.data, fromPublished: true })
+  const got = await readDoc(db.collection('coursesDraft').doc(courseId).get())
+  if (!got.ok) return reply(200, { ok: false, error: 'DOC_READ_FAIL' })
+  if (got.data) return reply(200, { ok: true, course: got.data })
+  const pub = await readDoc(db.collection('courses').doc(courseId).get())
+  if (!pub.ok) return reply(200, { ok: false, error: 'DOC_READ_FAIL' })
+  if (pub.data) return reply(200, { ok: true, course: pub.data, fromPublished: true })
   return reply(200, { ok: true, course: null })
 }
 
@@ -123,8 +126,9 @@ export async function saveCourseDraft({ db, data }: Ctx) {
   // 后保存者静默吃掉先保存者的改动。客户端带上拉草稿时的 rev，不符即拒（前端提示重新载入，不静默覆盖）；
   // 不带 baseRev 的调用（旧版前端/脚本）按原语义覆盖——部署窗口内前后端版本错开不卡死保存。
   // get→set 间仍有毫秒级 TOCTOU 窗（真实冲突场景是人差几分钟的编辑，非毫秒并发；同实例内已有 serialSave 串行）。
-  const got = await drafts2.doc(c.id).get().catch(() => null)
-  const curRev = got && got.data ? Number(got.data.rev) || 0 : 0
+  const got = await readDoc(drafts2.doc(c.id).get())
+  if (!got.ok) return reply(200, { ok: false, error: 'DOC_READ_FAIL' }) // 读失败≠rev=0：停写，不按空草稿覆盖
+  const curRev = got.data ? Number(got.data.rev) || 0 : 0
   const baseRev = Number(data.baseRev)
   if (Number.isFinite(baseRev) && curRev !== baseRev) return reply(200, { ok: false, error: 'DRAFT_CONFLICT', rev: curRev })
   const next = { ...c, rev: curRev + 1 }
@@ -158,8 +162,9 @@ const GC_GRACE_MS = 24 * 3600 * 1000
 export async function publishCourse({ db, data }: Ctx) {
   const courseId = String(data.courseId || '')
   if (!courseId) return reply(400, { ok: false, error: 'NO_COURSE_ID' })
-  const got = await db.collection('coursesDraft').doc(courseId).get().catch(() => null)
-  if (!got || !got.data) return reply(400, { ok: false, error: 'NO_DRAFT' })
+  const got = await readDoc(db.collection('coursesDraft').doc(courseId).get())
+  if (!got.ok) return reply(200, { ok: false, error: 'DOC_READ_FAIL' })
+  if (!got.data) return reply(400, { ok: false, error: 'NO_DRAFT' })
   const course: Record<string, any> = { ...got.data }
   delete course._id
   // 发布闸（决策§31 批2）：VOD 段转码未就绪（vodUrl 未回写）不放行——「传完 ≠ 可播」，放行了学员端
@@ -170,8 +175,9 @@ export async function publishCourse({ db, data }: Ctx) {
       for (const sg of l.segments || []) if (sg && isVodFileId(String(sg.videoFileId || '')) && !sg.vodUrl) pendingVod++
   if (pendingVod) return reply(200, { ok: false, error: 'VOD_PROCESSING', pending: pendingVod })
   const coursesColl = db.collection('courses')
-  const prev = await coursesColl.doc(courseId).get().catch(() => null) // GC 基线：读旧发布
-  const prevDoc = (prev && prev.data) || null
+  const prev = await readDoc(coursesColl.doc(courseId).get()) // GC 基线：读旧发布
+  if (!prev.ok) return reply(200, { ok: false, error: 'DOC_READ_FAIL' }) // 读失败≠空发布：停写停入队，不拿空基线 GC
+  const prevDoc = prev.data
   const keep = new Set(collectVideoIds(course))
   // 承接旧队列（过滤重新被引用的）+ 本次新孤儿入队（去重）
   const carried = (Array.isArray(prevDoc?.pendingGc) ? prevDoc.pendingGc : []).filter(
@@ -209,7 +215,7 @@ export async function uploadFinish({ db, cloud, data }: Ctx) {
   const total = parseInt(data.total, 10)
   // 片数上限须覆盖 admin 体积闸（uploadVideo 放行 ≤15MB·~80KB/片 b64 → 15MB≈263 片）+ 余量，
   // 否则 12~15MB 视频走回落分片必 BAD_FINISH（P2·回落容量 vs 体积闸不一致）。300 片≈17MB，封顶防无界回落。
-  // 任一片数变动同步 tests/cloud/adminMisc.test.js「视频回落分片」用例。
+  // 任一片数变动同步 rewrite/cloud/tests/app-admin2.test.ts「分片上传」片数封顶用例。
   if (!id || !(total > 0) || total > 300) return reply(400, { ok: false, error: 'BAD_FINISH' })
   const chunksColl = db.collection('uploadChunks')
   const got = await chunksColl.where({ uploadId: id }).limit(1000).get()

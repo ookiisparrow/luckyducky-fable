@@ -1,12 +1,31 @@
 <script setup lang="ts">
-// 商品管理（design/console.pen S11 视觉·M3 UI 批3）：页头+流水线副标+筛选 chip（真计数）+ 搜索（按名）
+// 商品管理：页头+流水线副标+筛选 chip（真计数）+ 搜索（按名）
 // + 三态表格（关联课程/规格·图列 + 5 步上新进度圆点）+ 编辑器（整档 round-trip·图片压缩·危操作两步确认）。
 // 「5 步上新进度」——cards/courses/qrcodes 后端 listDrafts bounded join 派生（视频/卡片/批次态）。
 import { ref, computed, onMounted, onBeforeUnmount, watch, nextTick } from 'vue'
 import { Search, Trash2, Package, MoreHorizontal, Plus } from 'lucide-vue-next'
 import { listDrafts, saveDraft, deleteDraft, uploadImage, publishProduct, unpublishProduct, republishProduct } from '../api/products'
-import { mapDraftRows, publishErrorText, b64SizeOk, basicsMissing, stepProgressHint, productsListSub, type DraftRowVM } from '../lib/mapProducts'
+import {
+  mapDraftRows,
+  publishErrorText,
+  b64SizeOk,
+  basicsMissing,
+  stepProgressHint,
+  stepDotTitle,
+  productsListSub,
+  DRAFT_PRICE_HINT,
+  draftSyncLabel,
+  draftSyncConfirm,
+  restoreSaleLabel,
+  restoreSaleConfirm,
+  draftSyncOk,
+  draftSyncMissingHint,
+  draftSyncReadyHint,
+  HOME_FEATURE_ASK,
+  type DraftRowVM,
+} from '../lib/mapProducts'
 import { serialSave } from '../lib/serialSave'
+import { compressImage } from '../lib/compressImage'
 import { useRouter } from 'vue-router'
 import UiButton from '../components/ui/Button.vue'
 import PageHeader from '../components/ui/PageHeader.vue'
@@ -14,7 +33,7 @@ import Card from '../components/ui/Card.vue'
 import Badge from '../components/ui/Badge.vue'
 import EmptyState from '../components/ui/EmptyState.vue'
 
-const KIT_ICONS = ['circle', 'pen-tool', 'cloud', 'eye', 'book-open', 'sparkles-purple', 'package', 'truck'] // 材料清单图标（换皮丢了选择器·恒 circle）
+const KIT_ICONS = ['circle', 'pen-tool', 'cloud', 'eye', 'book-open', 'sparkles-purple', 'package', 'truck'] // 材料清单图标（编辑器下拉可选；新行默认 circle）
 
 // 嵌入模式（上新向导步 1-3 复用本编辑器·向后兼容·独立 /products 路由用法不传 props 行为不变）：
 // embed=true 隐列表壳只留编辑器·wizardProductId 指定要编辑的商品档（向导载入后自动打开）。
@@ -55,7 +74,8 @@ async function editCourse(row: DraftRowVM) {
 const rows = ref<DraftRowVM[]>([])
 const message = ref('')
 const busy = ref(false)
-const confirmKey = ref('') // 两步确认（`del:<id>` / `off:<id>`）
+const confirmKey = ref('') // 两步确认（`del:<id>` / `off:<id>` / `pub:<id>`）
+const wantHome = ref(false) // 首次上架问首页·默认不挂（工单212）
 const moreKey = ref('') // 操作列「⋯更多」菜单展开行 id（非危险态·仅 UI 开合；顺手在 reload() 里也清，防刷新后残留开着的菜单）
 // 菜单挂视口 fixed 定位（批5 裁剪修正·浏览器实测）：absolute 会被 Card flush 的 overflow:hidden
 // 裁掉——末行菜单实测只露一项；fixed 按 ⋯ 按钮矩形算坐标，不受卡片裁剪。
@@ -109,6 +129,7 @@ const imgCount = (r: DraftRowVM) => (Array.isArray((r.raw as any).images) ? (r.r
 // 圆点深链：进上新向导落到第一个未完成步（全完成落第 1 步）
 const firstTodoStep = (r: DraftRowVM) => (r.steps.findIndex((s) => !s.done) + 1) || 1
 const courseOf = (r: DraftRowVM) => String((r.raw as any).courseId || '')
+const videoMarksOf = (r: DraftRowVM) => r.steps.find((s) => s.key === 'video')?.marks || []
 
 // 图片 fileID→url 解析：listDrafts 回的 urls 映射（已存图）+ 本会话新上传的 url
 const urlMap = ref<Record<string, string>>({})
@@ -119,19 +140,26 @@ const imgUrl = (fileID: string) => sessionUrls.value[fileID] || urlMap.value[fil
 let urlMapAt = 0
 const URL_MAP_STALE_MS = 90 * 60 * 1000
 
-async function reload() {
+async function reload(keepMsg = false) {
+  const held = keepMsg ? message.value : ''
   confirmKey.value = '' // 刷新即复位危险态（P1·防旧武装的上架/下架/删除按钮跨刷新残留一击直发·批3 规格）
+  wantHome.value = false
   moreKey.value = '' // 防刷新后残留开着的⋯更多菜单
-  message.value = '加载中…'
+  if (!keepMsg) message.value = '加载中…'
   const r = await listDrafts()
   urlMap.value = r.ok && (r as any).urls ? (r as any).urls : {}
   urlMapAt = Date.now()
   rows.value = r.ok ? mapDraftRows(r.list, r.urls, r.listed, stepExtras(r)) : []
-  message.value = r.ok ? '' : '加载失败：' + String(r.error || '')
+  message.value = r.ok ? held : '加载失败：' + String(r.error || '')
   listReady.value = true
 }
 // listDrafts 派生的 5 步分步态（后端 join）
-const stepExtras = (r: any) => ({ hasVideo: r.hasVideo || {}, cardFinal: r.cardFinal || {}, hasBatch: r.hasBatch || {} })
+const stepExtras = (r: any) => ({
+  hasVideo: r.hasVideo || {},
+  coursePublished: r.coursePublished || {},
+  cardFinal: r.cardFinal || {},
+  hasBatch: r.hasBatch || {},
+})
 // 静默刷新列表（不闪「加载中」·不打断正在编辑的编辑器）
 async function silentRefresh() {
   const r = await listDrafts()
@@ -153,7 +181,7 @@ watch(
     autoState.value = 'saving'
     if (saveTimer) clearTimeout(saveTimer)
     saveTimer = setTimeout(() => {
-      saveTimer = null // 触发后清空·让 saveTimer 真实反映「有未落盘的待发编辑」（照 Courses.vue:146 写法·P1·bug sweep Round2 item7）
+      saveTimer = null // 触发后清空·让 saveTimer 真实反映「有未落盘的待发编辑」
       void flushSave()
     }, 900)
   },
@@ -178,6 +206,7 @@ function markLoaded() {
   void nextTick(() => (editorLoaded = true)) // 赋值落定后再放开自动保存
 }
 function closeEditor() {
+  confirmKey.value = '' // 列表/编辑器共用 twoStep：关编辑必须卸武装，否则回到列表仍是确认文案
   openEditGen++ // 使任何仍在等 silentRefresh 回包的 openEdit 调用作废——不得在关闭后悄悄把编辑器重新弹开（同上代际守卫）
   const myGen = openEditGen // 快照本次关闭的代际（N1·bug 清除战役 II 遗留）：异步链 resolve 前用户可能已 openEdit 打开另一件商品，
   // 失败提示不得晚落地误标到新开的编辑器屏上——照 openEdit/silentRefresh 既有代际模式。
@@ -220,6 +249,7 @@ onBeforeUnmount(() => {
 // 打开两件不同商品，若网络乱序（先点的那次 silentRefresh 回包更晚落地），过期调用不得覆盖后来者正在看/编辑的编辑器。
 let openEditGen = 0
 async function openEdit(row: DraftRowVM) {
+  confirmKey.value = '' // 开编辑/换商品卸武装：列表确认态不得漏进编辑器一击直发
   const my = ++openEditGen
   let r = row
   if (Date.now() - urlMapAt > URL_MAP_STALE_MS) {
@@ -251,7 +281,7 @@ async function pickCover(ev: Event) {
   // 快照本次上传目标（H·完备性扫描新增·同 doSave 范式）：openEdit/列表「编辑」按钮无 busy 门控，
   // 压缩/上传两段 await 期间都可能已切到另一件商品的编辑器——回包不该打到已切换的新编辑器上。
   const snap = edit.value
-  const b64 = await compress(file)
+  const b64 = await compressImage(file, PRODUCT_COMPRESS)
   if (!b64SizeOk(b64)) {
     if (edit.value === snap) message.value = '图片压缩后仍超限，换小一点的图'
     return
@@ -270,30 +300,8 @@ async function pickCover(ev: Event) {
   }
 }
 
-// 前端压缩（canvas ≤720px 宽·jpeg 0.8→0.5 逐档压到 80K 内）
-async function compress(file: File): Promise<string> {
-  const url = URL.createObjectURL(file)
-  try {
-    const img = await new Promise<HTMLImageElement>((resolve, reject) => {
-      const i = new Image()
-      i.onload = () => resolve(i)
-      i.onerror = reject
-      i.src = url
-    })
-    const scale = Math.min(1, 720 / img.width)
-    const canvas = document.createElement('canvas')
-    canvas.width = Math.round(img.width * scale)
-    canvas.height = Math.round(img.height * scale)
-    canvas.getContext('2d')!.drawImage(img, 0, 0, canvas.width, canvas.height)
-    for (const q of [0.8, 0.65, 0.5, 0.35]) {
-      const b64 = canvas.toDataURL('image/jpeg', q).split(',')[1] || ''
-      if (b64SizeOk(b64)) return b64
-    }
-    return ''
-  } finally {
-    URL.revokeObjectURL(url)
-  }
-}
+// 商品封面/相册：M3 起就是 720 档（比卡片/首页 hero 更小），调用方覆盖默认，不是抄偏。
+const PRODUCT_COMPRESS = { maxWidth: 720, qualities: [0.8, 0.65, 0.5, 0.35] as const }
 
 async function doSave() {
   if (!edit.value || busy.value) return
@@ -340,20 +348,24 @@ async function doSave() {
 // 范式：失败分支直接 return、不 reload；只有成功才清空 message 再 reload。
 const doPublish = (id: string) =>
   twoStep('pub:' + id, async () => {
+    const st = rows.value.find((r) => r.id === id)?.state ?? editState.value
+    const featured = st === 'preparing' && wantHome.value
+    wantHome.value = false
     busy.value = true
-    const r = await publishProduct(id)
+    const r = st === 'preparing' ? await publishProduct(id, { featured }) : await publishProduct(id)
     busy.value = false
     if (!r.ok) {
-      message.value = publishErrorText(r.error) // 四道门人话
+      message.value = publishErrorText(r.error, st)
       return
     }
-    message.value = ''
-    void reload()
+    message.value = draftSyncOk(st, st === 'preparing' ? { featured } : undefined)
+    void reload(true) // 成功口要留下首页状态（工单212）·reload 默认会冲掉 message
   })
 
 async function twoStep(key: string, run: () => Promise<void>) {
   if (confirmKey.value !== key) {
     confirmKey.value = key
+    if (key.startsWith('pub:')) wantHome.value = false
     return
   }
   confirmKey.value = ''
@@ -404,7 +416,7 @@ async function addImages(ev: Event) {
   const snap = edit.value
   busy.value = true
   for (const file of Array.from(files)) {
-    const b64 = await compress(file)
+    const b64 = await compressImage(file, PRODUCT_COMPRESS)
     if (!b64SizeOk(b64)) {
       if (edit.value === snap) message.value = '有图压缩后仍超限，已跳过'
       continue
@@ -467,6 +479,10 @@ const missing = computed(() => (edit.value ? basicsMissing(edit.value) : []))
 const coverMissing = computed(() => missing.value.filter((x) => x === '封面图'))
 const lookMissing = computed(() => missing.value.filter((x) => x === '商品名称'))
 const detailMissing = computed(() => missing.value.filter((x) => x === '价格' || x === '至少一个有效规格'))
+const editState = computed(() => {
+  if (!edit.value) return 'preparing' as const
+  return rows.value.find((r) => r.id === String(edit.value!.id))?.state ?? 'preparing'
+})
 
 onMounted(async () => {
   await reload()
@@ -516,7 +532,7 @@ onMounted(async () => {
           <div class="ld-th" :style="{ width: '108px' }">规格 / 图</div>
           <div class="ld-th" :style="{ width: '196px' }">上新进度</div>
           <div class="ld-th" :style="{ width: '92px' }">状态</div>
-          <div class="ld-th" :style="{ width: '240px' }">操作</div>
+          <div class="ld-th" :style="{ width: '280px' }">操作</div>
         </div>
         <div class="ld-tbody">
           <div v-for="row in shown" :key="row.id" class="ld-tr">
@@ -535,11 +551,20 @@ onMounted(async () => {
             <div class="ld-td" :style="{ width: '196px' }">
               <div
                 class="steps-cell"
-                :title="row.steps.map((s) => (s.done ? '✓' : '○') + ' ' + s.label).join(' · ') + ' · 点击继续上新'"
+                :title="row.steps.map(stepDotTitle).join(' · ') + ' · 点击继续上新'"
                 @click="router.push('/products/' + row.id + '/wizard?step=' + firstTodoStep(row))"
               >
                 <span class="step-bars" :aria-label="'已完成 ' + row.doneCount + ' / 5 步'">
                   <span v-for="s in row.steps" :key="s.key" class="bar" :class="{ on: s.done }"></span>
+                </span>
+                <span v-if="videoMarksOf(row).length" class="vmarks">
+                  <i
+                    v-for="m in videoMarksOf(row)"
+                    :key="m.key"
+                    class="vmark"
+                    :class="{ on: m.done }"
+                    :title="m.label"
+                  ></i>
                 </span>
                 <span class="done-n">{{ stepProgressHint(row.steps) }}</span>
               </div>
@@ -547,11 +572,16 @@ onMounted(async () => {
             <div class="ld-td" :style="{ width: '92px' }">
               <Badge :tone="row.state === 'onsale' ? 'green' : row.state === 'unlisted' ? 'red' : 'amber'" dot>{{ row.stateLabel }}</Badge>
             </div>
-            <div class="ld-td ops" :style="{ width: '240px' }">
+            <div class="ld-td ops" :style="{ width: '280px' }">
               <UiButton v-if="row.doneCount < 5" class="cta-continue" variant="ghost" size="sm" @click="router.push('/products/' + row.id + '/wizard?step=' + firstTodoStep(row))">继续上新</UiButton>
               <UiButton variant="ghost" size="sm" @click="openEdit(row)">编辑</UiButton>
-              <UiButton v-if="row.state === 'preparing' || row.state === 'onsale'" variant="primary" size="sm" @click="doPublish(row.id)">{{ confirmKey === 'pub:' + row.id ? '确认同步到小程序？' : '同步到小程序' }}</UiButton>
-              <UiButton v-if="row.state === 'unlisted'" variant="primary" size="sm" @click="doRepublish(row.id)">{{ confirmKey === 're:' + row.id ? '确认同步到小程序？' : '同步到小程序' }}</UiButton>
+              <label v-if="row.state === 'preparing' && confirmKey === 'pub:' + row.id" class="home-ask">
+                <input v-model="wantHome" type="checkbox" />
+                <span>{{ HOME_FEATURE_ASK }}</span>
+              </label>
+              <UiButton v-if="row.state === 'preparing' || row.state === 'onsale'" variant="primary" size="sm" @click="doPublish(row.id)">{{ confirmKey === 'pub:' + row.id ? draftSyncConfirm(row.state) : draftSyncLabel(row.state) }}</UiButton>
+              <UiButton v-if="row.state === 'unlisted'" variant="primary" size="sm" @click="doPublish(row.id)">{{ confirmKey === 'pub:' + row.id ? draftSyncConfirm('unlisted') : draftSyncLabel('unlisted') }}</UiButton>
+              <UiButton v-if="row.state === 'unlisted'" variant="ghost" size="sm" @click="doRepublish(row.id)">{{ confirmKey === 're:' + row.id ? restoreSaleConfirm() : restoreSaleLabel() }}</UiButton>
               <UiButton v-if="row.state === 'onsale'" variant="danger" size="sm" @click="doUnpublish(row.id)">{{ confirmKey === 'off:' + row.id ? '确认从橱窗拿下？' : '从橱窗拿下' }}</UiButton>
               <button class="icon-btn ld-icon-btn" title="更多操作" @click="toggleMore(row.id, $event)">
                 <MoreHorizontal :size="15" :stroke-width="1.8" />
@@ -624,11 +654,17 @@ onMounted(async () => {
 
       <div v-if="showDetail" class="grid">
         <label>标签 <input v-model="edit.tag" maxlength="20" placeholder="如 送礼首选" /></label>
-        <label>价格（元）<input v-model="edit.price" /></label>
-        <label>划线价 <input v-model="edit.was" /></label>
-        <label>销量 <input v-model.number="edit.sold" type="number" min="0" step="1" placeholder="0 不在详情页显示" /></label>
         <label class="wide">一句话简介 <input v-model="edit.brief" maxlength="120" /></label>
         <label v-if="!embed">关联课程 <input v-model="edit.courseId" placeholder="course-xxx（可空）" /></label>
+      </div>
+      <div v-if="showDetail" class="price-sales">
+        <h4>价格与销量</h4>
+        <p class="price-sales-hint">{{ DRAFT_PRICE_HINT }}</p>
+        <div class="grid">
+          <label>价格（元）<input v-model="edit.price" /></label>
+          <label>划线价 <input v-model="edit.was" /></label>
+          <label>销量 <input v-model.number="edit.sold" type="number" min="0" step="1" placeholder="0 不在详情页显示" /></label>
+        </div>
       </div>
       <template v-if="showDetail">
         <h4>规格（SKU）</h4>
@@ -675,13 +711,16 @@ onMounted(async () => {
       <p v-else-if="embed && showLook" class="preflight ok">✓ 本步名字已齐</p>
       <p v-if="embed && showDetail && detailMissing.length" class="preflight">本步还差：<b>{{ detailMissing.join('、') }}</b></p>
       <p v-else-if="embed && showDetail && !detailMissing.length" class="preflight ok">✓ 本步价格和规格已齐</p>
-      <p v-if="!embed && missing.length" class="preflight">同步到小程序还差：<b>{{ missing.join('、') }}</b></p>
-      <p v-else-if="!embed" class="preflight ok">✓ 必备项齐全，保存后可同步到小程序</p>
+      <p v-if="!embed && missing.length" class="preflight">{{ draftSyncMissingHint(editState, missing) }}</p>
+      <p v-else-if="!embed" class="preflight ok">{{ draftSyncReadyHint(editState) }}</p>
 
       <!-- 嵌入向导步 1-3 时隐藏「保存草稿/关闭」：doSave 会 edit.value=null 关掉编辑器、而 embed 无列表可回→步面板变空白死胡同（P2）；
            embed 下 autosave（900ms + 离页补存）已负责持久化，切步/上架走向导自身按钮 -->
       <div v-if="!embed" class="editor-ops">
-        <UiButton variant="primary" :disabled="busy" @click="doSave">保存草稿</UiButton>
+        <UiButton v-if="editState === 'onsale'" variant="primary" :disabled="busy" @click="doPublish(String(edit.id))">{{ confirmKey === 'pub:' + edit.id ? draftSyncConfirm('onsale') : draftSyncLabel('onsale') }}</UiButton>
+        <UiButton v-if="editState === 'unlisted'" variant="primary" :disabled="busy" @click="doPublish(String(edit.id))">{{ confirmKey === 'pub:' + edit.id ? draftSyncConfirm('unlisted') : draftSyncLabel('unlisted') }}</UiButton>
+        <UiButton v-if="editState === 'unlisted'" variant="ghost" :disabled="busy" @click="doRepublish(String(edit.id))">{{ confirmKey === 're:' + edit.id ? restoreSaleConfirm() : restoreSaleLabel() }}</UiButton>
+        <UiButton :variant="editState === 'preparing' ? 'primary' : 'ghost'" :disabled="busy" @click="doSave">保存草稿</UiButton>
         <UiButton variant="ghost" @click="closeEditor">关闭</UiButton>
       </div>
     </div>
@@ -761,6 +800,33 @@ onMounted(async () => {
 }
 .bar.on {
   background: var(--ld-brand);
+}
+.vmarks {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+}
+.vmark {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--ld-line-strong);
+  flex: none;
+}
+.vmark.on {
+  background: var(--ld-green);
+}
+.home-ask {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11.5px;
+  color: var(--ld-content);
+  cursor: pointer;
+  white-space: nowrap;
+}
+.home-ask input {
+  margin: 0;
 }
 .done-n {
   font-size: 12px;
@@ -1009,7 +1075,23 @@ onMounted(async () => {
 .editor-ops {
   margin-top: 12px;
   display: flex;
+  flex-wrap: wrap;
   gap: 8px;
+}
+.price-sales {
+  margin-top: 16px;
+  padding: 12px 14px;
+  border: 1px solid var(--ld-line);
+  border-radius: var(--ld-radius-sm);
+  background: var(--ld-bg-faint);
+}
+.price-sales h4 {
+  margin: 0 0 4px;
+}
+.price-sales-hint {
+  margin: 0 0 10px;
+  font-size: 12.5px;
+  color: var(--ld-content-2);
 }
 /* 相册（本页独有·多图排序拖序） */
 .gallery {

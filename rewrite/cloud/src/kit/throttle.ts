@@ -10,7 +10,7 @@ import type { OpenIdCtx } from './gate'
 // 并发原子性：计数走乐观并发（CAS 重试）单点收口 bumpWindowed——杜绝「读-改-写」在突发并发下
 // 计数偏小、限额/锁定漏过；两系列（fails/hits）字段独立、同 key 不互踩。
 // best-effort：写频控库失败/重试耗尽不阻断主流程（口令校验本身仍是硬闸）。
-export interface ThrottleOpts {
+interface ThrottleOpts {
   max: number
   windowMs: number
   lockMs: number

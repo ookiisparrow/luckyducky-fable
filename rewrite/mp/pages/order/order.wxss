@@ -218,16 +218,6 @@
   font-weight: 600;
   color: var(--ld-ink);
 }
-.co-shop-chev {
-  margin-left: auto;
-  display: flex;
-  align-items: center;
-  opacity: 0.6;
-}
-.co-shop-chev .co-ico {
-  width: 30rpx;
-  height: 30rpx;
-}
 
 /* 订单商品行（只读） */
 .co-item {
@@ -240,7 +230,7 @@
   height: 150rpx;
   flex: 0 0 auto;
   border-radius: var(--ld-radius-sm);
-  background: var(--ld-bg-sage); /* 订单行无商品图字段→灰底占位 */
+  background: var(--ld-bg-sage); /* 无封面时灰底占位 */
 }
 .co-item-mid {
   flex: 1 1 auto;
@@ -475,6 +465,23 @@
   color: var(--ld-content-2);
   font-size: 30rpx;
   font-weight: 600;
+}
+
+/* ---------- 加载骨架（根因#8·对齐 order-list coolist-skel / detail pdp-skeleton） ---------- */
+.coord-skel-banner,
+.coord-skel-block,
+.coord-skel-bar {
+  background: linear-gradient(90deg, var(--ld-bg-sage) 25%, var(--ld-bg-faint) 50%, var(--ld-bg-sage) 75%);
+  background-size: 200% 100%;
+  animation: ld-shimmer 1500ms ease-in-out infinite;
+}
+.coord-skel-banner {
+  height: 148rpx;
+  border-radius: var(--ld-radius-md);
+}
+.coord-skel-bar {
+  height: 26rpx;
+  border-radius: 8rpx;
 }
 
 /* ---------- 订单不存在 ---------- */

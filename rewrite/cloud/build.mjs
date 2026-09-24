@@ -67,6 +67,10 @@ const OPENAPI_PERMS = [
 const fns = collect()
 if (existsSync(OUT)) rmSync(OUT, { recursive: true })
 
+execFileSync(process.execPath, [join(ROOT, 'scripts', 'bundle-cs-scripts.mjs')], { stdio: 'inherit' })
+execFileSync(process.execPath, [join(ROOT, 'scripts', 'bundle-cs-pack.mjs')], { stdio: 'inherit' })
+execFileSync(process.execPath, [join(ROOT, 'scripts', 'bundle-cs-atomic.mjs')], { stdio: 'inherit' })
+
 // 构建戳（工业级缺口③·release provenance）：产物必须能回答「这是从哪个提交构建的、构建时工作区干不干净」。
 // 此前全仓零构建戳，线上版本只能靠人眼比对打包文件名哈希、生产状态记在待办本散文里。
 // 只写元数据、不改任何函数源码 ⇒ 对运行时零风险；随 dist 一起上云，部署后仍可查。

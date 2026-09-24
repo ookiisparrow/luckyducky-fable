@@ -1,6 +1,7 @@
 import { reply, str, type Ctx } from '../lib'
 import { pageQuery } from '../../../kit'
 import { COLLECTIONS } from '@ldrw/shared'
+import { applyTrialRefresh, loadTrialRefreshGate, trialRefreshDenyStatus } from '../../cs/kfCallback/trialRefresh'
 
 // 客服会话检索（后台360工作站 B5.1·板块#9·外包管控底座）：坐席按客户（openid / externalUserId）+ 渠道筛选 →
 // cursor 翻页拉会话时间轴（归档单源 conversations·由 cs/kfCallback 落档）。供坐席查历史 + 质检取证（B5.3 依赖）。
@@ -69,7 +70,6 @@ export async function conversationsReport({ db, data }: Ctx) {
     .orderBy('at', 'desc')
     .limit(REPORT_SAMPLE)
     .get()
-    .catch(() => ({ data: [] }))
   const rows: any[] = (res && res.data) || []
 
   let inbound = 0
@@ -123,8 +123,8 @@ export async function conversationsReport({ db, data }: Ctx) {
 }
 
 // ── 质检抽检（B7·板块#11 续）──
-// 粒度＝客户会话档级（csSession 文档，非「轮次」——csSession 跨轮复用重开、消息无 sessionId，轮次实体不存在，
-// 见 docs/待办与债.md flag）。sessionKey＝csSession._id（形如 `wxkf:<openKfId>:<externalUserId>`——**不是**
+// 粒度＝客户会话档级（csSession 文档，非「轮次」——csSession 跨轮复用重开、消息无 sessionId，轮次实体不存在）。
+// sessionKey＝csSession._id（形如 `wxkf:<openKfId>:<externalUserId>`——**不是**
 // externalUserId：csat.ts 的明细行已改名为 externalUserId 字段、不再借用 sessionKey 之名，这里前端跳「查会话」
 // 时仍须解出 externalUserId 传给 searchConversations，别把 csSession._id 当 externalUserId 传错接口）。
 // 鉴权：均走 adminApi 现行机制——本文件三个 action 都不登记 ACTION_CAPS（见 index.ts），默认高权
@@ -277,4 +277,93 @@ export async function listQcSampled({ db, data }: Ctx): Promise<any> {
     }),
   )
   return reply(200, { ok: true, list, nextCursor: paged.nextCursor, hasMore: paged.hasMore })
+}
+
+/** 测版刷新闸探测：正式/预发回 enabled:false，管理端据此藏按钮。 */
+export async function getTrialRefreshGate({ db }: Ctx): Promise<any> {
+  const gate = await loadTrialRefreshGate(db)
+  return reply(200, { ok: true, enabled: gate.on })
+}
+
+function parseSessionKey(sessionId: string): { openKfId: string; euid: string } | null {
+  const m = /^wxkf:([^:]+):(.+)$/.exec(String(sessionId || '').trim())
+  return m ? { openKfId: m[1], euid: m[2] } : null
+}
+
+async function euidFromOpenid(db: any, openid: string): Promise<string> {
+  const res = await db
+    .collection(COLLECTIONS.kfIdentity)
+    .where({ openid })
+    .limit(1)
+    .get()
+    .catch(() => ({ data: [] }))
+  const row = ((res && res.data) || [])[0]
+  const id = String((row && row._id) || '')
+  return id.startsWith('ext:') ? id.slice(4) : ''
+}
+
+type RefreshTarget = { euid: string; openKfId?: string }
+
+async function collectRefreshTargets(db: any, d: Record<string, any>): Promise<RefreshTarget[]> {
+  const out: RefreshTarget[] = []
+  const seen = new Set<string>()
+  const push = (euid: string, openKfId?: string) => {
+    const id = String(euid || '').trim()
+    if (!id || seen.has(id)) return
+    seen.add(id)
+    out.push(openKfId ? { euid: id, openKfId } : { euid: id })
+  }
+  const sessionIds = Array.isArray(d.sessionIds) ? d.sessionIds : d.sessionId ? [d.sessionId] : []
+  for (const sid of sessionIds) {
+    const parsed = parseSessionKey(String(sid || ''))
+    if (parsed) push(parsed.euid, parsed.openKfId)
+  }
+  const euids = Array.isArray(d.externalUserIds)
+    ? d.externalUserIds
+    : d.externalUserId
+      ? String(d.externalUserId)
+          .split(/[,，\s]+/)
+          .filter(Boolean)
+      : []
+  for (const e of euids) push(String(e || ''))
+  const openids = Array.isArray(d.openids) ? d.openids : d.openid ? [d.openid] : []
+  for (const oid of openids) {
+    const euid = await euidFromOpenid(db, String(oid || '').trim())
+    if (euid) push(euid)
+  }
+  return out
+}
+
+/**
+ * refreshTrialSession：测版把会话当新客。原因必填。人工接待中默认 409，force=true 可强制并审计。
+ * 预发 403 / 正式 404。可批量（sessionIds / externalUserIds / openids）。
+ */
+export async function refreshTrialSession({ db, data, agentId }: Ctx): Promise<any> {
+  const gate = await loadTrialRefreshGate(db)
+  if (!gate.on) return reply(trialRefreshDenyStatus(), { ok: false, error: 'TRIAL_ONLY' })
+  const d = data || {}
+  const reason = String(d.reason || '').trim()
+  if (!reason) return reply(400, { ok: false, error: 'REASON_REQUIRED' })
+  const targets = await collectRefreshTargets(db, d)
+  if (!targets.length) return reply(400, { ok: false, error: 'BAD_ARGS' })
+  const force = !!d.force
+  const results = []
+  for (const t of targets) {
+    const r = await applyTrialRefresh(db, {
+      externalUserId: t.euid,
+      openKfId: t.openKfId,
+      via: 'admin',
+      reason,
+      force,
+      operator: String(agentId || 'admin'),
+    })
+    results.push(r)
+  }
+  if (results.length === 1 && !results[0].ok) {
+    const err = results[0].error
+    if (err === 'HUMAN_ACTIVE') return reply(409, { ok: false, error: err, results })
+    if (err === 'TRIAL_ONLY') return reply(trialRefreshDenyStatus(), { ok: false, error: err, results })
+    return reply(400, { ok: false, error: err, results })
+  }
+  return reply(200, { ok: true, results })
 }

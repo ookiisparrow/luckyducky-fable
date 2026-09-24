@@ -59,7 +59,9 @@ async function main() {
   console.log(`开始 5 分钟: p95=${avg(head, 'p95')}ms 错误率=${avg(head, 'errRate')}%`);
   console.log(`结束 5 分钟: p95=${avg(tail, 'p95')}ms 错误率=${avg(tail, 'errRate')}%`);
   const drift = Math.abs(avg(head, 'p95') - avg(tail, 'p95')) / Math.max(1, avg(head, 'p95'));
-  console.log(`P95 漂移: ${(drift * 100).toFixed(1)}% ${drift < 0.2 ? '✅ 达标(<20%)' : '⚠️ 超限'}`);
+  const over = !(drift < 0.2);
+  console.log(`P95 漂移: ${(drift * 100).toFixed(1)}% ${over ? '⚠️ 超限' : '✅ 达标(<20%)'}`);
+  if (over) process.exit(1);
 }
 
 main().catch((e) => { console.error('恒测失败:', e.message); process.exit(1); });

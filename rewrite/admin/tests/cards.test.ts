@@ -1,17 +1,24 @@
-// 卡面 SVG 生成黄金基准（守卫 rw-admin-cards-golden·换皮丢了整块卡片设计器·误判"卡后端"实则后端早就绪·仅前端从没接）：
+// 卡面 SVG 生成黄金基准（守卫 rw-admin-cards-golden）：
 // 正面满版图/品牌角标条件渲染 / 反面五项文案 + 品牌条 / 文本转义防注入 / 双版尺寸不崩。
 import { describe, it, expect } from 'vitest'
 import { buildFrontSvg, buildBackSvg, type CardModel } from '../src/lib/cardSvg'
 import cardsSrc from '../src/pages/Cards.vue?raw'
+import shellSrc from '../src/shell/Shell.vue?raw'
 
 // 死胡同改选择器（UX 体检批3）：顶层导航「卡片设计」直入曾甩红错「缺少 productId（请从商品页进入）」
 // ——入口即错误态，且红色与真故障同色（狼来了稀释红色语义）。listDrafts 本就在本页 import 却没用来
 // 兜底。修后：无 productId 时列商品可选（选择器），报错文案绝迹。
 describe('Cards.vue 无 productId 不再是死胡同（商品选择器兜底）', () => {
-  it('大白话：直入列商品可选（pickProduct 深链重载），「缺少 productId」红错文案绝迹', () => {
+  it('大白话：直入列商品可选（pickProduct 改 query 重挂，不整页刷新），「缺少 productId」红错文案绝迹', () => {
     expect(cardsSrc).not.toContain('缺少 productId')
     expect(cardsSrc).toMatch(/function pickProduct\(/)
     expect(cardsSrc).toMatch(/pickRows/)
+    // 同路由只改 query 不重跑 setup——按 productId 重挂，禁止 location.reload 冲掉未落盘自动保存
+    expect(cardsSrc).not.toContain('location.reload')
+    expect(cardsSrc).toMatch(/router\.replace\(\{\s*path:\s*'\/cards',\s*query:\s*\{\s*productId:\s*id\s*\}\s*\}\)/)
+    expect(shellSrc).toMatch(/pageKey/)
+    expect(shellSrc).toMatch(/route\.path === '\/cards'[\s\S]*route\.query\.productId/)
+    expect(shellSrc).toMatch(/<router-view :key="pageKey" \/>/)
   })
 })
 

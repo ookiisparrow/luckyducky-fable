@@ -100,7 +100,7 @@ function xmlTag(xml: string, tag: string): string {
   return m ? m[1] : ''
 }
 
-export interface KfTrustedEvent {
+interface KfTrustedEvent {
   /** 客服事件里的 Token，调 sync_msg 拉消息用（与回调验签的 token 不是一回事）。 */
   syncToken: string
   /** 指定客服帐号 open_kfid。 */
@@ -126,7 +126,7 @@ function readBody(event: any): string {
 
 /** defineKfCallback 的凭证组（单 getter 每请求取一次——决策 2026-07-12 读库后，逐字段懒读＝同文档多次
  * 往返；收敛为一次注入。corpid 空＝跳过 receiveId 校验，配齐即 fail-closed。 */
-export interface KfCallbackCreds {
+interface KfCallbackCreds {
   token: string
   aesKey: string
   /** 自己的 corpid（企业内部单 corp）：解密后 receiveId 须等于它，否则拒（WXBizMsgCrypt 验签三要素之一·
@@ -403,7 +403,6 @@ export async function ensureSmartAssistant(
   fetchImpl: FetchFn = defaultFetch
 ): Promise<'proceed' | 'skip'> {
   const state = await getServiceState(accessToken, args, fetchImpl)
-  console.log('[kf] service-state', { state }) // 实测会话态（根因#8 不假设·调试日志 AB）
   if (state === 1) return 'proceed' // 已智能助手态·可直接发
   // 只接管 0（未处理·新会话）与 -1（读取失败·尽力）——0→1 平台允许（真机实证）。其余让位不接管：
   // 2 待接入池 / 3 人工接待（有坐席）/ 4 已结束——平台不允许 2→1、4→1（真机 4→1 报 95013），

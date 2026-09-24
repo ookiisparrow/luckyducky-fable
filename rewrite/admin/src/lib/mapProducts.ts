@@ -16,17 +16,38 @@ export function productState(id: string, listedMap: unknown): ProductState {
   return m[id] === false ? 'unlisted' : 'onsale'
 }
 
-export interface StepDot {
+export interface StepMark {
   key: string
   label: string
   done: boolean
 }
+export interface StepDot {
+  key: string
+  label: string
+  done: boolean
+  marks?: StepMark[] // 第 4 步拆「有视频文件」/「课已发布」——上架不硬等发布（工单213）
+}
 // listDrafts 后端派生的分步态（换皮误判「无源」·实则 cards/courses/qrcodes 可 join）
 export interface StepExtras {
-  hasVideo?: Record<string, boolean> // courseId → 有教学视频
+  hasVideo?: Record<string, boolean> // courseId → 草稿或已发布课有教学视频文件
+  coursePublished?: Record<string, boolean> // courseId → 课已发布（学员看得见）
   cardFinal?: Record<string, boolean> // productId → 卡片已定稿
   hasBatch?: Record<string, boolean> // courseId → 有码批次
 }
+
+/** 工单213：商品上架不代替课程发布。店规可先卖材料包，但配套课时必须看得出还差发布。 */
+export const COURSE_VS_LISTING_HINT =
+  '商品上架 ≠ 课程发布。学员要看见视频，还要再点「发布课程」。没有课也可以先卖材料包。'
+
+export const VIDEO_MARK_FILE = '有视频文件'
+export const VIDEO_MARK_LIVE = '课已发布'
+
+/** 工单212：橱窗开关＝是否出现在首页，禁「上架橱窗」以免和商品上架撞词。 */
+export const HOME_FEATURE_ASK = '要不要同时出现在首页'
+export const HOME_FEATURE_SWITCH_ON = '出现在首页'
+export const HOME_FEATURE_SWITCH_OFF = '不出现在首页'
+export const HOME_FEATURE_SWITCH_TITLE_ON = '点击后不再出现在首页'
+export const HOME_FEATURE_SWITCH_TITLE_OFF = '点击后出现在首页'
 
 /** 5 步上新进度：建档+封面 / 图与名 / 详情前端算·课程 / 卡片+二维码取后端 listDrafts extras。 */
 export function productSteps(p: Record<string, any>, extras?: StepExtras): StepDot[] {
@@ -39,33 +60,108 @@ export function productSteps(p: Record<string, any>, extras?: StepExtras): StepD
   const skusOk = skus.length > 0 && skus.every((s: any) => String(s?.name || '').trim() !== '' && String(s?.price ?? '').trim() !== '')
   const cardOk = !!(e.cardFinal && e.cardFinal[id])
   const qrOk = !!(e.hasBatch && e.hasBatch[courseId])
+  const hasVideo = !!(e.hasVideo && e.hasVideo[courseId])
+  const courseLive = !!(e.coursePublished && e.coursePublished[courseId])
   return [
     { key: 'create', label: '新建与封面', done: !!id && !!(p && p.cover) },
     { key: 'look', label: '图片与名字', done: nameOk },
     { key: 'detail', label: '详情信息', done: priceOk && skusOk },
-    { key: 'video', label: '课程视频', done: !!(e.hasVideo && e.hasVideo[courseId]) },
+    {
+      key: 'video',
+      label: '课程视频',
+      done: hasVideo, // 有文件即本步齐；发布课另标，不挡先卖材料包
+      marks: [
+        { key: 'file', label: VIDEO_MARK_FILE, done: hasVideo },
+        { key: 'live', label: VIDEO_MARK_LIVE, done: courseLive },
+      ],
+    },
     { key: 'cardQr', label: '卡片与二维码', done: cardOk && qrOk },
   ]
 }
 
-/** 列表「上新进度」旁标：下一未完成步，或「上新完成」 */
+/** 第 4 步是否「有文件但课还没发布」——进度旁标用，不上架闸。 */
+export function courseNeedsPublish(steps: StepDot[]): boolean {
+  const video = steps.find((s) => s.key === 'video')
+  const live = video?.marks?.find((m) => m.key === 'live')
+  return !!(video?.done && live && !live.done)
+}
+
+/** 圆点/进度条 title：第 4 步拆出有视频文件 vs 课已发布。 */
+export function stepDotTitle(s: StepDot): string {
+  const head = (s.done ? '✓' : '○') + ' ' + s.label
+  if (!s.marks?.length) return head
+  return head + '（' + s.marks.map((m) => (m.done ? '✓' : '○') + m.label).join(' / ') + '）'
+}
+
+/** 列表「上新进度」旁标：下一未完成步，或「上新完成」；有视频未发布课时补一句。 */
 export function stepProgressHint(steps: StepDot[]): string {
   const i = steps.findIndex((s) => !s.done)
-  if (i < 0) return '上新完成'
+  const unpublished = courseNeedsPublish(steps)
+  if (i < 0) return unpublished ? '上新完成 · 课未发布' : '上新完成'
   return `第 ${i + 1} 步：${steps[i].label}`
+}
+
+/** 价格/销量块提示：自动保存只写草稿，顾客要再走同步才看见（#198 词表）。 */
+export const DRAFT_PRICE_HINT = '先存草稿，同步后顾客才见'
+
+/** 词表单源（#198 #199 #211）：筹备中第一次＝上架；在售推草稿＝同步到小程序；已下架推新稿＝同步草稿。禁「重新上架」。 */
+export function draftSyncLabel(state: ProductState): string {
+  if (state === 'preparing') return '上架'
+  if (state === 'unlisted') return '同步草稿'
+  return '同步到小程序'
+}
+
+/** 二次确认：在售只说新价/新图；已下架写清仍停售；筹备中第一次才说确认上架。 */
+export function draftSyncConfirm(state: ProductState): string {
+  if (state === 'onsale') return '顾客将看到新价/新图'
+  if (state === 'unlisted') return '确认同步草稿？写入新价/新图，商品仍停售'
+  return '确认上架？'
+}
+
+export function restoreSaleLabel(): string {
+  return '恢复销售'
+}
+
+/** 恢复销售只露旧发布档，不拷刚才改的草稿——确认必须说破（#211）。 */
+export function restoreSaleConfirm(): string {
+  return '确认恢复销售？顾客看到的是上次上架页，不是刚才改的草稿。若刚改过价/图请先同步草稿'
+}
+
+/** 恢复成功：列表清提示（reload 会冲掉）；向导留下这句，跟确认同一口径。 */
+export function restoreSaleOk(): string {
+  return '已恢复销售。若刚改过价/图请先同步草稿'
+}
+
+/** 已下架同步成功：发布档已更新，listed 仍是 false，还要再恢复（#211）。 */
+export function draftSyncUnlistedOk(): string {
+  return '草稿已同步。商品仍停售，还要再点「恢复销售」顾客才看得到'
+}
+
+export function draftSyncBusy(state: ProductState): string {
+  return state === 'preparing' ? '上架中…' : '同步中…'
+}
+
+export function draftSyncMissingHint(state: ProductState, missing: string[]): string {
+  return draftSyncLabel(state) + '还差：' + missing.join('、')
+}
+
+export function draftSyncReadyHint(state: ProductState): string {
+  return '✓ 必备项齐全，保存后可' + draftSyncLabel(state)
+}
+
+export function draftSyncOk(state: ProductState, opts?: { featured?: boolean }): string {
+  if (state === 'unlisted') return draftSyncUnlistedOk()
+  if (state === 'onsale') return '已同步到小程序，打开小程序即可看到该商品'
+  if (opts?.featured) {
+    return '已上架，已出现在小程序目录和首页人气条。不想挂首页请去橱窗关掉「出现在首页」'
+  }
+  return '已上架，已出现在小程序目录；首页人气条未打开。想出现在首页请去橱窗打开「出现在首页」'
 }
 
 /** 产品表副标：有筹备中才跟「待完成上新」；0 款不跟，避免「都已上架」还写待完成。 */
 export function productsListSub(all: number, preparing: number): string {
   if (preparing > 0) return `共 ${all} 款商品 · ${preparing} 款筹备中待完成上新`
   return `共 ${all} 款商品`
-}
-
-/** 向导 1–3 步各管哪些字段（互斥·防再嵌同一张大表）。第 1 步封面，第 2 步名字和相册，第 3 步详情。 */
-export const WIZARD_SLICE_FIELDS: Record<1 | 2 | 3, readonly string[]> = {
-  1: ['cover'],
-  2: ['name', 'images'],
-  3: ['tag', 'brief', 'price', 'was', 'sold', 'skus', 'params', 'detailSections', 'kit'],
 }
 
 /** 新建草稿骨架（向导第 1 步与列表「去上新」同形·课程号当场绑上，后面不用手输） */
@@ -102,7 +198,7 @@ export interface DraftRowVM {
 }
 
 /** 价格标签：多规格显最低 SKU 价 +「起」（换皮丢了起价语义·平铺 product.price）；无 SKU 退商品价。 */
-export function skuPriceLabel(p: Record<string, any>): string {
+function skuPriceLabel(p: Record<string, any>): string {
   const skus = Array.isArray(p.skus) ? p.skus : []
   const prices = skus.map((s: any) => Number(s && s.price)).filter((n: number) => n > 0)
   if (prices.length) return `¥${Math.min(...prices)}${skus.length > 1 ? ' 起' : ''}`
@@ -136,7 +232,7 @@ export function mapDraftRows(list: unknown, urls: unknown, listedMap: unknown, e
 }
 
 /** 上新向导上架闸：前三步（封面/信息/SKU）缺什么——事前预检（换皮退成事后报错）·与云端 publishProduct 四道门同口径。
- *  步 4-6（教学视频/二维码卡片/码批次）非上架硬门槛（可先上架、之后补课程），故不进此清单。 */
+ *  步 4–5（教学视频/卡片与二维码）非上架硬门槛（可先上架、之后补课程），故不进此清单。 */
 export function basicsMissing(p: unknown): string[] {
   const d = (p && typeof p === 'object' ? p : {}) as Record<string, any>
   const m: string[] = []
@@ -154,14 +250,15 @@ export function wizardCanPublish(p: unknown): boolean {
   return basicsMissing(p).length === 0
 }
 
-/** 上架四道门 → 人话（原文兜底不吞·守卫反向测试面）。 */
-export function publishErrorText(e: unknown): string {
+/** 上架四道门 → 人话（原文兜底不吞·守卫反向测试面）。动作用词跟 draftSyncLabel，禁另起别名。 */
+export function publishErrorText(e: unknown, state: ProductState = 'onsale'): string {
+  const act = draftSyncLabel(state)
   const code = String(e || '')
   if (code === 'NO_DRAFT') return '草稿不存在（可能已被删除）'
-  if (code === 'NEED_COVER') return '先上传封面图才能同步到小程序'
+  if (code === 'NEED_COVER') return '先上传封面图才能' + act
   if (code === 'NEED_INFO') return '名称或价格没填好（价格须是有效金额）'
   if (code === 'NEED_SKUS') return '规格行不完整（每行都要有名称和有效价格）'
-  return '同步到小程序没成功（' + code + '）' // 原文兜底
+  return act + '没成功（' + code + '）' // 原文兜底
 }
 
 export interface ShowcaseRowVM {

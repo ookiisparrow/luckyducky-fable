@@ -1,6 +1,5 @@
-// 自绘贴边通栏 TabBar（官方 custom-tab-bar 机制：保留 switchTab 语义 + 自绘视觉——2026-07-13 由「悬浮药丸」
-// 改通栏不透明，视觉见 index.wxss 头注；spike T4 双引擎真机 ✅）。active 由各 tab 页 onShow 经 getTabBar().setActive() 回写（官方推荐模式），
-// 购物车角标顺路随每次回写刷新（加购/改量后切回 tab 页即见最新件数）。
+// 自绘悬浮胶囊 TabBar（官方 custom-tab-bar：保留 switchTab 语义 + 自绘视觉）。
+// active 由各 tab 页 onShow 经 getTabBar().setActive() 回写；购物车角标随每次回写刷新。
 import { count as cartCount } from '../lib/cart'
 import { loginGate } from '../lib/loginGate'
 

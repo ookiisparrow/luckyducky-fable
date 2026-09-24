@@ -111,7 +111,6 @@ const encryptKf = (msg: string, receiveId: string) => cbcEncrypt(padded(pack(msg
 
 // —— alert 是 console.error 单行 [LD_ALERT]（kit/observe 契约）——spy 捕获逐字断言 ——
 let errSpy: ReturnType<typeof vi.spyOn>
-let logSpy: ReturnType<typeof vi.spyOn>
 const alertLines = () => errSpy.mock.calls.map((c: unknown[]) => String(c[0])).filter((s: string) => s.startsWith('[LD_ALERT]'))
 
 beforeEach(() => {
@@ -122,11 +121,9 @@ beforeEach(() => {
   h.emitError = false
   h.calls.length = 0
   errSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
-  logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
 })
 afterEach(() => {
   errSpy.mockRestore()
-  logSpy.mockRestore()
   vi.unstubAllGlobals()
   vi.useRealTimers()
 })
@@ -497,7 +494,7 @@ describe('会话态（service_state 读/转/决策·防 95018）', () => {
     expect(body(0)).toEqual({ open_kfid: 'kf1', external_userid: 'eu1', service_state: 1 })
   })
 
-  it('大白话：读态失败(-1)也尽力接管转 1 再放行（把 -1 分支削掉就直接让位了）；实测态照常打点', async () => {
+  it('大白话：读态失败(-1)也尽力接管转 1 再放行（把 -1 分支削掉就直接让位了）', async () => {
     const urls: string[] = []
     const f = (async (url: string) => {
       urls.push(String(url))
@@ -505,7 +502,6 @@ describe('会话态（service_state 读/转/决策·防 95018）', () => {
     }) as any
     expect(await ensureSmartAssistant('T', { openKfId: 'kf1', externalUserId: 'eu1' }, f)).toBe('proceed')
     expect(urls.some((u) => u.includes('service_state/trans'))).toBe(true)
-    expect(logSpy).toHaveBeenCalledWith('[kf] service-state', { state: -1 })
   })
 
   it('大白话：接管新会话(0→1)失败=真异常——告警逐字带 errcode 与来路态、返 skip 不硬发', async () => {

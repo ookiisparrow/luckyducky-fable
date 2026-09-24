@@ -2,7 +2,7 @@
   "name": "@ldrw/admin",
   "private": true,
   "version": "0.1.0",
-  "description": "Lucky Ducky 管理控制台 v2（M3 重写·Vue3+Vite+TS·对接 adminApi v2）",
+  "description": "Lucky Ducky 管理控制台 v2（M3 重写·Vue3+Vite+TS·VITE_ADMIN_API → adminApi）",
   "type": "module",
   "scripts": {
     "dev": "vite",

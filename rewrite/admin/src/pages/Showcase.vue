@@ -4,7 +4,14 @@
 // 停售/恢复已迁至 Products（在售态这里只读显示）；hero/背景/信任条/FAQ 已迁至 HomeContent。
 import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
 import { listShowcase, saveShowcase } from '../api/products'
-import { mapShowcaseRows, type ShowcaseRowVM } from '../lib/mapProducts'
+import {
+  mapShowcaseRows,
+  HOME_FEATURE_SWITCH_ON,
+  HOME_FEATURE_SWITCH_OFF,
+  HOME_FEATURE_SWITCH_TITLE_ON,
+  HOME_FEATURE_SWITCH_TITLE_OFF,
+  type ShowcaseRowVM,
+} from '../lib/mapProducts'
 import { serialSave } from '../lib/serialSave'
 import { Store, GripVertical } from 'lucide-vue-next'
 import PageHeader from '../components/ui/PageHeader.vue'
@@ -90,7 +97,7 @@ onMounted(reload)
 
 <template>
   <div class="ld-page">
-    <PageHeader title="小程序橱窗" sub="左侧一比一预览小程序首页 · 在画面或右侧列表上拖动排序、点开关上下架橱窗 · 改动自动保存，小程序重开生效">
+    <PageHeader title="小程序橱窗" sub="左侧一比一预览小程序首页 · 在画面或右侧列表上拖动排序、点开关决定是否出现在首页 · 改动自动保存，小程序重开生效">
       <Badge v-if="saveState" :tone="saveState === 'saved' ? 'green' : saveState === 'error' ? 'red' : 'neutral'" dot>
         {{ saveState === 'saving' ? '保存中…' : saveState === 'saved' ? '已保存' : '保存失败' }}
       </Badge>
@@ -122,7 +129,7 @@ onMounted(reload)
                   <div class="p-img"><img v-if="r.coverUrl" :src="r.coverUrl" alt="" /><span v-else class="p-img-ph">📦</span></div>
                   <div class="p-body"><div class="p-name">{{ r.name }}</div><div class="p-tag">{{ r.tag }}</div><div class="p-price">￥{{ r.price }}</div></div>
                 </div>
-                <p v-if="!featured.length" class="p-empty">橱窗空了——右侧打开几个商品的开关</p>
+                <p v-if="!featured.length" class="p-empty">首页人气条空了——右侧打开几个商品的「出现在首页」</p>
               </div>
             </div>
             <div class="p-spacer"></div>
@@ -133,7 +140,7 @@ onMounted(reload)
 
         <!-- 排序与推荐面板 -->
         <div class="panel">
-          <h3>首页 · 人气商品（拖动排序 · 开关上下架橱窗）</h3>
+          <h3>首页 · 人气商品（拖动排序 · 开关决定是否出现在首页）</h3>
           <div
             v-for="r in rows"
             :key="r.id"
@@ -149,11 +156,11 @@ onMounted(reload)
             <div class="thumb"><img v-if="r.coverUrl" :src="r.coverUrl" alt="" /><span v-else>📦</span></div>
             <div class="info">
               <div class="name">{{ r.name }}<span v-if="!r.listed" class="off-tag">已下架</span></div>
-              <div class="meta">￥{{ r.price }} · 排序 {{ idxOf(r) + 1 }}{{ r.featured ? '' : ' · 不在首页橱窗' }}</div>
+              <div class="meta">￥{{ r.price }} · 排序 {{ idxOf(r) + 1 }}{{ r.featured ? ' · ' + HOME_FEATURE_SWITCH_ON : ' · ' + HOME_FEATURE_SWITCH_OFF }}</div>
             </div>
-            <button class="switch" :class="{ on: r.featured }" :title="r.featured ? '点击下架橱窗' : '点击上架橱窗'" @click="toggle(r)"><span class="knob"></span></button>
+            <button class="switch" :class="{ on: r.featured }" :title="r.featured ? HOME_FEATURE_SWITCH_TITLE_ON : HOME_FEATURE_SWITCH_TITLE_OFF" @click="toggle(r)"><span class="knob"></span></button>
           </div>
-          <p class="hint">开关 = 是否出现在首页橱窗；拖哪边都行、两侧画面双向联动。同步到小程序 / 从橱窗拿下在「产品管理」页。</p>
+          <p class="hint">开关 = 是否出现在首页人气条，和商品「上架」不是一回事。拖哪边都行、两侧画面双向联动。同步到小程序 / 从橱窗拿下在「产品管理」页。</p>
         </div>
       </div>
     </Card>

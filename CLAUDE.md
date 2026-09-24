@@ -85,5 +85,5 @@ npm run build:rw-admin / build:agent；内容站 npm run build -w @ldrw/site
 
 ## 7. 扩展套路与新会话
 
-- mp 加页面：`rewrite/mp/pages/<name>/` 四件套 + `app.json` 注册。加云端 action：`rewrite/cloud/src/functions/` 对应域 + 登记 `modules.json`（守卫焊双向一致）。admin 加页面：`rewrite/admin/src/pages/<Name>.vue` + 路由/侧栏登记（守卫焊同步）。改主题：admin 只改 `styles/tokens.css`。
+- mp 加页面：`rewrite/mp/pages/<name>/` 四件套 + `app.json` 注册。加云端 action：`rewrite/cloud/src/functions/` 对应域 + 登记 `modules.json`（守卫焊双向一致）。admin 加页面：`rewrite/admin/src/pages/<Name>.vue` + 路由/侧栏登记（守卫焊同步）。改主题：admin 只改 `styles/tokens.css`。写 admin UI 先读 `rewrite/admin/DESIGN.md`。色值只许来自 `rewrite/admin/src/styles/tokens.css`。
 - 新会话三步：本文件 → `docs/现状与路线.md` → `git status` + `git log --oneline -5`。

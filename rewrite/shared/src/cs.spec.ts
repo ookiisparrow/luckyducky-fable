@@ -1,7 +1,7 @@
 /**
- * 客服会话状态机声明单源（承面C 坐席台·port 自旧线 packages/shared/src/cs.spec.ts——流转表与
- * rewrite 线 agentDesk.ts/dispatch.ts 里实际的 transition('csSession', …) 调用逐条吻合，语义不改）。
- * （原 CsSessionStatus 类型/CS_SESSION_STATUS 字典零消费·2026-07-23 瘦身批退役；SPEC 本体被 rw-cs-transitions-declared 守卫文本级消费·勿删。）
+ * 客服会话状态机声明单源（坐席台）。流转表与 agentDesk.ts/dispatch.ts 里
+ * 实际的 transition('csSession', …) 调用逐条吻合。
+ * SPEC 本体被 rw-cs-transitions-declared 守卫文本级消费·勿删。
  */
 
 /** 客服会话状态机声明（csSession 集合）。 */
@@ -11,7 +11,7 @@ export const CS_SESSION_STATUS_SPEC = {
   terminal: [],
   transitions: [
     { from: ['pending'], to: 'active', trigger: 'claimConversation（坐席认领接起·绑 agentId·受接待上限约束）' },
-    { from: ['pending'], to: 'closed', trigger: 'closeConversation（超时未接/顾客离开·放弃排队）' },
+    { from: ['pending'], to: 'closed', trigger: 'closeConversation（超时未接/顾客离开·放弃排队）/ refreshTrialSession force（测版强制刷新）' },
     { from: ['active'], to: 'escalated', trigger: 'escalateToMerchant（外包答不了·升级转商户超管·外包最小权只能升不能拍板）' },
     { from: ['active'], to: 'pending', trigger: 'releaseConversation（坐席放手退回待接队列·调 activeCount）' },
     { from: ['active'], to: 'closed', trigger: 'closeConversation（坐席结束会话·触 CSAT）' },

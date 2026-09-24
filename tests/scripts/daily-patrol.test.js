@@ -99,4 +99,11 @@ describe('daily patrol audit baseline', () => {
     expect(result.status).toBe(1)
     expect(result.output).toContain('🔴 high+critical 共 8 条（超过接受基线 7）')
   })
+
+  it('points at the red lines above instead of printing a bare exit status', () => {
+    const result = runPatrol({ backup: 'nightly/backup.csv', ageHours: 30 })
+    expect(result.status).toBe(1)
+    expect(result.output).toContain('❌❌ 巡逻有红项（见上方红项·')
+    expect(result.output).not.toContain('上文逐条')
+  })
 })

@@ -383,6 +383,20 @@ describe('app 公开读（getPageContent·空兜底 + heroImage cloud:// 换址 
     expect(r.ok).toBe(true)
     expect(r.content.lead).toBe('你好') // about 页无 heroImage·原样
   })
+
+  it('大白话：库挂不再装成「该页没内容」——ok:false INTERNAL；真无档仍 content:null', async () => {
+    control.setBeforeGet(({ coll, id }: any) => {
+      if (coll === 'content' && id === 'welcome') throw new Error('MOCK_DB_FAIL')
+    })
+    const fail = await appCall('getPageContent', { page: 'welcome' })
+    control.setBeforeGet(null as never)
+    expect(fail.ok).toBe(false)
+    expect(fail.error).toBe('INTERNAL')
+    expect(fail.page).toBe('welcome')
+    const missing = await appCall('getPageContent', { page: 'welcome' })
+    expect(missing.ok).toBe(true)
+    expect(missing.content).toBe(null)
+  })
 })
 
 // —— 帮助视频乐观并发 + GC 告警（批A·内容域并发安全·根因#1/#14·同 saveCourseDraft rev/baseRev/DRAFT_CONFLICT 口径）——

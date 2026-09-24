@@ -182,10 +182,10 @@ describe('库存映射与保存错误人话', () => {
       true
     )
     expect(rows).toHaveLength(2)
-    expect(rows[0].stockLabel).toBe('5')
+    expect(rows[0].stock).toBe(5)
     expect(rows[0].threshold).toBe(8) // per-SKU 阈值读回（换皮丢·硬编码 10·后端 saveStock 早支持 threshold）
     expect(rows[1].threshold).toBe(0) // 缺=0（无 per-SKU 阈值·前端退默认）
-    expect(rows[1].stockLabel).toBe('不限量') // null 不显 0
+    expect(rows[1].stock).toBeNull() // 不限量是空库存，不当成 0
     expect(truncNote).toContain('非全量')
     expect(mapStock([], false).truncNote).toBe('')
     expect(stockErrorText('STOCK_CONFLICT')).toContain('拒绝覆盖')

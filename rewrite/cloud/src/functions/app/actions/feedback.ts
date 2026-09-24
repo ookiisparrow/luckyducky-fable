@@ -1,7 +1,7 @@
 import { withOpenId, withRateLimit, ok, err, str, msgSecCheck, SCENE_COMMENT } from '../../../kit'
 import { COLLECTIONS } from '@ldrw/shared'
 
-// 用户意见反馈（运营钩子①·待办#23 前端半边）：上线初期 bug 高发期主动收用户反馈。
+// 用户意见反馈（运营钩子①）：上线初期 bug 高发期主动收用户反馈。
 // 写库必过闸（根因#3·withOpenId fail-closed）+ 按 openid 限频（根因#13·withRateLimit），防刷库堆垃圾。
 // 正文 msgSecCheck fail-open（Issue #113）：违规拒；安检抖动放行并记日志——不能让顾客连反馈都交不上去。
 // feedback 集合内部状态、仅管理端可读（控制台锁权限）；客户端只写不读。

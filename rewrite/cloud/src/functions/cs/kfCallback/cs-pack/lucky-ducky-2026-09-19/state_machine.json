@@ -1,0 +1,60 @@
+{
+  "version": "1.0",
+  "product": "Lucky Ducky",
+  "env": "test",
+  "comment_absorb": "主枚举学 Chatwoot 单一会话态；human 子态学 MaxKB ROBOT→AWAITING→HUMAN→FAILED；进 human 前 close 机器人回合学七鱼",
+  "states": ["new", "greet", "triage", "collect", "act", "resolve", "human"],
+  "terminal": ["resolve"],
+  "human_substates": {
+    "comment": "MaxKB 转人工中间态吸收；对外主枚举仍属 human",
+    "values": ["queued", "connected", "failed"],
+    "labels": {
+      "queued": "排队中",
+      "connected": "已接入",
+      "failed": "失败降级"
+    },
+    "transitions": [
+      { "from": "queued", "to": "connected", "when": "agent_accept" },
+      { "from": "queued", "to": "failed", "when": "queue_timeout_or_no_agent" },
+      { "from": "connected", "to": "failed", "when": "agent_disconnect_abnormal" },
+      { "from": "failed", "to": "queued", "when": "retry_handoff_allowed" }
+    ]
+  },
+  "transitions": [
+    { "from": "new", "to": "greet", "when": "session_created", "forbidden_skip": true },
+    { "from": "greet", "to": "triage", "when": "welcome_done" },
+    { "from": "triage", "to": "collect", "when": "intent_ok_need_slots" },
+    { "from": "triage", "to": "human", "when": "low_confidence|complaint|ask_human|sensitive" },
+    { "from": "triage", "to": "act", "when": "intent_ok_slots_ready", "note": "仅槽位已齐时；默认走 collect" },
+    { "from": "collect", "to": "act", "when": "required_slots_filled" },
+    { "from": "collect", "to": "triage", "when": "intent_reclassify" },
+    { "from": "collect", "to": "human", "when": "collect_rounds_ge_3|ask_human|complaint_high" },
+    { "from": "act", "to": "resolve", "when": "adapter_ok_and_confirmed" },
+    { "from": "act", "to": "collect", "when": "need_more_slots" },
+    { "from": "act", "to": "human", "when": "adapter_fail|model_fail|ask_human" },
+    { "from": "human", "to": "resolve", "when": "agent_close_resolved" }
+  ],
+  "invariants": [
+    "禁跳步：不得 new→triage / greet→collect / triage→resolve / collect→resolve / act→greet 等",
+    "失败不得伪 resolve：act/adapter/model 失败只能 → human 或诚实致歉后再 human，禁止直接 resolve",
+    "human 必含子态 queued|connected|failed",
+    "进 human 时结束机器人主动回合并写交接审计（学七鱼 close）",
+    "回退须说人话，不可静默跳状态"
+  ],
+  "forbidden_transitions": [
+    { "from": "new", "to": ["triage", "collect", "act", "resolve", "human"] },
+    { "from": "greet", "to": ["collect", "act", "resolve", "human", "new"] },
+    { "from": "triage", "to": ["resolve", "new", "greet"] },
+    { "from": "collect", "to": ["resolve", "new", "greet"] },
+    { "from": "act", "to": ["new", "greet", "triage"] },
+    { "from": "*", "to": "resolve", "unless": ["act.adapter_ok_and_confirmed", "human.agent_close_resolved"], "note": "失败路径禁止伪 resolve" }
+  ],
+  "handoff_triggers": [
+    "user_asks_human",
+    "complaint_and_high_severity",
+    "collect_rounds_ge_3",
+    "consecutive_unknown_ge_threshold",
+    "system_or_adapter_fail",
+    "triage_low_confidence"
+  ]
+}

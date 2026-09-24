@@ -12,7 +12,7 @@ export async function listCheckpoints({ db, data }: Ctx) {
   const courseId = str(data && data.courseId, 64)
   const where: any = { type: 'def' }
   if (courseId) where.courseId = courseId
-  const r = await db.collection('checkpoints').where(where).limit(DEF_SCAN).get().catch(() => ({ data: [] }))
+  const r = await db.collection('checkpoints').where(where).limit(DEF_SCAN).get()
   const list = ((r && r.data) || [])
     .map((d: any) => ({
       courseId: d.courseId,

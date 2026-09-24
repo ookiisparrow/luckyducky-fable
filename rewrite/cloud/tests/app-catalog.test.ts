@@ -43,6 +43,21 @@ describe('getContent（公开只读·空兜底）', () => {
     const r2: any = await call('getContent')
     expect(r2.home.heroTitle).toBe('幸运鸭')
   })
+
+  it('大白话：库挂不再装成「没有首页」——ok:false INTERNAL；真无档仍 home:null', async () => {
+    control.seed('content', [{ _id: 'home', heroTitle: '幸运鸭' }])
+    control.setBeforeGet(({ coll, id }: any) => {
+      if (coll === 'content' && id === 'home') throw new Error('MOCK_DB_FAIL')
+    })
+    const fail: any = await call('getContent')
+    control.setBeforeGet(null as never)
+    expect(fail.ok).toBe(false)
+    expect(fail.error).toBe('INTERNAL')
+    control.reset()
+    const missing: any = await call('getContent')
+    expect(missing.ok).toBe(true)
+    expect(missing.home).toBe(null)
+  })
 })
 
 // ── 批1·列表瘦身 + 签发缓存：cover cloud:// 换 https 短时址（带 maxAge·imageProc 默认关），images[] 不下发（列表用不到·图册收窄进详情页）。
@@ -113,6 +128,20 @@ describe('getProductDetail（公开只读·列表瘦身配套·批1）', () => {
     const r: any = await call('getProductDetail', { id: 'ghost' })
     expect(r.ok).toBe(true)
     expect(r.product).toBe(null)
+  })
+
+  it('大白话：库挂不再装成「商品不存在」——ok:false INTERNAL；真无档仍 product:null', async () => {
+    control.seed('products', [{ _id: 'p1', name: 'A', sort: 1 }])
+    control.setBeforeGet(({ coll }: any) => {
+      if (coll === 'products') throw new Error('MOCK_DB_FAIL')
+    })
+    const fail: any = await call('getProductDetail', { id: 'p1' })
+    control.setBeforeGet(null as never)
+    expect(fail.ok).toBe(false)
+    expect(fail.error).toBe('INTERNAL')
+    const missing: any = await call('getProductDetail', { id: 'ghost' })
+    expect(missing.ok).toBe(true)
+    expect(missing.product).toBe(null)
   })
 
   it('大白话：停售（listed:false）→ { product:null }（同 getProducts 停售口径·不下发给顾客）', async () => {

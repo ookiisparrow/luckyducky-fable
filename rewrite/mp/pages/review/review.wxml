@@ -7,10 +7,7 @@
     <!-- 商品行 + 综合评分（corev-top 卡） -->
     <view class="corev-card corev-top">
       <view class="corev-prod" wx:if="{{name}}">
-        <view class="corev-prod-img"></view>
-        <view class="corev-prod-mid">
-          <text class="corev-prod-name">{{name}}</text>
-        </view>
+        <text class="corev-prod-name">{{name}}</text>
       </view>
       <view class="corev-rate">
         <view class="corev-rate-stars">

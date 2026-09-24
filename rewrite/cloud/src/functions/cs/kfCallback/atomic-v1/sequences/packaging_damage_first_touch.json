@@ -1,0 +1,21 @@
+{
+  "id": "packaging_damage_first_touch",
+  "line": "packaging_damage",
+  "desc": "首次破损进线：惊讶短句 → 同理 → 合照权威三句（三气泡）",
+  "steps": [
+    {
+      "lib": "emotion/surprise",
+      "pick": "random_one"
+    },
+    {
+      "lib": "business/packaging",
+      "pick": "random_one",
+      "pool": ["empathy_01", "empathy_02", "empathy_03"]
+    },
+    {
+      "lib": "business/packaging",
+      "pick": "all",
+      "files": ["ask_photo_01", "ask_photo_02", "ask_photo_03"]
+    }
+  ]
+}

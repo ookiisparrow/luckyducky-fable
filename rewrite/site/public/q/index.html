@@ -10,7 +10,7 @@
        自有域名 + 微信扫码规则配好后，微信扫码不再经过本页（直接进小程序）；
        本页服务于：① 默认域名测试期 ② 非微信扫码（普通相机/浏览器）的引导。
        场景②走「明文 URL Scheme」一键拉起小程序（weixin://dl/business/...），把激活码作
-       启动 query 带进 pages/welcome/index（小程序端 parseActivationCode 认 ?code=）；
+       启动 query 带进 pages/welcome/welcome（小程序端 parseActivationCode 认 ?code=）；
        前置：MP后台「隐私与安全 - 明文Scheme拉起此小程序」须开启，否则链接拉不起。
        兼容性兜底：部分安卓浏览器拦自定义 scheme、微信内置浏览器不支持 scheme 拉小程序，
        故保留下方手动激活步骤。 */
@@ -62,7 +62,7 @@
       <button class="copy" onclick="copyCode()">复制激活码</button>
       <p class="copied" id="copied">已复制 ✓</p>
       <div class="steps">
-        <div><b>1</b>　打开微信，搜索小程序「小棉鸭」</div>
+        <div><b>1</b>　微信搜「LuckyDucky小棉鸭」</div>
         <div><b>2</b>　进入后扫码 / 使用激活码激活课程</div>
         <div><b>3</b>　确认开始观看，跟着视频钩出小鸭</div>
       </div>
@@ -72,7 +72,7 @@
   <script>
     // 小程序标识（与 CLAUDE.md / 云环境一致）；welcome 页须为已发布版本存在的页面（明文 Scheme 要求）。
     var APPID = 'wxcbd2fb68b81bcfb1'
-    var PATH = 'pages/welcome/index'
+    var PATH = 'pages/welcome/welcome'
     var code = new URLSearchParams(location.search).get('code') || (location.pathname.match(/\/q\/([A-Za-z0-9]+)/) || [])[1] || ''
     document.getElementById('code').textContent = code || '未识别到激活码'
     if (code) {

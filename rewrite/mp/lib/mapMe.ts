@@ -14,8 +14,8 @@ const str = (v: unknown, def: string): string => {
   return s || def
 }
 
-export type MeEntryKey = 'courses' | 'orders' | 'aftersales' | 'address' | 'activate' | 'feedback' | 'kefu' | 'consent' | 'about'
-export interface MeEntryVM {
+type MeEntryKey = 'courses' | 'orders' | 'aftersales' | 'address' | 'activate' | 'feedback' | 'kefu' | 'consent' | 'about'
+interface MeEntryVM {
   label: string
   visible: boolean
 }

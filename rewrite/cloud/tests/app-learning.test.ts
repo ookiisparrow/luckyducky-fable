@@ -371,6 +371,20 @@ describe('getCourses / getPlaybackUrl（目录不漏源·鉴权 fail-closed·黄
     expect(miss.list).toEqual([])
   })
 
+  it('大白话：按 id 取课库挂不再装成「没有这门课」——ok:false INTERNAL；真无档仍空', async () => {
+    control.setBeforeGet(({ coll, id }: any) => {
+      if (coll === 'courses' && id === 'c1') throw new Error('MOCK_DB_FAIL')
+    })
+    const fail = await call('getCourses', { ids: ['c1'] })
+    control.setBeforeGet(null as never)
+    expect(fail.ok).toBe(false)
+    expect(fail.error).toBe('INTERNAL')
+    expect(fail.list).toBeUndefined()
+    const missing = await call('getCourses', { ids: ['ghost'] })
+    expect(missing.ok).toBe(true)
+    expect(missing.list).toEqual([])
+  })
+
   it('大白话：未确认进课任何段都拒（只激活未确认也拒；残留免费标记不构成授权）', async () => {
     expect((await call('getPlaybackUrl', { courseId: 'c1', segmentId: 's1' })).error).toBe('NOT_ENTITLED')
     await call('activateCourse', { code: 'CODE1' }) // 激活但未确认
@@ -526,6 +540,23 @@ describe('getMyCourses / getMyProgress / trackEvent（黄金 §四/§五）', ()
     expect(progress[0].last.segmentId).toBe('s2')
     const mine = await call('getMyProgress')
     expect(mine.list.length).toBe(1)
+  })
+
+  it('大白话：库挂不再装成「没有进度」——ok:false INTERNAL；真没学过仍空列表', async () => {
+    control.seed('progress', [{ _id: 'p1', _openid: 'oME', courseId: 'c1', done: { s1: true } }])
+    control.setBeforeGet(({ coll }: any) => {
+      if (coll === 'progress') throw new Error('MOCK_DB_FAIL')
+    })
+    const fail = await call('getMyProgress')
+    control.setBeforeGet(null as never)
+    expect(fail.ok).toBe(false)
+    expect(fail.error).toBe('INTERNAL')
+    expect(fail.list).toBeUndefined()
+    control.reset()
+    control.setOpenId('oME')
+    const empty = await call('getMyProgress')
+    expect(empty.ok).toBe(true)
+    expect(empty.list).toEqual([])
   })
 
   it('大白话：防刷——未确认进课的进度事件不折叠（流水仍记，供分析）', async () => {

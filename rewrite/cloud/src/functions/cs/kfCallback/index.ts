@@ -12,7 +12,7 @@ import {
   msgSecCheck,
   SCENE_COMMENT,
 } from '../../../kit'
-import { handleMessage, rootMenu, buildMsgMenu, extUserId, processKfBatch, heldStatus, resolveOpenid, type Incoming } from './dispatch'
+import { handleMessage, welcomeMenu, buildMsgMenu, extUserId, processKfBatch, heldStatus, resolveOpenid, type Incoming } from './dispatch'
 import { archiveInbound, archiveOutbound } from './archive' // 会话归档（B5.1·入站/出站落档·守卫 conversations-archived）
 
 // 微信客服 in-chat 智能客服回调（HTTP 访问服务·类比 adminApi 的 /adminapi）。
@@ -24,8 +24,6 @@ import { archiveInbound, archiveOutbound } from './archive' // 会话归档（B5
 const db = getDb()
 const wxkfCfg = () => getSecureConfigFields(db, 'wxkf', ['corpId', 'secret', 'miniappAppId', 'thumbMediaId'])
 
-const SEEN_TTL_NOTE = 'seen:<msgid> 去重痕只增（量级=客服消息数·远低于 events）；如需回收随 cleanupEvents 扩展'
-
 // §查订单·平台原生身份桥接（根因#3 不信前端·best-effort 不反噬消息处理）：顾客的 external_userid 经微信客服
 // `kf/customer/batchget` 反查 unionid → users 找 openid → 建 `ext→openid` 映射（dispatch.resolveOpenid 读它查订单）。
 // **绕开客户联系 idconvert 的 48002 墙**（用微信客服自己的顾客接口·平台原生）。已建映射即跳（省 batchget）。
@@ -36,18 +34,11 @@ async function ensureKfIdentity(db: any, token: string, euid: string): Promise<v
     const got = await db.collection(COLLECTIONS.kfIdentity).doc('ext:' + euid).get().catch(() => null)
     if (got && got.data && got.data.openid) return // 已建映射·不重复 batchget
     const unionid = await kfCustomerBatchget(token, euid)
-    if (!unionid) {
-      console.log('[kf-bind] no-unionid via batchget（顾客没绑开放平台/没授权）')
-      return
-    }
+    if (!unionid) return
     const u = await db.collection('users').where({ unionid }).limit(1).get().catch(() => ({ data: [] }))
     const openid = u.data && u.data[0] && u.data[0]._openid
-    if (!openid) {
-      console.log('[kf-bind] unionid 不在 users（该顾客没登录过小程序·或与小程序不同开放平台主体）')
-      return
-    }
+    if (!openid) return
     await db.collection(COLLECTIONS.kfIdentity).doc('ext:' + euid).set({ data: { openid, unionid, updatedAt: Date.now() } })
-    console.log('[kf-bind] bound via batchget')
   } catch {
     /* best-effort：身份桥接不反噬消息处理 */
   }
@@ -70,8 +61,7 @@ export const main = defineKfCallback({
     return { token: f.token, aesKey: f.aesKey, corpid: f.corpId }
   },
   onEvent: async ({ syncToken, openKfId }) => {
-    // 观测（根因#8：整条 onEvent 链路可见，非敏感字段——不打 token/openid 内容）
-    console.log('[kf] onEvent', { openKfId, hasSyncToken: !!syncToken })
+    // 失败采样走已有 alert（SENDMSG_FAILED / SYNCMSG_FAILED），不常开 debug 喷日志
     const f = await wxkfCfg()
     let token: string
     try {
@@ -84,10 +74,7 @@ export const main = defineKfCallback({
     const send = async (payload: any) => {
       const res = await sendMsg(token, payload)
       if (res && res.errcode) alert('security', 'kfCallback', 'SENDMSG_FAILED', { errcode: res.errcode, msgtype: payload?.msgtype })
-      else {
-        console.log('[kf] sent', { msgtype: payload?.msgtype })
-        await archiveOutbound(db, payload, openKfId) // 出站回复落档（B5.1·仅记真发出的·fail-soft 不反噬发送）
-      }
+      else await archiveOutbound(db, payload, openKfId) // 出站回复落档（B5.1·仅记真发出的·fail-soft 不反噬发送）
       return res
     }
     // 转人工不再调平台 service_state 转接（守卫 agent-channel-stays-assistant·根因#12·调试日志 AC）：
@@ -99,11 +86,9 @@ export const main = defineKfCallback({
     let cursor = ''
     const cur = await db.collection(COLLECTIONS.kfState).doc(cursorId).get().catch(() => null)
     if (cur && cur.data && typeof cur.data.cursor === 'string') cursor = cur.data.cursor
-    console.log('[kf] cursor-read', { has: !!cursor }) // 观测：游标有没有读到（根因#8 定「为何每次重拉历史」）
 
     // 单条消息处理（防吞单经 processKfBatch 包 try/catch·见 dispatch）：进会话欢迎 / 文本分流
     const handleOne = async (msg: any) => {
-      console.log('[kf] handle', { msgtype: msg.msgtype, hasText: !!msg.text?.content, hasMenuId: !!msg.text?.menu_id })
       const euid = extUserId(msg)
       // 自由打字过 msgSecCheck（Issue #113）：违规不归档不分流；接口抖动 fail-open 放行并记日志。
       // 菜单回传（menu_id）是我方预设文案，不送审。v2 必带 openid——尚未建身份桥则跳过（等同 fail-open，不打无意义 INFRA）。
@@ -112,7 +97,6 @@ export const main = defineKfCallback({
         if (openid) {
           const sec = await msgSecCheck(String((msg.text && msg.text.content) || ''), openid, SCENE_COMMENT, 'open')
           if (!sec.ok) {
-            console.log('[kf] sec-blocked')
             if (euid)
               await send({
                 touser: euid,
@@ -129,9 +113,7 @@ export const main = defineKfCallback({
       // （调试日志 AB·迁移到企业微信内后平台默认态漂移·根因#12）。人工/排队态 bot 不抢话（skip·仍尽力建身份桥接）。
       if (euid) {
         const gate = await ensureSmartAssistant(token, { openKfId, externalUserId: euid })
-        console.log('[kf] assistant-gate', { gate }) // 观测：实测会话态决策（根因#8 定「为何发不出」）
         if (gate === 'skip') {
-          console.log('[kf] 人工/排队接待中 → bot 不抢话')
           await ensureKfIdentity(db, token, euid)
           return
         }
@@ -140,12 +122,11 @@ export const main = defineKfCallback({
       if (msg.msgtype === 'event' && msg.event?.event_type === 'enter_session') {
         // 深审 F3：排队/接待中顾客重开聊天窗（enter_session）不发欢迎菜单——bot 抢话且顾客点菜单又被
         // held 闸静默＝发了菜单点了没反应；「谁在接待」判定单源 heldStatus（与 handleMessage 同口径）。
-        if (euid && (await heldStatus(db, openKfId, euid))) console.log('[kf] enter_session held → bot 不抢话')
-        else await send(buildMsgMenu(euid, openKfId, rootMenu())) // 进会话欢迎（euid 在 event 子对象·根因#8）
+        if (!(euid && (await heldStatus(db, openKfId, euid))))
+          await send(buildMsgMenu(euid, openKfId, await welcomeMenu(db))) // 进会话欢迎（euid 在 event 子对象·根因#8）
       } else {
         const incoming = normalize(msg)
         if (incoming) await handleMessage(ctx, incoming)
-        else console.log('[kf] not-dispatched', { msgtype: msg.msgtype })
       }
       await ensureKfIdentity(db, token, euid) // §查订单·回复后再 batchget 反查建 ext→openid 映射（best-effort·不延迟回复）
     }
@@ -159,12 +140,9 @@ export const main = defineKfCallback({
     const startedAt = Date.now()
     for (let guard = 0; guard < 20; guard++) {
       if (Date.now() - startedAt > KF_TIME_BUDGET_MS) {
-        console.log('[kf] time-budget reached → 保留旧游标下次续拉（不吞单）')
         break // 临近超时：保留上次已落游标，剩余 backlog 下次续拉
       }
       const r = await syncMsg(token, { cursor, token: syncToken, openKfId, limit: KF_BATCH_LIMIT })
-      // nc=本轮 sync 是否回了 next_cursor（定根因：empty 即 WeChat 没回、游标无从推进）
-      console.log('[kf] sync', { errcode: r.errcode, msgs: r.msg_list.length, hasMore: r.has_more, nc: !!r.next_cursor })
       if (r.errcode) {
         alert('security', 'kfCallback', 'SYNCMSG_FAILED', { errcode: r.errcode })
         break
@@ -172,7 +150,6 @@ export const main = defineKfCallback({
       // 防吞单（审计 P2）：单条失败不中断整批、撤回认领；本批有失败则**保留旧游标**下次重拉重试
       const anyFailed = await processKfBatch(db, r.msg_list, handleOne)
       if (anyFailed) {
-        console.log('[kf] batch-failed → 保留旧游标下次重试（不吞单）')
         break // 不推进游标：下次重拉，成功项 seen 去重、失败项重试
       }
       cursor = r.next_cursor || cursor
@@ -183,6 +160,5 @@ export const main = defineKfCallback({
         .catch(() => {})
       if (!r.has_more) break
     }
-    void SEEN_TTL_NOTE
   },
 })

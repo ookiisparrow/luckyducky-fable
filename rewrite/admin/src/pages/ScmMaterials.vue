@@ -1,6 +1,6 @@
 <script setup lang="ts">
-// 物料与供应商（设计语言一致性·M3 UI 批16）：主档（毛线按 色×档×形态 推导料号·计量建档锁死）+ 供应商/织女
-// + 库存调整（必留原因·扣超整单拒）+ 流水查账。逻辑未动，仅套设计语言（页头/表单卡/grid 表/token）。
+// 物料与供应商：主档（毛线按 色×档×形态 推导料号·计量建档锁死）+ 供应商/织女
+// + 库存调整（必留原因·扣超整单拒）+ 流水查账。
 import { ref, computed, onMounted, watch } from 'vue'
 import { listMaterials, saveMaterial, listSuppliers, saveSupplier, adjustStock, listLedger } from '../api/scm'
 import { materialHuman, materialCategoryLabel, uomLabel, scmErrorText, mapLedger, type LedgerRow } from '../lib/mapScm'
@@ -26,7 +26,7 @@ const supCursor = ref<unknown>(null)
 const supHasMore = ref(false)
 const ledgerCursor = ref<unknown>(null)
 const ledgerHasMore = ref(false)
-// 流水加载失败独立记账（P2·深审20260712 失败伪装空账本）：不复用 message——reload 收尾 load(m.ok…)
+// 流水加载失败独立记账（P2·深审20260712 失败伪装空账本）：不复用 message——reload 收尾 load(…)
 // 会覆盖它；失败时 ledger=[] 若无此标记，EmptyState「还没有流水」＝把查询失败伪装成空账。
 const ledgerError = ref('')
 // 动作反馈(note)/加载态(load) 收口（病根#14）：reload 成功不再抹掉动作刚设的成功/失败原文。
@@ -247,7 +247,11 @@ async function reload() {
   supCursor.value = s.ok ? s.nextCursor : null
   supHasMore.value = !!(s.ok && s.hasMore)
   await loadLedger(ledgerMat.value || undefined) // 保持当前料号筛选（内部已复位 stocktakeExitConfirm）
-  load(m.ok, '加载失败：' + String(m.error || '')) // 只在加载失败时写·成功静默不抹动作反馈
+  // 分路报错（照 ScmBom.reload）：供应商挂掉不装空目录
+  const bad: string[] = []
+  if (!m.ok) bad.push('物料主档加载失败：' + String(m.error || ''))
+  if (!s.ok) bad.push('供应商加载失败：' + String(s.error || ''))
+  load(bad.length === 0, bad.join('；')) // 只在加载失败时写·成功静默不抹动作反馈
   stocktakeExitConfirm.value = false // 刷新即复位危险态（守卫 rw-admin-armed-reset-on-load）
 }
 

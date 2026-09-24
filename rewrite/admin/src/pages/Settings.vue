@@ -1,6 +1,5 @@
 <script setup lang="ts">
-// 系统设置（设计语言一致性·M3 UI 批13）：告警推送 webhook（企微群机器人·空=清除退回纯日志）+ 激活码 urlPrefix。
-// 逻辑未动，仅套设计语言。激活卡双面设计器（印刷用）随印刷批补——记待办。
+// 系统设置：告警推送 webhook（企微群机器人·空=清除退回纯日志）+ 激活码 urlPrefix。
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { getSettings, saveSettings } from '../api/system'
@@ -89,7 +88,6 @@ async function save() {
         <div class="field">
           <label class="field-label">链接前缀（印刷二维码用）</label>
           <input v-model="urlPrefix" placeholder="https://…" />
-          <p class="field-note">激活卡双面设计器（印刷排版）随印刷批补齐。</p>
         </div>
       </Card>
 

@@ -15,7 +15,7 @@
         <view wx:if="{{bio}}" class="ld-me-greet-bio">{{bio}}</view>
       </view>
       <image wx:if="{{avatar}}" class="ld-me-avatar" src="{{avatar}}" mode="aspectFill" />
-      <view wx:else class="ld-me-avatar ld-me-avatar-empty">🦆</view>
+      <image wx:else class="ld-me-avatar ld-me-avatar-empty" src="/static/logo-wordmark.svg" mode="aspectFit" />
     </view>
     <view wx:if="{{loggedIn}}" class="ld-me-edit" bind:tap="onEditProfile" hover-class="ld-me-edit-h">
       <text>编辑资料</text>
@@ -167,7 +167,7 @@
 </scroll-view>
 
 <!-- 登录授权半屏（R1·软门槛）：未同意登录进「我」页弹出、可「暂不登录」关掉继续逛·经 lib/loginGate 单例驱动 -->
-<login-sheet id="loginSheet" bind:login="onLoggedIn" />
+<login-sheet bind:login="onLoggedIn" />
 
 <!-- 误触退出提醒（决策§30）：隐形容器武装拦第一次返回 →「再按一次退出」·仅安卓返回键·见 utils/exitGuard -->
 <page-container show="{{exitGuardArmed}}" overlay="{{false}}" duration="{{0}}" bindbeforeleave="onExitGuardBeforeLeave" />

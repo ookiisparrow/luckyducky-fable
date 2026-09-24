@@ -36,7 +36,7 @@ describe('商品草稿与上架（黄金：白名单/四道门/软下架不隐�
     expect(d.status).toBe('preparing')
   })
 
-  it('大白话：上架四道门——无草稿/缺封面/坏价/缺 SKU 分别拒；齐全成功转在售、首发默认上首页', async () => {
+  it('大白话：上架四道门——无草稿/缺封面/坏价/缺 SKU 分别拒；齐全成功转在售、首发默认不上首页', async () => {
     expect((await post('publishProduct', { id: 'ghost' })).error).toBe('NO_DRAFT')
     await post('saveDraft', { product: { ...DRAFT, cover: '' } })
     expect((await post('publishProduct', { id: 'p1' })).error).toBe('NEED_COVER')
@@ -49,9 +49,21 @@ describe('商品草稿与上架（黄金：白名单/四道门/软下架不隐�
     expect((await post('publishProduct', { id: 'p1' })).ok).toBe(true)
     const p = control.dump('products')[0]
     expect(p.price).toBe(198) // 字符串价转数字
-    expect(p.featured).toBe(true)
+    expect(p.featured).toBe(false) // #212 首发默认不进首页；要挂须显式 featured:true
     expect(p.sold).toBe(0) // 未填销量默认 0（详情页藏掉）
     expect(control.dump('productsDraft')[0].status).toBe('onsale')
+  })
+
+  it('大白话：首发勾了首页才 featured=true；再同步不覆盖橱窗开关', async () => {
+    await post('saveDraft', { product: DRAFT })
+    expect((await post('publishProduct', { id: 'p1', featured: true })).ok).toBe(true)
+    expect(control.dump('products')[0].featured).toBe(true)
+    await post('saveShowcase', { items: [{ id: 'p1', sort: 1, featured: false }] })
+    expect(control.dump('products')[0].featured).toBe(false)
+    await post('saveDraft', { product: { ...DRAFT, name: '改名' } })
+    expect((await post('publishProduct', { id: 'p1', featured: true })).ok).toBe(true) // 再同步带 featured 也不得改橱窗
+    expect(control.dump('products')[0].featured).toBe(false)
+    expect(control.dump('products')[0].name).toBe('改名')
   })
 
   it('大白话：销量后台可填可改——整数落草稿并上架写入 products.sold；负数/小数/乱码洗成非负整数', async () => {
@@ -133,13 +145,35 @@ describe('商品草稿与上架（黄金：白名单/四道门/软下架不隐�
     const r = await post('listDrafts')
     expect(r.cardFinal.p1).toBe(true) // 卡片定稿
     expect(r.hasVideo['course-p1']).toBe(true) // 课程有视频段
+    expect(r.coursePublished['course-p1']).toBe(true) // 已发布课
     expect(r.hasBatch['course-p1']).toBe(true) // 该课有码批次（aggregate group·不扫全表）
     // 无卡片/视频/批次的产品：各态不误报完成
     await post('saveDraft', { product: { id: 'p2', name: '空', price: '1', cover: 'x', skus: [] } })
     const r2 = await post('listDrafts')
     expect(r2.cardFinal.p2).toBeFalsy()
     expect(r2.hasVideo['course-p2']).toBeFalsy()
+    expect(r2.coursePublished['course-p2']).toBeFalsy()
     expect(r2.hasBatch['course-p2']).toBeFalsy()
+    // 草稿有视频、课未发布：有文件 ≠ 已发布（#213）
+    await post('saveDraft', { product: { id: 'p3', name: '草稿课', price: '1', cover: 'x', skus: [], courseId: 'course-p3' } })
+    control.seed('coursesDraft', [{ _id: 'course-p3', id: 'course-p3', chapters: [{ lessons: [{ segments: [{ videoFileId: 'cloud://draft.mp4' }] }] }] }])
+    const r3 = await post('listDrafts')
+    expect(r3.hasVideo['course-p3']).toBe(true)
+    expect(r3.coursePublished['course-p3']).toBeFalsy()
+  })
+
+  it('大白话：上架态联表读炸不装成筹备中——整体报错，不回空 listed', async () => {
+    await post('saveDraft', { product: DRAFT })
+    await post('publishProduct', { id: 'p1' })
+    control.setBeforeGet(({ coll }: any) => {
+      if (coll === 'products') throw new Error('QUERY_FAIL')
+    })
+    const r = await post('listDrafts')
+    control.setBeforeGet(null as never)
+    expect(r.ok).toBe(false)
+    expect(r.status).toBe(500)
+    expect(r.listed).toBeUndefined()
+    expect(r.list).toBeUndefined()
   })
 })
 
@@ -175,6 +209,69 @@ describe('productId/spec 出生点校验（战役3 批D·D1·shared/scmKey.ts �
       product: { id: 'p_legacy', name: '历史遗留', price: '150', cover: 'cloud://c/x.png', tag: 'a__b', skus: [{ name: 'm__n', price: '150' }] },
     })
     expect(skuBad.error).toBe('BAD_SPEC')
+  })
+})
+
+describe('草稿/橱窗列表换临时图（微信一次最多 50 个 fileID·走 getTempUrls 分批）', () => {
+  it('大白话：不到 50 张时，临时地址还是一张对一张，外链和空图不换', async () => {
+    control.seed('productsDraft', [
+      {
+        _id: 'p1',
+        id: 'p1',
+        cover: 'cloud://c/a.png',
+        images: ['cloud://c/b.png', 'https://ext/x.png', ''],
+        createdAt: 1,
+      },
+    ])
+    const r = await post('listDrafts')
+    expect(r.ok).toBe(true)
+    expect(control.tempUrlCalls()).toEqual([2])
+    expect(r.urls).toEqual({
+      'cloud://c/a.png': 'https://tmp/cloud://c/a.png',
+      'cloud://c/b.png': 'https://tmp/cloud://c/b.png',
+    })
+  })
+
+  it('大白话：草稿图超过 50 张时分批都能换到，不再整批失败', async () => {
+    const drafts = []
+    for (let i = 0; i < 3; i++) {
+      drafts.push({
+        _id: `p${i}`,
+        id: `p${i}`,
+        cover: `cloud://c/cover-${i}.png`,
+        images: Array.from({ length: 20 }, (_, j) => `cloud://c/p${i}-${j}.png`),
+        createdAt: 1000 - i,
+      })
+    }
+    control.seed('productsDraft', drafts)
+    const r = await post('listDrafts')
+    expect(r.ok).toBe(true)
+    const calls = control.tempUrlCalls()
+    expect(calls.length).toBeGreaterThan(1)
+    expect(Math.max(...calls)).toBeLessThanOrEqual(50)
+    expect(calls.reduce((a: number, b: number) => a + b, 0)).toBe(63)
+    expect(r.urls['cloud://c/cover-0.png']).toBe('https://tmp/cloud://c/cover-0.png')
+    expect(r.urls['cloud://c/p2-19.png']).toBe('https://tmp/cloud://c/p2-19.png')
+  })
+
+  it('大白话：橱窗封面超过 50 张也分批换到；重复封面只换一次，外链不换', async () => {
+    const products = Array.from({ length: 51 }, (_, i) => ({
+      _id: `s${i}`,
+      cover: `cloud://c/s${i}.png`,
+      sort: i,
+    }))
+    products.push({ _id: 'dup', cover: 'cloud://c/s0.png', sort: 99 })
+    products.push({ _id: 'ext', cover: 'https://ext/z.png', sort: 100 })
+    control.seed('products', products)
+    const r = await post('listShowcase')
+    expect(r.ok).toBe(true)
+    const calls = control.tempUrlCalls()
+    expect(calls.length).toBeGreaterThan(1)
+    expect(Math.max(...calls)).toBeLessThanOrEqual(50)
+    expect(calls.reduce((a: number, b: number) => a + b, 0)).toBe(51)
+    expect(r.urls['cloud://c/s0.png']).toBe('https://tmp/cloud://c/s0.png')
+    expect(r.urls['cloud://c/s50.png']).toBe('https://tmp/cloud://c/s50.png')
+    expect(r.urls['https://ext/z.png']).toBeUndefined()
   })
 })
 
@@ -308,6 +405,27 @@ describe('码批次（黄金：数量闸·聚合·列码 cursor 分页）', () =
     expect(lc.hasMore).toBe(true)
     expect(lc.nextCursor).toBeTruthy()
     expect((await post('listBatchCodes', {})).error).toBe('NO_BATCH')
+  })
+
+  it('大白话：批次翻页中途读炸不装成扫到底——整体报错，不回半份', async () => {
+    control.seed(
+      'qrcodes',
+      Array.from({ length: 250 }, (_, i) => ({
+        _id: 'Q' + i,
+        courseId: 'c1',
+        batchId: 'b1',
+        status: 'unused',
+        createdAt: i,
+      }))
+    )
+    control.setBeforeGet(({ coll, skip }: any) => {
+      if (coll === 'qrcodes' && skip === 200) throw new Error('PAGE_FAIL')
+    })
+    const r = await post('listBatches', { courseId: 'c1' })
+    control.setBeforeGet(null as never)
+    expect(r.ok).toBe(false)
+    expect(r.status).toBe(500)
+    expect(r.list).toBeUndefined()
   })
 
   it('大白话：列码 cursor 翻页不重不漏，走完拿齐一批、不混别批', async () => {

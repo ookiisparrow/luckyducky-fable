@@ -1,7 +1,7 @@
 <script setup lang="ts">
-// 二维码卡片设计器（换皮丢了整块·误判「卡后端」·实则后端 getCard/saveCard + cards 集合早就绪·仅前端从没接）：
+// 二维码卡片设计器（前端 Cards.vue + 后端 getCard/saveCard + cards 集合）：
 // 正面=插画面（满版图+品牌角标）/ 反面=二维码面（标题/副文案/占位/扫码引导/退货小字+品牌条）·双面实时预览·防抖自动保存·
-// 定稿并启用（第 6 步批次生成前置）·卡面 SVG 下载（印刷交付）。深链自商品页「卡片设计」。
+// 定稿并启用（第 5 步批次生成前置）·卡面 SVG 下载（印刷交付）。深链自商品页「卡片设计」。
 import { ref, computed, onMounted, onBeforeUnmount, watch, nextTick } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { getCard, saveCard, uploadImage, listDrafts } from '../api/products'
@@ -9,8 +9,9 @@ import { b64SizeOk } from '../lib/mapProducts'
 import { launchErrorText } from '../lib/mapSystem'
 import { buildFrontSvg, buildBackSvg, type CardModel } from '../lib/cardSvg'
 import { serialSave } from '../lib/serialSave'
+import { compressImage } from '../lib/compressImage'
 // 视图层原语（批F 共享 UI）+ lucide 图标——仅新增 import，管道零改。
-// 注意：lucide 的 Image 与 compress() 里 new Image() 的全局 Image 同名，别名 ImageIcon 防遮蔽。
+// 注意：lucide 的 Image 与全局 Image 同名，别名 ImageIcon 防遮蔽。
 import UiButton from '../components/ui/Button.vue'
 import Card from '../components/ui/Card.vue'
 import Badge from '../components/ui/Badge.vue'
@@ -35,10 +36,9 @@ const product = ref<Record<string, any> | null>(null)
 const coverUrl = ref('')
 // 死胡同改选择器（UX 体检批3）：顶层导航直入无 productId 时列商品可选，不再甩红错叫人绕路
 const pickRows = ref<{ id: string; name: string; coverUrl: string }[] | null>(null)
-// 同路由 query 变更不重跑 setup（productId 是 setup 期常量）——replace 后 reload 一次最诚实，
-// 效果等同从商品页深链进入
+// 同路由只改 query 不重跑 setup（productId 是 setup 期常量）——Shell 按 productId 重挂本页
 function pickProduct(id: string) {
-  void router.replace({ path: '/cards', query: { productId: id } }).then(() => location.reload())
+  void router.replace({ path: '/cards', query: { productId: id } })
 }
 
 const PRESETS = [
@@ -156,7 +156,7 @@ async function pickArt(e: Event) {
   const file = (e.target as HTMLInputElement).files?.[0]
   ;(e.target as HTMLInputElement).value = ''
   if (!file || busyArt.value || !card.value) return
-  const b64 = await compress(file)
+  const b64 = await compressImage(file)
   if (!b64SizeOk(b64)) {
     loadErr.value = '图片压缩后仍超限，换小一点的图'
     return
@@ -198,7 +198,7 @@ async function finalize() {
     return
   }
   // 先落库、成功才翻定稿态（审核补漏·病根#14 伪成功）：不乐观翻——防前端显「已定稿」而后端仍 draft，
-  // 第 6 步码批次依赖 cardFinal 落库·否则生成失败且排障无线索。
+  // 第 5 步码批次依赖 cardFinal 落库·否则生成失败且排障无线索。
   if (saveTimer) {
     clearTimeout(saveTimer) // 取消未触发的防抖定时器（只挡得住这半·同 Products/HomeContent 约定）
     saveTimer = null
@@ -206,7 +206,7 @@ async function finalize() {
   const next = card.value.status === 'final' ? 'draft' : 'final'
   // 定稿写并入同一条 serialSave 队列（P1 复审补漏·根因#8）：不再旁路直发 saveCard，改走 flushSave()
   // 本尊（非 .settled()）——trigger() 对「已在途」的链只标脏、不并发再发一次 POST，会等其跑完再补跑
-  // 一轮；期间若又有新 autosave 触发（watch 的 900ms 计时器到点），一样标脏排进同一条链，不会跟本次
+  // 一轮；期间若又有新 autosave 触发（watch 的 700ms 计时器到点），一样标脏排进同一条链，不会跟本次
   // 定稿写并发在途。pendingStatus 保证链上「当前轮 + 尾随补跑轮」发出的都是 next 状态，不被旧 draft
   // 覆盖；flushSave() 收尾即整条链跑空，autoState 反映的是链上最后一轮（即本次定稿）的真实结果。
   pendingStatus = next
@@ -218,30 +218,6 @@ async function finalize() {
     loadErr.value = ''
   } else {
     loadErr.value = (next === 'final' ? '定稿' : '取消定稿') + '保存失败：请重试'
-  }
-}
-
-async function compress(file: File): Promise<string> {
-  const url = URL.createObjectURL(file)
-  try {
-    const img = await new Promise<HTMLImageElement>((resolve, reject) => {
-      const i = new Image()
-      i.onload = () => resolve(i)
-      i.onerror = reject
-      i.src = url
-    })
-    const scale = Math.min(1, 900 / img.width)
-    const canvas = document.createElement('canvas')
-    canvas.width = Math.round(img.width * scale)
-    canvas.height = Math.round(img.height * scale)
-    canvas.getContext('2d')!.drawImage(img, 0, 0, canvas.width, canvas.height)
-    for (const q of [0.8, 0.6, 0.45, 0.3]) {
-      const b64 = canvas.toDataURL('image/jpeg', q).split(',')[1] || ''
-      if (b64SizeOk(b64)) return b64
-    }
-    return ''
-  } finally {
-    URL.revokeObjectURL(url)
   }
 }
 

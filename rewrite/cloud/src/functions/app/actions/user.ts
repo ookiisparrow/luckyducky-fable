@@ -22,7 +22,7 @@ const CAPS = { nickname: 20, bio: 60, avatar: 256, phone: 11 }
 export const login = withOpenId(
   withRateLimit('login', { max: 30, windowMs: 60_000 }, async ({ db, OPENID }) => {
     const users = db.collection(COLLECTIONS.users)
-    const found = await users.where({ _openid: OPENID }).get()
+    const found = await users.where({ _openid: OPENID }).limit(1).get()
     const isNew = !found.data.length
     // 云函数是管理端，add 不自动写 _openid，必须显式写入（否则查不回）
     const user = isNew
@@ -31,7 +31,7 @@ export const login = withOpenId(
           nickname: '',
           avatar: '',
           phone: '',
-          createdAt: db.serverDate(),
+          createdAt: Date.now(), // 毫秒数字：与改资料/授权同形；后台 dateTime 只认数字，云端日期回读后注册时间是空白
         })
       : found.data[0]
     await storeUnionId(db, OPENID, user).catch(() => {})
@@ -97,7 +97,7 @@ export const updateProfile = withOpenId(
 
     // 先查后改（不用 update 的 stats 判建档：内容未变 updated=0 会误判重复建档）
     const users = db.collection(COLLECTIONS.users)
-    const found = await users.where({ _openid: OPENID }).get()
+    const found = await users.where({ _openid: OPENID }).limit(1).get()
     if (found.data.length) {
       const doc = found.data[0]
       await users.doc(doc._id).update({ data: patch })
@@ -117,14 +117,15 @@ export const updateProfile = withOpenId(
 
 const OWNED_STRIP_CAP = 200 // 同 getMyCourses 上界·一人激活/进度极少触顶；触顶剩行下轮再删（ponytail: 不做成游标清扫器）
 
-/** 按归属字段有界摘除本人行（集合未建/读失败当空·fail-soft 不挡主路径）。 */
-async function removeOwned(db: any, coll: string, field: string, value: string): Promise<void> {
+/** 按归属字段有界摘除本人行。真没有行才当空；读失败返回 false，调用方不得报已删除。 */
+async function removeOwned(db: any, coll: string, field: string, value: string): Promise<boolean> {
   const res = await db
     .collection(coll)
     .where({ [field]: value })
     .limit(OWNED_STRIP_CAP)
     .get()
-    .catch(() => ({ data: [] }))
+    .catch(() => null)
+  if (!res) return false // 库挂 ≠ 没有可删行（根因#14）
   for (const d of res.data || []) {
     await db
       .collection(coll)
@@ -132,6 +133,7 @@ async function removeOwned(db: any, coll: string, field: string, value: string):
       .remove()
       .catch(() => {})
   }
+  return true
 }
 
 /**
@@ -153,16 +155,16 @@ export const deleteAccount = withOpenId(
       updatedAt: now,
     }
     const users = db.collection(COLLECTIONS.users)
-    const found = await users.where({ _openid: OPENID }).get()
+    const found = await users.where({ _openid: OPENID }).limit(1).get()
     if (found.data.length) {
       await users.doc(found.data[0]._id).update({ data: blank })
     } else {
       await ensureDoc(COLLECTIONS.users, OPENID, { _openid: OPENID, createdAt: now, ...blank })
     }
 
-    await removeOwned(db, COLLECTIONS.activations, '_openid', OPENID)
-    await removeOwned(db, COLLECTIONS.progress, '_openid', OPENID)
-    await removeOwned(db, COLLECTIONS.kfIdentity, 'openid', OPENID)
+    if (!(await removeOwned(db, COLLECTIONS.activations, '_openid', OPENID))) return err(ERR.INTERNAL)
+    if (!(await removeOwned(db, COLLECTIONS.progress, '_openid', OPENID))) return err(ERR.INTERNAL)
+    if (!(await removeOwned(db, COLLECTIONS.kfIdentity, 'openid', OPENID))) return err(ERR.INTERNAL)
 
     const qrs = await db
       .collection(COLLECTIONS.qrcodes)

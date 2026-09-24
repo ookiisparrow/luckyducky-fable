@@ -61,7 +61,7 @@ export function normalizePem(raw: string): string {
   return `-----BEGIN ${type}-----\n${lines.join('\n')}\n-----END ${type}-----\n`
 }
 
-export interface SignOpts {
+interface SignOpts {
   method: string
   urlPath: string // path + query（被签内容·须与请求一致）
   body: string // GET 为空串

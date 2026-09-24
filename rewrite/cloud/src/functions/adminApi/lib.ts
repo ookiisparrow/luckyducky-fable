@@ -1,5 +1,5 @@
 import crypto from 'crypto'
-import { str, notifyAlert } from '../../kit'
+import { str, notifyAlert, isDocMissing, isEmptyDoc } from '../../kit'
 import { PAID_ORDER_STATUSES } from '@ldrw/shared'
 export { str } // 供 action 模块复用（saveCard / saveHomeContent 等截断）
 
@@ -32,7 +32,7 @@ export interface Ctx {
   caps?: string[] // 认证主体能力位（'*'=超管全量·坐席台分配 scope 判超管用）
 }
 
-export const CORS = {
+const CORS = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
   'Access-Control-Allow-Headers': 'Content-Type',
@@ -68,6 +68,32 @@ export async function ensure(db: any, coll: string) {
   }
 }
 
+// 集合未建 ≠ 库挂了。isDocMissing 故意不认 COLLECTION_NOT_EXIST（库存钱链：集合没了不能当「无档不限量」）。
+// 内容预读：集合还没建＝真没有文档，第一次保存前合法空；权限/超时仍当读失败。
+export function isCollectionMissing(e: unknown): boolean {
+  const o = e && typeof e === 'object' ? (e as Record<string, unknown>) : null
+  const t = [o && o.message, o && o.errMsg, o && o.errmsg, o && o.code, o && o.errCode, e]
+    .map((x) => (x == null ? '' : String(x)))
+    .join('\n')
+  if (/permission denied|PERMISSION_DENIED|-502003|ECONNRESET|NETWORK_TIMEOUT/i.test(t)) return false
+  return /COLLECTION_NOT_EXIST|-502005|collection does not exist/i.test(t)
+}
+
+// 预读一份文档：缺档 ≠ 读失败（根因#14）。原 .get().catch(() => null) 把网络/权限/集合故障也折成「没有这份」，
+// 写路径就会按空档/rev=0 覆盖或拿失败基线做 GC。缺档 data=null；读失败 ok=false——调用方必须停写。
+// 判据复用 kit isDocMissing（真 sdk 缺档文案已查证，禁再抄一份更宽的 /does not exist/）。
+// 集合未建走 isCollectionMissing：后台页靠读成功才放开保存，不当读失败挡第一次落档。
+export async function readDoc(p: Promise<any>): Promise<{ ok: true; data: any | null } | { ok: false }> {
+  try {
+    const got = await p
+    if (isEmptyDoc(got)) return { ok: true, data: null }
+    return { ok: true, data: got.data }
+  } catch (e) {
+    if (isDocMissing(e) || isCollectionMissing(e)) return { ok: true, data: null }
+    return { ok: false }
+  }
+}
+
 // 激活码状态数据链（退款判据 + 订单详情共用·根因#8 真数据不伪造）：买家对某商品对应课程是否
 // 已激活/已进课。courseId＝products.courseId·回退 course-<productId>（与 genQrcodes/StepBatch 同口径）；
 // 查 activations（activateCourse 写的 {_openid, courseId, enteredAt}）。
@@ -83,9 +109,9 @@ export async function activationFor(db: any, openid: string, productId: string) 
     ? await db
         .collection('activations')
         .where({ _openid: openid, courseId })
+        .limit(1)
         .get()
-        .then((r: any) => r.data)
-        .catch(() => [])
+        .then((r: any) => (r && r.data) || [])
     : []
   const act = acts[0] || null
   return {
@@ -156,7 +182,7 @@ export async function getTxAlerts(
 // 设密钥流程：部署时设云环境变量 ADMIN_BOOTSTRAP_KEY＝期望口令 → 首登用该口令 → 设定后可移除。
 // 坐席 RBAC 角色→能力位单源（§1.5·B5.2·别让单超管裸奔）：superadmin 全能力；outsourced 外包最小权
 // （只 agent:handle·余皆默认拒·防越权动钱/状态/导出）。中间角色（如内部坐席）按需扩——加新角色 + 给对应 action 标 cap 即可。
-export const ROLES: Record<string, string[]> = {
+const ROLES: Record<string, string[]> = {
   superadmin: ['*'],
   // 外包最小权（§1 定稿·根因#3·master 整合收窄）：**仅 agent:handle**——承面C 坐席台（查 listQueue/getThread + 回复 send +
   // 认领/放手/升级/结束 + 快捷回复读 kb·**不含**动钱/动状态/退款·留商户超管）。**刻意去掉裸 customer:view**：
@@ -170,7 +196,7 @@ export const capsForRole = (role: string): string[] => ROLES[role] || []
 // 前端只存令牌不存口令原文（口令是可复用主凭证，落在外包机器上=失守；令牌 12h 自灭 + 停号即拒）。
 // 存储形状：账号 doc.sessions = [{ hash, exp, via, at }]（sha 入库·绝不存明文）；数组容多设备
 // （商户同时登控制台+坐席台不互踢），签发时剪过期、超容剪最旧。守卫 admin-session-token-not-password。
-export const SESSION_TTL_MS = 12 * 60 * 60 * 1000 // 12h·一个工作班次；过期重登（企微内静默 OAuth 无感）
+const SESSION_TTL_MS = 12 * 60 * 60 * 1000 // 12h·一个工作班次；过期重登（企微内静默 OAuth 无感）
 const SESSION_MAX = 8 // 单账号并存会话上限（多设备够用·防 sessions 数组无界膨胀）
 
 /** 签发会话令牌：写进账号 doc.sessions（剪过期/超容），返回令牌明文（只此一次·不再可取回）。 */

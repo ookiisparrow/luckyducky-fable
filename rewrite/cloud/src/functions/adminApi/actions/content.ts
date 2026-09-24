@@ -1,10 +1,11 @@
-import { reply, ensure, str, type Ctx } from '../lib'
+import { reply, ensure, str, readDoc, type Ctx } from '../lib'
 import { notifyAlert } from '../../../kit'
 
 // —— 首页内容（橱窗逐块②③：hero 文案 / 信任条 / FAQ；规格 §八）——
 export async function getHomeContent({ db }: Ctx) {
-  const got = await db.collection('content').doc('home').get().catch(() => null)
-  return reply(200, { ok: true, home: got?.data || null })
+  const got = await readDoc(db.collection('content').doc('home').get())
+  if (!got.ok) return reply(200, { ok: false, error: 'DOC_READ_FAIL' })
+  return reply(200, { ok: true, home: got.data })
 }
 
 export async function saveHomeContent({ db, data }: Ctx) {
@@ -165,8 +166,9 @@ export async function savePageContent({ db, data }: Ctx) {
     // （读到的 prevData 已含并发方的新版本，本轮 diff 不会对已存在的版本重复追加，天然去重）；
     // 首次建档走 add() 撞 DUPLICATE_ID 即并发方已建，同样重读重试。非钱链路径，用不到分布式锁。
     for (let i = 0; i < HISTORY_CAS_RETRY; i++) {
-      const prev = await coll.doc('agreement').get().catch(() => null)
-      const prevData: any = (prev && prev.data) || {}
+      const prev = await readDoc(coll.doc('agreement').get())
+      if (!prev.ok) return reply(200, { ok: false, error: 'DOC_READ_FAIL' })
+      const prevData: any = prev.data || {}
       const prevHist = Array.isArray(prevData.history) ? prevData.history : []
       const hasV = typeof prevData._v === 'number'
       const prevV = hasV ? prevData._v : 0
@@ -176,7 +178,7 @@ export async function savePageContent({ db, data }: Ctx) {
         if (v && v !== prevData[part]?.version) additions.push({ part, version: v, at: new Date().toISOString() })
       }
       const doc = { ...clean, history: [...prevHist, ...additions].slice(-10), _v: prevV + 1, updatedAt: Date.now() }
-      if (!prev || !prev.data) {
+      if (!prev.data) {
         const created = await coll
           .add({ data: { ...doc, _id: 'agreement' } })
           .then(() => true)
@@ -210,16 +212,18 @@ export async function savePageContent({ db, data }: Ctx) {
 export async function getPageContent({ db, data }: Ctx) {
   const page = str(data.page, 40)
   if (!PAGES.includes(page as any)) return reply(400, { ok: false, error: 'UNKNOWN_PAGE' }) // 未知 page fail-closed（根因#3）
-  const got = await db.collection('content').doc(page).get().catch(() => null)
-  return reply(200, { ok: true, page, content: (got && got.data) || null })
+  const got = await readDoc(db.collection('content').doc(page).get())
+  if (!got.ok) return reply(200, { ok: false, error: 'DOC_READ_FAIL' })
+  return reply(200, { ok: true, page, content: got.data })
 }
 
 // —— 求助面板「辅助视频」（全局共用·所有课程同一份；存 content 集合 doc 'helpVideos'）——
 // 小程序播放页求助面板「遇到问题了」列表即此；控制台「帮助视频」增删改 + 上传视频（复用 getVideoUploadMeta 直传）。
 // 管理端读回原始 videoFileId（已过口令闸）便于显「已传」/保存；小程序公开读经 catalog/getHelpVideos 换临时 URL（fileID 不出口）。
 export async function listHelpVideos({ db }: Ctx) {
-  const got = await db.collection('content').doc('helpVideos').get().catch(() => null)
-  const d = (got?.data as any) || {}
+  const got = await readDoc(db.collection('content').doc('helpVideos').get())
+  if (!got.ok) return reply(200, { ok: false, error: 'DOC_READ_FAIL' })
+  const d = got.data || {}
   // rev 供前端做 baseRev（乐观并发基线·同 saveCourseDraft 口径）：缺档=0
   return reply(200, { ok: true, items: d.items || [], rev: Number(d.rev) || 0 })
 }
@@ -251,13 +255,14 @@ export async function saveHelpVideos({ db, cloud, data }: Ctx) {
     .filter((it: any) => it.title || it.segments.length)
   await ensure(db, 'content')
   const coll = db.collection('content')
-  const prev = await coll.doc('helpVideos').get().catch(() => null) // GC 基线 + 乐观并发基线：读旧份
+  const prev = await readDoc(coll.doc('helpVideos').get()) // GC 基线 + 乐观并发基线：读旧份
+  if (!prev.ok) return reply(200, { ok: false, error: 'DOC_READ_FAIL' }) // 读失败≠空档：停写停 GC，不当 rev=0 覆盖
   // 乐观并发（批A·内容域并发安全·根因#1·同 saveCourseDraft rev/baseRev/DRAFT_CONFLICT 口径）：整档覆盖。
   // 诚实边界：同 courses.ts 一样是「文档级 get→比对→set」，get 与 set 之间仍有毫秒级 TOCTOU 窗（非
   // checkpoints.ts defmeta 那种条件 update 真 CAS）——帮助视频保存低频、真实冲突是人差几分钟的编辑，可接受。
   // （items 整体替换）＝两处并发编辑（双页签/双管理员）后保存者静默吃掉先保存者的编辑。客户端带上拉取时
   // 的 rev，不符即拒（前端提示重新载入，不静默覆盖）；不带 baseRev 的旧调用按原语义覆盖（部署窗口兼容）。
-  const curRev = prev && prev.data ? Number((prev.data as any).rev) || 0 : 0
+  const curRev = prev.data ? Number(prev.data.rev) || 0 : 0
   const baseRev = Number(data.baseRev)
   // 冲突分支：既不覆盖内容也绝不 GC 删文件——否则先保存者的编辑丢了、其视频还被误删（不可逆）。
   if (Number.isFinite(baseRev) && curRev !== baseRev) return reply(200, { ok: false, error: 'DRAFT_CONFLICT', rev: curRev })
@@ -273,7 +278,7 @@ export async function saveHelpVideos({ db, cloud, data }: Ctx) {
   // 保存本身已成功，但 orphans 删不掉时如实回 ok:false + notifyAlert 留痕（orphans 进 anomalies 账本可人工回收，
   // 低频面不为罕见失败建 pendingGc 队列）——别静默过关让前端误显「已保存」而云存储悄悄只增不减。
   const keep = new Set(items.flatMap((it: any) => it.segments.map((sg: any) => String(sg.videoFileId))))
-  const prevIds = (((prev && (prev.data as any)) || {}).items || []).flatMap((it: any) =>
+  const prevIds = ((prev.data && prev.data.items) || []).flatMap((it: any) =>
     ((it.segments || []) as any[]).map((sg: any) => String(sg.videoFileId || '')).filter(Boolean)
   )
   const orphans = [...new Set(prevIds)].filter((id) => !keep.has(id))

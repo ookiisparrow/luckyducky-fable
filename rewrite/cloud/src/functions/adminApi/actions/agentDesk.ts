@@ -96,8 +96,10 @@ async function agentLimit(db: any, agentId: string): Promise<number> {
 
 // 坐席当前在接会话数（**派生**·防计数漂移·根因#8 桩≠真里的 inc 也不复现）：直接 count 本坐席 active 会话，
 // 不维护 agentState.activeCount 手写计数器（claim/release/close/escalate 后自动准确·无 TOCTOU 漂移）。
-async function activeCountFor(db: any, agentId: string): Promise<number> {
-  const r = await db.collection(COLLECTIONS.csSession).where({ agentId, status: 'active' }).count().catch(() => ({ total: 0 }))
+// count 失败返 null（不当 0）——调用方 fail-closed，避免席位被超领。
+async function activeCountFor(db: any, agentId: string): Promise<number | null> {
+  const r = await db.collection(COLLECTIONS.csSession).where({ agentId, status: 'active' }).count().catch(() => null)
+  if (!r) return null
   return (r && r.total) || 0
 }
 
@@ -163,6 +165,7 @@ export async function claimConversation(ctx: Ctx): Promise<any> {
   // 跟"甩给超管兜底"的设计意图矛盾）：isSuper 直接放行，不查 activeCountFor/agentLimit。
   if (!p.isSuper) {
     const [count, limit] = await Promise.all([activeCountFor(db, p.agentId), agentLimit(db, p.agentId)])
+    if (count == null) return reply(200, { ok: false, error: ERR.WRITE_FAIL })
     if (count >= limit) return reply(200, { ok: false, error: 'AT_CAPACITY', limit })
   }
   const now = Date.now()
@@ -278,9 +281,8 @@ export async function getThread(ctx: Ctx): Promise<any> {
   const PRE_CONTEXT_MS = 10 * 60_000
   // 合流取舍（2026-07-13·mp-7fixes 同步 PR#16→main）：本函数被 #16（深审·GRACE_MS 游标回退窗）与 main（PR#20 批B·
   // tie-group 补查）各自独立重写、解同一「同秒消息分页丢失」根因但契约互斥（GRACE_MS 靠客户端 msgid 去重容忍重取，
-  // tie-group 契约要求服务端跨轮零重复）。承重并发代码不做行级硬拼——取 main tie-group 版为准（新、在目标分支、
-  // 测试原样通过）；#16 的「出站毫秒>入站秒截断的晚到同秒消息」修复另立批用兼容 tie-group 的方式重叠（见待办与债 flag）。
-  // 【#124 另立批·2026-08-24】该修复不在本函数——根因在归档侧：kfCallback/archive.ts 入站 at 旧取 send_time*1000
+  // tie-group 契约要求服务端跨轮零重复）。承重并发代码不做行级硬拼——取 main tie-group 版为准。
+  // 【#124·2026-08-24】晚到同秒根因在归档侧：kfCallback/archive.ts 入站 at 旧取 send_time*1000
   // （秒截断）与出站 Date.now() 毫秒混用同一条游标轴，晚到同秒顾客消息 at 落在已推进 cursor 之前被 at > since 永久
   // 跳过（P1）。已改入站 at＝统一入库时刻（毫秒·单调递增），晚到消息归档时刻必大于此前任何已交付 cursor——
   // tie-group 边界机制零改动、契约不变（等价测试见 app-admin6.test.ts）。

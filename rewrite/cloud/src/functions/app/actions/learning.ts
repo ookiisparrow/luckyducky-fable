@@ -16,6 +16,7 @@ import {
   recordAnomaly,
   isVodFileId,
   signVodPlayUrl,
+  isDocMissing,
 } from '../../../kit'
 
 const QR = QRCODE_STATUS_SPEC.transitions[0] // unused→activated（声明单源，不散写状态串）
@@ -31,6 +32,7 @@ async function ensureActivation(
   const legacy = await db
     .collection(COLLECTIONS.activations)
     .where({ code, _openid: OPENID })
+    .limit(1)
     .get()
     .catch(() => ({ data: [] }))
   if (legacy.data.length) return legacy.data[0]
@@ -116,7 +118,7 @@ export const confirmEnter = withOpenId(
     const code = String((event as any).code || '').trim()
     if (!code) return err(ERR.BAD_ARGS)
 
-    const acts = await db.collection(COLLECTIONS.activations).where({ code, _openid: OPENID }).get()
+    const acts = await db.collection(COLLECTIONS.activations).where({ code, _openid: OPENID }).limit(1).get()
     if (!acts.data.length) return err(ERR.NOT_ACTIVATED)
     const act = acts.data[0]
 
@@ -267,8 +269,21 @@ export const getCourses = async (event: unknown = {}) => {
   const db = getDb()
   const ids = requestedCourseIds(event)
   if (ids) {
-    const docs = await Promise.all(ids.map((id) => db.collection(COLLECTIONS.courses).doc(id).get().catch(() => null)))
-    return ok({ list: docs.filter((d: any) => d && d.data).map((d: any) => publicCourse(d.data)) })
+    try {
+      const docs = await Promise.all(
+        ids.map(async (id) => {
+          try {
+            return await db.collection(COLLECTIONS.courses).doc(id).get()
+          } catch (e) {
+            if (isDocMissing(e)) return null // 真无这门课
+            throw e
+          }
+        })
+      )
+      return ok({ list: docs.filter((d: any) => d && d.data).map((d: any) => publicCourse(d.data)) })
+    } catch {
+      return err(ERR.INTERNAL) // 库挂 ≠ 没有这门课（根因#14）
+    }
   }
   // 显式上界（病根#7·守卫 rw-app-catalog-reads-bounded·深审 P2 同处独立发现取并）：同 getProducts 口径，
   // 防默认 100 条静默截断——课程目录破百后第 101 门起从用户课程页无声消失。
@@ -306,6 +321,7 @@ export const getPlaybackUrl = withOpenId(
       db
         .collection(COLLECTIONS.activations)
         .where({ _openid: OPENID, courseId, enteredAt: db.command.neq(null) })
+        .limit(1)
         .get()
         .catch(() => ({ data: [] })),
     ])
@@ -356,18 +372,16 @@ export const getMyCourses = withOpenId(async ({ db, OPENID }) => {
   return ok({ list: Object.values(byCourse) })
 })
 
-/** 我的学习进度（只本人·集合未建=空）。 */
+/** 我的学习进度（只本人·真没学过才空；库挂不装成 0%）。 */
 export const getMyProgress = withOpenId(async ({ db, OPENID }) => {
-  try {
-    const res = await db
-      .collection(COLLECTIONS.progress)
-      .where({ _openid: OPENID })
-      .limit(200)
-      .get()
-    return ok({ list: res.data })
-  } catch {
-    return ok({ list: [] })
-  }
+  const res = await db
+    .collection(COLLECTIONS.progress)
+    .where({ _openid: OPENID })
+    .limit(200)
+    .get()
+    .catch(() => null)
+  if (!res) return err(ERR.INTERNAL) // 库挂 ≠ 没有进度（根因#14·同 getUser 读失败口径）
+  return ok({ list: res.data })
 })
 
 async function addTo(db: any, coll: string, data: any) {
@@ -442,6 +456,7 @@ export const trackEvent = withOpenId(
       const owns = await db
         .collection(COLLECTIONS.activations)
         .where({ _openid: OPENID, courseId, enteredAt: _.neq(null) })
+        .limit(1)
         .get()
         .catch(() => ({ data: [] }))
       if (!owns.data.length) return ok()
@@ -454,7 +469,7 @@ export const trackEvent = withOpenId(
       const progress = db.collection(COLLECTIONS.progress)
       let found
       try {
-        found = await progress.where({ _openid: OPENID, courseId }).get()
+        found = await progress.where({ _openid: OPENID, courseId }).limit(1).get()
       } catch {
         found = { data: [] }
       }

@@ -1,6 +1,6 @@
 <script setup lang="ts">
-// 配方与组装（设计语言一致性·M3 UI 批17）：全局模板（共用料+毛线槽）+ 每产品差异位（三色+专属件）→
-// 预演（只读看短缺）→ 执行组装（快照冻结·同单不双扣）。逻辑未动，仅套设计语言。
+// 配方与组装：全局模板（共用料+毛线槽）+ 每产品差异位（三色+专属件）→
+// 预演（只读看短缺）→ 执行组装（快照冻结·同单不双扣）。
 import { ref, onMounted, watch, computed, nextTick } from 'vue'
 import { Plus, X, ClipboardList } from 'lucide-vue-next'
 import { getBomSetup, saveBomTemplate, saveBomProfile, previewAssembly, runAssembly, listAssemblies, listMaterials } from '../api/scm'
@@ -30,7 +30,7 @@ const asmHasMore = ref(false)
 // 组装记录加载失败标记（P2·深审20260712 失败伪装空态）：listAssemblies 单独失败时 assemblies=[]，
 // EmptyState 若仍显「还没有组装记录」＝把查询失败伪装成空账——文案按此标记分流。
 const asmFailed = ref(false)
-const products = ref<Array<Record<string, any>>>([]) // 全产品目录（换皮 SCM 域整体没接·致只显 id/无 SKU 下拉/看不到未填差异位）
+const products = ref<Array<Record<string, any>>>([]) // 全产品目录
 // 产品名解析 + 未填差异位总览 + 组装规格 SKU 下拉（接回 listDrafts 一并复原）
 const productName = (id: unknown) => productNameOf(products.value, id)
 const unprofiled = computed(() => unprofiledProducts(products.value, profiles.value))

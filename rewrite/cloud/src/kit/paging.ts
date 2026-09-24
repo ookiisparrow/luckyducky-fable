@@ -21,7 +21,7 @@ export function pageParams(req: PageReq | undefined, defaultLimit = 20) {
 }
 
 /** 复合游标形状（P2·根因#7 tiebreaker 修复）：v=cursorField 值，id=该行 _id（打破同值平局）。 */
-export interface CompoundCursor {
+interface CompoundCursor {
   v: unknown
   id: unknown
 }
