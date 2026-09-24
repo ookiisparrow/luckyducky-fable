@@ -1,5 +1,5 @@
 <script setup lang="ts">
-// 人工配置清单（批 B9·设计契约：TopBar chip + 说明 banner + 单卡分组表；批 B10 升级：可填写保存）：
+// 人工配置清单：TopBar chip + 说明 banner + 单卡分组表；带 fill 元数据的项可在本页填写保存。
 // 把散落在云函数环境变量 / admin 页内 DB 字段 / 纯人工外部后台项 / 资产正册的散落配置拼一屏「配了没」
 // （条数以后端 groups 动态计·不手抄——客观计数纪律，权威断言在 config-checklist.test.ts）。
 // 只读探测铁律不变（getConfigChecklist 响应从不回显任何已存密钥/配置真实值·只回 status 布尔态）；

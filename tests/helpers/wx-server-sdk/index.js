@@ -103,7 +103,7 @@ class DocRef {
   async get() {
     // 写前注入同款读侧钩子（批H：casDecrement 瞬时读故障测试）：可对 doc(id).get() 单点注入抛错
     // （非「无档」的真读失败，如网络/DB 瞬时故障），与下方「无档」reject 区分——回调收到 {coll,id}
-    // （Query.get() 的 beforeGet 收到 {coll,filter,skip}，字段不同，测试按需解构，互不干扰）。默认无。
+    // （Query.get() 的 beforeGet 收到 {coll,filter,skip,limit}，字段不同，测试按需解构，互不干扰）。默认无。
     if (typeof G.beforeGet === 'function') await G.beforeGet({ coll: this.coll, id: this.id })
     const found = rows(this.coll).find((d) => d._id === this.id)
     if (!found) throw new Error('DOCUMENT_NOT_FOUND') // 真 sdk：缺失即 reject
@@ -194,7 +194,8 @@ class Query {
   async get() {
     // 写前注入同款读侧钩子（批1 bug sweep·kit/inventory getInventory 分页扫描单页失败测试）：
     // 可在具体页（按 coll/skip 判断）注入抛错，模拟真机分页扫描中单页 .get() 失败（非到底）。默认无。
-    if (typeof G.beforeGet === 'function') await G.beforeGet({ coll: this.coll, filter: this._filter, skip: this._skip })
+    if (typeof G.beforeGet === 'function')
+      await G.beforeGet({ coll: this.coll, filter: this._filter, skip: this._skip, limit: this._limit })
     return { data: this._rows().map(clone) }
   }
   async count() {

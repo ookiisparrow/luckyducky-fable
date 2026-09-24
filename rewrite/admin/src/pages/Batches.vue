@@ -1,5 +1,5 @@
 <script setup lang="ts">
-// 激活码批次（design/console.pen S9 视觉 + 批次详情抽屉·M3 UI 批6）：统计卡/进度条/状态 chip 由真聚合派生、
+// 激活码批次：统计卡/进度条/状态 chip 由真聚合派生、
 // 详情抽屉码表接 listBatchCodes 真码（cursor 分页，一页 50）+ CSV/印刷包另取齐整批。
 // 诚实边界：后端 listBatches 需 courseId（无「列全量批次」action）——按课程范围查（非跨课「全部」）；
 // listBatchCodes 只回码串无每码激活态——码表不标单码已激活/未用（记待办）。印刷包 ZIP 已还原（卡面SVG+地址CSV+说明·二轮批Cards-2）。

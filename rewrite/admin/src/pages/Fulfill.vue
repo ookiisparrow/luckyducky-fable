@@ -1,8 +1,6 @@
 <script setup lang="ts">
-// 发货工作台（换皮回归还原批·1:1 承接旧线 packages/admin/src/pages/Fulfill.vue + fulfill/Step*.vue）：
-// ①拣货备货（全部待发货按产品汇总）②打印内部标签（QR=订单id 贴箱）③扫码发货（扫箱码选单+扫快递码发货）。
-// 三步是同一物理队列（全部待发货）的三个视图·数字互相咬合；新付款单只在点「刷新队列」时进队。
-// 新线单页三段（旧线是路由 /fulfill/step/:n + <component :is>）；no-alert：内联状态行代替 toast。
+// 发货工作台：①拣货备货 ②打印内部标签（QR=订单id 贴箱）③扫码发货。
+// 无电子面单，先打自家标签再扫快递码；三步同一待发货队列，新付款单只在点「刷新队列」时进队。
 import { ref, computed, nextTick, onMounted } from 'vue'
 import QRCode from 'qrcode'
 import { RefreshCw, ScanLine, Printer, Package } from 'lucide-vue-next'

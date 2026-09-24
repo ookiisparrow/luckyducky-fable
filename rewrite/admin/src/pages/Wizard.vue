@@ -5,8 +5,24 @@
 import { ref, computed, onMounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { Store, ArrowLeft, ChevronLeft, ChevronRight, Check } from 'lucide-vue-next'
-import { listDrafts, publishProduct, saveDraft } from '../api/products'
-import { productSteps, productState, basicsMissing, wizardCanPublish, freshDraft, publishErrorText, type StepDot } from '../lib/mapProducts'
+import { listDrafts, publishProduct, republishProduct, saveDraft } from '../api/products'
+import {
+  productSteps,
+  productState,
+  basicsMissing,
+  wizardCanPublish,
+  freshDraft,
+  publishErrorText,
+  draftSyncLabel,
+  draftSyncConfirm,
+  restoreSaleLabel,
+  restoreSaleConfirm,
+  restoreSaleOk,
+  draftSyncBusy,
+  draftSyncMissingHint,
+  draftSyncOk,
+  type StepDot,
+} from '../lib/mapProducts'
 import { launchErrorText } from '../lib/mapSystem'
 import { wizardStepFromQuery, WIZARD_STEPS, WIZARD_STEP_MAX } from '../lib/nav'
 import { isUploadLocked } from '../lib/uploadLock'
@@ -33,6 +49,7 @@ let msgLoadFail = false // 当前 banner 是否为「加载失败」——回刷
 const message = ref('')
 const busy = ref(false)
 const pubConfirm = ref(false)
+const restoreArmed = ref(false)
 const createdDraftId = ref('') // /launch 刚建档后首包偶发读不到新档时，区分「暂未同步」与真不存在
 
 const STEP_NAMES = WIZARD_STEPS.map((s) => s.label)
@@ -40,7 +57,10 @@ const STEP_HINTS = WIZARD_STEPS.map((s) => s.hint)
 const LEGEND = [
   { term: '保存草稿', desc: '只存在后台，前台看不到' },
   { term: '发布课程', desc: '视频对已购学员可见' },
-  { term: '同步到小程序', desc: '商品出现在小程序橱窗' },
+  { term: '上架', desc: '第一次公开卖' },
+  { term: '同步到小程序', desc: '在售时把草稿推给顾客' },
+  { term: '同步草稿', desc: '已下架时把新草稿写出去，商品仍停售' },
+  { term: '恢复销售', desc: '按上次上架页再卖，不是刚才改的草稿' },
   { term: '上传卡片', desc: '把卡面素材交给印厂' },
   { term: '生成批次', desc: '产出可扫码的二维码序列' },
 ] as const
@@ -69,6 +89,7 @@ async function reloadProduct() {
     return
   }
   pubConfirm.value = false // 刷新即复位危险态（P1·防旧武装的「确认同步」残留、重进一击直发·批3 规格）
+  restoreArmed.value = false
   loadError.value = false
   const r: any = await listDrafts()
   if (!r.ok) {
@@ -131,11 +152,31 @@ async function shelve() {
   const r: any = await publishProduct(id.value)
   busy.value = false
   if (r.ok) {
-    message.value = '已同步到小程序，打开小程序即可看到该商品'
+    message.value = draftSyncOk(state.value)
     msgLoadFail = false // 这是动作反馈·非加载失败——随后的 reloadProduct 成功不得把它当 stale banner 清掉（病根#14）
     void reloadProduct()
   } else {
-    message.value = publishErrorText(r.error)
+    message.value = publishErrorText(r.error, state.value)
+    msgLoadFail = false
+  }
+}
+
+async function restoreSale() {
+  if (busy.value || !id.value || state.value !== 'unlisted') return
+  if (!restoreArmed.value) {
+    restoreArmed.value = true
+    return
+  }
+  restoreArmed.value = false
+  busy.value = true
+  const r: any = await republishProduct(id.value)
+  busy.value = false
+  if (r.ok) {
+    message.value = restoreSaleOk()
+    msgLoadFail = false
+    void reloadProduct()
+  } else {
+    message.value = '恢复失败：' + String(r.error || '')
     msgLoadFail = false
   }
 }
@@ -164,6 +205,7 @@ async function createDraft() {
 // 切步 / 从 /launch 建档后换成带编号路由 → 刷新进度真值 + 收起同步二次确认
 watch(id, () => {
   pubConfirm.value = false
+  restoreArmed.value = false
   if (id.value) {
     const same = !!(product.value && String(product.value.id || product.value._id) === id.value)
     if (!same) loading.value = true // 换编号才转圈；同档切步不撕编辑器
@@ -177,6 +219,7 @@ watch(id, () => {
 
 watch(step, async () => {
   pubConfirm.value = false
+  restoreArmed.value = false
   if (id.value) {
     await settleAllSaves()
     void reloadProduct()
@@ -212,7 +255,7 @@ onMounted(() => {
           <UiButton :disabled="busy" @click="createDraft">{{ busy ? '建立中…' : '建立草稿，接着传封面' }}</UiButton>
         </div>
         <dl class="legend-grid">
-          <div class="legend-cap">这五件事互不等同</div>
+          <div class="legend-cap">这些事互不等同</div>
           <div v-for="item in LEGEND" :key="item.term" class="legend-row">
             <dt>{{ item.term }}</dt>
             <dd>{{ item.desc }}</dd>
@@ -236,10 +279,13 @@ onMounted(() => {
         <Badge v-if="state === 'onsale'" tone="green">小程序在售</Badge>
         <Badge v-else-if="state === 'unlisted'" tone="red">已从橱窗拿下</Badge>
         <Badge v-else tone="brand">草稿（顾客看不见）</Badge>
-        <Badge v-if="missing.length" tone="red">同步到小程序还差：{{ missing.join('、') }}</Badge>
-        <UiButton :disabled="!canPublish || busy" :title="canPublish ? '' : '补齐封面、名称、价格和规格后才能同步到小程序'" @click="shelve">
+        <Badge v-if="missing.length" tone="red">{{ draftSyncMissingHint(state, missing) }}</Badge>
+        <UiButton :disabled="!canPublish || busy" :title="canPublish ? '' : '补齐封面、名称、价格和规格后才能' + draftSyncLabel(state)" @click="shelve">
           <Store v-if="!busy" :size="15" :stroke-width="1.8" />
-          {{ busy ? '同步中…' : pubConfirm ? '确认同步到小程序？' : '同步到小程序' }}
+          {{ busy ? draftSyncBusy(state) : pubConfirm ? draftSyncConfirm(state) : draftSyncLabel(state) }}
+        </UiButton>
+        <UiButton v-if="state === 'unlisted'" variant="ghost" :disabled="busy" @click="restoreSale">
+          {{ restoreArmed ? restoreSaleConfirm() : restoreSaleLabel() }}
         </UiButton>
       </PageHeader>
 
@@ -299,7 +345,7 @@ onMounted(() => {
           </div>
         </div>
         <dl v-if="step === 1" class="legend-grid">
-          <div class="legend-cap">这五件事互不等同</div>
+          <div class="legend-cap">这些事互不等同</div>
           <div v-for="item in LEGEND" :key="item.term" class="legend-row">
             <dt>{{ item.term }}</dt>
             <dd>{{ item.desc }}</dd>
