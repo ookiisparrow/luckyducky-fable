@@ -10,7 +10,7 @@
 - **新会话先 `git fetch`**，对 `origin/main` 看（本地常落后几十个提交，错题本 E24）；当前阶段看 `docs/现状与路线.md`，待办看 `gh issue list`。
 
 ## 1. 干活流水线（全文见 `docs/元模式.md`）
-1. **事实只从代码取**：名字、数字、清单以代码为准，文档写「以 X 为准」不抄值；注释不写「由守卫 X 保证」，除非 grep 确认它在。动手前 grep `docs/判例索引.json`，别把否掉的方案再做一遍。
+1. **事实只从代码取**：名字、数字、清单以代码为准，文档写「以 X 为准」不抄值；注释不写「由守卫 X 保证」，除非 grep 确认它在。动手前 grep `docs/关键决策记录.md`（含「拍板不做」）与 `docs/根因账本.md`，别把否掉的方案再做一遍。
 2. **危险区靠硬闸**：钱链提交要 `MONEYCHAIN_ALLOWED`，红区提交要 `[red-review: 复核人]`，部署要 `DEPLOY_ALLOWED`，都由老板授权。被闸拦 = 修代码，不绕闸，不 `--no-verify`。
 3. **完成只由机器判**：`npm run check`（pre-commit 与 CI 同源）全绿才算；先写会红的测试再实现，反向自检（改坏必红，再还原）。改动走 `/refactor-batch`，体检走 `/audit`，修 bug 走 `/systematic-debugging`，验收走 `/acceptance-check`。
 4. **声明带证据**：PR 里写「真机验过/压测过」必须附截图、日志或命令输出，没附当没做。一批一个 squash，推分支不推 main。

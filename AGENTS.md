@@ -5,7 +5,7 @@
 ## 进场三步
 
 1. **读约定**：`CLAUDE.md`（危险速览/干活流水线/不变量/判断题，全在里面）。
-2. **认地图**：仓根 `modules.json`（模块归属 + 危险分级 `tier: red/yellow/green`）；动手前 grep `docs/判例索引.json` 查有没有判过。
+2. **认地图**：仓根 `modules.json`（模块归属 + 危险分级 `tier: red/yellow/green`）；动手前 grep `docs/关键决策记录.md` 与 `docs/根因账本.md` 查有没有判过。
 3. **看现状**：先 `git fetch` 对 origin/main（本地历史可能落后·错题本 E24）→ `docs/现状与路线.md` + `git log --oneline -5`。
 
 ## 三条铁律（无论厂商）
