@@ -36,7 +36,7 @@ describe('商品草稿与上架（黄金：白名单/四道门/软下架不隐�
     expect(d.status).toBe('preparing')
   })
 
-  it('大白话：上架四道门——无草稿/缺封面/坏价/缺 SKU 分别拒；齐全成功转在售、首发默认上首页', async () => {
+  it('大白话：上架四道门——无草稿/缺封面/坏价/缺 SKU 分别拒；齐全成功转在售、首发默认不上首页', async () => {
     expect((await post('publishProduct', { id: 'ghost' })).error).toBe('NO_DRAFT')
     await post('saveDraft', { product: { ...DRAFT, cover: '' } })
     expect((await post('publishProduct', { id: 'p1' })).error).toBe('NEED_COVER')
@@ -49,9 +49,21 @@ describe('商品草稿与上架（黄金：白名单/四道门/软下架不隐�
     expect((await post('publishProduct', { id: 'p1' })).ok).toBe(true)
     const p = control.dump('products')[0]
     expect(p.price).toBe(198) // 字符串价转数字
-    expect(p.featured).toBe(true)
+    expect(p.featured).toBe(false) // #212 首发默认不进首页；要挂须显式 featured:true
     expect(p.sold).toBe(0) // 未填销量默认 0（详情页藏掉）
     expect(control.dump('productsDraft')[0].status).toBe('onsale')
+  })
+
+  it('大白话：首发勾了首页才 featured=true；再同步不覆盖橱窗开关', async () => {
+    await post('saveDraft', { product: DRAFT })
+    expect((await post('publishProduct', { id: 'p1', featured: true })).ok).toBe(true)
+    expect(control.dump('products')[0].featured).toBe(true)
+    await post('saveShowcase', { items: [{ id: 'p1', sort: 1, featured: false }] })
+    expect(control.dump('products')[0].featured).toBe(false)
+    await post('saveDraft', { product: { ...DRAFT, name: '改名' } })
+    expect((await post('publishProduct', { id: 'p1', featured: true })).ok).toBe(true) // 再同步带 featured 也不得改橱窗
+    expect(control.dump('products')[0].featured).toBe(false)
+    expect(control.dump('products')[0].name).toBe('改名')
   })
 
   it('大白话：销量后台可填可改——整数落草稿并上架写入 products.sold；负数/小数/乱码洗成非负整数', async () => {
@@ -133,13 +145,21 @@ describe('商品草稿与上架（黄金：白名单/四道门/软下架不隐�
     const r = await post('listDrafts')
     expect(r.cardFinal.p1).toBe(true) // 卡片定稿
     expect(r.hasVideo['course-p1']).toBe(true) // 课程有视频段
+    expect(r.coursePublished['course-p1']).toBe(true) // 已发布课
     expect(r.hasBatch['course-p1']).toBe(true) // 该课有码批次（aggregate group·不扫全表）
     // 无卡片/视频/批次的产品：各态不误报完成
     await post('saveDraft', { product: { id: 'p2', name: '空', price: '1', cover: 'x', skus: [] } })
     const r2 = await post('listDrafts')
     expect(r2.cardFinal.p2).toBeFalsy()
     expect(r2.hasVideo['course-p2']).toBeFalsy()
+    expect(r2.coursePublished['course-p2']).toBeFalsy()
     expect(r2.hasBatch['course-p2']).toBeFalsy()
+    // 草稿有视频、课未发布：有文件 ≠ 已发布（#213）
+    await post('saveDraft', { product: { id: 'p3', name: '草稿课', price: '1', cover: 'x', skus: [], courseId: 'course-p3' } })
+    control.seed('coursesDraft', [{ _id: 'course-p3', id: 'course-p3', chapters: [{ lessons: [{ segments: [{ videoFileId: 'cloud://draft.mp4' }] }] }] }])
+    const r3 = await post('listDrafts')
+    expect(r3.hasVideo['course-p3']).toBe(true)
+    expect(r3.coursePublished['course-p3']).toBeFalsy()
   })
 })
 
