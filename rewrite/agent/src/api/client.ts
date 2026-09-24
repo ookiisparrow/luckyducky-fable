@@ -1,5 +1,5 @@
 // 坐席台客户端（与 admin client 同构·独立包小副本：令牌键独立·支持企微 ?code= 免登）。
-export interface ClientResult {
+interface ClientResult {
   ok: boolean
   status: number
   error?: string

@@ -10,7 +10,7 @@ export const main = withAdminGate(async ({ db }) => {
     await db
       .collection('courses')
       .doc(c.id)
-      .set({ data: { ...c, updatedAt: db.serverDate() } })
+      .set({ data: { ...c, updatedAt: Date.now() } })
     ids.push(c.id)
   }
   return ok({ count: ids.length, ids })

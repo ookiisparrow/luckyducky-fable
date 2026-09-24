@@ -153,4 +153,13 @@ describe('HelpVideos.vue 乐观并发接线（批A）', () => {
     expect(flushBody).toMatch(/if \(r\.ok \|\| r\.error === 'GC_DELETE_FAIL'\) \{/)
     expect(flushBody).toMatch(/baseRev\.value = Number\(r\.rev\)/)
   })
+  it('大白话：手动保存只走 flushSave，成功路径不再第二次 saveHelpVideos（对齐 Courses·夜间审计 2026-09-12 admin）', () => {
+    const src = scriptSetupSrc(helpVideosSrc)
+    const body = extractFunctionBody(src, 'async function save() {')
+    expect(body).toMatch(/await flushSave\(\)/)
+    expect(body).not.toMatch(/saveHelpVideos/)
+    expect(body).toMatch(/saveState\.value === 'saved'/)
+    // 冲突态露出已有 reload()——本页没有课程页那种常驻「载入」钮
+    expect(helpVideosSrc).toMatch(/v-if="conflicted"[^>]*@click="reload"/)
+  })
 })

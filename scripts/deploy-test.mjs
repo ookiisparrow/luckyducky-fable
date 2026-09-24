@@ -2,10 +2,8 @@
 /**
  * 部署到【测试环境】（债#19 配套）——把生产线（rewrite/cloud）函数部署到测试 env。
  *
- * 【指针大迁移·盲区体检批3·病根#16 ⑤】原版 build:cloud + 读 cloudbaserc.json 旧 38 函数清单
- * ＝把冻结旧线部署到测试环境（M5 后测试的不是生产跑的代码）。现改：build:rw-cloud + 函数清单
- * 直接从 rewrite/cloud/dist 产物目录取（与 deploy-fns 同源·不再依赖 cloudbaserc 旧清单——
- * cloudbaserc 的迁移需先从控制台抄回 14 函数真实内存/超时值，待办见 GitHub Issue「测试环境常量与环境抽象层入仓」）。
+ * 【指针大迁移·盲区体检批3·病根#16 ⑤】函数清单从 rewrite/cloud/dist 产物目录取（与 deploy-fns 同源）。
+ * cloudbaserc.json 的 functionRoot 已是 rewrite/cloud/dist；函数内存/超时以其中 functions 为准。
  * **物理防误部署生产**：env 等于生产 envId 直接中止。本脚本在你自己终端跑（不经部署闸 hook）。
  *
  * 用法：node scripts/deploy-test.mjs --target test
@@ -60,8 +58,8 @@ console.log(`部署 ${fns.length} 个函数 → 测试环境 ${env}`)
 for (const name of fns) {
   console.log(`  → ${name}`)
   try {
-    // --dir 显式指活线产物：不带 --dir 时 tcb 会按 cloudbaserc.json 的 functionRoot 取源，
-    // 而 cloudbaserc 仍指旧线（迁移需先抄回控制台真实函数配置·待办见 GitHub Issues）——不显式即部署错线
+    // --dir 指向 rewrite/cloud/dist/<fn>，与 cloudbaserc.json 的 functionRoot（rewrite/cloud/dist）是同一份活线产物。
+    // 省略 --dir 时 tcb 也按这份 functionRoot 取源。
     execSync(`tcb fn deploy ${name} --dir ${join(DIST, name)} -e ${env} --force`, { stdio: 'inherit', cwd: ROOT })
   } catch {
     console.error(`  ✗ ${name} 部署失败（看上面 tcb 输出；flag 不符就改本脚本的 tcb 行）`)

@@ -1,7 +1,6 @@
 <script setup lang="ts">
-// 首页内容表单（批C·从 pages/HomeContent.vue 整体搬入·逻辑逐字保留）：hero 文案/品牌/特写/信任条/放心区/
-// 买家秀/FAQ/收尾/页脚 + 激活页背景图（全局 + 按课三态）。背景图三态存于 content/home 档、由 saveHomeContent
-// 全档写——故随首页签保留在此不迁移（拆到欢迎签会出双写全档互踩）。
+// 首页内容表单：hero/品牌/特写/信任条/放心区/买家秀/FAQ/收尾/页脚 + 激活页背景图（全局 + 按课三态）。
+// 保存走本组件自己的 home-content 全档写，未并入 usePageContent——背景图三态与首页同档，拆签会双写互踩。
 // 保存链：serialSave 串行防乱序 + 900ms 防抖 + loaded load-guard + onBeforeUnmount 离签补存 + uploadImage 管线。
 import { ref, onMounted, onBeforeUnmount, watch, nextTick } from 'vue'
 import { Plus, Check, Trash2, X, ImageOff, ShieldCheck, HelpCircle } from 'lucide-vue-next'

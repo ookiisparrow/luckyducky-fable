@@ -1,11 +1,10 @@
 <script setup lang="ts">
-// 客服会话（设计语言一致性·M3 UI 批13 + 批 B6 深链预填）：按客户检索时间轴 + 质检报表（样本口径诚实标注）。
-// 深链预填（批 B6·本页原无 route.query 读取能力·新增最小实现）：Csat.vue 差评行「查会话」
-// router.push({path:'/conversations', query:{externalUserId}}) 跳转过来——挂载时读 route.query.externalUserId/
-// openid 预填输入框并自动检索一次（同 Batches.vue/Cards.vue 既有「props(嵌入) || route.query(深链) || 空」范式）。
+// 客服会话：按客户检索时间轴 + 质检报表（样本口径诚实标注）。
+// 深链：满意度差评行「查会话」带 ?externalUserId（或 openid）跳来，挂载时预填并自动检索一次。
 import { ref, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
 import { Search, RotateCcw, ClipboardCheck, RefreshCw } from 'lucide-vue-next'
+import { CS_REFRESH_COPY } from '@ldrw/shared'
 import { searchConversations, conversationsReport, sampleQc, saveQcMark, listQcSampled, getTrialRefreshGate, refreshTrialSession } from '../api/cs'
 import { mapMessages, mapReport, mapQcRows, type MsgVM, type ReportVM, type QcRowVM } from '../lib/mapCs'
 import { useLatest } from '../lib/latest'
@@ -207,7 +206,7 @@ async function doTrialRefresh() {
   }
   const reason = trialRefreshReason.value.trim()
   if (!reason) {
-    trialRefreshMsg.value = '请填写刷新原因（必填）'
+    trialRefreshMsg.value = CS_REFRESH_COPY.adminReasonPlaceholder
     trialRefreshArmed.value = false
     return
   }
@@ -227,7 +226,7 @@ async function doTrialRefresh() {
   const r = await refreshTrialSession(payload)
   trialRefreshBusy.value = false
   if (r.ok) {
-    trialRefreshMsg.value = '已刷新，epoch 已 +1'
+    trialRefreshMsg.value = CS_REFRESH_COPY.adminSuccess
     return
   }
   const err = String((r as { error?: string }).error || '')
@@ -273,14 +272,14 @@ onMounted(() => {
     </Card>
 
     <!-- 会话检索（按客户）：本页无「会话列表/客户上下文」数据源，不建三栏实时收件箱，保持检索→时间轴 -->
-    <Card title="会话检索（按客户）" :sub="trialRefreshOn ? '按客户检索时间轴 · 测版会话刷新（无刷金）' : '按 openid / 外部用户号 / 关键词 检索消息时间轴'">
+    <Card title="会话检索（按客户）" :sub="trialRefreshOn ? '按客户检索时间轴 · ' + CS_REFRESH_COPY.adminListHint : '按 openid / 外部用户号 / 关键词 检索消息时间轴'">
       <div class="ld-toolbar">
         <label class="ld-search"><input v-model="openid" placeholder="openid" @keyup.enter="search" /></label>
         <label class="ld-search"><input v-model="externalUserId" placeholder="或 外部用户号（未绑定时）" @keyup.enter="search" /></label>
         <label class="ld-search"><input v-model="keyword" placeholder="关键词（页内过滤）" @keyup.enter="search" /></label>
         <UiButton @click="search"><Search :size="14" :stroke-width="1.8" /><span>检索</span></UiButton>
         <template v-if="trialRefreshOn">
-          <label class="ld-search"><input v-model="trialRefreshReason" placeholder="请填写刷新原因（必填）" /></label>
+          <label class="ld-search"><input v-model="trialRefreshReason" :placeholder="CS_REFRESH_COPY.adminReasonPlaceholder" /></label>
           <label class="trial-force">
             <input v-model="trialRefreshForce" type="checkbox" />
             强制（人工中）

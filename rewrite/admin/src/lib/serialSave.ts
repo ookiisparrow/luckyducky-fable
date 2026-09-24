@@ -39,9 +39,8 @@ export function serialSave(run: () => Promise<unknown>, key?: string) {
   return trigger
 }
 
-// 会话过期提示用（批D·根因2）：是否有资源正在自动保存链上（在途请求或已排队的补存）——
-// 会话过期跳登录前若命中，说明这次过期可能正好打断了一次未落盘的编辑，不能悄无声息就跳走。
-// 只统计走了共享槽位（传 key）的调用——无 key 的组件实例级队列没有登记处，也没有跨组件协调的必要。
+// 共享槽位是否还有在途/待补存：会话过期跳登录前若命中，说明可能打断了未落盘的编辑，不能悄无声息就跳走。
+// 只统计传了 key 的共享槽；无 key 的实例级队列没有跨组件协调。
 export function hasPendingSaves(): boolean {
   for (const slot of registry.values()) if (slot.running || slot.dirty) return true
   return false
