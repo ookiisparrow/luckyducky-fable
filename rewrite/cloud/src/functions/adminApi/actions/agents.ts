@@ -38,7 +38,9 @@ export async function createAgent({ db, data }: Ctx) {
   const _ = db.command
   // ① 撞口令预检：有界扫描（同 checkKey 手法·最坏 ≤50 行 scrypt 比对，管理端低频操作可接受）+ keyMatches
   // 单源比对——认得住 legacy sha 存量账号与已带盐新账号两种在场形态，不漏判。
-  const dupScan = await db.collection('adminConfig').where({ keyHash: _.exists(true) }).limit(50).get().catch(() => ({ data: [] }))
+  // 读失败不当空扫描：否则预检形同虚设、撞口令也能建号
+  const dupScan = await db.collection('adminConfig').where({ keyHash: _.exists(true) }).limit(50).get().catch(() => null)
+  if (!dupScan) return reply(503, { ok: false, error: 'KEY_LOOKUP_FAIL' })
   alertIfScanAtCap(dupScan.data || [], 50, 'createAgent.dupScan')
   if ((dupScan.data || []).some((r: any) => keyMatches(r, key))) return reply(409, { ok: false, error: 'KEY_TAKEN' })
   if (await wecomUserIdTaken(db, wecomUserId, '')) return reply(409, { ok: false, error: 'WECOM_ID_TAKEN' })
@@ -54,7 +56,17 @@ export async function createAgent({ db, data }: Ctx) {
   // 并发双方可能都通过检查各自建号、撞出两账号共享同一口令/wecomUserId（登录串号/免登歧义）。
   // 写完立即重扫描重比对，keyMatches 命中 >1 说明确实撞了——回滚自己刚建的这份、回 409（两侧同时回滚也
   // 安全：都失败重试即可，绝不留双凭证）。管理端低频操作，多一次读的代价可接受。
-  const keyDupScan = await db.collection('adminConfig').where({ keyHash: _.exists(true) }).limit(50).get().catch(() => ({ data: [] }))
+  const keyDupScan = await db.collection('adminConfig').where({ keyHash: _.exists(true) }).limit(50).get().catch(() => null)
+  if (!keyDupScan) {
+    await db
+      .collection('adminConfig')
+      .doc(id)
+      .remove()
+      .catch(async () => {
+        await notifyAlert('security', 'createAgent', 'ROLLBACK_FAIL', { id, which: 'keyHash' })
+      })
+    return reply(503, { ok: false, error: 'KEY_LOOKUP_FAIL' })
+  }
   alertIfScanAtCap(keyDupScan.data || [], 50, 'createAgent.keyDupScan')
   const keyDupCount = ((keyDupScan.data || []) as any[]).filter((r: any) => keyMatches(r, key)).length
   if (keyDupCount > 1) {

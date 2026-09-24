@@ -142,6 +142,19 @@ describe('认领/放手/升级/结束（黄金 §一：互斥·上限·归属·�
     expect((await post('claimConversation', A2, { sessionId: 'nope' })).status).toBe(404)
   })
 
+  it('大白话：在接会话数 count 失败拒认领——不当 0 让坐席超领', async () => {
+    control.seed('csSession', [S('s1', 'pending'), S('busy', 'active', { agentId: 'agent-1' })])
+    control.seed('agentState', [{ _id: 'agent-1', status: 'online', limit: 5 }])
+    control.setBeforeCount(({ coll, filter }: any) => {
+      if (coll === 'csSession' && filter && filter.status === 'active') throw new Error('MOCK_COUNT_FAIL')
+    })
+    const r = await post('claimConversation', A1, { sessionId: 's1' })
+    control.setBeforeCount(null as never)
+    expect(r.ok).toBe(false)
+    expect(r.error).toBe('WRITE_FAIL')
+    expect(control.dump('csSession').find((s: any) => s._id === 's1').status).toBe('pending')
+  })
+
   it('大白话（P2 评审）：超管接待上限满额也能接被外包升级的会话——豁免容量闸，否则外包甩单没人能接（escalateToMerchant 设计意图）', async () => {
     // 超管（agentId='admin'）已 claim 满默认上限（DEFAULT_AGENT_LIMIT=5，未配 agentState 走默认）
     const busy = Array.from({ length: 5 }, (_, i) => S('busy-' + i, 'active', { agentId: 'admin' }))
@@ -553,6 +566,34 @@ describe('外包账号管理（黄金 §十：口令哈希·停用即时·白名
     expect((await post('createAgent', SUPER, { name: 'x', key: A1 })).status).toBe(409) // 撞 legacy 存量口令（无 keySalt）登录会串号·拒
     expect((await post('createAgent', SUPER, { name: 'y', key: 'brand-new-key-3' })).status).toBe(409) // 撞已带盐新账号口令同样拒（盐感知比对两形态都认得出）
     expect((await post('createAgent', A1, { name: 'x', key: 'whatever-key' })).status).toBe(403) // 外包不能自扩权
+  })
+
+  it('大白话：撞口令预检扫描读失败拒建号——DB 挂了不当「没撞」放行', async () => {
+    control.setBeforeGet(({ coll, filter }: any) => {
+      if (coll === 'adminConfig' && filter && filter.keyHash) throw new Error('MOCK_DB_FAIL')
+    })
+    const before = control.dump('adminConfig').length
+    const r = await post('createAgent', SUPER, { name: '库挂号', key: 'brand-new-scan-fail' })
+    control.setBeforeGet(null as never)
+    expect(r.status).toBe(503)
+    expect(r.error).toBe('KEY_LOOKUP_FAIL')
+    expect(control.dump('adminConfig').length).toBe(before)
+  })
+
+  it('大白话：写后撞口令复核扫描读失败——回滚刚建的号，不当「没撞」放行', async () => {
+    let keyHashGets = 0
+    control.setBeforeGet(({ coll, filter }: any) => {
+      if (coll === 'adminConfig' && filter && filter.keyHash) {
+        keyHashGets++
+        if (keyHashGets >= 2) throw new Error('MOCK_DB_FAIL')
+      }
+    })
+    const beforeIds = control.dump('adminConfig').map((a: any) => a._id)
+    const r = await post('createAgent', SUPER, { name: '复核挂号', key: 'brand-new-rescan-fail' })
+    control.setBeforeGet(null as never)
+    expect(r.status).toBe(503)
+    expect(r.error).toBe('KEY_LOOKUP_FAIL')
+    expect(control.dump('adminConfig').map((a: any) => a._id)).toEqual(beforeIds)
   })
 
   it('大白话：停用即时生效（连登录都不行）；不许停超管；列表只列外包、不回口令哈希；企微 userid 全局唯一防登错身份', async () => {
