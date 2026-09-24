@@ -50,6 +50,7 @@ describe('seed / init 管理闸（黄金 §十二：防覆盖生产数据·清�
     const c = (await seedCourses({})) as any
     expect(c.count).toBe(SEED_COURSES.length)
     expect(control.dump('courses').length).toBe(SEED_COURSES.length)
+    expect(typeof control.dump('courses')[0].updatedAt).toBe('number')
     await seedCourses({}) // 幂等：id 作 _id·set upsert·重跑不翻倍
     expect(control.dump('courses').length).toBe(SEED_COURSES.length)
   })

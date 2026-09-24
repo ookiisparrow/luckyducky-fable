@@ -29,6 +29,10 @@ describe('login（黄金：静默 upsert·unionid 桥接·并发幂等）', () =
     expect(docs.length).toBe(1)
     expect(docs[0]._id).toBe('oNEW')
     expect(docs[0]._openid).toBe('oNEW')
+    // 注册时间必须是毫秒数字：后台客户搜索用 dateTime，只认数字；云端日期经回读显示成空白
+    expect(typeof docs[0].createdAt).toBe('number')
+    expect(docs[0].createdAt).toBeGreaterThan(1_000_000_000_000)
+    expect(r.user.createdAt).toBe(docs[0].createdAt)
   })
 
   it('大白话：再登取回同一档不重复建档', async () => {
