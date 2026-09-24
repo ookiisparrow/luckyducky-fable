@@ -43,7 +43,6 @@
 ```bash
 npm run check                      # 质量闸
 node scripts/check-structure.mjs   # 结构快检，秒级
-npm run report                     # 守卫/测试/病根地图面板
 npm run build:rw-cloud             # 云函数产物（部署另为人工授权）
 npm run preview:mp                 # 推真机预览
 ```

@@ -21,7 +21,6 @@
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
     "check:structure": "node scripts/check-structure.mjs",
-    "report": "node scripts/check-report.mjs",
     "preflight": "node scripts/preflight.mjs",
     "loadtest": "node scripts/loadtest.mjs",
     "env:resolve": "node scripts/env-resolve.mjs",

@@ -3023,7 +3023,7 @@ export const fileRules = [
 ]
 
 // ============== 类型层 + 行为测试守卫（typeAndTestGuards）==============
-// 这些守卫没有独立的 JS 规则对象（活在 TS 编译期或 tests/），此处仅登记出处供 npm run report 展示。
+// 这些守卫没有独立的 JS 规则对象（活在 TS 编译期或 tests/），此处登记名字→出处，代码注释里的「守卫 X」据此可查。
 // mechanism：'ts'（编译期，reverseTest 为手动篡改说明）| 'test'（reverseTest 指向测试文件）。
 export const typeAndTestGuards = [
   {
@@ -3128,9 +3128,6 @@ export const typeAndTestGuards = [
   // 云存储上传路径消毒（深审 P3·根因#3 不信前端）：storeImage/getVideoUploadMeta 的 pid/courseId 客户端串
   // 直接拼对象键——'../' 等路径字符须剥净（[^\w-] 白名单·同 name 口径）、全非法回退 misc。reverseTest 锁此行为。
   { id: 'upload-path-sanitized', mechanism: 'test', roots: ['#3'], reverseTest: 'rewrite/cloud/tests/course-chain-hardening.test.ts' },
-  // 体检面板派生性（正册·可视检查系统批）：面板守卫清单必须=四注册表机器派生（一条不漏不多造）、
-  // 失败现场置顶可见、单测带复跑命令、病根地图与根因账本 §一 同源。reverseTest 锁此派生性。
-  { id: 'check-report-derived', mechanism: 'test', roots: ['正册'], reverseTest: 'tests/scripts/checkReport.test.js' },
   // mp↔cloud 响应契约哨兵（批B10·病根#5 手抄副本漂移 + #8 编译绿≠契约没漂）：mp 物理进不了
   // @ldrw/shared（微信开发者工具编译限制），响应形状全靠手抄——cloud 改键 mp 编译不红＝静默漂移面。
   // 钱链/学习链 5 热 action（createOrder/pay/getMyOrders/getOrderById/getPlaybackUrl）成功响应
@@ -3146,7 +3143,6 @@ export const typeAndTestGuards = [
   { id: 'rw-mp-version-channel', mechanism: 'test', roots: ['#5', '#8'], reverseTest: 'rewrite/mp/tests/app-version.test.ts' },
 ]
 
-// export：供 check-report 体检面板复用同一套遍历/判定（面板=派生视图，禁自建第二套语义）
 // 'rewrite' 加入扫描面（批1·2026-07-10）：唯一在迭代的活代码线，此前 fileRules 全量扫描扫不到，
 // rw- 前缀的新守卫不动这条即是装饰。旧 fileRules（5 条）inScope 全部锁死 packages 路径，扩面不误咬。
 export const SRC_DIRS = ['packages', 'cloudfunctions', 'scripts', 'rewrite']
@@ -3332,8 +3328,8 @@ function assertNoDuplicateIds() {
   return bad
 }
 
-// CLI 入口包进 main()，只在被 node 直接运行时执行——这样测试 / npm run report
-// 可 import 上面三个守卫数组而不触发全量检查（isMain 守门）。
+// CLI 入口包进 main()，只在被 node 直接运行时执行——这样测试可 import 上面的守卫数组
+// 而不触发全量检查（isMain 守门）。
 async function main() {
   const args = process.argv.slice(2)
 
