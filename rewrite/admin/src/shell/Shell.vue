@@ -103,6 +103,12 @@ const NAV: Array<{ group: string; icon: Component; solo?: boolean; items: Array<
 ]
 
 const route = useRoute()
+// 卡片页同路由只改 query 不重跑 setup（productId 是 setup 期常量）。
+// 按 productId 重挂，代替 Cards.pickProduct 的 location.reload（会冲掉未落盘自动保存）。
+// 其它页共用稳定 key，避免 /launch → /products/:id/wizard 被拆成两个向导实例。
+const pageKey = computed(() =>
+  route.path === '/cards' ? 'cards:' + String(route.query.productId || '') : 'page',
+)
 // 上下文侧栏（决策§27②）：进上新向导路由切「按步直达」聚焦步导航，否则六组运营 nav
 const wizardMode = computed(() => isWizardPath(route.path))
 const wizardId = computed(() => String(route.params.id || ''))
@@ -224,7 +230,7 @@ function logout() {
         </p>
       </header>
       <main>
-        <router-view />
+        <router-view :key="pageKey" />
       </main>
     </div>
   </div>
