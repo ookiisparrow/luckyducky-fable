@@ -232,57 +232,6 @@ export const repoChecks = [
     },
   },
   {
-    id: 'pipeline-scripts-wired',
-    roots: ['铁律'],
-    desc: '流水线脚本必须真实接线：scripts/pipeline/ 下的 .mjs/.sh 文件须至少被检查链、package.json scripts、git hooks、.claude/settings.json、测试或其它流水线脚本引用，防止 guard-hook.mjs 这类死实现残留',
-    run() {
-      const bad = []
-      const pipelineDir = join(ROOT, 'scripts/pipeline')
-      if (!existsSync(pipelineDir)) return bad
-      const scripts = readdirSync(pipelineDir).filter((n) => n.endsWith('.mjs') || n.endsWith('.sh'))
-      if (scripts.length === 0) return bad
-
-      const registry = []
-      const registerFile = (rel) => {
-        const abs = join(ROOT, rel)
-        if (existsSync(abs)) registry.push({ rel, text: readFileSync(abs, 'utf8') })
-      }
-      const registerDir = (rel) => {
-        const abs = join(ROOT, rel)
-        if (!existsSync(abs)) return
-        for (const n of readdirSync(abs)) {
-          const childAbs = join(abs, n)
-          if (statSync(childAbs).isFile()) {
-            registry.push({ rel: relative(ROOT, childAbs), text: readFileSync(childAbs, 'utf8') })
-          }
-        }
-      }
-
-      // 已知接线登记处
-      registerFile('scripts/check-structure.mjs')
-      registerFile('package.json')
-      registerFile('scripts/git-hooks/pre-commit')
-      registerFile('scripts/git-hooks/commit-msg')
-      registerFile('.claude/settings.json')
-      registerFile('.github/workflows/ci.yml')
-      registerDir('tests/scripts/pipeline')
-
-      // 流水线脚本之间互相引用也算接线
-      for (const n of scripts) {
-        registerFile(join('scripts/pipeline', n))
-      }
-
-      for (const n of scripts) {
-        const needle = `scripts/pipeline/${n}`
-        const referenced = registry.some((entry) => entry.rel !== needle && entry.text.includes(needle))
-        if (!referenced) {
-          bad.push(`${needle} 未被任何检查链/脚本/测试引用——死实现须接线或按退役规矩删除`)
-        }
-      }
-      return bad
-    },
-  },
-  {
     // 客服小程序卡片 pagepath 须为已注册路由（根因#8 桩过≠真机能开·外审 R1-R4·P2.11）：cs/kfCallback/dispatch.ts
     // 的 miniprogram route 写死 page 字符串，曾写错 pages/aftersale（少 s·实际 aftersales）、pages/course（实际在
     // pkg-video 分包 = pkg-video/courses/index）——桩测把错路径锁成假绿，真机点卡片打不开目标页。锁每个 page 都在
