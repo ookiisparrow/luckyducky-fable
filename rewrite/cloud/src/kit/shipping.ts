@@ -16,14 +16,14 @@ import cloud from 'wx-server-sdk'
  *      build.mjs OPENAPI_PERMS 自动产出·守卫 openapi-perm-declared 锁登记不漏）；③ 真单真机验上传成功 +
  *      mp 后台无「待接入发货管理」提醒。代码替不了 ①③ 两步，只把链路做成「配好即生效」。
  */
-export type ShipUpload = {
+type ShipUpload = {
   orderId: string // 商户订单号 out_trade_no（= order.id）
   openid: string // 买家 openid（payer）
   transactionId: string // 微信支付单号（order_number_type=1·首选·无需 mchid）
   company: string // 物流公司中文名（admin 录入）
   trackingNo: string // 运单号
 }
-export type ShipResult = { ok: boolean; error?: string }
+type ShipResult = { ok: boolean; error?: string }
 
 // 微信物流公司编码（delivery_company_list·与快递100 com 编码不同套·债#26）；未命中→'OTHER'（微信允许其他公司）。
 const WX_DELIVERY: Record<string, string> = {

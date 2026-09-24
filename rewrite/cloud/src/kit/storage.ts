@@ -9,7 +9,7 @@ import cloud from 'wx-server-sdk'
  * 的调用行为与现状完全全等**（learning.ts 视频路径零变化，刻意：签发缓存只覆盖长命图片，短命/一次性视频
  * 址不进缓存）。key 含 maxAge（不同 maxAge 不串），TTL 留 5min 安全边际防边界失效。
  */
-export interface TempUrlOpts {
+interface TempUrlOpts {
   /** 换发时向平台申请的地址有效期（秒）；同时作为容器级签发缓存的 TTL 依据。不传＝不缓存（现状全等）。 */
   maxAge?: number
   /** 是否给换到的 https 址拼数据万象图像处理参数（默认关·见 IMAGE_PROC_SUFFIX）。 */

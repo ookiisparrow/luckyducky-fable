@@ -16,7 +16,7 @@ import { alert } from './observe'
  *   （build.mjs OPENAPI_PERMS 自动产·守卫 openapi-perm-declared）；② mp 后台开通内容安全能力；③ 真机验图片
  *   真能拦黄暴恐（imgSecCheck v1 同步·errCode 87014=内容含违规信息）。代码替不了 ②③，只把链路做成「配好即生效」。
  */
-export type SecResult = { ok: boolean; error?: string }
+type SecResult = { ok: boolean; error?: string }
 
 const RISKY = 87014 // 微信内容安全：图片含违规信息
 
