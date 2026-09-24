@@ -1,5 +1,5 @@
 <script setup lang="ts">
-// 帮助视频（设计语言一致性·M3 UI 批12）：播放页「遇到问题了」求助面板内容源（主题→小段两级·全课程共用一份）。
+// 帮助视频：播放页「遇到问题了」求助面板内容源（主题→小段两级·全课程共用一份）。
 import { ref, onMounted, onBeforeUnmount, watch, nextTick } from 'vue'
 import { Upload, Check, Trash2, Plus, Video } from 'lucide-vue-next'
 import { listHelpVideos, saveHelpVideos, uploadVideo } from '../api/content'
