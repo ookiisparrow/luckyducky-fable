@@ -1,5 +1,5 @@
 <script setup lang="ts">
-// 外协单（设计语言一致性·M3 UI 批17）：发织女大团原团 → 收同色带结团 → 应付=收×计件价·损耗=发−收 → 结算销账。
+// 外协单：发织女大团原团 → 收同色带结团 → 应付=收×计件价·损耗=发−收 → 结算销账。
 import { ref, onMounted, computed } from 'vue'
 import { Plus, ClipboardList } from 'lucide-vue-next'
 import { listOutworks, saveOutwork, issueOutwork, receiveOutwork, settleOutwork, cancelOutwork, listMaterials, listSuppliers } from '../api/scm'

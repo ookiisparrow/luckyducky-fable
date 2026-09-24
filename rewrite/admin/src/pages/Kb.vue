@@ -1,5 +1,5 @@
 <script setup lang="ts">
-// 知识库（设计语言一致性·M3 UI 批14）：FAQ 整册编辑（客服 bot 与坐席快捷回复读同一份·整体覆盖式保存——删行即真删）。
+// 知识库：FAQ 整册编辑（客服 bot 与坐席快捷回复读同一份·整体覆盖式保存——删行即真删）。
 import { ref, onMounted } from 'vue'
 import { Trash2, Plus, BookOpen } from 'lucide-vue-next'
 import { listKb, saveKb } from '../api/cs'

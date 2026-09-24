@@ -1,5 +1,5 @@
 <script setup lang="ts">
-// 配方与组装（设计语言一致性·M3 UI 批17）：全局模板（共用料+毛线槽）+ 每产品差异位（三色+专属件）→
+// 配方与组装：全局模板（共用料+毛线槽）+ 每产品差异位（三色+专属件）→
 // 预演（只读看短缺）→ 执行组装（快照冻结·同单不双扣）。
 import { ref, onMounted, watch, computed, nextTick } from 'vue'
 import { Plus, X, ClipboardList } from 'lucide-vue-next'

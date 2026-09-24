@@ -50,6 +50,7 @@ describe('seed / init 管理闸（黄金 §十二：防覆盖生产数据·清�
     const c = (await seedCourses({})) as any
     expect(c.count).toBe(SEED_COURSES.length)
     expect(control.dump('courses').length).toBe(SEED_COURSES.length)
+    expect(typeof control.dump('courses')[0].updatedAt).toBe('number')
     await seedCourses({}) // 幂等：id 作 _id·set upsert·重跑不翻倍
     expect(control.dump('courses').length).toBe(SEED_COURSES.length)
   })
@@ -125,6 +126,25 @@ describe('节点拍照上传（黄金 §八：进课闸·内容安全 fail-close
     expect((await submit({ courseId: 'c1', nodeId: 'n1', fileId: 'f1' })).error).toBe('NOT_ENTITLED') // 未进课
     control.seed('activations', [{ _id: 'a0', _openid: 'oU1', courseId: 'c1', enteredAt: null }]) // 激活未进课也不行
     expect((await submit({ courseId: 'c1', nodeId: 'n1', fileId: 'f1' })).error).toBe('NOT_ENTITLED')
+    expect(control.dump('checkpoints').length).toBe(0)
+  })
+
+  it('大白话：进课资格读失败不再装成没资格——ok:false INTERNAL；真没进课仍 NOT_ENTITLED', async () => {
+    control.setOpenId('oU1')
+    seedEntered()
+    control.setBeforeGet(({ coll }: any) => {
+      if (coll === 'activations') throw new Error('MOCK_DB_FAIL')
+    })
+    const fail = await submit({ courseId: 'c1', nodeId: 'n1', fileId: 'f1' })
+    control.setBeforeGet(null as never)
+    expect(fail.ok).toBe(false)
+    expect(fail.error).toBe('INTERNAL')
+    expect(fail.error).not.toBe('NOT_ENTITLED')
+    expect(control.dump('checkpoints').length).toBe(0)
+    control.reset()
+    control.setOpenId('oU1')
+    const empty = await submit({ courseId: 'c1', nodeId: 'n1', fileId: 'f1' })
+    expect(empty.error).toBe('NOT_ENTITLED')
     expect(control.dump('checkpoints').length).toBe(0)
   })
 

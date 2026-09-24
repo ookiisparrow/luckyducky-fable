@@ -15,7 +15,7 @@ assertMay(_target, 'test-api');
 export const ENV = _target.envId;
 export const FUNCS = {
   app: 'app',           // 用户端网关
-  admin: 'adminApi',    // 管理后台 API（测试环境旧名）
+  admin: 'adminApi',    // 管理后台 API
   inspect: 'inspect',   // 健康巡检
 };
 
