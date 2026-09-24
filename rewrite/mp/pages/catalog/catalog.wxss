@@ -6,7 +6,7 @@
   background: var(--ld-bg-lilac);
 }
 
-/* —— 自绘返回（守卫 rw-mp-custom-nav-has-back）——
+/* —— 自绘返回——
    fixed 而非 absolute：目录区是整页自然流滚动，absolute 会随内容滚走、滚下去就没了返回入口。
    左上角与右上角原生胶囊分居两侧不打架；白色半透明圆底让它在深色 hero 图与浅色空态上都看得清。 */
 .ld-cat-back {

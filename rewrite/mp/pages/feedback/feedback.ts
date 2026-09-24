@@ -20,7 +20,7 @@ Page({
   unloaded: false, // 提交在途页面已退出标记（同 review.ts 范式·P2·bug sweep Round2 item3）：迟到回包别再对下一页 navigateBack+toast
   onUnload() {
     this.unloaded = true
-    if (this.backTimer) clearTimeout(this.backTimer) // 延时返回坞清理·防手动返回后孤儿定时器多弹页（守卫 rw-mp-navback-timer-cleaned）
+    if (this.backTimer) clearTimeout(this.backTimer) // 延时返回坞清理·防手动返回后孤儿定时器多弹页
   },
   onCat(e: WechatMiniprogram.TouchEvent) {
     this.setData({ cat: String(e.currentTarget.dataset.key) })

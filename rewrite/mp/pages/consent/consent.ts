@@ -11,7 +11,7 @@ Page({
     stateLabel: consentLabel(null),
     busy: false,
   },
-  unloaded: false, // 页面已退出标记（H3·守卫 rw-mp-await-side-effect-unloaded-recheck 点名·同 checkout/order-list 范式）
+  unloaded: false, // 页面已退出标记（H3·同 checkout/order-list 范式）
   onLoad() {
     const s = readConsentHint()
     this.setData({ state: s, stateLabel: consentLabel(s) })

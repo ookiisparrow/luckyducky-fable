@@ -1,7 +1,7 @@
 // tabBar 栈底页误触退出提醒（决策§30 落地·2026-07-18）：三页（首页/购物车/我）是页面栈底，安卓返回键＝
 // 直接退出小程序。机制＝隐形 <page-container> 武装拦第一次返回 →「再点一次退出」，2s 内再按放行、2s 后重新武装。
-// 前身 wx.enableAlertBeforeUnload 已判废（对栈底页永远不弹·双死因见 utils/exitGuard 头注），本测试连同
-// 结构守卫 rw-mp-tabbar-exit-guard 一起焊死不许回潮。
+// 前身 wx.enableAlertBeforeUnload 已判废（对栈底页永远不弹·双死因见 utils/exitGuard 头注），本测试焊死
+// 不许回潮。
 // 本测试钉三条行为不变量：① arm 武装、beforeleave 解武装并提示、2s 后自动重新武装；② release 清定时器
 // （切页后不再回调已隐藏页的 setData）；③ app.json 每个 tabBar 页都在源码接线三件套 + wxml 挂了 page-container。
 // 真机覆盖边界（安卓返回键可靠·iOS 侧滑未证实·胶囊 X/home 键/鸿蒙永远拦不到）属根因#8·机器守不了，见 utils/exitGuard 头注。
@@ -95,7 +95,7 @@ describe('tabBar 栈底页误触退出提醒（page-container「再点一次退�
       'pages/me/me': { ts: meRaw, wxml: meWxml },
     }
     for (const p of paths) {
-      // 剥注释后再剥 import 语句：否则删了调用点、光留 import 也算绿（同守卫 rw-mp-tabbar-exit-guard 的教训）
+      // 剥注释后再剥 import 语句：否则删了调用点、光留 import 也算绿
       const ts = stripComments(byPath[p].ts).replace(/^\s*import\s[\s\S]*?from\s*['"][^'"]+['"];?\s*$/gm, '')
       for (const fn of ['armExitGuard(', 'releaseExitGuard(', 'onExitGuardBeforeLeave(']) {
         expect(ts, `${p} 未接线 ${fn}——tabBar 页退出提醒缺武装/清理/消费其一`).toContain(fn)

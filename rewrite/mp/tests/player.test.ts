@@ -3,7 +3,7 @@
 import { describe, it, expect } from 'vitest'
 import { flattenSegments, navSegment, createPlaybackCache, formatClock, clampSeek, lessonStrip, nearestMark } from '../lib/player'
 // 源码扫描式断言（同 home-cards.test.ts 的 ?raw 范式·rewrite/mp tsconfig 无 node:fs）：续播秒/缓冲水位接线是
-// wxml 绑定⟷ts 方法成对（错题本 E2），机器守卫 rw-mp-player-prefetch-cache 咬结构，这里补文本断言逼出成对。
+// wxml 绑定⟷ts 方法成对（错题本 E2），这里用文本断言逼出成对。
 import playerWxmlRaw from '../pages/player/player.wxml?raw'
 import playerTsRaw from '../pages/player/player.ts?raw'
 import playerWxssRaw from '../pages/player/player.wxss?raw'

@@ -94,7 +94,7 @@ Page({
     this.setData({ state: 'loading' })
     void this.onShow()
   },
-  // 自绘返回（守卫 rw-mp-custom-nav-has-back）：custom 导航无原生返回箭头；扫码激活直落本页时
+  // 自绘返回：custom 导航无原生返回箭头；扫码激活直落本页时
   // 页面栈只有一层，goBackOrHome 兜底回首页 tab，不留死按钮。
   onBack() {
     tapHaptic()

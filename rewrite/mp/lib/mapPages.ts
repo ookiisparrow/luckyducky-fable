@@ -1,4 +1,4 @@
-// 五页 CMS 内容映射（纯函数·vitest 钉行为·守卫 rw-mp-page-content-golden）：云端 getPageContent → 视图模型。
+// 五页 CMS 内容映射（纯函数·vitest 钉行为）：云端 getPageContent → 视图模型。
 // 内容纪律（同 mapHome 黄金 §九）：整档 null / 逐块缺 / 逐字段空 都回退「设计默认文案」——CMS 拉不到或
 // 字段被误清空时页面永不空白、不报错（fail-soft）。默认值 = 各页面重设计原稿，逐字搬入本文件单源。
 // welcome.warning（不可退货告知义务）空则强制回默认，不允许被清空；me 未知 key 忽略、visible===false 才隐藏；

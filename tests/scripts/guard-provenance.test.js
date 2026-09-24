@@ -1,5 +1,4 @@
 // 守卫 provenance 完整性——每条守卫都必须标明治哪条病根/主张（roots）。
-// 这是 guard-coverage 体检闸（B3）的前置：没有 provenance 就无法机器核覆盖率。
 // 反向自检：删任一规则的 roots → 本测试红。
 import { describe, it, expect } from 'vitest'
 import { existsSync } from 'node:fs'
@@ -20,7 +19,7 @@ describe('守卫 provenance（roots 不缺失）', () => {
     expect(roots.length, `${kind} ${id} roots 为空`).toBeGreaterThan(0)
   })
 
-  it('每条规则守卫都有 id（注册表可被 guard-coverage 引用）', () => {
+  it('每条规则守卫都有 id', () => {
     for (const [kind, id] of ruleGuards) expect(id, `${kind} 缺 id`).toBeTruthy()
   })
 

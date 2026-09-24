@@ -1,7 +1,7 @@
 <!-- 编辑收货地址·重设计对齐 Checkout.jsx AddressEdit + checkout.css coaddr-* 版式（设计 402px→rpx ×1.87）。
      业务逻辑不动：字段绑定(value/data-field/bind:input)/默认开关(onToggleDefault)/保存(onSave) 一字未改；
      顶部标题走原生导航栏（navigationBarTitleText），故不渲染设计的 co-header/co-nav。
-     所在地区＝微信内置 <picker mode="region"> 省市区级联（全国数据运行时自带·region 空格拼接为真相源·守卫 rw-mp-address-region-picker）。 -->
+     所在地区＝微信内置 <picker mode="region"> 省市区级联（全国数据运行时自带·region 空格拼接为真相源）。 -->
 <view class="coaddr">
   <view class="co-body">
 

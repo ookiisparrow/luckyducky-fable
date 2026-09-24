@@ -45,7 +45,7 @@ async function uploadVideoVod(file: File, onProgress?: (p: number) => void): Pro
 }
 
 /**
- * 视频直传。**走 VOD 须显式 opt-in `allowVod`**（默认云存储老路·fail-safe·守卫 `rw-admin-help-video-stays-cos`）：
+ * 视频直传。**走 VOD 须显式 opt-in `allowVod`**（默认云存储老路·fail-safe）：
  * 本函数为课程视频与帮助视频**共用**——课程线（Courses.vue）传 `{ allowVod: true }` 走 VOD（转码/发布闸/
  * 播放签名整链已建）；帮助视频线（HelpVideos.vue）**恒不传**——其播放侧 `getHelpVideos` 只认云存储 fileID
  * （getTempUrls 批量换址·无 vodUrl 字段、无转码同步、无发布闸兜底），传进 VOD 即换不到地址、求助面板视频

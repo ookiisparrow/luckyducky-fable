@@ -1,7 +1,7 @@
 // 前端错误上报器行为测试（批 B7·治病根#14 client-error 通道 web 半边）：window.onerror/unhandledrejection 的
 // 真实 DOM 事件挂接不在此测——vitest 'rw' project 是 environment:'node'，无 window 全局，installErrorReporter
-// 里的 typeof window!=='undefined' 分支会被跳过；那部分交给 scripts/check-structure.mjs 的
-// rw-web-error-reporter-wired 源码扫描断言（见其头注），是刻意划清的验证责任分工，非漏测。
+// 里的 typeof window!=='undefined' 分支会被跳过；那部分目前无自动验证，
+// 靠真机/浏览器人工核。
 // 模块级 seen/sent 状态需在每个 it 前 vi.resetModules() + 动态 import 取全新模块实例（同 rewrite/agent/tests/
 // client.test.ts 已有先例，避免跨 it 状态串味）。
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'

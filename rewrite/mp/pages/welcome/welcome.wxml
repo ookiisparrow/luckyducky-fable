@@ -12,7 +12,7 @@
 
   <image class="ld-w-logo" src="/static/logo-wordmark.svg" mode="heightFix" style="top: {{statusBarHeight + 40}}px" />
 
-  <!-- 自绘返回（守卫 rw-mp-custom-nav-has-back）：custom 导航无原生返回箭头，此前输入态/废码态
+  <!-- 自绘返回：custom 导航无原生返回箭头，此前输入态/废码态
        只有「重新输入」、退不出去（W2 屏另有「先逛逛，稍后再进课」逃逸链接，那条不动）。
        照片壳是深色压暗底，故用半透明黑底＋反白箭头（与 lilac 壳的 W1/W2 无关，那两屏不加）。 -->
   <view class="ld-w-back" style="top: calc({{statusBarHeight}}px + 24rpx)" bind:tap="onBack" hover-class="ld-w-back-h" hover-stay-time="80">

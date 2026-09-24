@@ -44,7 +44,7 @@ Page({
       void this.activate(code)
     }
   },
-  // CMS W1/W2 文案（fail-soft·拉不到维持默认）：await 恢复点复核 unloaded（守卫 rw-mp-await-side-effect-unloaded-recheck 纪律）。
+  // CMS W1/W2 文案（fail-soft·拉不到维持默认）：await 恢复点复核 unloaded。
   async loadPageContent() {
     const content = await getPageContent('welcome')
     if (this.unloaded) return
@@ -81,7 +81,7 @@ Page({
     if (view.kind === 'activated' && view.courseId) {
       // W1 课程名行（fail-soft）：新激活才取，mine/taken/invalid 三态沉浸壳不显课程名、不必取。
       const course = await getCourseById(view.courseId)
-      if (this.unloaded) return // await 恢复点复核（新增 await 点同守 rw-mp-await-side-effect-unloaded-recheck 纪律）
+      if (this.unloaded) return // await 恢复点复核（新增 await 点同理）
       const title = course ? String((course as Record<string, unknown>).title || '') : ''
       if (title) this.setData({ courseTitle: title })
     }
@@ -111,7 +111,7 @@ Page({
   onRetry() {
     this.setData({ phase: 'input', code: '', kind: 'invalid', bg: '' })
   },
-  // 自绘返回（守卫 rw-mp-custom-nav-has-back）：custom 导航无原生返回箭头，输入态/废码态此前退不出去。
+  // 自绘返回：custom 导航无原生返回箭头，输入态/废码态此前退不出去。
   // 与 onGoHome（W2 屏「先逛逛，稍后再进课」）分工不同：那条是**主动放弃进课**的语义化出口、恒回首页；
   // 这条是通用返回，从「我」页进来的退回「我」、扫码深链进来的兜底回首页。
   onBack() {

@@ -1,5 +1,5 @@
 // 黄金 admin-misc §二（公开目录读）+ productListed（只下发在售）+ learning-content §九（守卫 rw-user-catalog-golden）。
-// 批1·列表瘦身（getProducts 只下发 cover·images[] 收窄进 getProductDetail·守卫 rw-catalog-list-cover-only）。
+// 批1·列表瘦身（getProducts 只下发 cover·images[] 收窄进 getProductDetail）。
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import cloud, { control } from 'wx-server-sdk'
 import { main as app } from '../src/functions/app/index'
@@ -70,7 +70,7 @@ describe('getProducts（列表只签 cover·images 不下发·批1 瘦身）', (
     expect(r.ok).toBe(true)
     const p1 = r.list.find((p: any) => p._id === 'p1')
     expect(p1.cover).toBe('https://tmp/cloud://p1-cover.jpg')
-    expect('images' in p1).toBe(false) // 列表瘦身：images 不下发（守卫 rw-catalog-list-cover-only）
+    expect('images' in p1).toBe(false) // 列表瘦身：images 不下发
   })
 
   it('大白话：cover 已是 https / 缺 cover 字段原样透传·images 一律不下发', async () => {

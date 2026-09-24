@@ -167,8 +167,8 @@ Page({
     else wx.navigateTo({ url, fail: () => wx.redirectTo({ url }) })
   },
 
-  // 转发/朋友圈钩子（分发前置·决策§29·守卫 rw-mp-share-wired）：路径带 ?id= 保证收到的人打开的是
-  // 同一件商品（守卫钉此）；标题/图取当前商品真身，vm 未就绪回退品牌语不造假。
+  // 转发/朋友圈钩子（分发前置·决策§29）：路径带 ?id= 保证收到的人打开的是
+  // 同一件商品；标题/图取当前商品真身，vm 未就绪回退品牌语不造假。
   onShareAppMessage() {
     const vm = this.data.vm
     return vm

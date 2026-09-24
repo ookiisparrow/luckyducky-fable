@@ -30,8 +30,7 @@
 | mp 只经 lib 层对接云读数、无本地样例回退；依赖方向 pages→lib 不反转 | `[机器守: rw-mp-cloud-only]` `[机器守: rw-dep-direction]` |
 | 云原语（init/身份）只在 kit；支付/退款平台接缝单点收 kit `callFlow` | `[机器守: rw-kit-only-cloud-primitives]` `[机器守: rw-flow-seam-single]` |
 | 动作类失败禁静默吞，告警走 `observe.alert` 单出口（读路径缺席=null 不在此列） | `[机器守: rw-flow-observable]` |
-| 代码量/依赖锁走基线棘轮；死导出/幽灵依赖/孤儿资产零容忍 | `[机器守: rw-loc-budget]` `[机器守: rw-lock-budget]` `[机器守: rw-dead-exports]` `[机器守: rw-phantom-deps]` `[机器守: rw-orphan-assets]` |
-| 守卫自身可信：id 唯一、扫描面够得着活线、工具脚本禁旧线引用 | `[机器守: guard-id-unique]` `[机器守: guard-scan-liveness]` `[机器守: rw-toolchain-no-oldline]` |
+| 依赖锁走基线棘轮；死导出/幽灵依赖/孤儿资产零容忍 | `[机器守: rw-lock-budget]` `[机器守: rw-dead-exports]` `[机器守: rw-phantom-deps]` `[机器守: rw-orphan-assets]` |
 
 全表唯一真值＝`scripts/check-structure.mjs`（此处只列设计期高频撞到的）；每条守卫为什么存在查 `docs/根因账本.md`。
 

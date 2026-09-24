@@ -2,8 +2,7 @@ import { reply, ensure, str, isCollectionMissing, type Ctx } from '../lib'
 import { notifyAlert } from '../../../kit'
 
 // 知识库维护（后台360工作站 B4.1·admin 侧）：管理端维护 FAQ/知识条目（问题 + 答案 + 分类 + 启用 + 顺序 + 精选），
-// 客服 bot（cs/kfCallback/dispatch.ts）按 _id（=FAQ 键·同分流菜单叶子 id）读 kb 发答案——FAQ 答案单源（守卫
-// faq-via-kb-single-source·根因#5）。整体覆盖式保存（同 saveCheckpoints 范式）：admin 提交整份条目列表，
+// 客服 bot（cs/kfCallback/dispatch.ts）按 _id（=FAQ 键·同分流菜单叶子 id）读 kb 发答案——FAQ 答案单源（根因#5）。整体覆盖式保存（同 saveCheckpoints 范式）：admin 提交整份条目列表，
 // 后端 upsert 全部 + 删除不在列表里的旧条目，一个 action 兼「增删改」。确定性 _id=key（doc(key).set·data 不带 _id）。
 // featured（R37b·公开读接线）：管理员勾选「精选」的条目才会被 app action getPublicFaq 公开下发给小程序求助
 // 面板 FAQ 区（同一 kb 单源分裂两个消费面：bot 答案全量按 key 命中/mp 公开读只挑 featured，互不冲突）。

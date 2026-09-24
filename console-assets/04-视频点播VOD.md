@@ -62,7 +62,7 @@ tcb permission get collection:secureConfig -e cloudbase-d4gcssqbv06865479   # �
 
 ## 运维坑册
 
-- **帮助视频线恒走云存储、不迁 VOD**（守卫 `rw-admin-help-video-stays-cos` 焊死）：admin 的 `uploadVideo` 是课程/帮助两线**共用**函数，走 VOD 须显式 `allowVod`（默认老路·fail-safe）。求助面板视频的播放侧 `getHelpVideos` 只认云存储 fileID（无 vodUrl 字段、无转码同步、无发布闸兜底），误传进 VOD 会换不到地址、**静默全哑**——批2 初版正是漏了这条调用面，机器闸与测试对跨线影响全绿（根因#8），加守卫自纠。
+- **帮助视频线恒走云存储、不迁 VOD**：admin 的 `uploadVideo` 是课程/帮助两线**共用**函数，走 VOD 须显式 `allowVod`（默认老路·fail-safe）。求助面板视频的播放侧 `getHelpVideos` 只认云存储 fileID（无 vodUrl 字段、无转码同步、无发布闸兜底），误传进 VOD 会换不到地址、**静默全哑**——批2 初版正是漏了这条调用面，机器闸与测试对跨线影响全绿（根因#8），加守卫自纠。
 - **上传后「传完 ≠ 可播」**：转码是异步的（短段几十秒到几分钟），发布被云端闸（VOD_PROCESSING）拦到全部就绪——这是刻意设计不是故障。
 - **VOD 任务记录只保留 72h**：转码结果核对别拖过 3 天（admin 同步按钮随点随查，正常节奏碰不到）。
 - **播放域名换了 = 已回写的 vodUrl 全部失效**：段上存的是完整播放 URL；换域名后须对全部课程重跑「同步转码状态」前先清空 vodUrl（或另立迁移批）。轻易别换域名。
