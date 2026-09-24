@@ -6,6 +6,8 @@ import { flattenSegments, navSegment, createPlaybackCache, formatClock, clampSee
 // wxml 绑定⟷ts 方法成对（错题本 E2），机器守卫 rw-mp-player-prefetch-cache 咬结构，这里补文本断言逼出成对。
 import playerWxmlRaw from '../pages/player/player.wxml?raw'
 import playerTsRaw from '../pages/player/player.ts?raw'
+import playerWxssRaw from '../pages/player/player.wxss?raw'
+import seekWxsRaw from '../pages/player/seek.wxs?raw'
 
 const COURSE = {
   id: 'c1',
@@ -332,5 +334,29 @@ describe('播放页死状态（data.segments / CMS FAQ 假 loading）', () => {
     expect(faqIdx).toBeGreaterThan(-1)
     expect(retIdx).toBeGreaterThan(faqIdx)
     expect(onHelp.slice(0, retIdx)).not.toMatch(/helpFaqState:\s*'loading'/)
+  })
+})
+
+describe('播放页样式与注释跟现在的做法一致', () => {
+  it('大白话：内容站常见问题的问答样式，不被知识库条目的同名 class 盖掉', () => {
+    expect(playerWxssRaw).toMatch(/\.lp-help-faq-item \.lp-help-faq-q \{/)
+    expect(playerWxssRaw).toMatch(/\.lp-help-faq-item \.lp-help-faq-a \{/)
+    expect(playerWxssRaw.match(/^\.lp-help-faq-q \{/gm)).toHaveLength(1)
+    expect(playerWxssRaw.match(/^\.lp-help-faq-a \{/gm)).toHaveLength(1)
+    const cmsQ = playerWxssRaw.slice(playerWxssRaw.indexOf('.lp-help-faq-q {'), playerWxssRaw.indexOf('.lp-help-faq-a {'))
+    expect(cmsQ).not.toMatch(/font-size/)
+    const cmsAStart = playerWxssRaw.indexOf('.lp-help-faq-a {')
+    const cmsA = playerWxssRaw.slice(cmsAStart, playerWxssRaw.indexOf('}', cmsAStart))
+    expect(cmsA).not.toMatch(/font-size/)
+  })
+
+  it('大白话：预览浮层位置由 seek.wxs previewLeft 和 seekCfg.edgePx 算，不再提已删的 previewLeftPx', () => {
+    expect(playerTsRaw).not.toContain('previewLeftPx')
+    expect(playerWxssRaw).not.toContain('previewLeftPx')
+    expect(seekWxsRaw).not.toContain('previewLeftPx')
+    expect(playerTsRaw).not.toContain('内联 px')
+    expect(playerWxssRaw).not.toContain('内联 px')
+    expect(playerTsRaw).toContain('seekCfg.edgePx')
+    expect(seekWxsRaw).toContain('function previewLeft')
   })
 })

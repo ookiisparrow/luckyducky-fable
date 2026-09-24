@@ -3,7 +3,7 @@
 // 哪儿的位置——落在 FAQ 板块视口顶部会被误读成弹出错误文案（真相见 me.ts/welcome.ts 置位点注释）。
 // 语义：**读即清**——consumeHomeTop() 读一次就复位，防标记残留误伤下一次正常回首页（正常切 tab 不经
 // 任何置位点，行为不受影响；这是本设计的关键不变量，别改成「只置不清」或「读了不清」）。
-// 批3b（评审扩线）：调用点过了 Rule of Three（me/welcome/paysuccess/checkout×2 共五处）——
+// 批3b（评审扩线）：调用点过了 Rule of Three（me/welcome/paysuccess/cart/checkout×2 共六处）——
 // 收敛出统一出口 goHomeTab()，置位+跳转配对收口在此，防将来新增出口漏挂置位。
 let wantTop = false
 
@@ -20,7 +20,7 @@ export function consumeHomeTop(): boolean {
 }
 
 /** 意图性去首页的统一出口：置位回顶标记与 switchTab 配对收敛在此，防新增出口漏挂
- *  （Rule of Three：me/welcome/paysuccess/checkout×2 五处）。 */
+ *  （me/welcome/paysuccess/cart/checkout×2 共六处）。 */
 export function goHomeTab(): void {
   requestHomeTop()
   wx.switchTab({ url: '/pages/home/home' })

@@ -2,9 +2,9 @@
 // tab 页实例常驻保留的上次滚动位置可能恰好停在首页 FAQ 板块，落地视口顶部观感=「弹出大家都在问」。
 // homeIntent 是这两处兜底跳转与首页 onShow 之间的一次性标记：request 置位、home onShow consume 读即清。
 //
-// 批3b（评审扩线）：意图性回首页出口过了 Rule of Three（me/welcome/paysuccess/checkout×2 共五处）——
+// 批3b（评审扩线）：意图性回首页出口过了 Rule of Three（me/welcome/paysuccess/cart/checkout×2 共六处）——
 // 收敛成统一出口 goHomeTab()（置位+switchTab 配对收口在 lib/homeIntent.ts），本文件同步扩接线断言：
-// 五处调用点改为断言含 goHomeTab()，另加 goHomeTab 自身方法体断言（防拆开成两半的重构悄悄漏调）。
+// 六处调用点断言含 goHomeTab()，另加 goHomeTab 自身方法体断言（防拆开成两半的重构悄悄漏调）。
 //
 // 接线断言（源码扫描式，同 home-cards.test.ts 范式）：读源文件文本 → 剥注释（防注释文本假命中，E1 教训）→
 // 按方法声明做花括号配平切片 → 断言目标方法体内确实调了 requestHomeTop/consumeHomeTop/goHomeTab，防将来重构
@@ -18,6 +18,7 @@ import meSrc from '../pages/me/me.ts?raw'
 import welcomeSrc from '../pages/welcome/welcome.ts?raw'
 import homeSrc from '../pages/home/home.ts?raw'
 import paysuccessSrc from '../pages/paysuccess/paysuccess.ts?raw'
+import cartSrc from '../pages/cart/cart.ts?raw'
 import checkoutSrc from '../pages/checkout/checkout.ts?raw'
 
 describe('homeIntent 纯逻辑：读即清，只消费一次', () => {
@@ -84,6 +85,11 @@ describe('接线断言：置位点/消费点/统一出口没被静默断线', ()
 
   it('大白话：paysuccess.ts onGoHome 调了统一出口 goHomeTab', () => {
     const body = methodBody(paysuccessSrc, 'onGoHome')
+    expect(body).toContain('goHomeTab()')
+  })
+
+  it('大白话：cart.ts onGoHome（空车去逛逛）调了统一出口 goHomeTab', () => {
+    const body = methodBody(cartSrc, 'onGoHome')
     expect(body).toContain('goHomeTab()')
   })
 

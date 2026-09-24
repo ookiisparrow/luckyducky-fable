@@ -35,9 +35,7 @@ const SEEK_TEXT_THROTTLE_MS = 100
 // 磁吸窗口（秒）：拖动秒数落在关键动作节点前后 3 秒内即吸附（批C 规格默认值·真机手感待调参 flag）。批5 起经
 // seekCfg.snapSec 下发 seek.wxs（渲染层磁吸单源本常量·不在 WXS 里另立 3 防漂）。
 const MARK_SNAP_SEC = 3
-// 拖动预览浮层防出屏边距（rpx）：规格原定 CSS clamp(64rpx, ..., calc(100% - 64rpx)) 夹取，改在 JS 侧算好
-// 像素值再传 px 内联样式——WXSS clamp() 是本仓首次出现的用法（无既有先例，真机支持度未经验证，CLAUDE.md
-// §4 对同类兼容性存疑的 CSS 函数已有专门规避先例 backdrop-filter/color-mix()），JS 算值零风险等价替代。
+// 拖动预览浮层防出屏边距（rpx）。seekEdgePx() 换成 px，经 seekCfg.edgePx 交给 seek.wxs previewLeft() 夹取。
 const PREVIEW_EDGE_RPX = 64
 // 返回二次确认窗口（ms·P5 设计拍板②）：每次返回都出现「再按一次返回退出」，非仅首次；侧滑/系统手势
 // 返回无法拦截（WebView 页无 onBackPress——平台限制），仅本页自绘返回箭头点击经此判定。
@@ -546,8 +544,7 @@ Page({
         }
       })
   },
-  // 拖动预览浮层防出屏边距（rpx→px·PREVIEW_EDGE_RPX 换算）：seek.wxs previewLeft 夹取用，经 seekCfg.edgePx 下发
-  // （JS 定值替代 WXSS clamp()·见 PREVIEW_EDGE_RPX 注·渲染层不做 rpx→px 换算，逻辑层算好传 px）。
+  // 拖动预览浮层防出屏边距（rpx→px·PREVIEW_EDGE_RPX 换算）：seek.wxs previewLeft 夹取用，经 seekCfg.edgePx 下发。
   seekEdgePx(): number {
     return (PREVIEW_EDGE_RPX / 750) * (this.windowWidthPx || 0)
   },

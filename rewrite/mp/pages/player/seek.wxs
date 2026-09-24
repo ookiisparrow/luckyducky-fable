@@ -46,7 +46,7 @@ function secAt(clientX) {
   return clampSeek(raw, st.durSec)
 }
 
-// 预览浮层 left 像素（pct→px·夹在 [edgePx, 轨宽-edgePx] 内防出屏·JS 定值替代 WXSS clamp()·同 player.ts 原 previewLeftPx）。
+// 预览浮层 left 像素（pct→px·夹在 [edgePx, 轨宽-edgePx] 内防出屏·edgePx 来自 seekCfg）。
 function previewLeft(pct) {
   var trackWidth = st.rect ? st.rect.width : 0
   if (!trackWidth) return 0
