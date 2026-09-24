@@ -1,5 +1,5 @@
 {
-  "__doc__": "判例索引（车队地基批4·前车之鉴档案）：AI 代理动手前先查这里——「这事以前决定过/拒过/修过没」。四类：decision=关键决策记录 §N（计数核）/ rootcause=根因账本 病根#N（计数核）/ debuglog=调试日志 fable 现行线（计数核·归档 next 线另有同字母条目、靠 namespace 消歧勿裸引字母）/ nofix=人工精选「拍板不做/故意不修」（不计数核·可手工增补）。守卫 precedent-index-synced 焊死三类计数与账本一致。关键词含同义词（原文用词+别人可能用的说法），grep 本文件即可命中，命中后按 source 读原文。查不到≠没判过：需求类去 需求清单.md、归档判例走 docs/史料索引.md 索引。",
+  "__doc__": "判例索引（车队地基批4·前车之鉴档案）：AI 代理动手前先查这里——「这事以前决定过/拒过/修过没」。四类：decision=关键决策记录 §N（计数核）/ rootcause=根因账本 病根#N（计数核）/ debuglog=git 史料层调试案（已冻结不再计数核·靠 namespace 消歧勿裸引字母）/ nofix=人工精选「拍板不做/故意不修」（不计数核·可手工增补）。守卫 precedent-index-synced 焊死 decision/rootcause 两类计数与账本一致。关键词含同义词（原文用词+别人可能用的说法），grep 本文件即可命中，命中后按 source 读原文。查不到≠没判过：需求类去 docs/需求清单.md、过程史走 git log / git show。",
   "debuglogT": "T 案不存在（2026-08-08 巡查核实：museum-20260723 归档册 A~R 入册 17 卷 + 活档 D + S/U 退役快照 0103deff，全 git 历史无「## T（fable）」任何标题格式；判例 debuglog 真值 A~R+S+U 共 20 条）",
   "entries": [
     {
@@ -684,7 +684,7 @@
         "回包乱序",
         "地址双击双条"
       ],
-      "source": "docs/调试日志.md ##D"
+      "source": "git 历史 ##D"
     },
     {
       "id": "fable调试-E",
@@ -918,7 +918,7 @@
         "automator超时",
         "工具自动更新回归"
       ],
-      "source": "git 历史（2026-08-02 退役·史料索引登记） ##S"
+      "source": "git 历史（2026-08-02 退役） ##S"
     },
     {
       "id": "fable调试-U",
@@ -939,7 +939,7 @@
         "RPC全超时",
         "二次自动更新"
       ],
-      "source": "git 历史（2026-08-02 退役·史料索引登记） ##U"
+      "source": "git 历史（2026-08-02 退役） ##U"
     },
     {
       "id": "免修-课程页失败toast",
@@ -952,7 +952,7 @@
         "免修",
         "rw-mp-await-side-effect-unloaded-recheck"
       ],
-      "source": "docs/待办与债.md Phase3 免修判例①"
+      "source": "git 历史（原待办与债 Phase3 免修①·现待办单源 GitHub Issues）"
     },
     {
       "id": "免修-对账文案边角",
@@ -964,7 +964,7 @@
         "拼接",
         "免修"
       ],
-      "source": "docs/待办与债.md Phase3 免修判例②"
+      "source": "git 历史（原待办与债 Phase3 免修②·现待办单源 GitHub Issues）"
     },
     {
       "id": "免修-cover豁免",
@@ -976,7 +976,7 @@
         "刻意取舍",
         "免修"
       ],
-      "source": "docs/待办与债.md Phase3 免修判例③"
+      "source": "git 历史（原待办与债 Phase3 免修③·现待办单源 GitHub Issues）"
     },
     {
       "id": "免修-不自动连播",
@@ -990,7 +990,7 @@
         "不自动切",
         "自动播放下一集"
       ],
-      "source": "docs/需求清单.md R38（原重构日志 2026-07-11 批B 条目已入史料层）"
+      "source": "docs/需求清单.md R38（过程史走 git log / git show）"
     },
     {
       "id": "红线-个人号微信机器人",
@@ -1022,7 +1022,7 @@
         "RPA 微信",
         "AI 客服机器人"
       ],
-      "source": "docs/待办与债.md 微信生态全景第四轮转化清单"
+      "source": "git 历史（原待办与债·微信生态全景第四轮·现待办单源 GitHub Issues）"
     },
     {
       "id": "根因#17",
