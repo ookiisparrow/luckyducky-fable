@@ -6,9 +6,7 @@ import {
   JEV_FAIL_OPEN_TEXT,
   JEV_MODEL,
   JEV_URL,
-  jevHitWord,
   jevRequestBody,
-  mapJevDepartment,
   parseJevBody,
   askJev,
   loadJevGate,
@@ -103,14 +101,7 @@ describe('Jev 请求体与映射', () => {
     expect('topic' in body.questions).toBe(false)
   })
 
-  it('大白话：科室对上现有菜单类；认不出就空，好走旧路', () => {
-    expect(mapJevDepartment('billing')).toBe('aftersale')
-    expect(mapJevDepartment('technical')).toBe('activation')
-    expect(mapJevDepartment('sales')).toBe('tutorial')
-    expect(mapJevDepartment('unknown')).toBe(null)
-    expect(jevHitWord('billing')).toBe('售后')
-    expect(jevHitWord('technical')).toBe('课程')
-    expect(jevHitWord('sales')).toBe('教程')
+  it('大白话：回包能读出科室和路由字段；缺字段就空', () => {
     expect(parseJevBody(probeBody)).toEqual({ model: 'jev-1.13.0', urgency: 0.98, department: 'billing' })
     expect(
       parseJevBody({

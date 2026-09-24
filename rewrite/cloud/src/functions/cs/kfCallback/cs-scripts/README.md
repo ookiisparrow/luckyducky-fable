@@ -5,4 +5,4 @@
 格式：Markdown 短句池（节点下编号行）；占位如【地点】【天数】【需求】【结论】。
 硬规则：纯对话，禁止气泡选项。
 
-改话术：先改本目录 `.md`，再跑 `node rewrite/cloud/scripts/bundle-cs-scripts.mjs`（`build:rw-cloud` 会再跑一遍）。
+改话术：先改本目录 `.md` 且在 `scriptPool.ts` POOL_HINTS 登记，再跑 `node rewrite/cloud/scripts/bundle-cs-scripts.mjs`（`build:rw-cloud` 会再跑一遍）。未进池的文档不打进函数 zip。
