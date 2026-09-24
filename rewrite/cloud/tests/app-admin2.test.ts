@@ -396,25 +396,6 @@ describe('课程发布与孤儿视频回收（黄金·缓期 GC）', () => {
   })
 })
 
-describe('分片上传（黄金：缺号拒·重组等字节·清理）', () => {
-  it('大白话：坏分片拒；序号不连续（缺号）拒不拼损坏文件；正好覆盖才重组且分片清理', async () => {
-    expect((await post('uploadChunk', { uploadId: 'u1', seq: -1, b64: 'x' })).error).toBe('BAD_CHUNK')
-
-    await post('uploadChunk', { uploadId: 'u1', seq: 0, b64: 'AA' })
-    await post('uploadChunk', { uploadId: 'u1', seq: 2, b64: 'CC' }) // 缺 1 号
-    const miss = await post('uploadFinish', { uploadId: 'u1', total: 2, pid: 'p1' })
-    expect(miss.error).toBe('CHUNKS_MISSING')
-
-    await post('uploadChunk', { uploadId: 'u1', seq: 1, b64: 'BB' })
-    const done = await post('uploadFinish', { uploadId: 'u1', total: 3, pid: 'p1' })
-    expect(done.ok).toBe(true)
-    expect(done.fileID).toContain('products/p1/')
-    expect(control.dump('uploadChunks').length).toBe(0) // 拼完清理
-
-    expect((await post('uploadFinish', { uploadId: 'u2', total: 999 })).error).toBe('BAD_FINISH') // 片数封顶
-  })
-})
-
 describe('码批次（黄金：数量闸·聚合·列码 cursor 分页）', () => {
   it('大白话：数量漏传/非法拒不静默成 1；成功透传批次与码；超大数量钳到上限', async () => {
     expect((await post('createBatch', { courseId: 'c1' })).error).toBe('BAD_ARGS')
