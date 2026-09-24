@@ -1,5 +1,6 @@
 import { reply, type Ctx } from '../lib'
 import { ERR } from '@ldrw/shared'
+import { isDocMissing } from '../../../kit'
 import { assembleCustomer360 } from '../customer360/orchestrator'
 
 // 客户360 只读查询（B1.1·M①）：按 openid 聚合该客人全貌（订单/激活…经 provider registry·铁律三）。
@@ -60,8 +61,13 @@ export async function searchCustomer({ db, data }: Ctx) {
   byId.forEach((u: any) => add(u, 'openid'))
   byPhone.forEach((u: any) => add(u, 'phone'))
   byNick.forEach((u: any) => add(u, 'nickname'))
-  // 订单号反查客户（坐席常拿单号来）：orders.doc(q) → _openid → 取其 users 摘要（无档也回 openid·让坐席仍能查 360）
-  const ord = await db.collection('orders').doc(q).get().catch(() => null)
+  // 订单号反查：缺档＝真没这单，继续；其它读失败回 USER_LOOKUP_FAIL，不当「没这单」。
+  let ord: any = null
+  try {
+    ord = await db.collection('orders').doc(q).get()
+  } catch (e) {
+    if (!isDocMissing(e)) return reply(200, { ok: false, error: ERR.USER_LOOKUP_FAIL })
+  }
   if (ord && ord.data && ord.data._openid) {
     const u = await rows(users.where({ _openid: ord.data._openid }).limit(1))
     if (!u) return reply(200, { ok: false, error: ERR.USER_LOOKUP_FAIL })

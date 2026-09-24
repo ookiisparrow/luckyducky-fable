@@ -41,16 +41,16 @@ export const learningProvider: CustomerPanelProvider = {
   enabled: true,
   order: 30,
   async fetch(db: any, openid: string) {
+    // 进度或课程目录读失败都抛给编排器——空数组会被当成「没学过 / 完成度 0」
     const pr = await db
       .collection('progress')
       .where({ _openid: openid })
       .limit(PROGRESS_LIMIT)
       .get()
-      .catch(() => ({ data: [] }))
     const progress: any[] = (pr && pr.data) || []
     if (!progress.length) return { count: 0, capped: false, positions: [] }
     // join courses（数门·全量 bounded·建 id→course 映射）
-    const cr = await db.collection('courses').limit(COURSE_LIMIT).get().catch(() => ({ data: [] }))
+    const cr = await db.collection('courses').limit(COURSE_LIMIT).get()
     const courseById: Record<string, any> = {}
     for (const c of (cr && cr.data) || []) courseById[c.id || c._id] = c
     const positions = progress.map((p: any) => {

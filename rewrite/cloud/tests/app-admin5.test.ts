@@ -103,6 +103,86 @@ describe('客户 360 聚合（黄金 §十三：只本人·钱链口径·错误�
     const profile = r.panels.find((p: any) => p.key === 'profile')
     expect(profile.data).toBeNull()
     expect(profile.error).toBe('PANEL_FETCH_FAIL')
+    // 订单板块读的是同一张表：库挂了同样不能装成「没下过单」
+    const orders = r.panels.find((p: any) => p.key === 'orders')
+    expect(orders.data).toBeNull()
+    expect(orders.error).toBe('PANEL_FETCH_FAIL')
+  })
+
+  it('大白话：订单/课程/学习/照片读失败标 PANEL_FETCH_FAIL——不当真没有；目录或节点名读失败同样不算空成功；真没有仍是空面板', async () => {
+    control.seed('users', [{ _id: 'u1', _openid: 'oU1', nickname: '鸭鸭' }])
+    control.seed('orders', [{ _id: 'o1', _openid: 'oU1', status: 'paid', amount: 100, createdAt: 1, items: [{}] }])
+    control.seed('activations', [{ _id: 'a1', _openid: 'oU1', courseId: 'c1', enteredAt: 1 }])
+    control.seed('courses', [{ _id: 'c1', id: 'c1', title: '钩织入门', chapters: [] }])
+    control.seed('progress', [{ _id: 'pg1', _openid: 'oU1', courseId: 'c1', done: {}, last: {} }])
+    control.seed('checkpoints', [
+      { _id: 'sub1', type: 'sub', _openid: 'oU1', courseId: 'c1', nodeId: 'n1', fileId: 'f1', createdAt: 1 },
+      { _id: 'def1', type: 'def', courseId: 'c1', nodeId: 'n1', title: '起针' },
+    ])
+    const cases: { coll: string; key: string; also: string[] }[] = [
+      { coll: 'activations', key: 'activation', also: ['profile'] },
+      { coll: 'progress', key: 'learning', also: [] },
+      { coll: 'checkpoints', key: 'checkpoints', also: [] },
+    ]
+    for (const c of cases) {
+      control.setBeforeGet(({ coll }: any) => {
+        if (coll === c.coll) throw new Error('MOCK_DB_FAIL')
+      })
+      try {
+        const r = await post('getCustomer360', SUPER, { openid: 'oU1' })
+        expect(r.ok, c.key).toBe(true) // 整页不拖垮
+        const panel = r.panels.find((p: any) => p.key === c.key)
+        expect(panel.data, c.key).toBeNull()
+        expect(panel.error, c.key).toBe('PANEL_FETCH_FAIL')
+        for (const k of c.also) {
+          const p = r.panels.find((x: any) => x.key === k)
+          expect(p.error, k).toBe('PANEL_FETCH_FAIL')
+        }
+        const spared = r.panels.filter((p: any) => p.key !== c.key && !c.also.includes(p.key))
+        for (const p of spared) {
+          expect(p.error, `${c.key} spare ${p.key}`).toBeUndefined()
+          expect(p.data, `${c.key} spare ${p.key}`).not.toBeNull()
+        }
+      } finally {
+        control.setBeforeGet(null as never)
+      }
+    }
+    // 课目录挂了：进度还在也不能把完成度装成 0
+    control.setBeforeGet(({ coll }: any) => {
+      if (coll === 'courses') throw new Error('MOCK_DB_FAIL')
+    })
+    try {
+      const learn = await post('getCustomer360', SUPER, { openid: 'oU1' })
+      const learning = learn.panels.find((p: any) => p.key === 'learning')
+      expect(learning.data).toBeNull()
+      expect(learning.error).toBe('PANEL_FETCH_FAIL')
+      expect(learn.panels.find((p: any) => p.key === 'orders').error).toBeUndefined()
+    } finally {
+      control.setBeforeGet(null as never)
+    }
+    // 节点定义挂了、客人照片还在：不能把标题读失败装成「没节点名」
+    control.setBeforeGet(({ coll, filter }: any) => {
+      if (coll === 'checkpoints' && filter && filter.type === 'def') throw new Error('MOCK_DB_FAIL')
+    })
+    try {
+      const photos = await post('getCustomer360', SUPER, { openid: 'oU1' })
+      const cp = photos.panels.find((p: any) => p.key === 'checkpoints')
+      expect(cp.data).toBeNull()
+      expect(cp.error).toBe('PANEL_FETCH_FAIL')
+      expect(photos.panels.find((p: any) => p.key === 'orders').data.orders).toHaveLength(1)
+    } finally {
+      control.setBeforeGet(null as never)
+    }
+    const empty = await post('getCustomer360', SUPER, { openid: 'oNobody' })
+    const nobodyOrders = empty.panels.find((p: any) => p.key === 'orders')
+    expect(nobodyOrders.error).toBeUndefined()
+    expect(nobodyOrders.data).toEqual({ count: 0, capped: false, orders: [] })
+    const nobodyLearn = empty.panels.find((p: any) => p.key === 'learning')
+    expect(nobodyLearn.error).toBeUndefined()
+    expect(nobodyLearn.data).toEqual({ count: 0, capped: false, positions: [] })
+    const nobodyPhotos = empty.panels.find((p: any) => p.key === 'checkpoints')
+    expect(nobodyPhotos.error).toBeUndefined()
+    expect(nobodyPhotos.data).toEqual({ count: 0, capped: false, photos: [] })
   })
 })
 
@@ -156,6 +236,30 @@ describe('客户检索与画像（黄金 §十三）', () => {
     expect(r.ok).toBe(false)
     expect(r.error).toBe('USER_LOOKUP_FAIL')
     expect(r.customers).toBeUndefined()
+  })
+
+  it('大白话：按订单号检索时订单档读失败回 USER_LOOKUP_FAIL——不当「没这单」；真没有这单仍是空列表', async () => {
+    control.seed('users', [{ _id: 'u1', _openid: 'oB', nickname: '鹅鹅', phone: '13800000002' }])
+    control.seed('orders', [{ _id: 'ORD1', _openid: 'oB', status: 'paid', amount: 1 }])
+    control.setBeforeGet(({ coll, id }: any) => {
+      if (coll === 'orders' && id === 'ORD1') throw new Error('MOCK_DB_FAIL')
+    })
+    try {
+      const r = await post('searchCustomer', SUPER, { q: 'ORD1' })
+      expect(r.ok).toBe(false)
+      expect(r.error).toBe('USER_LOOKUP_FAIL')
+      expect(r.customers).toBeUndefined()
+    } finally {
+      control.setBeforeGet(null as never)
+    }
+    const hit = await post('searchCustomer', SUPER, { q: 'ORD1' })
+    expect(hit.ok).toBe(true)
+    expect(hit.customers[0].openid).toBe('oB')
+    expect(hit.customers[0].matchedBy).toContain('orderId')
+    const miss = await post('searchCustomer', SUPER, { q: 'ORD-NONE' })
+    expect(miss.ok).toBe(true)
+    expect(miss.count).toBe(0)
+    expect(miss.customers).toEqual([])
   })
 })
 

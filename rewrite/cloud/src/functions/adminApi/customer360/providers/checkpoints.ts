@@ -14,16 +14,16 @@ export const checkpointsProvider: CustomerPanelProvider = {
   enabled: true,
   order: 40,
   async fetch(db: any, openid: string) {
+    // 提交或节点定义读失败都抛给编排器——空数组会被当成「没照片 / 没节点名」
     const sr = await db
       .collection('checkpoints')
       .where({ type: 'sub', _openid: openid })
       .limit(SUB_LIMIT)
       .get()
-      .catch(() => ({ data: [] }))
     const subs: any[] = (sr && sr.data) || []
     if (!subs.length) return { count: 0, capped: false, photos: [] }
     // join 节点定义取标题（数门课的节点·全量 bounded·建 courseId:nodeId → title 映射）
-    const dr = await db.collection('checkpoints').where({ type: 'def' }).limit(DEF_LIMIT).get().catch(() => ({ data: [] }))
+    const dr = await db.collection('checkpoints').where({ type: 'def' }).limit(DEF_LIMIT).get()
     const titleByNode: Record<string, string> = {}
     for (const d of (dr && dr.data) || []) titleByNode[d.courseId + ':' + d.nodeId] = d.title || ''
     const photos = subs.map((s: any) => ({

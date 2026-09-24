@@ -11,13 +11,13 @@ export const ordersProvider: CustomerPanelProvider = {
   enabled: true,
   order: 10,
   async fetch(db: any, openid: string) {
+    // 读失败抛给编排器标 PANEL_FETCH_FAIL——空数组会被当成「真没下过单」
     const r = await db
       .collection('orders')
       .where({ _openid: openid })
       .orderBy('createdAt', 'desc')
       .limit(LIMIT)
       .get()
-      .catch(() => ({ data: [] }))
     const list: any[] = (r && r.data) || []
     return {
       count: list.length,
