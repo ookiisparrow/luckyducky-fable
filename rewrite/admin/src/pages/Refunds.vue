@@ -1,5 +1,5 @@
 <script setup lang="ts">
-// 售后退款（design/console.pen S10 视觉 + 退款决策抽屉·M3 UI 批4）：chip 计数走云端 refundCounts、
+// 售后退款：chip 计数走云端 refundCounts、
 // grid 列表、右滑决策抽屉——把「退货权判据」摆到决策位（激活码/进课状态取 getRefundDetail 真判据·
 // 根因#8 不伪造徽章）。同意由「人工验收」勾选闸放行，服务端 approveRefund 仍权威复核（进课即拒/降级）。
 import { ref, computed, onMounted } from 'vue'
@@ -22,9 +22,7 @@ const TABS = [
   { key: '', label: '全部' },
 ]
 
-// 深链预填（债目·全局清零bug战役残余 2026-07-13）：Dashboard 退款类告警「去处理」按钮
-// router.push({path:'/refunds', query:{q}}) 跳转过来——挂载时读 route.query.q 预填搜索框并自动检索一次
-// （服务端 q 搜索按订单号精确命中已有·同 Conversations.vue/Batches.vue 既有深链范式）。
+// 深链：看板退款告警「去处理」带 ?q= 订单号跳来，挂载时预填搜索并自动检索一次。
 const route = useRoute()
 const tab = ref('applied')
 const counts = ref<Record<string, number>>({})

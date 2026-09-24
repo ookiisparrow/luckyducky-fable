@@ -1,5 +1,5 @@
 import { reply, str, type Ctx } from '../lib'
-import { applyStockMoves, produceStock, listMaterialDocs, notifyAlert, pageQuery } from '../../../kit'
+import { applyStockMoves, produceStock, listMaterialDocs, notifyAlert, pageQuery, isDocMissing } from '../../../kit'
 import { COLLECTIONS, ERR } from '@ldrw/shared'
 import { resolveBom, isValidScmProductId, isValidScmSpec } from '@ldrw/shared'
 
@@ -13,9 +13,23 @@ import { resolveBom, isValidScmProductId, isValidScmSpec } from '@ldrw/shared'
 
 /** 读模板+差异位（组装/预演共用·fail-closed：缺一即拒，不静默补默认）。 */
 async function loadBom(db: any, productId: string): Promise<{ template?: any; profile?: any; error?: string }> {
-  const p = await db.collection(COLLECTIONS.bomProfiles).doc(productId).get().catch(() => null)
+  const p = await db
+    .collection(COLLECTIONS.bomProfiles)
+    .doc(productId)
+    .get()
+    .catch((e: unknown) => {
+      if (isDocMissing(e)) return null
+      throw e // 库挂 ≠ 没有差异位
+    })
   if (!p || !p.data) return { error: ERR.NO_PROFILE }
-  const t = await db.collection(COLLECTIONS.config).doc('scmBomTemplate').get().catch(() => null)
+  const t = await db
+    .collection(COLLECTIONS.config)
+    .doc('scmBomTemplate')
+    .get()
+    .catch((e: unknown) => {
+      if (isDocMissing(e)) return null
+      throw e // 库挂 ≠ 没有模板
+    })
   if (!t || !t.data) return { error: ERR.NO_TEMPLATE }
   const { _id: _omit, updatedAt: _omit2, ...template } = t.data as Record<string, any>
   return { template, profile: p.data }
