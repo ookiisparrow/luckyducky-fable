@@ -42,7 +42,7 @@ const PREVIEW_EDGE_RPX = 64
 // 返回二次确认窗口（ms·P5 设计拍板②）：每次返回都出现「再按一次返回退出」，非仅首次；侧滑/系统手势
 // 返回无法拦截（WebView 页无 onBackPress——平台限制），仅本页自绘返回箭头点击经此判定。
 const BACK_CONFIRM_MS = 2500
-// 首次成功退出加桌引导 storage key（storage key 收敛·CLAUDE §7）：仅展示一次（P5b 设计拍板④）。
+// 首次成功退出加桌引导 storage key（storage key 收敛·CLAUDE.md）：仅展示一次（P5b 设计拍板④）。
 const DESK_GUIDE_KEY = 'ld_player_desk_guide_shown'
 
 // segcap 文案三态（P4·播放器重设计战役批B §2c）：播放中报「段落 x/y」；播完且课时内有下一段报「x 完成·接下来 x+1」；
@@ -806,7 +806,7 @@ Page({
   },
   onHide() {
     this.reportWatchAt()
-    // 后台挂起清缓冲升级定时器（timer 必清理·CLAUDE §7）：挂起期无 timeupdate，10s 定时器醒来会把
+    // 后台挂起清缓冲升级定时器（timer 必清理·CLAUDE.md）：挂起期无 timeupdate，10s 定时器醒来会把
     // 正常的后台停留误判成失速落 error 态；回前台若真在缓冲，waiting 会再次触发重建角标与定时器。
     this.clearBuffering()
   },

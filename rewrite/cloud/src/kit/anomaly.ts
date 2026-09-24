@@ -8,7 +8,7 @@ import { COLLECTIONS, anomalyFingerprint, type AnomalyKind, type AnomalySeverity
 // ② fail-soft——绝不抛错（可观测性不反噬主流程，同 recordAudit）；③ 对业务集合零写入——只写 anomalies
 // （「现在就只读看护线上」的安全铁律）。高危去重感知告警：仅首次出现经 alert 直发（不走 notifyAlert·防桥接递归），重复不刷（防告警疲劳）。
 
-// 敏感键（比审计更严：异常账本可广读，PII 也剥）——绝不入库（安全·CLAUDE §7）。
+// 敏感键（比审计更严：异常账本可广读，PII 也剥）——绝不入库（安全·CLAUDE.md）。
 const SENSITIVE = new Set([
   'openid',
   'unionid',

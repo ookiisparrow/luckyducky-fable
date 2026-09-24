@@ -3,7 +3,7 @@ import type { CustomerPanelProvider } from '../types'
 
 // 画像 rollup 板块（B1.3·铁律三）：坐席看某客人的总消费/单数/激活与进课/最近活跃——从 orders/activations/events
 // 派生（各查 bounded·capacity-reads-bounded·防大客户拖垮）。与看板 getDashboard 的全站聚合是不同切口
-// （这里按单个 openid·小集合），单源各表、不抽公共件（Rule of Three 未到·CLAUDE §7）。
+// （这里按单个 openid·小集合），单源各表、不抽公共件（Rule of Three 未到·CLAUDE.md）。
 const ORDER_LIMIT = 200
 const ACT_LIMIT = 100
 // 已付口径（与 shared PAID_ORDER_STATUSES / 看板 GMV 同义·营收只计已付·P2 顺手改批收口，此前本文件另手抄

@@ -67,7 +67,7 @@ export const updateProfile = withOpenId(
     // 手机号（账户联系电话·供客服 360 检索·与地址电话独立）。**区分两类空**（防「纯非数字→误当清空→清掉旧号」）：
     // ① 真·空输入（trim 后为空）＝用户显式清空→存空串；② 非空输入归一化纯数字后按 7–11 位（与地址电话 ≥7 对齐）
     // 校验，合法才入·非法（含字母/过短/超长，归一化可能为空但用户本意是填号）一律剔除、**不覆盖旧号**。
-    // 隐私铁律（CLAUDE §7）：手机号敏感——本 action 与任何 observe/alert/日志路径都不得记录 phone（anomaly SENSITIVE 已兜一层）。
+    // 隐私铁律（CLAUDE.md）：手机号敏感——本 action 与任何 observe/alert/日志路径都不得记录 phone（anomaly SENSITIVE 已兜一层）。
     if (typeof e.phone === 'string') {
       const raw = e.phone.trim()
       if (raw === '') {

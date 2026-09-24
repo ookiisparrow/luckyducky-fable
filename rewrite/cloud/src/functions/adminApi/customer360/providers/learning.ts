@@ -7,7 +7,7 @@ import { progressPercent } from '@ldrw/shared'
 //
 // bounded（防大客户 360 拖垮·capacity·根因#7）：progress 本人每课一条、远不及上界，courses 数门、显式上界——
 // 两读均带 .limit()，不裸 .get()（CloudBase 默认 100 静默截断）。与 getMyProgress（C 端返本人原始 progress）
-// 是同 progress 集合不同形状（这里 join 课程结构人话化给坐席），单源同一集合、不抽公共件（Rule of Three 未到·CLAUDE §7）。
+// 是同 progress 集合不同形状（这里 join 课程结构人话化给坐席），单源同一集合、不抽公共件（Rule of Three 未到·CLAUDE.md）。
 const PROGRESS_LIMIT = 200
 const COURSE_LIMIT = 100
 

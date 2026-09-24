@@ -1,5 +1,5 @@
 // RSS 端点（内容分发/收录信号）：教程集合出 feed。手写 XML 零新依赖——
-// @astrojs/rss 整包为此过重（CLAUDE §7 防过度工程）；转义闸齐全。
+// @astrojs/rss 整包为此过重（CLAUDE.md 防过度工程）；转义闸齐全。
 import type { APIRoute } from 'astro'
 import { SITE, BRAND_NAME } from '../lib/schema'
 import { sortedTutorials, TUTORIALS_DESCRIPTION } from '../lib/tutorials'
