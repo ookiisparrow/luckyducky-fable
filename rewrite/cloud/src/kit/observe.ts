@@ -14,6 +14,12 @@ export type AlertSev = 'money' | 'security' | 'anomaly'
 
 const MARK = '[LD_ALERT]'
 
+/** 读 adminConfig/settings（webhook / alertEvents）。三路 notify 共用，读失败当空档。 */
+async function readAlertSettings(): Promise<{ alertWebhook?: string; alertEvents?: Record<string, boolean> }> {
+  const got = await getDb().collection(COLLECTIONS.adminConfig).doc('settings').get().catch(() => null)
+  return (got && (got as any).data) || {}
+}
+
 export function alert(sev: AlertSev, fn: string, code: string, ctx: Record<string, unknown> = {}): void {
   try {
     console.error(`${MARK} sev=${sev} fn=${fn} code=${code} ctx=${JSON.stringify(ctx)}`)
@@ -45,8 +51,7 @@ export async function notifyAlert(sev: AlertSev, fn: string, code: string, ctx: 
   // ③ 推送（批5·botpush 唯一接缝）：按 adminConfig/settings.alertWebhook 推企微群机器人（owner 手机实时收）；
   //   alertEvents[code]=false 可逐事件静音。**fail-soft**：未配置/推送失败一律静默、绝不抛错、不反噬主流程。
   try {
-    const got = await getDb().collection(COLLECTIONS.adminConfig).doc('settings').get().catch(() => null)
-    const s = (got && (got as any).data) || {}
+    const s = await readAlertSettings()
     if (!s.alertWebhook) return
     if (s.alertEvents && s.alertEvents[code] === false) return
     await pushBotAlert(s.alertWebhook, { sev, fn, code, ctx })
@@ -68,8 +73,7 @@ export async function notifyRecall(summary: Record<string, number>): Promise<voi
   }
   // ② 推送（botpush 唯一接缝·sev='recall' 中性图标·不走告警语义）：按 adminConfig/settings.alertWebhook 推运营群。
   try {
-    const got = await getDb().collection(COLLECTIONS.adminConfig).doc('settings').get().catch(() => null)
-    const s = (got && (got as any).data) || {}
+    const s = await readAlertSettings()
     if (!s.alertWebhook) return
     await pushBotAlert(s.alertWebhook, { sev: 'recall', fn: 'recallScan', code: 'RECALL_SUMMARY', ctx: summary })
   } catch {
@@ -98,8 +102,7 @@ export async function notifyHeartbeat(summary: { green: number; red: number }): 
   }
   // ② 推送（botpush 唯一接缝·sev='heartbeat'）：按 adminConfig/settings.alertWebhook 推 owner 群机器人。
   try {
-    const got = await getDb().collection(COLLECTIONS.adminConfig).doc('settings').get().catch(() => null)
-    const s = (got && (got as any).data) || {}
+    const s = await readAlertSettings()
     if (!s.alertWebhook) return
     await pushBotAlert(s.alertWebhook, { sev: 'heartbeat', fn: 'inspect', code: red > 0 ? 'HEARTBEAT_RED' : 'HEARTBEAT_GREEN', ctx: { green, red } })
   } catch {

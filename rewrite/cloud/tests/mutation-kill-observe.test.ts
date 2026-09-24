@@ -13,12 +13,21 @@
 //   ④ [LD_RECALL]/[LD_HEARTBEAT] 结构化日志行形状（控制台按关键字配日志告警——前缀即格式契约，算 A 不算修饰）；
 //   ⑤ 心跳 red>0 分档（红/绿两条文案 + HEARTBEAT_RED/GREEN 码 + green/red 数字真透传·源码 L91-93/L104）；
 //   ⑥ fail-soft 铁律（推送抛错/summary 为 null 一律不反噬·源码「绝不抛错」注释）。
-// C 类不立（等价变异杀不动）：L48/L71/L101 的 `.catch(() => null)`→`() => undefined`——
+// C 类不立（等价变异杀不动）：readAlertSettings 的 `.catch(() => null)`→`() => undefined`——
 //   下游 `(got && got.data) || {}` 对 null/undefined 同判 falsy，行为逐位相同，等价变异。
+import { readFileSync } from 'node:fs'
+import { dirname, join } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { control } from 'wx-server-sdk'
 import { notifyAlert, notifyRecall, notifyHeartbeat } from '../src/kit/observe'
 import { COLLECTIONS } from '@ldrw/shared'
+
+const OBSERVE_SRC = join(dirname(fileURLToPath(import.meta.url)), '..', 'src', 'kit', 'observe.ts')
+
+function stripComments(src: string): string {
+  return src.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/gm, '')
+}
 
 // —— botpush 单接缝内存桩（观测批5：observe→pushBotAlert 是唯一推送出口·mock 它即锁 observe 侧全部推送语义）——
 // vi.mock 工厂被提升到 import 前，共享状态须走 vi.hoisted（同 mutation-kill-botpush.test.ts 范式）。
@@ -87,6 +96,15 @@ describe('alertOnHigh:false 防双告警防递归（本函数已 alert 过·reco
     expect(lines.filter((s) => s.includes('[LD_ALERT]')).length).toBe(1)
     // 且这一行是 notifyAlert 自己的（sev=money），不是 recordAnomaly 的高危补发（sev=anomaly）
     expect(lines[0]).toBe('[LD_ALERT] sev=money fn=pay code=FEE_MISMATCH ctx={"fp":"o1"}')
+  })
+})
+
+describe('readAlertSettings 单源（三路 notify 共用一次读·减法抽取钉）', () => {
+  it('大白话：settings 只在 helper 读一次，告警/召回/心跳三处都走它（再抄一份就会漏空 webhook / 静音）', () => {
+    const src = stripComments(readFileSync(OBSERVE_SRC, 'utf8'))
+    expect(src.match(/async function readAlertSettings\s*\(/g)?.length).toBe(1)
+    expect(src.match(/await readAlertSettings\(\)/g)?.length).toBe(3)
+    expect(src.match(/COLLECTIONS\.adminConfig\)\.doc\(['"]settings['"]\)\.get\(\)/g)?.length).toBe(1)
   })
 })
 
