@@ -9,13 +9,12 @@ interface Props {
   description: string
   type?: 'website' | 'article'
   noindex?: boolean
-  image?: string
   publishedTime?: string
   modifiedTime?: string
 }
-const { title, description, type = 'website', noindex = false, image, publishedTime, modifiedTime } = Astro.props
+const { title, description, type = 'website', noindex = false, publishedTime, modifiedTime } = Astro.props
 const canonical = new URL(Astro.url.pathname, Astro.site)
-const ogImage = new URL(image || '/og-cover.png', Astro.site)
+const ogImage = new URL('/og-cover.png', Astro.site)
 const fullTitle = `${title} · ${BRAND_NAME}`
 ---
 
