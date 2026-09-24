@@ -25,7 +25,8 @@ export const submitCheckpointPhoto = withOpenId(
       .where({ _openid: OPENID, courseId, enteredAt: _.neq(null) })
       .limit(1)
       .get()
-      .catch(() => ({ data: [] }))
+      .catch(() => null)
+    if (!owns) return err('INTERNAL') // 库挂 ≠ 没资格（根因#14）
     if (!owns.data.length) return err('NOT_ENTITLED')
 
     // UGC 内容安全（fail-closed·根因#3）：校不过/校不了一律拒、不入库（守卫 ugc-imgsecchecked）

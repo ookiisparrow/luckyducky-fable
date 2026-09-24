@@ -33,6 +33,7 @@
   --ld-bg-red-soft: #fff6f5; /* 危险底 */
   --ld-bg-amber-soft: #fbf1e2; /* 预警/进行中底（3 态状态补 amber·呼应改主题只改 token） */
   --ld-red-line: #f0c0ba; /* 危险描边 */
+  --ld-amber-line: #c47d1e; /* 预警描边 */
 
   /* 形状与字体 */
   --ld-radius: 12px; /* 卡片/面板（design 控制台.pen 卡角） */
