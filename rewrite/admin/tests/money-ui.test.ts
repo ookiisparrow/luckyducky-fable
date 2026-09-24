@@ -6,6 +6,7 @@ import ordersSrc from '../src/pages/Orders.vue?raw'
 import fulfillSrc from '../src/pages/Fulfill.vue?raw'
 import refundsSrc from '../src/pages/Refunds.vue?raw'
 import dashboardSrc from '../src/pages/Dashboard.vue?raw'
+import inventorySrc from '../src/pages/Inventory.vue?raw'
 
 describe('deriveDashboardTodos（待处理计数：加载失败别伪装成 0/全清·病根#14）', () => {
   it('大白话：某路计数加载失败时 partial=true——上层据此不把「加载失败」显示成绿色「今日无待处理」', () => {
@@ -29,7 +30,32 @@ describe('deriveDashboardTodos（待处理计数：加载失败别伪装成 0/�
       low: 10,
     })
     expect(t.partial).toBe(false)
-    expect(t).toMatchObject({ ship: 3, refund: 1, lowStock: 1, prep: 1 }) // 库存 2≤10 计低库存·preparing 计上新未完成
+    expect(t).toMatchObject({ ship: 3, refund: 1, lowStock: 1, prep: 1 }) // 没设自己的阈值：库存 2 按默认 10 算低库存；50 不算。preparing 计上新未完成
+  })
+
+  it('大白话：低库存/售罄跟库存页同一把尺子——设了自己的阈值就按自己的，没设才退默认；库存 0 仍算售罄', () => {
+    const t = deriveDashboardTodos({
+      orderCounts: { ok: true, counts: {} },
+      refundCounts: { ok: true, counts: {} },
+      inventory: {
+        ok: true,
+        list: [
+          { stock: 2 }, // 没设阈值 → 默认 10 → 低库存
+          { stock: 50 }, // 高于默认 → 在售
+          { stock: 15, threshold: 20 }, // 15≤自设 20 → 低库存（固定 ≤10 会漏）
+          { stock: 12, threshold: 20 }, // 12≤自设 20 → 低库存（再漏一条，避免和下面那条互相抵消）
+          { stock: 5, threshold: 3 }, // 5>自设 3 → 在售（固定 ≤10 会误计）
+          { stock: 0, threshold: 3 }, // 售罄，仍计入
+          { stock: null }, // 不限量，不计
+          { stock: 8, threshold: 0 }, // 阈值 0＝没设 → 退默认 10 → 低库存
+        ],
+      },
+      drafts: { ok: true, rows: [] },
+      low: 10,
+    })
+    expect(t.partial).toBe(false)
+    expect(t.lowStock).toBe(5) // 2、15、12、0、8；5 与 50 与不限量不计
+    expect(inventorySrc).toContain('stockAlertOf(r.stock, r.threshold, LOW_STOCK)') // 库存页标色走同一函数，不能再各写一遍
   })
 
   it('大白话：orderCounts/refundCounts 本身 ok:true 但服务端内部某路 count 失败时也带了 partial:true——不能因为整体 ok 就当真值信（P1·item7）', () => {

@@ -7,7 +7,7 @@ import { listInventory, saveStock } from '../api/system'
 import { listDrafts } from '../api/products'
 import { mapStock, stockErrorText, type StockRow } from '../lib/mapSystem'
 import { useLoadStatus } from '../lib/status'
-import { LOW_STOCK_THRESHOLD } from '../lib/thresholds'
+import { LOW_STOCK_THRESHOLD, stockAlertOf } from '../lib/thresholds'
 import UiButton from '../components/ui/Button.vue'
 import PageHeader from '../components/ui/PageHeader.vue'
 import KpiCard from '../components/ui/KpiCard.vue'
@@ -34,13 +34,7 @@ const editThreshold = ref('') // per-SKU 阈值编辑（换皮丢·后端 saveSt
 const search = ref('')
 const filter = ref<'all' | 'onsale' | 'low' | 'out' | 'unlimited'>('all')
 
-const effThreshold = (row: Row) => (row.threshold > 0 ? row.threshold : LOW_STOCK) // per-SKU 优先·未设退默认
-function statusOf(stock: number | null, threshold: number): Row['status'] {
-  if (stock == null) return 'unlimited'
-  if (stock === 0) return 'out'
-  if (stock <= (threshold > 0 ? threshold : LOW_STOCK)) return 'low'
-  return 'onsale'
-}
+const effThreshold = (row: Row) => (row.threshold > 0 ? row.threshold : LOW_STOCK) // per-SKU 优先·未设退默认（提示文案用；标色走 stockAlertOf）
 const STATUS = {
   onsale: '在售',
   low: '低库存',
@@ -88,7 +82,7 @@ async function reload() {
     ...r,
     name: cat[r.productId]?.name || r.productId,
     priceLabel: cat[r.productId]?.price || '—',
-    status: statusOf(r.stock, r.threshold),
+    status: stockAlertOf(r.stock, r.threshold, LOW_STOCK),
   }))
   truncNote.value = m.truncNote
   load((inv as any).ok, '加载失败：' + String((inv as any).error || '')) // 只在加载失败时写·成功不抹动作反馈（409 冲突原文留住）

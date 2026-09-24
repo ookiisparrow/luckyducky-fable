@@ -2,6 +2,7 @@
 // 脏档安全同 mp 口径（缺条目恒数组/裸脏档剔除/金额恒两位）；近似诚实标注（approx 透传不隐藏）。
 // orderErrorText：钱组 action 英文码→操作者中文（同 mapSystem.ts launchErrorText 手法·#222 同类）。
 import { yuan, orderStatusLabel, refundStatusLabel, dateTime } from './format'
+import { stockAlertOf } from './thresholds'
 
 const ORDER_ERR: Record<string, string> = {
   BAD_ARGS: '参数不完整',
@@ -94,12 +95,19 @@ export function deriveDashboardTodos(i: TodoInputs): TodoCounts {
   const partial = !(i.orderCounts?.ok && i.refundCounts?.ok && i.inventory?.ok && i.drafts?.ok) || !!i.orderCounts?.partial || !!i.refundCounts?.partial
   const ocC = (i.orderCounts?.counts || {}) as Record<string, unknown>
   const rcC = (i.refundCounts?.counts || {}) as Record<string, unknown>
-  const invList = Array.isArray(i.inventory?.list) ? (i.inventory.list as Array<{ stock?: unknown }>) : []
+  const invList = Array.isArray(i.inventory?.list) ? (i.inventory.list as Array<{ stock?: unknown; threshold?: unknown }>) : []
   const rows = Array.isArray(i.drafts?.rows) ? i.drafts.rows : []
   return {
     ship: Number(ocC.paid) || 0,
     refund: Number(rcC.applied) || 0,
-    lowStock: invList.filter((r) => typeof r?.stock === 'number' && (r.stock as number) <= i.low).length,
+    // 与库存页同一把尺子：per-SKU 阈值优先，未设退 i.low；库存 0 算售罄，不限量不计。
+    lowStock: invList.filter((r) => {
+      const stock = r?.stock
+      if (typeof stock !== 'number') return false
+      const threshold = Math.max(0, Number(r?.threshold) || 0)
+      const status = stockAlertOf(stock, threshold, i.low)
+      return status === 'low' || status === 'out'
+    }).length,
     prep: rows.filter((d) => d.state === 'preparing').length,
     partial,
   }
