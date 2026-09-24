@@ -212,6 +212,20 @@ describe('kfBind / dataConsent（黄金 §九/§三）', () => {
     expect((await assertDataShareConsent(db, 'oME')).ok).toBe(false) // 撤回即拒
     expect((await assertDataShareConsent(db, '')).ok).toBe(false) // 空标识 fail-closed
   })
+
+  it('大白话：查本人档失败不建第二份同意档——读挂了回 USER_LOOKUP_FAIL，不当「没档」去 set', async () => {
+    control.seed('users', [{ _id: 'legacy-u', _openid: 'oME', csDataShare: { agreed: false } }])
+    control.setBeforeGet(({ coll, filter }: any) => {
+      if (coll === 'users' && filter && filter._openid === 'oME') throw new Error('MOCK_DB_FAIL')
+    })
+    const r = await call('dataConsent', { agree: true })
+    control.setBeforeGet(null as never)
+    expect(r.ok).toBe(false)
+    expect(r.error).toBe('USER_LOOKUP_FAIL')
+    expect(control.dump('users').length).toBe(1)
+    expect(control.dump('users')[0]._id).toBe('legacy-u')
+    expect(control.dump('users')[0].csDataShare.agreed).toBe(false) // 原档没被改、也没多出一份
+  })
 })
 
 describe('csAccess 归属闸（黄金 §二）', () => {

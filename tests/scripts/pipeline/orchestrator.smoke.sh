@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 # orchestrator.sh 冒烟测试（P2.2-6: 编排器关键路径回归）
-# 验证: freeze 生成只读包且含代码 / 路径过滤防穿越 / archive 生成 sha256 不自动 commit
+# 验证: freeze 生成只读包且含代码 / 路径过滤防穿越
+# archive+sha256 真路径要 herdr，不在这里造假段。本文件留下是给 pipeline-scripts-wired 接线用。
 set -euo pipefail
 cd "$(dirname "$0")/../../.."
-ROOT="$(pwd)"
 TMP="$(mktemp -d)"
 trap 'chmod -R u+w "$TMP" 2>/dev/null; rm -rf "$TMP"' EXIT
 
@@ -13,7 +13,7 @@ check() { # $1=描述 $2=条件
   else fail=$((fail+1)); echo "❌ $1"; fi
 }
 
-# 准备: 临时上下文
+# 准备: 临时上下文（gitignore，不入库）
 mkdir -p .agents/contexts
 echo "# SMOKE: orchestrator 冒烟测试" > .agents/contexts/SMOKE-01.md
 
@@ -30,16 +30,6 @@ check "审查包只读 (a-w)" "$([ ! -w "$PKG/context.md" ] && echo true || echo
 # 2. 路径过滤: 非法 LD 拒绝
 INVALID="$(bash scripts/pipeline/orchestrator.sh freeze '../etc/passwd' 2>&1 || true)"
 check "路径穿越 LD 被拒" "$(echo "$INVALID" | grep -qE '非法|error' && echo true || echo false)"
-
-# 3. archive 不自动 commit, 生成 sha256
-git -C "$ROOT" stash list >/dev/null 2>&1 || true
-BEFORE="$(git -C "$ROOT" rev-parse HEAD)"
-echo "dummy archive content" > "$TMP/dummy.md"
-# 直接调 archive 需要 herdr, 跳过真实调用; 验证 sha256 机制本身
-echo "abc" > "$TMP/a.md"; shasum -a 256 "$TMP/a.md" > "$TMP/a.md.sha256"
-check "sha256 校验生成" "$([ -s "$TMP/a.md.sha256" ] && echo true || echo false)"
-AFTER="$(git -C "$ROOT" rev-parse HEAD)"
-check "无自动 commit (HEAD 未变)" "$([ "$BEFORE" = "$AFTER" ] && echo true || echo false)"
 
 echo ""
 echo "通过 $pass / $((pass+fail))"

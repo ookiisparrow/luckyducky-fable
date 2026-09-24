@@ -1,8 +1,5 @@
-// 发货工作台纯逻辑单源（换皮回归还原批·1:1 移植旧线 packages/admin/src/utils/fulfill.js·TS 化）。
+// 发货工作台纯逻辑：无电子面单，先打内部标签（QR=订单id）再扫快递码发货。
 // 不 import Vue——tests/fulfill.test.ts 直测。守卫 rw-admin-fulfill-golden。
-//
-// 现实约束：无电子面单 API，快递运单号在快递员上门逐箱贴条码面单那一刻才产生。所以流程是
-// 「打自家内部标签贴箱（QR=订单id）→ 装货 → 快递员贴他们的条码 → 扫内部码选单 + 扫快递码发货」。
 // 扫码枪 = 键盘模拟 + 回车后缀，一个输入框收两种码，classifyScan 负责分拣。
 
 export const FULFILL_STEP_NAMES = ['拣货备货', '打印标签', '扫码发货']

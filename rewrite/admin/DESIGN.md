@@ -14,14 +14,19 @@
 |---|---|
 | 强调 / 主操作 | `--ld-brand`；按下 `--ld-brand-active` |
 | 标题 | `--ld-ink` |
+| 品牌墨（主按钮底 / 重标题） | `--ld-purple-ink` |
 | 正文 | `--ld-content` |
 | 次要 | `--ld-content-2` |
+| 紫系说明 | `--ld-purple-meta` |
 | 底 | `--ld-bg` |
 | 浅紫底 | `--ld-bg-lilac` |
 | 灰底 | `--ld-bg-grey` |
+| 灰绿底 | `--ld-bg-sage` |
+| 近白底 | `--ld-bg-faint` |
 | 线 | `--ld-line` |
+| 强分隔线 | `--ld-line-strong` |
 | 紫描边 | `--ld-purple-line` |
-| 成功 / 危险 / 预警 | `--ld-green` / `--ld-red` / `--ld-amber`；浅底 `--ld-bg-green-soft` / `--ld-bg-red-soft` / `--ld-bg-amber-soft` |
+| 成功 / 危险 / 预警 | `--ld-green` / `--ld-red` / `--ld-amber`；浅底 `--ld-bg-green-soft` / `--ld-bg-red-soft` / `--ld-bg-amber-soft`；描边 `--ld-red-line` / `--ld-amber-line` |
 
 禁止：裸 hex（守卫 `rw-admin-theme-single-source`）、第二强调色、渐变底、玻璃拟态。换皮只改 `tokens.css`。
 
@@ -39,6 +44,7 @@
 
 - 卡 `--ld-radius`（12）
 - 按钮 / chip `--ld-radius-sm`（8）
+- 侧栏项 / 小件 `--ld-radius-item`（9）
 - 禁 pill CTA
 
 ## 组件（规则，不另起原语）

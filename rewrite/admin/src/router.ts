@@ -1,5 +1,5 @@
 // 路由（hash·静态托管友好）。信息架构按运营动作重组（M3 重写·非旧侧栏平铺）：
-// 总览 / 商品与内容 / 订单与钱 / 客服 / 进销存 / 系统 六组——页面随批次逐组填充。
+// 总览 / 商品与内容 / 订单与钱 / 客服 / 进销存 / 系统 六组已齐。
 import { createRouter, createWebHashHistory } from 'vue-router'
 import { client } from './api'
 import { isUploadLocked } from './lib/uploadLock'

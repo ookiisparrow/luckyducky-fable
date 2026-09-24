@@ -41,11 +41,6 @@
 .ld-mc-card-h {
   transform: scale(0.99);
 }
-/* 扫码激活定位高亮（welcome.ts onEnter 带 courseId 跳回本页·刚拿到的课卡描边一眼可寻） */
-.ld-mc-card-on .ld-mc-cover {
-  outline: 4rpx solid var(--ld-purple-tab);
-  outline-offset: 4rpx;
-}
 
 /* 封面（16:9.6·padding-top 百分比法，避 aspect-ratio 旧 WebView 不支持；同 me 页范式） */
 .ld-mc-cover {
@@ -135,9 +130,17 @@
   font-size: 22rpx;
   color: var(--ld-content-2);
 }
-/* 进度没读到：比正常进度文字更淡，不画进度条（不拿 0% 冒充「没学过」·根因#14） */
+/* 进度没读到：比正常进度文字更淡，不画进度条（不拿 0% 冒充「没学过」·根因#14）。
+   「点此重试」用课卡「继续学习」同色，标明能点；本页没有下拉刷新。 */
 .ld-mc-prog-unknown {
   color: var(--ld-content-3, #9a9aa2);
+}
+.ld-mc-prog-unknown-h {
+  opacity: 0.65;
+}
+.ld-mc-prog-retry {
+  color: var(--ld-purple-tab);
+  font-weight: 600;
 }
 .ld-mc-meta {
   display: flex;

@@ -29,6 +29,10 @@ describe('login（黄金：静默 upsert·unionid 桥接·并发幂等）', () =
     expect(docs.length).toBe(1)
     expect(docs[0]._id).toBe('oNEW')
     expect(docs[0]._openid).toBe('oNEW')
+    // 注册时间必须是毫秒数字：后台客户搜索用 dateTime，只认数字；云端日期经回读显示成空白
+    expect(typeof docs[0].createdAt).toBe('number')
+    expect(docs[0].createdAt).toBeGreaterThan(1_000_000_000_000)
+    expect(r.user.createdAt).toBe(docs[0].createdAt)
   })
 
   it('大白话：再登取回同一档不重复建档', async () => {
@@ -183,5 +187,27 @@ describe('deleteAccount（删除资料·抹识别信息·课不可再看·订单
     for (let i = 0; i < 5; i++) await call('deleteAccount')
     const r: any = await call('deleteAccount')
     expect(r).toEqual({ ok: false, error: 'RATE_LIMITED' })
+  })
+
+  it('大白话：摘激活/进度/客服桥读失败不再装成已删除——ok:false INTERNAL；真没有仍 deleted:true', async () => {
+    control.setOpenId('oME')
+    await call('login')
+    control.seed('activations', [
+      { _id: 'A1', _openid: 'oME', courseId: 'c1', code: 'K1', enteredAt: 111, createdAt: 1 },
+    ])
+    control.setBeforeGet(({ coll }: any) => {
+      if (coll === 'activations') throw new Error('MOCK_DB_FAIL')
+    })
+    const fail: any = await call('deleteAccount')
+    control.setBeforeGet(null as never)
+    expect(fail.ok).toBe(false)
+    expect(fail.error).toBe('INTERNAL')
+    expect(fail.deleted).toBeUndefined()
+    expect(control.dump('activations')).toHaveLength(1)
+    control.reset()
+    control.setOpenId('oME')
+    await call('login')
+    const empty: any = await call('deleteAccount')
+    expect(empty).toEqual({ ok: true, deleted: true })
   })
 })
