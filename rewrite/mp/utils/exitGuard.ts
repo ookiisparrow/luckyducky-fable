@@ -9,7 +9,7 @@
 // 为什么不用 wx.enableAlertBeforeUnload（**已判废·不要再搬回来**）：双死因——① 它是「返回上一页」
 //   语义、绑 navigateBack/左上角原生返回按钮，tab 栈底页无上一页；② 本 app navigationStyle:custom
 //   自绘导航**藏掉了它要挂的原生返回按钮**。→ 栈底页永远不弹。铁证：仓内 2026-06-14 真机存档
-//   （docs/archive/调试日志-至20260616.md）早已测出「真机无弹窗」。防回潮见 tests/tabbar-exit-guard.test.ts。
+//   （调试记录见 git 历史）早已测出「真机无弹窗」。防回潮见 tests/tabbar-exit-guard.test.ts。
 //
 // 真机覆盖边界（根因#8「构建过≠真机能用」·机器守不了·须真机验）：
 //   ✓ 安卓实体返回键 / 返回手势——最主要的误触退出路径，旧 uni-app 线安卓真机验证过；

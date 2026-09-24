@@ -13,7 +13,7 @@ export const meta = {
 // 用法（主脑调用，2026-07-08 复盘流程 v2 的机器化落地）：
 // Workflow({ scriptPath: '<repo>/.claude/workflows/batch-pipeline.mjs', args: {
 //   specPath: '/abs/path/spec.md',            // 必填：批次规格文件（执行者/评审员都读它）
-//   whitelist: ['docs/重构日志.md', 'rewrite/mp/pages/foo/'],  // 必填：允许改动路径；以 / 结尾=前缀匹配，否则精确匹配
+//   whitelist: ['docs/运维手册.md', 'rewrite/mp/pages/foo/'],  // 必填：允许改动路径；以 / 结尾=前缀匹配，否则精确匹配
 //   ignore: ['design/console.pen'],           // 选填：并行会话已知改动，边界断言忽略
 //   lenses: [{ key: '正确性', prompt: '……' }], // 选填：定向评审镜头；无镜头评审员总是自动追加
 //   execModel: 'sonnet', execEffort: 'high',   // 选填：执行者档位（默认 sonnet/high）

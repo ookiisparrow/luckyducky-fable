@@ -40,7 +40,7 @@ tcb hosting deploy rewrite/admin/dist admin -e cloudbase-d4gcssqbv06865479
 echo y | tcb permission set collection:secureConfig --level adminonly -e cloudbase-d4gcssqbv06865479
 tcb permission get collection:secureConfig -e cloudbase-d4gcssqbv06865479   # 应回 adminonly
 ```
-报「集合不存在」＝先在云开发控制台建 `secureConfig` 集合再锁（运维手册「凭证轮换」 同条·待办与债最高优先项）。
+报「集合不存在」＝先在云开发控制台建 `secureConfig` 集合再锁（运维手册「凭证轮换」同条）。
 
 ### 阶段 2 · 腾讯云控制台四步
 

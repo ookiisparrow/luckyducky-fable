@@ -30,7 +30,7 @@
  * 不是全量 UI/交互验证（那层仍是人工真机走查，见 rewrite/mp/README.md）。
  *
  * 不进 pre-commit/CI 三道闸（gate-single-source 单源＝npm run check；本脚本需真实 devtools 实例，
- * 机器闸对它无感，属靠人起环境的按需层，同 visual-check.cjs）。
+ * 机器闸对它无感，属靠人起环境的按需层）。
  *
  * 底座选型拍板（2026-07-24 深夜·官方 wechatide CLI 正式接入后实测评估·勿再重议）：本脚本**保持
  * miniprogram-automator，不迁官方 wechatide CLI**。数据依据：① wechatide 每条命令冷启动子进程、
@@ -85,7 +85,7 @@ function timeoutReject(ms, msg) {
   return new Promise((_, reject) => setTimeout(() => reject(new Error(msg)), ms))
 }
 
-// 照抄 scripts/visual-check.cjs 已验证过的坑：connect 成功 ≠ RPC 可用（僵尸端口），
+// 已验证过的坑：connect 成功 ≠ RPC 可用（僵尸端口），
 // 所以 connect 后必须先 systemInfo() 探活；连不上/探活超时才 launch 冷启动。
 // 2026-07-24 收紧：systemInfo 只走信息道，checkout 死锁留下的半僵实例（导航道瘫、信息道活）
 // 探不出来——上次失败残留的实例会让本次 connect「成功」然后逐页 reLaunch 全挂成假 FAIL。

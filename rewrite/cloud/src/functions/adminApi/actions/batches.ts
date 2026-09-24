@@ -33,7 +33,7 @@ export async function listBatches({ db, data }: Ctx) {
   return reply(200, { ok: true, list })
 }
 
-// 易抄写字符表（无 0/O/1/I），LD 前缀 + 10 位 ≈ 1e15 空间（原 ops/genQrcodes.ts 收编·2026-07-23 拓扑收编批）。
+// 易抄写字符表（无 0/O/1/I），LD 前缀 + 10 位 ≈ 1e15 空间。
 const ALPHABET = '23456789ABCDEFGHJKLMNPQRSTUVWXYZ'
 function genCode(): string {
   const bytes = randomBytes(10)
@@ -60,7 +60,7 @@ export function makeBatchId(courseId: string, now: number): string {
 }
 
 /**
- * 按课程批量生成唯一激活码（原 ops/genQrcodes.ts main 收编·2026-07-23 拓扑收编批·17→13）：校验/生成
+ * 按课程批量生成唯一激活码：校验/生成
  * 行为逐条不变（count 必须显式合法正整数、钳 500、课程须存在、撞 _id 重试 5 次）。原 kit.withAdminGate
  * 包装不迁——管理闸已在外层 adminApi（checkKey + ACTION_CAPS，见 index.ts）把关，本函数只做业务逻辑，
  * 不再需要第二层管理闸（唯一调用方 createBatch 已过 adminApi 网关）。
