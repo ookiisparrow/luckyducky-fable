@@ -29,9 +29,9 @@ export const SCENE_COMMENT = 2
 export async function imgSecCheck(fileId: string): Promise<SecResult> {
   if (!fileId) return { ok: false, error: 'NO_FILE' }
   try {
-    const dl = await (cloud as any).downloadFile({ fileList: [fileId] })
-    const f = dl && dl.fileList && dl.fileList[0]
-    const buf = f && f.fileContent
+    // 云函数 downloadFile 官方形状是 { fileID } → { fileContent, statusCode }，不是 getTempFileURL 的 fileList
+    const dl = await cloud.downloadFile({ fileID: fileId })
+    const buf = dl && dl.fileContent
     if (!buf) return { ok: false, error: 'SEC_CHECK_FAIL' } // 取不到图内容 → fail-closed 拒
     const r = await (cloud as any).openapi.security.imgSecCheck({
       media: { contentType: 'image/png', value: buf },
