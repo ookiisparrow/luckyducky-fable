@@ -2,7 +2,7 @@
 // 财务对账（design/console.pen S16 视觉·M3 UI 批8）：内部对账（应收/退款/净额·全量精确 + 按日表·真值）
 // + 外部微信官方账单逐笔勾对（四类差异·「微信有我方无」最危险标红——真对账口）+ 导出 CSV（客户端真生成）。
 // 诚实边界：设计稿「微信手续费≈0.6% / 微信实际到账」为估算/结算数据，后端 getReconciliation 无——不伪造，
-// 只渲染应收−退款=净额真等式；月份选择器（近 30 天固定窗，无 month 参数）与「导出 Excel」（改 CSV）记待办。
+// 只渲染应收−退款=净额真等式；默认近 30 天窗，from/to 可自定义；导出 CSV。
 import { ref, computed, onMounted } from 'vue'
 import { CircleDollarSign, RotateCcw, Wallet, Download, CircleCheck, TriangleAlert } from 'lucide-vue-next'
 import { getReconciliation, getBillMatch, downloadBill } from '../api/system'
@@ -56,7 +56,7 @@ async function reload(): Promise<boolean> {
   return bad.length === 0
 }
 
-// 自定义对账区间（后端 from/to 就绪·换皮丢了这个·只能看死 30 天窗）
+// 自定义对账区间（空则默认近 30 天）
 function applyRange() {
   const ok = (s: string) => !s || /^\d{4}-\d{2}-\d{2}$/.test(s)
   if (!ok(from.value) || !ok(to.value)) {
@@ -143,7 +143,7 @@ onMounted(reload)
 
 <template>
   <div class="ld-page">
-    <PageHeader title="财务对账" sub="应收 GMV、退款按日对账 + 微信官方账单逐笔勾对 · 资金对得上才安心（内部近 30 天窗）">
+    <PageHeader title="财务对账" sub="应收 GMV、退款按日对账 + 微信官方账单逐笔勾对 · 默认近 30 天，可自选区间 · 导出 CSV">
       <UiButton :disabled="!recon || busy" @click="exportCsv">
         <Download :size="15" :stroke-width="1.8" /><span>导出 CSV</span>
       </UiButton>
