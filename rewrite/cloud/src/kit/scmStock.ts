@@ -174,7 +174,6 @@ export async function sumLedgerByItemKey(docType: MoveDocType): Promise<{ itemKe
     .match({ docType })
     .group({ _id: '$itemKey', total: $.sum('$delta') })
     .end()
-    .catch(() => ({ list: [] }))
   return (r.list || []).map((x: any) => ({ itemKey: x._id, total: x.total }))
 }
 
@@ -184,7 +183,7 @@ export async function sumLedgerByItemKey(docType: MoveDocType): Promise<{ itemKe
 export async function recentStockLedger(n: number): Promise<any[]> {
   const db = getDb()
   const cap = Math.min(Math.max(1, n | 0), 50)
-  const r = await db.collection(COLLECTIONS.stockLedger).orderBy('at', 'desc').limit(cap).get().catch(() => ({ data: [] }))
+  const r = await db.collection(COLLECTIONS.stockLedger).orderBy('at', 'desc').limit(cap).get()
   return r.data || []
 }
 
@@ -192,7 +191,7 @@ export async function recentStockLedger(n: number): Promise<any[]> {
  *  经门1 唯一出口（同上·configChecklist 原直碰 stockLedger，批K 改走这里）。 */
 export async function hasAdjustLedgerEntry(): Promise<boolean> {
   const db = getDb()
-  const r = await db.collection(COLLECTIONS.stockLedger).where({ docType: 'adjust' }).limit(1).get().catch(() => ({ data: [] }))
+  const r = await db.collection(COLLECTIONS.stockLedger).where({ docType: 'adjust' }).limit(1).get()
   return (r.data || []).length > 0
 }
 
@@ -200,7 +199,7 @@ export async function hasAdjustLedgerEntry(): Promise<boolean> {
  *  经门1 唯一出口（同上·configChecklist 原直碰 materials，批K 改走这里）。 */
 export async function hasThresholdMaterial(): Promise<boolean> {
   const db = getDb()
-  const r = await db.collection(COLLECTIONS.materials).where({ threshold: db.command.gt(0) }).limit(1).get().catch(() => ({ data: [] }))
+  const r = await db.collection(COLLECTIONS.materials).where({ threshold: db.command.gt(0) }).limit(1).get()
   return (r.data || []).length > 0
 }
 
@@ -255,6 +254,6 @@ export async function saveMaterialDoc(m: MaterialDoc): Promise<'ok' | 'UOM_LOCKE
 export async function listMaterialDocs(limit = 500): Promise<any[]> {
   const db = getDb()
   const cap = Math.min(Math.max(1, limit | 0), 500)
-  const r = await db.collection(COLLECTIONS.materials).limit(cap).get().catch(() => ({ data: [] }))
+  const r = await db.collection(COLLECTIONS.materials).limit(cap).get()
   return r.data || []
 }

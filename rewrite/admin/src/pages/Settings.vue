@@ -1,5 +1,5 @@
 <script setup lang="ts">
-// 系统设置（设计语言一致性·M3 UI 批13）：告警推送 webhook（企微群机器人·空=清除退回纯日志）+ 激活码 urlPrefix。
+// 系统设置：告警推送 webhook（企微群机器人·空=清除退回纯日志）+ 激活码 urlPrefix。
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { getSettings, saveSettings } from '../api/system'

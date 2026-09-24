@@ -20,3 +20,14 @@ export const sampleQc = (count = 10) => client.post('sampleQc', { count })
 export const saveQcMark = (sessionKey: string, score: number, note: string) => client.post('saveQcMark', { sessionKey, score, note })
 export const listQcSampled = (filter: { cursor?: unknown; limit?: number; onlyPending?: boolean } = {}) =>
   client.post('listQcSampled', filter as Record<string, unknown>)
+export const getTrialRefreshGate = () => client.post('getTrialRefreshGate')
+export const refreshTrialSession = (data: {
+  reason: string
+  force?: boolean
+  externalUserId?: string
+  externalUserIds?: string[]
+  sessionId?: string
+  sessionIds?: string[]
+  openid?: string
+  openids?: string[]
+}) => client.post('refreshTrialSession', data as Record<string, unknown>)

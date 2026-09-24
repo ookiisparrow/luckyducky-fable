@@ -45,16 +45,18 @@ export async function searchCustomer({ db, data }: Ctx) {
     })
   }
   const users = db.collection('users')
+  // 同 getUser：读失败回 null，不当「没这个人」（根因#14 / USER_LOOKUP_FAIL）
   const rows = (qy: any) =>
     qy
       .get()
       .then((r: any) => (r && r.data) || [])
-      .catch(() => [])
+      .catch(() => null)
   const [byId, byPhone, byNick] = await Promise.all([
     rows(users.where({ _openid: q }).limit(SEARCH_LIMIT)),
     rows(users.where({ phone: q }).limit(SEARCH_LIMIT)),
     rows(users.where({ nickname: q }).limit(SEARCH_LIMIT)),
   ])
+  if (!byId || !byPhone || !byNick) return reply(200, { ok: false, error: ERR.USER_LOOKUP_FAIL })
   byId.forEach((u: any) => add(u, 'openid'))
   byPhone.forEach((u: any) => add(u, 'phone'))
   byNick.forEach((u: any) => add(u, 'nickname'))
@@ -62,6 +64,7 @@ export async function searchCustomer({ db, data }: Ctx) {
   const ord = await db.collection('orders').doc(q).get().catch(() => null)
   if (ord && ord.data && ord.data._openid) {
     const u = await rows(users.where({ _openid: ord.data._openid }).limit(1))
+    if (!u) return reply(200, { ok: false, error: ERR.USER_LOOKUP_FAIL })
     if (u.length) add(u[0], 'orderId')
     else add({ _openid: ord.data._openid }, 'orderId')
   }

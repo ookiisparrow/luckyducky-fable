@@ -1,5 +1,5 @@
 <script setup lang="ts">
-// 帮助视频（设计语言一致性·M3 UI 批12）：播放页「遇到问题了」求助面板内容源（主题→小段两级·全课程共用一份）。
+// 帮助视频：播放页「遇到问题了」求助面板内容源（主题→小段两级·全课程共用一份）。
 import { ref, onMounted, onBeforeUnmount, watch, nextTick } from 'vue'
 import { Upload, Check, Trash2, Plus, Video } from 'lucide-vue-next'
 import { listHelpVideos, saveHelpVideos, uploadVideo } from '../api/content'
@@ -161,24 +161,14 @@ async function save() {
     saveTimer = null
   }
   busy.value = true
-  await flushSave() // 先排空在途/待发自动保存·防旧快照 POST 落在手动保存之后覆盖新编辑（P2·同 HomeContent/Products.closeEditor）
-  const r = await saveHelpVideos(items.value, baseRev.value)
+  // 单路径：只走 flushSave（serialSave 链·run 现读 items.value）——原先 flush 后又直发一次
+  // saveHelpVideos 属双写冗余（夜间审计 2026-09-12 admin·对齐 Courses.save）。
+  await flushSave()
   busy.value = false
-  if (r.ok || r.error === 'GC_DELETE_FAIL') baseRev.value = Number(r.rev) || baseRev.value // 刷新基线（保存已成功·GC 失败也已 bump rev）
-  if (!r.ok) {
-    if (r.error === 'DRAFT_CONFLICT') {
-      // 别处已保存过更新版本：拒写防互相覆盖·不 reload 不丢当前编辑（批A·迭代I 载入失败保护范式）
-      conflicted.value = true
-      message.value = '内容已被别处修改，请重新载入后再保存'
-      return
-    }
-    // 失败留原文·不 reload——否则 listHelpVideos 会把编辑器换回旧数据（丢未存编辑）并抹掉本条错（病根#14·同 Kb）
-    message.value = '保存失败：' + String(r.error || '')
-    return
-  }
-  const okR = await reload() // 成功才刷（反映云端剔除无视频的小段）
-  // 只在刷新也成功时显纯成功；刷新失败保留其「加载失败」可见、不被成功盖掉（病根#14 失败必可观测·迭代I 批7 回归修）
-  message.value = okR ? '已保存（无视频的小段会被云端剔除）' : '已保存，但列表刷新失败，请重开本页确认'
+  if (saveState.value === 'saved') {
+    message.value = '已保存（无视频的小段会被云端剔除）'
+  } else if (!conflicted.value) message.value = '保存失败，请重试'
+  // 冲突态：flushSave 已写明确提示，不覆盖
 }
 
 onMounted(reload)
@@ -192,7 +182,10 @@ onMounted(reload)
       <UiButton :disabled="busy || !items.length" @click="save">{{ busy ? '保存中…' : '保存全部' }}</UiButton>
     </PageHeader>
 
-    <p v-if="message" class="status">{{ message }}</p>
+    <p v-if="message" class="status">
+      {{ message }}
+      <UiButton v-if="conflicted" variant="ghost" size="sm" @click="reload">重新载入</UiButton>
+    </p>
     <p v-if="progress" class="uploading ld-uploading">{{ progress }}</p>
 
     <!-- 逐主题卡（外框由 Card 提供）：标题/副/描述 + 逐小段·上移下移/两步删除 -->

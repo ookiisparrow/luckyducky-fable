@@ -1,0 +1,74 @@
+{
+  "version": "1.0",
+  "comment_absorb": "学 Chatwoot 显式 handoff + 七鱼 close 再转人工；交接包必带下列字段",
+  "required_fields": [
+    {
+      "name": "intent",
+      "type": "string",
+      "desc": "当前识别意图或 unknown"
+    },
+    {
+      "name": "filled_slots",
+      "type": "object",
+      "desc": "已填槽位快照"
+    },
+    {
+      "name": "summary",
+      "type": "string",
+      "desc": "最近对话摘要（短）"
+    },
+    {
+      "name": "order_binding",
+      "type": "object",
+      "desc": "本会话订单绑定（可空对象）",
+      "nullable": true
+    },
+    {
+      "name": "fail_reason",
+      "type": "string",
+      "desc": "触发转人工/失败原因码或文案",
+      "enum_examples": [
+        "user_asks_human",
+        "complaint_high",
+        "collect_rounds_ge_3",
+        "consecutive_unknown",
+        "adapter_fail",
+        "system_fail",
+        "low_confidence",
+        "queue_timeout"
+      ]
+    },
+    {
+      "name": "epoch",
+      "type": "integer",
+      "desc": "session_epoch，测版第 N 次进线"
+    }
+  ],
+  "optional_fields": [
+    { "name": "confidence", "type": "number" },
+    { "name": "stage", "type": "string" },
+    { "name": "channel", "type": "string" },
+    { "name": "openid_hash", "type": "string", "note": "仅哈希，不落明文到对外日志" },
+    { "name": "bot_closed_at", "type": "string", "note": "进 human 时机器人回合关闭时间" },
+    { "name": "audit_id", "type": "string" }
+  ],
+  "on_enter_human": [
+    "end_bot_active_turn",
+    "write_handoff_audit",
+    "set_human_substate_queued",
+    "send_script_human_queued"
+  ],
+  "example": {
+    "intent": "wrong_or_missing",
+    "filled_slots": {
+      "order_id": "LD20260919001",
+      "issue_type": "wrong_or_missing",
+      "product_type": "physical_kit",
+      "severity_desc": "少了一团线"
+    },
+    "summary": "用户反馈实物材料包缺件，已提供订单号。",
+    "order_binding": { "order_id": "LD20260919001", "bound": true },
+    "fail_reason": "user_asks_human",
+    "epoch": 3
+  }
+}
