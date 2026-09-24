@@ -1,5 +1,5 @@
 import { isValidPriceYuan, isValidScmProductId, isValidScmSpec } from '@ldrw/shared'
-import { reply, cleanProduct, cleanSold, storeImage, type Ctx } from '../lib'
+import { reply, cleanProduct, cleanSold, storeImage, readDoc, type Ctx } from '../lib'
 import { notifyAlert } from '../../../kit'
 
 // —— 商品图册孤儿 GC 判据单源（E16 共享 helper·防多点漂移·批B）——
@@ -108,10 +108,13 @@ export async function saveDraft({ db, drafts, data }: Ctx) {
   // 换图缓期 GC（批B·规则4）：整份覆盖前先取旧草稿+发布档，算被撤且非 cover 的孤儿图，缓期入 drafts.pendingGc
   // （单队列之家=草稿档）；不立删——admin listDrafts/mp 详情给这些图签过临时址，同步删=在场会话见 404。
   // pendingGc 是服务端衍生字段（cleanProduct 白名单不含它·客户端注入不了）：从旧草稿读、覆盖时带回。
-  const [prevDraft, pub] = await Promise.all([
-    drafts.doc(p.id).get().then((r: any) => r.data).catch(() => null),
-    db.collection('products').doc(p.id).get().then((r: any) => r.data).catch(() => null),
+  const [prevDraftR, pubR] = await Promise.all([
+    readDoc(drafts.doc(p.id).get()),
+    readDoc(db.collection('products').doc(p.id).get()),
   ])
+  if (!prevDraftR.ok || !pubR.ok) return reply(200, { ok: false, error: 'DOC_READ_FAIL' })
+  const prevDraft = prevDraftR.data
+  const pub = pubR.data
   // productId/spec 出生点校验（战役3 批D·D1·helper 单源 shared/scmKey.ts·预审裁决修订：校验只对「出生/变更」
   // 生效，不对「存量值原样带回」生效）：p.id 是 SCM 组合键的 productId 半边，p.tag/skus[].name 是 spec 半边的
   // 候选来源（createOrder lineIdOf 取 SKU 名或 tag 作 spec）——二者会拼进 scmAssembly fg:${productId}__${spec}
@@ -211,8 +214,9 @@ export async function uploadImage({ cloud, data }: Ctx) {
 export async function publishProduct({ db, drafts, data }: Ctx) {
   const id = String(data.id || '')
   if (!id) return reply(400, { ok: false, error: 'NO_ID' })
-  const got = await drafts.doc(id).get().catch(() => null)
-  if (!got || !got.data) return reply(400, { ok: false, error: 'NO_DRAFT' })
+  const got = await readDoc(drafts.doc(id).get())
+  if (!got.ok) return reply(200, { ok: false, error: 'DOC_READ_FAIL' })
+  if (!got.data) return reply(400, { ok: false, error: 'NO_DRAFT' })
   const d = got.data
   if (!d.cover) return reply(400, { ok: false, error: 'NEED_COVER' })
   // 价格硬边界：有限正数且 ≤ 上限——拦负价 / Infinity / 超大价穿透（外部体检 P1）
@@ -225,9 +229,10 @@ export async function publishProduct({ db, drafts, data }: Ctx) {
     return reply(400, { ok: false, error: 'NEED_SKUS' })
   }
   const productsColl = db.collection('products')
-  const exist = await productsColl.doc(id).get().catch(() => null)
-  let sort = exist?.data?.sort
-  let featured = exist?.data?.featured
+  const exist = await readDoc(productsColl.doc(id).get())
+  if (!exist.ok) return reply(200, { ok: false, error: 'DOC_READ_FAIL' })
+  let sort = exist.data?.sort
+  let featured = exist.data?.featured
   if (sort === undefined) {
     const top = await productsColl.orderBy('sort', 'desc').limit(1).get()
     sort = (top.data[0]?.sort ?? 0) + 1
@@ -236,7 +241,7 @@ export async function publishProduct({ db, drafts, data }: Ctx) {
   // 重新上架（编辑后再发布）不得隐式改变销售状态：保留旧 listed/unlistedAt——已停售（listed:false）商品
   // 编辑重发仍停售，须显式 republishProduct 才恢复销售（审核 P1·债#12·防整文档 set 抹掉 listed→「无字段=可售」隐式复活）。
   const carry: Record<string, unknown> = {}
-  if (exist?.data && 'listed' in exist.data) {
+  if (exist.data && 'listed' in exist.data) {
     carry.listed = exist.data.listed
     if (exist.data.unlistedAt != null) carry.unlistedAt = exist.data.unlistedAt
   }
@@ -269,7 +274,7 @@ export async function publishProduct({ db, drafts, data }: Ctx) {
   // 发布替换孤儿缓期入队（批B·规则4）：旧发布(exist)不再被新发布(doc=草稿)引用的非 cover 图进 drafts.pendingGc
   // （单队列之家=草稿档·发布 action 也写它），对齐 courses.publishCourse；立删会让在场 admin/详情会话临时址 404。
   // products 档本身不携 pendingGc（doc 显式白名单不含它）——队列只此一家在草稿档。
-  const { orphans, keep } = diffOrphans([exist?.data, d], [doc, d])
+  const { orphans, keep } = diffOrphans([exist.data, d], [doc, d])
   const pendingGc = mergePendingGc(d.pendingGc, orphans, keep)
   await drafts.doc(id).update({ data: { status: 'onsale', pendingGc } })
   return reply(200, { ok: true })

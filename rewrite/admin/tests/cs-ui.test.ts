@@ -1,6 +1,7 @@
 // 客服组映射（守卫 rw-admin-cs-ui-golden）：时长人话/报表 approx 诚实透传/360 单面板失败隔离/
 // 命中依据中文/kb 行归一/满意度分布。
 import { describe, it, expect } from 'vitest'
+import { CS_REFRESH_COPY } from '@ldrw/shared'
 import { msHuman, mapReport, mapPanels, matchLabel, normalizeKb, mapCsat, mapCsatEntries, mapMessages, nextNodeId, duplicateNodeIds, mapQcRows } from '../src/lib/mapCs'
 import customer360Src from '../src/pages/Customer360.vue?raw'
 import conversationsSrc from '../src/pages/Conversations.vue?raw'
@@ -246,9 +247,12 @@ describe('测版刷新入口只在闸开时露', () => {
     expect(conversationsSrc).toMatch(/v-if="trialRefreshOn"/)
     expect(conversationsSrc).toMatch(/当作新客重新开始/)
     expect(conversationsSrc).toMatch(/getTrialRefreshGate/)
-    expect(conversationsSrc).toMatch(/请填写刷新原因（必填）/)
-    expect(conversationsSrc).toMatch(/测版会话刷新（无刷金）/)
-    expect(conversationsSrc).toMatch(/已刷新，epoch 已 \+1/)
+    expect(conversationsSrc).toMatch(/CS_REFRESH_COPY\.adminReasonPlaceholder/)
+    expect(conversationsSrc).toMatch(/CS_REFRESH_COPY\.adminListHint/)
+    expect(conversationsSrc).toMatch(/CS_REFRESH_COPY\.adminSuccess/)
+    expect(conversationsSrc).not.toContain(CS_REFRESH_COPY.adminReasonPlaceholder)
+    expect(conversationsSrc).not.toContain(CS_REFRESH_COPY.adminListHint)
+    expect(conversationsSrc).not.toContain(CS_REFRESH_COPY.adminSuccess)
     expect(conversationsSrc).toMatch(/trialRefreshArmed/)
     expect(conversationsSrc).not.toMatch(/window\.prompt|window\.confirm/)
   })

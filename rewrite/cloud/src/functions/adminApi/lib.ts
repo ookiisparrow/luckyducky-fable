@@ -1,5 +1,5 @@
 import crypto from 'crypto'
-import { str, notifyAlert } from '../../kit'
+import { str, notifyAlert, isDocMissing, isEmptyDoc } from '../../kit'
 import { PAID_ORDER_STATUSES } from '@ldrw/shared'
 export { str } // 供 action 模块复用（saveCard / saveHomeContent 等截断）
 
@@ -68,6 +68,32 @@ export async function ensure(db: any, coll: string) {
   }
 }
 
+// 集合未建 ≠ 库挂了。isDocMissing 故意不认 COLLECTION_NOT_EXIST（库存钱链：集合没了不能当「无档不限量」）。
+// 内容预读：集合还没建＝真没有文档，第一次保存前合法空；权限/超时仍当读失败。
+export function isCollectionMissing(e: unknown): boolean {
+  const o = e && typeof e === 'object' ? (e as Record<string, unknown>) : null
+  const t = [o && o.message, o && o.errMsg, o && o.errmsg, o && o.code, o && o.errCode, e]
+    .map((x) => (x == null ? '' : String(x)))
+    .join('\n')
+  if (/permission denied|PERMISSION_DENIED|-502003|ECONNRESET|NETWORK_TIMEOUT/i.test(t)) return false
+  return /COLLECTION_NOT_EXIST|-502005|collection does not exist/i.test(t)
+}
+
+// 预读一份文档：缺档 ≠ 读失败（根因#14）。原 .get().catch(() => null) 把网络/权限/集合故障也折成「没有这份」，
+// 写路径就会按空档/rev=0 覆盖或拿失败基线做 GC。缺档 data=null；读失败 ok=false——调用方必须停写。
+// 判据复用 kit isDocMissing（真 sdk 缺档文案已查证，禁再抄一份更宽的 /does not exist/）。
+// 集合未建走 isCollectionMissing：后台页靠读成功才放开保存，不当读失败挡第一次落档。
+export async function readDoc(p: Promise<any>): Promise<{ ok: true; data: any | null } | { ok: false }> {
+  try {
+    const got = await p
+    if (isEmptyDoc(got)) return { ok: true, data: null }
+    return { ok: true, data: got.data }
+  } catch (e) {
+    if (isDocMissing(e) || isCollectionMissing(e)) return { ok: true, data: null }
+    return { ok: false }
+  }
+}
+
 // 激活码状态数据链（退款判据 + 订单详情共用·根因#8 真数据不伪造）：买家对某商品对应课程是否
 // 已激活/已进课。courseId＝products.courseId·回退 course-<productId>（与 genQrcodes/StepBatch 同口径）；
 // 查 activations（activateCourse 写的 {_openid, courseId, enteredAt}）。
@@ -83,9 +109,9 @@ export async function activationFor(db: any, openid: string, productId: string) 
     ? await db
         .collection('activations')
         .where({ _openid: openid, courseId })
+        .limit(1)
         .get()
-        .then((r: any) => r.data)
-        .catch(() => [])
+        .then((r: any) => (r && r.data) || [])
     : []
   const act = acts[0] || null
   return {

@@ -32,7 +32,6 @@ onMounted(async () => {
 
 <style>
 :root {
-  --ld-purple: #a371ea;
   --ld-purple-tab: #865dc0; /* 同步 admin tokens.css --ld-brand-active（守卫 rw-agent-tokens-synced 补捉的漂移：原 #7b5caf 与 admin 真值不符） */
   --ld-purple-meta: #7e6e96;
   --ld-purple-line: #c9bbe0;
@@ -40,7 +39,6 @@ onMounted(async () => {
   --ld-ink: #222222;
   --ld-bg: #ffffff;
   --ld-bg-lilac: #fcfaff;
-  --ld-bg-faint: #fafafa;
   --ld-radius: 12px;
 }
 * {
