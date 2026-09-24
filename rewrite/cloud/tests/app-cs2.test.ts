@@ -144,6 +144,16 @@ describe('转人工与队列（黄金 §五）', () => {
     expect(await enqueueSession(db(), 'kf1', '')).toBe('failed') // 不造无主会话
   })
 
+  it('大白话：入队通知在线坐席有界——agentState where(online) 必须 limit(50)', async () => {
+    let onlineLimit: number | null = null
+    control.setBeforeGet(({ coll, filter, limit }: any) => {
+      if (coll === 'agentState' && filter && filter.status === 'online') onlineLimit = limit == null ? null : limit
+    })
+    expect(await enqueueSession(db(), 'kf1', 'euNew')).toBe('queued')
+    control.setBeforeGet(null as never)
+    expect(onlineLimit).toBe(50)
+  })
+
   it('大白话：转人工基建错时如实提示重试，绝不发假「已转接」', async () => {
     const { sent } = sendCollector()
     const brokenDb = {
