@@ -17,7 +17,7 @@
 
   <!-- 课程卡列表 -->
   <view class="ld-mc-list" wx:if="{{!loading && list.length}}">
-    <view class="ld-mc-card {{item.courseId === highlightId && highlightId ? 'ld-mc-card-on' : ''}}" wx:for="{{list}}" wx:key="courseId" data-id="{{item.courseId}}" bind:tap="onTapCourse" hover-class="ld-mc-card-h" hover-stay-time="80">
+    <view class="ld-mc-card" wx:for="{{list}}" wx:key="courseId" data-id="{{item.courseId}}" bind:tap="onTapCourse" hover-class="ld-mc-card-h" hover-stay-time="80">
       <view class="ld-mc-cover">
         <view class="ld-mc-cover-scrim"></view>
         <view class="ld-mc-play">
@@ -27,9 +27,10 @@
         <image class="ld-mc-cover-chev" src="/static/icons/chevron-right.svg" mode="aspectFit" />
       </view>
       <!-- 学习进度（段粒度·与后台 360 同口径·无段不渲染·真值不编数·独立整行） -->
-      <!-- 进度没读到（progressUnknown·根因#14）：不画 0% 进度条冒充「一段没学过」，诚实说读不到 -->
-      <view class="ld-mc-prog" wx:if="{{item.totalSegments && item.progressUnknown}}">
-        <view class="ld-mc-prog-text ld-mc-prog-unknown">学习进度暂时读不到，下拉或重进本页再试</view>
+      <!-- 进度没读到（progressUnknown·根因#14）：不画 0% 进度条冒充「一段没学过」。
+           本页没有下拉刷新，点这一行走已有 onRetryLoad；catch 住，避免连课卡一起点进目录。 -->
+      <view class="ld-mc-prog" wx:if="{{item.totalSegments && item.progressUnknown}}" catch:tap="onRetryLoad" hover-class="ld-mc-prog-unknown-h" hover-stay-time="80">
+        <view class="ld-mc-prog-text ld-mc-prog-unknown">学习进度暂时读不到，<text class="ld-mc-prog-retry">点此重试</text></view>
       </view>
       <view class="ld-mc-prog" wx:elif="{{item.totalSegments}}">
         <!-- percent=0 不渲染 fill：min-width 下限只该抬「已学一点点」，不能让「一段没学」也显出一截紫条（自查发现·2026-07-25） -->

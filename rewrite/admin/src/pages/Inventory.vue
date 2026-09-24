@@ -1,5 +1,5 @@
 <script setup lang="ts">
-// 库存管理（design/console.pen S14 视觉·M3 UI 批7）：统计卡 + 状态 chip + SKU 表（商品名/价格 join listDrafts
+// 库存管理：统计卡 + 状态 chip + SKU 表（商品名/价格 join listDrafts
 // 真数据·当前库存/低库存预警/售罄/不限量派生）+ 行内调整（saveStock 带 per-SKU 阈值与版本校验 409）。
 import { ref, computed, onMounted } from 'vue'
 import { Search, Boxes, CircleCheck, TriangleAlert, XCircle, Infinity as InfinityIcon, RefreshCw } from 'lucide-vue-next'

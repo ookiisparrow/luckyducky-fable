@@ -1,0 +1,70 @@
+{
+  "pack_id": "lucky-ducky-2026-09-19",
+  "generated_at": "2026-09-19",
+  "baseline": "客服系统设计-测版打磨-v0.3.1",
+  "architecture": "客服系统搭建机器人-架构-v0.1",
+  "product_name": "Lucky Ducky",
+  "product_desc": "钩织/手工兴趣小程序 + 企微微信客服",
+  "channels": [
+    {
+      "type": "wechat_kf",
+      "callback": "kfCallback",
+      "env_label": "yaliceshi",
+      "note": "测版环境 yaliceshi；Gate 开=Jev 总接，旧关键词菜单不抢"
+    }
+  ],
+  "env": "test",
+  "gate": {
+    "mode": "jev_total_intake",
+    "legacy_keyword_menu": "yield",
+    "comment": "测版闸开=Jev总接；旧关键词菜单不抢答"
+  },
+  "intent_tree": {
+    "presale": {
+      "label": "售前",
+      "intents": ["consult", "compare", "order_guide"],
+      "desc": "咨询/对比/下单引导"
+    },
+    "insale": {
+      "label": "售中",
+      "intents": ["logistics", "not_arrived"],
+      "desc": "物流/货没到"
+    },
+    "aftersale": {
+      "label": "售后",
+      "intents": ["packaging", "product_course", "product_app", "quality", "howto_craft", "wrong_or_missing"],
+      "desc": "包装、产品(课程/程序)、质量、操作(手工)、发错/缺件"
+    }
+  },
+  "tone": {
+    "style": "短句、一次一问",
+    "forbid_fake_conclusion": true,
+    "forbid_placeholder_tag": "【结论】",
+    "bubble_default": false,
+    "comment": "纯对话默认无气泡标记"
+  },
+  "constraints": [
+    "不编造支付/退款承诺",
+    "act 只声明调已有业务适配 API",
+    "失败不装懂，转 human 或诚实致歉",
+    "正式线开关恒 false；不自动部署正式线",
+    "不向用户要密码；不编造 API 密钥"
+  ],
+  "features": {
+    "refresh": {
+      "enabled_env": ["test"],
+      "hard_off_env": ["staging", "production"],
+      "no_virtual_assets": true
+    },
+    "self_heal": {
+      "inspect_propose": true,
+      "p1_auto_apply": false,
+      "rollback": true,
+      "customer_facing": false
+    }
+  },
+  "production_deploy": {
+    "auto_deploy": false,
+    "switches_default": false
+  }
+}
