@@ -57,17 +57,15 @@ function expectCappedPackaging(got: string[], opts?: { claim?: boolean }) {
 
 const ACCEPT = '我的包裹被压烂了'
 
-const withOrderShort = (text = ACCEPT, extra?: { severity?: string; style?: 'short' | 'long' }) =>
+const withOrderShort = (text = ACCEPT, extra?: { severity?: string }) =>
   assemblePackagingBubbles({
     text,
     hasRecentOrder: true,
-    style: (extra && extra.style) || 'short',
     severity: extra && extra.severity,
     rand: () => 0,
   })
 
-const noOrder = (text = ACCEPT) =>
-  assemblePackagingBubbles({ text, hasRecentOrder: false, style: 'short', rand: () => 0 })
+const noOrder = (text = ACCEPT) => assemblePackagingBubbles({ text, hasRecentOrder: false, rand: () => 0 })
 
 const db = () => getDb()
 const sendCollector = () => {
@@ -210,15 +208,14 @@ describe('atomic-v1 包装优先级组装', () => {
     expect(detectPackagingFacets('快递摔坏了').logisticsSevere).toBe(true)
   })
 
-  it('大白话：long 同样 ≤3，同 priority 合成更少长气泡', () => {
-    const short = withOrderShort(ACCEPT, { style: 'short' })
-    const long = withOrderShort(ACCEPT, { style: 'long' })
-    expect(short.length).toBeLessThanOrEqual(3)
-    expect(long.length).toBeLessThanOrEqual(3)
-    expect(long[0]).toBe(short[0])
-    expect(long[1]).toBe(PHOTO3.join(''))
-    const severeLong = withOrderShort('物流运输把箱子压烂了', { style: 'long', severity: 'high' })
-    expect(severeLong.length).toBeLessThanOrEqual(3)
+  it('大白话：合照只留权威一句，理赔另起一泡，不合成一条长气泡', () => {
+    const got = withOrderShort(ACCEPT)
+    expect(got).toEqual([expectedEmotion(), PHOTO1])
+    expect(got[1]).not.toBe(PHOTO3.join(''))
+    const severe = withOrderShort('物流运输把箱子压烂了', { severity: 'high' })
+    expect(severe).toHaveLength(3)
+    expect(severe[1]).toBe(PHOTO1)
+    expect(severe[1]).not.toContain(severe[2])
   })
 
   it('大白话：CS_MAX_BUBBLES=2 时理赔并进合照条，总泡仍 ≤2', () => {

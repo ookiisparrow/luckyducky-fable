@@ -1,6 +1,6 @@
 /**
  * atomic-v1 测版挂接：按 route.json + sequences 取原子 .txt，全文 trim 后原样当一条气泡。
- * 查单门闩 / 多面 / 优先级组装 / 句型 short|long。构建打进 kfCallback，运行时不拉 GitHub。
+ * 查单门闩 / 多面 / 优先级组装。构建打进 kfCallback，运行时不拉 GitHub。
  * 装完后压到 ≤CS_MAX_BUBBLES（默认 3）：P1 惊讶+道歉/共情并 1 条（不含尽力），P2 只发 ask_photo_01，P3 理赔可留或并进业务条。
  * 不现编、不改写。正式闸关路径不走这里。
  */
@@ -10,8 +10,6 @@ import ASSETS from './csAtomicAssets.generated.json'
 export const PACKAGING_FIRST_TOUCH_ID = 'packaging_damage_first_touch'
 export const PACKAGING_WITH_ORDER_SHORT_ID = 'packaging_damage_priority_short'
 export const PACKAGING_NO_ORDER_ID = 'packaging_damage_no_order'
-
-export type UtteranceStyle = 'short' | 'long'
 
 type AtomicStep = {
   lib: string
@@ -59,7 +57,6 @@ export type PackagingFacets = {
 export type AtomicPlayCtx = {
   severityHigh?: boolean
   logisticsSevere?: boolean
-  style?: UtteranceStyle
   skipOptional?: boolean
 }
 
@@ -177,7 +174,7 @@ function pickPhotoBubble(texts: string[]): string {
   return (auth && texts.find((t) => t === auth)) || texts[0] || ''
 }
 
-function finalizeBubbles(items: Array<{ priority: number; text: string }>, style: UtteranceStyle, max: number): string[] {
+function finalizeBubbles(items: Array<{ priority: number; text: string }>, max: number): string[] {
   const groups = groupByPriority(items)
   let bubbles: Array<{ priority: number; text: string }> = []
   for (const g of groups) {
@@ -186,12 +183,8 @@ function finalizeBubbles(items: Array<{ priority: number; text: string }>, style
       continue
     }
     if (g.priority === 2) {
-      const text = style === 'long' ? g.texts.join('') : pickPhotoBubble(g.texts)
+      const text = pickPhotoBubble(g.texts)
       if (text) bubbles.push({ priority: 2, text })
-      continue
-    }
-    if (style === 'long') {
-      bubbles.push({ priority: g.priority, text: g.texts.join('') })
       continue
     }
     for (const text of g.texts) bubbles.push({ priority: g.priority, text })
@@ -227,7 +220,6 @@ function finalizeBubbles(items: Array<{ priority: number; text: string }>, style
 export function playSequence(id: string, rand: () => number = Math.random, ctx: AtomicPlayCtx = {}): string[] {
   const seq = assets.sequences[id]
   if (!seq || !seq.steps) return []
-  const style: UtteranceStyle = ctx.style === 'long' ? 'long' : 'short'
   const items: Array<{ priority: number; text: string }> = []
   for (const raw of withEmotionAlways(seq, seq.steps)) {
     if (!stepApplies(raw, ctx)) continue
@@ -236,32 +228,29 @@ export function playSequence(id: string, rand: () => number = Math.random, ctx: 
     const pri = Number.isFinite(Number(raw.priority)) ? Number(raw.priority) : 1
     for (const text of stepBubbles(step, rand)) items.push({ priority: pri, text })
   }
-  return finalizeBubbles(items, style, parseMaxBubbles(process.env.CS_MAX_BUBBLES))
+  return finalizeBubbles(items, parseMaxBubbles(process.env.CS_MAX_BUBBLES))
 }
 
 export function assemblePackagingBubbles(input: {
   text: string
   hasRecentOrder: boolean
-  style?: UtteranceStyle
   severity?: string
   rand?: () => number
 }): string[] {
   const rand = input.rand || Math.random
-  const style: UtteranceStyle = input.style === 'long' ? 'long' : 'short'
   const route = assets.route
   if (route.gate && route.gate.recentOrderRequiredForBusiness && !input.hasRecentOrder) {
     const noId = (route.gate && route.gate.noOrderSequence) || PACKAGING_NO_ORDER_ID
-    return playSequence(noId, rand, { style })
+    return playSequence(noId, rand)
   }
   const facets = detectPackagingFacets(input.text, input.severity)
   const id = (route.sequences && route.sequences.withOrderShort) || PACKAGING_WITH_ORDER_SHORT_ID
   return playSequence(id, rand, {
-    style,
     severityHigh: input.severity === 'high',
     logisticsSevere: facets.logisticsSevere,
   })
 }
 
 export function packagingFirstTouchBubbles(rand: () => number = Math.random): string[] {
-  return assemblePackagingBubbles({ text: '包裹被摔坏了', hasRecentOrder: true, style: 'short', rand })
+  return assemblePackagingBubbles({ text: '包裹被摔坏了', hasRecentOrder: true, rand })
 }
