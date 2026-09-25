@@ -19,7 +19,14 @@ const seen = new Set<string>()
 
 function currentPage(): string {
   try {
-    return typeof location !== 'undefined' ? location.pathname : ''
+    if (typeof location === 'undefined') return ''
+    // 有 hash 记页面（丢掉 ? 后查询串，openid 等不进账本）；没有再用 pathname。后台 hash 路由靠前者。
+    const hash = location.hash
+    if (hash && hash.length > 1) {
+      const cut = hash.indexOf('?')
+      return cut === -1 ? hash : hash.slice(0, cut)
+    }
+    return location.pathname || ''
   } catch {
     return ''
   }
