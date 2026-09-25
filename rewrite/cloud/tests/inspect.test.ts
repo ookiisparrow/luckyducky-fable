@@ -345,9 +345,9 @@ describe('runInspection（巡检机·探出静默失败）', () => {
     expect(docGets).toBe(0)
   })
 
-  it('大白话：空库/集合缺失也不抛、给出完整三查结果（fail-soft·巡检不反噬）', async () => {
+  it('大白话：空库/集合缺失也不抛、给出完整四查结果（fail-soft·巡检不反噬）', async () => {
     const run = await runInspection('timer')
-    expect(run.results.length).toBe(3)
+    expect(run.results.length).toBe(4)
     expect(run.summary).toBeDefined()
   })
 

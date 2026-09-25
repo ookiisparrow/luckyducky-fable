@@ -54,17 +54,20 @@ export async function firstSeen(db: any, msgid: string): Promise<ClaimResult> {
 /**
  * 逐条处理一批客服消息（防吞单·审计 P2）：① 原子认领去重（撞号跳过）② 每条包 try/catch——
  * 单条失败**不再中断整批**（原来 handleMessage 抛错会 unwind 整个 sync 循环：游标不推进 +
- * 已认领的消息永久跳过 = 静默吞掉顾客消息）；失败时 **撤回认领 + alert HANDLE_FAILED**，并返回
- * anyFailed。调用方据 anyFailed **保留旧游标**下次重拉：成功项 seen 去重、失败项重试——顾客消息
- * 至少处理一次，不再因一次崩溃/超时永久丢。（抛错路径均为瞬时：DB/网络；send errcode 不抛·已自 alert。）
+ * 已认领的消息永久跳过 = 静默吞掉顾客消息）；失败时 **撤回认领 + alert HANDLE_FAILED**。
+ * 返回 true＝本批没处理完（有失败，或到了 deadline 停下）。调用方据此**保留旧游标**下次重拉：成功项 seen 去重、
+ * 失败项和没轮到的重试——顾客消息至少处理一次。（抛错路径均为瞬时：DB/网络；send errcode 不抛·已自 alert。）
  */
 export async function processKfBatch(
   db: any,
   msgs: any[],
-  handleOne: (msg: any) => Promise<void>
+  handleOne: (msg: any) => Promise<void>,
+  deadline = Infinity
 ): Promise<boolean> {
   let anyFailed = false
   for (const msg of msgs || []) {
+    // 函数超时会在处理中途硬杀，被杀那条已认领、下次按重复跳过＝吞消息：到点就停，剩下的不认领
+    if (Date.now() > deadline) return true
     const msgid = String((msg && msg.msgid) || '')
     if (msgid) {
       const claim = await firstSeen(db, msgid)
@@ -408,10 +411,13 @@ export async function hasRecentOrders(db: any, openid: string): Promise<boolean 
   return ((r.data || []).length > 0)
 }
 
-/** 客服用户有没有近期订单。未绑定=无单；库挂当有单（不误走无单澄清）。测版默认假设有单。 */
-export async function kfUserHasRecentOrder(db: any, euid: string): Promise<boolean> {
+/**
+ * 客服用户有没有近期订单。未绑定=无单；库挂当有单（不误走无单澄清）。测版默认假设有单。
+ * knownOpenid：调用方已读过该顾客映射时传入（'' = 已知未绑定），不传才在此读。
+ */
+export async function kfUserHasRecentOrder(db: any, euid: string, knownOpenid?: string): Promise<boolean> {
   if (csTestAssumeRecentOrder()) return true
-  const openid = await resolveOpenid(db, euid)
+  const openid = knownOpenid ?? (await resolveOpenid(db, euid))
   if (!openid) return false
   const hit = await hasRecentOrders(db, openid)
   return hit !== false
@@ -553,6 +559,8 @@ export interface DispatchCtx {
   openKfId: string
   cfg: { appid: string; thumbMediaId: string }
   send: (payload: any) => Promise<any>
+  /** 本条消息已读到的顾客 openid（'' = 已知未绑定）；不传则分流里按需读 kfIdentity。 */
+  openid?: string
 }
 
 /**
@@ -579,6 +587,7 @@ const CSAT_ASK_TTL_MS = 48 * 3600_000
 export async function handleMessage(ctx: DispatchCtx, incoming: Incoming): Promise<void> {
   const { db, openKfId, cfg, send } = ctx
   const to = incoming.externalUserId
+  const openidOf = async () => ctx.openid ?? (await resolveOpenid(db, to))
 
   // 测版刷新：闸开时口令/按钮拦在 Jev、关键词、人工让位之前（人工接待中默认拒刷）。
   if (await interceptTrialRefresh(db, incoming, openKfId, send)) return
@@ -612,7 +621,7 @@ export async function handleMessage(ctx: DispatchCtx, incoming: Incoming): Promi
       const askAt = ask && Number(ask.at)
       if (askAt && Date.now() - askAt < CSAT_ASK_TTL_MS) {
         await dropKfState(db, 'csatask:' + to)
-        const openid = await resolveOpenid(db, to)
+        const openid = await openidOf()
         const csatId = await recordCsat(db, { externalUserId: to, openid, score: Number(m[1]) })
         if (!csatId) {
           await send(buildText(to, openKfId, '评分没记上，请稍后再评一次 🙏'))
@@ -636,7 +645,7 @@ export async function handleMessage(ctx: DispatchCtx, incoming: Incoming): Promi
           const hello = looksGreeting(incoming.text)
           // Jev 并行只为取证；人工/招呼选句不靠它。08:55 只有 [kf] jev greeting、没有梯子日志。
           const evP = tryJevClassify(gate.key, incoming.text)
-          const hasRecentOrder = await kfUserHasRecentOrder(db, incoming.externalUserId)
+          const hasRecentOrder = await kfUserHasRecentOrder(db, incoming.externalUserId, ctx.openid)
           const useEv = human ? HUMAN_LADDER_EV : hello ? GREET_EV : await evP
           const got = useEv
             ? await composeScriptReply(db, incoming.externalUserId, incoming.text, useEv, { hasRecentOrder })
@@ -738,7 +747,7 @@ export async function handleMessage(ctx: DispatchCtx, incoming: Incoming): Promi
       else await send(buildText(to, openKfId, r.fallbackText))
       return
     case 'order_query': {
-      const openid = await resolveOpenid(db, to)
+      const openid = await openidOf()
       if (!openid) {
         await send(
           buildText(
@@ -754,7 +763,7 @@ export async function handleMessage(ctx: DispatchCtx, incoming: Incoming): Promi
     }
     case 'csat': {
       // 记分（fail-closed 校验 1..5·绑 openid 若可解析）→ 再问可选备注（B4.3）；写失败如实告知不发菜单
-      const openid = await resolveOpenid(db, to)
+      const openid = await openidOf()
       const csatId = await recordCsat(db, { externalUserId: to, openid, score: r.score })
       if (!csatId) {
         await send(buildText(to, openKfId, '评分没记上，请稍后再评一次 🙏'))

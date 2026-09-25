@@ -103,6 +103,23 @@ export async function getTempUrl(fileId: string, opts: TempUrlOpts = {}): Promis
   return map[fileId] ?? null
 }
 
+// 删一个已经不存在的文件，平台逐项回失败码（tcb 是 STORAGE_FILE_NONEXIST / storage file not exist，真云 status 值未核实）。
+// 文件已经没了就是删成功：否则引用它的档永远摘不掉，每次重试都失败。
+const FILE_GONE = /FILE_NONEXIST|file (?:does )?not exist/i
+
+/**
+ * 删云存储文件（≤50 个＝平台单次上限，分批归调用方）。逐个回是否已删：只认回包里逐项确认的，缺项算没删；
+ * 文件本就不存在算已删。整次调用失败照抛，由调用方决定怎么收。
+ */
+export async function deleteFiles(fileIDs: string[]): Promise<Array<{ fileID: string; deleted: boolean }>> {
+  const res = await cloud.deleteFile({ fileList: fileIDs })
+  const byId = new Map((res?.fileList || []).map((f) => [f.fileID, f]))
+  return fileIDs.map((fileID) => {
+    const f = byId.get(fileID)
+    return { fileID, deleted: !!f && (f.status === 0 || FILE_GONE.test(`${f.errMsg || ''} ${f.code || ''}`)) }
+  })
+}
+
 /** 仅测试：清空容器级签发缓存，隔离跨 case 复用相同 fileID 的污染（批1）。 */
 export function __resetTempUrlCacheForTest(): void {
   urlCache.clear()

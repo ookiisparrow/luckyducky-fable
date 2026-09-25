@@ -1,6 +1,7 @@
 import { COLLECTIONS, toFen } from '@ldrw/shared'
 import { fetchTradeBill, normalizePem, type BillRow, type WxFetch } from './wxpay'
 import { getSecureConfigFields } from './secureConfig'
+import { getDocOrNull } from './ids'
 
 /** 库/API 金额（元，number 或数字串）→ 元 number。字符串绝不走 `+`。 */
 export function toYuanAmount(v: unknown): number {
@@ -58,6 +59,7 @@ async function upsertBills(db: any, date: string, rows: BillRow[]): Promise<numb
 
 /**
  * 拉一日微信交易账单 → 落 wxBills。**fail-soft 全程不抛**：凭证缺 {ok:false,error:'NO_WXPAY_CREDS'|'NO_MCHID'}，
+ * 凭证/商户号读失败 'CREDS_READ_FAIL'|'CONFIG_READ_FAIL'（与「没配置」分开：调用方对后者静默、对前者要告警），
  * 拉取失败原样透传 fetchTradeBill 的 error（含 NO_STATEMENT_EXIST 字样＝该日无账单·由调用方分诊）。
  * 凭证链（根因#9）：secureConfig/wxpay 读库优先、env 兜底（**env 是函数进程级**——timer 新函数不继承
  * adminApi 的环境变量，部署侧要么凭证入库要么本函数同配 env，否则每日静默 skipped）；mchid 取 config/pay.subMchId。
@@ -67,13 +69,15 @@ export async function pullBillDay(
   date: string,
   opts: { fetchImpl?: WxFetch; billType?: string } = {}
 ): Promise<{ ok: false; error: string } | { ok: true; count: number; rows: BillRow[] }> {
-  const creds = await getSecureConfigFields(db, 'wxpay', ['mchSerial', 'mchPrivateKey'])
+  const creds = await getSecureConfigFields(db, 'wxpay', ['mchSerial', 'mchPrivateKey'], { strict: true }).catch(() => null)
+  if (!creds) return { ok: false, error: 'CREDS_READ_FAIL' }
   const serial = creds.mchSerial
   // 私钥换行常被控制台塌成空格/字面 \n（→ OpenSSL DECODER 报错）→ 稳健重建规范 PEM（对已规整值幂等，无害）
   const privateKey = normalizePem(creds.mchPrivateKey)
   if (!serial || !privateKey) return { ok: false, error: 'NO_WXPAY_CREDS' }
-  const cfg = await db.collection(COLLECTIONS.config).doc('pay').get().catch(() => null)
-  const mchid = (cfg && cfg.data && cfg.data.subMchId) || ''
+  const cfg = await getDocOrNull(db.collection(COLLECTIONS.config).doc('pay')).catch(() => undefined)
+  if (cfg === undefined) return { ok: false, error: 'CONFIG_READ_FAIL' }
+  const mchid = (cfg && cfg.subMchId) || ''
   if (!mchid) return { ok: false, error: 'NO_MCHID' }
   const r = await fetchTradeBill({ date, mchid: String(mchid), serial, privateKey, billType: opts.billType }, opts.fetchImpl) // undefined 走默认出站
   if (!r.ok) return { ok: false, error: r.error || 'BILL_FETCH_FAIL' }

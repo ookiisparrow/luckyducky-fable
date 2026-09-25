@@ -1,6 +1,7 @@
 import cloud from 'wx-server-sdk'
-import { getDb, throttleLocked, throttleFail, throttleReset, recordAudit, shouldAudit, alert } from '../../kit'
-import { reply, checkKey, issueSession, type Ctx } from './lib'
+import { getDb, throttleLocked, throttleFail, throttleReset, recordAudit, shouldAudit, alert, notifyAlert } from '../../kit'
+import { COLLECTIONS } from '@ldrw/shared'
+import { reply, checkKey, issueSession, revokeSession, type Ctx } from './lib'
 import * as products from './actions/products'
 import * as courses from './actions/courses'
 import * as cards from './actions/cards'
@@ -34,7 +35,7 @@ import * as reviews from './actions/reviews'
 
 // 管理控制台后端 v2（HTTP 访问服务触发·鉴权外壳逐字承接旧线 index.ts·业务 action 已全域挂载
 // 进 ACTIONS/ACTION_CAPS——与旧线注册表逐行核对过）。
-// 鉴权：口令（adminConfig sha256·首登 bootstrap 须部署密钥）→ 会话令牌 fallback；RBAC 能力位默认拒；
+// 鉴权：login 只认口令（首登 bootstrap 须部署密钥）签发会话令牌；其余 action 先认令牌、查无再比口令；RBAC 能力位默认拒；
 // 认证频控 per-IP + 全局兜底。M5 切换日以新名部署、admin 前端切 endpoint。
 const db = getDb()
 
@@ -281,9 +282,31 @@ async function throttleGate(tkey: string): Promise<{ ipWait: number; globalWait:
   const [ipWait, globalWait] = await Promise.all([throttleLocked(tkey), throttleLocked(GLOBAL_KEY)])
   return { ipWait, globalWait }
 }
-async function throttleFailBoth(tkey: string): Promise<void> {
+// 鉴权失败计数 + 分布式爆破信号（login / 企微免登 / 泛 action 三个入口共用）。全局已锁时每次失败留一行日志；
+// 进来时未锁、计完已锁才 notifyAlert 进 anomalies 并推企微。上锁那一刻并发在跑的失败请求都满足这个条件，
+// 所以推送前还要抢 claimBrutePush——一轮爆破只推一次，不把企微机器人（每分钟 20 条）刷到限流、挤掉钱链告警。
+async function authFail(tkey: string, globalWait: number): Promise<void> {
   if (tkey !== GLOBAL_KEY) await throttleFail(tkey, ADMIN_THROTTLE)
   await throttleFail(GLOBAL_KEY, ADMIN_THROTTLE_GLOBAL)
+  if (globalWait === 0 && (await throttleLocked(GLOBAL_KEY)) === 0) return
+  if (globalWait === 0 && (await claimBrutePush())) await notifyAlert('security', 'adminLogin', 'GLOBAL_BRUTE', {})
+  else alert('security', 'adminLogin', 'GLOBAL_BRUTE', {})
+}
+// 推送权：同一文档的条件更新在库里串行执行，lockMs 内只有一个请求能把 pushedAt 改成功；首轮还没档时靠 add 撞 _id 定胜负。
+// ponytail: 抢权读写失败就不推（anomalies/日志仍在），按「宁少推不刷屏」取舍；要保底送达得区分撞号与库故障。
+const BRUTE_PUSH_ID = 'adminlogin-brute-push'
+async function claimBrutePush(): Promise<boolean> {
+  const now = Date.now()
+  const coll = db.collection(COLLECTIONS.rateLimit)
+  const r = await coll
+    .where({ _id: BRUTE_PUSH_ID, pushedAt: db.command.lt(now - ADMIN_THROTTLE_GLOBAL.lockMs) })
+    .update({ data: { pushedAt: now, updatedAt: now } })
+    .catch(() => null)
+  if (r && r.stats && r.stats.updated === 1) return true
+  return coll.add({ data: { _id: BRUTE_PUSH_ID, pushedAt: now, updatedAt: now } }).then(
+    () => true,
+    () => false
+  )
 }
 
 // 审计成功判定（C3·根因#14 失败不可观测）：handler 一律经 reply() 返回 { statusCode, body:JSON字符串 }。
@@ -327,8 +350,7 @@ export const main = async (event: any) => {
     if (!res.ok) {
       // 库故障≠错口令：不计爆破不告警；回 503 而非 401，前端不清令牌
       if (res.error === 'AUTH_UNAVAILABLE') return reply(503, res)
-      await throttleFailBoth(tkey)
-      if (globalWait > 0) alert('security', 'adminLogin', 'GLOBAL_BRUTE', {}) // 全局锁定态下仍有错误口令=疑似分布式爆破·告警人工
+      await authFail(tkey, globalWait)
       return reply(401, res)
     }
     if (tkey !== GLOBAL_KEY) await throttleReset(tkey) // 成功只清独立 IP；缺 IP/全局靠窗口衰减（防爆破信号被一次成功登入抹掉）
@@ -341,18 +363,22 @@ export const main = async (event: any) => {
     return reply(200, { ...res, sessionToken })
   }
 
+  // 登出（pre-auth·在能力闸前）：外包只有 agent:handle，走默认拒会 403 登不出。拿着令牌就能吊销它自己，
+  // 无效令牌也回成功，回包不当令牌有效性探针，故不计爆破失败。
+  if (action === 'logout') {
+    if (!(await revokeSession(db, String(key || '')))) return reply(503, { ok: false, error: 'AUTH_UNAVAILABLE' })
+    return reply(200, { ok: true })
+  }
+
   // 企微 OAuth 免登（pre-auth·坐席无口令·同 login 受频控防刷 code）：换 userid→查绑定账号→签发 session 令牌
   if (action === 'loginByWecomCode') {
     const res = await wecomLogin.loginByWecomCode({ db, data })
     // 按返回码分类计频控（C2·防基建冷窗自我 DoS）：wecomLogin.ts 枚举——200=成功；401 BAD_CODE /
     // 403 NO_BOUND_ACCOUNT / 403 ACCOUNT_DISABLED=真鉴权失败（爆破证据）→ 计 throttleFail；
     // 503 KF_TOKEN_UNAVAILABLE（令牌缓存冷窗·非爆破）/ 400 BAD_ARGS（缺 code·客户端错）=既不计失败也不 reset，
-    // 否则办公室固定 IP 会在令牌冷窗期被无辜锁死。GLOBAL_BRUTE 告警跟随计数：仅真鉴权失败且 globalWait>0 才告警。
+    // 否则办公室固定 IP 会在令牌冷窗期被无辜锁死。GLOBAL_BRUTE 告警跟随计数（authFail）：只有真鉴权失败才可能告警。
     if (res.statusCode === 200 && tkey !== GLOBAL_KEY) await throttleReset(tkey)
-    else if (res.statusCode === 401 || res.statusCode === 403) {
-      await throttleFailBoth(tkey)
-      if (globalWait > 0) alert('security', 'adminLogin', 'GLOBAL_BRUTE', {})
-    }
+    else if (res.statusCode === 401 || res.statusCode === 403) await authFail(tkey, globalWait)
     // 503/400 等基建/客户端错：直接返回，不触碰频控（不计不 reset·不告警）
     return res
   }
@@ -361,10 +387,7 @@ export const main = async (event: any) => {
   const auth = await checkKey(db, key, false)
   if (!auth.ok) {
     if (auth.error === 'AUTH_UNAVAILABLE') return reply(503, auth)
-    await throttleFailBoth(tkey)
-    // C1：泛 action 与 login 打的是同一把口令、同一类爆破——全局锁定态下经任一 action 入口的错误口令
-    // 同样是分布式爆破证据，比照 login 补同款告警（同 tag 'adminLogin' 聚合，供防噪判据统一消费）。
-    if (globalWait > 0) alert('security', 'adminLogin', 'GLOBAL_BRUTE', {})
+    await authFail(tkey, globalWait) // 泛 action 与 login 打的是同一把口令、同一类爆破，同 tag 'adminLogin' 聚合
     return reply(401, auth)
   }
   if (tkey !== GLOBAL_KEY) await throttleReset(tkey)

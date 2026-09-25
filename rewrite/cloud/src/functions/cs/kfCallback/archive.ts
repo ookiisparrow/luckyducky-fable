@@ -64,14 +64,15 @@ export function payloadText(payload: any): string {
 /**
  * 归档一条入站客户消息（fail-soft·绝不抛错）。确定性 _id 幂等：同 msgid 重投不重档。
  * 非客户文本（事件/图片等）本期不归档（incomingText 给占位·检索以客户文本为主）——只归档有 msgid 的真消息。
+ * knownOpenid：调用方已读过该顾客映射时传入（'' = 已知未绑定），不再重读；undefined 才在此读。
  */
-export async function archiveInbound(db: any, msg: any, openKfId: string): Promise<void> {
+export async function archiveInbound(db: any, msg: any, openKfId: string, knownOpenid?: string): Promise<void> {
   try {
     const msgid = String((msg && msg.msgid) || '')
     if (!msgid) return // 无 msgid（部分事件）不归档——无幂等键
     if (String((msg && msg.msgtype) || '') === 'event') return // 平台事件（进会话/状态变更）非会话内容——不归档（会话流/质检统计免噪声·调试日志 AC）
     const euid = msgEuid(msg)
-    const openid = await resolveOpenidBestEffort(db, euid)
+    const openid = knownOpenid ?? (await resolveOpenidBestEffort(db, euid))
     await db.collection(COLLECTIONS.conversations).add({
       data: {
         _id: 'wxkf:in:' + msgid,
@@ -95,11 +96,12 @@ export async function archiveInbound(db: any, msg: any, openKfId: string): Promi
 /**
  * 归档一条出站回复（fail-soft·绝不抛错）。出站由 index.ts send 收口处调——机器人自动回复（菜单/文字/卡片/转接通知）
  * 全捕获；未来承面C 人工坐席回复经自建 send 同样落档。
+ * knownOpenid：同 archiveInbound（'' = 已知未绑定，undefined = 在此读 touser 的映射）。
  */
-export async function archiveOutbound(db: any, payload: any, openKfId: string): Promise<void> {
+export async function archiveOutbound(db: any, payload: any, openKfId: string, knownOpenid?: string): Promise<void> {
   try {
     const euid = String((payload && payload.touser) || '')
-    const openid = await resolveOpenidBestEffort(db, euid)
+    const openid = knownOpenid ?? (await resolveOpenidBestEffort(db, euid))
     await db.collection(COLLECTIONS.conversations).add({
       data: {
         channel: CHANNEL_WXKF,

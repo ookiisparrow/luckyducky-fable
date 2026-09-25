@@ -6,34 +6,36 @@ import { reply, type Ctx } from '../lib'
 // 按页 skip 取尽（每页 200），不足一页即止。makeQuery 每页重建，避免复用查询对象。
 // 最大页数封顶（深审 P3·根因#7）：无上限 skip 循环在码量暴涨（一课累计数万码）时要跑上百次串行 DB 往返、
 // 逼近云函数超时——封顶 SCAN_PAGES 页（=1 万条·管理端量级远不触）；真触顶属灾难态、靠人扩容而非静默无限跑。
+// 触顶回 truncated，调用方据此告诉人计数不全；末页满时再探 1 条，码数正好封顶值时不误报。
 const SCAN_PAGES = 50
-async function fetchAll(makeQuery: () => any, pageSize = 200): Promise<any[]> {
+async function fetchAll(makeQuery: () => any, pageSize = 200): Promise<{ rows: any[]; truncated: boolean }> {
   const out: any[] = []
   for (let page = 0; page < SCAN_PAGES; page++) {
     // 页失败 fail-loud（同 getInventory）：.catch 空页会命中「不足一页即止」，静默截成半份批次。
     const r = await makeQuery().skip(page * pageSize).limit(pageSize).get()
     const batch = (r && r.data) || []
     out.push(...batch)
-    if (batch.length < pageSize) break
+    if (batch.length < pageSize) return { rows: out, truncated: false }
   }
-  return out
+  const more = await makeQuery().skip(SCAN_PAGES * pageSize).limit(1).get()
+  return { rows: out, truncated: ((more && more.data) || []).length > 0 }
 }
 
 export async function listBatches({ db, data }: Ctx) {
   const courseId = String(data.courseId || '')
   if (!courseId) return reply(400, { ok: false, error: 'NO_COURSE_ID' })
   // 无 orderBy 时服务端不保证各页同序，skip 翻页会跨页漏/重；_id 唯一，是全序。
-  const all = await fetchAll(() =>
+  const { rows, truncated } = await fetchAll(() =>
     db.collection('qrcodes').where({ courseId }).orderBy('_id', 'asc').field({ batchId: true, status: true, createdAt: true })
   )
   const map: Record<string, any> = {}
-  for (const q of all) {
+  for (const q of rows) {
     const b = (map[q.batchId] = map[q.batchId] || { batchId: q.batchId, total: 0, activated: 0, createdAt: q.createdAt || 0 })
     b.total++
     if (q.status === 'activated') b.activated++
   }
   const list = Object.values(map).sort((a: any, b: any) => (b.createdAt || 0) - (a.createdAt || 0))
-  return reply(200, { ok: true, list })
+  return reply(200, { ok: true, list, truncated })
 }
 
 // 易抄写字符表（无 0/O/1/I），LD 前缀 + 10 位 ≈ 1e15 空间。

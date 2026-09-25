@@ -10,6 +10,9 @@ import {
   refundShareFen,
   toFen,
   asFen,
+  AFTERSALE_INFLIGHT_STATUSES,
+  AFTERSALE_QUOTA_STATUSES,
+  PAY_WINDOW_MS,
 } from '@ldrw/shared'
 
 // 巡检机（运行期主动核对·不依赖 AI）：定时/手动跑一遍检查目录——
@@ -20,6 +23,8 @@ import {
 const SCAN_CAP = 500 // 单类单次扫描上限（有界·防容量炸弹）；触顶显式标 capped、不假装扫全了（no silent caps）
 const IN_CHUNK = 100 // _.in 每批键数（照 recallScan 先例·≤500 键 ≤5 次查询·每轮巡检可担）
 const STUCK_PAID_MS = 72 * 3600 * 1000 // 付款超 72h 仍未发货＝卡单（付了钱没发货·典型静默伤客）
+// 关单定时任务每 5 分钟跑一轮：超窗再过 1 小时还是 pending，说明它连着十来轮没关掉，不是还没轮到。
+const PENDING_OVERDUE_MS = PAY_WINDOW_MS + 3600 * 1000
 
 // 金额字段合法性（全文件共用一把尺子）：必须是有限非负 number——全部写入方都走 fenToYuan 落 number，
 // 故此判据不误伤正常行；脏/缺则 fail-closed 报给人看（算不准就别假装守恒/已退清成立）。
@@ -32,6 +37,26 @@ const scan = (db: any, coll: string, where: Record<string, unknown>): Promise<an
   db.collection(coll).where(where).limit(SCAN_CAP).get().then((r: any) => r.data || [])
 
 type Partial = Omit<CheckResult, 'id' | 'title' | 'layer'>
+
+// 按 orderId 批量读售后（_.in 分块·每批按行数封顶 SCAN_CAP，一单可多行售后）。读失败当空集：
+// 调用方拿到空集都往多报走（不豁免卡单 / 不算已退清），宁可多报一次，不可漏报。
+async function afterSalesOf(db: any, orderIds: string[], status: unknown): Promise<{ rows: any[]; capped: boolean }> {
+  const _ = db.command
+  const rows: any[] = []
+  let capped = false
+  for (let i = 0; i < orderIds.length; i += IN_CHUNK) {
+    const got = await db
+      .collection(COLLECTIONS.afterSales)
+      .where({ orderId: _.in(orderIds.slice(i, i + IN_CHUNK)), status })
+      .limit(SCAN_CAP)
+      .get()
+      .catch(() => ({ data: [] }))
+    const data = got.data || []
+    if (data.length >= SCAN_CAP) capped = true
+    rows.push(...data)
+  }
+  return { rows, capped }
+}
 
 /**
  * 该单**实际退得出来的上限**（整数分）——死信「已退清」判据的分母（批K 评审 P1）。
@@ -173,10 +198,7 @@ const CHECKS: Check[] = [
     async run(db) {
       const now = Date.now()
       const _ = db.command
-      const [asRows, paidRows, deadRows, exceptionRows] = await Promise.all([
-        // 排除：有活跃售后（申请中/已同意/已退）的订单＝正在退款·非发货义务（不误报卡单）。
-        // 这一路读失败兜空只会少豁免＝多报，方向安全，故单独保留兜底。
-        scan(db, COLLECTIONS.afterSales, { status: _.in(['applied', 'approved', 'refunded']) }).catch(() => []),
+      const [paidRows, deadRows, exceptionRows] = await Promise.all([
         scan(db, COLLECTIONS.orders, { status: 'paid' }),
         // ② refund_required 死信（钱已收待人工退款·没人管＝高危静默）
         scan(db, COLLECTIONS.orders, { status: 'refund_required' }),
@@ -184,38 +206,48 @@ const CHECKS: Check[] = [
         // 被 refund_required 的退款金额算法误判为已处理或漏报。
         scan(db, COLLECTIONS.orders, { status: 'payment_exception' }),
       ])
-      const refunding = new Set(asRows.map((a) => String(a.orderId)))
-      // ① paid 超 72h 未发货——只算**真付款**（有微信 transactionId·mock/演示单非真钱不算）且**未在退款**：只报真金白银该发没发的单。
-      const stuck = paidRows
-        .filter(
-          (o) =>
-            !o.shippedAt && o.transactionId && Number(o.paidAt || 0) > 0 && now - Number(o.paidAt) > STUCK_PAID_MS && !refunding.has(String(o._id)),
-        )
+      // ① paid 超 72h 未发货——只算**真付款**（有微信 transactionId·mock/演示单非真钱不算）：只报真金白银该发没发的单。
+      const overdue = paidRows.filter(
+        (o) => !o.shippedAt && o.transactionId && Number(o.paidAt || 0) > 0 && now - Number(o.paidAt) > STUCK_PAID_MS,
+      )
+      // 豁免只给在途售后（正在退款·先别发）。已退掉的件不再是发货义务，但同单其余件仍是：退了一行、
+      // 剩下的没发照样要报；每一行都退够件数才算没东西可发。按件数比、不按「这行有退款」比：
+      // 退款只退「购买件 − 已进课件」，进过课的那几件照样要发。售后缺 qty 按 0 计（证明不了已退清就报）。
+      const held = await afterSalesOf(db, overdue.map((o) => String(o._id)), _.in([...AFTERSALE_QUOTA_STATUSES]))
+      const inflight = new Set<string>()
+      const refundedQty = new Map<string, number>() // orderId + 行键 → 已退件数
+      for (const a of held.rows) {
+        const orderId = String(a.orderId)
+        if ((AFTERSALE_INFLIGHT_STATUSES as readonly string[]).includes(a.status)) inflight.add(orderId)
+        else if (a.status === 'refunded') {
+          const key = orderId + '__' + String(a.lineId || a.productId)
+          refundedQty.set(key, (refundedQty.get(key) || 0) + (Number(a.qty) || 0))
+        }
+      }
+      const stuck = overdue
+        .filter((o) => {
+          const id = String(o._id)
+          if (inflight.has(id)) return false
+          const items: any[] = Array.isArray(o.items) ? o.items : []
+          const allRefunded =
+            items.length > 0 &&
+            items.every((it) => (refundedQty.get(id + '__' + String(it?.lineId || it?.productId)) || 0) >= (Number(it?.qty) || 1))
+          return !allRefunded
+        })
         .map((o) => String(o._id))
       // payment_exception 退款完成后仍保留原订单状态（退款真相在 afterSales），所以像
       // refund_required 一样按「已退清」过滤；查询失败时空集兜底，宁可多报不能漏报。
       const exceptionRefunded = new Map<string, number>()
       const exceptionDirty = new Set<string>() // refundAmount 脏/缺 → 无从证明已退清 → 报异常（fail-closed·与 money-conserved 同口径）
-      let exceptionRefundScanCapped = false
-      const exceptionOrderIds = exceptionRows.map((o) => String(o._id))
-      for (let i = 0; i < exceptionOrderIds.length; i += IN_CHUNK) {
-        const chunk = exceptionOrderIds.slice(i, i + IN_CHUNK)
-        const got = await db
-          .collection(COLLECTIONS.afterSales)
-          .where({ orderId: _.in(chunk), status: 'refunded' })
-          .limit(SCAN_CAP)
-          .get()
-          .catch(() => ({ data: [] }))
-        if (got.data.length >= SCAN_CAP) exceptionRefundScanCapped = true
-        for (const a of got.data || []) {
-          if (!okMoney(a.refundAmount)) {
-            // 脏值绝不能参与累加：Number('abc')→NaN 会把整单已退额污染成 NaN，而 NaN<cap 恒 false
-            // → 该异常单被当成「已退清」漏报。与 money-conserved 同口径，脏即报（宁可多报）。
-            exceptionDirty.add(String(a.orderId))
-            continue
-          }
-          exceptionRefunded.set(String(a.orderId), (exceptionRefunded.get(String(a.orderId)) || 0) + toFen(a.refundAmount))
+      const exceptionAs = await afterSalesOf(db, exceptionRows.map((o) => String(o._id)), 'refunded')
+      for (const a of exceptionAs.rows) {
+        if (!okMoney(a.refundAmount)) {
+          // 脏值绝不能参与累加：Number('abc')→NaN 会把整单已退额污染成 NaN，而 NaN<cap 恒 false
+          // → 该异常单被当成「已退清」漏报。与 money-conserved 同口径，脏即报（宁可多报）。
+          exceptionDirty.add(String(a.orderId))
+          continue
         }
+        exceptionRefunded.set(String(a.orderId), (exceptionRefunded.get(String(a.orderId)) || 0) + toFen(a.refundAmount))
       }
       const exceptionIds = exceptionRows
         .filter((o) => {
@@ -242,24 +274,15 @@ const CHECKS: Check[] = [
       // amount 缺失/为 0 同理按未退清计（不让脏数据把死信静默洗白）。
       const refundedByOrder = new Map<string, number>()
       const deadDirty = new Set<string>() // refundAmount 脏/缺 → 无从证明退清 → 计死信（fail-closed·与 exception 分支同口径）
-      const deadOrderIds = deadRows.map((o) => String(o._id))
-      for (let i = 0; i < deadOrderIds.length; i += IN_CHUNK) {
-        const chunk = deadOrderIds.slice(i, i + IN_CHUNK)
-        const got = await db
-          .collection(COLLECTIONS.afterSales)
-          .where({ orderId: _.in(chunk), status: 'refunded' })
-          .limit(SCAN_CAP) // 一单可多行售后 → 按行数封顶（非键数）·有界
-          .get()
-          .catch(() => ({ data: [] }))
-        for (const a of got.data || []) {
-          if (!okMoney(a.refundAmount)) {
-            // 脏值绝不参与累加：NaN 污染整单已退额→NaN<cap 恒 false→真实未退死信被洗绿漏报（多代理审核 codex#4）
-            deadDirty.add(String(a.orderId))
-            continue
-          }
-          // 逐行先换算成整数分再累加（不累加元浮点后一次性取整）：整数域比较无需容差，杜绝浮点噪声。
-          refundedByOrder.set(String(a.orderId), (refundedByOrder.get(String(a.orderId)) || 0) + toFen(a.refundAmount))
+      const deadAs = await afterSalesOf(db, deadRows.map((o) => String(o._id)), 'refunded')
+      for (const a of deadAs.rows) {
+        if (!okMoney(a.refundAmount)) {
+          // 脏值绝不参与累加：NaN 污染整单已退额→NaN<cap 恒 false→真实未退死信被洗绿漏报（多代理审核 codex#4）
+          deadDirty.add(String(a.orderId))
+          continue
         }
+        // 逐行先换算成整数分再累加（不累加元浮点后一次性取整）：整数域比较无需容差，杜绝浮点噪声。
+        refundedByOrder.set(String(a.orderId), (refundedByOrder.get(String(a.orderId)) || 0) + toFen(a.refundAmount))
       }
       const deadIds = deadRows
         .filter((o) => {
@@ -270,8 +293,14 @@ const CHECKS: Check[] = [
         })
         .map((o) => String(o._id))
       const all = [...stuck, ...deadIds, ...exceptionIds]
-      const scanned = paidRows.length + deadRows.length + exceptionRows.length + asRows.length
-      const capped = paidRows.length >= SCAN_CAP || deadRows.length >= SCAN_CAP || exceptionRows.length >= SCAN_CAP || exceptionRefundScanCapped || asRows.length >= SCAN_CAP
+      const scanned = paidRows.length + deadRows.length + exceptionRows.length + held.rows.length
+      const capped =
+        paidRows.length >= SCAN_CAP ||
+        deadRows.length >= SCAN_CAP ||
+        exceptionRows.length >= SCAN_CAP ||
+        held.capped ||
+        exceptionAs.capped ||
+        deadAs.capped
       return all.length
         ? {
             status: 'red',
@@ -283,6 +312,30 @@ const CHECKS: Check[] = [
             capped,
           }
         : { status: 'green', detail: '无卡单/死信', severity: 'low', scanned, capped }
+    },
+  },
+  {
+    id: 'pending-overdue',
+    title: '超窗未关单（关单定时任务兜底）',
+    layer: 'invariant',
+    kind: 'flow-failure',
+    async run(db) {
+      // 关单定时触发器没挂上或没在跑、单条关单更新失败被静默跳过时，过期 pending 单会一直锁着预留库存（只会少卖）；
+      // 本项独立兜底（关单任务读失败那一路它自己已告警）。
+      const rows = await scan(db, COLLECTIONS.orders, { status: 'pending', createdAt: db.command.lt(Date.now() - PENDING_OVERDUE_MS) })
+      const ids = rows.map((o) => String(o._id))
+      const capped = rows.length >= SCAN_CAP
+      return ids.length
+        ? {
+            status: 'red',
+            detail: `${ids.length} 单超支付窗 1 小时仍未关（关单定时任务可能没在跑·预留库存被锁）`,
+            count: ids.length,
+            samples: ids.slice(0, 10),
+            severity: 'low',
+            scanned: rows.length,
+            capped,
+          }
+        : { status: 'green', detail: '无超窗未关单', severity: 'low', scanned: rows.length, capped }
     },
   },
 ]

@@ -15,19 +15,10 @@
 //   ⑥ fail-soft 铁律（推送抛错/summary 为 null 一律不反噬·源码「绝不抛错」注释）。
 // C 类不立（等价变异杀不动）：pushIfConfigured 读 settings 的 `.catch(() => null)`→`() => undefined`——
 //   下游 `(got && got.data) || {}` 对 null/undefined 同判 falsy，行为逐位相同，等价变异。
-import { readFileSync } from 'node:fs'
-import { dirname, join } from 'node:path'
-import { fileURLToPath } from 'node:url'
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { control } from 'wx-server-sdk'
 import { notifyAlert, notifyRecall, notifyHeartbeat } from '../src/kit/observe'
 import { COLLECTIONS } from '@ldrw/shared'
-
-const OBSERVE_SRC = join(dirname(fileURLToPath(import.meta.url)), '..', 'src', 'kit', 'observe.ts')
-
-function stripComments(src: string): string {
-  return src.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/gm, '')
-}
 
 // —— botpush 单接缝内存桩（观测批5：observe→pushBotAlert 是唯一推送出口·mock 它即锁 observe 侧全部推送语义）——
 // vi.mock 工厂被提升到 import 前，共享状态须走 vi.hoisted（同 mutation-kill-botpush.test.ts 范式）。
@@ -100,12 +91,26 @@ describe('alertOnHigh:false 防双告警防递归（本函数已 alert 过·reco
 })
 
 describe('pushIfConfigured 单源（三路 notify 共用一个推送入口·减法抽取钉）', () => {
-  it('大白话：settings 只读一处、pushBotAlert 只调一处，告警/召回/心跳三处都走它（再抄一份就会漏空 webhook / 静音）', () => {
-    const src = stripComments(readFileSync(OBSERVE_SRC, 'utf8'))
-    expect(src.match(/async function pushIfConfigured\s*\(/g)?.length).toBe(1)
-    expect(src.match(/pushIfConfigured\(\{/g)?.length).toBe(3)
-    expect(src.match(/COLLECTIONS\.adminConfig\)\.doc\(['"]settings['"]\)\.get\(\)/g)?.length).toBe(1)
-    expect(src.match(/pushBotAlert\(/g)?.length).toBe(1)
+  // 行为断言而非数源码：Stryker 插桩会改写源码文本，读源码计数的用例会让变异基线先红、整次变异跑不起来。
+  it('大白话：告警/召回/心跳每发一条，settings 恰好读一次、推送恰好发一次（再抄一份读或推就会多读/双推）', async () => {
+    seedSettings()
+    let settingsReads = 0
+    control.setBeforeGet((q: { coll: string; id?: string }) => {
+      if (q.coll === COLLECTIONS.adminConfig && q.id === 'settings') settingsReads++
+    })
+    const sends: Array<() => Promise<void>> = [
+      () => notifyAlert('money', 'pay', 'PAY_FAIL', {}),
+      () => notifyRecall({ recovered: 1 }),
+      () => notifyHeartbeat({ green: 1, red: 0 }),
+    ]
+    for (const send of sends) {
+      settingsReads = 0
+      bp.calls.length = 0
+      await captureLines(send)
+      expect(settingsReads).toBe(1)
+      expect(bp.calls.length).toBe(1)
+      expect(bp.calls[0].webhook).toBe(WEBHOOK)
+    }
   })
 
   it('大白话：逐事件静音只管告警——召回/心跳码被写进 alertEvents=false 也照推（运营通知不是告警，关不掉）', async () => {

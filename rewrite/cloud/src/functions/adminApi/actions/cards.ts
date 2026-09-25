@@ -5,7 +5,10 @@ import { setOrAdd } from '../../../kit'
 export async function getSettings({ db }: Ctx) {
   const got = await readDoc(db.collection('adminConfig').doc('settings').get())
   if (!got.ok) return reply(200, { ok: false, error: 'DOC_READ_FAIL' })
-  return reply(200, { ok: true, settings: got.data || {} })
+  // webhook 带 key，拿到整条就能往群里发消息：只回「配了没 + 尾号」供页面辨认，原值不出云端（#386）
+  const { alertWebhook, ...settings } = (got.data as Record<string, any>) || {}
+  if (alertWebhook) Object.assign(settings, { alertWebhookSet: true, alertWebhookTail: String(alertWebhook).slice(-4) })
+  return reply(200, { ok: true, settings })
 }
 
 // 合并保存（非整存覆盖）：urlPrefix(步骤⑥) 与 alertWebhook/alertEvents(消息通知) 各自分别保存、互不抹除。
@@ -19,11 +22,11 @@ export async function saveSettings({ db, data }: Ctx) {
   const { _id: _omitId, ...cur } = (got.data as Record<string, any>) || {}
   const patch: Record<string, any> = { updatedAt: Date.now() }
   if (data.urlPrefix !== undefined) patch.urlPrefix = String(data.urlPrefix || '').slice(0, 200)
-  if (data.alertWebhook !== undefined) {
-    // 企微群机器人 webhook 形态校验（空＝清除推送·退回纯日志告警）；非法直接拒
-    const w = String(data.alertWebhook || '').slice(0, 300)
-    if (w && !/^https:\/\/qyapi\.weixin\.qq\.com\/cgi-bin\/webhook\/send\?key=[\w-]+$/.test(w))
-      return reply(400, { ok: false, error: 'BAD_WEBHOOK' })
+  // 页面拿不到原值（getSettings 不回显），所以空串＝保持原值；清除要显式传 null（退回纯日志告警）
+  if (data.alertWebhook === null) patch.alertWebhook = ''
+  else if (data.alertWebhook) {
+    const w = String(data.alertWebhook).slice(0, 300)
+    if (!/^https:\/\/qyapi\.weixin\.qq\.com\/cgi-bin\/webhook\/send\?key=[\w-]+$/.test(w)) return reply(400, { ok: false, error: 'BAD_WEBHOOK' })
     patch.alertWebhook = w
   }
   if (data.alertEvents && typeof data.alertEvents === 'object') patch.alertEvents = data.alertEvents

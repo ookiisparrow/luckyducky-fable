@@ -402,8 +402,7 @@ describe('app 公开读（getPageContent·空兜底 + heroImage cloud:// 换址 
 // —— 帮助视频乐观并发 + GC 告警（批A·内容域并发安全·根因#1/#14·同 saveCourseDraft rev/baseRev/DRAFT_CONFLICT 口径）——
 // 整档覆盖（items 整体替换）＝两处并发编辑后保存者静默吃掉先保存者；补 rev/baseRev CAS：不符即拒（不覆盖不 GC）。
 // GC 静默吞错（原 deleteFile(...).catch(()=>{})）修掉：删失败留痕 notifyAlert + 如实回 ok:false（保存已成功·orphans 可人工回收）。
-const saveHV = (items: unknown[], baseRev?: number, cloudOverride?: unknown) =>
-  saveHelpVideos({ db: db(), cloud: cloudOverride || cloud, data: { items, baseRev } } as any)
+const saveHV = (items: unknown[], baseRev?: number) => saveHelpVideos({ db: db(), data: { items, baseRev } } as any)
 const listHV = () => listHelpVideos({ db: db() } as any)
 const hvItems = (fileId: string) => [{ id: 'h1', title: '起针总松', segments: [{ id: 's1', name: '段一', dur: '1:00', videoFileId: fileId }] }]
 
@@ -437,9 +436,8 @@ describe('帮助视频乐观并发 + GC 告警（批A·根因#1/#14）', () => {
 
   it('大白话：GC deleteFile 失败不再静默吞——留痕 notifyAlert(GC_DELETE_FAIL) + 如实回 ok:false（保存本身已成功）', async () => {
     control.seed('content', [{ _id: 'helpVideos', items: hvItems('cloud://old-vid'), rev: 1, updatedAt: 1 }])
-    // 注入 deleteFile 拒绝的 cloud（模拟真机偶发删失败）：saveHelpVideos 只用 cloud.deleteFile，最小对象即可
-    const failCloud = { deleteFile: () => Promise.reject(new Error('MOCK_DELETE_FAIL')) }
-    const r = bodyOf(await saveHV(hvItems('cloud://new-vid'), 1, failCloud))
+    vi.spyOn(cloud as any, 'deleteFile').mockRejectedValue(new Error('MOCK_DELETE_FAIL')) // 模拟真机偶发删失败
+    const r = bodyOf(await saveHV(hvItems('cloud://new-vid'), 1))
     expect(r.ok).toBe(false) // 原 .catch(()=>{}) 全吞会恒回 ok:true——前端误显「已保存」
     expect(r.error).toBe('GC_DELETE_FAIL')
     // 保存本身已成功：内容已落库、rev 已递增（只是 GC 失败）

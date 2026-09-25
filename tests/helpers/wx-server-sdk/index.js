@@ -32,6 +32,7 @@ const command = {
   neq: (val) => ({ __op: 'neq', val }),
   lt: (val) => ({ __op: 'lt', val }),
   gt: (val) => ({ __op: 'gt', val }), // 大于（承面C 坐席台 cursor 增量：listQueue FIFO / getThread 轮询取新消息）
+  gte: (val) => ({ __op: 'gte', val }), // 大于等于（库存原子扣减：扣的那一刻库存仍够才扣）
   exists: (val) => ({ __op: 'exists', val }), // 字段存在/缺失（CAS 初始化窗口前置条件，债#21）
   inc: (val) => ({ __op: 'inc', val }), // 原子自增（recordAnomaly 去重计数·真 sdk 服务端原子加，避免读-改-写并发窗）
   aggregate: { sum: (expr) => ({ __aggOp: 'sum', expr }) }, // 聚合算子（GMV 求和·债#18续）
@@ -60,6 +61,8 @@ function matchOne(docVal, cond) {
     if (cond.__op === 'neq') return docVal !== cond.val
     if (cond.__op === 'lt') return docVal < cond.val
     if (cond.__op === 'gt') return docVal > cond.val
+    // 同真库：null/缺字段不参与数值比较（JS 的 null >= 0 为真，不能直接比）
+    if (cond.__op === 'gte') return typeof docVal === typeof cond.val && docVal >= cond.val
     if (cond.__op === 'exists') return cond.val ? docVal !== undefined : docVal === undefined
     return false
   }

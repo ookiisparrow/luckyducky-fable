@@ -1,8 +1,4 @@
-import cloud from 'wx-server-sdk'
-import { getDb, ok, isServerCall, isVodFileId, callVodApi } from '../../kit'
-
-// wx-server-sdk 类型声明缺 deleteFile（运行时存在·adminApi 侧经 Ctx any 传入故未显形），此处显式收窄
-const storageCloud = cloud as unknown as { deleteFile: (o: { fileList: string[] }) => Promise<unknown> }
+import { getDb, ok, isServerCall, isVodFileId, callVodApi, isCollectionMissing, notifyAlert, deleteFiles } from '../../kit'
 
 // 清理无界增长集合（待办债#9 + 外审 P2.14）。定时触发器（每日）。三类只增不删/会堆积的数据保留 90 天：
 //  ① events 原始埋点流（只写不读·看板读 progress 折叠视图·删旧不损功能）；
@@ -20,11 +16,19 @@ const RETAIN_MS = 90 * 24 * 3600 * 1000 // 保留 90 天
 // 缓期孤儿 GC 消费器（⑤课程视频 / ⑥商品图册共用·单源防漂移）：逐文档处理 pendingGc 到期项——
 // 双线分流（决策§31·同 getPlaybackUrl 的 isVodFileId 判据单源）：cloud:// 走云存储 deleteFile（整批），
 // VOD FileId 走 DeleteMedia（官方单文件一调·商品图恒 cloud:// 故该分支恒 no-op）。逐项记成功：任一线失败
-// 其项留队下轮再试（fail-soft）；VOD「媒资已不存在」(ResourceNotFound)视作删成功出队防永久重试。返回删除数。
-async function gcPendingGc(db: any, coll: string, now: number): Promise<number> {
+// 其项留队下轮再试（fail-soft）；VOD「媒资已不存在」(ResourceNotFound)视作删成功出队防永久重试。返回删除数；
+// 读队列失败回 null 并告警（同 rm 口径）：折成 0 就看不出孤儿文件在一直堆。
+async function gcPendingGc(db: any, coll: string, now: number): Promise<number | null> {
   let deleted = 0
   // 小集合上界（≤1000·同 getCourses 口径），逐文档处理到期项
-  const docs = await db.collection(coll).limit(1000).get().catch(() => ({ data: [] }))
+  let docs: any
+  try {
+    docs = await db.collection(coll).limit(1000).get()
+  } catch (e) {
+    if (isCollectionMissing(e)) return 0
+    await notifyAlert('anomaly', 'cleanupEvents', 'CLEANUP_GC_READ_FAIL', { coll, err: String(e).slice(0, 80) })
+    return null
+  }
   for (const c of docs.data || []) {
     const q = Array.isArray(c.pendingGc) ? c.pendingGc : []
     const due = q.filter((en: any) => en && en.fileId && Number(en.deleteAfter) <= now)
@@ -32,7 +36,7 @@ async function gcPendingGc(db: any, coll: string, now: number): Promise<number> 
     const done = new Set<string>()
     const dueCos = due.filter((en: any) => !isVodFileId(String(en.fileId)))
     if (dueCos.length) {
-      const r = await storageCloud.deleteFile({ fileList: dueCos.map((en: any) => String(en.fileId)) }).catch(() => null)
+      const r = await deleteFiles(dueCos.map((en: any) => String(en.fileId))).catch(() => null)
       if (r) for (const en of dueCos) done.add(String(en.fileId))
     }
     for (const en of due) {
@@ -55,13 +59,21 @@ export const main = async () => {
   const _ = db.command
   const now = Date.now()
   const cutoff = now - RETAIN_MS
-  // 服务端按条件批量删（与 closeExpiredOrders 同口径，每日一轮收敛；集合不存在则 0）
-  const rm = (coll: string, field: string) =>
+  // 服务端按条件批量删（与 closeExpiredOrders 同口径，每日一轮收敛；集合不存在则 0）。
+  // 其余删失败回 null 并告警：折成 0 就看不出这类集合在无界增长。
+  const rm = (coll: string, field: string): Promise<number | null> =>
     db
       .collection(coll)
       .where({ [field]: _.lt(cutoff) })
       .remove()
-      .then((x: any) => (x && x.stats && x.stats.removed) || 0, () => 0)
+      .then(
+        (x: any) => (x && x.stats && x.stats.removed) || 0,
+        async (e: unknown) => {
+          if (isCollectionMissing(e)) return 0
+          await notifyAlert('anomaly', 'cleanupEvents', 'CLEANUP_REMOVE_FAIL', { coll, err: String(e).slice(0, 80) })
+          return null
+        },
+      )
   // 五路各删各的集合、互不依赖，并发跑（定时器有超时上限）
   const [removed, rateLimit, kfSeen, videoGc, imageGc] = await Promise.all([
     rm('events', 'createdAt'),

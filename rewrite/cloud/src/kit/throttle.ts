@@ -1,3 +1,4 @@
+import { createHash } from 'crypto'
 import { ERR, COLLECTIONS } from '@ldrw/shared'
 import { getDb } from './db'
 import { err } from './reply'
@@ -97,7 +98,11 @@ async function bumpWindowed(
   // throttleFail 意味着这次失败尝试等于没发生（爆破者可借洪水稀释计数）。维持 best-effort 放行语义
   // （头注刻意取舍：频控库故障不阻断主流程，口令校验仍是硬闸；改 fail-closed 属安全/可用性权衡，
   // 待用户拍板——见 2026-07-17 课程链路审计报告），但耗尽不再静默：留痕告警可查可统计。
-  alert('security', 'throttle', 'CAS_EXHAUSTED', { key })
+  // key 末段可能是 openid（withRateLimit 的 fn:<name>:<openid>），而 alert ctx 不放 openid：只留前缀定位是哪个
+  // 动作，另附整 key 的短哈希，够把同一 key 的多次耗尽归到一起。
+  const scope = key.slice(0, Math.max(0, key.lastIndexOf(':')))
+  const keyHash = createHash('sha256').update(key).digest('hex').slice(0, 8)
+  alert('security', 'throttle', 'CAS_EXHAUSTED', { scope, keyHash })
   return null
 }
 

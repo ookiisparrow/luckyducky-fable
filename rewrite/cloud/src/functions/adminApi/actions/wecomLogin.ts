@@ -29,7 +29,7 @@ export async function loginByWecomCode({ db, data }: { db: any; data: any }) {
   if (acct.disabled) return reply(403, { ok: false, error: 'ACCOUNT_DISABLED' })
   // 签发高熵 session 令牌（lib.issueSession 单源·口令登录同款·存 sessions 数组容多设备）；
   // 签发失败告警留痕后返空、前端按 NO_SESSION_TOKEN 拒登（同口令登录）
-  const sessionToken = await issueSession(db, acct._id, 'wecom').catch((e) => {
+  const sessionToken = await issueSession(db, acct._id, 'wecom', userid).catch((e) => {
     alert('security', 'adminLogin', 'SESSION_ISSUE_FAIL', { via: 'wecom', docId: acct._id, err: String(e) })
     return ''
   })

@@ -109,10 +109,9 @@ export async function activationFor(db: any, openid: string, productId: string) 
   }
 }
 
-// 已付营收口径（GMV / 财务对账单源·债#32）：pending/closed 未付不计。看板与 S16 对账共用·防口径漂移。
-// 真正单源在 @ldrw/shared order.ts 的 PAID_ORDER_STATUSES（与订单状态机声明同处·P2 顺手改批收口——此前本文件
-// /dashboard.ts /reconciliation.ts /customer360 profile.ts 各自手抄同一份数组，这里保留 PAID_STATUSES 这个
-// 名字只做转发，dashboard.ts/reconciliation.ts 既有 `import { PAID_STATUSES } from '../lib'` 不用改）。
+// 已付营收口径（看板 GMV·债#32）：pending/closed 未付不计。真正单源在 @ldrw/shared order.ts 的 PAID_ORDER_STATUSES
+// （与订单状态机声明同处）；这里保留 PAID_STATUSES 这个名字只做转发，给 dashboard.ts 用。财务对账（reconciliation.ts）
+// 按「已收到钱」算，口径更宽，直接从 @ldrw/shared 引 MONEY_RECEIVED_STATUSES，不走这里。
 export const PAID_STATUSES: readonly string[] = PAID_ORDER_STATUSES
 
 // 钱链内部异常（txAlerts·债#23 单源）：金额不符单 / 退款金额不符 / 审批超 1h 未到回调的卡单。
@@ -163,7 +162,7 @@ export async function getTxAlerts(
   }
 }
 
-// 口令校验。首次初始化（债#15 关抢占窗口）：须 bootstrap 且本次口令匹配**部署密钥**环境变量
+// 口令校验。首次初始化（债#15 关抢占窗口）：须走 login 且本次口令匹配**部署密钥**环境变量
 // ADMIN_BOOTSTRAP_KEY——杜绝「空库谁先登录谁就占管理员」。未设该环境变量＝禁 bootstrap。
 // 设密钥流程：部署时设云环境变量 ADMIN_BOOTSTRAP_KEY＝期望口令 → 首登用该口令 → 设定后可移除。
 // 坐席 RBAC 角色→能力位单源（§1.5·B5.2·别让单超管裸奔）：superadmin 全能力；outsourced 外包最小权
@@ -193,14 +192,16 @@ export function principalOf(a: any) {
 }
 
 // 会话令牌（深审 P1·根因#3 口令不落盘）：口令登录与企微免登共用一套签发/解析——登录成功签发高熵令牌，
-// 前端只存令牌不存口令原文（口令是可复用主凭证，落在外包机器上=失守；令牌 12h 自灭 + 停号即拒）。
+// 前端只存令牌不存口令原文（口令是可复用主凭证，落在外包机器上=失守；令牌 12h 自灭 + 登出/停号即删）。
 // 存储形状：账号 doc.sessions = [{ hash, exp, via, at }]（sha 入库·绝不存明文）；数组容多设备
 // （商户同时登控制台+坐席台不互踢），签发时剪过期、超容剪最旧（tests/app-admin1.test.ts 钉只存 sha）。
+// 停号必须清空 sessions：只靠 disabled 拒绝的话，重新启用时旧令牌会跟着复活。
 const SESSION_TTL_MS = 12 * 60 * 60 * 1000 // 12h·一个工作班次；过期重登（企微内静默 OAuth 无感）
 const SESSION_MAX = 8 // 单账号并存会话上限（多设备够用·防 sessions 数组无界膨胀）
 
-/** 签发会话令牌：写进账号 doc.sessions（剪过期/超容），返回令牌明文（只此一次·不再可取回）。 */
-export async function issueSession(db: any, docId: string, via: 'pwd' | 'wecom'): Promise<string> {
+/** 签发会话令牌：写进账号 doc.sessions（剪过期/超容），返回令牌明文（只此一次·不再可取回）。
+ *  企微免登带 wecomUserId 记进 uid，resolveSession 据此让改绑/解绑前签的令牌失效。 */
+export async function issueSession(db: any, docId: string, via: 'pwd' | 'wecom', wecomUserId = ''): Promise<string> {
   const token = crypto.randomBytes(32).toString('hex')
   const now = Date.now()
   const got = await readDoc(db.collection('adminConfig').doc(docId).get())
@@ -208,51 +209,91 @@ export async function issueSession(db: any, docId: string, via: 'pwd' | 'wecom')
   const prev: any[] = (got.data && Array.isArray(got.data.sessions) ? got.data.sessions : [])
     .filter((s: any) => s && typeof s.exp === 'number' && s.exp > now) // 剪过期
     .slice(-(SESSION_MAX - 1)) // 超容剪最旧（保留末 N-1 + 新签 1）
-  const sessions = [...prev, { hash: sha(token), exp: now + SESSION_TTL_MS, via, at: now }]
-  await db
+  const entry: any = { hash: sha(token), exp: now + SESSION_TTL_MS, via, at: now }
+  if (via === 'wecom') entry.uid = wecomUserId
+  const sessions = [...prev, entry]
+  // 条件写：整组写回会把读到的旧令牌一并写回。停号（disabled:true + 清 sessions）若落在读与写之间，
+  // 无条件写回就复活旧令牌；带 disabled≠true 条件，停号前后哪种顺序都写不进。
+  const r = await db
     .collection('adminConfig')
-    .doc(docId)
+    .where({ _id: docId, disabled: db.command.neq(true) })
     .update({ data: { sessions, updatedAt: now } })
+  if (!r || !r.stats || r.stats.updated !== 1) throw new Error('SESSION_WRITE_FAIL')
   return token
 }
 
-// 会话令牌解析（fail-closed）：key=登录签发的 sessionToken（非口令）。在账号 doc.sessions 里命中 sha 且
-// 未过期未停用 → 解析身份（同口令分支形状：超管 auth→agentId 'admin'·外包→_id）；否则 BAD_KEY /
-// SESSION_EXPIRED / ACCOUNT_DISABLED（不放行）。账号 doc 个位数（bounded 扫描·不依赖数组嵌套查询语义），
-// 令牌 sha 撞不上口令 keyHash，故只在口令全未命中后 fallback 到此。
-async function resolveSession(db: any, hash: string) {
+// 按令牌 sha 找所属账号。账号 doc 个位数（bounded 扫描·不依赖数组嵌套查询语义）；读失败回 ok:false，
+// 调用方不得当「查无此令牌」。
+async function sessionOwner(db: any, hash: string): Promise<{ ok: false } | { ok: true; acct: any }> {
   const _ = db.command
   const s = await db
     .collection('adminConfig')
     .where({ sessions: _.exists(true) })
     .limit(50)
     .get()
-    .catch(() => null)
-  if (!s) return { ok: false as const, error: 'AUTH_UNAVAILABLE' } // 库故障≠令牌无效：不能回 BAD_KEY 让前端清令牌
+    .catch((e: unknown) => (isCollectionMissing(e) ? { data: [] } : null)) // 集合未建（首登前）＝查无此令牌，不当库故障
+  if (!s) return { ok: false }
   const rows: any[] = s.data || []
-  const a =
-    rows.find(
-      (acc) => Array.isArray(acc.sessions) && acc.sessions.some((x: any) => x && x.hash === hash)
-    ) || null
+  const acct = rows.find((a) => Array.isArray(a.sessions) && a.sessions.some((x: any) => x && x.hash === hash)) || null
+  return { ok: true, acct }
+}
+
+// 会话令牌解析（fail-closed）：命中 sha 且未过期未停用 → 解析身份（同口令分支形状：超管 auth→agentId
+// 'admin'·外包→_id）；否则 BAD_KEY / SESSION_EXPIRED / ACCOUNT_DISABLED（不放行）。
+async function resolveSession(db: any, hash: string) {
+  const got = await sessionOwner(db, hash)
+  if (!got.ok) return { ok: false as const, error: 'AUTH_UNAVAILABLE' } // 库故障≠令牌无效：不能回 BAD_KEY 让前端清令牌
+  const a = got.acct
   if (!a) return { ok: false as const, error: 'BAD_KEY' }
   if (a.disabled) return { ok: false as const, error: 'ACCOUNT_DISABLED' }
   const hit = a.sessions.find((x: any) => x && x.hash === hash)
   if (!hit || typeof hit.exp !== 'number' || hit.exp < Date.now())
     return { ok: false as const, error: 'SESSION_EXPIRED' }
+  // 企微凭证＝账号上的 wecomUserId：改绑/解绑后，旧 userid 免登签的令牌不能再以本账号身份用。
+  // 按签发时的 uid 判，不在改绑处逐个剪：口令会话不受影响，改绑与免登并发也漏不掉。
+  if (hit.via === 'wecom' && (!hit.uid || hit.uid !== a.wecomUserId))
+    return { ok: false as const, error: 'SESSION_EXPIRED' }
   return principalOf(a)
 }
 
-// 口令校验 → 认证主体（principalOf）；disabled=账号开停（外包可停）。
-export async function checkKey(db: any, key: any, bootstrap: boolean) {
+// ponytail: 与 issueSession 同为读-改-写，同账号并发登录/登出可能互相覆盖（丢一枚新令牌或复活刚吊销的）；
+// 停号清会话已由 issueSession 的 disabled 条件挡住，登录与登出之间的互相覆盖没挡，要严格就加 updatedAt 条件更新重试。
+/** 登出：从所属账号 sessions 删掉这枚令牌。令牌本就无效也回 true——登出幂等，回包不透露令牌是否有效。
+ *  false＝库读写失败，没吊销成功。 */
+export async function revokeSession(db: any, token: string): Promise<boolean> {
+  const hash = sha(token)
+  const got = await sessionOwner(db, hash)
+  if (!got.ok) return false
+  if (!got.acct) return true
+  const sessions = got.acct.sessions.filter((x: any) => !(x && x.hash === hash))
+  return db
+    .collection('adminConfig')
+    .doc(got.acct._id)
+    .update({ data: { sessions, updatedAt: Date.now() } })
+    .then(
+      () => true,
+      () => false
+    )
+}
+
+// 凭证校验 → 认证主体（principalOf）；disabled=账号开停（外包可停）。
+// login=true 只认口令（含首登 bootstrap）：令牌不能再换令牌，否则偷到一枚就能每 12h 续一次、TTL 形同虚设。
+// login=false（业务请求）先按令牌 sha 查会话——便宜，命中或过期/停用/库故障都就此定案，不跑逐账号 scrypt；
+// 查无此令牌才回落口令比对（口令直接当 key 的调用方仍可用）。
+export async function checkKey(db: any, key: any, login: boolean) {
   if (!key || String(key).length < 6) return { ok: false as const, error: 'KEY_TOO_SHORT' }
   const keyStr = String(key)
+  if (!login) {
+    const s = await resolveSession(db, sha(keyStr))
+    if (s.ok || s.error !== 'BAD_KEY') return s
+  }
   const got = await readDoc(db.collection('adminConfig').doc('auth').get())
   if (!got.ok) return { ok: false as const, error: 'AUTH_UNAVAILABLE' } // 库故障≠查无此号：不当错口令记爆破
   if (!got.data) {
-    // 首登 bootstrap（债#15 关抢占）：无超管 doc 时·须 bootstrap + 部署密钥 ADMIN_BOOTSTRAP_KEY → 建首个超管。
+    // 首登 bootstrap（债#15 关抢占）：无超管 doc 时·须 login + 部署密钥 ADMIN_BOOTSTRAP_KEY → 建首个超管。
     // 批6：bootstrap 建号即带盐（新写入一律 salt+scrypt·不再落无盐 sha）。
     const secret = process.env.ADMIN_BOOTSTRAP_KEY || ''
-    if (!bootstrap || !secret || keyStr !== secret) return { ok: false as const, error: 'BAD_KEY' }
+    if (!login || !secret || keyStr !== secret) return { ok: false as const, error: 'BAD_KEY' }
     await ensure(db, 'adminConfig') // 只有这条首登写入需要集合在；读路径集合未建即当空（readDoc）
     const salt = newSalt()
     await db
@@ -289,7 +330,7 @@ export async function checkKey(db: any, key: any, bootstrap: boolean) {
     if (!scan) return { ok: false as const, error: 'AUTH_UNAVAILABLE' }
     alertIfScanAtCap(scan.data || [], 50, 'checkKey')
     acct = (scan.data || []).find((r: any) => r._id !== 'auth' && keyMatches(r, keyStr))
-    if (!acct) return resolveSession(db, sha(keyStr)) // 口令全未命中 → fallback 会话令牌（口令登录/企微免登共用）
+    if (!acct) return { ok: false as const, error: 'BAD_KEY' }
   }
   if (acct.disabled) return { ok: false as const, error: 'ACCOUNT_DISABLED' }
   // legacy 无盐命中即 best-effort 就地升级为带盐（存量账号无感迁移）；升级失败吞掉、不反噬本次登录——下次仍走 legacy 比对兜底

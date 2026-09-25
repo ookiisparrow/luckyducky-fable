@@ -4,6 +4,7 @@ import {
   MAX_QTY,
   MAX_ORDER_LINES,
   AFTERSALE_SCAN_CAP,
+  AFTERSALE_QUOTA_STATUSES,
   PAY_WINDOW_MS,
   toFen,
   asFen,
@@ -35,6 +36,7 @@ import {
   IMAGE_URL_MAX_AGE,
   hash53,
   isDocMissing,
+  isCollectionMissing,
   getDocOrNull,
 } from '../../../kit'
 
@@ -53,17 +55,20 @@ const ADDONS: Record<string, { name: string; price: number }> = Object.assign(
 // 头注，此处历史容忍（未来新建/编辑商品已在 products.ts saveDraft 出生点拦下歧义身份）。
 const lineIdOf = (productId: string, spec: string) => `${productId}__${spec || ''}`
 
-// 订单单读：读失败与缺档同归 null。只给 null 即拒单/报未知的路径用；null 会被当「确无此单」
-// 而据此写库的路径（建单读回）须自己用 isDocMissing 区分
-const readOrder = (db: any, id: string): Promise<any> =>
+// 订单单读：只有真缺档才回 null（调用方报 NOT_FOUND），其余读失败照抛、网关回 INTERNAL——
+// 前端把 NOT_FOUND 当确定空态不给重试。
+const readOrder = (db: any, id: string): Promise<any> => getDocOrNull(db.collection(COLLECTIONS.orders).doc(id))
+
+// 集合没建才建（首单/首个售后前）：热路径不再每单白调一次 createCollection。
+const addCreatingColl = (db: any, coll: string, data: Record<string, unknown>) =>
   db
-    .collection(COLLECTIONS.orders)
-    .doc(id)
-    .get()
-    .then(
-      (r: any) => (r && r.data) || null,
-      () => null
-    )
+    .collection(coll)
+    .add({ data })
+    .catch(async (e: unknown) => {
+      if (!isCollectionMissing(e)) throw e
+      await db.createCollection(coll).catch(() => {})
+      return db.collection(coll).add({ data })
+    })
 // 本人单：他人单也回 null，调用方统一回 NOT_FOUND，不泄露订单存在性
 const readOwnOrder = async (db: any, id: string, openid: string) => {
   const o = await readOrder(db, id)
@@ -189,11 +194,11 @@ export const createOrder = withOpenId(
     // 查询口径同 closeExpiredOrders（status:'pending' + createdAt 在支付窗内）。
     if (payMode === 'real') {
       const pendingCutoff = Date.now() - PAY_WINDOW_MS
+      // 计数失败不接住（交网关回 INTERNAL）：当 0 单放行，这道防滥用闸就静默失效了
       const mine = await db
         .collection(COLLECTIONS.orders)
         .where({ _openid: OPENID, status: 'pending', createdAt: _.gt(pendingCutoff) })
         .count()
-        .catch(() => ({ total: 0 }))
       if ((mine.total || 0) >= MAX_PENDING_ORDERS) return err(ERR.TOO_MANY_PENDING)
     }
 
@@ -205,11 +210,13 @@ export const createOrder = withOpenId(
     const idemKey = (typeof e.idempotencyKey === 'string' ? e.idempotencyKey.trim() : '').slice(0, 200)
     const claimId = idemKey ? 'oi_' + hash53(OPENID + '|' + idemKey) : ''
     if (claimId) {
-      await db.createCollection(COLLECTIONS.orderIdempotency).catch(() => {})
       try {
-        await db
-          .collection(COLLECTIONS.orderIdempotency)
-          .add({ data: { _id: claimId, openid: OPENID, orderId: null, createdAt: Date.now() } })
+        await addCreatingColl(db, COLLECTIONS.orderIdempotency, {
+          _id: claimId,
+          openid: OPENID,
+          orderId: null,
+          createdAt: Date.now(),
+        })
       } catch {
         // 撞号：同一幂等键已提交过（重试/并发）——短轮询等原请求把订单号落定，落定即原样返回同一笔
         // （不重复扣库存/不建二单）；轮询超时仍未落定极罕见（原请求同一时刻仍在处理中）才报 PENDING。
@@ -371,117 +378,126 @@ export const pay = withOpenId(
  * 申请售后退款（黄金 orders-money·applyRefund 节）：退款额一律云端分摊算定（refundShareFen 单源）；
  * 一单一行一售后（确定性 _id 库级唯一）；数量级退剩余可退件；同单累计封顶实付。
  */
-export const applyRefund = withOpenId(async ({ db, OPENID, event }) => {
-  const e: any = event
-  const orderId = String(e.orderId || '')
-  const reqLine = String(e.lineId || e.productId || '') // 新单行键/旧单回退 productId
-  if (!orderId || !reqLine) return err(ERR.BAD_ARGS)
-  const reason = String(e.reason || '').slice(0, 200)
+export const applyRefund = withOpenId(
+  withRateLimit('applyRefund', { max: 20, windowMs: 60_000 }, async ({ db, OPENID, event }) => {
+    const e: any = event
+    const orderId = String(e.orderId || '')
+    const reqLine = String(e.lineId || e.productId || '') // 新单行键/旧单回退 productId
+    if (!orderId || !reqLine) return err(ERR.BAD_ARGS)
+    const reason = String(e.reason || '').slice(0, 200)
 
-  const order = await readOwnOrder(db, orderId, OPENID)
-  if (!order) return err(ERR.NOT_FOUND)
-  if (!['paid', 'shipped', 'done'].includes(order.status)) return err(buildBadStatus(order.status))
+    const order = await readOwnOrder(db, orderId, OPENID)
+    if (!order) return err(ERR.NOT_FOUND)
+    if (!['paid', 'shipped', 'done'].includes(order.status)) return err(buildBadStatus(order.status))
 
-  const item = (order.items || []).find((it: any) => (it.lineId || it.productId) === reqLine)
-  if (!item) return err('UNKNOWN_ITEM:' + reqLine)
-  // 剩余可退件 = 购买件数 − 已进课件数；全进则无可退（旧单无 enteredQty 视 0＝整行可退）
-  const qty = item.qty || 1
-  const enteredQty = item.enteredQty || 0
-  const refundableQty = qty - enteredQty
-  if (item.refundable === false || refundableQty <= 0) return err(ERR.NOT_REFUNDABLE)
-  const lineId = item.lineId || item.productId
-  const productId = item.productId
+    const item = (order.items || []).find((it: any) => (it.lineId || it.productId) === reqLine)
+    if (!item) return err('UNKNOWN_ITEM:' + reqLine)
+    // 剩余可退件 = 购买件数 − 已进课件数；全进则无可退（旧单无 enteredQty 视 0＝整行可退）
+    const qty = item.qty || 1
+    const enteredQty = item.enteredQty || 0
+    const refundableQty = qty - enteredQty
+    if (item.refundable === false || refundableQty <= 0) return err(ERR.NOT_REFUNDABLE)
+    const lineId = item.lineId || item.productId
+    const productId = item.productId
 
-  // 分摊全程分整数；同单已占额度（申请中/已同意/已退）不可重复退
-  const amountFen = toFen(Number(order.amount))
-  const goodsFen = toFen(Number(order.goods))
-  const itemFen = asFen(toFen(item.price) * refundableQty)
+    // 分摊全程分整数；同单已占额度（申请中/已同意/已退）不可重复退
+    const amountFen = toFen(Number(order.amount))
+    const goodsFen = toFen(Number(order.goods))
+    const itemFen = asFen(toFen(item.price) * refundableQty)
 
-  await db.createCollection(COLLECTIONS.afterSales).catch(() => {})
-  // 同单售后须读齐才能算准 used 封顶（深审 P2·根因#7）：裸 .get() 服务端默认 100 条静默截断会少算 used、
-  // 令行/单级退款封顶失效。显式取到 AFTERSALE_SCAN_CAP；命中上限＝记录数异常，fail-closed 拒退 + 告警，
-  // 绝不按截断值算钱（钱守恒 > 可用性）。读失败同理不能当「没有售后」（used=0 会退超）：集合上面已建，
-  // 这里的异常只会是真故障，不接住，交网关回 INTERNAL 并记账。
-  const exist = await db
-    .collection(COLLECTIONS.afterSales)
-    .where({ orderId })
-    .limit(AFTERSALE_SCAN_CAP)
-    .get()
-  if (exist.data.length >= AFTERSALE_SCAN_CAP) {
-    alert('money', 'applyRefund', 'AFTERSALE_SCAN_CAP', { orderId })
-    return err('REFUND_SCAN_CAP')
-  }
-  if (exist.data.some((a: any) => (a.lineId || a.productId) === lineId))
-    return err(ERR.ALREADY_APPLIED)
-  const used = asFen(
-    exist.data
-      .filter((a: any) => ['applied', 'approved', 'refunded'].includes(a.status))
-      .reduce((s: number, a: any) => s + toFen(Number(a.refundAmount)), 0)
-  )
-  const refundFen = refundShareFen(amountFen, goodsFen, itemFen, used)
-  if (refundFen <= 0) return err(ERR.NOTHING_LEFT)
+    // 同单售后须读齐才能算准 used 封顶（深审 P2·根因#7）：裸 .get() 服务端默认 100 条静默截断会少算 used、
+    // 令行/单级退款封顶失效。显式取到 AFTERSALE_SCAN_CAP；命中上限＝记录数异常，fail-closed 拒退 + 告警，
+    // 绝不按截断值算钱（钱守恒 > 可用性）。读失败同理不能当「没有售后」（used=0 会退超）：只有集合还没建
+    // 才是真没有售后，其余异常不接住，交网关回 INTERNAL 并记账。
+    const exist = await db
+      .collection(COLLECTIONS.afterSales)
+      .where({ orderId })
+      .limit(AFTERSALE_SCAN_CAP)
+      .get()
+      .catch((e: unknown) => {
+        if (isCollectionMissing(e)) return { data: [] }
+        throw e
+      })
+    if (exist.data.length >= AFTERSALE_SCAN_CAP) {
+      alert('money', 'applyRefund', 'AFTERSALE_SCAN_CAP', { orderId })
+      return err('REFUND_SCAN_CAP')
+    }
+    if (exist.data.some((a: any) => (a.lineId || a.productId) === lineId))
+      return err(ERR.ALREADY_APPLIED)
+    const used = asFen(
+      exist.data
+        .filter((a: any) => AFTERSALE_QUOTA_STATUSES.includes(a.status))
+        .reduce((s: number, a: any) => s + toFen(Number(a.refundAmount)), 0)
+    )
+    const refundFen = refundShareFen(amountFen, goodsFen, itemFen, used)
+    if (refundFen <= 0) return err(ERR.NOTHING_LEFT)
 
-  const now = Date.now()
-  const asId = orderId + '__' + lineId
-  const rec = {
-    _id: asId,
-    orderId,
-    _openid: OPENID,
-    lineId,
-    productId,
-    name: item.name,
-    spec: item.spec || '',
-    qty: refundableQty, // 退款件数=剩余可退件·回补库存按此
-    itemTotal: fenToYuan(itemFen),
-    refundAmount: fenToYuan(refundFen),
-    reason,
-    addressName: (order.address && order.address.name) || '',
-    phone: (order.address && order.address.phone) || '',
-    // 微信退款单号（根因#12·案 A）：_id 可含中文 SKU/spec，派生成合规单号存库供退款回调反查
-    outRefundNo: refundNoFor(asId),
-    status: 'applied',
-    appliedAt: now,
-  }
-  try {
-    await db.collection(COLLECTIONS.afterSales).add({ data: rec })
-  } catch {
-    return err(ERR.ALREADY_APPLIED) // 库级唯一：一单一行一售后（并发双发只落一条）
-  }
-  return ok({ afterSale: rec })
-})
+    const now = Date.now()
+    const asId = orderId + '__' + lineId
+    const rec = {
+      _id: asId,
+      orderId,
+      _openid: OPENID,
+      lineId,
+      productId,
+      name: item.name,
+      spec: item.spec || '',
+      qty: refundableQty, // 退款件数=剩余可退件·回补库存按此
+      itemTotal: fenToYuan(itemFen),
+      refundAmount: fenToYuan(refundFen),
+      reason,
+      addressName: (order.address && order.address.name) || '',
+      phone: (order.address && order.address.phone) || '',
+      // 微信退款单号（根因#12·案 A）：_id 可含中文 SKU/spec，派生成合规单号存库供退款回调反查
+      outRefundNo: refundNoFor(asId),
+      status: 'applied',
+      appliedAt: now,
+    }
+    try {
+      await addCreatingColl(db, COLLECTIONS.afterSales, rec)
+    } catch {
+      return err(ERR.ALREADY_APPLIED) // 库级唯一：一单一行一售后（并发双发只落一条）
+    }
+    return ok({ afterSale: rec })
+  })
+)
 
 /** 确认收货（黄金）：本人 + 仅已发货可确认；条件流转防越状态/重复确认。 */
-export const confirmReceive = withOpenId(async ({ db, OPENID, event }) => {
-  const id = String((event as any).id || '')
-  if (!id) return err(ERR.NO_ID)
-  const order = await readOwnOrder(db, id, OPENID)
-  if (!order) return err(ERR.NOT_FOUND)
-  if (order.status !== 'shipped') return err(buildBadStatus(order.status))
-  const doneAt = Date.now()
-  const { moved } = await transition(COLLECTIONS.orders, id, ['shipped'], 'done', { doneAt })
-  if (!moved) return err(buildBadStatus((await readOrder(db, id))?.status || 'unknown'))
-  return ok({ doneAt })
-})
+export const confirmReceive = withOpenId(
+  withRateLimit('confirmReceive', { max: 20, windowMs: 60_000 }, async ({ db, OPENID, event }) => {
+    const id = String((event as any).id || '')
+    if (!id) return err(ERR.NO_ID)
+    const order = await readOwnOrder(db, id, OPENID)
+    if (!order) return err(ERR.NOT_FOUND)
+    if (order.status !== 'shipped') return err(buildBadStatus(order.status))
+    const doneAt = Date.now()
+    const { moved } = await transition(COLLECTIONS.orders, id, ['shipped'], 'done', { doneAt })
+    if (!moved) return err(buildBadStatus((await readOrder(db, id))?.status || 'unknown'))
+    return ok({ doneAt })
+  })
+)
 
 /**
  * 用户主动取消待支付单（黄金 orders-money·确认收货/关单节）：仅本人 + 仅 pending 可取消；
  * 复用已声明的 pending→closed 边（状态机零改动）；关单回补预留幂等绑 CAS——与超时关单/并发取消
  * 天然互斥，只回补一次（照抄 pay 惰性关单/closeExpiredOrders 的错向安全：transition 先、回补后）。
  */
-export const cancelOrder = withOpenId(async ({ db, OPENID, event }) => {
-  const id = String((event as any).id || '')
-  if (!id) return err(ERR.NO_ID)
-  const order = await readOwnOrder(db, id, OPENID)
-  if (!order) return err(ERR.NOT_FOUND)
-  if (order.status !== 'pending') return err(buildBadStatus(order.status))
-  const { moved } = await transition(COLLECTIONS.orders, id, ['pending'], 'closed', {
-    closedAt: Date.now(),
-    cancelledBy: 'user', // 台账区分手动取消 vs 超时关单
+export const cancelOrder = withOpenId(
+  withRateLimit('cancelOrder', { max: 20, windowMs: 60_000 }, async ({ db, OPENID, event }) => {
+    const id = String((event as any).id || '')
+    if (!id) return err(ERR.NO_ID)
+    const order = await readOwnOrder(db, id, OPENID)
+    if (!order) return err(ERR.NOT_FOUND)
+    if (order.status !== 'pending') return err(buildBadStatus(order.status))
+    const { moved } = await transition(COLLECTIONS.orders, id, ['pending'], 'closed', {
+      closedAt: Date.now(),
+      cancelledBy: 'user', // 台账区分手动取消 vs 超时关单
+    })
+    if (!moved) return err(buildBadStatus((await readOrder(db, id))?.status || 'unknown')) // 并发已被关/已付
+    if (Array.isArray(order.reserved) && order.reserved.length) await restoreStock(order.reserved) // 回补绑 moved·只一次
+    return ok({ closedAt: Date.now() })
   })
-  if (!moved) return err(buildBadStatus((await readOrder(db, id))?.status || 'unknown')) // 并发已被关/已付
-  if (Array.isArray(order.reserved) && order.reserved.length) await restoreStock(order.reserved) // 回补绑 moved·只一次
-  return ok({ closedAt: Date.now() })
-})
+)
 
 /** 本人订单列表（游标分页·属主隔离）。 */
 export const getMyOrders = withOpenId(async ({ db, OPENID, event }): Promise<GetMyOrdersResp> => {

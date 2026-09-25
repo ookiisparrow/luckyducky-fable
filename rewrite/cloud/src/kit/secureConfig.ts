@@ -1,4 +1,6 @@
 import { COLLECTIONS } from '@ldrw/shared'
+import { isCollectionMissing } from './db'
+import { isDocMissing } from './inventory'
 
 /**
  * 敏感凭证单源读取（根因#9·决策 2026-07-12：由「云函数环境变量改了要重新部署」升级为
@@ -29,9 +31,25 @@ export async function getSecureConfig(db: any, docId: SecureDocId, field: string
   return (await getSecureConfigFields(db, docId, [field]))[field]
 }
 
-/** 一次取一个 doc 的多个字段（省调用方逐字段 await 的重复 db 往返）。 */
-export async function getSecureConfigFields(db: any, docId: SecureDocId, fields: string[]): Promise<Record<string, string>> {
-  const got = await db.collection(COLLECTIONS.secureConfig).doc(docId).get().catch(() => null)
+/**
+ * 一次取一个 doc 的多个字段（省调用方逐字段 await 的重复 db 往返）。
+ * 默认读失败按「库里没填」回退环境变量；strict 时只有缺档/集合未建才算没填，其余读失败照抛——
+ * 给要把「读挂了」和「没配置」分开处理的调用方（没配置可以静默跳过，读挂了必须告警）。
+ */
+export async function getSecureConfigFields(
+  db: any,
+  docId: SecureDocId,
+  fields: string[],
+  opts: { strict?: boolean } = {}
+): Promise<Record<string, string>> {
+  const got = await db
+    .collection(COLLECTIONS.secureConfig)
+    .doc(docId)
+    .get()
+    .catch((e: unknown) => {
+      if (opts.strict && !isDocMissing(e) && !isCollectionMissing(e)) throw e
+      return null
+    })
   const data = (got && got.data) || {}
   const out: Record<string, string> = {}
   for (const f of fields) {

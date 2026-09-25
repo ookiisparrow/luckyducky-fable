@@ -24,11 +24,14 @@ const casWrite = async (coll: any, where: object, data: object): Promise<boolean
   return !!r.stats && r.stats.updated === 1
 }
 
-// 单条 CAS 扣减：true=已扣 / false=库存不足（含持续读失败重试耗尽·宁缺勿超卖）/ null=不限量（无档、空档或
+// 单条扣减：true=已扣 / false=库存不足（含持续读失败重试耗尽·宁缺勿超卖）/ null=不限量（无档、空档或
 // stock=null·不扣不计）。读失败绝不返回 null：调用方 reserveStock 把 null 当「不限量，跳过预留」，读失败落成
 // null 就是超卖口子。所以读失败只算一次尝试失败、进下一轮重试；耗尽仍读不到返回 false（与「库存不足」同一
 // fail-closed 出口）。
+// 读只用来分辨不限量/缺档/不足；扣本身是一次原子条件更新（扣的那一刻库存仍 ≥qty 才扣）——按读到的值比对
+// 会把「别人同时也扣了一件」当冲突，热销 SKU 并发时库存明明够也会重试耗尽、误报售罄。
 async function casDecrement(coll: any, _id: string, qty: number): Promise<boolean | null> {
+  const _ = getDb().command
   let lastRoundReadFailed = false
   for (let i = 0; i < CAS_RETRY; i++) {
     lastRoundReadFailed = false
@@ -44,11 +47,11 @@ async function casDecrement(coll: any, _id: string, qty: number): Promise<boolea
     const stock = got.data.stock
     if (stock == null) return null // 不限量：合法不处理
     if (stock < qty) return false
-    if (await casWrite(coll, { _id, stock }, { stock: stock - qty, updatedAt: Date.now() })) return true
+    if (await casWrite(coll, { _id, stock: _.gte(qty) }, { stock: _.inc(-qty), updatedAt: Date.now() })) return true
   }
   // 重试耗尽：持续读失败会把本应正常成交的订单误判 OUT_OF_STOCK（fail-closed·不超卖但阻断真实可售订单）——
-  // 与「纯 CAS 并发争抢耗尽」区分开单独告警，供人工对账/排障（后者高并发下属正常现象，不值得告警噪音）。
-  // 只看最后一轮：中途读失败过、但最终是被 CAS 更新持续抢先耗尽的，不算「持续读失败」，不告警。
+  // 与「条件写持续落空」（写失败/刚被扣到不足又回补）区分开单独告警，供人工对账/排障。
+  // 只看最后一轮：中途读失败过、但最终是条件写持续落空耗尽的，不算「持续读失败」，不告警。
   if (lastRoundReadFailed) await notifyAlert('money', 'reserveStock', 'RESERVE_READ_FAILED', { _id })
   return false // 重试耗尽按不足处理·宁缺勿超卖
 }
@@ -91,7 +94,8 @@ export const isEmptyDoc = (got: unknown): boolean => {
   return false
 }
 
-// 单条 CAS 递增（回补 / 入成品共用）：true=已加或合法不处理；false=重试耗尽仍未确认写入（调用方须知道：回补丢失 / 入成品争用）。
+// 单条递增（回补 / 入成品共用）：true=已加或合法不处理；false=重试耗尽仍未确认写入（调用方须知道：回补丢失 / 入成品争用）。
+// 加本身是原子 inc（条件只要求 stock 仍是数字、没被改成不限量），同时有人扣不算冲突。
 // 无档：不给 seed＝不限量不处理（回补）；给 seed＝按 qty 建档（入成品时 SKU 可能还没库存档）。
 // 读失败（非「无档」）只算一次尝试失败：当成无档会把限量 SKU 误作不限量，所以重试而不折叠。
 async function casIncrement(
@@ -100,6 +104,7 @@ async function casIncrement(
   qty: number,
   seed?: { productId: string; spec: string }
 ): Promise<boolean> {
+  const _ = getDb().command
   for (let i = 0; i < CAS_RETRY; i++) {
     let got: any = null
     try {
@@ -120,7 +125,7 @@ async function casIncrement(
     const stock = got.data.stock
     // 不限量：合法不处理（入成品也不把不限量隐式翻成限量，改计量语义须管理员在库存页显式设置）
     if (stock == null) return true
-    if (await casWrite(coll, { _id, stock }, { stock: stock + qty, updatedAt: Date.now() })) return true
+    if (await casWrite(coll, { _id, stock: _.gte(0) }, { stock: _.inc(qty), updatedAt: Date.now() })) return true
   }
   return false
 }
@@ -168,8 +173,10 @@ export async function restoreStock(lines: StockLine[]): Promise<void> {
 
 /**
  * 管理端设/调库存（绝对值）。stock=null＝不限量。
- * expectedUpdatedAt 提供时走条件写（CAS 防覆盖并发预留）：期间被预留/他人改动推进过即回 conflict，
- * 管理端刷新重试、绝不把并发扣减覆盖回旧值（超卖窗口）。省略＝上新/首设走 upsert。
+ * 一律按版本戳 updatedAt 条件写（CAS 防覆盖并发预留）：期间被预留/他人改动推进过即回 conflict，
+ * 管理端刷新重试、绝不把并发扣减覆盖回旧值（超卖窗口）。expectedUpdatedAt 省略＝按当前档的戳写
+ * （只挡读写之间插进来的预留）；无档＝首设建档。版本 0＝老档还没有戳——每次库存写都会盖戳，
+ * 「仍没有戳」就等于读到之后没被动过。读失败照抛（不当无档去建档）。
  */
 export async function setStock(
   productId: string,
@@ -179,18 +186,31 @@ export async function setStock(
   expectedUpdatedAt?: number | null
 ): Promise<{ ok: boolean; conflict?: boolean }> {
   const coll = getDb().collection(COLLECTIONS.inventory)
+  const _ = getDb().command
   const _id = idOf(productId, spec)
   const data: Record<string, unknown> = { productId, spec, stock, updatedAt: Date.now() }
   if (threshold != null) data.threshold = threshold
-  if (expectedUpdatedAt != null)
-    return (await casWrite(coll, { _id, updatedAt: expectedUpdatedAt }, data)) ? { ok: true } : { ok: false, conflict: true }
-  await coll
-    .doc(_id)
-    .set({ data })
-    .catch(async () => {
-      await coll.add({ data: { _id, ...data } })
-    })
-  return { ok: true }
+  let version: unknown = expectedUpdatedAt
+  if (version == null) {
+    const cur = await coll
+      .doc(_id)
+      .get()
+      .then(
+        (g: any) => (isEmptyDoc(g) ? null : g.data),
+        (e: unknown) => {
+          if (isDocMissing(e)) return null
+          throw e
+        }
+      )
+    if (!cur) {
+      // 建档撞键＝并发方刚建了档：当冲突让管理端刷新
+      const created = await coll.add({ data: { _id, ...data } }).then(() => true, () => false)
+      return created ? { ok: true } : { ok: false, conflict: true }
+    }
+    version = cur.updatedAt
+  }
+  const stamp = version == null || version === 0 ? _.exists(false) : version
+  return (await casWrite(coll, { _id, updatedAt: stamp }, data)) ? { ok: true } : { ok: false, conflict: true }
 }
 
 /**

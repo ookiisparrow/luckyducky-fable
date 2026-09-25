@@ -10,7 +10,10 @@ import {
   msgSecCheck,
   imgSecCheck,
   SCENE_PROFILE,
+  isCollectionMissing,
 } from '../../../kit'
+import { ANON_REVIEW_NAME } from './reviews'
+import { isOwnCheckpointFile, deleteOwnCheckpointFiles } from './checkpoint'
 
 const CAPS = { nickname: 20, bio: 60, avatar: 256, phone: 11 }
 
@@ -112,8 +115,9 @@ async function upsertUser(db: any, OPENID: string, patch: Record<string, unknown
 }
 
 /**
- * 自助删除资料（隐私政策第六条「我的 / 删除资料」）：
- * 抹掉可识别个人资料，摘掉课程权限与客服身份桥，订单行依法留存。
+ * 自助删除资料（隐私政策第五/六条「删除资料后删除或匿名化个人资料」）：
+ * 抹掉可识别个人资料，摘掉课程权限与客服身份桥；公开评价改匿名署名（评分与内容保留）、
+ * 意见反馈删联系方式、节点拍照连文件一起删；订单行依法留存。
  * 同一微信再登是空身份：资料空、课看不了；旧码不能凭本人身份抢回（activatedBy 改成 deleted:openid）。
  */
 export const deleteAccount = withOpenId(
@@ -140,6 +144,52 @@ export const deleteAccount = withOpenId(
       .collection(COLLECTIONS.qrcodes)
       .where({ activatedBy: OPENID })
       .update({ data: { activatedBy: 'deleted:' + OPENID } })
+    await db
+      .collection(COLLECTIONS.reviews)
+      .where({ _openid: OPENID })
+      .update({ data: { name: ANON_REVIEW_NAME } })
+      .catch(rethrowUnlessCollMissing)
+    await db
+      .collection(COLLECTIONS.feedback)
+      .where({ _openid: OPENID })
+      .update({ data: { contact: '' } })
+      .catch(rethrowUnlessCollMissing)
+    await removeCheckpointSubs(db, OPENID)
     return ok({ deleted: true })
   })
 )
+
+// 评价/反馈/节点集合都是第一次写时才建：集合没建＝本人本来就没有，不是删失败
+function rethrowUnlessCollMissing(e: unknown): void {
+  if (!isCollectionMissing(e)) throw e
+}
+
+/**
+ * 节点拍照提交连文件一起删。先删文件再摘档：档一摘 fileId 就没了，文件再也找不回来删。
+ * 每页 50 条＝deleteFile 单次上限；只摘文件确认没了的档，其余留给重试，本次整体抛错。
+ * 不在本人目录下的 fileId 只摘档不删文件（不拿管理权限删别人的图）。
+ */
+async function removeCheckpointSubs(db: any, OPENID: string): Promise<void> {
+  const coll = () => db.collection(COLLECTIONS.checkpoints)
+  for (;;) {
+    const page = await coll()
+      .where({ type: 'sub', _openid: OPENID })
+      .limit(50)
+      .get()
+      .catch((e: unknown) => (rethrowUnlessCollMissing(e), { data: [] }))
+    const subs: any[] = page.data
+    if (!subs.length) return
+    const fileOf = (d: any) => String(d.fileId || '')
+    const gone = await deleteOwnCheckpointFiles(subs.map(fileOf), OPENID)
+    const done = subs.filter((d) => gone.has(fileOf(d)) || !isOwnCheckpointFile(fileOf(d), OPENID)).map((d) => d._id)
+    if (done.length) {
+      const rm = await coll().where({ _id: db.command.in(done) }).remove()
+      // 删到 0 条可能是并发的另一次删除已经摘掉了：回读确认真没了才放行
+      if (!rm?.stats?.removed) {
+        const left = await coll().where({ _id: db.command.in(done) }).limit(1).get()
+        if (left.data.length) throw new Error('CHECKPOINT_REMOVE_NOOP')
+      }
+    }
+    if (done.length < subs.length) throw new Error('CHECKPOINT_FILE_DELETE_FAIL')
+  }
+}

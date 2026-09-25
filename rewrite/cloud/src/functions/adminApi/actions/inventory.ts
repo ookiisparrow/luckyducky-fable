@@ -22,7 +22,8 @@ export async function saveStock({ data }: Ctx) {
     stock = n
   }
   const threshold = data.threshold != null ? Math.max(0, parseInt(data.threshold, 10) || 0) : undefined
-  // CAS 防覆盖并发预留（外审 P1.8）：前端把加载时的 updatedAt 回传，库存自加载已变动则冲突、提示刷新（不覆盖预留）
+  // CAS 防覆盖并发预留（外审 P1.8）：前端把加载时的 updatedAt 回传（老档没有戳传 0），库存自加载已变动则冲突、
+  // 提示刷新（不覆盖预留）；没传也按当前档条件写，见 kit setStock
   const expectedUpdatedAt =
     data.expectedUpdatedAt != null && Number.isFinite(Number(data.expectedUpdatedAt)) ? Number(data.expectedUpdatedAt) : undefined
   const res = await setStock(productId, spec, stock, threshold, expectedUpdatedAt)
