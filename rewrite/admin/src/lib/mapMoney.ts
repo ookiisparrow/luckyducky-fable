@@ -82,9 +82,10 @@ export interface DashboardVM {
 // 让上层区分「真为 0」与「没加载到」：partial=true 时不显绿色全清、提示刷新。drafts.rows 由调用方先
 // mapDraftRows（避免本层反向依赖 mapProducts）。
 export interface TodoInputs {
-  // partial：服务端 orderCounts/refundCounts 自身可能整体 ok:true、但内部某状态 count() 失败时回传
-  // partial:true（该路数字不可信但不拖累整包报错·item7）——即便四路 .ok 全过，只要任一路带 partial 也要整体 partial。
-  orderCounts: { ok?: boolean; counts?: Record<string, unknown>; partial?: boolean }
+  // 待发货取 toShip 不取 orderCounts 的 paid：paid 里还有全额退款没翻状态、售后待审被拦的单，发不了
+  dashboard: { ok?: boolean; toShip?: unknown }
+  // partial：服务端 refundCounts 自身可能整体 ok:true、但内部某状态 count() 失败时回传
+  // partial:true（该路数字不可信但不拖累整包报错·item7）——即便各路 .ok 全过，带 partial 也要整体 partial。
   refundCounts: { ok?: boolean; counts?: Record<string, unknown>; partial?: boolean }
   inventory: { ok?: boolean; list?: unknown }
   drafts: { ok?: boolean; rows?: Array<{ state?: string }> }
@@ -98,13 +99,13 @@ export interface TodoCounts {
   partial: boolean // 任一路加载失败＝true（数字不可信·上层别显「无待办」全清）
 }
 export function deriveDashboardTodos(i: TodoInputs): TodoCounts {
-  const partial = !(i.orderCounts?.ok && i.refundCounts?.ok && i.inventory?.ok && i.drafts?.ok) || !!i.orderCounts?.partial || !!i.refundCounts?.partial
-  const ocC = (i.orderCounts?.counts || {}) as Record<string, unknown>
+  const toShip = i.dashboard?.ok ? i.dashboard.toShip : undefined
+  const partial = !(i.refundCounts?.ok && i.inventory?.ok && i.drafts?.ok) || typeof toShip !== 'number' || !!i.refundCounts?.partial
   const rcC = (i.refundCounts?.counts || {}) as Record<string, unknown>
   const invList = Array.isArray(i.inventory?.list) ? (i.inventory.list as Array<{ stock?: unknown; threshold?: unknown }>) : []
   const rows = Array.isArray(i.drafts?.rows) ? i.drafts.rows : []
   return {
-    ship: Number(ocC.paid) || 0,
+    ship: typeof toShip === 'number' ? toShip : 0,
     refund: Number(rcC.applied) || 0,
     // 与库存页同一把尺子：per-SKU 阈值优先，未设退 i.low；库存 0 算售罄，不限量不计。
     lowStock: invList.filter((r) => {

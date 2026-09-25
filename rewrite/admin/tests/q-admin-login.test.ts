@@ -73,3 +73,14 @@ describe('后台登录页提交', () => {
     expect(w.find('button').text()).toBe('登录中…')
   })
 })
+
+describe('后台登录页断网', () => {
+  it('大白话：断网只说网络不通，不把 NETWORK:Failed to fetch 原样甩出来', async () => {
+    loginMock.mockReset().mockResolvedValue({ ok: false, status: 0, error: 'NETWORK:Failed to fetch' })
+    const w = mount(Login)
+    await w.find('input').setValue('pw')
+    await w.find('button').trigger('click')
+    await flushPromises()
+    expect(w.find('.error').text()).toBe('网络不通，请检查网络后重试')
+  })
+})

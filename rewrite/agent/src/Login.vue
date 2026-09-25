@@ -26,7 +26,7 @@ async function submit() {
       : e === 'NO_ENDPOINT'
         ? '后端地址未配置（VITE_AGENT_API）'
         : e.startsWith('NETWORK')
-          ? '网络不通：' + e
+          ? '网络不通，请检查网络后重试'
           : e === 'AUTH_UNAVAILABLE'
             ? '登录校验服务暂时不可用，请稍后再试（不是口令的问题）'
             : e === 'CALL_TIMEOUT'

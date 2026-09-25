@@ -137,7 +137,7 @@ async function enterStocktake() {
   reportLoad(m) // 拉取失败不写错误会与「确实没有物料」撞成同一假空态（病根14）
 }
 
-// 分路报错（照 ScmBom.reload）。业务码走 scmErrorText 译人话：loadErrors 的兜底会原样露码。
+// 分路报错（照 ScmBom.reload）。业务码走 scmErrorText 译人话：loadErrors 只认传输层码，业务码只能挂括号。
 // 供应商那路沿用最近一次 reload 的结果——进盘点只查了物料，成功时要收回陈旧的物料错误、但不能收回仍有效的供应商错误。
 function reportLoad(m: { ok: boolean; error?: unknown }) {
   const err = [m.ok ? '' : '物料主档加载失败：' + scmErrorText(m.error), supsError.value].filter(Boolean).join('；')

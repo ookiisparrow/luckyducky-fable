@@ -86,7 +86,9 @@ async function reload() {
     if (hasMore && pages >= 25) truncNote.value = '订单量超出一次装载上限，列表不完整——请分批处理或联系技术缩小范围'
     orders.value = acc
   } catch (e) {
-    loadErr.value = '加载失败：' + (e instanceof Error ? e.message : String(e))
+    // 这里是页面自己的代码抛了异常（回包畸形之类），英文原文操作员看不懂；原文留控制台给技术排查
+    console.error(e)
+    loadErr.value = '加载失败：页面处理订单数据时出错，请刷新；反复出现请找技术'
   } finally {
     loading.value = false
   }

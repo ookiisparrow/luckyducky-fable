@@ -6,7 +6,7 @@ import { mount, flushPromises } from '@vue/test-utils'
 
 const { listOrdersMock, shipOrderMock } = vi.hoisted(() => ({ listOrdersMock: vi.fn(), shipOrderMock: vi.fn() }))
 vi.mock('../src/api/money', async (orig) => ({ ...(await orig<typeof import('../src/api/money')>()), listOrders: listOrdersMock }))
-vi.mock('../src/api', () => ({ client: { post: shipOrderMock } }))
+vi.mock('../src/api', () => ({ typedPost: shipOrderMock }))
 
 import Fulfill from '../src/pages/Fulfill.vue'
 
@@ -69,5 +69,20 @@ describe('Fulfill.vue 发货在途再扫一枪', () => {
     expect(shipOrderMock).toHaveBeenCalledTimes(1)
     expect(w.find('.scan-msg').text()).toContain('上一单发货还在处理中')
     expect(w.find('.scan-msg').classes()).toContain('bad')
+  })
+})
+
+describe('Fulfill.vue 页面自己处理数据时出错', () => {
+  it('大白话：提示说中文、叫人刷新，不把英文异常原文甩给操作员；原文留控制台给技术', async () => {
+    const boom = new TypeError("Cannot read properties of undefined (reading 'list')")
+    const consoleErr = vi.spyOn(console, 'error').mockImplementation(() => {})
+    listOrdersMock.mockReset().mockRejectedValue(boom)
+    const w = mount(Fulfill)
+    await flushPromises()
+    const err = w.find('.status-err').text()
+    expect(err).toContain('加载失败')
+    expect(err).not.toMatch(/[A-Za-z]/)
+    expect(consoleErr).toHaveBeenCalledWith(boom)
+    consoleErr.mockRestore()
   })
 })

@@ -64,7 +64,7 @@ describe('ScmBom.vue 加载', () => {
   it('大白话：组装记录挂了——点名报错，记录区写加载失败，不装成「还没有组装记录」', async () => {
     api.listAssemblies.mockResolvedValue({ ok: false, status: 500, error: 'X1' })
     const w = await mountPage()
-    expect(status(w)).toBe('组装记录加载失败：X1')
+    expect(status(w)).toBe('组装记录加载失败：操作没成功（X1）')
     expect(w.text()).toContain('组装记录加载失败，请刷新重试')
     expect(w.text()).not.toContain('还没有组装记录')
   })
@@ -90,7 +90,7 @@ describe('ScmBom.vue 保存模板', () => {
   it('大白话：模板没载入成功——点保存不发请求（空模板会覆盖整份配方），提示刷新', async () => {
     api.getBomSetup.mockResolvedValue({ ok: false, status: 500, error: 'X1' })
     const w = await mountPage()
-    expect(status(w)).toBe('配方模板加载失败：X1')
+    expect(status(w)).toBe('配方模板加载失败：操作没成功（X1）')
     await btn(w, '保存模板').trigger('click')
     await flushPromises()
     expect(api.saveBomTemplate).not.toHaveBeenCalled()

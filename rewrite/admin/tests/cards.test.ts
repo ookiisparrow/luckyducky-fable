@@ -1,9 +1,10 @@
 // 卡面 SVG 生成黄金基准：
 // 正面满版图/品牌角标条件渲染 / 反面五项文案 + 品牌条 / 文本转义防注入 / 双版尺寸不崩。
 import { describe, it, expect } from 'vitest'
-import { buildFrontSvg, buildBackSvg, type CardModel } from '../src/lib/cardSvg'
+import type { AdminCardDoc } from '@ldrw/shared'
+import { buildFrontSvg, buildBackSvg } from '../src/lib/cardSvg'
 
-const card: CardModel = {
+const card: AdminCardDoc = {
   productId: 'p1',
   courseId: 'course-p1',
   name: '小熊 · 激活卡',
@@ -50,7 +51,7 @@ describe('卡面反面（二维码面）', () => {
 // 深审20260712 P3：esc 原只转 &<> 不转引号，且 bg 颜色值完全不经 esc 裸内插——含引号脏档可越出
 // SVG 双引号属性注入任意属性（如 onload）。修法对齐 fulfill.ts esc（&<>"' 五件套）+ bg 走 esc。
 describe('属性注入防御（esc 转引号 + bg 不裸内插）', () => {
-  const dirty: CardModel = {
+  const dirty: AdminCardDoc = {
     ...card,
     front: { ...card.front, bg: '#fff" onload="evil()' },
     back: { ...card.back, bg: "#fff' x=\"1", texts: { ...card.back.texts, title: '他说"你好"和\'单引号\'' } },

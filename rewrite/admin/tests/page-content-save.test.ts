@@ -101,12 +101,12 @@ describe.each([
   })
 
   it('保存失败只报失败，点击重试才重新提交', async () => {
-    write.mockResolvedValueOnce({ ok: false, error: 'NETWORK_FAIL' })
+    write.mockResolvedValueOnce({ ok: false, status: 400, error: 'BAD_ARGS' })
     const view = await open()
     await view.find('.pc-toolbar button').trigger('click')
     await flushPromises()
     expect(write).toHaveBeenCalledTimes(1)
-    expect(view.text()).toContain('保存失败：NETWORK_FAIL')
+    expect(view.find('.ld-status').text()).toBe('保存失败（BAD_ARGS）')
     expect(view.text()).not.toContain(SAVE_OK_MESSAGE)
     await view.find('.pc-toolbar button').trigger('click')
     await flushPromises()
@@ -124,5 +124,16 @@ describe.each([
     wrapper = undefined
     await flushPromises()
     expect(write).not.toHaveBeenCalled()
+  })
+})
+
+describe('页面内容保存断网', () => {
+  it('大白话：断网说网络不通，不甩 NETWORK 码、不说保存失败（可能已存上）', async () => {
+    write.mockResolvedValueOnce({ ok: false, status: 0, error: 'NETWORK:Failed to fetch' })
+    wrapper = mount(WelcomeTab)
+    await flushPromises()
+    await wrapper.find('.pc-toolbar button').trigger('click')
+    await flushPromises()
+    expect(wrapper.find('.ld-status').text()).toBe('网络不通，请检查网络后重试。')
   })
 })

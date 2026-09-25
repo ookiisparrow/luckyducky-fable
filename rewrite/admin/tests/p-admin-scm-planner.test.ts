@@ -46,7 +46,7 @@ describe('ScmPlanner.vue 产销加载', () => {
   it('大白话：产销统计挂了——点名报错，不装成「还没有产销记录」', async () => {
     api.getFgSummary.mockResolvedValue({ ok: false, status: 500, error: 'X1' })
     const w = await mountPage()
-    expect(status(w)).toBe('产销统计加载失败：X1')
+    expect(status(w)).toBe('产销统计加载失败：操作没成功（X1）')
     // 库存那路仍有行：若失败被兜成空产销，会以 0 套 0 件 7 的假行渲染整张卡——所以断言整卡不出
     expect(w.findAll('.card-title').map((t) => t.text())).toEqual(['备货计算器'])
     expect(w.find('.ld-tbody').exists()).toBe(false)

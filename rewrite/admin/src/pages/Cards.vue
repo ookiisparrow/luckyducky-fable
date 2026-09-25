@@ -7,7 +7,8 @@ import { useRoute, useRouter } from 'vue-router'
 import { getCard, saveCard, uploadImage, listDrafts } from '../api/products'
 import { b64SizeOk } from '../lib/mapProducts'
 import { launchErrorText } from '../lib/mapSystem'
-import { buildFrontSvg, buildBackSvg, type CardModel } from '../lib/cardSvg'
+import type { AdminCardDoc } from '@ldrw/shared'
+import { buildFrontSvg, buildBackSvg } from '../lib/cardSvg'
 import { serialSave } from '../lib/serialSave'
 import { compressImage } from '../lib/compressImage'
 import { saveBlob } from '../lib/saveBlob'
@@ -27,10 +28,11 @@ const route = useRoute()
 const router = useRouter()
 const productId = props.wizardProductId || String(route.query.productId || '')
 
-const card = ref<CardModel | null>(null)
+const card = ref<AdminCardDoc | null>(null)
 const artUrl = ref('')
 const loading = ref(true)
-const loadErr = ref('')
+const loadErr = ref('') // 加载失败：不出编辑器
+const opErr = ref('') // 操作失败：编辑器留着，改了就能再试
 const busyArt = ref(false)
 const autoState = ref('') // '' | saving | saved | error
 const product = ref<Record<string, any> | null>(null)
@@ -48,7 +50,7 @@ const PRESETS = [
 ]
 const SWATCHES = ['#f6e9b8', '#fbe3ea', '#e3edfb', '#e6f2e7', '#fcfaff', '#ffffff'] // structure-ok 卡面衬底候选色（印刷卡面·非 UI 主题·卡面本就自选色）
 
-function freshCard(): CardModel {
+function freshCard(): AdminCardDoc {
   const p = product.value || {}
   return {
     productId,
@@ -76,8 +78,8 @@ onMounted(async () => {
     // 无 productId＝选择器模式：列全部商品（listDrafts 本页早已 import·量小全量）供点选
     const dr = await listDrafts().catch(() => null)
     if (dr?.ok) {
-      const urls = (dr as any).urls || {}
-      pickRows.value = (((dr as any).list as Record<string, any>[]) || []).map((p) => ({
+      const urls = dr.urls || {}
+      pickRows.value = (dr.list || []).map((p) => ({
         id: String(p.id || p._id || ''),
         name: String(p.name || '未命名商品'),
         coverUrl: p.cover ? String(urls[String(p.cover)] || '') : '',
@@ -91,16 +93,16 @@ onMounted(async () => {
   if (r.error === 'SESSION_LOST') return // 会话失效集中导登录（client.onSessionLost·单源·根因#5）
   // 商品没读到不能往下走：新卡会拿「新商品」和猜的课程号落库，「取商品封面图」也会谎报没封面。
   // 读到了但找不到也一样：listDrafts 只回最新 100 个商品
-  const found = dr.ok ? ((dr as any).list as Record<string, any>[]).find((p) => String(p.id || p._id) === productId) : undefined
+  const found = dr.ok ? dr.list.find((p) => String(p.id || p._id) === productId) : undefined
   if (!found) {
     loadErr.value = '商品信息没加载到：' + (dr.ok ? '没找到这个商品（商品超过 100 个时列表不全）' : launchErrorText(dr.error))
     loading.value = false
     return
   }
   product.value = found
-  if (found.cover) coverUrl.value = (dr as any).urls?.[String(found.cover)] || ''
+  if (dr.ok && found.cover) coverUrl.value = dr.urls?.[String(found.cover)] || ''
   if (r.ok) {
-    card.value = ((r as any).card as CardModel) || freshCard()
+    card.value = r.card || freshCard()
     artUrl.value = String(r.artUrl || '')
     if (!r.card && product.value?.cover) {
       card.value.front.art = String(product.value.cover)
@@ -130,11 +132,11 @@ watch(
 // 新 autosave 并发在途，谁的响应后到就把谁的 status 落库，慢网下刚定的 final 可能被晚到的旧 draft
 // autosave 盖回去（settled()-only 方案只排空「点击那一刻已在途」的链，堵不住这条）。pendingStatus 让
 // 队列里「当前及尾随补跑」的每一轮 run() 都携带 next 状态，直到 finalize 收尾才清空。
-let pendingStatus: CardModel['status'] | null = null
+let pendingStatus: AdminCardDoc['status'] | null = null
 async function autosave() {
   if (!card.value) return
   const payload = pendingStatus ? { ...card.value, status: pendingStatus } : card.value
-  const r = await saveCard(payload as unknown as Record<string, unknown>)
+  const r = await saveCard(payload)
   autoState.value = r.ok ? 'saved' : 'error'
 }
 // 串行化·防慢网下两次自动保存乱序覆盖（P2·根因#8）；key='cards:'+productId（批D·P1）：改走模块级共享
@@ -167,7 +169,7 @@ async function pickArt(e: Event) {
   if (!file || busyArt.value || !card.value) return
   const b64 = await compressImage(file)
   if (!b64SizeOk(b64)) {
-    loadErr.value = '图片压缩后仍超限，换小一点的图'
+    opErr.value = '图片压缩后仍超限，换小一点的图'
     return
   }
   busyArt.value = true
@@ -176,18 +178,19 @@ async function pickArt(e: Event) {
   if (r.ok) {
     card.value.front.art = String(r.fileID || '')
     artUrl.value = String(r.url || '')
-    loadErr.value = ''
+    opErr.value = ''
     void afterCardArtChanged()
-  } else loadErr.value = launchErrorText(r.error)
+  } else opErr.value = launchErrorText(r.error)
 }
 function useCover() {
   if (!card.value) return
   if (!product.value?.cover) {
-    loadErr.value = '该商品还没有封面图（去第 1 步上传）'
+    opErr.value = '该商品还没有封面图（去第 1 步上传）'
     return
   }
   card.value.front.art = String(product.value.cover)
   artUrl.value = coverUrl.value
+  opErr.value = ''
   void afterCardArtChanged()
 }
 /** 向导第 5 步只要上传：图到位后自动定稿（印刷批次仍认 cardFinal），并通知向导重算进度 */
@@ -203,7 +206,7 @@ async function afterCardArtChanged() {
 async function finalize() {
   if (!card.value) return
   if (!card.value.front.art) {
-    loadErr.value = '正面还没有图案——取商品封面图或上传插画'
+    opErr.value = '正面还没有图案——取商品封面图或上传插画'
     return
   }
   // 先落库、成功才翻定稿态（审核补漏·病根#14 伪成功）：不乐观翻——防前端显「已定稿」而后端仍 draft，
@@ -224,9 +227,9 @@ async function finalize() {
   if (!card.value) return // 排空期间页面被卸载（embed 模式随向导切步）——card 已置空则不再往下写
   if (autoState.value === 'saved') {
     card.value.status = next
-    loadErr.value = ''
+    opErr.value = ''
   } else {
-    loadErr.value = (next === 'final' ? '定稿' : '取消定稿') + '保存失败：请重试'
+    opErr.value = (next === 'final' ? '定稿' : '取消定稿') + '保存失败：请重试'
   }
 }
 
@@ -255,6 +258,7 @@ function downloadSvg(kind: 'front' | 'back') {
       </div>
     </header>
 
+    <p v-if="opErr" class="err-line">{{ opErr }}</p>
     <p v-if="loadErr" class="err-line">{{ loadErr }}</p>
     <p v-else-if="loading" class="ld-status">加载中…</p>
 

@@ -89,12 +89,12 @@ describe('Products.vue 关闭编辑器时补存', () => {
   it('大白话：补存失败要提示、不发 saved；补存的是关闭那一刻的编辑', async () => {
     await open(0)
     await typeName('小熊改名')
-    api.saveDraft.mockResolvedValueOnce({ ok: false, status: 500, error: 'X' })
+    api.saveDraft.mockResolvedValueOnce({ ok: false, status: 400, error: 'BAD_PRODUCT' })
     await btn('关闭').trigger('click')
     await flushPromises()
     expect(api.saveDraft).toHaveBeenCalledTimes(1)
     expect(api.saveDraft.mock.calls[0][0]).toMatchObject({ id: 'p1', name: '小熊改名' })
-    expect(status()).toBe('关闭前有编辑未保存成功：X，请重新打开该商品检查')
+    expect(status()).toBe('关闭前有编辑未保存成功，请重新打开该商品检查：商品信息不完整，保存没成功。请检查名称、价格和规格。')
     expect(w.emitted('saved')).toBeUndefined()
   })
 
@@ -209,5 +209,66 @@ describe('Products.vue 图片上传回包晚到', () => {
     expect(editorId()).toBe('p2')
     expect(w.findAll('.gallery .g-item')).toHaveLength(0)
     expect(status()).not.toContain('有图上传失败')
+  })
+})
+
+describe('Products.vue 失败提示说人话，不甩英文码', () => {
+  const TIMEOUT_TEXT = '服务器太久没回话。如果刚才是提交操作，可能已经生效——先刷新看看，再决定要不要重试。'
+  const mountFresh = async () => {
+    const w2 = mount(Products, { global: { plugins: [router] } })
+    await flushPromises()
+    return w2
+  }
+  const clickDelete = async () => {
+    await w.findAll('button[title="更多操作"]')[0].trigger('click')
+    await btn('删除').trigger('click')
+    await btn('连已上架一起删？').trigger('click')
+    await flushPromises()
+  }
+
+  it('大白话：列表读失败（断网）说网络不通', async () => {
+    api.listDrafts.mockResolvedValueOnce({ ok: false, status: 0, error: 'NETWORK:Failed to fetch' })
+    const w2 = await mountFresh()
+    expect(w2.find('.ld-status').text()).toBe('加载失败：网络不通，请检查网络后重试。')
+    w2.unmount()
+  })
+
+  it('大白话：列表读失败（云端出错）只说加载失败、编号挂括号，不扯「前面步骤」', async () => {
+    api.listDrafts.mockResolvedValueOnce({ ok: false, status: 500, error: 'SERVER_ERROR' })
+    const w2 = await mountFresh()
+    expect(w2.find('.ld-status').text()).toBe('加载失败（SERVER_ERROR）')
+    w2.unmount()
+  })
+
+  it.each([
+    ['封面', '.editor .grid input[type="file"]'],
+    ['相册', '.gallery .g-add input'],
+  ])('大白话：%s上传被拒（图太大）说换一张', async (_, sel) => {
+    await open(0)
+    api.uploadImage.mockResolvedValueOnce({ ok: false, status: 400, error: 'BAD_IMAGE' })
+    await pickFile(sel)
+    expect(status()).toBe('图片太大或格式不对。请换一张再传。')
+  })
+
+  it('大白话：删除没成功，说删除没成功、叫人再删一次，不扯「前面步骤」', async () => {
+    api.deleteDraft.mockResolvedValue({ ok: false, status: 200, error: 'REMOVE_FAIL' })
+    await clickDelete()
+    expect(api.deleteDraft).toHaveBeenCalledWith('p1')
+    expect(status()).toBe('删除没成功。请刷新后再删一次。')
+  })
+
+  it('大白话：删除超时不说「删除失败」——可能已经删掉了，叫人先刷新看看', async () => {
+    api.deleteDraft.mockResolvedValue({ ok: false, status: 0, error: 'CALL_TIMEOUT' })
+    await clickDelete()
+    expect(status()).toBe(TIMEOUT_TEXT)
+  })
+
+  it('大白话：关闭时补存超时不说「未保存成功」——可能已经存上了', async () => {
+    await open(0)
+    await typeName('小熊改名')
+    api.saveDraft.mockResolvedValueOnce({ ok: false, status: 0, error: 'CALL_TIMEOUT' })
+    await btn('关闭').trigger('click')
+    await flushPromises()
+    expect(status()).toBe(TIMEOUT_TEXT)
   })
 })

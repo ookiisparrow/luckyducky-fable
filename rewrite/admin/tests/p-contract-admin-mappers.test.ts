@@ -148,18 +148,15 @@ describe('看板映射（getDashboard / 计数 / 库存 真实形状）', () => 
     expect(vm.alertsPartial).toBe(true)
   })
 
-  it('待处理计数：待发货取 counts.paid、待审退款取 counts.applied；库存按 per-SKU 阈值判（库存 3 > 阈值 2 不算低）', () => {
-    // 已知缺口：ship: 2 锁的是现状不是期望——deriveDashboardTodos 仍读 counts.paid（status=paid 的全部单），
-    // 把全额退款仍停在 paid 的 B、售后待审的 D 也算进去；真能发的是 getDashboard.toShip（契约里是 0）。
-    // 改读 toShip 后这里传 dashboard: S('getDashboard')、期望改成 ship: 0。
+  it('待处理计数：待发货取 getDashboard.toShip（全额退款仍停在 paid 的 B、售后待审的 D 不算）、待审退款取 counts.applied；库存按 per-SKU 阈值判（库存 3 > 阈值 2 不算低）', () => {
     const t = deriveDashboardTodos({
-      orderCounts: S('orderCounts'),
+      dashboard: S('getDashboard'),
       refundCounts: S('refundCounts'),
       inventory: S('listInventory'),
       drafts: { ok: true, rows: [] },
       low: 10,
     })
-    expect(t).toEqual({ ship: 2, refund: 1, lowStock: 0, prep: 0, partial: false })
+    expect(t).toEqual({ ship: 0, refund: 1, lowStock: 0, prep: 0, partial: false })
   })
 
   it('页面直读的原始字段在契约里（不经映射）：计数的 partial、列表的 nextCursor/hasMore', () => {

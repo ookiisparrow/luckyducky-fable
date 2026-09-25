@@ -8,6 +8,7 @@ import { usePageContent } from '../../lib/usePageContent'
 import { normalizeCatalogPlayer, catalogPlayerPayload } from '../../lib/mapPageContent'
 import { uploadImage } from '../../api/products'
 import { b64SizeOk } from '../../lib/mapProducts'
+import { launchErrorText } from '../../lib/mapSystem'
 import { compressImage } from '../../lib/compressImage'
 import UiButton from '../ui/Button.vue'
 import Badge from '../ui/Badge.vue'
@@ -41,7 +42,7 @@ async function onHero(ev: Event) {
     model.value.catalog.heroImage = fid
     if (fid) sessionUrls.value[fid] = String(r.url || '')
     message.value = ''
-  } else message.value = '图片上传失败：' + String(r.error || '')
+  } else message.value = launchErrorText(r.error)
 }
 </script>
 

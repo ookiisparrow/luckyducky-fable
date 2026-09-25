@@ -11,7 +11,7 @@ import inventorySrc from '../src/pages/Inventory.vue?raw'
 describe('deriveDashboardTodos（待处理计数：加载失败别伪装成 0/全清·病根#14）', () => {
   it('大白话：某路计数加载失败时 partial=true——上层据此不把「加载失败」显示成绿色「今日无待处理」', () => {
     const t = deriveDashboardTodos({
-      orderCounts: { ok: false }, // 待发货计数加载失败
+      dashboard: { ok: false }, // 看板没读到，待发货数不知道
       refundCounts: { ok: true, counts: { applied: 0 } },
       inventory: { ok: true, list: [] },
       drafts: { ok: true, rows: [] },
@@ -21,9 +21,16 @@ describe('deriveDashboardTodos（待处理计数：加载失败别伪装成 0/�
     expect(t.ship).toBe(0) // 失败路暂显 0，但 partial 已标记：0 是「不知道」不是「真没有」
   })
 
+  it('大白话：待发货只认看板回的 toShip（真能发的单数）；看板没读到或没回 toShip 时算没加载全，不拿 0 冒充', () => {
+    const base = { refundCounts: { ok: true, counts: {} }, inventory: { ok: true, list: [] }, drafts: { ok: true, rows: [] }, low: 10 }
+    expect(deriveDashboardTodos({ ...base, dashboard: { ok: true, toShip: 2 } })).toMatchObject({ ship: 2, partial: false })
+    expect(deriveDashboardTodos({ ...base, dashboard: { ok: false } })).toMatchObject({ ship: 0, partial: true })
+    expect(deriveDashboardTodos({ ...base, dashboard: { ok: true, toShip: '2' } })).toMatchObject({ ship: 0, partial: true })
+  })
+
   it('大白话：四路全 ok 且真没待办时 partial=false、各计数为云端真值', () => {
     const t = deriveDashboardTodos({
-      orderCounts: { ok: true, counts: { paid: 3 } },
+      dashboard: { ok: true, toShip: 3 },
       refundCounts: { ok: true, counts: { applied: 1 } },
       inventory: { ok: true, list: [{ stock: 2 }, { stock: 50 }] },
       drafts: { ok: true, rows: [{ state: 'preparing' }, { state: 'listed' }] },
@@ -35,7 +42,7 @@ describe('deriveDashboardTodos（待处理计数：加载失败别伪装成 0/�
 
   it('大白话：低库存/售罄跟库存页同一把尺子——设了自己的阈值就按自己的，没设才退默认；库存 0 仍算售罄', () => {
     const t = deriveDashboardTodos({
-      orderCounts: { ok: true, counts: {} },
+      dashboard: { ok: true, toShip: 0 },
       refundCounts: { ok: true, counts: {} },
       inventory: {
         ok: true,
@@ -58,23 +65,15 @@ describe('deriveDashboardTodos（待处理计数：加载失败别伪装成 0/�
     expect(inventorySrc).toContain('stockAlertOf(r.stock, r.threshold, LOW_STOCK)') // 库存页标色走同一函数，不能再各写一遍
   })
 
-  it('大白话：orderCounts/refundCounts 本身 ok:true 但服务端内部某路 count 失败时也带了 partial:true——不能因为整体 ok 就当真值信（P1·item7）', () => {
-    const t1 = deriveDashboardTodos({
-      orderCounts: { ok: true, counts: { paid: 3 }, partial: true }, // 服务端：部分状态 count() 失败·数字不可信
-      refundCounts: { ok: true, counts: { applied: 1 } },
+  it('大白话：refundCounts 本身 ok:true 但服务端内部某路 count 失败时也带了 partial:true——不能因为整体 ok 就当真值信（P1·item7）', () => {
+    const t = deriveDashboardTodos({
+      dashboard: { ok: true, toShip: 3 },
+      refundCounts: { ok: true, counts: { applied: 1 }, partial: true }, // 服务端：部分状态 count() 失败·数字不可信
       inventory: { ok: true, list: [] },
       drafts: { ok: true, rows: [] },
       low: 10,
     })
-    expect(t1.partial).toBe(true) // 不因四路整体 .ok 都为 true 就误判为「真没待办」
-    const t2 = deriveDashboardTodos({
-      orderCounts: { ok: true, counts: { paid: 3 } },
-      refundCounts: { ok: true, counts: { applied: 1 }, partial: true }, // refundCounts 侧同理
-      inventory: { ok: true, list: [] },
-      drafts: { ok: true, rows: [] },
-      low: 10,
-    })
-    expect(t2.partial).toBe(true)
+    expect(t.partial).toBe(true) // 不因各路 .ok 都为 true 就误判为「真没待办」
   })
 })
 

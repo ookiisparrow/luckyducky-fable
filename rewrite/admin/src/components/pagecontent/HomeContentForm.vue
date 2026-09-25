@@ -8,6 +8,7 @@ import { getHomeContent, saveHomeContent } from '../../api/content'
 import { uploadImage } from '../../api/products'
 import { normalizeHome, homePayload } from '../../lib/mapContent'
 import { b64SizeOk } from '../../lib/mapProducts'
+import { launchErrorText } from '../../lib/mapSystem'
 import { compressImage } from '../../lib/compressImage'
 import { usePageContent } from '../../lib/usePageContent'
 import UiButton from '../ui/Button.vue'
@@ -44,7 +45,7 @@ async function uploadTo(assign: (_fileID: string) => void, ev: Event) {
     assign(fid)
     if (fid) sessionUrls.value[fid] = String(r.url || '') // 缩略预览（本会话）
     message.value = ''
-  } else message.value = '图片上传失败：' + String(r.error || '')
+  } else message.value = launchErrorText(r.error)
 }
 
 function addCourseRow() {

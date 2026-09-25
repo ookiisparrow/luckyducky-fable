@@ -62,7 +62,7 @@ describe('ScmOutwork.vue 列表', () => {
     api.listOutworks.mockResolvedValue({ ok: false, error: 'A' })
     api.listSuppliers.mockResolvedValue({ ok: false, error: 'C' })
     const w = await mountPage()
-    expect(w.find('.ld-status').text()).toBe('外协单加载失败：A；织女名单加载失败：C')
+    expect(w.find('.ld-status').text()).toBe('外协单加载失败：操作没成功（A）；织女名单加载失败：操作没成功（C）')
     expect(w.text()).not.toContain('还没有外协单')
   })
 

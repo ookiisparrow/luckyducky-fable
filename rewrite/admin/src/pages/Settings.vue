@@ -3,8 +3,8 @@
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { getSettings, saveSettings } from '../api/system'
-import { webhookOk, transportErrorText } from '../lib/mapSystem'
-import { confirmed } from '../lib/status'
+import { webhookOk } from '../lib/mapSystem'
+import { confirmed, failText, writeFailText } from '../lib/status'
 import UiButton from '../components/ui/Button.vue'
 import PageHeader from '../components/ui/PageHeader.vue'
 import Card from '../components/ui/Card.vue'
@@ -44,7 +44,7 @@ function toggleEvent(code: string) {
 onMounted(async () => {
   const r = await getSettings()
   if (!r.ok) {
-    message.value = '加载失败：' + (transportErrorText(r.error) || String(r.error || '')) // 载入失败 loaded 恒 false·save 拒（防空表单覆盖已存配置）
+    message.value = failText('加载失败', r.error) // 载入失败 loaded 恒 false·save 拒（防空表单覆盖已存配置）
     return
   }
   const s = (r.settings || {}) as Record<string, any> // r.ok 但无 settings = 首次空配置·合法可保存
@@ -81,7 +81,7 @@ async function save() {
       alertWebhook.value = ''
     }
   } else {
-    message.value = String(r.error) === 'BAD_WEBHOOK' ? 'webhook 被云端拒绝（形态不对）' : transportErrorText(r.error) || '保存失败：' + String(r.error || '')
+    message.value = String(r.error) === 'BAD_WEBHOOK' ? 'webhook 被云端拒绝（形态不对）' : writeFailText('保存失败', r.error)
   }
 }
 
@@ -98,7 +98,7 @@ async function clearHook() {
     ok.value = true
     message.value = '已清除 webhook：告警只记日志、不推群'
   } else {
-    message.value = transportErrorText(r.error) || '清除失败：' + String(r.error || '')
+    message.value = writeFailText('清除失败', r.error)
   }
 }
 </script>

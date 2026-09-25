@@ -6,7 +6,7 @@ import { Search, Boxes, CircleCheck, TriangleAlert, XCircle, Infinity as Infinit
 import { listInventory, saveStock } from '../api/system'
 import { listDrafts } from '../api/products'
 import { mapStock, stockErrorText, type StockRow } from '../lib/mapSystem'
-import { useLoadStatus } from '../lib/status'
+import { useLoadStatus, failText } from '../lib/status'
 import { LOW_STOCK_THRESHOLD, stockAlertOf, type StockAlert } from '../lib/thresholds'
 import UiButton from '../components/ui/Button.vue'
 import PageHeader from '../components/ui/PageHeader.vue'
@@ -78,7 +78,7 @@ async function reload() {
     status: stockAlertOf(r.stock, r.threshold, LOW_STOCK),
   }))
   truncNote.value = m.truncNote
-  load((inv as any).ok, '加载失败：' + String((inv as any).error || '')) // 只在加载失败时写·成功不抹动作反馈（409 冲突原文留住）
+  load((inv as any).ok, failText('加载失败', (inv as any).error)) // 只在加载失败时写·成功不抹动作反馈（409 冲突原文留住）
 }
 
 function startEdit(row: Row) {

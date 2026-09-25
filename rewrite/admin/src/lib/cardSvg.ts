@@ -1,15 +1,7 @@
 // 卡面 SVG 生成（印刷包交付物·1:1 移植旧线 utils/cardSvg.js）：
 // 正面 = 插画面（满版图案 + 品牌角标）；反面 = 二维码面（标题/副文案/二维码占位/扫码引导/退货小字 + 品牌条）。
 // 二维码区为占位框——印刷厂按地址清单 CSV 一码一图（用户确认的工作方式）。
-export interface CardModel {
-  productId: string
-  courseId: string
-  name: string
-  status: 'draft' | 'final'
-  front: { art: string; bg: string; showBrand: boolean }
-  back: { bg: string; brandText: string; texts: { title: string; sub: string; scanHint: string; warning: string } }
-  sizeMM: { w: number; h: number }
-}
+import type { AdminCardDoc } from '@ldrw/shared'
 
 // 印刷卡面固定色板（SVG 是独立印刷交付物·印刷/查看软件无 CSS var 可用·必须字面 hex·非 UI 主题色·刻意例外）
 const INK = '#241733' // structure-ok 品牌墨（角标条 / 底部品牌条底）
@@ -29,7 +21,7 @@ const head = (w: number, h: number): string =>
   `<?xml version="1.0" encoding="UTF-8"?>\n<svg xmlns="http://www.w3.org/2000/svg" width="${w}mm" height="${h}mm" viewBox="0 0 ${w} ${h}" font-family="'PingFang SC','Microsoft YaHei',sans-serif">`
 
 // 正面 · 插画面
-export function buildFrontSvg(card: CardModel, artHref?: string): string {
+export function buildFrontSvg(card: AdminCardDoc, artHref?: string): string {
   const { w, h } = card.sizeMM
   const f = card.front
   const fs = Math.min(w, h)
@@ -49,7 +41,7 @@ export function buildFrontSvg(card: CardModel, artHref?: string): string {
 }
 
 // 反面 · 二维码面（信息五项：主文案/副文案/二维码/扫码引导/退货小字提醒 + 品牌条）
-export function buildBackSvg(card: CardModel): string {
+export function buildBackSvg(card: AdminCardDoc): string {
   const { w, h } = card.sizeMM
   const b = card.back
   const t = b.texts

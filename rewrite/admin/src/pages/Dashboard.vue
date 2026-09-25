@@ -5,7 +5,7 @@
 import { ref, onMounted, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { Users, ShoppingBag, Wallet, QrCode, GraduationCap, RefreshCw, TriangleAlert, Truck, RotateCcw, Boxes, Flame, PauseCircle, PackagePlus, Inbox, ShieldAlert } from 'lucide-vue-next'
-import { getDashboard, orderCounts, refundCounts } from '../api/money'
+import { getDashboard, refundCounts } from '../api/money'
 import { listInventory } from '../api/system'
 import { listDrafts } from '../api/products'
 import { getInspectStatus } from '../api/ops'
@@ -13,6 +13,7 @@ import { mapDashboard, deriveDashboardTodos } from '../lib/mapMoney'
 import { mapDraftRows } from '../lib/mapProducts'
 import { LOW_STOCK_THRESHOLD } from '../lib/thresholds'
 import { dateTime } from '../lib/format'
+import { failText } from '../lib/status'
 import PageHeader from '../components/ui/PageHeader.vue'
 import Card from '../components/ui/Card.vue'
 import KpiCard from '../components/ui/KpiCard.vue'
@@ -77,15 +78,15 @@ const funnelMax = computed(() => Math.max(1, ...(vm.value?.funnel || []).map((f)
 
 async function load() {
   busy.value = true
-  // 行动条计数复用服务端精确口径（orderCounts/refundCounts·根因#7）+ 库存按 SKU 实算；任一失败（client 不抛·回 ok:false）不拖累看板
-  const [d, oc, rc, inv, dr, ins] = await Promise.all([getDashboard(), orderCounts(), refundCounts(), listInventory(), listDrafts(), getInspectStatus()])
+  // 行动条计数复用服务端精确口径（getDashboard.toShip/refundCounts·根因#7）+ 库存按 SKU 实算；任一失败（client 不抛·回 ok:false）不拖累看板
+  const [d, rc, inv, dr, ins] = await Promise.all([getDashboard(), refundCounts(), listInventory(), listDrafts(), getInspectStatus()])
   busy.value = false
   if (d.error === 'SESSION_LOST') return // 会话失效集中导登录（client.onSessionLost·单源·根因#5）
   vm.value = mapDashboard(d)
   // 上新未完成＝筹备中（未上架）商品数（复用 productState 三态口径）；失败副请求由 deriveDashboardTodos
   // 以 .ok 识别、回传 partial——不再兜成 0 把「没加载到」伪装成「无待办」（病根#14）
   const t = deriveDashboardTodos({
-    orderCounts: oc,
+    dashboard: d,
     refundCounts: rc,
     inventory: inv,
     drafts: { ok: dr.ok, rows: dr.ok ? mapDraftRows(dr.list, dr.urls, dr.listed) : [] },
@@ -95,7 +96,7 @@ async function load() {
   // 异常计数失败并入 partial 信号（同病根#14 口径：不把「没加载到」伪装成 0）
   todoPartial.value = t.partial || !ins.ok
   openAnomalies.value = ins.ok ? Number(ins.openAnomalies) || 0 : 0
-  message.value = vm.value ? '' : '看板加载失败：' + String(d.error || '')
+  message.value = vm.value ? '' : failText('看板加载失败', d.error)
 }
 
 onMounted(load)

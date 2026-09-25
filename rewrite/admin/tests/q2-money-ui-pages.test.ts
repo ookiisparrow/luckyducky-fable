@@ -7,7 +7,6 @@ import { transportErrorText } from '../src/lib/mapSystem'
 
 const m = vi.hoisted(() => ({
   getDashboard: vi.fn(),
-  orderCounts: vi.fn(),
   refundCounts: vi.fn(),
   listInventory: vi.fn(),
   listDrafts: vi.fn(),
@@ -15,7 +14,7 @@ const m = vi.hoisted(() => ({
   getCard: vi.fn(),
   saveCard: vi.fn(),
 }))
-vi.mock('../src/api/money', () => ({ getDashboard: m.getDashboard, orderCounts: m.orderCounts, refundCounts: m.refundCounts }))
+vi.mock('../src/api/money', () => ({ getDashboard: m.getDashboard, refundCounts: m.refundCounts }))
 vi.mock('../src/api/system', () => ({ listInventory: m.listInventory }))
 vi.mock('../src/api/products', () => ({ listDrafts: m.listDrafts, getCard: m.getCard, saveCard: m.saveCard, uploadImage: vi.fn() }))
 vi.mock('../src/api/ops', () => ({ getInspectStatus: m.getInspectStatus }))
@@ -30,7 +29,6 @@ beforeEach(() => {
   const dash = sample('getDashboard')
   dash.txAlerts = { feeMismatch: [], refundMismatch: [], stuckRefunds: [], partial: false }
   m.getDashboard.mockReset().mockResolvedValue(dash)
-  m.orderCounts.mockReset().mockResolvedValue({ ok: true, counts: { paid: 0 }, partial: false })
   m.refundCounts.mockReset().mockResolvedValue({ ok: true, counts: { applied: 0 }, partial: false })
   m.listInventory.mockReset().mockResolvedValue({ ok: true, list: [] })
   m.listDrafts.mockReset().mockResolvedValue({ ok: true, list: [], urls: {}, listed: {} })
@@ -60,8 +58,8 @@ describe('Dashboard.vue 钱链告警没读全', () => {
   it('大白话：有别的待办撑出行动条时，告警没读全的「钱链告警」格子显示「?」，不显 0', async () => {
     const dash = sample('getDashboard')
     dash.txAlerts = { feeMismatch: [], refundMismatch: [], stuckRefunds: [], partial: true }
+    dash.toShip = 2
     m.getDashboard.mockResolvedValue(dash)
-    m.orderCounts.mockResolvedValue({ ok: true, counts: { paid: 2 }, partial: false })
     const w = mount(Dashboard)
     await flushPromises()
     const money = w.findAll('.todo').find((b) => b.text().includes('钱链告警'))!

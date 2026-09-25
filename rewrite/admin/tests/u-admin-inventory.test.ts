@@ -85,3 +85,15 @@ describe('Inventory.vue 保存回包前切到别行（G4）', () => {
     expect((w.find('input.stockin').element as HTMLInputElement).value).toBe('7')
   })
 })
+
+describe('Inventory.vue 读失败说人话', () => {
+  it.each([
+    ['NETWORK:Failed to fetch', '加载失败：网络不通，请检查网络后重试。'],
+    ['X1', '加载失败（X1）'],
+  ])('大白话：库存读失败 %s 显示「%s」', async (code, text) => {
+    listInventoryMock.mockResolvedValue({ ok: false, status: 0, error: code })
+    const w = mount(Inventory)
+    await flushPromises()
+    expect(w.find('.msg-err').text()).toBe(text)
+  })
+})

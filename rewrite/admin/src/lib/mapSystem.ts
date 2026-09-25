@@ -200,6 +200,9 @@ const LAUNCH_ERR: Record<string, string> = {
   BAD_IMAGE: '图片太大或格式不对。请换一张再传。',
   BAD_PRODUCT: '商品信息不完整，保存没成功。请检查名称、价格和规格。',
   NO_ID: '缺少商品编号。请从商品列表重新进入。',
+  DOC_READ_FAIL: '云端数据暂时读不出来。请稍后重试。',
+  REMOVE_FAIL: '删除没成功。请刷新后再删一次。',
+  GC_DELETE_FAIL: '商品已删掉，只是有几张图片没清理干净（已留记录给技术）。请刷新列表。',
 }
 
 // 传输层/鉴权层码（client.ts 与网关产出，任何 action 都可能回）：各业务映射自己的表查不到时先问这里，文案单源

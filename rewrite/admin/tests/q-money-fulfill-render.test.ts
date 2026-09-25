@@ -6,7 +6,7 @@ import { mount, flushPromises } from '@vue/test-utils'
 
 const { listOrdersMock, postMock } = vi.hoisted(() => ({ listOrdersMock: vi.fn(), postMock: vi.fn() }))
 vi.mock('../src/api/money', async (orig) => ({ ...(await orig<typeof import('../src/api/money')>()), listOrders: listOrdersMock }))
-vi.mock('../src/api', () => ({ client: { post: postMock } }))
+vi.mock('../src/api', () => ({ typedPost: postMock }))
 vi.mock('qrcode', () => ({ default: { toDataURL: async () => 'data:,' } }))
 
 import Fulfill from '../src/pages/Fulfill.vue'

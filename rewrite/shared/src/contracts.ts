@@ -108,3 +108,43 @@ export interface AdminDashboard {
   stuck: Array<{ segId: string; name: string; count: number }>
   recentActivity: Array<{ type: string; at: number; text: string }>
 }
+
+// ── 后台商品组 action 的成功包字段（admin api/products.ts 用）──
+// 这组没有契约 JSON 锁，照 adminApi actions/products.ts、cards.ts 与 lib.ts storeImage 的回包写。
+
+/** listDrafts：最新 100 个商品草稿（库内文档原样，字段不在这里建模）。urls：图片 fileID → 临时地址，换不到的不在里面。
+ *  listed、cardFinal 键是商品 id；hasVideo、coursePublished、hasBatch 键是课程 id。 */
+export interface AdminDrafts {
+  list: Array<Record<string, unknown>>
+  urls: Record<string, string>
+  listed: Record<string, boolean>
+  cardFinal: Record<string, boolean>
+  hasVideo: Record<string, boolean>
+  coursePublished: Record<string, boolean>
+  hasBatch: Record<string, boolean>
+}
+/** listShowcase：products 集合按 sort 排的前 100 个（库内文档原样）+ 封面临时地址。 */
+export interface AdminShowcase {
+  list: Array<Record<string, unknown>>
+  urls: Record<string, string>
+}
+/** 卡面档：saveCard 按这个形状清洗后写库。 */
+export interface AdminCardDoc {
+  productId: string
+  courseId: string
+  name: string
+  status: 'draft' | 'final'
+  front: { art: string; bg: string; showBrand: boolean }
+  back: { bg: string; brandText: string; texts: { title: string; sub: string; scanHint: string; warning: string } }
+  sizeMM: { w: number; h: number }
+}
+/** getCard：没建过卡时 card 是 null；artUrl 是正面图的临时地址（不是云存储图或换不到时为 ''）。 */
+export interface AdminCard {
+  card: AdminCardDoc | null
+  artUrl: string
+}
+/** uploadImage：fileID 写进档里，url 是给页面预览的临时地址（换不到为 ''）。 */
+export interface AdminUploaded {
+  fileID: string
+  url: string
+}

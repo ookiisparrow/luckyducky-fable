@@ -574,34 +574,15 @@ async function exportCsv() {
   font-size: 12px;
   color: var(--ld-content-2);
 }
-/* 批次详情抽屉（本页独有浮层·web 端无需 touchmove 锁；壳层公共段单源在 styles/console.css·病根#5） */
+/* 批次详情抽屉：壳层在 styles/console.css，这里只写与全局不同的宽度 */
 .drawer {
   width: 400px;
-  max-width: 94vw;
-  height: 100%;
-  background: var(--ld-bg);
-  border-left: 1px solid var(--ld-line);
-  padding: 24px;
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-  overflow-y: auto;
-  animation: slidein 0.18s ease;
 }
 .drawer-bid {
   margin-top: 4px;
   font-size: 12px;
   color: var(--ld-content-2);
   font-family: var(--ld-font-mono);
-}
-.drawer-close {
-  display: flex;
-  padding: 6px;
-  border: none;
-  border-radius: var(--ld-radius-sm);
-  background: var(--ld-bg-grey);
-  color: var(--ld-content-2);
-  cursor: pointer;
 }
 .info {
   padding: 14px;

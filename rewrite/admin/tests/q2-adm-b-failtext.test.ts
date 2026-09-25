@@ -1,7 +1,7 @@
 // 后台失败提示不甩裸码：传输层码说人话；读失败点名哪块没出来（多处同时挂才分得清），
 // 写失败不冠「X失败」（写操作超时可能已生效）；没有中文映射的业务码挂括号保留，方便排查；没码也不留半句「加载失败：」。
 import { describe, it, expect } from 'vitest'
-import { failText, writeFailText } from '../src/lib/mapCs'
+import { failText, writeFailText } from '../src/lib/status'
 import { transportErrorText } from '../src/lib/mapSystem'
 
 const TRANSPORT = ['CALL_TIMEOUT', 'NETWORK:Failed to fetch', 'SESSION_LOST']

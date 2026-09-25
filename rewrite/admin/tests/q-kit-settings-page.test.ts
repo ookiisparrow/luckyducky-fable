@@ -121,3 +121,24 @@ describe('Settings.vue 载入与保存参数', () => {
     expect((w.find('.secret-row input').element as HTMLInputElement).value).toBe('')
   })
 })
+
+describe('Settings.vue 没有中文映射的码挂括号', () => {
+  it('大白话：载入、保存、清除被拒都写「X失败（码）」，不写成「X失败：码」', async () => {
+    getSettingsMock.mockResolvedValue({ ok: false, status: 200, error: 'DOC_READ_FAIL' })
+    const w = mount(Settings)
+    await flushPromises()
+    expect(w.text()).toContain('加载失败（DOC_READ_FAIL）')
+
+    loadWith({ alertWebhookSet: true, alertWebhookTail: 'wxyz' })
+    saveSettingsMock.mockResolvedValue({ ok: false, status: 200, error: 'DOC_READ_FAIL' })
+    const w2 = mount(Settings)
+    await flushPromises()
+    await btn(w2, '保存').trigger('click')
+    await flushPromises()
+    expect(w2.text()).toContain('保存失败（DOC_READ_FAIL）')
+    await btn(w2, '清除').trigger('click')
+    await btn(w2, '确认清除').trigger('click')
+    await flushPromises()
+    expect(w2.text()).toContain('清除失败（DOC_READ_FAIL）')
+  })
+})

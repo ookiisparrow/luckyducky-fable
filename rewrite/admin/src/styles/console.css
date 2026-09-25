@@ -251,7 +251,7 @@ body {
   flex: 1;
 }
 
-/* 抽屉壳层公共段单源（病根#5：各页复制后各自改出差异）。Batches 的 .drawer 尺寸不同，仍留在页内 scoped 覆盖。 */
+/* 抽屉壳层公共段单源（病根#5：各页复制后各自改出差异）。Batches 的抽屉窄一些，只在页内 scoped 覆盖 width。 */
 .drawer-mask {
   position: fixed;
   inset: 0;

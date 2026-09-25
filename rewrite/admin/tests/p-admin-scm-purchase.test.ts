@@ -55,7 +55,7 @@ describe('ScmPurchase.vue 加载', () => {
   it('大白话：采购单挂了——点名报错，不装成「还没有采购单」', async () => {
     api.listPurchases.mockResolvedValue({ ok: false, status: 500, error: 'X1' })
     const w = await mountPage()
-    expect(status(w)).toBe('采购单加载失败：X1')
+    expect(status(w)).toBe('采购单加载失败：操作没成功（X1）')
     expect(w.text()).not.toContain('还没有采购单')
   })
 })

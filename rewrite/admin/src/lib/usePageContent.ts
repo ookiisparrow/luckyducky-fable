@@ -7,6 +7,7 @@ import { getPageContent, savePageContent } from '../api/content'
 import type { ClientResult } from '../api/client'
 import { serialSave } from './serialSave'
 import { SAVE_OK_MESSAGE } from './mapPageContent'
+import { failText, writeFailText } from './status'
 
 type AutoState = '' | 'saving' | 'saved' | 'error'
 
@@ -67,7 +68,7 @@ export function usePageContent<M>(
     model.value = normalize(r.ok ? r.content : null)
     if (!r.ok) {
       // 载入失败：loaded 恒 false → 自动/手动保存都不放开，否则一次编辑就拿空档整块覆盖已有内容
-      message.value = '加载失败：' + String(r.error || '')
+      message.value = failText('加载失败', r.error)
       return
     }
     void nextTick(() => (loaded = true))
@@ -88,7 +89,7 @@ export function usePageContent<M>(
     const r = saveResult
     busy.value = false
     autoState.value = ''
-    message.value = r.ok ? SAVE_OK_MESSAGE : '保存失败：' + String(r.error || '')
+    message.value = r.ok ? SAVE_OK_MESSAGE : writeFailText('保存失败', r.error)
   }
 
   return { model, message, busy, autoState, save }

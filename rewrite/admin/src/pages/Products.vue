@@ -26,7 +26,8 @@ import {
   type StepExtras,
 } from '../lib/mapProducts'
 import { serialSave } from '../lib/serialSave'
-import { confirmed } from '../lib/status'
+import { confirmed, failText } from '../lib/status'
+import { launchErrorText, transportErrorText } from '../lib/mapSystem'
 import type { ClientResult } from '../api/client'
 import { compressImage } from '../lib/compressImage'
 import { useRouter } from 'vue-router'
@@ -154,7 +155,7 @@ async function reload(keepMsg = false) {
     urlMap.value = {}
     rows.value = []
   }
-  message.value = r.ok ? held : '加载失败：' + String(r.error || '')
+  message.value = r.ok ? held : failText('加载失败', r.error)
   listReady.value = true
 }
 // 静默刷新列表（不闪「加载中」·不打断正在编辑的编辑器）；5 步分步态由 listDrafts 后端 join 随包带回
@@ -228,7 +229,8 @@ function closeEditor() {
           emit('saved') // 只在真保存成功时才通知父级
         } else {
           // 代际锚（N1）：只在仍是本次关闭发起的这一代时才写失败提示——期间若已 openEdit(B)，A 的失败文案不得标到 B 屏上。
-          if (openEditGen === myGen) message.value = '关闭前有编辑未保存成功：' + String(r.error || '') + '，请重新打开该商品检查'
+          // 传输层码（超时等）可能已存上，不能冠「未保存成功」
+          if (openEditGen === myGen) message.value = transportErrorText(r.error) || '关闭前有编辑未保存成功，请重新打开该商品检查：' + launchErrorText(r.error)
         }
       })
       .catch(() => {})
@@ -291,7 +293,7 @@ async function pickCover(ev: Event) {
       coverPreview.value = String(r.url || '')
       message.value = ''
     } else {
-      message.value = '图片上传失败：' + String(r.error || '')
+      message.value = launchErrorText(r.error)
     }
   }
 }
@@ -367,15 +369,15 @@ async function twoStep(key: string, run: () => Promise<void>) {
 }
 
 // 失败留原因且不 reload：reload 起手的「加载中…」会同步冲掉失败文案
-const simpleAction = (prefix: string, api: (_id: string) => Promise<ClientResult>, act: string) => (id: string) =>
+const simpleAction = (prefix: string, api: (_id: string) => Promise<ClientResult>) => (id: string) =>
   twoStep(prefix + id, async () => {
     const r = await api(id)
     if (r.ok) void reload()
-    else message.value = act + '失败：' + String(r.error || '')
+    else message.value = launchErrorText(r.error)
   })
-const doUnpublish = simpleAction('off:', unpublishProduct, '下架')
-const doRepublish = simpleAction('re:', republishProduct, '恢复') // 恢复销售＝可见性变更，同上/下架要二次确认
-const doDelete = simpleAction('del:', deleteDraft, '删除')
+const doUnpublish = simpleAction('off:', unpublishProduct)
+const doRepublish = simpleAction('re:', republishProduct) // 恢复销售＝可见性变更，同上/下架要二次确认
+const doDelete = simpleAction('del:', deleteDraft)
 
 // —— 多图相册（换皮丢·仅 round-trip 保全无编辑 UI）：多选上传·压缩·增删·排序 ——
 async function addImages(ev: Event) {
@@ -398,7 +400,7 @@ async function addImages(ev: Event) {
         ;(edit.value.images as string[]).push(String(r.fileID))
         sessionUrls.value[String(r.fileID)] = String(r.url || '')
       } else {
-        message.value = '有图上传失败：' + String(r.error || '')
+        message.value = launchErrorText(r.error)
       }
     }
   }
