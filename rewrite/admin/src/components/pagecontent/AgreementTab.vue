@@ -69,7 +69,7 @@ function delSection(c: AgreementClause, i: number) {
         <div class="pc-phone">
           <div v-for="part in (['user', 'privacy'] as const)" :key="part" class="ph-agr">
             <div class="ph-agr-title">{{ part === 'user' ? '用户协议' : '隐私政策' }}</div>
-            <div class="ph-agr-meta pc-ph" :class="{ 'pc-ph': !model[part].version }">
+            <div class="ph-agr-meta" :class="{ 'pc-ph': !model[part].version }">
               {{ model[part].version || '（无版本号）' }} · {{ model[part].effectiveDate || '（无日期）' }}
             </div>
             <div v-if="model[part].sections.length" class="ph-agr-first">{{ model[part].sections[0].title || '（未填标题）' }}</div>
