@@ -8,7 +8,7 @@
 - `contracts.ts` mp↔cloud 响应契约人类正本（cloud 侧编译锚 + mp 手抄副本对照源·哨兵 `rewrite/cloud/tests/contract-shape.test.ts`）
 - `status.ts` 状态机声明公共形状 + 类型级派生 · `statusLabels.ts` 状态→中文标签单源（漏配编译期报错）
 - `order.ts` / `learning.ts` / `cs.spec.ts` / `scm.ts` 各域状态机声明单源（状态串=前后端契约+库内数据，**不可改名**）
-- `scm.ts` SCM 类型/常量/流转表**手改单源**（改流转须同步 `scripts/order-domain.generated.json`·守卫 `rw-scm-transitions-declared` 对账防漂移）· `scmBom.ts` 配方解析纯函数 · `scmKey.ts` 组合键定界符防护
+- `scm.ts` SCM 类型/常量/流转表**手改单源**（守卫 `rw-status-transitions-declared` 按它核对散落的状态写入）· `scmBom.ts` 配方解析纯函数 · `scmKey.ts` 组合键定界符防护
 - `collections.ts` 集合名册（同一生产库·名字是数据契约不可改·新集合先登记再用）
 - `errors.ts` 错误码权威登记册（前端分支契约·只追加不改名）· `limits.ts` 交易输入边界常量 · `checkout.ts` 结算/优惠/运费常量单源
 - `moduleMap.ts` app action→业务模块映射（仓根 `modules.json` 的运行时镜像·`rewrite/cloud/tests/module-map.test.ts` 锁同步）

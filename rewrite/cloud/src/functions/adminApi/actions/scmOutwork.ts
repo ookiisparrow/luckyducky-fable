@@ -162,7 +162,7 @@ export async function issueOutwork({ db, data, agentId }: Ctx) {
     // （若有人已 receiveOutwork 翻 delivered,此处 no-op,错误照返、人工经调整单对账）。
     // 复原本身若不成功（异常/条件不匹配即 updated≠1）须告警——否则单据永久卡在假「已发料」而库存实际未出，
     // 后续可能被继续走完流程甚至结算工钱,账实不符且无信号可查（同 scmStock.rollback 的 ROLLBACK_FAIL 口径）。
-    // structure-ok（rw-scm-transitions-declared）：技术性失败补偿,非业务逆向流转,理由见上。
+    // structure-ok（rw-status-transitions-declared）：技术性失败补偿,非业务逆向流转,理由见上。
     const rollback = await db
       .collection('outworkOrders')
       .where({ _id: outworkId, status: 'issued' })
@@ -253,7 +253,7 @@ export async function receiveOutwork({ db, data, agentId }: Ctx) {
     // 复原 issued 并清掉本次定格,否则单据「已收货有应付」而带结一团没入账、重放又被 NOT_ISSUED 挡死。
     // 复原本身若不成功须告警（同 issueOutwork 口径）——否则单据卡在假「已收货」（payableFen 已定格但
     // 库存未入账），可能被继续走到结算付工钱，账实不符且无信号可查。
-    // structure-ok（rw-scm-transitions-declared）：技术性失败补偿,非业务逆向流转,理由同 issueOutwork。
+    // structure-ok（rw-status-transitions-declared）：技术性失败补偿,非业务逆向流转,理由同 issueOutwork。
     const rollback = await db
       .collection('outworkOrders')
       .where({ _id: outworkId, status: 'delivered' })

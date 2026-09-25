@@ -89,7 +89,7 @@ export const SINGLE_SEAM_REGISTRY = [
     // 头注承诺「全库唯一 materials.stock/stockLedger 读写处」，applyStockMoves 须导出、CAS 须用条件 where(stock)。
     id: 'rw-material-stock-single-seam',
     roots: ['#1', '#2'],
-    desc: '新线原料账单点收口（SCM 门1·根因#1/#2·批K·移植 material-stock-single-seam，同 rw-order-transitions-declared 精神：旧守卫只扫冻结线，kit/scmStock.ts 头注承诺的保护对生产代码此前是假的）：materials.stock/stockLedger 仅 rewrite/cloud/src/kit/scmStock.ts 读写（applyStockMoves 唯一入口·乐观 CAS）；rewrite/cloud/src 其余文件直碰即红（防绕 CAS/绕流水改账）',
+    desc: '新线原料账单点收口（SCM 门1·根因#1/#2·批K·移植 material-stock-single-seam，同状态流转守卫的精神：旧守卫只扫冻结线，kit/scmStock.ts 头注承诺的保护对生产代码此前是假的）：materials.stock/stockLedger 仅 rewrite/cloud/src/kit/scmStock.ts 读写（applyStockMoves 唯一入口·乐观 CAS）；rewrite/cloud/src 其余文件直碰即红（防绕 CAS/绕流水改账）',
     seam: 'rewrite/cloud/src/kit/scmStock.ts',
     pattern: /COLLECTIONS\.(materials|stockLedger)\b|\.collection\(\s*['"](materials|stockLedger)['"]\s*\)/,
     strip: true,
@@ -1142,37 +1142,57 @@ export const repoChecks = [
     },
   },
   {
-    id: 'rw-order-transitions-declared',
+    // 状态写入只走声明流转（根因#2）：rewrite/cloud 里 transition(coll, …) 的边、裸条件 CAS（where status →
+    // update status）的边须在 rewrite/shared 声明流转表内；写 status 的字面量须是声明状态。谱源直接解析，零生成器。
+    // 两种声明形态：`*_STATUS_SPEC = { collection, initial, terminal, transitions }`（order.ts 的订单/售后、
+    // cs.spec.ts 的 CS_SESSION_STATUS_SPEC）；`export type XStatus = 'a' | …` + `X_TRANSITIONS = [{ from, to }]`
+    // （scm.ts 的 PURCHASE_ORDER_TRANSITIONS / OUTWORK_ORDER_TRANSITIONS·集合名＝X 的 camelCase + s）。
+    id: 'rw-status-transitions-declared',
     roots: ['#2'],
-    desc: '新线订单/售后状态写入只走声明流转（根因#2·移植 order-transitions-declared·深审 2026-07-05 抓到旧守卫只扫冻结线的缺口）：rewrite/cloud 里 transition(orders/afterSales) 的边、裸条件 CAS（where status→update status）的边须在 rewrite/shared/src/order.ts 声明流转表内；写这两集合 status 的字面量须是声明状态——越流转/打错状态名即红（谱源直接解析 order.ts·零生成器·qrcode/cs/scm 域各有 spec 派生调用不在本册）',
+    desc: '状态写入只走声明流转（根因#2）：rewrite/cloud 的 transition()/条件 CAS 的边与 status 字面量，须在 rewrite/shared 的 order.ts、cs.spec.ts、scm.ts 声明表内——越流转或打错状态名即红',
     run() {
-      const specPath = join(ROOT, 'rewrite/shared/src/order.ts')
+      const SPECS = ['rewrite/shared/src/order.ts', 'rewrite/shared/src/cs.spec.ts', 'rewrite/shared/src/scm.ts']
       const base = join(ROOT, 'rewrite/cloud/src/functions')
-      if (!existsSync(specPath) || !existsSync(base)) return []
-      const specSrc = readFileSync(specPath, 'utf8')
-      // 谱源解析：ORDER_STATUS_SPEC / AFTERSALE_STATUS_SPEC → 每集合 原子边集 + 状态集
-      const declaredEdges = {} // coll -> Set('from=>to')
-      const declaredStates = {} // coll -> Set(state)
-      for (const bm of specSrc.matchAll(/export const \w+_STATUS_SPEC = \{([\s\S]*?)\n\} as const/g)) {
-        const body = bm[1]
-        const coll = (body.match(/collection:\s*'(\w+)'/) || [])[1]
-        if (!coll) continue
-        const states = new Set()
-        for (const lm of body.matchAll(/(?:initial|terminal):\s*\[([^\]]*)\]/g))
-          for (const s of lm[1].matchAll(/'([a-z_]+)'/g)) states.add(s[1])
-        const edges = new Set()
+      if (!existsSync(base)) return []
+      const edges = {} // coll -> Set('from=>to')
+      const states = {} // coll -> Set(state)
+      const specOf = {} // coll -> spec 路径（报错用）
+      const addEdges = (coll, spec, body) => {
+        edges[coll] ??= new Set()
+        states[coll] ??= new Set()
+        specOf[coll] = spec
         for (const tm of body.matchAll(/\{\s*from:\s*\[([^\]]*)\]\s*,\s*to:\s*'([a-z_]+)'/g)) {
-          const to = tm[2]
-          states.add(to)
+          states[coll].add(tm[2])
           for (const f of tm[1].matchAll(/'([a-z_]+)'/g)) {
-            edges.add(f[1] + '=>' + to)
-            states.add(f[1])
+            edges[coll].add(f[1] + '=>' + tm[2])
+            states[coll].add(f[1])
           }
         }
-        declaredEdges[coll] = edges
-        declaredStates[coll] = states
       }
-      const COLLS = new Set(Object.keys(declaredEdges)) // orders / afterSales
+      const bad = []
+      for (const spec of SPECS) {
+        if (!existsSync(join(ROOT, spec))) {
+          bad.push(`${spec} 缺失——状态机声明单源丢了（根因#2）`)
+          continue
+        }
+        const src = readFileSync(join(ROOT, spec), 'utf8')
+        for (const bm of src.matchAll(/export const \w+_STATUS_SPEC = \{([\s\S]*?)\n\} as const/g)) {
+          const coll = (bm[1].match(/collection:\s*'(\w+)'/) || [])[1]
+          if (!coll) continue
+          addEdges(coll, spec, bm[1])
+          for (const lm of bm[1].matchAll(/(?:initial|terminal):\s*\[([^\]]*)\]/g))
+            for (const s of lm[1].matchAll(/'([a-z_]+)'/g)) states[coll].add(s[1])
+        }
+        for (const tm of src.matchAll(/export const ([A-Z_]+)_TRANSITIONS\b[^=]*=\s*\[([\s\S]*?)\n\]/g)) {
+          const coll = tm[1].toLowerCase().replace(/_([a-z])/g, (_, c) => c.toUpperCase()) + 's'
+          addEdges(coll, spec, tm[2])
+          const typeName = coll[0].toUpperCase() + coll.slice(1, -1) + 'Status'
+          const union = src.match(new RegExp(`export type ${typeName} = ([^\\n]+)`))
+          if (union) for (const s of union[1].matchAll(/'([a-z_]+)'/g)) states[coll].add(s[1])
+        }
+      }
+      const COLLS = new Set(Object.keys(edges))
+      if (!COLLS.size) return [...bad, '声明表一个都没解析到——守卫失效（先修解析）']
       const files = []
       const collectTs = (d) => {
         for (const e of lsScan(d)) {
@@ -1186,191 +1206,11 @@ export const repoChecks = [
         const ms = [...head.matchAll(/(?:\.collection\(|transition\()\s*(?:['"](\w+)['"]|COLLECTIONS\.(\w+))/g)]
         return ms.length ? ms[ms.length - 1][1] || ms[ms.length - 1][2] : null
       }
-      const bad = []
+      const undeclaredOf = (coll, from, to) => from.filter((f) => !edges[coll].has(f + '=>' + to))
       for (const p of files) {
         const src = readFileSync(p, 'utf8')
         const rel = relative(ROOT, p)
-        // ① transition(<coll>, id, [from...], 'to')：整条边对账（union 语义每个 from 元素都须有声明原子边）
-        const transRe = /transition\(\s*(?:['"](\w+)['"]|COLLECTIONS\.(\w+))\s*,[^,]+,\s*\[([^\]]*)\]\s*,\s*['"]([a-z_]+)['"]/g
-        let tm
-        while ((tm = transRe.exec(src))) {
-          const coll = tm[1] || tm[2]
-          if (!COLLS.has(coll)) continue
-          const from = [...tm[3].matchAll(/['"]([a-z_]+)['"]/g)].map((x) => x[1])
-          const undeclared = from.filter((f) => !declaredEdges[coll].has(f + '=>' + tm[4]))
-          if (undeclared.length)
-            bad.push(`${rel}：transition('${coll}', …, [${from.join(',')}] → '${tm[4]}') 含未声明边 ${undeclared.map((f) => f + '→' + tm[4]).join('、')}——rewrite/shared/src/order.ts 流转表里没有，越流转或先改声明（根因#2）`)
-        }
-        // ①' 裸条件 CAS：where({…status:'X'|_.in([..])…}).update({data:{…status:'Y'…}}) 的边对账（refunds/shipOne/关单/refundCallback 形态）
-        const casRe = /\.where\(\s*\{[^{}]*?status:\s*(?:['"]([a-z_]+)['"]|(?:db\.command|_)\.in\(\[([^\]]*)\]\))[^{}]*?\}\s*\)[\s\S]{0,60}?\.update\(\s*\{\s*data:\s*\{[\s\S]{0,160}?\bstatus:\s*['"]([a-z_]+)['"]/g
-        let cm
-        while ((cm = casRe.exec(src))) {
-          const coll = collOf(src.slice(0, cm.index))
-          if (!coll || !COLLS.has(coll)) continue
-          const from = cm[1] ? [cm[1]] : [...cm[2].matchAll(/['"]([a-z_]+)['"]/g)].map((x) => x[1])
-          const to = cm[3]
-          const undeclared = from.filter((f) => !declaredEdges[coll].has(f + '=>' + to))
-          if (undeclared.length)
-            bad.push(`${rel}：条件 CAS ${coll} [${from.join(',')}] → '${to}' 含未声明边 ${undeclared.map((f) => f + '→' + to).join('、')}——rewrite/shared/src/order.ts 流转表里没有（根因#2）`)
-        }
-        // ② 写侧 status 字面量须是声明状态（add/update 的 data 内·where 过滤侧跳过——打错状态名即红）
-        const writeRe = /\bstatus:\s*['"]([a-z_]+)['"]/g
-        let wm
-        while ((wm = writeRe.exec(src))) {
-          const before = src.slice(Math.max(0, wm.index - 160), wm.index)
-          if (/\.where\(\s*\{[^}]*$/.test(before)) continue
-          const coll = collOf(src.slice(0, wm.index))
-          if (!coll || !COLLS.has(coll)) continue
-          if (!declaredStates[coll].has(wm[1]))
-            bad.push(`${rel}：写 ${coll}.status='${wm[1]}' 不是 rewrite/shared/src/order.ts 声明状态（${[...declaredStates[coll]].join('/')}）——打错状态名或先改声明（根因#2）`)
-        }
-      }
-      return bad
-    },
-  },
-  {
-    id: 'rw-cs-transitions-declared',
-    roots: ['#2'],
-    desc: '新线客服会话状态写入只走声明流转（根因#2·csSession 域·谱源 rewrite/shared/src/cs.spec.ts）：rewrite/cloud 里 transition(csSession) 的边、裸条件 CAS（where status→update status）的边须在 rewrite/shared/src/cs.spec.ts 声明流转表内；写该集合 status 的字面量须是声明状态——越流转/打错状态名即红（谱源直接解析 cs.spec.ts·零生成器）',
-    run() {
-      const specPath = join(ROOT, 'rewrite/shared/src/cs.spec.ts')
-      const base = join(ROOT, 'rewrite/cloud/src/functions')
-      if (!existsSync(specPath) || !existsSync(base)) return []
-      const specSrc = readFileSync(specPath, 'utf8')
-      // 谱源解析：CS_SESSION_STATUS_SPEC → 每集合 原子边集 + 状态集
-      const declaredEdges = {} // coll -> Set('from=>to')
-      const declaredStates = {} // coll -> Set(state)
-      for (const bm of specSrc.matchAll(/export const \w+_STATUS_SPEC = \{([\s\S]*?)\n\} as const/g)) {
-        const body = bm[1]
-        const coll = (body.match(/collection:\s*'(\w+)'/) || [])[1]
-        if (!coll) continue
-        const states = new Set()
-        for (const lm of body.matchAll(/(?:initial|terminal):\s*\[([^\]]*)\]/g))
-          for (const s of lm[1].matchAll(/'([a-z_]+)'/g)) states.add(s[1])
-        const edges = new Set()
-        for (const tm of body.matchAll(/\{\s*from:\s*\[([^\]]*)\]\s*,\s*to:\s*'([a-z_]+)'/g)) {
-          const to = tm[2]
-          states.add(to)
-          for (const f of tm[1].matchAll(/'([a-z_]+)'/g)) {
-            edges.add(f[1] + '=>' + to)
-            states.add(f[1])
-          }
-        }
-        declaredEdges[coll] = edges
-        declaredStates[coll] = states
-      }
-      const COLLS = new Set(Object.keys(declaredEdges))
-      const files = []
-      const collectTs = (d) => {
-        for (const e of lsScan(d)) {
-          const p = join(d, e)
-          if (statSync(p).isDirectory()) collectTs(p)
-          else if (e.endsWith('.ts')) files.push(p)
-        }
-      }
-      collectTs(base)
-      const collOf = (head) => {
-        const ms = [...head.matchAll(/(?:\.collection\(|transition\()\s*(?:['"](\w+)['"]|COLLECTIONS\.(\w+))/g)]
-        return ms.length ? ms[ms.length - 1][1] || ms[ms.length - 1][2] : null
-      }
-      const bad = []
-      for (const p of files) {
-        const src = readFileSync(p, 'utf8')
-        const rel = relative(ROOT, p)
-        // ① transition(<coll>, id, [from...], 'to')：整条边对账（union 语义每个 from 元素都须有声明原子边）
-        const transRe = /transition\(\s*(?:['"](\w+)['"]|COLLECTIONS\.(\w+))\s*,[^,]+,\s*\[([^\]]*)\]\s*,\s*['"]([a-z_]+)['"]/g
-        let tm
-        while ((tm = transRe.exec(src))) {
-          const coll = tm[1] || tm[2]
-          if (!COLLS.has(coll)) continue
-          const from = [...tm[3].matchAll(/['"]([a-z_]+)['"]/g)].map((x) => x[1])
-          const undeclared = from.filter((f) => !declaredEdges[coll].has(f + '=>' + tm[4]))
-          if (undeclared.length)
-            bad.push(`${rel}：transition('${coll}', …, [${from.join(',')}] → '${tm[4]}') 含未声明边 ${undeclared.map((f) => f + '→' + tm[4]).join('、')}——rewrite/shared/src/cs.spec.ts 流转表里没有，越流转或先改声明（根因#2）`)
-        }
-        // ①' 裸条件 CAS：where({…status:'X'|_.in([..])…}).update({data:{…status:'Y'…}}) 的边对账
-        const casRe = /\.where\(\s*\{[^{}]*?status:\s*(?:['"]([a-z_]+)['"]|(?:db\.command|_)\.in\(\[([^\]]*)\]\))[^{}]*?\}\s*\)[\s\S]{0,60}?\.update\(\s*\{\s*data:\s*\{[\s\S]{0,160}?\bstatus:\s*['"]([a-z_]+)['"]/g
-        let cm
-        while ((cm = casRe.exec(src))) {
-          const coll = collOf(src.slice(0, cm.index))
-          if (!coll || !COLLS.has(coll)) continue
-          const from = cm[1] ? [cm[1]] : [...cm[2].matchAll(/['"]([a-z_]+)['"]/g)].map((x) => x[1])
-          const to = cm[3]
-          const undeclared = from.filter((f) => !declaredEdges[coll].has(f + '=>' + to))
-          if (undeclared.length)
-            bad.push(`${rel}：条件 CAS ${coll} [${from.join(',')}] → '${to}' 含未声明边 ${undeclared.map((f) => f + '→' + to).join('、')}——rewrite/shared/src/cs.spec.ts 流转表里没有（根因#2）`)
-        }
-        // ② 写侧 status 字面量须是声明状态（add/update 的 data 内·where 过滤侧跳过——打错状态名即红）
-        const writeRe = /\bstatus:\s*['"]([a-z_]+)['"]/g
-        let wm
-        while ((wm = writeRe.exec(src))) {
-          const before = src.slice(Math.max(0, wm.index - 160), wm.index)
-          if (/\.where\(\s*\{[^}]*$/.test(before)) continue
-          const coll = collOf(src.slice(0, wm.index))
-          if (!coll || !COLLS.has(coll)) continue
-          if (!declaredStates[coll].has(wm[1]))
-            bad.push(`${rel}：写 ${coll}.status='${wm[1]}' 不是 rewrite/shared/src/cs.spec.ts 声明状态（${[...declaredStates[coll]].join('/')}）——打错状态名或先改声明（根因#2）`)
-        }
-      }
-      return bad
-    },
-  },
-  {
-    // SCM 域（购/外协单）状态写入只走声明流转——新线扫描面（批K·根因#2·移植 order-transitions-declared 的
-    // scm* 前缀纳管，同 rw-order-transitions-declared 精神：旧守卫（line 3758）只扫 packages/cloud，
-    // rewrite/cloud/src/functions/adminApi/actions/scmPurchase.ts、scmOutwork.ts 头注承诺「受
-    // order-transitions-declared 守卫保护」对生产代码是假的——这两个文件的 transition('purchaseOrders'/
-    // 'outworkOrders', …) 从未被任何守卫对账过。COLLS 直接复用 scripts/order-domain.generated.json 里的
-    // purchaseOrders/outworkOrders 声明（不是「借用旧线数据」：gen-order-domain.mjs 强制 packages/scm.spec.ts
-    // 与 rewrite/scm.spec.ts 两份声明逐集合比对一致、不一致直接生成失败，故该 JSON 对新线同样权威——不用
-    // 另写一套 rewrite/shared/src/scm.ts 的 TS 解析器）。edges/writeRe/casRe 扫描逻辑镜像
-    // rw-order-transitions-declared（已验证适配新线代码形态），只收窄 COLLS 到 SCM 两集合、避免与其重复报
-    // orders/afterSales。
-    //
-    // 批S 修复（P1·根因#2）：①的原正则只认字面量 `[...]` 第三参数——但 scmPurchase.ts/scmOutwork.ts 全部 7 处
-    // transition() 调用实际写法是 `transition(coll, id, fromFor('X'), 'Y', ...)`（fromFor 是这两个文件内的
-    // helper，按目标态从 PURCHASE_ORDER_TRANSITIONS/OUTWORK_ORDER_TRANSITIONS 反查 from 集合，见文件内注释），
-    // 对这两个文件原正则匹配 0 次、①对全部 7 处真实流转提供的保护为零（静默假绿）。新增 fromFor(...) 形态分支：
-    // 语义上 fromFor(X) 永远等于声明表里 to=X 那条的 from 集合（fromFor 找不到 to=X 会直接 throw，运行时已经
-    // fail-fast），故静态守卫要抓的不是「fromFor(X) 算出的 from 对不对」，而是「调用点传给 fromFor 的 X 是否
-    // 就是这次 transition() 真正写入的 to」——两者不一致＝拿错状态的 from 集合去校验另一状态的流转，越流转会
-    // 被静默放行（写库时 transition() 内部仍会用实际 from 数组核对当前文档状态，但那份 from 数组已经是错的）。
-    id: 'rw-scm-transitions-declared',
-    roots: ['#2'],
-    desc: '新线 SCM 域（购/外协单）状态写入只走声明流转（根因#2·批K 引入·批S 修复①对 fromFor(X) 调用形态的假绿：新增分支核对 fromFor 参数 X 与 transition() 第四参数 to 一致，不一致＝越流转被静默放行）：rewrite/cloud/src/functions/adminApi/actions/scm*.ts 里 transition(purchaseOrders/outworkOrders) 的边（字面量数组或 fromFor(X) 两种形态）、裸条件 CAS 的边须在 order-domain.generated.json 声明流转表内（该 JSON 原由已退役的 gen-order-domain-synced 生成器守卫维护·2026-07-23 起为冻结数据快照、锚 rewrite/shared 两份 spec·生成物范式处置见 待办与债 (f)）；写这两集合 status 的字面量须是声明状态——越流转/打错状态名即红',
-    run() {
-      const jsonPath = join(ROOT, 'scripts/order-domain.generated.json')
-      if (!existsSync(jsonPath)) return ['scripts/order-domain.generated.json 缺失——它是冻结数据快照（生成器已退役）：`git checkout HEAD -- scripts/order-domain.generated.json` 恢复，或按 rewrite/shared/src/scm.ts 手改单源核正']
-      let spec
-      try {
-        spec = JSON.parse(readFileSync(jsonPath, 'utf8'))
-      } catch {
-        return ['scripts/order-domain.generated.json 解析失败——重生成']
-      }
-      const COLLS = new Set(['purchaseOrders', 'outworkOrders'].filter((c) => spec[c]))
-      if (!COLLS.size) return [] // JSON 未含 SCM 集合（生成物尚未覆盖）——不报，避免误挡未落地阶段
-      const declaredEdges = {} // coll -> Set('from=>to')
-      const declaredStates = {} // coll -> Set(state)
-      for (const coll of COLLS) {
-        declaredStates[coll] = new Set(spec[coll].states)
-        const edges = new Set()
-        for (const t of spec[coll].transitions) for (const f of t.from) edges.add(f + '=>' + t.to)
-        declaredEdges[coll] = edges
-      }
-
-      const actionsDir = join(ROOT, 'rewrite/cloud/src/functions/adminApi/actions')
-      if (!existsSync(actionsDir)) return ['rewrite/cloud/src/functions/adminApi/actions 缺失——守卫扫描面消失（rw-scm-transitions-declared）']
-      const files = readdirSync(actionsDir).filter((e) => /^scm\w*\.ts$/.test(e)).map((e) => join(actionsDir, e))
-      const collOf = (head) => {
-        const ms = [...head.matchAll(/(?:\.collection\(|transition\()\s*(?:['"](\w+)['"]|COLLECTIONS\.(\w+))/g)]
-        return ms.length ? ms[ms.length - 1][1] || ms[ms.length - 1][2] : null
-      }
-      const bad = []
-      for (const p of files) {
-        const src = readFileSync(p, 'utf8')
-        const rel = relative(ROOT, p)
-        // ① transition(<coll>, id, [from...]|fromFor('X'), 'to')：整条边对账（union 语义每个 from 元素都须
-        // 有声明原子边；fromFor(X) 形态见批S 修复注——核对 X 与实际写入的 to 一致，见上方文件头长注）
+        // transition(coll, …, [from…] | fromFor('x'), 'to')
         const transRe = /transition\(\s*(?:['"](\w+)['"]|COLLECTIONS\.(\w+))\s*,[^,]+,\s*(?:\[([^\]]*)\]|fromFor\(\s*['"]([a-z_]+)['"]\s*\))\s*,\s*['"]([a-z_]+)['"]/g
         let tm
         while ((tm = transRe.exec(src))) {
@@ -1378,45 +1218,33 @@ export const repoChecks = [
           if (!COLLS.has(coll)) continue
           const to = tm[5]
           if (tm[4] !== undefined) {
-            // fromFor(X) 形态：fromFor 永远返回声明表里 to=X 那条的 from 集合（找不到会 throw，已 fail-fast）——
-            // 静态守卫要抓的不是这个恒真关系，而是调用点的 X 是否就是本次真正写入的 to（不一致＝拿错状态的
-            // from 集合去校验另一状态的流转，越流转会被静默放行）。
             if (tm[4] !== to)
-              bad.push(`${rel}：transition('${coll}', …, fromFor('${tm[4]}'), '${to}') 参数不一致——fromFor 求的是 '${tm[4]}' 状态的合法 from 集合，但实际写入 to='${to}'，两者应相同，否则越流转会被静默放行（根因#2·批S）`)
+              bad.push(`${rel}：transition('${coll}', …, fromFor('${tm[4]}'), '${to}') 参数不一致——fromFor 求的是 '${tm[4]}' 的合法 from，实际写 '${to}'，越流转会被静默放行（根因#2）`)
             continue
           }
           const from = [...tm[3].matchAll(/['"]([a-z_]+)['"]/g)].map((x) => x[1])
-          const undeclared = from.filter((f) => !declaredEdges[coll].has(f + '=>' + to))
-          if (undeclared.length)
-            bad.push(`${rel}：transition('${coll}', …, [${from.join(',')}] → '${to}') 含未声明边 ${undeclared.map((f) => f + '→' + to).join('、')}——order-domain.generated.json 流转表里没有，越流转或先改声明（根因#2）`)
+          const un = undeclaredOf(coll, from, to)
+          if (un.length)
+            bad.push(`${rel}：transition('${coll}', …, [${from.join(',')}] → '${to}') 含未声明边 ${un.map((f) => f + '→' + to).join('、')}——${specOf[coll]} 流转表里没有，越流转或先改声明（根因#2）`)
         }
-        // ①' 裸条件 CAS：where({…status:'X'|_.in([..])…}).update({data:{…status:'Y'…}}) 的边对账。
-        // 例外：技术性失败补偿回滚（applyStockMoves 失败后把已被 transition 抢占的状态复原，非业务逆向
-        // 流转、scm.spec 刻意不声明——声明了就等于开放成业务动作，见 scmOutwork.ts/scmPurchase.ts 行内长
-        // 注释）——紧邻代码块（往前 800 字符窗口内）写明 structure-ok 即放行，同本文件其它守卫的既定豁免写法。
         const casRe = /\.where\(\s*\{[^{}]*?status:\s*(?:['"]([a-z_]+)['"]|(?:db\.command|_)\.in\(\[([^\]]*)\]\))[^{}]*?\}\s*\)[\s\S]{0,60}?\.update\(\s*\{\s*data:\s*\{[\s\S]{0,160}?\bstatus:\s*['"]([a-z_]+)['"]/g
         let cm
         while ((cm = casRe.exec(src))) {
           const coll = collOf(src.slice(0, cm.index))
           if (!coll || !COLLS.has(coll)) continue
           const from = cm[1] ? [cm[1]] : [...cm[2].matchAll(/['"]([a-z_]+)['"]/g)].map((x) => x[1])
-          const to = cm[3]
-          const undeclared = from.filter((f) => !declaredEdges[coll].has(f + '=>' + to))
-          if (!undeclared.length) continue
-          const context = src.slice(Math.max(0, cm.index - 800), cm.index)
-          if (context.includes('structure-ok')) continue
-          bad.push(`${rel}：条件 CAS ${coll} [${from.join(',')}] → '${to}' 含未声明边 ${undeclared.map((f) => f + '→' + to).join('、')}——order-domain.generated.json 流转表里没有（根因#2）`)
+          const un = undeclaredOf(coll, from, cm[3])
+          if (!un.length || src.slice(Math.max(0, cm.index - 800), cm.index).includes('structure-ok')) continue
+          bad.push(`${rel}：条件 CAS ${coll} [${from.join(',')}] → '${cm[3]}' 含未声明边 ${un.map((f) => f + '→' + cm[3]).join('、')}——${specOf[coll]} 流转表里没有（根因#2）`)
         }
-        // ② 写侧 status 字面量须是声明状态（add/update 的 data 内·where 过滤侧跳过——打错状态名即红）
         const writeRe = /\bstatus:\s*['"]([a-z_]+)['"]/g
         let wm
         while ((wm = writeRe.exec(src))) {
-          const before = src.slice(Math.max(0, wm.index - 160), wm.index)
-          if (/\.where\(\s*\{[^}]*$/.test(before)) continue
+          if (/\.where\(\s*\{[^}]*$/.test(src.slice(Math.max(0, wm.index - 160), wm.index))) continue
           const coll = collOf(src.slice(0, wm.index))
           if (!coll || !COLLS.has(coll)) continue
-          if (!declaredStates[coll].has(wm[1]))
-            bad.push(`${rel}：写 ${coll}.status='${wm[1]}' 不是 order-domain.generated.json 声明状态（${[...declaredStates[coll]].join('/')}）——打错状态名或先改声明（根因#2）`)
+          if (!states[coll].has(wm[1]))
+            bad.push(`${rel}：写 ${coll}.status='${wm[1]}' 不是 ${specOf[coll]} 声明状态（${[...states[coll]].join('/')}）——打错状态名或先改声明（根因#2）`)
         }
       }
       return bad

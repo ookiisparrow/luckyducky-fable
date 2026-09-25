@@ -131,7 +131,7 @@ export async function receivePurchase({ db, data, agentId }: Ctx) {
     // 声明了就开放成业务动作了）：条件 CAS 复原 ordered，让下次 receivePurchase 重新走一次真实入库
     // （门1 幂等：已应用行撞确定性流水 _id 跳过、未应用行补齐，见 scmStock.applyStockMoves）；
     // 复原本身若不成功须告警，否则单据卡死在假 received、无信号可查。
-    // structure-ok（rw-scm-transitions-declared）：技术性失败补偿,非业务逆向流转,理由见上。
+    // structure-ok（rw-status-transitions-declared）：技术性失败补偿,非业务逆向流转,理由见上。
     const rollback = await db
       .collection('purchaseOrders')
       .where({ _id: id, status: 'received' })

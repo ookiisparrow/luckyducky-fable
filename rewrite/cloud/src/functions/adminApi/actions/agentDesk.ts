@@ -27,7 +27,7 @@ import { assembleCustomer360 } from '../customer360/orchestrator'
 // 非 data 里前端传的）——防冒名认领/发消息。分配 scope：外包只能读/操作**自己 claim 的会话**（ownsSession·
 // 超管 '*' 全量）；守卫 outsourced-reads-scoped（车道 C 定义）合并后覆盖此不变量，本文件先落最小运行时校验。
 //
-// 状态流转一律走 kit `transition('csSession', …)`（合法流转单源 shared/cs.spec.ts·守卫 rw-cs-transitions-declared
+// 状态流转一律走 kit `transition('csSession', …)`（合法流转单源 shared/cs.spec.ts·守卫 rw-status-transitions-declared
 // 对账·私自越流转即红·根因#2）；一次性副作用绑首次转移（transition moved===true·天然幂等·根因#1）。
 // 读路径 bounded（cursor/limit·守卫 capacity-reads-bounded·根因#7）。发送经 kit 直连收口（2026-07-23 拓扑收编批·
 // 17→13·原 cs/kfSend 独立函数收编进 kit/wecom.ts kfSendText，不再有跨函数 callFunction 接缝）。
