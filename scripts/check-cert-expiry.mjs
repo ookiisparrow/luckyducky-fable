@@ -1,21 +1,26 @@
 #!/usr/bin/env node
 /**
- * SSL 证书到期倒计时（每日巡逻项·P0·2026-08-21 工作流1.0）。
+ * SSL 证书到期倒计时（每日巡逻项③）。
  *
- * 背景：2026-08-18 发现 luckyducky.cn 等三张证书自动续费卡「待验证」，2026-09-15 到期——
- * 到期=三站打不开=生意关门。本脚本对站点逐个发起真实 TLS 握手读证书链有效期，
- * 不依赖任何台账手抄（客观计数不手抄）。
+ * 对清单里的主机做真实 TLS 握手，读证书到期日。到期日以这次探测为准，不手抄台账。
+ * 裸域 luckyducky.cn 没有 DNS，不进默认清单：放进去每日巡逻会因解析失败永远报红，
+ * 出不了「平安报」。裸域解析问题记在运维文档，不要和「证书快到期」混在一起。
+ * 命令行传入域名时只查传入的那些（要单独看裸域时再写上）。
  *
- * 输出：每域名剩余天数一行 + 汇总退出码。
- * 退出码：0=全部 > WARN 天数；1=有域名 ≤ WARN 天或探测失败（fail-closed：查不到当坏消息报）。
- * 用法：node scripts/check-cert-expiry.mjs [域名...]（默认内置清单）
+ * 退出码：0=全部剩余天数 > WARN；1=有域名 ≤ WARN 天，或探测失败（查不到当坏消息）。
+ * 用法：node scripts/check-cert-expiry.mjs [域名...]
+ * 阈值：环境变量 CERT_WARN_DAYS，默认 30。
  */
 import tls from 'node:tls'
 import process from 'node:process'
 
-const HOSTS = process.argv.slice(2).length
-  ? process.argv.slice(2)
-  : ['luckyducky.cn', 'www.luckyducky.cn', 'q.luckyducky.cn', 'kf.luckyducky.cn', 'vod.luckyducky.cn']
+const DEFAULT_HOSTS = [
+  'www.luckyducky.cn',
+  'q.luckyducky.cn',
+  'kf.luckyducky.cn',
+  'vod.luckyducky.cn',
+]
+const HOSTS = process.argv.slice(2).length ? process.argv.slice(2) : DEFAULT_HOSTS
 const WARN_DAYS = Number(process.env.CERT_WARN_DAYS) || 30
 
 function getCert(host) {
