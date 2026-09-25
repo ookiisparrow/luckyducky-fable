@@ -4,7 +4,7 @@
 // 底部管理员条。进上新向导路由切「按步直达」聚焦步导航（决策§27·lib/nav）。
 //
 // 现侧栏即活 IA：看板独立项，其余六组可展开（商品与上新 / 店面内容 / 订单履约 / 客服 360 / 进销存 / 系统）。
-// 「商品与上新」「进销存」做成展开组，好让全部子页可达（守卫 rw-admin-nav-route-synced 要求 nav↔route 双向同步）。NAV 每个 path 都内联在此。
+// 「商品与上新」「进销存」做成展开组，好让全部子页可达（nav 与 router 要双向同步，改一边记得改另一边）。NAV 每个 path 都内联在此。
 import { ref, computed, type Component } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import {

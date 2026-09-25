@@ -343,7 +343,7 @@ Page({
   },
 
   // 段落播完（P4·设计拍板 2026-07-11）：不再自动切下一段——停在完成态，通栏「重播本段」+ segstrip
-  // 文案三态（见 buildCapText）由用户自己选重播/上一段/下一段（守卫 rw-mp-player-no-autonext）。
+  // 文案三态（见 buildCapText）由用户自己选重播/上一段/下一段（需求 R38）。
   onEnded() {
     const cur = this.data.current
     if (!cur) return

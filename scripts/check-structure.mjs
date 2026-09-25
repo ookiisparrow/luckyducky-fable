@@ -134,19 +134,6 @@ export const SINGLE_SEAM_REGISTRY = [
     },
   },
   {
-    // 图像处理接缝单点（批1·根因#12 平台规则外部风险）：数据万象（CI）imageMogr2 处理参数拼接收口
-    // kit/storage.ts withImageProc 一处——控制台开通/参数格式变化只改这里 + 环境变量 LD_IMAGE_PROC。
-    id: 'rw-image-proc-seam-single',
-    roots: ['#12'],
-    desc: '图像处理接缝单点（根因#12 平台规则外部风险）：数据万象 imageMogr2 处理参数拼接全库仅 rewrite/cloud/src/kit/storage.ts 一处（withImageProc）——控制台开通/参数格式变化改一处；别处出现 imageMogr2 字面量即红（同 flow-seam-single 形状）',
-    seam: 'rewrite/cloud/src/kit/storage.ts',
-    pattern: 'imageMogr2',
-    strip: false,
-    seamMissing: 'rewrite/cloud/src/kit/storage.ts 应为 imageMogr2 图像处理参数唯一出现点（withImageProc），未见——接缝单点缺失',
-    seamMustHit: 'rewrite/cloud/src/kit/storage.ts 应为 imageMogr2 图像处理参数唯一出现点（withImageProc），未见——接缝单点缺失',
-    hitMsg: '出现 imageMogr2——图像处理接缝须收口 kit/storage.ts 单点（根因#12）',
-  },
-  {
     // 平台接缝单点（根因#12）rewrite 镜像：cloudbase_module 支付/退款工作流调用仅 kit/flow.ts（callFlow）一处。
     id: 'rw-flow-seam-single',
     roots: ['#12'],
@@ -313,28 +300,6 @@ export const repoChecks = [
         }
         if (!/msgSecCheck\s*\(/.test(stripComments(readFileSync(abs, 'utf8'))))
           bad.push(`${rf} 写 UGC 文本（${what}）但未调 msgSecCheck——文本未过内容安全即入库（根因#3·fail-closed·合规/下架风险）`)
-      }
-      return bad
-    },
-  },
-  // ── 后台360工作站 B5.1：会话归档 + 检索（板块#9·外包管控底座·车道 E）──
-  // 微信客服会话（未来承面C）归档进 conversations 集合，供坐席检索 + 质检取证（B5.3 依赖）。会话含 PII，三守卫焊：
-  // ① 归档挂载不可悄悄摘（入站客户消息/出站回复都落档）+ 隐私须声明；② 检索须 bounded 分页（规模·根因#7）；
-  // ③ 检索＝读他人会话全文越权面、须能力闸（§1.5 信任边界·根因#3·同 360 读 customer:view·独立焊本 action·不动 master 的 cs-360-* 两条）。
-  {
-    id: 'console-assets-present',
-    roots: ['#9'],
-    desc: '控制台资产正册不可误删（根因#9）：console-assets 关键正册文件须存在（git 外资产的唯一版本化记录）',
-    run() {
-      const bad = []
-      for (const f of [
-        'console-assets/README.md',
-        'console-assets/01-支付退款工作流.md',
-        'console-assets/02-库权限期望表.md',
-        'console-assets/03-复合索引期望表.md',
-        'console-assets/forward-node.js',
-      ]) {
-        if (!existsSync(join(ROOT, f))) bad.push(`${f} 缺失（控制台资产正册不可删，根因#9）`)
       }
       return bad
     },
@@ -568,27 +533,6 @@ export const repoChecks = [
       if (!existsSync(ci) || !/check:artifacts/.test(readFileSync(ci, 'utf8')))
         bad.push('.github/workflows/ci.yml 未跑 check:artifacts——产物闸没进 CI（构建过≠真能用在产物层无人守）')
       return bad
-    },
-  },
-  {
-    // 依赖安全审计接线（B8·2026-07-19 快照）：本地 `npm audit --omit=dev` 实测 40 条
-    // 既有告警（13 high / 14 moderate / 13 low，0 critical）；非 --force 的
-    // `npm audit fix` 只能修 1 个 moderate（postcss），13 条 high 全部需要
-    // --force（breaking：@dcloudio/uni-mp-weixin 等），故本批只接「可见性」
-    // （CI 报告模式 + continue-on-error），不升级为 blocking——升级前置条件
-    // （清存量或显式接受风险记账·待办见 GitHub Issues）。仿 rw-artifact-gate-in-ci
-    // 同款「闸不能被悄悄拆」模式：只钉「这一步真的在 CI 里跑」，不评判闸门
-    // 严格度（严格度是产品/风险决策，机器管不着也不该管）。
-    id: 'ci-audit-step-present',
-    roots: ['铁律'],
-    desc: 'CI 依赖安全审计步骤在位（铁律·仿 rw-artifact-gate-in-ci 模式）：.github/workflows/ci.yml 须含 `npm audit` 调用——防依赖安全审计（当前报告模式·B8 起步）被静默摘除',
-    run() {
-      const f = '.github/workflows/ci.yml'
-      const abs = join(ROOT, f)
-      if (!existsSync(abs)) return [`${f} 不存在（依赖安全审计闸缺失）`]
-      if (!/npm audit\b/.test(readFileSync(abs, 'utf8')))
-        return [`${f} 未见 npm audit 步骤——依赖安全审计（B8 报告模式）被摘除或从未接线`]
-      return []
     },
   },
   {
@@ -1301,40 +1245,6 @@ export const repoChecks = [
     },
   },
   {
-    id: 'rw-admin-nav-route-synced',
-    roots: ['#5'],
-    desc: '新线 admin 导航↔路由同步（根因#5 复制即漂移·旧 admin-nav-route-synced 只护 packages·换皮期新线加页/改路径无机器兜底而失守）：Shell.vue nav 引用的每个 path 须在 router.ts 注册（防死链·点了白屏）；router.ts 每个子页路由（除 login·父 /·带参）须在 Shell.vue nav 有入口（防加页忘加导航的孤儿页）。新线子路由用相对 path（orders / 空=Dashboard）·nav 用绝对（/orders /）——归一后对账',
-    run() {
-      const routerRel = 'rewrite/admin/src/router.ts'
-      const shellRel = 'rewrite/admin/src/shell/Shell.vue'
-      const routerAbs = join(ROOT, routerRel)
-      const shellAbs = join(ROOT, shellRel)
-      if (!existsSync(routerAbs) || !existsSync(shellAbs)) return [`${routerRel} / ${shellRel} 缺失（新线导航同步守卫无从核起·#5）`]
-      const routerSrc = readFileSync(routerAbs, 'utf8')
-      const shellSrc = readFileSync(shellAbs, 'utf8')
-      const bad = []
-      // 路由所有 path（含子页相对 path 与父/顶层绝对 path）
-      const routePaths = [...routerSrc.matchAll(/path:\s*['"]([^'"]*)['"]/g)].map((m) => m[1])
-      // 子页＝不带前导 / 的 path（相对·如 orders、''=Dashboard）；父 '/' 与顶层 '/login' 带前导 / 排除
-      const childPages = routePaths.filter((p) => !p.startsWith('/'))
-      // Shell nav 的绝对 path（{ path: '/x' }）
-      const navPaths = [...shellSrc.matchAll(/\bpath:\s*['"](\/[^'"]*)['"]/g)].map((m) => m[1])
-      const norm = (p) => p.replace(/^\//, '') // /orders→orders，/→''
-      const childSet = new Set(childPages)
-      // ① 死链：Shell nav 每个 path 须有对应子路由
-      for (const np of navPaths) {
-        if (!childSet.has(norm(np))) bad.push(`${shellRel} nav 引用未注册路由 ${np}——死链，点了白屏（router.ts 无对应子 path '${norm(np)}'·#5）`)
-      }
-      // ② 孤儿页：每个子路由（非 login·非带参）须在 Shell nav 有入口
-      const navSet = new Set(navPaths.map(norm))
-      for (const p of childPages) {
-        if (p === 'login' || p.includes(':')) continue
-        if (!navSet.has(p)) bad.push(`router.ts 注册了子路由 '${p}' 但 ${shellRel} nav 无入口——孤儿页（加页忘加导航·#5）`)
-      }
-      return bad
-    },
-  },
-  {
     id: 'rw-line-in-gates',
     roots: ['铁律'],
     desc: '新线包必须被三道闸扫到（M1 批1·ADR §24 测试一等公民）：root typecheck 覆盖 rewrite/shared、vitest projects 含 rewrite 测试、listPackageJsons 扫描 rewrite/*（stub-only-sdk 等包级守卫随之覆盖新线）——防 rewrite/ 代码默默漏出 check',
@@ -1811,55 +1721,6 @@ export const repoChecks = [
     },
   },
   {
-    id: 'rw-site-in-gates',
-    roots: ['铁律'],
-    desc: '内容站 SEO/GEO 基线在位（M4·GEO 基建=可爬可收录+AI 引擎可摘要的机器面）：astro.config 配 site 域名 + sitemap 集成；robots.txt 在且显式放行 AI 爬虫（GPTBot 等）；Base.astro 齐 og 三件+og:image/og:locale/twitter:card+WebSite 结构化卡；llms.txt 与 rss.xml 端点在；404 页 noindex；favicon.svg 与 og-cover.png 分享素材在；根 typecheck 覆盖 rewrite/site；教程 frontmatter 带 reviewed 标记（AI 起草未审稿不冒充定稿——写真机器可核）',
-    run() {
-      const base = join(ROOT, 'rewrite/site')
-      if (!existsSync(base)) return ['rewrite/site 缺失——守卫扫描面消失（rw-site-in-gates）']
-      const bad = []
-      const cfg = join(base, 'astro.config.mjs')
-      if (!existsSync(cfg)) bad.push('rewrite/site/astro.config.mjs 缺失')
-      else {
-        const c = readFileSync(cfg, 'utf8')
-        if (!/site:\s*'https:\/\/www\.luckyducky\.cn'/.test(c)) bad.push('astro.config 未配 site 域名——sitemap/canonical 出不了绝对地址（收录基建缺）')
-        if (!/sitemap\(\)/.test(c)) bad.push('astro.config 未挂 sitemap 集成——搜索引擎无地图可爬')
-      }
-      const robotsPath = join(base, 'public/robots.txt')
-      if (!existsSync(robotsPath)) bad.push('public/robots.txt 缺失——爬虫策略未声明')
-      else if (!/GPTBot/.test(readFileSync(robotsPath, 'utf8')))
-        bad.push('robots.txt 未显式放行 AI 引擎爬虫（GPTBot 等）——GEO 语料源定位要求对 AI 爬虫态度显式声明，不靠通配默许')
-      const layout = join(base, 'src/layouts/Base.astro')
-      if (existsSync(layout)) {
-        const l = readFileSync(layout, 'utf8')
-        for (const og of ['og:title', 'og:description', 'og:url', 'og:image', 'og:locale', 'twitter:card']) {
-          if (!l.includes(og)) bad.push(`Base.astro 缺 ${og}——社交分享/引擎摘要卡不全（GEO 面）`)
-        }
-        if (!/websiteSchema/.test(l)) bad.push('Base.astro 未注入 WebSite 结构化卡（websiteSchema）——站点实体锚点缺失（GEO 面）')
-      }
-      // GEO 双端点：llms.txt（AI 引擎抓取入口·教程清单随内容集合同步）+ rss.xml（内容分发/收录信号）——
-      // 都做成 Astro 端点而非静态文件，防新增教程后清单 stale。
-      if (!existsSync(join(base, 'src/pages/llms.txt.ts'))) bad.push('src/pages/llms.txt.ts 缺失——GEO llms.txt 端点未建（AI 引擎抓取入口）')
-      if (!existsSync(join(base, 'src/pages/rss.xml.ts'))) bad.push('src/pages/rss.xml.ts 缺失——RSS 端点未建（内容分发/收录信号）')
-      const nf = join(base, 'src/pages/404.astro')
-      if (existsSync(nf) && !/noindex/.test(readFileSync(nf, 'utf8'))) bad.push('404.astro 未标 noindex——错误页进索引稀释收录质量')
-      if (!existsSync(join(base, 'public/favicon.svg'))) bad.push('public/favicon.svg 缺失——浏览器标签/收录结果无品牌图标')
-      if (!existsSync(join(base, 'public/og-cover.png'))) bad.push('public/og-cover.png 缺失——og:image 指向不存在的分享图（分享卡开天窗）')
-      const pkg = JSON.parse(readFileSync(join(ROOT, 'package.json'), 'utf8'))
-      if (!/rewrite\/site/.test((pkg.scripts && pkg.scripts.typecheck) || ''))
-        bad.push('package.json scripts.typecheck 未覆盖 rewrite/site——站点 TS（schema.ts 等 GEO 承重层）类型不过闸')
-      const contentDir = join(base, 'src/content/tutorials')
-      if (existsSync(contentDir)) {
-        for (const f of readdirSync(contentDir)) {
-          if (!f.endsWith('.md')) continue
-          const src = readFileSync(join(contentDir, f), 'utf8')
-          if (!/^reviewed:\s*(true|false)\s*$/m.test(src)) bad.push(`教程 ${f} frontmatter 缺 reviewed 标记——AI 起草稿与定稿无法区分（写真纪律）`)
-        }
-      }
-      return bad
-    },
-  },
-  {
     id: 'rw-agent-in-gates',
     roots: ['铁律'],
     desc: '新坐席台包必须被三道闸扫到（M3 批8·坐席台=在用人工客服唯一通道·零断档红线）：root typecheck 覆盖 rewrite/agent；轮询合并纯函数有行为测试；package.json 有 build 脚本',
@@ -1998,41 +1859,6 @@ export const repoChecks = [
       else if (!consentTs.includes('dataConsent')) bad.push('consent 页未调 dataConsent——同意/撤回没写到服务端真值')
       const me = rd('pages/me/me.ts')
       if (me && consentTs && !me.includes('consent')) bad.push('me 页无 consent 入口——授权管理页不可达')
-      return bad
-    },
-  },
-  {
-    // 段落播完不自动切换（P4 通栏重播·播放器重设计战役 批B·设计拍板）：旧行为 onEnded 里自动
-    // playSegment(next) 切下一段——新设计要求段落播完停在完成态，给用户看「重播本段」通栏按钮自己选，
-    // 不替用户做主。守此不变量：onEnded 不许再出现 playSegment( 调用（自动切段回潮即红）且须落 segDone；
-    // onReplay 须真 seek(0) 从头重来；wxml 须有重播长条的 tap 绑定，否则 ts 有功能界面点不到。
-    // （原「投屏观看模式连续播」模式分叉声明已删——投屏 2026-07-12 全线取缔·R40 退役·决策§28。）
-    id: 'rw-mp-player-no-autonext',
-    roots: ['R38'],
-    desc: '播放器重设计战役批B：段落播完不自动切换（P4 通栏重播·设计拍板 2026-07-11）——player.ts 的 onEnded 方法体不得含 playSegment( 调用（自动切段回潮即红）且须含 segDone；onReplay 方法体须存在且含 seek(0；player.wxml 须有 bind:tap="onReplay"（重播长条入口）',
-    run() {
-      const base = join(ROOT, 'rewrite/mp')
-      const tsPath = join(base, 'pages/player/player.ts')
-      if (!existsSync(tsPath)) return ['pages/player/player.ts 缺失——守卫扫描面消失（rw-mp-player-no-autonext）'] // 播放页未建时不红
-      const bad = []
-      const src = stripComments(readFileSync(tsPath, 'utf8')) // 剥注释单源 helper（错题本 E1）：防注释文本假触发/假放行
-      const endedBody = methodBody(src, 'onEnded')
-      if (!endedBody) {
-        bad.push('player.ts 找不到 onEnded 方法体——段落播完检测单点丢失')
-      } else {
-        if (/playSegment\s*\(/.test(endedBody))
-          bad.push('player.ts 的 onEnded 方法体内仍含 playSegment( 调用——自动切段回潮（设计拍板：段落播完不自动切换，须停在完成态给用户自己选）')
-        if (!/segDone/.test(endedBody)) bad.push('player.ts 的 onEnded 方法体内未见 segDone——播完完成态未落地')
-      }
-      const replayBody = methodBody(src, 'onReplay')
-      if (!replayBody) bad.push('player.ts 找不到 onReplay 方法体——重播入口单点丢失')
-      else if (!/seek\s*\(\s*0/.test(replayBody)) bad.push('player.ts 的 onReplay 方法体内未见 seek(0——重播未真正跳回段首')
-      const wxmlPath = join(base, 'pages/player/player.wxml')
-      if (existsSync(wxmlPath)) {
-        const wxml = readFileSync(wxmlPath, 'utf8')
-        if (!/bind:tap\s*=\s*"onReplay"/.test(wxml))
-          bad.push('player.wxml 找不到 bind:tap="onReplay"——重播长条按钮入口缺失（ts 有方法但界面点不到）')
-      }
       return bad
     },
   },
@@ -2407,43 +2233,6 @@ export const repoChecks = [
         const hit = corpus.includes(stem) || (stem.endsWith('-on') && corpus.includes(stem.slice(0, -3)))
         if (!hit) bad.push(`${rel} 仓内零引用——孤儿资产（病根#17·删除或补引用；tab 激活态图标按基名 + '-on' 拼接已放行）`)
       }
-      return bad
-    },
-  },
-  {
-    // 控制台调色板单源（design/console.pen 落地·M3 UI 批1）：旧台 #c0392b 散写 36 处即
-    // 病根#5「样板复制即漂移」在色值上的病征——色值一旦散写，换皮＝全仓 sed 碰运气。
-    id: 'rw-admin-theme-single-source',
-    roots: ['#5'],
-    desc: '控制台调色板单源（design/console.pen 落地批1·病根#5 样板复制即漂移）：rewrite/admin/src 除 styles/ 外禁裸 hex 色值（纯黑白 #fff/#000 中性放行·注释行与 structure-ok 豁免），颜色一律 var(--ld-*)；styles/tokens.css 为唯一调色板定义地——换皮只改 token 文件',
-    run() {
-      const bad = []
-      const base = join(ROOT, 'rewrite/admin/src')
-      if (!existsSync(base)) return bad
-      const NEUTRAL = new Set(['#fff', '#ffffff', '#000', '#000000'])
-      const scan = (d) => {
-        for (const e of lsScan(d)) {
-          const p = join(d, e)
-          if (statSync(p).isDirectory()) {
-            if (e === 'styles') continue
-            scan(p)
-          } else if (/\.(vue|ts|css)$/.test(e)) {
-            const lines = readFileSync(p, 'utf8').split('\n')
-            lines.forEach((line, i) => {
-              if (/^(\/\/|\/\*|\*|<!--)/.test(line.trim())) return
-              if (line.includes('structure-ok') || (i > 0 && lines[i - 1].includes('structure-ok'))) return
-              const hits = (line.match(/#[0-9a-fA-F]{3,8}\b/g) || []).filter(
-                (h) => !NEUTRAL.has(h.toLowerCase())
-              )
-              if (hits.length)
-                bad.push(
-                  `${relative(ROOT, p)}:${i + 1} 裸 hex ${hits.join(' ')}——颜色走 var(--ld-*)，调色板单源 rewrite/admin/src/styles/tokens.css（#5）`
-                )
-            })
-          }
-        }
-      }
-      scan(base)
       return bad
     },
   },

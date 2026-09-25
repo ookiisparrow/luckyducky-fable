@@ -44,4 +44,4 @@
 - [ ] 现网仍是 `cloudbaserc.json` 里的那些函数，超时/内存一致；上表 6 个触发器仍挂、cron 一致；`kfCallback` 路由仍是 `/kfcallback`。
 - [ ] 小程序 downloadFile 合法域名（见 `docs/外部配置手册.md`「小程序后台」）。
 
-控制台资产在 git 外，本目录没有机器可验项，验证＝照清单对照线上。`check-structure` 的 `console-assets-present` 保证本正册不被误删。
+控制台资产在 git 外，本目录没有机器可验项，验证＝照清单对照线上。

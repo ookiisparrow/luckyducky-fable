@@ -3,7 +3,7 @@
 // Component/Sidebar kz2uD 单源·决策§27）。步文案/顺序抄录设计帧、URL ?step 为步单源，侧栏与
 // Wizard 顶部横向 rail 同读它。纯数据+纯函数收口在此，Shell 只消费——便于 nav.test 焊死不靠组件挂载。
 
-/** 向导路由：/launch（新建）或 /products/:id/wizard（续做·带参·rw-admin-nav-route-synced 已豁免孤儿检查） */
+/** 向导路由：/launch（新建）或 /products/:id/wizard（续做·带参） */
 export function isWizardPath(path: string): boolean {
   return path === '/launch' || /^\/products\/[^/]+\/wizard$/.test(path)
 }
