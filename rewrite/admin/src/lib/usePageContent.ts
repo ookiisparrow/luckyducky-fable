@@ -1,16 +1,27 @@
-// 页面内容页签保存生命周期（批C·收敛阀）：welcome/catalogPlayer/mePage/about/agreement 四签的
+// 页面内容页签保存生命周期（收敛阀）：首页与 welcome/catalogPlayer/mePage/about/agreement 各签的
 // 「进签拉取 → 900ms 防抖自动保存 → serialSave 串行防乱序 → load-guard 未载入不写 → 离签补存」完全同构。
-// 抽成 composable 而非 4 份复制——防把 HomeContent 里那套有文档记载的竞态修复（serialSave 乱序/未载入整档覆盖·
-// 根因#8）在复制中改错（病根#5 复制即漂移）。HomeContentForm 用的是 getHomeContent/saveHomeContent
-// 另一对接口 + 多图上传，形状不同、单独保留、不并进此 composable（别为「碰巧长得像」硬合并）。
+// 抽成 composable 而非多份复制——防把竞态修复（serialSave 乱序/未载入整档覆盖·根因#8）在复制中改错
+// （病根#5 复制即漂移）。首页走 getHomeContent/saveHomeContent 另一对接口，由调用方传 io 覆盖读写。
 import { ref, watch, onMounted, onBeforeUnmount, nextTick, type Ref } from 'vue'
 import { getPageContent, savePageContent } from '../api/content'
+import type { ClientResult } from '../api/client'
 import { serialSave } from './serialSave'
 import { SAVE_OK_MESSAGE } from './mapPageContent'
 
 type AutoState = '' | 'saving' | 'saved' | 'error'
 
-export function usePageContent<M>(page: string, normalize: (_raw: unknown) => M, payload: (_m: M) => Record<string, unknown>) {
+interface ContentIO {
+  load: () => Promise<ClientResult> // 回包内容字段须叫 content
+  save: (_body: Record<string, unknown>) => Promise<ClientResult>
+  what?: string // 未载入拒存提示里「已有X配置」的 X
+}
+
+export function usePageContent<M>(
+  page: string,
+  normalize: (_raw: unknown) => M,
+  payload: (_m: M) => Record<string, unknown>,
+  io: ContentIO = { load: () => getPageContent(page), save: (body) => savePageContent(page, body) }
+) {
   const model: Ref<M | null> = ref(null) as Ref<M | null>
   const message = ref('')
   const busy = ref(false)
@@ -21,7 +32,7 @@ export function usePageContent<M>(page: string, normalize: (_raw: unknown) => M,
 
   async function autosave() {
     if (!model.value) return
-    const r = await savePageContent(page, payload(model.value))
+    const r = await io.save(payload(model.value))
     saveResult = r
     autoState.value = r.ok ? 'saved' : 'error'
   }
@@ -52,7 +63,7 @@ export function usePageContent<M>(page: string, normalize: (_raw: unknown) => M,
   })
 
   onMounted(async () => {
-    const r = await getPageContent(page)
+    const r = await io.load()
     model.value = normalize(r.ok ? r.content : null)
     if (!r.ok) {
       // 载入失败：loaded 恒 false → 自动/手动保存都不放开，否则一次编辑就拿空档整块覆盖已有内容
@@ -65,7 +76,7 @@ export function usePageContent<M>(page: string, normalize: (_raw: unknown) => M,
   async function save() {
     if (!model.value || busy.value) return
     if (!loaded) {
-      message.value = '内容未成功载入，暂不能保存（避免覆盖已有配置·请刷新重试）'
+      message.value = '内容未成功载入，暂不能保存（避免覆盖已有' + (io.what || '') + '配置·请刷新重试）'
       return
     }
     if (saveTimer) {

@@ -6,8 +6,8 @@ import { listPurchases, savePurchase, markOrdered, receivePurchase, cancelPurcha
 import { materialHuman, purchaseStatusLabel, yuanToFen, fenLabel, scmErrorText } from '../lib/mapScm'
 import { dateTime } from '../lib/format'
 import { consumePurchaseHandoff } from '../lib/scmHandoff'
-import { useLoadStatus } from '../lib/status'
-import { useLatest } from '../lib/latest'
+import { useLoadStatus, loadErrors, confirmed } from '../lib/status'
+import { useLatest, appendNew } from '../lib/latest'
 import ScmFlowTabs from '../components/ScmFlowTabs.vue'
 import UiButton from '../components/ui/Button.vue'
 import PageHeader from '../components/ui/PageHeader.vue'
@@ -68,11 +68,8 @@ async function reload() {
   mats.value = m.ok ? (m.list as Record<string, any>[]) : []
   sups.value = s.ok ? ((s.list as Record<string, any>[]) || []).filter((x) => x.type === 'factory') : []
   // 分路报错（照 ScmBom.reload）：物料/供应商挂掉不装空目录
-  const bad: string[] = []
-  if (!p.ok) bad.push('采购单加载失败：' + String(p.error || ''))
-  if (!m.ok) bad.push('物料主档加载失败：' + String(m.error || ''))
-  if (!s.ok) bad.push('供应商加载失败：' + String(s.error || ''))
-  load(bad.length === 0, bad.join('；')) // 只在加载失败时写·成功静默不抹动作反馈
+  const err = loadErrors([[p, '采购单'], [m, '物料主档'], [s, '供应商']])
+  load(!err, err) // 只在加载失败时写·成功静默不抹动作反馈
 }
 
 // 加载更多（B1·根因#7）：复用当前状态筛选·续游标追加·去重防双击重复追加同一页（同 Conversations more() 范式）
@@ -85,8 +82,7 @@ async function more() {
     note(false, '', '加载更多失败：' + scmErrorText(r.error))
     return
   }
-  const seen = new Set(orders.value.map((o) => o._id))
-  orders.value = [...orders.value, ...(((r.list as Record<string, any>[]) || []).filter((o) => !seen.has(o._id)))]
+  orders.value = appendNew(orders.value, (r.list as Record<string, any>[]) || [], (o) => o._id)
   cursor.value = r.nextCursor
   hasMore.value = !!r.hasMore
 }
@@ -127,15 +123,9 @@ async function doSave() {
   void reload() // 列表刷新与目标是否已切无关·恒执行
 }
 
+// 下单/收货/取消都两步确认（换皮下单无任何确认·花钱的动作应有一道·带金额）
 async function step(fn: (_id: string) => Promise<Record<string, unknown>>, id: string, key: string) {
-  if (key.startsWith('recv') || key.startsWith('cancel') || key.startsWith('ord')) {
-    // 下单/收货/取消都两步确认（换皮下单无任何确认·花钱的动作应有一道·带金额）
-    if (confirmKey.value !== key) {
-      confirmKey.value = key
-      return
-    }
-    confirmKey.value = ''
-  }
+  if (!confirmed(confirmKey, key)) return
   const r = (await fn(id)) as Record<string, any>
   note(r.ok, '', scmErrorText(r.error)) // 失败走 note 设 msgOk=false（红）·换皮只写 message 致失败显成功绿
   void reload()

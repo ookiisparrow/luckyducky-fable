@@ -6,8 +6,8 @@ import { listMaterials, saveMaterial, listSuppliers, saveSupplier, adjustStock, 
 import { materialHuman, materialCategoryLabel, uomLabel, scmErrorText, mapLedger, type LedgerRow } from '../lib/mapScm'
 import { stocktakeDiff, filterSubmittable, genStocktakeNo, stocktakeAdjustId } from '../lib/stocktake'
 import { dateTime } from '../lib/format'
-import { useLoadStatus } from '../lib/status'
-import { useLatest } from '../lib/latest'
+import { useLoadStatus, loadErrors } from '../lib/status'
+import { useLatest, appendNew } from '../lib/latest'
 import ScmFlowTabs from '../components/ScmFlowTabs.vue'
 import UiButton from '../components/ui/Button.vue'
 import PageHeader from '../components/ui/PageHeader.vue'
@@ -56,8 +56,7 @@ async function moreLedger() {
     note(false, '', '加载更多流水失败：' + scmErrorText(l.error))
     return
   }
-  const seen = new Set(ledger.value.map((x) => x.id))
-  ledger.value = [...ledger.value, ...mapLedger(l.list).filter((x) => !seen.has(x.id))]
+  ledger.value = appendNew(ledger.value, mapLedger(l.list))
   ledgerCursor.value = l.nextCursor
   ledgerHasMore.value = !!l.hasMore
 }
@@ -70,8 +69,7 @@ async function moreSuppliers() {
     note(false, '', '加载更多供应商失败：' + scmErrorText(s.error))
     return
   }
-  const seen = new Set(sups.value.map((x) => x._id))
-  sups.value = [...sups.value, ...(((s.list as Record<string, any>[]) || []).filter((x) => !seen.has(x._id)))]
+  sups.value = appendNew(sups.value, (s.list as Record<string, any>[]) || [], (x) => x._id)
   supCursor.value = s.nextCursor
   supHasMore.value = !!s.hasMore
 }
@@ -108,9 +106,7 @@ const stocktakeReasonValid = computed(() => stocktakeReason.value.trim().length 
 function pendingStocktakeRows(): StocktakeUiRow[] {
   return stocktakeRows.value.filter((r) => r.status !== 'success' && r.status !== 'submitting')
 }
-const stocktakeSubmittableCount = computed(
-  () => filterSubmittable(pendingStocktakeRows().map((r) => ({ materialId: r.materialId, stock: r.stock, actual: r.actual }))).length
-)
+const stocktakeSubmittableCount = computed(() => filterSubmittable(pendingStocktakeRows()).length)
 const stocktakeSummary = computed(() => ({
   success: stocktakeRows.value.filter((r) => r.status === 'success').length,
   failed: stocktakeRows.value.filter((r) => r.status === 'failed').length,
@@ -132,8 +128,9 @@ async function enterStocktake() {
   stocktakeReason.value = '期初盘点'
   stocktakeExitConfirm.value = false
   stocktakeMode.value = true
-  // 评审 P2：拉取失败不写错误会与「确实没有物料」撞成同一假空态（病根14）——沿用 reload() 同款 load() 接线。
-  load(m.ok, '加载失败：' + String(m.error || ''))
+  // 拉取失败不写错误会与「确实没有物料」撞成同一假空态（病根14）。只报失败：这里只查了物料，
+  // 成功时若走 load(true) 会收回 reload 报的供应商失败，而那条仍然有效。
+  if (!m.ok) load(false, '加载失败：' + String(m.error || ''))
 }
 
 // 有未提交差异（已填合法且差异≠0、尚未成功）——退出前拦一道，防手滑丢盘点结果
@@ -178,13 +175,10 @@ async function submitOneStocktakeRow(row: StocktakeUiRow) {
 }
 
 async function submitStocktake() {
-  if (stocktakeBusy.value || !stocktakeReasonValid.value) return // 在途禁再发·原因必填
-  const pending = pendingStocktakeRows() // 排除已成功/在途行——不重发已锁定行的 adjustStock
-  const submittable = filterSubmittable(pending.map((r) => ({ materialId: r.materialId, stock: r.stock, actual: r.actual })))
-  if (!submittable.length) return
-  const ids = new Set(submittable.map((s) => s.materialId))
+  if (stocktakeBusy.value || !stocktakeReasonValid.value || !stocktakeSubmittableCount.value) return // 在途禁再发·原因必填
   stocktakeBusy.value = true
-  await Promise.all(pending.filter((r) => ids.has(r.materialId)).map((r) => submitOneStocktakeRow(r)))
+  // 排除已成功/在途行（不重发已锁定行）；无差异的行在 submitOne 首行早返回、不动状态
+  await Promise.all(pendingStocktakeRows().map(submitOneStocktakeRow))
   stocktakeBusy.value = false
   void reload() // 刷新主档库存/流水（不退出盘点模式·失败行仍留在面板可单独重试）
 }
@@ -248,10 +242,8 @@ async function reload() {
   supHasMore.value = !!(s.ok && s.hasMore)
   await loadLedger(ledgerMat.value || undefined) // 保持当前料号筛选（内部已复位 stocktakeExitConfirm）
   // 分路报错（照 ScmBom.reload）：供应商挂掉不装空目录
-  const bad: string[] = []
-  if (!m.ok) bad.push('物料主档加载失败：' + String(m.error || ''))
-  if (!s.ok) bad.push('供应商加载失败：' + String(s.error || ''))
-  load(bad.length === 0, bad.join('；')) // 只在加载失败时写·成功静默不抹动作反馈
+  const err = loadErrors([[m, '物料主档'], [s, '供应商']])
+  load(!err, err) // 只在加载失败时写·成功静默不抹动作反馈
   stocktakeExitConfirm.value = false // 刷新即复位危险态
 }
 

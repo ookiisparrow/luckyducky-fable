@@ -8,6 +8,7 @@ import { listAgents, createAgent, disableAgent, setAgentWecomUserId } from '../a
 import { getCsatReport } from '../api/cs'
 import { mapAgents, type AgentRow } from '../lib/mapSystem'
 import { mapCsat } from '../lib/mapCs'
+import { useLoadStatus, confirmed } from '../lib/status'
 import UiButton from '../components/ui/Button.vue'
 import PageHeader from '../components/ui/PageHeader.vue'
 import Card from '../components/ui/Card.vue'
@@ -17,7 +18,7 @@ import EmptyState from '../components/ui/EmptyState.vue'
 import { Headset, Users, MessagesSquare, CircleCheck, Star } from 'lucide-vue-next'
 
 const rows = ref<AgentRow[]>([])
-const message = ref('')
+const { message, ok: msgOk, note, load } = useLoadStatus() // reload 成功不抹掉停用/恢复等动作反馈（病根#14）
 const busy = ref(false)
 const form = ref({ name: '', key: '', wecomUserId: '' })
 const confirmId = ref('')
@@ -36,13 +37,13 @@ async function reload() {
   const csatVm = mapCsat(csat)
   // 报表失败 ≠ 还没人评：空均分「—」会把加载失败读成零评价（病根#14·同 Conversations loadReport）
   csatAvg.value = !csatVm ? '加载失败' : csatVm.total ? csatVm.avg : null
-  message.value = !r.ok ? '加载失败：' + String(r.error || '') : csatVm ? '' : '满意度报表加载失败'
+  load(r.ok && !!csatVm, !r.ok ? '加载失败：' + String(r.error || '') : '满意度报表加载失败')
 }
 
 async function doCreate() {
   if (busy.value) return
   if (!form.value.name.trim() || form.value.key.length < 6) {
-    message.value = '名字必填，口令至少 6 位'
+    note(false, '', '名字必填，口令至少 6 位')
     return
   }
   busy.value = true
@@ -51,29 +52,24 @@ async function doCreate() {
   if (r.ok) {
     lastCreated.value = { name: form.value.name.trim(), key: form.value.key } // 回显供转交（系统只存哈希·这里回显你刚输的口令一次）
     form.value = { name: '', key: '', wecomUserId: '' }
-    message.value = ''
+    note(true, '', '')
     void reload()
   } else {
     const e = String(r.error || '')
-    message.value = e === 'KEY_TAKEN' ? '这个口令已被占用（撞口令会串号）' : e === 'WECOM_ID_TAKEN' ? '这个企微 userid 已绑在别的账号' : '建号失败：' + e
+    note(false, '', e === 'KEY_TAKEN' ? '这个口令已被占用（撞口令会串号）' : e === 'WECOM_ID_TAKEN' ? '这个企微 userid 已绑在别的账号' : '建号失败：' + e)
   }
 }
 
-// 失败提示不再紧随 reload()（P2·bug sweep Round2 item9·同第 8 条 Products.vue 范式）：reload() 内部
-// await listAgents() 落地后会把 message.value 重写成 ''（成功）或「加载失败：…」（失败），迟于本函数
-// 设的操作结果文案落地，把「操作失败：X」这条真实原因悄悄覆盖没了。失败分支直接 return、不 reload。
+// 失败分支直接 return、不 reload：reload 失败会写「加载失败：…」，迟于本函数落地，盖掉「操作失败：X」这条真实原因。
 async function toggle(row: AgentRow) {
-  if (!row.disabled && confirmId.value !== row.id) {
-    confirmId.value = row.id // 停用两步确认（即时生效·对方连登录都不行）
-    return
-  }
+  if (!row.disabled && !confirmed(confirmId, row.id)) return // 停用两步确认（即时生效·对方连登录都不行）；恢复直接放行
   confirmId.value = ''
   const r = await disableAgent(row.id, !row.disabled)
   if (!r.ok) {
-    message.value = '操作失败：' + String(r.error || '')
+    note(false, '', '操作失败：' + String(r.error || ''))
     return
   }
-  message.value = row.disabled ? `已恢复 ${row.name}` : `已停用 ${row.name}（对方即刻登不了）`
+  note(true, row.disabled ? `已恢复 ${row.name}` : `已停用 ${row.name}（对方即刻登不了）`, '')
   void reload()
 }
 
@@ -82,10 +78,10 @@ async function bindWecom(row: AgentRow) {
   if (v === null) return
   const r = await setAgentWecomUserId(row.id, v)
   if (!r.ok) {
-    message.value = String(r.error) === 'WECOM_ID_TAKEN' ? '这个 userid 已绑在别的账号' : '绑定失败：' + String(r.error || '')
+    note(false, '', String(r.error) === 'WECOM_ID_TAKEN' ? '这个 userid 已绑在别的账号' : '绑定失败：' + String(r.error || ''))
     return
   }
-  message.value = ''
+  note(true, '', '')
   void reload()
 }
 // 简易输入（no-alert 纪律下用内联输入更好·此处低频操作用行内编辑）
@@ -111,7 +107,7 @@ onMounted(reload)
       sub="外包坐席只有「接待」最小权限：能接会话、按已认领会话看客户资料（需客户同意），碰不到钱和商品。"
     />
 
-    <p v-if="message" class="ld-status is-err">{{ message }}</p>
+    <p v-if="message" class="ld-status" :class="msgOk ? 'is-ok' : 'is-err'">{{ message }}</p>
 
     <div v-if="rows.length" class="ld-kpi-grid">
       <KpiCard label="在线坐席" :value="onlineCount" :icon="Users" />
@@ -190,6 +186,9 @@ onMounted(reload)
  * 页头/卡/徽章/空态/按钮/表格骨架/状态行已交共享原语（PageHeader/Card/Badge/EmptyState/UiButton/.ld-table/.ld-status）。 */
 .is-err {
   color: var(--ld-red);
+}
+.is-ok {
+  color: var(--ld-green);
 }
 
 /* 建号表单：三字段 + 建号按钮一行（窄屏交由栅格自然换行·kit 无表单原语） */

@@ -29,6 +29,7 @@ import { launchErrorText } from '../lib/mapSystem'
 import { wizardStepFromQuery, WIZARD_STEPS, WIZARD_STEP_MAX } from '../lib/nav'
 import { isUploadLocked } from '../lib/uploadLock'
 import { settleAllSaves } from '../lib/serialSave'
+import { useLoadStatus } from '../lib/status'
 import Products from './Products.vue'
 import Courses from './Courses.vue'
 import Cards from './Cards.vue'
@@ -52,13 +53,18 @@ const extras = ref<{
 const listed = ref<Record<string, boolean>>({})
 const loading = ref(!!route.params.id)
 const loadError = ref(false) // 载入失败（网络波动）≠ 商品不存在——分开显「重试」态而非误报「商品不存在」死胡同（P3）
-let msgLoadFail = false // 当前 banner 是否为「加载失败」——回刷成功只清它、不误清上架等动作反馈（P3）
-const message = ref('')
+const { message, note, load } = useLoadStatus() // 回刷成功只收回「加载失败」横幅，不误清上架等动作反馈
 const busy = ref(false)
 const pubConfirm = ref(false)
 const wantHome = ref(false) // 首次上架问首页·默认不挂（工单212）
 const restoreArmed = ref(false)
 const createdDraftId = ref('') // /launch 刚建档后首包偶发读不到新档时，区分「暂未同步」与真不存在
+// 新增武装态必须并进来：漏复位的武装态会让下一次点击一击直发
+const disarm = () => {
+  pubConfirm.value = false
+  wantHome.value = false
+  restoreArmed.value = false
+}
 
 const STEP_NAMES = WIZARD_STEPS.map((s) => s.label)
 const STEP_HINTS = WIZARD_STEPS.map((s) => s.hint)
@@ -97,24 +103,18 @@ async function reloadProduct() {
     loading.value = false
     return
   }
-  pubConfirm.value = false // 刷新即复位危险态（P1·防旧武装的「确认同步」残留、重进一击直发·批3 规格）
-  wantHome.value = false
-  restoreArmed.value = false
+  disarm() // 刷新即复位危险态：防旧武装的「确认同步」残留、重进一击直发
   loadError.value = false
   const r: any = await listDrafts()
   if (!r.ok) {
     // 载入失败：仅在「还没载到商品」（初次深链·product 仍 null）时显全屏可重试态区别于「商品不存在」；
     // 已载入后的刷新失败（@saved autosave 回刷 / 切步回刷）只降级为 message banner、不撕掉正在编辑的向导+内嵌编辑器（P2 回归修·reloadProduct 是共享回刷路径）
     if (!product.value) loadError.value = true
-    message.value = launchErrorText(r.error)
-    msgLoadFail = true
+    load(false, launchErrorText(r.error))
     loading.value = false
     return
   }
-  if (msgLoadFail) {
-    message.value = '' // 回刷成功只清上次残留的「加载失败」banner（批10 让回刷失败保编辑器不撕后·否则常驻工作中的编辑器上·P3）
-    msgLoadFail = false
-  }
+  load(true, '')
   const found = (r.list as Record<string, any>[]).find((p) => String(p.id || p._id) === id.value)
   if (found) {
     product.value = found
@@ -125,12 +125,8 @@ async function reloadProduct() {
     product.value = null
   }
   listed.value = r.listed || {}
-  extras.value = {
-    hasVideo: r.hasVideo || {},
-    coursePublished: r.coursePublished || {},
-    cardFinal: r.cardFinal || {},
-    hasBatch: r.hasBatch || {},
-  }
+  const { hasVideo, coursePublished, cardFinal, hasBatch } = r
+  extras.value = { hasVideo, coursePublished, cardFinal, hasBatch }
   loading.value = false
 }
 function retryLoad() {
@@ -143,8 +139,7 @@ function go(n: number) {
   // 批量上传在途拦截（P1·bug sweep Round2 item12c）：Wizard 切步＝仅 query 变化＝路由 update 非 leave，
   // Courses.vue 内嵌的 onBeforeRouteLeave 不会触发——这是 batchUpload 孤儿化的主触发路径，须在这里前置拦。
   if (isUploadLocked()) {
-    message.value = '批量上传进行中，切步将丢失未落库的视频关联，请等其完成再切步'
-    msgLoadFail = false
+    note(false, '', '批量上传进行中，切步将丢失未落库的视频关联，请等其完成再切步')
     return
   }
   // 步写进 URL（单源）→ step 重算 → watch 触发刷新；Shell 侧栏点步走 router-link 同径同步
@@ -166,17 +161,12 @@ async function shelve() {
   pubConfirm.value = false
   const featured = state.value === 'preparing' && wantHome.value
   wantHome.value = false
+  const opts = state.value === 'preparing' ? { featured } : undefined
   busy.value = true
-  const r: any = await publishProduct(id.value, state.value === 'preparing' ? { featured } : undefined)
+  const r: any = await publishProduct(id.value, opts)
   busy.value = false
-  if (r.ok) {
-    message.value = draftSyncOk(state.value, state.value === 'preparing' ? { featured } : undefined)
-    msgLoadFail = false // 这是动作反馈·非加载失败——随后的 reloadProduct 成功不得把它当 stale banner 清掉（病根#14）
-    void reloadProduct()
-  } else {
-    message.value = publishErrorText(r.error, state.value)
-    msgLoadFail = false
-  }
+  note(r.ok, draftSyncOk(state.value, opts), publishErrorText(r.error, state.value))
+  if (r.ok) void reloadProduct()
 }
 
 async function restoreSale() {
@@ -189,14 +179,8 @@ async function restoreSale() {
   busy.value = true
   const r: any = await republishProduct(id.value)
   busy.value = false
-  if (r.ok) {
-    message.value = restoreSaleOk()
-    msgLoadFail = false
-    void reloadProduct()
-  } else {
-    message.value = '恢复失败：' + String(r.error || '')
-    msgLoadFail = false
-  }
+  note(r.ok, restoreSaleOk(), '恢复失败：' + String(r.error || ''))
+  if (r.ok) void reloadProduct()
 }
 
 async function createDraft() {
@@ -207,8 +191,7 @@ async function createDraft() {
   const r: any = await saveDraft(draft)
   busy.value = false
   if (!r.ok) {
-    message.value = launchErrorText(r.error)
-    msgLoadFail = false
+    note(false, '', launchErrorText(r.error))
     return
   }
   createdDraftId.value = newId
@@ -222,9 +205,7 @@ async function createDraft() {
 
 // 切步 / 从 /launch 建档后换成带编号路由 → 刷新进度真值 + 收起同步二次确认
 watch(id, () => {
-  pubConfirm.value = false
-  wantHome.value = false
-  restoreArmed.value = false
+  disarm()
   if (id.value) {
     const same = !!(product.value && String(product.value.id || product.value._id) === id.value)
     if (!same) loading.value = true // 换编号才转圈；同档切步不撕编辑器
@@ -237,9 +218,7 @@ watch(id, () => {
 })
 
 watch(step, async () => {
-  pubConfirm.value = false
-  wantHome.value = false
-  restoreArmed.value = false
+  disarm()
   if (id.value) {
     await settleAllSaves()
     void reloadProduct()

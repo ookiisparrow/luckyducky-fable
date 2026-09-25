@@ -14,9 +14,6 @@ const { model, message, busy, autoState, save } = usePageContent('welcome', norm
 function addItem() {
   if (model.value && model.value.w2.items.length < 3) model.value.w2.items.push({ title: '', desc: '' })
 }
-function delItem(i: number) {
-  model.value?.w2.items.splice(i, 1)
-}
 </script>
 
 <template>
@@ -46,7 +43,7 @@ function delItem(i: number) {
           </template>
           <EmptyState v-if="!model.w2.items.length" text="暂无条目，点「新增一条」添加（如：领取材料包 / 观看教程 / 加入社群）" />
           <div v-for="(it, i) in model.w2.items" :key="i" class="pc-item">
-            <div class="pc-item-head"><span class="pc-item-idx">第 {{ i + 1 }} 条</span><button class="pc-iconbtn" title="删除这条" @click="delItem(i)"><Trash2 :size="14" :stroke-width="1.8" /></button></div>
+            <div class="pc-item-head"><span class="pc-item-idx">第 {{ i + 1 }} 条</span><button class="pc-iconbtn" title="删除这条" @click="model.w2.items.splice(i, 1)"><Trash2 :size="14" :stroke-width="1.8" /></button></div>
             <div class="pc-field"><label>标题（≤60 字）</label><input v-model="it.title" class="pc-input" maxlength="60" placeholder="领取你的材料包" /></div>
             <div class="pc-field"><label>说明（≤2000 字）</label><textarea v-model="it.desc" class="pc-textarea" maxlength="2000" placeholder="在「我的订单」查看物流，收到后即可开始。" /></div>
           </div>

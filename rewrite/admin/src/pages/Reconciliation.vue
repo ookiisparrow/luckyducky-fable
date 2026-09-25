@@ -9,6 +9,7 @@ import { getReconciliation, getBillMatch, downloadBill } from '../api/system'
 import { mapRecon, mapBillMatch, type ReconVM, type BillMatchVM } from '../lib/mapSystem'
 import { orderErrorText } from '../lib/mapMoney'
 import { useLatest } from '../lib/latest'
+import { saveBlob } from '../lib/saveBlob'
 import UiButton from '../components/ui/Button.vue'
 import PageHeader from '../components/ui/PageHeader.vue'
 import Card from '../components/ui/Card.vue'
@@ -130,12 +131,7 @@ function exportCsv() {
   const head = '日期,订单数,应收GMV,退款,净额,退款笔数'
   const lines = recon.value.daily.map((d) => [d.day, d.orders, d.income, d.refund, d.net, d.refunds].join(','))
   const csv = [head, ...lines].join('\n')
-  const url = URL.createObjectURL(new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8' }))
-  const a = document.createElement('a')
-  a.href = url
-  a.download = '财务对账-按日.csv'
-  a.click()
-  URL.revokeObjectURL(url)
+  saveBlob(new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8' }), '财务对账-按日.csv')
 }
 
 onMounted(reload)

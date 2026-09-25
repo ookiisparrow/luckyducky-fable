@@ -25,14 +25,7 @@ const groups = computed(() => {
   ].filter((g) => g.items.length)
 })
 
-function fmt(ms: number) {
-  if (!ms) return ''
-  try {
-    return new Date(ms).toLocaleString('zh-CN', { hour12: false })
-  } catch {
-    return String(ms)
-  }
-}
+const fmt = (ms: number) => (ms ? new Date(ms).toLocaleString('zh-CN', { hour12: false }) : '')
 
 async function load() {
   const r: any = await getInspectStatus()

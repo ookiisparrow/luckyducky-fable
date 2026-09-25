@@ -22,9 +22,6 @@ const uploading = ref(false)
 function addFaq() {
   if (model.value && model.value.help.faq.length < 20) model.value.help.faq.push({ q: '', a: '' })
 }
-function delFaq(i: number) {
-  model.value?.help.faq.splice(i, 1)
-}
 
 async function onHero(ev: Event) {
   const input = ev.target as HTMLInputElement
@@ -88,7 +85,7 @@ async function onHero(ev: Event) {
           </template>
           <EmptyState v-if="!model.help.faq.length" :icon="HelpCircle" text="暂无 FAQ，点「新增一条」添加" />
           <div v-for="(f, i) in model.help.faq" :key="i" class="pc-item">
-            <div class="pc-item-head"><span class="pc-item-idx">第 {{ i + 1 }} 条</span><button class="pc-iconbtn" title="删除这条" @click="delFaq(i)"><Trash2 :size="14" :stroke-width="1.8" /></button></div>
+            <div class="pc-item-head"><span class="pc-item-idx">第 {{ i + 1 }} 条</span><button class="pc-iconbtn" title="删除这条" @click="model.help.faq.splice(i, 1)"><Trash2 :size="14" :stroke-width="1.8" /></button></div>
             <div class="pc-field"><label>问题（≤120 字）</label><input v-model="f.q" class="pc-input" maxlength="120" placeholder="视频卡住 / 加载不出来怎么办？" /></div>
             <div class="pc-field"><label>回答（≤1000 字）</label><textarea v-model="f.a" class="pc-textarea" maxlength="1000" placeholder="请检查网络后重新进入课程；仍有问题点「联系客服」。" /></div>
           </div>

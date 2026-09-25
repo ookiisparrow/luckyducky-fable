@@ -1,4 +1,4 @@
-// JSON-LD 结构化数据构造（纯函数·守卫 rw-site-schema-golden·GEO 核心）：
+// JSON-LD 结构化数据构造（纯函数·GEO 核心）：
 // 搜索引擎与 AI 引擎读的是这层——字段错了收录面就废，纯函数钉死。
 export const SITE = 'https://www.luckyducky.cn'
 export const BRAND_NAME = 'Lucky Ducky 小棉鸭'

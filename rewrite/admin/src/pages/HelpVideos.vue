@@ -5,6 +5,7 @@ import { Upload, Check, Trash2, Plus, Video } from 'lucide-vue-next'
 import { listHelpVideos, saveHelpVideos, uploadVideo } from '../api/content'
 import { normalizeHelpItems, type HelpItem } from '../lib/mapContent'
 import { serialSave } from '../lib/serialSave'
+import { confirmed } from '../lib/status'
 import PageHeader from '../components/ui/PageHeader.vue'
 import Card from '../components/ui/Card.vue'
 import Badge from '../components/ui/Badge.vue'
@@ -23,17 +24,19 @@ async function reload() {
   const r = await listHelpVideos()
   confirmKey.value = '' // 刷新即复位危险态（P1·防旧武装的删主题/删段残留、重进同一位一击直删·批3 规格）
   loaded = false // 载入期不触发自动保存
-  items.value = r.ok ? normalizeHelpItems(r.items) : []
-  if (r.ok) {
-    baseRev.value = Number(r.rev) || 0 // 记下拉取那一刻的版本号
-    conflicted.value = false // 重新载入即解除冲突态·恢复自动保存
-  }
-  message.value = r.ok ? '' : '加载失败：' + String(r.error || '')
   saveState.value = ''
-  // 只有载入成功才放开自动保存——载入失败(items=[]) 绝不 arm autosave，否则一次编辑就 saveHelpVideos([]) 触发后端整档覆盖 +
-  // 孤儿 GC 永久删光所有帮助视频文件（P1 不可逆·同 Courses.load 早退范式）。载入失败时 loaded 恒 false，autosave 与手动 save 都拒。
-  if (r.ok) void nextTick(() => (loaded = true))
-  return r.ok
+  if (!r.ok) {
+    // 失败 loaded 恒 false：autosave 与手动 save 都拒——否则一次编辑就 saveHelpVideos([]) 触发后端整档覆盖 +
+    // 孤儿 GC 永久删光所有帮助视频文件（P1 不可逆·同 Courses.load 早退范式）
+    items.value = []
+    message.value = '加载失败：' + String(r.error || '')
+    return
+  }
+  items.value = normalizeHelpItems(r.items)
+  baseRev.value = Number(r.rev) || 0 // 记下拉取那一刻的版本号
+  conflicted.value = false // 重新载入即解除冲突态·恢复自动保存
+  message.value = ''
+  void nextTick(() => (loaded = true))
 }
 
 // 视频时长自动读取（换皮丢·选完视频读元数据填 dur·mm:ss）
@@ -99,14 +102,6 @@ onBeforeUnmount(() => {
   }
 })
 
-function twoStep(key: string, run: () => void) {
-  if (confirmKey.value !== key) {
-    confirmKey.value = key
-    return
-  }
-  confirmKey.value = ''
-  run()
-}
 // ↑↓ 重排（换皮丢了重排·主题/小段顺序有意义·嵌套结构 ↑↓ 比拖拽稳）
 function move<T>(arr: T[], i: number, dir: number) {
   const j = i + dir
@@ -121,13 +116,13 @@ function addTopic() {
   items.value.push({ id: '', title: '', sub: '', desc: '', segments: [] })
 }
 function delTopic(i: number) {
-  twoStep('t:' + i, () => items.value.splice(i, 1))
+  if (confirmed(confirmKey, 't:' + i)) items.value.splice(i, 1)
 }
 function addSeg(t: HelpItem) {
   t.segments.push({ id: '', name: '', dur: '', videoFileId: '' })
 }
 function delSeg(t: HelpItem, ti: number, i: number) {
-  twoStep('s:' + ti + ':' + i, () => t.segments.splice(i, 1))
+  if (confirmed(confirmKey, 's:' + ti + ':' + i)) t.segments.splice(i, 1)
 }
 
 async function pickVideo(t: HelpItem, i: number, ev: Event) {

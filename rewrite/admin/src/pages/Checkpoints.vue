@@ -6,6 +6,7 @@ import { RotateCcw, Trash2, Plus, ListChecks, BookOpen } from 'lucide-vue-next'
 import { listCheckpoints, saveCheckpoints } from '../api/cs'
 import { nextNodeId, duplicateNodeIds } from '../lib/mapCs'
 import { useLatest } from '../lib/latest'
+import { confirmed } from '../lib/status'
 import UiButton from '../components/ui/Button.vue'
 import PageHeader from '../components/ui/PageHeader.vue'
 import Card from '../components/ui/Card.vue'
@@ -65,12 +66,7 @@ function move(i: number, dir: number) {
   confirmKey.value = '' // 重排后清「已武装删除」·防下标编码 confirmKey 落到换位后的另一节点→删错（P2·对齐姊妹页）
 }
 function delNode(i: number) {
-  if (confirmKey.value !== 'd:' + i) {
-    confirmKey.value = 'd:' + i
-    return
-  }
-  confirmKey.value = ''
-  nodes.value.splice(i, 1)
+  if (confirmed(confirmKey, 'd:' + i)) nodes.value.splice(i, 1)
 }
 
 async function save() {

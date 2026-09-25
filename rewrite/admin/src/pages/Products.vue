@@ -23,8 +23,11 @@ import {
   draftSyncReadyHint,
   HOME_FEATURE_ASK,
   type DraftRowVM,
+  type StepExtras,
 } from '../lib/mapProducts'
 import { serialSave } from '../lib/serialSave'
+import { confirmed } from '../lib/status'
+import type { ClientResult } from '../api/client'
 import { compressImage } from '../lib/compressImage'
 import { useRouter } from 'vue-router'
 import UiButton from '../components/ui/Button.vue'
@@ -146,28 +149,23 @@ async function reload(keepMsg = false) {
   wantHome.value = false
   moreKey.value = '' // 防刷新后残留开着的⋯更多菜单
   if (!keepMsg) message.value = '加载中…'
-  const r = await listDrafts()
-  urlMap.value = r.ok && (r as any).urls ? (r as any).urls : {}
-  urlMapAt = Date.now()
-  rows.value = r.ok ? mapDraftRows(r.list, r.urls, r.listed, stepExtras(r)) : []
+  const r = await silentRefresh()
+  if (!r.ok) {
+    urlMap.value = {}
+    rows.value = []
+  }
   message.value = r.ok ? held : '加载失败：' + String(r.error || '')
   listReady.value = true
 }
-// listDrafts 派生的 5 步分步态（后端 join）
-const stepExtras = (r: any) => ({
-  hasVideo: r.hasVideo || {},
-  coursePublished: r.coursePublished || {},
-  cardFinal: r.cardFinal || {},
-  hasBatch: r.hasBatch || {},
-})
-// 静默刷新列表（不闪「加载中」·不打断正在编辑的编辑器）
+// 静默刷新列表（不闪「加载中」·不打断正在编辑的编辑器）；5 步分步态由 listDrafts 后端 join 随包带回
 async function silentRefresh() {
   const r = await listDrafts()
   if (r.ok) {
-    urlMap.value = (r as any).urls || {}
+    urlMap.value = (r.urls as Record<string, string>) || {}
     urlMapAt = Date.now()
-    rows.value = mapDraftRows(r.list, r.urls, r.listed, stepExtras(r))
+    rows.value = mapDraftRows(r.list, r.urls, r.listed, r as StepExtras)
   }
+  return r
 }
 
 // —— 防抖自动保存（换皮把「编排即自动存」退成手动「保存草稿」·忘点即丢·且已上传的封面/相册 fileID 成孤儿）——
@@ -271,12 +269,10 @@ function clearCover() {
     coverPreview.value = ''
   }
 }
-function delSku(i: number) {
-  if (edit.value) (edit.value.skus as any[]).splice(i, 1)
-}
 
 async function pickCover(ev: Event) {
   const file = (ev.target as HTMLInputElement).files?.[0]
+  ;(ev.target as HTMLInputElement).value = '' // 允许失败后重选同一文件（否则 change 不再触发）
   if (!file || !edit.value) return
   // 快照本次上传目标（H·完备性扫描新增·同 doSave 范式）：openEdit/列表「编辑」按钮无 busy 门控，
   // 压缩/上传两段 await 期间都可能已切到另一件商品的编辑器——回包不该打到已切换的新编辑器上。
@@ -363,48 +359,23 @@ const doPublish = (id: string) =>
   })
 
 async function twoStep(key: string, run: () => Promise<void>) {
-  if (confirmKey.value !== key) {
-    confirmKey.value = key
+  if (!confirmed(confirmKey, key)) {
     if (key.startsWith('pub:')) wantHome.value = false
     return
   }
-  confirmKey.value = ''
   await run()
 }
 
-const doUnpublish = (id: string) =>
-  twoStep('off:' + id, async () => {
-    const r = await unpublishProduct(id)
-    if (!r.ok) {
-      message.value = '下架失败：' + String(r.error || '')
-      return
-    }
-    message.value = ''
-    void reload()
+// 失败留原因且不 reload：reload 起手的「加载中…」会同步冲掉失败文案
+const simpleAction = (prefix: string, api: (_id: string) => Promise<ClientResult>, act: string) => (id: string) =>
+  twoStep(prefix + id, async () => {
+    const r = await api(id)
+    if (r.ok) void reload()
+    else message.value = act + '失败：' + String(r.error || '')
   })
-
-// 恢复销售＝把已下架商品重新对小程序可见（可见性变更·同上/下架应有一道二次确认·审核补漏）
-const doRepublish = (id: string) =>
-  twoStep('re:' + id, async () => {
-    const r = await republishProduct(id)
-    if (!r.ok) {
-      message.value = '恢复失败：' + String(r.error || '')
-      return
-    }
-    message.value = ''
-    void reload()
-  })
-
-const doDelete = (id: string) =>
-  twoStep('del:' + id, async () => {
-    const r = await deleteDraft(id)
-    if (!r.ok) {
-      message.value = '删除失败：' + String(r.error || '')
-      return
-    }
-    message.value = ''
-    void reload()
-  })
+const doUnpublish = simpleAction('off:', unpublishProduct, '下架')
+const doRepublish = simpleAction('re:', republishProduct, '恢复') // 恢复销售＝可见性变更，同上/下架要二次确认
+const doDelete = simpleAction('del:', deleteDraft, '删除')
 
 // —— 多图相册（换皮丢·仅 round-trip 保全无编辑 UI）：多选上传·压缩·增删·排序 ——
 async function addImages(ev: Event) {
@@ -434,9 +405,6 @@ async function addImages(ev: Event) {
   busy.value = false
   input.value = '' // 允许再次选同一批
 }
-function delImage(i: number) {
-  if (edit.value) (edit.value.images as unknown[]).splice(i, 1)
-}
 function moveImage(i: number, dir: number) {
   if (!edit.value) return
   const arr = edit.value.images as unknown[]
@@ -450,20 +418,11 @@ function moveImage(i: number, dir: number) {
 function addParam() {
   if (edit.value && (edit.value.params as unknown[]).length < 8) (edit.value.params as unknown[]).push(['', ''])
 }
-function delParam(i: number) {
-  if (edit.value) (edit.value.params as unknown[]).splice(i, 1)
-}
 function addSection() {
   if (edit.value && (edit.value.detailSections as unknown[]).length < 4) (edit.value.detailSections as unknown[]).push({ lead: '', body: '' })
 }
-function delSection(i: number) {
-  if (edit.value) (edit.value.detailSections as unknown[]).splice(i, 1)
-}
 function addKit() {
   if (edit.value && (edit.value.kit as unknown[]).length < 8) (edit.value.kit as unknown[]).push({ icon: 'circle', name: '', qty: '' })
-}
-function delKit(i: number) {
-  if (edit.value) (edit.value.kit as unknown[]).splice(i, 1)
 }
 
 // 模板内 `as { a: string; b: string }[]` 型断言会让 vue 模板表达式解析器把内部分号误读——
@@ -474,7 +433,7 @@ const detailSections = computed(() => (edit.value?.detailSections ?? []) as Deta
 const kitItems = computed(() => (edit.value?.kit ?? []) as KitItem[])
 
 // 上架前缺项预检（1:1 旧 Wizard missing·换皮退成事后报错）：封面/名称/价格/有效规格四项必备。
-// basicsMissing 单源（向导上架闸与本页预检同口径·守卫 rw-admin-products-ui-golden）。
+// basicsMissing 单源（向导上架闸与本页预检同口径）。
 const missing = computed(() => (edit.value ? basicsMissing(edit.value) : []))
 const coverMissing = computed(() => missing.value.filter((x) => x === '封面图'))
 const lookMissing = computed(() => missing.value.filter((x) => x === '商品名称'))
@@ -645,7 +604,7 @@ onMounted(async () => {
             <div class="g-ops">
               <button v-if="i > 0" title="前移" @click="moveImage(i, -1)">‹</button>
               <button v-if="i < (edit.images as string[]).length - 1" title="后移" @click="moveImage(i, 1)">›</button>
-              <button class="g-del" title="删除" @click="delImage(i)">✕</button>
+              <button class="g-del" title="删除" @click="edit.images.splice(i, 1)">✕</button>
             </div>
           </div>
           <label class="g-add">＋ 加图<input type="file" accept="image/*" multiple hidden @change="addImages" /></label>
@@ -671,7 +630,7 @@ onMounted(async () => {
         <div v-for="(s, i) in edit.skus" :key="i" class="skurow">
           <input v-model="s.name" placeholder="规格名" maxlength="30" />
           <input v-model="s.price" placeholder="价格（元）" />
-          <button class="icon-btn ld-icon-btn" title="删除该规格" @click="delSku(i)"><Trash2 :size="14" :stroke-width="1.8" /></button>
+          <button class="icon-btn ld-icon-btn" title="删除该规格" @click="edit.skus.splice(i, 1)"><Trash2 :size="14" :stroke-width="1.8" /></button>
         </div>
         <UiButton variant="ghost" size="sm" @click="addSku">＋ 加规格</UiButton>
 
@@ -679,7 +638,7 @@ onMounted(async () => {
         <div v-for="(p, i) in (edit.params as string[][])" :key="i" class="kvrow">
           <input v-model="p[0]" placeholder="参数名（如 适用年龄）" maxlength="20" />
           <input v-model="p[1]" placeholder="参数值（如 8 岁+）" maxlength="40" />
-          <button class="icon-btn ld-icon-btn" title="删除该参数" @click="delParam(i)"><Trash2 :size="14" :stroke-width="1.8" /></button>
+          <button class="icon-btn ld-icon-btn" title="删除该参数" @click="edit.params.splice(i, 1)"><Trash2 :size="14" :stroke-width="1.8" /></button>
         </div>
         <UiButton variant="ghost" size="sm" :disabled="(edit.params as unknown[]).length >= 8" @click="addParam">＋ 加参数</UiButton>
 
@@ -687,7 +646,7 @@ onMounted(async () => {
         <div v-for="(d, i) in detailSections" :key="i" class="secrow">
           <div class="secrow-head">
             <input v-model="d.lead" placeholder="小标题" maxlength="30" />
-            <button class="icon-btn ld-icon-btn" title="删除该段落" @click="delSection(i)"><Trash2 :size="14" :stroke-width="1.8" /></button>
+            <button class="icon-btn ld-icon-btn" title="删除该段落" @click="detailSections.splice(i, 1)"><Trash2 :size="14" :stroke-width="1.8" /></button>
           </div>
           <textarea v-model="d.body" placeholder="段落正文" maxlength="200" rows="2" />
         </div>
@@ -700,7 +659,7 @@ onMounted(async () => {
           </select>
           <input v-model="k.name" placeholder="物品名" maxlength="14" />
           <input v-model="k.qty" placeholder="数量（如 1 包 50g）" maxlength="14" />
-          <button class="icon-btn ld-icon-btn" title="删除该材料" @click="delKit(i)"><Trash2 :size="14" :stroke-width="1.8" /></button>
+          <button class="icon-btn ld-icon-btn" title="删除该材料" @click="kitItems.splice(i, 1)"><Trash2 :size="14" :stroke-width="1.8" /></button>
         </div>
         <UiButton variant="ghost" size="sm" :disabled="kitItems.length >= 8" @click="addKit">＋ 加材料</UiButton>
       </template>

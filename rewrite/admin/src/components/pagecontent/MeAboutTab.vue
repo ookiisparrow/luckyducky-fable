@@ -46,9 +46,6 @@ async function saveBoth() {
 function addSection() {
   if (about.model.value && about.model.value.sections.length < 10) about.model.value.sections.push({ title: '', body: '' })
 }
-function delSection(i: number) {
-  about.model.value?.sections.splice(i, 1)
-}
 </script>
 
 <template>
@@ -81,7 +78,7 @@ function delSection(i: number) {
           <div class="pc-field"><label>引言（≤200 字）</label><textarea v-model="about.model.value.lead" class="pc-textarea" maxlength="200" placeholder="小棉鸭，让每个人都能亲手创造随身幸运物。" /></div>
           <EmptyState v-if="!about.model.value.sections.length" text="暂无段落，点「新增一段」添加（如：品牌故事 / 我们的团队 / 联系方式）" />
           <div v-for="(s, i) in about.model.value.sections" :key="i" class="pc-item">
-            <div class="pc-item-head"><span class="pc-item-idx">第 {{ i + 1 }} 段</span><button class="pc-iconbtn" title="删除这段" @click="delSection(i)"><Trash2 :size="14" :stroke-width="1.8" /></button></div>
+            <div class="pc-item-head"><span class="pc-item-idx">第 {{ i + 1 }} 段</span><button class="pc-iconbtn" title="删除这段" @click="about.model.value.sections.splice(i, 1)"><Trash2 :size="14" :stroke-width="1.8" /></button></div>
             <div class="pc-field"><label>小标题（≤60 字）</label><input v-model="s.title" class="pc-input" maxlength="60" placeholder="品牌故事" /></div>
             <div class="pc-field"><label>正文（≤2000 字）</label><textarea v-model="s.body" class="pc-textarea" maxlength="2000" placeholder="我们相信……" /></div>
           </div>

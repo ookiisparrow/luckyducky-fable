@@ -6,8 +6,8 @@ import { listOutworks, saveOutwork, issueOutwork, receiveOutwork, settleOutwork,
 import { materialHuman, outworkStatusLabel, yuanToFen, fenLabel, scmErrorText } from '../lib/mapScm'
 import { dateTime } from '../lib/format'
 import { consumeOutworkHandoff } from '../lib/scmHandoff'
-import { useLoadStatus } from '../lib/status'
-import { useLatest } from '../lib/latest'
+import { useLoadStatus, loadErrors, confirmed } from '../lib/status'
+import { useLatest, appendNew } from '../lib/latest'
 import ScmFlowTabs from '../components/ScmFlowTabs.vue'
 import UiButton from '../components/ui/Button.vue'
 import PageHeader from '../components/ui/PageHeader.vue'
@@ -29,13 +29,18 @@ const recvOrder = ref<Record<string, any> | null>(null) // 当前收货单（取
 const recvLines = ref<Array<{ materialId: string; qty: number }>>([])
 const confirmKey = ref('')
 
+// 发出的大团原团 → 收回的同色带结团料号（非大团原团回 ''）；上限预览与收货预填共用
+const knottedOf = (id: unknown) => {
+  const m = /^yarn:([a-z0-9-]+):L:raw$/.exec(String(id))
+  return m ? `yarn:${m[1]}:L:knotted` : ''
+}
 // 收货引导预览（换皮退成裸表单·得手抄颜色/自己算应付损耗/收超发也不拦）
 // 发的每个 raw 色 → 对应 knotted 同色的应收上限
 const issuedByKnotted = computed<Record<string, number>>(() => {
   const map: Record<string, number> = {}
   for (const l of recvOrder.value?.issueLines || []) {
-    const m = String(l.materialId).match(/^yarn:([a-z0-9-]+):L:raw$/)
-    if (m) map[`yarn:${m[1]}:L:knotted`] = (map[`yarn:${m[1]}:L:knotted`] || 0) + (Number(l.qty) || 0)
+    const k = knottedOf(l.materialId)
+    if (k) map[k] = (map[k] || 0) + (Number(l.qty) || 0)
   }
   return map
 })
@@ -63,11 +68,8 @@ async function reload() {
   knottedL.value = all.filter((x) => /^yarn:[a-z0-9-]+:L:knotted$/.test(String(x._id)))
   workers.value = s.ok ? ((s.list as Record<string, any>[]) || []).filter((x) => x.type === 'outworker') : []
   // 分路报错（照 ScmBom.reload）：物料/织女挂掉不装空目录
-  const bad: string[] = []
-  if (!o.ok) bad.push('外协单加载失败：' + String(o.error || ''))
-  if (!m.ok) bad.push('物料主档加载失败：' + String(m.error || ''))
-  if (!s.ok) bad.push('织女名单加载失败：' + String(s.error || ''))
-  load(bad.length === 0, bad.join('；')) // 只在加载失败时写·成功静默不抹动作反馈
+  const err = loadErrors([[o, '外协单'], [m, '物料主档'], [s, '织女名单']])
+  load(!err, err) // 只在加载失败时写·成功静默不抹动作反馈
 }
 
 // 加载更多（B1·根因#7·D4 补乱序守卫）：续游标追加·去重防双击重复追加同一页·绑定当前 reload 代际（新 reload
@@ -81,8 +83,7 @@ async function more() {
     note(false, '', '加载更多失败：' + scmErrorText(r.error))
     return
   }
-  const seen = new Set(orders.value.map((o) => o._id))
-  orders.value = [...orders.value, ...(((r.list as Record<string, any>[]) || []).filter((o) => !seen.has(o._id)))]
+  orders.value = appendNew(orders.value, (r.list as Record<string, any>[]) || [], (o) => o._id)
   cursor.value = r.nextCursor
   hasMore.value = !!r.hasMore
 }
@@ -127,10 +128,7 @@ function startRecv(o: Record<string, any>) {
   recvOrder.value = o
   // 按发料色预填：发的 raw → 收同色 knotted·默认收满(=发量·收≤发)·省手抄颜色
   recvLines.value = (o.issueLines || [])
-    .map((l: Record<string, any>) => {
-      const m = String(l.materialId).match(/^yarn:([a-z0-9-]+):L:raw$/)
-      return { materialId: m ? `yarn:${m[1]}:L:knotted` : '', qty: Number(l.qty) || 1 }
-    })
+    .map((l: Record<string, any>) => ({ materialId: knottedOf(l.materialId), qty: Number(l.qty) || 1 }))
     .filter((r: { materialId: string }) => r.materialId)
   if (!recvLines.value.length) recvLines.value = [{ materialId: '', qty: 1 }]
 }
@@ -155,11 +153,7 @@ async function doRecv() {
 }
 
 async function step(fn: (_id: string) => Promise<Record<string, unknown>>, id: string, key: string) {
-  if (confirmKey.value !== key) {
-    confirmKey.value = key
-    return
-  }
-  confirmKey.value = ''
+  if (!confirmed(confirmKey, key)) return
   const r = (await fn(id)) as Record<string, any>
   note(r.ok, '', scmErrorText(r.error)) // 失败走 note 设 msgOk=false（红）·换皮只写 message 致失败显成功绿
   void reload()

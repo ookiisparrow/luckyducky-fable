@@ -1,4 +1,4 @@
-// 发货工作台纯逻辑黄金基准（守卫 rw-admin-fulfill-golden·1:1 承接旧线 tests/admin/fulfill.test.js）：
+// 发货工作台纯逻辑黄金基准（1:1 承接旧线 tests/admin/fulfill.test.js）：
 // 扫码分拣安全判序 / 拣货汇总 / 标签派生 / 短码 / 打印 HTML。换皮回归还原批 Fulfill。
 import { describe, it, expect } from 'vitest'
 import { classifyScan, pickSummary, labelData, shortCode, buildLabelHtml, PAPER_PRESETS } from '../src/lib/fulfill'

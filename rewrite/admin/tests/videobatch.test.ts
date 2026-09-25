@@ -1,4 +1,4 @@
-// 课时级批量传视频计划黄金基准（守卫 rw-admin-videobatch-golden·1:1 承接旧 tests/admin/videoBatch）：
+// 课时级批量传视频计划黄金基准（1:1 承接旧 tests/admin/videoBatch）：
 // 去扩展名 / 文件名 numeric 排序（防字典序 1,10,2）/ 超现有段数标 isNew。换皮回归还原·视频批量传专项。
 import { describe, it, expect } from 'vitest'
 import { planLessonBatch } from '../src/lib/videoBatch'

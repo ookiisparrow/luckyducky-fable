@@ -1,4 +1,4 @@
-// 系统组+钱组补齐映射（纯函数·守卫 rw-admin-system-ui-golden）：外包账号行/批次激活率/
+// 系统组+钱组补齐映射（纯函数）：外包账号行/批次激活率/
 // 对账日表与勾对差异（approx 诚实透传·wxOnly=最危险标红）/库存冲突 409 人话/webhook 形态前端预检。
 // 上新五步/批次/课程操作者可见错误码 → 中文大白话（UNKNOWN_COURSE 等·编号只作次要信息）。
 import { yuan, dateTime } from './format'
@@ -72,7 +72,7 @@ export interface ReconVM {
   range: { from: string; to: string }
   daily: Array<{ day: string; income: string; refund: string; net: string; orders: number; refunds: number }>
   approxNote: string
-  partial: boolean // 累计聚合/异常查询降级：数据不可信（后端 cumDegraded·前端须警告操作员别当真 0）
+  partial: boolean // 累计聚合/异常查询降级：数据不可信（后端 degraded：任一路读失败·前端须警告操作员别当真 0）
   // 内部异常明细（bug B2 修：后端 getTxAlerts 返回 {feeMismatch,refundMismatch,stuckRefunds} 三数组对象·
   // 换皮误当数组取 .length 恒 0、明细永不渲染。改按对象结构化·有则渲染带单号、无则空数组不吓人）
   exceptions: Array<{ label: string; ids: string[] }>

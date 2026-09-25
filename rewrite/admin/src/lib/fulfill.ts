@@ -1,5 +1,5 @@
 // 发货工作台纯逻辑：无电子面单，先打内部标签（QR=订单id）再扫快递码发货。
-// 不 import Vue——tests/fulfill.test.ts 直测。守卫 rw-admin-fulfill-golden。
+// 不 import Vue——tests/fulfill.test.ts 直测。
 // 扫码枪 = 键盘模拟 + 回车后缀，一个输入框收两种码，classifyScan 负责分拣。
 
 export const FULFILL_STEP_NAMES = ['拣货备货', '打印标签', '扫码发货']
@@ -69,12 +69,9 @@ export function pickSummary(orders: unknown): PickSummary {
     orderCount++
     if (o && o.feeMismatch) mismatchCount++
     if (o && Number.isFinite(o.createdAt)) earliest = earliest == null ? (o.createdAt as number) : Math.min(earliest, o.createdAt as number)
-    for (const it of o && Array.isArray(o.items) ? o.items : []) {
-      const name = String((it && it.name) || '').trim()
-      const qty = Number(it && it.qty) || 0
-      if (!name || qty <= 0) continue
-      byName.set(name, (byName.get(name) || 0) + qty)
-      totalQty += qty
+    for (const l of labelData(o).lines) {
+      byName.set(l.name, (byName.get(l.name) || 0) + l.qty)
+      totalQty += l.qty
     }
   }
   const products = [...byName.entries()]

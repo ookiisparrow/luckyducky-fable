@@ -4,7 +4,7 @@ import { ref, onMounted } from 'vue'
 import { RotateCcw, Star } from 'lucide-vue-next'
 import { listReviews, setReviewPicked } from '../api/reviews'
 import { mapReviewRows, type ReviewRowVM } from '../lib/mapReviews'
-import { useLatest } from '../lib/latest'
+import { useLatest, appendNew } from '../lib/latest'
 import PageHeader from '../components/ui/PageHeader.vue'
 import Card from '../components/ui/Card.vue'
 import Badge from '../components/ui/Badge.vue'
@@ -51,8 +51,7 @@ async function more() {
     message.value = '加载更多失败：' + String(r.error || '')
     return
   }
-  const seen = new Set(rows.value.map((e) => e.id))
-  rows.value = [...rows.value, ...mapReviewRows(r.list).filter((e) => !seen.has(e.id))]
+  rows.value = appendNew(rows.value, mapReviewRows(r.list))
   cursor.value = r.nextCursor
   hasMore.value = !!r.hasMore
 }

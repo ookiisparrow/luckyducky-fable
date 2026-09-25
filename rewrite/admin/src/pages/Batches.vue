@@ -13,6 +13,7 @@ import { getCard } from '../api/products'
 import { buildFrontSvg, buildBackSvg } from '../lib/cardSvg'
 import { mapBatches, launchErrorText, UNKNOWN_COURSE_HINT, type BatchRow } from '../lib/mapSystem'
 import { useLatest } from '../lib/latest'
+import { saveBlob } from '../lib/saveBlob'
 import UiButton from '../components/ui/Button.vue'
 import PageHeader from '../components/ui/PageHeader.vue'
 import Card from '../components/ui/Card.vue'
@@ -54,14 +55,17 @@ const batchPage = ref(1)
 const urlPrefix = ref('') // 激活码落地网址前缀（换皮 CSV 只导码不导网址·印刷厂拿不到落地地址）
 const testQr = ref('') // 测试二维码 dataURL（量产前扫码验落地页·换皮丢了这个·根因#8）
 const exportBlockedMsg = ref('') // 导出 fail-closed 提示（未配网址前缀时挡导出·印刷交付物必须是完整网址）
+const prefixErr = ref('') // 读设置失败≠没配前缀：导出拦截时如实说读取失败，别把操作员支去设置页（病根#14）
+const codesErr = ref('')
 const packing = ref(false)
 const codeUrl = (code: string) => urlPrefix.value + code
 
 onMounted(async () => {
+  // 深链/向导带入了课程号即自动载入该课批次；与读设置互不依赖，先发
+  if (courseId.value.trim()) void load()
   const r = await getSettings()
   if (r.ok) urlPrefix.value = String((r as any).settings?.urlPrefix || (r as any).urlPrefix || '')
-  // 深链/向导带入了课程号即自动载入该课批次（换皮丢·落地空列表要手点「载入」）
-  if (courseId.value.trim()) void load()
+  else prefixErr.value = '网址前缀读取失败（' + launchErrorText(r.error) + '），请刷新页面重试'
 })
 
 function statusOf(b: BatchRow): 'using' | 'used' | 'fresh' {
@@ -153,12 +157,20 @@ async function doCreate() {
 }
 
 const codesGen = useLatest() // 码表乱序守卫（P1·A 的码别配到 B 的批次头·防印错卡·根因#8）
-function applyCodePage(r: { ok: boolean; codes?: unknown; nextCursor?: unknown; hasMore?: unknown }, page: number) {
-  codes.value = r.ok ? ((r.codes as string[]) || []) : []
-  codeHasMore.value = !!(r.ok && r.hasMore)
-  codeNextCursor.value = r.ok ? r.nextCursor : null
+// 失败不翻页、不清已有码，返回是否成功供调用方决定游标栈进退（失败≠空态·病根#14）
+function applyCodePage(r: { ok: boolean; error?: unknown; codes?: unknown; nextCursor?: unknown; hasMore?: unknown }, page: number): boolean {
+  codesLoading.value = false
+  if (!r.ok) {
+    codesErr.value = '取码失败：' + launchErrorText(r.error)
+    return false
+  }
+  codesErr.value = ''
+  codes.value = (r.codes as string[]) || []
+  codeHasMore.value = !!r.hasMore
+  codeNextCursor.value = r.nextCursor
   codePage.value = page
   if (page === 1 && codes.value[0]) firstCode.value = codes.value[0]
+  return true
 }
 async function openDetail(b: BatchRow) {
   detail.value = b
@@ -170,12 +182,12 @@ async function openDetail(b: BatchRow) {
   firstCode.value = ''
   testQr.value = ''
   exportBlockedMsg.value = ''
+  codesErr.value = ''
   codesLoading.value = true
   const my = codesGen.begin()
   const r = await listBatchCodes(b.batchId, { limit: CODE_PAGE })
   if (codesGen.isStale(my) || detail.value?.batchId !== b.batchId) return // 已切别批次·丢弃过期码表（防码/头错配印错卡）
   applyCodePage(r, 1)
-  codesLoading.value = false
 }
 async function nextCodes() {
   if (!detail.value || !codeHasMore.value || codeNextCursor.value == null || codesLoading.value) return
@@ -185,9 +197,7 @@ async function nextCodes() {
   const g = codesGen.peek()
   const r = await listBatchCodes(forBatch, { cursor, limit: CODE_PAGE })
   if (codesGen.isStale(g) || detail.value?.batchId !== forBatch) return
-  codeCursors.value.push(cursor)
-  applyCodePage(r, codePage.value + 1)
-  codesLoading.value = false
+  if (applyCodePage(r, codePage.value + 1)) codeCursors.value.push(cursor)
 }
 async function prevCodes() {
   if (!detail.value || codePage.value <= 1 || codesLoading.value) return
@@ -198,9 +208,7 @@ async function prevCodes() {
   const g = codesGen.peek()
   const r = await listBatchCodes(forBatch, { cursor, limit: CODE_PAGE })
   if (codesGen.isStale(g) || detail.value?.batchId !== forBatch) return
-  codeCursors.value.pop()
-  applyCodePage(r, targetPage)
-  codesLoading.value = false
+  if (applyCodePage(r, targetPage)) codeCursors.value.pop()
 }
 async function collectAllCodes(batchId: string): Promise<string[] | null> {
   const all: string[] = []
@@ -231,7 +239,7 @@ async function downloadPack() {
   // fail-closed（用户拍板 2026-07-08）：印刷交付物必须是完整网址，未配置网址前缀不许导出——
   // 印错「仅码无址」的包给印刷厂等于交付物废掉，宁可挡下不让走、也不悄悄降级成单列码。
   if (!urlPrefix.value.trim()) {
-    exportBlockedMsg.value = '先在「设置」配置扫码网址前缀，印刷交付物必须是完整网址'
+    exportBlockedMsg.value = prefixErr.value || '先在「设置」配置扫码网址前缀，印刷交付物必须是完整网址'
     return
   }
   exportBlockedMsg.value = ''
@@ -258,13 +266,7 @@ async function downloadPack() {
     } else {
       zip.file('说明.txt', `批次 ${detail.value.batchId}\n课程 ${loadedCourse.value}\n数量 ${detail.value.total} 张\n\n注意：该产品还没有上传卡片（去上新第 5 步上传后重新打包），本包仅含二维码地址清单。`)
     }
-    const blob = await zip.generateAsync({ type: 'blob' })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = detail.value.batchId + '-印刷包.zip'
-    a.click()
-    URL.revokeObjectURL(url)
+    saveBlob(await zip.generateAsync({ type: 'blob' }), detail.value.batchId + '-印刷包.zip')
   } finally {
     packing.value = false
   }
@@ -275,7 +277,7 @@ async function exportCsv() {
   if (!detail.value) return
   // fail-closed（同 downloadPack）：未配网址前缀不许导出，防印刷厂拿到「仅码无址」的废交付物
   if (!urlPrefix.value.trim()) {
-    exportBlockedMsg.value = '先在「设置」配置扫码网址前缀，印刷交付物必须是完整网址'
+    exportBlockedMsg.value = prefixErr.value || '先在「设置」配置扫码网址前缀，印刷交付物必须是完整网址'
     return
   }
   exportBlockedMsg.value = ''
@@ -285,12 +287,7 @@ async function exportCsv() {
     return
   }
   const csv = ['激活码,网址', ...all.map((c) => `${c},${codeUrl(c)}`)].join('\n')
-  const url = URL.createObjectURL(new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8' })) // BOM 防 Excel 中文乱码
-  const a = document.createElement('a')
-  a.href = url
-  a.download = detail.value.batchId + '-codes.csv'
-  a.click()
-  URL.revokeObjectURL(url)
+  saveBlob(new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8' }), detail.value.batchId + '-codes.csv') // BOM 防 Excel 中文乱码
 }
 </script>
 
@@ -418,6 +415,7 @@ async function exportCsv() {
         <p class="codes-note">每次只看一页（{{ CODE_PAGE }} 个），不会一次铺开整批。导出 CSV / 印刷包仍是这一批的全部码。单码「已激活/未用」后端暂未随码返回，看上面整体激活率。</p>
         <div class="code-list">
           <p v-if="codesLoading" class="code-loading">取码中…</p>
+          <p v-else-if="codesErr" class="code-loading">{{ codesErr }}</p>
           <p v-else-if="!codes.length" class="code-loading">无码</p>
           <div v-for="c in codes" :key="c" class="code-row">{{ c }}</div>
         </div>

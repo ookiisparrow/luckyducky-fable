@@ -6,84 +6,50 @@ import { isUploadLocked } from './lib/uploadLock'
 import { hasPendingSaves } from './lib/serialSave'
 import { isWizardPath } from './lib/nav'
 
-const Login = () => import('./pages/Login.vue')
-const Shell = () => import('./shell/Shell.vue')
-const Dashboard = () => import('./pages/Dashboard.vue')
-const Orders = () => import('./pages/Orders.vue')
-const Fulfill = () => import('./pages/Fulfill.vue')
-const Refunds = () => import('./pages/Refunds.vue')
-const Products = () => import('./pages/Products.vue')
 const Wizard = () => import('./pages/Wizard.vue')
-const Showcase = () => import('./pages/Showcase.vue')
-const PageContent = () => import('./pages/PageContent.vue')
-const HelpVideos = () => import('./pages/HelpVideos.vue')
-const Courses = () => import('./pages/Courses.vue')
-const Cards = () => import('./pages/Cards.vue')
-const ScmOverview = () => import('./pages/ScmOverview.vue')
-const ScmMaterials = () => import('./pages/ScmMaterials.vue')
-const ScmPurchase = () => import('./pages/ScmPurchase.vue')
-const ScmOutwork = () => import('./pages/ScmOutwork.vue')
-const ScmBom = () => import('./pages/ScmBom.vue')
-const ScmPlanner = () => import('./pages/ScmPlanner.vue')
-const Agents = () => import('./pages/Agents.vue')
-const Batches = () => import('./pages/Batches.vue')
-const Settings = () => import('./pages/Settings.vue')
-const Reconciliation = () => import('./pages/Reconciliation.vue')
-const Inventory = () => import('./pages/Inventory.vue')
-const External = () => import('./pages/External.vue')
-const Conversations = () => import('./pages/Conversations.vue')
-const Customer360 = () => import('./pages/Customer360.vue')
-const Kb = () => import('./pages/Kb.vue')
-const Csat = () => import('./pages/Csat.vue')
-const Checkpoints = () => import('./pages/Checkpoints.vue')
-const Inspect = () => import('./pages/Inspect.vue')
-const Anomalies = () => import('./pages/Anomalies.vue')
-const ConfigChecklist = () => import('./pages/ConfigChecklist.vue')
-const Audit = () => import('./pages/Audit.vue')
-const Reviews = () => import('./pages/Reviews.vue')
 
 export const router = createRouter({
   history: createWebHashHistory(),
   routes: [
-    { path: '/login', component: Login },
+    { path: '/login', component: () => import('./pages/Login.vue') },
     {
       path: '/',
-      component: Shell,
+      component: () => import('./shell/Shell.vue'),
       children: [
-        { path: '', component: Dashboard },
-        { path: 'orders', component: Orders },
-        { path: 'fulfill', component: Fulfill },
-        { path: 'refunds', component: Refunds },
-        { path: 'products', component: Products },
+        { path: '', component: () => import('./pages/Dashboard.vue') },
+        { path: 'orders', component: () => import('./pages/Orders.vue') },
+        { path: 'fulfill', component: () => import('./pages/Fulfill.vue') },
+        { path: 'refunds', component: () => import('./pages/Refunds.vue') },
+        { path: 'products', component: () => import('./pages/Products.vue') },
         { path: 'launch', component: Wizard }, // 上新入口：无编号时第 1 步建档，建完进 /products/:id/wizard
-        { path: 'products/:id/wizard', component: Wizard }, // 上新分步向导（带参·nav-route 守卫豁免孤儿页检查）
-        { path: 'showcase', component: Showcase },
-        { path: 'reviews', component: Reviews },
-        { path: 'page-content', component: PageContent }, // 页面内容五页签工作台（批C·首页内容并入）
-        { path: 'help-videos', component: HelpVideos },
-        { path: 'courses', component: Courses },
-        { path: 'cards', component: Cards },
-        { path: 'conversations', component: Conversations },
-        { path: 'customer360', component: Customer360 },
-        { path: 'kb', component: Kb },
-        { path: 'csat', component: Csat },
-        { path: 'checkpoints', component: Checkpoints },
-        { path: 'scm-overview', component: ScmOverview },
-        { path: 'scm-materials', component: ScmMaterials },
-        { path: 'scm-purchase', component: ScmPurchase },
-        { path: 'scm-outwork', component: ScmOutwork },
-        { path: 'scm-bom', component: ScmBom },
-        { path: 'scm-planner', component: ScmPlanner },
-        { path: 'agents', component: Agents },
-        { path: 'batches', component: Batches },
-        { path: 'settings', component: Settings },
-        { path: 'reconciliation', component: Reconciliation },
-        { path: 'inventory', component: Inventory },
-        { path: 'external', component: External },
-        { path: 'inspect', component: Inspect },
-        { path: 'anomalies', component: Anomalies },
-        { path: 'config-checklist', component: ConfigChecklist },
-        { path: 'audit', component: Audit },
+        { path: 'products/:id/wizard', component: Wizard }, // 上新分步向导（带参）
+        { path: 'showcase', component: () => import('./pages/Showcase.vue') },
+        { path: 'reviews', component: () => import('./pages/Reviews.vue') },
+        { path: 'page-content', component: () => import('./pages/PageContent.vue') }, // 页面内容五页签工作台（首页内容并入）
+        { path: 'help-videos', component: () => import('./pages/HelpVideos.vue') },
+        { path: 'courses', component: () => import('./pages/Courses.vue') },
+        { path: 'cards', component: () => import('./pages/Cards.vue') },
+        { path: 'conversations', component: () => import('./pages/Conversations.vue') },
+        { path: 'customer360', component: () => import('./pages/Customer360.vue') },
+        { path: 'kb', component: () => import('./pages/Kb.vue') },
+        { path: 'csat', component: () => import('./pages/Csat.vue') },
+        { path: 'checkpoints', component: () => import('./pages/Checkpoints.vue') },
+        { path: 'scm-overview', component: () => import('./pages/ScmOverview.vue') },
+        { path: 'scm-materials', component: () => import('./pages/ScmMaterials.vue') },
+        { path: 'scm-purchase', component: () => import('./pages/ScmPurchase.vue') },
+        { path: 'scm-outwork', component: () => import('./pages/ScmOutwork.vue') },
+        { path: 'scm-bom', component: () => import('./pages/ScmBom.vue') },
+        { path: 'scm-planner', component: () => import('./pages/ScmPlanner.vue') },
+        { path: 'agents', component: () => import('./pages/Agents.vue') },
+        { path: 'batches', component: () => import('./pages/Batches.vue') },
+        { path: 'settings', component: () => import('./pages/Settings.vue') },
+        { path: 'reconciliation', component: () => import('./pages/Reconciliation.vue') },
+        { path: 'inventory', component: () => import('./pages/Inventory.vue') },
+        { path: 'external', component: () => import('./pages/External.vue') },
+        { path: 'inspect', component: () => import('./pages/Inspect.vue') },
+        { path: 'anomalies', component: () => import('./pages/Anomalies.vue') },
+        { path: 'config-checklist', component: () => import('./pages/ConfigChecklist.vue') },
+        { path: 'audit', component: () => import('./pages/Audit.vue') },
       ],
     },
   ],

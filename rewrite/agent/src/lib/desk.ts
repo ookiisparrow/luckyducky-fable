@@ -1,4 +1,4 @@
-// 坐席台纯逻辑（守卫 rw-agent-ui-golden·黄金 cs-agent §四/§十二「会话流轮询增量合并」永恒语义）：
+// 坐席台纯逻辑（黄金 cs-agent §四/§十二「会话流轮询增量合并」永恒语义）：
 // 游标边界重复回同一条不产生重复气泡；增量并入后按时间升序（乱序落库也排对）；同一时刻不同方向/
 // 不同文视为不同条；无时间戳脏消息不进流；游标只进不退、空批不倒退。
 // 去重键（bug sweep II L1）：有 msgid（入站客户消息·全局唯一）→ 只认 msgid，同秒非文本消息（图片等
@@ -98,9 +98,6 @@ export interface KbEntry {
   key: string
   question: string
   answer: string
-  category: string
-  enabled: boolean
-  order: number
 }
 
 /** 快捷回复过滤：剔除 enabled===false / 空 question 或 answer 的条目（与 dispatch.ts bot 侧「未启用跳过」语义
@@ -114,14 +111,7 @@ export function filterQuickReplies(list: unknown): KbEntry[] {
     const question = String(e.question || '').trim()
     const answer = String(e.answer || '').trim()
     if (!question || !answer) continue
-    out.push({
-      key: String(e.key || ''),
-      question,
-      answer,
-      category: String(e.category || ''),
-      enabled: true,
-      order: Number(e.order) || 0,
-    })
+    out.push({ key: String(e.key || ''), question, answer })
   }
   return out
 }

@@ -1,4 +1,4 @@
-// 自动保存串行化 serialSave（守卫 rw-admin-serialsave-golden·治 autosave 乱序覆盖·根因#8「构建过≠真能用」）：
+// 自动保存串行化 serialSave（治 autosave 乱序覆盖·根因#8「构建过≠真能用」）：
 // 防抖 autosave 的整档 POST 无序号，慢网下两次保存乱序完成会用旧快照覆盖新内容。串行化不变量：
 // 在途再触发不并发（只标脏），当前保存完成后若期间有新编辑则用最新快照补存一次（latest-wins）。
 import { describe, it, expect } from 'vitest'

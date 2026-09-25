@@ -1,5 +1,6 @@
 // 页面内容 CMS 五页签映射（纯函数·批C）：welcome / catalogPlayer / mePage / about / agreement 各一对
 // normalize（云→表单·缺块补形·超限截断）+ payload（表单→云·裁剪限长·不夹带未知字段）。
+// payload 直接复用 normalize：normalize 对已成形的 Model 幂等，每个页签只维护一张限长表。
 // 限长与云端白名单（adminApi/content.ts sanitize*）逐字对齐——两处同源、改一处必改另一处。
 // history 由服务端权威追加（防伪造版本史），只读展示、**绝不进 payload**（回传即被云端忽略，此处更早拦住）。
 
@@ -21,12 +22,7 @@ export function normalizeWelcome(raw: unknown): WelcomeModel {
     w2: { items: arr(w2.items).slice(0, 3).map((it) => ({ title: cut(obj(it).title, 60), desc: cut(obj(it).desc, 2000) })) },
   }
 }
-export function welcomePayload(m: WelcomeModel): Record<string, unknown> {
-  return {
-    w1: { title: cut(m.w1.title, 60), sub: cut(m.w1.sub, 120), warning: cut(m.w1.warning, 120) },
-    w2: { items: m.w2.items.slice(0, 3).map((it) => ({ title: cut(it.title, 60), desc: cut(it.desc, 2000) })) },
-  }
-}
+export const welcomePayload = (m: WelcomeModel): Record<string, unknown> => ({ ...normalizeWelcome(m) })
 
 // ———————————————————————————— catalogPlayer（目录与播放）————————————————————————————
 export interface CatalogPlayerModel {
@@ -47,17 +43,7 @@ export function normalizeCatalogPlayer(raw: unknown): CatalogPlayerModel {
     },
   }
 }
-export function catalogPlayerPayload(m: CatalogPlayerModel): Record<string, unknown> {
-  return {
-    catalog: { heroImage: cut(m.catalog.heroImage, 200), resumeCta: cut(m.catalog.resumeCta, 40), emptyLesson: cut(m.catalog.emptyLesson, 40) },
-    help: {
-      contactTitle: cut(m.help.contactTitle, 60),
-      videosTitle: cut(m.help.videosTitle, 60),
-      faqTitle: cut(m.help.faqTitle, 60),
-      faq: m.help.faq.slice(0, 20).map((f) => ({ q: cut(f.q, 120), a: cut(f.a, 1000) })),
-    },
-  }
-}
+export const catalogPlayerPayload = (m: CatalogPlayerModel): Record<string, unknown> => ({ ...normalizeCatalogPlayer(m) })
 
 // ———————————————————————————— mePage（我的与关于）————————————————————————————
 // 九入口固定键集与顺序（以 rewrite/mp/pages/me 实况为准·与云端 ME_ENTRY_KEYS 同源）；label 可改名、visible 可开关，key 只读。
@@ -86,17 +72,8 @@ export function normalizeMePage(raw: unknown): MePageModel {
   })
   return { defaultNickname: cut(d.defaultNickname, 20), entries }
 }
-export function mePagePayload(m: MePageModel): Record<string, unknown> {
-  // 只发固定 9 键（顺序稳定·key 只读）：label 裁 60、visible 布尔。防表单被脏 key 污染（云端亦二次过滤）。
-  const byKey = new Map(m.entries.map((e) => [e.key, e]))
-  return {
-    defaultNickname: cut(m.defaultNickname, 20),
-    entries: ME_ENTRIES.map((def) => {
-      const e = byKey.get(def.key)
-      return { key: def.key, label: cut(e?.label || def.label, 60), visible: e ? e.visible !== false : true }
-    }),
-  }
-}
+// 只发固定 9 键（顺序稳定·key 只读）：防表单被脏 key 污染（云端亦二次过滤）。
+export const mePagePayload = (m: MePageModel): Record<string, unknown> => ({ ...normalizeMePage(m) })
 
 // ———————————————————————————— about（关于我们）————————————————————————————
 export interface AboutModel {
@@ -110,12 +87,7 @@ export function normalizeAbout(raw: unknown): AboutModel {
     sections: arr(d.sections).slice(0, 10).map((s) => ({ title: cut(obj(s).title, 60), body: cut(obj(s).body, 2000) })),
   }
 }
-export function aboutPayload(m: AboutModel): Record<string, unknown> {
-  return {
-    lead: cut(m.lead, 200),
-    sections: m.sections.slice(0, 10).map((s) => ({ title: cut(s.title, 60), body: cut(s.body, 2000) })),
-  }
-}
+export const aboutPayload = (m: AboutModel): Record<string, unknown> => ({ ...normalizeAbout(m) })
 
 // 「我」+关于两档保存结果聚合：任一失败必须看得见，禁止短路吞掉另一档。成功文案只在此一处定义。
 export const SAVE_OK_MESSAGE = '已保存，小程序立即生效'
@@ -157,14 +129,7 @@ export function normalizeAgreement(raw: unknown): AgreementModel {
     history: arr(d.history).map((h) => ({ part: cut(obj(h).part, 20), version: cut(obj(h).version, 20), at: cut(obj(h).at, 40) })),
   }
 }
-function clausePayload(c: AgreementClause): AgreementClause {
-  return {
-    version: cut(c.version, 20),
-    effectiveDate: cut(c.effectiveDate, 20),
-    sections: c.sections.slice(0, 30).map((s) => ({ title: cut(s.title, 60), body: cut(s.body, 2000) })),
-  }
-}
 export function agreementPayload(m: AgreementModel): Record<string, unknown> {
   // history 不进 payload（服务端权威追加·回传被忽略·此处更早拦）：只发 user + privacy 两份条款。
-  return { user: clausePayload(m.user), privacy: clausePayload(m.privacy) }
+  return { user: normalizeClause(m.user), privacy: normalizeClause(m.privacy) }
 }

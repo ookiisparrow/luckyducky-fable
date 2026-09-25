@@ -1,4 +1,4 @@
-// 客服组映射（纯函数·守卫 rw-admin-cs-ui-golden）：时长人话/报表 approx 诚实透传/
+// 客服组映射（纯函数）：时长人话/报表 approx 诚实透传/
 // 360 单面板 error 隔离（一处挂不能全黑·与云端编排同精神）/命中依据中文/kb 行归一。
 import { dateTime } from './format'
 
@@ -192,7 +192,7 @@ export function normalizeKb(list: unknown): KbRow[] {
   }))
 }
 
-// 节点诊断 nodeId 生成/校验（守卫 rw-admin-cs-ui-golden·根因#8）：后端 saveCheckpoints 按 _id=`def:课:nodeId`
+// 节点诊断 nodeId 生成/校验（根因#8）：后端 saveCheckpoints 按 _id=`def:课:nodeId`
 // upsert（整课覆盖），nodeId 是主键——两节点同 nodeId 会静默相互覆盖丢数据、返回计数少报。换皮 addNode 用
 // `'n'+(length+1)` 生成默认 id：删中间节点后 length 回退即撞现存号（删 n2 后再加又得 n3）。收口：默认 id 取
 // 「不与现存冲突的最小 n_k」；save 前再校验无重复（用户手改 nid 也可能撞）。
