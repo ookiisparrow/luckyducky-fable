@@ -16,7 +16,7 @@
     "qrcode": "^1.5.4",
     "vod-js-sdk-v6": "^1.8.0",
     "vue": "^3.5.35",
-    "vue-router": "^4.3.0"
+    "vue-router": "^5.3.0"
   },
   "devDependencies": {
     "@types/qrcode": "^1.5.5",
