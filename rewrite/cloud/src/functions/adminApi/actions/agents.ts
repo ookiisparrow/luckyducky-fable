@@ -1,5 +1,5 @@
 import { reply, ensure, str, newSalt, kdf, keyMatches, alertIfScanAtCap, type Ctx } from '../lib'
-import { notifyAlert, getDocOrNull, dayKeyCST, dayStartMsCST } from '../../../kit'
+import { notifyAlert, getDocOrNull, dayKeyCST, dayStartMsCST, err } from '../../../kit'
 import { COLLECTIONS } from '@ldrw/shared'
 
 // 外包账号管理（后台360工作站 §1.5·B5.2·承面C 车道 C·根因#3）：商户超管建/停/列外包坐席账号
@@ -32,20 +32,20 @@ export async function createAgent({ db, data }: Ctx) {
   const name = str((data && data.name) || '', 40).trim()
   const key = String((data && data.key) || '')
   const wecomUserId = str((data && data.wecomUserId) || '', 64).trim()
-  if (!name) return reply(400, { ok: false, error: 'BAD_NAME' })
-  if (key.length < 6) return reply(400, { ok: false, error: 'KEY_TOO_SHORT' })
+  if (!name) return reply(400, err('BAD_NAME'))
+  if (key.length < 6) return reply(400, err('KEY_TOO_SHORT'))
   await ensure(db, 'adminConfig')
   const _ = db.command
   // ① 撞口令预检：有界扫描（同 checkKey 手法·最坏 ≤50 行 scrypt 比对，管理端低频操作可接受）+ keyMatches
   // 单源比对——认得住 legacy sha 存量账号与已带盐新账号两种在场形态，不漏判。
   // 读失败不当空扫描：否则预检形同虚设、撞口令也能建号
   const dupScan = await db.collection('adminConfig').where({ keyHash: _.exists(true) }).limit(50).get().catch(() => null)
-  if (!dupScan) return reply(503, { ok: false, error: 'KEY_LOOKUP_FAIL' })
+  if (!dupScan) return reply(503, err('KEY_LOOKUP_FAIL'))
   alertIfScanAtCap(dupScan.data || [], 50, 'createAgent.dupScan')
-  if ((dupScan.data || []).some((r: any) => keyMatches(r, key))) return reply(409, { ok: false, error: 'KEY_TAKEN' })
+  if ((dupScan.data || []).some((r: any) => keyMatches(r, key))) return reply(409, err('KEY_TAKEN'))
   const taken = await wecomUserIdTaken(db, wecomUserId, '')
-  if (taken === null) return reply(503, { ok: false, error: 'WECOM_ID_LOOKUP_FAIL' })
-  if (taken) return reply(409, { ok: false, error: 'WECOM_ID_TAKEN' })
+  if (taken === null) return reply(503, err('WECOM_ID_LOOKUP_FAIL'))
+  if (taken) return reply(409, err('WECOM_ID_TAKEN'))
   const id = 'agent:' + Date.now().toString(36) + Math.random().toString(36).slice(2, 8)
   const keySalt = newSalt()
   const keyHash = kdf(key, keySalt)
@@ -68,19 +68,19 @@ export async function createAgent({ db, data }: Ctx) {
   const keyDupScan = await db.collection('adminConfig').where({ keyHash: _.exists(true) }).limit(50).get().catch(() => null)
   if (!keyDupScan) {
     await rollback('keyHash')
-    return reply(503, { ok: false, error: 'KEY_LOOKUP_FAIL' })
+    return reply(503, err('KEY_LOOKUP_FAIL'))
   }
   alertIfScanAtCap(keyDupScan.data || [], 50, 'createAgent.keyDupScan')
   const keyDupCount = ((keyDupScan.data || []) as any[]).filter((r: any) => keyMatches(r, key)).length
   if (keyDupCount > 1) {
     await rollback('keyHash')
-    return reply(409, { ok: false, error: 'KEY_TAKEN' })
+    return reply(409, err('KEY_TAKEN'))
   }
   if (wecomUserId) {
     const wDup = await db.collection('adminConfig').where({ wecomUserId }).limit(2).get().catch(() => null)
     if (!wDup || (wDup.data || []).length > 1) {
       await rollback('wecomUserId')
-      return wDup ? reply(409, { ok: false, error: 'WECOM_ID_TAKEN' }) : reply(503, { ok: false, error: 'WECOM_ID_LOOKUP_FAIL' })
+      return wDup ? reply(409, err('WECOM_ID_TAKEN')) : reply(503, err('WECOM_ID_LOOKUP_FAIL'))
     }
   }
   return reply(200, { ok: true, agent: { id, name, role: AGENT_ROLE, disabled: false, wecomUserId } })
@@ -91,7 +91,7 @@ export async function createAgent({ db, data }: Ctx) {
 export async function setAgentWecomUserId({ db, data }: Ctx) {
   const id = String((data && data.id) || '')
   const wecomUserId = str((data && data.wecomUserId) || '', 64).trim()
-  if (!id) return reply(400, { ok: false, error: 'BAD_ID' })
+  if (!id) return reply(400, err('BAD_ID'))
   const got = await db
     .collection('adminConfig')
     .doc(id)
@@ -99,10 +99,10 @@ export async function setAgentWecomUserId({ db, data }: Ctx) {
     .catch(() => null)
   const acct = got && got.data
   // 只作用于真实账号（超管 auth 或 outsourced agent）——防往任意 doc 塞字段
-  if (!acct || !(id === 'auth' || acct.role === AGENT_ROLE)) return reply(404, { ok: false, error: 'AGENT_NOT_FOUND' })
+  if (!acct || !(id === 'auth' || acct.role === AGENT_ROLE)) return reply(404, err('AGENT_NOT_FOUND'))
   const taken = await wecomUserIdTaken(db, wecomUserId, id)
-  if (taken === null) return reply(503, { ok: false, error: 'WECOM_ID_LOOKUP_FAIL' })
-  if (taken) return reply(409, { ok: false, error: 'WECOM_ID_TAKEN' })
+  if (taken === null) return reply(503, err('WECOM_ID_LOOKUP_FAIL'))
+  if (taken) return reply(409, err('WECOM_ID_TAKEN'))
   const prevWecomUserId = acct.wecomUserId || ''
   await db.collection('adminConfig').doc(id).update({ data: { wecomUserId, updatedAt: Date.now() } })
 
@@ -117,7 +117,7 @@ export async function setAgentWecomUserId({ db, data }: Ctx) {
         .doc(id)
         .update({ data: { wecomUserId: prevWecomUserId, updatedAt: Date.now() } })
         .catch(() => notifyAlert('security', 'setAgentWecomUserId', 'ROLLBACK_FAIL', { id, which: 'wecomUserId' }))
-      return dup ? reply(409, { ok: false, error: 'WECOM_ID_TAKEN' }) : reply(503, { ok: false, error: 'WECOM_ID_LOOKUP_FAIL' })
+      return dup ? reply(409, err('WECOM_ID_TAKEN')) : reply(503, err('WECOM_ID_LOOKUP_FAIL'))
     }
   }
   return reply(200, { ok: true, id, wecomUserId })
@@ -127,14 +127,14 @@ export async function setAgentWecomUserId({ db, data }: Ctx) {
 export async function disableAgent({ db, data }: Ctx) {
   const id = String((data && data.id) || '')
   const disabled = !!(data && data.disabled)
-  if (!id || id === 'auth') return reply(400, { ok: false, error: 'BAD_ID' }) // 'auth'＝超管·不许停
+  if (!id || id === 'auth') return reply(400, err('BAD_ID')) // 'auth'＝超管·不许停
   const got = await db
     .collection('adminConfig')
     .doc(id)
     .get()
     .catch(() => null)
   const acct = got && got.data
-  if (!acct || acct.role !== AGENT_ROLE) return reply(404, { ok: false, error: 'AGENT_NOT_FOUND' })
+  if (!acct || acct.role !== AGENT_ROLE) return reply(404, err('AGENT_NOT_FOUND'))
   // 停号同时清空会话（见 lib.ts 会话令牌注释）：否则重新启用时旧令牌跟着复活
   const patch: any = { disabled, updatedAt: Date.now() }
   if (disabled) patch.sessions = []

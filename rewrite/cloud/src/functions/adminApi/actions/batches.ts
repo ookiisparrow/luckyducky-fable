@@ -1,5 +1,5 @@
 import { randomBytes } from 'crypto'
-import { pageQuery } from '../../../kit'
+import { pageQuery, err } from '../../../kit'
 import { reply, type Ctx } from '../lib'
 
 // 分页全取（债#22：避免单次拉取封顶截断——批次/码增长后旧码被挤出工作台）。
@@ -23,7 +23,7 @@ async function fetchAll(makeQuery: () => any, pageSize = 200): Promise<{ rows: a
 
 export async function listBatches({ db, data }: Ctx) {
   const courseId = String(data.courseId || '')
-  if (!courseId) return reply(400, { ok: false, error: 'NO_COURSE_ID' })
+  if (!courseId) return reply(400, err('NO_COURSE_ID'))
   // 无 orderBy 时服务端不保证各页同序，skip 翻页会跨页漏/重；_id 唯一，是全序。
   const { rows, truncated } = await fetchAll(() =>
     db.collection('qrcodes').where({ courseId }).orderBy('_id', 'asc').field({ batchId: true, status: true, createdAt: true })
@@ -68,10 +68,10 @@ export async function generateQrcodes(
 ): Promise<{ ok: true; batchId: string; count: number; codes: string[] } | { ok: false; error: string }> {
   const cid = String(courseId || '')
   const rawCount = parseInt(count as any, 10)
-  if (!cid || !Number.isInteger(rawCount) || rawCount < 1) return { ok: false, error: 'BAD_ARGS' }
+  if (!cid || !Number.isInteger(rawCount) || rawCount < 1) return err('BAD_ARGS')
   const clamped = Math.min(500, rawCount)
   const course = await db.collection('courses').doc(cid).get().catch(() => null)
-  if (!course || !course.data) return { ok: false, error: 'UNKNOWN_COURSE:' + cid }
+  if (!course || !course.data) return err(`UNKNOWN_COURSE:${cid}`)
 
   const now = Date.now()
   const batchId = makeBatchId(cid, now)
@@ -105,7 +105,7 @@ const CODE_PAGE = 50
 
 export async function listBatchCodes({ db, data }: Ctx) {
   const batchId = String(data.batchId || '')
-  if (!batchId) return reply(400, { ok: false, error: 'NO_BATCH' })
+  if (!batchId) return reply(400, err('NO_BATCH'))
   // 一批可有几百到几千张：默认一页 50、limit 钳到 200，cursor 翻页（根因#7）。
   // createdAt 同批同值（generate 一次 now），靠 kit 复合游标 {_id} 打破平局。
   const paged = await pageQuery(db, 'qrcodes', { batchId }, 'createdAt', data, CODE_PAGE, 'asc')

@@ -1,4 +1,5 @@
 import cloud from 'wx-server-sdk'
+import { err } from './reply'
 
 /**
  * 微信发货信息上传接缝（根因#12 平台接缝单点 + 合规债#26）。
@@ -58,7 +59,7 @@ export function wxDeliveryCode(company: string): string {
  * 缺 transactionId）都收成 { ok:false, error } 供调用方 fail-soft 处理。成功返 { ok:true }。
  */
 export async function uploadShippingToWx(o: ShipUpload): Promise<ShipResult> {
-  if (!o.transactionId) return { ok: false, error: 'NO_TRANSACTION_ID' }
+  if (!o.transactionId) return err('NO_TRANSACTION_ID')
   try {
     const r = await (cloud as any).openapi.wxaSecOrder.uploadShippingInfo({
       orderKey: { orderNumberType: 1, transactionId: o.transactionId },
@@ -76,9 +77,9 @@ export async function uploadShippingToWx(o: ShipUpload): Promise<ShipResult> {
     })
     // 云调用成功 errCode/errcode=0；非 0 视为失败（留原始码供对账）。
     // 回包整个 falsy＝拿不到任何确认，也按失败算——fail-soft 只兜「不抛穿」，不兜「谎报成功」（2026-07-24 变异分诊缺口①）。
-    if (!r) return { ok: false, error: 'WX_EMPTY_RESP' }
+    if (!r) return err('WX_EMPTY_RESP')
     const code = r.errCode ?? r.errcode
-    if (code != null && code !== 0) return { ok: false, error: 'WX_ERR_' + code }
+    if (code != null && code !== 0) return err(`WX_ERR_${code}`)
     return { ok: true }
   } catch (e: any) {
     const code = e && (e.errCode ?? e.errcode)

@@ -2,6 +2,7 @@ import { getDb, isDocMissing, isEmptyDoc, getDocOrNull } from './db'
 import { notifyAlert } from './observe'
 import { pageQuery, type PageReq, type Paged } from './paging'
 import { COLLECTIONS, ERR } from '@ldrw/shared'
+import { err } from './reply'
 
 // 原料账原子原语（进销存 SCM-0 门1·根因#1/#2·镜像 kit/inventory.ts 范式）。
 // **全库唯一** materials.stock / stockLedger 读写处（守卫 rw-material-stock-single-seam）——任何单据出入库
@@ -107,7 +108,7 @@ export async function applyStockMoves(moves: StockMove[], doc: MoveDoc): Promise
         docId: doc.docId,
       })
       await rollback()
-      return { ok: false, error: 'LEDGER_WRITE_FAILED', materialId: m.materialId }
+      return err('LEDGER_WRITE_FAILED', { materialId: m.materialId })
     }
     // ② CAS 改余额（fg: 成品行不动 materials——成品账在 kit/inventory，流水行只留痕）
     if (!m.materialId.startsWith('fg:')) {

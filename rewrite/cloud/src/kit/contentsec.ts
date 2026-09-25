@@ -1,5 +1,6 @@
 import cloud from 'wx-server-sdk'
 import { alert } from './observe'
+import { err } from './reply'
 
 /**
  * 微信内容安全接缝（根因#12 平台接缝单点 + 根因#3 信任边界 fail-closed）。
@@ -27,23 +28,23 @@ export const SCENE_COMMENT = 2
 
 /** 校验云存储里一张图片（fileId）的内容安全。绝不抛错——失败一律收成 { ok:false }（fail-closed）。 */
 export async function imgSecCheck(fileId: string): Promise<SecResult> {
-  if (!fileId) return { ok: false, error: 'NO_FILE' }
+  if (!fileId) return err('NO_FILE')
   try {
     // 云函数 downloadFile 官方形状是 { fileID } → { fileContent, statusCode }，不是 getTempFileURL 的 fileList
     const dl = await cloud.downloadFile({ fileID: fileId })
     const buf = dl && dl.fileContent
-    if (!buf) return { ok: false, error: 'SEC_CHECK_FAIL' } // 取不到图内容 → fail-closed 拒
+    if (!buf) return err('SEC_CHECK_FAIL') // 取不到图内容 → fail-closed 拒
     const r = await (cloud as any).openapi.security.imgSecCheck({
       media: { contentType: 'image/png', value: buf },
     })
     const code = r && (r.errCode ?? r.errcode)
-    if (code === RISKY) return { ok: false, error: 'IMG_RISKY' }
-    if (code != null && code !== 0) return { ok: false, error: 'SEC_CHECK_FAIL' } // 非 0 非违规码 → 保守拒
+    if (code === RISKY) return err('IMG_RISKY')
+    if (code != null && code !== 0) return err('SEC_CHECK_FAIL') // 非 0 非违规码 → 保守拒
     return { ok: true }
   } catch (e: any) {
     const code = e && (e.errCode ?? e.errcode)
     // 87014=内容违规；其余异常（能力未开通/网络）一律 fail-closed 拒（UGC 越权写面·根因#3）
-    return { ok: false, error: code === RISKY ? 'IMG_RISKY' : 'SEC_CHECK_FAIL' }
+    return err(code === RISKY ? 'IMG_RISKY' : 'SEC_CHECK_FAIL')
   }
 }
 
@@ -59,7 +60,7 @@ function onInfraFail(infra: MsgSecInfra, scene: number): SecResult {
     alert('security', 'msgSecCheck', 'SEC_CHECK_INFRA', { scene })
     return { ok: true }
   }
-  return { ok: false, error: 'SEC_CHECK_FAIL' }
+  return err('SEC_CHECK_FAIL')
 }
 
 /**
@@ -90,12 +91,12 @@ export async function msgSecCheck(
     })
     const code = r && (r.errCode ?? r.errcode)
     const suggest = r && r.result && r.result.suggest
-    if (isRisky(code, suggest)) return { ok: false, error: 'SEC_CHECK_FAIL' }
+    if (isRisky(code, suggest)) return err('SEC_CHECK_FAIL')
     if (code != null && code !== 0) return onInfraFail(infra, scene)
     return { ok: true } // errCode:0 且非 risky（含 pass/review/无 suggest）→ 放行
   } catch (e: any) {
     const code = e && (e.errCode ?? e.errcode)
-    if (code === RISKY) return { ok: false, error: 'SEC_CHECK_FAIL' } // 抛错壳里的违规码仍拒
+    if (code === RISKY) return err('SEC_CHECK_FAIL') // 抛错壳里的违规码仍拒
     return onInfraFail(infra, scene)
   }
 }

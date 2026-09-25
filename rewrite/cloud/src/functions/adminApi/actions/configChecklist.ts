@@ -1,5 +1,5 @@
 import { reply, readDoc, type Ctx } from '../lib'
-import { hasAdjustLedgerEntry, hasThresholdMaterial } from '../../../kit'
+import { hasAdjustLedgerEntry, hasThresholdMaterial, err } from '../../../kit'
 import { COLLECTIONS } from '@ldrw/shared'
 
 // 人工配置清单（批 B9→2026-07-12 补口可填写化·docs/进销存ERP/ 与 docs/后台360工作站/ 之外的「配了没」总览）：
@@ -65,7 +65,7 @@ export async function getConfigChecklist({ db }: Ctx) {
   ])
   const docs = [rWxkf, rWxpay, rPay, rVod, rSettings, rBom]
   // 读失败≠未配置：显示成 missing 会诱导管理员重填密钥
-  if (docs.some((r) => !r.ok)) return reply(200, { ok: false, error: 'DOC_READ_FAIL' })
+  if (docs.some((r) => !r.ok)) return reply(200, err('DOC_READ_FAIL'))
   const [wxkf, wxpay, pay, vod, settings, bom] = docs.map((r) => (r.ok && r.data) || null)
   const has = (o: Record<string, unknown> | null, f: string) => !!(o && o[f])
   // wxpay 另认 adminApi 自身环境变量（规则②·同进程 wxbill.ts 读取，可信兜底）

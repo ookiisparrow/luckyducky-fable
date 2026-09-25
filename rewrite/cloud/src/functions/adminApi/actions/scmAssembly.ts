@@ -1,5 +1,5 @@
 import { reply, str, type Ctx } from '../lib'
-import { applyStockMoves, produceStock, listMaterialDocs, notifyAlert, pageQuery, getDocOrNull } from '../../../kit'
+import { applyStockMoves, produceStock, listMaterialDocs, notifyAlert, pageQuery, getDocOrNull, err } from '../../../kit'
 import { COLLECTIONS, ERR } from '@ldrw/shared'
 import { resolveBom, isValidScmProductId, isValidScmSpec } from '@ldrw/shared'
 
@@ -26,13 +26,13 @@ export async function runAssembly({ db, data, agentId }: Ctx) {
   const assemblyId = String(data.assemblyId || '') // 前端每次提交生成一次·重试复用＝幂等键
   const productId = String(data.productId || '')
   const spec = str(data.spec, 40) // 成品 SKU 规格（与 inventory/order.items[].spec 同键·可空）
-  if (!assemblyId || !productId) return reply(400, { ok: false, error: 'BAD_ARGS' })
+  if (!assemblyId || !productId) return reply(400, err('BAD_ARGS'))
   // productId/spec 定界符防护（战役3 批D·预审裁决重划边界·helper 单源 shared/scmKey.ts）：二者会拼进
   // fg:${productId}__${spec} 与 inventory idOf productId__spec——只挡 spec 含 __ 不够（productId 结尾 _ +
   // spec 开头 _ 仍会撞出同一个组合键，productId 含 __ 也会让首个 __ 反解拆错）；isValidScmProductId/
   // isValidScmSpec 两条排歧规则合用即证首个 __ 唯一定界（推理见该文件头注）。出生点两处校验之一（另一处
   // products.ts saveDraft·cleanProduct 之后）——下游消费点（历史订单/存量库存）刻意不校验，各自注释指回本处。
-  if (!isValidScmProductId(productId) || !isValidScmSpec(spec)) return reply(400, { ok: false, error: 'BAD_SPEC' })
+  if (!isValidScmProductId(productId) || !isValidScmSpec(spec)) return reply(400, err('BAD_SPEC'))
   const sets = data.sets
   if (!Number.isInteger(sets) || sets <= 0) return reply(400, { ok: false, error: ERR.BAD_SETS })
   const loaded = await loadBom(db, productId)

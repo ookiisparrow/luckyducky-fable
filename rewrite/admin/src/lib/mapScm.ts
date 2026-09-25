@@ -4,7 +4,7 @@ import { yuan } from './format'
 import { transportErrorText } from './mapSystem'
 // 采购/外协状态标签单源收口（P2 顺手改批）：此前本文件手抄 PURCHASE_CN/OUTWORK_CN，与 shared 状态机声明
 // 零绑定——改从 @ldrw/shared 取（见 shared/src/statusLabels.ts 头注）。
-import { PURCHASE_ORDER_STATUS_LABEL, OUTWORK_ORDER_STATUS_LABEL } from '@ldrw/shared'
+import { PURCHASE_ORDER_STATUS_LABEL, OUTWORK_ORDER_STATUS_LABEL, type ErrCode } from '@ldrw/shared'
 
 const TIER_CN: Record<string, string> = { L: '大团', M: '中团', S: '小团' }
 const FORM_CN: Record<string, string> = { raw: '原团', knotted: '带结' }
@@ -53,7 +53,7 @@ export const fenLabel = (fen: unknown): string => {
 /** SCM 错误码人话（原文兜底不吞）。 */
 export function scmErrorText(e: unknown): string {
   const code = String(e || '')
-  const MAP: Record<string, string> = {
+  const MAP: Partial<Record<ErrCode, string>> = {
     BAD_UOM: '计量只能选「件」或「克」',
     UOM_LOCKED: '建档后计量方式不能改（改了会混账）——需要改请新建料号',
     KNOT_ONLY_L: '带结只有大团（业务定稿：起手结做在最大团上）',
@@ -91,7 +91,7 @@ export function scmErrorText(e: unknown): string {
     NO_SPECIFIC: '专属件（包装/卡片料号）必须都选',
     BAD_PROFILE: 'BOM 档不完整，请先补齐三色与专属件',
   }
-  const hit = MAP[code] || MAP[code.split(':')[0]]
+  const hit = MAP[code as ErrCode] || MAP[code.split(':')[0] as ErrCode]
   return hit || transportErrorText(code) || '操作没成功（' + code + '）' // 原文兜底
 }
 

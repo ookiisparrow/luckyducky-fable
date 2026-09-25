@@ -10,6 +10,7 @@ import { ref, computed, onMounted } from 'vue'
 import { ShieldCheck, RefreshCw } from 'lucide-vue-next'
 import { getConfigChecklist, saveSecureConfig, savePayConfig } from '../api/system'
 import { failText, writeFailText } from '../lib/status'
+import type { ErrCode } from '@ldrw/shared'
 import PageHeader from '../components/ui/PageHeader.vue'
 import Card from '../components/ui/Card.vue'
 import Badge from '../components/ui/Badge.vue'
@@ -61,13 +62,13 @@ const anyBusy = computed(() => Object.values(fillState.value).some((s) => s.busy
 // 后端定型错误码 → 人话（非技术用户直读；未映射的原样带出便于排障）
 function errText(code: string): string {
   if (code.startsWith('TOO_LONG:')) return `内容超长（${code.slice('TOO_LONG:'.length)} 字段有长度上限），请核对后重填`
-  const map: Record<string, string> = {
+  const map: Partial<Record<ErrCode, string>> = {
     BAD_AESKEY_LEN: 'EncodingAESKey 必须是 43 位字符，请从后台完整复制后重填',
     BAD_MODE: '支付模式只能选 real 或 mock',
     BAD_DOC: '配置项标识不合法（请刷新页面后重试）',
     NO_FIELDS: '没有可保存的内容（留空提交不改动任何字段）',
   }
-  return map[code] || writeFailText('保存失败', code)
+  return map[code as ErrCode] || writeFailText('保存失败', code)
 }
 
 async function load(): Promise<boolean> {

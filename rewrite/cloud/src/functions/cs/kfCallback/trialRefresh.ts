@@ -5,7 +5,7 @@
  */
 
 import { COLLECTIONS, CS_REFRESH_COPY, CS_REFRESH_PASSPHRASES, formatRefreshDone } from '@ldrw/shared'
-import { recordAudit, transition } from '../../../kit'
+import { recordAudit, transition, err } from '../../../kit'
 import { emptyFlow, persistableFlow } from './scriptReply'
 import { packSessionId, readEpochForHandoff } from './csPack'
 
@@ -196,12 +196,12 @@ export async function applyTrialRefresh(
   }
 ): Promise<RefreshResult> {
   const euid = String(opts.externalUserId || '').trim()
-  if (!euid) return { ok: false, error: 'BAD_ARGS' }
+  if (!euid) return err('BAD_ARGS')
   const gate = await loadTrialRefreshGate(db)
-  if (!gate.on) return { ok: false, error: 'TRIAL_ONLY', externalUserId: euid }
+  if (!gate.on) return err('TRIAL_ONLY', { externalUserId: euid })
   const held = await listHeldSessions(db, euid, opts.openKfId)
   const force = !!opts.force
-  if (held.length && !force) return { ok: false, error: 'HUMAN_ACTIVE', externalUserId: euid }
+  if (held.length && !force) return err('HUMAN_ACTIVE', { externalUserId: euid })
   if (held.length && force) await forceCloseHeld(db, held)
 
   const epochFrom = await readEpochForHandoff(db, euid)

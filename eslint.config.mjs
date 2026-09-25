@@ -88,4 +88,18 @@ export default [
       'max-depth': ['error', 5],
     },
   },
+
+  // 云端失败对象手写字面量码 tsc 查不到登记册（handler 多不标返回类型），只有 err() 的参数类型拦得住写错/未登记的码。
+  {
+    files: ['rewrite/cloud/src/**/*.ts'],
+    rules: {
+      'no-restricted-syntax': [
+        'error',
+        {
+          selector: "ObjectExpression:has(> Property[key.name='ok']) > Property[key.name='error'] > :matches(Literal, TemplateLiteral, BinaryExpression)",
+          message: '失败回包改用 err(码, {...})：手写 { ok:false, error:"..." } 绕过 ErrCode 登记册检查',
+        },
+      ],
+    },
+  },
 ]

@@ -1,4 +1,5 @@
 import { request } from 'https'
+import { err } from './reply'
 
 // 企业微信群机器人告警推送（观测批5·根因#13 钱链可观测落地·移植旧线 kit/botpush.ts）。
 // [LD_ALERT] 原只打结构化日志（控制台配日志告警·靠人外部步骤）；本接缝把钱链/安全/异常告警「代码侧直推」
@@ -63,7 +64,7 @@ export async function pushBotAlert(
   fetchImpl: BotFetch = defaultFetch,
 ): Promise<{ ok: boolean; error?: string }> {
   try {
-    if (!WEBHOOK_RE.test(String(webhookUrl || ''))) return { ok: false, error: 'BAD_WEBHOOK' }
+    if (!WEBHOOK_RE.test(String(webhookUrl || ''))) return err('BAD_WEBHOOK')
     let ctxLine = ''
     try {
       const ctx = a.ctx || {}
@@ -81,12 +82,12 @@ export async function pushBotAlert(
     })
     // 2026-07-24 变异分诊缺口②：HTTP ≥400 或回包非 JSON（如网关 502 吐 HTML）都不算送达——
     // fail-soft 只要求不抛穿，不要求把「没确认」谎报成 ok:true（调用方留痕语义要真）。
-    if (r && r.status != null && r.status >= 400) return { ok: false, error: 'HTTP_' + r.status }
+    if (r && r.status != null && r.status >= 400) return err(`HTTP_${r.status}`)
     const j = await r.json().catch(() => null)
-    if (!j) return { ok: false, error: 'BAD_RESP' }
-    if (j.errcode) return { ok: false, error: 'WX_' + j.errcode }
+    if (!j) return err('BAD_RESP')
+    if (j.errcode) return err(`WX_${j.errcode}`)
     return { ok: true }
   } catch (e: any) {
-    return { ok: false, error: 'PUSH_FAIL:' + (e?.message || 'unknown') }
+    return err(`PUSH_FAIL:${e?.message || 'unknown'}`)
   }
 }

@@ -9,11 +9,14 @@ import { CREATE_ORDER_ERR_COPY } from '../lib/checkout'
 import { ERR_REASON } from '../lib/mapLearning'
 
 const ERR_VALUES = new Set([...errorsSrc.matchAll(/^\s*[A-Z_]+:\s*'([A-Z_]+)'/gm)].map((m) => m[1]))
+// 动态码（UNKNOWN_ITEM:<id> 这类）在 ErrCode 里登记为前缀模板，小程序按冒号前主码认
+const ERR_PREFIXES = new Set([...errorsSrc.matchAll(/`([A-Z_]+):\$\{string\}`/g)].map((m) => m[1]))
 // 客户端自己造的码（云调用超时/失败/回包坏），云端本来就没有
 const CLIENT_CODES = ['CALL_TIMEOUT', 'CALL_FAIL', 'BAD_RESULT']
 
+// 前缀码还要核建单源码真在拼：登记册只追加不删，光查登记册查不出「云端已不再发」
 function cloudHas(code: string): boolean {
-  return ERR_VALUES.has(code) || ordersSrc.includes(`'${code}:'`)
+  return ERR_VALUES.has(code) || (ERR_PREFIXES.has(code) && ordersSrc.includes('`' + code + ':'))
 }
 
 afterEach(() => {
@@ -23,6 +26,7 @@ afterEach(() => {
 describe('手抄的失败码与云端一致', () => {
   it('大白话：读到了云端错误码登记册（读不到就是路径/格式变了，先修这里）', () => {
     expect(ERR_VALUES.has('OUT_OF_STOCK')).toBe(true)
+    expect(ERR_PREFIXES.has('UNLISTED_ITEM')).toBe(true)
   })
 
   it('大白话：客户端自造的码确实是小程序云调用层发的（调用失败 / 回包没有 ok / 12 秒没回）', async () => {
@@ -55,8 +59,8 @@ describe('手抄的失败码与云端一致', () => {
   })
 
   it('大白话：「哪件买不了」的冒号格式没变（结算页按它找出那一行移走）', () => {
-    expect(ordersSrc).toContain("'UNLISTED_ITEM:' + l.id")
-    expect(ordersSrc).toContain("'UNKNOWN_ITEM:' + l.id")
-    expect(ordersSrc).toContain("'UNKNOWN_SKU:' + l.id + ':' + l.sku")
+    expect(ordersSrc).toContain('`UNLISTED_ITEM:${l.id}`')
+    expect(ordersSrc).toContain('`UNKNOWN_ITEM:${l.id}`')
+    expect(ordersSrc).toContain('`UNKNOWN_SKU:${l.id}:${l.sku}`')
   })
 })

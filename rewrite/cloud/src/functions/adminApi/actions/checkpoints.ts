@@ -1,5 +1,5 @@
 import { reply, ensure, str, type Ctx } from '../lib'
-import { notifyAlert } from '../../../kit'
+import { notifyAlert, err } from '../../../kit'
 
 // 节点诊断·关键节点定义策展（后台360工作站 B2.2·admin 侧）：管理端为某门课维护「关键节点 + 挽回办法」内容，
 // 学员在节点拍照、坐席据此 + 节点定义精准指导。一集合两形状：def 节点定义（本文件写）/ sub 用户拍照提交
@@ -34,19 +34,19 @@ export async function listCheckpoints({ db, data }: Ctx) {
 // 保存某门课的关键节点定义（整课覆盖式：upsert 传入节点 + 删本课不在列表里的旧节点·保持策展集同步；只动 def·不碰用户 sub 提交）
 export async function saveCheckpoints({ db, data }: Ctx) {
   const courseId = str(data && data.courseId, 64)
-  if (!courseId) return reply(400, { ok: false, error: 'BAD_ARGS' })
+  if (!courseId) return reply(400, err('BAD_ARGS'))
   // 冒号入参拒（P3·item11）：_id 拼接 'def:'+courseId+':'+nodeId，courseId/nodeId 含 ':' 会打乱段界、
   // 跨课/跨节点撞出同一个 _id 互相覆盖。fail-closed：先整体校验完（不写任何一条）再落库，避免半途拒绝
   // 留下部分节点已写、部分未写的半份数据。错误码沿用仓内既有「冒号后缀带因」形状（同 BAD_STATUS:/UNKNOWN_SKU: 先例）。
-  if (courseId.includes(':')) return reply(400, { ok: false, error: 'BAD_ARGS:COLON_IN_ID' })
+  if (courseId.includes(':')) return reply(400, err('BAD_ARGS:COLON_IN_ID'))
   const nodes = (Array.isArray(data && data.nodes) ? data.nodes : []).slice(0, NODE_LIMIT)
   for (const n of nodes) {
     const nodeId = str(n && n.nodeId, 64)
-    if (nodeId.includes(':')) return reply(400, { ok: false, error: 'BAD_ARGS:COLON_IN_ID' })
+    if (nodeId.includes(':')) return reply(400, err('BAD_ARGS:COLON_IN_ID'))
     // 空 nodeId 整批拒（D3·bug 清除批D·fail-closed）：主循环原先对空 nodeId 静默 continue，该行不进
     // keepIds，随后「删不在 keepIds 的旧 def」会把原有节点当「已移除」真删——整课覆盖时误删旧节点且前端
     // 只报成功。宁拒不删：任何空 nodeId 都到不了删除步骤（同预检位置·不写半份数据）。
-    if (!nodeId) return reply(400, { ok: false, error: 'BAD_ARGS:EMPTY_NODE_ID' })
+    if (!nodeId) return reply(400, err('BAD_ARGS:EMPTY_NODE_ID'))
   }
   await ensure(db, 'checkpoints')
   // 课程级元档 CAS 乐观并发（批A·内容域并发安全·根因#1/#2）：集合原本是逐节点 def 文档、无课程级档，
@@ -60,7 +60,7 @@ export async function saveCheckpoints({ db, data }: Ctx) {
   const metaGot = await db.collection('checkpoints').doc(metaId).get().catch(() => null)
   const curRev = metaGot && metaGot.data ? Number((metaGot.data as any).rev) || 0 : 0
   const baseRev = Number(data.baseRev)
-  if (Number.isFinite(baseRev) && curRev !== baseRev) return reply(200, { ok: false, error: 'DRAFT_CONFLICT', rev: curRev })
+  if (Number.isFinite(baseRev) && curRev !== baseRev) return reply(200, err('DRAFT_CONFLICT', { rev: curRev }))
   const nextRev = curRev + 1
   if (metaGot && metaGot.data) {
     const upd = await db
@@ -68,14 +68,14 @@ export async function saveCheckpoints({ db, data }: Ctx) {
       .where({ _id: metaId, rev: curRev })
       .update({ data: { rev: nextRev, updatedAt: Date.now() } })
       .catch(() => ({ stats: { updated: 0 } }))
-    if (!upd.stats || upd.stats.updated !== 1) return reply(200, { ok: false, error: 'DRAFT_CONFLICT', rev: curRev })
+    if (!upd.stats || upd.stats.updated !== 1) return reply(200, err('DRAFT_CONFLICT', { rev: curRev }))
   } else {
     const created = await db
       .collection('checkpoints')
       .add({ data: { _id: metaId, type: 'defmeta', courseId, rev: nextRev, updatedAt: Date.now() } })
       .then(() => true)
       .catch(() => false)
-    if (!created) return reply(200, { ok: false, error: 'DRAFT_CONFLICT', rev: curRev }) // 撞 _id＝并发方已建
+    if (!created) return reply(200, err('DRAFT_CONFLICT', { rev: curRev })) // 撞 _id＝并发方已建
   }
   const keepIds = new Set<string>()
   let i = 0
@@ -125,7 +125,7 @@ export async function saveCheckpoints({ db, data }: Ctx) {
   if (!old || failedIds.length) {
     await notifyAlert('anomaly', 'saveCheckpoints', 'GC_REMOVE_FAIL', { failedIds, courseId, scanFailed: !old })
     // rev 已递增（CAS 抢占成功·节点已 upsert）——回给前端刷新 baseRev，否则「重存收敛」会撞自己刚 bump 的 rev → DRAFT_CONFLICT
-    return reply(200, { ok: false, error: 'GC_REMOVE_FAIL', failedIds, rev: nextRev })
+    return reply(200, err('GC_REMOVE_FAIL', { failedIds, rev: nextRev }))
   }
   return reply(200, { ok: true, count: keepIds.size, rev: nextRev })
 }

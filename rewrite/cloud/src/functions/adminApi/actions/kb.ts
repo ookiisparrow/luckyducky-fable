@@ -1,5 +1,5 @@
 import { reply, ensure, str, type Ctx } from '../lib'
-import { notifyAlert, isCollectionMissing } from '../../../kit'
+import { notifyAlert, isCollectionMissing, err } from '../../../kit'
 
 // 知识库维护（后台360工作站 B4.1·admin 侧）：管理端维护 FAQ/知识条目（问题 + 答案 + 分类 + 启用 + 顺序 + 精选），
 // 客服 bot（cs/kfCallback/dispatch.ts）按 _id（=FAQ 键·同分流菜单叶子 id）读 kb 发答案——FAQ 答案单源（根因#5）。整体覆盖式保存（同 saveCheckpoints 范式）：admin 提交整份条目列表，
@@ -18,7 +18,7 @@ export async function listKb({ db }: Ctx) {
     r = await db.collection('kb').limit(SCAN).get()
   } catch (e) {
     if (isCollectionMissing(e)) return reply(200, { ok: true, list: [] }) // 集合未建＝真没有册（第一次保存前）
-    return reply(200, { ok: false, error: 'DOC_READ_FAIL' }) // 库挂了≠空册：停手，别让后台解锁「保存整册」
+    return reply(200, err('DOC_READ_FAIL')) // 库挂了≠空册：停手，别让后台解锁「保存整册」
   }
   const list = ((r && r.data) || [])
     .map((d: any) => ({
@@ -65,7 +65,7 @@ export async function saveKb({ db, data }: Ctx) {
   // 残留条目继续被 bot/坐席读到（可能是已改名/合并进别条的旧答案，误导话术）。upsert 已成功的部分保留（数据是
   // 新的、只是旧条目残留，重存一次即可收敛）；GC 失败经 notifyAlert 留痕 + 如实回 ok:false，别静默过关。
   const old = await db.collection('kb').limit(SCAN).get().catch(() => null)
-  if (!old) return reply(200, { ok: false, error: 'DOC_READ_FAIL' }) // 扫描失败≠空库：停 GC，不假装整册已替换
+  if (!old) return reply(200, err('DOC_READ_FAIL')) // 扫描失败≠空库：停 GC，不假装整册已替换
   const failedIds: string[] = []
   for (const d of (old && old.data) || []) {
     if (!keep.has(d._id)) {
@@ -80,7 +80,7 @@ export async function saveKb({ db, data }: Ctx) {
   }
   if (failedIds.length) {
     await notifyAlert('anomaly', 'saveKb', 'GC_REMOVE_FAIL', { failedIds })
-    return reply(200, { ok: false, error: 'GC_REMOVE_FAIL', failedIds })
+    return reply(200, err('GC_REMOVE_FAIL', { failedIds }))
   }
   return reply(200, { ok: true, count: keep.size })
 }

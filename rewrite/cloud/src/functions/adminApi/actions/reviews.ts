@@ -1,5 +1,5 @@
 import { reply, type Ctx } from '../lib'
-import { pageQuery, getTempUrls, IMAGE_URL_MAX_AGE } from '../../../kit'
+import { pageQuery, getTempUrls, IMAGE_URL_MAX_AGE, err } from '../../../kit'
 import { COLLECTIONS } from '@ldrw/shared'
 
 // 评价挑选（先审后发）：admin 看待挑选 + 已上架，勾上墙 / 撤下。公开读只认 picked===true。
@@ -42,13 +42,13 @@ export async function listReviews({ db, data }: Ctx) {
 
 export async function setReviewPicked({ db, data }: Ctx) {
   const id = String((data && data.id) || '')
-  if (!id) return reply(400, { ok: false, error: 'NO_ID' })
+  if (!id) return reply(400, err('NO_ID'))
   const picked = data.picked === true
   const upd = await db
     .collection(COLLECTIONS.reviews)
     .doc(id)
     .update({ data: { picked } })
     .catch(() => null)
-  if (!upd || !upd.stats || upd.stats.updated !== 1) return reply(400, { ok: false, error: 'NOT_FOUND' })
+  if (!upd || !upd.stats || upd.stats.updated !== 1) return reply(400, err('NOT_FOUND'))
   return reply(200, { ok: true, picked })
 }

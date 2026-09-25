@@ -1,6 +1,6 @@
 import { isValidPriceYuan, isValidScmProductId, isValidScmSpec } from '@ldrw/shared'
 import { reply, cleanProduct, cleanSold, storeImage, readDoc, ensure, type Ctx } from '../lib'
-import { notifyAlert, getTempUrls, setOrAdd, isCollectionMissing, deleteFiles } from '../../../kit'
+import { notifyAlert, getTempUrls, setOrAdd, isCollectionMissing, deleteFiles, err } from '../../../kit'
 
 // —— 商品图册孤儿 GC 判据单源（E16 共享 helper·防多点漂移·批B）——
 // 换图/发布替换/删档三处写点共用这一份 diff 计算 + cover 豁免，别各写一份（漂移＝漏删或误删）。
@@ -115,7 +115,7 @@ export async function listDrafts({ db, drafts }: Ctx) {
 
 export async function saveDraft({ db, drafts, data }: Ctx) {
   const p = cleanProduct(data.product)
-  if (!p) return reply(400, { ok: false, error: 'BAD_PRODUCT' })
+  if (!p) return reply(400, err('BAD_PRODUCT'))
   await ensure(db, 'productsDraft') // 草稿集合只在草稿动作用前建，不跟全局网关（进销存/体检等不顺手建）
   // 换图缓期 GC（批B·规则4）：整份覆盖前先取旧草稿+发布档，算被撤且非 cover 的孤儿图，缓期入 drafts.pendingGc
   // （单队列之家=草稿档）；不立删——admin listDrafts/mp 详情给这些图签过临时址，同步删=在场会话见 404。
@@ -124,7 +124,7 @@ export async function saveDraft({ db, drafts, data }: Ctx) {
     readDoc(drafts.doc(p.id).get()),
     readDoc(db.collection('products').doc(p.id).get()),
   ])
-  if (!prevDraftR.ok || !pubR.ok) return reply(200, { ok: false, error: 'DOC_READ_FAIL' })
+  if (!prevDraftR.ok || !pubR.ok) return reply(200, err('DOC_READ_FAIL'))
   const prevDraft = prevDraftR.data
   const pub = pubR.data
   // productId/spec 出生点校验（战役3 批D·D1·helper 单源 shared/scmKey.ts·预审裁决修订：校验只对「出生/变更」
@@ -134,15 +134,15 @@ export async function saveDraft({ db, drafts, data }: Ctx) {
   // productId 是草稿文档自身的寻址键：prevSource 存在即该 id 早已出生过（此前必过校验或属校验上线前的历史
   // 数据），不重复校验——只在真正新建（prevSource 不存在）时挡歧义 id 出生。
   const prevSource = prevDraft || pub
-  if (!prevSource && !isValidScmProductId(p.id)) return reply(400, { ok: false, error: 'BAD_SPEC' })
+  if (!prevSource && !isValidScmProductId(p.id)) return reply(400, err('BAD_SPEC'))
   // tag/SKU 名可在既有商品上被编辑，故按「相对旧值是否变化」逐项判断——未变的存量歧义值沿用旧值原样放行
   // （不追溯拒绝，注释承诺落到代码）；新增/改成的值才拦，歧义身份不再新增出生。
   const tagChanged = !prevSource || prevSource.tag !== p.tag
-  if (tagChanged && !isValidScmSpec(p.tag)) return reply(400, { ok: false, error: 'BAD_SPEC' })
+  if (tagChanged && !isValidScmSpec(p.tag)) return reply(400, err('BAD_SPEC'))
   const oldSkuNames = new Set((prevSource?.skus || []).map((s: any) => s?.name))
   for (const s of p.skus as { name: string }[]) {
     const skuIsNewOrChanged = !prevSource || !oldSkuNames.has(s.name)
-    if (skuIsNewOrChanged && !isValidScmSpec(s.name)) return reply(400, { ok: false, error: 'BAD_SPEC' })
+    if (skuIsNewOrChanged && !isValidScmSpec(s.name)) return reply(400, err('BAD_SPEC'))
   }
   const { orphans, keep } = diffOrphans([prevDraft, pub], [p, pub])
   const withGc = { ...p, pendingGc: mergePendingGc(prevDraft?.pendingGc, orphans, keep) }
@@ -160,14 +160,14 @@ export async function saveDraft({ db, drafts, data }: Ctx) {
 // ok:false，不再继续下一步、不再无条件回 ok:true；动作类失败（病根14）经 notifyAlert 留痕。
 export async function deleteDraft({ db, drafts, data }: Ctx) {
   const id = String(data.id || '')
-  if (!id) return reply(400, { ok: false, error: 'NO_ID' })
+  if (!id) return reply(400, err('NO_ID'))
   await ensure(db, 'productsDraft') // 草稿集合只在草稿动作用前建，不跟全局网关（进销存/体检等不顺手建）
   // 图册立即删（批B·规则5 例外）：两档文档一并删除后 pendingGc 无处安身、商品已不存在（在场详情会话本已死），
   // 立即删可接受。先读两档收 fileID（删档后无从取），cover 位仍豁免（订单快照·规则1）。走 diffOrphans 同源
   // 的 collectImgs：只认 cover/images 字段的 cloud:// fileID，绝不列文件夹（防误删共居的卡片/首页/目录图）。
   // 读失败≠无档：发布档读空会让它的 cover 失去豁免被删，草稿读空会让 pendingGc 随删档永久泄漏——停手不删。
   const [dr, pr] = await Promise.all([readDoc(drafts.doc(id).get()), readDoc(db.collection('products').doc(id).get())])
-  if (!dr.ok || !pr.ok) return reply(200, { ok: false, error: 'DOC_READ_FAIL' })
+  if (!dr.ok || !pr.ok) return reply(200, err('DOC_READ_FAIL'))
   const draftDoc = dr.data
   const pubDoc = pr.data
   const { all, covers } = collectImgs([draftDoc, pubDoc])
@@ -188,7 +188,7 @@ export async function deleteDraft({ db, drafts, data }: Ctx) {
   if (prodErr) {
     // products 删失败：发布面未下、drafts 保留不动——不继续删 drafts，管理员可在草稿列表重试删除
     await notifyAlert('anomaly', 'deleteDraft', 'REMOVE_FAIL', { id, stage: 'products' })
-    return reply(200, { ok: false, error: 'REMOVE_FAIL' })
+    return reply(200, err('REMOVE_FAIL'))
   }
   const draftErr = await drafts
     .doc(id)
@@ -198,7 +198,7 @@ export async function deleteDraft({ db, drafts, data }: Ctx) {
   if (draftErr) {
     // products 已删成功（发布面已下）、drafts 残留：如实报失败并留痕，注明状态——重试删除即可收敛
     await notifyAlert('anomaly', 'deleteDraft', 'REMOVE_FAIL', { id, stage: 'drafts', note: 'products already removed' })
-    return reply(200, { ok: false, error: 'REMOVE_FAIL' })
+    return reply(200, err('REMOVE_FAIL'))
   }
   // 两档已删净 → 立即删图册（规则5·cover 已豁免）。deleteFile 失败即留痕告警 + ok:false（病根14·批A 口径）——
   // 档已删、文件泄漏，告警带 orphans 供人工兜底清理，绝不静默吞。
@@ -206,7 +206,7 @@ export async function deleteDraft({ db, drafts, data }: Ctx) {
     const gcOk = await deleteFiles(orphans).then(() => true).catch(() => false)
     if (!gcOk) {
       await notifyAlert('anomaly', 'deleteDraft', 'GC_DELETE_FAIL', { id, orphans })
-      return reply(200, { ok: false, error: 'GC_DELETE_FAIL' })
+      return reply(200, err('GC_DELETE_FAIL'))
     }
   }
   return reply(200, { ok: true })
@@ -215,32 +215,32 @@ export async function deleteDraft({ db, drafts, data }: Ctx) {
 // 小图单发（b64 ≤ 80K 字符）；大图走分片（HTTP 请求体上限约 100KB，调试日志 F）
 export async function uploadImage({ cloud, data }: Ctx) {
   const b64 = String(data.b64 || '')
-  if (!b64 || b64.length > 90_000) return reply(400, { ok: false, error: 'BAD_IMAGE' })
+  if (!b64 || b64.length > 90_000) return reply(400, err('BAD_IMAGE'))
   return reply(200, await storeImage(cloud, b64, data))
 }
 
 // 上架小程序：商品草稿 → products（价格转数字，重复上架保留原 sort/featured）
 export async function publishProduct({ db, drafts, data }: Ctx) {
   const id = String(data.id || '')
-  if (!id) return reply(400, { ok: false, error: 'NO_ID' })
+  if (!id) return reply(400, err('NO_ID'))
   await ensure(db, 'productsDraft') // 草稿集合只在草稿动作用前建，不跟全局网关（进销存/体检等不顺手建）
   const got = await readDoc(drafts.doc(id).get())
-  if (!got.ok) return reply(200, { ok: false, error: 'DOC_READ_FAIL' })
-  if (!got.data) return reply(400, { ok: false, error: 'NO_DRAFT' })
+  if (!got.ok) return reply(200, err('DOC_READ_FAIL'))
+  if (!got.data) return reply(400, err('NO_DRAFT'))
   const d = got.data
-  if (!d.cover) return reply(400, { ok: false, error: 'NEED_COVER' })
+  if (!d.cover) return reply(400, err('NEED_COVER'))
   // 价格硬边界：有限正数且 ≤ 上限——拦负价 / Infinity / 超大价穿透（外部体检 P1）
-  if (!d.name || !isValidPriceYuan(d.price)) return reply(400, { ok: false, error: 'NEED_INFO' })
+  if (!d.name || !isValidPriceYuan(d.price)) return reply(400, err('NEED_INFO'))
   if (
     !Array.isArray(d.skus) ||
     !d.skus.length ||
     d.skus.some((x: any) => !x.name || !isValidPriceYuan(x.price))
   ) {
-    return reply(400, { ok: false, error: 'NEED_SKUS' })
+    return reply(400, err('NEED_SKUS'))
   }
   const productsColl = db.collection('products')
   const exist = await readDoc(productsColl.doc(id).get())
-  if (!exist.ok) return reply(200, { ok: false, error: 'DOC_READ_FAIL' })
+  if (!exist.ok) return reply(200, err('DOC_READ_FAIL'))
   let sort = exist.data?.sort
   let featured = exist.data?.featured
   if (sort === undefined) {
@@ -291,13 +291,13 @@ export async function publishProduct({ db, drafts, data }: Ctx) {
 // 详情页直达（按 id）与历史订单快照不受影响（订单存快照、不回读 products）。
 async function setListed({ db, data }: Ctx, listed: boolean) {
   const id = String(data.id || '')
-  if (!id) return reply(400, { ok: false, error: 'NO_ID' })
+  if (!id) return reply(400, err('NO_ID'))
   const upd = await db
     .collection('products')
     .doc(id)
     .update({ data: { listed, unlistedAt: listed ? null : Date.now() } })
     .catch(() => null)
-  if (upd?.stats?.updated !== 1) return reply(400, { ok: false, error: 'NO_PRODUCT' })
+  if (upd?.stats?.updated !== 1) return reply(400, err('NO_PRODUCT'))
   return reply(200, { ok: true })
 }
 export const unpublishProduct = (ctx: Ctx) => setListed(ctx, false)
@@ -313,7 +313,7 @@ export async function listShowcase({ db }: Ctx) {
 
 export async function saveShowcase({ db, data }: Ctx) {
   const items = Array.isArray(data.items) ? data.items.slice(0, 100) : []
-  if (!items.length) return reply(400, { ok: false, error: 'NO_ITEMS' })
+  if (!items.length) return reply(400, err('NO_ITEMS'))
   const productsColl = db.collection('products')
   let failed = 0 // 逐条失败计数（P2·bug sweep Round2 item16·根因#14）：原 .catch(()=>{}) 静默吞错，无论成败前端
   // 永远收到 ok:true——「已保存」是假象。改计数后任一失败即回 ok:false，不再误导消费方（admin Showcase.vue
@@ -333,7 +333,7 @@ export async function saveShowcase({ db, data }: Ctx) {
     // admin listAnomalies 查不到、企微群也收不到——不满足「留痕」二字（同 learning.ts ensureActivation
     // 注释 / orders.ts shipOne 既有写法）。改 notifyAlert：①同样打日志 ②落 anomalies 账本 ③按配置推企微。
     await notifyAlert('anomaly', 'saveShowcase', 'PARTIAL_WRITE', { failed, total: items.length })
-    return reply(400, { ok: false, error: 'PARTIAL_WRITE:' + failed })
+    return reply(400, err(`PARTIAL_WRITE:${failed}`))
   }
   return reply(200, { ok: true })
 }

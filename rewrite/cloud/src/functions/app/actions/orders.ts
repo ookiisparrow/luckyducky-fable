@@ -19,7 +19,7 @@ import {
 } from '@ldrw/shared'
 // 响应契约（批B10·病根#5/#8）：返回类型绑定 shared 契约——删键/改名 tsc 红；加键编译锁无牙
 // （可选键也能多写），牙在 tests/contract-shape.test.ts 键集合哨兵。
-import type { CreateOrderResp, PayResp, GetMyOrdersResp, GetOrderByIdResp, OrderDoc, OrderLine, AfterSaleDoc } from '@ldrw/shared'
+import type { CreateOrderResp, PayResp, GetMyOrdersResp, GetOrderByIdResp, OrderDoc, OrderLine, AfterSaleDoc, ErrCode } from '@ldrw/shared'
 import {
   withOpenId,
   withRateLimit,
@@ -110,7 +110,7 @@ const MAX_PENDING_ORDERS = 5
 
 // 云端定价：商品查 products、搭配购查单源表；未知条目整单拒（返回错误码，调用方原样回 err）
 // 新单这三个旧单可缺的键必须写全，所以写侧用 Required 收紧（读侧 OrderLine 保持可选）。
-function priceItems(lines: any[], byId: Map<string, any>): { items: Required<OrderLine>[] } | { error: string } {
+function priceItems(lines: any[], byId: Map<string, any>): { items: Required<OrderLine>[] } | { error: ErrCode } {
   const items: Required<OrderLine>[] = []
   for (const l of lines) {
     let line: Pick<OrderLine, 'productId' | 'name' | 'spec' | 'price' | 'cover'>
@@ -119,19 +119,19 @@ function priceItems(lines: any[], byId: Map<string, any>): { items: Required<Ord
       line = { productId: l.id, name: a.name, spec: '', price: a.price, cover: '' } // 搭配购无封面·不留 undefined
     } else {
       const p = byId.get(l.id)
-      if (!p) return { error: 'UNKNOWN_ITEM:' + l.id }
+      if (!p) return { error: `UNKNOWN_ITEM:${l.id}` }
       // 停售挡交易入口 fail-closed：定价/预留之前整单拒（不建单不扣库存）
-      if (p.listed === false) return { error: 'UNLISTED_ITEM:' + l.id }
+      if (p.listed === false) return { error: `UNLISTED_ITEM:${l.id}` }
       let price = p.price
       let spec = p.tag || ''
       if (l.sku) {
         const sk = (Array.isArray(p.skus) ? p.skus : []).find((x: any) => x && x.name === l.sku)
-        if (!sk) return { error: 'UNKNOWN_SKU:' + l.id + ':' + l.sku }
-        if (!isValidPriceYuan(sk.price)) return { error: 'BAD_SKU_PRICE:' + l.id + ':' + l.sku }
+        if (!sk) return { error: `UNKNOWN_SKU:${l.id}:${l.sku}` }
+        if (!isValidPriceYuan(sk.price)) return { error: `BAD_SKU_PRICE:${l.id}:${l.sku}` }
         price = Number(sk.price)
         spec = l.sku
       } else if (!isValidPriceYuan(p.price)) {
-        return { error: 'BAD_PRICE:' + l.id } // 交易最终关口：库内脏价不放行
+        return { error: `BAD_PRICE:${l.id}` } // 交易最终关口：库内脏价不放行
       }
       // LD-001 契约守卫：商品名只认服务端 products 主数据（byId 来自库内查询·不信前端上送）——
       // 写入来源被篡改（硬编码/客户端字段）时 app-orders.test.ts 的商品名来源用例必红。
@@ -302,7 +302,7 @@ export const createOrder = withOpenId(
     const rsv = await reserveStock(stockLines)
     if (!rsv.ok) {
       if (claimId) await db.collection(COLLECTIONS.orderIdempotency).doc(claimId).remove().catch(() => {}) // 拒单不占幂等键·放行同键重试
-      return err(ERR.OUT_OF_STOCK + (rsv.short ? ':' + rsv.short.productId + ':' + rsv.short.spec : ''))
+      return err(rsv.short ? `${ERR.OUT_OF_STOCK}:${rsv.short.productId}:${rsv.short.spec}` : ERR.OUT_OF_STOCK)
     }
 
     const now = Date.now()
@@ -414,7 +414,7 @@ export const applyRefund = withOpenId(
     if (!['paid', 'shipped', 'done'].includes(order.status)) return err(buildBadStatus(order.status))
 
     const item = (order.items || []).find((it) => (it.lineId || it.productId) === reqLine)
-    if (!item) return err('UNKNOWN_ITEM:' + reqLine)
+    if (!item) return err(`UNKNOWN_ITEM:${reqLine}`)
     // 剩余可退件 = 购买件数 − 已进课件数；全进则无可退（旧单无 enteredQty 视 0＝整行可退）
     const qty = item.qty || 1
     const enteredQty = item.enteredQty || 0

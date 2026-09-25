@@ -1,5 +1,5 @@
 import crypto from 'crypto'
-import { str, notifyAlert, isDocMissing, isEmptyDoc, isCollectionMissing } from '../../kit'
+import { str, notifyAlert, isDocMissing, isEmptyDoc, isCollectionMissing, err } from '../../kit'
 import { PAID_ORDER_STATUSES } from '@ldrw/shared'
 export { str } // 供 action 模块复用（saveCard / saveHomeContent 等截断）
 
@@ -242,17 +242,17 @@ async function sessionOwner(db: any, hash: string): Promise<{ ok: false } | { ok
 // 'admin'·外包→_id）；否则 BAD_KEY / SESSION_EXPIRED / ACCOUNT_DISABLED（不放行）。
 async function resolveSession(db: any, hash: string) {
   const got = await sessionOwner(db, hash)
-  if (!got.ok) return { ok: false as const, error: 'AUTH_UNAVAILABLE' } // 库故障≠令牌无效：不能回 BAD_KEY 让前端清令牌
+  if (!got.ok) return err('AUTH_UNAVAILABLE') // 库故障≠令牌无效：不能回 BAD_KEY 让前端清令牌
   const a = got.acct
-  if (!a) return { ok: false as const, error: 'BAD_KEY' }
-  if (a.disabled) return { ok: false as const, error: 'ACCOUNT_DISABLED' }
+  if (!a) return err('BAD_KEY')
+  if (a.disabled) return err('ACCOUNT_DISABLED')
   const hit = a.sessions.find((x: any) => x && x.hash === hash)
   if (!hit || typeof hit.exp !== 'number' || hit.exp < Date.now())
-    return { ok: false as const, error: 'SESSION_EXPIRED' }
+    return err('SESSION_EXPIRED')
   // 企微凭证＝账号上的 wecomUserId：改绑/解绑后，旧 userid 免登签的令牌不能再以本账号身份用。
   // 按签发时的 uid 判，不在改绑处逐个剪：口令会话不受影响，改绑与免登并发也漏不掉。
   if (hit.via === 'wecom' && (!hit.uid || hit.uid !== a.wecomUserId))
-    return { ok: false as const, error: 'SESSION_EXPIRED' }
+    return err('SESSION_EXPIRED')
   return principalOf(a)
 }
 
@@ -281,19 +281,19 @@ export async function revokeSession(db: any, token: string): Promise<boolean> {
 // login=false（业务请求）先按令牌 sha 查会话——便宜，命中或过期/停用/库故障都就此定案，不跑逐账号 scrypt；
 // 查无此令牌才回落口令比对（口令直接当 key 的调用方仍可用）。
 export async function checkKey(db: any, key: any, login: boolean) {
-  if (!key || String(key).length < 6) return { ok: false as const, error: 'KEY_TOO_SHORT' }
+  if (!key || String(key).length < 6) return err('KEY_TOO_SHORT')
   const keyStr = String(key)
   if (!login) {
     const s = await resolveSession(db, sha(keyStr))
     if (s.ok || s.error !== 'BAD_KEY') return s
   }
   const got = await readDoc(db.collection('adminConfig').doc('auth').get())
-  if (!got.ok) return { ok: false as const, error: 'AUTH_UNAVAILABLE' } // 库故障≠查无此号：不当错口令记爆破
+  if (!got.ok) return err('AUTH_UNAVAILABLE') // 库故障≠查无此号：不当错口令记爆破
   if (!got.data) {
     // 首登 bootstrap（债#15 关抢占）：无超管 doc 时·须 login + 部署密钥 ADMIN_BOOTSTRAP_KEY → 建首个超管。
     // 批6：bootstrap 建号即带盐（新写入一律 salt+scrypt·不再落无盐 sha）。
     const secret = process.env.ADMIN_BOOTSTRAP_KEY || ''
-    if (!login || !secret || keyStr !== secret) return { ok: false as const, error: 'BAD_KEY' }
+    if (!login || !secret || keyStr !== secret) return err('BAD_KEY')
     await ensure(db, 'adminConfig') // 只有这条首登写入需要集合在；读路径集合未建即当空（readDoc）
     const salt = newSalt()
     await db
@@ -327,12 +327,12 @@ export async function checkKey(db: any, key: any, login: boolean) {
       .limit(50)
       .get()
       .catch(() => null)
-    if (!scan) return { ok: false as const, error: 'AUTH_UNAVAILABLE' }
+    if (!scan) return err('AUTH_UNAVAILABLE')
     alertIfScanAtCap(scan.data || [], 50, 'checkKey')
     acct = (scan.data || []).find((r: any) => r._id !== 'auth' && keyMatches(r, keyStr))
-    if (!acct) return { ok: false as const, error: 'BAD_KEY' }
+    if (!acct) return err('BAD_KEY')
   }
-  if (acct.disabled) return { ok: false as const, error: 'ACCOUNT_DISABLED' }
+  if (acct.disabled) return err('ACCOUNT_DISABLED')
   // legacy 无盐命中即 best-effort 就地升级为带盐（存量账号无感迁移）；升级失败吞掉、不反噬本次登录——下次仍走 legacy 比对兜底
   if (!acct.keySalt) {
     const salt = newSalt()

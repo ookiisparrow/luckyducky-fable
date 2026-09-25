@@ -2,6 +2,7 @@ import { COLLECTIONS, toFen } from '@ldrw/shared'
 import { fetchTradeBill, normalizePem, type BillRow, type WxFetch } from './wxpay'
 import { getSecureConfigFields } from './secureConfig'
 import { getDocOrNull } from './db'
+import { err } from './reply'
 
 /** 库/API 金额（元，number 或数字串）→ 元 number。字符串绝不走 `+`。 */
 export function toYuanAmount(v: unknown): number {
@@ -70,17 +71,17 @@ export async function pullBillDay(
   opts: { fetchImpl?: WxFetch; billType?: string } = {}
 ): Promise<{ ok: false; error: string } | { ok: true; count: number; rows: BillRow[] }> {
   const creds = await getSecureConfigFields(db, 'wxpay', ['mchSerial', 'mchPrivateKey'], { strict: true }).catch(() => null)
-  if (!creds) return { ok: false, error: 'CREDS_READ_FAIL' }
+  if (!creds) return err('CREDS_READ_FAIL')
   const serial = creds.mchSerial
   // 私钥换行常被控制台塌成空格/字面 \n（→ OpenSSL DECODER 报错）→ 稳健重建规范 PEM（对已规整值幂等，无害）
   const privateKey = normalizePem(creds.mchPrivateKey)
-  if (!serial || !privateKey) return { ok: false, error: 'NO_WXPAY_CREDS' }
+  if (!serial || !privateKey) return err('NO_WXPAY_CREDS')
   const cfg = await getDocOrNull(db.collection(COLLECTIONS.config).doc('pay')).catch(() => undefined)
-  if (cfg === undefined) return { ok: false, error: 'CONFIG_READ_FAIL' }
+  if (cfg === undefined) return err('CONFIG_READ_FAIL')
   const mchid = (cfg && cfg.subMchId) || ''
-  if (!mchid) return { ok: false, error: 'NO_MCHID' }
+  if (!mchid) return err('NO_MCHID')
   const r = await fetchTradeBill({ date, mchid: String(mchid), serial, privateKey, billType: opts.billType }, opts.fetchImpl) // undefined 走默认出站
-  if (!r.ok) return { ok: false, error: r.error || 'BILL_FETCH_FAIL' }
+  if (!r.ok) return err(r.error || 'BILL_FETCH_FAIL')
   const rows = r.rows || []
   const count = await upsertBills(db, date, rows)
   return { ok: true, count, rows }

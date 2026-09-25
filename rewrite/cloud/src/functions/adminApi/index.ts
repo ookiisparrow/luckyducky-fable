@@ -1,5 +1,5 @@
 import cloud from 'wx-server-sdk'
-import { getDb, throttleLocked, throttleFail, throttleReset, recordAudit, shouldAudit, alert, notifyAlert } from '../../kit'
+import { getDb, throttleLocked, throttleFail, throttleReset, recordAudit, shouldAudit, alert, notifyAlert, err } from '../../kit'
 import { COLLECTIONS } from '@ldrw/shared'
 import { reply, checkKey, issueSession, revokeSession, type Ctx } from './lib'
 import * as products from './actions/products'
@@ -356,14 +356,14 @@ async function loginByWecom(data: any, tkey: string, globalWait: number) {
 
 export const main = async (event: any) => {
   if (event.httpMethod === 'OPTIONS') return reply(204, {})
-  if (event.httpMethod !== 'POST') return reply(405, { ok: false, error: 'POST_ONLY' })
+  if (event.httpMethod !== 'POST') return reply(405, err('POST_ONLY'))
 
   let req: any
   try {
     const raw = event.isBase64Encoded ? Buffer.from(event.body, 'base64').toString() : event.body
     req = JSON.parse(raw || '{}')
   } catch {
-    return reply(400, { ok: false, error: 'BAD_JSON' })
+    return reply(400, err('BAD_JSON'))
   }
   const { action, key, data = {} } = req
 
@@ -374,14 +374,14 @@ export const main = async (event: any) => {
   const tkey = clientKey(event)
   const { ipWait, globalWait } = await throttleGate(tkey)
   // 只有独立 IP 的 per-IP 锁才硬预拒。缺 IP 时 tkey===GLOBAL_KEY，ipWait 其实是全局信号——预拒会把真超管锁门外。
-  if (ipWait > 0 && tkey !== GLOBAL_KEY) return reply(429, { ok: false, error: 'TOO_MANY_ATTEMPTS', retryAfter: Math.ceil(ipWait / 1000) })
+  if (ipWait > 0 && tkey !== GLOBAL_KEY) return reply(429, err('TOO_MANY_ATTEMPTS', { retryAfter: Math.ceil(ipWait / 1000) }))
 
   if (action === 'login') return loginByPassword(key, tkey, globalWait)
 
   // 登出（pre-auth·在能力闸前）：外包只有 agent:handle，走默认拒会 403 登不出。拿着令牌就能吊销它自己，
   // 无效令牌也回成功，回包不当令牌有效性探针，故不计爆破失败。
   if (action === 'logout') {
-    if (!(await revokeSession(db, String(key || '')))) return reply(503, { ok: false, error: 'AUTH_UNAVAILABLE' })
+    if (!(await revokeSession(db, String(key || '')))) return reply(503, err('AUTH_UNAVAILABLE'))
     return reply(200, { ok: true })
   }
 
@@ -402,11 +402,11 @@ export const main = async (event: any) => {
   const caps: string[] = Array.isArray(auth.caps) ? auth.caps : []
   const capSpec = ACTION_CAPS[action]
   const needCaps: string[] = Array.isArray(capSpec) ? capSpec : capSpec ? [capSpec] : [ADMIN_DEFAULT_CAP]
-  if (!caps.some((c) => c === '*' || needCaps.includes(c))) return reply(403, { ok: false, error: 'FORBIDDEN' })
+  if (!caps.some((c) => c === '*' || needCaps.includes(c))) return reply(403, err('FORBIDDEN'))
   const drafts = db.collection('productsDraft')
 
   const handler = ACTIONS[action]
-  if (!handler) return reply(400, { ok: false, error: 'UNKNOWN_ACTION' })
+  if (!handler) return reply(400, err('UNKNOWN_ACTION'))
   const auditIp = tkey.replace('adminlogin:', '')
   const operator = String(auth.operator || 'admin') // 真实操作者身份·多账号可追溯
   const agentId = String(auth.agentId || operator)
@@ -417,7 +417,7 @@ export const main = async (event: any) => {
   } catch (e) {
     console.error('adminApi error', action, e)
     crash = { module: ADMIN_ACTION_MODULE_BY_NAME[action] ?? 'unknown', error: 'SERVER_ERROR' }
-    res = reply(500, { ok: false, error: 'SERVER_ERROR' })
+    res = reply(500, err('SERVER_ERROR'))
   }
   if (shouldAudit(action)) await recordAudit({ action, operator, ip: auditIp, data, ok: auditOk(res), ...crash })
   return res

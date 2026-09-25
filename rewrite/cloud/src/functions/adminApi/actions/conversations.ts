@@ -1,5 +1,5 @@
 import { reply, str, type Ctx } from '../lib'
-import { pageQuery } from '../../../kit'
+import { pageQuery, err } from '../../../kit'
 import { COLLECTIONS } from '@ldrw/shared'
 import { applyTrialRefresh, loadTrialRefreshGate, trialRefreshDenyStatus } from '../../cs/kfCallback/trialRefresh'
 
@@ -226,20 +226,20 @@ export async function sampleQc({ db, data }: Ctx): Promise<any> {
 export async function saveQcMark({ db, data, agentId }: Ctx): Promise<any> {
   const d = data || {}
   const sessionKey = String(d.sessionKey || '').trim()
-  if (!sessionKey) return reply(400, { ok: false, error: 'BAD_ARGS' })
+  if (!sessionKey) return reply(400, err('BAD_ARGS'))
   const score = Number(d.score)
-  if (!Number.isInteger(score) || score < 1 || score > 5) return reply(400, { ok: false, error: 'BAD_ARGS:SCORE_RANGE' })
+  if (!Number.isInteger(score) || score < 1 || score > 5) return reply(400, err('BAD_ARGS:SCORE_RANGE'))
   const note = str(d.note, QC_NOTE_MAX).trim()
   const got = await db.collection(COLLECTIONS.csSession).doc(sessionKey).get().catch(() => null)
   const s = got && got.data ? got.data : null
-  if (!s) return reply(404, { ok: false, error: 'NOT_FOUND' })
+  if (!s) return reply(404, err('NOT_FOUND'))
   const now = Date.now()
   const _ = db.command
   const r = await db
     .collection(COLLECTIONS.csSession)
     .where({ _id: sessionKey, qc: _.exists(false) })
     .update({ data: { qc: { score, note, by: String(agentId || 'admin'), at: now } } })
-  if (!r || !r.stats || r.stats.updated !== 1) return reply(409, { ok: false, error: 'ALREADY_MARKED' })
+  if (!r || !r.stats || r.stats.updated !== 1) return reply(409, err('ALREADY_MARKED'))
   return reply(200, { ok: true })
 }
 
@@ -333,12 +333,12 @@ async function collectRefreshTargets(db: any, d: Record<string, any>): Promise<R
  */
 export async function refreshTrialSession({ db, data, agentId }: Ctx): Promise<any> {
   const gate = await loadTrialRefreshGate(db)
-  if (!gate.on) return reply(trialRefreshDenyStatus(), { ok: false, error: 'TRIAL_ONLY' })
+  if (!gate.on) return reply(trialRefreshDenyStatus(), err('TRIAL_ONLY'))
   const d = data || {}
   const reason = String(d.reason || '').trim()
-  if (!reason) return reply(400, { ok: false, error: 'REASON_REQUIRED' })
+  if (!reason) return reply(400, err('REASON_REQUIRED'))
   const targets = await collectRefreshTargets(db, d)
-  if (!targets.length) return reply(400, { ok: false, error: 'BAD_ARGS' })
+  if (!targets.length) return reply(400, err('BAD_ARGS'))
   const force = !!d.force
   const results = []
   for (const t of targets) {

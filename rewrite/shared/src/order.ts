@@ -186,6 +186,7 @@ export const AFTERSALE_STATUS = statesOf(AFTERSALE_STATUS_SPEC) as readonly Afte
  * 解析侧 mp payFlow.ts / admin Fulfill.vue 各自按字面量手动同步（mp 进不了 @ldrw/shared）——
  * 前缀不可改，一改三处（本文件 + mp + admin）都得跟着改。
  */
-export function buildBadStatus(status: string): string {
-  return 'BAD_STATUS:' + status
+export function buildBadStatus(status: string): `BAD_STATUS:${string}` {
+  // 拼接推不出模板类型只能断言；不改写成模板字符串，因为 check-structure「错误前缀」从下一行的字符串拼接里取前缀
+  return 'BAD_STATUS:' + status as `BAD_STATUS:${string}`
 }

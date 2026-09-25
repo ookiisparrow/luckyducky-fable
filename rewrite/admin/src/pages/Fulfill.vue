@@ -7,6 +7,7 @@ import { RefreshCw, ScanLine, Printer, Package } from 'lucide-vue-next'
 import { listOrders, shipOrder } from '../api/money'
 import { mapOrderRows, orderErrorText, type OrderRowVM } from '../lib/mapMoney'
 import { dateTime } from '../lib/format'
+import type { ErrCode } from '@ldrw/shared'
 import {
   FULFILL_STEP_NAMES,
   COMPANIES,
@@ -261,7 +262,7 @@ function onScan() {
 }
 function mapShipErr(code: unknown): string {
   if (code === 'BAD_STATUS:' + 'shipped') return '这单已发过货；要改运单号请去「订单发货」页'
-  if (code === 'REFUND_LINES_CHANGED') return '这单打完标签后又有商品退款，箱里的货可能多了——点「刷新队列」重打标签，按新标签重新装箱'
+  if (code === ('REFUND_LINES_CHANGED' satisfies ErrCode)) return '这单打完标签后又有商品退款，箱里的货可能多了——点「刷新队列」重打标签，按新标签重新装箱'
   return orderErrorText(code)
 }
 async function doShip(order: FulfillOrder, trackingNo: string) {

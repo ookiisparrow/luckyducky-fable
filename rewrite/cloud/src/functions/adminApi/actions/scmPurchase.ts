@@ -1,5 +1,5 @@
 import { reply, type Ctx } from '../lib'
-import { transition, applyStockMoves, listMaterialDocs, pageQuery, notifyAlert, getDocOrNull } from '../../../kit'
+import { transition, applyStockMoves, listMaterialDocs, pageQuery, notifyAlert, getDocOrNull, err } from '../../../kit'
 import { COLLECTIONS } from '@ldrw/shared'
 import { asFen, PURCHASE_ORDER_TRANSITIONS } from '@ldrw/shared'
 
@@ -31,22 +31,22 @@ interface PurchaseLine {
 /** 行校验 fail-closed（根因#8 假数据不入账）：qty 正整数、unitPriceFen 非负整数分、料号在主档、无重复行。
  *  重复料号必拒——received 入库流水 _id=`purchase_in:<docId>:<materialId>`，同料两行会撞幂等键漏记后行。 */
 async function validateLines(raw: any): Promise<{ ok: true; lines: PurchaseLine[]; totalFen: number } | { ok: false; error: string; materialId?: string }> {
-  if (!Array.isArray(raw) || !raw.length) return { ok: false, error: 'BAD_LINES' }
-  if (raw.length > MAX_LINES) return { ok: false, error: 'BAD_LINES' }
+  if (!Array.isArray(raw) || !raw.length) return err('BAD_LINES')
+  if (raw.length > MAX_LINES) return err('BAD_LINES')
   const known = new Set((await listMaterialDocs()).map((m: any) => m._id)) // 主档只读校验（不写 materials·门1 之外无写）
   const seen = new Set<string>()
   const lines: PurchaseLine[] = []
   let totalFen = 0
   for (const l of raw) {
     const materialId = l && typeof l.materialId === 'string' ? l.materialId : ''
-    if (!materialId) return { ok: false, error: 'BAD_LINES' }
-    if (!known.has(materialId)) return { ok: false, error: 'NO_MATERIAL', materialId }
-    if (seen.has(materialId)) return { ok: false, error: 'DUP_LINE', materialId }
+    if (!materialId) return err('BAD_LINES')
+    if (!known.has(materialId)) return err('NO_MATERIAL', { materialId })
+    if (seen.has(materialId)) return err('DUP_LINE', { materialId })
     seen.add(materialId)
     const qty = l.qty
-    if (!Number.isInteger(qty) || qty <= 0) return { ok: false, error: 'BAD_QTY', materialId }
+    if (!Number.isInteger(qty) || qty <= 0) return err('BAD_QTY', { materialId })
     const unitPriceFen = l.unitPriceFen
-    if (!Number.isInteger(unitPriceFen) || unitPriceFen < 0) return { ok: false, error: 'BAD_PRICE', materialId }
+    if (!Number.isInteger(unitPriceFen) || unitPriceFen < 0) return err('BAD_PRICE', { materialId })
     lines.push({ materialId, qty, unitPriceFen: asFen(unitPriceFen) })
     totalFen += qty * unitPriceFen
   }
@@ -71,10 +71,10 @@ export async function listPurchases({ db, data }: Ctx) {
 export async function savePurchase({ db, data, agentId }: Ctx) {
   // 供应商须存在且是厂家（织女走车道 B 外协单·不混）
   const supplierId = String(data.supplierId || '')
-  if (!supplierId) return reply(400, { ok: false, error: 'BAD_SUPPLIER' })
+  if (!supplierId) return reply(400, err('BAD_SUPPLIER'))
   // 读失败照抛（网关 500）——库挂≠供应商不对（根因#14）
   const sup = await getDocOrNull(db.collection(COLLECTIONS.suppliers).doc(supplierId))
-  if (!sup || sup.type !== 'factory') return reply(400, { ok: false, error: 'BAD_SUPPLIER' })
+  if (!sup || sup.type !== 'factory') return reply(400, err('BAD_SUPPLIER'))
 
   const v = await validateLines(data.lines)
   if (!v.ok) return reply(400, { ok: false, error: v.error, materialId: v.materialId })
@@ -89,8 +89,8 @@ export async function savePurchase({ db, data, agentId }: Ctx) {
     const r = await coll.where({ _id: purchaseId, status: 'draft' }).update({ data: fields })
     if (!r.stats || r.stats.updated !== 1) {
       const got = await getDocOrNull(coll.doc(purchaseId))
-      if (!got) return reply(404, { ok: false, error: 'NO_PURCHASE' })
-      return reply(409, { ok: false, error: 'NOT_DRAFT' })
+      if (!got) return reply(404, err('NO_PURCHASE'))
+      return reply(409, err('NOT_DRAFT'))
     }
     return reply(200, { ok: true, purchaseId, totalFen: v.totalFen })
   }
@@ -102,22 +102,22 @@ export async function savePurchase({ db, data, agentId }: Ctx) {
 
 export async function markOrdered({ data }: Ctx) {
   const id = String(data.purchaseId || '')
-  if (!id) return reply(400, { ok: false, error: 'BAD_ID' })
+  if (!id) return reply(400, err('BAD_ID'))
   const r = await transition('purchaseOrders', id, fromFor('ordered'), 'ordered', { orderedAt: Date.now(), updatedAt: Date.now() })
-  if (!r.doc) return reply(404, { ok: false, error: 'NO_PURCHASE' })
-  if (!r.moved && r.doc.status !== 'ordered') return reply(409, { ok: false, error: 'BAD_STATUS', current: r.doc.status })
+  if (!r.doc) return reply(404, err('NO_PURCHASE'))
+  if (!r.moved && r.doc.status !== 'ordered') return reply(409, err('BAD_STATUS', { current: r.doc.status }))
   return reply(200, { ok: true, moved: r.moved })
 }
 
 export async function receivePurchase({ db, data, agentId }: Ctx) {
   const id = String(data.purchaseId || '')
-  if (!id) return reply(400, { ok: false, error: 'BAD_ID' })
+  if (!id) return reply(400, err('BAD_ID'))
   const r = await transition('purchaseOrders', id, fromFor('received'), 'received', { receivedAt: Date.now(), updatedAt: Date.now() })
-  if (!r.doc) return reply(404, { ok: false, error: 'NO_PURCHASE' })
+  if (!r.doc) return reply(404, err('NO_PURCHASE'))
   if (!r.moved) {
     // 重放天然幂等：已 received 直接返回（入库副作用绑首次流转·不双入库）；draft 直收/已取消＝非法流转拒
     if (r.doc.status === 'received') return reply(200, { ok: true, moved: false })
-    return reply(409, { ok: false, error: 'BAD_STATUS', current: r.doc.status })
+    return reply(409, err('BAD_STATUS', { current: r.doc.status }))
   }
   // 首次流转 → 门1 入库（各行 qty 正数·确定性流水 purchase_in:<单据id>:<料号>·并发重放撞幂等键跳过）
   const lines: PurchaseLine[] = Array.isArray(r.doc.lines) ? r.doc.lines : []
@@ -147,17 +147,17 @@ export async function receivePurchase({ db, data, agentId }: Ctx) {
         stockError: applied.error,
       })
     }
-    return reply(500, { ok: false, error: 'STOCK_APPLY_FAIL', detail: applied.error, materialId: applied.materialId })
+    return reply(500, err('STOCK_APPLY_FAIL', { detail: applied.error, materialId: applied.materialId }))
   }
   return reply(200, { ok: true, moved: true, applied: applied.applied })
 }
 
 export async function cancelPurchase({ data }: Ctx) {
   const id = String(data.purchaseId || '')
-  if (!id) return reply(400, { ok: false, error: 'BAD_ID' })
+  if (!id) return reply(400, err('BAD_ID'))
   const r = await transition('purchaseOrders', id, fromFor('cancelled'), 'cancelled', { cancelledAt: Date.now(), updatedAt: Date.now() })
-  if (!r.doc) return reply(404, { ok: false, error: 'NO_PURCHASE' })
+  if (!r.doc) return reply(404, err('NO_PURCHASE'))
   // received 后不可取消（状态机声明表无 received→cancelled 边·天然拒）——入库后的账走调整单
-  if (!r.moved && r.doc.status !== 'cancelled') return reply(409, { ok: false, error: 'BAD_STATUS', current: r.doc.status })
+  if (!r.moved && r.doc.status !== 'cancelled') return reply(409, err('BAD_STATUS', { current: r.doc.status }))
   return reply(200, { ok: true, moved: r.moved })
 }

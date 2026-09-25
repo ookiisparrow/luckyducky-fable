@@ -1,7 +1,7 @@
 import crypto from 'crypto'
 import https from 'https'
 import { getDb } from './db'
-import { COLLECTIONS, ERR } from '@ldrw/shared'
+import { COLLECTIONS, ERR, type ErrCode } from '@ldrw/shared'
 import { alert } from './observe'
 import { getSecureConfig, getSecureConfigFields } from './secureConfig'
 import { ok, err } from './reply'
@@ -527,7 +527,7 @@ export async function getKfMedia(
 // 权限改由外层 adminApi 网关闸（口令 + scope + 接待窗口，见 agentDesk.ts sendAgentMessage/getMediaUrl）负责。
 
 /** 读 wxkf 凭证并取 access_token：未配回 KF_NOT_CONFIGURED、gettoken 失败回 TOKEN_FAILED。 */
-export async function kfToken(db: any): Promise<{ token: string } | { error: string }> {
+export async function kfToken(db: any): Promise<{ token: string } | { error: ErrCode }> {
   const { corpId: corpid, secret } = await getSecureConfigFields(db, 'wxkf', ['corpId', 'secret'])
   if (!corpid || !secret) return { error: ERR.KF_NOT_CONFIGURED }
   try {

@@ -4,9 +4,10 @@
 import { yuan, orderStatusLabel, refundStatusLabel, dateTime } from './format'
 import { stockAlertOf } from './thresholds'
 import { transportErrorText } from './mapSystem'
-import { asFen, fenToYuan } from '@ldrw/shared'
+import { asFen, fenToYuan, type ErrCode } from '@ldrw/shared'
 
-const ORDER_ERR: Record<string, string> = {
+// NO_RESULT 不是云端码：Orders.vue 批量发货回包里缺这一单时本地补的
+const ORDER_ERR: Partial<Record<ErrCode | 'NO_RESULT', string>> = {
   BAD_ARGS: '参数不完整',
   NO_ORDER: '找不到这单订单',
   FEE_MISMATCH_HOLD: '金额异常单被挡下：先去核对流水解除',
@@ -20,7 +21,6 @@ const ORDER_ERR: Record<string, string> = {
   REFUND_SCAN_CAP: '售后记录异常',
   CONCURRENT: '刚被改过，请刷新重试',
   ORDER_NO_REQUIRED: '需要输入单号',
-  NOT_EXCEPTION: '该单不是支付异常状态',
   NO_RESULT: '系统没返回这单结果，请重试',
   ENTERED_NOT_REFUNDABLE: '这件商品已进课，不符合退款规则',
   NOTHING_LEFT: '这件商品已经没有可退金额了',
@@ -45,7 +45,7 @@ export function orderErrorText(e: unknown): string {
     const refundLabel = refundStatusLabel(raw)
     return `${refundLabel !== raw ? '售后' : '当前'}状态「${refundLabel}」不允许此操作`
   }
-  return ORDER_ERR[s] || transportErrorText(s) || `操作失败（${s}）`
+  return ORDER_ERR[s as keyof typeof ORDER_ERR] || transportErrorText(s) || `操作失败（${s}）`
 }
 
 export interface StatCard {

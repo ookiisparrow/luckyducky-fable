@@ -1,6 +1,6 @@
 import { reply, ensure, readDoc, type Ctx } from '../lib'
 import { COLLECTIONS } from '@ldrw/shared'
-import { normalizePem, setOrAdd } from '../../../kit'
+import { normalizePem, setOrAdd, err } from '../../../kit'
 
 // 人工配置清单可填写化（决策 2026-07-12·config-checklist 补口）：把此前只能去云开发控制台改环境变量/
 // 库里手敲 JSON 的敏感凭证 + 支付接缝配置，收口成两个写 action——admin 页填、云函数运行时读库自动生效
@@ -36,7 +36,7 @@ const MAX_LEN: Record<string, number> = {
 /** 写「wxkf」/「wxpay」/「vod」三 doc 的敏感凭证字段（merge-save·同 saveSettings 范式：先读现有、非 undefined 才覆盖）。 */
 export async function saveSecureConfig({ db, data }: Ctx) {
   const docId = String((data && data.docId) || '')
-  if (docId !== 'wxkf' && docId !== 'wxpay' && docId !== 'vod') return reply(400, { ok: false, error: 'BAD_DOC' })
+  if (docId !== 'wxkf' && docId !== 'wxpay' && docId !== 'vod') return reply(400, err('BAD_DOC'))
   const allow = DOC_FIELDS[docId]
   const fields = (data && typeof data.fields === 'object' && data.fields) || {}
 
@@ -45,18 +45,18 @@ export async function saveSecureConfig({ db, data }: Ctx) {
     if ((fields as Record<string, unknown>)[f] === undefined) continue
     let v = String((fields as Record<string, unknown>)[f] || '').trim()
     if (!v) continue // 留空不改动
-    if (v.length > MAX_LEN[f]) return reply(400, { ok: false, error: 'TOO_LONG:' + f })
+    if (v.length > MAX_LEN[f]) return reply(400, err(`TOO_LONG:${f}`))
     // EncodingAESKey 平台定长 43（base64）：长度不对多半是抄漏/多抄——早拒早发现，别等回调解密才崩
-    if (f === 'aesKey' && v.length !== 43) return reply(400, { ok: false, error: 'BAD_AESKEY_LEN' })
+    if (f === 'aesKey' && v.length !== 43) return reply(400, err('BAD_AESKEY_LEN'))
     if (f === 'mchPrivateKey') v = normalizePem(v) // 换行常被输入框/剪贴板塌行——存前先规整（同 wxbill 读时兜底）
     patch[f] = v
   }
-  if (!Object.keys(patch).length) return reply(400, { ok: false, error: 'NO_FIELDS' })
+  if (!Object.keys(patch).length) return reply(400, err('NO_FIELDS'))
 
   await ensure(db, COLLECTIONS.secureConfig)
   const coll = db.collection(COLLECTIONS.secureConfig)
   const got = await readDoc(coll.doc(docId).get())
-  if (!got.ok) return reply(200, { ok: false, error: 'DOC_READ_FAIL' }) // 读失败≠空档：停写，不拿 {} 整档覆盖
+  if (!got.ok) return reply(200, err('DOC_READ_FAIL')) // 读失败≠空档：停写，不拿 {} 整档覆盖
   const { _id: _omitId, ...cur } = got.data || {}
   const next = { ...cur, ...patch, updatedAt: Date.now() }
   await setOrAdd(coll, docId, next)
@@ -70,22 +70,22 @@ export async function savePayConfig({ db, data }: Ctx) {
   const patch: Record<string, unknown> = {}
   if (data && data.mode !== undefined) {
     const m = String(data.mode || '')
-    if (m !== 'real' && m !== 'mock') return reply(400, { ok: false, error: 'BAD_MODE' })
+    if (m !== 'real' && m !== 'mock') return reply(400, err('BAD_MODE'))
     patch.mode = m
   }
   for (const f of ['subMchId', 'flowId', 'refundFlowId'] as const) {
     if (!data || data[f] === undefined) continue
     const v = String(data[f] || '').trim()
     if (!v) continue
-    if (v.length > PAY_MAX_LEN[f]) return reply(400, { ok: false, error: 'TOO_LONG:' + f })
+    if (v.length > PAY_MAX_LEN[f]) return reply(400, err(`TOO_LONG:${f}`))
     patch[f] = v
   }
-  if (!Object.keys(patch).length) return reply(400, { ok: false, error: 'NO_FIELDS' })
+  if (!Object.keys(patch).length) return reply(400, err('NO_FIELDS'))
 
   await ensure(db, COLLECTIONS.config)
   const coll = db.collection(COLLECTIONS.config)
   const got = await readDoc(coll.doc('pay').get())
-  if (!got.ok) return reply(200, { ok: false, error: 'DOC_READ_FAIL' }) // 读失败≠空档：停写，不拿 {} 整档覆盖
+  if (!got.ok) return reply(200, err('DOC_READ_FAIL')) // 读失败≠空档：停写，不拿 {} 整档覆盖
   const { _id: _omitId, ...cur } = got.data || {}
   const next = { ...cur, ...patch, updatedAt: Date.now() }
   await setOrAdd(coll, 'pay', next)

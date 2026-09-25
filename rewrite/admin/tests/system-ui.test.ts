@@ -58,7 +58,6 @@ describe('上新/批次/课程错误码人话（操作者可见·不裸甩英文
     expect(launchErrorText('VOD_PROCESSING')).toContain('转码')
     expect(launchErrorText('DRAFT_CONFLICT')).toContain('载入')
     expect(launchErrorText('SESSION_LOST')).toContain('登录')
-    expect(launchErrorText('GEN_FAIL')).toContain('二维码')
   })
 
   it('大白话：没映射的码也不裸甩 Error:CODE；已是中文原样；空串给兜底人话', () => {

@@ -2,6 +2,7 @@
 // 上架四道门错误转人话（原文兜底不吞）；编辑走整档 round-trip（saveDraft 全量覆盖——表单只绑核心字段·
 // 未编辑字段原样随档提交，防高级字段被抹）。
 import { transportErrorText } from './mapSystem'
+import type { ErrCode } from '@ldrw/shared'
 
 export type ProductState = 'onsale' | 'unlisted' | 'preparing'
 
@@ -256,10 +257,11 @@ export function wizardCanPublish(p: unknown): boolean {
 export function publishErrorText(e: unknown, state: ProductState = 'onsale'): string {
   const act = draftSyncLabel(state)
   const code = String(e || '')
-  if (code === 'NO_DRAFT') return '草稿不存在（可能已被删除）'
-  if (code === 'NEED_COVER') return '先上传封面图才能' + act
-  if (code === 'NEED_INFO') return '名称或价格没填好（价格须是有效金额）'
-  if (code === 'NEED_SKUS') return '规格行不完整（每行都要有名称和有效价格）'
+  const is = (c: ErrCode) => code === c
+  if (is('NO_DRAFT')) return '草稿不存在（可能已被删除）'
+  if (is('NEED_COVER')) return '先上传封面图才能' + act
+  if (is('NEED_INFO')) return '名称或价格没填好（价格须是有效金额）'
+  if (is('NEED_SKUS')) return '规格行不完整（每行都要有名称和有效价格）'
   return transportErrorText(code) || act + '没成功（' + code + '）' // 原文兜底
 }
 

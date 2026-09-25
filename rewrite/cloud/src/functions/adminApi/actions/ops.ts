@@ -1,5 +1,5 @@
 import { reply, type Ctx } from '../lib'
-import { runInspection, pageQuery, recordAnomaly, throttleHit, str } from '../../../kit'
+import { runInspection, pageQuery, recordAnomaly, throttleHit, str, err } from '../../../kit'
 import { COLLECTIONS } from '@ldrw/shared'
 
 // 运行期观测·控制台数据层（批3·体检面板 + 异常账本·治病根#14 告警进人眼）：手动巡检 / 最新体检 / 异常列表 /
@@ -62,7 +62,7 @@ export async function listAnomalies({ db, data }: Ctx) {
 /** 标记异常已处理（写·自动审计·resolvedBy 记真实操作者）。 */
 export async function resolveAnomaly({ db, data, agentId }: Ctx) {
   const id = String((data && data.id) || '')
-  if (!id) return reply(200, { ok: false, error: 'BAD_ARGS' })
+  if (!id) return reply(200, err('BAD_ARGS'))
   const r = await db
     .collection(COLLECTIONS.anomalies)
     .doc(id)
@@ -145,7 +145,7 @@ export async function reportClientError({ data, agentId }: Ctx) {
   if (over) return reply(200, { ok: true, dropped: true }) // 节流丢弃不算错误，前端不必重试
   const d = data || {}
   const msg = str(d.msg, 500)
-  if (!msg) return reply(200, { ok: false, error: 'BAD_ARGS' })
+  if (!msg) return reply(200, err('BAD_ARGS'))
   const source = d.source === 'admin' || d.source === 'agent' ? d.source : 'unknown'
   const page = str(d.page, 200)
   await recordAnomaly('client-error', CLIENT_ERROR_CODE[source] || 'WEB_JS_ERROR', { fp: hashSig(msg), source, page, msg, agentId: agentId || '' }, 'low')
