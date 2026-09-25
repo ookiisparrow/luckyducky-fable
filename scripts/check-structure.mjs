@@ -224,7 +224,7 @@ export const repoChecks = [
       // ② 红区闸
       if (!manifest) bad.push('scripts/lib/red-paths.mjs 缺失——红区提交闸的名单')
       else {
-        for (const must of ['rewrite/cloud/src/functions/callbacks/', 'rewrite/cloud/src/kit/wxpay.ts', 'rewrite/cloud/src/kit/transition.ts', 'rewrite/shared/src/money.ts', 'rewrite/shared/src/order.ts', 'rewrite/mp/pages/checkout/', 'rewrite/cloud/src/kit/gate.ts', 'rewrite/cloud/src/functions/adminApi/actions/secureConfig.ts'])
+        for (const must of ['rewrite/cloud/src/functions/callbacks/', 'rewrite/cloud/src/kit/wxpay.ts', 'rewrite/cloud/src/kit/transition.ts', 'rewrite/shared/src/money.ts', 'rewrite/shared/src/order.ts', 'rewrite/mp/pages/checkout/', 'rewrite/cloud/src/kit/gate.ts', 'rewrite/cloud/src/functions/adminApi/actions/secureConfig.ts', 'rewrite/cloud/src/functions/adminApi/lib.ts', 'rewrite/cloud/src/functions/timers/closeExpiredOrders.ts'])
           if (!manifest.includes(must)) bad.push(`red-paths.mjs 缺关键路径 ${must}——红区边界被收窄（改边界须老板拍板）`)
         if (!manifest.includes('export function isRedPath')) bad.push('red-paths.mjs 缺 isRedPath 导出——pre-commit 靠它判定')
       }
