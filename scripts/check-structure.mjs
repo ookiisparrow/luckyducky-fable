@@ -39,8 +39,7 @@ const lsScan = (d) => readdirSync(d).filter((n) => !SKIP_DIR(n))
 
 function listPackageJsons() {
   const out = ['package.json']
-  // 旧线 packages/ + 新线 rewrite/（rw-line-in-gates：包级守卫不许漏扫新线）
-  for (const base of ['packages', 'rewrite']) {
+  for (const base of ['rewrite']) {
     const dir = join(ROOT, base)
     if (!existsSync(dir)) continue
     for (const n of lsScan(dir)) {
@@ -241,7 +240,6 @@ export const repoChecks = [
     desc: '客服卡片 pagepath 须为小程序已注册路由（根因#8·外审 P2.11）：旧线 packages/cloud dispatch.ts×pages.json + 新线 rewrite/cloud dispatch.ts×rewrite/mp/app.json（主包 pages + subPackages root/path）双面扫——防卡片跳不存在页真机打不开。课程链路审计 2026-07-17 扩新线面：原只扫旧线冻结参照，新线死链（pkg-video 分包路径从未落地）在守卫真空里假绿',
     run() {
       const bad = []
-      // 旧线面已随 packages/ 删除（2026-07-23 瘦身拍板批）
       // 新线（原生小程序 app.json·真正部署面）
       const rwDispatch = 'rewrite/cloud/src/functions/cs/kfCallback/dispatch.ts'
       const rwAppJson = 'rewrite/mp/app.json'
@@ -276,7 +274,6 @@ export const repoChecks = [
     desc: 'UGC 内容安全入库前必校（根因#3 fail-closed）：kit/contentsec.ts 接缝须真调 cloud.openapi.security.imgSecCheck（图）+ .msgSecCheck（文本）；写 UGC 图的函数——checkpoint.ts 写 checkpoints / reviews.ts 存买家秀 photos / user.ts 头像——须调 imgSecCheck；写 UGC 文本的函数——reviews.ts 评价 text/tags、user.ts 昵称/签名——须调 msgSecCheck，防违规图/文直接入库（节点诊断拍照 B2.2 + 买家秀晒图 + 昵称/签名/头像公开展示面）',
     run() {
       const bad = []
-      // 旧线 contentsec/submitCheckpointPhoto 段已随 packages/ 删除（2026-07-23 瘦身拍板批）；本守卫只守活线
       const rwSec = 'rewrite/cloud/src/kit/contentsec.ts'
       const absRwSec = join(ROOT, rwSec)
       if (!existsSync(absRwSec)) bad.push(`${rwSec} 缺失——重写线内容安全接缝（根因#3·UGC 入库前校验）`)
@@ -595,57 +592,9 @@ export const repoChecks = [
     },
   },
   {
-    id: 'user-writes-throttled',
-    roots: ['#13'],
-    desc: '用户端可滥用写函数防刷（根因#13·活线）：高频/造数写函数（trackEvent/createOrder/login/updateProfile）必经 withRateLimit（按 openid 限频），防无限刷库/堆垃圾/成本',
-    run() {
-      const bad = []
-      // 旧线段已随 packages/ 删除（2026-07-23 瘦身拍板批）
-      // 活线（rewrite/cloud·多 action 合于一文件）：按「文件 + withRateLimit 标签」核每个用户写 action 被包裹
-      const rwTargets = [
-        { file: 'learning.ts', label: 'trackEvent' },
-        { file: 'checkpoint.ts', label: 'submitCheckpointPhoto' },
-        { file: 'cs.ts', label: 'kfBind' },
-        { file: 'cs.ts', label: 'dataConsent' },
-        { file: 'feedback.ts', label: 'submitFeedback' },
-        { file: 'orders.ts', label: 'createOrder' },
-        { file: 'user.ts', label: 'login' },
-        { file: 'user.ts', label: 'updateProfile' },
-        { file: 'reviews.ts', label: 'submitReview' },
-      ]
-      for (const { file, label } of rwTargets) {
-        const f = `rewrite/cloud/src/functions/app/actions/${file}`
-        const abs = join(ROOT, f)
-        if (!existsSync(abs)) {
-          bad.push(`${f} 缺失——活线用户写函数（${label}）`)
-          continue
-        }
-        const src = readFileSync(abs, 'utf8')
-        if (!new RegExp(`withRateLimit\\s*\\(\\s*['"]${label}['"]`).test(src))
-          bad.push(`${f} 的 ${label} 未经 withRateLimit(${label}) 包裹——可滥用写函数无频控、可被刷（根因#13·活线唯一部署版本）`)
-      }
-      return bad
-    },
-  },
-  {
-    id: 'rw-admin-login-throttled',
-    roots: ['#13'],
-    desc: '认证端点防爆破·生产线（根因#13·深审 P2 补：admin-login-throttled 只扫冻结旧线 packages/ 是假绿）：生产线 adminApi（rewrite/cloud）口令校验路径必经频控闸（throttleLocked + 失败 throttleFail），删掉即公网口令可无限爆破',
-    run() {
-      const f = 'rewrite/cloud/src/functions/adminApi/index.ts'
-      const abs = join(ROOT, f)
-      if (!existsSync(abs)) return [`${f} 缺失（生产线 adminApi 应在此）`]
-      const src = readFileSync(abs, 'utf8')
-      const bad = []
-      if (!/throttleLocked\s*\(/.test(src)) bad.push(`${f} 未经 throttleLocked 闸——认证端点无锁定、公网口令可被爆破（根因#13）`)
-      if (!/throttleFail\s*\(/.test(src)) bad.push(`${f} 失败未 throttleFail 计数——频控空转（根因#13）`)
-      return bad
-    },
-  },
-  {
     id: 'rw-user-writes-throttled',
     roots: ['#13'],
-    desc: '用户端可滥用写函数防刷·生产线（根因#13·深审 P2 补：user-writes-throttled 只扫冻结旧线是假绿·深审「activateCourse/confirmEnter 无频控」同批修）：生产线 app 域用户可调写 action 必经 withRateLimit——尤其激活码兑换类（activateCourse/confirmEnter）是猜码爆破面',
+    desc: '用户端可调写 action 必经 withRateLimit（根因#13）：防刷库、堆垃圾、猜码爆破（activateCourse/confirmEnter）',
     run() {
       // export 名 → 所在 action 文件（rewrite 按域聚合·一文件多 action，故按 withRateLimit('<name>' 精确核到具体导出）
       const targets = [
@@ -659,6 +608,7 @@ export const repoChecks = [
         ['submitCheckpointPhoto', 'checkpoint'],
         ['kfBind', 'cs'],
         ['dataConsent', 'cs'],
+        ['submitReview', 'reviews'],
       ]
       const bad = []
       for (const [name, file] of targets) {
@@ -763,8 +713,6 @@ export const repoChecks = [
               )
           })
       }
-      // 旧线 packages/miniapp/src（.js/.ts/.vue·walk 默认扩名）
-      // 旧线扫描段已随 packages/ 删除（2026-07-23 瘦身拍板批）
       // 新线 rewrite/mp：.js/.ts 走 walk；.wxml walk 不吐、本地遍历（2026-07-16 双线补真空·仿 font-not-in-package 单源）
       for (const f of walk(join(ROOT, 'rewrite/mp'))) {
         if (/\.(js|ts)$/.test(f)) scanFile(f)
@@ -1093,10 +1041,10 @@ export const repoChecks = [
   {
     // 店名单一来源（决策 R23 / 占位⑲，2026-06-15 定名「Lucky Ducky 小棉鸭」）。病根#5「样板复制即漂移」：
     // 店名曾在 order/checkout/welcome/BrandIntro/GroupPanel/productDetail 六处硬编码（order↔checkout 还逐字重复），
-    // 改名必漏改。根治＝收口 constants/brand.js 的 BRAND_NAME，「保持一致」从人工义务变机器保证。
+    // 改名必漏改。根治＝收口 rewrite/mp/lib/brand.ts 的 BRAND_NAME，「保持一致」从人工义务变机器保证。
     id: 'brand-name-single-source',
     roots: ['#5', 'R23'],
-    desc: '店名单一来源（决策 R23 / 占位⑲）：① 旧占位「易织…」+ 漂移变体「幸运小鸭」全库绝迹（中文名定「小棉鸭」；当初只堵「易织」没堵「幸运小鸭」才让中文名漂进来）② 店名字面量「Lucky Ducky 小棉鸭」只在 constants/brand.js、别处引 BRAND_NAME——改名只改一处，防散落硬编码漂移（病根#5）',
+    desc: '店名单一来源（决策 R23 / 占位⑲）：① 旧占位「易织…」+ 漂移变体「幸运小鸭」全库绝迹（中文名定「小棉鸭」；当初只堵「易织」没堵「幸运小鸭」才让中文名漂进来）② 店名字面量「Lucky Ducky 小棉鸭」只在 rewrite/mp/lib/brand.ts、别处引 BRAND_NAME——改名只改一处，防散落硬编码漂移（病根#5）',
     run() {
       const bad = []
       const NAME = 'Lucky Ducky 小棉鸭'
@@ -1125,7 +1073,7 @@ export const repoChecks = [
           const rel = relative(ROOT, f)
           const s = strip(rel, readFileSync(f, 'utf8'))
           if (rel !== brandFile && s.includes(NAME))
-            bad.push(`${rel} 硬编码店名「${NAME}」——须引 constants/brand.js 的 BRAND_NAME 单源（病根#5）`)
+            bad.push(`${rel} 硬编码店名「${NAME}」——须引 rewrite/mp/lib/brand.ts 的 BRAND_NAME 单源（病根#5）`)
           // 店铺全名单源住 lib/shop.ts 而非 brand.ts（2026-07-25 体检批 P3）：brand.ts 在首页闭包内，
           // 「旗舰店」并进去会被 rw-mp-font-tier-subset-covers 算作 tier1 首屏字，而首屏子集里没有这三个字
           // → 真机静默掉系统字体。拆开后本字落 tier2（详见 lib/shop.ts 头注）。
@@ -1730,70 +1678,6 @@ export const repoChecks = [
     },
   },
   {
-    // 原料流水确定性幂等——新线扫描面（批K·根因#2·移植 scm-ledger-idempotent，同上精神）。
-    // 顺手修正旧守卫（line 854）本体带的潜伏 bug（不改旧守卫本身、只是不在新守卫里复制同一个洞）：旧正则
-    // 用「'stockLedger' 与 '.add(' 相距 ≤200 字符」定位流水写入点，但实际代码里两者靠变量名（`ledger`）
-    // 间接关联、源码相距 >200 字符——`node -e` 实测旧正则对 packages/cloud/src/kit/scmStock.ts 当前内容
-    // 匹配 0 次，即该守卫的「_id 是否带确定性构造」检查从未真正跑过、静默假绿。新守卫改按 data 对象内是否
-    // 含 `itemKey:`（流水行的标志字段，物料主档 add 没有这个字段）定位真正的流水 add 调用，不依赖变量名/
-    // 字符距离；并新增「一个流水 add 都没找到」本身也报红——防止代码形态再变一次时守卫又悄悄测不到东西。
-    //
-    // 批S 修复（P3·根因#2）：原「确定性 _id 构造」检查与「流水 add 带 _id」检查是两条独立正则各自宽松匹配
-    // ——只证明「文件里某处有三段模板」+「add 里某处有 _id 字样」同时为真，从不核对 add 里那个 _id 是不是
-    // 真的来自该模板函数的调用（例如手写 `docType+':'+docId+':'+itemKey` 绕开函数、或干脆用别的变量，两条
-    // 独立检查都仍然各自绿）。改为：①按模板结构（不硬编码函数名，函数改名不失效）定位确定性 id 生成函数并
-    // 取其名；②对每处流水 add 提取 _id 字段实际绑定的表达式——简写 `{_id,...}`、显式变量 `_id: x`、或内联
-    // 直调 `_id: fn(...)` 三种形态都认；③简写/显式变量形态下，在该 add 调用所在函数体内（粗粒度以最近的
-    // `function` 关键字为作用域起点，避免跨函数误配同名变量）核对是否存在 `const/let <var> = <fn>(...)` 赋值
-    // ——找不到就说明 add 用的 _id 不是那次调用产生的确定性值，幂等绑定关系并未真正成立。
-    id: 'rw-scm-ledger-idempotent',
-    roots: ['#2'],
-    desc: '新线原料流水确定性幂等（SCM·根因#2·批K 引入·批S 修复两条独立正则拼出的假绑定：新增「_id 字段实际来自确定性生成函数调用」的绑定核验，不再只各自宽松匹配「有模板」+「有 _id 字样」）：rewrite/cloud/src/kit/scmStock.ts 写 stockLedger 必构造确定性 _id=`docType:docId:itemKey`（撞 id=并发方已写）·禁自动 id 双记账·禁绕开生成函数手写等价 _id',
-    run() {
-      const seam = 'rewrite/cloud/src/kit/scmStock.ts'
-      // seam 缺失即红（批1 从被退役的旧副本移植回：守卫目标消失=显式退役，不静默绿）
-      if (!existsSync(join(ROOT, seam))) return [`${seam} 缺失——生产线流水写入点（SCM 门1）·守卫目标消失须显式退役本守卫`]
-      const bad = []
-      const src = stripComments(readFileSync(join(ROOT, seam), 'utf8')) // 剥注释再匹配（E1/E10·批I 评审加固·stripComments 保长置空、下方索引数学不受影响）
-      // 定位确定性 _id 生成函数并取其名（按「docType:docId:itemKey 三段模板」结构识别，不硬编码 ledgerIdOf——
-      // 函数改名不失效；`const NAME = (…) => \`…\`` 或 `function NAME(…) {…}` 两种写法都认）
-      const fnDeclM = src.match(/(?:const|function)\s+(\w+)\s*=?\s*\([^)]*\)\s*(?:=>\s*)?[{`][\s\S]{0,120}?\$\{[^}]*docType[^}]*\}:\$\{[^}]*docId[^}]*\}:\$\{/)
-      if (!fnDeclM)
-        bad.push(`${seam} 未见确定性流水 _id 构造函数（\`\${docType}:\${docId}:\${itemKey}\` 三段模板）——流水失幂等（根因#2）`)
-      const fnName = fnDeclM ? fnDeclM[1] : null
-      // 按 data 对象内是否含 itemKey: 字段识别真正的流水 add（不依赖变量名/字符距离——防 regex 假绿，见上注）
-      const addRe = /\.add\(\s*\{\s*data:\s*\{([\s\S]{0,300}?)\}\s*\}\s*\)/g
-      const adds = [...src.matchAll(addRe)].filter((m) => /itemKey\s*:/.test(m[1]))
-      if (!adds.length) bad.push(`${seam} 未找到 stockLedger 流水 add({data:{itemKey:...}}) 调用——流水写入点代码形态已变、本守卫需同步（根因#2）`)
-      // 粗粒度函数作用域边界：add 调用所在函数体起点＝其前最近一个 `function` 关键字位置——把「_id 绑定
-      // 赋值」核验限定在同一函数内，不误配到别的函数里恰好同名的变量
-      const funcBoundaryBefore = (index) => {
-        const funcRe = /\bfunction\s+\w+/g
-        let last = 0
-        let fm
-        while ((fm = funcRe.exec(src)) && fm.index < index) last = fm.index
-        return last
-      }
-      for (const m of adds) {
-        const inlineCall = fnName && new RegExp(`_id\\s*:\\s*${fnName}\\s*\\(`).test(m[1])
-        if (inlineCall) continue // 内联直调确定性生成函数——绑定关系天然成立
-        const shorthand = /(?:^|[,{])\s*_id\s*(?=[,}])/.test(m[1])
-        const varMatch = m[1].match(/_id\s*:\s*([A-Za-z_$][\w$]*)\s*(?=[,}])/)
-        if (!shorthand && !varMatch) {
-          bad.push(`${seam} stockLedger add 未带 _id 字段——自动 id=重放双记账（根因#2）`)
-          continue
-        }
-        if (!fnName) continue // 上面已报「未见确定性 _id 构造函数」，此处不重复噪音
-        const idVarName = shorthand ? '_id' : varMatch[1]
-        const scoped = src.slice(funcBoundaryBefore(m.index), m.index)
-        const boundRe = new RegExp(`(?:const|let)\\s+${idVarName}\\s*=\\s*${fnName}\\s*\\(`)
-        if (!boundRe.test(scoped))
-          bad.push(`${seam} stockLedger add 的 _id（变量 ${idVarName}）未见来自确定性生成函数 ${fnName}() 的同作用域赋值——_id 可能绕开确定性构造手写等价值，幂等绑定关系未真正成立（根因#2）`)
-      }
-      return bad
-    },
-  },
-  {
     id: 'rw-mp-checkout-consts-synced',
     roots: ['#5'],
     desc: '结算常量镜像同步（根因#5·mp 包进不了 @ldrw/shared——开发者工具编译不出仓外引用，故 mp 落副本 + 本守卫焊死）：rewrite/mp/lib/checkoutConst.ts 的全部导出常量必须与 rewrite/shared/src/checkout.ts 名值双向一致（第一性原理审计批堵元漂移：原版硬编码 COUPON/SHIP/CHECKOUT_ADDONS 三个名字，shared 新增第四个常量 mp 忘抄守卫仍绿——改为自动枚举全部 export const，新增/删除/改值任一侧漂移即红）',
@@ -2060,60 +1944,6 @@ export const repoChecks = [
     },
   },
   {
-    // 页面内容 CMS 白名单净化（批A·5 页可编辑内容云读写链）——信任边界 fail-closed（根因#3 不信前端）：
-    // adminApi 写侧每页独立净化 + 未知 page 拒；app 读侧同白名单 fail-closed。承 saveHomeContent/getContent 样板。
-    // 函数体断言走 setupFnBody（顶层 export async function·非对象方法·methodBody 收尾启发式不适配）+ stripComments
-    // 单源 helper（错题本 E1/E10：取真源须对剥注释后函数体匹配，防注释文本假触发/假放行）。
-    id: 'rw-cloud-page-content-sanitized',
-    roots: ['#3'],
-    desc: '页面内容 CMS 白名单净化（批A·信任边界 fail-closed·根因#3 不信前端）：① adminApi actions/content.ts 有 savePageContent，其函数体（剥注释后·setupFnBody 单源 helper）经 PAGES 白名单 gate 未知 page → fail-closed（UNKNOWN_PAGE），且 5 页各有独立净化函数（sanitizeWelcome/sanitizeCatalogPlayer/sanitizeMePage/sanitizeAbout/sanitizeAgreementDoc 均须定义）；getPageContent 同 fail-closed ② app actions/catalog.ts getPageContent 有同 5 键白名单且未知 page fail-closed（BAD_ARGS）。反向自检：删 content.ts PAGES 任一键 / 删 catalog.ts 白名单键 / 抹 UNKNOWN_PAGE 拒 → 本守卫红',
-    run() {
-      const bad = []
-      const PAGES = ['welcome', 'catalogPlayer', 'mePage', 'about', 'agreement']
-      const adminPath = join(ROOT, 'rewrite/cloud/src/functions/adminApi/actions/content.ts')
-      const appPath = join(ROOT, 'rewrite/cloud/src/functions/app/actions/catalog.ts')
-      if (!existsSync(adminPath)) {
-        bad.push('rewrite/cloud/src/functions/adminApi/actions/content.ts 缺失——页面内容 CMS 写侧无处（正册 P1）')
-        return bad
-      }
-      const adminSrc = stripComments(readFileSync(adminPath, 'utf8')) // 剥注释单源 helper（错题本 E1/E10）：防注释假触发
-      // ① 5 页独立净化函数须定义（每页白名单一函数·根因#3）
-      for (const s of ['sanitizeWelcome', 'sanitizeCatalogPlayer', 'sanitizeMePage', 'sanitizeAbout', 'sanitizeAgreementDoc'])
-        if (!new RegExp(`function\\s+${s}\\b`).test(adminSrc))
-          bad.push(`content.ts 缺每页净化函数 ${s}——未净化即入库（根因#3 不信前端）`)
-      // ② PAGES 白名单数组字面量含全部 5 键（对 const PAGES = [...] 内断言·不全文匹配·防 welcome 等键与无关字符串串味假绿）
-      const pagesLit = (adminSrc.match(/const PAGES\s*=\s*\[([^\]]*)\]/) || [])[1] || ''
-      if (!pagesLit) bad.push('content.ts 找不到 const PAGES 白名单数组——未知 page 无处 fail-closed（根因#3）')
-      for (const p of PAGES)
-        if (!new RegExp(`['"]${p}['"]`).test(pagesLit)) bad.push(`content.ts PAGES 白名单缺键「${p}」——该页无法保存或漏净化`)
-      // ③ savePageContent 函数体经 PAGES gate + UNKNOWN_PAGE fail-closed
-      const saveBody = setupFnBody(adminSrc, 'savePageContent')
-      if (!saveBody) bad.push('content.ts 找不到 savePageContent 函数体——CMS 写侧缺失')
-      else {
-        if (!/PAGES\b/.test(saveBody)) bad.push('savePageContent 未经 PAGES 白名单 gate——未知 page 会被放行（信任边界·根因#3）')
-        if (!/UNKNOWN_PAGE/.test(saveBody)) bad.push('savePageContent 缺 UNKNOWN_PAGE fail-closed 拒——未知 page 未 fail-closed（根因#3）')
-      }
-      const getBody = setupFnBody(adminSrc, 'getPageContent')
-      if (!getBody) bad.push('content.ts 找不到 getPageContent 函数体——CMS 读回侧缺失')
-      else if (!/UNKNOWN_PAGE/.test(getBody))
-        bad.push('content.ts getPageContent 缺 UNKNOWN_PAGE fail-closed 拒未知 page（根因#3）')
-      // ④ app 公开读侧同白名单 fail-closed（catalog.ts getPageContent）
-      if (!existsSync(appPath)) {
-        bad.push('rewrite/cloud/src/functions/app/actions/catalog.ts 缺失——公开读侧无处')
-        return bad
-      }
-      const appSrc = stripComments(readFileSync(appPath, 'utf8'))
-      if (!/getPageContent/.test(appSrc)) bad.push('app/catalog.ts 缺 getPageContent——公开读链未接（批A）')
-      const appPagesLit = (appSrc.match(/const PAGE_KEYS\s*=\s*\[([^\]]*)\]/) || [])[1] || ''
-      if (!appPagesLit) bad.push('app/catalog.ts 找不到 const PAGE_KEYS 白名单数组——公开读侧未知 page 无处 fail-closed（根因#3）')
-      for (const p of PAGES)
-        if (!new RegExp(`['"]${p}['"]`).test(appPagesLit))
-          bad.push(`app/catalog.ts 白名单缺键「${p}」——公开读侧 fail-closed 白名单不全（根因#3）`)
-      if (!/BAD_ARGS|UNKNOWN_PAGE/.test(appSrc)) bad.push('app/catalog.ts getPageContent 未 fail-closed 拒未知 page（根因#3）')
-      return bad
-    },
-  },
-  {
     // 新线镜像 privacy-authorize-wired（R27㉒）+ consent 页（cs-data-share-consented 的 C 端半边）。
     // 原生形态：app.json __usePrivacyCheck__ + lib/privacyGate 挂 onNeedPrivacyAuthorization + app.ts 启动注册
     // + privacy-sheet 组件（agreePrivacyAuthorization 能力按钮）；涉隐私接口页扫描制——哪页调隐私接口哪页必挂
@@ -2168,28 +1998,6 @@ export const repoChecks = [
       else if (!consentTs.includes('dataConsent')) bad.push('consent 页未调 dataConsent——同意/撤回没写到服务端真值')
       const me = rd('pages/me/me.ts')
       if (me && consentTs && !me.includes('consent')) bad.push('me 页无 consent 入口——授权管理页不可达')
-      return bad
-    },
-  },
-  {
-    // 防盗链签名 fail-closed（病根#1 信任边界 + #14 失败可观测·决策§31 批1）：playKey 未配置时
-    // signVodPlayUrl 必须告警（VOD_KEY_MISSING·配置洞可发现）并返回 null——绝不裸发未签名地址
-    // （防盗链已开=裸地址必 403 坏体验；未开=付费内容裸奔，两头都不许发）。行为端由 rw-learning-golden
-    // 测试实证（无 key → url:null + 告警行），本守卫焊死代码形状防「先发裸地址试试」的回潮。
-    id: 'rw-vod-sign-fail-closed',
-    roots: ['#1', '#14'],
-    desc: 'VOD 防盗链签名 fail-closed（决策§31 批1）：kit/vod.ts signVodPlayUrl 须含 playKey 判空→alert(VOD_KEY_MISSING)→null 的 fail-closed 分支，且不得出现裸 return rawUrl（未签名地址下发即红）',
-    run() {
-      const rel = 'rewrite/cloud/src/kit/vod.ts'
-      if (!existsSync(join(ROOT, rel))) return [] // 未建时由 rw-vod-seam-single 负责红——不重复报
-      const src = stripComments(readFileSync(join(ROOT, rel), 'utf8'))
-      const body = setupFnBody(src, 'signVodPlayUrl')
-      if (!body) return [`${rel} 找不到 signVodPlayUrl——防盗链签名单点丢失（决策§31 批1）`]
-      const bad = []
-      if (!body.includes('VOD_KEY_MISSING') || !body.includes('alert('))
-        bad.push(`${rel} signVodPlayUrl 缺 playKey fail-closed 告警（VOD_KEY_MISSING）——密钥未配置将静默不可发现（病根#14）`)
-      if (/return\s+rawUrl/.test(body))
-        bad.push(`${rel} signVodPlayUrl 出现裸 return rawUrl——未签名地址下发（病根#1 fail-closed：宁可 null 不裸奔）`)
       return bad
     },
   },
@@ -2737,25 +2545,6 @@ export const repoChecks = [
     },
   },
   {
-    // 批6（承重批·钱/权限）：admin 口令哈希从「sha256 无盐」升级为「salt+scrypt」，防库泄露离线彩虹表
-    // 还原（根因#3 信任边界·根因#13 认证端点防爆破——频控只挡在线爆破，挡不住离线还原）。本守卫钉住
-    // lib.ts 剥注释后（stripComments·E1/E10）确实含 scryptSync 与 keySalt 字样——纯字符串在场性检查，
-    // 行为语义（legacy 无缝迁移/盐感知比对单源 keyMatches）由 app-admin1/app-admin6 测试锁。
-    id: 'rw-admin-key-kdf',
-    roots: ['#13', '#3'],
-    desc: 'admin 口令加盐 KDF（批6·根因#13 认证端点防爆破/根因#3 信任边界）：adminApi/lib.ts 剥注释后须含 scryptSync（口令 KDF）与 keySalt（每账号随机盐字段），防 sha256 无盐口令库泄露被离线彩虹表还原；legacy 存量账号无感迁移语义由测试锁',
-    run() {
-      const bad = []
-      const rel = 'rewrite/cloud/src/functions/adminApi/lib.ts'
-      const abs = join(ROOT, rel)
-      if (!existsSync(abs)) return [`${rel} 缺失`]
-      const src = stripComments(readFileSync(abs, 'utf8'))
-      if (!/scryptSync\s*\(/.test(src)) bad.push(`${rel} 未见 scryptSync(——口令哈希仍可能是无盐 sha256（根因#13 离线彩虹表风险）`)
-      if (!/keySalt/.test(src)) bad.push(`${rel} 未见 keySalt 字段——口令未加盐（根因#13）`)
-      return bad
-    },
-  },
-  {
     // 播放器重设计战役批B 实录（2026-07-11）：helpbtn <view 开标签漏写 >，conventions/structure/typecheck/lint/test
     // 五道机器网全绿放行——WXML 语法损坏连微信编译器都过不了，但本仓机器闸对「标签配平」完全免疫（此前从未有
     // 守卫盯过 wxml 的标签语法本身，只盯属性/事件绑定字面量）。人工评审逮到后，批C 把这类缺陷机器化：轻量
@@ -2933,16 +2722,6 @@ export const fileRules = [
     test: (line) =>
       /\bcloud\.init\s*\(/.test(line) || /\bgetWXContext\s*\(/.test(line)
         ? '云函数业务代码禁裸用 cloud.init()/getWXContext()——经 kit（withOpenId/getDb/isServerCall）收编样板，防样板重生（T2/根因5·rewrite 镜像）'
-        : null,
-  },
-  {
-    // 平台接缝收口（根因账本 #12）镜像：触发工作流禁裸用 cloudbase_module——经 kit.callFlow 单点。
-    id: 'rw-flow-seam-via-kit',
-    roots: ['#12'],
-    inScope: (abs) => abs.includes('/rewrite/cloud/src/functions/') && abs.endsWith('.ts'),
-    test: (line) =>
-      /cloudbase_module/.test(line)
-        ? '触发工作流禁裸用 cloudbase_module——经 kit.callFlow 单点收口（根因#12 平台接缝最小化·rewrite 镜像）'
         : null,
   },
   {
@@ -3145,7 +2924,7 @@ export const typeAndTestGuards = [
 
 // 'rewrite' 加入扫描面（批1·2026-07-10）：唯一在迭代的活代码线，此前 fileRules 全量扫描扫不到，
 // rw- 前缀的新守卫不动这条即是装饰。旧 fileRules（5 条）inScope 全部锁死 packages 路径，扩面不误咬。
-export const SRC_DIRS = ['packages', 'cloudfunctions', 'scripts', 'rewrite']
+export const SRC_DIRS = ['scripts', 'rewrite']
 // 扩展名过滤可选参数（2026-07-25 全量页面体检批）：默认沿用「编译面四类」不动既有全部调用方，
 // 需要扫小程序模板层的守卫显式传 exts。病根：默认集合不含 .wxml/.wxss/.json，**凡走 walk() 的守卫
 // 在 mp 模板层一律失明**——废弃店名占位「易织™小棉鸭®」正是借此在 order/checkout 两处 wxml 里

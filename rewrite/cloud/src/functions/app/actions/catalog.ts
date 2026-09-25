@@ -118,8 +118,7 @@ export const getContent = async () => {
 
 /**
  * 页面内容 CMS 公开只读（批A·5 页可编辑内容·写侧样板 adminApi/content.savePageContent）：
- * content 集合每页一 doc（_id=page 键名），未知 page fail-closed 拒（同白名单·根因#3 不信前端·守卫
- * rw-cloud-page-content-sanitized）。catalogPlayer.catalog.heroImage 若为 cloud:// fileID，服务端换临时
+ * content 集合每页一 doc（_id=page 键名），未知 page fail-closed 拒（同白名单·根因#3 不信前端）。catalogPlayer.catalog.heroImage 若为 cloud:// fileID，服务端换临时
  * URL 再下发（fileID 不出口·同 swapHomeImages/getProducts 换址口径与 fail-soft 权衡）；无文档返回 null。
  */
 const PAGE_KEYS = ['welcome', 'catalogPlayer', 'mePage', 'about', 'agreement']

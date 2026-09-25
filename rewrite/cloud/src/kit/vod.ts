@@ -8,7 +8,7 @@ import { alert } from './observe'
 // 与 VOD 的全部平台触点——Key 防盗链签名算法、（批2 起）服务端 API 域名与 TC3 签名——收口本文件，
 // 平台规则单方变化只改这一点。配置单源 DB secureConfig/vod（admin /config-checklist 填即生效，
 // kit/secureConfig.ts 读取；字段 secretId/secretKey/playKey/procedure——批1 只用 playKey）。
-// 守卫：rw-vod-seam-single（接缝单点+前缀分流）/ rw-vod-sign-fail-closed（签名 fail-closed）。
+// 守卫：rw-vod-seam-single（接缝单点+前缀分流）；签名 fail-closed 由 app-learning.test.ts 与 mutation-kill-vod.test.ts 锁。
 // ────────────────────────────────────────────────────────────────────────────
 
 // FileId 判据单源在 @ldrw/shared（批2 提升：admin「转码中」显示与云端分流同判据·病根#5），此处再导出
