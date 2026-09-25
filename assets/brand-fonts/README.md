@@ -1,7 +1,7 @@
 # 品牌字体（文源圆体 WenYuan Rounded SC · 分层子集 WebFont）
 
 这里是**小程序标题/正文字（`--ld-font-brand`）的分层子集 WebFont 产物**，经 `wx.loadFontFace` 远程
-分层加载（`rewrite/mp/utils/brandFont.ts`）——**不进 src、不打进小程序包**（守卫 `font-not-in-package`）。
+分层加载（`rewrite/mp/utils/brandFont.ts`）——**不进 src、不打进小程序包**（守卫 `rw-mp-package-budget`）。
 
 ## 文件（v2）
 

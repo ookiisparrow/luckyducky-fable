@@ -66,7 +66,7 @@ pages/ · components/ · custom-tab-bar/   （顶层·可越级下行直连 api/
 > 新线图片处理早已成体系，本节把隐性规则**显性化**为约定。客观事实（换址函数/存储路径/守卫扫描面）以代码为准，此处只引不手抄。
 
 **决策 5 轴**（每轴＝一个问题 → 一个策略 → 既有实现）：
-- **A 所有权/易变性 → 包内 vs 远程**：恒定 UI（图标/logo）走 `/static/*.svg` 包内即时；内容图 `cloud://` fileID 存库、读时服务端批量换临时址下发；唯一入包位图＝品牌兜底 hero（`static/hero-full.jpg`）。守：`rw-mp-static-bitmap-budget`（单张 ≤200KB·总 ≤400KB）、`font-not-in-package`。
+- **A 所有权/易变性 → 包内 vs 远程**：恒定 UI（图标/logo）走 `/static/*.svg` 包内即时；内容图 `cloud://` fileID 存库、读时服务端批量换临时址下发；唯一入包位图＝品牌兜底 hero（`static/hero-full.jpg`）。守：`rw-mp-package-budget`。
 - **B 首屏 vs 折叠 → eager vs lazy（横向容器例外）**：首屏首图 eager（hero 不加 lazy）；折叠下方纵向内容图加 `lazy-load`；横向 scroll-view / swiper 内 `lazy-load` **真机不生效**（验证过），不加。
 - **C 单张 vs 列表 vs 大画廊 → 要否窗口化**：swiper/横向轨 lazy 失效 → 窗口化只渲 current±1（`computeGalleryWindow`·`pages/detail/detail.ts`）。
 - **D 临时址时效（~2h）→ 防过期**：持久化进 storage 的（cart/checkout）读时 `freshCover`（`lib/cart.ts`）重取；order 存 fileID 服务端 `swapOrdersCover` 换址；现取现渲（home/detail）天然新鲜。home 首屏快照（`lib/snapshot.ts`·冷启动 SWR）存的是已换好的 https 临时址，带 **90min TTL 剥离闸**（< 服务端 2h 有效期）——超龄读时剥掉快照内所有 http 临时址回退兜底（本地 `/static` 路径保留·mapHero 落包内鸭图/cover 落灰底），防隔夜冷启动首帧裂图。
@@ -85,7 +85,7 @@ pages/ · components/ · custom-tab-bar/   （顶层·可越级下行直连 api/
 | 头像 | UGC `cloud://` | eager·`<image>` 直解 fileID | 免（直解不过期） | 包内 `/static/logo-wordmark.svg` |
 | UGC 晒图 | UGC `cloud://`→读时换址 | **lazy** | 读时换址 | `wx:if` 守空 |
 
-**约定守卫（防策略漂移）**：折叠内容图必 `lazy-load`；禁内联 `<svg>`（`rw-mp-no-inline-svg`）；禁本地 `background:url()`（`rw-mp-no-bg-image-local`）；进包位图预算（`rw-mp-static-bitmap-budget`）；视频源禁外链（`no-external-video-src`·双线）。
+**约定守卫（防策略漂移）**：折叠内容图必 `lazy-load`；禁内联 `<svg>`、禁本地 `background:url()`、视频源禁外链（`rw-mp-banned-patterns`）；进包位图与主包体积预算（`rw-mp-package-budget`）。
 
 **非目标**（看似该做其实不该）：不重建 MediaSlot（方向 A 弃）；不引缩略图/雪碧图/多尺寸/图片处理 CDN（无需求·防过度工程）；不给横向轨/swiper 硬加无效 lazy；不给 hero 改 lazy/留灰占位；持久化临时址须带 **TTL 剥离闸**（`lib/snapshot.ts` 首屏快照面为唯一合法先例·超龄剥址回兜底——无剥离闸的「裸存 https 临时址」仍禁，会隔天过期裂图）。
 

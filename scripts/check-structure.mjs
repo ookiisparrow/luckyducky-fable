@@ -503,107 +503,30 @@ export const repoChecks = [
     },
   },
   {
-    // 视频源不走外链（优化批0618·T-F7·合规红线）。根因#8「urlCheck 翻 true 后真机才暴露」：
-    // player 曾硬编码 Google 外链占位视频（.mp4），合规非法域名 + 小程序 urlCheck 开启后真机根本播不了
-    // （dev/未校验时能播=假绿）。视频源只许经 getPlaybackUrl/store.playbackUrl 换云端短时效 URL；
-    // 前端禁裸 http(s) 视频 URL 字面量。无真实视频 → 本地占位封面（不播外链）。
-    id: 'no-external-video-src',
-    roots: ['#8'],
-    desc: '视频源不走外链（T-F7·合规）：rewrite/mp（.js/.ts/.wxml）禁裸 http(s) 视频 URL 字面量（.mp4/.m3u8/.mov/.webm 等）——视频源只经 getPlaybackUrl/store.playbackUrl 换云端临时 URL，无真视频显本地占位；防外链合规红线 + urlCheck 翻 true 后真机播不了（根因#8）',
+    // 小程序禁用写法清单（根因#8「构建过≠真机能用」）：每行一条「文件类型 + 禁用模式 + 为什么」。
+    // 逐行扫（跳注释行与带 structure-ok 的行；wxml 先剥 <!-- --> 注释）。加一条禁用写法＝加一行，别另立守卫。
+    id: 'rw-mp-banned-patterns',
+    roots: ['#8', 'T1'],
+    desc: '小程序禁用写法清单：外链视频地址、内联 <svg>、wxss 本地背景图、裸 wx.request——各自真机失效或越过云函数单源，逐行扫 rewrite/mp 即红',
     run() {
+      const BANNED = [
+        { ext: /\.(js|ts|wxml)$/, re: /https?:\/\/[^'"`\s)]+\.(?:mp4|m3u8|mov|webm|avi|mkv)\b/i, why: '裸 http(s) 视频地址——视频源须经 getPlaybackUrl 换云端临时地址，禁外链（合规 + urlCheck 下真机播不了）' },
+        { ext: /\.wxml$/, re: /<svg[\s>]/i, why: '内联 <svg>——mp 端不渲染（真机静默不显），图标用 <image src="/static/icons/*.svg">' },
+        { ext: /\.wxss$/, re: /background(?:-image)?\s*:[^;]*url\(\s*['"]?(?!https?:\/\/|data:)[^'")\s]/i, why: 'background:url() 引本地图——mp 端不可靠，本地图用 <image>' },
+        { ext: /\.ts$/, re: /\bwx\.request\s*\(/, skipTests: true, why: '裸 wx.request()——核心交易只经云函数 callCloud，不另开 HTTP 直连（T1）' },
+      ]
       const bad = []
-      const re = /https?:\/\/[^'"`\s)]+\.(?:mp4|m3u8|mov|webm|avi|mkv)\b/i
-      const scanFile = (f) => {
+      for (const f of walk(join(ROOT, 'rewrite/mp'), /\.(js|ts|wxml|wxss)$/)) {
         const rel = relative(ROOT, f)
-        readFileSync(f, 'utf8')
-          .split('\n')
-          .forEach((line, i) => {
-            if (isCommentLine(line) || line.includes('structure-ok')) return
-            if (re.test(line))
-              bad.push(
-                `${rel}:${i + 1} 裸 http(s) 视频 URL 字面量——视频源须经 getPlaybackUrl/云、禁外链（T-F7/合规·根因#8）`,
-              )
-          })
+        const rules = BANNED.filter((b) => b.ext.test(f) && !(b.skipTests && rel.includes('/tests/')))
+        if (!rules.length) continue
+        let src = readFileSync(f, 'utf8')
+        if (f.endsWith('.wxml')) src = src.replace(/<!--[\s\S]*?-->/g, (m) => m.replace(/[^\n]/g, ' '))
+        src.split('\n').forEach((line, i) => {
+          if (isCommentLine(line) || line.includes('structure-ok')) return
+          for (const b of rules) if (b.re.test(line)) bad.push(`${rel}:${i + 1} ${b.why}`)
+        })
       }
-      // 新线 rewrite/mp：.js/.ts 走 walk；.wxml walk 不吐、本地遍历（2026-07-16 双线补真空·仿 font-not-in-package 单源）
-      for (const f of walk(join(ROOT, 'rewrite/mp'))) {
-        if (/\.(js|ts)$/.test(f)) scanFile(f)
-      }
-      const wxmlWalk = (d) => {
-        if (!existsSync(d)) return
-        for (const name of lsScan(d)) {
-          if (name === 'node_modules' || name === 'dist') continue
-          const p = join(d, name)
-          if (statSync(p).isDirectory()) wxmlWalk(p)
-          else if (name.endsWith('.wxml')) scanFile(p)
-        }
-      }
-      wxmlWalk(join(ROOT, 'rewrite/mp'))
-      return bad
-    },
-  },
-  {
-    // mp 内联 <svg> 禁用（新线镜像旧线 inline-svg·2026-07-16 补 rewrite/mp 守卫真空）。旧 inline-svg 物理
-    // 锚死 packages/miniapp/src 的 .vue/.scss（check-conventions），活线原生 .wxml 扫不到（文件类型+根都不匹配）。
-    // mp 端不渲染内联 <svg>（真机静默不显·dev/H5 假绿）——图标须 <image src="/static/icons/*.svg">（色烘进 svg）。
-    id: 'rw-mp-no-inline-svg',
-    roots: ['#8'],
-    desc: 'mp 内联 svg 禁用（新线·补 inline-svg 真空）：扫 rewrite/mp/**/*.wxml，剥 <!-- --> 注释后出现 <svg 即红——mp 端不渲染内联 svg（真机静默不显·构建过≠真机能用·根因#8），图标走 <image src="/static/icons/*.svg">',
-    run() {
-      const bad = []
-      const base = join(ROOT, 'rewrite/mp')
-      if (!existsSync(base)) return bad
-      const walkW = (d) => {
-        for (const name of lsScan(d)) {
-          if (name === 'node_modules' || name === 'dist') continue
-          const p = join(d, name)
-          if (statSync(p).isDirectory()) walkW(p)
-          else if (name.endsWith('.wxml')) {
-            // 剥 <!-- --> 注释再扫（同 rw-mp-wxml-well-formed 手法·防注释里的 <svg 假红）
-            const src = readFileSync(p, 'utf8').replace(/<!--[\s\S]*?-->/g, '')
-            if (/<svg[\s>]/i.test(src))
-              bad.push(
-                `${relative(ROOT, p)} 内联 <svg>——mp 端不渲染（真机静默不显·根因#8），图标用 <image src="/static/icons/*.svg">`,
-              )
-          }
-        }
-      }
-      walkW(base)
-      return bad
-    },
-  },
-  {
-    // 本地图不走 CSS background:url()（新线镜像旧线 bg-image-local·2026-07-16 补真空）。旧 bg-image-local 锚死
-    // packages/miniapp/src 的 .vue/.scss，活线 .wxss 扫不到。本地图 background:url() 在 mp 端不可靠（真机可能不显）；
-    // 本地图用 <image>，占位走灰底（新线方向 A·弃 MediaSlot）。放行 http(s):// 与 data:（远程/内联合法）。
-    id: 'rw-mp-no-bg-image-local',
-    roots: ['#8'],
-    desc: 'mp 本地背景图禁用（新线·补 bg-image-local 真空）：扫 rewrite/mp/**/*.wxss，background(-image):url(本地路径) 即红（放行 http(s)://、data:）——本地图 background:url() 在 mp 端不可靠，用 <image>（根因#8）',
-    run() {
-      const bad = []
-      const base = join(ROOT, 'rewrite/mp')
-      if (!existsSync(base)) return bad
-      const re = /background(?:-image)?\s*:[^;]*url\(\s*['"]?([^'")]+)/i
-      const walkS = (d) => {
-        for (const name of lsScan(d)) {
-          if (name === 'node_modules' || name === 'dist') continue
-          const p = join(d, name)
-          if (statSync(p).isDirectory()) walkS(p)
-          else if (name.endsWith('.wxss')) {
-            readFileSync(p, 'utf8')
-              .split('\n')
-              .forEach((line, i) => {
-                if (isCommentLine(line) || line.includes('structure-ok')) return
-                const m = line.match(re)
-                if (m && !/^(https?:\/\/|data:)/.test(m[1]))
-                  bad.push(
-                    `${relative(ROOT, p)}:${i + 1} background:url() 引本地图——mp 端不可靠，本地图用 <image>（根因#8）`,
-                  )
-              })
-          }
-        }
-      }
-      walkS(base)
       return bad
     },
   },
@@ -726,126 +649,48 @@ export const repoChecks = [
     },
   },
   {
-    // 进包位图预算（新线·2026-07-16·病根#15 图片面 + 根因#8 冷启）。内容图归云存储（getTempUrl 换临时址按需拉），
-    // 进包位图只该是品牌兜底（hero-full.jpg 42K）。防大位图悄爬进主包（2MB 硬顶·含代码）拖慢冷启动——真机冷启
-    // 才感知（根因#8「构建过≠真机能用」）。与 font-not-in-package（禁字体二进制进包）同精神互补：那管字体、这管位图。
-    id: 'rw-mp-static-bitmap-budget',
+    // 小程序包体积（根因#8：超了只有真机冷启才感知）：一次遍历会进上传包的文件，查三件事——
+    // ① 主包估算 ≤ 1.5MiB（微信硬顶 2MiB 的 75%；.ts 按 ×1.05 估编译后体积）；② 位图单张 ≤ 200KB、合计 ≤ 400KB
+    // （内容图走云存储，进包的只该是品牌兜底）；③ 字体不进包（二进制或 base64 内嵌都不行，~14MB 字重会撑爆），
+    // 品牌字体放仓根 assets/brand-fonts/，经 rewrite/mp/utils/brandFont.ts 远程加载。
+    id: 'rw-mp-package-budget',
     roots: ['#8', '#15'],
-    desc: '进包位图预算（新线·病根#15+#8）：rewrite/mp 下位图（.png/.jpg/.jpeg/.gif/.webp/.bmp）单张 ≤200KB、总量 ≤400KB——内容图归云存储按需加载，进包位图只该是品牌兜底（hero-full.jpg 42K）；防大位图撑主包拖慢冷启动（主包 2MB·真机冷启才感知·根因#8）',
-    run() {
-      const bad = []
-      const base = join(ROOT, 'rewrite/mp')
-      if (!existsSync(base)) return bad
-      const BITMAP = /\.(png|jpe?g|gif|webp|bmp)$/i
-      const ONE = 200 * 1024
-      const TOTAL = 400 * 1024
-      let total = 0
-      const walkB = (d) => {
-        for (const name of lsScan(d)) {
-          if (name === 'node_modules' || name === 'dist') continue
-          const p = join(d, name)
-          const st = statSync(p)
-          if (st.isDirectory()) walkB(p)
-          else if (BITMAP.test(name)) {
-            total += st.size
-            if (st.size > ONE)
-              bad.push(
-                `${relative(ROOT, p)} 位图 ${Math.round(st.size / 1024)}KB 超单张上限 200KB——内容图归云存储（getTempUrl），进包位图只该是品牌兜底；大图压缩或上云（根因#8 冷启）`,
-              )
-          }
-        }
-      }
-      walkB(base)
-      if (total > TOTAL)
-        bad.push(
-          `rewrite/mp 进包位图总量 ${Math.round(total / 1024)}KB 超上限 400KB——内容图别进包、走云存储按需加载（病根#15/根因#8 冷启）`,
-        )
-      return bad
-    },
-  },
-  {
-    // 主包体积预算——活线版（2026-07-18·code-gaps 战役批B4）。既有 main-package-budget/
-    // subpackage-config-present 两条扫的是冻结旧线 packages/miniapp/src/pages.json，对本仓唯一在
-    // 迭代的 rewrite/mp 假绿：23 页全塞主包、app.json 无 subPackages，此前从无人测过真实上传体积
-    // （随 packages/ 处置拍板一并退役前先补活线真空，本条只加、不动旧线两条；与 rw-mp-static-bitmap-budget
-    // 同精神互补——那管进包位图，这管进包代码/wxml/wxss/json 总量）。
-    // 实测方法（2026-07-18）：tsc --module CommonJS --target ES2020 编译 rewrite/mp 全部 .ts 落临时目录，
-    // 逐组比对编译前后字节数——比值集中在 1.015–1.026（剥类型注解基本被 CommonJS require/exports 样板
-    // 抵消，非显著收缩），取 ×1.05 留安全边际估「编译后 .js」体积；wxml/wxss 真实上传会被
-    // project.config.json 当前 minifyWXML/minifyWXSS(true) 再压一道，本估算不折算压缩收益——估算天然
-    // 偏保守（宁可判红过严、不可放过真超限）。进包边界：lsScan/SKIP_DIR 已天然排除 node_modules/dist/
-    // 隐藏文件；本表额外剔除四个不可达/工具专属项——
-    // tests（vitest 用例，非页面/组件可达）、typings（.d.ts 纯类型声明零运行时产出）、README.md/
-    // tsconfig.json（无页面引用，微信 ignoreUploadUnusedFiles 语义下不可达）、project*.config.json
-    // （.gitignore 排除、未入库，防本机已生成时误计入）。2026-07-18 实测约 695KB（0.66MiB），预算
-    // 1.5MiB＝微信主包硬顶 2MiB（2×1024×1024）的 75%——留 25% 边际盖估算误差；当前用量仅占预算
-    // ~44%、占硬顶 ~33%，暂无需分包（评估见 重构日志 同日条目）。
-    id: 'rw-mp-main-package-budget',
-    roots: ['#8'],
-    desc: '主包体积预算（活线 rewrite/mp·根因#8）：会进上传包的源文件（pages/components/custom-tab-bar/lib/api/utils/static/styles + app.json/app.ts/app.wxss/sitemap.json，剔 tests/typings/README/tsconfig/project*.config.json）总字节数（.ts 按 ×1.05 估编译后 .js 体积——实测 tsc CommonJS 输出比源码大 1.5%–2.6%）须 ≤ 1.5MiB（微信主包硬顶 2MiB 的 75%，留边际）——超预算真机冷启退化才现形（根因#8「构建过≠真机能用」）；既有 main-package-budget/subpackage-config-present 扫冻结旧线 packages/miniapp 对活线假绿，本条补活线真空（随 packages/ 处置拍板一并退役前不动旧线两条）',
+    desc: '小程序包体积：主包估算 ≤1.5MiB、进包位图单张 ≤200KB 合计 ≤400KB、字体不进包（二进制或 base64 内嵌）',
     run() {
       const base = join(ROOT, 'rewrite/mp')
-      if (!existsSync(base)) return ['rewrite/mp 缺失——守卫扫描面消失（rw-mp-main-package-budget）']
+      if (!existsSync(base)) return ['rewrite/mp 缺失——守卫扫描面消失（rw-mp-package-budget）']
       const EXCLUDE_TOP = new Set(['tests', 'typings', 'README.md', 'tsconfig.json', 'project.config.json', 'project.private.config.json'])
-      const TS_MULTIPLIER = 1.05
-      const BUDGET = 1.5 * 1024 * 1024 // 微信主包硬顶 2MiB 的 75%（见守卫头注）
+      const BUDGET = 1.5 * 1024 * 1024
+      const BITMAP = /\.(png|jpe?g|gif|webp|bmp)$/i
+      const FONT_BIN = /\.(otf|ttf|woff2?|eot)$/i
+      const FONT_DATAURI = /data:(?:font\/[a-z0-9.+-]+|application\/(?:x-)?font[a-z0-9.+-]*|application\/vnd\.ms-fontobject)[^"')]*?base64,[A-Za-z0-9+/]{200,}/i
+      const bad = []
       let total = 0
-      const walkB = (d, top) => {
+      let bitmaps = 0
+      const scan = (d, top) => {
         for (const name of lsScan(d)) {
           if (top && EXCLUDE_TOP.has(name)) continue
           const p = join(d, name)
+          const rel = relative(ROOT, p)
           const st = statSync(p)
-          if (st.isDirectory()) walkB(p, false)
-          else total += /\.ts$/.test(name) ? st.size * TS_MULTIPLIER : st.size
-        }
-      }
-      walkB(base, true)
-      if (total > BUDGET)
-        return [
-          `rewrite/mp 主包体积估算 ${Math.round(total / 1024)}KB 超预算 ${Math.round(BUDGET / 1024)}KB（微信主包硬顶 2048KB 的 75%）——新增源码/静态资源前先量体积，逼近硬顶需评估分包（根因#8·真机冷启才感知）`,
-        ]
-      return []
-    },
-  },
-  {
-    // 品牌字体走远程加载（wx.loadFontFace）、绝不进小程序包——杜绝字体二进制撑爆包体积（主包 2MB·总包 20MB）。
-    // 痛：文源圆体单字重 ~14MB，若有人把 .otf/.ttf 丢进 src/static（构建原样拷入包）或 base64 内嵌进 wxss，
-    // 包体积瞬间爆掉。锁两条进包路径：① src 下无字体二进制 ② mp 可达源码无字体 data-URI（base64 内嵌）。
-    // 子集产物正本在仓根 assets/brand-fonts/（不在 src·不进包，仅作部署到托管的真相源 + OFL 授权随附）。
-    id: 'font-not-in-package',
-    roots: ['基建'],
-    desc: '品牌字体远程加载不进包：rewrite/mp 下无字体二进制(.otf/.ttf/.woff/.woff2/.eot) + mp 可达源码无字面内嵌字体 blob（base64 长串·非运行时 downloadFile→base64 模板）——防 ~14MB 字重撑爆包体积（主包 2MB），字体须远程拉取（正本在 assets/brand-fonts/·远程托管·mp 端 downloadFile→base64 绕 CORS 见 App.vue / rewrite/mp/utils/brandFont.ts）',
-    run() {
-      const bad = []
-      const srcDirs = [join(ROOT, 'rewrite/mp')]
-      const FONT_BIN = /\.(otf|ttf|woff2?|eot)$/i
-      // 只拦「字面内嵌的字体 blob」（base64, 后跟一长串 base64=真把字体打进包），不拦运行时拼的 data URI
-      // 模板（如 `data:font/woff;base64,${data}`·downloadFile 后运行时构造·字体不在包里·见 App.vue / brandFont.ts 绕 CORS）。
-      const FONT_DATAURI =
-        /data:(?:font\/[a-z0-9.+-]+|application\/(?:x-)?font[a-z0-9.+-]*|application\/vnd\.ms-fontobject)[^"')]*?base64,[A-Za-z0-9+/]{200,}/i
-      const scan = (dir) => {
-        if (!existsSync(dir)) return
-        for (const name of lsScan(dir)) {
-          if (name === 'node_modules' || name === 'dist') continue
-          const p = join(dir, name)
-          if (statSync(p).isDirectory()) {
-            scan(p)
+          if (st.isDirectory()) {
+            scan(p, false)
             continue
           }
-          if (FONT_BIN.test(name)) {
-            bad.push(
-              `${relative(ROOT, p)} 是字体二进制——会被构建打进小程序包（~MB 级撑爆包体积）。品牌字体放仓根 assets/brand-fonts/ 并走 wx.loadFontFace 远程加载`
-            )
-          } else if (/\.(vue|scss|css|js|mjs|ts|wxss)$/.test(name)) {
-            if (FONT_DATAURI.test(mpReachableText(readFileSync(p, 'utf8')))) {
-              bad.push(
-                `${relative(ROOT, p)} 在 mp 可达处内嵌字体 data-URI（base64）——会编进 wxss 撑爆包体积。字体走 wx.loadFontFace 远程加载、勿 base64 内嵌`
-              )
-            }
+          total += name.endsWith('.ts') ? st.size * 1.05 : st.size
+          if (BITMAP.test(name)) {
+            bitmaps += st.size
+            if (st.size > 200 * 1024) bad.push(`${rel} 位图 ${Math.round(st.size / 1024)}KB 超单张 200KB——内容图走云存储，大图压缩或上云`)
           }
+          if (FONT_BIN.test(name)) bad.push(`${rel} 是字体二进制——会打进小程序包；品牌字体放 assets/brand-fonts/ 远程加载`)
+          else if (/\.(js|ts|wxss)$/.test(name) && FONT_DATAURI.test(readFileSync(p, 'utf8')))
+            bad.push(`${rel} 内嵌字体 base64——会编进包撑爆体积；字体走 wx.loadFontFace 远程加载`)
         }
       }
-      srcDirs.forEach(scan)
+      scan(base, true)
+      if (bitmaps > 400 * 1024) bad.push(`rewrite/mp 进包位图合计 ${Math.round(bitmaps / 1024)}KB 超 400KB——内容图别进包，走云存储`)
+      if (total > BUDGET)
+        bad.push(`rewrite/mp 主包估算 ${Math.round(total / 1024)}KB 超预算 ${Math.round(BUDGET / 1024)}KB（硬顶 2048KB 的 75%）——逼近硬顶需评估分包`)
       return bad
     },
   },
@@ -2188,17 +2033,6 @@ export const fileRules = [
         : null,
   },
   {
-    // T1 微信原生单源（根因账本 #6）镜像：mp 端禁裸 wx.request——核心交易流程只走云函数
-    // （callCloud），不再造第二条 HTTP 直连路径。wx.requestPayment 是微信支付原生能力，不误中。
-    id: 'rw-mp-cloud-only',
-    roots: ['T1'],
-    inScope: (abs) => abs.includes('/rewrite/mp/') && !abs.includes('/rewrite/mp/tests/') && abs.endsWith('.ts'),
-    test: (line) =>
-      /\bwx\.request\s*\(/.test(line)
-        ? 'mp 端禁裸 wx.request()——H5/App 不连核心交易流程，微信原生单源经云函数 callCloud（T1·rewrite 镜像）'
-        : null,
-  },
-  {
     // T4 按链内聚·活线镜像（盲区体检批2·病根#16 ② × Phase3 批I 合并融合）：旧 dep-direction 的 inScope
     // 锁死冻结 packages/miniapp——CLAUDE 四大架构主张之一在唯一迭代的活线上零执行。两条线（盲区体检批2 /
     // Phase3 批I）曾各自独立补活线镜像，合流时融合为一条严格强于两者的版本：
@@ -2476,29 +2310,6 @@ function maskStringLiterals(src) {
   return out
 }
 
-// 剥「mp-weixin 不可达」的条件编译块（#ifndef MP-WEIXIN / #ifdef H5|APP… 等），留 mp 可达文本
-// （#ifdef MP-WEIXIN/MP + 未 gate）。宁过勿漏：未 gate 的脚本级调用一律计入（多挂个 PrivacySheet 是无害防御）。
-function mpReachableText(src) {
-  const out = []
-  const stack = [] // 每层存累积可达性（含祖先）
-  const cur = () => stack.length === 0 || stack[stack.length - 1]
-  for (const line of src.split('\n')) {
-    const m = line.match(/(?:\/\/|<!--)\s*#(ifdef|ifndef)\s+([^\n>]+?)(?:\s*-->)?\s*$/)
-    if (m) {
-      const platforms = m[2].split('||').map((s) => s.trim())
-      const mp = platforms.includes('MP-WEIXIN') || platforms.includes('MP')
-      const here = m[1] === 'ifdef' ? mp : !mp
-      stack.push(cur() && here)
-      continue
-    }
-    if (/(?:\/\/|<!--)\s*#endif/.test(line)) {
-      stack.pop()
-      continue
-    }
-    if (cur()) out.push(line)
-  }
-  return out.join('\n')
-}
 
 export function checkFile(file) {
   // 扫描面排除（病根#16）：dot 目录（.claude/worktrees 残留 worktree 等）不是活代码——
