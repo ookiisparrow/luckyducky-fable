@@ -43,8 +43,16 @@ run('生产线（rewrite/cloud）钱链函数无未部署漂移（根因#8）', 
   const drift = detectDrift(cur, deployed, MONEY_CHAIN)
   if (drift.length) throw new Error(`钱链改了未部署：${drift.join(', ')}——先 DEPLOY_ALLOWED=1 deploy-fns`)
 })
-run('console-assets 正册齐（4 件）', () => {
-  for (const f of ['README.md', '01-支付退款工作流.md', '02-库权限期望表.md', 'forward-node.js'])
+run('console-assets 正册齐（6 件）', () => {
+  // 与 console-assets/README.md 目录一致：README 自己 + 正册五件。
+  for (const f of [
+    'README.md',
+    '01-支付退款工作流.md',
+    'forward-node.js',
+    '02-库权限期望表.md',
+    '03-复合索引期望表.md',
+    '04-视频点播VOD.md',
+  ])
     if (!existsSync(join(ROOT, 'console-assets', f))) throw new Error(`缺 ${f}`)
 })
 run('.deploy-manifest.json 在册', () => {
