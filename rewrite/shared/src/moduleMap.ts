@@ -1,6 +1,6 @@
 /**
  * app action → 业务模块映射（异常归因）。单源＝仓根 modules.json（模块正册），
- * 云函数运行时物理进不了 JSON 单源，故设此镜像——守卫 module-map-synced 与正册逐键焊死，改正册漏改此表即红。
+ * 云函数运行时物理进不了 JSON 单源，故设此镜像——rewrite/cloud/tests/module-map.test.ts 与正册逐键比对，改正册漏改此表即红。
  * 消费者：app/index.ts 顶层兜底把 module 写进 anomalies 账本 ctx（admin Anomalies 页按模块看「今天谁在冒错」）。
  */
 export const APP_ACTION_MODULE: Record<string, string> = {

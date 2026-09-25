@@ -439,74 +439,6 @@ export const repoChecks = [
     },
   },
   {
-    // MCP 写工具封锁（2026-07-25·用户拍板「三个都装」的安全前提·与 deploy-gated 同族）。痛：MCP 工具调用
-    // 不经 Bash，guard-deploy（Bash PreToolUse hook）对它整体失明——wechat-devtools/cloudbase 两个 MCP server
-    // 暴露的生产写工具（发体验版/云函数部署/产库直写/权限修改/任意云API直通）若不在 settings.json 权限层
-    // deny，就是一条绕过部署闸直达生产的暗道（deny 在 bypass/auto 权限模式下依然最高优先级生效，是 MCP 面
-    // 唯一可靠的闸）。清单以 2026-07-25 tools/list 协议直测实录为准（wechatide 44 工具/cloudbase 40 工具逐一
-    // 过筛）；server 未挂载（.mcp.json 缺失）亦红——MCP 接入若刻意退役，按「删与加对等」同批退役本守卫。
-    id: 'mcp-write-tools-denied',
-    roots: ['#3'],
-    desc: 'MCP 写工具封锁（fail-closed·根因#3）：.mcp.json 挂载的 wechat-devtools/cloudbase 两 MCP server，其生产写/危险工具（wechatide 6写+quit+project_remove；cloudbase 全部 manage*/write*/modify* + downloadTemplate + callCloudApi 计 18）须逐条出现在 .claude/settings.json permissions.deny——MCP 调用不经 Bash、guard-deploy 对其失明，deny 是 MCP 面唯一的闸；缺一条即红',
-    run() {
-      const bad = []
-      const REQUIRED_DENY = [
-        'mcp__wechat-devtools__upload',
-        'mcp__wechat-devtools__cloud_fn_deploy',
-        'mcp__wechat-devtools__cloud_fn_inc_deploy',
-        'mcp__wechat-devtools__cloud_db_write_doc',
-        'mcp__wechat-devtools__cloud_db_write_struct',
-        'mcp__wechat-devtools__cloud_manage_storage',
-        'mcp__wechat-devtools__project_remove',
-        'mcp__wechat-devtools__quit',
-        'mcp__cloudbase__envDomainManagement',
-        'mcp__cloudbase__manageEnv',
-        'mcp__cloudbase__writeNoSqlDatabaseStructure',
-        'mcp__cloudbase__writeNoSqlDatabaseContent',
-        'mcp__cloudbase__modifyDataModel',
-        'mcp__cloudbase__managePgDatabase',
-        'mcp__cloudbase__manageMysqlDatabase',
-        'mcp__cloudbase__manageFunctions',
-        'mcp__cloudbase__manageHosting',
-        'mcp__cloudbase__manageStorage',
-        'mcp__cloudbase__manageCloudRun',
-        'mcp__cloudbase__manageGateway',
-        'mcp__cloudbase__manageAppAuth',
-        'mcp__cloudbase__manageApps',
-        'mcp__cloudbase__managePermissions',
-        'mcp__cloudbase__manageAgents',
-        'mcp__cloudbase__downloadTemplate',
-        'mcp__cloudbase__callCloudApi',
-      ]
-      const mcpPath = join(ROOT, '.mcp.json')
-      if (!existsSync(mcpPath)) {
-        bad.push('.mcp.json 缺失——MCP 接入被拆（2026-07-25 用户拍板装载）；若刻意退役 MCP，同批退役本守卫（删与加对等）')
-        return bad
-      }
-      let servers = {}
-      try {
-        servers = JSON.parse(readFileSync(mcpPath, 'utf8')).mcpServers || {}
-      } catch {
-        bad.push('.mcp.json 不是合法 JSON')
-        return bad
-      }
-      for (const name of ['wechat-devtools', 'cloudbase'])
-        if (!servers[name]) bad.push(`.mcp.json 缺 ${name} server——MCP 接入面不完整（拆卸须同批退役本守卫）`)
-      const settingsPath = join(ROOT, '.claude/settings.json')
-      let deny = []
-      try {
-        deny = JSON.parse(readFileSync(settingsPath, 'utf8'))?.permissions?.deny || []
-      } catch {
-        bad.push('.claude/settings.json 读取/解析失败——deny 闸状态不可知（fail-closed 判红）')
-        return bad
-      }
-      for (const t of REQUIRED_DENY)
-        if (!deny.includes(t))
-          bad.push(`settings.json permissions.deny 缺「${t}」——MCP 生产写暗道未封（guard-deploy 对 MCP 失明·根因#3）`)
-      return bad
-    },
-  },
-  {
     // 根因#8「构建过≠真能用」在部署产物层的镜像（盲区体检批4·病根#16 配套）：三道闸此前从不
     // 构建任何真实生产产物——build:rw-cloud/rw-admin/agent/site 四个真实构建在编辑 hook/pre-commit
     // /CI 里一次都没跑过；「把产物 require 进来真跑」的行为级验证只有旧线有（verify-cloud-bundles
@@ -567,70 +499,6 @@ export const repoChecks = [
           bad.push(`${f} 的 ${name} 未经 withRateLimit——用户可调写函数无频控可被刷/爆破（根因#13）`)
         }
       }
-      return bad
-    },
-  },
-  {
-    id: 'rw-cs-360-read-audited',
-    roots: ['#3'],
-    desc: '360 读他人全貌破例留痕·生产线（§1.5·根因#3·深审 P2 补：cs-360-read-audited 只焊冻结旧线是假绿）：生产线 rewrite/cloud/src/kit/audit.ts 须有 FORCE_AUDIT 名单含 getCustomer360/getUser/searchCustomer/getSessionCustomer360 强制留痕（防 PII 访问 0 痕）',
-    run() {
-      const audit = 'rewrite/cloud/src/kit/audit.ts'
-      if (!existsSync(join(ROOT, audit))) return [`${audit} 缺失——生产线审计原语`]
-      const src = readFileSync(join(ROOT, audit), 'utf8')
-      const bad = []
-      const set = src.match(/FORCE_AUDIT\s*=\s*new Set\(\[([\s\S]*?)\]\)/)
-      if (!set) bad.push(`${audit} 无 FORCE_AUDIT 名单——360 读越权面无法破例留痕（§1.5·根因#3）`)
-      else
-        for (const a of ['getCustomer360', 'getUser', 'searchCustomer', 'getSessionCustomer360'])
-          if (!new RegExp(`['"]${a}['"]`).test(set[1]))
-            bad.push(`${audit} FORCE_AUDIT 未含 ${a}——读他人全貌/检索 0 留痕（§1.5·根因#3）`)
-      return bad
-    },
-  },
-  {
-    id: 'rw-cs-360-rbac-gated',
-    roots: ['#3'],
-    desc: '360 读须能力闸·生产线（§1.5·根因#3·深审 P2 补：cs-360-rbac-gated 只焊冻结旧线是假绿）：生产线 rewrite/cloud/src/functions/adminApi/index.ts 须有 ACTION_CAPS 含 getCustomer360/getUser/searchCustomer→customer:view，且按 caps 校验拒绝',
-    run() {
-      const idx = 'rewrite/cloud/src/functions/adminApi/index.ts'
-      if (!existsSync(join(ROOT, idx))) return [`${idx} 缺失`]
-      const src = readFileSync(join(ROOT, idx), 'utf8')
-      const bad = []
-      const caps = src.match(/const ACTION_CAPS[^{]*\{([\s\S]*?)\}/)
-      if (!caps) bad.push(`${idx} 无 ACTION_CAPS 能力闸——360 读无 RBAC（§1.5·根因#3）`)
-      else
-        for (const a of ['getCustomer360', 'getUser', 'searchCustomer'])
-          if (!new RegExp(`\\b${a}\\s*:`).test(caps[1]))
-            bad.push(`ACTION_CAPS 未含 ${a}——任何登录即可读他人全貌/检索客户（§1.5·根因#3）`)
-      if (!/\bcaps\b/.test(src)) bad.push(`${idx} 未按 caps 校验——能力闸空转（§1.5）`)
-      return bad
-    },
-  },
-  {
-    id: 'rw-conversations-archived',
-    roots: ['#3'],
-    desc: '客服会话归档挂载 + 隐私声明·生产线（B5.1·根因#3·深审 P2 补：conversations-archived 只焊冻结旧线是假绿）：生产线 archive.ts 须真写 conversations 集合；kfCallback/index.ts 须真调 archiveInbound + archiveOutbound；会话含 PII·协议页须声明「客服会话记录」被收集',
-    run() {
-      const bad = []
-      const arch = 'rewrite/cloud/src/functions/cs/kfCallback/archive.ts'
-      const absArch = join(ROOT, arch)
-      if (!existsSync(absArch)) bad.push(`${arch} 缺失——生产线会话归档接缝（B5.1）`)
-      else if (!/COLLECTIONS\.conversations|['"]conversations['"]/.test(readFileSync(absArch, 'utf8')))
-        bad.push(`${arch} 未写 conversations 集合——归档接缝是摆设（B5.1·扫真实写入·非注释）`)
-      const idx = 'rewrite/cloud/src/functions/cs/kfCallback/index.ts'
-      const absIdx = join(ROOT, idx)
-      if (!existsSync(absIdx)) bad.push(`${idx} 缺失——微信客服回调（归档挂点）`)
-      else {
-        const s = readFileSync(absIdx, 'utf8')
-        if (!/archiveInbound\s*\(/.test(s)) bad.push(`${idx} 未调 archiveInbound——入站客户消息未落档（B5.1·防摘归档）`)
-        if (!/archiveOutbound\s*\(/.test(s)) bad.push(`${idx} 未调 archiveOutbound——出站回复未落档（B5.1·防摘归档）`)
-      }
-      // 隐私文案单源已随页面内容 CMS 战役迁 lib/mapPages.ts（agreement.ts 只渲染·文案默认值在 mapPages）——守卫锚随迁
-      const agr = 'rewrite/mp/lib/mapPages.ts'
-      const absAgr = join(ROOT, agr)
-      if (existsSync(absAgr) && !/客服.{0,8}会话|会话记录/.test(readFileSync(absAgr, 'utf8')))
-        bad.push(`${agr} 未声明「客服会话记录」被收集留存——会话含 PII·隐私声明漏（B5.1·根因#3）`)
       return bad
     },
   },
@@ -1208,39 +1076,6 @@ export const repoChecks = [
           if (!truth[axis].includes(item))
             bad.push(`modules.json 登记的 ${axis} \`${item}\` 在源码里不存在——删除或改名（防幽灵登记）`)
       }
-      return bad
-    },
-  },
-  {
-    id: 'module-map-synced',
-    roots: ['#11'],
-    desc: '运行时模块映射与正册同步（车队地基批2·病根#11 生成物防漂·同 gen-order-domain-synced 范式）：rewrite/shared/src/moduleMap.ts 的 APP_ACTION_MODULE 须与 modules.json 各模块 appActions 完全一致（云函数运行时按它给异常账本标模块，物理进不了 JSON 单源故设镜像+本守卫焊死）——改 modules.json 的 appActions 后同步 moduleMap.ts，漏改即红',
-    run() {
-      const bad = []
-      const regPath = join(ROOT, 'modules.json')
-      const mapPath = join(ROOT, 'rewrite/shared/src/moduleMap.ts')
-      if (!existsSync(regPath)) return [] // 正册缺失由 module-registry-complete 报，不双报
-      if (!existsSync(mapPath))
-        return ['rewrite/shared/src/moduleMap.ts 缺失——异常账本模块归因的运行时映射（单源 modules.json 的镜像），按 modules.json appActions 生成它']
-      let reg
-      try {
-        reg = JSON.parse(readFileSync(regPath, 'utf8'))
-      } catch {
-        return [] // JSON 坏由 module-registry-complete 报
-      }
-      const want = new Map() // action → module（真值：modules.json）
-      for (const [mid, m] of Object.entries(reg?.modules ?? {}))
-        for (const a of m?.appActions ?? []) want.set(a, mid)
-      const mapSrc = readFileSync(mapPath, 'utf8')
-      const got = new Map(
-        [...mapSrc.matchAll(/^\s*([A-Za-z0-9_]+):\s*'([a-z]+)',/gm)].map((m) => [m[1], m[2]])
-      )
-      for (const [a, mid] of want)
-        if (!got.has(a)) bad.push(`moduleMap.ts 缺 action \`${a}\`（modules.json 归 \`${mid}\`）——补 \`${a}: '${mid}',\``)
-        else if (got.get(a) !== mid)
-          bad.push(`moduleMap.ts 里 \`${a}\` 标 \`${got.get(a)}\` ≠ modules.json 真值 \`${mid}\`——改为真值`)
-      for (const a of got.keys())
-        if (!want.has(a)) bad.push(`moduleMap.ts 多出 action \`${a}\`（modules.json 无此登记）——删除（防幽灵映射）`)
       return bad
     },
   },

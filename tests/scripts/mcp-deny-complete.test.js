@@ -30,3 +30,14 @@ describe('cloudbase MCP 写工具全部显式 deny', () => {
     expect(mcp.includes(`@cloudbase/cloudbase-mcp@${reg._pinnedVersion}`)).toBe(true)
   })
 })
+
+// MCP 调用不经 Bash，部署闸 guard-deploy 看不见它；settings.json 的 deny 是 MCP 面唯一的闸。
+describe('wechat-devtools MCP 写/危险工具全部显式 deny', () => {
+  it('.mcp.json 挂着 wechat-devtools，且上传/云函数部署/云库写/云存储管理/删项目/退出全在 deny', () => {
+    const servers = JSON.parse(readFileSync(resolve(ROOT, '.mcp.json'), 'utf8')).mcpServers ?? {}
+    expect(servers['wechat-devtools']).toBeTruthy()
+    const required = ['upload', 'cloud_fn_deploy', 'cloud_fn_inc_deploy', 'cloud_db_write_doc', 'cloud_db_write_struct', 'cloud_manage_storage', 'project_remove', 'quit']
+    const missing = required.filter((t) => !deny.includes(`mcp__wechat-devtools__${t}`))
+    expect(missing, `这些写/危险工具没有 deny：${missing.join(', ')}`).toEqual([])
+  })
+})

@@ -235,6 +235,8 @@ describe('操作审计（黄金 kit-security §H）', () => {
     expect(shouldAudit('ping')).toBe(false)
     expect(shouldAudit('getCustomer360')).toBe(true) // FORCE_AUDIT
     expect(shouldAudit('searchCustomer')).toBe(true)
+    expect(shouldAudit('getUser')).toBe(true)
+    expect(shouldAudit('getSessionCustomer360')).toBe(true)
     expect(shouldAudit('reportClientError')).toBe(false) // 批 B7：高频遥测，账本是 anomalies 不是 auditLog
   })
 

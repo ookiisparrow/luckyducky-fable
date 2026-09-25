@@ -153,6 +153,8 @@ describe('mapAgreement（用户协议/隐私政策·缺档回退默认全文·in
     // 隐私政策第三方披露事实对齐（快递100·不通过微信授权）不因回退丢失
     expect(d.privacy.intro).toContain('不通过微信授权')
     expect(JSON.stringify(d.privacy.articles)).toContain('快递100')
+    // 客服会话含 PII，归档留存必须在隐私政策里声明
+    expect(JSON.stringify(d.privacy.articles)).toContain('客服会话记录')
     // 用户协议默认稿：产品名「初学者钩织学习套装」；扫印刷码只开欢迎页、仍可退；确认进课才失七天无理由
     const userBodies = d.user.articles.map((a) => a.body).join('\n')
     const article4 = d.user.articles.find((a) => a.title.startsWith('第四条'))?.body ?? ''
