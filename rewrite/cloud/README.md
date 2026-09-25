@@ -28,6 +28,6 @@ tests/         各域测试 + kit 原语 + 契约哨兵（contract-shape.test.ts
 - `flow.ts` 微信退款单号契约（`out_refund_no` 字符集转换·平台接缝）· `wxpay.ts` 微信支付商户接缝（签名/请求）· `reconcile.ts` 对账原语
 - `secureConfig.ts` 敏感凭证单源读取（DB 优先 env 兜底）· `contentsec.ts` 内容安全接缝 · `shipping.ts` 发货信息上传接缝 · `storage.ts` 云存储换 URL 收口 · `vod.ts` 视频点播封装 · `wecom.ts` 企业微信封装 + 客服发送/媒体下载高层助手（`kfSendText`/`kfFetchMedia`）· `csAccess.ts` 外包客服会话访问闸 · `index.ts` 桶导出
 
-## 钱链文件点名
+## 红区
 
-`modules.json` 里 orders 模块 tier=red，改动要过钱链闸（`MONEYCHAIN_ALLOWED`，老板授权）：`app/actions/orders.ts` · `callbacks/*` · `timers/closeExpiredOrders.ts` · `timers/billReconcile.ts` · `adminApi/actions/refunds.ts`。
+钱链、运维配置与身份闸文件的改动要过红区提交闸（`RED_ALLOWED`，老板授权），名单以 `scripts/lib/red-paths.mjs` 为准。

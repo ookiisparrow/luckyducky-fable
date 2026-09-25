@@ -5,14 +5,14 @@
 ## 0. 危险速览（动手前必读）
 - 钩织材料包电商：微信小程序 + 云开发后端 + admin/agent 后台 + Astro 内容站。
 - **本仓是生产源**：云环境 `cloudbase-d4gcssqbv06865479` 的唯一版本就是 `rewrite/` 的产物，部署/建表/删表真实生效。小程序 AppID `wxcbd2fb68b81bcfb1`，上传/提审/发布是微信后台人工动作。
-- **先问老板、宁停勿猜**：red 模块（订单交易钱链、运维观测与系统配置，分级以 `modules.json` 为准）、部署与数据库不可逆操作、删守卫、合规文案、改 `scripts/check-*.mjs` 或 `.claude/`。
+- **先问老板、宁停勿猜**：红区（订单交易钱链、运维观测与系统配置、身份闸，名单以 `scripts/lib/red-paths.mjs` 为准）、部署与数据库不可逆操作、删守卫、合规文案、改 `scripts/check-*.mjs` 或 `.claude/`。
 - **git 外资产**：控制台资产的权威副本在 `console-assets/`，变更先 repo 后控制台。
 - **非 Claude 代理（Cursor 等）同守本文件**；不自装 MCP 或云端直连扩展（要装须复刻 `.claude/settings.json` 的全部 deny 并经老板确认）；不自派任务。
 - **新会话先 `git fetch`**，对 `origin/main` 看（本地常落后几十个提交，错题本 E24）；现状与待办看 `gh issue list`。
 
 ## 1. 干活流水线
 1. **事实只从代码取**：名字、数字、清单以代码为准，文档写「以 X 为准」不抄值；注释不写「由守卫 X 保证」，除非 grep 确认它在。动手前 grep `docs/关键决策记录.md`（含「拍板不做」）与 `docs/根因账本.md`，别把否掉的方案再做一遍。
-2. **危险区靠硬闸**：钱链提交要 `MONEYCHAIN_ALLOWED`，红区提交要 `[red-review: 复核人]`，部署要 `DEPLOY_ALLOWED`，都由老板授权。被闸拦 = 修代码，不绕闸，不 `--no-verify`。
+2. **危险区靠硬闸**：红区提交要 `RED_ALLOWED`，部署要 `DEPLOY_ALLOWED`，都由老板授权。被闸拦 = 修代码，不绕闸，不 `--no-verify`。
 3. **完成只由机器判**：`npm run check`（pre-commit 与 CI 同源）全绿才算；先写会红的测试再实现，反向自检（改坏必红，再还原）。改动走 `/refactor-batch`，体检走 `/audit`，修 bug 走 `/systematic-debugging`，验收走 `/acceptance-check`。
 4. **声明带证据**：PR 里写「真机验过/压测过」必须附截图、日志或命令输出，没附当没做。一批一个 squash，推分支不推 main。
 

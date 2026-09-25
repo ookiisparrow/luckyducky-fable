@@ -202,39 +202,36 @@ export const repoChecks = [
   },
   {
     // 提交/CI 闸门接线在位（根因#3 #8）：闸本身的逻辑在 scripts/git-hooks/ 与 CI 里，这里只查「接线没被拆」——
-    // ① pre-commit 与 CI 都只调 `npm run check`（质量闸单一定义）；② 钱链闸：moneychain-paths.mjs 在、关键路径没被收窄，
-    // pre-commit 引用它并认 MONEYCHAIN_ALLOWED；③ 红区复核闸：commit-msg 钩子在且认 [red-review]，`prepare` 把
-    // core.hooksPath 指到 scripts/git-hooks；④ 产物闸：check:artifacts 覆盖云函数/admin/agent/site 四面且 CI 真跑。
+    // ① pre-commit 与 CI 都只调 `npm run check`（质量闸单一定义）；② 红区闸：red-paths.mjs 在、关键路径没被收窄，
+    // pre-commit 引用它并认 RED_ALLOWED，`prepare` 把 core.hooksPath 指到 scripts/git-hooks；
+    // ③ 产物闸：check:artifacts 覆盖云函数/admin/agent/site 四面且 CI 真跑。
     // 改闸门边界（红区名单等）是治理批，须老板拍板。
     id: 'rw-gates-wired',
     roots: ['#3', '#8'],
-    desc: '提交/CI 闸门接线在位：pre-commit 与 CI 调 npm run check、钱链闸与红区复核闸钩子在且已注册、check:artifacts 四面齐且 CI 真跑——任一被拆即红',
+    desc: '提交/CI 闸门接线在位：pre-commit 与 CI 调 npm run check、红区闸名单与钩子在且已注册、check:artifacts 四面齐且 CI 真跑——任一被拆即红',
     run() {
       const bad = []
       const read = (f) => (existsSync(join(ROOT, f)) ? readFileSync(join(ROOT, f), 'utf8') : null)
       const preCommit = read('scripts/git-hooks/pre-commit')
       const ci = read('.github/workflows/ci.yml')
-      const commitMsg = read('scripts/git-hooks/commit-msg')
-      const manifest = read('scripts/lib/moneychain-paths.mjs')
+      const manifest = read('scripts/lib/red-paths.mjs')
       const pkg = JSON.parse(read('package.json'))
       const scripts = pkg.scripts || {}
       // ① 质量闸单一定义
       for (const [f, src] of [['scripts/git-hooks/pre-commit', preCommit], ['.github/workflows/ci.yml', ci]])
         if (!src) bad.push(`${f} 不存在——质量闸缺一道`)
         else if (!/npm run check\b/.test(src)) bad.push(`${f} 未调 \`npm run check\`——质量闸须以 check 脚本为单一定义`)
-      // ② 钱链闸
-      if (!manifest) bad.push('scripts/lib/moneychain-paths.mjs 缺失——钱链提交闸的路径单源')
+      // ② 红区闸
+      if (!manifest) bad.push('scripts/lib/red-paths.mjs 缺失——红区提交闸的名单')
       else {
-        for (const must of ['rewrite/cloud/src/functions/callbacks/', 'rewrite/cloud/src/kit/wxpay.ts', 'rewrite/cloud/src/kit/transition.ts', 'rewrite/shared/src/money.ts', 'rewrite/shared/src/order.ts', 'rewrite/mp/pages/checkout/'])
-          if (!manifest.includes(must)) bad.push(`moneychain-paths.mjs 缺关键路径 ${must}——钱链边界被收窄（改边界须老板拍板）`)
-        if (!manifest.includes('export function isMoneychainPath')) bad.push('moneychain-paths.mjs 缺 isMoneychainPath 导出——pre-commit 靠它判定')
+        for (const must of ['rewrite/cloud/src/functions/callbacks/', 'rewrite/cloud/src/kit/wxpay.ts', 'rewrite/cloud/src/kit/transition.ts', 'rewrite/shared/src/money.ts', 'rewrite/shared/src/order.ts', 'rewrite/mp/pages/checkout/', 'rewrite/cloud/src/kit/gate.ts', 'rewrite/cloud/src/functions/adminApi/actions/secureConfig.ts'])
+          if (!manifest.includes(must)) bad.push(`red-paths.mjs 缺关键路径 ${must}——红区边界被收窄（改边界须老板拍板）`)
+        if (!manifest.includes('export function isRedPath')) bad.push('red-paths.mjs 缺 isRedPath 导出——pre-commit 靠它判定')
       }
-      if (preCommit && !(preCommit.includes('moneychain-paths') && preCommit.includes('MONEYCHAIN_ALLOWED')))
-        bad.push('pre-commit 不再引用 moneychain-paths 或缺 MONEYCHAIN_ALLOWED 开关——钱链闸被拆')
-      // ③ 红区复核闸 + 钩子注册
-      if (!commitMsg || !commitMsg.includes('red-review')) bad.push('scripts/git-hooks/commit-msg 缺失或不再认 [red-review]——红区复核闸被拆')
+      if (preCommit && !(preCommit.includes('red-paths') && preCommit.includes('RED_ALLOWED')))
+        bad.push('pre-commit 不再引用 red-paths 或缺 RED_ALLOWED 开关——红区闸被拆')
       if (!/core\.hooksPath scripts\/git-hooks/.test(scripts.prepare || '')) bad.push('package.json prepare 未把 core.hooksPath 指到 scripts/git-hooks——钩子不会生效')
-      // ④ 产物闸
+      // ③ 产物闸
       const ca = scripts['check:artifacts'] || ''
       for (const piece of ['verify:rw-cloud', 'build:rw-admin', 'build:agent', '@ldrw/site'])
         if (!ca.includes(piece)) bad.push(`check:artifacts 缺 ${piece}——产物闸不全（构建过≠真能用）`)
@@ -834,11 +831,11 @@ export const repoChecks = [
   {
     id: 'module-registry-complete',
     roots: ['#11'],
-    desc: '模块正册不重不漏（车队地基批1·病根#11 单源防漂）：modules.json 把活线全部 app action / adminApi action 文件 / mp 页 / admin 页 / agent 页 / 集合按业务模块登记，一条目归属唯一模块——加 action/页面/集合不登记、登记了源码里不存在的名字、或一条目挂两模块，即红。用途：异常归因带模块 ID（批2 接线）+ 车队施工单范围=模块（tier 定档：red 工头亲自/yellow 逐行评审/green 放手）',
+    desc: '模块正册不重不漏（车队地基批1·病根#11 单源防漂）：modules.json 把活线全部 app action / adminApi action 文件 / mp 页 / admin 页 / agent 页 / 集合按业务模块登记，一条目归属唯一模块——加 action/页面/集合不登记、登记了源码里不存在的名字、或一条目挂两模块，即红。用途：异常归因带模块 ID',
     run() {
       const bad = []
       const regPath = join(ROOT, 'modules.json')
-      if (!existsSync(regPath)) return ['modules.json 缺失——模块正册是异常归因与车队派活的单源，恢复它（结构见守卫 desc）']
+      if (!existsSync(regPath)) return ['modules.json 缺失——模块正册是异常归因的单源，恢复它（结构见守卫 desc）']
       let reg
       try {
         reg = JSON.parse(readFileSync(regPath, 'utf8'))
@@ -846,11 +843,8 @@ export const repoChecks = [
         return [`modules.json 不是合法 JSON：${e.message}`]
       }
       const modules = reg?.modules ?? {}
-      const TIERS = new Set(['red', 'yellow', 'green'])
-      for (const [mid, m] of Object.entries(modules)) {
+      for (const [mid, m] of Object.entries(modules))
         if (!m?.name) bad.push(`modules.json 模块 \`${mid}\` 缺 name——补中文名`)
-        if (!TIERS.has(m?.tier)) bad.push(`modules.json 模块 \`${mid}\` tier=\`${m?.tier}\` 非法——取 red/yellow/green 之一`)
-      }
       // 六轴真值全部从源码/目录现读（不信正册自述·与 build.mjs/枚举同源规则）
       const appSrc = readFileSync(join(ROOT, 'rewrite/cloud/src/functions/app/index.ts'), 'utf8')
       const appBlock = appSrc.match(/const ACTIONS[^{]*\{([\s\S]*?)\n\}/)
