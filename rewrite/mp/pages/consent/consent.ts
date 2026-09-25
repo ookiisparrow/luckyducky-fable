@@ -23,10 +23,11 @@ Page({
     if (this.data.busy) return
     this.setData({ busy: true })
     const r = await setDataShareConsent(agree)
+    // 提示先于退页复核落盘：服务端已生效而本机不记，下次进页会显示改之前的状态（本页是唯一写入点）
+    if (r.ok) writeConsentHint(agree)
     if (this.unloaded) return // 页面已退出：不再对已退页 setData/toast（静默，无钱副作用，本页无需像 checkout 那样补提示）
     this.setData({ busy: false })
     if (r.ok) {
-      writeConsentHint(agree)
       this.setData({ state: agree, stateLabel: consentLabel(agree) })
       wx.showToast({ title: agree ? '已同意数据共享' : '已撤回授权', icon: 'none' })
     } else {
