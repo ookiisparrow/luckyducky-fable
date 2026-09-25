@@ -61,7 +61,7 @@ function publicReviewFilter(productId: string) {
 /**
  * 精确汇总（黄金 §七：全量精确、永不近似）：按星级分组一次聚合出各档条数与总分，不受样本截断。
  * 与 tags 样本读互不依赖并行；样本加 .field({tags:true}) 投影——只取 tags，不连 text（≤500字）/photos
- * 拉整文档（真 sdk 支持字段投影；桩 field() 是 no-op）。
+ * 拉整文档。
  */
 async function buildSummaryExact(db: any, productId: string) {
   const $ = db.command.aggregate

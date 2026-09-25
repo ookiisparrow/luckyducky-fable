@@ -8,6 +8,7 @@
 //   - doc(id).get() 缺失即 reject（源码大量 .catch(()=>null) 依赖此）；
 //   - where(...).update() 返回 { stats:{updated} }（activateCourse 一码一用抢占）；
 //   - add({data:{_id}}) 撞已存在 _id 抛错（genQrcodes/submitReview 库级唯一约束）。
+// 不模拟事务：云函数没有用 runTransaction/startTransaction 的地方。
 
 const G = (globalThis.__cloudMock = globalThis.__cloudMock || {
   store: {},
@@ -25,7 +26,18 @@ const G = (globalThis.__cloudMock = globalThis.__cloudMock || {
   tempUrlCalls: [],
 })
 
-const clone = (v) => (v === undefined ? undefined : JSON.parse(JSON.stringify(v)))
+// JSON 往返保留真云序列化语义（undefined 键被丢等），但 Date 要原样存取：真云存的是日期类型，不是 ISO 串
+const clone = (v) =>
+  v === undefined
+    ? undefined
+    : JSON.parse(
+        JSON.stringify(v, function (k, x) {
+          return this[k] instanceof Date ? { __mockDate: this[k].getTime() } : x
+        }),
+        (k, x) => (x && typeof x === 'object' && '__mockDate' in x ? new Date(x.__mockDate) : x)
+      )
+// 真云服务端 get()/聚合单次最多取 1000 条
+const MAX_LIMIT = 1000
 
 const command = {
   in: (val) => ({ __op: 'in', val }),
@@ -59,12 +71,12 @@ function matchOne(docVal, cond) {
   if (cond && typeof cond === 'object' && cond.__op) {
     if (cond.__op === 'in') return Array.isArray(cond.val) && cond.val.includes(docVal)
     if (cond.__op === 'neq') return docVal !== cond.val
-    if (cond.__op === 'lt') return docVal < cond.val
-    if (cond.__op === 'gt') return docVal > cond.val
-    // 同真库：null/缺字段不参与数值比较（JS 的 null >= 0 为真，不能直接比）
+    // 同真库只在同类型间比大小：null/缺字段不参与（JS 的 null >= 0 为真），Date 字段也不和数字比（JS 会把 Date 转数字）
+    if (cond.__op === 'lt') return typeof docVal === typeof cond.val && docVal < cond.val
+    if (cond.__op === 'gt') return typeof docVal === typeof cond.val && docVal > cond.val
     if (cond.__op === 'gte') return typeof docVal === typeof cond.val && docVal >= cond.val
     if (cond.__op === 'exists') return cond.val ? docVal !== undefined : docVal === undefined
-    return false
+    throw new Error('MOCK: 桩不支持查询操作符 ' + cond.__op) // 静默当「不匹配」会让用错操作符的查询在测试里假绿
   }
   return docVal === cond
 }
@@ -172,8 +184,10 @@ class Query {
     this._skip = n
     return this
   }
-  field() {
-    return this // 投影在测试里忽略
+  field(proj) {
+    if (Object.values(proj).some((v) => v !== true)) throw new Error('MOCK: field() 只实现了包含式投影')
+    this._field = proj
+    return this
   }
   doc(id) {
     return new DocRef(this.coll, id)
@@ -199,9 +213,12 @@ class Query {
   async get() {
     // 写前注入同款读侧钩子（批1 bug sweep·kit/inventory getInventory 分页扫描单页失败测试）：
     // 可在具体页（按 coll/skip 判断）注入抛错，模拟真机分页扫描中单页 .get() 失败（非到底）。默认无。
+    if (this._limit > MAX_LIMIT) throw new Error('MOCK: limit 超过真云上限 ' + MAX_LIMIT)
     if (typeof G.beforeGet === 'function')
       await G.beforeGet({ coll: this.coll, filter: this._filter, skip: this._skip, limit: this._limit })
-    return { data: this._rows().map(clone) }
+    const keep = this._field && ['_id', ...Object.keys(this._field)]
+    const pick = (d) => (keep ? Object.fromEntries(keep.filter((k) => k in d).map((k) => [k, d[k]])) : d)
+    return { data: this._rows().map((d) => clone(pick(d))) }
   }
   async count() {
     // 写前注入同款钩子（测试：精确聚合异常→兜底近样本口径场景，逼真机 count() 失败·默认无）
@@ -209,13 +226,16 @@ class Query {
     return { total: rows(this.coll).filter((d) => matchDoc(d, this._filter)).length }
   }
   async update({ data }) {
+    ensureColl(this.coll)
     // 写前注入（测试并发：条件更新 where 求值前让「并发方」先改库·验 CAS 真在咬）。默认无。
     if (typeof G.beforeUpdate === 'function') await G.beforeUpdate({ coll: this.coll, data })
-    const hit = this._rows()
+    // 真云 where().update() 改全部匹配文档，不受读取的默认 100 条截断
+    const hit = rows(this.coll).filter((d) => matchDoc(d, this._filter))
     hit.forEach((d) => applyPatch(d, clone(data)))
     return { stats: { updated: hit.length } }
   }
   async remove() {
+    ensureColl(this.coll)
     if (typeof G.beforeRemove === 'function') await G.beforeRemove({ coll: this.coll, filter: this._filter })
     const arr = rows(this.coll)
     const before = arr.length
@@ -264,8 +284,8 @@ class Aggregate {
   async end() {
     // 聚合前注入（测试：精确聚合异常→兜底口径场景，可按 coll 判断选择性抛错）。默认无。
     if (typeof G.beforeAggregate === 'function') await G.beforeAggregate({ coll: this.coll, match: this._match })
-    // 真 sdk 聚合不写 limit 只回 20 条；桩默认不截断，要逼真的测试经 setAggregateDefaultLimit(20) 打开
-    const cap = this._limit ?? G.aggregateDefaultLimit
+    if (this._limit > MAX_LIMIT) throw new Error('MOCK: limit 超过真云上限 ' + MAX_LIMIT)
+    const cap = this._limit ?? 20 // 真云聚合不写 limit 只回 20 条
     const docs = rows(this.coll).filter((d) => matchDoc(d, this._match))
     if (!this._group) return { list: docs.slice(0, cap).map(clone) }
     const idExpr = this._group._id
@@ -411,13 +431,12 @@ const control = {
     G.beforeCount = null
     G.beforeRemove = null
     G.beforeAggregate = null
-    G.aggregateDefaultLimit = undefined
     G.uncreated = new Set()
     G.deletedFiles = []
     G.tempUrlCalls = []
   },
   seed(coll, docs) {
-    G.store[coll] = (G.store[coll] || []).concat(JSON.parse(JSON.stringify(docs)))
+    G.store[coll] = (G.store[coll] || []).concat(clone(docs))
   },
   setOpenId(id) {
     G.openid = id
@@ -426,7 +445,7 @@ const control = {
     G.unionid = id
   },
   dump(coll) {
-    return JSON.parse(JSON.stringify(G.store[coll] || []))
+    return clone(G.store[coll] || [])
   },
   lastUpload() {
     return G.lastUpload ? { ...G.lastUpload } : null
@@ -466,9 +485,6 @@ const control = {
   // 注入「aggregate().end() 前」副作用（测试：聚合失败场景，可按 coll 判断选择性抛错）
   setBeforeAggregate(fn) {
     G.beforeAggregate = fn
-  },
-  setAggregateDefaultLimit(n) {
-    G.aggregateDefaultLimit = n
   },
   // 注入「remove() 前」副作用（测试：删失败场景，可按 coll 判断选择性抛错）
   setBeforeRemove(fn) {
