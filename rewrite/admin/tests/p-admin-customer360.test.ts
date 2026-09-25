@@ -91,6 +91,22 @@ describe('Customer360.vue 全景', () => {
     expect(statuses(w)).toEqual(['该客户暂无用户档案（可能仅有订单/会话记录）'])
   })
 
+  it('大白话：档案读失败后点「返回结果」或直接重搜——「读失败」提示跟着清掉，不挂在命中列表上误导下一个客户', async () => {
+    api.getUser.mockResolvedValue({ ok: false, status: 200, error: 'USER_LOOKUP_FAIL' })
+    const w = await mountAndSearch()
+    await w.findAll('.hit-row')[0].trigger('click')
+    await flushPromises()
+    await back(w).trigger('click')
+    expect(w.text()).not.toContain('用户档案加载失败')
+
+    await w.findAll('.hit-row')[0].trigger('click')
+    await flushPromises()
+    expect(w.text()).toContain('用户档案加载失败')
+    await w.find('input').trigger('keyup.enter')
+    await flushPromises()
+    expect(w.text()).not.toContain('用户档案加载失败')
+  })
+
   it('大白话：A 的全景没回包就切到 B——A 的数据不落到 B 头下', async () => {
     let releaseA: (v: unknown) => void = () => {}
     api.getCustomer360.mockImplementationOnce(() => new Promise((r) => (releaseA = r)))

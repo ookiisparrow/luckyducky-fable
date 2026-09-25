@@ -3,11 +3,12 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { mount, flushPromises } from '@vue/test-utils'
 
-const { listBatchesMock, createBatchMock, listBatchCodesMock, getSettingsMock, routeQuery } = vi.hoisted(() => ({
+const { listBatchesMock, createBatchMock, listBatchCodesMock, getSettingsMock, saveBlobMock, routeQuery } = vi.hoisted(() => ({
   listBatchesMock: vi.fn(),
   createBatchMock: vi.fn(),
   listBatchCodesMock: vi.fn(),
   getSettingsMock: vi.fn(),
+  saveBlobMock: vi.fn(),
   routeQuery: { courseId: 'course-p1' } as Record<string, string>,
 }))
 vi.mock('../src/api/system', () => ({
@@ -18,9 +19,10 @@ vi.mock('../src/api/system', () => ({
 }))
 vi.mock('../src/api/products', () => ({ getCard: vi.fn() }))
 vi.mock('vue-router', () => ({ useRoute: () => ({ query: routeQuery }), useRouter: () => ({ push: vi.fn() }) }))
+vi.mock('../src/lib/saveBlob', () => ({ saveBlob: saveBlobMock }))
 
 import Batches from '../src/pages/Batches.vue'
-import { UNKNOWN_COURSE_HINT } from '../src/lib/mapSystem'
+import { UNKNOWN_COURSE_HINT, launchErrorText } from '../src/lib/mapSystem'
 
 const batch = { _id: 'b1', batchId: 'b1', courseId: 'course-p1', total: 120, activated: 3, createdAt: Date.now() }
 
@@ -29,6 +31,7 @@ beforeEach(() => {
   getSettingsMock.mockReset().mockResolvedValue({ ok: true, settings: { urlPrefix: 'https://x.test/a?c=' } })
   listBatchCodesMock.mockReset()
   createBatchMock.mockReset().mockResolvedValue({ ok: true, batchId: 'b9', codes: ['C1', 'C2'] })
+  saveBlobMock.mockReset()
 })
 
 async function openFirstBatch() {
@@ -155,5 +158,115 @@ describe('Batches.vue 生成批次按钮：courseReady 没传不能当成「课�
     await flushPromises()
     expect(createBatchMock).toHaveBeenCalledWith('course-p1', 50)
     expect(w.emitted('saved')).toHaveLength(1)
+  })
+})
+
+describe('Batches.vue 码表翻页与导出', () => {
+  const codeRows = (w: ReturnType<typeof mount>) => w.findAll('.code-row').map((r) => r.text())
+
+  it('大白话：翻到第 2 页再点上一页——回到第 1 页的码，不是一次铺开整批', async () => {
+    listBatchCodesMock
+      .mockResolvedValueOnce({ ok: true, codes: ['C1', 'C2'], nextCursor: 'k1', hasMore: true })
+      .mockResolvedValueOnce({ ok: true, codes: ['C3'], nextCursor: null, hasMore: false })
+      .mockResolvedValueOnce({ ok: true, codes: ['C1', 'C2'], nextCursor: 'k1', hasMore: true })
+    const w = await openFirstBatch()
+    expect(listBatchCodesMock.mock.calls[0]).toEqual(['b1', { limit: 50 }])
+    await btn(w, '下一页').trigger('click')
+    await flushPromises()
+    expect(codeRows(w)).toEqual(['C3'])
+    await btn(w, '上一页').trigger('click')
+    await flushPromises()
+    expect(listBatchCodesMock.mock.calls[2][1]).toEqual({ cursor: undefined, limit: 50 })
+    expect(codeRows(w)).toEqual(['C1', 'C2'])
+    expect(w.find('.code-pager').text()).toContain('第 1 页')
+  })
+
+  it('大白话：导出 CSV 另取齐整批（不止当前这页），每行带落地网址，文件开头带 BOM 防 Excel 乱码', async () => {
+    listBatchCodesMock
+      .mockResolvedValueOnce({ ok: true, codes: ['C1'], nextCursor: 'k1', hasMore: true })
+      .mockResolvedValueOnce({ ok: true, codes: ['C1', 'C2'], nextCursor: 'e1', hasMore: true })
+      .mockResolvedValueOnce({ ok: true, codes: ['C3'], nextCursor: null, hasMore: false })
+    const w = await openFirstBatch()
+    await w.findAll('button').find((b) => b.text().includes('导出 CSV'))!.trigger('click')
+    await flushPromises()
+    expect(listBatchCodesMock.mock.calls.slice(1).map((c) => c[1])).toEqual([
+      { cursor: undefined, limit: 200 },
+      { cursor: 'e1', limit: 200 },
+    ])
+    const [blob, name] = saveBlobMock.mock.calls[0]
+    expect(name).toBe('b1-codes.csv')
+    const bytes = new Uint8Array(await (blob as Blob).arrayBuffer())
+    expect([...bytes.slice(0, 3)]).toEqual([0xef, 0xbb, 0xbf])
+    expect(new TextDecoder().decode(bytes.slice(3))).toBe('激活码,网址\nC1,https://x.test/a?c=C1\nC2,https://x.test/a?c=C2\nC3,https://x.test/a?c=C3')
+  })
+
+  it('大白话：A 批翻页没回来就打开 B 批——A 的第 2 页不写进 B 的抽屉', async () => {
+    listBatchesMock.mockResolvedValue({ ok: true, list: [batch, { ...batch, _id: 'b2', batchId: 'b2' }] })
+    let releaseA: (v: unknown) => void = () => {}
+    listBatchCodesMock
+      .mockResolvedValueOnce({ ok: true, codes: ['A1'], nextCursor: 'ka', hasMore: true })
+      .mockReturnValueOnce(new Promise((r) => (releaseA = r)))
+      .mockResolvedValueOnce({ ok: true, codes: ['B1'], nextCursor: null, hasMore: false })
+    const w = await openFirstBatch()
+    await btn(w, '下一页').trigger('click')
+    await w.findAll('button').filter((b) => b.text() === '打开这批')[1].trigger('click')
+    await flushPromises()
+    releaseA({ ok: true, codes: ['A2'], nextCursor: null, hasMore: false })
+    await flushPromises()
+    expect(codeRows(w)).toEqual(['B1'])
+    expect(w.find('.code-pager').text()).toContain('第 1 页')
+  })
+
+  it('大白话：A 批下一页没回来就重开 A 批——旧的第 2 页不写进重开后的第 1 页', async () => {
+    let releaseA: (v: unknown) => void = () => {}
+    listBatchCodesMock
+      .mockResolvedValueOnce({ ok: true, codes: ['A1'], nextCursor: 'ka', hasMore: true })
+      .mockReturnValueOnce(new Promise((r) => (releaseA = r)))
+      .mockResolvedValueOnce({ ok: true, codes: ['A1'], nextCursor: 'ka', hasMore: true })
+    const w = await openFirstBatch()
+    await btn(w, '下一页').trigger('click')
+    await w.findAll('button').find((b) => b.text() === '打开这批')!.trigger('click')
+    await flushPromises()
+    releaseA({ ok: true, codes: ['A2'], nextCursor: null, hasMore: false })
+    await flushPromises()
+    expect(codeRows(w)).toEqual(['A1'])
+    expect(w.find('.code-pager').text()).toContain('第 1 页')
+  })
+
+  it('大白话：A 批上一页没回来就重开 A 批——旧回包的失败不盖掉重开后取到的码', async () => {
+    let releaseA: (v: unknown) => void = () => {}
+    listBatchCodesMock
+      .mockResolvedValueOnce({ ok: true, codes: ['A1'], nextCursor: 'ka', hasMore: true })
+      .mockResolvedValueOnce({ ok: true, codes: ['A2'], nextCursor: null, hasMore: false })
+      .mockReturnValueOnce(new Promise((r) => (releaseA = r)))
+      .mockResolvedValueOnce({ ok: true, codes: ['A1'], nextCursor: 'ka', hasMore: true })
+    const w = await openFirstBatch()
+    await btn(w, '下一页').trigger('click')
+    await flushPromises()
+    await btn(w, '上一页').trigger('click')
+    await w.findAll('button').find((b) => b.text() === '打开这批')!.trigger('click')
+    await flushPromises()
+    releaseA({ ok: false, status: 500, error: 'DB_READ_FAIL' })
+    await flushPromises()
+    expect(codeRows(w)).toEqual(['A1'])
+    expect(w.find('.code-list').text()).not.toContain('取码失败')
+  })
+})
+
+describe('Batches.vue 报错说人话', () => {
+  it('大白话：批次列表读失败、生成失败都走上新组人话，不甩英文码', async () => {
+    listBatchesMock.mockResolvedValueOnce({ ok: false, status: 0, error: 'NETWORK:fetch failed' })
+    const w = mount(Batches)
+    await flushPromises()
+    expect(w.find('.ld-status').text()).toBe(launchErrorText('NETWORK:fetch failed'))
+    expect(w.text()).not.toContain('NETWORK:')
+
+    createBatchMock.mockResolvedValue({ ok: false, status: 400, error: 'UNKNOWN_COURSE:course-p1' })
+    const w2 = mount(Batches)
+    await flushPromises()
+    await w2.findAll('button').find((b) => b.text().includes('生成新批次'))!.trigger('click')
+    await w2.findAll('button').find((b) => b.text().includes('确认生成'))!.trigger('click')
+    await flushPromises()
+    expect(w2.find('.ld-status').text()).toBe(UNKNOWN_COURSE_HINT + '（编号 course-p1）')
   })
 })

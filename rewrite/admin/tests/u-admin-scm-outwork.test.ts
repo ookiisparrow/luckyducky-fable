@@ -58,11 +58,12 @@ describe('ScmOutwork.vue 收货预填', () => {
 })
 
 describe('ScmOutwork.vue 列表', () => {
-  it('大白话：外协单与织女名单都挂，两条原因按顺序连起来，不装成「还没有外协单」', async () => {
+  it('大白话：外协单、物料、织女名单都挂，三条原因按顺序连起来，不装成「还没有外协单」、下拉是空的', async () => {
     api.listOutworks.mockResolvedValue({ ok: false, error: 'A' })
+    api.listMaterials.mockResolvedValue({ ok: false, error: 'B' })
     api.listSuppliers.mockResolvedValue({ ok: false, error: 'C' })
     const w = await mountPage()
-    expect(w.find('.ld-status').text()).toBe('外协单加载失败：操作没成功（A）；织女名单加载失败：操作没成功（C）')
+    expect(w.find('.ld-status').text()).toBe('外协单加载失败：操作没成功（A）；物料主档加载失败：操作没成功（B）；织女名单加载失败：操作没成功（C）')
     expect(w.text()).not.toContain('还没有外协单')
   })
 
@@ -71,6 +72,7 @@ describe('ScmOutwork.vue 列表', () => {
     api.listOutworks.mockResolvedValue({ ok: true, list: [draft, { _id: 'ow3', status: 'settled' }], hasMore: false })
     await btn(w, '加载更多').trigger('click')
     await flushPromises()
+    expect(api.listOutworks).toHaveBeenLastCalledWith(undefined, { cursor: 'c1' })
     expect(w.findAll('.ld-tbody .ld-tr').map((r) => r.find('.mono').text())).toEqual(['ow1', 'ow2', 'ow3'])
   })
 

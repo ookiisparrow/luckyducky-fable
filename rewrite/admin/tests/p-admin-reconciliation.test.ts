@@ -3,8 +3,9 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { mount, flushPromises } from '@vue/test-utils'
 
-const api = vi.hoisted(() => ({ getReconciliation: vi.fn(), getBillMatch: vi.fn(), downloadBill: vi.fn() }))
-vi.mock('../src/api/system', () => api)
+const api = vi.hoisted(() => ({ getReconciliation: vi.fn(), getBillMatch: vi.fn(), downloadBill: vi.fn(), saveBlob: vi.fn() }))
+vi.mock('../src/api/system', () => ({ getReconciliation: api.getReconciliation, getBillMatch: api.getBillMatch, downloadBill: api.downloadBill }))
+vi.mock('../src/lib/saveBlob', () => ({ saveBlob: api.saveBlob }))
 
 import Reconciliation from '../src/pages/Reconciliation.vue'
 import CONTRACT from '../../../tests/contracts/admin-money.json'
@@ -74,6 +75,38 @@ describe('Reconciliation.vue 加载', () => {
     await flushPromises()
     expect(w.text()).toContain('全账累计 应收 ¥5.00')
     expect(w.text()).not.toContain('¥777.00')
+  })
+})
+
+describe('Reconciliation.vue 降级与空数据', () => {
+  it('大白话：对账数据标了不完整——显黄色「可能不完整」，不说「内部账已对平」', async () => {
+    api.getReconciliation.mockResolvedValue({ ...RECON, partial: true, exceptions: { feeMismatch: [], refundMismatch: [], stuckRefunds: [] } })
+    const w = await mountPage()
+    expect(w.find('.balance').classes()).toContain('warn')
+    expect(w.find('.balance-t').text()).toBe('对账数据可能不完整，请稍后重试')
+  })
+
+  it('大白话：区间里没有订单/退款——逐日表说暂无记录', async () => {
+    api.getReconciliation.mockResolvedValue({ ...RECON, daily: [] })
+    const w = await mountPage()
+    expect(w.text()).toContain('当前区间暂无订单/退款记录')
+  })
+
+  it('大白话：还没拉过账单（一笔都没勾上、也没差异）——提示先拉账单，不装成「已勾对无差异」', async () => {
+    api.getBillMatch.mockResolvedValue({ ...MATCH, summary: { matched: 0, wxOnly: 0, oursOnly: 0, amountMismatch: 0 }, discrepancies: { wxOnly: [], oursOnly: [], amountMismatch: [] } })
+    const w = await mountPage()
+    expect(w.text()).toContain('暂无勾对数据——请先拉取账单')
+    expect(w.text()).not.toContain('逐笔已勾对')
+  })
+
+  it('大白话：导出 CSV 按日一行，文件开头带 BOM 防 Excel 乱码', async () => {
+    const w = await mountPage()
+    await btn(w, '导出 CSV').trigger('click')
+    const [blob, name] = api.saveBlob.mock.calls[0]
+    expect(name).toBe('财务对账-按日.csv')
+    const bytes = new Uint8Array(await (blob as Blob).arrayBuffer())
+    expect([...bytes.slice(0, 3)]).toEqual([0xef, 0xbb, 0xbf])
+    expect(new TextDecoder().decode(bytes.slice(3)).split('\n')[0]).toBe('日期,订单数,应收GMV,退款,净额,退款笔数')
   })
 })
 

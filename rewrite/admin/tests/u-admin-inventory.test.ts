@@ -54,6 +54,22 @@ describe('Inventory.vue 状态筛选与徽章', () => {
   })
 })
 
+describe('Inventory.vue 自设低库存阈值', () => {
+  it('大白话：设了自己的阈值按自己的算（15≤20 算低库存、5>3 算在售），没设才退默认；与看板同一把尺子', async () => {
+    listInventoryMock.mockResolvedValue({
+      ok: true,
+      list: [
+        { _id: 'a', productId: 'p1', stock: 15, threshold: 20, updatedAt: 1 },
+        { _id: 'b', productId: 'p2', stock: 5, threshold: 3, updatedAt: 1 },
+        { _id: 'c', productId: 'p3', stock: 8, threshold: 0, updatedAt: 1 },
+      ],
+    })
+    const w = mount(Inventory)
+    await flushPromises()
+    expect(w.findAll('.badge').map((b) => b.text())).toEqual(['低库存', '在售', '低库存'])
+  })
+})
+
 describe('Inventory.vue 保存回包前切到别行（G4）', () => {
   const two = { ok: true, list: [{ _id: 's1', productId: 'p1', spec: '', stock: 5, updatedAt: 100 }, { _id: 's2', productId: 'p2', spec: '', stock: 7, updatedAt: 100 }] }
   const adjust = (w: ReturnType<typeof mount>, i: number) => w.findAll('button').filter((b) => b.text() === '调整')[i].trigger('click')
@@ -95,5 +111,6 @@ describe('Inventory.vue 读失败说人话', () => {
     const w = mount(Inventory)
     await flushPromises()
     expect(w.find('.msg-err').text()).toBe(text)
+    expect(w.find('.ld-kpi-grid').exists()).toBe(false) // 读失败不把四张 KPI 画成 0
   })
 })

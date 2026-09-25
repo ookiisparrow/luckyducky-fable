@@ -10,8 +10,10 @@ const m = vi.hoisted(() => ({
   listInventory: vi.fn(),
   listDrafts: vi.fn(),
   getInspectStatus: vi.fn(),
+  push: vi.fn(),
 }))
 vi.mock('../src/api/money', () => ({ getDashboard: m.getDashboard, refundCounts: m.refundCounts }))
+vi.mock('vue-router', () => ({ useRouter: () => ({ push: m.push }) }))
 vi.mock('../src/api/system', () => ({ listInventory: m.listInventory }))
 vi.mock('../src/api/products', () => ({ listDrafts: m.listDrafts }))
 vi.mock('../src/api/ops', () => ({ getInspectStatus: m.getInspectStatus }))
@@ -32,6 +34,7 @@ beforeEach(() => {
   m.listInventory.mockReset().mockResolvedValue({ ok: true, list: [] })
   m.listDrafts.mockReset().mockResolvedValue({ ok: true, list: [], urls: {}, listed: {} })
   m.getInspectStatus.mockReset().mockResolvedValue({ ok: true, openAnomalies: 1 })
+  m.push.mockReset()
 })
 
 describe('Dashboard.vue 加载', () => {
@@ -78,5 +81,26 @@ describe('Dashboard.vue 看板读失败', () => {
     await flushPromises()
     expect(w.find('.ld-status').text()).toBe('看板加载失败：' + transportErrorText('CALL_TIMEOUT'))
     expect(w.text()).not.toContain('CALL_TIMEOUT')
+  })
+})
+
+describe('Dashboard.vue 跳转', () => {
+  it('大白话：告警「去处理」——金额不符单去订单页不带单号；退款类恰好 1 条带反解出的单号去售后页；多条只去列表', async () => {
+    m.getDashboard.mockResolvedValue({ ok: true, stats: { users: 1 }, toShip: 0, txAlerts: { feeMismatch: ['o1'], refundMismatch: ['o3__p1__'], stuckRefunds: ['a1', 'a2'] } })
+    const w = mount(Dashboard)
+    await flushPromises()
+    for (const b of w.findAll('.alert-row button')) await b.trigger('click')
+    expect(m.push.mock.calls.map((c) => c[0])).toEqual([
+      { path: '/orders', query: {} },
+      { path: '/refunds', query: { q: 'o3' } },
+      { path: '/refunds', query: {} },
+    ])
+  })
+
+  it('大白话：「异常未处理」格子点进异常监测页', async () => {
+    const w = mount(Dashboard)
+    await flushPromises()
+    await w.findAll('.todo').find((t) => t.text().includes('异常未处理'))!.trigger('click')
+    expect(m.push).toHaveBeenCalledWith('/anomalies')
   })
 })

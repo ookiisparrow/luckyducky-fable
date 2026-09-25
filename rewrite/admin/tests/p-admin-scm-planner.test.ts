@@ -52,6 +52,13 @@ describe('ScmPlanner.vue 产销加载', () => {
     expect(w.find('.ld-tbody').exists()).toBe(false)
     expect(w.text()).not.toContain('还没有产销记录')
   })
+
+  it('大白话：库存和产品目录挂了——各自点名，不静默吞成空表', async () => {
+    api.listInventory.mockResolvedValue({ ok: false, status: 500, error: 'X2' })
+    api.listDrafts.mockResolvedValue({ ok: false, status: 500, error: 'X3' })
+    const w = await mountPage()
+    expect(status(w)).toBe('库存加载失败：操作没成功（X2）；产品目录加载失败：操作没成功（X3）')
+  })
 })
 
 describe('ScmPlanner.vue 算缺口', () => {

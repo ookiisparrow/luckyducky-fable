@@ -58,6 +58,25 @@ describe('ScmPurchase.vue 加载', () => {
     expect(status(w)).toBe('采购单加载失败：操作没成功（X1）')
     expect(w.text()).not.toContain('还没有采购单')
   })
+
+  it('大白话：采购单读到了、物料和供应商挂了——两路各自点名，不装成「厂家/料都是空的」', async () => {
+    api.listMaterials.mockResolvedValue({ ok: false, status: 500, error: 'X2' })
+    api.listSuppliers.mockResolvedValue({ ok: false, status: 500, error: 'X3' })
+    const w = await mountPage()
+    expect(status(w)).toBe('物料主档加载失败：操作没成功（X2）；供应商加载失败：操作没成功（X3）')
+  })
+
+  it('大白话：在「草稿」筛选下点加载更多——带着当前筛选和游标续页', async () => {
+    const w = await mountPage()
+    api.listPurchases.mockResolvedValueOnce({ ok: true, list: [draft], nextCursor: 'c9', hasMore: true })
+    await btn(w, '草稿').trigger('click')
+    await flushPromises()
+    api.listPurchases.mockResolvedValueOnce({ ok: true, list: [{ ...draft, _id: 'po3' }], hasMore: false })
+    await btn(w, '加载更多').trigger('click')
+    await flushPromises()
+    expect(api.listPurchases).toHaveBeenLastCalledWith('draft', { cursor: 'c9' })
+    expect(rowIds(w)).toEqual(['po1', 'po3'])
+  })
 })
 
 describe('ScmPurchase.vue 建草稿', () => {

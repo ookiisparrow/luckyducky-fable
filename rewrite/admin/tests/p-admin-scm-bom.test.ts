@@ -68,6 +68,24 @@ describe('ScmBom.vue 加载', () => {
     expect(w.text()).toContain('组装记录加载失败，请刷新重试')
     expect(w.text()).not.toContain('还没有组装记录')
   })
+
+  it('大白话：物料主档和产品目录挂了——各自点名，不装成下拉是空的', async () => {
+    api.listMaterials.mockResolvedValue({ ok: false, status: 500, error: 'X2' })
+    api.listDrafts.mockResolvedValue({ ok: false, status: 500, error: 'X3' })
+    const w = await mountPage()
+    expect(status(w)).toBe('物料主档加载失败：操作没成功（X2）；产品目录加载失败：操作没成功（X3）')
+  })
+
+  it('大白话：组装记录加载更多——续传游标，新页接在后面', async () => {
+    api.listAssemblies.mockResolvedValueOnce({ ok: true, list: [{ _id: 'asm-1', productId: 'p1', spec: '红', sets: 3, at: 1, consumedLines: [] }], nextCursor: 'a1', hasMore: true })
+    const w = await mountPage()
+    api.listAssemblies.mockResolvedValueOnce({ ok: true, list: [{ _id: 'asm-2', productId: 'p1', spec: '红', sets: 1, at: 2, consumedLines: [] }], nextCursor: null, hasMore: false })
+    await btn(w, '加载更多').trigger('click')
+    await flushPromises()
+    expect(api.listAssemblies).toHaveBeenLastCalledWith({ cursor: 'a1' })
+    expect(w.text()).toContain('asm-1')
+    expect(w.text()).toContain('asm-2')
+  })
 })
 
 describe('ScmBom.vue 保存模板', () => {

@@ -42,6 +42,82 @@ describe('ScmMaterials.vue 批量盘点', () => {
     await flushPromises()
     expect(api.adjustStock).toHaveBeenCalledTimes(1)
     expect(api.adjustStock.mock.calls[0].slice(0, 2)).toEqual(['m1', -2])
+    const no = w.find('.stocktake-no b').text()
+    expect(no).toMatch(/^ST-\d{8}-\d{4}$/)
+    expect(api.adjustStock.mock.calls[0].slice(2)).toEqual([`期初盘点（${no}）`, `${no}-m1`]) // 幂等键＝单号-料号
+  })
+
+  const enterAndFill = async () => {
+    const w = await mountPage()
+    await w.findAll('button').find((b) => b.text().includes('批量盘点'))!.trigger('click')
+    await flushPromises()
+    const inputs = w.findAll('input.stocktake-actual')
+    await inputs[0].setValue(3)
+    await inputs[1].setValue(9)
+    return w
+  }
+  const submitBtn = (w: Awaited<ReturnType<typeof mountPage>>) => w.findAll('button').find((b) => /^提交(盘点|中)/.test(b.text()))!
+
+  it('大白话：一行成功一行失败——成功行不再计入待提交、再点提交只重发失败行；提交过的行实盘框锁死，没盘的行照常能填', async () => {
+    api.adjustStock.mockResolvedValueOnce({ ok: true }).mockResolvedValueOnce({ ok: false, error: 'X' })
+    const w = await enterAndFill()
+    await submitBtn(w).trigger('click')
+    await flushPromises()
+    expect(submitBtn(w).text()).toBe('提交盘点（1）')
+    const inputs = w.findAll('input.stocktake-actual')
+    expect(inputs.map((i) => i.attributes('disabled') !== undefined)).toEqual([true, true, false])
+
+    await submitBtn(w).trigger('click')
+    await flushPromises()
+    expect(api.adjustStock.mock.calls.map((c) => c[0])).toEqual(['m1', 'm2', 'm2'])
+  })
+
+  it('大白话：单行重试在途时，「提交盘点」也锁住，不跟重试并发碰同一行', async () => {
+    api.adjustStock.mockResolvedValueOnce({ ok: true }).mockResolvedValueOnce({ ok: false, error: 'X' })
+    const w = await enterAndFill()
+    await submitBtn(w).trigger('click')
+    await flushPromises()
+    await w.findAll('input.stocktake-actual')[2].setValue(1) // 第三行还有待提交的差异
+    let release: (v: unknown) => void = () => {}
+    api.adjustStock.mockReturnValueOnce(new Promise((r) => (release = r)))
+    await w.findAll('button').find((b) => b.text() === '重试')!.trigger('click')
+    expect(submitBtn(w).attributes('disabled')).toBeDefined()
+    release({ ok: true })
+    await flushPromises()
+    expect(w.find('.stocktake-summary').text()).toContain('已提交 2 成功 / 0 失败')
+    expect(submitBtn(w).text()).toBe('提交盘点（1）')
+    expect(submitBtn(w).attributes('disabled')).toBeUndefined()
+  })
+})
+
+describe('ScmMaterials.vue 建档表单', () => {
+  it('大白话：大团选了「带结」再把档位切成中团——形态自动回「原团」，不留一个下拉里已没有的值', async () => {
+    const w = await mountPage()
+    const [tier, form] = w.findAll('.scm-form select').filter((s) => ['L', 'raw'].includes((s.element as HTMLSelectElement).value))
+    await form.setValue('knotted')
+    await tier.setValue('M')
+    expect((form.element as HTMLSelectElement).value).toBe('raw')
+  })
+})
+
+describe('ScmMaterials.vue 加载更多', () => {
+  const more = (w: Awaited<ReturnType<typeof mountPage>>, i: number) => w.findAll('button').filter((b) => b.text() === '加载更多')[i]
+
+  it('大白话：供应商、流水各自续传自己的游标，新页接在后面', async () => {
+    api.listSuppliers.mockResolvedValueOnce({ ok: true, list: [{ _id: 's1', name: '甲厂', type: 'factory' }], nextCursor: 'sc1', hasMore: true })
+    api.listLedger.mockResolvedValueOnce({ ok: true, list: [{ _id: 'l1', itemKey: 'm1', delta: 1, docType: 'adjust', at: 1 }], nextCursor: 'lc1', hasMore: true })
+    const w = await mountPage()
+    api.listSuppliers.mockResolvedValueOnce({ ok: true, list: [{ _id: 's2', name: '乙厂', type: 'factory' }], hasMore: false })
+    await more(w, 0).trigger('click')
+    await flushPromises()
+    expect(api.listSuppliers).toHaveBeenLastCalledWith({ cursor: 'sc1' })
+    expect(w.findAll('.sup-line .sup-name').map((n) => n.text())).toEqual(['甲厂', '乙厂'])
+
+    api.listLedger.mockResolvedValueOnce({ ok: true, list: [{ _id: 'l2', itemKey: 'm1', delta: -1, docType: 'adjust', at: 2 }], hasMore: false })
+    await more(w, 0).trigger('click')
+    await flushPromises()
+    expect(api.listLedger).toHaveBeenLastCalledWith(undefined, { cursor: 'lc1' })
+    expect(w.findAll('.ld-tbody .ld-tr').length).toBe(3 + 2) // 物料 3 行 + 流水 2 行
   })
 })
 
@@ -138,6 +214,7 @@ describe('ScmMaterials.vue 读失败不装空（失败≠空态）', () => {
     api.listLedger.mockResolvedValue({ ok: false, status: 0, error: 'NETWORK:boom' })
     const w = await mountPage()
     expect(w.find('.ledger-err').text()).toBe('流水加载失败：网络不通，请检查网络后重试。')
+    expect(w.text()).not.toContain('还没有库存流水')
   })
 
   it('大白话：物料读回来了但确实一条没有，照常显示空态', async () => {
