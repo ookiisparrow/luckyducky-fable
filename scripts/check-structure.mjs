@@ -1063,135 +1063,117 @@ export const repoChecks = [
     },
   },
   {
-    id: 'rw-mp-checkout-consts-synced',
-    roots: ['#5'],
-    desc: '结算常量镜像同步（根因#5·mp 包进不了 @ldrw/shared——开发者工具编译不出仓外引用，故 mp 落副本 + 本守卫焊死）：rewrite/mp/lib/checkoutConst.ts 的全部导出常量必须与 rewrite/shared/src/checkout.ts 名值双向一致（第一性原理审计批堵元漂移：原版硬编码 COUPON/SHIP/CHECKOUT_ADDONS 三个名字，shared 新增第四个常量 mp 忘抄守卫仍绿——改为自动枚举全部 export const，新增/删除/改值任一侧漂移即红）',
+    // 手抄副本同步（根因#5）：小程序进不了 @ldrw/shared（开发者工具编不出仓外引用），只能手落副本；
+    // 这里逐项核副本与单源一致。新增一处手抄副本＝在 CHECKS 加一项，别另立守卫。
+    id: 'rw-mp-copies-synced',
+    roots: ['#5', '#14'],
+    desc: '手抄副本与单源一致：结算常量、订单/售后状态标签码、支付/库存错误前缀、学习进度百分比口径、手机号位数——任一侧漂移即红',
     run() {
-      const mpPath = join(ROOT, 'rewrite/mp/lib/checkoutConst.ts')
-      const shPath = join(ROOT, 'rewrite/shared/src/checkout.ts')
-      if (!existsSync(shPath)) return ['rewrite/shared/src/checkout.ts 缺失——守卫扫描面消失（rw-mp-checkout-consts-synced）']
-      if (!existsSync(mpPath)) return ['rewrite/mp/lib/checkoutConst.ts 缺失——结算常量副本未落（mp 无法引 @ldrw/shared·守卫需两份对账）']
       const bad = []
-      // 全导出枚举：数值常量取字面量；数组常量取 {id,name,price} 逐项序列化——两类之外的导出形态（对象/函数）
-      // 出现时报「守卫需扩形态」而非静默跳过（防扫描面盲区·病根#16）
-      const parse = (src) => {
-        const stripped = stripComments(src)
-        const vals = {}
-        for (const m of stripped.matchAll(/export const (\w+)(?::[^=]*)? = ([0-9.]+)/g)) vals[m[1]] = m[2]
-        for (const m of stripped.matchAll(/export const (\w+)(?::[^=]*)? = \[([\s\S]*?)\n\]/g)) {
-          const items = [...m[2].matchAll(/\{ id: '([^']+)', name: '([^']+)', price: ([0-9.]+) \}/g)].map((x) => `${x[1]}|${x[2]}|${x[3]}`)
-          vals[m[1]] = items.join(';')
-        }
-        const unparsed = [...stripped.matchAll(/export const (\w+)/g)].map((m) => m[1]).filter((n) => !(n in vals))
-        return { vals, unparsed }
-      }
-      const mp = parse(readFileSync(mpPath, 'utf8'))
-      const sh = parse(readFileSync(shPath, 'utf8'))
-      if (!Object.keys(sh.vals).length) bad.push('rewrite/shared/src/checkout.ts 未解析出任何导出常量——守卫定位失效（改了导出形态须同步本守卫·病根#16 空样本假绿）')
-      for (const n of sh.unparsed) bad.push(`rewrite/shared/src/checkout.ts 导出 ${n} 形态本守卫不识别（非数值/非 {id,name,price} 数组）——扩守卫解析后再加，不许静默跳过`)
-      for (const [n, v] of Object.entries(sh.vals)) {
-        if (!(n in mp.vals)) bad.push(`结算常量漂移：shared 导出 ${n} 在 mp checkoutConst.ts 无副本（结算页展示价与云端定价不一致·下单必对不上账）`)
-        else if (mp.vals[n] !== v) bad.push(`结算常量漂移：${n} mp=${mp.vals[n]} ≠ shared=${v}（结算页展示价与云端定价不一致·下单必对不上账）`)
-      }
-      for (const n of Object.keys(mp.vals)) if (!(n in sh.vals)) bad.push(`结算常量漂移：mp checkoutConst.ts 导出 ${n} 在 shared checkout.ts 无对应——副本多出无源常量`)
-      return bad
-    },
-  },
-  {
-    id: 'rw-mp-order-labels-synced',
-    roots: ['#5'],
-    desc: '订单/售后状态标签码集合同步（根因#5·同 rw-mp-checkout-consts-synced 精神：mp 包进不了 @ldrw/shared，' +
-      'mp 落客户向文案副本，本守卫只焊「状态码集合」不焊文案——admin/mp 措辞刻意不同是 UX 针对性、不是漂移，见 ' +
-      'rewrite/shared/src/statusLabels.ts 头注）：rewrite/mp/lib/mapOrders.ts 的 STATUS_LABELS 与 ' +
-      'rewrite/mp/lib/mapAftersales.ts 的 STATUS_LABELS 键集合必须分别与 shared ORDER_STATUS_LABEL_CUSTOMER / ' +
-      'AFTERSALE_STATUS_LABEL_CUSTOMER 键集合一致——状态机新增状态若 mp 忘配标签，页面会悄悄显示原始状态码；' +
-      '③ order/order-list 模板不得硬编码「实付…」金额行标题（须引 mapOrders 的 amountTitle）——未付订单（pending/closed）' +
-      '写「实付款」是假话，顾客会以为被扣了钱（2026-07-25 体检批 P1 取证：已关闭单同屏两处「实付款 ¥778.00」）',
-    run() {
-      const shPath = join(ROOT, 'rewrite/shared/src/statusLabels.ts')
-      const mpOrdersPath = join(ROOT, 'rewrite/mp/lib/mapOrders.ts')
-      const mpAftersalesPath = join(ROOT, 'rewrite/mp/lib/mapAftersales.ts')
-      if (!existsSync(shPath)) return ['rewrite/shared/src/statusLabels.ts 缺失——守卫扫描面消失（rw-mp-order-labels-synced）']
-      const bad = []
-      const keysOf = (src, exportName) => {
-        const m = src.match(new RegExp(`export const ${exportName}[^{]*{([^}]*)}`, 's'))
-        if (!m) return null
-        return [...m[1].matchAll(/^\s*([a-zA-Z_][a-zA-Z0-9_]*):/gm)].map((x) => x[1]).sort()
-      }
-      const sh = readFileSync(shPath, 'utf8')
-      const shOrderKeys = keysOf(sh, 'ORDER_STATUS_LABEL_CUSTOMER')
-      const shAsKeys = keysOf(sh, 'AFTERSALE_STATUS_LABEL_CUSTOMER')
-      if (existsSync(mpOrdersPath) && shOrderKeys) {
-        const mpKeys = keysOf(readFileSync(mpOrdersPath, 'utf8'), 'STATUS_LABELS')
-        if (mpKeys && mpKeys.join(',') !== shOrderKeys.join(','))
-          bad.push(`订单状态标签码集合漂移：mp mapOrders.ts STATUS_LABELS=[${mpKeys.join(',')}] ≠ shared ORDER_STATUS_LABEL_CUSTOMER=[${shOrderKeys.join(',')}]（状态机新增/改名状态未同步到 mp）`)
-      }
-      if (existsSync(mpAftersalesPath) && shAsKeys) {
-        const mpKeys = keysOf(readFileSync(mpAftersalesPath, 'utf8'), 'STATUS_LABELS')
-        if (mpKeys && mpKeys.join(',') !== shAsKeys.join(','))
-          bad.push(`售后状态标签码集合漂移：mp mapAftersales.ts STATUS_LABELS=[${mpKeys.join(',')}] ≠ shared AFTERSALE_STATUS_LABEL_CUSTOMER=[${shAsKeys.join(',')}]（状态机新增/改名状态未同步到 mp）`)
-      }
-      // ③ 金额行标题不得在模板层硬编码（2026-07-25 全量页面体检批 P1·钱链措辞）：
-      //    order/order-list 曾对**全部**状态写死「实付款」，已关闭订单（从未付过钱·closed 只从 pending 转来）
-      //    同屏两处写「实付款 ¥778.00」，顾客会以为被扣款。须引 mapOrders 的 amountTitle（付过=实付款/未付=订单金额）。
-      //    语义正确性另由 rewrite/mp/tests/orders-map.test.ts「金额行标题」组锁；本条只封「绕过单源再写死」这条回潮路。
-      for (const rel of ['rewrite/mp/pages/order/order.wxml', 'rewrite/mp/pages/order-list/order-list.wxml']) {
+      const src = (rel, strip = true) => {
         const abs = join(ROOT, rel)
-        if (!existsSync(abs)) continue
-        const body = readFileSync(abs, 'utf8').replace(/<!--[\s\S]*?-->/g, '') // 剥注释（错题本 E1）
-        if (/实付/.test(body))
-          bad.push(`${rel} 模板层硬编码「实付…」金额行标题——须引 mapOrders 的 amountTitle（未付订单写「实付款」会让顾客以为被扣款·体检批 P1）`)
+        if (!existsSync(abs)) return null
+        const s = readFileSync(abs, 'utf8')
+        return strip ? stripComments(s) : s
       }
-      return bad
-    },
-  },
-  {
-    // 手抄常量补机器守卫（G6·根因#5：mp 进不了 @ldrw/shared，两处手抄常量此前无守卫——同族
-    // checkoutConst/order-labels 都已有 rw-mp-*-synced，这两处是漏网）：
-    // ① payFlow.ts PAID_BAD_STATUS 须与 shared order.ts buildBadStatus('paid') 输出逐字一致；
-    //   admin Fulfill.vue 里另有第三处 'BAD_STATUS:' 前缀硬编码（mapShipErr），一并纳入核对面
-    //   （admin/mp 分处不同前端、各自手抄同一个前缀，三处漂移任一处都会致「已发货判定」/「支付判定」误判）。
-    // ② checkout.ts OUT_OF_STOCK_PREFIX 须与 shared errors.ts ERR.OUT_OF_STOCK 一致。
-    id: 'rw-mp-payflow-consts-synced',
-    roots: ['#5'],
-    desc: '手抄常量三点核对面（根因#5·mp 进不了 @ldrw/shared，故手落副本）：① rewrite/mp/lib/payFlow.ts PAID_BAD_STATUS 与 rewrite/shared/src/order.ts buildBadStatus(\'paid\') 输出、及 rewrite/admin/src/pages/Fulfill.vue mapShipErr 里硬编码的 \'BAD_STATUS:\' 前缀三处一致；② rewrite/mp/lib/checkout.ts OUT_OF_STOCK_PREFIX 与 rewrite/shared/src/errors.ts ERR.OUT_OF_STOCK 一致——任一处漂移会致支付/发货/库存判定误判',
-    run() {
-      const bad = []
-      const payFlowPath = join(ROOT, 'rewrite/mp/lib/payFlow.ts')
-      const orderPath = join(ROOT, 'rewrite/shared/src/order.ts')
-      const fulfillPath = join(ROOT, 'rewrite/admin/src/pages/Fulfill.vue')
-      const checkoutPath = join(ROOT, 'rewrite/mp/lib/checkout.ts')
-      const errorsPath = join(ROOT, 'rewrite/shared/src/errors.ts')
-      if (!existsSync(orderPath) || !existsSync(errorsPath)) return [] // shared 未在（不适用场景）
-
-      // ① BAD_STATUS 三点核对
-      if (existsSync(payFlowPath)) {
-        const payFlowSrc = readFileSync(payFlowPath, 'utf8')
-        const orderSrc = readFileSync(orderPath, 'utf8')
-        const mpM = payFlowSrc.match(/const PAID_BAD_STATUS = '([^']+)'/)
-        const prefixM = orderSrc.match(/return '([^']+)' \+ status/)
-        if (!mpM) bad.push('rewrite/mp/lib/payFlow.ts 未找到 PAID_BAD_STATUS 定义——手抄常量守卫需要它（G6）')
-        else if (!prefixM) bad.push('rewrite/shared/src/order.ts buildBadStatus 实现形状变了——本守卫的取值正则找不到前缀字面量，先看是否漂移或需要更新守卫')
-        else {
-          const expected = prefixM[1] + 'paid'
-          if (mpM[1] !== expected) bad.push(`手抄常量漂移：mp payFlow.ts PAID_BAD_STATUS='${mpM[1]}' ≠ shared buildBadStatus('paid')='${expected}'（并发已付幂等判定会失效）`)
-          if (existsSync(fulfillPath)) {
-            const fulfillSrc = readFileSync(fulfillPath, 'utf8')
-            if (!fulfillSrc.includes(`'${prefixM[1]}'`)) bad.push(`手抄常量漂移：admin Fulfill.vue mapShipErr 未见与 shared 一致的 '${prefixM[1]}' 前缀字面量（发货态判定文案会对不上真实状态码）`)
+      const need = (rel, s) => (s == null ? (bad.push(`${rel} 缺失——手抄副本核对面消失`), false) : true)
+      const CHECKS = {
+        // mp/lib/checkoutConst.ts 的全部导出常量 ⇄ shared/checkout.ts（自动枚举，新增/删除/改值任一侧即红）
+        结算常量() {
+          const mpRel = 'rewrite/mp/lib/checkoutConst.ts'
+          const shRel = 'rewrite/shared/src/checkout.ts'
+          const mpS = src(mpRel)
+          const shS = src(shRel)
+          if (!need(mpRel, mpS) || !need(shRel, shS)) return
+          const parse = (s) => {
+            const vals = {}
+            for (const m of s.matchAll(/export const (\w+)(?::[^=]*)? = ([0-9.]+)/g)) vals[m[1]] = m[2]
+            for (const m of s.matchAll(/export const (\w+)(?::[^=]*)? = \[([\s\S]*?)\n\]/g))
+              vals[m[1]] = [...m[2].matchAll(/\{ id: '([^']+)', name: '([^']+)', price: ([0-9.]+) \}/g)].map((x) => x.slice(1).join('|')).join(';')
+            const unparsed = [...s.matchAll(/export const (\w+)/g)].map((m) => m[1]).filter((n) => !(n in vals))
+            return { vals, unparsed }
           }
-        }
+          const mp = parse(mpS)
+          const sh = parse(shS)
+          if (!Object.keys(sh.vals).length) bad.push(`${shRel} 未解析出任何导出常量——核对失效（改了导出形态须同步本守卫）`)
+          for (const n of sh.unparsed) bad.push(`${shRel} 导出 ${n} 形态不识别（非数值 / 非 {id,name,price} 数组）——扩解析后再加`)
+          for (const [n, v] of Object.entries(sh.vals))
+            if (!(n in mp.vals)) bad.push(`结算常量 ${n} 在 ${mpRel} 无副本——结算页展示价与云端定价对不上`)
+            else if (mp.vals[n] !== v) bad.push(`结算常量 ${n}：mp=${mp.vals[n]} ≠ shared=${v}——结算页展示价与云端定价对不上`)
+          for (const n of Object.keys(mp.vals)) if (!(n in sh.vals)) bad.push(`${mpRel} 多出无源常量 ${n}`)
+        },
+        // 状态标签只核「状态码集合」不核文案（mp 与 admin 措辞刻意不同）；订单模板不得写死「实付」（未付单写实付是假话）
+        状态标签码() {
+          const sh = src('rewrite/shared/src/statusLabels.ts', false)
+          if (!need('rewrite/shared/src/statusLabels.ts', sh)) return
+          const keysOf = (s, name) => {
+            const m = s && s.match(new RegExp(`(?:export\\s+)?const ${name}[^{]*{([^}]*)}`, 's'))
+            return m ? [...m[1].matchAll(/^\s*([a-zA-Z_]\w*):/gm)].map((x) => x[1]).sort().join(',') : null
+          }
+          for (const [mpRel, shName] of [['rewrite/mp/lib/mapOrders.ts', 'ORDER_STATUS_LABEL_CUSTOMER'], ['rewrite/mp/lib/mapAftersales.ts', 'AFTERSALE_STATUS_LABEL_CUSTOMER']]) {
+            const mpKeys = keysOf(src(mpRel, false), 'STATUS_LABELS')
+            const shKeys = keysOf(sh, shName)
+            if (!mpKeys || !shKeys) bad.push(`${mpRel} STATUS_LABELS 或 shared ${shName} 解析不到——核对失效（改了定义形态须同步本项）`)
+            else if (mpKeys !== shKeys) bad.push(`${mpRel} STATUS_LABELS=[${mpKeys}] ≠ shared ${shName}=[${shKeys}]——新状态没配标签，页面会露原始状态码`)
+          }
+          for (const rel of ['rewrite/mp/pages/order/order.wxml', 'rewrite/mp/pages/order-list/order-list.wxml']) {
+            const w = src(rel, false)
+            if (w && /实付/.test(w.replace(/<!--[\s\S]*?-->/g, ''))) bad.push(`${rel} 写死「实付…」金额行标题——须引 mapOrders 的 amountTitle（未付单写实付会让顾客以为被扣款）`)
+          }
+        },
+        // mp payFlow PAID_BAD_STATUS ⇄ shared buildBadStatus('paid') ⇄ admin Fulfill.vue 前缀；mp checkout OUT_OF_STOCK_PREFIX ⇄ ERR.OUT_OF_STOCK
+        错误前缀() {
+          const order = src('rewrite/shared/src/order.ts', false)
+          const errors = src('rewrite/shared/src/errors.ts', false)
+          const payFlow = src('rewrite/mp/lib/payFlow.ts', false)
+          const checkout = src('rewrite/mp/lib/checkout.ts', false)
+          const fulfill = src('rewrite/admin/src/pages/Fulfill.vue', false)
+          const prefix = order?.match(/return '([^']+)' \+ status/)?.[1]
+          const paid = payFlow?.match(/const PAID_BAD_STATUS = '([^']+)'/)?.[1]
+          if (!prefix || !paid) bad.push('buildBadStatus 前缀或 mp PAID_BAD_STATUS 取不到——实现形状变了，先核漂移再改本项')
+          else {
+            if (paid !== prefix + 'paid') bad.push(`mp payFlow.ts PAID_BAD_STATUS='${paid}' ≠ shared buildBadStatus('paid')='${prefix}paid'——并发已付幂等判定会失效`)
+            if (fulfill && !fulfill.includes(`'${prefix}'`)) bad.push(`admin Fulfill.vue 未见 '${prefix}' 前缀——发货态判定文案对不上真实状态码`)
+          }
+          const oos = checkout?.match(/const OUT_OF_STOCK_PREFIX = '([^']+)'/)?.[1]
+          const shOos = errors?.match(/OUT_OF_STOCK:\s*'([^']+)'/)?.[1]
+          if (!oos || !shOos) bad.push('mp OUT_OF_STOCK_PREFIX 或 shared ERR.OUT_OF_STOCK 取不到——先核漂移再改本项')
+          else if (oos !== shOos) bad.push(`mp checkout.ts OUT_OF_STOCK_PREFIX='${oos}' ≠ shared ERR.OUT_OF_STOCK='${shOos}'——库存不足文案会失联`)
+        },
+        // 学习进度百分比：cloud customer360 与 admin Courses 须引 shared progressPercent；mp 副本守住四条边界规则
+        学习进度口径() {
+          const sh = src('rewrite/shared/src/learning.ts')
+          if (!need('rewrite/shared/src/learning.ts', sh)) return
+          if (!/export\s+function\s+progressPercent\b/.test(sh)) bad.push('rewrite/shared/src/learning.ts 未导出 progressPercent——学习进度口径单源缺定值')
+          for (const rel of ['rewrite/cloud/src/functions/adminApi/customer360/providers/learning.ts', 'rewrite/admin/src/pages/Courses.vue']) {
+            const s = src(rel)
+            if (!s) continue
+            if (!/progressPercent\s*\(/.test(s)) bad.push(`${rel} 未用 progressPercent——学习进度须引 @ldrw/shared 单源`)
+            if (/Math\.round\s*\(\s*\(\s*\w+(\.\w+)*\s*\/\s*\w+(\.\w+)*\s*\)\s*\*\s*100\s*\)/.test(s)) bad.push(`${rel} 裸写 Math.round((x/y)*100)——边界会撒谎（1/250→0%、199/200→100%）`)
+          }
+          const mp = src('rewrite/mp/lib/mapLearning.ts')
+          if (!mp) return
+          if (!/function\s+progressPercent\b/.test(mp)) return bad.push('rewrite/mp/lib/mapLearning.ts 无 progressPercent 副本')
+          const body = methodBody(mp, 'progressPercent') || mp
+          for (const [re, rule] of [[/d\s*<=\s*0/, 'd<=0→0'], [/d\s*>=\s*t/, 'd>=t→100'], [/Math\.min\s*\(\s*99/, 'Math.min(99,…)'], [/Math\.max\s*\(\s*1/, 'Math.max(1,…)']])
+            if (!re.test(body)) bad.push(`rewrite/mp/lib/mapLearning.ts 的 progressPercent 副本缺规则「${rule}」——同一门课两处显示不同进度`)
+        },
+        // 手机号位数：mp 资料编辑页前置校验 ⇄ 云端 user.ts 白名单（不一致＝前端放行、云端剔除，假「已保存」）
+        手机号位数() {
+          const pe = src('rewrite/mp/pages/profile-edit/profile-edit.ts')
+          if (!pe) return
+          const mpMin = pe.match(/PHONE_MIN_DIGITS\s*=\s*(\d+)/)?.[1]
+          const mpMax = pe.match(/PHONE_MAX_DIGITS\s*=\s*(\d+)/)?.[1]
+          if (!mpMin || !mpMax) return bad.push('profile-edit.ts 无手机号位数校验（PHONE_MIN_DIGITS/PHONE_MAX_DIGITS）——非法号被云端静默剔除、界面却弹「已保存」')
+          const cs = src('rewrite/cloud/src/functions/app/actions/user.ts')
+          if (!cs) return
+          const cMax = cs.match(/CAPS\s*=\s*\{[^}]*phone:\s*(\d+)/)?.[1]
+          const cMin = cs.match(/d\.length\s*>=\s*(\d+)/)?.[1]
+          if (cMin && mpMin !== cMin) bad.push(`手机号下界：mp PHONE_MIN_DIGITS=${mpMin} ≠ 云端 d.length>=${cMin}——假「已保存」`)
+          if (cMax && mpMax !== cMax) bad.push(`手机号上界：mp PHONE_MAX_DIGITS=${mpMax} ≠ 云端 CAPS.phone=${cMax}——假「已保存」`)
+        },
       }
-
-      // ② OUT_OF_STOCK 两点核对
-      if (existsSync(checkoutPath)) {
-        const checkoutSrc = readFileSync(checkoutPath, 'utf8')
-        const errorsSrc = readFileSync(errorsPath, 'utf8')
-        const mpM = checkoutSrc.match(/const OUT_OF_STOCK_PREFIX = '([^']+)'/)
-        const shM = errorsSrc.match(/OUT_OF_STOCK:\s*'([^']+)'/)
-        if (!mpM) bad.push('rewrite/mp/lib/checkout.ts 未找到 OUT_OF_STOCK_PREFIX 定义——手抄常量守卫需要它（G6）')
-        else if (!shM) bad.push('rewrite/shared/src/errors.ts 未找到 ERR.OUT_OF_STOCK——手抄常量守卫需要它（G6）')
-        else if (mpM[1] !== shM[1]) bad.push(`手抄常量漂移：mp checkout.ts OUT_OF_STOCK_PREFIX='${mpM[1]}' ≠ shared ERR.OUT_OF_STOCK='${shM[1]}'（结算页库存不足文案会失联）`)
-      }
+      for (const check of Object.values(CHECKS)) check()
       return bad
     },
   },
@@ -1463,77 +1445,6 @@ export const repoChecks = [
       // ③ 延伸：写入被云端静默剔除，前端却报「已保存」。云端 updateProfile 对 phone 走白名单
       //    （纯数字 7–11 位才入库、否则剔除不改），前端不校验就会「说存了其实没存」。
       //    数字须与 rewrite/cloud/src/functions/app/actions/user.ts 的 CAPS.phone / d.length>=7 一致（手落副本+本条焊死，同 checkout consts 范式）。
-      const peTs = join(base, 'pages/profile-edit/profile-edit.ts')
-      if (existsSync(peTs)) {
-        const src = stripComments(readFileSync(peTs, 'utf8'))
-        const mpMin = src.match(/PHONE_MIN_DIGITS\s*=\s*(\d+)/)
-        const mpMax = src.match(/PHONE_MAX_DIGITS\s*=\s*(\d+)/)
-        if (!mpMin || !mpMax) {
-          bad.push('pages/profile-edit/profile-edit.ts 无手机号位数校验（PHONE_MIN_DIGITS/PHONE_MAX_DIGITS）——非法号被云端白名单静默剔除，界面却弹「已保存」（根因#14 延伸：写入说假话）')
-        } else {
-          // 副本焊死（病根#5）：只断言「有校验」挡不住漂移——前端放宽一位，云端照旧剔除，
-          // 假「已保存」立刻复发。故与云端白名单真值逐数比对（同 rw-mp-checkout-consts-synced 精神）。
-          const cloudUser = join(ROOT, 'rewrite/cloud/src/functions/app/actions/user.ts')
-          if (existsSync(cloudUser)) {
-            const cs = stripComments(readFileSync(cloudUser, 'utf8'))
-            const cMax = cs.match(/CAPS\s*=\s*\{[^}]*phone:\s*(\d+)/)
-            const cMin = cs.match(/d\.length\s*>=\s*(\d+)/)
-            if (cMin && mpMin[1] !== cMin[1])
-              bad.push(`手机号下界漂移：mp profile-edit PHONE_MIN_DIGITS=${mpMin[1]} ≠ 云端 user.ts d.length>=${cMin[1]}——前端放行、云端剔除，假「已保存」复发（病根#5）`)
-            if (cMax && mpMax[1] !== cMax[1])
-              bad.push(`手机号上界漂移：mp profile-edit PHONE_MAX_DIGITS=${mpMax[1]} ≠ 云端 user.ts CAPS.phone=${cMax[1]}——同上（病根#5）`)
-          }
-        }
-      }
-      return bad
-    },
-  },
-  {
-    // 学习进度百分比口径单源（2026-07-25 进度条专项·病根#5 三处裸写同式 + 根因#14 界面说假话）。
-    // 病史：mp mapLearning / cloud customer360 / admin Courses 三处各自裸写
-    // `Math.round((done/total)*100)`，边界上对用户撒谎——1/250 显示 0%（学了却像没学）、
-    // 199/200 显示 100%（没学完却像结课）。收口 shared 的 progressPercent；mp 进不了 @ldrw/shared
-    // 故手落副本，本守卫逐规则焊死两侧（副本最怕单边改：一边收紧一边照旧，同一门课两处显示不同进度）。
-    // 反向自检＝把 mp 副本的 Math.min(99,…) 改回裸 raw 即红。
-    id: 'rw-progress-percent-single-source',
-    roots: ['#5', '#14'],
-    desc: '学习进度百分比口径单源：canonical＝rewrite/shared/src/learning.ts 的 progressPercent（0% 只表示真没学、100% 只表示真学完、中间夹 [1,99]）；cloud customer360 与 admin Courses 须 import 它、不得裸写 Math.round((x/y)*100)；mp 进不了 @ldrw/shared 故手落副本，四条关键规则（d<=0→0 / d>=t→100 / Math.round / Math.min(99,Math.max(1,…))）须与单源一致',
-    run() {
-      const bad = []
-      const shPath = join(ROOT, 'rewrite/shared/src/learning.ts')
-      if (!existsSync(shPath)) return ['rewrite/shared/src/learning.ts 缺失——守卫扫描面消失（rw-progress-percent-single-source）']
-      const sh = stripComments(readFileSync(shPath, 'utf8'))
-      if (!/export\s+function\s+progressPercent\b/.test(sh))
-        bad.push('rewrite/shared/src/learning.ts 未导出 progressPercent——学习进度口径单源缺定值（病根#5）')
-      // ① 两个能引 shared 的消费面：必须引单源、不得裸写
-      for (const rel of ['rewrite/cloud/src/functions/adminApi/customer360/providers/learning.ts', 'rewrite/admin/src/pages/Courses.vue']) {
-        const abs = join(ROOT, rel)
-        if (!existsSync(abs)) continue
-        const src = stripComments(readFileSync(abs, 'utf8'))
-        if (!/progressPercent\s*\(/.test(src))
-          bad.push(`${rel} 未用 progressPercent——学习进度百分比须引 @ldrw/shared 单源（病根#5）`)
-        if (/Math\.round\s*\(\s*\(\s*\w+(\.\w+)*\s*\/\s*\w+(\.\w+)*\s*\)\s*\*\s*100\s*\)/.test(src))
-          bad.push(`${rel} 仍裸写 Math.round((x/y)*100) 算学习进度——边界会撒谎（1/250→0%、199/200→100%），须走 progressPercent`)
-      }
-      // ② mp 手落副本：四条关键规则逐条焊死（同 STATUS_LABELS/checkoutConst 副本范式）
-      const mpPath = join(ROOT, 'rewrite/mp/lib/mapLearning.ts')
-      if (existsSync(mpPath)) {
-        const mp = stripComments(readFileSync(mpPath, 'utf8'))
-        const body = methodBody(mp, 'progressPercent') || mp
-        if (!/function\s+progressPercent\b/.test(mp)) {
-          bad.push('rewrite/mp/lib/mapLearning.ts 无 progressPercent 副本——mp 进不了 @ldrw/shared，须手落副本（病根#5）')
-        } else {
-          const RULES = [
-            { re: /d\s*<=\s*0/, msg: 'd<=0→0（没学过才是 0%）' },
-            { re: /d\s*>=\s*t/, msg: 'd>=t→100（学完才是 100%）' },
-            { re: /Math\.min\s*\(\s*99/, msg: 'Math.min(99,…)（没学完不许显示 100%）' },
-            { re: /Math\.max\s*\(\s*1/, msg: 'Math.max(1,…)（学过了不许显示 0%）' },
-          ]
-          for (const r of RULES)
-            if (!r.re.test(body))
-              bad.push(`rewrite/mp/lib/mapLearning.ts 的 progressPercent 副本缺规则「${r.msg}」——与 shared 单源漂移，同一门课两处显示不同进度（病根#5）`)
-        }
-      }
       return bad
     },
   },
