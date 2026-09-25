@@ -33,20 +33,14 @@ export function detectDrift(cur, deployed, fns) {
   return drift
 }
 
-// 给定产物根目录 distRoot 与函数名 name，算部署 hash——逐字节镜像 scripts/deploy-fns.mjs 现行部署
-// 时的算法（index.js 恒有 + config.json 若存在 + package.json 若存在）。index.js 缺失（未构建/函数
-// 不存在）返回 null。
+// 给定产物根目录 distRoot 与函数名 name，算部署 hash——这就是 scripts/deploy-fns.mjs 部署时用的算法本体
+// （它直接 import 本函数）：index.js 恒有 + config.json 若存在 + package.json 若存在。index.js 缺失
+// （未构建/函数不存在）返回 null。
 //
-// 单源（2026-08-03 收口）：deploy-fns.mjs 部署时直接 import 本函数，不再各留一份镜像实现。原头注写
-// 「不能抽，因为 openapi-perm-declared 用正则原文锚定 deploy-fns.mjs 的 `'config.json'` 字面」——
-// **实测该守卫只锚 rewrite/cloud/build.mjs（OPENAPI_PERMS + config.json 产出），从不读 deploy-fns.mjs**，
-// 那条约束早已不存在（文档失真·同 R02 族）。抽单源后「两处要记得同步改」这条窄债一并消。
-//
-// version 排除的由来（构建戳回归·2026-08-03 omp 评估 R03 由 opus-5 逮到、主力独立核实）：build.mjs 把
-// 提交号写进每函数 package.json.version（`0.0.0-<sha>`），而本 hash 原吃 package.json 全文 → 提交号
-// 一变 13 个函数 hash 全变，「变更待部署 N 个」恒等于全量、再分不出谁真改了；而这条 hash 机制当初正是
-// 为治「假报 0 个」而建（deploy-fns.mjs 头注：app 函数落后 git 半月无人察觉）——漏报变全噪，同样没信号。
-// 故 version 不参与 hash，deps/name/其余字段照旧参与（tests/scripts/deploy-drift.test.js 两条对锁）。
+// version 不参与 hash：build.mjs 把提交号写进每函数 package.json.version（`0.0.0-<sha>`），若 hash 吃
+// package.json 全文，提交号一变所有函数 hash 全变，「变更待部署 N 个」恒等于全量、分不出谁真改了——这条
+// hash 本为治「漏报待部署」而建，漏报变全噪同样没信号。deps/name/其余字段照旧参与
+// （tests/scripts/deploy-drift.test.js 两条对锁）。
 // 代价（明写）：仅提交号变而产物内容不变时不再触发重部署，线上戳会停在「上次真有内容变更」那一版——
 // 内容仍是对的，只是戳不等于最新 HEAD。要让线上戳恒等 HEAD 得全量重部署换戳，值不值是部署面决策。
 const stripBuildStamp = (buf) => {
