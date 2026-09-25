@@ -16,7 +16,7 @@ const AGENT_ROLE = 'outsourced' // 外包最小权角色（ROLES.outsourced·cap
 async function wecomUserIdTaken(db: any, wecomUserId: string, exceptId: string): Promise<boolean | null> {
   if (!wecomUserId) return false
   const r = await db
-    .collection('adminConfig')
+    .collection(COLLECTIONS.adminConfig)
     .where({ wecomUserId })
     .limit(2)
     .get()
@@ -34,12 +34,12 @@ export async function createAgent({ db, data }: Ctx) {
   const wecomUserId = str((data && data.wecomUserId) || '', 64).trim()
   if (!name) return reply(400, err('BAD_NAME'))
   if (key.length < 6) return reply(400, err('KEY_TOO_SHORT'))
-  await ensure(db, 'adminConfig')
+  await ensure(db, COLLECTIONS.adminConfig)
   const _ = db.command
   // ① 撞口令预检：有界扫描（同 checkKey 手法·最坏 ≤50 行 scrypt 比对，管理端低频操作可接受）+ keyMatches
   // 单源比对——认得住 legacy sha 存量账号与已带盐新账号两种在场形态，不漏判。
   // 读失败不当空扫描：否则预检形同虚设、撞口令也能建号
-  const dupScan = await db.collection('adminConfig').where({ keyHash: _.exists(true) }).limit(50).get().catch(() => null)
+  const dupScan = await db.collection(COLLECTIONS.adminConfig).where({ keyHash: _.exists(true) }).limit(50).get().catch(() => null)
   if (!dupScan) return reply(503, err('KEY_LOOKUP_FAIL'))
   alertIfScanAtCap(dupScan.data || [], 50, 'createAgent.dupScan')
   if ((dupScan.data || []).some((r: any) => keyMatches(r, key))) return reply(409, err('KEY_TAKEN'))
@@ -52,7 +52,7 @@ export async function createAgent({ db, data }: Ctx) {
   // _id 由 doc(id) 指定·data 不带 _id（真 sdk set data 含 _id 即 reject·根因#8）
   const doc: any = { name, role: AGENT_ROLE, keySalt, keyHash, disabled: false, createdAt: Date.now() }
   if (wecomUserId) doc.wecomUserId = wecomUserId
-  await db.collection('adminConfig').doc(id).set({ data: doc })
+  await db.collection(COLLECTIONS.adminConfig).doc(id).set({ data: doc })
 
   // 写后复核（P2·根因#1 先查后写竞态修复）：上面的 dup/wecomUserIdTaken 都是「先查」，先查后写窗口内
   // 并发双方可能都通过检查各自建号、撞出两账号共享同一口令/wecomUserId（登录串号/免登歧义）。
@@ -61,11 +61,11 @@ export async function createAgent({ db, data }: Ctx) {
   // 回滚失败留痕（病根14）：双凭证残留属身份安全面（共享 keyHash 串号 / 共享企微 userid 免登歧义）。
   const rollback = (which: string) =>
     db
-      .collection('adminConfig')
+      .collection(COLLECTIONS.adminConfig)
       .doc(id)
       .remove()
       .catch(() => notifyAlert('security', 'createAgent', 'ROLLBACK_FAIL', { id, which }))
-  const keyDupScan = await db.collection('adminConfig').where({ keyHash: _.exists(true) }).limit(50).get().catch(() => null)
+  const keyDupScan = await db.collection(COLLECTIONS.adminConfig).where({ keyHash: _.exists(true) }).limit(50).get().catch(() => null)
   if (!keyDupScan) {
     await rollback('keyHash')
     return reply(503, err('KEY_LOOKUP_FAIL'))
@@ -77,7 +77,7 @@ export async function createAgent({ db, data }: Ctx) {
     return reply(409, err('KEY_TAKEN'))
   }
   if (wecomUserId) {
-    const wDup = await db.collection('adminConfig').where({ wecomUserId }).limit(2).get().catch(() => null)
+    const wDup = await db.collection(COLLECTIONS.adminConfig).where({ wecomUserId }).limit(2).get().catch(() => null)
     if (!wDup || (wDup.data || []).length > 1) {
       await rollback('wecomUserId')
       return wDup ? reply(409, err('WECOM_ID_TAKEN')) : reply(503, err('WECOM_ID_LOOKUP_FAIL'))
@@ -93,7 +93,7 @@ export async function setAgentWecomUserId({ db, data }: Ctx) {
   const wecomUserId = str((data && data.wecomUserId) || '', 64).trim()
   if (!id) return reply(400, err('BAD_ID'))
   const got = await db
-    .collection('adminConfig')
+    .collection(COLLECTIONS.adminConfig)
     .doc(id)
     .get()
     .catch(() => null)
@@ -104,16 +104,16 @@ export async function setAgentWecomUserId({ db, data }: Ctx) {
   if (taken === null) return reply(503, err('WECOM_ID_LOOKUP_FAIL'))
   if (taken) return reply(409, err('WECOM_ID_TAKEN'))
   const prevWecomUserId = acct.wecomUserId || ''
-  await db.collection('adminConfig').doc(id).update({ data: { wecomUserId, updatedAt: Date.now() } })
+  await db.collection(COLLECTIONS.adminConfig).doc(id).update({ data: { wecomUserId, updatedAt: Date.now() } })
 
   // 写后复核（P2·根因#1 先查后写竞态修复，同 createAgent）：写完重查该 wecomUserId 计数，>1 说明
   // 先查后写窗口内被并发改绑撞号——回滚刚写的这份字段（恢复旧值），绝不留两账号共享同一企微 userid。
   // 复核读失败同样回滚（核验不了的绑定不能留）；回滚失败留痕（同 createAgent）。
   if (wecomUserId) {
-    const dup = await db.collection('adminConfig').where({ wecomUserId }).limit(2).get().catch(() => null)
+    const dup = await db.collection(COLLECTIONS.adminConfig).where({ wecomUserId }).limit(2).get().catch(() => null)
     if (!dup || (dup.data || []).length > 1) {
       await db
-        .collection('adminConfig')
+        .collection(COLLECTIONS.adminConfig)
         .doc(id)
         .update({ data: { wecomUserId: prevWecomUserId, updatedAt: Date.now() } })
         .catch(() => notifyAlert('security', 'setAgentWecomUserId', 'ROLLBACK_FAIL', { id, which: 'wecomUserId' }))
@@ -129,7 +129,7 @@ export async function disableAgent({ db, data }: Ctx) {
   const disabled = !!(data && data.disabled)
   if (!id || id === 'auth') return reply(400, err('BAD_ID')) // 'auth'＝超管·不许停
   const got = await db
-    .collection('adminConfig')
+    .collection(COLLECTIONS.adminConfig)
     .doc(id)
     .get()
     .catch(() => null)
@@ -138,7 +138,7 @@ export async function disableAgent({ db, data }: Ctx) {
   // 停号同时清空会话（见 lib.ts 会话令牌注释）：否则重新启用时旧令牌跟着复活
   const patch: any = { disabled, updatedAt: Date.now() }
   if (disabled) patch.sessions = []
-  await db.collection('adminConfig').doc(id).update({ data: patch })
+  await db.collection(COLLECTIONS.adminConfig).doc(id).update({ data: patch })
   return reply(200, { ok: true, id, disabled })
 }
 
@@ -153,7 +153,7 @@ export async function disableAgent({ db, data }: Ctx) {
 //   零写路径：本 action 只读 adminConfig/agentState/csSession 三个集合，原 CRUD 四个 action 零改动。
 export async function listAgents({ db }: Ctx) {
   const r = await db
-    .collection('adminConfig')
+    .collection(COLLECTIONS.adminConfig)
     .where({ role: AGENT_ROLE })
     .limit(50)
     .get() // 读失败上抛（网关 500）——不当「没有外包」（根因#14）

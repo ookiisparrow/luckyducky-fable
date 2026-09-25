@@ -1,5 +1,6 @@
 import { reply, str, issueSession, principalOf } from '../lib'
 import { getCachedKfToken, getWecomOAuthUserId, alert, err } from '../../../kit'
+import { COLLECTIONS } from '@ldrw/shared'
 
 // M⑦ 车道 B·企业微信自建应用内 OAuth 免登（承面C 增强·工单 §2.2）。
 //
@@ -20,7 +21,7 @@ export async function loginByWecomCode({ db, data }: { db: any; data: any }) {
   if (!userid) return reply(401, err('BAD_CODE')) // code 失效 / 非企业成员（返 openid 非 userid）
   // 反查绑定账号（超管 auth 或外包 agent·wecomUserId 应唯一）。limit(2) 才能发现撞号——
   // limit(1) 会静默捡第一条、登错身份。读失败不当「没绑」。
-  const hit = await db.collection('adminConfig').where({ wecomUserId: userid }).limit(2).get().catch(() => null)
+  const hit = await db.collection(COLLECTIONS.adminConfig).where({ wecomUserId: userid }).limit(2).get().catch(() => null)
   if (!hit) return reply(503, err('WECOM_ID_LOOKUP_FAIL'))
   const rows = (hit.data || []) as any[]
   if (rows.length > 1) return reply(409, err('WECOM_ID_TAKEN'))

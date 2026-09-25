@@ -1,5 +1,5 @@
 import { reply, type Ctx } from '../lib'
-import { ERR } from '@ldrw/shared'
+import { COLLECTIONS, ERR } from '@ldrw/shared'
 import { isDocMissing } from '../../../kit'
 import { assembleCustomer360 } from '../customer360/orchestrator'
 
@@ -45,7 +45,7 @@ export async function searchCustomer({ db, data }: Ctx) {
       matchedBy: [by],
     })
   }
-  const users = db.collection('users')
+  const users = db.collection(COLLECTIONS.users)
   // 同 getUser：读失败回 null，不当「没这个人」（根因#14 / USER_LOOKUP_FAIL）
   const rows = (qy: any) =>
     qy
@@ -58,7 +58,7 @@ export async function searchCustomer({ db, data }: Ctx) {
     rows(users.where({ phone: q }).limit(SEARCH_LIMIT)),
     rows(users.where({ nickname: q }).limit(SEARCH_LIMIT)),
     db
-      .collection('orders')
+      .collection(COLLECTIONS.orders)
       .doc(q)
       .get()
       .then(
@@ -89,7 +89,7 @@ export async function getUser({ db, data }: Ctx) {
   const openid = String((data && data.openid) || '').trim()
   if (!openid) return reply(400, { ok: false, error: ERR.BAD_ARGS })
   const r = await db
-    .collection('users')
+    .collection(COLLECTIONS.users)
     .where({ _openid: openid })
     .limit(1)
     .get()

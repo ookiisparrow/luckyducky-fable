@@ -31,7 +31,7 @@ async function ensureKfIdentity(db: any, token: string, euid: string, knownOpeni
     if (!euid || knownOpenid) return // 已建映射·不重复 batchget
     const unionid = await kfCustomerBatchget(token, euid)
     if (!unionid) return
-    const u = await db.collection('users').where({ unionid }).limit(1).get().catch(() => ({ data: [] }))
+    const u = await db.collection(COLLECTIONS.users).where({ unionid }).limit(1).get().catch(() => ({ data: [] }))
     const openid = u.data && u.data[0] && u.data[0]._openid
     if (!openid) return
     await db.collection(COLLECTIONS.kfIdentity).doc('ext:' + euid).set({ data: { openid, unionid, updatedAt: Date.now() } })

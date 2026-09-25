@@ -1,4 +1,4 @@
-import { asFen, fenToYuan, MONEY_RECEIVED_STATUSES } from '@ldrw/shared'
+import { COLLECTIONS, asFen, fenToYuan, MONEY_RECEIVED_STATUSES, type CollectionName } from '@ldrw/shared'
 import { reply, getTxAlerts, type Ctx } from '../lib'
 // CST 日助手/比对分类器已上提 kit/reconcile 单源（批B2·timers/billReconcile 复用同一套原语）；
 // 别名保持既有调用点零改动
@@ -51,7 +51,7 @@ export async function getReconciliation({ db, data }: Ctx) {
   // 任一路读失败（累计聚合 / 每日明细 / 计数）都置 degraded + 告警，回传 partial 让前端标注数据不可信（病根#14）：
   // 「查询失败」归零会被读成「这段时间没收入、没退款、已对平」。
   let degraded = false
-  const sumAgg = (coll: string, status: any, field: string): Promise<number> =>
+  const sumAgg = (coll: CollectionName, status: any, field: string): Promise<number> =>
     db
       .collection(coll)
       .aggregate()
@@ -83,26 +83,26 @@ export async function getReconciliation({ db, data }: Ctx) {
   const [amountCum, exceptionFenCum, refundCum, paidRows, refundRows, paidN, refundN, exceptions] =
     await Promise.all([
       // 累计（aggregate·全量精确·不封顶·money 锚）：按标价的单（元）与支付异常单的到账额（分）分开汇总
-      sumAgg('orders', _.in(AMOUNT_INCOME_STATUSES), 'amount'),
-      sumAgg('orders', 'payment_exception', 'paidFee'),
-      sumAgg('afterSales', 'refunded', 'refundAmount'),
+      sumAgg(COLLECTIONS.orders, _.in(AMOUNT_INCOME_STATUSES), 'amount'),
+      sumAgg(COLLECTIONS.orders, 'payment_exception', 'paidFee'),
+      sumAgg(COLLECTIONS.afterSales, 'refunded', 'refundAmount'),
       // 每日明细有界拉取（最近 CAP 笔·按时间倒序）
       rows(
         db
-          .collection('orders')
+          .collection(COLLECTIONS.orders)
           .where({ status: _.in([...MONEY_RECEIVED_STATUSES]) })
           .orderBy('paidAt', 'desc')
           .limit(CAP)
       ),
       rows(
         db
-          .collection('afterSales')
+          .collection(COLLECTIONS.afterSales)
           .where({ status: 'refunded' })
           .orderBy('refundedAt', 'desc')
           .limit(CAP)
       ),
-      cnt(db.collection('orders').where({ status: _.in([...MONEY_RECEIVED_STATUSES]) })),
-      cnt(db.collection('afterSales').where({ status: 'refunded' })),
+      cnt(db.collection(COLLECTIONS.orders).where({ status: _.in([...MONEY_RECEIVED_STATUSES]) })),
+      cnt(db.collection(COLLECTIONS.afterSales).where({ status: 'refunded' })),
       getTxAlerts(db),
     ])
   const incomeCum = fenToYuan(asFen(toFenAmount(amountCum) + Math.round(exceptionFenCum)))
@@ -193,12 +193,12 @@ export async function getBillMatch({ db, data }: Ctx) {
   const [rawOur, rawWx] = await Promise.all([
     rows(
       db
-        .collection('orders')
+        .collection(COLLECTIONS.orders)
         .where({ status: _.in([...MONEY_RECEIVED_STATUSES]) })
         .orderBy('paidAt', 'desc')
         .limit(CAP)
     ),
-    rows(db.collection('wxBills').orderBy('date', 'desc').limit(CAP)),
+    rows(db.collection(COLLECTIONS.wxBills).orderBy('date', 'desc').limit(CAP)),
   ])
   const approx = rawOur.length >= CAP || rawWx.length >= CAP
   const ourOrders = rawOur.filter(

@@ -1,3 +1,4 @@
+import type { CollectionName } from '@ldrw/shared'
 import { getDb, getDocOrNull } from './db'
 
 // moved 是否真的发生了流转（当前态 ∈ from 才会）；doc 是流转前的单据，供调用方据旧值记日志/算 patch——
@@ -13,7 +14,7 @@ type TransitionResult<T> = { moved: true; doc: T } | { moved: false; doc?: T }
  * 读失败照抛（与写失败同一出口）：折成 moved:false 会被调用方当成「状态不对/单不存在」，只有真缺档才回 moved:false。
  */
 export async function transition<T extends { status: string } = any>(
-  coll: string,
+  coll: CollectionName,
   id: string,
   from: readonly string[],
   to: string,

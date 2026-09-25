@@ -1,4 +1,5 @@
 import {
+  COLLECTIONS,
   toFen,
   asFen,
   fenToYuan,
@@ -17,7 +18,7 @@ import { reply, ensure, activationFor, type Ctx } from '../lib'
 // 当成「没有售后」就是 used=0 退超、REFUND_EXISTS 锁被绕过。集合未建＝真没有售后。
 async function orderAfterSales(db: any, orderId: string, fn: string): Promise<AfterSaleDoc[] | null> {
   const r = await db
-    .collection('afterSales')
+    .collection(COLLECTIONS.afterSales)
     .where({ orderId })
     .limit(AFTERSALE_SCAN_CAP)
     .get()
@@ -36,13 +37,13 @@ async function orderAfterSales(db: any, orderId: string, fn: string): Promise<Af
 // 同因的库故障）辨别不了，按可能卡 approved 告警；只有读成功且已不在 approved 才不报。
 async function rollbackApproved(db: any, id: string, fn: string) {
   const rb = await db
-    .collection('afterSales')
+    .collection(COLLECTIONS.afterSales)
     .where({ _id: id, status: 'approved' })
     .update({ data: { status: 'applied' } })
     .catch(() => null)
   if (rb && rb.stats && rb.stats.updated === 1) return
   const fresh = await db
-    .collection('afterSales')
+    .collection(COLLECTIONS.afterSales)
     .doc(id)
     .get()
     .catch((e: unknown) => (isDocMissing(e) ? { data: null } : null))
@@ -60,7 +61,7 @@ const flowAccepted = (r: any): boolean => !!(r && (r.status || r.refund_id || r.
 // 拦截物流/联系客户。shipOne 侧挡「先退款后发货」，这里补「先发货后退款」方向的兜底信号，两个方向对称。
 async function alertIfShippedMeanwhile(db: any, orderId: string, statusAtStart: string, fn: string, ctx: Record<string, unknown>) {
   if (statusAtStart === 'shipped') return
-  const fresh = await db.collection('orders').doc(orderId).get().catch(() => null)
+  const fresh = await db.collection(COLLECTIONS.orders).doc(orderId).get().catch(() => null)
   if (fresh && fresh.data && fresh.data.status === 'shipped') {
     await notifyAlert('money', fn, 'SHIP_REFUND_RACE', ctx)
   }
@@ -82,12 +83,12 @@ export async function overrideRefund({ db, data }: Ctx) {
   // 两次纯读互不依赖，并行；判定顺序：退款流 → 订单
   const [cfg, got] = await Promise.all([
     db
-      .collection('config')
+      .collection(COLLECTIONS.config)
       .doc('pay')
       .get()
       .catch(() => null),
     db
-      .collection('orders')
+      .collection(COLLECTIONS.orders)
       .doc(orderId)
       .get()
       .catch(() => null),
@@ -160,10 +161,10 @@ export async function overrideRefund({ db, data }: Ctx) {
   ).length
   const asId = bareTaken ? ovrPrefix + ovrCount : bareId
   const outRefundNo = refundNoFor(asId) // 微信合规退款单号（asId 含中文 SKU/spec·根因#12·案 A）
-  await ensure(db, 'afterSales')
+  await ensure(db, COLLECTIONS.afterSales)
   const now = Date.now()
   try {
-    await db.collection('afterSales').add({
+    await db.collection(COLLECTIONS.afterSales).add({
       data: {
         _id: asId,
         orderId,
@@ -188,7 +189,7 @@ export async function overrideRefund({ db, data }: Ctx) {
     // 退款回调按 outRefundNo 反查将无单）。撞键判定不靠错误类型嗅探（仓内惯例不区分 add 错误类型）：
     // 读回 doc(asId)——存在＝并发方已写（天然幂等，非故障）；不存在＝真写失败，留痕告警。
     const reread = await db
-      .collection('afterSales')
+      .collection(COLLECTIONS.afterSales)
       .doc(asId)
       .get()
       .catch(() => null)
@@ -223,7 +224,7 @@ export async function recordPaidFee({ db, data, agentId }: Ctx) {
   const id = String((data && data.id) || '')
   const paidFee = Number((data && data.paidFeeFen) ?? NaN)
   if (!id || !Number.isInteger(paidFee) || paidFee <= 0) return reply(400, err('BAD_ARGS'))
-  const got = await db.collection('orders').doc(id).get().catch(() => null)
+  const got = await db.collection(COLLECTIONS.orders).doc(id).get().catch(() => null)
   if (!got || !got.data) return reply(400, err('NO_ORDER'))
   const order: OrderDoc = got.data
   if (order.status !== 'payment_exception') return reply(400, err(buildBadStatus(order.status)))
@@ -244,7 +245,7 @@ export async function recordPaidFee({ db, data, agentId }: Ctx) {
   const prev = Number(order.paidFee)
   const prevValid = Number.isInteger(prev) && prev > 0
   const upd = await db
-    .collection('orders')
+    .collection(COLLECTIONS.orders)
     .where({ _id: id, status: 'payment_exception' })
     .update({
       data: {
@@ -266,7 +267,7 @@ export async function recordPaidFee({ db, data, agentId }: Ctx) {
 // 服务端筛选/搜索（根因#7 计数/筛选/搜索失真·与订单同治）：status 云端 where 过滤、q=订单号精确
 // 命中（orderId·一单可多条售后行），无视状态标签搜全部。计数另走 refundCounts（.count() 精确）。
 export async function listRefunds({ db, data }: Ctx) {
-  await ensure(db, 'afterSales')
+  await ensure(db, COLLECTIONS.afterSales)
   const q = String((data && data.q) || '').trim()
   const status = String((data && data.status) || '')
   const filter: Record<string, any> = q
@@ -274,7 +275,7 @@ export async function listRefunds({ db, data }: Ctx) {
     : status && status !== 'all'
       ? { status }
       : {}
-  const paged = await pageQuery(db, 'afterSales', filter, 'appliedAt', data, 200)
+  const paged = await pageQuery(db, COLLECTIONS.afterSales, filter, 'appliedAt', data, 200)
   // 补买家收货人（换皮丢·审退款需识别申请人+联系寄回；afterSale 本身无地址→join 订单收货地址·
   // 有界批量一次 _.in 查·不逐单 doc.get）。前端列表掩码、抽屉给全号（PII·根因#3）。
   const list: AfterSaleDoc[] = Array.isArray(paged.list) ? paged.list : []
@@ -283,7 +284,7 @@ export async function listRefunds({ db, data }: Ctx) {
   if (orderIds.length) {
     const _ = db.command
     const or = await db
-      .collection('orders')
+      .collection(COLLECTIONS.orders)
       .where({ _id: _.in(orderIds) })
       .limit(orderIds.length)
       .get()
@@ -308,7 +309,7 @@ export async function listRefunds({ db, data }: Ctx) {
 // partial（P1·bug sweep Round1 item7·病根#14，同 orderCounts 治法）：某路 .count() 失败原先静默兜
 // 成 0——现在任一路失败即整体标 partial:true，前端待办卡据此别显绿色「无待办」。
 export async function refundCounts({ db }: Ctx) {
-  await ensure(db, 'afterSales')
+  await ensure(db, COLLECTIONS.afterSales)
   let partial = false
   const cnt = (query: any) =>
     query
@@ -320,8 +321,8 @@ export async function refundCounts({ db }: Ctx) {
       })
   const statuses = Object.values(AFTERSALE_STATUS) as string[]
   const [all, ...nums] = await Promise.all([
-    cnt(db.collection('afterSales')),
-    ...statuses.map((s) => cnt(db.collection('afterSales').where({ status: s }))),
+    cnt(db.collection(COLLECTIONS.afterSales)),
+    ...statuses.map((s) => cnt(db.collection(COLLECTIONS.afterSales).where({ status: s }))),
   ])
   const counts: Record<string, number> = { all }
   statuses.forEach((s, i) => (counts[s] = nums[i]))
@@ -335,7 +336,7 @@ export async function getRefundDetail({ db, data }: Ctx) {
   const id = String((data && data.id) || '')
   if (!id) return reply(400, err('BAD_ARGS'))
   const got = await db
-    .collection('afterSales')
+    .collection(COLLECTIONS.afterSales)
     .doc(id)
     .get()
     .catch(() => null)
@@ -347,7 +348,7 @@ export async function getRefundDetail({ db, data }: Ctx) {
   const reqLine = a.lineId || a.productId
   // 订单读与激活态互不依赖：并行。订单读失败照抛（网关回 500）：当成「行缺失」会显示可退，误导审核
   const [order, activation] = await Promise.all([
-    getDocOrNull<OrderDoc>(db.collection('orders').doc(String(a.orderId || ''))),
+    getDocOrNull<OrderDoc>(db.collection(COLLECTIONS.orders).doc(String(a.orderId || ''))),
     activationFor(db, a._openid, a.productId),
   ])
   const line = order && (order.items || []).find((it) => (it.lineId || it.productId) === reqLine)
@@ -369,12 +370,12 @@ export async function approveRefund({ db, data }: Ctx) {
   // 两次纯读互不依赖，并行；判定顺序：记录 → 状态 → 退款流；订单读依赖 orderId，串行
   const [got, cfg] = await Promise.all([
     db
-      .collection('afterSales')
+      .collection(COLLECTIONS.afterSales)
       .doc(id)
       .get()
       .catch(() => null),
     db
-      .collection('config')
+      .collection(COLLECTIONS.config)
       .doc('pay')
       .get()
       .catch(() => null),
@@ -387,7 +388,7 @@ export async function approveRefund({ db, data }: Ctx) {
   const flowId = cfg && cfg.data && cfg.data.refundFlowId
   if (!flowId) return reply(400, err('REFUND_FLOW_NOT_CONFIGURED'))
   const orderGot = await db
-    .collection('orders')
+    .collection(COLLECTIONS.orders)
     .doc(rec.orderId)
     .get()
     .catch(() => null)
@@ -442,7 +443,7 @@ export async function approveRefund({ db, data }: Ctx) {
   // 原子抢占（审核批次A-2）：仍是 applied 才置 approved——并发只有一个抢到，杜绝重复触发退款；
   // 重算降级（requalify）与抢占同一次条件更新落库：打款金额与售后单永远一致（refundCallback 金额核验依赖它）。
   const grab = await db
-    .collection('afterSales')
+    .collection(COLLECTIONS.afterSales)
     .where({ _id: id, status: 'applied' })
     .update({
       data: {
@@ -484,7 +485,7 @@ export async function rejectRefund({ db, data }: Ctx) {
     .slice(0, 100)
   if (!id || !reason) return reply(400, err('BAD_ARGS'))
   const got = await db
-    .collection('afterSales')
+    .collection(COLLECTIONS.afterSales)
     .doc(id)
     .get()
     .catch(() => null)
@@ -494,7 +495,7 @@ export async function rejectRefund({ db, data }: Ctx) {
   // 条件更新（深审②·原子化）：仍是 applied 才置 rejected——读检查到写入之间被同意抢先（approved·钱已进
   // 退款通道）时绝不 clobber 回 rejected（否则退款回调 from applied/approved 抢不到状态·钱退了单据却是已拒绝）。
   const grab = await db
-    .collection('afterSales')
+    .collection(COLLECTIONS.afterSales)
     .where({ _id: id, status: 'applied' })
     .update({ data: { status: 'rejected', rejectedAt: Date.now(), rejectReason: reason } })
   if (!grab.stats || grab.stats.updated !== 1) {

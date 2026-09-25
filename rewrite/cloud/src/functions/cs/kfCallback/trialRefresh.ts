@@ -174,7 +174,7 @@ export async function listHeldSessions(
 async function forceCloseHeld(db: any, held: Array<{ _id: string }>): Promise<void> {
   const now = Date.now()
   for (const s of held) {
-    await transition('csSession', s._id, ['pending', 'active', 'escalated'], 'closed', {
+    await transition(COLLECTIONS.csSession, s._id, ['pending', 'active', 'escalated'], 'closed', {
       updatedAt: now,
     }).catch(() => ({ moved: false }))
   }

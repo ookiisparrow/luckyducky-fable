@@ -51,3 +51,6 @@ export const COLLECTIONS = {
   // 反馈通知游标（意见箱铃铛）：doc('state') 记录上次扫描时间, 防重复推送
   feedbackNotifyCursor: 'feedbackNotifyCursor',
 } as const
+
+// 帮手函数的集合名参数用它而不是 string：名字打错编译即红（lint 只拦得到 .collection('字面量')）。
+export type CollectionName = (typeof COLLECTIONS)[keyof typeof COLLECTIONS]

@@ -1,6 +1,7 @@
 import { reply, ensure, cleanCourse, manager, readDoc, type Ctx } from '../lib'
 import { isVodFileId, makeVodUploadSignature, callVodApi, setOrAdd, err } from '../../../kit'
 import { mergePendingGc } from './products'
+import { COLLECTIONS } from '@ldrw/shared'
 
 // —— VOD 转码管线（决策§31 批2）——课程视频主路径升级为「admin 直传 VOD + 任务流自动转码」；
 // 帮助视频线（HelpVideos）恒走下方云存储直传老路，不迁。
@@ -44,7 +45,7 @@ function pickVodPlayUrl(mi: any): string {
 export async function syncVodMedia({ db, data }: Ctx) {
   const courseId = String(data.courseId || '')
   if (!courseId) return reply(400, err('NO_COURSE_ID'))
-  const got = await readDoc(db.collection('coursesDraft').doc(courseId).get())
+  const got = await readDoc(db.collection(COLLECTIONS.coursesDraft).doc(courseId).get())
   if (!got.ok) return reply(200, err('DOC_READ_FAIL'))
   if (!got.data) return reply(400, err('NO_DRAFT'))
   const course: Record<string, any> = { ...got.data }
@@ -74,7 +75,7 @@ export async function syncVodMedia({ db, data }: Ctx) {
     if (durSec > 0 && !sg.dur) sg.dur = fmtDur(durSec)
   }
   const next = { ...course, rev: (Number(course.rev) || 0) + 1 }
-  await setOrAdd(db.collection('coursesDraft'), courseId, next)
+  await setOrAdd(db.collection(COLLECTIONS.coursesDraft), courseId, next)
   return reply(200, { ok: true, ready, processing, rev: next.rev })
 }
 
@@ -105,11 +106,11 @@ export async function getVideoUploadMeta({ data }: Ctx) {
 export async function getCourseDraft({ db, data }: Ctx) {
   const courseId = String(data.courseId || '')
   if (!courseId) return reply(400, err('NO_COURSE_ID'))
-  await ensure(db, 'coursesDraft')
-  const got = await readDoc(db.collection('coursesDraft').doc(courseId).get())
+  await ensure(db, COLLECTIONS.coursesDraft)
+  const got = await readDoc(db.collection(COLLECTIONS.coursesDraft).doc(courseId).get())
   if (!got.ok) return reply(200, err('DOC_READ_FAIL'))
   if (got.data) return reply(200, { ok: true, course: got.data })
-  const pub = await readDoc(db.collection('courses').doc(courseId).get())
+  const pub = await readDoc(db.collection(COLLECTIONS.courses).doc(courseId).get())
   if (!pub.ok) return reply(200, err('DOC_READ_FAIL'))
   if (pub.data) return reply(200, { ok: true, course: pub.data, fromPublished: true })
   return reply(200, { ok: true, course: null })
@@ -118,8 +119,8 @@ export async function getCourseDraft({ db, data }: Ctx) {
 export async function saveCourseDraft({ db, data }: Ctx) {
   const c = cleanCourse(data.course)
   if (!c) return reply(400, err('BAD_COURSE'))
-  await ensure(db, 'coursesDraft')
-  const drafts2 = db.collection('coursesDraft')
+  await ensure(db, COLLECTIONS.coursesDraft)
+  const drafts2 = db.collection(COLLECTIONS.coursesDraft)
   // 乐观并发（课程链路审计 2026-07-17·根因#1）：整份覆盖 + 无版本比对＝两处并发编辑（双页签/双管理员）
   // 后保存者静默吃掉先保存者的改动。客户端带上拉草稿时的 rev，不符即拒（前端提示重新载入，不静默覆盖）；
   // 不带 baseRev 的调用（旧版前端/脚本）按原语义覆盖——部署窗口内前后端版本错开不卡死保存。
@@ -147,7 +148,7 @@ const collectVideoIds = (c: any): string[] => segsOf(c).filter((sg) => sg.videoF
 export async function publishCourse({ db, data }: Ctx) {
   const courseId = String(data.courseId || '')
   if (!courseId) return reply(400, err('NO_COURSE_ID'))
-  const got = await readDoc(db.collection('coursesDraft').doc(courseId).get())
+  const got = await readDoc(db.collection(COLLECTIONS.coursesDraft).doc(courseId).get())
   if (!got.ok) return reply(200, err('DOC_READ_FAIL'))
   if (!got.data) return reply(400, err('NO_DRAFT'))
   const course: Record<string, any> = { ...got.data }
@@ -156,7 +157,7 @@ export async function publishCourse({ db, data }: Ctx) {
   // 该段只会 url:null 显示成「素材未剪」假象（伪成功·病根#14）。admin 点「同步转码状态」全就绪再发布。
   const pendingVod = segsOf(course).filter(isPendingVod).length
   if (pendingVod) return reply(200, err('VOD_PROCESSING', { pending: pendingVod }))
-  const coursesColl = db.collection('courses')
+  const coursesColl = db.collection(COLLECTIONS.courses)
   const prev = await readDoc(coursesColl.doc(courseId).get()) // GC 基线：读旧发布
   if (!prev.ok) return reply(200, err('DOC_READ_FAIL')) // 读失败≠空发布：停写停入队，不拿空基线 GC
   const prevDoc = prev.data

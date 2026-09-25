@@ -1,5 +1,6 @@
 import { reply, getTxAlerts, PAID_STATUSES, type Ctx } from '../lib'
 import { listOrders } from './orders'
+import { COLLECTIONS } from '@ldrw/shared'
 
 // —— 数据看板（债#18 + #18续：消除「≤1000 条/表内存聚合」静默少算）——
 // 计数走 .count()（精确·不封顶）；GMV 走 DB aggregate 对 paid 订单求和（精确·不封顶·#18续/债#32）；
@@ -50,42 +51,42 @@ export async function getDashboard(ctx: Ctx) {
     recentRefs,
     toShip,
   ] = await Promise.all([
-    cnt(db.collection('users')),
-    cnt(db.collection('orders')),
-    cnt(db.collection('qrcodes')),
-    cnt(db.collection('qrcodes').where({ status: 'activated' })),
-    cnt(db.collection('progress')),
+    cnt(db.collection(COLLECTIONS.users)),
+    cnt(db.collection(COLLECTIONS.orders)),
+    cnt(db.collection(COLLECTIONS.qrcodes)),
+    cnt(db.collection(COLLECTIONS.qrcodes).where({ status: 'activated' })),
+    cnt(db.collection(COLLECTIONS.progress)),
     db
-      .collection('orders')
+      .collection(COLLECTIONS.orders)
       .aggregate()
       .match({ status: _.in(PAID_STATUSES) })
       .group({ _id: null, gmv: $.sum('$amount') })
       .end()
       .then((r: any) => (r.list && r.list[0] ? Number(r.list[0].gmv) || 0 : 0)),
-    rows(db.collection('progress').field({ done: true, last: true }).limit(SAMPLE)),
-    rows(db.collection('courses').field({ id: true, title: true, chapters: true }).limit(SAMPLE)),
+    rows(db.collection(COLLECTIONS.progress).field({ done: true, last: true }).limit(SAMPLE)),
+    rows(db.collection(COLLECTIONS.courses).field({ id: true, title: true, chapters: true }).limit(SAMPLE)),
     // 钱链异常：单源 helper（dashboard 与 S16 对账共用·防漂移）；内部定向 where 精确（不从样本 filter）
     getTxAlerts(db),
     rows(
       db
-        .collection('orders')
+        .collection(COLLECTIONS.orders)
         .field({ id: true, amount: true, createdAt: true, items: true })
         .orderBy('createdAt', 'desc')
         .limit(5)
     ),
     // 转化速览：已支付订单数（口径同 GMV·PAID_STATUSES）——下单→支付→激活 各环节量级（指示性·非同批追踪）
-    cnt(db.collection('orders').where({ status: _.in(PAID_STATUSES) })),
+    cnt(db.collection(COLLECTIONS.orders).where({ status: _.in(PAID_STATUSES) })),
     // 最近动态混合流（S15）：近期激活/进课 + 退款申请，与最近订单合并成一条时间轴（各 orderBy+limit 有界·债#18）
     rows(
       db
-        .collection('activations')
+        .collection(COLLECTIONS.activations)
         .field({ code: true, courseId: true, createdAt: true, enteredAt: true })
         .orderBy('createdAt', 'desc')
         .limit(6)
     ),
     rows(
       db
-        .collection('afterSales')
+        .collection(COLLECTIONS.afterSales)
         .field({ orderId: true, refundAmount: true, appliedAt: true })
         .orderBy('appliedAt', 'desc')
         .limit(6)

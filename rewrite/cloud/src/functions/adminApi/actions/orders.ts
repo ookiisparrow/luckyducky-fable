@@ -1,4 +1,4 @@
-import { ORDER_STATUS, AFTERSALE_QUOTA_STATUSES, AFTERSALE_INFLIGHT_STATUSES, buildBadStatus } from '@ldrw/shared'
+import { COLLECTIONS, ORDER_STATUS, AFTERSALE_QUOTA_STATUSES, AFTERSALE_INFLIGHT_STATUSES, buildBadStatus } from '@ldrw/shared'
 import type { OrderDoc, AfterSaleDoc, ErrCode } from '@ldrw/shared'
 import { pageQuery, uploadShippingToWx, notifyAlert, applyStockMoves, isCollectionMissing, err } from '../../../kit'
 import { reply, activationFor, type Ctx } from '../lib'
@@ -36,7 +36,7 @@ function sameRefundedQty(now: Record<string, number>, ackRaw: unknown): boolean 
 export async function getOrderDetail({ db, data }: Ctx) {
   const id = String((data && data.id) || '')
   if (!id) return reply(400, err('BAD_ARGS'))
-  const got = await db.collection('orders').doc(id).get().catch(() => null)
+  const got = await db.collection(COLLECTIONS.orders).doc(id).get().catch(() => null)
   if (!got || !got.data) return reply(400, err('NO_ORDER'))
   const o: OrderDoc = got.data
   const pids = [...new Set<string>((o.items || []).map((it) => String(it.productId || '')).filter(Boolean))]
@@ -65,7 +65,7 @@ export async function listOrders({ db, data, caps }: Ctx) {
     : status && status !== 'all'
       ? { status }
       : {}
-  const paged = await pageQuery(db, 'orders', filter, 'createdAt', data, 200)
+  const paged = await pageQuery(db, COLLECTIONS.orders, filter, 'createdAt', data, 200)
   // 退款↔履约状态同步：批量 join 本页订单的售后行，给前端两个标记——refundHold（在途售后或每行都退够件数，
   // 与 shipOne 拦截同一判据）与 refundedQty（每行已退件数：拣货/标签扣掉它，发货时原样回传给 shipOne 核对）。
   // 有界批量 _.in 查，不逐单 doc.get。读失败整页报错：当成「没有退款」会把已退的件当成要发的货。
@@ -76,7 +76,7 @@ export async function listOrders({ db, data, caps }: Ctx) {
   if (orderIds.length) {
     const _ = db.command
     const held = await db
-      .collection('afterSales')
+      .collection(COLLECTIONS.afterSales)
       .where({ orderId: _.in(orderIds), status: _.in([...AFTERSALE_QUOTA_STATUSES]) })
       .field({ orderId: true, lineId: true, productId: true, status: true, qty: true })
       .limit(1000) // 钱链异常账本同款上限（getTxAlerts CAP）：本页订单最多几百单，一单多行售后仍远够
@@ -114,8 +114,8 @@ export async function orderCounts({ db }: Ctx) {
       })
   const statuses = Object.values(ORDER_STATUS) as string[]
   const [all, ...nums] = await Promise.all([
-    cnt(db.collection('orders')),
-    ...statuses.map((s) => cnt(db.collection('orders').where({ status: s }))),
+    cnt(db.collection(COLLECTIONS.orders)),
+    ...statuses.map((s) => cnt(db.collection(COLLECTIONS.orders).where({ status: s }))),
   ])
   const counts: Record<string, number> = { all }
   statuses.forEach((s, i) => (counts[s] = nums[i]))
@@ -144,7 +144,7 @@ async function grabShipLock(db: any, id: string, order: OrderDoc, company: strin
   const _ = db.command
   const lockNow = Date.now()
   const upd = await db
-    .collection('orders')
+    .collection(COLLECTIONS.orders)
     .where({ _id: id, status: _.in(['paid', 'shipped']), shipUploadLock: _.neq('busy') })
     .update({
       data: {
@@ -156,7 +156,7 @@ async function grabShipLock(db: any, id: string, order: OrderDoc, company: strin
       },
     })
   if (upd.stats && upd.stats.updated === 1) return null
-  const fresh = await db.collection('orders').doc(id).get().catch(() => null)
+  const fresh = await db.collection(COLLECTIONS.orders).doc(id).get().catch(() => null)
   const freshData: OrderDoc | null = fresh && fresh.data
   const freshStatus = (freshData && freshData.status) || 'unknown'
   if (freshStatus !== 'paid' && freshStatus !== 'shipped') return buildBadStatus(freshStatus)
@@ -168,7 +168,7 @@ async function grabShipLock(db: any, id: string, order: OrderDoc, company: strin
   const stale = freshData && freshData.shipUploadLock === 'busy' && lockNow - lockAt > SHIP_LOCK_STALE_MS
   if (!stale) return 'SHIP_IN_PROGRESS'
   const preempt = await db
-    .collection('orders')
+    .collection(COLLECTIONS.orders)
     .where({ _id: id, status: _.in(['paid', 'shipped']), shipUploadLock: 'busy', shipUploadLockAt: lockAt })
     .update({
       data: {
@@ -209,7 +209,7 @@ async function shipOne(db: any, idRaw: any, companyRaw: any, trackingRaw: any, o
   const company = String(companyRaw || '').trim().slice(0, 30)
   const trackingNo = String(trackingRaw || '').trim().slice(0, 40)
   if (!id || !company || !trackingNo) return err('BAD_ARGS')
-  const got = await db.collection('orders').doc(id).get().catch(() => null)
+  const got = await db.collection(COLLECTIONS.orders).doc(id).get().catch(() => null)
   if (!got || !got.data) return err('NO_ORDER')
   const order: OrderDoc = got.data
   const cur = order.status
@@ -226,7 +226,7 @@ async function shipOne(db: any, idRaw: any, companyRaw: any, trackingRaw: any, o
   // 恰好把售后抢占成 approved，本次读不到、会照常发货。分布式锁/事务模拟不是本仓既有模式；对称收口在
   // refunds.ts：退款批准落库后回读订单，发现期间已变 shipped 即 notifyAlert SHIP_REFUND_RACE 供人工介入。
   const afterSales = await db
-    .collection('afterSales')
+    .collection(COLLECTIONS.afterSales)
     .where({ orderId: id, status: db.command.in([...AFTERSALE_QUOTA_STATUSES]) })
     .field({ lineId: true, productId: true, status: true, qty: true })
     .get()
@@ -256,7 +256,7 @@ async function shipOne(db: any, idRaw: any, companyRaw: any, trackingRaw: any, o
   // 之后任何合法再调用（含改单号）会被永久误判 SHIP_IN_PROGRESS。uploadShippingToWx 自身「绝不抛错」
   // （见 kit/shipping.ts 契约），故本次写与上方状态转移写一样不需要 try/finally 兜底异常路径。
   await db
-    .collection('orders')
+    .collection(COLLECTIONS.orders)
     .doc(id)
     .update({
       data: ship.ok
@@ -294,12 +294,12 @@ export async function shipOrders({ db, data, agentId }: Ctx) {
 export async function clearFeeMismatch({ db, data }: Ctx) {
   const id = String(data.id || '')
   if (!id) return reply(400, err('BAD_ARGS'))
-  const got = await db.collection('orders').doc(id).get().catch(() => null)
+  const got = await db.collection(COLLECTIONS.orders).doc(id).get().catch(() => null)
   if (!got || !got.data) return reply(400, err('NO_ORDER'))
   const order: OrderDoc = got.data
   // payment_exception 是金额不符后的待处理终态，不能被旧的「解除 feeMismatch」按钮
   // 误清成看似正常；它必须走人工退款/补差后的明确处理流程。
   if (order.status === 'payment_exception') return reply(400, err(buildBadStatus(order.status)))
-  await db.collection('orders').doc(id).update({ data: { feeMismatch: false, feeMismatchClearedAt: Date.now() } })
+  await db.collection(COLLECTIONS.orders).doc(id).update({ data: { feeMismatch: false, feeMismatchClearedAt: Date.now() } })
   return reply(200, { ok: true })
 }

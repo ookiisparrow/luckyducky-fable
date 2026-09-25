@@ -1,3 +1,5 @@
+import type { CollectionName } from '@ldrw/shared'
+
 // 统一分页协议（设计约束#7：列表读一律 cursor/limit 契约，禁裸全量/固定条数）。
 // 游标式：按排序字段值翻页，多查一条判 hasMore；无参=首页默认 limit（兼容旧调用）。
 const ABS_MAX = 200
@@ -46,7 +48,7 @@ function isCompoundCursor(c: unknown): c is CompoundCursor {
  */
 export async function pageQuery(
   db: any,
-  collName: string,
+  collName: CollectionName,
   filter: Record<string, unknown>,
   cursorField: string,
   req: PageReq | undefined,

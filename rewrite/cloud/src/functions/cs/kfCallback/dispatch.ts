@@ -477,7 +477,7 @@ export async function enqueueSession(
     // true，能选中候选，DB CAS 却写不进——两套判断对同一字段的「清空」语义打架）。改用 `_.remove()`（真删
     // 键·对齐 $unset）才能让内存真值判断与 DB exists(false) 判断同一套语义。
     const _ = db.command
-    const r = await transition('csSession', id, ['closed'], 'pending', {
+    const r = await transition(COLLECTIONS.csSession, id, ['closed'], 'pending', {
       agentId: null,
       claimedAt: null,
       createdAt: now,
@@ -508,7 +508,7 @@ async function notifyOnlineAgents(db: any, sessionId: string): Promise<void> {
     // 在线也查不到 wecomUserId＝只有超管值班时推送恒为空（escalate 推送读 'auth' 同口径）。
     const docIds = ids.map((id: string) => (id === 'admin' ? 'auth' : id))
     const cfg = await db
-      .collection('adminConfig')
+      .collection(COLLECTIONS.adminConfig)
       .where({ _id: db.command.in(docIds) })
       .limit(docIds.length)
       .get()

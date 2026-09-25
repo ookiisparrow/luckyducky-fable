@@ -1,4 +1,4 @@
-import { toFen, fenToYuan, asFen, PAID_ORDER_STATUSES } from '@ldrw/shared'
+import { COLLECTIONS, toFen, fenToYuan, asFen, PAID_ORDER_STATUSES } from '@ldrw/shared'
 import type { CustomerPanelProvider } from '../types'
 
 // 画像 rollup 板块（B1.3·铁律三）：坐席看某客人的总消费/单数/激活与进课/最近活跃——从 orders/activations/events
@@ -20,9 +20,9 @@ export const profileProvider: CustomerPanelProvider = {
     // 读失败抛给编排器标 PANEL_FETCH_FAIL——空数组会被当成「真没花过钱」
     const rows = (qy: any) => qy.get().then((r: any) => (r && r.data) || [])
     const [orders, acts, lastEvt] = await Promise.all([
-      rows(db.collection('orders').where({ _openid: openid }).limit(ORDER_LIMIT)),
-      rows(db.collection('activations').where({ _openid: openid }).limit(ACT_LIMIT)),
-      rows(db.collection('events').where({ _openid: openid }).orderBy('createdAt', 'desc').limit(1)),
+      rows(db.collection(COLLECTIONS.orders).where({ _openid: openid }).limit(ORDER_LIMIT)),
+      rows(db.collection(COLLECTIONS.activations).where({ _openid: openid }).limit(ACT_LIMIT)),
+      rows(db.collection(COLLECTIONS.events).where({ _openid: openid }).orderBy('createdAt', 'desc').limit(1)),
     ])
     const paid = orders.filter((o: any) => PAID.includes(o.status))
     // 分累加再回元（深审 P3·钱链口径）：元浮点直加会漂（0.1+0.2 类），逐单 toFen 求和后 fenToYuan 一次

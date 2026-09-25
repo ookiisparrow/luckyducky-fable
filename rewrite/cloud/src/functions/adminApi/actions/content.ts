@@ -1,9 +1,10 @@
 import { reply, ensure, str, readDoc, arrOf, type Ctx } from '../lib'
 import { notifyAlert, setOrAdd, deleteFiles, err } from '../../../kit'
+import { COLLECTIONS } from '@ldrw/shared'
 
 // —— 首页内容（橱窗逐块②③：hero 文案 / 信任条 / FAQ；规格 §八）——
 export async function getHomeContent({ db }: Ctx) {
-  const got = await readDoc(db.collection('content').doc('home').get())
+  const got = await readDoc(db.collection(COLLECTIONS.content).doc('home').get())
   if (!got.ok) return reply(200, err('DOC_READ_FAIL'))
   return reply(200, { ok: true, home: got.data })
 }
@@ -61,8 +62,8 @@ export async function saveHomeContent({ db, data }: Ctx) {
     faq: arrOf(c.faq, 8).map((f: any) => ({ title: str(f?.title, 40), body: str(f?.body, 150) })),
     updatedAt: Date.now(),
   }
-  await ensure(db, 'content')
-  const coll = db.collection('content')
+  await ensure(db, COLLECTIONS.content)
+  const coll = db.collection(COLLECTIONS.content)
   await setOrAdd(coll, 'home', doc)
   return reply(200, { ok: true })
 }
@@ -145,8 +146,8 @@ export async function savePageContent({ db, data }: Ctx) {
   const page = str(data.page, 40)
   if (!PAGES.includes(page as any)) return reply(400, err('UNKNOWN_PAGE')) // 未知 page fail-closed（根因#3）
   const clean: any = PAGE_SANITIZERS[page](data.data || {})
-  await ensure(db, 'content')
-  const coll = db.collection('content')
+  await ensure(db, COLLECTIONS.content)
+  const coll = db.collection(COLLECTIONS.content)
   if (page === 'agreement') {
     // history 服务端权威追加（客户端传的一律忽略·防伪造版本史）：读旧份逐 part 比对 version，非空且变更即追
     // {part,version,at:ISO}，封顶 10（保留末 10 条·同 issueSession 剪最旧手法）。
@@ -200,7 +201,7 @@ export async function savePageContent({ db, data }: Ctx) {
 export async function getPageContent({ db, data }: Ctx) {
   const page = str(data.page, 40)
   if (!PAGES.includes(page as any)) return reply(400, err('UNKNOWN_PAGE')) // 未知 page fail-closed（根因#3）
-  const got = await readDoc(db.collection('content').doc(page).get())
+  const got = await readDoc(db.collection(COLLECTIONS.content).doc(page).get())
   if (!got.ok) return reply(200, err('DOC_READ_FAIL'))
   return reply(200, { ok: true, page, content: got.data })
 }
@@ -209,7 +210,7 @@ export async function getPageContent({ db, data }: Ctx) {
 // 小程序播放页求助面板「遇到问题了」列表即此；控制台「帮助视频」增删改 + 上传视频（复用 getVideoUploadMeta 直传）。
 // 管理端读回原始 videoFileId（已过口令闸）便于显「已传」/保存；小程序公开读经 catalog/getHelpVideos 换临时 URL（fileID 不出口）。
 export async function listHelpVideos({ db }: Ctx) {
-  const got = await readDoc(db.collection('content').doc('helpVideos').get())
+  const got = await readDoc(db.collection(COLLECTIONS.content).doc('helpVideos').get())
   if (!got.ok) return reply(200, err('DOC_READ_FAIL'))
   const d = got.data || {}
   // rev 供前端做 baseRev（乐观并发基线·同 saveCourseDraft 口径）：缺档=0
@@ -241,8 +242,8 @@ export async function saveHelpVideos({ db, data }: Ctx) {
       }
     })
     .filter((it: any) => it.title || it.segments.length)
-  await ensure(db, 'content')
-  const coll = db.collection('content')
+  await ensure(db, COLLECTIONS.content)
+  const coll = db.collection(COLLECTIONS.content)
   const prev = await readDoc(coll.doc('helpVideos').get()) // GC 基线 + 乐观并发基线：读旧份
   if (!prev.ok) return reply(200, err('DOC_READ_FAIL')) // 读失败≠空档：停写停 GC，不当 rev=0 覆盖
   // 乐观并发（批A·内容域并发安全·根因#1·同 saveCourseDraft rev/baseRev/DRAFT_CONFLICT 口径）：整档覆盖。

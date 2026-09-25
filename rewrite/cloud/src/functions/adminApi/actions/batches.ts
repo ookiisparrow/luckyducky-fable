@@ -1,6 +1,7 @@
 import { randomBytes } from 'crypto'
 import { pageQuery, err } from '../../../kit'
 import { reply, type Ctx } from '../lib'
+import { COLLECTIONS } from '@ldrw/shared'
 
 // 分页全取（债#22：避免单次拉取封顶截断——批次/码增长后旧码被挤出工作台）。
 // 按页 skip 取尽（每页 200），不足一页即止。makeQuery 每页重建，避免复用查询对象。
@@ -26,7 +27,7 @@ export async function listBatches({ db, data }: Ctx) {
   if (!courseId) return reply(400, err('NO_COURSE_ID'))
   // 无 orderBy 时服务端不保证各页同序，skip 翻页会跨页漏/重；_id 唯一，是全序。
   const { rows, truncated } = await fetchAll(() =>
-    db.collection('qrcodes').where({ courseId }).orderBy('_id', 'asc').field({ batchId: true, status: true, createdAt: true })
+    db.collection(COLLECTIONS.qrcodes).where({ courseId }).orderBy('_id', 'asc').field({ batchId: true, status: true, createdAt: true })
   )
   const map: Record<string, any> = {}
   for (const q of rows) {
@@ -70,7 +71,7 @@ export async function generateQrcodes(
   const rawCount = parseInt(count as any, 10)
   if (!cid || !Number.isInteger(rawCount) || rawCount < 1) return err('BAD_ARGS')
   const clamped = Math.min(500, rawCount)
-  const course = await db.collection('courses').doc(cid).get().catch(() => null)
+  const course = await db.collection(COLLECTIONS.courses).doc(cid).get().catch(() => null)
   if (!course || !course.data) return err(`UNKNOWN_COURSE:${cid}`)
 
   const now = Date.now()
@@ -81,7 +82,7 @@ export async function generateQrcodes(
     for (let attempt = 0; attempt < 5; attempt++) {
       const code = genCode()
       try {
-        await db.collection('qrcodes').add({
+        await db.collection(COLLECTIONS.qrcodes).add({
           data: { _id: code, code, courseId: cid, batchId, status: 'unused', activatedBy: null, activatedAt: null, createdAt: now },
         })
         codes.push(code)
@@ -108,7 +109,7 @@ export async function listBatchCodes({ db, data }: Ctx) {
   if (!batchId) return reply(400, err('NO_BATCH'))
   // 一批可有几百到几千张：默认一页 50、limit 钳到 200，cursor 翻页（根因#7）。
   // createdAt 同批同值（generate 一次 now），靠 kit 复合游标 {_id} 打破平局。
-  const paged = await pageQuery(db, 'qrcodes', { batchId }, 'createdAt', data, CODE_PAGE, 'asc')
+  const paged = await pageQuery(db, COLLECTIONS.qrcodes, { batchId }, 'createdAt', data, CODE_PAGE, 'asc')
   return reply(200, {
     ok: true,
     codes: paged.list.map((q: any) => q._id),

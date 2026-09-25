@@ -173,7 +173,7 @@ export async function claimConversation(ctx: Ctx): Promise<any> {
   const now = Date.now()
   const patch = { agentId: p.agentId, claimedAt: now, updatedAt: now }
   // pending/escalated → active（声明流转·原子幂等：并发已被接走则 moved=false）
-  const r = await transition('csSession', sessionId, ['pending', 'escalated'], 'active', patch)
+  const r = await transition(COLLECTIONS.csSession, sessionId, ['pending', 'escalated'], 'active', patch)
   if (!r.moved) return reply(200, { ok: false, error: ERR.NOT_CLAIMABLE }) // 非 pending/escalated（已 active/closed 或并发抢先）
   // 回包＝流转前文档 + 本次写入（字段全已知）：不重读——重读抛错会让已成功的认领回 500
   const claimed = { ...r.doc, ...patch, status: 'active' }
@@ -186,7 +186,7 @@ export async function releaseConversation(ctx: Ctx): Promise<any> {
   if ('deny' in g) return g.deny
   const { sessionId } = g
   const now = Date.now()
-  const r = await transition('csSession', sessionId, ['active'], 'pending', {
+  const r = await transition(COLLECTIONS.csSession, sessionId, ['active'], 'pending', {
     agentId: null, // 退回队列＝清归属（重回可认领态·activeCount 派生随 status 降）
     claimedAt: null,
     updatedAt: now,
@@ -419,11 +419,11 @@ export async function escalateToMerchant(ctx: Ctx): Promise<any> {
   const { sessionId } = g
   const now = Date.now()
   // active → escalated（保留 agentId＝记录谁升的·activeCount 派生随 status 降·商户可 claim 重接）
-  const r = await transition('csSession', sessionId, ['active'], 'escalated', { updatedAt: now })
+  const r = await transition(COLLECTIONS.csSession, sessionId, ['active'], 'escalated', { updatedAt: now })
   if (!r.moved) return reply(200, { ok: false, error: ERR.NOT_ACTIVE })
   // M⑦ 推送线·fail-soft：会话升级 → 推商户超管手机（其 wecomUserId 存 adminConfig 'auth' doc·超管在 /agent 队列可见 escalated）
   try {
-    const boss = await db.collection('adminConfig').doc('auth').get().catch(() => null)
+    const boss = await db.collection(COLLECTIONS.adminConfig).doc('auth').get().catch(() => null)
     const uid = boss && boss.data && boss.data.wecomUserId
     if (uid)
       await sendAgentCard(db, [String(uid)], {
@@ -446,7 +446,7 @@ export async function closeConversation(ctx: Ctx): Promise<any> {
   const now = Date.now()
   const wasEngaged = s.status === 'active' || s.status === 'escalated' // 真人接待过→结束时发 CSAT 提示
   // pending/active/escalated → closed（终态·声明流转·幂等：已 closed 则 moved=false）
-  const r = await transition('csSession', sessionId, ['pending', 'active', 'escalated'], 'closed', {
+  const r = await transition(COLLECTIONS.csSession, sessionId, ['pending', 'active', 'escalated'], 'closed', {
     updatedAt: now,
   })
   if (!r.moved) return reply(200, { ok: false, error: ERR.ALREADY_CLOSED })

@@ -8,7 +8,7 @@ import { COLLECTIONS } from '@ldrw/shared'
 const SCAN = 1000
 
 export async function getCsatReport({ db }: Ctx) {
-  const r = await db.collection('csat').limit(SCAN).get()
+  const r = await db.collection(COLLECTIONS.csat).limit(SCAN).get()
   const rows = (r && r.data) || []
   const dist: Record<number, number> = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 }
   let sum = 0

@@ -1,5 +1,6 @@
 import { reply, ensure, str, type Ctx } from '../lib'
 import { notifyAlert, err } from '../../../kit'
+import { COLLECTIONS } from '@ldrw/shared'
 
 // 节点诊断·关键节点定义策展（后台360工作站 B2.2·admin 侧）：管理端为某门课维护「关键节点 + 挽回办法」内容，
 // 学员在节点拍照、坐席据此 + 节点定义精准指导。一集合两形状：def 节点定义（本文件写）/ sub 用户拍照提交
@@ -14,7 +15,7 @@ export async function listCheckpoints({ db, data }: Ctx) {
   if (courseId) where.courseId = courseId
   // 元档 rev 供前端做 baseRev（乐观并发基线·课程级 CAS 元档 defmeta:<courseId>）：单课查时读该课元档 rev；
   // 无 courseId（全部课·customer360 不走此形状）时无单一元档、rev 省 0。where type:'def' 天然排除 defmeta。
-  const coll = db.collection('checkpoints')
+  const coll = db.collection(COLLECTIONS.checkpoints)
   const [r, m] = await Promise.all([
     coll.where(where).limit(DEF_SCAN).get(),
     courseId ? coll.doc('defmeta:' + courseId).get().catch(() => null) : null,
@@ -48,7 +49,7 @@ export async function saveCheckpoints({ db, data }: Ctx) {
     // 只报成功。宁拒不删：任何空 nodeId 都到不了删除步骤（同预检位置·不写半份数据）。
     if (!nodeId) return reply(400, err('BAD_ARGS:EMPTY_NODE_ID'))
   }
-  await ensure(db, 'checkpoints')
+  await ensure(db, COLLECTIONS.checkpoints)
   // 课程级元档 CAS 乐观并发（批A·内容域并发安全·根因#1/#2）：集合原本是逐节点 def 文档、无课程级档，
   // 整课覆盖式保存（逐节点 upsert + 删本课不在列表里的旧节点）＝两处并发编辑后保存者静默吃掉先保存者的
   // 整册策展。立元档 `defmeta:<courseId>`（确定性 _id·courseId 已过防冒号校验·段界安全）承 rev：客户端带
@@ -57,21 +58,21 @@ export async function saveCheckpoints({ db, data }: Ctx) {
   // 才进 upsert+GC。不带 baseRev 的旧调用跳过比对但仍走 CAS 抢占——抢失败也返 DRAFT_CONFLICT（诚实拒绝
   // 优于静默互吃；courses 的「旧版覆盖」兼容是文档级 set 无法区分并发，这里 CAS 天然可区分，取更强语义）。
   const metaId = 'defmeta:' + courseId
-  const metaGot = await db.collection('checkpoints').doc(metaId).get().catch(() => null)
+  const metaGot = await db.collection(COLLECTIONS.checkpoints).doc(metaId).get().catch(() => null)
   const curRev = metaGot && metaGot.data ? Number((metaGot.data as any).rev) || 0 : 0
   const baseRev = Number(data.baseRev)
   if (Number.isFinite(baseRev) && curRev !== baseRev) return reply(200, err('DRAFT_CONFLICT', { rev: curRev }))
   const nextRev = curRev + 1
   if (metaGot && metaGot.data) {
     const upd = await db
-      .collection('checkpoints')
+      .collection(COLLECTIONS.checkpoints)
       .where({ _id: metaId, rev: curRev })
       .update({ data: { rev: nextRev, updatedAt: Date.now() } })
       .catch(() => ({ stats: { updated: 0 } }))
     if (!upd.stats || upd.stats.updated !== 1) return reply(200, err('DRAFT_CONFLICT', { rev: curRev }))
   } else {
     const created = await db
-      .collection('checkpoints')
+      .collection(COLLECTIONS.checkpoints)
       .add({ data: { _id: metaId, type: 'defmeta', courseId, rev: nextRev, updatedAt: Date.now() } })
       .then(() => true)
       .catch(() => false)
@@ -84,7 +85,7 @@ export async function saveCheckpoints({ db, data }: Ctx) {
     const id = 'def:' + courseId + ':' + nodeId
     keepIds.add(id)
     await db
-      .collection('checkpoints')
+      .collection(COLLECTIONS.checkpoints)
       .doc(id)
       .set({
         data: {
@@ -104,7 +105,7 @@ export async function saveCheckpoints({ db, data }: Ctx) {
   // 的错觉工作，残留的旧节点定义继续被读到（可能已改名/合并，误导挽回话术）。upsert 已成功的部分保留（数据是新
   // 的、只是旧条目残留，重存一次即可收敛）；GC 失败经 notifyAlert 留痕 + 如实回 ok:false，别静默过关。
   const old = await db
-    .collection('checkpoints')
+    .collection(COLLECTIONS.checkpoints)
     .where({ type: 'def', courseId })
     .limit(DEF_SCAN)
     .get()
@@ -113,7 +114,7 @@ export async function saveCheckpoints({ db, data }: Ctx) {
   for (const d of old?.data || []) {
     if (!keepIds.has(d._id)) {
       const err = await db
-        .collection('checkpoints')
+        .collection(COLLECTIONS.checkpoints)
         .doc(d._id)
         .remove()
         .then(() => null)

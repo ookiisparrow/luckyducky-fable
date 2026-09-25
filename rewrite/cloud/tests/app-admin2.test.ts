@@ -10,7 +10,7 @@ import { getDb } from '../src/kit'
 
 const SRC = (p: string) => join(dirname(fileURLToPath(import.meta.url)), '..', 'src', p)
 const stripComments = (s: string) => s.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/gm, '')
-const ENSURE_DRAFTS = /ensure\(\s*db\s*,\s*['"]productsDraft['"]\s*\)/
+const ENSURE_DRAFTS = /ensure\(\s*db\s*,\s*(?:['"]productsDraft['"]|COLLECTIONS\.productsDraft)\s*\)/
 
 const post = (action: string, data: Record<string, unknown> = {}) =>
   adminApi({

@@ -1,9 +1,10 @@
 import { reply, ensure, str, readDoc, type Ctx } from '../lib'
 import { setOrAdd, err } from '../../../kit'
+import { COLLECTIONS } from '@ldrw/shared'
 
 // —— 二维码卡片 + 设置（规格 §六/§七 步骤⑤⑥）——
 export async function getSettings({ db }: Ctx) {
-  const got = await readDoc(db.collection('adminConfig').doc('settings').get())
+  const got = await readDoc(db.collection(COLLECTIONS.adminConfig).doc('settings').get())
   if (!got.ok) return reply(200, err('DOC_READ_FAIL'))
   // webhook 带 key，拿到整条就能往群里发消息：只回「配了没 + 尾号」供页面辨认，原值不出云端（#386）
   const { alertWebhook, ...settings } = (got.data as Record<string, any>) || {}
@@ -13,8 +14,8 @@ export async function getSettings({ db }: Ctx) {
 
 // 合并保存（非整存覆盖）：urlPrefix(步骤⑥) 与 alertWebhook/alertEvents(消息通知) 各自分别保存、互不抹除。
 export async function saveSettings({ db, data }: Ctx) {
-  await ensure(db, 'adminConfig')
-  const coll = db.collection('adminConfig')
+  await ensure(db, COLLECTIONS.adminConfig)
+  const coll = db.collection(COLLECTIONS.adminConfig)
   const got = await readDoc(coll.doc('settings').get())
   if (!got.ok) return reply(200, err('DOC_READ_FAIL')) // 读失败≠空配置：停写，不拿 {} 合并覆盖
   // 去掉 get 回来的 _id：真 sdk doc(id).set({data}) 的 data 含 _id 即 reject（_id 由 doc(id) 指定）——
@@ -38,8 +39,8 @@ export async function saveSettings({ db, data }: Ctx) {
 export async function getCard({ db, cloud, data }: Ctx) {
   const productId = String(data.productId || '')
   if (!productId) return reply(400, err('NO_PRODUCT'))
-  await ensure(db, 'cards')
-  const got = await readDoc(db.collection('cards').doc(`card-${productId}`).get())
+  await ensure(db, COLLECTIONS.cards)
+  const got = await readDoc(db.collection(COLLECTIONS.cards).doc(`card-${productId}`).get())
   if (!got.ok) return reply(200, err('DOC_READ_FAIL'))
   let card: any = got.data
   // 旧单面结构 → 双面结构（兼容已存草稿）
@@ -93,8 +94,8 @@ export async function saveCard({ db, data }: Ctx) {
     },
     updatedAt: Date.now(),
   }
-  await ensure(db, 'cards')
-  const coll = db.collection('cards')
+  await ensure(db, COLLECTIONS.cards)
+  const coll = db.collection(COLLECTIONS.cards)
   const id = `card-${doc.productId}`
   await setOrAdd(coll, id, doc)
   return reply(200, { ok: true })

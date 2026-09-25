@@ -99,6 +99,11 @@ export default [
           selector: "ObjectExpression:has(> Property[key.name='ok']) > Property[key.name='error'] > :matches(Literal, TemplateLiteral, BinaryExpression)",
           message: '失败回包改用 err(码, {...})：手写 { ok:false, error:"..." } 绕过 ErrCode 登记册检查',
         },
+        {
+          // 与上条同数组：flat config 里同名规则后写覆盖前写，另起一块会把 err() 那条冲掉
+          selector: "CallExpression[callee.property.name='collection'] > :matches(Literal, TemplateLiteral).arguments",
+          message: '集合名改用 COLLECTIONS.x（@ldrw/shared 集合名册单源）：collection(\'字面量\') 打错名不报错，新集合先登记 rewrite/shared/src/collections.ts',
+        },
       ],
     },
   },

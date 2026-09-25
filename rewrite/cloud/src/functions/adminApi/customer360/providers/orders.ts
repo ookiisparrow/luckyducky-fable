@@ -1,4 +1,5 @@
 import type { CustomerPanelProvider } from '../types'
+import { COLLECTIONS } from '@ldrw/shared'
 
 // 订单板块（B1.1 首批 provider·铁律三）：坐席查某客人最近订单（bounded·防大客户拖垮）。
 // 与 bot 侧 summarizeOrders（cs/dispatch·返文本·限 3）是同数据不同形状的两读者——Rule of Three 未到，
@@ -13,7 +14,7 @@ export const ordersProvider: CustomerPanelProvider = {
   async fetch(db: any, openid: string) {
     // 读失败抛给编排器标 PANEL_FETCH_FAIL——空数组会被当成「真没下过单」
     const r = await db
-      .collection('orders')
+      .collection(COLLECTIONS.orders)
       .where({ _openid: openid })
       .orderBy('createdAt', 'desc')
       .limit(LIMIT)

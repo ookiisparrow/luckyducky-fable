@@ -403,7 +403,7 @@ export const main = async (event: any) => {
   const capSpec = ACTION_CAPS[action]
   const needCaps: string[] = Array.isArray(capSpec) ? capSpec : capSpec ? [capSpec] : [ADMIN_DEFAULT_CAP]
   if (!caps.some((c) => c === '*' || needCaps.includes(c))) return reply(403, err('FORBIDDEN'))
-  const drafts = db.collection('productsDraft')
+  const drafts = db.collection(COLLECTIONS.productsDraft)
 
   const handler = ACTIONS[action]
   if (!handler) return reply(400, err('UNKNOWN_ACTION'))

@@ -62,7 +62,7 @@ const LIST_LIMIT = 100
 export async function listPurchases({ db, data }: Ctx) {
   const filter: Record<string, unknown> = {}
   if (data && data.status) filter.status = String(data.status)
-  const paged = await pageQuery(db, 'purchaseOrders', filter, 'createdAt', data, LIST_LIMIT)
+  const paged = await pageQuery(db, COLLECTIONS.purchaseOrders, filter, 'createdAt', data, LIST_LIMIT)
   return reply(200, { ok: true, list: paged.list, nextCursor: paged.nextCursor, hasMore: paged.hasMore })
 }
 
@@ -82,7 +82,7 @@ export async function savePurchase({ db, data, agentId }: Ctx) {
   const now = Date.now()
   const fields = { supplierId, lines: v.lines, totalFen: v.totalFen, updatedAt: now } // 白名单字段·防杂字段入库
   const purchaseId = String(data.purchaseId || '')
-  const coll = db.collection('purchaseOrders')
+  const coll = db.collection(COLLECTIONS.purchaseOrders)
   if (purchaseId) {
     // 条件更新原子锁草稿态（where 含 status——ordered/received/cancelled 单据不可改·防改已入库单账目漂移）。
     // 写异常照抛（网关 500）——写挂≠没命中草稿
@@ -103,7 +103,7 @@ export async function savePurchase({ db, data, agentId }: Ctx) {
 export async function markOrdered({ data }: Ctx) {
   const id = String(data.purchaseId || '')
   if (!id) return reply(400, err('BAD_ID'))
-  const r = await transition('purchaseOrders', id, fromFor('ordered'), 'ordered', { orderedAt: Date.now(), updatedAt: Date.now() })
+  const r = await transition(COLLECTIONS.purchaseOrders, id, fromFor('ordered'), 'ordered', { orderedAt: Date.now(), updatedAt: Date.now() })
   if (!r.doc) return reply(404, err('NO_PURCHASE'))
   if (!r.moved && r.doc.status !== 'ordered') return reply(409, err('BAD_STATUS', { current: r.doc.status }))
   return reply(200, { ok: true, moved: r.moved })
@@ -112,7 +112,7 @@ export async function markOrdered({ data }: Ctx) {
 export async function receivePurchase({ db, data, agentId }: Ctx) {
   const id = String(data.purchaseId || '')
   if (!id) return reply(400, err('BAD_ID'))
-  const r = await transition('purchaseOrders', id, fromFor('received'), 'received', { receivedAt: Date.now(), updatedAt: Date.now() })
+  const r = await transition(COLLECTIONS.purchaseOrders, id, fromFor('received'), 'received', { receivedAt: Date.now(), updatedAt: Date.now() })
   if (!r.doc) return reply(404, err('NO_PURCHASE'))
   if (!r.moved) {
     // 重放天然幂等：已 received 直接返回（入库副作用绑首次流转·不双入库）；draft 直收/已取消＝非法流转拒
@@ -135,7 +135,7 @@ export async function receivePurchase({ db, data, agentId }: Ctx) {
     // 复原本身若不成功须告警，否则单据卡死在假 received、无信号可查。
     // structure-ok（rw-status-transitions-declared）：技术性失败补偿,非业务逆向流转,理由见上。
     const rollback = await db
-      .collection('purchaseOrders')
+      .collection(COLLECTIONS.purchaseOrders)
       .where({ _id: id, status: 'received' })
       .update({ data: { status: 'ordered', receivedAt: null, updatedAt: Date.now() } })
       .catch(() => ({ stats: { updated: 0 } }))
@@ -155,7 +155,7 @@ export async function receivePurchase({ db, data, agentId }: Ctx) {
 export async function cancelPurchase({ data }: Ctx) {
   const id = String(data.purchaseId || '')
   if (!id) return reply(400, err('BAD_ID'))
-  const r = await transition('purchaseOrders', id, fromFor('cancelled'), 'cancelled', { cancelledAt: Date.now(), updatedAt: Date.now() })
+  const r = await transition(COLLECTIONS.purchaseOrders, id, fromFor('cancelled'), 'cancelled', { cancelledAt: Date.now(), updatedAt: Date.now() })
   if (!r.doc) return reply(404, err('NO_PURCHASE'))
   // received 后不可取消（状态机声明表无 received→cancelled 边·天然拒）——入库后的账走调整单
   if (!r.moved && r.doc.status !== 'cancelled') return reply(409, err('BAD_STATUS', { current: r.doc.status }))

@@ -1,4 +1,4 @@
-import { isValidPriceYuan, isValidScmProductId, isValidScmSpec } from '@ldrw/shared'
+import { COLLECTIONS, isValidPriceYuan, isValidScmProductId, isValidScmSpec } from '@ldrw/shared'
 import { reply, cleanProduct, cleanSold, storeImage, readDoc, ensure, type Ctx } from '../lib'
 import { notifyAlert, getTempUrls, setOrAdd, isCollectionMissing, deleteFiles, err } from '../../../kit'
 
@@ -55,7 +55,7 @@ async function listedImageUrls(fileIds: Iterable<string>): Promise<Record<string
 }
 
 export async function listDrafts({ db, drafts }: Ctx) {
-  await ensure(db, 'productsDraft') // 草稿集合只在草稿动作用前建，不跟全局网关（进销存/体检等不顺手建）
+  await ensure(db, COLLECTIONS.productsDraft) // 草稿集合只在草稿动作用前建，不跟全局网关（进销存/体检等不顺手建）
   const res = await drafts.orderBy('createdAt', 'desc').limit(100).get()
   // 上架/下架状态映射（S11·债#12 软下架显形）：listed 标记在 products、不在草稿，控制台靠它分
   // 「在售（onsale+listed≠false）/ 已下架（onsale+listed:false）/ 筹备中（未上架·无 products 文档）」。
@@ -77,17 +77,17 @@ export async function listDrafts({ db, drafts }: Ctx) {
     // 已完成步画成未做。草稿课集合可能尚未建，只把「集合不存在」当空表。
     const [u, pr, cr, cor, cdr, br] = await Promise.all([
       listedImageUrls(collectImgs(res.data).all),
-      db.collection('products').where({ _id: _.in(draftIds) }).field({ listed: true }).get(),
-      db.collection('cards').where({ _id: _.in(cardIds) }).get(),
-      db.collection('courses').where({ _id: _.in(courseIds) }).get(),
+      db.collection(COLLECTIONS.products).where({ _id: _.in(draftIds) }).field({ listed: true }).get(),
+      db.collection(COLLECTIONS.cards).where({ _id: _.in(cardIds) }).get(),
+      db.collection(COLLECTIONS.courses).where({ _id: _.in(courseIds) }).get(),
       // 草稿课也算「有视频文件」——进度圆点要能区分「有文件」vs「课已发布」（#213）
-      db.collection('coursesDraft').where({ _id: _.in(courseIds) }).get().catch((e: unknown) => {
+      db.collection(COLLECTIONS.coursesDraft).where({ _id: _.in(courseIds) }).get().catch((e: unknown) => {
         if (isCollectionMissing(e)) return { data: [] as any[] }
         throw e
       }),
       // aggregate group：只回「有 qrcode 的 courseId」一行/课·不逐码扫（capacity·根因#7）；
       // 显式 limit：聚合不写 limit 平台只回 20 条，课多于 20 门时批次步会被截成未做
-      db.collection('qrcodes').aggregate().match({ courseId: _.in(courseIds) }).group({ _id: '$courseId' }).limit(courseIds.length).end(),
+      db.collection(COLLECTIONS.qrcodes).aggregate().match({ courseId: _.in(courseIds) }).group({ _id: '$courseId' }).limit(courseIds.length).end(),
     ])
     urls = u
     for (const p of pr.data) listed[p._id] = p.listed !== false
@@ -116,13 +116,13 @@ export async function listDrafts({ db, drafts }: Ctx) {
 export async function saveDraft({ db, drafts, data }: Ctx) {
   const p = cleanProduct(data.product)
   if (!p) return reply(400, err('BAD_PRODUCT'))
-  await ensure(db, 'productsDraft') // 草稿集合只在草稿动作用前建，不跟全局网关（进销存/体检等不顺手建）
+  await ensure(db, COLLECTIONS.productsDraft) // 草稿集合只在草稿动作用前建，不跟全局网关（进销存/体检等不顺手建）
   // 换图缓期 GC（批B·规则4）：整份覆盖前先取旧草稿+发布档，算被撤且非 cover 的孤儿图，缓期入 drafts.pendingGc
   // （单队列之家=草稿档）；不立删——admin listDrafts/mp 详情给这些图签过临时址，同步删=在场会话见 404。
   // pendingGc 是服务端衍生字段（cleanProduct 白名单不含它·客户端注入不了）：从旧草稿读、覆盖时带回。
   const [prevDraftR, pubR] = await Promise.all([
     readDoc(drafts.doc(p.id).get()),
-    readDoc(db.collection('products').doc(p.id).get()),
+    readDoc(db.collection(COLLECTIONS.products).doc(p.id).get()),
   ])
   if (!prevDraftR.ok || !pubR.ok) return reply(200, err('DOC_READ_FAIL'))
   const prevDraft = prevDraftR.data
@@ -161,12 +161,12 @@ export async function saveDraft({ db, drafts, data }: Ctx) {
 export async function deleteDraft({ db, drafts, data }: Ctx) {
   const id = String(data.id || '')
   if (!id) return reply(400, err('NO_ID'))
-  await ensure(db, 'productsDraft') // 草稿集合只在草稿动作用前建，不跟全局网关（进销存/体检等不顺手建）
+  await ensure(db, COLLECTIONS.productsDraft) // 草稿集合只在草稿动作用前建，不跟全局网关（进销存/体检等不顺手建）
   // 图册立即删（批B·规则5 例外）：两档文档一并删除后 pendingGc 无处安身、商品已不存在（在场详情会话本已死），
   // 立即删可接受。先读两档收 fileID（删档后无从取），cover 位仍豁免（订单快照·规则1）。走 diffOrphans 同源
   // 的 collectImgs：只认 cover/images 字段的 cloud:// fileID，绝不列文件夹（防误删共居的卡片/首页/目录图）。
   // 读失败≠无档：发布档读空会让它的 cover 失去豁免被删，草稿读空会让 pendingGc 随删档永久泄漏——停手不删。
-  const [dr, pr] = await Promise.all([readDoc(drafts.doc(id).get()), readDoc(db.collection('products').doc(id).get())])
+  const [dr, pr] = await Promise.all([readDoc(drafts.doc(id).get()), readDoc(db.collection(COLLECTIONS.products).doc(id).get())])
   if (!dr.ok || !pr.ok) return reply(200, err('DOC_READ_FAIL'))
   const draftDoc = dr.data
   const pubDoc = pr.data
@@ -180,7 +180,7 @@ export async function deleteDraft({ db, drafts, data }: Ctx) {
     .filter(Boolean)
   const orphans = [...new Set([...all, ...queued])].filter((u) => !covers.has(u)) // cover 永不删（规则1）
   const prodErr = await db
-    .collection('products')
+    .collection(COLLECTIONS.products)
     .doc(id)
     .remove()
     .then(() => null)
@@ -223,7 +223,7 @@ export async function uploadImage({ cloud, data }: Ctx) {
 export async function publishProduct({ db, drafts, data }: Ctx) {
   const id = String(data.id || '')
   if (!id) return reply(400, err('NO_ID'))
-  await ensure(db, 'productsDraft') // 草稿集合只在草稿动作用前建，不跟全局网关（进销存/体检等不顺手建）
+  await ensure(db, COLLECTIONS.productsDraft) // 草稿集合只在草稿动作用前建，不跟全局网关（进销存/体检等不顺手建）
   const got = await readDoc(drafts.doc(id).get())
   if (!got.ok) return reply(200, err('DOC_READ_FAIL'))
   if (!got.data) return reply(400, err('NO_DRAFT'))
@@ -238,7 +238,7 @@ export async function publishProduct({ db, drafts, data }: Ctx) {
   ) {
     return reply(400, err('NEED_SKUS'))
   }
-  const productsColl = db.collection('products')
+  const productsColl = db.collection(COLLECTIONS.products)
   const exist = await readDoc(productsColl.doc(id).get())
   if (!exist.ok) return reply(200, err('DOC_READ_FAIL'))
   let sort = exist.data?.sort
@@ -293,7 +293,7 @@ async function setListed({ db, data }: Ctx, listed: boolean) {
   const id = String(data.id || '')
   if (!id) return reply(400, err('NO_ID'))
   const upd = await db
-    .collection('products')
+    .collection(COLLECTIONS.products)
     .doc(id)
     .update({ data: { listed, unlistedAt: listed ? null : Date.now() } })
     .catch(() => null)
@@ -305,7 +305,7 @@ export const republishProduct = (ctx: Ctx) => setListed(ctx, true)
 
 // —— 小程序橱窗（规格 §八）：一比一首页预览的排序与上下架 ——
 export async function listShowcase({ db }: Ctx) {
-  const res = await db.collection('products').orderBy('sort', 'asc').limit(100).get()
+  const res = await db.collection(COLLECTIONS.products).orderBy('sort', 'asc').limit(100).get()
   const ids = res.data.map((p: any) => p.cover).filter((u: any) => u && u.startsWith('cloud://'))
   const urls = await listedImageUrls(ids)
   return reply(200, { ok: true, list: res.data, urls })
@@ -314,7 +314,7 @@ export async function listShowcase({ db }: Ctx) {
 export async function saveShowcase({ db, data }: Ctx) {
   const items = Array.isArray(data.items) ? data.items.slice(0, 100) : []
   if (!items.length) return reply(400, err('NO_ITEMS'))
-  const productsColl = db.collection('products')
+  const productsColl = db.collection(COLLECTIONS.products)
   let failed = 0 // 逐条失败计数（P2·bug sweep Round2 item16·根因#14）：原 .catch(()=>{}) 静默吞错，无论成败前端
   // 永远收到 ok:true——「已保存」是假象。改计数后任一失败即回 ok:false，不再误导消费方（admin Showcase.vue
   // 已按 r.ok 通用判断成败，无需改消费方）。

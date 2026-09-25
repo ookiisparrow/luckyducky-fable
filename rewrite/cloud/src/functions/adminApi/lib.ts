@@ -1,6 +1,6 @@
 import crypto from 'crypto'
 import { str, notifyAlert, isDocMissing, isEmptyDoc, isCollectionMissing, err } from '../../kit'
-import { PAID_ORDER_STATUSES } from '@ldrw/shared'
+import { COLLECTIONS, PAID_ORDER_STATUSES, type CollectionName } from '@ldrw/shared'
 export { str } // 供 action 模块复用（saveCard / saveHomeContent 等截断）
 
 // 账号有界扫描命中上限告警（P2 评审·根因#7 分页协议纪律的账号扫描版）：keyHash 加盐后多账号查找从
@@ -60,7 +60,7 @@ export function keyMatches(row: any, key: string): boolean {
   return row.keySalt ? kdf(key, row.keySalt) === row.keyHash : sha(key) === row.keyHash
 }
 
-export async function ensure(db: any, coll: string) {
+export async function ensure(db: any, coll: CollectionName) {
   try {
     await db.createCollection(coll)
   } catch {
@@ -88,12 +88,12 @@ export async function readDoc(p: Promise<any>): Promise<{ ok: true; data: any | 
 // 查 activations（activateCourse 写的 {_openid, courseId, enteredAt}）。
 export async function activationFor(db: any, openid: string, productId: string) {
   const pid = String(productId || '')
-  const prod = await readDoc(db.collection('products').doc(pid).get())
+  const prod = await readDoc(db.collection(COLLECTIONS.products).doc(pid).get())
   if (!prod.ok) throw new Error('PRODUCT_READ_FAIL') // 读失败不回退默认课程：会查错课，把已进课报成未激活
   const courseId = (prod.data && prod.data.courseId) || 'course-' + pid
   const acts = openid
     ? await db
-        .collection('activations')
+        .collection(COLLECTIONS.activations)
         .where({ _openid: openid, courseId })
         .limit(1)
         .get()
@@ -144,11 +144,11 @@ export async function getTxAlerts(
         return []
       })
   const [feeMismatch, refundMismatch, stuckRefunds] = await Promise.all([
-    rows(db.collection('orders').where({ feeMismatch: true }).field({ id: true })),
-    rows(db.collection('afterSales').where({ refundMismatch: true }).field({ _id: true })),
+    rows(db.collection(COLLECTIONS.orders).where({ feeMismatch: true }).field({ id: true })),
+    rows(db.collection(COLLECTIONS.afterSales).where({ refundMismatch: true }).field({ _id: true })),
     rows(
       db
-        .collection('afterSales')
+        .collection(COLLECTIONS.afterSales)
         .where({ status: 'approved', approvedAt: _.lt(Date.now() - HOUR) })
         .field({ _id: true })
     ),
@@ -204,7 +204,7 @@ const SESSION_MAX = 8 // 单账号并存会话上限（多设备够用·防 sess
 export async function issueSession(db: any, docId: string, via: 'pwd' | 'wecom', wecomUserId = ''): Promise<string> {
   const token = crypto.randomBytes(32).toString('hex')
   const now = Date.now()
-  const got = await readDoc(db.collection('adminConfig').doc(docId).get())
+  const got = await readDoc(db.collection(COLLECTIONS.adminConfig).doc(docId).get())
   if (!got.ok) throw new Error('SESSION_READ_FAIL') // 读失败不当空基线：下面整组覆盖会踢掉别的设备
   const prev: any[] = (got.data && Array.isArray(got.data.sessions) ? got.data.sessions : [])
     .filter((s: any) => s && typeof s.exp === 'number' && s.exp > now) // 剪过期
@@ -215,7 +215,7 @@ export async function issueSession(db: any, docId: string, via: 'pwd' | 'wecom',
   // 条件写：整组写回会把读到的旧令牌一并写回。停号（disabled:true + 清 sessions）若落在读与写之间，
   // 无条件写回就复活旧令牌；带 disabled≠true 条件，停号前后哪种顺序都写不进。
   const r = await db
-    .collection('adminConfig')
+    .collection(COLLECTIONS.adminConfig)
     .where({ _id: docId, disabled: db.command.neq(true) })
     .update({ data: { sessions, updatedAt: now } })
   if (!r || !r.stats || r.stats.updated !== 1) throw new Error('SESSION_WRITE_FAIL')
@@ -227,7 +227,7 @@ export async function issueSession(db: any, docId: string, via: 'pwd' | 'wecom',
 async function sessionOwner(db: any, hash: string): Promise<{ ok: false } | { ok: true; acct: any }> {
   const _ = db.command
   const s = await db
-    .collection('adminConfig')
+    .collection(COLLECTIONS.adminConfig)
     .where({ sessions: _.exists(true) })
     .limit(50)
     .get()
@@ -267,7 +267,7 @@ export async function revokeSession(db: any, token: string): Promise<boolean> {
   if (!got.acct) return true
   const sessions = got.acct.sessions.filter((x: any) => !(x && x.hash === hash))
   return db
-    .collection('adminConfig')
+    .collection(COLLECTIONS.adminConfig)
     .doc(got.acct._id)
     .update({ data: { sessions, updatedAt: Date.now() } })
     .then(
@@ -287,17 +287,17 @@ export async function checkKey(db: any, key: any, login: boolean) {
     const s = await resolveSession(db, sha(keyStr))
     if (s.ok || s.error !== 'BAD_KEY') return s
   }
-  const got = await readDoc(db.collection('adminConfig').doc('auth').get())
+  const got = await readDoc(db.collection(COLLECTIONS.adminConfig).doc('auth').get())
   if (!got.ok) return err('AUTH_UNAVAILABLE') // 库故障≠查无此号：不当错口令记爆破
   if (!got.data) {
     // 首登 bootstrap（债#15 关抢占）：无超管 doc 时·须 login + 部署密钥 ADMIN_BOOTSTRAP_KEY → 建首个超管。
     // 批6：bootstrap 建号即带盐（新写入一律 salt+scrypt·不再落无盐 sha）。
     const secret = process.env.ADMIN_BOOTSTRAP_KEY || ''
     if (!login || !secret || keyStr !== secret) return err('BAD_KEY')
-    await ensure(db, 'adminConfig') // 只有这条首登写入需要集合在；读路径集合未建即当空（readDoc）
+    await ensure(db, COLLECTIONS.adminConfig) // 只有这条首登写入需要集合在；读路径集合未建即当空（readDoc）
     const salt = newSalt()
     await db
-      .collection('adminConfig')
+      .collection(COLLECTIONS.adminConfig)
       .add({
         data: {
           _id: 'auth',
@@ -322,7 +322,7 @@ export async function checkKey(db: any, key: any, login: boolean) {
     // ② 多账号：有界扫描按盐感知比对查外包/坐席账号。最坏 ≤50 行 scrypt 比对，登录端点已有频控、可接受。
     const _ = db.command
     const scan = await db
-      .collection('adminConfig')
+      .collection(COLLECTIONS.adminConfig)
       .where({ keyHash: _.exists(true) })
       .limit(50)
       .get()
@@ -337,7 +337,7 @@ export async function checkKey(db: any, key: any, login: boolean) {
   if (!acct.keySalt) {
     const salt = newSalt()
     await db
-      .collection('adminConfig')
+      .collection(COLLECTIONS.adminConfig)
       .doc(acct._id)
       .update({ data: { keySalt: salt, keyHash: kdf(keyStr, salt) } })
       .catch(() => {})

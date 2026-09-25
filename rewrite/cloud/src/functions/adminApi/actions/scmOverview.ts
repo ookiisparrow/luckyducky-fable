@@ -19,10 +19,10 @@ const RECENT_LEDGER_N = 8
 export async function getScmOverview({ db }: Ctx) {
   const [materials, payRes, payCountRes, orderedCountRes, issuedCountRes, recentLedgerRows, supRes] = await Promise.all([
     listMaterialDocs(), // 门1 只读出口·主档量小·内部已 bounded 500
-    db.collection('outworkOrders').where({ status: OUTWORK_ORDER_STATUS.DELIVERED }).limit(PAYABLE_SCAN_CAP).get(),
-    db.collection('outworkOrders').where({ status: OUTWORK_ORDER_STATUS.DELIVERED }).count(),
-    db.collection('purchaseOrders').where({ status: PURCHASE_ORDER_STATUS.ORDERED }).count(),
-    db.collection('outworkOrders').where({ status: OUTWORK_ORDER_STATUS.ISSUED }).count(),
+    db.collection(COLLECTIONS.outworkOrders).where({ status: OUTWORK_ORDER_STATUS.DELIVERED }).limit(PAYABLE_SCAN_CAP).get(),
+    db.collection(COLLECTIONS.outworkOrders).where({ status: OUTWORK_ORDER_STATUS.DELIVERED }).count(),
+    db.collection(COLLECTIONS.purchaseOrders).where({ status: PURCHASE_ORDER_STATUS.ORDERED }).count(),
+    db.collection(COLLECTIONS.outworkOrders).where({ status: OUTWORK_ORDER_STATUS.ISSUED }).count(),
     recentStockLedger(RECENT_LEDGER_N), // 门1 只读出口（批K：原直碰 stockLedger 集合，绕过 SCM 门1）
     db.collection(COLLECTIONS.suppliers).limit(PAYABLE_SCAN_CAP).get(),
   ])
