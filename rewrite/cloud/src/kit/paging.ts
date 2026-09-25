@@ -43,6 +43,8 @@ function isCompoundCursor(c: unknown): c is CompoundCursor {
  * `limit+1` 后内存合并：tie 段（`cursorField===v` 且 `_id<id`，按 `_id desc`）与 lt 段
  * （`cursorField<v`，已按 `cursorField desc,_id desc` 排好）互斥且 tie 段值天然「更大」，
  * 合并顺序＝tie 段在前、lt 段在后，再统一裁到 `limit+1`，与「单条复合条件」语义等价。
+ * 排序字段就是 `_id` 时不走这两条：v 和 id 是同一列，对象字面量里两个 `_id` 键会互相覆盖，
+ * 拼起来不去重，尾页 hasMore 会报错。这种情况只发一条 `beyond(_id)`。
  */
 export async function pageQuery(
   db: any,
@@ -59,7 +61,11 @@ export async function pageQuery(
   const _ = db.command
   const beyond = (v: unknown) => (asc ? _.gt(v) : _.lt(v)) // asc 续页取「更大」、desc 续页取「更小」——同一比较方向套用在 tie 段（_id）与 span 段（cursorField）
   let rows: any[]
-  if (isCompoundCursor(cursor)) {
+  if (isCompoundCursor(cursor) && cursorField === '_id') {
+    // 值与 id 同一列，单条 beyond(_id)；双查询同名键会互相覆盖（见上）。
+    const res = await db.collection(collName).where({ ...filter, _id: beyond(cursor.id) }).orderBy('_id', order).limit(limit + 1).get()
+    rows = (res && res.data) || []
+  } else if (isCompoundCursor(cursor)) {
     const [tieRes, spanRes] = await Promise.all([
       db.collection(collName).where({ ...filter, [cursorField]: cursor.v, _id: beyond(cursor.id) }).orderBy('_id', order).limit(limit + 1).get(),
       db.collection(collName).where({ ...filter, [cursorField]: beyond(cursor.v) }).orderBy(cursorField, order).orderBy('_id', order).limit(limit + 1).get(),
