@@ -1,7 +1,7 @@
 import { COLLECTIONS, toFen } from '@ldrw/shared'
 import { fetchTradeBill, normalizePem, type BillRow, type WxFetch } from './wxpay'
 import { getSecureConfigFields } from './secureConfig'
-import { getDocOrNull } from './ids'
+import { getDocOrNull } from './db'
 
 /** 库/API 金额（元，number 或数字串）→ 元 number。字符串绝不走 `+`。 */
 export function toYuanAmount(v: unknown): number {

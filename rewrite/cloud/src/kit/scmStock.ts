@@ -1,7 +1,5 @@
-import { getDb } from './db'
+import { getDb, isDocMissing, isEmptyDoc, getDocOrNull } from './db'
 import { notifyAlert } from './observe'
-import { isDocMissing, isEmptyDoc } from './inventory'
-import { getDocOrNull } from './ids'
 import { pageQuery, type PageReq, type Paged } from './paging'
 import { COLLECTIONS, ERR } from '@ldrw/shared'
 

@@ -2,9 +2,6 @@ import { COLLECTIONS, ERR } from '@ldrw/shared'
 import { getDb, isDocMissing, isEmptyDoc } from './db'
 import { notifyAlert } from './observe'
 
-// 过渡：scmStock / secureConfig 还从本文件引这两个判定，它们改成从 './db' 引之后删掉这一行。
-export { isDocMissing, isEmptyDoc } from './db'
-
 // 实物库存原子原语（设计约束#1「下单即预留+乐观 CAS 防超卖」·黄金 inventory-scm §A/§B/§C）。
 // SKU 库存独立集合 inventory，确定性 _id=`${productId}__${spec}`（与 order.items[].spec 同键，回补一致）。
 // 不限量：无文档或 stock=null＝不限量（缺货前不阻断下单·安全迁移）。

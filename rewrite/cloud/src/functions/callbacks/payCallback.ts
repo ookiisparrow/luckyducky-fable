@@ -40,11 +40,13 @@ export async function reserveWithRetry(
 // 回调里的收款字段（v3 amount.* 与旧 v2 字段兼容）。金额单位都是分。
 // 核对用订单总额 total（微信原单金额）：payer_total 是扣掉微信/银行立减后的用户实付，
 // 拿它核对会把用了优惠的正常单判成少付；它只存 payerTotal 备查。
+// paidFee 保留 NaN：它要参与核对（NaN 必判不符）；落库前各分支自己归一。payerTotal 不参与核对，
+// 在源头把非数归成 null，免得 paid / refund_required 各分支把 NaN 写进库。
 function paidFieldsOf(e: any) {
   const paidFee = e.amount && e.amount.total != null ? Number(e.amount.total) : Number(e.totalFee)
   const payerTotal = e.amount && e.amount.payer_total != null ? Number(e.amount.payer_total) : null
   const transactionId = String(e.transaction_id || e.transactionId || '')
-  return { paidFee, payerTotal, transactionId }
+  return { paidFee, payerTotal: Number.isFinite(payerTotal) ? payerTotal : null, transactionId }
 }
 
 export const main = defineNotifyCallback<any>({

@@ -442,7 +442,7 @@
     "getDashboard": {
       "action": "getDashboard",
       "keys": {
-        "": ["approx", "funnel", "hot", "ok", "recentActivity", "stats", "stuck", "txAlerts"],
+        "": ["approx", "funnel", "hot", "ok", "recentActivity", "stats", "stuck", "toShip", "txAlerts"],
         "stats": ["codesActivated", "codesTotal", "gmv", "learners", "orders", "users"],
         "approx": ["gmv", "hot", "sampleSize", "stuck"],
         "funnel": ["activated", "ordered", "paid"],
@@ -474,6 +474,7 @@
           "paid": 3,
           "activated": 0
         },
+        "toShip": 0,
         "txAlerts": {
           "feeMismatch": ["2026070112000003"],
           "refundMismatch": [],

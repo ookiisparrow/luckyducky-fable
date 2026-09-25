@@ -89,8 +89,7 @@ const REQ: Record<string, () => Record<string, unknown>> = {
 beforeAll(async () => {
   vi.useFakeTimers({ toFake: ['Date'] })
   vi.setSystemTime(new Date(DAY + 'T04:00:00Z'))
-  // 4 单同 openid 同一冻结分钟，单号只剩随机尾 4 位可区分：撞号时 placeOrder 读回同主人旧单当成功返回，
-  // W.B 会等于 W.A（约 1/1500 次跑一次）。换成逐次递增的序列让单号必不同。
+  // 4 单同 openid 同一冻结分钟，单号只剩随机尾 4 位可区分；撞号会多走一轮换号，逐次递增的序列让单号一次取成、可复现。
   let seq = 0
   vi.spyOn(Math, 'random').mockImplementation(() => (++seq % 9000) / 9000)
   control.reset()

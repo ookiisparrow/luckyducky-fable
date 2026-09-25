@@ -1,6 +1,5 @@
 import { COLLECTIONS } from '@ldrw/shared'
-import { isCollectionMissing } from './db'
-import { isDocMissing } from './inventory'
+import { isCollectionMissing, isDocMissing } from './db'
 
 /**
  * 敏感凭证单源读取（根因#9·决策 2026-07-12：由「云函数环境变量改了要重新部署」升级为

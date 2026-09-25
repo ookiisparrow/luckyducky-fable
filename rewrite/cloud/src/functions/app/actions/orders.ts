@@ -200,8 +200,10 @@ async function placeOrder(db: any, OPENID: string, claimId: string, order: Omit<
     } catch {
       // 写失败区分（深审 P2·根因#3 幂等）：add 抛错既可能是 _id 撞号（换号重试），也可能是「写已持久化但
       // SDK 返回超时/网络错」——后者若换号重试会落两张共享同一 reserved 的单（各自关单/取消时 restoreStock
-      // 双记＝库存虚增/超卖）。先读回本次 _id：存在且属本人＝本次写其实成功，直接返回该单（幂等）；确不存在
-      // 才是真撞号/真失败，换号重试（同 overrideRefund refunds.ts 的读回判定范式，不嗅探 add 的错误类型）。
+      // 双记＝库存虚增/超卖）。先读回本次 _id：属本人且 createdAt 与本次相同＝本次写其实成功，直接返回该单（幂等）；
+      // 否则是真撞号（含本人同一分钟的旧单撞了尾号——当成功会让用户去付旧单、本单预留无单可回补），换号重试
+      // （同 overrideRefund refunds.ts 的读回判定范式，不嗅探 add 的错误类型）。
+      // ponytail: createdAt 精确到毫秒，同一人两次请求同一毫秒且撞尾号才会误判；要根除得给订单写一次性写入标记。
       // 读回本身失败＝不知道这单落没落：换号可能落共享 reserved 的第二单，回补可能还掉在途单的预留，
       // 两样都不做；幂等键也留着（同键重试只会报 PENDING，不建二单），告警交人工核。
       let back: OrderDoc | null = null
@@ -213,7 +215,7 @@ async function placeOrder(db: any, OPENID: string, claimId: string, order: Omit<
           return err(ERR.ORDER_CLAIM_PENDING)
         }
       }
-      if (back && back._openid === OPENID) return ok({ order: { ...order, _id: id, id } })
+      if (back && back._openid === OPENID && back.createdAt === order.createdAt) return ok({ order: { ...order, _id: id, id } })
     }
   }
   await restoreStock(order.reserved) // 建单彻底失败：预留还回去（不锁死库存）

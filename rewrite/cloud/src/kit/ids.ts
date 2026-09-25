@@ -1,8 +1,5 @@
 import { getDb } from './db'
 
-// 过渡：scmStock / reconcile 还从本文件引 getDocOrNull，它们改成从 './db' 引之后删掉这一行。
-export { getDocOrNull } from './db'
-
 /**
  * 确定性 _id 幂等建档（设计约束#1：确定性主键——撞键＝并发方已写＝天然幂等）。
  * 以传入 id 建档；撞号（并发/重试已建）→ 吞掉、读回，绝不产生第二条。
