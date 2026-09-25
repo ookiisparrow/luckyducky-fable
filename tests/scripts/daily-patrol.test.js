@@ -18,7 +18,7 @@ function executable(path, body) {
   chmodSync(path, 0o755)
 }
 
-function runPatrol({ backup, ageHours = 0, audit = 0 } = {}) {
+function runPatrol({ backup, ageHours = 0, audit = 0, env = {} } = {}) {
   const root = mkdtempSync(join(tmpdir(), 'daily-patrol-test-'))
   sandboxes.push(root)
   mkdirSync(join(root, 'scripts'), { recursive: true })
@@ -56,7 +56,7 @@ echo '{"metadata":{"vulnerabilities":{"high":${audit},"critical":0}}}'
   const result = spawnSync('sh', ['scripts/daily-patrol.sh'], {
     cwd: root,
     encoding: 'utf8',
-    env: { ...process.env, PATH: `${bin}:${process.env.PATH}` },
+    env: { ...process.env, ...env, PATH: `${bin}:${process.env.PATH}` },
   })
   return { status: result.status, output: result.stdout + result.stderr }
 }
@@ -98,6 +98,14 @@ describe('daily patrol audit baseline', () => {
     const result = runPatrol({ backup: 'backup.json', ageHours: 1, audit: 8 })
     expect(result.status).toBe(1)
     expect(result.output).toContain('🔴 high+critical 共 8 条（超过接受基线 7）')
+  })
+
+  it('counts audit findings and open issues even when the shell forces colored output', () => {
+    // FORCE_COLOR 下 node 的 console.log(数字) 会带 ANSI 色码，计数被当成「读不到」静默跳过
+    const result = runPatrol({ backup: 'backup.json', ageHours: 1, audit: 8, env: { FORCE_COLOR: '1' } })
+    expect(result.status).toBe(1)
+    expect(result.output).toContain('🔴 high+critical 共 8 条（超过接受基线 7）')
+    expect(result.output).toContain('开着的 Issue：0 个')
   })
 
   it('points at the red lines above instead of printing a bare exit status', () => {

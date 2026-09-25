@@ -63,14 +63,15 @@ try {
 ' .db-backups.local || FAIL=1
 
 note "⑤ GitHub Issues 卫生"
-OPEN=$(gh issue list --state open --limit 200 --json number 2>/dev/null | node -e "let d='';process.stdin.on('data',c=>d+=c).on('end',()=>console.log(JSON.parse(d||'[]').length))")
+# 下面两处计数都用 String() 输出：FORCE_COLOR 环境里 console.log(数字) 会带色码，case 判成非数字就被静默跳过
+OPEN=$(gh issue list --state open --limit 200 --json number 2>/dev/null | node -e "let d='';process.stdin.on('data',c=>d+=c).on('end',()=>console.log(String(JSON.parse(d||'[]').length)))")
 case "$OPEN" in
   ''|*[!0-9]*) echo "🟡 gh 不可用（离线？），跳过";;
   *) echo "开着的 Issue：${OPEN} 个（>50 需清淤）"; [ "$OPEN" -gt 50 ] && FAIL=1;;
 esac
 
 note "⑥ npm audit 高危计数"
-AUDIT=$(npm audit --json 2>/dev/null | node -e "let d='';process.stdin.on('data',c=>d+=c).on('end',()=>{try{const v=JSON.parse(d).metadata.vulnerabilities;console.log((v.high||0)+(v.critical||0))}catch{console.log('?')}})")
+AUDIT=$(npm audit --json 2>/dev/null | node -e "let d='';process.stdin.on('data',c=>d+=c).on('end',()=>{try{const v=JSON.parse(d).metadata.vulnerabilities;console.log(String((v.high||0)+(v.critical||0)))}catch{console.log('?')}})")
 case "$AUDIT" in
   ''|*[!0-9]*) echo "🟡 audit 读不到，跳过";;
   *) if [ "$AUDIT" -eq 0 ]; then
