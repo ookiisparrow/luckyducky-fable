@@ -16,6 +16,7 @@ import {
   SHIP,
   ORDER_STATUS,
   buildBadStatus,
+  cstIso,
 } from '@ldrw/shared'
 // 响应契约（批B10·病根#5/#8）：返回类型绑定 shared 契约——删键/改名 tsc 红；加键编译锁无牙
 // （可选键也能多写），牙在 tests/contract-shape.test.ts 键集合哨兵。
@@ -100,7 +101,7 @@ async function swapOrdersCover(orders: any[]): Promise<any[]> {
 
 // 订单号：yyyyMMddHHmm + 4 位随机（北京时间）
 const orderNo = (now: number): string =>
-  new Date(now + 8 * 3600 * 1000).toISOString().replace(/\D/g, '').slice(0, 12) +
+  cstIso(now).replace(/\D/g, '').slice(0, 12) +
   String(Math.floor(Math.random() * 9000) + 1000)
 
 // 每 openid 在途未支付单上限（收尾硬化批 2026-07-13·防滥用面）：real 模式下单即 reserveStock 持库存至支付窗

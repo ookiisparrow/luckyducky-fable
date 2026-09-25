@@ -10,6 +10,7 @@ import { mapRecon, mapBillMatch, type ReconVM, type BillMatchVM } from '../lib/m
 import { orderErrorText } from '../lib/mapMoney'
 import { useLatest } from '../lib/latest'
 import { saveBlob } from '../lib/saveBlob'
+import { dayKeyCST, dayStartMsCST } from '@ldrw/shared'
 import UiButton from '../components/ui/Button.vue'
 import PageHeader from '../components/ui/PageHeader.vue'
 import Card from '../components/ui/Card.vue'
@@ -89,12 +90,11 @@ async function pullBill() {
 
 // CST 起止（含端）逐日列表（cap 62 天·防误填超长区间刷爆）
 function daysBetween(a: string, b: string): string[] {
-  const CST = 8 * 3600_000
-  const s = Date.parse(a + 'T00:00:00+08:00')
-  const e = Date.parse(b + 'T00:00:00+08:00')
+  const s = dayStartMsCST(a)
+  const e = dayStartMsCST(b)
   const out: string[] = []
   if (!Number.isFinite(s) || !Number.isFinite(e) || s > e) return out
-  for (let t = s; t <= e && out.length < 62; t += 86400_000) out.push(new Date(t + CST).toISOString().slice(0, 10))
+  for (let t = s; t <= e && out.length < 62; t += 86400_000) out.push(dayKeyCST(t))
   return out
 }
 
@@ -102,9 +102,8 @@ function daysBetween(a: string, b: string): string[] {
 // 区间空则默认近 30 天窗（与后端默认对齐）。
 async function pullRange() {
   if (busy.value) return
-  const CST = 8 * 3600_000
-  const today = new Date(Date.now() + CST).toISOString().slice(0, 10)
-  const f = /^\d{4}-\d{2}-\d{2}$/.test(from.value) ? from.value : new Date(Date.now() - 29 * 86400_000 + CST).toISOString().slice(0, 10)
+  const today = dayKeyCST(Date.now())
+  const f = /^\d{4}-\d{2}-\d{2}$/.test(from.value) ? from.value : dayKeyCST(Date.now() - 29 * 86400_000)
   const t = /^\d{4}-\d{2}-\d{2}$/.test(to.value) ? to.value : today
   const days = daysBetween(f, t)
   if (!days.length) {

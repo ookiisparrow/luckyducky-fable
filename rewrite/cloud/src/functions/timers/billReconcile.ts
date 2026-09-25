@@ -1,4 +1,4 @@
-import { ERR, COLLECTIONS, MONEY_RECEIVED_STATUSES, anomalyFingerprint } from '@ldrw/shared'
+import { ERR, COLLECTIONS, MONEY_RECEIVED_STATUSES, anomalyFingerprint, dayKeyCST, dayStartMsCST } from '@ldrw/shared'
 import {
   isServerCall,
   ok,
@@ -8,8 +8,6 @@ import {
   notifyAlert,
   pullBillDay,
   matchBillRows,
-  dayKeyCST,
-  dayStartMsCST,
   DAY_MS,
   type WxFetch,
 } from '../../kit'

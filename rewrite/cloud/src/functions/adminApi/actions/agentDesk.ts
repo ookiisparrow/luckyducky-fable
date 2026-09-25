@@ -1,4 +1,4 @@
-import { reply, str, type Ctx } from '../lib'
+import { reply, type Ctx } from '../lib'
 import {
   transition,
   pageParams,
@@ -12,6 +12,7 @@ import {
   kfSendText,
   kfFetchMedia,
   getDocOrNull,
+  str,
   err,
 } from '../../../kit'
 import { COLLECTIONS, ERR, AGENT_STATUS } from '@ldrw/shared'

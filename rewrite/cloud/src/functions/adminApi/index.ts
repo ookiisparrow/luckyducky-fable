@@ -403,7 +403,6 @@ export const main = async (event: any) => {
   const capSpec = ACTION_CAPS[action]
   const needCaps: string[] = Array.isArray(capSpec) ? capSpec : capSpec ? [capSpec] : [ADMIN_DEFAULT_CAP]
   if (!caps.some((c) => c === '*' || needCaps.includes(c))) return reply(403, err('FORBIDDEN'))
-  const drafts = db.collection(COLLECTIONS.productsDraft)
 
   const handler = ACTIONS[action]
   if (!handler) return reply(400, err('UNKNOWN_ACTION'))
@@ -413,7 +412,7 @@ export const main = async (event: any) => {
   let res: any
   let crash: { module?: string; error?: string } = {} // 只有异常路径带模块归因
   try {
-    res = await handler({ db, cloud, data, drafts, agentId, caps })
+    res = await handler({ db, cloud, data, agentId, caps })
   } catch (e) {
     console.error('adminApi error', action, e)
     crash = { module: ADMIN_ACTION_MODULE_BY_NAME[action] ?? 'unknown', error: 'SERVER_ERROR' }

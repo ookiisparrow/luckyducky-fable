@@ -1,6 +1,6 @@
-import { reply, ensure, str, newSalt, kdf, keyMatches, alertIfScanAtCap, type Ctx } from '../lib'
-import { notifyAlert, getDocOrNull, dayKeyCST, dayStartMsCST, err } from '../../../kit'
-import { COLLECTIONS } from '@ldrw/shared'
+import { reply, ensure, newSalt, kdf, keyMatches, alertIfScanAtCap, type Ctx } from '../lib'
+import { notifyAlert, getDocOrNull, str, err } from '../../../kit'
+import { COLLECTIONS, dayKeyCST, dayStartMsCST } from '@ldrw/shared'
 
 // 外包账号管理（后台360工作站 §1.5·B5.2·承面C 车道 C·根因#3）：商户超管建/停/列外包坐席账号
 // （adminConfig 多账号·role=outsourced 最小权·checkKey 据 keyHash 认账号 + disabled 停用·骨架已在 lib.ts）。
@@ -159,7 +159,7 @@ export async function listAgents({ db }: Ctx) {
     .get() // 读失败上抛（网关 500）——不当「没有外包」（根因#14）
   const rows = (r.data || []) as any[]
   const _ = db.command
-  const todayStartMs = dayStartMsCST(dayKeyCST(Date.now())) // 今日零点（CST +08:00·kit/reconcile 单源）
+  const todayStartMs = dayStartMsCST(dayKeyCST(Date.now())) // 今日零点（北京时间）
   const agents = await Promise.all(
     rows.map(async (a: any) => {
       const [st, activeR, closedR] = await Promise.all([

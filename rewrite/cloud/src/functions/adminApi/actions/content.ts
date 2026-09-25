@@ -1,5 +1,6 @@
-import { reply, ensure, str, readDoc, arrOf, type Ctx } from '../lib'
-import { notifyAlert, setOrAdd, deleteFiles, err } from '../../../kit'
+import { reply, ensure, readDoc, type Ctx } from '../lib'
+import { arrOf } from '../catalog'
+import { notifyAlert, setOrAdd, deleteFiles, str, err } from '../../../kit'
 import { COLLECTIONS } from '@ldrw/shared'
 
 // —— 首页内容（橱窗逐块②③：hero 文案 / 信任条 / FAQ；规格 §八）——

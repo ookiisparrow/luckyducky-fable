@@ -1,7 +1,7 @@
 import { randomBytes } from 'crypto'
 import { pageQuery, err } from '../../../kit'
 import { reply, type Ctx } from '../lib'
-import { COLLECTIONS } from '@ldrw/shared'
+import { COLLECTIONS, cstIso } from '@ldrw/shared'
 
 // 分页全取（债#22：避免单次拉取封顶截断——批次/码增长后旧码被挤出工作台）。
 // 按页 skip 取尽（每页 200），不足一页即止。makeQuery 每页重建，避免复用查询对象。
@@ -52,7 +52,7 @@ function genCode(): string {
 // 同课同分钟生成两批撞同 batchId → 后台按 batchId 合并、批次追踪/核销混乱。改北京时间到秒 + 随机后缀，
 // 同课同秒并发两批也必不同（batches.ts 按存库 batchId 字段分组、不解析串，加后缀不破坏分组）。
 export function makeBatchId(courseId: string, now: number): string {
-  const ts = new Date(now + 8 * 3600 * 1000).toISOString().slice(0, 19).replace(/\D/g, '')
+  const ts = cstIso(now).slice(0, 19).replace(/\D/g, '')
   return `b-${courseId}-${ts}-${randomBytes(3).toString('hex')}`
 }
 

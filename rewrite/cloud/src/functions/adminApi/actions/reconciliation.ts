@@ -1,14 +1,20 @@
-import { COLLECTIONS, asFen, fenToYuan, MONEY_RECEIVED_STATUSES, type CollectionName } from '@ldrw/shared'
+import {
+  COLLECTIONS,
+  asFen,
+  fenToYuan,
+  MONEY_RECEIVED_STATUSES,
+  dayKeyCST as dayKey,
+  dayStartMsCST as dayStartMs,
+  type CollectionName,
+} from '@ldrw/shared'
 import { reply, getTxAlerts, type Ctx } from '../lib'
-// CST 日助手/比对分类器已上提 kit/reconcile 单源（批B2·timers/billReconcile 复用同一套原语）；
+// 比对分类器在 kit/reconcile（批B2·timers/billReconcile 复用同一套原语）；北京日助手在 @ldrw/shared cst.ts。
 // 别名保持既有调用点零改动
 import {
   notifyAlert,
   matchBillRows,
   toFenAmount,
   toYuanAmount,
-  dayKeyCST as dayKey,
-  dayStartMsCST as dayStartMs,
   DAY_MS as DAY,
   isCollectionMissing,
 } from '../../../kit'

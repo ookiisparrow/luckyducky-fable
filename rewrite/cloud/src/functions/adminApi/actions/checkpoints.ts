@@ -1,5 +1,5 @@
-import { reply, ensure, str, type Ctx } from '../lib'
-import { notifyAlert, err } from '../../../kit'
+import { reply, ensure, type Ctx } from '../lib'
+import { notifyAlert, str, err } from '../../../kit'
 import { COLLECTIONS } from '@ldrw/shared'
 
 // 节点诊断·关键节点定义策展（后台360工作站 B2.2·admin 侧）：管理端为某门课维护「关键节点 + 挽回办法」内容，

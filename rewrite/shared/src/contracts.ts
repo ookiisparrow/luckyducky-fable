@@ -110,7 +110,7 @@ export interface AdminDashboard {
 }
 
 // ── 后台商品组 action 的成功包字段（admin api/products.ts 用）──
-// 这组没有契约 JSON 锁，照 adminApi actions/products.ts、cards.ts 与 lib.ts storeImage 的回包写。
+// 这组没有契约 JSON 锁，照 adminApi actions/products.ts、cards.ts 与 catalog.ts storeImage 的回包写。
 
 /** listDrafts：最新 100 个商品草稿（库内文档原样，字段不在这里建模）。urls：图片 fileID → 临时地址，换不到的不在里面。
  *  listed、cardFinal 键是商品 id；hasVideo、coursePublished、hasBatch 键是课程 id。 */

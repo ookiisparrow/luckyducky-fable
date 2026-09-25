@@ -1,5 +1,5 @@
-import { reply, ensure, str, type Ctx } from '../lib'
-import { notifyAlert, isCollectionMissing, err } from '../../../kit'
+import { reply, ensure, type Ctx } from '../lib'
+import { notifyAlert, isCollectionMissing, str, err } from '../../../kit'
 import { COLLECTIONS } from '@ldrw/shared'
 
 // 知识库维护（后台360工作站 B4.1·admin 侧）：管理端维护 FAQ/知识条目（问题 + 答案 + 分类 + 启用 + 顺序 + 精选），

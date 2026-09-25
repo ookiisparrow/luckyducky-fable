@@ -1,4 +1,5 @@
-import { reply, ensure, cleanCourse, manager, readDoc, type Ctx } from '../lib'
+import { reply, ensure, readDoc, type Ctx } from '../lib'
+import { cleanCourse, manager } from '../catalog'
 import { isVodFileId, makeVodUploadSignature, callVodApi, setOrAdd, err } from '../../../kit'
 import { mergePendingGc } from './products'
 import { COLLECTIONS } from '@ldrw/shared'

@@ -13,6 +13,7 @@ import {
   AFTERSALE_INFLIGHT_STATUSES,
   AFTERSALE_QUOTA_STATUSES,
   PAY_WINDOW_MS,
+  dayKeyCST,
 } from '@ldrw/shared'
 
 // 巡检机（运行期主动核对·不依赖 AI）：定时/手动跑一遍检查目录——
@@ -395,8 +396,7 @@ export async function runInspection(trigger: 'timer' | 'manual'): Promise<Inspec
 export async function sendDailyHeartbeat(summary: { green: number; red: number }): Promise<void> {
   try {
     const db = getDb()
-    // Asia/Shanghai（UTC+8）当日：+8h 后取 UTC 日期部分——相对本地时区无关、确定性可撞键去重。
-    const day = new Date(Date.now() + 8 * 3600 * 1000).toISOString().slice(0, 10).replace(/-/g, '')
+    const day = dayKeyCST(Date.now()).replace(/-/g, '')
     // summary 落当日真实计数（评审 P3：只写占位 0/0 会让直查 tcb db 的人被「全绿」误导；读路径已按 startedAt>0 过滤、此字段仅供直查审计）
     const rec = { _id: `hb:${day}`, startedAt: 0, finishedAt: 0, trigger: 'timer', summary: { green: summary.green, red: summary.red }, results: [] }
     try {

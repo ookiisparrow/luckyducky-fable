@@ -199,6 +199,20 @@ describe('Reconciliation.vue 拉整个区间', () => {
     expect(status(w)).toBe('区间账单已拉取 3/3 天，勾对已刷新')
   })
 
+  it('大白话：区间留空按北京时间取近 30 天——UTC 还是 25 号时北京已是 26 号', async () => {
+    const now = vi.spyOn(Date, 'now').mockReturnValue(Date.parse('2026-09-25T16:30:00Z'))
+    try {
+      const w = await mountPage()
+      await btn(w, '拉整个区间').trigger('click')
+      await flushPromises()
+      const days = api.downloadBill.mock.calls.map((c) => c[0])
+      expect(days).toHaveLength(30)
+      expect([days[0], days[29]]).toEqual(['2026-08-28', '2026-09-26'])
+    } finally {
+      now.mockRestore()
+    }
+  })
+
   it('大白话：刷新失败要把错误原文拼在后面，不能被纯成功文案盖掉', async () => {
     const w = await mountPage()
     api.getBillMatch.mockResolvedValue(FAIL)

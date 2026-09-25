@@ -1,5 +1,5 @@
-import { reply, str, issueSession, principalOf } from '../lib'
-import { getCachedKfToken, getWecomOAuthUserId, alert, err } from '../../../kit'
+import { reply, issueSession, principalOf } from '../lib'
+import { getCachedKfToken, getWecomOAuthUserId, alert, str, err } from '../../../kit'
 import { COLLECTIONS } from '@ldrw/shared'
 
 // M⑦ 车道 B·企业微信自建应用内 OAuth 免登（承面C 增强·工单 §2.2）。

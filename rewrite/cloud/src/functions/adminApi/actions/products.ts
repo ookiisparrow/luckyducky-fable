@@ -1,5 +1,6 @@
 import { COLLECTIONS, isValidPriceYuan, isValidScmProductId, isValidScmSpec } from '@ldrw/shared'
-import { reply, cleanProduct, cleanSold, storeImage, readDoc, ensure, type Ctx } from '../lib'
+import { reply, readDoc, ensure, type Ctx } from '../lib'
+import { cleanProduct, cleanSold, storeImage } from '../catalog'
 import { notifyAlert, getTempUrls, setOrAdd, isCollectionMissing, deleteFiles, err } from '../../../kit'
 
 // —— 商品图册孤儿 GC 判据单源（E16 共享 helper·防多点漂移·批B）——
@@ -54,7 +55,8 @@ async function listedImageUrls(fileIds: Iterable<string>): Promise<Record<string
   return urls
 }
 
-export async function listDrafts({ db, drafts }: Ctx) {
+export async function listDrafts({ db }: Ctx) {
+  const drafts = db.collection(COLLECTIONS.productsDraft)
   await ensure(db, COLLECTIONS.productsDraft) // 草稿集合只在草稿动作用前建，不跟全局网关（进销存/体检等不顺手建）
   const res = await drafts.orderBy('createdAt', 'desc').limit(100).get()
   // 上架/下架状态映射（S11·债#12 软下架显形）：listed 标记在 products、不在草稿，控制台靠它分
@@ -113,7 +115,8 @@ export async function listDrafts({ db, drafts }: Ctx) {
   return reply(200, { ok: true, list: res.data, urls, listed, cardFinal, hasVideo, coursePublished, hasBatch })
 }
 
-export async function saveDraft({ db, drafts, data }: Ctx) {
+export async function saveDraft({ db, data }: Ctx) {
+  const drafts = db.collection(COLLECTIONS.productsDraft)
   const p = cleanProduct(data.product)
   if (!p) return reply(400, err('BAD_PRODUCT'))
   await ensure(db, COLLECTIONS.productsDraft) // 草稿集合只在草稿动作用前建，不跟全局网关（进销存/体检等不顺手建）
@@ -158,7 +161,8 @@ export async function saveDraft({ db, drafts, data }: Ctx) {
 // 改：**先删 products（发布面）再删 drafts**——若 products 删失败，drafts 还在、商品仍在后台草稿列表
 // 可重试删除；危险方向永远是「后台不见了、前台还在卖」，反转顺序后不再可能发生。任一步失败即
 // ok:false，不再继续下一步、不再无条件回 ok:true；动作类失败（病根14）经 notifyAlert 留痕。
-export async function deleteDraft({ db, drafts, data }: Ctx) {
+export async function deleteDraft({ db, data }: Ctx) {
+  const drafts = db.collection(COLLECTIONS.productsDraft)
   const id = String(data.id || '')
   if (!id) return reply(400, err('NO_ID'))
   await ensure(db, COLLECTIONS.productsDraft) // 草稿集合只在草稿动作用前建，不跟全局网关（进销存/体检等不顺手建）
@@ -220,7 +224,8 @@ export async function uploadImage({ cloud, data }: Ctx) {
 }
 
 // 上架小程序：商品草稿 → products（价格转数字，重复上架保留原 sort/featured）
-export async function publishProduct({ db, drafts, data }: Ctx) {
+export async function publishProduct({ db, data }: Ctx) {
+  const drafts = db.collection(COLLECTIONS.productsDraft)
   const id = String(data.id || '')
   if (!id) return reply(400, err('NO_ID'))
   await ensure(db, COLLECTIONS.productsDraft) // 草稿集合只在草稿动作用前建，不跟全局网关（进销存/体检等不顺手建）

@@ -1,5 +1,5 @@
-import { reply, ensure, str, readDoc, type Ctx } from '../lib'
-import { setOrAdd, err } from '../../../kit'
+import { reply, ensure, readDoc, type Ctx } from '../lib'
+import { setOrAdd, str, err } from '../../../kit'
 import { COLLECTIONS } from '@ldrw/shared'
 
 // —— 二维码卡片 + 设置（规格 §六/§七 步骤⑤⑥）——
