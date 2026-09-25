@@ -8,7 +8,7 @@
 atomic-v1/
   README.md
   route.json                          # 本线路由：业务库 + 情绪库
-  lib/business/packaging/             # 业务原子（合照 / 产品没事 / 产品有事；empathy 镜像）
+  lib/business/packaging/             # 合照三句 + 短序列共情三句
   lib/business/claim/                 # 理赔口径
   lib/gate/no_order/                  # 无单门闩
   lib/emotion/                        # 情绪二级档（见下表）
@@ -16,7 +16,7 @@ atomic-v1/
     packaging_damage_*.json           # 先情绪、再业务的固定序列
 ```
 
-- `lib/business/packaging/`：`ask_photo_*`、`product_ok_*`、`product_hurt_*`；`empathy_*` 已迁权威库到 `emotion/empathy/`（本目录保留镜像，见该目录 README）
+- `lib/business/packaging/`：`ask_photo_01`～`03`、`empathy_01`～`03`（短序列共情池读这三份，见该目录 README）
 - `route.json`：`emotionAlways: true`；按信号键抽对应 `emotion/*`
 - `sequences/`：编排「先情绪、再业务」的固定序列
 
@@ -75,5 +75,5 @@ atomic-v1/
 ## 演进 · 情绪二级六档 + 共情独立（2026-09-19）
 
 - 新增：`soothe` / `awkward` / `ack` / `neutral` / `celebrate` / `boundary`（各 ≥5 种子）
-- `empathy` 独立成 `lib/emotion/empathy/`（从 packaging 复制；packaging 保留原文件 + README 指向）
+- `empathy` 信号表在 `lib/emotion/empathy/`；有单短句共情池仍读 `business/packaging/empathy_01`～`03`（见该目录 README）
 - `route.json` `emotionLibBySignal` 已挂齐上表全部 key

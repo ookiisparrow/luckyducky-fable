@@ -158,8 +158,20 @@ describe('atomic-v1 包装优先级组装', () => {
     expect(Object.keys(assets.files).some((k) => /try_hard|_deprecated/.test(k))).toBe(false)
     expect(listAtomicLib('business/claim')).toHaveLength(3)
     expect(listAtomicLib('gate/no_order')).toEqual(['clarify_01', 'clarify_02', 'human_01'])
-    expect(listAtomicLib('business/packaging')).toHaveLength(18)
-    expect(Object.keys(assets.files)).toHaveLength(82)
+    expect(listAtomicLib('business/packaging')).toEqual([
+      'ask_photo_01',
+      'ask_photo_02',
+      'ask_photo_03',
+      'empathy_01',
+      'empathy_02',
+      'empathy_03',
+    ])
+    const shortSteps = assets.sequences[PACKAGING_WITH_ORDER_SHORT_ID].steps || []
+    const empathyStep = shortSteps.find((s) => s.orLib === 'business/packaging')
+    expect(empathyStep && empathyStep.orPool).toEqual(['empathy_01', 'empathy_02', 'empathy_03'])
+    const photoStep = shortSteps.find((s) => s.lib === 'business/packaging')
+    expect(photoStep && photoStep.files).toEqual(['ask_photo_01', 'ask_photo_02', 'ask_photo_03'])
+    expect(Object.keys(assets.files)).toHaveLength(70)
     expect(atomicText('business/packaging/empathy_01')).toBe('理解，包装成这样确实烦。')
     expect(atomicText('gate/no_order/clarify_01')).toMatch(/没查到您近期的订单/)
     const blob = JSON.stringify(assets)

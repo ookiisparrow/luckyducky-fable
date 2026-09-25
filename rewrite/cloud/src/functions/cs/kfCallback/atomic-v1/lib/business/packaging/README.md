@@ -1,11 +1,12 @@
 # business/packaging
 
-包装破损线业务原子：合照 / 产品没事 / 产品有事 / 同理（历史）。
+有单短句实际会发出的包装话术，只留这两类：
 
-## 情绪迁出说明
+- 合照：`ask_photo_01`～`ask_photo_03`
+- 同理：`empathy_01`～`empathy_03`
 
-`empathy_01..03` **仍保留本目录**（兼容旧序列引用），权威情绪库已独立到：
+## 同理以本目录为准
 
-- `lib/emotion/empathy/`（共情档，测版路由优先走这里）
+短序列 `sequences/packaging_damage_priority_short.json` 的共情池是 `orLib: business/packaging`，`orPool` 为 `empathy_01`、`empathy_02`、`empathy_03`。顾客听到的同理就是本目录这三份 txt。
 
-新写/扩写共情短句请改 `emotion/empathy/`，本目录三份视为镜像副本，勿只改一边。
+要改顾客听到的句子，改 `empathy_01.txt`～`empathy_03.txt`。`lib/emotion/empathy/` 不在这条短序列的抽取路径上，改那里顾客听不到。
