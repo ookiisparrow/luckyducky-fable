@@ -1,8 +1,8 @@
 #!/bin/sh
-# 红区双人复核闸（commit-msg hook·2026-08-10 老板令·rw-red-second-review 的提交信息检查点）
+# 红区双人复核闸（commit-msg hook·老板令）
 # pre-commit 阶段拿不到本次提交信息（git log -1 是旧 HEAD），故提交信息标记检查在此做：
 # 暂存区含 red 模块文件（订单钱链 orders / 运维配置 ops）→ 提交信息必须带 [red-review: <复核人>]，
-# 缺复核即拦下。与 check-structure.mjs 的 rw-red-second-review 守卫（兜底 amend/cherry-pick）双保险。
+# 缺复核即拦下。守卫 rw-gates-wired 盯着本钩子在位、已注册。
 #
 # 用法：git commit 自动触发；紧急绕过（不建议）：git commit --no-verify
 MSG_FILE="$1"

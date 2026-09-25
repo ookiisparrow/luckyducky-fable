@@ -7,7 +7,7 @@
  *
  * 范围＝orders 红模块的语义核心（云端 action/回调/kit 钱件/shared 契约/mp 交易页）；
  * admin 订单类 UI 页不在内（可视化面·错误易发现，避免日常批被闸卡死）。
- * 改这份清单＝改红区边界＝治理批，须老板拍板；守卫 moneychain-gate-present 盯着本文件存在且非空、钩子真引用它。
+ * 改这份清单＝改红区边界＝治理批，须老板拍板；守卫 rw-gates-wired 盯着本文件的关键路径没被收窄、钩子真引用它。
  */
 export const MONEYCHAIN_PATHS = [
   // 云端 app 面：下单/支付/退款申请/订单读

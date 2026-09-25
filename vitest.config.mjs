@@ -27,7 +27,7 @@ export default defineConfig({
         },
       },
       {
-        // 新线（rewrite/）测试——rw-line-in-gates 守卫要求新线包必须被测试闸扫到。
+        // 新线（rewrite/）测试——rw-packages-in-gates 守卫要求新线包必须被测试闸扫到。
         // @ldrw/shared 走源码别名（免建 dist）；wx-server-sdk 经根 node_modules 命中内存桩。
         // plugins:[vue()]（B9）：只编译 .vue 文件的 transform，不影响其余 .ts/.js 测试文件——给
         // admin 渲染测试（挂载真实 .vue 组件）提供 SFC 编译支持。environment 仍默认 'node'（纯逻辑

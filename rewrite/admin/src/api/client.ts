@@ -1,4 +1,4 @@
-// adminApi v2 客户端（钱链入口·行为测试钉·守卫 rw-admin-ui-in-gates）：
+// adminApi v2 客户端（钱链入口·行为测试 tests/client.test.ts 钉）：
 // 单 endpoint POST {action, key, data}；key=会话令牌（口令仅登录时用一次·令牌哈希在云端）；
 // 401 会话失效 → 清令牌抛 SESSION_LOST（壳层导登录）；错误规整不吞（承接调试案 A 教训：报错带原文）。
 export interface ClientResult {

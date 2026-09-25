@@ -29,7 +29,7 @@
  * 路由级错误、未捕获异常/Promise 拒绝（经 app.ts 探针取证）。
  * 不是全量 UI/交互验证（那层仍是人工真机走查，见 rewrite/mp/README.md）。
  *
- * 不进 pre-commit/CI 三道闸（gate-single-source 单源＝npm run check；本脚本需真实 devtools 实例，
+ * 不进 pre-commit/CI 三道闸（质量闸单源＝npm run check；本脚本需真实 devtools 实例，
  * 机器闸对它无感，属靠人起环境的按需层）。
  *
  * 底座选型拍板（2026-07-24 深夜·官方 wechatide CLI 正式接入后实测评估·勿再重议）：本脚本**保持

@@ -201,19 +201,47 @@ export const repoChecks = [
     },
   },
   {
-    id: 'gate-single-source',
-    roots: ['铁律'],
-    desc: '三道闸单一定义：pre-commit 与 CI 都只调 `npm run check`（防三闸语义悄悄漂移）',
+    // 提交/CI 闸门接线在位（根因#3 #8）：闸本身的逻辑在 scripts/git-hooks/ 与 CI 里，这里只查「接线没被拆」——
+    // ① pre-commit 与 CI 都只调 `npm run check`（质量闸单一定义）；② 钱链闸：moneychain-paths.mjs 在、关键路径没被收窄，
+    // pre-commit 引用它并认 MONEYCHAIN_ALLOWED；③ 红区复核闸：commit-msg 钩子在且认 [red-review]，`prepare` 把
+    // core.hooksPath 指到 scripts/git-hooks；④ 产物闸：check:artifacts 覆盖云函数/admin/agent/site 四面且 CI 真跑。
+    // 改闸门边界（红区名单等）是治理批，须老板拍板。
+    id: 'rw-gates-wired',
+    roots: ['#3', '#8'],
+    desc: '提交/CI 闸门接线在位：pre-commit 与 CI 调 npm run check、钱链闸与红区复核闸钩子在且已注册、check:artifacts 四面齐且 CI 真跑——任一被拆即红',
     run() {
       const bad = []
-      for (const f of ['scripts/git-hooks/pre-commit', '.github/workflows/ci.yml']) {
-        const abs = join(ROOT, f)
-        if (!existsSync(abs)) {
-          bad.push(`${f} 不存在（三道闸缺一）`)
-        } else if (!/npm run check\b/.test(readFileSync(abs, 'utf8'))) {
-          bad.push(`${f} 未统一调用 \`npm run check\`——三道闸须以 check 脚本为单一定义，防漂移`)
-        }
+      const read = (f) => (existsSync(join(ROOT, f)) ? readFileSync(join(ROOT, f), 'utf8') : null)
+      const preCommit = read('scripts/git-hooks/pre-commit')
+      const ci = read('.github/workflows/ci.yml')
+      const commitMsg = read('scripts/git-hooks/commit-msg')
+      const manifest = read('scripts/lib/moneychain-paths.mjs')
+      const pkg = JSON.parse(read('package.json'))
+      const scripts = pkg.scripts || {}
+      // ① 质量闸单一定义
+      for (const [f, src] of [['scripts/git-hooks/pre-commit', preCommit], ['.github/workflows/ci.yml', ci]])
+        if (!src) bad.push(`${f} 不存在——质量闸缺一道`)
+        else if (!/npm run check\b/.test(src)) bad.push(`${f} 未调 \`npm run check\`——质量闸须以 check 脚本为单一定义`)
+      // ② 钱链闸
+      if (!manifest) bad.push('scripts/lib/moneychain-paths.mjs 缺失——钱链提交闸的路径单源')
+      else {
+        for (const must of ['rewrite/cloud/src/functions/callbacks/', 'rewrite/cloud/src/kit/wxpay.ts', 'rewrite/cloud/src/kit/transition.ts', 'rewrite/shared/src/money.ts', 'rewrite/shared/src/order.ts', 'rewrite/mp/pages/checkout/'])
+          if (!manifest.includes(must)) bad.push(`moneychain-paths.mjs 缺关键路径 ${must}——钱链边界被收窄（改边界须老板拍板）`)
+        if (!manifest.includes('export function isMoneychainPath')) bad.push('moneychain-paths.mjs 缺 isMoneychainPath 导出——pre-commit 靠它判定')
       }
+      if (preCommit && !(preCommit.includes('moneychain-paths') && preCommit.includes('MONEYCHAIN_ALLOWED')))
+        bad.push('pre-commit 不再引用 moneychain-paths 或缺 MONEYCHAIN_ALLOWED 开关——钱链闸被拆')
+      // ③ 红区复核闸 + 钩子注册
+      if (!commitMsg || !commitMsg.includes('red-review')) bad.push('scripts/git-hooks/commit-msg 缺失或不再认 [red-review]——红区复核闸被拆')
+      if (!/core\.hooksPath scripts\/git-hooks/.test(scripts.prepare || '')) bad.push('package.json prepare 未把 core.hooksPath 指到 scripts/git-hooks——钩子不会生效')
+      // ④ 产物闸
+      const ca = scripts['check:artifacts'] || ''
+      for (const piece of ['verify:rw-cloud', 'build:rw-admin', 'build:agent', '@ldrw/site'])
+        if (!ca.includes(piece)) bad.push(`check:artifacts 缺 ${piece}——产物闸不全（构建过≠真能用）`)
+      if (!/build:rw-cloud/.test(scripts['verify:rw-cloud'] || '') || !/verify-rw-cloud-bundles/.test(scripts['verify:rw-cloud'] || ''))
+        bad.push('verify:rw-cloud 须 = build:rw-cloud + verify-rw-cloud-bundles.cjs')
+      if (!existsSync(join(ROOT, 'scripts/verify-rw-cloud-bundles.cjs'))) bad.push('scripts/verify-rw-cloud-bundles.cjs 缺失——云函数产物行为验证没了')
+      if (ci && !/check:artifacts/.test(ci)) bad.push('.github/workflows/ci.yml 未跑 check:artifacts——产物闸没进 CI')
       return bad
     },
   },
@@ -405,65 +433,6 @@ export const repoChecks = [
             bad.push(`package.json script「${name}」把 wechatide 写工具「${hit}」包进了 npm script——部署闸读命令文本、看不进 npm run 内层，等于静默绕过（写工具必须整行手打；只读类如 auto_preview 不在此限）`)
         }
       }
-      return bad
-    },
-  },
-  {
-    // 红区（钱链）提交闸在位（2026-08-21 治理减负批·用户拍板「物理层面划分 AI 权限」）：闸=pre-commit 钩子
-    // 拦截命中 scripts/lib/moneychain-paths.mjs 的暂存提交（MONEYCHAIN_ALLOWED=1 显式授权放行·与部署闸同模式）。
-    // 本守卫守闸自身：清单存在且含关键路径、钩子真引用它——防「锁被拆了没人知道」（同 omp 闸漏3 教训·病根#16）。
-    id: 'moneychain-gate-present',
-    roots: ['#3'],
-    desc: '红区提交闸在位（根因#3·物理隔离）：scripts/lib/moneychain-paths.mjs 存在且含 callbacks/kit 钱件/shared 契约关键路径与 isMoneychainPath 导出；scripts/git-hooks/pre-commit 含 moneychain-paths 引用与 MONEYCHAIN_ALLOWED 闸逻辑——闸被删/被改瘦即红（改红区边界=治理批须老板拍板）',
-    run() {
-      const bad = []
-      const manifest = join(ROOT, 'scripts/lib/moneychain-paths.mjs')
-      if (!existsSync(manifest)) return ['scripts/lib/moneychain-paths.mjs 缺失——红区提交闸的路径单源，重建它（含 isMoneychainPath 导出）']
-      const mSrc = readFileSync(manifest, 'utf8')
-      for (const must of [
-        'rewrite/cloud/src/functions/callbacks/',
-        'rewrite/cloud/src/kit/wxpay.ts',
-        'rewrite/cloud/src/kit/transition.ts',
-        'rewrite/shared/src/money.ts',
-        'rewrite/shared/src/order.ts',
-        'rewrite/mp/pages/checkout/',
-      ])
-        if (!mSrc.includes(must)) bad.push(`moneychain-paths.mjs 缺关键路径 ${must}——红区边界被收窄，补回或经治理批正式改边界`)
-      if (!mSrc.includes('export function isMoneychainPath')) bad.push('moneychain-paths.mjs 缺 isMoneychainPath 导出——pre-commit 闸依赖它判定')
-      const hook = join(ROOT, 'scripts/git-hooks/pre-commit')
-      if (!existsSync(hook)) return ['scripts/git-hooks/pre-commit 缺失——提交闸不存在（core.hooksPath 指 scripts/git-hooks）']
-      const hSrc = readFileSync(hook, 'utf8')
-      if (!hSrc.includes('moneychain-paths')) bad.push('pre-commit 钩子不再引用 moneychain-paths——红区闸被拆除，恢复闸逻辑')
-      if (!hSrc.includes('MONEYCHAIN_ALLOWED')) bad.push('pre-commit 钩子缺 MONEYCHAIN_ALLOWED 授权开关——红区闸语义被改，恢复')
-      return bad
-    },
-  },
-  {
-    // 根因#8「构建过≠真能用」在部署产物层的镜像（盲区体检批4·病根#16 配套）：三道闸此前从不
-    // 构建任何真实生产产物——build:rw-cloud/rw-admin/agent/site 四个真实构建在编辑 hook/pre-commit
-    // /CI 里一次都没跑过；「把产物 require 进来真跑」的行为级验证只有旧线有（verify-cloud-bundles
-    // 只验冻结 packages/cloud/dist）。本守卫钉住产物闸接线不许静默掉：check:artifacts 脚本存在且
-    // 含四个面 + CI 真跑它 + 活线产物验证脚本在位。（产物闸 CI-only：vite/astro 构建分钟级，进
-    // pre-commit 会把每次提交拖到分钟级——三道闸单一定义指 npm run check，产物闸是 CI 追加硬化层。）
-    id: 'rw-artifact-gate-in-ci',
-    roots: ['#8', '#16'],
-    desc: '产物闸接线（根因#8 部署产物层镜像·病根#16 配套）：package.json 须有 check:artifacts（含 verify:rw-cloud + build:rw-admin + build:agent + @ldrw/site 构建四面）、.github/workflows/ci.yml 须真跑 check:artifacts、scripts/verify-rw-cloud-bundles.cjs 在位——防「CI 全绿但生产产物从未被构建/加载过」复发',
-    run() {
-      const bad = []
-      const pkg = JSON.parse(readFileSync(join(ROOT, 'package.json'), 'utf8'))
-      const ca = (pkg.scripts || {})['check:artifacts'] || ''
-      if (!ca) bad.push('package.json 无 check:artifacts 脚本——产物闸未定义（根因#8·四个真实构建零闸覆盖）')
-      else
-        for (const piece of ['verify:rw-cloud', 'build:rw-admin', 'build:agent', '@ldrw/site'])
-          if (!ca.includes(piece)) bad.push(`check:artifacts 缺 ${piece} 面——产物闸不全（根因#8）`)
-      const vs = (pkg.scripts || {})['verify:rw-cloud'] || ''
-      if (!/build:rw-cloud/.test(vs) || !/verify-rw-cloud-bundles/.test(vs))
-        bad.push('verify:rw-cloud 须 = build:rw-cloud + verify-rw-cloud-bundles.cjs（先构建再产物验证）')
-      if (!existsSync(join(ROOT, 'scripts/verify-rw-cloud-bundles.cjs')))
-        bad.push('scripts/verify-rw-cloud-bundles.cjs 缺失——活线产物行为验证真空（旧线 verify 只验冻结线）')
-      const ci = join(ROOT, '.github/workflows/ci.yml')
-      if (!existsSync(ci) || !/check:artifacts/.test(readFileSync(ci, 'utf8')))
-        bad.push('.github/workflows/ci.yml 未跑 check:artifacts——产物闸没进 CI（构建过≠真能用在产物层无人守）')
       return bad
     },
   },
@@ -925,23 +894,21 @@ export const repoChecks = [
     },
   },
   {
-    id: 'rw-line-in-gates',
+    // 新线各包都在质量闸里（测试一等公民·决策§22 架构底线）：根 typecheck 覆盖 rewrite 下六个包、vitest 含 rewrite
+    // 测试、admin/agent 有 build 脚本（产物闸靠它）。防某个包的代码默默漏出 `npm run check`。
+    id: 'rw-packages-in-gates',
     roots: ['铁律'],
-    desc: '新线包必须被三道闸扫到（M1 批1·ADR §24 测试一等公民）：root typecheck 覆盖 rewrite/shared、vitest projects 含 rewrite 测试、listPackageJsons 扫描 rewrite/*（stub-only-sdk 等包级守卫随之覆盖新线）——防 rewrite/ 代码默默漏出 check',
+    desc: '新线各包都在质量闸里：根 typecheck 覆盖 rewrite/{shared,cloud,mp,site,admin,agent}，vitest 含 rewrite 测试，admin/agent 有 build 脚本',
     run() {
       const bad = []
       const pkg = JSON.parse(readFileSync(join(ROOT, 'package.json'), 'utf8'))
-      for (const p of ['rewrite/shared', 'rewrite/cloud']) {
-        if (!new RegExp(p).test(pkg.scripts?.typecheck || '')) {
-          bad.push(`package.json scripts.typecheck 未覆盖 ${p}——新线类型不过闸`)
-        }
-      }
-      const vconf = readFileSync(join(ROOT, 'vitest.config.mjs'), 'utf8')
-      if (!/rewrite\//.test(vconf)) {
-        bad.push('vitest.config.mjs 未含 rewrite 测试 project——新线测试不过闸')
-      }
-      if (!listPackageJsons().some((p) => p.startsWith('rewrite/'))) {
-        bad.push('listPackageJsons() 未扫描 rewrite/*——包级守卫（stub-only-sdk 等）漏新线')
+      const tc = pkg.scripts?.typecheck || ''
+      for (const p of ['shared', 'cloud', 'mp', 'site', 'admin', 'agent'])
+        if (!tc.includes(`rewrite/${p}/`)) bad.push(`package.json scripts.typecheck 未覆盖 rewrite/${p}——该包类型不过闸`)
+      if (!/rewrite\//.test(readFileSync(join(ROOT, 'vitest.config.mjs'), 'utf8'))) bad.push('vitest.config.mjs 未含 rewrite 测试——新线测试不过闸')
+      for (const p of ['admin', 'agent']) {
+        const f = join(ROOT, `rewrite/${p}/package.json`)
+        if (!existsSync(f) || !JSON.parse(readFileSync(f, 'utf8')).scripts?.build) bad.push(`rewrite/${p} 缺 build 脚本——产物闸无从构建`)
       }
       return bad
     },
@@ -1229,47 +1196,13 @@ export const repoChecks = [
     },
   },
   {
-    id: 'rw-agent-in-gates',
-    roots: ['铁律'],
-    desc: '新坐席台包必须被三道闸扫到（M3 批8·坐席台=在用人工客服唯一通道·零断档红线）：root typecheck 覆盖 rewrite/agent；轮询合并纯函数有行为测试；package.json 有 build 脚本',
-    run() {
-      const base = join(ROOT, 'rewrite/agent')
-      if (!existsSync(base)) return ['rewrite/agent 缺失——守卫扫描面消失（rw-agent-in-gates）']
-      const bad = []
-      const pkg = JSON.parse(readFileSync(join(ROOT, 'package.json'), 'utf8'))
-      if (!/rewrite\/agent/.test(pkg.scripts?.typecheck || '')) bad.push('package.json scripts.typecheck 未覆盖 rewrite/agent——新坐席台类型不过闸')
-      if (!existsSync(join(base, 'tests/desk.test.ts'))) bad.push('rewrite/agent/tests/desk.test.ts 缺失——轮询合并（不重气泡/游标只进不退）无行为测试')
-      const apkg = join(base, 'package.json')
-      if (!existsSync(apkg) || !JSON.parse(readFileSync(apkg, 'utf8')).scripts?.build) bad.push('rewrite/agent 缺 build 脚本——产物形态不在')
-      return bad
-    },
-  },
-  {
-    id: 'rw-admin-ui-in-gates',
-    roots: ['铁律'],
-    desc: '新后台包必须被三道闸扫到（M3 批1）：root typecheck 覆盖 rewrite/admin；api 客户端有行为测试在位（会话/规整属钱链入口）；package.json 有 build 脚本（vite 产物形态在）',
-    run() {
-      const base = join(ROOT, 'rewrite/admin')
-      if (!existsSync(base)) return ['rewrite/admin 缺失——守卫扫描面消失（rw-admin-ui-in-gates）']
-      const bad = []
-      const pkg = JSON.parse(readFileSync(join(ROOT, 'package.json'), 'utf8'))
-      if (!/rewrite\/admin/.test(pkg.scripts?.typecheck || '')) bad.push('package.json scripts.typecheck 未覆盖 rewrite/admin——新后台类型不过闸')
-      if (!existsSync(join(base, 'tests/client.test.ts'))) bad.push('rewrite/admin/tests/client.test.ts 缺失——api 客户端无行为测试（会话/错误规整是钱链入口）')
-      const apkg = join(base, 'package.json')
-      if (!existsSync(apkg) || !JSON.parse(readFileSync(apkg, 'utf8')).scripts?.build) bad.push('rewrite/admin 缺 build 脚本——产物形态不在')
-      return bad
-    },
-  },
-  {
     id: 'rw-mp-line-in-gates',
     roots: ['铁律'],
-    desc: '新线小程序包必须被三道闸扫到（M2 批1·ADR §24 测试一等公民）：root typecheck 覆盖 rewrite/mp；app.json 每个注册页面四件套（.wxml/.ts/.json/.wxss）齐全（缺件=真机白屏或工具报错·构建过≠真机能用的结构半边）；tabBar.custom 时 custom-tab-bar 组件四件套在位',
+    desc: '小程序注册页面文件齐全：app.json 每个注册页面四件套（.wxml/.ts/.json/.wxss）齐全（缺件=真机白屏或工具报错·构建过≠真机能用的结构半边）；tabBar.custom 时 custom-tab-bar 组件四件套在位',
     run() {
       const base = join(ROOT, 'rewrite/mp')
       if (!existsSync(base)) return ['rewrite/mp 缺失——守卫扫描面消失（rw-mp-line-in-gates）']
       const bad = []
-      const pkg = JSON.parse(readFileSync(join(ROOT, 'package.json'), 'utf8'))
-      if (!/rewrite\/mp/.test(pkg.scripts?.typecheck || '')) bad.push('package.json scripts.typecheck 未覆盖 rewrite/mp——新线小程序类型不过闸')
       const appJsonPath = join(base, 'app.json')
       if (!existsSync(appJsonPath)) return [...bad, 'rewrite/mp/app.json 缺失']
       const appJson = JSON.parse(readFileSync(appJsonPath, 'utf8'))
@@ -1932,76 +1865,6 @@ export const repoChecks = [
       return bad
     },
   },
-  {
-    id: 'rw-red-second-review',
-    roots: ['#3'],
-    desc: '红区（订单交易钱链 orders / 运维观测与配置 ops）改动必须双人复核——red 模块文件被改动时，提交信息须带 [red-review: <复核人>] 标记（工头亲自+人签字的机器化），拦截点在 commit-msg hook（pre-commit 阶段拿不到本次提交信息）。本守卫职责=机器闸完整性：commit-msg hook 缺失/未注册（core.hooksPath 错）即红——红区改动无人复核也拦不住=机器闸形同虚设。红区文件清单从 modules.json tier=red 推导 + 显式补录（app 网关壳/kit 共享内核）。反向自检：删 hook 或改 hooksPath 必红；改 red 文件无标记被 hook 拦。',
-    run() {
-      const bad = []
-      const modPath = join(ROOT, 'modules.json')
-      if (!existsSync(modPath)) return ['modules.json 缺失——守卫扫描面消失（rw-red-second-review）']
-      let mods
-      try { mods = JSON.parse(readFileSync(modPath, 'utf8'))?.modules ?? {} } catch { return [] }
-
-      const redFiles = new Set()
-      const appActionFileOf = {}
-      const appDir = join(ROOT, 'rewrite/cloud/src/functions/app/actions')
-      if (existsSync(appDir)) {
-        for (const f of readdirSync(appDir).filter((x) => x.endsWith('.ts'))) {
-          const src = readFileSync(join(appDir, f), 'utf8')
-          for (const m of src.matchAll(/^export\s+(?:async\s+)?(?:const\s+)?(?:function\s+)?(\w+)\s*[=(]/gm)) {
-            appActionFileOf[m[1]] = `rewrite/cloud/src/functions/app/actions/${f}`
-          }
-        }
-      }
-      for (const [mid, m] of Object.entries(mods)) {
-        if (m?.tier !== 'red') continue
-        for (const a of m?.appActions ?? []) {
-          if (appActionFileOf[a]) redFiles.add(appActionFileOf[a])
-        }
-        for (const f of m?.adminActionFiles ?? []) {
-          redFiles.add(`rewrite/cloud/src/functions/adminApi/actions/${f}.ts`)
-        }
-        for (const p of m?.mpPages ?? []) {
-          redFiles.add(`rewrite/mp/pages/${p}`)
-        }
-        for (const p of m?.adminPages ?? []) {
-          redFiles.add(`rewrite/admin/src/pages/${p}.vue`)
-        }
-      }
-      const EXTRA_RED = [
-        'rewrite/cloud/src/functions/app/index.ts',
-        'rewrite/cloud/src/functions/adminApi/index.ts',
-        'rewrite/cloud/src/functions/adminApi/lib.ts',
-        'rewrite/cloud/src/kit/gate.ts',
-        'rewrite/cloud/src/kit/wxpay.ts',
-        'rewrite/cloud/src/kit/transition.ts',
-        'rewrite/shared/src/money.ts',
-      ]
-      for (const f of EXTRA_RED) redFiles.add(f)
-
-      let changed = []
-      try {
-        const staged = execSync('git diff --cached --name-only', { encoding: 'utf8', maxBuffer: 8 * 1024 * 1024, stdio: ['ignore', 'pipe', 'ignore'], cwd: ROOT })
-        const unstaged = execSync('git diff --name-only', { encoding: 'utf8', maxBuffer: 8 * 1024 * 1024, stdio: ['ignore', 'pipe', 'ignore'], cwd: ROOT })
-        changed = [...new Set([...staged.split('\n'), ...unstaged.split('\n')])].map((s) => s.trim()).filter(Boolean)
-      } catch {
-        return []
-      }
-      const redTouched = changed.filter((f) => [...redFiles].some((rf) => f === rf || f.startsWith(rf + '/')))
-      if (redTouched.length === 0) return []
-
-      const hookPath = join(ROOT, 'scripts/git-hooks/commit-msg')
-      let hooksPath = ''
-      try {
-        hooksPath = execSync('git config core.hooksPath', { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'], cwd: ROOT }).trim()
-      } catch { /* hooksPath 读取失败按未设置处理（下方判红） */ }
-      if (!existsSync(hookPath) || hooksPath !== 'scripts/git-hooks') {
-        bad.push(`红区文件被改动（${redTouched.slice(0, 5).join(', ')}）但 commit-msg 复核闸缺失（scripts/git-hooks/commit-msg 不存在或 core.hooksPath=${hooksPath || '未设置'}）——红区改动必须双人复核 [red-review: <复核人>]，机器闸缺失即红（rw-red-second-review·根因#3）`)
-      }
-      return bad
-    },
-  },
 ]
 
 // ============== 逐文件规则（fileRules）==============
@@ -2095,7 +1958,7 @@ export const typeAndTestGuards = [
     id: 'rw-fen-branded-type',
     mechanism: 'ts',
     roots: ['#4'],
-    reverseTest: '新线：浮点金额赋给 Fen → tsc 编译失败（rewrite/shared Fen 品牌类型；随 rw-line-in-gates 接入 typecheck 闸）',
+    reverseTest: '新线：浮点金额赋给 Fen → tsc 编译失败（rewrite/shared Fen 品牌类型；随 rw-packages-in-gates 接入 typecheck 闸）',
   },
   {
     id: 'rw-flow-observable',
