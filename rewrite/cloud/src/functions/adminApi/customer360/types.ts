@@ -9,7 +9,7 @@ export interface CustomerPanelProvider {
   enabled: boolean
   /** 渲染顺序（小在前） */
   order: number
-  /** 取该板块数据（须 bounded·防大客户 360 拖垮·capacity-reads-bounded） */
+  /** 取该板块数据（须 bounded·防大客户 360 拖垮） */
   fetch(db: any, openid: string): Promise<unknown>
 }
 

@@ -1,4 +1,4 @@
-// 黄金 admin-misc 看板节 + orders-money 对账节 + inventory-scm §L（守卫 rw-admin4-golden）。
+// 黄金 admin-misc 看板节 + orders-money 对账节 + inventory-scm §L。
 import { describe, it, expect, beforeEach } from 'vitest'
 import { control } from 'wx-server-sdk'
 import { main as adminApi } from '../src/functions/adminApi/index'

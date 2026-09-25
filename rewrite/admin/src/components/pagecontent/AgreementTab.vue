@@ -14,9 +14,6 @@ const { model, message, busy, autoState, save } = usePageContent('agreement', no
 function addSection(c: AgreementClause) {
   if (c.sections.length < 30) c.sections.push({ title: '', body: '' })
 }
-function delSection(c: AgreementClause, i: number) {
-  c.sections.splice(i, 1)
-}
 </script>
 
 <template>
@@ -46,7 +43,7 @@ function delSection(c: AgreementClause, i: number) {
           </div>
           <EmptyState v-if="!model[part].sections.length" text="暂无条款，点「新增条款」添加" />
           <div v-for="(s, i) in model[part].sections" :key="i" class="pc-item">
-            <div class="pc-item-head"><span class="pc-item-idx">第 {{ i + 1 }} 条</span><button class="pc-iconbtn" title="删除这条" @click="delSection(model[part], i)"><Trash2 :size="14" :stroke-width="1.8" /></button></div>
+            <div class="pc-item-head"><span class="pc-item-idx">第 {{ i + 1 }} 条</span><button class="pc-iconbtn" title="删除这条" @click="model[part].sections.splice(i, 1)"><Trash2 :size="14" :stroke-width="1.8" /></button></div>
             <div class="pc-field"><label>条款标题（≤60 字）</label><input v-model="s.title" class="pc-input" maxlength="60" placeholder="第一条 服务范围" /></div>
             <div class="pc-field"><label>条款正文（≤2000 字）</label><textarea v-model="s.body" class="pc-textarea" maxlength="2000" placeholder="……" /></div>
           </div>

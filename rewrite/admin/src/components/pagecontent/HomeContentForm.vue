@@ -1,71 +1,30 @@
 <script setup lang="ts">
 // 首页内容表单：hero/品牌/特写/信任条/放心区/买家秀/FAQ/收尾/页脚 + 激活页背景图（全局 + 按课三态）。
-// 保存走本组件自己的 home-content 全档写，未并入 usePageContent——背景图三态与首页同档，拆签会双写互踩。
-// 保存链：serialSave 串行防乱序 + 900ms 防抖 + loaded load-guard + onBeforeUnmount 离签补存 + uploadImage 管线。
-import { ref, onMounted, onBeforeUnmount, watch, nextTick } from 'vue'
+// 保存链复用 usePageContent（走首页专用的 getHomeContent/saveHomeContent 全档读写）；激活页背景图三态
+// 与首页同档，留在本表单一起存，拆签会双写互踩。
+import { ref } from 'vue'
 import { Plus, Check, Trash2, X, ImageOff, ShieldCheck, HelpCircle } from 'lucide-vue-next'
 import { getHomeContent, saveHomeContent } from '../../api/content'
 import { uploadImage } from '../../api/products'
-import { normalizeHome, homePayload, type HomeModel } from '../../lib/mapContent'
+import { normalizeHome, homePayload } from '../../lib/mapContent'
 import { b64SizeOk } from '../../lib/mapProducts'
-import { serialSave } from '../../lib/serialSave'
 import { compressImage } from '../../lib/compressImage'
-import { SAVE_OK_MESSAGE } from '../../lib/mapPageContent'
+import { usePageContent } from '../../lib/usePageContent'
 import UiButton from '../ui/Button.vue'
 import Card from '../ui/Card.vue'
 import Badge from '../ui/Badge.vue'
 import EmptyState from '../ui/EmptyState.vue'
 
-const model = ref<HomeModel | null>(null)
-const message = ref('')
-const busy = ref(false)
+const { model, message, busy, autoState, save } = usePageContent('home', normalizeHome, homePayload, {
+  load: async () => {
+    const r = await getHomeContent()
+    return { ...r, content: r.home }
+  },
+  save: saveHomeContent,
+  what: '首页',
+})
 const sessionUrls = ref<Record<string, string>>({}) // 新上传 fileID→url 缩略预览
 const thumb = (fileID: string) => sessionUrls.value[fileID] || ''
-
-const autoState = ref('') // '' | saving | saved | error
-let saveTimer: ReturnType<typeof setTimeout> | null = null
-let saveResult: { ok: boolean; error?: string } = { ok: false } // 手动保存读取队列结果，不再另发一次请求
-let loaded = false // load-guard：首次载入赋值不触发自动保存
-watch(
-  model,
-  () => {
-    if (!model.value || !loaded) return
-    autoState.value = 'saving'
-    if (saveTimer) clearTimeout(saveTimer)
-    saveTimer = setTimeout(() => {
-      saveTimer = null
-      void flushSave()
-    }, 900)
-  },
-  { deep: true }
-)
-async function autosave() {
-  if (!model.value) return
-  const r = await saveHomeContent(homePayload(model.value))
-  saveResult = r
-  autoState.value = r.ok ? 'saved' : 'error'
-}
-// 串行化·防慢网下两次自动保存乱序覆盖（P2·根因#8）；key='page-content:home'（批D·P1，与 usePageContent.ts
-// 其余四签用同一 key 命名法·本组件独立存 content/home 档不复用该 composable，见文件头注）：改走模块级
-// 共享槽位，快速切签再切回首页签重建组件实例时，新实例接管旧实例仍在途的补存链，防旧快照覆盖新编辑。
-const flushSave = serialSave(autosave, 'page-content:home')
-onBeforeUnmount(() => {
-  if (saveTimer) {
-    clearTimeout(saveTimer)
-    void flushSave() // 离签补存 pending
-  }
-})
-
-onMounted(async () => {
-  const r = await getHomeContent()
-  model.value = normalizeHome(r.ok ? r.home : null)
-  if (!r.ok) {
-    // 载入失败不放开自动保存、也不允许手动保存（loaded 恒 false）——否则一次编辑就 saveHomeContent(空档) 整块覆盖
-    message.value = '加载失败：' + String(r.error || '')
-    return
-  }
-  void nextTick(() => (loaded = true)) // 载入成功落定后才放开自动保存
-})
 
 async function uploadTo(assign: (_fileID: string) => void, ev: Event) {
   const input = ev.target as HTMLInputElement
@@ -105,42 +64,6 @@ function addReview() {
 }
 function addFooterLink() {
   if (model.value && model.value.footerLinks.length < 6) model.value.footerLinks.push('')
-}
-function delCourseRow(i: number) {
-  model.value?.byCourse.splice(i, 1)
-}
-function delTrust(i: number) {
-  model.value?.trust.splice(i, 1)
-}
-function delFaq(i: number) {
-  model.value?.faq.splice(i, 1)
-}
-function delReassure(i: number) {
-  model.value?.reassureItems.splice(i, 1)
-}
-function delReview(i: number) {
-  model.value?.reviewsItems.splice(i, 1)
-}
-function delFooterLink(i: number) {
-  model.value?.footerLinks.splice(i, 1)
-}
-
-async function save() {
-  if (!model.value || busy.value) return
-  if (!loaded) {
-    message.value = '内容未成功载入，暂不能保存（避免覆盖已有首页配置·请刷新重试）'
-    return
-  }
-  if (saveTimer) {
-    clearTimeout(saveTimer)
-    saveTimer = null
-  }
-  busy.value = true
-  await flushSave() // 排空并补存最新编辑，保存结果来自同一条队列
-  const r = saveResult
-  busy.value = false
-  autoState.value = ''
-  message.value = r.ok ? SAVE_OK_MESSAGE : '保存失败：' + String(r.error || '')
 }
 </script>
 
@@ -222,7 +145,7 @@ async function save() {
               <label class="mini">欢迎<input type="file" accept="image/*" @change="(e) => uploadTo((f) => (row.welcome = f), e)" /><template v-if="row.welcome"><img v-if="thumb(row.welcome)" :src="thumb(row.welcome)" class="state-thumb" alt="" /><Check v-else :size="13" :stroke-width="2" class="ok" /><button class="clr" title="清除这态" @click.stop.prevent="row.welcome = ''"><X :size="12" :stroke-width="2" /></button></template></label>
               <label class="mini">回访<input type="file" accept="image/*" @change="(e) => uploadTo((f) => (row.welcomeBack = f), e)" /><template v-if="row.welcomeBack"><img v-if="thumb(row.welcomeBack)" :src="thumb(row.welcomeBack)" class="state-thumb" alt="" /><Check v-else :size="13" :stroke-width="2" class="ok" /><button class="clr" title="清除这态" @click.stop.prevent="row.welcomeBack = ''"><X :size="12" :stroke-width="2" /></button></template></label>
               <label class="mini">已用<input type="file" accept="image/*" @change="(e) => uploadTo((f) => (row.taken = f), e)" /><template v-if="row.taken"><img v-if="thumb(row.taken)" :src="thumb(row.taken)" class="state-thumb" alt="" /><Check v-else :size="13" :stroke-width="2" class="ok" /><button class="clr" title="清除这态" @click.stop.prevent="row.taken = ''"><X :size="12" :stroke-width="2" /></button></template></label>
-              <button class="icon-btn" title="删除这门课" @click="delCourseRow(i)"><Trash2 :size="14" :stroke-width="1.8" /></button>
+              <button class="icon-btn" title="删除这门课" @click="model.byCourse.splice(i, 1)"><Trash2 :size="14" :stroke-width="1.8" /></button>
             </div>
           </template>
           <div class="row-add">
@@ -240,7 +163,7 @@ async function save() {
             <div v-for="(t, i) in model.trust" :key="i" class="pair">
               <input v-model="t.icon" placeholder="图标名（如 truck）" />
               <input v-model="t.label" placeholder="文案（≤12 字）" maxlength="12" />
-              <button class="icon-btn" title="删除" @click="delTrust(i)"><Trash2 :size="14" :stroke-width="1.8" /></button>
+              <button class="icon-btn" title="删除" @click="model.trust.splice(i, 1)"><Trash2 :size="14" :stroke-width="1.8" /></button>
             </div>
           </div>
         </Card>
@@ -253,7 +176,7 @@ async function save() {
           <div class="field"><label>区块标题（≤20 字）</label><input v-model="model.reassureHeading" maxlength="20" placeholder="把门槛一一拆掉" /></div>
           <div class="field"><label>引语（≤60 字）</label><textarea v-model="model.reassureLead" maxlength="60" placeholder="新手学习钩织存在很多门槛，我们把这些门槛一一拆掉了。" /></div>
           <div v-for="(it, i) in model.reassureItems" :key="i" class="item-block">
-            <div class="item-head"><span class="item-idx">第 {{ i + 1 }} 条</span><button class="icon-btn" title="删除这条" @click="delReassure(i)"><Trash2 :size="14" :stroke-width="1.8" /></button></div>
+            <div class="item-head"><span class="item-idx">第 {{ i + 1 }} 条</span><button class="icon-btn" title="删除这条" @click="model.reassureItems.splice(i, 1)"><Trash2 :size="14" :stroke-width="1.8" /></button></div>
             <div class="pair2">
               <input v-model="it.icon" placeholder="图标名（如 heart-handshake）" />
               <input v-model="it.title" placeholder="标题（≤20 字）" maxlength="20" />
@@ -276,7 +199,7 @@ async function save() {
           </template>
           <div class="field"><label>区块标题（≤20 字）</label><input v-model="model.reviewsHeading" maxlength="20" placeholder="真实买家秀" /></div>
           <div v-for="(it, i) in model.reviewsItems" :key="i" class="item-block">
-            <div class="item-head"><span class="item-idx">第 {{ i + 1 }} 条</span><button class="icon-btn" title="删除这条" @click="delReview(i)"><Trash2 :size="14" :stroke-width="1.8" /></button></div>
+            <div class="item-head"><span class="item-idx">第 {{ i + 1 }} 条</span><button class="icon-btn" title="删除这条" @click="model.reviewsItems.splice(i, 1)"><Trash2 :size="14" :stroke-width="1.8" /></button></div>
             <textarea v-model="it.quote" placeholder="买家评价（≤120 字）" maxlength="120" />
             <div class="upload-row inline">
               <input v-model="it.user" placeholder="昵称（≤20 字）" maxlength="20" class="user-in" />
@@ -299,7 +222,7 @@ async function save() {
             <div v-for="(f, i) in model.faq" :key="i" class="faq">
               <input v-model="f.title" placeholder="问题（≤40 字）" maxlength="40" />
               <textarea v-model="f.body" placeholder="回答（≤150 字）" maxlength="150" />
-              <button class="icon-btn" title="删除" @click="delFaq(i)"><Trash2 :size="14" :stroke-width="1.8" /></button>
+              <button class="icon-btn" title="删除" @click="model.faq.splice(i, 1)"><Trash2 :size="14" :stroke-width="1.8" /></button>
             </div>
           </div>
         </Card>
@@ -327,7 +250,7 @@ async function save() {
           <div v-if="model.footerLinks.length" class="rows">
             <div v-for="(_, i) in model.footerLinks" :key="i" class="linkrow">
               <input v-model="model.footerLinks[i]" placeholder="链接文案（≤20 字）" maxlength="20" />
-              <button class="icon-btn" title="删除" @click="delFooterLink(i)"><Trash2 :size="14" :stroke-width="1.8" /></button>
+              <button class="icon-btn" title="删除" @click="model.footerLinks.splice(i, 1)"><Trash2 :size="14" :stroke-width="1.8" /></button>
             </div>
           </div>
           <div class="field mt"><label>版权文案（≤120 字）</label><input v-model="model.footerCopy" maxlength="120" placeholder="Copyright © 2026 ZHUO DUCKI LUCKY · All Rights Reserved." /></div>

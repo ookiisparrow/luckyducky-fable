@@ -13,6 +13,7 @@ import { planLessonBatch } from '../lib/videoBatch'
 import { serialSave } from '../lib/serialSave'
 import { useLatest } from '../lib/latest'
 import { setUploadLock, clearUploadLock, isUploadLocked } from '../lib/uploadLock'
+import { confirmed } from '../lib/status'
 import PageHeader from '../components/ui/PageHeader.vue'
 import Card from '../components/ui/Card.vue'
 import Badge from '../components/ui/Badge.vue'
@@ -79,22 +80,18 @@ const vodPendingCount = computed(() => {
 async function syncVod() {
   if (!course.value || busy.value || batchUploading.value) return
   busy.value = true
-  const r = await syncVodMedia(String(course.value.id))
+  const cid = String(course.value.id)
+  const r = await syncVodMedia(cid)
   busy.value = false
   if (r.ok) {
-    message.value = `转码状态已同步：本次就绪 ${r.ready} 段、仍在转码 ${r.processing} 段` + (Number(r.processing) ? '——短视频通常几分钟内转完，稍后再点一次' : '，可以发布了')
-    await load() // 服务端已回写 vodUrl 且 rev 递增——不重载，下次自动保存会撞 DRAFT_CONFLICT（诚实拒绝）
+    const text = `转码状态已同步：本次就绪 ${r.ready} 段、仍在转码 ${r.processing} 段` + (Number(r.processing) ? '——短视频通常几分钟内转完，稍后再点一次' : '，可以发布了')
+    // 服务端已回写 vodUrl 且 rev 递增——不重载，下次自动保存会撞 DRAFT_CONFLICT（诚实拒绝）。
+    // 重载刚同步的这门课（输入框可能已被清空或改成别的课）；先刷新再写结论，load 会清 message，刷新失败则保留其报错
+    courseId.value = cid
+    if (await load()) message.value = text
   } else message.value = launchErrorText(r.error)
 }
 
-function twoStep(key: string, run: () => void) {
-  if (confirmKey.value !== key) {
-    confirmKey.value = key
-    return
-  }
-  confirmKey.value = ''
-  run()
-}
 // ↑↓ 重排（换皮丢·章/课时/段顺序＝内容语义·嵌套 ↑↓ 比拖拽稳）
 function move<T>(arr: T[], i: number, dir: number) {
   if (batchUploading.value) return // 批量传视频在途锁重排（交互面·P1·同 delChapter/delLesson/delSegment）
@@ -107,17 +104,15 @@ function move<T>(arr: T[], i: number, dir: number) {
 }
 function delChapter(ci: number) {
   if (batchUploading.value) return // 批量传视频在途锁删除（交互面·P1·防结构变动使稳定引用失配）
-  twoStep('ch:' + ci, () => course.value!.chapters.splice(ci, 1))
+  if (confirmed(confirmKey, 'ch:' + ci)) course.value!.chapters.splice(ci, 1)
 }
 function delLesson(ch: Record<string, any>, ci: number, li: number) {
   if (batchUploading.value) return
-  twoStep('l:' + ci + ':' + li, () => ch.lessons.splice(li, 1))
+  if (confirmed(confirmKey, 'l:' + ci + ':' + li)) ch.lessons.splice(li, 1)
 }
 function delSegment(l: Record<string, any>, ci: number, li: number, si: number) {
   if (batchUploading.value) return
-  twoStep('s:' + ci + ':' + li + ':' + si, () => {
-    l.segments.splice(si, 1)
-  })
+  if (confirmed(confirmKey, 's:' + ci + ':' + li + ':' + si)) l.segments.splice(si, 1)
 }
 // 发布前护栏（换皮退成可静默发布残课）：空结构硬拦、缺视频/空课时软提醒
 const publishIssues = computed(() => {
@@ -140,23 +135,23 @@ const publishIssues = computed(() => {
 
 const loadGen = useLatest() // load() 乱序守卫（批A）：只让最后一次发起的 getCourseDraft 结果落地
 async function load() {
-  if (!courseId.value.trim()) return
+  if (!courseId.value.trim()) return false
   if (batchUploading.value) {
     // 批量传视频在途时拦截切课（P1 复审补漏·根因#8）：load() 会把 course.value 整体换成另一门课，
     // 而 batchUpload 循环持有的是旧课时对象的裸引用——一旦断链，仍在跑的上传会把 videoFileId 写回
     // 一棵不可达的树，永久丢失且无报错（云存储留孤儿文件）。交互面已锁重排/删除按钮，切课入口同锁。
     message.value = '有批量上传在进行中，请等其完成再切课'
-    return
+    return false
   }
   confirmKey.value = '' // 换课即复位危险态（P1·防旧武装的删章/删课时/删段残留、重进同一位一击直删·批3 规格）
   publishConfirm.value = false // 换课即复位危险态（P1·防旧武装的发布确认残留、重进一击直发·批3 规格）
   message.value = '加载中…'
   const my = loadGen.begin() // 乱序守卫（批A·同 Batches G1·根因#8）：连点载入/切课时旧回包别把 course.value 污染成错课
   const r = await getCourseDraft(courseId.value.trim())
-  if (loadGen.isStale(my)) return // 已发起更新的 load()·整包丢弃（course/draftRev/message 全不写）
+  if (loadGen.isStale(my)) return false // 已发起更新的 load()·整包丢弃（course/draftRev/message 全不写）
   if (!r.ok) {
     message.value = launchErrorText(r.error)
-    return
+    return false
   }
   loaded = false // 载入期不触发自动保存
   fromPublished.value = r.fromPublished === true
@@ -167,6 +162,7 @@ async function load() {
   message.value = ''
   saveState.value = ''
   void nextTick(() => (loaded = true)) // 载入后的用户编辑才自动保存
+  return true
 }
 
 // 视频时长自动读取（换皮丢·选完视频读元数据填 dur·mm:ss）

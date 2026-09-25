@@ -30,7 +30,7 @@ Page({
   pendingBackTimer: false, // refresh() 在 onReady 之前检测到空草稿——先记待办，onReady 触发后补起计时（见 onReady）。
   onUnload() {
     this.unloaded = true
-    if (this.backTimer) clearTimeout(this.backTimer) // 空车延时返回坞清理（守卫 rw-mp-navback-timer-cleaned）
+    if (this.backTimer) clearTimeout(this.backTimer) // 空车延时返回坞清理
   },
   onReady() {
     this.ready = true
@@ -49,7 +49,7 @@ Page({
   // 「转场大概率已落地」的近似信号——ready 前检测到空草稿只记 pendingBackTimer，onReady 触发后再起 600ms 计时；
   // ready 已是 true（如从地址页返回，onReady 早已触发过）则照旧立即起表。600ms「可读时长」语义不变，toast 立即弹出。
   armBackTimer() {
-    if (this.unloaded) return // pendingBackTimer 补起时也需复核（守卫 rw-mp-navback-timer-cleaned·同步路径任意位置皆可）
+    if (this.unloaded) return // pendingBackTimer 补起时也需复核（同步路径任意位置皆可）
     if (this.backTimer) clearTimeout(this.backTimer)
     this.backTimer = setTimeout(() => wx.navigateBack(), 600)
   },
@@ -132,11 +132,13 @@ Page({
     const order = (r.order || {}) as Record<string, any>
     trackEvent('order_success', 'checkout', String(order.id || ''), { amountFen }) // 电商漏斗埋点（R41）
     if (order.status === 'paid') {
-      // mock 模式建单即付（开发环境）——直接进成功页
-      wx.redirectTo({ url: '/pages/paysuccess/paysuccess?id=' + order.id + '&amount=' + amountFen })
+      this.toSuccess(order.id, amountFen) // mock 模式建单即付（开发环境）——直接进成功页
       return
     }
     await this.startPay(String(order.id || ''), amountFen)
+  },
+  toSuccess(orderId: string, amountFen: number) {
+    wx.redirectTo({ url: '/pages/paysuccess/paysuccess?id=' + orderId + '&amount=' + amountFen })
   },
   async startPay(orderId: string, amountFen: number) {
     const outcome = mapPayResult(await pay(orderId))
@@ -146,34 +148,22 @@ Page({
       wx.showToast({ title: '订单已生成，可到订单列表继续支付', icon: 'none' })
       return
     }
+    // 回首页从头逛起：防 tab 实例旧滚动位置残留（收敛见 lib/homeIntent.ts）
+    const failModal = (title: string, content: string) => wx.showModal({ title, content, showCancel: false, success: () => goHomeTab() })
     if (outcome.kind === 'paid') {
-      wx.redirectTo({ url: '/pages/paysuccess/paysuccess?id=' + orderId + '&amount=' + amountFen })
+      this.toSuccess(orderId, amountFen)
       return
     }
     if (outcome.kind === 'request') {
       wx.requestPayment({
         ...outcome.payment,
-        success: () => wx.redirectTo({ url: '/pages/paysuccess/paysuccess?id=' + orderId + '&amount=' + amountFen }),
-        fail: (res) => {
-          // 取消/失败：订单保留待支付（支付窗口内可续付·订单列表/详情页已上线，见 me.ts:57 入口）
-          const cancelled = String(res.errMsg || '').includes('cancel')
-          wx.showModal({
-            title: cancelled ? '支付已取消' : '支付没成功',
-            content: '订单已保留，超时前都可以继续支付。可到「我的-我的订单」继续支付。',
-            showCancel: false,
-            // 回首页从头逛起：防 tab 实例旧滚动位置残留（收敛见 lib/homeIntent.ts）
-            success: () => goHomeTab(),
-          })
-        },
+        success: () => this.toSuccess(orderId, amountFen),
+        // 取消/失败：订单保留待支付（支付窗口内可续付·订单列表/详情页已上线，见 me.ts:57 入口）
+        fail: (res) =>
+          failModal(String(res.errMsg || '').includes('cancel') ? '支付已取消' : '支付没成功', '订单已保留，超时前都可以继续支付。可到「我的-我的订单」继续支付。'),
       })
       return
     }
-    wx.showModal({
-      title: outcome.kind === 'closed' ? '订单已关闭' : '支付没成功',
-      content: outcome.message,
-      showCancel: false,
-      // 回首页从头逛起：防 tab 实例旧滚动位置残留（收敛见 lib/homeIntent.ts）
-      success: () => goHomeTab(),
-    })
+    failModal(outcome.kind === 'closed' ? '订单已关闭' : '支付没成功', outcome.message)
   },
 })

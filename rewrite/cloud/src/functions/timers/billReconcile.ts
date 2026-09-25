@@ -14,7 +14,7 @@ import {
   type WxFetch,
 } from '../../kit'
 
-// —— 每日自动对账 timer（钱链·批B2·守卫 rw-bill-reconcile-golden）——
+// —— 每日自动对账 timer（钱链）——
 // 病根#14：closeExpiredOrders 从不查微信侧，「微信有款我方无单」（wxOnly·最危险类）此前唯一链路是
 // admin 手动点开 getBillMatch——没人点开就没人知道。本 timer 每日拉前一日微信账单→落 wxBills→比对，
 // 差异高危入账（anomalies 指纹去重·同日重跑天然幂等#1）+ 首见 [LD_ALERT] + 新指纹才推 run 级汇总告警。
@@ -58,15 +58,23 @@ export async function runBillReconcile(
   // 全窗匹配已压到「我方单真不存在」一类＝真差异——勿再加宽。
   const _ = db.command
   const dayStart = dayStartMsCST(date)
-  const cap = opts.cap ?? 2000
-  const raw = await db
+  const cap = opts.cap ?? 1000 // 云函数端 .limit() 最多给 1000 条，设大了 truncated 永远报不出截断
+  const raw: any[] | null = await db
     .collection(COLLECTIONS.orders)
     .where({ status: _.in(PAID_ORDER_STATUSES as any), paidAt: _.gt(dayStart - DAY_MS - 1) })
     .orderBy('paidAt', 'desc')
     .limit(cap)
     .get()
-    .then((r: any) => r.data)
-    .catch(() => [])
+    .then(
+      (r: any) => r.data,
+      () => null
+    )
+  // 读失败≠我方无单：当空会把当天每笔微信流水写成 BILL_WX_ONLY 高危假异常，且指纹去重让同日重跑不再推送、
+  // 假异常一直挂在账本里。只发一条告警，不比对不落账。
+  if (!raw) {
+    await notifyAlert('money', 'billReconcile', 'BILL_RECON_ORDERS_READ_FAIL', { date, fp: date })
+    return ok({ date, error: 'ORDERS_READ_FAIL' })
+  }
   const truncated = raw.length >= cap
   const ourOrders = raw.filter((o: any) => typeof o.paidAt === 'number' && o.paidAt < dayStart + 2 * DAY_MS)
 

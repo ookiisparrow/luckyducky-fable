@@ -10,16 +10,9 @@ Page({
   data: { orderId: '', amountYuan: '', hasAmount: false, sloganEn: BRAND_SLOGAN_EN },
   onLoad(query: Record<string, string | undefined>) {
     const orderId = String(query.id || '')
-    let amountYuan = ''
-    let hasAmount = false
-    const raw = query.amount
-    if (raw != null && raw !== '') {
-      const fen = Number(raw)
-      if (Number.isFinite(fen) && fen >= 0) {
-        amountYuan = (fen / 100).toFixed(2)
-        hasAmount = true
-      }
-    }
+    const fen = query.amount ? Number(query.amount) : NaN // 缺/空串 → NaN → 隐去金额行
+    const hasAmount = Number.isFinite(fen) && fen >= 0
+    const amountYuan = hasAmount ? (fen / 100).toFixed(2) : ''
     this.setData({ orderId, amountYuan, hasAmount })
     trackEvent('pay_success_view', 'paysuccess', orderId, { amountYuan, hasAmount }) // 电商漏斗埋点（R41）
   },

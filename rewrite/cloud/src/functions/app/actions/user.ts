@@ -94,46 +94,21 @@ export const updateProfile = withOpenId(
     }
 
     patch.updatedAt = Date.now()
-
-    // 先查后改（不用 update 的 stats 判建档：内容未变 updated=0 会误判重复建档）
-    const users = db.collection(COLLECTIONS.users)
-    const found = await users.where({ _openid: OPENID }).limit(1).get()
-    if (found.data.length) {
-      const doc = found.data[0]
-      await users.doc(doc._id).update({ data: patch })
-      return ok({ user: { ...doc, ...patch } })
-    }
-    const user = await ensureDoc(COLLECTIONS.users, OPENID, {
-      _openid: OPENID,
-      nickname: '',
-      avatar: '',
-      bio: '',
-      createdAt: Date.now(),
-      ...patch,
-    })
-    return ok({ user })
+    const seed = { nickname: '', avatar: '', bio: '', createdAt: Date.now() }
+    return ok({ user: await upsertUser(db, OPENID, patch, seed) })
   })
 )
 
-const OWNED_STRIP_CAP = 200 // 同 getMyCourses 上界·一人激活/进度极少触顶；触顶剩行下轮再删（ponytail: 不做成游标清扫器）
-
-/** 按归属字段有界摘除本人行。真没有行才当空；读失败返回 false，调用方不得报已删除。 */
-async function removeOwned(db: any, coll: string, field: string, value: string): Promise<boolean> {
-  const res = await db
-    .collection(coll)
-    .where({ [field]: value })
-    .limit(OWNED_STRIP_CAP)
-    .get()
-    .catch(() => null)
-  if (!res) return false // 库挂 ≠ 没有可删行（根因#14）
-  for (const d of res.data || []) {
-    await db
-      .collection(coll)
-      .doc(d._id)
-      .remove()
-      .catch(() => {})
-  }
-  return true
+/**
+ * 本人档 upsert：老随机 _id 档 where 命中即改；无档按确定性 _id=OPENID 建（seed 为缺省字段）。
+ * 先查后改——不用 update 的 stats 判建档：内容未变 updated=0 会误判重复建档。
+ */
+async function upsertUser(db: any, OPENID: string, patch: Record<string, unknown>, seed: Record<string, unknown>) {
+  const users = db.collection(COLLECTIONS.users)
+  const found = await users.where({ _openid: OPENID }).limit(1).get()
+  if (!found.data.length) return ensureDoc(COLLECTIONS.users, OPENID, { _openid: OPENID, ...seed, ...patch })
+  await users.doc(found.data[0]._id).update({ data: patch })
+  return { ...found.data[0], ...patch }
 }
 
 /**
@@ -154,32 +129,17 @@ export const deleteAccount = withOpenId(
       deletedAt: now,
       updatedAt: now,
     }
-    const users = db.collection(COLLECTIONS.users)
-    const found = await users.where({ _openid: OPENID }).limit(1).get()
-    if (found.data.length) {
-      await users.doc(found.data[0]._id).update({ data: blank })
-    } else {
-      await ensureDoc(COLLECTIONS.users, OPENID, { _openid: OPENID, createdAt: now, ...blank })
-    }
+    await upsertUser(db, OPENID, blank, { createdAt: now })
 
-    if (!(await removeOwned(db, COLLECTIONS.activations, '_openid', OPENID))) return err(ERR.INTERNAL)
-    if (!(await removeOwned(db, COLLECTIONS.progress, '_openid', OPENID))) return err(ERR.INTERNAL)
-    if (!(await removeOwned(db, COLLECTIONS.kfIdentity, 'openid', OPENID))) return err(ERR.INTERNAL)
-
-    const qrs = await db
+    // 服务端条件批删/批改（无上界·各一次往返），串行：前一步失败后面不动。任一步失败直接抛→网关记账回
+    // INTERNAL，绝不报已删除却留着课权或旧码归属（根因#14：旧码仍归本人时重扫会走 activateCourse 自愈拿回课）。
+    await db.collection(COLLECTIONS.activations).where({ _openid: OPENID }).remove()
+    await db.collection(COLLECTIONS.progress).where({ _openid: OPENID }).remove()
+    await db.collection(COLLECTIONS.kfIdentity).where({ openid: OPENID }).remove()
+    await db
       .collection(COLLECTIONS.qrcodes)
       .where({ activatedBy: OPENID })
-      .limit(OWNED_STRIP_CAP)
-      .get()
-      .catch(() => ({ data: [] }))
-    for (const q of qrs.data || []) {
-      await db
-        .collection(COLLECTIONS.qrcodes)
-        .doc(q._id)
-        .update({ data: { activatedBy: 'deleted:' + OPENID } })
-        .catch(() => {})
-    }
-
+      .update({ data: { activatedBy: 'deleted:' + OPENID } })
     return ok({ deleted: true })
   })
 )

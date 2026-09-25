@@ -1,4 +1,4 @@
-// 黄金 观测-控制台 §D：运行期观测控制台数据层（守卫 rw-ops-console-golden·批3·治病根#14 告警进人眼）。
+// 黄金 观测-控制台 §D：运行期观测控制台数据层（治病根#14 告警进人眼）。
 // 体检面板 + 异常账本的 adminApi 数据层：立即巡检 / 最新体检 / 异常列表(筛+有界) / 标记已处理(写+审计)。
 // 只读业务数据——只碰 inspectRuns/anomalies 两 ops 集合。
 import { describe, it, expect, beforeEach } from 'vitest'
@@ -12,7 +12,7 @@ const body = (res: any) => JSON.parse(res.body)
 
 beforeEach(() => control.reset())
 
-describe('运行期观测控制台数据层（批3·rw-ops-console-golden）', () => {
+describe('运行期观测控制台数据层', () => {
   it('大白话：立即巡检→跑一轮·回报体检·写 inspectRuns（卡单被逮）', async () => {
     control.seed(COLLECTIONS.orders, [{ _id: 'A', status: 'paid', amount: 100, transactionId: 'wxA', paidAt: Date.now() - 80 * HOUR }])
     const r = body(await runInspect(ctx()))

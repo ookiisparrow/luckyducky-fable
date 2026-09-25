@@ -1,4 +1,4 @@
-// 金额契约：分整数往返与售后分摊封顶（守卫 rw-contracts-golden）。
+// 金额契约：分整数往返与售后分摊封顶。
 import { describe, it, expect } from 'vitest'
 import fc from 'fast-check'
 import { toFen, asFen, fenToYuan, refundShareFen, type Fen } from '../src/money'

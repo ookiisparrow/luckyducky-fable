@@ -6,6 +6,7 @@ import { ref, computed, onMounted } from 'vue'
 import { RefreshCw, Check, ClipboardList, AlertCircle, AlertTriangle, Activity, ShieldCheck } from 'lucide-vue-next'
 import { listAnomalies, resolveAnomaly } from '../api/ops'
 import { useLatest } from '../lib/latest'
+import { confirmed } from '../lib/status'
 import PageHeader from '../components/ui/PageHeader.vue'
 import KpiCard from '../components/ui/KpiCard.vue'
 import Badge from '../components/ui/Badge.vue'
@@ -31,14 +32,7 @@ const FILTERS: { key: 'open' | 'resolved' | 'all'; label: string }[] = [
   { key: 'all', label: '全部' },
 ]
 
-function fmt(ms: number) {
-  if (!ms) return ''
-  try {
-    return new Date(ms).toLocaleString('zh-CN', { hour12: false })
-  } catch {
-    return String(ms)
-  }
-}
+const fmt = (ms: number) => (ms ? new Date(ms).toLocaleString('zh-CN', { hour12: false }) : '')
 function ctxPairs(ctx: any): string {
   if (!ctx || typeof ctx !== 'object') return ''
   return Object.keys(ctx)
@@ -71,11 +65,7 @@ async function load() {
 
 const confirmId = ref('') // 两步确认（换皮一键无撤销·标记已处理是破坏性动作）
 async function markResolved(a: any) {
-  if (confirmId.value !== a._id) {
-    confirmId.value = a._id
-    return
-  }
-  confirmId.value = ''
+  if (!confirmed(confirmId, a._id)) return
   const r: any = await resolveAnomaly(a._id)
   if (r.error === 'SESSION_LOST') return // 会话失效集中导登录（client.onSessionLost·单源·根因#5）
   if (r.ok) {

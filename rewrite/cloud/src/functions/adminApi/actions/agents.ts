@@ -1,10 +1,10 @@
 import { reply, ensure, str, newSalt, kdf, keyMatches, alertIfScanAtCap, type Ctx } from '../lib'
-import { notifyAlert, isDocMissing } from '../../../kit'
+import { notifyAlert, getDocOrNull, dayKeyCST, dayStartMsCST } from '../../../kit'
 import { COLLECTIONS } from '@ldrw/shared'
 
 // 外包账号管理（后台360工作站 §1.5·B5.2·承面C 车道 C·根因#3）：商户超管建/停/列外包坐席账号
 // （adminConfig 多账号·role=outsourced 最小权·checkKey 据 keyHash 认账号 + disabled 停用·骨架已在 lib.ts）。
-// 本三 action 仅超管可调——**未登记 ACTION_CAPS 默认拒 ADMIN_DEFAULT_CAP**（守卫 agent-rbac-gated·外包
+// 本三 action 仅超管可调——**未登记 ACTION_CAPS 默认拒 ADMIN_DEFAULT_CAP**（外包
 // 自身 caps 无 admin:write、不能建/停账号·防外包自扩权）。已挂 adminApi ACTIONS。
 
 const AGENT_ROLE = 'outsourced' // 外包最小权角色（ROLES.outsourced·caps 由 role 派生·车道 A 补 agent:handle）
@@ -49,7 +49,7 @@ export async function createAgent({ db, data }: Ctx) {
   const id = 'agent:' + Date.now().toString(36) + Math.random().toString(36).slice(2, 8)
   const keySalt = newSalt()
   const keyHash = kdf(key, keySalt)
-  // _id 由 doc(id) 指定·data 不带 _id（真 sdk set data 含 _id 即 reject·根因#8·no-id-in-set-data）
+  // _id 由 doc(id) 指定·data 不带 _id（真 sdk set data 含 _id 即 reject·根因#8）
   const doc: any = { name, role: AGENT_ROLE, keySalt, keyHash, disabled: false, createdAt: Date.now() }
   if (wecomUserId) doc.wecomUserId = wecomUserId
   await db.collection('adminConfig').doc(id).set({ data: doc })
@@ -57,45 +57,30 @@ export async function createAgent({ db, data }: Ctx) {
   // 写后复核（P2·根因#1 先查后写竞态修复）：上面的 dup/wecomUserIdTaken 都是「先查」，先查后写窗口内
   // 并发双方可能都通过检查各自建号、撞出两账号共享同一口令/wecomUserId（登录串号/免登歧义）。
   // 写完立即重扫描重比对，keyMatches 命中 >1 说明确实撞了——回滚自己刚建的这份、回 409（两侧同时回滚也
-  // 安全：都失败重试即可，绝不留双凭证）。管理端低频操作，多一次读的代价可接受。
-  const keyDupScan = await db.collection('adminConfig').where({ keyHash: _.exists(true) }).limit(50).get().catch(() => null)
-  if (!keyDupScan) {
-    await db
+  // 安全：都失败重试即可，绝不留双凭证）。复核读失败同样回滚：核验不了的账号不能留。管理端低频操作，多一次读的代价可接受。
+  // 回滚失败留痕（病根14）：双凭证残留属身份安全面（共享 keyHash 串号 / 共享企微 userid 免登歧义）。
+  const rollback = (which: string) =>
+    db
       .collection('adminConfig')
       .doc(id)
       .remove()
-      .catch(async () => {
-        await notifyAlert('security', 'createAgent', 'ROLLBACK_FAIL', { id, which: 'keyHash' })
-      })
+      .catch(() => notifyAlert('security', 'createAgent', 'ROLLBACK_FAIL', { id, which }))
+  const keyDupScan = await db.collection('adminConfig').where({ keyHash: _.exists(true) }).limit(50).get().catch(() => null)
+  if (!keyDupScan) {
+    await rollback('keyHash')
     return reply(503, { ok: false, error: 'KEY_LOOKUP_FAIL' })
   }
   alertIfScanAtCap(keyDupScan.data || [], 50, 'createAgent.keyDupScan')
   const keyDupCount = ((keyDupScan.data || []) as any[]).filter((r: any) => keyMatches(r, key)).length
   if (keyDupCount > 1) {
-    // 回滚失败留痕（N3·bug 清除战役 II 遗留·病根14）：双凭证残留属身份安全面（两账号共享同一 keyHash 能登录串号）
-    // ——只加信号，返回语义/控制流零变化（原 409 回复不变）。
-    await db
-      .collection('adminConfig')
-      .doc(id)
-      .remove()
-      .catch(async () => {
-        await notifyAlert('security', 'createAgent', 'ROLLBACK_FAIL', { id, which: 'keyHash' })
-      })
+    await rollback('keyHash')
     return reply(409, { ok: false, error: 'KEY_TAKEN' })
   }
   if (wecomUserId) {
     const wDup = await db.collection('adminConfig').where({ wecomUserId }).limit(2).get().catch(() => null)
-    if (!wDup) return reply(503, { ok: false, error: 'WECOM_ID_LOOKUP_FAIL' })
-    if ((wDup.data || []).length > 1) {
-      // 回滚失败留痕（N3）：双凭证残留（两账号共享同一企微 userid→免登歧义）属身份安全面。
-      await db
-        .collection('adminConfig')
-        .doc(id)
-        .remove()
-        .catch(async () => {
-          await notifyAlert('security', 'createAgent', 'ROLLBACK_FAIL', { id, which: 'wecomUserId' })
-        })
-      return reply(409, { ok: false, error: 'WECOM_ID_TAKEN' })
+    if (!wDup || (wDup.data || []).length > 1) {
+      await rollback('wecomUserId')
+      return wDup ? reply(409, { ok: false, error: 'WECOM_ID_TAKEN' }) : reply(503, { ok: false, error: 'WECOM_ID_LOOKUP_FAIL' })
     }
   }
   return reply(200, { ok: true, agent: { id, name, role: AGENT_ROLE, disabled: false, wecomUserId } })
@@ -123,16 +108,16 @@ export async function setAgentWecomUserId({ db, data }: Ctx) {
 
   // 写后复核（P2·根因#1 先查后写竞态修复，同 createAgent）：写完重查该 wecomUserId 计数，>1 说明
   // 先查后写窗口内被并发改绑撞号——回滚刚写的这份字段（恢复旧值），绝不留两账号共享同一企微 userid。
+  // 复核读失败同样回滚（核验不了的绑定不能留）；回滚失败留痕（同 createAgent）。
   if (wecomUserId) {
     const dup = await db.collection('adminConfig').where({ wecomUserId }).limit(2).get().catch(() => null)
-    if (!dup) return reply(503, { ok: false, error: 'WECOM_ID_LOOKUP_FAIL' })
-    if ((dup.data || []).length > 1) {
+    if (!dup || (dup.data || []).length > 1) {
       await db
         .collection('adminConfig')
         .doc(id)
         .update({ data: { wecomUserId: prevWecomUserId, updatedAt: Date.now() } })
-        .catch(() => {})
-      return reply(409, { ok: false, error: 'WECOM_ID_TAKEN' })
+        .catch(() => notifyAlert('security', 'setAgentWecomUserId', 'ROLLBACK_FAIL', { id, which: 'wecomUserId' }))
+      return dup ? reply(409, { ok: false, error: 'WECOM_ID_TAKEN' }) : reply(503, { ok: false, error: 'WECOM_ID_LOOKUP_FAIL' })
     }
   }
   return reply(200, { ok: true, id, wecomUserId })
@@ -171,21 +156,11 @@ export async function listAgents({ db }: Ctx) {
     .get() // 读失败上抛（网关 500）——不当「没有外包」（根因#14）
   const rows = (r.data || []) as any[]
   const _ = db.command
-  // 今日零点（CST +08:00）：沿用 reconciliation.ts dayStartMs 的口径同构内联（预审拍板点 3）。
-  const CST = 8 * 3600_000
-  const todayKey = new Date(Date.now() + CST).toISOString().slice(0, 10)
-  const todayStartMs = Date.parse(todayKey + 'T00:00:00+08:00')
+  const todayStartMs = dayStartMsCST(dayKeyCST(Date.now())) // 今日零点（CST +08:00·kit/reconcile 单源）
   const agents = await Promise.all(
     rows.map(async (a: any) => {
-      const [stateGot, activeR, closedR] = await Promise.all([
-        db
-          .collection(COLLECTIONS.agentState)
-          .doc(a._id)
-          .get()
-          .catch((e: unknown) => {
-            if (isDocMissing(e)) return null // 无档＝offline 兜底仍成立
-            throw e // 读失败不当 offline
-          }),
+      const [st, activeR, closedR] = await Promise.all([
+        getDocOrNull(db.collection(COLLECTIONS.agentState).doc(a._id)), // 无档＝offline 兜底；读失败不当 offline
         db.collection(COLLECTIONS.csSession).where({ agentId: a._id, status: 'active' }).count(),
         // todayStartMs 恒整数 ms：gt(todayStartMs-1) 等价 gte(todayStartMs)（桩/真 sdk 均无 gte 算子）。
         db
@@ -193,7 +168,6 @@ export async function listAgents({ db }: Ctx) {
           .where({ agentId: a._id, status: 'closed', updatedAt: _.gt(todayStartMs - 1) })
           .count(),
       ])
-      const st = stateGot && stateGot.data
       return {
         id: a._id,
         name: a.name || '',

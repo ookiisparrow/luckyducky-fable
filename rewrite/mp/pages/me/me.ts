@@ -10,6 +10,7 @@ import { getPageContent } from '../../lib/pageContent'
 import { continueResolve, type ContinueTarget } from '../../lib/continueResolve'
 import { mapMe, type MeVM } from '../../lib/mapMe' // 直引拆分模块（tab 闭包不拖 mapPages 法务长文·字体分层批）
 import { openCustomerService } from '../../utils/customerService'
+import { readStorage } from '../../utils/storage'
 import { goHomeTab } from '../../lib/homeIntent'
 // consumeExitGuard 别名：页面方法须叫 onExitGuardBeforeLeave（wxml bindbeforeleave 绑的就是它），同名易误读成递归
 import { armExitGuard, releaseExitGuard, onExitGuardBeforeLeave as consumeExitGuard } from '../../utils/exitGuard'
@@ -35,11 +36,7 @@ function sanitizeCont(raw: unknown): ContinueTarget | null {
 }
 
 function readStoredCont(): ContinueTarget | null {
-  try {
-    return sanitizeCont(wx.getStorageSync(CONT_KEY))
-  } catch {
-    return null
-  }
+  return sanitizeCont(readStorage(CONT_KEY))
 }
 
 function writeStoredCont(cont: ContinueTarget | null): void {

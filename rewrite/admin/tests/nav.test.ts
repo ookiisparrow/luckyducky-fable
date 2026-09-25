@@ -1,4 +1,4 @@
-// 上下文侧栏导航模型（守卫 rw-admin-nav-contextual·根因#8「构建过≠真机能用」）：向导路由识别 /
+// 上下文侧栏导航模型（根因#8「构建过≠真机能用」）：向导路由识别 /
 // 步单源 ?step 夹取 / 5 步文案·顺序（老板预览后改口径：封面并进第 1 步、卡片上传并进第 5 步）。
 import { describe, it, expect } from 'vitest'
 import { isWizardPath, wizardStepFromQuery, WIZARD_STEPS, WIZARD_STEP_MAX, currentNavGroup } from '../src/lib/nav'

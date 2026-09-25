@@ -1,5 +1,5 @@
 // 详情页映射（展示面 fail-closed 同首页·防半空详情/裂图/「¥undefined」·根因#8 展示层半边）
-// + SKU 价格联动（黄金 frontend-store §一 SKU 行身份的展示半边）（守卫 rw-mp-detail-golden）。
+// + SKU 价格联动（黄金 frontend-store §一 SKU 行身份的展示半边）。
 import { describe, it, expect } from 'vitest'
 import { mapDetail } from '../lib/mapDetail'
 

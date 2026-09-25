@@ -1,4 +1,4 @@
-// 商品与橱窗映射（守卫 rw-admin-products-ui-golden）：三态口径与云端一致/四道门人话原文兜底/
+// 商品与橱窗映射：三态口径与云端一致/四道门人话原文兜底/
 // 整档 round-trip 保真/图片尺寸闸提前拦/脏档安全。
 import { describe, it, expect } from 'vitest'
 import { productState, mapDraftRows, publishErrorText, mapShowcaseRows, b64SizeOk, productSteps, stepProgressHint, stepDotTitle, courseNeedsPublish, productsListSub, basicsMissing, wizardCanPublish, freshDraft, DRAFT_PRICE_HINT, draftSyncLabel, draftSyncConfirm, restoreSaleLabel, restoreSaleConfirm, restoreSaleOk, draftSyncUnlistedOk, draftSyncBusy, draftSyncOk, COURSE_VS_LISTING_HINT, HOME_FEATURE_ASK, HOME_FEATURE_SWITCH_ON, HOME_FEATURE_SWITCH_OFF, VIDEO_MARK_FILE, VIDEO_MARK_LIVE } from '../src/lib/mapProducts'

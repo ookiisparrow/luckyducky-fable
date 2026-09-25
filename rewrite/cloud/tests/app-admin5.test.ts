@@ -1,5 +1,5 @@
 // 黄金 cs-agent §二（RBAC 批量导出洞）/§六（质检报表口径）/§七（CSAT 报表）/§十三（客户 360 聚合）
-// + admin-misc（kb/checkpoints 策展）（守卫 rw-admin5-golden）。
+// + admin-misc（kb/checkpoints 策展）。
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { control } from 'wx-server-sdk'
 import { main as adminApi } from '../src/functions/adminApi/index'

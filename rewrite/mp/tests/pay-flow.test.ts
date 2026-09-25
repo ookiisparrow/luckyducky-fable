@@ -1,5 +1,5 @@
 // 支付结果映射（黄金 orders-money pay 节的前端半边：0 元直付/已付幂等/收银台五参 fail-closed/
-// 关单与未开通如实分诊）（守卫 rw-mp-pay-golden）。
+// 关单与未开通如实分诊）。
 import { describe, it, expect } from 'vitest'
 import { mapPayResult } from '../lib/payFlow'
 

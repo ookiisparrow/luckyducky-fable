@@ -111,9 +111,9 @@ describe('ScmMaterials「批量盘点」模式接线（源码扫描防回归）'
   })
 
   // 评审 P2（找回：拉物料主档失败要可观测，不能与「确实没有物料」撞成同一假空态·病根14）
-  it('大白话：enterStocktake() 物料主档拉取失败要写错误提示（load(m.ok,…)），不静默置空', () => {
+  it('大白话：enterStocktake() 物料主档拉取失败要写错误提示（load(false,…)），不静默置空', () => {
     const fnBody = scmMaterialsSrc.match(/async function enterStocktake[\s\S]*?\n}/)
     expect(fnBody).toBeTruthy()
-    expect(fnBody![0]).toMatch(/load\(m\.ok/)
+    expect(fnBody![0]).toMatch(/if \(!m\.ok\) load\(false,/)
   })
 })

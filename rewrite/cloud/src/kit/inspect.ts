@@ -1,4 +1,4 @@
-import { getDb } from './db'
+import { getDb, isCollectionMissing } from './db'
 import { recordAnomaly } from './anomaly'
 import { notifyHeartbeat } from './observe'
 import {
@@ -12,7 +12,7 @@ import {
   asFen,
 } from '@ldrw/shared'
 
-// 巡检机（运行期主动核对·不依赖 AI·守卫 rw-inspect-golden）：定时/手动跑一遍检查目录——
+// 巡检机（运行期主动核对·不依赖 AI）：定时/手动跑一遍检查目录——
 // A 基建存活（探得动）+ B 业务不变量（数据自洽）。北极星＝把没抛异常/没人投诉的静默失败主动探出：
 // 每条红 → recordAnomaly 落 bug 账本（违反→闭环）+ 高危经 recordAnomaly 内部推告警。**只读铁律**：
 // 只读业务集合、只写 inspectRuns/anomalies，绝不改业务数据（「现在只读看护线上」的安全前提）。
@@ -24,6 +24,12 @@ const STUCK_PAID_MS = 72 * 3600 * 1000 // 付款超 72h 仍未发货＝卡单（
 // 金额字段合法性（全文件共用一把尺子）：必须是有限非负 number——全部写入方都走 fenToYuan 落 number，
 // 故此判据不误伤正常行；脏/缺则 fail-closed 报给人看（算不准就别假装守恒/已退清成立）。
 const okMoney = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v) && v >= 0
+
+// 主扫描读失败一律抛给 runInspection 标红（失败≠空态：读不到就报绿＝真钱漏了却说没事）；
+// 只有「集合还没建」才等于真没有数据。
+
+const scan = (db: any, coll: string, where: Record<string, unknown>): Promise<any[]> =>
+  db.collection(coll).where(where).limit(SCAN_CAP).get().then((r: any) => r.data || [])
 
 type Partial = Omit<CheckResult, 'id' | 'title' | 'layer'>
 
@@ -100,13 +106,10 @@ const CHECKS: Check[] = [
       // 那个写法把**脏字段变 NaN、缺字段变 0**，两者都让已退总额变小或变 NaN，而 `NaN > amount` 恒 false
       // ⇒ 真超退单被静默报绿。改为：字段必须是有限非负 number（全部写入方都走 fenToYuan(...) 落 number，
       // 故此判据不误伤正常行），否则记 suspect 直接报出来给人看——算不准就别假装守恒成立。
-      const as = await db
-        .collection(COLLECTIONS.afterSales)
-        .where({ status: 'refunded' })
-        .limit(SCAN_CAP)
-        .get()
-        .catch(() => ({ data: [] }))
-      const rows: any[] = as.data || []
+      const rows = await scan(db, COLLECTIONS.afterSales, { status: 'refunded' }).catch((e: unknown) => {
+        if (isCollectionMissing(e)) return [] // afterSales 首次申请售后才建：集合未建＝确实没有退款
+        throw e
+      })
       const _ = db.command
       const refundedFen = new Map<string, number>()
       const suspect = new Set<string>() // 金额字段脏/缺 → 无从证明守恒 → 一律报（宁可多报一次）
@@ -120,38 +123,32 @@ const CHECKS: Check[] = [
       }
       // 批量读订单实付（_.in 分块·照 recallScan IN_CHUNK=100·杜绝 ≤500 键逐条串行 doc.get 的 N+1）；
       // payment_exception 的退款入口按实际到账 paidFee 退款，所以钱守恒也必须用 paidFee 做分母；
-      // 其他订单仍用订单实付 amount。paidFee 脏/缺时回退 amount，交给既有金额脏数据路径处理。
-      // 内存比对，判定语义与逐条 get 版一致（订单缺失=不在 known→跳过·不误报超退·既有用例锁此语义）。
+      // 其他订单仍用订单实付 amount。分母脏/缺记 null，与售后金额脏一样 fail-closed 报出来。
+      // 订单缺失（不在 capFenById）跳过，不误报超退（既有用例锁此语义）。
       const orderIds = [...new Set([...refundedFen.keys(), ...suspect])]
-      const amountFenById = new Map<string, number>()
-      const known = new Set<string>()
+      const capFenById = new Map<string, number | null>()
       for (let i = 0; i < orderIds.length; i += IN_CHUNK) {
         const chunk = orderIds.slice(i, i + IN_CHUNK)
-        const got = await db.collection(COLLECTIONS.orders).where({ _id: _.in(chunk) }).limit(IN_CHUNK).get().catch(() => ({ data: [] }))
+        const got = await db.collection(COLLECTIONS.orders).where({ _id: _.in(chunk) }).limit(IN_CHUNK).get()
         for (const o of got.data || []) {
-          const id = String(o._id)
-          known.add(id)
+          let cap: number | null = null
           if (o.status === 'payment_exception') {
-            // 异常单实付额必须是可信的整数分才可作分母；脏/缺→suspect fail-closed（多代理审核
-            // codex#3：回退 amount 会把「退款按实付退、分母却是应付」的不一致掩盖成守恒成立）。
-            if (Number.isInteger(o.paidFee) && o.paidFee > 0) amountFenById.set(id, o.paidFee)
-            else suspect.add(id)
-          } else if (okMoney(o.amount)) amountFenById.set(id, toFen(o.amount))
-          else suspect.add(id) // 实付额脏 → 分母不可信 → 同样报出来
+            // 异常单实付额必须是可信的整数分才可作分母；脏/缺不回退 amount：回退会把
+            // 「退款按实付退、分母却是应付」的不一致掩盖成守恒成立。
+            if (Number.isInteger(o.paidFee) && o.paidFee > 0) cap = o.paidFee
+          } else if (okMoney(o.amount)) cap = toFen(o.amount)
+          capFenById.set(String(o._id), cap)
         }
       }
       const bad: string[] = []
       let dirty = 0
       for (const orderId of orderIds) {
-        if (!known.has(orderId)) continue // 订单缺失（逐条 get 落空即跳过·语义不变）
-        if (suspect.has(orderId)) {
+        if (!capFenById.has(orderId)) continue
+        const cap = capFenById.get(orderId)
+        if (cap == null || suspect.has(orderId)) {
           bad.push(orderId)
           dirty++
-          continue
-        }
-        const amountFen = amountFenById.get(orderId)
-        if (amountFen === undefined) continue // 理论不可达（非 suspect 必已入表）·防御性跳过
-        if ((refundedFen.get(orderId) || 0) > amountFen) bad.push(orderId)
+        } else if ((refundedFen.get(orderId) || 0) > cap) bad.push(orderId)
       }
       const capped = rows.length >= SCAN_CAP
       const over = bad.length - dirty
@@ -176,48 +173,25 @@ const CHECKS: Check[] = [
     async run(db) {
       const now = Date.now()
       const _ = db.command
-      // 排除：有活跃售后（申请中/已同意/已退）的订单＝正在退款·非发货义务（不误报卡单）
-      const asRows: any[] =
-        (
-          await db
-            .collection(COLLECTIONS.afterSales)
-            .where({ status: _.in(['applied', 'approved', 'refunded']) })
-            .limit(SCAN_CAP)
-            .get()
-            .catch(() => ({ data: [] }))
-        ).data || []
+      const [asRows, paidRows, deadRows, exceptionRows] = await Promise.all([
+        // 排除：有活跃售后（申请中/已同意/已退）的订单＝正在退款·非发货义务（不误报卡单）。
+        // 这一路读失败兜空只会少豁免＝多报，方向安全，故单独保留兜底。
+        scan(db, COLLECTIONS.afterSales, { status: _.in(['applied', 'approved', 'refunded']) }).catch(() => []),
+        scan(db, COLLECTIONS.orders, { status: 'paid' }),
+        // ② refund_required 死信（钱已收待人工退款·没人管＝高危静默）
+        scan(db, COLLECTIONS.orders, { status: 'refund_required' }),
+        // 金额不符单不属于退款死信，但同样是「钱已到、不能履约、待人工处理」；单独扫，避免
+        // 被 refund_required 的退款金额算法误判为已处理或漏报。
+        scan(db, COLLECTIONS.orders, { status: 'payment_exception' }),
+      ])
       const refunding = new Set(asRows.map((a) => String(a.orderId)))
       // ① paid 超 72h 未发货——只算**真付款**（有微信 transactionId·mock/演示单非真钱不算）且**未在退款**：只报真金白银该发没发的单。
-      const paid = await db
-        .collection(COLLECTIONS.orders)
-        .where({ status: 'paid' })
-        .limit(SCAN_CAP)
-        .get()
-        .catch(() => ({ data: [] }))
-      const paidRows: any[] = paid.data || []
       const stuck = paidRows
         .filter(
           (o) =>
             !o.shippedAt && o.transactionId && Number(o.paidAt || 0) > 0 && now - Number(o.paidAt) > STUCK_PAID_MS && !refunding.has(String(o._id)),
         )
         .map((o) => String(o._id))
-      // ② refund_required 死信（钱已收待人工退款·没人管＝高危静默）
-      const dead = await db
-        .collection(COLLECTIONS.orders)
-        .where({ status: 'refund_required' })
-        .limit(SCAN_CAP)
-        .get()
-        .catch(() => ({ data: [] }))
-      const deadRows: any[] = dead.data || []
-      // 金额不符单不属于退款死信，但同样是「钱已到、不能履约、待人工处理」；单独扫，避免
-      // 被 refund_required 的退款金额算法误判为已处理或漏报。
-      const exceptions = await db
-        .collection(COLLECTIONS.orders)
-        .where({ status: 'payment_exception' })
-        .limit(SCAN_CAP)
-        .get()
-        .catch(() => ({ data: [] }))
-      const exceptionRows: any[] = exceptions.data || []
       // payment_exception 退款完成后仍保留原订单状态（退款真相在 afterSales），所以像
       // refund_required 一样按「已退清」过滤；查询失败时空集兜底，宁可多报不能漏报。
       const exceptionRefunded = new Map<string, number>()

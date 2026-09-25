@@ -47,25 +47,19 @@ function mediaOf(m: Msg): MediaState {
   return (m.msgid && mediaCache[m.msgid]) || IDLE_MEDIA
 }
 
-/** 点开图片占位卡：已加载/加载中不重复触发；否则经 getMediaUrl 下载——按会话归属+消息归属双闸走既有后端校验，
- *  前端只管展示三态（EXPIRED 显“已过期”不可重试；其余失败显“加载失败”可点重试；成功落 URL 供 <img> 显示）。 */
+/** 点开图片占位卡：只有 idle/失败态才下载，加载中/已加载/已过期点击一律 no-op（已过期无重试路径）。
+ *  经 getMediaUrl 下载——按会话归属+消息归属双闸走既有后端校验，前端只管展示三态
+ *  （EXPIRED 显“已过期”不可重试；其余失败显“加载失败”可点重试；成功落 URL 供 <img> 显示）。 */
 async function loadMedia(m: Msg) {
-  if (!m.msgid || !currentId.value) return
+  const s = mediaOf(m).state
+  if (!m.msgid || !currentId.value || (s !== 'idle' && s !== 'error')) return
   const key = m.msgid
-  const existing = mediaCache[key]
-  if (existing && (existing.state === 'loaded' || existing.state === 'loading')) return
   const sid = currentId.value // 快照归属会话（同 send/act/claim 治法：await 期间坐席可能已切会话，但该消息始终归 sid 所有）
   mediaCache[key] = { state: 'loading' }
   const r = await post('getMediaUrl', { sessionId: sid, msgId: key })
   if (r.ok) mediaCache[key] = { state: 'loaded', url: String(r.url || '') }
   else if (r.error === 'EXPIRED') mediaCache[key] = { state: 'expired' } // media_id 3 天有效·过期不提供重试（重试也无用）
   else mediaCache[key] = { state: 'error' } // 其余失败（下载/上传异常）：显示重试
-}
-
-/** 图片占位卡点击：idle/失败态才触发下载，加载中/已加载/已过期忽略（已过期无重试路径）。 */
-function onMediaClick(m: Msg) {
-  const s = mediaOf(m).state
-  if (s === 'idle' || s === 'error') void loadMedia(m)
 }
 
 /** 查看大图：临时 URL 新标签页打开（组件内缓存的 URL，非持久链接）。 */
@@ -78,8 +72,7 @@ function openMedia(m: Msg) {
 const NOTIFY_KEY = 'ldrw_agent_notify_enabled'
 const baseTitle = document.title // 还原基准单源＝index.html 定的标题，不复制字面量、避免漂移
 
-const kbList = ref<KbEntry[]>([])
-const availableReplies = computed(() => filterQuickReplies(kbList.value)) // 过滤后全部（供 FAQ 面板/判断整行显隐）
+const availableReplies = ref<KbEntry[]>([]) // 过滤后全部（供 FAQ 面板/判断整行显隐）
 const quickReplies = computed(() => availableReplies.value.slice(0, 4)) // chips 只取前 4 条
 const faqOpen = ref(false)
 const faqQuery = ref('')
@@ -121,10 +114,10 @@ async function pollThread(loud = false) {
   recomputeAlert() // 当前会话新入站是提醒聚合公式另一半（改动契约 3）
 }
 
-/** 快捷回复读知识库（进入 Desk 拉一次·不轮询）：失败/空→过滤后自然为空，整行诚实隐藏。 */
+/** 快捷回复读知识库（进入 Desk 拉一次·不轮询）：空→整行诚实隐藏；刷新失败不清已有（同 refreshLists）。 */
 async function loadKb() {
   const r = await listKb()
-  kbList.value = r.ok ? ((r.list as KbEntry[]) || []) : []
+  if (r.ok) availableReplies.value = filterQuickReplies(r.list)
 }
 
 /** 把答案追加进输入框（不自动发送）；无选中会话时无输入框可写，no-op。 */
@@ -353,7 +346,7 @@ onBeforeUnmount(() => {
                两张图（msgid 不同、text 恒为占位）时撞 Vue 重复 key——去重键已认 msgid，key 必须同源防再漂移 -->
           <div v-for="m in msgs" :key="keyOf(m)" class="bubble" :class="m.direction">
             <template v-if="m.msgtype === 'image' && m.hasMedia">
-              <div class="media" :class="mediaOf(m).state" @click="onMediaClick(m)">
+              <div class="media" :class="mediaOf(m).state" @click="loadMedia(m)">
                 <img v-if="mediaOf(m).state === 'loaded'" :src="mediaOf(m).url" class="media-img" @click.stop="openMedia(m)" />
                 <span v-else-if="mediaOf(m).state === 'loading'">加载中…</span>
                 <span v-else-if="mediaOf(m).state === 'expired'">图片已过期（超 3 天）</span>

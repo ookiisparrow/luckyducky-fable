@@ -4,8 +4,8 @@
 // 外壳/onEvent、kfSendText、kfFetchMedia（2026-07-23 拓扑收编批：原 cs/kfSend、cs/kfMedia 独立函数
 // 收编进 kit/wecom.ts 高层助手）、kfHealthProbe、cs.kfBind、wxbill）无直接测试。四态各一例，双函数同覆盖。
 //
-// 反向自检：把 getSecureConfig 的 `if (typeof v === 'string' && v) return v` 改成 `if (typeof v === 'string')
-// return v`（空串遮蔽 env）→「DB 空串不遮蔽 env」用例立即红；改回即绿。
+// 反向自检：把 getSecureConfigFields 的 `typeof v === 'string' && v ? v : …` 改成 `typeof v === 'string' ? v : …`
+// （空串遮蔽 env）→「DB 空串不遮蔽 env」用例立即红；改回即绿。
 import { describe, it, expect, beforeEach, afterEach } from 'vitest'
 import { control } from 'wx-server-sdk'
 import { getDb } from '../src/kit'

@@ -1,13 +1,15 @@
 import { getDb } from './db'
 import { notifyAlert } from './observe'
+import { isDocMissing, isEmptyDoc } from './inventory'
+import { getDocOrNull } from './ids'
 import { pageQuery, type PageReq, type Paged } from './paging'
 import { COLLECTIONS, ERR } from '@ldrw/shared'
 
 // 原料账原子原语（进销存 SCM-0 门1·根因#1/#2·镜像 kit/inventory.ts 范式）。
-// **全库唯一** materials.stock / stockLedger 读写处（守卫 material-stock-single-seam）——任何单据出入库
+// **全库唯一** materials.stock / stockLedger 读写处（守卫 rw-material-stock-single-seam）——任何单据出入库
 // （采购入库/外协发收/组装扣料/调整/期初/发货核销）都经 applyStockMoves，换存储/加损耗逻辑只改这点。
 //
-// 幂等（守卫 scm-ledger-idempotent）：每笔流水确定性 _id=`<docType>:<docId>:<itemKey>`——同一单据对同一
+// 幂等：每笔流水确定性 _id=`<docType>:<docId>:<itemKey>`——同一单据对同一
 // 物料重放时 add 撞 DUPLICATE_ID＝并发方/上次已写，跳过不双记账（同 deterministic-id 范式）。
 // 并发：库存变更走乐观 CAS（读 stock → where({_id, stock:读值}).update 绝对值·updated===1 才算改到），
 // 与 kit/inventory 同款；不足/争用耗尽即失败并**尽力回滚本次已应用行**（宁不动账勿错账；反向 CAS 若也
@@ -84,7 +86,6 @@ export async function applyStockMoves(moves: StockMove[], doc: MoveDoc): Promise
     }
   }
 
-  let applied = 0
   for (const m of moves) {
     const _id = ledgerIdOf(doc.docType, doc.docId, m.materialId)
     // ① 流水 claim（确定性 _id·撞 id=已应用过·幂等跳过）
@@ -97,24 +98,19 @@ export async function applyStockMoves(moves: StockMove[], doc: MoveDoc): Promise
     // 验证、不像 isDocMissing 那样有查证过的社区报错文案可比对）——读回该 _id：读到＝真撞号（该行
     // 确已被写入过，跳过合法、不告警）；读不到＝写真没落地，是需要观测的失败，不当「已应用过」
     // 处理，回滚已应用行、整单按此行失败收尾。
-    let claimed = true
     try {
       await ledger.add({ data: { _id, itemKey: m.materialId, delta: m.delta, docType: doc.docType, docId: doc.docId, operator: doc.operator || '', reason: doc.reason || '', at: Date.now() } })
     } catch {
       const check = await ledger.doc(_id).get().catch(() => null)
-      if (check && check.data) {
-        claimed = false // 真撞号（DUPLICATE_ID）：该行已入账（重放/并发方），跳过库存变更，不告警
-      } else {
-        await notifyAlert('money', 'scmStock.applyStockMoves', 'LEDGER_WRITE_FAILED', {
-          materialId: m.materialId,
-          docType: doc.docType,
-          docId: doc.docId,
-        })
-        await rollback()
-        return { ok: false, error: 'LEDGER_WRITE_FAILED', materialId: m.materialId }
-      }
+      if (check && check.data) continue // 真撞号（DUPLICATE_ID）：该行已入账（重放/并发方），跳过库存变更，不告警
+      await notifyAlert('money', 'scmStock.applyStockMoves', 'LEDGER_WRITE_FAILED', {
+        materialId: m.materialId,
+        docType: doc.docType,
+        docId: doc.docId,
+      })
+      await rollback()
+      return { ok: false, error: 'LEDGER_WRITE_FAILED', materialId: m.materialId }
     }
-    if (!claimed) continue
     // ② CAS 改余额（fg: 成品行不动 materials——成品账在 kit/inventory，流水行只留痕）
     if (!m.materialId.startsWith('fg:')) {
       const r = await casChange(mats, m.materialId, m.delta)
@@ -125,16 +121,25 @@ export async function applyStockMoves(moves: StockMove[], doc: MoveDoc): Promise
       }
     }
     done.push(m)
-    applied++
   }
-  return { ok: true, applied }
+  return { ok: true, applied: done.length }
 }
 
 /** 单料 CAS 变更：读 stock → 条件 where({_id, stock}) 绝对值写回；余额不为负；主档缺失 fail-closed。 */
 async function casChange(coll: any, materialId: string, delta: number): Promise<'ok' | 'NO_MATERIAL' | 'INSUFFICIENT' | 'CONTENTION'> {
+  let lastRoundReadFailed = false
   for (let i = 0; i < CAS_RETRY; i++) {
-    const got = await coll.doc(materialId).get().catch(() => null)
-    if (!got || !got.data) return ERR.NO_MATERIAL
+    lastRoundReadFailed = false
+    let got: any = null
+    try {
+      got = await coll.doc(materialId).get()
+    } catch (e) {
+      if (!isDocMissing(e)) {
+        lastRoundReadFailed = true
+        continue // 瞬时读失败算一次尝试，不当主档缺失
+      }
+    }
+    if (isEmptyDoc(got)) return ERR.NO_MATERIAL
     const cur = got.data.stock
     if (!Number.isInteger(cur)) {
       // 主档缺/坏 stock 字段（建档点恒写 0·此为历史/手工档兜底）：where 条件含 undefined 行为不可信，
@@ -151,7 +156,9 @@ async function casChange(coll: any, materialId: string, delta: number): Promise<
     if (r.stats && r.stats.updated === 1) return 'ok'
     // updated:0＝并发改动→重读重试
   }
-  return ERR.CONTENTION // 争用耗尽（管理端低频·几乎不至）——宁不动账勿错账
+  // 耗尽（含持续读失败）——宁不动账勿错账。只看最后一轮：纯争用耗尽不告警，库挂须有信号（同 casDecrement）
+  if (lastRoundReadFailed) await notifyAlert('money', 'scmStock.casChange', 'READ_FAILED', { materialId })
+  return ERR.CONTENTION
 }
 
 /** 读流水（管理端查账·cursor 分页）：可按料号过滤，按时间倒序。B1（根因#7）：改走 kit pageQuery——
@@ -164,8 +171,11 @@ export async function listStockLedger(materialId?: string, req?: PageReq, defaul
 }
 
 
-/** 某类流水按 itemKey 分组求和（管理端只读汇总·产销统计用·DB aggregate 不封顶精确不近似）。 */
-export async function sumLedgerByItemKey(docType: MoveDocType): Promise<{ itemKey: string; total: number }[]> {
+// 聚合不写 limit 平台只回 20 条；显式封顶，触顶如实标 truncated（每个 itemKey 的求和本身精确，缺的是触顶后的 itemKey）
+const LEDGER_SUM_CAP = 1000
+
+/** 某类流水按 itemKey 分组求和（管理端只读汇总·产销统计用）。 */
+export async function sumLedgerByItemKey(docType: MoveDocType): Promise<{ list: { itemKey: string; total: number }[]; truncated: boolean }> {
   const db = getDb()
   const $ = db.command.aggregate
   const r = await db
@@ -173,8 +183,10 @@ export async function sumLedgerByItemKey(docType: MoveDocType): Promise<{ itemKe
     .aggregate()
     .match({ docType })
     .group({ _id: '$itemKey', total: $.sum('$delta') })
+    .limit(LEDGER_SUM_CAP)
     .end()
-  return (r.list || []).map((x: any) => ({ itemKey: x._id, total: x.total }))
+  const rows: any[] = r.list || []
+  return { list: rows.map((x) => ({ itemKey: x._id, total: x.total })), truncated: rows.length >= LEDGER_SUM_CAP }
 }
 
 /** 最近 N 条流水（管理端总览卡片用·bounded·按时间倒序）。经门1 唯一出口，不许调用方直碰 stockLedger 集合
@@ -203,7 +215,7 @@ export async function hasThresholdMaterial(): Promise<boolean> {
   return (r.data || []).length > 0
 }
 
-// ── 物料主档持久化（同在门1：materials 集合全库仅本文件读写·守卫 material-stock-single-seam）──
+// ── 物料主档持久化（同在门1：materials 集合全库仅本文件读写·守卫 rw-material-stock-single-seam）──
 // 主档字段与库存字段分治：saveMaterialDoc 只写主档字段（name/category/uom/…），**绝不碰 stock**
 // （建档初始化 stock:0 除外）；库存只经 applyStockMoves。uom 建档锁死（守卫 scm-uom-integer 行为锁）。
 
@@ -231,20 +243,19 @@ export async function saveMaterialDoc(m: MaterialDoc): Promise<'ok' | 'UOM_LOCKE
     updatedAt: Date.now(),
   }
   if (m.spec) fields.spec = m.spec
-  const got = await coll.doc(m._id).get().catch(() => null)
-  if (got && got.data) {
-    if (got.data.uom && got.data.uom !== m.uom) return ERR.UOM_LOCKED // 计量方式建档锁死（改了=两本单位混账）
+  const got = await getDocOrNull(coll.doc(m._id)) // 库挂照抛：当无档会落到新建分支、撞号冒充 DUPLICATE
+  if (got) {
+    if (got.uom && got.uom !== m.uom) return ERR.UOM_LOCKED // 计量方式建档锁死（改了=两本单位混账）
     await coll.doc(m._id).update({ data: fields }) // 不含 stock——库存只经 applyStockMoves
   } else {
-    // 先查后写竞态（两个并发首建请求都读到「无档」、都落到这里）：确定性 _id 撞号——与同域
-    // scmAssembly.ts runAssembly（try/catch add() → 409 DUPLICATE）/ scmBom.ts saveBomTemplate/
-    // saveBomProfile（.set().catch(...add())）对同类竞态的处理口径看齐，不再是模块内「确定性 _id
-    // + 无异常处理」的孤例——原实现的异常会一路裸抛，靠 adminApi 路由层兜成笼统 500，丢失「其实是
-    // 并发首建撞车」这个更精确的语义。
+    // 先查后写竞态：两个并发首建都读到「无档」、都落到这里，确定性 _id 撞号。读回判撞号（同
+    // runAssembly / applyStockMoves 流水 claim）：读到＝另一方已建档；读不到＝写没落地，照抛走 500。
     try {
       await coll.add({ data: { _id: m._id, ...fields, stock: 0 } }) // 建档初始化 stock:0（casChange 依赖整数余额）
-    } catch {
-      return 'DUPLICATE' // 撞确定性 _id：并发首建同一物料，另一方已建档
+    } catch (e) {
+      const dup = await coll.doc(m._id).get().catch(() => null)
+      if (!dup || !dup.data) throw e
+      return 'DUPLICATE'
     }
   }
   return 'ok'

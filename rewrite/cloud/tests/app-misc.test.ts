@@ -1,5 +1,5 @@
 // 黄金 learning-content §一（激活码生成管理闸）/§八（UGC 内容安全 fail-closed）/§十二（seed/init 管理闸）
-// + admin-misc §四（意见反馈过闸）/§五（事件流水定时清理）+ cs-agent §一（建库清单含坐席集合）（守卫 rw-misc-golden）。
+// + admin-misc §四（意见反馈过闸）/§五（事件流水定时清理）+ cs-agent §一（建库清单含坐席集合）。
 import { describe, it, expect, beforeEach } from 'vitest'
 import { control } from 'wx-server-sdk'
 import { COLLECTIONS, SEED_COURSES } from '@ldrw/shared'

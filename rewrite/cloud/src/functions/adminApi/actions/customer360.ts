@@ -4,9 +4,9 @@ import { isDocMissing } from '../../../kit'
 import { assembleCustomer360 } from '../customer360/orchestrator'
 
 // 客户360 只读查询（B1.1·M①）：按 openid 聚合该客人全貌（订单/激活…经 provider registry·铁律三）。
-// 越权面（坐席批量读他人数据·§1.5·根因#3）双闸，均在 index.ts 分发处集中收口（守卫焊·本 action 不自己碰审计/能力）：
-//   ① 能力闸 ACTION_CAPS['getCustomer360']='customer:view'·分发前校验 caps（cs-360-rbac-gated）；
-//   ② 强制留痕：FORCE_AUDIT 含 getCustomer360·分发后经 kit/audit 记痕（shouldAudit 跳 ^get·本 action 破例·cs-360-read-audited）。
+// 越权面（坐席批量读他人数据·§1.5·根因#3）双闸，均在 index.ts 分发处集中收口（本 action 不自己碰审计/能力）：
+//   ① 能力闸 ACTION_CAPS['getCustomer360']='customer:view'·分发前校验 caps；
+//   ② 强制留痕：FORCE_AUDIT 含 getCustomer360·分发后经 kit/audit 记痕（shouldAudit 跳 ^get·本 action 破例）。
 // 本 action 只负责取 openid → 编排 → 回结果（读类·不写库）。
 export async function getCustomer360({ db, data }: Ctx) {
   const openid = String((data && data.openid) || '').trim()
@@ -16,8 +16,8 @@ export async function getCustomer360({ db, data }: Ctx) {
 }
 
 // ── B1.2 检索 + 单人画像（同属 360 越权读·§1.5·根因#3）──
-// 双闸同 getCustomer360：ACTION_CAPS['searchCustomer'/'getUser']='customer:view'（cs-360-rbac-gated）
-// + FORCE_AUDIT 含两者（cs-360-read-audited·getUser 以 get 开头会被 shouldAudit 跳·破例留痕）。闸在 index.ts 分发处收口。
+// 双闸同 getCustomer360：ACTION_CAPS['searchCustomer'/'getUser']='customer:view'
+// + FORCE_AUDIT 含两者（getUser 以 get 开头会被 shouldAudit 跳·破例留痕）。闸在 index.ts 分发处收口。
 
 const SEARCH_LIMIT = 20 // bounded（防一次拉爆 users·大库友好）
 
@@ -52,27 +52,29 @@ export async function searchCustomer({ db, data }: Ctx) {
       .get()
       .then((r: any) => (r && r.data) || [])
       .catch(() => null)
-  const [byId, byPhone, byNick] = await Promise.all([
+  // 订单号反查与三条 users 查询并行：缺档＝真没这单（null），其它读失败（false）回 USER_LOOKUP_FAIL，不当「没这单」。
+  const [byId, byPhone, byNick, ord] = await Promise.all([
     rows(users.where({ _openid: q }).limit(SEARCH_LIMIT)),
     rows(users.where({ phone: q }).limit(SEARCH_LIMIT)),
     rows(users.where({ nickname: q }).limit(SEARCH_LIMIT)),
+    db
+      .collection('orders')
+      .doc(q)
+      .get()
+      .then(
+        (r: any) => (r && r.data) || null,
+        (e: unknown) => (isDocMissing(e) ? null : false)
+      ),
   ])
-  if (!byId || !byPhone || !byNick) return reply(200, { ok: false, error: ERR.USER_LOOKUP_FAIL })
+  if (!byId || !byPhone || !byNick || ord === false) return reply(200, { ok: false, error: ERR.USER_LOOKUP_FAIL })
   byId.forEach((u: any) => add(u, 'openid'))
   byPhone.forEach((u: any) => add(u, 'phone'))
   byNick.forEach((u: any) => add(u, 'nickname'))
-  // 订单号反查：缺档＝真没这单，继续；其它读失败回 USER_LOOKUP_FAIL，不当「没这单」。
-  let ord: any = null
-  try {
-    ord = await db.collection('orders').doc(q).get()
-  } catch (e) {
-    if (!isDocMissing(e)) return reply(200, { ok: false, error: ERR.USER_LOOKUP_FAIL })
-  }
-  if (ord && ord.data && ord.data._openid) {
-    const u = await rows(users.where({ _openid: ord.data._openid }).limit(1))
+  if (ord && ord._openid) {
+    const u = await rows(users.where({ _openid: ord._openid }).limit(1))
     if (!u) return reply(200, { ok: false, error: ERR.USER_LOOKUP_FAIL })
     if (u.length) add(u[0], 'orderId')
-    else add({ _openid: ord.data._openid }, 'orderId')
+    else add({ _openid: ord._openid }, 'orderId')
   }
   const customers = [...found.values()].slice(0, SEARCH_LIMIT)
   return reply(200, { ok: true, count: customers.length, customers })

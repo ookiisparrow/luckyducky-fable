@@ -1,4 +1,4 @@
-// 后台状态反馈收口 useLoadStatus（守卫 rw-admin-load-status-golden·治病根#14 admin 前端侧）：
+// 后台状态反馈收口 useLoadStatus（治病根#14 admin 前端侧）：
 // 各页「动作 note 设提示 → void reload 刷新」的竞态里，reload 成功会把刚设的成功/失败原文抹掉
 //（伪成功/吞反馈＝病根#14）。收口不变量：load 只在「自身加载失败」时写 message，成功静默、不 touch。
 import { describe, it, expect } from 'vitest'

@@ -1,7 +1,7 @@
-// 售后映射（纯函数·黄金 orders-money 售后节前端半边 + frontend-store §八）（守卫 rw-mp-aftersales-golden）：
+// 售后映射（纯函数·黄金 orders-money 售后节前端半边 + frontend-store §八）：
 // 状态中文化/金额两位小数/可申请行计算（refundable 且剩余可退件>0 且未申请过——与云端 applyRefund 同口径，
 // 前端只做入口收窄，最终裁决在云端）/翻页追加去重（申请成功后列表即时收窄由 applicableLines 排除已申请实现）。
-import { dateTime } from './mapOrders'
+import { dateTime, money } from './mapOrders'
 import type { OrderLineVM } from './mapOrders'
 
 export interface AfterSaleVM {
@@ -29,11 +29,6 @@ const STATUS_LABELS: Record<string, string> = {
   rejected: '已拒绝',
 }
 export const asStatusLabel = (s: unknown): string => STATUS_LABELS[String(s)] || String(s || '')
-
-const money = (v: unknown): string => {
-  const n = Number(v)
-  return Number.isFinite(n) ? '¥' + n.toFixed(2) : ''
-}
 
 /** 售后单 → VM；无标识裸脏档回 null（整行剔除不白屏）。 */
 export function mapAfterSale(raw: unknown): AfterSaleVM | null {

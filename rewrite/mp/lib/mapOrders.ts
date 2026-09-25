@@ -1,5 +1,5 @@
 // 订单映射（纯函数·黄金 frontend-store §七：脏单归一防白屏/渲染访问点纵深防御/金额恒两位小数/
-// 状态中文化）（守卫 rw-mp-orders-golden）。
+// 状态中文化）。
 // 响应形状哨兵见 rewrite/cloud/tests/contract-shape.test.ts·cloud 改键该测试会红·同步时两头一起改（批B10）。
 export interface OrderLineVM {
   lineId: string
@@ -58,7 +58,7 @@ export const __amountTitleSets = { PAID_LOOK, UNPAID_LOOK } // 供测试核「�
 /** 金额行标题：付过钱→「实付款」；未付/未知→「订单金额」（未知状态兜底按未付，不冒充已付）。 */
 export const amountTitle = (s: unknown): string => (PAID_LOOK.includes(String(s)) ? '实付款' : '订单金额')
 
-const money = (v: unknown): string => {
+export const money = (v: unknown): string => {
   const n = Number(v)
   return Number.isFinite(n) ? '¥' + n.toFixed(2) : ''
 }

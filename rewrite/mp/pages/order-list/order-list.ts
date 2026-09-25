@@ -29,7 +29,7 @@ const stripCny = (s: string): string => (s || '').replace(/^¥/, '')
 type LineRow = OrderLineVM & { priceNum: string }
 type OrderRow = Omit<OrderVM, 'items'> & { items: LineRow[]; tint: string; amountNum: string }
 
-// 视图装饰：附 tint + 拆分货币符号（不动 mapOrders 单源/守卫 rw-mp-orders-golden）。
+// 视图装饰：附 tint + 拆分货币符号（不动 mapOrders 单源）。
 function decorate(o: OrderVM): OrderRow {
   return {
     ...o,

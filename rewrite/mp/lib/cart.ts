@@ -2,6 +2,8 @@
 // 行身份=「商品 id + 规格 sku」双键（同商品不同规格各成独立行·同规格合并加量）；
 // 持久化 wx.storage、回灌必过 sanitizeCart 清洗（脏条目丢弃·防旧数据撑乱列表）；
 // 合计走「分」整数累加再回两位小数展示（元浮点直加会漂·黄金 §四 金额恒两位小数）。
+import { readStorage, writeStorage } from '../utils/storage'
+
 export interface CartItem {
   id: string
   sku: string
@@ -41,23 +43,11 @@ function sanitizeCart(raw: unknown): CartItem[] {
 }
 
 function load(): CartItem[] {
-  if (items) return items
-  let raw: unknown = null
-  try {
-    raw = wx.getStorageSync(KEY)
-  } catch {
-    raw = null // 坏存档不崩·退回空车
-  }
-  items = sanitizeCart(raw)
-  return items
+  return items ?? (items = sanitizeCart(readStorage(KEY))) // 坏存档读回 null → 空车
 }
 
 function save(): void {
-  try {
-    wx.setStorageSync(KEY, { items: load() })
-  } catch {
-    /* 存不进不崩（下次会话回灌旧值） */
-  }
+  writeStorage(KEY, { items: load() }) // 存不进时下次会话回灌旧值
 }
 
 const keyOf = (id: string, sku: string) => (it: CartItem) => it.id === id && it.sku === (sku || '')

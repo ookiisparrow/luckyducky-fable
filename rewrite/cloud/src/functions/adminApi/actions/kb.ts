@@ -1,5 +1,5 @@
-import { reply, ensure, str, isCollectionMissing, type Ctx } from '../lib'
-import { notifyAlert } from '../../../kit'
+import { reply, ensure, str, type Ctx } from '../lib'
+import { notifyAlert, isCollectionMissing } from '../../../kit'
 
 // 知识库维护（后台360工作站 B4.1·admin 侧）：管理端维护 FAQ/知识条目（问题 + 答案 + 分类 + 启用 + 顺序 + 精选），
 // 客服 bot（cs/kfCallback/dispatch.ts）按 _id（=FAQ 键·同分流菜单叶子 id）读 kb 发答案——FAQ 答案单源（根因#5）。整体覆盖式保存（同 saveCheckpoints 范式）：admin 提交整份条目列表，
@@ -8,7 +8,7 @@ import { notifyAlert } from '../../../kit'
 // 面板 FAQ 区（同一 kb 单源分裂两个消费面：bot 答案全量按 key 命中/mp 公开读只挑 featured，互不冲突）。
 
 const ENTRY_LIMIT = 100 // 单次保存条目上限（防一次塞爆·FAQ 量级远低于此）
-const SCAN = 500 // 列表/清理扫描上界（bounded·capacity-reads-bounded）
+const SCAN = 500 // 列表/清理扫描上界（bounded）
 const CATS = ['logistics', 'activation', 'aftersale', 'tutorial', 'other'] // 分类白名单·越界归 other
 
 // 列出全部知识条目（bounded·读类·shouldAudit 跳 ^list 降噪）：按 分类→order 升序，供 admin 维护页编辑。

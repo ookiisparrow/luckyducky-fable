@@ -1,4 +1,4 @@
-// 黄金 learning-content §四「继续学习定位」（守卫 rw-mp-me-golden）：
+// 黄金 learning-content §四「继续学习定位」：
 // 按观看记录定位·绝不回退默认课；无记录取最近解锁课第一课时；脏课时退回第一课时；无课回空不假装。
 import { describe, it, expect } from 'vitest'
 import { continueResolve, clampResumeAt } from '../lib/continueResolve'

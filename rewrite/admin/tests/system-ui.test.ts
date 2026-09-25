@@ -1,4 +1,4 @@
-// 系统组+钱组补齐映射（守卫 rw-admin-system-ui-golden）：批次激活率不除零/webhook 预检同云端正则/
+// 系统组+钱组补齐映射：批次激活率不除零/webhook 预检同云端正则/
 // 对账 approx 诚实透传/wxOnly 标红/库存不限量不显 0/409 冲突人话。
 import { describe, it, expect } from 'vitest'
 import { mapAgents, mapBatches, webhookOk, mapRecon, mapBillMatch, mapStock, stockErrorText, mapAuditEntries, launchErrorText, UNKNOWN_COURSE_HINT } from '../src/lib/mapSystem'

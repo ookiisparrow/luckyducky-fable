@@ -4,7 +4,7 @@
 // shipped 改单号 · done 查看、物流公司预设下拉、列表手机号掩码（PII）。删除/解除仍走 no-alert 两步确认。
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
-import { useLatest } from '../lib/latest'
+import { useLatest, appendNew } from '../lib/latest'
 import { RefreshCw, Search, Package, X, PackageCheck, ScanLine, TriangleAlert } from 'lucide-vue-next'
 import { listOrders, orderCounts, getOrderDetail, shipOrder, shipOrders, clearFeeMismatch, recordPaidFee } from '../api/money'
 import UiButton from '../components/ui/Button.vue'
@@ -14,7 +14,9 @@ import Badge from '../components/ui/Badge.vue'
 import EmptyState from '../components/ui/EmptyState.vue'
 import { mapOrderRows, orderErrorText, type OrderRowVM } from '../lib/mapMoney'
 import { dateTime } from '../lib/format'
+import { yuanToFen } from '../lib/mapScm'
 import { COMPANIES } from '../lib/fulfill'
+import { confirmed } from '../lib/status'
 
 const router = useRouter() // 本页唯一跳转点：退款持有行「查看退款」深链（/refunds?q=单号·复用 Refunds 深链自动检索范式）
 
@@ -39,7 +41,7 @@ const clearConfirmId = ref('')
 
 // 发货/查看抽屉：mode ship=填单发货（paid 首发 / shipped 改单号）· view=只读查看（done 等）
 type Acts = Record<string, { activated?: boolean; entered?: boolean } | undefined>
-const drawer = ref<{ row: OrderRowVM; mode: 'ship' | 'view'; company: string; trackingNo: string; acts: Acts | null; error?: string } | null>(null)
+const drawer = ref<{ row: OrderRowVM; mode: 'ship' | 'view'; company: string; trackingNo: string; acts: Acts | null; actsErr?: string; error?: string } | null>(null)
 
 // 列表页脚分母＝当前标签计数（换皮恒用 counts.all·在「待发货」栏也显全量总数·误导以为本栏还有一堆没翻）
 const tabTotal = computed(() => counts.value[tab.value || 'all'])
@@ -83,8 +85,7 @@ async function more() {
   const r = await listOrders(tab.value, cursor.value, 20, activeQ.value)
   if (listGen.isStale(gen)) return // 期间发生过 reload（切标签/搜索/刷新/动作后刷新）·放弃本页（防混排 + 游标跳页）
   if (!r.ok) return // 翻页失败不覆盖已有
-  const seen = new Set(rows.value.map((x) => x.id))
-  rows.value = [...rows.value, ...mapOrderRows((r as any).list).filter((x) => !seen.has(x.id))]
+  rows.value = appendNew(rows.value, mapOrderRows((r as any).list))
   cursor.value = (r as any).nextCursor
   hasMore.value = !!(r as any).hasMore
 }
@@ -116,10 +117,12 @@ function clearSearch() {
 function openDrawer(row: OrderRowVM, mode: 'ship' | 'view') {
   drawer.value = { row, mode, company: row.company || COMPANIES[0], trackingNo: row.trackingNo || '', acts: null }
   getOrderDetail(row.id)
+    .catch((e) => ({ ok: false, status: 0, error: String(e) })) // 回包 JSON 为 null 时 post 会抛，同样算取数失败
     .then((r) => {
-      if (r.ok && drawer.value && drawer.value.row.id === row.id) drawer.value.acts = (r as any).activations || {}
+      if (drawer.value?.row.id !== row.id) return
+      if (r.ok) drawer.value.acts = (r as any).activations || {}
+      else drawer.value.actsErr = '激活状态没加载到：' + orderErrorText(r.error) // 失败≠无激活（病根#14）
     })
-    .catch(() => {})
 }
 function closeDrawer() {
   if (busy.value) return
@@ -165,7 +168,6 @@ async function doShip() {
   busy.value = false
   if (r.ok) {
     drawer.value = null
-    message.value = ''
     void reload()
   } else {
     d.error = '发货没成功：' + orderErrorText(r.error) // 抽屉内可见·不挡死顶部 message
@@ -228,18 +230,10 @@ async function doBatchShip() {
 
 // 金额异常单解除禁发：no-alert 两步确认（先去商户平台核对流水，确认无误再点）
 async function doClearMismatch(id: string) {
-  if (clearConfirmId.value !== id) {
-    clearConfirmId.value = id
-    return
-  }
-  clearConfirmId.value = ''
+  if (!confirmed(clearConfirmId, id)) return
   const r = await clearFeeMismatch(id)
-  if (r.ok) {
-    message.value = ''
-    void reload()
-  } else {
-    message.value = '解除失败：' + orderErrorText(r.error) // 失败留人话·不 reload 吞（同 doShip 约定·病根#14）
-  }
+  if (r.ok) void reload()
+  else message.value = '解除失败：' + orderErrorText(r.error) // 失败留人话·不 reload 吞（同 doShip 约定·病根#14）
 }
 
 // 补录实际到账金额（异常单退款死胡同出口）：管理员核对微信商户流水后输入「元」，云端转分存库。
@@ -250,19 +244,14 @@ async function doRecordPaidFee(row: OrderRowVM) {
   // eslint-disable-next-line no-alert
   const input = window.prompt(`订单 ${row.id} 实际到账金额（元）？\n请核对微信商户流水后填写——将作为该单退款金额的依据，请勿随意填写。`)
   if (input == null) return
-  const yuan = Number(input)
-  const fen = Math.round(yuan * 100)
-  if (!Number.isFinite(yuan) || !Number.isInteger(fen) || fen <= 0) {
-    message.value = '补录失败：金额必须是大于 0 的元数'
+  const fen = yuanToFen(input) // 超两位小数回 null（退款依据不静默取整）；换算溢出成 Infinity 靠 isInteger 拦
+  if (fen == null || !Number.isInteger(fen) || fen <= 0) {
+    message.value = '补录失败：金额必须是大于 0 的元数（最多两位小数）'
     return
   }
   const r = await recordPaidFee(row.id, fen)
-  if (r.ok) {
-    message.value = ''
-    void reload()
-  } else {
-    message.value = '补录失败：' + orderErrorText(r.error)
-  }
+  if (r.ok) void reload()
+  else message.value = '补录失败：' + orderErrorText(r.error)
 }
 
 onMounted(reload)
@@ -451,6 +440,7 @@ onMounted(reload)
             <b>{{ it.name }}{{ it.spec ? `（${it.spec}）` : '' }} ×{{ it.qty }}</b>
             <em v-if="actOf(it.productId)" class="act-tag" :class="actOf(it.productId)!.activated ? 'used' : 'fresh'">{{ actLabel(actOf(it.productId)!) }}</em>
           </div>
+          <p v-if="drawer.actsErr" class="drawer-error">{{ drawer.actsErr }}</p>
           <div class="ditem-foot">
             <span>金额</span><strong>{{ drawer.row.amountLabel }}</strong>
           </div>

@@ -1,4 +1,4 @@
-// 黄金 kit-security §A：状态机原子流转与幂等（守卫 rw-kit-golden）。
+// 黄金 kit-security §A：状态机原子流转与幂等。
 import { describe, it, expect, beforeEach } from 'vitest'
 import { control } from 'wx-server-sdk'
 import { transition } from '../src/kit'

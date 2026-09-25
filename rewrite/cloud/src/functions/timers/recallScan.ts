@@ -1,5 +1,5 @@
 import { PAY_WINDOW_MS, COLLECTIONS } from '@ldrw/shared'
-import { getDb, isServerCall, ok, notifyRecall } from '../../kit'
+import { getDb, isServerCall, ok, notifyRecall, alert } from '../../kit'
 import { recallCandidates } from './recallRules'
 
 // 主动召回扫描（黄金 cs-agent §八·纯决策与 I/O 分离）：读 bounded 定向数据 → rules 算四类候选 →
@@ -30,22 +30,27 @@ export const main = async () => {
     rd(db.collection(COLLECTIONS.activations).where({ enteredAt: _.neq(null) }).orderBy('enteredAt', 'desc').limit(SCAN)),
   ])
   // progress 定向读：只查已进课这批人的进度（unfinished 判据只消费这批·unstarted 不需要 progress）
-  const openids = [...new Set(actsEntered.map((a: any) => String(a._openid || '')).filter(Boolean))]
-  const progress: any[] = []
-  for (let i = 0; i < openids.length; i += IN_CHUNK) {
-    const chunk = openids.slice(i, i + IN_CHUNK)
-    progress.push(...(await rd(db.collection(COLLECTIONS.progress).where({ _openid: _.in(chunk) }).limit(1000))))
-  }
-  const activations = [...actsUnstarted, ...actsEntered]
+  const openids = [...new Set<string>(actsEntered.map((a: any) => String(a._openid || '')).filter(Boolean))]
+  const chunks: string[][] = []
+  for (let i = 0; i < openids.length; i += IN_CHUNK) chunks.push(openids.slice(i, i + IN_CHUNK))
+  const pages = await Promise.all(
+    chunks.map((c) => db.collection(COLLECTIONS.progress).where({ _openid: _.in(c) }).limit(1000).get().then((r: any) => (r && r.data) || [], () => null)),
+  )
+  // 进度读失败≠没进度：当空会把这批已进课学员全判「开了没学」误推运营群，故这轮不判 unfinished
+  const progressOk = pages.every(Boolean)
+  if (!progressOk) alert('anomaly', 'recallScan', 'PROGRESS_READ_FAILED')
+  const progress = progressOk ? pages.flat() : []
+  const activations = progressOk ? [...actsUnstarted, ...actsEntered] : actsUnstarted
   const result = recallCandidates({ now: Date.now(), payWindowMs: PAY_WINDOW_MS, pendingOrders, shippedOrders, activations, progress })
-  const summary = {
+  const summary: Record<string, number> = {
     unpaid: result.unpaid.length,
     logistics: result.logistics.length,
     unstarted: result.unstarted.length,
-    unfinished: result.unfinished.length,
+    // 跳过时不写 unfinished：写 0 与「真没人开了没学」分不开，运营会以为这轮没有
+    ...(progressOk ? { unfinished: result.unfinished.length } : { unfinishedSkipped: 1 }),
     total: result.total,
   }
-  if (result.total > 0) await notifyRecall(summary)
+  if (result.total > 0 || !progressOk) await notifyRecall(summary)
   // capped：任一切片打满 SCAN＝候选可能超窗（近似值·同 dashboard approx 口径），返回值如实标注不装全量
   return ok({ ...summary, capped: actsUnstarted.length >= SCAN || actsEntered.length >= SCAN })
 }

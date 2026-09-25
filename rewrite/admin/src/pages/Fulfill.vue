@@ -6,6 +6,7 @@ import QRCode from 'qrcode'
 import { RefreshCw, ScanLine, Printer, Package } from 'lucide-vue-next'
 import { listOrders, shipOrder } from '../api/money'
 import { mapOrderRows, orderErrorText, type OrderRowVM } from '../lib/mapMoney'
+import { dateTime } from '../lib/format'
 import {
   FULFILL_STEP_NAMES,
   COMPANIES,
@@ -95,12 +96,7 @@ const summary = computed(() => pickSummary(orders.value))
 // orders 仍留全量：refundHoldCount 要如实报数，扫到那张已打印的旧码也要认得出来（见 onScan）。
 const shippable = computed(() => orders.value.filter((o) => !o.refundHold))
 const heldIdSet = computed(() => new Set(orders.value.filter((o) => o.refundHold).map((o) => o.id as string)))
-const fmtTime = (ts?: number) => {
-  if (!ts) return '—'
-  const d = new Date(ts)
-  const p = (x: number) => String(x).padStart(2, '0')
-  return `${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`
-}
+const fmtTime = (ts?: number) => dateTime(ts).slice(5) || '—'
 
 // —— 步2 打印 ——
 const PRINTED_KEY = 'ldrw-fulfill-printed'
@@ -141,9 +137,6 @@ function toggleCheck(id: string) {
 }
 function selectAll() {
   checked.value = new Set(shippable.value.map((o) => o.id as string))
-}
-function selectUnprinted() {
-  checked.value = new Set(shippable.value.filter((o) => !printed.value.has(o.id as string)).map((o) => o.id as string))
 }
 const chosen = computed(() => shippable.value.filter((o) => checked.value.has(o.id as string)))
 const previewId = ref('')
@@ -262,22 +255,21 @@ async function doShip(order: FulfillOrder, trackingNo: string) {
     return
   }
   shipping.value = true
-  const time = Date.now()
-  const code = shortCode(order.id)
-  const name = order.address?.name || '—'
-  const r = await shipOrder(order.id as string, company.value, trackingNo)
+  // await 前快照：在途期下拉框仍可改，回包后的流水/提示必须是实际提交的那家公司
+  const entry = { id: order.id as string, time: Date.now(), code: shortCode(order.id), name: order.address?.name || '—', trackingNo, company: company.value }
+  const r = await shipOrder(entry.id, entry.company, trackingNo)
   shipping.value = false
   if (r.ok) {
     orders.value = orders.value.filter((o) => o.id !== order.id)
-    sessionLog.value.unshift({ id: order.id as string, time, code, name, trackingNo, company: company.value, ok: true })
+    sessionLog.value.unshift({ ...entry, ok: true })
     // 只在仍选中刚发的这单时清选择——发货往返期间操作员可能已扫下一箱内码选中别单（selected=B），
     // 无条件置空会把 B 的选择抹掉、逼其重扫箱码（P3·根因#8·扫码枪快速连扫才触发）
     if (selected.value?.id === order.id) selected.value = null
-    say(`已发货 ${code} · ${company.value} ${trackingNo}`)
+    say(`已发货 ${entry.code} · ${entry.company} ${trackingNo}`)
   } else {
     const msg = mapShipErr(r.error)
     // 失败保持选中：多半运单号扫歪/网络抖，纠正后直接重扫，不用再扫箱码
-    sessionLog.value.unshift({ id: order.id as string, time, code, name, trackingNo, company: company.value, ok: false, msg })
+    sessionLog.value.unshift({ ...entry, ok: false, msg })
     say(msg, true)
   }
   focusScan()
@@ -359,7 +351,7 @@ const railState = (n: number) => (n === step.value ? 'current' : n < step.value 
           <select v-model="paperKey" class="sel" @change="onPaperChange">
             <option v-for="p in PAPER_PRESETS" :key="p.key" :value="p.key">{{ p.label }}</option>
           </select>
-          <UiButton variant="ghost" size="sm" @click="selectUnprinted">只选未打印</UiButton>
+          <UiButton variant="ghost" size="sm" @click="syncDefaultChecked">只选未打印</UiButton>
           <UiButton variant="ghost" size="sm" @click="selectAll">全选</UiButton>
           <span class="tb-grow"></span>
           <UiButton :disabled="!chosen.length || printing" @click="doPrint">

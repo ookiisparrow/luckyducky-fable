@@ -119,11 +119,12 @@ Page({
   // 批D 补丁：粗粒度 helpPanel==='videos' 判定无法区分「快速退出再进入」产生的新旧两次请求，慢的旧请求
   // 若晚于新请求回包，会用旧数据把刚渲染好的新列表覆盖回去——必须用自增代次精确丢弃过期回包）。
   helpFaqToken: 0, // 常见问题子层请求令牌（R37b·同 helpVideosToken 惯用法·防「快速退出再进入」乱序回包覆盖）
-  errSeg: '', // 上次因视频加载失败重试过的段
   // 本段自动重试预算（课程链路审计 2026-07-17·替代原一次性 errRetried 布尔）：原布尔跨整段播放生命周期
   // 不复位——同段先后两次独立的瞬时网络抖动（中途正常播放数分钟）会让第二次直接跳过自动重试落硬失败态。
   // 改计数预算 2 次：容两次独立抖动自愈；预算耗尽即硬失败（保住原设计的「防不可恢复媒体无限重取死循环」——
   // 坏媒体每轮消耗一次预算，最多 2 轮即停，不会每 N 秒一次 getPlaybackUrl 打转）。换段/手动重试复位。
+  // 不用另记「是哪段」：current 只由 playSegment 改写，换段（非 retry）同步清零，retry 只重放当前段——
+  // errCount>0 时它必然属于当前段。
   errCount: 0,
   _bufTimer: null as ReturnType<typeof setTimeout> | null, // 缓冲失速升级定时器（onVideoWaiting 起·timeupdate/play 恢复即清·timer 必清理）
   watchReported: false, // 本段 watch_at 是否已上报（一次性·防 onHide+onUnload 双报）
@@ -175,10 +176,7 @@ Page({
     // playSegment 才现取地址），深链两跳叠加。并行后耗时＝max(目录, 取址) 而非目录+取址；取址结果不在此直接
     // 消费（只暖缓存·err 吞掉），仍待目录确认段存在后由 playSegment 经 peek/在途去重命中；期望段空则不发。
     // NOT_ENTITLED 语义不变：暖取抛错吞掉不缓存，playSegment 正路 cache.get 再抛→denied（错误路径原样）。
-    const [d] = await Promise.all([
-      getCourseByIdDetailed(this.courseId),
-      this._wantSeg ? cache.get(this.courseId, this._wantSeg).catch(() => '') : Promise.resolve(''),
-    ])
+    const [d] = await Promise.all([getCourseByIdDetailed(this.courseId), cache.prefetch(this.courseId, this._wantSeg)])
     if (this.unloaded || seq !== this._seq) return // 已退页或过期回包（被更晚一次 initCourse 取代）：丢弃
     if (d.failed) {
       this.setData({ state: 'error' })
@@ -202,10 +200,7 @@ Page({
   },
 
   async playSegment(seg: FlatSegment, scene: 'enter' | 'seg' | 'retry') {
-    if (scene !== 'retry') {
-      this.errSeg = '' // 换段（非重试）重置视频加载失败重试预算
-      this.errCount = 0
-    }
+    if (scene !== 'retry') this.errCount = 0 // 换段（非重试）重置视频加载失败重试预算
     this.clearBuffering() // 换段/重试即清缓冲失速态与升级定时器（旧段的缓冲不带进新段）
     this.watchReported = false // 新段（含重试重入）＝新观看单元·允许再上报一次 watch_at
     const token = ++this.playToken // 本次切段令牌·await 后复核，防慢回旧段覆盖新段
@@ -230,8 +225,12 @@ Page({
     // src 清空另在各自 setData 给（loading 给 ''·卸载旧/坏 <video> 显骨架；peek 直给新 url）。进度/暂停/播完通栏/
     // 自绘 seek 填充节点气泡/缓冲水位都属旧段，一律归零重算（completed=false）——新段是新的播放单元。
     const strip = lessonStrip(this.course, seg.segmentId, false)
+    const next = navSegment(this.course, seg.segmentId, 1)
+    // canPrev/canNext 随换段一次算定：loading/denied 态不读它们，playing/empty/error 各落点共用
     const clearPatch = {
       current: seg,
+      canPrev: !!navSegment(this.course, seg.segmentId, -1),
+      canNext: !!next,
       paused: false,
       curSec: 0,
       durSec: 0,
@@ -261,7 +260,6 @@ Page({
       // 段间提速（根因#8·段间转场卡顿·承退役老线 prefetch 语义，新线重写缓存却漏接线）：当前段就绪即预热下一段
       // 地址，用户点「下一段」时命中缓存零云往返。纯 cache 暖（不 setData·不改 this.data），故不复核 playToken——
       // 慢回调预热了用户不会到的段也无害；cache.prefetch 对新鲜命中 no-op、在途去重（见 lib/player.ts）。
-      const next = navSegment(this.course, seg.segmentId, 1)
       if (next) void cache.prefetch(this.courseId, next.segmentId)
     }
     // peek 消初见切段闪烁（根因#8）：来源页/上一段预热过则缓存新鲜命中，跳过 state:'loading' 中间态、一次 setData
@@ -271,10 +269,7 @@ Page({
     if (peeked) {
       this.srcSetAt = Date.now()
       if (initialTime > 0) this._wantAt = 0 // 消费（peek 命中即真把非空 src 交给挂载 video）
-      this.setData(
-        { ...clearPatch, state: 'playing', src: peeked, initialTime, canPrev: !!navSegment(this.course, seg.segmentId, -1), canNext: !!navSegment(this.course, seg.segmentId, 1) },
-        onPlaying
-      )
+      this.setData({ ...clearPatch, state: 'playing', src: peeked, initialTime }, onPlaying)
       return
     }
     // 缓存未命中：走 loading 骨架 + 取址（这里的 initialTime:0 只是骨架态占位·<video> 此刻尚未挂载不读它·
@@ -294,20 +289,17 @@ Page({
       // 取址失败上报（课程链路审计 2026-07-17·根因#14）：核心内容链的失败率此前对服务端完全不可见——
       // fire-and-forget 留痕（弱网下本次上报也可能失败，可容忍：能到达的样本已足以暴露分布）。
       trackEvent('video_error', 'player', seg.segmentId, { courseId: this.courseId, phase: 'fetch' })
-      this.setData({ state: 'error', canPrev: !!navSegment(this.course, seg.segmentId, -1), canNext: !!navSegment(this.course, seg.segmentId, 1) })
+      this.setData({ state: 'error' })
       return
     }
     if (token !== this.playToken) return // 乱序回包：更晚的 playSegment 已接管·丢弃本次结果（不覆盖新段）
     if (!url) {
-      this.setData({ state: 'empty', src: '', canPrev: !!navSegment(this.course, seg.segmentId, -1), canNext: !!navSegment(this.course, seg.segmentId, 1) })
+      this.setData({ state: 'empty', src: '' })
       return
     }
     if (initialTime > 0) this._wantAt = 0 // 消费（取址成功且 url 非空即真把非空 src 交给挂载 video）
     this.srcSetAt = Date.now()
-    this.setData(
-      { state: 'playing', src: url, initialTime, canPrev: !!navSegment(this.course, seg.segmentId, -1), canNext: !!navSegment(this.course, seg.segmentId, 1) },
-      onPlaying
-    )
+    this.setData({ state: 'playing', src: url, initialTime }, onPlaying)
   },
 
   onFirstPlay() {
@@ -371,7 +363,6 @@ Page({
       void this.initCourse()
       return
     }
-    this.errSeg = ''
     this.errCount = 0
     cache.invalidate(this.courseId, cur.segmentId)
     void this.playSegment(cur, 'retry')
@@ -386,15 +377,11 @@ Page({
     if (!cur) return
     // 地址可能过期（可恢复）→ 失效后重取；预算 2 次（见 errCount 字段注：容同段两次独立瞬时抖动自愈，
     // 又保住「坏媒体不无限重取」）。耗尽落播放失败态让用户换段/稍后再试，并上报留痕（根因#14）。
-    if (this.errSeg === cur.segmentId && this.errCount >= 2) {
+    if (this.errCount >= 2) {
       trackEvent('video_error', 'player', cur.segmentId, { courseId: this.courseId, phase: 'media', retries: this.errCount })
       this.clearBuffering()
       this.setData({ state: 'error' })
       return
-    }
-    if (this.errSeg !== cur.segmentId) {
-      this.errSeg = cur.segmentId
-      this.errCount = 0
     }
     this.errCount++
     cache.invalidate(this.courseId, cur.segmentId)
@@ -596,8 +583,8 @@ Page({
   },
   // WXS 松手提交（批5·根因#15·原 onSeekEnd 语义整体迁入）：真正 seek 到 seek.wxs 回报的落位秒（渲染层唯一提交出口）。
   // 完成态下拖动＝用户想回看，恢复播放并退出完成遮罩（同 onReplay 语义·completed=false——不留播完遮罩挡住刚拖到的
-  // 画面）。收口 seeking/snapName 态 + 把 seekPct/curSec/curClock 同步到落位秒（拖动中 seekPct 被冻结·此处补齐数据
-  // 绑定与 WXS 落位一致·免松手一帧回跳）。防御：非 seeking 态的杂散提交丢弃（不误 seek）。
+  // 画面；完成态 paused 恒为 true，故 play 条件须单列 segDone）。收口 seeking/snapName 态 + 把 seekPct/curSec/curClock
+  // 同步到落位秒（拖动中 seekPct 被冻结·此处补齐数据绑定与 WXS 落位一致·免松手一帧回跳）。防御：非 seeking 态的杂散提交丢弃（不误 seek）。
   onSeekCommit(e: { sec: number } | WechatMiniprogram.CustomEvent<{ sec: number }>) {
     if (!this.data.seeking) return
     const d = wxsArgs<{ sec: number }>(e)
@@ -606,16 +593,13 @@ Page({
     ctx.seek(sec)
     const durSec = this.data.durSec
     const seekPct = durSec ? Math.min(100, Math.round((sec / durSec) * 10000) / 100) : 0
-    if (this.data.segDone) {
-      ctx.play()
-      this.exitSegDone({ seeking: false, snapName: '', curSec: sec, curClock: formatClock(sec), seekPct })
-      return
-    }
+    const patch = { seeking: false, snapName: '', curSec: sec, curClock: formatClock(sec), seekPct }
     // 续播兜底：seek 触发重载时播放会停摆在首帧，没人补推就永远停在那——而播放一停就没有 timeupdate，
     // 进度条随之永久冻结在 WXS 最后落位处（用户看到的「拖动失效」实为播放停了）。play 幂等（已在播＝no-op），
     // 与 playSegment 的 autoplay 停摆兜底同型。用户主动暂停态（paused 由 bind:pause 真回报）不打扰。
-    if (!this.data.paused) ctx.play()
-    this.setData({ seeking: false, snapName: '', curSec: sec, curClock: formatClock(sec), seekPct })
+    if (this.data.segDone || !this.data.paused) ctx.play()
+    if (this.data.segDone) this.exitSegDone(patch)
+    else this.setData(patch)
   },
   // 事件震（进节点重嗒）单出口：≥VIBE_GAP_MS 节流，与拖动阻尼「嗒」共用 lastVibe/lastTick 时间地板防叠震
   // （配方单源 lib/haptics·数值为用户真机拍板定版，改动需用户重新拍板）。
@@ -713,16 +697,9 @@ Page({
   // 返回（P5·设计拍板③每次返回都出现二次确认；P5b④首次成功退出加桌引导）：求助面板开着时先逐层
   // 收口（四级链：内嵌播放→videos/faq 列表→menu→关面板），不计入退出确认；面板已关时才走二次确认。
   onBack() {
-    if (this.data.helpSrc) {
-      this.setData({ helpSrc: '', helpSegName: '' })
-      return
-    }
-    if (this.data.helpPanel === 'videos' || this.data.helpPanel === 'faq') {
-      this.setData({ helpPanel: 'menu' })
-      return
-    }
-    if (this.data.helpPanel === 'menu') {
-      this.setData({ helpPanel: '' })
+    const { helpSrc, helpPanel } = this.data
+    if (helpSrc || helpPanel) {
+      this.setData(helpSrc ? { helpSrc: '', helpSegName: '' } : { helpPanel: helpPanel === 'menu' ? '' : 'menu' })
       return
     }
     const now = Date.now()
@@ -754,12 +731,6 @@ Page({
       this.setData({ deskGuide: true, deskGuideIOS: ios })
       return
     }
-    this.exitPlayer()
-  },
-  // 真退单出口：原生返回栈优先，深链无上级页兜底回首页——判断收口到 lib/nav.ts
-  // （2026-07-25 体检批 P2·Rule of Three：catalog/welcome 补自绘返回后同款判断第三次出现，
-  //   行为不变，首页兜底由 reLaunch 改 switchTab 保住底部导航栏）。
-  exitPlayer() {
     goBackOrHome()
   },
   // 加桌引导（P5b）：继续学习＝关弹窗留下（不退）；先退出＝执行真退。
@@ -768,7 +739,7 @@ Page({
   },
   onDeskGuideExit() {
     this.setData({ deskGuide: false })
-    this.exitPlayer()
+    goBackOrHome()
   },
 
   onPrev() {

@@ -1,4 +1,4 @@
-// 乱序响应守卫（组合式·治 async-race 类·守卫 rw-admin-latest-golden·根因#8「构建过≠真能用」）。
+// 乱序响应守卫（组合式·治 async-race 类·根因#8「构建过≠真能用」）。
 //
 // 病根：页面用共享 ref 承接「可被多次触发的异步取数」（reload/切筛选/翻页/抽屉开详情），await 后无条件
 //   写结果——快点/慢网下先发的旧请求后到，会覆盖新请求的结果 → 高亮标签/抽屉头与内容错配、甚至跨单/跨人
@@ -14,4 +14,10 @@ export function useLatest() {
     // 新主操作会作废在途从属（isStale=true），而从属自身不递增故不会反噬在途主操作（避免互杀）。
     peek: () => seq,
   }
+}
+
+// 游标翻页追加：只接上一页没见过的项——双击「加载更多」或服务端页边界重叠时同一条不重复出现。
+export function appendNew<T>(prev: T[], next: T[], key: (_x: T) => unknown = (x: any) => x.id): T[] {
+  const seen = new Set(prev.map(key))
+  return [...prev, ...next.filter((x) => !seen.has(key(x)))]
 }

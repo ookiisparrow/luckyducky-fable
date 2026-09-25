@@ -7,7 +7,7 @@ import { listInventory, saveStock } from '../api/system'
 import { listDrafts } from '../api/products'
 import { mapStock, stockErrorText, type StockRow } from '../lib/mapSystem'
 import { useLoadStatus } from '../lib/status'
-import { LOW_STOCK_THRESHOLD, stockAlertOf } from '../lib/thresholds'
+import { LOW_STOCK_THRESHOLD, stockAlertOf, type StockAlert } from '../lib/thresholds'
 import UiButton from '../components/ui/Button.vue'
 import PageHeader from '../components/ui/PageHeader.vue'
 import KpiCard from '../components/ui/KpiCard.vue'
@@ -19,7 +19,7 @@ const LOW_STOCK = LOW_STOCK_THRESHOLD // 默认阈值（per-SKU 未设时退此�
 interface Row extends StockRow {
   name: string
   priceLabel: string
-  status: 'unlimited' | 'out' | 'low' | 'onsale'
+  status: StockAlert
 }
 
 const rows = ref<Row[]>([])
@@ -28,34 +28,27 @@ const invOk = ref(false) // listInventory 成功才信 KPI；失败不画假零
 // 动作反馈/加载态收口（病根#14）：reload 成功不再抹掉 doSave 刚设的 409 冲突原文等动作反馈。
 const { message, load } = useLoadStatus()
 const busy = ref(false)
+const saving = ref(false) // 在途闸：同一 expectedUpdatedAt 二发必 409，成功后会显假冲突
 const editKey = ref('')
 const editVal = ref('')
 const editThreshold = ref('') // per-SKU 阈值编辑（换皮丢·后端 saveStock 早支持 threshold）
 const search = ref('')
-const filter = ref<'all' | 'onsale' | 'low' | 'out' | 'unlimited'>('all')
+const filter = ref<'all' | StockAlert>('all')
 
 const effThreshold = (row: Row) => (row.threshold > 0 ? row.threshold : LOW_STOCK) // per-SKU 优先·未设退默认（提示文案用；标色走 stockAlertOf）
-const STATUS = {
-  onsale: '在售',
-  low: '低库存',
-  out: '售罄',
-  unlimited: '不限量',
+const STATUS: Record<StockAlert, { label: string; tone: 'green' | 'amber' | 'red' | 'brand' }> = {
+  onsale: { label: '在售', tone: 'green' },
+  low: { label: '低库存', tone: 'amber' },
+  out: { label: '售罄', tone: 'red' },
+  unlimited: { label: '不限量', tone: 'brand' },
 }
-const FILTERS = [
-  { key: 'all', label: '全部' },
-  { key: 'onsale', label: '在售' },
-  { key: 'low', label: '低库存' },
-  { key: 'out', label: '售罄' },
-  { key: 'unlimited', label: '不限量' },
-] as const
+const FILTERS = [{ key: 'all' as const, label: '全部' }, ...(Object.keys(STATUS) as StockAlert[]).map((key) => ({ key, label: STATUS[key].label }))]
 
-const counts = computed(() => ({
-  all: rows.value.length,
-  onsale: rows.value.filter((r) => r.status === 'onsale').length,
-  low: rows.value.filter((r) => r.status === 'low').length,
-  out: rows.value.filter((r) => r.status === 'out').length,
-  unlimited: rows.value.filter((r) => r.status === 'unlimited').length,
-}))
+const counts = computed(() => {
+  const c = { all: rows.value.length, onsale: 0, low: 0, out: 0, unlimited: 0 }
+  for (const r of rows.value) c[r.status]++
+  return c
+})
 const shown = computed(() => {
   const q = search.value.trim().toLowerCase()
   return rows.value.filter(
@@ -95,6 +88,7 @@ function startEdit(row: Row) {
 }
 
 async function doSave(row: Row) {
+  if (saving.value) return
   const key = editKey.value // 快照发起时的编辑目标（G4·P2）：回包后若已切到别行编辑，不清新行正开着的 editKey
   const v = editVal.value.trim()
   const stock = v === '' ? null : Number(v)
@@ -108,7 +102,9 @@ async function doSave(row: Row) {
     message.value = '低库存阈值须为非负整数（留空=用默认 ' + LOW_STOCK + '）'
     return
   }
+  saving.value = true
   const r = await saveStock(row.productId, row.spec, stock, row.updatedAt, threshold) // 带版本·被人先改过会 409
+  saving.value = false
   if (r.ok) {
     if (editKey.value === key) editKey.value = '' // 仍是发起时那行才收起编辑态，别顶掉新打开的行内编辑（G4）
     message.value = ''
@@ -190,13 +186,11 @@ onMounted(reload)
             </template>
           </div>
           <div class="ld-td" :style="{ width: '110px' }">
-            <Badge :tone="row.status === 'onsale' ? 'green' : row.status === 'low' ? 'amber' : row.status === 'out' ? 'red' : 'brand'">{{
-              STATUS[row.status]
-            }}</Badge>
+            <Badge :tone="STATUS[row.status].tone">{{ STATUS[row.status].label }}</Badge>
           </div>
           <div class="ld-td ops-cell" :style="{ width: '180px' }">
             <template v-if="editKey === row.key">
-              <UiButton size="sm" @click="doSave(row)">保存</UiButton>
+              <UiButton size="sm" :disabled="saving" @click="doSave(row)">保存</UiButton>
               <UiButton variant="ghost" size="sm" @click="editKey = ''">取消</UiButton>
             </template>
             <template v-else>

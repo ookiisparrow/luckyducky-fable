@@ -1,6 +1,7 @@
 // 播放器纯逻辑（黄金 learning-content §六：分段导航跨课时/跳过不可播课时/端点置灰 +
-// 播放地址缓存 TTL/空不缓存/跨课隔离/在途去重/定向失效）（守卫 rw-mp-player-golden）。
+// 播放地址缓存 TTL/空不缓存/跨课隔离/在途去重/定向失效）。
 // 工厂式依赖注入（fetcher/now）——缓存命中/过期/去重最易在边界出错，纯函数化单测钉死（承接旧线范式）。
+import { createInflight } from './inflight'
 
 export interface SegmentPub {
   id: string
@@ -116,27 +117,24 @@ export function createPlaybackCache(o: { fetcher: UrlFetcher; now?: () => number
   const now = o.now || (() => Date.now())
   const ttlMs = o.ttlMs ?? 25 * 60 * 1000
   const cache = new Map<string, { url: string; at: number }>()
-  const inflight = new Map<string, Promise<string>>()
+  const flight = createInflight<string>()
   const keyOf = (c: string, s: string) => c + '||' + s
+  // 新鲜命中回 url，否则 ''——空 url 从不入缓存，故 '' 即未命中
+  const fresh = (key: string) => {
+    const hit = cache.get(key)
+    return hit && now() - hit.at < ttlMs ? hit.url : ''
+  }
 
   async function get(courseId: string, segmentId: string): Promise<string> {
     if (!courseId || !segmentId) return '' // 空段不取址
     const key = keyOf(courseId, segmentId)
-    const hit = cache.get(key)
-    if (hit && now() - hit.at < ttlMs) return hit.url
-    const going = inflight.get(key)
-    if (going) return going // 在途去重：并发取同段只真取一次
-    const p = (async () => {
-      try {
-        const url = String((await o.fetcher(courseId, segmentId)) || '')
-        if (url) cache.set(key, { url, at: now() }) // 空不缓存·下次重试
-        return url
-      } finally {
-        inflight.delete(key)
-      }
-    })()
-    inflight.set(key, p)
-    return p
+    const hit = fresh(key)
+    if (hit) return hit
+    return flight.run(key, async () => {
+      const url = String((await o.fetcher(courseId, segmentId)) || '')
+      if (url) cache.set(key, { url, at: now() }) // 空不缓存·下次重试
+      return url
+    })
   }
 
   return {
@@ -144,15 +142,10 @@ export function createPlaybackCache(o: { fetcher: UrlFetcher; now?: () => number
     /** 同步窥探（批3·消初见切段 loading 闪烁）：新鲜缓存命中回 url，否则回 ''——绝不触发取址（纯读，
      *  无 await、无 inflight 参与）；空段回 ''。播放页据此在命中时跳过 state:'loading' 中间态、一次 setData 直落播放。 */
     peek(courseId: string, segmentId: string): string {
-      if (!courseId || !segmentId) return ''
-      const hit = cache.get(keyOf(courseId, segmentId))
-      return hit && now() - hit.at < ttlMs ? hit.url : ''
+      return courseId && segmentId ? fresh(keyOf(courseId, segmentId)) : ''
     },
-    /** 预热：已有新鲜缓存时空操作；空段不取址不崩。 */
+    /** 预热：已有新鲜缓存时空操作（get 直接回命中）；空段不取址不崩；取址失败吞掉。 */
     async prefetch(courseId: string, segmentId: string): Promise<void> {
-      if (!courseId || !segmentId) return
-      const hit = cache.get(keyOf(courseId, segmentId))
-      if (hit && now() - hit.at < ttlMs) return
       await get(courseId, segmentId).catch(() => undefined)
     },
     /** 定向失效：只清本（课,段），不误伤别课同名段。 */

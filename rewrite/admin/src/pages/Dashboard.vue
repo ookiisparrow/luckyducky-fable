@@ -12,6 +12,7 @@ import { getInspectStatus } from '../api/ops'
 import { mapDashboard, deriveDashboardTodos } from '../lib/mapMoney'
 import { mapDraftRows } from '../lib/mapProducts'
 import { LOW_STOCK_THRESHOLD } from '../lib/thresholds'
+import { dateTime } from '../lib/format'
 import PageHeader from '../components/ui/PageHeader.vue'
 import Card from '../components/ui/Card.vue'
 import KpiCard from '../components/ui/KpiCard.vue'
@@ -56,12 +57,7 @@ const TODOS = computed(() => [
   { key: 'anomaly', label: '异常未处理', n: openAnomalies.value, to: '/anomalies', icon: ShieldAlert, tone: 'red' },
 ])
 const todoTotal = computed(() => TODOS.value.reduce((s, t) => s + t.n, 0))
-const fmtClock = (ts: number) => {
-  if (!ts) return ''
-  const d = new Date(ts)
-  const p = (x: number) => String(x).padStart(2, '0')
-  return `${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`
-}
+const fmtClock = (ts: number) => dateTime(ts).slice(5)
 const ACT_LABEL: Record<string, string> = { order: '订单', activate: '激活', enter: '进课', refund: '退款' }
 
 const CARD_ICON: Record<string, any> = {
@@ -90,23 +86,22 @@ async function load() {
     getInspectStatus().catch(() => ({ ok: false }) as any),
   ])
   busy.value = false
-  if ((d as any).error === 'SESSION_LOST') return // 会话失效集中导登录（client.onSessionLost·单源·根因#5）
+  if (d.error === 'SESSION_LOST') return // 会话失效集中导登录（client.onSessionLost·单源·根因#5）
   vm.value = mapDashboard(d)
   // 上新未完成＝筹备中（未上架）商品数（复用 productState 三态口径）；失败副请求由 deriveDashboardTodos
   // 以 .ok 识别、回传 partial——不再兜成 0 把「没加载到」伪装成「无待办」（病根#14）
   const t = deriveDashboardTodos({
-    orderCounts: oc as any,
-    refundCounts: rc as any,
-    inventory: inv as any,
-    drafts: { ok: (dr as any)?.ok, rows: (dr as any)?.ok ? mapDraftRows((dr as any).list, (dr as any).urls, (dr as any).listed) : [] },
+    orderCounts: oc,
+    refundCounts: rc,
+    inventory: inv,
+    drafts: { ok: dr.ok, rows: dr.ok ? mapDraftRows(dr.list, dr.urls, dr.listed) : [] },
     low: LOW,
   })
-  todo.value = { ship: t.ship, refund: t.refund, lowStock: t.lowStock, prep: t.prep }
-  todoPartial.value = t.partial
+  todo.value = t
   // 异常计数失败并入 partial 信号（同病根#14 口径：不把「没加载到」伪装成 0）
-  openAnomalies.value = (ins as any)?.ok ? Number((ins as any).openAnomalies) || 0 : 0
-  if (!(ins as any)?.ok) todoPartial.value = true
-  message.value = vm.value ? '' : '看板加载失败：' + String((d as any).error || '')
+  todoPartial.value = t.partial || !ins.ok
+  openAnomalies.value = ins.ok ? Number(ins.openAnomalies) || 0 : 0
+  message.value = vm.value ? '' : '看板加载失败：' + String(d.error || '')
 }
 
 onMounted(load)
@@ -152,7 +147,7 @@ onMounted(load)
       <div v-if="vm.alerts.length" class="alert">
         <div class="alert-ico"><TriangleAlert :size="20" :stroke-width="1.8" /></div>
         <div class="alert-body">
-          <div class="alert-title">交易异常待处理 · {{ vm.alerts.reduce((n, a) => n + a.ids.length, 0) }} 笔</div>
+          <div class="alert-title">交易异常待处理 · {{ alertCount }} 笔</div>
           <div v-for="a in vm.alerts" :key="a.label" class="alert-row">
             <span class="alert-item">{{ a.label }}：<code v-for="id in a.ids" :key="id">{{ id }}</code></span>
             <UiButton variant="danger" size="sm" @click="router.push({ path: alertPath(a.label), query: alertQuery(a) })">去处理</UiButton>

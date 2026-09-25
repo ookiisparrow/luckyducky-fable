@@ -1,4 +1,4 @@
-// 黄金 kit-security（确定性主键幂等·设计约束#1）（守卫 rw-kit-golden）。
+// 黄金 kit-security（确定性主键幂等·设计约束#1）。
 import { describe, it, expect, beforeEach } from 'vitest'
 import { control } from 'wx-server-sdk'
 import { ensureDoc } from '../src/kit'

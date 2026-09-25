@@ -1,5 +1,5 @@
 // 黄金 frontend-store §五（地址簿：空簿/唯一 id/默认唯一）+ 结算草稿语义（快照独立/直买不动车/
-// 提交精确扣车）+ 金额分口径与云端 createOrder 同式（守卫 rw-mp-checkout-golden）。
+// 提交精确扣车）+ 金额分口径与云端 createOrder 同式。
 import { describe, it, expect, beforeEach } from 'vitest'
 import * as addr from '../lib/address'
 import * as cart from '../lib/cart'

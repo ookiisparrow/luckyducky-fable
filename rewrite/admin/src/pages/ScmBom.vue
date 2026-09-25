@@ -7,8 +7,8 @@ import { getBomSetup, saveBomTemplate, saveBomProfile, previewAssembly, runAssem
 import { listDrafts } from '../api/products'
 import { materialHuman, scmErrorText, unprofiledProducts, productNameOf } from '../lib/mapScm'
 import { dateTime } from '../lib/format'
-import { useLoadStatus } from '../lib/status'
-import { useLatest } from '../lib/latest'
+import { useLoadStatus, loadErrors } from '../lib/status'
+import { useLatest, appendNew } from '../lib/latest'
 import ScmFlowTabs from '../components/ScmFlowTabs.vue'
 import UiButton from '../components/ui/Button.vue'
 import PageHeader from '../components/ui/PageHeader.vue'
@@ -102,12 +102,8 @@ async function reload() {
   products.value = d.ok ? ((d as any).list as Record<string, any>[]) : []
   // 分路报错（P2·深审20260712）：原先只校验 getBomSetup 一路，listMaterials/listAssemblies/listDrafts
   // 单独失败被吞成空数组、页面显假空态——照 Reconciliation.vue reload 范式，任一路失败都点名报出。
-  const bad: string[] = []
-  if (!b.ok) bad.push('配方模板加载失败：' + String(b.error || ''))
-  if (!m.ok) bad.push('物料主档加载失败：' + String(m.error || ''))
-  if (!a.ok) bad.push('组装记录加载失败：' + String(a.error || ''))
-  if (!d.ok) bad.push('产品目录加载失败：' + String(d.error || ''))
-  load(bad.length === 0, bad.join('；')) // 只在加载失败时写·成功静默不抹动作反馈
+  const err = loadErrors([[b, '配方模板'], [m, '物料主档'], [a, '组装记录'], [d, '产品目录']])
+  load(!err, err) // 只在加载失败时写·成功静默不抹动作反馈
 }
 
 // 组装记录「加载更多」（B1·根因#7）：续游标追加·去重防双击重复追加同一页
@@ -118,8 +114,7 @@ async function moreAssemblies() {
     note(false, '', '加载更多组装记录失败：' + scmErrorText(r.error))
     return
   }
-  const seen = new Set(assemblies.value.map((x) => x._id))
-  assemblies.value = [...assemblies.value, ...(((r.list as Record<string, any>[]) || []).filter((x) => !seen.has(x._id)))]
+  assemblies.value = appendNew(assemblies.value, (r.list as Record<string, any>[]) || [], (x) => x._id)
   asmCursor.value = r.nextCursor
   asmHasMore.value = !!r.hasMore
 }

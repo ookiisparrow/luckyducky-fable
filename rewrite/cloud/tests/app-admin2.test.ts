@@ -1,4 +1,4 @@
-// 黄金 admin-misc §二（上新流水线/软下架/孤儿视频回收/分片/批次）（守卫 rw-admin2-golden）。
+// 黄金 admin-misc §二（上新流水线/软下架/孤儿视频回收/分片/批次）。
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { readFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
@@ -167,6 +167,15 @@ describe('商品草稿与上架（黄金：白名单/四道门/软下架不隐�
     const r3 = await post('listDrafts')
     expect(r3.hasVideo['course-p3']).toBe(true)
     expect(r3.coursePublished['course-p3']).toBeFalsy()
+  })
+
+  it('大白话：超过 20 门课有码，批次步也不被聚合默认 20 条截断', async () => {
+    control.setAggregateDefaultLimit(20) // 真 sdk 聚合不写 limit 只回 20 条
+    const ids = Array.from({ length: 25 }, (_, i) => 'p' + i)
+    control.seed('productsDraft', ids.map((id, i) => ({ _id: id, id, name: id, courseId: 'course-' + id, createdAt: i })))
+    control.seed('qrcodes', ids.map((id) => ({ _id: 'q-' + id, courseId: 'course-' + id, batchId: 'b', status: 'unused', createdAt: 1 })))
+    const r = await post('listDrafts')
+    expect(ids.filter((id) => !r.hasBatch['course-' + id])).toEqual([])
   })
 
   it('大白话：上架态联表读炸不装成筹备中——整体报错，不回空 listed', async () => {

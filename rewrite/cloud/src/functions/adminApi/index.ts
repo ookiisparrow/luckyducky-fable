@@ -194,86 +194,22 @@ const ACTIONS: Record<string, (ctx: Ctx) => Promise<any>> = Object.assign(Object
   setReviewPicked: reviews.setReviewPicked,
 } satisfies Record<string, (ctx: Ctx) => Promise<any>>)
 
-// 方案 b：adminApi 顶层兜底需要按 action 归因，但 action 名本身不带文件名。
-// 这里沿 ACTIONS 的真实 handler 引用反查所属 action 文件，再用模块正册的 adminActionFiles 镜像归因；
-// 未挂载/未匹配的动态 action 保守回 unknown，不影响错误兜底本身。
-const ADMIN_ACTION_MODULE: Record<string, string> = {
-  products: 'shop',
-  content: 'shop',
-  cards: 'shop',
-  orders: 'orders',
-  refunds: 'orders',
-  reconciliation: 'orders',
-  wxbill: 'orders',
-  courses: 'learning',
-  batches: 'learning',
-  agentDesk: 'cs',
-  agents: 'cs',
-  checkpoints: 'cs',
-  conversations: 'cs',
-  csat: 'cs',
-  customer360: 'cs',
-  kb: 'cs',
-  wecomLogin: 'cs',
-  scmAssembly: 'scm',
-  scmBom: 'scm',
-  scmMaterials: 'scm',
-  scmOutwork: 'scm',
-  scmOverview: 'scm',
-  scmPlanner: 'scm',
-  scmPurchase: 'scm',
-  inventory: 'scm',
-  ops: 'ops',
-  configChecklist: 'ops',
-  secureConfig: 'ops',
-  dashboard: 'ops',
-  reviews: 'reviews',
+// 顶层兜底按 action 归因：action 名不带文件名，故沿 ACTIONS 的真实 handler 引用反查所属 action 文件，
+// 再按模块归因。下表是 modules.json adminActionFiles 的镜像（云函数进不了 JSON）；未匹配的动态 action 回 unknown。
+const ADMIN_ACTION_MODULES: Record<string, Record<string, unknown>[]> = {
+  shop: [products, content, cards],
+  orders: [ordersA, refunds, reconciliation, wxbill],
+  learning: [courses, batches],
+  cs: [agentDesk, agents, checkpoints, conversations, csat, customer360, kb, wecomLogin],
+  scm: [scmAssembly, scmBom, scmMaterials, scmOutwork, scmOverview, scmPlanner, scmPurchase, inventoryA],
+  ops: [ops, configChecklist, secureConfig, dashboard],
+  reviews: [reviews],
 }
-
-const ADMIN_ACTION_FILES: Record<string, Record<string, unknown>> = {
-  products,
-  content,
-  cards,
-  orders: ordersA,
-  refunds,
-  reconciliation,
-  wxbill,
-  courses,
-  batches,
-  agentDesk,
-  agents,
-  checkpoints,
-  conversations,
-  csat,
-  customer360,
-  kb,
-  wecomLogin,
-  scmAssembly,
-  scmBom,
-  scmMaterials,
-  scmOutwork,
-  scmOverview,
-  scmPlanner,
-  scmPurchase,
-  inventory: inventoryA,
-  ops,
-  configChecklist,
-  secureConfig,
-  dashboard,
-  reviews,
-}
-
 const ADMIN_ACTION_MODULE_BY_NAME: Record<string, string> = Object.create(null)
-for (const [file, actionModule] of Object.entries(ADMIN_ACTION_FILES)) {
-  const module = ADMIN_ACTION_MODULE[file] ?? 'unknown'
-  for (const [action, handler] of Object.entries(actionModule)) {
-    if (ACTIONS[action] === handler) ADMIN_ACTION_MODULE_BY_NAME[action] = module
-  }
-}
-
-function moduleOfAdminAction(action: string): string {
-  return ADMIN_ACTION_MODULE_BY_NAME[action] ?? 'unknown'
-}
+for (const [mod, files] of Object.entries(ADMIN_ACTION_MODULES))
+  for (const file of files)
+    for (const [action, handler] of Object.entries(file))
+      if (ACTIONS[action] === handler) ADMIN_ACTION_MODULE_BY_NAME[action] = mod
 
 // 能力闸（RBAC·别让单超管裸奔）：受限 action 须 principal 具备对应能力（'*'=全能力）。值可为单 cap 或
 // cap 数组（「任一命中」语义·C4）——数组内任一 cap 命中即放行。
@@ -389,14 +325,19 @@ export const main = async (event: any) => {
   if (action === 'login') {
     const res = await checkKey(db, key, true)
     if (!res.ok) {
+      // 库故障≠错口令：不计爆破不告警；回 503 而非 401，前端不清令牌
+      if (res.error === 'AUTH_UNAVAILABLE') return reply(503, res)
       await throttleFailBoth(tkey)
       if (globalWait > 0) alert('security', 'adminLogin', 'GLOBAL_BRUTE', {}) // 全局锁定态下仍有错误口令=疑似分布式爆破·告警人工
       return reply(401, res)
     }
     if (tkey !== GLOBAL_KEY) await throttleReset(tkey) // 成功只清独立 IP；缺 IP/全局靠窗口衰减（防爆破信号被一次成功登入抹掉）
     // 签发会话令牌（口令不落盘）：前端此后只存/只发令牌；签发失败如实返空、前端 fail-closed 拒登
-    const docId = (res as any).agentId === 'admin' ? 'auth' : String((res as any).agentId || 'auth')
-    const sessionToken = await issueSession(db, docId, 'pwd').catch(() => '')
+    const docId = res.agentId === 'admin' ? 'auth' : String(res.agentId || 'auth')
+    const sessionToken = await issueSession(db, docId, 'pwd').catch((e) => {
+      alert('security', 'adminLogin', 'SESSION_ISSUE_FAIL', { via: 'pwd', docId, err: String(e) })
+      return ''
+    })
     return reply(200, { ...res, sessionToken })
   }
 
@@ -419,6 +360,7 @@ export const main = async (event: any) => {
   // 其余 action 一律先验口令/令牌（同受频控，防经任一 action 入口爆破）
   const auth = await checkKey(db, key, false)
   if (!auth.ok) {
+    if (auth.error === 'AUTH_UNAVAILABLE') return reply(503, auth)
     await throttleFailBoth(tkey)
     // C1：泛 action 与 login 打的是同一把口令、同一类爆破——全局锁定态下经任一 action 入口的错误口令
     // 同样是分布式爆破证据，比照 login 补同款告警（同 tag 'adminLogin' 聚合，供防噪判据统一消费）。
@@ -429,7 +371,7 @@ export const main = async (event: any) => {
   // 能力闸·默认拒：登记的取 ACTION_CAPS、未登记默认高权 ADMIN_DEFAULT_CAP；超管 '*' 匹配一切。
   // 「任一命中」语义（C4）：ACTION_CAPS 值可为单 cap 或 cap 数组——principal 持数组中任一 cap 即放行，
   // admin:write 与 refund:manage 并列登记时，admin:write 持有者行为不变、refund:manage 独立可用。
-  const caps: string[] = Array.isArray((auth as any).caps) ? (auth as any).caps : []
+  const caps: string[] = Array.isArray(auth.caps) ? auth.caps : []
   const capSpec = ACTION_CAPS[action]
   const needCaps: string[] = Array.isArray(capSpec) ? capSpec : capSpec ? [capSpec] : [ADMIN_DEFAULT_CAP]
   if (!caps.some((c) => c === '*' || needCaps.includes(c))) return reply(403, { ok: false, error: 'FORBIDDEN' })
@@ -438,27 +380,20 @@ export const main = async (event: any) => {
   const handler = ACTIONS[action]
   if (!handler) return reply(400, { ok: false, error: 'UNKNOWN_ACTION' })
   const auditIp = tkey.replace('adminlogin:', '')
-  const operator = String((auth as any).operator || 'admin') // 真实操作者身份·多账号可追溯
-  const agentId = String((auth as any).agentId || operator)
+  const operator = String(auth.operator || 'admin') // 真实操作者身份·多账号可追溯
+  const agentId = String(auth.agentId || operator)
+  let res: any
+  let crash: { module?: string; error?: string } = {} // 只有异常路径带模块归因
   try {
-    const res = await handler({ db, cloud, data, drafts, agentId, caps })
-    if (shouldAudit(action)) await recordAudit({ action, operator, ip: auditIp, data, ok: auditOk(res) })
-    return res
+    res = await handler({ db, cloud, data, drafts, agentId, caps })
   } catch (e) {
-    if (shouldAudit(action))
-      await recordAudit({
-        action,
-        module: moduleOfAdminAction(action),
-        operator,
-        ip: auditIp,
-        data,
-        ok: false,
-        error: 'SERVER_ERROR',
-      })
     console.error('adminApi error', action, e)
-    return reply(500, { ok: false, error: 'SERVER_ERROR' })
+    crash = { module: ADMIN_ACTION_MODULE_BY_NAME[action] ?? 'unknown', error: 'SERVER_ERROR' }
+    res = reply(500, { ok: false, error: 'SERVER_ERROR' })
   }
+  if (shouldAudit(action)) await recordAudit({ action, operator, ip: auditIp, data, ok: auditOk(res), ...crash })
+  return res
 }
 
 /** 测试挂载口（ACTIONS/ACTION_CAPS 已全域挂载·与旧线注册表逐行核对过）。 */
-export const registries = { ACTIONS, ACTION_CAPS }
+export const registries = { ACTIONS, ACTION_CAPS, ADMIN_ACTION_MODULE_BY_NAME }

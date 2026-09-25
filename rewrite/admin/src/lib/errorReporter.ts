@@ -18,7 +18,6 @@ interface ReportableClient {
 // 同一圆整值降认知负担（非精调结果）。
 const MAX_REPORTS = 20
 const seen = new Set<string>()
-let sent = 0
 
 function currentPage(): string {
   try {
@@ -34,10 +33,9 @@ function reportError(cli: ReportableClient, msg: unknown, page = currentPage()):
     if (!cli.hasSession()) return // 无会话不外呼——不为上报建未鉴权端点
     const text = String(msg).slice(0, 500)
     const fingerprint = text.slice(0, 200)
-    if (seen.has(fingerprint)) return // 会话内同指纹去重：同一报错反复触发不刷屏
-    if (sent >= MAX_REPORTS) return // 会话内封顶：防错误风暴把请求打爆
+    // 会话内同指纹去重（同一报错反复触发不刷屏）+ 封顶（防错误风暴把请求打爆）
+    if (seen.has(fingerprint) || seen.size >= MAX_REPORTS) return
     seen.add(fingerprint)
-    sent++
     cli.post('reportClientError', { msg: text, source: 'admin', page }).catch(() => {}) // .catch 兜底：网络失败不再变成新的 unhandledrejection
   } catch {
     /* fail-soft：上报器自身绝不抛错 */

@@ -21,12 +21,7 @@ const RETAIN_MS = 90 * 24 * 3600 * 1000 // 保留 90 天
 // 双线分流（决策§31·同 getPlaybackUrl 的 isVodFileId 判据单源）：cloud:// 走云存储 deleteFile（整批），
 // VOD FileId 走 DeleteMedia（官方单文件一调·商品图恒 cloud:// 故该分支恒 no-op）。逐项记成功：任一线失败
 // 其项留队下轮再试（fail-soft）；VOD「媒资已不存在」(ResourceNotFound)视作删成功出队防永久重试。返回删除数。
-async function gcPendingGc(
-  db: any,
-  storageCloud: { deleteFile: (o: { fileList: string[] }) => Promise<unknown> },
-  coll: string,
-  now: number
-): Promise<number> {
+async function gcPendingGc(db: any, coll: string, now: number): Promise<number> {
   let deleted = 0
   // 小集合上界（≤1000·同 getCourses 口径），逐文档处理到期项
   const docs = await db.collection(coll).limit(1000).get().catch(() => ({ data: [] }))
@@ -58,29 +53,25 @@ export const main = async () => {
   if (!isServerCall()) return ok({ removed: 0 })
   const db = getDb()
   const _ = db.command
-  const cutoff = Date.now() - RETAIN_MS
-  const n = (x: any) => (x && x.stats && x.stats.removed) || 0
-  // 服务端按条件批量删（与 closeExpiredOrders 同口径，每日一轮收敛；集合不存在则 0）
-  const rmEvents = await db
-    .collection('events')
-    .where({ createdAt: _.lt(cutoff) })
-    .remove()
-    .catch(() => ({ stats: { removed: 0 } }))
-  // 频控窗口 TTL（外审 P2.14）：按 updatedAt（throttle 每次写更新）删·非 createdAt（创建即定·活跃 key 会被误删）
-  const rmRate = await db
-    .collection('rateLimit')
-    .where({ updatedAt: _.lt(cutoff) })
-    .remove()
-    .catch(() => ({ stats: { removed: 0 } }))
-  // 客服去重痕 TTL（外审 P2.14）：seen:<msgid> 带 at·按 at 删；cursor:*/token 无 at 字段故不误删
-  const rmSeen = await db
-    .collection('kfState')
-    .where({ at: _.lt(cutoff) })
-    .remove()
-    .catch(() => ({ stats: { removed: 0 } }))
-  // ⑤ 孤儿视频缓期删除（courses.pendingGc） + ⑥ 孤儿图册缓期删除（productsDraft.pendingGc）：同构·共用消费器
   const now = Date.now()
-  const videoGc = await gcPendingGc(db, storageCloud, 'courses', now)
-  const imageGc = await gcPendingGc(db, storageCloud, 'productsDraft', now)
-  return ok({ removed: n(rmEvents), rateLimit: n(rmRate), kfSeen: n(rmSeen), videoGc, imageGc })
+  const cutoff = now - RETAIN_MS
+  // 服务端按条件批量删（与 closeExpiredOrders 同口径，每日一轮收敛；集合不存在则 0）
+  const rm = (coll: string, field: string) =>
+    db
+      .collection(coll)
+      .where({ [field]: _.lt(cutoff) })
+      .remove()
+      .then((x: any) => (x && x.stats && x.stats.removed) || 0, () => 0)
+  // 五路各删各的集合、互不依赖，并发跑（定时器有超时上限）
+  const [removed, rateLimit, kfSeen, videoGc, imageGc] = await Promise.all([
+    rm('events', 'createdAt'),
+    // 频控窗口 TTL（外审 P2.14）：按 updatedAt（throttle 每次写更新）删·非 createdAt（创建即定·活跃 key 会被误删）
+    rm('rateLimit', 'updatedAt'),
+    // 客服去重痕 TTL（外审 P2.14）：seen:<msgid> 带 at·按 at 删；cursor:*/token 无 at 字段故不误删
+    rm('kfState', 'at'),
+    // ⑤ 孤儿视频缓期删除（courses.pendingGc） + ⑥ 孤儿图册缓期删除（productsDraft.pendingGc）：同构·共用消费器
+    gcPendingGc(db, 'courses', now),
+    gcPendingGc(db, 'productsDraft', now),
+  ])
+  return ok({ removed, rateLimit, kfSeen, videoGc, imageGc })
 }

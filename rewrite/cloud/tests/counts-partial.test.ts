@@ -1,4 +1,4 @@
-// 黄金 orderCounts/refundCounts partial（守卫 rw-counts-partial-golden·bug sweep Round1 item7·病根#14）：
+// 黄金 orderCounts/refundCounts partial（病根#14）：
 // 服务端两个计数 action 原先 `.count().catch(()=>0)` 把「查询失败」静默兜成「真为 0」，前端据此测不出
 // partial——本文件直接调用纯 action 函数（同 ops-console.test.ts 范式，不经 adminApi 鉴权层），用自造的
 // 假 db（wx-server-sdk 内存桩 count() 从不失败、无法在桩层制造失败）模拟「某状态 count() 失败」，

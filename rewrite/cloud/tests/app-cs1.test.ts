@@ -1,4 +1,4 @@
-// 黄金 cs-agent §二/§三/§八/§九/§十一（守卫 rw-cs1-golden）。
+// 黄金 cs-agent §二/§三/§八/§九/§十一。
 import { describe, it, expect, beforeEach, afterEach } from 'vitest'
 import crypto from 'node:crypto'
 import { control } from 'wx-server-sdk'

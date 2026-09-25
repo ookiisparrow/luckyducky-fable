@@ -7,7 +7,7 @@ import { Search, RotateCcw, ClipboardCheck, RefreshCw } from 'lucide-vue-next'
 import { CS_REFRESH_COPY } from '@ldrw/shared'
 import { searchConversations, conversationsReport, sampleQc, saveQcMark, listQcSampled, getTrialRefreshGate, refreshTrialSession } from '../api/cs'
 import { mapMessages, mapReport, mapQcRows, type MsgVM, type ReportVM, type QcRowVM } from '../lib/mapCs'
-import { useLatest } from '../lib/latest'
+import { useLatest, appendNew } from '../lib/latest'
 import UiButton from '../components/ui/Button.vue'
 import PageHeader from '../components/ui/PageHeader.vue'
 import Card from '../components/ui/Card.vue'
@@ -31,25 +31,25 @@ const message = ref('')
 const slaMin = ref(5)
 let slaMinInited = false // true＝已有一次成功回填（此后「重算」才带用户当前输入值，不再吞后端权威口径）
 const reportBusy = ref(false)
+const reportErr = ref('') // 报表失败独立一行：与检索共用 message 会被并发的检索结果抹掉，而报表卡此时已隐藏
 
 async function loadReport() {
   reportBusy.value = true
   const r = await conversationsReport(slaMinInited ? slaMin.value * 60000 : undefined)
   reportBusy.value = false
   report.value = mapReport(r) // 出错/空档都为 null（卡隐）——出错时另透传原文，别让「加载失败」被读成「暂无数据」
+  reportErr.value = r.ok ? '' : '质检报表加载失败：' + String((r as any).error || '')
   if (r.ok) {
     const backendSlaMs = Number((r as any).slaMs) // 后端回传的本次实际生效阈值（权威·见 conversationsReport 回包 slaMs 字段）
     if (Number.isFinite(backendSlaMs) && backendSlaMs > 0) slaMin.value = Math.round(backendSlaMs / 60000) || slaMin.value
     slaMinInited = true
-  } else {
-    message.value = '质检报表加载失败：' + String((r as any).error || '') // 报错带原文（病根#14·对齐 search）
   }
 }
 
 // 发起检索时的筛选快照（翻页复用·防用户改输入框后点「更早」用新筛选+旧 cursor 串档·P2）
 let searchFilter: { openid?: string; externalUserId?: string; keyword?: string } = {}
 const pageGen = useLatest() // 检索/翻页乱序守卫（P2·在途时又检索/翻页·旧结果别覆盖/混排新结果·根因#8）
-const searching = ref(false) // search 专属在途标志（迭代G·单写布尔·more 加载闸不受 loadReport 等旁路 message 写者干扰）
+const searching = ref(false) // search 专属在途标志（单写布尔·more 加载闸不受旁路 message 写者干扰）
 async function search() {
   message.value = '检索中…'
   searching.value = true
@@ -66,7 +66,7 @@ async function search() {
 
 async function more() {
   if (!hasMore.value || cursor.value == null) return
-  if (searching.value) return // 检索在途时不翻页（cursor 还是旧的）——覆盖 search 先于 more 的序（单写布尔·不受 loadReport 等旁路 message 写者干扰）
+  if (searching.value) return // 检索在途时不翻页（cursor 还是旧的）——覆盖 search 先于 more 的序（单写布尔·不受旁路 message 写者干扰）
   const gen = pageGen.peek() // 绑定当前 search 代际·不递增（不反噬在途 search）·新检索会作废本页（迭代F 逮出）
   const r = await searchConversations({ ...searchFilter, cursor: cursor.value }) // 复用检索快照·不现读输入框（防串档）
   if (pageGen.isStale(gen)) return // 期间又检索·放弃本页（防混排）
@@ -75,8 +75,7 @@ async function more() {
     return
   }
   message.value = '' // 翻页成功清旧错（P2·item5：上次失败留的「加载更多失败」提示别一直挂在成功之后）
-  const seen = new Set(msgs.value.map((m) => m.id)) // 去重·防双击「更早」重复追加同一页（迭代F·对齐 Orders/Refunds）
-  msgs.value = [...msgs.value, ...mapMessages(r.messages).filter((m) => !seen.has(m.id))]
+  msgs.value = appendNew(msgs.value, mapMessages(r.messages))
   cursor.value = r.nextCursor
   hasMore.value = !!r.hasMore
 }
@@ -251,6 +250,7 @@ onMounted(() => {
     <PageHeader title="客服会话" sub="按客户检索会话时间轴 + 质检报表（样本口径如实标注，不夸大覆盖）" />
 
     <!-- 质检报表：mapReport 真值（volume/response/sla），未答复/超时 >0 标红（bad→tone red） -->
+    <p v-if="reportErr" class="ld-status">{{ reportErr }}</p>
     <Card v-if="report" title="质检报表" :sub="report.sampleNote">
       <template #head>
         <label class="sla-in">首响 SLA <input v-model.number="slaMin" type="number" min="1" max="1440" /> 分钟</label>

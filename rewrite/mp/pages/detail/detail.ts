@@ -10,6 +10,7 @@ import { mapDetail, type DetailVM } from '../../lib/mapDetail'
 import { mapSummary, type SummaryVM } from '../../lib/mapReviews'
 import { mapProducts, type ProductVM } from '../../lib/mapHome'
 import { openCustomerService } from '../../utils/customerService'
+import { navigateOrRedirect } from '../../lib/nav'
 
 // 图册窗口（病根#15 图片面·批B）：current±1 才渲染，circular 时首尾邻接也算窗口内——
 // swiper 内 lazy-load 真机不生效，全量 swiper-item 会让画廊全部图并发下载抢首屏带宽。
@@ -40,12 +41,11 @@ Page({
     this.productId = String(query.id || '')
     void this.loadProduct()
   },
-  // 加载失败重试入口（onLoad 与 onRetryLoad 共用）：先拿全量表判两态——
+  // onLoad 与 onRetryLoad 共用：先拿全量表判两态——
   // all===null（网络/取数失败）→ loadFailed 给重试；all 有值但 id 未命中 → 灭 loading（wxml !loading 空态＝真下架）。
   async loadProduct() {
     const id = this.productId
     const seq = ++this._seq
-    this.setData({ loading: true, loadFailed: false })
     const all = await getAllProducts()
     if (seq !== this._seq) return // 过期回包（被更晚一次 loadProduct 取代）：丢弃·不覆盖较新结果
     if (all === null) {
@@ -65,10 +65,10 @@ Page({
       skuIndex: i,
       currentPriceNum: i >= 0 && vm.skus[i] ? vm.skus[i].price : vm.price,
       galleryWindow: computeGalleryWindow(vm.gallery.length, 0),
+      recs: mapProducts(all).filter((p) => p.id !== id).slice(0, 4), // 同一份全量表·排除本商品取 4 个
     })
     trackEvent('view_product', 'detail', vm.id, { price: vm.price }) // 电商漏斗埋点（R41）
     void this.loadDetail(id, seq)
-    void this.loadRecs(id, seq)
     void this.loadRating(id, seq)
   },
   // 图册补齐（批1·列表瘦身不下发 images·详情页按 id 拉全档补进 swiper·根因#15）：列表项首帧已渲染
@@ -92,16 +92,11 @@ Page({
         : {}),
     })
   },
+  // data 初值已是加载态，只有重试才需要先切回去
   onRetryLoad() {
     tapHaptic()
+    this.setData({ loading: true, loadFailed: false })
     void this.loadProduct()
-  },
-  async loadRecs(id: string, seq: number) {
-    const list = await getAllProducts() // 复用首页缓存·热路径零云调用（miss 则兜底重拉一次）
-    if (seq !== this._seq) return // 过期回包（连点重试/离开后迟到）：丢弃·不覆盖较新结果
-    if (list) {
-      this.setData({ recs: mapProducts(list).filter((p) => p.id !== id).slice(0, 4) }) // 排除本商品·取 4 个
-    }
   },
   // 评分摘要（云端聚合下发·不用列表页缓存自算·云为唯一真相）：count=0 或失败→mapSummary 返 null→回退静态入口
   async loadRating(id: string, seq: number) {
@@ -125,21 +120,20 @@ Page({
       currentPriceNum: vm.skus[idx] ? vm.skus[idx].price : vm.price,
     })
   },
+  // 当前选中规格的成交行（加购/直买同源·价用规格价·双键行身份）。划线价是商品级、现价可能取了规格级：
+  // 划线不高于现价就不透传，否则购物车行渲染出「划线比现价还低」（同 lib/quickAdd 那道闸）。
+  _line(vm: DetailVM) {
+    const s = vm.skus[this.data.skuIndex]
+    const price = s ? s.price : vm.price
+    return { id: vm.id, sku: s ? s.name : '', name: vm.name, tag: vm.tag, price, cover: vm.gallery[0] || '', was: vm.was !== undefined && vm.was > price ? vm.was : undefined }
+  },
   onAddCart() {
     const vm = this.data.vm
     if (!vm) return
     tapHaptic()
-    const sku = vm.skus[this.data.skuIndex] // 选中规格随行入车（价用规格价·双键行身份）
-    cart.add({
-      id: vm.id,
-      sku: sku ? sku.name : '',
-      name: vm.name,
-      tag: vm.tag,
-      price: sku ? sku.price : vm.price,
-      was: vm.was,
-      cover: vm.gallery[0] || '',
-    })
-    trackEvent('add_to_cart', 'detail', vm.id, { sku: sku ? sku.name : '', price: sku ? sku.price : vm.price }) // 电商漏斗埋点（R41）
+    const line = this._line(vm)
+    cart.add(line)
+    trackEvent('add_to_cart', 'detail', line.id, { sku: line.sku, price: line.price }) // 电商漏斗埋点（R41）
     wx.showToast({ title: '已加入购物车', icon: 'success' })
   },
   onService() {
@@ -153,18 +147,13 @@ Page({
     const vm = this.data.vm
     if (!vm) return
     tapHaptic()
-    const sku = vm.skus[this.data.skuIndex]
-    prepareBuyNow({ id: vm.id, sku: sku ? sku.name : '', name: vm.name, tag: vm.tag, price: sku ? sku.price : vm.price, cover: vm.gallery[0] || '' }) // 直买不动购物车
+    prepareBuyNow(this._line(vm)) // 直买不动购物车（草稿不收划线价）
     wx.navigateTo({ url: '/pages/checkout/checkout' })
   },
   onTapRec(e: WechatMiniprogram.TouchEvent) {
     const id = String(e.currentTarget.dataset.id || '')
     if (!id) return
-    // detail→详情 会叠栈：连点推荐卡逼近微信 10 层上限后 navigateTo 静默失败、卡片变哑。
-    // 逼近上限（留 headroom）改 redirectTo 替换本页不叠栈；否则 navigateTo 并补 fail 降级 redirectTo（不静默）。
-    const url = '/pages/detail/detail?id=' + id
-    if (getCurrentPages().length >= 8) wx.redirectTo({ url })
-    else wx.navigateTo({ url, fail: () => wx.redirectTo({ url }) })
+    navigateOrRedirect('/pages/detail/detail?id=' + id)
   },
 
   // 转发/朋友圈钩子（分发前置·决策§29）：路径带 ?id= 保证收到的人打开的是

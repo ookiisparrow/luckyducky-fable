@@ -36,7 +36,7 @@ describe('deploy-drift MONEY_CHAIN：生产线（rewrite/cloud）钱链 4 函数
   })
 })
 
-describe('deploy-drift hashFnDist：产物内容 hash（逐字节镜像 deploy-fns.mjs 部署时算法）', () => {
+describe('deploy-drift hashFnDist：产物内容 hash（即 deploy-fns.mjs 部署时算法本体）', () => {
   const mkTmp = () => mkdtempSync(join(tmpdir(), 'deploy-drift-test-'))
 
   it('index.js 缺失 → 返回 null', () => {

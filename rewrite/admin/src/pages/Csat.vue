@@ -6,7 +6,7 @@ import { useRouter } from 'vue-router'
 import { RotateCcw, Star, ThumbsUp, ThumbsDown, MessageSquare, Search } from 'lucide-vue-next'
 import { getCsatReport, listCsatEntries } from '../api/cs'
 import { mapCsat, mapCsatEntries, type CsatEntryVM } from '../lib/mapCs'
-import { useLatest } from '../lib/latest'
+import { useLatest, appendNew } from '../lib/latest'
 import PageHeader from '../components/ui/PageHeader.vue'
 import Card from '../components/ui/Card.vue'
 import KpiCard from '../components/ui/KpiCard.vue'
@@ -89,8 +89,7 @@ async function moreEntries() {
     return
   }
   entriesMsg.value = ''
-  const seen = new Set(entries.value.map((e) => e.id)) // 去重·防双击「加载更多」重复追加同一页（同 Orders/Refunds/Conversations 范式）
-  entries.value = [...entries.value, ...mapCsatEntries(r.entries).filter((e) => !seen.has(e.id))]
+  entries.value = appendNew(entries.value, mapCsatEntries(r.entries))
   entriesCursor.value = r.nextCursor
   entriesHasMore.value = !!r.hasMore
 }

@@ -10,6 +10,7 @@ import { launchErrorText } from '../lib/mapSystem'
 import { buildFrontSvg, buildBackSvg, type CardModel } from '../lib/cardSvg'
 import { serialSave } from '../lib/serialSave'
 import { compressImage } from '../lib/compressImage'
+import { saveBlob } from '../lib/saveBlob'
 // 视图层原语（批F 共享 UI）+ lucide 图标——仅新增 import，管道零改。
 // 注意：lucide 的 Image 与全局 Image 同名，别名 ImageIcon 防遮蔽。
 import UiButton from '../components/ui/Button.vue'
@@ -113,7 +114,10 @@ watch(
     if (!card.value || !loaded) return
     autoState.value = 'saving'
     if (saveTimer) clearTimeout(saveTimer)
-    saveTimer = setTimeout(() => void flushSave(), 700)
+    saveTimer = setTimeout(() => {
+      saveTimer = null // 触发后清空·让 saveTimer 真实反映「有未落盘的待发编辑」（在途保存由 serialSave 共享槽位接续，离页不再补发）
+      void flushSave()
+    }, 700)
   },
   { deep: true }
 )
@@ -225,12 +229,7 @@ async function finalize() {
 function downloadSvg(kind: 'front' | 'back') {
   if (!card.value) return
   const svg = kind === 'front' ? buildFrontSvg(card.value, artUrl.value) : buildBackSvg(card.value)
-  const url = URL.createObjectURL(new Blob([svg], { type: 'image/svg+xml' }))
-  const a = document.createElement('a')
-  a.href = url
-  a.download = `卡面-${kind === 'front' ? '正面-插画' : '反面-二维码'}-${productId}.svg`
-  a.click()
-  URL.revokeObjectURL(url)
+  saveBlob(new Blob([svg], { type: 'image/svg+xml' }), `卡面-${kind === 'front' ? '正面-插画' : '反面-二维码'}-${productId}.svg`)
 }
 </script>
 
@@ -329,9 +328,9 @@ function downloadSvg(kind: 'front' | 'back') {
             <button v-for="p in PRESETS" :key="p.label" class="ld-chip" :class="{ on: isPreset(p) }" @click="card.sizeMM = { w: p.w, h: p.h }">{{ p.label }}</button>
           </div>
           <div class="dims">
-            <label>宽 <input v-model.number="card.sizeMM.w" @change="clampDims" type="number" min="40" max="300" class="num" /></label>
+            <label>宽 <input v-model.number="card.sizeMM.w" type="number" min="40" max="300" class="num" @change="clampDims" /></label>
             <span>×</span>
-            <label>高 <input v-model.number="card.sizeMM.h" @change="clampDims" type="number" min="40" max="300" class="num" /></label>
+            <label>高 <input v-model.number="card.sizeMM.h" type="number" min="40" max="300" class="num" @change="clampDims" /></label>
           </div>
         </Card>
 

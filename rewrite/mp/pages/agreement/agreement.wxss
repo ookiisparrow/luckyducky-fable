@@ -1,6 +1,6 @@
 /* 用户协议 / 隐私政策·法律文本阅读版式（一致性对齐·无独立设计）。
    白卡 + 发丝线分隔（承接 me/detail 词汇）·中性文字 token·舒适行高。
-   正文文案逐字承接旧线（守卫 agreement-text-real）·此处只重排版不动内容。 */
+   正文文案逐字承接旧线·此处只重排版不动内容。 */
 .ld-ag {
   min-height: 100vh;
   background: var(--ld-bg-lilac);

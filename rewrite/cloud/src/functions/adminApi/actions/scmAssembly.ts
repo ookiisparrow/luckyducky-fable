@@ -1,5 +1,5 @@
 import { reply, str, type Ctx } from '../lib'
-import { applyStockMoves, produceStock, listMaterialDocs, notifyAlert, pageQuery, isDocMissing } from '../../../kit'
+import { applyStockMoves, produceStock, listMaterialDocs, notifyAlert, pageQuery, getDocOrNull } from '../../../kit'
 import { COLLECTIONS, ERR } from '@ldrw/shared'
 import { resolveBom, isValidScmProductId, isValidScmSpec } from '@ldrw/shared'
 
@@ -13,26 +13,12 @@ import { resolveBom, isValidScmProductId, isValidScmSpec } from '@ldrw/shared'
 
 /** 读模板+差异位（组装/预演共用·fail-closed：缺一即拒，不静默补默认）。 */
 async function loadBom(db: any, productId: string): Promise<{ template?: any; profile?: any; error?: string }> {
-  const p = await db
-    .collection(COLLECTIONS.bomProfiles)
-    .doc(productId)
-    .get()
-    .catch((e: unknown) => {
-      if (isDocMissing(e)) return null
-      throw e // 库挂 ≠ 没有差异位
-    })
-  if (!p || !p.data) return { error: ERR.NO_PROFILE }
-  const t = await db
-    .collection(COLLECTIONS.config)
-    .doc('scmBomTemplate')
-    .get()
-    .catch((e: unknown) => {
-      if (isDocMissing(e)) return null
-      throw e // 库挂 ≠ 没有模板
-    })
-  if (!t || !t.data) return { error: ERR.NO_TEMPLATE }
-  const { _id: _omit, updatedAt: _omit2, ...template } = t.data as Record<string, any>
-  return { template, profile: p.data }
+  const profile = await getDocOrNull(db.collection(COLLECTIONS.bomProfiles).doc(productId))
+  if (!profile) return { error: ERR.NO_PROFILE }
+  const t = await getDocOrNull(db.collection(COLLECTIONS.config).doc('scmBomTemplate'))
+  if (!t) return { error: ERR.NO_TEMPLATE }
+  const { _id: _omit, updatedAt: _omit2, ...template } = t as Record<string, any>
+  return { template, profile }
 }
 
 /** 组装执行：产品×规格×套数 → 扣原料入成品，全程留痕。 */
@@ -71,8 +57,12 @@ export async function runAssembly({ db, data, agentId }: Ctx) {
         at: Date.now(),
       },
     })
-  } catch {
-    return reply(409, { ok: false, error: ERR.DUPLICATE }) // 已执行过（重放/并发方）·不双扣
+  } catch (e) {
+    // 读回判撞号（同 applyStockMoves 流水 claim）：读到＝真已执行过（重放/并发方）·不双扣；
+    // 读不到＝写没落地，照抛走 500——不冒充「已执行过」让运营以为组装完成而不重试。
+    const dup = await coll.doc(assemblyId).get().catch(() => null)
+    if (!dup || !dup.data) throw e
+    return reply(409, { ok: false, error: ERR.DUPLICATE })
   }
 
   // ② 门1 扣原料（all-or-nothing·任一料不足即整单回滚）；失败撤回 claim——账没动，修完库存可重试

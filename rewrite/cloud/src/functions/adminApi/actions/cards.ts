@@ -1,4 +1,5 @@
 import { reply, ensure, str, readDoc, type Ctx } from '../lib'
+import { setOrAdd } from '../../../kit'
 
 // —— 二维码卡片 + 设置（规格 §六/§七 步骤⑤⑥）——
 export async function getSettings({ db }: Ctx) {
@@ -14,7 +15,7 @@ export async function saveSettings({ db, data }: Ctx) {
   const got = await readDoc(coll.doc('settings').get())
   if (!got.ok) return reply(200, { ok: false, error: 'DOC_READ_FAIL' }) // 读失败≠空配置：停写，不拿 {} 合并覆盖
   // 去掉 get 回来的 _id：真 sdk doc(id).set({data}) 的 data 含 _id 即 reject（_id 由 doc(id) 指定）——
-  // 不剥则二次保存（doc 已存在·get 带回 _id）必 500（根因#8 桩≠真 SDK 藏过·守卫 no-id-in-set-data 兜字面版）。
+  // 不剥则二次保存（doc 已存在·get 带回 _id）必 500（根因#8 桩≠真 SDK 藏过，现测试桩同样拒）。
   const { _id: _omitId, ...cur } = (got.data as Record<string, any>) || {}
   const patch: Record<string, any> = { updatedAt: Date.now() }
   if (data.urlPrefix !== undefined) patch.urlPrefix = String(data.urlPrefix || '').slice(0, 200)
@@ -27,12 +28,7 @@ export async function saveSettings({ db, data }: Ctx) {
   }
   if (data.alertEvents && typeof data.alertEvents === 'object') patch.alertEvents = data.alertEvents
   const next = { ...cur, ...patch }
-  await coll
-    .doc('settings')
-    .set({ data: next })
-    .catch(async () => {
-      await coll.add({ data: { _id: 'settings', ...next } })
-    })
+  await setOrAdd(coll, 'settings', next)
   return reply(200, { ok: true })
 }
 
@@ -97,11 +93,6 @@ export async function saveCard({ db, data }: Ctx) {
   await ensure(db, 'cards')
   const coll = db.collection('cards')
   const id = `card-${doc.productId}`
-  await coll
-    .doc(id)
-    .set({ data: doc })
-    .catch(async () => {
-      await coll.add({ data: { ...doc, _id: id } })
-    })
+  await setOrAdd(coll, id, doc)
   return reply(200, { ok: true })
 }

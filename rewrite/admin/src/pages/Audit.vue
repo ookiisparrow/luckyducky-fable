@@ -8,7 +8,7 @@ import { ref, computed, onMounted } from 'vue'
 import { RotateCcw, Search, ClipboardList, AlertCircle, ShieldCheck } from 'lucide-vue-next'
 import { listAudit } from '../api/ops'
 import { mapAuditEntries, type AuditEntryVM } from '../lib/mapSystem'
-import { useLatest } from '../lib/latest'
+import { useLatest, appendNew } from '../lib/latest'
 import PageHeader from '../components/ui/PageHeader.vue'
 import Card from '../components/ui/Card.vue'
 import KpiCard from '../components/ui/KpiCard.vue'
@@ -80,9 +80,7 @@ async function more() {
     message.value = '加载更多失败：' + String(r.error || '')
     return
   }
-  const seen = new Set(entries.value.map((e) => e.id)) // 去重·防双击「加载更多」重复追加同一页
-  const appended = mapAuditEntries(r.entries).filter((e) => !seen.has(e.id))
-  entries.value = [...entries.value, ...appended]
+  entries.value = appendNew(entries.value, mapAuditEntries(r.entries))
   cursor.value = r.nextCursor
   hasMore.value = !!r.hasMore
   message.value = entries.value.length ? '' : hasMore.value ? '本页无匹配，点“加载更多”继续翻' : '没有匹配的记录'

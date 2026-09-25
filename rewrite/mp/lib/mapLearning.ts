@@ -1,4 +1,4 @@
-// 学习域映射（纯函数·黄金 learning-content §一激活三态 + §九内容回退）（守卫 rw-mp-learning-golden）。
+// 学习域映射（纯函数·黄金 learning-content §一激活三态 + §九内容回退）。
 import { dateTime } from './mapOrders'
 import { clampResumeAt } from './continueResolve' // 续播秒夹取单源（命中 last 段分支复用·禁复制实现·病根#5）
 

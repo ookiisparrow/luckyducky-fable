@@ -6,7 +6,7 @@ import { alert } from './observe'
 // `orderId__lineId`（lineId = productId__spec）可含**非 ASCII**（中文 SKU/spec，如「sku测试文案」）或**超 64 字**，
 // 直接当退款单号必被微信 PARAM_ERROR 拒（案 A 卡单真因·非平台漂移）。此处把内部 _id 派生成合规单号：
 // ASCII、≤64、按 _id **确定**（幂等重试同号）、**唯一**（哈希锁定具体 _id）。售后单落 `outRefundNo` 字段
-// 供退款回调反查（refundCallback 按此命中·回退 .doc(_id) 兼容纯 ASCII 老单）。守卫 rw-money3/admin3-golden。
+// 供退款回调反查（refundCallback 按此命中·回退 .doc(_id) 兼容纯 ASCII 老单）。
 const REFUND_NO_RE = /^[0-9a-zA-Z_|*@-]{1,64}$/
 
 /** 单号合规自证（守卫/调用方可断言·避免魔法正则散写）。非字符串（undefined/缺字段）一律不合规——
@@ -33,7 +33,7 @@ export function hash53(s: string): string {
  * **已合规（纯 ASCII 短单，如旧线 orderId__productId）原样返回**——退款回调 `.doc(_id)` 兼容不变、
  * 微信按单号幂等不受影响；仅当 _id 含非 ASCII / 超 64 时才派生「ASCII 可读前缀（订单号/productId·便于
  * 对账溯源）- 全 _id 短哈希（锁定具体单·防碰撞）」。前缀截 48 + '-' + ≤11 哈希 ≤ 60 < 64；前缀空用 'r' 兜底。
- * 产出恒配 REFUND_NO_RE（守卫 rw-money3-golden 断言）。
+ * 产出恒配 REFUND_NO_RE（tests/app-refund.test.ts 断言）。
  */
 export function refundNoFor(afterSaleId: string): string {
   const id = String(afterSaleId || '')

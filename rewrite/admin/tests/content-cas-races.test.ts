@@ -1,4 +1,4 @@
-// 内容域并发安全前端接线（批A·守卫 rw-admin-content-cas-races·根因#1 乐观并发 + #8 乱序响应）：
+// 内容域并发安全前端接线（根因#1 乐观并发 + #8 乱序响应）：
 // 取真源（@vue/compiler-sfc parse <script setup> 原文·花括号配平抽函数体·剥注释防 E1/E10 假绿）断言
 // 三页接 rev/baseRev + DRAFT_CONFLICT 乱序闸真落在代码里，不是另抄影子实现。helper 抄自
 // rewrite/admin/tests/admin-races-g-batch.test.ts（跨文件不共享·Rule of Three 未到·同 E1 纪律只对守卫本体生效）。

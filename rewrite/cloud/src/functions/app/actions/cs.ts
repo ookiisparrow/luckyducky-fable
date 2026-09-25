@@ -1,5 +1,5 @@
 import { ERR, COLLECTIONS } from '@ldrw/shared'
-import { withOpenId, withRateLimit, ok, err, getAccessToken, unionidToExternalUserid, getSecureConfigFields } from '../../../kit'
+import { withOpenId, withRateLimit, ok, err, kfToken, unionidToExternalUserid } from '../../../kit'
 
 /**
  * 身份桥接·写侧（黄金 cs-agent §九）：可信 openid + unionid 经企微转换 API 得 external_userid，
@@ -12,16 +12,9 @@ export const kfBind = withOpenId(
     const unionid = String(e?.unionid || '')
     if (!unionid) return err(ERR.NO_UNIONID)
 
-    const { corpId: corpid, secret } = await getSecureConfigFields(db, 'wxkf', ['corpId', 'secret'])
-    if (!corpid || !secret) return err(ERR.KF_NOT_CONFIGURED)
-
-    let token: string
-    try {
-      token = await getAccessToken({ corpid, secret })
-    } catch {
-      return err(ERR.TOKEN_FAILED)
-    }
-    const externalUserId = await unionidToExternalUserid(token, unionid, OPENID)
+    const t = await kfToken(db)
+    if ('error' in t) return err(t.error)
+    const externalUserId = await unionidToExternalUserid(t.token, unionid, OPENID)
     if (!externalUserId) return err(ERR.NO_EXTERNAL_USERID)
 
     // 确定性 _id 幂等映射：ext:external_userid → openid，撞号即覆盖为最新

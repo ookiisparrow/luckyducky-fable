@@ -3,7 +3,7 @@ import { pageQuery } from '../../../kit'
 import { COLLECTIONS } from '@ldrw/shared'
 
 // 客服满意度报表（后台360工作站 B4.3·admin 侧·只读）：聚合 csat 集合出 均分 + 1-5 分布 + 总数 + 有备注数。
-// bounded（≤SCAN 条·样本近似·CSAT 量级远低于此·approx 标注）；越界分（守 csat-score-bounded 已挡入库）这里
+// bounded（≤SCAN 条·样本近似·CSAT 量级远低于此·approx 标注）；越界分入库时已挡（kfCallback/dispatch.ts recordCsat），这里
 // 再忽略一次防御。名以 get 起头：shouldAudit 跳 ^get（聚合无 PII·不留痕降噪）。
 const SCAN = 1000
 

@@ -1,5 +1,5 @@
 import { reply, type Ctx } from '../lib'
-import { listMaterialDocs, sumLedgerByItemKey, isDocMissing } from '../../../kit'
+import { listMaterialDocs, sumLedgerByItemKey, getDocOrNull } from '../../../kit'
 import { COLLECTIONS } from '@ldrw/shared'
 import { resolveBom, yarnMaterialId } from '@ldrw/shared'
 
@@ -19,30 +19,16 @@ export async function getRestockPlan({ db, data }: Ctx) {
   for (const t of targets) {
     if (!t || !t.productId || !Number.isInteger(t.sets) || t.sets <= 0) return reply(400, { ok: false, error: 'BAD_TARGETS' })
   }
-  const tDoc = await db
-    .collection(COLLECTIONS.config)
-    .doc('scmBomTemplate')
-    .get()
-    .catch((e: unknown) => {
-      if (isDocMissing(e)) return null
-      throw e // 库挂 ≠ 没有模板
-    })
-  if (!tDoc || !tDoc.data) return reply(400, { ok: false, error: 'NO_TEMPLATE' })
-  const { _id: _omit, updatedAt: _omit2, ...template } = tDoc.data as Record<string, any>
+  const tDoc = await getDocOrNull(db.collection(COLLECTIONS.config).doc('scmBomTemplate'))
+  if (!tDoc) return reply(400, { ok: false, error: 'NO_TEMPLATE' })
+  const { _id: _omit, updatedAt: _omit2, ...template } = tDoc as Record<string, any>
 
   // 聚合需求：Σ各产品 resolveBom（同料号跨产品累加）
   const need = new Map<string, number>()
   for (const t of targets) {
-    const p = await db
-      .collection(COLLECTIONS.bomProfiles)
-      .doc(String(t.productId))
-      .get()
-      .catch((e: unknown) => {
-        if (isDocMissing(e)) return null
-        throw e // 库挂 ≠ 没有差异位
-      })
-    if (!p || !p.data) return reply(400, { ok: false, error: 'NO_PROFILE', productId: String(t.productId) })
-    const r = resolveBom(template as any, p.data, t.sets)
+    const profile = await getDocOrNull(db.collection(COLLECTIONS.bomProfiles).doc(String(t.productId)))
+    if (!profile) return reply(400, { ok: false, error: 'NO_PROFILE', productId: String(t.productId) })
+    const r = resolveBom(template as any, profile, t.sets)
     if (!r.ok) return reply(400, { ok: false, error: r.error, productId: String(t.productId) })
     for (const l of r.lines) need.set(l.materialId, (need.get(l.materialId) || 0) + l.qty)
   }
@@ -94,12 +80,13 @@ function parseFgKey(itemKey: string): { productId: string; spec: string } {
 
 /** 产销统计（只读）：stockLedger 里 assembly_in（打包产出）/ ship（发货核销）两类 fg 流水按 itemKey 汇总——
  * 回应「一共打包/卖出多少」，不产生任何新写入（对账口径见 scmAssembly.ts 注释：Σ成品流水 ⇄ inventory）。
- * 汇总经门1 kit/scmStock.sumLedgerByItemKey 读（守卫 material-stock-single-seam：stockLedger 全库仅门1 读写）。 */
+ * 汇总经门1 kit/scmStock.sumLedgerByItemKey 读（守卫 rw-material-stock-single-seam：stockLedger 全库仅门1 读写）。 */
 export async function getFgSummary(_ctx: Ctx) {
   const [packed, shipped] = await Promise.all([sumLedgerByItemKey('assembly_in'), sumLedgerByItemKey('ship')])
   return reply(200, {
     ok: true,
-    packed: packed.map((r) => ({ ...parseFgKey(r.itemKey), qty: r.total })),
-    shipped: shipped.map((r) => ({ ...parseFgKey(r.itemKey), qty: -r.total })), // delta 存负数（出库），展示转正
+    packed: packed.list.map((r) => ({ ...parseFgKey(r.itemKey), qty: r.total })),
+    shipped: shipped.list.map((r) => ({ ...parseFgKey(r.itemKey), qty: -r.total })), // delta 存负数（出库），展示转正
+    truncated: packed.truncated || shipped.truncated,
   })
 }

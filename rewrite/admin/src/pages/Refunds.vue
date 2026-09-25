@@ -8,7 +8,7 @@ import { RefreshCw, Search, X, CircleCheck, Ticket, GraduationCap, Check, Shield
 import { listRefunds, refundCounts, approveRefund, rejectRefund, getRefundDetail, listOrders, overrideRefund } from '../api/money'
 import UiButton from '../components/ui/Button.vue'
 import { mapRefundRows, refundVerdict, mapOverrideOrder, canOverrideRefund, orderErrorText, type RefundRowVM, type RefundVerdictVM, type OverrideOrderVM } from '../lib/mapMoney'
-import { useLatest } from '../lib/latest'
+import { useLatest, appendNew } from '../lib/latest'
 import PageHeader from '../components/ui/PageHeader.vue'
 import Card from '../components/ui/Card.vue'
 import Badge from '../components/ui/Badge.vue'
@@ -100,8 +100,7 @@ async function more() {
   const r = await listRefunds(tab.value, cursor.value, 20, activeQ.value)
   if (listGen.isStale(gen)) return // 期间发生过 reload·放弃本页（防混排 + 游标跳页）
   if (!r.ok) return
-  const seen = new Set(rows.value.map((x) => x.id))
-  rows.value = [...rows.value, ...mapRefundRows((r as any).list).filter((x) => !seen.has(x.id))]
+  rows.value = appendNew(rows.value, mapRefundRows((r as any).list))
   cursor.value = (r as any).nextCursor
   hasMore.value = !!(r as any).hasMore
 }

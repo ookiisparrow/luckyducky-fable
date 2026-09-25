@@ -1,5 +1,4 @@
-// 黄金 learning-content §一（激活三态：新激活/本人回访/他人码/废码）+ §九（背景回退链）
-// （守卫 rw-mp-learning-golden）。
+// 黄金 learning-content §一（激活三态：新激活/本人回访/他人码/废码）+ §九（背景回退链）。
 import { describe, it, expect } from 'vitest'
 import { activationView, bgFor, mapMyCourses, mapCatalog, mapHelpVideos, mapPublicFaq } from '../lib/mapLearning'
 
@@ -52,7 +51,7 @@ describe('我的课程 join（标题缺失不崩）', () => {
 })
 
 // C 类竖切（2026-07-07）：我的课程学习进度（段粒度·与后台 customer360 provider 同口径·纯前端组合三 action）。
-describe('我的课程学习进度（段粒度·交集防 stale·不除零·守卫 rw-mp-learning-golden）', () => {
+describe('我的课程学习进度（段粒度·交集防 stale·不除零）', () => {
   const COURSES = [
     {
       id: 'c1',

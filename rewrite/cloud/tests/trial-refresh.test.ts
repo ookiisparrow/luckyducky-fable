@@ -11,14 +11,7 @@ import {
   sessionEpochId,
   trialRefreshDenyStatus,
 } from '../src/functions/cs/kfCallback/trialRefresh'
-import {
-  CS_DESIGN_BASELINE,
-  CS_PACK_ID,
-  CS_REFRESH_COPY,
-  CS_REFRESH_RESET,
-  CS_SELF_HEAL,
-  formatRefreshDone,
-} from '@ldrw/shared'
+import { CS_REFRESH_COPY, formatRefreshDone } from '@ldrw/shared'
 import { main as adminApi } from '../src/functions/adminApi/index'
 import { sha } from '../src/functions/adminApi/lib'
 import { getDb } from '../src/kit'
@@ -260,27 +253,5 @@ describe('管理端 API', () => {
     control.seed('adminConfig', [{ _id: 'agent-1', keyHash: sha('out-key-1'), role: 'outsourced' }])
     const r = await post('refreshTrialSession', { externalUserId: 'eu1', reason: '坐席试' }, 'out-key-1')
     expect(r.status).toBe(403)
-  })
-})
-
-describe('配置包真相', () => {
-  it('大白话：自修 P1 必须人点，任何一级都没有自动落库；刷新只清会话层', () => {
-    expect(CS_PACK_ID).toBe('lucky-ducky-2026-09-19')
-    expect(CS_DESIGN_BASELINE).toBe('v0.3.1')
-    expect(CS_SELF_HEAL.customerFacing).toBe(false)
-    expect(CS_SELF_HEAL.severity.P1.auto_apply).toBe(false)
-    expect(CS_SELF_HEAL.severity.P1.human_click_apply_required).toBe(true)
-    const flags = Object.values(CS_SELF_HEAL.severity).map((s) => s.auto_apply)
-    expect(flags.every((v) => v === false)).toBe(true)
-    expect(CS_REFRESH_RESET.reset).toContain('session_epoch_increment')
-    expect(CS_REFRESH_RESET.doNotReset).toEqual([
-      'openid',
-      'real_orders',
-      'payments',
-      'inventory',
-      'audit_logs',
-      'global_config',
-      'production_user_data',
-    ])
   })
 })

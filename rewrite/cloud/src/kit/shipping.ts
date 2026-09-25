@@ -13,7 +13,7 @@ import cloud from 'wx-server-sdk'
  * ⚠️ 真发前置（靠人·根因#8「拿到 ≠ 用通」；未满足时本接缝失败→fail-soft→本地照发 + 告警，不阻塞）：
  *   ① mp 后台开通「发货信息管理」能力（2026-06-26 用户确认已开通）；② 云函数部署产物 config.json 声明 openapi
  *      权限 `wxaSecOrder.uploadShippingInfo`（权限串 === JS 调用路径 cloud.openapi.<串>·官方云调用规则；已由
- *      build.mjs OPENAPI_PERMS 自动产出·守卫 openapi-perm-declared 锁登记不漏）；③ 真单真机验上传成功 +
+ *      build.mjs OPENAPI_PERMS 自动产出·守卫 rw-openapi-perm-declared 锁登记不漏）；③ 真单真机验上传成功 +
  *      mp 后台无「待接入发货管理」提醒。代码替不了 ①③ 两步，只把链路做成「配好即生效」。
  */
 type ShipUpload = {

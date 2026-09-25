@@ -1,4 +1,4 @@
-// 订单与钱组映射（纯函数·守卫 rw-admin-money-ui-golden）：v2 契约 → 页面 VM。
+// 订单与钱组映射（纯函数）：v2 契约 → 页面 VM。
 // 脏档安全同 mp 口径（缺条目恒数组/裸脏档剔除/金额恒两位）；近似诚实标注（approx 透传不隐藏）。
 // orderErrorText：钱组 action 英文码→操作者中文（同 mapSystem.ts launchErrorText 手法·#222 同类）。
 import { yuan, orderStatusLabel, refundStatusLabel, dateTime } from './format'
@@ -9,6 +9,7 @@ const ORDER_ERR: Record<string, string> = {
   NO_ORDER: '找不到这单订单',
   FEE_MISMATCH_HOLD: '金额异常单被挡下：先去核对流水解除',
   REFUND_HOLD: '这单涉及退款，先去「售后退款」处理',
+  REFUND_HOLD_READ_FAIL: '暂时查不到这单的退款状态，请稍后重试',
   SHIP_IN_PROGRESS: '正在处理中，请稍后重试',
   TOO_MANY: '一次最多 100 单，请分批',
   BAD_AMOUNT: '金额超出合理范围',
@@ -70,7 +71,7 @@ export interface DashboardVM {
   approxSeg: boolean // 热点/卡点为抽样近似（诚实标注·透传 approx.hot）
 }
 
-// 待处理行动条计数（治病根#14 admin 侧·守卫 rw-admin-money-ui-golden）：四路副请求各自可能失败，
+// 待处理行动条计数（治病根#14 admin 侧）：四路副请求各自可能失败，
 // 换皮把失败的路 `.catch(()=>({}))` 兜成 0 → 四路全失败时「待处理」塌成绿色「今日无待处理事项 ✓」，
 // 把「加载失败/未知」伪装成「真没待办」→ 运营据此漏发货。此处以 `.ok` 显式判失败并回传 partial，
 // 让上层区分「真为 0」与「没加载到」：partial=true 时不显绿色全清、提示刷新。drafts.rows 由调用方先
@@ -222,6 +223,9 @@ export function mapOrderRows(list: unknown): OrderRowVM[] {
     const names = items.map((it) => it.name).filter(Boolean)
     const a = o.address && typeof o.address === 'object' ? o.address : {}
     const status = String(o.status || '')
+    const exc = status === 'payment_exception'
+    const paidFen = Number(o.paidFee)
+    const paidOk = Number.isInteger(paidFen) && paidFen > 0
     out.push({
       id,
       status,
@@ -229,16 +233,13 @@ export function mapOrderRows(list: unknown): OrderRowVM[] {
       summary: names.slice(0, 2).join('、') + (names.length > 2 ? ` 等 ${names.length} 件商品` : ''),
       count: items.reduce((n, it) => n + it.qty, 0),
       // 支付异常单展示实际到账（多代理审核 codex#5）：列表「实付款」不能配「订单标价」；paidFee 为整数分，脏/缺回退订单金额。
-      amountLabel:
-        status === 'payment_exception' && Number.isInteger(Number(o.paidFee)) && Number(o.paidFee) > 0
-          ? yuan(Number(o.paidFee) / 100) || '¥0.00'
-          : yuan(o.amount) || '¥0.00',
+      amountLabel: yuan(exc && paidOk ? paidFen / 100 : o.amount) || '¥0.00',
       timeLabel: dateTime(o.createdAt),
       feeMismatch: o.feeMismatch === true,
-      paymentException: status === 'payment_exception',
+      paymentException: exc,
       // 异常单但实付额脏/缺（回调缺金额字段）→ 无法走退款（PAYMENT_AMOUNT_MISSING），须人工补录后才有关口；
       // 供列表行渲染「补录实付」按钮（补录成功后刷新即消失）。
-      paidFeeMissing: status === 'payment_exception' && !(Number.isInteger(Number(o.paidFee)) && Number(o.paidFee) > 0),
+      paidFeeMissing: exc && !paidOk,
       refundHold: o.refundHold === true,
       trackingNo: String((o.shipping && o.shipping.trackingNo) || o.trackingNo || ''),
       address: [a.name, maskPhone(a.phone), a.region, a.detail].filter(Boolean).join(' '), // 列表掩码

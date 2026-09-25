@@ -1,4 +1,4 @@
-// 坐席台轮询合并（守卫 rw-agent-ui-golden·黄金 cs-agent「会话流轮询增量合并」永恒语义）：
+// 坐席台轮询合并（黄金 cs-agent「会话流轮询增量合并」永恒语义）：
 // 游标边界重复不重气泡/升序/同刻不同方向不同文是不同条/无时间戳不进流/游标只进不退空批不倒退。
 import { describe, it, expect } from 'vitest'
 import {
@@ -439,13 +439,10 @@ describe('hasMedia 透传（B5·顾客发图坐席可见·纯函数半边）', (
 })
 
 describe('Desk.vue 图片气泡（B5·顾客发图坐席可见·源码断言：钉住真代码，不抄影子实现）', () => {
-  it('大白话：loadMedia 须快照点击时的会话 sid（同 send/act/claim 治法），已加载/加载中直接跳过不重复触发下载，EXPIRED 与其余失败分两态（前者不可重试、后者可重试）', () => {
+  it('大白话：loadMedia 须快照点击时的会话 sid（同 send/act/claim 治法），EXPIRED 与其余失败分两态（前者不可重试、后者可重试）', () => {
     const body = extractFunctionBody(scriptSetupSrc(), 'async function loadMedia(m: Msg) {')
     expect(body).toMatch(/const sid = currentId\.value/) // 归属会话快照，不用随时会变的 currentId.value 直接发请求
     expect(body).toMatch(/post\(\s*'getMediaUrl'\s*,\s*\{\s*sessionId:\s*sid\s*,\s*msgId:\s*key\s*\}\s*\)/)
-    // 已加载/加载中提前 return，不重复触发下载（幂等点击）
-    const guardIdx = body.search(/if\s*\(\s*existing\s*&&\s*\(\s*existing\.state === 'loaded' \|\| existing\.state === 'loading'\s*\)\s*\)\s*return/)
-    expect(guardIdx).toBeGreaterThan(-1)
     // EXPIRED 与其余失败必须分两个不同分支落两个不同 state（不能把 EXPIRED 并进通用失败态）
     const expiredIdx = body.indexOf("mediaCache[key] = { state: 'expired' }")
     const errorIdx = body.indexOf("mediaCache[key] = { state: 'error' }")
@@ -456,9 +453,9 @@ describe('Desk.vue 图片气泡（B5·顾客发图坐席可见·源码断言：�
   })
 
   it('大白话：占位卡点击只在 idle/失败态触发下载——加载中/已加载/已过期点击一律 no-op（已过期没有重试路径）', () => {
-    const body = extractFunctionBody(scriptSetupSrc(), 'function onMediaClick(m: Msg) {')
-    expect(body).toMatch(/if\s*\(\s*s === 'idle' \|\| s === 'error'\s*\)\s*void loadMedia\(m\)/)
-    expect(body).not.toMatch(/s === 'expired'/) // 已过期不应出现在触发下载的条件里
+    const body = extractFunctionBody(scriptSetupSrc(), 'async function loadMedia(m: Msg) {')
+    expect(body).toMatch(/\(\s*s !== 'idle' && s !== 'error'\s*\)\s*\)\s*return/)
+    expect(body).not.toMatch(/s [!=]== 'expired'/) // 已过期不应出现在放行下载的条件里
   })
 
   it('大白话：查看大图只在已加载态才 window.open，防止对占位/加载中/失败态误开空 URL', () => {
@@ -470,7 +467,7 @@ describe('Desk.vue 图片气泡（B5·顾客发图坐席可见·源码断言：�
     const { descriptor } = parse(deskSrc)
     const tpl = descriptor.template?.content || ''
     expect(tpl).toMatch(/v-if="m\.msgtype === 'image' && m\.hasMedia"/)
-    expect(tpl).toMatch(/@click="onMediaClick\(m\)"/)
+    expect(tpl).toMatch(/@click="loadMedia\(m\)"/)
     expect(tpl).toMatch(/@click="openMedia\(m\)"/)
     expect(tpl).toMatch(/图片已过期（超 3 天）/)
     expect(tpl).toMatch(/加载失败，点击重试/)

@@ -2,7 +2,7 @@
 // 真实 DOM 事件挂接不在此测——vitest 'rw' project 是 environment:'node'，无 window 全局，installErrorReporter
 // 里的 typeof window!=='undefined' 分支会被跳过；那部分目前无自动验证，
 // 靠真机/浏览器人工核。
-// 模块级 seen/sent 状态需在每个 it 前 vi.resetModules() + 动态 import 取全新模块实例（同 rewrite/agent/tests/
+// 模块级 seen 状态需在每个 it 前 vi.resetModules() + 动态 import 取全新模块实例（同 rewrite/agent/tests/
 // client.test.ts 已有先例，避免跨 it 状态串味）。
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 

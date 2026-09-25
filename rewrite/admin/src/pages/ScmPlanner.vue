@@ -10,6 +10,7 @@ import { listDrafts } from '../api/products'
 import { materialHuman, scmErrorText, productNameOf } from '../lib/mapScm'
 import { setPurchaseHandoff, setOutworkHandoff } from '../lib/scmHandoff'
 import { useLatest } from '../lib/latest'
+import { loadErrors } from '../lib/status'
 import ScmFlowTabs from '../components/ScmFlowTabs.vue'
 import PageHeader from '../components/ui/PageHeader.vue'
 import Card from '../components/ui/Card.vue'
@@ -29,7 +30,7 @@ function goPurchaseOrder(g: Record<string, any>) {
 
 const targets = ref<Array<{ productId: string; sets: number }>>([{ productId: '', sets: 10 }])
 const plan = ref<Record<string, any> | null>(null)
-const fg = ref<{ packed: Array<Record<string, any>>; shipped: Array<Record<string, any>> } | null>(null)
+const fg = ref<{ packed: Array<Record<string, any>>; shipped: Array<Record<string, any>>; truncated: boolean } | null>(null)
 const inv = ref<Record<string, number>>({}) // 成品现存库存 fg:<pid>__<spec> → stock
 const products = ref<Array<Record<string, any>>>([]) // 全产品目录
 const productName = (id: unknown) => productNameOf(products.value, id)
@@ -77,7 +78,7 @@ async function calc() {
 onMounted(async () => {
   const [r, i, d] = await Promise.all([getFgSummary(), listInventory(), listDrafts()])
   products.value = d.ok ? ((d as any).list as Record<string, any>[]) : []
-  fg.value = r.ok ? { packed: (r.packed as Record<string, any>[]) || [], shipped: (r.shipped as Record<string, any>[]) || [] } : null
+  fg.value = r.ok ? { packed: (r.packed as Record<string, any>[]) || [], shipped: (r.shipped as Record<string, any>[]) || [], truncated: r.truncated === true } : null
   if (i.ok) {
     const list = ((i as any).list as Record<string, any>[]) || []
     const map: Record<string, number> = {}
@@ -88,11 +89,7 @@ onMounted(async () => {
     inv.value = map
   }
   // 分路报错（照 ScmBom.reload）：任一路失败点名报出，不装「没数据」
-  const bad: string[] = []
-  if (!r.ok) bad.push('产销统计加载失败：' + String(r.error || ''))
-  if (!i.ok) bad.push('库存加载失败：' + String(i.error || ''))
-  if (!d.ok) bad.push('产品目录加载失败：' + String(d.error || ''))
-  message.value = bad.join('；')
+  message.value = loadErrors([[r, '产销统计'], [i, '库存'], [d, '产品目录']])
 })
 </script>
 
@@ -146,7 +143,7 @@ onMounted(async () => {
       </template>
     </Card>
 
-    <Card v-if="fg" title="产销统计" sub="打包 · 发货 · 现存库存">
+    <Card v-if="fg" title="产销统计" :sub="`打包 · 发货 · 现存库存${fg.truncated ? '（超 1000 个规格，列表可能不全）' : ''}`">
       <div v-if="produceRows.length" class="ld-table">
         <div class="ld-thead">
           <div class="ld-th grow">产品 / 规格</div>

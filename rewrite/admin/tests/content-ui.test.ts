@@ -1,4 +1,4 @@
-// 内容组映射（守卫 rw-admin-content-ui-golden）：首页模型往返（旧单串值归一/空课行剔除）/
+// 内容组映射：首页模型往返（旧单串值归一/空课行剔除）/
 // 直传表单字段构造（调试日志 G 固化：key 截取·字段名精确·凭证不齐不发）/课程视频统计脏档安全。
 import { describe, it, expect } from 'vitest'
 import { normalizeHome, homePayload, uploadFormFields, courseVideoStats, normalizeHelpItems } from '../src/lib/mapContent'

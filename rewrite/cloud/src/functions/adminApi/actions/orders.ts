@@ -1,5 +1,5 @@
 import { ORDER_STATUS, buildBadStatus } from '@ldrw/shared'
-import { pageQuery, uploadShippingToWx, notifyAlert, applyStockMoves } from '../../../kit'
+import { pageQuery, uploadShippingToWx, notifyAlert, applyStockMoves, isCollectionMissing } from '../../../kit'
 import { reply, activationFor, type Ctx } from '../lib'
 
 // 订单详情补充（VMlhp·读类）：逐商品的激活码状态数据链（复用 activationFor·与退款判据同口径）。
@@ -10,14 +10,9 @@ export async function getOrderDetail({ db, data }: Ctx) {
   const got = await db.collection('orders').doc(id).get().catch(() => null)
   if (!got || !got.data) return reply(400, { ok: false, error: 'NO_ORDER' })
   const o = got.data
-  const seen = new Set<string>()
-  const activations: Record<string, any> = {}
-  for (const it of o.items || []) {
-    const pid = String(it.productId || '')
-    if (!pid || seen.has(pid)) continue
-    seen.add(pid)
-    activations[pid] = await activationFor(db, o._openid, pid)
-  }
+  const pids = [...new Set<string>((o.items || []).map((it: any) => String(it.productId || '')).filter(Boolean))]
+  const acts = await Promise.all(pids.map((pid) => activationFor(db, o._openid, pid)))
+  const activations = Object.fromEntries(pids.map((pid, i) => [pid, acts[i]]))
   return reply(200, { ok: true, activations })
 }
 
@@ -45,7 +40,7 @@ export async function listOrders({ db, data, caps }: Ctx) {
   // 退款↔履约状态同步（P0 修复同源标记·根因见下方 shipOne 闸子注释）：批量 join 本页订单是否存在
   // 已批准/已退款的 afterSales 记录，供前端「待发货」列表标「已退款·勿发货」（真正的拦截闸在 shipOne
   // 服务端裁决，这里只是入口视觉提示——最小改动：不重新设计整表接口，只加一个轻量标记字段）。
-  // 有界批量 _.in 查（同 listRefunds join 订单地址手法·capacity-reads-bounded），不逐单 doc.get。
+  // 有界批量 _.in 查（同 listRefunds join 订单地址手法），不逐单 doc.get。
   const list: any[] = Array.isArray(paged.list) ? paged.list : []
   const orderIds = [...new Set(list.map((o) => String(o.id || o._id || '')).filter(Boolean))]
   const heldIds = new Set<string>()
@@ -113,9 +108,6 @@ async function shipOne(db: any, idRaw: any, companyRaw: any, trackingRaw: any, o
   const cur = got.data.status
   // paid = 首次发货；shipped = 改单号。其余状态不允许动。
   if (cur !== 'paid' && cur !== 'shipped') return { ok: false, error: buildBadStatus(cur) }
-  // 支付异常终态显式拒绝（多代理审核 kimi#2 加固）：不能只依赖 feeMismatch 派生标志——
-  // 即便未来出现误流转/改库把异常单写成 paid 且 feeMismatch 被清，也不允许发货（金额没对清绝不发货）。
-  if (got.data.status === 'payment_exception') return { ok: false, error: buildBadStatus(got.data.status) }
   // 金额异常单（feeMismatch 留痕）须先「解除」后才能发货（审核批次A 折中）
   if (got.data.feeMismatch) return { ok: false, error: 'FEE_MISMATCH_HOLD' }
   // 退款↔履约状态同步闸（P0·根因：afterSales 与 orders 是两套各自实现的状态机，互不知晓对方——
@@ -136,7 +128,9 @@ async function shipOne(db: any, idRaw: any, companyRaw: any, trackingRaw: any, o
     .where({ orderId: id, status: db.command.in(['applied', 'approved', 'refunded']) })
     .field({ lineId: true, productId: true, status: true })
     .get()
-    .catch(() => ({ data: [] }))
+    .catch((e: unknown) => (isCollectionMissing(e) ? { data: [] } : null))
+  // 查不到退款态 ≠ 没有退款：读失败拒发。回结果对象不抛——shipOrders 批量里一单失败不拖垮其余单。
+  if (!heldLines) return { ok: false, error: 'REFUND_HOLD_READ_FAIL' }
   if (heldLines.data && heldLines.data.length) {
     const lines = heldLines.data.map((a: any) => String(a.lineId || a.productId || ''))
     return { ok: false, error: 'REFUND_HOLD', lines }

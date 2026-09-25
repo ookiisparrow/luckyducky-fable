@@ -152,37 +152,14 @@ export function classifyPackIntent(
 }
 
 function whenMatch(when: Record<string, unknown>, facts: Record<string, unknown>): boolean {
-  for (const [k, v] of Object.entries(when || {})) {
-    if (k === 'user_asks_human') {
-      if (!!facts.user_asks_human !== !!v) return false
-      continue
-    }
-    if (k === 'sensitive_hit') {
-      if (!!facts.sensitive_hit !== !!v) return false
-      continue
-    }
-    if (k === 'confidence_lt') {
-      if (Number(facts.confidence ?? 1) >= Number(v)) return false
-      continue
-    }
-    if (k === 'consecutive_unknown_ge') {
-      if (Number(facts.consecutive_unknown || 0) < Number(v)) return false
-      continue
-    }
-    if (k === 'severity') {
-      if (String(facts.severity || '') !== String(v)) return false
-      continue
-    }
-    if (k === 'intent') {
-      if (String(facts.intent || '') !== String(v)) return false
-      continue
-    }
-    if (k === 'stage') {
-      if (String(facts.stage || '') !== String(v)) return false
-      continue
-    }
-  }
-  return true
+  return Object.entries(when || {}).every(([k, v]) => {
+    if (k === 'user_asks_human' || k === 'sensitive_hit') return !!facts[k] === !!v
+    if (k === 'severity' || k === 'intent' || k === 'stage') return String(facts[k] || '') === String(v)
+    // 数值键用 !(a >= b) 而不是 a < b：比较量为 NaN 时两者结果相反，前者让该条件算满足
+    if (k === 'confidence_lt') return !(Number(facts.confidence ?? 1) >= Number(v))
+    if (k === 'consecutive_unknown_ge') return !(Number(facts.consecutive_unknown || 0) < Number(v))
+    return true
+  })
 }
 
 export function matchTriageRule(facts: {
@@ -239,16 +216,13 @@ export function packagingMustNotAskOrderId(hit: PackTriageHit | null): boolean {
 }
 
 export function canTransition(from: PackMachineState, to: PackMachineState, opts?: { fail?: boolean }): boolean {
-  if (!PACK_STATES.has(from) || !PACK_STATES.has(to)) return false
-  if (to === 'resolve' && opts && opts.fail) return false
-  const forbid = assets.state_machine.forbidden_transitions || []
-  for (const f of forbid) {
+  if (!PACK_STATES.has(from) || !PACK_STATES.has(to) || (to === 'resolve' && opts?.fail)) return false
+  for (const f of assets.state_machine.forbidden_transitions || []) {
     if (f.from !== from && f.from !== '*') continue
     const tos = Array.isArray(f.to) ? f.to : [f.to]
-    if (tos.includes(to) && !(f.unless && f.unless.length)) return false
-    if (to === 'resolve' && f.from === '*' && opts && opts.fail) return false
+    if (tos.includes(to) && !f.unless?.length) return false
   }
-  return (ALLOWED[from] || []).includes(to)
+  return ALLOWED[from].includes(to)
 }
 
 export function walkPackStates(from: PackMachineState, to: PackMachineState): PackMachineState[] | null {
@@ -309,23 +283,22 @@ export function advancePackSession(
   opts?: { fail?: boolean; toHuman?: boolean }
 ): PackSession {
   const next = loadPackSession(prev)
-  const want: PackMachineState = opts && opts.toHuman ? 'human' : hit && hit.action === 'human' ? 'human' : hit && hit.action === 'collect' ? 'collect' : hit && hit.action === 'act' ? 'act' : next.state === 'new' ? 'greet' : next.state
+  const act = hit ? hit.action : ''
+  const want: PackMachineState = opts?.toHuman
+    ? 'human'
+    : act === 'human' || act === 'collect' || act === 'act'
+      ? act
+      : next.state === 'new'
+        ? 'greet'
+        : next.state
   const path = walkPackStates(next.state, want)
-  if (!path) {
-    if (opts && opts.fail) {
-      const toHuman = walkPackStates(next.state, 'human')
-      if (toHuman) next.state = 'human'
-      next.humanSubstate = next.state === 'human' ? 'queued' : next.humanSubstate
-      return next
-    }
+  // 失败不能假装结案：走不到目标或目标是结案时，能走到人工就退到人工排队
+  if (opts?.fail && (!path || want === 'resolve')) {
+    if (walkPackStates(next.state, 'human')) next.state = 'human'
+    if (next.state === 'human') next.humanSubstate = 'queued'
     return next
   }
-  if (want === 'resolve' && opts && opts.fail) {
-    const toHuman = walkPackStates(next.state, 'human')
-    next.state = toHuman ? 'human' : next.state
-    next.humanSubstate = next.state === 'human' ? 'queued' : next.humanSubstate
-    return next
-  }
+  if (!path) return next
   next.state = path[path.length - 1]
   if (hit) {
     next.intent = hit.intent || next.intent

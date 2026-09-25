@@ -1,5 +1,4 @@
 // 课时级批量传视频：只算「多文件→小段」灌入计划，上传走 api/content.uploadVideo。
-// 守卫 rw-admin-videobatch-golden。
 
 // 去掉最后一段扩展名（"起针.mp4" → "起针"；无扩展名原样返回）
 function stripExt(name: string): string {

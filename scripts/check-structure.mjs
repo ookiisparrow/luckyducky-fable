@@ -85,11 +85,11 @@ export const SINGLE_SEAM_REGISTRY = [
     },
   },
   {
-    // 原料账单点收口——新线扫描面（批K·SCM 门1·根因#1/#2·移植 material-stock-single-seam）：kit/scmStock.ts
+    // 原料账单点收口——新线扫描面（SCM 门1·根因#1/#2）：kit/scmStock.ts
     // 头注承诺「全库唯一 materials.stock/stockLedger 读写处」，applyStockMoves 须导出、CAS 须用条件 where(stock)。
     id: 'rw-material-stock-single-seam',
     roots: ['#1', '#2'],
-    desc: '新线原料账单点收口（SCM 门1·根因#1/#2·批K·移植 material-stock-single-seam，同状态流转守卫的精神：旧守卫只扫冻结线，kit/scmStock.ts 头注承诺的保护对生产代码此前是假的）：materials.stock/stockLedger 仅 rewrite/cloud/src/kit/scmStock.ts 读写（applyStockMoves 唯一入口·乐观 CAS）；rewrite/cloud/src 其余文件直碰即红（防绕 CAS/绕流水改账）',
+    desc: '新线原料账单点收口（SCM 门1·根因#1/#2）：materials.stock/stockLedger 仅 rewrite/cloud/src/kit/scmStock.ts 读写（applyStockMoves 唯一入口·乐观 CAS）；rewrite/cloud/src 其余文件直碰即红（防绕 CAS/绕流水改账）',
     seam: 'rewrite/cloud/src/kit/scmStock.ts',
     pattern: /COLLECTIONS\.(materials|stockLedger)\b|\.collection\(\s*['"](materials|stockLedger)['"]\s*\)/,
     strip: true,
@@ -105,7 +105,7 @@ export const SINGLE_SEAM_REGISTRY = [
     },
   },
   {
-    // VOD 平台接缝单点（根因#12·决策§31 转码管线批1·镜像 flow-seam-via-kit 之于支付工作流）：腾讯云点播平台
+    // VOD 平台接缝单点（根因#12·决策§31·同 rw-flow-seam-single 之于支付工作流）：腾讯云点播平台
     // 触点（Key 防盗链签名算法/服务端 API 域名）收口 kit/vod.ts 一处；extra 焊 getPlaybackUrl 新旧双线前缀分流
     // 四件套（业务不变量·与接缝单点判定异构，故留 extra 不进骨架）：分流拆掉任意一半，存量或转码课程之一必哑。
     id: 'rw-vod-seam-single',
@@ -273,9 +273,6 @@ export const repoChecks = [
       return bad
     },
   },
-  // ── 后台360工作站 B1.1：模块化框架（架构规范五铁律）+ §1.5 信任边界（360 读越权面）──
-  // provider/registry/编排器在 functions/admin/adminApi/customer360/；4 模块守卫焊「板块不散落/解耦/经接口/可开关」，
-  // 2 信任边界守卫焊「360 读他人全貌→破例留痕 + 能力闸」（补 admin-actions-audited 跳 ^get 的盲区）。原 B0 框架并入本批·守卫随首个真 provider 立、咬真板块（防过度工程裁决）。
   {
     // 后台360工作站 B2.2 节点诊断·UGC 图片入库前必过内容安全（根因#3 信任边界 fail-closed）：学员拍照上传是
     // 本项目第一个「用户图片入库」越权写面——黄暴恐违规图直接入库＝合规风险。守此不变量：① kit/contentsec.ts
@@ -805,10 +802,8 @@ export const repoChecks = [
     },
   },
   {
-    // 新线集合逐名登记库权限期望表（2026-07-12 配置清单可填写化审查批）：secureConfig（企微 Secret/商户
-    // 私钥承重）动态建默认 private 是已知真洞（rateLimit/wxBills 前科·期望表自注），漏出期望表＝逃出
-    // 「上线前逐项锁 adminonly」的人工核对面。collection-count-synced 只核旧线 packages/cloud 计数，
-    // 新线净新增集合（anomalies/inspectRuns/secureConfig…）对它结构性不可见——本守卫按名补上。
+    // 新线集合逐名登记库权限期望表：secureConfig（企微 Secret/商户私钥承重）动态建默认 private 是已知真洞
+    // （rateLimit/wxBills 前科·期望表自注），漏出期望表＝逃出「上线前逐项锁 adminonly」的人工核对面。
     id: 'rw-collection-perm-registered',
     roots: ['#9', '#3'],
     desc: '新线集合逐名登记库权限期望表：rewrite/shared/src/collections.ts 每个集合名须在 console-assets/02-库权限期望表.md 有期望档位行——动态建默认 private=真洞，漏登记即逃出锁权限人工核对（配置清单审查批·secureConfig 首踩）',
@@ -910,7 +905,7 @@ export const repoChecks = [
   {
     id: 'rw-writes-need-gate',
     roots: ['#3'],
-    desc: '新线函数写库必过 kit 闸（移植 writes-need-gate·设计约束#3「不过闸写不出库」）：rewrite/cloud/src/functions/ 下每个函数单元（app/actions 逐文件；callbacks/timers/cs 顶层逐文件；多文件函数目录如 kfCallback 聚合判——index 的 defineKfCallback 外壳即全单元的闸）含写库者必须出现 withOpenId/withAdminGate/defineNotifyCallback/defineKfCallback/isServerCall/checkKey 之一',
+    desc: '新线函数写库必过 kit 闸（设计约束#3「不过闸写不出库」）：rewrite/cloud/src/functions/ 下每个函数单元（app/actions 逐文件；callbacks/timers/cs 顶层逐文件；多文件函数目录如 kfCallback 聚合判——index 的 defineKfCallback 外壳即全单元的闸）含写库者必须出现 withOpenId/withAdminGate/defineNotifyCallback/defineKfCallback/isServerCall/checkKey 之一',
     run() {
       const bad = []
       const base = join(ROOT, 'rewrite/cloud/src/functions')
@@ -1195,7 +1190,7 @@ export const repoChecks = [
   {
     id: 'rw-openapi-perm-declared',
     roots: ['#12', '#8'],
-    desc: '新线云调用权限随产物声明（移植 openapi-perm-declared·根因#12/#8·债#26）：rewrite/cloud 源每个 cloud.openapi.<ns>.<method> 调用须在 rewrite/cloud/build.mjs OPENAPI_PERMS 登记（据此产 config.json）——否则部署产物缺权限、云调用被微信拒',
+    desc: '新线云调用权限随产物声明（根因#12/#8·债#26）：rewrite/cloud 源每个 cloud.openapi.<ns>.<method> 调用须在 rewrite/cloud/build.mjs OPENAPI_PERMS 登记（据此产 config.json）——否则部署产物缺权限、云调用被微信拒',
     run() {
       const bad = []
       const srcRoot = join(ROOT, 'rewrite/cloud/src')
@@ -1222,7 +1217,7 @@ export const repoChecks = [
     },
   },
   {
-    // 新线镜像 privacy-authorize-wired（R27㉒）+ consent 页（cs-data-share-consented 的 C 端半边）。
+    // 新线隐私授权（R27㉒）+ consent 页（数据共享同意的 C 端半边）。
     // 原生形态：app.json __usePrivacyCheck__ + lib/privacyGate 挂 onNeedPrivacyAuthorization + app.ts 启动注册
     // + privacy-sheet 组件（agreePrivacyAuthorization 能力按钮）；涉隐私接口页扫描制——哪页调隐私接口哪页必挂
     // 弹窗（挂载可达性·债#25 教训：闸全局触发、弹窗挂不到就渲不出=授权链静默断）。consent 页写 dataConsent
@@ -1801,16 +1796,12 @@ export const fileRules = [
         : null,
   },
   {
-    // T4 按链内聚·活线镜像（盲区体检批2·病根#16 ② × Phase3 批I 合并融合）：旧 dep-direction 的 inScope
-    // 锁死冻结 packages/miniapp——CLAUDE 四大架构主张之一在唯一迭代的活线上零执行。两条线（盲区体检批2 /
-    // Phase3 批I）曾各自独立补活线镜像，合流时融合为一条严格强于两者的版本：
-    //   · 骨架取盲区体检版——mp 分层表驱动（pages/components/custom-tab-bar → lib → api → utils 叶·出度 0，
-    //     见 rewrite/mp/README §分层）+ rewrite/cloud kit 禁反向 import functions/ + tests 目录排除；
-    //   · 加固取 Phase3 批I 版——探测正则并入 CommonJS `require('…')`（mp tsconfig module=CommonJS、无
-    //     ESLint 兜底，只认 from 会留等价绕过口·E16 翻版）与反引号模板字面量（动态 import(`../lib/${x}`)
-    //     的依赖前缀在插值前已定型、按前缀判仍正确）+ 先剥行尾注释（E1：注释里提路径不算）+ 扫描面补
-    //     admin src/lib|api（禁引 ../pages/、../shell/）与 agent src/lib（禁引页面级 .vue）。
-    // 存量违例 0（两线各自侦察实测一致）——纯预防守卫，先红由反向自检证。
+    // T4 按链内聚（病根#16 ②）：mp 分层表驱动（pages/components/custom-tab-bar → lib → api → utils 叶·出度 0，
+    // 见 rewrite/mp/README §分层）+ rewrite/cloud kit 禁反向 import functions/ + tests 目录排除。
+    // 探测正则并入 CommonJS `require('…')`（mp tsconfig module=CommonJS、无 ESLint 兜底，只认 from 会留等价
+    // 绕过口·E16）与反引号模板字面量（动态 import(`../lib/${x}`) 的依赖前缀在插值前已定型、按前缀判仍正确）；
+    // 先剥行尾注释（E1：注释里提路径不算）；扫描面含 admin src/lib|api（禁引 ../pages/、../shell/）与 agent
+    // src/lib（禁引页面级 .vue）。纯预防守卫，先红由反向自检证。
     id: 'rw-dep-direction',
     roots: ['T4', '#16'],
     inScope: (abs) =>
@@ -1875,7 +1866,7 @@ export const typeAndTestGuards = [
     id: 'order-status-union',
     mechanism: 'ts',
     roots: ['#2'],
-    reverseTest: '写非法状态名 → tsc 编译失败（调用方用 ORDER_STATUS 常量联合）',
+    reverseTest: '状态集增删改名而 statusLabels / PAID_ORDER_STATUSES 漏配或写错 → tsc 编译失败（以 ORDER_STATUS_SPEC 类型级派生的 OrderStatus 为键/元素）；transition() 的状态字面量不归这里，由 rw-status-transitions-declared 拦',
   },
   {
     id: 'transition-atomic-idempotent',

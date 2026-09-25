@@ -1,4 +1,4 @@
-// 隐私授权闸 + 数据共享提示态黄金语义（守卫 rw-mp-privacy-golden·承旧线 privacyGate.test 语义）。
+// 隐私授权闸 + 数据共享提示态黄金语义（承旧线 privacyGate.test 语义）。
 // 钉住的不变量：resolve 只回一次（同意后再拒不重复回调）；agree 带能力按钮 id；disagree 中止；
 // 退订即止（泄漏纪律）；register 缺 API 安全空转；consent 提示回灌只认 boolean（storage 不可信）。
 import { describe, it, expect, vi } from 'vitest'

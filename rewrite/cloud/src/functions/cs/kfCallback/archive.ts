@@ -2,8 +2,8 @@ import { COLLECTIONS } from '@ldrw/shared'
 
 /**
  * 客服会话归档（后台360工作站 B5.1·板块#9·外包管控底座）。一会话消息一文档落 conversations 集合，
- * 供坐席检索（adminApi.searchConversations）+ 质检取证（B5.3）。挂点在 kfCallback/index.ts（守卫
- * conversations-archived 焊「入站/出站都落档·不悄悄摘」）。
+ * 供坐席检索（adminApi.searchConversations）+ 质检取证（B5.3）。挂点在 kfCallback/index.ts
+ *（入站/出站都落档·不悄悄摘）。
  *
  * 设计：
  *  - **入站**（客户消息）确定性 `_id='wxkf:in:<msgid>'`——同 seen 去重幂等：重拉/重投同 msgid 不重复入库（add 撞号即 no-op）。
@@ -11,7 +11,7 @@ import { COLLECTIONS } from '@ldrw/shared'
  *  - **fail-soft 铁律**：归档绝不抛错（try/catch 吞）——归档失败不得反噬消息处理（不致 anyFailed→不致吞单·根因#3 旁路）。
  *  - **解耦**（架构规范铁律二）：不 import dispatch.ts（车道 D 领域）；external_userid 取法与 openid 解析各自内联
  *    （都是 1 行读·非投机抽象·避免跨板块伸手）。
- *  - **PII**：会话全文含个人信息·协议页已声明（守卫 conversations-archived 同焊隐私声明）；检索侧能力闸 + 留痕（§1.5）。
+ *  - **PII**：会话全文含个人信息·协议页已声明；检索侧能力闸 + 留痕（§1.5）。
  *  - **承面C 扩展位**：人工坐席回复（未来经自建 send_msg）天然走同一 archiveOutbound 落档；channel 字段留作多承面区分。
  */
 

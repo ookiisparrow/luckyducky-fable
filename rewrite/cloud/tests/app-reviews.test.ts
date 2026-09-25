@@ -1,4 +1,4 @@
-// 黄金 learning-content §七（评价）/§九（辅助视频）+ R37b（KB 精选 FAQ 公开读）（守卫 rw-reviews-golden）。
+// 黄金 learning-content §七（评价）/§九（辅助视频）+ R37b（KB 精选 FAQ 公开读）。
 import { describe, it, expect, beforeEach } from 'vitest'
 import { control } from 'wx-server-sdk'
 import { main as app } from '../src/functions/app/index'
@@ -114,8 +114,8 @@ describe('getReviews（游标分页+全量精确汇总·黄金 §七）', () => 
   })
 
   it('大白话：精确聚合异常时落回兜底近样本口径——恰好 200 条（=SUMMARY_SAMPLE）其实是全量，不该误标近似（差一修复·P3）；201 条才真被截断标近似且只统计前 200 条', async () => {
-    control.setBeforeCount(({ coll }: any) => {
-      if (coll === 'reviews') throw new Error('MOCK_COUNT_FAIL') // 逼精确聚合六路 Promise.all 任一路失败→落回兜底
+    control.setBeforeAggregate(({ coll }: any) => {
+      if (coll === 'reviews') throw new Error('MOCK_AGG_FAIL') // 逼精确聚合失败→落回兜底
     })
     control.seed(
       'reviews',
@@ -130,7 +130,7 @@ describe('getReviews（游标分页+全量精确汇总·黄金 §七）', () => 
     expect(r201.summary.count).toBe(200) // 真被截断只统计前 200（多取的那条只用于探测截断，不参与聚合）
     expect(r201.summary.approx).toBe(true)
 
-    control.setBeforeCount(null as never)
+    control.setBeforeAggregate(null as never)
   })
 
   it('大白话：首页倒序+游标续页不重不漏；续页不重算汇总；到底无更多', async () => {

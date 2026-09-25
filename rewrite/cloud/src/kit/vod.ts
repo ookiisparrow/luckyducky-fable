@@ -1,6 +1,6 @@
 import { createHash, createHmac, randomBytes } from 'crypto'
-import https from 'https'
 import { getSecureConfigFields } from './secureConfig'
+import { defaultFetch as doFetch } from './wecom'
 import { alert } from './observe'
 
 // ────────────────────────────────────────────────────────────────────────────
@@ -17,7 +17,7 @@ export { isVodFileId } from '@ldrw/shared'
 
 // 签名有效期 6h：显式覆盖「mp 端 25min 地址缓存 TTL（rewrite/mp/lib/player.ts createPlaybackCache）
 // + 最长课时 + 余量」——短于缓存 TTL 会让缓存命中返回已过期签名（分片 403 只能靠失速兜底恢复）；
-// 仍 < 发布 GC 24h 缓期（adminApi/actions/courses.ts GC_GRACE_MS），换源删除时在播学员手里的签名
+// 仍 < 发布 GC 24h 缓期（adminApi/actions/products.ts GC_GRACE_MS，经 mergePendingGc），换源删除时在播学员手里的签名
 // 不会晚于缓期还活着。
 const SIGN_TTL_SEC = 6 * 3600
 
@@ -56,26 +56,6 @@ export async function signVodPlayUrl(db: any, rawUrl: string) {
 }
 
 // ── 批2：上传签名 + 服务端 API（决策§31 转码管线批2）─────────────────────────
-
-// 最小 fetch 形状 + https 兜底（照抄 kit/wecom.ts 口径：测试经 globalThis.fetch 桩、运行时无全局 fetch 走 https）
-type FetchFn = (url: string, init?: { method?: string; body?: string; headers?: Record<string, string> }) => Promise<{ json: () => Promise<any> }>
-const httpsFetch: FetchFn = (url, init) =>
-  new Promise((resolve, reject) => {
-    const u = new URL(url)
-    const req = https.request(
-      { method: init?.method || 'GET', hostname: u.hostname, path: u.pathname + u.search, headers: init?.headers },
-      (res) => {
-        let body = ''
-        res.on('data', (c) => (body += c))
-        res.on('end', () => resolve({ json: async () => JSON.parse(body || '{}') }))
-      }
-    )
-    req.on('error', reject)
-    if (init?.body) req.write(init.body)
-    req.end()
-  })
-const doFetch: FetchFn = (url, init) =>
-  typeof (globalThis as any).fetch === 'function' ? (globalThis as any).fetch(url, init) : httpsFetch(url, init)
 
 /**
  * UGC 客户端上传签名（官方 266/9221·纯本地 HMAC-SHA1，不调任何 API）：admin 浏览器 vod-js-sdk-v6

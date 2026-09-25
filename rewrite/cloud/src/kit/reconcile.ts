@@ -30,7 +30,8 @@ export const dayKeyCST = (ts: number) => new Date(Number(ts) + CST).toISOString(
 /** 'YYYY-MM-DD' → CST 当日 00:00:00 的 ms */
 export const dayStartMsCST = (d: string) => Date.parse(d + 'T00:00:00+08:00')
 
-/** 幂等落库：确定性 _id=`<date>:<transactionId>`（重拉同日覆盖不重复·根因#1）。
+/** 幂等落库：确定性 _id=`<date>:<transactionId>`（重拉同日覆盖不重复·根因#1）。非 SUCCESS 行加 `:<tradeState>` 后缀：
+ *  ALL 账单的退款行沿用原单微信订单号，同日先付后退会用 REFUND 行盖掉 SUCCESS 行，getBillMatch 就误报「我方有微信无」。
  *  先建集合（wxBills 动态建·往不存在的集合 doc().set() 会失败）；只对真写成功的计数（不吞错装成功）。
  *  自 adminApi/actions/wxbill.ts 原样移入（批B2·timer 复用），ensure 改本地 createCollection（kit 不 import functions/）。 */
 async function upsertBills(db: any, date: string, rows: BillRow[]): Promise<number> {
@@ -45,7 +46,7 @@ async function upsertBills(db: any, date: string, rows: BillRow[]): Promise<numb
     try {
       await db
         .collection(COLLECTIONS.wxBills)
-        .doc(`${date}:${r.transactionId}`)
+        .doc(`${date}:${r.transactionId}${r.tradeState === 'SUCCESS' ? '' : ':' + r.tradeState}`)
         .set({ data: { date, ...r, _syncedAt: Date.now() } })
       n++ // 仅真写成功才计
     } catch {
@@ -74,9 +75,7 @@ export async function pullBillDay(
   const cfg = await db.collection(COLLECTIONS.config).doc('pay').get().catch(() => null)
   const mchid = (cfg && cfg.data && cfg.data.subMchId) || ''
   if (!mchid) return { ok: false, error: 'NO_MCHID' }
-  const r = opts.fetchImpl
-    ? await fetchTradeBill({ date, mchid: String(mchid), serial, privateKey, billType: opts.billType }, opts.fetchImpl)
-    : await fetchTradeBill({ date, mchid: String(mchid), serial, privateKey, billType: opts.billType })
+  const r = await fetchTradeBill({ date, mchid: String(mchid), serial, privateKey, billType: opts.billType }, opts.fetchImpl) // undefined 走默认出站
   if (!r.ok) return { ok: false, error: r.error || 'BILL_FETCH_FAIL' }
   const rows = r.rows || []
   const count = await upsertBills(db, date, rows)

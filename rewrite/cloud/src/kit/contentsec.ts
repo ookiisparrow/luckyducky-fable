@@ -13,7 +13,7 @@ import { alert } from './observe'
  * 安检挂了不能卡死顾客通道（Issue #113）。守卫 ugc-imgsecchecked 焊公开 UGC 写面。
  *
  * ⚠️ 真发前置（靠人·根因#8「拿到 ≠ 用通」）：① 部署产物 config.json 声明 openapi 权限 `security.imgSecCheck`
- *   （build.mjs OPENAPI_PERMS 自动产·守卫 openapi-perm-declared）；② mp 后台开通内容安全能力；③ 真机验图片
+ *   （build.mjs OPENAPI_PERMS 自动产·守卫 rw-openapi-perm-declared）；② mp 后台开通内容安全能力；③ 真机验图片
  *   真能拦黄暴恐（imgSecCheck v1 同步·errCode 87014=内容含违规信息）。代码替不了 ②③，只把链路做成「配好即生效」。
  */
 type SecResult = { ok: boolean; error?: string }

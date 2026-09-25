@@ -205,7 +205,7 @@ describe('ScmOutwork.vue more() 乱序守卫（D4·战役3 批D·同 ScmPurchase
     expect(peekIdx).toBeGreaterThan(-1)
     const moreStaleIdx = moreBody.search(/if\s*\(\s*listGen\.isStale\(gen\)\s*\)\s*return/)
     expect(moreStaleIdx).toBeGreaterThan(peekIdx)
-    const appendIdx = moreBody.indexOf('orders.value = [...orders.value')
+    const appendIdx = moreBody.indexOf('orders.value = appendNew(orders.value')
     const cursorIdx = moreBody.indexOf('cursor.value = r.nextCursor')
     expect(appendIdx).toBeGreaterThan(moreStaleIdx) // append 复核后才写
     expect(cursorIdx).toBeGreaterThan(moreStaleIdx) // cursor 复核后才写

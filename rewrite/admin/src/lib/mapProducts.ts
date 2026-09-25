@@ -1,4 +1,4 @@
-// 商品与橱窗映射（纯函数·守卫 rw-admin-products-ui-golden）：三态口径与云端 listDrafts 一致；
+// 商品与橱窗映射（纯函数）：三态口径与云端 listDrafts 一致；
 // 上架四道门错误转人话（原文兜底不吞）；编辑走整档 round-trip（saveDraft 全量覆盖——表单只绑核心字段·
 // 未编辑字段原样随档提交，防高级字段被抹）。
 export type ProductState = 'onsale' | 'unlisted' | 'preparing'

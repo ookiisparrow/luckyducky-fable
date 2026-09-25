@@ -1,4 +1,4 @@
-// 夜间审计 2026-09-12 mp slice：订单/详情 data.missing 是死字段；详情 loadRecs/loadRating 过期回包未认代次。
+// 订单/详情 data.missing 是死字段；详情 loadRating 过期回包须认代次（推荐与主体同一次 setData 写入，无需另认）。
 // 源码扫描（同 home-reload-failsoft·mp tsconfig 无 node:fs·E1 剥注释防假绿）。
 import { describe, it, expect } from 'vitest'
 import detailSrc from '../pages/detail/detail.ts?raw'
@@ -25,8 +25,8 @@ function methodBody(rawSrc: string, name: string): string {
 
 describe('订单/详情死字段 + 推荐评分过期回包', () => {
 
-  it('大白话：推荐和评分回包若这一趟已经过期，就丢掉不写到已经离开的页', () => {
-    for (const name of ['loadRecs', 'loadRating']) {
+  it('大白话：评分回包若这一趟已经过期，就丢掉不写到已经离开的页', () => {
+    for (const name of ['loadRating']) {
       const body = methodBody(detailSrc, name)
       const seqAt = body.search(/seq\s*!==\s*this\._seq|this\._seq\s*!==\s*seq/)
       const setAt = body.search(/this\.setData/)

@@ -57,11 +57,7 @@ function buildSegments(lessonId: string, dur: string): SeedSegment[] {
   }))
 }
 
-interface RawLesson {
-  id: string
-  name: string
-  dur: string
-}
+type RawLesson = Omit<SeedLesson, 'segments'>
 const CHAPTERS: { id: string; title: string; lessons: RawLesson[] }[] = [
   {
     id: 'c1',
@@ -112,14 +108,8 @@ export const SEED_COURSES: SeedCourse[] = [
     title: '零基础 · 钩织你的第一只小棉鸭',
     sort: 0,
     chapters: CHAPTERS.map((c) => ({
-      id: c.id,
-      title: c.title,
-      lessons: c.lessons.map((l) => ({
-        id: l.id,
-        name: l.name,
-        dur: l.dur,
-        segments: buildSegments(l.id, l.dur),
-      })),
+      ...c,
+      lessons: c.lessons.map((l) => ({ ...l, segments: buildSegments(l.id, l.dur) })),
     })),
   },
 ]

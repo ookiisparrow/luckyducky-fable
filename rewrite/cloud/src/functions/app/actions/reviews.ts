@@ -56,28 +56,15 @@ function publicReviewFilter(productId: string) {
 }
 
 /**
- * 精确汇总（黄金 §七：全量精确、永不近似）：星级桶 count + aggregate 求和，不受样本截断。
- * 六路互不依赖并行（批C·云端加载链微优化）：原为「五路 Promise.all 后再串行拉一次 tags 样本」，
- * tags 样本与前五路同样只依赖 productId、彼此零数据依赖，并入同一 Promise.all 省一轮网关往返；
- * 样本查询加 .field({tags:true}) 投影——只取 tags 字段，不再连 text（≤500字）/photos 一并拉整文档
- * （真 sdk 支持字段投影；桩 field() 是 no-op，测试断言的汇总数值不受影响，等价性见下方字段使用范围）。
+ * 精确汇总（黄金 §七：全量精确、永不近似）：按星级分组一次聚合出各档条数与总分，不受样本截断。
+ * 与 tags 样本读互不依赖并行；样本加 .field({tags:true}) 投影——只取 tags，不连 text（≤500字）/photos
+ * 拉整文档（真 sdk 支持字段投影；桩 field() 是 no-op）。
  */
 async function buildSummaryExact(db: any, productId: string) {
   const $ = db.command.aggregate
-  const _ = db.command
   const coll = () => db.collection(COLLECTIONS.reviews)
-  const [c5, c4, c3, c21, sumRes, tres] = await Promise.all([
-    coll().where({ ...publicReviewFilter(productId), rating: 5 }).count(),
-    coll().where({ ...publicReviewFilter(productId), rating: 4 }).count(),
-    coll().where({ ...publicReviewFilter(productId), rating: 3 }).count(),
-    coll()
-      .where({ ...publicReviewFilter(productId), rating: _.in([1, 2]) })
-      .count(), // 1 星并入 2 星档（与展示折叠一致）
-    coll()
-      .aggregate()
-      .match(publicReviewFilter(productId))
-      .group({ _id: null, s: $.sum('$rating') })
-      .end(),
+  const [agg, tres] = await Promise.all([
+    coll().aggregate().match(publicReviewFilter(productId)).group({ _id: '$rating', n: $.sum(1) }).end(),
     coll()
       .where(publicReviewFilter(productId))
       .orderBy('createdAt', 'desc')
@@ -86,12 +73,18 @@ async function buildSummaryExact(db: any, productId: string) {
       .get()
       .catch(() => null),
   ])
-  const b5 = c5.total || 0
-  const b4 = c4.total || 0
-  const b3 = c3.total || 0
-  const b2 = c21.total || 0
+  const n: Record<string, number> = {}
+  let sum = 0
+  for (const g of agg.list || []) {
+    n[g._id] = g.n
+    sum += (Number(g._id) || 0) * g.n // 等价 $.sum('$rating')
+  }
+  // 评分只由 submitReview 写入且限 1–5 整数，四档即全量；1 星并入 2 星档（与展示折叠一致）
+  const b5 = n[5] || 0
+  const b4 = n[4] || 0
+  const b3 = n[3] || 0
+  const b2 = (n[2] || 0) + (n[1] || 0)
   const count = b5 + b4 + b3 + b2
-  const sum = (sumRes && sumRes.list && sumRes.list[0] && sumRes.list[0].s) || 0
   const pct = (n: number) => (count ? Math.round((n / count) * 100) : 0) // structure-ok：星级占比百分比，非金额换算（根因#4 fileRule 不误咬）
   const tagCount: Record<string, number> = {}
   for (const r of tres ? tres.data : [])
@@ -205,7 +198,7 @@ export const getReviews = async (event: any = {}) => {
 }
 
 /**
- * 详情页评分摘要（公开只读·slim·C 类竖切）：热路径只跑 count + aggregate 求和 → {score,count}，
+ * 详情页评分摘要（公开只读·slim·C 类竖切）：热路径只跑一次 aggregate（条数+求和）→ {score,count}，
  * **不拉列表/晒图/标签**（详情页为一个分数拉 20 条评价+换临时图址是过度取数）。口径对齐 buildSummaryExact
  * 的精确均分（sum/count 保留一位）。只回聚合数、绝不带 _openid/评价明细（公开只读·隐私）。
  * 聚合异常/集合未建 → {score:'0',count:0}（前端 mapSummary count=0 → 不渲染假评·fail-closed）。
@@ -216,17 +209,15 @@ export const getRatingSummary = async (event: any = {}) => {
   const db = getDb()
   const $ = db.command.aggregate
   try {
-    const [cRes, sumRes] = await Promise.all([
-      db.collection(COLLECTIONS.reviews).where(publicReviewFilter(productId)).count(),
-      db
-        .collection(COLLECTIONS.reviews)
-        .aggregate()
-        .match(publicReviewFilter(productId))
-        .group({ _id: null, s: $.sum('$rating') })
-        .end(),
-    ])
-    const count = cRes.total || 0
-    const sum = (sumRes && sumRes.list && sumRes.list[0] && sumRes.list[0].s) || 0
+    const res = await db
+      .collection(COLLECTIONS.reviews)
+      .aggregate()
+      .match(publicReviewFilter(productId))
+      .group({ _id: null, s: $.sum('$rating'), n: $.sum(1) })
+      .end()
+    const g = (res && res.list && res.list[0]) || {}
+    const count = g.n || 0
+    const sum = g.s || 0
     return ok({ score: count ? (sum / count).toFixed(1) : '0', count })
   } catch {
     return ok({ score: '0', count: 0 })

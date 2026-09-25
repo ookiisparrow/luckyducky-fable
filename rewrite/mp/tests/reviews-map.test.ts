@@ -1,5 +1,4 @@
-// 黄金 learning-content §七（评价读取半边：条数 0 视同无数据/汇总形状/星级拼装）
-// （守卫 rw-mp-reviews-golden）。
+// 黄金 learning-content §七（评价读取半边：条数 0 视同无数据/汇总形状/星级拼装）。
 import { describe, it, expect } from 'vitest'
 import { stars, mapReviews, mapSummary } from '../lib/mapReviews'
 

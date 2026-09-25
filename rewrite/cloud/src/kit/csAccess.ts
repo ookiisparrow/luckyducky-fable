@@ -5,10 +5,10 @@ import { COLLECTIONS, ERR } from '@ldrw/shared'
  *
  * 两条独立不变量，各配守卫（车道 A 坐席台 action 对 outsourced 角色调用这两闸；商户超管＝数据控制者·
  * 走原 customer360 路径·现有隐私政策覆盖·不经本闸）：
- *  - assertDataShareConsent（守卫 cs-data-share-consented·C1）：第三方（外包/企微坐席≠商户本人）看某客户
+ *  - assertDataShareConsent（C1）：第三方（外包/企微坐席≠商户本人）看某客户
  *    360 数据前，该客户须已「告知同意」数据共享（users.csDataShare.agreed===true）——未同意即拒（fail-closed）。
  *    声明文案在协议/隐私页；法律口径是否需独立同意归律师，本层只机械化「有同意才放行」。
- *  - assertOwnedByAgent（守卫 outsourced-reads-scoped·C3）：外包坐席读某会话/对应 360 须是自己 claim 的会话
+ *  - assertOwnedByAgent（C3·tests/app-cs1.test.ts 钉）：外包坐席读某会话/对应 360 须是自己 claim 的会话
  *    （csSession.agentId===本坐席 agentId）——防一个外包账号遍历全量客户 360＝批量导出。
  *
  * 两闸返回 { ok, error? }（**不 throw**：adminApi 分发对 throw 一律 500·返 { ok:false } 让调用方 reply(403)

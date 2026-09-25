@@ -1,4 +1,4 @@
-// 进销存映射（守卫 rw-admin-scm-ui-golden）：料号人话/元→分整数闸（超两位小数拒·不静默取整）/
+// 进销存映射：料号人话/元→分整数闸（超两位小数拒·不静默取整）/
 // 状态中文/错误码人话原文兜底/流水类型中文。
 import { describe, it, expect } from 'vitest'
 import shellRaw from '../src/shell/Shell.vue?raw'
@@ -175,11 +175,8 @@ describe('SCM 四页「加载更多」翻页收口（B1·照抄 Conversations.vu
 // 假空态——照 Reconciliation.vue reload 分路范式，任一路失败点名报出 + EmptyState 文案分流。
 describe('ScmBom.vue reload 分路报错（失败不伪装空态）', () => {
   it('大白话：四路各自判失败点名报，不被 b.ok 一路成功吞掉；组装记录空态文案区分「没记录」vs「加载失败」', () => {
-    expect(scmBomSrc).toMatch(/if \(!b\.ok\) bad\.push\('配方模板加载失败：'/)
-    expect(scmBomSrc).toMatch(/if \(!m\.ok\) bad\.push\('物料主档加载失败：'/)
-    expect(scmBomSrc).toMatch(/if \(!a\.ok\) bad\.push\('组装记录加载失败：'/)
-    expect(scmBomSrc).toMatch(/if \(!d\.ok\) bad\.push\('产品目录加载失败：'/)
-    expect(scmBomSrc).toMatch(/load\(bad\.length === 0, bad\.join\(/)
+    expect(scmBomSrc).toMatch(/loadErrors\(\[\[b, '配方模板'\], \[m, '物料主档'\], \[a, '组装记录'\], \[d, '产品目录'\]\]\)/)
+    expect(scmBomSrc).toMatch(/load\(!err, err\)/)
     // 旧「只看 b.ok」收尾写法不再存在
     expect(scmBomSrc).not.toMatch(/load\(b\.ok/)
     // 组装记录失败标记：reload 落标 + EmptyState 文案按标记分流
@@ -207,34 +204,26 @@ describe('ScmMaterials.vue 流水加载失败独立记账（不伪装空账本�
 // 2026-09-15 SCM UI 诚实度：挂载/次级列表失败不许装空目录；库存 KPI 失败不许画假零（病根#8/#14）。
 describe('ScmPlanner.vue 挂载三路失败点名报（不装「没数据」）', () => {
   it('大白话：产销/库存/产品目录任一路挂掉都写进 message，不被静默吞成空表', () => {
-    expect(scmPlannerSrc).toMatch(/if \(!r\.ok\) bad\.push\('产销统计加载失败：'/)
-    expect(scmPlannerSrc).toMatch(/if \(!i\.ok\) bad\.push\('库存加载失败：'/)
-    expect(scmPlannerSrc).toMatch(/if \(!d\.ok\) bad\.push\('产品目录加载失败：'/)
-    expect(scmPlannerSrc).toMatch(/message\.value = bad\.join\(/)
+    expect(scmPlannerSrc).toMatch(/message\.value = loadErrors\(\[\[r, '产销统计'\], \[i, '库存'\], \[d, '产品目录'\]\]\)/)
   })
 })
 
 describe('采购/外协/物料页次级目录失败点名报（不装空目录）', () => {
   it('大白话：采购单页物料/供应商挂掉要单独报，不被采购单成功吞成「厂家/料都是空的」', () => {
-    expect(scmPurchaseSrc).toMatch(/if \(!p\.ok\) bad\.push\('采购单加载失败：'/)
-    expect(scmPurchaseSrc).toMatch(/if \(!m\.ok\) bad\.push\('物料主档加载失败：'/)
-    expect(scmPurchaseSrc).toMatch(/if \(!s\.ok\) bad\.push\('供应商加载失败：'/)
-    expect(scmPurchaseSrc).toMatch(/load\(bad\.length === 0, bad\.join\(/)
+    expect(scmPurchaseSrc).toMatch(/loadErrors\(\[\[p, '采购单'\], \[m, '物料主档'\], \[s, '供应商'\]\]\)/)
+    expect(scmPurchaseSrc).toMatch(/load\(!err, err\)/)
     expect(scmPurchaseSrc).not.toMatch(/load\(p\.ok/)
   })
 
   it('大白话：外协单页物料/织女挂掉要单独报，不被外协单成功吞成「织女/原团都是空的」', () => {
-    expect(scmOutworkSrc).toMatch(/if \(!o\.ok\) bad\.push\('外协单加载失败：'/)
-    expect(scmOutworkSrc).toMatch(/if \(!m\.ok\) bad\.push\('物料主档加载失败：'/)
-    expect(scmOutworkSrc).toMatch(/if \(!s\.ok\) bad\.push\('织女名单加载失败：'/)
-    expect(scmOutworkSrc).toMatch(/load\(bad\.length === 0, bad\.join\(/)
+    expect(scmOutworkSrc).toMatch(/loadErrors\(\[\[o, '外协单'\], \[m, '物料主档'\], \[s, '织女名单'\]\]\)/)
+    expect(scmOutworkSrc).toMatch(/load\(!err, err\)/)
     expect(scmOutworkSrc).not.toMatch(/load\(o\.ok/)
   })
 
   it('大白话：物料页供应商挂掉要单独报，不被物料成功吞成「没有供应商」', () => {
-    expect(scmMaterialsSrc).toMatch(/if \(!m\.ok\) bad\.push\('物料主档加载失败：'/)
-    expect(scmMaterialsSrc).toMatch(/if \(!s\.ok\) bad\.push\('供应商加载失败：'/)
-    expect(scmMaterialsSrc).toMatch(/load\(bad\.length === 0, bad\.join\(/)
+    expect(scmMaterialsSrc).toMatch(/loadErrors\(\[\[m, '物料主档'\], \[s, '供应商'\]\]\)/)
+    expect(scmMaterialsSrc).toMatch(/load\(!err, err\)/)
   })
 })
 

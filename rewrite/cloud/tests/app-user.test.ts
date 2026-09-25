@@ -1,4 +1,4 @@
-// 黄金 admin-misc §五（用户账户与写入闸门）+ frontend-store §九（守卫 rw-user-catalog-golden）。
+// 黄金 admin-misc §五（用户账户与写入闸门）+ frontend-store §九。
 import { describe, it, expect, beforeEach } from 'vitest'
 import { control } from 'wx-server-sdk'
 import { main as app } from '../src/functions/app/index'
@@ -189,17 +189,17 @@ describe('deleteAccount（删除资料·抹识别信息·课不可再看·订单
     expect(r).toEqual({ ok: false, error: 'RATE_LIMITED' })
   })
 
-  it('大白话：摘激活/进度/客服桥读失败不再装成已删除——ok:false INTERNAL；真没有仍 deleted:true', async () => {
+  it('大白话：摘激活/进度/客服桥删失败不再装成已删除——ok:false INTERNAL；真没有仍 deleted:true', async () => {
     control.setOpenId('oME')
     await call('login')
     control.seed('activations', [
       { _id: 'A1', _openid: 'oME', courseId: 'c1', code: 'K1', enteredAt: 111, createdAt: 1 },
     ])
-    control.setBeforeGet(({ coll }: any) => {
+    control.setBeforeRemove(({ coll }: any) => {
       if (coll === 'activations') throw new Error('MOCK_DB_FAIL')
     })
     const fail: any = await call('deleteAccount')
-    control.setBeforeGet(null as never)
+    control.setBeforeRemove(null)
     expect(fail.ok).toBe(false)
     expect(fail.error).toBe('INTERNAL')
     expect(fail.deleted).toBeUndefined()

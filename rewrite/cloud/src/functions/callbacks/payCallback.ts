@@ -1,5 +1,14 @@
 import { toFen, COLLECTIONS } from '@ldrw/shared'
-import { defineNotifyCallback, transition, notifyAlert, reserveStock, restoreStock, getDb } from '../../kit'
+import {
+  defineNotifyCallback,
+  transition,
+  notifyAlert,
+  reserveStock,
+  restoreStock,
+  getDb,
+  isDocMissing,
+  isEmptyDoc,
+} from '../../kit'
 
 // 支付结果回调（黄金 orders-money·payCallback 节全量）。防伪/ACK/id 提取由 defineNotifyCallback 强制。
 // pending→paid 直接翻单（库存自下单持有）；closed→paid 复活前必须重抢库存——抢不到进 refund_required
@@ -40,38 +49,47 @@ export const main = defineNotifyCallback<any>({
           ? Number(e.amount.total)
           : Number(e.totalFee)
     const transactionId = String(e.transaction_id || e.transactionId || '')
-    const initial = await getDb().collection(COLLECTIONS.orders).doc(id).get().catch(() => null)
-    if (!initial || !initial.data) return void (await notifyAlert('money', 'payCallback', 'UNKNOWN_ORDER', { id }))
+    // 读失败≠无此单（病根#14）：只有真缺档才告警 ACK；其余读失败告警后抛——不 ACK，微信重推时幂等重跑自愈。
+    // 当无单 ACK 掉，已付款单会留在 pending、被关单定时器关掉。
+    const readFail = async (code: string, cause?: unknown) => {
+      await notifyAlert('money', 'payCallback', code, { id })
+      throw cause || new Error('PAYCB_' + code)
+    }
+    const initial = await getDb()
+      .collection(COLLECTIONS.orders)
+      .doc(id)
+      .get()
+      .catch((err: unknown) => (isDocMissing(err) ? null : readFail('ORDER_READ_FAIL', err)))
+    if (isEmptyDoc(initial)) return void (await notifyAlert('money', 'payCallback', 'UNKNOWN_ORDER', { id }))
     const expectedFee = toFen(initial.data.amount as number)
     const mismatch = paidFee !== expectedFee
     const mismatchDirection = paidFee < expectedFee ? 'underpaid' : paidFee > expectedFee ? 'overpaid' : 'unknown'
-    const payPatch = (order: Record<string, unknown>): Record<string, unknown> => {
-      const expectFen = toFen(order.amount as number)
-      const patch: Record<string, unknown> = { paidAt: Date.now(), transactionId }
-      if (paidFee !== expectFen) {
-        patch.feeMismatch = true
-        patch.expectedFee = expectFen
-        patch.paidFee = Number.isFinite(paidFee) ? paidFee : null
-        patch.paymentMismatchDirection = paidFee < expectFen ? 'underpaid' : paidFee > expectFen ? 'overpaid' : 'unknown'
-      }
-      return patch
-    }
+    // amount 只在建单时写入，initial 算出的应付额就是流转时的应付额：目标态与 patch 同源
+    const payPatch = (): Record<string, unknown> => ({
+      paidAt: Date.now(),
+      transactionId,
+      ...(mismatch
+        ? { feeMismatch: true, expectedFee, paidFee: Number.isFinite(paidFee) ? paidFee : null, paymentMismatchDirection: mismatchDirection }
+        : {}),
+    })
 
     // 正常路径：pending → paid；金额不符进入 payment_exception（库存自下单持有，异常单不得履约）。
     const p = await transition(COLLECTIONS.orders, id, ['pending'], mismatch ? 'payment_exception' : 'paid', payPatch)
     if (p.moved) {
-      if (mismatch && Array.isArray(p.doc && p.doc.reserved) && p.doc.reserved.length) await restoreStock(p.doc.reserved)
-      if (mismatch) await notifyAlert('money', 'payCallback', 'FEE_MISMATCH', { id, paidFee, expectFen: expectedFee, direction: mismatchDirection })
+      if (mismatch) {
+        if (Array.isArray(p.doc && p.doc.reserved) && p.doc.reserved.length) await restoreStock(p.doc.reserved)
+        await notifyAlert('money', 'payCallback', 'FEE_MISMATCH', { id, paidFee, expectFen: expectedFee, direction: mismatchDirection })
+      }
       return
     }
-    if (!p.doc) return void (await notifyAlert('money', 'payCallback', 'UNKNOWN_ORDER', { id })) // 收钱无单
+    if (!p.doc) return readFail('REREAD_FAIL') // 上面已读到单：这里没 doc 只会是 transition 内部读失败
 
     // 关单复活漏窗（P1·根因#1 修复）：p.doc 是条件更新**前**的读。若读到的仍是 'pending' 但 moved=false，
     // 说明读后被并发推进（关单定时器抢先转 closed）——不能拿「读时值」当「现在值」，须重读一次现值再分发。
     let status = String(p.doc.status || '')
     if (status === 'pending') {
       const fresh = await getDb().collection(COLLECTIONS.orders).doc(id).get().catch(() => null)
-      if (!fresh || !fresh.data) return void (await notifyAlert('money', 'payCallback', 'REREAD_FAIL', { id }))
+      if (!fresh || !fresh.data) return readFail('REREAD_FAIL')
       status = String(fresh.data.status || '')
     }
     if (status === 'paid' || status === 'shipped' || status === 'done') return // 幂等 no-op
@@ -80,8 +98,8 @@ export const main = defineNotifyCallback<any>({
 
     // 关单后晚到但金额不符：不重抢库存，直接进入异常态，避免先占货再把异常单冻结。
     if (mismatch) {
-      const ex = await transition(COLLECTIONS.orders, id, ['closed'], 'payment_exception', (order) => ({
-        ...payPatch(order),
+      const ex = await transition(COLLECTIONS.orders, id, ['closed'], 'payment_exception', () => ({
+        ...payPatch(),
         feeReceivedAt: Date.now(),
       }))
       if (ex.moved) await notifyAlert('money', 'payCallback', 'FEE_MISMATCH', { id, paidFee, expectFen: expectedFee, direction: mismatchDirection })
@@ -94,8 +112,8 @@ export const main = defineNotifyCallback<any>({
     const reserved = Array.isArray(p.doc.reserved) ? p.doc.reserved : []
     const re = await reserveWithRetry(() => reserveStock(reserved))
     if (re.ok) {
-      const c = await transition(COLLECTIONS.orders, id, ['closed'], 'paid', (order) => ({
-        ...payPatch(order),
+      const c = await transition(COLLECTIONS.orders, id, ['closed'], 'paid', () => ({
+        ...payPatch(),
         revivedAt: Date.now(),
       }))
       if (!c.moved) await restoreStock(re.reserved) // 并发已被别的回调复活：把刚抢的还回去防双扣

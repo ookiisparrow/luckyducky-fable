@@ -184,11 +184,9 @@ function choiceOf<T extends string>(body: any, key: string, allowed: readonly T[
 
 export function parseJevBody(body: any): JevResult | null {
   const model = String((body && body.model) || '')
-  const urgency = Number(body && body.answers && body.answers.urgency && body.answers.urgency.noul)
-  const department = String(
-    (body && body.answers && body.answers.department && body.answers.department.choice) || ''
-  )
-  if (!model || !Number.isFinite(urgency) || !DEPTS.includes(department as JevDepartment)) return null
+  const urgency = noulOf(body, 'urgency')
+  const department = choiceOf(body, 'department', DEPTS)
+  if (!model || urgency == null || !department) return null
   const orderStatus = choiceOf(body, 'orderStatus', JEV_ORDER)
   const emotionStatus = choiceOf(body, 'emotionStatus', JEV_EMOTION)
   const severity = choiceOf(body, 'severity', JEV_SEVERITY)
@@ -199,7 +197,7 @@ export function parseJevBody(body: any): JevResult | null {
   return {
     model,
     urgency,
-    department: department as JevDepartment,
+    department,
     ...(topic ? { topic } : {}),
     ...(orderStatus ? { orderStatus } : {}),
     ...(emotionStatus ? { emotionStatus } : {}),
@@ -287,23 +285,13 @@ export function logJevEvidence(
   })
 }
 
-/** 闸关 / 无 key / Jev 失败 → null（闸关走旧菜单；闸开由调用方发短句，不弹气泡）。 */
-export async function tryJevClassify(db: any, text: string): Promise<JevResult | null> {
-  try {
-    const gate = await loadJevGate(db)
-    if (!gate.on) return null
-    if (!gate.key) {
-      console.info('[kf] jev', { skip: 'no-key' })
-      return null
-    }
-    const ev = await askJev(text, gate.key)
-    if (!ev) {
-      console.info('[kf] jev', { skip: 'fail-open' })
-      return null
-    }
-    return ev
-  } catch {
-    console.info('[kf] jev', { skip: 'fail-open' })
+/** 闸开后调用（key 取自调用方已读的 loadJevGate）。无 key / Jev 失败 → null，由调用方发短句，不弹气泡。 */
+export async function tryJevClassify(key: string, text: string): Promise<JevResult | null> {
+  if (!key) {
+    console.info('[kf] jev', { skip: 'no-key' })
     return null
   }
+  const ev = await askJev(text, key).catch(() => null)
+  if (!ev) console.info('[kf] jev', { skip: 'fail-open' })
+  return ev
 }

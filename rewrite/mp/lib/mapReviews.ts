@@ -1,4 +1,4 @@
-// 评价映射（纯函数·黄金 learning-content §七 + frontend-store §四星级拼装）（守卫 rw-mp-reviews-golden）。
+// 评价映射（纯函数·黄金 learning-content §七 + frontend-store §四星级拼装）。
 import { dateTime } from './mapOrders'
 
 export interface ReviewVM {

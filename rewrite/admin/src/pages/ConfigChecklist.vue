@@ -69,14 +69,14 @@ function errText(code: string): string {
   return map[code] || `保存失败：${code || '未知错误'}`
 }
 
-async function load() {
+async function load(): Promise<boolean> {
   loading.value = true
   const r: any = await getConfigChecklist()
   loading.value = false
-  if (r.error === 'SESSION_LOST') return // 会话失效集中导登录（client.onSessionLost·单源·根因#5）
+  if (r.error === 'SESSION_LOST') return false // 会话失效集中导登录（client.onSessionLost·单源·根因#5）
   if (!r.ok) {
     message.value = '加载失败：' + String(r.error || '')
-    return
+    return false
   }
   groups.value = (r.groups || []) as Group[]
   // 每次载入（含保存成功后的整页刷新）都重建填写态：所有可填项恒空白起——响应从不带回真实值，
@@ -89,6 +89,7 @@ async function load() {
   }
   fillState.value = nextFill
   message.value = ''
+  return true
 }
 
 function canSubmit(it: Item): boolean {
@@ -106,8 +107,13 @@ async function submitFill(it: Item) {
   const r: any = f.action === 'saveSecureConfig' ? await saveSecureConfig(f.docId || '', { [f.field]: value }) : await savePayConfig({ [f.field]: value })
   if (r.error === 'SESSION_LOST') return // 集中导登录（同上）
   if (r.ok) {
-    await load() // 整页刷新：拿到最新 status + 全部填写态清空（更简单可靠，优先选它）
-    message.value = '已保存'
+    // 整页刷新：拿到最新 status + 全部填写态清空。刷新在途期间本项仍 busy 持全局锁；刷新失败不重建
+    // fillState，须在此解锁本项，否则整页卡在「保存中」，且「已保存」不能盖掉刷新失败（病根#14）
+    if (await load()) message.value = '已保存'
+    else {
+      fillState.value[it.key] = { value: '', busy: false, error: '' }
+      message.value = '已保存，但状态刷新失败——请点「重新探测」确认'
+    }
   } else {
     fillState.value[it.key] = { value: s.value, busy: false, error: errText(String(r.error || '')) }
   }

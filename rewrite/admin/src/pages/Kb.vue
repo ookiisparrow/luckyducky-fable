@@ -4,6 +4,7 @@ import { ref, onMounted } from 'vue'
 import { Trash2, Plus, BookOpen } from 'lucide-vue-next'
 import { listKb, saveKb } from '../api/cs'
 import { normalizeKb, type KbRow } from '../lib/mapCs'
+import { confirmed } from '../lib/status'
 import UiButton from '../components/ui/Button.vue'
 import PageHeader from '../components/ui/PageHeader.vue'
 import Card from '../components/ui/Card.vue'
@@ -60,12 +61,7 @@ function loadPreset() {
   message.value = added ? `已载入 ${added} 条预设（键已按菜单叶子 id 填好·可改）` : '预设 FAQ 已都在'
 }
 function delRow(i: number) {
-  if (confirmKey.value !== 'd:' + i) {
-    confirmKey.value = 'd:' + i
-    return
-  }
-  confirmKey.value = ''
-  rows.value.splice(i, 1)
+  if (confirmed(confirmKey, 'd:' + i)) rows.value.splice(i, 1)
 }
 
 async function save() {

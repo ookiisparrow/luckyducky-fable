@@ -35,8 +35,7 @@ Page({
   onShow() {
     armExitGuard(this) // tabBar 栈底页误触退出提醒：放 ready 早返回之前·首建实例也需武装（决策§30·见 utils/exitGuard）
     if (!this.ready) return // 首建实例抢跑：onLoad 首拉还没完成，交给它自己的 refresh 收尾，这次 onShow 不重复刷新
-    if (typeof this.getTabBar === 'function') (this.getTabBar() as unknown as LdTabBar).setActive('cart')
-    this.refresh()
+    this.refresh() // 末尾同步 tabBar 角标
   },
   onHide() {
     releaseExitGuard(this) // 切走本 tab：清在途重武装定时器（不回调已隐藏页的 setData）
