@@ -11,14 +11,59 @@ import json, subprocess, sys, time, ssl, socket
 
 ENV_DEFAULT = "cloudbase-d4gcssqbv06865479"
 
+def parse_tcb_output(out):
+    """从命令输出里抠出第一段 JSON。抠不出或解析不了就当没有回包。"""
+    try:
+        return json.loads(out[out.index("{"):])
+    except Exception:
+        return None
+
+def tcb_step_ok(parsed, returncode):
+    """这一步能不能接着干下一步。
+
+    tcb --json 成功时打印 {"data": {"RequestId": "..."}}。
+    CreateHTTPServiceRoute / DeleteHTTPServiceRoute 的成功体就是这个 RequestId，
+    CLI 再用 data 包一层。失败打印 {"error": {"code", "message", "exit_code"}}，
+    正文里常有 message，不能拿这个词当成功。
+    认不出这个形状、进程不是 0、或 data 里还带着 Error，都当失败。
+    """
+    if returncode != 0 or not isinstance(parsed, dict):
+        return False
+    if "error" in parsed or "Error" in parsed:
+        return False
+    data = parsed.get("data")
+    if not isinstance(data, dict):
+        return False
+    if "error" in data or "Error" in data:
+        return False
+    # 归属权没过时接口仍会给 RequestId，域名其实没绑上
+    ownership = data.get("OwnershipVerification")
+    if isinstance(ownership, dict) and ownership:
+        return False
+    request_id = data.get("RequestId")
+    return isinstance(request_id, str) and bool(request_id.strip())
+
+def _step_detail(parsed, out):
+    if isinstance(parsed, dict):
+        err = parsed.get("error")
+        if not isinstance(err, dict):
+            err = parsed.get("Error")
+        if isinstance(err, dict):
+            msg = err.get("message") or err.get("Message")
+            if msg:
+                return str(msg)
+        data = parsed.get("data")
+        if isinstance(data, dict):
+            rid = data.get("RequestId")
+            if isinstance(rid, str) and rid.strip():
+                return rid.strip()
+    return (out or "")[-200:]
+
 def run(*args):
     r = subprocess.run(args, capture_output=True, text=True,
                        timeout=120, input="y\n")
     out = r.stdout + r.stderr
-    try:
-        return json.loads(out[out.index("{"):]), out
-    except Exception:
-        return None, out
+    return parse_tcb_output(out), out, r.returncode
 
 def live_cert(domain):
     """返回线上证书 notAfter 的日期字符串，失败返回 None"""
@@ -51,9 +96,9 @@ def rebind(domain, cert_id, path, upstream_type, upstream_name, env):
         ("重建路由", ["tcb", "routes", "add", "-d", route_cfg, "-e", env, "--json"]),
     ]
     for name, cmd in steps:
-        d, out = run(*cmd)
-        ok = d is not None and "message" in str(d)
-        print(f"[{name}] {'✅' if ok else '❌'} {(d or {}).get('data', {}).get('message', '') or out[-200:]}")
+        d, out, code = run(*cmd)
+        ok = tcb_step_ok(d, code)
+        print(f"[{name}] {'✅' if ok else '❌'} {_step_detail(d, out)}")
         if not ok:
             print(f"!! {name} 失败，中止。本脚本不留备份；停在失败这一步，到云开发控制台按当前域名和路由状态手工恢复。")
             sys.exit(1)
