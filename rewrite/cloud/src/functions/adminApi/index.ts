@@ -323,6 +323,37 @@ function auditOk(res: any): boolean {
   }
 }
 
+// 口令登录：失败计爆破，成功只清独立 IP 的计数并签发会话令牌。
+async function loginByPassword(key: unknown, tkey: string, globalWait: number) {
+  const res = await checkKey(db, key, true)
+  if (!res.ok) {
+    // 库故障≠错口令：不计爆破不告警；回 503 而非 401，前端不清令牌
+    if (res.error === 'AUTH_UNAVAILABLE') return reply(503, res)
+    await authFail(tkey, globalWait)
+    return reply(401, res)
+  }
+  if (tkey !== GLOBAL_KEY) await throttleReset(tkey) // 成功只清独立 IP；缺 IP/全局靠窗口衰减（防爆破信号被一次成功登入抹掉）
+  // 签发会话令牌（口令不落盘）：前端此后只存/只发令牌；签发失败如实返空、前端 fail-closed 拒登
+  const docId = res.agentId === 'admin' ? 'auth' : String(res.agentId || 'auth')
+  const sessionToken = await issueSession(db, docId, 'pwd').catch((e) => {
+    alert('security', 'adminLogin', 'SESSION_ISSUE_FAIL', { via: 'pwd', docId, err: String(e) })
+    return ''
+  })
+  return reply(200, { ...res, sessionToken })
+}
+
+// 企微 OAuth 免登：按返回码分类计频控（C2·防基建冷窗自我 DoS）：wecomLogin.ts 枚举——200=成功；401 BAD_CODE /
+// 403 NO_BOUND_ACCOUNT / 403 ACCOUNT_DISABLED=真鉴权失败（爆破证据）→ 计 throttleFail；
+// 503 KF_TOKEN_UNAVAILABLE（令牌缓存冷窗·非爆破）/ 400 BAD_ARGS（缺 code·客户端错）=既不计失败也不 reset，
+// 否则办公室固定 IP 会在令牌冷窗期被无辜锁死。GLOBAL_BRUTE 告警跟随计数（authFail）：只有真鉴权失败才可能告警。
+async function loginByWecom(data: any, tkey: string, globalWait: number) {
+  const res = await wecomLogin.loginByWecomCode({ db, data })
+  if (res.statusCode === 200 && tkey !== GLOBAL_KEY) await throttleReset(tkey)
+  else if (res.statusCode === 401 || res.statusCode === 403) await authFail(tkey, globalWait)
+  // 503/400 等基建/客户端错：直接返回，不触碰频控（不计不 reset·不告警）
+  return res
+}
+
 export const main = async (event: any) => {
   if (event.httpMethod === 'OPTIONS') return reply(204, {})
   if (event.httpMethod !== 'POST') return reply(405, { ok: false, error: 'POST_ONLY' })
@@ -345,23 +376,7 @@ export const main = async (event: any) => {
   // 只有独立 IP 的 per-IP 锁才硬预拒。缺 IP 时 tkey===GLOBAL_KEY，ipWait 其实是全局信号——预拒会把真超管锁门外。
   if (ipWait > 0 && tkey !== GLOBAL_KEY) return reply(429, { ok: false, error: 'TOO_MANY_ATTEMPTS', retryAfter: Math.ceil(ipWait / 1000) })
 
-  if (action === 'login') {
-    const res = await checkKey(db, key, true)
-    if (!res.ok) {
-      // 库故障≠错口令：不计爆破不告警；回 503 而非 401，前端不清令牌
-      if (res.error === 'AUTH_UNAVAILABLE') return reply(503, res)
-      await authFail(tkey, globalWait)
-      return reply(401, res)
-    }
-    if (tkey !== GLOBAL_KEY) await throttleReset(tkey) // 成功只清独立 IP；缺 IP/全局靠窗口衰减（防爆破信号被一次成功登入抹掉）
-    // 签发会话令牌（口令不落盘）：前端此后只存/只发令牌；签发失败如实返空、前端 fail-closed 拒登
-    const docId = res.agentId === 'admin' ? 'auth' : String(res.agentId || 'auth')
-    const sessionToken = await issueSession(db, docId, 'pwd').catch((e) => {
-      alert('security', 'adminLogin', 'SESSION_ISSUE_FAIL', { via: 'pwd', docId, err: String(e) })
-      return ''
-    })
-    return reply(200, { ...res, sessionToken })
-  }
+  if (action === 'login') return loginByPassword(key, tkey, globalWait)
 
   // 登出（pre-auth·在能力闸前）：外包只有 agent:handle，走默认拒会 403 登不出。拿着令牌就能吊销它自己，
   // 无效令牌也回成功，回包不当令牌有效性探针，故不计爆破失败。
@@ -371,17 +386,7 @@ export const main = async (event: any) => {
   }
 
   // 企微 OAuth 免登（pre-auth·坐席无口令·同 login 受频控防刷 code）：换 userid→查绑定账号→签发 session 令牌
-  if (action === 'loginByWecomCode') {
-    const res = await wecomLogin.loginByWecomCode({ db, data })
-    // 按返回码分类计频控（C2·防基建冷窗自我 DoS）：wecomLogin.ts 枚举——200=成功；401 BAD_CODE /
-    // 403 NO_BOUND_ACCOUNT / 403 ACCOUNT_DISABLED=真鉴权失败（爆破证据）→ 计 throttleFail；
-    // 503 KF_TOKEN_UNAVAILABLE（令牌缓存冷窗·非爆破）/ 400 BAD_ARGS（缺 code·客户端错）=既不计失败也不 reset，
-    // 否则办公室固定 IP 会在令牌冷窗期被无辜锁死。GLOBAL_BRUTE 告警跟随计数（authFail）：只有真鉴权失败才可能告警。
-    if (res.statusCode === 200 && tkey !== GLOBAL_KEY) await throttleReset(tkey)
-    else if (res.statusCode === 401 || res.statusCode === 403) await authFail(tkey, globalWait)
-    // 503/400 等基建/客户端错：直接返回，不触碰频控（不计不 reset·不告警）
-    return res
-  }
+  if (action === 'loginByWecomCode') return loginByWecom(data, tkey, globalWait)
 
   // 其余 action 一律先验口令/令牌（同受频控，防经任一 action 入口爆破）
   const auth = await checkKey(db, key, false)

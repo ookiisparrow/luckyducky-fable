@@ -1,4 +1,5 @@
 import { ORDER_STATUS, AFTERSALE_QUOTA_STATUSES, AFTERSALE_INFLIGHT_STATUSES, buildBadStatus } from '@ldrw/shared'
+import type { OrderDoc, AfterSaleDoc } from '@ldrw/shared'
 import { pageQuery, uploadShippingToWx, notifyAlert, applyStockMoves, isCollectionMissing } from '../../../kit'
 import { reply, activationFor, type Ctx } from '../lib'
 
@@ -37,8 +38,8 @@ export async function getOrderDetail({ db, data }: Ctx) {
   if (!id) return reply(400, { ok: false, error: 'BAD_ARGS' })
   const got = await db.collection('orders').doc(id).get().catch(() => null)
   if (!got || !got.data) return reply(400, { ok: false, error: 'NO_ORDER' })
-  const o = got.data
-  const pids = [...new Set<string>((o.items || []).map((it: any) => String(it.productId || '')).filter(Boolean))]
+  const o: OrderDoc = got.data
+  const pids = [...new Set<string>((o.items || []).map((it) => String(it.productId || '')).filter(Boolean))]
   const acts = await Promise.all(pids.map((pid) => activationFor(db, o._openid, pid)))
   const activations = Object.fromEntries(pids.map((pid, i) => [pid, acts[i]]))
   return reply(200, { ok: true, activations })
@@ -68,10 +69,10 @@ export async function listOrders({ db, data, caps }: Ctx) {
   // 退款↔履约状态同步：批量 join 本页订单的售后行，给前端两个标记——refundHold（在途售后或每行都退够件数，
   // 与 shipOne 拦截同一判据）与 refundedQty（每行已退件数：拣货/标签扣掉它，发货时原样回传给 shipOne 核对）。
   // 有界批量 _.in 查，不逐单 doc.get。读失败整页报错：当成「没有退款」会把已退的件当成要发的货。
-  const list: any[] = Array.isArray(paged.list) ? paged.list : []
+  const list: OrderDoc[] = Array.isArray(paged.list) ? paged.list : []
   const orderIds = [...new Set(list.map((o) => String(o.id || o._id || '')).filter(Boolean))]
   const inflight = new Set<string>()
-  const refunded = new Map<string, any[]>()
+  const refunded = new Map<string, AfterSaleDoc[]>()
   if (orderIds.length) {
     const _ = db.command
     const held = await db
@@ -129,6 +130,77 @@ export async function orderCounts({ db }: Ctx) {
 // 发货上传比支付回调窗口短得多，5 分钟已是远超正常耗时的宽松边际，不做成分布式锁/TTL 索引那类重型机制。
 const SHIP_LOCK_STALE_MS = 5 * 60 * 1000
 
+// 发货状态转移 + 抢上传互斥闸：抢到回 null，没抢到回错误码。
+// 条件更新（审核批次A-6 + 批P 并发互斥闸续）：仍是 paid/shipped 才写——防与确认收货并发把 done 回滚；
+// 同一次写里叠加抢占 shipUploadLock（CAS neq 'busy'，非「一次性 exists」范式——本闸是「进行中」busy/idle
+// 二态、可反复抢占，不是只能成功一次的既有 exists(false) 惯用法，因为「改单号」场景要求同单可合法地
+// 再次触发上传）。根因：两个几乎同时到达的并发 shipOne 调用可能都读到 cur=paid、都通过上方状态闸——
+// 若只闸 status（'shipped'→'shipped' 对二次调用天然放行，不是能拦并发的 CAS），两次调用会各自独立
+// 触发一次微信发货上传，后写入的 wxShipUploaded/wxShipError 无条件覆盖前一次结果（可能把合规上传成功
+// 覆盖成误报失败，或反过来盖掉真实失败）。shipUploadLock 抢占失败不代表状态真的不合法，故失败后二次读判：
+// 状态仍在 paid/shipped 内即认定「另一次调用正在处理本单上传」，回 SHIP_IN_PROGRESS 而非 BAD_STATUS
+// （不是分布式锁：只挡同单同时进行中的窗口，上传结束即释放，不影响之后合法的改单号再次调用）。
+async function grabShipLock(db: any, id: string, order: OrderDoc, company: string, trackingNo: string): Promise<string | null> {
+  const _ = db.command
+  const lockNow = Date.now()
+  const upd = await db
+    .collection('orders')
+    .where({ _id: id, status: _.in(['paid', 'shipped']), shipUploadLock: _.neq('busy') })
+    .update({
+      data: {
+        status: 'shipped',
+        shipping: { company, trackingNo },
+        shippedAt: order.shippedAt || Date.now(),
+        shipUploadLock: 'busy',
+        shipUploadLockAt: lockNow,
+      },
+    })
+  if (upd.stats && upd.stats.updated === 1) return null
+  const fresh = await db.collection('orders').doc(id).get().catch(() => null)
+  const freshData: OrderDoc | null = fresh && fresh.data
+  const freshStatus = (freshData && freshData.status) || 'unknown'
+  if (freshStatus !== 'paid' && freshStatus !== 'shipped') return 'BAD_STATUS:' + freshStatus
+  // 陈旧锁抢占（SHIP_LOCK_STALE_MS 见上方注释）：只有「仍是 busy」且「按时间戳判定已过期」才抢占；
+  // 未过期＝真的在处理中，照旧拒绝 SHIP_IN_PROGRESS。CAS 精确带上读到的 shipUploadLockAt 值，
+  // 防止本次重读之后、抢占写之前又有别的合法调用已经拿到了新的 busy（那种情况精确匹配天然落空，
+  // 回落到「拒绝」而不会误抢一把并不陈旧的新锁——不用 _.and()/_.or() 组合子，桩未验证过、避免误用）。
+  const lockAt = Number((freshData && freshData.shipUploadLockAt) || 0)
+  const stale = freshData && freshData.shipUploadLock === 'busy' && lockNow - lockAt > SHIP_LOCK_STALE_MS
+  if (!stale) return 'SHIP_IN_PROGRESS'
+  const preempt = await db
+    .collection('orders')
+    .where({ _id: id, status: _.in(['paid', 'shipped']), shipUploadLock: 'busy', shipUploadLockAt: lockAt })
+    .update({
+      data: {
+        status: 'shipped',
+        shipping: { company, trackingNo },
+        shippedAt: freshData.shippedAt || Date.now(),
+        shipUploadLock: 'busy',
+        shipUploadLockAt: lockNow,
+      },
+    })
+  if (!preempt.stats || preempt.stats.updated !== 1) return 'SHIP_IN_PROGRESS'
+  await notifyAlert('anomaly', 'shipOne', 'SHIP_LOCK_STALE_PREEMPTED', { id, staleForMs: lockNow - lockAt })
+  return null
+}
+
+// SCM-D 核销留痕（守卫 ship-verify-ledger·根因#2·「如实核销」蓝图定稿）：**首次** paid→shipped 逐行落
+// ship 流水（fg 行只留痕不动账——成品扣账在下单预留 reserveStock；确定性 _id=ship:<orderId>:fg:<pid>__<spec>
+// 并发/重试天然幂等）；改单号（shipped→shipped）不重复留痕，由调用方只在首次发货时调。fail-soft：留痕失败
+// 不反噬发货（发货是主动作），但 fg 行无 CAS 面、除入参形状外无失败路径；旧单无 items 静默跳过（不落假流水·根因#8）。
+async function recordShipLedger(id: string, order: OrderDoc, refundedQty: Record<string, number>, operator: string) {
+  // 组合键校验在出生点、不在此消费点（战役3 批D·D1）：这里吃的是历史订单快照（items 下单时已定格），
+  // fail-closed 会拒发既有订单（钱链反噬）——规则单源见 shared/scmKey.ts 头注，此处历史容忍。
+  const moves = (order.items || [])
+    .filter((it) => it && it.productId && Number.isInteger(it.qty) && it.qty > 0)
+    .map((it) => ({ materialId: `fg:${it.productId}__${it.spec || ''}`, delta: -(it.qty - (refundedQty[lineKey(it)] || 0)) }))
+    .filter((m) => m.delta < 0) // 已退的件没发出去，不核销
+  if (!moves.length) return
+  // operator＝认证账号身份（B5.4 同款·与 SCM 各线 agentId 口径一致）：多账号后流水可溯「谁发的货」
+  const led = await applyStockMoves(moves, { docType: 'ship', docId: id, operator }).catch(() => ({ ok: false as const }))
+  if (!led.ok) await notifyAlert('anomaly', 'shipOrder', 'SCM_LEDGER_FAIL', { id })
+}
+
 // 单单发货核心（shipOrder 与 shipOrders 批量共用·DRY 单源）：状态闸 paid/shipped + feeMismatch 挡单
 // + 条件转移防并发回滚 done + 微信 upload_shipping_info 合规上报（fail-soft·债#26·根因#12）。
 // 返回纯结果对象（不含 HTTP 包装），调用方各自 reply / 汇总。
@@ -139,11 +211,12 @@ async function shipOne(db: any, idRaw: any, companyRaw: any, trackingRaw: any, o
   if (!id || !company || !trackingNo) return { ok: false, error: 'BAD_ARGS' }
   const got = await db.collection('orders').doc(id).get().catch(() => null)
   if (!got || !got.data) return { ok: false, error: 'NO_ORDER' }
-  const cur = got.data.status
+  const order: OrderDoc = got.data
+  const cur = order.status
   // paid = 首次发货；shipped = 改单号。其余状态不允许动。
   if (cur !== 'paid' && cur !== 'shipped') return { ok: false, error: buildBadStatus(cur) }
   // 金额异常单（feeMismatch 留痕）须先「解除」后才能发货（审核批次A 折中）
-  if (got.data.feeMismatch) return { ok: false, error: 'FEE_MISMATCH_HOLD' }
+  if (order.feeMismatch) return { ok: false, error: 'FEE_MISMATCH_HOLD' }
   // 退款↔履约状态同步闸：afterSales 与 orders 是两套状态机，退款从不改订单状态，所以发货前现场直读
   // afterSales（钱链闸子不走派生字段）。在途售后（申请中/已批，钱可能正在退）整单拦，返回命中行供前端定位；
   // 已退款只把退掉的件排除出发货——refunded 是终态，按它拦会让其余件永远发不出去；每行都退够件数才拦。
@@ -160,86 +233,22 @@ async function shipOne(db: any, idRaw: any, companyRaw: any, trackingRaw: any, o
     .catch((e: unknown) => (isCollectionMissing(e) ? { data: [] } : null))
   // 查不到退款态 ≠ 没有退款：读失败拒发。回结果对象不抛——shipOrders 批量里一单失败不拖垮其余单。
   if (!afterSales) return { ok: false, error: 'REFUND_HOLD_READ_FAIL' }
-  const rows: any[] = afterSales.data || []
+  const rows: AfterSaleDoc[] = afterSales.data || []
   const inflightLines = rows.filter(isInflight).map(lineKey)
-  const refundedQty = refundedQtyByLine(got.data.items, rows.filter((a) => !isInflight(a)))
+  const refundedQty = refundedQtyByLine(order.items, rows.filter((a) => !isInflight(a)))
   if (inflightLines.length) return { ok: false, error: 'REFUND_HOLD', lines: inflightLines }
-  if (allLinesRefunded(got.data.items, refundedQty)) return { ok: false, error: 'REFUND_HOLD', lines: Object.keys(refundedQty) }
+  if (allLinesRefunded(order.items, refundedQty)) return { ok: false, error: 'REFUND_HOLD', lines: Object.keys(refundedQty) }
   // 改单号（shipped）不重新装箱，不核对
   if (cur === 'paid' && !sameRefundedQty(refundedQty, ackRefundedQty)) return { ok: false, error: 'REFUND_LINES_CHANGED', refundedQty }
-  // 条件更新（审核批次A-6 + 批P 并发互斥闸续）：仍是 paid/shipped 才写——防与确认收货并发把 done 回滚；
-  // 同一次写里叠加抢占 shipUploadLock（CAS neq 'busy'，非「一次性 exists」范式——本闸是「进行中」busy/idle
-  // 二态、可反复抢占，不是只能成功一次的既有 exists(false) 惯用法，因为「改单号」场景要求同单可合法地
-  // 再次触发上传）。根因：两个几乎同时到达的并发 shipOne 调用可能都读到 cur=paid、都通过上方状态闸——
-  // 若只闸 status（'shipped'→'shipped' 对二次调用天然放行，不是能拦并发的 CAS），两次调用会各自独立
-  // 触发一次微信发货上传，后写入的 wxShipUploaded/wxShipError 无条件覆盖前一次结果（可能把合规上传成功
-  // 覆盖成误报失败，或反过来盖掉真实失败）。shipUploadLock 抢占失败不代表状态真的不合法，故失败后二次读判：
-  // 状态仍在 paid/shipped 内即认定「另一次调用正在处理本单上传」，回 SHIP_IN_PROGRESS 而非 BAD_STATUS
-  // （不是分布式锁：只挡同单同时进行中的窗口，上传结束即释放，不影响之后合法的改单号再次调用）。
-  const _ = db.command
-  const lockNow = Date.now()
-  const upd = await db
-    .collection('orders')
-    .where({ _id: id, status: _.in(['paid', 'shipped']), shipUploadLock: _.neq('busy') })
-    .update({
-      data: {
-        status: 'shipped',
-        shipping: { company, trackingNo },
-        shippedAt: got.data.shippedAt || Date.now(),
-        shipUploadLock: 'busy',
-        shipUploadLockAt: lockNow,
-      },
-    })
-  if (!upd.stats || upd.stats.updated !== 1) {
-    const fresh = await db.collection('orders').doc(id).get().catch(() => null)
-    const freshData = fresh && fresh.data
-    const freshStatus = (freshData && freshData.status) || 'unknown'
-    if (freshStatus !== 'paid' && freshStatus !== 'shipped') return { ok: false, error: 'BAD_STATUS:' + freshStatus }
-    // 陈旧锁抢占（SHIP_LOCK_STALE_MS 见上方注释）：只有「仍是 busy」且「按时间戳判定已过期」才抢占；
-    // 未过期＝真的在处理中，照旧拒绝 SHIP_IN_PROGRESS。CAS 精确带上读到的 shipUploadLockAt 值，
-    // 防止本次重读之后、抢占写之前又有别的合法调用已经拿到了新的 busy（那种情况精确匹配天然落空，
-    // 回落到「拒绝」而不会误抢一把并不陈旧的新锁——不用 _.and()/_.or() 组合子，桩未验证过、避免误用）。
-    const lockAt = Number((freshData && freshData.shipUploadLockAt) || 0)
-    const stale = freshData && freshData.shipUploadLock === 'busy' && lockNow - lockAt > SHIP_LOCK_STALE_MS
-    if (!stale) return { ok: false, error: 'SHIP_IN_PROGRESS' }
-    const preempt = await db
-      .collection('orders')
-      .where({ _id: id, status: _.in(['paid', 'shipped']), shipUploadLock: 'busy', shipUploadLockAt: lockAt })
-      .update({
-        data: {
-          status: 'shipped',
-          shipping: { company, trackingNo },
-          shippedAt: freshData.shippedAt || Date.now(),
-          shipUploadLock: 'busy',
-          shipUploadLockAt: lockNow,
-        },
-      })
-    if (!preempt.stats || preempt.stats.updated !== 1) return { ok: false, error: 'SHIP_IN_PROGRESS' }
-    await notifyAlert('anomaly', 'shipOne', 'SHIP_LOCK_STALE_PREEMPTED', { id, staleForMs: lockNow - lockAt })
-  }
-  // SCM-D 核销留痕（守卫 ship-verify-ledger·根因#2·「如实核销」蓝图定稿）：**首次** paid→shipped 逐行落
-  // ship 流水（fg 行只留痕不动账——成品扣账在下单预留 reserveStock；确定性 _id=ship:<orderId>:fg:<pid>__<spec>
-  // 并发/重试天然幂等）；改单号（shipped→shipped）不重复留痕。fail-soft：留痕失败不反噬发货（发货是主动作），
-  // 但 fg 行无 CAS 面、除入参形状外无失败路径；旧单无 items 静默跳过（不落假流水·根因#8）。
-  if (cur === 'paid') {
-    // 组合键校验在出生点、不在此消费点（战役3 批D·D1）：这里吃的是历史订单快照（items 下单时已定格），
-    // fail-closed 会拒发既有订单（钱链反噬）——规则单源见 shared/scmKey.ts 头注，此处历史容忍。
-    const moves = ((got.data.items as any[]) || [])
-      .filter((it) => it && it.productId && Number.isInteger(it.qty) && it.qty > 0)
-      .map((it) => ({ materialId: `fg:${it.productId}__${it.spec || ''}`, delta: -(it.qty - (refundedQty[lineKey(it)] || 0)) }))
-      .filter((m) => m.delta < 0) // 已退的件没发出去，不核销
-    if (moves.length) {
-      // operator＝认证账号身份（B5.4 同款·与 SCM 各线 agentId 口径一致）：多账号后流水可溯「谁发的货」
-      const led = await applyStockMoves(moves, { docType: 'ship', docId: id, operator }).catch(() => ({ ok: false as const }))
-      if (!led.ok) await notifyAlert('anomaly', 'shipOrder', 'SCM_LEDGER_FAIL', { id })
-    }
-  }
+  const lockErr = await grabShipLock(db, id, order, company, trackingNo)
+  if (lockErr) return { ok: false, error: lockErr }
+  if (cur === 'paid') await recordShipLedger(id, order, refundedQty, operator)
   // 合规债#26（根因#12）：本地发货成功后向微信上传发货信息——实物+微信支付不上传则订单资金冻结/无法结算。
   // fail-soft：上传失败绝不回滚本地发货（已 shipped），只留痕 + [LD_ALERT] sev=money 告警，靠人去 mp 后台手动录入兜底。
   const ship = await uploadShippingToWx({
     orderId: id,
-    openid: String(got.data._openid || ''),
-    transactionId: String(got.data.transactionId || ''),
+    openid: String(order._openid || ''),
+    transactionId: String(order.transactionId || ''),
     company,
     trackingNo,
   })
@@ -287,9 +296,10 @@ export async function clearFeeMismatch({ db, data }: Ctx) {
   if (!id) return reply(400, { ok: false, error: 'BAD_ARGS' })
   const got = await db.collection('orders').doc(id).get().catch(() => null)
   if (!got || !got.data) return reply(400, { ok: false, error: 'NO_ORDER' })
+  const order: OrderDoc = got.data
   // payment_exception 是金额不符后的待处理终态，不能被旧的「解除 feeMismatch」按钮
   // 误清成看似正常；它必须走人工退款/补差后的明确处理流程。
-  if (got.data.status === 'payment_exception') return reply(400, { ok: false, error: buildBadStatus(got.data.status) })
+  if (order.status === 'payment_exception') return reply(400, { ok: false, error: buildBadStatus(order.status) })
   await db.collection('orders').doc(id).update({ data: { feeMismatch: false, feeMismatchClearedAt: Date.now() } })
   return reply(200, { ok: true })
 }

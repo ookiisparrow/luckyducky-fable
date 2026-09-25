@@ -25,6 +25,54 @@ export function isCollectionMissing(e: unknown): boolean {
   return /COLLECTION_NOT_EXIST|-502005|collection does not exist/i.test(t)
 }
 
+// 「无档」判据：只认「这一份文档不在」，不认集合/权限/网络（那些当读失败·fail-closed）。
+// 文案散落在 message / errMsg / code / errCode（CloudBase HTTP 只给 code、桩只给 message）。
+// `/does not exist/i` 太宽：collection/permission 文案也带这句，旧版会把限量 SKU 当不限量放行。
+function errHaystack(e: unknown): string {
+  if (e == null) return ''
+  if (typeof e === 'string') return e
+  const o = e as Record<string, unknown>
+  return [o.message, o.errMsg, o.errmsg, o.code, o.errCode, o.errcode]
+    .map((x) => (x == null ? '' : String(x)))
+    .join('\n')
+}
+
+export const isDocMissing = (e: unknown): boolean => {
+  const t = errHaystack(e)
+  if (!t) return false
+  if (
+    /permission denied|PERMISSION_DENIED|-502003|COLLECTION_NOT_EXIST|-502005|collection does not exist|ECONNRESET|NETWORK_TIMEOUT/i.test(
+      t
+    )
+  )
+    return false
+  return (
+    /DOCUMENT_NOT_FOUND|DOCUMENT_NOT_EXIST/i.test(t) ||
+    /cannot find document/i.test(t) ||
+    /document(?:\.get|\s+with\s+_id\b)?[^.\n]*does not exist/i.test(t)
+  )
+}
+
+/** get() 成功但没文档：CloudBase 有的版本不抛、回 { data: [] } / { data: {} }。 */
+export const isEmptyDoc = (got: unknown): boolean => {
+  if (!got || typeof got !== 'object') return true
+  const data = (got as { data?: unknown }).data
+  if (data == null) return true
+  if (Array.isArray(data)) return data.length === 0
+  if (typeof data === 'object') return Object.keys(data as object).length === 0
+  return false
+}
+
+/** 读单档：无档→null；其它读失败照抛（库挂≠没有·根因#14）。 */
+export const getDocOrNull = <T = any>(ref: { get(): Promise<any> }): Promise<T | null> =>
+  ref.get().then(
+    (got: any) => (got && got.data ? got.data : null),
+    (e: unknown) => {
+      if (isDocMissing(e)) return null
+      throw e
+    }
+  )
+
 /** 按确定性 _id 整档写：set 被拒就用 add 以同一 _id 建档；add 也失败就抛给调用方，不吞。 */
 export const setOrAdd = (coll: any, id: string, data: Record<string, unknown>): Promise<unknown> =>
   coll.doc(id).set({ data }).catch(() => coll.add({ data: { ...data, _id: id } }))

@@ -1,6 +1,9 @@
 import { COLLECTIONS, ERR } from '@ldrw/shared'
-import { getDb } from './db'
+import { getDb, isDocMissing, isEmptyDoc } from './db'
 import { notifyAlert } from './observe'
+
+// 过渡：scmStock / secureConfig 还从本文件引这两个判定，它们改成从 './db' 引之后删掉这一行。
+export { isDocMissing, isEmptyDoc } from './db'
 
 // 实物库存原子原语（设计约束#1「下单即预留+乐观 CAS 防超卖」·黄金 inventory-scm §A/§B/§C）。
 // SKU 库存独立集合 inventory，确定性 _id=`${productId}__${spec}`（与 order.items[].spec 同键，回补一致）。
@@ -54,44 +57,6 @@ async function casDecrement(coll: any, _id: string, qty: number): Promise<boolea
   // 只看最后一轮：中途读失败过、但最终是条件写持续落空耗尽的，不算「持续读失败」，不告警。
   if (lastRoundReadFailed) await notifyAlert('money', 'reserveStock', 'RESERVE_READ_FAILED', { _id })
   return false // 重试耗尽按不足处理·宁缺勿超卖
-}
-
-// 「无档」判据：只认「这一份文档不在」，不认集合/权限/网络（那些当读失败·fail-closed）。
-// 文案散落在 message / errMsg / code / errCode（CloudBase HTTP 只给 code、桩只给 message）。
-// `/does not exist/i` 太宽：collection/permission 文案也带这句，旧版会把限量 SKU 当不限量放行。
-function errHaystack(e: unknown): string {
-  if (e == null) return ''
-  if (typeof e === 'string') return e
-  const o = e as Record<string, unknown>
-  return [o.message, o.errMsg, o.errmsg, o.code, o.errCode, o.errcode]
-    .map((x) => (x == null ? '' : String(x)))
-    .join('\n')
-}
-
-export const isDocMissing = (e: unknown): boolean => {
-  const t = errHaystack(e)
-  if (!t) return false
-  if (
-    /permission denied|PERMISSION_DENIED|-502003|COLLECTION_NOT_EXIST|-502005|collection does not exist|ECONNRESET|NETWORK_TIMEOUT/i.test(
-      t
-    )
-  )
-    return false
-  return (
-    /DOCUMENT_NOT_FOUND|DOCUMENT_NOT_EXIST/i.test(t) ||
-    /cannot find document/i.test(t) ||
-    /document(?:\.get|\s+with\s+_id\b)?[^.\n]*does not exist/i.test(t)
-  )
-}
-
-/** get() 成功但没文档：CloudBase 有的版本不抛、回 { data: [] } / { data: {} }。 */
-export const isEmptyDoc = (got: unknown): boolean => {
-  if (!got || typeof got !== 'object') return true
-  const data = (got as { data?: unknown }).data
-  if (data == null) return true
-  if (Array.isArray(data)) return data.length === 0
-  if (typeof data === 'object') return Object.keys(data as object).length === 0
-  return false
 }
 
 // 单条递增（回补 / 入成品共用）：true=已加或合法不处理；false=重试耗尽仍未确认写入（调用方须知道：回补丢失 / 入成品争用）。

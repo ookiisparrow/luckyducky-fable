@@ -17,9 +17,9 @@ import {
   ORDER_STATUS,
   buildBadStatus,
 } from '@ldrw/shared'
-// 响应契约（批B10·病根#5/#8）：返回类型绑定 shared 契约——删键/改名 tsc 红；加键与 createOrder
-// （order:any 展开）编译锁无牙，牙在 tests/contract-shape.test.ts 键集合哨兵。
-import type { CreateOrderResp, PayResp, GetMyOrdersResp, GetOrderByIdResp } from '@ldrw/shared'
+// 响应契约（批B10·病根#5/#8）：返回类型绑定 shared 契约——删键/改名 tsc 红；加键编译锁无牙
+// （可选键也能多写），牙在 tests/contract-shape.test.ts 键集合哨兵。
+import type { CreateOrderResp, PayResp, GetMyOrdersResp, GetOrderByIdResp, OrderDoc, OrderLine, AfterSaleDoc } from '@ldrw/shared'
 import {
   withOpenId,
   withRateLimit,
@@ -57,10 +57,10 @@ const lineIdOf = (productId: string, spec: string) => `${productId}__${spec || '
 
 // 订单单读：只有真缺档才回 null（调用方报 NOT_FOUND），其余读失败照抛、网关回 INTERNAL——
 // 前端把 NOT_FOUND 当确定空态不给重试。
-const readOrder = (db: any, id: string): Promise<any> => getDocOrNull(db.collection(COLLECTIONS.orders).doc(id))
+const readOrder = (db: any, id: string) => getDocOrNull<OrderDoc>(db.collection(COLLECTIONS.orders).doc(id))
 
 // 集合没建才建（首单/首个售后前）：热路径不再每单白调一次 createCollection。
-const addCreatingColl = (db: any, coll: string, data: Record<string, unknown>) =>
+const addCreatingColl = (db: any, coll: string, data: object) =>
   db
     .collection(coll)
     .add({ data })
@@ -108,6 +108,119 @@ const orderNo = (now: number): string =>
 // 留足余量，又把单账号可同时锁的 SKU 数封顶——绕过需大量真微信号，成本陡增（用户拍板取此低风险方案·非改钱链热路径）。
 const MAX_PENDING_ORDERS = 5
 
+// 云端定价：商品查 products、搭配购查单源表；未知条目整单拒（返回错误码，调用方原样回 err）
+// 新单这三个旧单可缺的键必须写全，所以写侧用 Required 收紧（读侧 OrderLine 保持可选）。
+function priceItems(lines: any[], byId: Map<string, any>): { items: Required<OrderLine>[] } | { error: string } {
+  const items: Required<OrderLine>[] = []
+  for (const l of lines) {
+    let line: Pick<OrderLine, 'productId' | 'name' | 'spec' | 'price' | 'cover'>
+    const a = ADDONS[l.id]
+    if (a) {
+      line = { productId: l.id, name: a.name, spec: '', price: a.price, cover: '' } // 搭配购无封面·不留 undefined
+    } else {
+      const p = byId.get(l.id)
+      if (!p) return { error: 'UNKNOWN_ITEM:' + l.id }
+      // 停售挡交易入口 fail-closed：定价/预留之前整单拒（不建单不扣库存）
+      if (p.listed === false) return { error: 'UNLISTED_ITEM:' + l.id }
+      let price = p.price
+      let spec = p.tag || ''
+      if (l.sku) {
+        const sk = (Array.isArray(p.skus) ? p.skus : []).find((x: any) => x && x.name === l.sku)
+        if (!sk) return { error: 'UNKNOWN_SKU:' + l.id + ':' + l.sku }
+        if (!isValidPriceYuan(sk.price)) return { error: 'BAD_SKU_PRICE:' + l.id + ':' + l.sku }
+        price = Number(sk.price)
+        spec = l.sku
+      } else if (!isValidPriceYuan(p.price)) {
+        return { error: 'BAD_PRICE:' + l.id } // 交易最终关口：库内脏价不放行
+      }
+      // LD-001 契约守卫：商品名只认服务端 products 主数据（byId 来自库内查询·不信前端上送）——
+      // 写入来源被篡改（硬编码/客户端字段）时 app-orders.test.ts 的商品名来源用例必红。
+      // 封面快照（订单=历史快照·不回读 catalog·T3/§6）：下单那一刻商品封面永久留存，
+      // 商品删/停售/换图都不影响历史订单展示；products 已在 byId 手上·零额外查询。
+      line = { productId: p.id, name: p.name, spec, price, cover: String(p.cover || '') }
+    }
+    items.push({ ...line, lineId: lineIdOf(line.productId, line.spec), qty: l.qty, enteredQty: 0, refundable: true })
+  }
+  return { items }
+}
+
+// 地址快照：白名单 + 四要素必填 + 截断（不信前端长度）；不合格回 null
+function cleanAddress(raw: any) {
+  const a = raw || {}
+  const cut = (v: unknown, n: number) => String(v || '').trim().slice(0, n) // String() 而非只收字符串：数字手机号也要收
+  const address = { name: cut(a.name, 40), phone: cut(a.phone, 20), region: cut(a.region, 60), detail: cut(a.detail, 120) }
+  if (Object.values(address).some((v) => !v) || address.phone.replace(/\D/g, '').length < 7) return null
+  return address
+}
+
+// 幂等键 claim：抢到（首次提交）回 null 让调用方继续建单；撞号＝同一次提交的重试/并发——短轮询等原请求把
+// 订单号落定，落定即原样返回同一笔（不重复扣库存/不建二单）；轮询超时仍未落定极罕见（原请求同一时刻仍在
+// 处理中）才报 PENDING。
+async function claimOrReplay(db: any, OPENID: string, claimId: string): Promise<CreateOrderResp | null> {
+  try {
+    await addCreatingColl(db, COLLECTIONS.orderIdempotency, {
+      _id: claimId,
+      openid: OPENID,
+      orderId: null,
+      createdAt: Date.now(),
+    })
+    return null
+  } catch {
+    for (let i = 0; i < 5; i++) {
+      const c = await db.collection(COLLECTIONS.orderIdempotency).doc(claimId).get().catch(() => null)
+      const existingId = c && c.data && c.data.orderId
+      if (existingId) {
+        const existing = await readOrder(db, String(existingId))
+        if (existing) return ok({ order: existing })
+        break // 登记了订单号却读不到订单——不应发生，跳出按未落定处理（下方报 PENDING）
+      }
+      await new Promise((r) => setTimeout(r, 150))
+    }
+    return err(ERR.ORDER_CLAIM_PENDING)
+  }
+}
+
+// 落单：订单号防碰撞——库级唯一 + 换号重试，绝不覆盖既有交易单据；彻底失败才回补预留、放掉幂等键。
+async function placeOrder(db: any, OPENID: string, claimId: string, order: Omit<OrderDoc, '_id' | 'id'>): Promise<CreateOrderResp> {
+  for (let attempt = 0; attempt < 5; attempt++) {
+    const id = orderNo(order.createdAt)
+    try {
+      await db.collection(COLLECTIONS.orders).add({ data: { ...order, _id: id, id } })
+      if (claimId) {
+        // 幂等键回填订单号（fail-soft 但不静默·病根14）：订单已真实建成，这一步只是让「同键重试」
+        // 未来能查到它；写失败不影响本次返回，但会让本键的下一次重试落进轮询超时→误判 PENDING，
+        // 必须留痕供人工核（同 scmAssembly ASSEMBLY_LEDGER_FAIL 口径）。
+        await db
+          .collection(COLLECTIONS.orderIdempotency)
+          .doc(claimId)
+          .update({ data: { orderId: id } })
+          .catch(() => alert('money', 'createOrder', 'CLAIM_UPDATE_FAIL', { orderId: id, claimId }))
+      }
+      return ok({ order: { ...order, _id: id, id } })
+    } catch {
+      // 写失败区分（深审 P2·根因#3 幂等）：add 抛错既可能是 _id 撞号（换号重试），也可能是「写已持久化但
+      // SDK 返回超时/网络错」——后者若换号重试会落两张共享同一 reserved 的单（各自关单/取消时 restoreStock
+      // 双记＝库存虚增/超卖）。先读回本次 _id：存在且属本人＝本次写其实成功，直接返回该单（幂等）；确不存在
+      // 才是真撞号/真失败，换号重试（同 overrideRefund refunds.ts 的读回判定范式，不嗅探 add 的错误类型）。
+      // 读回本身失败＝不知道这单落没落：换号可能落共享 reserved 的第二单，回补可能还掉在途单的预留，
+      // 两样都不做；幂等键也留着（同键重试只会报 PENDING，不建二单），告警交人工核。
+      let back: OrderDoc | null = null
+      try {
+        back = (await db.collection(COLLECTIONS.orders).doc(id).get()).data
+      } catch (e) {
+        if (!isDocMissing(e)) {
+          alert('money', 'createOrder', 'ORDER_READBACK_FAIL', { orderId: id, claimId })
+          return err(ERR.ORDER_CLAIM_PENDING)
+        }
+      }
+      if (back && back._openid === OPENID) return ok({ order: { ...order, _id: id, id } })
+    }
+  }
+  await restoreStock(order.reserved) // 建单彻底失败：预留还回去（不锁死库存）
+  if (claimId) await db.collection(COLLECTIONS.orderIdempotency).doc(claimId).remove().catch(() => {}) // 拒单不占幂等键·放行同键重试
+  return err(ERR.ORDER_ID_BUSY)
+}
+
 export const createOrder = withOpenId(
   withRateLimit('createOrder', { max: 20, windowMs: 60_000 }, async ({ db, OPENID, event }): Promise<CreateOrderResp> => {
     const _ = db.command
@@ -120,7 +233,6 @@ export const createOrder = withOpenId(
     if (lines.length > MAX_ORDER_LINES) return err(ERR.TOO_MANY_ITEMS)
     if (lines.some((l: any) => l.qty > MAX_QTY)) return err(ERR.BAD_QTY)
 
-    // 云端定价：商品查 products、搭配购查单源表；未知条目整单拒
     const prodIds = [...new Set(lines.map((l: any) => l.id).filter((id: string) => !ADDONS[id]))]
     if (!prodIds.length) return err(ERR.NO_MAIN_ITEM)
     // 商品价与支付配置互不依赖：并行取回；前段拒单时 cfg 结果直接丢弃（纯读）
@@ -135,38 +247,9 @@ export const createOrder = withOpenId(
         .get()
         .catch(() => null),
     ])
-    const byId = new Map<string, any>(res.data.map((p: any) => [p.id, p]))
-
-    const items: any[] = []
-    for (const l of lines) {
-      let line: any
-      const a = ADDONS[l.id]
-      if (a) {
-        line = { productId: l.id, name: a.name, spec: '', price: a.price, cover: '' } // 搭配购无封面·不留 undefined
-      } else {
-        const p = byId.get(l.id)
-        if (!p) return err('UNKNOWN_ITEM:' + l.id)
-        // 停售挡交易入口 fail-closed：定价/预留之前整单拒（不建单不扣库存）
-        if (p.listed === false) return err('UNLISTED_ITEM:' + l.id)
-        let price = p.price
-        let spec = p.tag || ''
-        if (l.sku) {
-          const sk = (Array.isArray(p.skus) ? p.skus : []).find((x: any) => x && x.name === l.sku)
-          if (!sk) return err('UNKNOWN_SKU:' + l.id + ':' + l.sku)
-          if (!isValidPriceYuan(sk.price)) return err('BAD_SKU_PRICE:' + l.id + ':' + l.sku)
-          price = Number(sk.price)
-          spec = l.sku
-        } else if (!isValidPriceYuan(p.price)) {
-          return err('BAD_PRICE:' + l.id) // 交易最终关口：库内脏价不放行
-        }
-        // LD-001 契约守卫：商品名只认服务端 products 主数据（byId 来自库内查询·不信前端上送）——
-        // 写入来源被篡改（硬编码/客户端字段）时 app-orders.test.ts 的商品名来源用例必红。
-        // 封面快照（订单=历史快照·不回读 catalog·T3/§6）：下单那一刻商品封面永久留存，
-        // 商品删/停售/换图都不影响历史订单展示；products 已在 byId 手上·零额外查询。
-        line = { productId: p.id, name: p.name, spec, price, cover: String(p.cover || '') }
-      }
-      items.push({ ...line, lineId: lineIdOf(line.productId, line.spec), qty: l.qty, enteredQty: 0, refundable: true })
-    }
+    const priced = priceItems(lines, new Map<string, any>(res.data.map((p: any) => [p.id, p])))
+    if ('error' in priced) return err(priced.error)
+    const { items } = priced
 
     // 金额全程「分」整数运算（设计约束#4）；存库记元（与现网数据兼容），由分精确换算
     const goodsFen = asFen(items.reduce((s, it) => s + toFen(it.price) * it.qty, 0))
@@ -177,12 +260,8 @@ export const createOrder = withOpenId(
     const goods = fenToYuan(goodsFen)
     const amount = fenToYuan(amountFen)
 
-    // 地址快照：白名单 + 四要素必填 + 截断（不信前端长度）
-    const a = e.address || {}
-    const cut = (v: unknown, n: number) => String(v || '').trim().slice(0, n) // String() 而非只收字符串：数字手机号也要收
-    const address = { name: cut(a.name, 40), phone: cut(a.phone, 20), region: cut(a.region, 60), detail: cut(a.detail, 120) }
-    if (Object.values(address).some((v) => !v) || address.phone.replace(/\D/g, '').length < 7)
-      return err(ERR.BAD_ADDRESS)
+    const address = cleanAddress(e.address)
+    if (!address) return err(ERR.BAD_ADDRESS)
 
     // 支付配置 fail-closed：只认环境级开关——mock 仅显式 ALLOW_MOCK_PAY=1 放行（生产永不设），
     // 库内 config 声称 mock 不作数（可篡改数据不当安全闸），缺/错配置绝不伪造已付单。
@@ -210,28 +289,8 @@ export const createOrder = withOpenId(
     const idemKey = (typeof e.idempotencyKey === 'string' ? e.idempotencyKey.trim() : '').slice(0, 200)
     const claimId = idemKey ? 'oi_' + hash53(OPENID + '|' + idemKey) : ''
     if (claimId) {
-      try {
-        await addCreatingColl(db, COLLECTIONS.orderIdempotency, {
-          _id: claimId,
-          openid: OPENID,
-          orderId: null,
-          createdAt: Date.now(),
-        })
-      } catch {
-        // 撞号：同一幂等键已提交过（重试/并发）——短轮询等原请求把订单号落定，落定即原样返回同一笔
-        // （不重复扣库存/不建二单）；轮询超时仍未落定极罕见（原请求同一时刻仍在处理中）才报 PENDING。
-        for (let i = 0; i < 5; i++) {
-          const c = await db.collection(COLLECTIONS.orderIdempotency).doc(claimId).get().catch(() => null)
-          const existingId = c && c.data && c.data.orderId
-          if (existingId) {
-            const existing = await readOrder(db, String(existingId))
-            if (existing) return ok({ order: existing })
-            break // 登记了订单号却读不到订单——不应发生，跳出按未落定处理（下方报 PENDING）
-          }
-          await new Promise((r) => setTimeout(r, 150))
-        }
-        return err(ERR.ORDER_CLAIM_PENDING)
-      }
+      const replay = await claimOrReplay(db, OPENID, claimId)
+      if (replay) return replay
     }
 
     // 下单即预留（乐观 CAS 防超卖）：任一不足整单拒（已扣回滚在 reserveStock 内）
@@ -245,7 +304,7 @@ export const createOrder = withOpenId(
     }
 
     const now = Date.now()
-    const order: any = {
+    const order: Omit<OrderDoc, '_id' | 'id'> = {
       _openid: OPENID,
       items,
       goods,
@@ -258,45 +317,7 @@ export const createOrder = withOpenId(
       createdAt: now,
     }
     if (payMode !== 'real') order.paidAt = now
-
-    // 订单号防碰撞：库级唯一 + 换号重试，绝不覆盖既有交易单据
-    for (let attempt = 0; attempt < 5; attempt++) {
-      const id = orderNo(now)
-      try {
-        await db.collection(COLLECTIONS.orders).add({ data: { ...order, _id: id, id } })
-        if (claimId) {
-          // 幂等键回填订单号（fail-soft 但不静默·病根14）：订单已真实建成，这一步只是让「同键重试」
-          // 未来能查到它；写失败不影响本次返回，但会让本键的下一次重试落进轮询超时→误判 PENDING，
-          // 必须留痕供人工核（同 scmAssembly ASSEMBLY_LEDGER_FAIL 口径）。
-          await db
-            .collection(COLLECTIONS.orderIdempotency)
-            .doc(claimId)
-            .update({ data: { orderId: id } })
-            .catch(() => alert('money', 'createOrder', 'CLAIM_UPDATE_FAIL', { orderId: id, claimId }))
-        }
-        return ok({ order: { ...order, _id: id, id } })
-      } catch {
-        // 写失败区分（深审 P2·根因#3 幂等）：add 抛错既可能是 _id 撞号（换号重试），也可能是「写已持久化但
-        // SDK 返回超时/网络错」——后者若换号重试会落两张共享同一 reserved 的单（各自关单/取消时 restoreStock
-        // 双记＝库存虚增/超卖）。先读回本次 _id：存在且属本人＝本次写其实成功，直接返回该单（幂等）；确不存在
-        // 才是真撞号/真失败，换号重试（同 overrideRefund refunds.ts 的读回判定范式，不嗅探 add 的错误类型）。
-        // 读回本身失败＝不知道这单落没落：换号可能落共享 reserved 的第二单，回补可能还掉在途单的预留，
-        // 两样都不做；幂等键也留着（同键重试只会报 PENDING，不建二单），告警交人工核。
-        let back: any = null
-        try {
-          back = (await db.collection(COLLECTIONS.orders).doc(id).get()).data
-        } catch (e) {
-          if (!isDocMissing(e)) {
-            alert('money', 'createOrder', 'ORDER_READBACK_FAIL', { orderId: id, claimId })
-            return err(ERR.ORDER_CLAIM_PENDING)
-          }
-        }
-        if (back && back._openid === OPENID) return ok({ order: { ...order, _id: id, id } })
-      }
-    }
-    await restoreStock(rsv.reserved) // 建单彻底失败：预留还回去（不锁死库存）
-    if (claimId) await db.collection(COLLECTIONS.orderIdempotency).doc(claimId).remove().catch(() => {}) // 拒单不占幂等键·放行同键重试
-    return err(ERR.ORDER_ID_BUSY)
+    return placeOrder(db, OPENID, claimId, order)
   })
 )
 
@@ -345,7 +366,7 @@ export const pay = withOpenId(
       if (moved) return ok({ paid: true, paidAt })
       const fresh = await readOrder(db, id)
       const st = fresh?.status || 'unknown'
-      if (st === 'paid') return ok({ paid: true, paidAt: fresh.paidAt || paidAt }) // 并发已付：幂等成功
+      if (st === 'paid') return ok({ paid: true, paidAt: fresh?.paidAt || paidAt }) // 并发已付：幂等成功
       return err(buildBadStatus(st))
     }
 
@@ -390,7 +411,7 @@ export const applyRefund = withOpenId(
     if (!order) return err(ERR.NOT_FOUND)
     if (!['paid', 'shipped', 'done'].includes(order.status)) return err(buildBadStatus(order.status))
 
-    const item = (order.items || []).find((it: any) => (it.lineId || it.productId) === reqLine)
+    const item = (order.items || []).find((it) => (it.lineId || it.productId) === reqLine)
     if (!item) return err('UNKNOWN_ITEM:' + reqLine)
     // 剩余可退件 = 购买件数 − 已进课件数；全进则无可退（旧单无 enteredQty 视 0＝整行可退）
     const qty = item.qty || 1
@@ -409,7 +430,7 @@ export const applyRefund = withOpenId(
     // 令行/单级退款封顶失效。显式取到 AFTERSALE_SCAN_CAP；命中上限＝记录数异常，fail-closed 拒退 + 告警，
     // 绝不按截断值算钱（钱守恒 > 可用性）。读失败同理不能当「没有售后」（used=0 会退超）：只有集合还没建
     // 才是真没有售后，其余异常不接住，交网关回 INTERNAL 并记账。
-    const exist = await db
+    const exist: { data: AfterSaleDoc[] } = await db
       .collection(COLLECTIONS.afterSales)
       .where({ orderId })
       .limit(AFTERSALE_SCAN_CAP)
@@ -422,19 +443,19 @@ export const applyRefund = withOpenId(
       alert('money', 'applyRefund', 'AFTERSALE_SCAN_CAP', { orderId })
       return err('REFUND_SCAN_CAP')
     }
-    if (exist.data.some((a: any) => (a.lineId || a.productId) === lineId))
+    if (exist.data.some((a) => (a.lineId || a.productId) === lineId))
       return err(ERR.ALREADY_APPLIED)
     const used = asFen(
       exist.data
-        .filter((a: any) => AFTERSALE_QUOTA_STATUSES.includes(a.status))
-        .reduce((s: number, a: any) => s + toFen(Number(a.refundAmount)), 0)
+        .filter((a) => AFTERSALE_QUOTA_STATUSES.includes(a.status))
+        .reduce((s, a) => s + toFen(Number(a.refundAmount)), 0)
     )
     const refundFen = refundShareFen(amountFen, goodsFen, itemFen, used)
     if (refundFen <= 0) return err(ERR.NOTHING_LEFT)
 
     const now = Date.now()
     const asId = orderId + '__' + lineId
-    const rec = {
+    const rec: AfterSaleDoc & Required<Pick<AfterSaleDoc, 'lineId' | 'qty' | 'outRefundNo'>> = {
       _id: asId,
       orderId,
       _openid: OPENID,
@@ -515,7 +536,7 @@ export const getOrderById = withOpenId(async ({ db, OPENID, event }): Promise<Ge
   const id = String((event as any).id || '')
   if (!id) return err(ERR.NO_ID)
   // 只有真缺档才算「没有这单」：订单页把 NOT_FOUND 当确定空态不给重试，读失败抛给网关回 INTERNAL
-  const got = await getDocOrNull(db.collection(COLLECTIONS.orders).doc(id))
+  const got = await getDocOrNull<OrderDoc>(db.collection(COLLECTIONS.orders).doc(id))
   if (!got || got._openid !== OPENID) return err(ERR.NOT_FOUND)
   const [order] = await swapOrdersCover([got])
   return ok({ order })
