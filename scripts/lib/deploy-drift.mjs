@@ -8,10 +8,9 @@
 // 打包、无法单独取某 action 字节）+ callbacks/payCallback + callbacks/refundCallback +
 // timers/closeExpiredOrders。故 MONEY_CHAIN 降为 4 项，其中 app 是粗粒度但保守的超集代理（任何
 // action 变动都会触发钱链漂移检查，宁可误报不漏判——旧线 6 项一一对应函数名的精度在新线做不到，
-// 因为 createOrder/pay/applyRefund 三者已折叠进同一个 app 产物）。guard-deploy.mjs 的 SENSITIVE_FNS
-// 同时含旧 6 项与 app 两套名字（并行期遗留），本模块只消费其中与 MONEY_CHAIN 同名的部分，不需要改
-// guard-deploy.mjs。（观察点：app 粗粒度代理若未来 action 数继续增长，误报率会不会高到影响可用性——
-// 暂未实测，留待用后视实际体验判断要不要再细化，待办见 GitHub Issues。）
+// 因为 createOrder/pay/applyRefund 三者已折叠进同一个 app 产物）。与部署闸无关：guard-deploy.mjs 对任何
+// tcb 部署一律 ask，不按函数名分级。（观察点：app 粗粒度代理若未来 action 数继续增长，误报率会不会高到
+// 影响可用性——暂未实测，留待用后视实际体验判断要不要再细化，待办见 GitHub Issues。）
 import { createHash } from 'node:crypto'
 import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'

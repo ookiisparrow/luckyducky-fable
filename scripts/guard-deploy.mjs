@@ -1,67 +1,47 @@
 #!/usr/bin/env node
 /**
- * 部署闸（Claude Code PreToolUse hook，matcher: Bash）——生产仓模型（v0.9.1 起，用户拍板 A 2026-06-14）。
+ * 部署闸（Claude Code PreToolUse hook，matcher: Bash）。本仓是生产源，云环境 cloudbase-d4gcssqbv06865479
+ * 从本仓迭代，故接管 tcb 与 wechatide 两条通往生产的命令行通道，命中即 `permissionDecision:'ask'` 让人确认。
  *
- * 本仓 = 生产源（云环境 cloudbase-d4gcssqbv06865479 从本仓迭代），**接管 tcb**。策略：
- *   - 读类 tcb（fn invoke / fn log / env list …）：放行。
- *   - tcb 写部署（deploy/publish/delete/create/framework）命中**敏感函数**（钱/权限/状态），
- *     或批量/删除/认不出具体非敏感函数：`permissionDecision:'ask'` 二次确认。
- *   - 新线（rewrite/cloud·部署单元以 cloudbaserc.json 为准·2026-07-23 拓扑收编批）无独立纯读函数（读 action 收在 app 内）；旧线纯读函数
- *     2026-07-09 已清退，部署同名＝静默新建孤儿函数——故任何具名函数写部署一律 ask，READONLY_FNS 空册。
- *   - `DEPLOY_ALLOWED=1 … deploy-fns`（批量部署全量、含敏感）：'ask'。
- *   - 仅在「真把 tcb / deploy-fns 当命令执行」时判（按 shell 分段、看段首）——提交信息 / echo 里
- *     **提到** "tcb"/"deploy" 字样不算，杜绝误拦 git commit。人在自己终端的命令不经本 hook。
+ *   - tcb（含同一 CLI 的 `cloudbase` / `@cloudbase/cli` 入口）：只放行 TCB_READ 白名单里确知只读、不吐密钥的
+ *     子命令，其余一律 ask。用白名单而非写动词黑名单：CLI 子命令几十个且随版本增长，黑名单天生漏
+ *     （`fn code update` 改线上代码、`fn config update` 改环境变量、`api` 任意云 API 都曾被放行）。
+ *     看似只读的也不进白名单：`fn invoke` 在云端拿不到 OPENID，isServerCall()/withAdminGate 视同服务端直接放行，
+ *     等于绕过身份闸直调回调（能把订单翻成已付）和管理 action；`fn detail`、`secrets get` 明文打印函数环境变量
+ *     和临时密钥；`db` 能读出 secureConfig 里的商户私钥。
+ *   - 任何「真跑 deploy-fns.mjs」（批量部署）：ask。它无 DEPLOY_ALLOWED=1 即拒跑，故 --dry-run 一并确认不误伤。
+ *   - wechatide 官方 CLI：同样白名单。只放行 WECHATIDE_READ 里的工具，其余 ask。它随开发者工具 Nightly 自动
+ *     升级，新增的写工具（如 cloud_manage_msg_push）黑名单来不及登记。这条通道直接读写生产云环境，完全绕过本仓
+ *     kit 写闸。白名单与 MCP 侧同源：取 .claude/settings.json allow 里的 mcp__wechat-devtools__*，同一个工具
+ *     两条通道放行口径一致。
  *
- * **接管 wechatide**（2026-07-24 官方 skill CLI 正式接入批）：官方 `wechatide` CLI（随开发者工具 Nightly
- * 自动装好，见 git 历史（原调试日志 U 案·2026-08-21 退役））新开了一条平行的生产写
- * 通道——`upload`（发布体验版）直接把代码包传到微信平台；`cloud_fn_deploy`/`cloud_fn_inc_deploy`/
- * `cloud_db_write_doc`/`cloud_db_write_struct`/`cloud_manage_storage` 直接读写生产云环境，且**完全绕过
- * 本仓自己的 kit 写闸**（`rw-writes-need-gate` 只挡得住我们自己代码里发起的写，挡不住这条外部 CLI 通道）。
- * 若不接管，这条通道会成为部署闸的盲区——故与 tcb 同等级别纳管：命中上述任一写工具名即 ask，不分敏感/
- * 非敏感（这条通道新、无历史基线可判"非敏感安全"，fail-safe 全挡）。**故意不给 wechatide upload 包一层
- * npm script**（如 `npm run upload:mp`）——`npm run <name>` 是脚本名, 本 hook 看到的只是这行文本，看不进
- * package.json 里真正执行的命令，会制造一个静默绕过部署闸的洞；`wechatide upload …` 必须整行手打/由 agent
- * 整行拼出，本闸才管得到（同 tcb 直打的既有纪律，见 `docs/外部配置手册.md`「小程序后台」）。
+ * 只在「真把这些程序当命令执行」时判：按 shell 分段（含 `$(`、反引号、`<(`、单个 `&`）、剥掉段首的
+ * then/do/if 等关键字后看程序位——提交信息 / echo 里**提到**字样不算，杜绝误拦 git commit。段首的
+ * env/sudo/timeout 等包装器会带自己的选项（运维手册的部署写法就是 `env -u http_proxy -u https_proxy tcb fn deploy …`），
+ * 只看段首会认不出真程序，故包装段里取第一个受管程序名起算。
+ * **不要把这些命令包成 npm script**：本 hook 只看到 `npm run <name>` 这行文本，看不进 package.json 里真正执行的命令。
+ * 人在自己终端跑的命令不经本 hook。
  *
- * 自测：echo '{"tool_input":{"command":"tcb fn deploy createOrder"}}' | node scripts/guard-deploy.mjs  # → ask
- *       echo '{"tool_input":{"command":"npx tcb fn deploy adminApi"}}' | node scripts/guard-deploy.mjs  # → ask（runner 前缀绕过·深审 P1）
- *       echo '{"tool_input":{"command":"export DEPLOY_ALLOWED=1; node scripts/deploy-fns.mjs"}}' | node scripts/guard-deploy.mjs  # → ask（export 分段绕过·深审 P1）
- *       echo '{"tool_input":{"command":"git commit -m \"tcb deploy 记账\""}}' | node scripts/guard-deploy.mjs  # → 放行（无输出）
- *       echo '{"tool_input":{"command":"wechatide -c x upload --project rewrite/mp --upload-version 1.0.0"}}' | node scripts/guard-deploy.mjs  # → ask
- *       echo '{"tool_input":{"command":"wechatide -c x cloud_db_write_doc --collection orders"}}' | node scripts/guard-deploy.mjs  # → ask
- *       echo '{"tool_input":{"command":"wechatide -c x project_list"}}' | node scripts/guard-deploy.mjs  # → 放行（读类/项目列表管理，非生产写）
+ * 自测：echo '{"tool_input":{"command":"tcb fn invoke payCallback"}}' | node scripts/guard-deploy.mjs  # → ask
+ *       echo '{"tool_input":{"command":"tcb fn log payCallback"}}' | node scripts/guard-deploy.mjs     # → 放行（无输出）
+ * 完整用例表见 check-structure.mjs 的 deploy-gated 守卫。
  */
+import { readFileSync } from 'node:fs'
 
-// 敏感函数（钱/权限/状态/毁灭性删除）：tcb 写部署须二次确认
-const SENSITIVE_FNS = [
-  'createOrder', 'pay', 'payCallback', 'applyRefund', 'refundCallback', 'closeExpiredOrders',
-  'adminApi', 'activateCourse', 'confirmEnter', 'confirmReceive', 'submitReview',
-  'login', 'updateProfile', 'trackEvent', 'seedCourses', 'initDb', 'cleanupEvents',
-  'kfCallback', 'kfBind', 'kfHealthProbe', // 微信客服：回调状态写 + 身份桥接映射写 + 活体探针（读密钥/调API/推告警·敏感·根因#3）
-  'submitFeedback', // 用户写函数（写库·频控敏感·根因#13），同 trackEvent/updateProfile 二次确认
-  'app', // 重写线并行期部署面（M2/M3）：app 含钱链用户 action——重部署二次确认（adminApiV2 已于 2026-08-13 合并去重下线）
-  // 新线（rewrite/cloud）函数拓扑刷新（批I·以 build.mjs collect() 产物为准，非记忆）：新线部署单元全部纳入敏感面，
-  // 部署任一即二次确认。2026-07-23 拓扑收编批：kfSend/kfMedia/genQrcodes 收编进 adminApi、seedProducts 退役
-  // ——四名从本册剔除（产物不复存在·部署同名=新建孤儿函数，落 READONLY_FNS 空册的兜底 ask，见下注）。
-  'recallScan', // timers/recallScan：招回扫描（写库·bot 告警接缝·根因#14）
-  'inspect', // timers/inspect：巡检机（读密钥/连接器活体/写 inspectRuns + recordAnomaly·根因#14）
-  'billReconcile', // 每日对账 timer（批B2）：读商户私钥（secureConfig/env）+写 wxBills+钱链告警——重部署二次确认
-]
-// 纯读函数：写部署放行（明确非敏感）——新线**无独立纯读函数**（读 action 收在 app 内、非独立部署单元），
-// 旧线纯读函数（getProducts/getCourses…）2026-07-09 已随旧线清退、云端不复存在；此时部署同名 = 新建孤儿函数
-// （唯一真放行洞·会静默造函数不弹确认），故清空为 []：任何 tcb 写部署一律走 ask（fail-safe·收紧不放松）。
-const READONLY_FNS = []
-const word = (w) => new RegExp('\\b' + w + '\\b')
+// 确知只读、不吐密钥的 tcb 子命令（匹配 tcb 之后的参数串开头）
+const TCB_READ =
+  /^(?:$|(?:-v|--version|-h|--help|help|login|logout|docs|env list|fn list|fn log|fn get-route|hosting list|permission get|logs search)(?:\s|$))/
+// 任意位置的 -h/--help 只打印帮助；但 `--` 之后它是普通参数、引号里的也不是独立参数，这两种照常判
+const isHelp = (args) => !/(?:^|\s)--(?:\s|$)|['"]/.test(args) && /(?:^|\s)(?:-h|--help)(?:\s|$)/.test(args)
 
-// wechatide 官方 CLI 的生产写工具名（见头注「接管 wechatide」）——命中任一即 ask，不分敏感/非敏感。
-const WECHATIDE_WRITE_TOOLS = [
-  'upload', // 发布体验版：把代码包传到微信平台
-  'cloud_fn_deploy',
-  'cloud_fn_inc_deploy',
-  'cloud_db_write_doc',
-  'cloud_db_write_struct',
-  'cloud_manage_storage', // upload/delete 子操作是写，但工具粒度已到最细，整体纳管不细分 action
-]
+// auto_preview 只推开发者手机预览，MCP 侧不常驻 allow 但 npm run preview:mp 要用
+const WECHATIDE_READ = new Set(['auto_preview'])
+try {
+  const allow = JSON.parse(readFileSync(new URL('../.claude/settings.json', import.meta.url), 'utf8')).permissions?.allow ?? []
+  for (const p of allow) if (/^mcp__wechat-devtools__\w+$/.test(p)) WECHATIDE_READ.add(p.slice('mcp__wechat-devtools__'.length))
+} catch {
+  /* 读不到就只剩 auto_preview：其余 wechatide 工具全部 ask，失败往严的方向 */
+}
 
 let stdin = ''
 process.stdin.setEncoding('utf8')
@@ -74,38 +54,39 @@ try {
   process.exit(0)
 }
 
+const MANAGED = /(?:^|[\s"'])((?:\S*\/)?(?:tcb|cloudbase|@cloudbase\/cli(?:@\S*)?|node|wechatide|deploy-fns\.mjs)(?:\s|$)[\s\S]*)/
 let needConfirm = false
-for (const raw of command.split(/&&|\|\||;|\n|\|/)) {
-  const seg = raw.trim()
-  const envPrefix = (seg.match(/^(?:\w+=\S+\s+)*/) || [''])[0]
-  const cmd = seg.slice(envPrefix.length) // 去掉前导 ENV=val 后的真命令
+for (const raw of command.split(/&&|\|\||[;\n|&`)]|[$<>]\(/)) {
+  // 真程序：剥掉子 shell 括号/取反/反斜杠、流程关键字与前导 ENV=val；包装器开头的段取第一个受管程序名起算
+  let cmd = raw
+    .replace(/^(?:[\s({!\\]|(?:then|do|else|elif|if|while|until)\s)+/, '')
+    .replace(/^(?:\w+=\S*\s+)*/, '')
+  if (/^(?:env|sudo|time|timeout|gtimeout|stdbuf|caffeinate|nohup|nice|command|exec|eval|xargs|bash|sh|zsh)\s/.test(cmd)) {
+    const m = cmd.match(MANAGED)
+    if (m) cmd = m[1]
+  }
 
-  // ① 批量部署脚本：任何「真跑 deploy-fns.mjs」都确认（深审 P1·env/export 绕过）。deploy-fns 无 DEPLOY_ALLOWED=1
-  //    即 exit(1) 拒跑，故对无害的 --dry-run/未授权跑一并 ask 不误伤（确认后照样只报告）；而 `env DEPLOY_ALLOWED=1 …`
-  //    的 env 不进 envPrefix、`export DEPLOY_ALLOWED=1; …` 又被 ';' 拆成两段——旧版只认 envPrefix 里的 DEPLOY_ALLOWED
-  //    会双双漏网。改判「被执行的程序是不是 deploy-fns.mjs」：剥掉 env/前导赋值取真正的程序，锚在程序位判定
-  //    （node/路径/裸跑皆认；提交信息里提字样处于参数位、锚不住 → 不误拦）。
-  const prog = seg.replace(/^(?:env\s+)?(?:\w+=\S+\s+)*/, '')
-  if (/^(?:node\s+)?(?:\S*\/)?deploy-fns\.mjs\b/.test(prog)) needConfirm = true
+  if (/^(?:node\s+)?(?:\S*\/)?deploy-fns\.mjs\b/.test(cmd)) needConfirm = true
 
-  // ② 直接 tcb 命令：段首真为 tcb 才算（提交信息 / echo 里的字样不算）。深审 P1：runner 前缀（npx/pnpm dlx/
-  //    yarn dlx/bunx）+ tcb 或 @cloudbase/cli（其 bin=tcb）是「command not found: tcb」时最自然的改写形态，
-  //    旧版段首正则认不出而全放行——先剥 runner 前缀、把 @cloudbase/cli 归一成 tcb，再走原判定。
-  const runnerStripped = cmd.replace(/^(?:npx|pnpm\s+dlx|pnpm\s+exec|yarn\s+dlx|bunx)\s+/, '')
-  const asTcb = runnerStripped.replace(/^@cloudbase\/cli\b/, 'tcb')
-  if (/^(?:\S*\/)?tcb[\s:]/.test(asTcb)) {
-    const isWrite = /\b(deploy|publish|delete|create)\b/.test(asTcb) || /\bframework\b/.test(asTcb)
-    if (isWrite) {
-      const sensitive = SENSITIVE_FNS.some((fn) => word(fn).test(asTcb))
-      const readonlyOnly = !sensitive && READONLY_FNS.some((fn) => word(fn).test(asTcb))
-      if (sensitive || !readonlyOnly) needConfirm = true // 敏感 / 批量 / 认不出非敏感 → 确认
-    }
+  // runner 前缀是「command not found: tcb」时最自然的改写形态；中间的 -y/--yes/-- 等选项一并跳过
+  const prog = cmd.replace(/^(?:npx|bunx|npm\s+(?:exec|x)|pnpm(?:\s+(?:dlx|exec))?|yarn(?:\s+(?:dlx|exec))?)\s+(?:-\S+\s+)*/, '')
+  const tcb = prog.match(/^(?:\S*\/)?(?:tcb|cloudbase|@cloudbase\/cli(?:@\S*)?)(?=[\s:]|$)(.*)$/s)
+  if (tcb) {
+    const args = tcb[1].trim()
+    if (!TCB_READ.test(args) && !isHelp(args)) needConfirm = true
     continue
   }
 
-  // ③ wechatide 官方 CLI：段首真为 wechatide 才算（同 tcb 判法，防提交信息/echo 误拦）。
-  if (/^(?:\S*\/)?wechatide\b/.test(runnerStripped) && WECHATIDE_WRITE_TOOLS.some((t) => word(t).test(runnerStripped)))
-    needConfirm = true
+  const ide = prog.match(/^(?:\S*\/)?wechatide(?=\s|$)(.*)$/s)
+  if (ide) {
+    const args = ide[1].trim()
+    // 工具名＝去掉 -c/--token 及其值后的第一个非选项词；认不出的选项会把值当工具名，落到 ask
+    const tool = args
+      .replace(/(?:^|\s)(?:-c|--token)\s+\S+/g, ' ')
+      .split(/\s+/)
+      .find((t) => t && !t.startsWith('-'))
+    if (tool && !WECHATIDE_READ.has(tool) && !isHelp(args)) needConfirm = true
+  }
 }
 
 if (needConfirm) {
@@ -115,8 +96,8 @@ if (needConfirm) {
         hookEventName: 'PreToolUse',
         permissionDecision: 'ask',
         permissionDecisionReason:
-          '生产部署确认：这条命令会向生产云环境 cloudbase-d4gcssqbv06865479 写入敏感函数' +
-          '（钱/权限/状态）或为批量部署。确认无误再放行——读类 tcb（invoke/log/list）不弹此确认；新线无独立纯读函数，任何具名函数写部署一律确认。',
+          '生产环境确认：这条命令会写生产云环境 cloudbase-d4gcssqbv06865479（部署/改代码/改配置/直调函数/写库），' +
+          '或可能明文打印密钥（fn detail / secrets / 读 secureConfig）。确认无误再放行——只有 fn log/fn list/env list 等白名单只读命令不弹此确认。',
       },
     })
   )
