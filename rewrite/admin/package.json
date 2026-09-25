@@ -11,11 +11,11 @@
   },
   "dependencies": {
     "@ldrw/shared": "*",
-    "jszip": "^3.10.1",
+    "jszip": "^3.10.2",
     "lucide-vue-next": "^1.0.0",
     "qrcode": "^1.5.4",
     "vod-js-sdk-v6": "^1.8.0",
-    "vue": "^3.5.35",
+    "vue": "^3.5.43",
     "vue-router": "^4.3.0"
   },
   "devDependencies": {
