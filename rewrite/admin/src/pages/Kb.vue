@@ -25,6 +25,7 @@ const confirmKey = ref('')
 // 载入成功才放开「保存整册」——saveKb 是整册覆盖同步（提交外的旧 doc 逐个 remove），载入失败 rows=[] 时一保存就把
 // 真实整份 FAQ 删光（KB 是客服 bot 答案 + 坐席快捷回复单源·不可逆）。同 HelpVideos/Settings/ScmBom 载入失败门·P1。
 let loaded = false
+const listFailed = ref(false) // 没读到册时不显「暂无 FAQ」引导——失败≠空册，此时也存不了
 
 // 预设 FAQ（换皮删了·键按「分类:主题」＝客服菜单叶子 id 口径填好·owner 按实际菜单微调）
 const PRESET: Omit<KbRow, 'order'>[] = [
@@ -39,6 +40,7 @@ async function reload() {
   loaded = false // 载入/刷新期间禁保存（含 save 后刷新失败 rows=[] 的窗口·防拿空表覆盖删光·同 HelpVideos）
   const r = await listKb()
   rows.value = r.ok ? normalizeKb(r.list) : []
+  listFailed.value = !r.ok
   message.value = r.ok ? '' : '加载失败：' + String(r.error || '')
   loaded = r.ok // 成功（含合法空库 list=[]）才放开·失败恒关
   return r.ok
@@ -116,7 +118,7 @@ onMounted(reload)
         <UiButton variant="ghost" size="sm" @click="addRow"><Plus :size="14" :stroke-width="2" />新增一条</UiButton>
       </template>
 
-      <EmptyState v-if="!rows.length" :icon="BookOpen" text="暂无 FAQ，点「新增一条」或「载入预设 FAQ」开始" />
+      <EmptyState v-if="!rows.length && !listFailed" :icon="BookOpen" text="暂无 FAQ，点「新增一条」或「载入预设 FAQ」开始" />
 
       <div v-else class="kb-list">
         <div v-for="(row, i) in rows" :key="i" class="kb-row">

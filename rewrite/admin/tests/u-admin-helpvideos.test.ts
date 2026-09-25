@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 // HelpVideos.vue 载入与删除：载入失败绝不放开保存（空档整档覆盖会连带孤儿 GC 删光云端视频）；
-// 冲突后重新载入恢复自动保存；删主题要点两次。
+// 冲突后停自动保存、重新载入恢复；旧视频没删净也按新版本号继续；手动保存只走同一条保存链；删主题要点两次。
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { mount, flushPromises, type VueWrapper } from '@vue/test-utils'
 
@@ -75,5 +75,56 @@ describe('HelpVideos.vue 载入', () => {
     expect(w.findAll('.t-title')).toHaveLength(1)
     await del().trigger('click')
     expect(w.findAll('.t-title')).toHaveLength(0)
+  })
+})
+
+describe('HelpVideos.vue 保存链', () => {
+  const edit = async (v: string) => {
+    await w!.find('.t-title').setValue(v)
+    await vi.advanceTimersByTimeAsync(900)
+    await flushPromises()
+  }
+
+  it('大白话：撞冲突后继续编辑、再点保存，都不再发保存（不循环重试覆盖别处）', async () => {
+    api.saveHelpVideos.mockResolvedValueOnce({ ok: false, error: 'DRAFT_CONFLICT', rev: 8 })
+    w = mount(HelpVideos)
+    await flushPromises()
+    await edit('改一下')
+    await edit('再改一下')
+    await w.findAll('button').find((b) => b.text() === '保存全部')!.trigger('click')
+    await flushPromises()
+    expect(api.saveHelpVideos).toHaveBeenCalledTimes(1)
+    expect(w.find('.status').text()).toContain('内容已被别处修改')
+  })
+
+  it('大白话：旧视频没删净（GC_DELETE_FAIL）也按回包的新版本号继续，下一次不撞自己造的冲突', async () => {
+    api.saveHelpVideos.mockResolvedValueOnce({ ok: false, error: 'GC_DELETE_FAIL', rev: 5 })
+    w = mount(HelpVideos)
+    await flushPromises()
+    await edit('改一下')
+    await edit('再改一下')
+    expect(api.saveHelpVideos.mock.calls.map((c) => c[1])).toEqual([3, 5])
+  })
+
+  it('大白话：防抖没到点就点「保存全部」——只发一次保存，成功提示已保存', async () => {
+    w = mount(HelpVideos)
+    await flushPromises()
+    await w.find('.t-title').setValue('改一下')
+    await w.findAll('button').find((b) => b.text() === '保存全部')!.trigger('click')
+    await flushPromises()
+    await vi.advanceTimersByTimeAsync(1000)
+    await flushPromises()
+    expect(api.saveHelpVideos).toHaveBeenCalledTimes(1)
+    expect(api.saveHelpVideos.mock.calls[0][0][0].title).toBe('改一下')
+    expect(w.find('.status').text()).toBe('已保存（无视频的小段会被云端剔除）')
+  })
+
+  it('大白话：「保存全部」失败提示重试', async () => {
+    api.saveHelpVideos.mockResolvedValue({ ok: false, status: 500, error: 'X' })
+    w = mount(HelpVideos)
+    await flushPromises()
+    await w.findAll('button').find((b) => b.text() === '保存全部')!.trigger('click')
+    await flushPromises()
+    expect(w.find('.status').text()).toBe('保存失败，请重试')
   })
 })

@@ -1,5 +1,6 @@
 // @vitest-environment happy-dom
-// Inventory.vue doSave 在途闸：回包前再按保存/Enter 不许二发——同一 expectedUpdatedAt 二发必 409，成功后显假冲突。
+// Inventory.vue doSave 在途闸：回包前再按保存/Enter 不许二发——同一 expectedUpdatedAt 二发必 409，成功后显假冲突；
+// 保存回包前已切到别行编辑，成功不收起新行的编辑态。
 import { describe, it, expect, vi } from 'vitest'
 import { mount, flushPromises } from '@vue/test-utils'
 
@@ -50,5 +51,37 @@ describe('Inventory.vue 状态筛选与徽章', () => {
       't-brand:不限量',
       't-amber:低库存',
     ])
+  })
+})
+
+describe('Inventory.vue 保存回包前切到别行（G4）', () => {
+  const two = { ok: true, list: [{ _id: 's1', productId: 'p1', spec: '', stock: 5, updatedAt: 100 }, { _id: 's2', productId: 'p2', spec: '', stock: 7, updatedAt: 100 }] }
+  const adjust = (w: ReturnType<typeof mount>, i: number) => w.findAll('button').filter((b) => b.text() === '调整')[i].trigger('click')
+
+  it('大白话：没切行——保存成功收起编辑态', async () => {
+    listInventoryMock.mockResolvedValue(two)
+    saveStockMock.mockReset().mockResolvedValue({ ok: true })
+    const w = mount(Inventory)
+    await flushPromises()
+    await adjust(w, 0)
+    await w.findAll('button').find((b) => b.text() === '保存')!.trigger('click')
+    await flushPromises()
+    expect(saveStockMock).toHaveBeenCalledWith('p1', '', 5, 100, 0)
+    expect(w.find('input.stockin').exists()).toBe(false)
+  })
+
+  it('大白话：保存在途时已点开另一行——成功回包不收起那一行的编辑', async () => {
+    listInventoryMock.mockResolvedValue(two)
+    let release: (v: unknown) => void = () => {}
+    saveStockMock.mockReset().mockReturnValueOnce(new Promise((r) => (release = r)))
+    const w = mount(Inventory)
+    await flushPromises()
+    await adjust(w, 0)
+    await w.findAll('button').find((b) => b.text() === '保存')!.trigger('click')
+    await adjust(w, 0) // 第一行已进编辑态，剩下的「调整」就是第二行的
+    release({ ok: true })
+    await flushPromises()
+    expect(w.findAll('input.stockin')).toHaveLength(1)
+    expect((w.find('input.stockin').element as HTMLInputElement).value).toBe('7')
   })
 })

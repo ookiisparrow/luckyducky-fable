@@ -30,7 +30,7 @@ function baseOrder(overrides: Record<string, unknown> = {}) {
     id: 'o1',
     status: 'paid',
     items: [{ productId: 'p1', name: '钩织材料包', spec: '', qty: 1 }],
-    amount: 9900,
+    amount: 99, // 元：云端 orders.amount 存元（tests/contracts/admin-money.json units）
     createdAt: Date.now(),
     feeMismatch: false,
     refundHold: false,
@@ -58,6 +58,7 @@ describe('Orders.vue 金额异常单两步确认（clearFeeMismatch）', () => {
     await flushPromises()
 
     const findMismatchBtn = () => wrapper.findAll('.ld-tr button').find((b) => b.text() === '去核对' || b.text() === '确认已核对流水？')
+    expect(wrapper.find('.ld-td.amount').text()).toBe('¥99.00')
     const btn = findMismatchBtn()
     expect(btn).toBeTruthy()
     expect(btn!.text()).toBe('去核对')

@@ -19,7 +19,7 @@ import Orders from '../src/pages/Orders.vue'
 beforeEach(() => {
   listOrdersMock.mockResolvedValue({
     ok: true,
-    list: [{ id: 'o1', status: 'paid', items: [{ productId: 'p1', name: '材料包', qty: 1 }], amount: 9900, createdAt: Date.now(), address: { name: '张三' } }],
+    list: [{ id: 'o1', status: 'paid', items: [{ productId: 'p1', name: '材料包', qty: 1 }], amount: 99, createdAt: Date.now(), address: { name: '张三' } }],
     nextCursor: null,
     hasMore: false,
   })

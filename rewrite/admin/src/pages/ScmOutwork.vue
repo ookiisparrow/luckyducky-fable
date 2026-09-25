@@ -21,6 +21,7 @@ const knottedL = ref<Array<Record<string, any>>>([]) // 大团带结（可收）
 const workers = ref<Array<Record<string, any>>>([])
 const cursor = ref<unknown>(null) // B1（根因#7）：外协单列表翻页游标
 const hasMore = ref(false)
+const listFailed = ref(false) // 外协单没读到时不显「还没有外协单」——失败≠空态
 // 动作反馈(note)/加载态(load) 收口（病根#14）：reload 成功不再抹掉动作刚设的成功/失败原文。
 const { message, ok: msgOk, note, load } = useLoadStatus()
 const form = ref<{ outworkId?: string; workerId: string; rateYuan: string; lines: Array<{ materialId: string; qty: number }> } | null>(null)
@@ -61,6 +62,7 @@ async function reload() {
   const [o, m, s] = await Promise.all([listOutworks(), listMaterials(), listSuppliers()])
   if (listGen.isStale(my)) return // 已发起更新的 reload·丢弃过期回包
   orders.value = o.ok ? (o.list as Record<string, any>[]) : []
+  listFailed.value = !o.ok
   cursor.value = o.ok ? o.nextCursor : null
   hasMore.value = !!(o.ok && o.hasMore)
   const all = m.ok ? (m.list as Record<string, any>[]) : []
@@ -244,7 +246,7 @@ onMounted(async () => {
         <UiButton variant="ghost" size="sm" @click="more">加载更多</UiButton>
       </div>
     </div>
-    <EmptyState v-else-if="!form" :icon="ClipboardList" text="还没有外协单" />
+    <EmptyState v-else-if="!form && !listFailed" :icon="ClipboardList" text="还没有外协单" />
 
     <Card v-if="recvFor" title="收货登记" :sub="recvFor + ' · 已按发料色预填 · 收 ≤ 发'">
       <div v-for="(l, i) in recvLines" :key="i" class="recv-row" :class="{ over: lineOver(l) }">

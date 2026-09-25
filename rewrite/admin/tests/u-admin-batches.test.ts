@@ -3,15 +3,16 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { mount, flushPromises } from '@vue/test-utils'
 
-const { listBatchesMock, listBatchCodesMock, getSettingsMock, routeQuery } = vi.hoisted(() => ({
+const { listBatchesMock, createBatchMock, listBatchCodesMock, getSettingsMock, routeQuery } = vi.hoisted(() => ({
   listBatchesMock: vi.fn(),
+  createBatchMock: vi.fn(),
   listBatchCodesMock: vi.fn(),
   getSettingsMock: vi.fn(),
   routeQuery: { courseId: 'course-p1' } as Record<string, string>,
 }))
 vi.mock('../src/api/system', () => ({
   listBatches: listBatchesMock,
-  createBatch: vi.fn(),
+  createBatch: createBatchMock,
   listBatchCodes: listBatchCodesMock,
   getSettings: getSettingsMock,
 }))
@@ -100,5 +101,23 @@ describe('Batches.vue 计数触顶不静默（#389）', () => {
     const w2 = mount(Batches)
     await flushPromises()
     expect(w2.text()).not.toContain('计数可能不全')
+  })
+})
+
+describe('Batches.vue 载入课程乱序（G1）', () => {
+  it('大白话：先发的载入后回包，不把列表和「已载入课程」改回旧课', async () => {
+    let releaseOld: (v: unknown) => void = () => {}
+    listBatchesMock
+      .mockReturnValueOnce(new Promise((r) => (releaseOld = r)))
+      .mockResolvedValueOnce({ ok: true, list: [{ ...batch, _id: 'b2', batchId: 'b2', courseId: 'course-p2' }] })
+    const w = mount(Batches)
+    await w.find('.course-picker input').setValue('course-p2')
+    await w.findAll('button').find((b) => b.text() === '载入课程')!.trigger('click')
+    await flushPromises()
+    releaseOld({ ok: true, list: [batch] })
+    await flushPromises()
+    expect(listBatchesMock.mock.calls).toEqual([['course-p1'], ['course-p2']])
+    expect(w.text()).toContain('（课程 course-p2）')
+    expect(w.text()).not.toContain('course-p1')
   })
 })

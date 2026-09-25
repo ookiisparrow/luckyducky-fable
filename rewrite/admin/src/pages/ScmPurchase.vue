@@ -20,6 +20,7 @@ const mats = ref<Array<Record<string, any>>>([])
 const sups = ref<Array<Record<string, any>>>([])
 const cursor = ref<unknown>(null) // B1（根因#7）：采购单列表翻页游标
 const hasMore = ref(false)
+const listFailed = ref(false) // 采购单没读到时不显「还没有采购单」——失败≠空态
 // 动作反馈(note)/加载态(load) 收口（病根#14）：reload 成功不再抹掉动作刚设的成功/失败原文。
 const { message, ok: msgOk, note, load } = useLoadStatus()
 const form = ref<{ purchaseId?: string; supplierId: string; lines: Array<{ materialId: string; qty: number; priceYuan: string }> } | null>(null)
@@ -63,6 +64,7 @@ async function reload() {
   const [p, m, s] = await Promise.all([listPurchases(filter.value || undefined), listMaterials(), listSuppliers()])
   if (listGen.isStale(my)) return // 已切别 chip·丢弃过期采购单
   orders.value = p.ok ? (p.list as Record<string, any>[]) : []
+  listFailed.value = !p.ok
   cursor.value = p.ok ? p.nextCursor : null // 换筛选/刷新恒重置游标（新首页·不接续旧筛选下的位置）
   hasMore.value = !!(p.ok && p.hasMore)
   mats.value = m.ok ? (m.list as Record<string, any>[]) : []
@@ -233,7 +235,7 @@ onMounted(async () => {
         <UiButton variant="ghost" size="sm" @click="more">加载更多</UiButton>
       </div>
     </div>
-    <EmptyState v-else-if="!form" :icon="ClipboardList" :text="filter ? '这个状态下没有采购单' : '还没有采购单'" />
+    <EmptyState v-else-if="!form && !listFailed" :icon="ClipboardList" :text="filter ? '这个状态下没有采购单' : '还没有采购单'" />
   </div>
 </template>
 

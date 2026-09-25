@@ -1,5 +1,6 @@
 // @vitest-environment happy-dom
-// Fulfill.vue doShip：成功提示里的物流公司必须是实际提交给 shipOrder 的那一个——在途期操作员改下拉框不许串台。
+// Fulfill.vue doShip：成功提示里的物流公司必须是实际提交给 shipOrder 的那一个——在途期操作员改下拉框不许串台；
+// 在途期再扫一枪要明说没生效（扫码枪连扫两箱时不吭声会让人以为已处理而漏发）。
 import { describe, it, expect, vi } from 'vitest'
 import { mount, flushPromises } from '@vue/test-utils'
 
@@ -42,5 +43,31 @@ describe('Fulfill.vue 发货提示与实际提交的物流公司一致', () => {
     expect(msg).toContain('已发货')
     expect(msg).toContain('顺丰速运')
     expect(msg).not.toContain('中通快递')
+  })
+})
+
+describe('Fulfill.vue 发货在途再扫一枪', () => {
+  it('大白话：上一单还没回包时再扫面单，不二发、提示这一枪没生效', async () => {
+    localStorage.clear()
+    listOrdersMock.mockResolvedValue({
+      ok: true,
+      list: [{ id: OID, status: 'paid', amount: 100, createdAt: Date.now(), items: [{ name: '小熊', qty: 1 }], address: { name: '张三' } }],
+      hasMore: false,
+    })
+    shipOrderMock.mockReset().mockReturnValue(new Promise(() => {}))
+    const w = mount(Fulfill)
+    await flushPromises()
+    await w.findAll('.rail-step')[2].trigger('click')
+    await flushPromises()
+    const scan = w.find('input.scan-input')
+    await scan.setValue(OID)
+    await scan.trigger('keyup.enter')
+    await scan.setValue('SF1234567890')
+    await scan.trigger('keyup.enter')
+    await scan.setValue('SF0000000002')
+    await scan.trigger('keyup.enter')
+    expect(shipOrderMock).toHaveBeenCalledTimes(1)
+    expect(w.find('.scan-msg').text()).toContain('上一单发货还在处理中')
+    expect(w.find('.scan-msg').classes()).toContain('bad')
   })
 })

@@ -433,7 +433,7 @@ describe('orderErrorText（钱组英文码→操作者中文·#222 同类）', (
     expect(fulfillSrc).toMatch(/要改运单号请去「订单发货」页/)
     expect(fulfillSrc).toMatch(/return orderErrorText\(/)
     expect(fulfillSrc).toMatch(/剩 \$\{shippable\.length\} 单待发/)
-    expect(fulfillSrc).toMatch(/function syncDefaultChecked\(\) \{\n  checked\.value = new Set\(shippable\.value\.filter/)
+    expect(fulfillSrc).toMatch(/function syncDefaultChecked\(\) \{\n {2}checked\.value = new Set\(shippable\.value\.filter/)
     expect(fulfillSrc).not.toMatch(/if \(msg === 'FEE_MISMATCH_HOLD'\)/)
     expect(fulfillSrc).not.toMatch(/if \(msg === 'NO_ORDER'\)/)
   })

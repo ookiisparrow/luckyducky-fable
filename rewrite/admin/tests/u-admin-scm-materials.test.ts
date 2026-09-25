@@ -1,5 +1,6 @@
 // @vitest-environment happy-dom
-// ScmMaterials.vue：批量盘点只提交有差异的行；分路加载失败各报各的原因。
+// ScmMaterials.vue：批量盘点只提交有差异的行；分路加载失败各报各的原因；
+// 供应商保存回包前已切到别的供应商，反馈与复位不打到新表单上。
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { mount, flushPromises } from '@vue/test-utils'
 
@@ -56,5 +57,40 @@ describe('ScmMaterials.vue 分路加载报错', () => {
     api.listSuppliers.mockResolvedValue({ ok: false, error: 'B' })
     const w = await mountPage()
     expect(w.find('.ld-status').text()).toBe('供应商加载失败：B')
+  })
+})
+
+describe('ScmMaterials.vue 供应商保存回包晚到（H1）', () => {
+  const sups = { ok: true, list: [{ _id: 's1', name: '甲厂', type: 'factory' }, { _id: 's2', name: '乙厂', type: 'factory' }] }
+  const nameInput = (w: Awaited<ReturnType<typeof mountPage>>) => w.findAll('input[placeholder="名称"]')[1] // [0] 是物料建档的名称框
+  const status = (w: Awaited<ReturnType<typeof mountPage>>) => (w.find('.ld-status').exists() ? w.find('.ld-status').text() : '')
+
+  it('大白话：没切供应商——更新成功报「已更新」、表单复位', async () => {
+    api.listSuppliers.mockResolvedValue(sups)
+    api.saveSupplier.mockResolvedValue({ ok: true })
+    const w = await mountPage()
+    await w.findAll('.sup-line')[0].trigger('click')
+    await nameInput(w).setValue('甲厂二号')
+    await w.findAll('button').find((b) => b.text() === '更新')!.trigger('click')
+    await flushPromises()
+    expect(api.saveSupplier).toHaveBeenCalledWith({ supplierId: 's1', name: '甲厂二号', type: 'factory', contact: '', note: '' })
+    expect(status(w)).toBe('供应商已更新')
+    expect((nameInput(w).element as HTMLInputElement).value).toBe('')
+  })
+
+  it('大白话：保存在途时已点开另一家——回包不复位新表单、不写反馈，列表照刷', async () => {
+    api.listSuppliers.mockResolvedValue(sups)
+    let release: (v: unknown) => void = () => {}
+    api.saveSupplier.mockReturnValue(new Promise((r) => (release = r)))
+    const w = await mountPage()
+    await w.findAll('.sup-line')[0].trigger('click')
+    await w.findAll('button').find((b) => b.text() === '更新')!.trigger('click')
+    await w.findAll('.sup-line')[1].trigger('click')
+    const listCalls = api.listSuppliers.mock.calls.length
+    release({ ok: true })
+    await flushPromises()
+    expect((nameInput(w).element as HTMLInputElement).value).toBe('乙厂')
+    expect(status(w)).toBe('')
+    expect(api.listSuppliers.mock.calls.length).toBeGreaterThan(listCalls)
   })
 })
