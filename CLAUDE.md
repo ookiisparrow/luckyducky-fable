@@ -5,13 +5,14 @@
 ## 0. 危险速览（动手前必读）
 - 钩织材料包电商：微信小程序 + 云开发后端 + admin/agent 后台 + Astro 内容站。
 - **本仓是生产源**：云环境 `cloudbase-d4gcssqbv06865479` 的唯一版本就是 `rewrite/` 的产物，部署/建表/删表真实生效。小程序 AppID `wxcbd2fb68b81bcfb1`，上传/提审/发布是微信后台人工动作。
-- **先问老板、宁停勿猜**：red 模块（订单交易钱链、运维观测与系统配置，分级以 `modules.json` 为准）、部署与数据库不可逆操作、删守卫、合规文案、改 `scripts/check-*.mjs` 或 `.claude/`。
+- **先问老板、宁停勿猜**：红区（订单交易钱链、运维观测与系统配置、身份闸，名单以 `scripts/lib/red-paths.mjs` 为准）、部署与数据库不可逆操作、删守卫、合规文案、改 `scripts/check-*.mjs` 或 `.claude/`。
 - **git 外资产**：控制台资产的权威副本在 `console-assets/`，变更先 repo 后控制台。
-- **新会话先 `git fetch`**，对 `origin/main` 看（本地常落后几十个提交，错题本 E24）；当前阶段看 `docs/现状与路线.md`，待办看 `gh issue list`。
+- **非 Claude 代理（Cursor 等）同守本文件**；不自装 MCP 或云端直连扩展（要装须复刻 `.claude/settings.json` 的全部 deny 并经老板确认）；不自派任务。
+- **新会话先 `git fetch`**，对 `origin/main` 看（本地常落后几十个提交，错题本 E24）；现状与待办看 `gh issue list`。
 
-## 1. 干活流水线（全文见 `docs/元模式.md`）
+## 1. 干活流水线
 1. **事实只从代码取**：名字、数字、清单以代码为准，文档写「以 X 为准」不抄值；注释不写「由守卫 X 保证」，除非 grep 确认它在。动手前 grep `docs/关键决策记录.md`（含「拍板不做」）与 `docs/根因账本.md`，别把否掉的方案再做一遍。
-2. **危险区靠硬闸**：钱链提交要 `MONEYCHAIN_ALLOWED`，红区提交要 `[red-review: 复核人]`，部署要 `DEPLOY_ALLOWED`，都由老板授权。被闸拦 = 修代码，不绕闸，不 `--no-verify`。
+2. **危险区靠硬闸**：红区提交要 `RED_ALLOWED`，部署要 `DEPLOY_ALLOWED`，都由老板授权。被闸拦 = 修代码，不绕闸，不 `--no-verify`。
 3. **完成只由机器判**：`npm run check`（pre-commit 与 CI 同源）全绿才算；先写会红的测试再实现，反向自检（改坏必红，再还原）。改动走 `/refactor-batch`，体检走 `/audit`，修 bug 走 `/systematic-debugging`，验收走 `/acceptance-check`。
 4. **声明带证据**：PR 里写「真机验过/压测过」必须附截图、日志或命令输出，没附当没做。一批一个 squash，推分支不推 main。
 
@@ -33,7 +34,7 @@
 - **边界**：storage/query/API 输入一律不可信；禁 `eval`/`v-html`；敏感信息不进日志。
 
 ## 4. 记账
-- 过程写进 commit 信息；待办/债/待拍板开 GitHub Issue；状态写 `docs/现状与路线.md`；需求变更先改 `docs/需求清单.md` 再动代码；拍板写 `docs/关键决策记录.md`。
+- 过程写进 commit 信息；待办/债/待拍板/状态开 GitHub Issue；需求变更先改 `docs/需求清单.md` 再动代码；拍板写 `docs/关键决策记录.md`。
 - 过期文档直接删，git 即归档层；不写「已删/已退役」墓碑。
 - 提交信息 `type：中文说明`（全角冒号，type ∈ feat/fix/docs/refactor/chore/test）。同一 PR 不重复 squash merge，不 force-push 改历史。
 
@@ -42,9 +43,8 @@
 ```bash
 npm run check                      # 质量闸
 node scripts/check-structure.mjs   # 结构快检，秒级
-npm run report                     # 守卫/测试/病根地图面板
 npm run build:rw-cloud             # 云函数产物（部署另为人工授权）
 npm run preview:mp                 # 推真机预览
 ```
 - mp 加页面：`rewrite/mp/pages/<name>/` 四件套 + `app.json` 注册。加云端 action：放进对应域 + 登记 `modules.json`。admin 加页面：页面 + 路由/侧栏登记；写 admin UI 先读 `rewrite/admin/DESIGN.md`，色值只来自 `styles/tokens.css`。
-- 查别的：需求 `docs/需求清单.md` · 病根 `docs/根因账本.md` · 运维 `docs/运维手册.md` · 发布/巡检 `docs/工作流.md` · 平台坑 `docs/云开发参考.md` · 环境 `npm run env:resolve` · 历史 `git log`。
+- 查别的：需求 `docs/需求清单.md` · 业务链与状态机 `docs/业务逻辑架构.md` · 病根 `docs/根因账本.md` · 运维/发布/巡检/平台坑 `docs/运维手册.md` · 外部平台配置 `docs/外部配置手册.md` · 环境 `npm run env:resolve` · 历史 `git log`。

@@ -75,7 +75,7 @@ export async function saveHomeContent({ db, data }: Ctx) {
 
 // —— 页面内容 CMS（批A·5 页可编辑：欢迎流/目录+播放页求助/我的/关于/协议）——
 // 承 saveHomeContent 样板（白名单净化·str 限长·数组封顶·.doc().set 带 .add 回退）；每页一独立净化函数，
-// 未知字段丢弃、未知 page fail-closed 拒（信任边界·根因#3 不信前端·守卫 rw-cloud-page-content-sanitized）。
+// 未知字段丢弃、未知 page fail-closed 拒（信任边界·根因#3 不信前端·行为由 app-page-content.test.ts 锁）。
 // content 集合每页一 doc（_id=page 键名）；小程序公开读经 app/catalog.getPageContent（catalogPlayer.catalog.heroImage
 // 若 cloud:// 换临时 URL，fileID 不出口·照 swapHomeImages 模式）。
 const PAGES = ['welcome', 'catalogPlayer', 'mePage', 'about', 'agreement'] as const

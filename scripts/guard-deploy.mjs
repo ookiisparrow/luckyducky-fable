@@ -21,7 +21,7 @@
  * 非敏感（这条通道新、无历史基线可判"非敏感安全"，fail-safe 全挡）。**故意不给 wechatide upload 包一层
  * npm script**（如 `npm run upload:mp`）——`npm run <name>` 是脚本名, 本 hook 看到的只是这行文本，看不进
  * package.json 里真正执行的命令，会制造一个静默绕过部署闸的洞；`wechatide upload …` 必须整行手打/由 agent
- * 整行拼出，本闸才管得到（同 tcb 直打的既有纪律，见 `docs/人工配置清单.md`「小程序新版本上传、提审、发布」）。
+ * 整行拼出，本闸才管得到（同 tcb 直打的既有纪律，见 `docs/外部配置手册.md`「小程序后台」）。
  *
  * 自测：echo '{"tool_input":{"command":"tcb fn deploy createOrder"}}' | node scripts/guard-deploy.mjs  # → ask
  *       echo '{"tool_input":{"command":"npx tcb fn deploy adminApi"}}' | node scripts/guard-deploy.mjs  # → ask（runner 前缀绕过·深审 P1）

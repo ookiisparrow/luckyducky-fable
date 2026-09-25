@@ -1,15 +1,15 @@
-# rewrite/mp · 新小程序（M2）真机走查手册
+# rewrite/mp · 小程序真机走查手册
 
-> **为什么靠人**（根因#8）：构建过、测试绿 ≠ 真机能用——视觉/手感/键盘/支付收银台/视频首帧只有真机证得了。本手册 = M2 验收的人工半边（机器半边＝`npm run check` 全量测试与守卫·计数以其输出为准，另有按需冒烟层，见下）。
+> **为什么靠人**（根因#8）：构建过、测试绿 ≠ 真机能用——视觉/手感/键盘/支付收银台/视频首帧只有真机证得了。本手册是真机验收的人工半边（机器半边＝`npm run check` 全量测试与守卫·计数以其输出为准，另有按需冒烟层，见下）。
 >
-> **走查/传体验版前先跑** `npm run smoke:mp`（miniprogram-automator + devtools headless 逐页开验，捕 handler 缺失/组件未注册/未捕获异常类致命错误——把「构建过≠真机能用」先过一遍机器半边，剩下才轮到本手册的人工走查；不入三道闸，见 `docs/运维手册.md` §⑨）。
+> **走查/传体验版前先跑** `npm run smoke:mp`（miniprogram-automator + devtools headless 逐页开验，捕 handler 缺失/组件未注册/未捕获异常类致命错误——把「构建过≠真机能用」先过一遍机器半边，剩下才轮到本手册的人工走查；不入三道闸，见 `docs/运维手册.md`「工具」）。
 >
 > **导入**：微信开发者工具 → 导入项目 → 选本目录（AppID 已预填）→ 工具能跑后点「预览」扫码真机。
-> **免扫码一键推真机**（`npm run device:preview` 等·端口探测与排障表）：见 `docs/real-device-debug.md`。
+> **推真机预览/调试**：入口见 `docs/运维手册.md`「工具」。
 > **版本脚**：提交钩子 / CI 合入 main 或 test / `preview:mp` / `device:preview` / `agent:preview` / `npm run release` / `mac:sync-ends` 会自动把「我」页日期戳成上海当天，并按分支对齐通道（main＝开发、test＝测试）。人不用记 `mp:stamp-version-date`。实验线在仓 `luckyducky-fable-ablation` 把 `BUILD_CHANNEL` 写成 `experimental`，本仓不回收。**不要改微信正式上传/提审/发布命令。**
-> **渲染引擎拍板（2026-07-04 收口）**：M2 首发**全 WebView**——M0 spike 已证按页 Skyline 可用性无障碍，但增益未证实（吸顶双引擎都不吸），按防过度工程原则不为未证实的收益引入双引擎变量；Skyline 留上线后按页灰度（能力在手，随时可开）。
+> **渲染引擎**：首发**全 WebView**——M0 spike 已证按页 Skyline 可用性无障碍，但增益未证实（吸顶双引擎都不吸），按防过度工程原则不为未证实的收益引入双引擎变量；Skyline 留上线后按页灰度（能力在手，随时可开）。
 
-## 分层与依赖方向（T4 活线约定·守卫 `rw-dep-direction` 机器钉·2026-07-18 盲区体检批2 成文）
+## 分层与依赖方向（守卫 `rw-dep-direction`）
 
 此前这条方向只存在于代码事实里（从未写成文字·守卫也只扫冻结旧线）——现成文并配活线守卫：
 
@@ -24,7 +24,7 @@ pages/ · components/ · custom-tab-bar/   （顶层·可越级下行直连 api/
 - 顶层（pages/components/custom-tab-bar）越级直连 api/utils 合法（同旧线范式·不入守卫扫描面）；页面取目录数据必须走 `lib/catalog.ts`/`lib/courses.ts` 缓存单源（病根#15）。
 - 云端同批钉住：`rewrite/cloud/src/kit/` 禁反向 import `functions/`（kit=原语层）。
 
-## 逐页走查清单（21 页 · 照着点 ✅/❌ + 一句话现象）
+## 逐页走查清单（照着点 ✅/❌ + 一句话现象）
 
 **买东西这条链**
 | # | 页面 | 看什么 | 结果 |
@@ -61,20 +61,12 @@ pages/ · components/ · custom-tab-bar/   （顶层·可越级下行直连 api/
 
 **通用横切**（任意页顺手看）：底部悬浮胶囊 TabBar 实底不透明不跳（2026-07-13 曾改贴边通栏，**2026-07-16 按用户需求改回悬浮形态**——胶囊左右留白+重投影，读作浮在内容上的实心块；口径以 `custom-tab-bar/index.wxss` 头注为准，2026-07-25 体检订正本行）、切 tab 角标数字对、杀进程重开购物车/地址还在、弱网时空态文案（不是白屏）、品牌字体生效（文源圆体·分层加载：首屏字先到、二级页/生僻字稍后补齐属正常；二次冷启动本地缓存应近即时，飞行模式也该有品牌字）。
 
-## 已知未搬面（诚实清单 · 2026-07-04 收口清点）
+## 图片/资产加载策略
 
-**合规必须（M5 上线前·剩用户侧两件）**：mp 后台《用户隐私保护指引》登记与新版采集面对齐 + 真机验弹窗（根因#8）。
-
-**记账待补（GitHub Issues·非上线阻塞）**：分享卡剩真机验样式与朋友圈单页态；订单物流轨迹（快递100 插件）剩真机验（见走查表第10项）。
-
-**非缺口（设计已变·UI 方向 A 拍板覆盖）**：MediaSlot 灰占位体系（新线 cover 直渲+灰底替代·见下「图片/资产加载策略」）· 节点拍照页（用户确认未投产·挂起）。
-
-## 图片/资产加载策略（canonical · 2026-07-16 成文）
-
-> 新线图片处理早已成体系，本节把隐性规则**显性化**为约定。客观事实（换址函数/存储路径/守卫扫描面）单源在 `docs/系统事实.md`，此处只引不手抄（防 stale）。
+> 新线图片处理早已成体系，本节把隐性规则**显性化**为约定。客观事实（换址函数/存储路径/守卫扫描面）以代码为准，此处只引不手抄。
 
 **决策 5 轴**（每轴＝一个问题 → 一个策略 → 既有实现）：
-- **A 所有权/易变性 → 包内 vs 远程**：恒定 UI（图标/logo）走 `/static/*.svg` 包内即时；内容图 `cloud://` fileID 存库、读时服务端批量换临时址下发；唯一入包位图＝品牌兜底 hero（`static/hero-full.jpg`）。守：`rw-mp-static-bitmap-budget`（单张 ≤200KB·总 ≤400KB）、`font-not-in-package`。
+- **A 所有权/易变性 → 包内 vs 远程**：恒定 UI（图标/logo）走 `/static/*.svg` 包内即时；内容图 `cloud://` fileID 存库、读时服务端批量换临时址下发；唯一入包位图＝品牌兜底 hero（`static/hero-full.jpg`）。守：`rw-mp-package-budget`。
 - **B 首屏 vs 折叠 → eager vs lazy（横向容器例外）**：首屏首图 eager（hero 不加 lazy）；折叠下方纵向内容图加 `lazy-load`；横向 scroll-view / swiper 内 `lazy-load` **真机不生效**（验证过），不加。
 - **C 单张 vs 列表 vs 大画廊 → 要否窗口化**：swiper/横向轨 lazy 失效 → 窗口化只渲 current±1（`computeGalleryWindow`·`pages/detail/detail.ts`）。
 - **D 临时址时效（~2h）→ 防过期**：持久化进 storage 的（cart/checkout）读时 `freshCover`（`lib/cart.ts`）重取；order 存 fileID 服务端 `swapOrdersCover` 换址；现取现渲（home/detail）天然新鲜。home 首屏快照（`lib/snapshot.ts`·冷启动 SWR）存的是已换好的 https 临时址，带 **90min TTL 剥离闸**（< 服务端 2h 有效期）——超龄读时剥掉快照内所有 http 临时址回退兜底（本地 `/static` 路径保留·mapHero 落包内鸭图/cover 落灰底），防隔夜冷启动首帧裂图。
@@ -93,10 +85,10 @@ pages/ · components/ · custom-tab-bar/   （顶层·可越级下行直连 api/
 | 头像 | UGC `cloud://` | eager·`<image>` 直解 fileID | 免（直解不过期） | 包内 `/static/logo-wordmark.svg` |
 | UGC 晒图 | UGC `cloud://`→读时换址 | **lazy** | 读时换址 | `wx:if` 守空 |
 
-**约定守卫（防策略漂移）**：折叠内容图必 `lazy-load`；禁内联 `<svg>`（`rw-mp-no-inline-svg`）；禁本地 `background:url()`（`rw-mp-no-bg-image-local`）；进包位图预算（`rw-mp-static-bitmap-budget`）；视频源禁外链（`no-external-video-src`·双线）。
+**约定守卫（防策略漂移）**：折叠内容图必 `lazy-load`；禁内联 `<svg>`、禁本地 `background:url()`、视频源禁外链（`rw-mp-banned-patterns`）；进包位图与主包体积预算（`rw-mp-package-budget`）。
 
 **非目标**（看似该做其实不该）：不重建 MediaSlot（方向 A 弃）；不引缩略图/雪碧图/多尺寸/图片处理 CDN（无需求·防过度工程）；不给横向轨/swiper 硬加无效 lazy；不给 hero 改 lazy/留灰占位；持久化临时址须带 **TTL 剥离闸**（`lib/snapshot.ts` 首屏快照面为唯一合法先例·超龄剥址回兜底——无剥离闸的「裸存 https 临时址」仍禁，会隔天过期裂图）。
 
 ## 走查结果记录
 
-走完把 ❌ 项拍照/描述发给 Claude，逐项修复后 M2 关账。
+走完把 ❌ 项拍照或描述发出来，逐项修复。

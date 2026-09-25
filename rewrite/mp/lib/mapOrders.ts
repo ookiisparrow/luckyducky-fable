@@ -34,7 +34,7 @@ export interface OrderVM {
 // rewrite/shared/src/statusLabels.ts 的 ORDER_STATUS_LABEL_CUSTOMER——mp 包进不了 @ldrw/shared（微信开发者
 // 工具编译不出仓外引用，同 lib/checkoutConst.ts 头注），故手落此副本；措辞与 admin 运营向（同源
 // ORDER_STATUS_LABEL_OPS，见 admin/src/lib/format.ts）刻意不同（如 shipped 这里「待收货」、admin「已发货」——
-// 客户视角 vs 商家视角），不是漂移；状态码集合须与 shared 一致，由守卫 rw-mp-order-labels-synced 焊死。
+// 客户视角 vs 商家视角），不是漂移；状态码集合须与 shared 一致，由守卫 rw-mp-copies-synced 焊死。
 const STATUS_LABELS: Record<string, string> = {
   pending: '待支付',
   paid: '待发货',

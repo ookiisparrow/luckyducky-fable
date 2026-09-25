@@ -3,7 +3,7 @@
 // 签名字节形状/告警口径/httpsFetch 兜底全程无人钉）：
 //   ① Key 防盗链签名（signVodPlayUrl）：t/us/sign 三参独立复算验证——sign 用测试侧 md5(KEY+Dir+t+us)
 //      重算比对（靠人#8「拿到≠用通」：不是断言「有个 sign 参数」，是哈希真能对上）；fail-closed 两口
-//      （无 playKey / 坏 URL）钉精确 [LD_ALERT] 行（守卫 rw-vod-sign-fail-closed 的行为面）。
+//      （无 playKey / 坏 URL）钉精确 [LD_ALERT] 行（签名 fail-closed 的行为面）。
 //   ② 上传签名（makeVodUploadSignature）：base64 解开成 HMAC(20B)+orig，HMAC-SHA1 测试侧真复算、
 //      orig 查询串逐字符对（官方 266/9221 形状）；时间戳/有效期 2h/random 用假时钟+假随机钉死。
 //   ③ 服务端 API（callVodApi）：固定时钟下 TC3-HMAC-SHA256 全链独立复算、Authorization 逐字符对；
@@ -127,7 +127,7 @@ afterEach(() => {
   vi.restoreAllMocks()
 })
 
-describe('signVodPlayUrl（Key 防盗链签名·官方 266/14047·rw-vod-sign-fail-closed 行为面）', () => {
+describe('signVodPlayUrl（Key 防盗链签名·官方 266/14047·fail-closed 行为面）', () => {
   it('大白话：黄金路径——t=过期时刻十六进制（now+6h）、us=8 位 hex、sign 用 md5(KEY+Dir+t+us) 独立复算对上、零告警', async () => {
     vi.useFakeTimers()
     vi.setSystemTime(FIXED)

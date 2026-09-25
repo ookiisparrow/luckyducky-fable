@@ -15,7 +15,7 @@ beforeEach(() => {
   control.setOpenId('')
 })
 
-// 激活码生成（黄金 §一：数量合法·防废码·批次不撞）——2026-07-23 拓扑收编批：原独立函数 ops/genQrcodes.ts
+// 激活码生成（黄金 §一：数量合法·防废码·批次不撞）——原为独立函数
 // 收编进 adminApi/actions/batches.ts generateQrcodes，原 kit.withAdminGate 管理闸不迁（唯一调用方
 // createBatch 已过 adminApi 外层网关 checkKey + ACTION_CAPS，见 app-admin2.test.ts 码批次用例覆盖）——
 // ADMIN_ONLY 用例随之删除，本层只测生成逻辑本身（数量/课程校验、码唯一性、批次号不撞）。

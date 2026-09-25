@@ -2,7 +2,7 @@
 import { describe, it, expect } from 'vitest'
 import { progressPercent } from '../src/learning'
 
-describe('学习进度百分比（0%/100% 不撒谎·守卫 rw-progress-percent-single-source）', () => {
+describe('学习进度百分比（0%/100% 不撒谎·守卫 rw-mp-copies-synced）', () => {
   it('大白话：一段都没学才是 0%', () => {
     expect(progressPercent(0, 80)).toBe(0)
     expect(progressPercent(0, 1)).toBe(0)

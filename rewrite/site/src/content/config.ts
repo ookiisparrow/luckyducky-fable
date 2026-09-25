@@ -1,6 +1,6 @@
 import { defineCollection, z } from 'astro:content'
 
-// 教程集合契约：reviewed=false 的 AI 起草稿页面带「初稿待审」横幅（守卫 rw-site-in-gates 核标记在）；
+// 教程集合契约：reviewed=false 的 AI 起草稿页面带「初稿待审」横幅（reviewed 必填，缺了 astro 构建即报错）；
 // steps 供 HowTo 结构化数据；faq 供 FAQPage。
 const tutorials = defineCollection({
   type: 'content',

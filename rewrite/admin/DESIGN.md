@@ -28,7 +28,7 @@
 | 紫描边 | `--ld-purple-line` |
 | 成功 / 危险 / 预警 | `--ld-green` / `--ld-red` / `--ld-amber`；浅底 `--ld-bg-green-soft` / `--ld-bg-red-soft` / `--ld-bg-amber-soft`；描边 `--ld-red-line` / `--ld-amber-line` |
 
-禁止：裸 hex（守卫 `rw-admin-theme-single-source`）、第二强调色、渐变底、玻璃拟态。换皮只改 `tokens.css`。
+禁止：裸 hex、第二强调色、渐变底、玻璃拟态。换皮只改 `tokens.css`。
 
 ## 字
 

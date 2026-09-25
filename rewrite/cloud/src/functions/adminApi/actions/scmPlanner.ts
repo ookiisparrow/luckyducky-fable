@@ -3,7 +3,7 @@ import { listMaterialDocs, sumLedgerByItemKey, isDocMissing } from '../../../kit
 import { COLLECTIONS } from '@ldrw/shared'
 import { resolveBom, yarnMaterialId } from '@ldrw/shared'
 
-// 进销存 SCM-D 备货计算器（蓝图 docs/进销存ERP/ §4D·门5 文件级隔离：本文件=车道 D 计划面）。
+// 进销存 SCM-D 备货计算器（见 docs/业务逻辑架构.md 链 12·门5 文件级隔离：本文件=车道 D 计划面）。
 // **只读**：目标套数 × 门3 resolveBom（与组装同一解析·配方语义单源）→ 对比主档库存 → 缺口两分：
 //   ① 外协缺口——带结团不外购（业务定稿：带结=织女产出），缺多少带结＝应发多少同色 L 原团；
 //     派生的原团需求叠回采购口径（发出去的原团也是要备的料）。

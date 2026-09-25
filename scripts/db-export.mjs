@@ -2,7 +2,7 @@
 // 数据备份导出（运维脚本，只读面：读集合 → 触发 manager-node 官方导出 API → 下载到本地，
 // 不建/改/删任何云端资源——只读红线见批次授权，实现细节见 git 历史本批提交信息）。
 // 不进 npm run check（同 deploy-fns.mjs / preflight.mjs 等既有运维脚本惯例，见 guardPlan：
-// 「脚本存在性」不是摆设守卫值得守的东西）。用法见 docs/运维手册.md §⑥.1。
+// 「脚本存在性」不是摆设守卫值得守的东西）。用法见 docs/运维手册.md「备份与索引」。
 //
 //   npm run db:export                              # 导出 DEFAULT_COLLECTIONS
 //   npm run db:export -- --collections=orders,users # 只导出指定集合

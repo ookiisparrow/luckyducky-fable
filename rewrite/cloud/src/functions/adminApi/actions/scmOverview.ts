@@ -3,7 +3,7 @@ import { listMaterialDocs, recentStockLedger } from '../../../kit'
 import { COLLECTIONS } from '@ldrw/shared'
 import { OUTWORK_ORDER_STATUS, PURCHASE_ORDER_STATUS } from '@ldrw/shared'
 
-// 进销存总览（蓝图 docs/进销存ERP/ §4·B2·门5 文件级隔离：本文件=总览车道，与 scmPlanner 同级只读聚合）。
+// 进销存总览（见 docs/业务逻辑架构.md 链 12·B2·门5 文件级隔离：本文件=总览车道，与 scmPlanner 同级只读聚合）。
 // 批 B2：无聚合看板，低库存/应付/在途要跑 5 页各看各的——本 action 把「今天该干啥」一屏拼出来，
 // 卡片直达对应页（跳转在前端）。**只读**，写路径零新增。RBAC：不登记 ACTION_CAPS → 默认拒
 // admin:write＝仅超管（照抄 scmPlanner 同级鉴权）。

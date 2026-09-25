@@ -12,7 +12,7 @@
  *
  * mp 包进不了本模块（微信开发者工具编译不出仓外引用——同 rewrite/mp/lib/checkoutConst.ts 头注），mp 仍手落
  * 一份副本（见 rewrite/mp/lib/mapOrders.ts / mapAftersales.ts 头注），改用 scripts/check-structure.mjs 的
- * rw-mp-order-labels-synced 守卫焊住「状态码集合」与本文件一致（措辞允许不同，状态漏配不允许）。
+ * rw-mp-copies-synced 守卫焊住「状态码集合」与本文件一致（措辞允许不同，状态漏配不允许）。
  * admin 无此限制（vite.config.ts 经 esbuild alias 直连本模块 TS 源，同 rewrite/cloud/build.mjs 既有先例），
  * 直接 import 用，不再手抄。
  */

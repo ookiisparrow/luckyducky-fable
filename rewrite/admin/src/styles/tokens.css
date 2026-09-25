@@ -1,6 +1,6 @@
 /**
  * 调色板单源（design/console.pen 变量表抄录·2026-07-05）。
- * 换皮只改这个文件——src 其余地方禁裸 hex（守卫 rw-admin-theme-single-source）。
+ * 换皮只改这个文件——src 其余地方禁裸 hex。
  * 命名沿用设计稿 token 名，加 --ld- 前缀。
  */
 :root {

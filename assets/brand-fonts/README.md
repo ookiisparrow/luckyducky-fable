@@ -1,9 +1,9 @@
 # 品牌字体（文源圆体 WenYuan Rounded SC · 分层子集 WebFont）
 
 这里是**小程序标题/正文字（`--ld-font-brand`）的分层子集 WebFont 产物**，经 `wx.loadFontFace` 远程
-分层加载（`rewrite/mp/utils/brandFont.ts`）——**不进 src、不打进小程序包**（守卫 `font-not-in-package`）。
+分层加载（`rewrite/mp/utils/brandFont.ts`）——**不进 src、不打进小程序包**（守卫 `rw-mp-package-budget`）。
 
-## 文件（2026-07-16 字体分层批·v2）
+## 文件（v2）
 
 | 层 | 覆盖 | CJK | 文件（Medium 500 / Bold 700） | 体积 |
 |---|---|---|---|---|
@@ -16,7 +16,7 @@
 - `LICENSE` — SIL OFL-1.1 全文 + 版权（随字体分发的授权条件③）。
 
 > ⚠ 用 **woff** 不用 woff2：`wx.loadFontFace` 官方建议格式仅 TTF/WOFF，woff2 开发者工具能渲染（假绿）
-> 真机静默失败（根因#8·2026-06-29 真机逮出）。
+> 真机静默失败（根因#8）。
 > ⚠ 文件名带版本号（`.v2`）：字符集/分层变更＝版本 +1＝新文件名＝CDN 与本地缓存天然失效。
 > 版本常量在 `scripts/build-brand-font.mjs`（`V`），须与 `rewrite/mp/utils/brandFont.ts` 文件名同步改。
 
@@ -39,12 +39,10 @@ BRAND_FONT_SRC=/path/to/otf-dir node scripts/build-brand-font.mjs
 ## 部署（靠人·控制台）
 
 1. 6 个 `.woff` 传到 CloudBase 静态托管 `/fonts/` 下（URL 单源 `rewrite/mp/utils/brandFont.ts`）。
-   旧 `wenyuan-rounded-{medium,bold}.woff` 可暂留托管作回滚（真机验过分层后再删）。
 2. 小程序后台「downloadFile 合法域名」须含该托管域名（已配·换域名时重核）。
-3. **建议**：托管控制台把 `/fonts/` 路径缓存策略调长（如 max-age=31536000）——2026-07-16 实测现状
-   `max-age=120` 几乎次次回源；文件名带版本号后长缓存无 stale 风险。不调也能用（客户端有本地缓存兜底）。
+3. **建议**：托管控制台把 `/fonts/` 路径缓存策略调长（如 max-age=31536000）：文件名带版本号，长缓存无 stale 风险。不调也能用（客户端有本地缓存兜底）。
 
-## 真机验收（根因#8·分层批新增项）
+## 真机验收（字体变更后·根因#8）
 
 ① 首启 FOUT 明显缩短（好网络下 splash 2s 窗口内首屏即品牌字）；② 进二级页（结算/订单/播放）文字
 最终换字——iOS+安卓都看（跨族逐字回退的真机半边）；③ **二次冷启动秒出品牌字**（本地缓存·开飞行模式

@@ -3,7 +3,7 @@ import { applyStockMoves, listMaterialDocs, transition, pageQuery, notifyAlert }
 import { COLLECTIONS } from '@ldrw/shared'
 import { asFen, OUTWORK_ORDER_STATUS, OUTWORK_ORDER_TRANSITIONS } from '@ldrw/shared'
 
-// 进销存车道 B·外协线（蓝图 docs/进销存ERP/施工蓝图.md §4B·门5 文件级隔离：本文件=车道 B 全部 action）。
+// 进销存车道 B·外协线（见 docs/业务逻辑架构.md 链 12·门5 文件级隔离：本文件=车道 B 全部 action）。
 // 业务定稿（README 需求）：织女把起手结做在**最大团**毛线上——发最大团原团（按色）→ 收同色带结团入库 →
 // 损耗=发−收可见 → 计件工钱应付（收回数×单价）→ 结算销账。
 // 出入库只经门1 kit/scmStock.applyStockMoves（守卫 material-stock-single-seam）；状态只走门2 transition()
@@ -162,7 +162,7 @@ export async function issueOutwork({ db, data, agentId }: Ctx) {
     // （若有人已 receiveOutwork 翻 delivered,此处 no-op,错误照返、人工经调整单对账）。
     // 复原本身若不成功（异常/条件不匹配即 updated≠1）须告警——否则单据永久卡在假「已发料」而库存实际未出，
     // 后续可能被继续走完流程甚至结算工钱,账实不符且无信号可查（同 scmStock.rollback 的 ROLLBACK_FAIL 口径）。
-    // structure-ok（rw-scm-transitions-declared）：技术性失败补偿,非业务逆向流转,理由见上。
+    // structure-ok（rw-status-transitions-declared）：技术性失败补偿,非业务逆向流转,理由见上。
     const rollback = await db
       .collection('outworkOrders')
       .where({ _id: outworkId, status: 'issued' })
@@ -253,7 +253,7 @@ export async function receiveOutwork({ db, data, agentId }: Ctx) {
     // 复原 issued 并清掉本次定格,否则单据「已收货有应付」而带结一团没入账、重放又被 NOT_ISSUED 挡死。
     // 复原本身若不成功须告警（同 issueOutwork 口径）——否则单据卡在假「已收货」（payableFen 已定格但
     // 库存未入账），可能被继续走到结算付工钱，账实不符且无信号可查。
-    // structure-ok（rw-scm-transitions-declared）：技术性失败补偿,非业务逆向流转,理由同 issueOutwork。
+    // structure-ok（rw-status-transitions-declared）：技术性失败补偿,非业务逆向流转,理由同 issueOutwork。
     const rollback = await db
       .collection('outworkOrders')
       .where({ _id: outworkId, status: 'delivered' })

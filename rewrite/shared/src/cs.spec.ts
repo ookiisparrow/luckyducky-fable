@@ -1,7 +1,7 @@
 /**
  * 客服会话状态机声明单源（坐席台）。流转表与 agentDesk.ts/dispatch.ts 里
  * 实际的 transition('csSession', …) 调用逐条吻合。
- * SPEC 本体被 rw-cs-transitions-declared 守卫文本级消费·勿删。
+ * SPEC 本体被 rw-status-transitions-declared 守卫文本级消费·勿删。
  */
 
 /** 客服会话状态机声明（csSession 集合）。 */

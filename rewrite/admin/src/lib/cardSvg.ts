@@ -11,7 +11,7 @@ export interface CardModel {
   sizeMM: { w: number; h: number }
 }
 
-// 印刷卡面固定色板（SVG 是独立印刷交付物·印刷/查看软件无 CSS var 可用·必须字面 hex·非 UI 主题色·刻意例外·非 rw-admin-theme-single-source 范围）
+// 印刷卡面固定色板（SVG 是独立印刷交付物·印刷/查看软件无 CSS var 可用·必须字面 hex·非 UI 主题色·刻意例外）
 const INK = '#241733' // structure-ok 品牌墨（角标条 / 底部品牌条底）
 const WHITE = '#ffffff' // structure-ok 卡面白字
 const C_TITLE = '#222222' // structure-ok 反面主标题

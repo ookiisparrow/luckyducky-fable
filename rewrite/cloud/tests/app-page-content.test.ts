@@ -1,4 +1,4 @@
-// 页面内容 CMS 云读写链（批A·守卫 rw-cloud-page-content-sanitized·信任边界 fail-closed·根因#3 不信前端）：
+// 页面内容 CMS 云读写链（批A·信任边界 fail-closed·根因#3 不信前端）：
 // adminApi savePageContent/getPageContent 每页白名单净化（超长截断/数组封顶/未知字段丢弃/未知 page 拒）
 // + agreement history 服务端追加与 cap；app 公开读 getPageContent 同白名单 + catalogPlayer.heroImage 换址。
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'

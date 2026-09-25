@@ -1,4 +1,4 @@
-// 登录软门槛（R1·规格§四-1·决策§3）——旧线 packages/miniapp 的 composables/useAuthGate.js +
+// 登录软门槛（R1）——旧线 packages/miniapp 的 composables/useAuthGate.js +
 // components/LoginSheet.vue 原生 mp 移植（重写线漏搬·同播放页预取那类「老线守冻结字节、新线未随迁」）。
 // openid 由云开发上下文静默可信（全仓无 wx.login/token）——此处「登录」＝用户显式勾协议同意登录，
 // 登录环节不采集头像昵称（真·一键登录·守卫 rw-mp-login-no-profile-collect·资料可后续在「编辑资料」页补）。

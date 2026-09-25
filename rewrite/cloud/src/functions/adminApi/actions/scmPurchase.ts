@@ -3,7 +3,7 @@ import { transition, applyStockMoves, listMaterialDocs, pageQuery, notifyAlert }
 import { COLLECTIONS } from '@ldrw/shared'
 import { asFen, PURCHASE_ORDER_TRANSITIONS } from '@ldrw/shared'
 
-// 进销存车道 A·采购线（蓝图 docs/进销存ERP/ §4·门5 文件级隔离：本文件=车道 A）。
+// 进销存车道 A·采购线（见 docs/业务逻辑架构.md 链 12·门5 文件级隔离：本文件=车道 A）。
 // 状态机 draft→ordered→received（+draft/ordered→cancelled·声明表 shared/scm.spec.ts·门2 transition 收口·
 // 守卫 order-transitions-declared 按 scm* 前缀自动纳管本文件）；received 首次流转绑入库副作用（门1
 // applyStockMoves·docType purchase_in·确定性流水幂等——重放 moved=false 直接返回已入库、不双记账）。
@@ -131,7 +131,7 @@ export async function receivePurchase({ db, data, agentId }: Ctx) {
     // 声明了就开放成业务动作了）：条件 CAS 复原 ordered，让下次 receivePurchase 重新走一次真实入库
     // （门1 幂等：已应用行撞确定性流水 _id 跳过、未应用行补齐，见 scmStock.applyStockMoves）；
     // 复原本身若不成功须告警，否则单据卡死在假 received、无信号可查。
-    // structure-ok（rw-scm-transitions-declared）：技术性失败补偿,非业务逆向流转,理由见上。
+    // structure-ok（rw-status-transitions-declared）：技术性失败补偿,非业务逆向流转,理由见上。
     const rollback = await db
       .collection('purchaseOrders')
       .where({ _id: id, status: 'received' })

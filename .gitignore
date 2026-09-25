@@ -34,7 +34,7 @@ rewrite/mp/minitest/
 # build:cloud 并发锁（原子 mkdir，构建完即删；崩溃残留由下次构建 2min 破除）
 .build-cloud.lock
 
-# 体检面板产物（npm run report 生成 核不入库）
+# 生成的报告（变异测试等）不入库
 reports/
 
 # vitest --coverage 产物（B8·仅本地/CI 度量用，不入库）

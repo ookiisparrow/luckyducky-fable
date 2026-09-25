@@ -23,7 +23,7 @@
 // （onLaunch 时机）下加的、随真因（CORS）修复删除；本次为「瞬断=整会话系统字」这一真缺口重加，语义不同。
 //
 // ⚠ 用 woff 不用 woff2（官方建议格式仅 TTF/WOFF·woff2 真机静默失败·2026-06-29 真机逮出）。
-// ⚠ 子集产物正本在仓根 assets/brand-fonts/（不进包·守卫 font-not-in-package），部署到静态托管 /fonts/。
+// ⚠ 子集产物正本在仓根 assets/brand-fonts/（不进包·守卫 rw-mp-package-budget），部署到静态托管 /fonts/。
 // ⚠ 字符集覆盖由守卫 rw-mp-font-tier-subset-covers 机器盯（新增文案带来子集外新字即红）。
 // ⚠ 用默认域名 cloudbase-….tcloudbaseapp.com（DigiCert·同视频域名 CA）不用自有 www.luckyducky.cn
 //   （TrustAsia·手机微信对 CA 挑剔）。域名须在小程序后台「downloadFile 合法域名」内。

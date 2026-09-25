@@ -1,4 +1,4 @@
-// adminApi v2 客户端行为（守卫 rw-admin-ui-in-gates 焊在位·钱链入口）：
+// adminApi v2 客户端行为（钱链入口）：
 // 口令用完即弃只存令牌/云端没发令牌不算登成/401 清令牌统一 SESSION_LOST/网络错带原文不吞（调试案 A 教训）。
 import { describe, it, expect, beforeEach } from 'vitest'
 import { createClient } from '../src/api/client'

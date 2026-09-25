@@ -1,7 +1,7 @@
 // 页面内容页签保存生命周期（批C·收敛阀）：welcome/catalogPlayer/mePage/about/agreement 四签的
 // 「进签拉取 → 900ms 防抖自动保存 → serialSave 串行防乱序 → load-guard 未载入不写 → 离签补存」完全同构。
 // 抽成 composable 而非 4 份复制——防把 HomeContent 里那套有文档记载的竞态修复（serialSave 乱序/未载入整档覆盖·
-// 根因#8）在复制中改错（元模式：复制即漂移·病根#5）。HomeContentForm 用的是 getHomeContent/saveHomeContent
+// 根因#8）在复制中改错（病根#5 复制即漂移）。HomeContentForm 用的是 getHomeContent/saveHomeContent
 // 另一对接口 + 多图上传，形状不同、单独保留、不并进此 composable（别为「碰巧长得像」硬合并）。
 import { ref, watch, onMounted, onBeforeUnmount, nextTick, type Ref } from 'vue'
 import { getPageContent, savePageContent } from '../api/content'

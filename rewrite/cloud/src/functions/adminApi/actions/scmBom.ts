@@ -2,7 +2,7 @@ import { reply, type Ctx } from '../lib'
 import { isDocMissing } from '../../../kit'
 import { COLLECTIONS, cleanBomTemplate } from '@ldrw/shared'
 
-// 进销存 SCM-C 配方管理（蓝图 docs/进销存ERP/·门5 文件级隔离：本文件=车道 C 配方面）。
+// 进销存 SCM-C 配方管理（见 docs/业务逻辑架构.md 链 12·门5 文件级隔离：本文件=车道 C 配方面）。
 // 全局一张模板存 config 确定性 _id='scmBomTemplate'（复用配置单源模式·不立新集合）；每产品差异位存
 // bomProfiles（_id=productId·三色 + 专属包装/卡片料号）。配方语义单源在 shared/scmBom resolveBom（门3）——
 // 本文件只管「存取」，白名单校验规则单源在 shared/scmBom cleanBomTemplate（此前本文件手写复刻过一份，

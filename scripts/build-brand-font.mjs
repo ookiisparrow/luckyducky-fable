@@ -13,7 +13,7 @@
  *
  * ⚠ 用 woff 不用 woff2：wx.loadFontFace 官方建议格式仅 TTF/WOFF，woff2 真机静默失败（根因#8·2026-06-29
  *   真机逮出·开发者工具浏览器内核能渲染=假绿）。
- * ⚠ 产物落 assets/brand-fonts/，**不进 src**（守卫 font-not-in-package）——wx.loadFontFace 远程托管加载。
+ * ⚠ 产物落 assets/brand-fonts/，**不进 src**（守卫 rw-mp-package-budget）——wx.loadFontFace 远程托管加载。
  * ⚠ 文件名带版本号（V 常量）：托管 CDN 可放心配长缓存，字符集变更=版本+1=新文件名=天然缓存失效；
  *   rewrite/mp/utils/brandFont.ts 的 URL 与本脚本产物名必须一致（tests/brand-font.test.ts 钉形状）。
  * ⚠ txt 与 woff 永远一起产出（本脚本无「只出 txt」路径）——守卫只读 txt，txt 新 woff 旧=守卫绿但真机
@@ -100,7 +100,7 @@ function run() {
       console.log(`  ✓ ${outName}  (weight ${w.weight})  ${kb}KB`)
     }
   }
-  console.log(`产物 → ${OUT_DIR}（不进 src·wx.loadFontFace 远程分层加载·守卫 font-not-in-package + rw-mp-font-tier-subset-covers）`)
+  console.log(`产物 → ${OUT_DIR}（不进 src·wx.loadFontFace 远程分层加载·守卫 rw-mp-package-budget + rw-mp-font-tier-subset-covers）`)
   console.log('下一步（靠人·控制台）：6 个 woff 传 CloudBase 静态托管 /fonts/ 下（README 部署节·含 CDN 缓存建议）')
 }
 

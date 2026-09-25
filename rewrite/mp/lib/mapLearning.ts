@@ -44,7 +44,7 @@ export interface MyCourseVM {
 
 // 学习进度百分比（手落副本·canonical 单源 rewrite/shared/src/learning.ts 的 progressPercent；
 // mp 包进不了 @ldrw/shared——微信开发者工具编译不出仓外引用，同 lib/checkoutConst.ts / mapOrders.ts 头注；
-// 两侧一致由守卫 rw-progress-percent-single-source 逐规则焊死）。
+// 两侧一致由守卫 rw-mp-copies-synced 逐规则焊死）。
 // **0% 只表示真没学、100% 只表示真学完**，中间态夹到 [1,99]：
 // 原裸写 Math.round 在边界撒谎——1/250 显示 0%（学了却像没学）、199/200 显示 100%（没学完却像结课）。
 function progressPercent(done: number, total: number): number {

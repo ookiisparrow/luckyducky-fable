@@ -84,7 +84,7 @@ export const main = async (event: any) => {
     await recordAnomaly(
       'server-exception',
       'APP_ACTION_UNCAUGHT',
-      // module：按模块正册归因（车队地基批2·modules.json→moduleMap 镜像·守卫 module-map-synced 焊死）
+      // module：按模块正册归因（modules.json→moduleMap 镜像·module-map.test.ts 锁同步）
       { fp: action, action, module: moduleOfAction(action), msg: String((e as Error)?.message || e).slice(0, 200) },
       'high'
     )

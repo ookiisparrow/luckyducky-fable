@@ -1,4 +1,4 @@
-// 结算常量副本（镜像 rewrite/shared/src/checkout.ts·守卫 rw-mp-checkout-consts-synced 焊死逐值一致——
+// 结算常量副本（镜像 rewrite/shared/src/checkout.ts·守卫 rw-mp-copies-synced 焊死逐值一致——
 // mp 包进不了 @ldrw/shared（开发者工具编译不出仓外引用），改值先改 shared 再同步这里，守卫红了别绕）。
 export interface CheckoutAddon {
   id: string

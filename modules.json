@@ -1,9 +1,8 @@
 {
-  "__doc__": "模块正册（车队地基批1·2026-07-23）：活线全部 action/页面/集合按业务模块归属，一条目一模块、不重不漏。用途：①出问题按模块归因（异常账本/告警带模块 ID，批2 接线）②AI 车队派活时施工单范围=模块（tier=改动该模块云端逻辑所需档位：red=工头亲自+人签字 / yellow=工头逐行评审 / green=下层模型放手）。维护：加 action/页面/集合先在此登记，守卫 module-registry-complete 核不重不漏，登记漂移即 npm run check 红。",
+  "__doc__": "模块正册：活线全部 action/页面/集合按业务模块归属，一条目一模块、不重不漏。用途：出问题按模块归因（告警带模块 ID）。红区（改动须老板授权）不在这里定，以 scripts/lib/red-paths.mjs 为准。维护：加 action/页面/集合先在此登记，守卫 module-registry-complete 核不重不漏。",
   "modules": {
     "identity": {
       "name": "身份与合规",
-      "tier": "yellow",
       "appActions": [
         "login",
         "updateProfile",
@@ -24,7 +23,6 @@
     },
     "shop": {
       "name": "商品与内容",
-      "tier": "yellow",
       "appActions": [
         "getProducts",
         "getProductDetail",
@@ -60,7 +58,6 @@
     },
     "orders": {
       "name": "订单交易（钱链）",
-      "tier": "red",
       "appActions": [
         "createOrder",
         "pay",
@@ -104,7 +101,6 @@
     },
     "learning": {
       "name": "课程学习（激活/进课/播放）",
-      "tier": "yellow",
       "appActions": [
         "activateCourse",
         "confirmEnter",
@@ -140,7 +136,6 @@
     },
     "reviews": {
       "name": "评价晒单",
-      "tier": "yellow",
       "appActions": [
         "getReviews",
         "getRatingSummary",
@@ -163,7 +158,6 @@
     },
     "cs": {
       "name": "客服360与私域",
-      "tier": "yellow",
       "appActions": [
         "kfBind",
         "dataConsent",
@@ -212,7 +206,6 @@
     },
     "scm": {
       "name": "进销存供应链",
-      "tier": "yellow",
       "appActions": [],
       "adminActionFiles": [
         "scmAssembly",
@@ -247,7 +240,6 @@
     },
     "ops": {
       "name": "运维观测与系统配置",
-      "tier": "red",
       "appActions": [],
       "adminActionFiles": [
         "ops",
