@@ -3,13 +3,32 @@ import { dateTime } from './mapOrders'
 import { clampResumeAt } from './continueResolve' // 续播秒夹取单源（命中 last 段分支复用·禁复制实现·病根#5）
 
 /** 激活结果五态：activated 新激活（恭喜屏）/ mine 本人已进课（欢迎回来屏）/ taken 他人码（已被使用屏）/
- *  invalid 废码 / error 网络失败（深审20260712 P3：CALL_FAIL/BAD_RESULT≠废码——扫真码遇网络抖动不误告
- *  「激活码不对」，给「再试一次」；fail-closed 方向不变，仍不授权不冒充激活）。 */
+ *  invalid 废码 / error 没兑成但码可能是好的（按 reason 分文案、可重试·fail-closed 不冒充激活）。 */
 export type ActivationKind = 'activated' | 'mine' | 'taken' | 'invalid' | 'error'
+export type ActivationErrReason = 'network' | 'throttled' | 'busy'
 
 export interface ActivationView {
   kind: ActivationKind
   courseId: string
+  reason?: ActivationErrReason
+}
+
+// 非废码失败说「码不对」会让持真码的人清码重输、甚至以为买到假卡；只有 INVALID_CODE/未知码才归废码。
+// NOT_ACTIVATED＝云端激活没写进库，重扫即幂等自愈，对用户就是「服务繁忙再试」。
+// 云端码手抄自 shared ERR（mp 进不了 @ldrw/shared），云端改名时 tests/q-mp-err-codes-synced 会红。
+export const ERR_REASON: Record<string, ActivationErrReason> = {
+  CALL_FAIL: 'network',
+  BAD_RESULT: 'network',
+  CALL_TIMEOUT: 'network',
+  RATE_LIMITED: 'throttled',
+  INTERNAL: 'busy',
+  NOT_ACTIVATED: 'busy',
+}
+
+export const ACTIVATION_ERR_COPY: Record<ActivationErrReason, { eyebrow: string; display: string; lead: string }> = {
+  network: { eyebrow: 'NETWORK · 网络开小差', display: '网络不好', lead: '你的激活码可能没问题，只是刚才没连上服务器——稍等片刻，再试一次就好。' },
+  throttled: { eyebrow: 'SLOW DOWN · 操作太频繁', display: '操作太频繁了', lead: '刚才试得有点多，歇一分钟再试一次就好，激活码不用重输。' },
+  busy: { eyebrow: 'BUSY · 服务繁忙', display: '服务繁忙', lead: '服务器这会儿有点忙，你的激活码可能没问题——稍后再试一次。' },
 }
 
 export function activationView(r: unknown): ActivationView {
@@ -18,7 +37,8 @@ export function activationView(r: unknown): ActivationView {
   if (res.ok === true && (res.state === 'activated' || res.state === 'mine')) return { kind: res.state, courseId }
   const err = String(res.error || '')
   if (res.ok === false && err === 'CODE_TAKEN') return { kind: 'taken', courseId } // 带 courseId·按课取图
-  if (res.ok === false && (err === 'CALL_FAIL' || err === 'BAD_RESULT')) return { kind: 'error', courseId: '' } // 网络/回包失败≠废码：文案分治可重试，仍 fail-closed 不冒充激活
+  const reason = res.ok === false && Object.prototype.hasOwnProperty.call(ERR_REASON, err) ? ERR_REASON[err] : undefined
+  if (reason) return { kind: 'error', courseId: '', reason }
   return { kind: 'invalid', courseId: '' } // INVALID_CODE/未知错误一律废码态（fail-closed 不冒充激活）
 }
 

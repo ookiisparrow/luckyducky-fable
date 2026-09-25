@@ -35,6 +35,7 @@ Page({
     banner: null as BannerVM | null,
     amountNum: '',
     canAfterSale: false,
+    paying: false, // 继续支付在途（锁 + 按钮 dim）：pay 往返最长 12s，连点会重复发 pay、重复拉起收银台
     shopName: SHOP_FULL_NAME, // 店铺行恒引 lib/shop 单源（不硬编码·病根#5·守卫 brand-name-single-source）
   },
   onLoad(query: Record<string, string | undefined>) {
@@ -127,8 +128,17 @@ Page({
     })
   },
   async onPay() {
+    if (this.data.paying) return
     tapHaptic()
+    this.setData({ paying: true })
+    wx.showLoading({ title: '正在发起支付', mask: true })
     const outcome = mapPayResult(await pay(this.orderId))
+    wx.hideLoading()
+    // 收银台关掉（成功/取消/失败）或没拉起都要解锁，否则按钮永久点不动
+    const settle = () => {
+      this.setData({ paying: false })
+      void this.reload()
+    }
     // await 恢复点复核（同 checkout startPay 范式·bug sweep II 批E）：用户在支付发起在途退出详情页，迟到回包
     // 不再对已退页 toast/reload/拉起支付授权框——订单已在云端，用户下次重新打开详情页续付即可。requestPayment 的
     // success/fail 回调内不加同款复核：授权框是模态、卸载窗口小，无需评估。
@@ -138,7 +148,7 @@ Page({
     }
     if (outcome.kind === 'paid') {
       wx.showToast({ title: '已支付', icon: 'success' })
-      void this.reload()
+      settle()
       return
     }
     if (outcome.kind === 'request') {
@@ -146,14 +156,14 @@ Page({
         ...outcome.payment,
         success: () => {
           wx.showToast({ title: '支付成功', icon: 'success' })
-          void this.reload()
+          settle()
         },
-        fail: () => void this.reload(),
+        fail: settle,
       })
       return
     }
     wx.showToast({ title: outcome.message, icon: 'none' })
-    void this.reload()
+    settle()
   },
   onConfirm() {
     tapHaptic()
@@ -194,28 +204,35 @@ Page({
       wx.showToast({ title: '没有可申请售后的条目', icon: 'none' })
       return
     }
-    wx.showActionSheet({
-      itemList: eligible.slice(0, 6).map((l) => `${l.name}${l.spec ? '（' + l.spec + '）' : ''}`),
-      success: (res) => {
-        const line = eligible[res.tapIndex]
-        wx.showModal({
-          title: '申请退款',
-          editable: true,
-          placeholderText: '退款原因（选填）',
-          success: async (m) => {
-            if (!m.confirm) return
-            const r = await applyRefund(vm.id, line.lineId, String(m.content || ''))
-            if (this.unloaded) return // await 恢复点复核（bug sweep II 批E）：用户已退出详情页——申请已真实提交，非钱副作用，静默收尾即可（不再对已退页 toast/导航）
-            if (r.ok) {
-              wx.showToast({ title: '已提交申请', icon: 'success' })
-              navigateOrRedirect('/pages/aftersales/aftersales')
-            } else {
-              const e = String(r.error || '')
-              const msg = e === 'ALREADY_APPLIED' ? '这条已申请过了' : e === 'NOT_REFUNDABLE' ? '该条目不可退（已开课）' : e === 'NOTHING_LEFT' ? '本单可退额度已用完' : '申请没成功，稍后再试'
-              wx.showToast({ title: msg, icon: 'none' })
-            }
-          },
-        })
+    const label = (l: (typeof eligible)[number]) => `${l.name}${l.spec ? '（' + l.spec + '）' : ''}`
+    // wx.showActionSheet 一屏最多 6 项：放不下时每屏 5 行 + 「更多…」翻下一屏，保证每一行都选得到
+    const pick = (start: number) => {
+      const paged = eligible.length - start > 6
+      const page = eligible.slice(start, paged ? start + 5 : undefined)
+      wx.showActionSheet({
+        itemList: page.map(label).concat(paged ? ['更多…'] : []),
+        success: (res) => (res.tapIndex < page.length ? this.applyFor(vm.id, page[res.tapIndex].lineId) : pick(start + 5)),
+      })
+    }
+    pick(0)
+  },
+  applyFor(orderId: string, lineId: string) {
+    wx.showModal({
+      title: '申请退款',
+      editable: true,
+      placeholderText: '退款原因（选填）',
+      success: async (m) => {
+        if (!m.confirm) return
+        const r = await applyRefund(orderId, lineId, String(m.content || ''))
+        if (this.unloaded) return // await 恢复点复核（bug sweep II 批E）：用户已退出详情页——申请已真实提交，非钱副作用，静默收尾即可（不再对已退页 toast/导航）
+        if (r.ok) {
+          wx.showToast({ title: '已提交申请', icon: 'success' })
+          navigateOrRedirect('/pages/aftersales/aftersales')
+        } else {
+          const e = String(r.error || '')
+          const msg = e === 'ALREADY_APPLIED' ? '这条已申请过了' : e === 'NOT_REFUNDABLE' ? '该条目不可退（已开课）' : e === 'NOTHING_LEFT' ? '本单可退额度已用完' : '申请没成功，稍后再试'
+          wx.showToast({ title: msg, icon: 'none' })
+        }
       },
     })
   },

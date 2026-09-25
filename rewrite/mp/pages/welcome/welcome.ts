@@ -7,7 +7,7 @@ import { activateCourse, confirmEnter } from '../../api/learning'
 import { getContent } from '../../api/catalog'
 import { getPageContent } from '../../lib/pageContent'
 import { getCourseById } from '../../lib/courses'
-import { activationView, bgFor, type ActivationKind } from '../../lib/mapLearning'
+import { activationView, bgFor, ACTIVATION_ERR_COPY, type ActivationKind } from '../../lib/mapLearning'
 import { mapWelcome, type WelcomeVM } from '../../lib/mapPages'
 import { goBackOrHome } from '../../lib/nav'
 import type { ApiResult } from '../../utils/cloud'
@@ -22,6 +22,7 @@ Page({
     courseId: '',
     courseTitle: '', // W1 课程名行数据源（取不到/空则不渲染该行·诚实回退，见 activate()）
     bg: '',
+    errCopy: ACTIVATION_ERR_COPY.network,
     busy: false,
     welcome: mapWelcome(null) as WelcomeVM, // W1/W2 文案·首帧即默认（CMS 到达后覆盖·不空屏）
   },
@@ -77,6 +78,7 @@ Page({
       courseId: view.courseId,
       courseTitle: '',
       bg: bgFor(this.home, view.courseId, view.kind),
+      errCopy: ACTIVATION_ERR_COPY[view.reason || 'network'],
     })
     if (view.kind === 'activated' && view.courseId) {
       // W1 课程名行（fail-soft）：新激活才取，mine/taken/invalid 三态沉浸壳不显课程名、不必取。

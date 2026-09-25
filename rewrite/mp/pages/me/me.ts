@@ -18,6 +18,9 @@ import { loginGate } from '../../lib/loginGate'
 import { currentAppVersionLine, currentAppVersionDetail } from '../../lib/appVersion'
 
 const CONT_KEY = 'ld:me-cont'
+// 切 tab 回「我」的去重窗：每次刷新是 login+CMS+进度+我的课（+课程）4-5 次云调用，tab 来回切不该每次都付。
+// ponytail: 窗内从别的 tab 看完课再切回，继续学习卡的续播秒数最多旧 30s；要更准就改成播放器写进度时主动作废。
+const ME_FRESH_MS = 30_000
 
 function sanitizeCont(raw: unknown): ContinueTarget | null {
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null
@@ -87,6 +90,7 @@ Page({
     armExitGuard(this) // tabBar 栈底页误触退出提醒：武装 page-container 拦第一次返回（决策§30·见 utils/exitGuard）
     if (typeof this.getTabBar === 'function') (this.getTabBar() as unknown as LdTabBar).setActive('me')
     loginGate.maybePromptOnce() // 软门槛本会话至多弹一次（首页/我页共用·未同意才弹）
+    if (Date.now() - this._freshAt < ME_FRESH_MS && this._freshAgreed === loginGate.hasAgreed()) return
     void this.refresh()
   },
   onHide() {
@@ -103,10 +107,19 @@ Page({
   onLoggedIn() {
     void this.refresh()
   },
+  _freshAt: 0, // 上次完整拉成功的时刻（没拉全不记·失败不缓存）；置 0 = 下次 onShow 必拉
+  _freshAgreed: false, // 那次刷新时的登录态：登录/退出后切回必须重拉
   _seq: 0, // refresh 代次（同 order-list/aftersales 范式）：onShow 多触发点（tab 切回/其他页返回）并发 refresh，
   // 慢回包迟到落地会覆盖更晚一次 refresh 已落的新结果（P2·bug sweep Round2 item1）。
+  /** 离开去做会改资料/进度的事：回来必须重拉。只清 _freshAt 不够——在途的 refresh 晚到会把去重窗重新记上，
+   *  所以连代次一起作废，让它的结果整个丢掉（回来 onShow 反正全量重拉）。 */
+  _expireFresh() {
+    this._freshAt = 0
+    this._seq++
+  },
   async refresh() {
     const seq = ++this._seq
+    this._freshAt = 0
     const contP = this.refreshCont(seq) // 继续学习卡不等人资料/CMS（那两路只喂头像昵称/入口）
     const [u, meContent] = await Promise.all([login(), getPageContent('mePage')])
     if (seq !== this._seq) return
@@ -120,26 +133,31 @@ Page({
       bio: (agreed && user && String(user.bio || '')) || '',
       entries: me.entries,
     })
-    await contP
+    if ((await contP) && u.ok && seq === this._seq) {
+      this._freshAt = Date.now()
+      this._freshAgreed = agreed
+    }
   },
-  async refreshCont(seq: number) {
+  /** 返回是否拉全（供 refresh 判断能否进去重窗）。 */
+  async refreshCont(seq: number): Promise<boolean> {
     const [progress, mine] = await Promise.all([getMyProgress(), getMyCourses()])
-    if (seq !== this._seq) return
+    if (seq !== this._seq) return false
     if (!progress.ok || !mine.ok) {
       this.setData({ contLoaded: true, ...(this.data.cont ? {} : { contFailed: true }) })
-      return
+      return false
     }
     const ids = continueCourseIds(progress.list, mine.list)
     const courses = ids.length ? await getCoursesByIds(ids) : []
-    if (seq !== this._seq) return
+    if (seq !== this._seq) return false
     if (courses === null) {
       this.setData({ contLoaded: true, ...(this.data.cont ? {} : { contFailed: true }) })
-      return
+      return false
     }
     const cont = continueResolve(progress.list, mine.list, courses)
     writeStoredCont(cont)
     this.setData({ cont, contFailed: false, contLoaded: true })
     if (cont) void playbackCache.prefetch(cont.courseId, cont.segmentId)
+    return true
   },
   onRetryCont() {
     tapHaptic()
@@ -147,6 +165,7 @@ Page({
   },
   onContinue() {
     tapHaptic()
+    this._expireFresh() // 看完课回来续播位置变了
     const c = this.data.cont
     if (c) {
       // 带上次段位回到那一段（卡片显的是该课时·不带则播放器落首段·卡片承诺≠行为）；段位空则不拼（播放器挑首个可播段）
@@ -160,6 +179,7 @@ Page({
     }
   },
   onEditProfile() {
+    this._expireFresh() // 改完昵称头像回来要看到新的
     wx.navigateTo({ url: '/pages/profile-edit/profile-edit' })
   },
   // 登出态头部「登录」入口：打开登录半屏（同软门槛入口·loginGate 单例驱动）
@@ -221,9 +241,11 @@ Page({
     wx.showToast({ title: '已删除', icon: 'none' })
   },
   onCourses() {
+    this._expireFresh() // 从课程列表进播放器，回来进度变了
     wx.navigateTo({ url: '/pages/my-courses/my-courses' })
   },
   onActivate() {
+    this._expireFresh() // 激活了新课，继续学习卡要换
     wx.navigateTo({ url: '/pages/welcome/welcome' })
   },
   // 三格（待付款/待发货/待收货）带 data-tab 直落对应分栏；「全部订单」无 dataset 不带 tab（order-list.ts query.tab 契约）。

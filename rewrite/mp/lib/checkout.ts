@@ -93,12 +93,46 @@ export function resolveOrderAmountFen(order: unknown, fallbackFen: number): numb
 // 必须与 rewrite/shared/src/errors.ts 的 ERR.OUT_OF_STOCK 值一致——mp 进不了 @ldrw/shared（开发者工具编译限制），手动同步
 const OUT_OF_STOCK_PREFIX = 'OUT_OF_STOCK'
 
+// 云端拒单码 → 人话（码值镜像 cloud app/actions/orders.ts createOrder 与 shared/src/errors.ts，手动同步；
+// 云端改名/改冒号格式时 tests/q-mp-err-codes-synced 会红）。
+// 带冒号的码（UNLISTED_ITEM:<id> 等）按前缀认。没列到的才落通用句——通用句只配真没法归因的失败。
+// 本文件在购物车 tab 首屏字体闭包里：措辞只用 tier1 子集已有的字（守卫 rw-mp-font-tier-subset-covers），
+// 换字前先查 assets/brand-fonts/tier1.txt，否则要重建字体。
+export const CREATE_ORDER_ERR_COPY: Record<string, string> = {
+  UNLISTED_ITEM: '有商品已下架',
+  UNKNOWN_ITEM: '有商品已不存在',
+  UNKNOWN_SKU: '有商品的这一款已下架',
+  TOO_MANY_PENDING: '待付款的订单太多了，先到「我的订单」里处理',
+  BAD_ADDRESS: '收货地址不完整，请检查',
+  BAD_QTY: '有商品数量太多了，请调整数量',
+  TOO_MANY_ITEMS: '商品太多了，请分开下单',
+  COUPON_EXCEEDS_GOODS: '优惠券暂不支持抵扣这单，请调整商品数量',
+  RATE_LIMITED: '点太快了，稍后再试',
+  CALL_TIMEOUT: '网络不好，稍后再试',
+  CALL_FAIL: '网络不好，稍后再试',
+}
+
 /** 建单失败错误码 → 人话文案（云端拒单原样透传·前端只做展示映射，不吞成通用失败）（bug sweep R1 #2）。 */
 export function mapCreateOrderError(msg: string): string {
   const m = String(msg || '')
   if (m.startsWith(OUT_OF_STOCK_PREFIX)) return '有商品库存不足'
-  if (m === 'COUPON_EXCEEDS_GOODS') return '优惠券暂不支持抵扣这单，请调整商品数量'
-  return '下单没成功，稍后再试'
+  const code = m.split(':')[0]
+  return Object.prototype.hasOwnProperty.call(CREATE_ORDER_ERR_COPY, code) ? CREATE_ORDER_ERR_COPY[code] : '下单没成功，稍后再试'
+}
+
+/** 云端说「这件买不了」（下架/删档/规格没了·整单拒）时把那一行移出草稿（来自购物车的也移出购物车），
+ *  否则同一草稿永远被拒、用户只能干等。返回被移走的商品名；别的码不动任何行、回 ''。
+ *  移完只剩搭配购则清空草稿（云端 NO_MAIN_ITEM 不许单买搭配购）。 */
+export function dropRejectedLine(msg: string): string {
+  const [code, id, ...rest] = String(msg || '').split(':')
+  if (!id || !(code === 'UNLISTED_ITEM' || code === 'UNKNOWN_ITEM' || code === 'UNKNOWN_SKU')) return ''
+  const sku = code === 'UNKNOWN_SKU' ? rest.join(':') : null // 下架/删档是整件，规格没了只挑这一规格
+  const hit = draftItems.filter((l) => l.id === id && (sku === null || l.sku === sku))
+  if (!hit.length) return ''
+  draftItems = draftItems.filter((l) => !hit.includes(l))
+  if (fromCart) hit.forEach((l) => cart.remove(l.id, l.sku))
+  if (draftItems.every((l) => CHECKOUT_ADDONS.some((a) => a.id === l.id))) draftItems = []
+  return hit[0].name + (sku ? '（' + sku + '）' : '')
 }
 
 /** 仅测试：清草稿。 */
