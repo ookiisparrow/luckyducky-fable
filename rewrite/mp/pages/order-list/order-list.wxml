@@ -90,7 +90,6 @@
 
     <!-- 尾注：分页可加载 / 到底 -->
     <view class="coolist-more" wx:if="{{hasMore}}">上拉加载更多</view>
-    <view class="coolist-end" wx:elif="{{!loading && shown.length}}">仅展示近期订单</view>
 
   </view>
 </view>

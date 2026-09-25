@@ -224,7 +224,7 @@ describe('松手 seek', () => {
   })
   it('大白话：播完态（paused）松手 → seek 后恢复播放并退出完成态', async () => {
     const page = await setup({ paused: true, segDone: true })
-    page.onSeekCommit({ detail: { sec: 100 } })
+    page.onSeekCommit({ sec: 100 })
     expect(video.calls).toEqual(['seek', 'play'])
     expect(page.data).toMatchObject({ segDone: false, seeking: false, snapName: '', curSec: 100, curClock: '1:40', seekPct: 50 })
   })
