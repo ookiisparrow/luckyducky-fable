@@ -10,6 +10,7 @@
 //     lib/courses.ts（别在这儿绕过缓存直取）。
 //  ③ 快照是**加分项**：任何一步失败（storage 超限/脏档/序列化炸）一律静默回退到「无快照」路径，
 //     绝不影响主渲染（reload 照常拉云端）。
+import { readStorage } from '../utils/storage'
 
 const KEY = 'ld:home-snap'
 const SNAP_VERSION = 1
@@ -65,18 +66,14 @@ function stripHttp(v: unknown): unknown {
 
 /** 内部裸读（不做 TTL 剥址·供 writeSnapshot 合并保留另半边用）。 */
 function readRaw(): Record<string, unknown> | null {
-  try {
-    return asObj(wx.getStorageSync(KEY))
-  } catch {
-    return null
-  }
+  return asObj(readStorage(KEY))
 }
 
 /** 回写快照：products 逐条裁白名单；products 为 null（本趟只拿到 home）则保留上次的 products 半边，反之亦然。
  *  静默 fail-soft（storage 超限/序列化失败等一律吞·纪律③）。 */
 export function writeSnapshot(products: unknown, home: unknown): void {
   try {
-    const prev = readRaw()
+    const prev = Array.isArray(products) && home != null ? null : readRaw() // 两半都有就用不到旧档，省一次同步读
     const snap: HomeSnapshot = {
       v: SNAP_VERSION,
       savedAt: Date.now(),

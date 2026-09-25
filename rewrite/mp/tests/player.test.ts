@@ -1,5 +1,5 @@
 // 黄金 learning-content §六（分段导航跨课时/跳过不可播/端点置灰 + 播放地址缓存 TTL/空不缓存/
-// 跨课隔离/在途去重/定向失效/预取）（守卫 rw-mp-player-golden）。
+// 跨课隔离/在途去重/定向失效/预取）。
 import { describe, it, expect } from 'vitest'
 import { flattenSegments, navSegment, createPlaybackCache, formatClock, clampSeek, lessonStrip, nearestMark } from '../lib/player'
 // 源码扫描式断言（同 home-cards.test.ts 的 ?raw 范式·rewrite/mp tsconfig 无 node:fs）：续播秒/缓冲水位接线是

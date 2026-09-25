@@ -1,5 +1,5 @@
 // 黄金 learning-content §九「首页内容公开读·无记录前端回退默认文案·空块仍用默认防误清空」
-// + 展示面 fail-closed（防「¥undefined」类真机事故·根因#8 展示层半边）（守卫 rw-mp-home-golden）。
+// + 展示面 fail-closed（防「¥undefined」类真机事故·根因#8 展示层半边）。
 import { describe, it, expect } from 'vitest'
 import { BRAND_SLOGAN_CN, HOME_SHARE_TITLE, LEARNER_KIT } from '../lib/brand'
 import { mapHero, mapProducts, mapHomeContent, pickDuckKit } from '../lib/mapHome'

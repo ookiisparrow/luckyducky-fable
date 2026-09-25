@@ -1,4 +1,4 @@
-// 详情页数据映射（纯函数·vitest 钉行为·守卫 rw-mp-detail-golden）：云端商品档 → 详情视图模型。
+// 详情页数据映射（纯函数·vitest 钉行为）：云端商品档 → 详情视图模型。
 // 展示面 fail-closed 同首页（脏行剔除·绝不渲染 undefined）；价格「元」原样标不做算术。
 
 export interface SkuVM {

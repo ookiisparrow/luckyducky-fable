@@ -1,5 +1,5 @@
 // 黄金 frontend-store §七（脏单归一防白屏/渲染访问点纵深防御）+ §四（金额两位小数/
-// 时间格式化非法回空）（守卫 rw-mp-orders-golden）。
+// 时间格式化非法回空）。
 import { describe, it, expect } from 'vitest'
 import { mapOrder, mapOrders, itemsOf, countOf, statusLabel, dateTime, amountTitle, __amountTitleSets } from '../lib/mapOrders'
 import { ORDER_STATUS } from '../../shared/src/order'

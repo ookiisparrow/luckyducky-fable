@@ -1,5 +1,7 @@
 // 收货地址簿（黄金 frontend-store §五·旧线 Pinia address 原生承接）：
 // 空簿不内置样例（真支付误发样例人=错发货）；新增 id 取现有最大+1（回灌后天然不撞号）；默认唯一。
+import { readStorage, writeStorage } from '../utils/storage'
+
 interface Address {
   id: number
   name: string
@@ -31,23 +33,11 @@ export function sanitizeAddresses(raw: unknown): Address[] {
 }
 
 function load(): Address[] {
-  if (list) return list
-  let raw: unknown = null
-  try {
-    raw = wx.getStorageSync(KEY)
-  } catch {
-    raw = null
-  }
-  list = sanitizeAddresses(raw)
-  return list
+  return list ?? (list = sanitizeAddresses(readStorage(KEY)))
 }
 
 function save(): void {
-  try {
-    wx.setStorageSync(KEY, { list: load() })
-  } catch {
-    /* 存不进不崩 */
-  }
+  writeStorage(KEY, { list: load() })
 }
 
 // 下一个 id：现有最大+1（不用模块计数器——回灌后计数器归零会撞已存 id·旧线审定语义）

@@ -21,7 +21,7 @@
 //   scroll-view 内部（page-container 锁不到）。页面级下拉刷新（enablePullDownRefresh）同理失效，
 //   须改用 <scroll-view refresher-enabled>。
 const REARM_MS = 2000
-// 用「点」不用「按」：本文件在 tab 首屏字体闭包内，「按」不在 tier1 子集（改回去会咬红 rw-mp-font-tier-coverage，
+// 用「点」不用「按」：本文件在 tab 首屏字体闭包内，「按」不在 tier1 子集（改回去会咬红 rw-mp-font-tier-subset-covers，
 // 且不重建 woff 的话真机该字掉系统字体）。语义无损——原生 toast 本就由客户端用系统字体渲染。
 const EXIT_TOAST = '再点一次退出'
 
@@ -33,10 +33,7 @@ type ExitGuardHost = {
 
 /** tabBar 页 onShow 调用：武装拦截（幂等·重复调用只是重新置位并清掉在途重武装定时器）。 */
 export function armExitGuard(page: ExitGuardHost): void {
-  if (page._exitGuardTimer) {
-    clearTimeout(page._exitGuardTimer)
-    page._exitGuardTimer = null
-  }
+  releaseExitGuard(page)
   page.setData({ exitGuardArmed: true })
 }
 
@@ -52,7 +49,7 @@ export function releaseExitGuard(page: ExitGuardHost): void {
 export function onExitGuardBeforeLeave(page: ExitGuardHost): void {
   page.setData({ exitGuardArmed: false }) // 本次返回已被消费 → 2s 内再按返回不拦、直接退出
   wx.showToast({ title: EXIT_TOAST, icon: 'none', duration: REARM_MS })
-  if (page._exitGuardTimer) clearTimeout(page._exitGuardTimer)
+  releaseExitGuard(page)
   page._exitGuardTimer = setTimeout(() => {
     page._exitGuardTimer = null
     page.setData({ exitGuardArmed: true }) // 没等到第二次返回＝误触，保护恢复

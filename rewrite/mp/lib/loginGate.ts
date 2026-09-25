@@ -4,6 +4,8 @@
 // 登录环节不采集头像昵称（真·一键登录·守卫 rw-mp-login-no-profile-collect·资料可后续在「编辑资料」页补）。
 // loginGate 单例（镜像 lib/privacyGate 广播范式）：各页 <login-sheet/> 订阅同一开关；
 // 已同意真值本地 hint（服务端 users 为准可后续加·镜像 lib/consent「本地 hint·非真值」范式）。
+import { readStorage, writeStorage } from '../utils/storage'
+
 const LOGIN_HINT_KEY = 'ld_login_hint'
 
 // storage 不可信：只认字面 true 为「已同意登录」，其余（旧脏值/未设/字符串）一律未同意
@@ -12,19 +14,12 @@ export function sanitizeLoginHint(raw: unknown): boolean {
 }
 
 function readLoginHint(): boolean {
-  try {
-    return sanitizeLoginHint(wx.getStorageSync(LOGIN_HINT_KEY))
-  } catch {
-    return false
-  }
+  return sanitizeLoginHint(readStorage(LOGIN_HINT_KEY))
 }
 
+// 存不上只影响下次进页是否再弹提示·不影响 openid 身份（服务端按 openid 记账）
 function writeLoginHint(v: boolean): void {
-  try {
-    wx.setStorageSync(LOGIN_HINT_KEY, v)
-  } catch {
-    // 存不上只影响下次进页是否再弹提示·不影响 openid 身份（服务端按 openid 记账）
-  }
+  writeStorage(LOGIN_HINT_KEY, v)
 }
 
 type Sub = (visible: boolean) => void

@@ -5,6 +5,13 @@ import { submitReview } from '../../api/reviews'
 
 const REV_TAGS = ['教程清晰', '很可爱', '适合新手', '包装用心', '物流快', '线材好'] // 承接旧线预设
 const REV_LABEL = ['点星评分', '非常不满', '不满意', '一般', '满意', '非常满意']
+// 云端错误码 → 提示；用 Map 而非对象字面量：'constructor' 这类原型键不会误命中
+const REV_ERR = new Map([
+  ['REVIEWED', '这条已经评过了'],
+  ['NOT_DONE', '订单完成后才能评价'],
+  ['IMG_RISKY', '图片没通过审核，换一张再试'],
+  ['SEC_CHECK_FAIL', '图片没检查成功，稍后再试'],
+])
 
 Page({
   data: {
@@ -113,17 +120,6 @@ Page({
       return
     }
     this.setData({ busy: false })
-    const e = String(r.error || '')
-    const msg =
-      e === 'REVIEWED'
-        ? '这条已经评过了'
-        : e === 'NOT_DONE'
-          ? '订单完成后才能评价'
-          : e === 'IMG_RISKY'
-            ? '图片没通过审核，换一张再试'
-            : e === 'SEC_CHECK_FAIL'
-              ? '图片没检查成功，稍后再试'
-              : '提交没成功，稍后再试'
-    wx.showToast({ title: msg, icon: 'none' })
+    wx.showToast({ title: REV_ERR.get(String(r.error || '')) || '提交没成功，稍后再试', icon: 'none' })
   },
 })

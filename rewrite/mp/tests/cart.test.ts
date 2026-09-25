@@ -1,5 +1,5 @@
 // 黄金 frontend-store §一（购物车含 SKU 行身份）/§二（持久化回灌脏数据闸）/§四（金额恒两位小数）
-// （守卫 rw-mp-cart-golden）。wx.storage 以内存桩替代（持久化链路真机验·根因#8 记档）。
+// wx.storage 以内存桩替代（持久化链路真机验·根因#8 记档）。
 import { describe, it, expect, beforeEach } from 'vitest'
 import * as cart from '../lib/cart'
 

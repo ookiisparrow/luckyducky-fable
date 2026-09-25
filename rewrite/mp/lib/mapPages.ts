@@ -148,10 +148,11 @@ const ABOUT_SECTIONS_DEFAULT: AboutSectionVM[] = [
   { title: '我们相信', body: `${BRAND_SLOGAN_EN}。手作的温度来自亲手完成的那一刻——当你为自己或在乎的人钩出一只小鸭，幸运也随之被你亲手创造出来。` },
 ]
 
-const aboutSection = (raw: unknown): AboutSectionVM | null => {
+// about 段 / 协议条款共用：无标题的脏段剔除
+const titleBody = (raw: unknown): AboutSectionVM | null => {
   const x = obj(raw)
   const title = str(x.title, '')
-  return title ? { title, body: str(x.body, '') } : null // 无标题的脏段剔除
+  return title ? { title, body: str(x.body, '') } : null
 }
 
 /** about 内容映射：lead 逐字段回退；sections 空/全脏 → 默认三段全文。 */
@@ -159,7 +160,7 @@ export function mapAbout(content: unknown): AboutVM {
   const c = obj(content)
   return {
     lead: str(c.lead, ABOUT_LEAD_DEFAULT),
-    sections: arr(c.sections, aboutSection, ABOUT_SECTIONS_DEFAULT),
+    sections: arr(c.sections, titleBody, ABOUT_SECTIONS_DEFAULT),
   }
 }
 
@@ -167,15 +168,11 @@ export function mapAbout(content: unknown): AboutVM {
 // 条款正文逐字承接旧线（2026-06-27 经营者评估拍板上线的已过审文案）：intro（引言）与 title 为固定法律
 // 文本、不经 CMS 覆盖（合规文案勿随意改·契约无 intro/title 字段）；CMS 仅覆盖 effectiveDate（更新日期）
 // 与 sections（条款条目）。sections 空数组 → 回退默认全文（防误清空上线过审文本）。
-interface AgreementArticleVM {
-  title: string
-  body: string
-}
 export interface AgreementDocVM {
   title: string
   updated: string
   intro: string
-  articles: AgreementArticleVM[]
+  articles: AboutSectionVM[]
 }
 interface AgreementVM {
   user: AgreementDocVM
@@ -218,12 +215,6 @@ const PRIVACY_DEFAULT: AgreementDocVM = {
   ],
 }
 
-const agreementArticle = (raw: unknown): AgreementArticleVM | null => {
-  const x = obj(raw)
-  const title = str(x.title, '')
-  return title ? { title, body: str(x.body, '') } : null
-}
-
 /** 单文档映射（user/privacy 共用）：effectiveDate→更新日期回退默认；sections→条款条目、空/全脏回退默认全文；
  *  intro/title 为固定合规文本恒取默认（契约无字段·勿被 CMS 覆盖）。 */
 function mapAgreementDoc(raw: unknown, def: AgreementDocVM): AgreementDocVM {
@@ -232,7 +223,7 @@ function mapAgreementDoc(raw: unknown, def: AgreementDocVM): AgreementDocVM {
     title: def.title, // 固定（导航栏标题·契约无字段）
     updated: str(d.effectiveDate, def.updated),
     intro: def.intro, // 固定合规引言（契约无字段·勿覆盖）
-    articles: arr(d.sections, agreementArticle, def.articles),
+    articles: arr(d.sections, titleBody, def.articles),
   }
 }
 

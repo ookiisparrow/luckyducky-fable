@@ -147,7 +147,7 @@ describe('mapAgreement（用户协议/隐私政策·缺档回退默认全文·in
       expect(doc.title).toBeTruthy()
       expect(doc.updated).toBeTruthy()
       expect(doc.intro).toBeTruthy()
-      expect(doc.articles.length).toBeGreaterThanOrEqual(8) // 条款条目齐（同旧线 agreement-text-real 精神）
+      expect(doc.articles.length).toBeGreaterThanOrEqual(8) // 条款条目齐
       expect(doc.articles.every((a) => a.title && a.body)).toBe(true)
     }
     // 隐私政策第三方披露事实对齐（快递100·不通过微信授权）不因回退丢失

@@ -6,6 +6,7 @@ import { mapOrder, type OrderVM } from '../../lib/mapOrders'
 import { applicableLines, mapAfterSales } from '../../lib/mapAftersales'
 import { expressCode } from '../../lib/express'
 import { SHOP_FULL_NAME } from '../../lib/shop'
+import { navigateOrRedirect } from '../../lib/nav'
 
 // 状态横幅配置（纯展示派生·icon/tint/文案随订单态·不含业务判定）。
 interface BannerVM {
@@ -177,10 +178,17 @@ Page({
   async onAfterSale() {
     const vm = this.data.vm
     if (!vm) return
-    // 该单已申请过的行（入口收窄·最终裁决在云端）：从我的售后里筛本单
-    const asRes = await getMyAfterSales()
+    // 该单已申请过的行（入口收窄·最终裁决在云端）：从我的售后里筛本单。云端按申请时间倒序截断，
+    // 页长取云端默认 100（api 默认 20 会把本单较早的申请截掉，用户选了才被 ALREADY_APPLIED 拒）。
+    // ponytail: 只取首页·不看 hasMore——本人售后超 100 条时本单更早的申请仍会被截掉（云端 ALREADY_APPLIED 兜底）；
+    // 根治=云端 getMyAfterSales 接 orderId 过滤后改传 vm.id、删下方客户端 filter。
+    const asRes = await getMyAfterSales(undefined, 100)
     if (this.unloaded) return // await 恢复点复核（bug sweep II 批E）：用户已退出详情页——非钱副作用，静默收尾即可
-    const appliedIds = asRes.ok ? mapAfterSales(asRes.list).filter((a) => a.orderId === vm.id).map((a) => a.lineId) : []
+    if (!asRes.ok) {
+      wx.showToast({ title: '售后记录没加载出来，稍后再试', icon: 'none' }) // 失败≠一条都没申请过
+      return
+    }
+    const appliedIds = mapAfterSales(asRes.list).filter((a) => a.orderId === vm.id).map((a) => a.lineId)
     const eligible = applicableLines(vm.status, vm.items, appliedIds)
     if (!eligible.length) {
       wx.showToast({ title: '没有可申请售后的条目', icon: 'none' })
@@ -200,11 +208,7 @@ Page({
             if (this.unloaded) return // await 恢复点复核（bug sweep II 批E）：用户已退出详情页——申请已真实提交，非钱副作用，静默收尾即可（不再对已退页 toast/导航）
             if (r.ok) {
               wx.showToast({ title: '已提交申请', icon: 'success' })
-              // order↔aftersales 互跳环无叠栈守卫（P3·bug sweep Round2 item6·同 detail.ts onTapRec 范式）：
-              // 反复「订单详情→申请售后→我的售后→回订单→再申请」会持续叠栈，逼近上限改 redirectTo 替换本页。
-              const url = '/pages/aftersales/aftersales'
-              if (getCurrentPages().length >= 8) wx.redirectTo({ url })
-              else wx.navigateTo({ url, fail: () => wx.redirectTo({ url }) })
+              navigateOrRedirect('/pages/aftersales/aftersales')
             } else {
               const e = String(r.error || '')
               const msg = e === 'ALREADY_APPLIED' ? '这条已申请过了' : e === 'NOT_REFUNDABLE' ? '该条目不可退（已开课）' : e === 'NOTHING_LEFT' ? '本单可退额度已用完' : '申请没成功，稍后再试'

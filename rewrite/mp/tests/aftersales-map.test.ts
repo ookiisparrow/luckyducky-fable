@@ -1,5 +1,5 @@
 // 黄金 orders-money 售后节前端半边（可申请口径与云端 applyRefund 一致）+ frontend-store §八
-// （翻页去重·申请成功列表即时收窄由 applicableLines 排除已申请实现·非独立插头部函数）（守卫 rw-mp-aftersales-golden）。
+// （翻页去重·申请成功列表即时收窄由 applicableLines 排除已申请实现·非独立插头部函数）。
 import { describe, it, expect } from 'vitest'
 import { mapAfterSale, mapAfterSales, mergeAfterSales, applicableLines, asStatusLabel } from '../lib/mapAftersales'
 import type { OrderLineVM } from '../lib/mapOrders'

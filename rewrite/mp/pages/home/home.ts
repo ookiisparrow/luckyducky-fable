@@ -42,20 +42,15 @@ Page({
     reportColdStart() // 冷启动耗时上报（R41）：首帧就绪算 delta（仅首次·onReady 生命周期本身只触发一次+内部 reported 锁双保险）
   },
   onLoad() {
-    const info = wx.getWindowInfo()
-    this.setData({ statusBarHeight: info.statusBarHeight })
-    // 冷启动首屏快照（SWR·批2·根因#15/#8）：上次冷启动存的首页数据即刻渲染真实内容（stale），
+    // 冷启动首屏快照（SWR·根因#15/#8）：上次冷启动存的首页数据即刻渲染真实内容（stale），
     // splashReady 直接置 true 放行 splash（有真内容不必等云回包）；随后 reload 拉最新覆盖（revalidate）。
+    // 与状态栏高度并进同一次 setData：首帧直接带真实内容。
     const snap = readSnapshot()
-    if (snap) {
-      this._hadSnapshot = true
-      this.setData({
-        loading: false,
-        content: mapHomeContent(snap.home),
-        products: mapProducts(snap.products),
-        splashReady: true,
-      })
-    }
+    this._hadSnapshot = !!snap
+    this.setData({
+      statusBarHeight: wx.getWindowInfo().statusBarHeight,
+      ...(snap ? { loading: false, content: mapHomeContent(snap.home), products: mapProducts(snap.products), splashReady: true } : {}),
+    })
     void this.reload()
   },
   hidden: false, // 已切走本 tab 标记（H·完备性扫描新增）：home 是 tabBar 页，切 tab/navigateTo 只触发 onHide、
@@ -73,17 +68,11 @@ Page({
   onHide() {
     this.hidden = true
     releaseExitGuard(this) // 切走本 tab：清在途重武装定时器（不回调已隐藏页的 setData）
-    if (toastTimer) {
-      clearTimeout(toastTimer)
-      toastTimer = null
-    }
+    this.hideToast()
   },
   onUnload() {
     releaseExitGuard(this)
-    if (toastTimer) {
-      clearTimeout(toastTimer)
-      toastTimer = null
-    }
+    this.hideToast()
   },
   /** <page-container bindbeforeleave>：拦下第一次返回 →「再按一次退出」（2s 内再按放行·2s 后自动重新武装）。 */
   onExitGuardBeforeLeave() {
@@ -96,7 +85,7 @@ Page({
       await this.reload()
     } finally {
       // 收起下拉圈（等价原 wx.stopPullDownRefresh）。必须 finally——reload 抛异常时若漏收，
-      // 下拉圈永远转下去且再也刷不动，且只有真机看得见（根因#8·同 pull-refresh-stops ③ 守的病）。
+      // 下拉圈永远转下去且再也刷不动，且只有真机看得见（根因#8）。
       this.setData({ refreshing: false })
     }
   },
@@ -124,8 +113,8 @@ Page({
     const [content, products] = await Promise.all([getContent(), getAllProducts({ force: true })])
     if (seq !== this._seq) return // 过期回包（被更晚 reload 取代）：丢弃·不覆盖较新结果
     const nextContent = mapHomeContent(content.ok ? content.home : null) // 逐块回退默认（不空屏·不半空）
-    // products===null（本次强刷失败）时不计算/不写入 patch.products——保留已渲染的现状不动，同 detail.ts loadRecs
-    // fail-soft 范式（G1）：此前无条件 mapProducts(null)⇒[] 会把已有非空商品轨清成空，误导「上新在路上」空态。
+    // products===null（本次强刷失败）时不计算/不写入 patch.products——保留已渲染的现状不动（G1）：
+    // 无条件 mapProducts(null)⇒[] 会把已有非空商品轨清成空，误导「上新在路上」空态。
     const nextProducts = products !== null ? mapProducts(products) : null
     const patch: Record<string, unknown> = {
       loading: false,
@@ -209,7 +198,17 @@ Page({
   ping(text: string) {
     if (toastTimer) clearTimeout(toastTimer)
     this.setData({ toast: { show: true, text } })
-    toastTimer = setTimeout(() => this.setData({ 'toast.show': false }), 1600)
+    toastTimer = setTimeout(() => {
+      toastTimer = null
+      this.setData({ 'toast.show': false })
+    }, 1600)
+  },
+  // 切走时清定时器必须连 toast 一起收：.ld-toast.show 不会自己淡出，只清定时器回来就一直挂着
+  hideToast() {
+    if (!toastTimer) return
+    clearTimeout(toastTimer)
+    toastTimer = null
+    this.setData({ 'toast.show': false })
   },
 
   // 转发/朋友圈钩子（分发前置·决策§29）：公开页开转发，私有页（交易/学习/隐私）
