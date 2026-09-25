@@ -1,6 +1,8 @@
 /**
  * rewrite/mp 运行时冒烟层（批次D·根因#8「构建过≠真机能用」的机器半边）。
  * 用法：npm run smoke:mp（miniprogram-automator 已登记为 devDependencies，无需 --no-save 手装）。
+ *       自动化端口默认 9420；工具把它分到别的口（如 9420 被服务端口占用时落 9421）用
+ *       WX_AUTO_PORT=9421 npm run smoke:mp 指定。
  * 前置：微信开发者工具已安装于默认路径 /Applications/wechatwebdevtools.app；
  *       工具「设置 → 安全设置 → 服务端口」需开启（否则 connect/launch 均失败，见下方报错提示）。
  *       在 git worktree 里跑本脚本：先把主目录 rewrite/mp/project.config.json（gitignored 本地文件，
@@ -119,10 +121,12 @@ async function probeChannels(mp, attempts = 1) {
   ])
 }
 
+const AUTO_PORT = Number(process.env.WX_AUTO_PORT) || 9420
+
 async function connectMp() {
   try {
     const mp = await Promise.race([
-      automator.connect({ wsEndpoint: 'ws://127.0.0.1:9420' }),
+      automator.connect({ wsEndpoint: `ws://127.0.0.1:${AUTO_PORT}` }),
       timeoutReject(5000, 'connect 5s 超时'),
     ])
     await probeChannels(mp)
@@ -139,6 +143,7 @@ async function connectMp() {
     const mp = await automator.launch({
       cliPath: CLI_PATH,
       projectPath: MP_ROOT,
+      port: AUTO_PORT,
       timeout: 120000,
     })
     // 冷开就绪要 ~25s（见上方实测），信息道给 8 次预算（≈48s 上限）——探不通才是真病了。
@@ -259,7 +264,7 @@ async function main() {
   }
 
   console.log(`\n共 ${pagePaths.length} 页，PASS ${pagePaths.length - fails} / FAIL ${fails}`)
-  await mp.disconnect() // 用 disconnect 而非 close：close 会留 9420 僵尸监听
+  await mp.disconnect() // 用 disconnect 而非 close：close 会留自动化端口僵尸监听
   process.exit(fails === 0 ? 0 : 1)
 }
 
