@@ -7,7 +7,7 @@
 import { COLLECTIONS, CS_REFRESH_COPY, CS_REFRESH_PASSPHRASES, formatRefreshDone } from '@ldrw/shared'
 import { recordAudit, transition } from '../../../kit'
 import { emptyFlow, persistableFlow } from './scriptReply'
-import { packSessionId } from './csPack'
+import { packSessionId, readEpochForHandoff } from './csPack'
 
 export const DEFAULT_REFRESH_WORDS = CS_REFRESH_PASSPHRASES
 export const REFRESH_MENU_ASK = 'trial:refresh'
@@ -131,36 +131,20 @@ export function trialRefreshConfirmMenu(kind: 'passphrase' | 'button' = 'button'
 }
 
 export async function loadTrialRefreshGate(db: any): Promise<TrialRefreshGate> {
-  const ver = envVersion()
   const off = { on: false, words: [] as string[] }
-  if (ver === 'release' || ver === 'trial') return off
-  if (isProdCloud()) return off
-  const envFlag = process.env.CS_TRIAL_REFRESH === '1'
-  const develop = ver === 'develop'
+  if (isOfficialHardOff()) return off
   const got = await db
     .collection(COLLECTIONS.secureConfig)
     .doc('typesafe')
     .get()
     .catch(() => null)
   const d = (got && got.data) || {}
-  const dbFlag = String(d.CS_TRIAL_REFRESH || '') === '1'
-  const on = envFlag || dbFlag || develop || isYaliceshiCloud()
+  const on = process.env.CS_TRIAL_REFRESH === '1' || String(d.CS_TRIAL_REFRESH || '') === '1' || isCsTrialLikeEnv()
   if (!on) return off
   const fromEnv = parseWords(process.env.CS_TRIAL_REFRESH_WORDS)
   const fromDb = parseWords(d.CS_TRIAL_REFRESH_WORDS || d.refreshPassphrases)
   const words = fromEnv.length ? fromEnv : fromDb.length ? fromDb : [...DEFAULT_REFRESH_WORDS]
   return { on: true, words }
-}
-
-async function readEpoch(db: any, euid: string): Promise<{ epoch: number; boundOrderId: string }> {
-  const got = await db
-    .collection(COLLECTIONS.kfState)
-    .doc(sessionEpochId(euid))
-    .get()
-    .catch(() => null)
-  const d = (got && got.data) || {}
-  const epoch = Number.isFinite(Number(d.epoch)) ? Math.max(0, Math.floor(Number(d.epoch))) : 0
-  return { epoch, boundOrderId: String(d.boundOrderId || '') }
 }
 
 export async function listHeldSessions(
@@ -220,11 +204,11 @@ export async function applyTrialRefresh(
   if (held.length && !force) return { ok: false, error: 'HUMAN_ACTIVE', externalUserId: euid }
   if (held.length && force) await forceCloseHeld(db, held)
 
-  const prev = await readEpoch(db, euid)
-  const epochTo = prev.epoch + 1
+  const epochFrom = await readEpochForHandoff(db, euid)
+  const epochTo = epochFrom + 1
   const now = Date.now()
-  await db
-    .collection(COLLECTIONS.kfState)
+  const kf = db.collection(COLLECTIONS.kfState)
+  await kf
     .doc(sessionEpochId(euid))
     .set({
       data: {
@@ -234,21 +218,12 @@ export async function applyTrialRefresh(
         via: opts.via,
       },
     })
-  await db
-    .collection(COLLECTIONS.kfState)
-    .doc(flowStateId(euid))
-    .set({ data: persistableFlow(emptyFlow()) })
-    .catch(() => {})
-  await db
-    .collection(COLLECTIONS.kfState)
-    .doc(packSessionId(euid))
-    .remove()
-    .catch(() => {})
-  await db
-    .collection(COLLECTIONS.kfState)
-    .doc('csatask:' + euid)
-    .remove()
-    .catch(() => {})
+  // epoch 先落（失败即抛）；三项清理互不依赖、各自吞错，并发
+  await Promise.all([
+    kf.doc(flowStateId(euid)).set({ data: persistableFlow(emptyFlow()) }).catch(() => {}),
+    kf.doc(packSessionId(euid)).remove().catch(() => {}),
+    kf.doc('csatask:' + euid).remove().catch(() => {}),
+  ])
 
   const reason = String(opts.reason || opts.via).slice(0, 80)
   await recordAudit({
@@ -258,14 +233,14 @@ export async function applyTrialRefresh(
     data: {
       via: opts.via,
       reason,
-      epochFrom: String(prev.epoch),
+      epochFrom: String(epochFrom),
       epochTo: String(epochTo),
       externalUserId: euid,
       force: force ? '1' : '0',
     },
     ok: true,
   })
-  return { ok: true, externalUserId: euid, epochFrom: prev.epoch, epochTo, forced: force && !!held.length }
+  return { ok: true, externalUserId: euid, epochFrom, epochTo, forced: force && !!held.length }
 }
 
 export type IncomingLite = { externalUserId: string; menuId: string; text: string }
@@ -278,12 +253,11 @@ export async function interceptTrialRefresh(
   send: (payload: any) => Promise<any>
 ): Promise<boolean> {
   const menuId = String(incoming.menuId || '')
-  const text = String(incoming.text || '')
-  const looksLike = isRefreshMenuId(menuId)
+  if (menuId && !isRefreshMenuId(menuId)) return false // 普通菜单不可能是刷新，不读闸
   const gate = await loadTrialRefreshGate(db)
   if (!gate.on) return false
-  const passphrase = !menuId && matchRefreshPassphrase(text, gate.words)
-  if (!looksLike && !passphrase) return false
+  const passphrase = !menuId && matchRefreshPassphrase(String(incoming.text || ''), gate.words)
+  if (!menuId && !passphrase) return false
 
   const to = incoming.externalUserId
   const base = { touser: to, open_kfid: openKfId }

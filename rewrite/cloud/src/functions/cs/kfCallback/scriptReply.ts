@@ -9,22 +9,18 @@
 
 import { COLLECTIONS } from '@ldrw/shared'
 import { alert } from '../../../kit'
-import type {
-  JevEmotionStatus,
-  JevNeedStatus,
-  JevOrderStatus,
-  JevResponsibility,
-  JevResult,
-  JevSeverity,
+import {
+  JEV_TOPICS,
+  type JevEmotionStatus,
+  type JevNeedStatus,
+  type JevOrderStatus,
+  type JevResponsibility,
+  type JevResult,
+  type JevSeverity,
+  type JevTopic,
 } from './jev'
 import { fillSlots, pickLine, rememberUsed, type ScriptPoolId } from './scriptPool'
-import {
-  looksPackagingDamage,
-  loadAndAdvancePack,
-  readEpochForHandoff,
-  resolvePackagingMainScript,
-  writeHandoffStub,
-} from './csPack'
+import { looksPackagingDamage, loadAndAdvancePack, resolvePackagingMainScript } from './csPack'
 import { assemblePackagingBubbles, stitchUtterance } from './csAtomic'
 
 export type ScriptNode =
@@ -34,7 +30,6 @@ export type ScriptNode =
   | 'askMore'
   | 'photo'
   | 'promise'
-  | 'askCoop'
   | 'answer'
   | 'askNext'
   | 'hesitate'
@@ -58,15 +53,7 @@ export type Acting =
 
 export type ActingCheckpoint = 'pick' | 'review' | 'promise' | 'coop' | 'solve' | ''
 
-export type ScriptTopic =
-  | 'logistics'
-  | 'packaging'
-  | 'missing'
-  | 'course'
-  | 'discount'
-  | 'rush'
-  | 'greeting'
-  | 'other'
+export type ScriptTopic = JevTopic
 
 export type JevFlowState = {
   node: ScriptNode | ''
@@ -82,7 +69,6 @@ export type JevFlowState = {
   restated: boolean
   promised: boolean
   solved: boolean
-  coopCount: number
   humanAsks: number
   used: string[]
   stitchText: string
@@ -114,23 +100,11 @@ const FLOW_KEYS = [
   'restated',
   'promised',
   'solved',
-  'coopCount',
   'humanAsks',
   'used',
   'stitchText',
   'stitchAt',
 ] as const
-
-const TOPIC_NEEDS: readonly ScriptTopic[] = [
-  'logistics',
-  'packaging',
-  'missing',
-  'course',
-  'discount',
-  'rush',
-  'greeting',
-  'other',
-]
 
 function topicFromOrder(order: JevOrderStatus): ScriptTopic | '' {
   if (order === 'pre_order' || order === 'ordering') return 'discount'
@@ -141,7 +115,7 @@ function topicFromOrder(order: JevOrderStatus): ScriptTopic | '' {
 }
 
 function topicOf(need: JevNeedStatus, order: JevOrderStatus, prev: ScriptTopic | ''): ScriptTopic {
-  if ((TOPIC_NEEDS as readonly string[]).includes(need)) return need as ScriptTopic
+  if ((JEV_TOPICS as readonly string[]).includes(need)) return need as ScriptTopic
   return prev || topicFromOrder(order) || 'other'
 }
 
@@ -223,7 +197,7 @@ export function looksGreeting(text: string): boolean {
 }
 
 /** 卡在收尾或 Jev 把招呼/快递判薄时，用原文拉回专题。包装破损原文优先于招呼。 */
-function evForScript(_state: JevFlowState, ev: JevResult, text: string): JevResult {
+function evForScript(ev: JevResult, text: string): JevResult {
   if (looksPackagingDamage(text)) return { ...ev, needStatus: 'packaging', topic: 'packaging' }
   const need = ev.needStatus || 'other'
   if (looksLogistics(text) && !isTopicNeed(need)) return { ...ev, needStatus: 'logistics' }
@@ -235,18 +209,8 @@ function isNegative(emotion: JevEmotionStatus): boolean {
   return emotion === 'upset' || emotion === 'angry' || emotion === 'disappointed'
 }
 
-function needsCoop(r: JevRoute, state: JevFlowState): boolean {
-  if (r.needStatus === 'photo_needed' && !state.photoAsked) return true
-  if ((r.needStatus === 'missing' || r.needStatus === 'packaging' || r.needStatus === 'course') && !state.photoAsked)
-    return true
-  return false
-}
-
 function infoThin(r: JevRoute): boolean {
-  if (r.needStatus === 'photo_needed') return true
-  if (r.emotionStatus === 'confused') return true
-  if (r.needStatus === 'other' || r.needStatus === 'greeting') return true
-  return false
+  return r.needStatus === 'photo_needed' || r.needStatus === 'other' || r.needStatus === 'greeting' || r.emotionStatus === 'confused'
 }
 
 /** 只读 Jev 答案。不扫顾客原文猜题。 */
@@ -255,8 +219,7 @@ export function routeFromJev(state: JevFlowState, ev: JevResult): JevRoute {
   const emotionStatus = ev.emotionStatus || 'calm'
   const severity = ev.severity || 'low'
   const responsibility = ev.responsibility || 'n/a'
-  const needStatus =
-    ev.needStatus || (ev.topic && (TOPIC_NEEDS as readonly string[]).includes(ev.topic) ? ev.topic : 'other')
+  const needStatus: JevNeedStatus = ev.needStatus || ev.topic || 'other'
   const exceeds = needStatus === 'exceeds' || Number(ev.exceeds || 0) >= 0.55
   const topic = topicOf(needStatus, orderStatus, (ev.topic || state.topic || '') as ScriptTopic | '')
   return { topic, orderStatus, emotionStatus, severity, responsibility, needStatus, exceeds, hasLogisticsFacts: hasLogisticsFacts(ev) }
@@ -267,7 +230,7 @@ export function checkpointOf(node: ScriptNode): ActingCheckpoint {
     return 'pick'
   if (node === 'severity' || node === 'restate' || node === 'askMore') return 'review'
   if (node === 'promise') return 'promise'
-  if (node === 'photo' || node === 'askCoop') return 'coop'
+  if (node === 'photo') return 'coop'
   if (node === 'answer' || node === 'askNext') return 'solve'
   return ''
 }
@@ -340,10 +303,6 @@ export function nextNode(state: JevFlowState, ev: JevResult, text = ''): ScriptN
     return 'restate'
   }
   if (!s.promised) return 'promise'
-  if (needsCoop(r, s)) {
-    if (s.coopCount >= 3) return 'human'
-    return needsPhoto(r.needStatus) ? 'photo' : 'askCoop'
-  }
   if (canEmitAnswer(r) && (!s.solved || r.hasLogisticsFacts)) return 'answer'
   if (logisticsNoFacts) return 'promise'
   return 'askNext'
@@ -353,7 +312,7 @@ function poolFor(node: ScriptNode, topic: ScriptTopic, ev: JevResult): ScriptPoo
   if (node === 'humanAsk') return 'humanAskWhat'
   if (node === 'humanAsk2') return 'humanSayDirect'
   if (node === 'promise') return 'trySolve'
-  if (node === 'askNext' || node === 'askCoop') return 'askMore'
+  if (node === 'askNext') return 'askMore'
   if (node === 'greetIssue' && topic === 'logistics') return 'logisticsGreet'
   if (node === 'answer') {
     if (topic === 'discount') return 'discountConfirm'
@@ -372,15 +331,7 @@ function poolFor(node: ScriptNode, topic: ScriptTopic, ev: JevResult): ScriptPoo
 }
 
 function actingPool(acting: Acting): ScriptPoolId {
-  if (acting === 'reassure') return 'reassure'
-  if (acting === 'empathy') return 'empathy'
-  if (acting === 'apology') return 'apology'
-  if (acting === 'hesitate') return 'hesitate'
-  if (acting === 'clarify') return 'clarify'
-  if (acting === 'surprise') return 'surprise'
-  if (acting === 'awkward') return 'awkward'
-  if (acting === 'light') return 'askMore'
-  return 'ack'
+  return acting === 'light' ? 'askMore' : acting === 'steady' ? 'ack' : acting
 }
 
 export function compressNeed(text: string): string {
@@ -403,7 +354,6 @@ export function emptyFlow(): JevFlowState {
     restated: false,
     promised: false,
     solved: false,
-    coopCount: 0,
     humanAsks: 0,
     used: [],
     stitchText: '',
@@ -421,7 +371,6 @@ export function loadFlow(raw: unknown): JevFlowState {
     if (src[k] !== undefined) (next as Record<string, unknown>)[k] = src[k]
   }
   next.used = Array.isArray(src.used) ? (src.used as string[]) : []
-  next.coopCount = Number.isFinite(Number(src.coopCount)) ? Number(src.coopCount) : 0
   next.humanAsks = Number.isFinite(Number(src.humanAsks)) ? Number(src.humanAsks) : 0
   next.stitchText = String(src.stitchText || '')
   next.stitchAt = Number.isFinite(Number(src.stitchAt)) ? Number(src.stitchAt) : 0
@@ -442,7 +391,6 @@ export function applyNode(
   orderStatus: JevOrderStatus,
   acting: Acting
 ): JevFlowState {
-  const coopInc = node === 'askCoop' || (node === 'photo' && state.photoAsked) ? 1 : 0
   return {
     ...loadFlow(state),
     node,
@@ -458,7 +406,6 @@ export function applyNode(
     restated: state.restated || node === 'restate' || node === 'askMore',
     promised: state.promised || node === 'promise',
     solved: state.solved || node === 'answer',
-    coopCount: state.coopCount + coopInc,
     used: state.used,
   }
 }
@@ -478,10 +425,6 @@ function packagingPieces(topic: ScriptTopic, ev: JevResult, text: string, rand: 
   })
 }
 
-function packMain(topic: ScriptTopic, ev: JevResult, text: string, _used: string[], rand: () => number): string {
-  return packagingPieces(topic, ev, text, rand).join('\n')
-}
-
 function speak(
   node: ScriptNode,
   acting: Acting,
@@ -492,7 +435,7 @@ function speak(
   rand: () => number,
   text = ''
 ): string {
-  const packBody = packMain(topic, ev, text, used, rand)
+  const packBody = packagingPieces(topic, ev, text, rand).join('\n')
   // 包装破损走 atomic 门闩+优先级组装，不跟表演空壳粘、不抽旧 Pack
   if (packBody.includes('\n')) return packBody
   const body = packBody || fillSlots(pickLine(poolFor(node, topic, ev), used, undefined, rand), slots)
@@ -528,7 +471,7 @@ export function composeLine(
   checkpoint: ActingCheckpoint
   pieces?: string[]
 } {
-  const useEv = evForScript(state, ev, text)
+  const useEv = evForScript(ev, text)
   const route = routeFromJev(state, useEv)
   if (wantsHuman(text)) {
     const n = state.humanAsks + 1
@@ -546,17 +489,8 @@ export function composeLine(
   const slots = { 需求: compressNeed(text), ...factSlots(useEv) }
   const atomic = packagingPieces(route.topic, useEv, text, rand, ctx)
   let line = atomic.length ? atomic.join('\n') : speak(node, acting, route.topic, useEv, base.used, slots, rand, text)
-  if ((looksPackagingDamage(text) || route.topic === 'packaging') && /订单号/.test(line)) {
-    line = assemblePackagingBubbles({
-      text,
-      hasRecentOrder: !ctx || ctx.hasRecentOrder !== false,
-      severity: useEv.severity,
-      rand,
-    }).join('\n')
-  }
   if (!line && node !== 'human') line = fillSlots(pickLine('ack', base.used, undefined, rand), slots)
   const next = applyNode(base, node, route.topic, route.orderStatus, acting)
-  next.humanAsks = state.humanAsks
   next.used = rememberUsed(base.used, line)
   const pieces = atomic.length ? atomic : undefined
   return { line, next, node, topic: route.topic, acting, checkpoint: checkpointOf(node), pieces }
@@ -586,9 +520,7 @@ export async function composeScriptReply(
   const prev = loadFlow(got && got.data)
   const now = Date.now()
   const stitched = stitchUtterance(prev.stitchText, prev.stitchAt, text, now)
-  const { line, next, node, topic, acting, checkpoint, pieces } = composeLine(prev, ev, stitched, Math.random, {
-    hasRecentOrder: !ctx || ctx.hasRecentOrder !== false,
-  })
+  const { line, next, node, topic, acting, checkpoint, pieces } = composeLine(prev, ev, stitched, Math.random, ctx)
   next.stitchText = stitched
   next.stitchAt = now
   if (!line && node !== 'human') return null
@@ -604,19 +536,10 @@ export async function composeScriptReply(
     alert('anomaly', 'kfCallback', 'JEVFLOW_WRITE_FAIL', { euid })
     return null
   }
-  const pack = await loadAndAdvancePack(db, euid, ev, stitched, {
+  // 交接包由 dispatch 转人工分支统一写（菜单、打字同一出口），这里不重复写
+  await loadAndAdvancePack(db, euid, ev, stitched, {
     toHuman: node === 'human',
     userAsksHuman: wantsHuman(stitched),
   })
-  if (node === 'human') {
-    const epoch = await readEpochForHandoff(db, euid)
-    await writeHandoffStub(db, euid, {
-      intent: pack.session.intent || topic || 'unknown',
-      filledSlots: pack.session.slots,
-      summary: String(stitched || '').slice(0, 160),
-      failReason: wantsHuman(stitched) ? 'user_asks_human' : pack.hit && pack.hit.action === 'human' ? pack.hit.ruleId : 'collect_rounds_ge_3',
-      epoch,
-    })
-  }
   return { text: line, node, topic, acting, checkpoint, humanAsks: next.humanAsks, pieces }
 }

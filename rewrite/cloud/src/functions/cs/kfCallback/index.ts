@@ -13,7 +13,7 @@ import {
   SCENE_COMMENT,
 } from '../../../kit'
 import { handleMessage, welcomeMenu, buildMsgMenu, extUserId, processKfBatch, heldStatus, resolveOpenid, type Incoming } from './dispatch'
-import { archiveInbound, archiveOutbound } from './archive' // 会话归档（B5.1·入站/出站落档·守卫 conversations-archived）
+import { archiveInbound, archiveOutbound } from './archive' // 会话归档（B5.1·入站/出站落档）
 
 // 微信客服 in-chat 智能客服回调（HTTP 访问服务·类比 adminApi 的 /adminapi）。
 // 验签 + AES 解密 + fail-closed 由 kit.defineKfCallback 强制（根因#3）；本函数只做「收到事件 → 拉消息
@@ -27,7 +27,7 @@ const wxkfCfg = () => getSecureConfigFields(db, 'wxkf', ['corpId', 'secret', 'mi
 // §查订单·平台原生身份桥接（根因#3 不信前端·best-effort 不反噬消息处理）：顾客的 external_userid 经微信客服
 // `kf/customer/batchget` 反查 unionid → users 找 openid → 建 `ext→openid` 映射（dispatch.resolveOpenid 读它查订单）。
 // **绕开客户联系 idconvert 的 48002 墙**（用微信客服自己的顾客接口·平台原生）。已建映射即跳（省 batchget）。
-// 守卫 login-kf-identity-bridge 焊「login 存 unionid + 本处 batchget 建 kfIdentity」两端。
+// 两端配合：login 存 unionid，本处 batchget 建 kfIdentity。
 async function ensureKfIdentity(db: any, token: string, euid: string): Promise<void> {
   try {
     if (!euid) return
@@ -77,7 +77,7 @@ export const main = defineKfCallback({
       else await archiveOutbound(db, payload, openKfId) // 出站回复落档（B5.1·仅记真发出的·fail-soft 不反噬发送）
       return res
     }
-    // 转人工不再调平台 service_state 转接（守卫 agent-channel-stays-assistant·根因#12·调试日志 AC）：
+    // 转人工不再调平台 service_state 转接（根因#12·调试日志 AC）：
     // 平台会话恒智能助手态(1)，人工由承面C 自建工作台（csSession 队列）承接——转 3 会让坐席 send_msg 全被 95018 拒。
     const ctx = { db, openKfId, cfg: { appid: f.miniappAppId, thumbMediaId: f.thumbMediaId }, send }
 

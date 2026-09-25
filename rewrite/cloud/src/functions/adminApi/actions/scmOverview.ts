@@ -10,8 +10,7 @@ import { OUTWORK_ORDER_STATUS, PURCHASE_ORDER_STATUS } from '@ldrw/shared'
 //
 // 有界纪律（根因#7）：materials 经 listMaterialDocs()（门1 kit·内部已 .limit(500)）；本文件内直接发起
 // 的每条查询链都显式 .limit()；计数一律走 db .count()（精确·不封顶·不受 limit 影响）——不编数（根因#8）。
-// 守卫 rw-scm-overview-bounded-queries（本批新立·rewrite/cloud/tests/scm-overview-bounded.test.ts）
-// 源码扫描本文件 getScmOverview 函数体：每条含 `.get()` 的查询链必须同链带 `.limit(`。
+// rewrite/cloud/tests/scm-overview-bounded.test.ts 源码扫描本文件 getScmOverview 函数体：每条含 `.get()` 的查询链必须同链带 `.limit(`。
 
 const KNOTTED_RE = /^yarn:([a-z][a-z0-9-]*):L:knotted$/ // 与 scmPlanner.ts 同契约：带结＝外协产物，不外购
 const PAYABLE_SCAN_CAP = 200 // 未结外协单内存分组上限（超界不误报精确总额，改标 truncated）

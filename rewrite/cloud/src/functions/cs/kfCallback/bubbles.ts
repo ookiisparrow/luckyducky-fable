@@ -12,38 +12,15 @@ const MAX_BUBBLES_CAP = 20
 
 /** 按换行或。！？～切成非空短段；标点留在本段末尾。 */
 export function splitBubbles(text: string): string[] {
-  const out: string[] = []
-  for (const para of String(text || '').split(/\r?\n+/)) {
-    let rest = para.trim()
-    if (!rest) continue
-    while (rest) {
-      const m = /[。！？～]/.exec(rest)
-      if (!m || m.index == null) {
-        out.push(rest)
-        break
-      }
-      const end = m.index + m[0].length
-      const piece = rest.slice(0, end).trim()
-      if (piece) out.push(piece)
-      rest = rest.slice(end).trim()
-    }
-  }
-  return out
+  return (String(text || '').match(/[^。！？～\n]*[。！？～]|[^。！？～\n]+/g) || []).map((s) => s.trim()).filter(Boolean)
 }
 
 export function parseBubbleGapMs(raw?: string): { min: number; max: number } {
-  const s = String(raw == null ? '' : raw).trim()
-  if (!s) return { min: DEFAULT_GAP_MIN, max: DEFAULT_GAP_MAX }
-  const m = /^(\d+)(?:\s*-\s*(\d+))?$/.exec(s)
+  const m = /^(\d+)(?:\s*-\s*(\d+))?$/.exec(String(raw ?? '').trim())
   if (!m) return { min: DEFAULT_GAP_MIN, max: DEFAULT_GAP_MAX }
-  let a = Math.min(GAP_CAP_MS, Math.max(0, Number(m[1])))
-  let b = m[2] == null ? a : Math.min(GAP_CAP_MS, Math.max(0, Number(m[2])))
-  if (b < a) {
-    const t = a
-    a = b
-    b = t
-  }
-  return { min: a, max: b }
+  const a = Math.min(GAP_CAP_MS, Number(m[1]))
+  const b = m[2] == null ? a : Math.min(GAP_CAP_MS, Number(m[2]))
+  return { min: Math.min(a, b), max: Math.max(a, b) }
 }
 
 export function bubbleGapMs(raw?: string, rand: () => number = Math.random): number {
@@ -54,11 +31,8 @@ export function bubbleGapMs(raw?: string, rand: () => number = Math.random): num
 
 /** 硬顶气泡数。非法/空 → 3；至少 1，至多 20。 */
 export function parseMaxBubbles(raw?: string): number {
-  const s = String(raw == null ? '' : raw).trim()
-  if (!s) return DEFAULT_MAX_BUBBLES
-  const n = Number(s)
-  if (!Number.isFinite(n) || n < 1) return DEFAULT_MAX_BUBBLES
-  return Math.min(MAX_BUBBLES_CAP, Math.floor(n))
+  const n = Number(raw)
+  return Number.isFinite(n) && n >= 1 ? Math.min(MAX_BUBBLES_CAP, Math.floor(n)) : DEFAULT_MAX_BUBBLES
 }
 
 function defaultSleep(ms: number): Promise<void> {

@@ -1,4 +1,4 @@
-// 黄金 orders-money（createOrder/关单）+ inventory-scm §A/§B/§C（守卫 rw-money1-golden）。
+// 黄金 orders-money（createOrder/关单）+ inventory-scm §A/§B/§C。
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import cloud, { control } from 'wx-server-sdk'
 import { main as app } from '../src/functions/app/index'

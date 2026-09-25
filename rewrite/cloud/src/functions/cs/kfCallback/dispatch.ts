@@ -15,6 +15,12 @@ import { sendBubbles } from './bubbles'
 const HUMAN_LADDER_EV: JevResult = { model: 'local-human', urgency: 0, department: 'sales' }
 const GREET_EV: JevResult = { model: 'local-hello', urgency: 0, department: 'sales', needStatus: 'greeting' }
 
+// 缺档与读失败都折成 null（真 sdk 缺档即 reject），null 的含义由调用方定
+const docData = (db: any, coll: string, id: string): Promise<any> =>
+  db.collection(coll).doc(id).get().then((g: any) => (g && g.data) || null, () => null)
+const dropKfState = (db: any, id: string): Promise<void> =>
+  db.collection(COLLECTIONS.kfState).doc(id).remove().then(() => {}, () => {})
+
 /**
  * 客服分流引擎（避免幻觉第一·非生成式）：关键词识别 → 高亮 msgmenu 气泡分流；按回传 menu_id →
  * 下级菜单 / miniprogram 小程序卡片 / 文字答案 / 转人工。身份桥接（external_userid→openid）查「你的订单」。
@@ -41,12 +47,7 @@ export async function firstSeen(db: any, msgid: string): Promise<ClaimResult> {
     await db.collection(COLLECTIONS.kfState).add({ data: { _id: 'seen:' + msgid, at: Date.now() } })
     return 'first'
   } catch {
-    const got = await db
-      .collection(COLLECTIONS.kfState)
-      .doc('seen:' + msgid)
-      .get()
-      .catch(() => null)
-    return got && got.data ? 'duplicate' : 'error'
+    return (await docData(db, COLLECTIONS.kfState, 'seen:' + msgid)) ? 'duplicate' : 'error'
   }
 }
 
@@ -82,12 +83,7 @@ export async function processKfBatch(
       console.error('[kf] handle threw', { msgid }, String(e))
       alert('security', 'kfCallback', 'HANDLE_FAILED', {})
       // 撤回认领 → 不永久吞单（配合调用方保留旧游标重试）
-      if (msgid)
-        await db
-          .collection(COLLECTIONS.kfState)
-          .doc('seen:' + msgid)
-          .remove()
-          .catch(() => {})
+      if (msgid) await dropKfState(db, 'seen:' + msgid)
       anyFailed = true
     }
   }
@@ -195,13 +191,7 @@ const CSAT_REASONS: Record<string, string> = {
 function csatReasonMenu(): MsgMenuContent {
   return menu(
     '想补充点什么吗？（可选）',
-    [
-      { id: 'csatnote:resolved', content: '问题已解决' },
-      { id: 'csatnote:unresolved', content: '问题没解决' },
-      { id: 'csatnote:slow', content: '回复有点慢' },
-      { id: 'csatnote:attitude', content: '态度很好' },
-      { id: 'csatnote:none', content: '不补充了' },
-    ],
+    Object.entries(CSAT_REASONS).map(([k, v]) => ({ id: 'csatnote:' + k, content: v || '不补充了' })),
     '点一下就好，不补充也没关系～'
   )
 }
@@ -301,17 +291,12 @@ export function route(menuId: string): Route {
  */
 async function faqAnswer(db: any, faqKey: string): Promise<string | null> {
   if (!faqKey) return null
-  const got = await db
-    .collection(COLLECTIONS.kb)
-    .doc(faqKey)
-    .get()
-    .catch(() => null)
-  const d = got && got.data
+  const d = await docData(db, COLLECTIONS.kb, faqKey)
   if (!d || d.enabled === false) return null
   return d.answer ? String(d.answer) : null
 }
 
-// ── 满意度评分入库（CSAT·B4.3·守卫 csat-score-bounded）──
+// ── 满意度评分入库（CSAT·B4.3）──
 interface CsatInput {
   externalUserId: string
   openid: string | null
@@ -320,7 +305,7 @@ interface CsatInput {
 }
 /**
  * 记一条满意度评分（B4.3）。**不信前端·根因#3**：score 越界（非 1..5）一律 fail-closed 不入库——防伪造/脏分
- * 污染满意度均分（守卫 csat-score-bounded）。确定性 _id=`csat:<euid>:<createdAt>`；并在 kfState 记最近一条
+ * 污染满意度均分。确定性 _id=`csat:<euid>:<createdAt>`；并在 kfState 记最近一条
  * （`csatlast:<euid>`）供「补充备注」菜单回写——只在 CSAT 交互时读写、不进每条消息热路径。返回 csat 文档 id。
  */
 export async function recordCsat(db: any, input: CsatInput): Promise<string | null> {
@@ -367,12 +352,8 @@ export async function recordCsat(db: any, input: CsatInput): Promise<string | nu
 export async function attachCsatNote(db: any, externalUserId: string, note: string): Promise<void> {
   const euid = String(externalUserId || '')
   if (!euid || !note) return
-  const got = await db
-    .collection(COLLECTIONS.kfState)
-    .doc('csatlast:' + euid)
-    .get()
-    .catch(() => null)
-  const csatId = got && got.data && got.data.csatId
+  const last = await docData(db, COLLECTIONS.kfState, 'csatlast:' + euid)
+  const csatId = last && last.csatId
   if (!csatId) return
   await db
     .collection(COLLECTIONS.csat)
@@ -381,23 +362,15 @@ export async function attachCsatNote(db: any, externalUserId: string, note: stri
     .catch(() => {
       alert('anomaly', 'attachCsatNote', 'CSAT_NOTE_FAIL', { euid })
     })
-  await db
-    .collection(COLLECTIONS.kfState)
-    .doc('csatlast:' + euid)
-    .remove()
-    .catch(() => {})
+  await dropKfState(db, 'csatlast:' + euid)
 }
 
 // ── 身份桥接（external_userid → openid）+ 订单摘要 ──
 /** 查映射表得 openid（不信前端·根因#3：映射由 kfBind 在小程序侧建）。未绑定返 null。 */
 export async function resolveOpenid(db: any, externalUserId: string): Promise<string | null> {
   if (!externalUserId) return null
-  const got = await db
-    .collection(COLLECTIONS.kfIdentity)
-    .doc('ext:' + externalUserId)
-    .get()
-    .catch(() => null)
-  return got && got.data && got.data.openid ? String(got.data.openid) : null
+  const d = await docData(db, COLLECTIONS.kfIdentity, 'ext:' + externalUserId)
+  return d && d.openid ? String(d.openid) : null
 }
 
 /** 会话内回「你的订单」摘要（实时查·零幻觉）：取最近 3 单状态。 */
@@ -482,12 +455,7 @@ export async function enqueueSession(
     queued = true
   } catch {
     // add 失败先回查：doc 真存在＝撞确定性 _id（正常幂等路径）；不存在＝基建错（DB 权限/瞬时）→ 'failed' 如实上报
-    const got = await db
-      .collection(COLLECTIONS.csSession)
-      .doc(id)
-      .get()
-      .catch(() => null)
-    if (!got || !got.data) {
+    if (!(await docData(db, COLLECTIONS.csSession, id))) {
       console.error('[kf] enqueue failed (infra)', { id })
       alert('security', 'kfCallback', 'ENQUEUE_FAILED', {})
       return 'failed'
@@ -530,19 +498,16 @@ async function notifyOnlineAgents(db: any, sessionId: string): Promise<void> {
       .catch(() => ({ data: [] }))
     const ids = (st.data || []).map((a: any) => a._id).filter(Boolean)
     if (!ids.length) return
-    const touser: string[] = []
-    for (const id of ids) {
-      // 键映射（深审 F1）：超管坐席身份是 'admin'（checkKey 固定），但其账号 doc 是 'auth'——不映射则超管
-      // 在线也查不到 wecomUserId＝只有超管值班时推送恒为空（escalate 推送读 'auth' 同口径）。
-      const docId = id === 'admin' ? 'auth' : id
-      const g = await db
-        .collection('adminConfig')
-        .doc(docId)
-        .get()
-        .catch(() => null)
-      const uid = g && g.data && g.data.wecomUserId
-      if (uid) touser.push(String(uid))
-    }
+    // 键映射（深审 F1）：超管坐席身份是 'admin'（checkKey 固定），但其账号 doc 是 'auth'——不映射则超管
+    // 在线也查不到 wecomUserId＝只有超管值班时推送恒为空（escalate 推送读 'auth' 同口径）。
+    const docIds = ids.map((id: string) => (id === 'admin' ? 'auth' : id))
+    const cfg = await db
+      .collection('adminConfig')
+      .where({ _id: db.command.in(docIds) })
+      .limit(docIds.length)
+      .get()
+      .catch(() => ({ data: [] }))
+    const touser = (cfg.data || []).map((d: any) => d.wecomUserId).filter(Boolean).map(String)
     await sendAgentCard(db, touser, {
       title: '新会话待接',
       description: '有顾客转入人工客服，请及时到工作台接待。',
@@ -601,12 +566,8 @@ export async function heldStatus(
   openKfId: string,
   externalUserId: string
 ): Promise<string | null> {
-  const held = await db
-    .collection(COLLECTIONS.csSession)
-    .doc('wxkf:' + openKfId + ':' + externalUserId)
-    .get()
-    .catch(() => null)
-  const hs = held && held.data && held.data.status
+  const held = await docData(db, COLLECTIONS.csSession, 'wxkf:' + openKfId + ':' + externalUserId)
+  const hs = held && held.status
   return hs === 'pending' || hs === 'active' || hs === 'escalated' ? hs : null
 }
 
@@ -647,18 +608,10 @@ export async function handleMessage(ctx: DispatchCtx, incoming: Incoming): Promi
   if (!incoming.menuId) {
     const m = /^\s*([1-5])\s*$/.exec(incoming.text)
     if (m) {
-      const ask = await db
-        .collection(COLLECTIONS.kfState)
-        .doc('csatask:' + to)
-        .get()
-        .catch(() => null)
-      const askAt = ask && ask.data && Number(ask.data.at)
+      const ask = await docData(db, COLLECTIONS.kfState, 'csatask:' + to)
+      const askAt = ask && Number(ask.at)
       if (askAt && Date.now() - askAt < CSAT_ASK_TTL_MS) {
-        await db
-          .collection(COLLECTIONS.kfState)
-          .doc('csatask:' + to)
-          .remove()
-          .catch(() => {})
+        await dropKfState(db, 'csatask:' + to)
         const openid = await resolveOpenid(db, to)
         const csatId = await recordCsat(db, { externalUserId: to, openid, score: Number(m[1]) })
         if (!csatId) {
@@ -682,25 +635,13 @@ export async function handleMessage(ctx: DispatchCtx, incoming: Incoming): Promi
           const human = wantsHuman(incoming.text)
           const hello = looksGreeting(incoming.text)
           // Jev 并行只为取证；人工/招呼选句不靠它。08:55 只有 [kf] jev greeting、没有梯子日志。
-          const evP = tryJevClassify(db, incoming.text)
-          const recentOrder = await kfUserHasRecentOrder(db, incoming.externalUserId)
-          const scripted = human
-            ? await composeScriptReply(db, incoming.externalUserId, incoming.text, HUMAN_LADDER_EV, {
-                hasRecentOrder: recentOrder,
-              })
-            : hello
-              ? await composeScriptReply(db, incoming.externalUserId, incoming.text, GREET_EV, {
-                  hasRecentOrder: recentOrder,
-                })
-              : null
+          const evP = tryJevClassify(gate.key, incoming.text)
+          const hasRecentOrder = await kfUserHasRecentOrder(db, incoming.externalUserId)
+          const useEv = human ? HUMAN_LADDER_EV : hello ? GREET_EV : await evP
+          const got = useEv
+            ? await composeScriptReply(db, incoming.externalUserId, incoming.text, useEv, { hasRecentOrder })
+            : null
           const ev = await evP
-          const got =
-            scripted ||
-            (human || hello || !ev
-              ? null
-              : await composeScriptReply(db, incoming.externalUserId, incoming.text, ev, {
-                  hasRecentOrder: recentOrder,
-                }))
           console.log('[kf] humanLadder', {
             matched: human,
             humanAsks: got ? got.humanAsks : null,
@@ -720,7 +661,7 @@ export async function handleMessage(ctx: DispatchCtx, incoming: Incoming): Promi
               return { type: 'text' as const, content: got.text, bubbles: true, pieces: got.pieces }
             return { type: 'text' as const, content: '在的在的，请说。' }
           }
-          if (got && got.node === 'human') {
+          if (got && (got.node === 'human' || got.text)) {
             if (ev)
               logJevEvidence(ev, got.topic, {
                 stateLen: textLen,
@@ -729,18 +670,9 @@ export async function handleMessage(ctx: DispatchCtx, incoming: Incoming): Promi
                 acting: got.acting,
                 checkpoint: got.checkpoint,
               })
-            return { type: 'transfer' as const }
-          }
-          if (got && got.text) {
-            if (ev)
-              logJevEvidence(ev, got.topic, {
-                stateLen: textLen,
-                node: got.node,
-                topic: got.topic,
-                acting: got.acting,
-                checkpoint: got.checkpoint,
-              })
-            return { type: 'text' as const, content: got.text, bubbles: true, pieces: got.pieces }
+            return got.node === 'human'
+              ? { type: 'transfer' as const }
+              : { type: 'text' as const, content: got.text, bubbles: true, pieces: got.pieces }
           }
           if (ev) logJevEvidence(ev, null, { stateLen: textLen })
           return { type: 'text' as const, content: JEV_FAIL_OPEN_TEXT }
@@ -754,7 +686,7 @@ export async function handleMessage(ctx: DispatchCtx, incoming: Incoming): Promi
   switch (r.type) {
     case 'transfer': {
       // 承面 C：转人工 = 会话进**自建工作台**待接队列（pending·幂等·坐席台 listQueue 读它）+ 给顾客文字确认。
-      // **不动平台 service_state**（守卫 agent-channel-stays-assistant·根因#12·调试日志 AC）：坐席回复走
+      // **不动平台 service_state**（根因#12·调试日志 AC）：坐席回复走
       // send_msg API、仅智能助手态(1)可发——曾在此调 transferToServicer 转 3（原生接待台模式）致坐席发送
       // 全被 95018 拒（2026-07-02 真机逼出）。人工排队/认领/结束由 csSession 状态机管，平台侧全程留 1。
       let pack = await readPackSession(db, to)
@@ -834,12 +766,7 @@ export async function handleMessage(ctx: DispatchCtx, incoming: Incoming): Promi
     case 'csat_note': {
       // 备注预设标签回写最近一条；选「不补充」则清最近标记。一律谢一句收尾。
       if (r.note) await attachCsatNote(db, to, r.note)
-      else
-        await db
-          .collection(COLLECTIONS.kfState)
-          .doc('csatlast:' + to)
-          .remove()
-          .catch(() => {})
+      else await dropKfState(db, 'csatlast:' + to)
       await send(buildText(to, openKfId, '谢谢你的反馈，我们会继续改进 🙏'))
       return
     }

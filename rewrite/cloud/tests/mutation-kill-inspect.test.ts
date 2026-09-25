@@ -1,10 +1,11 @@
-// 变异测试幸存者击杀（kit/inspect.ts·巡检机引擎·守卫 rw-inspect-golden）。
+// 变异测试幸存者击杀（kit/inspect.ts·巡检机引擎）。
 // 背景：StrykerJS 首轮 146 个幸存/无覆盖，本文件补 A 类（真测试缺口）击杀，不与 inspect.test.ts 重复：
 //   ① 检查目录元数据契约（id/title/layer 逐字锁——admin 体检面板与 anomaly 指纹都消费它们）；
 //   ② 红灯落账契约（anomaly._id 确定性指纹 / kind / code=INSPECT_<ID> / ctx.fp / ctx.samples 逗号拼接）；
 //   ③ 有界扫描 capped 语义（三路 >= SCAN_CAP 逐路点亮·触顶显式标 capped、不假装扫全了）；
 //   ④ _.in 分块契约（每批 ≤ IN_CHUNK=100 键·恰好 N 批不多发空查询·分块错了 >100 单静默漏扫）；
-//   ⑤ fail-soft 读失败兜底（单路查询炸→该路当空集不炸整轮·scanned 如实计 0）；
+//   ⑤ 读失败≠空态（多报方向的读——活跃售后豁免、按 orderId 查已退款——炸了当空集，afterSales 集合未建当真无退款；
+//      其余主扫描炸→该检查项红/high「检查自身异常」、其余检查照跑）；
 //   ⑥ 卡单判据逐条件（真付款 transactionId / paidAt>0 / 严格超 72h / 活跃售后豁免仅 applied|approved|refunded）；
 //   ⑦ refundableCapFen 死信分母（缺行缺货款退回 amount 口径·qty 参与分摊·脏数据 catch 兜底）；
 //   ⑧ 心跳确定性日 id（Asia/Shanghai UTC+8 显式换算·档案形状逐字段锁）。
@@ -198,18 +199,20 @@ describe('钱守恒（money-conserved·超退判定/有界扫描/分块契约）
     expect(chunkSizes).toEqual([IN_CHUNK, 20]) // 恰好 2 批·每批 ≤100 键
   })
 
-  it('大白话：订单分块查询炸→当读不到订单跳过、不误报也不炸整轮（fail-soft）', async () => {
+  it('大白话：订单分块查询炸→本项红/high（读不到实付≠没超退）、其余检查照跑', async () => {
     control.seed(COLLECTIONS.afterSales, [{ _id: 'A__l1', orderId: 'A', status: 'refunded', refundAmount: 999 }])
     control.setBeforeGet(({ coll, filter }: any) => {
       if (coll === COLLECTIONS.orders && filter && filter._id) throw new Error('boom')
     })
     const run = await runInspection('timer')
     const money = entry(run, 'money-conserved')
-    expect(money.status).toBe('green')
-    expect(money.detail).toBe('退款均未超实付')
+    expect(money.status).toBe('red')
+    expect(money.severity).toBe('high')
+    expect(money.detail).toBe('检查自身异常：Error: boom')
+    expect(entry(run, 'stuck-order').status).toBe('green')
   })
 
-  it('大白话：售后扫描查询炸→当空集、scanned 如实计 0、不炸整轮（fail-soft）', async () => {
+  it('大白话：售后扫描查询炸→本项红/high、不伪造扫描量、其余检查照跑', async () => {
     control.seed(COLLECTIONS.afterSales, [{ _id: 'A__l1', orderId: 'A', status: 'refunded', refundAmount: 999 }])
     control.setBeforeGet(({ coll, filter }: any) => {
       // 只炸 money-conserved 的「status:refunded 且无 orderId」这一路
@@ -217,8 +220,10 @@ describe('钱守恒（money-conserved·超退判定/有界扫描/分块契约）
     })
     const run = await runInspection('timer')
     const money = entry(run, 'money-conserved')
-    expect(money.status).toBe('green')
-    expect(money.scanned).toBe(0) // 查询炸=一条没扫到·不许伪造扫描量
+    expect(money.status).toBe('red')
+    expect(money.severity).toBe('high')
+    expect(money.scanned).toBeUndefined() // 查询炸=一条没扫到·不许伪造扫描量
+    expect(run.summary).toEqual({ green: 2, yellow: 0, red: 1 })
   })
 })
 
@@ -385,26 +390,29 @@ describe('卡单（stuck-order·72h 判据逐条件/售后豁免面/有界扫描
     expect(stuck.scanned).toBe(1) // 1 paid + 0 dead + 0 售后（炸了就是 0·不伪造）
   })
 
-  it('大白话：paid 查询炸→该路当空集、不炸整轮·scanned=0', async () => {
+  it('大白话：paid 查询炸→本项红/high（80h 真卡单不许被读失败洗绿）、其余检查照跑', async () => {
     control.seed(COLLECTIONS.orders, [{ _id: 'S', status: 'paid', amount: 100, transactionId: 'wxS', paidAt: Date.now() - 80 * HOUR }])
     control.setBeforeGet(({ coll, filter }: any) => {
       if (coll === COLLECTIONS.orders && filter && filter.status === 'paid') throw new Error('boom')
     })
     const run = await runInspection('timer')
     const stuck = entry(run, 'stuck-order')
-    expect(stuck.status).toBe('green')
-    expect(stuck.scanned).toBe(0)
+    expect(stuck.status).toBe('red')
+    expect(stuck.severity).toBe('high')
+    expect(stuck.detail).toBe('检查自身异常：Error: boom')
+    expect(run.summary).toEqual({ green: 2, yellow: 0, red: 1 })
   })
 
-  it('大白话：refund_required 查询炸→该路当空集、不炸整轮·scanned=0', async () => {
+  it('大白话：refund_required 查询炸→本项红/high（死信不许被读失败洗绿）', async () => {
     control.seed(COLLECTIONS.orders, [{ _id: 'D', status: 'refund_required', amount: 100, paidAt: Date.now() }])
     control.setBeforeGet(({ coll, filter }: any) => {
       if (coll === COLLECTIONS.orders && filter && filter.status === 'refund_required') throw new Error('boom')
     })
     const run = await runInspection('timer')
     const stuck = entry(run, 'stuck-order')
-    expect(stuck.status).toBe('green')
-    expect(stuck.scanned).toBe(0)
+    expect(stuck.status).toBe('red')
+    expect(stuck.severity).toBe('high')
+    expect(stuck.detail).toBe('检查自身异常：Error: boom')
   })
 })
 

@@ -34,13 +34,17 @@ import {
   getTempUrls,
   IMAGE_URL_MAX_AGE,
   hash53,
+  isDocMissing,
+  getDocOrNull,
 } from '../../../kit'
 
 // 创建订单（黄金 orders-money·createOrder 节全量）：价格一律云端现算不信前端；服务端不变量
 // （主商品必含/地址四要素/数量条数硬上限）；订单号库级唯一防碰撞；支付配置 fail-closed 只认环境级开关。
 
-const ADDONS: Record<string, { name: string; price: number }> = Object.fromEntries(
-  CHECKOUT_ADDONS.map((a) => [a.id, { name: a.name, price: a.price }])
+// 空原型：前端传来的 id 直接当键查，普通对象会让 'constructor'/'__proto__' 等继承键命中成搭配购（价格 undefined→NaN）
+const ADDONS: Record<string, { name: string; price: number }> = Object.assign(
+  Object.create(null),
+  Object.fromEntries(CHECKOUT_ADDONS.map((a) => [a.id, { name: a.name, price: a.price }]))
 )
 
 // 订单行稳定身份：同商品多 SKU 同单需稳定行键（售后/评价按此定位）；旧单读路径回退 productId。
@@ -48,6 +52,23 @@ const ADDONS: Record<string, { name: string; price: number }> = Object.fromEntri
 // 文档（可能是校验规则上线前的存量商品），fail-closed 会拒建订单（钱链反噬）——规则单源见 shared/scmKey.ts
 // 头注，此处历史容忍（未来新建/编辑商品已在 products.ts saveDraft 出生点拦下歧义身份）。
 const lineIdOf = (productId: string, spec: string) => `${productId}__${spec || ''}`
+
+// 订单单读：读失败与缺档同归 null。只给 null 即拒单/报未知的路径用；null 会被当「确无此单」
+// 而据此写库的路径（建单读回）须自己用 isDocMissing 区分
+const readOrder = (db: any, id: string): Promise<any> =>
+  db
+    .collection(COLLECTIONS.orders)
+    .doc(id)
+    .get()
+    .then(
+      (r: any) => (r && r.data) || null,
+      () => null
+    )
+// 本人单：他人单也回 null，调用方统一回 NOT_FOUND，不泄露订单存在性
+const readOwnOrder = async (db: any, id: string, openid: string) => {
+  const o = await readOrder(db, id)
+  return o && o._openid === openid ? o : null
+}
 
 // 批C·订单读时换址（根因#15 图片面·同 catalog.ts getProducts/getContent 换址口径的订单面延伸）：
 // 订单行 items[].cover 下单时从 products.cover 快照进订单（见 createOrder 注释），库内快照本身
@@ -73,19 +94,9 @@ async function swapOrdersCover(orders: any[]): Promise<any[]> {
 }
 
 // 订单号：yyyyMMddHHmm + 4 位随机（北京时间）
-function orderNo(now: number): string {
-  const d = new Date(now + 8 * 3600 * 1000)
-  const p = (n: number, w = 2) => String(n).padStart(w, '0')
-  const rand = String(Math.floor(Math.random() * 9000) + 1000)
-  return (
-    d.getUTCFullYear() +
-    p(d.getUTCMonth() + 1) +
-    p(d.getUTCDate()) +
-    p(d.getUTCHours()) +
-    p(d.getUTCMinutes()) +
-    rand
-  )
-}
+const orderNo = (now: number): string =>
+  new Date(now + 8 * 3600 * 1000).toISOString().replace(/\D/g, '').slice(0, 12) +
+  String(Math.floor(Math.random() * 9000) + 1000)
 
 // 每 openid 在途未支付单上限（收尾硬化批 2026-07-13·防滥用面）：real 模式下单即 reserveStock 持库存至支付窗
 // 过后才回补，无此上限时单账号可零成本建单把热销 SKU 库存全额预留 15min 锁死真买家。5 单给正常用户（弃单重下）
@@ -103,38 +114,33 @@ export const createOrder = withOpenId(
     if (!lines.length) return err(ERR.EMPTY_ITEMS)
     if (lines.length > MAX_ORDER_LINES) return err(ERR.TOO_MANY_ITEMS)
     if (lines.some((l: any) => l.qty > MAX_QTY)) return err(ERR.BAD_QTY)
-    if (!lines.some((l: any) => !ADDONS[l.id])) return err(ERR.NO_MAIN_ITEM)
 
     // 云端定价：商品查 products、搭配购查单源表；未知条目整单拒
     const prodIds = [...new Set(lines.map((l: any) => l.id).filter((id: string) => !ADDONS[id]))]
-    const res = prodIds.length
-      ? await db
-          .collection(COLLECTIONS.products)
-          .where({ id: _.in(prodIds) })
-          .get()
-      : { data: [] }
-    const byId: Record<string, any> = {}
-    res.data.forEach((p: any) => {
-      byId[p.id] = p
-    })
+    if (!prodIds.length) return err(ERR.NO_MAIN_ITEM)
+    // 商品价与支付配置互不依赖：并行取回；前段拒单时 cfg 结果直接丢弃（纯读）
+    const [res, cfg] = await Promise.all([
+      db
+        .collection(COLLECTIONS.products)
+        .where({ id: _.in(prodIds) })
+        .get(),
+      db
+        .collection(COLLECTIONS.config)
+        .doc('pay')
+        .get()
+        .catch(() => null),
+    ])
+    const byId = new Map<string, any>(res.data.map((p: any) => [p.id, p]))
 
     const items: any[] = []
     for (const l of lines) {
-      if (ADDONS[l.id]) {
-        const a = ADDONS[l.id]
-        items.push({
-          productId: l.id,
-          lineId: lineIdOf(l.id, ''),
-          name: a.name,
-          spec: '',
-          price: a.price,
-          qty: l.qty,
-          enteredQty: 0,
-          refundable: true,
-          cover: '', // 搭配购无封面·形状一致（订单行封面单源=下单快照·不留 undefined）
-        })
-      } else if (byId[l.id]) {
-        const p = byId[l.id]
+      let line: any
+      const a = ADDONS[l.id]
+      if (a) {
+        line = { productId: l.id, name: a.name, spec: '', price: a.price, cover: '' } // 搭配购无封面·不留 undefined
+      } else {
+        const p = byId.get(l.id)
+        if (!p) return err('UNKNOWN_ITEM:' + l.id)
         // 停售挡交易入口 fail-closed：定价/预留之前整单拒（不建单不扣库存）
         if (p.listed === false) return err('UNLISTED_ITEM:' + l.id)
         let price = p.price
@@ -148,24 +154,13 @@ export const createOrder = withOpenId(
         } else if (!isValidPriceYuan(p.price)) {
           return err('BAD_PRICE:' + l.id) // 交易最终关口：库内脏价不放行
         }
-        items.push({
-          productId: p.id,
-          lineId: lineIdOf(p.id, spec),
-          // LD-001 契约守卫：商品名只认服务端 products 主数据（byId 来自库内查询·不信前端上送）——
-          // 写入来源被篡改（硬编码/客户端字段）时 app-orders.test.ts 的商品名来源用例必红。
-          name: p.name,
-          spec,
-          price,
-          qty: l.qty,
-          enteredQty: 0,
-          refundable: true,
-          // 封面快照（订单=历史快照·不回读 catalog·T3/§6）：下单那一刻商品封面永久留存，
-          // 商品删/停售/换图都不影响历史订单展示；products 已在 byId 手上·零额外查询。
-          cover: String(p.cover || ''),
-        })
-      } else {
-        return err('UNKNOWN_ITEM:' + l.id)
+        // LD-001 契约守卫：商品名只认服务端 products 主数据（byId 来自库内查询·不信前端上送）——
+        // 写入来源被篡改（硬编码/客户端字段）时 app-orders.test.ts 的商品名来源用例必红。
+        // 封面快照（订单=历史快照·不回读 catalog·T3/§6）：下单那一刻商品封面永久留存，
+        // 商品删/停售/换图都不影响历史订单展示；products 已在 byId 手上·零额外查询。
+        line = { productId: p.id, name: p.name, spec, price, cover: String(p.cover || '') }
       }
+      items.push({ ...line, lineId: lineIdOf(line.productId, line.spec), qty: l.qty, enteredQty: 0, refundable: true })
     }
 
     // 金额全程「分」整数运算（设计约束#4）；存库记元（与现网数据兼容），由分精确换算
@@ -179,31 +174,13 @@ export const createOrder = withOpenId(
 
     // 地址快照：白名单 + 四要素必填 + 截断（不信前端长度）
     const a = e.address || {}
-    const address = {
-      name: String(a.name || '')
-        .trim()
-        .slice(0, 40),
-      phone: String(a.phone || '')
-        .trim()
-        .slice(0, 20),
-      region: String(a.region || '')
-        .trim()
-        .slice(0, 60),
-      detail: String(a.detail || '')
-        .trim()
-        .slice(0, 120),
-    }
-    if (!address.name || !address.phone || !address.region || !address.detail)
+    const cut = (v: unknown, n: number) => String(v || '').trim().slice(0, n) // String() 而非只收字符串：数字手机号也要收
+    const address = { name: cut(a.name, 40), phone: cut(a.phone, 20), region: cut(a.region, 60), detail: cut(a.detail, 120) }
+    if (Object.values(address).some((v) => !v) || address.phone.replace(/\D/g, '').length < 7)
       return err(ERR.BAD_ADDRESS)
-    if (address.phone.replace(/\D/g, '').length < 7) return err(ERR.BAD_ADDRESS)
 
     // 支付配置 fail-closed：只认环境级开关——mock 仅显式 ALLOW_MOCK_PAY=1 放行（生产永不设），
     // 库内 config 声称 mock 不作数（可篡改数据不当安全闸），缺/错配置绝不伪造已付单。
-    const cfg = await db
-      .collection(COLLECTIONS.config)
-      .doc('pay')
-      .get()
-      .catch(() => null)
     const payMode = cfg && cfg.data && cfg.data.mode === 'real' ? 'real' : 'mock'
     if (payMode === 'mock' && process.env.ALLOW_MOCK_PAY !== '1') return err(ERR.PAY_CONFIG_MISSING)
 
@@ -240,8 +217,8 @@ export const createOrder = withOpenId(
           const c = await db.collection(COLLECTIONS.orderIdempotency).doc(claimId).get().catch(() => null)
           const existingId = c && c.data && c.data.orderId
           if (existingId) {
-            const got = await db.collection(COLLECTIONS.orders).doc(String(existingId)).get().catch(() => null)
-            if (got && got.data) return ok({ order: got.data })
+            const existing = await readOrder(db, String(existingId))
+            if (existing) return ok({ order: existing })
             break // 登记了订单号却读不到订单——不应发生，跳出按未落定处理（下方报 PENDING）
           }
           await new Promise((r) => setTimeout(r, 150))
@@ -295,14 +272,19 @@ export const createOrder = withOpenId(
         // 写失败区分（深审 P2·根因#3 幂等）：add 抛错既可能是 _id 撞号（换号重试），也可能是「写已持久化但
         // SDK 返回超时/网络错」——后者若换号重试会落两张共享同一 reserved 的单（各自关单/取消时 restoreStock
         // 双记＝库存虚增/超卖）。先读回本次 _id：存在且属本人＝本次写其实成功，直接返回该单（幂等）；确不存在
-        // 才是真撞号/真失败，换号重试（同 overrideRefund refunds.ts 的读回判定范式，不靠错误类型嗅探）。
-        const back = await db
-          .collection(COLLECTIONS.orders)
-          .doc(id)
-          .get()
-          .catch(() => null)
-        if (back && back.data && back.data._openid === OPENID)
-          return ok({ order: { ...order, _id: id, id } })
+        // 才是真撞号/真失败，换号重试（同 overrideRefund refunds.ts 的读回判定范式，不嗅探 add 的错误类型）。
+        // 读回本身失败＝不知道这单落没落：换号可能落共享 reserved 的第二单，回补可能还掉在途单的预留，
+        // 两样都不做；幂等键也留着（同键重试只会报 PENDING，不建二单），告警交人工核。
+        let back: any = null
+        try {
+          back = (await db.collection(COLLECTIONS.orders).doc(id).get()).data
+        } catch (e) {
+          if (!isDocMissing(e)) {
+            alert('money', 'createOrder', 'ORDER_READBACK_FAIL', { orderId: id, claimId })
+            return err(ERR.ORDER_CLAIM_PENDING)
+          }
+        }
+        if (back && back._openid === OPENID) return ok({ order: { ...order, _id: id, id } })
       }
     }
     await restoreStock(rsv.reserved) // 建单彻底失败：预留还回去（不锁死库存）
@@ -322,23 +304,17 @@ export const pay = withOpenId(
     const id = String((event as any).id || '')
     if (!id) return err(ERR.NO_ID)
 
-    // 批C·并行取回（零依赖只读·各自 .catch(()=>null) 已核）：订单读与支付配置读互不依赖对方结果，
-    // 并行发起省一次网关往返；校验顺序与错误分支原样不变——订单校验（NOT_FOUND/BAD_STATUS/超时关单）
-    // 失败时 cfg 结果原样丢弃（纯读零副作用，等价原「先订单后 config」串行语义）。
-    const [got, cfg] = await Promise.all([
-      db
-        .collection(COLLECTIONS.orders)
-        .doc(id)
-        .get()
-        .catch(() => null),
+    // 订单读与支付配置读互不依赖：并行省一次往返；订单校验（NOT_FOUND/BAD_STATUS/超时关单）失败时
+    // cfg 结果直接丢弃（纯读零副作用）。
+    const [order, cfg] = await Promise.all([
+      readOwnOrder(db, id, OPENID),
       db
         .collection(COLLECTIONS.config)
         .doc('pay')
         .get()
         .catch(() => null),
     ])
-    if (!got || !got.data || got.data._openid !== OPENID) return err(ERR.NOT_FOUND)
-    const order = got.data
+    if (!order) return err(ERR.NOT_FOUND)
     if (order.status !== 'pending') return err(buildBadStatus(order.status))
 
     // 惰性超时：到点的 pending 当场关闭（定时器只是兜底）；抢占成功才回补预留（幂等绑转移）
@@ -360,13 +336,9 @@ export const pay = withOpenId(
       const paidAt = Date.now()
       const { moved } = await transition(COLLECTIONS.orders, id, ['pending'], 'paid', { paidAt })
       if (moved) return ok({ paid: true, paidAt })
-      const fresh = await db
-        .collection(COLLECTIONS.orders)
-        .doc(id)
-        .get()
-        .catch(() => null)
-      const st = (fresh && fresh.data && fresh.data.status) || 'unknown'
-      if (st === 'paid') return ok({ paid: true, paidAt: fresh!.data.paidAt || paidAt }) // 并发已付：幂等成功
+      const fresh = await readOrder(db, id)
+      const st = fresh?.status || 'unknown'
+      if (st === 'paid') return ok({ paid: true, paidAt: fresh.paidAt || paidAt }) // 并发已付：幂等成功
       return err(buildBadStatus(st))
     }
 
@@ -406,13 +378,8 @@ export const applyRefund = withOpenId(async ({ db, OPENID, event }) => {
   if (!orderId || !reqLine) return err(ERR.BAD_ARGS)
   const reason = String(e.reason || '').slice(0, 200)
 
-  const got = await db
-    .collection(COLLECTIONS.orders)
-    .doc(orderId)
-    .get()
-    .catch(() => null)
-  if (!got || !got.data || got.data._openid !== OPENID) return err(ERR.NOT_FOUND)
-  const order = got.data
+  const order = await readOwnOrder(db, orderId, OPENID)
+  if (!order) return err(ERR.NOT_FOUND)
   if (!['paid', 'shipped', 'done'].includes(order.status)) return err(buildBadStatus(order.status))
 
   const item = (order.items || []).find((it: any) => (it.lineId || it.productId) === reqLine)
@@ -433,13 +400,13 @@ export const applyRefund = withOpenId(async ({ db, OPENID, event }) => {
   await db.createCollection(COLLECTIONS.afterSales).catch(() => {})
   // 同单售后须读齐才能算准 used 封顶（深审 P2·根因#7）：裸 .get() 服务端默认 100 条静默截断会少算 used、
   // 令行/单级退款封顶失效。显式取到 AFTERSALE_SCAN_CAP；命中上限＝记录数异常，fail-closed 拒退 + 告警，
-  // 绝不按截断值算钱（钱守恒 > 可用性）。
+  // 绝不按截断值算钱（钱守恒 > 可用性）。读失败同理不能当「没有售后」（used=0 会退超）：集合上面已建，
+  // 这里的异常只会是真故障，不接住，交网关回 INTERNAL 并记账。
   const exist = await db
     .collection(COLLECTIONS.afterSales)
     .where({ orderId })
     .limit(AFTERSALE_SCAN_CAP)
     .get()
-    .catch(() => ({ data: [] }))
   if (exist.data.length >= AFTERSALE_SCAN_CAP) {
     alert('money', 'applyRefund', 'AFTERSALE_SCAN_CAP', { orderId })
     return err('REFUND_SCAN_CAP')
@@ -487,23 +454,12 @@ export const applyRefund = withOpenId(async ({ db, OPENID, event }) => {
 export const confirmReceive = withOpenId(async ({ db, OPENID, event }) => {
   const id = String((event as any).id || '')
   if (!id) return err(ERR.NO_ID)
-  const got = await db
-    .collection(COLLECTIONS.orders)
-    .doc(id)
-    .get()
-    .catch(() => null)
-  if (!got || !got.data || got.data._openid !== OPENID) return err(ERR.NOT_FOUND)
-  if (got.data.status !== 'shipped') return err(buildBadStatus(got.data.status))
+  const order = await readOwnOrder(db, id, OPENID)
+  if (!order) return err(ERR.NOT_FOUND)
+  if (order.status !== 'shipped') return err(buildBadStatus(order.status))
   const doneAt = Date.now()
   const { moved } = await transition(COLLECTIONS.orders, id, ['shipped'], 'done', { doneAt })
-  if (!moved) {
-    const fresh = await db
-      .collection(COLLECTIONS.orders)
-      .doc(id)
-      .get()
-      .catch(() => null)
-    return err(buildBadStatus((fresh && fresh.data && fresh.data.status) || 'unknown'))
-  }
+  if (!moved) return err(buildBadStatus((await readOrder(db, id))?.status || 'unknown'))
   return ok({ doneAt })
 })
 
@@ -515,26 +471,14 @@ export const confirmReceive = withOpenId(async ({ db, OPENID, event }) => {
 export const cancelOrder = withOpenId(async ({ db, OPENID, event }) => {
   const id = String((event as any).id || '')
   if (!id) return err(ERR.NO_ID)
-  const got = await db
-    .collection(COLLECTIONS.orders)
-    .doc(id)
-    .get()
-    .catch(() => null)
-  if (!got || !got.data || got.data._openid !== OPENID) return err(ERR.NOT_FOUND) // 属主隔离·不泄存在性
-  const order = got.data
+  const order = await readOwnOrder(db, id, OPENID)
+  if (!order) return err(ERR.NOT_FOUND)
   if (order.status !== 'pending') return err(buildBadStatus(order.status))
   const { moved } = await transition(COLLECTIONS.orders, id, ['pending'], 'closed', {
     closedAt: Date.now(),
     cancelledBy: 'user', // 台账区分手动取消 vs 超时关单
   })
-  if (!moved) {
-    const fresh = await db
-      .collection(COLLECTIONS.orders)
-      .doc(id)
-      .get()
-      .catch(() => null)
-    return err(buildBadStatus((fresh && fresh.data && fresh.data.status) || 'unknown')) // 并发已被关/已付
-  }
+  if (!moved) return err(buildBadStatus((await readOrder(db, id))?.status || 'unknown')) // 并发已被关/已付
   if (Array.isArray(order.reserved) && order.reserved.length) await restoreStock(order.reserved) // 回补绑 moved·只一次
   return ok({ closedAt: Date.now() })
 })
@@ -554,13 +498,10 @@ export const getMyOrders = withOpenId(async ({ db, OPENID, event }): Promise<Get
 export const getOrderById = withOpenId(async ({ db, OPENID, event }): Promise<GetOrderByIdResp> => {
   const id = String((event as any).id || '')
   if (!id) return err(ERR.NO_ID)
-  const got = await db
-    .collection(COLLECTIONS.orders)
-    .doc(id)
-    .get()
-    .catch(() => null)
-  if (!got || !got.data || got.data._openid !== OPENID) return err(ERR.NOT_FOUND)
-  const [order] = await swapOrdersCover([got.data])
+  // 只有真缺档才算「没有这单」：订单页把 NOT_FOUND 当确定空态不给重试，读失败抛给网关回 INTERNAL
+  const got = await getDocOrNull(db.collection(COLLECTIONS.orders).doc(id))
+  if (!got || got._openid !== OPENID) return err(ERR.NOT_FOUND)
+  const [order] = await swapOrdersCover([got])
   return ok({ order })
 })
 

@@ -26,11 +26,7 @@ const ENV_FALLBACK: Record<string, string> = {
 
 /** 读一个安全配置字段：DB 命中且非空 → 用它；否则回退环境变量；都没有 → ''。 */
 export async function getSecureConfig(db: any, docId: SecureDocId, field: string): Promise<string> {
-  const got = await db.collection(COLLECTIONS.secureConfig).doc(docId).get().catch(() => null)
-  const v = got && got.data && (got.data as any)[field]
-  if (typeof v === 'string' && v) return v
-  const envKey = ENV_FALLBACK[`${docId}.${field}`]
-  return envKey ? process.env[envKey] || '' : ''
+  return (await getSecureConfigFields(db, docId, [field]))[field]
 }
 
 /** 一次取一个 doc 的多个字段（省调用方逐字段 await 的重复 db 往返）。 */
@@ -40,7 +36,8 @@ export async function getSecureConfigFields(db: any, docId: SecureDocId, fields:
   const out: Record<string, string> = {}
   for (const f of fields) {
     const v = (data as any)[f]
-    out[f] = typeof v === 'string' && v ? v : process.env[ENV_FALLBACK[`${docId}.${f}`]] || ''
+    const envKey = ENV_FALLBACK[`${docId}.${f}`]
+    out[f] = typeof v === 'string' && v ? v : (envKey && process.env[envKey]) || ''
   }
   return out
 }

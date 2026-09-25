@@ -1,4 +1,15 @@
 import { getDb } from './db'
+import { isDocMissing } from './inventory'
+
+/** 读单档：无档→null；其它读失败照抛（库挂≠没有·根因#14）。 */
+export const getDocOrNull = (ref: { get(): Promise<any> }): Promise<any> =>
+  ref.get().then(
+    (got: any) => (got && got.data ? got.data : null),
+    (e: unknown) => {
+      if (isDocMissing(e)) return null
+      throw e
+    }
+  )
 
 /**
  * 确定性 _id 幂等建档（设计约束#1：确定性主键——撞键＝并发方已写＝天然幂等）。

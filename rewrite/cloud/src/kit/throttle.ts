@@ -19,6 +19,7 @@ interface ThrottleOpts {
 const COLL = COLLECTIONS.rateLimit
 const rid = (key: string) => 'rl_' + key
 const CAS_RETRIES = 20
+const readRec = async (key: string) => (await getDb().collection(COLL).doc(rid(key)).get().catch(() => null))?.data || null
 
 async function bumpWindowed(
   key: string,
@@ -60,12 +61,7 @@ async function bumpWindowed(
   }
   for (let attempt = 0; attempt < CAS_RETRIES; attempt++) {
     const now = Date.now()
-    const got = await db
-      .collection(COLL)
-      .doc(id)
-      .get()
-      .catch(() => null)
-    const rec = got && got.data ? got.data : null
+    const rec = await readRec(key)
     const within = !!rec && typeof rec[windowField] === 'number' && now - rec[windowField] < windowMs
     const count = (within ? rec![countField] || 0 : 0) + 1
     const patch: Record<string, unknown> = within
@@ -75,11 +71,11 @@ async function bumpWindowed(
     patch.updatedAt = now // TTL 清理锚：cleanupEvents 按 updatedAt 删过期窗口（不入 CAS cond）
     if (!rec) {
       try {
-        await db.createCollection(COLL).catch(() => {})
         await db.collection(COLL).add({ data: { _id: id, createdAt: now, ...patch } })
         return count
       } catch {
-        continue // 并发首写撞号 → 重试转 update 路径
+        await db.createCollection(COLL).catch(() => {}) // 集合缺失才需要；撞号时白调一次（少见）
+        continue // 重读：撞号走 CAS update，缺集合则重新 add
       }
     }
     // CAS 前置：窗内连同计数、否则窗口起点须仍是读到的旧值（缺失则 exists(false)——两系列不互踩）
@@ -107,13 +103,7 @@ async function bumpWindowed(
 
 /** 锁定中？是 → 返回剩余毫秒；否 → 0。调用方据此拒绝。 */
 export async function throttleLocked(key: string): Promise<number> {
-  const db = getDb()
-  const got = await db
-    .collection(COLL)
-    .doc(rid(key))
-    .get()
-    .catch(() => null)
-  const rec = got && got.data ? got.data : null
+  const rec = await readRec(key)
   const left = rec && typeof rec.lockedUntil === 'number' ? rec.lockedUntil - Date.now() : 0
   return left > 0 ? left : 0
 }
@@ -132,15 +122,9 @@ export async function throttleFail(key: string, opts: ThrottleOpts): Promise<voi
 
 /** 认证成功：清零计数与锁定（仅在有残留时写，常态零开销）。 */
 export async function throttleReset(key: string): Promise<void> {
-  const db = getDb()
-  const got = await db
-    .collection(COLL)
-    .doc(rid(key))
-    .get()
-    .catch(() => null)
-  const rec = got && got.data ? got.data : null
+  const rec = await readRec(key)
   if (rec && ((rec.fails || 0) > 0 || (rec.lockedUntil || 0) > 0)) {
-    await db
+    await getDb()
       .collection(COLL)
       .doc(rid(key))
       .update({ data: { fails: 0, lockedUntil: 0 } })

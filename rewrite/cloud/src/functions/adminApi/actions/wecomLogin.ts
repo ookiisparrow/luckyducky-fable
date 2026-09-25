@@ -1,5 +1,5 @@
-import { reply, str, capsForRole, issueSession } from '../lib'
-import { getCachedKfToken, getWecomOAuthUserId } from '../../../kit'
+import { reply, str, issueSession, principalOf } from '../lib'
+import { getCachedKfToken, getWecomOAuthUserId, alert } from '../../../kit'
 
 // M⑦ 车道 B·企业微信自建应用内 OAuth 免登（承面C 增强·工单 §2.2）。
 //
@@ -27,14 +27,11 @@ export async function loginByWecomCode({ db, data }: { db: any; data: any }) {
   const acct = rows[0] || null
   if (!acct) return reply(403, { ok: false, error: 'NO_BOUND_ACCOUNT' }) // userid 未绑任何坐席账号·fail-closed 拒登
   if (acct.disabled) return reply(403, { ok: false, error: 'ACCOUNT_DISABLED' })
-  // 签发高熵 session 令牌（lib.issueSession 单源·口令登录同款·存 sessions 数组容多设备·深审 P1）
-  const sessionToken = await issueSession(db, acct._id, 'wecom')
-  const isSuper = acct._id === 'auth'
-  return reply(200, {
-    ok: true,
-    sessionToken,
-    operator: acct.name || (isSuper ? 'admin' : acct._id),
-    agentId: isSuper ? 'admin' : acct._id,
-    caps: acct.role ? capsForRole(acct.role) : Array.isArray(acct.caps) ? acct.caps : isSuper ? ['*'] : [],
+  // 签发高熵 session 令牌（lib.issueSession 单源·口令登录同款·存 sessions 数组容多设备）；
+  // 签发失败告警留痕后返空、前端按 NO_SESSION_TOKEN 拒登（同口令登录）
+  const sessionToken = await issueSession(db, acct._id, 'wecom').catch((e) => {
+    alert('security', 'adminLogin', 'SESSION_ISSUE_FAIL', { via: 'wecom', docId: acct._id, err: String(e) })
+    return ''
   })
+  return reply(200, { ...principalOf(acct), sessionToken })
 }

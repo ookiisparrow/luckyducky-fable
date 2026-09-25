@@ -3,7 +3,7 @@
  * functions/ 下每个「函数单元」→ dist/<name>/index.js（CJS 单文件，kit/@ldrw/shared 内联 + 摇树），
  * external: wx-server-sdk（tcb 运行时提供 + installDependency 装）。
  *
- * 函数单元判定（与守卫 rw-interface-catalog-sync 同规则）：
+ * 函数单元判定：
  *   顶层目录含 index.ts 且有 `export const main` ＝ 一函数（app / adminApi）；
  *   否则为组目录（callbacks/timers/cs/ops），其下含 main 的 .ts 文件或含 main index.ts 的子目录各为一函数
  *   （无 main 的文件如 timers/recallRules.ts 是库·被内联、不独立成函数）。

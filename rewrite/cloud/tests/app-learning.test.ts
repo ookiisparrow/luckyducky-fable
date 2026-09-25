@@ -1,4 +1,4 @@
-// 黄金 learning-content §一–§五（守卫 rw-learning-golden）。
+// 黄金 learning-content §一–§五。
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { createHash } from 'node:crypto'
 import cloud, { control } from 'wx-server-sdk'
@@ -372,8 +372,8 @@ describe('getCourses / getPlaybackUrl（目录不漏源·鉴权 fail-closed·黄
   })
 
   it('大白话：按 id 取课库挂不再装成「没有这门课」——ok:false INTERNAL；真无档仍空', async () => {
-    control.setBeforeGet(({ coll, id }: any) => {
-      if (coll === 'courses' && id === 'c1') throw new Error('MOCK_DB_FAIL')
+    control.setBeforeGet(({ coll }: any) => {
+      if (coll === 'courses') throw new Error('MOCK_DB_FAIL')
     })
     const fail = await call('getCourses', { ids: ['c1'] })
     control.setBeforeGet(null as never)

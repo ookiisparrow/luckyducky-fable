@@ -5,7 +5,7 @@ import { notifyAlert } from './observe'
 // 实物库存原子原语（设计约束#1「下单即预留+乐观 CAS 防超卖」·黄金 inventory-scm §A/§B/§C）。
 // SKU 库存独立集合 inventory，确定性 _id=`${productId}__${spec}`（与 order.items[].spec 同键，回补一致）。
 // 不限量：无文档或 stock=null＝不限量（缺货前不阻断下单·安全迁移）。
-// 单一收口：全库仅本文件读写 inventory.stock。getInventory（批14）/produceStock（批16 SCM）已随域批次补齐。
+// 单一收口：全库仅本文件读写 inventory.stock。
 
 interface StockLine {
   productId: string
@@ -14,23 +14,20 @@ interface StockLine {
 }
 
 const CAS_RETRY = 5
-// 组合键校验在出生点、不在此消费点（战役3 批D·D1）：本函数吃存量库存文档的 productId/spec（多来自已保存
+// 组合键校验在出生点、不在此消费点：本函数吃存量库存文档的 productId/spec（多来自已保存
 // 的历史商品/订单），fail-closed 会拒结算既有数据（钱链反噬）——规则单源见 shared/scmKey.ts 头注，此处历史容忍。
 const idOf = (productId: string, spec: string) => `${productId}__${spec || ''}`
 
-// 单条 CAS 扣减：true=已扣 / false=库存不足（含持续读失败重试耗尽·宁缺勿超卖）/ null=不限量（无档·不扣不计）
-// P1 修复（批H）：原实现 `.get().catch(() => null)` 把「文档真的不存在」（无档＝合法不限量）与
-// 「网络/DB 瞬时读失败」混为一谈，且第一次 get() 失败就立即 return null——调用方 reserveStock 把
-// null 解释为「不限量，跳过预留」，真实读失败被静默当成合法不限量放行，直接开超卖口子。
-// 改为跟随 casIncrement 已确立的 isDocMissing 判据：只有真无档才判不限量（返回 null）；其它读失败
-// 视为一次尝试失败、进入下一轮 CAS_RETRY 重试（不再第一次失败即弃）；重试耗尽仍读不到，返回 false
-// （与「库存不足」同一 fail-closed 出口，绝不落回 null——不让读失败伪装成合法不限量）。
-//
-// 批Q 修复（P3·告警误报）：hadReadFailure 原实现整个重试循环粘滞——只要任意一轮读失败过就
-// 一直为 true，即便后续轮次 get() 全部读成功、只是 CAS 更新（where+update）持续被别的并发方
-// 抢先而耗尽，也会在重试耗尽时误打 RESERVE_READ_FAILED（把「最后其实是正常并发争抢耗尽」诬成
-// 「持续读失败」）。改为每轮开头重置：只保留「决定本轮是否继续/耗尽」那一轮的读失败标记，耗尽后
-// 只看最后一轮是否读失败——读失败与纯 CAS 争抢耗尽的告警语义才名副其实。
+// 条件写只认 updated===1 为写成；updated 为 0 或写失败都按「未写成」处理（调用方重读重试或回冲突）。
+const casWrite = async (coll: any, where: object, data: object): Promise<boolean> => {
+  const r = await coll.where(where).update({ data }).catch(() => ({ stats: { updated: 0 } }))
+  return !!r.stats && r.stats.updated === 1
+}
+
+// 单条 CAS 扣减：true=已扣 / false=库存不足（含持续读失败重试耗尽·宁缺勿超卖）/ null=不限量（无档、空档或
+// stock=null·不扣不计）。读失败绝不返回 null：调用方 reserveStock 把 null 当「不限量，跳过预留」，读失败落成
+// null 就是超卖口子。所以读失败只算一次尝试失败、进下一轮重试；耗尽仍读不到返回 false（与「库存不足」同一
+// fail-closed 出口）。
 async function casDecrement(coll: any, _id: string, qty: number): Promise<boolean | null> {
   let lastRoundReadFailed = false
   for (let i = 0; i < CAS_RETRY; i++) {
@@ -47,11 +44,7 @@ async function casDecrement(coll: any, _id: string, qty: number): Promise<boolea
     const stock = got.data.stock
     if (stock == null) return null // 不限量：合法不处理
     if (stock < qty) return false
-    const r = await coll
-      .where({ _id, stock })
-      .update({ data: { stock: stock - qty, updatedAt: Date.now() } })
-      .catch(() => ({ stats: { updated: 0 } }))
-    if (r.stats && r.stats.updated === 1) return true
+    if (await casWrite(coll, { _id, stock }, { stock: stock - qty, updatedAt: Date.now() })) return true
   }
   // 重试耗尽：持续读失败会把本应正常成交的订单误判 OUT_OF_STOCK（fail-closed·不超卖但阻断真实可售订单）——
   // 与「纯 CAS 并发争抢耗尽」区分开单独告警，供人工对账/排障（后者高并发下属正常现象，不值得告警噪音）。
@@ -98,31 +91,38 @@ export const isEmptyDoc = (got: unknown): boolean => {
   return false
 }
 
-// 单条 CAS 回补：true=已扣回/无档或不限量（合法不处理）；false=重试耗尽仍未确认写入（回补丢失，调用方需知道）。
-// K3（bug sweep II）：原返回 void 把「读失败」「无档/不限量」「CAS 重试耗尽」三种迥异语义折叠成同一句静默 return——
-// restoreStock 的调用方（closeExpiredOrders/orders×3/payCallback/refundCallback）全部 await void，回补丢失
-// 永久无信号（方向偏少卖）。改为区分：无档/不限量→true（合法不处理，不算丢失）；读失败→当一次尝试失败继续重试
-// （不再与「无档」折叠，防真实读失败被误吞成合法不限量）；重试耗尽→false，交回补丢失信号给调用方。
-async function casIncrement(coll: any, _id: string, qty: number): Promise<boolean> {
+// 单条 CAS 递增（回补 / 入成品共用）：true=已加或合法不处理；false=重试耗尽仍未确认写入（调用方须知道：回补丢失 / 入成品争用）。
+// 无档：不给 seed＝不限量不处理（回补）；给 seed＝按 qty 建档（入成品时 SKU 可能还没库存档）。
+// 读失败（非「无档」）只算一次尝试失败：当成无档会把限量 SKU 误作不限量，所以重试而不折叠。
+async function casIncrement(
+  coll: any,
+  _id: string,
+  qty: number,
+  seed?: { productId: string; spec: string }
+): Promise<boolean> {
   for (let i = 0; i < CAS_RETRY; i++) {
-    let got: any
+    let got: any = null
     try {
       got = await coll.doc(_id).get()
     } catch (e) {
-      if (isDocMissing(e)) return true // 无档＝不限量·合法不处理
-      continue // 读失败（非「无档」）：当一次尝试失败，进入下一轮重试——持续性读失败下该行 get 最多放大到
-      // CAS_RETRY 次（原实现 1 次即静默放弃）：刻意权衡（评审 P3 要求注明），回补只走关单/退款等低频补偿路径，可接受
+      // 持续读失败下 get 最多放大到 CAS_RETRY 次：只走关单/退款/组装入成品等低频路径，可接受
+      if (!isDocMissing(e)) continue
     }
-    if (isEmptyDoc(got)) return true // 无档（空 data / 空数组）＝不限量
+    if (isEmptyDoc(got)) {
+      if (!seed) return true // 无档＝不限量·合法不处理
+      // 确定性 _id：并发双建时一方撞 DUPLICATE，下一轮走 CAS 累加
+      const created = await coll
+        .add({ data: { _id, ...seed, stock: qty, updatedAt: Date.now() } })
+        .then(() => true, () => false)
+      if (created) return true
+      continue
+    }
     const stock = got.data.stock
-    if (stock == null) return true // 不限量：合法不处理
-    const r = await coll
-      .where({ _id, stock })
-      .update({ data: { stock: stock + qty, updatedAt: Date.now() } })
-      .catch(() => ({ stats: { updated: 0 } }))
-    if (r.stats && r.stats.updated === 1) return true
+    // 不限量：合法不处理（入成品也不把不限量隐式翻成限量，改计量语义须管理员在库存页显式设置）
+    if (stock == null) return true
+    if (await casWrite(coll, { _id, stock }, { stock: stock + qty, updatedAt: Date.now() })) return true
   }
-  return false // 重试耗尽（持续读失败或 CAS 持续被抢）——回补真丢失
+  return false
 }
 
 /**
@@ -149,8 +149,8 @@ export async function reserveStock(
 
 /**
  * 回补库存（超时关单/退款/建单失败回滚）。幂等由调用方绑状态转移保证（只在抢占成功后调一次）。
- * K3（bug sweep II·钱链可观测）：返回语义不变（fail-soft·调用点零改动）——只加信号：任一行回补丢失
- * （casIncrement 重试耗尽）经 kit observe 单出口留痕告警，供人工对账回补；不因回补丢失让关单/退款失败。
+ * fail-soft：任一行回补丢失（casIncrement 重试耗尽）经 kit observe 单出口留痕告警，供人工对账回补；
+ * 不因回补丢失让关单/退款失败。
  * 漂移方向仅偏少卖（永不超卖·与防超卖偏置同向）。
  */
 export async function restoreStock(lines: StockLine[]): Promise<void> {
@@ -182,14 +182,8 @@ export async function setStock(
   const _id = idOf(productId, spec)
   const data: Record<string, unknown> = { productId, spec, stock, updatedAt: Date.now() }
   if (threshold != null) data.threshold = threshold
-  if (expectedUpdatedAt != null) {
-    const r = await coll
-      .where({ _id, updatedAt: expectedUpdatedAt })
-      .update({ data })
-      .catch(() => ({ stats: { updated: 0 } }))
-    if (r.stats && r.stats.updated === 1) return { ok: true }
-    return { ok: false, conflict: true }
-  }
+  if (expectedUpdatedAt != null)
+    return (await casWrite(coll, { _id, updatedAt: expectedUpdatedAt }, data)) ? { ok: true } : { ok: false, conflict: true }
   await coll
     .doc(_id)
     .set({ data })
@@ -200,41 +194,13 @@ export async function setStock(
 }
 
 /**
- * 组装入成品（进销存 SCM 门4·旧线 kit/inventory 逐字承接·批16）：
- * CAS 增·无文档则建（组装出来的成品第一次入账时 SKU 可能还没建库存档）。stock=null（不限量）保持不动——
- * 不把「不限量」隐式翻成限量（改计量语义须管理员在库存页显式设置）。qty 非正整数 fail-closed。
+ * 组装入成品（进销存 SCM 门4）：CAS 增·无文档则建，stock=null（不限量）保持不动。qty 非正整数 fail-closed。
  */
 export async function produceStock(productId: string, spec: string, qty: number): Promise<{ ok: boolean; error?: string }> {
   if (!productId || !Number.isInteger(qty) || qty <= 0) return { ok: false, error: ERR.BAD_QTY }
   const coll = getDb().collection(COLLECTIONS.inventory)
-  const _id = idOf(productId, spec)
-  for (let i = 0; i < CAS_RETRY; i++) {
-    let got: any
-    try {
-      got = await coll.doc(_id).get()
-    } catch (e) {
-      if (!isDocMissing(e)) continue // 读失败：重试，不当「无档」去新建
-      got = null
-    }
-    if (isEmptyDoc(got)) {
-      // 无文档则建（确定性 _id·并发双建一方撞 DUPLICATE 走下轮 CAS 累加）
-      const created = await coll
-        .add({ data: { _id, productId, spec, stock: qty, updatedAt: Date.now() } })
-        .then(() => true)
-        .catch(() => false)
-      if (created) return { ok: true }
-      continue
-    }
-    const stock = got.data.stock
-    if (stock == null) return { ok: true } // 不限量：入成品无账可加·保持不限量
-    const r = await coll
-      .where({ _id, stock })
-      .update({ data: { stock: stock + qty, updatedAt: Date.now() } })
-      .catch(() => ({ stats: { updated: 0 } }))
-    if (r.stats && r.stats.updated === 1) return { ok: true }
-    // updated:0＝并发改动→重读重试
-  }
-  return { ok: false, error: ERR.CONTENTION } // 争用耗尽（管理端低频·几乎不至）
+  const ok = await casIncrement(coll, idOf(productId, spec), qty, { productId, spec })
+  return ok ? { ok: true } : { ok: false, error: ERR.CONTENTION } // 争用耗尽（管理端低频·几乎不至）
 }
 
 // 全量扫描上限（黄金 inventory-scm §L）：裸 .get() 服务端默认 100 条静默截断——SKU 破百后库存页
@@ -243,10 +209,8 @@ const INVENTORY_SCAN_CAP = 1000
 
 /**
  * 读库存（管理端列表/看板低库存）。productIds 为空＝全量（分页取齐·封顶）。
- * 页查失败 fail-loud（P1·根因#7 修复）：单页 .get() 失败必须与「真扫到底」可区分——原先 `.catch(()=>[])`
- * 把失败页当空页处理，命中 `rows.length < PAGE` 的到底判据，静默返回不完整列表且 truncated:false（Dashboard
- * 低库存待办漏报/库存页少显示）。改为不吞：失败直接抛出，交给唯一调用方 adminApi listInventory 的域出口
- * 统一 try/catch 兜底 500（域内既定惯例·不再局部加一层重复保护，见 §7 防过度工程）。
+ * 页查失败直接抛、不当空页（根因#7）：空页会命中 `rows.length < PAGE` 的到底判据，把不完整列表报成
+ * truncated:false（看板低库存漏报/库存页少显示）。
  */
 export async function getInventory(productIds?: string[]): Promise<{ list: any[]; truncated: boolean }> {
   const coll = getDb().collection(COLLECTIONS.inventory)
@@ -254,7 +218,7 @@ export async function getInventory(productIds?: string[]): Promise<{ list: any[]
   const PAGE = 100
   const list: any[] = []
   for (let skip = 0; skip < INVENTORY_SCAN_CAP; skip += PAGE) {
-    // 排序加唯一 tiebreaker _id（深审 P2·根因#7）：productId 非唯一（inventory 一 SKU 一档·_id=productId__spec·
+    // 排序加唯一 tiebreaker _id（根因#7）：productId 非唯一（inventory 一 SKU 一档·_id=productId__spec·
     // 同 productId 多 spec 共键），只按 productId 排序时同值行的相对次序在真 TCB 上无保证——skip 翻页跨页边界
     // 会漏/重同 productId 的 SKU（JS 桩 sort 稳定掩盖此坑）。补 _id 使排序成全序，skip 分页确定不漏不重。
     const r = await base.orderBy('productId', 'asc').orderBy('_id', 'asc').skip(skip).limit(PAGE).get()

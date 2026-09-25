@@ -12,7 +12,7 @@ import { request } from 'https'
  * `secureConfig/wxpay`（字段 `mchPrivateKey`/`mchSerial`·admin /config-checklist 页填即生效·经 kit/secureConfig
  * 读库·env `WXPAY_MCH_PRIVATE_KEY`/`WXPAY_MCH_SERIAL` 仅迁移期兜底）；调用方（adminApi/actions/wxbill.ts）
  * 取值后传入本接缝，mchid 取 `config.pay.subMchId`（自有商户号 1113881793）。
- * 出站 + 解析单点收口此处（守卫 wxpay-seam-single）；业务码不直拼签名/不直调商户 API。
+ * 出站 + 解析单点收口此处；业务码不直拼签名/不直调商户 API。
  *
  * fail-soft 铁律：缺凭证 / 网络 / 状态码非 200 / 解析失败 → `{ ok:false, error }`，绝不抛错反噬调用方。
  *

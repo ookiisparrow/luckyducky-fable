@@ -7,10 +7,10 @@ import { applyTrialRefresh, loadTrialRefreshGate, trialRefreshDenyStatus } from 
 // cursor 翻页拉会话时间轴（归档单源 conversations·由 cs/kfCallback 落档）。供坐席查历史 + 质检取证（B5.3 依赖）。
 //
 // 越权读他人会话全文（§1.5·根因#3·同 360 读）：index.ts ACTION_CAPS['searchConversations']='customer:view' 能力闸
-// + shouldAudit 默认留痕（search* 非 ^get·自动记「查了谁的会话」）——闸均在分发处收口（守卫 conversations-pii-gated），
+// + shouldAudit 默认留痕（search* 非 ^get·自动记「查了谁的会话」）——闸均在分发处收口，
 // 本 action 只取参→分页→回结果、不自己碰审计/能力。
 //
-// bounded（守卫 conversations-search-bounded·根因#7）：一律经 kit pageQuery 游标分页（limit 钳 [1,200]·desc by at）——
+// bounded（根因#7）：一律经 kit pageQuery 游标分页（limit 钳 [1,200]·desc by at）——
 // 杜绝裸 .get() 一次拉爆某客户长会话/全量会话拖垮工作台（同订单/评价分页·paging-contract）。
 // keyword＝「当前页内」子串过滤（坐席沿时间轴翻页检索）；真全文检索须真 sdk db.RegExp + 索引（内存桩不复现·
 // 根因#8 桩≠真）——故先页内过滤、不造不可测的全库模糊分支（防过度工程·留真机后升级）。
@@ -51,11 +51,30 @@ export async function searchConversations({ db, data }: Ctx) {
 
 // ── 质检 + 报表 + SLA（B5.3·板块#11·依赖归档·车道 E）──
 // 近 REPORT_SAMPLE 条会话的运营度量：会话量 / 首次响应时长 / SLA 达标 / 答复率。聚合属运营统计（无逐人 PII·同
-// dashboard 不另设 cap 闸）。bounded 样本读（守卫 conversations-report-bounded·根因#7/#18·超量标 approx·同 dashboard）。
+// dashboard 不另设 cap 闸）。bounded 样本读（根因#7/#18·超量标 approx·同 dashboard）。
 // 配对口径：按客户（externalUserId 优先·稳定·无则 openid）把消息按 at 升序，每条入站找其后首个出站算「首次响应」。
 // 诚实标注（根因#8）：当前出站含机器人自动应答（近实时）→首响多近 0；人工接待时长待承面C 人工回复落档后才显著。
 const REPORT_SAMPLE = 1000
 const DEFAULT_SLA_MS = 5 * 60_000 // 首次响应 SLA 默认 5 分钟（前端可传 slaMs 覆盖）
+
+// 首次响应配对（报表与抽检聚合共用口径）：msgs 按 at 升序（原地排序），每条入站配其后首个出站算 delta；
+// 其后无出站（或该出站 at 缺失为 0）＝未答复。倒序扫一遍，nextOut 记「当前位置之后最近一条出站」的 at。
+function pairFirstResponses(msgs: any[]): { deltas: number[]; unanswered: number } {
+  msgs.sort((a, b) => (Number(a.at) || 0) - (Number(b.at) || 0))
+  const deltas: number[] = []
+  let unanswered = 0
+  let nextOut = 0
+  for (let i = msgs.length - 1; i >= 0; i--) {
+    const m = msgs[i]
+    if (m.direction === 'out') nextOut = Number(m.at) || 0
+    else if (m.direction === 'in') {
+      const inAt = Number(m.at) || 0
+      if (nextOut && nextOut >= inAt) deltas.push(nextOut - inAt)
+      else unanswered++
+    }
+  }
+  return { deltas, unanswered }
+}
 
 export async function conversationsReport({ db, data }: Ctx) {
   const d = data || {}
@@ -63,7 +82,7 @@ export async function conversationsReport({ db, data }: Ctx) {
   const channel = String(d.channel || '').trim()
   const filter: Record<string, any> = {}
   if (channel) filter.channel = channel
-  // bounded 样本（最近 SAMPLE 条·orderBy at desc·守卫 conversations-report-bounded·防全量扫拖垮）
+  // bounded 样本（最近 SAMPLE 条·orderBy at desc·防全量扫拖垮）
   const res = await db
     .collection(COLLECTIONS.conversations)
     .where(filter)
@@ -85,24 +104,12 @@ export async function conversationsReport({ db, data }: Ctx) {
     byCustomer.set(key, arr)
   }
 
-  // 首次响应配对：每客户消息按 at 升序，每条入站找其后首个出站算 delta（答复）；无后续出站＝未答复（unanswered）。
   const deltas: number[] = []
   let unanswered = 0
   for (const msgs of byCustomer.values()) {
-    const sorted = msgs.slice().sort((a, b) => (Number(a.at) || 0) - (Number(b.at) || 0))
-    for (let i = 0; i < sorted.length; i++) {
-      if (sorted[i].direction !== 'in') continue
-      const inAt = Number(sorted[i].at) || 0
-      let replyAt = 0
-      for (let j = i + 1; j < sorted.length; j++) {
-        if (sorted[j].direction === 'out') {
-          replyAt = Number(sorted[j].at) || 0
-          break
-        }
-      }
-      if (replyAt && replyAt >= inAt) deltas.push(replyAt - inAt)
-      else unanswered++
-    }
+    const r = pairFirstResponses(msgs)
+    deltas.push(...r.deltas)
+    unanswered += r.unanswered
   }
   const answered = deltas.length
   const avgResponseMs = answered ? Math.round(deltas.reduce((s, x) => s + x, 0) / answered) : 0
@@ -152,20 +159,7 @@ async function computeCustomerAgg(db: any, externalUserId: string): Promise<{ me
     .catch(() => null)
   if (!res) return null
   const rows: any[] = (res && res.data) || []
-  const sorted = rows.slice().sort((a, b) => (Number(a.at) || 0) - (Number(b.at) || 0))
-  const deltas: number[] = []
-  for (let i = 0; i < sorted.length; i++) {
-    if (sorted[i].direction !== 'in') continue
-    const inAt = Number(sorted[i].at) || 0
-    let replyAt = 0
-    for (let j = i + 1; j < sorted.length; j++) {
-      if (sorted[j].direction === 'out') {
-        replyAt = Number(sorted[j].at) || 0
-        break
-      }
-    }
-    if (replyAt && replyAt >= inAt) deltas.push(replyAt - inAt)
-  }
+  const { deltas } = pairFirstResponses(rows)
   const avgResponseMs = deltas.length ? Math.round(deltas.reduce((s, x) => s + x, 0) / deltas.length) : 0
   return { messageCount: rows.length, avgResponseMs }
 }
@@ -185,8 +179,7 @@ export async function sampleQc({ db, data }: Ctx): Promise<any> {
     .where({ status: 'closed' })
     .orderBy('updatedAt', 'desc')
     .limit(QC_POOL_LIMIT)
-    .get()
-    .catch(() => ({ data: [] }))
+    .get() // 读失败上抛（网关 500）——不当「候选池已抽完」（根因#14）
   const rows: any[] = (res && res.data) || []
   // qc/qcSampledAt 挂在可被重开复用的 csSession 文档上——顾客二次「找人工」时
   // cs/kfCallback/dispatch.ts enqueueSession 的 closed→pending 重开分支已一并清空 qc/qcSampledAt（批 B7 修复），

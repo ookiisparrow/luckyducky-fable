@@ -1,4 +1,4 @@
-// 黄金 orders-money·pay/payCallback 节（守卫 rw-money2-golden）。
+// 黄金 orders-money·pay/payCallback 节。
 import { describe, it, expect, beforeEach } from 'vitest'
 import { control } from 'wx-server-sdk'
 import { main as app } from '../src/functions/app/index'

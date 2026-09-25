@@ -8,9 +8,16 @@ const IMG_OPTS = { maxAge: IMAGE_URL_MAX_AGE, imageProc: true }
 /** cloud:// 裸 fileID 判定（区分「需服务端换址」vs 已是 https / 空串——两者原样透传）。 */
 const isCloudId = (v: unknown): v is string => typeof v === 'string' && v.startsWith('cloud://')
 
-/** 换址（fail-soft）：换不到（urlMap 值为 null/缺项）回退原 fileID，不炸也不空串——前端仍可兜底。 */
-const swapUrl = (v: unknown, urlMap: Record<string, string | null>): unknown =>
-  isCloudId(v) ? urlMap[v] ?? v : v
+/**
+ * 原地换址：obj[key] 为 cloud:// 的批量换 https 短时址（IMG_OPTS）。fail-soft：换不到（urlMap 值为 null/缺项）
+ * 回退原 fileID，不炸也不空串——前端仍可兜底。只写回 cloud:// 项，缺字段不会多出键。
+ */
+async function swapImgs(targets: [any, string | number][]): Promise<void> {
+  const hits = targets.filter(([o, k]) => isCloudId(o[k]))
+  if (!hits.length) return
+  const urlMap = await getTempUrls(hits.map(([o, k]) => o[k]), IMG_OPTS) // getTempUrls 内部去重
+  for (const [o, k] of hits) o[k] = urlMap[o[k]] ?? o[k]
+}
 
 /**
  * 商品列表（公开只读·黄金 admin-misc §二：按排序升序下发；只下发在售——
@@ -31,18 +38,9 @@ export const getProducts = async () => {
     .orderBy('sort', 'asc')
     .limit(1000) // 显式上界（病根#7·守卫 rw-app-catalog-reads-bounded）：裸 .get() 服务端默认 100 条静默截断，目录破百无声丢货
     .get()
-  const products = res.data as any[]
-
-  const ids = new Set<string>()
-  for (const p of products) if (isCloudId(p.cover)) ids.add(p.cover)
-  const urlMap = await getTempUrls([...ids], IMG_OPTS)
-
-  const list = products.map((p) => {
-    const out = { ...p }
-    if ('cover' in out) out.cover = swapUrl(out.cover, urlMap)
-    delete out.images // 列表瘦身：图册不下发（详情页 getProductDetail 专拉）
-    return out
-  })
+  const list = res.data as any[]
+  for (const p of list) delete p.images // 列表瘦身：图册不下发（详情页 getProductDetail 专拉）
+  await swapImgs(list.map((p): [any, string] => [p, 'cover']))
   return ok({ list })
 }
 
@@ -62,14 +60,9 @@ export const getProductDetail = async (data: any) => {
     const got = await db.collection(COLLECTIONS.products).doc(id).get()
     const p: any = got.data || null
     if (!p || p.listed === false) return ok({ product: null }) // 无档/停售 fail-soft（同 getProducts listed 口径）
-    const ids = new Set<string>()
-    if (isCloudId(p.cover)) ids.add(p.cover)
-    if (Array.isArray(p.images)) for (const im of p.images) if (isCloudId(im)) ids.add(im)
-    const urlMap = await getTempUrls([...ids], IMG_OPTS)
-    const out = { ...p }
-    if ('cover' in out) out.cover = swapUrl(out.cover, urlMap)
-    if (Array.isArray(out.images)) out.images = out.images.map((im: unknown) => swapUrl(im, urlMap))
-    return ok({ product: out })
+    const imgs: unknown[] = Array.isArray(p.images) ? p.images : []
+    await swapImgs([[p, 'cover'], ...imgs.map((_, i): [any, number] => [imgs, i])])
+    return ok({ product: p })
   } catch (e) {
     // 真无档才 null；库挂/权限/集合不在走 INTERNAL，不装成「商品不存在」（根因#14）
     if (isDocMissing(e)) return ok({ product: null })
@@ -83,20 +76,16 @@ export const getProductDetail = async (data: any) => {
  * （trust/brand/faq/footer 无图字段，不在此列）。原地改写 home（get() 每次新取，不共享缓存引用）。
  */
 async function swapHomeImages(home: any): Promise<void> {
-  const targets: { obj: any; key: string }[] = []
+  const targets: [any, string][] = []
   const addTarget = (obj: unknown, key: string) => {
-    if (obj && typeof obj === 'object') targets.push({ obj, key })
+    if (obj && typeof obj === 'object') targets.push([obj, key])
   }
   addTarget(home.hero, 'img')
   addTarget(home.feature, 'img')
   for (const it of Array.isArray(home.reassure?.items) ? home.reassure.items : []) addTarget(it, 'img')
   for (const it of Array.isArray(home.reviews?.items) ? home.reviews.items : []) addTarget(it, 'img')
   addTarget(home.closing, 'img')
-
-  const ids = [...new Set(targets.map((t) => t.obj[t.key]).filter(isCloudId))]
-  if (!ids.length) return
-  const urlMap = await getTempUrls(ids, IMG_OPTS)
-  for (const t of targets) t.obj[t.key] = swapUrl(t.obj[t.key], urlMap)
+  await swapImgs(targets)
 }
 
 /**
@@ -130,10 +119,7 @@ export const getPageContent = async (data: any) => {
     const got = await db.collection(COLLECTIONS.content).doc(page).get()
     const content: any = got.data || null
     // catalogPlayer.catalog.heroImage：cloud:// 换临时 URL（fileID 不出口·fail-soft 换不到回退原 fileID）
-    if (content && page === 'catalogPlayer' && content.catalog && isCloudId(content.catalog.heroImage)) {
-      const urlMap = await getTempUrls([content.catalog.heroImage], IMG_OPTS)
-      content.catalog.heroImage = swapUrl(content.catalog.heroImage, urlMap)
-    }
+    if (page === 'catalogPlayer' && content?.catalog) await swapImgs([[content.catalog, 'heroImage']])
     return ok({ page, content })
   } catch (e) {
     if (isDocMissing(e)) return ok({ page, content: null }) // 真无档

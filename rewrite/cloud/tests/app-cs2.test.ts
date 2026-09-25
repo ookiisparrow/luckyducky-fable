@@ -1,4 +1,4 @@
-// 黄金 cs-agent §四/§五/§六/§七（分流引擎/防吞单/归档/CSAT 编排）（守卫 rw-cs2-golden）。
+// 黄金 cs-agent §四/§五/§六/§七（分流引擎/防吞单/归档/CSAT 编排）。
 import { describe, it, expect, beforeEach, afterEach } from 'vitest'
 import crypto from 'node:crypto'
 import { control } from 'wx-server-sdk'

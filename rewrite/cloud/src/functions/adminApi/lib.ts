@@ -1,5 +1,5 @@
 import crypto from 'crypto'
-import { str, notifyAlert, isDocMissing, isEmptyDoc } from '../../kit'
+import { str, notifyAlert, isDocMissing, isEmptyDoc, isCollectionMissing } from '../../kit'
 import { PAID_ORDER_STATUSES } from '@ldrw/shared'
 export { str } // 供 action 模块复用（saveCard / saveHomeContent 等截断）
 
@@ -68,17 +68,6 @@ export async function ensure(db: any, coll: string) {
   }
 }
 
-// 集合未建 ≠ 库挂了。isDocMissing 故意不认 COLLECTION_NOT_EXIST（库存钱链：集合没了不能当「无档不限量」）。
-// 内容预读：集合还没建＝真没有文档，第一次保存前合法空；权限/超时仍当读失败。
-export function isCollectionMissing(e: unknown): boolean {
-  const o = e && typeof e === 'object' ? (e as Record<string, unknown>) : null
-  const t = [o && o.message, o && o.errMsg, o && o.errmsg, o && o.code, o && o.errCode, e]
-    .map((x) => (x == null ? '' : String(x)))
-    .join('\n')
-  if (/permission denied|PERMISSION_DENIED|-502003|ECONNRESET|NETWORK_TIMEOUT/i.test(t)) return false
-  return /COLLECTION_NOT_EXIST|-502005|collection does not exist/i.test(t)
-}
-
 // 预读一份文档：缺档 ≠ 读失败（根因#14）。原 .get().catch(() => null) 把网络/权限/集合故障也折成「没有这份」，
 // 写路径就会按空档/rev=0 覆盖或拿失败基线做 GC。缺档 data=null；读失败 ok=false——调用方必须停写。
 // 判据复用 kit isDocMissing（真 sdk 缺档文案已查证，禁再抄一份更宽的 /does not exist/）。
@@ -99,12 +88,9 @@ export async function readDoc(p: Promise<any>): Promise<{ ok: true; data: any | 
 // 查 activations（activateCourse 写的 {_openid, courseId, enteredAt}）。
 export async function activationFor(db: any, openid: string, productId: string) {
   const pid = String(productId || '')
-  const prod = await db
-    .collection('products')
-    .doc(pid)
-    .get()
-    .catch(() => null)
-  const courseId = (prod && prod.data && prod.data.courseId) || 'course-' + pid
+  const prod = await readDoc(db.collection('products').doc(pid).get())
+  if (!prod.ok) throw new Error('PRODUCT_READ_FAIL') // 读失败不回退默认课程：会查错课，把已进课报成未激活
+  const courseId = (prod.data && prod.data.courseId) || 'course-' + pid
   const acts = openid
     ? await db
         .collection('activations')
@@ -192,10 +178,24 @@ const ROLES: Record<string, string[]> = {
 }
 export const capsForRole = (role: string): string[] => ROLES[role] || []
 
+// 账号档 → 认证主体（口令 / 会话令牌 / 企微免登共用一份，防同一账号换登录方式拿到不同权限）。
+// caps 优先级：role 派生（ROLES 单源）＞显式 caps 字段＞超管回退 ['*']（旧超管 'auth' doc 无 role/caps）。
+// operator＝真实操作者（审计留痕「谁改了谁」）：无 name 时超管回退 'admin'、外包回退 _id。
+// 超管 agentId 固定 'admin'（商户本人·承面C 可 claim）；外包 agentId＝账号 _id（claim 绑定/scope/agentState 键）。
+export function principalOf(a: any) {
+  const isSuper = a._id === 'auth'
+  return {
+    ok: true as const,
+    operator: a.name || (isSuper ? 'admin' : a._id),
+    agentId: isSuper ? 'admin' : a._id,
+    caps: (a.role ? capsForRole(a.role) : Array.isArray(a.caps) ? a.caps : isSuper ? ['*'] : []) as string[],
+  }
+}
+
 // 会话令牌（深审 P1·根因#3 口令不落盘）：口令登录与企微免登共用一套签发/解析——登录成功签发高熵令牌，
 // 前端只存令牌不存口令原文（口令是可复用主凭证，落在外包机器上=失守；令牌 12h 自灭 + 停号即拒）。
 // 存储形状：账号 doc.sessions = [{ hash, exp, via, at }]（sha 入库·绝不存明文）；数组容多设备
-// （商户同时登控制台+坐席台不互踢），签发时剪过期、超容剪最旧。守卫 admin-session-token-not-password。
+// （商户同时登控制台+坐席台不互踢），签发时剪过期、超容剪最旧（tests/app-admin1.test.ts 钉只存 sha）。
 const SESSION_TTL_MS = 12 * 60 * 60 * 1000 // 12h·一个工作班次；过期重登（企微内静默 OAuth 无感）
 const SESSION_MAX = 8 // 单账号并存会话上限（多设备够用·防 sessions 数组无界膨胀）
 
@@ -203,12 +203,9 @@ const SESSION_MAX = 8 // 单账号并存会话上限（多设备够用·防 sess
 export async function issueSession(db: any, docId: string, via: 'pwd' | 'wecom'): Promise<string> {
   const token = crypto.randomBytes(32).toString('hex')
   const now = Date.now()
-  const got = await db
-    .collection('adminConfig')
-    .doc(docId)
-    .get()
-    .catch(() => null)
-  const prev: any[] = (got && got.data && Array.isArray(got.data.sessions) ? got.data.sessions : [])
+  const got = await readDoc(db.collection('adminConfig').doc(docId).get())
+  if (!got.ok) throw new Error('SESSION_READ_FAIL') // 读失败不当空基线：下面整组覆盖会踢掉别的设备
+  const prev: any[] = (got.data && Array.isArray(got.data.sessions) ? got.data.sessions : [])
     .filter((s: any) => s && typeof s.exp === 'number' && s.exp > now) // 剪过期
     .slice(-(SESSION_MAX - 1)) // 超容剪最旧（保留末 N-1 + 新签 1）
   const sessions = [...prev, { hash: sha(token), exp: now + SESSION_TTL_MS, via, at: now }]
@@ -230,8 +227,9 @@ async function resolveSession(db: any, hash: string) {
     .where({ sessions: _.exists(true) })
     .limit(50)
     .get()
-    .catch(() => ({ data: [] }))
-  const rows: any[] = (s && s.data) || []
+    .catch(() => null)
+  if (!s) return { ok: false as const, error: 'AUTH_UNAVAILABLE' } // 库故障≠令牌无效：不能回 BAD_KEY 让前端清令牌
+  const rows: any[] = s.data || []
   const a =
     rows.find(
       (acc) => Array.isArray(acc.sessions) && acc.sessions.some((x: any) => x && x.hash === hash)
@@ -241,33 +239,21 @@ async function resolveSession(db: any, hash: string) {
   const hit = a.sessions.find((x: any) => x && x.hash === hash)
   if (!hit || typeof hit.exp !== 'number' || hit.exp < Date.now())
     return { ok: false as const, error: 'SESSION_EXPIRED' }
-  const isSuper = a._id === 'auth'
-  return {
-    ok: true as const,
-    operator: a.name || (isSuper ? 'admin' : a._id),
-    agentId: isSuper ? 'admin' : a._id,
-    caps: a.role ? capsForRole(a.role) : Array.isArray(a.caps) ? a.caps : isSuper ? ['*'] : [],
-  }
+  return principalOf(a)
 }
 
-// 能力位（§1.5 RBAC·B5.2 多账号/角色）：caps 来源优先级 role 派生（ROLES 单源）＞显式 caps 字段＞回退 ['*']
-// （向后兼容旧超管 'auth' doc·无 role/caps 字段·现网单超管不变）。disabled=账号开停（外包可停·B5.2）。
-// operator＝真实操作者账号身份（B5.4·§1.5 可追溯）：随 caps 一起返回，供 adminApi 分发处贯入操作审计
-// 留痕「谁查/改了谁」（多账号上线后不再糊成单口令 admin）；超管 doc 无 name 时回退 'admin'、外包回退其 _id。
+// 口令校验 → 认证主体（principalOf）；disabled=账号开停（外包可停）。
 export async function checkKey(db: any, key: any, bootstrap: boolean) {
-  if (!key || String(key).length < 6) return { ok: false, error: 'KEY_TOO_SHORT' }
-  await ensure(db, 'adminConfig')
+  if (!key || String(key).length < 6) return { ok: false as const, error: 'KEY_TOO_SHORT' }
   const keyStr = String(key)
-  const got = await db
-    .collection('adminConfig')
-    .doc('auth')
-    .get()
-    .catch(() => null)
-  if (!got || !got.data) {
+  const got = await readDoc(db.collection('adminConfig').doc('auth').get())
+  if (!got.ok) return { ok: false as const, error: 'AUTH_UNAVAILABLE' } // 库故障≠查无此号：不当错口令记爆破
+  if (!got.data) {
     // 首登 bootstrap（债#15 关抢占）：无超管 doc 时·须 bootstrap + 部署密钥 ADMIN_BOOTSTRAP_KEY → 建首个超管。
     // 批6：bootstrap 建号即带盐（新写入一律 salt+scrypt·不再落无盐 sha）。
     const secret = process.env.ADMIN_BOOTSTRAP_KEY || ''
-    if (!bootstrap || !secret || keyStr !== secret) return { ok: false, error: 'BAD_KEY' }
+    if (!bootstrap || !secret || keyStr !== secret) return { ok: false as const, error: 'BAD_KEY' }
+    await ensure(db, 'adminConfig') // 只有这条首登写入需要集合在；读路径集合未建即当空（readDoc）
     const salt = newSalt()
     await db
       .collection('adminConfig')
@@ -282,52 +268,31 @@ export async function checkKey(db: any, key: any, bootstrap: boolean) {
         },
       })
     return {
-      ok: true,
+      ok: true as const,
       bootstrapped: true,
       caps: ['*'] as string[],
       operator: 'admin',
       agentId: 'admin',
     }
   }
-  // ① 超管 'auth' doc 命中（盐感知比对·keyMatches 单源：有 keySalt 走 scrypt，legacy 无盐走 sha·
-  // 向后兼容：无 role 取 caps 字段·旧 ['*']）。legacy 命中即 best-effort 就地升级为带盐（批6·存量账号
-  // 无感迁移·升级失败 `.catch` 吞掉、不反噬本次登录——下次登录 legacy 分支仍能兜底）。
-  if (keyMatches(got.data, keyStr)) {
-    if (got.data.disabled) return { ok: false, error: 'ACCOUNT_DISABLED' }
-    if (!got.data.keySalt) {
-      const salt = newSalt()
-      await db
-        .collection('adminConfig')
-        .doc('auth')
-        .update({ data: { keySalt: salt, keyHash: kdf(keyStr, salt) } })
-        .catch(() => {})
-    }
-    // 超管 agentId 固定 'admin'（商户本人·承面C 可 claim/setAgentStatus·稳定可读·§1.5）
-    return {
-      ok: true,
-      operator: got.data.name || 'admin',
-      agentId: 'admin',
-      caps: got.data.role
-        ? capsForRole(got.data.role)
-        : Array.isArray(got.data.caps)
-          ? got.data.caps
-          : ['*'],
-    }
+  // ① 超管 'auth' doc 先比（盐感知比对 keyMatches 单源：有 keySalt 走 scrypt，legacy 无盐走 sha）；超管命中就不扫。
+  let acct: any = keyMatches(got.data, keyStr) ? { ...got.data, _id: 'auth' } : null
+  if (!acct) {
+    // ② 多账号：有界扫描按盐感知比对查外包/坐席账号。最坏 ≤50 行 scrypt 比对，登录端点已有频控、可接受。
+    const _ = db.command
+    const scan = await db
+      .collection('adminConfig')
+      .where({ keyHash: _.exists(true) })
+      .limit(50)
+      .get()
+      .catch(() => null)
+    if (!scan) return { ok: false as const, error: 'AUTH_UNAVAILABLE' }
+    alertIfScanAtCap(scan.data || [], 50, 'checkKey')
+    acct = (scan.data || []).find((r: any) => r._id !== 'auth' && keyMatches(r, keyStr))
+    if (!acct) return resolveSession(db, sha(keyStr)) // 口令全未命中 → fallback 会话令牌（口令登录/企微免登共用）
   }
-  // ② B5.2 多账号：非超管·有界扫描（手法同 resolveSession）按盐感知比对查 agent/外包 账号 doc
-  // （均有 role；disabled 即停）。最坏 ≤50 行 scrypt 比对，登录端点已有频控、可接受。
-  const _ = db.command
-  const scan = await db
-    .collection('adminConfig')
-    .where({ keyHash: _.exists(true) })
-    .limit(50)
-    .get()
-    .catch(() => ({ data: [] }))
-  alertIfScanAtCap((scan && scan.data) || [], 50, 'checkKey')
-  const acct =
-    ((scan && scan.data) || []).find((r: any) => r._id !== 'auth' && keyMatches(r, keyStr)) || null
-  if (!acct) return resolveSession(db, sha(keyStr)) // 口令全未命中 → fallback 会话令牌（口令登录/企微免登共用·深审 P1）
-  if (acct.disabled) return { ok: false, error: 'ACCOUNT_DISABLED' }
+  if (acct.disabled) return { ok: false as const, error: 'ACCOUNT_DISABLED' }
+  // legacy 无盐命中即 best-effort 就地升级为带盐（存量账号无感迁移）；升级失败吞掉、不反噬本次登录——下次仍走 legacy 比对兜底
   if (!acct.keySalt) {
     const salt = newSalt()
     await db
@@ -336,13 +301,7 @@ export async function checkKey(db: any, key: any, bootstrap: boolean) {
       .update({ data: { keySalt: salt, keyHash: kdf(keyStr, salt) } })
       .catch(() => {})
   }
-  // 外包/坐席 agentId＝账号 _id（承面C claim 绑定/分配 scope/agentState 键·§1.5·根因#3 取认证主体非前端）
-  return {
-    ok: true,
-    operator: acct.name || acct._id,
-    agentId: acct._id,
-    caps: acct.role ? capsForRole(acct.role) : Array.isArray(acct.caps) ? acct.caps : [],
-  }
+  return principalOf(acct)
 }
 
 // 运营手填销量（#119 ①）：非负整数；脏值/缺省→0。不是订单加总。
@@ -352,31 +311,25 @@ export function cleanSold(v: unknown): number {
   return n > 99_999_999 ? 99_999_999 : n
 }
 
+export const arrOf = (v: unknown, cap: number): any[] => (Array.isArray(v) ? v : []).slice(0, cap)
+
 // 草稿白名单字段（防杂字段入库）
 export function cleanProduct(p: any) {
   if (!p || typeof p !== 'object' || !p.id) return null
   return {
     id: String(p.id).slice(0, 40),
     cover: str(p.cover, 300),
-    images: (Array.isArray(p.images) ? p.images : []).slice(0, 20).map((u: any) => str(u, 300)),
+    images: arrOf(p.images, 20).map((u: any) => str(u, 300)),
     name: str(p.name, 60),
     price: str(String(p.price ?? ''), 12),
     was: str(String(p.was ?? ''), 12),
     sold: cleanSold(p.sold),
     tag: str(p.tag, 20),
     brief: str(p.brief, 120),
-    skus: (Array.isArray(p.skus) ? p.skus : [])
-      .slice(0, 30)
-      .map((s: any) => ({ name: str(s?.name, 30), price: str(String(s?.price ?? ''), 12) })),
-    params: (Array.isArray(p.params) ? p.params : [])
-      .slice(0, 8)
-      .map((kv: any) => [str(kv?.[0], 10), str(kv?.[1], 40)]),
-    detailSections: (Array.isArray(p.detailSections) ? p.detailSections : [])
-      .slice(0, 4)
-      .map((d: any) => ({ lead: str(d?.lead, 30), body: str(d?.body, 200) })),
-    kit: (Array.isArray(p.kit) ? p.kit : [])
-      .slice(0, 8)
-      .map((k: any) => ({ icon: str(k?.icon, 24), name: str(k?.name, 14), qty: str(k?.qty, 14) })),
+    skus: arrOf(p.skus, 30).map((s: any) => ({ name: str(s?.name, 30), price: str(String(s?.price ?? ''), 12) })),
+    params: arrOf(p.params, 8).map((kv: any) => [str(kv?.[0], 10), str(kv?.[1], 40)]),
+    detailSections: arrOf(p.detailSections, 4).map((d: any) => ({ lead: str(d?.lead, 30), body: str(d?.body, 200) })),
+    kit: arrOf(p.kit, 8).map((k: any) => ({ icon: str(k?.icon, 24), name: str(k?.name, 14), qty: str(k?.qty, 14) })),
     courseId: str(p.courseId, 40),
     cardStatus: p.cardStatus === 'final' ? 'final' : p.cardStatus === 'draft' ? 'draft' : '',
     batchCount: Number(p.batchCount) || 0,
@@ -397,21 +350,21 @@ export function cleanCourse(c: any) {
     id: String(c.id).slice(0, 40),
     title: str(c.title, 60),
     sort: Number(c.sort) || 0,
-    chapters: (Array.isArray(c.chapters) ? c.chapters : []).slice(0, 30).map((ch: any) => ({
+    chapters: arrOf(c.chapters, 30).map((ch: any) => ({
       id: str(ch?.id, 40) || 'c' + Math.random().toString(36).slice(2, 8),
       title: str(ch?.title, 60),
-      lessons: (Array.isArray(ch?.lessons) ? ch.lessons : []).slice(0, 50).map((l: any) => ({
+      lessons: arrOf(ch?.lessons, 50).map((l: any) => ({
         id: str(l?.id, 40) || 'l' + Math.random().toString(36).slice(2, 8),
         name: str(l?.name, 60),
         dur: str(l?.dur, 10),
-        segments: (Array.isArray(l?.segments) ? l.segments : []).slice(0, 30).map((sg: any) => ({
+        segments: arrOf(l?.segments, 30).map((sg: any) => ({
           id: str(sg?.id, 40) || 's' + Math.random().toString(36).slice(2, 8),
           name: str(sg?.name, 60),
           dur: str(sg?.dur, 10),
           videoFileId: str(sg?.videoFileId, 300),
           // VOD 转码产物（决策§31 批2·syncVodMedia 服务端回写；此处入白名单让 admin 草稿保存的
           // 往返不抹掉它们）。学员端不泄露：publicSegment/getCourses 逐层白名单不含这些字段，
-          // 播放地址只经 getPlaybackUrl 鉴权后签名下发（守卫 rw-learning-golden 断言不漏）。
+          // 播放地址只经 getPlaybackUrl 鉴权后签名下发。
           vodUrl: str(sg?.vodUrl, 500),
           vodPoster: str(sg?.vodPoster, 500),
           vodSpriteVtt: str(sg?.vodSpriteVtt, 500),

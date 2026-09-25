@@ -13,19 +13,15 @@ import { COLLECTIONS } from '@ldrw/shared'
 const CAPS = { content: 500, contact: 100, page: 64, version: 32, platform: 16 }
 const CATEGORIES = ['bug', 'idea', 'other'] as const
 
-// 写入；集合不存在则建一次再重试（免 initDb 时序依赖，同 trackEvent 范式）。
-async function addTo(db: any, coll: string, data: any) {
-  try {
-    await db.collection(coll).add({ data })
-  } catch {
-    try {
-      await db.createCollection(coll)
-    } catch {
-      /* 已存在则忽略 */
-    }
-    await db.collection(coll).add({ data })
-  }
-}
+// 写入；集合不存在则建一次再重试（免 initDb 时序依赖）。第二次 add 失败照抛→网关回 INTERNAL（反馈须失败可见）。
+const addTo = (db: any, coll: string, data: any) =>
+  db
+    .collection(coll)
+    .add({ data })
+    .catch(async () => {
+      await db.createCollection(coll).catch(() => {})
+      await db.collection(coll).add({ data })
+    })
 
 export const submitFeedback = withOpenId(
   // 频控（根因#13）：反馈是低频动作，单用户 10 次/分远超正常，超即拒——挡刷

@@ -1,4 +1,4 @@
-import { reply, type Ctx } from '../lib'
+import { reply, readDoc, type Ctx } from '../lib'
 import { hasAdjustLedgerEntry, hasThresholdMaterial } from '../../../kit'
 import { COLLECTIONS } from '@ldrw/shared'
 
@@ -42,6 +42,7 @@ interface ChecklistItem {
   noteExtra?: string
   fill?: FillMeta
 }
+type ItemText = Pick<ChecklistItem, 'key' | 'name' | 'purpose' | 'howTo' | 'url' | 'noteExtra'>
 interface ChecklistGroup {
   group: string
   items: ChecklistItem[]
@@ -50,243 +51,208 @@ interface ChecklistGroup {
 const MIGRATE_NOTE = '若此前配置在云函数环境变量层（迁移前遗留）、功能仍照常运行，只是本页检测不到——建议在此重新填一遍，统一到库管理、云函数优先读库'
 
 export async function getConfigChecklist({ db }: Ctx) {
-  // ── 组① 微信客服凭证：secureConfig/wxkf 字段存在性（决策 2026-07-12 入库·本页可填写）──
-  const wxkfDoc = await db.collection(COLLECTIONS.secureConfig).doc('wxkf').get().catch(() => null)
-  const wxkf = (wxkfDoc && wxkfDoc.data) || {}
-  const wxkfOk = (f: string) => !!(wxkf as Record<string, unknown>)[f]
-
-  // ── 组② 微信支付对账凭证：secureConfig/wxpay 字段存在性 OR adminApi 自身环境变量（规则②·可信兜底）──
-  const wxpayDoc = await db.collection(COLLECTIONS.secureConfig).doc('wxpay').get().catch(() => null)
-  const wxpay = (wxpayDoc && wxpayDoc.data) || {}
-  const privKeyOk = !!(wxpay as Record<string, unknown>).mchPrivateKey || !!process.env.WXPAY_MCH_PRIVATE_KEY
-  const serialOk = !!(wxpay as Record<string, unknown>).mchSerial || !!process.env.WXPAY_MCH_SERIAL
-
-  // ── 组③ 支付/退款接缝配置：config/pay 字段存在性 ──
-  const payDoc = await db.collection(COLLECTIONS.config).doc('pay').get().catch(() => null)
-  const pay = (payDoc && payDoc.data) || {}
-  const payOk = (f: string) => !!(pay as Record<string, unknown>)[f]
-
-  // ── 组③′ 视频点播 VOD 凭证：secureConfig/vod 字段存在性（决策§31 转码管线·本页可填写）──
-  const vodDoc = await db.collection(COLLECTIONS.secureConfig).doc('vod').get().catch(() => null)
-  const vod = (vodDoc && vodDoc.data) || {}
-  const vodOk = (f: string) => !!(vod as Record<string, unknown>)[f]
-
-  // ── 组④ admin 页内配置：DB 字段/初始化态（规则③④·全部有界·只判存在）──
-  const settingsDoc = await db.collection(COLLECTIONS.adminConfig).doc('settings').get().catch(() => null)
-  const webhookOk = !!(settingsDoc && settingsDoc.data && settingsDoc.data.alertWebhook)
-
-  const bomDoc = await db.collection(COLLECTIONS.config).doc('scmBomTemplate').get().catch(() => null)
-  const bomOk = !!(bomDoc && bomDoc.data)
-
-  // 期初盘点（有 adjust 流水）+ 物料安全线（有 threshold>0 物料）合并一行两条件（选简单者·两者皆备才算 ok）
-  // 门1 只读出口（批K：原直碰 stockLedger/materials 集合，绕过 SCM 门1·kit/scmStock.ts）
-  const [hasLedger, hasThreshold] = await Promise.all([hasAdjustLedgerEntry(), hasThresholdMaterial()])
+  const probe = (coll: string, id: string) => readDoc(db.collection(coll).doc(id).get())
+  // 期初盘点（有 adjust 流水）+ 物料安全线（有 threshold>0 物料）合并一行两条件（两者皆备才算 ok）·走门1 只读出口 kit/scmStock.ts
+  const [rWxkf, rWxpay, rPay, rVod, rSettings, rBom, hasLedger, hasThreshold] = await Promise.all([
+    probe(COLLECTIONS.secureConfig, 'wxkf'),
+    probe(COLLECTIONS.secureConfig, 'wxpay'),
+    probe(COLLECTIONS.config, 'pay'),
+    probe(COLLECTIONS.secureConfig, 'vod'),
+    probe(COLLECTIONS.adminConfig, 'settings'),
+    probe(COLLECTIONS.config, 'scmBomTemplate'),
+    hasAdjustLedgerEntry(),
+    hasThresholdMaterial(),
+  ])
+  const docs = [rWxkf, rWxpay, rPay, rVod, rSettings, rBom]
+  // 读失败≠未配置：显示成 missing 会诱导管理员重填密钥
+  if (docs.some((r) => !r.ok)) return reply(200, { ok: false, error: 'DOC_READ_FAIL' })
+  const [wxkf, wxpay, pay, vod, settings, bom] = docs.map((r) => (r.ok && r.data) || null)
+  const has = (o: Record<string, unknown> | null, f: string) => !!(o && o[f])
+  // wxpay 另认 adminApi 自身环境变量（规则②·同进程 wxbill.ts 读取，可信兜底）
+  const privKeyOk = has(wxpay, 'mchPrivateKey') || !!process.env.WXPAY_MCH_PRIVATE_KEY
+  const serialOk = has(wxpay, 'mchSerial') || !!process.env.WXPAY_MCH_SERIAL
+  // 可填项的位置 / 状态 / 填写目标全由 (docId, field) 推出：三处各抄一遍字段名，抄错一处就静默显示成别的字段的状态
+  const sec = { wxkf, wxpay, vod }
+  const secureItem = (
+    docId: 'wxkf' | 'wxpay' | 'vod',
+    field: string,
+    inputType: FillMeta['inputType'],
+    t: ItemText,
+    ok = has(sec[docId], field)
+  ): ChecklistItem => ({
+    ...t,
+    location: `DB secureConfig/${docId}.${field}`,
+    status: ok ? 'ok' : 'missing',
+    fill: { action: 'saveSecureConfig', docId, field, inputType },
+  })
+  const payItem = (
+    field: string,
+    inputType: FillMeta['inputType'],
+    t: ItemText,
+    options?: FillMeta['options']
+  ): ChecklistItem => ({
+    ...t,
+    location: `DB config/pay.${field}`,
+    status: has(pay, field) ? 'ok' : 'missing',
+    fill: { action: 'savePayConfig', field, inputType, ...(options && { options }) },
+  })
+  const webhookOk = has(settings, 'alertWebhook')
+  const bomOk = !!bom
   const stockInitOk = hasLedger && hasThreshold
 
   const groups: ChecklistGroup[] = [
     {
       group: '微信客服凭证（本页填写 → 云函数读库自动生效，无需再改环境变量）',
       items: [
-        {
+        secureItem('wxkf', 'agentId', 'text', {
           key: 'WXKF_AGENTID',
           name: '企微应用推送 AgentId',
-          location: 'DB secureConfig/wxkf.agentId',
           purpose: '新会话/升级推送到坐席企微',
-          status: wxkfOk('agentId') ? 'ok' : 'missing',
           howTo: '企微后台→应用管理→自建应用→AgentId，复制粘到右侧输入框保存',
           url: 'https://work.weixin.qq.com',
           noteExtra: MIGRATE_NOTE,
-          fill: { action: 'saveSecureConfig', docId: 'wxkf', field: 'agentId', inputType: 'text' },
-        },
-        {
+        }),
+        secureItem('wxkf', 'corpId', 'text', {
           key: 'WXKF_CORPID',
           name: '企微企业 ID',
-          location: 'DB secureConfig/wxkf.corpId',
           purpose: '客服消息收发 + 主动推送用的企微 access_token（凭证之一）',
-          status: wxkfOk('corpId') ? 'ok' : 'missing',
           howTo: '企微后台→我的企业→企业ID',
           url: 'https://work.weixin.qq.com',
           noteExtra: MIGRATE_NOTE,
-          fill: { action: 'saveSecureConfig', docId: 'wxkf', field: 'corpId', inputType: 'text' },
-        },
-        {
+        }),
+        secureItem('wxkf', 'secret', 'password', {
           key: 'WXKF_SECRET',
           name: '企微自建应用 Secret',
-          location: 'DB secureConfig/wxkf.secret',
           purpose: '客服消息收发 + 主动推送用的企微 access_token（凭证之一）',
-          status: wxkfOk('secret') ? 'ok' : 'missing',
           howTo: '企微后台→应用管理→自建应用→Secret',
           url: 'https://work.weixin.qq.com',
           noteExtra: MIGRATE_NOTE,
-          fill: { action: 'saveSecureConfig', docId: 'wxkf', field: 'secret', inputType: 'password' },
-        },
-        {
+        }),
+        secureItem('wxkf', 'token', 'password', {
           key: 'WXKF_TOKEN',
           name: '微信客服回调 Token',
-          location: 'DB secureConfig/wxkf.token',
           purpose: '客服消息回调验签防伪',
-          status: wxkfOk('token') ? 'ok' : 'missing',
           howTo: '微信客服后台→开发配置',
           url: 'https://kf.weixin.qq.com',
           noteExtra: MIGRATE_NOTE,
-          fill: { action: 'saveSecureConfig', docId: 'wxkf', field: 'token', inputType: 'password' },
-        },
-        {
+        }),
+        secureItem('wxkf', 'aesKey', 'password', {
           key: 'WXKF_AESKEY',
           name: '微信客服回调 EncodingAESKey',
-          location: 'DB secureConfig/wxkf.aesKey',
           purpose: '客服消息回调解密（固定 43 位）',
-          status: wxkfOk('aesKey') ? 'ok' : 'missing',
           howTo: '微信客服后台→开发配置（固定 43 字符，抄错长度保存会被拒）',
           url: 'https://kf.weixin.qq.com',
           noteExtra: MIGRATE_NOTE,
-          fill: { action: 'saveSecureConfig', docId: 'wxkf', field: 'aesKey', inputType: 'password' },
-        },
-        {
+        }),
+        secureItem('wxkf', 'miniappAppId', 'text', {
           key: 'WXKF_MINIAPP_APPID',
           name: '客服卡片小程序 AppID（审查批随迁·原 cs 函数环境变量）',
-          location: 'DB secureConfig/wxkf.miniappAppId',
           purpose: '客服会话里发的小程序卡片（查订单/进店）跳转目标小程序',
-          status: wxkfOk('miniappAppId') ? 'ok' : 'missing',
           howTo: '填本店小程序 AppID（mp 后台→设置→账号信息，与发布用 AppID 一致）',
           url: 'https://mp.weixin.qq.com',
           noteExtra: MIGRATE_NOTE,
-          fill: { action: 'saveSecureConfig', docId: 'wxkf', field: 'miniappAppId', inputType: 'text' },
-        },
-        {
+        }),
+        secureItem('wxkf', 'thumbMediaId', 'text', {
           key: 'WXKF_THUMB_MEDIA_ID',
           name: '客服卡片封面素材 ID（审查批随迁·原 cs 函数环境变量）',
-          location: 'DB secureConfig/wxkf.thumbMediaId',
           purpose: '小程序卡片封面图 thumb_media_id（缺任一项则卡片消息静默不发、只发文字）',
-          status: wxkfOk('thumbMediaId') ? 'ok' : 'missing',
           howTo: '经企微素材上传接口上传封面图取得 media_id（流程见 docs/微信客服配置手册.md）',
           url: 'https://kf.weixin.qq.com',
           noteExtra: MIGRATE_NOTE,
-          fill: { action: 'saveSecureConfig', docId: 'wxkf', field: 'thumbMediaId', inputType: 'text' },
-        },
+        }),
       ],
     },
     {
       group: '微信支付对账凭证（本页填写 → 云函数读库自动生效）',
       items: [
-        {
+        secureItem('wxpay', 'mchPrivateKey', 'textarea', {
           key: 'WXPAY_MCH_PRIVATE_KEY',
           name: '商户 API 私钥',
-          location: 'DB secureConfig/wxpay.mchPrivateKey',
           purpose: '拉取微信交易账单（对账）用 APIv3 商户私钥签名',
-          status: privKeyOk ? 'ok' : 'missing',
           howTo: '微信支付商户平台→账户中心→API 安全→申请 API 证书（下载的 apiclient_key.pem 全文粘贴）',
           url: 'https://pay.weixin.qq.com',
-          fill: { action: 'saveSecureConfig', docId: 'wxpay', field: 'mchPrivateKey', inputType: 'textarea' },
-        },
-        {
+        }, privKeyOk),
+        secureItem('wxpay', 'mchSerial', 'text', {
           key: 'WXPAY_MCH_SERIAL',
           name: '商户证书序列号',
-          location: 'DB secureConfig/wxpay.mchSerial',
           purpose: '与商户私钥配对，APIv3 签名头必填',
-          status: serialOk ? 'ok' : 'missing',
           howTo: '微信支付商户平台→账户中心→API 安全→查看证书序列号',
           url: 'https://pay.weixin.qq.com',
-          fill: { action: 'saveSecureConfig', docId: 'wxpay', field: 'mchSerial', inputType: 'text' },
-        },
+        }, serialOk),
       ],
     },
     {
       group: '支付/退款接缝配置（本页填写 → 云函数读库自动生效）',
       items: [
-        {
-          key: 'pay.mode',
-          name: '支付模式',
-          location: 'DB config/pay.mode',
-          purpose: 'real=真实支付工作流；mock=仅测试环境（生产必须 real）',
-          status: payOk('mode') ? 'ok' : 'missing',
-          howTo: '确认支付工作流已在云开发控制台配好后选择 real',
-          url: '',
-          fill: {
-            action: 'savePayConfig',
-            field: 'mode',
-            inputType: 'select',
-            options: [
-              { value: 'real', label: 'real（生产真实支付）' },
-              { value: 'mock', label: 'mock（仅测试）' },
-            ],
+        payItem(
+          'mode',
+          'select',
+          {
+            key: 'pay.mode',
+            name: '支付模式',
+            purpose: 'real=真实支付工作流；mock=仅测试环境（生产必须 real）',
+            howTo: '确认支付工作流已在云开发控制台配好后选择 real',
+            url: '',
           },
-        },
-        {
+          [
+            { value: 'real', label: 'real（生产真实支付）' },
+            { value: 'mock', label: 'mock（仅测试）' },
+          ]
+        ),
+        payItem('subMchId', 'text', {
           key: 'pay.subMchId',
           name: '商户号',
-          location: 'DB config/pay.subMchId',
           purpose: '账单查询 mchid（对照 console-assets/ 正册商户号）',
-          status: payOk('subMchId') ? 'ok' : 'missing',
           howTo: '微信支付商户平台→账户中心→商户号',
           url: 'https://pay.weixin.qq.com',
-          fill: { action: 'savePayConfig', field: 'subMchId', inputType: 'text' },
-        },
-        {
+        }),
+        payItem('flowId', 'text', {
           key: 'pay.flowId',
           name: '支付工作流 ID',
-          location: 'DB config/pay.flowId',
           purpose: '发起支付经 callFlow 触发的云开发工作流标识',
-          status: payOk('flowId') ? 'ok' : 'missing',
           howTo: '云开发控制台→工作流→复制支付工作流 ID（console-assets/01-支付退款工作流.md 正册对照）',
           url: 'https://tcb.cloud.tencent.com',
-          fill: { action: 'savePayConfig', field: 'flowId', inputType: 'text' },
-        },
-        {
+        }),
+        payItem('refundFlowId', 'text', {
           key: 'pay.refundFlowId',
           name: '退款工作流 ID',
-          location: 'DB config/pay.refundFlowId',
           purpose: '发起退款经 callFlow 触发的云开发工作流标识',
-          status: payOk('refundFlowId') ? 'ok' : 'missing',
           howTo: '云开发控制台→工作流→复制退款工作流 ID（console-assets/01-支付退款工作流.md 正册对照）',
           url: 'https://tcb.cloud.tencent.com',
-          fill: { action: 'savePayConfig', field: 'refundFlowId', inputType: 'text' },
-        },
+        }),
       ],
     },
     {
       group: '视频点播 VOD（决策§31 转码管线·本页填写 → 云函数读库自动生效；开通/模板/域名等控制台步骤见 console-assets/04）',
       items: [
-        {
+        secureItem('vod', 'secretId', 'text', {
           key: 'VOD_SECRET_ID',
           name: 'VOD 子账号 SecretId',
-          location: 'DB secureConfig/vod.secretId',
           purpose: '上传签名派发 + 服务端 API（转码状态同步/GC 删除）——函数运行时临时密钥签不了 VOD，须独立子账号密钥',
-          status: vodOk('secretId') ? 'ok' : 'missing',
           howTo: '腾讯云控制台→访问管理 CAM→新建子账号（仅授 QcloudVODFullAccess）→API 密钥',
           url: 'https://console.cloud.tencent.com/cam',
-          fill: { action: 'saveSecureConfig', docId: 'vod', field: 'secretId', inputType: 'text' },
-        },
-        {
+        }),
+        secureItem('vod', 'secretKey', 'password', {
           key: 'VOD_SECRET_KEY',
           name: 'VOD 子账号 SecretKey',
-          location: 'DB secureConfig/vod.secretKey',
           purpose: '与 SecretId 配对（HMAC 签名用·绝不回显）',
-          status: vodOk('secretKey') ? 'ok' : 'missing',
           howTo: '同上（创建时一次性展示，抄下即填此处）',
           url: 'https://console.cloud.tencent.com/cam',
-          fill: { action: 'saveSecureConfig', docId: 'vod', field: 'secretKey', inputType: 'password' },
-        },
-        {
+        }),
+        secureItem('vod', 'playKey', 'password', {
           key: 'VOD_PLAY_KEY',
           name: '播放 Key 防盗链密钥',
-          location: 'DB secureConfig/vod.playKey',
           purpose: '播放地址签名（getPlaybackUrl 鉴权后签发）——未配则 VOD 段一律 url:null（fail-closed 拒裸奔）',
-          status: vodOk('playKey') ? 'ok' : 'missing',
           howTo: '云点播控制台→分发播放设置→域名管理→Key 防盗链→开启并复制 Key',
           url: 'https://console.cloud.tencent.com/vod',
-          fill: { action: 'saveSecureConfig', docId: 'vod', field: 'playKey', inputType: 'password' },
-        },
-        {
+        }),
+        secureItem('vod', 'procedure', 'text', {
           key: 'VOD_PROCEDURE',
           name: '任务流模板名',
-          location: 'DB secureConfig/vod.procedure',
           purpose: '上传完成自动触发的转码+截图任务流（转码/雪碧图/封面一站）——空则上传后不自动转码',
-          status: vodOk('procedure') ? 'ok' : 'missing',
           howTo: '云点播控制台→任务流设置→新建（含转码+雪碧图+封面截图任务）→模板名填此处（对照 console-assets/04）',
           url: 'https://console.cloud.tencent.com/vod',
-          fill: { action: 'saveSecureConfig', docId: 'vod', field: 'procedure', inputType: 'text' },
-        },
+        }),
         {
           key: 'vodDomain',
           name: 'VOD 播放域名（自有已备案 + CNAME + 防盗链开启）',

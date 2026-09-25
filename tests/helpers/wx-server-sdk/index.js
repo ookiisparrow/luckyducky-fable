@@ -133,6 +133,8 @@ class DocRef {
     return { stats: { updated: 1 } }
   }
   async remove() {
+    // 删前注入（测试：删失败不得被装成已删除）。回调收到 {coll,id}；Query.remove() 收到 {coll,filter}。默认无。
+    if (typeof G.beforeRemove === 'function') await G.beforeRemove({ coll: this.coll, id: this.id })
     const arr = rows(this.coll)
     const i = arr.findIndex((d) => d._id === this.id)
     if (i >= 0) arr.splice(i, 1)
@@ -211,6 +213,7 @@ class Query {
     return { stats: { updated: hit.length } }
   }
   async remove() {
+    if (typeof G.beforeRemove === 'function') await G.beforeRemove({ coll: this.coll, filter: this._filter })
     const arr = rows(this.coll)
     const before = arr.length
     G.store[this.coll] = arr.filter((d) => !matchDoc(d, this._filter))
@@ -235,7 +238,7 @@ class Query {
   }
 }
 
-// 聚合管线（最小实现·债#18续 + SCM 产销统计续）：支持 .match(filter).group({_id, key:$.sum('$field')}).end()。
+// 聚合管线（最小实现·债#18续 + SCM 产销统计续）：支持 .match(filter).group({_id, key:$.sum('$field' | 常数)}).end()。
 // _id 为 '$field' 时真按该字段值分桶（真实 wx-server-sdk 语义）；_id:null 仍是单桶（GMV/评分求和等既有用法不变）。
 class Aggregate {
   constructor(coll) {
@@ -251,9 +254,17 @@ class Aggregate {
     this._group = spec
     return this
   }
+  limit(n) {
+    this._limit = n
+    return this
+  }
   async end() {
+    // 聚合前注入（测试：精确聚合异常→兜底口径场景，可按 coll 判断选择性抛错）。默认无。
+    if (typeof G.beforeAggregate === 'function') await G.beforeAggregate({ coll: this.coll, match: this._match })
+    // 真 sdk 聚合不写 limit 只回 20 条；桩默认不截断，要逼真的测试经 setAggregateDefaultLimit(20) 打开
+    const cap = this._limit ?? G.aggregateDefaultLimit
     const docs = rows(this.coll).filter((d) => matchDoc(d, this._match))
-    if (!this._group) return { list: docs.map(clone) }
+    if (!this._group) return { list: docs.slice(0, cap).map(clone) }
     const idExpr = this._group._id
     const keyOf = (d) => (typeof idExpr === 'string' && idExpr.startsWith('$') ? d[idExpr.slice(1)] : idExpr ?? null)
     const buckets = new Map() // 分桶键需 JSON 化（对象/undefined 也能落桶），值存 {_id, docs}
@@ -267,14 +278,16 @@ class Aggregate {
       const out = { _id: b._id }
       for (const [k, v] of Object.entries(this._group)) {
         if (k === '_id') continue
-        if (v && v.__aggOp === 'sum') {
+        if (v && v.__aggOp === 'sum' && typeof v.expr === 'number') {
+          out[k] = v.expr * b.docs.length // $.sum(1) 常量：每条计 expr（真 sdk 按桶计数的写法）
+        } else if (v && v.__aggOp === 'sum') {
           const f = String(v.expr).replace(/^\$/, '')
           out[k] = b.docs.reduce((n, d) => n + (Number(d[f]) || 0), 0)
         }
       }
       return out
     })
-    return { list }
+    return { list: list.slice(0, cap) }
   }
 }
 
@@ -393,6 +406,9 @@ const control = {
     G.beforeAdd = null
     G.beforeGet = null
     G.beforeCount = null
+    G.beforeRemove = null
+    G.beforeAggregate = null
+    G.aggregateDefaultLimit = undefined
     G.uncreated = new Set()
     G.deletedFiles = []
     G.tempUrlCalls = []
@@ -443,6 +459,17 @@ const control = {
   // 注入「count() 前」副作用（测试：精确聚合异常→兜底近样本口径场景，可按 coll 判断选择性抛错）
   setBeforeCount(fn) {
     G.beforeCount = fn
+  },
+  // 注入「aggregate().end() 前」副作用（测试：聚合失败场景，可按 coll 判断选择性抛错）
+  setBeforeAggregate(fn) {
+    G.beforeAggregate = fn
+  },
+  setAggregateDefaultLimit(n) {
+    G.aggregateDefaultLimit = n
+  },
+  // 注入「remove() 前」副作用（测试：删失败场景，可按 coll 判断选择性抛错）
+  setBeforeRemove(fn) {
+    G.beforeRemove = fn
   },
   // 逼真机「集合未建」（根因#8）：标记集合未 createCollection·其 add/update 抛错·验代码有 createCollection 兜底
   markUncreated(name) {

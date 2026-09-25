@@ -4,7 +4,7 @@ import { COLLECTIONS } from '@ldrw/shared'
 import { yarnMaterialId } from '@ldrw/shared'
 
 // 进销存 SCM-0 地基·物料/供应商主档 + 期初盘点/调整（见 docs/业务逻辑架构.md 链 12·门5 文件级隔离：本文件=SCM-0 车道）。
-// 库存/主档持久化收口 kit/scmStock（门1·守卫 material-stock-single-seam）；本文件只做入参校验 + 料号推导 + 转调。
+// 库存/主档持久化收口 kit/scmStock（门1·守卫 rw-material-stock-single-seam）；本文件只做入参校验 + 料号推导 + 转调。
 // RBAC：不登记 ACTION_CAPS → 默认拒 admin:write＝仅超管（外包坐席天然无权·蓝图门5）；写类 action 自动审计（shouldAudit）。
 
 const SLUG = /^[a-z][a-z0-9-]*$/ // 料号成分（颜色/辅料名）：小写字母开头的 slug，保 _id 干净可读

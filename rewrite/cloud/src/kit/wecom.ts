@@ -40,7 +40,7 @@ const httpsFetch: FetchFn = (url, init) =>
     req.end()
   })
 
-const defaultFetch: FetchFn = (url, init) =>
+export const defaultFetch: FetchFn = (url, init) =>
   typeof (globalThis as any).fetch === 'function' ? (globalThis as any).fetch(url, init) : httpsFetch(url, init)
 
 // ───────────────────────── 验签 + 解密（WXBizMsgCrypt） ─────────────────────────
@@ -210,12 +210,9 @@ export async function getAccessToken(
   fetchImpl: FetchFn = defaultFetch
 ): Promise<string> {
   const db = getDb()
+  const cached = await getCachedKfToken(db)
+  if (cached) return cached
   const now = Date.now()
-  const got = await db.collection(COLLECTIONS.kfState).doc(TOKEN_ID).get().catch(() => null)
-  const rec = got && got.data ? got.data : null
-  if (rec && typeof rec.expireAt === 'number' && rec.expireAt - TOKEN_SKEW_MS > now && rec.accessToken) {
-    return rec.accessToken as string
-  }
   // secret 拼在 query 里——底层 fetch 若把请求 URL 嵌进错误消息（运行时相关），raw error 冒泡到
   // kfCallback 的 console.error(String(e)) 就会把 corpsecret 写进云日志。故在源头消毒：吞 fetch 原始错误、
   // 只抛不含 secret 的定型码（深审 2026-07-05·纵深加固）。
@@ -303,7 +300,7 @@ export async function getWecomOAuthUserId(
 // ───────────── 应用消息（自建应用主动推送·M⑦ 承面C 增强·推送线）─────────────
 // 与微信客服 send_msg 的区别：这是企业微信「应用消息」（message/send·带 agentid·推给企业成员 userid）——
 // 把「新会话待接 / 会话升级」主动推到坐席手机（app 消息不受 48h 会话窗口限制·解「页面关着无提醒」）。
-// **单接缝**（守卫 app-message-single-seam）：全库 message/send 只经本文件出。
+// **单接缝**：全库 message/send 只经本文件出。
 
 /** 坐席台工作台 URL（推送卡片点入·车道 C 消费 ?session·单源）。可 env WXKF_AGENT_URL 覆盖。 */
 export const AGENT_DESK_URL = process.env.WXKF_AGENT_URL || 'https://www.luckyducky.cn/agent/'
@@ -346,10 +343,8 @@ export async function sendAgentCard(
   try {
     const to = (touser || []).filter(Boolean)
     if (!to.length) return
-    const agentid = await getSecureConfig(db, 'wxkf', 'agentId')
-    if (!agentid) return
-    const token = await getCachedKfToken(db)
-    if (!token) return
+    const [agentid, token] = await Promise.all([getSecureConfig(db, 'wxkf', 'agentId'), getCachedKfToken(db)])
+    if (!agentid || !token) return
     await sendAppMessage(token, { agentid, touser: to, textcard: card }, fetchImpl)
   } catch {
     /* fail-soft：推送不反噬主流程 */
@@ -531,6 +526,17 @@ export async function getKfMedia(
 // 已无独立可调用边界（不再是能被任意 event 直接 invoke 的函数），越权发送/下载面随函数消失；
 // 权限改由外层 adminApi 网关闸（口令 + scope + 接待窗口，见 agentDesk.ts sendAgentMessage/getMediaUrl）负责。
 
+/** 读 wxkf 凭证并取 access_token：未配回 KF_NOT_CONFIGURED、gettoken 失败回 TOKEN_FAILED。 */
+export async function kfToken(db: any): Promise<{ token: string } | { error: string }> {
+  const { corpId: corpid, secret } = await getSecureConfigFields(db, 'wxkf', ['corpId', 'secret'])
+  if (!corpid || !secret) return { error: ERR.KF_NOT_CONFIGURED }
+  try {
+    return { token: await getAccessToken({ corpid, secret }) }
+  } catch {
+    return { error: ERR.TOKEN_FAILED }
+  }
+}
+
 /** 客服主动发消息（原 cs/kfSend main 逻辑收编）：参数→配置→token→send_msg，契约与原函数一致。 */
 export async function kfSendText(args: { externalUserId: string; openKfId: string; text: string }) {
   const externalUserId = String(args.externalUserId || '')
@@ -538,17 +544,9 @@ export async function kfSendText(args: { externalUserId: string; openKfId: strin
   const text = String(args.text || '')
   if (!externalUserId || !openKfId || !text) return err(ERR.BAD_ARGS)
 
-  const db = getDb()
-  const { corpId: corpid, secret } = await getSecureConfigFields(db, 'wxkf', ['corpId', 'secret'])
-  if (!corpid || !secret) return err(ERR.KF_NOT_CONFIGURED)
-
-  let token: string
-  try {
-    token = await getAccessToken({ corpid, secret })
-  } catch {
-    return err(ERR.TOKEN_FAILED)
-  }
-  const res = await sendMsg(token, { touser: externalUserId, open_kfid: openKfId, msgtype: 'text', text: { content: text } })
+  const t = await kfToken(getDb())
+  if ('error' in t) return err(t.error)
+  const res = await sendMsg(t.token, { touser: externalUserId, open_kfid: openKfId, msgtype: 'text', text: { content: text } })
   return ok({ sent: !res?.errcode, errcode: res?.errcode || 0, msgid: res?.msgid || '' })
 }
 
@@ -561,17 +559,9 @@ export async function kfFetchMedia(mediaId: string) {
   const id = String(mediaId || '')
   if (!id) return err(ERR.BAD_ARGS)
 
-  const db = getDb()
-  const { corpId: corpid, secret } = await getSecureConfigFields(db, 'wxkf', ['corpId', 'secret'])
-  if (!corpid || !secret) return err(ERR.KF_NOT_CONFIGURED)
-
-  let token: string
-  try {
-    token = await getAccessToken({ corpid, secret })
-  } catch {
-    return err(ERR.TOKEN_FAILED)
-  }
-  const r = await getKfMedia(token, id)
+  const t = await kfToken(getDb())
+  if ('error' in t) return err(t.error)
+  const r = await getKfMedia(t.token, id)
   if (!r.ok) return ok({ ok: false, expired: r.expired, errcode: r.errcode || 0 })
   return ok({ ok: true, buffer: r.buffer })
 }

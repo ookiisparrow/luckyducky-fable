@@ -190,28 +190,16 @@ function finalizeBubbles(items: Array<{ priority: number; text: string }>, max: 
   }
   if (bubbles.length > max) {
     const extra = bubbles.filter((b) => b.priority >= 3)
-    let bizAt = -1
-    for (let i = bubbles.length - 1; i >= 0; i--) {
-      if (bubbles[i].priority === 2) {
-        bizAt = i
-        break
-      }
-    }
+    const bizAt = bubbles.map((b) => b.priority).lastIndexOf(2)
     if (extra.length && bizAt >= 0) {
       bubbles[bizAt] = { priority: 2, text: bubbles[bizAt].text + extra.map((e) => e.text).join('') }
       bubbles = bubbles.filter((b) => b.priority < 3)
     }
   }
+  // 超顶先丢优先级最低（数值最大）的，同级丢最后一个
   while (bubbles.length > max) {
-    let dropAt = bubbles.length - 1
-    let dropPri = bubbles[dropAt] ? bubbles[dropAt].priority : 0
-    for (let i = 0; i < bubbles.length; i++) {
-      if (bubbles[i].priority >= dropPri) {
-        dropPri = bubbles[i].priority
-        dropAt = i
-      }
-    }
-    bubbles.splice(dropAt, 1)
+    const pris = bubbles.map((b) => b.priority)
+    bubbles.splice(pris.lastIndexOf(Math.max(...pris)), 1)
   }
   return bubbles.map((b) => b.text).filter(Boolean)
 }

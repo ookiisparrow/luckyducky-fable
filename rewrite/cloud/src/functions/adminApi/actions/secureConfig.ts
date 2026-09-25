@@ -1,6 +1,6 @@
-import { reply, ensure, type Ctx } from '../lib'
+import { reply, ensure, readDoc, type Ctx } from '../lib'
 import { COLLECTIONS } from '@ldrw/shared'
-import { normalizePem } from '../../../kit'
+import { normalizePem, setOrAdd } from '../../../kit'
 
 // 人工配置清单可填写化（决策 2026-07-12·config-checklist 补口）：把此前只能去云开发控制台改环境变量/
 // 库里手敲 JSON 的敏感凭证 + 支付接缝配置，收口成两个写 action——admin 页填、云函数运行时读库自动生效
@@ -55,15 +55,11 @@ export async function saveSecureConfig({ db, data }: Ctx) {
 
   await ensure(db, COLLECTIONS.secureConfig)
   const coll = db.collection(COLLECTIONS.secureConfig)
-  const got = await coll.doc(docId).get().catch(() => null)
-  const { _id: _omitId, ...cur } = (got && got.data) || {}
+  const got = await readDoc(coll.doc(docId).get())
+  if (!got.ok) return reply(200, { ok: false, error: 'DOC_READ_FAIL' }) // 读失败≠空档：停写，不拿 {} 整档覆盖
+  const { _id: _omitId, ...cur } = got.data || {}
   const next = { ...cur, ...patch, updatedAt: Date.now() }
-  await coll
-    .doc(docId)
-    .set({ data: next })
-    .catch(async () => {
-      await coll.add({ data: { _id: docId, ...next } })
-    })
+  await setOrAdd(coll, docId, next)
   return reply(200, { ok: true })
 }
 
@@ -88,14 +84,10 @@ export async function savePayConfig({ db, data }: Ctx) {
 
   await ensure(db, COLLECTIONS.config)
   const coll = db.collection(COLLECTIONS.config)
-  const got = await coll.doc('pay').get().catch(() => null)
-  const { _id: _omitId, ...cur } = (got && got.data) || {}
+  const got = await readDoc(coll.doc('pay').get())
+  if (!got.ok) return reply(200, { ok: false, error: 'DOC_READ_FAIL' }) // 读失败≠空档：停写，不拿 {} 整档覆盖
+  const { _id: _omitId, ...cur } = got.data || {}
   const next = { ...cur, ...patch, updatedAt: Date.now() }
-  await coll
-    .doc('pay')
-    .set({ data: next })
-    .catch(async () => {
-      await coll.add({ data: { _id: 'pay', ...next } })
-    })
+  await setOrAdd(coll, 'pay', next)
   return reply(200, { ok: true })
 }

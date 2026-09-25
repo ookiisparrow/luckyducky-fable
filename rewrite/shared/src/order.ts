@@ -44,12 +44,9 @@ export type AfterSaleStatus = SpecStates<typeof AFTERSALE_STATUS_SPEC>
  *  profile.ts 各自手抄同一份数组，改状态机漏改一处即口径分叉——收口到订单状态声明单源旁，其余四处改 import。 */
 export const PAID_ORDER_STATUSES: readonly OrderStatus[] = ['paid', 'shipped', 'done']
 
-// 运行时常量（从声明运行时派生）：
-// 键是大写状态名、值是小写状态串；消费方 Object.values() 作状态全集（计数/筛选枚举用）。
-const dictOf = <T extends string>(states: readonly string[]) =>
-  Object.fromEntries(states.map((s) => [s.toUpperCase(), s])) as Record<string, T>
-export const ORDER_STATUS = dictOf<OrderStatus>(statesOf(ORDER_STATUS_SPEC))
-export const AFTERSALE_STATUS = dictOf<AfterSaleStatus>(statesOf(AFTERSALE_STATUS_SPEC))
+// 运行时状态全集（从声明派生·去重排序）；消费方仅作枚举（计数/筛选/白名单）。
+export const ORDER_STATUS = statesOf(ORDER_STATUS_SPEC) as readonly OrderStatus[]
+export const AFTERSALE_STATUS = statesOf(AFTERSALE_STATUS_SPEC) as readonly AfterSaleStatus[]
 
 /**
  * 'BAD_STATUS:'+状态 复合码的构造单源。云端 orders/refunds 用本函数拼码；

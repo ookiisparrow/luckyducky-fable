@@ -1,4 +1,4 @@
-// 黄金 观测-巡检 §B：巡检机「主动核对不变量·探出静默失败」（守卫 rw-inspect-golden）。
+// 黄金 观测-巡检 §B：巡检机「主动核对不变量·探出静默失败」。
 // 不依赖 AI 的定时/手动体检：跑一遍检查目录（A 基建存活 + B 业务不变量）→ 写 inspectRuns 体检报告
 // → 每条红自动落 recordAnomaly（违反→bug 账本闭环）。只读——绝不改业务集合（「现在只读看护线上」铁律）。
 import { describe, it, expect, beforeEach, vi } from 'vitest'

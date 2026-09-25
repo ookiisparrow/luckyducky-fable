@@ -10,6 +10,7 @@ import {
   dayKeyCST as dayKey,
   dayStartMsCST as dayStartMs,
   DAY_MS as DAY,
+  isCollectionMissing,
 } from '../../../kit'
 
 // —— S16 财务对账（内部账·Batch 1）——
@@ -20,7 +21,7 @@ import {
 //   · 内部异常＝feeMismatch/refundMismatch/stuckRefunds（getTxAlerts 与看板同源·防漂移）。
 // 抓「我方内部不一致」；抓不到「微信收了款我方无单」——那需逐笔比对微信账单（外部对账·Batch 2/3·需商户凭证）。
 
-const CAP = 2000 // 每日明细有界拉取上限（超则 approx；同 dashboard SAMPLE 范式）
+const CAP = 1000 // 明细有界拉取上限（超则 approx）：云函数端 .limit() 最多给 1000 条，CAP 设得比它大就会少报截断
 const isDate = (s: any) => typeof s === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(s)
 
 // 累加用整数「分」（toFen·防浮点漂移·根因#4 钱链）；出参再 fenToYuan 回元
@@ -41,10 +42,9 @@ export async function getReconciliation({ db, data }: Ctx) {
   const fromMs = dayStartMs(from)
   const toMs = dayStartMs(to) + DAY - 1 // 含 to 当日
 
-  // 累计金额锚点聚合失败辨别（深审 P2·病根#14）：income/refund 累计是 money 对账锚（注释「全量精确·恒可信」），
-  // 旧版 .catch(()=>0) 静默归零会把「查询失败」冒充成「累计为 0」——对账员据此以为没收入/没退款。改：失败置
-  // cumDegraded + 告警，回传让前端标注累计不可信，不当真 0。
-  let cumDegraded = false
+  // 任一路读失败（累计聚合 / 每日明细 / 计数）都置 degraded + 告警，回传 partial 让前端标注数据不可信（病根#14）：
+  // 「查询失败」归零会被读成「这段时间没收入、没退款、已对平」。
+  let degraded = false
   const sumAgg = (coll: string, status: any, field: string): Promise<number> =>
     db
       .collection(coll)
@@ -54,19 +54,25 @@ export async function getReconciliation({ db, data }: Ctx) {
       .end()
       .then((r: any) => (r.list && r.list[0] ? toYuanAmount(r.list[0].s) : 0))
       .catch(() => {
-        cumDegraded = true
+        degraded = true
         return 0
       })
   const rows = (q: any) =>
     q
       .get()
       .then((r: any) => r.data)
-      .catch(() => [])
+      .catch(() => {
+        degraded = true
+        return []
+      })
   const cnt = (q: any) =>
     q
       .count()
       .then((r: any) => r.total || 0)
-      .catch(() => 0)
+      .catch(() => {
+        degraded = true
+        return 0
+      })
 
   const [incomeCum, refundCum, paidRows, refundRows, paidN, refundN, exceptions] =
     await Promise.all([
@@ -124,28 +130,16 @@ export async function getReconciliation({ db, data }: Ctx) {
   }))
 
   // 区间汇总：分累加再回元（与每日同源·精确）
-  let incFen = 0
-  let refFen = 0
-  let ordersN = 0
-  let refundsN = 0
-  for (const b of sorted) {
-    incFen += b.incomeFen
-    refFen += b.refundFen
-    ordersN += b.orders
-    refundsN += b.refunds
-  }
+  const sum = (k: 'incomeFen' | 'refundFen' | 'orders' | 'refunds') => sorted.reduce((s, b) => s + b[k], 0)
+  const incFen = sum('incomeFen')
+  const refFen = sum('refundFen')
 
-  // 累计聚合或异常查询任一降级（深审 P2·病根#14）：告警 + 回传 partial，前端据此标注「对账数据不可信」，
-  // 不让「查询失败归零」被读成真实的收支/异常态。
-  if (cumDegraded)
-    await notifyAlert('money', 'reconciliation', 'CUMULATIVE_AGG_FAIL', { from, to }).catch(
-      () => {}
-    )
-  const partial = cumDegraded || !!(exceptions as any).partial
+  if (degraded) await notifyAlert('money', 'reconciliation', 'RECON_READ_FAIL', { from, to })
+  const partial = degraded || !!(exceptions as any).partial
   return reply(200, {
     ok: true,
     range: { from, to },
-    partial, // 累计聚合/异常查询降级：数据不可信标记（前端提示重试·别当真 0/all-clear）
+    partial, // 任一路读失败（累计聚合/每日明细/计数/异常查询）：数据不可信标记（前端提示重试·别当真 0/all-clear）
     // 累计（aggregate 全量·元）；net 经分相减回元避浮点
     cumulative: {
       income: incomeCum,
@@ -156,8 +150,8 @@ export async function getReconciliation({ db, data }: Ctx) {
       income: fenToYuan(asFen(incFen)),
       refund: fenToYuan(asFen(refFen)),
       net: fenToYuan(asFen(incFen - refFen)),
-      orders: ordersN,
-      refunds: refundsN,
+      orders: sum('orders'),
+      refunds: sum('refunds'),
     },
     daily,
     // 窗内明细可能被 CAP 截断（低量远不触·诚实标注·债#18）；累计/异常不受 CAP 影响
@@ -175,22 +169,29 @@ export async function getBillMatch({ db, data }: Ctx) {
   const from = isDate(data?.from) ? data.from : dayKey(Date.now() - 29 * DAY)
   const fromMs = dayStartMs(from)
   const toMs = dayStartMs(to) + DAY - 1
+  // 读失败不接住（交网关回 500，前端报加载失败）：订单读挂了会把每笔微信流水判成「微信有我方无」，账单读挂了
+  // 会假装全平。集合未建＝wxBills 从没拉过账单，是合法空态。
   const rows = (q: any) =>
-    q
-      .get()
-      .then((r: any) => r.data)
-      .catch(() => [])
+    q.get().then(
+      (r: any) => r.data,
+      (e: unknown) => {
+        if (isCollectionMissing(e)) return []
+        throw e
+      }
+    )
 
   // 取最近 CAP 条再按窗过滤；触顶＝更早的单没进比对面，老窗口里的真单会被误判 wxOnly——必须 approx 如实标注
   //（深审 P2·同 getReconciliation 口径·守卫 billmatch-approx-flag），前端见 approx 提示「窗口可能不全」而非当真差异。
-  const rawOur = await rows(
-    db
-      .collection('orders')
-      .where({ status: _.in(PAID_STATUSES) })
-      .orderBy('paidAt', 'desc')
-      .limit(CAP)
-  )
-  const rawWx = await rows(db.collection('wxBills').orderBy('date', 'desc').limit(CAP))
+  const [rawOur, rawWx] = await Promise.all([
+    rows(
+      db
+        .collection('orders')
+        .where({ status: _.in(PAID_STATUSES) })
+        .orderBy('paidAt', 'desc')
+        .limit(CAP)
+    ),
+    rows(db.collection('wxBills').orderBy('date', 'desc').limit(CAP)),
+  ])
   const approx = rawOur.length >= CAP || rawWx.length >= CAP
   const ourOrders = rawOur.filter(
     (o: any) => typeof o.paidAt === 'number' && o.paidAt >= fromMs && o.paidAt <= toMs

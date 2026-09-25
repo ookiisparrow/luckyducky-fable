@@ -1,5 +1,5 @@
-import { reply, ensure, str, readDoc, type Ctx } from '../lib'
-import { notifyAlert } from '../../../kit'
+import { reply, ensure, str, readDoc, arrOf, type Ctx } from '../lib'
+import { notifyAlert, setOrAdd } from '../../../kit'
 
 // —— 首页内容（橱窗逐块②③：hero 文案 / 信任条 / FAQ；规格 §八）——
 export async function getHomeContent({ db }: Ctx) {
@@ -33,7 +33,6 @@ export async function saveHomeContent({ db, data }: Ctx) {
     if (Object.keys(entry).length) activationBgByCourse[str(k, 40)] = entry
   }
   // 首页九板块内容白名单净化（键限长、数组封顶防滥用；空态照存＝小程序读侧回退设计默认文案·防误清空）：
-  const arrOf = (v: any, cap: number) => (Array.isArray(v) ? v : []).slice(0, cap)
   const doc = {
     // Hero：主标题/副标语 + 搜索框占位文案 + 顶部背景图 fileID（空→小程序回退渐变占位）
     hero: { title: str(c.hero?.title, 20), tagline: str(c.hero?.tagline, 40), search: str(c.hero?.search, 40), img: str(c.hero?.img, 200) },
@@ -64,22 +63,16 @@ export async function saveHomeContent({ db, data }: Ctx) {
   }
   await ensure(db, 'content')
   const coll = db.collection('content')
-  await coll
-    .doc('home')
-    .set({ data: doc })
-    .catch(async () => {
-      await coll.add({ data: { ...doc, _id: 'home' } })
-    })
+  await setOrAdd(coll, 'home', doc)
   return reply(200, { ok: true })
 }
 
 // —— 页面内容 CMS（批A·5 页可编辑：欢迎流/目录+播放页求助/我的/关于/协议）——
-// 承 saveHomeContent 样板（白名单净化·str 限长·数组封顶·.doc().set 带 .add 回退）；每页一独立净化函数，
+// 承 saveHomeContent 样板（白名单净化·str 限长·数组封顶·setOrAdd 落档）；每页一独立净化函数，
 // 未知字段丢弃、未知 page fail-closed 拒（信任边界·根因#3 不信前端·行为由 app-page-content.test.ts 锁）。
 // content 集合每页一 doc（_id=page 键名）；小程序公开读经 app/catalog.getPageContent（catalogPlayer.catalog.heroImage
 // 若 cloud:// 换临时 URL，fileID 不出口·照 swapHomeImages 模式）。
 const PAGES = ['welcome', 'catalogPlayer', 'mePage', 'about', 'agreement'] as const
-const arrOf = (v: any, cap: number) => (Array.isArray(v) ? v : []).slice(0, cap)
 
 // 欢迎流（W1 恭喜屏 + W2 三件事）：w1 单屏文案 + w2 至多 3 条清单。
 function sanitizeWelcome(d: any) {
@@ -200,12 +193,7 @@ export async function savePageContent({ db, data }: Ctx) {
     return reply(409, { ok: false, error: 'CONTENTION' }) // 争用耗尽（管理端低频操作·几乎不至）
   }
   const doc = { ...clean, updatedAt: Date.now() }
-  await coll
-    .doc(page)
-    .set({ data: doc })
-    .catch(async () => {
-      await coll.add({ data: { ...doc, _id: page } })
-    })
+  await setOrAdd(coll, page, doc)
   return reply(200, { ok: true })
 }
 
@@ -267,12 +255,7 @@ export async function saveHelpVideos({ db, cloud, data }: Ctx) {
   // 冲突分支：既不覆盖内容也绝不 GC 删文件——否则先保存者的编辑丢了、其视频还被误删（不可逆）。
   if (Number.isFinite(baseRev) && curRev !== baseRev) return reply(200, { ok: false, error: 'DRAFT_CONFLICT', rev: curRev })
   const doc = { items, updatedAt: Date.now(), rev: curRev + 1 }
-  await coll
-    .doc('helpVideos')
-    .set({ data: doc })
-    .catch(async () => {
-      await coll.add({ data: { ...doc, _id: 'helpVideos' } })
-    })
+  await setOrAdd(coll, 'helpVideos', doc)
   // 孤儿视频 GC（深审 P3·同 publishCourse 思路）：删「旧份有、新份没有」的 videoFileId。**写成功后才 GC**
   // （冲突分支已 early-return，到不了这里）。GC 删除失败不再静默吞（H2·同 saveCheckpoints 判例·病根#14）：
   // 保存本身已成功，但 orphans 删不掉时如实回 ok:false + notifyAlert 留痕（orphans 进 anomalies 账本可人工回收，

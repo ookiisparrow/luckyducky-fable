@@ -1,5 +1,5 @@
 // 黄金 cs-agent §一（会话状态机与认领互斥）/§二（scoped 360 双闸）/§四（坐席发送与归档）/§七（关单触 CSAT）
-// /§十（企微免登与外包账号管理）（守卫 rw-admin6-golden）。
+// /§十（企微免登与外包账号管理）。
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import { control } from 'wx-server-sdk'
 import { main as adminApi } from '../src/functions/adminApi/index'

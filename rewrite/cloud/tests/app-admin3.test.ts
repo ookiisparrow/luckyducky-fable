@@ -1,4 +1,4 @@
-// 黄金 orders-money 审批/发货节 + inventory-scm §J（发货核销）（守卫 rw-admin3-golden）。
+// 黄金 orders-money 审批/发货节 + inventory-scm §J（发货核销）。
 import { describe, it, expect, beforeEach } from 'vitest'
 import { control } from 'wx-server-sdk'
 import { main as adminApi } from '../src/functions/adminApi/index'

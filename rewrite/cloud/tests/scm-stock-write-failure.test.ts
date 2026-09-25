@@ -6,9 +6,8 @@
 // 改为跟随 kit/ids.ts ensureDoc 的读回判据：读到该 _id＝真撞号（跳过合法不告警）；读不到＝真失败
 // （notifyAlert + 回滚已应用行 + 整单按此行失败收尾，返回 LEDGER_WRITE_FAILED）。
 //
-// 任务2（P2）：saveMaterialDoc 新建物料分支的 add() 原来没有任何异常处理，是模块内「确定性 _id + 无
-// 异常处理」的孤例——现跟 scmAssembly.ts runAssembly（try/catch → 409 DUPLICATE）同口径，识别「并发
-// 首建同一物料」并返回 'DUPLICATE'（scmMaterials.ts saveMaterial 路由层随之映射成 409）。
+// 任务2（P2）：saveMaterialDoc 新建物料分支的 add() 失败时读回判撞号（同 runAssembly）：读到＝并发首建
+// 同一物料，返回 'DUPLICATE'（scmMaterials.ts saveMaterial 路由层随之映射成 409）；读不到＝写失败，照抛。
 import { describe, it, expect, beforeEach } from 'vitest'
 import { control } from 'wx-server-sdk'
 import { applyStockMoves, saveMaterialDoc } from '../src/kit'
@@ -86,8 +85,9 @@ describe('applyStockMoves ledger.add() 失败区分（P1）', () => {
 
 describe('saveMaterialDoc 并发首建撞号（P2）', () => {
   it('大白话：新建物料时 add() 撞确定性 _id（并发首建）——不裸抛异常，返回 DUPLICATE', async () => {
-    control.setBeforeAdd(({ coll }: any) => {
-      if (coll === COLLECTIONS.materials) throw new Error('DUPLICATE_ID')
+    // 并发方抢先建档：add 真撞库级唯一约束
+    control.setBeforeAdd(({ coll, data }: any) => {
+      if (coll === COLLECTIONS.materials) control.seed(COLLECTIONS.materials, [data])
     })
     const r = await saveMaterialDoc({ _id: 'acc:test-dup', name: 'x', category: 'accessory', uom: 'count' })
     control.setBeforeAdd(null as never)
@@ -96,8 +96,9 @@ describe('saveMaterialDoc 并发首建撞号（P2）', () => {
 
   it('大白话：saveMaterial 路由层把 DUPLICATE 映射成 409（同 runAssembly 口径），不会误报 200 成功', async () => {
     control.seed('adminConfig', [{ _id: 'auth', keyHash: sha(SUPER), role: 'superadmin' }])
-    control.setBeforeAdd(({ coll }: any) => {
-      if (coll === COLLECTIONS.materials) throw new Error('DUPLICATE_ID')
+    // 并发方抢先建档：add 真撞库级唯一约束
+    control.setBeforeAdd(({ coll, data }: any) => {
+      if (coll === COLLECTIONS.materials) control.seed(COLLECTIONS.materials, [data])
     })
     const r = await post('saveMaterial', SUPER, { name: 'x', category: 'accessory', uom: 'count', slug: 'race-slug' })
     control.setBeforeAdd(null as never)

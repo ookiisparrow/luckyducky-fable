@@ -16,7 +16,7 @@ import {
   recordAnomaly,
   isVodFileId,
   signVodPlayUrl,
-  isDocMissing,
+  enteredActs,
 } from '../../../kit'
 
 const QR = QRCODE_STATUS_SPEC.transitions[0] // unused→activated（声明单源，不散写状态串）
@@ -269,21 +269,16 @@ export const getCourses = async (event: unknown = {}) => {
   const db = getDb()
   const ids = requestedCourseIds(event)
   if (ids) {
-    try {
-      const docs = await Promise.all(
-        ids.map(async (id) => {
-          try {
-            return await db.collection(COLLECTIONS.courses).doc(id).get()
-          } catch (e) {
-            if (isDocMissing(e)) return null // 真无这门课
-            throw e
-          }
-        })
-      )
-      return ok({ list: docs.filter((d: any) => d && d.data).map((d: any) => publicCourse(d.data)) })
-    } catch {
-      return err(ERR.INTERNAL) // 库挂 ≠ 没有这门课（根因#14）
-    }
+    if (!ids.length) return ok({ list: [] })
+    const res = await db
+      .collection(COLLECTIONS.courses)
+      .where({ _id: db.command.in(ids) })
+      .limit(20)
+      .get()
+      .catch(() => null)
+    if (!res) return err(ERR.INTERNAL) // 库挂 ≠ 没有这门课（根因#14）
+    const byId = new Map(res.data.map((c: any) => [c._id, c]))
+    return ok({ list: ids.filter((id) => byId.has(id)).map((id) => publicCourse(byId.get(id))) })
   }
   // 显式上界（病根#7·守卫 rw-app-catalog-reads-bounded·深审 P2 同处独立发现取并）：同 getProducts 口径，
   // 防默认 100 条静默截断——课程目录破百后第 101 门起从用户课程页无声消失。
@@ -318,26 +313,14 @@ export const getPlaybackUrl = withOpenId(
         .doc(courseId)
         .get()
         .catch(() => null),
-      db
-        .collection(COLLECTIONS.activations)
-        .where({ _openid: OPENID, courseId, enteredAt: db.command.neq(null) })
-        .limit(1)
-        .get()
-        .catch(() => ({ data: [] })),
+      enteredActs(db, OPENID, courseId).catch(() => ({ data: [] })),
     ])
     if (!got || !got.data) return err(ERR.NO_COURSE)
 
-    let seg: any = null
-    for (const ch of got.data.chapters || []) {
-      for (const l of ch.lessons || []) {
-        const f = (l.segments || []).find((s: any) => s.id === segmentId)
-        if (f) {
-          seg = f
-          break
-        }
-      }
-      if (seg) break
-    }
+    const seg = (got.data.chapters || [])
+      .flatMap((ch: any) => ch.lessons || [])
+      .flatMap((l: any) => l.segments || [])
+      .find((s: any) => s.id === segmentId)
     if (!seg) return err(ERR.NO_SEGMENT)
     if (!seg.videoFileId) return ok({ url: null })
 
@@ -452,26 +435,22 @@ export const trackEvent = withOpenId(
 
     const courseId = str(meta.courseId, 64)
     if ((type === 'segment_done' || type === 'watch_at') && courseId) {
-      const _ = db.command
-      const owns = await db
-        .collection(COLLECTIONS.activations)
-        .where({ _openid: OPENID, courseId, enteredAt: _.neq(null) })
-        .limit(1)
-        .get()
-        .catch(() => ({ data: [] }))
+      const progress = db.collection(COLLECTIONS.progress)
+      // 两读互不依赖，并行省一次往返；代价是未进课（防刷冷分支）多一次白读，同 getPlaybackUrl 取舍
+      const [owns, found] = await Promise.all([
+        enteredActs(db, OPENID, courseId).catch(() => ({ data: [] })),
+        progress
+          .where({ _openid: OPENID, courseId })
+          .limit(1)
+          .get()
+          .catch(() => ({ data: [] })),
+      ])
       if (!owns.data.length) return ok()
       const last = {
         lessonId: str(meta.lessonId, 64),
         segmentId: targetId,
         at: Number(meta.at) || 0,
         dur: Number(meta.dur) || 0,
-      }
-      const progress = db.collection(COLLECTIONS.progress)
-      let found
-      try {
-        found = await progress.where({ _openid: OPENID, courseId }).limit(1).get()
-      } catch {
-        found = { data: [] }
       }
       const patch: Record<string, unknown> = { last, updatedAt: now }
       if (type === 'segment_done' && targetId) patch[`done.${targetId}`] = true

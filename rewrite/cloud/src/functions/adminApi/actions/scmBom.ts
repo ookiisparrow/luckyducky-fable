@@ -1,5 +1,5 @@
 import { reply, type Ctx } from '../lib'
-import { isDocMissing } from '../../../kit'
+import { getDocOrNull, setOrAdd } from '../../../kit'
 import { COLLECTIONS, cleanBomTemplate } from '@ldrw/shared'
 
 // 进销存 SCM-C 配方管理（见 docs/业务逻辑架构.md 链 12·门5 文件级隔离：本文件=车道 C 配方面）。
@@ -12,17 +12,10 @@ const SLUG = /^[a-z][a-z0-9-]*$/ // 颜色 slug（与 scmMaterials 料号成分�
 
 /** 配方一览（模板 + 全部产品差异位·bounded）。 */
 export async function getBomSetup({ db }: Ctx) {
-  const t = await db
-    .collection(COLLECTIONS.config)
-    .doc('scmBomTemplate')
-    .get()
-    .catch((e: unknown) => {
-      if (isDocMissing(e)) return null // 真没模板
-      throw e // 库挂 ≠ 没有配方
-    })
-  const { _id: _omit, updatedAt: _omit2, ...template } = (t?.data as Record<string, any>) || {}
+  const t = await getDocOrNull(db.collection(COLLECTIONS.config).doc('scmBomTemplate'))
+  const { _id: _omit, updatedAt: _omit2, ...template } = (t as Record<string, any>) || {}
   const p = await db.collection(COLLECTIONS.bomProfiles).limit(200).get()
-  return reply(200, { ok: true, template: t?.data ? template : null, profiles: p.data || [] })
+  return reply(200, { ok: true, template: t ? template : null, profiles: p.data || [] })
 }
 
 /** 保存全局模板（整存·模板就一张，数值＝业务数据 admin 填）。 */
@@ -30,14 +23,7 @@ export async function saveBomTemplate({ db, data }: Ctx) {
   const clean = cleanBomTemplate(data.template)
   if (!clean) return reply(400, { ok: false, error: 'BAD_TEMPLATE' })
   const next = { ...clean, updatedAt: Date.now() }
-  const coll = db.collection(COLLECTIONS.config)
-  // set data 不含 _id（真 SDK doc(id).set 的 data 带 _id 即 reject·守卫 no-id-in-set-data）
-  await coll
-    .doc('scmBomTemplate')
-    .set({ data: next })
-    .catch(async () => {
-      await coll.add({ data: { _id: 'scmBomTemplate', ...next } })
-    })
+  await setOrAdd(db.collection(COLLECTIONS.config), 'scmBomTemplate', next)
   return reply(200, { ok: true })
 }
 
@@ -61,12 +47,6 @@ export async function saveBomProfile({ db, data }: Ctx) {
     cardMaterialId: cardMaterialId.slice(0, 80),
     updatedAt: Date.now(),
   }
-  const coll = db.collection(COLLECTIONS.bomProfiles)
-  await coll
-    .doc(productId)
-    .set({ data: next })
-    .catch(async () => {
-      await coll.add({ data: { _id: productId, ...next } })
-    })
+  await setOrAdd(db.collection(COLLECTIONS.bomProfiles), productId, next)
   return reply(200, { ok: true, productId })
 }

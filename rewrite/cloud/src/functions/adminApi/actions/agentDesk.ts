@@ -11,7 +11,7 @@ import {
   getTempUrl,
   kfSendText,
   kfFetchMedia,
-  isDocMissing,
+  getDocOrNull,
 } from '../../../kit'
 import { COLLECTIONS, ERR, AGENT_STATUS } from '@ldrw/shared'
 import { assembleCustomer360 } from '../customer360/orchestrator'
@@ -24,12 +24,12 @@ import { assembleCustomer360 } from '../customer360/orchestrator'
 // 根因#3）——wire 在 adminApi/index.ts ACTION_CAPS + lib.ts ROLES.outsourced（与本文件同批落·不空守）。
 //
 // 信任边界（§1.5·根因#3 不信前端）：坐席身份 `agentId` 一律取自 checkKey 解析的**认证主体**（Ctx.agentId，
-// 非 data 里前端传的）——防冒名认领/发消息。分配 scope：外包只能读/操作**自己 claim 的会话**（ownsSession·
-// 超管 '*' 全量）；守卫 outsourced-reads-scoped（车道 C 定义）合并后覆盖此不变量，本文件先落最小运行时校验。
+// 非 data 里前端传的）——防冒名认领/发消息。分配 scope：外包只能读/操作**自己 claim 的会话**（scopedSession →
+// kit assertOwnedByAgent·超管 '*' 全量）。
 //
 // 状态流转一律走 kit `transition('csSession', …)`（合法流转单源 shared/cs.spec.ts·守卫 rw-status-transitions-declared
 // 对账·私自越流转即红·根因#2）；一次性副作用绑首次转移（transition moved===true·天然幂等·根因#1）。
-// 读路径 bounded（cursor/limit·守卫 capacity-reads-bounded·根因#7）。发送经 kit 直连收口（2026-07-23 拓扑收编批·
+// 读路径 bounded（cursor/limit·根因#7）。发送经 kit 直连收口（2026-07-23 拓扑收编批·
 // 17→13·原 cs/kfSend 独立函数收编进 kit/wecom.ts kfSendText，不再有跨函数 callFunction 接缝）。
 
 const LIST_LIMIT = 20 // 待接队列默认页大小（bounded）
@@ -45,22 +45,25 @@ const CSAT_PROMPT = '感谢你的咨询～这次服务还满意吗？回复 1-5 
 // 认证主体（根因#3 不信前端）：agentId＝checkKey 解析的账号 _id（外包账号 adminConfig._id / 超管 'admin'），
 // 经 adminApi/index.ts 分发处贯入 Ctx（非 data 传入）。isSuper＝caps 含 '*'（商户超管·可读/操作全量会话）。
 function principal(ctx: Ctx): { agentId: string; isSuper: boolean } {
-  const agentId = String((ctx as any).agentId || '')
-  const caps: string[] = Array.isArray((ctx as any).caps) ? (ctx as any).caps : []
+  const agentId = String(ctx.agentId || '')
+  const caps: string[] = Array.isArray(ctx.caps) ? ctx.caps : []
   return { agentId, isSuper: caps.includes('*') }
 }
 
-// 分配 scope + 载入会话（§1.5·根因#3·防批量导出）：超管全量（loadSession）；外包经 kit 单源闸 assertOwnedByAgent
-// （会话须存在且 agentId===本坐席·fail-closed·单源 kit/csAccess·守卫 outsourced-reads-scoped 焊 per-session action 必引它）。
-// 返回 { code, s? }：code=0 通过（s＝会话）；404 会话不存在；403 非本坐席 claim（越 scope 拒）。整合统一：原内联 ownsSession
-// 与车道 C 的 assertOwnedByAgent 同一不变量两处表达（根因#5）→ 收敛到 kit 闸单源（超管 bypass 留调用侧·避双读）。
-async function scopedLoad(db: any, p: { agentId: string; isSuper: boolean }, sessionId: string): Promise<{ code: number; s?: any }> {
+// 按会话操作的统一开头：取 sessionId（缺→400）+ 分配 scope + 载入会话（§1.5·根因#3·防批量导出）。
+// 超管全量（loadSession）；外包经 kit 单源闸 assertOwnedByAgent（会话须存在且 agentId===本坐席·fail-closed·
+// 单源 kit/csAccess·超管 bypass 留在这里·避双读）。拒绝时 deny＝要回的 reply：404 会话不存在；403 非本坐席 claim。
+async function scopedSession(ctx: Ctx): Promise<{ deny: any } | { p: { agentId: string; isSuper: boolean }; sessionId: string; s: any }> {
+  const p = principal(ctx)
+  const sessionId = str(ctx.data && ctx.data.sessionId, 200)
+  if (!sessionId) return { deny: reply(400, { ok: false, error: ERR.BAD_ARGS }) }
   if (p.isSuper) {
-    const s = await loadSession(db, sessionId)
-    return s ? { code: 0, s } : { code: 404 }
+    const s = await loadSession(ctx.db, sessionId)
+    return s ? { p, sessionId, s } : { deny: reply(404, { ok: false, error: ERR.NOT_FOUND }) }
   }
-  const sc = await assertOwnedByAgent(db, p.agentId, sessionId)
-  return sc.ok ? { code: 0, s: sc.session } : { code: sc.error === 'NO_SESSION' ? 404 : 403 }
+  const sc = await assertOwnedByAgent(ctx.db, p.agentId, sessionId)
+  if (sc.ok) return { p, sessionId, s: sc.session }
+  return { deny: sc.error === 'NO_SESSION' ? reply(404, { ok: false, error: ERR.NOT_FOUND }) : reply(403, { ok: false, error: ERR.FORBIDDEN }) }
 }
 
 // SessionView 映射（契约 shared/csAgentDesk.ts·可带额外字段）。openid 由 resolveOpenid 异步补（身份桥接）。
@@ -88,10 +91,10 @@ async function resolveOpenid(db: any, s: any): Promise<string | null> {
   return (got && got.data && got.data.openid) || null
 }
 
-// 坐席接待上限（agentState.limit·未配回默认）。
+// 坐席接待上限（agentState.limit·未配回默认）。读失败上抛——当成「未配」会让 setAgentStatus 把已配上限覆盖成默认值。
 async function agentLimit(db: any, agentId: string): Promise<number> {
-  const got = await db.collection(COLLECTIONS.agentState).doc(agentId).get().catch(() => null)
-  const lim = got && got.data ? Number(got.data.limit) : 0
+  const st = await getDocOrNull(db.collection(COLLECTIONS.agentState).doc(agentId))
+  const lim = st ? Number(st.limit) : 0
   return lim && lim > 0 ? lim : DEFAULT_AGENT_LIMIT
 }
 
@@ -115,15 +118,7 @@ function inboundMsgid(id: unknown): string | undefined {
 }
 
 // 读一条会话：真无档返 null；读失败上抛（不当「没有」·根因#14）。
-async function loadSession(db: any, sessionId: string): Promise<any | null> {
-  try {
-    const got = await db.collection(COLLECTIONS.csSession).doc(sessionId).get()
-    return got && got.data ? got.data : null
-  } catch (e) {
-    if (isDocMissing(e)) return null
-    throw e
-  }
-}
+const loadSession = (db: any, sessionId: string): Promise<any | null> => getDocOrNull(db.collection(COLLECTIONS.csSession).doc(sessionId))
 
 // ── ① listQueue：待接队列（pending 会话·FIFO createdAt 升序·bounded cursor/limit·根因#7）──
 // 待接队列对所有坐席可见（pending 会话无归属·可被任一坐席认领）；分配 scope 只在认领后的读/操作侧生效。
@@ -175,27 +170,20 @@ export async function claimConversation(ctx: Ctx): Promise<any> {
     if (count >= limit) return reply(200, { ok: false, error: 'AT_CAPACITY', limit })
   }
   const now = Date.now()
+  const patch = { agentId: p.agentId, claimedAt: now, updatedAt: now }
   // pending/escalated → active（声明流转·原子幂等：并发已被接走则 moved=false）
-  const r = await transition('csSession', sessionId, ['pending', 'escalated'], 'active', {
-    agentId: p.agentId,
-    claimedAt: now,
-    updatedAt: now,
-  })
+  const r = await transition('csSession', sessionId, ['pending', 'escalated'], 'active', patch)
   if (!r.moved) return reply(200, { ok: false, error: ERR.NOT_CLAIMABLE }) // 非 pending/escalated（已 active/closed 或并发抢先）
-  const fresh = await loadSession(db, sessionId)
-  const openid = fresh ? await resolveOpenid(db, fresh) : null
-  return reply(200, { ok: true, session: toView(fresh, openid) })
+  // 回包＝流转前文档 + 本次写入（字段全已知）：不重读——重读抛错会让已成功的认领回 500
+  const claimed = { ...r.doc, ...patch, status: 'active' }
+  return reply(200, { ok: true, session: toView(claimed, await resolveOpenid(db, claimed)) })
 }
 
 // ── ③ releaseConversation：active → pending 退回待接队列（坐席放手·清 agentId·activeCount 派生自动降）──
 export async function releaseConversation(ctx: Ctx): Promise<any> {
-  const { db, data } = ctx
-  const p = principal(ctx)
-  const sessionId = str(data && data.sessionId, 200)
-  if (!sessionId) return reply(400, { ok: false, error: ERR.BAD_ARGS })
-  const sl = await scopedLoad(db, p, sessionId)
-  if (sl.code) return reply(sl.code, { ok: false, error: sl.code === 404 ? ERR.NOT_FOUND : ERR.FORBIDDEN }) // 分配 scope：只放手自己 claim 的
-  const s = sl.s
+  const g = await scopedSession(ctx) // 分配 scope：只放手自己 claim 的
+  if ('deny' in g) return g.deny
+  const { sessionId } = g
   const now = Date.now()
   const r = await transition('csSession', sessionId, ['active'], 'pending', {
     agentId: null, // 退回队列＝清归属（重回可认领态·activeCount 派生随 status 降）
@@ -207,20 +195,18 @@ export async function releaseConversation(ctx: Ctx): Promise<any> {
 }
 
 // ── ④ sendAgentMessage：坐席回复·经 kit kfSendText（48h 窗口内 send_msg）·出站落 conversations ──
-// 越权发送面（§1.5·根因#3）双闸：① 分配 scope（ownsSession·外包只发自己 claim 的会话）；② 接待窗口
-// （仅 active 态·防对已结束/未接会话越窗发·守卫 kf-send-server-gated 焊 sendAgentMessage 须过此两闸再发）。
+// 越权发送面（§1.5·根因#3）双闸：① 分配 scope（scopedSession → assertOwnedByAgent·外包只发自己 claim 的会话）；
+// ② 接待窗口（仅 active 态·防对已结束/未接会话越窗发）。
 // 发送经 kit 直连收口（2026-07-23 拓扑收编批·17→13）——原 cs/kfSend 独立函数已收编进 kit/wecom.ts，
 // 不再有跨函数 callFunction 接缝；.catch(() => null) 保留为兜底（助手正常契约不抛网络外错误，
 // 但网络层意外异常仍不该反噬发送流程失败判定，同 B1 fail-soft 精神）。
 export async function sendAgentMessage(ctx: Ctx): Promise<any> {
   const { db, data } = ctx
-  const p = principal(ctx)
-  const sessionId = str(data && data.sessionId, 200)
   const text = str(data && data.text, MAX_TEXT)
-  if (!sessionId || !text) return reply(400, { ok: false, error: ERR.BAD_ARGS })
-  const sl = await scopedLoad(db, p, sessionId)
-  if (sl.code) return reply(sl.code, { ok: false, error: sl.code === 404 ? ERR.NOT_FOUND : ERR.FORBIDDEN }) // 分配 scope
-  const s = sl.s
+  if (!text) return reply(400, { ok: false, error: ERR.BAD_ARGS })
+  const g = await scopedSession(ctx)
+  if ('deny' in g) return g.deny
+  const { p, sessionId, s } = g
   if (s.status !== 'active') return reply(200, { ok: false, error: ERR.NOT_ACTIVE }) // 接待窗口：仅 active 可发
   if (!s.externalUserId || !s.openKfId) return reply(200, { ok: false, error: ERR.NO_CHANNEL })
   // 经 kit 直连主动发（48h 窗口内经微信客服 send_msg）；errcode 原样带回便于联调
@@ -265,8 +251,8 @@ export async function sendAgentMessage(ctx: Ctx): Promise<any> {
 //
 // 不直接复用 kit `pageQuery` 的复合游标 `{v,id}` 方案：pageQuery 的 nextCursor 是对象形状，而 getThread
 // 的 wire 契约（`data.cursor` / 回包 `nextCursor`）是纯数字——前端 `rewrite/agent/src/lib/desk.ts`
-// `advanceCursor(current:number, next)` 对非数字 next 直接判 NaN 丢弃、cursor 冻结不前进（golden 契约
-// rw-agent-ui-golden 锁死此数字语义）。把 nextCursor 换成对象会在没有配套改前端的情况下让轮询整体卡死
+// `advanceCursor(current:number, next)` 对非数字 next 直接判 NaN 丢弃、cursor 冻结不前进（agent/tests/desk.test.ts
+// 锁死此数字语义）。把 nextCursor 换成对象会在没有配套改前端的情况下让轮询整体卡死
 // （比原 bug 更坏：原 bug 只丢同值尾部，改坏后连后续所有消息都拉不到），代价远大于收益，故不硬套。
 // 改用等价但契约不变的手写方案——「整组 tie 要么整批进本页、要么整批留到下一轮」：轮询语义天然容许
 // "下一轮把上一轮没发的整批重新查一遍再发全"（不像分页 UI 必须精确衔接下一页、少一条都不行），
@@ -275,12 +261,11 @@ export async function sendAgentMessage(ctx: Ctx): Promise<any> {
 // 查询另加 `orderBy('_id')` 兜底同值内的稳定次序（避免同一批读因排序不确定而使边界判定在不同轮询间漂移）。
 export async function getThread(ctx: Ctx): Promise<any> {
   const { db, data } = ctx
-  const p = principal(ctx)
-  const sessionId = str(data && data.sessionId, 200)
-  if (!sessionId) return reply(400, { ok: false, error: ERR.BAD_ARGS })
-  const sl = await scopedLoad(db, p, sessionId)
-  if (sl.code) return reply(sl.code, { ok: false, error: sl.code === 404 ? ERR.NOT_FOUND : ERR.FORBIDDEN }) // 分配 scope
-  const s = sl.s
+  const g = await scopedSession(ctx)
+  if ('deny' in g) return g.deny
+  const { sessionId, s } = g
+  // 身份桥接读与消息查询互不依赖，先发出与之并行（轮询热路径少一个串行往返）；resolveOpenid 内部已吞读错、不会 reject。
+  const openidP = resolveOpenid(db, s)
   const _ = db.command
   // 增量游标：首拉（无 cursor）从会话建立**前 10 分钟**起（深审 F5——顾客点「转人工」之前打的字往往是真正的
   // 问题描述，坐席须看得到；10 分钟窗兼顾「不整段回溯该顾客历史会话」的 AD 语义）；cursor 有则取其后（轮询取新消息）。
@@ -298,7 +283,7 @@ export async function getThread(ctx: Ctx): Promise<any> {
     .where({ externalUserId: s.externalUserId || '', openKfId: s.openKfId || '', at: _.gt(since) })
     .orderBy('at', 'asc')
     .orderBy('_id', 'asc') // 同 at 值内稳定次序（tie-breaker 边界判定跨轮询一致，不靠底层默认序）
-    .limit(THREAD_LIMIT + 1) // 多查一条判 hasMore（bounded·capacity-reads-bounded）
+    .limit(THREAD_LIMIT + 1) // 多查一条判 hasMore（bounded）
     .get() // 读失败上抛（网关 500）——不当空消息流（根因#14）
   const raw: any[] = (res && res.data) || []
   const hasMore = raw.length > THREAD_LIMIT
@@ -345,12 +330,11 @@ export async function getThread(ctx: Ctx): Promise<any> {
       hasMedia: !!(m.mediaId || m.fileId), // B5：坐席台据此渲染图片气泡（未加载=mediaId·已加载过=fileId）
     }))
   const nextCursor = list.length ? list[list.length - 1].at : Number(data && data.cursor) || undefined
-  const openid = await resolveOpenid(db, s)
-  return reply(200, { ok: true, session: toView(s, openid), messages, nextCursor })
+  return reply(200, { ok: true, session: toView(s, await openidP), messages, nextCursor })
 }
 
 // ── ⑤.5 getMediaUrl：顾客发图坐席可见（B5·图片消息下载延迟到坐席首次请求·平台接缝单点#12）──
-// 双闸：① 分配 scope（scopedLoad→assertOwnedByAgent·外包只能拉自己在接会话的图）；② 消息真属于本会话
+// 双闸：① 分配 scope（scopedSession→assertOwnedByAgent·外包只能拉自己在接会话的图）；② 消息真属于本会话
 // （防跨会话拉图——scope 闸只护「会话本身」，这里再核「消息-会话」对应关系：msgId 对应消息行须与本会话
 // 同一 externalUserId+openKfId，不能借自己名下会话号偷看别会话的图）。
 // 缓存命中（消息行已有 fileId·云存储缓存）直接换临时 URL，不重新下载；否则经 kit 直连收口（2026-07-23
@@ -359,13 +343,11 @@ export async function getThread(ctx: Ctx): Promise<any> {
 // fileId → 换临时 URL。下载/上传失败经 notifyAlert 留痕（动作类失败禁静默·根因#14）；不重试风暴（前端手动重试）。
 export async function getMediaUrl(ctx: Ctx): Promise<any> {
   const { db, cloud, data } = ctx
-  const p = principal(ctx)
-  const sessionId = str(data && data.sessionId, 200)
   const msgId = str(data && data.msgId, 200)
-  if (!sessionId || !msgId) return reply(400, { ok: false, error: ERR.BAD_ARGS })
-  const sl = await scopedLoad(db, p, sessionId)
-  if (sl.code) return reply(sl.code, { ok: false, error: sl.code === 404 ? ERR.NOT_FOUND : ERR.FORBIDDEN }) // 分配 scope
-  const s = sl.s
+  if (!msgId) return reply(400, { ok: false, error: ERR.BAD_ARGS })
+  const g = await scopedSession(ctx)
+  if ('deny' in g) return g.deny
+  const { sessionId, s } = g
   const docId = INBOUND_ID_PREFIX + msgId
   const got = await db.collection(COLLECTIONS.conversations).doc(docId).get().catch(() => null)
   const row = got && got.data
@@ -430,13 +412,10 @@ export async function setAgentStatus(ctx: Ctx): Promise<any> {
 
 // ── ⑦ escalateToMerchant：active → escalated·甩回商户超管（外包最小权只能升不能拍板·§1 定稿）──
 export async function escalateToMerchant(ctx: Ctx): Promise<any> {
-  const { db, data } = ctx
-  const p = principal(ctx)
-  const sessionId = str(data && data.sessionId, 200)
-  if (!sessionId) return reply(400, { ok: false, error: ERR.BAD_ARGS })
-  const sl = await scopedLoad(db, p, sessionId)
-  if (sl.code) return reply(sl.code, { ok: false, error: sl.code === 404 ? ERR.NOT_FOUND : ERR.FORBIDDEN }) // 分配 scope
-  const s = sl.s // 分配 scope：只升自己 claim 的
+  const { db } = ctx
+  const g = await scopedSession(ctx) // 分配 scope：只升自己 claim 的
+  if ('deny' in g) return g.deny
+  const { sessionId } = g
   const now = Date.now()
   // active → escalated（保留 agentId＝记录谁升的·activeCount 派生随 status 降·商户可 claim 重接）
   const r = await transition('csSession', sessionId, ['active'], 'escalated', { updatedAt: now })
@@ -459,13 +438,10 @@ export async function escalateToMerchant(ctx: Ctx): Promise<any> {
 
 // ── ⑧ closeConversation：pending/active/escalated → closed（终态·触 CSAT 评分气泡·会话结束）──
 export async function closeConversation(ctx: Ctx): Promise<any> {
-  const { db, data } = ctx
-  const p = principal(ctx)
-  const sessionId = str(data && data.sessionId, 200)
-  if (!sessionId) return reply(400, { ok: false, error: ERR.BAD_ARGS })
-  const sl = await scopedLoad(db, p, sessionId)
-  if (sl.code) return reply(sl.code, { ok: false, error: sl.code === 404 ? ERR.NOT_FOUND : ERR.FORBIDDEN }) // 分配 scope
-  const s = sl.s // 分配 scope：pending 仅超管可关（外包非 owner 拒）
+  const { db } = ctx
+  const g = await scopedSession(ctx) // 分配 scope：pending 仅超管可关（外包非 owner 拒）
+  if ('deny' in g) return g.deny
+  const { p, sessionId, s } = g
   const now = Date.now()
   const wasEngaged = s.status === 'active' || s.status === 'escalated' // 真人接待过→结束时发 CSAT 提示
   // pending/active/escalated → closed（终态·声明流转·幂等：已 closed 则 moved=false）
@@ -528,17 +504,14 @@ export async function listMyActive(ctx: Ctx): Promise<any> {
 
 // ── ⑩ getSessionCustomer360：按会话看对应客户 360（follow-up ①·外包唯一 360 读路径·§1.5 双闸）──
 // RBAC 收窄后外包无 customer:view、直调 getCustomer360 已 403（防批量导出）——外包看 360 只能走本 scoped 路径：
-// ① 分配 scope（scopedLoad→assertOwnedByAgent·只看自己 claim 的会话·超管数据控制者 bypass）；
+// ① 分配 scope（scopedSession→assertOwnedByAgent·只看自己 claim 的会话·超管数据控制者 bypass）；
 // ② 数据共享同意闸（assertDataShareConsent·客户未同意第三方访问即拒·fail-closed·读侧真实消费者·B3.3）。
-// 留痕：FORCE_AUDIT 含本 action（^get 被 shouldAudit 跳过·破例强制留痕·守卫 cs-360-read-audited）。
+// 留痕：FORCE_AUDIT 含本 action（^get 被 shouldAudit 跳过·破例强制留痕）。
 export async function getSessionCustomer360(ctx: Ctx): Promise<any> {
-  const { db, data } = ctx
-  const p = principal(ctx)
-  const sessionId = str(data && data.sessionId, 200)
-  if (!sessionId) return reply(400, { ok: false, error: ERR.BAD_ARGS })
-  const sl = await scopedLoad(db, p, sessionId)
-  if (sl.code) return reply(sl.code, { ok: false, error: sl.code === 404 ? ERR.NOT_FOUND : ERR.FORBIDDEN }) // 分配 scope
-  const s = sl.s
+  const { db } = ctx
+  const g = await scopedSession(ctx)
+  if ('deny' in g) return g.deny
+  const { p, s } = g
   const openid = await resolveOpenid(db, s)
   if (!openid) return reply(200, { ok: false, error: ERR.NO_BRIDGE }) // 身份桥接未建（kfIdentity 无映射）·如实回·前端有提示
   if (!p.isSuper) {

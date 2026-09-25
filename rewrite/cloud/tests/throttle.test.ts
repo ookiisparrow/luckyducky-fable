@@ -1,4 +1,4 @@
-// 黄金 kit-security §F：频控与锁定（防爆破·并发正确性·两系列独立）（守卫 rw-kit-golden）。
+// 黄金 kit-security §F：频控与锁定（防爆破·并发正确性·两系列独立）。
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import { control } from 'wx-server-sdk'
 import { throttleFail, throttleLocked, throttleReset, throttleHit, withRateLimit, getDb } from '../src/kit'

@@ -13,7 +13,7 @@
 //   ④ [LD_RECALL]/[LD_HEARTBEAT] 结构化日志行形状（控制台按关键字配日志告警——前缀即格式契约，算 A 不算修饰）；
 //   ⑤ 心跳 red>0 分档（红/绿两条文案 + HEARTBEAT_RED/GREEN 码 + green/red 数字真透传·源码 L91-93/L104）；
 //   ⑥ fail-soft 铁律（推送抛错/summary 为 null 一律不反噬·源码「绝不抛错」注释）。
-// C 类不立（等价变异杀不动）：readAlertSettings 的 `.catch(() => null)`→`() => undefined`——
+// C 类不立（等价变异杀不动）：pushIfConfigured 读 settings 的 `.catch(() => null)`→`() => undefined`——
 //   下游 `(got && got.data) || {}` 对 null/undefined 同判 falsy，行为逐位相同，等价变异。
 import { readFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
@@ -99,12 +99,20 @@ describe('alertOnHigh:false 防双告警防递归（本函数已 alert 过·reco
   })
 })
 
-describe('readAlertSettings 单源（三路 notify 共用一次读·减法抽取钉）', () => {
-  it('大白话：settings 只在 helper 读一次，告警/召回/心跳三处都走它（再抄一份就会漏空 webhook / 静音）', () => {
+describe('pushIfConfigured 单源（三路 notify 共用一个推送入口·减法抽取钉）', () => {
+  it('大白话：settings 只读一处、pushBotAlert 只调一处，告警/召回/心跳三处都走它（再抄一份就会漏空 webhook / 静音）', () => {
     const src = stripComments(readFileSync(OBSERVE_SRC, 'utf8'))
-    expect(src.match(/async function readAlertSettings\s*\(/g)?.length).toBe(1)
-    expect(src.match(/await readAlertSettings\(\)/g)?.length).toBe(3)
+    expect(src.match(/async function pushIfConfigured\s*\(/g)?.length).toBe(1)
+    expect(src.match(/pushIfConfigured\(\{/g)?.length).toBe(3)
     expect(src.match(/COLLECTIONS\.adminConfig\)\.doc\(['"]settings['"]\)\.get\(\)/g)?.length).toBe(1)
+    expect(src.match(/pushBotAlert\(/g)?.length).toBe(1)
+  })
+
+  it('大白话：逐事件静音只管告警——召回/心跳码被写进 alertEvents=false 也照推（运营通知不是告警，关不掉）', async () => {
+    seedSettings({ alertEvents: { RECALL_SUMMARY: false, HEARTBEAT_GREEN: false } })
+    await captureLines(() => notifyRecall({ unpaid: 1 }))
+    await captureLines(() => notifyHeartbeat({ green: 1, red: 0 }))
+    expect(bp.calls.map((c) => c.alert.code)).toEqual(['RECALL_SUMMARY', 'HEARTBEAT_GREEN'])
   })
 })
 

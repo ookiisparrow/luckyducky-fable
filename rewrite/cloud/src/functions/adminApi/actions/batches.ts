@@ -22,7 +22,10 @@ async function fetchAll(makeQuery: () => any, pageSize = 200): Promise<any[]> {
 export async function listBatches({ db, data }: Ctx) {
   const courseId = String(data.courseId || '')
   if (!courseId) return reply(400, { ok: false, error: 'NO_COURSE_ID' })
-  const all = await fetchAll(() => db.collection('qrcodes').where({ courseId }))
+  // 无 orderBy 时服务端不保证各页同序，skip 翻页会跨页漏/重；_id 唯一，是全序。
+  const all = await fetchAll(() =>
+    db.collection('qrcodes').where({ courseId }).orderBy('_id', 'asc').field({ batchId: true, status: true, createdAt: true })
+  )
   const map: Record<string, any> = {}
   for (const q of all) {
     const b = (map[q.batchId] = map[q.batchId] || { batchId: q.batchId, total: 0, activated: 0, createdAt: q.createdAt || 0 })
@@ -46,17 +49,8 @@ function genCode(): string {
 // 同课同分钟生成两批撞同 batchId → 后台按 batchId 合并、批次追踪/核销混乱。改北京时间到秒 + 随机后缀，
 // 同课同秒并发两批也必不同（batches.ts 按存库 batchId 字段分组、不解析串，加后缀不破坏分组）。
 export function makeBatchId(courseId: string, now: number): string {
-  const d = new Date(now + 8 * 3600 * 1000)
-  const p = (n: number) => String(n).padStart(2, '0')
-  const ts =
-    String(d.getUTCFullYear()) +
-    p(d.getUTCMonth() + 1) +
-    p(d.getUTCDate()) +
-    p(d.getUTCHours()) +
-    p(d.getUTCMinutes()) +
-    p(d.getUTCSeconds())
-  const rand = randomBytes(3).toString('hex')
-  return `b-${courseId}-${ts}-${rand}`
+  const ts = new Date(now + 8 * 3600 * 1000).toISOString().slice(0, 19).replace(/\D/g, '')
+  return `b-${courseId}-${ts}-${randomBytes(3).toString('hex')}`
 }
 
 /**
@@ -98,14 +92,10 @@ export async function generateQrcodes(
   return { ok: true, batchId, count: codes.length, codes }
 }
 
+// 入参校验与钳 500 只在 generateQrcodes 一处（读库前就回 BAD_ARGS）。
 export async function createBatch({ db, data }: Ctx) {
-  const courseId = String(data.courseId || '')
-  const rawCount = parseInt(data.count, 10) // 漏传/非法不再静默成 1（审核批次B）
-  if (!courseId || !Number.isInteger(rawCount) || rawCount < 1) return reply(400, { ok: false, error: 'BAD_ARGS' })
-  const count = Math.min(500, rawCount)
-  // 域内直调 generateQrcodes（同进程·收编前经 cloud.callFunction 互调独立函数·2026-07-23 拓扑收编批）
-  const r = await generateQrcodes(db, courseId, count)
-  if (!r.ok) return reply(400, { ok: false, error: r.error || 'GEN_FAIL' })
+  const r = await generateQrcodes(db, String(data.courseId || ''), data.count)
+  if (!r.ok) return reply(400, { ok: false, error: r.error })
   return reply(200, { ok: true, batchId: r.batchId, codes: r.codes })
 }
 

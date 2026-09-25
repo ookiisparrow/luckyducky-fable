@@ -15,18 +15,20 @@ export async function runInspect(_ctx: Ctx) {
 /** 最新体检报告 + 未处理异常计数（体检面板首屏）。 */
 export async function getInspectStatus({ db }: Ctx) {
   const _ = db.command
-  const latest = await db
-    .collection(COLLECTIONS.inspectRuns)
-    .where({ startedAt: _.gt(0) }) // 排除 A5 心跳档（startedAt:0·非体检记录）·读侧意图显式、不靠排序碰巧（存量真巡检 startedAt 全 >0·零迁移）
-    .orderBy('startedAt', 'desc')
-    .limit(1)
-    .get()
-    .then((r: any) => (r.data && r.data[0]) || null)
-  const openAnomalies = await db
-    .collection(COLLECTIONS.anomalies)
-    .where({ resolved: false })
-    .count()
-    .then((r: any) => r.total || 0)
+  const [latest, openAnomalies] = await Promise.all([
+    db
+      .collection(COLLECTIONS.inspectRuns)
+      .where({ startedAt: _.gt(0) }) // 排除 A5 心跳档（startedAt:0·非体检记录）·读侧意图显式、不靠排序碰巧（存量真巡检 startedAt 全 >0·零迁移）
+      .orderBy('startedAt', 'desc')
+      .limit(1)
+      .get()
+      .then((r: any) => (r.data && r.data[0]) || null),
+    db
+      .collection(COLLECTIONS.anomalies)
+      .where({ resolved: false })
+      .count()
+      .then((r: any) => r.total || 0),
+  ])
   return reply(200, { ok: true, latest, openAnomalies })
 }
 
@@ -39,19 +41,21 @@ export async function listAnomalies({ db, data }: Ctx) {
   if (d.resolved === true || d.resolved === false) filter.resolved = d.resolved
   if (d.kind) filter.kind = String(d.kind)
   const limit = Math.min(Number(d.limit) || 50, 200)
-  const list = await db
-    .collection(COLLECTIONS.anomalies)
-    .where(filter)
-    .orderBy('lastSeen', 'desc')
-    .limit(limit)
-    .get()
-    .then((r: any) => r.data)
-  const total = await db
-    .collection(COLLECTIONS.anomalies)
-    .where(filter)
-    .count()
-    .then((r: any) => (typeof r.total === 'number' ? r.total : null))
-    .catch(() => null)
+  const [list, total] = await Promise.all([
+    db
+      .collection(COLLECTIONS.anomalies)
+      .where(filter)
+      .orderBy('lastSeen', 'desc')
+      .limit(limit)
+      .get()
+      .then((r: any) => r.data),
+    db
+      .collection(COLLECTIONS.anomalies)
+      .where(filter)
+      .count()
+      .then((r: any) => (typeof r.total === 'number' ? r.total : null))
+      .catch(() => null),
+  ])
   return reply(200, { ok: true, list, limit, total })
 }
 
@@ -70,8 +74,7 @@ export async function resolveAnomaly({ db, data, agentId }: Ctx) {
 const AUDIT_DEFAULT_LIMIT = 30 // 审计日志默认页大小（同订单/售后体量·bounded·根因#7）
 
 // 审计日志读出口（批 B6·操作审计#4·根因#3 信任边界可追溯）：kit/audit.ts::recordAudit 已全量写 auditLog，
-// 此前唯一读路径是控制台裸翻数据库——本 action 补读出口。只读 auditLog（写侧单点仍在 kit/audit.ts，见
-// 该文件头注 admin-actions-audited 守卫）。未登记 ACTION_CAPS→默认拒 admin:write＝仅超管（同 listAnomalies/
+// 此前唯一读路径是控制台裸翻数据库——本 action 补读出口。只读 auditLog（写侧单点仍在 kit/audit.ts）。未登记 ACTION_CAPS→默认拒 admin:write＝仅超管（同 listAnomalies/
 // getConfigChecklist 等「系统组」action 先例——不复用 customer:view，那是「客户是谁」越权面，这里是「谁动过
 // 系统」，权限语义不同）。cursor 分页复用 kit/paging.ts pageQuery（同 listCsatEntries 样板，无新分页实现）。
 //
@@ -92,21 +95,14 @@ export async function listAudit({ db, data }: Ctx) {
   const toMs = Number(d.to)
   if (Number.isFinite(toMs)) filter.ts = _.lt(toMs)
   const paged = await pageQuery(db, COLLECTIONS.auditLog, filter, 'ts', d, AUDIT_DEFAULT_LIMIT)
-  let list = paged.list
-  let hasMore = paged.hasMore
-  let nextCursor = paged.nextCursor
   const fromMs = Number(d.from)
-  if (Number.isFinite(fromMs)) {
-    const kept = list.filter((r: any) => (Number(r.ts) || 0) >= fromMs)
-    if (kept.length < list.length) {
-      // 本页已触到 from 下界——后续页只会更早，全部落在窗口外，就此收口不再续页
-      hasMore = false
-      nextCursor = null
-    }
-    list = kept
-  }
+  const inWindow = Number.isFinite(fromMs) ? paged.list.filter((r: any) => (Number(r.ts) || 0) >= fromMs) : paged.list
+  // 本页已触到 from 下界——后续页只会更早，全部落在窗口外，就此收口不再续页
+  const cut = inWindow.length < paged.list.length
+  const hasMore = paged.hasMore && !cut
+  const nextCursor = cut ? null : paged.nextCursor
   const actionPrefix = String(d.actionPrefix || '').trim()
-  if (actionPrefix) list = list.filter((r: any) => String(r.action || '').startsWith(actionPrefix))
+  const list = actionPrefix ? inWindow.filter((r: any) => String(r.action || '').startsWith(actionPrefix)) : inWindow
   const entries = list.map((r: any) => ({
     id: String(r._id || ''),
     action: String(r.action || ''),

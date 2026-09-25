@@ -12,7 +12,13 @@ export async function listCheckpoints({ db, data }: Ctx) {
   const courseId = str(data && data.courseId, 64)
   const where: any = { type: 'def' }
   if (courseId) where.courseId = courseId
-  const r = await db.collection('checkpoints').where(where).limit(DEF_SCAN).get()
+  // 元档 rev 供前端做 baseRev（乐观并发基线·课程级 CAS 元档 defmeta:<courseId>）：单课查时读该课元档 rev；
+  // 无 courseId（全部课·customer360 不走此形状）时无单一元档、rev 省 0。where type:'def' 天然排除 defmeta。
+  const coll = db.collection('checkpoints')
+  const [r, m] = await Promise.all([
+    coll.where(where).limit(DEF_SCAN).get(),
+    courseId ? coll.doc('defmeta:' + courseId).get().catch(() => null) : null,
+  ])
   const list = ((r && r.data) || [])
     .map((d: any) => ({
       courseId: d.courseId,
@@ -22,14 +28,7 @@ export async function listCheckpoints({ db, data }: Ctx) {
       order: Number(d.order) || 0,
     }))
     .sort((a: any, b: any) => a.order - b.order)
-  // 元档 rev 供前端做 baseRev（乐观并发基线·课程级 CAS 元档 defmeta:<courseId>）：单课查时读该课元档 rev；
-  // 无 courseId（全部课·customer360 不走此形状）时无单一元档、rev 省 0。where type:'def' 天然排除 defmeta。
-  let rev = 0
-  if (courseId) {
-    const m = await db.collection('checkpoints').doc('defmeta:' + courseId).get().catch(() => null)
-    rev = m && m.data ? Number((m.data as any).rev) || 0 : 0
-  }
-  return reply(200, { ok: true, list, rev })
+  return reply(200, { ok: true, list, rev: Number(m?.data?.rev) || 0 })
 }
 
 // 保存某门课的关键节点定义（整课覆盖式：upsert 传入节点 + 删本课不在列表里的旧节点·保持策展集同步；只动 def·不碰用户 sub 提交）
@@ -109,9 +108,9 @@ export async function saveCheckpoints({ db, data }: Ctx) {
     .where({ type: 'def', courseId })
     .limit(DEF_SCAN)
     .get()
-    .catch(() => ({ data: [] }))
+    .catch(() => null)
   const failedIds: string[] = []
-  for (const d of (old && old.data) || []) {
+  for (const d of old?.data || []) {
     if (!keepIds.has(d._id)) {
       const err = await db
         .collection('checkpoints')
@@ -122,8 +121,9 @@ export async function saveCheckpoints({ db, data }: Ctx) {
       if (err) failedIds.push(d._id)
     }
   }
-  if (failedIds.length) {
-    await notifyAlert('anomaly', 'saveCheckpoints', 'GC_REMOVE_FAIL', { failedIds, courseId })
+  // 扫描失败≠没有旧节点：删没删净未知，按 GC 未删净报（不另起错误码——前端只在 ok/GC_REMOVE_FAIL 时刷 baseRev）。
+  if (!old || failedIds.length) {
+    await notifyAlert('anomaly', 'saveCheckpoints', 'GC_REMOVE_FAIL', { failedIds, courseId, scanFailed: !old })
     // rev 已递增（CAS 抢占成功·节点已 upsert）——回给前端刷新 baseRev，否则「重存收敛」会撞自己刚 bump 的 rev → DRAFT_CONFLICT
     return reply(200, { ok: false, error: 'GC_REMOVE_FAIL', failedIds, rev: nextRev })
   }

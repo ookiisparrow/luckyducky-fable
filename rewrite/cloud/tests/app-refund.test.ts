@@ -1,4 +1,4 @@
-// 黄金 orders-money·applyRefund/refundCallback/confirmReceive/订单读 节（守卫 rw-money3-golden）。
+// 黄金 orders-money·applyRefund/refundCallback/confirmReceive/订单读 节。
 import { describe, it, expect, beforeEach } from 'vitest'
 import { control } from 'wx-server-sdk'
 import { main as app } from '../src/functions/app/index'

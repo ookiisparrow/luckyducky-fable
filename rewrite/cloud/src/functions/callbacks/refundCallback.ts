@@ -1,5 +1,5 @@
 import { toFen, COLLECTIONS } from '@ldrw/shared'
-import { defineNotifyCallback, notifyAlert, restoreStock } from '../../kit'
+import { defineNotifyCallback, notifyAlert, restoreStock, isDocMissing } from '../../kit'
 
 // 退款结果回调（黄金 orders-money·refundCallback 节）。防伪/ACK/id 提取由框架强制。
 // 核验 fail-closed：成功通知的订单号+金额须与售后单一致，否则不置已退款、留 refundMismatch 痕+告警；
@@ -13,19 +13,27 @@ export const main = defineNotifyCallback<any>({
   onNotify: async ({ db, id, event: e }) => {
     // id = 微信回传 out_refund_no。本批解耦（根因#12·案 A）：退款单号不再等于内部 _id（含中文/超长者被规整），
     // 故先按售后单 outRefundNo 字段反查；回退 .doc(id) 兼容纯 ASCII 老单（out_refund_no===_id·无 outRefundNo 字段）。
+    // 读失败≠没有这张售后单（病根#14）：告警后抛——不 ACK，微信重推时重跑自愈；当没查到 ACK 掉，钱已退、售后单却一直停在 approved。
     const byField = await db
       .collection(COLLECTIONS.afterSales)
       .where({ outRefundNo: id })
       .limit(1)
       .get()
-      .catch(() => ({ data: [] }))
+      .catch(async (err: unknown) => {
+        await notifyAlert('money', 'refundCallback', 'AFTERSALE_READ_FAIL', { id })
+        throw err
+      })
     let as = (byField.data && byField.data[0]) || null
     if (!as) {
       const got = await db
         .collection(COLLECTIONS.afterSales)
         .doc(id)
         .get()
-        .catch(() => null)
+        .catch(async (err: unknown) => {
+          if (isDocMissing(err)) return null
+          await notifyAlert('money', 'refundCallback', 'AFTERSALE_READ_FAIL', { id })
+          throw err
+        })
       as = (got && got.data) || null
     }
     if (!as) {
@@ -93,13 +101,16 @@ export const main = defineNotifyCallback<any>({
         },
       })
     if (grab.stats && grab.stats.updated === 1) {
-      // 回补仅限未发货（paid）：已发货实物在客户手中，回补＝凭空多一件超卖
+      // 回补仅限未发货（paid）：已发货实物在客户手中，回补＝凭空多一件超卖。读不到订单就判不了该不该回补，
+      // 而售后单已置 refunded、重推也走不回这里——只能告警人工补。
       const ord = await db
         .collection(COLLECTIONS.orders)
         .doc(as.orderId)
         .get()
         .catch(() => null)
-      if (ord && ord.data && ord.data.status === 'paid') {
+      if (!ord || !ord.data) {
+        await notifyAlert('money', 'refundCallback', 'RESTOCK_SKIPPED_ORDER_READ_FAIL', { asId, orderId: as.orderId })
+      } else if (ord.data.status === 'paid') {
         await restoreStock([{ productId: as.productId, spec: as.spec || '', qty: as.qty }])
       }
       // 订单留对账痕（失败不阻塞 ACK：售后单是退款状态单一来源）。key 用 lineId（回退 productId，

@@ -1,4 +1,4 @@
-// 黄金 kit-security §C/§E/§J：fail-closed 身份闸 / 服务端调用判定 / 输入边界（守卫 rw-kit-golden）。
+// 黄金 kit-security §C/§E/§J：fail-closed 身份闸 / 服务端调用判定 / 输入边界。
 import { describe, it, expect, beforeEach } from 'vitest'
 import { control } from 'wx-server-sdk'
 import { withOpenId, withAdminGate, isServerCall, str } from '../src/kit'

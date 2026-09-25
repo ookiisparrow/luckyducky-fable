@@ -1,15 +1,15 @@
 import { reply, type Ctx } from '../lib'
-import { transition, applyStockMoves, listMaterialDocs, pageQuery, notifyAlert } from '../../../kit'
+import { transition, applyStockMoves, listMaterialDocs, pageQuery, notifyAlert, getDocOrNull } from '../../../kit'
 import { COLLECTIONS } from '@ldrw/shared'
 import { asFen, PURCHASE_ORDER_TRANSITIONS } from '@ldrw/shared'
 
 // 进销存车道 A·采购线（见 docs/业务逻辑架构.md 链 12·门5 文件级隔离：本文件=车道 A）。
 // 状态机 draft→ordered→received（+draft/ordered→cancelled·声明表 shared/scm.spec.ts·门2 transition 收口·
-// 守卫 order-transitions-declared 按 scm* 前缀自动纳管本文件）；received 首次流转绑入库副作用（门1
+// 守卫 rw-status-transitions-declared 对账）；received 首次流转绑入库副作用（门1
 // applyStockMoves·docType purchase_in·确定性流水幂等——重放 moved=false 直接返回已入库、不双记账）。
 // 金额全链整数分（unitPriceFen/totalFen·totalFen 服务端算不信前端·根因#4）；数量正整数（守卫 scm-uom-integer 纪律）。
 // RBAC：不登记 ACTION_CAPS → 默认拒 admin:write＝仅超管（外包坐席天然无权·蓝图门5）；写类 action 自动审计（shouldAudit）。
-// 集合名用字面量 'purchaseOrders'（known-collections-only 在册）——order-transitions-declared 靠字面量归属 status 写入点。
+// 集合名用字面量 'purchaseOrders'：rw-status-transitions-declared 靠字面量或 COLLECTIONS.x 归属 status 写入点，普通变量会逃出对账。
 
 const MAX_LINES = 50 // 单据行数上限（bounded·一张采购单不至于超·防垃圾大单）
 
@@ -72,8 +72,9 @@ export async function savePurchase({ db, data, agentId }: Ctx) {
   // 供应商须存在且是厂家（织女走车道 B 外协单·不混）
   const supplierId = String(data.supplierId || '')
   if (!supplierId) return reply(400, { ok: false, error: 'BAD_SUPPLIER' })
-  const sup = await db.collection(COLLECTIONS.suppliers).doc(supplierId).get().catch(() => null)
-  if (!sup || !sup.data || sup.data.type !== 'factory') return reply(400, { ok: false, error: 'BAD_SUPPLIER' })
+  // 读失败照抛（网关 500）——库挂≠供应商不对（根因#14）
+  const sup = await getDocOrNull(db.collection(COLLECTIONS.suppliers).doc(supplierId))
+  if (!sup || sup.type !== 'factory') return reply(400, { ok: false, error: 'BAD_SUPPLIER' })
 
   const v = await validateLines(data.lines)
   if (!v.ok) return reply(400, { ok: false, error: v.error, materialId: v.materialId })
@@ -83,11 +84,12 @@ export async function savePurchase({ db, data, agentId }: Ctx) {
   const purchaseId = String(data.purchaseId || '')
   const coll = db.collection('purchaseOrders')
   if (purchaseId) {
-    // 条件更新原子锁草稿态（where 含 status——ordered/received/cancelled 单据不可改·防改已入库单账目漂移）
-    const r = await coll.where({ _id: purchaseId, status: 'draft' }).update({ data: fields }).catch(() => ({ stats: { updated: 0 } }))
+    // 条件更新原子锁草稿态（where 含 status——ordered/received/cancelled 单据不可改·防改已入库单账目漂移）。
+    // 写异常照抛（网关 500）——写挂≠没命中草稿
+    const r = await coll.where({ _id: purchaseId, status: 'draft' }).update({ data: fields })
     if (!r.stats || r.stats.updated !== 1) {
-      const got = await coll.doc(purchaseId).get().catch(() => null)
-      if (!got || !got.data) return reply(404, { ok: false, error: 'NO_PURCHASE' })
+      const got = await getDocOrNull(coll.doc(purchaseId))
+      if (!got) return reply(404, { ok: false, error: 'NO_PURCHASE' })
       return reply(409, { ok: false, error: 'NOT_DRAFT' })
     }
     return reply(200, { ok: true, purchaseId, totalFen: v.totalFen })

@@ -1,4 +1,4 @@
-// 黄金 kit-security §E：回调防伪由框架强制（守卫 rw-kit-golden）。
+// 黄金 kit-security §E：回调防伪由框架强制。
 import { describe, it, expect, beforeEach } from 'vitest'
 import { control } from 'wx-server-sdk'
 import { defineNotifyCallback } from '../src/kit'

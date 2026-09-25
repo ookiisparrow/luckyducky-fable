@@ -1,4 +1,4 @@
-// 黄金 admin-misc §二（公开目录读）+ productListed（只下发在售）+ learning-content §九（守卫 rw-user-catalog-golden）。
+// 黄金 admin-misc §二（公开目录读）+ productListed（只下发在售）+ learning-content §九。
 // 批1·列表瘦身（getProducts 只下发 cover·images[] 收窄进 getProductDetail）。
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import cloud, { control } from 'wx-server-sdk'

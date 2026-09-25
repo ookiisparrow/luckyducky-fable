@@ -2,7 +2,7 @@ import { getDb } from './db'
 import { alert } from './observe'
 import { COLLECTIONS, anomalyFingerprint, type AnomalyKind, type AnomalySeverity } from '@ldrw/shared'
 
-// bug 收集器地基（运行期观测·防治静默 bug·守卫 rw-anomaly-record-golden）：四路来源（服务端异常/
+// bug 收集器地基（运行期观测·防治静默 bug）：四路来源（服务端异常/
 // 业务不变量违反/关键流程失败/客户端错误）统一落库口。北极星＝把没抛异常/没告警/没人投诉的失败留成痕。
 // 三条铁律：① 指纹去重（确定性 _id·根因#1 撞键即幂等）——同一 bug 反复发只累加 count 不刷屏；
 // ② fail-soft——绝不抛错（可观测性不反噬主流程，同 recordAudit）；③ 对业务集合零写入——只写 anomalies

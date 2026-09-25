@@ -2,7 +2,7 @@ import { toFen, fenToYuan, asFen, PAID_ORDER_STATUSES } from '@ldrw/shared'
 import type { CustomerPanelProvider } from '../types'
 
 // 画像 rollup 板块（B1.3·铁律三）：坐席看某客人的总消费/单数/激活与进课/最近活跃——从 orders/activations/events
-// 派生（各查 bounded·capacity-reads-bounded·防大客户拖垮）。与看板 getDashboard 的全站聚合是不同切口
+// 派生（各查 bounded·防大客户拖垮）。与看板 getDashboard 的全站聚合是不同切口
 // （这里按单个 openid·小集合），单源各表、不抽公共件（Rule of Three 未到·CLAUDE.md）。
 const ORDER_LIMIT = 200
 const ACT_LIMIT = 100

@@ -1,4 +1,4 @@
-// 黄金 kit-security §G：分页协议（游标式·limit 钳制·属主隔离）（守卫 rw-kit-golden）。
+// 黄金 kit-security §G：分页协议（游标式·limit 钳制·属主隔离）。
 import { describe, it, expect, beforeEach } from 'vitest'
 import fc from 'fast-check'
 import { control } from 'wx-server-sdk'

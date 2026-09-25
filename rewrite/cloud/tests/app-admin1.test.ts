@@ -1,4 +1,4 @@
-// 黄金 kit-security §C/§D/§F/§H + admin-misc §三（adminApi 鉴权底座）（守卫 rw-admin1-golden）。
+// 黄金 kit-security §C/§D/§F/§H + admin-misc §三（adminApi 鉴权底座）。
 import { describe, it, expect, beforeEach, afterEach } from 'vitest'
 import { control } from 'wx-server-sdk'
 import { main as adminApi, registries } from '../src/functions/adminApi/index'
