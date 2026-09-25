@@ -67,16 +67,16 @@ async function reload() {
   const [r, c] = await Promise.all([listOrders(tab.value, undefined, 20, activeQ.value), orderCounts()])
   if (listGen.isStale(my)) return // 已切别标签/搜索·丢弃过期列表（防高亮标签与内容错配·由更新的 reload 负责复位 reloading）
   reloading.value = false // 本次是最新·加载完成
-  if ((r as any).error === 'SESSION_LOST') return
-  rows.value = r.ok ? mapOrderRows((r as any).list) : []
-  cursor.value = r.ok ? (r as any).nextCursor : null
-  hasMore.value = !!(r.ok && (r as any).hasMore)
+  if (r.error === 'SESSION_LOST') return
+  rows.value = r.ok ? mapOrderRows(r.list) : []
+  cursor.value = r.ok ? r.nextCursor : null
+  hasMore.value = !!(r.ok && r.hasMore)
   if (selectedIds.value.length) {
     const vis = new Set(rows.value.map((x) => x.id))
     selectedIds.value = selectedIds.value.filter((id) => vis.has(id))
   }
-  if (c.ok && (c as any).counts) counts.value = (c as any).counts as Record<string, number>
-  countsPartial.value = c.ok ? !!(c as any).partial : true // 计数请求本身失败也按不可信处理（不误显陈旧/占位数字）
+  if (c.ok && c.counts) counts.value = c.counts
+  countsPartial.value = c.ok ? !!c.partial : true // 计数请求本身失败也按不可信处理（不误显陈旧/占位数字）
   message.value = r.ok ? '' : '加载失败：' + orderErrorText(r.error)
 }
 
@@ -91,9 +91,9 @@ async function more() {
     return
   }
   moreErr.value = ''
-  rows.value = appendNew(rows.value, mapOrderRows((r as any).list))
-  cursor.value = (r as any).nextCursor
-  hasMore.value = !!(r as any).hasMore
+  rows.value = appendNew(rows.value, mapOrderRows(r.list))
+  cursor.value = r.nextCursor
+  hasMore.value = !!r.hasMore
 }
 
 function pickTab(k: string) {
@@ -124,7 +124,7 @@ function openDrawer(row: OrderRowVM, mode: 'ship' | 'view') {
   drawer.value = { row, mode, company: row.company || COMPANIES[0], trackingNo: row.trackingNo || '', acts: null }
   void getOrderDetail(row.id).then((r) => {
     if (drawer.value?.row.id !== row.id) return
-    if (r.ok) drawer.value.acts = (r as any).activations || {}
+    if (r.ok) drawer.value.acts = r.activations || {}
     else drawer.value.actsErr = '激活状态没加载到：' + orderErrorText(r.error) // 失败≠无激活（病根#14）
   })
 }
@@ -232,7 +232,7 @@ async function doBatchShip() {
     live.forEach((r) => (r.error = res.error ? orderErrorText(res.error) : '发货失败'))
     return
   }
-  const byId = Object.fromEntries(((res as any).results || []).map((x: any) => [x.id, x]))
+  const byId = Object.fromEntries((res.results || []).map((x) => [x.id, x]))
   live.forEach((r) => {
     const x = byId[r.id]
     r.stale = x?.error === 'REFUND_LINES_CHANGED'
@@ -684,21 +684,7 @@ onMounted(reload)
   gap: 8px;
 }
 
-/* 右滑抽屉（壳层公共段 .drawer-mask/.drawer-head/.drawer-title/@keyframes slidein 单源在
- * styles/console.css·三页逐字节一致收敛·病根#5；.drawer 本体宽度等页面差异留此不动） */
-.drawer {
-  width: 420px;
-  max-width: 92vw;
-  height: 100%;
-  background: var(--ld-bg);
-  border-left: 1px solid var(--ld-line);
-  padding: 24px;
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-  overflow-y: auto;
-  animation: slidein 0.18s ease;
-}
+/* 右滑抽屉：.drawer/.drawer-close 等壳层单源在 styles/console.css */
 .drawer-oid {
   margin-top: 6px;
   display: flex;
@@ -709,15 +695,6 @@ onMounted(reload)
 }
 .drawer-badge {
   margin-left: 8px;
-}
-.drawer-close {
-  display: flex;
-  padding: 6px;
-  border: none;
-  border-radius: 8px;
-  background: var(--ld-bg-grey);
-  color: var(--ld-content-2);
-  cursor: pointer;
 }
 .drawer-close:disabled {
   opacity: 0.5;

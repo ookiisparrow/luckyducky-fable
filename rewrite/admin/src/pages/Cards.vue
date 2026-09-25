@@ -75,33 +75,38 @@ onMounted(async () => {
   if (!productId) {
     // 无 productId＝选择器模式：列全部商品（listDrafts 本页早已 import·量小全量）供点选
     const dr = await listDrafts().catch(() => null)
-    if ((dr as any)?.ok) {
+    if (dr?.ok) {
       const urls = (dr as any).urls || {}
       pickRows.value = (((dr as any).list as Record<string, any>[]) || []).map((p) => ({
         id: String(p.id || p._id || ''),
         name: String(p.name || '未命名商品'),
         coverUrl: p.cover ? String(urls[String(p.cover)] || '') : '',
       }))
-    } else loadErr.value = launchErrorText((dr as any)?.error || '网络异常')
+    } else loadErr.value = launchErrorText(dr?.error || '网络异常')
     loading.value = false
     return
   }
   // 载入产品（取名/封面·「取商品封面图」用）+ 卡片草稿
   const [dr, r] = await Promise.all([listDrafts(), getCard(productId)])
-  if ((dr as any).ok) {
-    const urls = (dr as any).urls || {}
-    product.value = ((dr as any).list as Record<string, any>[]).find((p) => String(p.id || p._id) === productId) || null
-    if (product.value?.cover) coverUrl.value = urls[String(product.value.cover)] || ''
+  if (r.error === 'SESSION_LOST') return // 会话失效集中导登录（client.onSessionLost·单源·根因#5）
+  // 商品没读到不能往下走：新卡会拿「新商品」和猜的课程号落库，「取商品封面图」也会谎报没封面。
+  // 读到了但找不到也一样：listDrafts 只回最新 100 个商品
+  const found = dr.ok ? ((dr as any).list as Record<string, any>[]).find((p) => String(p.id || p._id) === productId) : undefined
+  if (!found) {
+    loadErr.value = '商品信息没加载到：' + (dr.ok ? '没找到这个商品（商品超过 100 个时列表不全）' : launchErrorText(dr.error))
+    loading.value = false
+    return
   }
-  if ((r as any).error === 'SESSION_LOST') return // 会话失效集中导登录（client.onSessionLost·单源·根因#5）
-  if ((r as any).ok) {
+  product.value = found
+  if (found.cover) coverUrl.value = (dr as any).urls?.[String(found.cover)] || ''
+  if (r.ok) {
     card.value = ((r as any).card as CardModel) || freshCard()
-    artUrl.value = String((r as any).artUrl || '')
-    if (!(r as any).card && product.value?.cover) {
+    artUrl.value = String(r.artUrl || '')
+    if (!r.card && product.value?.cover) {
       card.value.front.art = String(product.value.cover)
       artUrl.value = coverUrl.value
     }
-  } else loadErr.value = launchErrorText((r as any).error)
+  } else loadErr.value = launchErrorText(r.error)
   loading.value = false
   void nextTick(() => (loaded = true))
 })
@@ -130,7 +135,7 @@ async function autosave() {
   if (!card.value) return
   const payload = pendingStatus ? { ...card.value, status: pendingStatus } : card.value
   const r = await saveCard(payload as unknown as Record<string, unknown>)
-  autoState.value = (r as any).ok ? 'saved' : 'error'
+  autoState.value = r.ok ? 'saved' : 'error'
 }
 // 串行化·防慢网下两次自动保存乱序覆盖（P2·根因#8）；key='cards:'+productId（批D·P1）：改走模块级共享
 // 槽位，快速切走再切回本页（或向导内切步再切回）重建组件实例时，新实例接管旧实例仍在途的补存链，防旧
@@ -168,12 +173,12 @@ async function pickArt(e: Event) {
   busyArt.value = true
   const r = await uploadImage(b64, productId, 'jpg')
   busyArt.value = false
-  if ((r as any).ok) {
-    card.value.front.art = String((r as any).fileID || '')
-    artUrl.value = String((r as any).url || '')
+  if (r.ok) {
+    card.value.front.art = String(r.fileID || '')
+    artUrl.value = String(r.url || '')
     loadErr.value = ''
     void afterCardArtChanged()
-  } else loadErr.value = launchErrorText((r as any).error)
+  } else loadErr.value = launchErrorText(r.error)
 }
 function useCover() {
   if (!card.value) return

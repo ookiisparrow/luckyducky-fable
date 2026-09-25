@@ -53,7 +53,8 @@ const TODOS = computed(() => [
   { key: 'refund', label: '待审退款', n: todo.value.refund, to: '/refunds', icon: RotateCcw, tone: 'warn' },
   { key: 'prep', label: '上新未完成', n: todo.value.prep, to: '/products', icon: PackagePlus, tone: 'warn' },
   { key: 'low', label: '低库存 / 售罄', n: todo.value.lowStock, to: '/inventory', icon: Boxes, tone: 'red' },
-  { key: 'money', label: '钱链告警', n: alertCount.value, to: alertsHaveRefundType.value ? '/refunds' : '/orders', icon: TriangleAlert, tone: 'red' },
+  // 告警没读全时格子显示「?」：列出 0 条不等于没有告警
+  { key: 'money', label: '钱链告警', n: alertCount.value, unknown: !!vm.value?.alertsPartial, to: alertsHaveRefundType.value ? '/refunds' : '/orders', icon: TriangleAlert, tone: 'red' },
   { key: 'anomaly', label: '异常未处理', n: openAnomalies.value, to: '/anomalies', icon: ShieldAlert, tone: 'red' },
 ])
 const todoTotal = computed(() => TODOS.value.reduce((s, t) => s + t.n, 0))
@@ -126,16 +127,17 @@ onMounted(load)
       <!-- 待处理行动条（owner 行动入口·真值）：数字直接点进对应页 -->
       <Card v-if="todoTotal" title="待处理" :sub="`共 ${todoTotal} 项`">
         <div class="todos">
-          <button v-for="t in TODOS" :key="t.key" class="todo" :class="[t.tone, { zero: !t.n }]" @click="router.push(t.to)">
+          <button v-for="t in TODOS" :key="t.key" class="todo" :class="[t.tone, { zero: !t.n && !t.unknown }]" @click="router.push(t.to)">
             <component :is="t.icon" :size="18" :stroke-width="1.8" class="todo-ico" />
-            <div class="todo-txt"><span class="todo-n">{{ t.n }}</span><span class="todo-l">{{ t.label }}</span></div>
+            <div class="todo-txt"><span class="todo-n">{{ t.unknown ? '?' : t.n }}</span><span class="todo-l">{{ t.label }}</span></div>
           </button>
         </div>
       </Card>
-      <p v-else-if="!todoPartial" class="ok-line">今日无待处理事项 ✓</p>
+      <p v-else-if="!todoPartial && !vm.alertsPartial" class="ok-line">今日无待处理事项 ✓</p>
       <!-- 副请求加载失败：不显绿色全清（病根#14 别把「没加载到」当「无待办」→ 漏发货）·提示刷新 -->
       <p v-if="todoPartial" class="ld-status">部分待处理计数没能加载，显示的数字可能不全，请刷新看真实待办</p>
 
+      <p v-if="vm.alertsPartial" class="ld-status">钱链告警没读全：部分异常没查到，告警可能不全，请刷新</p>
       <!-- 交易异常告警（有则必显）：每类各带自己的「去处理」——三类 id 形状不同，落点不能共用一个按钮 -->
       <div v-if="vm.alerts.length" class="alert">
         <div class="alert-ico"><TriangleAlert :size="20" :stroke-width="1.8" /></div>

@@ -4,6 +4,7 @@
 import { yuan, orderStatusLabel, refundStatusLabel, dateTime } from './format'
 import { stockAlertOf } from './thresholds'
 import { transportErrorText } from './mapSystem'
+import { asFen, fenToYuan } from '@ldrw/shared'
 
 const ORDER_ERR: Record<string, string> = {
   BAD_ARGS: '参数不完整',
@@ -72,6 +73,7 @@ export interface DashboardVM {
   stuck: SegStat[] // 最多人卡住停留的段位
   recent: ActivityItem[] // 最近动态四类事件流（订单/激活/进课/退款·换皮退成纯订单列表）
   approxSeg: boolean // 热点/卡点为抽样近似（诚实标注·透传 approx.hot）
+  alertsPartial: boolean // 钱链告警有一路没查到：alerts 可能不全，页面不能显「无告警/无待办」
 }
 
 // 待处理行动条计数（治病根#14 admin 侧）：四路副请求各自可能失败，
@@ -157,7 +159,7 @@ export function mapDashboard(r: unknown): DashboardVM | null {
   const recent: ActivityItem[] = Array.isArray(d.recentActivity)
     ? d.recentActivity.map((e: any) => ({ type: String((e && e.type) || ''), text: String((e && e.text) || ''), at: Number(e && e.at) || 0 })).filter((e) => e.text)
     : []
-  return { cards, funnel, alerts, hot: seg(d.hot), stuck: seg(d.stuck), recent, approxSeg: !!(d.approx && d.approx.hot) }
+  return { cards, funnel, alerts, hot: seg(d.hot), stuck: seg(d.stuck), recent, approxSeg: !!(d.approx && d.approx.hot), alertsPartial: t.partial === true }
 }
 
 // 手机号掩码（PII·根因#3 信任边界）：列表只显掩码，抽屉给操作员看完整号（联系买家/填面单）。
@@ -211,6 +213,14 @@ export interface OrderRowVM {
 
 const ms = (v: unknown): number | null => (typeof v === 'number' && v > 0 ? v : null)
 
+// 实付（元）单源，订单列表和越规退款共用。支付异常单应付≠到账，看微信实际到账 paidFee（整数分）；
+// 异常单 paidFee 缺/脏回 null（不知道），正常单就是应付 amount。
+function paidYuan(o: Record<string, any>): unknown {
+  if (o.status !== 'payment_exception') return o.amount
+  const fen = Number(o.paidFee)
+  return Number.isInteger(fen) && fen > 0 ? fenToYuan(asFen(fen)) : null
+}
+
 export function mapOrderRows(list: unknown): OrderRowVM[] {
   if (!Array.isArray(list)) return []
   const out: OrderRowVM[] = []
@@ -233,23 +243,21 @@ export function mapOrderRows(list: unknown): OrderRowVM[] {
     const names = items.map((it) => it.name).filter(Boolean)
     const a = o.address && typeof o.address === 'object' ? o.address : {}
     const status = String(o.status || '')
-    const exc = status === 'payment_exception'
-    const paidFen = Number(o.paidFee)
-    const paidOk = Number.isInteger(paidFen) && paidFen > 0
+    const paid = paidYuan(o)
     out.push({
       id,
       status,
       statusLabel: orderStatusLabel(o.status),
       summary: names.slice(0, 2).join('、') + (names.length > 2 ? ` 等 ${names.length} 件商品` : ''),
       count: items.reduce((n, it) => n + it.qty, 0),
-      // 支付异常单展示实际到账（多代理审核 codex#5）：列表「实付款」不能配「订单标价」；paidFee 为整数分，脏/缺回退订单金额。
-      amountLabel: yuan(exc && paidOk ? paidFen / 100 : o.amount) || '¥0.00',
+      // 缺实付回退应付，旁边配「补录实付」按钮（paidFeeMissing）
+      amountLabel: yuan(paid ?? o.amount) || '¥0.00',
       timeLabel: dateTime(o.createdAt),
       feeMismatch: o.feeMismatch === true,
-      paymentException: exc,
+      paymentException: status === 'payment_exception',
       // 异常单但实付额脏/缺（回调缺金额字段）→ 无法走退款（PAYMENT_AMOUNT_MISSING），须人工补录后才有关口；
       // 供列表行渲染「补录实付」按钮（补录成功后刷新即消失）。
-      paidFeeMissing: exc && !paidOk,
+      paidFeeMissing: paid === null,
       refundHold: o.refundHold === true,
       ackRefundedQty,
       trackingNo: String((o.shipping && o.shipping.trackingNo) || o.trackingNo || ''),
@@ -358,8 +366,8 @@ export interface OverrideOrderVM {
   statusLabel: string
   buyerName: string
   buyerPhone: string
-  amountLabel: string // 实付（分转元只读展示）
-  goodsLabel: string // 商品价（分转元只读展示）
+  amountLabel: string // 实付（元）：支付异常单取实际到账 paidFee
+  goodsLabel: string // 商品价（元）
   lines: OverrideLineVM[]
 }
 
@@ -369,6 +377,7 @@ export function mapOverrideOrder(list: unknown, orderId: string): OverrideOrderV
   const o = (list as Record<string, any>[]).find((x) => x && typeof x === 'object' && String(x._id || x.id || '') === orderId)
   if (!o) return null
   const a = o.address && typeof o.address === 'object' ? o.address : {}
+  const paid = paidYuan(o)
   const rawItems = Array.isArray(o.items) ? o.items : []
   const lines: OverrideLineVM[] = rawItems
     .filter((it: any) => it && typeof it === 'object')
@@ -384,7 +393,8 @@ export function mapOverrideOrder(list: unknown, orderId: string): OverrideOrderV
     statusLabel: orderStatusLabel(o.status),
     buyerName: String(a.name || ''),
     buyerPhone: String(a.phone || ''),
-    amountLabel: yuan(o.amount) || '¥0.00',
+    // 这里没有补录按钮，缺实付就明说，不拿应付冒充（提交会被服务端 PAYMENT_AMOUNT_MISSING 拦下）
+    amountLabel: paid === null ? '待补录实付' : yuan(paid) || '¥0.00',
     goodsLabel: yuan(o.goods) || '',
     lines,
   }

@@ -140,19 +140,18 @@ describe('看板映射（getDashboard / 计数 / 库存 真实形状）', () => 
     expect(vm.recent.length).toBe(S('getDashboard').recentActivity.length)
   })
 
-  it('已知缺口：异常查询失败（txAlerts.partial=true、三数组空）时 mapDashboard 丢掉 partial，钱链告警显示为无（假绿·病根#14）', () => {
-    // 锁的是现状不是期望：后台补上 partial 处理（显「异常数据不可信」）时这条会红，届时改成新行为。
+  it('异常查询失败（txAlerts.partial=true、三数组空）时 mapDashboard 标 alertsPartial，页面不把「没查到」显示成无告警（病根#14）', () => {
     const d = structuredClone(S('getDashboard'))
     d.txAlerts = { feeMismatch: [], refundMismatch: [], stuckRefunds: [], partial: true }
     const vm = mapDashboard(d)!
     expect(vm.alerts).toEqual([])
-    expect(JSON.stringify(vm)).not.toContain('partial')
+    expect(vm.alertsPartial).toBe(true)
   })
 
   it('待处理计数：待发货取 counts.paid、待审退款取 counts.applied；库存按 per-SKU 阈值判（库存 3 > 阈值 2 不算低）', () => {
-    // 已知缺口：ship: 2 锁的是现状不是期望。counts.paid 的两单都 refundHold（B 已全额退款但状态永远停在 paid，
-    // D 有待审售后），实际能发的是 0；全额退款单还会在这个数里越积越多。修在计数端（orderCounts 排除
-    // refundHold 单，或 deriveDashboardTodos 不直接用 counts.paid），修好这条会红，届时改成 0。
+    // 已知缺口：ship: 2 锁的是现状不是期望——deriveDashboardTodos 仍读 counts.paid（status=paid 的全部单），
+    // 把全额退款仍停在 paid 的 B、售后待审的 D 也算进去；真能发的是 getDashboard.toShip（契约里是 0）。
+    // 改读 toShip 后这里传 dashboard: S('getDashboard')、期望改成 ship: 0。
     const t = deriveDashboardTodos({
       orderCounts: S('orderCounts'),
       refundCounts: S('refundCounts'),

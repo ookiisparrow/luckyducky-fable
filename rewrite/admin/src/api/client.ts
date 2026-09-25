@@ -8,6 +8,9 @@ export interface ClientResult {
   [k: string]: unknown
 }
 
+/** 按契约类型看的回包：成功带 T 的字段（没有索引签名，字段名写错编译不过），失败只有 error。 */
+export type TypedResult<T> = ({ ok: true; status: number; error?: undefined } & T) | { ok: false; status: number; error?: string }
+
 export interface ClientDeps {
   endpoint: string
   fetchImpl?: typeof fetch

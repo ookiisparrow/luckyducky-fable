@@ -13,6 +13,7 @@ import PageHeader from '../components/ui/PageHeader.vue'
 import Card from '../components/ui/Card.vue'
 import Badge from '../components/ui/Badge.vue'
 import EmptyState from '../components/ui/EmptyState.vue'
+import type { AdminActivation } from '@ldrw/shared'
 
 const TABS = [
   { key: 'applied', label: '待审核' },
@@ -85,12 +86,12 @@ async function reload() {
   const [r, c] = await Promise.all([listRefunds(tab.value, undefined, 20, activeQ.value), refundCounts()])
   if (listGen.isStale(my)) return // 已切别标签/搜索·丢弃过期列表（由更新的 reload 负责复位 reloading）
   reloading.value = false // 本次是最新·加载完成
-  if ((r as any).error === 'SESSION_LOST') return
-  rows.value = r.ok ? mapRefundRows((r as any).list) : []
-  cursor.value = r.ok ? (r as any).nextCursor : null
-  hasMore.value = !!(r.ok && (r as any).hasMore)
-  if (c.ok && c.counts) counts.value = c.counts as Record<string, number>
-  countsPartial.value = c.ok ? !!(c as any).partial : true // 计数请求本身失败也按不可信处理（不误显陈旧/占位数字）
+  if (r.error === 'SESSION_LOST') return
+  rows.value = r.ok ? mapRefundRows(r.list) : []
+  cursor.value = r.ok ? r.nextCursor : null
+  hasMore.value = !!(r.ok && r.hasMore)
+  if (c.ok && c.counts) counts.value = c.counts
+  countsPartial.value = c.ok ? !!c.partial : true // 计数请求本身失败也按不可信处理（不误显陈旧/占位数字）
   message.value = r.ok ? '' : '加载失败：' + orderErrorText(r.error)
 }
 
@@ -106,9 +107,9 @@ async function more() {
     return
   }
   moreErr.value = ''
-  rows.value = appendNew(rows.value, mapRefundRows((r as any).list))
-  cursor.value = (r as any).nextCursor
-  hasMore.value = !!(r as any).hasMore
+  rows.value = appendNew(rows.value, mapRefundRows(r.list))
+  cursor.value = r.nextCursor
+  hasMore.value = !!r.hasMore
 }
 
 function pickTab(k: string) {
@@ -146,18 +147,18 @@ async function openDecide(row: RefundRowVM) {
     // 判据加载失败（网络/服务端）：r.ok=false 时无 activation/lineRefundable 字段，若照组 verdict 会渲成
     // 确定的绿色「未使用·可退」误导审核放行（P2·根因#14 失败必可观测/#8 不失真）。红条同 doApprove/doReject 范式。
     verdict.value = null // 判据区留空（模板据此显示「重新加载判据」重试入口）
-    decideErr.value = '判据加载失败：' + orderErrorText((r as any).error)
+    decideErr.value = '判据加载失败：' + orderErrorText(r.error)
     return
   }
-  const a = (r as any)?.activation || {}
+  const a: Partial<AdminActivation> = r.activation || {}
   verdict.value = {
     loading: false,
     activated: !!a.activated,
     entered: !!a.entered,
     code: String(a.code || ''),
     courseId: String(a.courseId || ''),
-    lineRefundable: (r as any)?.lineRefundable !== false, // 缺字段/老后端默认可退（不误判会拦）
-    refundableQty: (r as any)?.refundableQty ?? null,
+    lineRefundable: r.lineRefundable !== false, // 缺字段/老后端默认可退（不误判会拦）
+    refundableQty: r.refundableQty ?? null,
   }
 }
 function closeDecide() {
@@ -255,7 +256,7 @@ async function findOverrideOrder() {
     overrideFindMsg.value = '查找失败：' + orderErrorText(r.error)
     return
   }
-  const vm = mapOverrideOrder((r as any).list, id)
+  const vm = mapOverrideOrder(r.list, id)
   if (!vm) {
     overrideFindMsg.value = '没有找到该订单号'
     return
@@ -270,7 +271,7 @@ async function submitOverride() {
   const r = await overrideRefund(overrideOrder.value.id, overrideLineId.value, overrideReason.value.trim())
   overrideBusy.value = false
   if (r.ok) {
-    overrideResultMsg.value = `✓ 已发起越规退款（售后单 ${String((r as any).id || '')}），等微信回调确认到账`
+    overrideResultMsg.value = `✓ 已发起越规退款（售后单 ${String(r.id || '')}），等微信回调确认到账`
     void reload() // 列表/计数刷新——本单可能已出现在「退款处理中」栏
     // 提交成功后复位选择态（防误再次对同一行重复提交），保留结果横幅可见
     overrideOrder.value = null
@@ -639,34 +640,12 @@ onMounted(() => {
   color: var(--ld-red);
 }
 
-/* 决策抽屉（本页独有浮层·web 端无需 touchmove 锁；壳层公共段单源在 styles/console.css·病根#5） */
-.drawer {
-  width: 420px;
-  max-width: 94vw;
-  height: 100%;
-  background: var(--ld-bg);
-  border-left: 1px solid var(--ld-line);
-  padding: 24px;
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
-  overflow-y: auto;
-  animation: slidein 0.18s ease;
-}
+/* 决策抽屉：.drawer/.drawer-close 等壳层单源在 styles/console.css */
 .drawer-oid {
   margin-top: 4px;
   font-size: 12px;
   color: var(--ld-content-2);
   font-family: var(--ld-font-mono);
-}
-.drawer-close {
-  display: flex;
-  padding: 6px;
-  border: none;
-  border-radius: var(--ld-radius-sm);
-  background: var(--ld-bg-grey);
-  color: var(--ld-content-2);
-  cursor: pointer;
 }
 .summary {
   padding: 14px;

@@ -251,8 +251,7 @@ body {
   flex: 1;
 }
 
-/* 抽屉壳层公共段单源（Orders/Batches/Refunds 三页逐字节一致的子集·批2 refactor·病根#5）：
- * .drawer 本体宽度/gap 等尺寸差异是各页刻意保留、留在页内不动，这里只收敛真一致的四块。 */
+/* 抽屉壳层公共段单源（病根#5：各页复制后各自改出差异）。Batches 的 .drawer 尺寸不同，仍留在页内 scoped 覆盖。 */
 .drawer-mask {
   position: fixed;
   inset: 0;
@@ -271,10 +270,32 @@ body {
     opacity: 1;
   }
 }
+.drawer {
+  width: 420px;
+  max-width: 94vw;
+  height: 100%;
+  background: var(--ld-bg);
+  border-left: 1px solid var(--ld-line);
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  overflow-y: auto;
+  animation: slidein 0.18s ease;
+}
 .drawer-head {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
+}
+.drawer-close {
+  display: flex;
+  padding: 6px;
+  border: none;
+  border-radius: var(--ld-radius-sm);
+  background: var(--ld-bg-grey);
+  color: var(--ld-content-2);
+  cursor: pointer;
 }
 .drawer-title {
   font-size: 18px;
