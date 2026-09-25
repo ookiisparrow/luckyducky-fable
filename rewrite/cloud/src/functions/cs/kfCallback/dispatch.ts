@@ -583,6 +583,32 @@ export async function heldStatus(
 // 本文件收到纯数字 1-5 且标记在 48h 窗口内才记分——防顾客随口发的数字被误当评分（副作用绑提示·不裸吃数字）。
 const CSAT_ASK_TTL_MS = 48 * 3600_000
 
+// 关单评分闭环（深审 F2·CSAT_PROMPT「回复 1-5 分」的兑现）：自由文本纯数字 1-5 + 48h 内有 csatask 标记
+// → 记分 + 消费标记 + 回可选原因菜单（与菜单评分路径同款收尾）。无标记/过期 → 返 false 落回正常分流（不误记）。
+async function handleCsatScoreText(
+  ctx: DispatchCtx,
+  incoming: Incoming,
+  openidOf: () => Promise<string | null>
+): Promise<boolean> {
+  if (incoming.menuId) return false
+  const m = /^\s*([1-5])\s*$/.exec(incoming.text)
+  if (!m) return false
+  const { db, openKfId, send } = ctx
+  const to = incoming.externalUserId
+  const ask = await docData(db, COLLECTIONS.kfState, 'csatask:' + to)
+  const askAt = ask && Number(ask.at)
+  if (!(askAt && Date.now() - askAt < CSAT_ASK_TTL_MS)) return false
+  await dropKfState(db, 'csatask:' + to)
+  const openid = await openidOf()
+  const csatId = await recordCsat(db, { externalUserId: to, openid, score: Number(m[1]) })
+  if (!csatId) {
+    await send(buildText(to, openKfId, '评分没记上，请稍后再评一次 🙏'))
+    return true
+  }
+  await send(buildMsgMenu(to, openKfId, csatReasonMenu()))
+  return true
+}
+
 /** 处理单条入站消息：menu_id 优先按路由走，否则自由文本走关键词识别→高亮气泡。 */
 export async function handleMessage(ctx: DispatchCtx, incoming: Incoming): Promise<void> {
   const { db, openKfId, cfg, send } = ctx
@@ -612,26 +638,7 @@ export async function handleMessage(ctx: DispatchCtx, incoming: Incoming): Promi
     return
   }
 
-  // 关单评分闭环（深审 F2·CSAT_PROMPT「回复 1-5 分」的兑现）：自由文本纯数字 1-5 + 48h 内有 csatask 标记
-  // → 记分 + 消费标记 + 回可选原因菜单（与菜单评分路径同款收尾）。无标记/过期 → 落回下面正常分流（不误记）。
-  if (!incoming.menuId) {
-    const m = /^\s*([1-5])\s*$/.exec(incoming.text)
-    if (m) {
-      const ask = await docData(db, COLLECTIONS.kfState, 'csatask:' + to)
-      const askAt = ask && Number(ask.at)
-      if (askAt && Date.now() - askAt < CSAT_ASK_TTL_MS) {
-        await dropKfState(db, 'csatask:' + to)
-        const openid = await openidOf()
-        const csatId = await recordCsat(db, { externalUserId: to, openid, score: Number(m[1]) })
-        if (!csatId) {
-          await send(buildText(to, openKfId, '评分没记上，请稍后再评一次 🙏'))
-          return
-        }
-        await send(buildMsgMenu(to, openKfId, csatReasonMenu()))
-        return
-      }
-    }
-  }
+  if (await handleCsatScoreText(ctx, incoming, openidOf)) return
 
   const r: Route = incoming.menuId
     ? route(incoming.menuId)

@@ -1,10 +1,10 @@
 // 小程序进不了 @ldrw/shared，建单/激活失败码只能手抄一份。云端改名或改冒号格式时，结算页会悄悄落回
 // 「下单没成功，稍后再试」、不再移走买不了的那一行；激活页会把频控/服务繁忙说成「码不对」——而各自的
 // 测试用的是写死的码，照样全绿。这里直接读云端源码对一遍，改一边这里就红。
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, vi, afterEach } from 'vitest'
 import errorsSrc from '../../shared/src/errors.ts?raw'
 import ordersSrc from '../../cloud/src/functions/app/actions/orders.ts?raw'
-import cloudCallSrc from '../utils/cloud.ts?raw'
+import { callApp } from '../utils/cloud'
 import { CREATE_ORDER_ERR_COPY } from '../lib/checkout'
 import { ERR_REASON } from '../lib/mapLearning'
 
@@ -16,13 +16,30 @@ function cloudHas(code: string): boolean {
   return ERR_VALUES.has(code) || ordersSrc.includes(`'${code}:'`)
 }
 
+afterEach(() => {
+  vi.useRealTimers()
+})
+
 describe('手抄的失败码与云端一致', () => {
   it('大白话：读到了云端错误码登记册（读不到就是路径/格式变了，先修这里）', () => {
     expect(ERR_VALUES.has('OUT_OF_STOCK')).toBe(true)
   })
 
-  it('大白话：客户端自造的码确实是小程序云调用层发的', () => {
-    for (const c of CLIENT_CODES) expect(cloudCallSrc, c).toContain(`error: '${c}'`)
+  it('大白话：客户端自造的码确实是小程序云调用层发的（调用失败 / 回包没有 ok / 12 秒没回）', async () => {
+    const run = async (callFunction: (o: Record<string, any>) => void, wait = 0) => {
+      vi.useFakeTimers()
+      ;(globalThis as any).wx = { cloud: { callFunction } }
+      const p = callApp('ping')
+      await vi.advanceTimersByTimeAsync(wait)
+      return (await p).error
+    }
+    const got = [
+      await run((o) => o.fail({})),
+      await run((o) => o.success({ result: null })),
+      await run(() => undefined, 12_000),
+    ]
+    expect(got).toEqual(['CALL_FAIL', 'BAD_RESULT', 'CALL_TIMEOUT'])
+    expect([...got].sort()).toEqual([...CLIENT_CODES].sort())
   })
 
   it('大白话：结算页认的每个拒单码，云端都还发', () => {

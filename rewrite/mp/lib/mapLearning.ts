@@ -176,20 +176,8 @@ function parseDurSec(v: unknown): number {
   return Number(s) > 0 ? Number(s) : 0
 }
 
-/**
- * 目录页数据源（C1·教学播放重设计批A·2026-07-11 预审裁决消歧优先级）：
- * 课时状态判定优先级——① 全课全 done（每个段数>0 的课时都 done 且至少有一个课时）→ 全部 done、无 current（覆盖一切）；
- * ② 否则 last.lessonId 命中的课时标 current（即使自身已 done——回看中）；③ 否则首个非 done 且含 hasVideo 段的课时标 current；
- * 其余课时按「done=段数>0 且全部段 ∈ done 集合」/ todo 判。continueTarget 与 current 解耦独立判定（见下）。
- * firstPlayableSegId / continueTarget 的「last 命中」分支须额外校验命中段 hasVideo（progress 记录可能滞后于
- * admin 撤下/替换视频的编辑），不可播则视同未命中、落入课时内/全课首个 hasVideo 段兜底——对外承诺「非空即可播放」不因此松动。
- * 脏结构安全同 segmentIdsOf 风格。
- */
-export function mapCatalog(
-  course: unknown,
-  progressList: unknown,
-  courseId: string
-): { chapters: CatalogChapterVM[]; continueTarget: { segmentId: string; lessonId: string; lessonName: string; resumeAt: number } | null } {
+/** 课程树摊平成课时列表 + 章分组（章里存课时下标）；无 id 课时跳过且不占编号，no 跨章连续。 */
+function flattenCatalog(course: unknown): { lessons: CatalogLessonRaw[]; chapterGroups: { title: string; lessonIdxs: number[] }[] } {
   const c = (course && typeof course === 'object' ? course : {}) as Record<string, any>
   const lessons: CatalogLessonRaw[] = []
   const chapterGroups: { title: string; lessonIdxs: number[] }[] = []
@@ -208,8 +196,11 @@ export function mapCatalog(
     }
     chapterGroups.push({ title: String(ch.title || ''), lessonIdxs: idxs })
   }
+  return { lessons, chapterGroups }
+}
 
-  // 命中进度条目：courseId 匹配 + 多条取 updatedAt 最大者
+/** 命中进度条目：courseId 匹配 + 多条取 updatedAt 最大者。 */
+function latestProgress(progressList: unknown, courseId: string): Record<string, any> | null {
   let prog: Record<string, any> | null = null
   if (Array.isArray(progressList)) {
     for (const p of progressList as Record<string, any>[]) {
@@ -217,6 +208,25 @@ export function mapCatalog(
       if (!prog || Number(p.updatedAt || 0) > Number(prog.updatedAt || 0)) prog = p
     }
   }
+  return prog
+}
+
+/**
+ * 目录页数据源（C1·教学播放重设计批A·2026-07-11 预审裁决消歧优先级）：
+ * 课时状态判定优先级——① 全课全 done（每个段数>0 的课时都 done 且至少有一个课时）→ 全部 done、无 current（覆盖一切）；
+ * ② 否则 last.lessonId 命中的课时标 current（即使自身已 done——回看中）；③ 否则首个非 done 且含 hasVideo 段的课时标 current；
+ * 其余课时按「done=段数>0 且全部段 ∈ done 集合」/ todo 判。continueTarget 与 current 解耦独立判定（见下）。
+ * firstPlayableSegId / continueTarget 的「last 命中」分支须额外校验命中段 hasVideo（progress 记录可能滞后于
+ * admin 撤下/替换视频的编辑），不可播则视同未命中、落入课时内/全课首个 hasVideo 段兜底——对外承诺「非空即可播放」不因此松动。
+ * 脏结构安全同 segmentIdsOf 风格。
+ */
+export function mapCatalog(
+  course: unknown,
+  progressList: unknown,
+  courseId: string
+): { chapters: CatalogChapterVM[]; continueTarget: { segmentId: string; lessonId: string; lessonName: string; resumeAt: number } | null } {
+  const { lessons, chapterGroups } = flattenCatalog(course)
+  const prog = latestProgress(progressList, courseId)
   const allSegIds = new Set<string>()
   for (const l of lessons) for (const s of l.segments) allSegIds.add(s.id)
   const doneSet = new Set<string>()

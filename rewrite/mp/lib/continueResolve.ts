@@ -104,39 +104,37 @@ export function continueResolve(progress: unknown, myCourses: unknown, courses: 
     const course = courseOf(String(p.courseId))
     if (!course) continue // 课程查不到：不假装、看下一条
     const exactLesson = lessonIn(course, String((p.last && p.last.lessonId) || ''))
+    const wantSeg = String((p.last && p.last.segmentId) || '')
     let lesson = exactLesson
     let segmentId = ''
     let resumeAt = 0
-    if (exactLesson) {
-      const wantSeg = String((p.last && p.last.segmentId) || '')
-      if (wantSeg) {
-        // 命中原课时且带段位才需校验（G3）：命中段仍 hasVideo→原样保留段位+续秒；不可播（含段已不存在）→
-        // 降级到该课时首个 hasVideo 段（resumeAt 一并归 0，别把 A 段的秒带进 B 段）；整课时无可播段→继续在
-        // 全课范围内找第一个真正可播的课时（与 mapCatalog 全课兜底同口径·不能无条件退回 firstLesson，否则
-        // 卡片展示课时与播放器实际起播课时会分叉）；全课确无可播段→退回既有「脏课时」兜底路径（lesson 改指
-        // 全课首课时，segmentId/resumeAt 保持初值空/0）。
-        const hitSeg = segmentIn(course, exactLesson.id, wantSeg)
-        if (hitSeg) {
-          segmentId = hitSeg
-          resumeAt = clampResumeAt(Number(p.last && p.last.at), Number(p.last && p.last.dur))
+    if (!exactLesson) {
+      lesson = firstLesson(course) // 脏课时退回第一课时
+    } else if (wantSeg) {
+      // 命中原课时且带段位才需校验（G3）：命中段仍 hasVideo→原样保留段位+续秒；不可播（含段已不存在）→
+      // 降级到该课时首个 hasVideo 段（resumeAt 一并归 0，别把 A 段的秒带进 B 段）；整课时无可播段→继续在
+      // 全课范围内找第一个真正可播的课时（与 mapCatalog 全课兜底同口径·不能无条件退回 firstLesson，否则
+      // 卡片展示课时与播放器实际起播课时会分叉）；全课确无可播段→退回既有「脏课时」兜底路径（lesson 改指
+      // 全课首课时，segmentId/resumeAt 保持初值空/0）。
+      const hitSeg = segmentIn(course, exactLesson.id, wantSeg)
+      if (hitSeg) {
+        segmentId = hitSeg
+        resumeAt = clampResumeAt(Number(p.last && p.last.at), Number(p.last && p.last.dur))
+      } else {
+        const fv = firstVideoSegmentIn(course, exactLesson.id)
+        if (fv) {
+          segmentId = fv
         } else {
-          const fv = firstVideoSegmentIn(course, exactLesson.id)
-          if (fv) {
-            segmentId = fv
+          const fp = firstPlayableLesson(course)
+          if (fp) {
+            lesson = { id: fp.id, name: fp.name }
+            segmentId = fp.segmentId
           } else {
-            const fp = firstPlayableLesson(course)
-            if (fp) {
-              lesson = { id: fp.id, name: fp.name }
-              segmentId = fp.segmentId
-            } else {
-              lesson = firstLesson(course)
-            }
+            lesson = firstLesson(course)
           }
         }
-      } // 无段位记录：原样命中课时、segmentId 留空让播放器挑首个可播段（既有语义不动）
-    } else {
-      lesson = firstLesson(course) // 脏课时退回第一课时
-    }
+      }
+    } // 无段位记录：原样命中课时、segmentId 留空让播放器挑首个可播段（既有语义不动）
     if (lesson) {
       return { courseId: course.id, courseTitle: String(course.title || ''), lessonId: lesson.id, lessonName: lesson.name, segmentId, resumeAt }
     }
