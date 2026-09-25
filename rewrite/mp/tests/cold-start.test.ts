@@ -1,4 +1,4 @@
-// 冷启动耗时上报（R41·守卫 rw-mp-funnel-tracked）：markLaunch 记起点 + reportColdStart 算 delta 上报一次
+// 冷启动耗时上报（R41）：markLaunch 记起点 + reportColdStart 算 delta 上报一次
 // （home 首帧 onReady 触点·仅首次——onReady 生命周期本身只触发一次+内部 reported 锁双保险）。
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 

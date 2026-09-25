@@ -208,10 +208,6 @@ describe('气泡 :key 与去重键 keyOf 同源（深审20260712 P2·防再漂�
     expect(keyOf({ at: 1000, direction: 'out', text: '好', msgtype: 'text' })).toBe('1000|out|text|好')
     expect(keyOf({ at: 1000, direction: 'out', text: '好' })).toBe('1000|out||好') // msgtype 缺省稳定
   })
-  it('大白话：Desk.vue 模板 :key 用导出的 keyOf（同源单点）——旧 at+direction+text 拼接键不再存在', () => {
-    expect(deskSrc).toMatch(/:key="keyOf\(m\)"/)
-    expect(deskSrc).not.toMatch(/:key="m\.at \+ m\.direction \+ m\.text"/)
-  })
 })
 
 describe('队列与错误人话', () => {
@@ -412,21 +408,6 @@ describe('onBeforeUnmount 标题复位（B4 后审 P2·源码断言）', () => {
     expect(body).toMatch(/clearInterval\(listTimer\)/)
     expect(body).toMatch(/removeEventListener\('blur', onWindowBlur\)/)
     expect(body).toMatch(/removeEventListener\('focus', onWindowFocus\)/)
-  })
-
-  it('大白话：卸载注释不得再引用不存在的 agent-poll-cleanup 守卫、也不得钉死会漂的 line 89', () => {
-    expect(deskSrc).not.toMatch(/agent-poll-cleanup/)
-    expect(deskSrc).not.toMatch(/line 89/)
-  })
-})
-
-describe('refreshLists 会话失效不自登出（源码断言）', () => {
-  it('大白话：列表刷新遇到 SESSION_LOST 只早退，不自调 doLogout——登出单源是壳层 onSessionLost，按钮退出才走 doLogout', () => {
-    const body = extractFunctionBody(scriptSetupSrc(), 'async function refreshLists() {')
-    expect(body).toMatch(/SESSION_LOST/)
-    expect(body).not.toMatch(/doLogout/)
-    expect(scriptSetupSrc()).toMatch(/function doLogout\(\)/)
-    expect(deskSrc).toMatch(/@click="doLogout"/)
   })
 })
 

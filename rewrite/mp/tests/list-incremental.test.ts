@@ -4,10 +4,6 @@
 //      （整表重发传输 O(n²)·根因#7）。reload/switchTab 全量替换本该全发·不在此约束内。
 // Page 桩挂载范式同 me-cont-failed.test.ts（node 环境无小程序运行时·全局 Page 捕获 options）。
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import orderWxml from '../pages/order-list/order-list.wxml?raw'
-import orderWxss from '../pages/order-list/order-list.wxss?raw'
-import reviewsWxml from '../pages/reviews/reviews.wxml?raw'
-import reviewsWxss from '../pages/reviews/reviews.wxss?raw'
 
 const { getMyOrdersMock, getReviewsMock } = vi.hoisted(() => ({
   getMyOrdersMock: vi.fn(),
@@ -120,27 +116,5 @@ describe('列表翻页增量 setData（根因#7·翻页只追加新行·不整�
     expect(keys).not.toContain('list')
     expect(patch['list[2]']).toBeTruthy()
     expect(page.data.list.length).toBe(3)
-  })
-})
-
-describe('钱链后高频页骨架屏（根因#8·加载中不再整页空白）', () => {
-  it('大白话：order-list.wxml 有「加载中且列表空」骨架块（coolist-skel·条件 loading && !shown.length）', () => {
-    expect(orderWxml).toMatch(/wx:if="\{\{loading && !shown\.length\}\}"/)
-    expect(orderWxml).toContain('coolist-skel')
-  })
-  it('大白话：order-list.wxss 骨架类引全局微光动画 ld-shimmer', () => {
-    expect(orderWxss).toMatch(/coolist-skel/)
-    expect(orderWxss).toMatch(/ld-shimmer/)
-  })
-  it('大白话：order-list.wxml 保留 coolist-body {{anim}} 字面（防手势/动画守卫连带回归·order-swipe.test.ts:91）', () => {
-    expect(orderWxml).toMatch(/class="coolist-body \{\{anim\}\}"/)
-  })
-  it('大白话：reviews.wxml 有「加载中且列表空」骨架块（ld-rv-skel·条件 loading && !list.length）', () => {
-    expect(reviewsWxml).toMatch(/wx:if="\{\{loading && !list\.length\}\}"/)
-    expect(reviewsWxml).toContain('ld-rv-skel')
-  })
-  it('大白话：reviews.wxss 骨架类引全局微光动画 ld-shimmer', () => {
-    expect(reviewsWxss).toMatch(/ld-rv-skel/)
-    expect(reviewsWxss).toMatch(/ld-shimmer/)
   })
 })

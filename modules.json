@@ -135,7 +135,6 @@
         "activations",
         "qrcodes",
         "progress",
-        "uploadChunks",
         "events"
       ]
     },

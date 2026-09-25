@@ -1,42 +1,38 @@
 ---
 name: refactor-batch
-description: Use when doing any change/batch/audit/fix in the Lucky Ducky 重构线仓 — enforces 根因→先立守卫(红)再改到绿→顺手退役被取代的旧守卫(删与加对等)→npm run check 全绿→反向自检→squash 提交+推送→记 重构日志. Triggers on "继续(重构)", "做这批", "修…", "审核", "加守卫", or any edit landing in luckyducky-fable.
+description: Use when doing any change/batch/fix in luckyducky-fable — 意图单 → 先写会红的测试/守卫 → 改到绿 → npm run check 全绿 → 反向自检 → 一批一个 squash 提交推分支 → PR 带证据。Triggers on "继续", "做这批", "修…", "加守卫", or any edit landing in luckyducky-fable.
 ---
 
-# 重构批次纪律
+# 批次纪律
 
-> 本 skill = 元模式的 **genesis 环**（`docs/元模式.md` A5）：一批改动从「先守卫后实现」到「反向自检 + 归因」。循环定义见元模式，本文是它在本仓的执行纪律。
+> 对应 `docs/元模式.md` 流水线第 3、4 步：完成只由机器判，声明带证据。
 
-本仓（fable 重构线）每一处改动（功能/审计/修复/加守卫）都按这套走。**铁律：一切迭代在 `luckyducky-fable`；部署是独立人工动作、必过 `guard-deploy` 部署闸（共用真实云环境，见 CLAUDE 身份段），git 提交与部署解耦。**
+部署是独立的人工授权动作（`guard-deploy` 闸），与提交解耦。
 
 ## 接活前
-1. 读 `git log --oneline -10`（最近批次=过程账）+ `gh issue list --state open`（活待办）；修 bug 先查 `docs/根因账本.md` 同类病根；执行前必读同目录 `执行者错题本.md`（历任执行者踩坑清单）。
-2. 定位这批治哪条根因/主张。**每主张 / 不变量 → 一条机器守卫**（不是靠人记）。
-3. 动工前写意图单：用业务大白话写清这批「改什么/业务规则是什么/为什么」；涉钱/库存/权限等敏感规则须老板点头才动手，不敏感批次至少写明供老板抽查；意图单与批次验证的红绿证据一并附上。
+1. `git fetch` 后看 `origin/main` 的 `git log --oneline -10` 和 `gh issue list --state open`；修 bug 先查 `docs/根因账本.md` 同类病根；读同目录 `执行者错题本.md`。
+2. 写意图单：用大白话写清这批改什么、业务规则是什么、为什么。涉钱/库存/权限的规则先让老板点头；其余写明供老板抽查。
 
-## 改造（意图先行：先守卫后实现）
-3. **能机器化的先加守卫、让它红**，再改代码到绿：
-   - 跨文件 / 仓级不变量 → `scripts/check-structure.mjs` 的 repoCheck / fileRule。
-   - 单文件样式 / 多端写法 → `scripts/check-structure.mjs` 的 fileRule（conventions 独立层已并入 structure）。
-   - 类型层（金额 Fen、状态联合）→ TS 编译期。
-   - 行为不变量（钱 / 权限 / 状态 / 幂等）→ `tests/`，业务不变量优先锁。
-   - **新加守卫标 `roots`**（治哪条病根 `#N` / 主张 `TN`）+ reverseTest；`guard-coverage` 据此核每病根有守卫，漏标即覆盖率红。新治一条病根 → 先在 `docs/根因账本.md` §一立条目，守卫才有归属。
-4. **顺手退役（「删」和「加」对等·治「只增不减」的熵）**：改完先问一句——这批让某条**旧守卫变多余**了吗？三种信号：① 被本批新守卫/注册表**取代**；② 所守的功能/分支**已删**（守一个不存在的东西＝纪念碑）；③ N 条窄守卫可**折成「一张表 + 一条守卫」**（`known-collections-only` 范式·元模式 A2「守卫粒度会收敛」）。命中就**当批退役**：删守卫 + 若某病根/主张因此失守，补挡或在 CLAUDE 转「靠人」豁免（`guard-coverage` 会拦覆盖缺口）。退役与新增**同批走完 step 7–8 验证**。为什么必须每批自省：**守卫总数没有守卫管它**（元模式 A2）——「加」有 step 3 的流程、「删」只能靠本步，不自省就必然只增不减。
-5. 不能干净机器化的（方法论 / 守则）→ 成文进 CLAUDE / 运维手册；**动了治理机制本身（守卫层/退役制/skill 家族）的批，收尾须回写 `docs/元模式.md` §B 绑定点**（2026-07-23 三处失效绑定的教训），并写清「为什么靠人」。
-6. 新增云函数/action → 登记 `modules.json`（`module-registry-complete` 会拦）；新增写库 → 必过 kit 闸（`rw-writes-need-gate` 会拦）；新增敏感云函数 → 加进 `scripts/guard-deploy.mjs` SENSITIVE_FNS。
+## 改
+3. **先写一个会红的检查，再改到绿**：
+   - 行为（钱/权限/状态/幂等）→ 测试，放 `tests/` 或各包 `tests/`。
+   - 金额、状态名这类能用类型表达的 → TS 类型。
+   - 仓级结构规则 → `scripts/check-structure.mjs`，但先过 `docs/元模式.md`「守卫准入」，UI 实现细节不加守卫。新守卫标 `roots`（病根号）。
+4. **顺手删**：这批让哪条旧守卫/旧测试多余了（被取代、守的功能已删、能并成一张表）？当批删掉。守卫总数没有别的机制管，只能靠每批自省。
+5. 新增云函数/action → 登记 `modules.json`；新增写库 → 过 kit 闸；新增敏感云函数 → 加进 `scripts/guard-deploy.mjs` 的名单。
+6. 注释里不写「由守卫 X 保证」，除非 grep 确认它真在（`docs/元模式.md` 流水线第 1 步）。
 
 ## 验证（缺一不可）
-7. `npm run check` 全绿（structure + typecheck + lint + test·conventions 已并入 structure）。被拦先修代码、不绕闸。
-8. **反向自检**：临时篡改这批新加的守卫 / 不变量 → 必须红 → 还原 → 绿。证明守卫真在咬、不是摆设。
-9. 碰云产物 / 部署形态：活线 `npm run build:rw-cloud`；碰页面：活线 `rewrite/mp` 为原生小程序无 bundler 构建、`npm run typecheck` 即等价校验 DONE。
+7. `npm run check` 全绿。被拦先修代码，不绕闸，不 `--no-verify`。
+8. **反向自检**：把这批的修复或新规则临时改坏，检查必须变红；改坏后先 grep 确认真改到了，还原后也要 grep 确认（错题本 E14/E19/E21）。
+9. 碰云函数产物跑 `npm run build:rw-cloud`；碰 admin/agent/site 跑对应 build。
 
 ## 收尾
-10. 推分支（绝不直接推 main·生产仓管理权不给 agent），**一批一个 squash 提交**；信息 `type：中文说明`（type ∈ feat / fix / docs / refactor / chore / test，全角冒号）。
-11. `git push`（GitHub 备份库 `ookiisparrow/luckyducky-fable`）。
-12. 过程记进 **commit 信息**（结论 + 净化指标 / 根治病根 + 验证证据 + 反向自检 + **本批退役/折叠了哪些守卫**·重构日志已退役 2026-08-21）+ 新踩的坑记回 `执行者错题本.md`。
-13. 向用户汇报用**业务语言**、决策给收益 / 代价（用户非技术）；如实报结果（红就说红、跳过就说跳过）。
+10. 推分支，不直接推 main。一批一个 squash 提交，信息 `type：中文说明`（全角冒号，type ∈ feat/fix/docs/refactor/chore/test）。
+11. 提交信息写清：结论、验证证据、反向自检结果、本批删了哪些守卫。新踩的坑记回 `执行者错题本.md`。
+12. PR 里凡写「真机验过/压测过」，附日志、截图或命令输出。
+13. 向老板汇报用业务语言；红就说红，跳过就说跳过。
 
 ## 红线
-- 部署不绕 guard-deploy 闸；不删 8 件控制台正册资产。
-- 守卫被拦 = 修代码，不是加 `structure-ok` 绕过（确属刻意例外才加，先确认）。
-- 主张没守卫不算做完；守卫反向自检不变红不算可靠。
+- 部署不绕 `guard-deploy`；不删 `console-assets/` 正册资产。
+- 被守卫拦 = 修代码。确属刻意例外才行内加 `structure-ok`，先确认。

@@ -17,8 +17,8 @@ import {
   type FlatSegment,
   type LessonStrip,
 } from '../../lib/player'
-// 播放地址缓存单例迁 lib（批3·跨页取址预热·根因#15）：本地名仍叫 cache（守卫 rw-mp-player-prefetch-cache
-// 正则钉 cache.prefetch(·且 catalog/me 共享同一实例才能预热·拆回页面私有即断跨页预热）。
+// 播放地址缓存单例迁 lib（批3·跨页取址预热·根因#15）：本地名仍叫 cache（catalog/me
+// 共享同一实例才能预热·拆回页面私有即断跨页预热）。
 import { playbackCache as cache } from '../../lib/playbackCache'
 import { getCourseByIdDetailed } from '../../lib/courses'
 import { getPageContent } from '../../lib/pageContent'
@@ -40,7 +40,7 @@ const PREVIEW_EDGE_RPX = 64
 // 返回二次确认窗口（ms·P5 设计拍板②）：每次返回都出现「再按一次返回退出」，非仅首次；侧滑/系统手势
 // 返回无法拦截（WebView 页无 onBackPress——平台限制），仅本页自绘返回箭头点击经此判定。
 const BACK_CONFIRM_MS = 2500
-// 首次成功退出加桌引导 storage key（storage key 收敛·CLAUDE §7）：仅展示一次（P5b 设计拍板④）。
+// 首次成功退出加桌引导 storage key（storage key 收敛·CLAUDE.md）：仅展示一次（P5b 设计拍板④）。
 const DESK_GUIDE_KEY = 'ld_player_desk_guide_shown'
 
 // segcap 文案三态（P4·播放器重设计战役批B §2c）：播放中报「段落 x/y」；播完且课时内有下一段报「x 完成·接下来 x+1」；
@@ -114,7 +114,7 @@ Page({
   windowHeightPx: 0, // 视频框比例封顶基准（onLoad 存·防超高素材撑破屏·见 onVideoMeta）
   firstFrameScene: 'enter' as 'enter' | 'seg' | 'retry',
   firstFrameReported: false,
-  playToken: 0, // 切段请求令牌（防乱序回包覆盖·守卫 rw-mp-player-stale-guarded）
+  playToken: 0, // 切段请求令牌（防乱序回包覆盖）
   helpVideosToken: 0, // 帮助视频子层请求令牌（防乱序回包覆盖·同 playToken 惯用法·评审 finding 复核 2026-07-11
   // 批D 补丁：粗粒度 helpPanel==='videos' 判定无法区分「快速退出再进入」产生的新旧两次请求，慢的旧请求
   // 若晚于新请求回包，会用旧数据把刚渲染好的新列表覆盖回去——必须用自增代次精确丢弃过期回包）。
@@ -249,7 +249,7 @@ Page({
       seekCfg: this.buildSeekCfg(0, seg.marks),
       bufferPct: 0,
     }
-    // 起播落定回调（peek 直落 / 取址落定共用·定义在方法体内以内联段间预取与 autoplay 兜底·守卫 rw-mp-player-prefetch-cache 咬）。
+    // 起播落定回调（peek 直落 / 取址落定共用·定义在方法体内以内联段间预取与 autoplay 兜底）。
     const onPlaying = () => {
       // 首次量取 seek 条布局；换段重入该回调时已有值即跳过——底条布局不随段变化，无需重量。
       if (!this._seekRect) this.measureSeekRect()
@@ -266,7 +266,7 @@ Page({
     }
     // peek 消初见切段闪烁（根因#8）：来源页/上一段预热过则缓存新鲜命中，跳过 state:'loading' 中间态、一次 setData
     // 直落 playing+src（清零字段全并入同一次·无「加载首帧」骨架一闪）。peek 同步纯读、无异步空窗、无乱序风险，故此路
-    // 不复核请求令牌；令牌复核仍在下方取址路一处（守卫 rw-mp-player-stale-guarded 咬那处·勿动）。
+    // 不复核请求令牌；令牌复核仍在下方取址路一处（勿动）。
     const peeked = cache.peek(this.courseId, seg.segmentId)
     if (peeked) {
       this.srcSetAt = Date.now()
@@ -627,7 +627,7 @@ Page({
   },
 
   // CMS 求助面板文案 + FAQ（批B·fail-soft·拉不到维持默认）：三卡标题回退默认；FAQ 空 → 维持诚实空态导流客服
-  // （不造假 Q&A·见 wxml faq 子层）。await 恢复点复核 unloaded（守卫 rw-mp-await-side-effect-unloaded-recheck 纪律）。
+  // （不造假 Q&A·见 wxml faq 子层）。await 恢复点复核 unloaded。
   async loadPageContent() {
     const content = await getPageContent('catalogPlayer')
     if (this.unloaded) return
@@ -635,9 +635,8 @@ Page({
   },
 
   // 求助面板入口（P3·播放器重设计战役批D）：占常规播放键位的求助钮不再直连客服，改拉起底部 sheet——
-  // 客服真调用移入面板卡1（onHelpContact，守卫 rw-mp-customer-service-wired 触点表钉这里）；播放不阻断
-  // （唯一暂停例外＝内嵌视频播放，见 onHelpPlaySegment）。wxml 上 bind:tap="onHelp" 绑定原样保留（守卫
-  // rw-mp-player-immersive 钉的是这个节点，与本方法体内调用什么无关）。
+  // 客服真调用移入面板卡1（onHelpContact）；播放不阻断
+  // （唯一暂停例外＝内嵌视频播放，见 onHelpPlaySegment）。wxml 上 bind:tap="onHelp" 绑定原样保留。
   onHelp() {
     this.setData({ helpPanel: 'menu' })
   },
@@ -759,7 +758,7 @@ Page({
   },
   // 真退单出口：原生返回栈优先，深链无上级页兜底回首页——判断收口到 lib/nav.ts
   // （2026-07-25 体检批 P2·Rule of Three：catalog/welcome 补自绘返回后同款判断第三次出现，
-  //   守卫 rw-mp-custom-nav-has-back 焊死单源；行为不变，首页兜底由 reLaunch 改 switchTab 保住底部导航栏）。
+  //   行为不变，首页兜底由 reLaunch 改 switchTab 保住底部导航栏）。
   exitPlayer() {
     goBackOrHome()
   },
@@ -806,7 +805,7 @@ Page({
   },
   onHide() {
     this.reportWatchAt()
-    // 后台挂起清缓冲升级定时器（timer 必清理·CLAUDE §7）：挂起期无 timeupdate，10s 定时器醒来会把
+    // 后台挂起清缓冲升级定时器（timer 必清理·CLAUDE.md）：挂起期无 timeupdate，10s 定时器醒来会把
     // 正常的后台停留误判成失速落 error 态；回前台若真在缓冲，waiting 会再次触发重建角标与定时器。
     this.clearBuffering()
   },

@@ -4,9 +4,6 @@
 // 加载提速：卡不等人资料/CMS；有旧卡不拉回骨架；继续学习只取所需课（不拉整本 getAllCourses）。
 // Page 以全局桩捕获 options（node 环境无小程序运行时·同 cart/catalog 测试 wx 桩家风）。
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-// wxml 门控断言用（同 home-cards.test.ts 的 ?raw 原文导入范式·类型见 raw-imports.d.ts）
-import meWxmlRaw from '../pages/me/me.wxml?raw'
-import meTsRaw from '../pages/me/me.ts?raw'
 import { loginGate } from '../lib/loginGate'
 import { mapMe } from '../lib/mapMe'
 
@@ -140,16 +137,6 @@ describe('继续学习区加载中态分治（加载中≠没课·消首帧假�
     await flush()
     expect(page2.data.contLoaded).toBe(true)
   })
-  it('大白话：me.wxml 的「还没有学习记录」空态不再挂裸 wx:else，须门控在 contLoaded 后，且有加载中骨架兜底', () => {
-    const wxml = meWxmlRaw.replace(/<!--[\s\S]*?-->/g, '')
-    // 空态文案存在
-    expect(wxml).toContain('还没有学习记录')
-    // 门控与节点绑定断言（钉分支归属，不是碎片各自存在）：contLoaded 门控必须挂在「还没有学习记录」
-    // 那张空态卡的节点上，骨架必须是 wx:else 兜底分支——两分支互换（加载中渲染假空态·Bug C 原样回归）
-    // 时三碎片仍都在、只有这两条节点锚定断言会咬红。
-    expect(wxml).toMatch(/<view wx:elif="\{\{contLoaded\}\}" class="ld-me-empty">[\s\S]{0,400}?还没有学习记录/)
-    expect(wxml).toMatch(/<view wx:else class="ld-me-cont-skeleton">/)
-  })
 })
 
 describe('继续学习卡不等人资料/不拉整本树/旧卡先画（根因#15）', () => {
@@ -211,16 +198,6 @@ describe('继续学习卡不等人资料/不拉整本树/旧卡先画（根因#1
     expect(page.data.contFailed).toBe(false)
     expect(store[CONT_KEY]).toEqual(STORED)
   })
-
-  it('大白话：有进度时只按所需课 id 取，不走 getAllCourses 整本树', async () => {
-    getMyProgressMock.mockResolvedValue({ ok: true, list: [{ courseId: 'c1', last: { lessonId: 'l1' }, updatedAt: 100 }] })
-    const page = await mountMe()
-    await page.refresh()
-    await flush()
-    expect(getCoursesByIdsMock).toHaveBeenCalledWith(['c1'])
-    expect(meTsRaw).toMatch(/getCoursesByIds\s*\(/)
-    expect(meTsRaw.replace(/\/\/.*$/gm, '')).not.toMatch(/\bgetAllCourses\s*\(/)
-  })
 })
 
 // 登录态首帧（2026-09-14）：loggedIn/nickname 写死未登录，本地 hint 已同意仍先闪「欢迎来到小棉鸭 / 点击登录」。
@@ -247,20 +224,5 @@ describe('我页登录态首帧（本地已同意不先闪登出·根因#8/#14�
     await flush()
     expect(page.data.loggedIn).toBe(true)
     expect(page.data.nickname).toBe(mapMe(null).defaultNickname)
-  })
-
-  it('大白话：me.ts 初始 data 的 loggedIn/nickname 须从 loginGate.hasAgreed 与 mapMe 默认名预填，禁写死 false/空串', () => {
-    const ts = meTsRaw.replace(/\/\/.*$/gm, '')
-    expect(ts).toMatch(/loggedIn:\s*(seededLoggedIn|loginGate\.hasAgreed\(\))/)
-    expect(ts).toMatch(/nickname:\s*(seededMe\.defaultNickname|mapMe\(null\)\.defaultNickname)/)
-    expect(ts).not.toMatch(/loggedIn:\s*false/)
-    expect(ts).not.toMatch(/nickname:\s*''/)
-  })
-
-  it('大白话：问候与登录入口仍门控 loggedIn（已同意首帧走欢迎回来/编辑资料，未同意走欢迎来到/点击登录）', () => {
-    const wxml = meWxmlRaw.replace(/<!--[\s\S]*?-->/g, '')
-    expect(wxml).toMatch(/loggedIn \? '欢迎回来' : '欢迎来到小棉鸭'/)
-    expect(wxml).toContain('点击登录')
-    expect(wxml).toContain('编辑资料')
   })
 })

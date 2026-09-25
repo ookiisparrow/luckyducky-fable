@@ -1,8 +1,6 @@
 // stripComments/methodBody 单源 helper 单测（批E·执行者错题本 E1）：
 // 这两个 helper 是原三处/四处重复正则字面量收敛后的单一来源，被 scripts/check-structure.mjs
-// 多条守卫（agent-channel-stays-assistant / rw-mp-player-stale-guarded /
-// rw-mp-player-immersive / rw-mp-customer-service-wired / rw-mp-home-quick-add-real）
-// 复用——本测试直接钉 helper 自身行为，不依赖任何具体守卫。
+// 多条守卫复用——本测试直接钉 helper 自身行为，不依赖任何具体守卫。
 import { describe, it, expect } from 'vitest'
 import { stripComments, methodBody } from '../../scripts/check-structure.mjs'
 

@@ -7,7 +7,7 @@
 //     隔夜价若进了 catalog 缓存会流到 quickAdd/cart 的展示价（价格最终由云端 createOrder 现算校验兜底，
 //     但用户会先看见错价·体验事故）。快照里的 price 只用于首页卡片标价展示，不作任何交易依据。
 //  ② 本文件**不 import api/***、**不出现 callApp 字面量**——目录数据的云调用单源仍在 lib/catalog.ts /
-//     lib/courses.ts（守卫 rw-mp-catalog-cache-single-source 扫本文件·别在这儿绕过缓存直取）。
+//     lib/courses.ts（别在这儿绕过缓存直取）。
 //  ③ 快照是**加分项**：任何一步失败（storage 超限/脏档/序列化炸）一律静默回退到「无快照」路径，
 //     绝不影响主渲染（reload 照常拉云端）。
 

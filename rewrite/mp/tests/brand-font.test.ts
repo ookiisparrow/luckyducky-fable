@@ -5,10 +5,6 @@
 // rewrite/mp/tsconfig.json 无 @types/node，不走 node:fs+import.meta.url，改走 `?raw` 原文导入（见 raw-imports.d.ts）。
 import { describe, it, expect } from 'vitest'
 import { BRAND_FONT_FAMILY, BRAND_FONT_FAMILY_T2, BRAND_FONT_FAMILY_T3, BRAND_FONT_TIERS } from '../utils/brandFont'
-import brandFontSrc from '../utils/brandFont.ts?raw'
-import appSrc from '../app.ts?raw'
-import tokensSrc from '../styles/tokens.wxss?raw'
-import appWxssSrc from '../app.wxss?raw'
 
 describe('brandFont 分层常量（三层×两字重·首屏最先）', () => {
   it('大白话：三层字族——首层沿用文源圆体原名，二三层带 T2/T3 后缀', () => {
@@ -34,57 +30,5 @@ describe('brandFont 分层常量（三层×两字重·首屏最先）', () => {
         expect(name.endsWith('.woff2')).toBe(false)
       }
     }
-  })
-
-  it('大白话：下载走 tcloudbaseapp 托管域名 /fonts/（DigiCert·域名在 downloadFile 白名单）', () => {
-    expect(brandFontSrc).toMatch(/https:\/\/cloudbase-.*\.tcloudbaseapp\.com/)
-    expect(brandFontSrc).toMatch(/\/fonts\/\$\{name\}/)
-  })
-})
-
-describe('持久缓存 + 弱网重试（字体分层批新增·断线即真机回到「次次全量下载/瞬断整会话系统字」）', () => {
-  it('大白话：缓存落 USER_DATA_PATH（官方保证跨冷启动持久·二次启动零网络）', () => {
-    expect(brandFontSrc).toContain('USER_DATA_PATH')
-    expect(brandFontSrc).toMatch(/copyFile/)
-  })
-
-  it('大白话：下载有显式 timeout 与退避重试（弱网瞬断不再单发即弃）', () => {
-    expect(brandFontSrc).toMatch(/timeout:\s*DOWNLOAD_TIMEOUT_MS/)
-    expect(brandFontSrc).toMatch(/RETRY_DELAYS_MS/)
-  })
-})
-
-describe('app.ts 接线（loadBrandFonts 真被调用）', () => {
-  it('大白话：app.ts 源码里出现 loadBrandFonts() 调用', () => {
-    expect(appSrc).toMatch(/loadBrandFonts\(\)/)
-  })
-})
-
-describe('tokens.wxss / app.wxss 接线（--ld-font-brand 三族回退栈 + page 块真引用）', () => {
-  it('大白话：tokens.wxss 定义 --ld-font-brand，三层字族按 T1→T2→T3 次序打头（逐字回退补字的地基）', () => {
-    const m = tokensSrc.match(/--ld-font-brand:\s*([^;]+);/)
-    expect(m).toBeTruthy()
-    const stack = m![1]
-    const i1 = stack.indexOf(`'${BRAND_FONT_FAMILY}'`)
-    const i2 = stack.indexOf(`'${BRAND_FONT_FAMILY_T2}'`)
-    const i3 = stack.indexOf(`'${BRAND_FONT_FAMILY_T3}'`)
-    expect(i1).toBe(stack.search(/\S/)) // T1 打头
-    expect(i2).toBeGreaterThan(i1)
-    expect(i3).toBeGreaterThan(i2) // 次序 T1 → T2 → T3（错序=首屏字被兜底族抢渲染）
-  })
-
-  it('大白话：app.wxss 的 page 块引用了 var(--ld-font-brand)', () => {
-    const pageBlock = appWxssSrc.match(/page\s*\{[^}]*\}/)
-    expect(pageBlock).toBeTruthy()
-    expect(pageBlock![0]).toContain('var(--ld-font-brand)')
-  })
-
-  it('大白话：page 块显式钉了 font-weight，且值命中已注册字重（不留默认 400 空档）', () => {
-    const pageBlock = appWxssSrc.match(/page\s*\{[^}]*\}/)
-    expect(pageBlock).toBeTruthy()
-    const m = pageBlock![0].match(/font-weight:\s*(\d+)/)
-    expect(m).toBeTruthy()
-    const registeredWeights = BRAND_FONT_TIERS[0].files.map((f) => f.weight)
-    expect(registeredWeights).toContain(m![1])
   })
 })

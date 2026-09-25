@@ -105,10 +105,6 @@ describe('cleanupEvents：缓期孤儿视频 + 弃传分片（根因#7/#1）', (
         ],
       },
     ])
-    control.seed('uploadChunks', [
-      { _id: 'u1-0', uploadId: 'u1', seq: 0, b64: 'AA', createdAt: now - 25 * 3600_000 }, // 弃传超 24h
-      { _id: 'u2-0', uploadId: 'u2', seq: 0, b64: 'BB', createdAt: now - 60_000 }, // 进行中
-    ])
     const r: any = await cleanupEvents()
     expect(r.videoGc).toBe(1)
     expect(control.deletedFiles()).toContain('cloud://v/due.mp4')
@@ -116,9 +112,6 @@ describe('cleanupEvents：缓期孤儿视频 + 弃传分片（根因#7/#1）', (
     const left = control.dump('courses')[0].pendingGc
     expect(left).toHaveLength(1)
     expect(left[0].fileId).toBe('cloud://v/not-yet.mp4')
-    const chunks = control.dump('uploadChunks')
-    expect(chunks).toHaveLength(1)
-    expect(chunks[0]._id).toBe('u2-0')
   })
 })
 

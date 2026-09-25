@@ -56,8 +56,6 @@ const ACTIONS: Record<string, (ctx: Ctx) => Promise<any>> = Object.assign(Object
   getCourseDraft: courses.getCourseDraft,
   saveCourseDraft: courses.saveCourseDraft,
   publishCourse: courses.publishCourse,
-  uploadChunk: courses.uploadChunk,
-  uploadFinish: courses.uploadFinish,
   // VOD 转码管线（决策§31 批2）：直传签名（get 前缀不审计）+ 转码同步（写草稿·自动审计）·默认 admin:write
   getVodUploadSignature: courses.getVodUploadSignature,
   syncVodMedia: courses.syncVodMedia,

@@ -5,7 +5,7 @@
      （序号圈/名称/副行「N 个段落 · M 分钟 · 上次学到…」+ 右侧状态图标 done/current/todo 三态）。 -->
 <view class="ld-cat">
 
-  <!-- 自绘返回（守卫 rw-mp-custom-nav-has-back）：navigationStyle:custom 去掉了原生返回箭头，
+  <!-- 自绘返回：navigationStyle:custom 去掉了原生返回箭头，
        不补这个用户只剩系统手势可退；置于最外层而非 hero 内——missing/failed 空态同样需要出路。
        白色半透明圆底＋深色箭头：hero 图深浅不定、空态是浅底，两种背景下都看得清。 -->
   <view class="ld-cat-back" style="top: calc({{statusBarHeight}}px + 12rpx)" bind:tap="onBack" hover-class="ld-cat-back-h" hover-stay-time="80">

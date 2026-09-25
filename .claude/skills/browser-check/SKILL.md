@@ -5,7 +5,7 @@ description: Use when 深度检查/审查 web 线（rewrite/admin 管理控制�
 
 # 浏览器视觉体检（web 线）
 
-> 元模式 health 环、web 端专版：小程序真机走查归 `rewrite/mp/README.md` 手册（原 /frontend-check 已随旧线退役），本 skill 管 **rewrite/admin·rewrite/agent·rewrite/site 三条 web 线**。补的病根：「对 UI/前端变更先启动 dev server 在浏览器里实际用一遍」这条纪律（原 CLAUDE.md 主提示·决策§32 换稿删节后由本 skill 承载），此前无工具落地、全靠记性——2026-07-12 页面内容 CMS 战役证实记性会漏（五页签工作台上线全程零浏览器验证）。**依赖 Playwright MCP**（`claude mcp list` 查 `playwright` 是否 Connected；未装先 `claude mcp add playwright --scope user npx '@playwright/mcp@latest'`，装完需下一次新会话才加载工具，当次会话调不到）。
+> `docs/元模式.md`「周期审查」的 web 端专版：小程序真机走查归 `rewrite/mp/README.md` 手册（原 /frontend-check 已随旧线退役），本 skill 管 **rewrite/admin·rewrite/agent·rewrite/site 三条 web 线**。补的病根：「对 UI/前端变更先启动 dev server 在浏览器里实际用一遍」这条纪律（原 CLAUDE.md 主提示·决策§32 换稿删节后由本 skill 承载），此前无工具落地、全靠记性——2026-07-12 页面内容 CMS 战役证实记性会漏（五页签工作台上线全程零浏览器验证）。**依赖 Playwright MCP**（`claude mcp list` 查 `playwright` 是否 Connected；未装先 `claude mcp add playwright --scope user npx '@playwright/mcp@latest'`，装完需下一次新会话才加载工具，当次会话调不到）。
 
 ## 0. 先过机器层（机器能验的不手验）
 - `npm run check` 全绿；对应 `npm run build:rw-admin` / `build:agent` / 内容站构建 exit 0。红了先修，别往下走。

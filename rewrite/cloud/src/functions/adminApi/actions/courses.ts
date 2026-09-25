@@ -1,4 +1,4 @@
-import { reply, ensure, cleanCourse, storeImage, manager, readDoc, type Ctx } from '../lib'
+import { reply, ensure, cleanCourse, manager, readDoc, type Ctx } from '../lib'
 import { isVodFileId, makeVodUploadSignature, callVodApi } from '../../../kit'
 
 // —— VOD 转码管线（决策§31 批2）——课程视频主路径升级为「admin 直传 VOD + 任务流自动转码」；
@@ -193,50 +193,4 @@ export async function publishCourse({ db, data }: Ctx) {
       await coursesColl.add({ data: { ...course, _id: courseId } })
     })
   return reply(200, { ok: true })
-}
-
-export async function uploadChunk({ db, data }: Ctx) {
-  const { uploadId, seq, b64 } = data
-  const id = String(uploadId || '').slice(0, 40)
-  const n = parseInt(seq, 10)
-  if (!id || !(n >= 0) || typeof b64 !== 'string' || !b64 || b64.length > 90_000) {
-    return reply(400, { ok: false, error: 'BAD_CHUNK' })
-  }
-  await ensure(db, 'uploadChunks')
-  await db
-    .collection('uploadChunks')
-    .doc(`${id}-${n}`)
-    .set({ data: { uploadId: id, seq: n, b64, createdAt: Date.now() } })
-  return reply(200, { ok: true })
-}
-
-export async function uploadFinish({ db, cloud, data }: Ctx) {
-  const id = String(data.uploadId || '').slice(0, 40)
-  const total = parseInt(data.total, 10)
-  // 片数上限须覆盖 admin 体积闸（uploadVideo 放行 ≤15MB·~80KB/片 b64 → 15MB≈263 片）+ 余量，
-  // 否则 12~15MB 视频走回落分片必 BAD_FINISH（P2·回落容量 vs 体积闸不一致）。300 片≈17MB，封顶防无界回落。
-  // 任一片数变动同步 rewrite/cloud/tests/app-admin2.test.ts「分片上传」片数封顶用例。
-  if (!id || !(total > 0) || total > 300) return reply(400, { ok: false, error: 'BAD_FINISH' })
-  const chunksColl = db.collection('uploadChunks')
-  const got = await chunksColl.where({ uploadId: id }).limit(1000).get()
-  // seq 必须正好 0..total-1（审核批次B：只数数量「0,2 共 2 片」也能过 → 拼出损坏文件）
-  const seqs = new Set(got.data.map((c: any) => c.seq))
-  const complete =
-    got.data.length === total &&
-    seqs.size === total &&
-    Array.from({ length: total }, (_, i) => i).every((i) => seqs.has(i))
-  if (!complete) {
-    return reply(400, { ok: false, error: 'CHUNKS_MISSING', have: got.data.length })
-  }
-  const b64 = got.data
-    .sort((a: any, b: any) => a.seq - b.seq)
-    .map((c: any) => c.b64)
-    .join('')
-  const res = await storeImage(cloud, b64, data)
-  await chunksColl.where({ uploadId: id }).remove()
-  await chunksColl
-    .where({ createdAt: db.command.lt(Date.now() - 3600_000) })
-    .remove()
-    .catch(() => {})
-  return reply(200, res)
 }

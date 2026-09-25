@@ -18,7 +18,6 @@ export const COLLECTIONS = {
   config: 'config',
   adminConfig: 'adminConfig',
   cards: 'cards',
-  uploadChunks: 'uploadChunks',
   events: 'events',
   rateLimit: 'rateLimit',
   inventory: 'inventory',

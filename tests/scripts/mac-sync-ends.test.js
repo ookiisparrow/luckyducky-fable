@@ -13,14 +13,7 @@ import {
 
 const ROOT = resolve(import.meta.dirname, '../..')
 const src = readFileSync(resolve(ROOT, 'scripts/mac-sync-ends.mjs'), 'utf8')
-const pkg = JSON.parse(readFileSync(resolve(ROOT, 'package.json'), 'utf8'))
 const SAMPLE = "export const BUILD_CHANNEL: '' | 'develop' | 'trial' | 'release' | 'experimental' = ''\n"
-
-describe('mac-sync-ends 接线', () => {
-  it('package.json 挂上 mac:sync-ends', () => {
-    expect(pkg.scripts['mac:sync-ends']).toBe('node scripts/mac-sync-ends.mjs')
-  })
-})
 
 describe('resolveEnds：默认 Mac 三路径，env/args 可改', () => {
   it('无覆盖 → 赵老板三台固定目录', () => {

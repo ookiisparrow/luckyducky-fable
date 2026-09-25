@@ -2,7 +2,6 @@
 // 自绘导航页（navigationStyle:custom）没有原生返回箭头，返回全靠自绘按钮——而这些页都可能被
 // **深链直接进入**（扫码激活落 welcome/catalog、分享链落播放页），此时页面栈只有一层，
 // navigateBack 会失败并把用户卡死在页内。故统一：有上级页就退回去，没有就兜底回首页 tab。
-// 守卫 rw-mp-custom-nav-has-back 焊死本文件存在与各页接线。
 
 /** 返回上一页；深链无上级页时兜底回首页 tab（不留死按钮）。 */
 export function goBackOrHome(): void {

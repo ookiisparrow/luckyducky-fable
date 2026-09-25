@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * 体检面板生成器（守卫 check-report-in-gates + check-report-derived·roots 正册）。
+ * 体检面板生成器（守卫 check-report-derived·roots 正册）。
  *
  * 为什么：一百多条守卫 + 千余条测试的健康状态只在终端滚屏里一闪而过——哪条守卫红了、
  * 哪个测试挂了、每条病根有几道网，没有可以「单独查看」的入口。本面板把它们变成一页
@@ -19,8 +19,7 @@
  *
  * 后期加针对性测试（自动入册·无需登记）：
  *   新线行为测试 → rewrite/<包>/tests/xxx.test.ts；守卫/脚本 → tests/scripts/xxx.test.js。
- *   落文件即被 vitest 项目自动发现，下次生成即出现在面板；要升格为守卫（纳入 guard-coverage
- *   病根覆盖核算）再到 check-structure.mjs 的 typeAndTestGuards 加 { id, mechanism:'test',
+ *   落文件即被 vitest 项目自动发现，下次生成即出现在面板；要升格为守卫再到 check-structure.mjs 的 typeAndTestGuards 加 { id, mechanism:'test',
  *   roots, reverseTest } 一条。结构守卫 → repoChecks/fileRules 加条目，面板同样自动入册。
  */
 import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'node:fs'
@@ -57,7 +56,7 @@ export function guardCatalog() {
   ]
 }
 
-/** 病根册解析：docs/根因账本.md §一 的 `### N. 标题`（与 guard-coverage/guard-count-synced 同源口径）。 */
+/** 病根册解析：docs/根因账本.md §一 的 `### N. 标题`。 */
 export function parseRootLedger() {
   const p = join(ROOT, 'docs/根因账本.md')
   if (!existsSync(p)) return []
@@ -358,12 +357,12 @@ ${testSections}</section>
 <ul>
 <li><b>新线行为测试</b>：在 <code>rewrite/&lt;包&gt;/tests/xxx.test.ts</code> 落一个 vitest 文件（旧线/脚本域放 <code>tests/&lt;域&gt;/xxx.test.js</code>）——vitest 项目自动发现，下次 <code>npm run report</code> 自动出现在本面板。</li>
 <li><b>单独跑</b>：<code>npx vitest run 文件路径</code>；只跑一条用例加 <code>-t "用例名"</code>（红灯卡片里已带好命令，点选即可复制）。</li>
-<li><b>升格为守卫</b>（纳入病根覆盖核算）：在 <code>scripts/check-structure.mjs</code> 的 <code>typeAndTestGuards</code> 注册 <code>{ id, mechanism:'test', roots:['#病根'], reverseTest:'测试文件路径' }</code>——guard-coverage / provenance 元守卫自动纳管。</li>
+<li><b>升格为守卫</b>：在 <code>scripts/check-structure.mjs</code> 的 <code>typeAndTestGuards</code> 注册 <code>{ id, mechanism:'test', roots:['#病根'], reverseTest:'测试文件路径' }</code>。</li>
 <li><b>结构守卫</b>：<code>repoChecks</code>（仓级断言）或 <code>fileRules</code>（逐文件规则）加条目并标 <code>roots</code>；本面板是注册表的派生视图，加完即自动入册。</li>
 <li><b>面板只呈现不拦截</b>：质量闸仍是 <code>npm run check</code>（pre-commit / CI 同源）；本面板用于「单独查看谁红了、每条病根有几道网」。</li>
 </ul></section>
 
-<footer>面板=守卫注册表+vitest 实跑的机器派生视图（守卫 check-report-in-gates / check-report-derived）·手抄清单迟早漂移，派生不会。</footer>
+<footer>面板=守卫注册表+vitest 实跑的机器派生视图（守卫 check-report-derived）·手抄清单迟早漂移，派生不会。</footer>
 </div>
 <script>
 (function(){

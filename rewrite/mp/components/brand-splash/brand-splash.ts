@@ -5,12 +5,11 @@
 //  · 过了 min-hold 后，父级 ready（首页数据就绪）即淡出——好网络下 splash 撤得比死等 1.5s 更快；
 //  · 数据迟迟不来（弱网/云未部署）则 HARD_CAP_MS 无条件撤场——防「数据永不就绪」splash 永久盖死首页
 //    （根因#8 build 绿·真机陷死）。
-// 有界自撤守卫见 rw-mp-splash-auto-dismiss（三断言＋硬上限断言④·HARD_CAP_MS 改名须同步守卫）。
 import { BRAND_SLOGAN_EN } from '../../lib/brand'
 
 const MIN_HOLD_MS = 800 // 最短停留（低于此一闪而过·观感差）
 const FADE_MS = 500 // 淡出时长（须与 wxss .ld-splash.leaving 动画时长一致）
-const HARD_CAP_MS = 4000 // 硬上限：数据永不就绪也无条件撤场（HARD_CAP_MS 改名须同步守卫 rw-mp-splash-auto-dismiss 断言④）
+const HARD_CAP_MS = 4000 // 硬上限：数据永不就绪也无条件撤场
 
 // 撤场判定（纯函数·供测试直测 rewrite/mp/tests/brand-splash.test.ts）：过了最短停留且父级 ready 才放行离场。
 export function shouldLeave(now: number, t0: number, ready: boolean): boolean {

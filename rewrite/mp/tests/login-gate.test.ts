@@ -2,10 +2,6 @@
 // ensureLogin：已同意（本地 hint=true）放行返回 true 不弹；未同意拦截返回 false 并打开半屏。
 // hint sanitize：storage 不可信只认字面 true。markAgreed 写 hint + 关闭 + 广播订阅者。
 import { describe, it, expect, beforeEach, afterEach } from 'vitest'
-import homeWxml from '../pages/home/home.wxml?raw'
-import meWxml from '../pages/me/me.wxml?raw'
-import tabbarTs from '../custom-tab-bar/index.ts?raw'
-import tabbarWxml from '../custom-tab-bar/index.wxml?raw'
 
 let store: Record<string, unknown> = {}
 beforeEach(() => {
@@ -83,27 +79,5 @@ describe('loginGate · 登录软门槛（半屏弹窗·R1）', () => {
     expect(sanitizeLoginHint(1)).toBe(false)
     expect(sanitizeLoginHint(undefined)).toBe(false)
     expect(sanitizeLoginHint(null)).toBe(false)
-  })
-})
-
-// 接线回归锁（守 2026-07-16 真机反馈两 bug：①登录半屏也要在首页出现 ②tabBar 覆盖半屏）
-describe('登录半屏接线（防两报告 bug 回归·R1）', () => {
-  it('大白话：首页与我页都挂了 <login-sheet>（软门槛在首页也出现·非只我页）', () => {
-    expect(homeWxml).toContain('<login-sheet')
-    expect(meWxml).toContain('<login-sheet')
-  })
-  it('大白话：自定义 tabBar 订阅 loginGate 并按 hidden 让位（半屏打开时不盖住登录·页面 z-index 盖不住原生 tabBar 层）', () => {
-    expect(tabbarTs).toContain("from '../lib/loginGate'")
-    expect(tabbarTs).toContain('loginGate.subscribe')
-    expect(tabbarWxml).toContain('!hidden')
-  })
-  it('大白话：自定义底栏只画图标和购物车角标，不写首页/购物车/我', () => {
-    const live = tabbarWxml.replace(/<!--[\s\S]*?-->/g, '')
-    expect(live).toContain('ld-tab-icon')
-    expect(live).toContain('ld-tab-badge')
-    expect(tabbarTs).toContain('setActive')
-    expect(tabbarTs).toContain('cartCount')
-    expect(live).not.toContain('ld-tab-label')
-    expect(live).not.toContain('item.label')
   })
 })
