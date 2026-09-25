@@ -2,6 +2,7 @@
 // Csat.vue 挂载测试：满意度报表与评价明细的加载成败（失败不装「还没有评价」）、筛差评、差评跳会话。
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { mount, flushPromises } from '@vue/test-utils'
+import { transportErrorText } from '../src/lib/mapSystem'
 
 const api = vi.hoisted(() => ({ getCsatReport: vi.fn(), listCsatEntries: vi.fn(), push: vi.fn() }))
 vi.mock('../src/api/cs', () => ({ getCsatReport: api.getCsatReport, listCsatEntries: api.listCsatEntries }))
@@ -39,7 +40,7 @@ describe('Csat.vue 报表', () => {
   it('大白话：报表挂了——显原因，不装成「还没有顾客评价」', async () => {
     api.getCsatReport.mockResolvedValue({ ok: false, status: 500, error: 'X1' })
     const w = await mountPage()
-    expect(statuses(w)).toContain('加载失败：X1')
+    expect(statuses(w)).toContain('加载失败（X1）')
     expect(w.text()).not.toContain('还没有顾客评价')
   })
 })
@@ -54,9 +55,9 @@ describe('Csat.vue 评价明细', () => {
   })
 
   it('大白话：明细挂了——显原因，不说「这个区间没有评价」', async () => {
-    api.listCsatEntries.mockResolvedValue({ ok: false, status: 500, error: 'X2' })
+    api.listCsatEntries.mockResolvedValue({ ok: false, status: 0, error: 'CALL_TIMEOUT' })
     const w = await mountPage()
-    expect(statuses(w)).toContain('加载失败：X2')
+    expect(statuses(w)).toContain('加载失败：' + transportErrorText('CALL_TIMEOUT'))
     expect(w.text()).not.toContain('这个区间没有评价')
   })
 
@@ -75,7 +76,7 @@ describe('Csat.vue 评价明细', () => {
     await btn(w, '全部').trigger('click')
     await flushPromises()
     expect(api.listCsatEntries.mock.lastCall![0]).toEqual({ from: undefined, to: undefined, maxScore: undefined })
-    expect(statuses(w)).toContain('加载失败：X3')
+    expect(statuses(w)).toContain('加载失败（X3）')
     expect(w.findAll('.ld-tbody .ld-tr')).toHaveLength(0)
   })
 })

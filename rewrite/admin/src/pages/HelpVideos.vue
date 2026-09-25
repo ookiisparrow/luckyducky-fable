@@ -4,6 +4,8 @@ import { ref, onMounted, onBeforeUnmount, watch, nextTick } from 'vue'
 import { Upload, Check, Trash2, Plus, Video } from 'lucide-vue-next'
 import { listHelpVideos, saveHelpVideos, uploadVideo } from '../api/content'
 import { normalizeHelpItems, type HelpItem } from '../lib/mapContent'
+import { failText } from '../lib/mapCs'
+import { launchErrorText } from '../lib/mapSystem'
 import { serialSave } from '../lib/serialSave'
 import { confirmed } from '../lib/status'
 import PageHeader from '../components/ui/PageHeader.vue'
@@ -29,7 +31,7 @@ async function reload() {
     // 失败 loaded 恒 false：autosave 与手动 save 都拒——否则一次编辑就 saveHelpVideos([]) 触发后端整档覆盖 +
     // 孤儿 GC 永久删光所有帮助视频文件（P1 不可逆·同 Courses.load 早退范式）
     items.value = []
-    message.value = '加载失败：' + String(r.error || '')
+    message.value = failText('加载失败', r.error)
     return
   }
   items.value = normalizeHelpItems(r.items)
@@ -141,7 +143,7 @@ async function pickVideo(t: HelpItem, i: number, ev: Event) {
   if (r.ok) {
     seg.videoFileId = r.fileId || ''
     message.value = ''
-  } else message.value = '视频上传失败：' + String(r.error || '')
+  } else message.value = launchErrorText(r.error) // 与 Courses 同一上传器·同一张中文映射
 }
 
 async function save() {

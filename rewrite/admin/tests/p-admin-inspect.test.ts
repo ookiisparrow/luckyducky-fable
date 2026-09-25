@@ -2,6 +2,7 @@
 // Inspect.vue 挂载测试：最新体检报告加载成败（失败不装「还没跑过巡检」）、立即巡检成败、未处理异常入口。
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { mount, flushPromises } from '@vue/test-utils'
+import { transportErrorText } from '../src/lib/mapSystem'
 import type { InspectRunRecord } from '@ldrw/shared'
 
 const api = vi.hoisted(() => ({ getInspectStatus: vi.fn(), runInspect: vi.fn(), push: vi.fn() }))
@@ -51,7 +52,7 @@ describe('Inspect.vue 加载', () => {
   it('大白话：加载失败显原因，不装成「还没跑过巡检」', async () => {
     api.getInspectStatus.mockResolvedValue({ ok: false, status: 500, error: 'X1' })
     const w = await mountPage()
-    expect(status(w)).toBe('加载失败：X1')
+    expect(status(w)).toBe('加载失败（X1）')
     expect(w.text()).not.toContain('还没跑过巡检')
   })
 })
@@ -72,10 +73,10 @@ describe('Inspect.vue 立即巡检', () => {
 
   it('大白话：巡检失败显原因，不重载冲掉它、旧报告留着', async () => {
     const w = await mountPage()
-    api.runInspect.mockResolvedValue({ ok: false, status: 500, error: 'X2' })
+    api.runInspect.mockResolvedValue({ ok: false, status: 0, error: 'CALL_TIMEOUT' })
     await w.findAll('button').find((b) => b.text() === '立即巡检')!.trigger('click')
     await flushPromises()
-    expect(status(w)).toBe('巡检失败：X2')
+    expect(status(w)).toBe(transportErrorText('CALL_TIMEOUT'))
     expect(api.getInspectStatus).toHaveBeenCalledTimes(1)
     expect(w.find('.check.red').text()).toContain('付了钱没发货')
   })

@@ -4,7 +4,7 @@
 import { ref } from 'vue'
 import { Search, ChevronLeft, RotateCcw, User } from 'lucide-vue-next'
 import { searchCustomer, getCustomer360, getUser } from '../api/cs'
-import { matchLabel, mapPanels, type PanelVM } from '../lib/mapCs'
+import { matchLabel, mapPanels, failText, type PanelVM } from '../lib/mapCs'
 import { maskPhone } from '../lib/mapMoney'
 import { useLatest } from '../lib/latest'
 import { dateTime } from '../lib/format'
@@ -50,7 +50,7 @@ async function search() {
   // message 只在未打开客户面板时更新（P2·bug sweep Round2 item13·AND 语义非 OR）：isStale 早退之后「本代际仍
   // 最新」在此恒真——若把它也纳入这里的判定条件（OR）等于恒真，起不到「迟到搜索回包覆盖已打开客户状态文案」
   // 的防护；只认 !current 才是真实闸门。
-  if (!current.value) message.value = r.ok ? (hits.value.length ? '' : '没找到匹配的客户') : '搜索失败：' + String(r.error || '')
+  if (!current.value) message.value = r.ok ? (hits.value.length ? '' : '没找到匹配的客户') : failText('搜索失败', r.error)
 }
 
 const panoGen = useLatest() // 全景乱序守卫（P1·FORCE_AUDIT 页·A 的私域全景别落到标 B 的头下·根因#8）
@@ -75,7 +75,7 @@ async function open(openid: string) {
   } else if (!u.ok) {
     userLoadFailed.value = true
   }
-  message.value = r.ok ? '' : '加载失败：' + String(r.error || '')
+  message.value = r.ok ? '' : failText('加载失败', r.error)
 }
 </script>
 

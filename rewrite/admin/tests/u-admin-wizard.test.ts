@@ -4,6 +4,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { mount, flushPromises } from '@vue/test-utils'
 import { createRouter, createMemoryHistory } from 'vue-router'
 import { freshDraft, restoreSaleOk } from '../src/lib/mapProducts'
+import { launchErrorText } from '../src/lib/mapSystem'
 
 const { listDraftsMock, republishProductMock } = vi.hoisted(() => ({ listDraftsMock: vi.fn(), republishProductMock: vi.fn() }))
 vi.mock('../src/api/products', () => ({
@@ -63,5 +64,17 @@ describe('Wizard.vue 回刷失败横幅与动作反馈', () => {
     expect(republishProductMock).toHaveBeenCalledTimes(1)
     expect(listDraftsMock).toHaveBeenCalledTimes(3)
     expect(w.find('.banner').text()).toBe(restoreSaleOk())
+  })
+
+  it('大白话：恢复销售失败说人话，不甩 NO_PRODUCT', async () => {
+    listDraftsMock.mockResolvedValue(okList)
+    republishProductMock.mockResolvedValue({ ok: false, status: 400, error: 'NO_PRODUCT' })
+    const { w } = await mountAt('1')
+    await w.findAll('button').find((b) => b.text() === '恢复销售')!.trigger('click')
+    await flushPromises()
+    await w.findAll('button').find((b) => b.text().includes('上次上架页'))!.trigger('click')
+    await flushPromises()
+    expect(w.find('.banner').text()).toBe(launchErrorText('NO_PRODUCT'))
+    expect(w.find('.banner').text()).not.toContain('NO_PRODUCT')
   })
 })

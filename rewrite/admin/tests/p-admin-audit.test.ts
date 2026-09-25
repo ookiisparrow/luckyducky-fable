@@ -2,6 +2,7 @@
 // Audit.vue 挂载测试：审计记录加载成败（失败≠「没有匹配的记录」）、按操作人/前缀筛选、加载更多成败、快切区间不串。
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { mount, flushPromises } from '@vue/test-utils'
+import { transportErrorText } from '../src/lib/mapSystem'
 
 const api = vi.hoisted(() => ({ listAudit: vi.fn() }))
 vi.mock('../src/api/ops', () => api)
@@ -39,7 +40,7 @@ describe('Audit.vue 加载', () => {
   it('大白话：加载失败显原因，不说「没有匹配的记录」也不显空态', async () => {
     api.listAudit.mockResolvedValue({ ok: false, status: 500, error: 'X1' })
     const w = await mountPage()
-    expect(status(w)).toBe('加载失败：X1')
+    expect(status(w)).toBe('加载失败（X1）')
     expect(w.text()).not.toContain('还没有操作记录')
   })
 
@@ -68,10 +69,10 @@ describe('Audit.vue 筛选与翻页', () => {
     expect(api.listAudit.mock.lastCall![0]).toMatchObject({ cursor: 'c1' })
     expect(actions(w)).toEqual(['shipOrder', 'approveRefund', 'saveDraft'])
 
-    api.listAudit.mockResolvedValueOnce({ ok: false, status: 500, error: 'X2' })
+    api.listAudit.mockResolvedValueOnce({ ok: false, status: 0, error: 'NETWORK:Failed to fetch' })
     await btn(w, '加载更多').trigger('click')
     await flushPromises()
-    expect(status(w)).toBe('加载更多失败：X2')
+    expect(status(w)).toBe('加载更多失败：' + transportErrorText('NETWORK:Failed to fetch'))
     expect(actions(w)).toHaveLength(3)
   })
 

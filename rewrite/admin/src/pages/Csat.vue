@@ -5,7 +5,7 @@ import { ref, onMounted, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { RotateCcw, Star, ThumbsUp, ThumbsDown, MessageSquare, Search } from 'lucide-vue-next'
 import { getCsatReport, listCsatEntries } from '../api/cs'
-import { mapCsat, mapCsatEntries, type CsatEntryVM } from '../lib/mapCs'
+import { mapCsat, mapCsatEntries, failText, type CsatEntryVM } from '../lib/mapCs'
 import { useLatest, appendNew } from '../lib/latest'
 import PageHeader from '../components/ui/PageHeader.vue'
 import Card from '../components/ui/Card.vue'
@@ -34,7 +34,7 @@ async function load() {
   const r = await getCsatReport()
   busy.value = false
   vm.value = mapCsat(r)
-  message.value = vm.value ? '' : '加载失败：' + String(r.error || '')
+  message.value = vm.value ? '' : failText('加载失败', r.error)
 }
 
 // —— 明细钻取（批 B6）——
@@ -75,7 +75,7 @@ async function loadEntries() {
   entries.value = r.ok ? mapCsatEntries(r.entries) : []
   entriesCursor.value = r.ok ? r.nextCursor : null
   entriesHasMore.value = !!(r.ok && r.hasMore)
-  entriesMsg.value = r.ok ? (entries.value.length ? '' : '这个区间没有评价') : '加载失败：' + String(r.error || '')
+  entriesMsg.value = r.ok ? (entries.value.length ? '' : '这个区间没有评价') : failText('加载失败', r.error)
 }
 
 async function moreEntries() {
@@ -85,7 +85,7 @@ async function moreEntries() {
   const r = await listCsatEntries({ ...entriesFilter, cursor: entriesCursor.value })
   if (entriesGen.isStale(gen)) return // 期间又切区间·放弃本页
   if (!r.ok) {
-    entriesMsg.value = '加载更多失败：' + String(r.error || '')
+    entriesMsg.value = failText('加载更多失败', r.error)
     return
   }
   entriesMsg.value = ''

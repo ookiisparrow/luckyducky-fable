@@ -222,7 +222,7 @@ describe('采购/外协/物料页次级目录失败点名报（不装空目录�
   })
 
   it('大白话：物料页供应商挂掉要单独报，不被物料成功吞成「没有供应商」', () => {
-    expect(scmMaterialsSrc).toMatch(/loadErrors\(\[\[m, '物料主档'\], \[s, '供应商'\]\]\)/)
+    expect(scmMaterialsSrc).toMatch(/supsError\.value = s\.ok \? '' : '供应商加载失败：'/)
     expect(scmMaterialsSrc).toMatch(/load\(!err, err\)/)
   })
 })

@@ -6,7 +6,7 @@ import { listMaterials, saveMaterial, listSuppliers, saveSupplier, adjustStock, 
 import { materialHuman, materialCategoryLabel, uomLabel, scmErrorText, mapLedger, type LedgerRow } from '../lib/mapScm'
 import { stocktakeDiff, filterSubmittable, genStocktakeNo, stocktakeAdjustId } from '../lib/stocktake'
 import { dateTime } from '../lib/format'
-import { useLoadStatus, loadErrors } from '../lib/status'
+import { useLoadStatus } from '../lib/status'
 import { useLatest, appendNew } from '../lib/latest'
 import ScmFlowTabs from '../components/ScmFlowTabs.vue'
 import UiButton from '../components/ui/Button.vue'
@@ -29,6 +29,10 @@ const ledgerHasMore = ref(false)
 // 流水加载失败独立记账（P2·深审20260712 失败伪装空账本）：不复用 message——reload 收尾 load(…)
 // 会覆盖它；失败时 ledger=[] 若无此标记，EmptyState「还没有流水」＝把查询失败伪装成空账。
 const ledgerError = ref('')
+// 物料读失败：物料表/盘点表/KPI 不能画成「没有物料」「低库存 0」，原因由 message 报
+const matsFailed = ref(false)
+// 供应商读失败原因（空=读成功）：KPI/供应商列不能画成「0 家」「没挂供应商」；进盘点重报提示时沿用
+const supsError = ref('')
 // 动作反馈(note)/加载态(load) 收口（病根#14）：reload 成功不再抹掉动作刚设的成功/失败原文。
 const { message, ok: msgOk, note, load } = useLoadStatus()
 
@@ -41,7 +45,7 @@ async function loadLedger(materialId?: string) {
   ledger.value = l.ok ? mapLedger(l.list) : []
   ledgerCursor.value = l.ok ? l.nextCursor : null
   ledgerHasMore.value = !!(l.ok && l.hasMore)
-  ledgerError.value = l.ok ? '' : '流水加载失败：' + String(l.error || '') // 独立 ref·不被 reload 的 load() 抹掉
+  ledgerError.value = l.ok ? '' : '流水加载失败：' + scmErrorText(l.error) // 独立 ref·不被 reload 的 load() 抹掉
   ledgerMat.value = materialId || ''
   stocktakeExitConfirm.value = false // 刷新即复位危险态（防旧武装退出确认跨刷新残留一击直发）
 }
@@ -116,6 +120,8 @@ const stocktakeSummary = computed(() => ({
 async function enterStocktake() {
   const m = await listMaterials()
   const list = m.ok ? (m.list as Record<string, any>[]) : []
+  if (m.ok) mats.value = list // mats 与 matsFailed 同步描述最近一次物料读取，KPI 才不会按旧失败画 0
+  matsFailed.value = !m.ok
   stocktakeRows.value = list.map((mat) => ({
     materialId: String(mat._id),
     uom: String(mat.uom || ''),
@@ -128,9 +134,14 @@ async function enterStocktake() {
   stocktakeReason.value = '期初盘点'
   stocktakeExitConfirm.value = false
   stocktakeMode.value = true
-  // 拉取失败不写错误会与「确实没有物料」撞成同一假空态（病根14）。只报失败：这里只查了物料，
-  // 成功时若走 load(true) 会收回 reload 报的供应商失败，而那条仍然有效。
-  if (!m.ok) load(false, '加载失败：' + String(m.error || ''))
+  reportLoad(m) // 拉取失败不写错误会与「确实没有物料」撞成同一假空态（病根14）
+}
+
+// 分路报错（照 ScmBom.reload）。业务码走 scmErrorText 译人话：loadErrors 的兜底会原样露码。
+// 供应商那路沿用最近一次 reload 的结果——进盘点只查了物料，成功时要收回陈旧的物料错误、但不能收回仍有效的供应商错误。
+function reportLoad(m: { ok: boolean; error?: unknown }) {
+  const err = [m.ok ? '' : '物料主档加载失败：' + scmErrorText(m.error), supsError.value].filter(Boolean).join('；')
+  load(!err, err) // 只在加载失败时写·成功静默不抹动作反馈
 }
 
 // 有未提交差异（已填合法且差异≠0、尚未成功）——退出前拦一道，防手滑丢盘点结果
@@ -237,13 +248,13 @@ function resetSupForm() {
 async function reload() {
   const [m, s] = await Promise.all([listMaterials(), listSuppliers()])
   mats.value = m.ok ? (m.list as Record<string, any>[]) : []
+  matsFailed.value = !m.ok
   sups.value = s.ok ? (s.list as Record<string, any>[]) : []
   supCursor.value = s.ok ? s.nextCursor : null
   supHasMore.value = !!(s.ok && s.hasMore)
+  supsError.value = s.ok ? '' : '供应商加载失败：' + scmErrorText(s.error)
   await loadLedger(ledgerMat.value || undefined) // 保持当前料号筛选（内部已复位 stocktakeExitConfirm）
-  // 分路报错（照 ScmBom.reload）：供应商挂掉不装空目录
-  const err = loadErrors([[m, '物料主档'], [s, '供应商']])
-  load(!err, err) // 只在加载失败时写·成功静默不抹动作反馈
+  reportLoad(m)
   stocktakeExitConfirm.value = false // 刷新即复位危险态
 }
 
@@ -293,9 +304,9 @@ onMounted(reload)
 
     <ScmFlowTabs />
 
-    <div class="ld-kpi-grid">
+    <div v-if="!matsFailed" class="ld-kpi-grid">
       <KpiCard label="物料数" :value="mats.length" :icon="Boxes" />
-      <KpiCard label="供应商 / 织女" :value="sups.length" :icon="Factory" />
+      <KpiCard label="供应商 / 织女" :value="supsError ? '—' : sups.length" :icon="Factory" />
       <KpiCard label="低库存预警" :value="lowStockCount" :icon="TriangleAlert" :tone="lowStockCount > 0 ? 'red' : 'neutral'" />
     </div>
 
@@ -391,7 +402,7 @@ onMounted(reload)
       </div>
   
       <!-- 物料主档表 -->
-      <Card flush :title="'物料主档（' + mats.length + '）'">
+      <Card flush :title="matsFailed ? '物料主档' : '物料主档（' + mats.length + '）'">
         <template v-if="sortedMats.length">
           <div class="ld-thead">
             <div class="ld-th grow">料号</div>
@@ -415,12 +426,13 @@ onMounted(reload)
                 <span v-if="m.threshold && m.stock <= m.threshold" class="low-tag">低于 {{ m.threshold }}</span>
               </div>
               <div class="ld-td sup-cell" :style="{ width: '210px' }">
-                <span class="muted sup-name">{{ (sups.find((s) => s._id === m.supplierId) || {}).name || '—' }}</span>
+                <span class="muted sup-name">{{ supsError ? '读取失败' : (sups.find((s) => s._id === m.supplierId) || {}).name || '—' }}</span>
                 <UiButton variant="ghost" size="sm" title="看这个料的流水" @click="loadLedger(m._id)">流水</UiButton>
               </div>
             </div>
           </div>
         </template>
+        <p v-else-if="matsFailed" class="ledger-err">物料主档没读出来，列表暂不可用（原因见上方提示）</p>
         <EmptyState v-else :icon="Boxes" text="还没有物料档，先在上方「建物料档」建档" />
       </Card>
   
@@ -525,6 +537,7 @@ onMounted(reload)
             </div>
           </div>
         </template>
+        <p v-else-if="matsFailed" class="ledger-err">物料主档没读出来，暂时没法盘点（原因见上方提示）</p>
         <EmptyState v-else :icon="Boxes" text="没有物料档可盘点" />
       </Card>
     </template>

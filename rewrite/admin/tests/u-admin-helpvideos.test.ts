@@ -3,6 +3,7 @@
 // 冲突后停自动保存、重新载入恢复；旧视频没删净也按新版本号继续；手动保存只走同一条保存链；删主题要点两次。
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { mount, flushPromises, type VueWrapper } from '@vue/test-utils'
+import { transportErrorText } from '../src/lib/mapSystem'
 
 const api = vi.hoisted(() => ({ listHelpVideos: vi.fn(), saveHelpVideos: vi.fn(), uploadVideo: vi.fn() }))
 vi.mock('../src/api/content', () => api)
@@ -25,10 +26,10 @@ afterEach(async () => {
 
 describe('HelpVideos.vue 载入', () => {
   it('大白话：载入失败显示原因；之后加主题、等防抖、点保存，都不发保存', async () => {
-    api.listHelpVideos.mockResolvedValue({ ok: false, error: 'NETWORK_FAIL' })
+    api.listHelpVideos.mockResolvedValue({ ok: false, error: 'NETWORK:Failed to fetch' })
     w = mount(HelpVideos)
     await flushPromises()
-    expect(w.find('.status').text()).toContain('加载失败：NETWORK_FAIL')
+    expect(w.find('.status').text()).toBe('加载失败：' + transportErrorText('NETWORK:Failed to fetch'))
     await w.find('.add-topic').trigger('click')
     await vi.advanceTimersByTimeAsync(1000)
     await w.findAll('button').find((b) => b.text() === '保存全部')!.trigger('click')
@@ -75,6 +76,25 @@ describe('HelpVideos.vue 载入', () => {
     expect(w.findAll('.t-title')).toHaveLength(1)
     await del().trigger('click')
     expect(w.findAll('.t-title')).toHaveLength(0)
+  })
+})
+
+describe('HelpVideos.vue 视频上传失败', () => {
+  // 与 Courses 同一个 uploadVideo，文案同走 launchErrorText：业务码有中文映射就用，上传器自带的中文原样透传不再套壳
+  it.each([
+    ['META_UNAVAILABLE', '上传通道暂时不可用。请稍后重试。'],
+    ['直传失败 HTTP 403', '直传失败 HTTP 403'],
+  ])('大白话：上传回 %s，提示「%s」', async (error, text) => {
+    api.listHelpVideos.mockResolvedValue({ ...ok, items: [{ ...ok.items[0], segments: [{ id: 's1', name: '段', dur: '1:00', videoFileId: '' }] }] })
+    api.uploadVideo.mockReset().mockResolvedValue({ ok: false, error })
+    w = mount(HelpVideos)
+    await flushPromises()
+    const input = w.find('input[type="file"]')
+    Object.defineProperty(input.element, 'files', { value: [new File(['x'], 'a.mp4', { type: 'video/mp4' })] })
+    await input.trigger('change')
+    await flushPromises()
+    expect(api.uploadVideo).toHaveBeenCalledTimes(1)
+    expect(w.find('.status').text()).toBe(text)
   })
 })
 

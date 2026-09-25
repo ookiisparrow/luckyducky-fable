@@ -13,6 +13,7 @@ import {
   type ShowcaseRowVM,
 } from '../lib/mapProducts'
 import { serialSave } from '../lib/serialSave'
+import { transportErrorText } from '../lib/mapSystem'
 import { Store, GripVertical } from 'lucide-vue-next'
 import PageHeader from '../components/ui/PageHeader.vue'
 import Card from '../components/ui/Card.vue'
@@ -29,7 +30,7 @@ async function reload() {
   message.value = '加载中…'
   const r = await listShowcase()
   rows.value = r.ok ? mapShowcaseRows(r.list, r.urls) : []
-  message.value = r.ok ? '' : '加载失败：' + String(r.error || '')
+  message.value = r.ok ? '' : '加载失败：' + (transportErrorText(r.error) || (r.error ? '请刷新重试（' + String(r.error) + '）' : '请刷新重试'))
 }
 
 // 防抖自动保存（700ms·换皮退成手动按钮·忘点即丢编辑）：拖动/开关都走它

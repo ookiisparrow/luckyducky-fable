@@ -7,7 +7,7 @@ import { ref, onMounted, computed } from 'vue'
 import { listAgents, createAgent, disableAgent, setAgentWecomUserId } from '../api/system'
 import { getCsatReport } from '../api/cs'
 import { mapAgents, type AgentRow } from '../lib/mapSystem'
-import { mapCsat } from '../lib/mapCs'
+import { mapCsat, failText, writeFailText } from '../lib/mapCs'
 import { useLoadStatus, confirmed } from '../lib/status'
 import UiButton from '../components/ui/Button.vue'
 import PageHeader from '../components/ui/PageHeader.vue'
@@ -37,7 +37,7 @@ async function reload() {
   const csatVm = mapCsat(csat)
   // 报表失败 ≠ 还没人评：空均分「—」会把加载失败读成零评价（病根#14·同 Conversations loadReport）
   csatAvg.value = !csatVm ? '加载失败' : csatVm.total ? csatVm.avg : null
-  load(r.ok && !!csatVm, !r.ok ? '加载失败：' + String(r.error || '') : '满意度报表加载失败')
+  load(r.ok && !!csatVm, !r.ok ? failText('加载失败', r.error) : '满意度报表加载失败')
 }
 
 async function doCreate() {
@@ -56,7 +56,7 @@ async function doCreate() {
     void reload()
   } else {
     const e = String(r.error || '')
-    note(false, '', e === 'KEY_TAKEN' ? '这个口令已被占用（撞口令会串号）' : e === 'WECOM_ID_TAKEN' ? '这个企微 userid 已绑在别的账号' : '建号失败：' + e)
+    note(false, '', e === 'KEY_TAKEN' ? '这个口令已被占用（撞口令会串号）' : e === 'WECOM_ID_TAKEN' ? '这个企微 userid 已绑在别的账号' : writeFailText('建号失败', e))
   }
 }
 
@@ -66,7 +66,7 @@ async function toggle(row: AgentRow) {
   confirmId.value = ''
   const r = await disableAgent(row.id, !row.disabled)
   if (!r.ok) {
-    note(false, '', '操作失败：' + String(r.error || ''))
+    note(false, '', writeFailText('操作失败', r.error))
     return
   }
   note(true, row.disabled ? `已恢复 ${row.name}` : `已停用 ${row.name}（对方即刻登不了）`, '')
@@ -78,7 +78,7 @@ async function bindWecom(row: AgentRow) {
   if (v === null) return
   const r = await setAgentWecomUserId(row.id, v)
   if (!r.ok) {
-    note(false, '', String(r.error) === 'WECOM_ID_TAKEN' ? '这个 userid 已绑在别的账号' : '绑定失败：' + String(r.error || ''))
+    note(false, '', String(r.error) === 'WECOM_ID_TAKEN' ? '这个 userid 已绑在别的账号' : writeFailText('绑定失败', r.error))
     return
   }
   note(true, '', '')

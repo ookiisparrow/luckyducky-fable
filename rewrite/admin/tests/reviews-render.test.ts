@@ -2,6 +2,7 @@
 // Reviews.vue 上架/撤下接线：点按钮须真调 setReviewPicked，不是只改文案。
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { mount, flushPromises } from '@vue/test-utils'
+import { transportErrorText } from '../src/lib/mapSystem'
 
 const { listReviewsMock, setReviewPickedMock } = vi.hoisted(() => ({
   listReviewsMock: vi.fn(),
@@ -49,5 +50,24 @@ describe('Reviews.vue 挑选开关', () => {
     await flushPromises()
     expect(setReviewPickedMock).toHaveBeenCalledTimes(1)
     expect(setReviewPickedMock).toHaveBeenCalledWith('pend', true)
+  })
+})
+
+describe('Reviews.vue 失败提示', () => {
+  it('大白话：加载失败说中文带码，不显空态', async () => {
+    listReviewsMock.mockResolvedValue({ ok: false, status: 403, error: 'FORBIDDEN' })
+    const wrapper = mount(Reviews)
+    await flushPromises()
+    expect(wrapper.find('.ld-status').text()).toBe('加载失败（FORBIDDEN）')
+    expect(wrapper.text()).not.toContain('这一档还没有评价')
+  })
+
+  it('大白话：上架超时说人话，不甩 CALL_TIMEOUT', async () => {
+    setReviewPickedMock.mockResolvedValue({ ok: false, status: 0, error: 'CALL_TIMEOUT' })
+    const wrapper = mount(Reviews)
+    await flushPromises()
+    await wrapper.findAll('button').find((b) => b.text() === '上架')!.trigger('click')
+    await flushPromises()
+    expect(wrapper.find('.ld-status').text()).toBe(transportErrorText('CALL_TIMEOUT'))
   })
 })

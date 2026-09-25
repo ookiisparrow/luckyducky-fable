@@ -20,6 +20,7 @@ vi.mock('../src/api/products', () => ({ getCard: vi.fn() }))
 vi.mock('vue-router', () => ({ useRoute: () => ({ query: routeQuery }), useRouter: () => ({ push: vi.fn() }) }))
 
 import Batches from '../src/pages/Batches.vue'
+import { UNKNOWN_COURSE_HINT } from '../src/lib/mapSystem'
 
 const batch = { _id: 'b1', batchId: 'b1', courseId: 'course-p1', total: 120, activated: 3, createdAt: Date.now() }
 
@@ -27,6 +28,7 @@ beforeEach(() => {
   listBatchesMock.mockReset().mockResolvedValue({ ok: true, list: [batch] })
   getSettingsMock.mockReset().mockResolvedValue({ ok: true, settings: { urlPrefix: 'https://x.test/a?c=' } })
   listBatchCodesMock.mockReset()
+  createBatchMock.mockReset().mockResolvedValue({ ok: true, batchId: 'b9', codes: ['C1', 'C2'] })
 })
 
 async function openFirstBatch() {
@@ -119,5 +121,39 @@ describe('Batches.vue 载入课程乱序（G1）', () => {
     expect(listBatchesMock.mock.calls).toEqual([['course-p1'], ['course-p2']])
     expect(w.text()).toContain('（课程 course-p2）')
     expect(w.text()).not.toContain('course-p1')
+  })
+})
+
+describe('Batches.vue 生成批次按钮：courseReady 没传不能当成「课程没发布」', () => {
+  const byText = (w: ReturnType<typeof mount>, t: string) => w.findAll('button').find((b) => b.text().includes(t))
+
+  it('大白话：独立页（不传 courseReady）载入课程后，能点「确认生成」，按已载入课程生成', async () => {
+    const w = mount(Batches)
+    await flushPromises()
+    await byText(w, '生成新批次')!.trigger('click')
+    const confirm = byText(w, '确认生成')!
+    expect(confirm.attributes('disabled')).toBeUndefined()
+    await confirm.trigger('click')
+    await flushPromises()
+    expect(createBatchMock).toHaveBeenCalledWith('course-p1', 50)
+    expect(w.text()).toContain('已生成批次 b9（2 张码）')
+  })
+
+  it('大白话：向导里课程没发布，「生成新批次」置灰并提示先发布，不发 createBatch', async () => {
+    const w = mount(Batches, { props: { embed: true, wizardCourseId: 'course-p1', courseReady: false } })
+    await flushPromises()
+    expect(byText(w, '生成新批次')!.attributes('disabled')).toBeDefined()
+    expect(w.text()).toContain(UNKNOWN_COURSE_HINT)
+    expect(createBatchMock).not.toHaveBeenCalled()
+  })
+
+  it('大白话：向导里课程已发布，能生成并通知向导刷新', async () => {
+    const w = mount(Batches, { props: { embed: true, wizardCourseId: 'course-p1', courseReady: true } })
+    await flushPromises()
+    await byText(w, '生成新批次')!.trigger('click')
+    await byText(w, '确认生成')!.trigger('click')
+    await flushPromises()
+    expect(createBatchMock).toHaveBeenCalledWith('course-p1', 50)
+    expect(w.emitted('saved')).toHaveLength(1)
   })
 })

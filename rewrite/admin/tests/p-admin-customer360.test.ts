@@ -3,6 +3,7 @@
 // 看 A 的全景还没回包就切到 B，A 的数据不能落到 B 的头下（隐私错配）。
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { mount, flushPromises } from '@vue/test-utils'
+import { transportErrorText } from '../src/lib/mapSystem'
 
 const api = vi.hoisted(() => ({ searchCustomer: vi.fn(), getCustomer360: vi.fn(), getUser: vi.fn() }))
 vi.mock('../src/api/cs', () => api)
@@ -45,7 +46,7 @@ describe('Customer360.vue 搜索', () => {
   it('大白话：搜索失败说失败，不说「没找到」', async () => {
     api.searchCustomer.mockResolvedValue({ ok: false, status: 200, error: 'USER_LOOKUP_FAIL' })
     const w = await mountAndSearch()
-    expect(statuses(w)).toEqual(['搜索失败：USER_LOOKUP_FAIL'])
+    expect(statuses(w)).toEqual(['搜索失败（USER_LOOKUP_FAIL）'])
   })
 
   it('大白话：真没人才说「没找到匹配的客户」', async () => {
@@ -68,11 +69,11 @@ describe('Customer360.vue 全景', () => {
   })
 
   it('大白话：全景取数失败——显原因，留「返回结果」出口', async () => {
-    api.getCustomer360.mockResolvedValue({ ok: false, status: 500, error: 'X1' })
+    api.getCustomer360.mockResolvedValue({ ok: false, status: 0, error: 'NETWORK:Failed to fetch' })
     const w = await mountAndSearch()
     await w.findAll('.hit-row')[0].trigger('click')
     await flushPromises()
-    expect(statuses(w)).toContain('加载失败：X1')
+    expect(statuses(w)).toContain('加载失败：' + transportErrorText('NETWORK:Failed to fetch'))
     await back(w).trigger('click')
     expect(w.findAll('.hit-row')).toHaveLength(2)
   })

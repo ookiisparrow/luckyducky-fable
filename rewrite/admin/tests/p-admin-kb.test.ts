@@ -3,6 +3,7 @@
 // 保存成败与保存后刷新失败、键为空/重复拦下。
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { mount, flushPromises } from '@vue/test-utils'
+import { transportErrorText } from '../src/lib/mapSystem'
 
 const api = vi.hoisted(() => ({ listKb: vi.fn(), saveKb: vi.fn() }))
 vi.mock('../src/api/cs', () => api)
@@ -40,7 +41,7 @@ describe('Kb.vue 加载', () => {
   it('大白话：加载失败显原因，不显「暂无 FAQ」引导；点保存不发请求', async () => {
     api.listKb.mockResolvedValue({ ok: false, status: 200, error: 'DOC_READ_FAIL' })
     const w = await mountPage()
-    expect(status(w)).toBe('加载失败：DOC_READ_FAIL')
+    expect(status(w)).toBe('加载失败（DOC_READ_FAIL）')
     expect(w.text()).not.toContain('暂无 FAQ')
     await save(w)
     expect(api.saveKb).not.toHaveBeenCalled()
@@ -65,10 +66,10 @@ describe('Kb.vue 保存整册', () => {
   })
 
   it('大白话：保存失败显原因、不重拉', async () => {
-    api.saveKb.mockResolvedValue({ ok: false, status: 200, error: 'DOC_READ_FAIL' })
+    api.saveKb.mockResolvedValue({ ok: false, status: 0, error: 'NETWORK:Failed to fetch' })
     const w = await mountPage()
     await save(w)
-    expect(status(w)).toBe('保存失败：DOC_READ_FAIL')
+    expect(status(w)).toBe(transportErrorText('NETWORK:Failed to fetch'))
     expect(api.listKb).toHaveBeenCalledTimes(1)
   })
 

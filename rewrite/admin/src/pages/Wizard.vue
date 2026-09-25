@@ -179,7 +179,7 @@ async function restoreSale() {
   busy.value = true
   const r: any = await republishProduct(id.value)
   busy.value = false
-  note(r.ok, restoreSaleOk(), '恢复失败：' + String(r.error || ''))
+  note(r.ok, restoreSaleOk(), launchErrorText(r.error))
   if (r.ok) void reloadProduct()
 }
 

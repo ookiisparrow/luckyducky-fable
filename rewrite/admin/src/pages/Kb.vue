@@ -3,7 +3,7 @@
 import { ref, onMounted } from 'vue'
 import { Trash2, Plus, BookOpen } from 'lucide-vue-next'
 import { listKb, saveKb } from '../api/cs'
-import { normalizeKb, type KbRow } from '../lib/mapCs'
+import { normalizeKb, failText, writeFailText, type KbRow } from '../lib/mapCs'
 import { confirmed } from '../lib/status'
 import UiButton from '../components/ui/Button.vue'
 import PageHeader from '../components/ui/PageHeader.vue'
@@ -41,7 +41,7 @@ async function reload() {
   const r = await listKb()
   rows.value = r.ok ? normalizeKb(r.list) : []
   listFailed.value = !r.ok
-  message.value = r.ok ? '' : '加载失败：' + String(r.error || '')
+  message.value = r.ok ? '' : failText('加载失败', r.error)
   loaded = r.ok // 成功（含合法空库 list=[]）才放开·失败恒关
   return r.ok
 }
@@ -92,7 +92,7 @@ async function save() {
   if (!r.ok) {
     // 保存失败留原文·绝不 reload——否则 listKb 成功会把编辑器换回旧数据（丢未存的 FAQ 编辑）并抹掉本条错（病根#14）
     // GC_REMOVE_FAIL（H2）：新内容已 upsert 成功，只是旧条目 GC 删除失败残留——友好文案区分于「整体没存上」
-    message.value = r.error === 'GC_REMOVE_FAIL' ? '已保存新内容，但有旧条目未删净（重存一次即可收敛）' : '保存失败：' + String(r.error || '')
+    message.value = r.error === 'GC_REMOVE_FAIL' ? '已保存新内容，但有旧条目未删净（重存一次即可收敛）' : writeFailText('保存失败', r.error)
     return
   }
   const n = Number(r.count) || 0

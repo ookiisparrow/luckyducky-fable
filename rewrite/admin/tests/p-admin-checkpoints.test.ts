@@ -2,6 +2,7 @@
 // Checkpoints.vue 挂载测试：载入与乱序、保存带版本号（乐观并发）、撞版本停手不自动重载不丢编辑。
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { mount, flushPromises } from '@vue/test-utils'
+import { transportErrorText } from '../src/lib/mapSystem'
 
 const api = vi.hoisted(() => ({ listCheckpoints: vi.fn(), saveCheckpoints: vi.fn() }))
 vi.mock('../src/api/cs', () => api)
@@ -38,10 +39,10 @@ describe('Checkpoints.vue 载入', () => {
     expect(status(w)).toBe('')
   })
 
-  it('大白话：载入失败显原因，不显「还没配节点」，也没有保存按钮', async () => {
-    api.listCheckpoints.mockResolvedValue({ ok: false, status: 500, error: 'X1' })
+  it('大白话：载入失败显人话原因，不显「还没配节点」，也没有保存按钮', async () => {
+    api.listCheckpoints.mockResolvedValue({ ok: false, status: 0, error: 'CALL_TIMEOUT' })
     const w = await mountPage()
-    expect(status(w)).toBe('加载失败：X1')
+    expect(status(w)).toBe('加载失败：' + transportErrorText('CALL_TIMEOUT'))
     expect(w.text()).not.toContain('还没配节点')
     expect(btn(w, '保存整课')).toBeUndefined()
   })
@@ -85,7 +86,7 @@ describe('Checkpoints.vue 保存整课', () => {
     api.saveCheckpoints.mockResolvedValue({ ok: false, status: 400, error: 'BAD_ARGS' })
     const w = await mountPage()
     await save(w)
-    expect(status(w)).toBe('保存失败：BAD_ARGS')
+    expect(status(w)).toBe('保存失败（BAD_ARGS）')
   })
 
   it('大白话：旧节点没删净也算写成了——提示重存，并按新版本号继续', async () => {

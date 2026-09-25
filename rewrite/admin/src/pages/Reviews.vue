@@ -4,6 +4,7 @@ import { ref, onMounted } from 'vue'
 import { RotateCcw, Star } from 'lucide-vue-next'
 import { listReviews, setReviewPicked } from '../api/reviews'
 import { mapReviewRows, type ReviewRowVM } from '../lib/mapReviews'
+import { failText, writeFailText } from '../lib/mapCs'
 import { useLatest, appendNew } from '../lib/latest'
 import PageHeader from '../components/ui/PageHeader.vue'
 import Card from '../components/ui/Card.vue'
@@ -39,7 +40,7 @@ async function load() {
   rows.value = r.ok ? mapReviewRows(r.list) : []
   cursor.value = r.ok ? r.nextCursor : null
   hasMore.value = !!(r.ok && r.hasMore)
-  message.value = r.ok ? '' : '加载失败：' + String(r.error || '')
+  message.value = r.ok ? '' : failText('加载失败', r.error)
 }
 
 async function more() {
@@ -48,7 +49,7 @@ async function more() {
   const r = await listReviews({ ...filterSnapshot, cursor: cursor.value })
   if (gen.isStale(g)) return
   if (!r.ok) {
-    message.value = '加载更多失败：' + String(r.error || '')
+    message.value = failText('加载更多失败', r.error)
     return
   }
   rows.value = appendNew(rows.value, mapReviewRows(r.list))
@@ -62,7 +63,7 @@ async function toggle(row: ReviewRowVM) {
   const r = await setReviewPicked(row.id, !row.picked)
   toggling.value = ''
   if (!r.ok) {
-    message.value = '操作失败：' + String(r.error || '')
+    message.value = writeFailText('操作失败', r.error)
     return
   }
   await load()

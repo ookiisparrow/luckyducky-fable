@@ -1,6 +1,20 @@
 // 客服组映射（纯函数）：时长人话/报表 approx 诚实透传/
 // 360 单面板 error 隔离（一处挂不能全黑·与云端编排同精神）/命中依据中文/kb 行归一。
 import { dateTime } from './format'
+import { transportErrorText } from './mapSystem'
+
+/** 读失败提示：点名哪块没出来（与 status.loadErrors 同式·否则多处同文案分不清是谁挂了）；
+ *  没有中文映射的业务码挂括号保留，给排查留线索。 */
+export function failText(what: string, code: unknown): string {
+  const c = String(code || '')
+  const t = transportErrorText(c)
+  return t ? `${what}：${t}` : c ? `${what}（${c}）` : `${what}，请重试`
+}
+
+/** 写失败提示：传输层码不冠「X失败」——写操作超时可能已生效，说失败会诱人重复提交。 */
+export function writeFailText(what: string, code: unknown): string {
+  return transportErrorText(code) || failText(what, code)
+}
 
 /** 毫秒 → 人话（32 秒 / 4 分 10 秒 / 2 小时 5 分）。非法回 '—'。 */
 export function msHuman(v: unknown): string {

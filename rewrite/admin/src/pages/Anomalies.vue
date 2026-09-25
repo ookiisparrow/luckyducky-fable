@@ -7,6 +7,7 @@ import { RefreshCw, Check, ClipboardList, AlertCircle, AlertTriangle, Activity, 
 import { listAnomalies, resolveAnomaly } from '../api/ops'
 import { useLatest } from '../lib/latest'
 import { confirmed } from '../lib/status'
+import { failText, writeFailText } from '../lib/mapCs'
 import PageHeader from '../components/ui/PageHeader.vue'
 import KpiCard from '../components/ui/KpiCard.vue'
 import Badge from '../components/ui/Badge.vue'
@@ -60,7 +61,7 @@ async function load() {
   if (r.error === 'SESSION_LOST') return // 会话失效集中导登录（client.onSessionLost·单源·根因#5）
   list.value = r.list || []
   total.value = typeof r.total === 'number' ? r.total : null
-  message.value = r.ok ? '' : '加载失败：' + String(r.error || '')
+  message.value = r.ok ? '' : failText('加载失败', r.error)
 }
 
 const confirmId = ref('') // 两步确认（换皮一键无撤销·标记已处理是破坏性动作）
@@ -73,7 +74,7 @@ async function markResolved(a: any) {
     return
   }
   // 破坏性动作失败（网络/未生效）必须显——否则两步确认按钮悄悄复位、异常仍未处理、操作员以为已办（病根#14）
-  message.value = '标记失败：' + String(r.error || '未生效，请重试') // 不 reload（reload 成功会把此错抹掉）
+  message.value = writeFailText('标记失败', r.error) // 不 reload（reload 成功会把此错抹掉）
 }
 
 function setFilter(f: 'open' | 'resolved' | 'all') {

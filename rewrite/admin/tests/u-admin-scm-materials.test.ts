@@ -46,17 +46,23 @@ describe('ScmMaterials.vue 批量盘点', () => {
 })
 
 describe('ScmMaterials.vue 分路加载报错', () => {
-  it('大白话：物料和供应商都挂，两条原因按顺序用「；」连起来', async () => {
+  it('大白话：物料和供应商都挂，两条原因按顺序用「；」连起来，业务码给中文兜底', async () => {
     api.listMaterials.mockResolvedValue({ ok: false, error: 'A' })
     api.listSuppliers.mockResolvedValue({ ok: false, error: 'B' })
     const w = await mountPage()
-    expect(w.find('.ld-status').text()).toBe('物料主档加载失败：A；供应商加载失败：B')
+    expect(w.find('.ld-status').text()).toBe('物料主档加载失败：操作没成功（A）；供应商加载失败：操作没成功（B）')
   })
 
   it('大白话：只有供应商挂，只报供应商', async () => {
     api.listSuppliers.mockResolvedValue({ ok: false, error: 'B' })
     const w = await mountPage()
-    expect(w.find('.ld-status').text()).toBe('供应商加载失败：B')
+    expect(w.find('.ld-status').text()).toBe('供应商加载失败：操作没成功（B）')
+  })
+
+  it('大白话：物料读被业务码拒，提示是中文，不裸甩码', async () => {
+    api.listMaterials.mockResolvedValue({ ok: false, status: 403, error: 'FORBIDDEN' })
+    const w = await mountPage()
+    expect(w.find('.ld-status').text()).toMatch(/^物料主档加载失败：[一-鿿]/)
   })
 })
 
@@ -92,5 +98,66 @@ describe('ScmMaterials.vue 供应商保存回包晚到（H1）', () => {
     expect((nameInput(w).element as HTMLInputElement).value).toBe('乙厂')
     expect(status(w)).toBe('')
     expect(api.listSuppliers.mock.calls.length).toBeGreaterThan(listCalls)
+  })
+})
+
+describe('ScmMaterials.vue 读失败不装空（失败≠空态）', () => {
+  const clickText = async (w: Awaited<ReturnType<typeof mountPage>>, t: string) => {
+    await w.findAll('button').find((b) => b.text().includes(t))!.trigger('click')
+    await flushPromises()
+  }
+
+  it('大白话：物料主档读失败，表里不显「还没有物料档」、KPI 不画 0，并说出人话原因', async () => {
+    api.listMaterials.mockResolvedValue({ ok: false, status: 0, error: 'NETWORK:boom' })
+    const w = await mountPage()
+    expect(w.text()).not.toContain('还没有物料档')
+    expect(w.find('.ld-kpi-grid').exists()).toBe(false)
+    expect(w.text()).not.toContain('物料主档（0）')
+    expect(w.text()).toContain('物料主档加载失败')
+    expect(w.text()).toContain('网络不通')
+  })
+
+  it('大白话：供应商读失败，KPI 不画「0 家」，物料的供应商列不显「—」冒充没挂', async () => {
+    api.listMaterials.mockResolvedValue({ ok: true, list: [{ ...mat('m1', 5), supplierId: 's1' }] })
+    api.listSuppliers.mockResolvedValue({ ok: false, status: 0, error: 'NETWORK:boom' })
+    const w = await mountPage()
+    expect(w.find('.ld-kpi-grid').text()).not.toContain('供应商 / 织女0')
+    expect(w.find('.sup-cell .sup-name').text()).toBe('读取失败')
+  })
+
+  it('大白话：进批量盘点时物料读超时，不显「没有物料档可盘点」，也不甩英文码', async () => {
+    const w = await mountPage()
+    api.listMaterials.mockResolvedValue({ ok: false, status: 0, error: 'CALL_TIMEOUT' })
+    await clickText(w, '批量盘点')
+    expect(w.text()).not.toContain('没有物料档可盘点')
+    expect(w.text()).toContain('服务器太久没回话')
+    expect(w.text()).not.toContain('CALL_TIMEOUT')
+  })
+
+  it('大白话：流水读失败说人话，不甩英文码', async () => {
+    api.listLedger.mockResolvedValue({ ok: false, status: 0, error: 'NETWORK:boom' })
+    const w = await mountPage()
+    expect(w.find('.ledger-err').text()).toBe('流水加载失败：网络不通，请检查网络后重试。')
+  })
+
+  it('大白话：物料读回来了但确实一条没有，照常显示空态', async () => {
+    api.listMaterials.mockResolvedValue({ ok: true, list: [] })
+    const w = await mountPage()
+    expect(w.text()).toContain('还没有物料档')
+    await clickText(w, '批量盘点')
+    expect(w.text()).toContain('没有物料档可盘点')
+  })
+})
+
+describe('ScmMaterials.vue 物料先读挂、进盘点再读成功', () => {
+  it('大白话：KPI 按这次读到的物料数显示，不再按上次失败画 0', async () => {
+    api.listMaterials.mockResolvedValueOnce({ ok: false, status: 0, error: 'NETWORK:boom' })
+    const w = await mountPage()
+    expect(w.find('.ld-kpi-grid').exists()).toBe(false)
+    await w.findAll('button').find((b) => b.text().includes('批量盘点'))!.trigger('click')
+    await flushPromises()
+    expect(w.find('.ld-kpi-grid').text()).toContain('物料数3')
+    expect(w.findAll('input.stocktake-actual')).toHaveLength(3)
+    expect(w.text()).not.toContain('物料主档加载失败')
   })
 })

@@ -23,7 +23,8 @@ import EmptyState from '../components/ui/EmptyState.vue'
 
 // 嵌入模式（上新向导第 5 步复用）+ 修独立深链 bug：换皮把 courseId 写死空 ref、不读 route.query，
 // 致商品页「码批次」深链(/batches?courseId=)落地要手输课程号；改读 props(向导)||route.query(深链)||空。
-const props = defineProps<{ embed?: boolean; wizardCourseId?: string; courseReady?: boolean }>()
+// courseReady 显式缺省 undefined：布尔 prop 不传时 Vue 会转成 false，独立页就被当成「课程没发布」锁死生成按钮。
+const props = withDefaults(defineProps<{ embed?: boolean; wizardCourseId?: string; courseReady?: boolean }>(), { wizardCourseId: undefined, courseReady: undefined })
 const emit = defineEmits<{ saved: [] }>()
 const route = useRoute()
 const router = useRouter()

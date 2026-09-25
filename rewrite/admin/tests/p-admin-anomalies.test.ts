@@ -2,6 +2,7 @@
 // Anomalies.vue 挂载测试：异常账本加载成败（失败不装「没有未处理异常」）、标记已处理两步确认与失败留原因、快切筛选不串。
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { mount, flushPromises } from '@vue/test-utils'
+import { transportErrorText } from '../src/lib/mapSystem'
 
 const api = vi.hoisted(() => ({ listAnomalies: vi.fn(), resolveAnomaly: vi.fn() }))
 vi.mock('../src/api/ops', () => api)
@@ -41,7 +42,7 @@ describe('Anomalies.vue 加载', () => {
   it('大白话：加载失败显原因，不装成「没有未处理异常」', async () => {
     api.listAnomalies.mockResolvedValue({ ok: false, status: 500, error: 'X1' })
     const w = await mountPage()
-    expect(statuses(w)).toEqual(['加载失败：X1'])
+    expect(statuses(w)).toEqual(['加载失败（X1）'])
     expect(w.text()).not.toContain('没有未处理异常')
   })
 
@@ -72,12 +73,12 @@ describe('Anomalies.vue 标记已处理', () => {
   })
 
   it('大白话：标记失败留原因，不重载冲掉它', async () => {
-    api.resolveAnomaly.mockResolvedValue({ ok: false, status: 200, error: 'BAD_ARGS' })
+    api.resolveAnomaly.mockResolvedValue({ ok: false, status: 0, error: 'CALL_TIMEOUT' })
     const w = await mountPage()
     await btn(w, '标记已处理').trigger('click')
     await btn(w, '确认已处理？').trigger('click')
     await flushPromises()
-    expect(statuses(w)).toContain('标记失败：BAD_ARGS')
+    expect(statuses(w)).toContain(transportErrorText('CALL_TIMEOUT'))
     expect(api.listAnomalies).toHaveBeenCalledTimes(1)
   })
 })

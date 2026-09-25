@@ -4,7 +4,7 @@
 import { ref, computed, onMounted } from 'vue'
 import { RotateCcw, Trash2, Plus, ListChecks, BookOpen } from 'lucide-vue-next'
 import { listCheckpoints, saveCheckpoints } from '../api/cs'
-import { nextNodeId, duplicateNodeIds } from '../lib/mapCs'
+import { nextNodeId, duplicateNodeIds, failText, writeFailText } from '../lib/mapCs'
 import { useLatest } from '../lib/latest'
 import { confirmed } from '../lib/status'
 import UiButton from '../components/ui/Button.vue'
@@ -50,7 +50,7 @@ async function load() {
     baseRev.value = Number(r.rev) || 0 // 记下拉取那一刻的元档版本号
     conflicted.value = false // 重新载入即解除冲突态
   }
-  message.value = r.ok ? '' : '加载失败：' + String(r.error || '')
+  message.value = r.ok ? '' : failText('加载失败', r.error)
 }
 
 function addNode() {
@@ -104,7 +104,7 @@ async function save() {
     ? `已保存 ${Number(r.count) || 0} 个节点到 ${loadedCourseId.value}（整课覆盖·学员提交不受影响）`
     : r.error === 'GC_REMOVE_FAIL'
       ? '已保存新节点，但有旧节点未删净（重存一次即可收敛）'
-      : '保存失败：' + String(r.error || '')
+      : writeFailText('保存失败', r.error)
 }
 
 onMounted(load) // 默认旗舰课自动载入
