@@ -138,7 +138,7 @@ const isOpen = (g: { group: string; items: Array<{ path: string }> }) =>
   curGroup.value === g.group || expanded.value.has(g.group)
 
 function logout() {
-  client.logout()
+  void client.logout() // 本地令牌同步清掉，服务端吊销不等回包
   void router.push('/login')
 }
 </script>

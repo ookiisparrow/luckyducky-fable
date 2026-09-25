@@ -13,6 +13,7 @@ import {
   diffNewInbound,
   titleWithBadge,
   createStatusController,
+  skipWhileBusy,
   type Msg,
   type QueueItem,
   type KbEntry,
@@ -273,15 +274,15 @@ async function setStatus(s: 'online' | 'busy' | 'offline') {
 }
 
 function doLogout() {
-  logout()
+  void logout() // 本地令牌同步清掉，服务端吊销不等回包
   emit('logout')
 }
 
 onMounted(() => {
   void refreshLists()
   void loadKb() // KB 拉一次·不轮询（改动契约 1）
-  listTimer = setInterval(refreshLists, 10_000)
-  pollTimer = setInterval(pollThread, 3_000)
+  listTimer = setInterval(skipWhileBusy(refreshLists), 10_000)
+  pollTimer = setInterval(skipWhileBusy(() => pollThread(), () => currentId.value), 3_000)
   window.addEventListener('blur', onWindowBlur)
   window.addEventListener('focus', onWindowFocus)
 })

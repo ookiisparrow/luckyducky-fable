@@ -1,9 +1,10 @@
 <script setup lang="ts">
-// 系统设置：告警推送 webhook（企微群机器人·空=清除退回纯日志）+ 激活码 urlPrefix。
+// 系统设置：告警推送 webhook（企微群机器人·云端不回显原值，留空＝保持·清除走按钮）+ 激活码 urlPrefix。
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { getSettings, saveSettings } from '../api/system'
-import { webhookOk } from '../lib/mapSystem'
+import { webhookOk, transportErrorText } from '../lib/mapSystem'
+import { confirmed } from '../lib/status'
 import UiButton from '../components/ui/Button.vue'
 import PageHeader from '../components/ui/PageHeader.vue'
 import Card from '../components/ui/Card.vue'
@@ -21,18 +22,20 @@ const EVENTS = [
   { code: 'MISMATCH', label: '退款金额不符' },
   { code: 'NOT_SUCCESS', label: '退款未成功' },
 ]
-const alertWebhook = ref('')
+const alertWebhook = ref('') // 只收新地址：云端不回显原值，留空＝保持已存的
+const hookSet = ref(false)
+const hookTail = ref('')
+const clearArmed = ref('')
 const urlPrefix = ref('')
 const events = ref<Record<string, boolean>>({}) // code → false=静音（不在表=开启）
 const message = ref('')
 const ok = ref(false)
 const busy = ref(false)
-// 密钥不明文常驻（UX 体检批4）：默认密码态、点眼睛临时显示——只动 input type 展示层；
-// v-model/save 语义零改动（「留空=清除」是设计内行为·后端零回显属 API 改动另批拍板）
+// 密钥不明文常驻（UX 体检批4）：正在填的新地址默认密码态、点眼睛临时显示
 const showWebhook = ref(false)
 let loaded = false // 载入成功（含首次空配置）才放开保存——载入失败时空表单一保存会抹掉已存 webhook/urlPrefix（钱链告警安全网·病根#14）·P2·同 HomeContent
 
-const pushing = computed(() => webhookOk(alertWebhook.value.trim()) && !!alertWebhook.value.trim())
+const pushing = computed(() => (!!alertWebhook.value.trim() && webhookOk(alertWebhook.value.trim())) || hookSet.value)
 const enabled = (code: string) => events.value[code] !== false
 function toggleEvent(code: string) {
   events.value = { ...events.value, [code]: !enabled(code) }
@@ -41,11 +44,12 @@ function toggleEvent(code: string) {
 onMounted(async () => {
   const r = await getSettings()
   if (!r.ok) {
-    message.value = '加载失败：' + String(r.error || '') // 载入失败 loaded 恒 false·save 拒（防空表单覆盖已存配置）
+    message.value = '加载失败：' + (transportErrorText(r.error) || String(r.error || '')) // 载入失败 loaded 恒 false·save 拒（防空表单覆盖已存配置）
     return
   }
   const s = (r.settings || {}) as Record<string, any> // r.ok 但无 settings = 首次空配置·合法可保存
-  alertWebhook.value = String(s.alertWebhook || '')
+  hookSet.value = s.alertWebhookSet === true
+  hookTail.value = String(s.alertWebhookTail || '')
   urlPrefix.value = String(s.urlPrefix || '')
   events.value = s.alertEvents && typeof s.alertEvents === 'object' ? { ...s.alertEvents } : {}
   loaded = true
@@ -60,17 +64,41 @@ async function save() {
   }
   ok.value = false
   if (!webhookOk(alertWebhook.value.trim())) {
-    message.value = 'webhook 形态不对（须是企微群机器人地址，或留空清除）'
+    message.value = 'webhook 形态不对（须是企微群机器人地址；留空＝保持原来的）'
     return
   }
   busy.value = true
-  const r = await saveSettings({ alertWebhook: alertWebhook.value.trim(), urlPrefix: urlPrefix.value.trim(), alertEvents: events.value })
+  const hook = alertWebhook.value.trim()
+  // 留空就不带这个字段：旧版云端把空串当清除，前后端哪个先上线都不会误清已存的 webhook
+  const r = await saveSettings({ ...(hook ? { alertWebhook: hook } : {}), urlPrefix: urlPrefix.value.trim(), alertEvents: events.value })
   busy.value = false
   if (r.ok) {
     ok.value = true
     message.value = '已保存'
+    if (hook) {
+      hookSet.value = true
+      hookTail.value = hook.slice(-4)
+      alertWebhook.value = ''
+    }
   } else {
-    message.value = String(r.error) === 'BAD_WEBHOOK' ? 'webhook 被云端拒绝（形态不对）' : '保存失败：' + String(r.error || '')
+    message.value = String(r.error) === 'BAD_WEBHOOK' ? 'webhook 被云端拒绝（形态不对）' : transportErrorText(r.error) || '保存失败：' + String(r.error || '')
+  }
+}
+
+// 停推送是危险动作（钱链告警退回只记日志），两步确认
+async function clearHook() {
+  if (busy.value || !confirmed(clearArmed, 'hook')) return
+  ok.value = false
+  busy.value = true
+  const r = await saveSettings({ alertWebhook: null })
+  busy.value = false
+  if (r.ok) {
+    hookSet.value = false
+    hookTail.value = ''
+    ok.value = true
+    message.value = '已清除 webhook：告警只记日志、不推群'
+  } else {
+    message.value = transportErrorText(r.error) || '清除失败：' + String(r.error || '')
   }
 }
 </script>
@@ -98,13 +126,22 @@ async function save() {
         <div class="field">
           <label class="field-label">企业微信群机器人 webhook</label>
           <div class="secret-row">
-            <input v-model="alertWebhook" :type="showWebhook ? 'text' : 'password'" autocomplete="new-password" placeholder="https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=…" />
+            <input
+              v-model="alertWebhook"
+              :type="showWebhook ? 'text' : 'password'"
+              autocomplete="new-password"
+              :placeholder="hookSet ? '填新地址可替换，留空保持原来的' : 'https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=…'"
+            />
             <button class="eye-btn" :title="showWebhook ? '隐藏' : '显示'" @click="showWebhook = !showWebhook">
               <EyeOff v-if="showWebhook" :size="15" :stroke-width="1.8" />
               <Eye v-else :size="15" :stroke-width="1.8" />
             </button>
           </div>
-          <p class="field-note">留空 = 只记日志、不推送。</p>
+          <div v-if="hookSet" class="hook-set">
+            <span>已配置 · 尾号 {{ hookTail }}</span>
+            <UiButton variant="ghost" size="sm" :disabled="busy" @click="clearHook">{{ clearArmed ? '确认清除？' : '清除' }}</UiButton>
+          </div>
+          <p class="field-note">{{ hookSet ? '留空 = 保持原来的地址；点「清除」停止推送、只记日志。' : '不填 = 只记日志、不推送。' }}</p>
         </div>
       </Card>
     </div>
@@ -310,6 +347,15 @@ async function save() {
 .hint code {
   font-family: var(--ld-font-mono);
   font-size: 11.5px;
+  color: var(--ld-content);
+}
+/* 已存 webhook（只显尾号）+ 清除钮 */
+.hook-set {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 12.5px;
   color: var(--ld-content);
 }
 /* 密钥显隐（批4）：输入行 + 眼睛钮 */

@@ -174,6 +174,23 @@ export function createStatusController(
   }
 }
 
+/** 定时轮询的在途闸：同一 key 上一拍没回来就跳过这一拍，慢网下请求不堆积、不重复计费。只包定时器，
+ *  坐席手动触发的拉取（打开会话/认领后刷新）不经此闸。按 key 分闸：切会话后旧会话卡住的请求
+ *  不能挡住新会话的轮询。 */
+export function skipWhileBusy(fn: () => Promise<unknown>, keyOf: () => unknown = () => ''): () => Promise<void> {
+  const busy = new Set<unknown>()
+  return async () => {
+    const k = keyOf()
+    if (busy.has(k)) return
+    busy.add(k)
+    try {
+      await fn()
+    } finally {
+      busy.delete(k)
+    }
+  }
+}
+
 /** 坐席动作错误人话（原文兜底）。 */
 export function deskErrorText(e: unknown): string {
   const code = String(e || '')
@@ -190,6 +207,10 @@ export function deskErrorText(e: unknown): string {
     ALREADY_CLOSED: '会话已经结束了',
     SESSION_LOST: '登录已失效，请重新登录',
     WRITE_FAIL: '状态没保存成功，稍后再试', // setAgentStatus 写失败不再吞（云端战役II；本包 F2＝字数上限可见）
+    CALL_TIMEOUT: '服务器太久没回话。如果刚才是提交操作，可能已经生效——先刷新看看再决定要不要重试', // 后台刷列表也显这句
+    AUTH_UNAVAILABLE: '登录校验服务暂时不可用，稍后再试',
+    BAD_JSON_RESPONSE: '服务器回包读不懂，刷新后再试',
+    NETWORK: '网络不通，检查网络后重试',
   }
   return MAP[code] || MAP[code.split(':')[0]] || '操作没成功（' + code + '）'
 }

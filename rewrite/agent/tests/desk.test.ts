@@ -502,7 +502,7 @@ describe('refreshLists / open 失败出声（病根#14·首屏不得装成队列
     const open = extractFunctionBody(scriptSetupSrc(), 'async function open(sessionId: string) {')
     expect(open).toMatch(/pollThread\(\s*true\s*\)/)
     const setup = scriptSetupSrc()
-    expect(setup).toMatch(/setInterval\(\s*pollThread\s*,\s*3_000\s*\)/) // 后台调用不传 true
+    expect(setup).toMatch(/setInterval\(\s*skipWhileBusy\(\s*\(\)\s*=>\s*pollThread\(\)\s*,[^\n]*\)\s*,\s*3_000\s*\)/) // 后台调用不传 true
     const { descriptor } = parse(deskSrc)
     const tpl = descriptor.template?.content || ''
     expect(tpl).toMatch(/v-if="threadNote"/)

@@ -3,13 +3,15 @@
 // orderErrorText：钱组 action 英文码→操作者中文（同 mapSystem.ts launchErrorText 手法·#222 同类）。
 import { yuan, orderStatusLabel, refundStatusLabel, dateTime } from './format'
 import { stockAlertOf } from './thresholds'
+import { transportErrorText } from './mapSystem'
 
 const ORDER_ERR: Record<string, string> = {
   BAD_ARGS: '参数不完整',
   NO_ORDER: '找不到这单订单',
   FEE_MISMATCH_HOLD: '金额异常单被挡下：先去核对流水解除',
-  REFUND_HOLD: '这单涉及退款，先去「售后退款」处理',
+  REFUND_HOLD: '这单有退款正在处理，处理完才能发货；若每件都已退款，这单就不用发了',
   REFUND_HOLD_READ_FAIL: '暂时查不到这单的退款状态，请稍后重试',
+  REFUND_LINES_CHANGED: '这单刚又有商品退款，已退的件数变了——刷新后按最新的「已退·别发」重新装箱再发',
   SHIP_IN_PROGRESS: '正在处理中，请稍后重试',
   TOO_MANY: '一次最多 100 单，请分批',
   BAD_AMOUNT: '金额超出合理范围',
@@ -27,13 +29,14 @@ const ORDER_ERR: Record<string, string> = {
   WRITE_FAIL: '系统写入失败，请重试',
   PAYMENT_AMOUNT_MISSING: '这单缺实际到账金额，请先去「订单发货」页补录实付',
   UNKNOWN_ITEM: '商品行不在订单里',
-  NO_ENDPOINT: '后台地址没配好，请联系管理员检查',
-  BAD_JSON_RESPONSE: '系统回包不完整，请稍后重试',
+  CREDS_READ_FAIL: '读不到微信支付凭证（库暂时故障），请稍后重试',
+  CONFIG_READ_FAIL: '读不到商户号配置（库暂时故障），请稍后重试',
+  NO_WXPAY_CREDS: '微信支付凭证还没配置，请先去系统设置检查',
+  NO_MCHID: '商户号还没配置，请先去系统设置检查',
 }
 export function orderErrorText(e: unknown): string {
   const s = String(e || '')
   if (!s) return '未知错误'
-  if (s.startsWith('NETWORK:')) return '网络有点不稳，请刷新重试'
   if (s.startsWith('BAD_STATUS:')) {
     const raw = s.slice(11)
     const orderLabel = orderStatusLabel(raw)
@@ -41,7 +44,7 @@ export function orderErrorText(e: unknown): string {
     const refundLabel = refundStatusLabel(raw)
     return `${refundLabel !== raw ? '售后' : '当前'}状态「${refundLabel}」不允许此操作`
   }
-  return ORDER_ERR[s] || `操作失败（${s}）`
+  return ORDER_ERR[s] || transportErrorText(s) || `操作失败（${s}）`
 }
 
 export interface StatCard {
@@ -166,9 +169,11 @@ export function maskPhone(p: unknown): string {
 
 export interface OrderItemVM {
   productId: string
+  lineKey: string // 与后端 refundedQty 同一行键：新单 lineId，旧单回退 productId
   name: string
   spec: string
   qty: number
+  refundedQty: number // 这行已退的件数（不发）
 }
 
 export interface OrderRowVM {
@@ -182,7 +187,9 @@ export interface OrderRowVM {
   feeMismatch: boolean
   paymentException: boolean
   paidFeeMissing: boolean // 异常单实付额脏/缺 → 需人工补录后才能走退款（退款死胡同出口）
-  refundHold: boolean // 已有行退款 approved/refunded（后端 listOrders join afterSales·真正拦截闸在 shipOne 服务端）→ 禁发货
+  refundHold: boolean // 有在途售后或每行都退够件数（后端 listOrders 与 shipOne 同一判据·真正拦截闸在 shipOne 服务端）→ 禁发货
+  // 首次发货回传给 shipOne 核对的已退件数：只含对上了商品行、抽屉/批量面板真展示过的，对不上的让服务端拒
+  ackRefundedQty: Record<string, number>
   trackingNo: string
   address: string // 列表用·手机号已掩码（PII）
   canShip: boolean // paid & 非金额异常 & 非退款保留 → 首次发货
@@ -212,14 +219,17 @@ export function mapOrderRows(list: unknown): OrderRowVM[] {
     const id = String(o.id || o._id || '')
     if (!id) continue
     const rawItems = Array.isArray(o.items) ? o.items : []
+    const gone: Record<string, unknown> = o.refundedQty && typeof o.refundedQty === 'object' ? o.refundedQty : {}
+    const ackRefundedQty: Record<string, number> = {}
     const items: OrderItemVM[] = rawItems
       .filter((it: any) => it && typeof it === 'object')
-      .map((it: any) => ({
-        productId: String(it.productId || ''),
-        name: String(it.name || ''),
-        spec: String(it.spec || ''),
-        qty: Number.isInteger(it.qty) && it.qty > 0 ? it.qty : 0,
-      }))
+      .map((it: any) => {
+        const lineKey = String(it.lineId || it.productId || '')
+        const qty = Number.isInteger(it.qty) && it.qty > 0 ? it.qty : 0
+        const n = Number(gone[lineKey]) || 0
+        if (lineKey && n > 0) ackRefundedQty[lineKey] = n
+        return { productId: String(it.productId || ''), lineKey, name: String(it.name || ''), spec: String(it.spec || ''), qty, refundedQty: Math.min(qty, Math.max(0, n)) }
+      })
     const names = items.map((it) => it.name).filter(Boolean)
     const a = o.address && typeof o.address === 'object' ? o.address : {}
     const status = String(o.status || '')
@@ -241,9 +251,10 @@ export function mapOrderRows(list: unknown): OrderRowVM[] {
       // 供列表行渲染「补录实付」按钮（补录成功后刷新即消失）。
       paidFeeMissing: exc && !paidOk,
       refundHold: o.refundHold === true,
+      ackRefundedQty,
       trackingNo: String((o.shipping && o.shipping.trackingNo) || o.trackingNo || ''),
       address: [a.name, maskPhone(a.phone), a.region, a.detail].filter(Boolean).join(' '), // 列表掩码
-      // 金额不符单/已退款单禁发货（云端 shipOne 也挡·这里只是入口收窄，防越权点了才发现被拒）
+      // 金额不符单/退款持有单（在途售后或每行都退够件数）禁发货（云端 shipOne 也挡·这里只是入口收窄，防点了才发现被拒）
       canShip: status === 'paid' && o.feeMismatch !== true && o.refundHold !== true,
       canModify: status === 'shipped', // 已发货可改单号
       company: String((o.shipping && o.shipping.company) || ''),

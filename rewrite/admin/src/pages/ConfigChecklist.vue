@@ -9,6 +9,7 @@
 import { ref, computed, onMounted } from 'vue'
 import { ShieldCheck, RefreshCw } from 'lucide-vue-next'
 import { getConfigChecklist, saveSecureConfig, savePayConfig } from '../api/system'
+import { transportErrorText } from '../lib/mapSystem'
 import PageHeader from '../components/ui/PageHeader.vue'
 import Card from '../components/ui/Card.vue'
 import Badge from '../components/ui/Badge.vue'
@@ -66,7 +67,7 @@ function errText(code: string): string {
     BAD_DOC: '配置项标识不合法（请刷新页面后重试）',
     NO_FIELDS: '没有可保存的内容（留空提交不改动任何字段）',
   }
-  return map[code] || `保存失败：${code || '未知错误'}`
+  return map[code] || transportErrorText(code) || `保存失败：${code || '未知错误'}`
 }
 
 async function load(): Promise<boolean> {
@@ -75,7 +76,7 @@ async function load(): Promise<boolean> {
   loading.value = false
   if (r.error === 'SESSION_LOST') return false // 会话失效集中导登录（client.onSessionLost·单源·根因#5）
   if (!r.ok) {
-    message.value = '加载失败：' + String(r.error || '')
+    message.value = '加载失败：' + (transportErrorText(r.error) || String(r.error || ''))
     return false
   }
   groups.value = (r.groups || []) as Group[]

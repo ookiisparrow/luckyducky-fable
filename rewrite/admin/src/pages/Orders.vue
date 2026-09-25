@@ -33,6 +33,7 @@ const countsPartial = ref(false) // P2·bug sweep Round2 item14：某状态 .cou
 const rows = ref<OrderRowVM[]>([])
 const cursor = ref<unknown>(null)
 const hasMore = ref(false)
+const moreErr = ref('') // 翻页失败单独一格：不占顶部 message（那里还有别的动作报错），重试成功即清
 const message = ref('')
 const busy = ref(false)
 const search = ref('') // 搜索框输入
@@ -50,7 +51,7 @@ const tabTotal = computed(() => counts.value[tab.value || 'all'])
 const selectedIds = ref<string[]>([])
 const batch = ref<{
   company: string
-  rows: Array<{ id: string; name: string; trackingNo: string; error: string }>
+  rows: Array<{ id: string; name: string; trackingNo: string; error: string; refunded: string; ack: Record<string, number>; stale?: boolean }>
   saving: boolean
   done: boolean
 } | null>(null)
@@ -61,6 +62,7 @@ async function reload() {
   clearConfirmId.value = '' // 换标签/搜索/翻页/发货成功后自动刷新即复位危险态（P1·防旧武装的「去核对」残留、重进同一行一击直发·批3 规格）
   message.value = '加载中…'
   reloading.value = true
+  moreErr.value = ''
   const my = listGen.begin()
   const [r, c] = await Promise.all([listOrders(tab.value, undefined, 20, activeQ.value), orderCounts()])
   if (listGen.isStale(my)) return // 已切别标签/搜索·丢弃过期列表（防高亮标签与内容错配·由更新的 reload 负责复位 reloading）
@@ -84,7 +86,11 @@ async function more() {
   const gen = listGen.peek() // 绑定当前 reload 代际·不递增（不反噬在途 reload）·任何新 reload 会作废本页（迭代F 逮出）
   const r = await listOrders(tab.value, cursor.value, 20, activeQ.value)
   if (listGen.isStale(gen)) return // 期间发生过 reload（切标签/搜索/刷新/动作后刷新）·放弃本页（防混排 + 游标跳页）
-  if (!r.ok) return // 翻页失败不覆盖已有
+  if (!r.ok) {
+    moreErr.value = '加载更多失败：' + orderErrorText(r.error) // 翻页失败不静默；已有行和游标不动，再点即重试
+    return
+  }
+  moreErr.value = ''
   rows.value = appendNew(rows.value, mapOrderRows((r as any).list))
   cursor.value = (r as any).nextCursor
   hasMore.value = !!(r as any).hasMore
@@ -116,13 +122,11 @@ function clearSearch() {
 // —— 详情/发货抽屉 ——
 function openDrawer(row: OrderRowVM, mode: 'ship' | 'view') {
   drawer.value = { row, mode, company: row.company || COMPANIES[0], trackingNo: row.trackingNo || '', acts: null }
-  getOrderDetail(row.id)
-    .catch((e) => ({ ok: false, status: 0, error: String(e) })) // 回包 JSON 为 null 时 post 会抛，同样算取数失败
-    .then((r) => {
-      if (drawer.value?.row.id !== row.id) return
-      if (r.ok) drawer.value.acts = (r as any).activations || {}
-      else drawer.value.actsErr = '激活状态没加载到：' + orderErrorText(r.error) // 失败≠无激活（病根#14）
-    })
+  void getOrderDetail(row.id).then((r) => {
+    if (drawer.value?.row.id !== row.id) return
+    if (r.ok) drawer.value.acts = (r as any).activations || {}
+    else drawer.value.actsErr = '激活状态没加载到：' + orderErrorText(r.error) // 失败≠无激活（病根#14）
+  })
 }
 function closeDrawer() {
   if (busy.value) return
@@ -143,7 +147,7 @@ function timeline(row: OrderRowVM) {
   ]
 }
 // 状态徽章 tone（批2 refactor·同文件字面重复 ×2 去重）：三输入——feeMismatch/refundHold 优先分支 + status 分支。
-// refundHold（P0 修复·退款↔履约状态同步）：已有行退款 approved/refunded，绝不能让「待发货」绿标误导操作员点发货。
+// refundHold（退款↔履约状态同步）：有在途售后或每行都退够件数，绝不能让「待发货」绿标误导操作员点发货。
 function badgeTone(row: { feeMismatch: boolean; paymentException?: boolean; refundHold?: boolean; status: string }): 'neutral' | 'brand' | 'green' | 'red' | 'amber' {
   if (row.paymentException || row.feeMismatch) return 'red'
   if (row.refundHold) return 'red'
@@ -154,6 +158,11 @@ function badgeTone(row: { feeMismatch: boolean; paymentException?: boolean; refu
 }
 const actOf = (pid: string) => (drawer.value?.acts ? drawer.value.acts[pid] : undefined)
 const actLabel = (a: { activated?: boolean; entered?: boolean }) => (a.activated ? (a.entered ? '已激活·已进课' : '已激活') : '未激活')
+const refundedText = (row: OrderRowVM) =>
+  row.items
+    .filter((it) => it.refundedQty > 0)
+    .map((it) => `${it.name}${it.spec ? `（${it.spec}）` : ''} ×${it.refundedQty}`)
+    .join('、')
 
 async function doShip() {
   const d = drawer.value
@@ -164,7 +173,7 @@ async function doShip() {
   }
   d.error = ''
   busy.value = true
-  const r = await shipOrder(d.row.id, d.company.trim(), d.trackingNo.trim())
+  const r = await shipOrder(d.row.id, d.company.trim(), d.trackingNo.trim(), d.row.ackRefundedQty)
   busy.value = false
   if (r.ok) {
     drawer.value = null
@@ -194,7 +203,7 @@ function openBatch() {
   if (!chosen.length) return
   batch.value = {
     company: COMPANIES[0],
-    rows: chosen.map((r) => ({ id: r.id, name: r.addrName || '—', trackingNo: '', error: '' })),
+    rows: chosen.map((r) => ({ id: r.id, name: r.addrName || '—', trackingNo: '', error: '', refunded: refundedText(r), ack: r.ackRefundedQty })),
     saving: false,
     done: false,
   }
@@ -203,24 +212,32 @@ function closeBatch() {
   if (batch.value?.saving) return
   batch.value = null
 }
-const batchReady = computed(() => !!batch.value && !!batch.value.company.trim() && batch.value.rows.every((r) => r.trackingNo.trim()))
+// 件数变了的行不再重试：面板里的「已退款·别装」是打开那一刻的、这里没处刷新，
+// 也不能拿回包里的新件数悄悄换掉——那等于替操作员确认了他没看到的件数
+const liveRows = computed(() => (batch.value ? batch.value.rows.filter((r) => !r.stale) : []))
+const batchReady = computed(() => !!batch.value && !!batch.value.company.trim() && liveRows.value.length > 0 && liveRows.value.every((r) => r.trackingNo.trim()))
 async function doBatchShip() {
   const b = batch.value
   if (!b || b.saving) return
+  const live = liveRows.value
   if (!batchReady.value) {
-    b.rows.forEach((r) => (r.error = r.trackingNo.trim() ? '' : '缺运单号'))
+    live.forEach((r) => (r.error = r.trackingNo.trim() ? '' : '缺运单号'))
     return
   }
   b.saving = true
-  const items = b.rows.map((r) => ({ id: r.id, trackingNo: r.trackingNo.trim() }))
+  const items = live.map((r) => ({ id: r.id, trackingNo: r.trackingNo.trim(), ackRefundedQty: r.ack }))
   const res = await shipOrders(items, b.company.trim())
   b.saving = false
   if (!res.ok) {
-    b.rows.forEach((r) => (r.error = res.error ? orderErrorText(res.error) : '发货失败'))
+    live.forEach((r) => (r.error = res.error ? orderErrorText(res.error) : '发货失败'))
     return
   }
   const byId = Object.fromEntries(((res as any).results || []).map((x: any) => [x.id, x]))
-  b.rows.forEach((r) => (r.error = byId[r.id]?.ok ? '' : orderErrorText(byId[r.id]?.error || 'NO_RESULT')))
+  live.forEach((r) => {
+    const x = byId[r.id]
+    r.stale = x?.error === 'REFUND_LINES_CHANGED'
+    r.error = x?.ok ? '' : r.stale ? '打开面板后这单又有商品退款，上面的「已退款·别装」已过时——关掉面板、刷新后重新勾选这单再发' : orderErrorText(x?.error || 'NO_RESULT')
+  })
   b.rows = b.rows.filter((r) => r.error) // 只留失败的可改运单号重试
   b.done = true
   selectedIds.value = []
@@ -337,8 +354,8 @@ onMounted(reload)
               <UiButton v-else-if="row.paidFeeMissing" variant="danger" size="sm" @click="doRecordPaidFee(row)">
                 <TriangleAlert :size="14" :stroke-width="1.8" /><span>补录实付</span>
               </UiButton>
-              <!-- refundHold（P0）：已有行退款 applied/approved/refunded，禁止发货入口——真正裁决在服务端 shipOne，这里只挡入口不给点。
-                   布尔不区分三态→文案不得声称「处理中/已退款」（曾与徽章自相矛盾）；深链带单号让 Refunds 自动检索到具体记录 -->
+              <!-- refundHold：有在途售后或每行都退够件数，禁止发货入口——真正裁决在服务端 shipOne，这里只挡入口不给点。
+                   布尔不区分这两种情形→文案不得只声称「处理中」或「已退款」；深链带单号让 Refunds 自动检索到具体记录 -->
               <span v-else-if="row.refundHold" class="hint-refund-hold">该单涉及退款，勿发货<button class="link" @click="router.push({ path: '/refunds', query: { q: row.id } })">查看退款 →</button></span>
               <UiButton v-else-if="row.canShip" variant="primary" size="sm" @click="openDrawer(row, 'ship')">
                 <Package :size="14" :stroke-width="1.8" /><span>发货</span>
@@ -350,6 +367,7 @@ onMounted(reload)
         </div>
         <div class="tbl-foot">
           <span>已加载 {{ rows.length }} 单{{ !activeQ && tabTotal != null ? ' / ' + tabTotal + ' 单（本栏）' : '' }}</span>
+          <span v-if="moreErr" class="more-err">{{ moreErr }}</span>
           <UiButton v-if="hasMore" variant="ghost" size="sm" @click="more">加载更多</UiButton>
         </div>
       </template>
@@ -385,14 +403,15 @@ onMounted(reload)
         <div class="batch-list">
           <div v-for="r in batch.rows" :key="r.id" class="batch-row" :class="{ bad: r.error }">
             <div class="batch-oid">{{ r.id }}<small>{{ r.name }}</small></div>
-            <input v-model="r.trackingNo" placeholder="运单号" />
+            <input v-model="r.trackingNo" placeholder="运单号" :disabled="r.stale" />
+            <span v-if="r.refunded" class="batch-refunded">已退款·别装：{{ r.refunded }}</span>
             <span v-if="r.error" class="batch-err">{{ r.error }}</span>
           </div>
         </div>
         <p v-if="batch.done && batch.rows.length" class="batch-warn">部分单失败，已保留可改运单号重试。</p>
         <div class="drawer-foot">
           <UiButton variant="primary" block :disabled="batch.saving || !batchReady" @click="doBatchShip">
-            <PackageCheck :size="16" :stroke-width="1.8" /><span>{{ batch.saving ? '发货中…' : `确认发货 ${batch.rows.length} 单` }}</span>
+            <PackageCheck :size="16" :stroke-width="1.8" /><span>{{ batch.saving ? '发货中…' : `确认发货 ${liveRows.length} 单` }}</span>
           </UiButton>
           <UiButton variant="ghost" block :disabled="batch.saving" @click="closeBatch">关闭</UiButton>
         </div>
@@ -435,9 +454,10 @@ onMounted(reload)
         <!-- 商品 + 逐商品激活态 -->
         <div class="items-card">
           <div class="addr-label">商品 · 激活状态</div>
-          <!-- :key 带 spec＝行身份 productId__spec（后端 lineId 契约·VM 未透传 lineId 故就地重建）：同品多规格同单不撞键（P3·深审20260712） -->
+          <!-- :key＝productId__spec（与后端 lineId 同构）：旧单 lineKey 只有 productId，同品多规格同单会撞键（P3·深审20260712） -->
           <div v-for="it in drawer.row.items" :key="(it.productId || it.name) + '__' + it.spec" class="ditem">
             <b>{{ it.name }}{{ it.spec ? `（${it.spec}）` : '' }} ×{{ it.qty }}</b>
+            <em v-if="it.refundedQty" class="act-tag refunded">已退 {{ it.refundedQty }} 件·别发</em>
             <em v-if="actOf(it.productId)" class="act-tag" :class="actOf(it.productId)!.activated ? 'used' : 'fresh'">{{ actLabel(actOf(it.productId)!) }}</em>
           </div>
           <p v-if="drawer.actsErr" class="drawer-error">{{ drawer.actsErr }}</p>
@@ -631,6 +651,11 @@ onMounted(reload)
   font-size: 12px;
   color: var(--ld-content-2);
 }
+.more-err {
+  margin-left: auto;
+  margin-right: 8px;
+  color: var(--ld-red);
+}
 
 /* 批量操作浮条（白卡·底部居中） */
 .batchbar {
@@ -806,6 +831,10 @@ onMounted(reload)
   background: var(--ld-bg-red-soft);
   color: var(--ld-amber);
 }
+.act-tag.refunded {
+  background: var(--ld-bg-amber-soft);
+  color: var(--ld-amber);
+}
 .ditem-foot {
   margin-top: 11px;
   padding-top: 10px;
@@ -937,6 +966,11 @@ onMounted(reload)
   font-size: 12.5px;
   background: var(--ld-bg);
   color: var(--ld-ink);
+}
+.batch-refunded {
+  grid-column: 1 / -1;
+  font-size: 11px;
+  color: var(--ld-amber);
 }
 .batch-err {
   grid-column: 1 / -1;

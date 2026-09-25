@@ -30,6 +30,7 @@ const countsPartial = ref(false) // P2·bug sweep Round2 item14：某状态 .cou
 const rows = ref<RefundRowVM[]>([])
 const cursor = ref<unknown>(null)
 const hasMore = ref(false)
+const moreErr = ref('') // 翻页失败单独一格：不占顶部 message（那里还有别的动作报错），重试成功即清
 const message = ref('')
 const busy = ref(false)
 const search = ref(String(route.query.q || '')) // 搜索框输入（深链预填初值）
@@ -79,6 +80,7 @@ const reloading = ref(false) // reload 专属在途标志（迭代G·单写布�
 async function reload() {
   message.value = '加载中…'
   reloading.value = true
+  moreErr.value = ''
   const my = listGen.begin()
   const [r, c] = await Promise.all([listRefunds(tab.value, undefined, 20, activeQ.value), refundCounts()])
   if (listGen.isStale(my)) return // 已切别标签/搜索·丢弃过期列表（由更新的 reload 负责复位 reloading）
@@ -99,7 +101,11 @@ async function more() {
   const gen = listGen.peek() // 绑定当前 reload 代际·不递增（不反噬在途 reload）·任何新 reload 会作废本页（迭代F 逮出）
   const r = await listRefunds(tab.value, cursor.value, 20, activeQ.value)
   if (listGen.isStale(gen)) return // 期间发生过 reload·放弃本页（防混排 + 游标跳页）
-  if (!r.ok) return
+  if (!r.ok) {
+    moreErr.value = '加载更多失败：' + orderErrorText(r.error) // 翻页失败不静默；已有行和游标不动，再点即重试
+    return
+  }
+  moreErr.value = ''
   rows.value = appendNew(rows.value, mapRefundRows((r as any).list))
   cursor.value = (r as any).nextCursor
   hasMore.value = !!(r as any).hasMore
@@ -363,6 +369,7 @@ onMounted(() => {
         </div>
         <div class="tfoot">
           <span>已加载 {{ rows.length }} 单{{ !activeQ && tabTotal != null ? ' / ' + tabTotal + ' 单（本栏）' : '' }}</span>
+          <span v-if="moreErr" class="more-err">{{ moreErr }}</span>
           <UiButton v-if="hasMore" variant="ghost" size="sm" @click="more">加载更多</UiButton>
         </div>
       </template>
@@ -625,6 +632,11 @@ onMounted(() => {
   border-top: 1px solid var(--ld-line);
   font-size: 12px;
   color: var(--ld-content-2);
+}
+.more-err {
+  margin-left: auto;
+  margin-right: 8px;
+  color: var(--ld-red);
 }
 
 /* 决策抽屉（本页独有浮层·web 端无需 touchmove 锁；壳层公共段单源在 styles/console.css·病根#5） */

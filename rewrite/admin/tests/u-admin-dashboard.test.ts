@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-// Dashboard.vue 加载行为锁：副请求失败（回失败或直接抛）都并入「部分计数没加载」提示，
+// Dashboard.vue 加载行为锁：副请求失败（client 不抛，一律回 ok:false）并入「部分计数没加载」提示，
 // 告警笔数、最近动态时间照常显示。
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { mount, flushPromises } from '@vue/test-utils'
@@ -45,8 +45,8 @@ describe('Dashboard.vue 加载', () => {
     expect(w.text()).not.toContain('部分待处理计数没能加载')
   })
 
-  it('大白话：异常计数请求直接抛错，看板照常出，但提示部分计数没加载', async () => {
-    m.getInspectStatus.mockRejectedValue(new Error('boom'))
+  it('大白话：异常计数请求超时，看板照常出，但提示部分计数没加载', async () => {
+    m.getInspectStatus.mockResolvedValue({ ok: false, status: 0, error: 'CALL_TIMEOUT' })
     const w = mount(Dashboard)
     await flushPromises()
     expect(w.find('.alert-title').exists()).toBe(true)

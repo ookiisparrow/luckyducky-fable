@@ -31,7 +31,13 @@ async function submit() {
         ? '后端地址未配置（VITE_ADMIN_API）'
         : e.startsWith('NETWORK')
           ? '网络不通：' + e
-          : '口令不对或登录被拒（' + e + '）'
+          : e === 'AUTH_UNAVAILABLE'
+            ? '登录校验服务暂时不可用，请稍后再试（不是口令的问题）'
+            : e === 'CALL_TIMEOUT'
+              ? '服务器太久没回话，请稍后再试'
+              : e === 'BAD_JSON_RESPONSE' || r.status >= 500 // 错口令只会是 4xx；回包读不懂或 5xx 说成口令错会诱人换口令试到被锁
+                ? '服务器出错了，请稍后再试（不是口令的问题）'
+                : '口令不对或登录被拒（' + e + '）'
 }
 </script>
 
