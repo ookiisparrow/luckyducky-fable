@@ -95,6 +95,7 @@ onMounted(load)
             <div class="check-body">
               <div class="check-title">{{ c.title }}</div>
               <div class="check-detail">{{ c.detail }}</div>
+              <div v-if="c.capped" class="check-detail">只扫了前 {{ c.scanned }} 条，结论可能不全</div>
               <div v-if="c.status === 'red' && c.samples && c.samples.length" class="samples">
                 <code v-for="s in c.samples" :key="s">{{ s }}</code>
                 <span v-if="c.count && c.count > c.samples.length" class="more">等 {{ c.count }} 条</span>

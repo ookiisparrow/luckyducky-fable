@@ -414,6 +414,15 @@ describe('Desk.vue 拉取失败出声（失败≠空态）', () => {
     expect(w.text()).not.toContain('队列空 ✓')
   })
 
+  it('大白话：待接超过一页（云端回了 nextCursor）——写明列表没显示全部，不让坐席以为只有这几个人在等', async () => {
+    serve({ listQueue: () => ({ ok: true, items: [Q1], nextCursor: { v: 1, id: 'q1' } }) })
+    const w = await mountDesk()
+    expect(w.findAll('aside')[0].text()).toContain('待接不止 1 条，列表未显示全部')
+    serve({ listQueue: () => ({ ok: true, items: [Q1] }) })
+    const w2 = await mountDesk()
+    expect(w2.text()).not.toContain('列表未显示全部')
+  })
+
   it('大白话：已拉到排队后再刷新失败——排队不清、写明原因', async () => {
     let q: unknown = { ok: true, items: [Q1] }
     serve({ listQueue: () => q })

@@ -53,6 +53,12 @@ describe('ScmPlanner.vue 产销加载', () => {
     expect(w.text()).not.toContain('还没有产销记录')
   })
 
+  it('大白话：库存列表到了扫描上限（truncated）——现存那列可能缺行，卡头要写列表可能不全', async () => {
+    api.listInventory.mockResolvedValue({ ok: true, list: [{ _id: 'fg:p1__红', productId: 'p1', spec: '红', stock: 7 }], truncated: true })
+    const w = await mountPage()
+    expect(w.findAll('.card-sub')[1].text()).toContain('列表可能不全')
+  })
+
   it('大白话：库存和产品目录挂了——各自点名，不静默吞成空表', async () => {
     api.listInventory.mockResolvedValue({ ok: false, status: 500, error: 'X2' })
     api.listDrafts.mockResolvedValue({ ok: false, status: 500, error: 'X3' })

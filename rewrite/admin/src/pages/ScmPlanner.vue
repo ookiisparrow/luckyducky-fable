@@ -78,7 +78,9 @@ async function calc() {
 onMounted(async () => {
   const [r, i, d] = await Promise.all([getFgSummary(), listInventory(), listDrafts()])
   products.value = d.ok ? ((d as any).list as Record<string, any>[]) : []
-  fg.value = r.ok ? { packed: (r.packed as Record<string, any>[]) || [], shipped: (r.shipped as Record<string, any>[]) || [], truncated: r.truncated === true } : null
+  // 产销汇总与库存列表都封顶 1000 个规格，任一边触顶这张表都可能缺行
+  const truncated = r.truncated === true || (i.ok && i.truncated === true)
+  fg.value = r.ok ? { packed: (r.packed as Record<string, any>[]) || [], shipped: (r.shipped as Record<string, any>[]) || [], truncated } : null
   if (i.ok) {
     const list = ((i as any).list as Record<string, any>[]) || []
     const map: Record<string, number> = {}

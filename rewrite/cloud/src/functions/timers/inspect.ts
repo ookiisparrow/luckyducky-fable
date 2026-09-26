@@ -8,6 +8,6 @@ export const main = async () => {
   if (!isServerCall()) return err(ERR.SERVER_ONLY)
   const run = await runInspection('timer')
   // 每日心跳（业务逻辑架构 链 13·去重·全绿也报平安）：仅定时线发（手动 adminApi.runInspect 不发心跳）·fail-soft 内部吞错。
-  await sendDailyHeartbeat({ green: run.summary.green, red: run.summary.red })
+  await sendDailyHeartbeat({ green: run.summary.green, red: run.summary.red, capped: run.results.filter((r) => r.capped).length })
   return ok({ summary: run.summary, red: run.results.filter((r) => r.status === 'red').map((r) => r.id) })
 }

@@ -44,6 +44,7 @@ export interface SummaryVM {
   scoreLabel: string
   scoreStars: string
   count: number
+  countLabel: string // approx＝云端只数了最近一批，写「近 N 条」
   dist: Array<{ label: string; pct: number }>
   tags: Array<{ tag: string; n: number }>
 }
@@ -57,6 +58,7 @@ export function mapSummary(summary: unknown): SummaryVM | null {
     scoreLabel: String(s.score || '0'),
     scoreStars: stars(s.score), // 摘要星行·由真实均分四舍五入派生（非写死）
     count,
+    countLabel: (s.approx === true ? '近 ' : '') + count + ' 条评价',
     dist: (Array.isArray(s.dist) ? s.dist : [])
       .filter((d: any) => Array.isArray(d) && d.length >= 2)
       .map((d: any) => ({ label: String(d[0]), pct: Number(d[1]) || 0 })),

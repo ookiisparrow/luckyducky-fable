@@ -172,7 +172,7 @@ export const getReviews = async (event: any = {}) => {
           .limit(SUMMARY_SAMPLE + 1)
           .get()
           .catch(() => null)
-        return buildSummary(sres ? sres.data : [])
+        return sres ? buildSummary(sres.data) : null // 两路都没读到：汇总给 null，不给 0 条冒充没人评过
       })
     : null
 

@@ -208,6 +208,13 @@ describe('notifyHeartbeat（巡检机每日心跳·红/绿分档文案+码+计�
     expect(bp.calls[0].alert).toEqual({ sev: 'heartbeat', fn: 'inspect', code: 'HEARTBEAT_RED', ctx: { green: 5, red: 2 } })
   })
 
+  it('大白话：有检查项扫描到上限（capped）→不说「全绿」，推到群里的计数带上 capped 条数', async () => {
+    seedSettings()
+    const lines = await captureLines(() => notifyHeartbeat({ green: 3, red: 0, capped: 1 }))
+    expect(lines).toContain('[LD_HEARTBEAT] 巡检机存活·今日体检 green=3·1 项扫描到上限、结论可能不全')
+    expect(bp.calls[0].alert).toEqual({ sev: 'heartbeat', fn: 'inspect', code: 'HEARTBEAT_GREEN', ctx: { green: 3, red: 0, capped: 1 } })
+  })
+
   it('大白话：summary 为 null（运行期防御·`?.` 是设计）→绝不抛、按 0 计全绿（削掉 ?. 就当场炸）', async () => {
     const lines: string[] = []
     const orig = console.error

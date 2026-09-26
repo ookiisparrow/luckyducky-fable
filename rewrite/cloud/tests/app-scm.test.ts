@@ -673,6 +673,12 @@ describe('总览（黄金 §L：批 B2 聚合着陆页——只读、不动账�
     ])
   })
 
+  it('大白话：缺料超过 50 种也全数返回——「缺料物料」卡的数不能停在 50 冒充全部', async () => {
+    control.seed('materials', Array.from({ length: 51 }, (_, i) => mat('stuffing' + i, 0, { threshold: 5 })))
+    const r = await post('getScmOverview', SUPER, {})
+    expect(r.lowStock.length).toBe(51)
+  })
+
   it('大白话：应付未结＝外协单 delivered（未 settled）按织女分组求和 payableFen（分整数）+ 计单据数；issued/settled/draft 不计入；合计=各组之和', async () => {
     control.seed('suppliers', [
       { _id: 'w1', name: '织女一号', type: 'outworker' },

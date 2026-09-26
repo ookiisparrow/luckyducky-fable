@@ -55,6 +55,15 @@ describe('Dashboard.vue 钱链告警没读全', () => {
     expect(w.text()).not.toContain('部分待处理计数没能加载') // 计数都读到了，不另报一条泛泛的红字
   })
 
+  it('大白话：库存规格超扫描上限——不显绿色全清，明说低库存数可能不全；它是读到了只是没数全，不叫人刷新', async () => {
+    m.listInventory.mockResolvedValue({ ok: true, list: [{ productId: 'p1', spec: '', stock: 50 }], truncated: true })
+    const w = mount(Dashboard)
+    await flushPromises()
+    expect(w.text()).not.toContain('今日无待处理事项 ✓')
+    expect(w.text()).toContain('库存规格超扫描上限，低库存数可能不全')
+    expect(w.text()).not.toContain('部分待处理计数没能加载')
+  })
+
   it('大白话：有别的待办撑出行动条时，告警没读全的「钱链告警」格子显示「?」，不显 0', async () => {
     const dash = sample('getDashboard')
     dash.txAlerts = { feeMismatch: [], refundMismatch: [], stuckRefunds: [], partial: true }

@@ -393,12 +393,12 @@ export async function runInspection(trigger: 'timer' | 'manual'): Promise<Inspec
  * + 形状兜底（`summary/results`·防体检面板解构空集合炸），**不污染体检读路径**（getInspectStatus 过滤
  * startedAt>0）。心跳非异常——**绝不落 recordAnomaly**（不污染 anomalies 账本）。fail-soft：绝不反噬主流程。
  */
-export async function sendDailyHeartbeat(summary: { green: number; red: number }): Promise<void> {
+export async function sendDailyHeartbeat(summary: { green: number; red: number; capped?: number }): Promise<void> {
   try {
     const db = getDb()
     const day = dayKeyCST(Date.now()).replace(/-/g, '')
-    // summary 落当日真实计数（只写占位 0/0 会让直查 tcb db 的人被「全绿」误导；读路径已按 startedAt>0 过滤、此字段仅供直查审计）
-    const rec = { _id: `hb:${day}`, startedAt: 0, finishedAt: 0, trigger: 'timer', summary: { green: summary.green, red: summary.red }, results: [] }
+    // summary 落当日真实计数含 capped（只写占位 0/0 或漏 capped 都会让直查 tcb db 的人被「全绿」误导；读路径已按 startedAt>0 过滤、此字段仅供直查审计）
+    const rec = { _id: `hb:${day}`, startedAt: 0, finishedAt: 0, trigger: 'timer', summary: { green: summary.green, red: summary.red, ...(summary.capped ? { capped: summary.capped } : {}) }, results: [] }
     try {
       await db.collection(COLLECTIONS.inspectRuns).add({ data: rec })
     } catch {

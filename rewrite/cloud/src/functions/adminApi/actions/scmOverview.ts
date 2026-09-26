@@ -27,7 +27,7 @@ export async function getScmOverview({ db }: Ctx) {
     db.collection(COLLECTIONS.suppliers).limit(PAYABLE_SCAN_CAP).get(),
   ])
 
-  // ── 缺料预警：qty(stock) < threshold，gap 降序，limit 50 有界 ──
+  // ── 缺料预警：qty(stock) < threshold，gap 降序；不截条数——前端「缺料物料」卡直接数这个列表 ──
   const lowStock = (materials as any[])
     .filter((m) => Number.isInteger(m.stock) && Number.isInteger(m.threshold) && m.stock < m.threshold)
     .map((m) => ({
@@ -40,7 +40,6 @@ export async function getScmOverview({ db }: Ctx) {
       suggest: (KNOTTED_RE.test(String(m._id)) ? 'outwork' : 'purchase') as 'outwork' | 'purchase',
     }))
     .sort((a, b) => b.gap - a.gap)
-    .slice(0, 50)
 
   // ── 应付未结：delivered 未 settled 外协单按织女（供应商）分组求和（分整数·有界扫描·超界标 truncated）──
   const supName = new Map(((supRes.data || []) as any[]).map((s) => [String(s._id), String(s.name || '')]))

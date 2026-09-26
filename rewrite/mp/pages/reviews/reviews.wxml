@@ -5,7 +5,7 @@
       <view class="ld-rv-score">
         <text class="ld-rv-num">{{summary.scoreLabel}}</text>
         <text class="ld-rv-stars ld-rv-stars-lg">{{summary.scoreStars}}</text>
-        <text class="ld-rv-count">{{summary.count}} 条评价</text>
+        <text class="ld-rv-count">{{summary.countLabel}}</text>
       </view>
       <view class="ld-rv-bars">
         <view class="ld-rv-bar" wx:for="{{summary.dist}}" wx:key="label">
