@@ -10,9 +10,9 @@
 | 1 | 云点播服务开通 | 已开通（存储区 ap-chongqing 默认） | 媒资存储 + 转码 + 分发的载体；按量后付费需账户预充值 |
 | 2 | CAM 子账号 + API 密钥 | `ld-vod`（仅授 `QcloudVODFullAccess`） | `secureConfig/vod.secretId/secretKey`——上传签名派发 + DescribeMediaInfos/DeleteMedia。**函数运行时临时密钥签不了 VOD，必须独立子账号** |
 | 3 | 任务流模板 | `LuckyDuckyVod`（转码 1982549 + 雪碧图 172236 + 封面 233175） | 上传完成自动触发：转码（H.264 720p 单档·GOP2s）+ 雪碧图（2s 一帧 10×10）+ 封面截图 |
-| 4 | 播放域名 | `vod.luckyducky.cn`（CNAME→`vod.luckyducky.cn.cdn.dnsv1.com`·阿里云 DNS 已配） | 默认分发域名官方定位「仅用于测试」，线上必须自有域名（同 `kf.luckyducky.cn` 备案先例）|
+| 4 | 播放域名 | `vod.luckyducky.cn`（CNAME→`vod.luckyducky.cn.cdn.dnsv1.com`·腾讯 DNSPod 已配） | 默认分发域名官方定位「仅用于测试」，线上必须自有域名（同 `kf.luckyducky.cn` 备案先例）|
 | 5 | Key 防盗链 | 开启（EncryptedKey=`secureConfig/vod.playKey`） | `getPlaybackUrl` 鉴权后本地 md5 签名（有效期 6h·kit/vod.ts SIGN_TTL_SEC）；**Key 未配则 VOD 段一律 url:null（fail-closed）** |
-| 6 | HTTPS 证书 | `a6eOgKnW`（vod.luckyducky.cn·CloudCertId；到期日见 Issue #139） | 播放必须 HTTPS（小程序合法域名要求）；到期前续期（DNS 在阿里云须手动验证）|
+| 6 | HTTPS 证书 | `a6eOgKnW`（vod.luckyducky.cn·CloudCertId；到期日见 Issue #139） | 播放必须 HTTPS（小程序合法域名要求）；到期前续期（DNS 在腾讯 DNSPod，同账号续签走 DNS_AUTO）|
 | 7 | 事件通知模式 | **不配置回调 URL**（拉模式·刻意）| 转码完成感知走 admin「同步转码状态」按钮 on-demand 查询（DescribeMediaInfos）——云函数无公网回调入口，不为此开 HTTP 访问服务 |
 
 ## 重建手册（新环境 / 误删后照做）
@@ -21,12 +21,12 @@
 
 ### 阶段 0 · 让代码上线（前置，否则清单页看不到 VOD 组）
 
-改动面＝云函数 `adminApiV2`/`app`/`cleanupEvents` + admin 静态托管。照运维手册「部署」 部署（险级顺序：定时器 → adminApiV2 → app 最后·`app` 先读 §1.4 stale 陷阱）：
+改动面＝云函数 `adminApi`/`app`/`cleanupEvents` + admin 静态托管。照运维手册「部署」一节部署（险级顺序：定时器 → adminApi → app 最后）：
 
 ```bash
 npm run build:rw-cloud
 tcb fn deploy cleanupEvents --dir rewrite/cloud/dist/cleanupEvents --force -e cloudbase-d4gcssqbv06865479
-echo y | tcb fn deploy adminApiV2 --dir rewrite/cloud/dist/adminApi --force -e cloudbase-d4gcssqbv06865479   # ⚠️ 云端名≠目录名
+echo y | tcb fn deploy adminApi --dir rewrite/cloud/dist/adminApi --force -e cloudbase-d4gcssqbv06865479
 echo y | tcb fn deploy app --dir rewrite/cloud/dist/app --force -e cloudbase-d4gcssqbv06865479
 npm run build:rw-admin
 tcb hosting delete admin --dir --yes -e cloudbase-d4gcssqbv06865479
