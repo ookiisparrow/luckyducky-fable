@@ -1,10 +1,11 @@
-import { reply, ensure, str, type Ctx } from '../lib'
-import { notifyAlert, isCollectionMissing } from '../../../kit'
+import { reply, ensure, type Ctx } from '../lib'
+import { notifyAlert, isCollectionMissing, str, err } from '../../../kit'
+import { COLLECTIONS } from '@ldrw/shared'
 
-// 知识库维护（后台360工作站 B4.1·admin 侧）：管理端维护 FAQ/知识条目（问题 + 答案 + 分类 + 启用 + 顺序 + 精选），
+// 知识库维护（admin 侧）：管理端维护 FAQ/知识条目（问题 + 答案 + 分类 + 启用 + 顺序 + 精选），
 // 客服 bot（cs/kfCallback/dispatch.ts）按 _id（=FAQ 键·同分流菜单叶子 id）读 kb 发答案——FAQ 答案单源（根因#5）。整体覆盖式保存（同 saveCheckpoints 范式）：admin 提交整份条目列表，
 // 后端 upsert 全部 + 删除不在列表里的旧条目，一个 action 兼「增删改」。确定性 _id=key（doc(key).set·data 不带 _id）。
-// featured（R37b·公开读接线）：管理员勾选「精选」的条目才会被 app action getPublicFaq 公开下发给小程序求助
+// featured（R37·公开读）：管理员勾选「精选」的条目才会被 app action getPublicFaq 公开下发给小程序求助
 // 面板 FAQ 区（同一 kb 单源分裂两个消费面：bot 答案全量按 key 命中/mp 公开读只挑 featured，互不冲突）。
 
 const ENTRY_LIMIT = 100 // 单次保存条目上限（防一次塞爆·FAQ 量级远低于此）
@@ -15,10 +16,10 @@ const CATS = ['logistics', 'activation', 'aftersale', 'tutorial', 'other'] // �
 export async function listKb({ db }: Ctx) {
   let r: { data?: any[] }
   try {
-    r = await db.collection('kb').limit(SCAN).get()
+    r = await db.collection(COLLECTIONS.kb).limit(SCAN).get()
   } catch (e) {
     if (isCollectionMissing(e)) return reply(200, { ok: true, list: [] }) // 集合未建＝真没有册（第一次保存前）
-    return reply(200, { ok: false, error: 'DOC_READ_FAIL' }) // 库挂了≠空册：停手，别让后台解锁「保存整册」
+    return reply(200, err('DOC_READ_FAIL')) // 库挂了≠空册：停手，别让后台解锁「保存整册」
   }
   const list = ((r && r.data) || [])
     .map((d: any) => ({
@@ -36,7 +37,7 @@ export async function listKb({ db }: Ctx) {
 
 // 整体覆盖式保存知识条目（白名单字段 + 长度上限·不信前端·根因#3）：upsert 传入条目 + 删本册不在列表里的旧条目。
 export async function saveKb({ db, data }: Ctx) {
-  await ensure(db, 'kb')
+  await ensure(db, COLLECTIONS.kb)
   const entries = (Array.isArray(data && data.entries) ? data.entries : []).slice(0, ENTRY_LIMIT)
   const keep = new Set<string>()
   let i = 0
@@ -45,7 +46,7 @@ export async function saveKb({ db, data }: Ctx) {
     if (!key) continue // 无键的行跳过（key 即 _id·FAQ 路由键）
     keep.add(key)
     await db
-      .collection('kb')
+      .collection(COLLECTIONS.kb)
       .doc(key)
       .set({
         data: {
@@ -53,24 +54,24 @@ export async function saveKb({ db, data }: Ctx) {
           answer: str(e.answer, 2000),
           category: CATS.includes(e.category) ? e.category : 'other',
           enabled: e.enabled !== false,
-          order: Number.isFinite(Number(e.order)) ? Number(e.order) : i, // order:0 是合法首位·不被 ||i 的 falsy 吞掉（P3·item10）
-          featured: e.featured === true, // 精选（R37b·白名单字段·默认 false）：mp 求助面板 FAQ 公开读只取此=true 的条目
+          order: Number.isFinite(Number(e.order)) ? Number(e.order) : i, // order:0 是合法首位·不被 ||i 的 falsy 吞掉
+          featured: e.featured === true, // 精选（R37·白名单字段·默认 false）：mp 求助面板 FAQ 公开读只取此=true 的条目
           updatedAt: Date.now(),
         },
       })
     i++
   }
   // 删本册不在新列表里的旧条目（整体覆盖式同步·admin 删一条即真删）
-  // GC 删除失败不再吞（H2·同批F F1 判例）：原 .catch(()=>{}) 全吞、恒 ok:true——旧条目删不掉时前端仍显「已保存」，
+  // GC 删除失败不吞：若 .catch(()=>{}) 全吞、恒 ok:true，旧条目删不掉时前端仍显「已保存」，
   // 残留条目继续被 bot/坐席读到（可能是已改名/合并进别条的旧答案，误导话术）。upsert 已成功的部分保留（数据是
   // 新的、只是旧条目残留，重存一次即可收敛）；GC 失败经 notifyAlert 留痕 + 如实回 ok:false，别静默过关。
-  const old = await db.collection('kb').limit(SCAN).get().catch(() => null)
-  if (!old) return reply(200, { ok: false, error: 'DOC_READ_FAIL' }) // 扫描失败≠空库：停 GC，不假装整册已替换
+  const old = await db.collection(COLLECTIONS.kb).limit(SCAN).get().catch(() => null)
+  if (!old) return reply(200, err('DOC_READ_FAIL')) // 扫描失败≠空库：停 GC，不假装整册已替换
   const failedIds: string[] = []
   for (const d of (old && old.data) || []) {
     if (!keep.has(d._id)) {
       const err = await db
-        .collection('kb')
+        .collection(COLLECTIONS.kb)
         .doc(d._id)
         .remove()
         .then(() => null)
@@ -80,7 +81,7 @@ export async function saveKb({ db, data }: Ctx) {
   }
   if (failedIds.length) {
     await notifyAlert('anomaly', 'saveKb', 'GC_REMOVE_FAIL', { failedIds })
-    return reply(200, { ok: false, error: 'GC_REMOVE_FAIL', failedIds })
+    return reply(200, err('GC_REMOVE_FAIL', { failedIds }))
   }
   return reply(200, { ok: true, count: keep.size })
 }

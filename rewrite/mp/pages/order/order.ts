@@ -1,4 +1,4 @@
-// 订单详情（M2 批7·批8 接售后）：状态横幅/条目/地址/金额明细/操作（续付·确认收货·申请售后）。
+// 订单详情：状态横幅/条目/地址/金额明细/操作（续付·确认收货·申请售后）。
 import { tapHaptic } from '../../lib/haptics'
 import { getOrderById, pay, confirmReceive, cancelOrder, applyRefund, getMyAfterSales } from '../../api/orders'
 import { mapPayResult } from '../../lib/payFlow'
@@ -35,6 +35,7 @@ Page({
     banner: null as BannerVM | null,
     amountNum: '',
     canAfterSale: false,
+    paying: false, // 继续支付在途（锁 + 按钮 dim）：pay 往返最长 12s，连点会重复发 pay、重复拉起收银台
     shopName: SHOP_FULL_NAME, // 店铺行恒引 lib/shop 单源（不硬编码·病根#5·守卫 brand-name-single-source）
   },
   onLoad(query: Record<string, string | undefined>) {
@@ -42,7 +43,7 @@ Page({
   },
   orderId: '',
   _seq: 0, // reload 代次·丢弃过期回包（onShow/取消/支付/确认收货多触发点并发·慢回包别把横幅盖回过期态）
-  unloaded: false, // 页面已退出标记（同 checkout/review 范式·bug sweep II 批E）：onPay/onAfterSale 回包在途用户退出详情页，迟到回包不再对已退页 toast/reload/导航
+  unloaded: false, // 页面已退出标记（同 checkout/review 范式）：onPay/onAfterSale 回包在途用户退出详情页，迟到回包不再对已退页 toast/reload/导航
   onUnload() {
     this.unloaded = true
   },
@@ -58,7 +59,7 @@ Page({
     // 失败≠不存在（根因#14）：请求失败落 loadFailed 给重试（已有 vm 时保留不覆盖）；
     // 查无此单保持 vm 空、loadFailed 灭，wxml 的 !loading 空态就是「订单不存在」。
     if (!r.ok) {
-      // 「查无此单」≠「网络失败」（根因#14 反向·2026-07-25 体检批 P2）：云端 getOrderById 对
+      // 「查无此单」≠「网络失败」（根因#14 反向）：云端 getOrderById 对
       // 订单不存在/非本人一律 err(NOT_FOUND)、缺 id 是 err(NO_ID)，都是 ok:false——只看 ok 会把
       // 这两类落进 loadFailed，用户对着不存在的单反复点重试。按错误码分流：确定性的「没有」
       // 灭 loadFailed（空态走 !loading，不是死代码），其余（超时/未部署/云异常）才落 loadFailed 给重试。
@@ -120,16 +121,25 @@ Page({
       success: async (res) => {
         if (!res.confirm) return
         const r = await cancelOrder(this.orderId)
-        if (this.unloaded) return // await 恢复点复核（bug sweep II 批E round2）：用户已退出详情页——非钱副作用，静默收尾即可
+        if (this.unloaded) return // await 恢复点复核：用户已退出详情页——非钱副作用，静默收尾即可
         wx.showToast({ title: r.ok ? '订单已取消' : '取消没成功，稍后再试', icon: r.ok ? 'success' : 'none' })
         void this.reload() // 横幅按映射自动翻 closed
       },
     })
   },
   async onPay() {
+    if (this.data.paying) return
     tapHaptic()
+    this.setData({ paying: true })
+    wx.showLoading({ title: '正在发起支付', mask: true })
     const outcome = mapPayResult(await pay(this.orderId))
-    // await 恢复点复核（同 checkout startPay 范式·bug sweep II 批E）：用户在支付发起在途退出详情页，迟到回包
+    wx.hideLoading()
+    // 收银台关掉（成功/取消/失败）或没拉起都要解锁，否则按钮永久点不动
+    const settle = () => {
+      this.setData({ paying: false })
+      void this.reload()
+    }
+    // await 恢复点复核（同 checkout startPay 范式）：用户在支付发起在途退出详情页，迟到回包
     // 不再对已退页 toast/reload/拉起支付授权框——订单已在云端，用户下次重新打开详情页续付即可。requestPayment 的
     // success/fail 回调内不加同款复核：授权框是模态、卸载窗口小，无需评估。
     if (this.unloaded) {
@@ -138,7 +148,7 @@ Page({
     }
     if (outcome.kind === 'paid') {
       wx.showToast({ title: '已支付', icon: 'success' })
-      void this.reload()
+      settle()
       return
     }
     if (outcome.kind === 'request') {
@@ -146,14 +156,14 @@ Page({
         ...outcome.payment,
         success: () => {
           wx.showToast({ title: '支付成功', icon: 'success' })
-          void this.reload()
+          settle()
         },
-        fail: () => void this.reload(),
+        fail: settle,
       })
       return
     }
     wx.showToast({ title: outcome.message, icon: 'none' })
-    void this.reload()
+    settle()
   },
   onConfirm() {
     tapHaptic()
@@ -163,7 +173,7 @@ Page({
       success: async (res) => {
         if (!res.confirm) return
         const r = await confirmReceive(this.orderId)
-        if (this.unloaded) return // await 恢复点复核（bug sweep II 批E round2）：用户已退出详情页——非钱副作用，静默收尾即可
+        if (this.unloaded) return // await 恢复点复核：用户已退出详情页——非钱副作用，静默收尾即可
         wx.showToast({ title: r.ok ? '已确认收货' : '操作没成功，稍后再试', icon: r.ok ? 'success' : 'none' })
         void this.reload()
       },
@@ -172,7 +182,7 @@ Page({
   onWriteReview(e: WechatMiniprogram.TouchEvent) {
     const { lineid, name } = e.currentTarget.dataset as { lineid: string; name: string }
     // lineId 与 name 同一往返约定：编码/解码成对（review.ts onLoad 对应 decodeURIComponent）——
-    // lineId 未编码时若含 URL 保留字符（如 productId 里的 &/#）会截断查询串（P3·bug sweep R1 #6）。
+    // lineId 未编码时若含 URL 保留字符（如 productId 里的 &/#）会截断查询串。
     wx.navigateTo({ url: `/pages/review/review?orderId=${this.orderId}&lineId=${encodeURIComponent(lineid || '')}&name=${encodeURIComponent(name || '')}` })
   },
   async onAfterSale() {
@@ -183,7 +193,7 @@ Page({
     // ponytail: 只取首页·不看 hasMore——本人售后超 100 条时本单更早的申请仍会被截掉（云端 ALREADY_APPLIED 兜底）；
     // 根治=云端 getMyAfterSales 接 orderId 过滤后改传 vm.id、删下方客户端 filter。
     const asRes = await getMyAfterSales(undefined, 100)
-    if (this.unloaded) return // await 恢复点复核（bug sweep II 批E）：用户已退出详情页——非钱副作用，静默收尾即可
+    if (this.unloaded) return // await 恢复点复核：用户已退出详情页——非钱副作用，静默收尾即可
     if (!asRes.ok) {
       wx.showToast({ title: '售后记录没加载出来，稍后再试', icon: 'none' }) // 失败≠一条都没申请过
       return
@@ -194,28 +204,35 @@ Page({
       wx.showToast({ title: '没有可申请售后的条目', icon: 'none' })
       return
     }
-    wx.showActionSheet({
-      itemList: eligible.slice(0, 6).map((l) => `${l.name}${l.spec ? '（' + l.spec + '）' : ''}`),
-      success: (res) => {
-        const line = eligible[res.tapIndex]
-        wx.showModal({
-          title: '申请退款',
-          editable: true,
-          placeholderText: '退款原因（选填）',
-          success: async (m) => {
-            if (!m.confirm) return
-            const r = await applyRefund(vm.id, line.lineId, String(m.content || ''))
-            if (this.unloaded) return // await 恢复点复核（bug sweep II 批E）：用户已退出详情页——申请已真实提交，非钱副作用，静默收尾即可（不再对已退页 toast/导航）
-            if (r.ok) {
-              wx.showToast({ title: '已提交申请', icon: 'success' })
-              navigateOrRedirect('/pages/aftersales/aftersales')
-            } else {
-              const e = String(r.error || '')
-              const msg = e === 'ALREADY_APPLIED' ? '这条已申请过了' : e === 'NOT_REFUNDABLE' ? '该条目不可退（已开课）' : e === 'NOTHING_LEFT' ? '本单可退额度已用完' : '申请没成功，稍后再试'
-              wx.showToast({ title: msg, icon: 'none' })
-            }
-          },
-        })
+    const label = (l: (typeof eligible)[number]) => `${l.name}${l.spec ? '（' + l.spec + '）' : ''}`
+    // wx.showActionSheet 一屏最多 6 项：放不下时每屏 5 行 + 「更多…」翻下一屏，保证每一行都选得到
+    const pick = (start: number) => {
+      const paged = eligible.length - start > 6
+      const page = eligible.slice(start, paged ? start + 5 : undefined)
+      wx.showActionSheet({
+        itemList: page.map(label).concat(paged ? ['更多…'] : []),
+        success: (res) => (res.tapIndex < page.length ? this.applyFor(vm.id, page[res.tapIndex].lineId) : pick(start + 5)),
+      })
+    }
+    pick(0)
+  },
+  applyFor(orderId: string, lineId: string) {
+    wx.showModal({
+      title: '申请退款',
+      editable: true,
+      placeholderText: '退款原因（选填）',
+      success: async (m) => {
+        if (!m.confirm) return
+        const r = await applyRefund(orderId, lineId, String(m.content || ''))
+        if (this.unloaded) return // await 恢复点复核：用户已退出详情页——申请已真实提交，非钱副作用，静默收尾即可（不再对已退页 toast/导航）
+        if (r.ok) {
+          wx.showToast({ title: '已提交申请', icon: 'success' })
+          navigateOrRedirect('/pages/aftersales/aftersales')
+        } else {
+          const e = String(r.error || '')
+          const msg = e === 'ALREADY_APPLIED' ? '这条已申请过了' : e === 'NOT_REFUNDABLE' ? '该条目不可退（已开课）' : e === 'NOTHING_LEFT' ? '本单可退额度已用完' : '申请没成功，稍后再试'
+          wx.showToast({ title: msg, icon: 'none' })
+        }
       },
     })
   },

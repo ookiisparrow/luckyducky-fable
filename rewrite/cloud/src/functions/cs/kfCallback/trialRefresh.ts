@@ -1,11 +1,11 @@
 /**
  * 测版「刷新」：同号当新客（epoch++）。只清会话进度，不动真订单/支付/库存/openid。
- * 设计基线 v0.3.1 §5/§8 T1；§1.4 刷新列＝清会话变量 / 人工中拒刷 / 只打会话层。
+ * 刷新＝清会话变量 / 人工中拒刷 / 只打会话层。
  * 预发（微信 trial）+ 正式（release / 生产云）硬关。口令默认可改：刷新 / #reset。
  */
 
 import { COLLECTIONS, CS_REFRESH_COPY, CS_REFRESH_PASSPHRASES, formatRefreshDone } from '@ldrw/shared'
-import { recordAudit, transition } from '../../../kit'
+import { recordAudit, transition, err } from '../../../kit'
 import { emptyFlow, persistableFlow } from './scriptReply'
 import { packSessionId, readEpochForHandoff } from './csPack'
 
@@ -174,7 +174,7 @@ export async function listHeldSessions(
 async function forceCloseHeld(db: any, held: Array<{ _id: string }>): Promise<void> {
   const now = Date.now()
   for (const s of held) {
-    await transition('csSession', s._id, ['pending', 'active', 'escalated'], 'closed', {
+    await transition(COLLECTIONS.csSession, s._id, ['pending', 'active', 'escalated'], 'closed', {
       updatedAt: now,
     }).catch(() => ({ moved: false }))
   }
@@ -196,12 +196,12 @@ export async function applyTrialRefresh(
   }
 ): Promise<RefreshResult> {
   const euid = String(opts.externalUserId || '').trim()
-  if (!euid) return { ok: false, error: 'BAD_ARGS' }
+  if (!euid) return err('BAD_ARGS')
   const gate = await loadTrialRefreshGate(db)
-  if (!gate.on) return { ok: false, error: 'TRIAL_ONLY', externalUserId: euid }
+  if (!gate.on) return err('TRIAL_ONLY', { externalUserId: euid })
   const held = await listHeldSessions(db, euid, opts.openKfId)
   const force = !!opts.force
-  if (held.length && !force) return { ok: false, error: 'HUMAN_ACTIVE', externalUserId: euid }
+  if (held.length && !force) return err('HUMAN_ACTIVE', { externalUserId: euid })
   if (held.length && force) await forceCloseHeld(db, held)
 
   const epochFrom = await readEpochForHandoff(db, euid)

@@ -1,6 +1,6 @@
 // 首页数据映射（纯函数·vitest 钉行为）：云端契约 → 视图模型。
 // 钱链纪律：price 云端存「元」（订单链的分整数在云函数内·展示层不做算术、原样标价）。
-// 内容纪律（黄金 learning-content §九）：整档/逐字段/逐块缺失都回退「设计默认文案」，
+// 内容纪律：整档/逐字段/逐块缺失都回退「设计默认文案」，
 //   空块（空字段/空数组/整组脏行）仍用默认——防线上误清空、防半空板块。默认文案 = 重设计首页原稿。
 
 import { BRAND_SLOGAN_EN, LEARNER_KIT } from './brand'
@@ -125,7 +125,7 @@ const str = (v: unknown, def: string): string => {
   const s = (v == null ? '' : String(v)).trim()
   return s || def
 }
-/** 数组块：非空数组 → 逐项净化（脏项剔除）；空/缺/整组全脏 → 默认整组（黄金 §九·防误清空）。
+/** 数组块：非空数组 → 逐项净化（脏项剔除）；空/缺/整组全脏 → 默认整组（防误清空）。
  *  mapItem 拿原始元素（取对象与否的职责下沉给各 mapper 自己决定——footerLink 就要拒收对象，不能被 arr 先 obj() 成 {}）。 */
 function arr<T>(raw: unknown, mapItem: (x: unknown) => T | null, def: T[]): T[] {
   if (!Array.isArray(raw) || raw.length === 0) return def

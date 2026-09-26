@@ -4,7 +4,7 @@
      原生标题栏承担返回/标题（navigationBarTitleText），故不渲染设计的 co-nav 返回条，只保留下沉筛选 tab。
      有封面画缩略图；没有就灰底占位。 -->
 <!-- 手势滑动换 tab 绑在全高根容器 .coolist（min-height:100vh）上，不绑内层 .coolist-body：
-     body 高度只到内容底部，订单少时下半屏落在 body 外→下半屏滑动无效（真机 2026-07-13 逮出）。
+     body 高度只到内容底部，订单少时下半屏落在 body 外→下半屏滑动无效（真机实测）。
      bind 不 catch，不影响纵向滚动/上拉翻页与卡片点按；判定见 order-list.ts onSwipeStart/onSwipeEnd。 -->
 <view class="coolist" bind:touchstart="onSwipeStart" bind:touchend="onSwipeEnd">
 
@@ -81,7 +81,7 @@
       <view class="coolist-foot">
         <view class="coolist-actions" wx:if="{{item.status === 'pending' || item.status === 'shipped'}}">
           <view class="coolist-btn ghost" wx:if="{{item.status === 'pending'}}" data-id="{{item.id}}" catch:tap="onCancel">取消订单</view>
-          <view class="coolist-btn primary" wx:if="{{item.status === 'pending'}}" data-id="{{item.id}}" catch:tap="onPay">继续支付</view>
+          <view class="coolist-btn primary {{payingId === item.id ? 'dim' : ''}}" wx:if="{{item.status === 'pending'}}" data-id="{{item.id}}" catch:tap="onPay">继续支付</view>
           <view class="coolist-btn ghost" wx:if="{{item.status === 'shipped'}}" data-id="{{item.id}}" catch:tap="onConfirm">确认收货</view>
         </view>
         <text class="coolist-sum">共 {{item.count}} 件 · {{item.amountTitle}}<text class="coolist-sum-b"><text class="cny">¥</text>{{item.amountNum}}</text></text>

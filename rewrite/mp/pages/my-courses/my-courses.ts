@@ -1,4 +1,4 @@
-// 我的课程（M2 批10·C 类补学习进度）：已进课课程列表（join 课程标题 + 段粒度学习进度）。
+// 我的课程：已进课课程列表（join 课程标题 + 段粒度学习进度）。
 import { tapHaptic } from '../../lib/haptics'
 import { getMyCourses } from '../../api/learning'
 import { getMyProgress } from '../../api/user'
@@ -34,7 +34,7 @@ Page({
     this.setData({
       loading: false,
       loadFailed: false,
-      // 进度失败传 null 而非 []（根因#14·体检批 P2）：[] 与「真的一段没学过」不可区分，课卡会谎报
+      // 进度失败传 null 而非 []（根因#14）：[] 与「真的一段没学过」不可区分，课卡会谎报
       // 「已学 0/80 · 0%」；null 落 progressUnknown，界面显示「进度暂时读不到，点此重试」（点按走 onRetryLoad，本页无下拉刷新）。
       // 课程列表本身照常渲染（进度只是卡上一行，不该因它失败把整页打成失败态）。
       list: mapMyCourses(mine.list, courses || [], progress.ok ? progress.list : null),

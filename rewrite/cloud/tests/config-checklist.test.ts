@@ -196,6 +196,7 @@ describe('哨兵行为测试：密钥/配置值零回显（铁律）', () => {
     control.seed('materials', [{ _id: 'm1', name: 'SENTINEL_MATERIAL_9f3a', threshold: 3, stock: 10 }])
 
     const r = await post('getConfigChecklist', SUPER, {})
+    expect(r.ok).toBe(true) // 报错回包里本来就没有配置值，零回显只在成功回包上才有意义
     const stringified = JSON.stringify(r)
     for (const sentinel of [
       'SENTINEL_WXPAY_KEY_9f3a',

@@ -1,5 +1,5 @@
 /**
- * 课程种子单一来源 · 三层结构（规格 v2 §三：chapter / lesson / segment）。
+ * 课程种子单一来源 · 三层结构（chapter / lesson / segment）。
  * 根因账本 #5：目录与时长只改这一处，cloud `ops/seedCourses` 从这派生。
  *
  * - 目录只显 chapter + lesson 两层；segment 只在播放页（顶部分段进度条）。

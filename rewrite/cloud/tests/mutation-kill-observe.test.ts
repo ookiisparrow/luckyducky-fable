@@ -15,19 +15,10 @@
 //   ⑥ fail-soft 铁律（推送抛错/summary 为 null 一律不反噬·源码「绝不抛错」注释）。
 // C 类不立（等价变异杀不动）：pushIfConfigured 读 settings 的 `.catch(() => null)`→`() => undefined`——
 //   下游 `(got && got.data) || {}` 对 null/undefined 同判 falsy，行为逐位相同，等价变异。
-import { readFileSync } from 'node:fs'
-import { dirname, join } from 'node:path'
-import { fileURLToPath } from 'node:url'
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { control } from 'wx-server-sdk'
 import { notifyAlert, notifyRecall, notifyHeartbeat } from '../src/kit/observe'
 import { COLLECTIONS } from '@ldrw/shared'
-
-const OBSERVE_SRC = join(dirname(fileURLToPath(import.meta.url)), '..', 'src', 'kit', 'observe.ts')
-
-function stripComments(src: string): string {
-  return src.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/gm, '')
-}
 
 // —— botpush 单接缝内存桩（观测批5：observe→pushBotAlert 是唯一推送出口·mock 它即锁 observe 侧全部推送语义）——
 // vi.mock 工厂被提升到 import 前，共享状态须走 vi.hoisted（同 mutation-kill-botpush.test.ts 范式）。
@@ -100,12 +91,26 @@ describe('alertOnHigh:false 防双告警防递归（本函数已 alert 过·reco
 })
 
 describe('pushIfConfigured 单源（三路 notify 共用一个推送入口·减法抽取钉）', () => {
-  it('大白话：settings 只读一处、pushBotAlert 只调一处，告警/召回/心跳三处都走它（再抄一份就会漏空 webhook / 静音）', () => {
-    const src = stripComments(readFileSync(OBSERVE_SRC, 'utf8'))
-    expect(src.match(/async function pushIfConfigured\s*\(/g)?.length).toBe(1)
-    expect(src.match(/pushIfConfigured\(\{/g)?.length).toBe(3)
-    expect(src.match(/COLLECTIONS\.adminConfig\)\.doc\(['"]settings['"]\)\.get\(\)/g)?.length).toBe(1)
-    expect(src.match(/pushBotAlert\(/g)?.length).toBe(1)
+  // 行为断言而非数源码：Stryker 插桩会改写源码文本，读源码计数的用例会让变异基线先红、整次变异跑不起来。
+  it('大白话：告警/召回/心跳每发一条，settings 恰好读一次、推送恰好发一次（再抄一份读或推就会多读/双推）', async () => {
+    seedSettings()
+    let settingsReads = 0
+    control.setBeforeGet((q: { coll: string; id?: string }) => {
+      if (q.coll === COLLECTIONS.adminConfig && q.id === 'settings') settingsReads++
+    })
+    const sends: Array<() => Promise<void>> = [
+      () => notifyAlert('money', 'pay', 'PAY_FAIL', {}),
+      () => notifyRecall({ recovered: 1 }),
+      () => notifyHeartbeat({ green: 1, red: 0 }),
+    ]
+    for (const send of sends) {
+      settingsReads = 0
+      bp.calls.length = 0
+      await captureLines(send)
+      expect(settingsReads).toBe(1)
+      expect(bp.calls.length).toBe(1)
+      expect(bp.calls[0].webhook).toBe(WEBHOOK)
+    }
   })
 
   it('大白话：逐事件静音只管告警——召回/心跳码被写进 alertEvents=false 也照推（运营通知不是告警，关不掉）', async () => {
@@ -151,7 +156,8 @@ describe('notifyAlert 推送接缝契约（adminConfig/settings.alertWebhook·�
   it('大白话：推送接缝抛错→notifyAlert 照样正常返回（fail-soft 铁律·可观测性不反噬主流程）', async () => {
     seedSettings()
     bp.throwOnPush = true
-    await expect(captureLines(() => notifyAlert('money', 'pay', 'X', {}))).resolves.toBeDefined()
+    await captureLines(() => notifyAlert('money', 'pay', 'X', {})) // 推送的错漏出来这里就 reject
+    expect(bp.calls).toHaveLength(1) // 会抛的推送确实走到了，否则 fail-soft 没被测到
   })
 })
 
@@ -182,7 +188,8 @@ describe('notifyRecall（召回汇总·[LD_RECALL] 结构化行 + 推送半边·
   it('大白话：推送抛错→notifyRecall 照样正常返回（fail-soft）', async () => {
     seedSettings()
     bp.throwOnPush = true
-    await expect(captureLines(() => notifyRecall({ recovered: 1 }))).resolves.toBeDefined()
+    await captureLines(() => notifyRecall({ recovered: 1 }))
+    expect(bp.calls).toHaveLength(1)
   })
 })
 
@@ -201,6 +208,13 @@ describe('notifyHeartbeat（巡检机每日心跳·红/绿分档文案+码+计�
     expect(lines).toContain('[LD_HEARTBEAT] 巡检机存活·今日体检 green=5 red=2（红项另有告警通道）')
     expect(bp.calls.length).toBe(1)
     expect(bp.calls[0].alert).toEqual({ sev: 'heartbeat', fn: 'inspect', code: 'HEARTBEAT_RED', ctx: { green: 5, red: 2 } })
+  })
+
+  it('大白话：有检查项扫描到上限（capped）→不说「全绿」，推到群里的计数带上 capped 条数', async () => {
+    seedSettings()
+    const lines = await captureLines(() => notifyHeartbeat({ green: 3, red: 0, capped: 1 }))
+    expect(lines).toContain('[LD_HEARTBEAT] 巡检机存活·今日体检 green=3·1 项扫描到上限、结论可能不全')
+    expect(bp.calls[0].alert).toEqual({ sev: 'heartbeat', fn: 'inspect', code: 'HEARTBEAT_GREEN', ctx: { green: 3, red: 0, capped: 1 } })
   })
 
   it('大白话：summary 为 null（运行期防御·`?.` 是设计）→绝不抛、按 0 计全绿（削掉 ?. 就当场炸）', async () => {
@@ -225,7 +239,8 @@ describe('notifyHeartbeat（巡检机每日心跳·红/绿分档文案+码+计�
   it('大白话：心跳非异常·绝不落 anomalies 账本（源码明示「不接 recordAnomaly」）+ 推送抛错不反噬（fail-soft）', async () => {
     seedSettings()
     bp.throwOnPush = true
-    await expect(captureLines(() => notifyHeartbeat({ green: 1, red: 1 }))).resolves.toBeDefined()
+    await captureLines(() => notifyHeartbeat({ green: 1, red: 1 }))
+    expect(bp.calls).toHaveLength(1)
     expect(control.dump(COLLECTIONS.anomalies).length).toBe(0)
   })
 })

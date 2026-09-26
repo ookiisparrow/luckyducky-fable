@@ -1,5 +1,5 @@
 <script setup lang="ts">
-// 欢迎与激活页签（批C）：W1 恭喜屏（主标题/副文案/警示语）+ W2 三件事清单。
+// 欢迎与激活页签：W1 恭喜屏（主标题/副文案/警示语）+ W2 三件事清单。
 // 警示语琥珀描边提示「保留原意勿清空」（不可退货等法务文案·清空即失守）。背景图三态在「首页」签编辑（存 content/home 档·此签只提示）。
 import { Plus, Trash2 } from 'lucide-vue-next'
 import { usePageContent } from '../../lib/usePageContent'

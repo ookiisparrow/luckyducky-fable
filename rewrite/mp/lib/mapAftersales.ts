@@ -1,4 +1,4 @@
-// 售后映射（纯函数·黄金 orders-money 售后节前端半边 + frontend-store §八）：
+// 售后映射（纯函数）：
 // 状态中文化/金额两位小数/可申请行计算（refundable 且剩余可退件>0 且未申请过——与云端 applyRefund 同口径，
 // 前端只做入口收窄，最终裁决在云端）/翻页追加去重（申请成功后列表即时收窄由 applicableLines 排除已申请实现）。
 import { dateTime, money } from './mapOrders'
@@ -56,7 +56,7 @@ export function mapAfterSales(list: unknown): AfterSaleVM[] {
   return list.map(mapAfterSale).filter((x): x is AfterSaleVM => !!x)
 }
 
-/** 翻页合并（黄金 §八）：追加去重（同 id 不重复）；失败调用方不调本函数即天然不覆盖已有。 */
+/** 翻页合并：追加去重（同 id 不重复）；失败调用方不调本函数即天然不覆盖已有。 */
 export function mergeAfterSales(existing: AfterSaleVM[], incoming: AfterSaleVM[]): AfterSaleVM[] {
   const seen = new Set(existing.map((a) => a.id))
   return [...existing, ...incoming.filter((a) => !seen.has(a.id))]

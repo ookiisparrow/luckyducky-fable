@@ -5,6 +5,7 @@
 // 两条都测，覆盖两条真实存在的安全闸（主脑裁决：Orders.vue 无字面意义上「同一按钮点两下」的发货二次确认）。
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { mount, flushPromises } from '@vue/test-utils'
+import { createRouter, createMemoryHistory } from 'vue-router'
 
 const { listOrdersMock, orderCountsMock, getOrderDetailMock, shipOrderMock, shipOrdersMock, clearFeeMismatchMock } = vi.hoisted(() => ({
   listOrdersMock: vi.fn(),
@@ -30,7 +31,7 @@ function baseOrder(overrides: Record<string, unknown> = {}) {
     id: 'o1',
     status: 'paid',
     items: [{ productId: 'p1', name: '钩织材料包', spec: '', qty: 1 }],
-    amount: 9900,
+    amount: 99, // 元：云端 orders.amount 存元（tests/contracts/admin-money.json units）
     createdAt: Date.now(),
     feeMismatch: false,
     refundHold: false,
@@ -58,6 +59,7 @@ describe('Orders.vue 金额异常单两步确认（clearFeeMismatch）', () => {
     await flushPromises()
 
     const findMismatchBtn = () => wrapper.findAll('.ld-tr button').find((b) => b.text() === '去核对' || b.text() === '确认已核对流水？')
+    expect(wrapper.find('.ld-td.amount').text()).toBe('¥99.00')
     const btn = findMismatchBtn()
     expect(btn).toBeTruthy()
     expect(btn!.text()).toBe('去核对')
@@ -135,7 +137,7 @@ describe('Orders.vue 发货表单校验闸（shipOrder）', () => {
     expect(wrapper.find('.drawer').exists()).toBe(true)
     const err = wrapper.find('.drawer-error')
     expect(err.exists()).toBe(true)
-    expect(err.text()).toContain('这单涉及退款')
+    expect(err.text()).toContain('退款正在处理')
     expect(err.text()).not.toContain('REFUND_HOLD')
   })
 })
@@ -170,5 +172,51 @@ describe('Orders.vue 刷新后勾选与可见行求交', () => {
     await flushPromises()
 
     expect(wrapper.find('.batchbar').exists()).toBe(false)
+  })
+})
+
+describe('Orders.vue 退款持有行', () => {
+  it('大白话：不声称具体退款状态（布尔证不出是处理中还是已退完），不给发货入口；点「查看退款」带单号跳售后页', async () => {
+    listOrdersMock.mockReset().mockResolvedValue({ ok: true, list: [baseOrder({ id: 'oR', refundHold: true })], nextCursor: null, hasMore: false })
+    const router = createRouter({
+      history: createMemoryHistory(),
+      routes: [
+        { path: '/', component: { template: '<div/>' } },
+        { path: '/refunds', component: { template: '<div/>' } },
+      ],
+    })
+    await router.push('/')
+    await router.isReady()
+    const wrapper = mount(Orders, { global: { plugins: [router] } })
+    await flushPromises()
+
+    const row = wrapper.find('.ld-tr')
+    expect(row.find('.badge').text()).toBe('退款·勿发货')
+    expect(row.find('.hint-refund-hold').text()).toContain('该单涉及退款，勿发货')
+    expect(row.text()).not.toMatch(/已退款|处理中/)
+    expect(row.findAll('button').some((b) => b.text() === '发货')).toBe(false)
+
+    await row.findAll('button').find((b) => b.text().includes('查看退款'))!.trigger('click')
+    await flushPromises()
+    expect(router.currentRoute.value.fullPath).toBe('/refunds?q=oR')
+  })
+})
+
+describe('Orders.vue 列表加载', () => {
+  it('大白话：读失败说人话、不显空态；刷新在途时「刷新」按钮锁住，回来才解锁', async () => {
+    listOrdersMock.mockReset().mockResolvedValue({ ok: false, status: 0, error: 'NETWORK:fetch failed' })
+    const wrapper = mount(Orders)
+    await flushPromises()
+    expect(wrapper.find('.ld-status').text()).toBe('加载失败：网络不通，请检查网络后重试。')
+    expect(wrapper.find('.empty-text').exists()).toBe(false)
+
+    let release: (v: unknown) => void = () => {}
+    listOrdersMock.mockReturnValueOnce(new Promise((r) => (release = r)))
+    const refresh = () => wrapper.findAll('button').find((b) => b.text() === '刷新')!
+    await refresh().trigger('click')
+    expect(refresh().attributes('disabled')).toBeDefined()
+    release({ ok: true, list: [baseOrder()], nextCursor: null, hasMore: false })
+    await flushPromises()
+    expect(refresh().attributes('disabled')).toBeUndefined()
   })
 })

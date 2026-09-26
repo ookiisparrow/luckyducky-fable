@@ -4,8 +4,9 @@ import { ref, onMounted, onBeforeUnmount, watch, nextTick } from 'vue'
 import { Upload, Check, Trash2, Plus, Video } from 'lucide-vue-next'
 import { listHelpVideos, saveHelpVideos, uploadVideo } from '../api/content'
 import { normalizeHelpItems, type HelpItem } from '../lib/mapContent'
+import { launchErrorText } from '../lib/mapSystem'
 import { serialSave } from '../lib/serialSave'
-import { confirmed } from '../lib/status'
+import { confirmed, failText } from '../lib/status'
 import PageHeader from '../components/ui/PageHeader.vue'
 import Card from '../components/ui/Card.vue'
 import Badge from '../components/ui/Badge.vue'
@@ -16,20 +17,20 @@ const items = ref<HelpItem[]>([])
 const message = ref('')
 const busy = ref(false)
 const progress = ref('')
-const confirmKey = ref('') // no-alert 两步删除确认（换皮改直接 splice·误删即丢）
-const baseRev = ref(0) // 拉取那一刻的版本号（乐观并发基线·批A·内容域并发安全）
+const confirmKey = ref('') // no-alert 两步删除确认（直接 splice 的话误删即丢）
+const baseRev = ref(0) // 拉取那一刻的版本号（乐观并发基线）
 const conflicted = ref(false) // 冲突态：别处已改过帮助视频档——停自动保存防连环覆盖，重新载入解除
 
 async function reload() {
   const r = await listHelpVideos()
-  confirmKey.value = '' // 刷新即复位危险态（P1·防旧武装的删主题/删段残留、重进同一位一击直删·批3 规格）
+  confirmKey.value = '' // 刷新即复位危险态（防旧武装的删主题/删段残留、重进同一位一击直删）
   loaded = false // 载入期不触发自动保存
   saveState.value = ''
   if (!r.ok) {
     // 失败 loaded 恒 false：autosave 与手动 save 都拒——否则一次编辑就 saveHelpVideos([]) 触发后端整档覆盖 +
-    // 孤儿 GC 永久删光所有帮助视频文件（P1 不可逆·同 Courses.load 早退范式）
+    // 孤儿 GC 永久删光所有帮助视频文件（不可逆·同 Courses.load 早退范式）
     items.value = []
-    message.value = '加载失败：' + String(r.error || '')
+    message.value = failText('加载失败', r.error)
     return
   }
   items.value = normalizeHelpItems(r.items)
@@ -39,7 +40,7 @@ async function reload() {
   void nextTick(() => (loaded = true))
 }
 
-// 视频时长自动读取（换皮丢·选完视频读元数据填 dur·mm:ss）
+// 视频时长自动读取（选完视频读元数据填 dur·mm:ss）
 function readDuration(file: File): Promise<string> {
   return new Promise((resolve) => {
     const url = URL.createObjectURL(file)
@@ -58,17 +59,17 @@ function readDuration(file: File): Promise<string> {
   })
 }
 
-// 防抖自动保存（换皮退成手动按钮·编排忘点即丢）：900ms + 离页补存·load 期不触发·不 reload（免打断编辑）
+// 防抖自动保存（手动按钮的话编排忘点即丢）：900ms + 离页补存·load 期不触发·不 reload（免打断编辑）
 const saveState = ref<'' | 'saving' | 'saved' | 'error'>('')
 let loaded = false
 let saveTimer: ReturnType<typeof setTimeout> | null = null
-// 串行化实际保存（防慢网下两次自动保存乱序覆盖·P2·根因#8）：run 现读 items.value·补存即最新。
-// P1 兜底单点：载入失败或 reload 清空后 loaded=false，任何在途 timer / 离页补存 / 手动保存路径进到这里都直接 no-op——
+// 串行化实际保存（防慢网下两次自动保存乱序覆盖·根因#8）：run 现读 items.value·补存即最新。
+// 兜底单点：载入失败或 reload 清空后 loaded=false，任何在途 timer / 离页补存 / 手动保存路径进到这里都直接 no-op——
 // 杜绝拿空/残缺 items 整档覆盖 + 孤儿 GC 删光云端帮助视频（gate loaded 已挡 watch 与 save 入口·此处收口所有写者）。
-// key='help-videos'（批D·P1）：改走模块级共享槽位，快速切走再切回本页重建组件实例时，新实例接管旧实例
+// key='help-videos'：走模块级共享槽位，快速切走再切回本页重建组件实例时，新实例接管旧实例
 // 仍在途的补存链，防旧快照晚到覆盖新实例已存的编辑（全课程共用一份·本就是单一资源，泛 key 恰好对应）。
 const flushSave = serialSave(async () => {
-  if (!loaded || conflicted.value) return // 冲突态阻断写者（批A·不得循环重试覆盖别处的编辑）
+  if (!loaded || conflicted.value) return // 冲突态阻断写者（不得循环重试覆盖别处的编辑）
   const r = await saveHelpVideos(items.value, baseRev.value)
   if (r.ok || r.error === 'GC_DELETE_FAIL') {
     // 保存已成功刷新基线（GC_DELETE_FAIL＝内容落库成功、仅孤儿视频删除失败·后端已 bump rev）——必须与手动 save()
@@ -93,7 +94,7 @@ function autosave() {
 }
 watch(items, () => { if (loaded && !conflicted.value) autosave() }, { deep: true })
 // 离页补存判据用 pending saveTimer 而非 saveState==='saving'：先发的自动保存完成会把 saveState 复位成 'saved'，
-// 后一次编辑只活在待触发的 timer 里——按 saveState 判会漏补、离页丢这次编辑（P2·同 Showcase/HomeContent）
+// 后一次编辑只活在待触发的 timer 里——按 saveState 判会漏补、离页丢这次编辑（同 Showcase/HomeContent）
 onBeforeUnmount(() => {
   if (saveTimer) {
     clearTimeout(saveTimer)
@@ -102,14 +103,14 @@ onBeforeUnmount(() => {
   }
 })
 
-// ↑↓ 重排（换皮丢了重排·主题/小段顺序有意义·嵌套结构 ↑↓ 比拖拽稳）
+// ↑↓ 重排（主题/小段顺序有意义·嵌套结构 ↑↓ 比拖拽稳）
 function move<T>(arr: T[], i: number, dir: number) {
   const j = i + dir
   if (j < 0 || j >= arr.length) return
   const t = arr[i]
   arr[i] = arr[j]
   arr[j] = t
-  confirmKey.value = '' // 重排后清「已武装删除」·防下标编码的 confirmKey 落到换位后的另一元素→删错（P2）
+  confirmKey.value = '' // 重排后清「已武装删除」·防下标编码的 confirmKey 落到换位后的另一元素→删错
 }
 
 function addTopic() {
@@ -130,7 +131,7 @@ async function pickVideo(t: HelpItem, i: number, ev: Event) {
   const file = input.files?.[0]
   input.value = '' // 重置 value：允许上传失败后重选同一文件重试（否则浏览器不再触发 change）
   if (!file) return
-  // 上传前捕获段「对象引用」而非下标（P1·根因#8）：秒级上传窗口内若重排/删段，按下标回写会落到换位后的
+  // 上传前捕获段「对象引用」而非下标（根因#8）：秒级上传窗口内若重排/删段，按下标回写会落到换位后的
   // 另一段（静默错位·随 autosave 落库）或越界崩溃；写对象引用则始终落到本段、删段后写孤儿也不崩。
   const seg = t.segments[i]
   if (!seg) return
@@ -141,23 +142,23 @@ async function pickVideo(t: HelpItem, i: number, ev: Event) {
   if (r.ok) {
     seg.videoFileId = r.fileId || ''
     message.value = ''
-  } else message.value = '视频上传失败：' + String(r.error || '')
+  } else message.value = launchErrorText(r.error) // 与 Courses 同一上传器·同一张中文映射
 }
 
 async function save() {
   if (busy.value) return
   if (!loaded) {
-    // 未成功载入即手动保存 = 拿空/残缺 items 整档覆盖 + 孤儿 GC 删光云端视频文件（P1）——拒绝并提示刷新（gate loaded 已挡 autosave·此挡手动路径）
+    // 未成功载入即手动保存 = 拿空/残缺 items 整档覆盖 + 孤儿 GC 删光云端视频文件——拒绝并提示刷新（gate loaded 已挡 autosave·此挡手动路径）
     message.value = '内容未成功载入，暂不能保存（避免覆盖并误删已有帮助视频·请刷新重试）'
     return
   }
   if (saveTimer) {
-    clearTimeout(saveTimer) // 清在途防抖 timer·防其在随后 reload 清空 items+loaded=false 后再触发（P1·同 Courses/HomeContent·flushSave run 已 gate loaded 兜底）
+    clearTimeout(saveTimer) // 清在途防抖 timer·防其在随后 reload 清空 items+loaded=false 后再触发（同 Courses/HomeContent·flushSave run 已 gate loaded 兜底）
     saveTimer = null
   }
   busy.value = true
-  // 单路径：只走 flushSave（serialSave 链·run 现读 items.value）——原先 flush 后又直发一次
-  // saveHelpVideos 属双写冗余（夜间审计 2026-09-12 admin·对齐 Courses.save）。
+  // 单路径：只走 flushSave（serialSave 链·run 现读 items.value）——flush 后再直发一次
+  // saveHelpVideos 属双写冗余（对齐 Courses.save）。
   await flushSave()
   busy.value = false
   if (saveState.value === 'saved') {
@@ -173,7 +174,7 @@ onMounted(reload)
   <div class="ld-page help">
     <PageHeader title="帮助视频" sub="小程序播放页「遇到问题了」面板的内容；主题下每个小段挂一条视频，全课程共用一份。">
       <span v-if="saveState" class="autosave ld-autosave" :class="saveState">{{ saveState === 'saving' ? '自动保存中…' : saveState === 'saved' ? '已自动保存' : '自动保存失败·点保存重试' }}</span>
-      <!-- 空态无可存内容时禁用（批6·曾在零主题时仍高亮主按钮） -->
+      <!-- 空态无可存内容时禁用（零主题时别高亮主按钮） -->
       <UiButton :disabled="busy || !items.length" @click="save">{{ busy ? '保存中…' : '保存全部' }}</UiButton>
     </PageHeader>
 

@@ -118,3 +118,74 @@ describe('召回 progress 读失败→不判「开了没学」', () => {
     expect(lines.some((l) => l.startsWith('[LD_RECALL]') && l.includes('"unfinishedSkipped":1'))).toBe(true)
   })
 })
+
+describe('召回主读失败→那一类跳过，不报 0', () => {
+  const recallLines = async () => {
+    const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const r: any = await recallScan()
+    return { r, lines: errSpy.mock.calls.map((c) => String(c[0])) }
+  }
+
+  it('大白话：待付款单读炸→不写 unpaid:0、标 unpaidSkipped、打 SCAN_READ_FAILED，别的类照算照推', async () => {
+    control.setOpenId('')
+    control.seed(COLLECTIONS.activations, [{ _id: 'a0', _openid: 'oNEW', courseId: 'c1', enteredAt: null }])
+    control.setBeforeGet(({ coll, filter }: any) => {
+      if (coll === COLLECTIONS.orders && filter && filter.status === 'pending') throw new Error('boom')
+    })
+    const { r, lines } = await recallLines()
+    expect(r.unpaid).toBeUndefined() // 0 读起来像「真没人待付款」
+    expect(r.unpaidSkipped).toBe(1)
+    expect(r.unstarted).toBe(1)
+    expect(lines.some((l) => l.includes('code=SCAN_READ_FAILED'))).toBe(true)
+    expect(lines.some((l) => l.startsWith('[LD_RECALL]') && l.includes('"unpaidSkipped":1'))).toBe(true)
+  })
+
+  it('大白话：已进课激活读炸→unfinished 跳过（读不到的不当成没人开了没学），未进课照报', async () => {
+    control.setOpenId('')
+    control.seed(COLLECTIONS.activations, [{ _id: 'a0', _openid: 'oNEW', courseId: 'c1', enteredAt: null }])
+    control.setBeforeGet(({ coll, filter }: any) => {
+      if (coll === COLLECTIONS.activations && filter && filter.enteredAt !== null) throw new Error('boom')
+    })
+    const { r } = await recallLines()
+    expect(r.unfinished).toBeUndefined()
+    expect(r.unfinishedSkipped).toBe(1)
+    expect(r.unstarted).toBe(1)
+  })
+
+  it('大白话：候选切片打满上限→推给运营群的摘要里就写 capped，不只留在定时任务返回值里', async () => {
+    control.setOpenId('')
+    control.seed(
+      COLLECTIONS.activations,
+      Array.from({ length: 500 }, (_, i) => ({ _id: 'a' + i, _openid: 'o' + i, courseId: 'c1', enteredAt: null })),
+    )
+    const { r, lines } = await recallLines()
+    expect(r.capped).toBe(true)
+    expect(lines.some((l) => l.startsWith('[LD_RECALL]') && l.includes('"capped":1'))).toBe(true)
+  })
+
+  it('大白话：已发货单切片打满上限（没人点确认收货会一直堆）→物流数只是前 500 单的，推送带 capped', async () => {
+    control.setOpenId('')
+    const old = Date.now() - 8 * 86400_000
+    control.seed(
+      COLLECTIONS.orders,
+      Array.from({ length: 500 }, (_, i) => ({ _id: 'S' + i, status: 'shipped', shippedAt: old + i })),
+    )
+    const { r, lines } = await recallLines()
+    expect(r.logistics).toBe(500)
+    expect(lines.some((l) => l.startsWith('[LD_RECALL]') && l.includes('"capped":1'))).toBe(true)
+  })
+
+  it.each([
+    ['待付款单', 'unpaidSkipped', (coll: string, f: any) => coll === COLLECTIONS.orders && f && f.status === 'pending'],
+    ['已发货单', 'logisticsSkipped', (coll: string, f: any) => coll === COLLECTIONS.orders && f && f.status === 'shipped'],
+    ['未进课激活', 'unstartedSkipped', (coll: string, f: any) => coll === COLLECTIONS.activations && f && f.enteredAt === null],
+  ])('大白话：别的类都是 0、只有%s读炸→照样推运营群写明 %s（不因候选 0 就不推，运营才知道这轮没查全）', async (_n, key, hit) => {
+    control.setOpenId('')
+    control.setBeforeGet(({ coll, filter }: any) => {
+      if (hit(coll, filter)) throw new Error('boom')
+    })
+    const { r, lines } = await recallLines()
+    expect(r.total).toBe(0)
+    expect(lines.some((l) => l.startsWith('[LD_RECALL]') && l.includes(`"${key}":1`))).toBe(true)
+  })
+})

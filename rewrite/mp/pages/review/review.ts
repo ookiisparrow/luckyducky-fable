@@ -1,9 +1,9 @@
-// 写评价（M2 批12）：星级 + 预设标签多选 + 文字 + 匿名开关。闸门全在云端
+// 写评价：星级 + 预设标签多选 + 文字 + 匿名开关。闸门全在云端
 // （本人已完成订单/商品在单内/一单一行一评——撞主键如实回「已评过」）。
 import { tapHaptic } from '../../lib/haptics'
 import { submitReview } from '../../api/reviews'
 
-const REV_TAGS = ['教程清晰', '很可爱', '适合新手', '包装用心', '物流快', '线材好'] // 承接旧线预设
+const REV_TAGS = ['教程清晰', '很可爱', '适合新手', '包装用心', '物流快', '线材好'] // 预设标签
 const REV_LABEL = ['点星评分', '非常不满', '不满意', '一般', '满意', '非常满意']
 // 云端错误码 → 提示；用 Map 而非对象字面量：'constructor' 这类原型键不会误命中
 const REV_ERR = new Map([
@@ -30,7 +30,7 @@ Page({
   orderId: '',
   lineId: '',
   backTimer: null as ReturnType<typeof setTimeout> | null,
-  unloaded: false, // 提交在途页面已退出标记（P2·bug sweep R1 #9）：提交本身已达服务端，退页后回包只是迟到副作用，不补偿
+  unloaded: false, // 提交在途页面已退出标记：提交本身已达服务端，退页后回包只是迟到副作用，不补偿
   onUnload() {
     this.unloaded = true
     if (this.backTimer) clearTimeout(this.backTimer) // 延时返回坞清理
@@ -79,7 +79,7 @@ Page({
         /* 单张失败跳过 */
       }
     }
-    if (this.unloaded) return // await 恢复点复核（同 onSubmit 范式·深审20260712 P3）：上传在途已退页——迟到回包不再 setData/toast
+    if (this.unloaded) return // await 恢复点复核（同 onSubmit 范式）：上传在途已退页——迟到回包不再 setData/toast
     this.setData({ photos: [...this.data.photos, ...ups].slice(0, this.data.maxPhotos), uploading: false })
     if (ups.length < res.tempFiles.length) wx.showToast({ title: '部分图片没传上', icon: 'none' })
   },

@@ -1,5 +1,5 @@
 import { withAdminGate, ok } from '../../kit'
-import { SEED_COURSES } from '@ldrw/shared'
+import { COLLECTIONS, SEED_COURSES } from '@ldrw/shared'
 
 // 灌入课程种子（三层；幂等：course id 作 _id，doc.set upsert）。
 // canonical 种子在 @ldrw/shared 的 SEED_COURSES（根因#5）。
@@ -8,7 +8,7 @@ export const main = withAdminGate(async ({ db }) => {
   const ids: string[] = []
   for (const c of SEED_COURSES) {
     await db
-      .collection('courses')
+      .collection(COLLECTIONS.courses)
       .doc(c.id)
       .set({ data: { ...c, updatedAt: Date.now() } })
     ids.push(c.id)

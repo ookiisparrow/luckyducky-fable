@@ -64,7 +64,7 @@ const POOL_HINTS: { file: string; heading: RegExp; id: ScriptPoolId }[] = [
 export function parseNumberedLines(md: string): string[] {
   const out: string[] = []
   for (const raw of String(md || '').split(/\r?\n/)) {
-    const m = /^\s*\d+[\.、]\s+(.+?)\s*$/.exec(raw)
+    const m = /^\s*\d+[.、]\s+(.+?)\s*$/.exec(raw)
     if (m) out.push(m[1])
   }
   return out

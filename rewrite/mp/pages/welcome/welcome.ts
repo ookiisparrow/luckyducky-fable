@@ -1,13 +1,13 @@
-// 激活页（M2 批10·播放器重设计战役批E 扩 W1/W2 恭喜/学习方式两屏）：扫激活卡二维码带 ?code= 进入
+// 激活页（含 W1/W2 恭喜/学习方式两屏）：扫激活卡二维码带 ?code= 进入
 // （或手动输码）→ 兑课三态屏 → （新激活）W1 恭喜屏 → W2 三件事屏 → 确认进课。
 // 一码一用/幂等/退货权失效节点全在云端；本页只编排各态视图与背景回退链。kind==='mine'/'taken'/'invalid'
-// 三态沉浸壳与文案一字不动；仅 kind==='activated' 的结果屏改走 W1/W2 lilac 壳（见 wxml 头注）。
+// 三态走沉浸壳；仅 kind==='activated' 的结果屏走 W1/W2 lilac 壳（见 wxml 头注）。
 import { tapHaptic } from '../../lib/haptics'
 import { activateCourse, confirmEnter } from '../../api/learning'
 import { getContent } from '../../api/catalog'
 import { getPageContent } from '../../lib/pageContent'
 import { getCourseById } from '../../lib/courses'
-import { activationView, bgFor, type ActivationKind } from '../../lib/mapLearning'
+import { activationView, bgFor, ACTIVATION_ERR_COPY, type ActivationKind } from '../../lib/mapLearning'
 import { mapWelcome, type WelcomeVM } from '../../lib/mapPages'
 import { goBackOrHome } from '../../lib/nav'
 import type { ApiResult } from '../../utils/cloud'
@@ -22,6 +22,7 @@ Page({
     courseId: '',
     courseTitle: '', // W1 课程名行数据源（取不到/空则不渲染该行·诚实回退，见 activate()）
     bg: '',
+    errCopy: ACTIVATION_ERR_COPY.network,
     busy: false,
     welcome: mapWelcome(null) as WelcomeVM, // W1/W2 文案·首帧即默认（CMS 到达后覆盖·不空屏）
   },
@@ -29,7 +30,7 @@ Page({
   // getContent（背景图）与 activateCourse（兑课）互不依赖：并行发起省一次云调用往返（0.7-1.4s/次）。
   // 页实例持有而非模块级——同 home 一样跟着本次 onLoad 走，避免跨实例复用陈旧 promise。
   homeReady: null as Promise<ApiResult> | null,
-  unloaded: false, // 页面已退出标记（同 checkout/review 范式·bug sweep II 批E）：onEnter 进课回包在途用户已退出本页（自绘导航无返回箭头，但侧滑/物理键仍可退），迟到回包不再 redirectTo
+  unloaded: false, // 页面已退出标记（同 checkout/review 范式）：onEnter 进课回包在途用户已退出本页（自绘导航无返回箭头，但侧滑/物理键仍可退），迟到回包不再 redirectTo
   onUnload() {
     this.unloaded = true
   },
@@ -67,7 +68,7 @@ Page({
     this.setData({ busy: true })
     const contentReady = this.homeReady ?? Promise.resolve({ ok: false } as ApiResult)
     const [result, content] = await Promise.all([activateCourse(code), contentReady])
-    if (this.unloaded) return // await 恢复点复核（H·完备性扫描新增·同 onEnter 范式）：用户已退出本页——不再 setData
+    if (this.unloaded) return // await 恢复点复核（同 onEnter 范式）：用户已退出本页——不再 setData
     this.home = content.ok ? content.home : null // bgFor null-safe：取不到就走回退链，不阻塞结果屏
     const view = activationView(result)
     this.setData({
@@ -77,6 +78,7 @@ Page({
       courseId: view.courseId,
       courseTitle: '',
       bg: bgFor(this.home, view.courseId, view.kind),
+      errCopy: ACTIVATION_ERR_COPY[view.reason || 'network'],
     })
     if (view.kind === 'activated' && view.courseId) {
       // W1 课程名行（fail-soft）：新激活才取，mine/taken/invalid 三态沉浸壳不显课程名、不必取。
@@ -96,9 +98,9 @@ Page({
     tapHaptic()
     this.setData({ busy: true })
     const r = await confirmEnter(this.data.code)
-    if (this.unloaded) return // await 恢复点复核（bug sweep II 批E）：用户已退出本页——不再 setData/toast/redirectTo
+    if (this.unloaded) return // await 恢复点复核：用户已退出本页——不再 setData/toast/redirectTo
     if (!r.ok) {
-      // 仅失败复位 busy（深审20260712 P3·同 review/feedback onSubmit 范式）：成功路径保持锁定直至 redirectTo——
+      // 仅失败复位 busy（同 review/feedback onSubmit 范式）：成功路径保持锁定直至 redirectTo——
       // 提前解锁则导航完成前双击可再次 confirmEnter+redirectTo
       this.setData({ busy: false })
       wx.showToast({ title: '进课没成功，稍后再试', icon: 'none' })
@@ -111,7 +113,7 @@ Page({
   onRetry() {
     this.setData({ phase: 'input', code: '', kind: 'invalid', bg: '' })
   },
-  // 自绘返回：custom 导航无原生返回箭头，输入态/废码态此前退不出去。
+  // 自绘返回：custom 导航无原生返回箭头，否则输入态/废码态退不出去。
   // 与 onGoHome（W2 屏「先逛逛，稍后再进课」）分工不同：那条是**主动放弃进课**的语义化出口、恒回首页；
   // 这条是通用返回，从「我」页进来的退回「我」、扫码深链进来的兜底回首页。
   onBack() {

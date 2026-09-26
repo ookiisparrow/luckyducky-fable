@@ -89,7 +89,7 @@ const LINKS = computed(() => RAW_LINKS.map((l) => ({ ...l, href: l.deepEnv ? wit
   grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
   gap: 16px;
 }
-/* 整卡可点：卡外包一层 <a>（点卡片任意处即在新窗口打开对应后台·恢复原整卡链接语义） */
+/* 整卡可点：卡外包一层 <a>（点卡片任意处即在新窗口打开对应后台·整卡即链接） */
 .ext-card-link {
   display: block;
   height: 100%;

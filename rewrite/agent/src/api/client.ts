@@ -7,11 +7,13 @@ interface ClientResult {
 }
 
 const TOKEN_KEY = 'ldrw_agent_token'
+/** 须长于 adminApi 函数超时（以 cloudbaserc.json adminApi.timeout 为准），否则慢但仍在执行的写会被前端先判失败。 */
+export const CALL_TIMEOUT_MS = 35_000
 const ENDPOINT = import.meta.env.VITE_AGENT_API || ''
 
-// 会话失效集中回调（单源·根因#5 收口·对照 admin client.ts 同构移植）：post 遇无令牌/401 清令牌后触发一次，
-// 壳层（App.vue）注册为「登出并回登录视图」，各调用点不再各写各的 SESSION_LOST 跳转（同 admin 病史：
-// 曾漂成 3 种——卡死「加载中…」/裸显合成码/导登录）。login/loginByWecomCode 不触发（登录页自己处理错误）。
+// 会话失效集中回调（单源·根因#5·与 admin client.ts 同构）：post 遇无令牌/401 清令牌后触发一次，
+// 壳层（App.vue）注册为「登出并回登录视图」，各调用点不各写各的 SESSION_LOST 跳转（各写
+// 会漂成卡死「加载中…」/裸显合成码/导登录多种表现）。login/loginByWecomCode 不触发（登录页自己处理错误）。
 let sessionLostHandler: (() => void) | null = null
 /** 注册会话失效回调（壳层调一次·如 () => { logout(); authed.value = false }）——会话失效导登录的单一出口。 */
 export const onSessionLost = (fn: () => void) => {
@@ -20,27 +22,40 @@ export const onSessionLost = (fn: () => void) => {
 
 async function raw(action: string, key: string, data: Record<string, unknown>): Promise<ClientResult> {
   if (!ENDPOINT) return { ok: false, status: 0, error: 'NO_ENDPOINT' }
+  const ctrl = new AbortController()
+  const timer = setTimeout(() => ctrl.abort(), CALL_TIMEOUT_MS)
   let res: Response
+  let body: unknown
   try {
     res = await fetch(ENDPOINT, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ action, key, data }),
+      signal: ctrl.signal,
     })
   } catch (e) {
+    clearTimeout(timer)
+    if (ctrl.signal.aborted) return { ok: false, status: 0, error: 'CALL_TIMEOUT' }
     return { ok: false, status: 0, error: 'NETWORK:' + String(e instanceof Error ? e.message : e).slice(0, 120) }
   }
-  let body: Record<string, unknown> = {}
   try {
-    body = (await res.json()) as Record<string, unknown>
+    body = await res.json()
   } catch {
-    return { ok: false, status: res.status, error: 'BAD_JSON_RESPONSE' }
+    return { ok: false, status: res.status, error: ctrl.signal.aborted ? 'CALL_TIMEOUT' : 'BAD_JSON_RESPONSE' }
+  } finally {
+    clearTimeout(timer)
   }
-  return { status: res.status, ...body, ok: body.ok === true } as ClientResult
+  if (!body || typeof body !== 'object' || Array.isArray(body)) return { ok: false, status: res.status, error: 'BAD_JSON_RESPONSE' }
+  return { status: res.status, ...body, ok: (body as { ok?: unknown }).ok === true } as ClientResult
 }
 
 export const hasSession = () => !!localStorage.getItem(TOKEN_KEY)
-export const logout = () => localStorage.removeItem(TOKEN_KEY)
+/** 登出：先清本地再吊销服务端令牌（best-effort）——网络挂死时人也立刻登出，不卡到超时。 */
+export async function logout(): Promise<void> {
+  const token = localStorage.getItem(TOKEN_KEY) || ''
+  localStorage.removeItem(TOKEN_KEY)
+  if (token) await raw('logout', token, {})
+}
 
 export async function login(password: string): Promise<ClientResult> {
   const r = await raw('login', password, {})
@@ -74,6 +89,6 @@ export async function post(action: string, data: Record<string, unknown> = {}): 
   return r
 }
 
-// 快捷回复读知识库（批 B4·预审裁决：cap agent:handle 已挂，直接复用 admin 侧同一 action，不新建 listQuickReplies）。
+// 快捷回复读知识库（cap agent:handle 已挂，直接复用 admin 侧同一 action，不新建 listQuickReplies）。
 // action 名与 admin 侧 rewrite/admin/src/api/cs.ts 的 listKb 一致（同一后端 action，前端各自薄封装）。
 export const listKb = () => post('listKb')

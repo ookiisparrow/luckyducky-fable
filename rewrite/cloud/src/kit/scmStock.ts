@@ -1,9 +1,8 @@
-import { getDb } from './db'
+import { getDb, isDocMissing, isEmptyDoc, getDocOrNull } from './db'
 import { notifyAlert } from './observe'
-import { isDocMissing, isEmptyDoc } from './inventory'
-import { getDocOrNull } from './ids'
 import { pageQuery, type PageReq, type Paged } from './paging'
 import { COLLECTIONS, ERR } from '@ldrw/shared'
+import { err } from './reply'
 
 // 原料账原子原语（进销存 SCM-0 门1·根因#1/#2·镜像 kit/inventory.ts 范式）。
 // **全库唯一** materials.stock / stockLedger 读写处（守卫 rw-material-stock-single-seam）——任何单据出入库
@@ -17,13 +16,13 @@ import { COLLECTIONS, ERR } from '@ldrw/shared'
 // 计量：delta 一律非零整数（克或件·单位随主档 uom·validate fail-closed）；余额不允许为负。
 
 type MoveDocType =
-  | 'purchase_in' // 采购到货入库（车道 A）
-  | 'outwork_issue' // 外协发料出库（车道 B）
-  | 'outwork_receive' // 外协交付入库（车道 B）
-  | 'assembly_out' // 组装扣原料（车道 C）
-  | 'assembly_in' // 组装入成品（车道 C·itemKey=fg:<productId>__<spec>）
-  | 'adjust' // 期初盘点/人工调整（SCM-0·须 reason）
-  | 'ship' // 发货核销留痕（车道 D·itemKey=fg:…）
+  | 'purchase_in' // 采购到货入库
+  | 'outwork_issue' // 外协发料出库
+  | 'outwork_receive' // 外协交付入库
+  | 'assembly_out' // 组装扣原料
+  | 'assembly_in' // 组装入成品（itemKey=fg:<productId>__<spec>）
+  | 'adjust' // 期初盘点/人工调整（须 reason）
+  | 'ship' // 发货核销留痕（itemKey=fg:…）
 
 interface StockMove {
   materialId: string // 料号（materials._id）；成品行用 fg: 前缀 itemKey、不动 materials
@@ -47,7 +46,7 @@ type ApplyResult =
 /**
  * 对一张单据应用一组库存变动：写确定性流水 + CAS 改 materials.stock。全有或全无（尽力回滚）——任一行
  * 失败即回滚已应用行（删其流水 + 反向 CAS），返回失败原因；反向 CAS 若也失败（并发抢占），该行库存
- * 保持已扣、流水保留作审计迹并打 ROLLBACK_FAIL 告警，需人工对账回补（K4）。重放同一单据（同
+ * 保持已扣、流水保留作审计迹并打 ROLLBACK_FAIL 告警，需人工对账回补。重放同一单据（同
  * docType+docId）天然幂等。
  */
 export async function applyStockMoves(moves: StockMove[], doc: MoveDoc): Promise<ApplyResult> {
@@ -64,9 +63,9 @@ export async function applyStockMoves(moves: StockMove[], doc: MoveDoc): Promise
   const mats = db.collection(COLLECTIONS.materials)
   const done: StockMove[] = [] // 本次真正应用（拿到流水 claim 且改了库存）的行，失败时回滚
 
-  // K4（bug sweep II·P2·钱链审计迹）：原版丢弃 casChange 反向结果、紧接无条件删流水——反向若因
+  // 钱链审计迹：若丢弃 casChange 反向结果、紧接无条件删流水——反向一旦因
   // INSUFFICIENT/CONTENTION/NO_MATERIAL 失败，库存留错账、唯一能解释差额的流水却被删掉，违反本模块
-  // 自述「宁不动账勿错账」与病根14「fail-soft 不抹可观测性」。改为消费返回值：反向成功才删流水；
+  // 自述「宁不动账勿错账」与病根14「fail-soft 不抹可观测性」。故消费返回值：反向成功才删流水；
   // 反向失败＝保留该行 ledger 作审计迹 + 经 kit observe 告警，继续处理其余行（applyStockMoves 返回语义不变）。
   const rollback = async () => {
     for (const m of done) {
@@ -89,8 +88,8 @@ export async function applyStockMoves(moves: StockMove[], doc: MoveDoc): Promise
   for (const m of moves) {
     const _id = ledgerIdOf(doc.docType, doc.docId, m.materialId)
     // ① 流水 claim（确定性 _id·撞 id=已应用过·幂等跳过）
-    // P1 修复（评审）：add() 抛错原因不明——真正的确定性 _id 撞号（重放/并发方已写，合法幂等跳过）
-    // 与其它任何原因（网络瞬断/限流/配额超限/字段非法……）导致的写入失败长得一模一样。原实现无条件
+    // add() 抛错原因不明——真正的确定性 _id 撞号（重放/并发方已写，合法幂等跳过）
+    // 与其它任何原因（网络瞬断/限流/配额超限/字段非法……）导致的写入失败长得一模一样。若无条件
     // 把两者都当「已应用过」跳过（continue，不改库存、不告警）——后者情况下这行既没真正入账也没
     // CAS 改库存，却被当成功处理，applied 悄悄比 moves.length 小、无调用方检查这个差值，违反本模块
     // 自述「宁不动账勿错账」与病根14「失败必可观测」。
@@ -109,7 +108,7 @@ export async function applyStockMoves(moves: StockMove[], doc: MoveDoc): Promise
         docId: doc.docId,
       })
       await rollback()
-      return { ok: false, error: 'LEDGER_WRITE_FAILED', materialId: m.materialId }
+      return err('LEDGER_WRITE_FAILED', { materialId: m.materialId })
     }
     // ② CAS 改余额（fg: 成品行不动 materials——成品账在 kit/inventory，流水行只留痕）
     if (!m.materialId.startsWith('fg:')) {
@@ -161,8 +160,8 @@ async function casChange(coll: any, materialId: string, delta: number): Promise<
   return ERR.CONTENTION
 }
 
-/** 读流水（管理端查账·cursor 分页）：可按料号过滤，按时间倒序。B1（根因#7）：改走 kit pageQuery——
- *  旧 limit 直取封顶 200 会让超上限旧流水永久不可查；defaultLimit 沿用旧默认值 50，无参调用首页条数零变化。 */
+/** 读流水（管理端查账·cursor 分页）：可按料号过滤，按时间倒序。根因#7：走 kit pageQuery——
+ *  limit 直取封顶会让超上限旧流水永久不可查；defaultLimit 50。 */
 export async function listStockLedger(materialId?: string, req?: PageReq, defaultLimit = 50): Promise<Paged> {
   const db = getDb()
   const filter: Record<string, unknown> = {}
@@ -190,8 +189,7 @@ export async function sumLedgerByItemKey(docType: MoveDocType): Promise<{ list: 
 }
 
 /** 最近 N 条流水（管理端总览卡片用·bounded·按时间倒序）。经门1 唯一出口，不许调用方直碰 stockLedger 集合
- *  （守卫 rw-material-stock-single-seam·批K：scmOverview 原直接 `db.collection(COLLECTIONS.stockLedger)`
- *  绕过本门，改走这里）。 */
+ *  （守卫 rw-material-stock-single-seam·scmOverview 走这里）。 */
 export async function recentStockLedger(n: number): Promise<any[]> {
   const db = getDb()
   const cap = Math.min(Math.max(1, n | 0), 50)
@@ -200,7 +198,7 @@ export async function recentStockLedger(n: number): Promise<any[]> {
 }
 
 /** 是否存在过任意 adjust 类流水（配置清单「期初盘点完成」探测用·bounded limit(1)·只判存在不取值）。
- *  经门1 唯一出口（同上·configChecklist 原直碰 stockLedger，批K 改走这里）。 */
+ *  经门1 唯一出口（同上·configChecklist 走这里）。 */
 export async function hasAdjustLedgerEntry(): Promise<boolean> {
   const db = getDb()
   const r = await db.collection(COLLECTIONS.stockLedger).where({ docType: 'adjust' }).limit(1).get()
@@ -208,7 +206,7 @@ export async function hasAdjustLedgerEntry(): Promise<boolean> {
 }
 
 /** 是否存在任意已设安全库存线（threshold>0）的物料主档（配置清单「物料安全线已配」探测用·bounded limit(1)）。
- *  经门1 唯一出口（同上·configChecklist 原直碰 materials，批K 改走这里）。 */
+ *  经门1 唯一出口（同上·configChecklist 走这里）。 */
 export async function hasThresholdMaterial(): Promise<boolean> {
   const db = getDb()
   const r = await db.collection(COLLECTIONS.materials).where({ threshold: db.command.gt(0) }).limit(1).get()
