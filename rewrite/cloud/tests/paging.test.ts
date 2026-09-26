@@ -169,3 +169,50 @@ describe('pageQuery order 参数（Round8·根因#7 收口·order 可选 asc/des
     expect(seen.size).toBe(3)
   })
 })
+
+describe('pageQuery 排序字段为 _id（值与 id 同一列·单条查询）', () => {
+  // 7 条、每页 4：首页拿走 4 条后剩余 3，落在 (limit/2, limit]。
+  // 旧实现把 tie/span 拼成同一条查询且不去重，这一页会重复并误报 hasMore。
+  function seedSeven() {
+    control.reset()
+    control.seed(
+      'suppliers',
+      Array.from({ length: 7 }, (_, i) => ({ _id: 's' + String(i).padStart(2, '0'), name: 'n' + i }))
+    )
+  }
+
+  async function walk(order: 'asc' | 'desc') {
+    const seen = new Set<string>()
+    let cursor: unknown = undefined
+    let pages = 0
+    let lastHasMore = true
+    for (let round = 0; round < 5; round++) {
+      const p = await pageQuery(getDb(), 'suppliers', {}, '_id', { limit: 4, cursor }, 20, order)
+      pages++
+      expect(p.list.length).toBeGreaterThan(0)
+      for (const row of p.list) {
+        expect(seen.has(row._id)).toBe(false)
+        seen.add(row._id)
+      }
+      lastHasMore = p.hasMore
+      if (!p.hasMore) {
+        expect(p.nextCursor).toBe(null)
+        break
+      }
+      cursor = p.nextCursor
+    }
+    expect(lastHasMore).toBe(false)
+    expect(seen.size).toBe(7)
+    expect(pages).toBe(2)
+  }
+
+  it('大白话：按 _id 降序翻完不重复，尾页 hasMore 为 false', async () => {
+    seedSeven()
+    await walk('desc')
+  })
+
+  it('大白话：按 _id 升序翻完不重复，尾页 hasMore 为 false', async () => {
+    seedSeven()
+    await walk('asc')
+  })
+})

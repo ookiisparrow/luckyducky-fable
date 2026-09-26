@@ -67,28 +67,11 @@ export async function saveMaterial({ data }: Ctx) {
 
 // ── 供应商/织女主档 ──
 
-// 根因#7：走 kit pageQuery——.limit(200) 裸封顶会让超上限旧档永久不可查；defaultLimit=200，
-// 无参调用（多处 picker 下拉全量消费点）首页即 200 条。
-//
-// cursorField 用 `_id`（供应商表无自然排序字段）：kit pageQuery 复合游标的 tie/span
-// 双分支设计假定 cursorField≠_id（tie 分支靠「同 cursorField 值·不同 _id」区分同值记录打破平局）；当
-// cursorField===_id 时 v===id 恒成立，`{ [cursorField]: cursor.v, _id: beyond(cursor.id) }` 这一对象
-// 字面量里两个键都叫 `_id`、后者覆盖前者，tie 分支的查询条件坍缩成与 span 分支完全相同的条件——两个
-// 分支各自把剩余行整批取回、拼接后不去重直接 slice。剩余行数 R 较小时（R ≤ limit/2）只产生页内重复、
-// 靠去重能清干净；但 R 较大时（limit/2 < R ≤ limit，即将进入尾页前一页）拼接体在 slice(limit+1) 处被
-// 截断在「原序列中段」而非真正尾部，页内去重清得干净，但 pageQuery 内部据此算出的 hasMore/nextCursor
-// 本身就是错的（hasMore 误报 true、nextCursor 指向一条已经交付过的记录）——只做页内去重堵不住这层，
-// 会造成跨页重复交付（实测 350 条供应商、limit 200 时命中）。这里不动共享的 kit/paging.ts pageQuery
-// 内部，而是从调用侧避开这条坏分支：cursorField===_id 时 v===id 恒成立，
-// 在调用前把客户端回传的复合游标 {v,id} 拆成纯值 id 再传给 pageQuery——pageQuery 收到非 {v,id} 形状
-// 的游标会落进「向后兼容纯值游标」分支（单一查询，无 tie/span 拼接），该分支的 hasMore/nextCursor 本
-// 身即正确，无需再在此兜底去重。首页（无 cursor）不受影响。
+// 供应商没有自然排序字段，按 _id 游标翻页；无参首页仍默认 200，游标原样交给 pageQuery。
 const SUPPLIER_LIST_LIMIT = 200
 
 export async function listSuppliers({ db, data }: Ctx) {
-  const rawCursor = data && (data as any).cursor
-  const cursor = rawCursor && typeof rawCursor === 'object' && 'id' in rawCursor ? (rawCursor as any).id : rawCursor
-  const paged = await pageQuery(db, COLLECTIONS.suppliers, {}, '_id', { ...data, cursor }, SUPPLIER_LIST_LIMIT)
+  const paged = await pageQuery(db, COLLECTIONS.suppliers, {}, '_id', data, SUPPLIER_LIST_LIMIT)
   return reply(200, { ok: true, list: paged.list, nextCursor: paged.nextCursor, hasMore: paged.hasMore })
 }
 
