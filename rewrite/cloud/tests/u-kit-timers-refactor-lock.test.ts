@@ -11,7 +11,7 @@ beforeEach(() => {
 })
 
 describe('cleanupEvents 单路删失败不连累其余', () => {
-  it('大白话：events 删炸→该路计 0，rateLimit/kfSeen 照删照计', async () => {
+  it('大白话：events 删炸→该路标 null（失败≠删了 0 条），rateLimit/kfSeen 照删照计', async () => {
     control.setOpenId('')
     const OLD = Date.now() - 91 * 24 * 3600 * 1000
     control.seed('events', [{ _id: 'e-old', createdAt: OLD }])
@@ -21,7 +21,7 @@ describe('cleanupEvents 单路删失败不连累其余', () => {
       if (coll === 'events') throw new Error('boom')
     })
     const r: any = await cleanupEvents()
-    expect(r).toMatchObject({ ok: true, removed: 0, rateLimit: 1, kfSeen: 1, videoGc: 0, imageGc: 0 })
+    expect(r).toMatchObject({ ok: true, removed: null, rateLimit: 1, kfSeen: 1, videoGc: 0, imageGc: 0 })
     expect(control.dump('events').length).toBe(1)
   })
 })

@@ -1,21 +1,22 @@
 import crypto from 'crypto'
 import https from 'https'
 import { getDb } from './db'
-import { COLLECTIONS, ERR } from '@ldrw/shared'
+import { COLLECTIONS, ERR, type ErrCode } from '@ldrw/shared'
 import { alert } from './observe'
 import { getSecureConfig, getSecureConfigFields } from './secureConfig'
 import { ok, err } from './reply'
+import { str } from './validate'
 
 /**
  * 企业微信「微信客服」平台接缝（根因#12 平台规则外部风险：与企业微信的接缝收口一处）。
- * 收编三块：① 回调验签 + AES 解密（WXBizMsgCrypt·根因#3 fail-closed 由 defineKfCallback 强制）
+ * 管三块：① 回调验签 + AES 解密（WXBizMsgCrypt·根因#3 fail-closed 由 defineKfCallback 强制）
  * ② access_token 取用 + 缓存（DB·类比 kit/throttle 的 DB 模式·7200s）③ 客服 API 调用
  * （sync_msg / send_msg / unionid→external_userid 身份转换）。消费者：cs/kfCallback、cs/kfBind。
  *
  * 出网用全局 fetch（node18+ 自带），运行时低于 18 回退内置 https（杜绝「Node<18 下 fetch undefined」——
  * 验签只做加密会照样过、真消息进来调 access_token 才崩的根因#8 隐患）；fetchImpl 可注入便于单测打桩。
  * 密钥（corpid/secret/token/aeskey）单源经 kit/secureConfig 读取（DB secureConfig/wxkf 优先·env 兜底迁移期·
- * 决策 2026-07-12：config-checklist 页填写自动生效），绝不进日志（CLAUDE.md 敏感信息不进日志）。
+ * config-checklist 页填写自动生效），绝不进日志（CLAUDE.md 敏感信息不进日志）。
  */
 
 const QY = 'https://qyapi.weixin.qq.com/cgi-bin'
@@ -81,7 +82,7 @@ export function decryptKfMessage(encodingAESKey: string, encrypted: string): { m
   const decipher = crypto.createDecipheriv('aes-256-cbc', key, iv)
   decipher.setAutoPadding(false)
   const buf = Buffer.concat([decipher.update(Buffer.from(encrypted, 'base64')), decipher.final()])
-  // 去 PKCS7：末字节 = padding 长度（WXBizMsgCrypt 块 32）。边界纵深（审计 P1）：验签虽在前，仍兜
+  // 去 PKCS7：末字节 = padding 长度（WXBizMsgCrypt 块 32）。边界纵深：验签虽在前，仍兜
   // 非法 pad/msgLen 即抛、不返回错位切片——防签名异常路径吐出越界数据（调用方 try/catch 转告警）。
   const pad = buf[buf.length - 1]
   if (!(pad >= 1 && pad <= 32) || pad > buf.length) throw new Error('BAD_PADDING')
@@ -124,8 +125,8 @@ function readBody(event: any): string {
   return raw || ''
 }
 
-/** defineKfCallback 的凭证组（单 getter 每请求取一次——决策 2026-07-12 读库后，逐字段懒读＝同文档多次
- * 往返；收敛为一次注入。corpid 空＝跳过 receiveId 校验，配齐即 fail-closed。 */
+/** defineKfCallback 的凭证组（单 getter 每请求取一次——凭证读库，逐字段懒读＝同文档多次
+ * 往返；故一次注入。corpid 空＝跳过 receiveId 校验，配齐即 fail-closed。 */
 interface KfCallbackCreds {
   token: string
   aesKey: string
@@ -139,7 +140,7 @@ interface KfCallbackCreds {
  * GET 验 URL（验签 → 解密 echostr → 回明文）；POST 收事件（验签 → 解密 → 解析 → onEvent）。
  * 验签不过 = 不可信：GET 回空、POST 回空 + 告警，**绝不调 onEvent**（防伪不给处理通道）。
  * 任何客服回调经此外壳才写得出业务，杜绝「忘记验签」。token/aesKey/corpid 由调用方经 creds() 懒读注入
- * （异步——决策 2026-07-12 起走 kit/secureConfig 读库，故取值本身是异步 IO；每请求调用一次取最新值·
+ * （异步——走 kit/secureConfig 读库，取值本身是异步 IO；每请求调用一次取最新值·
  * admin 填写即生效；单 getter 而非逐字段 getter：kfCallback 配 getSecureConfigFields 一次 DB 读取齐，
  * 治「同一 doc 每事件 5 读」的读放大；懒读同样便于测试注入固定值）。
  */
@@ -152,7 +153,7 @@ export function defineKfCallback(opts: {
     // receiveId 绑定校验：配了 corpid 才生效（配置就绪即 fail-closed·未配不阻断现网）
     const receiveIdOk = (receiveId: string): boolean => !corpid || receiveId === corpid
     const q = readQuery(event)
-    const method = String(event.httpMethod || 'POST').toUpperCase()
+    const method = (str(event.httpMethod, 20) || 'POST').toUpperCase()
 
     if (method === 'GET') {
       // URL 验证：echostr 是密文，验签后解密回明文
@@ -185,7 +186,7 @@ export function defineKfCallback(opts: {
       alert('security', 'kfCallback', 'DECRYPT_FAILED', {})
       return httpReply(200, '')
     }
-    // receiveId 须本 corp（验签三要素之三）：跨 corp 合法签名消息也拒，不进 onEvent（审计 P1·根因#3）
+    // receiveId 须本 corp（验签三要素之三）：跨 corp 合法签名消息也拒，不进 onEvent（根因#3）
     if (!receiveIdOk(dec.receiveId)) {
       alert('security', 'kfCallback', 'RECEIVEID_MISMATCH', {})
       return httpReply(200, '')
@@ -215,7 +216,7 @@ export async function getAccessToken(
   const now = Date.now()
   // secret 拼在 query 里——底层 fetch 若把请求 URL 嵌进错误消息（运行时相关），raw error 冒泡到
   // kfCallback 的 console.error(String(e)) 就会把 corpsecret 写进云日志。故在源头消毒：吞 fetch 原始错误、
-  // 只抛不含 secret 的定型码（深审 2026-07-05·纵深加固）。
+  // 只抛不含 secret 的定型码（纵深加固）。
   let r: { json: () => Promise<any> }
   try {
     r = await fetchImpl(`${QY}/gettoken?corpid=${encodeURIComponent(cfg.corpid)}&corpsecret=${encodeURIComponent(cfg.secret)}`)
@@ -238,7 +239,7 @@ export async function getAccessToken(
 }
 
 /**
- * 只读缓存的 access_token（未过期返回·过期/无返 ''）：给**不持密钥**的函数（如 login·§P0 链② 客服身份桥接）
+ * 只读缓存的 access_token（未过期返回·过期/无返 ''）：给**不持密钥**的函数（如 login·客服身份桥接）
  * 复用 kfCallback/getAccessToken 维护的令牌做 idconvert，自己不 gettoken（不需 Secret·根因#3 密钥不扩散到 login）。
  * best-effort：取不到（过期/kfCallback 近期没活动）返 ''，调用方跳过、下次再试。
  */
@@ -282,7 +283,7 @@ export async function sendMsg(accessToken: string, payload: any, fetchImpl: Fetc
 }
 
 /**
- * 企业微信网页 OAuth：code → userid（`auth/getuserinfo`·用 app access_token·M⑦ 免登线·车道 B）。
+ * 企业微信网页 OAuth：code → userid（`auth/getuserinfo`·用 app access_token·坐席免登）。
  * 成员在自建应用内打开授权（snsapi_base 静默）拿 code，本函数换回其企业成员 userid（坐席身份）。
  * errcode / 无 userid（非成员返 openid·我们只认 userid）→ 返 '' —— 调用方 fail-closed 拒登。
  */
@@ -297,12 +298,12 @@ export async function getWecomOAuthUserId(
   return String(j.userid)
 }
 
-// ───────────── 应用消息（自建应用主动推送·M⑦ 承面C 增强·推送线）─────────────
+// ───────────── 应用消息（自建应用主动推送）─────────────
 // 与微信客服 send_msg 的区别：这是企业微信「应用消息」（message/send·带 agentid·推给企业成员 userid）——
 // 把「新会话待接 / 会话升级」主动推到坐席手机（app 消息不受 48h 会话窗口限制·解「页面关着无提醒」）。
 // **单接缝**：全库 message/send 只经本文件出。
 
-/** 坐席台工作台 URL（推送卡片点入·车道 C 消费 ?session·单源）。可 env WXKF_AGENT_URL 覆盖。 */
+/** 坐席台工作台 URL（推送卡片点入·坐席台消费 ?session·单源）。可 env WXKF_AGENT_URL 覆盖。 */
 export const AGENT_DESK_URL = process.env.WXKF_AGENT_URL || 'https://www.luckyducky.cn/agent/'
 
 /** 发一条应用消息 textcard（touser 用 '|' 连接·企微规范）。原始接缝——全库只此一处调 message/send。 */
@@ -386,7 +387,7 @@ export async function enterSmartAssistant(
 }
 
 /**
- * 确保会话可由 bot 自动回复（防 95018·调试日志 AB·根因#12 平台规则外部风险）：读会话状态 → 决策——
+ * 确保会话可由 bot 自动回复（防 95018·根因#12 平台规则外部风险）：读会话状态 → 决策——
  * - 1 智能助手：可直接发 → 'proceed'
  * - 0 未处理(新会话) / -1 读失败：尽力 trans 到 1 接管 → 'proceed'（trans 失败 → 'skip'·不硬发触 95018）
  * - 2 待接入池 / 3 人工接待 / 4 已结束：让位不接管 → 'skip'（平台不允许 2→1、4→1·3 有坐席；4 待顾客新消息重激活成 0）
@@ -440,7 +441,7 @@ export async function listKfAccounts(accessToken: string, fetchImpl: FetchFn = d
 
 /**
  * 查客服顾客的 unionid（`kf/customer/batchget`·**平台原生反查**·须小程序绑开放平台）：给定 external_userid，
- * 用微信客服**自己的**顾客接口拿该顾客的 unionid——查订单身份桥接用（绕开客户联系 idconvert 的 48002·§查订单）。
+ * 用微信客服**自己的**顾客接口拿该顾客的 unionid——查订单身份桥接用（绕开客户联系 idconvert 的 48002）。
  * 返回 unionid 或 ''（errcode/无 unionid[顾客没授权/没绑开放平台]即空·best-effort）。
  */
 export async function kfCustomerBatchget(accessToken: string, externalUserId: string, fetchImpl: FetchFn = defaultFetch): Promise<string> {
@@ -453,7 +454,7 @@ export async function kfCustomerBatchget(accessToken: string, externalUserId: st
   return c && c.unionid ? String(c.unionid) : ''
 }
 
-// ───────────────────────── 媒体下载（kf/media/get·B5 顾客发图坐席可见·平台接缝单点#12） ─────────────────────────
+// ───────────────────────── 媒体下载（kf/media/get·顾客发图坐席可见·平台接缝单点·根因#12） ─────────────────────────
 
 // media/get 成功回二进制文件流（content-type 按文件类型）、失败回 JSON {errcode,errmsg}——与上面
 // 全 JSON 的 FetchFn 形状不同，故另立一个二进制形态的 fetch 抽象（fetchImpl 可注入便于单测打桩）。
@@ -490,8 +491,8 @@ const defaultBinFetch: BinFetchFn = (url) =>
 
 // 「媒体不存在/已过期」类错误码（企业微信全局错误码·kf/media/get 复用同一套）：仅这些码判 expired:true。
 // 40007＝不合法的媒体文件id——media_id 3 天有效期到期后 media/get 的实际表现即此码（企业微信开放社区
-// 多个 40007 反馈案例均指向 media_id 过期/不存在，无另立的专用「已过期」错误码可细分——2026-07-24 核实
-// 债#getMediaUrl-errcode 时查证；若日后真机遇到其余「媒体不存在」语义码，按此表补充）。
+// 多个 40007 反馈案例均指向 media_id 过期/不存在，无另立的专用「已过期」错误码可细分；
+// 若日后真机遇到其余「媒体不存在」语义码，按此表补充）。
 const KF_MEDIA_EXPIRED_ERRCODES = new Set([40007])
 
 /**
@@ -519,15 +520,13 @@ export async function getKfMedia(
   return { ok: true, buffer }
 }
 
-// ───────────────────────── 高层助手（客服发送/媒体下载·拓扑收编批 2026-07-23） ─────────────────────────
-// 原 functions/cs/kfSend.ts、cs/kfMedia.ts 两个薄壳函数收编：契约/校验顺序逐字保留，
-// 唯一调用方 adminApi/actions/agentDesk.ts 从「cloud.callFunction 服务端互调」改直连本文件助手。
-// 两助手都不带 isServerCall 闸——收编前独立函数需要闸挡「带 openid 的客户端调用」，收编后
-// 已无独立可调用边界（不再是能被任意 event 直接 invoke 的函数），越权发送/下载面随函数消失；
-// 权限改由外层 adminApi 网关闸（口令 + scope + 接待窗口，见 agentDesk.ts sendAgentMessage/getMediaUrl）负责。
+// ───────────────────────── 高层助手（客服发送/媒体下载） ─────────────────────────
+// 唯一调用方 adminApi/actions/agentDesk.ts 直连本文件助手（非 cloud.callFunction 服务端互调）。
+// 两助手都不带 isServerCall 闸——它们不是能被任意 event 直接 invoke 的独立函数，没有独立可调用边界；
+// 权限由外层 adminApi 网关闸（口令 + scope + 接待窗口，见 agentDesk.ts sendAgentMessage/getMediaUrl）负责。
 
 /** 读 wxkf 凭证并取 access_token：未配回 KF_NOT_CONFIGURED、gettoken 失败回 TOKEN_FAILED。 */
-export async function kfToken(db: any): Promise<{ token: string } | { error: string }> {
+export async function kfToken(db: any): Promise<{ token: string } | { error: ErrCode }> {
   const { corpId: corpid, secret } = await getSecureConfigFields(db, 'wxkf', ['corpId', 'secret'])
   if (!corpid || !secret) return { error: ERR.KF_NOT_CONFIGURED }
   try {
@@ -537,7 +536,7 @@ export async function kfToken(db: any): Promise<{ token: string } | { error: str
   }
 }
 
-/** 客服主动发消息（原 cs/kfSend main 逻辑收编）：参数→配置→token→send_msg，契约与原函数一致。 */
+/** 客服主动发消息：参数→配置→token→send_msg。 */
 export async function kfSendText(args: { externalUserId: string; openKfId: string; text: string }) {
   const externalUserId = String(args.externalUserId || '')
   const openKfId = String(args.openKfId || '')
@@ -551,9 +550,8 @@ export async function kfSendText(args: { externalUserId: string; openKfId: strin
 }
 
 /**
- * 顾客发图下载（原 cs/kfMedia main 逻辑收编）：参数→配置→token→media/get，契约与原函数一致——
- * 除一处：收编前跨函数调用走 JSON 序列化、二进制须转 base64 转手；收编后同进程直连，这层序列化
- * 约束随之消失，故**直接回 Buffer**（调用方 agentDesk.ts getMediaUrl 不再需要 base64→Buffer 转换）。
+ * 顾客发图下载：参数→配置→token→media/get。同进程直连、不走跨函数 JSON 序列化，
+ * 故**直接回 Buffer**（调用方 agentDesk.ts getMediaUrl 不需要 base64→Buffer 转换）。
  */
 export async function kfFetchMedia(mediaId: string) {
   const id = String(mediaId || '')

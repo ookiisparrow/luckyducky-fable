@@ -19,7 +19,7 @@ import Orders from '../src/pages/Orders.vue'
 beforeEach(() => {
   listOrdersMock.mockResolvedValue({
     ok: true,
-    list: [{ id: 'o1', status: 'paid', items: [{ productId: 'p1', name: '材料包', qty: 1 }], amount: 9900, createdAt: Date.now(), address: { name: '张三' } }],
+    list: [{ id: 'o1', status: 'paid', items: [{ productId: 'p1', name: '材料包', qty: 1 }], amount: 99, createdAt: Date.now(), address: { name: '张三' } }],
     nextCursor: null,
     hasMore: false,
   })
@@ -41,8 +41,8 @@ describe('Orders.vue 抽屉激活态取数失败可见', () => {
     expect(w.find('.items-card').text()).toContain('激活状态没加载到')
   })
 
-  it('大白话：getOrderDetail 直接抛错，同样显示没加载到，不静默', async () => {
-    getOrderDetailMock.mockRejectedValue(new TypeError("Cannot read properties of null (reading 'ok')"))
+  it('大白话：回包读不懂（BAD_JSON_RESPONSE）也显示没加载到，不静默', async () => {
+    getOrderDetailMock.mockResolvedValue({ ok: false, status: 200, error: 'BAD_JSON_RESPONSE' })
     const w = await openShipDrawer()
     expect(w.find('.items-card').text()).toContain('激活状态没加载到')
   })

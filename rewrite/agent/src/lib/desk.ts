@@ -1,7 +1,7 @@
-// 坐席台纯逻辑（黄金 cs-agent §四/§十二「会话流轮询增量合并」永恒语义）：
+// 坐席台纯逻辑（会话流轮询增量合并）：
 // 游标边界重复回同一条不产生重复气泡；增量并入后按时间升序（乱序落库也排对）；同一时刻不同方向/
 // 不同文视为不同条；无时间戳脏消息不进流；游标只进不退、空批不倒退。
-// 去重键（bug sweep II L1）：有 msgid（入站客户消息·全局唯一）→ 只认 msgid，同秒非文本消息（图片等
+// 去重键：有 msgid（入站客户消息·全局唯一）→ 只认 msgid，同秒非文本消息（图片等
 // text 恒为 `[msgtype]` 占位）不再被 at|direction|text 误判同条而丢弃；无 msgid（出站坐席消息/历史档，
 // 无稳定唯一 id）→ 回退 at|direction|msgtype|text——这条回退键仍有残余边界：纯文本同秒同文重发会被
 // 当同条塌掉，无唯一 id 时分不清「真重发」与「重投递」，此处维持既有偏置（宁去重勿重复气泡）。
@@ -11,12 +11,12 @@ export interface Msg {
   at: number
   msgtype?: string
   msgid?: string
-  hasMedia?: boolean // B5：顾客发图坐席可见——true 时 Desk.vue 渲染图片气泡而非纯文本占位
+  hasMedia?: boolean // 顾客发图坐席可见——true 时 Desk.vue 渲染图片气泡而非纯文本占位
 }
 
-// 导出供 Desk.vue 模板 :key 复用（深审20260712 P2）：气泡 key 与去重键同源单点——去重键升级（msgid）而
-// 模板 key 仍用旧 at+direction+text 时，同秒同向两张图（msgid 不同）会进 msgs 却撞 Vue 重复 key。
-// （diffNewInbound B4 同样复用此键——身份判同单源。）
+// 导出供 Desk.vue 模板 :key 复用：气泡 key 与去重键同源单点——去重键认 msgid 而
+// 模板 key 若用 at+direction+text，同秒同向两张图（msgid 不同）会进 msgs 却撞 Vue 重复 key。
+// （diffNewInbound 同样复用此键——身份判同单源。）
 export const keyOf = (m: Msg) => (m.msgid ? `id:${m.msgid}` : `${m.at}|${m.direction}|${m.msgtype || ''}|${m.text}`)
 
 /** 归一进流：无时间戳/脏形状不进（防脏消息撑乱时间轴）。 */
@@ -93,7 +93,7 @@ export function mapQueue(list: unknown, now: number): QueueItem[] {
   return out
 }
 
-// 快捷回复 + 页内提醒（批 B4·预审裁决：listKb 后端零改动直接复用，不新建 listQuickReplies）。
+// 快捷回复 + 页内提醒（直接复用后端 listKb，不新建 listQuickReplies）。
 export interface KbEntry {
   key: string
   question: string
@@ -174,6 +174,23 @@ export function createStatusController(
   }
 }
 
+/** 定时轮询的在途闸：同一 key 上一拍没回来就跳过这一拍，慢网下请求不堆积、不重复计费。只包定时器，
+ *  坐席手动触发的拉取（打开会话/认领后刷新）不经此闸。按 key 分闸：切会话后旧会话卡住的请求
+ *  不能挡住新会话的轮询。 */
+export function skipWhileBusy(fn: () => Promise<unknown>, keyOf: () => unknown = () => ''): () => Promise<void> {
+  const busy = new Set<unknown>()
+  return async () => {
+    const k = keyOf()
+    if (busy.has(k)) return
+    busy.add(k)
+    try {
+      await fn()
+    } finally {
+      busy.delete(k)
+    }
+  }
+}
+
 /** 坐席动作错误人话（原文兜底）。 */
 export function deskErrorText(e: unknown): string {
   const code = String(e || '')
@@ -189,7 +206,11 @@ export function deskErrorText(e: unknown): string {
     NO_CONSENT: '顾客未同意数据共享——按规定不能看 TA 的资料',
     ALREADY_CLOSED: '会话已经结束了',
     SESSION_LOST: '登录已失效，请重新登录',
-    WRITE_FAIL: '状态没保存成功，稍后再试', // setAgentStatus 写失败不再吞（云端战役II；本包 F2＝字数上限可见）
+    WRITE_FAIL: '状态没保存成功，稍后再试', // setAgentStatus 写失败不吞
+    CALL_TIMEOUT: '服务器太久没回话。如果刚才是提交操作，可能已经生效——先刷新看看再决定要不要重试', // 后台刷列表也显这句
+    AUTH_UNAVAILABLE: '登录校验服务暂时不可用，稍后再试',
+    BAD_JSON_RESPONSE: '服务器回包读不懂，刷新后再试',
+    NETWORK: '网络不通，检查网络后重试',
   }
   return MAP[code] || MAP[code.split(':')[0]] || '操作没成功（' + code + '）'
 }

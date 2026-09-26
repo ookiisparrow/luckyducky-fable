@@ -1,17 +1,17 @@
 import { toFen, COLLECTIONS } from '@ldrw/shared'
 import { defineNotifyCallback, notifyAlert, restoreStock, isDocMissing } from '../../kit'
 
-// 退款结果回调（黄金 orders-money·refundCallback 节）。防伪/ACK/id 提取由框架强制。
+// 退款结果回调。防伪/ACK/id 提取由框架强制。
 // 核验 fail-closed：成功通知的订单号+金额须与售后单一致，否则不置已退款、留 refundMismatch 痕+告警；
 // 幂等：applied/approved→refunded 抢占只一次；回补库存仅限未发货单（已发货实物已出库·回补=幻影超卖）。
-// 部署命名：M5 切换日同名替换（回调点位绑定控制台工作流 refundnotify）。
+// 回调点位绑定控制台工作流 refundnotify。
 const ACK = { errcode: 0, errmsg: 'OK' }
 
 export const main = defineNotifyCallback<any>({
   ack: ACK,
   refId: (e) => String(e.out_refund_no || ''),
   onNotify: async ({ db, id, event: e }) => {
-    // id = 微信回传 out_refund_no。本批解耦（根因#12·案 A）：退款单号不再等于内部 _id（含中文/超长者被规整），
+    // id = 微信回传 out_refund_no（根因#12）：退款单号不一定等于内部 _id（含中文/超长者被规整），
     // 故先按售后单 outRefundNo 字段反查；回退 .doc(id) 兼容纯 ASCII 老单（out_refund_no===_id·无 outRefundNo 字段）。
     // 读失败≠没有这张售后单（病根#14）：告警后抛——不 ACK，微信重推时重跑自愈；当没查到 ACK 掉，钱已退、售后单却一直停在 approved。
     const byField = await db
@@ -116,7 +116,7 @@ export const main = defineNotifyCallback<any>({
       // 订单留对账痕（失败不阻塞 ACK：售后单是退款状态单一来源）。key 用 lineId（回退 productId，
       // 兼容无 lineId 的旧售后单）而非裸 productId：同一 productId 可能有多条不同 spec 的订单行
       // （见 orders.ts lineIdOf），裸 productId 会让两条行的退款回调互相覆盖对账痕。
-      // 洗点号（合流保留深审 P3 修复）：lineId 含 spec 里的 '.'（如 3.5mm）会被 TCB 当嵌套路径分层，洗成 '_' 保持扁平一键。
+      // 洗点号：lineId 含 spec 里的 '.'（如 3.5mm）会被 TCB 当嵌套路径分层，洗成 '_' 保持扁平一键。
       const refundedKey = String(as.lineId || as.productId).replace(/\./g, '_')
       await db
         .collection(COLLECTIONS.orders)

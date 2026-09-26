@@ -1,10 +1,11 @@
+import { createHash } from 'crypto'
 import { ERR, COLLECTIONS } from '@ldrw/shared'
 import { getDb } from './db'
 import { err } from './reply'
 import { alert } from './observe'
 import type { OpenIdCtx } from './gate'
 
-// 频控 / 锁定闸（设计约束#13：认证与写入端点默认限速——门锁再硬也要挡无限次尝试）。
+// 频控 / 锁定闸（根因#13：认证与写入端点默认限速——门锁再硬也要挡无限次尝试）。
 // 按 key 在 rateLimit 集合记 {fails, windowStart, lockedUntil}（失败计数）/{hits, hitWindowStart}
 // （调用计数）：滚动窗口内累加，失败达 max → 锁定 lockMs；认证成功 → 清零。
 // 并发原子性：计数走乐观并发（CAS 重试）单点收口 bumpWindowed——杜绝「读-改-写」在突发并发下
@@ -32,15 +33,15 @@ async function bumpWindowed(
   const db = getDb()
   const _ = db.command
   const id = rid(key)
-  // 盲快路径（批C·等价性论证，仅调用频控 throttleHit 传 fastPathMax 时启用，throttleFail 的锁定
+  // 盲快路径（等价性论证，仅调用频控 throttleHit 传 fastPathMax 时启用，throttleFail 的锁定
   // 判定分毫不碰）：不读，直接盲发一次条件更新——命中条件「窗口未过期（windowField 在 windowMs
   // 内）且 countField < fastPathMax」才把 countField 原子 +1（_.inc，非读改写的绝对赋值）。
   // 等价性：条件保证「更新前 count < max」，更新后 count ≤ max，天然落在完整路径「count > max 才算
   // 超限」判定的「未超限」区间——不会多放行一个本该拒的请求。并发下：条件更新在真实云数据库是对单
   // 文档的原子读判即写（同一 doc 的多次更新在存储层天然串行化），任何会让 count 越过 max 的那次增
   // 量，其应用时点的 count 已 ≥ max，条件天然不匹配，不会成功；一旦不匹配（含窗口已过期 / 文档尚
-  // 未建档两种情况）即回落下方既有「读+判定+CAS」完整路径，超限拒绝 / 换窗重置 / 首写建档三条既有
-  // 语义原样触发、不改一行判定顺序。命中时无需精确返回值（外层只做 count>max 比较），fastPathMax
+  // 未建档两种情况）即回落下方既有「读+判定+CAS」完整路径，超限拒绝 / 换窗重置 / 首写建档三条
+  // 语义照常触发、判定顺序不变。命中时无需精确返回值（外层只做 count>max 比较），fastPathMax
   // 本身就是满足「未超限」的合法哨兵值。
   if (fastPathMax !== undefined) {
     const now0 = Date.now()
@@ -93,11 +94,15 @@ async function bumpWindowed(
       .catch(() => null)
     if (r && r.stats && r.stats.updated === 1) return count
   }
-  // CAS 重试耗尽（课程链路审计 2026-07-17·根因#13/#14）：同 key 高并发争抢下这次计数没写进去——对
+  // CAS 重试耗尽（根因#13/#14）：同 key 高并发争抢下这次计数没写进去——对
   // throttleFail 意味着这次失败尝试等于没发生（爆破者可借洪水稀释计数）。维持 best-effort 放行语义
   // （头注刻意取舍：频控库故障不阻断主流程，口令校验仍是硬闸；改 fail-closed 属安全/可用性权衡，
-  // 待用户拍板——见 2026-07-17 课程链路审计报告），但耗尽不再静默：留痕告警可查可统计。
-  alert('security', 'throttle', 'CAS_EXHAUSTED', { key })
+  // 须老板拍板），但耗尽不静默：留痕告警可查可统计。
+  // key 末段可能是 openid（withRateLimit 的 fn:<name>:<openid>），而 alert ctx 不放 openid：只留前缀定位是哪个
+  // 动作，另附整 key 的短哈希，够把同一 key 的多次耗尽归到一起。
+  const scope = key.slice(0, Math.max(0, key.lastIndexOf(':')))
+  const keyHash = createHash('sha256').update(key).digest('hex').slice(0, 8)
+  alert('security', 'throttle', 'CAS_EXHAUSTED', { scope, keyHash })
   return null
 }
 

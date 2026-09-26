@@ -38,7 +38,7 @@ const keysOf = (o: any) => Object.keys(o).sort()
 // 桩的默认导出没有 database() 的类型声明（真 sdk 有）：一次性具名断言，不内联进成员访问。
 const sdk = cloud as unknown as { database: () => Ctx['db'] }
 const db = () => sdk.database()
-const adminCtx = (data: unknown): Ctx => ({ db: db(), cloud, data, drafts: db().collection('productsDraft') })
+const adminCtx = (data: unknown): Ctx => ({ db: db(), cloud, data })
 
 const ADDR = { name: '张三', phone: '13800000000', region: '浙江·杭州', detail: 'xx 路 1 号' }
 // 刻意不 seed cloud:// cover（cover 缺省快照成空串）：绕开 swapOrdersCover 换址与容器级签发缓存，

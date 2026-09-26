@@ -5,16 +5,17 @@
 <view class="coaddr">
   <view class="co-body">
 
-    <!-- 表单卡（收货人 / 手机号 / 所在地区 / 详细地址·同卡内发丝线分隔） -->
+    <!-- 表单卡（收货人 / 手机号 / 所在地区 / 详细地址·同卡内发丝线分隔）。
+         maxlength 与云端 createOrder 地址快照截断一致：表单比云端宽，多打的字会在下单时被悄悄截掉。 -->
     <view class="co-card coaddr-form">
       <view class="coaddr-field">
         <text class="coaddr-label">收货人</text>
-        <input class="coaddr-input" value="{{name}}" data-field="name" bind:input="onInput"
+        <input class="coaddr-input" value="{{name}}" data-field="name" bind:input="onInput" maxlength="40"
           placeholder="请填写收货人姓名" placeholder-class="coaddr-ph" />
       </view>
       <view class="coaddr-field">
         <text class="coaddr-label">手机号</text>
-        <input class="coaddr-input" value="{{phone}}" data-field="phone" bind:input="onInput" type="number"
+        <input class="coaddr-input" value="{{phone}}" data-field="phone" bind:input="onInput" type="number" maxlength="20"
           placeholder="请填写手机号" placeholder-class="coaddr-ph" />
       </view>
       <view class="coaddr-field">
@@ -25,7 +26,7 @@
       </view>
       <view class="coaddr-field">
         <text class="coaddr-label">详细地址</text>
-        <input class="coaddr-input" value="{{detail}}" data-field="detail" bind:input="onInput"
+        <input class="coaddr-input" value="{{detail}}" data-field="detail" bind:input="onInput" maxlength="120"
           placeholder="街道、楼牌号、门牌号等" placeholder-class="coaddr-ph" />
       </view>
     </view>

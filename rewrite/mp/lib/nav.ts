@@ -1,4 +1,4 @@
-// 导航兜底单源（2026-07-25 体检批 P2·病根#5 Rule of Three：player/catalog/welcome 三处同款判断）。
+// 导航兜底单源（病根#5 Rule of Three：player/catalog/welcome 三处同款判断）。
 // 自绘导航页（navigationStyle:custom）没有原生返回箭头，返回全靠自绘按钮——而这些页都可能被
 // **深链直接进入**（扫码激活落 welcome/catalog、分享链落播放页），此时页面栈只有一层，
 // navigateBack 会失败并把用户卡死在页内。故统一：有上级页就退回去，没有就兜底回首页 tab。

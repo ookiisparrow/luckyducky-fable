@@ -1,4 +1,4 @@
-// 登录授权半屏弹窗（R1）——旧线 components/LoginSheet.vue 原生 mp 移植（重写线补搬）。
+// 登录授权半屏弹窗（R1）。
 // 真·一键登录：勾选同意《用户协议》《隐私政策》→「微信一键登录」用静默 openid 身份直接登录，
 // 登录环节不采集头像昵称（守卫 rw-mp-login-no-profile-collect·资料可后续在「编辑资料」页补）。
 // 「暂不登录」/点遮罩/✕ 关闭继续逛（软门槛·不强制·合微信运营规范）。各页放一处 <login-sheet/>，
@@ -18,7 +18,7 @@ Component({
       unsubs.set(
         this,
         loginGate.subscribe((v) =>
-          // 打开时复位勾选/提交态（同旧线 watch(loginSheetVisible) 复位）；关闭仅收起
+          // 打开时复位勾选/提交态；关闭仅收起
           this.setData(v ? { visible: true, agreed: false, submitting: false } : { visible: false })
         )
       )

@@ -17,15 +17,19 @@ export type PaperPreset = (typeof PAPER_PRESETS)[number]
 export interface FulfillItem {
   name?: string
   qty?: number
+  // 该行已退的件数（后端 listOrders refundedQty）：退款按件退，没退的件照装，已退的件别装
+  refundedQty?: number
 }
 export interface FulfillOrder {
   id?: string
   createdAt?: number
   feeMismatch?: boolean
-  // 退款持有：后端 listOrders join afterSales 标 applied/approved/refunded（对齐 shipOne 拦截三态），
+  // 退款持有：后端 listOrders 在有在途售后或每行都退够件数时标出（与 shipOne 拦截同一判据），
   // 契约用途＝供前端入口收窄挡。与 feeMismatch 不同——那个是「货照备·扫码时挡下」（对平后仍要发），
   // 这个 shipOne 必拦、备了必然白备，故排除出备货与标签面（计数仍单列，不静默丢·病根#14）。
   refundHold?: boolean
+  // 发货时回传给 shipOne 核对的已退件数（行键 → 件数）：只含对上了商品行、真展示给操作员的那些
+  ackRefundedQty?: Record<string, number>
   items?: FulfillItem[]
   address?: { name?: string; phone?: string; region?: string; detail?: string }
 }
@@ -88,6 +92,7 @@ export interface LabelData {
   addressText: string
   lines: Array<{ name: string; qty: number }>
   totalQty: number
+  refundedLines: Array<{ name: string; qty: number }> // 已退的件：不进清单与件数，单列提示别装
 }
 
 /** 标签数据派生（纸标签与步3 核对卡共用同一口径）。只含发货字段——不带金额/openid/支付流水（标签外人可见）。 */
@@ -95,11 +100,14 @@ export function labelData(order: FulfillOrder | null | undefined): LabelData {
   const o = order || {}
   const a = o.address || {}
   const byName = new Map<string, number>()
+  const refundedByName = new Map<string, number>()
   for (const it of Array.isArray(o.items) ? o.items : []) {
     const name = String((it && it.name) || '').trim()
     const qty = Number(it && it.qty) || 0
     if (!name || qty <= 0) continue
-    byName.set(name, (byName.get(name) || 0) + qty)
+    const gone = Math.min(qty, Number(it.refundedQty) || 0)
+    if (qty > gone) byName.set(name, (byName.get(name) || 0) + qty - gone)
+    if (gone > 0) refundedByName.set(name, (refundedByName.get(name) || 0) + gone)
   }
   const lines = [...byName.entries()].map(([name, qty]) => ({ name, qty }))
   return {
@@ -110,7 +118,13 @@ export function labelData(order: FulfillOrder | null | undefined): LabelData {
     addressText: [a.region, a.detail].filter(Boolean).join(' '),
     lines,
     totalQty: lines.reduce((s, l) => s + l.qty, 0),
+    refundedLines: [...refundedByName.entries()].map(([name, qty]) => ({ name, qty })),
   }
+}
+
+/** 两份已退件数逐行相同（缺的行按 0）——与服务端 shipOne 的 sameRefundedQty 同口径。 */
+export function sameAck(a: Record<string, number> = {}, b: Record<string, number> = {}): boolean {
+  return [...new Set([...Object.keys(a), ...Object.keys(b)])].every((k) => (Number(a[k]) || 0) === (Number(b[k]) || 0))
 }
 
 export type ScanResult =
@@ -153,9 +167,13 @@ export function buildLabelHtml(labels: PrintLabel[], preset?: PaperPreset): stri
   const cards = (Array.isArray(labels) ? labels : [])
     .map((l) => {
       const dense = l.lines.length > 6
-      const rows = l.lines
-        .map((ln) => `<div class="line"><span class="ln-name">${esc(ln.name)}</span><span class="ln-qty">× ${esc(ln.qty)}</span></div>`)
-        .join('')
+      const rows =
+        l.lines
+          .map((ln) => `<div class="line"><span class="ln-name">${esc(ln.name)}</span><span class="ln-qty">× ${esc(ln.qty)}</span></div>`)
+          .join('') +
+        (l.refundedLines || [])
+          .map((ln) => `<div class="line"><span class="ln-name">已退款·别装：${esc(ln.name)}</span><span class="ln-qty">× ${esc(ln.qty)}</span></div>`)
+          .join('')
       return `<div class="label${dense ? ' dense' : ''}">
   <div class="head">
     <img class="qr" src="${l.qrDataUrl}" alt="qr" />

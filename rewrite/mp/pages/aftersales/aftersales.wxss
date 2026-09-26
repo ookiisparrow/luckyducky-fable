@@ -13,8 +13,8 @@
 
 /* ---------- 内容容器（设计 co-body） ---------- */
 .co-body {
-  /* 底部安全区避让（2026-07-25 体检批 P2）：原下内边距仅 8rpx，末行「需要帮助？联系客服」
-     被 iPhone home indicator 横条压掉半截、点也不好点。本页无吸底栏，故直接给内容容器留白。 */
+  /* 底部安全区避让：下内边距太小时末行「需要帮助？联系客服」
+     会被 iPhone home indicator 横条压掉半截、点也不好点。本页无吸底栏，故直接给内容容器留白。 */
   padding: 22rpx 26rpx calc(24rpx + env(safe-area-inset-bottom));
   display: flex;
   flex-direction: column;

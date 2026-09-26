@@ -1,4 +1,4 @@
-// 我的售后（M2 批8）：列表 + 游标翻页（追加去重·失败不覆盖已有——黄金 §八）。
+// 我的售后：列表 + 游标翻页（追加去重·失败不覆盖已有）。
 import { getMyAfterSales } from '../../api/orders'
 import { mapAfterSales, mergeAfterSales, type AfterSaleVM } from '../../lib/mapAftersales'
 import { openCustomerService } from '../../utils/customerService'
@@ -36,7 +36,7 @@ Page({
     if (!this.data.hasMore || this.data.cursor == null) return
     const seq = this._seq // 捕获当前代次（翻页不 bump）：期间若发生 reload（_seq 递增）则本次 append 作废
     const r = await getMyAfterSales(this.data.cursor)
-    if (seq !== this._seq) return // reload 已取代当前列表：丢弃·不错配游标（失败的过期回包也静默丢弃，不误弹 toast——评审修复）
+    if (seq !== this._seq) return // reload 已取代当前列表：丢弃·不错配游标（失败的过期回包也静默丢弃，不误弹 toast）
     if (!r.ok) {
       wx.showToast({ title: '加载失败，上拉重试', icon: 'none' }) // 翻页失败不静默（根因#14）
       return

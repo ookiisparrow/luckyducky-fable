@@ -3,7 +3,7 @@
 <scroll-view class="ld-me-scroll" scroll-y="{{true}}" enhanced="{{true}}" show-scrollbar="{{false}}">
 <view class="ld-me">
   <!-- 头部·大字问候（editorial）：品牌 logo + 欢迎回来大字 + 安静的编辑链接。
-       沉浸式：浅丁香头部底色上延填满状态栏区（padding-top 叠状态栏高度·2026-07-16 用户需求） -->
+       沉浸式：浅丁香头部底色上延填满状态栏区（padding-top 叠状态栏高度·用户需求） -->
   <view class="ld-me-header" style="padding-top: calc({{statusBarHeight}}px + 24rpx)">
     <view class="ld-me-brandrow">
       <image class="ld-me-logo" src="/static/logo-wordmark.svg" mode="heightFix" />
@@ -68,7 +68,7 @@
         </view>
       </view>
 
-      <!-- 空态只在「首次取数已落地(contLoaded)且真无课」时出现——避免加载中 cont=null 就渲染假空态（先空后有闪烁·2026-07-13 反馈） -->
+      <!-- 空态只在「首次取数已落地(contLoaded)且真无课」时出现——避免加载中 cont=null 就渲染假空态（先空后有闪烁） -->
       <view wx:elif="{{contLoaded}}" class="ld-me-empty">
         <view class="ld-me-empty-ico">
           <image class="ld-me-empty-img" src="/static/icons/play-circle.svg" mode="aspectFit" />

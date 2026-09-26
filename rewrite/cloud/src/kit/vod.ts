@@ -4,15 +4,15 @@ import { defaultFetch as doFetch } from './wecom'
 import { alert } from './observe'
 
 // ────────────────────────────────────────────────────────────────────────────
-// 腾讯云点播（VOD）平台接缝单点（根因#12·决策§31 转码管线批1·镜像 kit/flow.ts 之于支付工作流）：
-// 与 VOD 的全部平台触点——Key 防盗链签名算法、（批2 起）服务端 API 域名与 TC3 签名——收口本文件，
+// 腾讯云点播（VOD）平台接缝单点（根因#12·决策§31·镜像 kit/flow.ts 之于支付工作流）：
+// 与 VOD 的全部平台触点——Key 防盗链签名算法、服务端 API 域名与 TC3 签名——收口本文件，
 // 平台规则单方变化只改这一点。配置单源 DB secureConfig/vod（admin /config-checklist 填即生效，
-// kit/secureConfig.ts 读取；字段 secretId/secretKey/playKey/procedure——批1 只用 playKey）。
+// kit/secureConfig.ts 读取；字段 secretId/secretKey/playKey/procedure——播放签名只用 playKey）。
 // 守卫：rw-vod-seam-single（接缝单点+前缀分流）；签名 fail-closed 由 app-learning.test.ts 与 mutation-kill-vod.test.ts 锁。
 // ────────────────────────────────────────────────────────────────────────────
 
-// FileId 判据单源在 @ldrw/shared（批2 提升：admin「转码中」显示与云端分流同判据·病根#5），此处再导出
-// 保持 kit 调用面不变（learning.ts / cleanupEvents 均经 kit 取用）。
+// FileId 判据单源在 @ldrw/shared（admin「转码中」显示与云端分流同判据·病根#5），此处再导出
+// 供 kit 调用面用（learning.ts / cleanupEvents 均经 kit 取用）。
 export { isVodFileId } from '@ldrw/shared'
 
 // 签名有效期 6h：显式覆盖「mp 端 25min 地址缓存 TTL（rewrite/mp/lib/player.ts createPlaybackCache）
@@ -48,14 +48,14 @@ export async function signVodPlayUrl(db: any, rawUrl: string) {
   const sign = createHash('md5')
     .update(playKey + dir + t + us)
     .digest('hex')
-  // 续参分隔符按「地址是否已带 query」定（omp 交接工单#2·P2 潜伏态）：VOD 自适应码流/带参地址一旦
+  // 续参分隔符按「地址是否已带 query」定：VOD 自适应码流/带参地址一旦
   // 硬拼 `?` 就产出双问号——`…?v=2?t=…` 里 `t/us/sign` 整段被解析成 v 的值，防盗链参数等于没带（403），
   // 且签名本身是对的、日志上看不出毛病。Dir 取 pathname 天然不含 query，签名算法不受影响，只改拼接。
   const sep = rawUrl.includes('?') ? '&' : '?'
   return `${rawUrl}${sep}t=${t}&us=${us}&sign=${sign}`
 }
 
-// ── 批2：上传签名 + 服务端 API（决策§31 转码管线批2）─────────────────────────
+// ── 上传签名 + 服务端 API（决策§31）─────────────────────────
 
 /**
  * UGC 客户端上传签名（官方 266/9221·纯本地 HMAC-SHA1，不调任何 API）：admin 浏览器 vod-js-sdk-v6
@@ -85,7 +85,7 @@ const hmac256 = (key: Buffer | string, s: string) => createHmac('sha256', key).u
 
 /**
  * VOD 服务端 API 单点（TC3-HMAC-SHA256 手签·官方签名方法 v3；不引 tencentcloud-sdk（几 MB 包体
- * 只为两个调用不值当·云函数包越小冷启动越快））。批2 调用面：DescribeMediaInfos（转码状态同步）、
+ * 只为两个调用不值当·云函数包越小冷启动越快））。调用面：DescribeMediaInfos（转码状态同步）、
  * DeleteMedia（GC 删除）。注意：函数运行时临时密钥（TENCENTCLOUD_SECRETID）权限域限云开发资源、
  * 签不了 VOD——须 secureConfig/vod 独立密钥（控制台子账号·仅授 VOD 权限）。
  * 返回 Response 对象（语义错误时含 .Error{Code,Message}，调用方按需分辨——如 GC 把 ResourceNotFound
@@ -102,9 +102,9 @@ export async function callVodApi(db: any, action: string, payload: Record<string
   const timestamp = Math.floor(Date.now() / 1000)
   const date = new Date(timestamp * 1000).toISOString().slice(0, 10)
   const body = JSON.stringify(payload || {})
-  // TC3 规范拼接（2026-07-24 修：官方规范=六段以 \n 相接，CanonicalHeaders 段自身以 \n 结尾，
-  // 两者叠加后 host 行与 SignedHeaders 之间必须有一个空行——官方文档示例串可证。原实现少这个 \n，
-  // 任何真实调用必 AuthFailure.SignatureFailure（变异分诊立案实锤·真机验签随 VOD E2E 待办）
+  // TC3 规范拼接（官方规范=六段以 \n 相接，CanonicalHeaders 段自身以 \n 结尾，
+  // 两者叠加后 host 行与 SignedHeaders 之间必须有一个空行——官方文档示例串可证。少这个 \n，
+  // 任何真实调用必 AuthFailure.SignatureFailure）
   const canonicalHeaders = `content-type:application/json; charset=utf-8\nhost:${host}\n`
   const canonical = `POST\n/\n\n${canonicalHeaders}\ncontent-type;host\n${sha256hex(body)}`
   const scope = `${date}/${service}/tc3_request`

@@ -1,8 +1,7 @@
-/* 课程播放页·竖屏沉浸全屏重设计（播放器重设计战役 批B：P1 常态结构重排 + P4 段落播完不自动切换；
-   批C：P2 自绘 seek 条 + 阻尼震感 + 关键节点磁吸 + 拖动预览）。
+/* 课程播放页·竖屏沉浸全屏（常态结构 + 段落播完不自动切换 + 自绘 seek 条 + 阻尼震感 + 关键节点磁吸 + 拖动预览）。
    整页纯黑铺满；视频 1:1.68（宽:高）·padding-top 百分比法（避 aspect-ratio·旧 WebView 不支持），
    垂直居中；上下 UI 是黑条覆盖层（绝对定位 + z-index 盖在 video 上·同层渲染官方已允许，不必 cover-view）。
-   <video> 与全部既有回归事件绑定语义不变，本文件重排结构与视觉 + 段落进度条浮层 + 播完通栏重播。
+   本文件管结构与视觉 + 段落进度条浮层 + 播完通栏重播。
    设计稿（播放器重设计.html）画布宽 402px，本页 rpx 换算比例 750/402≈1.866（px × 1.866 ≈ rpx）。 */
 .ld-player {
   position: relative;
@@ -13,9 +12,8 @@
 }
 
 /* —— 顶条（覆盖层·避让状态栏·标题居中·右侧空 spacer 与返回钮等宽·右上刻意留白给原生胶囊） ——
-   右侧安全缓冲＝spacer(64rpx) + 本行右 padding(56rpx) = 120rpx，与本页改版前的既有留白量（原 `right:120rpx`
-   整体偏移）对齐（评审复核：改版初版把右 padding 收到 16rpx、缓冲缩到约 80rpx，未经真机核实即收窄，
-   已按原留白量补回；spacer 仍与返回钮等宽以保标题视觉居中，真机走查后如需再调此处一并改）。 */
+   右侧安全缓冲＝spacer(64rpx) + 本行右 padding(56rpx) = 120rpx（缓冲缩到约 80rpx 未经真机核实，
+   不收窄）；spacer 与返回钮等宽以保标题视觉居中，真机走查后如需再调此处一并改。 */
 .lp-topbar {
   position: absolute;
   top: 0;
@@ -24,7 +22,7 @@
   /* z-index 高于求助面板遮罩（.lp-help-mask 20·position:fixed）：.ld-player 无 transform，fixed 元素
      以视口为包含块，仅靠 z-index 定层级——若不高于遮罩，面板打开时自绘返回箭头会被遮罩完全盖住、
      点不到，onBack() 里的求助面板逐层收口分支（helpSrc/helpPanel 四级链，见 player.ts）将永远
-     打不到（评审 finding 复核·2026-07-11 批D 补丁）。仍低于加桌引导遮罩（.lp-dg-mask 30）——
+     打不到。仍低于加桌引导遮罩（.lp-dg-mask 30）——
      该弹窗不需要物理返回箭头参与（自身两个按钮已闭环，见 player.ts onBack 第二次按返回的判定）。 */
   z-index: 21;
   display: flex;
@@ -90,7 +88,7 @@
   position: relative;
   width: 100%;
   padding-top: 168%; /* 默认 1:1.68·padding-top 百分比法；播放态由内联 style="padding-top:{{videoRatio}}%" 覆盖，
-                        贴合素材真实比例去左右黑边（2026-07-13 反馈·Bug D2）；状态框（.lp-video-box.lp-state）无内联仍用此默认 */
+                        贴合素材真实比例去左右黑边；状态框（.lp-video-box.lp-state）无内联仍用此默认 */
 }
 .lp-video {
   position: absolute;
@@ -130,7 +128,7 @@
 /* 单击提示条（设计 .tap-hint·402px 画布 ×1.866 换算 rpx）：playing 且未被首次 tap 关闭过 */
 .lp-tap-hint {
   position: absolute;
-  /* top 由内联 style 动态提供（capsuleBottom 避让·同 .lp-segstrip 范式·2026-07-25 体检批 P2）：
+  /* top 由内联 style 动态提供（capsuleBottom 避让·同 .lp-segstrip 范式）：
      定位祖先是全屏 .lp-stage，写死 top 会让提示条压进状态栏，故此处不写死 top。 */
   left: 50%;
   transform: translateX(-50%);
@@ -150,7 +148,7 @@
   position: absolute;
   left: 37rpx;
   right: 37rpx;
-  /* top 由内联 style 动态提供（capsuleBottom+8·落胶囊下方·2026-07-13 反馈）：定位祖先是全屏 .lp-stage，
+  /* top 由内联 style 动态提供（capsuleBottom+8·落胶囊下方）：定位祖先是全屏 .lp-stage，
      不动态给 top 会贴屏顶撞状态栏/胶囊，故此处不写死 top。 */
   z-index: 3;
   display: flex;
@@ -224,7 +222,7 @@
     transform: rotate(360deg);
   }
 }
-/* 缓冲失速角标（课程链路审计 2026-07-17·挂 tapzone 子节点悬浮底部居中·复用 lp-spin 动画） */
+/* 缓冲失速角标（挂 tapzone 子节点悬浮底部居中·复用 lp-spin 动画） */
 .lp-buffering {
   position: absolute;
   left: 50%;
@@ -259,7 +257,7 @@
   justify-content: center;
   gap: 16rpx;
   padding: 0 40rpx;
-  /* box-sizing 必写（2026-07-25 体检批 P2）：本框同时挂着 .lp-video-box 的 width:100%，
+  /* box-sizing 必写：本框同时挂着 .lp-video-box 的 width:100%，
      默认 content-box 下「100% 内容宽 + 左右各 40rpx padding」总宽超屏 80rpx，又因 left:0 起算，
      整块文案的居中中心右移 40rpx——「课程不存在」等四种非播放态文字都肉眼可见地偏右。 */
   box-sizing: border-box;
@@ -352,7 +350,7 @@
   font-weight: 700;
 }
 
-/* 自绘 seek 条（设计 .seek·画布 402px×1.866 换算，节点/触摸热区数值按批C 规格显式给定）：
+/* 自绘 seek 条（设计 .seek·画布 402px×1.866 换算，节点/触摸热区数值按规格显式给定）：
    .lp-seek 是拖动触摸容器（≥72rpx 热区，扩大真机可点中率），内部视觉轨道保持设计原细身。 */
 .lp-seek {
   position: relative;
@@ -371,7 +369,7 @@
   border-radius: 4rpx;
   background: rgba(255, 255, 255, 0.24);
 }
-/* 缓冲水位（批3·bind:progress 尽力而为）：同轨道几何，灰阶白 0.38 介于轨道底 0.24 与紫填充之间——
+/* 缓冲水位（bind:progress 尽力而为）：同轨道几何，灰阶白 0.38 介于轨道底 0.24 与紫填充之间——
    叠在轨道之上、紫填充之下（DOM 序：track→buffer→fill），显「已缓冲到哪」不抢播放进度的紫。 */
 .lp-seek-buffer {
   position: absolute;
@@ -416,7 +414,7 @@
 
 /* 拖动浮层（seeking 时显示·seek 条上方 absolute）：时间预览胶囊 + 命中关键动作节点再叠气泡。
    left 由 seek.wxs previewLeft() 按 seekCfg.edgePx 夹取后 setStyle，不写在 wxml 上。 */
-/* 批5 WXS 化：预览浮层常驻 DOM（不再 wx:if seeking）·默认隐藏·left 与显隐由 seek.wxs 渲染层控制
+/* 预览浮层常驻 DOM（不 wx:if seeking）·默认隐藏·left 与显隐由 seek.wxs 渲染层控制
    （setStyle left + addClass('on')·避免 setData 重建与 WXS setStyle 抢写 position）。 */
 .lp-seek-preview {
   position: absolute;
@@ -498,7 +496,7 @@
   height: 48rpx;
 }
 
-/* —— 求助面板（P3·播放器重设计战役批D·设计稿画布 402px×1.866 换算）—— */
+/* —— 求助面板（设计稿画布 402px×1.866 换算）—— */
 .lp-help-mask {
   position: fixed;
   inset: 0;
@@ -509,7 +507,7 @@
 }
 .lp-help-sheet {
   width: 100%;
-  height: 75vh; /* 约 75% 屏高（批D 规格） */
+  height: 75vh; /* 约 75% 屏高（规格） */
   background: #ffffff;
   color: var(--ld-ink);
   border-radius: 45rpx 45rpx 0 0;
@@ -697,7 +695,7 @@
   color: var(--ld-content-2);
 }
 
-/* 常见问题问答列表（批B·CMS help.faq 非空时渲染·白卡逐条·空态见 lp-help-empty） */
+/* 常见问题问答列表（CMS help.faq 非空时渲染·白卡逐条·空态见 lp-help-empty） */
 .lp-help-faq {
   display: flex;
   flex-direction: column;
@@ -740,7 +738,7 @@
   font-weight: 600;
 }
 
-/* 常见问题条目（R37b·KB 精选 FAQ 公开读·播放器重设计战役批B8）：卡片式 Q&A，同 lp-help-seg 卡片语言 */
+/* 常见问题条目（R37·KB 精选 FAQ 公开读）：卡片式 Q&A，同 lp-help-seg 卡片语言 */
 .lp-help-faq-item {
   background: #ffffff;
   border: 1rpx solid var(--ld-line);
@@ -760,7 +758,7 @@
   line-height: 1.6;
 }
 
-/* 内嵌播放视图（P3b-play 简化决策：原生 <video controls>，不做自绘控制条——辅助内容非主路径） */
+/* 内嵌播放视图（简化决策：原生 <video controls>，不做自绘控制条——辅助内容非主路径） */
 .lp-help-play {
   flex: 1;
   min-height: 0;
@@ -773,7 +771,7 @@
   height: 100%;
 }
 
-/* —— 首次成功退出加桌引导（P5b·仅展示一次） —— */
+/* —— 首次成功退出加桌引导（仅展示一次） —— */
 .lp-dg-mask {
   position: fixed;
   inset: 0;

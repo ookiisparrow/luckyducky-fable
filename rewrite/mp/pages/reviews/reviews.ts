@@ -1,4 +1,4 @@
-// 商品评价列表（M2 批12）：首页汇总头（均分/分布/标签 Top5·首页返回后前端缓存）+ 游标分页。
+// 商品评价列表：首页汇总头（均分/分布/标签 Top5·首页返回后前端缓存）+ 游标分页。
 import { tapHaptic } from '../../lib/haptics'
 import { getReviews } from '../../api/reviews'
 import { mapReviews, mapSummary, type ReviewVM, type SummaryVM } from '../../lib/mapReviews'
@@ -13,7 +13,7 @@ Page({
     cursor: null as unknown,
   },
   productId: '',
-  loadingMore: false, // 触底翻页在途标记（P2·bug sweep R1 #10）：防快速多次触底并发请求各自 append 造成重复行
+  loadingMore: false, // 触底翻页在途标记：防快速多次触底并发请求各自 append 造成重复行
   _seq: 0, // reload 代次（同 aftersales/order-list）：onLoad + 重试 + 触底翻页并发时丢弃过期回包
   onLoad(query: Record<string, string | undefined>) {
     this.productId = String(query.productId || '')

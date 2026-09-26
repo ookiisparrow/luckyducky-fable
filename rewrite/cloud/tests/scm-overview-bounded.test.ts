@@ -49,7 +49,7 @@ describe('SCM 总览有界查询（批 B2·根因#7/#8）：getScmOverview 每�
 
   it('大白话：应付未结扫描链、materials 主档读取、流水最近 8 条、供应商查找都在场且各自有界', () => {
     expect(body).toMatch(/listMaterialDocs\(\)/) // 主档经门1 只读出口（内部已 bounded）
-    expect(body).toMatch(/outworkOrders['"]\)\s*\.where\(\{\s*status:\s*OUTWORK_ORDER_STATUS\.DELIVERED\s*\}\)\s*\.limit\(/)
+    expect(body).toMatch(/COLLECTIONS\.outworkOrders\)\s*\.where\(\{\s*status:\s*OUTWORK_ORDER_STATUS\.DELIVERED\s*\}\)\s*\.limit\(/)
     // 批K：流水最近 N 条改走门1 recentStockLedger（原直碰 COLLECTIONS.stockLedger 绕过 SCM 门1，见
     // rw-material-stock-single-seam）——本文件不再直写 orderBy/limit 链，boundedness 由该 kit 函数内部
     // `Math.min(n,50)` 兜底，故这里只核「调了这个门1 出口」。
@@ -58,8 +58,8 @@ describe('SCM 总览有界查询（批 B2·根因#7/#8）：getScmOverview 每�
   })
 
   it('大白话：在途采购/外协计数与应付扫描总量核验走 .count()，不是拉全量数组数长度', () => {
-    expect(body).toMatch(/purchaseOrders['"]\)\s*\.where\(\{\s*status:\s*PURCHASE_ORDER_STATUS\.ORDERED\s*\}\)\s*\.count\(\)/)
-    expect(body).toMatch(/outworkOrders['"]\)\s*\.where\(\{\s*status:\s*OUTWORK_ORDER_STATUS\.ISSUED\s*\}\)\s*\.count\(\)/)
-    expect(body).toMatch(/outworkOrders['"]\)\s*\.where\(\{\s*status:\s*OUTWORK_ORDER_STATUS\.DELIVERED\s*\}\)\s*\.count\(\)/)
+    expect(body).toMatch(/COLLECTIONS\.purchaseOrders\)\s*\.where\(\{\s*status:\s*PURCHASE_ORDER_STATUS\.ORDERED\s*\}\)\s*\.count\(\)/)
+    expect(body).toMatch(/COLLECTIONS\.outworkOrders\)\s*\.where\(\{\s*status:\s*OUTWORK_ORDER_STATUS\.ISSUED\s*\}\)\s*\.count\(\)/)
+    expect(body).toMatch(/COLLECTIONS\.outworkOrders\)\s*\.where\(\{\s*status:\s*OUTWORK_ORDER_STATUS\.DELIVERED\s*\}\)\s*\.count\(\)/)
   })
 })

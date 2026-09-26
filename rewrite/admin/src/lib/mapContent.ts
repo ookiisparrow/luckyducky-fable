@@ -1,5 +1,5 @@
 // 内容组映射（纯函数）：首页内容表单模型往返/帮助视频两级归一/
-// 课程视频统计/**直传表单字段构造**（调试日志 G 固化：凭证只认 POST 表单·key 从 fileId 截取·字段名精确——
+// 课程视频统计/**直传表单字段构造**（凭证只认 POST 表单·key 从 fileId 截取·字段名精确——
 // 错一个字段云存储 403，这类坑必须钉在测试里）。
 export interface HomeModel {
   heroTitle: string
@@ -76,7 +76,7 @@ export function normalizeHome(raw: unknown): HomeModel {
 }
 
 /** 编辑模型 → saveHomeContent 载荷（空课行/空块/空评价/空链剔除·与云端白名单同构）。
- *  空串字段照发（云端存空、小程序读侧回退设计默认＝防误清空半空板块·黄金 §九）。 */
+ *  空串字段照发（云端存空、小程序读侧回退设计默认＝防误清空半空板块）。 */
 export function homePayload(m: HomeModel): Record<string, unknown> {
   const activationBgByCourse: Record<string, Record<string, string>> = {}
   for (const row of m.byCourse) {
@@ -86,7 +86,7 @@ export function homePayload(m: HomeModel): Record<string, unknown> {
     if (row.welcome) entry.welcome = row.welcome
     if (row.welcomeBack) entry.welcomeBack = row.welcomeBack
     if (row.taken) entry.taken = row.taken
-    // 同 courseId 多行按状态位合并、不整块替换——否则末行胜、前行已上传的图（如欢迎图）静默丢失（P3·同 Kb/Checkpoints 的「重复键静默覆盖」危险·此处以合并根治而非拦截）
+    // 同 courseId 多行按状态位合并、不整块替换——否则末行胜、前行已上传的图（如欢迎图）静默丢失（同 Kb/Checkpoints 的「重复键静默覆盖」危险·此处以合并根治而非拦截）
     if (Object.keys(entry).length) activationBgByCourse[cid] = { ...(activationBgByCourse[cid] || {}), ...entry }
   }
   return {
@@ -96,11 +96,11 @@ export function homePayload(m: HomeModel): Record<string, unknown> {
     reassure: {
       heading: m.reassureHeading,
       lead: m.reassureLead,
-      items: m.reassureItems.filter((it) => it.title.trim() || it.body.trim() || it.img.trim()).map((it) => ({ icon: it.icon, title: it.title, body: it.body, img: it.img })), // 空块剔除（非空判据含 img：先传图后补文案的中间态不算空块·item1）
+      items: m.reassureItems.filter((it) => it.title.trim() || it.body.trim() || it.img.trim()).map((it) => ({ icon: it.icon, title: it.title, body: it.body, img: it.img })), // 空块剔除（非空判据含 img：先传图后补文案的中间态不算空块）
     },
     reviews: {
       heading: m.reviewsHeading,
-      items: m.reviewsItems.filter((it) => it.quote.trim() || it.img.trim() || it.user.trim()).map((it) => ({ quote: it.quote, user: it.user, img: it.img })), // 空评价剔除（非空判据含 img/user·item2）
+      items: m.reviewsItems.filter((it) => it.quote.trim() || it.img.trim() || it.user.trim()).map((it) => ({ quote: it.quote, user: it.user, img: it.img })), // 空评价剔除（非空判据含 img/user）
     },
     closing: { title: m.closingTitle, cta: m.closingCta, img: m.closingImg },
     footer: { links: m.footerLinks.map((s) => s.trim()).filter(Boolean), copy: m.footerCopy }, // 空链剔除
@@ -153,7 +153,7 @@ export function courseVideoStats(course: unknown): { total: number; done: number
   return { total, done }
 }
 
-/** 直传表单字段（调试日志 G 固化）：key=对象路径（从 fileId 的 cloud://<env>.<bucket>/ 后截取）；
+/** 直传表单字段：key=对象路径（从 fileId 的 cloud://<env>.<bucket>/ 后截取）；
  *  Signature/x-cos-security-token/x-cos-meta-fileid 名字一个不能错；凭证只认 POST 表单（PUT 403）。 */
 export function uploadFormFields(meta: { fileId?: unknown; authorization?: unknown; token?: unknown; cosFileId?: unknown }): Record<string, string> | null {
   const fileId = String(meta.fileId || '')

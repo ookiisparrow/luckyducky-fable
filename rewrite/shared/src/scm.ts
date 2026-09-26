@@ -15,7 +15,7 @@ export const PURCHASE_ORDER_STATUS = {
 
 /** purchaseOrders 合法流转表（机读·守卫 rw-status-transitions-declared 对账散落实现）。 */
 export const PURCHASE_ORDER_TRANSITIONS: ReadonlyArray<{ from: readonly PurchaseOrderStatus[]; to: PurchaseOrderStatus }> = [
-  { from: ['draft'], to: 'ordered' }, // markOrdered 向厂家下单（车道 A）
+  { from: ['draft'], to: 'ordered' }, // markOrdered 向厂家下单
   { from: ['ordered'], to: 'received' }, // receivePurchase 到货入库（首次流转绑 applyStockMoves purchase_in·幂等）
   { from: ['draft', 'ordered'], to: 'cancelled' }, // cancelPurchase 取消（未入库的单·入库后不可取消，走调整单）
 ]

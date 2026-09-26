@@ -38,10 +38,10 @@ describe('HomeContentForm 读写接口', () => {
   })
 
   it('大白话：载入失败后点保存，提示不能覆盖已有首页配置，且不发保存', async () => {
-    api.getHomeContent.mockResolvedValue({ ok: false, error: 'NETWORK_FAIL' })
+    api.getHomeContent.mockResolvedValue({ ok: false, status: 0, error: 'NETWORK:Failed to fetch' })
     wrapper = mount(HomeContentForm)
     await flushPromises()
-    expect(wrapper.text()).toContain('加载失败：NETWORK_FAIL')
+    expect(wrapper.find('.ld-status').text()).toBe('加载失败：网络不通，请检查网络后重试。')
     await wrapper.find('.pc-toolbar button').trigger('click')
     expect(wrapper.text()).toContain('内容未成功载入，暂不能保存（避免覆盖已有首页配置·请刷新重试）')
     expect(api.saveHomeContent).not.toHaveBeenCalled()

@@ -5,7 +5,7 @@
 import { describe, it, expect, beforeEach } from 'vitest'
 import { control } from 'wx-server-sdk'
 import { restoreStock, reserveStock } from '../src/kit'
-import { isDocMissing, isEmptyDoc } from '../src/kit/inventory'
+import { isDocMissing, isEmptyDoc } from '../src/kit/db'
 import { COLLECTIONS } from '@ldrw/shared'
 
 function captureAlerts(fn: () => Promise<void>): Promise<string[]> {

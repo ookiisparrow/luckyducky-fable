@@ -1,7 +1,7 @@
 import { COLLECTIONS } from '@ldrw/shared'
 import { getDb, isServerCall, ok, notifyAlert, alert } from '../../kit'
 
-// 新反馈通知（流水线 P3·意见箱铃铛）：定时扫 feedback 集合新增 → 推企微群（owner 手机实时收）。
+// 新反馈通知（意见箱铃铛）：定时扫 feedback 集合新增 → 推企微群（owner 手机实时收）。
 // 语义：反馈是低频动作, 每天 1 次轮询足够；推通知提醒人工去开意见箱（人工筛选是安全闸, AI 不自动读反馈原文）。
 // 游标 = feedbackNotifyCursor/doc('state').lastScanAt，只代表「已纳入通知的最后一条」的 createdAt。
 // 读失败、空页不动游标；触顶只停在本页最后一条，不用 Date.now()——否则下轮会跳过从没提醒过的意见。

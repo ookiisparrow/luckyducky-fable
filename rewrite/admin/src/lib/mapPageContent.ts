@@ -1,4 +1,4 @@
-// 页面内容 CMS 五页签映射（纯函数·批C）：welcome / catalogPlayer / mePage / about / agreement 各一对
+// 页面内容 CMS 五页签映射（纯函数）：welcome / catalogPlayer / mePage / about / agreement 各一对
 // normalize（云→表单·缺块补形·超限截断）+ payload（表单→云·裁剪限长·不夹带未知字段）。
 // payload 直接复用 normalize：normalize 对已成形的 Model 幂等，每个页签只维护一张限长表。
 // 限长与云端白名单（adminApi/content.ts sanitize*）逐字对齐——两处同源、改一处必改另一处。
