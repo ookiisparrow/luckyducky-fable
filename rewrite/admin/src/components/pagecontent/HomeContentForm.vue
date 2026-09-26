@@ -395,7 +395,7 @@ input[type='file'] {
 }
 .course-row {
   display: grid;
-  /* minmax(0,1fr)（批6·治整页横向溢出）：裸 1fr=minmax(auto,1fr)，轨道被内容最小宽撑住不肯缩，
+  /* minmax(0,1fr)（治整页横向溢出）：裸 1fr=minmax(auto,1fr)，轨道被内容最小宽撑住不肯缩，
      配右栏固定 375px 预览把整页顶出横向滚动条（实测 1353>1249）；min 归零允许轨道随容器收缩 */
   grid-template-columns: 130px minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr) auto;
   gap: 8px;

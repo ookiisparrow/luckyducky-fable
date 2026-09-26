@@ -33,12 +33,12 @@ const panelNote = ref('')
 const listNote = ref('') // 队列/我在接拉失败出声（病根#14）：首屏失败不得装成「队列空 ✓」
 const threadNote = ref('') // 打开会话拉消息失败出声（病根#14）：与 360 panelNote 同形；后台轮询仍静默
 const message = ref('')
-// 发送忙碌锁按会话隔离（F1·P2 race 修复：组件级共享 busy 会让 A 会话发送在途拦住 B 会话发送）——
+// 发送忙碌锁按会话隔离（组件级共享 busy 会让 A 会话发送在途拦住 B 会话发送）——
 // reactive Set 按 sessionId 索引，只拦「同一会话」的重复发送；template :disabled 判 sendingIds.has(currentId)。
 const sendingIds = reactive(new Set<string>())
-const draftLen = computed(() => draft.value.length) // F2：接近 2000 字上限时显字数，避免后端静默截断坐席却不知道
+const draftLen = computed(() => draft.value.length) // 接近 2000 字上限时显字数，避免后端静默截断坐席却不知道
 
-// 顾客发图坐席可见（B5·图片气泡）：组件内缓存，键＝msgid（只有入站客户消息带 hasMedia/msgid，出站/无媒体不入这张表）。
+// 顾客发图坐席可见（图片气泡）：组件内缓存，键＝msgid（只有入站客户消息带 hasMedia/msgid，出站/无媒体不入这张表）。
 // 未点开＝表里没有该 key（视同 idle，占位卡「图片 · 点击加载」）；点击才触发 getMediaUrl 下载——回调侧不预下载，坐席按需拉取。
 type MediaState = { state: 'idle' | 'loading' | 'loaded' | 'expired' | 'error'; url?: string }
 const IDLE_MEDIA: MediaState = { state: 'idle' }
@@ -69,7 +69,7 @@ function openMedia(m: Msg) {
   if (c.state === 'loaded' && c.url) window.open(c.url, '_blank')
 }
 
-// 快捷回复 + 页内提醒（批 B4·预审裁决：listKb 后端零改动直接复用，不新建 listQuickReplies）。
+// 快捷回复 + 页内提醒（直接复用后端 listKb，不新建 listQuickReplies）。
 const NOTIFY_KEY = 'ldrw_agent_notify_enabled'
 const baseTitle = document.title // 还原基准单源＝index.html 定的标题，不复制字面量、避免漂移
 
@@ -102,7 +102,7 @@ async function refreshLists() {
 
 async function pollThread(loud = false) {
   if (!currentId.value) return
-  const sid = currentId.value // 会话粒度快照（P1·item8：防切会话后旧轮询回包串号——await 期间用户可能已切会话）
+  const sid = currentId.value // 会话粒度快照（防切会话后旧轮询回包串号——await 期间用户可能已切会话）
   const r = await post('getThread', { sessionId: sid, cursor: cursor.value || undefined })
   if (sid !== currentId.value) return // 期间已切别的会话·丢弃过期回包（不写进新会话的 msgs/cursor）
   if (!r.ok) {
@@ -168,7 +168,7 @@ function playAlertSound() {
   }
 }
 
-/** 提醒聚合（改动契约 3·公式见批规格）：N = 队列新增会话数 + 失焦期间当前会话新入站消息数。
+/** 提醒聚合：N = 队列新增会话数 + 失焦期间当前会话新入站消息数。
  *  未失焦（blurQueueIds 为 null）或提醒已关＝不计，保持零副作用。 */
 function recomputeAlert() {
   if (!notifyEnabled.value || blurQueueIds === null) return
@@ -197,9 +197,9 @@ function onWindowFocus() {
 }
 
 async function claim(sessionId: string) {
-  // 快照点击时所在会话（bug sweep II R5）：本文件五个会话敏感异步动作（pollThread/open/act/send/claim）里
-  // 最后一个补快照的——claim 在途期间坐席可能已主动打开另一会话并打字，慢回包若无条件 open(sessionId)
-  // 会把视图拽回来、且 open 的切会话清草稿把人家正在打的字清掉（同 send/act 治法·item8 家族收口）。
+  // 快照点击时所在会话（五个会话敏感异步动作 pollThread/open/act/send/claim 同一治法）：
+  // claim 在途期间坐席可能已主动打开另一会话并打字，慢回包若无条件 open(sessionId)
+  // 会把视图拽回来、且 open 的切会话清草稿把人家正在打的字清掉。
   const before = currentId.value
   const r = await post('claimConversation', { sessionId })
   if (currentId.value === before) {
@@ -210,7 +210,7 @@ async function claim(sessionId: string) {
 }
 
 async function open(sessionId: string) {
-  // 切会话前清未发草稿（B2·item8 输入侧同源：草稿留在输入框会随下一次 Ctrl+Enter 以新会话 sessionId 误发）
+  // 切会话前清未发草稿（草稿留在输入框会随下一次 Ctrl+Enter 以新会话 sessionId 误发）
   if (sessionId !== currentId.value) draft.value = ''
   currentId.value = sessionId
   msgs.value = []
@@ -220,7 +220,7 @@ async function open(sessionId: string) {
   threadNote.value = ''
   await pollThread(true) // 首拉失败写出 threadNote（与 360 panelNote 同形）；后台轮询仍走默认静默
   const p = await post('getSessionCustomer360', { sessionId })
-  if (currentId.value !== sessionId) return // 期间又切了别的会话·丢弃过期 360 回包（P1·item8·同 pollThread 治法）
+  if (currentId.value !== sessionId) return // 期间又切了别的会话·丢弃过期 360 回包（同 pollThread 治法）
   if (p.ok) panels.value = (p.panels as Record<string, any>[]) || []
   else panelNote.value = deskErrorText(p.error) // NO_BRIDGE/NO_CONSENT 如实显示
 }
@@ -230,7 +230,7 @@ async function send() {
   if (!text || !currentId.value) return
   const sid = currentId.value // 会话粒度快照（同 act()/open() 治法：await 期间用户可能已切会话——若不快照，
   // A 发送在途时切到 B 并打新草稿，A 的回包落地会用 currentId.value（此刻已是 B）误清掉 B 正在打的字）
-  if (sendingIds.has(sid)) return // F1：忙碌锁按会话隔离——只拦同一会话的重复发送，不误伤别的会话
+  if (sendingIds.has(sid)) return // 忙碌锁按会话隔离——只拦同一会话的重复发送，不误伤别的会话
   sendingIds.add(sid)
   try {
     const r = await post('sendAgentMessage', { sessionId: sid, text })
@@ -238,7 +238,7 @@ async function send() {
       // 期间已切别的会话——以下 UI 效果不落地：不清掉新会话正在打的字（open() 切会话时已清过旧草稿，
       // 框里现在是新会话的新字，这里「不清」正是期望行为，不是遗漏）、不把旧会话的失败提示标到新会话上
       if (r.ok) {
-        draft.value = '' // 只有发成功才清输入框（旧线 95018 教训：失败清框=顾客话丢了）
+        draft.value = '' // 只有发成功才清输入框（失败清框=顾客话丢了）
         void pollThread()
       } else {
         message.value = deskErrorText(r.error)
@@ -251,7 +251,7 @@ async function send() {
 
 async function act(action: string) {
   if (!currentId.value) return
-  const sid = currentId.value // 会话粒度快照（B3·同 pollThread/open 治法·item8：await 期间用户可能已切会话）
+  const sid = currentId.value // 会话粒度快照（同 pollThread/open 治法：await 期间用户可能已切会话）
   const r = await post(action, { sessionId: sid })
   if (currentId.value === sid) {
     // 期间已切别的会话·丢弃过期回包的 UI 效果（不把 A 的报错标到 B 上、不清掉正在看的 B 会话）
@@ -259,7 +259,7 @@ async function act(action: string) {
     if (r.ok && (action === 'releaseConversation' || action === 'closeConversation' || action === 'escalateToMerchant')) {
       currentId.value = ''
       msgs.value = []
-      // K1（bug sweep II·PII 残留）：右栏「顾客 360」无 v-if="currentId" 门控，不随会话清空——放回队列/结束/升级后
+      // 防 PII 残留：右栏「顾客 360」无 v-if="currentId" 门控，不随会话清空——放回队列/结束/升级后
       // 该客户可能已被别的坐席接手，panels/panelNote 若留着上一客户资料即跨会话 PII 残留。与 currentId/msgs 并列清空。
       panels.value = []
       panelNote.value = ''
@@ -291,7 +291,7 @@ onBeforeUnmount(() => {
   if (listTimer) clearInterval(listTimer)
   window.removeEventListener('blur', onWindowBlur)
   window.removeEventListener('focus', onWindowFocus)
-  // 卸载必还原标题（P2 修复）：失焦期间登出（如轮询收到 SESSION_LOST）会带着角标态卸载——不还原则标题
+  // 卸载必还原标题：失焦期间登出（如轮询收到 SESSION_LOST）会带着角标态卸载——不还原则标题
   // 永久停留在带角标字符串上；且下次重登 mount 时会把这个已污染的标题当新 baseTitle 捕获，
   // 跨多次「失焦掉线-重登」循环叠加复合（与 toggleNotify/onWindowFocus 的还原语义保持一致）。
   document.title = baseTitle
@@ -343,8 +343,8 @@ onBeforeUnmount(() => {
       <template v-if="currentId">
         <p v-if="threadNote" class="note">{{ threadNote }}</p>
         <div class="thread">
-          <!-- :key 与 lib/desk.ts 去重键 keyOf 同源（深审20260712 P2）：旧 at+direction+text 键在同秒同向
-               两张图（msgid 不同、text 恒为占位）时撞 Vue 重复 key——去重键已认 msgid，key 必须同源防再漂移 -->
+          <!-- :key 与 lib/desk.ts 去重键 keyOf 同源：若用 at+direction+text 当键，同秒同向
+               两张图（msgid 不同、text 恒为占位）时撞 Vue 重复 key——去重键认 msgid，key 必须同源 -->
           <div v-for="m in msgs" :key="keyOf(m)" class="bubble" :class="m.direction">
             <template v-if="m.msgtype === 'image' && m.hasMedia">
               <div class="media" :class="mediaOf(m).state" @click="loadMedia(m)">
@@ -367,7 +367,7 @@ onBeforeUnmount(() => {
               placeholder="回复顾客…（Ctrl+Enter 发送）"
               @keydown.ctrl.enter="send"
             />
-            <!-- F2：与 agentDesk.ts MAX_TEXT 手动同步（不改后端）——kit str() 超长静默截断，接近上限先给坐席看见 -->
+            <!-- 与 agentDesk.ts MAX_TEXT 手动同步——kit str() 超长静默截断，接近上限先给坐席看见 -->
             <span v-if="draftLen >= 1900" class="charcount">{{ draftLen }}/2000</span>
           </div>
           <button class="act" :disabled="sendingIds.has(currentId)" @click="send">发送</button>

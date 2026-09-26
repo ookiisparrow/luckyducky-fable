@@ -12,7 +12,7 @@ import {
 } from '../../../kit'
 import { COLLECTIONS } from '@ldrw/shared'
 
-// 节点诊断·用户拍照上传（后台360工作站 B2.2·节点诊断 MVP）：学员在关键节点拍照上传成果/卡点，坐席据此精准指导。
+// 节点诊断·用户拍照上传：学员在关键节点拍照上传成果/卡点，坐席据此精准指导。
 //
 // 信任边界（根因#3 fail-closed）：① withOpenId 闸（公网写函数防伪·不信前端 openid）；② withRateLimit 防刷库；
 // ③ 须本人已确认进课（activations.enteredAt 非空·与 trackEvent/getPlaybackUrl 同闸·防未购用户造数）；

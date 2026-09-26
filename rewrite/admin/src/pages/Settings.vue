@@ -13,7 +13,7 @@ import { ChevronRight, Eye, EyeOff } from 'lucide-vue-next'
 
 const router = useRouter()
 
-// 钱链告警事件开关（换皮把 webhook 迁进 Settings 但删了 5+ 事件粒度开关·alertEvents 后端字段悬空·B6 证伪 saveSettings 合并保存不抹）
+// 钱链告警事件开关（alertEvents 后端字段·saveSettings 合并保存不抹）
 const EVENTS = [
   { code: 'UNKNOWN_ORDER', label: '收款无单（款到账却找不到订单）' },
   { code: 'PAID_BUT_OOS', label: '付款售罄（款到但库存已空·待退款）' },
@@ -31,9 +31,9 @@ const events = ref<Record<string, boolean>>({}) // code → false=静音（不�
 const message = ref('')
 const ok = ref(false)
 const busy = ref(false)
-// 密钥不明文常驻（UX 体检批4）：正在填的新地址默认密码态、点眼睛临时显示
+// 密钥不明文常驻：正在填的新地址默认密码态、点眼睛临时显示
 const showWebhook = ref(false)
-let loaded = false // 载入成功（含首次空配置）才放开保存——载入失败时空表单一保存会抹掉已存 webhook/urlPrefix（钱链告警安全网·病根#14）·P2·同 HomeContent
+let loaded = false // 载入成功（含首次空配置）才放开保存——载入失败时空表单一保存会抹掉已存 webhook/urlPrefix（钱链告警安全网·病根#14）·同 HomeContent
 
 const pushing = computed(() => (!!alertWebhook.value.trim() && webhookOk(alertWebhook.value.trim())) || hookSet.value)
 const enabled = (code: string) => events.value[code] !== false
@@ -358,7 +358,7 @@ async function clearHook() {
   font-size: 12.5px;
   color: var(--ld-content);
 }
-/* 密钥显隐（批4）：输入行 + 眼睛钮 */
+/* 密钥显隐：输入行 + 眼睛钮 */
 .secret-row {
   display: flex;
   align-items: center;

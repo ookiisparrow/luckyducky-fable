@@ -2,8 +2,7 @@
 // 元→分整数闸（超两位小数拒——分整数纪律的输入侧半边）/SCM 错误码人话（原文兜底）。
 import { yuan } from './format'
 import { transportErrorText } from './mapSystem'
-// 采购/外协状态标签单源收口（P2 顺手改批）：此前本文件手抄 PURCHASE_CN/OUTWORK_CN，与 shared 状态机声明
-// 零绑定——改从 @ldrw/shared 取（见 shared/src/statusLabels.ts 头注）。
+// 采购/外协状态标签从 @ldrw/shared 取、不手抄，与状态机声明绑定（见 shared/src/statusLabels.ts 头注）。
 import { PURCHASE_ORDER_STATUS_LABEL, OUTWORK_ORDER_STATUS_LABEL, type ErrCode } from '@ldrw/shared'
 
 const TIER_CN: Record<string, string> = { L: '大团', M: '中团', S: '小团' }
@@ -23,7 +22,7 @@ export function materialHuman(id: unknown): string {
 
 export const uomLabel = (u: unknown): string => (String(u) === 'gram' ? '克' : '件')
 
-// 物料类别中文（主档 category 字段→人话·换皮丢了类别列·长表只靠 id 前缀猜类别不好扫）
+// 物料类别中文（主档 category 字段→人话·长表只靠 id 前缀猜类别不好扫）
 const CATEGORY_CN: Record<string, string> = { yarn: '毛线', packaging: '外包装', card: '激活卡片', accessory: '辅料' }
 export const materialCategoryLabel = (c: unknown): string => CATEGORY_CN[String(c)] || String(c || '')
 
@@ -117,7 +116,7 @@ const DOC_CN: Record<string, string> = {
 }
 export const docTypeLabel = (t: unknown): string => DOC_CN[String(t)] || String(t || '')
 
-/** 未填差异位的产品（全产品 − 已建 profile·组装前必填·换皮只列已建 profile·没建过差异位的产品看不见）。 */
+/** 未填差异位的产品（全产品 − 已建 profile·组装前必填·只列已建 profile 的话没建过差异位的产品看不见）。 */
 export function unprofiledProducts(products: unknown, profiles: unknown): Array<{ id: string; name: string }> {
   const prof = new Set((Array.isArray(profiles) ? profiles : []).map((p: any) => String((p && p._id) || '')))
   return (Array.isArray(products) ? products : [])

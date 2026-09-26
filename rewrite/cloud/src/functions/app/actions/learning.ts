@@ -1,5 +1,5 @@
 import { ERR, COLLECTIONS, QRCODE_STATUS_SPEC } from '@ldrw/shared'
-// 响应契约（批B10·病根#5/#8）：getPlaybackUrl 返回类型绑定 shared 契约——删键/改名 tsc 红；
+// 响应契约（病根#5/#8）：getPlaybackUrl 返回类型绑定 shared 契约——删键/改名 tsc 红；
 // 加键编译不红（TS 宽赋值），牙在 tests/contract-shape.test.ts 键集合哨兵。
 import type { GetPlaybackUrlResp } from '@ldrw/shared'
 import {
@@ -21,7 +21,7 @@ import {
 
 const QR = QRCODE_STATUS_SPEC.transitions[0] // unused→activated（声明单源，不散写状态串）
 
-/** 确保本人激活记录存在（幂等自愈·黄金 §一）：老随机 _id 命中即用；否则确定性 _id=code 原子创建。 */
+/** 确保本人激活记录存在（幂等自愈）：老随机 _id 命中即用；否则确定性 _id=code 原子创建。 */
 async function ensureActivation(
   db: any,
   code: string,
@@ -39,7 +39,7 @@ async function ensureActivation(
   const doc = { _openid: OPENID, courseId, qrcodeId: code, code, enteredAt: null, createdAt: now }
   try {
     await db.collection(COLLECTIONS.activations).add({ data: { _id: code, ...doc } })
-    // 批C·省常态读回：add 成功＝刚落地的这份 doc 就是库内现值（enteredAt 恒 null），调用方
+    // 省常态读回：add 成功＝刚落地的这份 doc 就是库内现值（enteredAt 恒 null），调用方
     // activateCourse 只读 act.enteredAt——原地返回与读回等价，省一次网关往返；不影响后续 confirmEnter
     // 的抢占语义（enteredAt 仍是 null，转移仍走那边的条件更新）。
     return { _id: code, ...doc }
@@ -52,7 +52,7 @@ async function ensureActivation(
       .get()
       .catch(() => null)
     if (got && got.data) return got.data
-    // 双失败（add 抛错 + 读回也失败·P2·根因#14 修复，P2 复核补真留痕）：不伪造激活记录——库里其实没有，
+    // 双失败（add 抛错 + 读回也失败·根因#14）：不伪造激活记录——库里其实没有，
     // 假装成功会让 activateCourse 回「activated」但用户看不到课。留痕告警，调用方对 null 走失败反馈
     // （用户重扫走 qr.activatedBy===OPENID 幂等自愈）。走 recordAnomaly 而非裸 alert()：裸 alert() 只打
     // console.error 一行，不落 anomalies 账本、运营后台 listAnomalies 查不到、企微群也收不到——不满足
@@ -70,10 +70,10 @@ async function ensureActivation(
 }
 
 /**
- * 扫码激活（黄金 §一）：一码一用抢占（transition 条件更新·翻成功者赢）；
+ * 扫码激活：一码一用抢占（transition 条件更新·翻成功者赢）；
  * 抢到/本人重扫一律幂等自愈激活记录；他人码拒且带回 courseId（「已被激活」屏按课程取图）。
  */
-// 频控（深审 P2·根因#13 认证/兑换端点防爆破）：激活码兑换是「猜有效未用码」的典型爆破面（每次调用一读一条件写），
+// 频控（根因#13 认证/兑换端点防爆破）：激活码兑换是「猜有效未用码」的典型爆破面（每次调用一读一条件写），
 // 码空间 32^10≈1e15 使盲猜不现实，但仍须按 openid 限速拖慢定向枚举 + 挡刷库成本（同 trackEvent/login 口径）。
 export const activateCourse = withOpenId(
   withRateLimit('activateCourse', { max: 10, windowMs: 60_000 }, async ({ db, OPENID, event }) => {
@@ -87,7 +87,7 @@ export const activateCourse = withOpenId(
     })
 
     if (!qr) return err(ERR.INVALID_CODE)
-    // transition 返回的是更新前旧快照（课程链路审计 2026-07-17·根因#1）：真并发同用户双扫（网络抖动重发/
+    // transition 返回的是更新前旧快照（根因#1）：真并发同用户双扫（网络抖动重发/
     // 双击）时，后到方 moved=false 且快照仍是 unused（activatedBy null）——据此判「他人占用」会把本人
     // 激活成功误报成 CODE_TAKEN。快照未见归属且没抢到时读回库内现值再判（撞在自己身上走幂等自愈分支）。
     let qrNow = qr
@@ -97,7 +97,7 @@ export const activateCourse = withOpenId(
     }
     if (moved || qrNow.activatedBy === OPENID) {
       const act = await ensureActivation(db, code, qrNow.courseId, OPENID, now)
-      // 双失败未持久化（P2·根因#14）：库里其实没写成功，别回「activated」——回错误码走客户端已有失败反馈路径；
+      // 双失败未持久化（根因#14）：库里其实没写成功，别回「activated」——回错误码走客户端已有失败反馈路径；
       // 用户重扫时 qr.activatedBy===OPENID 命中本分支再试一次 ensureActivation，天然幂等自愈。
       if (!act) return err(ERR.NOT_ACTIVATED, { courseId: qrNow.courseId })
       return ok({ state: act.enteredAt ? 'mine' : 'activated', courseId: qrNow.courseId })
@@ -107,11 +107,11 @@ export const activateCourse = withOpenId(
 )
 
 /**
- * 确认进课（黄金 §二）：退货权法律节点。enteredAt null→时间戳原子抢占（只一次）；
+ * 确认进课：退货权法律节点。enteredAt null→时间戳原子抢占（只一次）；
  * 首次进课按件失效退货权（enteredQty++·entVer CAS 防并发少记）；送礼无单不报错。
- * 撤权 CAS 耗尽：回滚本次 enteredAt（Issue #114·不留已交付+仍可退）。
+ * 撤权 CAS 耗尽：回滚本次 enteredAt（不留已交付+仍可退）。
  */
-// 频控（深审 P2·根因#13）：确认进课是退货权失效的法律节点写，按 openid 限速挡刷（正常人一次进课远低于此）。
+// 频控（根因#13）：确认进课是退货权失效的法律节点写，按 openid 限速挡刷（正常人一次进课远低于此）。
 export const confirmEnter = withOpenId(
   withRateLimit('confirmEnter', { max: 10, windowMs: 60_000 }, async ({ db, OPENID, event }) => {
     const _ = db.command
@@ -150,7 +150,7 @@ export const confirmEnter = withOpenId(
       const prods = await db
         .collection(COLLECTIONS.products)
         .where({ courseId: act.courseId })
-        .limit(500) // 显式上界（深审 P2·病根#7）：裸 .get() 默认 100 截断会让本课部分商品的退货权撤销漏判
+        .limit(500) // 显式上界（病根#7）：裸 .get() 默认 100 截断会让本课部分商品的退货权撤销漏判
         .get()
       const prodIds = prods.data.map((p: any) => p.id)
       if (prodIds.length) {
@@ -208,8 +208,8 @@ export const confirmEnter = withOpenId(
           }
           if (revoked) break
         }
-        // Issue #114：抢到 enteredAt 后撤权 CAS 全败只告警不回滚 → 已交付课程 + 订单仍可退。
-        // 最小对齐：撤权没做成就把本次进课抢占退回去；客户稍后再点，欢迎页已有失败提示。
+        // 抢到 enteredAt 后撤权 CAS 全败若只告警不回滚 → 已交付课程 + 订单仍可退。
+        // 故撤权没做成就把本次进课抢占退回去；客户稍后再点，欢迎页已有失败提示。
         // 送礼/无对应行（从未 attempt）不走这里——那不是钱课裂。
         if (revokeFailed && !revoked) {
           const undo = await db
@@ -235,7 +235,7 @@ export const confirmEnter = withOpenId(
   })
 )
 
-/** 公开课程目录（黄金 §三）：逐层显式白名单，绝不下发视频源；段只暴露 hasVideo 布尔。 */
+/** 公开课程目录：逐层显式白名单，绝不下发视频源；段只暴露 hasVideo 布尔。 */
 function publicSegment(s: any) {
   return { id: s.id, name: s.name, dur: s.dur, hasVideo: !!s.videoFileId }
 }
@@ -280,17 +280,17 @@ export const getCourses = async (event: unknown = {}) => {
     const byId = new Map(res.data.map((c: any) => [c._id, c]))
     return ok({ list: ids.filter((id) => byId.has(id)).map((id) => publicCourse(byId.get(id))) })
   }
-  // 显式上界（病根#7·守卫 rw-app-catalog-reads-bounded·深审 P2 同处独立发现取并）：同 getProducts 口径，
+  // 显式上界（病根#7·守卫 rw-app-catalog-reads-bounded）：同 getProducts 口径，
   // 防默认 100 条静默截断——课程目录破百后第 101 门起从用户课程页无声消失。
   const res = await db.collection(COLLECTIONS.courses).orderBy('sort', 'asc').limit(1000).get()
   return ok({ list: res.data.map((c: any) => publicCourse(c)) })
 }
 
 /**
- * 取分段播放地址（黄金 §三·fail-closed）：一律须本人已确认进课；旧库残留预览标记不构成授权
- * （免费预览通道已整条撤除）；素材未剪 → url:null；鉴权过才换短时临时 URL。
+ * 取分段播放地址（fail-closed）：一律须本人已确认进课；旧库残留预览标记不构成授权
+ * （没有免费预览通道）；素材未剪 → url:null；鉴权过才换短时临时 URL。
  */
-// 频控（深审 P3·病根#13）：签发付费视频临时地址的端点，按 openid 限速防无限铸签名地址/刷成本；
+// 频控（病根#13）：签发付费视频临时地址的端点，按 openid 限速防无限铸签名地址/刷成本；
 // 上限宽松（正常观看切段+预取每分钟远低于此·客户端已缓存 prefetch·不误伤连续播放）。
 export const getPlaybackUrl = withOpenId(
   withRateLimit('getPlaybackUrl', { max: 60, windowMs: 60_000 }, async ({ db, OPENID, event }): Promise<GetPlaybackUrlResp> => {
@@ -299,12 +299,12 @@ export const getPlaybackUrl = withOpenId(
     const segmentId = String(e.segmentId || '')
     if (!courseId || !segmentId) return err(ERR.BAD_ARGS)
 
-    // 批C·并行取回（零依赖只读）：课程文档读与鉴权读的入参只来自 courseId/segmentId/OPENID（已核对
-    // 课程文档零依赖），互不依赖对方结果——并行发起省一次网关往返；判定顺序原样保持
+    // 并行取回（零依赖只读）：课程文档读与鉴权读的入参只来自 courseId/segmentId/OPENID（已核对
+    // 课程文档零依赖），互不依赖对方结果——并行发起省一次网关往返；判定顺序保持
     // NO_COURSE→NO_SEGMENT→NOT_ENTITLED。素材未剪（url:null）分支下 acts 结果单纯丢弃——纯读零副作用，
-    // 等价原「未剪视频不查鉴权」语义，代价仅是该分支多付一次本可省的读（权衡：省掉常态有视频路径的
+    // 与「未剪视频不查鉴权」语义等价，代价仅是该分支多付一次本可省的读（权衡：省掉常态有视频路径的
     // 一次串行往返，换未剪视频这一冷分支多一次并行读，净为正）。
-    // .catch(()=>({data:[]}))（P2 复核·根因#14）：未剪段场景本不该查鉴权，此查询若瞬时失败/集合未建
+    // .catch(()=>({data:[]}))（根因#14）：未剪段场景本不该查鉴权，此查询若瞬时失败/集合未建
     // 不该让整个云函数调用未捕获抛错——同文件其它鉴权读一律 catch 兜底空数组，失败即视为「查无本人已确认
     // 记录」，fail-closed 走 NOT_ENTITLED 拒绝而非放行（不是伪造通过）；未剪段分支本就丢弃 acts，兜底不影响该分支。
     const [got, acts] = await Promise.all([
@@ -326,9 +326,9 @@ export const getPlaybackUrl = withOpenId(
 
     if (!acts.data.length) return err(ERR.NOT_ENTITLED)
 
-    // VOD 前缀分流（决策§31 转码管线批1·守卫 rw-vod-seam-single）：VOD FileId（纯数字）走防盗链
-    // 签名（kit/vod.ts 单点·纯本地零往返·未配 Key fail-closed 回 null）；转码未就绪（批2 同步回写
-    // vodUrl 之前）同「素材未剪」口径 url:null 诚实降级；cloud:// 存量走临时 URL 原路——双线混跑零停机。
+    // VOD 前缀分流（决策§31·守卫 rw-vod-seam-single）：VOD FileId（纯数字）走防盗链
+    // 签名（kit/vod.ts 单点·纯本地零往返·未配 Key fail-closed 回 null）；转码未就绪（syncVodMedia 回写
+    // vodUrl 之前）同「素材未剪」口径 url:null 诚实降级；cloud:// 存量走临时 URL——两种来源并存。
     const fid = String(seg.videoFileId)
     if (isVodFileId(fid)) {
       if (!seg.vodUrl) return ok({ url: null })
@@ -338,7 +338,7 @@ export const getPlaybackUrl = withOpenId(
   })
 )
 
-/** 本人已解锁课程（黄金 §五）：只认已确认进课；同课多码去重取最早。 */
+/** 本人已解锁课程：只认已确认进课；同课多码去重取最早。 */
 export const getMyCourses = withOpenId(async ({ db, OPENID }) => {
   const _ = db.command
   const res = await db
@@ -376,8 +376,8 @@ async function addTo(db: any, coll: string, data: any) {
     } catch {
       /* 已存在 */
     }
-    // 第二次 add 也兜底（课程链路审计 2026-07-17·根因#14）：首次失败若非「集合缺失」而是基础设施瞬时
-    // 抖动，这里大概率复现同因再失败——原来异常直接冒出 trackEvent，恰在最需要观测的时刻埋点通道先失明。
+    // 第二次 add 也兜底（根因#14）：首次失败若非「集合缺失」而是基础设施瞬时
+    // 抖动，这里大概率复现同因再失败——若异常直接冒出 trackEvent，恰在最需要观测的时刻埋点通道先失明。
     // 留痕告警（alert 只打结构化日志行，不回调 recordAnomaly，防观测递归），埋点丢一条可容忍、丢得无声不可容忍。
     await db
       .collection(coll)
@@ -387,7 +387,7 @@ async function addTo(db: any, coll: string, data: any) {
 }
 
 /**
- * 埋点+进度折叠（黄金 §四）：events 流水照记；segment_done/watch_at 折叠进「每用户每课一条」；
+ * 埋点+进度折叠：events 流水照记；segment_done/watch_at 折叠进「每用户每课一条」；
  * 防刷：未确认进课的进度事件不折叠（流水仍记，供分析）；限频挡刷库洪水。
  */
 export const trackEvent = withOpenId(
@@ -411,7 +411,7 @@ export const trackEvent = withOpenId(
       createdAt: now,
     })
 
-    // 客户端崩溃桥接进 bug 账本（工业级完善批8·根因#14）：events 流水人不会主动翻，anomalies 账本运营后台
+    // 客户端崩溃桥接进 bug 账本（根因#14）：events 流水人不会主动翻，anomalies 账本运营后台
     // Anomalies 页天天看——同一条崩溃信号必须落两处才算「记回总部账本、店主翻后台能看」。severity:'low'
     // （单条客户端报错不主动推告警刷屏，仅留痕待人巡查）；fp 取 msg 前缀做去重细分（同一报错聚成一条累加
     // count，不同报错各自成条，不撞成一坨）。recordAnomaly 本身 fail-soft，不反噬 trackEvent 主流程。
@@ -420,8 +420,8 @@ export const trackEvent = withOpenId(
       await recordAnomaly('client-error', 'MP_JS_ERROR', { fp: msg.slice(0, 60), page, msg }, 'low')
     }
 
-    // 播放失败桥接（课程链路审计 2026-07-17·根因#14）：品牌核心价值链（视频播放）的失败率原先服务端
-    // 零记录——mp 播放器三类失败点（取址失败 fetch/媒体硬失败 media/缓冲失速 stall）现随 video_error
+    // 播放失败桥接（根因#14）：品牌核心价值链（视频播放）的失败率不能在服务端
+    // 零记录——mp 播放器三类失败点（取址失败 fetch/媒体硬失败 media/缓冲失速 stall）随 video_error
     // 上报，按 课程:段 细分指纹聚合（同段反复坏聚一条累加 count，不同段各自成条），运营后台可查分布。
     if (type === 'video_error') {
       const vCourse = str(meta.courseId, 64)

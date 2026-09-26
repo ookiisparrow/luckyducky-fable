@@ -1,7 +1,7 @@
 import type { CustomerPanelProvider } from '../types'
 import { COLLECTIONS } from '@ldrw/shared'
 
-// 订单板块（B1.1 首批 provider·铁律三）：坐席查某客人最近订单（bounded·防大客户拖垮）。
+// 订单板块（铁律三 provider）：坐席查某客人最近订单（bounded·防大客户拖垮）。
 // 与 bot 侧 summarizeOrders（cs/dispatch·返文本·限 3）是同数据不同形状的两读者——Rule of Three 未到，
 // 暂不抽公共「按 openid 取近单」件（防过度工程·CLAUDE.md·宁先重复）。
 const LIMIT = 20

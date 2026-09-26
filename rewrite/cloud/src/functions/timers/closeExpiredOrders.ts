@@ -1,11 +1,9 @@
 import { PAY_WINDOW_MS, COLLECTIONS, ERR } from '@ldrw/shared'
 import { getDb, ok, err, isServerCall, restoreStock, notifyAlert } from '../../kit'
 
-// 超时关单（定时触发器·黄金 orders-money 关单节）：pending 超支付窗 → closed，抢占成功那次才回补
+// 超时关单（定时触发器）：pending 超支付窗 → closed，抢占成功那次才回补
 // 预留库存（绑状态转移＝天然幂等，已 closed 不在查询内）。bounded ≤200/次。
 // 先 closed 后回补（此序错向安全：宁可晚到回调误判售罄[可退款]，不冒先回补被并发买走的超卖）。
-// M5 已于 2026-07-09 切换完毕：本 timer 是当前唯一版本（rewrite/ 15 云函数）部署的一部分，
-// 旧线 timer 已随切换清退，不再并行服役。
 
 // 每批并发关几单：串行 200 单逼近函数超时，全并发又会一下子把库打满
 const CONCURRENCY = 5

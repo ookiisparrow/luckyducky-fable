@@ -3,7 +3,7 @@ import { applyStockMoves, produceStock, listMaterialDocs, notifyAlert, pageQuery
 import { COLLECTIONS, ERR } from '@ldrw/shared'
 import { resolveBom, isValidScmProductId, isValidScmSpec } from '@ldrw/shared'
 
-// 进销存 SCM-C 组装执行（见 docs/业务逻辑架构.md 链 12·门5 文件级隔离：本文件=车道 C 组装面）。
+// 进销存组装执行（见 docs/业务逻辑架构.md 链 12·门5 文件级隔离：本文件=组装面）。
 // 组装单**单步执行**（建即执行·无状态机·撤销走调整单——CLAUDE.md 别为不存在的草稿需求建状态机）：
 //   门3 resolveBom 解析 → **快照冻结**存单（bomSnapshot/consumedLines·历史单不追新·守卫 bom-snapshot-frozen）
 //   → 门1 applyStockMoves 扣原料（assembly_out·all-or-nothing）→ 门4 produceStock 入成品（kit/inventory 唯一出口）
@@ -27,7 +27,7 @@ export async function runAssembly({ db, data, agentId }: Ctx) {
   const productId = String(data.productId || '')
   const spec = str(data.spec, 40) // 成品 SKU 规格（与 inventory/order.items[].spec 同键·可空）
   if (!assemblyId || !productId) return reply(400, err('BAD_ARGS'))
-  // productId/spec 定界符防护（战役3 批D·预审裁决重划边界·helper 单源 shared/scmKey.ts）：二者会拼进
+  // productId/spec 定界符防护（helper 单源 shared/scmKey.ts）：二者会拼进
   // fg:${productId}__${spec} 与 inventory idOf productId__spec——只挡 spec 含 __ 不够（productId 结尾 _ +
   // spec 开头 _ 仍会撞出同一个组合键，productId 含 __ 也会让首个 __ 反解拆错）；isValidScmProductId/
   // isValidScmSpec 两条排歧规则合用即证首个 __ 唯一定界（推理见该文件头注）。出生点两处校验之一（另一处
@@ -71,8 +71,8 @@ export async function runAssembly({ db, data, agentId }: Ctx) {
     { docType: 'assembly_out', docId: assemblyId, operator }
   )
   if (!out.ok) {
-    // 撤 claim 失败留痕（N3·bug 清除战役 II 遗留·病根14）：失败会留孤 claim 文档，重试永远撞 DUPLICATE
-    // （库存没扣却被判已执行）——只加信号，返回语义/控制流零变化（原 409/400 回复不变）。
+    // 撤 claim 失败留痕（病根14）：失败会留孤 claim 文档，重试永远撞 DUPLICATE
+    // （库存没扣却被判已执行）——只加信号，不改返回语义/控制流（409/400 回复照旧）。
     await coll
       .doc(assemblyId)
       .remove()
@@ -86,7 +86,7 @@ export async function runAssembly({ db, data, agentId }: Ctx) {
   const prod = await produceStock(productId, spec, sets)
   if (!prod.ok) {
     // 争用耗尽（管理端低频·几乎不至）：原料已扣、成品未入——诚实报错不写 assembly_in 流水（不留假痕），
-    // 单据保留供追查，人工经「期初盘点/调整」对平（撤销走调整单·蓝图 §1）。
+    // 单据保留供追查，人工经「期初盘点/调整」对平（撤销走调整单）。
     return reply(500, { ok: false, error: ERR.PRODUCE_FAIL })
   }
   // ④ assembly_in 成品流水留痕（fg 行只留痕不动 materials·对账公式 Σ成品流水 ⇄ inventory）。
@@ -117,8 +117,8 @@ export async function previewAssembly({ db, data }: Ctx) {
   return reply(200, { ok: true, lines })
 }
 
-/** 组装单列表（管理端查账·cursor 分页·倒序）。B1（根因#7）：改走 kit pageQuery——旧 limit 直取封顶
- *  会让超上限历史单永久不可查；defaultLimit 沿用旧默认值 50，无参调用首页条数零变化。 */
+/** 组装单列表（管理端查账·cursor 分页·倒序·根因#7）：走 kit pageQuery——limit 直取封顶
+ *  会让超上限历史单永久不可查；defaultLimit 50。 */
 export async function listAssemblies({ db, data }: Ctx) {
   const paged = await pageQuery(db, COLLECTIONS.assemblyOrders, {}, 'at', data, 50)
   return reply(200, { ok: true, list: paged.list, nextCursor: paged.nextCursor, hasMore: paged.hasMore })

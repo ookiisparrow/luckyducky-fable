@@ -1,5 +1,5 @@
 <script setup lang="ts">
-// 空态·自建原语（design/控制台.pen 语言·换皮期各页各写各的空行）。
+// 空态·自建原语（design/控制台.pen 语言·各页共用，不各写各的空行）。
 // icon 传 lucide 组件（可选）；text 主文案；默认槽放次级说明/操作按钮。
 import type { Component } from 'vue'
 withDefaults(defineProps<{ icon?: Component; text: string }>(), { icon: undefined })

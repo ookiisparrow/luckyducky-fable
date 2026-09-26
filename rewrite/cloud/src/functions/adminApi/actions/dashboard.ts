@@ -2,10 +2,10 @@ import { reply, getTxAlerts, PAID_STATUSES, type Ctx } from '../lib'
 import { listOrders } from './orders'
 import { COLLECTIONS } from '@ldrw/shared'
 
-// —— 数据看板（债#18 + #18续：消除「≤1000 条/表内存聚合」静默少算）——
-// 计数走 .count()（精确·不封顶）；GMV 走 DB aggregate 对 paid 订单求和（精确·不封顶·#18续/债#32）；
+// —— 数据看板（不做「≤1000 条/表内存聚合」，那样会静默少算）——
+// 计数走 .count()（精确·不封顶）；GMV 走 DB aggregate 对 paid 订单求和（精确·不封顶）；
 // 钱链异常走定向 where（稀少·小集合·精确不漏老单）；最近订单走 orderBy 取真·最新 5（createOrder
-// 必写 createdAt → orderBy 不漏单·债#31 不变量）。仅 热度/卡点 仍「近 SAMPLE 条样本」近似（progress
+// 必写 createdAt → orderBy 不漏单）。仅 热度/卡点 仍「近 SAMPLE 条样本」近似（progress
 // 超 SAMPLE 时 approx 标注、前端显「近 N 估算」）。
 const SAMPLE = 1000
 
@@ -65,7 +65,7 @@ export async function getDashboard(ctx: Ctx) {
       .then((r: any) => (r.list && r.list[0] ? Number(r.list[0].gmv) || 0 : 0)),
     rows(db.collection(COLLECTIONS.progress).field({ done: true, last: true }).limit(SAMPLE)),
     rows(db.collection(COLLECTIONS.courses).field({ id: true, title: true, chapters: true }).limit(SAMPLE)),
-    // 钱链异常：单源 helper（dashboard 与 S16 对账共用·防漂移）；内部定向 where 精确（不从样本 filter）
+    // 钱链异常：单源 helper（dashboard 与对账页共用·防漂移）；内部定向 where 精确（不从样本 filter）
     getTxAlerts(db),
     rows(
       db
@@ -76,7 +76,7 @@ export async function getDashboard(ctx: Ctx) {
     ),
     // 转化速览：已支付订单数（口径同 GMV·PAID_STATUSES）——下单→支付→激活 各环节量级（指示性·非同批追踪）
     cnt(db.collection(COLLECTIONS.orders).where({ status: _.in(PAID_STATUSES) })),
-    // 最近动态混合流（S15）：近期激活/进课 + 退款申请，与最近订单合并成一条时间轴（各 orderBy+limit 有界·债#18）
+    // 最近动态混合流：近期激活/进课 + 退款申请，与最近订单合并成一条时间轴（各 orderBy+limit 有界）
     rows(
       db
         .collection(COLLECTIONS.activations)
@@ -113,8 +113,8 @@ export async function getDashboard(ctx: Ctx) {
       .slice(0, 8)
       .map(([segId, count]) => ({ segId, name: segName[segId] || segId, count }))
 
-  // 最近动态混合流（S15）：订单(createdAt) + 激活/进课(activations) + 退款申请(afterSales) 合并按事件时间倒序。
-  // 指示性：激活按 createdAt 取近 6（已进课的取 enteredAt 作事件时刻）——非穷尽审计，与看板其余近似口径一致（#8）。
+  // 最近动态混合流：订单(createdAt) + 激活/进课(activations) + 退款申请(afterSales) 合并按事件时间倒序。
+  // 指示性：激活按 createdAt 取近 6（已进课的取 enteredAt 作事件时刻）——非穷尽审计，与看板其余近似口径一致（根因#8）。
   const yuan = (n: any) => '￥' + Number(n || 0).toFixed(2)
   const ords = recent.map((o: any) => ({ type: 'order', at: o.createdAt || 0, text: `新订单 ${o.id} · ${yuan(o.amount)}` }))
   const acts = (recentActs || []).map((a: any) =>

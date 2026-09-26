@@ -29,7 +29,7 @@ const TABS = [
 
 const tab = ref('paid')
 const counts = ref<Record<string, number>>({})
-const countsPartial = ref(false) // P2·bug sweep Round2 item14：某状态 .count() 失败时角标别把占位 0 当真值显示（同 Dashboard todoPartial 风格）
+const countsPartial = ref(false) // 某状态 .count() 失败时角标别把占位 0 当真值显示（同 Dashboard todoPartial 风格）
 const rows = ref<OrderRowVM[]>([])
 const cursor = ref<unknown>(null)
 const hasMore = ref(false)
@@ -44,10 +44,10 @@ const clearConfirmId = ref('')
 type Acts = Record<string, { activated?: boolean; entered?: boolean } | undefined>
 const drawer = ref<{ row: OrderRowVM; mode: 'ship' | 'view'; company: string; trackingNo: string; acts: Acts | null; actsErr?: string; error?: string } | null>(null)
 
-// 列表页脚分母＝当前标签计数（换皮恒用 counts.all·在「待发货」栏也显全量总数·误导以为本栏还有一堆没翻）
+// 列表页脚分母＝当前标签计数（恒用 counts.all 的话在「待发货」栏也显全量总数·误导以为本栏还有一堆没翻）
 const tabTotal = computed(() => counts.value[tab.value || 'all'])
 
-// 批量发货（P1·上量瓶颈）：仅待发货 tab 且非搜索态可批量
+// 批量发货（上量瓶颈）：仅待发货 tab 且非搜索态可批量
 const selectedIds = ref<string[]>([])
 const batch = ref<{
   company: string
@@ -56,10 +56,10 @@ const batch = ref<{
   done: boolean
 } | null>(null)
 
-const listGen = useLatest() // 列表乱序守卫（P2·快切标签/搜索时旧结果别覆盖新标签·根因#8）
-const reloading = ref(false) // reload 专属在途标志（迭代G：more 的加载闸原用多写者 message 文案·脆弱·改此单写布尔）
+const listGen = useLatest() // 列表乱序守卫（快切标签/搜索时旧结果别覆盖新标签·根因#8）
+const reloading = ref(false) // reload 专属在途标志（more 的加载闸用单写布尔，不靠多写者 message 文案）
 async function reload() {
-  clearConfirmId.value = '' // 换标签/搜索/翻页/发货成功后自动刷新即复位危险态（P1·防旧武装的「去核对」残留、重进同一行一击直发·批3 规格）
+  clearConfirmId.value = '' // 换标签/搜索/翻页/发货成功后自动刷新即复位危险态（防旧武装的「去核对」残留、重进同一行一击直发）
   message.value = '加载中…'
   reloading.value = true
   moreErr.value = ''
@@ -83,7 +83,7 @@ async function reload() {
 async function more() {
   if (!hasMore.value || cursor.value == null) return
   if (reloading.value) return // reload 在途时不翻页（cursor 还是旧的·会跳页）——覆盖 reload 先于 more 的序（单写布尔·不受 message 多写者干扰）
-  const gen = listGen.peek() // 绑定当前 reload 代际·不递增（不反噬在途 reload）·任何新 reload 会作废本页（迭代F 逮出）
+  const gen = listGen.peek() // 绑定当前 reload 代际·不递增（不反噬在途 reload）·任何新 reload 会作废本页
   const r = await listOrders(tab.value, cursor.value, 20, activeQ.value)
   if (listGen.isStale(gen)) return // 期间发生过 reload（切标签/搜索/刷新/动作后刷新）·放弃本页（防混排 + 游标跳页）
   if (!r.ok) {
@@ -146,7 +146,7 @@ function timeline(row: OrderRowVM) {
     },
   ]
 }
-// 状态徽章 tone（批2 refactor·同文件字面重复 ×2 去重）：三输入——feeMismatch/refundHold 优先分支 + status 分支。
+// 状态徽章 tone：三输入——feeMismatch/refundHold 优先分支 + status 分支。
 // refundHold（退款↔履约状态同步）：有在途售后或每行都退够件数，绝不能让「待发货」绿标误导操作员点发货。
 function badgeTone(row: { feeMismatch: boolean; paymentException?: boolean; refundHold?: boolean; status: string }): 'neutral' | 'brand' | 'green' | 'red' | 'amber' {
   if (row.paymentException || row.feeMismatch) return 'red'
@@ -183,7 +183,7 @@ async function doShip() {
   }
 }
 
-// —— 批量发货（P1·上量瓶颈）：多选 paid 非异常单 → 一次发 ——
+// —— 批量发货（上量瓶颈）：多选 paid 非异常单 → 一次发 ——
 const canBatch = computed(() => tab.value === 'paid' && !activeQ.value)
 const shippableInList = computed(() => rows.value.filter((r) => r.canShip))
 const isSel = (id: string) => selectedIds.value.includes(id)
@@ -454,7 +454,7 @@ onMounted(reload)
         <!-- 商品 + 逐商品激活态 -->
         <div class="items-card">
           <div class="addr-label">商品 · 激活状态</div>
-          <!-- :key＝productId__spec（与后端 lineId 同构）：旧单 lineKey 只有 productId，同品多规格同单会撞键（P3·深审20260712） -->
+          <!-- :key＝productId__spec（与后端 lineId 同构）：只用 productId 当键的话同品多规格同单会撞键 -->
           <div v-for="it in drawer.row.items" :key="(it.productId || it.name) + '__' + it.spec" class="ditem">
             <b>{{ it.name }}{{ it.spec ? `（${it.spec}）` : '' }} ×{{ it.qty }}</b>
             <em v-if="it.refundedQty" class="act-tag refunded">已退 {{ it.refundedQty }} 件·别发</em>

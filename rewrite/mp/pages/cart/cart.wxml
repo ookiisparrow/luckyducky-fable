@@ -34,8 +34,7 @@
       </view>
     </view>
   </view>
-  <!-- 空车补出路（2026-07-25 体检批 P3·走查清单第 3 项「空车『去逛逛』」）：原先只有一行灰字，
-       是全站最单薄的空态；下方虽有推荐位，但推荐拉取失败时整页就真没地方可去了。 -->
+  <!-- 空车补出路：只有一行灰字的话，推荐拉取失败时整页就真没地方可去了。 -->
   <view wx:else class="ld-cart-hold ld-cart-hold-empty">
     <text class="ld-cart-hold-hint">这里还没有东西</text>
     <view class="ld-cart-hold-cta" bind:tap="onGoHome" hover-class="ld-cart-hold-cta-h" hover-stay-time="80">去逛逛</view>

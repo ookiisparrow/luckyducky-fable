@@ -2,7 +2,7 @@ import cloud from 'wx-server-sdk'
 import { err } from './reply'
 
 /**
- * 微信发货信息上传接缝（根因#12 平台接缝单点 + 合规债#26）。
+ * 微信发货信息上传接缝（根因#12 平台接缝单点·发货合规）。
  *
  * 微信要求「实物 + 微信支付」的小程序在支付成功后上传发货信息（upload_shipping_info），否则订单资金
  * 冻结/无法结算 + 后台反复弹「待接入订单发货管理」。本接缝走微信云开发「云调用」cloud.openapi——
@@ -12,7 +12,7 @@ import { err } from './reply'
  * 失败绝不回滚本地发货，只回 { ok, error } 供调用方留痕 + [LD_ALERT] 告警人工补录（mp 后台手动录入兜底）。
  *
  * ⚠️ 真发前置（靠人·根因#8「拿到 ≠ 用通」；未满足时本接缝失败→fail-soft→本地照发 + 告警，不阻塞）：
- *   ① mp 后台开通「发货信息管理」能力（2026-06-26 用户确认已开通）；② 云函数部署产物 config.json 声明 openapi
+ *   ① mp 后台开通「发货信息管理」能力（用户确认已开通）；② 云函数部署产物 config.json 声明 openapi
  *      权限 `wxaSecOrder.uploadShippingInfo`（权限串 === JS 调用路径 cloud.openapi.<串>·官方云调用规则；已由
  *      build.mjs OPENAPI_PERMS 自动产出·守卫 rw-openapi-perm-declared 锁登记不漏）；③ 真单真机验上传成功 +
  *      mp 后台无「待接入发货管理」提醒。代码替不了 ①③ 两步，只把链路做成「配好即生效」。
@@ -26,7 +26,7 @@ type ShipUpload = {
 }
 type ShipResult = { ok: boolean; error?: string }
 
-// 微信物流公司编码（delivery_company_list·与快递100 com 编码不同套·债#26）；未命中→'OTHER'（微信允许其他公司）。
+// 微信物流公司编码（delivery_company_list·与快递100 com 编码不同套）；未命中→'OTHER'（微信允许其他公司）。
 const WX_DELIVERY: Record<string, string> = {
   顺丰: 'SF',
   顺丰速运: 'SF',
@@ -76,7 +76,7 @@ export async function uploadShippingToWx(o: ShipUpload): Promise<ShipResult> {
       payer: { openid: o.openid },
     })
     // 云调用成功 errCode/errcode=0；非 0 视为失败（留原始码供对账）。
-    // 回包整个 falsy＝拿不到任何确认，也按失败算——fail-soft 只兜「不抛穿」，不兜「谎报成功」（2026-07-24 变异分诊缺口①）。
+    // 回包整个 falsy＝拿不到任何确认，也按失败算——fail-soft 只兜「不抛穿」，不兜「谎报成功」。
     if (!r) return err('WX_EMPTY_RESP')
     const code = r.errCode ?? r.errcode
     if (code != null && code !== 0) return err(`WX_ERR_${code}`)

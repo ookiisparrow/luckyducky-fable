@@ -3,12 +3,12 @@ import { reply, readDoc, ensure, type Ctx } from '../lib'
 import { cleanProduct, cleanSold, storeImage } from '../catalog'
 import { notifyAlert, getTempUrls, setOrAdd, isCollectionMissing, deleteFiles, err } from '../../../kit'
 
-// —— 商品图册孤儿 GC 判据单源（E16 共享 helper·防多点漂移·批B）——
+// —— 商品图册孤儿 GC 判据单源（共享 helper·防多点漂移）——
 // 换图/发布替换/删档三处写点共用这一份 diff 计算 + cover 豁免，别各写一份（漂移＝漏删或误删）。
 const GC_GRACE_MS = 24 * 3600 * 1000 // 孤儿图/视频缓期 24h（在场 admin/详情会话、在播学员手里的临时址 TTL 内不断）
 
 type ImgDoc = { cover?: string; images?: string[] } | null | undefined
-// 收拢一组文档的图片 fileID：只认 cloud:// 云存储对象（外链/占位符不可删）；cover 位单列供规则1豁免。
+// 收拢一组文档的图片 fileID：只认 cloud:// 云存储对象（外链/占位符不可删）；cover 位单列供豁免（cover 永不删）。
 function collectImgs(docs: ImgDoc[]): { all: Set<string>; covers: Set<string> } {
   const all = new Set<string>()
   const covers = new Set<string>()
@@ -23,8 +23,8 @@ function collectImgs(docs: ImgDoc[]): { all: Set<string>; covers: Set<string> } 
   }
   return { all, covers }
 }
-// 孤儿判据（规则2·3·1）：孤儿 ⇔ 变更前并集有、变更后并集无、且不在 cover 豁免集（前后×两档四处 cover
-// 的并集·规则1 cover 永不删）。**只按 cover/images 字段的 fileID 精确差集**，永远禁止按存储文件夹列举
+// 孤儿判据：孤儿 ⇔ 变更前并集有、变更后并集无、且不在 cover 豁免集（前后×两档四处 cover
+// 的并集·cover 永不删）。**只按 cover/images 字段的 fileID 精确差集**，永远禁止按存储文件夹列举
 // 删除——`products/<pid>/` 前缀被卡片图(Cards.vue·pid=商品id)、首页内容(HomeContentForm·pid='homecontent')、
 // 目录页(CatalogPlayerTab·pid='catalogcontent')共居复用：这些图从不写进 products 草稿/发布档的 cover/images
 // 字段，故字段差集天然碰不到它们；反之任何「列文件夹删除」形态都会误删共居文件。后人勿改成扫文件夹
@@ -47,7 +47,7 @@ export function mergePendingGc(old: any, orphans: string[], keep: Set<string>): 
 }
 
 // 列表图换临时地址。微信一次最多 50 个 fileID；草稿封面+图册、橱窗封面凑一批会超，整包丢过去会整批失败。
-// 走 kit getTempUrls：去重后按 50 张分批。不传 maxAge，和原先裸 string 换址同形。换不到的不放进结果。
+// 走 kit getTempUrls：去重后按 50 张分批。不传 maxAge（裸 string 换址）。换不到的不放进结果。
 async function listedImageUrls(fileIds: Iterable<string>): Promise<Record<string, string>> {
   const urls: Record<string, string> = {}
   const map = await getTempUrls([...fileIds])
@@ -59,10 +59,10 @@ export async function listDrafts({ db }: Ctx) {
   const drafts = db.collection(COLLECTIONS.productsDraft)
   await ensure(db, COLLECTIONS.productsDraft) // 草稿集合只在草稿动作用前建，不跟全局网关（进销存/体检等不顺手建）
   const res = await drafts.orderBy('createdAt', 'desc').limit(100).get()
-  // 上架/下架状态映射（S11·债#12 软下架显形）：listed 标记在 products、不在草稿，控制台靠它分
+  // 上架/下架状态映射（软下架显形）：listed 标记在 products、不在草稿，控制台靠它分
   // 「在售（onsale+listed≠false）/ 已下架（onsale+listed:false）/ 筹备中（未上架·无 products 文档）」。
   // 一次性批量取（草稿 ≤100·bounded·根因#7），口径与 getProducts 一致（旧无字段=可售）。
-  // 6 步上新进度派生（换皮误判「分步态无源·略」·实则可由 cards/courses/qrcodes 批量 join·bounded 同 listed 范式·根因#7）：
+  // 6 步上新进度派生（由 cards/courses/qrcodes 批量 join·bounded 同 listed 范式·根因#7）：
   // 视频(课程有段带 videoFileId) / 卡片(card 定稿 final) / 批次(该课有 qrcode·aggregate group 只回有码的课·不扫全表)。
   const draftIds = res.data.map((p: any) => p.id || p._id).filter(Boolean)
   let urls: Record<string, string> = {}
@@ -82,7 +82,7 @@ export async function listDrafts({ db }: Ctx) {
       db.collection(COLLECTIONS.products).where({ _id: _.in(draftIds) }).field({ listed: true }).get(),
       db.collection(COLLECTIONS.cards).where({ _id: _.in(cardIds) }).get(),
       db.collection(COLLECTIONS.courses).where({ _id: _.in(courseIds) }).get(),
-      // 草稿课也算「有视频文件」——进度圆点要能区分「有文件」vs「课已发布」（#213）
+      // 草稿课也算「有视频文件」——进度圆点要能区分「有文件」vs「课已发布」
       db.collection(COLLECTIONS.coursesDraft).where({ _id: _.in(courseIds) }).get().catch((e: unknown) => {
         if (isCollectionMissing(e)) return { data: [] as any[] }
         throw e
@@ -120,7 +120,7 @@ export async function saveDraft({ db, data }: Ctx) {
   const p = cleanProduct(data.product)
   if (!p) return reply(400, err('BAD_PRODUCT'))
   await ensure(db, COLLECTIONS.productsDraft) // 草稿集合只在草稿动作用前建，不跟全局网关（进销存/体检等不顺手建）
-  // 换图缓期 GC（批B·规则4）：整份覆盖前先取旧草稿+发布档，算被撤且非 cover 的孤儿图，缓期入 drafts.pendingGc
+  // 换图缓期 GC：整份覆盖前先取旧草稿+发布档，算被撤且非 cover 的孤儿图，缓期入 drafts.pendingGc
   // （单队列之家=草稿档）；不立删——admin listDrafts/mp 详情给这些图签过临时址，同步删=在场会话见 404。
   // pendingGc 是服务端衍生字段（cleanProduct 白名单不含它·客户端注入不了）：从旧草稿读、覆盖时带回。
   const [prevDraftR, pubR] = await Promise.all([
@@ -130,11 +130,11 @@ export async function saveDraft({ db, data }: Ctx) {
   if (!prevDraftR.ok || !pubR.ok) return reply(200, err('DOC_READ_FAIL'))
   const prevDraft = prevDraftR.data
   const pub = pubR.data
-  // productId/spec 出生点校验（战役3 批D·D1·helper 单源 shared/scmKey.ts·预审裁决修订：校验只对「出生/变更」
+  // productId/spec 出生点校验（helper 单源 shared/scmKey.ts·校验只对「出生/变更」
   // 生效，不对「存量值原样带回」生效）：p.id 是 SCM 组合键的 productId 半边，p.tag/skus[].name 是 spec 半边的
   // 候选来源（createOrder lineIdOf 取 SKU 名或 tag 作 spec）——二者会拼进 scmAssembly fg:${productId}__${spec}
   // 与 inventory idOf，歧义 __ 组合会撞键写错库存文档（推理见 scmKey.ts 头注）。
-  // productId 是草稿文档自身的寻址键：prevSource 存在即该 id 早已出生过（此前必过校验或属校验上线前的历史
+  // productId 是草稿文档自身的寻址键：prevSource 存在即该 id 早已出生过（必已过校验或属校验上线前的历史
   // 数据），不重复校验——只在真正新建（prevSource 不存在）时挡歧义 id 出生。
   const prevSource = prevDraft || pub
   if (!prevSource && !isValidScmProductId(p.id)) return reply(400, err('BAD_SPEC'))
@@ -153,21 +153,21 @@ export async function saveDraft({ db, data }: Ctx) {
   return reply(200, { ok: true })
 }
 
-// 删除：草稿 + 已上架商品一并删（外部体检 P2：原只删草稿，已上架仍被买＝「不可撤销」失真）。
-// 历史订单存快照、不回读 products，故删上架不伤订单历史；停售/软下架已实现（见本文件 unpublishProduct·债#12 已清）。
+// 删除：草稿 + 已上架商品一并删（只删草稿的话已上架仍被买＝「不可撤销」失真）。
+// 历史订单存快照、不回读 products，故删上架不伤订单历史；停售/软下架见本文件 unpublishProduct。
 //
-// 顺序反转 + 失败可见（P0·bug 清除战役II F1）：原两条 remove 各自 .catch(()=>{}) 全吞、恒 ok:true——
+// 顺序 + 失败可见：两条 remove 若各自 .catch(()=>{}) 全吞、恒 ok:true，
 // products 删失败时后台列表已消失、小程序端仍在售可购买，管理员却被告知「已删除」。
-// 改：**先删 products（发布面）再删 drafts**——若 products 删失败，drafts 还在、商品仍在后台草稿列表
-// 可重试删除；危险方向永远是「后台不见了、前台还在卖」，反转顺序后不再可能发生。任一步失败即
-// ok:false，不再继续下一步、不再无条件回 ok:true；动作类失败（病根14）经 notifyAlert 留痕。
+// 故**先删 products（发布面）再删 drafts**——若 products 删失败，drafts 还在、商品仍在后台草稿列表
+// 可重试删除；危险方向永远是「后台不见了、前台还在卖」，此顺序下不可能发生。任一步失败即
+// ok:false，不继续下一步；动作类失败（病根14）经 notifyAlert 留痕。
 export async function deleteDraft({ db, data }: Ctx) {
   const drafts = db.collection(COLLECTIONS.productsDraft)
   const id = String(data.id || '')
   if (!id) return reply(400, err('NO_ID'))
   await ensure(db, COLLECTIONS.productsDraft) // 草稿集合只在草稿动作用前建，不跟全局网关（进销存/体检等不顺手建）
-  // 图册立即删（批B·规则5 例外）：两档文档一并删除后 pendingGc 无处安身、商品已不存在（在场详情会话本已死），
-  // 立即删可接受。先读两档收 fileID（删档后无从取），cover 位仍豁免（订单快照·规则1）。走 diffOrphans 同源
+  // 图册立即删（不走缓期的例外）：两档文档一并删除后 pendingGc 无处安身、商品已不存在（在场详情会话本已死），
+  // 立即删可接受。先读两档收 fileID（删档后无从取），cover 位仍豁免（订单快照引用）。走 diffOrphans 同源
   // 的 collectImgs：只认 cover/images 字段的 cloud:// fileID，绝不列文件夹（防误删共居的卡片/首页/目录图）。
   // 读失败≠无档：发布档读空会让它的 cover 失去豁免被删，草稿读空会让 pendingGc 随删档永久泄漏——停手不删。
   const [dr, pr] = await Promise.all([readDoc(drafts.doc(id).get()), readDoc(db.collection(COLLECTIONS.products).doc(id).get())])
@@ -177,12 +177,12 @@ export async function deleteDraft({ db, data }: Ctx) {
   const { all, covers } = collectImgs([draftDoc, pubDoc])
   // 并入草稿档已挂起的 pendingGc 队列（前一次换图/发布替换产生、尚在 24h 缓期内的孤儿）：draft 文档是
   // pendingGc 唯一之家，下方 remove() 后队列随文档消失——若只删「当前字段差集」，队里未到期的孤儿将无
-  // 文档引用、无队列记录、cleanupEvents 也扫不到，永久漏在云存储。规则5「立即删可接受」本就覆盖这些孤儿
+  // 文档引用、无队列记录、cleanupEvents 也扫不到，永久漏在云存储。删档时「立即删可接受」同样覆盖这些孤儿
   // （商品已不存在·在场会话已死），故一并立删。cover 豁免同样适用（cover 永不进 pendingGc·防御性保留）。
   const queued = (Array.isArray(draftDoc?.pendingGc) ? draftDoc.pendingGc : [])
     .map((en: any) => String(en?.fileId || ''))
     .filter(Boolean)
-  const orphans = [...new Set([...all, ...queued])].filter((u) => !covers.has(u)) // cover 永不删（规则1）
+  const orphans = [...new Set([...all, ...queued])].filter((u) => !covers.has(u)) // cover 永不删
   const prodErr = await db
     .collection(COLLECTIONS.products)
     .doc(id)
@@ -204,7 +204,7 @@ export async function deleteDraft({ db, data }: Ctx) {
     await notifyAlert('anomaly', 'deleteDraft', 'REMOVE_FAIL', { id, stage: 'drafts', note: 'products already removed' })
     return reply(200, err('REMOVE_FAIL'))
   }
-  // 两档已删净 → 立即删图册（规则5·cover 已豁免）。deleteFile 失败即留痕告警 + ok:false（病根14·批A 口径）——
+  // 两档已删净 → 立即删图册（cover 已豁免）。deleteFile 失败即留痕告警 + ok:false（病根14）——
   // 档已删、文件泄漏，告警带 orphans 供人工兜底清理，绝不静默吞。
   if (orphans.length) {
     const gcOk = await deleteFiles(orphans).then(() => true).catch(() => false)
@@ -216,7 +216,7 @@ export async function deleteDraft({ db, data }: Ctx) {
   return reply(200, { ok: true })
 }
 
-// 小图单发（b64 ≤ 80K 字符）；大图走分片（HTTP 请求体上限约 100KB，调试日志 F）
+// 小图单发（b64 ≤ 80K 字符）；大图走分片（HTTP 请求体上限约 100KB）
 export async function uploadImage({ cloud, data }: Ctx) {
   const b64 = String(data.b64 || '')
   if (!b64 || b64.length > 90_000) return reply(400, err('BAD_IMAGE'))
@@ -234,7 +234,7 @@ export async function publishProduct({ db, data }: Ctx) {
   if (!got.data) return reply(400, err('NO_DRAFT'))
   const d = got.data
   if (!d.cover) return reply(400, err('NEED_COVER'))
-  // 价格硬边界：有限正数且 ≤ 上限——拦负价 / Infinity / 超大价穿透（外部体检 P1）
+  // 价格硬边界：有限正数且 ≤ 上限——拦负价 / Infinity / 超大价穿透
   if (!d.name || !isValidPriceYuan(d.price)) return reply(400, err('NEED_INFO'))
   if (
     !Array.isArray(d.skus) ||
@@ -251,11 +251,11 @@ export async function publishProduct({ db, data }: Ctx) {
   if (sort === undefined) {
     const top = await productsColl.orderBy('sort', 'desc').limit(1).get()
     sort = (top.data[0]?.sort ?? 0) + 1
-    // 首发默认不进首页人气条（#212）：要挂首页须显式 featured:true。再同步保留原 featured，不覆盖橱窗开关。
+    // 首发默认不进首页人气条：要挂首页须显式 featured:true。再同步保留原 featured，不覆盖橱窗开关。
     featured = data.featured === true
   }
   // 重新上架（编辑后再发布）不得隐式改变销售状态：保留旧 listed/unlistedAt——已停售（listed:false）商品
-  // 编辑重发仍停售，须显式 republishProduct 才恢复销售（审核 P1·债#12·防整文档 set 抹掉 listed→「无字段=可售」隐式复活）。
+  // 编辑重发仍停售，须显式 republishProduct 才恢复销售（防整文档 set 抹掉 listed→「无字段=可售」隐式复活）。
   const carry: Record<string, unknown> = {}
   if (exist.data && 'listed' in exist.data) {
     carry.listed = exist.data.listed
@@ -274,15 +274,15 @@ export async function publishProduct({ db, data }: Ctx) {
     params: d.params || [],
     detailSections: d.detailSections || [],
     kit: d.kit || [],
-    sold: cleanSold(d.sold), // 运营手填·详情页展示·0 不渲染（#119 ①·不从订单加总）
+    sold: cleanSold(d.sold), // 运营手填·详情页展示·0 不渲染（不从订单加总）
     courseId: d.courseId || '',
     featured: !!featured,
     sort,
     updatedAt: Date.now(),
-    ...carry, // 保留旧 listed/unlistedAt（重新上架不隐式恢复销售·审核 P1）
+    ...carry, // 保留旧 listed/unlistedAt（重新上架不隐式恢复销售）
   }
   await setOrAdd(productsColl, id, doc)
-  // 发布替换孤儿缓期入队（批B·规则4）：旧发布(exist)不再被新发布(doc=草稿)引用的非 cover 图进 drafts.pendingGc
+  // 发布替换孤儿缓期入队：旧发布(exist)不再被新发布(doc=草稿)引用的非 cover 图进 drafts.pendingGc
   // （单队列之家=草稿档·发布 action 也写它），对齐 courses.publishCourse；立删会让在场 admin/详情会话临时址 404。
   // products 档本身不携 pendingGc（doc 显式白名单不含它）——队列只此一家在草稿档。
   const { orphans, keep } = diffOrphans([exist.data, d], [doc, d])
@@ -291,7 +291,7 @@ export async function publishProduct({ db, data }: Ctx) {
   return reply(200, { ok: true })
 }
 
-// 停售/恢复（软下架·债#12）：products.listed=false → getProducts 不再下发（顾客端列表消失），true 重新下发。
+// 停售/恢复（软下架）：products.listed=false → getProducts 不再下发（顾客端列表消失），true 重新下发。
 // 区别 deleteDraft（硬删商品记录）：停售可恢复、保留记录；区别 saveShowcase 的 featured（只管首页橱窗位）。
 // 详情页直达（按 id）与历史订单快照不受影响（订单存快照、不回读 products）。
 async function setListed({ db, data }: Ctx, listed: boolean) {
@@ -308,7 +308,7 @@ async function setListed({ db, data }: Ctx, listed: boolean) {
 export const unpublishProduct = (ctx: Ctx) => setListed(ctx, false)
 export const republishProduct = (ctx: Ctx) => setListed(ctx, true)
 
-// —— 小程序橱窗（规格 §八）：一比一首页预览的排序与上下架 ——
+// —— 小程序橱窗：一比一首页预览的排序与上下架 ——
 export async function listShowcase({ db }: Ctx) {
   const res = await db.collection(COLLECTIONS.products).orderBy('sort', 'asc').limit(100).get()
   const ids = res.data.map((p: any) => p.cover).filter((u: any) => u && u.startsWith('cloud://'))
@@ -320,9 +320,9 @@ export async function saveShowcase({ db, data }: Ctx) {
   const items = Array.isArray(data.items) ? data.items.slice(0, 100) : []
   if (!items.length) return reply(400, err('NO_ITEMS'))
   const productsColl = db.collection(COLLECTIONS.products)
-  let failed = 0 // 逐条失败计数（P2·bug sweep Round2 item16·根因#14）：原 .catch(()=>{}) 静默吞错，无论成败前端
-  // 永远收到 ok:true——「已保存」是假象。改计数后任一失败即回 ok:false，不再误导消费方（admin Showcase.vue
-  // 已按 r.ok 通用判断成败，无需改消费方）。
+  let failed = 0 // 逐条失败计数（根因#14）：若 .catch(()=>{}) 静默吞错，无论成败前端
+  // 永远收到 ok:true——「已保存」是假象。故任一失败即回 ok:false（admin Showcase.vue
+  // 按 r.ok 通用判断成败）。
   for (const it of items) {
     const id = String(it?.id || '')
     if (!id) continue
@@ -334,9 +334,9 @@ export async function saveShowcase({ db, data }: Ctx) {
       })
   }
   if (failed) {
-    // 真留痕（P2·bug sweep Round2 复审补漏）：裸 alert() 只打 console.error 一行，不落 anomalies 账本、
+    // 真留痕：裸 alert() 只打 console.error 一行，不落 anomalies 账本、
     // admin listAnomalies 查不到、企微群也收不到——不满足「留痕」二字（同 learning.ts ensureActivation
-    // 注释 / orders.ts shipOne 既有写法）。改 notifyAlert：①同样打日志 ②落 anomalies 账本 ③按配置推企微。
+    // 注释 / orders.ts shipOne 既有写法）。故用 notifyAlert：①同样打日志 ②落 anomalies 账本 ③按配置推企微。
     await notifyAlert('anomaly', 'saveShowcase', 'PARTIAL_WRITE', { failed, total: items.length })
     return reply(400, err(`PARTIAL_WRITE:${failed}`))
   }

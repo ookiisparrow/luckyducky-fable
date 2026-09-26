@@ -6,10 +6,10 @@ import { getDb, getDocOrNull } from './db'
 type TransitionResult<T> = { moved: true; doc: T } | { moved: false; doc?: T }
 
 /**
- * 状态机统一闸（设计约束#2：状态流转一律条件化 + 幂等）。
+ * 状态机统一闸（根因#2：状态流转一律条件化 + 幂等）。
  * 用 where({ _id, status: in(from) }).update 做 DB 层 compare-and-set，天然幂等：
  * 重复调用时当前态已不在 from，updated=0，no-op——根治「副作用不幂等 / 跳级 / 倒退」。
- * from/to 应来自 @ldrw/shared 的状态机声明（守卫随域批次对账）。
+ * from/to 应来自 @ldrw/shared 的状态机声明（守卫 rw-status-transitions-declared 对账）。
  * patch 可为对象或 (旧 doc) => 对象（需读旧值时，如金额核对）。
  * 读失败照抛（与写失败同一出口）：折成 moved:false 会被调用方当成「状态不对/单不存在」，只有真缺档才回 moved:false。
  */

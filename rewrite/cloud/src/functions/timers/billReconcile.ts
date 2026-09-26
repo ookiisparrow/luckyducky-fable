@@ -13,11 +13,11 @@ import {
 } from '../../kit'
 
 // —— 每日自动对账 timer（钱链）——
-// 病根#14：closeExpiredOrders 从不查微信侧，「微信有款我方无单」（wxOnly·最危险类）此前唯一链路是
-// admin 手动点开 getBillMatch——没人点开就没人知道。本 timer 每日拉前一日微信账单→落 wxBills→比对，
-// 差异高危入账（anomalies 指纹去重·同日重跑天然幂等#1）+ 首见 [LD_ALERT] + 新指纹才推 run 级汇总告警。
+// 病根#14：closeExpiredOrders 从不查微信侧，「微信有款我方无单」（wxOnly·最危险类）若只靠
+// admin 手动点开 getBillMatch，没人点开就没人知道。本 timer 每日拉前一日微信账单→落 wxBills→比对，
+// 差异高危入账（anomalies 指纹去重·同日重跑天然幂等·根因#1）+ 首见 [LD_ALERT] + 新指纹才推 run 级汇总告警。
 // 复用清单：kit/reconcile（pullBillDay 拉+落 / matchBillRows 纯分类器·与 admin 手动路径同一套原语）
-// + kit/wxpay fetchTradeBill（出站单点#12）+ kit/anomaly 指纹去重。
+// + kit/wxpay fetchTradeBill（出站单点·根因#12）+ kit/anomaly 指纹去重。
 // 凭证部署注意：env 兜底是**函数进程级**——本函数不继承 adminApi 的环境变量；凭证须入库
 // （secureConfig/wxpay·admin 配置清单页可填）或本函数同配 env，否则每日静默 skipped（有 low 面包屑可查）。
 // oursOnly（我方有微信无）刻意不在 timer 告警：账单生成时点边界易误报（我方 paidAt 与微信账单归日
@@ -39,13 +39,13 @@ export async function runBillReconcile(
   if (!pull.ok) {
     const e = pull.error || ''
     if (e === 'NO_WXPAY_CREDS' || e === 'NO_MCHID') {
-      // 未配凭证＝功能未启用·非故障：low 面包屑留痕（#14 不静默）但不告警（不打扰）——每日 count++ 可查
+      // 未配凭证＝功能未启用·非故障：low 面包屑留痕（根因#14 不静默）但不告警（不打扰）——每日 count++ 可查
       await recordAnomaly('flow-failure', 'BILL_RECON_NOT_CONFIGURED', { fp: 'billReconcile', date, reason: e }, 'low')
       return ok({ date, skipped: 'NOT_CONFIGURED' })
     }
     // 该日无账单（无交易日）＝正常·不告警不落库
     if (e.includes('NO_STATEMENT_EXIST')) return ok({ date, skipped: 'NO_BILL' })
-    // 真失败（签名/网络/平台变更）——动作类失败必可观测（#14）：告警后 fail-soft 返回（不抛）
+    // 真失败（签名/网络/平台变更）——动作类失败必可观测（根因#14）：告警后 fail-soft 返回（不抛）
     await notifyAlert('money', 'billReconcile', 'BILL_FETCH_FAIL', { date, fp: date, error: e.slice(0, 120) })
     return ok({ date, error: e.slice(0, 120) })
   }
@@ -98,7 +98,7 @@ export async function runBillReconcile(
   ]
 
   // run 级汇总推送前按指纹预读判「有无新差异」：recordAnomaly 指纹去重兜住账本与 [LD_ALERT]，
-  // 但 notifyAlert 的 webhook 推送每调必推（无去重）——预检保证同日重跑不重推（#1）。
+  // 但 notifyAlert 的 webhook 推送每调必推（无去重）——预检保证同日重跑不重推（根因#1）。
   // 读放大有界＝差异条数（正常日为 0）；不改 recordAnomaly 返回值（其 void 契约被 anomaly.test.ts 钉死）。
   let fresh = 0
   for (const f of findings) {

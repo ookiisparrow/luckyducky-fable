@@ -2,8 +2,8 @@ import { reply, ensure, readDoc, type Ctx } from '../lib'
 import { COLLECTIONS } from '@ldrw/shared'
 import { normalizePem, setOrAdd, err } from '../../../kit'
 
-// 人工配置清单可填写化（决策 2026-07-12·config-checklist 补口）：把此前只能去云开发控制台改环境变量/
-// 库里手敲 JSON 的敏感凭证 + 支付接缝配置，收口成两个写 action——admin 页填、云函数运行时读库自动生效
+// 人工配置清单的填写入口（config-checklist）：敏感凭证 + 支付接缝配置不必去云开发控制台改环境变量/
+// 库里手敲 JSON，收口成两个写 action——admin 页填、云函数运行时读库自动生效
 // （kit/secureConfig.ts 单源读取）。零回显铁律延伸到写入口：只接收、绝不回显；且 payload 一律嵌套在
 // `fields`（saveSecureConfig）之下——adminApi/index.ts 分发处的 recordAudit 会把 `data` 顶层非敏感字段
 // 摘要写入 auditLog（见 kit/audit.ts::summarize），嵌套对象会被折叠成 '{…}'、不递归——这是本文件把敏感
@@ -65,7 +65,7 @@ export async function saveSecureConfig({ db, data }: Ctx) {
 
 const PAY_MAX_LEN: Record<string, number> = { subMchId: 32, flowId: 100, refundFlowId: 100 }
 
-/** 写 `config/pay` 文档（mode/subMchId/flowId/refundFlowId·支付退款工作流接缝，console-assets §⑦）。 */
+/** 写 `config/pay` 文档（mode/subMchId/flowId/refundFlowId·支付退款工作流接缝，见 console-assets/01 ⑦）。 */
 export async function savePayConfig({ db, data }: Ctx) {
   const patch: Record<string, unknown> = {}
   if (data && data.mode !== undefined) {

@@ -107,11 +107,11 @@
 .cs-btn {
   flex: 1;
   height: 92rpx;
-  /* 药丸形（2026-07-25 体检批 P3）：全站主按钮（结算「提交订单」/空车「去逛逛」/播放页出路）都是
-     药丸，本页原用 --ld-radius 圆角方块，是全站唯一异形。 */
+  /* 药丸形：全站主按钮（结算「提交订单」/空车「去逛逛」/播放页出路）都是
+     药丸，本页不单独用圆角方块。 */
   border-radius: var(--ld-radius-pill);
   /* box-sizing 必写：ghost 支多一条 2rpx 边框，content-box 下实际高 96rpx——两个按钮并排
-     一高一矮、底边不齐（体检取证：「撤回授权」比「同意共享」大一圈）。 */
+     一高一矮、底边不齐（否则「撤回授权」比「同意共享」大一圈）。 */
   box-sizing: border-box;
   display: flex;
   align-items: center;

@@ -1,8 +1,8 @@
-<!-- 激活欢迎页·对齐设计 Welcome.jsx 变体A「沉浸全屏」+ 播放器重设计战役批E 新增 W1/W2 lilac 壳。
+<!-- 激活欢迎页·对齐设计 Welcome.jsx 变体A「沉浸全屏」+ W1/W2 lilac 壳。
      业务态：phase 'input'（输入激活码）/ 'result'（兑课结果）/ 'w2'（W2 三件事屏·仅新激活可达）。
-     kind==='mine'/'taken'/'invalid' 三态与输入态一律走沉浸全屏照片壳（第一个 view，一字不动）；
-     唯独 kind==='activated' 改走 W1（恭喜屏）→ W2（三件事屏）两屏 lilac 壳（第二/三个 view，本批新增）。
-     数据流与 handler 全保留（activate/onEnter/onRetry/onGoHome），新增 onNextWelcome（W1→W2 纯前端翻屏）。 -->
+     kind==='mine'/'taken'/'invalid' 三态与输入态一律走沉浸全屏照片壳（第一个 view）；
+     唯独 kind==='activated' 走 W1（恭喜屏）→ W2（三件事屏）两屏 lilac 壳（第二/三个 view）。
+     handler：activate/onEnter/onRetry/onGoHome，onNextWelcome（W1→W2 纯前端翻屏）。 -->
 
 <!-- 沉浸全屏照片壳：input 态 + result 态里 kind !== 'activated'（mine/欢迎回来·taken/已被使用·invalid/废码） -->
 <view class="ld-welcome" wx:if="{{phase === 'input' || (phase === 'result' && kind !== 'activated')}}">
@@ -12,8 +12,8 @@
 
   <image class="ld-w-logo" src="/static/logo-wordmark.svg" mode="heightFix" style="top: {{statusBarHeight + 40}}px" />
 
-  <!-- 自绘返回：custom 导航无原生返回箭头，此前输入态/废码态
-       只有「重新输入」、退不出去（W2 屏另有「先逛逛，稍后再进课」逃逸链接，那条不动）。
+  <!-- 自绘返回：custom 导航无原生返回箭头，否则输入态/废码态
+       只有「重新输入」、退不出去（W2 屏另有「先逛逛，稍后再进课」逃逸链接）。
        照片壳是深色压暗底，故用半透明黑底＋反白箭头（与 lilac 壳的 W1/W2 无关，那两屏不加）。 -->
   <view class="ld-w-back" style="top: calc({{statusBarHeight}}px + 24rpx)" bind:tap="onBack" hover-class="ld-w-back-h" hover-stay-time="80">
     <image class="ld-w-back-ico" src="/static/icons/chevron-right.svg" mode="aspectFit" />
@@ -118,7 +118,7 @@
         <view class="ld-wl-dot"></view>
         <view class="ld-wl-dot on"></view>
       </view>
-      <!-- 不可退货警示（业务告知义务·README 走查表第12项明确要求，不省）·空则强制回默认（mapWelcome·不允许被清空） -->
+      <!-- 不可退货警示（业务告知义务·需求 R4，不省）·空则强制回默认（mapWelcome·不允许被清空） -->
       <view class="ld-wl-warn">{{welcome.w1.warning}}</view>
       <view class="ld-wl-cta {{busy ? 'dim' : ''}}" bind:tap="onEnter">
         <text>进入课程</text>

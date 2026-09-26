@@ -52,11 +52,11 @@ export async function getOrderDetail({ db, data }: Ctx) {
 export async function listOrders({ db, data, caps }: Ctx) {
   const q = String((data && data.q) || '').trim()
   const status = String((data && data.status) || '')
-  // 最小权限收窄（P2 评审·refund:manage 越权面）：listOrders 无过滤时逐单回全文（无 .field() 投影：
+  // 最小权限收窄（refund:manage 越权面）：listOrders 无过滤时逐单回全文（无 .field() 投影：
   // _openid/address 姓名·电话·详址/items/transactionId/amount），无 q 全表翻页＝翻遍全店客户 PII。
-  // ACTION_CAPS 把 listOrders 放给 admin:write|refund:manage（C4），但 refund:manage（退款专员）只需
+  // ACTION_CAPS 把 listOrders 放给 admin:write|refund:manage，但 refund:manage（退款专员）只需
   // 核对「越规退款这一单」——仅持 refund:manage（无 admin:write/'*'）时强制精确单号 q、拒无过滤/状态浏览
-  // （与 lib.ts ROLES 注释「刻意去掉裸 customer:view 防批量导出」同一类风险）。admin:write/'*' 行为完全不变。
+  // （与 lib.ts ROLES 注释「刻意去掉裸 customer:view 防批量导出」同一类风险）。admin:write/'*' 不受此限。
   const capList: string[] = Array.isArray(caps) ? caps : []
   const canBrowseAll = capList.some((c) => c === '*' || c === 'admin:write')
   if (!canBrowseAll && !q) return reply(403, err('ORDER_NO_REQUIRED'))
@@ -99,8 +99,8 @@ export async function listOrders({ db, data, caps }: Ctx) {
 
 // 按状态服务端精确计数（根因#7 计数失真）：每状态 + 全部走 .count()（精确·不封顶·不受分页影响），
 // 状态枚举绑订单域单源 ORDER_STATUS（新增状态自动覆盖·根因#2）。前端标签计数只读此结果、不数已加载页。
-// partial（P1·bug sweep Round1 item7·病根#14）：某路 .count() 失败原先静默兜成 0，混进精确计数里
-// front 端无从分辨「真为 0」还是「没查到」——现在任一路失败即整体标 partial:true（不逐路置 null，
+// partial（病根#14）：某路 .count() 失败若静默兜成 0，混进精确计数里
+// 前端无从分辨「真为 0」还是「没查到」——故任一路失败即整体标 partial:true（不逐路置 null，
 // 保持返回形状简单：前端已按「整体不可信」处理待办卡，无需精确到哪个状态失败）。
 export async function orderCounts({ db }: Ctx) {
   let partial = false
@@ -122,7 +122,7 @@ export async function orderCounts({ db }: Ctx) {
   return reply(200, { ok: true, counts, partial })
 }
 
-// 发货上传互斥闸陈旧判据（批Y·shipUploadLock 无解锁机制修复）：闸释放写在函数体最后一步（微信上传
+// 发货上传互斥闸陈旧判据（shipUploadLock 无独立解锁机制）：闸释放写在函数体最后一步（微信上传
 // 完成之后）——若云函数在「写完 busy、写回 idle」这个窗口被平台强杀（超时/OOM/平台重启，非 JS 异常，
 // try/catch 挡不住），busy 会永久卡住，且全仓没有其它 action 会重置它，该订单从此再也发不出货（含合法
 // 改单号重试），只能人工进库改字段。微信发货上传云调用正常应秒级完成，给远超正常耗时的安全边际——
@@ -131,7 +131,7 @@ export async function orderCounts({ db }: Ctx) {
 const SHIP_LOCK_STALE_MS = 5 * 60 * 1000
 
 // 发货状态转移 + 抢上传互斥闸：抢到回 null，没抢到回错误码。
-// 条件更新（审核批次A-6 + 批P 并发互斥闸续）：仍是 paid/shipped 才写——防与确认收货并发把 done 回滚；
+// 条件更新 + 并发互斥闸：仍是 paid/shipped 才写——防与确认收货并发把 done 回滚；
 // 同一次写里叠加抢占 shipUploadLock（CAS neq 'busy'，非「一次性 exists」范式——本闸是「进行中」busy/idle
 // 二态、可反复抢占，不是只能成功一次的既有 exists(false) 惯用法，因为「改单号」场景要求同单可合法地
 // 再次触发上传）。根因：两个几乎同时到达的并发 shipOne 调用可能都读到 cur=paid、都通过上方状态闸——
@@ -184,25 +184,25 @@ async function grabShipLock(db: any, id: string, order: OrderDoc, company: strin
   return null
 }
 
-// SCM-D 核销留痕（守卫 ship-verify-ledger·根因#2·「如实核销」蓝图定稿）：**首次** paid→shipped 逐行落
+// 核销留痕（守卫 ship-verify-ledger·根因#2·如实核销）：**首次** paid→shipped 逐行落
 // ship 流水（fg 行只留痕不动账——成品扣账在下单预留 reserveStock；确定性 _id=ship:<orderId>:fg:<pid>__<spec>
 // 并发/重试天然幂等）；改单号（shipped→shipped）不重复留痕，由调用方只在首次发货时调。fail-soft：留痕失败
 // 不反噬发货（发货是主动作），但 fg 行无 CAS 面、除入参形状外无失败路径；旧单无 items 静默跳过（不落假流水·根因#8）。
 async function recordShipLedger(id: string, order: OrderDoc, refundedQty: Record<string, number>, operator: string) {
-  // 组合键校验在出生点、不在此消费点（战役3 批D·D1）：这里吃的是历史订单快照（items 下单时已定格），
+  // 组合键校验在出生点、不在此消费点：这里吃的是历史订单快照（items 下单时已定格），
   // fail-closed 会拒发既有订单（钱链反噬）——规则单源见 shared/scmKey.ts 头注，此处历史容忍。
   const moves = (order.items || [])
     .filter((it) => it && it.productId && Number.isInteger(it.qty) && it.qty > 0)
     .map((it) => ({ materialId: `fg:${it.productId}__${it.spec || ''}`, delta: -(it.qty - (refundedQty[lineKey(it)] || 0)) }))
     .filter((m) => m.delta < 0) // 已退的件没发出去，不核销
   if (!moves.length) return
-  // operator＝认证账号身份（B5.4 同款·与 SCM 各线 agentId 口径一致）：多账号后流水可溯「谁发的货」
+  // operator＝认证账号身份（与 SCM 各线 agentId 口径一致）：多账号后流水可溯「谁发的货」
   const led = await applyStockMoves(moves, { docType: 'ship', docId: id, operator }).catch(() => ({ ok: false as const }))
   if (!led.ok) await notifyAlert('anomaly', 'shipOrder', 'SCM_LEDGER_FAIL', { id })
 }
 
 // 单单发货核心（shipOrder 与 shipOrders 批量共用·DRY 单源）：状态闸 paid/shipped + feeMismatch 挡单
-// + 条件转移防并发回滚 done + 微信 upload_shipping_info 合规上报（fail-soft·债#26·根因#12）。
+// + 条件转移防并发回滚 done + 微信 upload_shipping_info 合规上报（fail-soft·根因#12）。
 // 返回纯结果对象（不含 HTTP 包装），调用方各自 reply / 汇总。
 async function shipOne(db: any, idRaw: any, companyRaw: any, trackingRaw: any, operator: string, ackRefundedQty: unknown) {
   const id = String(idRaw || '')
@@ -215,7 +215,7 @@ async function shipOne(db: any, idRaw: any, companyRaw: any, trackingRaw: any, o
   const cur = order.status
   // paid = 首次发货；shipped = 改单号。其余状态不允许动。
   if (cur !== 'paid' && cur !== 'shipped') return err(buildBadStatus(cur))
-  // 金额异常单（feeMismatch 留痕）须先「解除」后才能发货（审核批次A 折中）
+  // 金额异常单（feeMismatch 留痕）须先「解除」后才能发货
   if (order.feeMismatch) return err('FEE_MISMATCH_HOLD')
   // 退款↔履约状态同步闸：afterSales 与 orders 是两套状态机，退款从不改订单状态，所以发货前现场直读
   // afterSales（钱链闸子不走派生字段）。在途售后（申请中/已批，钱可能正在退）整单拦，返回命中行供前端定位；
@@ -243,7 +243,7 @@ async function shipOne(db: any, idRaw: any, companyRaw: any, trackingRaw: any, o
   const lockErr = await grabShipLock(db, id, order, company, trackingNo)
   if (lockErr) return err(lockErr)
   if (cur === 'paid') await recordShipLedger(id, order, refundedQty, operator)
-  // 合规债#26（根因#12）：本地发货成功后向微信上传发货信息——实物+微信支付不上传则订单资金冻结/无法结算。
+  // 发货合规上报（根因#12）：本地发货成功后向微信上传发货信息——实物+微信支付不上传则订单资金冻结/无法结算。
   // fail-soft：上传失败绝不回滚本地发货（已 shipped），只留痕 + [LD_ALERT] sev=money 告警，靠人去 mp 后台手动录入兜底。
   const ship = await uploadShippingToWx({
     orderId: id,
@@ -273,7 +273,7 @@ export async function shipOrder({ db, data, agentId }: Ctx) {
   return reply(r.ok ? 200 : 400, r)
 }
 
-// 批量发货（P1·上量瓶颈）：多选订单一次发，逐单走 shipOne（串行·各自独立·一单失败不拖累其余），
+// 批量发货（上量瓶颈）：多选订单一次发，逐单走 shipOne（串行·各自独立·一单失败不拖累其余），
 // per-order 回报。company 可整批共用或逐单覆盖。电子面单取号/打印需快递 API 账号·诚实延后（不在此造·根因#8）。
 export async function shipOrders({ db, data, agentId }: Ctx) {
   const items = Array.isArray(data && data.items) ? data.items : []

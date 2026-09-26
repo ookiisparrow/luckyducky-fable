@@ -3,19 +3,19 @@ import { transition, applyStockMoves, listMaterialDocs, pageQuery, notifyAlert, 
 import { COLLECTIONS } from '@ldrw/shared'
 import { asFen, PURCHASE_ORDER_TRANSITIONS } from '@ldrw/shared'
 
-// 进销存车道 A·采购线（见 docs/业务逻辑架构.md 链 12·门5 文件级隔离：本文件=车道 A）。
+// 进销存采购线（见 docs/业务逻辑架构.md 链 12·门5 文件级隔离：本文件=采购面）。
 // 状态机 draft→ordered→received（+draft/ordered→cancelled·声明表 shared/scm.spec.ts·门2 transition 收口·
 // 守卫 rw-status-transitions-declared 对账）；received 首次流转绑入库副作用（门1
 // applyStockMoves·docType purchase_in·确定性流水幂等——重放 moved=false 直接返回已入库、不双记账）。
 // 金额全链整数分（unitPriceFen/totalFen·totalFen 服务端算不信前端·根因#4）；数量正整数（守卫 scm-uom-integer 纪律）。
-// RBAC：不登记 ACTION_CAPS → 默认拒 admin:write＝仅超管（外包坐席天然无权·蓝图门5）；写类 action 自动审计（shouldAudit）。
+// RBAC：不登记 ACTION_CAPS → 默认拒 admin:write＝仅超管（外包坐席天然无权·门5）；写类 action 自动审计（shouldAudit）。
 // 集合名用字面量 'purchaseOrders'：rw-status-transitions-declared 靠字面量或 COLLECTIONS.x 归属 status 写入点，普通变量会逃出对账。
 
 const MAX_LINES = 50 // 单据行数上限（bounded·一张采购单不至于超·防垃圾大单）
 
 /** 从声明流转表（scm.spec.ts→scm.ts 生成物）按目标态取合法 from 集合——该表内每个 to 只出现一次
  *  （见 shared/scm.spec.ts 头注），故按 to 反查唯一。改流转边只改 scm.spec.ts 再跑生成器，
- *  本函数自动跟着变——不再像此前那样在各 transition() 调用点手写字面量、与生成物各背各的。 */
+ *  本函数自动跟着变——不在各 transition() 调用点手写字面量、与生成物各背各的。 */
 function fromFor(to: string): string[] {
   const t = PURCHASE_ORDER_TRANSITIONS.find((x) => x.to === to)
   if (!t) throw new Error(`PURCHASE_ORDER_TRANSITIONS 未声明 to='${to}'（scm.spec.ts 与 scmPurchase.ts 不同步）`)
@@ -54,8 +54,8 @@ async function validateLines(raw: any): Promise<{ ok: true; lines: PurchaseLine[
 }
 
 // ── 列表（只读·cursor 分页·可按 status 过滤·createdAt 倒序）──
-// B1（根因#7）：改走 kit pageQuery——旧 limit 直取封顶 200 会让超上限旧单永久不可查；defaultLimit
-// 沿用旧默认值 100，无参调用首页条数零变化，翻页可续查历史全量。
+// 根因#7：走 kit pageQuery——limit 直取封顶会让超上限旧单永久不可查；defaultLimit 100，
+// 翻页可续查历史全量。
 
 const LIST_LIMIT = 100
 
@@ -69,7 +69,7 @@ export async function listPurchases({ db, data }: Ctx) {
 // ── 建/改草稿（仅 status=draft 可改·totalFen 服务端算·不信前端）──
 
 export async function savePurchase({ db, data, agentId }: Ctx) {
-  // 供应商须存在且是厂家（织女走车道 B 外协单·不混）
+  // 供应商须存在且是厂家（织女走外协单·不混）
   const supplierId = String(data.supplierId || '')
   if (!supplierId) return reply(400, err('BAD_SUPPLIER'))
   // 读失败照抛（网关 500）——库挂≠供应商不对（根因#14）

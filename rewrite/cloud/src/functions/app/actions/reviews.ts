@@ -14,10 +14,10 @@ import {
 } from '../../../kit'
 
 /**
- * 求助面板辅助视频（黄金 §九）：两级（主题→小段）白名单下发；fileID 留服务端，
+ * 求助面板辅助视频：两级（主题→小段）白名单下发；fileID 留服务端，
  * 批量换短时 URL（≤50/批·映射不串位）；无视频/换不到 → null（前端占位）。
  */
-// 频控（深审 P3·病根#13）：批量签发视频临时地址的读端点，按 openid 限速防无节流刷签名地址。
+// 频控（病根#13）：批量签发视频临时地址的读端点，按 openid 限速防无节流刷签名地址。
 export const getHelpVideos = withOpenId(
   withRateLimit('getHelpVideos', { max: 30, windowMs: 60_000 }, async ({ db }) => {
     let got: any
@@ -59,7 +59,7 @@ function publicReviewFilter(productId: string) {
 }
 
 /**
- * 精确汇总（黄金 §七：全量精确、永不近似）：按星级分组一次聚合出各档条数与总分，不受样本截断。
+ * 精确汇总（全量精确、永不近似）：按星级分组一次聚合出各档条数与总分，不受样本截断。
  * 与 tags 样本读互不依赖并行；样本加 .field({tags:true}) 投影——只取 tags，不连 text（≤500字）/photos
  * 拉整文档。
  */
@@ -112,8 +112,8 @@ async function buildSummaryExact(db: any, productId: string) {
  * 兜底汇总（聚合异常时的近样本口径·如实标 approx）。
  * sample 由调用方多取一条（limit SUMMARY_SAMPLE+1）传入，仅用来判断是否被截断——真被截断
  * （length > SUMMARY_SAMPLE）才标 approx；恰好 SUMMARY_SAMPLE 条时其实是全量、不该误标近似
- * （差一：原先用 count>=SUMMARY_SAMPLE 判定，采样查询本身就 limit(SUMMARY_SAMPLE)，「恰好占满上限」
- * 与「被截断」在 length 上不可区分，P3 复核修）。参与统计计算只取前 SUMMARY_SAMPLE 条，多取的
+ * （差一：采样查询若只 limit(SUMMARY_SAMPLE) 再用 count>=SUMMARY_SAMPLE 判定，「恰好占满上限」
+ * 与「被截断」在 length 上不可区分）。参与统计计算只取前 SUMMARY_SAMPLE 条，多取的
  * 那一条只用于探测截断、不参与聚合，避免引入统计偏差。
  */
 function buildSummary(sample: any[]) {
@@ -150,15 +150,15 @@ function buildSummary(sample: any[]) {
 }
 
 /**
- * 按商品取评价（公开读·黄金 §七）：游标分页 + 首页全量精确汇总（翻页不重算，前端缓存）。
+ * 按商品取评价（公开读）：游标分页 + 首页全量精确汇总（翻页不重算，前端缓存）。
  */
 export const getReviews = async (event: any = {}) => {
   const productId = String(event.productId || '')
   if (!productId) return err(ERR.NO_PRODUCT)
   const db = getDb()
 
-  // isFirstPage 只依赖 event.cursor，与列表分页查询结果零数据依赖（已核·批C）——起汇总链与列表链
-  // 并行跑，最后统一 await，省一轮网关往返；fallback 语义与原 try/catch 完全等价（仅改成 promise 链）。
+  // isFirstPage 只依赖 event.cursor，与列表分页查询结果零数据依赖——起汇总链与列表链
+  // 并行跑，最后统一 await，省一轮网关往返；fallback 语义与 try/catch 写法等价。
   const isFirstPage = !(event && (event.cursor ?? null))
   const summaryP = isFirstPage
     ? buildSummaryExact(db, productId).catch(async () => {
@@ -176,12 +176,12 @@ export const getReviews = async (event: any = {}) => {
     : null
 
   const paged = await pageQuery(db, COLLECTIONS.reviews, publicReviewFilter(productId), 'createdAt', event, 20)
-  // 买家秀晒图：受保护云存储 fileID 只在服务端，鉴权后批量换短时地址下发（不漏裸 fileID·黄金 §九同 helpVideos）。
+  // 买家秀晒图：受保护云存储 fileID 只在服务端，鉴权后批量换短时地址下发（不漏裸 fileID·同 helpVideos）。
   const photoIds = paged.list.flatMap((r: any) =>
     (Array.isArray(r.photos) ? r.photos : []).filter(Boolean).map(String)
   )
-  // 批1·买家秀晒图带 maxAge（容器级签发缓存·热门商品晒图跨会话复用不重签）+ imageProc（图像处理·默认关）·
-  // 同 catalog IMG_OPTS 口径。求助视频（getHelpVideos·:30）不带此策略——视频址一次性、不进签发缓存。
+  // 买家秀晒图带 maxAge（容器级签发缓存·热门商品晒图跨会话复用不重签）+ imageProc（图像处理·默认关）·
+  // 同 catalog IMG_OPTS 口径。求助视频（getHelpVideos）不带此策略——视频址一次性、不进签发缓存。
   const urlMap = await getTempUrls(photoIds, { maxAge: IMAGE_URL_MAX_AGE, imageProc: true })
   const list = paged.list.map((r: any) => ({
     name: r.name,
@@ -228,7 +228,7 @@ export const getRatingSummary = async (event: any = {}) => {
 }
 
 /**
- * 提交评价（黄金 §七）：多重闸门（身份/评分 1–5/订单归属/已完成/商品在单内）；
+ * 提交评价：多重闸门（身份/评分 1–5/订单归属/已完成/商品在单内）；
  * 一单一行一评（确定性 _id=orderId__lineId 库级唯一·同商品多 SKU 各自可评）；匿名/昵称云端快照。
  * 按 openid 限频（根因#13·防刷库堆垃圾）；内容安全外呼（图 imgSecCheck ≤9 张 + 文本 msgSecCheck）跑在
  * 幂等存在性预检之后——已评过直接返 REVIEWED，不再逐张/逐文本外呼放大计费（根因#4 幂等 + 成本）。

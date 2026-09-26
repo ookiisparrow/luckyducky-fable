@@ -1,5 +1,5 @@
 /**
- * 集合名册（设计约束「集合单一来源」——同一个生产库，名字是数据契约不可改）。
+ * 集合名册（集合单一来源——同一个生产库，名字是数据契约不可改）。
  * 新集合先登记（并去控制台锁权限）再用。
  */
 export const COLLECTIONS = {
@@ -42,7 +42,7 @@ export const COLLECTIONS = {
   // 观测
   anomalies: 'anomalies', // bug 收集器账本（防治静默 bug·指纹去重·仅管理端·recordAnomaly 单口写入）
   inspectRuns: 'inspectRuns', // 巡检机体检报告（每次运行 A/B 检查红绿灯·仅管理端·runInspection 单口写入）
-  // 敏感凭证入库单源（2026-07-12 决策·config-checklist 本页填写自动生效）：doc('wxkf')/doc('wxpay')，
+  // 敏感凭证入库单源（config-checklist 本页填写自动生效）：doc('wxkf')/doc('wxpay')，
   // 云函数运行时读库优先、env 兜底迁移期——见 kit/secureConfig.ts。仅 saveSecureConfig 单口写入。
   secureConfig: 'secureConfig',
   // createOrder 幂等键（防网络超时重试双建单）：_id=(openid+客户端幂等键) 确定性哈希，

@@ -2,10 +2,10 @@ import crypto from 'crypto'
 import { notifyAlert, isDocMissing, isEmptyDoc, isCollectionMissing, err } from '../../kit'
 import { COLLECTIONS, PAID_ORDER_STATUSES, type CollectionName } from '@ldrw/shared'
 
-// 账号有界扫描命中上限告警（P2 评审·根因#7 分页协议纪律的账号扫描版）：keyHash 加盐后多账号查找从
+// 账号有界扫描命中上限告警（根因#7 分页协议纪律的账号扫描版）：keyHash 加盐后多账号查找从
 // 「等值精确查询」退化为「limit(N) 有界扫描 + 客户端逐条比对」（checkKey 多账号分支、createAgent 撞口令
 // 预检①/写后复核②，见 keyMatches 单源三处调用点）——一旦 adminConfig 带 keyHash 的账号总数超过扫描上限，
-// 候选窗口可能装不下目标账号，导致合法口令静默登录失败 / 撞口令回滚安全网形同虚设，且此前无任何信号。
+// 候选窗口可能装不下目标账号，导致合法口令静默登录失败 / 撞口令回滚安全网形同虚设，且没有任何信号。
 // fail-soft：只在命中上限时留痕告警，不改变扫描本身的返回值/控制流。
 export function alertIfScanAtCap(rows: any[], limit: number, fn: string): void {
   if (Array.isArray(rows) && rows.length >= limit) {
@@ -25,7 +25,7 @@ export interface Ctx {
   db: any
   cloud: any
   data: any
-  // 承面 C 坐席台（B6·§1.5·根因#3 不信前端）：认证主体身份，由 index.ts 分发处从 checkKey 结果贯入（非 data）。
+  // 坐席台（根因#3 不信前端）：认证主体身份，由 index.ts 分发处从 checkKey 结果贯入（非 data）。
   agentId?: string // 认证坐席身份＝账号 _id（外包 adminConfig._id / 超管 'admin'）·claim/scope/agentState 用
   caps?: string[] // 认证主体能力位（'*'=超管全量·坐席台分配 scope 判超管用）
 }
@@ -43,7 +43,7 @@ export const reply = (statusCode: number, data: any) => ({
 })
 export const sha = (s: any) => crypto.createHash('sha256').update(String(s)).digest('hex')
 
-// 口令加盐 KDF（批6·根因：sha 无盐口令可离线彩虹表还原·钱/权限承重批）：新写入口令一律 salt+scrypt；
+// 口令加盐 KDF（sha 无盐口令可离线彩虹表还原）：新写入口令一律 salt+scrypt；
 // 存量 sha 账号 legacy 校验通过后 best-effort 就地升级（见 checkKey/createAgent）。scrypt 默认参数
 // N=16384（~16MB/数十 ms）：登录端点已有频控、建号为管理端低频操作，最坏扫描 ≤50 行也在可接受范围。
 export const newSalt = () => crypto.randomBytes(16).toString('hex')
@@ -51,8 +51,8 @@ export const kdf = (key: string, salt: string) =>
   crypto.scryptSync(String(key), salt, 32).toString('hex')
 
 // 盐感知口令比对单源（根因#5·防漂移）：有 keySalt 走 scrypt 比对（新写入/已升级口令）；无则 legacy
-// sha 比对（存量未升级账号）。checkKey 的多账号扫描、createAgent 的撞口令预检①与写后复核②全部改走
-// 它——一份比对逻辑，杜绝三处各写一份、盐语义漂移（预审咬中项）。
+// sha 比对（存量未升级账号）。checkKey 的多账号扫描、createAgent 的撞口令预检①与写后复核②都走
+// 它——一份比对逻辑，杜绝三处各写一份、盐语义漂移。
 export function keyMatches(row: any, key: string): boolean {
   if (!row) return false
   return row.keySalt ? kdf(key, row.keySalt) === row.keyHash : sha(key) === row.keyHash
@@ -66,7 +66,7 @@ export async function ensure(db: any, coll: CollectionName) {
   }
 }
 
-// 预读一份文档：缺档 ≠ 读失败（根因#14）。原 .get().catch(() => null) 把网络/权限/集合故障也折成「没有这份」，
+// 预读一份文档：缺档 ≠ 读失败（根因#14）。若 .get().catch(() => null)，网络/权限/集合故障也会折成「没有这份」，
 // 写路径就会按空档/rev=0 覆盖或拿失败基线做 GC。缺档 data=null；读失败 ok=false——调用方必须停写。
 // 判据复用 kit isDocMissing（真 sdk 缺档文案已查证，禁再抄一份更宽的 /does not exist/）。
 // 集合未建走 isCollectionMissing：后台页靠读成功才放开保存，不当读失败挡第一次落档。
@@ -108,16 +108,15 @@ export async function activationFor(db: any, openid: string, productId: string) 
   }
 }
 
-// 已付营收口径（看板 GMV·债#32）：pending/closed 未付不计。真正单源在 @ldrw/shared order.ts 的 PAID_ORDER_STATUSES
-// （与订单状态机声明同处）；这里保留 PAID_STATUSES 这个名字只做转发，给 dashboard.ts 用。财务对账（reconciliation.ts）
+// 已付营收口径（看板 GMV）：pending/closed 未付不计。真正单源在 @ldrw/shared order.ts 的 PAID_ORDER_STATUSES
+// （与订单状态机声明同处）；这里的 PAID_STATUSES 只做转发，给 dashboard.ts 用。财务对账（reconciliation.ts）
 // 按「已收到钱」算，口径更宽，直接从 @ldrw/shared 引 MONEY_RECEIVED_STATUSES，不走这里。
 export const PAID_STATUSES: readonly string[] = PAID_ORDER_STATUSES
 
-// 钱链内部异常（txAlerts·债#23 单源）：金额不符单 / 退款金额不符 / 审批超 1h 未到回调的卡单。
-// 看板（dashboard）与财务对账（reconciliation·S16）共用此单源——同 activationFor 范式，防两处漂移
+// 钱链内部异常（txAlerts 单源）：金额不符单 / 退款金额不符 / 审批超 1h 未到回调的卡单。
+// 看板（dashboard）与财务对账（reconciliation）共用此单源——同 activationFor 范式，防两处漂移
 // （钱链异常是 money 正确性判据，散两份易一处改漏）。各项走定向 where 精确（稀少·小集合·不从样本 filter）。
-// P2→修（批1 bug sweep）：三路裸 .get() 命中服务端默认 100 条截断，与「精确不漏老单」的注释矛盾——
-// 显式 .limit(1000)（云函数端上限）。钱链异常超 1000 条属灾难态，看板计数意义已失真，如实 cap 不强求无界。
+// 三路裸 .get() 会命中服务端默认 100 条截断、漏老单——故显式 .limit(1000)（云函数端上限）。钱链异常超 1000 条属灾难态，看板计数意义已失真，如实 cap 不强求无界。
 export async function getTxAlerts(
   db: any
 ): Promise<{
@@ -129,8 +128,8 @@ export async function getTxAlerts(
   const _ = db.command
   const HOUR = 3600_000
   const CAP = 1000
-  // 任一路查询失败（深审 P1·病根#14）：钱链异常（金额不符/退款不符/卡单）是 money 正确性判据，
-  // 静默 .catch(()=>[]) 降级为「零异常」会让看板/对账把「没查到」当「没异常」（假 all-clear）。改：
+  // 任一路查询失败（病根#14）：钱链异常（金额不符/退款不符/卡单）是 money 正确性判据，
+  // 静默 .catch(()=>[]) 降级为「零异常」会让看板/对账把「没查到」当「没异常」（假 all-clear）。故：
   // 失败置 partial + 告警，回传 partial 让消费方标注「异常数据不可信」，绝不假装全清。
   let partial = false
   const rows = (q: any) =>
@@ -161,17 +160,17 @@ export async function getTxAlerts(
   }
 }
 
-// 口令校验。首次初始化（债#15 关抢占窗口）：须走 login 且本次口令匹配**部署密钥**环境变量
+// 口令校验。首次初始化（关抢占窗口）：须走 login 且本次口令匹配**部署密钥**环境变量
 // ADMIN_BOOTSTRAP_KEY——杜绝「空库谁先登录谁就占管理员」。未设该环境变量＝禁 bootstrap。
 // 设密钥流程：部署时设云环境变量 ADMIN_BOOTSTRAP_KEY＝期望口令 → 首登用该口令 → 设定后可移除。
-// 坐席 RBAC 角色→能力位单源（§1.5·B5.2·别让单超管裸奔）：superadmin 全能力；outsourced 外包最小权
+// 坐席 RBAC 角色→能力位单源（别让单超管裸奔）：superadmin 全能力；outsourced 外包最小权
 // （只 agent:handle·余皆默认拒·防越权动钱/状态/导出）。中间角色（如内部坐席）按需扩——加新角色 + 给对应 action 标 cap 即可。
 const ROLES: Record<string, string[]> = {
   superadmin: ['*'],
-  // 外包最小权（§1 定稿·根因#3·master 整合收窄）：**仅 agent:handle**——承面C 坐席台（查 listQueue/getThread + 回复 send +
+  // 外包最小权（根因#3）：**仅 agent:handle**——坐席台（查 listQueue/getThread + 回复 send +
   // 认领/放手/升级/结束 + 快捷回复读 kb·**不含**动钱/动状态/退款·留商户超管）。**刻意去掉裸 customer:view**：
-  // 否则外包一建号即可调 getCustomer360/searchCustomer 遍历全量客户＝批量导出（车道 C 报的洞·§1 定稿「分配制·只看自己 claim 的会话+对应360」）。
-  // 外包看客户 360 只能经「自己 claim 的会话」的 scoped 路径（assertOwnedByAgent + assertDataShareConsent·scoped-360 follow-up 落地·见 承面C工单）。
+  // 否则外包一建号即可调 getCustomer360/searchCustomer 遍历全量客户＝批量导出（分配制：只看自己 claim 的会话+对应360）。
+  // 外包看客户 360 只能经「自己 claim 的会话」的 scoped 路径（assertOwnedByAgent + assertDataShareConsent·见 agentDesk.ts getSessionCustomer360）。
   outsourced: ['agent:handle'],
 }
 export const capsForRole = (role: string): string[] => ROLES[role] || []
@@ -179,7 +178,7 @@ export const capsForRole = (role: string): string[] => ROLES[role] || []
 // 账号档 → 认证主体（口令 / 会话令牌 / 企微免登共用一份，防同一账号换登录方式拿到不同权限）。
 // caps 优先级：role 派生（ROLES 单源）＞显式 caps 字段＞超管回退 ['*']（旧超管 'auth' doc 无 role/caps）。
 // operator＝真实操作者（审计留痕「谁改了谁」）：无 name 时超管回退 'admin'、外包回退 _id。
-// 超管 agentId 固定 'admin'（商户本人·承面C 可 claim）；外包 agentId＝账号 _id（claim 绑定/scope/agentState 键）。
+// 超管 agentId 固定 'admin'（商户本人·坐席台可 claim）；外包 agentId＝账号 _id（claim 绑定/scope/agentState 键）。
 export function principalOf(a: any) {
   const isSuper = a._id === 'auth'
   return {
@@ -190,7 +189,7 @@ export function principalOf(a: any) {
   }
 }
 
-// 会话令牌（深审 P1·根因#3 口令不落盘）：口令登录与企微免登共用一套签发/解析——登录成功签发高熵令牌，
+// 会话令牌（根因#3 口令不落盘）：口令登录与企微免登共用一套签发/解析——登录成功签发高熵令牌，
 // 前端只存令牌不存口令原文（口令是可复用主凭证，落在外包机器上=失守；令牌 12h 自灭 + 登出/停号即删）。
 // 存储形状：账号 doc.sessions = [{ hash, exp, via, at }]（sha 入库·绝不存明文）；数组容多设备
 // （商户同时登控制台+坐席台不互踢），签发时剪过期、超容剪最旧（tests/app-admin1.test.ts 钉只存 sha）。
@@ -289,8 +288,8 @@ export async function checkKey(db: any, key: any, login: boolean) {
   const got = await readDoc(db.collection(COLLECTIONS.adminConfig).doc('auth').get())
   if (!got.ok) return err('AUTH_UNAVAILABLE') // 库故障≠查无此号：不当错口令记爆破
   if (!got.data) {
-    // 首登 bootstrap（债#15 关抢占）：无超管 doc 时·须 login + 部署密钥 ADMIN_BOOTSTRAP_KEY → 建首个超管。
-    // 批6：bootstrap 建号即带盐（新写入一律 salt+scrypt·不再落无盐 sha）。
+    // 首登 bootstrap（关抢占）：无超管 doc 时·须 login + 部署密钥 ADMIN_BOOTSTRAP_KEY → 建首个超管。
+    // bootstrap 建号即带盐（新写入一律 salt+scrypt·不落无盐 sha）。
     const secret = process.env.ADMIN_BOOTSTRAP_KEY || ''
     if (!login || !secret || keyStr !== secret) return err('BAD_KEY')
     await ensure(db, COLLECTIONS.adminConfig) // 只有这条首登写入需要集合在；读路径集合未建即当空（readDoc）

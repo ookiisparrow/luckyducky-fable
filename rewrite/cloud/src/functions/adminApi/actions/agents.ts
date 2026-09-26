@@ -2,15 +2,15 @@ import { reply, ensure, newSalt, kdf, keyMatches, alertIfScanAtCap, type Ctx } f
 import { notifyAlert, getDocOrNull, str, err } from '../../../kit'
 import { COLLECTIONS, dayKeyCST, dayStartMsCST } from '@ldrw/shared'
 
-// 外包账号管理（后台360工作站 §1.5·B5.2·承面C 车道 C·根因#3）：商户超管建/停/列外包坐席账号
+// 外包账号管理（根因#3）：商户超管建/停/列外包坐席账号
 // （adminConfig 多账号·role=outsourced 最小权·checkKey 据 keyHash 认账号 + disabled 停用·骨架已在 lib.ts）。
 // 本三 action 仅超管可调——**未登记 ACTION_CAPS 默认拒 ADMIN_DEFAULT_CAP**（外包
 // 自身 caps 无 admin:write、不能建/停账号·防外包自扩权）。已挂 adminApi ACTIONS。
 
-const AGENT_ROLE = 'outsourced' // 外包最小权角色（ROLES.outsourced·caps 由 role 派生·车道 A 补 agent:handle）
+const AGENT_ROLE = 'outsourced' // 外包最小权角色（ROLES.outsourced·caps 由 role 派生）
 
-// 企微 userid 唯一性校验（免登不歧义的真实不变量·M⑦ 地基）：loginByWecomCode 按 wecomUserId===userid
-// 反查账号，两账号撞同一 userid 会匹配歧义→登错身份。写侧收口唯一性；车道 B 免登侧再补 fail-closed 闸。
+// 企微 userid 唯一性校验（免登不歧义的真实不变量）：loginByWecomCode 按 wecomUserId===userid
+// 反查账号，两账号撞同一 userid 会匹配歧义→登错身份。写侧收口唯一性；免登侧（wecomLogin）另有 fail-closed 闸。
 // exceptId 排除自身（回填改绑时不误判撞自己）。
 // null＝读失败（DB 挂了）——绝不当「没人占用」。调用方回 503，不继续写。
 async function wecomUserIdTaken(db: any, wecomUserId: string, exceptId: string): Promise<boolean | null> {
@@ -26,7 +26,7 @@ async function wecomUserIdTaken(db: any, wecomUserId: string, exceptId: string):
 }
 
 // 建外包账号：{ name, key(登录口令), wecomUserId?(企微 userid·可空·免登用) }。keySalt+keyHash 入库（不存明文·
-// 批6 加盐 scrypt·同超管 doc）；_id=确定性 agent:<rand>。口令须 ≥6（同 checkKey 下限）且不与既有账号/超管撞
+// 加盐 scrypt·同超管 doc）；_id=确定性 agent:<rand>。口令须 ≥6（同 checkKey 下限）且不与既有账号/超管撞
 // （撞口令登录会串号）——撞口令判定经 keyMatches 单源（根因#5·同时认得住 legacy sha 存量与带盐新账号两种形态）。
 export async function createAgent({ db, data }: Ctx) {
   const name = str((data && data.name) || '', 40).trim()
@@ -54,7 +54,7 @@ export async function createAgent({ db, data }: Ctx) {
   if (wecomUserId) doc.wecomUserId = wecomUserId
   await db.collection(COLLECTIONS.adminConfig).doc(id).set({ data: doc })
 
-  // 写后复核（P2·根因#1 先查后写竞态修复）：上面的 dup/wecomUserIdTaken 都是「先查」，先查后写窗口内
+  // 写后复核（根因#1 先查后写竞态）：上面的 dup/wecomUserIdTaken 都是「先查」，先查后写窗口内
   // 并发双方可能都通过检查各自建号、撞出两账号共享同一口令/wecomUserId（登录串号/免登歧义）。
   // 写完立即重扫描重比对，keyMatches 命中 >1 说明确实撞了——回滚自己刚建的这份、回 409（两侧同时回滚也
   // 安全：都失败重试即可，绝不留双凭证）。复核读失败同样回滚：核验不了的账号不能留。管理端低频操作，多一次读的代价可接受。
@@ -86,7 +86,7 @@ export async function createAgent({ db, data }: Ctx) {
   return reply(200, { ok: true, agent: { id, name, role: AGENT_ROLE, disabled: false, wecomUserId } })
 }
 
-// 回填/改绑企微 userid：{ id, wecomUserId(空串=解绑) }。作用于外包账号或超管 'auth'（超管也可免登·M⑦ §2.2）。
+// 回填/改绑企微 userid：{ id, wecomUserId(空串=解绑) }。作用于外包账号或超管 'auth'（超管也可免登）。
 // 唯一性校验防两账号撞 userid（免登歧义）。仅超管可调（未登记 ACTION_CAPS→默认拒 admin:write·同建/停）。
 export async function setAgentWecomUserId({ db, data }: Ctx) {
   const id = String((data && data.id) || '')
@@ -106,7 +106,7 @@ export async function setAgentWecomUserId({ db, data }: Ctx) {
   const prevWecomUserId = acct.wecomUserId || ''
   await db.collection(COLLECTIONS.adminConfig).doc(id).update({ data: { wecomUserId, updatedAt: Date.now() } })
 
-  // 写后复核（P2·根因#1 先查后写竞态修复，同 createAgent）：写完重查该 wecomUserId 计数，>1 说明
+  // 写后复核（根因#1 先查后写竞态，同 createAgent）：写完重查该 wecomUserId 计数，>1 说明
   // 先查后写窗口内被并发改绑撞号——回滚刚写的这份字段（恢复旧值），绝不留两账号共享同一企微 userid。
   // 复核读失败同样回滚（核验不了的绑定不能留）；回滚失败留痕（同 createAgent）。
   if (wecomUserId) {
@@ -143,14 +143,14 @@ export async function disableAgent({ db, data }: Ctx) {
 }
 
 // 列外包账号（白名单字段·不回 keyHash·回 wecomUserId 供超管看绑没绑）：id/name/role/disabled/createdAt/wecomUserId。
-// B6 看板扩展（坐席个位量级·per-agent 三次有界读/count，无翻页需求）：
+// 看板字段（坐席个位量级·per-agent 三次有界读/count，无翻页需求）：
 //   status/stateUpdatedAt ← agentState 文档（agentDesk.ts setAgentStatus 写；无档兜底 'offline'/null）。
 //   activeCount ← csSession {agentId,status:'active'} count（查询写法照 agentDesk.ts activeCountFor 同构
 //     内联——文件级隔离先例，不 import 该私有 helper）。
 //   todayClosed ← csSession {agentId,status:'closed', updatedAt≥今日零点} count——现场核实：closeConversation
 //     转 closed 时 transition() 的 patch 只写 `{ updatedAt: now }`，没有独立 closedAt 字段（见 agentDesk.ts
 //     closeConversation），故这里的时间字段就是 updatedAt，不是 closedAt。
-//   零写路径：本 action 只读 adminConfig/agentState/csSession 三个集合，原 CRUD 四个 action 零改动。
+//   零写路径：本 action 只读 adminConfig/agentState/csSession 三个集合。
 export async function listAgents({ db }: Ctx) {
   const r = await db
     .collection(COLLECTIONS.adminConfig)

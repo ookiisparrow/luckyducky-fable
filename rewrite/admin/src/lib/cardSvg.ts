@@ -1,4 +1,4 @@
-// 卡面 SVG 生成（印刷包交付物·1:1 移植旧线 utils/cardSvg.js）：
+// 卡面 SVG 生成（印刷包交付物）：
 // 正面 = 插画面（满版图案 + 品牌角标）；反面 = 二维码面（标题/副文案/二维码占位/扫码引导/退货小字 + 品牌条）。
 // 二维码区为占位框——印刷厂按地址清单 CSV 一码一图（用户确认的工作方式）。
 import type { AdminCardDoc } from '@ldrw/shared'
@@ -13,7 +13,7 @@ const C_QRTEXT = '#b9b9c0' // structure-ok 二维码占位说明
 const C_HINT = '#3d3d42' // structure-ok 扫码引导
 const C_WARN = '#9a9aa2' // structure-ok 退货小字提醒
 
-// 引号也转（深审20260712 P3·对齐 fulfill.ts esc）：SVG 文本全部内插在双引号属性/元素里，只转 &<> 时
+// 引号也转（对齐 fulfill.ts esc）：SVG 文本全部内插在双引号属性/元素里，只转 &<> 时
 // 含引号脏档（文案/颜色值）可越出属性边界注入任意属性。
 const esc = (s: unknown): string =>
   String(s || '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c] as string)

@@ -1,7 +1,7 @@
 <script setup lang="ts">
-// 小程序橱窗（换皮回归还原批·1:1 承接旧线 Showcase 手感）：左 iPhone WYSIWYG 实时预览（同一份云端数据
+// 小程序橱窗：左 iPhone WYSIWYG 实时预览（同一份云端数据
 // 渲染小程序首页人气条），右排序/推荐面板。两边同一份列表状态，拖哪边都行，松手防抖自动保存、离页补存。
-// 停售/恢复已迁至 Products（在售态这里只读显示）；hero/背景/信任条/FAQ 已迁至 HomeContent。
+// 停售/恢复在 Products（在售态这里只读显示）；hero/背景/信任条/FAQ 在 HomeContent。
 import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
 import { listShowcase, saveShowcase } from '../api/products'
 import {
@@ -33,10 +33,10 @@ async function reload() {
   message.value = r.ok ? '' : '加载失败：' + (transportErrorText(r.error) || (r.error ? '请刷新重试（' + String(r.error) + '）' : '请刷新重试'))
 }
 
-// 防抖自动保存（700ms·换皮退成手动按钮·忘点即丢编辑）：拖动/开关都走它
+// 防抖自动保存（700ms·手动按钮的话忘点即丢编辑）：拖动/开关都走它
 let timer: ReturnType<typeof setTimeout> | null = null
-// 串行化实际保存（防慢网下多次拖拽/开关的保存乱序覆盖·P2·根因#8）：run 现读 rows·补存即最新排序。
-// key='showcase'（批D·P1）：改走模块级共享槽位，快速切走再切回本页重建组件实例时，新实例接管旧实例仍
+// 串行化实际保存（防慢网下多次拖拽/开关的保存乱序覆盖·根因#8）：run 现读 rows·补存即最新排序。
+// key='showcase'：走模块级共享槽位，快速切走再切回本页重建组件实例时，新实例接管旧实例仍
 // 在途的补存链，防旧快照晚到覆盖新实例已存的排序/推荐编辑。
 const flushSave = serialSave(async () => {
   const r = await saveShowcase(rows.value.map((x, i) => ({ id: x.id, sort: i + 1, featured: x.featured })))
@@ -84,7 +84,7 @@ const isDrag = (r: ShowcaseRowVM) => drag.value === idxOf(r)
 
 // 离页补存：还在防抖窗口内未落盘的改动立即补发（保存幂等·多发无副作用）。
 // 判据用 pending timer 而非 saveState==='saving'：先发的自动保存完成会把 saveState 复位成 'saved'，
-// 而后一次编辑只活在待触发的 timer 里——按 saveState 判会漏补、离页丢这次编辑（P2·同 HomeContent 的 if(saveTimer)）
+// 而后一次编辑只活在待触发的 timer 里——按 saveState 判会漏补、离页丢这次编辑（同 HomeContent 的 if(saveTimer)）
 onBeforeUnmount(() => {
   if (timer) {
     clearTimeout(timer)

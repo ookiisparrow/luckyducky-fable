@@ -56,7 +56,7 @@ const labelOf = (s: Status) => (s === 'ok' ? '已配' : s === 'missing' ? '未�
 
 const totalItems = computed(() => groups.value.reduce((n, g) => n + g.items.length, 0))
 // 全局保存锁：任一项保存在途时全部保存按钮禁用——防先返回的整页 load() 重建 fillState 时，
-// 另一在途项的 busy 态被清、输入框复通造成二次提交/态错乱（审查批·frontend finding）
+// 另一在途项的 busy 态被清、输入框复通造成二次提交/态错乱
 const anyBusy = computed(() => Object.values(fillState.value).some((s) => s.busy))
 
 // 后端定型错误码 → 人话（非技术用户直读；未映射的原样带出便于排障）
@@ -289,7 +289,7 @@ onMounted(load)
   color: var(--ld-amber);
 }
 
-/* 填写区（批 B10：带 fill 元数据的项才出现）——占满整行、居下方，输入框永远空白起 */
+/* 填写区（带 fill 元数据的项才出现）——占满整行、居下方，输入框永远空白起 */
 .row-fill {
   grid-column: 1 / -1;
   display: flex;

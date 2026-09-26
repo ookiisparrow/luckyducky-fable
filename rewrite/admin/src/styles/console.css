@@ -27,7 +27,7 @@ body {
   color: var(--ld-content-2);
 }
 
-/* 页面内反复出现的小型结构原语（Issue #137 F1·病根#5）：只收敛布局与既有 token 引用，
+/* 页面内反复出现的小型结构原语（病根#5）：只收敛布局与既有 token 引用，
  * 页面专属尺寸/交互态仍留在 scoped 样式。 */
 .ld-autosave {
   font-size: 11.5px;
@@ -303,7 +303,7 @@ body {
   color: var(--ld-ink);
 }
 
-/* —— 页面内容 CMS 五页签共享配方（批C·PageContent + 5 tab 组件同源·防 5 份表单样式漂移·病根#5）——
+/* —— 页面内容 CMS 五页签共享配方（PageContent + 5 tab 组件同源·防 5 份表单样式漂移·病根#5）——
  * 页签自有的差异（预览内部结构等）仍写各组件 scoped；这里收敛真一致的布局/表单/工具条/手机 mock 壳。 */
 .pc-tabs {
   display: flex;

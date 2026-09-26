@@ -1,5 +1,5 @@
 <script setup lang="ts">
-// 目录与播放页签（批C）：课程目录页 hero 图 + 续播文案 + 课时空态文案；播放页求助面板三卡标题 + FAQ 增删改（≤20）。
+// 目录与播放页签：课程目录页 hero 图 + 续播文案 + 课时空态文案；播放页求助面板三卡标题 + FAQ 增删改（≤20）。
 // hero 图走 uploadImage 通道（前端压缩·与首页/商品封面同管线）、存 fileID、会话内缩略预览（sessionUrls）。
 // 帮助视频不在此签编辑（已有 /help-videos 页），只留一行链接提示。
 import { ref } from 'vue'

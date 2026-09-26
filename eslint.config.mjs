@@ -1,7 +1,7 @@
 /**
  * ESLint 配置（新版 flat config，ESLint 9）。
  * 作用：自动揪出潜在错误（未用变量、拼写错的变量、误用等），统一代码质量。
- * Prettier CLI/配置已按 ADR §409 退役；不再依赖 eslint-config-prettier。
+ * 本仓不用 Prettier，也不装 eslint-config-prettier。
  * 排版类 vue recommended 规则在下面显式关掉——lint 管对错，不管排版。
  *
  * 命令：npm run lint（只报）；npm run lint:fix（自动修可修的）
@@ -17,7 +17,7 @@ export default [
     ignores: [
       '**/dist/**',
       '**/node_modules/**',
-      // vitest --coverage 产物（B8·vendor 生成的 lcov-report/*.js 会触发误报 warning）
+      // vitest --coverage 产物（vendor 生成的 lcov-report/*.js 会触发误报 warning）
       'coverage/**',
       'console-assets/**',
       // git worktree 隔离副本（.claude/worktrees/*）＝仓库另一份拷贝，非本仓 lint 源——
@@ -53,7 +53,7 @@ export default [
       'vue/multi-word-component-names': 'off',
       // 占位 / 预留代码里允许「定义但暂未使用」的参数（以 _ 开头则完全忽略）
       'no-unused-vars': ['warn', { argsIgnorePattern: '^_', varsIgnorePattern: '^_' }],
-      // 无 Prettier（ADR §409）。vue recommended 自带排版规则，不靠已卸的 eslint-config-prettier 闭嘴。
+      // 无 Prettier：vue recommended 自带的排版规则在这里逐条关掉。
       'vue/max-attributes-per-line': 'off',
       'vue/singleline-html-element-content-newline': 'off',
       'vue/html-self-closing': 'off',

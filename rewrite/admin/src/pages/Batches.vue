@@ -2,7 +2,7 @@
 // 激活码批次：统计卡/进度条/状态 chip 由真聚合派生、
 // 详情抽屉码表接 listBatchCodes 真码（cursor 分页，一页 50）+ CSV/印刷包另取齐整批。
 // 诚实边界：后端 listBatches 需 courseId（无「列全量批次」action）——按课程范围查（非跨课「全部」）；
-// listBatchCodes 只回码串无每码激活态——码表不标单码已激活/未用（记待办）。印刷包 ZIP 已还原（卡面SVG+地址CSV+说明·二轮批Cards-2）。
+// listBatchCodes 只回码串无每码激活态——码表不标单码已激活/未用。印刷包 ZIP＝卡面SVG+地址CSV+说明。
 import { ref, computed, onMounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import QRCode from 'qrcode'
@@ -21,8 +21,8 @@ import KpiCard from '../components/ui/KpiCard.vue'
 import Badge from '../components/ui/Badge.vue'
 import EmptyState from '../components/ui/EmptyState.vue'
 
-// 嵌入模式（上新向导第 5 步复用）+ 修独立深链 bug：换皮把 courseId 写死空 ref、不读 route.query，
-// 致商品页「码批次」深链(/batches?courseId=)落地要手输课程号；改读 props(向导)||route.query(深链)||空。
+// 嵌入模式（上新向导第 5 步复用）+ 独立深链：courseId 读 props(向导)||route.query(深链)||空，
+// 商品页「码批次」深链(/batches?courseId=)落地不用手输课程号。
 // courseReady 显式缺省 undefined：布尔 prop 不传时 Vue 会转成 false，独立页就被当成「课程没发布」锁死生成按钮。
 const props = withDefaults(defineProps<{ embed?: boolean; wizardCourseId?: string; courseReady?: boolean }>(), { wizardCourseId: undefined, courseReady: undefined })
 const emit = defineEmits<{ saved: [] }>()
@@ -54,8 +54,8 @@ const codePage = ref(1)
 const codeCursors = ref<unknown[]>([]) // 已走过的游标栈·上一页用
 const firstCode = ref('') // 本批首码（测试二维码用·不随翻页漂）
 const batchPage = ref(1)
-const urlPrefix = ref('') // 激活码落地网址前缀（换皮 CSV 只导码不导网址·印刷厂拿不到落地地址）
-const testQr = ref('') // 测试二维码 dataURL（量产前扫码验落地页·换皮丢了这个·根因#8）
+const urlPrefix = ref('') // 激活码落地网址前缀（CSV 只导码不导网址的话印刷厂拿不到落地地址）
+const testQr = ref('') // 测试二维码 dataURL（量产前扫码验落地页·根因#8）
 const exportBlockedMsg = ref('') // 导出 fail-closed 提示（未配网址前缀时挡导出·印刷交付物必须是完整网址）
 const prefixErr = ref('') // 读设置失败≠没配前缀：导出拦截时如实说读取失败，别把操作员支去设置页（病根#14）
 const codesErr = ref('')
@@ -112,7 +112,7 @@ watch([filter, rows], () => {
 })
 const pct = (b: BatchRow) => (b.total ? Math.min(100, Math.round((b.activated / b.total) * 100)) : 0)
 
-const loadGen = useLatest() // 乱序守卫（G1·P1）：切课/连点「载入课程」时旧回包别把新课的 loadedCourse 污染成旧课——
+const loadGen = useLatest() // 乱序守卫：切课/连点「载入课程」时旧回包别把新课的 loadedCourse 污染成旧课——
 // 是「错课量产激活码」防线的地基，doCreate 用 loadedCourse 当目标（见下 doCreate 注释）。
 async function load() {
   const c = courseId.value.trim()
@@ -138,7 +138,7 @@ async function doCreate() {
     return
   }
   busy.value = true
-  // 用已载入的课程(loadedCourse)生成·非可编辑的 courseId（P1·改了选择器没重载会为错课量产激活卡）
+  // 用已载入的课程(loadedCourse)生成·非可编辑的 courseId（改了选择器没重载会为错课量产激活卡）
   const target = loadedCourse.value || courseId.value.trim()
   const r = await createBatch(target, count.value)
   busy.value = false
@@ -149,9 +149,9 @@ async function doCreate() {
   creating.value = false
   const batchId = String(r.batchId)
   const codeN = (r.codes as string[]).length
-  courseId.value = target // 选择器回到刚生成的课·load() 据此刷新 target（P2·防用漂移的可编辑框值跳到别课、把刚建的批次藏掉）
+  courseId.value = target // 选择器回到刚生成的课·load() 据此刷新 target（防用漂移的可编辑框值跳到别课、把刚建的批次藏掉）
   await load() // 先刷新（load 会写'加载中…'/'')，刷完再按刷新结果显——否则同步 reload 的'加载中…'当帧盖掉成功（病根#14 伪成功）
-  // 只在列表刷新也成功时显纯成功；刷新失败则保留其可见性、不被成功盖掉（load 成功才把 loadedCourse 设为 target·病根#14 失败必可观测·迭代I 批7 回归修）
+  // 只在列表刷新也成功时显纯成功；刷新失败则保留其可见性、不被成功盖掉（load 成功才把 loadedCourse 设为 target·病根#14 失败必可观测）
   message.value =
     loadedCourse.value === target
       ? `已生成批次 ${batchId}（${codeN} 张码）`
@@ -159,7 +159,7 @@ async function doCreate() {
   emit('saved')
 }
 
-const codesGen = useLatest() // 码表乱序守卫（P1·A 的码别配到 B 的批次头·防印错卡·根因#8）
+const codesGen = useLatest() // 码表乱序守卫（A 的码别配到 B 的批次头·防印错卡·根因#8）
 // 失败不翻页、不清已有码，返回是否成功供调用方决定游标栈进退（失败≠空态·病根#14）
 function applyCodePage(r: { ok: boolean; error?: unknown; codes?: unknown; nextCursor?: unknown; hasMore?: unknown }, page: number): boolean {
   codesLoading.value = false
@@ -229,17 +229,17 @@ function closeDetail() {
   detail.value = null
   testQr.value = ''
 }
-// 测试二维码（量产前扫码验落地页·换皮丢·根因#8「拿到≠用通」）：取首码生成 QR，手机微信扫屏验证
+// 测试二维码（量产前扫码验落地页·根因#8「拿到≠用通」）：取首码生成 QR，手机微信扫屏验证
 async function makeTestQr() {
   const first = firstCode.value || codes.value[0]
   if (!first) return
   testQr.value = await QRCode.toDataURL(codeUrl(first), { width: 320, margin: 1 })
 }
-// 印刷包 ZIP（换皮丢·旧台 downloadPack·印刷厂拿不到矢量卡面与制卡说明·整条「设计→打包→交付」链断）：
+// 印刷包 ZIP（没有它印刷厂拿不到矢量卡面与制卡说明·整条「设计→打包→交付」链断）：
 // 卡面正面.svg + 卡面反面.svg（取该课产品的卡片设计·课程编号 course-<productId> 反推 productId）+ 地址清单.csv + 说明.txt。
 async function downloadPack() {
   if (!detail.value || packing.value) return
-  // fail-closed（用户拍板 2026-07-08）：印刷交付物必须是完整网址，未配置网址前缀不许导出——
+  // fail-closed（用户拍板）：印刷交付物必须是完整网址，未配置网址前缀不许导出——
   // 印错「仅码无址」的包给印刷厂等于交付物废掉，宁可挡下不让走、也不悄悄降级成单列码。
   if (!urlPrefix.value.trim()) {
     exportBlockedMsg.value = prefixErr.value || '先在「设置」配置扫码网址前缀，印刷交付物必须是完整网址'
@@ -275,7 +275,7 @@ async function downloadPack() {
   }
 }
 
-// CSV 导出：换皮只导「激活码」单列·印刷厂拿不到落地地址；补「网址」列（激活码,完整URL·Excel BOM）
+// CSV 导出：只导「激活码」单列的话印刷厂拿不到落地地址，故带「网址」列（激活码,完整URL·Excel BOM）
 async function exportCsv() {
   if (!detail.value) return
   // fail-closed（同 downloadPack）：未配网址前缀不许导出，防印刷厂拿到「仅码无址」的废交付物

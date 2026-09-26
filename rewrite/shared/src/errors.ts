@@ -1,5 +1,5 @@
 /**
- * 错误码权威登记册（设计约束#3 fail-closed 闸配套——码是前端分支契约，
+ * 错误码权威登记册（根因#3 fail-closed 闸配套——码是前端分支契约，
  * 不可改名、新增只追加）。kit err() 读本册。
  */
 export const ERR = {
@@ -27,9 +27,9 @@ export const ERR = {
   PAY_NOT_ENABLED: 'PAY_NOT_ENABLED',
   PAY_CONFIG_MISSING: 'PAY_CONFIG_MISSING',
   UNIFIED_ORDER_FAIL: 'UNIFIED_ORDER_FAIL',
-  COUPON_EXCEEDS_GOODS: 'COUPON_EXCEEDS_GOODS', // 占位券抵扣≥货款即拒单（深审 2026-07-05·真券系统前的白送闸）
-  OUT_OF_STOCK: 'OUT_OF_STOCK', // 库存不足（cloud-order 域·跨系统一致性批次追加登记）
-  TOO_MANY_PENDING: 'TOO_MANY_PENDING', // 在途未支付单超上限（收尾硬化批·防单账号零成本预留锁死热销 SKU）
+  COUPON_EXCEEDS_GOODS: 'COUPON_EXCEEDS_GOODS', // 占位券抵扣≥货款即拒单（真券系统前的白送闸）
+  OUT_OF_STOCK: 'OUT_OF_STOCK', // 库存不足（cloud-order 域）
+  TOO_MANY_PENDING: 'TOO_MANY_PENDING', // 在途未支付单超上限（防单账号零成本预留锁死热销 SKU）
   ORDER_CLAIM_PENDING: 'ORDER_CLAIM_PENDING', // 同幂等键的原请求仍在处理中（极端并发窗口）——不建二单，前端稍候按原键重试
   // 售后 / 退款
   ALREADY_APPLIED: 'ALREADY_APPLIED',
@@ -40,7 +40,7 @@ export const ERR = {
   CODE_TAKEN: 'CODE_TAKEN',
   NOTHING_LEFT: 'NOTHING_LEFT',
   NOT_ACTIVATED: 'NOT_ACTIVATED',
-  ENTER_REVOKE_FAILED: 'ENTER_REVOKE_FAILED', // confirmEnter 撤退货权 CAS 耗尽已回滚进课（Issue #114）
+  ENTER_REVOKE_FAILED: 'ENTER_REVOKE_FAILED', // confirmEnter 撤退货权 CAS 耗尽已回滚进课
   NOT_ENTITLED: 'NOT_ENTITLED',
   NOT_DONE: 'NOT_DONE',
   NO_COURSE: 'NO_COURSE',
@@ -50,7 +50,7 @@ export const ERR = {
   REVIEWED: 'REVIEWED',
   // 频控
   RATE_LIMITED: 'RATE_LIMITED',
-  // 网关兜底（课程链路审计 2026-07-17·根因#14）：action 未捕获异常经 app 网关顶层 catch 收敛后回此码
+  // 网关兜底（根因#14）：action 未捕获异常经 app 网关顶层 catch 收敛后回此码
   INTERNAL: 'INTERNAL',
   // 客服 / 身份桥接
   NO_UNIONID: 'NO_UNIONID',
@@ -61,7 +61,7 @@ export const ERR = {
   EMPTY_FEEDBACK: 'EMPTY_FEEDBACK',
   IMG_RISKY: 'IMG_RISKY',
   SEC_CHECK_FAIL: 'SEC_CHECK_FAIL',
-  // 客服 / 坐席（承面C 坐席台 agentDesk.ts + kfCallback dispatch + csAccess 闸 + 客户360·跨系统一致性批次追加登记）
+  // 客服 / 坐席（坐席台 agentDesk.ts + kfCallback dispatch + csAccess 闸 + 客户360）
   NO_AGENT: 'NO_AGENT',
   AT_CAPACITY: 'AT_CAPACITY',
   NOT_CLAIMABLE: 'NOT_CLAIMABLE',

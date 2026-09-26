@@ -11,9 +11,9 @@ const TOKEN_KEY = 'ldrw_agent_token'
 export const CALL_TIMEOUT_MS = 35_000
 const ENDPOINT = import.meta.env.VITE_AGENT_API || ''
 
-// 会话失效集中回调（单源·根因#5 收口·对照 admin client.ts 同构移植）：post 遇无令牌/401 清令牌后触发一次，
-// 壳层（App.vue）注册为「登出并回登录视图」，各调用点不再各写各的 SESSION_LOST 跳转（同 admin 病史：
-// 曾漂成 3 种——卡死「加载中…」/裸显合成码/导登录）。login/loginByWecomCode 不触发（登录页自己处理错误）。
+// 会话失效集中回调（单源·根因#5·与 admin client.ts 同构）：post 遇无令牌/401 清令牌后触发一次，
+// 壳层（App.vue）注册为「登出并回登录视图」，各调用点不各写各的 SESSION_LOST 跳转（各写
+// 会漂成卡死「加载中…」/裸显合成码/导登录多种表现）。login/loginByWecomCode 不触发（登录页自己处理错误）。
 let sessionLostHandler: (() => void) | null = null
 /** 注册会话失效回调（壳层调一次·如 () => { logout(); authed.value = false }）——会话失效导登录的单一出口。 */
 export const onSessionLost = (fn: () => void) => {
@@ -89,6 +89,6 @@ export async function post(action: string, data: Record<string, unknown> = {}): 
   return r
 }
 
-// 快捷回复读知识库（批 B4·预审裁决：cap agent:handle 已挂，直接复用 admin 侧同一 action，不新建 listQuickReplies）。
+// 快捷回复读知识库（cap agent:handle 已挂，直接复用 admin 侧同一 action，不新建 listQuickReplies）。
 // action 名与 admin 侧 rewrite/admin/src/api/cs.ts 的 listKb 一致（同一后端 action，前端各自薄封装）。
 export const listKb = () => post('listKb')

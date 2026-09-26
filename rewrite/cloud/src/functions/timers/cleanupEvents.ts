@@ -1,14 +1,14 @@
 import { getDb, ok, isServerCall, isVodFileId, callVodApi, isCollectionMissing, notifyAlert, deleteFiles } from '../../kit'
 import { COLLECTIONS, type CollectionName } from '@ldrw/shared'
 
-// 清理无界增长集合（待办债#9 + 外审 P2.14）。定时触发器（每日）。三类只增不删/会堆积的数据保留 90 天：
+// 清理无界增长集合。定时触发器（每日）。三类只增不删/会堆积的数据保留 90 天：
 //  ① events 原始埋点流（只写不读·看板读 progress 折叠视图·删旧不损功能）；
 //  ② rateLimit 频控窗口（窗 60s·锁 ≤30min·90 天前的 key 早已无锁/无窗·删了下次命中重建）；
 //  ③ kfState 的 seen:<msgid> 客服去重痕（带 at 字段；cursor:*/token 文档无 at·不误删）。
-// 另两类短周期清理（课程链路审计 2026-07-17）：
+// 另两类短周期清理：
 //  ⑤ courses.pendingGc 孤儿视频缓期删除（publishCourse 只入队不删——给在播学员留播放窗）：到期项
 //    cloud.deleteFile 后从队列摘除，fail-soft（删失败留队下轮再试）。
-//  ⑥ productsDraft.pendingGc 孤儿图册缓期删除（批B·saveDraft/publishProduct 换图/发布替换只入队不删——
+//  ⑥ productsDraft.pendingGc 孤儿图册缓期删除（saveDraft/publishProduct 换图/发布替换只入队不删——
 //    admin listDrafts/mp 详情给旧图签过临时址，缓期内不断图）：与 ⑤ 同构，复用同一 gcPendingGc 消费器
 //    （商品图恒 cloud://·无 VOD 分支·harmless no-op）。
 // 仅服务端/定时触发（无 openid）；客户端带身份调用一律拒（根因#3：写库必过闸，防滥调）。
@@ -78,9 +78,9 @@ export const main = async () => {
   // 五路各删各的集合、互不依赖，并发跑（定时器有超时上限）
   const [removed, rateLimit, kfSeen, videoGc, imageGc] = await Promise.all([
     rm(COLLECTIONS.events, 'createdAt'),
-    // 频控窗口 TTL（外审 P2.14）：按 updatedAt（throttle 每次写更新）删·非 createdAt（创建即定·活跃 key 会被误删）
+    // 频控窗口 TTL：按 updatedAt（throttle 每次写更新）删·非 createdAt（创建即定·活跃 key 会被误删）
     rm(COLLECTIONS.rateLimit, 'updatedAt'),
-    // 客服去重痕 TTL（外审 P2.14）：seen:<msgid> 带 at·按 at 删；cursor:*/token 无 at 字段故不误删
+    // 客服去重痕 TTL：seen:<msgid> 带 at·按 at 删；cursor:*/token 无 at 字段故不误删
     rm(COLLECTIONS.kfState, 'at'),
     // ⑤ 孤儿视频缓期删除（courses.pendingGc） + ⑥ 孤儿图册缓期删除（productsDraft.pendingGc）：同构·共用消费器
     gcPendingGc(db, COLLECTIONS.courses, now),

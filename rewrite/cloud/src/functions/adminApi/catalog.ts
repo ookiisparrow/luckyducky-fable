@@ -2,7 +2,7 @@ import { str } from '../../kit'
 
 // adminApi 商品/课程草稿工具：白名单清洗、云存储上传、manager-node。与身份/钱链无关，故不放红区 lib.ts。
 
-// 运营手填销量（#119 ①）：非负整数；脏值/缺省→0。不是订单加总。
+// 运营手填销量：非负整数；脏值/缺省→0。不是订单加总。
 export function cleanSold(v: unknown): number {
   const n = Math.floor(Number(v))
   if (!Number.isFinite(n) || n < 0) return 0
@@ -60,7 +60,7 @@ export function cleanCourse(c: any) {
           name: str(sg?.name, 60),
           dur: str(sg?.dur, 10),
           videoFileId: str(sg?.videoFileId, 300),
-          // VOD 转码产物（决策§31 批2·syncVodMedia 服务端回写；此处入白名单让 admin 草稿保存的
+          // VOD 转码产物（决策§31·syncVodMedia 服务端回写；此处入白名单让 admin 草稿保存的
           // 往返不抹掉它们）。学员端不泄露：publicSegment/getCourses 逐层白名单不含这些字段，
           // 播放地址只经 getPlaybackUrl 鉴权后签名下发。
           vodUrl: str(sg?.vodUrl, 500),
@@ -76,7 +76,7 @@ export function cleanCourse(c: any) {
 // base64 → 云存储 products/<pid>/，返回 fileID + 临时展示 URL
 export async function storeImage(cloud: any, b64: string, data: any) {
   const ext = ['png', 'jpg', 'mp4', 'mov'].includes(data.ext) ? data.ext : 'jpg'
-  // 消毒（深审 P3·同 getVideoUploadMeta）：客户端串直接拼云存储对象键，'../' 类字符不入路径
+  // 消毒（同 getVideoUploadMeta）：客户端串直接拼云存储对象键，'../' 类字符不入路径
   const pid =
     String(data.pid || 'misc')
       .replace(/[^\w-]/g, '')

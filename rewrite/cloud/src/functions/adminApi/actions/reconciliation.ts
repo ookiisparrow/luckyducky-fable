@@ -8,8 +8,8 @@ import {
   type CollectionName,
 } from '@ldrw/shared'
 import { reply, getTxAlerts, type Ctx } from '../lib'
-// 比对分类器在 kit/reconcile（批B2·timers/billReconcile 复用同一套原语）；北京日助手在 @ldrw/shared cst.ts。
-// 别名保持既有调用点零改动
+// 比对分类器在 kit/reconcile（timers/billReconcile 复用同一套原语）；北京日助手在 @ldrw/shared cst.ts。
+// DAY_MS 取别名 DAY，文件内沿用短名
 import {
   notifyAlert,
   matchBillRows,
@@ -19,16 +19,16 @@ import {
   isCollectionMissing,
 } from '../../../kit'
 
-// —— S16 财务对账（内部账·Batch 1）——
+// —— 财务对账（内部账）——
 // 收入口径＝已收到钱的单（MONEY_RECEIVED_STATUSES，比看板 GMV 多 refund_required/payment_exception：
 // 它们的退款照常计入，收入漏了就对不平）。三块：① 收支汇总 ② 每日流水 ③ 内部异常（txAlerts 单源）。
 //   · payment_exception 的到账额和标价不符（正是它异常的原因），收入按实际到账 paidFee（分）计，与它退款的
 //     分母同口径；缺 paidFee（待补录实付）的计 0——累计聚合对缺字段也是 0，两处一致。
-//   · 累计总额走 aggregate $.sum 精确（不封顶·债#18续）——money 锚，恒可信。
+//   · 累计总额走 aggregate $.sum 精确（不封顶）——money 锚，恒可信。
 //   · 每日明细走有界拉取（CAP）+ JS 按 CST 日分桶（云端 aggregate 不便按日分组），超 CAP 标 approx
-//     （同 dashboard SAMPLE 诚实范式·债#18；低量业务远不触）。
+//     （同 dashboard SAMPLE 诚实范式；低量业务远不触）。
 //   · 内部异常＝feeMismatch/refundMismatch/stuckRefunds（getTxAlerts 与看板同源·防漂移）。
-// 抓「我方内部不一致」；抓不到「微信收了款我方无单」——那需逐笔比对微信账单（外部对账·Batch 2/3·需商户凭证）。
+// 抓「我方内部不一致」；抓不到「微信收了款我方无单」——那需逐笔比对微信账单（外部对账·需商户凭证）。
 
 const CAP = 1000 // 明细有界拉取上限（超则 approx）：云函数端 .limit() 最多给 1000 条，CAP 设得比它大就会少报截断
 const isDate = (s: any) => typeof s === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(s)
@@ -168,13 +168,13 @@ export async function getReconciliation({ db, data }: Ctx) {
       refunds: sum('refunds'),
     },
     daily,
-    // 窗内明细可能被 CAP 截断（低量远不触·诚实标注·债#18）；累计/异常不受 CAP 影响
+    // 窗内明细可能被 CAP 截断（低量远不触·诚实标注）；累计/异常不受 CAP 影响
     approx: paidN > CAP || refundN > CAP,
     exceptions,
   })
 }
 
-// —— S16 外部对账 Batch 3：我方付款单 ⋈ wxBills（微信权威账单）逐笔比对 ——
+// —— 外部对账：我方付款单 ⋈ wxBills（微信权威账单）逐笔比对 ——
 // 四类：✅平 / 🔴微信有我方无（收了款无单·最危险）/ 🔴我方有微信无（仅该日账单已拉时才判·防误报）/ 🔴金额不符。
 // 抓内部账抓不到的「微信有款我方无单」。须先 downloadBill 拉账单进 wxBills（未拉的日期 = 无数据·非差异）。
 export async function getBillMatch({ db, data }: Ctx) {
@@ -195,7 +195,7 @@ export async function getBillMatch({ db, data }: Ctx) {
     )
 
   // 取最近 CAP 条再按窗过滤；触顶＝更早的单没进比对面，老窗口里的真单会被误判 wxOnly——必须 approx 如实标注
-  //（深审 P2·同 getReconciliation 口径·守卫 billmatch-approx-flag），前端见 approx 提示「窗口可能不全」而非当真差异。
+  //（同 getReconciliation 口径·守卫 billmatch-approx-flag），前端见 approx 提示「窗口可能不全」而非当真差异。
   const [rawOur, rawWx] = await Promise.all([
     rows(
       db
@@ -218,7 +218,7 @@ export async function getBillMatch({ db, data }: Ctx) {
   const wxByTxn = new Map(wxRows.map((w: any) => [String(w.transactionId || ''), w]))
   const wxByOut = new Map(wxRows.map((w: any) => [String(w.outTradeNo || ''), w]))
 
-  // 三分支分类（平/微信有我方无/金额不符）提纯 kit matchBillRows（批B2·timer 复用同一分类器·分整数比对#4）；
+  // 三分支分类（平/微信有我方无/金额不符）提纯 kit matchBillRows（timer 复用同一分类器·分整数比对·根因#4）；
   // oursOnly（我方有微信无）需「账单覆盖日」上下文防误报，留本地判。
   const { matched, wxOnly, amountMismatch } = matchBillRows(ourOrders, wxRows)
   const oursOnly: any[] = []
@@ -245,6 +245,6 @@ export async function getBillMatch({ db, data }: Ctx) {
     },
     discrepancies: { wxOnly, oursOnly, amountMismatch },
     billDays,
-    approx, // 比对面触 CAP 截断（深审 P2）：true 时差异可能是截断假象、勿当真差异（前端提示）
+    approx, // 比对面触 CAP 截断：true 时差异可能是截断假象、勿当真差异（前端提示）
   })
 }

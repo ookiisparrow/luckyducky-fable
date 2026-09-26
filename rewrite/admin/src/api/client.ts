@@ -1,6 +1,6 @@
 // adminApi v2 客户端（钱链入口·行为测试 tests/client.test.ts 钉）：
 // 单 endpoint POST {action, key, data}；key=会话令牌（口令仅登录时用一次·令牌哈希在云端）；
-// 401 会话失效 → 清令牌抛 SESSION_LOST（壳层导登录）；错误规整不吞（承接调试案 A 教训：报错带原文）。
+// 401 会话失效 → 清令牌抛 SESSION_LOST（壳层导登录）；错误规整不吞（报错带原文，排障不靠猜）。
 export interface ClientResult {
   ok: boolean
   status: number
@@ -21,7 +21,7 @@ export interface ClientDeps {
 export const CALL_TIMEOUT_MS = 35_000
 
 const TOKEN_KEY = 'ldrw_admin_token'
-const WHO_KEY = 'ldrw_admin_who' // 登录操作者名（Shell 显真实身份·换皮硬编码「管理员」·多账号无法辨认）
+const WHO_KEY = 'ldrw_admin_who' // 登录操作者名（Shell 显真实身份：写死「管理员」的话多账号无法辨认）
 
 const defaultStorage = {
   get: (k: string) => (typeof localStorage !== 'undefined' ? localStorage.getItem(k) : null),
@@ -37,7 +37,7 @@ export function createClient(deps: ClientDeps) {
   const storage = deps.storage || defaultStorage
   const doFetch = deps.fetchImpl || fetch
   // 会话失效集中回调（单源·根因#5 收口）：post 遇 401 清令牌后触发一次，壳层注册为「导登录」，
-  // 各页不再各写各的 SESSION_LOST 跳转（曾漂成 3 种：卡死「加载中…」/裸显合成码/导登录）。
+  // 各页不各写各的 SESSION_LOST 跳转（各写会漂成卡死「加载中…」/裸显合成码/导登录多种表现）。
   let sessionLostHandler: (() => void) | null = null
 
   async function raw(action: string, key: string, data: Record<string, unknown>): Promise<ClientResult> {

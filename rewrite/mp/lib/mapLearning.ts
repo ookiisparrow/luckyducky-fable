@@ -1,4 +1,4 @@
-// 学习域映射（纯函数·黄金 learning-content §一激活三态 + §九内容回退）。
+// 学习域映射（纯函数·激活三态 + 内容回退）。
 import { dateTime } from './mapOrders'
 import { clampResumeAt } from './continueResolve' // 续播秒夹取单源（命中 last 段分支复用·禁复制实现·病根#5）
 
@@ -42,7 +42,7 @@ export function activationView(r: unknown): ActivationView {
   return { kind: 'invalid', courseId: '' } // INVALID_CODE/未知错误一律废码态（fail-closed 不冒充激活）
 }
 
-/** 激活屏背景回退链（黄金 §九：配置缺哪级回退哪级·不裂图）：
+/** 激活屏背景回退链（配置缺哪级回退哪级·不裂图）：
  *  按课程图（welcome/welcomeBack/taken）→ 全局 activationBg → 空串（模板落纯色底）。 */
 export function bgFor(home: unknown, courseId: string, kind: ActivationKind): string {
   const h = (home && typeof home === 'object' ? home : {}) as Record<string, any>
@@ -66,7 +66,7 @@ export interface MyCourseVM {
 // mp 包进不了 @ldrw/shared——微信开发者工具编译不出仓外引用，同 lib/checkoutConst.ts / mapOrders.ts 头注；
 // 两侧一致由守卫 rw-mp-copies-synced 逐规则焊死）。
 // **0% 只表示真没学、100% 只表示真学完**，中间态夹到 [1,99]：
-// 原裸写 Math.round 在边界撒谎——1/250 显示 0%（学了却像没学）、199/200 显示 100%（没学完却像结课）。
+// 裸写 Math.round 会在边界撒谎——1/250 显示 0%（学了却像没学）、199/200 显示 100%（没学完却像结课）。
 function progressPercent(done: number, total: number): number {
   const d = Number(done)
   const t = Number(total)
@@ -108,7 +108,7 @@ export function mapMyCourses(mine: unknown, courses: unknown, progress?: unknown
       }
     }
   }
-  // 进度**读失败**用显式 null 表达（根因#14·2026-07-25 体检批 P2）：此前调用方在 getMyProgress 失败时
+  // 进度**读失败**用显式 null 表达（根因#14）：调用方在 getMyProgress 失败时若
   // 回退空数组，与「真的一段没学过」不可区分 → 课卡照样渲染「已学 0/80 · 0%」，学了一半的用户
   // 会以为学习记录丢了。null=没读到（界面另给未知态），[]/undefined=真的没进度（0% 是实话）。
   const progressUnknown = progress === null
@@ -166,8 +166,8 @@ interface CatalogLessonRaw {
   segments: CatalogSeg[]
 }
 
-/** dur 口径修复（决策§31 批2 顺修）：段 dur 库内是 'm:ss' 字符串（admin readDuration/VOD 转码回填同款），
- *  原 Number('5:00')→NaN→0 把全部课时时长隐藏成 0 分钟。兼容三种历史写法：数字秒、纯数字串、'm:ss'。 */
+/** dur 口径（决策§31）：段 dur 库内是 'm:ss' 字符串（admin readDuration/VOD 转码回填同款），
+ *  直接 Number('5:00')→NaN→0 会把全部课时时长隐藏成 0 分钟。兼容三种历史写法：数字秒、纯数字串、'm:ss'。 */
 function parseDurSec(v: unknown): number {
   if (typeof v === 'number') return v > 0 ? v : 0
   const s = String(v || '').trim()
@@ -212,7 +212,7 @@ function latestProgress(progressList: unknown, courseId: string): Record<string,
 }
 
 /**
- * 目录页数据源（C1·教学播放重设计批A·2026-07-11 预审裁决消歧优先级）：
+ * 目录页数据源：
  * 课时状态判定优先级——① 全课全 done（每个段数>0 的课时都 done 且至少有一个课时）→ 全部 done、无 current（覆盖一切）；
  * ② 否则 last.lessonId 命中的课时标 current（即使自身已 done——回看中）；③ 否则首个非 done 且含 hasVideo 段的课时标 current；
  * 其余课时按「done=段数>0 且全部段 ∈ done 集合」/ todo 判。continueTarget 与 current 解耦独立判定（见下）。
@@ -304,8 +304,8 @@ export function mapCatalog(
   return { chapters, continueTarget }
 }
 
-// 播放页求助面板·帮助视频（P3b·播放器重设计战役批D）：云端 getHelpVideos 返回两级主题→小段
-// （rewrite/cloud/src/functions/app/actions/reviews.ts，本批零改动）。清洗脏结构：非数组归空、
+// 播放页求助面板·帮助视频：云端 getHelpVideos 返回两级主题→小段
+// （rewrite/cloud/src/functions/app/actions/reviews.ts）。清洗脏结构：非数组归空、
 // id/title/sub/desc/dur String 化（dur 原样字符串，不重新格式化）、url 非串归 null（短时地址过期/未剪辑）；
 // 无 title 且无 segments 的主题剔除（脏档不占一个空分组位）。
 export interface HelpVideoSegVM {
@@ -345,7 +345,7 @@ export function mapHelpVideos(r: unknown): HelpTopicVM[] {
   return out
 }
 
-// 播放页求助面板·常见问题（R37b·KB 精选 FAQ 公开读接线·播放器重设计战役批B8）：云端 getPublicFaq
+// 播放页求助面板·常见问题（R37·KB 精选 FAQ 公开读）：云端 getPublicFaq
 // 只回 admin 勾选「精选」的 kb 条目，字段瘦身 {key,title,content}（title←question/content←answer）。
 // 清洗脏结构同 mapHelpVideos 先例（null 防御）：非数组归空、字段 String 化、无标题剔除（脏档不占位）。
 // ok:false（库挂/超时）回 null，不把空 items 装成「没有 FAQ」；真没有才回 []（根因#14）。

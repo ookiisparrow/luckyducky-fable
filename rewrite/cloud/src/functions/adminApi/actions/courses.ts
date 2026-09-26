@@ -4,8 +4,8 @@ import { isVodFileId, makeVodUploadSignature, callVodApi, setOrAdd, err } from '
 import { mergePendingGc } from './products'
 import { COLLECTIONS } from '@ldrw/shared'
 
-// —— VOD 转码管线（决策§31 批2）——课程视频主路径升级为「admin 直传 VOD + 任务流自动转码」；
-// 帮助视频线（HelpVideos）恒走下方云存储直传老路，不迁。
+// —— VOD 转码管线（决策§31）——课程视频主路径是「admin 直传 VOD + 任务流自动转码」；
+// 帮助视频线（HelpVideos）恒走下方云存储直传。
 
 /** VOD 直传签名（UGC 签名·kit/vod.ts 纯本地 HMAC）：未配置回 VOD_NOT_CONFIGURED——admin 借此
  *  回退云存储直传老路（迁移期不断档），secureConfig/vod 填入即自动切换、零部署。 */
@@ -38,7 +38,7 @@ function pickVodPlayUrl(mi: any): string {
 /**
  * 转码状态同步（on-demand·admin 点「同步转码状态」触发）：查草稿里「VOD FileId 已回填、vodUrl 未
  * 就绪」的段，批量 DescribeMediaInfos（≤20/次官方上限），就绪段回写 vodUrl/vodPoster（封面缺口）/
- * vodSpriteVtt（R36 雪碧图·批3 预览窗消费）/dur（转码元数据回填空时长·手填不覆盖，顺修 mm:ss 口径）。
+ * vodSpriteVtt（R36 雪碧图）/dur（转码元数据回填空时长·手填不覆盖，mm:ss 口径）。
  * 选择拉模式而非事件回调：云函数无公网回调入口、开 HTTP 访问服务只为此不值当；admin 发布前本就要
  * 打开本页，点一下同步即拿最新（VOD 任务记录保留 72h，远大于运营节奏）。rev 递增走乐观并发既有轨——
  * admin 同步后须重载草稿（前端 syncVod() 已自动 load()），否则下次自动保存撞 DRAFT_CONFLICT（诚实拒绝）。
@@ -82,7 +82,7 @@ export async function syncVodMedia({ db, data }: Ctx) {
 
 // 视频直传凭证（主路径）：manager-node 签发 COS 上传元数据，浏览器 PUT 直传
 export async function getVideoUploadMeta({ data }: Ctx) {
-  // 与 name 同款消毒（深审 P3）：客户端串直接拼对象键，'../' 类字符不入路径
+  // 与 name 同款消毒：客户端串直接拼对象键，'../' 类字符不入路径
   const courseId = String(data.courseId || 'misc').replace(/[^\w-]/g, '').slice(0, 40) || 'misc'
   const name = String(data.name || 'seg').replace(/[^\w-]/g, '').slice(0, 40) || 'seg'
   const ext = data.ext === 'mov' ? 'mov' : 'mp4'
@@ -122,7 +122,7 @@ export async function saveCourseDraft({ db, data }: Ctx) {
   if (!c) return reply(400, err('BAD_COURSE'))
   await ensure(db, COLLECTIONS.coursesDraft)
   const drafts2 = db.collection(COLLECTIONS.coursesDraft)
-  // 乐观并发（课程链路审计 2026-07-17·根因#1）：整份覆盖 + 无版本比对＝两处并发编辑（双页签/双管理员）
+  // 乐观并发（根因#1）：整份覆盖 + 无版本比对＝两处并发编辑（双页签/双管理员）
   // 后保存者静默吃掉先保存者的改动。客户端带上拉草稿时的 rev，不符即拒（前端提示重新载入，不静默覆盖）；
   // 不带 baseRev 的调用（旧版前端/脚本）按原语义覆盖——部署窗口内前后端版本错开不卡死保存。
   // get→set 间仍有毫秒级 TOCTOU 窗（真实冲突场景是人差几分钟的编辑，非毫秒并发；同实例内已有 serialSave 串行）。
@@ -139,10 +139,10 @@ export async function saveCourseDraft({ db, data }: Ctx) {
 // 收集课程文档引用的全部 videoFileId（发布时孤儿视频 GC 用）
 const collectVideoIds = (c: any): string[] => segsOf(c).filter((sg) => sg.videoFileId).map((sg) => String(sg.videoFileId))
 
-// 发布：草稿整体覆盖 courses（引用模型，老学员自动生效）+ 孤儿视频缓期 GC（深审 P3：每次替换视频都生成
+// 发布：草稿整体覆盖 courses（引用模型，老学员自动生效）+ 孤儿视频缓期 GC（每次替换视频都生成
 // 新 cloudPath、旧文件无人删 → 云存储只增不减）。GC 基线取「旧发布 − 新发布」：发布那刻旧发布不再引用
 // 的文件才进回收队列（草稿期替换不删——已发布课程可能仍在引用旧文件，删了学员播放即断）。
-// 缓期而非立删（课程链路审计 2026-07-17·根因#1）：正在观看被替换段的学员手里持有旧文件的临时签名 URL
+// 缓期而非立删（根因#1）：正在观看被替换段的学员手里持有旧文件的临时签名 URL
 // （有效期 ≤2h），发布同步物理删除会让其播放中途 404。待删清单记在已发布课程文档 pendingGc 字段
 // （getCourses 逐层白名单天然不外泄；不建新集合免控制台锁权限人工步），cleanupEvents 每日删已过缓期项；
 // 重新引用回来的文件自动出队（keep 过滤）。缓期长度与承接规则和商品图同一份（products.mergePendingGc）。
@@ -154,7 +154,7 @@ export async function publishCourse({ db, data }: Ctx) {
   if (!got.data) return reply(400, err('NO_DRAFT'))
   const course: Record<string, any> = { ...got.data }
   delete course._id
-  // 发布闸（决策§31 批2）：VOD 段转码未就绪（vodUrl 未回写）不放行——「传完 ≠ 可播」，放行了学员端
+  // 发布闸（决策§31）：VOD 段转码未就绪（vodUrl 未回写）不放行——「传完 ≠ 可播」，放行了学员端
   // 该段只会 url:null 显示成「素材未剪」假象（伪成功·病根#14）。admin 点「同步转码状态」全就绪再发布。
   const pendingVod = segsOf(course).filter(isPendingVod).length
   if (pendingVod) return reply(200, err('VOD_PROCESSING', { pending: pendingVod }))

@@ -1,4 +1,4 @@
-// 数据共享授权页（后台360工作站 B3.3·承旧线 pkg-extra/consent 语义）：对「外包/第三方客服在服务
+// 数据共享授权页：对「外包/第三方客服在服务
 // 所必需范围内查看订单/物流/学习/咨询记录」作同意/撤回。写云 dataConsent（openid 闸·服务端为真值·
 // 外包坐席看 360 前云端 fail-closed 校验此态）；本地只存提示，进页显示用。完整声明文案在协议/隐私页。
 import { tapHaptic } from '../../lib/haptics'
@@ -11,7 +11,7 @@ Page({
     stateLabel: consentLabel(null),
     busy: false,
   },
-  unloaded: false, // 页面已退出标记（H3·同 checkout/order-list 范式）
+  unloaded: false, // 页面已退出标记（同 checkout/order-list 范式）
   onLoad() {
     const s = readConsentHint()
     this.setData({ state: s, stateLabel: consentLabel(s) })

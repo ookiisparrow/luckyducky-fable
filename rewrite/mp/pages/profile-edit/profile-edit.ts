@@ -1,5 +1,5 @@
-// 编辑资料（M2 批13）：微信头像昵称填写能力（button open-type=chooseAvatar——能力按钮属 button 例外）。
-// 头像临时路径先传云存储换 cloud:// 再同步（云端只收 cloud:// 或空·黄金 §九）；上传失败昵称照常同步不带头像字段。
+// 编辑资料：微信头像昵称填写能力（button open-type=chooseAvatar——能力按钮属 button 例外）。
+// 头像临时路径先传云存储换 cloud:// 再同步（云端只收 cloud:// 或空）；上传失败昵称照常同步不带头像字段。
 import { tapHaptic } from '../../lib/haptics'
 import { login, updateProfile } from '../../api/user'
 
@@ -20,7 +20,7 @@ Page({
     loaded: false, // 资料是否成功载入（login 成功）·未载入不允许保存（防读故障→空字段→破坏性覆盖清空已存 phone/bio）
   },
   backTimer: null as ReturnType<typeof setTimeout> | null,
-  unloaded: false, // 保存在途页面已退出标记（同 review.ts 范式·P2·bug sweep Round2 item2）：迟到回包别再对下一页 navigateBack+toast
+  unloaded: false, // 保存在途页面已退出标记（同 review.ts 范式）：迟到回包别再对下一页 navigateBack+toast
   onUnload() {
     this.unloaded = true
     if (this.backTimer) clearTimeout(this.backTimer) // 延时返回坞清理
@@ -53,7 +53,7 @@ Page({
     return this.onLoad()
   },
   onChooseAvatar(e: WechatMiniprogram.CustomEvent<{ avatarUrl: string }>) {
-    if (this.data.busy) return // 保存在途禁止重选头像：否则 onSave 已捕获的 avatarTemp 与此刻新选的分叉、上传的是旧图（P2·bug sweep R1 #8）
+    if (this.data.busy) return // 保存在途禁止重选头像：否则 onSave 已捕获的 avatarTemp 与此刻新选的分叉、上传的是旧图
     this.setData({ avatarTemp: e.detail.avatarUrl })
   },
   onNickname(e: WechatMiniprogram.Input) {
@@ -76,7 +76,7 @@ Page({
       wx.showToast({ title: '起个昵称吧', icon: 'none' })
       return
     }
-    // 手机号位数校验（根因#14·2026-07-25 体检批 P2「写入说假话」）：云端 updateProfile 对 phone 走白名单
+    // 手机号位数校验（根因#14「写入说假话」）：云端 updateProfile 对 phone 走白名单
     // ——纯数字 7–11 位才入库，否则**剔除不改**（保留旧号）。前端不校验就会出现「填了 6 位 → 弹『已保存』
     // → 其实一个字没存」。空串合法（＝显式清空，云端同样承认）。
     // 数字是手落副本，canonical 单源在 rewrite/cloud/src/functions/app/actions/user.ts（CAPS.phone 与 d.length>=7），

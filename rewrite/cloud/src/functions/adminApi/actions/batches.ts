@@ -3,9 +3,9 @@ import { pageQuery, err } from '../../../kit'
 import { reply, type Ctx } from '../lib'
 import { COLLECTIONS, cstIso } from '@ldrw/shared'
 
-// 分页全取（债#22：避免单次拉取封顶截断——批次/码增长后旧码被挤出工作台）。
+// 分页全取（避免单次拉取封顶截断——批次/码增长后旧码被挤出工作台）。
 // 按页 skip 取尽（每页 200），不足一页即止。makeQuery 每页重建，避免复用查询对象。
-// 最大页数封顶（深审 P3·根因#7）：无上限 skip 循环在码量暴涨（一课累计数万码）时要跑上百次串行 DB 往返、
+// 最大页数封顶（根因#7）：无上限 skip 循环在码量暴涨（一课累计数万码）时要跑上百次串行 DB 往返、
 // 逼近云函数超时——封顶 SCAN_PAGES 页（=1 万条·管理端量级远不触）；真触顶属灾难态、靠人扩容而非静默无限跑。
 // 触顶回 truncated，调用方据此告诉人计数不全；末页满时再探 1 条，码数正好封顶值时不误报。
 const SCAN_PAGES = 50
@@ -48,8 +48,8 @@ function genCode(): string {
   return s
 }
 
-// 批次 ID（外审 R1-R4·P1.9·根因#1 唯一标识粒度不足）：曾只到分钟（b-<course>-yyyyMMddHHmm），
-// 同课同分钟生成两批撞同 batchId → 后台按 batchId 合并、批次追踪/核销混乱。改北京时间到秒 + 随机后缀，
+// 批次 ID（根因#1 唯一标识粒度）：只到分钟的话（b-<course>-yyyyMMddHHmm），
+// 同课同分钟生成两批撞同 batchId → 后台按 batchId 合并、批次追踪/核销混乱。故北京时间到秒 + 随机后缀，
 // 同课同秒并发两批也必不同（batches.ts 按存库 batchId 字段分组、不解析串，加后缀不破坏分组）。
 export function makeBatchId(courseId: string, now: number): string {
   const ts = cstIso(now).slice(0, 19).replace(/\D/g, '')

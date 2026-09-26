@@ -1,34 +1,33 @@
-// 品牌字体（文源圆体 WenYuan Rounded SC）分层远程加载单源（字体分层批·2026-07-16 工作流实测定档）——
+// 品牌字体（文源圆体 WenYuan Rounded SC）分层远程加载单源（实测定档）——
 // 三层字族 + URL + 缓存 + 调度集中一处。改域名/文件名/分层只改这里（+ 构建脚本 scripts/build-brand-font.mjs）。
 //
-// 为什么分层（旧方案：GB2312 一级 3755 字整包两档 ~1.9MB，全下完首屏才换字）：真实上屏只 ~890 字，
+// 为什么分层（整包 GB2312 一级 3755 字两档 ~1.9MB，全下完首屏才换字）：真实上屏只 ~890 字，
 // tab 首屏闭包仅 ~430 字。分层后首屏所需 220KB（-88%），好网络下大概率赶在 brand-splash 2s 窗口内到达：
 //   tier1（首屏·110KB/档）→ tier2（二级页·111KB/档）→ tier3（GB2312 兜底·UGC 昵称/评价/地址·765KB/档）
 // 逐层接力加载（上层落定才起下层=带宽让给首屏）；每层一个字族，回退栈 T1→T2→T3→系统圆体
 // （styles/tokens.wxss --ld-font-brand）按 CSS 逐字回退语义补字——T1 没有的字自动用 T2/T3 渲染，
 // 坏情况=个别字暂显系统圆体（与 FOUT 相同·无正确性悬崖）。刻意不用「同族多次 loadFontFace 增量合并」：
-// 官方未定义该语义（2026-07-16 对抗核查·大概率覆盖或去重忽略），不拿未定义行为当地基。
+// 官方未定义该语义（核查过·大概率覆盖或去重忽略），不拿未定义行为当地基。
 //
-// 加载策略——绕 CORS（承 2026-06-29 真机定案·真凶=CloudBase 静态托管 CDN 不发
+// 加载策略——绕 CORS（真机定案·真凶=CloudBase 静态托管 CDN 不发
 // Access-Control-Allow-Origin，渲染层 loadFontFace(网络URL) 报 ERR_CACHE_MISS）：
 //   downloadFile（逻辑层·不受跨域限制）→ 读 base64 → loadFontFace(data URI)。source 传本地文件路径
-//   不可行——官方文档明文 source 只支持「https 链接或 Data URL」（2026-07-16 核查钉死，别再试）。
+//   不可行——官方文档明文 source 只支持「https 链接或 Data URL」（核查钉死，别再试）。
 //
-// 持久缓存（新增·官方文件系统文档背书「本地用户文件清理时机跟代码包一样」=跨冷启动持久·上限 200MB）：
+// 持久缓存（官方文件系统文档背书「本地用户文件清理时机跟代码包一样」=跨冷启动持久·上限 200MB）：
 //   首启 downloadFile → copyFile 落 USER_DATA_PATH/brand-fonts/ → 二次冷启动本地直读零网络（飞行模式也有
 //   品牌字）。文件名带版本号（v2）＝天然缓存失效：版本升级后旧文件名不再被引用，启动时顺手清理。
-//   CDN 侧 max-age 仅 120s 几乎次次回源（2026-07-16 实测），本地缓存是把「每次冷启 1.9MB」降为零的主杠杆。
+//   CDN 侧 max-age 仅 120s 几乎次次回源（实测），本地缓存是把「每次冷启 1.9MB」降为零的主杠杆。
 //
-// 弱网加固（新增）：downloadFile 显式 timeout + 失败退避重试 2 次（3s/8s）——旧线曾有的重试是错误假设
-// （onLaunch 时机）下加的、随真因（CORS）修复删除；本次为「瞬断=整会话系统字」这一真缺口重加，语义不同。
+// 弱网加固：downloadFile 显式 timeout + 失败退避重试 2 次（3s/8s）——防「瞬断=整会话系统字」。
 //
-// ⚠ 用 woff 不用 woff2（官方建议格式仅 TTF/WOFF·woff2 真机静默失败·2026-06-29 真机逮出）。
+// ⚠ 用 woff 不用 woff2（官方建议格式仅 TTF/WOFF·woff2 真机静默失败·真机实测）。
 // ⚠ 子集产物正本在仓根 assets/brand-fonts/（不进包·守卫 rw-mp-package-budget），部署到静态托管 /fonts/。
 // ⚠ 字符集覆盖由守卫 rw-mp-font-tier-subset-covers 机器盯（新增文案带来子集外新字即红）。
 // ⚠ 用默认域名 cloudbase-….tcloudbaseapp.com（DigiCert·同视频域名 CA）不用自有 www.luckyducky.cn
 //   （TrustAsia·手机微信对 CA 挑剔）。域名须在小程序后台「downloadFile 合法域名」内。
-// ⚠ base64 Data URL 官方地板=基础库 3.7.9（此前属未定义行为碰巧能用）；分层后单文件 base64 过桥
-//   110KB→147KB 字符，远小于旧方案 1.3MB/档，体量坑同步缓解。
+// ⚠ base64 Data URL 官方地板=基础库 3.7.9（更低版本属未定义行为碰巧能用）；分层后单文件 base64 过桥
+//   110KB→147KB 字符，远小于整包 1.3MB/档。
 
 export const BRAND_FONT_FAMILY = 'WenYuan Rounded SC' // tier1（首屏·族名沿用，消费方零改动）
 export const BRAND_FONT_FAMILY_T2 = 'WenYuan Rounded SC T2' // tier2（二级页）
@@ -67,9 +66,9 @@ const DOWNLOAD_TIMEOUT_MS = 30000 // 显式超时：弱网单发不设限会悬�
 const RETRY_DELAYS_MS = [3000, 8000] // 下载失败退避重试（2 次后放弃该文件·该层其余文件不受影响）
 
 /**
- * 远程分层加载品牌字体。失败不阻断启动（策略承老线）；字体降级本身无害（纯视觉回退系统字体/下层字族，
+ * 远程分层加载品牌字体。失败不阻断启动；字体降级本身无害（纯视觉回退系统字体/下层字族，
  * 非根因#14「动作类失败」范畴），任一环节失败刻意静默，不引 console、不 throw。
- * 缓存目录不可用（极老基础库/存储异常）时自动退化为「纯下载不落盘」，行为=旧方案。
+ * 缓存目录不可用（极老基础库/存储异常）时自动退化为「纯下载不落盘」。
  */
 export function loadBrandFonts(): void {
   const fs = wx.getFileSystemManager()

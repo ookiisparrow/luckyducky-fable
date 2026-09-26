@@ -38,7 +38,7 @@ async function load() {
   message.value = vm.value ? '' : failText('加载失败', r.error)
 }
 
-// —— 明细钻取（批 B6）——
+// —— 明细钻取 ——
 const RANGE_CHIPS = [
   { key: '7d', label: '近 7 天', days: 7 },
   { key: '30d', label: '近 30 天', days: 30 },
@@ -46,7 +46,7 @@ const RANGE_CHIPS = [
 ] as const
 type RangeKey = (typeof RANGE_CHIPS)[number]['key']
 const range = ref<RangeKey>('7d')
-const badOnly = ref(false) // 仅差评 ≤2（P2 顺手改批：统一到 badCount/KPI 卡同口径——1~2 星差评/3 星中评/4~5 星好评，此前筛选按钮按 ≤3 与 KPI 卡 ≤2 打架）
+const badOnly = ref(false) // 仅差评 ≤2（与 badCount/KPI 卡同口径——1~2 星差评/3 星中评/4~5 星好评）
 
 const entries = ref<CsatEntryVM[]>([])
 const entriesCursor = ref<unknown>(null)
@@ -155,7 +155,7 @@ onMounted(() => {
       </Card>
     </template>
 
-    <!-- 明细钻取（批 B6）：无「暂无评价」也展示（区间/开关可换），故不依赖上方 vm.total 门控 -->
+    <!-- 明细钻取：无「暂无评价」也展示（区间/开关可换），故不依赖上方 vm.total 门控 -->
     <Card title="评价明细" sub="按时间窗 + 评分筛选逐条查看；差评行可一键跳会话时间轴取证">
       <template #head>
         <div class="range-chips ld-range-chips">

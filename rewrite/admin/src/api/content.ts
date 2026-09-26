@@ -1,25 +1,25 @@
 // 内容组 api（首页内容/帮助视频/课程与视频直传）。
-// 直传（调试日志 G）：getVideoUploadMeta 签发凭证 → POST 表单直传 COS（PUT 会 403）；
+// 直传：getVideoUploadMeta 签发凭证 → POST 表单直传 COS（PUT 会 403）；
 // 失败如实报错（不静默装成功）。
 import { client } from './index'
 import { uploadFormFields } from '../lib/mapContent'
 
 export const getHomeContent = () => client.post('getHomeContent')
 export const saveHomeContent = (home: Record<string, unknown>) => client.post('saveHomeContent', { home })
-// 页面内容 CMS（批C·五页签，云端 adminApi/content.ts）：page ∈ welcome|catalogPlayer|mePage|about|agreement
+// 页面内容 CMS（五页签，云端 adminApi/content.ts）：page ∈ welcome|catalogPlayer|mePage|about|agreement
 export const getPageContent = (page: string) => client.post('getPageContent', { page })
 export const savePageContent = (page: string, data: Record<string, unknown>) => client.post('savePageContent', { page, data })
 export const listHelpVideos = () => client.post('listHelpVideos')
-// baseRev＝拉取时的版本号（乐观并发·批A 内容域并发安全）：不符后端回 DRAFT_CONFLICT 拒覆盖·防双页签互吃 + 误 GC 删视频
+// baseRev＝拉取时的版本号（乐观并发）：不符后端回 DRAFT_CONFLICT 拒覆盖·防双页签互吃 + 误 GC 删视频
 export const saveHelpVideos = (items: unknown[], baseRev?: number) => client.post('saveHelpVideos', { items, baseRev })
 export const getCourseDraft = (courseId: string) => client.post('getCourseDraft', { courseId })
-// baseRev＝拉草稿时的版本号（乐观并发·课程链路审计 2026-07-17）：不符后端回 DRAFT_CONFLICT 拒覆盖
+// baseRev＝拉草稿时的版本号（乐观并发）：不符后端回 DRAFT_CONFLICT 拒覆盖
 export const saveCourseDraft = (course: Record<string, unknown>, baseRev?: number) => client.post('saveCourseDraft', { course, baseRev })
 export const publishCourse = (courseId: string) => client.post('publishCourse', { courseId })
-// 转码状态同步（决策§31 批2·on-demand 拉模式）：就绪段回写 vodUrl/封面/雪碧图/时长·rev 递增（调用方须重载草稿）
+// 转码状态同步（决策§31·on-demand 拉模式）：就绪段回写 vodUrl/封面/雪碧图/时长·rev 递增（调用方须重载草稿）
 export const syncVodMedia = (courseId: string) => client.post('syncVodMedia', { courseId })
 
-// —— VOD 直传（决策§31 转码管线批2·课程视频主路径升级）——签名派发经 adminApi（kit/vod UGC 签名），
+// —— VOD 直传（决策§31·课程视频主路径）——签名派发经 adminApi（kit/vod UGC 签名），
 // 浏览器 vod-js-sdk-v6 直传 VOD 并经 procedure 自动触发转码任务流。未配置（VOD_NOT_CONFIGURED）自动
 // 回退下方云存储直传老路——配置填入即切换、零部署零操作变化；帮助视频线（HelpVideos）恒走老路不迁。
 let vodSig: { sig: string | null; exp: number } | null = null
@@ -49,7 +49,7 @@ async function uploadVideoVod(file: File, onProgress?: (p: number) => void): Pro
  * 本函数为课程视频与帮助视频**共用**——课程线（Courses.vue）传 `{ allowVod: true }` 走 VOD（转码/发布闸/
  * 播放签名整链已建）；帮助视频线（HelpVideos.vue）**恒不传**——其播放侧 `getHelpVideos` 只认云存储 fileID
  * （getTempUrls 批量换址·无 vodUrl 字段、无转码同步、无发布闸兜底），传进 VOD 即换不到地址、求助面板视频
- * 静默全哑（批2 自纠：原实现「VOD 配了就走 VOD」漏了调用面·机器闸与测试对跨线影响全绿）。
+ * 静默全哑（「VOD 配了就走 VOD」会漏掉这个调用面，且机器闸与测试对跨线影响全绿、拦不住）。
  * 返回 fileId：VOD 线=纯数字 FileId，云存储线=`cloud://` fileID。onProgress 0-1。
  */
 export async function uploadVideo(
@@ -71,7 +71,7 @@ export async function uploadVideo(
       for (const [k, v] of Object.entries(fields)) fd.append(k, v)
       fd.append('file', file)
       const xhr = new XMLHttpRequest()
-      xhr.open('POST', String(meta.url)) // 只认 POST 表单（调试日志 G·PUT 403）
+      xhr.open('POST', String(meta.url)) // 只认 POST 表单（PUT 403）
       if (xhr.upload && onProgress) xhr.upload.onprogress = (e) => e.lengthComputable && onProgress(e.loaded / e.total)
       xhr.onload = () => (xhr.status < 300 ? resolve() : reject(new Error('直传失败 HTTP ' + xhr.status)))
       xhr.onerror = () => reject(new Error('直传网络错误'))

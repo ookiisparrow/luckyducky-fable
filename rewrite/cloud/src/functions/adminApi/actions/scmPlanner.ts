@@ -3,13 +3,13 @@ import { listMaterialDocs, sumLedgerByItemKey, getDocOrNull, err } from '../../.
 import { COLLECTIONS } from '@ldrw/shared'
 import { resolveBom, yarnMaterialId } from '@ldrw/shared'
 
-// 进销存 SCM-D 备货计算器（见 docs/业务逻辑架构.md 链 12·门5 文件级隔离：本文件=车道 D 计划面）。
+// 进销存备货计算器（见 docs/业务逻辑架构.md 链 12·门5 文件级隔离：本文件=计划面）。
 // **只读**：目标套数 × 门3 resolveBom（与组装同一解析·配方语义单源）→ 对比主档库存 → 缺口两分：
 //   ① 外协缺口——带结团不外购（业务定稿：带结=织女产出），缺多少带结＝应发多少同色 L 原团；
 //     派生的原团需求叠回采购口径（发出去的原团也是要备的料）。
 //   ② 采购缺口——按供应商分列（够扣不出行·未建档料点名+归「未挂供应商」组）。
 // fail-closed：无模板/无差异位/坏 targets 即拒（不静默补默认·根因#8）。RBAC：默认拒 admin:write＝仅超管。
-// getFgSummary 同车道另一只读视角：不算缺口，是 stockLedger fg 流水事后按产品汇总（打包累计/发货累计），不动账。
+// getFgSummary 同文件另一只读视角：不算缺口，是 stockLedger fg 流水事后按产品汇总（打包累计/发货累计），不动账。
 
 const KNOTTED_RE = /^yarn:([a-z][a-z0-9-]*):L:knotted$/
 
@@ -39,7 +39,7 @@ export async function getRestockPlan({ db, data }: Ctx) {
     return m && Number.isInteger(m.stock) ? m.stock : 0
   }
 
-  // ① 外协缺口：带结缺口 → 应送同色 L 原团（1 原团织 1 带结·蓝图动线）·派生原团需求叠进采购口径
+  // ① 外协缺口：带结缺口 → 应送同色 L 原团（1 原团织 1 带结）·派生原团需求叠进采购口径
   const outworkGaps: any[] = []
   for (const [id, n] of [...need.entries()]) {
     const m = KNOTTED_RE.exec(id)

@@ -1,7 +1,7 @@
 import type { CustomerPanelProvider } from '../types'
 import { COLLECTIONS, progressPercent } from '@ldrw/shared'
 
-// 学习位置板块（B2.1·后台360工作站·铁律三 provider 模式）：坐席查某客人每门课学到哪——章/节/段/完成度
+// 学习位置板块（铁律三 provider 模式）：坐席查某客人每门课学到哪——章/节/段/完成度
 // 人话化，精准指导钩织学习求助。数据＝progress（trackEvent 折叠的「每用户每课一条」·last 末位置 + done
 // 段完成集）join courses（取章标题/节名/段名）。
 //

@@ -2,7 +2,7 @@ import { COLLECTIONS, ERR } from '@ldrw/shared'
 import { getDb, isDocMissing, isEmptyDoc } from './db'
 import { notifyAlert } from './observe'
 
-// 实物库存原子原语（设计约束#1「下单即预留+乐观 CAS 防超卖」·黄金 inventory-scm §A/§B/§C）。
+// 实物库存原子原语（根因#1「下单即预留+乐观 CAS 防超卖」）。
 // SKU 库存独立集合 inventory，确定性 _id=`${productId}__${spec}`（与 order.items[].spec 同键，回补一致）。
 // 不限量：无文档或 stock=null＝不限量（缺货前不阻断下单·安全迁移）。
 // 单一收口：全库仅本文件读写 inventory.stock。
@@ -185,7 +185,7 @@ export async function produceStock(productId: string, spec: string, qty: number)
   return ok ? { ok: true } : { ok: false, error: ERR.CONTENTION } // 争用耗尽（管理端低频·几乎不至）
 }
 
-// 全量扫描上限（黄金 inventory-scm §L）：裸 .get() 服务端默认 100 条静默截断——SKU 破百后库存页
+// 全量扫描上限：裸 .get() 服务端默认 100 条静默截断——SKU 破百后库存页
 // 少显示像没记录。分页取齐（100/页）、封顶防无界；到顶如实报 truncated（调用方提示、不装全量）。
 const INVENTORY_SCAN_CAP = 1000
 

@@ -1,7 +1,7 @@
 <script setup lang="ts">
-// 数据看板（照 design/控制台.pen PxuIO 视觉语言重写·M-adminImpl 批1）：套新卡片/KPI/表格语言，
-// 数据仍全绑云端真值。设计的「成交额趋势柱图 / 热销商品 Top5」当前后端无数据源——不编数（根因#8·T3），
-// 保留真实的 KPI/转化漏斗/段位分析/最近动态 + owner 待处理行动条 + 交易异常告警（换皮曾删·复原不再丢）。
+// 数据看板（design/控制台.pen PxuIO 视觉语言）：卡片/KPI/表格语言，
+// 数据全绑云端真值。设计的「成交额趋势柱图 / 热销商品 Top5」当前后端无数据源——不编数（根因#8），
+// 只放真实的 KPI/转化漏斗/段位分析/最近动态 + owner 待处理行动条 + 交易异常告警。
 import { ref, onMounted, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { Users, ShoppingBag, Wallet, QrCode, GraduationCap, RefreshCw, TriangleAlert, Truck, RotateCcw, Boxes, Flame, PauseCircle, PackagePlus, Inbox, ShieldAlert } from 'lucide-vue-next'
@@ -25,7 +25,7 @@ const router = useRouter()
 const vm = ref<ReturnType<typeof mapDashboard>>(null)
 const todo = ref({ ship: 0, refund: 0, lowStock: 0, prep: 0 })
 const todoPartial = ref(false) // 待处理计数有副请求加载失败＝true（病根#14：别把「没加载到」显示成「无待办」）
-// 异常账本未处理数（UX 体检批2·病根#14 信息架构层）：与 /anomalies 页同账本（服务端 count·
+// 异常账本未处理数（病根#14 信息架构层）：与 /anomalies 页同账本（服务端 count·
 // getInspectStatus 纯只读），让账本高危信号进看板人眼；「钱链告警」是另一套定向口径（getTxAlerts
 // 三类），两格并存各自为真
 const openAnomalies = ref(0)
@@ -33,7 +33,7 @@ const message = ref('加载中…')
 const busy = ref(false)
 
 const alertCount = computed(() => (vm.value?.alerts || []).reduce((n, a) => n + a.ids.length, 0))
-// 钱链告警按类型定位（P2 修复·根因：getTxAlerts 三类 id 形状不同——feeMismatch 是订单 _id（Orders 页
+// 钱链告警按类型定位（getTxAlerts 三类 id 形状不同——feeMismatch 是订单 _id（Orders 页
 // 搜索精确匹配 _id 能找到），refundMismatch/stuckRefunds 是 afterSales 复合 _id（`orderId__lineId[__ovrN]`，
 // Orders/Refunds 两页搜索都搜不到这种复合 id）。金额不符单唯一对应 Orders 页；其余两类只能去 Refunds 页
 // （虽然 Refunds 搜索也不认复合 id，但至少落在能看到售后记录的正确页面——不去 /orders 那种连页面都错的死路）。
@@ -84,7 +84,7 @@ async function load() {
   if (d.error === 'SESSION_LOST') return // 会话失效集中导登录（client.onSessionLost·单源·根因#5）
   vm.value = mapDashboard(d)
   // 上新未完成＝筹备中（未上架）商品数（复用 productState 三态口径）；失败副请求由 deriveDashboardTodos
-  // 以 .ok 识别、回传 partial——不再兜成 0 把「没加载到」伪装成「无待办」（病根#14）
+  // 以 .ok 识别、回传 partial——不兜成 0 把「没加载到」伪装成「无待办」（病根#14）
   const t = deriveDashboardTodos({
     dashboard: d,
     refundCounts: rc,

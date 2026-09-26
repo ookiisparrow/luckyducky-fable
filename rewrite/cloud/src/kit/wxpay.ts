@@ -4,13 +4,13 @@ import { err } from './reply'
 import type { ErrCode } from '@ldrw/shared'
 
 /**
- * 微信支付 APIv3 商户接缝（根因#12 平台接缝单点·S16 外部对账 Batch 2）。
+ * 微信支付 APIv3 商户接缝（根因#12 平台接缝单点·外部对账）。
  *
  * 与 `kit/flow.ts` 并列、职责不同：flow.ts 走【云开发支付工作流】收/退款（凭证由工作流持有）；本文件走
  * 【商户 API v3 直连】拉**交易账单**（云开发支付未封装账单下载·只能商户 API 直取），出站 GET
  * `api.mch.weixin.qq.com`、用**商户私钥 RSA-SHA256** 签名（APIv3 鉴权方案）。
  *
- * 凭证（敏感·根因#9·决策 2026-07-12 起单源 DB `secureConfig/wxpay`）：商户私钥 + 证书序列号单源
+ * 凭证（敏感·根因#9·单源 DB `secureConfig/wxpay`）：商户私钥 + 证书序列号单源
  * `secureConfig/wxpay`（字段 `mchPrivateKey`/`mchSerial`·admin /config-checklist 页填即生效·经 kit/secureConfig
  * 读库·env `WXPAY_MCH_PRIVATE_KEY`/`WXPAY_MCH_SERIAL` 仅迁移期兜底）；调用方（adminApi/actions/wxbill.ts）
  * 取值后传入本接缝，mchid 取 `config.pay.subMchId`（自有商户号 1113881793）。
@@ -19,7 +19,7 @@ import type { ErrCode } from '@ldrw/shared'
  * fail-soft 铁律：缺凭证 / 网络 / 状态码非 200 / 解析失败 → `{ ok:false, error }`，绝不抛错反噬调用方。
  *
  * ⚠️ 真账单可行性（靠人·根因#8 拿到≠用通）：若商户号是「服务商-子商户」模式，账单 API 须服务商凭证
- * + `sub_mchid` 参数（云开发持有·未必可取）——故 Batch 2 第一步＝拉一天真账单 spike 验通才继续 Batch 3。
+ * + `sub_mchid` 参数（云开发持有·未必可取）——故先拉一天真账单验通，再依赖逐笔比对。
  */
 
 const WXPAY_HOST = 'https://api.mch.weixin.qq.com'
@@ -40,7 +40,7 @@ const httpsFetch: WxFetch = (url, init) =>
         res.on('end', () => resolve({ status: res.statusCode || 0, text: async () => body }))
       }
     )
-    // 对端悬挂不无限等（2026-07-24 变异分诊缺口③）：账单查询/下载 30 秒不回即掐——destroy 触发 error → reject → fail-soft 兜住。
+    // 对端悬挂不无限等：账单查询/下载 30 秒不回即掐——destroy 触发 error → reject → fail-soft 兜住。
     req.setTimeout(30_000, () => req.destroy(new Error('TIMEOUT')))
     req.on('error', reject)
     if (init?.body) req.write(init.body)

@@ -4,7 +4,7 @@ import { COLLECTIONS } from '@ldrw/shared'
 let inited = false
 
 /**
- * 取数据库句柄；init 只跑一次（设计约束#5：平台原语收口 kit，业务码禁裸 cloud.*）。
+ * 取数据库句柄；init 只跑一次（根因#5：平台原语收口 kit，业务码禁裸 cloud.*）。
  */
 export function getDb() {
   if (!inited) {
@@ -27,7 +27,7 @@ export function isCollectionMissing(e: unknown): boolean {
 
 // 「无档」判据：只认「这一份文档不在」，不认集合/权限/网络（那些当读失败·fail-closed）。
 // 文案散落在 message / errMsg / code / errCode（CloudBase HTTP 只给 code、桩只给 message）。
-// `/does not exist/i` 太宽：collection/permission 文案也带这句，旧版会把限量 SKU 当不限量放行。
+// `/does not exist/i` 太宽：collection/permission 文案也带这句，用它会把限量 SKU 当不限量放行。
 function errHaystack(e: unknown): string {
   if (e == null) return ''
   if (typeof e === 'string') return e

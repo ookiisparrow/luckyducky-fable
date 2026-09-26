@@ -19,8 +19,8 @@ export function toFenAmount(v: unknown): number {
   return toFen(toYuanAmount(v))
 }
 
-// —— S16 对账原语单源（钱链·批B2）——与 kit/wxpay 分工：wxpay 管微信 v3 出站签名/账单解析
-// （平台接缝单点#12），本文件管「拉一日→落库→比对」编排与纯分类器。消费方：adminApi 手动路径
+// —— 对账原语单源（钱链）——与 kit/wxpay 分工：wxpay 管微信 v3 出站签名/账单解析
+// （平台接缝单点·根因#12），本文件管「拉一日→落库→比对」编排与纯分类器。消费方：adminApi 手动路径
 // （downloadBill/getBillMatch）+ timers/billReconcile 每日自动对账——同一套原语，行为单源不双轨。
 
 export const DAY_MS = 86400_000
@@ -28,7 +28,7 @@ export const DAY_MS = 86400_000
 /** 幂等落库：确定性 _id=`<date>:<transactionId>`（重拉同日覆盖不重复·根因#1）。非 SUCCESS 行加 `:<tradeState>` 后缀：
  *  ALL 账单的退款行沿用原单微信订单号，同日先付后退会用 REFUND 行盖掉 SUCCESS 行，getBillMatch 就误报「我方有微信无」。
  *  先建集合（wxBills 动态建·往不存在的集合 doc().set() 会失败）；只对真写成功的计数（不吞错装成功）。
- *  自 adminApi/actions/wxbill.ts 原样移入（批B2·timer 复用），ensure 改本地 createCollection（kit 不 import functions/）。 */
+ *  ensure 用本地 createCollection（kit 不 import functions/）。 */
 async function upsertBills(db: any, date: string, rows: BillRow[]): Promise<number> {
   try {
     await db.createCollection(COLLECTIONS.wxBills) // 集合不存在则建（否则 set 静默失败·count 虚高）

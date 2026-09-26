@@ -5,13 +5,13 @@ import { err } from './reply'
 /**
  * 微信内容安全接缝（根因#12 平台接缝单点 + 根因#3 信任边界 fail-closed）。
  *
- * 用户上传的图片（UGC）入库前必过内容安全校验——节点诊断拍照（B2.2）是本项目第一个「用户图片入库」面，
+ * 用户上传的图片（UGC）入库前必过内容安全校验——节点诊断拍照是本项目第一个「用户图片入库」面，
  * 黄暴恐违规图直接入库＝合规风险。走云开发「云调用」cloud.openapi.security.imgSecCheck——access_token 由
  * 云环境注入、无需 AppSecret（同 kit/shipping 走 openapi，区别 kit/wecom 企业微信须自管 token）。
  *
  * **图片 + 评价/资料文本 = fail-CLOSED**（区别 kit/shipping 钱链 fail-soft）：公开展示 UGC，校不过或校不了一律拒。
  * **客服打字 / 意见反馈 = fail-OPEN**（`msgSecCheck(..., 'open')`）：真违规仍拒；接口抖动放行并记 `SEC_CHECK_INFRA`，
- * 安检挂了不能卡死顾客通道（Issue #113）。守卫 ugc-imgsecchecked 焊公开 UGC 写面。
+ * 安检挂了不能卡死顾客通道。守卫 ugc-imgsecchecked 焊公开 UGC 写面。
  *
  * ⚠️ 真发前置（靠人·根因#8「拿到 ≠ 用通」）：① 部署产物 config.json 声明 openapi 权限 `security.imgSecCheck`
  *   （build.mjs OPENAPI_PERMS 自动产·守卫 rw-openapi-perm-declared）；② mp 后台开通内容安全能力；③ 真机验图片
@@ -71,7 +71,7 @@ function onInfraFail(infra: MsgSecInfra, scene: number): SecResult {
  * **接口抖动/能力未开**（其它非 0 码 / 抛错）：
  *   - `infra:'closed'`（默认·评价/昵称/签名）：拒。UGC 公开展示面，「证明安全」才放行。
  *   - `infra:'open'`（客服打字 / 意见反馈）：放行并 `alert(SEC_CHECK_INFRA)`。
- *     安检抖动不得卡死顾客消息（Issue #113 拍板）。
+ *     安检抖动不得卡死顾客消息（拍板）。
  * 守卫 ugc-imgsecchecked 焊评价/资料写面；客服/反馈由测试锁 fail-open。
  */
 export async function msgSecCheck(

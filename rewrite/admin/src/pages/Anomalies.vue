@@ -1,5 +1,5 @@
 <script setup lang="ts">
-// 异常监测·bug 账本（design 语言一致·批3·治病根#14）：四路来源（服务端异常/不变量违反/关键流程失败/
+// 异常监测·bug 账本（design 语言一致·治病根#14）：四路来源（服务端异常/不变量违反/关键流程失败/
 // 客户端错误）统一账本·指纹去重（count 累加）·可筛未处理/已处理·标记已处理。数据走 adminApi listAnomalies/
 // resolveAnomaly 真值。
 import { ref, computed, onMounted } from 'vue'
@@ -15,7 +15,7 @@ import UiButton from '../components/ui/Button.vue'
 
 // 会话失效导登录由 client.onSessionLost 集中处理（单源·根因#5）——本页不再自持 router
 const list = ref<any[]>([])
-const total = ref<number | null>(null) // 账本真实总数（N2·bug 清除战役 II 遗留）：与 list.length 分开——list 受 limit 截断，total 是同 filter 全量
+const total = ref<number | null>(null) // 账本真实总数：与 list.length 分开——list 受 limit 截断，total 是同 filter 全量
 const message = ref('加载中…')
 const busy = ref(false)
 const filter = ref<'open' | 'resolved' | 'all'>('open')
@@ -46,9 +46,9 @@ const openCount = computed(() => list.value.filter((a) => !a.resolved).length)
 const highCount = computed(() => list.value.filter((a) => a.severity === 'high').length)
 const totalHits = computed(() => list.value.reduce((s, a) => s + (Number(a.count) || 0), 0))
 
-const listGen = useLatest() // 异常账本乱序守卫（P2·快切筛选时旧结果别覆盖当前 chip·根因#8）
+const listGen = useLatest() // 异常账本乱序守卫（快切筛选时旧结果别覆盖当前 chip·根因#8）
 async function load() {
-  confirmId.value = '' // 换筛选/刷新即复位危险态（P1·防旧武装的「标记已处理」残留、重进同一位一击直发·批3 规格）
+  confirmId.value = '' // 换筛选/刷新即复位危险态（防旧武装的「标记已处理」残留、重进同一位一击直发）
   busy.value = true
   const opts: { resolved?: boolean } = {}
   if (filter.value === 'open') opts.resolved = false
@@ -63,7 +63,7 @@ async function load() {
   message.value = r.ok ? '' : failText('加载失败', r.error)
 }
 
-const confirmId = ref('') // 两步确认（换皮一键无撤销·标记已处理是破坏性动作）
+const confirmId = ref('') // 两步确认（标记已处理是破坏性动作·无撤销）
 async function markResolved(a: any) {
   if (!confirmed(confirmId, a._id)) return
   const r: any = await resolveAnomaly(a._id)
@@ -111,7 +111,7 @@ onMounted(load)
         <KpiCard label="累计触发" :value="totalHits" :icon="Activity" />
       </div>
 
-      <!-- 账本总数提示（N2·仅当总数超出本视图截断条数时显示，不动既有 4 张 KPI 卡布局） -->
+      <!-- 账本总数提示（仅当总数超出本视图截断条数时显示，不动 4 张 KPI 卡布局） -->
       <p v-if="total != null && total > list.length" class="ld-status">
         账本共 {{ total }} 条 · 本视图按 lastSeen 前 {{ list.length }} 条（处理后重载会顶上更早的）
       </p>

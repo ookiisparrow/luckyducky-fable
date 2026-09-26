@@ -1,5 +1,5 @@
 <script setup lang="ts">
-// 供应链顶部流程标签（旧线 components/ScmFlowTabs.vue 移植）：5 个 SCM 页是同一条流程的不同环节，
+// 供应链顶部流程标签：5 个 SCM 页是同一条流程的不同环节，
 // 给一条可直接互跳的标签条，不必每次退回侧栏找。顺序单源见 lib/scmFlow.ts。
 import { useRoute } from 'vue-router'
 import { SCM_FLOW } from '../lib/scmFlow'

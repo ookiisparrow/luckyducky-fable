@@ -68,14 +68,14 @@ export const webhookOk = (w: string): boolean => !w || /^https:\/\/qyapi\.weixin
 
 export interface ReconVM {
   cumulative: Array<{ label: string; value: string }>
-  // 窗内合计（所选区间真值·后端 summary 就绪·换皮误用全时 cumulative 致口径错乱：窗内订单数与全时钱额混排、tfoot 穿帮）
+  // 窗内合计（所选区间真值·别用全时 cumulative：窗内订单数与全时钱额混排会口径错乱、tfoot 穿帮）
   summary: { income: string; refund: string; net: string; orders: number; refunds: number }
   range: { from: string; to: string }
   daily: Array<{ day: string; income: string; refund: string; net: string; orders: number; refunds: number }>
   approxNote: string
   partial: boolean // 累计聚合/异常查询降级：数据不可信（后端 degraded：任一路读失败·前端须警告操作员别当真 0）
-  // 内部异常明细（bug B2 修：后端 getTxAlerts 返回 {feeMismatch,refundMismatch,stuckRefunds} 三数组对象·
-  // 换皮误当数组取 .length 恒 0、明细永不渲染。改按对象结构化·有则渲染带单号、无则空数组不吓人）
+  // 内部异常明细（后端 getTxAlerts 返回 {feeMismatch,refundMismatch,stuckRefunds} 三数组对象·
+  // 当数组取 .length 恒 0、明细永不渲染，故按对象结构化·有则渲染带单号、无则空数组不吓人）
   exceptions: Array<{ label: string; ids: string[] }>
 }
 
@@ -113,7 +113,7 @@ export function mapRecon(r: unknown): ReconVM | null {
   }
 }
 
-// B2：后端 exceptions＝{feeMismatch,refundMismatch,stuckRefunds} 三 id 数组·结构化成带单号明细块（有则渲染·空不吓人）
+// 后端 exceptions＝{feeMismatch,refundMismatch,stuckRefunds} 三 id 数组·结构化成带单号明细块（有则渲染·空不吓人）
 function mapExceptions(ex: unknown): Array<{ label: string; ids: string[] }> {
   const o = (ex && typeof ex === 'object' ? ex : {}) as Record<string, any>
   const list = (v: unknown) => (Array.isArray(v) ? v.map(String) : [])
@@ -156,7 +156,7 @@ export interface StockRow {
   productId: string
   spec: string
   stock: number | null // null=不限量（页面用状态徽章，不当成 0）
-  threshold: number // per-SKU 低库存阈值（0=无·前端退默认·换皮硬编码 10 丢了 per-SKU·后端 saveStock 早支持）
+  threshold: number // per-SKU 低库存阈值（0=无·前端退默认）
   updatedAt: number
 }
 
@@ -265,7 +265,7 @@ export interface AuditEntryVM {
   summaryText: string
 }
 
-/** 审计日志行归一（批 B6·listAudit）：ok 归一中文徽章（成功绿/失败红）、operator/ip/摘要缺省显 '—'、
+/** 审计日志行归一（listAudit）：ok 归一中文徽章（成功绿/失败红）、operator/ip/摘要缺省显 '—'、
  *  summary 对象拼成 `k: v · k: v` 展示串（同 Anomalies.vue 内联 ctxPairs 的精神，落成可单测的纯函数）。 */
 export function mapAuditEntries(list: unknown): AuditEntryVM[] {
   if (!Array.isArray(list)) return []

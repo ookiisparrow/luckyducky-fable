@@ -23,11 +23,11 @@ const message = ref('')
 const busy = ref(false)
 const confirmKey = ref('')
 // 载入成功才放开「保存整册」——saveKb 是整册覆盖同步（提交外的旧 doc 逐个 remove），载入失败 rows=[] 时一保存就把
-// 真实整份 FAQ 删光（KB 是客服 bot 答案 + 坐席快捷回复单源·不可逆）。同 HelpVideos/Settings/ScmBom 载入失败门·P1。
+// 真实整份 FAQ 删光（KB 是客服 bot 答案 + 坐席快捷回复单源·不可逆）。同 HelpVideos/Settings/ScmBom 载入失败门。
 let loaded = false
 const listFailed = ref(false) // 没读到册时不显「暂无 FAQ」引导——失败≠空册，此时也存不了
 
-// 预设 FAQ（换皮删了·键按「分类:主题」＝客服菜单叶子 id 口径填好·owner 按实际菜单微调）
+// 预设 FAQ（键按「分类:主题」＝客服菜单叶子 id 口径填好·owner 按实际菜单微调）
 const PRESET: Omit<KbRow, 'order'>[] = [
   { key: 'logistics:eta', question: '什么时候发货 / 多久到？', answer: '付款后 48 小时内发货，快递一般 3-5 天到；物流单号在「我的订单」可查。', category: 'logistics', enabled: true, featured: false },
   { key: 'activation:howto', question: '激活码怎么用？', answer: '收到材料包后扫卡片上的二维码，输入激活码即可进入课程。', category: 'activation', enabled: true, featured: false },
@@ -36,7 +36,7 @@ const PRESET: Omit<KbRow, 'order'>[] = [
 ]
 
 async function reload() {
-  confirmKey.value = '' // 刷新即复位危险态（P1·防旧武装的删行残留、重进同一位一击直删·批3 规格）
+  confirmKey.value = '' // 刷新即复位危险态（防旧武装的删行残留、重进同一位一击直删）
   loaded = false // 载入/刷新期间禁保存（含 save 后刷新失败 rows=[] 的窗口·防拿空表覆盖删光·同 HelpVideos）
   const r = await listKb()
   rows.value = r.ok ? normalizeKb(r.list) : []
@@ -46,12 +46,12 @@ async function reload() {
   return r.ok
 }
 
-// B3：新建 FAQ 键留空由人填（换皮自动生成随机 faq-<ts>·永不匹配菜单叶子·bot 命不中）
+// 新建 FAQ 键留空由人填（自动生成随机 faq-<ts> 的话永不匹配菜单叶子·bot 命不中）
 function addRow() {
   rows.value.push({ key: '', question: '', answer: '', category: 'other', enabled: true, order: rows.value.length, featured: false })
 }
 function loadPreset() {
-  confirmKey.value = '' // 载入预设即复位危险态（P1·同 reload 约定·批3 规格同类扩面）
+  confirmKey.value = '' // 载入预设即复位危险态（同 reload 约定）
   const existing = new Set(rows.value.map((r) => r.key))
   let added = 0
   PRESET.forEach((p) => {
@@ -69,11 +69,11 @@ function delRow(i: number) {
 async function save() {
   if (busy.value) return
   if (!loaded) {
-    // 未成功载入即保存 = 拿空/残缺 rows 整册覆盖·把真实 FAQ 全删光（P1）——拒绝并提示刷新
+    // 未成功载入即保存 = 拿空/残缺 rows 整册覆盖·把真实 FAQ 全删光——拒绝并提示刷新
     message.value = '知识库未成功载入，暂不能保存（避免覆盖并删光已有 FAQ·请刷新重试）'
     return
   }
-  // 键校验（B3·bot 命中命脉·换皮删了这层）：非空 + 唯一（重复会互相覆盖）
+  // 键校验（bot 命中命脉）：非空 + 唯一（重复会互相覆盖）
   const keys = rows.value.map((r) => r.key.trim())
   if (keys.some((k) => !k)) {
     message.value = '每条 FAQ 都要填「键」——键须＝客服菜单叶子 id（如 logistics:eta），bot 据此命中'
@@ -91,13 +91,13 @@ async function save() {
   busy.value = false
   if (!r.ok) {
     // 保存失败留原文·绝不 reload——否则 listKb 成功会把编辑器换回旧数据（丢未存的 FAQ 编辑）并抹掉本条错（病根#14）
-    // GC_REMOVE_FAIL（H2）：新内容已 upsert 成功，只是旧条目 GC 删除失败残留——友好文案区分于「整体没存上」
+    // GC_REMOVE_FAIL：新内容已 upsert 成功，只是旧条目 GC 删除失败残留——友好文案区分于「整体没存上」
     message.value = r.error === 'GC_REMOVE_FAIL' ? '已保存新内容，但有旧条目未删净（重存一次即可收敛）' : writeFailText('保存失败', r.error)
     return
   }
   const n = Number(r.count) || 0
   const okR = await reload() // 成功才刷（拉回落库后的整册）
-  // 只在刷新也成功时显纯成功；刷新失败保留其「加载失败」可见、不被成功盖掉（病根#14 失败必可观测·迭代I 批7 回归修）
+  // 只在刷新也成功时显纯成功；刷新失败保留其「加载失败」可见、不被成功盖掉（病根#14 失败必可观测）
   message.value = okR ? `已保存 ${n} 条（整册覆盖·被删的行已真删）` : `已保存 ${n} 条，但列表刷新失败，请重开本页确认`
 }
 

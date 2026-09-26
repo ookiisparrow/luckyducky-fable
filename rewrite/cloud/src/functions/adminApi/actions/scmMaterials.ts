@@ -3,9 +3,9 @@ import { applyStockMoves, listStockLedger, saveMaterialDoc, listMaterialDocs, pa
 import { COLLECTIONS } from '@ldrw/shared'
 import { yarnMaterialId } from '@ldrw/shared'
 
-// 进销存 SCM-0 地基·物料/供应商主档 + 期初盘点/调整（见 docs/业务逻辑架构.md 链 12·门5 文件级隔离：本文件=SCM-0 车道）。
+// 进销存地基·物料/供应商主档 + 期初盘点/调整（见 docs/业务逻辑架构.md 链 12·门5 文件级隔离：本文件=主档面）。
 // 库存/主档持久化收口 kit/scmStock（门1·守卫 rw-material-stock-single-seam）；本文件只做入参校验 + 料号推导 + 转调。
-// RBAC：不登记 ACTION_CAPS → 默认拒 admin:write＝仅超管（外包坐席天然无权·蓝图门5）；写类 action 自动审计（shouldAudit）。
+// RBAC：不登记 ACTION_CAPS → 默认拒 admin:write＝仅超管（外包坐席天然无权·门5）；写类 action 自动审计（shouldAudit）。
 
 const SLUG = /^[a-z][a-z0-9-]*$/ // 料号成分（颜色/辅料名）：小写字母开头的 slug，保 _id 干净可读
 
@@ -67,10 +67,10 @@ export async function saveMaterial({ data }: Ctx) {
 
 // ── 供应商/织女主档 ──
 
-// B1（根因#7）：改走 kit pageQuery——旧 .limit(200) 裸封顶超上限旧档永久不可查；defaultLimit=200
-// 沿用旧上限，无参调用（多处 picker 下拉全量消费点）行为零变化。
+// 根因#7：走 kit pageQuery——.limit(200) 裸封顶会让超上限旧档永久不可查；defaultLimit=200，
+// 无参调用（多处 picker 下拉全量消费点）首页即 200 条。
 //
-// cursorField 用 `_id`（供应商表无自然排序字段·蓝图 B1 主脑裁决）：kit pageQuery 复合游标的 tie/span
+// cursorField 用 `_id`（供应商表无自然排序字段）：kit pageQuery 复合游标的 tie/span
 // 双分支设计假定 cursorField≠_id（tie 分支靠「同 cursorField 值·不同 _id」区分同值记录打破平局）；当
 // cursorField===_id 时 v===id 恒成立，`{ [cursorField]: cursor.v, _id: beyond(cursor.id) }` 这一对象
 // 字面量里两个键都叫 `_id`、后者覆盖前者，tie 分支的查询条件坍缩成与 span 分支完全相同的条件——两个
@@ -78,11 +78,11 @@ export async function saveMaterial({ data }: Ctx) {
 // 靠去重能清干净；但 R 较大时（limit/2 < R ≤ limit，即将进入尾页前一页）拼接体在 slice(limit+1) 处被
 // 截断在「原序列中段」而非真正尾部，页内去重清得干净，但 pageQuery 内部据此算出的 hasMore/nextCursor
 // 本身就是错的（hasMore 误报 true、nextCursor 指向一条已经交付过的记录）——只做页内去重堵不住这层，
-// 会造成跨页重复交付（P1 复核实测：350 条供应商、limit 200 时命中）。kit/paging.ts 判定本批不许改
-// （铁律），故不去修 pageQuery 内部，而是从根上避开这条坏分支：cursorField===_id 时 v===id 恒成立，
+// 会造成跨页重复交付（实测 350 条供应商、limit 200 时命中）。这里不动共享的 kit/paging.ts pageQuery
+// 内部，而是从调用侧避开这条坏分支：cursorField===_id 时 v===id 恒成立，
 // 在调用前把客户端回传的复合游标 {v,id} 拆成纯值 id 再传给 pageQuery——pageQuery 收到非 {v,id} 形状
 // 的游标会落进「向后兼容纯值游标」分支（单一查询，无 tie/span 拼接），该分支的 hasMore/nextCursor 本
-// 身即正确，无需再在此兜底去重。首页（无 cursor）不受影响，「无参调用行为零变化」契约不受影响。
+// 身即正确，无需再在此兜底去重。首页（无 cursor）不受影响。
 const SUPPLIER_LIST_LIMIT = 200
 
 export async function listSuppliers({ db, data }: Ctx) {
@@ -121,11 +121,11 @@ export async function saveSupplier({ db, data }: Ctx) {
 export async function adjustStock({ data, agentId }: Ctx) {
   const materialId = String(data.materialId || '')
   const adjustId = String(data.adjustId || '') // 前端每次提交生成一次·重试复用＝幂等键成分
-  // trim 后判空（D2·同 scmBom saveBomProfile productId trim 判例）：不 trim 会放行纯空格 reason，
+  // trim 后判空（同 scmBom saveBomProfile productId trim）：不 trim 会放行纯空格 reason，
   // 落库看似「有原因」实则不可读，审计追责时形同白填。
   const reason = str(data.reason, 200).trim()
   if (!materialId || !adjustId) return reply(400, err('BAD_ADJUST'))
-  // 拒成品 fg: 调整（深审 P2·假成功账实分叉）：applyStockMoves 对 fg: 行跳过 casChange（成品账在 kit/inventory·
+  // 拒成品 fg: 调整（防假成功账实分叉）：applyStockMoves 对 fg: 行跳过 casChange（成品账在 kit/inventory·
   // 流水行只留痕），adjust 走这里会收 ok:true/applied:1 但 materials/inventory 纹丝不动＝假成功、留一条 stray fg
   // adjust 流水破坏对账公式。成品期初/人工调整须走 inventory.saveStock，不走原料调整口。
   if (materialId.startsWith('fg:')) return reply(400, err('FG_NOT_ADJUSTABLE'))
@@ -138,7 +138,7 @@ export async function adjustStock({ data, agentId }: Ctx) {
 }
 
 // ── 流水查账（只读·cursor 分页）──
-// B1（根因#7）：真实现改在 kit/scmStock.ts listStockLedger（走 pageQuery），本 action 只透传 {cursor,limit}。
+// 根因#7：真实现在 kit/scmStock.ts listStockLedger（走 pageQuery），本 action 只透传 {cursor,limit}。
 
 export async function listLedger({ data }: Ctx) {
   const materialId = data.materialId ? String(data.materialId) : undefined

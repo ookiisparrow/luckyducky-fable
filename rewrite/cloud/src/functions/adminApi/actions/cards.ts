@@ -2,11 +2,11 @@ import { reply, ensure, readDoc, type Ctx } from '../lib'
 import { setOrAdd, str, err } from '../../../kit'
 import { COLLECTIONS } from '@ldrw/shared'
 
-// —— 二维码卡片 + 设置（规格 §六/§七 步骤⑤⑥）——
+// —— 二维码卡片 + 设置 ——
 export async function getSettings({ db }: Ctx) {
   const got = await readDoc(db.collection(COLLECTIONS.adminConfig).doc('settings').get())
   if (!got.ok) return reply(200, err('DOC_READ_FAIL'))
-  // webhook 带 key，拿到整条就能往群里发消息：只回「配了没 + 尾号」供页面辨认，原值不出云端（#386）
+  // webhook 带 key，拿到整条就能往群里发消息：只回「配了没 + 尾号」供页面辨认，原值不出云端
   const { alertWebhook, ...settings } = (got.data as Record<string, any>) || {}
   if (alertWebhook) Object.assign(settings, { alertWebhookSet: true, alertWebhookTail: String(alertWebhook).slice(-4) })
   return reply(200, { ok: true, settings })

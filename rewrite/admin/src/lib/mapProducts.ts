@@ -28,9 +28,9 @@ export interface StepDot {
   key: string
   label: string
   done: boolean
-  marks?: StepMark[] // 第 4 步拆「有视频文件」/「课已发布」——上架不硬等发布（工单213）
+  marks?: StepMark[] // 第 4 步拆「有视频文件」/「课已发布」——上架不硬等发布
 }
-// listDrafts 后端派生的分步态（换皮误判「无源」·实则 cards/courses/qrcodes 可 join）
+// listDrafts 后端派生的分步态（cards/courses/qrcodes join 得出）
 export interface StepExtras {
   hasVideo?: Record<string, boolean> // courseId → 草稿或已发布课有教学视频文件
   coursePublished?: Record<string, boolean> // courseId → 课已发布（学员看得见）
@@ -38,14 +38,14 @@ export interface StepExtras {
   hasBatch?: Record<string, boolean> // courseId → 有码批次
 }
 
-/** 工单213：商品上架不代替课程发布。店规可先卖材料包，但配套课时必须看得出还差发布。 */
+/** 商品上架不代替课程发布。店规可先卖材料包，但配套课时必须看得出还差发布。 */
 export const COURSE_VS_LISTING_HINT =
   '商品上架 ≠ 课程发布。学员要看见视频，还要再点「发布课程」。没有课也可以先卖材料包。'
 
 export const VIDEO_MARK_FILE = '有视频文件'
 export const VIDEO_MARK_LIVE = '课已发布'
 
-/** 工单212：橱窗开关＝是否出现在首页，禁「上架橱窗」以免和商品上架撞词。 */
+/** 橱窗开关＝是否出现在首页，禁「上架橱窗」以免和商品上架撞词。 */
 export const HOME_FEATURE_ASK = '要不要同时出现在首页'
 export const HOME_FEATURE_SWITCH_ON = '出现在首页'
 export const HOME_FEATURE_SWITCH_OFF = '不出现在首页'
@@ -104,10 +104,10 @@ export function stepProgressHint(steps: StepDot[]): string {
   return `第 ${i + 1} 步：${steps[i].label}`
 }
 
-/** 价格/销量块提示：自动保存只写草稿，顾客要再走同步才看见（#198 词表）。 */
+/** 价格/销量块提示：自动保存只写草稿，顾客要再走同步才看见。 */
 export const DRAFT_PRICE_HINT = '先存草稿，同步后顾客才见'
 
-/** 词表单源（#198 #199 #211）：筹备中第一次＝上架；在售推草稿＝同步到小程序；已下架推新稿＝同步草稿。禁「重新上架」。 */
+/** 词表单源：筹备中第一次＝上架；在售推草稿＝同步到小程序；已下架推新稿＝同步草稿。禁「重新上架」。 */
 export function draftSyncLabel(state: ProductState): string {
   if (state === 'preparing') return '上架'
   if (state === 'unlisted') return '同步草稿'
@@ -125,7 +125,7 @@ export function restoreSaleLabel(): string {
   return '恢复销售'
 }
 
-/** 恢复销售只露旧发布档，不拷刚才改的草稿——确认必须说破（#211）。 */
+/** 恢复销售只露旧发布档，不拷刚才改的草稿——确认必须说破。 */
 export function restoreSaleConfirm(): string {
   return '确认恢复销售？顾客看到的是上次上架页，不是刚才改的草稿。若刚改过价/图请先同步草稿'
 }
@@ -135,7 +135,7 @@ export function restoreSaleOk(): string {
   return '已恢复销售。若刚改过价/图请先同步草稿'
 }
 
-/** 已下架同步成功：发布档已更新，listed 仍是 false，还要再恢复（#211）。 */
+/** 已下架同步成功：发布档已更新，listed 仍是 false，还要再恢复。 */
 export function draftSyncUnlistedOk(): string {
   return '草稿已同步。商品仍停售，还要再点「恢复销售」顾客才看得到'
 }
@@ -200,7 +200,7 @@ export interface DraftRowVM {
   raw: Record<string, unknown> // 整档（编辑 round-trip 用·防覆盖式保存抹字段）
 }
 
-/** 价格标签：多规格显最低 SKU 价 +「起」（换皮丢了起价语义·平铺 product.price）；无 SKU 退商品价。 */
+/** 价格标签：多规格显最低 SKU 价 +「起」（不平铺 product.price）；无 SKU 退商品价。 */
 function skuPriceLabel(p: Record<string, any>): string {
   const skus = Array.isArray(p.skus) ? p.skus : []
   const prices = skus.map((s: any) => Number(s && s.price)).filter((n: number) => n > 0)
@@ -234,7 +234,7 @@ export function mapDraftRows(list: unknown, urls: unknown, listedMap: unknown, e
   return out
 }
 
-/** 上新向导上架闸：前三步（封面/信息/SKU）缺什么——事前预检（换皮退成事后报错）·与云端 publishProduct 四道门同口径。
+/** 上新向导上架闸：前三步（封面/信息/SKU）缺什么——事前预检（不等事后报错）·与云端 publishProduct 四道门同口径。
  *  步 4–5（教学视频/卡片与二维码）非上架硬门槛（可先上架、之后补课程），故不进此清单。 */
 export function basicsMissing(p: unknown): string[] {
   const d = (p && typeof p === 'object' ? p : {}) as Record<string, any>
@@ -272,7 +272,7 @@ export interface ShowcaseRowVM {
   featured: boolean
   listed: boolean
   coverUrl: string
-  price: string // iPhone WYSIWYG 预览用（换皮丢了手机预览）
+  price: string // iPhone WYSIWYG 预览用
   tag: string
 }
 

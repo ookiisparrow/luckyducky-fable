@@ -1,5 +1,5 @@
 <script setup lang="ts">
-// 系统巡检·体检面板（design 语言一致·批3·治病根#14 告警进人眼）：最新体检报告（A 基建存活 + B 业务不变量
+// 系统巡检·体检面板（design 语言一致·治病根#14 告警进人眼）：最新体检报告（A 基建存活 + B 业务不变量
 // 红绿灯）+ 立即巡检（手动触发一轮）+ 未处理异常入口。数据走 adminApi getInspectStatus/runInspect 真值·不编数。
 import { ref, onMounted, computed } from 'vue'
 import { useRouter } from 'vue-router'
@@ -42,7 +42,7 @@ async function runNow() {
   running.value = false
   if (r.error === 'SESSION_LOST') return // 会话失效集中导登录（client.onSessionLost·单源·根因#5）
   if (!r.ok) {
-    // 巡检本身失败（超时/限频/网络）留原文·不再 load()——否则紧随的 getInspectStatus 成功会把 message 抹成 ''，
+    // 巡检本身失败（超时/限频/网络）留原文·不 load()——否则紧随的 getInspectStatus 成功会把 message 抹成 ''，
     // 操作员误以为「巡检跑过·没新异常」，恰在这块「探静默失败」的面板上制造新的静默失败（病根#14）
     message.value = writeFailText('巡检失败', r.error)
     return

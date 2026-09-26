@@ -22,7 +22,7 @@ const { message, ok: msgOk, note, load } = useLoadStatus() // reload 成功不�
 const busy = ref(false)
 const form = ref({ name: '', key: '', wecomUserId: '' })
 const confirmId = ref('')
-const lastCreated = ref<{ name: string; key: string } | null>(null) // 建号后回显口令（换皮不回显·超管拿不到明文转交坐席）
+const lastCreated = ref<{ name: string; key: string } | null>(null) // 建号后回显口令（不回显则超管拿不到明文转交坐席）
 const csatAvg = ref<string | null>(null) // 整体均分（并行调 getCsatReport·与坐席表无关联维度）
 
 // KPI（真·从 rows 聚合，非另造）：在线坐席数 / 接待中总数 / 今日结束总数
@@ -31,7 +31,7 @@ const activeTotal = computed(() => rows.value.reduce((s, r) => s + r.activeCount
 const closedTotal = computed(() => rows.value.reduce((s, r) => s + r.todayClosed, 0))
 
 async function reload() {
-  confirmId.value = '' // 刷新即复位危险态（P1·防旧武装的停用确认残留、重进同一行一击直发·批3 规格）
+  confirmId.value = '' // 刷新即复位危险态（防旧武装的停用确认残留、重进同一行一击直发）
   const [r, csat] = await Promise.all([listAgents(), getCsatReport()])
   rows.value = r.ok ? mapAgents(r.agents) : []
   const csatVm = mapCsat(csat)
@@ -238,7 +238,7 @@ onMounted(reload)
   border-radius: var(--ld-radius-sm);
 }
 
-/* KPI 行小字注（批 B6·同 Csat.vue kpi-note 各自定义·scoped 边界不共享） */
+/* KPI 行小字注（同 Csat.vue kpi-note 各自定义·scoped 边界不共享） */
 .kpi-note {
   font-size: 11.5px;
   color: var(--ld-content-2);

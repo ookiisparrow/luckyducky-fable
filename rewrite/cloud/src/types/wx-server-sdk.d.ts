@@ -1,5 +1,5 @@
 /**
- * wx-server-sdk 最小环境声明（新线版·只声明用到的 API 面 + 测试桩 control 面）。
+ * wx-server-sdk 最小环境声明（只声明用到的 API 面 + 测试桩 control 面）。
  * 运行时：云环境提供真实 sdk；测试：file: 内存桩（stub-only-sdk 守卫保证不换真 sdk）。
  */
 declare module 'wx-server-sdk' {

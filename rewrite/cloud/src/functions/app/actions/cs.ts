@@ -2,7 +2,7 @@ import { ERR, COLLECTIONS } from '@ldrw/shared'
 import { withOpenId, withRateLimit, ok, err, kfToken, unionidToExternalUserid, currentUnionId } from '../../../kit'
 
 /**
- * 身份桥接·写侧（黄金 cs-agent §九）：可信 openid + unionid 经企微转换 API 得 external_userid，
+ * 身份桥接·写侧：可信 openid + unionid 经企微转换 API 得 external_userid，
  * 建 ext→openid 映射（客服会话查「你的订单」用）。fail-closed：无 unionid/未配置/token 失败/转换空一律拒不写。
  * unionid 只取服务端上下文、前端传的一律不看：映射按 external_userid 覆盖写，信了前端就能拿别人的 unionid
  * 把别人的 ext 改绑到自己，完整性不能只押在 idconvert 会校验 (unionid, openid) 同主体上。
@@ -27,7 +27,7 @@ export const kfBind = withOpenId(
 )
 
 /**
- * 数据共享告知同意·写侧（黄金 cs-agent §三）：只写本人 users.csDataShare（{agreed, at}）；
+ * 数据共享告知同意·写侧：只写本人 users.csDataShare（{agreed, at}）；
  * true=同意 / false 或缺=撤回（缺省未同意·fail-safe）。外包读 360 前经 assertDataShareConsent 校验。
  */
 export const dataConsent = withOpenId(

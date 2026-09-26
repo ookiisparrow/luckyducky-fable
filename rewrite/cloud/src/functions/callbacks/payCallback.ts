@@ -11,10 +11,10 @@ import {
   isEmptyDoc,
 } from '../../kit'
 
-// 支付结果回调（黄金 orders-money·payCallback 节全量）。防伪/ACK/id 提取由 defineNotifyCallback 强制。
+// 支付结果回调。防伪/ACK/id 提取由 defineNotifyCallback 强制。
 // pending→paid 直接翻单（库存自下单持有）；closed→paid 复活前必须重抢库存——抢不到进 refund_required
 // （钱已收无法履约·告警人工退款·绝不超卖）。入参兼容 v3 resource 与旧 v2 字段。
-// 部署命名：M5 切换日同名替换（回调点位绑定控制台工作流 paynotify）。
+// 回调点位绑定控制台工作流 paynotify。
 const ACK = { errcode: 0, errmsg: 'OK' }
 
 /**
@@ -96,7 +96,7 @@ export const main = defineNotifyCallback<any>({
     }
     if (!p.doc) return readFail('REREAD_FAIL') // 上面已读到单：这里没 doc＝读后被删，不 ACK 留给重推
 
-    // 关单复活漏窗（P1·根因#1 修复）：p.doc 是条件更新**前**的读。若读到的仍是 'pending' 但 moved=false，
+    // 关单复活漏窗（根因#1）：p.doc 是条件更新**前**的读。若读到的仍是 'pending' 但 moved=false，
     // 说明读后被并发推进（关单定时器抢先转 closed）——不能拿「读时值」当「现在值」，须重读一次现值再分发。
     let status = String(p.doc.status || '')
     if (status === 'pending') {

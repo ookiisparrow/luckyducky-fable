@@ -1,4 +1,4 @@
-// 意见反馈（M2 批13）：submitFeedback 接 UI（分类/内容/联系方式·云端白名单+限频）。
+// 意见反馈：submitFeedback 接 UI（分类/内容/联系方式·云端白名单+限频）。
 import { tapHaptic } from '../../lib/haptics'
 import { submitFeedback } from '../../api/user'
 
@@ -17,7 +17,7 @@ Page({
     busy: false,
   },
   backTimer: null as ReturnType<typeof setTimeout> | null,
-  unloaded: false, // 提交在途页面已退出标记（同 review.ts 范式·P2·bug sweep Round2 item3）：迟到回包别再对下一页 navigateBack+toast
+  unloaded: false, // 提交在途页面已退出标记（同 review.ts 范式）：迟到回包别再对下一页 navigateBack+toast
   onUnload() {
     this.unloaded = true
     if (this.backTimer) clearTimeout(this.backTimer) // 延时返回坞清理·防手动返回后孤儿定时器多弹页

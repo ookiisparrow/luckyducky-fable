@@ -52,11 +52,11 @@ const extras = ref<{
 }>({})
 const listed = ref<Record<string, boolean>>({})
 const loading = ref(!!route.params.id)
-const loadError = ref(false) // 载入失败（网络波动）≠ 商品不存在——分开显「重试」态而非误报「商品不存在」死胡同（P3）
+const loadError = ref(false) // 载入失败（网络波动）≠ 商品不存在——分开显「重试」态而非误报「商品不存在」死胡同
 const { message, note, load } = useLoadStatus() // 回刷成功只收回「加载失败」横幅，不误清上架等动作反馈
 const busy = ref(false)
 const pubConfirm = ref(false)
-const wantHome = ref(false) // 首次上架问首页·默认不挂（工单212）
+const wantHome = ref(false) // 首次上架问首页·默认不挂
 const restoreArmed = ref(false)
 const createdDraftId = ref('') // /launch 刚建档后首包偶发读不到新档时，区分「暂未同步」与真不存在
 // 新增武装态必须并进来：漏复位的武装态会让下一次点击一击直发
@@ -108,7 +108,7 @@ async function reloadProduct() {
   const r: any = await listDrafts()
   if (!r.ok) {
     // 载入失败：仅在「还没载到商品」（初次深链·product 仍 null）时显全屏可重试态区别于「商品不存在」；
-    // 已载入后的刷新失败（@saved autosave 回刷 / 切步回刷）只降级为 message banner、不撕掉正在编辑的向导+内嵌编辑器（P2 回归修·reloadProduct 是共享回刷路径）
+    // 已载入后的刷新失败（@saved autosave 回刷 / 切步回刷）只降级为 message banner、不撕掉正在编辑的向导+内嵌编辑器（reloadProduct 是共享回刷路径）
     if (!product.value) loadError.value = true
     load(false, launchErrorText(r.error))
     loading.value = false
@@ -136,7 +136,7 @@ function retryLoad() {
 
 function go(n: number) {
   if (n < 1 || n > WIZARD_STEP_MAX || n === step.value) return
-  // 批量上传在途拦截（P1·bug sweep Round2 item12c）：Wizard 切步＝仅 query 变化＝路由 update 非 leave，
+  // 批量上传在途拦截：Wizard 切步＝仅 query 变化＝路由 update 非 leave，
   // Courses.vue 内嵌的 onBeforeRouteLeave 不会触发——这是 batchUpload 孤儿化的主触发路径，须在这里前置拦。
   if (isUploadLocked()) {
     note(false, '', '批量上传进行中，切步将丢失未落库的视频关联，请等其完成再切步')

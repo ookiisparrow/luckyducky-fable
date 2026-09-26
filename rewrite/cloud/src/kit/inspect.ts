@@ -60,16 +60,16 @@ async function afterSalesOf(db: any, orderIds: string[], status: unknown): Promi
 }
 
 /**
- * 该单**实际退得出来的上限**（整数分）——死信「已退清」判据的分母（批K 评审 P1）。
+ * 该单**实际退得出来的上限**（整数分）——死信「已退清」判据的分母。
  *
  * 为什么不能直接用 order.amount：退款按行走 refundShareFen 比例分摊，每行各自 Math.round 且行与行之间
  * **不共享余数预算**（overrideRefund 只接受单行 lineId，没有「退整单剩余」的路径，行级封顶用尽即
  * NOTHING_LEFT）。而 amount≠goods 是本系统常态（COUPON 是固定额券、非按比例），故 2 行以上订单的
  * 「各行分摊之和」常比实付额少几分，且这几分**没有任何入口能追回**。若分母还用 amount，管理员把每一行
- * 都退到各自上限后订单依旧「差几分」→ 永久红/high、还挤占 samples 前 10 位，正是本批要消灭的假死信
- * 换个形状复发。故分母改为「逐行理论分摊上限之和」（与 overrideRefund 的 lineShare 同一份公式，used=0）。
+ * 都退到各自上限后订单依旧「差几分」→ 永久红/high、还挤占 samples 前 10 位，就是假死信
+ * 换个形状复发。故分母用「逐行理论分摊上限之和」（与 overrideRefund 的 lineShare 同一份公式，used=0）。
  *
- * 钱守恒不受影响：这里只改**巡检报不报**的判据，不放宽任何退款金额闸（refundShareFen 封顶原样）。
+ * 钱守恒不受影响：这里只管**巡检报不报**的判据，不放宽任何退款金额闸（refundShareFen 封顶原样）。
  * fail-closed：items/goods 快照缺失或脏数据算不出 → 退回 amount 口径（更严），让该单继续被报死信。
  */
 function refundableCapFen(o: any, amountFenOverride?: number): number {
@@ -122,15 +122,15 @@ const CHECKS: Check[] = [
     kind: 'invariant-violation',
     async run(db) {
       // 扫已退款售后（有界），按 orderId 归集退款额，比对该单实付 order.amount——超了＝静默多退钱。
-      // 口径（R1 统一·与同文件 refundableCapFen / stuck-order 死信判据同源）：afterSales.refundAmount 与
+      // 口径（与同文件 refundableCapFen / stuck-order 死信判据同源）：afterSales.refundAmount 与
       // order.amount 同为「元」number，**逐行先 toFen 换整数分再累加**（不累加元浮点后一次性取整），
       // 整数域比较精确，故不需要也不该有 `1e-6` 容差——那是元浮点域的产物，且 1e-6 远小于 1 分，
       // 留着既挡不住真差额、又让人误以为「亚分差额可以容忍」。边界用 `>` 不是 `>=`：退＝实付是**全额退**，
       // 合法，不该报；只有严格多退才是钱漏。
       //
-      // fail-closed（本检测器最危险的错法是漏报——真钱漏了却报绿）：金额字段不再走 `Number(x || 0)`。
+      // fail-closed（本检测器最危险的错法是漏报——真钱漏了却报绿）：金额字段不走 `Number(x || 0)`。
       // 那个写法把**脏字段变 NaN、缺字段变 0**，两者都让已退总额变小或变 NaN，而 `NaN > amount` 恒 false
-      // ⇒ 真超退单被静默报绿。改为：字段必须是有限非负 number（全部写入方都走 fenToYuan(...) 落 number，
+      // ⇒ 真超退单被静默报绿。故：字段必须是有限非负 number（全部写入方都走 fenToYuan(...) 落 number，
       // 故此判据不误伤正常行），否则记 suspect 直接报出来给人看——算不准就别假装守恒成立。
       const rows = await scan(db, COLLECTIONS.afterSales, { status: 'refunded' }).catch((e: unknown) => {
         if (isCollectionMissing(e)) return [] // afterSales 首次申请售后才建：集合未建＝确实没有退款
@@ -255,22 +255,22 @@ const CHECKS: Check[] = [
           if (exceptionDirty.has(String(o._id))) return true // 退款额脏 → 无从证明已退清 → 报（fail-closed）
           const paidFen = Number(o.paidFee)
           if (!Number.isInteger(paidFen) || paidFen <= 0) return true // paidFee 脏/缺 → 保守计异常
-          // 与 deadIds 同源判据（批K P1·同文件 refundableCapFen）：退款按行走 refundShareFen 分摊、
+          // 与 deadIds 同源判据（同文件 refundableCapFen）：退款按行走 refundShareFen 分摊、
           // 逐行 Math.round，多行单「各行分摊之和」可能比实付少几分且无任何入口追回——分母须用
           // 「以 paidFee 为实付的逐行分摊上限和」，不能拿裸 paidFen，否则已退清的多行异常单会被
-          // 永久误报假死信（正是批K 为 refund_required 消灭的问题在此复发）。
+          // 永久误报假死信（refund_required 的假死信问题在此复发）。
           const capFen = refundableCapFen(o, paidFen)
           if (!(capFen > 0)) return true // 可退上限算不出 → 保守计异常
           return (exceptionRefunded.get(String(o._id)) || 0) < capFen
         })
         .map((o) => String(o._id))
-      // 死信判据＝「refund_required **且钱还没退清**」（批K K2·与放行越规退款同批落地）：退款成功后**订单
+      // 死信判据＝「refund_required **且钱还没退清**」：退款成功后**订单
       // 状态不变**（refundCallback 只回补库存 + 写 refunded.<lineId> 对账痕，从不改 order.status——退款真相
       // 单一来源是售后单），若判据停在「状态即死信」，退清的单会被永远报死信、淹没真死信。
       // 批量读该单已到账退款额（_.in 分块·照 money-conserved/recallScan 先例·杜绝逐单 doc.get 的 N+1）；
       // 只认 status==='refunded'（真到买家手里），applied/approved 在途不算退清。单位：afterSales.refundAmount
       // 与 order.amount 同为「元」number，本处一律先 toFen 换成整数分再比较（整数域无需容差）。
-      // 分母＝**该单实际可退上限** refundableCapFen(o)，不是 order.amount（批K 评审 P1）。
+      // 分母＝**该单实际可退上限** refundableCapFen(o)，不是 order.amount。
       // fail-closed：查询失败 → catch 兜空 → 该单已退额算 0 → 仍计死信（宁可多报一次，不可漏报真死信）；
       // amount 缺失/为 0 同理按未退清计（不让脏数据把死信静默洗白）。
       const refundedByOrder = new Map<string, number>()
@@ -278,7 +278,7 @@ const CHECKS: Check[] = [
       const deadAs = await afterSalesOf(db, deadRows.map((o) => String(o._id)), 'refunded')
       for (const a of deadAs.rows) {
         if (!okMoney(a.refundAmount)) {
-          // 脏值绝不参与累加：NaN 污染整单已退额→NaN<cap 恒 false→真实未退死信被洗绿漏报（多代理审核 codex#4）
+          // 脏值绝不参与累加：NaN 污染整单已退额→NaN<cap 恒 false→真实未退死信被洗绿漏报
           deadDirty.add(String(a.orderId))
           continue
         }
@@ -386,7 +386,7 @@ export async function runInspection(trigger: 'timer' | 'manual'): Promise<Inspec
 }
 
 /**
- * A5 每日心跳（观测批②「全绿也报平安」·终结「告警的告警」递归）：inspect 全绿时零输出，「该来的消息没来」
+ * 每日心跳（「全绿也报平安」·终结「告警的告警」递归）：inspect 全绿时零输出，「该来的消息没来」
  * 本身无从发现——每日经既有 bot 接缝主动发一条「巡检机存活」。**去重**：确定性 _id `hb:<YYYYMMDD>`
  * （Asia/Shanghai·UTC+8 显式换算）写 inspectRuns，add-first 撞 id=今日已发→跳过（病根#2 房式幂等·
  * timers/inspect 每 2h 跑·触发相位随部署漂移故用确定性日 id 不用固定小时窗）。心跳档带 `startedAt:0`
@@ -397,7 +397,7 @@ export async function sendDailyHeartbeat(summary: { green: number; red: number }
   try {
     const db = getDb()
     const day = dayKeyCST(Date.now()).replace(/-/g, '')
-    // summary 落当日真实计数（评审 P3：只写占位 0/0 会让直查 tcb db 的人被「全绿」误导；读路径已按 startedAt>0 过滤、此字段仅供直查审计）
+    // summary 落当日真实计数（只写占位 0/0 会让直查 tcb db 的人被「全绿」误导；读路径已按 startedAt>0 过滤、此字段仅供直查审计）
     const rec = { _id: `hb:${day}`, startedAt: 0, finishedAt: 0, trigger: 'timer', summary: { green: summary.green, red: summary.red }, results: [] }
     try {
       await db.collection(COLLECTIONS.inspectRuns).add({ data: rec })

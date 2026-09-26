@@ -8,9 +8,9 @@ import Desk from './Desk.vue'
 const ready = ref(false)
 const authed = ref(false)
 
-// 会话失效集中导登录（单源·根因#5·对照 admin router.ts 同构移植）：client.post 遇无令牌/401 触发此回调，
+// 会话失效集中导登录（单源·根因#5·与 admin router.ts 同构）：client.post 遇无令牌/401 触发此回调，
 // 壳层统一登出回登录视图——Desk.vue 内各会话敏感动作（pollThread/send/act/claim/setStatus）不再需要
-// 各自显式判 SESSION_LOST 才能导登录（原先只有 refreshLists 有此判断，其余散点会卡在失效态）。
+// 各自显式判 SESSION_LOST 才能导登录（靠各自判的话容易漏，漏判的散点会卡在失效态）。
 onSessionLost(() => {
   void logout()
   authed.value = false

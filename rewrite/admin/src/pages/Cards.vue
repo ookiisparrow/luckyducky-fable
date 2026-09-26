@@ -12,7 +12,7 @@ import { buildFrontSvg, buildBackSvg } from '../lib/cardSvg'
 import { serialSave } from '../lib/serialSave'
 import { compressImage } from '../lib/compressImage'
 import { saveBlob } from '../lib/saveBlob'
-// 视图层原语（批F 共享 UI）+ lucide 图标——仅新增 import，管道零改。
+// 视图层原语（共享 UI）+ lucide 图标。
 // 注意：lucide 的 Image 与全局 Image 同名，别名 ImageIcon 防遮蔽。
 import UiButton from '../components/ui/Button.vue'
 import Card from '../components/ui/Card.vue'
@@ -37,7 +37,7 @@ const busyArt = ref(false)
 const autoState = ref('') // '' | saving | saved | error
 const product = ref<Record<string, any> | null>(null)
 const coverUrl = ref('')
-// 死胡同改选择器（UX 体检批3）：顶层导航直入无 productId 时列商品可选，不再甩红错叫人绕路
+// 死胡同改选择器：顶层导航直入无 productId 时列商品可选，不甩红错叫人绕路
 const pickRows = ref<{ id: string; name: string; coverUrl: string }[] | null>(null)
 // 同路由只改 query 不重跑 setup（productId 是 setup 期常量）——Shell 按 productId 重挂本页
 function pickProduct(id: string) {
@@ -128,7 +128,7 @@ watch(
   },
   { deep: true }
 )
-// pendingStatus（P1 复审补漏·根因#8）：finalize() 定稿写并入本队列而非旁路直发——旁路会与随后触发的
+// pendingStatus（根因#8）：finalize() 定稿写并入本队列而非旁路直发——旁路会与随后触发的
 // 新 autosave 并发在途，谁的响应后到就把谁的 status 落库，慢网下刚定的 final 可能被晚到的旧 draft
 // autosave 盖回去（settled()-only 方案只排空「点击那一刻已在途」的链，堵不住这条）。pendingStatus 让
 // 队列里「当前及尾随补跑」的每一轮 run() 都携带 next 状态，直到 finalize 收尾才清空。
@@ -139,7 +139,7 @@ async function autosave() {
   const r = await saveCard(payload)
   autoState.value = r.ok ? 'saved' : 'error'
 }
-// 串行化·防慢网下两次自动保存乱序覆盖（P2·根因#8）；key='cards:'+productId（批D·P1）：改走模块级共享
+// 串行化·防慢网下两次自动保存乱序覆盖（根因#8）；key='cards:'+productId：走模块级共享
 // 槽位，快速切走再切回本页（或向导内切步再切回）重建组件实例时，新实例接管旧实例仍在途的补存链，防旧
 // 快照晚到覆盖新实例已存的编辑；按 productId 分槽——不同商品的卡面互不干扰。
 const flushSave = serialSave(autosave, 'cards:' + productId)
@@ -156,7 +156,7 @@ const ratio = computed(() => {
 })
 const prevW = computed(() => (ratio.value > 1 ? 200 : 290))
 const isPreset = (p: { w: number; h: number }) => card.value && card.value.sizeMM.w === p.w && card.value.sizeMM.h === p.h
-// 尺寸失焦即校正（P2·清空/0/负数会写 NaN 进 sizeMM·塌陷预览+导出无效印刷 SVG）：clamp 到 40–300 整数·非法回退 85
+// 尺寸失焦即校正（清空/0/负数会写 NaN 进 sizeMM·塌陷预览+导出无效印刷 SVG）：clamp 到 40–300 整数·非法回退 85
 function clampDims() {
   if (!card.value) return
   const fix = (n: number) => (Number.isFinite(n) && n > 0 ? Math.min(300, Math.max(40, Math.round(n))) : 85)
@@ -209,14 +209,14 @@ async function finalize() {
     opErr.value = '正面还没有图案——取商品封面图或上传插画'
     return
   }
-  // 先落库、成功才翻定稿态（审核补漏·病根#14 伪成功）：不乐观翻——防前端显「已定稿」而后端仍 draft，
+  // 先落库、成功才翻定稿态（病根#14 伪成功）：不乐观翻——防前端显「已定稿」而后端仍 draft，
   // 第 5 步码批次依赖 cardFinal 落库·否则生成失败且排障无线索。
   if (saveTimer) {
     clearTimeout(saveTimer) // 取消未触发的防抖定时器（只挡得住这半·同 Products/HomeContent 约定）
     saveTimer = null
   }
   const next = card.value.status === 'final' ? 'draft' : 'final'
-  // 定稿写并入同一条 serialSave 队列（P1 复审补漏·根因#8）：不再旁路直发 saveCard，改走 flushSave()
+  // 定稿写并入同一条 serialSave 队列（根因#8）：不旁路直发 saveCard，走 flushSave()
   // 本尊（非 .settled()）——trigger() 对「已在途」的链只标脏、不并发再发一次 POST，会等其跑完再补跑
   // 一轮；期间若又有新 autosave 触发（watch 的 700ms 计时器到点），一样标脏排进同一条链，不会跟本次
   // 定稿写并发在途。pendingStatus 保证链上「当前轮 + 尾随补跑轮」发出的都是 next 状态，不被旧 draft
@@ -772,7 +772,7 @@ function downloadSvg(kind: 'front' | 'back') {
   margin: 0;
   color: var(--ld-content-2);
 }
-/* 选择器模式（批3 死胡同改造）：导航直入的商品挑选列表 */
+/* 选择器模式（防死胡同）：导航直入的商品挑选列表 */
 .pick-list {
   display: flex;
   flex-direction: column;

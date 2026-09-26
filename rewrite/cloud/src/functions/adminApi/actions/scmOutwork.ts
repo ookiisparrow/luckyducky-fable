@@ -3,8 +3,8 @@ import { applyStockMoves, listMaterialDocs, transition, pageQuery, notifyAlert, 
 import { COLLECTIONS } from '@ldrw/shared'
 import { asFen, OUTWORK_ORDER_STATUS, OUTWORK_ORDER_TRANSITIONS } from '@ldrw/shared'
 
-// 进销存车道 B·外协线（见 docs/业务逻辑架构.md 链 12·门5 文件级隔离：本文件=车道 B 全部 action）。
-// 业务定稿（README 需求）：织女把起手结做在**最大团**毛线上——发最大团原团（按色）→ 收同色带结团入库 →
+// 进销存外协线（见 docs/业务逻辑架构.md 链 12·门5 文件级隔离：本文件=外协全部 action）。
+// 业务定稿：织女把起手结做在**最大团**毛线上——发最大团原团（按色）→ 收同色带结团入库 →
 // 损耗=发−收可见 → 计件工钱应付（收回数×单价）→ 结算销账。
 // 出入库只经门1 kit/scmStock.applyStockMoves（守卫 rw-material-stock-single-seam）；状态只走门2 transition()
 // 且边全在 shared/scm.spec.ts 声明内（守卫 rw-status-transitions-declared 对账）。
@@ -18,7 +18,7 @@ const L_KNOTTED = /^yarn:([a-z][a-z0-9-]*):L:knotted$/
 // 集合名写字面量 'outworkOrders'：rw-status-transitions-declared 按字面量或 COLLECTIONS.x 归属集合对账
 // transition 边与 status 写入——普通变量会让本文件逃出对账面
 
-// 单据行数上限（D3·同 scmPurchase.ts MAX_LINES 判例·bounded·一张外协单不至于超·防垃圾大单）
+// 单据行数上限（同 scmPurchase.ts MAX_LINES·bounded·一张外协单不至于超·防垃圾大单）
 const MAX_LINES = 50
 
 /** 行清洗：[{materialId,qty}] → 白名单字段 + qty 正整数校验。返回 null＝形状非法（fail-closed）。 */
@@ -44,7 +44,7 @@ async function knownMaterialIds(): Promise<Set<string>> {
 
 /** 从声明流转表（scm.spec.ts→scm.ts 生成物）按目标态取合法 from 集合——该表内每个 to 只出现一次
  *  （见 shared/scm.spec.ts 头注），故按 to 反查唯一。改流转边只改 scm.spec.ts 再跑生成器，
- *  本函数自动跟着变——不再像此前那样在各 transition() 调用点手写字面量、与生成物各背各的。 */
+ *  本函数自动跟着变——不在各 transition() 调用点手写字面量、与生成物各背各的。 */
 function fromFor(to: string): string[] {
   const t = OUTWORK_ORDER_TRANSITIONS.find((x) => x.to === to)
   if (!t) throw new Error(`OUTWORK_ORDER_TRANSITIONS 未声明 to='${to}'（scm.spec.ts 与 scmOutwork.ts 不同步）`)
@@ -52,8 +52,8 @@ function fromFor(to: string): string[] {
 }
 
 // ── 列表（cursor 分页·可按 status/workerId 过滤·倒序）──
-// B1（根因#7）：改走 kit pageQuery——旧 limit 直取封顶 200 会让超上限旧单永久不可查；defaultLimit
-// 沿用旧默认值 100，无参调用首页条数零变化，翻页可续查历史全量。
+// 根因#7：走 kit pageQuery——limit 直取封顶会让超上限旧单永久不可查；defaultLimit 100，
+// 翻页可续查历史全量。
 
 const LIST_LIMIT = 100
 
@@ -146,9 +146,9 @@ export async function issueOutwork({ db, data, agentId }: Ctx) {
   if (!ar.ok) {
     // 补偿回滚（宁不动账勿错账）：库存不足/主档缺/争用时 applyStockMoves 已内部尽力回滚全部行（全有或全无·
     // 通常账没动；例外——反向 CAS 若也失败/并发抢占，该行库存保持已扣、流水保留作审计迹并打 ROLLBACK_FAIL
-    // 告警，此时账实确有偏差，需人工对账回补，非本函数可自愈·K4），
+    // 告警，此时账实确有偏差，需人工对账回补，非本函数可自愈），
     // 但状态已被上面 transition 抢占成 issued——须复原 draft,否则单据「已发料」而库存一件没出（账实必偏且无法重试）。
-    // 用条件更新而非 transition()：issued→draft 是本次未完成发料的技术性复原,不是业务逆向流转（蓝图定稿 MVP
+    // 用条件更新而非 transition()：issued→draft 是本次未完成发料的技术性复原,不是业务逆向流转（业务上
     // 不做逆向流转,scm.spec 故意不声明这条边——声明了就开放成业务动作了）；条件绑 status:'issued' 防覆盖并发方
     // （若有人已 receiveOutwork 翻 delivered,此处 no-op,错误照返、人工经调整单对账）。
     // 复原本身若不成功（异常/条件不匹配即 updated≠1）须告警——否则单据永久卡在假「已发料」而库存实际未出，
@@ -268,7 +268,7 @@ export async function settleOutwork({ data }: Ctx) {
   return reply(200, { ok: true, moved: r.moved })
 }
 
-// ── 取消（仅 draft·已发料不可取消,异常走物料页调整单·蓝图定稿）──
+// ── 取消（仅 draft·已发料不可取消,异常走物料页调整单）──
 
 export async function cancelOutwork({ data }: Ctx) {
   const outworkId = String(data.outworkId || '')

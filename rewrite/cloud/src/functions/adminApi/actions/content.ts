@@ -3,7 +3,7 @@ import { arrOf } from '../catalog'
 import { notifyAlert, setOrAdd, deleteFiles, str, err } from '../../../kit'
 import { COLLECTIONS } from '@ldrw/shared'
 
-// —— 首页内容（橱窗逐块②③：hero 文案 / 信任条 / FAQ；规格 §八）——
+// —— 首页内容（hero 文案 / 信任条 / FAQ）——
 export async function getHomeContent({ db }: Ctx) {
   const got = await readDoc(db.collection(COLLECTIONS.content).doc('home').get())
   if (!got.ok) return reply(200, err('DOC_READ_FAIL'))
@@ -69,7 +69,7 @@ export async function saveHomeContent({ db, data }: Ctx) {
   return reply(200, { ok: true })
 }
 
-// —— 页面内容 CMS（批A·5 页可编辑：欢迎流/目录+播放页求助/我的/关于/协议）——
+// —— 页面内容 CMS（5 页可编辑：欢迎流/目录+播放页求助/我的/关于/协议）——
 // 承 saveHomeContent 样板（白名单净化·str 限长·数组封顶·setOrAdd 落档）；每页一独立净化函数，
 // 未知字段丢弃、未知 page fail-closed 拒（信任边界·根因#3 不信前端·行为由 app-page-content.test.ts 锁）。
 // content 集合每页一 doc（_id=page 键名）；小程序公开读经 app/catalog.getPageContent（catalogPlayer.catalog.heroImage
@@ -153,11 +153,11 @@ export async function savePageContent({ db, data }: Ctx) {
     // history 服务端权威追加（客户端传的一律忽略·防伪造版本史）：读旧份逐 part 比对 version，非空且变更即追
     // {part,version,at:ISO}，封顶 10（保留末 10 条·同 issueSession 剪最旧手法）。
     //
-    // 并发保存 fail-closed（P3 复核：原「读 history → 内存追加 → 整体写回」非原子——两次并发保存读到同一份
-    // 旧 history，各自追加后写回，后写覆盖先写、丢一条历史记录）。改用乐观 CAS 重试（同 kit/inventory.ts
+    // 并发保存 fail-closed（「读 history → 内存追加 → 整体写回」非原子——两次并发保存读到同一份
+    // 旧 history，各自追加后写回，后写覆盖先写、丢一条历史记录）。故用乐观 CAS 重试（同 kit/inventory.ts
     // produceStock 手法）：条件带上读到时的版本号 _v（单调计数器，非 updatedAt 时间戳——毫秒级 Date.now()
     // 在同一毫秒内两次写入会撞出同一个值，CAS 条件误判「无冲突」直接覆盖、静默丢一条并发追加，
-    // 曾在本地高频重试下实测复现），写前该文档被并发改过则 updated:0、重读重算 additions 再重试
+    // 本地高频重试下实测复现过），写前该文档被并发改过则 updated:0、重读重算 additions 再重试
     // （读到的 prevData 已含并发方的新版本，本轮 diff 不会对已存在的版本重复追加，天然去重）；
     // 首次建档走 add() 撞 DUPLICATE_ID 即并发方已建，同样重读重试。非钱链路径，用不到分布式锁。
     for (let i = 0; i < HISTORY_CAS_RETRY; i++) {
@@ -247,7 +247,7 @@ export async function saveHelpVideos({ db, data }: Ctx) {
   const coll = db.collection(COLLECTIONS.content)
   const prev = await readDoc(coll.doc('helpVideos').get()) // GC 基线 + 乐观并发基线：读旧份
   if (!prev.ok) return reply(200, err('DOC_READ_FAIL')) // 读失败≠空档：停写停 GC，不当 rev=0 覆盖
-  // 乐观并发（批A·内容域并发安全·根因#1·同 saveCourseDraft rev/baseRev/DRAFT_CONFLICT 口径）：整档覆盖。
+  // 乐观并发（根因#1·同 saveCourseDraft rev/baseRev/DRAFT_CONFLICT 口径）：整档覆盖。
   // 诚实边界：同 courses.ts 一样是「文档级 get→比对→set」，get 与 set 之间仍有毫秒级 TOCTOU 窗（非
   // checkpoints.ts defmeta 那种条件 update 真 CAS）——帮助视频保存低频、真实冲突是人差几分钟的编辑，可接受。
   // （items 整体替换）＝两处并发编辑（双页签/双管理员）后保存者静默吃掉先保存者的编辑。客户端带上拉取时
@@ -258,8 +258,8 @@ export async function saveHelpVideos({ db, data }: Ctx) {
   if (Number.isFinite(baseRev) && curRev !== baseRev) return reply(200, err('DRAFT_CONFLICT', { rev: curRev }))
   const doc = { items, updatedAt: Date.now(), rev: curRev + 1 }
   await setOrAdd(coll, 'helpVideos', doc)
-  // 孤儿视频 GC（深审 P3·同 publishCourse 思路）：删「旧份有、新份没有」的 videoFileId。**写成功后才 GC**
-  // （冲突分支已 early-return，到不了这里）。GC 删除失败不再静默吞（H2·同 saveCheckpoints 判例·病根#14）：
+  // 孤儿视频 GC（同 publishCourse 思路）：删「旧份有、新份没有」的 videoFileId。**写成功后才 GC**
+  // （冲突分支已 early-return，到不了这里）。GC 删除失败不静默吞（同 saveCheckpoints·病根#14）：
   // 保存本身已成功，但 orphans 删不掉时如实回 ok:false + notifyAlert 留痕（orphans 进 anomalies 账本可人工回收，
   // 低频面不为罕见失败建 pendingGc 队列）——别静默过关让前端误显「已保存」而云存储悄悄只增不减。
   const keep = new Set(items.flatMap((it: any) => it.segments.map((sg: any) => String(sg.videoFileId))))

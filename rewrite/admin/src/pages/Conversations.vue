@@ -25,8 +25,8 @@ const cursor = ref<unknown>(null)
 const hasMore = ref(false)
 const report = ref<ReportVM | null>(null)
 const message = ref('')
-// 首响 SLA 阈值（分钟）：初值 5 与后端 conversations.ts DEFAULT_SLA_MS 同口径（P2 顺手改批——此前前端默认 30
-// 分钟，首次挂载即把它当参数传给后端，用「猜的默认值」悄悄覆盖了后端实际生效口径，两个数字互相打架）。
+// 首响 SLA 阈值（分钟）：初值 5 与后端 conversations.ts DEFAULT_SLA_MS 同口径。前端若首次挂载就把自己猜的
+// 默认值当参数传给后端，会悄悄覆盖后端实际生效口径，两个数字互相打架。
 // 首次加载不传该值（见 loadReport slaMinInited 分支），让后端用它自己的 DEFAULT_SLA_MS 计算，回包后用后端
 // 权威 slaMs 回填本地显示——今后改后端默认值不用两处同步改，前端自动跟上。
 const slaMin = ref(5)
@@ -47,9 +47,9 @@ async function loadReport() {
   }
 }
 
-// 发起检索时的筛选快照（翻页复用·防用户改输入框后点「更早」用新筛选+旧 cursor 串档·P2）
+// 发起检索时的筛选快照（翻页复用·防用户改输入框后点「更早」用新筛选+旧 cursor 串档）
 let searchFilter: { openid?: string; externalUserId?: string; keyword?: string } = {}
-const pageGen = useLatest() // 检索/翻页乱序守卫（P2·在途时又检索/翻页·旧结果别覆盖/混排新结果·根因#8）
+const pageGen = useLatest() // 检索/翻页乱序守卫（在途时又检索/翻页·旧结果别覆盖/混排新结果·根因#8）
 const searching = ref(false) // search 专属在途标志（单写布尔·more 加载闸不受旁路 message 写者干扰）
 async function search() {
   message.value = '检索中…'
@@ -68,20 +68,20 @@ async function search() {
 async function more() {
   if (!hasMore.value || cursor.value == null) return
   if (searching.value) return // 检索在途时不翻页（cursor 还是旧的）——覆盖 search 先于 more 的序（单写布尔·不受旁路 message 写者干扰）
-  const gen = pageGen.peek() // 绑定当前 search 代际·不递增（不反噬在途 search）·新检索会作废本页（迭代F 逮出）
+  const gen = pageGen.peek() // 绑定当前 search 代际·不递增（不反噬在途 search）·新检索会作废本页
   const r = await searchConversations({ ...searchFilter, cursor: cursor.value }) // 复用检索快照·不现读输入框（防串档）
   if (pageGen.isStale(gen)) return // 期间又检索·放弃本页（防混排）
   if (!r.ok) {
     message.value = failText('加载更多失败', r.error) // 别静默吞·反复点无反应（病根#14）
     return
   }
-  message.value = '' // 翻页成功清旧错（P2·item5：上次失败留的「加载更多失败」提示别一直挂在成功之后）
+  message.value = '' // 翻页成功清旧错（上次失败留的「加载更多失败」提示别一直挂在成功之后）
   msgs.value = appendNew(msgs.value, mapMessages(r.messages))
   cursor.value = r.nextCursor
   hasMore.value = !!r.hasMore
 }
 
-// —— 质检抽检（批 B7）——
+// —— 质检抽检 ——
 // sessionKey＝csSession._id（非 externalUserId·与「会话检索」上方 openid/externalUserId 输入框语义不同）。
 // 编辑态附在纯映射 QcRowVM 之外（draftScore/draftNote/busy/err 只在本组件用·mapCs.ts 保持纯映射不掺 UI 态）。
 interface QcRow extends QcRowVM {
@@ -315,7 +315,7 @@ onMounted(() => {
       <EmptyState v-else-if="!message" :icon="Search" text="输入 openid / 外部用户号 / 关键词后检索会话时间轴" />
     </Card>
 
-    <!-- 质检抽检（批 B7）：closed 会话随机抽样 → 人工评分 1-5 + 备注·粒度=会话档级（非轮次，csSession 无轮次实体） -->
+    <!-- 质检抽检：closed 会话随机抽样 → 人工评分 1-5 + 备注·粒度=会话档级（非轮次，csSession 无轮次实体） -->
     <Card title="质检抽检" sub="从已结束会话里随机抽样，人工评分 1-5 + 备注留痕">
       <template #head>
         <UiButton size="sm" :disabled="qcSampling" @click="doSampleQc">

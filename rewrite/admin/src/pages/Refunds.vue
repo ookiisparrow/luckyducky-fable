@@ -27,7 +27,7 @@ const TABS = [
 const route = useRoute()
 const tab = ref('applied')
 const counts = ref<Record<string, number>>({})
-const countsPartial = ref(false) // P2·bug sweep Round2 item14：某状态 .count() 失败时角标别把占位 0 当真值显示（同 Dashboard todoPartial 风格）
+const countsPartial = ref(false) // 某状态 .count() 失败时角标别把占位 0 当真值显示（同 Dashboard todoPartial 风格）
 const rows = ref<RefundRowVM[]>([])
 const cursor = ref<unknown>(null)
 const hasMore = ref(false)
@@ -43,7 +43,7 @@ interface Verdict {
   entered: boolean
   code: string
   courseId: string
-  lineRefundable: boolean // 本单此行真实可退性（P2·判据绑单·非课程级）
+  lineRefundable: boolean // 本单此行真实可退性（判据绑单·非课程级）
   refundableQty: number | null
 }
 const decideRow = ref<RefundRowVM | null>(null)
@@ -53,15 +53,15 @@ const checkCard = ref(false)
 const rejecting = ref(false)
 const rejectReason = ref('')
 const actionMsg = ref('') // 审批结果（成功·持久·reload 不清·别一闪而过）
-const decideErr = ref('') // 同意/拒绝失败原因（抽屉内红条·不被 reload 的"加载中"吞·P2·根因#14）
+const decideErr = ref('') // 同意/拒绝失败原因（抽屉内红条·不被 reload 的"加载中"吞·根因#14）
 
-// 列表页脚分母＝当前标签计数（换皮恒用 counts.all·在「待审核」栏也显全量总数·误导）
+// 列表页脚分母＝当前标签计数（恒用 counts.all 的话在「待审核」栏也显全量总数·误导）
 const tabTotal = computed(() => counts.value[tab.value || 'all'])
-// 空栏提示（UX 体检批·死循环修复）：本栏空但别的栏有货时明说去处——曾让「已退款 4 单」的场景
+// 空栏提示：本栏空但别的栏有货时明说去处——否则「已退款 4 单」的场景
 // 落在初始「待审核 0」空白页、以为无事可做；counts 就在手边，不用额外请求
 const emptyText = computed(() => {
   if (activeQ.value) return '没有匹配该订单号的售后单'
-  // 计数不可信时不引用数字（终审 P1·病根#14）：countsPartial 时 counts 是上次成功加载的陈旧值，
+  // 计数不可信时不引用数字（病根#14）：countsPartial 时 counts 是上次成功加载的陈旧值，
   // 同屏 tab chip 已显「?」——这里再自信报「有 N 单」就是同屏自相矛盾的假话
   if (countsPartial.value) return '这一栏没有售后单（其他栏计数暂不可用，刷新后再看）'
   const others = TABS.filter((t) => t.key && t.key !== tab.value && (counts.value[t.key] || 0) > 0)
@@ -69,15 +69,15 @@ const emptyText = computed(() => {
   return '这一栏没有售后单——' + others.map((t) => `「${t.label}」有 ${counts.value[t.key]} 单`).join('、')
 })
 const canApprove = computed(() => !!decideRow.value?.canDecide && checkPkg.value && checkCard.value && !busy.value)
-// 判据文案绑本单订单行（P2·根因#8 不失真）：以 lineRefundable 为准，不被课程级激活误导
+// 判据文案绑本单订单行（根因#8 不失真）：以 lineRefundable 为准，不被课程级激活误导
 const verdictVM = computed<RefundVerdictVM | null>(() =>
   verdict.value && !verdict.value.loading
     ? refundVerdict({ lineRefundable: verdict.value.lineRefundable, entered: verdict.value.entered, refundableQty: verdict.value.refundableQty })
     : null
 )
 
-const listGen = useLatest() // 列表乱序守卫（P2·快切标签/搜索时旧结果别覆盖新标签·根因#8）
-const reloading = ref(false) // reload 专属在途标志（迭代G·单写布尔·more 加载闸不再靠脆弱 message 文案）
+const listGen = useLatest() // 列表乱序守卫（快切标签/搜索时旧结果别覆盖新标签·根因#8）
+const reloading = ref(false) // reload 专属在途标志（单写布尔·more 加载闸不靠脆弱 message 文案）
 async function reload() {
   message.value = '加载中…'
   reloading.value = true
@@ -95,11 +95,11 @@ async function reload() {
   message.value = r.ok ? '' : '加载失败：' + orderErrorText(r.error)
 }
 
-// 加载更多（游标分页·根因#7·换皮丢了这个·退款首页 20 条封顶·第 21 单起翻不到）
+// 加载更多（游标分页·根因#7·退款首页 20 条封顶·没有它第 21 单起翻不到）
 async function more() {
   if (!hasMore.value || cursor.value == null) return
   if (reloading.value) return // reload 在途时不翻页（cursor 还是旧的·会跳页）——覆盖 reload 先于 more 的序（单写布尔）
-  const gen = listGen.peek() // 绑定当前 reload 代际·不递增（不反噬在途 reload）·任何新 reload 会作废本页（迭代F 逮出）
+  const gen = listGen.peek() // 绑定当前 reload 代际·不递增（不反噬在途 reload）·任何新 reload 会作废本页
   const r = await listRefunds(tab.value, cursor.value, 20, activeQ.value)
   if (listGen.isStale(gen)) return // 期间发生过 reload·放弃本页（防混排 + 游标跳页）
   if (!r.ok) {
@@ -131,7 +131,7 @@ function clearSearch() {
   void reload()
 }
 
-const detailGen = useLatest() // 退货权判据乱序守卫（P1·A 单在途详情别盖到 B 单抽屉·根因#8）
+const detailGen = useLatest() // 退货权判据乱序守卫（A 单在途详情别盖到 B 单抽屉·根因#8）
 async function openDecide(row: RefundRowVM) {
   decideRow.value = row
   checkPkg.value = false
@@ -145,7 +145,7 @@ async function openDecide(row: RefundRowVM) {
   if (detailGen.isStale(my) || decideRow.value?.id !== row.id) return // 抽屉已切别单·丢弃过期详情（防判据错配）
   if (!r.ok) {
     // 判据加载失败（网络/服务端）：r.ok=false 时无 activation/lineRefundable 字段，若照组 verdict 会渲成
-    // 确定的绿色「未使用·可退」误导审核放行（P2·根因#14 失败必可观测/#8 不失真）。红条同 doApprove/doReject 范式。
+    // 确定的绿色「未使用·可退」误导审核放行（根因#14 失败必可观测/#8 不失真）。红条同 doApprove/doReject 范式。
     verdict.value = null // 判据区留空（模板据此显示「重新加载判据」重试入口）
     decideErr.value = '判据加载失败：' + orderErrorText(r.error)
     return
@@ -168,7 +168,7 @@ function closeDecide() {
 async function doApprove() {
   const row = decideRow.value
   if (!row || !canApprove.value || busy.value) return // 在途禁再发·防双击重复触发退款（同 doReject）
-  const targetId = row.id // 请求发起时捕获目标单号（P2·根因#8）：回包迟到时抽屉可能已被管理员切到别单
+  const targetId = row.id // 请求发起时捕获目标单号（根因#8）：回包迟到时抽屉可能已被管理员切到别单
   busy.value = true
   decideErr.value = ''
   const r = await approveRefund(row.id)
@@ -179,8 +179,8 @@ async function doApprove() {
     if (stillHere) closeDecide()
     void reload() // 列表真值刷新与抽屉是否仍是该单无关·恒执行
   } else if (stillHere) {
-    // 失败：不关抽屉、不刷新——真实原因留在眼前（P2·根因#14 admin 侧·别被 reload 的"加载中…"盖掉）；
-    // 若抽屉已切别单则不挂错误（P2·根因#8）
+    // 失败：不关抽屉、不刷新——真实原因留在眼前（根因#14 admin 侧·别被 reload 的"加载中…"盖掉）；
+    // 若抽屉已切别单则不挂错误（根因#8）
     decideErr.value = '退款没成功：' + orderErrorText(r.error)
   }
 }
@@ -192,7 +192,7 @@ async function doReject() {
     decideErr.value = '拒绝必须写原因（会展示给买家）'
     return
   }
-  const targetId = row.id // 请求发起时捕获目标单号（P2·根因#8）：回包迟到时抽屉可能已被管理员切到别单
+  const targetId = row.id // 请求发起时捕获目标单号（根因#8）：回包迟到时抽屉可能已被管理员切到别单
   busy.value = true
   decideErr.value = ''
   const r = await rejectRefund(row.id, rejectReason.value.trim())
@@ -208,7 +208,7 @@ async function doReject() {
   }
 }
 
-// —— 越规退款入口（决策§26·钱链后端零改动·cap refund:manage）——
+// —— 越规退款入口（决策§26·cap refund:manage）——
 // 后台工具区独立入口：按订单号查找 → 选行 → 必填原因 + 勾选知晓 → 提交 overrideRefund。
 // 退货资格/退款金额一律服务端裁决（overrideRefund 只收 orderId/lineId/reason·前端不发明金额参数）。
 const showOverride = ref(false)
@@ -390,12 +390,12 @@ onMounted(() => {
         <div class="summary">
           <div class="srow"><span>退款商品</span><strong>{{ decideRow.what }}</strong></div>
           <div class="srow"><span>退款金额</span><strong>{{ decideRow.refundAmountLabel }}</strong></div>
-          <!-- 收货人（换皮丢·联系买家核对寄回/退货）：抽屉给全号 -->
+          <!-- 收货人（联系买家核对寄回/退货）：抽屉给全号 -->
           <div v-if="decideRow.buyerName || decideRow.buyerPhone" class="srow"><span>收货人</span><span class="sval">{{ decideRow.buyerName || '—' }} · {{ decideRow.buyerPhone || '（无电话）' }}</span></div>
           <div class="srow"><span>买家原因</span><span class="sval">{{ decideRow.reason || '—' }}</span></div>
         </div>
 
-        <!-- 结果区（已退款/已拒绝单·换皮丢了这块）：到账时间 / 拒绝原因 -->
+        <!-- 结果区（已退款/已拒绝单）：到账时间 / 拒绝原因 -->
         <div v-if="decideRow.refundedAtLabel || decideRow.rejectReason" class="result" :class="decideRow.status">
           <template v-if="decideRow.refundedAtLabel">✓ 已原路退回微信 · 到账 {{ decideRow.refundedAtLabel }}</template>
           <template v-else>✕ 已拒绝 · 原因：{{ decideRow.rejectReason }}</template>
@@ -438,7 +438,7 @@ onMounted(() => {
           <button v-else-if="!verdict" class="link" @click="openDecide(decideRow)">重新加载判据</button>
         </template>
 
-        <!-- 同意/拒绝失败原因（P2·不被刷新的"加载中"吞·留在眼前直到重试或关抽屉） -->
+        <!-- 同意/拒绝失败原因（不被刷新的"加载中"吞·留在眼前直到重试或关抽屉） -->
         <p v-if="decideErr" class="decide-err">{{ decideErr }}</p>
 
         <template v-if="decideRow.canDecide && !rejecting">

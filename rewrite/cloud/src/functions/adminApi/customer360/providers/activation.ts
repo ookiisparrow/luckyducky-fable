@@ -1,7 +1,7 @@
 import type { CustomerPanelProvider } from '../types'
 import { COLLECTIONS } from '@ldrw/shared'
 
-// 激活/课程板块（B1.1 首批 provider·铁律三）：坐席查某客人激活了哪些课、是否进课（bounded）。
+// 激活/课程板块（铁律三 provider）：坐席查某客人激活了哪些课、是否进课（bounded）。
 // 数据＝activations（activateCourse 写 {_openid, courseId, enteredAt}）；与退款判据 lib.activationFor
 // （按 productId 单查）是同集合不同切口（这里按 openid 全量列），单源同一集合、不抽公共件（Rule of Three 未到）。
 const LIMIT = 50

@@ -1,8 +1,8 @@
 import { reply, type Ctx } from '../lib'
 import { pullBillDay, err } from '../../../kit'
 
-// —— S16 外部对账 Batch 2：拉微信交易账单落 wxBills（供 Batch 3 逐笔比对）——
-// 批B2 改薄：凭证读取（secureConfig 读库优先·env 兜底）+ 拉取（kit/wxpay 出站）
+// —— 外部对账：拉微信交易账单落 wxBills（供 reconciliation.ts getBillMatch 逐笔比对）——
+// 薄壳：凭证读取（secureConfig 读库优先·env 兜底）+ 拉取（kit/wxpay 出站）
 // + 幂等落库（确定性 _id）全部收口 kit/reconcile.pullBillDay——timers/billReconcile 每日自动对账同一套原语，
 // 本 action 只留手动路径的参数校验与 reply 形状。fail-soft：缺凭证 / 拉取失败 → ok:false（不抛·不落库）。
 

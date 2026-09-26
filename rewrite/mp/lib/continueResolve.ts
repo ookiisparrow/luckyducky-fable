@@ -1,4 +1,4 @@
-// 「继续学习」定位（纯函数·黄金 learning-content §四）：
+// 「继续学习」定位（纯函数）：
 // 按观看记录自己的课程定位——绝不回退默认课（防「进小程序显演示课」错乱）；
 // 无记录但有已解锁课 → 最近解锁那门的第一课时；记录里课时已不在 → 退回该课第一课时；
 // 无记录且无解锁课/课程查不到 → null（卡片走兜底，不假装有课）。
@@ -19,7 +19,7 @@ interface ProgressDoc {
   updatedAt?: number
 }
 
-/** 续播秒夹取（批3·数据已在库·接通最后一公里）：at<5→0（刚开头不值得续）；dur>0 且 at>dur-10→0
+/** 续播秒夹取（数据已在库·接通最后一公里）：at<5→0（刚开头不值得续）；dur>0 且 at>dur-10→0
  *  （快看完不续·防续到片尾起播即 ended）；其余 Math.floor(at)。脏值（NaN/负）经 `||0` 归 0 后一律落 at<5 分支。
  *  单源（mapCatalog 命中 last 段分支复用·禁复制实现·病根#5）。 */
 export function clampResumeAt(at: number, dur: number): number {
@@ -49,7 +49,7 @@ function lessonIn(course: CoursePub, lessonId: string): { id: string; name: stri
   return null
 }
 
-/** 课时内校验 segmentId 命中且 hasVideo（G3·与 mapLearning.mapCatalog continueTarget 同口径·病根#5 同概念
+/** 课时内校验 segmentId 命中且 hasVideo（与 mapLearning.mapCatalog continueTarget 同口径·病根#5 同概念
  *  两处实现分叉对齐）：progress 记录可能滞后于 admin 撤下/替换视频，命中段若已不可播视同未命中。命中回段 id，否则 null。 */
 function segmentIn(course: CoursePub, lessonId: string, segmentId: string): string | null {
   if (!segmentId) return null
@@ -77,7 +77,7 @@ function firstVideoSegmentIn(course: CoursePub, lessonId: string): string {
   return ''
 }
 
-/** 全课内首个 hasVideo 段所在课时（P2 finding 修正·与 mapLearning.mapCatalog 全课兜底同口径）：命中课时
+/** 全课内首个 hasVideo 段所在课时（与 mapLearning.mapCatalog 全课兜底同口径）：命中课时
  *  自身整课时无可播段时，须继续在全课范围内找第一个真正可播的课时——不能无条件退回 firstLesson(course)，
  *  否则卡片展示的课时（可能仍无 video）与播放器自扫全课得到的实际起播课时会分叉（卡片承诺≠行为）。
  *  整课确无可播段回 null，交给调用方退回既有「脏课时」兜底。 */
@@ -111,7 +111,7 @@ export function continueResolve(progress: unknown, myCourses: unknown, courses: 
     if (!exactLesson) {
       lesson = firstLesson(course) // 脏课时退回第一课时
     } else if (wantSeg) {
-      // 命中原课时且带段位才需校验（G3）：命中段仍 hasVideo→原样保留段位+续秒；不可播（含段已不存在）→
+      // 命中原课时且带段位才需校验：命中段仍 hasVideo→原样保留段位+续秒；不可播（含段已不存在）→
       // 降级到该课时首个 hasVideo 段（resumeAt 一并归 0，别把 A 段的秒带进 B 段）；整课时无可播段→继续在
       // 全课范围内找第一个真正可播的课时（与 mapCatalog 全课兜底同口径·不能无条件退回 firstLesson，否则
       // 卡片展示课时与播放器实际起播课时会分叉）；全课确无可播段→退回既有「脏课时」兜底路径（lesson 改指

@@ -18,7 +18,7 @@ import {
   buildBadStatus,
   cstIso,
 } from '@ldrw/shared'
-// 响应契约（批B10·病根#5/#8）：返回类型绑定 shared 契约——删键/改名 tsc 红；加键编译锁无牙
+// 响应契约（病根#5/#8）：返回类型绑定 shared 契约——删键/改名 tsc 红；加键编译锁无牙
 // （可选键也能多写），牙在 tests/contract-shape.test.ts 键集合哨兵。
 import type { CreateOrderResp, PayResp, GetMyOrdersResp, GetOrderByIdResp, OrderDoc, OrderLine, AfterSaleDoc, ErrCode } from '@ldrw/shared'
 import {
@@ -41,7 +41,7 @@ import {
   getDocOrNull,
 } from '../../../kit'
 
-// 创建订单（黄金 orders-money·createOrder 节全量）：价格一律云端现算不信前端；服务端不变量
+// 创建订单：价格一律云端现算不信前端；服务端不变量
 // （主商品必含/地址四要素/数量条数硬上限）；订单号库级唯一防碰撞；支付配置 fail-closed 只认环境级开关。
 
 // 空原型：前端传来的 id 直接当键查，普通对象会让 'constructor'/'__proto__' 等继承键命中成搭配购（价格 undefined→NaN）
@@ -51,7 +51,7 @@ const ADDONS: Record<string, { name: string; price: number }> = Object.assign(
 )
 
 // 订单行稳定身份：同商品多 SKU 同单需稳定行键（售后/评价按此定位）；旧单读路径回退 productId。
-// 组合键校验在出生点、不在此消费点（战役3 批D·D1）：createOrder 建单时 productId/spec 来自库内 products
+// 组合键校验在出生点、不在此消费点：createOrder 建单时 productId/spec 来自库内 products
 // 文档（可能是校验规则上线前的存量商品），fail-closed 会拒建订单（钱链反噬）——规则单源见 shared/scmKey.ts
 // 头注，此处历史容忍（未来新建/编辑商品已在 products.ts saveDraft 出生点拦下歧义身份）。
 const lineIdOf = (productId: string, spec: string) => `${productId}__${spec || ''}`
@@ -76,9 +76,9 @@ const readOwnOrder = async (db: any, id: string, openid: string) => {
   return o && o._openid === openid ? o : null
 }
 
-// 批C·订单读时换址（根因#15 图片面·同 catalog.ts getProducts/getContent 换址口径的订单面延伸）：
+// 订单读时换址（根因#15 图片面·同 catalog.ts getProducts/getContent 换址口径的订单面延伸）：
 // 订单行 items[].cover 下单时从 products.cover 快照进订单（见 createOrder 注释），库内快照本身
-// 不改写（订单=历史快照单源·T3，不回读/不改写 catalog）；只在 getMyOrders/getOrderById 下发响应前
+// 不改写（订单=历史快照单源，不回读/不改写 catalog）；只在 getMyOrders/getOrderById 下发响应前
 // 批量换 https 短时址，换不到（fail-soft）回退原 fileID，不吞整单/整个响应。getMyAfterSales 无
 // cover 字段（已核消费面 mapAftersales.ts），不在此列。
 const isCloudCover = (v: unknown): v is string => typeof v === 'string' && v.startsWith('cloud://')
@@ -89,7 +89,7 @@ async function swapOrdersCover(orders: any[]): Promise<any[]> {
   for (const o of orders)
     for (const it of o.items || []) if (isCloudCover(it.cover)) ids.add(it.cover)
   if (!ids.size) return orders
-  // 批1·带 maxAge（容器级签发缓存·封面跨会话复用不重签）+ imageProc（图像处理·默认关）·同 catalog IMG_OPTS 口径
+  // 带 maxAge（容器级签发缓存·封面跨会话复用不重签）+ imageProc（图像处理·默认关）·同 catalog IMG_OPTS 口径
   const urlMap = await getTempUrls([...ids], { maxAge: IMAGE_URL_MAX_AGE, imageProc: true })
   return orders.map((o) => ({
     ...o,
@@ -104,7 +104,7 @@ const orderNo = (now: number): string =>
   cstIso(now).replace(/\D/g, '').slice(0, 12) +
   String(Math.floor(Math.random() * 9000) + 1000)
 
-// 每 openid 在途未支付单上限（收尾硬化批 2026-07-13·防滥用面）：real 模式下单即 reserveStock 持库存至支付窗
+// 每 openid 在途未支付单上限（防滥用面）：real 模式下单即 reserveStock 持库存至支付窗
 // 过后才回补，无此上限时单账号可零成本建单把热销 SKU 库存全额预留 15min 锁死真买家。5 单给正常用户（弃单重下）
 // 留足余量，又把单账号可同时锁的 SKU 数封顶——绕过需大量真微信号，成本陡增（用户拍板取此低风险方案·非改钱链热路径）。
 const MAX_PENDING_ORDERS = 5
@@ -136,7 +136,7 @@ function priceItems(lines: any[], byId: Map<string, any>): { items: Required<Ord
       }
       // LD-001 契约守卫：商品名只认服务端 products 主数据（byId 来自库内查询·不信前端上送）——
       // 写入来源被篡改（硬编码/客户端字段）时 app-orders.test.ts 的商品名来源用例必红。
-      // 封面快照（订单=历史快照·不回读 catalog·T3/§6）：下单那一刻商品封面永久留存，
+      // 封面快照（订单=历史快照·不回读 catalog）：下单那一刻商品封面永久留存，
       // 商品删/停售/换图都不影响历史订单展示；products 已在 byId 手上·零额外查询。
       line = { productId: p.id, name: p.name, spec, price, cover: String(p.cover || '') }
     }
@@ -199,7 +199,7 @@ async function placeOrder(db: any, OPENID: string, claimId: string, order: Omit<
       }
       return ok({ order: { ...order, _id: id, id } })
     } catch {
-      // 写失败区分（深审 P2·根因#3 幂等）：add 抛错既可能是 _id 撞号（换号重试），也可能是「写已持久化但
+      // 写失败区分（根因#1 幂等）：add 抛错既可能是 _id 撞号（换号重试），也可能是「写已持久化但
       // SDK 返回超时/网络错」——后者若换号重试会落两张共享同一 reserved 的单（各自关单/取消时 restoreStock
       // 双记＝库存虚增/超卖）。先读回本次 _id：属本人且 createdAt 与本次相同＝本次写其实成功，直接返回该单（幂等）；
       // 否则是真撞号（含本人同一分钟的旧单撞了尾号——当成功会让用户去付旧单、本单预留无单可回补），换号重试
@@ -254,11 +254,11 @@ export const createOrder = withOpenId(
     if ('error' in priced) return err(priced.error)
     const { items } = priced
 
-    // 金额全程「分」整数运算（设计约束#4）；存库记元（与现网数据兼容），由分精确换算
+    // 金额全程「分」整数运算（根因#4）；存库记元（与现网数据兼容），由分精确换算
     const goodsFen = asFen(items.reduce((s, it) => s + toFen(it.price) * it.qty, 0))
-    // 应付 = 商品 + 运费 − 券。主线 COUPON 恒 0（2026-09-02），不静默少收 20。
+    // 应付 = 商品 + 运费 − 券。主线 COUPON 恒 0，不静默少收 20。
     const amountFen = asFen(Math.max(0, goodsFen + toFen(SHIP) - toFen(COUPON)))
-    // 券额若被改回非 0 且把货款抵穿，仍拒单——不给「低价 SKU 白送」留面（深审 2026-07-05）。
+    // 券额若被改回非 0 且把货款抵穿，仍拒单——不给「低价 SKU 白送」留面。
     if (goodsFen > 0 && amountFen === 0) return err(ERR.COUPON_EXCEEDS_GOODS)
     const goods = fenToYuan(goodsFen)
     const amount = fenToYuan(amountFen)
@@ -284,10 +284,10 @@ export const createOrder = withOpenId(
       if ((mine.total || 0) >= MAX_PENDING_ORDERS) return err(ERR.TOO_MANY_PENDING)
     }
 
-    // 幂等键（批E·P1 防网络超时重试双建单）：前端结算草稿创建时生成一次、失败重试复用同一个键；
+    // 幂等键（防网络超时重试双建单）：前端结算草稿创建时生成一次、失败重试复用同一个键；
     // claim _id=(openid+键) 确定性哈希——撞号＝同一次提交的重试/并发，绝不建二单、不重复扣库存
     // （范式抄 scmAssembly runAssembly 的「确定性 _id claim + 失败回滚」）。订单自身 _id/id 仍走
-    // orderNo() 可读格式不变——发货扫码（admin/src/lib/fulfill.ts ORDER_ID_RE）与微信支付 out_trade_no
+    // orderNo() 可读格式——发货扫码（admin/src/lib/fulfill.ts ORDER_ID_RE）与微信支付 out_trade_no
     // 都认这个形状，故幂等 claim 落独立小集合，只记 claim→orderId 指针，不改订单主键形状。
     const idemKey = (typeof e.idempotencyKey === 'string' ? e.idempotencyKey.trim() : '').slice(0, 200)
     const claimId = idemKey ? 'oi_' + hash53(OPENID + '|' + idemKey) : ''
@@ -325,10 +325,10 @@ export const createOrder = withOpenId(
 )
 
 /**
- * 发起支付（黄金 orders-money·pay 节）：金额一律取库内订单换分，不信前端；三道闸（身份/本人/待支付）
+ * 发起支付：金额一律取库内订单换分，不信前端；三道闸（身份/本人/待支付）
  * + 惰性超时关单（抢占成功才回补·幂等）+ 0 元单直付并发校验（没抢到不谎报成功）+ 工作流接缝单点。
  */
-// 频控（深审 P2·病根#13）：pay 触发外部微信支付下单 API（callFlow 接缝）——无频控可被任意频率触发外呼。
+// 频控（病根#13）：pay 触发外部微信支付下单 API（callFlow 接缝）——无频控可被任意频率触发外呼。
 // 按 openid 限速（同 createOrder 口径·正常下单支付远低于此）。金额安全另有云端换分兜底，此为成本/外呼防刷。
 export const pay = withOpenId(
   withRateLimit('pay', { max: 20, windowMs: 60_000 }, async ({ db, OPENID, event }): Promise<PayResp> => {
@@ -399,7 +399,7 @@ export const pay = withOpenId(
 )
 
 /**
- * 申请售后退款（黄金 orders-money·applyRefund 节）：退款额一律云端分摊算定（refundShareFen 单源）；
+ * 申请售后退款：退款额一律云端分摊算定（refundShareFen 单源）；
  * 一单一行一售后（确定性 _id 库级唯一）；数量级退剩余可退件；同单累计封顶实付。
  */
 export const applyRefund = withOpenId(
@@ -429,7 +429,7 @@ export const applyRefund = withOpenId(
     const goodsFen = toFen(Number(order.goods))
     const itemFen = asFen(toFen(item.price) * refundableQty)
 
-    // 同单售后须读齐才能算准 used 封顶（深审 P2·根因#7）：裸 .get() 服务端默认 100 条静默截断会少算 used、
+    // 同单售后须读齐才能算准 used 封顶（根因#7）：裸 .get() 服务端默认 100 条静默截断会少算 used、
     // 令行/单级退款封顶失效。显式取到 AFTERSALE_SCAN_CAP；命中上限＝记录数异常，fail-closed 拒退 + 告警，
     // 绝不按截断值算钱（钱守恒 > 可用性）。读失败同理不能当「没有售后」（used=0 会退超）：只有集合还没建
     // 才是真没有售后，其余异常不接住，交网关回 INTERNAL 并记账。
@@ -472,7 +472,7 @@ export const applyRefund = withOpenId(
       reason,
       addressName: (order.address && order.address.name) || '',
       phone: (order.address && order.address.phone) || '',
-      // 微信退款单号（根因#12·案 A）：_id 可含中文 SKU/spec，派生成合规单号存库供退款回调反查
+      // 微信退款单号（根因#12）：_id 可含中文 SKU/spec，派生成合规单号存库供退款回调反查
       outRefundNo: refundNoFor(asId),
       status: 'applied',
       appliedAt: now,
@@ -486,7 +486,7 @@ export const applyRefund = withOpenId(
   })
 )
 
-/** 确认收货（黄金）：本人 + 仅已发货可确认；条件流转防越状态/重复确认。 */
+/** 确认收货：本人 + 仅已发货可确认；条件流转防越状态/重复确认。 */
 export const confirmReceive = withOpenId(
   withRateLimit('confirmReceive', { max: 20, windowMs: 60_000 }, async ({ db, OPENID, event }) => {
     const id = String((event as any).id || '')
@@ -502,7 +502,7 @@ export const confirmReceive = withOpenId(
 )
 
 /**
- * 用户主动取消待支付单（黄金 orders-money·确认收货/关单节）：仅本人 + 仅 pending 可取消；
+ * 用户主动取消待支付单：仅本人 + 仅 pending 可取消；
  * 复用已声明的 pending→closed 边（状态机零改动）；关单回补预留幂等绑 CAS——与超时关单/并发取消
  * 天然互斥，只回补一次（照抄 pay 惰性关单/closeExpiredOrders 的错向安全：transition 先、回补后）。
  */

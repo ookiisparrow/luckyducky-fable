@@ -1,7 +1,7 @@
 import type { CustomerPanelProvider } from '../types'
 import { COLLECTIONS } from '@ldrw/shared'
 
-// 节点照片轨迹板块（B2.2·后台360工作站·铁律三）：坐席查某客人在各关键节点上传的成果/卡点照片（join 节点定义取标题），
+// 节点照片轨迹板块（铁律三 provider）：坐席查某客人在各关键节点上传的成果/卡点照片（join 节点定义取标题），
 // 配合学习位置精准指导。数据＝checkpoints 集合（def 节点定义 by admin·sub 用户提交 by submitCheckpointPhoto·imgSecCheck 过后才入库）。
 //
 // bounded（防大客户拖垮·capacity·根因#7）：本人提交、节点定义两读均带 .limit()。返回 fileId（admin Customer360 UI

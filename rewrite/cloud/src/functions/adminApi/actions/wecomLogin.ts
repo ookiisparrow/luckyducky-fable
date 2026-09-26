@@ -2,10 +2,10 @@ import { reply, issueSession, principalOf } from '../lib'
 import { getCachedKfToken, getWecomOAuthUserId, alert, str, err } from '../../../kit'
 import { COLLECTIONS } from '@ldrw/shared'
 
-// M⑦ 车道 B·企业微信自建应用内 OAuth 免登（承面C 增强·工单 §2.2）。
+// 企业微信自建应用内 OAuth 免登（坐席台用）。
 //
 // 定位＝pre-auth（坐席无口令·index.ts 特殊分发·在能力闸前·同 login 受认证频控）：企微内打开应用 → snsapi_base
-// 静默授权拿 code → 本 action 换 userid → 反查绑定账号（M⑦ 地基填的 wecomUserId）→ 签发服务端 session 令牌
+// 静默授权拿 code → 本 action 换 userid → 反查绑定账号（agents.ts 写入的 wecomUserId）→ 签发服务端 session 令牌
 //（lib.issueSession 单源·口令登录同款），之后请求以令牌作 key（checkKey 会话解析·同口令闸的 fail-closed 语义）。
 //
 // fail-closed（守卫 wecom-login-gated·根因#3 信任边界）：无 code / OAuth 换不到 userid / userid 未绑定账号 /
