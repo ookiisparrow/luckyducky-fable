@@ -215,6 +215,9 @@
   background: var(--ld-purple);
   color: #ffffff;
 }
+.coolist-btn.dim {
+  opacity: 0.5;
+}
 .coolist-btn.ghost {
   background: var(--ld-bg);
   color: var(--ld-purple-tab);

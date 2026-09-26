@@ -1,6 +1,7 @@
 // 进销存映射（纯函数）：料号人话/计量中文/状态中文/
 // 元→分整数闸（超两位小数拒——分整数纪律的输入侧半边）/SCM 错误码人话（原文兜底）。
 import { yuan } from './format'
+import { transportErrorText } from './mapSystem'
 // 采购/外协状态标签单源收口（P2 顺手改批）：此前本文件手抄 PURCHASE_CN/OUTWORK_CN，与 shared 状态机声明
 // 零绑定——改从 @ldrw/shared 取（见 shared/src/statusLabels.ts 头注）。
 import { PURCHASE_ORDER_STATUS_LABEL, OUTWORK_ORDER_STATUS_LABEL } from '@ldrw/shared'
@@ -91,7 +92,7 @@ export function scmErrorText(e: unknown): string {
     BAD_PROFILE: 'BOM 档不完整，请先补齐三色与专属件',
   }
   const hit = MAP[code] || MAP[code.split(':')[0]]
-  return hit || '操作没成功（' + code + '）' // 原文兜底
+  return hit || transportErrorText(code) || '操作没成功（' + code + '）' // 原文兜底
 }
 
 export interface LedgerRow {

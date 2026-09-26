@@ -89,3 +89,16 @@ describe('Batches.vue 读设置失败不误报成「没配置前缀」', () => {
     expect(listBatchesMock).toHaveBeenCalledWith('course-p1')
   })
 })
+
+describe('Batches.vue 计数触顶不静默（#389）', () => {
+  it('大白话：listBatches 回 truncated，页面写明计数可能不全；没触顶不提示', async () => {
+    listBatchesMock.mockResolvedValue({ ok: true, list: [batch], truncated: true })
+    const w = mount(Batches)
+    await flushPromises()
+    expect(w.text()).toContain('码量超上限，计数可能不全')
+    listBatchesMock.mockResolvedValue({ ok: true, list: [batch], truncated: false })
+    const w2 = mount(Batches)
+    await flushPromises()
+    expect(w2.text()).not.toContain('计数可能不全')
+  })
+})

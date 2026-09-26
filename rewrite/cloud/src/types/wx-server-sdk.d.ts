@@ -19,6 +19,7 @@ declare module 'wx-server-sdk' {
     // 云函数官方形状（不是 getTempFileURL/deleteFile 的 fileList）：
     // https://developers.weixin.qq.com/miniprogram/dev/wxcloudservice/wxcloud/reference-sdk-api/storage/downloadFile/server.downloadFile.html
     downloadFile(params: { fileID: string }): Promise<{ fileContent: Buffer; statusCode: number }>
+    deleteFile(params: { fileList: string[] }): Promise<{ fileList?: { fileID: string; status: number; errMsg?: string; code?: string }[] }>
     getTempFileURL(params: {
       fileList: (string | { fileID: string; maxAge?: number })[]
     }): Promise<{ fileList: { fileID: string; tempFileURL: string }[] }>

@@ -5,6 +5,7 @@
 // 收口不变量：note = 动作反馈（成功绿/失败红原文）；load = 后台加载态，失败写错误，成功只收回
 //   它自己上次写的那条错误——动作反馈因此不被随后的成功 reload 顶掉，重试成功也不留陈旧的失败横幅。
 import { ref, type Ref } from 'vue'
+import { transportErrorText } from './mapSystem'
 
 export function useLoadStatus() {
   const message = ref('')
@@ -37,7 +38,7 @@ export function useLoadStatus() {
 export const loadErrors = (parts: Array<[{ ok: boolean; error?: unknown }, string]>): string =>
   parts
     .filter(([r]) => !r.ok)
-    .map(([r, name]) => `${name}加载失败：${String(r.error || '')}`)
+    .map(([r, name]) => `${name}加载失败：${transportErrorText(r.error) || String(r.error || '')}`)
     .join('；')
 
 // 危险动作两步确认：第一次点只武装（armed 记下 key·按钮变确认态），同一 key 再点才放行并解除武装。

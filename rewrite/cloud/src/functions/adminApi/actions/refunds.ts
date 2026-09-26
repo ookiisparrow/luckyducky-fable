@@ -4,10 +4,11 @@ import {
   fenToYuan,
   refundShareFen,
   AFTERSALE_STATUS,
+  AFTERSALE_QUOTA_STATUSES,
   AFTERSALE_SCAN_CAP,
   buildBadStatus,
 } from '@ldrw/shared'
-import { callFlow, refundNoFor, pageQuery, notifyAlert, isDocMissing, isCollectionMissing } from '../../../kit'
+import { callFlow, refundNoFor, pageQuery, notifyAlert, isDocMissing, isCollectionMissing, getDocOrNull } from '../../../kit'
 import { reply, ensure, activationFor, type Ctx } from '../lib'
 
 // 同单售后读齐（退款封顶 used / 补录分母锁都靠它）：裸 .get() 默认 100 条截断会少算 used，故显式取到
@@ -82,8 +83,9 @@ export async function overrideRefund({ db, data }: Ctx) {
   // 别人买走（payCallback PAID_BUT_OOS 唯一产生点）——**钱已经收了、货永远发不出**，必须退，此前却无任何
   // 在库退款路径（只能人工登商户平台退，且巡检把它永久报死信）。故这里放行，且**只放行 overrideRefund 这
   // 一个管理员越规通道**（cap refund:manage·决策§26），客户自助面 applyRefund 不扩。
-  // payment_exception 同样放行，但退款分母必须改用回调记录的实际到账 paidFee：少付退少付、多付退多付，不能
-  // 继续拿订单标价 order.amount 作为退款总额，否则少付会多退、多付会少退。补差转正常支付不在本入口内。
+  // payment_exception 同样放行，但分母与发给微信的 amount.total 都改用 paidFee——支付回调记下的微信原单总额
+  // （amount.total，不是扣了立减的 payer_total）：微信要求退款 total 等于原单总额，订单标价与它不符正是
+  // 这单异常的原因。补差转正常支付不在本入口内。
   // 为什么不顺手放行 closed：closed 是「钱根本没收」的正常关单（超时未支付/主动取消），放行＝凭空退款给
   // 没付过钱的人，是纯资损洞。「已收钱」是本入口的前提，不是状态多寡的问题。
   // 钱守恒零改动：refundShareFen 行/单双口径封顶原样——payment_exception 改用 paidFee 作为全单实付分母。
@@ -111,7 +113,7 @@ export async function overrideRefund({ db, data }: Ctx) {
   const itemFen = asFen(toFen(line.price) * (line.qty || 1))
   const exist = await orderAfterSales(db, orderId, 'overrideRefund')
   if (!exist) return reply(400, { ok: false, error: 'REFUND_SCAN_CAP' })
-  const settled = (a: any) => ['applied', 'approved', 'refunded'].includes(a.status)
+  const settled = (a: any) => AFTERSALE_QUOTA_STATUSES.includes(a.status)
   const usedOrder = asFen(
     exist.filter(settled).reduce((s: number, a: any) => s + toFen(Number(a.refundAmount)), 0)
   )
@@ -335,19 +337,12 @@ export async function getRefundDetail({ db, data }: Ctx) {
   // 判据须绑「本单这一订单行」的 refundable/enteredQty，而非「买家这门课有没有进过」——买家可能经别单/别码
   // 进过这门课（activation.entered=true），但本单此行仍可退。审核员据 lineRefundable 判会不会被拦，不被课程级激活误导。
   const reqLine = a.lineId || a.productId
-  // 订单读与激活态互不依赖：并行
+  // 订单读与激活态互不依赖：并行。订单读失败照抛（网关回 500）：当成「行缺失」会显示可退，误导审核
   const [order, activation] = await Promise.all([
-    db
-      .collection('orders')
-      .doc(String(a.orderId || ''))
-      .get()
-      .catch(() => null),
+    getDocOrNull(db.collection('orders').doc(String(a.orderId || ''))),
     activationFor(db, a._openid, a.productId),
   ])
-  const line =
-    order &&
-    order.data &&
-    (order.data.items || []).find((it: any) => (it.lineId || it.productId) === reqLine)
+  const line = order && (order.items || []).find((it: any) => (it.lineId || it.productId) === reqLine)
   const refundableQty = line ? (Number(line.qty) || 1) - (Number(line.enteredQty) || 0) : 0
   // 行缺失＝approveRefund 的 if(line) 跳过、不因进课拦 → 视作不被 ENTERED 拦（lineRefundable:true）
   const lineRefundable = line ? line.refundable !== false && refundableQty > 0 : true
@@ -415,7 +410,7 @@ export async function approveRefund({ db, data }: Ctx) {
       const used = asFen(
         exist
           .filter(
-            (a: any) => a._id !== id && ['applied', 'approved', 'refunded'].includes(a.status)
+            (a: any) => a._id !== id && AFTERSALE_QUOTA_STATUSES.includes(a.status)
           )
           .reduce((s: number, a: any) => s + toFen(Number(a.refundAmount)), 0)
       )

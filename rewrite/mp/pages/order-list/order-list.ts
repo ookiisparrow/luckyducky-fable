@@ -48,6 +48,7 @@ Page({
     loadFailed: false, // 失败≠空态（根因#14·守卫 rw-mp-list-loadfailed-state）：一无所有时的网络失败态，与「暂无订单」分治
     hasMore: false,
     cursor: null as unknown,
+    payingId: '', // 继续支付在途的订单（锁 + 按钮 dim）：pay 往返最长 12s，连点会重复发 pay、重复拉起收银台
     anim: '', // 切 tab 滑入动画类（anim-next/anim-prev）：由 switchTab 置向、reload 落新数据时应用一次；onShow/翻页不带
   },
   _all: [] as OrderVM[], // 全量已拉列表（迁出 data·wxml 不绑定它）：仅供翻页去重与游标基准；shown 才是渲染源，翻页用路径键 shown[N] 增量追加（根因#7 规模·整表重发传输 O(n²)）
@@ -153,9 +154,18 @@ Page({
     wx.navigateTo({ url: '/pages/order/order?id=' + String(e.currentTarget.dataset.id) })
   },
   async onPay(e: WechatMiniprogram.TouchEvent) {
+    if (this.data.payingId) return // 同一时刻只容一笔在途：收银台是模态，别的单等它关掉再付
     const id = String(e.currentTarget.dataset.id)
     tapHaptic()
+    this.setData({ payingId: id })
+    wx.showLoading({ title: '正在发起支付', mask: true })
     const outcome = mapPayResult(await pay(id))
+    wx.hideLoading()
+    // 收银台关掉（成功/取消/失败）或没拉起都要解锁，否则按钮永久点不动
+    const settle = () => {
+      this.setData({ payingId: '' })
+      void this.reload()
+    }
     // await 恢复点复核（同 checkout startPay 范式·bug sweep II 批E）：用户在支付发起在途退出列表页，迟到回包
     // 不再对已退页 toast/reload/拉起支付授权框——订单已在云端，用户下次进详情页续付即可。requestPayment 的
     // success/fail 回调内不加同款复核：授权框是模态、卸载窗口小，无需评估。
@@ -165,7 +175,7 @@ Page({
     }
     if (outcome.kind === 'paid') {
       wx.showToast({ title: '已支付', icon: 'success' })
-      void this.reload()
+      settle()
       return
     }
     if (outcome.kind === 'request') {
@@ -173,14 +183,14 @@ Page({
         ...outcome.payment,
         success: () => {
           wx.showToast({ title: '支付成功', icon: 'success' })
-          void this.reload()
+          settle()
         },
-        fail: () => void this.reload(), // 取消：订单保留·刷新即可
+        fail: settle, // 取消：订单保留·刷新即可
       })
       return
     }
     wx.showToast({ title: outcome.message, icon: 'none' })
-    void this.reload() // 超时关单等状态变化如实刷出来
+    settle() // 超时关单等状态变化如实刷出来
   },
   onConfirm(e: WechatMiniprogram.TouchEvent) {
     const id = String(e.currentTarget.dataset.id)

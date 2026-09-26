@@ -192,7 +192,7 @@ describe('订单行映射·详情抽屉数据链 + 列表掩码（还原批 Orde
     expect(r.address).not.toContain('13812345678') // 绝不泄全号（PII）
     expect(r.addrPhone).toBe('13812345678') // 抽屉用完整号（操作员联系买家）
     expect(r.addrName).toBe('赵四')
-    expect(r.items).toEqual([{ productId: 'p1', name: '小熊', spec: '基础', qty: 2 }])
+    expect(r.items).toEqual([{ productId: 'p1', lineKey: 'p1', name: '小熊', spec: '基础', qty: 2, refundedQty: 0 }])
     expect(r.transactionId).toBe('4200TX')
     expect(r.wxShipUploaded).toBe(false) // 三态：已知上传失败
     expect(r.company).toBe('顺丰速运')
@@ -393,7 +393,7 @@ describe('Dashboard.vue 待处理行动条含「异常未处理」（异常账�
 
 describe('orderErrorText（钱组英文码→操作者中文·#222 同类）', () => {
   it('大白话：已知码出人话、BAD_STATUS 复合码拆出状态中文、未知码兜底不裸甩', () => {
-    expect(orderErrorText('REFUND_HOLD')).toBe('这单涉及退款，先去「售后退款」处理')
+    expect(orderErrorText('REFUND_HOLD')).toBe('这单有退款正在处理，处理完才能发货；若每件都已退款，这单就不用发了')
     expect(orderErrorText('FEE_MISMATCH_HOLD')).toBe('金额异常单被挡下：先去核对流水解除')
     expect(orderErrorText('SHIP_IN_PROGRESS')).toBe('正在处理中，请稍后重试')
     expect(orderErrorText('NO_RESULT')).toBe('系统没返回这单结果，请重试')
@@ -409,8 +409,8 @@ describe('orderErrorText（钱组英文码→操作者中文·#222 同类）', (
     expect(orderErrorText('WRITE_FAIL')).toBe('系统写入失败，请重试')
     expect(orderErrorText('UNKNOWN_ITEM')).toBe('商品行不在订单里')
     expect(orderErrorText('BAD_STATUS:approved')).toBe('售后状态「退款处理中」不允许此操作')
-    expect(orderErrorText('NETWORK:fetch failed')).toBe('网络有点不稳，请刷新重试')
-    expect(orderErrorText('NO_ENDPOINT')).toBe('后台地址没配好，请联系管理员检查')
+    expect(orderErrorText('NETWORK:fetch failed')).toBe('网络不通，请检查网络后重试。')
+    expect(orderErrorText('NO_ENDPOINT')).toBe('后台还没接上服务器地址。请找技术看配置。')
     expect(orderErrorText('FUTURE_UNKNOWN_CODE')).toBe('操作失败（FUTURE_UNKNOWN_CODE）')
     expect(orderErrorText('')).toBe('未知错误')
     expect(orderErrorText(null)).toBe('未知错误')

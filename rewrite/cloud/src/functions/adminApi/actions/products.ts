@@ -1,6 +1,6 @@
 import { isValidPriceYuan, isValidScmProductId, isValidScmSpec } from '@ldrw/shared'
 import { reply, cleanProduct, cleanSold, storeImage, readDoc, ensure, type Ctx } from '../lib'
-import { notifyAlert, getTempUrls, setOrAdd, isCollectionMissing } from '../../../kit'
+import { notifyAlert, getTempUrls, setOrAdd, isCollectionMissing, deleteFiles } from '../../../kit'
 
 // —— 商品图册孤儿 GC 判据单源（E16 共享 helper·防多点漂移·批B）——
 // 换图/发布替换/删档三处写点共用这一份 diff 计算 + cover 豁免，别各写一份（漂移＝漏删或误删）。
@@ -158,7 +158,7 @@ export async function saveDraft({ db, drafts, data }: Ctx) {
 // 改：**先删 products（发布面）再删 drafts**——若 products 删失败，drafts 还在、商品仍在后台草稿列表
 // 可重试删除；危险方向永远是「后台不见了、前台还在卖」，反转顺序后不再可能发生。任一步失败即
 // ok:false，不再继续下一步、不再无条件回 ok:true；动作类失败（病根14）经 notifyAlert 留痕。
-export async function deleteDraft({ db, cloud, drafts, data }: Ctx) {
+export async function deleteDraft({ db, drafts, data }: Ctx) {
   const id = String(data.id || '')
   if (!id) return reply(400, { ok: false, error: 'NO_ID' })
   await ensure(db, 'productsDraft') // 草稿集合只在草稿动作用前建，不跟全局网关（进销存/体检等不顺手建）
@@ -203,7 +203,7 @@ export async function deleteDraft({ db, cloud, drafts, data }: Ctx) {
   // 两档已删净 → 立即删图册（规则5·cover 已豁免）。deleteFile 失败即留痕告警 + ok:false（病根14·批A 口径）——
   // 档已删、文件泄漏，告警带 orphans 供人工兜底清理，绝不静默吞。
   if (orphans.length) {
-    const gcOk = await cloud.deleteFile({ fileList: orphans }).then(() => true).catch(() => false)
+    const gcOk = await deleteFiles(orphans).then(() => true).catch(() => false)
     if (!gcOk) {
       await notifyAlert('anomaly', 'deleteDraft', 'GC_DELETE_FAIL', { id, orphans })
       return reply(200, { ok: false, error: 'GC_DELETE_FAIL' })

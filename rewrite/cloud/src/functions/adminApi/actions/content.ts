@@ -1,5 +1,5 @@
 import { reply, ensure, str, readDoc, arrOf, type Ctx } from '../lib'
-import { notifyAlert, setOrAdd } from '../../../kit'
+import { notifyAlert, setOrAdd, deleteFiles } from '../../../kit'
 
 // —— 首页内容（橱窗逐块②③：hero 文案 / 信任条 / FAQ；规格 §八）——
 export async function getHomeContent({ db }: Ctx) {
@@ -216,7 +216,7 @@ export async function listHelpVideos({ db }: Ctx) {
   return reply(200, { ok: true, items: d.items || [], rev: Number(d.rev) || 0 })
 }
 
-export async function saveHelpVideos({ db, cloud, data }: Ctx) {
+export async function saveHelpVideos({ db, data }: Ctx) {
   // 白名单净化（两级：主题→小段）：主题 id/title/sub/desc 限长；小段 id/name/dur/videoFileId 限长。
   // 主题封顶 20、每主题小段封顶 20 防滥用；空小段（无视频）剔除；空主题（无标题且无任何带视频小段）剔除。
   const raw = Array.isArray(data.items) ? data.items : []
@@ -261,15 +261,14 @@ export async function saveHelpVideos({ db, cloud, data }: Ctx) {
   // 保存本身已成功，但 orphans 删不掉时如实回 ok:false + notifyAlert 留痕（orphans 进 anomalies 账本可人工回收，
   // 低频面不为罕见失败建 pendingGc 队列）——别静默过关让前端误显「已保存」而云存储悄悄只增不减。
   const keep = new Set(items.flatMap((it: any) => it.segments.map((sg: any) => String(sg.videoFileId))))
-  const prevIds = ((prev.data && prev.data.items) || []).flatMap((it: any) =>
+  const prevIds: string[] = ((prev.data && prev.data.items) || []).flatMap((it: any) =>
     ((it.segments || []) as any[]).map((sg: any) => String(sg.videoFileId || '')).filter(Boolean)
   )
   const orphans = [...new Set(prevIds)].filter((id) => !keep.has(id))
   if (orphans.length) {
-    // 整体调用失败＝全部 orphans 视为删除失败；成功但含 status!=0 的项＝那几个失败（真 sdk 逐文件状态）。
-    const failed: string[] = await cloud
-      .deleteFile({ fileList: orphans })
-      .then((r: any) => ((r && r.fileList) || []).filter((f: any) => f && f.status !== 0).map((f: any) => String(f.fileID)))
+    // 整体调用失败＝全部 orphans 视为删除失败；否则按逐文件结果
+    const failed: string[] = await deleteFiles(orphans)
+      .then((rs) => rs.filter((r) => !r.deleted).map((r) => r.fileID))
       .catch(() => orphans)
     if (failed.length) {
       await notifyAlert('anomaly', 'saveHelpVideos', 'GC_DELETE_FAIL', { orphans: failed })

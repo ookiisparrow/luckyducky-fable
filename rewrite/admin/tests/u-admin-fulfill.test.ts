@@ -4,7 +4,8 @@ import { describe, it, expect, vi } from 'vitest'
 import { mount, flushPromises } from '@vue/test-utils'
 
 const { listOrdersMock, shipOrderMock } = vi.hoisted(() => ({ listOrdersMock: vi.fn(), shipOrderMock: vi.fn() }))
-vi.mock('../src/api/money', () => ({ listOrders: listOrdersMock, shipOrder: shipOrderMock }))
+vi.mock('../src/api/money', async (orig) => ({ ...(await orig<typeof import('../src/api/money')>()), listOrders: listOrdersMock }))
+vi.mock('../src/api', () => ({ client: { post: shipOrderMock } }))
 
 import Fulfill from '../src/pages/Fulfill.vue'
 
@@ -32,7 +33,7 @@ describe('Fulfill.vue 发货提示与实际提交的物流公司一致', () => {
     await scan.trigger('keyup.enter')
     await scan.setValue('SF1234567890')
     await scan.trigger('keyup.enter')
-    expect(shipOrderMock).toHaveBeenCalledWith(OID, '顺丰速运', 'SF1234567890')
+    expect(shipOrderMock).toHaveBeenCalledWith('shipOrder', { id: OID, company: '顺丰速运', trackingNo: 'SF1234567890', ackRefundedQty: {} })
 
     await sel.setValue('中通快递') // 在途改选
     release({ ok: true })

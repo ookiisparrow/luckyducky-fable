@@ -195,15 +195,25 @@ const LAUNCH_ERR: Record<string, string> = {
   META_UNAVAILABLE: '上传通道暂时不可用。请稍后重试。',
   BAD_FINISH: '视频合并失败。请重新上传。',
   DRAFT_CONFLICT: '草稿在别处被改过（另一个页签或窗口）。本次未保存以免互相覆盖；请点「载入」取最新后再编辑。',
-  SESSION_LOST: '登录已过期。请重新登录后再试。',
   NO_PRODUCT: '找不到这个商品。请刷新后重试。',
   BAD_CARD: '卡片信息不完整，保存没成功。请检查卡面是否上传。',
   BAD_IMAGE: '图片太大或格式不对。请换一张再传。',
   BAD_PRODUCT: '商品信息不完整，保存没成功。请检查名称、价格和规格。',
   NO_ID: '缺少商品编号。请从商品列表重新进入。',
+}
+
+// 传输层/鉴权层码（client.ts 与网关产出，任何 action 都可能回）：各业务映射自己的表查不到时先问这里，文案单源
+const TRANSPORT_ERR: Record<string, string> = {
   NO_ENDPOINT: '后台还没接上服务器地址。请找技术看配置。',
   BAD_JSON_RESPONSE: '服务器回包读不懂。请刷新后再试。',
   NETWORK: '网络不通，请检查网络后重试。',
+  CALL_TIMEOUT: '服务器太久没回话。如果刚才是提交操作，可能已经生效——先刷新看看，再决定要不要重试。', // 读写共用
+  AUTH_UNAVAILABLE: '登录校验服务暂时不可用。请稍后再试。',
+  SESSION_LOST: '登录已过期。请重新登录后再试。',
+}
+export function transportErrorText(code: unknown): string | undefined {
+  const s = String(code || '')
+  return TRANSPORT_ERR[s.startsWith('NETWORK:') ? 'NETWORK' : s]
 }
 
 /** 剥 `Error:` 前缀，取 `CODE` / `CODE:detail` 的主码。已是中文则原样。 */
@@ -218,6 +228,8 @@ function launchErrHead(raw: unknown): { head: string; rest: string; original: st
 /** 上新五步 / 批次 / 课程给操作者看的错误：主句人话，编号只挂括号里。无映射也不裸甩 CODE。 */
 export function launchErrorText(e: unknown): string {
   const { head, rest, original } = launchErrHead(e)
+  const transport = transportErrorText(original)
+  if (transport) return transport
   const mapped = head ? LAUNCH_ERR[head] : ''
   if (mapped) {
     if (rest && /^[\w./-]+$/.test(rest) && rest.length <= 80) return `${mapped}（编号 ${rest}）`
@@ -233,7 +245,7 @@ export function stockErrorText(e: unknown, status?: number): string {
   const code = String(e || '')
   if (code === 'STOCK_CONFLICT' || status === 409) return '这行库存刚被改过（可能是顾客下单占用）——已拒绝覆盖，刷新后再改'
   if (code === 'BAD_STOCK') return '库存数不合法（须为非负整数，或留空表示不限量）'
-  return '保存没成功（' + code + '）'
+  return transportErrorText(code) || '保存没成功（' + code + '）' // 超时可能已存上，不能说成没成功
 }
 
 export interface AuditEntryVM {

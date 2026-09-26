@@ -135,7 +135,10 @@ export async function disableAgent({ db, data }: Ctx) {
     .catch(() => null)
   const acct = got && got.data
   if (!acct || acct.role !== AGENT_ROLE) return reply(404, { ok: false, error: 'AGENT_NOT_FOUND' })
-  await db.collection('adminConfig').doc(id).update({ data: { disabled, updatedAt: Date.now() } })
+  // 停号同时清空会话（见 lib.ts 会话令牌注释）：否则重新启用时旧令牌跟着复活
+  const patch: any = { disabled, updatedAt: Date.now() }
+  if (disabled) patch.sessions = []
+  await db.collection('adminConfig').doc(id).update({ data: patch })
   return reply(200, { ok: true, id, disabled })
 }
 

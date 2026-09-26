@@ -119,7 +119,25 @@ Page({
     if (!r.ok) {
       // 云端拒单如实反馈（缺货/停售/配置缺失等·不吞错）——唯一留在本页的路径·此处才解锁重试
       this.setData({ submitting: false })
-      wx.showToast({ title: checkout.mapCreateOrderError(String(r.error || '')), icon: 'none' })
+      const errCode = String(r.error || '')
+      const dropped = checkout.dropRejectedLine(errCode)
+      if (dropped) {
+        // 那一行已移出本单（及购物车）：点名告诉用户是哪件。还有别的商品就重渲染、可直接再提交；
+        // 草稿空了（立即购买那一件/唯一勾选的那件）没东西可下，等用户看完弹窗再退回——不走 refresh 的空草稿
+        // 提示+600ms 自动返回，否则 toast 和退页会跟弹窗抢。
+        const left = checkout.getDraft().items.length > 0
+        wx.showModal({
+          title: checkout.mapCreateOrderError(errCode),
+          content: `「${dropped}」现在买不了，已从本单移除` + (left ? '，其余商品可以继续下单。' : '。'),
+          showCancel: false,
+          success: () => {
+            if (!left && !this.unloaded) wx.navigateBack()
+          },
+        })
+        if (left) void this.refresh()
+        return
+      }
+      wx.showToast({ title: checkout.mapCreateOrderError(errCode), icon: 'none' })
       return
     }
     // 建单成功后每条后续路径都会离开结算页（redirectTo 成功页 / startPay 内 requestPayment 成功→成功页、取消/失败→switchTab 首页），

@@ -1,4 +1,4 @@
-import { ERR, COLLECTIONS, PAID_ORDER_STATUSES, anomalyFingerprint } from '@ldrw/shared'
+import { ERR, COLLECTIONS, MONEY_RECEIVED_STATUSES, anomalyFingerprint } from '@ldrw/shared'
 import {
   isServerCall,
   ok,
@@ -61,7 +61,7 @@ export async function runBillReconcile(
   const cap = opts.cap ?? 1000 // 云函数端 .limit() 最多给 1000 条，设大了 truncated 永远报不出截断
   const raw: any[] | null = await db
     .collection(COLLECTIONS.orders)
-    .where({ status: _.in(PAID_ORDER_STATUSES as any), paidAt: _.gt(dayStart - DAY_MS - 1) })
+    .where({ status: _.in([...MONEY_RECEIVED_STATUSES]), paidAt: _.gt(dayStart - DAY_MS - 1) })
     .orderBy('paidAt', 'desc')
     .limit(cap)
     .get()

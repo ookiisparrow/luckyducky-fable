@@ -7,9 +7,11 @@ export const listOrders = (status?: string, cursor?: unknown, limit = 20, q?: st
   client.post('listOrders', { status: status || undefined, cursor, limit, q: q || undefined })
 export const orderCounts = () => client.post('orderCounts')
 export const getOrderDetail = (id: string) => client.post('getOrderDetail', { id }) // 逐商品激活态（VMlhp·抽屉异步补）
-export const shipOrder = (id: string, company: string, trackingNo: string) => client.post('shipOrder', { id, company, trackingNo })
-// 批量发货（P1·上量瓶颈）：items=[{id,trackingNo,company?}]，company=整批共用快递公司；逐单独立·一单失败不拖累其余。
-export const shipOrders = (items: Array<{ id: string; trackingNo: string; company?: string }>, company: string) =>
+// ackRefundedQty＝发货人看到的每行已退件数（行键→件数）：首次发货时 shipOne 与现状逐行比，对不上回 REFUND_LINES_CHANGED
+export const shipOrder = (id: string, company: string, trackingNo: string, ackRefundedQty: Record<string, number>) =>
+  client.post('shipOrder', { id, company, trackingNo, ackRefundedQty })
+// 批量发货（P1·上量瓶颈）：items=[{id,trackingNo,company?,ackRefundedQty}]，company=整批共用快递公司；逐单独立·一单失败不拖累其余。
+export const shipOrders = (items: Array<{ id: string; trackingNo: string; company?: string; ackRefundedQty: Record<string, number> }>, company: string) =>
   client.post('shipOrders', { items, company })
 export const clearFeeMismatch = (id: string) => client.post('clearFeeMismatch', { id })
 // q=订单号精确搜索（服务端·跨全部状态·根因#7）；有 q 时后端忽略 status

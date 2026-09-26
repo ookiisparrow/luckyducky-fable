@@ -103,7 +103,8 @@ async function doSave(row: Row) {
     return
   }
   saving.value = true
-  const r = await saveStock(row.productId, row.spec, stock, row.updatedAt, threshold) // 带版本·被人先改过会 409
+  // 一律带版本：老档没有 updatedAt 时 mapStock 给 0，服务端按「仍没有版本戳」比对——被预留动过同样 409
+  const r = await saveStock(row.productId, row.spec, stock, row.updatedAt, threshold)
   saving.value = false
   if (r.ok) {
     if (editKey.value === key) editKey.value = '' // 仍是发起时那行才收起编辑态，别顶掉新打开的行内编辑（G4）

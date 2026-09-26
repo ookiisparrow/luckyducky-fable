@@ -1,5 +1,5 @@
-import { asFen, fenToYuan } from '@ldrw/shared'
-import { reply, getTxAlerts, PAID_STATUSES, type Ctx } from '../lib'
+import { asFen, fenToYuan, MONEY_RECEIVED_STATUSES } from '@ldrw/shared'
+import { reply, getTxAlerts, type Ctx } from '../lib'
 // CST 日助手/比对分类器已上提 kit/reconcile 单源（批B2·timers/billReconcile 复用同一套原语）；
 // 别名保持既有调用点零改动
 import {
@@ -14,7 +14,10 @@ import {
 } from '../../../kit'
 
 // —— S16 财务对账（内部账·Batch 1）——
-// 口径同看板 GMV（PAID_STATUSES·已付营收）。三块：① 收支汇总 ② 每日流水 ③ 内部异常（txAlerts 单源）。
+// 收入口径＝已收到钱的单（MONEY_RECEIVED_STATUSES，比看板 GMV 多 refund_required/payment_exception：
+// 它们的退款照常计入，收入漏了就对不平）。三块：① 收支汇总 ② 每日流水 ③ 内部异常（txAlerts 单源）。
+//   · payment_exception 的到账额和标价不符（正是它异常的原因），收入按实际到账 paidFee（分）计，与它退款的
+//     分母同口径；缺 paidFee（待补录实付）的计 0——累计聚合对缺字段也是 0，两处一致。
 //   · 累计总额走 aggregate $.sum 精确（不封顶·债#18续）——money 锚，恒可信。
 //   · 每日明细走有界拉取（CAP）+ JS 按 CST 日分桶（云端 aggregate 不便按日分组），超 CAP 标 approx
 //     （同 dashboard SAMPLE 诚实范式·债#18；低量业务远不触）。
@@ -23,6 +26,9 @@ import {
 
 const CAP = 1000 // 明细有界拉取上限（超则 approx）：云函数端 .limit() 最多给 1000 条，CAP 设得比它大就会少报截断
 const isDate = (s: any) => typeof s === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(s)
+const AMOUNT_INCOME_STATUSES = MONEY_RECEIVED_STATUSES.filter((s) => s !== 'payment_exception')
+const receivedFen = (o: any): number =>
+  o.status === 'payment_exception' ? (Number.isInteger(o.paidFee) ? o.paidFee : 0) : toFenAmount(o.amount)
 
 // 累加用整数「分」（toFen·防浮点漂移·根因#4 钱链）；出参再 fenToYuan 回元
 interface Bucket {
@@ -74,16 +80,17 @@ export async function getReconciliation({ db, data }: Ctx) {
         return 0
       })
 
-  const [incomeCum, refundCum, paidRows, refundRows, paidN, refundN, exceptions] =
+  const [amountCum, exceptionFenCum, refundCum, paidRows, refundRows, paidN, refundN, exceptions] =
     await Promise.all([
-      // 累计（aggregate·全量精确·不封顶·money 锚）
-      sumAgg('orders', _.in(PAID_STATUSES), 'amount'),
+      // 累计（aggregate·全量精确·不封顶·money 锚）：按标价的单（元）与支付异常单的到账额（分）分开汇总
+      sumAgg('orders', _.in(AMOUNT_INCOME_STATUSES), 'amount'),
+      sumAgg('orders', 'payment_exception', 'paidFee'),
       sumAgg('afterSales', 'refunded', 'refundAmount'),
       // 每日明细有界拉取（最近 CAP 笔·按时间倒序）
       rows(
         db
           .collection('orders')
-          .where({ status: _.in(PAID_STATUSES) })
+          .where({ status: _.in([...MONEY_RECEIVED_STATUSES]) })
           .orderBy('paidAt', 'desc')
           .limit(CAP)
       ),
@@ -94,10 +101,11 @@ export async function getReconciliation({ db, data }: Ctx) {
           .orderBy('refundedAt', 'desc')
           .limit(CAP)
       ),
-      cnt(db.collection('orders').where({ status: _.in(PAID_STATUSES) })),
+      cnt(db.collection('orders').where({ status: _.in([...MONEY_RECEIVED_STATUSES]) })),
       cnt(db.collection('afterSales').where({ status: 'refunded' })),
       getTxAlerts(db),
     ])
+  const incomeCum = fenToYuan(asFen(toFenAmount(amountCum) + Math.round(exceptionFenCum)))
 
   // JS 按 CST 日分桶（窗内）：income 自 paidRows.paidAt，refund 自 refundRows.refundedAt（累加整数分）
   const buckets = new Map<string, Bucket>()
@@ -110,7 +118,7 @@ export async function getReconciliation({ db, data }: Ctx) {
   for (const o of paidRows) {
     if (!inRange(o.paidAt)) continue
     const b = bucket(dayKey(o.paidAt))
-    b.incomeFen += toFenAmount(o.amount)
+    b.incomeFen += receivedFen(o)
     b.orders += 1
   }
   for (const a of refundRows) {
@@ -186,7 +194,7 @@ export async function getBillMatch({ db, data }: Ctx) {
     rows(
       db
         .collection('orders')
-        .where({ status: _.in(PAID_STATUSES) })
+        .where({ status: _.in([...MONEY_RECEIVED_STATUSES]) })
         .orderBy('paidAt', 'desc')
         .limit(CAP)
     ),

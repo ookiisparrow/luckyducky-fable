@@ -12,7 +12,7 @@ const authed = ref(false)
 // 壳层统一登出回登录视图——Desk.vue 内各会话敏感动作（pollThread/send/act/claim/setStatus）不再需要
 // 各自显式判 SESSION_LOST 才能导登录（原先只有 refreshLists 有此判断，其余散点会卡在失效态）。
 onSessionLost(() => {
-  logout()
+  void logout()
   authed.value = false
 })
 

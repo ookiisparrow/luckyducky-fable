@@ -50,6 +50,9 @@ export const getHelpVideos = withOpenId(
 
 const SUMMARY_SAMPLE = 200
 
+/** 匿名评价的公开署名：用户选匿名、以及删资料后抹掉昵称快照，都显示这一个名字。 */
+export const ANON_REVIEW_NAME = '匿名钩友'
+
 /** 公开读只认人工挑选。缺字段 / false = 不出（fail-closed·先审后发）。 */
 function publicReviewFilter(productId: string) {
   return { productId, picked: true }
@@ -290,7 +293,7 @@ export const submitReview = withOpenId(
       /* 已存在 */
     }
 
-    let name = '匿名钩友'
+    let name = ANON_REVIEW_NAME
     if (!e.anon) {
       const u = await db.collection(COLLECTIONS.users).where({ _openid: OPENID }).limit(1).get()
       name = (u.data[0] && u.data[0].nickname) || '鸭友'

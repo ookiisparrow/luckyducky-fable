@@ -135,7 +135,7 @@ describe('Orders.vue 发货表单校验闸（shipOrder）', () => {
     expect(wrapper.find('.drawer').exists()).toBe(true)
     const err = wrapper.find('.drawer-error')
     expect(err.exists()).toBe(true)
-    expect(err.text()).toContain('这单涉及退款')
+    expect(err.text()).toContain('退款正在处理')
     expect(err.text()).not.toContain('REFUND_HOLD')
   })
 })

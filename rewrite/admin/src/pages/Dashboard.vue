@@ -76,15 +76,8 @@ const funnelMax = computed(() => Math.max(1, ...(vm.value?.funnel || []).map((f)
 
 async function load() {
   busy.value = true
-  // 行动条计数复用服务端精确口径（orderCounts/refundCounts·根因#7）+ 库存按 SKU 实算；任一失败不拖累看板
-  const [d, oc, rc, inv, dr, ins] = await Promise.all([
-    getDashboard(),
-    orderCounts().catch(() => ({ ok: false }) as any),
-    refundCounts().catch(() => ({ ok: false }) as any),
-    listInventory().catch(() => ({ ok: false }) as any),
-    listDrafts().catch(() => ({ ok: false }) as any),
-    getInspectStatus().catch(() => ({ ok: false }) as any),
-  ])
+  // 行动条计数复用服务端精确口径（orderCounts/refundCounts·根因#7）+ 库存按 SKU 实算；任一失败（client 不抛·回 ok:false）不拖累看板
+  const [d, oc, rc, inv, dr, ins] = await Promise.all([getDashboard(), orderCounts(), refundCounts(), listInventory(), listDrafts(), getInspectStatus()])
   busy.value = false
   if (d.error === 'SESSION_LOST') return // 会话失效集中导登录（client.onSessionLost·单源·根因#5）
   vm.value = mapDashboard(d)

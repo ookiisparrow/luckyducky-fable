@@ -36,6 +36,7 @@ function backToLaunch() {
 const loadedCourse = ref('')
 const rows = ref<BatchRow[]>([])
 const message = ref('')
+const truncated = ref(false) // 后端取码触顶：批次计数只数到上限
 const busy = ref(false)
 const count = ref(50)
 const creating = ref(false)
@@ -120,6 +121,7 @@ async function load() {
   const r = await listBatches(c)
   if (loadGen.isStale(my)) return // 已发起更新的 load()·整包丢弃（rows/loadedCourse/message 全不写）
   rows.value = r.ok ? mapBatches(r.list) : []
+  truncated.value = r.ok && r.truncated === true
   loadedCourse.value = r.ok ? c : ''
   message.value = r.ok ? (rows.value.length ? '' : '这门课还没有批次') : launchErrorText(r.error)
 }
@@ -339,6 +341,7 @@ async function exportCsv() {
     </div>
 
     <p v-if="message" class="ld-status">{{ message }}</p>
+    <p v-if="truncated" class="ld-status">码量超上限，计数可能不全</p>
 
     <Card v-if="shown.length" flush>
       <div class="ld-thead">

@@ -26,7 +26,8 @@ export const ORDER_STATUS_SPEC = {
 /** 售后状态机声明（afterSales 集合）。 */
 export const AFTERSALE_STATUS_SPEC = {
   collection: 'afterSales',
-  initial: ['applied'],
+  /** approved：overrideRefund 越规退款由管理员发起，直接以已批准建档。 */
+  initial: ['applied', 'approved'],
   terminal: ['refunded', 'rejected'],
   transitions: [
     { from: ['applied'], to: 'approved', trigger: 'adminApi.approveRefund（原子抢占·触发退款工作流）' },
@@ -43,6 +44,15 @@ export type AfterSaleStatus = SpecStates<typeof AFTERSALE_STATUS_SPEC>
  *  refund_required 未付不计。此前 adminApi lib.ts / dashboard.ts / reconciliation.ts / customer360
  *  profile.ts 各自手抄同一份数组，改状态机漏改一处即口径分叉——收口到订单状态声明单源旁，其余四处改 import。 */
 export const PAID_ORDER_STATUSES: readonly OrderStatus[] = ['paid', 'shipped', 'done']
+
+/** 已收到钱的订单状态（对账口径）：refund_required 与 payment_exception 也收了款，漏掉会把它们的微信流水
+ *  报成「微信有我方无」，而它们的退款又照常计入。GMV/画像仍用 PAID_ORDER_STATUSES。 */
+export const MONEY_RECEIVED_STATUSES: readonly OrderStatus[] = [...PAID_ORDER_STATUSES, 'refund_required', 'payment_exception']
+
+/** 占退款额度的售后状态（算已退/可退封顶时要减掉的）。 */
+export const AFTERSALE_QUOTA_STATUSES: readonly AfterSaleStatus[] = ['applied', 'approved', 'refunded']
+/** 在途售后（钱可能正在退）：有这类记录的订单不能发货。refunded 是终态，只把退掉的件排除出发货。 */
+export const AFTERSALE_INFLIGHT_STATUSES: readonly AfterSaleStatus[] = ['applied', 'approved']
 
 // 运行时状态全集（从声明派生·去重排序）；消费方仅作枚举（计数/筛选/白名单）。
 export const ORDER_STATUS = statesOf(ORDER_STATUS_SPEC) as readonly OrderStatus[]
