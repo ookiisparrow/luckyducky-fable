@@ -1,5 +1,6 @@
 // 意见反馈：submitFeedback 接 UI（分类/内容/联系方式·云端白名单+限频）。
 import { tapHaptic } from '../../lib/haptics'
+import { APP_VERSION } from '../../lib/appVersion'
 import { submitFeedback } from '../../api/user'
 import { keyDown, keyUp } from '../../lib/keyFx'
 import { fxHint, fxLoaded, fxLoading, fxToast } from '../../lib/pxFx'
@@ -69,7 +70,7 @@ Page({
     this.sync({ busy: true })
     fxLoading(this, '提交中') // 设计稿「提交中」加载框（自绘·挡连点）
     if (!this.idemKey) this.idemKey = Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 10)
-    const r = await submitFeedback(this.data.content.trim(), this.data.cat, this.data.contact.trim(), this.idemKey)
+    const r = await submitFeedback(this.data.content.trim(), this.data.cat, this.data.contact.trim(), this.idemKey, APP_VERSION)
     fxLoaded(this) // 先收加载框再提示
     if (this.unloaded) return // 迟到回包：已退页（onUnload 已清 backTimer）——不弹 toast、不 navigateBack
     if (r.ok) {

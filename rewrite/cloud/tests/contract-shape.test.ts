@@ -729,7 +729,8 @@ describe('契约键集合哨兵（Object.keys 排序全等·增删改名都红�
   })
 
   it('submitFeedback：成功恒 [ok] 零载荷；写侧 9 键含 _openid 与用户自填 contact，一个字节都不下发；空内容/未登录各 [error,ok]', async () => {
-    const r = await call('submitFeedback', { content: '很好用', category: 'idea', contact: 'wx: duck', page: 'feedback', version: 'rw-m2', platform: 'mp' })
+    // version 键由写侧恒落；值不进本契约（客户端传 APP_VERSION，这里不硬编版本号）
+    const r = await call('submitFeedback', { content: '很好用', category: 'idea', contact: 'wx: duck', page: 'feedback', platform: 'mp' })
     expect(keysOf(r)).toEqual(['ok'])
     // contact 是本 action 唯一 PII 类字段（用户自填微信号/手机号）：入库有、下发面为空
     expect(keysOf(control.dump('feedback')[0])).toEqual(FEEDBACK_WRITE_KEYS)
