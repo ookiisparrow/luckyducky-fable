@@ -129,7 +129,7 @@ export function unprofiledProducts(products: unknown, profiles: unknown): Array<
 export function productNameOf(products: unknown, id: unknown): string {
   const wanted = String(id || '')
   const hit = (Array.isArray(products) ? products : []).find((p: any) => String((p && (p.id || p._id)) || '') === wanted)
-  return hit ? String((hit as any).name || wanted) : wanted
+  return hit ? String(hit.name || wanted) : wanted
 }
 
 export function mapLedger(list: unknown): LedgerRow[] {

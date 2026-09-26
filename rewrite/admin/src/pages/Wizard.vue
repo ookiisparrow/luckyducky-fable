@@ -105,7 +105,7 @@ async function reloadProduct() {
   }
   disarm() // 刷新即复位危险态：防旧武装的「确认同步」残留、重进一击直发
   loadError.value = false
-  const r: any = await listDrafts()
+  const r = await listDrafts()
   if (!r.ok) {
     // 载入失败：仅在「还没载到商品」（初次深链·product 仍 null）时显全屏可重试态区别于「商品不存在」；
     // 已载入后的刷新失败（@saved autosave 回刷 / 切步回刷）只降级为 message banner、不撕掉正在编辑的向导+内嵌编辑器（reloadProduct 是共享回刷路径）
@@ -163,7 +163,7 @@ async function shelve() {
   wantHome.value = false
   const opts = state.value === 'preparing' ? { featured } : undefined
   busy.value = true
-  const r: any = await publishProduct(id.value, opts)
+  const r = await publishProduct(id.value, opts)
   busy.value = false
   note(r.ok, draftSyncOk(state.value, opts), publishErrorText(r.error, state.value))
   if (r.ok) void reloadProduct()
@@ -177,7 +177,7 @@ async function restoreSale() {
   }
   restoreArmed.value = false
   busy.value = true
-  const r: any = await republishProduct(id.value)
+  const r = await republishProduct(id.value)
   busy.value = false
   note(r.ok, restoreSaleOk(), launchErrorText(r.error))
   if (r.ok) void reloadProduct()
@@ -188,7 +188,7 @@ async function createDraft() {
   busy.value = true
   const newId = 'p' + Date.now().toString(36)
   const draft = freshDraft(newId)
-  const r: any = await saveDraft(draft)
+  const r = await saveDraft(draft)
   busy.value = false
   if (!r.ok) {
     note(false, '', launchErrorText(r.error))

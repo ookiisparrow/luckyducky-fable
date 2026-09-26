@@ -2,7 +2,7 @@
 import { describe, it, expect, vi } from 'vitest'
 
 const { postMock } = vi.hoisted(() => ({ postMock: vi.fn().mockResolvedValue({ ok: true }) }))
-vi.mock('../src/api/index', () => ({ client: { post: postMock } }))
+vi.mock('../src/api/index', () => ({ typedPost: postMock }))
 
 import { saveHelpVideos } from '../src/api/content'
 import { saveCheckpoints } from '../src/api/cs'

@@ -42,7 +42,7 @@ async function load() {
   const r = await listCheckpoints(c)
   if (loadGen.isStale(my)) return // 已发起更新的 load()·整包丢弃（nodes/loaded/baseRev/message 全不写）
   nodes.value = r.ok
-    ? ((r.list as Record<string, any>[]) || []).map((n) => ({ nodeId: String(n.nodeId || ''), title: String(n.title || ''), remedy: String(n.remedy || ''), order: Number(n.order) || 0 }))
+    ? (r.list || []).map((n) => ({ nodeId: String(n.nodeId || ''), title: String(n.title || ''), remedy: String(n.remedy || ''), order: Number(n.order) || 0 }))
     : []
   loaded.value = r.ok
   if (r.ok) {

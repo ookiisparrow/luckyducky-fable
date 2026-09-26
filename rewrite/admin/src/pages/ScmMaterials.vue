@@ -73,7 +73,7 @@ async function moreSuppliers() {
     note(false, '', '加载更多供应商失败：' + scmErrorText(s.error))
     return
   }
-  sups.value = appendNew(sups.value, (s.list as Record<string, any>[]) || [], (x) => x._id)
+  sups.value = appendNew(sups.value, s.list || [], (x) => x._id)
   supCursor.value = s.nextCursor
   supHasMore.value = !!s.hasMore
 }
@@ -119,7 +119,7 @@ const stocktakeSummary = computed(() => ({
 // 进入盘点：拉一份全量快照（listMaterials 本就 limit 500 整取无分页·刻意留给本模式）+ 生成本次盘点单号
 async function enterStocktake() {
   const m = await listMaterials()
-  const list = m.ok ? (m.list as Record<string, any>[]) : []
+  const list = m.ok ? m.list : []
   if (m.ok) mats.value = list // mats 与 matsFailed 同步描述最近一次物料读取，KPI 才不会按旧失败画 0
   matsFailed.value = !m.ok
   stocktakeRows.value = list.map((mat) => ({
@@ -247,9 +247,9 @@ function resetSupForm() {
 
 async function reload() {
   const [m, s] = await Promise.all([listMaterials(), listSuppliers()])
-  mats.value = m.ok ? (m.list as Record<string, any>[]) : []
+  mats.value = m.ok ? m.list : []
   matsFailed.value = !m.ok
-  sups.value = s.ok ? (s.list as Record<string, any>[]) : []
+  sups.value = s.ok ? s.list : []
   supCursor.value = s.ok ? s.nextCursor : null
   supHasMore.value = !!(s.ok && s.hasMore)
   supsError.value = s.ok ? '' : '供应商加载失败：' + scmErrorText(s.error)
@@ -260,7 +260,7 @@ async function reload() {
 
 async function doSaveMaterial() {
   const r = await saveMaterial({ ...matForm.value })
-  note(r.ok, `已建档：${String(r.materialId)}`, scmErrorText(r.error))
+  note(r.ok, r.ok ? `已建档：${r.materialId}` : '', scmErrorText(r.error))
   void reload()
 }
 

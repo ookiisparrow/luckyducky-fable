@@ -63,12 +63,12 @@ async function reload() {
   const my = listGen.begin()
   const [p, m, s] = await Promise.all([listPurchases(filter.value || undefined), listMaterials(), listSuppliers()])
   if (listGen.isStale(my)) return // 已切别 chip·丢弃过期采购单
-  orders.value = p.ok ? (p.list as Record<string, any>[]) : []
+  orders.value = p.ok ? p.list : []
   listFailed.value = !p.ok
   cursor.value = p.ok ? p.nextCursor : null // 换筛选/刷新恒重置游标（新首页·不接续旧筛选下的位置）
   hasMore.value = !!(p.ok && p.hasMore)
-  mats.value = m.ok ? (m.list as Record<string, any>[]) : []
-  sups.value = s.ok ? ((s.list as Record<string, any>[]) || []).filter((x) => x.type === 'factory') : []
+  mats.value = m.ok ? m.list : []
+  sups.value = s.ok ? (s.list || []).filter((x) => x.type === 'factory') : []
   // 分路报错（照 ScmBom.reload）：物料/供应商挂掉不装空目录
   const err = loadErrors([[p, '采购单'], [m, '物料主档'], [s, '供应商']])
   load(!err, err) // 只在加载失败时写·成功静默不抹动作反馈
@@ -84,7 +84,7 @@ async function more() {
     note(false, '', '加载更多失败：' + scmErrorText(r.error))
     return
   }
-  orders.value = appendNew(orders.value, (r.list as Record<string, any>[]) || [], (o) => o._id)
+  orders.value = appendNew(orders.value, r.list || [], (o) => o._id)
   cursor.value = r.nextCursor
   hasMore.value = !!r.hasMore
 }
@@ -119,16 +119,16 @@ async function doSave() {
   const r = await savePurchase(f.supplierId, lines, f.purchaseId || undefined) // 传 purchaseId＝改草稿·空＝新建
   saving.value = false
   if (form.value === snap) {
-    note(r.ok, `草稿已${f.purchaseId ? '更新' : '建'}（总价 ${fenLabel(r.totalFen)}·服务端核算）`, scmErrorText(r.error))
+    note(r.ok, r.ok ? `草稿已${f.purchaseId ? '更新' : '建'}（总价 ${fenLabel(r.totalFen)}·服务端核算）` : '', scmErrorText(r.error))
     if (r.ok) form.value = null
   }
   void reload() // 列表刷新与目标是否已切无关·恒执行
 }
 
 // 下单/收货/取消都两步确认（花钱的动作应有一道·带金额）
-async function step(fn: (_id: string) => Promise<Record<string, unknown>>, id: string, key: string) {
+async function step(fn: (_id: string) => Promise<{ ok: boolean; error?: string }>, id: string, key: string) {
   if (!confirmed(confirmKey, key)) return
-  const r = (await fn(id)) as Record<string, any>
+  const r = await fn(id)
   note(r.ok, '', scmErrorText(r.error)) // 失败走 note 设 msgOk=false（红）·只写 message 会让失败显成功绿
   void reload()
 }

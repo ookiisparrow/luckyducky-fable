@@ -41,7 +41,7 @@ async function loadReport() {
   report.value = mapReport(r) // 出错/空档都为 null（卡隐）——出错时另透传原文，别让「加载失败」被读成「暂无数据」
   reportErr.value = r.ok ? '' : failText('质检报表加载失败', r.error)
   if (r.ok) {
-    const backendSlaMs = Number((r as any).slaMs) // 后端回传的本次实际生效阈值（权威·见 conversationsReport 回包 slaMs 字段）
+    const backendSlaMs = Number(r.slaMs) // 后端回传的本次实际生效阈值（权威·见 conversationsReport 回包 slaMs 字段）
     if (Number.isFinite(backendSlaMs) && backendSlaMs > 0) slaMin.value = Math.round(backendSlaMs / 60000) || slaMin.value
     slaMinInited = true
   }
@@ -194,7 +194,7 @@ const trialRefreshMsg = ref('')
 
 async function loadTrialRefreshGate() {
   const r = await getTrialRefreshGate()
-  trialRefreshOn.value = !!(r.ok && (r as { enabled?: boolean }).enabled)
+  trialRefreshOn.value = !!(r.ok && r.enabled)
 }
 
 async function doTrialRefresh() {
@@ -229,7 +229,7 @@ async function doTrialRefresh() {
     trialRefreshMsg.value = CS_REFRESH_COPY.adminSuccess
     return
   }
-  const err = String((r as { error?: string }).error || '')
+  const err = String(r.error || '')
   trialRefreshMsg.value =
     err === 'HUMAN_ACTIVE'
       ? '人工处理中，默认不能刷新。如需强制请走管理端并写原因。'

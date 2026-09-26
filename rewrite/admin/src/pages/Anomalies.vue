@@ -4,6 +4,7 @@
 // resolveAnomaly 真值。
 import { ref, computed, onMounted } from 'vue'
 import { RefreshCw, Check, ClipboardList, AlertCircle, AlertTriangle, Activity, ShieldCheck } from 'lucide-vue-next'
+import type { AdminAnomaly } from '@ldrw/shared'
 import { listAnomalies, resolveAnomaly } from '../api/ops'
 import { useLatest } from '../lib/latest'
 import { confirmed, failText, writeFailText } from '../lib/status'
@@ -14,7 +15,7 @@ import EmptyState from '../components/ui/EmptyState.vue'
 import UiButton from '../components/ui/Button.vue'
 
 // 会话失效导登录由 client.onSessionLost 集中处理（单源·根因#5）——本页不再自持 router
-const list = ref<any[]>([])
+const list = ref<AdminAnomaly[]>([])
 const total = ref<number | null>(null) // 账本真实总数：与 list.length 分开——list 受 limit 截断，total 是同 filter 全量
 const message = ref('加载中…')
 const busy = ref(false)
@@ -54,19 +55,19 @@ async function load() {
   if (filter.value === 'open') opts.resolved = false
   else if (filter.value === 'resolved') opts.resolved = true
   const my = listGen.begin()
-  const r: any = await listAnomalies(opts)
+  const r = await listAnomalies(opts)
   busy.value = false
   if (listGen.isStale(my)) return // 已切别 chip·丢弃过期异常账本
   if (r.error === 'SESSION_LOST') return // 会话失效集中导登录（client.onSessionLost·单源·根因#5）
-  list.value = r.list || []
-  total.value = typeof r.total === 'number' ? r.total : null
+  list.value = r.ok ? r.list || [] : []
+  total.value = r.ok && typeof r.total === 'number' ? r.total : null
   message.value = r.ok ? '' : failText('加载失败', r.error)
 }
 
 const confirmId = ref('') // 两步确认（标记已处理是破坏性动作·无撤销）
-async function markResolved(a: any) {
+async function markResolved(a: AdminAnomaly) {
   if (!confirmed(confirmId, a._id)) return
-  const r: any = await resolveAnomaly(a._id)
+  const r = await resolveAnomaly(a._id)
   if (r.error === 'SESSION_LOST') return // 会话失效集中导登录（client.onSessionLost·单源·根因#5）
   if (r.ok) {
     await load()

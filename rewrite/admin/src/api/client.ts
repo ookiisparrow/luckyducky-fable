@@ -8,8 +8,8 @@ export interface ClientResult {
   [k: string]: unknown
 }
 
-/** 按契约类型看的回包：成功带 T 的字段（没有索引签名，字段名写错编译不过），失败只有 error。 */
-export type TypedResult<T> = ({ ok: true; status: number; error?: undefined } & T) | { ok: false; status: number; error?: string }
+/** 按契约类型看的回包：成功带 T 的字段（没有索引签名，字段名写错编译不过）；失败只有 error，外加云端随某些错误码带回的 F（可能不带）。 */
+export type TypedResult<T, F = {}> = ({ ok: true; status: number; error?: undefined } & T) | ({ ok: false; status: number; error?: string } & Partial<F>)
 
 export interface ClientDeps {
   endpoint: string

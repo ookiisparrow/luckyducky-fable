@@ -4,6 +4,7 @@
 import { ref, onMounted, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { PlayCircle, TriangleAlert, ShieldCheck } from 'lucide-vue-next'
+import type { InspectRunRecord } from '@ldrw/shared'
 import { getInspectStatus, runInspect } from '../api/ops'
 import { failText, writeFailText } from '../lib/status'
 import UiButton from '../components/ui/Button.vue'
@@ -13,13 +14,13 @@ import Badge from '../components/ui/Badge.vue'
 import EmptyState from '../components/ui/EmptyState.vue'
 
 const router = useRouter()
-const latest = ref<any>(null)
+const latest = ref<InspectRunRecord | null>(null)
 const openAnomalies = ref(0)
 const message = ref('加载中…')
 const running = ref(false)
 
 const groups = computed(() => {
-  const rs = (latest.value?.results || []) as any[]
+  const rs = latest.value?.results || []
   return [
     { key: 'infra', label: '基建存活', items: rs.filter((r) => r.layer === 'infra') },
     { key: 'invariant', label: '业务不变量', items: rs.filter((r) => r.layer === 'invariant') },
@@ -29,16 +30,16 @@ const groups = computed(() => {
 const fmt = (ms: number) => (ms ? new Date(ms).toLocaleString('zh-CN', { hour12: false }) : '')
 
 async function load() {
-  const r: any = await getInspectStatus()
+  const r = await getInspectStatus()
   if (r.error === 'SESSION_LOST') return // 会话失效集中导登录（client.onSessionLost·单源·根因#5）
-  latest.value = r.latest
-  openAnomalies.value = Number(r.openAnomalies || 0)
+  latest.value = r.ok ? r.latest : null
+  openAnomalies.value = r.ok ? Number(r.openAnomalies || 0) : 0
   message.value = r.ok ? '' : failText('加载失败', r.error)
 }
 
 async function runNow() {
   running.value = true
-  const r: any = await runInspect()
+  const r = await runInspect()
   running.value = false
   if (r.error === 'SESSION_LOST') return // 会话失效集中导登录（client.onSessionLost·单源·根因#5）
   if (!r.ok) {

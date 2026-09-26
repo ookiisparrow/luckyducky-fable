@@ -53,9 +53,9 @@ async function loadCourseOptions() {
   message.value = '加载中…'
   const dr = await listDrafts().catch(() => null)
   message.value = ''
-  if (!(dr as any)?.ok) return
+  if (!dr?.ok) return
   const seen = new Map<string, string>()
-  for (const p of (((dr as any).list as Record<string, any>[]) || [])) {
+  for (const p of dr.list || []) {
     const cid = String(p.courseId || '')
     if (cid && !seen.has(cid)) seen.set(cid, String(p.name || cid))
   }
@@ -155,9 +155,9 @@ async function load() {
   }
   loaded = false // 载入期不触发自动保存
   fromPublished.value = r.fromPublished === true
-  course.value = (r.course as Record<string, any>) || { id: courseId.value.trim(), title: '', sort: 0, chapters: [] }
+  course.value = r.course || { id: courseId.value.trim(), title: '', sort: 0, chapters: [] }
   // 乐观并发基线：记下拉草稿那一刻的版本号；重新载入即解除冲突态恢复自动保存
-  draftRev.value = Number((r.course as Record<string, any>)?.rev) || 0
+  draftRev.value = Number(r.course?.rev) || 0
   conflicted.value = false
   message.value = ''
   saveState.value = ''
@@ -298,7 +298,7 @@ async function batchUpload(l: Record<string, any>, ev: Event) {
   const input = ev.target as HTMLInputElement
   const files = Array.from(input.files || [])
   if (!files.length || !course.value || batchUploading.value) return
-  const plan = planLessonBatch(files, (l.segments as any[]).length)
+  const plan = planLessonBatch(files, l.segments.length)
   // plan 时就地深捕获——existing 段捕获当时的对象引用；new 段等真正 push 那一刻才有引用可捕获（先占位 null）
   const targets: Array<Record<string, any> | null> = plan.map((item) => (item.isNew ? null : (l.segments[item.segIndex] as Record<string, any>) ?? null))
   batchUploading.value = true
@@ -312,7 +312,7 @@ async function batchUpload(l: Record<string, any>, ev: Event) {
       if (item.isNew) {
         sg = { id: mintId('s'), name: item.segName, dur: '', videoFileId: '' }
         l.segments.push(sg)
-      } else if (!sg || !(l.segments as any[]).includes(sg)) {
+      } else if (!sg || !l.segments.includes(sg)) {
         fails.push(`「${item.segName}」对应的段已被删除/移出，已跳过`)
         continue // 稳定引用重定位失败（段已被删）——如实跳过报告
       }

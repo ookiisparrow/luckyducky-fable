@@ -61,14 +61,14 @@ async function reload() {
   const my = listGen.begin()
   const [o, m, s] = await Promise.all([listOutworks(), listMaterials(), listSuppliers()])
   if (listGen.isStale(my)) return // 已发起更新的 reload·丢弃过期回包
-  orders.value = o.ok ? (o.list as Record<string, any>[]) : []
+  orders.value = o.ok ? o.list : []
   listFailed.value = !o.ok
   cursor.value = o.ok ? o.nextCursor : null
   hasMore.value = !!(o.ok && o.hasMore)
-  const all = m.ok ? (m.list as Record<string, any>[]) : []
+  const all = m.ok ? m.list : []
   rawL.value = all.filter((x) => /^yarn:[a-z0-9-]+:L:raw$/.test(String(x._id)))
   knottedL.value = all.filter((x) => /^yarn:[a-z0-9-]+:L:knotted$/.test(String(x._id)))
-  workers.value = s.ok ? ((s.list as Record<string, any>[]) || []).filter((x) => x.type === 'outworker') : []
+  workers.value = s.ok ? (s.list || []).filter((x) => x.type === 'outworker') : []
   // 分路报错（照 ScmBom.reload）：物料/织女挂掉不装空目录
   const err = loadErrors([[o, '外协单'], [m, '物料主档'], [s, '织女名单']])
   load(!err, err) // 只在加载失败时写·成功静默不抹动作反馈
@@ -85,7 +85,7 @@ async function more() {
     note(false, '', '加载更多失败：' + scmErrorText(r.error))
     return
   }
-  orders.value = appendNew(orders.value, (r.list as Record<string, any>[]) || [], (o) => o._id)
+  orders.value = appendNew(orders.value, r.list || [], (o) => o._id)
   cursor.value = r.nextCursor
   hasMore.value = !!r.hasMore
 }
@@ -148,15 +148,15 @@ async function doRecv() {
   // 反馈/清理不该打到新表单上（同 Desk act() 治法）
   const r = await receiveOutwork(recvFor.value, recvLines.value.map((l) => ({ materialId: l.materialId, qty: Number(l.qty) })))
   if (recvFor.value === forId) {
-    note(r.ok, `已收货入库：应付 ${fenLabel(r.payableFen)} · 损耗 ${Number(r.lossQty) || 0} 团（已定格）`, scmErrorText(r.error))
+    note(r.ok, r.ok ? `已收货入库：应付 ${fenLabel(r.payableFen)} · 损耗 ${Number(r.lossQty) || 0} 团（已定格）` : '', scmErrorText(r.error))
     if (r.ok) cancelRecv()
   }
   void reload() // 列表刷新无条件执行，不受目标是否过期影响
 }
 
-async function step(fn: (_id: string) => Promise<Record<string, unknown>>, id: string, key: string) {
+async function step(fn: (_id: string) => Promise<{ ok: boolean; error?: string }>, id: string, key: string) {
   if (!confirmed(confirmKey, key)) return
-  const r = (await fn(id)) as Record<string, any>
+  const r = await fn(id)
   note(r.ok, '', scmErrorText(r.error)) // 失败走 note 设 msgOk=false（红）·只写 message 会让失败显成功绿
   void reload()
 }

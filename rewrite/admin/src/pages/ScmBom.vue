@@ -9,6 +9,7 @@ import { materialHuman, scmErrorText, unprofiledProducts, productNameOf } from '
 import { dateTime } from '../lib/format'
 import { useLoadStatus, loadErrors } from '../lib/status'
 import { useLatest, appendNew } from '../lib/latest'
+import type { AdminAssemblyPreview } from '@ldrw/shared'
 import ScmFlowTabs from '../components/ScmFlowTabs.vue'
 import UiButton from '../components/ui/Button.vue'
 import PageHeader from '../components/ui/PageHeader.vue'
@@ -38,13 +39,13 @@ const runSkus = computed(() => {
   const p = products.value.find((x) => String(x.id || x._id) === String(run.value.productId))
   return Array.isArray(p?.skus) ? (p!.skus as Record<string, any>[]).map((s) => String(s.name || '')).filter(Boolean) : []
 })
-const shortCount = computed(() => preview.value.filter((l) => (l as any).short > 0 || (l as any).missing).length) // 执行前缺料预警
+const shortCount = computed(() => preview.value.filter((l) => l.short > 0 || l.missing).length) // 执行前缺料预警
 // 动作反馈(note)/加载态(load) 收口（病根#14）：reload 成功不抹掉动作刚设的成功/失败原文。
 const { message, ok: msgOk, note, load } = useLoadStatus()
 
 const prof = ref({ productId: '', L: '', M: '', S: '', packagingMaterialId: '', cardMaterialId: '' })
 const run = ref({ productId: '', spec: '', sets: 1 })
-const preview = ref<Array<Record<string, any>>>([])
+const preview = ref<AdminAssemblyPreview['lines']>([])
 const runConfirm = ref(false)
 const expanded = ref('') // 组装记录用料展开（点单号看扣了哪些料）
 
@@ -92,14 +93,14 @@ async function reload() {
       void nextTick(() => (tplGuard = false))
       bomLoaded = true // 仅在「真实模板回灌进内存」时才放开保存——若因 tplDirty 跳过回灌，template 仍是初次失败后的空/残缺值，此时置真会重开覆盖 singleton 的洞
     }
-    profiles.value = (b.profiles as Record<string, any>[]) || []
+    profiles.value = b.profiles || []
   }
-  mats.value = m.ok ? (m.list as Record<string, any>[]) : []
-  assemblies.value = a.ok ? (a.list as Record<string, any>[]) : []
+  mats.value = m.ok ? m.list : []
+  assemblies.value = a.ok ? a.list : []
   asmCursor.value = a.ok ? a.nextCursor : null
   asmHasMore.value = !!(a.ok && a.hasMore)
   asmFailed.value = !a.ok
-  products.value = d.ok ? ((d as any).list as Record<string, any>[]) : []
+  products.value = d.ok ? d.list : []
   // 分路报错：只校验 getBomSetup 一路的话，listMaterials/listAssemblies/listDrafts
   // 单独失败被吞成空数组、页面显假空态——照 Reconciliation.vue reload 范式，任一路失败都点名报出。
   const err = loadErrors([[b, '配方模板'], [m, '物料主档'], [a, '组装记录'], [d, '产品目录']])
@@ -114,7 +115,7 @@ async function moreAssemblies() {
     note(false, '', '加载更多组装记录失败：' + scmErrorText(r.error))
     return
   }
-  assemblies.value = appendNew(assemblies.value, (r.list as Record<string, any>[]) || [], (x) => x._id)
+  assemblies.value = appendNew(assemblies.value, r.list || [], (x) => x._id)
   asmCursor.value = r.nextCursor
   asmHasMore.value = !!r.hasMore
 }
@@ -147,7 +148,7 @@ async function doPreview() {
   const my = previewGen.begin()
   const r = await previewAssembly(run.value.productId, Number(run.value.sets))
   if (previewGen.isStale(my)) return // 已发起更新的预演·整包丢弃（preview/note 均不写）
-  preview.value = r.ok ? (r.lines as Record<string, any>[]) : []
+  preview.value = r.ok ? r.lines : []
   note(r.ok, '', scmErrorText(r.error))
 }
 
@@ -160,7 +161,7 @@ async function doRun() {
   runConfirm.value = false
   const r = await runAssembly(run.value.productId, run.value.spec, Number(run.value.sets), pendingAsmId.value)
   if (r.ok) {
-    note(true, `组装完成：扣料 ${(r.consumed as unknown[]).length} 行·入成品 ${Number(r.sets)} 套`, '')
+    note(true, `组装完成：扣料 ${r.consumed.length} 行·入成品 ${Number(r.sets)} 套`, '')
     pendingAsmId.value = '' // 成功才换新 id·下次组装全新幂等键
     preview.value = []
     void reload()
