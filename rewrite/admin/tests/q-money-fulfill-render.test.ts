@@ -114,7 +114,7 @@ describe('Fulfill.vue 部分退款单', () => {
     await refreshAndScan(w)
     expect(w.find('.scan-msg').text()).toContain('标签作废')
     await scanTracking(w)
-    for (const [, body] of postMock.mock.calls) expect(body.ackRefundedQty).toEqual({}) // 发了也只带标签上的件数
+    expect(postMock).not.toHaveBeenCalled()
   })
 
   it('大白话：标签作废的单回到第 2 步默认勾上重打；重打后按新件数发', async () => {

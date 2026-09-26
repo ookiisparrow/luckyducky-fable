@@ -43,8 +43,10 @@ describe('钱组与上新页的新错误码', () => {
   })
 
   it('大白话：怪回包两边都有人话', () => {
-    expect(orderErrorText('BAD_JSON_RESPONSE')).not.toMatch(/BAD_JSON_RESPONSE/)
-    expect(launchErrorText('BAD_JSON_RESPONSE')).not.toMatch(/BAD_JSON_RESPONSE/)
+    for (const t of [orderErrorText('BAD_JSON_RESPONSE'), launchErrorText('BAD_JSON_RESPONSE')]) {
+      expect(t).toMatch(/回包读不懂/)
+      expect(t).not.toMatch(/BAD_JSON_RESPONSE/)
+    }
   })
 
   it('大白话：REFUND_HOLD 说清是「有退款正在处理，处理完才能发」', () => {

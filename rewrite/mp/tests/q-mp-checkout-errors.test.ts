@@ -37,6 +37,11 @@ describe('建单失败文案：每类拒单各说各的', () => {
     expect(checkout.mapCreateOrderError('TOO_MANY_PENDING')).toContain('我的订单')
     expect(checkout.mapCreateOrderError('BAD_ADDRESS')).toContain('地址')
     expect(checkout.mapCreateOrderError('BAD_QTY')).toContain('数量')
+    expect(checkout.mapCreateOrderError('UNKNOWN_ITEM:p1')).toContain('不存在')
+    expect(checkout.mapCreateOrderError('UNKNOWN_SKU:p1:白')).toContain('下架')
+    expect(checkout.mapCreateOrderError('RATE_LIMITED')).toContain('太快')
+    expect(checkout.mapCreateOrderError('CALL_TIMEOUT')).toContain('网络')
+    expect(checkout.mapCreateOrderError('CALL_FAIL')).toContain('网络')
     expect(checkout.mapCreateOrderError('OUT_OF_STOCK:p1:')).toBe('有商品库存不足') // 原有映射不变
     expect(checkout.mapCreateOrderError('SOMETHING_NEW')).toBe(GENERIC)
   })

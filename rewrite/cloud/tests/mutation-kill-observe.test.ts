@@ -156,7 +156,8 @@ describe('notifyAlert 推送接缝契约（adminConfig/settings.alertWebhook·�
   it('大白话：推送接缝抛错→notifyAlert 照样正常返回（fail-soft 铁律·可观测性不反噬主流程）', async () => {
     seedSettings()
     bp.throwOnPush = true
-    await expect(captureLines(() => notifyAlert('money', 'pay', 'X', {}))).resolves.toBeDefined()
+    await captureLines(() => notifyAlert('money', 'pay', 'X', {})) // 推送的错漏出来这里就 reject
+    expect(bp.calls).toHaveLength(1) // 会抛的推送确实走到了，否则 fail-soft 没被测到
   })
 })
 
@@ -187,7 +188,8 @@ describe('notifyRecall（召回汇总·[LD_RECALL] 结构化行 + 推送半边·
   it('大白话：推送抛错→notifyRecall 照样正常返回（fail-soft）', async () => {
     seedSettings()
     bp.throwOnPush = true
-    await expect(captureLines(() => notifyRecall({ recovered: 1 }))).resolves.toBeDefined()
+    await captureLines(() => notifyRecall({ recovered: 1 }))
+    expect(bp.calls).toHaveLength(1)
   })
 })
 
@@ -237,7 +239,8 @@ describe('notifyHeartbeat（巡检机每日心跳·红/绿分档文案+码+计�
   it('大白话：心跳非异常·绝不落 anomalies 账本（源码明示「不接 recordAnomaly」）+ 推送抛错不反噬（fail-soft）', async () => {
     seedSettings()
     bp.throwOnPush = true
-    await expect(captureLines(() => notifyHeartbeat({ green: 1, red: 1 }))).resolves.toBeDefined()
+    await captureLines(() => notifyHeartbeat({ green: 1, red: 1 }))
+    expect(bp.calls).toHaveLength(1)
     expect(control.dump(COLLECTIONS.anomalies).length).toBe(0)
   })
 })
