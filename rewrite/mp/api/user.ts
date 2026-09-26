@@ -6,7 +6,8 @@ export const login = (agreed = false): Promise<ApiResult> => callApp('login', { 
 export const updateProfile = (patch: { nickname?: string; bio?: string; avatar?: string; phone?: string }): Promise<ApiResult> => callApp('updateProfile', patch)
 export const deleteAccount = (): Promise<ApiResult> => callApp('deleteAccount')
 export const getMyProgress = (): Promise<ApiResult> => callApp('getMyProgress')
-export const submitFeedback = (content: string, category: string, contact: string, idempotencyKey: string): Promise<ApiResult> =>
-  callApp('submitFeedback', { content, category, contact, page: 'feedback', version: 'rw-m2', platform: 'mp', idempotencyKey })
+// version 由调用方传入（反馈页传 lib/appVersion 的 APP_VERSION）。api 不能 import lib（分层：pages→lib→api→utils）。
+export const submitFeedback = (content: string, category: string, contact: string, idempotencyKey: string, version: string): Promise<ApiResult> =>
+  callApp('submitFeedback', { content, category, contact, page: 'feedback', version, platform: 'mp', idempotencyKey })
 // 数据共享授权同意/撤回（服务端 users.csDataShare 为真值·外包坐席看 360 前 fail-closed 校验）
 export const setDataShareConsent = (agree: boolean): Promise<ApiResult> => callApp('dataConsent', { agree })

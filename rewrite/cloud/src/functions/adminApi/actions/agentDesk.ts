@@ -18,9 +18,10 @@ import {
 import { COLLECTIONS, ERR, AGENT_STATUS } from '@ldrw/shared'
 import { assembleCustomer360 } from '../customer360/orchestrator'
 
-// 外包会话工作台·坐席台后端。实现 shared/csAgentDesk.ts 契约的 8 个 action：
+// 外包会话工作台·坐席台后端。action 与本文件导出的处理函数一致：
 //   listQueue / claimConversation / releaseConversation / sendAgentMessage / getThread /
-//   setAgentStatus / escalateToMerchant / closeConversation。
+//   getMediaUrl / setAgentStatus / escalateToMerchant / closeConversation /
+//   listMyActive / getSessionCustomer360。
 //
 // 落点＝adminApi actions（复用口令闸/checkKey/ACTION_CAPS 能力闸）。均须 cap `agent:handle`（外包最小权·
 // 根因#3）——wire 在 adminApi/index.ts ACTION_CAPS + lib.ts ROLES.outsourced。
