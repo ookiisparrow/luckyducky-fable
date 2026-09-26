@@ -52,8 +52,11 @@ async function loadCourseOptions() {
   publishConfirm.value = false
   message.value = '加载中…'
   const dr = await listDrafts().catch(() => null)
+  if (!dr?.ok) {
+    message.value = launchErrorText(dr?.error || '网络异常')
+    return
+  }
   message.value = ''
-  if (!dr?.ok) return
   const seen = new Map<string, string>()
   for (const p of dr.list || []) {
     const cid = String(p.courseId || '')

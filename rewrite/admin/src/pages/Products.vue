@@ -387,25 +387,34 @@ async function addImages(ev: Event) {
   // 快照本次上传目标（同 pickCover/doSave 范式）：循环内每次 await 期间
   // 都可能已切到另一件商品的编辑器——回包不该打到已切换的新编辑器上。
   const snap = edit.value
+  const batch = Array.from(files)
   busy.value = true
-  for (const file of Array.from(files)) {
-    const b64 = await compressImage(file, PRODUCT_COMPRESS)
-    if (!b64SizeOk(b64)) {
-      if (edit.value === snap) message.value = '有图压缩后仍超限，已跳过'
-      continue
-    }
-    const r = await uploadImage(b64, String(snap.id), 'jpg')
-    if (edit.value === snap) {
-      if (r.ok && r.fileID) {
-        ;(edit.value.images as string[]).push(String(r.fileID))
-        sessionUrls.value[String(r.fileID)] = String(r.url || '')
-      } else {
-        message.value = launchErrorText(r.error)
+  try {
+    for (const file of batch) {
+      let b64 = ''
+      try {
+        b64 = await compressImage(file, PRODUCT_COMPRESS)
+      } catch {
+        b64 = '' // 压图抛错与超限同一出口，下面的提示接住；忙碌在 finally 复位
+      }
+      if (!b64SizeOk(b64)) {
+        if (edit.value === snap) message.value = '有图压缩后仍超限，已跳过'
+        continue
+      }
+      const r = await uploadImage(b64, String(snap.id), 'jpg')
+      if (edit.value === snap) {
+        if (r.ok && r.fileID) {
+          ;(edit.value.images as string[]).push(String(r.fileID))
+          sessionUrls.value[String(r.fileID)] = String(r.url || '')
+        } else {
+          message.value = launchErrorText(r.error)
+        }
       }
     }
+  } finally {
+    busy.value = false
+    input.value = '' // 抛错也要能再选同一批
   }
-  busy.value = false
-  input.value = '' // 允许再次选同一批
 }
 function moveImage(i: number, dir: number) {
   if (!edit.value) return

@@ -111,9 +111,14 @@ const stocktakeSummary = computed(() => ({
 // 进入盘点：拉一份全量快照（listMaterials 本就 limit 500 整取无分页·刻意留给本模式）+ 生成本次盘点单号
 async function enterStocktake() {
   const m = await listMaterials()
-  const list = m.ok ? m.list : []
-  if (m.ok) mats.value = list // mats 与 matsFailed 同步描述最近一次物料读取，KPI 才不会按旧失败画 0
-  matsFailed.value = !m.ok
+  if (!m.ok) {
+    matsFailed.value = true // 与 mats 一起描述这次读取：失败不拿旧成功画 KPI
+    reportLoad(m) // 现成报错；停在物料页。失败不进盘点、不发盘点单号
+    return
+  }
+  const list = m.list
+  mats.value = list
+  matsFailed.value = false
   stocktakeRows.value = list.map((mat) => ({
     materialId: String(mat._id),
     uom: String(mat.uom || ''),
@@ -126,7 +131,7 @@ async function enterStocktake() {
   stocktakeReason.value = '期初盘点'
   stocktakeExitConfirm.value = false
   stocktakeMode.value = true
-  reportLoad(m) // 拉取失败不写错误会与「确实没有物料」撞成同一假空态（病根14）
+  reportLoad(m) // 成功收回陈旧的物料错误，供应商那路仍沿用上次结果
 }
 
 // 分路报错（照 ScmBom.reload）。业务码走 scmErrorText 译人话：loadErrors 只认传输层码，业务码只能挂括号。

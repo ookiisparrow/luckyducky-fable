@@ -32,6 +32,9 @@ export async function compressImage(file: File, opts: CompressImageOpts = {}): P
       if (b64SizeOk(b64)) return b64
     }
     return ''
+  } catch {
+    // 图读不出来与压完仍超限同一出口：交空串，调用方已有「换小一点」提示
+    return ''
   } finally {
     URL.revokeObjectURL(url)
   }
