@@ -30,7 +30,7 @@ async function wecomUserIdTaken(db: any, wecomUserId: string, exceptId: string):
 // （撞口令登录会串号）——撞口令判定经 keyMatches 单源（根因#5·同时认得住 legacy sha 存量与带盐新账号两种形态）。
 export async function createAgent({ db, data }: Ctx) {
   const name = str((data && data.name) || '', 40).trim()
-  const key = String((data && data.key) || '')
+  const key = str(data && data.key, Infinity) // 不截：登录端 checkKey 不截，这边截了会建出永远登不上的号
   const wecomUserId = str((data && data.wecomUserId) || '', 64).trim()
   if (!name) return reply(400, err('BAD_NAME'))
   if (key.length < 6) return reply(400, err('KEY_TOO_SHORT'))
@@ -89,7 +89,7 @@ export async function createAgent({ db, data }: Ctx) {
 // 回填/改绑企微 userid：{ id, wecomUserId(空串=解绑) }。作用于外包账号或超管 'auth'（超管也可免登）。
 // 唯一性校验防两账号撞 userid（免登歧义）。仅超管可调（未登记 ACTION_CAPS→默认拒 admin:write·同建/停）。
 export async function setAgentWecomUserId({ db, data }: Ctx) {
-  const id = String((data && data.id) || '')
+  const id = str(data && data.id, 200)
   const wecomUserId = str((data && data.wecomUserId) || '', 64).trim()
   if (!id) return reply(400, err('BAD_ID'))
   const got = await db
@@ -125,7 +125,7 @@ export async function setAgentWecomUserId({ db, data }: Ctx) {
 
 // 停/启外包账号：{ id, disabled }（disabled=true 停·false 启）。只作用于 outsourced agent doc（不许停超管）。
 export async function disableAgent({ db, data }: Ctx) {
-  const id = String((data && data.id) || '')
+  const id = str(data && data.id, 200)
   const disabled = !!(data && data.disabled)
   if (!id || id === 'auth') return reply(400, err('BAD_ID')) // 'auth'＝超管·不许停
   const got = await db

@@ -1,5 +1,5 @@
 import { reply, type Ctx } from '../lib'
-import { pullBillDay, err } from '../../../kit'
+import { pullBillDay, str, err } from '../../../kit'
 
 // —— 外部对账：拉微信交易账单落 wxBills（供 reconciliation.ts getBillMatch 逐笔比对）——
 // 薄壳：凭证读取（secureConfig 读库优先·env 兜底）+ 拉取（kit/wxpay 出站）
@@ -12,7 +12,7 @@ const isDate = (s: any) => typeof s === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(s
 export async function downloadBill({ db, data }: Ctx) {
   const date = isDate(data?.date) ? data.date : ''
   if (!date) return reply(400, err('BAD_DATE'))
-  const r = await pullBillDay(db, date, { billType: data?.billType })
+  const r = await pullBillDay(db, date, { billType: str(data?.billType, 200) })
   if (!r.ok) return reply(200, { ok: false, error: r.error })
   return reply(200, { ok: true, date, count: r.count })
 }

@@ -23,8 +23,8 @@ async function loadBom(db: any, productId: string): Promise<{ template?: any; pr
 
 /** 组装执行：产品×规格×套数 → 扣原料入成品，全程留痕。 */
 export async function runAssembly({ db, data, agentId }: Ctx) {
-  const assemblyId = String(data.assemblyId || '') // 前端每次提交生成一次·重试复用＝幂等键
-  const productId = String(data.productId || '')
+  const assemblyId = str(data.assemblyId, 200) // 前端每次提交生成一次·重试复用＝幂等键
+  const productId = str(data.productId, 200)
   const spec = str(data.spec, 40) // 成品 SKU 规格（与 inventory/order.items[].spec 同键·可空）
   if (!assemblyId || !productId) return reply(400, err('BAD_ARGS'))
   // productId/spec 定界符防护（helper 单源 shared/scmKey.ts）：二者会拼进
@@ -101,7 +101,7 @@ export async function runAssembly({ db, data, agentId }: Ctx) {
 
 /** 只读预演：这批打包要扣什么料、库存够不够（不动账·打包页确认用）。 */
 export async function previewAssembly({ db, data }: Ctx) {
-  const productId = String(data.productId || '')
+  const productId = str(data.productId, 200)
   const sets = data.sets
   if (!productId || !Number.isInteger(sets) || sets <= 0) return reply(400, { ok: false, error: ERR.BAD_SETS })
   const loaded = await loadBom(db, productId)

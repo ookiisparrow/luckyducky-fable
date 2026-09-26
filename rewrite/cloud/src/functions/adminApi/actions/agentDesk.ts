@@ -386,8 +386,8 @@ export async function setAgentStatus(ctx: Ctx): Promise<any> {
   const { db, data } = ctx
   const p = principal(ctx)
   if (!p.agentId) return reply(403, { ok: false, error: ERR.NO_AGENT })
-  const status = AGENT_STATUS.includes(String(data && data.status) as any) ? String(data.status) : ''
-  if (!status) return reply(400, { ok: false, error: ERR.BAD_ARGS })
+  const status = str(data && data.status, 200)
+  if (!AGENT_STATUS.includes(status as any)) return reply(400, { ok: false, error: ERR.BAD_ARGS })
   const limit = await agentLimit(db, p.agentId) // 保留已配上限（首次建 doc 用默认）
   // doc(agentId).set({data}) 的 data 不含 _id（_id 由 doc 指定·真 sdk 约束·根因#8）
   // 写失败不吞：前端 Desk 的 confirmedStatus

@@ -1,5 +1,5 @@
 import { reply, type Ctx } from '../lib'
-import { listMaterialDocs, sumLedgerByItemKey, getDocOrNull, err } from '../../../kit'
+import { listMaterialDocs, sumLedgerByItemKey, getDocOrNull, str, err } from '../../../kit'
 import { COLLECTIONS } from '@ldrw/shared'
 import { resolveBom, yarnMaterialId } from '@ldrw/shared'
 
@@ -17,7 +17,7 @@ export async function getRestockPlan({ db, data }: Ctx) {
   const targets = Array.isArray(data.targets) ? data.targets : []
   if (!targets.length || targets.length > 50) return reply(400, err('BAD_TARGETS'))
   for (const t of targets) {
-    if (!t || !t.productId || !Number.isInteger(t.sets) || t.sets <= 0) return reply(400, err('BAD_TARGETS'))
+    if (!t || !str(t.productId, 200) || !Number.isInteger(t.sets) || t.sets <= 0) return reply(400, err('BAD_TARGETS'))
   }
   const tDoc = await getDocOrNull(db.collection(COLLECTIONS.config).doc('scmBomTemplate'))
   if (!tDoc) return reply(400, err('NO_TEMPLATE'))
@@ -26,10 +26,11 @@ export async function getRestockPlan({ db, data }: Ctx) {
   // 聚合需求：Σ各产品 resolveBom（同料号跨产品累加）
   const need = new Map<string, number>()
   for (const t of targets) {
-    const profile = await getDocOrNull(db.collection(COLLECTIONS.bomProfiles).doc(String(t.productId)))
-    if (!profile) return reply(400, err('NO_PROFILE', { productId: String(t.productId) }))
+    const productId = str(t.productId, 200)
+    const profile = await getDocOrNull(db.collection(COLLECTIONS.bomProfiles).doc(productId))
+    if (!profile) return reply(400, err('NO_PROFILE', { productId }))
     const r = resolveBom(template as any, profile, t.sets)
-    if (!r.ok) return reply(400, { ok: false, error: r.error, productId: String(t.productId) })
+    if (!r.ok) return reply(400, { ok: false, error: r.error, productId })
     for (const l of r.lines) need.set(l.materialId, (need.get(l.materialId) || 0) + l.qty)
   }
 

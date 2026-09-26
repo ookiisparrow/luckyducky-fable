@@ -1,5 +1,5 @@
 import { reply, type Ctx } from '../lib'
-import { applyStockMoves, listMaterialDocs, transition, pageQuery, notifyAlert, getDocOrNull, err } from '../../../kit'
+import { applyStockMoves, listMaterialDocs, transition, pageQuery, notifyAlert, getDocOrNull, str, err } from '../../../kit'
 import { COLLECTIONS } from '@ldrw/shared'
 import { asFen, OUTWORK_ORDER_STATUS, OUTWORK_ORDER_TRANSITIONS } from '@ldrw/shared'
 
@@ -59,12 +59,12 @@ const LIST_LIMIT = 100
 
 export async function listOutworks({ db, data }: Ctx) {
   const filter: Record<string, string> = {}
-  const status = String((data && data.status) || '')
+  const status = str(data && data.status, 200)
   if (status) {
     if (!(Object.values(OUTWORK_ORDER_STATUS) as string[]).includes(status)) return reply(400, err('BAD_STATUS'))
     filter.status = status
   }
-  const workerId = String((data && data.workerId) || '')
+  const workerId = str(data && data.workerId, 200)
   if (workerId) filter.workerId = workerId
   const paged = await pageQuery(db, COLLECTIONS.outworkOrders, filter, 'createdAt', data, LIST_LIMIT)
   return reply(200, { ok: true, list: paged.list, nextCursor: paged.nextCursor, hasMore: paged.hasMore })
@@ -73,8 +73,8 @@ export async function listOutworks({ db, data }: Ctx) {
 // ── 建/改草稿（仅 draft 可改）──
 
 export async function saveOutwork({ db, data, agentId }: Ctx) {
-  const outworkId = String(data.outworkId || '')
-  const workerId = String(data.workerId || '')
+  const outworkId = str(data.outworkId, 200)
+  const workerId = str(data.workerId, 200)
   if (!workerId) return reply(400, err('NO_WORKER'))
   // 计件单价：非负整数「分」（0 允许=义务工/试做；元→分转换在 admin 边界一次·这里只收整数分）
   const pieceRateFen = data.pieceRateFen
@@ -127,7 +127,7 @@ export async function saveOutwork({ db, data, agentId }: Ctx) {
 // ── 发料（draft→issued·首次流转绑出库副作用）──
 
 export async function issueOutwork({ db, data, agentId }: Ctx) {
-  const outworkId = String(data.outworkId || '')
+  const outworkId = str(data.outworkId, 200)
   if (!outworkId) return reply(400, err('NO_OUTWORK'))
   const r = await transition(COLLECTIONS.outworkOrders, outworkId, fromFor('issued'), 'issued', { issuedAt: Date.now() })
   if (!r.doc) return reply(404, err('NO_OUTWORK'))
@@ -175,7 +175,7 @@ export async function issueOutwork({ db, data, agentId }: Ctx) {
 // ── 收货（issued→delivered·入带结 + 同一次条件更新定格 payableFen/lossQty）──
 
 export async function receiveOutwork({ db, data, agentId }: Ctx) {
-  const outworkId = String(data.outworkId || '')
+  const outworkId = str(data.outworkId, 200)
   if (!outworkId) return reply(400, err('NO_OUTWORK'))
   const order = await getDocOrNull(db.collection(COLLECTIONS.outworkOrders).doc(outworkId))
   if (!order) return reply(404, err('NO_OUTWORK'))
@@ -259,7 +259,7 @@ export async function receiveOutwork({ db, data, agentId }: Ctx) {
 // ── 结算（delivered→settled·工钱付清销账）──
 
 export async function settleOutwork({ data }: Ctx) {
-  const outworkId = String(data.outworkId || '')
+  const outworkId = str(data.outworkId, 200)
   if (!outworkId) return reply(400, err('NO_OUTWORK'))
   const r = await transition(COLLECTIONS.outworkOrders, outworkId, fromFor('settled'), 'settled', { settledAt: Date.now() })
   if (!r.doc) return reply(404, err('NO_OUTWORK'))
@@ -271,7 +271,7 @@ export async function settleOutwork({ data }: Ctx) {
 // ── 取消（仅 draft·已发料不可取消,异常走物料页调整单）──
 
 export async function cancelOutwork({ data }: Ctx) {
-  const outworkId = String(data.outworkId || '')
+  const outworkId = str(data.outworkId, 200)
   if (!outworkId) return reply(400, err('NO_OUTWORK'))
   const r = await transition(COLLECTIONS.outworkOrders, outworkId, fromFor('cancelled'), 'cancelled', { cancelledAt: Date.now() })
   if (!r.doc) return reply(404, err('NO_OUTWORK'))

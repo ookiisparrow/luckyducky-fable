@@ -1,5 +1,5 @@
 import { randomBytes } from 'crypto'
-import { pageQuery, err } from '../../../kit'
+import { pageQuery, str, err } from '../../../kit'
 import { reply, type Ctx } from '../lib'
 import { COLLECTIONS, cstIso } from '@ldrw/shared'
 
@@ -23,7 +23,7 @@ async function fetchAll(makeQuery: () => any, pageSize = 200): Promise<{ rows: a
 }
 
 export async function listBatches({ db, data }: Ctx) {
-  const courseId = String(data.courseId || '')
+  const courseId = str(data.courseId, 200)
   if (!courseId) return reply(400, err('NO_COURSE_ID'))
   // 无 orderBy 时服务端不保证各页同序，skip 翻页会跨页漏/重；_id 唯一，是全序。
   const { rows, truncated } = await fetchAll(() =>
@@ -97,7 +97,7 @@ export async function generateQrcodes(
 
 // 入参校验与钳 500 只在 generateQrcodes 一处（读库前就回 BAD_ARGS）。
 export async function createBatch({ db, data }: Ctx) {
-  const r = await generateQrcodes(db, String(data.courseId || ''), data.count)
+  const r = await generateQrcodes(db, str(data.courseId, 200), data.count)
   if (!r.ok) return reply(400, { ok: false, error: r.error })
   return reply(200, { ok: true, batchId: r.batchId, codes: r.codes })
 }
@@ -105,7 +105,7 @@ export async function createBatch({ db, data }: Ctx) {
 const CODE_PAGE = 50
 
 export async function listBatchCodes({ db, data }: Ctx) {
-  const batchId = String(data.batchId || '')
+  const batchId = str(data.batchId, 200)
   if (!batchId) return reply(400, err('NO_BATCH'))
   // 一批可有几百到几千张：默认一页 50、limit 钳到 200，cursor 翻页（根因#7）。
   // createdAt 同批同值（generate 一次 now），靠 kit 复合游标 {_id} 打破平局。

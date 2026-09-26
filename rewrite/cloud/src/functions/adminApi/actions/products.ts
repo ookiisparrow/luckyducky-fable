@@ -1,7 +1,7 @@
 import { COLLECTIONS, isValidPriceYuan, isValidScmProductId, isValidScmSpec } from '@ldrw/shared'
 import { reply, readDoc, ensure, type Ctx } from '../lib'
 import { cleanProduct, cleanSold, storeImage } from '../catalog'
-import { notifyAlert, getTempUrls, setOrAdd, isCollectionMissing, deleteFiles, err } from '../../../kit'
+import { notifyAlert, getTempUrls, setOrAdd, isCollectionMissing, deleteFiles, str, err } from '../../../kit'
 
 // —— 商品图册孤儿 GC 判据单源（共享 helper·防多点漂移）——
 // 换图/发布替换/删档三处写点共用这一份 diff 计算 + cover 豁免，别各写一份（漂移＝漏删或误删）。
@@ -163,7 +163,7 @@ export async function saveDraft({ db, data }: Ctx) {
 // ok:false，不继续下一步；动作类失败（病根14）经 notifyAlert 留痕。
 export async function deleteDraft({ db, data }: Ctx) {
   const drafts = db.collection(COLLECTIONS.productsDraft)
-  const id = String(data.id || '')
+  const id = str(data.id, 200)
   if (!id) return reply(400, err('NO_ID'))
   await ensure(db, COLLECTIONS.productsDraft) // 草稿集合只在草稿动作用前建，不跟全局网关（进销存/体检等不顺手建）
   // 图册立即删（不走缓期的例外）：两档文档一并删除后 pendingGc 无处安身、商品已不存在（在场详情会话本已死），
@@ -218,7 +218,7 @@ export async function deleteDraft({ db, data }: Ctx) {
 
 // 小图单发（b64 ≤ 80K 字符）；大图走分片（HTTP 请求体上限约 100KB）
 export async function uploadImage({ cloud, data }: Ctx) {
-  const b64 = String(data.b64 || '')
+  const b64 = str(data.b64, 90_001) // 多留一位：超长要落到下面 BAD_IMAGE 拒，不能被截成合法长度
   if (!b64 || b64.length > 90_000) return reply(400, err('BAD_IMAGE'))
   return reply(200, await storeImage(cloud, b64, data))
 }
@@ -226,7 +226,7 @@ export async function uploadImage({ cloud, data }: Ctx) {
 // 上架小程序：商品草稿 → products（价格转数字，重复上架保留原 sort/featured）
 export async function publishProduct({ db, data }: Ctx) {
   const drafts = db.collection(COLLECTIONS.productsDraft)
-  const id = String(data.id || '')
+  const id = str(data.id, 200)
   if (!id) return reply(400, err('NO_ID'))
   await ensure(db, COLLECTIONS.productsDraft) // 草稿集合只在草稿动作用前建，不跟全局网关（进销存/体检等不顺手建）
   const got = await readDoc(drafts.doc(id).get())
@@ -295,7 +295,7 @@ export async function publishProduct({ db, data }: Ctx) {
 // 区别 deleteDraft（硬删商品记录）：停售可恢复、保留记录；区别 saveShowcase 的 featured（只管首页橱窗位）。
 // 详情页直达（按 id）与历史订单快照不受影响（订单存快照、不回读 products）。
 async function setListed({ db, data }: Ctx, listed: boolean) {
-  const id = String(data.id || '')
+  const id = str(data.id, 200)
   if (!id) return reply(400, err('NO_ID'))
   const upd = await db
     .collection(COLLECTIONS.products)
@@ -324,7 +324,7 @@ export async function saveShowcase({ db, data }: Ctx) {
   // 永远收到 ok:true——「已保存」是假象。故任一失败即回 ok:false（admin Showcase.vue
   // 按 r.ok 通用判断成败）。
   for (const it of items) {
-    const id = String(it?.id || '')
+    const id = str(it?.id, 200)
     if (!id) continue
     await productsColl
       .doc(id)

@@ -1,5 +1,5 @@
 import { ERR, moduleOfAction } from '@ldrw/shared'
-import { err, recordAnomaly } from '../../kit'
+import { err, recordAnomaly, str } from '../../kit'
 import { login, updateProfile, deleteAccount } from './actions/user'
 import { getProducts, getProductDetail, getContent, getPageContent } from './actions/catalog'
 import {
@@ -71,7 +71,7 @@ const ACTIONS: Record<string, (event: unknown) => Promise<unknown>> = Object.ass
 } satisfies Record<string, (event: unknown) => Promise<unknown>>)
 
 export const main = async (event: any) => {
-  const action = String(event?.action ?? '')
+  const action = str(event?.action, 200)
   const handler = ACTIONS[action]
   if (!handler) return err(ERR.BAD_ARGS, { action })
   try {

@@ -1,5 +1,5 @@
 import { COLLECTIONS, ERR } from '@ldrw/shared'
-import { getDb, ok, err, getTempUrls, IMAGE_URL_MAX_AGE, isDocMissing } from '../../../kit'
+import { getDb, ok, err, getTempUrls, IMAGE_URL_MAX_AGE, isDocMissing, str } from '../../../kit'
 
 // 图片换址策略（根因#15/#7/#12）：cover/图册等长命展示图统一带 maxAge（容器级签发缓存复用·省重签）
 // + imageProc（默认关·数据万象未开通时 withImageProc 空返原址·见 kit/storage.ts）。视频/一次性址不带此策略。
@@ -53,7 +53,7 @@ export const getProducts = async () => {
  * 先例·products 无 _openid/隐私字段·下单价仍以 createOrder 云端现算为准，不信此下发价）。
  */
 export const getProductDetail = async (data: any) => {
-  const id = String((data && data.id) || '')
+  const id = str(data && data.id, 200)
   if (!id) return err(ERR.BAD_ARGS, { id })
   const db = getDb()
   try {
@@ -112,7 +112,7 @@ export const getContent = async () => {
  */
 const PAGE_KEYS = ['welcome', 'catalogPlayer', 'mePage', 'about', 'agreement']
 export const getPageContent = async (data: any) => {
-  const page = String((data && data.page) || '')
+  const page = str(data && data.page, 200)
   if (!PAGE_KEYS.includes(page)) return err(ERR.BAD_ARGS, { page }) // 未知 page fail-closed（同 adminApi 白名单·根因#3）
   const db = getDb()
   try {

@@ -39,6 +39,7 @@ import {
   isDocMissing,
   isCollectionMissing,
   getDocOrNull,
+  str,
 } from '../../../kit'
 
 // 创建订单：价格一律云端现算不信前端；服务端不变量
@@ -148,7 +149,8 @@ function priceItems(lines: any[], byId: Map<string, any>): { items: Required<Ord
 // 地址快照：白名单 + 四要素必填 + 截断（不信前端长度）；不合格回 null
 function cleanAddress(raw: any) {
   const a = raw || {}
-  const cut = (v: unknown, n: number) => String(v || '').trim().slice(0, n) // String() 而非只收字符串：数字手机号也要收
+  // 数字也收（数字手机号）；对象/true 不收——String() 会把它们洗成「[object Object]」「true」当地址写进订单
+  const cut = (v: unknown, n: number) => (typeof v === 'number' ? String(v || '') : str(v, Infinity)).trim().slice(0, n)
   const address = { name: cut(a.name, 40), phone: cut(a.phone, 20), region: cut(a.region, 60), detail: cut(a.detail, 120) }
   if (Object.values(address).some((v) => !v) || address.phone.replace(/\D/g, '').length < 7) return null
   return address
@@ -332,7 +334,7 @@ export const createOrder = withOpenId(
 // 按 openid 限速（同 createOrder 口径·正常下单支付远低于此）。金额安全另有云端换分兜底，此为成本/外呼防刷。
 export const pay = withOpenId(
   withRateLimit('pay', { max: 20, windowMs: 60_000 }, async ({ db, OPENID, event }): Promise<PayResp> => {
-    const id = String((event as any).id || '')
+    const id = str((event as any).id, 200)
     if (!id) return err(ERR.NO_ID)
 
     // 订单读与支付配置读互不依赖：并行省一次往返；订单校验（NOT_FOUND/BAD_STATUS/超时关单）失败时
@@ -405,10 +407,10 @@ export const pay = withOpenId(
 export const applyRefund = withOpenId(
   withRateLimit('applyRefund', { max: 20, windowMs: 60_000 }, async ({ db, OPENID, event }) => {
     const e: any = event
-    const orderId = String(e.orderId || '')
-    const reqLine = String(e.lineId || e.productId || '') // 新单行键/旧单回退 productId
+    const orderId = str(e.orderId, 200)
+    const reqLine = str(e.lineId, 200) || str(e.productId, 200) // 新单行键/旧单回退 productId
     if (!orderId || !reqLine) return err(ERR.BAD_ARGS)
-    const reason = String(e.reason || '').slice(0, 200)
+    const reason = str(e.reason, 200)
 
     const order = await readOwnOrder(db, orderId, OPENID)
     if (!order) return err(ERR.NOT_FOUND)
@@ -489,7 +491,7 @@ export const applyRefund = withOpenId(
 /** 确认收货：本人 + 仅已发货可确认；条件流转防越状态/重复确认。 */
 export const confirmReceive = withOpenId(
   withRateLimit('confirmReceive', { max: 20, windowMs: 60_000 }, async ({ db, OPENID, event }) => {
-    const id = String((event as any).id || '')
+    const id = str((event as any).id, 200)
     if (!id) return err(ERR.NO_ID)
     const order = await readOwnOrder(db, id, OPENID)
     if (!order) return err(ERR.NOT_FOUND)
@@ -508,7 +510,7 @@ export const confirmReceive = withOpenId(
  */
 export const cancelOrder = withOpenId(
   withRateLimit('cancelOrder', { max: 20, windowMs: 60_000 }, async ({ db, OPENID, event }) => {
-    const id = String((event as any).id || '')
+    const id = str((event as any).id, 200)
     if (!id) return err(ERR.NO_ID)
     const order = await readOwnOrder(db, id, OPENID)
     if (!order) return err(ERR.NOT_FOUND)
@@ -527,7 +529,7 @@ export const cancelOrder = withOpenId(
 export const getMyOrders = withOpenId(async ({ db, OPENID, event }): Promise<GetMyOrdersResp> => {
   // 状态筛选下推服务端（与游标分页同源·修 order-list 短过滤 tab 内容短于视口拉不动、深页匹配单看不到）：
   // status 须是合法订单状态（ORDER_STATUS 全集·不信前端）·空/非法忽略回全部。
-  const raw = String((event as any)?.status || '')
+  const raw = str((event as any)?.status, 200)
   const status = (Object.values(ORDER_STATUS) as string[]).includes(raw) ? raw : ''
   const where = status ? { _openid: OPENID, status } : { _openid: OPENID }
   const paged = await pageQuery(db, COLLECTIONS.orders, where, 'createdAt', event as any, 100)
@@ -536,7 +538,7 @@ export const getMyOrders = withOpenId(async ({ db, OPENID, event }): Promise<Get
 
 /** 按单号取本人订单（他人/不存在一律 NOT_FOUND·不泄露存在性）。 */
 export const getOrderById = withOpenId(async ({ db, OPENID, event }): Promise<GetOrderByIdResp> => {
-  const id = String((event as any).id || '')
+  const id = str((event as any).id, 200)
   if (!id) return err(ERR.NO_ID)
   // 只有真缺档才算「没有这单」：订单页把 NOT_FOUND 当确定空态不给重试，读失败抛给网关回 INTERNAL
   const got = await getDocOrNull<OrderDoc>(db.collection(COLLECTIONS.orders).doc(id))

@@ -1,6 +1,6 @@
 import { COLLECTIONS, ORDER_STATUS, AFTERSALE_QUOTA_STATUSES, AFTERSALE_INFLIGHT_STATUSES, buildBadStatus } from '@ldrw/shared'
 import type { OrderDoc, AfterSaleDoc, ErrCode } from '@ldrw/shared'
-import { pageQuery, uploadShippingToWx, notifyAlert, applyStockMoves, isCollectionMissing, err } from '../../../kit'
+import { pageQuery, uploadShippingToWx, notifyAlert, applyStockMoves, isCollectionMissing, str, err } from '../../../kit'
 import { reply, activationFor, type Ctx } from '../lib'
 
 // 订单行 / 售后行的行键：新单 lineId，旧单回退 productId（与 applyRefund 建售后单同一口径）。
@@ -34,7 +34,7 @@ function sameRefundedQty(now: Record<string, number>, ackRaw: unknown): boolean 
 // 订单详情补充（VMlhp·读类）：逐商品的激活码状态数据链（复用 activationFor·与退款判据同口径）。
 // 时间线/交易单号/物流/合规上报等都在订单对象里、前端直接读；本 action 只补「需联查 activations」的激活态。
 export async function getOrderDetail({ db, data }: Ctx) {
-  const id = String((data && data.id) || '')
+  const id = str(data && data.id, 200)
   if (!id) return reply(400, err('BAD_ARGS'))
   const got = await db.collection(COLLECTIONS.orders).doc(id).get().catch(() => null)
   if (!got || !got.data) return reply(400, err('NO_ORDER'))
@@ -50,8 +50,8 @@ export async function getOrderDetail({ db, data }: Ctx) {
 // 服务端筛选/搜索（根因#7 计数/筛选/搜索失真）：status 在云端 where 过滤（不让前端从已加载页筛、
 // 防分页后漏单）；q=单号精确命中（_id），无视状态标签搜全部。计数另走 orderCounts（.count() 精确）。
 export async function listOrders({ db, data, caps }: Ctx) {
-  const q = String((data && data.q) || '').trim()
-  const status = String((data && data.status) || '')
+  const q = str(data && data.q, 200).trim()
+  const status = str(data && data.status, 200)
   // 最小权限收窄（refund:manage 越权面）：listOrders 无过滤时逐单回全文（无 .field() 投影：
   // _openid/address 姓名·电话·详址/items/transactionId/amount），无 q 全表翻页＝翻遍全店客户 PII。
   // ACTION_CAPS 把 listOrders 放给 admin:write|refund:manage，但 refund:manage（退款专员）只需
@@ -205,9 +205,9 @@ async function recordShipLedger(id: string, order: OrderDoc, refundedQty: Record
 // + 条件转移防并发回滚 done + 微信 upload_shipping_info 合规上报（fail-soft·根因#12）。
 // 返回纯结果对象（不含 HTTP 包装），调用方各自 reply / 汇总。
 async function shipOne(db: any, idRaw: any, companyRaw: any, trackingRaw: any, operator: string, ackRefundedQty: unknown) {
-  const id = String(idRaw || '')
-  const company = String(companyRaw || '').trim().slice(0, 30)
-  const trackingNo = String(trackingRaw || '').trim().slice(0, 40)
+  const id = str(idRaw, 200)
+  const company = str(companyRaw, 200).trim().slice(0, 30)
+  const trackingNo = str(trackingRaw, 200).trim().slice(0, 40)
   if (!id || !company || !trackingNo) return err('BAD_ARGS')
   const got = await db.collection(COLLECTIONS.orders).doc(id).get().catch(() => null)
   if (!got || !got.data) return err('NO_ORDER')
@@ -279,10 +279,10 @@ export async function shipOrders({ db, data, agentId }: Ctx) {
   const items = Array.isArray(data && data.items) ? data.items : []
   if (!items.length) return reply(400, err('BAD_ARGS'))
   if (items.length > 100) return reply(400, err('TOO_MANY')) // 单批上限·防滥用/超时
-  const batchCompany = String((data && data.company) || '')
+  const batchCompany = str(data && data.company, 200)
   const results: any[] = []
   for (const it of items) {
-    const id = String((it && it.id) || '')
+    const id = str(it && it.id, 200)
     const r = await shipOne(db, id, (it && it.company) || batchCompany, it && it.trackingNo, agentId || 'admin', it && it.ackRefundedQty)
     results.push({ id, ...r })
   }
@@ -292,7 +292,7 @@ export async function shipOrders({ db, data, agentId }: Ctx) {
 
 // 金额异常单人工复核解除（feeMismatch 单禁发货，核实流水后在此解除）
 export async function clearFeeMismatch({ db, data }: Ctx) {
-  const id = String(data.id || '')
+  const id = str(data.id, 200)
   if (!id) return reply(400, err('BAD_ARGS'))
   const got = await db.collection(COLLECTIONS.orders).doc(id).get().catch(() => null)
   if (!got || !got.data) return reply(400, err('NO_ORDER'))

@@ -13,9 +13,10 @@ export const arrOf = (v: unknown, cap: number): any[] => (Array.isArray(v) ? v :
 
 // 草稿白名单字段（防杂字段入库）
 export function cleanProduct(p: any) {
-  if (!p || typeof p !== 'object' || !p.id) return null
+  const id = p && typeof p === 'object' ? str(p.id, 40) : ''
+  if (!id) return null
   return {
-    id: String(p.id).slice(0, 40),
+    id,
     cover: str(p.cover, 300),
     images: arrOf(p.images, 20).map((u: any) => str(u, 300)),
     name: str(p.name, 60),
@@ -43,9 +44,10 @@ export function cleanProduct(p: any) {
 
 // 课程草稿白名单（三层结构，与小程序 courses 同形；字段截断防杂数据）
 export function cleanCourse(c: any) {
-  if (!c || typeof c !== 'object' || !c.id) return null
+  const id = c && typeof c === 'object' ? str(c.id, 40) : ''
+  if (!id) return null
   return {
-    id: String(c.id).slice(0, 40),
+    id,
     title: str(c.title, 60),
     sort: Number(c.sort) || 0,
     chapters: arrOf(c.chapters, 30).map((ch: any) => ({
@@ -78,7 +80,7 @@ export async function storeImage(cloud: any, b64: string, data: any) {
   const ext = ['png', 'jpg', 'mp4', 'mov'].includes(data.ext) ? data.ext : 'jpg'
   // 消毒（同 getVideoUploadMeta）：客户端串直接拼云存储对象键，'../' 类字符不入路径
   const pid =
-    String(data.pid || 'misc')
+    (str(data.pid, 200) || 'misc')
       .replace(/[^\w-]/g, '')
       .slice(0, 40) || 'misc'
   const prefix = data.kind === 'video' ? 'videos' : 'products'

@@ -11,6 +11,7 @@ import {
   imgSecCheck,
   msgSecCheck,
   isDocMissing,
+  str,
 } from '../../../kit'
 
 /**
@@ -153,7 +154,7 @@ function buildSummary(sample: any[]) {
  * 按商品取评价（公开读）：游标分页 + 首页全量精确汇总（翻页不重算，前端缓存）。
  */
 export const getReviews = async (event: any = {}) => {
-  const productId = String(event.productId || '')
+  const productId = str(event.productId, 200)
   if (!productId) return err(ERR.NO_PRODUCT)
   const db = getDb()
 
@@ -207,7 +208,7 @@ export const getReviews = async (event: any = {}) => {
  * 聚合异常/集合未建 → {score:'0',count:0}（前端 mapSummary count=0 → 不渲染假评·fail-closed）。
  */
 export const getRatingSummary = async (event: any = {}) => {
-  const productId = String(event.productId || '')
+  const productId = str(event.productId, 200)
   if (!productId) return err(ERR.NO_PRODUCT)
   const db = getDb()
   const $ = db.command.aggregate
@@ -236,8 +237,8 @@ export const getRatingSummary = async (event: any = {}) => {
 export const submitReview = withOpenId(
   withRateLimit('submitReview', { max: 10, windowMs: 60_000 }, async ({ db, OPENID, event }) => {
     const e: any = event
-    const orderId = String(e.orderId || '')
-    const reqLine = String(e.lineId || e.productId || '')
+    const orderId = str(e.orderId, 200)
+    const reqLine = str(e.lineId, 200) || str(e.productId, 200)
     const rating = Number(e.rating)
     if (!orderId || !reqLine) return err(ERR.BAD_ARGS)
     if (!Number.isInteger(rating) || rating < 1 || rating > 5) return err(ERR.BAD_RATING)
