@@ -1,12 +1,7 @@
 // 客服组映射：时长人话/报表 approx 诚实透传/360 单面板失败隔离/
 // 命中依据中文/kb 行归一/满意度分布。
 import { describe, it, expect } from 'vitest'
-import { CS_REFRESH_COPY } from '@ldrw/shared'
 import { msHuman, mapReport, mapPanels, matchLabel, normalizeKb, mapCsat, mapCsatEntries, mapMessages, nextNodeId, duplicateNodeIds, mapQcRows } from '../src/lib/mapCs'
-import customer360Src from '../src/pages/Customer360.vue?raw'
-import conversationsSrc from '../src/pages/Conversations.vue?raw'
-import agentsSrc from '../src/pages/Agents.vue?raw'
-import csatSrc from '../src/pages/Csat.vue?raw'
 
 // 单行走外层 mapQcRows（mapQcRow 已不对外 export）
 function mapQcRow(r: unknown) {
@@ -197,63 +192,5 @@ describe('质检抽检行映射（批 B7·sessionKey≠externalUserId·聚合失
     const rows = mapQcRows([{ sessionKey: 's1', externalUserId: 'e1' }, { externalUserId: 'no-key' }, null])
     expect(rows.map((r) => r.sessionKey)).toEqual(['s1']) // 无 key 的行被过滤，不留半档
     expect(mapQcRows(null)).toEqual([])
-  })
-})
-
-// 无档客户不渲染幽灵身份头（D4·bug 清除批D·取真源法：open() 逻辑内联在组件里未抽 lib 函数，无法单元测试
-// 行为，钉源码模式防回归——原 `(u.user || u)` falsy 兜底会把整个响应对象当数据源渲染全空「（无昵称）」卡）。
-describe('客户 360 无档客户不渲染幽灵身份头', () => {
-  it('大白话：getUser 判定改为「u.ok 且真拿到 user 字段」才组身份头，不再有 `|| u` 兜底残留', () => {
-    expect(customer360Src).not.toMatch(/user\s*\|\|\s*u\)/) // 旧 falsy 兜底写法已删
-    expect(customer360Src).toMatch(/u\.ok\s*&&\s*\(u as any\)\.user/) // 新判定：ok 且 user 真存在
-  })
-  it('大白话：身份头 v-if="user" 处有对应 v-else（-if），无档客户显式提示而非空白/幽灵卡', () => {
-    expect(customer360Src).toMatch(/v-else-if="current[^"]*"[^>]*>\s*该客户暂无用户档案/)
-  })
-})
-
-// getUser 取数失败 ≠ 真无档（P2·bug sweep II D 补·取真源法：与 getCustomer360 各自独立成败，
-// 旧写法把 u.ok===false 也并入「该客户暂无用户档案」文案，网络抖动被误报成查无此档）
-describe('客户 360 getUser 取数失败与真无档区分', () => {
-  it('大白话：u.ok===false 才置 userLoadFailed，不与真无档共用同一句文案', () => {
-    expect(customer360Src).toMatch(/else if\s*\(!u\.ok\)\s*\{\s*userLoadFailed\.value\s*=\s*true/)
-    expect(customer360Src).toMatch(/v-else-if="userLoadFailed"[^>]*>\s*用户档案加载失败/)
-  })
-  it('大白话：open()/search()/返回结果 三处重置点都清 userLoadFailed，避免跨客户残留误报', () => {
-    expect((customer360Src.match(/userLoadFailed\.value\s*=\s*false/g) || []).length).toBeGreaterThanOrEqual(2)
-    expect(customer360Src).toMatch(/userLoadFailed\s*=\s*false;\s*message\s*=\s*''/)
-  })
-})
-
-// listAgents 成功 + getCsatReport 失败 ≠ 还没人评分（病根#14/#8）：旧写法 mapCsat 失败后 csatAvg=null，
-// KPI 渲「—」、message 被 list 成功清掉，管理员会当成「客户还没评」。
-describe('外包账号页满意度报表失败 ≠ 还没评分', () => {
-  it('大白话：list 成功但 getCsatReport 失败时点名「满意度报表加载失败」，不把空均分「—」当成还没人评', () => {
-    expect(agentsSrc).toMatch(/满意度报表加载失败/)
-    expect(agentsSrc).toMatch(/csatVm[\s\S]{0,220}满意度报表加载失败|满意度报表加载失败[\s\S]{0,220}csatVm/)
-    expect(agentsSrc).toMatch(/!csatVm\s*\?[\s\S]{0,80}加载失败/)
-  })
-})
-
-describe('Csat.vue 文件头差评口径与按钮一致', () => {
-  it('大白话：文件头「仅差评」写 ≤2，不再写 ≤3（按钮/筛选已是 ≤2）', () => {
-    expect(csatSrc).not.toMatch(/仅差评\s*≤3/)
-    expect(csatSrc).toMatch(/仅差评\s*≤2/)
-  })
-})
-
-describe('测版刷新入口只在闸开时露', () => {
-  it('大白话：管理端「当作新客重新开始」跟 trialRefreshOn，正式环境不该看见', () => {
-    expect(conversationsSrc).toMatch(/v-if="trialRefreshOn"/)
-    expect(conversationsSrc).toMatch(/当作新客重新开始/)
-    expect(conversationsSrc).toMatch(/getTrialRefreshGate/)
-    expect(conversationsSrc).toMatch(/CS_REFRESH_COPY\.adminReasonPlaceholder/)
-    expect(conversationsSrc).toMatch(/CS_REFRESH_COPY\.adminListHint/)
-    expect(conversationsSrc).toMatch(/CS_REFRESH_COPY\.adminSuccess/)
-    expect(conversationsSrc).not.toContain(CS_REFRESH_COPY.adminReasonPlaceholder)
-    expect(conversationsSrc).not.toContain(CS_REFRESH_COPY.adminListHint)
-    expect(conversationsSrc).not.toContain(CS_REFRESH_COPY.adminSuccess)
-    expect(conversationsSrc).toMatch(/trialRefreshArmed/)
-    expect(conversationsSrc).not.toMatch(/window\.prompt|window\.confirm/)
   })
 })

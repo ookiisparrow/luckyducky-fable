@@ -4,15 +4,16 @@
 // （病根#5 复制即漂移）。首页走 getHomeContent/saveHomeContent 另一对接口，由调用方传 io 覆盖读写。
 import { ref, watch, onMounted, onBeforeUnmount, nextTick, type Ref } from 'vue'
 import { getPageContent, savePageContent } from '../api/content'
-import type { ClientResult } from '../api/client'
+import type { TypedResult } from '../api/client'
 import { serialSave } from './serialSave'
 import { SAVE_OK_MESSAGE } from './mapPageContent'
+import { failText, writeFailText } from './status'
 
 type AutoState = '' | 'saving' | 'saved' | 'error'
 
 interface ContentIO {
-  load: () => Promise<ClientResult> // 回包内容字段须叫 content
-  save: (_body: Record<string, unknown>) => Promise<ClientResult>
+  load: () => Promise<TypedResult<{ content: unknown }>> // 回包内容字段须叫 content
+  save: (_body: Record<string, unknown>) => Promise<TypedResult<object>>
   what?: string // 未载入拒存提示里「已有X配置」的 X
 }
 
@@ -36,7 +37,7 @@ export function usePageContent<M>(
     saveResult = r
     autoState.value = r.ok ? 'saved' : 'error'
   }
-  // 串行·防慢网两次自动保存乱序覆盖（根因#8）；key='page-content:'+page（批D·P1）：改走模块级共享槽位，
+  // 串行·防慢网两次自动保存乱序覆盖（根因#8）；key='page-content:'+page：走模块级共享槽位，
   // 快速切签再切回本签（PageContent.vue 用 v-if+:key 强制重建组件实例）时，新实例接管旧实例仍在途的补存
   // 链，防旧快照晚到覆盖新实例已存的编辑；按 page 分槽——不同页签互不干扰。
   const flushSave = serialSave(autosave, 'page-content:' + page)
@@ -67,7 +68,7 @@ export function usePageContent<M>(
     model.value = normalize(r.ok ? r.content : null)
     if (!r.ok) {
       // 载入失败：loaded 恒 false → 自动/手动保存都不放开，否则一次编辑就拿空档整块覆盖已有内容
-      message.value = '加载失败：' + String(r.error || '')
+      message.value = failText('加载失败', r.error)
       return
     }
     void nextTick(() => (loaded = true))
@@ -88,7 +89,7 @@ export function usePageContent<M>(
     const r = saveResult
     busy.value = false
     autoState.value = ''
-    message.value = r.ok ? SAVE_OK_MESSAGE : '保存失败：' + String(r.error || '')
+    message.value = r.ok ? SAVE_OK_MESSAGE : writeFailText('保存失败', r.error)
   }
 
   return { model, message, busy, autoState, save }

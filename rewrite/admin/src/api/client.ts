@@ -1,6 +1,6 @@
 // adminApi v2 客户端（钱链入口·行为测试 tests/client.test.ts 钉）：
 // 单 endpoint POST {action, key, data}；key=会话令牌（口令仅登录时用一次·令牌哈希在云端）；
-// 401 会话失效 → 清令牌抛 SESSION_LOST（壳层导登录）；错误规整不吞（承接调试案 A 教训：报错带原文）。
+// 401 会话失效 → 清令牌抛 SESSION_LOST（壳层导登录）；错误规整不吞（报错带原文，排障不靠猜）。
 export interface ClientResult {
   ok: boolean
   status: number
@@ -8,14 +8,20 @@ export interface ClientResult {
   [k: string]: unknown
 }
 
+/** 按契约类型看的回包：成功带 T 的字段（没有索引签名，字段名写错编译不过）；失败只有 error，外加云端随某些错误码带回的 F（可能不带）。 */
+export type TypedResult<T, F = {}> = ({ ok: true; status: number; error?: undefined } & T) | ({ ok: false; status: number; error?: string } & Partial<F>)
+
 export interface ClientDeps {
   endpoint: string
   fetchImpl?: typeof fetch
   storage?: { get(k: string): string | null; set(k: string, v: string): void; remove(k: string): void }
 }
 
+/** 须长于 adminApi 函数超时（以 cloudbaserc.json adminApi.timeout 为准）：短于它，慢但仍在执行的写（批量发货/生成二维码）会被前端先判失败、诱发重复提交。 */
+export const CALL_TIMEOUT_MS = 35_000
+
 const TOKEN_KEY = 'ldrw_admin_token'
-const WHO_KEY = 'ldrw_admin_who' // 登录操作者名（Shell 显真实身份·换皮硬编码「管理员」·多账号无法辨认）
+const WHO_KEY = 'ldrw_admin_who' // 登录操作者名（Shell 显真实身份：写死「管理员」的话多账号无法辨认）
 
 const defaultStorage = {
   get: (k: string) => (typeof localStorage !== 'undefined' ? localStorage.getItem(k) : null),
@@ -31,28 +37,36 @@ export function createClient(deps: ClientDeps) {
   const storage = deps.storage || defaultStorage
   const doFetch = deps.fetchImpl || fetch
   // 会话失效集中回调（单源·根因#5 收口）：post 遇 401 清令牌后触发一次，壳层注册为「导登录」，
-  // 各页不再各写各的 SESSION_LOST 跳转（曾漂成 3 种：卡死「加载中…」/裸显合成码/导登录）。
+  // 各页不各写各的 SESSION_LOST 跳转（各写会漂成卡死「加载中…」/裸显合成码/导登录多种表现）。
   let sessionLostHandler: (() => void) | null = null
 
   async function raw(action: string, key: string, data: Record<string, unknown>): Promise<ClientResult> {
     if (!deps.endpoint) return { ok: false, status: 0, error: 'NO_ENDPOINT' } // 未配后端·fail-closed 不假装
+    const ctrl = new AbortController()
+    const timer = setTimeout(() => ctrl.abort(), CALL_TIMEOUT_MS)
     let res: Response
+    let body: unknown
     try {
       res = await doFetch(deps.endpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action, key, data }),
+        signal: ctrl.signal,
       })
     } catch (e) {
+      clearTimeout(timer)
+      if (ctrl.signal.aborted) return { ok: false, status: 0, error: 'CALL_TIMEOUT' }
       return { ok: false, status: 0, error: 'NETWORK:' + String(e instanceof Error ? e.message : e).slice(0, 120) } // 报错带原文·不吞
     }
-    let body: Record<string, unknown> = {}
     try {
-      body = (await res.json()) as Record<string, unknown>
+      body = await res.json() // 读回包体也可能挂死，计时器要罩到这里
     } catch {
-      return { ok: false, status: res.status, error: 'BAD_JSON_RESPONSE' }
+      return { ok: false, status: res.status, error: ctrl.signal.aborted ? 'CALL_TIMEOUT' : 'BAD_JSON_RESPONSE' }
+    } finally {
+      clearTimeout(timer)
     }
-    return { status: res.status, ...body, ok: body.ok === true } as ClientResult
+    if (!body || typeof body !== 'object' || Array.isArray(body)) return { ok: false, status: res.status, error: 'BAD_JSON_RESPONSE' }
+    return { status: res.status, ...body, ok: (body as { ok?: unknown }).ok === true } as ClientResult
   }
 
   return {
@@ -63,9 +77,13 @@ export function createClient(deps: ClientDeps) {
     onSessionLost: (fn: () => void) => {
       sessionLostHandler = fn
     },
-    logout: () => {
+    /** 登出：先清本地再吊销服务端令牌（best-effort）。先清是为了网络挂死时人也立刻登出，
+     *  而不是卡到超时；吊销失败只剩令牌自然过期，不影响本地登出。 */
+    async logout(): Promise<void> {
+      const token = storage.get(TOKEN_KEY) || ''
       storage.remove(TOKEN_KEY)
       storage.remove(WHO_KEY)
+      if (token) await raw('logout', token, {})
     },
 
     /** 口令登录：成功存会话令牌（口令不落存储·用完即弃）+ 操作者名（显真实身份）。 */

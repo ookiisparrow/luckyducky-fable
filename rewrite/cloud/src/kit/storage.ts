@@ -1,12 +1,12 @@
 import cloud from 'wx-server-sdk'
 
 /**
- * 云存储原语收口（设计约束「受保护内容短时 URL」：fileID 只在服务端、鉴权后才换短时地址下发）。
+ * 云存储原语收口（受保护内容短时 URL：fileID 只在服务端、鉴权后才换短时地址下发）。
  *
- * 批1·签发缓存（根因#15 加载链路冗余）：临时地址换发是网关外呼（~几十~上百 ms/批），同一批热点图
+ * 签发缓存（根因#15 加载链路冗余）：临时地址换发是网关外呼（~几十~上百 ms/批），同一批热点图
  * （首页封面/详情图册）在多个会话/多次列表拉取里被反复重签，白打穿组件与 CDN 缓存。这里加**容器级**签发
  * 缓存：只有调用方传了 `maxAge`（明确「这地址我要缓存住 maxAge 秒」）且真换到址才写缓存——**未传 maxAge
- * 的调用行为与现状完全全等**（learning.ts 视频路径零变化，刻意：签发缓存只覆盖长命图片，短命/一次性视频
+ * 的调用不走缓存**（如 learning.ts 视频路径，刻意：签发缓存只覆盖长命图片，短命/一次性视频
  * 址不进缓存）。key 含 maxAge（不同 maxAge 不串），TTL 留 5min 安全边际防边界失效。
  */
 interface TempUrlOpts {
@@ -44,14 +44,13 @@ function withImageProc(url: string): string {
 
 /**
  * 批量换临时 URL：去重后分批 ≤50/次（真 sdk 单次上限 50）；换不到给显式 null（调用方回退占位）。
- * 批间并发（批C）：各批相互独立、互不依赖对方结果，串行 await 纯属浪费网关往返——改批间
- * Promise.all 并发发起，逐批结果落回同一个 map（写不同 key，无共享可变状态竞争）。等价性：
- * ≤50 常态路径只有一批，循环体只跑一次、行为与串行版完全一致（不并发也不改变现状）；单批失败
- * 仍走既有 fail-soft 口径——该批 catch 到 null 后同样把该批全部 id 落 null，不影响其余批次。
+ * 批间并发：各批相互独立、互不依赖对方结果，串行 await 纯属浪费网关往返——故批间
+ * Promise.all 并发发起，逐批结果落回同一个 map（写不同 key，无共享可变状态竞争）。
+ * ≤50 常态路径只有一批；单批失败走 fail-soft 口径——该批 catch 到 null 后同样把该批全部 id 落 null，不影响其余批次。
  *
- * 批1·签发缓存（见文件头注）：传了 maxAge 时先查容器级缓存（命中直接复用原始址·不进 sdk），未命中的
- * 才去换；换到且传了 maxAge 才写缓存（null 不缓存·fail-soft 语义原样）。imageProc 在**读出**时才拼（缓存
- * 存原始址）。**未传 maxAge：完全走原路径**（无缓存读写、fileList 仍传裸 string 数组），与现状字节级全等。
+ * 签发缓存（见文件头注）：传了 maxAge 时先查容器级缓存（命中直接复用原始址·不进 sdk），未命中的
+ * 才去换；换到且传了 maxAge 才写缓存（null 不缓存）。imageProc 在**读出**时才拼（缓存
+ * 存原始址）。**未传 maxAge：不碰缓存**（无缓存读写、fileList 传裸 string 数组）。
  */
 export async function getTempUrls(
   fileIds: string[],
@@ -103,7 +102,24 @@ export async function getTempUrl(fileId: string, opts: TempUrlOpts = {}): Promis
   return map[fileId] ?? null
 }
 
-/** 仅测试：清空容器级签发缓存，隔离跨 case 复用相同 fileID 的污染（批1）。 */
+// 删一个已经不存在的文件，平台逐项回失败码（tcb 是 STORAGE_FILE_NONEXIST / storage file not exist，真云 status 值未核实）。
+// 文件已经没了就是删成功：否则引用它的档永远摘不掉，每次重试都失败。
+const FILE_GONE = /FILE_NONEXIST|file (?:does )?not exist/i
+
+/**
+ * 删云存储文件（≤50 个＝平台单次上限，分批归调用方）。逐个回是否已删：只认回包里逐项确认的，缺项算没删；
+ * 文件本就不存在算已删。整次调用失败照抛，由调用方决定怎么收。
+ */
+export async function deleteFiles(fileIDs: string[]): Promise<Array<{ fileID: string; deleted: boolean }>> {
+  const res = await cloud.deleteFile({ fileList: fileIDs })
+  const byId = new Map((res?.fileList || []).map((f) => [f.fileID, f]))
+  return fileIDs.map((fileID) => {
+    const f = byId.get(fileID)
+    return { fileID, deleted: !!f && (f.status === 0 || FILE_GONE.test(`${f.errMsg || ''} ${f.code || ''}`)) }
+  })
+}
+
+/** 仅测试：清空容器级签发缓存，隔离跨 case 复用相同 fileID 的污染。 */
 export function __resetTempUrlCacheForTest(): void {
   urlCache.clear()
 }

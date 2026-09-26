@@ -4,9 +4,9 @@
 //   ② 红灯落账契约（anomaly._id 确定性指纹 / kind / code=INSPECT_<ID> / ctx.fp / ctx.samples 逗号拼接）；
 //   ③ 有界扫描 capped 语义（三路 >= SCAN_CAP 逐路点亮·触顶显式标 capped、不假装扫全了）；
 //   ④ _.in 分块契约（每批 ≤ IN_CHUNK=100 键·恰好 N 批不多发空查询·分块错了 >100 单静默漏扫）；
-//   ⑤ 读失败≠空态（多报方向的读——活跃售后豁免、按 orderId 查已退款——炸了当空集，afterSales 集合未建当真无退款；
+//   ⑤ 读失败≠空态（多报方向的读——在途售后豁免、按 orderId 查已退款——炸了当空集，afterSales 集合未建当真无退款；
 //      其余主扫描炸→该检查项红/high「检查自身异常」、其余检查照跑）；
-//   ⑥ 卡单判据逐条件（真付款 transactionId / paidAt>0 / 严格超 72h / 活跃售后豁免仅 applied|approved|refunded）；
+//   ⑥ 卡单判据逐条件（真付款 transactionId / paidAt>0 / 严格超 72h / 在途售后豁免仅 applied|approved·每行都退够件数才不算卡单）；
 //   ⑦ refundableCapFen 死信分母（缺行缺货款退回 amount 口径·qty 参与分摊·脏数据 catch 兜底）；
 //   ⑧ 心跳确定性日 id（Asia/Shanghai UTC+8 显式换算·档案形状逐字段锁）。
 // 期望值全部取自 inspect.ts 源码常量与注释，未发明行为。钱样本一律整数分可换算（元最多两位小数）。
@@ -30,7 +30,7 @@ function entry(run: Awaited<ReturnType<typeof runInspection>>, id: string) {
 }
 
 describe('检查目录元数据与报告契约（体检面板/指纹的消费面·逐字锁）', () => {
-  it('大白话：空库跑一轮→三项全绿、每项 id/title/layer/detail/severity 逐字段对上、报告落库完整', async () => {
+  it('大白话：空库跑一轮→四项全绿、每项 id/title/layer/detail/severity 逐字段对上、报告落库完整', async () => {
     // 分块查询计数：空库时 money/死信两条 _.in 分块循环都不该发任何查询（多发一次空查询=循环边界错）
     const inQueries: string[] = []
     control.setBeforeGet(({ coll, filter }: any) => {
@@ -66,7 +66,17 @@ describe('检查目录元数据与报告契约（体检面板/指纹的消费面
       scanned: 0,
       capped: false,
     })
-    expect(run.summary).toEqual({ green: 3, yellow: 0, red: 0 })
+    expect(entry(run, 'pending-overdue')).toEqual({
+      id: 'pending-overdue',
+      title: '超窗未关单（关单定时任务兜底）',
+      layer: 'invariant',
+      status: 'green',
+      detail: '无超窗未关单',
+      severity: 'low',
+      scanned: 0,
+      capped: false,
+    })
+    expect(run.summary).toEqual({ green: 4, yellow: 0, red: 0 })
     expect(inQueries).toEqual([]) // 零键=零查询（i<=length 之类的循环边界变异会多发一次空 _.in）
     // 报告确定性 _id + 落库形状（写的是整份 run，不是空壳）
     expect(run._id).toBe(`inspect_manual_${run.startedAt}`)
@@ -74,8 +84,8 @@ describe('检查目录元数据与报告契约（体检面板/指纹的消费面
     expect(docs.length).toBe(1)
     expect(docs[0]._id).toBe(run._id)
     expect(docs[0].trigger).toBe('manual')
-    expect(docs[0].results.length).toBe(3)
-    expect(docs[0].summary).toEqual({ green: 3, yellow: 0, red: 0 })
+    expect(docs[0].results.length).toBe(4)
+    expect(docs[0].summary).toEqual({ green: 4, yellow: 0, red: 0 })
   })
 
   it('大白话：DB 读炸→db-reachable 红、错误文案截 80 字、落 anomaly 契约全对上（指纹/kind/code/fp）', async () => {
@@ -87,7 +97,7 @@ describe('检查目录元数据与报告契约（体检面板/指纹的消费面
     expect(db.status).toBe('red')
     expect(db.severity).toBe('high')
     expect(db.detail).toBe('DB 读失败：' + ('Error: ' + 'X'.repeat(100)).slice(0, 80))
-    expect(run.summary).toEqual({ green: 2, yellow: 0, red: 1 })
+    expect(run.summary).toEqual({ green: 3, yellow: 0, red: 1 })
     // 红→recordAnomaly 契约：确定性指纹 _id（kind+code+fp）、code=INSPECT_大写下划线、无样本时 samples=''
     const an = control.dump(COLLECTIONS.anomalies)
     expect(an.length).toBe(1)
@@ -223,7 +233,7 @@ describe('钱守恒（money-conserved·超退判定/有界扫描/分块契约）
     expect(money.status).toBe('red')
     expect(money.severity).toBe('high')
     expect(money.scanned).toBeUndefined() // 查询炸=一条没扫到·不许伪造扫描量
-    expect(run.summary).toEqual({ green: 2, yellow: 0, red: 1 })
+    expect(run.summary).toEqual({ green: 3, yellow: 0, red: 1 })
   })
 })
 
@@ -256,7 +266,7 @@ describe('卡单（stuck-order·72h 判据逐条件/售后豁免面/有界扫描
     expect(entry(run, 'stuck-order').status).toBe('green')
   })
 
-  it('大白话：rejected 售后不豁免卡单（驳回=发货义务还在·豁免面只有 applied/approved/refunded）', async () => {
+  it('大白话：rejected 售后不豁免卡单（驳回=发货义务还在·豁免面只有在途 applied/approved）', async () => {
     control.seed(COLLECTIONS.orders, [{ _id: 'S', status: 'paid', amount: 100, transactionId: 'wxS', paidAt: Date.now() - 80 * HOUR }])
     control.seed(COLLECTIONS.afterSales, [{ _id: 'S__l1', orderId: 'S', status: 'rejected', refundAmount: 100 }])
     const run = await runInspection('timer')
@@ -272,9 +282,11 @@ describe('卡单（stuck-order·72h 判据逐条件/售后豁免面/有界扫描
     expect(entry(run, 'stuck-order').status).toBe('green')
   })
 
-  it('大白话：refunded 售后豁免卡单（钱都退了·不是该发没发）', async () => {
-    control.seed(COLLECTIONS.orders, [{ _id: 'S', status: 'paid', amount: 100, transactionId: 'wxS', paidAt: Date.now() - 80 * HOUR }])
-    control.seed(COLLECTIONS.afterSales, [{ _id: 'S__l1', orderId: 'S', status: 'refunded', refundAmount: 100 }])
+  it('大白话：唯一一行已退款→不算卡单（钱都退了·没东西可发）', async () => {
+    control.seed(COLLECTIONS.orders, [
+      { _id: 'S', status: 'paid', amount: 100, items: [{ lineId: 'l1', price: 100, qty: 1 }], transactionId: 'wxS', paidAt: Date.now() - 80 * HOUR },
+    ])
+    control.seed(COLLECTIONS.afterSales, [{ _id: 'S__l1', orderId: 'S', lineId: 'l1', qty: 1, status: 'refunded', refundAmount: 100 }])
     const run = await runInspection('timer')
     expect(entry(run, 'stuck-order').status).toBe('green')
   })
@@ -315,16 +327,19 @@ describe('卡单（stuck-order·72h 判据逐条件/售后豁免面/有界扫描
     expect(an[0].code).toBe('INSPECT_STUCK_ORDER')
   })
 
-  it('大白话：scanned=paid+dead+活跃售后三路相加·未触顶 capped=false', async () => {
+  it('大白话：scanned=paid+dead+超时单的售后三路相加·未触顶 capped=false', async () => {
     control.seed(COLLECTIONS.orders, [
-      { _id: 'P1', status: 'paid', amount: 100, transactionId: 'wxP1', paidAt: Date.now() - 1 * HOUR }, // 近期·不卡
+      { _id: 'P1', status: 'paid', amount: 100, transactionId: 'wxP1', paidAt: Date.now() - 80 * HOUR }, // 超时但在途售后·豁免
       { _id: 'D1', status: 'refund_required', amount: 100, paidAt: Date.now() }, // 已退清·非死信
     ])
-    control.seed(COLLECTIONS.afterSales, [{ _id: 'D1__l1', orderId: 'D1', status: 'refunded', refundAmount: 100 }])
+    control.seed(COLLECTIONS.afterSales, [
+      { _id: 'P1__l1', orderId: 'P1', status: 'applied', refundAmount: 100 },
+      { _id: 'D1__l1', orderId: 'D1', status: 'refunded', refundAmount: 100 },
+    ])
     const run = await runInspection('timer')
     const stuck = entry(run, 'stuck-order')
     expect(stuck.status).toBe('green')
-    expect(stuck.scanned).toBe(3) // 1 paid + 1 dead + 1 活跃售后
+    expect(stuck.scanned).toBe(3) // 1 paid + 1 dead + 1 超时单的在途售后
     expect(stuck.capped).toBe(false)
   })
 
@@ -348,9 +363,10 @@ describe('卡单（stuck-order·72h 判据逐条件/售后豁免面/有界扫描
     expect(stuck.capped).toBe(true)
   })
 
-  it('大白话：活跃售后一路扫满 500→capped 亮灯', async () => {
+  it('大白话：超时单的售后一路扫满 500→capped 亮灯', async () => {
+    control.seed(COLLECTIONS.orders, [{ _id: 'G', status: 'paid', amount: 100, transactionId: 'wxG', paidAt: Date.now() - 80 * HOUR }])
     const as: any[] = []
-    for (let i = 0; i < SCAN_CAP; i++) as.push({ _id: 'AS' + i, orderId: 'G' + i, status: 'applied', refundAmount: 1 })
+    for (let i = 0; i < SCAN_CAP; i++) as.push({ _id: 'G__l' + i, orderId: 'G', status: 'applied', refundAmount: 1 })
     control.seed(COLLECTIONS.afterSales, as)
     const run = await runInspection('timer')
     const stuck = entry(run, 'stuck-order')
@@ -378,15 +394,17 @@ describe('卡单（stuck-order·72h 判据逐条件/售后豁免面/有界扫描
     expect(chunkSizes).toEqual([IN_CHUNK, 20])
   })
 
-  it('大白话：活跃售后查询炸→当空集不豁免误算、也不炸整轮·scanned 如实少一路', async () => {
-    control.seed(COLLECTIONS.orders, [{ _id: 'P1', status: 'paid', amount: 100, transactionId: 'wxP1', paidAt: Date.now() - 1 * HOUR }])
+  it('大白话：在途售后查询炸→当空集不豁免（照报卡单）、也不炸整轮·scanned 如实少一路', async () => {
+    control.seed(COLLECTIONS.orders, [{ _id: 'P1', status: 'paid', amount: 100, transactionId: 'wxP1', paidAt: Date.now() - 80 * HOUR }])
+    control.seed(COLLECTIONS.afterSales, [{ _id: 'P1__l1', orderId: 'P1', status: 'applied', refundAmount: 100 }])
     control.setBeforeGet(({ coll, filter }: any) => {
       if (coll === COLLECTIONS.afterSales && filter && filter.status && typeof filter.status === 'object' && filter.status.__op === 'in')
         throw new Error('boom')
     })
     const run = await runInspection('timer')
     const stuck = entry(run, 'stuck-order')
-    expect(stuck.status).toBe('green')
+    expect(stuck.status).toBe('red')
+    expect(stuck.samples).toEqual(['P1'])
     expect(stuck.scanned).toBe(1) // 1 paid + 0 dead + 0 售后（炸了就是 0·不伪造）
   })
 
@@ -400,7 +418,7 @@ describe('卡单（stuck-order·72h 判据逐条件/售后豁免面/有界扫描
     expect(stuck.status).toBe('red')
     expect(stuck.severity).toBe('high')
     expect(stuck.detail).toBe('检查自身异常：Error: boom')
-    expect(run.summary).toEqual({ green: 2, yellow: 0, red: 1 })
+    expect(run.summary).toEqual({ green: 3, yellow: 0, red: 1 })
   })
 
   it('大白话：refund_required 查询炸→本项红/high（死信不许被读失败洗绿）', async () => {

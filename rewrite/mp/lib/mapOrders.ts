@@ -1,6 +1,6 @@
-// 订单映射（纯函数·黄金 frontend-store §七：脏单归一防白屏/渲染访问点纵深防御/金额恒两位小数/
+// 订单映射（纯函数：脏单归一防白屏/渲染访问点纵深防御/金额恒两位小数/
 // 状态中文化）。
-// 响应形状哨兵见 rewrite/cloud/tests/contract-shape.test.ts·cloud 改键该测试会红·同步时两头一起改（批B10）。
+// 响应形状哨兵见 rewrite/cloud/tests/contract-shape.test.ts·cloud 改键该测试会红·同步时两头一起改。
 export interface OrderLineVM {
   lineId: string
   name: string
@@ -46,11 +46,10 @@ const STATUS_LABELS: Record<string, string> = {
 }
 export const statusLabel = (s: unknown): string => STATUS_LABELS[String(s)] || String(s || '')
 
-// 金额行标题·顾客视角「这单钱付过没有」（2026-07-25 全量页面体检批 P1）。**展示口径**，与 shared 的
+// 金额行标题·顾客视角「这单钱付过没有」。**展示口径**，与 shared 的
 // GMV/对账口径 PAID_ORDER_STATUSES 刻意不同：refund_required 是「已付但缺货、钱已收待人工退款」，
 // GMV 不计入但顾客确实付过款，金额行须写「实付款」。反之 pending/closed 从未付过钱（状态机 closed 只从
-// pending 转来），写「实付款」会让顾客以为被扣了钱——病史：两页曾对全部状态硬编码「实付款」，
-// 已关闭单同屏两处「实付款 ¥778.00」。两个集合**穷举** shared ORDER_STATUS 全集（新增状态漏归类，
+// pending 转来），写「实付款」会让顾客以为被扣了钱。两个集合**穷举** shared ORDER_STATUS 全集（新增状态漏归类，
 // 测试 orders-map「金额行标题」组当场红；不靠兜底默默吞掉）。
 const PAID_LOOK = ['paid', 'shipped', 'done', 'refund_required', 'payment_exception']
 const UNPAID_LOOK = ['pending', 'closed']
@@ -63,7 +62,7 @@ export const money = (v: unknown): string => {
   return Number.isFinite(n) ? '¥' + n.toFixed(2) : ''
 }
 
-/** 时间戳 → 'YYYY-MM-DD HH:mm'；非法返回空串（黄金 §四）。 */
+/** 时间戳 → 'YYYY-MM-DD HH:mm'；非法返回空串。 */
 export function dateTime(ts: unknown): string {
   const n = Number(ts)
   if (!Number.isFinite(n) || n <= 0) return ''
@@ -111,7 +110,7 @@ export function mapOrder(raw: unknown): OrderVM | null {
     amountTitle: amountTitle(o.status),
     items: itemsOf(o),
     count: countOf(o),
-    // 支付异常单展示实际到账（多代理审核 codex#5）：标题「实付款」不能配「订单标价」，否则对账/退款沟通依据错。
+    // 支付异常单展示实际到账：标题「实付款」不能配「订单标价」，否则对账/退款沟通依据错。
     // paidFee 为整数分（回调/补录落库），脏/缺回退订单金额。
     amountLabel:
       o.status === 'payment_exception' && Number.isInteger(Number(o.paidFee)) && Number(o.paidFee) > 0
@@ -124,7 +123,7 @@ export function mapOrder(raw: unknown): OrderVM | null {
     address: a ? { name: String(a.name || ''), phone: String(a.phone || ''), region: String(a.region || ''), detail: String(a.detail || '') } : null,
     goodsLabel: money(o.goods),
     shipLabel: Number(o.ship) > 0 ? money(o.ship) : '包邮',
-    // 主线顾客页不展示优惠券（2026-09-02）：历史单可能仍带 coupon 快照，标签恒空，实付走库内 amount。
+    // 主线顾客页不展示优惠券：历史单可能仍带 coupon 快照，标签恒空，实付走库内 amount。
     couponLabel: '',
   }
 }

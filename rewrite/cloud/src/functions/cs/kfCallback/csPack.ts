@@ -1,5 +1,5 @@
 /**
- * Config Pack lucky-ducky-2026-09-19 挂进测版运行时（T2）。
+ * Config Pack lucky-ducky-2026-09-19 挂进测版运行时。
  * 构建打进 kfCallback，运行时不拉 GitHub。Jev/原文 → triage_rules → 会话/交接（script id / lastScript）。
  * 包装破损对客正文只走 atomic-v1 assemblePackagingBubbles；Pack .txt 不发给顾客。
  */

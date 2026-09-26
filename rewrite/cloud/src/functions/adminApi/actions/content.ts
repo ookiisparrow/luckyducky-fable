@@ -1,10 +1,12 @@
-import { reply, ensure, str, readDoc, arrOf, type Ctx } from '../lib'
-import { notifyAlert, setOrAdd } from '../../../kit'
+import { reply, ensure, readDoc, type Ctx } from '../lib'
+import { arrOf } from '../catalog'
+import { notifyAlert, setOrAdd, deleteFiles, str, err } from '../../../kit'
+import { COLLECTIONS } from '@ldrw/shared'
 
-// —— 首页内容（橱窗逐块②③：hero 文案 / 信任条 / FAQ；规格 §八）——
+// —— 首页内容（hero 文案 / 信任条 / FAQ）——
 export async function getHomeContent({ db }: Ctx) {
-  const got = await readDoc(db.collection('content').doc('home').get())
-  if (!got.ok) return reply(200, { ok: false, error: 'DOC_READ_FAIL' })
+  const got = await readDoc(db.collection(COLLECTIONS.content).doc('home').get())
+  if (!got.ok) return reply(200, err('DOC_READ_FAIL'))
   return reply(200, { ok: true, home: got.data })
 }
 
@@ -61,13 +63,13 @@ export async function saveHomeContent({ db, data }: Ctx) {
     faq: arrOf(c.faq, 8).map((f: any) => ({ title: str(f?.title, 40), body: str(f?.body, 150) })),
     updatedAt: Date.now(),
   }
-  await ensure(db, 'content')
-  const coll = db.collection('content')
+  await ensure(db, COLLECTIONS.content)
+  const coll = db.collection(COLLECTIONS.content)
   await setOrAdd(coll, 'home', doc)
   return reply(200, { ok: true })
 }
 
-// —— 页面内容 CMS（批A·5 页可编辑：欢迎流/目录+播放页求助/我的/关于/协议）——
+// —— 页面内容 CMS（5 页可编辑：欢迎流/目录+播放页求助/我的/关于/协议）——
 // 承 saveHomeContent 样板（白名单净化·str 限长·数组封顶·setOrAdd 落档）；每页一独立净化函数，
 // 未知字段丢弃、未知 page fail-closed 拒（信任边界·根因#3 不信前端·行为由 app-page-content.test.ts 锁）。
 // content 集合每页一 doc（_id=page 键名）；小程序公开读经 app/catalog.getPageContent（catalogPlayer.catalog.heroImage
@@ -143,24 +145,24 @@ const HISTORY_CAS_RETRY = 5
 
 export async function savePageContent({ db, data }: Ctx) {
   const page = str(data.page, 40)
-  if (!PAGES.includes(page as any)) return reply(400, { ok: false, error: 'UNKNOWN_PAGE' }) // 未知 page fail-closed（根因#3）
+  if (!PAGES.includes(page as any)) return reply(400, err('UNKNOWN_PAGE')) // 未知 page fail-closed（根因#3）
   const clean: any = PAGE_SANITIZERS[page](data.data || {})
-  await ensure(db, 'content')
-  const coll = db.collection('content')
+  await ensure(db, COLLECTIONS.content)
+  const coll = db.collection(COLLECTIONS.content)
   if (page === 'agreement') {
     // history 服务端权威追加（客户端传的一律忽略·防伪造版本史）：读旧份逐 part 比对 version，非空且变更即追
     // {part,version,at:ISO}，封顶 10（保留末 10 条·同 issueSession 剪最旧手法）。
     //
-    // 并发保存 fail-closed（P3 复核：原「读 history → 内存追加 → 整体写回」非原子——两次并发保存读到同一份
-    // 旧 history，各自追加后写回，后写覆盖先写、丢一条历史记录）。改用乐观 CAS 重试（同 kit/inventory.ts
+    // 并发保存 fail-closed（「读 history → 内存追加 → 整体写回」非原子——两次并发保存读到同一份
+    // 旧 history，各自追加后写回，后写覆盖先写、丢一条历史记录）。故用乐观 CAS 重试（同 kit/inventory.ts
     // produceStock 手法）：条件带上读到时的版本号 _v（单调计数器，非 updatedAt 时间戳——毫秒级 Date.now()
     // 在同一毫秒内两次写入会撞出同一个值，CAS 条件误判「无冲突」直接覆盖、静默丢一条并发追加，
-    // 曾在本地高频重试下实测复现），写前该文档被并发改过则 updated:0、重读重算 additions 再重试
+    // 本地高频重试下实测复现过），写前该文档被并发改过则 updated:0、重读重算 additions 再重试
     // （读到的 prevData 已含并发方的新版本，本轮 diff 不会对已存在的版本重复追加，天然去重）；
     // 首次建档走 add() 撞 DUPLICATE_ID 即并发方已建，同样重读重试。非钱链路径，用不到分布式锁。
     for (let i = 0; i < HISTORY_CAS_RETRY; i++) {
       const prev = await readDoc(coll.doc('agreement').get())
-      if (!prev.ok) return reply(200, { ok: false, error: 'DOC_READ_FAIL' })
+      if (!prev.ok) return reply(200, err('DOC_READ_FAIL'))
       const prevData: any = prev.data || {}
       const prevHist = Array.isArray(prevData.history) ? prevData.history : []
       const hasV = typeof prevData._v === 'number'
@@ -190,7 +192,7 @@ export async function savePageContent({ db, data }: Ctx) {
       if (r.stats && r.stats.updated === 1) return reply(200, { ok: true })
       // updated:0＝写前被并发改动抢先，重读重试
     }
-    return reply(409, { ok: false, error: 'CONTENTION' }) // 争用耗尽（管理端低频操作·几乎不至）
+    return reply(409, err('CONTENTION')) // 争用耗尽（管理端低频操作·几乎不至）
   }
   const doc = { ...clean, updatedAt: Date.now() }
   await setOrAdd(coll, page, doc)
@@ -199,9 +201,9 @@ export async function savePageContent({ db, data }: Ctx) {
 
 export async function getPageContent({ db, data }: Ctx) {
   const page = str(data.page, 40)
-  if (!PAGES.includes(page as any)) return reply(400, { ok: false, error: 'UNKNOWN_PAGE' }) // 未知 page fail-closed（根因#3）
-  const got = await readDoc(db.collection('content').doc(page).get())
-  if (!got.ok) return reply(200, { ok: false, error: 'DOC_READ_FAIL' })
+  if (!PAGES.includes(page as any)) return reply(400, err('UNKNOWN_PAGE')) // 未知 page fail-closed（根因#3）
+  const got = await readDoc(db.collection(COLLECTIONS.content).doc(page).get())
+  if (!got.ok) return reply(200, err('DOC_READ_FAIL'))
   return reply(200, { ok: true, page, content: got.data })
 }
 
@@ -209,14 +211,14 @@ export async function getPageContent({ db, data }: Ctx) {
 // 小程序播放页求助面板「遇到问题了」列表即此；控制台「帮助视频」增删改 + 上传视频（复用 getVideoUploadMeta 直传）。
 // 管理端读回原始 videoFileId（已过口令闸）便于显「已传」/保存；小程序公开读经 catalog/getHelpVideos 换临时 URL（fileID 不出口）。
 export async function listHelpVideos({ db }: Ctx) {
-  const got = await readDoc(db.collection('content').doc('helpVideos').get())
-  if (!got.ok) return reply(200, { ok: false, error: 'DOC_READ_FAIL' })
+  const got = await readDoc(db.collection(COLLECTIONS.content).doc('helpVideos').get())
+  if (!got.ok) return reply(200, err('DOC_READ_FAIL'))
   const d = got.data || {}
   // rev 供前端做 baseRev（乐观并发基线·同 saveCourseDraft 口径）：缺档=0
   return reply(200, { ok: true, items: d.items || [], rev: Number(d.rev) || 0 })
 }
 
-export async function saveHelpVideos({ db, cloud, data }: Ctx) {
+export async function saveHelpVideos({ db, data }: Ctx) {
   // 白名单净化（两级：主题→小段）：主题 id/title/sub/desc 限长；小段 id/name/dur/videoFileId 限长。
   // 主题封顶 20、每主题小段封顶 20 防滥用；空小段（无视频）剔除；空主题（无标题且无任何带视频小段）剔除。
   const raw = Array.isArray(data.items) ? data.items : []
@@ -241,11 +243,11 @@ export async function saveHelpVideos({ db, cloud, data }: Ctx) {
       }
     })
     .filter((it: any) => it.title || it.segments.length)
-  await ensure(db, 'content')
-  const coll = db.collection('content')
+  await ensure(db, COLLECTIONS.content)
+  const coll = db.collection(COLLECTIONS.content)
   const prev = await readDoc(coll.doc('helpVideos').get()) // GC 基线 + 乐观并发基线：读旧份
-  if (!prev.ok) return reply(200, { ok: false, error: 'DOC_READ_FAIL' }) // 读失败≠空档：停写停 GC，不当 rev=0 覆盖
-  // 乐观并发（批A·内容域并发安全·根因#1·同 saveCourseDraft rev/baseRev/DRAFT_CONFLICT 口径）：整档覆盖。
+  if (!prev.ok) return reply(200, err('DOC_READ_FAIL')) // 读失败≠空档：停写停 GC，不当 rev=0 覆盖
+  // 乐观并发（根因#1·同 saveCourseDraft rev/baseRev/DRAFT_CONFLICT 口径）：整档覆盖。
   // 诚实边界：同 courses.ts 一样是「文档级 get→比对→set」，get 与 set 之间仍有毫秒级 TOCTOU 窗（非
   // checkpoints.ts defmeta 那种条件 update 真 CAS）——帮助视频保存低频、真实冲突是人差几分钟的编辑，可接受。
   // （items 整体替换）＝两处并发编辑（双页签/双管理员）后保存者静默吃掉先保存者的编辑。客户端带上拉取时
@@ -253,27 +255,26 @@ export async function saveHelpVideos({ db, cloud, data }: Ctx) {
   const curRev = prev.data ? Number(prev.data.rev) || 0 : 0
   const baseRev = Number(data.baseRev)
   // 冲突分支：既不覆盖内容也绝不 GC 删文件——否则先保存者的编辑丢了、其视频还被误删（不可逆）。
-  if (Number.isFinite(baseRev) && curRev !== baseRev) return reply(200, { ok: false, error: 'DRAFT_CONFLICT', rev: curRev })
+  if (Number.isFinite(baseRev) && curRev !== baseRev) return reply(200, err('DRAFT_CONFLICT', { rev: curRev }))
   const doc = { items, updatedAt: Date.now(), rev: curRev + 1 }
   await setOrAdd(coll, 'helpVideos', doc)
-  // 孤儿视频 GC（深审 P3·同 publishCourse 思路）：删「旧份有、新份没有」的 videoFileId。**写成功后才 GC**
-  // （冲突分支已 early-return，到不了这里）。GC 删除失败不再静默吞（H2·同 saveCheckpoints 判例·病根#14）：
+  // 孤儿视频 GC（同 publishCourse 思路）：删「旧份有、新份没有」的 videoFileId。**写成功后才 GC**
+  // （冲突分支已 early-return，到不了这里）。GC 删除失败不静默吞（同 saveCheckpoints·病根#14）：
   // 保存本身已成功，但 orphans 删不掉时如实回 ok:false + notifyAlert 留痕（orphans 进 anomalies 账本可人工回收，
   // 低频面不为罕见失败建 pendingGc 队列）——别静默过关让前端误显「已保存」而云存储悄悄只增不减。
   const keep = new Set(items.flatMap((it: any) => it.segments.map((sg: any) => String(sg.videoFileId))))
-  const prevIds = ((prev.data && prev.data.items) || []).flatMap((it: any) =>
+  const prevIds: string[] = ((prev.data && prev.data.items) || []).flatMap((it: any) =>
     ((it.segments || []) as any[]).map((sg: any) => String(sg.videoFileId || '')).filter(Boolean)
   )
   const orphans = [...new Set(prevIds)].filter((id) => !keep.has(id))
   if (orphans.length) {
-    // 整体调用失败＝全部 orphans 视为删除失败；成功但含 status!=0 的项＝那几个失败（真 sdk 逐文件状态）。
-    const failed: string[] = await cloud
-      .deleteFile({ fileList: orphans })
-      .then((r: any) => ((r && r.fileList) || []).filter((f: any) => f && f.status !== 0).map((f: any) => String(f.fileID)))
+    // 整体调用失败＝全部 orphans 视为删除失败；否则按逐文件结果
+    const failed: string[] = await deleteFiles(orphans)
+      .then((rs) => rs.filter((r) => !r.deleted).map((r) => r.fileID))
       .catch(() => orphans)
     if (failed.length) {
       await notifyAlert('anomaly', 'saveHelpVideos', 'GC_DELETE_FAIL', { orphans: failed })
-      return reply(200, { ok: false, error: 'GC_DELETE_FAIL', rev: doc.rev })
+      return reply(200, err('GC_DELETE_FAIL', { rev: doc.rev }))
     }
   }
   return reply(200, { ok: true, rev: doc.rev })

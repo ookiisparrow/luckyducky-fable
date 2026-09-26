@@ -1,37 +1,42 @@
-// 订单/详情 data.missing 是死字段；详情 loadRating 过期回包须认代次（推荐与主体同一次 setData 写入，无需另认）。
-// 源码扫描（同 home-reload-failsoft·mp tsconfig 无 node:fs·E1 剥注释防假绿）。
-import { describe, it, expect } from 'vitest'
-import detailSrc from '../pages/detail/detail.ts?raw'
+// 详情页评分摘要过期回包：连点重试 / 快速切商品时，上一趟的评分迟到回来不该盖到当前商品上。
+// Page 桩同 me-cont-failed.test.ts。
+import { describe, it, expect, vi } from 'vitest'
 
-function stripComments(src: string): string {
-  return src.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/gm, '').replace(/<!--[\s\S]*?-->/g, '')
+const { ratingMock } = vi.hoisted(() => ({ ratingMock: vi.fn() }))
+vi.mock('../api/reviews', () => ({ getRatingSummary: ratingMock }))
+vi.mock('../api/learning', () => ({ trackEvent: vi.fn() }))
+vi.mock('../lib/catalog', () => ({ getAllProducts: vi.fn(), getProductDetail: vi.fn() }))
+vi.mock('../lib/cart', () => ({ add: vi.fn() }))
+vi.mock('../lib/checkout', () => ({ prepareBuyNow: vi.fn() }))
+vi.mock('../utils/customerService', () => ({ openCustomerService: vi.fn() }))
+vi.mock('../lib/haptics', () => ({ tapHaptic: vi.fn() }))
+
+let pageOpts: Record<string, any> = {}
+;(globalThis as any).Page = (o: unknown) => {
+  pageOpts = o as Record<string, any>
 }
 
-function methodBody(rawSrc: string, name: string): string {
-  const src = stripComments(rawSrc)
-  const start = new RegExp(`(?:async\\s+)?${name}\\s*\\([^)]*\\)\\s*(?::\\s*[^{]+)?\\{`).exec(src)
-  if (!start) throw new Error(`未找到方法 ${name}`)
-  let depth = 0
-  let i = start.index + start[0].length - 1
-  for (; i < src.length; i++) {
-    if (src[i] === '{') depth++
-    else if (src[i] === '}') {
-      depth--
-      if (depth === 0) break
+describe('详情评分摘要过期回包', () => {
+  it('大白话：评分回包若这一趟已经过期（期间又加载了一次），就丢掉不写；当前这趟的照常写', async () => {
+    vi.resetModules()
+    await import('../pages/detail/detail')
+    const page = Object.create(pageOpts) as Record<string, any>
+    page.data = { ...pageOpts.data }
+    page.setData = function (patch: Record<string, unknown>) {
+      Object.assign(this.data as Record<string, unknown>, patch)
     }
-  }
-  return src.slice(start.index, i + 1)
-}
 
-describe('订单/详情死字段 + 推荐评分过期回包', () => {
+    let releaseOld!: (v: unknown) => void
+    ratingMock.mockReturnValueOnce(new Promise((r) => (releaseOld = r)))
+    page._seq = 1
+    const old = page.loadRating('p-old', 1)
+    page._seq = 2 // 又加载了一次商品
+    releaseOld({ ok: true, count: 9, score: 4.2 })
+    await old
+    expect(page.data.rating).toBeNull()
 
-  it('大白话：评分回包若这一趟已经过期，就丢掉不写到已经离开的页', () => {
-    for (const name of ['loadRating']) {
-      const body = methodBody(detailSrc, name)
-      const seqAt = body.search(/seq\s*!==\s*this\._seq|this\._seq\s*!==\s*seq/)
-      const setAt = body.search(/this\.setData/)
-      expect(seqAt, `${name} 须认代次`).toBeGreaterThanOrEqual(0)
-      expect(setAt, `${name} 过期须先于写入丢掉`).toBeGreaterThan(seqAt)
-    }
+    ratingMock.mockResolvedValueOnce({ ok: true, count: 3, score: 5 })
+    await page.loadRating('p-new', 2)
+    expect(page.data.rating).toMatchObject({ count: 3, scoreLabel: '5' })
   })
 })

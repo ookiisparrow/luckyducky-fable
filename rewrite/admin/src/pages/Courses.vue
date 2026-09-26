@@ -38,10 +38,10 @@ const message = ref('')
 const busy = ref(false)
 const progress = ref('')
 const publishConfirm = ref(false)
-// 视频进度＝computed 自动随课程树更新（迭代E 逮出：原 imperative ref 在 delChapter/delLesson/addSegment 后不刷新致漂移）
+// 视频进度＝computed 自动随课程树更新（imperative ref 在 delChapter/delLesson/addSegment 后不刷新会漂移）
 const stats = computed(() => courseVideoStats(course.value))
-const confirmKey = ref('') // no-alert 两步删除确认（换皮改直接 splice·误删即丢）
-// 死胡同改选择器（UX 体检批3）：课程无列表 API（listCourses 不存在·已核）——走「商品行 courseId」桥
+const confirmKey = ref('') // no-alert 两步删除确认（直接 splice 的话误删即丢）
+// 死胡同改选择器：课程无列表 API（listCourses 不存在）——走「商品行 courseId」桥
 // （商品档是课程唯一入口事实·商品页「编辑课程」按钮同源）；只列已关联课程的商品，未关联的从商品页补建。
 // 拉不到列表就保持手输老路，不挡人
 const courseOptions = ref<{ cid: string; label: string }[] | null>(null)
@@ -53,9 +53,9 @@ async function loadCourseOptions() {
   message.value = '加载中…'
   const dr = await listDrafts().catch(() => null)
   message.value = ''
-  if (!(dr as any)?.ok) return
+  if (!dr?.ok) return
   const seen = new Map<string, string>()
-  for (const p of (((dr as any).list as Record<string, any>[]) || [])) {
+  for (const p of dr.list || []) {
     const cid = String(p.courseId || '')
     if (cid && !seen.has(cid)) seen.set(cid, String(p.name || cid))
   }
@@ -65,11 +65,11 @@ function pickCourse(cid: string) {
   courseId.value = cid
   void load()
 }
-const batchUploading = ref(false) // 课时级批量传视频在途（P1·根因#8）：期间锁重排/删除交互入口，防结构错位与稳定标识失配（批3 规格）
+const batchUploading = ref(false) // 课时级批量传视频在途（根因#8）：期间锁重排/删除交互入口，防结构错位与稳定标识失配
 
 const pct = computed(() => progressPercent(stats.value.done, stats.value.total)) // 单源 @ldrw/shared（0%/100% 不撒谎）
 
-// VOD 转码态（决策§31 批2）：段 videoFileId 为 VOD FileId（纯数字·判据单源 @ldrw/shared 与云端播放
+// VOD 转码态（决策§31）：段 videoFileId 为 VOD FileId（纯数字·判据单源 @ldrw/shared 与云端播放
 // 分流同款）且 vodUrl 未回写 = 转码中——「传完 ≠ 可播」，发布被云端闸拦，先点「同步转码状态」。
 const vodPending = (sg: Record<string, any>) => isVodFileId(String(sg.videoFileId || '')) && !sg.vodUrl
 const vodPendingCount = computed(() => {
@@ -92,18 +92,18 @@ async function syncVod() {
   } else message.value = launchErrorText(r.error)
 }
 
-// ↑↓ 重排（换皮丢·章/课时/段顺序＝内容语义·嵌套 ↑↓ 比拖拽稳）
+// ↑↓ 重排（章/课时/段顺序＝内容语义·嵌套 ↑↓ 比拖拽稳）
 function move<T>(arr: T[], i: number, dir: number) {
-  if (batchUploading.value) return // 批量传视频在途锁重排（交互面·P1·同 delChapter/delLesson/delSegment）
+  if (batchUploading.value) return // 批量传视频在途锁重排（交互面·同 delChapter/delLesson/delSegment）
   const j = i + dir
   if (j < 0 || j >= arr.length) return
   const t = arr[i]
   arr[i] = arr[j]
   arr[j] = t
-  confirmKey.value = '' // 重排后清「已武装删除」·防下标编码的 confirmKey 落到换位后的另一元素→删错（P2）
+  confirmKey.value = '' // 重排后清「已武装删除」·防下标编码的 confirmKey 落到换位后的另一元素→删错
 }
 function delChapter(ci: number) {
-  if (batchUploading.value) return // 批量传视频在途锁删除（交互面·P1·防结构变动使稳定引用失配）
+  if (batchUploading.value) return // 批量传视频在途锁删除（交互面·防结构变动使稳定引用失配）
   if (confirmed(confirmKey, 'ch:' + ci)) course.value!.chapters.splice(ci, 1)
 }
 function delLesson(ch: Record<string, any>, ci: number, li: number) {
@@ -114,7 +114,7 @@ function delSegment(l: Record<string, any>, ci: number, li: number, si: number) 
   if (batchUploading.value) return
   if (confirmed(confirmKey, 's:' + ci + ':' + li + ':' + si)) l.segments.splice(si, 1)
 }
-// 发布前护栏（换皮退成可静默发布残课）：空结构硬拦、缺视频/空课时软提醒
+// 发布前护栏（防静默发布残课）：空结构硬拦、缺视频/空课时软提醒
 const publishIssues = computed(() => {
   const c = course.value
   if (!c) return [] as string[]
@@ -122,7 +122,7 @@ const publishIssues = computed(() => {
   const issues: string[] = []
   if (!chs.length || !chs.some((ch) => (ch.lessons || []).length)) issues.push('课程还没有章节/课时')
   let missing = 0
-  let emptyLessons = 0 // 0 段课时（课程链路审计 2026-07-17）：内层循环不执行、missing 数不到——学员点进见空课时
+  let emptyLessons = 0 // 0 段课时：内层循环不执行、missing 数不到——学员点进见空课时
   for (const ch of chs)
     for (const l of ch.lessons || []) {
       if (!(l.segments || []).length) emptyLessons++
@@ -133,20 +133,20 @@ const publishIssues = computed(() => {
   return issues
 })
 
-const loadGen = useLatest() // load() 乱序守卫（批A）：只让最后一次发起的 getCourseDraft 结果落地
+const loadGen = useLatest() // load() 乱序守卫：只让最后一次发起的 getCourseDraft 结果落地
 async function load() {
   if (!courseId.value.trim()) return false
   if (batchUploading.value) {
-    // 批量传视频在途时拦截切课（P1 复审补漏·根因#8）：load() 会把 course.value 整体换成另一门课，
+    // 批量传视频在途时拦截切课（根因#8）：load() 会把 course.value 整体换成另一门课，
     // 而 batchUpload 循环持有的是旧课时对象的裸引用——一旦断链，仍在跑的上传会把 videoFileId 写回
     // 一棵不可达的树，永久丢失且无报错（云存储留孤儿文件）。交互面已锁重排/删除按钮，切课入口同锁。
     message.value = '有批量上传在进行中，请等其完成再切课'
     return false
   }
-  confirmKey.value = '' // 换课即复位危险态（P1·防旧武装的删章/删课时/删段残留、重进同一位一击直删·批3 规格）
-  publishConfirm.value = false // 换课即复位危险态（P1·防旧武装的发布确认残留、重进一击直发·批3 规格）
+  confirmKey.value = '' // 换课即复位危险态（防旧武装的删章/删课时/删段残留、重进同一位一击直删）
+  publishConfirm.value = false // 换课即复位危险态（防旧武装的发布确认残留、重进一击直发）
   message.value = '加载中…'
-  const my = loadGen.begin() // 乱序守卫（批A·同 Batches G1·根因#8）：连点载入/切课时旧回包别把 course.value 污染成错课
+  const my = loadGen.begin() // 乱序守卫（同 Batches loadGen·根因#8）：连点载入/切课时旧回包别把 course.value 污染成错课
   const r = await getCourseDraft(courseId.value.trim())
   if (loadGen.isStale(my)) return false // 已发起更新的 load()·整包丢弃（course/draftRev/message 全不写）
   if (!r.ok) {
@@ -155,9 +155,9 @@ async function load() {
   }
   loaded = false // 载入期不触发自动保存
   fromPublished.value = r.fromPublished === true
-  course.value = (r.course as Record<string, any>) || { id: courseId.value.trim(), title: '', sort: 0, chapters: [] }
-  // 乐观并发基线（课程链路审计 2026-07-17）：记下拉草稿那一刻的版本号；重新载入即解除冲突态恢复自动保存
-  draftRev.value = Number((r.course as Record<string, any>)?.rev) || 0
+  course.value = r.course || { id: courseId.value.trim(), title: '', sort: 0, chapters: [] }
+  // 乐观并发基线：记下拉草稿那一刻的版本号；重新载入即解除冲突态恢复自动保存
+  draftRev.value = Number(r.course?.rev) || 0
   conflicted.value = false
   message.value = ''
   saveState.value = ''
@@ -165,7 +165,7 @@ async function load() {
   return true
 }
 
-// 视频时长自动读取（换皮丢·选完视频读元数据填 dur·mm:ss）
+// 视频时长自动读取（选完视频读元数据填 dur·mm:ss）
 function readDuration(file: File): Promise<string> {
   return new Promise((resolve) => {
     const url = URL.createObjectURL(file)
@@ -184,15 +184,15 @@ function readDuration(file: File): Promise<string> {
   })
 }
 
-// 防抖自动保存（换皮退成手动按钮·编视频编排忘点即丢）：900ms + 离页补存·load 期不触发
+// 防抖自动保存（手动按钮的话编视频编排忘点即丢）：900ms + 离页补存·load 期不触发
 const saveState = ref<'' | 'saving' | 'saved' | 'error'>('')
-const draftRev = ref(0) // 拉草稿那一刻的版本号（乐观并发基线·课程链路审计 2026-07-17）
+const draftRev = ref(0) // 拉草稿那一刻的版本号（乐观并发基线）
 const conflicted = ref(false) // 冲突态：别处已改过草稿——停自动保存防连环覆盖，「载入」解除
 let loaded = false
 let saveTimer: ReturnType<typeof setTimeout> | null = null
-// 串行化实际保存（防慢网下两次自动保存乱序覆盖·P2·根因#8）：run 现读 course.value·补存即最新。
-// key='courses:'+courseId（批D·P1，取组件构造那一刻的 courseId·同实例内后续 load() 换课不改 key——仍在
-// 同一条队列里天然串行，只是槽位标签不再精确对应「当前」课程号，不影响写入正确性)：改走模块级共享槽位，
+// 串行化实际保存（防慢网下两次自动保存乱序覆盖·根因#8）：run 现读 course.value·补存即最新。
+// key='courses:'+courseId（取组件构造那一刻的 courseId·同实例内后续 load() 换课不改 key——仍在
+// 同一条队列里天然串行，只是槽位标签不再精确对应「当前」课程号，不影响写入正确性)：走模块级共享槽位，
 // 快速切走再切回本页重建组件实例时，新实例接管旧实例仍在途的补存链，防旧快照晚到覆盖新实例已存的编辑。
 const flushSave = serialSave(async () => {
   if (!course.value || conflicted.value) return
@@ -219,7 +219,7 @@ function autosave() {
   }, 900)
 }
 watch(course, () => { if (loaded && course.value) autosave() }, { deep: true })
-// 浏览器级离页拦截（课程链路审计 2026-07-17·根因#14）：F5 刷新/关标签页不走 Vue 生命周期与 vue-router
+// 浏览器级离页拦截（根因#14）：F5 刷新/关标签页不走 Vue 生命周期与 vue-router
 // 钩子，onBeforeUnmount 的补存也会随页面卸载被浏览器取消——有未落盘编辑（防抖待触发/保存在途）时弹
 // 浏览器原生「离开页面？」确认，给一次挽回机会（补存本身在 unload 里保证不了送达，拦住人才是可靠的）。
 function onBeforeUnload(e: BeforeUnloadEvent) {
@@ -230,7 +230,7 @@ function onBeforeUnload(e: BeforeUnloadEvent) {
 }
 onMounted(() => window.addEventListener('beforeunload', onBeforeUnload))
 // 离页补存判据用 pending saveTimer 而非 saveState==='saving'（先发保存完成会把 saveState 复位成 'saved'、
-// 后一次编辑只在待触发 timer 里→按 saveState 判会漏补、离页丢课程编辑·P2·同 HelpVideos/Showcase·迭代I 批7 回归补 Courses）
+// 后一次编辑只在待触发 timer 里→按 saveState 判会漏补、离页丢课程编辑·同 HelpVideos/Showcase）
 onBeforeUnmount(() => {
   window.removeEventListener('beforeunload', onBeforeUnload)
   if (saveTimer) {
@@ -240,7 +240,7 @@ onBeforeUnmount(() => {
   }
 })
 
-// 新建节点当场铸 id（课程链路审计 2026-07-17·根因#1 稳定标识）：原来恒传空串、由云端 cleanCourse 每次
+// 新建节点当场铸 id（根因#1 稳定标识）：若恒传空串、由云端 cleanCourse 每次
 // 保存现生成随机 id 且从不回填——同一会话「发布→继续编辑→再保存→再发布」会让内容没变的节点 id 漂移，
 // 学员进度/checkpoint 按 segmentId 关联的记录随之失联。前端铸一次（格式对齐 cleanCourse：前缀+6位36进制），
 // cleanCourse 对非空 id 原样保留，id 自出生即稳定。
@@ -255,8 +255,8 @@ function addSegment(l: Record<string, any>) {
   l.segments.push({ id: mintId('s'), name: '', dur: '', videoFileId: '' })
 }
 
-// 单段上传纳入批量传视频同一套防护（G2·P1）：换皮丢了这层——单段上传无锁，切课后仍在跑的上传把 videoFileId
-// 写回一棵不可达的树，静默丢失（同 batchUpload 顶部注释的病根）。补：借用 batchUploading 共享标志（上传期间
+// 单段上传纳入批量传视频同一套防护：单段上传无锁的话，切课后仍在跑的上传把 videoFileId
+// 写回一棵不可达的树，静默丢失（同 batchUpload 顶部注释的病根）。故借用 batchUploading 共享标志（上传期间
 // load() 已会拦截切课、重排/删除按钮已按此标志 disable），并在写回前按对象引用重定位——段已被删除/移出则如实
 // 报告、不写回幽灵对象。
 async function pickVideo(l: Record<string, any>, sg: Record<string, any>, ev: Event) {
@@ -269,7 +269,7 @@ async function pickVideo(l: Record<string, any>, sg: Record<string, any>, ev: Ev
   try {
     progress.value = '上传中 0%'
     if (!sg.dur) sg.dur = await readDuration(file) // 时长自动读取（未填才读·不覆盖手填）
-    // allowVod（决策§31 批2 自纠）：课程视频线显式走 VOD——
+    // allowVod（决策§31）：课程视频线显式走 VOD——
     // 帮助视频线共用本函数但恒不传（其播放侧只认云存储 fileID）。
     const r = await uploadVideo(String(course.value.id), String(sg.name || 'seg'), file, (p) => (progress.value = `上传中 ${Math.round(p * 100)}%`), { allowVod: true })
     if (!l.segments.includes(sg)) {
@@ -279,7 +279,7 @@ async function pickVideo(l: Record<string, any>, sg: Record<string, any>, ev: Ev
     if (r.ok) {
       sg.videoFileId = r.fileId || ''
       message.value = ''
-    } else if (r.error === 'SESSION_LOST') message.value = '登录已过期，这段视频未上传成功，请重新登录后重试' // 同 batchUpload 措辞（批D·根因2）
+    } else if (r.error === 'SESSION_LOST') message.value = '登录已过期，这段视频未上传成功，请重新登录后重试' // 同 batchUpload 措辞
     else message.value = launchErrorText(r.error)
   } finally {
     progress.value = ''
@@ -288,9 +288,9 @@ async function pickVideo(l: Record<string, any>, sg: Record<string, any>, ev: Ev
   }
 }
 
-// 课时级批量传视频（换皮丢·多选按文件名 numeric 顺序灌入/自动新建段·串行 fail-soft·课时级进度）：
+// 课时级批量传视频（多选按文件名 numeric 顺序灌入/自动新建段·串行 fail-soft·课时级进度）：
 // plan 时用当前 l.segments 下标算出的 segIndex 只是「计划那一刻」的位置——循环是逐段 await 的异步过程，
-// 期间若发生重排/删段，下标会漂移到别的段（错配/越界，P1·根因#8）。修：plan 后立即深捕获目标段的
+// 期间若发生重排/删段，下标会漂移到别的段（错配/越界，根因#8）。故 plan 后立即深捕获目标段的
 // 对象引用（existing 段直接引用当时的数组元素·JS 对象身份不随数组重排改变），每次上传前按引用重定位
 // （`l.segments.includes(sg)`），引用已不在数组里（被删）即跳过并如实报告；同时上传期间锁重排/删除 UI
 // （数据面按稳定引用兜底、交互面靠 batchUploading 锁入口，两层都做）。
@@ -298,13 +298,13 @@ async function batchUpload(l: Record<string, any>, ev: Event) {
   const input = ev.target as HTMLInputElement
   const files = Array.from(input.files || [])
   if (!files.length || !course.value || batchUploading.value) return
-  const plan = planLessonBatch(files, (l.segments as any[]).length)
+  const plan = planLessonBatch(files, l.segments.length)
   // plan 时就地深捕获——existing 段捕获当时的对象引用；new 段等真正 push 那一刻才有引用可捕获（先占位 null）
   const targets: Array<Record<string, any> | null> = plan.map((item) => (item.isNew ? null : (l.segments[item.segIndex] as Record<string, any>) ?? null))
   batchUploading.value = true
-  setUploadLock() // 批量上传在途锁（P1·bug sweep Round2 item12）：本组件 onBeforeRouteLeave + Wizard.go() 两处消费，拦截离页/切步致孤儿上传
+  setUploadLock() // 批量上传在途锁：本组件 onBeforeRouteLeave + Wizard.go() 两处消费，拦截离页/切步致孤儿上传
   let uploaded = 0
-  const fails: string[] = [] // 失败逐条累积（课程链路审计 2026-07-17）：原先互相覆盖 message，只剩最后一条——中间失败的段名/原因全丢
+  const fails: string[] = [] // 失败逐条累积：互相覆盖 message 的话只剩最后一条——中间失败的段名/原因全丢
   try {
     for (let i = 0; i < plan.length; i++) {
       const item = plan[i]
@@ -312,9 +312,9 @@ async function batchUpload(l: Record<string, any>, ev: Event) {
       if (item.isNew) {
         sg = { id: mintId('s'), name: item.segName, dur: '', videoFileId: '' }
         l.segments.push(sg)
-      } else if (!sg || !(l.segments as any[]).includes(sg)) {
+      } else if (!sg || !l.segments.includes(sg)) {
         fails.push(`「${item.segName}」对应的段已被删除/移出，已跳过`)
-        continue // 稳定引用重定位失败（段已被删）——如实跳过报告（P1）
+        continue // 稳定引用重定位失败（段已被删）——如实跳过报告
       }
       if (!sg.name) sg.name = item.segName
       if (!sg.dur) sg.dur = await readDuration(item.file) // 时长自动读取（未填才读）
@@ -323,7 +323,7 @@ async function batchUpload(l: Record<string, any>, ev: Event) {
         sg.videoFileId = r.fileId || ''
         uploaded++
       } else if (r.error === 'SESSION_LOST') {
-        // 会话失效清晰中止（批D·根因2）：不继续逐文件循环——令牌已被 client 清空，剩余每个文件必然同样
+        // 会话失效清晰中止：不继续逐文件循环——令牌已被 client 清空，剩余每个文件必然同样
         // 401，逐个静默失败会把这份汇总原因冲没、用户只看到最后一条「上传失败：SESSION_LOST」摸不着头脑。
         // client.onSessionLost 已集中导登录（见 router.ts），这里只负责把「传到哪、剩多少」说清楚。
         fails.push(`登录已过期，已上传 ${uploaded}/${plan.length} 个，剩余 ${plan.length - uploaded} 个未上传，请重新登录后继续`)
@@ -339,8 +339,8 @@ async function batchUpload(l: Record<string, any>, ev: Event) {
   input.value = ''
 }
 
-// 离页拦截（P1·bug sweep Round2 item12）：覆盖独立路由页离开 + 整个 Wizard 页离开（如中途点「回商品列表」）。
-// Wizard 内部切步（query 变化）是路由 update 非 leave，此钩子不触发——那半由 Wizard.vue go() 前置拦截负责（c 点）。
+// 离页拦截：覆盖独立路由页离开 + 整个 Wizard 页离开（如中途点「回商品列表」）。
+// Wizard 内部切步（query 变化）是路由 update 非 leave，此钩子不触发——那半由 Wizard.vue go() 前置拦截负责。
 onBeforeRouteLeave(() => {
   if (isUploadLocked()) {
     message.value = '批量上传进行中，请等其完成再离开（切走会丢失还没落库的视频关联）'
@@ -351,9 +351,9 @@ onBeforeRouteLeave(() => {
 async function save() {
   if (!course.value || busy.value) return
   busy.value = true
-  // 手动保存前排空在途/待发自动保存·成为最后一次写（防旧快照 autosave POST 后落覆盖新草稿·同 publish/HomeContent·迭代I 批7 回归补 Courses.save）。
-  // 单路径：只走 flushSave（serialSave 链·run 现读 course.value 即最新快照）——原先 flush 后又直发一次
-  // saveCourseDraft 属双写冗余，且直发不带 baseRev 会绕过乐观并发检查（课程链路审计 2026-07-17）。
+  // 手动保存前排空在途/待发自动保存·成为最后一次写（防旧快照 autosave POST 后落覆盖新草稿·同 publish/HomeContent）。
+  // 单路径：只走 flushSave（serialSave 链·run 现读 course.value 即最新快照）——flush 后再直发一次
+  // saveCourseDraft 属双写冗余，且直发不带 baseRev 会绕过乐观并发检查。
   if (saveTimer) {
     clearTimeout(saveTimer)
     saveTimer = null
@@ -491,7 +491,7 @@ onMounted(() => {
 
       <div><button class="add-chapter ld-tree-add-root" @click="addChapter"><Plus :size="15" :stroke-width="2" /><span>加章</span></button></div>
     </template>
-    <!-- 选择器模式（批3 死胡同改造）：直入无课号时从商品桥列已关联课程点选 -->
+    <!-- 选择器模式（防死胡同）：直入无课号时从商品桥列已关联课程点选 -->
     <Card v-else-if="!message && courseOptions && courseOptions.length" title="选择课程" sub="从已关联课程的商品选一门进入；未关联的先到商品页「编辑课程」建立关联">
       <div class="pick-list">
         <button v-for="o in courseOptions" :key="o.cid" class="pick-row" @click="pickCourse(o.cid)">
@@ -635,7 +635,7 @@ onMounted(() => {
   font-size: 13px;
   background: var(--ld-bg);
 }
-/* VOD 转码中 chip（决策§31 批2）：已传但转码未就绪——发布被云端闸拦的可视化对应物 */
+/* VOD 转码中 chip（决策§31）：已传但转码未就绪——发布被云端闸拦的可视化对应物 */
 .vod-pending {
   padding: 4px 10px;
   border: 1px solid var(--ld-amber);
@@ -646,7 +646,7 @@ onMounted(() => {
   font-weight: 600;
   white-space: nowrap;
 }
-/* 上传中禁用态（G2 复审补：批量传视频在途时和其余受锁控件一致给可感知反馈，防用户选完文件误以为失灵） */
+/* 上传中禁用态（批量传视频在途时和其余受锁控件一致给可感知反馈，防用户选完文件误以为失灵） */
 .upload.disabled,
 .batch-up.disabled {
   opacity: 0.5;
@@ -672,7 +672,7 @@ onMounted(() => {
   border-style: solid;
   background: var(--ld-bg-lilac);
 }
-/* 选择器模式（批3 死胡同改造）：课程挑选列表（商品桥） */
+/* 选择器模式（防死胡同）：课程挑选列表（商品桥） */
 .pick-list {
   display: flex;
   flex-direction: column;

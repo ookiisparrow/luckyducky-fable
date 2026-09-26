@@ -1,5 +1,5 @@
 <script setup lang="ts">
-// 协议文案页签（批C）：用户协议 user + 隐私政策 privacy 两份（各 version/effectiveDate + 条款增删改 ≤30）。
+// 协议文案页签：用户协议 user + 隐私政策 privacy 两份（各 version/effectiveDate + 条款增删改 ≤30）。
 // 顶部琥珀警示：文案已过审、改动须同步微信后台《隐私保护指引》；保存时服务端自动留版本档（history 只读展示·无回滚）。
 import { Plus, Trash2, AlertTriangle } from 'lucide-vue-next'
 import { usePageContent } from '../../lib/usePageContent'

@@ -1,4 +1,4 @@
-// 关于我们（M2 批13·文案 CMS 优先·硬编码降级为默认回退，见 lib/mapPages mapAbout）。品牌名引 lib/brand 单源（病根#5）。
+// 关于我们（文案 CMS 优先·硬编码降级为默认回退，见 lib/mapPages mapAbout）。品牌名引 lib/brand 单源（病根#5）。
 import { BRAND_NAME } from '../../lib/brand'
 import { getPageContent } from '../../lib/pageContent'
 import { mapAbout } from '../../lib/mapPages'

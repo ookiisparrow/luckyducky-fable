@@ -16,7 +16,7 @@ export function msHuman(v: unknown): string {
 export interface ReportItem {
   label: string
   value: string
-  bad?: boolean // 异常指标（未答复/超时 > 0）·模板据此标红（换皮把异常和正常指标同色·质检扫不到）
+  bad?: boolean // 异常指标（未答复/超时 > 0）·模板据此标红（与正常指标同色的话质检扫不到）
 }
 export interface ReportVM {
   sampleNote: string
@@ -59,7 +59,7 @@ export interface MsgVM {
   id: string
   who: string
   text: string
-  kind: string // 非文本消息类型（image/voice…）·独立 chip；文本为 ''（换皮把类型吞进正文·丢了与文字并存的标识）
+  kind: string // 非文本消息类型（image/voice…）·独立 chip；文本为 ''（类型不吞进正文，保留与文字并存的标识）
   timeLabel: string
   channel: string
 }
@@ -100,7 +100,7 @@ export interface PanelVM {
   label: string
   failed: boolean
   rows: PanelField[] // 面板标量字段
-  groups: PanelGroupVM[] // 嵌套数组明细分组（逐行逐字段·真复原·换皮误塌成「N 条」）
+  groups: PanelGroupVM[] // 嵌套数组明细分组（逐行逐字段·不塌成「N 条」）
 }
 
 const GROUP_CAP = 50 // 明细逐行有界（防大客户拖垮·capacity·根因#7）
@@ -155,7 +155,7 @@ export function mapPanels(r: unknown): PanelVM[] {
     const groups: PanelGroupVM[] = []
     const data = p.data
     if (!failed && data && typeof data === 'object' && !Array.isArray(data)) {
-      // 真实 provider 形状：对象含标量 + 嵌套数组。标量→rows；数组→逐行明细 groups（换皮误塌成「N 条」的真复原）
+      // 真实 provider 形状：对象含标量 + 嵌套数组。标量→rows；数组→逐行明细 groups（不塌成「N 条」）
       for (const [k, v] of Object.entries(data as Record<string, unknown>)) {
         if (Array.isArray(v)) {
           groups.push(buildGroup(k, v))
@@ -193,8 +193,8 @@ export function normalizeKb(list: unknown): KbRow[] {
 }
 
 // 节点诊断 nodeId 生成/校验（根因#8）：后端 saveCheckpoints 按 _id=`def:课:nodeId`
-// upsert（整课覆盖），nodeId 是主键——两节点同 nodeId 会静默相互覆盖丢数据、返回计数少报。换皮 addNode 用
-// `'n'+(length+1)` 生成默认 id：删中间节点后 length 回退即撞现存号（删 n2 后再加又得 n3）。收口：默认 id 取
+// upsert（整课覆盖），nodeId 是主键——两节点同 nodeId 会静默相互覆盖丢数据、返回计数少报。若 addNode 用
+// `'n'+(length+1)` 生成默认 id：删中间节点后 length 回退即撞现存号（删 n2 后再加又得 n3）。故默认 id 取
 // 「不与现存冲突的最小 n_k」；save 前再校验无重复（用户手改 nid 也可能撞）。
 export function nextNodeId(existing: string[]): string {
   const used = new Set(existing.map((s) => String(s).trim()))
@@ -225,7 +225,7 @@ export interface CsatEntryVM {
   bad: boolean // 差评（≤2 星）——用于「查会话」按钮与行高亮，同 Csat.vue badOnly 筛选 maxScore=2 的口径
 }
 
-/** 满意度明细行（批 B6·listCsatEntries）：时间人话化，note/externalUserId 无则回 '—'/''。 */
+/** 满意度明细行（listCsatEntries）：时间人话化，note/externalUserId 无则回 '—'/''。 */
 export function mapCsatEntries(list: unknown): CsatEntryVM[] {
   if (!Array.isArray(list)) return []
   return (list as Record<string, any>[]).filter(Boolean).map((e) => {
@@ -241,10 +241,9 @@ export function mapCsatEntries(list: unknown): CsatEntryVM[] {
   })
 }
 
-// —— 质检抽检（批 B7）——
-// 下面 QcRowVM.sessionKey＝csSession._id（形如 `wxkf:<openKfId>:<externalUserId>`）——已改名消歧，此处曾经
-// 和上面 CsatEntryVM.sessionKey 撞名混淆（旧字段其实是 externalUserId，现已分开）；本页「查会话」跳检索
-// 仍须用 externalUserId 字段（见 QcRowVM.externalUserId），别把 sessionKey 当 externalUserId 传给 searchConversations。
+// —— 质检抽检 ——
+// 下面 QcRowVM.sessionKey＝csSession._id（形如 `wxkf:<openKfId>:<externalUserId>`）；本页「查会话」跳检索
+// 须用 externalUserId 字段（见 QcRowVM.externalUserId），别把 sessionKey 当 externalUserId 传给 searchConversations。
 export interface QcRowVM {
   sessionKey: string
   externalUserId: string

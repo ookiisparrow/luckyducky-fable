@@ -71,7 +71,7 @@
 .ld-hero-copy {
   position: relative;
   z-index: 2;
-  padding: 0 36rpx 320rpx; /* 抬高文案：坐落鸭图下方（鸭身止于约 59% 高·下半被 scrim 洗白）·不贴 TabBar·不过于偏下（用户反馈 2026-07-16·真机为准） */
+  padding: 0 36rpx 320rpx; /* 抬高文案：坐落鸭图下方（鸭身止于约 59% 高·下半被 scrim 洗白）·不贴 TabBar·不过于偏下（用户反馈·真机为准） */
   text-align: center;
 }
 .ld-hero-tag {
@@ -209,7 +209,7 @@
 .ld-prod-media {
   position: relative;
   width: 100%;
-  padding-top: 100%; /* 1:1 方形（2026-07-13 用户指令·padding-top 百分比法撑方·避 aspect-ratio 旧 WebView 不支持·同 .ld-feature-display） */
+  padding-top: 100%; /* 1:1 方形（用户指令·padding-top 百分比法撑方·避 aspect-ratio 旧 WebView 不支持·同 .ld-feature-display） */
   flex-shrink: 0; /* 锁定高度·媒体不被挤扁（同 .ld-review-media） */
   background: var(--ld-bg-sage);
 }
@@ -448,7 +448,7 @@
 .ld-review-media {
   position: relative;
   width: 100%;
-  padding-top: 100%; /* 1:1 方形（与商品卡同步·2026-07-13·等高守卫联动两卡内部算式一致不留空隙） */
+  padding-top: 100%; /* 1:1 方形（与商品卡同步·等高守卫联动两卡内部算式一致不留空隙） */
   flex-shrink: 0; /* 锁定高度·媒体不被挤扁 */
   background: var(--ld-bg-sage);
 }

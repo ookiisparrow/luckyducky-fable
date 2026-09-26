@@ -1,6 +1,9 @@
+// @vitest-environment happy-dom
 // 坐席台轮询合并（黄金 cs-agent「会话流轮询增量合并」永恒语义）：
 // 游标边界重复不重气泡/升序/同刻不同方向不同文是不同条/无时间戳不进流/游标只进不退空批不倒退。
-import { describe, it, expect } from 'vitest'
+// 后半挂载 Desk.vue：会话敏感的异步动作（切会话/发送/收会话/认领/拉列表）回包晚到时，只落到发起时那个会话。
+import { describe, it, expect, vi, afterEach } from 'vitest'
+import { mount, flushPromises, type VueWrapper } from '@vue/test-utils'
 import {
   mergeThread,
   keyOf,
@@ -16,97 +19,16 @@ import {
   createStatusController,
   type Msg,
 } from '../src/lib/desk'
-import { parse } from '@vue/compiler-sfc'
-// Desk.vue 原文按 Vite 内建 ?raw 取纯文本，给下方源码断言用（open/send/act 等仍钉页面真代码）。
-import deskSrc from '../src/Desk.vue?raw'
+
+const { postMock } = vi.hoisted(() => ({ postMock: vi.fn() }))
+vi.mock('../src/api/client', () => ({ post: postMock, logout: vi.fn(), listKb: vi.fn().mockResolvedValue({ ok: true, list: [] }) }))
+import Desk from '../src/Desk.vue'
 
 const m = (at: number, direction: 'in' | 'out', text: string): Msg => ({ at, direction, text })
 const last = <T>(arr: T[]): T | undefined => arr[arr.length - 1] // rewrite/agent tsconfig lib=ES2020，无 Array.prototype.at（ES2022）
 
 type StatusRes = { ok: boolean; error?: string }
 type Status = 'online' | 'busy' | 'offline'
-
-// B2/B3 源码断言用：从 <script setup> 原文里抠出指定函数的完整函数体（花括号配平·跳过注释/字符串内的花括号，
-// 避免 E1 同类坑——裸括号计数会被注释里的 { } 或字符串里的 { } 带偏）。只服务本文件的静态断言，不是 check-structure.mjs
-// 的守卫 helper，不复用/不冒充 methodBody()+stripComments() 共享实现。
-function extractFunctionBody(src: string, signature: string): string {
-  const start = src.indexOf(signature)
-  if (start === -1) throw new Error('函数签名未找到：' + signature)
-  // signature 若自带结尾 '{'（调用方传参写法），起点就是它自身，不再往后找——否则会跳过函数体第一个 '{'
-  // 命中函数体内更靠后的对象字面量花括号（B2/B3 现场踩过：`{ sessionId }` 解构把起点带偏）。
-  const braceStart = signature.trimEnd().endsWith('{') ? start + signature.length - 1 : src.indexOf('{', start + signature.length)
-  if (braceStart === -1) throw new Error('函数体起始 { 未找到：' + signature)
-  let depth = 0
-  let inLineComment = false
-  let inBlockComment = false
-  let inString: string | null = null
-  // I2（防线·执行者错题本 E1 在测试层的翻版）：返回值须是剥去注释后的函数体，不是原始切片——原始切片里
-  // 若「保护代码被注释掉」，注释文本本身仍会命中 toMatch/indexOf 正则，断言假绿。逐字符扫描时同步攒 out，
-  // 跳过注释段（行注释/块注释不写入 out），字符串字面量内容原样保留（断言认代码 token，不认字符串内容）。
-  let out = ''
-  for (let j = braceStart; j < src.length; j++) {
-    const c = src[j]
-    const c2 = src[j + 1]
-    if (inLineComment) {
-      if (c === '\n') {
-        inLineComment = false
-        out += c
-      }
-      continue
-    }
-    if (inBlockComment) {
-      if (c === '*' && c2 === '/') {
-        inBlockComment = false
-        j++
-      } else if (c === '\n') {
-        out += c
-      }
-      continue
-    }
-    if (inString) {
-      out += c
-      if (c === '\\') {
-        j++
-        out += src[j] ?? ''
-        continue
-      }
-      if (c === inString) inString = null
-      continue
-    }
-    if (c === '/' && c2 === '/') {
-      inLineComment = true
-      j++
-      continue
-    }
-    if (c === '/' && c2 === '*') {
-      inBlockComment = true
-      j++
-      continue
-    }
-    if (c === '"' || c === "'" || c === '`') {
-      inString = c
-      out += c
-      continue
-    }
-    if (c === '{') {
-      depth++
-      out += c
-    } else if (c === '}') {
-      depth--
-      out += c
-      if (depth === 0) return out
-    } else {
-      out += c
-    }
-  }
-  throw new Error('函数体未闭合：' + signature)
-}
-
-function scriptSetupSrc(): string {
-  const { descriptor } = parse(deskSrc)
-  if (!descriptor.scriptSetup?.content) throw new Error('Desk.vue 缺少 <script setup> 块——测试抽不到真代码')
-  return descriptor.scriptSetup.content
-}
 
 // 手控 resolve 顺序的 post 桩：每次调用发一个可外部 resolve 的 promise，调用方按测试场景指定的顺序 settle。
 function deferredPost() {
@@ -228,12 +150,6 @@ describe('队列与错误人话', () => {
 })
 
 describe('坐席状态并发收敛（setStatus·Round3 item3 三场景，钉住 lib/desk 真代码）', () => {
-  it('大白话：Desk 直接调 lib 里同一份控制器，不再另放非 setup 脚本块给测试抽', () => {
-    expect(scriptSetupSrc()).toMatch(/createStatusController\(/)
-    const { descriptor } = parse(deskSrc)
-    expect(descriptor.script).toBeFalsy()
-  })
-
   it('大白话：fresh 请求失败 + stale 请求后到成功——静止后 UI 收到最新代际的成功目标，不被过期失败卡住', async () => {
     const { post, resolvers } = deferredPost()
     const ctl = createStatusController(post, 'online')
@@ -296,137 +212,6 @@ describe('坐席状态并发收敛（setStatus·Round3 item3 三场景，钉住 
   })
 })
 
-describe('open() 切会话清未发草稿（B2·源码断言：钉住 Desk.vue 真代码，不是另抄影子实现）', () => {
-  it('大白话：切到别的会话前必须先清 draft——防跨会话误发；且清草稿判断须在改 currentId 之前，不能顺序颠倒', () => {
-    const body = extractFunctionBody(scriptSetupSrc(), 'async function open(sessionId: string) {')
-    const draftClearRe = /if\s*\(\s*sessionId\s*!==\s*currentId\.value\s*\)\s*draft\.value\s*=\s*['"]{2}/
-    expect(body).toMatch(draftClearRe)
-    const draftClearIdx = body.search(draftClearRe)
-    const assignCurrentIdx = body.indexOf('currentId.value = sessionId')
-    expect(assignCurrentIdx).toBeGreaterThan(-1)
-    // 顺序铁律：draft 清理必须读到「切换前」的 currentId.value，因此判断句必须出现在赋值之前
-    expect(draftClearIdx).toBeLessThan(assignCurrentIdx)
-  })
-})
-
-describe('send() 发送忙碌锁按会话隔离（F1·同 act()/open() 治法·源码断言）', () => {
-  it('大白话：send() 顶部用快照 sid（非实时 currentId.value）判 sendingIds 早退闸；置位/回包处理/finally 复位全用同一份快照 sid——A 会话发送在途不再拦 B 会话；组件级共享 busy 不再出现', () => {
-    const body = extractFunctionBody(scriptSetupSrc(), 'async function send() {')
-    expect(body).toMatch(/const sid = currentId\.value/)
-    // 早退闸用快照 sid，不是随时会变的 currentId.value
-    const guardGateRe = /if\s*\(\s*sendingIds\.has\(sid\)\s*\)\s*return/
-    expect(body).toMatch(guardGateRe)
-    expect(body).not.toMatch(/sendingIds\.has\(currentId\.value\)/)
-    // post 携带的是快照 sid，不是随时会变的 currentId.value
-    expect(body).toMatch(/post\(\s*'sendAgentMessage'\s*,\s*\{\s*sessionId:\s*sid\s*,\s*text\s*\}\s*\)/)
-    expect(body).not.toMatch(/sessionId:\s*currentId\.value\s*,\s*text/)
-    // 不再用组件级共享 busy（F1：改按会话隔离的 sendingIds）
-    expect(body).not.toMatch(/busy\.value/)
-    const guardRe = /if\s*\(\s*currentId\.value === sid\s*\)\s*\{/
-    expect(body).toMatch(guardRe)
-    const guardIdx = body.search(guardRe)
-    expect(guardIdx).toBeGreaterThan(-1)
-    // 三处 UI 落地效果须落在复核 if 之内
-    const draftClearIdx = body.indexOf("draft.value = ''")
-    const pollIdx = body.indexOf('void pollThread()')
-    const messageAssignIdx = body.indexOf('message.value = deskErrorText(r.error)')
-    expect(draftClearIdx).toBeGreaterThan(guardIdx)
-    expect(pollIdx).toBeGreaterThan(guardIdx)
-    expect(messageAssignIdx).toBeGreaterThan(guardIdx)
-    // 置位须在早退闸之后、复核 if 之前（早于回包处理，发送一开始就占锁）
-    const gateIdx = body.search(guardGateRe)
-    const addIdx = body.indexOf('sendingIds.add(sid)')
-    expect(addIdx).toBeGreaterThan(gateIdx)
-    expect(addIdx).toBeLessThan(guardIdx)
-    // 复位须落在 finally 块内、按快照 sid（不受 currentId 复核约束）：否则切会话后发送按钮永久卡死不可用
-    const finallyIdx = body.indexOf('finally')
-    expect(finallyIdx).toBeGreaterThan(-1)
-    const deleteIdx = body.indexOf('sendingIds.delete(sid)')
-    expect(deleteIdx).toBeGreaterThan(finallyIdx)
-  })
-})
-
-describe('发送框 2000 字上限可见（F2·源码断言）', () => {
-  it('大白话：textarea 有 maxlength=2000（与后端 agentDesk MAX_TEXT 手动同步，不改后端）；接近上限（>=1900）时坐席能看见还剩多少字，不再被静默截断', () => {
-    const { descriptor } = parse(deskSrc)
-    const tpl = descriptor.template?.content || ''
-    expect(tpl).toMatch(/maxlength="2000"/)
-    expect(tpl).toMatch(/draftLen >= 1900/)
-    expect(tpl).toMatch(/\{\{\s*draftLen\s*\}\}\/2000/)
-    const src = scriptSetupSrc()
-    expect(src).toMatch(/const draftLen = computed/)
-  })
-})
-
-describe('act() 会话代际快照（B3·同 pollThread/open 治法·源码断言）', () => {
-  it('大白话：act() 必须先快照 sid 再用 sid 请求，回包后的 UI 效果须用 currentId===sid 复核才落地——过期回包不得清掉/标错正在看的新会话', () => {
-    const body = extractFunctionBody(scriptSetupSrc(), 'async function act(action: string) {')
-    expect(body).toMatch(/const sid = currentId\.value/)
-    // post 携带的是快照 sid，不是随时会变的 currentId.value
-    expect(body).toMatch(/post\(\s*action\s*,\s*\{\s*sessionId:\s*sid\s*\}\s*\)/)
-    expect(body).not.toMatch(/post\(\s*action\s*,\s*\{\s*sessionId:\s*currentId\.value\s*\}\s*\)/)
-    // UI 落地效果（message 赋值 + 三 action 的清 currentId/msgs）须被 currentId.value === sid 复核包住
-    const guardRe = /if\s*\(\s*currentId\.value === sid\s*\)\s*\{/
-    expect(body).toMatch(guardRe)
-    const guardIdx = body.search(guardRe)
-    expect(guardIdx).toBeGreaterThan(-1)
-    const messageAssignIdx = body.indexOf("message.value = r.ok ? '' : deskErrorText(r.error)")
-    const clearCurrentIdx = body.indexOf("currentId.value = ''")
-    expect(messageAssignIdx).toBeGreaterThan(guardIdx) // message 赋值须落在复核 if 之内（在 guard 起点之后）
-    expect(clearCurrentIdx).toBeGreaterThan(guardIdx) // 清 currentId/msgs 也须落在复核 if 之内
-    // refreshLists 必须无条件执行（不受 sid 复核约束）：出现在函数体末尾、且不早于两处 UI 效果
-    const refreshIdx = body.indexOf('void refreshLists()')
-    expect(refreshIdx).toBeGreaterThan(clearCurrentIdx)
-  })
-
-  it('大白话：三个收会话动作（放回队列/结束会话/升级商户）成功后须同批清 panels/panelNote——右栏顾客360无 currentId 门控，不清会残留上一客户资料给下一个接手的坐席看见（K1·PII 残留）', () => {
-    const body = extractFunctionBody(scriptSetupSrc(), 'async function act(action: string) {')
-    const clearCurrentIdx = body.indexOf("currentId.value = ''")
-    const clearMsgsIdx = body.indexOf('msgs.value = []')
-    const clearPanelsIdx = body.indexOf('panels.value = []')
-    const clearPanelNoteIdx = body.indexOf("panelNote.value = ''")
-    expect(clearPanelsIdx).toBeGreaterThan(-1)
-    expect(clearPanelNoteIdx).toBeGreaterThan(-1)
-    // 与 currentId/msgs 并列在同一成功分支内清空（都在三 action 判断的花括号内，晚于两者出现）
-    expect(clearPanelsIdx).toBeGreaterThan(clearCurrentIdx)
-    expect(clearPanelsIdx).toBeGreaterThan(clearMsgsIdx)
-    expect(clearPanelNoteIdx).toBeGreaterThan(clearPanelsIdx)
-    // 仍须落在 sid 复核 if 之内、refreshLists 之前
-    const guardIdx = body.search(/if\s*\(\s*currentId\.value === sid\s*\)\s*\{/)
-    const refreshIdx = body.indexOf('void refreshLists()')
-    expect(clearPanelsIdx).toBeGreaterThan(guardIdx)
-    expect(refreshIdx).toBeGreaterThan(clearPanelNoteIdx)
-  })
-})
-
-describe('onBeforeUnmount 标题复位（B4 后审 P2·源码断言）', () => {
-  it('大白话：组件卸载须还原 document.title——失焦掉线登出会带角标态卸载，不还原则标题永久残留，且下次重登 mount 会把污染态当新 baseTitle 捕获、跨循环复合叠加', () => {
-    const body = extractFunctionBody(scriptSetupSrc(), 'onBeforeUnmount(() => {')
-    expect(body).toMatch(/document\.title = baseTitle/)
-    // 既有清理不得被顺手删掉（回归网）
-    expect(body).toMatch(/clearInterval\(pollTimer\)/)
-    expect(body).toMatch(/clearInterval\(listTimer\)/)
-    expect(body).toMatch(/removeEventListener\('blur', onWindowBlur\)/)
-    expect(body).toMatch(/removeEventListener\('focus', onWindowFocus\)/)
-  })
-})
-
-describe('claim() 会话代际快照（bug sweep II R5·五个会话敏感异步动作的最后收口·源码断言）', () => {
-  it('大白话：claim() 须快照点击时的 currentId，回包后 message/open 须复核未切走才落地——慢回包不得把视图拽回、不得经 open 清掉坐席在新会话打的字；refreshLists 无条件', () => {
-    const body = extractFunctionBody(scriptSetupSrc(), 'async function claim(sessionId: string) {')
-    expect(body).toMatch(/const before = currentId\.value/)
-    const guardRe = /if\s*\(\s*currentId\.value === before\s*\)\s*\{/
-    expect(body).toMatch(guardRe)
-    const guardIdx = body.search(guardRe)
-    const messageIdx = body.indexOf("message.value = r.ok ? '' : deskErrorText(r.error)")
-    const openIdx = body.indexOf('void open(sessionId)')
-    expect(messageIdx).toBeGreaterThan(guardIdx) // message 赋值落在复核内
-    expect(openIdx).toBeGreaterThan(guardIdx) // open（会拽视图+清草稿）落在复核内
-    const refreshIdx = body.indexOf('void refreshLists()')
-    expect(refreshIdx).toBeGreaterThan(openIdx) // 列表刷新无条件、居末
-  })
-})
-
 describe('hasMedia 透传（B5·顾客发图坐席可见·纯函数半边）', () => {
   it('大白话：normalizeMsgs 把服务端 hasMedia 标记原样带过来（缺省视 false，脏值转布尔）；mergeThread 合并后保留', () => {
     const withMedia = normalizeMsgs([{ at: 1000, direction: 'in', text: '[image]', msgtype: 'image', msgid: 'img-1', hasMedia: true }])
@@ -438,74 +223,263 @@ describe('hasMedia 透传（B5·顾客发图坐席可见·纯函数半边）', (
   })
 })
 
-describe('Desk.vue 图片气泡（B5·顾客发图坐席可见·源码断言：钉住真代码，不抄影子实现）', () => {
-  it('大白话：loadMedia 须快照点击时的会话 sid（同 send/act/claim 治法），EXPIRED 与其余失败分两态（前者不可重试、后者可重试）', () => {
-    const body = extractFunctionBody(scriptSetupSrc(), 'async function loadMedia(m: Msg) {')
-    expect(body).toMatch(/const sid = currentId\.value/) // 归属会话快照，不用随时会变的 currentId.value 直接发请求
-    expect(body).toMatch(/post\(\s*'getMediaUrl'\s*,\s*\{\s*sessionId:\s*sid\s*,\s*msgId:\s*key\s*\}\s*\)/)
-    // EXPIRED 与其余失败必须分两个不同分支落两个不同 state（不能把 EXPIRED 并进通用失败态）
-    const expiredIdx = body.indexOf("mediaCache[key] = { state: 'expired' }")
-    const errorIdx = body.indexOf("mediaCache[key] = { state: 'error' }")
-    expect(expiredIdx).toBeGreaterThan(-1)
-    expect(errorIdx).toBeGreaterThan(-1)
-    expect(expiredIdx).not.toBe(errorIdx)
-    expect(body).toMatch(/r\.error === 'EXPIRED'/) // EXPIRED 判定须读服务端语义码，不是猜的
+// —— Desk.vue 挂载 ——
+type Handler = (data: any) => unknown
+const gate = () => {
+  let release: (v: unknown) => void = () => {}
+  const p = new Promise((r) => (release = r))
+  return { p, release: (v: unknown) => release(v) }
+}
+const Q1 = { sessionId: 'q1', externalUserId: 'wm-q00001', status: 'pending', createdAt: Date.now() }
+function serve(over: Record<string, Handler> = {}) {
+  postMock.mockReset().mockImplementation(async (action: string, data: any) => {
+    if (over[action]) return over[action](data)
+    if (action === 'listMyActive') return { ok: true, sessions: [{ sessionId: 's1', externalUserId: 'wm-000001' }, { sessionId: 's2', externalUserId: 'wm-000002' }] }
+    if (action === 'listQueue') return { ok: true, items: [] }
+    if (action === 'getThread') return { ok: true, messages: [], nextCursor: 0 }
+    if (action === 'getSessionCustomer360') return { ok: true, panels: [{ key: 'profile', label: '画像', data: { 会话: data.sessionId } }] }
+    return { ok: true }
+  })
+}
+const mounted: VueWrapper[] = []
+afterEach(() => {
+  mounted.splice(0).forEach((w) => w.unmount())
+  vi.useRealTimers()
+})
+async function mountDesk() {
+  const w = mount(Desk)
+  mounted.push(w)
+  await flushPromises()
+  return w
+}
+const mineItems = (w: VueWrapper) => w.findAll('aside .qitem').filter((q) => !q.find('.qinfo').exists())
+async function openMine(w: VueWrapper, i: number) {
+  await mineItems(w)[i].trigger('click')
+  await flushPromises()
+}
+const btn = (w: VueWrapper, text: string) => w.findAll('button').find((b) => b.text() === text)!
+const draft = (w: VueWrapper) => (w.find('textarea').element as HTMLTextAreaElement).value
+const calls = (action: string) => postMock.mock.calls.filter((c) => c[0] === action)
+
+describe('Desk.vue 坐席状态', () => {
+  it('大白话：切状态被拒——下拉回到上次确认的状态并报错，不停在没生效的选项上', async () => {
+    serve({ setAgentStatus: () => ({ ok: false, error: 'NOPE' }) })
+    const w = await mountDesk()
+    await w.find('select').setValue('busy')
+    await flushPromises()
+    expect(calls('setAgentStatus').map((c) => c[1])).toEqual([{ status: 'busy' }])
+    expect((w.find('select').element as HTMLSelectElement).value).toBe('online')
+    expect(w.find('.status').text()).toBe('操作没成功（NOPE）')
   })
 
-  it('大白话：占位卡点击只在 idle/失败态触发下载——加载中/已加载/已过期点击一律 no-op（已过期没有重试路径）', () => {
-    const body = extractFunctionBody(scriptSetupSrc(), 'async function loadMedia(m: Msg) {')
-    expect(body).toMatch(/\(\s*s !== 'idle' && s !== 'error'\s*\)\s*\)\s*return/)
-    expect(body).not.toMatch(/s [!=]== 'expired'/) // 已过期不应出现在放行下载的条件里
-  })
-
-  it('大白话：查看大图只在已加载态才 window.open，防止对占位/加载中/失败态误开空 URL', () => {
-    const body = extractFunctionBody(scriptSetupSrc(), 'function openMedia(m: Msg) {')
-    expect(body).toMatch(/if\s*\(\s*c\.state === 'loaded' && c\.url\s*\)\s*window\.open\(c\.url, '_blank'\)/)
-  })
-
-  it('大白话：消息气泡模板须按 msgtype===image && hasMedia 分流到图片气泡，其余（含 image 但无 mediaId 的历史档）回退纯文本', () => {
-    const { descriptor } = parse(deskSrc)
-    const tpl = descriptor.template?.content || ''
-    expect(tpl).toMatch(/v-if="m\.msgtype === 'image' && m\.hasMedia"/)
-    expect(tpl).toMatch(/@click="loadMedia\(m\)"/)
-    expect(tpl).toMatch(/@click="openMedia\(m\)"/)
-    expect(tpl).toMatch(/图片已过期（超 3 天）/)
-    expect(tpl).toMatch(/加载失败，点击重试/)
+  it('大白话：先切忙碌再切离线，离线先成功、忙碌后到失败——下拉停在离线（服务端真值），不回退、不报错', async () => {
+    const busy = gate()
+    const off = gate()
+    serve({ setAgentStatus: (d) => (d.status === 'busy' ? busy.p : off.p) })
+    const w = await mountDesk()
+    await w.find('select').setValue('busy')
+    await w.find('select').setValue('offline')
+    off.release({ ok: true })
+    await flushPromises()
+    busy.release({ ok: false, error: 'NOPE' })
+    await flushPromises()
+    expect((w.find('select').element as HTMLSelectElement).value).toBe('offline')
+    expect(w.find('.status').exists()).toBe(false)
   })
 })
 
-describe('refreshLists / open 失败出声（病根#14·首屏不得装成队列空或空白会话）', () => {
-  it('大白话：拉队列或我在接失败须写入 listNote；两边成功才清空。模板「队列空 ✓」只在没有 listNote 时出现——首屏拉失败不得装成没事', () => {
-    const body = extractFunctionBody(scriptSetupSrc(), 'async function refreshLists() {')
-    expect(body).toMatch(/listNote\.value = q\.ok && m\.ok \? '' : deskErrorText\(q\.ok \? m\.error : q\.error\)/)
-    expect(body).toMatch(/queue\.value = q\.ok \? mapQueue/) // 失败不清已有
-    expect(body).toMatch(/mine\.value = m\.ok \?/)
-    const { descriptor } = parse(deskSrc)
-    const tpl = descriptor.template?.content || ''
-    expect(tpl).toMatch(/v-if="listNote"/)
-    expect(tpl).toMatch(/v-else-if="!queue\.length"/)
-    expect(tpl).toContain('队列空 ✓')
-    const emptyOkIdx = tpl.indexOf('队列空 ✓')
-    const elseIfIdx = tpl.lastIndexOf('v-else-if="!queue.length"', emptyOkIdx)
-    expect(elseIfIdx).toBeGreaterThan(-1)
+describe('Desk.vue 切会话与发送', () => {
+  it('大白话：切到别的会话清掉没发出的草稿（防跨会话误发）；点回当前会话不清', async () => {
+    serve()
+    const w = await mountDesk()
+    await openMine(w, 0)
+    await w.find('textarea').setValue('给一号的话')
+    await openMine(w, 0)
+    expect(draft(w)).toBe('给一号的话')
+    await openMine(w, 1)
+    expect(draft(w)).toBe('')
   })
 
-  it('大白话：打开会话时 pollThread 失败须像 360 一样写出 threadNote；后台 3 秒轮询仍静默重试、不打断输入', () => {
-    const poll = extractFunctionBody(scriptSetupSrc(), 'async function pollThread(loud = false) {')
-    expect(poll).toMatch(/if\s*\(\s*loud\s*\)\s*threadNote\.value = deskErrorText\(r\.error\)/)
-    expect(poll).toMatch(/if\s*\(\s*!r\.ok\s*\)/)
-    // 成功须清 threadNote（后台重试拉到了就把首拉错误收掉）
-    const failIdx = poll.indexOf('if (loud) threadNote.value = deskErrorText(r.error)')
-    const clearIdx = poll.indexOf("threadNote.value = ''")
-    expect(failIdx).toBeGreaterThan(-1)
-    expect(clearIdx).toBeGreaterThan(failIdx)
-    const open = extractFunctionBody(scriptSetupSrc(), 'async function open(sessionId: string) {')
-    expect(open).toMatch(/pollThread\(\s*true\s*\)/)
-    const setup = scriptSetupSrc()
-    expect(setup).toMatch(/setInterval\(\s*pollThread\s*,\s*3_000\s*\)/) // 后台调用不传 true
-    const { descriptor } = parse(deskSrc)
-    const tpl = descriptor.template?.content || ''
-    expect(tpl).toMatch(/v-if="threadNote"/)
-    expect(tpl).toMatch(/v-if="panelNote"/)
+  it('大白话：一号发送在途不拦二号发送；一号晚到的失败不清二号正在打的字、不把报错标到二号上；回到一号还能发', async () => {
+    const a = gate()
+    serve({ sendAgentMessage: (d) => (d.sessionId === 's1' ? a.p : { ok: true }) })
+    const w = await mountDesk()
+    await openMine(w, 0)
+    await w.find('textarea').setValue('给一号')
+    await btn(w, '发送').trigger('click')
+    expect(btn(w, '发送').attributes('disabled')).toBeDefined()
+
+    await openMine(w, 1)
+    expect(btn(w, '发送').attributes('disabled')).toBeUndefined()
+    await w.find('textarea').setValue('给二号')
+    await btn(w, '发送').trigger('click')
+    await flushPromises()
+    expect(calls('sendAgentMessage').map((c) => c[1])).toEqual([
+      { sessionId: 's1', text: '给一号' },
+      { sessionId: 's2', text: '给二号' },
+    ])
+    expect(draft(w)).toBe('') // 二号发成功才清框
+
+    await w.find('textarea').setValue('二号草稿')
+    a.release({ ok: false, error: 'SEND_FAIL' })
+    await flushPromises()
+    expect(draft(w)).toBe('二号草稿')
+    expect(w.find('.status').exists()).toBe(false)
+    await openMine(w, 0)
+    expect(btn(w, '发送').attributes('disabled')).toBeUndefined()
+  })
+
+  it('大白话：输入框最多 2000 字；快到上限（≥1900）才显示已打字数', async () => {
+    serve()
+    const w = await mountDesk()
+    await openMine(w, 0)
+    expect(w.find('textarea').attributes('maxlength')).toBe('2000')
+    await w.find('textarea').setValue('字'.repeat(1899))
+    expect(w.find('.charcount').exists()).toBe(false)
+    await w.find('textarea').setValue('字'.repeat(1900))
+    expect(w.find('.charcount').text()).toBe('1900/2000')
+  })
+})
+
+describe('Desk.vue 收会话（放回/结束/升级）', () => {
+  it.each([
+    ['放回队列', 'releaseConversation'],
+    ['结束会话', 'closeConversation'],
+    ['升级给商户', 'escalateToMerchant'],
+  ])('大白话：%s成功——会话窗和右栏顾客资料一起清掉（别的坐席接手时不残留上一客户资料），列表刷新', async (label, action) => {
+    serve()
+    const w = await mountDesk()
+    await openMine(w, 0)
+    expect(w.find('aside.right .panel').text()).toContain('s1')
+    const lists = calls('listQueue').length
+    await btn(w, label).trigger('click')
+    await flushPromises()
+    expect(calls(action).map((c) => c[1])).toEqual([{ sessionId: 's1' }])
+    expect(w.find('textarea').exists()).toBe(false)
+    expect(w.find('aside.right .panel').exists()).toBe(false)
+    expect(calls('listQueue').length).toBe(lists + 1)
+  })
+
+  it('大白话：结束一号在途时切到二号——一号的回包不清二号的会话窗与资料、不报错，列表照刷', async () => {
+    const a = gate()
+    serve({ closeConversation: () => a.p })
+    const w = await mountDesk()
+    await openMine(w, 0)
+    await btn(w, '结束会话').trigger('click')
+    await openMine(w, 1)
+    const lists = calls('listQueue').length
+    a.release({ ok: true })
+    await flushPromises()
+    expect(mineItems(w)[1].classes()).toContain('on')
+    expect(w.find('textarea').exists()).toBe(true)
+    expect(w.find('aside.right .panel').text()).toContain('s2')
+    expect(w.find('.status').exists()).toBe(false)
+    expect(calls('listQueue').length).toBe(lists + 1)
+  })
+})
+
+describe('Desk.vue 认领', () => {
+  it('大白话：没切走时认领成功——直接打开认领的会话', async () => {
+    serve({ listQueue: () => ({ ok: true, items: [Q1] }) })
+    const w = await mountDesk()
+    await btn(w, '接').trigger('click')
+    await flushPromises()
+    expect(calls('getThread').map((c) => c[1].sessionId)).toEqual(['q1'])
+  })
+
+  it('大白话：认领在途时切去二号打字——认领回包不把视图拽回、不清二号的字；列表照刷', async () => {
+    const c = gate()
+    serve({ listQueue: () => ({ ok: true, items: [Q1] }), claimConversation: () => c.p })
+    const w = await mountDesk()
+    await btn(w, '接').trigger('click')
+    await openMine(w, 1)
+    await w.find('textarea').setValue('二号草稿')
+    const lists = calls('listQueue').length
+    c.release({ ok: true })
+    await flushPromises()
+    expect(mineItems(w)[1].classes()).toContain('on')
+    expect(draft(w)).toBe('二号草稿')
+    expect(calls('getThread').some((x) => x[1].sessionId === 'q1')).toBe(false)
+    expect(calls('listQueue').length).toBe(lists + 1)
+  })
+})
+
+describe('Desk.vue 拉取失败出声（失败≠空态）', () => {
+  it('大白话：首屏拉队列失败——写明原因，不装成「队列空 ✓」；真空才显队列空', async () => {
+    serve()
+    expect((await mountDesk()).text()).toContain('队列空 ✓')
+    serve({ listQueue: () => ({ ok: false, error: 'NETWORK:boom' }) })
+    const w = await mountDesk()
+    expect(w.findAll('aside')[0].find('.note').text()).toBe(deskErrorText('NETWORK:boom'))
+    expect(w.text()).not.toContain('队列空 ✓')
+  })
+
+  it('大白话：待接超过一页（云端回了 nextCursor）——写明列表没显示全部，不让坐席以为只有这几个人在等', async () => {
+    serve({ listQueue: () => ({ ok: true, items: [Q1], nextCursor: { v: 1, id: 'q1' } }) })
+    const w = await mountDesk()
+    expect(w.findAll('aside')[0].text()).toContain('待接不止 1 条，列表未显示全部')
+    serve({ listQueue: () => ({ ok: true, items: [Q1] }) })
+    const w2 = await mountDesk()
+    expect(w2.text()).not.toContain('列表未显示全部')
+  })
+
+  it('大白话：已拉到排队后再刷新失败——排队不清、写明原因', async () => {
+    let q: unknown = { ok: true, items: [Q1] }
+    serve({ listQueue: () => q })
+    const w = await mountDesk()
+    q = { ok: false, error: 'NETWORK:boom' }
+    await openMine(w, 0)
+    await btn(w, '放回队列').trigger('click')
+    await flushPromises()
+    expect(w.findAll('aside .qinfo')).toHaveLength(1)
+    expect(w.findAll('aside')[0].find('.note').text()).toBe(deskErrorText('NETWORK:boom'))
+  })
+
+  it('大白话：打开会话拉消息/顾客资料失败都写明原因；后台 3 秒轮询失败不出声，拉到了就把提示收掉', async () => {
+    vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval'] })
+    let t: unknown = { ok: true, messages: [], nextCursor: 0 }
+    serve({ getThread: () => t, getSessionCustomer360: () => ({ ok: false, error: 'NO_CONSENT' }) })
+    const w = await mountDesk()
+    await openMine(w, 0)
+    expect(w.find('main .note').exists()).toBe(false)
+    expect(w.find('aside.right .note').text()).toBe(deskErrorText('NO_CONSENT'))
+
+    t = { ok: false, error: 'NETWORK:boom' }
+    vi.advanceTimersByTime(3_000)
+    await flushPromises()
+    expect(w.find('main .note').exists()).toBe(false) // 后台轮询静默
+
+    await openMine(w, 1)
+    expect(w.find('main .note').text()).toBe(deskErrorText('NETWORK:boom'))
+    t = { ok: true, messages: [], nextCursor: 0 }
+    vi.advanceTimersByTime(3_000)
+    await flushPromises()
+    expect(w.find('main .note').exists()).toBe(false)
+  })
+})
+
+describe('Desk.vue 卸载', () => {
+  it('大白话：失焦时来了新排队，标题带角标；卸载时标题还原、定时轮询停掉', async () => {
+    vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval'] })
+    document.title = '小棉鸭 · 坐席台'
+    let items: unknown[] = []
+    serve({ listQueue: () => ({ ok: true, items }) })
+    const w = mount(Desk)
+    await flushPromises()
+    window.dispatchEvent(new Event('blur'))
+    items = [Q1]
+    vi.advanceTimersByTime(10_000)
+    await flushPromises()
+    expect(document.title).toBe('(1) 小棉鸭 · 坐席台')
+
+    await openMine(w, 0) // 开着会话才有 3 秒拉消息的轮询可停
+    w.unmount()
+    expect(document.title).toBe('小棉鸭 · 坐席台')
+    const threads = calls('getThread').length
+    const lists = calls('listQueue').length
+    vi.advanceTimersByTime(30_000)
+    await flushPromises()
+    expect(calls('getThread').length).toBe(threads)
+    expect(calls('listQueue').length).toBe(lists)
   })
 })

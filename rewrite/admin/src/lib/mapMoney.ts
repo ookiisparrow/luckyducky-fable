@@ -1,15 +1,19 @@
 // 订单与钱组映射（纯函数）：v2 契约 → 页面 VM。
 // 脏档安全同 mp 口径（缺条目恒数组/裸脏档剔除/金额恒两位）；近似诚实标注（approx 透传不隐藏）。
-// orderErrorText：钱组 action 英文码→操作者中文（同 mapSystem.ts launchErrorText 手法·#222 同类）。
+// orderErrorText：钱组 action 英文码→操作者中文（同 mapSystem.ts launchErrorText 手法）。
 import { yuan, orderStatusLabel, refundStatusLabel, dateTime } from './format'
 import { stockAlertOf } from './thresholds'
+import { transportErrorText } from './mapSystem'
+import { asFen, fenToYuan, type ErrCode } from '@ldrw/shared'
 
-const ORDER_ERR: Record<string, string> = {
+// NO_RESULT 不是云端码：Orders.vue 批量发货回包里缺这一单时本地补的
+const ORDER_ERR: Partial<Record<ErrCode | 'NO_RESULT', string>> = {
   BAD_ARGS: '参数不完整',
   NO_ORDER: '找不到这单订单',
   FEE_MISMATCH_HOLD: '金额异常单被挡下：先去核对流水解除',
-  REFUND_HOLD: '这单涉及退款，先去「售后退款」处理',
+  REFUND_HOLD: '这单有退款正在处理，处理完才能发货；若每件都已退款，这单就不用发了',
   REFUND_HOLD_READ_FAIL: '暂时查不到这单的退款状态，请稍后重试',
+  REFUND_LINES_CHANGED: '这单刚又有商品退款，已退的件数变了——刷新后按最新的「已退·别发」重新装箱再发',
   SHIP_IN_PROGRESS: '正在处理中，请稍后重试',
   TOO_MANY: '一次最多 100 单，请分批',
   BAD_AMOUNT: '金额超出合理范围',
@@ -17,7 +21,6 @@ const ORDER_ERR: Record<string, string> = {
   REFUND_SCAN_CAP: '售后记录异常',
   CONCURRENT: '刚被改过，请刷新重试',
   ORDER_NO_REQUIRED: '需要输入单号',
-  NOT_EXCEPTION: '该单不是支付异常状态',
   NO_RESULT: '系统没返回这单结果，请重试',
   ENTERED_NOT_REFUNDABLE: '这件商品已进课，不符合退款规则',
   NOTHING_LEFT: '这件商品已经没有可退金额了',
@@ -27,13 +30,14 @@ const ORDER_ERR: Record<string, string> = {
   WRITE_FAIL: '系统写入失败，请重试',
   PAYMENT_AMOUNT_MISSING: '这单缺实际到账金额，请先去「订单发货」页补录实付',
   UNKNOWN_ITEM: '商品行不在订单里',
-  NO_ENDPOINT: '后台地址没配好，请联系管理员检查',
-  BAD_JSON_RESPONSE: '系统回包不完整，请稍后重试',
+  CREDS_READ_FAIL: '读不到微信支付凭证（库暂时故障），请稍后重试',
+  CONFIG_READ_FAIL: '读不到商户号配置（库暂时故障），请稍后重试',
+  NO_WXPAY_CREDS: '微信支付凭证还没配置，请先去系统设置检查',
+  NO_MCHID: '商户号还没配置，请先去系统设置检查',
 }
 export function orderErrorText(e: unknown): string {
   const s = String(e || '')
   if (!s) return '未知错误'
-  if (s.startsWith('NETWORK:')) return '网络有点不稳，请刷新重试'
   if (s.startsWith('BAD_STATUS:')) {
     const raw = s.slice(11)
     const orderLabel = orderStatusLabel(raw)
@@ -41,15 +45,15 @@ export function orderErrorText(e: unknown): string {
     const refundLabel = refundStatusLabel(raw)
     return `${refundLabel !== raw ? '售后' : '当前'}状态「${refundLabel}」不允许此操作`
   }
-  return ORDER_ERR[s] || `操作失败（${s}）`
+  return ORDER_ERR[s as keyof typeof ORDER_ERR] || transportErrorText(s) || `操作失败（${s}）`
 }
 
 export interface StatCard {
   label: string
   value: string
   note?: string
-  sub?: string // 副文案（漏斗逐环转化率「较上环 X%」·换皮丢了逐环转化率只剩绝对值）
-  pct?: number // 进度条百分比（激活率·换皮把进度条退成纯「已激活/总」文本）
+  sub?: string // 副文案（漏斗逐环转化率「较上环 X%」）
+  pct?: number // 进度条百分比（激活率）
 }
 
 export interface SegStat {
@@ -65,21 +69,23 @@ export interface DashboardVM {
   cards: StatCard[]
   funnel: StatCard[]
   alerts: Array<{ label: string; ids: string[] }>
-  hot: SegStat[] // 最多人看完的段位（换皮误删·后端 dashboard.ts hot=top(doneCount) 仍返回·B5）
+  hot: SegStat[] // 最多人看完的段位（后端 dashboard.ts hot=top(doneCount)）
   stuck: SegStat[] // 最多人卡住停留的段位
-  recent: ActivityItem[] // 最近动态四类事件流（订单/激活/进课/退款·换皮退成纯订单列表）
+  recent: ActivityItem[] // 最近动态四类事件流（订单/激活/进课/退款）
   approxSeg: boolean // 热点/卡点为抽样近似（诚实标注·透传 approx.hot）
+  alertsPartial: boolean // 钱链告警有一路没查到：alerts 可能不全，页面不能显「无告警/无待办」
 }
 
 // 待处理行动条计数（治病根#14 admin 侧）：四路副请求各自可能失败，
-// 换皮把失败的路 `.catch(()=>({}))` 兜成 0 → 四路全失败时「待处理」塌成绿色「今日无待处理事项 ✓」，
+// 若把失败的路 `.catch(()=>({}))` 兜成 0 → 四路全失败时「待处理」塌成绿色「今日无待处理事项 ✓」，
 // 把「加载失败/未知」伪装成「真没待办」→ 运营据此漏发货。此处以 `.ok` 显式判失败并回传 partial，
 // 让上层区分「真为 0」与「没加载到」：partial=true 时不显绿色全清、提示刷新。drafts.rows 由调用方先
 // mapDraftRows（避免本层反向依赖 mapProducts）。
 export interface TodoInputs {
-  // partial：服务端 orderCounts/refundCounts 自身可能整体 ok:true、但内部某状态 count() 失败时回传
-  // partial:true（该路数字不可信但不拖累整包报错·item7）——即便四路 .ok 全过，只要任一路带 partial 也要整体 partial。
-  orderCounts: { ok?: boolean; counts?: Record<string, unknown>; partial?: boolean }
+  // 待发货取 toShip 不取 orderCounts 的 paid：paid 里还有全额退款没翻状态、售后待审被拦的单，发不了
+  dashboard: { ok?: boolean; toShip?: unknown }
+  // partial：服务端 refundCounts 自身可能整体 ok:true、但内部某状态 count() 失败时回传
+  // partial:true（该路数字不可信但不拖累整包报错）——即便各路 .ok 全过，带 partial 也要整体 partial。
   refundCounts: { ok?: boolean; counts?: Record<string, unknown>; partial?: boolean }
   inventory: { ok?: boolean; list?: unknown }
   drafts: { ok?: boolean; rows?: Array<{ state?: string }> }
@@ -93,13 +99,13 @@ export interface TodoCounts {
   partial: boolean // 任一路加载失败＝true（数字不可信·上层别显「无待办」全清）
 }
 export function deriveDashboardTodos(i: TodoInputs): TodoCounts {
-  const partial = !(i.orderCounts?.ok && i.refundCounts?.ok && i.inventory?.ok && i.drafts?.ok) || !!i.orderCounts?.partial || !!i.refundCounts?.partial
-  const ocC = (i.orderCounts?.counts || {}) as Record<string, unknown>
+  const toShip = i.dashboard?.ok ? i.dashboard.toShip : undefined
+  const partial = !(i.refundCounts?.ok && i.inventory?.ok && i.drafts?.ok) || typeof toShip !== 'number' || !!i.refundCounts?.partial
   const rcC = (i.refundCounts?.counts || {}) as Record<string, unknown>
   const invList = Array.isArray(i.inventory?.list) ? (i.inventory.list as Array<{ stock?: unknown; threshold?: unknown }>) : []
   const rows = Array.isArray(i.drafts?.rows) ? i.drafts.rows : []
   return {
-    ship: Number(ocC.paid) || 0,
+    ship: typeof toShip === 'number' ? toShip : 0,
     refund: Number(rcC.applied) || 0,
     // 与库存页同一把尺子：per-SKU 阈值优先，未设退 i.low；库存 0 算售罄，不限量不计。
     lowStock: invList.filter((r) => {
@@ -126,7 +132,7 @@ export function mapDashboard(r: unknown): DashboardVM | null {
     { label: '注册用户', value: String(Number(s.users) || 0) },
     { label: '订单总数', value: String(Number(s.orders) || 0) },
     { label: '成交额（已付）', value: yuan(s.gmv), note: approx.gmv ? '近似' : '精确' },
-    // 激活码卡：进度条 + 激活率%（换皮丢了进度条/百分比·只剩「已激活/总」文本）
+    // 激活码卡：进度条 + 激活率%
     { label: '激活码（已激活/总）', value: `${codesAct} / ${codesTotal}`, sub: codesTotal ? `激活率 ${actRate}%` : '', pct: codesTotal ? actRate : undefined },
     { label: '学习者', value: String(Number(s.learners) || 0) },
   ]
@@ -134,7 +140,7 @@ export function mapDashboard(r: unknown): DashboardVM | null {
   const ordered = Number(f.ordered) || 0
   const paid = Number(f.paid) || 0
   const activated = Number(f.activated) || 0
-  // 逐环转化率（较上环 %·换皮丢·只剩绝对值看不出支付率/激活率）；首环无上环故空
+  // 逐环转化率（较上环 %·只看绝对值看不出支付率/激活率）；首环无上环故空
   const conv = (n: number, prev: number) => (prev ? `较上环 ${Math.round((n / prev) * 100)}%` : '') // structure-ok：转化率百分比
   const funnel: StatCard[] = [
     { label: '下单', value: String(ordered), sub: '' },
@@ -148,13 +154,13 @@ export function mapDashboard(r: unknown): DashboardVM | null {
     { label: '退款金额不符', ids: list(t.refundMismatch) },
     { label: '审批后卡单', ids: list(t.stuckRefunds) },
   ].filter((a) => a.ids.length) // 无异常不渲染空警报（不吓人也不假绿：有则必显）
-  // 热点/卡点段位（B5·后端仍返回·换皮误以为「无数据源」删掉）：top(doneCount)/top(stuckCount)＝[{segId,name,count}]
+  // 热点/卡点段位：top(doneCount)/top(stuckCount)＝[{segId,name,count}]
   const seg = (v: unknown): SegStat[] =>
     Array.isArray(v) ? v.map((s: any) => ({ name: String((s && (s.name || s.segId)) || ''), count: Number(s && s.count) || 0 })).filter((s) => s.name) : []
   const recent: ActivityItem[] = Array.isArray(d.recentActivity)
     ? d.recentActivity.map((e: any) => ({ type: String((e && e.type) || ''), text: String((e && e.text) || ''), at: Number(e && e.at) || 0 })).filter((e) => e.text)
     : []
-  return { cards, funnel, alerts, hot: seg(d.hot), stuck: seg(d.stuck), recent, approxSeg: !!(d.approx && d.approx.hot) }
+  return { cards, funnel, alerts, hot: seg(d.hot), stuck: seg(d.stuck), recent, approxSeg: !!(d.approx && d.approx.hot), alertsPartial: t.partial === true }
 }
 
 // 手机号掩码（PII·根因#3 信任边界）：列表只显掩码，抽屉给操作员看完整号（联系买家/填面单）。
@@ -166,9 +172,11 @@ export function maskPhone(p: unknown): string {
 
 export interface OrderItemVM {
   productId: string
+  lineKey: string // 与后端 refundedQty 同一行键：新单 lineId，旧单回退 productId
   name: string
   spec: string
   qty: number
+  refundedQty: number // 这行已退的件数（不发）
 }
 
 export interface OrderRowVM {
@@ -182,7 +190,9 @@ export interface OrderRowVM {
   feeMismatch: boolean
   paymentException: boolean
   paidFeeMissing: boolean // 异常单实付额脏/缺 → 需人工补录后才能走退款（退款死胡同出口）
-  refundHold: boolean // 已有行退款 approved/refunded（后端 listOrders join afterSales·真正拦截闸在 shipOne 服务端）→ 禁发货
+  refundHold: boolean // 有在途售后或每行都退够件数（后端 listOrders 与 shipOne 同一判据·真正拦截闸在 shipOne 服务端）→ 禁发货
+  // 首次发货回传给 shipOne 核对的已退件数：只含对上了商品行、抽屉/批量面板真展示过的，对不上的让服务端拒
+  ackRefundedQty: Record<string, number>
   trackingNo: string
   address: string // 列表用·手机号已掩码（PII）
   canShip: boolean // paid & 非金额异常 & 非退款保留 → 首次发货
@@ -204,6 +214,14 @@ export interface OrderRowVM {
 
 const ms = (v: unknown): number | null => (typeof v === 'number' && v > 0 ? v : null)
 
+// 实付（元）单源，订单列表和越规退款共用。支付异常单应付≠到账，看微信实际到账 paidFee（整数分）；
+// 异常单 paidFee 缺/脏回 null（不知道），正常单就是应付 amount。
+function paidYuan(o: Record<string, any>): unknown {
+  if (o.status !== 'payment_exception') return o.amount
+  const fen = Number(o.paidFee)
+  return Number.isInteger(fen) && fen > 0 ? fenToYuan(asFen(fen)) : null
+}
+
 export function mapOrderRows(list: unknown): OrderRowVM[] {
   if (!Array.isArray(list)) return []
   const out: OrderRowVM[] = []
@@ -212,38 +230,40 @@ export function mapOrderRows(list: unknown): OrderRowVM[] {
     const id = String(o.id || o._id || '')
     if (!id) continue
     const rawItems = Array.isArray(o.items) ? o.items : []
+    const gone: Record<string, unknown> = o.refundedQty && typeof o.refundedQty === 'object' ? o.refundedQty : {}
+    const ackRefundedQty: Record<string, number> = {}
     const items: OrderItemVM[] = rawItems
       .filter((it: any) => it && typeof it === 'object')
-      .map((it: any) => ({
-        productId: String(it.productId || ''),
-        name: String(it.name || ''),
-        spec: String(it.spec || ''),
-        qty: Number.isInteger(it.qty) && it.qty > 0 ? it.qty : 0,
-      }))
+      .map((it: any) => {
+        const lineKey = String(it.lineId || it.productId || '')
+        const qty = Number.isInteger(it.qty) && it.qty > 0 ? it.qty : 0
+        const n = Number(gone[lineKey]) || 0
+        if (lineKey && n > 0) ackRefundedQty[lineKey] = n
+        return { productId: String(it.productId || ''), lineKey, name: String(it.name || ''), spec: String(it.spec || ''), qty, refundedQty: Math.min(qty, Math.max(0, n)) }
+      })
     const names = items.map((it) => it.name).filter(Boolean)
     const a = o.address && typeof o.address === 'object' ? o.address : {}
     const status = String(o.status || '')
-    const exc = status === 'payment_exception'
-    const paidFen = Number(o.paidFee)
-    const paidOk = Number.isInteger(paidFen) && paidFen > 0
+    const paid = paidYuan(o)
     out.push({
       id,
       status,
       statusLabel: orderStatusLabel(o.status),
       summary: names.slice(0, 2).join('、') + (names.length > 2 ? ` 等 ${names.length} 件商品` : ''),
       count: items.reduce((n, it) => n + it.qty, 0),
-      // 支付异常单展示实际到账（多代理审核 codex#5）：列表「实付款」不能配「订单标价」；paidFee 为整数分，脏/缺回退订单金额。
-      amountLabel: yuan(exc && paidOk ? paidFen / 100 : o.amount) || '¥0.00',
+      // 缺实付回退应付，旁边配「补录实付」按钮（paidFeeMissing）
+      amountLabel: yuan(paid ?? o.amount) || '¥0.00',
       timeLabel: dateTime(o.createdAt),
       feeMismatch: o.feeMismatch === true,
-      paymentException: exc,
+      paymentException: status === 'payment_exception',
       // 异常单但实付额脏/缺（回调缺金额字段）→ 无法走退款（PAYMENT_AMOUNT_MISSING），须人工补录后才有关口；
       // 供列表行渲染「补录实付」按钮（补录成功后刷新即消失）。
-      paidFeeMissing: exc && !paidOk,
+      paidFeeMissing: paid === null,
       refundHold: o.refundHold === true,
+      ackRefundedQty,
       trackingNo: String((o.shipping && o.shipping.trackingNo) || o.trackingNo || ''),
       address: [a.name, maskPhone(a.phone), a.region, a.detail].filter(Boolean).join(' '), // 列表掩码
-      // 金额不符单/已退款单禁发货（云端 shipOne 也挡·这里只是入口收窄，防越权点了才发现被拒）
+      // 金额不符单/退款持有单（在途售后或每行都退够件数）禁发货（云端 shipOne 也挡·这里只是入口收窄，防点了才发现被拒）
       canShip: status === 'paid' && o.feeMismatch !== true && o.refundHold !== true,
       canModify: status === 'shipped', // 已发货可改单号
       company: String((o.shipping && o.shipping.company) || ''),
@@ -275,7 +295,7 @@ export interface RefundRowVM {
   canDecide: boolean
   refundedAtLabel: string // 已退款单：到账时间（空=未退/无）
   rejectReason: string // 已拒绝单：拒绝原因（买家可见）
-  // 买家收货人（换皮丢·审退款需识别申请人+联系寄回·后端 listRefunds join 订单地址）
+  // 买家收货人（审退款需识别申请人+联系寄回·后端 listRefunds join 订单地址）
   buyerName: string
   buyerPhone: string // 完整·抽屉用（联系买家）
   buyerMasked: string // 列表用·掩码（PII·根因#3）
@@ -314,7 +334,7 @@ export interface RefundVerdictVM {
   sub: string
 }
 
-// 退款判据文案（P2·根因#8 判据不失真）：以「本单此行真实可退性 lineRefundable」（getRefundDetail 绑订单行·
+// 退款判据文案（根因#8 判据不失真）：以「本单此行真实可退性 lineRefundable」（getRefundDetail 绑订单行·
 // 与 approveRefund ENTERED_NOT_REFUNDABLE 同口径）为准，不被课程级激活（activation.entered）误导——买家可能经
 // 别单/别码进过这门课，但本单此行仍可退，绝不显"会拦"。审核员据此判会不会被服务端拦。
 export function refundVerdict(v: { lineRefundable: boolean; entered: boolean; refundableQty: number | null }): RefundVerdictVM {
@@ -334,7 +354,7 @@ export function refundVerdict(v: { lineRefundable: boolean; entered: boolean; re
   }
 }
 
-// —— 越规退款入口（决策§26·钱链后端零改动·cap refund:manage）——
+// —— 越规退款入口（决策§26·cap refund:manage）——
 // 后端 overrideRefund 只收 { orderId, lineId, reason }，金额/退货资格一律云端裁决（不越权在前端伪造金额）；
 // 这里只提供「按订单号查订单→选行」的查找态 VM + 提交按钮门控纯函数，售后行选择走 listOrders(q=orderId)。
 
@@ -347,8 +367,8 @@ export interface OverrideOrderVM {
   statusLabel: string
   buyerName: string
   buyerPhone: string
-  amountLabel: string // 实付（分转元只读展示）
-  goodsLabel: string // 商品价（分转元只读展示）
+  amountLabel: string // 实付（元）：支付异常单取实际到账 paidFee
+  goodsLabel: string // 商品价（元）
   lines: OverrideLineVM[]
 }
 
@@ -358,6 +378,7 @@ export function mapOverrideOrder(list: unknown, orderId: string): OverrideOrderV
   const o = (list as Record<string, any>[]).find((x) => x && typeof x === 'object' && String(x._id || x.id || '') === orderId)
   if (!o) return null
   const a = o.address && typeof o.address === 'object' ? o.address : {}
+  const paid = paidYuan(o)
   const rawItems = Array.isArray(o.items) ? o.items : []
   const lines: OverrideLineVM[] = rawItems
     .filter((it: any) => it && typeof it === 'object')
@@ -373,13 +394,14 @@ export function mapOverrideOrder(list: unknown, orderId: string): OverrideOrderV
     statusLabel: orderStatusLabel(o.status),
     buyerName: String(a.name || ''),
     buyerPhone: String(a.phone || ''),
-    amountLabel: yuan(o.amount) || '¥0.00',
+    // 这里没有补录按钮，缺实付就明说，不拿应付冒充（提交会被服务端 PAYMENT_AMOUNT_MISSING 拦下）
+    amountLabel: paid === null ? '待补录实付' : yuan(paid) || '¥0.00',
     goodsLabel: yuan(o.goods) || '',
     lines,
   }
 }
 
-// 提交按钮门控（勾选+原因非空才可点·批 B8 规格）：找到订单 + 选中一行 + 原因 trim 非空 + 已勾「知晓越过常规
+// 提交按钮门控（勾选+原因非空才可点）：找到订单 + 选中一行 + 原因 trim 非空 + 已勾「知晓越过常规
 // 售后流程」+ 不在提交中，四项齐才放行——纯函数，供 UI 与单测共用同一判据（防页面另写一份判定漂移）。
 export function canOverrideRefund(v: { orderFound: boolean; lineId: string; reason: string; ack: boolean; busy: boolean }): boolean {
   return v.orderFound && !!v.lineId && v.reason.trim().length > 0 && v.ack && !v.busy

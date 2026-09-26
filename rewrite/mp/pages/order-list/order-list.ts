@@ -1,4 +1,4 @@
-// 我的订单（M2 批7）：状态分栏 + 游标分页 + 待支付续付 + 确认收货。列表从云端拉取、无本地回退单。
+// 我的订单：状态分栏 + 游标分页 + 待支付续付 + 确认收货。列表从云端拉取、无本地回退单。
 import { tapHaptic } from '../../lib/haptics'
 import { getMyOrders, pay, confirmReceive, cancelOrder } from '../../api/orders'
 import { mapPayResult } from '../../lib/payFlow'
@@ -48,11 +48,12 @@ Page({
     loadFailed: false, // 失败≠空态（根因#14·守卫 rw-mp-list-loadfailed-state）：一无所有时的网络失败态，与「暂无订单」分治
     hasMore: false,
     cursor: null as unknown,
+    payingId: '', // 继续支付在途的订单（锁 + 按钮 dim）：pay 往返最长 12s，连点会重复发 pay、重复拉起收银台
     anim: '', // 切 tab 滑入动画类（anim-next/anim-prev）：由 switchTab 置向、reload 落新数据时应用一次；onShow/翻页不带
   },
   _all: [] as OrderVM[], // 全量已拉列表（迁出 data·wxml 不绑定它）：仅供翻页去重与游标基准；shown 才是渲染源，翻页用路径键 shown[N] 增量追加（根因#7 规模·整表重发传输 O(n²)）
   _seq: 0, // reload 代次·同 tab 内多触发点（onShow/取消后 reload）并发时丢弃过期回包（tab-token 只挡切 tab·挡不住同 tab 乱序）
-  unloaded: false, // 页面已退出标记（同 checkout/review 范式·bug sweep II 批E）：onPay 支付回包在途用户退出列表页，迟到回包不再对已退页 toast/reload
+  unloaded: false, // 页面已退出标记（同 checkout/review 范式）：onPay 支付回包在途用户退出列表页，迟到回包不再对已退页 toast/reload
   _swX: 0, // 手势起点 clientX（非渲染态直挂·仿 _seq 写法）
   _swY: 0, // 手势起点 clientY
   _swT: 0, // 手势起点 timeStamp（ms）——一律用事件 timeStamp，不引 Date.now
@@ -68,8 +69,8 @@ Page({
   },
   async reload() {
     // 状态筛选下推服务端（分页与过滤同源）：tabKey 作 status 传下去·从该 tab 重新分页。
-    // 修原「客户端过滤 + 服务端全量分页」：短过滤 tab 内容短于视口→不可滚→onReachBottom 不触发→深页匹配单看不到、
-    // 且并存「上拉加载更多」死提示与「暂无订单」假空态（审计 P2）。
+    // 不做「客户端过滤 + 服务端全量分页」：短过滤 tab 内容短于视口→不可滚→onReachBottom 不触发→深页匹配单看不到、
+    // 且并存「上拉加载更多」死提示与「暂无订单」假空态。
     const tab = this.data.tabKey // 捕获本次请求的 tab·回包落地前复核，防快速切 tab 慢回包乱序覆盖（同 player playToken）
     const seq = ++this._seq // 代次：同 tab 内被更晚 reload（如取消后 reload）取代的旧回包丢弃
     this.setData({ loading: true })
@@ -98,10 +99,10 @@ Page({
     const tab = this.data.tabKey
     const seq = this._seq // 捕获当前代次（翻页不 bump）：期间若发生 reload（_seq 递增）则本次 append 作废，不并入被替换的列表
     const r = await getMyOrders(this.data.cursor, 20, tab)
-    if (seq !== this._seq || tab !== this.data.tabKey) return // reload 已取代当前列表 / 跨 tab 过期回包：丢弃·不错配游标（失败的过期回包也在此静默丢弃，不该对已离开的 tab 弹 toast——评审修复）
+    if (seq !== this._seq || tab !== this.data.tabKey) return // reload 已取代当前列表 / 跨 tab 过期回包：丢弃·不错配游标（失败的过期回包也在此静默丢弃，不该对已离开的 tab 弹 toast）
     if (!r.ok) {
       wx.showToast({ title: '加载失败，上拉重试', icon: 'none' }) // 翻页失败不静默（根因#14）
-      return // 不覆盖已有数据（黄金 §八口径）
+      return // 不覆盖已有数据
     }
     // 增量 setData（根因#7 规模）：翻页只把新增行按路径键 shown[N] 追加，不重发已渲染卡（整表 setData 传输 O(n²)）。
     // _all 迁实例字段仅供去重/游标基准；shown 用路径键局部更新（wxml 只绑定 shown）。
@@ -153,10 +154,19 @@ Page({
     wx.navigateTo({ url: '/pages/order/order?id=' + String(e.currentTarget.dataset.id) })
   },
   async onPay(e: WechatMiniprogram.TouchEvent) {
+    if (this.data.payingId) return // 同一时刻只容一笔在途：收银台是模态，别的单等它关掉再付
     const id = String(e.currentTarget.dataset.id)
     tapHaptic()
+    this.setData({ payingId: id })
+    wx.showLoading({ title: '正在发起支付', mask: true })
     const outcome = mapPayResult(await pay(id))
-    // await 恢复点复核（同 checkout startPay 范式·bug sweep II 批E）：用户在支付发起在途退出列表页，迟到回包
+    wx.hideLoading()
+    // 收银台关掉（成功/取消/失败）或没拉起都要解锁，否则按钮永久点不动
+    const settle = () => {
+      this.setData({ payingId: '' })
+      void this.reload()
+    }
+    // await 恢复点复核（同 checkout startPay 范式）：用户在支付发起在途退出列表页，迟到回包
     // 不再对已退页 toast/reload/拉起支付授权框——订单已在云端，用户下次进详情页续付即可。requestPayment 的
     // success/fail 回调内不加同款复核：授权框是模态、卸载窗口小，无需评估。
     if (this.unloaded) {
@@ -165,7 +175,7 @@ Page({
     }
     if (outcome.kind === 'paid') {
       wx.showToast({ title: '已支付', icon: 'success' })
-      void this.reload()
+      settle()
       return
     }
     if (outcome.kind === 'request') {
@@ -173,14 +183,14 @@ Page({
         ...outcome.payment,
         success: () => {
           wx.showToast({ title: '支付成功', icon: 'success' })
-          void this.reload()
+          settle()
         },
-        fail: () => void this.reload(), // 取消：订单保留·刷新即可
+        fail: settle, // 取消：订单保留·刷新即可
       })
       return
     }
     wx.showToast({ title: outcome.message, icon: 'none' })
-    void this.reload() // 超时关单等状态变化如实刷出来
+    settle() // 超时关单等状态变化如实刷出来
   },
   onConfirm(e: WechatMiniprogram.TouchEvent) {
     const id = String(e.currentTarget.dataset.id)
@@ -190,7 +200,7 @@ Page({
       success: async (res) => {
         if (!res.confirm) return
         const r = await confirmReceive(id)
-        if (this.unloaded) return // await 恢复点复核（bug sweep II 批E round2）：用户已退出列表页——非钱副作用，静默收尾即可
+        if (this.unloaded) return // await 恢复点复核：用户已退出列表页——非钱副作用，静默收尾即可
         wx.showToast({ title: r.ok ? '已确认收货' : '操作没成功，稍后再试', icon: r.ok ? 'success' : 'none' })
         void this.reload()
       },
@@ -205,7 +215,7 @@ Page({
       success: async (res) => {
         if (!res.confirm) return
         const r = await cancelOrder(id)
-        if (this.unloaded) return // await 恢复点复核（bug sweep II 批E round2）：用户已退出列表页——非钱副作用，静默收尾即可
+        if (this.unloaded) return // await 恢复点复核：用户已退出列表页——非钱副作用，静默收尾即可
         wx.showToast({ title: r.ok ? '订单已取消' : '取消没成功，稍后再试', icon: r.ok ? 'success' : 'none' })
         void this.reload()
       },

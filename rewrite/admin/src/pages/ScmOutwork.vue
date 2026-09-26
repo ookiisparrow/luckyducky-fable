@@ -7,7 +7,7 @@ import { materialHuman, outworkStatusLabel, yuanToFen, fenLabel, scmErrorText } 
 import { dateTime } from '../lib/format'
 import { consumeOutworkHandoff } from '../lib/scmHandoff'
 import { useLoadStatus, loadErrors, confirmed } from '../lib/status'
-import { useLatest, appendNew } from '../lib/latest'
+import { usePager, appendNew } from '../lib/latest'
 import ScmFlowTabs from '../components/ScmFlowTabs.vue'
 import UiButton from '../components/ui/Button.vue'
 import PageHeader from '../components/ui/PageHeader.vue'
@@ -19,9 +19,10 @@ const orders = ref<Array<Record<string, any>>>([])
 const rawL = ref<Array<Record<string, any>>>([]) // 大团原团（可发）
 const knottedL = ref<Array<Record<string, any>>>([]) // 大团带结（可收）
 const workers = ref<Array<Record<string, any>>>([])
-const cursor = ref<unknown>(null) // B1（根因#7）：外协单列表翻页游标
-const hasMore = ref(false)
-// 动作反馈(note)/加载态(load) 收口（病根#14）：reload 成功不再抹掉动作刚设的成功/失败原文。
+const pager = usePager() // 外协单列表翻页（根因#7）
+const hasMore = pager.hasMore
+const listFailed = ref(false) // 外协单没读到时不显「还没有外协单」——失败≠空态
+// 动作反馈(note)/加载态(load) 收口（病根#14）：reload 成功不抹掉动作刚设的成功/失败原文。
 const { message, ok: msgOk, note, load } = useLoadStatus()
 const form = ref<{ outworkId?: string; workerId: string; rateYuan: string; lines: Array<{ materialId: string; qty: number }> } | null>(null)
 const recvFor = ref('')
@@ -34,7 +35,7 @@ const knottedOf = (id: unknown) => {
   const m = /^yarn:([a-z0-9-]+):L:raw$/.exec(String(id))
   return m ? `yarn:${m[1]}:L:knotted` : ''
 }
-// 收货引导预览（换皮退成裸表单·得手抄颜色/自己算应付损耗/收超发也不拦）
+// 收货引导预览（裸表单得手抄颜色/自己算应付损耗/收超发也不拦）
 // 发的每个 raw 色 → 对应 knotted 同色的应收上限
 const issuedByKnotted = computed<Record<string, number>>(() => {
   const map: Record<string, number> = {}
@@ -54,44 +55,37 @@ function lineOver(l: { materialId: string; qty: number }): boolean {
 }
 const anyOver = computed(() => recvLines.value.some(lineOver)) // 任一色收超发→拦确认（后端也会拒·前端先防呆）
 
-const listGen = useLatest() // 外协单乱序守卫（D4·同 ScmPurchase.vue 判例·根因#8）：快切/快刷新时旧回包别覆盖当前结果
 async function reload() {
-  confirmKey.value = '' // 刷新即复位危险态（P1·防旧武装的发料/结算/取消按钮跨刷新残留一击直发·批3 规格）
-  const my = listGen.begin()
+  confirmKey.value = '' // 刷新即复位危险态（防旧武装的发料/结算/取消按钮跨刷新残留一击直发）
+  const my = pager.begin()
   const [o, m, s] = await Promise.all([listOutworks(), listMaterials(), listSuppliers()])
-  if (listGen.isStale(my)) return // 已发起更新的 reload·丢弃过期回包
-  orders.value = o.ok ? (o.list as Record<string, any>[]) : []
-  cursor.value = o.ok ? o.nextCursor : null
-  hasMore.value = !!(o.ok && o.hasMore)
-  const all = m.ok ? (m.list as Record<string, any>[]) : []
+  if (pager.isStale(my)) return // 已发起更新的 reload·丢弃过期回包（快刷新时旧回包别覆盖当前结果·根因#8）
+  orders.value = o.ok ? o.list : []
+  listFailed.value = !o.ok
+  pager.reset(o)
+  const all = m.ok ? m.list : []
   rawL.value = all.filter((x) => /^yarn:[a-z0-9-]+:L:raw$/.test(String(x._id)))
   knottedL.value = all.filter((x) => /^yarn:[a-z0-9-]+:L:knotted$/.test(String(x._id)))
-  workers.value = s.ok ? ((s.list as Record<string, any>[]) || []).filter((x) => x.type === 'outworker') : []
+  workers.value = s.ok ? (s.list || []).filter((x) => x.type === 'outworker') : []
   // 分路报错（照 ScmBom.reload）：物料/织女挂掉不装空目录
   const err = loadErrors([[o, '外协单'], [m, '物料主档'], [s, '织女名单']])
   load(!err, err) // 只在加载失败时写·成功静默不抹动作反馈
 }
 
-// 加载更多（B1·根因#7·D4 补乱序守卫）：续游标追加·去重防双击重复追加同一页·绑定当前 reload 代际（新 reload
-// 会作废在途 more，more 自身不递增代际·防与 reload 互杀，同 ScmPurchase.vue more() 判例）
 async function more() {
-  if (!hasMore.value || cursor.value == null) return
-  const gen = listGen.peek()
-  const r = await listOutworks(undefined, { cursor: cursor.value })
-  if (listGen.isStale(gen)) return
+  const r = await pager.next((cursor) => listOutworks(undefined, { cursor }))
+  if (!r) return
   if (!r.ok) {
     note(false, '', '加载更多失败：' + scmErrorText(r.error))
     return
   }
-  orders.value = appendNew(orders.value, (r.list as Record<string, any>[]) || [], (o) => o._id)
-  cursor.value = r.nextCursor
-  hasMore.value = !!r.hasMore
+  orders.value = appendNew(orders.value, r.list || [], (o) => o._id)
 }
 
 function newOrder() {
   form.value = { outworkId: '', workerId: '', rateYuan: '', lines: [{ materialId: '', qty: 1 }] }
 }
-// 草稿编辑（换皮丢·外协草稿建完只能取消重建·后端 saveOutwork 收 outworkId 支持改）：预填
+// 草稿编辑（后端 saveOutwork 收 outworkId 支持改）：预填
 function editDraft(o: Record<string, any>) {
   form.value = {
     outworkId: String(o._id || ''),
@@ -102,11 +96,11 @@ function editDraft(o: Record<string, any>) {
   if (!form.value.lines.length) form.value.lines.push({ materialId: '', qty: 1 })
 }
 
-const saving = ref(false) // 建单在途锁（P2·防双击建两张重复外协草稿·后端建单无 id 幂等）
+const saving = ref(false) // 建单在途锁（防双击建两张重复外协草稿·后端建单无 id 幂等）
 async function doSave() {
   const f = form.value
   if (!f || saving.value) return
-  const snap = f // 快照本次编辑目标（H1·同批G G3/G4 范式·同文件 doRecv 已有 forId 快照参照）：editDraft 无 saving 门控，
+  const snap = f // 快照本次编辑目标（同文件 doRecv 的 forId 快照）：editDraft 无 saving 门控，
   // await 期间若已切到另一张草稿/新建，回包收尾效果不该打过去
   const fen = yuanToFen(f.rateYuan)
   if (fen === null) {
@@ -142,20 +136,20 @@ async function doRecv() {
     note(false, '', '有颜色收货数超过发出数（收 ≤ 发）——请核对')
     return
   }
-  const forId = recvFor.value // 快照发起时的收货目标（G3·P2）：await 期间若已切到另一张收货表单，回包的
+  const forId = recvFor.value // 快照发起时的收货目标：await 期间若已切到另一张收货表单，回包的
   // 反馈/清理不该打到新表单上（同 Desk act() 治法）
   const r = await receiveOutwork(recvFor.value, recvLines.value.map((l) => ({ materialId: l.materialId, qty: Number(l.qty) })))
   if (recvFor.value === forId) {
-    note(r.ok, `已收货入库：应付 ${fenLabel(r.payableFen)} · 损耗 ${Number(r.lossQty) || 0} 团（已定格）`, scmErrorText(r.error))
+    note(r.ok, r.ok ? `已收货入库：应付 ${fenLabel(r.payableFen)} · 损耗 ${Number(r.lossQty) || 0} 团（已定格）` : '', scmErrorText(r.error))
     if (r.ok) cancelRecv()
   }
   void reload() // 列表刷新无条件执行，不受目标是否过期影响
 }
 
-async function step(fn: (_id: string) => Promise<Record<string, unknown>>, id: string, key: string) {
+async function step(fn: (_id: string) => Promise<{ ok: boolean; error?: string }>, id: string, key: string) {
   if (!confirmed(confirmKey, key)) return
-  const r = (await fn(id)) as Record<string, any>
-  note(r.ok, '', scmErrorText(r.error)) // 失败走 note 设 msgOk=false（红）·换皮只写 message 致失败显成功绿
+  const r = await fn(id)
+  note(r.ok, '', scmErrorText(r.error)) // 失败走 note 设 msgOk=false（红）·只写 message 会让失败显成功绿
   void reload()
 }
 
@@ -244,7 +238,7 @@ onMounted(async () => {
         <UiButton variant="ghost" size="sm" @click="more">加载更多</UiButton>
       </div>
     </div>
-    <EmptyState v-else-if="!form" :icon="ClipboardList" text="还没有外协单" />
+    <EmptyState v-else-if="!form && !listFailed" :icon="ClipboardList" text="还没有外协单" />
 
     <Card v-if="recvFor" title="收货登记" :sub="recvFor + ' · 已按发料色预填 · 收 ≤ 发'">
       <div v-for="(l, i) in recvLines" :key="i" class="recv-row" :class="{ over: lineOver(l) }">

@@ -1,4 +1,4 @@
-/* 商品详情·重设计对齐 ProductDetail.jsx 方案A（经典电商）。设计 402px 画板→rpx（×1.87）。
+/* 商品详情·对齐设计 ProductDetail.jsx 方案A（经典电商）。设计 402px 画板→rpx（×1.87）。
    页中性浅灰底、白卡全宽以灰缝分隔；token 见 styles/tokens.wxss。 */
 .pdp {
   min-height: 100vh;
@@ -416,7 +416,7 @@
   font-weight: 600;
 }
 
-/* 加载骨架（批5·页内自足·不跨页 import home.wxss，参照其 ld-skeleton 手法） */
+/* 加载骨架（页内自足·不跨页 import home.wxss，参照其 ld-skeleton 手法） */
 .pdp-skeleton {
   min-height: 100vh;
   background: #f4f4f5;

@@ -1,4 +1,4 @@
-// 数据共享授权提示态（后台360工作站 B3.3 的 C 端半边·守卫 rw-mp-privacy-gated）：
+// 数据共享授权提示态（客服 360 数据共享同意的 C 端半边·守卫 rw-mp-privacy-gated）：
 // 服务端 users.csDataShare 为授权真值（云端 assertDataShareConsent fail-closed 校验）——
 // 本地只存「提示」（显示用·非真值），回灌必 sanitize：storage 不可信，只认 boolean，其余回 null=未知。
 import { readStorage, writeStorage } from '../utils/storage'

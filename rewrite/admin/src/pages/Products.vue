@@ -26,7 +26,8 @@ import {
   type StepExtras,
 } from '../lib/mapProducts'
 import { serialSave } from '../lib/serialSave'
-import { confirmed } from '../lib/status'
+import { confirmed, failText } from '../lib/status'
+import { launchErrorText } from '../lib/mapSystem'
 import type { ClientResult } from '../api/client'
 import { compressImage } from '../lib/compressImage'
 import { useRouter } from 'vue-router'
@@ -45,22 +46,22 @@ const showCover = computed(() => !props.embed || props.wizardSlice === 1)
 const showLook = computed(() => !props.embed || props.wizardSlice === 2)
 const showDetail = computed(() => !props.embed || props.wizardSlice === 3)
 // 编辑器持久化成功即通知父级（上新向导嵌本编辑器·步1-3）——让 Wizard 顶部「上架闸/进度圆点/缺项徽章」随
-// 内嵌编辑器 autosave 重算真值（P2·否则补齐必备项后向导头仍锁死、与编辑器自身预检自相矛盾·根因#8）。
+// 内嵌编辑器 autosave 重算真值（否则补齐必备项后向导头仍锁死、与编辑器自身预检自相矛盾·根因#8）。
 const emit = defineEmits<{ saved: [] }>()
 
 const router = useRouter()
-// 商品→课程深链（换皮丢了入口，本按钮已补·下方「编辑课程」+ Courses 页占位文案均已对齐现状）：courseId=商品档 courseId 或 course-<id>
+// 商品→课程深链（下方「编辑课程」按钮）：courseId=商品档 courseId 或 course-<id>
 async function editCourse(row: DraftRowVM) {
-  // existing 优先读活编辑器（评审 P3 同批收口）：row.raw 是旧快照——编辑器里刚手输、还在防抖窗口内
+  // existing 优先读活编辑器：row.raw 是旧快照——编辑器里刚手输、还在防抖窗口内
   // 未落盘的关联课程号，不该被自动生成的 course-<id> 盖掉。
   const live = edit.value && String(edit.value.id) === row.id ? String(edit.value.courseId || '') : ''
-  const existing = live || String((row.raw as any).courseId || '')
+  const existing = live || String(row.raw.courseId || '')
   const cid = existing || 'course-' + row.id
-  // courseId 落库（换皮只算不存·商品与课程/批次关联要人工输易错）：首次深链即写回商品档
+  // courseId 落库（只算不存的话商品与课程/批次关联要人工输·易错）：首次深链即写回商品档
   if (!existing) {
     if (edit.value && String(edit.value.id) === row.id) {
       // 编辑器正开着同一件商品：row.raw 是不含防抖窗口内未落盘编辑的旧快照，旁路直发会与在途/即将触发的
-      // autosave 乱序覆盖（P1·bug 清除战役 II C3·同 doSave 已修的乱序覆盖同模式）。并入同一条 serialSave
+      // autosave 乱序覆盖（同 doSave 的乱序覆盖同模式）。并入同一条 serialSave
       // 队列——flushSave() 的 run() 现读 edit.value（含这里刚写的 courseId + 用户未落盘编辑），latest-wins。
       // flushSave 失败（autoState≠saved）不挡下面的 router.push：cid 是确定性 course-<id>，下次再点会重试写回。
       edit.value.courseId = cid
@@ -78,12 +79,12 @@ const rows = ref<DraftRowVM[]>([])
 const message = ref('')
 const busy = ref(false)
 const confirmKey = ref('') // 两步确认（`del:<id>` / `off:<id>` / `pub:<id>`）
-const wantHome = ref(false) // 首次上架问首页·默认不挂（工单212）
+const wantHome = ref(false) // 首次上架问首页·默认不挂
 const moreKey = ref('') // 操作列「⋯更多」菜单展开行 id（非危险态·仅 UI 开合；顺手在 reload() 里也清，防刷新后残留开着的菜单）
-// 菜单挂视口 fixed 定位（批5 裁剪修正·浏览器实测）：absolute 会被 Card flush 的 overflow:hidden
+// 菜单挂视口 fixed 定位（浏览器实测）：absolute 会被 Card flush 的 overflow:hidden
 // 裁掉——末行菜单实测只露一项；fixed 按 ⋯ 按钮矩形算坐标，不受卡片裁剪。
-// 终审对抗审查两处 P1 修正：① fixed 坐标只在打开瞬间准，页面一滚动立即收起（scroll 不触发 click，
-// backdrop 挡不住滚轮——原「backdrop 先挡」注释被审查证伪）；② 关菜单=取消手势，必须连带解除
+// 另外两点：① fixed 坐标只在打开瞬间准，页面一滚动立即收起（scroll 不触发 click，
+// backdrop 挡不住滚轮）；② 关菜单=取消手势，必须连带解除
 // confirmKey 两步武装（否则武装残留、重开菜单一击直发真删除）。backdrop 用 mousedown 关：mouseup
 // 时 click 落在其下真实目标上——跨行切换菜单一击到位，不吞第一击。
 const morePos = ref({ top: 0, right: 0 })
@@ -128,24 +129,24 @@ const shown = computed(() => {
     (r) => (filter.value === 'all' || r.state === filter.value) && (!q || r.name.toLowerCase().includes(q) || r.id.toLowerCase().includes(q))
   )
 })
-const imgCount = (r: DraftRowVM) => (Array.isArray((r.raw as any).images) ? (r.raw as any).images.length : 0)
+const imgCount = (r: DraftRowVM) => (Array.isArray(r.raw.images) ? r.raw.images.length : 0)
 // 圆点深链：进上新向导落到第一个未完成步（全完成落第 1 步）
 const firstTodoStep = (r: DraftRowVM) => (r.steps.findIndex((s) => !s.done) + 1) || 1
-const courseOf = (r: DraftRowVM) => String((r.raw as any).courseId || '')
+const courseOf = (r: DraftRowVM) => String(r.raw.courseId || '')
 const videoMarksOf = (r: DraftRowVM) => r.steps.find((s) => s.key === 'video')?.marks || []
 
 // 图片 fileID→url 解析：listDrafts 回的 urls 映射（已存图）+ 本会话新上传的 url
 const urlMap = ref<Record<string, string>>({})
 const sessionUrls = ref<Record<string, string>>({})
 const imgUrl = (fileID: string) => sessionUrls.value[fileID] || urlMap.value[fileID] || ''
-// urlMap 取数时刻（P3·bug sweep Round2 item10）：云存储临时址约 2h 时效，长会话挂着不关闭列表页时
+// urlMap 取数时刻：云存储临时址约 2h 时效，长会话挂着不关闭列表页时
 // urlMap 只在写操作后才刷新——openEdit 入口若超龄，编辑器一打开图就已经挂了。阈值 90 分钟（留 30 分钟余量）。
 let urlMapAt = 0
 const URL_MAP_STALE_MS = 90 * 60 * 1000
 
 async function reload(keepMsg = false) {
   const held = keepMsg ? message.value : ''
-  confirmKey.value = '' // 刷新即复位危险态（P1·防旧武装的上架/下架/删除按钮跨刷新残留一击直发·批3 规格）
+  confirmKey.value = '' // 刷新即复位危险态（防旧武装的上架/下架/删除按钮跨刷新残留一击直发）
   wantHome.value = false
   moreKey.value = '' // 防刷新后残留开着的⋯更多菜单
   if (!keepMsg) message.value = '加载中…'
@@ -154,7 +155,7 @@ async function reload(keepMsg = false) {
     urlMap.value = {}
     rows.value = []
   }
-  message.value = r.ok ? held : '加载失败：' + String(r.error || '')
+  message.value = r.ok ? held : failText('加载失败', r.error)
   listReady.value = true
 }
 // 静默刷新列表（不闪「加载中」·不打断正在编辑的编辑器）；5 步分步态由 listDrafts 后端 join 随包带回
@@ -168,7 +169,7 @@ async function silentRefresh() {
   return r
 }
 
-// —— 防抖自动保存（换皮把「编排即自动存」退成手动「保存草稿」·忘点即丢·且已上传的封面/相册 fileID 成孤儿）——
+// —— 防抖自动保存（手动「保存草稿」的话忘点即丢·且已上传的封面/相册 fileID 成孤儿）——
 const autoState = ref('') // '' | saving | saved | error
 let saveTimer: ReturnType<typeof setTimeout> | null = null
 let editorLoaded = false // load-guard：打开/新建时的赋值不触发自动保存
@@ -194,7 +195,7 @@ async function autosave() {
     emit('saved') // 通知向导重算上架闸/进度（步1-3 内嵌编辑器 autosave 落库后）
   }
 }
-// 串行化·防慢网下两次自动保存乱序覆盖（P2·根因#8）；key='products'（批D·P1）：改走模块级共享槽位，
+// 串行化·防慢网下两次自动保存乱序覆盖（根因#8）；key='products'：走模块级共享槽位，
 // 快速切走再切回本页重建组件实例时，新实例接管旧实例仍在途的补存链，防旧快照晚到覆盖新实例已存的编辑
 // （每次 saveDraft 都带自身 id 落自己的档，用同一泛 key 不会串到别的商品档上）。
 const flushSave = serialSave(autosave, 'products')
@@ -206,14 +207,14 @@ function markLoaded() {
 function closeEditor() {
   confirmKey.value = '' // 列表/编辑器共用 twoStep：关编辑必须卸武装，否则回到列表仍是确认文案
   openEditGen++ // 使任何仍在等 silentRefresh 回包的 openEdit 调用作废——不得在关闭后悄悄把编辑器重新弹开（同上代际守卫）
-  const myGen = openEditGen // 快照本次关闭的代际（N1·bug 清除战役 II 遗留）：异步链 resolve 前用户可能已 openEdit 打开另一件商品，
+  const myGen = openEditGen // 快照本次关闭的代际：异步链 resolve 前用户可能已 openEdit 打开另一件商品，
   // 失败提示不得晚落地误标到新开的编辑器屏上——照 openEdit/silentRefresh 既有代际模式。
   if (saveTimer) {
     clearTimeout(saveTimer)
     saveTimer = null
   }
   // 同步抓快照 + 立即关闭（杜绝关闭期手输）：有未落盘编辑就排空在途后存**快照**（不读实时 ref、不被置空击穿）。
-  // 修两回归：批4b「在途保存期关闭丢最后编辑」(迭代D) + 批5「await 期间手输丢失/孤儿计时器」(迭代E)。
+  // 防两种丢失：在途保存期关闭丢最后编辑；await 期间手输丢失/孤儿计时器。
   const snap = autoState.value === 'saving' && edit.value ? (JSON.parse(JSON.stringify(edit.value)) as Record<string, any>) : null
   editorLoaded = false
   edit.value = null
@@ -221,14 +222,15 @@ function closeEditor() {
     void flushSave() // 先排空任何在途 autosave（其 run 读已 null 的 edit→no-op·仅用于等排空）
       .then(() => saveDraft(snap)) // 排空后存快照·成为最后一次写（不被旧在途覆盖）
       .then((r) => {
-        // 消费返回值（F3·P1）：client.post 从不 reject、业务失败以 {ok:false} resolve——原 .catch(()=>{})
+        // 消费返回值：client.post 从不 reject、业务失败以 {ok:false} resolve——光 .catch(()=>{})
         // 只兜网络异常，业务失败被静默吞掉、无提示且仍 emit('saved') 给上新向导假的「已保存」信号。
         if (r.ok) {
           void silentRefresh()
           emit('saved') // 只在真保存成功时才通知父级
         } else {
-          // 代际锚（N1）：只在仍是本次关闭发起的这一代时才写失败提示——期间若已 openEdit(B)，A 的失败文案不得标到 B 屏上。
-          if (openEditGen === myGen) message.value = '关闭前有编辑未保存成功：' + String(r.error || '') + '，请重新打开该商品检查'
+          // 代际锚：只在仍是本次关闭发起的这一代时才写失败提示——期间若已 openEdit(B)，A 的失败文案不得标到 B 屏上。
+          // 编辑器已关、快照已丢，任何码都要留这句上下文；说「可能」是因超时/SERVER_ERROR 时其实可能已存上
+          if (openEditGen === myGen) message.value = '关闭前的编辑可能没存上，请重新打开该商品检查：' + launchErrorText(r.error)
         }
       })
       .catch(() => {})
@@ -241,9 +243,9 @@ onBeforeUnmount(() => {
   }
 })
 
-// urlMap 超龄（≥90 分钟未刷新）先静默刷一次再开编辑器（P3·bug sweep Round2 item10）：只在这一个入口挂钩子，
+// urlMap 超龄（≥90 分钟未刷新）先静默刷一次再开编辑器：只在这一个入口挂钩子，
 // 列表渲染路径（模板求值）不挂副作用、也不做定时轮询（防过度工程）。row 可能是刷新前的旧快照，刷新后按 id 重找。
-// 代际守卫（P1·bug sweep Round2 复审补漏·同 me.ts/order-list.ts 的 _seq 范式）：urlMap 超龄期间连续快点
+// 代际守卫（同 me.ts/order-list.ts 的 _seq 范式）：urlMap 超龄期间连续快点
 // 打开两件不同商品，若网络乱序（先点的那次 silentRefresh 回包更晚落地），过期调用不得覆盖后来者正在看/编辑的编辑器。
 let openEditGen = 0
 async function openEdit(row: DraftRowVM) {
@@ -261,7 +263,7 @@ async function openEdit(row: DraftRowVM) {
 }
 
 function addSku() {
-  if (edit.value) (edit.value.skus as any[]).push({ name: '', price: edit.value.price || '' }) // 默认带商品现价（换皮恒空价·手抄易错）
+  if (edit.value) edit.value.skus.push({ name: '', price: edit.value.price || '' }) // 默认带商品现价（空价要手抄·易错）
 }
 function clearCover() {
   if (edit.value) {
@@ -274,7 +276,7 @@ async function pickCover(ev: Event) {
   const file = (ev.target as HTMLInputElement).files?.[0]
   ;(ev.target as HTMLInputElement).value = '' // 允许失败后重选同一文件（否则 change 不再触发）
   if (!file || !edit.value) return
-  // 快照本次上传目标（H·完备性扫描新增·同 doSave 范式）：openEdit/列表「编辑」按钮无 busy 门控，
+  // 快照本次上传目标（同 doSave 范式）：openEdit/列表「编辑」按钮无 busy 门控，
   // 压缩/上传两段 await 期间都可能已切到另一件商品的编辑器——回包不该打到已切换的新编辑器上。
   const snap = edit.value
   const b64 = await compressImage(file, PRODUCT_COMPRESS)
@@ -291,25 +293,25 @@ async function pickCover(ev: Event) {
       coverPreview.value = String(r.url || '')
       message.value = ''
     } else {
-      message.value = '图片上传失败：' + String(r.error || '')
+      message.value = launchErrorText(r.error)
     }
   }
 }
 
-// 商品封面/相册：M3 起就是 720 档（比卡片/首页 hero 更小），调用方覆盖默认，不是抄偏。
+// 商品封面/相册走 720 档（比卡片/首页 hero 更小），调用方覆盖默认，不是抄偏。
 const PRODUCT_COMPRESS = { maxWidth: 720, qualities: [0.8, 0.65, 0.5, 0.35] as const }
 
 async function doSave() {
   if (!edit.value || busy.value) return
-  const snap = edit.value // 快照本次保存目标（H1·完备性扫描新增·同批G G3/G4 范式）：openEdit/newProduct 无 busy 门控
+  const snap = edit.value // 快照本次保存目标：openEdit/newProduct 无 busy 门控
   // （列表「编辑」按钮 & 编辑器均非遮罩、不挡点击），await 期间若已切到另一件商品的编辑器，收尾效果不该打过去
   busy.value = true
-  // 并入同一条 serialSave 队列而非旁路直发（P1·bug sweep Round2 item7·批3 修复不彻底：原「settled() 排空后
+  // 并入同一条 serialSave 队列而非旁路直发（若「settled() 排空后
   // 再裸调 saveDraft」——这次写发出到回包落地期间，若又有新编辑触发 watch→再排一枚 saveTimer→到点 flushSave()
-  // 会并发发出第二条 POST，乱序回包时晚到的旧快照覆盖新写。改走 flushSave()（trigger 本尊，非 .settled()）：
+  // 会并发发出第二条 POST，乱序回包时晚到的旧快照覆盖新写）。故走 flushSave()（trigger 本尊，非 .settled()）：
   // 已在途只标脏、不并发再发；run() 现读 edit.value 最新值，latest-wins，全程只有一条链在跑。
   //
-  // 反复排空直到干净（P1·bug sweep Round2 复审补漏）：flushSave() 挂起期间若又有新编辑，watch(edit) 会
+  // 反复排空直到干净：flushSave() 挂起期间若又有新编辑，watch(edit) 会
   // 另起一枚**独立**的 900ms 防抖计时器（不经过 trigger()，不会让本轮 serialSave 的 dirty=true）——若这次
   // 网络往返快于 900ms（常见），该计时器仍孤悬未触发时 flushSave() 已经 resolve；同时这次新编辑已把 autoState
   // 同步置回 'saving'，随后落地的旧回包又把它覆盖误报成 'saved'。用「saveTimer 是否仍孤悬」判断「还有未落库
@@ -337,8 +339,8 @@ async function doSave() {
   if (ok) void reload() // 列表真值刷新与目标是否已切无关·恒执行
 }
 
-// 上架两步确认（换皮直接上架无确认·上架即对小程序可见·应有一道）
-// 四动作失败提示不再紧随 reload()（P1·bug sweep Round2 item8）：reload() 起手同步 `message.value='加载中…'`，
+// 上架两步确认（上架即对小程序可见·应有一道）
+// 四动作失败提示不紧随 reload()：reload() 起手同步 `message.value='加载中…'`，
 // void reload() 的 fire-and-forget 调用会在当前同步代码段里立即跑到那一行、把刚设的失败原因同步清掉——
 // 操作员只看见一闪而过的「加载中」，真实失败原因（如四道门人话）从未被看见。照 Anomalies/Inspect 已有规避
 // 范式：失败分支直接 return、不 reload；只有成功才清空 message 再 reload。
@@ -355,7 +357,7 @@ const doPublish = (id: string) =>
       return
     }
     message.value = draftSyncOk(st, st === 'preparing' ? { featured } : undefined)
-    void reload(true) // 成功口要留下首页状态（工单212）·reload 默认会冲掉 message
+    void reload(true) // 成功口要留下首页状态·reload 默认会冲掉 message
   })
 
 async function twoStep(key: string, run: () => Promise<void>) {
@@ -367,22 +369,22 @@ async function twoStep(key: string, run: () => Promise<void>) {
 }
 
 // 失败留原因且不 reload：reload 起手的「加载中…」会同步冲掉失败文案
-const simpleAction = (prefix: string, api: (_id: string) => Promise<ClientResult>, act: string) => (id: string) =>
+const simpleAction = (prefix: string, api: (_id: string) => Promise<ClientResult>) => (id: string) =>
   twoStep(prefix + id, async () => {
     const r = await api(id)
     if (r.ok) void reload()
-    else message.value = act + '失败：' + String(r.error || '')
+    else message.value = launchErrorText(r.error)
   })
-const doUnpublish = simpleAction('off:', unpublishProduct, '下架')
-const doRepublish = simpleAction('re:', republishProduct, '恢复') // 恢复销售＝可见性变更，同上/下架要二次确认
-const doDelete = simpleAction('del:', deleteDraft, '删除')
+const doUnpublish = simpleAction('off:', unpublishProduct)
+const doRepublish = simpleAction('re:', republishProduct) // 恢复销售＝可见性变更，同上/下架要二次确认
+const doDelete = simpleAction('del:', deleteDraft)
 
-// —— 多图相册（换皮丢·仅 round-trip 保全无编辑 UI）：多选上传·压缩·增删·排序 ——
+// —— 多图相册：多选上传·压缩·增删·排序 ——
 async function addImages(ev: Event) {
   const input = ev.target as HTMLInputElement
   const files = input.files
   if (!files || !edit.value) return
-  // 快照本次上传目标（H·完备性扫描新增·同 pickCover/doSave 范式）：循环内每次 await 期间
+  // 快照本次上传目标（同 pickCover/doSave 范式）：循环内每次 await 期间
   // 都可能已切到另一件商品的编辑器——回包不该打到已切换的新编辑器上。
   const snap = edit.value
   busy.value = true
@@ -398,7 +400,7 @@ async function addImages(ev: Event) {
         ;(edit.value.images as string[]).push(String(r.fileID))
         sessionUrls.value[String(r.fileID)] = String(r.url || '')
       } else {
-        message.value = '有图上传失败：' + String(r.error || '')
+        message.value = launchErrorText(r.error)
       }
     }
   }
@@ -426,13 +428,13 @@ function addKit() {
 }
 
 // 模板内 `as { a: string; b: string }[]` 型断言会让 vue 模板表达式解析器把内部分号误读——
-// 收进 script 的 typed computed 访问器（返回同一数组引用，v-model 直改元素属性不受影响·行为零变化，批4）。
+// 收进 script 的 typed computed 访问器（返回同一数组引用，v-model 直改元素属性不受影响）。
 type DetailSection = { lead: string; body: string }
 type KitItem = { icon: string; name: string; qty: string }
 const detailSections = computed(() => (edit.value?.detailSections ?? []) as DetailSection[])
 const kitItems = computed(() => (edit.value?.kit ?? []) as KitItem[])
 
-// 上架前缺项预检（1:1 旧 Wizard missing·换皮退成事后报错）：封面/名称/价格/有效规格四项必备。
+// 上架前缺项预检（不等事后报错）：封面/名称/价格/有效规格四项必备。
 // basicsMissing 单源（向导上架闸与本页预检同口径）。
 const missing = computed(() => (edit.value ? basicsMissing(edit.value) : []))
 const coverMissing = computed(() => missing.value.filter((x) => x === '封面图'))
@@ -673,7 +675,7 @@ onMounted(async () => {
       <p v-if="!embed && missing.length" class="preflight">{{ draftSyncMissingHint(editState, missing) }}</p>
       <p v-else-if="!embed" class="preflight ok">{{ draftSyncReadyHint(editState) }}</p>
 
-      <!-- 嵌入向导步 1-3 时隐藏「保存草稿/关闭」：doSave 会 edit.value=null 关掉编辑器、而 embed 无列表可回→步面板变空白死胡同（P2）；
+      <!-- 嵌入向导步 1-3 时隐藏「保存草稿/关闭」：doSave 会 edit.value=null 关掉编辑器、而 embed 无列表可回→步面板变空白死胡同；
            embed 下 autosave（900ms + 离页补存）已负责持久化，切步/上架走向导自身按钮 -->
       <div v-if="!embed" class="editor-ops">
         <UiButton v-if="editState === 'onsale'" variant="primary" :disabled="busy" @click="doPublish(String(edit.id))">{{ confirmKey === 'pub:' + edit.id ? draftSyncConfirm('onsale') : draftSyncLabel('onsale') }}</UiButton>
@@ -847,7 +849,7 @@ onMounted(async () => {
   gap: 6px;
   flex-wrap: wrap;
 }
-/* ⋯更多菜单（操作列收敛·主操作+更多·design 批）：透明全屏 backdrop 收合点击外部，菜单本体白卡贴右下角 */
+/* ⋯更多菜单（操作列收敛·主操作+更多）：透明全屏 backdrop 收合点击外部，菜单本体白卡贴右下角 */
 .more-backdrop {
   position: fixed;
   inset: 0;
@@ -855,7 +857,7 @@ onMounted(async () => {
   z-index: 15;
 }
 .more-menu {
-  /* fixed 挂视口（批5 裁剪修正）：absolute 被 Card flush 的 overflow:hidden 裁·坐标由 toggleMore 注入 */
+  /* fixed 挂视口：absolute 被 Card flush 的 overflow:hidden 裁·坐标由 toggleMore 注入 */
   position: fixed;
   z-index: 16;
   display: flex;

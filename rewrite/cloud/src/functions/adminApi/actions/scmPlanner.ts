@@ -1,35 +1,36 @@
 import { reply, type Ctx } from '../lib'
-import { listMaterialDocs, sumLedgerByItemKey, getDocOrNull } from '../../../kit'
+import { listMaterialDocs, sumLedgerByItemKey, getDocOrNull, str, err } from '../../../kit'
 import { COLLECTIONS } from '@ldrw/shared'
 import { resolveBom, yarnMaterialId } from '@ldrw/shared'
 
-// 进销存 SCM-D 备货计算器（见 docs/业务逻辑架构.md 链 12·门5 文件级隔离：本文件=车道 D 计划面）。
+// 进销存备货计算器（见 docs/业务逻辑架构.md 链 12·门5 文件级隔离：本文件=计划面）。
 // **只读**：目标套数 × 门3 resolveBom（与组装同一解析·配方语义单源）→ 对比主档库存 → 缺口两分：
 //   ① 外协缺口——带结团不外购（业务定稿：带结=织女产出），缺多少带结＝应发多少同色 L 原团；
 //     派生的原团需求叠回采购口径（发出去的原团也是要备的料）。
 //   ② 采购缺口——按供应商分列（够扣不出行·未建档料点名+归「未挂供应商」组）。
 // fail-closed：无模板/无差异位/坏 targets 即拒（不静默补默认·根因#8）。RBAC：默认拒 admin:write＝仅超管。
-// getFgSummary 同车道另一只读视角：不算缺口，是 stockLedger fg 流水事后按产品汇总（打包累计/发货累计），不动账。
+// getFgSummary 同文件另一只读视角：不算缺口，是 stockLedger fg 流水事后按产品汇总（打包累计/发货累计），不动账。
 
 const KNOTTED_RE = /^yarn:([a-z][a-z0-9-]*):L:knotted$/
 
 export async function getRestockPlan({ db, data }: Ctx) {
   const targets = Array.isArray(data.targets) ? data.targets : []
-  if (!targets.length || targets.length > 50) return reply(400, { ok: false, error: 'BAD_TARGETS' })
+  if (!targets.length || targets.length > 50) return reply(400, err('BAD_TARGETS'))
   for (const t of targets) {
-    if (!t || !t.productId || !Number.isInteger(t.sets) || t.sets <= 0) return reply(400, { ok: false, error: 'BAD_TARGETS' })
+    if (!t || !str(t.productId, 200) || !Number.isInteger(t.sets) || t.sets <= 0) return reply(400, err('BAD_TARGETS'))
   }
   const tDoc = await getDocOrNull(db.collection(COLLECTIONS.config).doc('scmBomTemplate'))
-  if (!tDoc) return reply(400, { ok: false, error: 'NO_TEMPLATE' })
+  if (!tDoc) return reply(400, err('NO_TEMPLATE'))
   const { _id: _omit, updatedAt: _omit2, ...template } = tDoc as Record<string, any>
 
   // 聚合需求：Σ各产品 resolveBom（同料号跨产品累加）
   const need = new Map<string, number>()
   for (const t of targets) {
-    const profile = await getDocOrNull(db.collection(COLLECTIONS.bomProfiles).doc(String(t.productId)))
-    if (!profile) return reply(400, { ok: false, error: 'NO_PROFILE', productId: String(t.productId) })
+    const productId = str(t.productId, 200)
+    const profile = await getDocOrNull(db.collection(COLLECTIONS.bomProfiles).doc(productId))
+    if (!profile) return reply(400, err('NO_PROFILE', { productId }))
     const r = resolveBom(template as any, profile, t.sets)
-    if (!r.ok) return reply(400, { ok: false, error: r.error, productId: String(t.productId) })
+    if (!r.ok) return reply(400, { ok: false, error: r.error, productId })
     for (const l of r.lines) need.set(l.materialId, (need.get(l.materialId) || 0) + l.qty)
   }
 
@@ -39,7 +40,7 @@ export async function getRestockPlan({ db, data }: Ctx) {
     return m && Number.isInteger(m.stock) ? m.stock : 0
   }
 
-  // ① 外协缺口：带结缺口 → 应送同色 L 原团（1 原团织 1 带结·蓝图动线）·派生原团需求叠进采购口径
+  // ① 外协缺口：带结缺口 → 应送同色 L 原团（1 原团织 1 带结）·派生原团需求叠进采购口径
   const outworkGaps: any[] = []
   for (const [id, n] of [...need.entries()]) {
     const m = KNOTTED_RE.exec(id)
