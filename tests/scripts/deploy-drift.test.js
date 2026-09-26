@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest'
-import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs'
+import { mkdtempSync, mkdirSync, readFileSync, writeFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { join, resolve } from 'node:path'
 import { execFileSync } from 'node:child_process'
 import { MONEY_CHAIN, deployBlockers, detectDrift, hashFnDist, readDeployLedger } from '../../scripts/lib/deploy-drift.mjs'
 
@@ -143,6 +143,13 @@ describe('deploy-drift hashFnDist：产物内容 hash（即 deploy-fns.mjs 部�
     } finally {
       rmSync(dist, { recursive: true, force: true })
     }
+  })
+
+  it('大白话：产物检查的函数条数下限等于 cloudbaserc.json 里的名单，少报一个就红', () => {
+    const rc = JSON.parse(readFileSync(resolve(import.meta.dirname, '../../cloudbaserc.json'), 'utf8'))
+    const src = readFileSync(resolve(import.meta.dirname, '../../scripts/verify-rw-cloud-bundles.cjs'), 'utf8')
+    expect(rc.functions.length).toBeGreaterThan(0)
+    expect(src).toContain(`fns.length >= ${rc.functions.length}`)
   })
 
   it('无 config.json/package.json 时不因文件不存在而抛错', () => {

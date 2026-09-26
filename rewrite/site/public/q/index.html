@@ -3,10 +3,11 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="robots" content="noindex">
   <title>Lucky Ducky · 课程激活</title>
   <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
   <style>
-    /* 扫码落地页（印刷二维码指向 /q/?code=<激活码>）。
+    /* 扫码落地页。印刷码以路径形 /q/<激活码> 为准（关键决策记录 §13）；脚本仍兼容 ?code=。
        自有域名 + 微信扫码规则配好后，微信扫码不再经过本页（直接进小程序）；
        本页服务于：① 默认域名测试期 ② 非微信扫码（普通相机/浏览器）的引导。
        场景②走「明文 URL Scheme」一键拉起小程序（weixin://dl/business/...），把激活码作

@@ -14,4 +14,11 @@ describe('扫码落地页拉起路径', () => {
     expect(appJson.pages).toContain('pages/welcome/welcome')
     expect(appJson.pages).not.toContain('pages/welcome/index')
   })
+
+  it('大白话：印刷码以路径形 /q/<激活码> 为准，这页不给搜索引擎收录', () => {
+    expect(landing).toContain('<meta name="robots" content="noindex">')
+    expect(landing).toContain('/q/<激活码>')
+    expect(landing).not.toContain('/q/?code=')
+    expect(landing).toContain('兼容 ?code=')
+  })
 })
