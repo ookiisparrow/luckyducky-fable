@@ -24,6 +24,7 @@ beforeEach(() => {
 })
 afterEach(() => {
   vi.restoreAllMocks()
+  vi.unstubAllGlobals()
 })
 
 // reportError 已不对外 export：走外层 installErrorReporter 的 Vue errorHandler
@@ -46,6 +47,24 @@ describe('admin errorReporter（批 B7·治病根#14 client-error 通道）', ()
     fire('出错了')
     await Promise.resolve()
     expect(cli.post).not.toHaveBeenCalled()
+  })
+
+  it('大白话：地址栏有 hash 时 page 记 hash，问号后面的查询串丢掉', async () => {
+    vi.stubGlobal('location', { pathname: '/index.html', hash: '#/orders?openid=o1' })
+    const cli = fakeClient(true)
+    const fire = await attachHandler(cli)
+    fire('订单页出错')
+    await Promise.resolve()
+    expect(cli.posted[0].data?.page).toBe('#/orders')
+  })
+
+  it('大白话：地址栏没有 hash 时 page 记 pathname', async () => {
+    vi.stubGlobal('location', { pathname: '/desk', hash: '' })
+    const cli = fakeClient(true)
+    const fire = await attachHandler(cli)
+    fire('坐席页出错')
+    await Promise.resolve()
+    expect(cli.posted[0].data?.page).toBe('/desk')
   })
 
   it('大白话：有会话时字段正确——action=reportClientError/source=admin/msg 截 500/page 走当前页', async () => {
