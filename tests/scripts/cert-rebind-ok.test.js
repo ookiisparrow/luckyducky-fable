@@ -104,6 +104,15 @@ describe('证书换绑成功判断', () => {
     expect(parsedOk('{这不是合法 JSON，message', 0)).toBe(false)
   })
 
+  it('成功 JSON 后面跟着警告文字（stderr 拼在 stdout 后）仍判成功', () => {
+    const ok = JSON.stringify({ data: { domain: 'www.luckyducky.cn', paths: ['/'], message: '成功删除 1 个路由' } }, null, 2)
+    expect(parsedOk('? 确认删除路由？ Yes\n' + ok + '\n(node:1) Warning: something deprecated\n', 0)).toBe(true)
+  })
+
+  it('顶层带 error 即使退出码 0、data 像成功也判失败', () => {
+    expect(judge({ error: { code: 'API_ERROR', message: '解绑失败' }, data: { RequestId: RID } }, 0)).toBe(false)
+  })
+
   it('成功形状但带着 Error，或进程没成功，都判失败', () => {
     expect(judge({
       data: { RequestId: RID, Error: { Code: 'FailedOperation', Message: '绑定失败' } },

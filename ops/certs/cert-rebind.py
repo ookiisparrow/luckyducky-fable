@@ -12,9 +12,13 @@ import json, subprocess, sys, time, ssl, socket
 ENV_DEFAULT = "cloudbase-d4gcssqbv06865479"
 
 def parse_tcb_output(out):
-    """从命令输出里抠出第一段 JSON。抠不出或解析不了就当没有回包。"""
+    """从命令输出里抠出第一段 JSON。抠不出或解析不了就当没有回包。
+
+    只解第一段、忽略其后的文字：stderr 拼在 stdout 后，成功回包后跟一条 Node 警告
+    就整体解析失败的话，第 1 步云端已删路由、脚本却判失败退出，线上域名断在半路。
+    """
     try:
-        return json.loads(out[out.index("{"):])
+        return json.JSONDecoder().raw_decode(out, out.index("{"))[0]
     except Exception:
         return None
 
