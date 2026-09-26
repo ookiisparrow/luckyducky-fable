@@ -84,6 +84,22 @@ describe('物料主档（黄金 §E：料号契约·计量锁死·调整幂等�
     expect((await post('saveSupplier', SUPER, { name: '张三', type: 'factory', supplierId: 'ghost' })).status).toBe(404)
   })
 
+  it('大白话：改已有供应商时库写挂了，回写失败，不当成「没有这个供应商」', async () => {
+    control.seed('suppliers', [{ _id: 's1', name: '毛线厂', type: 'factory', active: true }])
+    control.setBeforeUpdate(({ coll }: any) => {
+      if (coll === 'suppliers') throw new Error('MOCK_DB_FAIL')
+    })
+    try {
+      const r = await post('saveSupplier', SUPER, { name: '新厂名', type: 'factory', supplierId: 's1' })
+      expect(r.error).not.toBe('NO_SUPPLIER')
+      expect(r.status).toBe(500)
+      expect(r.error).toBe('SERVER_ERROR')
+      expect(control.dump('suppliers').find((s: any) => s._id === 's1').name).toBe('毛线厂')
+    } finally {
+      control.setBeforeUpdate(null as never)
+    }
+  })
+
   it('大白话：库存调整必留原因、量须非零整数；同调整号重放不双记账；扣超余额拒且流水零残留', async () => {
     control.seed('materials', [mat('stuffing', 10)])
     expect((await post('adjustStock', SUPER, { materialId: 'stuffing', adjustId: 'a1', delta: 5 })).error).toBe('NO_REASON')

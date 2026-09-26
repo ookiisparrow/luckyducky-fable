@@ -91,7 +91,7 @@ export async function saveSupplier({ db, data }: Ctx) {
   const supplierId = str(data.supplierId, 200)
   const coll = db.collection(COLLECTIONS.suppliers)
   if (supplierId) {
-    const r = await coll.doc(supplierId).update({ data: fields }).catch(() => ({ stats: { updated: 0 } }))
+    const r = await coll.doc(supplierId).update({ data: fields })
     if (!r.stats || r.stats.updated !== 1) return reply(404, err('NO_SUPPLIER'))
     return reply(200, { ok: true, supplierId })
   }

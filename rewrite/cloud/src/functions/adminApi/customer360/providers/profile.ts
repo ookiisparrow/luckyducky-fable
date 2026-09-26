@@ -18,8 +18,10 @@ export const profileProvider: CustomerPanelProvider = {
   async fetch(db: any, openid: string) {
     // 读失败抛给编排器标 PANEL_FETCH_FAIL——空数组会被当成「真没花过钱」
     const rows = (qy: any) => qy.get().then((r: any) => (r && r.data) || [])
+    // 订单破上限必须是最近一批：按 createdAt 倒序再截断（下单必写）。
+    // 不排的话总消费/已付单数是库随手返回的一批。
     const [orders, acts, lastEvt] = await Promise.all([
-      rows(db.collection(COLLECTIONS.orders).where({ _openid: openid }).limit(ORDER_LIMIT)),
+      rows(db.collection(COLLECTIONS.orders).where({ _openid: openid }).orderBy('createdAt', 'desc').limit(ORDER_LIMIT)),
       rows(db.collection(COLLECTIONS.activations).where({ _openid: openid }).limit(ACT_LIMIT)),
       rows(db.collection(COLLECTIONS.events).where({ _openid: openid }).orderBy('createdAt', 'desc').limit(1)),
     ])
@@ -29,7 +31,7 @@ export const profileProvider: CustomerPanelProvider = {
     const entered = acts.filter((a: any) => !!a.enteredAt).length
     return {
       orderCount: orders.length,
-      ordersCapped: orders.length >= ORDER_LIMIT, // 破上限即标·totalSpent 为「近 N 单」近似（诚实·根因#8）
+      ordersCapped: orders.length >= ORDER_LIMIT, // 破上限即标·totalSpent/已付单数是按 createdAt 倒序的近 N 单
       paidCount: paid.length,
       totalSpent, // 元
       activatedCount: acts.length,
