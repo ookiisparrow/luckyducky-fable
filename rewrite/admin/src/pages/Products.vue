@@ -27,7 +27,7 @@ import {
 } from '../lib/mapProducts'
 import { serialSave } from '../lib/serialSave'
 import { confirmed, failText } from '../lib/status'
-import { launchErrorText, transportErrorText } from '../lib/mapSystem'
+import { launchErrorText } from '../lib/mapSystem'
 import type { ClientResult } from '../api/client'
 import { compressImage } from '../lib/compressImage'
 import { useRouter } from 'vue-router'
@@ -55,7 +55,7 @@ async function editCourse(row: DraftRowVM) {
   // existing 优先读活编辑器：row.raw 是旧快照——编辑器里刚手输、还在防抖窗口内
   // 未落盘的关联课程号，不该被自动生成的 course-<id> 盖掉。
   const live = edit.value && String(edit.value.id) === row.id ? String(edit.value.courseId || '') : ''
-  const existing = live || String((row.raw as any).courseId || '')
+  const existing = live || String(row.raw.courseId || '')
   const cid = existing || 'course-' + row.id
   // courseId 落库（只算不存的话商品与课程/批次关联要人工输·易错）：首次深链即写回商品档
   if (!existing) {
@@ -129,10 +129,10 @@ const shown = computed(() => {
     (r) => (filter.value === 'all' || r.state === filter.value) && (!q || r.name.toLowerCase().includes(q) || r.id.toLowerCase().includes(q))
   )
 })
-const imgCount = (r: DraftRowVM) => (Array.isArray((r.raw as any).images) ? (r.raw as any).images.length : 0)
+const imgCount = (r: DraftRowVM) => (Array.isArray(r.raw.images) ? r.raw.images.length : 0)
 // 圆点深链：进上新向导落到第一个未完成步（全完成落第 1 步）
 const firstTodoStep = (r: DraftRowVM) => (r.steps.findIndex((s) => !s.done) + 1) || 1
-const courseOf = (r: DraftRowVM) => String((r.raw as any).courseId || '')
+const courseOf = (r: DraftRowVM) => String(r.raw.courseId || '')
 const videoMarksOf = (r: DraftRowVM) => r.steps.find((s) => s.key === 'video')?.marks || []
 
 // 图片 fileID→url 解析：listDrafts 回的 urls 映射（已存图）+ 本会话新上传的 url
@@ -229,8 +229,8 @@ function closeEditor() {
           emit('saved') // 只在真保存成功时才通知父级
         } else {
           // 代际锚：只在仍是本次关闭发起的这一代时才写失败提示——期间若已 openEdit(B)，A 的失败文案不得标到 B 屏上。
-          // 传输层码（超时等）可能已存上，不能冠「未保存成功」
-          if (openEditGen === myGen) message.value = transportErrorText(r.error) || '关闭前有编辑未保存成功，请重新打开该商品检查：' + launchErrorText(r.error)
+          // 编辑器已关、快照已丢，任何码都要留这句上下文；说「可能」是因超时/SERVER_ERROR 时其实可能已存上
+          if (openEditGen === myGen) message.value = '关闭前的编辑可能没存上，请重新打开该商品检查：' + launchErrorText(r.error)
         }
       })
       .catch(() => {})
@@ -263,7 +263,7 @@ async function openEdit(row: DraftRowVM) {
 }
 
 function addSku() {
-  if (edit.value) (edit.value.skus as any[]).push({ name: '', price: edit.value.price || '' }) // 默认带商品现价（空价要手抄·易错）
+  if (edit.value) edit.value.skus.push({ name: '', price: edit.value.price || '' }) // 默认带商品现价（空价要手抄·易错）
 }
 function clearCover() {
   if (edit.value) {

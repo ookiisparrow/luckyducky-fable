@@ -1,6 +1,6 @@
 import { reply, type Ctx } from '../lib'
 import { COLLECTIONS, ERR } from '@ldrw/shared'
-import { isDocMissing } from '../../../kit'
+import { isDocMissing, str } from '../../../kit'
 import { assembleCustomer360 } from '../customer360/orchestrator'
 
 // 客户360 只读查询：按 openid 聚合该客人全貌（订单/激活…经 provider registry·铁律三）。
@@ -9,7 +9,7 @@ import { assembleCustomer360 } from '../customer360/orchestrator'
 //   ② 强制留痕：FORCE_AUDIT 含 getCustomer360·分发后经 kit/audit 记痕（shouldAudit 跳 ^get·本 action 破例）。
 // 本 action 只负责取 openid → 编排 → 回结果（读类·不写库）。
 export async function getCustomer360({ db, data }: Ctx) {
-  const openid = String((data && data.openid) || '').trim()
+  const openid = str(data && data.openid, 200).trim()
   if (!openid) return reply(400, { ok: false, error: ERR.BAD_ARGS })
   const result = await assembleCustomer360(db, openid)
   return reply(200, { ok: true, ...result })
@@ -25,7 +25,7 @@ const SEARCH_LIMIT = 20 // bounded（防一次拉爆 users·大库友好）
 // 各键精确匹配（内存桩与真 sdk 都支持的 where 等值）：openid/phone/nickname 直查 users；orderId 反查 orders→_openid。
 // 昵称模糊（db.RegExp 子串）须真 sdk + 索引、内存桩不复现（根因#8 桩≠真），故先精确、不造不可测的模糊分支（防过度工程·留待真机验后再升级）。
 export async function searchCustomer({ db, data }: Ctx) {
-  const q = String((data && data.q) || '').trim().slice(0, 64)
+  const q = str(data && data.q, 200).trim().slice(0, 64)
   if (!q) return reply(400, { ok: false, error: ERR.BAD_ARGS })
   const found = new Map<string, any>() // openid → 摘要（去重·一人多键命中合并 matchedBy）
   const add = (u: any, by: string) => {
@@ -86,7 +86,7 @@ export async function searchCustomer({ db, data }: Ctx) {
 // 折叠成同一个 {ok:true,user:null}，前端 userLoadFailed 分支就永远命中不到最常见的失败（DB 异常）。
 // 故查询异常回 null（≠真查无结果的 {data:[]}）→ 单独识别为 ok:false；「真查无结果」回 ok:true+user:null。
 export async function getUser({ db, data }: Ctx) {
-  const openid = String((data && data.openid) || '').trim()
+  const openid = str(data && data.openid, 200).trim()
   if (!openid) return reply(400, { ok: false, error: ERR.BAD_ARGS })
   const r = await db
     .collection(COLLECTIONS.users)

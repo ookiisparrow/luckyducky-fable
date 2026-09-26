@@ -77,7 +77,7 @@ async function ensureActivation(
 // 码空间 32^10≈1e15 使盲猜不现实，但仍须按 openid 限速拖慢定向枚举 + 挡刷库成本（同 trackEvent/login 口径）。
 export const activateCourse = withOpenId(
   withRateLimit('activateCourse', { max: 10, windowMs: 60_000 }, async ({ db, OPENID, event }) => {
-    const code = String((event as any).code || '').trim()
+    const code = str((event as any).code, 200).trim()
     if (!code) return err(ERR.INVALID_CODE)
     const now = Date.now()
 
@@ -115,7 +115,7 @@ export const activateCourse = withOpenId(
 export const confirmEnter = withOpenId(
   withRateLimit('confirmEnter', { max: 10, windowMs: 60_000 }, async ({ db, OPENID, event }) => {
     const _ = db.command
-    const code = String((event as any).code || '').trim()
+    const code = str((event as any).code, 200).trim()
     if (!code) return err(ERR.BAD_ARGS)
 
     const acts = await db.collection(COLLECTIONS.activations).where({ code, _openid: OPENID }).limit(1).get()
@@ -256,7 +256,7 @@ function requestedCourseIds(event: unknown): string[] | null {
   const out: string[] = []
   const seen = new Set<string>()
   for (const x of raw) {
-    const id = String(x || '')
+    const id = str(x, 200)
     if (!id || seen.has(id)) continue
     seen.add(id)
     out.push(id)
@@ -295,8 +295,8 @@ export const getCourses = async (event: unknown = {}) => {
 export const getPlaybackUrl = withOpenId(
   withRateLimit('getPlaybackUrl', { max: 60, windowMs: 60_000 }, async ({ db, OPENID, event }): Promise<GetPlaybackUrlResp> => {
     const e: any = event
-    const courseId = String(e.courseId || '')
-    const segmentId = String(e.segmentId || '')
+    const courseId = str(e.courseId, 200)
+    const segmentId = str(e.segmentId, 200)
     if (!courseId || !segmentId) return err(ERR.BAD_ARGS)
 
     // 并行取回（零依赖只读）：课程文档读与鉴权读的入参只来自 courseId/segmentId/OPENID（已核对

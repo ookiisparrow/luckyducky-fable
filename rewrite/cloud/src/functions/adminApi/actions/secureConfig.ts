@@ -1,6 +1,6 @@
 import { reply, ensure, readDoc, type Ctx } from '../lib'
 import { COLLECTIONS } from '@ldrw/shared'
-import { normalizePem, setOrAdd, err } from '../../../kit'
+import { normalizePem, setOrAdd, str, err } from '../../../kit'
 
 // 人工配置清单的填写入口（config-checklist）：敏感凭证 + 支付接缝配置不必去云开发控制台改环境变量/
 // 库里手敲 JSON，收口成两个写 action——admin 页填、云函数运行时读库自动生效
@@ -35,7 +35,7 @@ const MAX_LEN: Record<string, number> = {
 
 /** 写「wxkf」/「wxpay」/「vod」三 doc 的敏感凭证字段（merge-save·同 saveSettings 范式：先读现有、非 undefined 才覆盖）。 */
 export async function saveSecureConfig({ db, data }: Ctx) {
-  const docId = String((data && data.docId) || '')
+  const docId = str(data && data.docId, 200)
   if (docId !== 'wxkf' && docId !== 'wxpay' && docId !== 'vod') return reply(400, err('BAD_DOC'))
   const allow = DOC_FIELDS[docId]
   const fields = (data && typeof data.fields === 'object' && data.fields) || {}
@@ -43,7 +43,8 @@ export async function saveSecureConfig({ db, data }: Ctx) {
   const patch: Record<string, string> = {}
   for (const f of allow) {
     if ((fields as Record<string, unknown>)[f] === undefined) continue
-    let v = String((fields as Record<string, unknown>)[f] || '').trim()
+    // 不截：后面的 TOO_LONG 就是上限；先截再 trim 会把带前导空白的超长值截成「合法长度」静默存进去
+    let v = str((fields as Record<string, unknown>)[f], Infinity).trim()
     if (!v) continue // 留空不改动
     if (v.length > MAX_LEN[f]) return reply(400, err(`TOO_LONG:${f}`))
     // EncodingAESKey 平台定长 43（base64）：长度不对多半是抄漏/多抄——早拒早发现，别等回调解密才崩
@@ -69,13 +70,13 @@ const PAY_MAX_LEN: Record<string, number> = { subMchId: 32, flowId: 100, refundF
 export async function savePayConfig({ db, data }: Ctx) {
   const patch: Record<string, unknown> = {}
   if (data && data.mode !== undefined) {
-    const m = String(data.mode || '')
+    const m = str(data.mode, 200)
     if (m !== 'real' && m !== 'mock') return reply(400, err('BAD_MODE'))
     patch.mode = m
   }
   for (const f of ['subMchId', 'flowId', 'refundFlowId'] as const) {
     if (!data || data[f] === undefined) continue
-    const v = String(data[f] || '').trim()
+    const v = str(data[f], Infinity).trim() // 不截：同 saveSecureConfig，上限交给下面的 TOO_LONG
     if (!v) continue
     if (v.length > PAY_MAX_LEN[f]) return reply(400, err(`TOO_LONG:${f}`))
     patch[f] = v

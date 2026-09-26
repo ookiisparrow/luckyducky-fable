@@ -1,6 +1,6 @@
 import { reply, ensure, readDoc, type Ctx } from '../lib'
 import { cleanCourse, manager } from '../catalog'
-import { isVodFileId, makeVodUploadSignature, callVodApi, setOrAdd, err } from '../../../kit'
+import { isVodFileId, makeVodUploadSignature, callVodApi, setOrAdd, str, err } from '../../../kit'
 import { mergePendingGc } from './products'
 import { COLLECTIONS } from '@ldrw/shared'
 
@@ -44,7 +44,7 @@ function pickVodPlayUrl(mi: any): string {
  * admin 同步后须重载草稿（前端 syncVod() 已自动 load()），否则下次自动保存撞 DRAFT_CONFLICT（诚实拒绝）。
  */
 export async function syncVodMedia({ db, data }: Ctx) {
-  const courseId = String(data.courseId || '')
+  const courseId = str(data.courseId, 200)
   if (!courseId) return reply(400, err('NO_COURSE_ID'))
   const got = await readDoc(db.collection(COLLECTIONS.coursesDraft).doc(courseId).get())
   if (!got.ok) return reply(200, err('DOC_READ_FAIL'))
@@ -83,8 +83,8 @@ export async function syncVodMedia({ db, data }: Ctx) {
 // 视频直传凭证（主路径）：manager-node 签发 COS 上传元数据，浏览器 PUT 直传
 export async function getVideoUploadMeta({ data }: Ctx) {
   // 与 name 同款消毒：客户端串直接拼对象键，'../' 类字符不入路径
-  const courseId = String(data.courseId || 'misc').replace(/[^\w-]/g, '').slice(0, 40) || 'misc'
-  const name = String(data.name || 'seg').replace(/[^\w-]/g, '').slice(0, 40) || 'seg'
+  const courseId = (str(data.courseId, 200) || 'misc').replace(/[^\w-]/g, '').slice(0, 40) || 'misc'
+  const name = (str(data.name, 200) || 'seg').replace(/[^\w-]/g, '').slice(0, 40) || 'seg'
   const ext = data.ext === 'mov' ? 'mov' : 'mp4'
   const cloudPath = `videos/${courseId}/${name}-${Date.now()}.${ext}`
   try {
@@ -105,7 +105,7 @@ export async function getVideoUploadMeta({ data }: Ctx) {
 
 // —— 课程草稿（步骤④ 视频编排；与小程序 courses 同形，发布前学员不可见）——
 export async function getCourseDraft({ db, data }: Ctx) {
-  const courseId = String(data.courseId || '')
+  const courseId = str(data.courseId, 200)
   if (!courseId) return reply(400, err('NO_COURSE_ID'))
   await ensure(db, COLLECTIONS.coursesDraft)
   const got = await readDoc(db.collection(COLLECTIONS.coursesDraft).doc(courseId).get())
@@ -147,7 +147,7 @@ const collectVideoIds = (c: any): string[] => segsOf(c).filter((sg) => sg.videoF
 // （getCourses 逐层白名单天然不外泄；不建新集合免控制台锁权限人工步），cleanupEvents 每日删已过缓期项；
 // 重新引用回来的文件自动出队（keep 过滤）。缓期长度与承接规则和商品图同一份（products.mergePendingGc）。
 export async function publishCourse({ db, data }: Ctx) {
-  const courseId = String(data.courseId || '')
+  const courseId = str(data.courseId, 200)
   if (!courseId) return reply(400, err('NO_COURSE_ID'))
   const got = await readDoc(db.collection(COLLECTIONS.coursesDraft).doc(courseId).get())
   if (!got.ok) return reply(200, err('DOC_READ_FAIL'))

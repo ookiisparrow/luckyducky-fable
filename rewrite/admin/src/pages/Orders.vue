@@ -4,7 +4,7 @@
 // shipped 改单号 · done 查看、物流公司预设下拉、列表手机号掩码（PII）。删除/解除仍走 no-alert 两步确认。
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
-import { useLatest, appendNew } from '../lib/latest'
+import { usePager, appendNew } from '../lib/latest'
 import { RefreshCw, Search, Package, X, PackageCheck, ScanLine, TriangleAlert } from 'lucide-vue-next'
 import { listOrders, orderCounts, getOrderDetail, shipOrder, shipOrders, clearFeeMismatch, recordPaidFee } from '../api/money'
 import UiButton from '../components/ui/Button.vue'
@@ -31,8 +31,8 @@ const tab = ref('paid')
 const counts = ref<Record<string, number>>({})
 const countsPartial = ref(false) // 某状态 .count() 失败时角标别把占位 0 当真值显示（同 Dashboard todoPartial 风格）
 const rows = ref<OrderRowVM[]>([])
-const cursor = ref<unknown>(null)
-const hasMore = ref(false)
+const pager = usePager()
+const hasMore = pager.hasMore
 const moreErr = ref('') // 翻页失败单独一格：不占顶部 message（那里还有别的动作报错），重试成功即清
 const message = ref('')
 const busy = ref(false)
@@ -56,21 +56,19 @@ const batch = ref<{
   done: boolean
 } | null>(null)
 
-const listGen = useLatest() // 列表乱序守卫（快切标签/搜索时旧结果别覆盖新标签·根因#8）
-const reloading = ref(false) // reload 专属在途标志（more 的加载闸用单写布尔，不靠多写者 message 文案）
+const reloading = ref(false) // reload 在途：刷新按钮置灰
 async function reload() {
   clearConfirmId.value = '' // 换标签/搜索/翻页/发货成功后自动刷新即复位危险态（防旧武装的「去核对」残留、重进同一行一击直发）
   message.value = '加载中…'
   reloading.value = true
   moreErr.value = ''
-  const my = listGen.begin()
+  const my = pager.begin()
   const [r, c] = await Promise.all([listOrders(tab.value, undefined, 20, activeQ.value), orderCounts()])
-  if (listGen.isStale(my)) return // 已切别标签/搜索·丢弃过期列表（防高亮标签与内容错配·由更新的 reload 负责复位 reloading）
+  if (pager.isStale(my)) return // 已切别标签/搜索·丢弃过期列表（防高亮标签与内容错配·由更新的 reload 负责复位 reloading）
   reloading.value = false // 本次是最新·加载完成
   if (r.error === 'SESSION_LOST') return
   rows.value = r.ok ? mapOrderRows(r.list) : []
-  cursor.value = r.ok ? r.nextCursor : null
-  hasMore.value = !!(r.ok && r.hasMore)
+  pager.reset(r)
   if (selectedIds.value.length) {
     const vis = new Set(rows.value.map((x) => x.id))
     selectedIds.value = selectedIds.value.filter((id) => vis.has(id))
@@ -81,19 +79,14 @@ async function reload() {
 }
 
 async function more() {
-  if (!hasMore.value || cursor.value == null) return
-  if (reloading.value) return // reload 在途时不翻页（cursor 还是旧的·会跳页）——覆盖 reload 先于 more 的序（单写布尔·不受 message 多写者干扰）
-  const gen = listGen.peek() // 绑定当前 reload 代际·不递增（不反噬在途 reload）·任何新 reload 会作废本页
-  const r = await listOrders(tab.value, cursor.value, 20, activeQ.value)
-  if (listGen.isStale(gen)) return // 期间发生过 reload（切标签/搜索/刷新/动作后刷新）·放弃本页（防混排 + 游标跳页）
+  const r = await pager.next((cursor) => listOrders(tab.value, cursor, 20, activeQ.value))
+  if (!r) return
   if (!r.ok) {
     moreErr.value = '加载更多失败：' + orderErrorText(r.error) // 翻页失败不静默；已有行和游标不动，再点即重试
     return
   }
   moreErr.value = ''
   rows.value = appendNew(rows.value, mapOrderRows(r.list))
-  cursor.value = r.nextCursor
-  hasMore.value = !!r.hasMore
 }
 
 function pickTab(k: string) {

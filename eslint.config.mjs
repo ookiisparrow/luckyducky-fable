@@ -104,6 +104,12 @@ export default [
           selector: "CallExpression[callee.property.name='collection'] > :matches(Literal, TemplateLiteral).arguments",
           message: '集合名改用 COLLECTIONS.x（@ldrw/shared 集合名册单源）：collection(\'字面量\') 打错名不报错，新集合先登记 rewrite/shared/src/collections.ts',
         },
+        {
+          // 只认得 data/event 这两个入参名（含 `as` 断言）；另起别名（const e = event、const d = data || {}）后就拦不住，靠评审
+          selector:
+            "CallExpression[callee.name='String']:has(:matches(MemberExpression[object.name=/^(data|event)$/], TSAsExpression[expression.name=/^(data|event)$/]))",
+          message: '入参改用 kit 的 str(data.x, 上限)：String() 会把对象/true/undefined 变成 "[object Object]"/"true"/"undefined" 当真值去查库写库，也没有长度上限',
+        },
       ],
     },
   },

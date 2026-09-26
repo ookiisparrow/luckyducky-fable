@@ -39,7 +39,8 @@ export async function listAnomalies({ db, data }: Ctx) {
   const d = data || {}
   const filter: any = {}
   if (d.resolved === true || d.resolved === false) filter.resolved = d.resolved
-  if (d.kind) filter.kind = String(d.kind)
+  const kind = str(d.kind, 200)
+  if (kind) filter.kind = kind
   const limit = Math.min(Number(d.limit) || 50, 200)
   const [list, total] = await Promise.all([
     db
@@ -61,7 +62,7 @@ export async function listAnomalies({ db, data }: Ctx) {
 
 /** 标记异常已处理（写·自动审计·resolvedBy 记真实操作者）。 */
 export async function resolveAnomaly({ db, data, agentId }: Ctx) {
-  const id = String((data && data.id) || '')
+  const id = str(data && data.id, 200)
   if (!id) return reply(200, err('BAD_ARGS'))
   const r = await db
     .collection(COLLECTIONS.anomalies)
@@ -90,7 +91,7 @@ export async function listAudit({ db, data }: Ctx) {
   const d = data || {}
   const _ = db.command
   const filter: Record<string, unknown> = {}
-  const operator = String(d.operator || '').trim().slice(0, 60)
+  const operator = str(d.operator, 200).trim().slice(0, 60)
   if (operator) filter.operator = operator
   const toMs = Number(d.to)
   if (Number.isFinite(toMs)) filter.ts = _.lt(toMs)
@@ -101,7 +102,7 @@ export async function listAudit({ db, data }: Ctx) {
   const cut = inWindow.length < paged.list.length
   const hasMore = paged.hasMore && !cut
   const nextCursor = cut ? null : paged.nextCursor
-  const actionPrefix = String(d.actionPrefix || '').trim()
+  const actionPrefix = str(d.actionPrefix, 200).trim()
   const list = actionPrefix ? inWindow.filter((r: any) => String(r.action || '').startsWith(actionPrefix)) : inWindow
   const entries = list.map((r: any) => ({
     id: String(r._id || ''),

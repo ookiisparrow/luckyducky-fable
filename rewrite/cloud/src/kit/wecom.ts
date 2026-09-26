@@ -5,6 +5,7 @@ import { COLLECTIONS, ERR, type ErrCode } from '@ldrw/shared'
 import { alert } from './observe'
 import { getSecureConfig, getSecureConfigFields } from './secureConfig'
 import { ok, err } from './reply'
+import { str } from './validate'
 
 /**
  * 企业微信「微信客服」平台接缝（根因#12 平台规则外部风险：与企业微信的接缝收口一处）。
@@ -152,7 +153,7 @@ export function defineKfCallback(opts: {
     // receiveId 绑定校验：配了 corpid 才生效（配置就绪即 fail-closed·未配不阻断现网）
     const receiveIdOk = (receiveId: string): boolean => !corpid || receiveId === corpid
     const q = readQuery(event)
-    const method = String(event.httpMethod || 'POST').toUpperCase()
+    const method = (str(event.httpMethod, 20) || 'POST').toUpperCase()
 
     if (method === 'GET') {
       // URL 验证：echostr 是密文，验签后解密回明文

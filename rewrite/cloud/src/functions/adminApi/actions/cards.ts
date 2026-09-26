@@ -22,11 +22,11 @@ export async function saveSettings({ db, data }: Ctx) {
   // 不剥则二次保存（doc 已存在·get 带回 _id）必 500（根因#8 桩≠真 SDK 藏过，现测试桩同样拒）。
   const { _id: _omitId, ...cur } = (got.data as Record<string, any>) || {}
   const patch: Record<string, any> = { updatedAt: Date.now() }
-  if (data.urlPrefix !== undefined) patch.urlPrefix = String(data.urlPrefix || '').slice(0, 200)
+  if (data.urlPrefix !== undefined) patch.urlPrefix = str(data.urlPrefix, 200)
   // 页面拿不到原值（getSettings 不回显），所以空串＝保持原值；清除要显式传 null（退回纯日志告警）
   if (data.alertWebhook === null) patch.alertWebhook = ''
   else if (data.alertWebhook) {
-    const w = String(data.alertWebhook).slice(0, 300)
+    const w = str(data.alertWebhook, 300)
     if (!/^https:\/\/qyapi\.weixin\.qq\.com\/cgi-bin\/webhook\/send\?key=[\w-]+$/.test(w)) return reply(400, err('BAD_WEBHOOK'))
     patch.alertWebhook = w
   }
@@ -37,7 +37,7 @@ export async function saveSettings({ db, data }: Ctx) {
 }
 
 export async function getCard({ db, cloud, data }: Ctx) {
-  const productId = String(data.productId || '')
+  const productId = str(data.productId, 200)
   if (!productId) return reply(400, err('NO_PRODUCT'))
   await ensure(db, COLLECTIONS.cards)
   const got = await readDoc(db.collection(COLLECTIONS.cards).doc(`card-${productId}`).get())

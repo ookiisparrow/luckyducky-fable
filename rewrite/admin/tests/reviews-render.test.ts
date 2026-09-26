@@ -54,11 +54,11 @@ describe('Reviews.vue 挑选开关', () => {
 })
 
 describe('Reviews.vue 失败提示', () => {
-  it('大白话：加载失败说中文带码，不显空态', async () => {
+  it('大白话：没权限说加载失败并讲清是权限，不显空态', async () => {
     listReviewsMock.mockResolvedValue({ ok: false, status: 403, error: 'FORBIDDEN' })
     const wrapper = mount(Reviews)
     await flushPromises()
-    expect(wrapper.find('.ld-status').text()).toBe('加载失败（FORBIDDEN）')
+    expect(wrapper.find('.ld-status').text()).toBe('加载失败：' + transportErrorText('FORBIDDEN'))
     expect(wrapper.text()).not.toContain('这一档还没有评价')
   })
 

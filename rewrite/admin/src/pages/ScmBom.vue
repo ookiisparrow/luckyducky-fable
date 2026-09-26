@@ -8,7 +8,8 @@ import { listDrafts } from '../api/products'
 import { materialHuman, scmErrorText, unprofiledProducts, productNameOf } from '../lib/mapScm'
 import { dateTime } from '../lib/format'
 import { useLoadStatus, loadErrors } from '../lib/status'
-import { useLatest, appendNew } from '../lib/latest'
+import { useLatest, usePager, appendNew } from '../lib/latest'
+import type { AdminAssemblyPreview } from '@ldrw/shared'
 import ScmFlowTabs from '../components/ScmFlowTabs.vue'
 import UiButton from '../components/ui/Button.vue'
 import PageHeader from '../components/ui/PageHeader.vue'
@@ -25,8 +26,8 @@ watch(template, () => { if (!tplGuard) tplDirty.value = true }, { deep: true })
 const profiles = ref<Array<Record<string, any>>>([])
 const mats = ref<Array<Record<string, any>>>([])
 const assemblies = ref<Array<Record<string, any>>>([])
-const asmCursor = ref<unknown>(null) // 组装记录列表翻页游标（根因#7）
-const asmHasMore = ref(false)
+const asmPager = usePager() // 组装记录列表翻页（根因#7）
+const asmHasMore = asmPager.hasMore
 // 组装记录加载失败标记（防失败伪装空态）：listAssemblies 单独失败时 assemblies=[]，
 // EmptyState 若仍显「还没有组装记录」＝把查询失败伪装成空账——文案按此标记分流。
 const asmFailed = ref(false)
@@ -38,13 +39,13 @@ const runSkus = computed(() => {
   const p = products.value.find((x) => String(x.id || x._id) === String(run.value.productId))
   return Array.isArray(p?.skus) ? (p!.skus as Record<string, any>[]).map((s) => String(s.name || '')).filter(Boolean) : []
 })
-const shortCount = computed(() => preview.value.filter((l) => (l as any).short > 0 || (l as any).missing).length) // 执行前缺料预警
+const shortCount = computed(() => preview.value.filter((l) => l.short > 0 || l.missing).length) // 执行前缺料预警
 // 动作反馈(note)/加载态(load) 收口（病根#14）：reload 成功不抹掉动作刚设的成功/失败原文。
 const { message, ok: msgOk, note, load } = useLoadStatus()
 
 const prof = ref({ productId: '', L: '', M: '', S: '', packagingMaterialId: '', cardMaterialId: '' })
 const run = ref({ productId: '', spec: '', sets: 1 })
-const preview = ref<Array<Record<string, any>>>([])
+const preview = ref<AdminAssemblyPreview['lines']>([])
 const runConfirm = ref(false)
 const expanded = ref('') // 组装记录用料展开（点单号看扣了哪些料）
 
@@ -82,7 +83,9 @@ let bomLoaded = false
 
 async function reload() {
   runConfirm.value = false // 刷新即复位危险态（防旧武装的「执行组装」确认残留、重进一击直扣料）
+  const my = asmPager.begin()
   const [b, m, a, d] = await Promise.all([getBomSetup(), listMaterials(), listAssemblies(), listDrafts()])
+  if (asmPager.isStale(my)) return // 已发起更新的 reload·丢弃过期回包（更新那次会整页重写）
   if (b.ok) {
     const t = (b.template as Record<string, any>) || {}
     if (!tplDirty.value) {
@@ -92,31 +95,27 @@ async function reload() {
       void nextTick(() => (tplGuard = false))
       bomLoaded = true // 仅在「真实模板回灌进内存」时才放开保存——若因 tplDirty 跳过回灌，template 仍是初次失败后的空/残缺值，此时置真会重开覆盖 singleton 的洞
     }
-    profiles.value = (b.profiles as Record<string, any>[]) || []
+    profiles.value = b.profiles || []
   }
-  mats.value = m.ok ? (m.list as Record<string, any>[]) : []
-  assemblies.value = a.ok ? (a.list as Record<string, any>[]) : []
-  asmCursor.value = a.ok ? a.nextCursor : null
-  asmHasMore.value = !!(a.ok && a.hasMore)
+  mats.value = m.ok ? m.list : []
+  assemblies.value = a.ok ? a.list : []
+  asmPager.reset(a)
   asmFailed.value = !a.ok
-  products.value = d.ok ? ((d as any).list as Record<string, any>[]) : []
+  products.value = d.ok ? d.list : []
   // 分路报错：只校验 getBomSetup 一路的话，listMaterials/listAssemblies/listDrafts
   // 单独失败被吞成空数组、页面显假空态——照 Reconciliation.vue reload 范式，任一路失败都点名报出。
   const err = loadErrors([[b, '配方模板'], [m, '物料主档'], [a, '组装记录'], [d, '产品目录']])
   load(!err, err) // 只在加载失败时写·成功静默不抹动作反馈
 }
 
-// 组装记录「加载更多」（根因#7）：续游标追加·去重防双击重复追加同一页
 async function moreAssemblies() {
-  if (!asmHasMore.value || asmCursor.value == null) return
-  const r = await listAssemblies({ cursor: asmCursor.value })
+  const r = await asmPager.next((cursor) => listAssemblies({ cursor }))
+  if (!r) return
   if (!r.ok) {
     note(false, '', '加载更多组装记录失败：' + scmErrorText(r.error))
     return
   }
-  assemblies.value = appendNew(assemblies.value, (r.list as Record<string, any>[]) || [], (x) => x._id)
-  asmCursor.value = r.nextCursor
-  asmHasMore.value = !!r.hasMore
+  assemblies.value = appendNew(assemblies.value, r.list || [], (x) => x._id)
 }
 
 async function doSaveTemplate() {
@@ -147,7 +146,7 @@ async function doPreview() {
   const my = previewGen.begin()
   const r = await previewAssembly(run.value.productId, Number(run.value.sets))
   if (previewGen.isStale(my)) return // 已发起更新的预演·整包丢弃（preview/note 均不写）
-  preview.value = r.ok ? (r.lines as Record<string, any>[]) : []
+  preview.value = r.ok ? r.lines : []
   note(r.ok, '', scmErrorText(r.error))
 }
 
@@ -160,7 +159,7 @@ async function doRun() {
   runConfirm.value = false
   const r = await runAssembly(run.value.productId, run.value.spec, Number(run.value.sets), pendingAsmId.value)
   if (r.ok) {
-    note(true, `组装完成：扣料 ${(r.consumed as unknown[]).length} 行·入成品 ${Number(r.sets)} 套`, '')
+    note(true, `组装完成：扣料 ${r.consumed.length} 行·入成品 ${Number(r.sets)} 套`, '')
     pendingAsmId.value = '' // 成功才换新 id·下次组装全新幂等键
     preview.value = []
     void reload()

@@ -25,6 +25,8 @@ const router = useRouter()
 const vm = ref<ReturnType<typeof mapDashboard>>(null)
 const todo = ref({ ship: 0, refund: 0, lowStock: 0, prep: 0 })
 const todoPartial = ref(false) // 待处理计数有副请求加载失败＝true（病根#14：别把「没加载到」显示成「无待办」）
+// 库存扫描触顶：读到了只是没数全，低库存数可能少算；与加载失败分开说，刷新也消不掉，别叫人去刷新
+const lowTruncated = ref(false)
 // 异常账本未处理数（病根#14 信息架构层）：与 /anomalies 页同账本（服务端 count·
 // getInspectStatus 纯只读），让账本高危信号进看板人眼；「钱链告警」是另一套定向口径（getTxAlerts
 // 三类），两格并存各自为真
@@ -95,6 +97,7 @@ async function load() {
   todo.value = t
   // 异常计数失败并入 partial 信号（同病根#14 口径：不把「没加载到」伪装成 0）
   todoPartial.value = t.partial || !ins.ok
+  lowTruncated.value = inv.ok === true && inv.truncated === true
   openAnomalies.value = ins.ok ? Number(ins.openAnomalies) || 0 : 0
   message.value = vm.value ? '' : failText('看板加载失败', d.error)
 }
@@ -134,9 +137,10 @@ onMounted(load)
           </button>
         </div>
       </Card>
-      <p v-else-if="!todoPartial && !vm.alertsPartial" class="ok-line">今日无待处理事项 ✓</p>
+      <p v-else-if="!todoPartial && !vm.alertsPartial && !lowTruncated" class="ok-line">今日无待处理事项 ✓</p>
       <!-- 副请求加载失败：不显绿色全清（病根#14 别把「没加载到」当「无待办」→ 漏发货）·提示刷新 -->
       <p v-if="todoPartial" class="ld-status">部分待处理计数没能加载，显示的数字可能不全，请刷新看真实待办</p>
+      <p v-if="lowTruncated" class="ld-status">库存规格超扫描上限，低库存数可能不全</p>
 
       <p v-if="vm.alertsPartial" class="ld-status">钱链告警没读全：部分异常没查到，告警可能不全，请刷新</p>
       <!-- 交易异常告警（有则必显）：每类各带自己的「去处理」——三类 id 形状不同，落点不能共用一个按钮 -->

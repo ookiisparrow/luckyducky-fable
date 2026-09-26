@@ -1,5 +1,5 @@
 import { reply, type Ctx } from '../lib'
-import { transition, applyStockMoves, listMaterialDocs, pageQuery, notifyAlert, getDocOrNull, err } from '../../../kit'
+import { transition, applyStockMoves, listMaterialDocs, pageQuery, notifyAlert, getDocOrNull, str, err } from '../../../kit'
 import { COLLECTIONS } from '@ldrw/shared'
 import { asFen, PURCHASE_ORDER_TRANSITIONS } from '@ldrw/shared'
 
@@ -61,7 +61,8 @@ const LIST_LIMIT = 100
 
 export async function listPurchases({ db, data }: Ctx) {
   const filter: Record<string, unknown> = {}
-  if (data && data.status) filter.status = String(data.status)
+  const status = str(data && data.status, 200)
+  if (status) filter.status = status
   const paged = await pageQuery(db, COLLECTIONS.purchaseOrders, filter, 'createdAt', data, LIST_LIMIT)
   return reply(200, { ok: true, list: paged.list, nextCursor: paged.nextCursor, hasMore: paged.hasMore })
 }
@@ -70,7 +71,7 @@ export async function listPurchases({ db, data }: Ctx) {
 
 export async function savePurchase({ db, data, agentId }: Ctx) {
   // 供应商须存在且是厂家（织女走外协单·不混）
-  const supplierId = String(data.supplierId || '')
+  const supplierId = str(data.supplierId, 200)
   if (!supplierId) return reply(400, err('BAD_SUPPLIER'))
   // 读失败照抛（网关 500）——库挂≠供应商不对（根因#14）
   const sup = await getDocOrNull(db.collection(COLLECTIONS.suppliers).doc(supplierId))
@@ -81,7 +82,7 @@ export async function savePurchase({ db, data, agentId }: Ctx) {
 
   const now = Date.now()
   const fields = { supplierId, lines: v.lines, totalFen: v.totalFen, updatedAt: now } // 白名单字段·防杂字段入库
-  const purchaseId = String(data.purchaseId || '')
+  const purchaseId = str(data.purchaseId, 200)
   const coll = db.collection(COLLECTIONS.purchaseOrders)
   if (purchaseId) {
     // 条件更新原子锁草稿态（where 含 status——ordered/received/cancelled 单据不可改·防改已入库单账目漂移）。
@@ -101,7 +102,7 @@ export async function savePurchase({ db, data, agentId }: Ctx) {
 // ── 状态流转（门2·声明边见 scm.spec.ts·重放幂等：目标态重放返 200 moved:false、其余 409）──
 
 export async function markOrdered({ data }: Ctx) {
-  const id = String(data.purchaseId || '')
+  const id = str(data.purchaseId, 200)
   if (!id) return reply(400, err('BAD_ID'))
   const r = await transition(COLLECTIONS.purchaseOrders, id, fromFor('ordered'), 'ordered', { orderedAt: Date.now(), updatedAt: Date.now() })
   if (!r.doc) return reply(404, err('NO_PURCHASE'))
@@ -110,7 +111,7 @@ export async function markOrdered({ data }: Ctx) {
 }
 
 export async function receivePurchase({ db, data, agentId }: Ctx) {
-  const id = String(data.purchaseId || '')
+  const id = str(data.purchaseId, 200)
   if (!id) return reply(400, err('BAD_ID'))
   const r = await transition(COLLECTIONS.purchaseOrders, id, fromFor('received'), 'received', { receivedAt: Date.now(), updatedAt: Date.now() })
   if (!r.doc) return reply(404, err('NO_PURCHASE'))
@@ -153,7 +154,7 @@ export async function receivePurchase({ db, data, agentId }: Ctx) {
 }
 
 export async function cancelPurchase({ data }: Ctx) {
-  const id = String(data.purchaseId || '')
+  const id = str(data.purchaseId, 200)
   if (!id) return reply(400, err('BAD_ID'))
   const r = await transition(COLLECTIONS.purchaseOrders, id, fromFor('cancelled'), 'cancelled', { cancelledAt: Date.now(), updatedAt: Date.now() })
   if (!r.doc) return reply(404, err('NO_PURCHASE'))

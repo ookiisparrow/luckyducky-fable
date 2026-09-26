@@ -19,16 +19,16 @@ const DEFAULT_LIMIT = 30
 export async function searchConversations({ db, data }: Ctx) {
   const d = data || {}
   // 客户范围（可选）：优先 openid（kfBind 绑定后稳定），否则 externalUserId；渠道可叠加（wxkf 等）。
-  const openid = String(d.openid || '').trim()
-  const externalUserId = String(d.externalUserId || '').trim()
-  const channel = String(d.channel || '').trim()
+  const openid = str(d.openid, 200).trim()
+  const externalUserId = str(d.externalUserId, 200).trim()
+  const channel = str(d.channel, 200).trim()
   const filter: Record<string, any> = {}
   if (openid) filter.openid = openid
   else if (externalUserId) filter.externalUserId = externalUserId
   if (channel) filter.channel = channel
   // cursor 分页（bounded·d 携 cursor/limit）：按 at 倒序翻页，nextCursor 续取更早消息
   const paged = await pageQuery(db, COLLECTIONS.conversations, filter, 'at', d, DEFAULT_LIMIT)
-  const keyword = String(d.keyword || '').trim().slice(0, 64)
+  const keyword = str(d.keyword, 200).trim().slice(0, 64)
   const rows = keyword ? paged.list.filter((m: any) => String(m.text || '').includes(keyword)) : paged.list
   const messages = rows.map((m: any) => ({
     id: m._id,
@@ -79,7 +79,7 @@ function pairFirstResponses(msgs: any[]): { deltas: number[]; unanswered: number
 export async function conversationsReport({ db, data }: Ctx) {
   const d = data || {}
   const slaMs = Math.max(0, Number(d.slaMs) || DEFAULT_SLA_MS)
-  const channel = String(d.channel || '').trim()
+  const channel = str(d.channel, 200).trim()
   const filter: Record<string, any> = {}
   if (channel) filter.channel = channel
   // bounded 样本（最近 SAMPLE 条·orderBy at desc·防全量扫拖垮）
@@ -225,7 +225,7 @@ export async function sampleQc({ db, data }: Ctx): Promise<any> {
  */
 export async function saveQcMark({ db, data, agentId }: Ctx): Promise<any> {
   const d = data || {}
-  const sessionKey = String(d.sessionKey || '').trim()
+  const sessionKey = str(d.sessionKey, 200).trim()
   if (!sessionKey) return reply(400, err('BAD_ARGS'))
   const score = Number(d.score)
   if (!Number.isInteger(score) || score < 1 || score > 5) return reply(400, err('BAD_ARGS:SCORE_RANGE'))
@@ -308,20 +308,20 @@ async function collectRefreshTargets(db: any, d: Record<string, any>): Promise<R
   }
   const sessionIds = Array.isArray(d.sessionIds) ? d.sessionIds : d.sessionId ? [d.sessionId] : []
   for (const sid of sessionIds) {
-    const parsed = parseSessionKey(String(sid || ''))
+    const parsed = parseSessionKey(str(sid, 200))
     if (parsed) push(parsed.euid, parsed.openKfId)
   }
   const euids = Array.isArray(d.externalUserIds)
     ? d.externalUserIds
     : d.externalUserId
-      ? String(d.externalUserId)
+      ? str(d.externalUserId, Infinity) // 不截：可能是逗号分隔的一串，截断会切出半个 id 刷错人；单个 id 在 push 处限长
           .split(/[,，\s]+/)
           .filter(Boolean)
       : []
-  for (const e of euids) push(String(e || ''))
+  for (const e of euids) push(str(e, 200))
   const openids = Array.isArray(d.openids) ? d.openids : d.openid ? [d.openid] : []
   for (const oid of openids) {
-    const euid = await euidFromOpenid(db, String(oid || '').trim())
+    const euid = await euidFromOpenid(db, str(oid, 200).trim())
     if (euid) push(euid)
   }
   return out
@@ -335,7 +335,7 @@ export async function refreshTrialSession({ db, data, agentId }: Ctx): Promise<a
   const gate = await loadTrialRefreshGate(db)
   if (!gate.on) return reply(trialRefreshDenyStatus(), err('TRIAL_ONLY'))
   const d = data || {}
-  const reason = String(d.reason || '').trim()
+  const reason = str(d.reason, 200).trim()
   if (!reason) return reply(400, err('REASON_REQUIRED'))
   const targets = await collectRefreshTargets(db, d)
   if (!targets.length) return reply(400, err('BAD_ARGS'))

@@ -40,7 +40,7 @@ async function search() {
   const r = await searchCustomer(q.value.trim())
   if (searchGen.isStale(my)) return // 已发起更新的搜索·丢弃过期结果
   hits.value = r.ok
-    ? ((r.customers as Record<string, any>[]) || []).map((c) => ({
+    ? (r.customers || []).map((c) => ({
         openid: String(c.openid || ''),
         nickname: String(c.nickname || '（无昵称）'),
         phone: String(c.phone || ''),
@@ -70,8 +70,8 @@ async function open(openid: string) {
   // 无档保持 user.value=null（模板 v-else 提示「暂无用户档案」）。
   // u.ok===false（取数失败，如网络抖动/超时）与「真无档」是两种不同语义——
   // 前者不能被误标成后者，否则坐席会把「这次没查到」误当成「该客户确实没档案」的结论去用。
-  if (u.ok && (u as any).user) {
-    const d = (u as any).user as Record<string, any>
+  if (u.ok && u.user) {
+    const d = u.user
     user.value = { nickname: String(d.nickname || '（无昵称）'), phone: String(d.phone || ''), avatar: String(d.avatar || ''), bio: String(d.bio || '') }
   } else if (!u.ok) {
     userLoadFailed.value = true

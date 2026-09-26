@@ -14,6 +14,8 @@ describe('deskErrorText 新码', () => {
     expect(deskErrorText('CALL_TIMEOUT')).toMatch(/刷新/)
     expect(deskErrorText('CALL_TIMEOUT')).toMatch(/如果刚才是提交/) // 后台刷列表也会显这句，「可能已生效」不能无条件说
     expect(deskErrorText('AUTH_UNAVAILABLE')).toMatch(/稍后/)
+    expect(deskErrorText('BAD_JSON_RESPONSE')).toMatch(/回包读不懂/)
+    expect(deskErrorText('NETWORK:fetch failed')).toMatch(/网络不通/)
     for (const c of ['CALL_TIMEOUT', 'AUTH_UNAVAILABLE', 'BAD_JSON_RESPONSE', 'NETWORK:fetch failed']) {
       expect(deskErrorText(c)).not.toMatch(/[A-Z]{4,}/)
     }

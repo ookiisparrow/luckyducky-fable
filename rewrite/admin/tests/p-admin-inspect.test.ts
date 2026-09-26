@@ -49,6 +49,15 @@ describe('Inspect.vue 加载', () => {
     expect(api.push).toHaveBeenCalledWith('/anomalies')
   })
 
+  it('大白话：扫描到上限的检查项，哪怕通过也要写明只看了一部分，不能让人当成全查过了', async () => {
+    const latest = run('timer', '付了钱没发货')
+    latest.results[0] = { id: 'money-conserved', title: '钱守恒', layer: 'invariant', status: 'green', detail: '退款均未超实付', severity: 'low', scanned: 500, capped: true }
+    api.getInspectStatus.mockResolvedValue({ ok: true, latest, openAnomalies: 0 })
+    const w = await mountPage()
+    expect(w.find('.check.green').text()).toContain('只扫了前 500 条，结论可能不全')
+    expect(w.find('.check.red').text()).not.toContain('结论可能不全') // 没触顶的项不带这句
+  })
+
   it('大白话：加载失败显原因，不装成「还没跑过巡检」', async () => {
     api.getInspectStatus.mockResolvedValue({ ok: false, status: 500, error: 'X1' })
     const w = await mountPage()

@@ -54,7 +54,9 @@ describe('mapOrderRows 已退件数', () => {
   })
 
   it('大白话：REFUND_LINES_CHANGED 有人话，不甩英文码', () => {
-    expect(orderErrorText('REFUND_LINES_CHANGED')).not.toContain('REFUND_LINES_CHANGED')
+    const t = orderErrorText('REFUND_LINES_CHANGED')
+    expect(t).toMatch(/又有商品退款.*重新装箱/)
+    expect(t).not.toContain('REFUND_LINES_CHANGED')
   })
 })
 

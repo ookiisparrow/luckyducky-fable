@@ -19,7 +19,7 @@ import EmptyState from '../ui/EmptyState.vue'
 const { model, message, busy, autoState, save } = usePageContent('home', normalizeHome, homePayload, {
   load: async () => {
     const r = await getHomeContent()
-    return { ...r, content: r.home }
+    return r.ok ? { ...r, content: r.home } : r
   },
   save: saveHomeContent,
   what: '首页',

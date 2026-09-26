@@ -24,6 +24,7 @@ const form = ref({ name: '', key: '', wecomUserId: '' })
 const confirmId = ref('')
 const lastCreated = ref<{ name: string; key: string } | null>(null) // 建号后回显口令（不回显则超管拿不到明文转交坐席）
 const csatAvg = ref<string | null>(null) // 整体均分（并行调 getCsatReport·与坐席表无关联维度）
+const csatApproxNote = ref('') // 报表只算了样本时的近似说明（均分不是全量精确值）
 
 // KPI（真·从 rows 聚合，非另造）：在线坐席数 / 接待中总数 / 今日结束总数
 const onlineCount = computed(() => rows.value.filter((r) => r.status === 'online').length)
@@ -37,6 +38,7 @@ async function reload() {
   const csatVm = mapCsat(csat)
   // 报表失败 ≠ 还没人评：空均分「—」会把加载失败读成零评价（病根#14·同 Conversations loadReport）
   csatAvg.value = !csatVm ? '加载失败' : csatVm.total ? csatVm.avg : null
+  csatApproxNote.value = csatVm ? csatVm.approxNote : ''
   load(r.ok && !!csatVm, !r.ok ? failText('加载失败', r.error) : '满意度报表加载失败')
 }
 
@@ -114,7 +116,7 @@ onMounted(reload)
       <KpiCard label="接待中" :value="activeTotal" :icon="MessagesSquare" />
       <KpiCard label="今日结束" :value="closedTotal" :icon="CircleCheck" />
       <KpiCard label="整体满意度均分" :value="csatAvg ?? '—'" :icon="Star">
-        <span class="kpi-note">来自客服满意度报表（全局·非按坐席）</span>
+        <span class="kpi-note">来自客服满意度报表（全局·非按坐席）{{ csatApproxNote ? '·' + csatApproxNote : '' }}</span>
       </KpiCard>
     </div>
 

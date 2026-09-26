@@ -5,7 +5,7 @@ import { ref, computed, nextTick, onMounted } from 'vue'
 import QRCode from 'qrcode'
 import { RefreshCw, ScanLine, Printer, Package } from 'lucide-vue-next'
 import { listOrders, shipOrder } from '../api/money'
-import { mapOrderRows, orderErrorText, type OrderRowVM } from '../lib/mapMoney'
+import { mapOrderRows, orderErrorText } from '../lib/mapMoney'
 import { dateTime } from '../lib/format'
 import type { ErrCode } from '@ldrw/shared'
 import {
@@ -64,7 +64,7 @@ async function reload() {
         loadErr.value = '加载待发货订单失败：' + orderErrorText(r.error)
         break
       }
-      for (const o of mapOrderRows((r as any).list) as OrderRowVM[]) {
+      for (const o of mapOrderRows(r.list)) {
         if (seen.has(o.id)) continue
         seen.add(o.id)
         // OrderRowVM 已带 addr*/items/每行已退件数·转 FulfillOrder 形状
@@ -78,8 +78,8 @@ async function reload() {
           address: { name: o.addrName, phone: o.addrPhone, region: o.addrRegion, detail: o.addrDetail },
         })
       }
-      cursor = (r as any).nextCursor
-      hasMore = !!(r as any).hasMore && cursor != null
+      cursor = r.nextCursor
+      hasMore = !!r.hasMore && cursor != null
       pages++
     }
     // 触顶（25 页仍有下一页）不静默（同 getInventory truncated 惯例）：

@@ -31,6 +31,7 @@ const draft = ref('')
 const panels = ref<Array<Record<string, any>>>([])
 const panelNote = ref('')
 const listNote = ref('') // 队列/我在接拉失败出声（病根#14）：首屏失败不得装成「队列空 ✓」
+const queueMore = ref(false) // 云端只回一页待接（nextCursor 在＝后面还有人在等），不说坐席会以为就这几个
 const threadNote = ref('') // 打开会话拉消息失败出声（病根#14）：与 360 panelNote 同形；后台轮询仍静默
 const message = ref('')
 // 发送忙碌锁按会话隔离（组件级共享 busy 会让 A 会话发送在途拦住 B 会话发送）——
@@ -95,6 +96,7 @@ async function refreshLists() {
   const [q, m] = await Promise.all([post('listQueue'), post('listMyActive')])
   if (q.error === 'SESSION_LOST' || m.error === 'SESSION_LOST') return // 导登录单源＝壳层 onSessionLost；此处只停刷新，不自调 doLogout
   queue.value = q.ok ? mapQueue(q.items, Date.now()) : queue.value // 失败不清已有
+  if (q.ok) queueMore.value = !!q.nextCursor
   mine.value = m.ok ? ((m.sessions as Record<string, any>[]) || []) : mine.value
   listNote.value = q.ok && m.ok ? '' : deskErrorText(q.ok ? m.error : q.error)
   recomputeAlert() // 队列增量是提醒聚合公式一半（改动契约 3）
@@ -319,6 +321,7 @@ onBeforeUnmount(() => {
         </div>
         <button class="act" @click="claim(q.sessionId)">接</button>
       </div>
+      <p v-if="queueMore" class="note">待接不止 {{ queue.length }} 条，列表未显示全部</p>
       <p v-if="listNote" class="note">{{ listNote }}</p>
       <p v-else-if="!queue.length" class="empty">队列空 ✓</p>
       <h3>我在接（{{ mine.length }}）</h3>

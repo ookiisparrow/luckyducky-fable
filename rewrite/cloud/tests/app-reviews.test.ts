@@ -133,6 +133,22 @@ describe('getReviews（游标分页+全量精确汇总·黄金 §七）', () => 
     control.setBeforeAggregate(null as never)
   })
 
+  it('大白话：精确聚合和兜底样本都读失败——汇总回 null，不回「0 条、0 分」冒充没人评过', async () => {
+    control.seed('reviews', [{ _id: 'r1', productId: 'p1', picked: true, rating: 5, createdAt: 1 }])
+    control.setBeforeAggregate(({ coll }: any) => {
+      if (coll === 'reviews') throw new Error('MOCK_AGG_FAIL')
+    })
+    control.setBeforeGet(({ coll, limit }: any) => {
+      if (coll === 'reviews' && limit === 201) throw new Error('MOCK_SAMPLE_FAIL') // 只炸兜底样本读，列表照常
+    })
+    const r = await call('getReviews', { productId: 'p1' })
+    control.setBeforeAggregate(null as never)
+    control.setBeforeGet(null as never)
+    expect(r.ok).toBe(true)
+    expect(r.list.length).toBe(1)
+    expect(r.summary).toBeNull()
+  })
+
   it('大白话：首页倒序+游标续页不重不漏；续页不重算汇总；到底无更多', async () => {
     control.seed(
       'reviews',

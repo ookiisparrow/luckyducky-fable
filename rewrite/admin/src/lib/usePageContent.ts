@@ -4,7 +4,7 @@
 // （病根#5 复制即漂移）。首页走 getHomeContent/saveHomeContent 另一对接口，由调用方传 io 覆盖读写。
 import { ref, watch, onMounted, onBeforeUnmount, nextTick, type Ref } from 'vue'
 import { getPageContent, savePageContent } from '../api/content'
-import type { ClientResult } from '../api/client'
+import type { TypedResult } from '../api/client'
 import { serialSave } from './serialSave'
 import { SAVE_OK_MESSAGE } from './mapPageContent'
 import { failText, writeFailText } from './status'
@@ -12,8 +12,8 @@ import { failText, writeFailText } from './status'
 type AutoState = '' | 'saving' | 'saved' | 'error'
 
 interface ContentIO {
-  load: () => Promise<ClientResult> // 回包内容字段须叫 content
-  save: (_body: Record<string, unknown>) => Promise<ClientResult>
+  load: () => Promise<TypedResult<{ content: unknown }>> // 回包内容字段须叫 content
+  save: (_body: Record<string, unknown>) => Promise<TypedResult<object>>
   what?: string // 未载入拒存提示里「已有X配置」的 X
 }
 

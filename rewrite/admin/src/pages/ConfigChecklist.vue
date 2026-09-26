@@ -10,43 +10,21 @@ import { ref, computed, onMounted } from 'vue'
 import { ShieldCheck, RefreshCw } from 'lucide-vue-next'
 import { getConfigChecklist, saveSecureConfig, savePayConfig } from '../api/system'
 import { failText, writeFailText } from '../lib/status'
-import type { ErrCode } from '@ldrw/shared'
+import type { ErrCode, AdminChecklistGroup, AdminChecklistItem } from '@ldrw/shared'
 import PageHeader from '../components/ui/PageHeader.vue'
 import Card from '../components/ui/Card.vue'
 import Badge from '../components/ui/Badge.vue'
 import UiButton from '../components/ui/Button.vue'
 import EmptyState from '../components/ui/EmptyState.vue'
 
-type Status = 'ok' | 'missing' | 'check'
-interface FillMeta {
-  action: 'saveSecureConfig' | 'savePayConfig'
-  docId?: 'wxkf' | 'wxpay'
-  field: string
-  inputType: 'text' | 'password' | 'textarea' | 'select'
-  options?: { value: string; label: string }[]
-}
-interface Item {
-  key: string
-  name: string
-  location: string
-  purpose: string
-  status: Status
-  howTo: string
-  url: string
-  noteExtra?: string
-  fill?: FillMeta
-}
-interface Group {
-  group: string
-  items: Item[]
-}
+type Status = AdminChecklistItem['status']
 interface FillState {
   value: string // 永远从空白起（零回显铁律·从不用已存值预填）
   busy: boolean
   error: string
 }
 
-const groups = ref<Group[]>([])
+const groups = ref<AdminChecklistGroup[]>([])
 const message = ref('加载中…')
 const loading = ref(false)
 const fillState = ref<Record<string, FillState>>({})
@@ -73,14 +51,14 @@ function errText(code: string): string {
 
 async function load(): Promise<boolean> {
   loading.value = true
-  const r: any = await getConfigChecklist()
+  const r = await getConfigChecklist()
   loading.value = false
   if (r.error === 'SESSION_LOST') return false // 会话失效集中导登录（client.onSessionLost·单源·根因#5）
   if (!r.ok) {
     message.value = failText('加载失败', r.error)
     return false
   }
-  groups.value = (r.groups || []) as Group[]
+  groups.value = r.groups || []
   // 每次载入（含保存成功后的整页刷新）都重建填写态：所有可填项恒空白起——响应从不带回真实值，
   // 这里也绝不该拿旧输入去预填，避免误以为"已回显"。
   const nextFill: Record<string, FillState> = {}
@@ -94,19 +72,19 @@ async function load(): Promise<boolean> {
   return true
 }
 
-function canSubmit(it: Item): boolean {
+function canSubmit(it: AdminChecklistItem): boolean {
   const s = fillState.value[it.key]
   return !!s && !anyBusy.value && s.value.trim().length > 0
 }
 
-async function submitFill(it: Item) {
+async function submitFill(it: AdminChecklistItem) {
   const f = it.fill
   if (!f || anyBusy.value) return // 全局锁：在途保存未归前不受理第二笔
   const s = fillState.value[it.key]
   const value = s ? s.value.trim() : ''
   if (!value) return
   fillState.value[it.key] = { value: s.value, busy: true, error: '' }
-  const r: any = f.action === 'saveSecureConfig' ? await saveSecureConfig(f.docId || '', { [f.field]: value }) : await savePayConfig({ [f.field]: value })
+  const r = f.action === 'saveSecureConfig' ? await saveSecureConfig(f.docId || '', { [f.field]: value }) : await savePayConfig({ [f.field]: value })
   if (r.error === 'SESSION_LOST') return // 集中导登录（同上）
   if (r.ok) {
     // 整页刷新：拿到最新 status + 全部填写态清空。刷新在途期间本项仍 busy 持全局锁；刷新失败不重建

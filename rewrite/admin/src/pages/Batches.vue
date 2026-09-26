@@ -8,6 +8,8 @@ import { useRoute, useRouter } from 'vue-router'
 import QRCode from 'qrcode'
 import JSZip from 'jszip'
 import { Layers, QrCode, CircleCheck, TrendingUp, X, Download, Package } from 'lucide-vue-next'
+import type { AdminBatchCodes } from '@ldrw/shared'
+import type { TypedResult } from '../api/client'
 import { listBatches, createBatch, listBatchCodes, getSettings } from '../api/system'
 import { getCard } from '../api/products'
 import { buildFrontSvg, buildBackSvg } from '../lib/cardSvg'
@@ -66,7 +68,7 @@ onMounted(async () => {
   // 深链/向导带入了课程号即自动载入该课批次；与读设置互不依赖，先发
   if (courseId.value.trim()) void load()
   const r = await getSettings()
-  if (r.ok) urlPrefix.value = String((r as any).settings?.urlPrefix || (r as any).urlPrefix || '')
+  if (r.ok) urlPrefix.value = String(r.settings?.urlPrefix || '')
   else prefixErr.value = '网址前缀读取失败（' + launchErrorText(r.error) + '），请刷新页面重试'
 })
 
@@ -148,7 +150,7 @@ async function doCreate() {
   }
   creating.value = false
   const batchId = String(r.batchId)
-  const codeN = (r.codes as string[]).length
+  const codeN = r.codes.length
   courseId.value = target // 选择器回到刚生成的课·load() 据此刷新 target（防用漂移的可编辑框值跳到别课、把刚建的批次藏掉）
   await load() // 先刷新（load 会写'加载中…'/'')，刷完再按刷新结果显——否则同步 reload 的'加载中…'当帧盖掉成功（病根#14 伪成功）
   // 只在列表刷新也成功时显纯成功；刷新失败则保留其可见性、不被成功盖掉（load 成功才把 loadedCourse 设为 target·病根#14 失败必可观测）
@@ -161,14 +163,14 @@ async function doCreate() {
 
 const codesGen = useLatest() // 码表乱序守卫（A 的码别配到 B 的批次头·防印错卡·根因#8）
 // 失败不翻页、不清已有码，返回是否成功供调用方决定游标栈进退（失败≠空态·病根#14）
-function applyCodePage(r: { ok: boolean; error?: unknown; codes?: unknown; nextCursor?: unknown; hasMore?: unknown }, page: number): boolean {
+function applyCodePage(r: TypedResult<AdminBatchCodes>, page: number): boolean {
   codesLoading.value = false
   if (!r.ok) {
     codesErr.value = '取码失败：' + launchErrorText(r.error)
     return false
   }
   codesErr.value = ''
-  codes.value = (r.codes as string[]) || []
+  codes.value = r.codes || []
   codeHasMore.value = !!r.hasMore
   codeNextCursor.value = r.nextCursor
   codePage.value = page
@@ -219,7 +221,7 @@ async function collectAllCodes(batchId: string): Promise<string[] | null> {
   for (let i = 0; i < 50; i++) {
     const r = await listBatchCodes(batchId, { cursor, limit: 200 })
     if (!r.ok) return null
-    all.push(...((r.codes as string[]) || []))
+    all.push(...(r.codes || []))
     if (!r.hasMore || r.nextCursor == null) return all
     cursor = r.nextCursor
   }
@@ -258,9 +260,9 @@ async function downloadPack() {
     const zip = new JSZip()
     const csv = ['激活码,网址', ...all.map((c) => `${c},${codeUrl(c)}`)].join('\n')
     zip.file('二维码地址.csv', '﻿' + csv) // BOM 防 Excel 中文乱码
-    const card = (r as any).ok ? (r as any).card : null
+    const card = r.ok ? r.card : null
     if (card) {
-      zip.file('卡面-正面-插画.svg', buildFrontSvg(card, String((r as any).artUrl || '')))
+      zip.file('卡面-正面-插画.svg', buildFrontSvg(card, String((r.ok && r.artUrl) || '')))
       zip.file('卡面-反面-二维码.svg', buildBackSvg(card))
       zip.file(
         '说明.txt',

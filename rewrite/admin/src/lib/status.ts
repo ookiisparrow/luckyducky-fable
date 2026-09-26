@@ -41,7 +41,7 @@ export function failText(what: string, code: unknown): string {
   return t ? `${what}：${t}` : c ? `${what}（${c}）` : `${what}，请重试`
 }
 
-/** 写失败提示：传输层码不冠「X失败」——写操作超时可能已生效，说失败会诱人重复提交。 */
+/** 写失败提示：公共表（mapSystem TRANSPORT_ERR）的码直接用表里整句、不冠「X失败」——超时这类可能已生效，冠「失败」会诱人重复提交；其余句子本身已说清没做成。 */
 export function writeFailText(what: string, code: unknown): string {
   return transportErrorText(code) || failText(what, code)
 }

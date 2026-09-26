@@ -18,8 +18,8 @@ export async function listMaterials({ data }: Ctx) {
 
 export async function saveMaterial({ data }: Ctx) {
   const name = str(data.name, 60)
-  const category = String(data.category || '')
-  const uom = String(data.uom || '')
+  const category = str(data.category, 200)
+  const uom = str(data.uom, 200)
   if (!name) return reply(400, err('NO_NAME'))
   if (uom !== 'count' && uom !== 'gram') return reply(400, err('BAD_UOM')) // 计量二选一（守卫 scm-uom-integer）
   const threshold = data.threshold != null ? parseInt(data.threshold, 10) : 0
@@ -29,9 +29,9 @@ export async function saveMaterial({ data }: Ctx) {
   let _id = ''
   let spec: Record<string, string> | undefined
   if (category === 'yarn') {
-    const color = String(data.color || '')
-    const tier = String(data.tier || '')
-    const form = String(data.form || '')
+    const color = str(data.color, 200)
+    const tier = str(data.tier, 200)
+    const form = str(data.form, 200)
     if (!SLUG.test(color)) return reply(400, err('BAD_COLOR'))
     if (tier !== 'L' && tier !== 'M' && tier !== 'S') return reply(400, err('BAD_TIER'))
     if (form !== 'raw' && form !== 'knotted') return reply(400, err('BAD_FORM'))
@@ -39,11 +39,11 @@ export async function saveMaterial({ data }: Ctx) {
     _id = yarnMaterialId(color, tier, form)
     spec = { color, tier, form }
   } else if (category === 'packaging' || category === 'card') {
-    const productId = String(data.productId || '')
+    const productId = str(data.productId, 200)
     if (!productId) return reply(400, err('NO_PRODUCT'))
     _id = (category === 'packaging' ? 'pkg:' : 'card:') + productId
   } else if (category === 'accessory') {
-    const slug = String(data.slug || '')
+    const slug = str(data.slug, 200)
     if (!SLUG.test(slug)) return reply(400, err('BAD_SLUG'))
     _id = slug
   } else {
@@ -55,7 +55,7 @@ export async function saveMaterial({ data }: Ctx) {
     name,
     category,
     uom,
-    supplierId: String(data.supplierId || ''),
+    supplierId: str(data.supplierId, 200),
     threshold,
     active: data.active !== false,
     spec,
@@ -94,7 +94,7 @@ export async function listSuppliers({ db, data }: Ctx) {
 
 export async function saveSupplier({ db, data }: Ctx) {
   const name = str(data.name, 60)
-  const type = String(data.type || '')
+  const type = str(data.type, 200)
   if (!name) return reply(400, err('NO_NAME'))
   if (type !== 'factory' && type !== 'outworker') return reply(400, err('BAD_TYPE')) // 厂家 | 织女
   const fields = {
@@ -105,7 +105,7 @@ export async function saveSupplier({ db, data }: Ctx) {
     active: data.active !== false,
     updatedAt: Date.now(),
   }
-  const supplierId = String(data.supplierId || '')
+  const supplierId = str(data.supplierId, 200)
   const coll = db.collection(COLLECTIONS.suppliers)
   if (supplierId) {
     const r = await coll.doc(supplierId).update({ data: fields }).catch(() => ({ stats: { updated: 0 } }))
@@ -119,8 +119,8 @@ export async function saveSupplier({ db, data }: Ctx) {
 // ── 期初盘点 / 人工调整（经门1·docType adjust·流水留痕）──
 
 export async function adjustStock({ data, agentId }: Ctx) {
-  const materialId = String(data.materialId || '')
-  const adjustId = String(data.adjustId || '') // 前端每次提交生成一次·重试复用＝幂等键成分
+  const materialId = str(data.materialId, 200)
+  const adjustId = str(data.adjustId, 200) // 前端每次提交生成一次·重试复用＝幂等键成分
   // trim 后判空（同 scmBom saveBomProfile productId trim）：不 trim 会放行纯空格 reason，
   // 落库看似「有原因」实则不可读，审计追责时形同白填。
   const reason = str(data.reason, 200).trim()
@@ -141,7 +141,7 @@ export async function adjustStock({ data, agentId }: Ctx) {
 // 根因#7：真实现在 kit/scmStock.ts listStockLedger（走 pageQuery），本 action 只透传 {cursor,limit}。
 
 export async function listLedger({ data }: Ctx) {
-  const materialId = data.materialId ? String(data.materialId) : undefined
+  const materialId = str(data.materialId, 200) || undefined
   const paged = await listStockLedger(materialId, data)
   return reply(200, { ok: true, list: paged.list, nextCursor: paged.nextCursor, hasMore: paged.hasMore })
 }

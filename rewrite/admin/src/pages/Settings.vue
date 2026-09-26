@@ -2,6 +2,7 @@
 // 系统设置：告警推送 webhook（企微群机器人·云端不回显原值，留空＝保持·清除走按钮）+ 激活码 urlPrefix。
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
+import type { AdminSettings } from '@ldrw/shared'
 import { getSettings, saveSettings } from '../api/system'
 import { webhookOk } from '../lib/mapSystem'
 import { confirmed, failText, writeFailText } from '../lib/status'
@@ -47,7 +48,7 @@ onMounted(async () => {
     message.value = failText('加载失败', r.error) // 载入失败 loaded 恒 false·save 拒（防空表单覆盖已存配置）
     return
   }
-  const s = (r.settings || {}) as Record<string, any> // r.ok 但无 settings = 首次空配置·合法可保存
+  const s: AdminSettings['settings'] = r.settings || {} // r.ok 但无 settings = 首次空配置·合法可保存
   hookSet.value = s.alertWebhookSet === true
   hookTail.value = String(s.alertWebhookTail || '')
   urlPrefix.value = String(s.urlPrefix || '')

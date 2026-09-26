@@ -46,14 +46,14 @@ async function reload(): Promise<boolean> {
   const my = listGen.begin()
   const [r, m] = await Promise.all([getReconciliation(from.value, to.value), getBillMatch(from.value, to.value)])
   if (listGen.isStale(my)) return false // 已改区间·丢弃过期对账结果
-  if ((r as any).error === 'SESSION_LOST' || (m as any).error === 'SESSION_LOST') return false
+  if (r.error === 'SESSION_LOST' || m.error === 'SESSION_LOST') return false
   recon.value = mapRecon(r)
   match.value = mapBillMatch(m)
   // 分路报错：单路失败别被另一路成功吞掉——mapRecon/mapBillMatch 只在 ok!==true
   // 或响应体缺 cumulative/summary 容器时才回 null（合法空数据容器仍在、只是内部数组/数值为空，不会误判成失败）。
   const bad: string[] = []
-  if (!recon.value) bad.push('内部对账加载失败：' + orderErrorText((r as any).error))
-  if (!match.value) bad.push('外部账单勾对加载失败：' + orderErrorText((m as any).error))
+  if (!recon.value) bad.push('内部对账加载失败：' + orderErrorText(r.error))
+  if (!match.value) bad.push('外部账单勾对加载失败：' + orderErrorText(m.error))
   message.value = bad.join('；')
   return bad.length === 0
 }

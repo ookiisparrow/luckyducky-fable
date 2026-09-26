@@ -8,7 +8,7 @@ import { RefreshCw, Search, X, CircleCheck, Ticket, GraduationCap, Check, Shield
 import { listRefunds, refundCounts, approveRefund, rejectRefund, getRefundDetail, listOrders, overrideRefund } from '../api/money'
 import UiButton from '../components/ui/Button.vue'
 import { mapRefundRows, refundVerdict, mapOverrideOrder, canOverrideRefund, orderErrorText, type RefundRowVM, type RefundVerdictVM, type OverrideOrderVM } from '../lib/mapMoney'
-import { useLatest, appendNew } from '../lib/latest'
+import { useLatest, usePager, appendNew } from '../lib/latest'
 import PageHeader from '../components/ui/PageHeader.vue'
 import Card from '../components/ui/Card.vue'
 import Badge from '../components/ui/Badge.vue'
@@ -29,8 +29,8 @@ const tab = ref('applied')
 const counts = ref<Record<string, number>>({})
 const countsPartial = ref(false) // 某状态 .count() 失败时角标别把占位 0 当真值显示（同 Dashboard todoPartial 风格）
 const rows = ref<RefundRowVM[]>([])
-const cursor = ref<unknown>(null)
-const hasMore = ref(false)
+const pager = usePager()
+const hasMore = pager.hasMore
 const moreErr = ref('') // 翻页失败单独一格：不占顶部 message（那里还有别的动作报错），重试成功即清
 const message = ref('')
 const busy = ref(false)
@@ -76,20 +76,18 @@ const verdictVM = computed<RefundVerdictVM | null>(() =>
     : null
 )
 
-const listGen = useLatest() // 列表乱序守卫（快切标签/搜索时旧结果别覆盖新标签·根因#8）
-const reloading = ref(false) // reload 专属在途标志（单写布尔·more 加载闸不靠脆弱 message 文案）
+const reloading = ref(false) // reload 在途：刷新按钮置灰
 async function reload() {
   message.value = '加载中…'
   reloading.value = true
   moreErr.value = ''
-  const my = listGen.begin()
+  const my = pager.begin()
   const [r, c] = await Promise.all([listRefunds(tab.value, undefined, 20, activeQ.value), refundCounts()])
-  if (listGen.isStale(my)) return // 已切别标签/搜索·丢弃过期列表（由更新的 reload 负责复位 reloading）
+  if (pager.isStale(my)) return // 已切别标签/搜索·丢弃过期列表（由更新的 reload 负责复位 reloading）
   reloading.value = false // 本次是最新·加载完成
   if (r.error === 'SESSION_LOST') return
   rows.value = r.ok ? mapRefundRows(r.list) : []
-  cursor.value = r.ok ? r.nextCursor : null
-  hasMore.value = !!(r.ok && r.hasMore)
+  pager.reset(r)
   if (c.ok && c.counts) counts.value = c.counts
   countsPartial.value = c.ok ? !!c.partial : true // 计数请求本身失败也按不可信处理（不误显陈旧/占位数字）
   message.value = r.ok ? '' : '加载失败：' + orderErrorText(r.error)
@@ -97,19 +95,14 @@ async function reload() {
 
 // 加载更多（游标分页·根因#7·退款首页 20 条封顶·没有它第 21 单起翻不到）
 async function more() {
-  if (!hasMore.value || cursor.value == null) return
-  if (reloading.value) return // reload 在途时不翻页（cursor 还是旧的·会跳页）——覆盖 reload 先于 more 的序（单写布尔）
-  const gen = listGen.peek() // 绑定当前 reload 代际·不递增（不反噬在途 reload）·任何新 reload 会作废本页
-  const r = await listRefunds(tab.value, cursor.value, 20, activeQ.value)
-  if (listGen.isStale(gen)) return // 期间发生过 reload·放弃本页（防混排 + 游标跳页）
+  const r = await pager.next((cursor) => listRefunds(tab.value, cursor, 20, activeQ.value))
+  if (!r) return
   if (!r.ok) {
     moreErr.value = '加载更多失败：' + orderErrorText(r.error) // 翻页失败不静默；已有行和游标不动，再点即重试
     return
   }
   moreErr.value = ''
   rows.value = appendNew(rows.value, mapRefundRows(r.list))
-  cursor.value = r.nextCursor
-  hasMore.value = !!r.hasMore
 }
 
 function pickTab(k: string) {

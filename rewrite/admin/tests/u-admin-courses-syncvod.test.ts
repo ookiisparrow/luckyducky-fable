@@ -70,6 +70,6 @@ describe('Courses.vue 同步转码结论不被重载抹掉', () => {
     getCourseDraftMock.mockResolvedValue({ ok: false, error: 'NETWORK:boom' })
     await clickSync(w)
     expect(w.find('.status').text()).not.toContain('仍在转码')
-    expect(w.find('.status').text()).not.toBe('')
+    expect(w.find('.status').text()).toContain('网络不通')
   })
 })

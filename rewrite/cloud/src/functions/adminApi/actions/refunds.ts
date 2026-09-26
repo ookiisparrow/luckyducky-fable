@@ -9,7 +9,7 @@ import {
   AFTERSALE_SCAN_CAP,
   buildBadStatus,
 } from '@ldrw/shared'
-import { callFlow, refundNoFor, pageQuery, notifyAlert, isDocMissing, isCollectionMissing, getDocOrNull, err } from '../../../kit'
+import { callFlow, refundNoFor, pageQuery, notifyAlert, isDocMissing, isCollectionMissing, getDocOrNull, str, err } from '../../../kit'
 import type { OrderDoc, AfterSaleDoc } from '@ldrw/shared'
 import { reply, ensure, activationFor, type Ctx } from '../lib'
 
@@ -73,9 +73,9 @@ async function alertIfShippedMeanwhile(db: any, orderId: string, statusAtStart: 
 // 退」的退货规则，不越「退多少」的钱红线——退超实付不是退货规则、是资损洞。直建 approved 售后单（越客户
 // applied→approved 流转·管理员发起）+ 触发退款工作流；未受理条件回滚 approved→applied 可重试。写类自动审计。
 export async function overrideRefund({ db, data }: Ctx) {
-  const orderId = String((data && data.orderId) || '')
-  const reqLine = String((data && data.lineId) || '')
-  const reason = String((data && data.reason) || '')
+  const orderId = str(data && data.orderId, 200)
+  const reqLine = str(data && data.lineId, 200)
+  const reason = str(data && data.reason, 200)
     .trim()
     .slice(0, 100)
   if (!orderId || !reqLine || !reason) return reply(400, err('BAD_ARGS'))
@@ -221,7 +221,7 @@ export async function overrideRefund({ db, data }: Ctx) {
 // ② paidFee 须正整数分（asFen 同款校验·脏数据早暴露）；③ 条件更新防并发推进（仍是异常态才写）；
 // ④ 覆盖旧值留痕（paidFeePrev/paidFeeRecordedAt/paidFeeRecordedBy·可对账可溯）。
 export async function recordPaidFee({ db, data, agentId }: Ctx) {
-  const id = String((data && data.id) || '')
+  const id = str(data && data.id, 200)
   const paidFee = Number((data && data.paidFeeFen) ?? NaN)
   if (!id || !Number.isInteger(paidFee) || paidFee <= 0) return reply(400, err('BAD_ARGS'))
   const got = await db.collection(COLLECTIONS.orders).doc(id).get().catch(() => null)
@@ -268,8 +268,8 @@ export async function recordPaidFee({ db, data, agentId }: Ctx) {
 // 命中（orderId·一单可多条售后行），无视状态标签搜全部。计数另走 refundCounts（.count() 精确）。
 export async function listRefunds({ db, data }: Ctx) {
   await ensure(db, COLLECTIONS.afterSales)
-  const q = String((data && data.q) || '').trim()
-  const status = String((data && data.status) || '')
+  const q = str(data && data.q, 200).trim()
+  const status = str(data && data.status, 200)
   const filter: Record<string, any> = q
     ? { orderId: q } // 搜索：订单号精确，跨全部状态
     : status && status !== 'all'
@@ -333,7 +333,7 @@ export async function refundCounts({ db }: Ctx) {
 // 按 afterSale._openid + 该商品对应课程（products.courseId·回退 course-<productId>·与 genQrcodes/StepBatch
 // 同口径），查 activations 算「买家是否已激活/已进课该课程」——给审核员真判据（已激活=退货权失·谨慎）。
 export async function getRefundDetail({ db, data }: Ctx) {
-  const id = String((data && data.id) || '')
+  const id = str(data && data.id, 200)
   if (!id) return reply(400, err('BAD_ARGS'))
   const got = await db
     .collection(COLLECTIONS.afterSales)
@@ -365,7 +365,7 @@ export async function getRefundDetail({ db, data }: Ctx) {
 }
 
 export async function approveRefund({ db, data }: Ctx) {
-  const id = String(data.id || '')
+  const id = str(data.id, 200)
   if (!id) return reply(400, err('BAD_ARGS'))
   // 两次纯读互不依赖，并行；判定顺序：记录 → 状态 → 退款流；订单读依赖 orderId，串行
   const [got, cfg] = await Promise.all([
@@ -479,8 +479,8 @@ export async function approveRefund({ db, data }: Ctx) {
 }
 
 export async function rejectRefund({ db, data }: Ctx) {
-  const id = String(data.id || '')
-  const reason = String(data.reason || '')
+  const id = str(data.id, 200)
+  const reason = str(data.reason, 200)
     .trim()
     .slice(0, 100)
   if (!id || !reason) return reply(400, err('BAD_ARGS'))

@@ -38,6 +38,17 @@ describe('Agents.vue 停用成功提示留得住', () => {
   })
 })
 
+describe('Agents.vue 满意度均分', () => {
+  it('大白话：满意度报表只算了样本（approx）——均分旁要写近似，不装成全量精确', async () => {
+    listAgentsMock.mockResolvedValue({ ok: true, agents: [{ id: 'a1', name: '外包一号', disabled: false }] })
+    getCsatReportMock.mockResolvedValue({ ok: true, total: 1000, avg: 4.6, dist: {}, withNote: 0, approx: true })
+    const w = mount(Agents)
+    await flushPromises()
+    const kpi = w.findAll('.kpi-note').map((n) => n.text())
+    expect(kpi.some((t) => t.includes('触样本顶·近似'))).toBe(true)
+  })
+})
+
 describe('Agents.vue 失败提示', () => {
   it('大白话：坐席列表超时说人话，不甩 CALL_TIMEOUT', async () => {
     listAgentsMock.mockResolvedValue({ ok: false, status: 0, error: 'CALL_TIMEOUT' })

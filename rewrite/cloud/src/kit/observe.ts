@@ -80,22 +80,27 @@ export async function notifyRecall(summary: Record<string, number>): Promise<voi
 /**
  * 巡检机每日心跳（「全绿也报平安」·终结「告警的告警」递归）：证明巡检机活着——「该来的消息没来」
  * 本身可被发现。经同一 botpush 唯一接缝（sev='heartbeat'·`[LD_HEARTBEAT]` 前缀）复用 alertWebhook（人工配置
- * 清单不新增条目）。语义＝「巡检机存活」非「系统正常」：red>0 照发心跳，但消息只报 green/red 计数、不写「正常」；
+ * 清单不新增条目）。语义＝「巡检机存活」非「系统正常」：red>0 照发心跳，但消息只报 green/red（及扫描触顶项数）计数、不写「正常」；
  * 红项另有 notifyAlert 告警通道。心跳非异常——**不接 recordAnomaly**（不污染 anomalies 账本）。去重由调用方
  * （kit/inspect sendDailyHeartbeat 确定性日 id）保证，本函数只管发。fail-soft：未配/失败静默不抛。
  */
-export async function notifyHeartbeat(summary: { green: number; red: number }): Promise<void> {
+export async function notifyHeartbeat(summary: { green: number; red: number; capped?: number }): Promise<void> {
   const green = Number(summary?.green || 0)
   const red = Number(summary?.red || 0)
+  const capped = Number(summary?.capped || 0) // 扫描到上限的检查项：绿也只代表看过的那部分，不能报「全绿」
+  const cappedNote = capped ? `·${capped} 项扫描到上限、结论可能不全` : ''
   const line =
     red > 0
-      ? `[LD_HEARTBEAT] 巡检机存活·今日体检 green=${green} red=${red}（红项另有告警通道）`
-      : `[LD_HEARTBEAT] 巡检机存活·今日体检全绿 green=${green}`
+      ? `[LD_HEARTBEAT] 巡检机存活·今日体检 green=${green} red=${red}（红项另有告警通道）${cappedNote}`
+      : capped
+        ? `[LD_HEARTBEAT] 巡检机存活·今日体检 green=${green}${cappedNote}`
+        : `[LD_HEARTBEAT] 巡检机存活·今日体检全绿 green=${green}`
   try {
     console.error(line) // ① 结构化日志行（backstop）
   } catch {
     /* fail-soft */
   }
   // ② 推送（sev='heartbeat'）：推 owner 群机器人。
-  await pushIfConfigured({ sev: 'heartbeat', fn: 'inspect', code: red > 0 ? 'HEARTBEAT_RED' : 'HEARTBEAT_GREEN', ctx: { green, red } })
+  const ctx = capped ? { green, red, capped } : { green, red }
+  await pushIfConfigured({ sev: 'heartbeat', fn: 'inspect', code: red > 0 ? 'HEARTBEAT_RED' : 'HEARTBEAT_GREEN', ctx })
 }
