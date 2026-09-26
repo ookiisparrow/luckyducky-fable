@@ -8,7 +8,7 @@ import { listDrafts } from '../api/products'
 import { materialHuman, scmErrorText, unprofiledProducts, productNameOf } from '../lib/mapScm'
 import { dateTime } from '../lib/format'
 import { useLoadStatus, loadErrors } from '../lib/status'
-import { useLatest, appendNew } from '../lib/latest'
+import { useLatest, usePager, appendNew } from '../lib/latest'
 import type { AdminAssemblyPreview } from '@ldrw/shared'
 import ScmFlowTabs from '../components/ScmFlowTabs.vue'
 import UiButton from '../components/ui/Button.vue'
@@ -26,8 +26,8 @@ watch(template, () => { if (!tplGuard) tplDirty.value = true }, { deep: true })
 const profiles = ref<Array<Record<string, any>>>([])
 const mats = ref<Array<Record<string, any>>>([])
 const assemblies = ref<Array<Record<string, any>>>([])
-const asmCursor = ref<unknown>(null) // 组装记录列表翻页游标（根因#7）
-const asmHasMore = ref(false)
+const asmPager = usePager() // 组装记录列表翻页（根因#7）
+const asmHasMore = asmPager.hasMore
 // 组装记录加载失败标记（防失败伪装空态）：listAssemblies 单独失败时 assemblies=[]，
 // EmptyState 若仍显「还没有组装记录」＝把查询失败伪装成空账——文案按此标记分流。
 const asmFailed = ref(false)
@@ -83,7 +83,9 @@ let bomLoaded = false
 
 async function reload() {
   runConfirm.value = false // 刷新即复位危险态（防旧武装的「执行组装」确认残留、重进一击直扣料）
+  const my = asmPager.begin()
   const [b, m, a, d] = await Promise.all([getBomSetup(), listMaterials(), listAssemblies(), listDrafts()])
+  if (asmPager.isStale(my)) return // 已发起更新的 reload·丢弃过期回包（更新那次会整页重写）
   if (b.ok) {
     const t = (b.template as Record<string, any>) || {}
     if (!tplDirty.value) {
@@ -97,8 +99,7 @@ async function reload() {
   }
   mats.value = m.ok ? m.list : []
   assemblies.value = a.ok ? a.list : []
-  asmCursor.value = a.ok ? a.nextCursor : null
-  asmHasMore.value = !!(a.ok && a.hasMore)
+  asmPager.reset(a)
   asmFailed.value = !a.ok
   products.value = d.ok ? d.list : []
   // 分路报错：只校验 getBomSetup 一路的话，listMaterials/listAssemblies/listDrafts
@@ -107,17 +108,14 @@ async function reload() {
   load(!err, err) // 只在加载失败时写·成功静默不抹动作反馈
 }
 
-// 组装记录「加载更多」（根因#7）：续游标追加·去重防双击重复追加同一页
 async function moreAssemblies() {
-  if (!asmHasMore.value || asmCursor.value == null) return
-  const r = await listAssemblies({ cursor: asmCursor.value })
+  const r = await asmPager.next((cursor) => listAssemblies({ cursor }))
+  if (!r) return
   if (!r.ok) {
     note(false, '', '加载更多组装记录失败：' + scmErrorText(r.error))
     return
   }
   assemblies.value = appendNew(assemblies.value, r.list || [], (x) => x._id)
-  asmCursor.value = r.nextCursor
-  asmHasMore.value = !!r.hasMore
 }
 
 async function doSaveTemplate() {

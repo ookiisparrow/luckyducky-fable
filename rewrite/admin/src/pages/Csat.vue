@@ -7,7 +7,7 @@ import { RotateCcw, Star, ThumbsUp, ThumbsDown, MessageSquare, Search } from 'lu
 import { getCsatReport, listCsatEntries } from '../api/cs'
 import { mapCsat, mapCsatEntries, type CsatEntryVM } from '../lib/mapCs'
 import { failText } from '../lib/status'
-import { useLatest, appendNew } from '../lib/latest'
+import { usePager, appendNew } from '../lib/latest'
 import PageHeader from '../components/ui/PageHeader.vue'
 import Card from '../components/ui/Card.vue'
 import KpiCard from '../components/ui/KpiCard.vue'
@@ -49,13 +49,12 @@ const range = ref<RangeKey>('7d')
 const badOnly = ref(false) // 仅差评 ≤2（与 badCount/KPI 卡同口径——1~2 星差评/3 星中评/4~5 星好评）
 
 const entries = ref<CsatEntryVM[]>([])
-const entriesCursor = ref<unknown>(null)
-const entriesHasMore = ref(false)
+const entriesPager = usePager()
+const entriesHasMore = entriesPager.hasMore
 const entriesMsg = ref('')
 const entriesBusy = ref(false)
 // 发起检索时的筛选快照（翻页复用·防切区间后翻页串档·同 Conversations.vue searchFilter 范式）
 let entriesFilter: { from?: number; to?: number; maxScore?: number } = {}
-const entriesGen = useLatest() // 乱序守卫（切区间/翻页在途时又切·旧结果别覆盖新结果）
 
 function currentRangeArgs(): { from?: number; to?: number } {
   const chip = RANGE_CHIPS.find((c) => c.key === range.value)
@@ -69,30 +68,24 @@ async function loadEntries() {
   entriesBusy.value = true
   const { from, to } = currentRangeArgs()
   entriesFilter = { from, to, maxScore: badOnly.value ? 2 : undefined }
-  const my = entriesGen.begin()
+  const my = entriesPager.begin()
   const r = await listCsatEntries(entriesFilter)
-  if (entriesGen.isStale(my)) return // 期间又切区间/开关·丢弃过期结果
+  if (entriesPager.isStale(my)) return // 期间又切区间/开关·丢弃过期结果
   entriesBusy.value = false
   entries.value = r.ok ? mapCsatEntries(r.entries) : []
-  entriesCursor.value = r.ok ? r.nextCursor : null
-  entriesHasMore.value = !!(r.ok && r.hasMore)
+  entriesPager.reset(r)
   entriesMsg.value = r.ok ? (entries.value.length ? '' : '这个区间没有评价') : failText('加载失败', r.error)
 }
 
 async function moreEntries() {
-  if (!entriesHasMore.value || entriesCursor.value == null) return
-  if (entriesBusy.value) return // 主查询在途时不翻页（cursor 还是旧的）
-  const gen = entriesGen.peek() // 绑定当前主查询代际·不递增（不反噬在途主查询）
-  const r = await listCsatEntries({ ...entriesFilter, cursor: entriesCursor.value })
-  if (entriesGen.isStale(gen)) return // 期间又切区间·放弃本页
+  const r = await entriesPager.next((cursor) => listCsatEntries({ ...entriesFilter, cursor }))
+  if (!r) return
   if (!r.ok) {
     entriesMsg.value = failText('加载更多失败', r.error)
     return
   }
   entriesMsg.value = ''
   entries.value = appendNew(entries.value, mapCsatEntries(r.entries))
-  entriesCursor.value = r.nextCursor
-  entriesHasMore.value = !!r.hasMore
 }
 
 function pickRange(k: RangeKey) {

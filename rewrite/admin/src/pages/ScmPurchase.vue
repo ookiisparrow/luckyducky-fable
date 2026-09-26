@@ -7,7 +7,7 @@ import { materialHuman, purchaseStatusLabel, yuanToFen, fenLabel, scmErrorText }
 import { dateTime } from '../lib/format'
 import { consumePurchaseHandoff } from '../lib/scmHandoff'
 import { useLoadStatus, loadErrors, confirmed } from '../lib/status'
-import { useLatest, appendNew } from '../lib/latest'
+import { usePager, appendNew } from '../lib/latest'
 import ScmFlowTabs from '../components/ScmFlowTabs.vue'
 import UiButton from '../components/ui/Button.vue'
 import PageHeader from '../components/ui/PageHeader.vue'
@@ -18,8 +18,8 @@ import EmptyState from '../components/ui/EmptyState.vue'
 const orders = ref<Array<Record<string, any>>>([])
 const mats = ref<Array<Record<string, any>>>([])
 const sups = ref<Array<Record<string, any>>>([])
-const cursor = ref<unknown>(null) // 采购单列表翻页游标（根因#7）
-const hasMore = ref(false)
+const pager = usePager() // 采购单列表翻页（根因#7）
+const hasMore = pager.hasMore
 const listFailed = ref(false) // 采购单没读到时不显「还没有采购单」——失败≠空态
 // 动作反馈(note)/加载态(load) 收口（病根#14）：reload 成功不抹掉动作刚设的成功/失败原文。
 const { message, ok: msgOk, note, load } = useLoadStatus()
@@ -56,17 +56,15 @@ const draftTotalFen = computed(() => {
   return sum
 })
 
-const listGen = useLatest() // 采购单乱序守卫（快切 chip 时旧结果别覆盖当前筛选·根因#8）
 const saving = ref(false) // 建单在途锁（防双击建两张重复草稿·后端建单无 id 幂等）
 async function reload() {
   confirmKey.value = '' // 换筛选/刷新即复位危险态（防旧武装的下单/收货/取消按钮跨上下文残留一击直发）
-  const my = listGen.begin()
+  const my = pager.begin()
   const [p, m, s] = await Promise.all([listPurchases(filter.value || undefined), listMaterials(), listSuppliers()])
-  if (listGen.isStale(my)) return // 已切别 chip·丢弃过期采购单
+  if (pager.isStale(my)) return // 已切别 chip·丢弃过期采购单（快切 chip 时旧结果别覆盖当前筛选·根因#8）
   orders.value = p.ok ? p.list : []
   listFailed.value = !p.ok
-  cursor.value = p.ok ? p.nextCursor : null // 换筛选/刷新恒重置游标（新首页·不接续旧筛选下的位置）
-  hasMore.value = !!(p.ok && p.hasMore)
+  pager.reset(p) // 换筛选/刷新恒重置游标（新首页·不接续旧筛选下的位置）
   mats.value = m.ok ? m.list : []
   sups.value = s.ok ? (s.list || []).filter((x) => x.type === 'factory') : []
   // 分路报错（照 ScmBom.reload）：物料/供应商挂掉不装空目录
@@ -74,19 +72,14 @@ async function reload() {
   load(!err, err) // 只在加载失败时写·成功静默不抹动作反馈
 }
 
-// 加载更多（根因#7）：复用当前状态筛选·续游标追加·去重防双击重复追加同一页（同 Conversations more() 范式）
 async function more() {
-  if (!hasMore.value || cursor.value == null) return
-  const gen = listGen.peek() // 绑定当前 reload 代际·不递增（新 reload 会作废本页·防混排）
-  const r = await listPurchases(filter.value || undefined, { cursor: cursor.value })
-  if (listGen.isStale(gen)) return
+  const r = await pager.next((cursor) => listPurchases(filter.value || undefined, { cursor }))
+  if (!r) return
   if (!r.ok) {
     note(false, '', '加载更多失败：' + scmErrorText(r.error))
     return
   }
   orders.value = appendNew(orders.value, r.list || [], (o) => o._id)
-  cursor.value = r.nextCursor
-  hasMore.value = !!r.hasMore
 }
 
 function newOrder() {

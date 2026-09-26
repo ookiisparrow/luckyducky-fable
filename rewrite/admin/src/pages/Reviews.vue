@@ -5,7 +5,7 @@ import { RotateCcw, Star } from 'lucide-vue-next'
 import { listReviews, setReviewPicked } from '../api/reviews'
 import { mapReviewRows, type ReviewRowVM } from '../lib/mapReviews'
 import { failText, writeFailText } from '../lib/status'
-import { useLatest, appendNew } from '../lib/latest'
+import { usePager, appendNew } from '../lib/latest'
 import PageHeader from '../components/ui/PageHeader.vue'
 import Card from '../components/ui/Card.vue'
 import Badge from '../components/ui/Badge.vue'
@@ -21,40 +21,34 @@ type StatusKey = (typeof STATUS_CHIPS)[number]['key']
 const status = ref<StatusKey>('pending')
 
 const rows = ref<ReviewRowVM[]>([])
-const cursor = ref<unknown>(null)
-const hasMore = ref(false)
+const pager = usePager()
+const hasMore = pager.hasMore
 const message = ref('')
 const busy = ref(false)
 const toggling = ref('')
 let filterSnapshot: { status: StatusKey } = { status: 'pending' }
-const gen = useLatest()
 
 async function load() {
   message.value = '加载中…'
   busy.value = true
   filterSnapshot = { status: status.value }
-  const my = gen.begin()
+  const my = pager.begin()
   const r = await listReviews(filterSnapshot)
-  if (gen.isStale(my)) return
+  if (pager.isStale(my)) return
   busy.value = false
   rows.value = r.ok ? mapReviewRows(r.list) : []
-  cursor.value = r.ok ? r.nextCursor : null
-  hasMore.value = !!(r.ok && r.hasMore)
+  pager.reset(r)
   message.value = r.ok ? '' : failText('加载失败', r.error)
 }
 
 async function more() {
-  if (!hasMore.value || cursor.value == null || busy.value) return
-  const g = gen.peek()
-  const r = await listReviews({ ...filterSnapshot, cursor: cursor.value })
-  if (gen.isStale(g)) return
+  const r = await pager.next((cursor) => listReviews({ ...filterSnapshot, cursor }))
+  if (!r) return
   if (!r.ok) {
     message.value = failText('加载更多失败', r.error)
     return
   }
   rows.value = appendNew(rows.value, mapReviewRows(r.list))
-  cursor.value = r.nextCursor
-  hasMore.value = !!r.hasMore
 }
 
 async function toggle(row: ReviewRowVM) {

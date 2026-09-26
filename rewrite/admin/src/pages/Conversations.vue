@@ -8,7 +8,7 @@ import { CS_REFRESH_COPY } from '@ldrw/shared'
 import { searchConversations, conversationsReport, sampleQc, saveQcMark, listQcSampled, getTrialRefreshGate, refreshTrialSession } from '../api/cs'
 import { mapMessages, mapReport, mapQcRows, type MsgVM, type ReportVM, type QcRowVM } from '../lib/mapCs'
 import { failText, writeFailText } from '../lib/status'
-import { useLatest, appendNew } from '../lib/latest'
+import { usePager, appendNew } from '../lib/latest'
 import UiButton from '../components/ui/Button.vue'
 import PageHeader from '../components/ui/PageHeader.vue'
 import Card from '../components/ui/Card.vue'
@@ -21,8 +21,8 @@ const openid = ref(String(route.query.openid || ''))
 const externalUserId = ref(String(route.query.externalUserId || ''))
 const keyword = ref('')
 const msgs = ref<MsgVM[]>([])
-const cursor = ref<unknown>(null)
-const hasMore = ref(false)
+const pager = usePager()
+const hasMore = pager.hasMore
 const report = ref<ReportVM | null>(null)
 const message = ref('')
 // 首响 SLA 阈值（分钟）：初值 5 与后端 conversations.ts DEFAULT_SLA_MS 同口径。前端若首次挂载就把自己猜的
@@ -49,36 +49,26 @@ async function loadReport() {
 
 // 发起检索时的筛选快照（翻页复用·防用户改输入框后点「更早」用新筛选+旧 cursor 串档）
 let searchFilter: { openid?: string; externalUserId?: string; keyword?: string } = {}
-const pageGen = useLatest() // 检索/翻页乱序守卫（在途时又检索/翻页·旧结果别覆盖/混排新结果·根因#8）
-const searching = ref(false) // search 专属在途标志（单写布尔·more 加载闸不受旁路 message 写者干扰）
 async function search() {
   message.value = '检索中…'
-  searching.value = true
   searchFilter = { openid: openid.value.trim() || undefined, externalUserId: externalUserId.value.trim() || undefined, keyword: keyword.value.trim() || undefined }
-  const my = pageGen.begin()
+  const my = pager.begin()
   const r = await searchConversations(searchFilter)
-  if (pageGen.isStale(my)) return // 已发起更新的检索·丢弃过期结果（由更新的 search 负责复位 searching）
-  searching.value = false // 本次是最新·检索完成
+  if (pager.isStale(my)) return // 已发起更新的检索·丢弃过期结果
   msgs.value = r.ok ? mapMessages(r.messages) : []
-  cursor.value = r.ok ? r.nextCursor : null
-  hasMore.value = !!(r.ok && r.hasMore)
+  pager.reset(r)
   message.value = r.ok ? (msgs.value.length ? '' : '没有匹配的会话') : failText('检索失败', r.error)
 }
 
 async function more() {
-  if (!hasMore.value || cursor.value == null) return
-  if (searching.value) return // 检索在途时不翻页（cursor 还是旧的）——覆盖 search 先于 more 的序（单写布尔·不受旁路 message 写者干扰）
-  const gen = pageGen.peek() // 绑定当前 search 代际·不递增（不反噬在途 search）·新检索会作废本页
-  const r = await searchConversations({ ...searchFilter, cursor: cursor.value }) // 复用检索快照·不现读输入框（防串档）
-  if (pageGen.isStale(gen)) return // 期间又检索·放弃本页（防混排）
+  const r = await pager.next((cursor) => searchConversations({ ...searchFilter, cursor })) // 复用检索快照·不现读输入框（防串档）
+  if (!r) return
   if (!r.ok) {
     message.value = failText('加载更多失败', r.error) // 别静默吞·反复点无反应（病根#14）
     return
   }
   message.value = '' // 翻页成功清旧错（上次失败留的「加载更多失败」提示别一直挂在成功之后）
   msgs.value = appendNew(msgs.value, mapMessages(r.messages))
-  cursor.value = r.nextCursor
-  hasMore.value = !!r.hasMore
 }
 
 // —— 质检抽检 ——
@@ -94,11 +84,10 @@ function toQcRow(v: QcRowVM): QcRow {
   return { ...v, draftScore: v.scored ? v.score : 0, draftNote: v.scored ? v.note : '', busy: false, err: '' }
 }
 const qcRows = ref<QcRow[]>([])
-const qcCursor = ref<unknown>(null)
-const qcHasMore = ref(false)
+const qcPager = usePager()
+const qcHasMore = qcPager.hasMore
 const qcMsg = ref('')
 const qcSampling = ref(false)
-const qcGen = useLatest() // 乱序守卫（同 search/loadEntries 范式·防在途请求互相覆盖）
 
 // 池内已抽/已评（由已加载的行现算·不编未加载部分的数——诚实反映「当前看到多少」而非库内总数）
 function qcStat(): string {
@@ -115,32 +104,27 @@ function mergeQcRows(list: QcRowVM[]) {
 
 async function loadQcSampled() {
   qcMsg.value = qcRows.value.length ? qcMsg.value : '加载中…'
-  const my = qcGen.begin()
+  const my = qcPager.begin()
   const r = await listQcSampled({})
-  if (qcGen.isStale(my)) return
+  if (qcPager.isStale(my)) return
   if (!r.ok) {
     qcMsg.value = failText('加载失败', r.error)
     return
   }
   qcRows.value = mapQcRows(r.list).map(toQcRow)
-  qcCursor.value = r.nextCursor
-  qcHasMore.value = !!r.hasMore
+  qcPager.reset(r)
   qcMsg.value = qcRows.value.length ? '' : '暂无抽样记录，点「随机抽取」开始质检'
 }
 
 async function moreQc() {
-  if (!qcHasMore.value || qcCursor.value == null) return
-  const gen = qcGen.peek()
-  const r = await listQcSampled({ cursor: qcCursor.value })
-  if (qcGen.isStale(gen)) return
+  const r = await qcPager.next((cursor) => listQcSampled({ cursor }))
+  if (!r) return
   if (!r.ok) {
     qcMsg.value = failText('加载更多失败', r.error)
     return
   }
   qcMsg.value = ''
   mergeQcRows(mapQcRows(r.list)) // dedup-by-id（同 Conversations 消息翻页/Csat 明细范式）
-  qcCursor.value = r.nextCursor
-  qcHasMore.value = !!r.hasMore
 }
 
 async function doSampleQc() {

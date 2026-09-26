@@ -7,7 +7,7 @@ import { materialHuman, materialCategoryLabel, uomLabel, scmErrorText, mapLedger
 import { stocktakeDiff, filterSubmittable, genStocktakeNo, stocktakeAdjustId } from '../lib/stocktake'
 import { dateTime } from '../lib/format'
 import { useLoadStatus } from '../lib/status'
-import { useLatest, appendNew } from '../lib/latest'
+import { usePager, appendNew } from '../lib/latest'
 import ScmFlowTabs from '../components/ScmFlowTabs.vue'
 import UiButton from '../components/ui/Button.vue'
 import PageHeader from '../components/ui/PageHeader.vue'
@@ -21,11 +21,11 @@ const mats = ref<Array<Record<string, any>>>([])
 const sups = ref<Array<Record<string, any>>>([])
 const ledger = ref<LedgerRow[]>([])
 const ledgerMat = ref('') // 当前流水按哪个料号过滤（空=全部）
-// 根因#7：供应商列表 + 流水列表两处翻页态（照 Orders.vue/Conversations.vue 模式）。
-const supCursor = ref<unknown>(null)
-const supHasMore = ref(false)
-const ledgerCursor = ref<unknown>(null)
-const ledgerHasMore = ref(false)
+// 根因#7：供应商列表 + 流水列表两处翻页
+const supPager = usePager()
+const supHasMore = supPager.hasMore
+const ledgerPager = usePager()
+const ledgerHasMore = ledgerPager.hasMore
 // 流水加载失败独立记账（防失败伪装空账本）：不复用 message——reload 收尾 load(…)
 // 会覆盖它；失败时 ledger=[] 若无此标记，EmptyState「还没有流水」＝把查询失败伪装成空账。
 const ledgerError = ref('')
@@ -37,45 +37,36 @@ const supsError = ref('')
 const { message, ok: msgOk, note, load } = useLoadStatus()
 
 // 行内按料号查流水（listLedger 支持 materialId 过滤）
-const ledgerGen = useLatest() // 流水乱序守卫（照 latest.ts 范式·快速切料号连查·旧回包别盖新查询结果）
 async function loadLedger(materialId?: string) {
-  const my = ledgerGen.begin()
+  const my = ledgerPager.begin()
   const l = await listLedger(materialId)
-  if (ledgerGen.isStale(my)) return // 已发起更新的查询·丢弃过期流水（切料号即换新首页游标）
+  if (ledgerPager.isStale(my)) return // 快速切料号连查·丢弃过期流水（切料号即换新首页游标）
   ledger.value = l.ok ? mapLedger(l.list) : []
-  ledgerCursor.value = l.ok ? l.nextCursor : null
-  ledgerHasMore.value = !!(l.ok && l.hasMore)
+  ledgerPager.reset(l)
   ledgerError.value = l.ok ? '' : '流水加载失败：' + scmErrorText(l.error) // 独立 ref·不被 reload 的 load() 抹掉
   ledgerMat.value = materialId || ''
   stocktakeExitConfirm.value = false // 刷新即复位危险态（防旧武装退出确认跨刷新残留一击直发）
 }
 
-// 流水「加载更多」：复用当前料号筛选·续游标追加·去重防双击重复追加同一页（同 Conversations more() 范式）
 async function moreLedger() {
-  if (!ledgerHasMore.value || ledgerCursor.value == null) return
-  const gen = ledgerGen.peek() // 绑定当前查询代际·不递增（新查询会作废本页·防混排）
-  const l = await listLedger(ledgerMat.value || undefined, { cursor: ledgerCursor.value })
-  if (ledgerGen.isStale(gen)) return
+  const l = await ledgerPager.next((cursor) => listLedger(ledgerMat.value || undefined, { cursor }))
+  if (!l) return
   if (!l.ok) {
     note(false, '', '加载更多流水失败：' + scmErrorText(l.error))
     return
   }
   ledger.value = appendNew(ledger.value, mapLedger(l.list))
-  ledgerCursor.value = l.nextCursor
-  ledgerHasMore.value = !!l.hasMore
 }
 
 // 供应商「加载更多」：首屏上限 200，翻页可续查超上限的旧档
 async function moreSuppliers() {
-  if (!supHasMore.value || supCursor.value == null) return
-  const s = await listSuppliers({ cursor: supCursor.value })
+  const s = await supPager.next((cursor) => listSuppliers({ cursor }))
+  if (!s) return
   if (!s.ok) {
     note(false, '', '加载更多供应商失败：' + scmErrorText(s.error))
     return
   }
   sups.value = appendNew(sups.value, s.list || [], (x) => x._id)
-  supCursor.value = s.nextCursor
-  supHasMore.value = !!s.hasMore
 }
 
 const matForm = ref({ category: 'yarn', name: '', uom: 'count', color: '', tier: 'L', form: 'raw', productId: '', slug: '', supplierId: '', threshold: 0 })
@@ -246,12 +237,13 @@ function resetSupForm() {
 }
 
 async function reload() {
+  const my = supPager.begin()
   const [m, s] = await Promise.all([listMaterials(), listSuppliers()])
+  if (supPager.isStale(my)) return // 已发起更新的 reload·丢弃过期回包（更新那次会整页重写）
   mats.value = m.ok ? m.list : []
   matsFailed.value = !m.ok
   sups.value = s.ok ? s.list : []
-  supCursor.value = s.ok ? s.nextCursor : null
-  supHasMore.value = !!(s.ok && s.hasMore)
+  supPager.reset(s)
   supsError.value = s.ok ? '' : '供应商加载失败：' + scmErrorText(s.error)
   await loadLedger(ledgerMat.value || undefined) // 保持当前料号筛选（内部已复位 stocktakeExitConfirm）
   reportLoad(m)

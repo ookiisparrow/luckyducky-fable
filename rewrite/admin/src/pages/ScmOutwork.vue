@@ -7,7 +7,7 @@ import { materialHuman, outworkStatusLabel, yuanToFen, fenLabel, scmErrorText } 
 import { dateTime } from '../lib/format'
 import { consumeOutworkHandoff } from '../lib/scmHandoff'
 import { useLoadStatus, loadErrors, confirmed } from '../lib/status'
-import { useLatest, appendNew } from '../lib/latest'
+import { usePager, appendNew } from '../lib/latest'
 import ScmFlowTabs from '../components/ScmFlowTabs.vue'
 import UiButton from '../components/ui/Button.vue'
 import PageHeader from '../components/ui/PageHeader.vue'
@@ -19,8 +19,8 @@ const orders = ref<Array<Record<string, any>>>([])
 const rawL = ref<Array<Record<string, any>>>([]) // 大团原团（可发）
 const knottedL = ref<Array<Record<string, any>>>([]) // 大团带结（可收）
 const workers = ref<Array<Record<string, any>>>([])
-const cursor = ref<unknown>(null) // 外协单列表翻页游标（根因#7）
-const hasMore = ref(false)
+const pager = usePager() // 外协单列表翻页（根因#7）
+const hasMore = pager.hasMore
 const listFailed = ref(false) // 外协单没读到时不显「还没有外协单」——失败≠空态
 // 动作反馈(note)/加载态(load) 收口（病根#14）：reload 成功不抹掉动作刚设的成功/失败原文。
 const { message, ok: msgOk, note, load } = useLoadStatus()
@@ -55,16 +55,14 @@ function lineOver(l: { materialId: string; qty: number }): boolean {
 }
 const anyOver = computed(() => recvLines.value.some(lineOver)) // 任一色收超发→拦确认（后端也会拒·前端先防呆）
 
-const listGen = useLatest() // 外协单乱序守卫（同 ScmPurchase.vue·根因#8）：快切/快刷新时旧回包别覆盖当前结果
 async function reload() {
   confirmKey.value = '' // 刷新即复位危险态（防旧武装的发料/结算/取消按钮跨刷新残留一击直发）
-  const my = listGen.begin()
+  const my = pager.begin()
   const [o, m, s] = await Promise.all([listOutworks(), listMaterials(), listSuppliers()])
-  if (listGen.isStale(my)) return // 已发起更新的 reload·丢弃过期回包
+  if (pager.isStale(my)) return // 已发起更新的 reload·丢弃过期回包（快刷新时旧回包别覆盖当前结果·根因#8）
   orders.value = o.ok ? o.list : []
   listFailed.value = !o.ok
-  cursor.value = o.ok ? o.nextCursor : null
-  hasMore.value = !!(o.ok && o.hasMore)
+  pager.reset(o)
   const all = m.ok ? m.list : []
   rawL.value = all.filter((x) => /^yarn:[a-z0-9-]+:L:raw$/.test(String(x._id)))
   knottedL.value = all.filter((x) => /^yarn:[a-z0-9-]+:L:knotted$/.test(String(x._id)))
@@ -74,20 +72,14 @@ async function reload() {
   load(!err, err) // 只在加载失败时写·成功静默不抹动作反馈
 }
 
-// 加载更多（根因#7·带乱序守卫）：续游标追加·去重防双击重复追加同一页·绑定当前 reload 代际（新 reload
-// 会作废在途 more，more 自身不递增代际·防与 reload 互杀，同 ScmPurchase.vue more()）
 async function more() {
-  if (!hasMore.value || cursor.value == null) return
-  const gen = listGen.peek()
-  const r = await listOutworks(undefined, { cursor: cursor.value })
-  if (listGen.isStale(gen)) return
+  const r = await pager.next((cursor) => listOutworks(undefined, { cursor }))
+  if (!r) return
   if (!r.ok) {
     note(false, '', '加载更多失败：' + scmErrorText(r.error))
     return
   }
   orders.value = appendNew(orders.value, r.list || [], (o) => o._id)
-  cursor.value = r.nextCursor
-  hasMore.value = !!r.hasMore
 }
 
 function newOrder() {
