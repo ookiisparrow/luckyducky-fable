@@ -5,18 +5,20 @@ import { mount, flushPromises } from '@vue/test-utils'
 import { transportErrorText } from '../src/lib/mapSystem'
 import { CS_REFRESH_COPY } from '@ldrw/shared'
 
-const { conversationsReportMock, searchConversationsMock, getTrialRefreshGateMock, refreshTrialSessionMock } = vi.hoisted(() => ({
+const { conversationsReportMock, searchConversationsMock, getTrialRefreshGateMock, refreshTrialSessionMock, listQcSampledMock, sampleQcMock } = vi.hoisted(() => ({
   conversationsReportMock: vi.fn(),
   searchConversationsMock: vi.fn(),
   getTrialRefreshGateMock: vi.fn(),
   refreshTrialSessionMock: vi.fn(),
+  listQcSampledMock: vi.fn(),
+  sampleQcMock: vi.fn(),
 }))
 vi.mock('../src/api/cs', () => ({
   conversationsReport: conversationsReportMock,
   searchConversations: searchConversationsMock,
-  sampleQc: vi.fn(),
+  sampleQc: sampleQcMock,
   saveQcMark: vi.fn(),
-  listQcSampled: vi.fn().mockResolvedValue({ ok: true, list: [] }),
+  listQcSampled: listQcSampledMock,
   getTrialRefreshGate: getTrialRefreshGateMock,
   refreshTrialSession: refreshTrialSessionMock,
 }))
@@ -27,7 +29,15 @@ import Conversations from '../src/pages/Conversations.vue'
 beforeEach(() => {
   getTrialRefreshGateMock.mockReset().mockResolvedValue({ ok: true, enabled: false })
   refreshTrialSessionMock.mockReset()
+  listQcSampledMock.mockReset().mockResolvedValue({ ok: true, list: [] })
+  sampleQcMock.mockReset()
 })
+
+function pending<T>() {
+  let release: (v: T) => void = () => {}
+  const p = new Promise<T>((resolve) => { release = resolve })
+  return { p, release: (v: T) => release(v) }
+}
 
 describe('Conversations.vue 报表失败不被检索成功抹掉', () => {
   it('大白话：带客户深链进来，报表失败、检索成功，报表失败提示仍在', async () => {
@@ -89,5 +99,37 @@ describe('Conversations.vue 测版刷新入口', () => {
     await flushPromises()
     expect(refreshTrialSessionMock).toHaveBeenCalledWith({ reason: '测试回归', force: false, externalUserId: 'wm-1' })
     expect(w.text()).toContain(CS_REFRESH_COPY.adminSuccess)
+  })
+})
+
+describe('Conversations.vue 抽样与在途列表', () => {
+  const qcRow = (sessionKey: string, externalUserId: string) => ({ sessionKey, externalUserId, qcSampledAt: 1, qc: null })
+  const btn = (w: ReturnType<typeof mount>, label: string) => w.findAll('button').find((b) => b.text() === label)
+
+  it('大白话：进页列表还在路上就随机抽取——后到的旧列表不盖掉刚抽的，加载更多还能接着翻', async () => {
+    const late = pending<{ ok: boolean; list: unknown[]; hasMore: boolean; nextCursor: string }>()
+    listQcSampledMock.mockResolvedValue({ ok: true, list: [qcRow('s-page2', 'extuser-PAGE02')], hasMore: false, nextCursor: null })
+    listQcSampledMock.mockImplementationOnce(() => late.p)
+    sampleQcMock.mockResolvedValue({ ok: true, count: 1, sampled: [qcRow('s-new', 'extuser-NEWROW')] })
+    conversationsReportMock.mockResolvedValue({ ok: true })
+    searchConversationsMock.mockResolvedValue({ ok: true, messages: [], hasMore: false })
+
+    const w = mount(Conversations)
+    await flushPromises()
+    await btn(w, '随机抽取 10 条')!.trigger('click')
+    await flushPromises()
+
+    late.release({ ok: true, list: [qcRow('s-old', 'extuser-OLDROW')], hasMore: true, nextCursor: 'c-next' })
+    await flushPromises()
+
+    expect(w.text()).toContain('NEWROW')
+    expect(w.text()).not.toContain('OLDROW')
+    const more = btn(w, '加载更多')
+    expect(more).toBeTruthy()
+    await more!.trigger('click')
+    await flushPromises()
+    expect(listQcSampledMock).toHaveBeenLastCalledWith({ cursor: 'c-next' })
+    expect(w.text()).toContain('NEWROW')
+    expect(w.text()).toContain('PAGE02')
   })
 })

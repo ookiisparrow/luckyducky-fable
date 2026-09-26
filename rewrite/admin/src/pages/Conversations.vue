@@ -88,6 +88,9 @@ const qcPager = usePager()
 const qcHasMore = qcPager.hasMore
 const qcMsg = ref('')
 const qcSampling = ref(false)
+// 进页就会拉「已抽」，「随机抽取」同时可点。抽样一开始把进行中的列表作废，后到的首页不得整表盖掉刚抽出的行。
+// 计数单独走，不调 qcPager.begin()：begin 会把「首页还没回来」卡住，抽样不解，加载更多就永久点不了。
+let qcListSeq = 0
 
 // 池内已抽/已评（由已加载的行现算·不编未加载部分的数——诚实反映「当前看到多少」而非库内总数）
 function qcStat(): string {
@@ -104,9 +107,15 @@ function mergeQcRows(list: QcRowVM[]) {
 
 async function loadQcSampled() {
   qcMsg.value = qcRows.value.length ? qcMsg.value : '加载中…'
+  const listGen = qcListSeq
   const my = qcPager.begin()
   const r = await listQcSampled({})
-  if (qcPager.isStale(my)) return
+  if (qcPager.isStale(my)) return // 先对上翻页代际，解开「首页还没回来」
+  if (listGen !== qcListSeq) {
+    // 抽样已作废这次整表替换。游标仍落地，否则「还有下一页」一起丢，加载更多出不来。
+    if (r.ok) qcPager.reset(r)
+    return
+  }
   if (!r.ok) {
     qcMsg.value = failText('加载失败', r.error, csErrorText)
     return
@@ -128,6 +137,7 @@ async function moreQc() {
 }
 
 async function doSampleQc() {
+  qcListSeq += 1
   qcSampling.value = true
   qcMsg.value = ''
   const r = await sampleQc(10)
